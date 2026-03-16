@@ -1,0 +1,25 @@
+{
+  "name": "@stll/anonymize",
+  "version": "0.0.1",
+  "description": "Multi-layer PII detection and anonymization pipeline with regex, NER, deny lists, and coreference resolution",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./dictionaries": "./src/dictionaries/index.ts"
+  },
+  "publishConfig": {
+    "access": "restricted"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stella/anonymize.git"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "@huggingface/tokenizers": "^0.1.2",
+    "@monyone/aho-corasick": "^1.1.6"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

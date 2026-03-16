@@ -1,0 +1,23 @@
+{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "@stll/anonymize",
+      "dependencies": {
+        "@huggingface/tokenizers": "^0.1.2",
+        "@monyone/aho-corasick": "^1.1.6",
+      },
+      "devDependencies": {
+        "typescript": "^5.9.3",
+      },
+    },
+  },
+  "packages": {
+    "@huggingface/tokenizers": ["@huggingface/tokenizers@0.1.2", "", {}, "sha512-6sPNgS2pHowVBXFBuaKKUP0e9+5K2vPyAlmi2bc5PofMkMyi6gttJsq5FKcIDpAjJIONV6Pom9DTjqKazsrdAw=="],
+
+    "@monyone/aho-corasick": ["@monyone/aho-corasick@1.1.6", "", {}, "sha512-CYTudIyoZJqTnbFR2gJTlcxcCNgz40NrdT8a7B127ttn3OYZiTG6w6SStkhDWUvgjwg/oxz4RTvVpnL0HWjUwQ=="],
+
+    "typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
+  }
+}
