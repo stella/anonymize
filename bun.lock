@@ -1,0 +1,64 @@
+{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "anonymize",
+      "devDependencies": {
+        "turbo": "^2",
+      },
+    },
+    "packages/anonymize": {
+      "name": "@stll/anonymize",
+      "version": "0.0.1",
+      "dependencies": {
+        "@huggingface/tokenizers": "^0.1.2",
+        "@stll/aho-corasick": "^0.1.0",
+      },
+      "devDependencies": {
+        "typescript": "^5.9.3",
+      },
+    },
+    "packages/data": {
+      "name": "@stll/anonymize-data",
+      "version": "0.0.1",
+    },
+  },
+  "packages": {
+    "@huggingface/tokenizers": ["@huggingface/tokenizers@0.1.2", "", {}, "sha512-6sPNgS2pHowVBXFBuaKKUP0e9+5K2vPyAlmi2bc5PofMkMyi6gttJsq5FKcIDpAjJIONV6Pom9DTjqKazsrdAw=="],
+
+    "@stll/aho-corasick": ["@stll/aho-corasick@0.1.1", "", { "optionalDependencies": { "@stll/aho-corasick-darwin-arm64": "0.1.1", "@stll/aho-corasick-darwin-x64": "0.1.1", "@stll/aho-corasick-linux-arm64-gnu": "0.1.1", "@stll/aho-corasick-linux-x64-gnu": "0.1.1", "@stll/aho-corasick-linux-x64-musl": "0.1.1", "@stll/aho-corasick-win32-x64-msvc": "0.1.1" } }, "sha512-chp7u5hI9+nI5Y55XW6F2jktA8CO19oDTZftZz4Kz/BN3gimeLdE8c2Re6Rk1qOM5jlorLZv/ythtRl86vV0+A=="],
+
+    "@stll/aho-corasick-darwin-arm64": ["@stll/aho-corasick-darwin-arm64@0.1.1", "", { "os": "darwin", "cpu": "arm64" }, "sha512-OmAstwz9/OT1mSwqp+NCXNtzgEjQXr+A2TELQICQ6ybOdhANOwuwHfzIxq4PHuIsn2wrl6iKGYKBhcbpJ2ePMw=="],
+
+    "@stll/aho-corasick-darwin-x64": ["@stll/aho-corasick-darwin-x64@0.1.1", "", { "os": "darwin", "cpu": "x64" }, "sha512-QKrfHmQ1LKckvRjv5W1BKQ1OXikZF9BLMrIcKtql0r1q7BaYOyV5c3AH+KP0L/a7Yw9LqV4UelrShyuhEN1sWQ=="],
+
+    "@stll/aho-corasick-linux-arm64-gnu": ["@stll/aho-corasick-linux-arm64-gnu@0.1.1", "", { "os": "linux", "cpu": "arm64" }, "sha512-xdJY4jlau4BgOBSB40VMUEg88AHPZ5iLm9fNR7DVQ6dj8pOewmp9C64Ax7dcj8r8ot+xk1BNk12JP9u/wydZvw=="],
+
+    "@stll/aho-corasick-linux-x64-gnu": ["@stll/aho-corasick-linux-x64-gnu@0.1.1", "", { "os": "linux", "cpu": "x64" }, "sha512-LaXzR+R9Ftn5A2ssq5UwaZn5rYmp/44oVRVhqaYQnuUtf4BJk176jyMYir7k1NKYEbDgFwJUyWZBaH3ZrPTDAg=="],
+
+    "@stll/aho-corasick-linux-x64-musl": ["@stll/aho-corasick-linux-x64-musl@0.1.1", "", { "os": "linux", "cpu": "x64" }, "sha512-V2s/QvFxi36HNa3pbC7/Ng2aDr5UtbscA6GmZIuuwzvMkSw2HwZEFios9xfVQ029g9bkWP9W/Q8uzc73CfEohQ=="],
+
+    "@stll/aho-corasick-win32-x64-msvc": ["@stll/aho-corasick-win32-x64-msvc@0.1.1", "", { "os": "win32", "cpu": "x64" }, "sha512-f+mmZMx9MCsMptFKNs+Zjpsbm2cko0zzmiP4g2wnscMZVLpysRnB1QnK4gOor1Z8YMguAPRJoejxrmCbdSqqUQ=="],
+
+    "@stll/anonymize": ["@stll/anonymize@workspace:packages/anonymize"],
+
+    "@stll/anonymize-data": ["@stll/anonymize-data@workspace:packages/data"],
+
+    "turbo": ["turbo@2.8.17", "", { "optionalDependencies": { "turbo-darwin-64": "2.8.17", "turbo-darwin-arm64": "2.8.17", "turbo-linux-64": "2.8.17", "turbo-linux-arm64": "2.8.17", "turbo-windows-64": "2.8.17", "turbo-windows-arm64": "2.8.17" }, "bin": { "turbo": "bin/turbo" } }, "sha512-YwPsNSqU2f/RXU/+Kcb7cPkPZARxom4+me7LKEdN5jsvy2tpfze3zDZ4EiGrJnvOm9Avu9rK0aaYsP7qZ3iz7A=="],
+
+    "turbo-darwin-64": ["turbo-darwin-64@2.8.17", "", { "os": "darwin", "cpu": "x64" }, "sha512-ZFkv2hv7zHpAPEXBF6ouRRXshllOavYc+jjcrYyVHvxVTTwJWsBZwJ/gpPzmOKGvkSjsEyDO5V6aqqtZzwVF+Q=="],
+
+    "turbo-darwin-arm64": ["turbo-darwin-arm64@2.8.17", "", { "os": "darwin", "cpu": "arm64" }, "sha512-5DXqhQUt24ycEryXDfMNKEkW5TBHs+QmU23a2qxXwwFDaJsWcPo2obEhBxxdEPOv7qmotjad+09RGeWCcJ9JDw=="],
+
+    "turbo-linux-64": ["turbo-linux-64@2.8.17", "", { "os": "linux", "cpu": "x64" }, "sha512-KLUbz6w7F73D/Ihh51hVagrKR0/CTsPEbRkvXLXvoND014XJ4BCrQUqSxlQ4/hu+nqp1v5WlM85/h3ldeyujuA=="],
+
+    "turbo-linux-arm64": ["turbo-linux-arm64@2.8.17", "", { "os": "linux", "cpu": "arm64" }, "sha512-pJK67XcNJH40lTAjFu7s/rUlobgVXyB3A3lDoq+/JccB3hf+SysmkpR4Itlc93s8LEaFAI4mamhFuTV17Z6wOg=="],
+
+    "turbo-windows-64": ["turbo-windows-64@2.8.17", "", { "os": "win32", "cpu": "x64" }, "sha512-EijeQ6zszDMmGZLP2vT2RXTs/GVi9rM0zv2/G4rNu2SSRSGFapgZdxgW4b5zUYLVaSkzmkpWlGfPfj76SW9yUg=="],
+
+    "turbo-windows-arm64": ["turbo-windows-arm64@2.8.17", "", { "os": "win32", "cpu": "arm64" }, "sha512-crpfeMPkfECd4V1PQ/hMoiyVcOy04+bWedu/if89S15WhOalHZ2BYUi6DOJhZrszY+mTT99OwpOsj4wNfb/GHQ=="],
+
+    "typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
+  }
+}
