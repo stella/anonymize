@@ -235,8 +235,13 @@ const extractValue = (
       // Skip optional colon + whitespace separator,
       // then grab: optional country prefix (0-4
       // uppercase letters), then digits with optional
-      // spaces/hyphens/slashes. Mirrors the old
-      // COMPANY_ID_PATTERNS regex capture group.
+      // spaces/hyphens/slashes.
+      //
+      // The separator regex allows zero characters
+      // (bare adjacency like "IČO12345678") — this is
+      // intentional. Czech documents sometimes omit
+      // the separator entirely. Leading whitespace is
+      // already stripped by extractValue upstream.
       const sepMatch =
         /^[\s:]*/.exec(valueText);
       const sepLen = sepMatch
