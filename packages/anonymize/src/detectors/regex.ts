@@ -173,9 +173,12 @@ const PII_PATTERNS: readonly PiiPattern[] = [
   },
   // Czech bank account: prefix-account/bank_code
   // e.g., "123-9787260287/0100", "826611/0100", "6034776349/0800"
+  // Uses (?!\d) instead of \b at the end because the number
+  // may be followed directly by a letter (no space) in Czech
+  // text, and \b fails between two word characters.
   {
     label: "bank account number",
-    pattern: /\b\d{1,6}-?\d{6,10}\/\d{4}\b/g,
+    pattern: /\b\d{1,6}-?\d{6,10}\/\d{4}(?!\d)/g,
     score: 0.95,
   },
 ];

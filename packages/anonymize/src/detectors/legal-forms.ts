@@ -18,6 +18,15 @@ const UPPER =
 const LOWER =
   "a-záčďéěíňóřšťúůýžäöüßàâæçèêëîïôùûÿñ\\u0131";
 const CAP_WORD = `[${UPPER}][${LOWER}${UPPER}]+`;
+/** Any word (upper or lowercase start, 2+ chars). */
+const ANY_WORD = `[${UPPER}${LOWER}][${LOWER}${UPPER}]+`;
+
+/**
+ * Roman numerals that some jurisdictions use as legal
+ * forms (e.g., Romania "II", "IF"). Filter these out
+ * to avoid matching "Článek II", "Příloha III", etc.
+ */
+const ROMAN_NUMERAL_RE = /^[IVXLCDM]+$/;
 
 const escapeForRegex = (form: string): string =>
   form
@@ -41,9 +50,12 @@ const buildPattern = (
     (a, b) => b.length - a.length,
   );
   const alt = sorted.map(escapeForRegex).join("|");
+  // First word must be capitalised; subsequent words
+  // can be lowercase (Czech: "Pražské služby, a.s.",
+  // "Rosa rodinné centrum, z.s.").
   const prefix =
     `(?:${CAP_WORD})` +
-    `(?:[\\s&,.-]{1,4}(?:${CAP_WORD})){0,4}`;
+    `(?:[\\s&,.-]{1,4}(?:${ANY_WORD})){0,4}`;
   const separator = requireCapBefore
     ? `(?:\\s+|,\\s*)`
     : `\\s+`;
@@ -128,8 +140,30 @@ export const detectLegalFormEntities = async (
       match !== null;
       match = re.exec(fullText)
     ) {
-      const text = match[0];
+      const raw = match[0];
+      // Trim trailing whitespace/newlines that the
+      // regex may have captured
+      const text = raw.trimEnd();
       if (text.length < 5) {
+        continue;
+      }
+
+      // Reject matches that span across paragraphs
+      // (newline in the middle = not a single entity)
+      if (text.includes("\n")) {
+        continue;
+      }
+
+      // Reject matches where the "legal form" suffix is
+      // actually a Roman numeral (II, III, IV, etc.)
+      const lastSpace = text.lastIndexOf(" ");
+      const suffix = lastSpace !== -1
+        ? text.slice(lastSpace + 1).replace(/[.,]/g, "")
+        : "";
+      if (
+        suffix.length > 0 &&
+        ROMAN_NUMERAL_RE.test(suffix)
+      ) {
         continue;
       }
 

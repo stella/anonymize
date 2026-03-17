@@ -6,7 +6,7 @@
   },
   {
     "trigger": "born on",
-    "label": "date",
+    "label": "date of birth",
     "strategy": { "type": "n-words", "count": 4 }
   },
   {

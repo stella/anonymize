@@ -112,19 +112,19 @@ const extractValue = (
 
   switch (strategy.type) {
     case "to-next-comma": {
-      const commaIdx = valueText.indexOf(",");
-      const newlineIdx = valueText.indexOf("\n");
-      let end: number;
-
-      if (commaIdx !== -1 && newlineIdx !== -1) {
-        end = Math.min(commaIdx, newlineIdx);
-      } else if (commaIdx !== -1) {
-        end = commaIdx;
-      } else if (newlineIdx !== -1) {
-        end = newlineIdx;
-      } else {
-        end = Math.min(valueText.length, 100);
+      // Stop at comma, newline, or opening parenthesis.
+      // Parens mark defined-term clauses in legal text
+      // (e.g., "(dále jen ...)") and should not be
+      // captured as part of a name/address.
+      const STOP_CHARS = [",", "\n", "("];
+      let end = valueText.length;
+      for (const ch of STOP_CHARS) {
+        const idx = valueText.indexOf(ch);
+        if (idx !== -1 && idx < end) {
+          end = idx;
+        }
       }
+      end = Math.min(end, 100);
 
       const rawSlice = valueText.slice(0, end);
       const extracted = rawSlice.trim();

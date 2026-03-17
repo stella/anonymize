@@ -3,6 +3,7 @@ import { AhoCorasick } from "@stll/aho-corasick";
 import { resolveCountries } from "../regions";
 import { DETECTION_SOURCES } from "../types";
 import type { Entity, PipelineConfig } from "../types";
+import { normalizeForSearch } from "../util/normalize";
 
 /**
  * Try to load the optional @stll/anonymize-data package.
@@ -517,7 +518,11 @@ export const scanDenyList = (
   fullText: string,
   automaton: DenyListAutomaton,
 ): Entity[] => {
-  const rawMatches = automaton.ac.findIter(fullText);
+  // Normalize typographic variants (NBSP, smart quotes,
+  // en/em dashes) for matching. Offsets remain valid
+  // because all replacements are same-length.
+  const normalized = normalizeForSearch(fullText);
+  const rawMatches = automaton.ac.findIter(normalized);
 
   // Pass 1: collect valid matches grouped by pattern
   const matchesByPattern = new Map<
@@ -531,14 +536,20 @@ export const scanDenyList = (
       continue;
     }
 
-    const keyword = match.text.toLowerCase();
+    // Use original text for display; normalized was
+    // only for the AC search.
+    const matchText = fullText.slice(
+      match.start,
+      match.end,
+    );
+    const keyword = matchText.toLowerCase();
     if (STOPWORDS.has(keyword) || ALLOW_LIST.has(keyword)) {
       continue;
     }
 
     // Skip ALL-CAPS tokens (likely acronyms, not PII)
     // unless surrounding context is also all-caps
-    if (ALL_UPPER_RE.test(match.text)) {
+    if (ALL_UPPER_RE.test(matchText)) {
       continue;
     }
 
@@ -551,7 +562,7 @@ export const scanDenyList = (
       start: match.start,
       end: match.end,
       label,
-      text: match.text,
+      text: matchText,
       patternIdx: match.pattern,
     };
 

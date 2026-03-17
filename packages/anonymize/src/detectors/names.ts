@@ -6,7 +6,11 @@ import type { Entity } from "../types";
 // English, French, Polish, Turkish, and international
 // (ECHR/legal context). Frozen set for O(1) lookup.
 
-const FIRST_NAMES: ReadonlySet<string> = Object.freeze(
+/**
+ * Czech and Slovak first names: inflection stripping
+ * is only applied when checking against this subset.
+ */
+const CS_SK_FIRST_NAMES: ReadonlySet<string> = Object.freeze(
   new Set([
     // ── Czech male (top 100) ────────────────────────
     "Adam",
@@ -105,7 +109,6 @@ const FIRST_NAMES: ReadonlySet<string> = Object.freeze(
     "Zbyněk",
     "Zdeněk",
     "Zikmund",
-
     // ── Czech female (top 100) ──────────────────────
     "Adéla",
     "Alena",
@@ -195,7 +198,6 @@ const FIRST_NAMES: ReadonlySet<string> = Object.freeze(
     "Zdeňka",
     "Zdislava",
     "Zuzana",
-
     // ── Slovak (top 40) ─────────────────────────────
     "Adrián",
     "Branislav",
@@ -220,10 +222,15 @@ const FIRST_NAMES: ReadonlySet<string> = Object.freeze(
     "Tatiana",
     "Tibor",
     "Viera",
-    // (Dušan, Vladimír, Miroslav, Stanislav, Jana,
-    //  Eva, Martina, Helena, Monika, Anna, Michal,
-    //  Tomáš, Marek, Patrik, Dalibor, Soňa, Zuzana
-    //  already listed under Czech)
+  ]),
+);
+
+const FIRST_NAMES: ReadonlySet<string> = Object.freeze(
+  new Set([
+    // Include all Czech/Slovak names
+    ...CS_SK_FIRST_NAMES,
+    // ── Non-Czech/Slovak names below ────────────────
+    // (inflection stripping is NOT applied to these)
 
     // ── German (top 60) ─────────────────────────────
     "Andreas",
@@ -724,20 +731,39 @@ const INFLECTION_SUFFIXES = [
 
 /**
  * Strip common Czech/Slovak case suffixes from a token.
- * Returns the base form if stripping produces a plausible
- * name (capitalised, length >= 3), otherwise null.
+ * Returns candidate base forms if stripping produces a
+ * plausible name (capitalised, length >= 3).
+ *
+ * For the "-ou" instrumental feminine suffix, also yields
+ * base + "a" (e.g., "Editou" → "Edit" and "Edita")
+ * because Czech feminine names decline -a → -ou.
  */
-const stripInflection = (token: string): string | null => {
+const stripInflection = (token: string): string[] => {
+  const candidates: string[] = [];
   for (const suffix of INFLECTION_SUFFIXES) {
-    if (token.length > suffix.length + 2 && token.endsWith(suffix)) {
+    if (
+      token.length > suffix.length + 2 &&
+      token.endsWith(suffix)
+    ) {
       const base = token.slice(0, -suffix.length);
-      // Base must start with uppercase
       if (/^\p{Lu}/u.test(base)) {
-        return base;
+        candidates.push(base);
+        // Czech feminine: -a → -ou (instrumental),
+        // -a → -é (dative/locative), -a → -u (accusative)
+        if (
+          suffix === "ou" ||
+          suffix === "é" ||
+          suffix === "u"
+        ) {
+          candidates.push(`${base}a`);
+        }
+        // Czech feminine: -a → -ovi is not valid, but
+        // -e → -em is (e.g., "Kalhousem" → "Kalhous")
+        // which is already handled by stripping "em".
       }
     }
   }
-  return null;
+  return candidates;
 };
 
 // ── Token types ──────────────────────────────────────
@@ -773,8 +799,7 @@ const isFirstNameToken = (token: string): boolean => {
   if (FIRST_NAMES.has(token)) {
     return true;
   }
-  const base = stripInflection(token);
-  return base !== null && FIRST_NAMES.has(base);
+  return stripInflection(token).some((b) => FIRST_NAMES.has(b));
 };
 
 /**
@@ -785,8 +810,9 @@ const isSurnameToken = (token: string): boolean => {
   if (COMMON_SURNAMES.has(token)) {
     return true;
   }
-  const base = stripInflection(token);
-  return base !== null && COMMON_SURNAMES.has(base);
+  return stripInflection(token).some(
+    (b) => COMMON_SURNAMES.has(b),
+  );
 };
 
 /**

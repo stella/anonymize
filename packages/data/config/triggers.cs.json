@@ -29,7 +29,7 @@
   },
   {
     "trigger": "nar.:",
-    "label": "date",
+    "label": "date of birth",
     "strategy": {
       "type": "n-words",
       "count": 1
@@ -37,7 +37,7 @@
   },
   {
     "trigger": "narozen dne",
-    "label": "date",
+    "label": "date of birth",
     "strategy": {
       "type": "n-words",
       "count": 1
@@ -45,7 +45,7 @@
   },
   {
     "trigger": "narozena dne",
-    "label": "date",
+    "label": "date of birth",
     "strategy": {
       "type": "n-words",
       "count": 1
@@ -53,7 +53,7 @@
   },
   {
     "trigger": "narozen/a dne",
-    "label": "date",
+    "label": "date of birth",
     "strategy": {
       "type": "n-words",
       "count": 1
@@ -61,7 +61,7 @@
   },
   {
     "trigger": "dat.nar.",
-    "label": "date",
+    "label": "date of birth",
     "strategy": {
       "type": "n-words",
       "count": 1
@@ -96,7 +96,7 @@
     "label": "bank account number",
     "strategy": {
       "type": "n-words",
-      "count": 2
+      "count": 1
     }
   },
   {
@@ -104,7 +104,7 @@
     "label": "bank account number",
     "strategy": {
       "type": "n-words",
-      "count": 2
+      "count": 1
     }
   },
   {
@@ -131,6 +131,235 @@
   {
     "trigger": "jednající:",
     "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    }
+  },
+  {
+    "trigger": "pan ",
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    }
+  },
+  {
+    "trigger": "paní ",
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    }
+  },
+  {
+    "trigger": "panem ",
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    }
+  },
+  {
+    "trigger": "panu ",
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    }
+  },
+  {
+    "trigger": "město ",
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    }
+  },
+  {
+    "trigger": "města ",
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    }
+  },
+  {
+    "trigger": "městem ",
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    }
+  },
+  {
+    "trigger": "městu ",
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    }
+  },
+  {
+    "trigger": "obec ",
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    }
+  },
+  {
+    "trigger": "obce ",
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    }
+  },
+  {
+    "trigger": "obcí ",
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    }
+  },
+  {
+    "trigger": "obec a katastrální území",
+    "label": "address",
+    "strategy": {
+      "type": "to-next-comma"
+    }
+  },
+  {
+    "trigger": "katastrální území",
+    "label": "address",
+    "strategy": {
+      "type": "to-next-comma"
+    }
+  },
+  {
+    "trigger": "katastrálního území",
+    "label": "address",
+    "strategy": {
+      "type": "to-next-comma"
+    }
+  },
+  {
+    "trigger": "č.p.",
+    "label": "address",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    }
+  },
+  {
+    "trigger": "čp.",
+    "label": "address",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    }
+  },
+  {
+    "trigger": "v.s.",
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    }
+  },
+  {
+    "trigger": "PSČ",
+    "label": "address",
+    "strategy": {
+      "type": "n-words",
+      "count": 2
+    }
+  },
+  {
+    "trigger": "č. účtu:",
+    "label": "bank account number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    }
+  },
+  {
+    "trigger": "základní škola",
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    }
+  },
+  {
+    "trigger": "základní školy",
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    }
+  },
+  {
+    "trigger": "střední škola",
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    }
+  },
+  {
+    "trigger": "střední školy",
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    }
+  },
+  {
+    "trigger": "mateřská škola",
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    }
+  },
+  {
+    "trigger": "nemocnice",
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    }
+  },
+  {
+    "trigger": "nemocnici",
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    }
+  },
+  {
+    "trigger": "fakultní nemocnice",
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    }
+  },
+  {
+    "trigger": "univerzita",
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    }
+  },
+  {
+    "trigger": "univerzity",
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    }
+  },
+  {
+    "trigger": "nadace",
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    }
+  },
+  {
+    "trigger": "nadaci",
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    }
+  },
+  {
+    "trigger": "příspěvková organizace",
+    "label": "organization",
     "strategy": {
       "type": "to-next-comma"
     }
