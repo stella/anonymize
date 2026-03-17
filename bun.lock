@@ -14,11 +14,16 @@
       "dependencies": {
         "@huggingface/tokenizers": "^0.1.2",
         "@stll/aho-corasick": "^0.1.0",
-        "@stll/anonymize-data": "workspace:*",
       },
       "devDependencies": {
         "typescript": "^5.9.3",
       },
+      "peerDependencies": {
+        "@stll/anonymize-data": ">=0.0.1",
+      },
+      "optionalPeers": [
+        "@stll/anonymize-data",
+      ],
     },
     "packages/data": {
       "name": "@stll/anonymize-data",

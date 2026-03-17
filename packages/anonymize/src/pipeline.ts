@@ -14,10 +14,22 @@ import { filterFalsePositives } from "./filters/false-positives";
 import type { Entity, GazetteerEntry, PipelineConfig } from "./types";
 
 /**
- * Merge entity arrays, sort by offset, and deduplicate
- * overlapping spans (keep the one with the highest score).
+ * Check if entity `a` should replace entity `b`.
+ * Prefers higher score; on tie, prefers longer span.
  */
-export const mergeAndDedup = (...layers: Entity[][]): Entity[] => {
+const shouldReplace = (a: Entity, b: Entity): boolean =>
+  a.score > b.score ||
+  (a.score === b.score &&
+    a.end - a.start > b.end - b.start);
+
+/**
+ * Merge entity arrays, sort by offset, and deduplicate
+ * overlapping spans. Keeps the highest-scoring entity;
+ * on equal score, keeps the longer span.
+ */
+export const mergeAndDedup = (
+  ...layers: Entity[][]
+): Entity[] => {
   const all: Entity[] = [];
   for (const layer of layers) {
     for (const entity of layer) {
@@ -25,17 +37,20 @@ export const mergeAndDedup = (...layers: Entity[][]): Entity[] => {
     }
   }
 
-  const sorted = all.toSorted((a, b) => a.start - b.start);
+  const sorted = all.toSorted(
+    (a, b) => a.start - b.start,
+  );
 
   const merged: Entity[] = [];
   for (const entity of sorted) {
     const idx = merged.findIndex(
-      (e) => entity.start < e.end && entity.end > e.start,
+      (e) =>
+        entity.start < e.end && entity.end > e.start,
     );
 
     if (idx !== -1) {
       const existing = merged[idx];
-      if (existing && entity.score > existing.score) {
+      if (existing && shouldReplace(entity, existing)) {
         merged[idx] = { ...entity };
       }
     } else {
@@ -44,15 +59,18 @@ export const mergeAndDedup = (...layers: Entity[][]): Entity[] => {
   }
 
   // Second pass: a replacement may have widened a span,
-  // creating new overlaps. Remove lower-scoring duplicates.
-  const result = merged.toSorted((a, b) => a.start - b.start);
+  // creating new overlaps.
+  const result = merged.toSorted(
+    (a, b) => a.start - b.start,
+  );
   const deduped: Entity[] = [];
   for (const entity of result) {
     const existing = deduped.find(
-      (e) => entity.start < e.end && entity.end > e.start,
+      (e) =>
+        entity.start < e.end && entity.end > e.start,
     );
     if (existing) {
-      if (entity.score > existing.score) {
+      if (shouldReplace(entity, existing)) {
         deduped[deduped.indexOf(existing)] = entity;
       }
     } else {
