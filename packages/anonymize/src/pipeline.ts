@@ -108,7 +108,7 @@ export const runPipeline = async (
   // Step 1: Trigger phrases
   let triggerEntities: Entity[] = [];
   if (config.enableTriggerPhrases) {
-    triggerEntities = detectTriggerPhrases(fullText);
+    triggerEntities = await detectTriggerPhrases(fullText);
     log("trigger-phrases", `${triggerEntities.length} matches`);
   }
 
@@ -121,7 +121,7 @@ export const runPipeline = async (
 
   // Step 2b: Legal form detection
   const legalFormEntities =
-    detectLegalFormEntities(fullText);
+    await detectLegalFormEntities(fullText);
   if (legalFormEntities.length > 0) {
     log(
       "legal-forms",

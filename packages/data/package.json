@@ -1,6 +1,21 @@
 {
   "name": "@stll/anonymize-data",
   "version": "0.0.1",
-  "private": true,
-  "description": "Placeholder for future separate data package"
+  "description": "Deny list dictionaries and config data for @stll/anonymize",
+  "type": "module",
+  "exports": {
+    ".": "./dictionaries/index.ts",
+    "./dictionaries": "./dictionaries/index.ts",
+    "./config/*": "./config/*"
+  },
+  "publishConfig": {
+    "access": "restricted"
+  },
+  "license": "UNLICENSED",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
 }

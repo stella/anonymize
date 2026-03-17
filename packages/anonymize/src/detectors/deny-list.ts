@@ -1,14 +1,22 @@
 import { AhoCorasick } from "@stll/aho-corasick";
 
-import {
-  ALL_DICTIONARY_IDS,
-  DICTIONARY_META,
-  loadDictionary,
-} from "../dictionaries/index";
-import type { DictionaryId } from "../dictionaries/index";
 import { resolveCountries } from "../regions";
 import { DETECTION_SOURCES } from "../types";
 import type { Entity, PipelineConfig } from "../types";
+
+/**
+ * Try to load the optional @stll/anonymize-data package.
+ * Returns null if not installed.
+ */
+const loadDataModule = async (): Promise<
+  typeof import("@stll/anonymize-data") | null
+> => {
+  try {
+    return await import("@stll/anonymize-data");
+  } catch {
+    return null;
+  }
+};
 
 export type DenyListConfig = Pick<
   PipelineConfig,
@@ -375,10 +383,18 @@ export type DenyListAutomaton = {
  * and category filters, load them, and build the
  * Aho-Corasick automaton. The returned automaton can
  * be reused across multiple `scanDenyList` calls.
+ *
+ * Requires `@stll/anonymize-data` to be installed.
+ * Returns null if the data package is not available.
  */
 export const buildDenyList = async (
   config: DenyListConfig,
 ): Promise<DenyListAutomaton | null> => {
+  const dataModule = await loadDataModule();
+  if (!dataModule) {
+    return null;
+  }
+
   const allowedCountries = resolveCountries(
     config.denyListRegions,
     config.denyListCountries,
@@ -389,39 +405,46 @@ export const buildDenyList = async (
     ? new Set(excluded)
     : new Set<string>();
 
-  const ids = ALL_DICTIONARY_IDS.filter(
-    (id: DictionaryId) => {
-      const meta = DICTIONARY_META[id];
+  const allIds = [...dataModule.ALL_DICTIONARY_IDS];
 
-      if (excludeCategories.has(meta.category)) {
-        return false;
-      }
+  const ids = allIds.filter((id) => {
+    const meta = dataModule.DICTIONARY_META[id];
+    if (!meta) {
+      return false;
+    }
 
-      if (allowedCountries === null) {
-        return true;
-      }
+    if (excludeCategories.has(meta.category)) {
+      return false;
+    }
 
-      if (meta.country === null) {
-        return true;
-      }
+    if (allowedCountries === null) {
+      return true;
+    }
 
-      return allowedCountries.has(meta.country);
-    },
-  );
+    if (meta.country === null) {
+      return true;
+    }
+
+    return allowedCountries.has(meta.country);
+  });
 
   const patternList: string[] = [];
   const labelList: string[] = [];
   const seen = new Set<string>();
 
   const results = await Promise.all(
-    ids.map(async (id: DictionaryId) => {
-      const entries = await loadDictionary(id);
+    ids.map(async (id) => {
+      const entries =
+        await dataModule.loadDictionary(id);
       return { id, entries };
     }),
   );
 
   for (const { id, entries } of results) {
-    const meta = DICTIONARY_META[id];
+    const meta = dataModule.DICTIONARY_META[id];
+    if (!meta) {
+      continue;
+    }
     for (const entry of entries) {
       const lower = entry.toLowerCase();
       if (seen.has(lower)) {
@@ -442,7 +465,11 @@ export const buildDenyList = async (
     wholeWords: true,
   });
 
-  return { ac, labels: labelList, patterns: patternList };
+  return {
+    ac,
+    labels: labelList,
+    patterns: patternList,
+  };
 };
 
 const SENTENCE_END_RE = /[.!?]/;

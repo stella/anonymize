@@ -58,15 +58,9 @@ export { REGIONS, resolveCountries } from "./regions";
 export type { RegionId, CountryCode } from "./regions";
 
 // ── Dictionaries ─────────────────────────────────
-export {
-  DICTIONARY_META,
-  ALL_DICTIONARY_IDS,
-  loadDictionary,
-  loadDictionaries,
-  loadDictionarySet,
-  clearDictionaryCache,
-} from "./dictionaries/index";
-export type { DictionaryId } from "./dictionaries/index";
+// Install @stll/anonymize-data for deny list
+// dictionaries. Import directly from that package:
+//   import { loadDictionary } from "@stll/anonymize-data"
 
 // ── Filters ───────────────────────────────────────
 export { filterFalsePositives } from "./filters/false-positives";
