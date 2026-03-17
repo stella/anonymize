@@ -116,7 +116,7 @@ const extractValue = (
       // Parens mark defined-term clauses in legal text
       // (e.g., "(dále jen ...)") and should not be
       // captured as part of a name/address.
-      const STOP_CHARS = [",", "\n", "("];
+      const STOP_CHARS = [",", "\n", "(", "\t"];
       let end = valueText.length;
       let foundStop = false;
       for (const ch of STOP_CHARS) {
