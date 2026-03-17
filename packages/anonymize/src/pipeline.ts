@@ -59,7 +59,8 @@ export const mergeAndDedup = (
   }
 
   // Second pass: a replacement may have widened a span,
-  // creating new overlaps.
+  // creating new overlaps. Remove lower-scoring or
+  // shorter duplicates.
   const result = merged.toSorted(
     (a, b) => a.start - b.start,
   );
