@@ -232,22 +232,18 @@ const extractValue = (
     }
 
     case "company-id-value": {
-      // Skip optional colon + whitespace separator,
-      // then grab: optional country prefix (0-4
-      // uppercase letters), then digits with optional
-      // spaces/hyphens/slashes.
-      //
-      // The separator regex allows zero characters
-      // (bare adjacency like "IČO12345678") — this is
-      // intentional. Czech documents sometimes omit
-      // the separator entirely. Leading whitespace is
-      // already stripped by extractValue upstream.
+      // Work from the raw remaining text (before the
+      // upstream trimStart) so we can require at least
+      // a colon or whitespace separator between the
+      // keyword and value (e.g., "IČO: 12345678" or
+      // "IČO 12345678", but not "IČO12345678").
+      const raw = text.slice(triggerEnd);
       const sepMatch =
-        /^[\s:]*/.exec(valueText);
-      const sepLen = sepMatch
-        ? sepMatch[0].length
-        : 0;
-      const afterSep = valueText.slice(sepLen);
+        /^(?:\s*:\s*|\s+)/.exec(raw);
+      if (!sepMatch) {
+        return null;
+      }
+      const afterSep = raw.slice(sepMatch[0].length);
       const idMatch =
         /^[A-Z]{0,4}\s?\d[\d\s\-/]{4,}/i.exec(
           afterSep,
@@ -256,8 +252,8 @@ const extractValue = (
         return null;
       }
       const idText = idMatch[0].trim();
-      const idStart = valueStart + sepLen +
-        (idMatch.index ?? 0);
+      const idStart = triggerEnd +
+        sepMatch[0].length + (idMatch.index ?? 0);
       return {
         start: idStart,
         end: idStart + idText.length,
