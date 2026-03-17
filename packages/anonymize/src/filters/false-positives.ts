@@ -1,9 +1,12 @@
 import type { Entity } from "../types";
 
 const TEMPLATE_PLACEHOLDER_RE = /^(?:\.{3,}|_{3,}|\[[\w\s]+\]|\{[\w\s]+\})$/;
-// Section/clause numbers: "s 3", "3.2.1", "12." but NOT
-// long digit strings like ICO "12345678" or account numbers
-const SECTION_NUMBER_RE = /^(?:§\s*)?\d{1,4}(?:\.\d{1,4})*\.?$/;
+// Section/clause numbers: "§ 3", "3.2.1", "12." but NOT
+// dates like "4.3.2026" or long digit strings like IČO.
+// A section number has 1-3 digit groups of 1-3 digits each,
+// never ending with a 4-digit group (that's a year).
+const SECTION_NUMBER_RE =
+  /^(?:§\s*)?\d{1,3}(?:\.\d{1,3}){0,4}\.?$/;
 const STANDALONE_YEAR_RE = /^(?:19|20)\d{2}$/;
 
 /**
