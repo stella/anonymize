@@ -31,11 +31,12 @@ type TriggerAutomaton = {
 };
 
 let cached: TriggerAutomaton | null = null;
+let loaded = false;
 
 const loadAutomaton = async (): Promise<
   TriggerAutomaton | null
 > => {
-  if (cached) {
+  if (loaded) {
     return cached;
   }
 
@@ -67,6 +68,8 @@ const loadAutomaton = async (): Promise<
       "@stll/anonymize-data/config/triggers.en.json",
     ),
   ]);
+
+  loaded = true;
 
   if (rules.length === 0) {
     return null;
