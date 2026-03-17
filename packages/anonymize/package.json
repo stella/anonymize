@@ -21,8 +21,15 @@
   },
   "dependencies": {
     "@huggingface/tokenizers": "^0.1.2",
-    "@stll/aho-corasick": "^0.1.0",
-    "@stll/anonymize-data": "workspace:*"
+    "@stll/aho-corasick": "^0.1.0"
+  },
+  "peerDependencies": {
+    "@stll/anonymize-data": ">=0.0.1"
+  },
+  "peerDependenciesMeta": {
+    "@stll/anonymize-data": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "typescript": "^5.9.3"

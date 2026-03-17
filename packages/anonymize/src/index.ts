@@ -57,16 +57,10 @@ export type { DenyListAutomaton } from "./detectors/deny-list";
 export { REGIONS, resolveCountries } from "./regions";
 export type { RegionId, CountryCode } from "./regions";
 
-// ── Dictionaries (re-exported from @stll/anonymize-data)
-export {
-  DICTIONARY_META,
-  ALL_DICTIONARY_IDS,
-  loadDictionary,
-  loadDictionaries,
-  loadDictionarySet,
-  clearDictionaryCache,
-} from "@stll/anonymize-data";
-export type { DictionaryId } from "@stll/anonymize-data";
+// ── Dictionaries ─────────────────────────────────
+// Install @stll/anonymize-data for deny list
+// dictionaries. Import directly from that package:
+//   import { loadDictionary } from "@stll/anonymize-data"
 
 // ── Filters ───────────────────────────────────────
 export { filterFalsePositives } from "./filters/false-positives";
