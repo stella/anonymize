@@ -1,6 +1,20 @@
 {
   "name": "@stll/anonymize-data",
   "version": "0.0.1",
-  "private": true,
-  "description": "Placeholder for future separate data package"
+  "description": "Deny list dictionaries for @stll/anonymize: names, cities, courts, banks, hospitals, and more",
+  "type": "module",
+  "exports": {
+    ".": "./dictionaries/index.ts",
+    "./dictionaries": "./dictionaries/index.ts"
+  },
+  "publishConfig": {
+    "access": "restricted"
+  },
+  "license": "UNLICENSED",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
 }

@@ -57,7 +57,7 @@ export type { DenyListAutomaton } from "./detectors/deny-list";
 export { REGIONS, resolveCountries } from "./regions";
 export type { RegionId, CountryCode } from "./regions";
 
-// ── Dictionaries ─────────────────────────────────
+// ── Dictionaries (re-exported from @stll/anonymize-data)
 export {
   DICTIONARY_META,
   ALL_DICTIONARY_IDS,
@@ -65,8 +65,8 @@ export {
   loadDictionaries,
   loadDictionarySet,
   clearDictionaryCache,
-} from "./dictionaries/index";
-export type { DictionaryId } from "./dictionaries/index";
+} from "@stll/anonymize-data";
+export type { DictionaryId } from "@stll/anonymize-data";
 
 // ── Filters ───────────────────────────────────────
 export { filterFalsePositives } from "./filters/false-positives";

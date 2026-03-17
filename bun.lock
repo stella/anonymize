@@ -14,6 +14,7 @@
       "dependencies": {
         "@huggingface/tokenizers": "^0.1.2",
         "@stll/aho-corasick": "^0.1.0",
+        "@stll/anonymize-data": "workspace:*",
       },
       "devDependencies": {
         "typescript": "^5.9.3",
@@ -22,6 +23,9 @@
     "packages/data": {
       "name": "@stll/anonymize-data",
       "version": "0.0.1",
+      "devDependencies": {
+        "typescript": "^5.9.3",
+      },
     },
   },
   "packages": {

@@ -4,8 +4,7 @@
   "description": "Multi-layer PII detection and anonymization pipeline with regex, NER, deny lists, and coreference resolution",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts",
-    "./dictionaries": "./src/dictionaries/index.ts"
+    ".": "./src/index.ts"
   },
   "publishConfig": {
     "access": "restricted"
@@ -22,7 +21,8 @@
   },
   "dependencies": {
     "@huggingface/tokenizers": "^0.1.2",
-    "@stll/aho-corasick": "^0.1.0"
+    "@stll/aho-corasick": "^0.1.0",
+    "@stll/anonymize-data": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.9.3"

@@ -4,8 +4,8 @@ import {
   ALL_DICTIONARY_IDS,
   DICTIONARY_META,
   loadDictionary,
-} from "../dictionaries/index";
-import type { DictionaryId } from "../dictionaries/index";
+} from "@stll/anonymize-data";
+import type { DictionaryId } from "@stll/anonymize-data";
 import { resolveCountries } from "../regions";
 import { DETECTION_SOURCES } from "../types";
 import type { Entity, PipelineConfig } from "../types";
