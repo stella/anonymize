@@ -447,12 +447,16 @@ export const buildDenyList = async (
       continue;
     }
     for (const entry of entries) {
-      const lower = entry.toLowerCase();
+      // Normalize typographic variants in patterns too,
+      // so both sides (pattern + search text) are
+      // consistent.
+      const normalized = normalizeForSearch(entry);
+      const lower = normalized.toLowerCase();
       if (seen.has(lower)) {
         continue;
       }
       seen.add(lower);
-      patternList.push(entry);
+      patternList.push(normalized);
       labelList.push(meta.label);
     }
   }

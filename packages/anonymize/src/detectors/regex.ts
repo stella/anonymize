@@ -79,12 +79,12 @@ const TITLED_PERSON_RE = new RegExp(
  * "Mme Dupont", "Maître Leblanc", etc.
  */
 const EN_NAME_WORD = `[A-Z][a-z]+`;
-const EN_LEGAL_POST_NOMINAL = `(?:\\s+(?:QC|KC|SC|LJ|AG))?`;
+const EN_LEGAL_POST_NOMINAL = `(?:${SP}+(?:QC|KC|SC|LJ|AG))?`;
 const EN_HONORIFIC_PERSON_RE = new RegExp(
   `(?:\\bM\\.|Mrs|Ms|Miss|Messrs|Mr|Sir|Dame|Lord|Lady|` +
     `Judge|Justice|President|Mme|Mlle|\\bMe\\b|Maître)` +
-    `\\.?\\s+${EN_NAME_WORD}` +
-    `(?:[\\s-]{1,2}(?:${PARTICLE}\\s+)?` +
+    `\\.?${SP}+${EN_NAME_WORD}` +
+    `(?:(?:${SP}|-){1,2}(?:${PARTICLE}${SP}+)?` +
     `${EN_NAME_WORD}){0,3}${EN_LEGAL_POST_NOMINAL}`,
   "g",
 );
@@ -124,10 +124,12 @@ const PII_PATTERNS: readonly PiiPattern[] = [
   },
   // Domestic CZ/SK phone: 9 digits, starting with 6xx
   // or 7xx (mobile). Allows spaces/dashes between groups.
+  // Negative lookahead excludes bank account segments
+  // (digits followed by /bank_code).
   {
     label: "phone number",
     pattern:
-      /\b[67]\d{2}[\s.-]?\d{3}[\s.-]?\d{3}\b/g,
+      /\b[67]\d{2}[\s.-]?\d{3}[\s.-]?\d{3}(?![\s.-]?\d*\/)\b/g,
     score: 0.9,
   },
   {

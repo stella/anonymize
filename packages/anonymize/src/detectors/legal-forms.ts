@@ -22,11 +22,13 @@ const CAP_WORD = `[${UPPER}][${LOWER}${UPPER}]+`;
 const ANY_WORD = `[${UPPER}${LOWER}][${LOWER}${UPPER}]+`;
 
 /**
- * Roman numerals that some jurisdictions use as legal
- * forms (e.g., Romania "II", "IF"). Filter these out
- * to avoid matching "Článek II", "Příloha III", etc.
+ * Proper Roman numeral pattern. Rejects legal forms
+ * like LLC, CIC, LC that happen to use the same
+ * letters (I, V, X, L, C, D, M). Only matches
+ * valid Roman numeral sequences (I–MMMCMXCIX).
  */
-const ROMAN_NUMERAL_RE = /^[IVXLCDM]+$/;
+const ROMAN_NUMERAL_RE =
+  /^(?=[IVXLCDM])M{0,3}(?:CM|CD|D?C{0,3})(?:XC|XL|L?X{0,3})(?:IX|IV|V?I{0,3})$/;
 
 const escapeForRegex = (form: string): string =>
   form

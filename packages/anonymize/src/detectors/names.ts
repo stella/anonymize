@@ -7,8 +7,12 @@ import type { Entity } from "../types";
 // (ECHR/legal context). Frozen set for O(1) lookup.
 
 /**
- * Czech and Slovak first names: inflection stripping
- * is only applied when checking against this subset.
+ * Czech and Slovak first names. Separated from the
+ * full FIRST_NAMES set for potential future use in
+ * scoped inflection. Currently, inflection stripping
+ * checks against the full set because Czech grammar
+ * inflects all names (e.g., "Thomasem" is valid
+ * instrumental of "Thomas" in Czech text).
  */
 const CS_SK_FIRST_NAMES: ReadonlySet<string> = Object.freeze(
   new Set([
