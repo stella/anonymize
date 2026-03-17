@@ -90,6 +90,11 @@
     "strategy": { "type": "company-id-value" }
   },
   {
+    "trigger": "Handelsregister",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" }
+  },
+  {
     "trigger": "HRB",
     "label": "registration number",
     "strategy": { "type": "company-id-value" }

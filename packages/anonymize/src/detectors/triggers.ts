@@ -77,9 +77,9 @@ const loadAutomaton = async (): Promise<
   const patterns = rules.map((r) =>
     r.trigger.toLowerCase(),
   );
-  const ac = new AhoCorasick(patterns, {
-    caseInsensitive: true,
-  });
+  // No caseInsensitive needed: both patterns and
+  // search text are already lowercased.
+  const ac = new AhoCorasick(patterns);
 
   cached = { ac, rules };
   return cached;
@@ -288,12 +288,16 @@ export const detectTriggerPhrases = async (
   const matches = automaton.ac.findIter(lowerText);
 
   for (const match of matches) {
-    // Word-boundary check: reject if preceded by
-    // a letter (prevents matching inside words)
+    // Word-boundary check: reject if preceded or
+    // followed by a letter (prevents "IČ" matching
+    // inside "IČO", or "pan" inside "panel").
     if (
       match.start > 0 &&
       LETTER_RE.test(lowerText[match.start - 1] ?? "")
     ) {
+      continue;
+    }
+    if (LETTER_RE.test(lowerText[match.end] ?? "")) {
       continue;
     }
 
