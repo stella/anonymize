@@ -1,11 +1,12 @@
 {
   "name": "@stll/anonymize-data",
   "version": "0.0.1",
-  "description": "Deny list dictionaries for @stll/anonymize: names, cities, courts, banks, hospitals, and more",
+  "description": "Deny list dictionaries and config data for @stll/anonymize",
   "type": "module",
   "exports": {
     ".": "./dictionaries/index.ts",
-    "./dictionaries": "./dictionaries/index.ts"
+    "./dictionaries": "./dictionaries/index.ts",
+    "./config/*": "./config/*"
   },
   "publishConfig": {
     "access": "restricted"

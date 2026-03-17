@@ -119,6 +119,31 @@ export const DICTIONARY_META = {
     category: "Courts",
     country: "AT",
   },
+  "courts/AU": {
+    label: "organization",
+    category: "Courts",
+    country: "AU",
+  },
+  "courts/BE": {
+    label: "organization",
+    category: "Courts",
+    country: "BE",
+  },
+  "courts/BG": {
+    label: "organization",
+    category: "Courts",
+    country: "BG",
+  },
+  "courts/BR": {
+    label: "organization",
+    category: "Courts",
+    country: "BR",
+  },
+  "courts/CA": {
+    label: "organization",
+    category: "Courts",
+    country: "CA",
+  },
   "courts/CZ": {
     label: "organization",
     category: "Courts",
@@ -129,10 +154,95 @@ export const DICTIONARY_META = {
     category: "Courts",
     country: "DE",
   },
+  "courts/DK": {
+    label: "organization",
+    category: "Courts",
+    country: "DK",
+  },
+  "courts/ES": {
+    label: "organization",
+    category: "Courts",
+    country: "ES",
+  },
+  "courts/FI": {
+    label: "organization",
+    category: "Courts",
+    country: "FI",
+  },
+  "courts/FR": {
+    label: "organization",
+    category: "Courts",
+    country: "FR",
+  },
+  "courts/GB": {
+    label: "organization",
+    category: "Courts",
+    country: "GB",
+  },
+  "courts/HR": {
+    label: "organization",
+    category: "Courts",
+    country: "HR",
+  },
+  "courts/HU": {
+    label: "organization",
+    category: "Courts",
+    country: "HU",
+  },
+  "courts/IE": {
+    label: "organization",
+    category: "Courts",
+    country: "IE",
+  },
+  "courts/IT": {
+    label: "organization",
+    category: "Courts",
+    country: "IT",
+  },
+  "courts/NL": {
+    label: "organization",
+    category: "Courts",
+    country: "NL",
+  },
+  "courts/NO": {
+    label: "organization",
+    category: "Courts",
+    country: "NO",
+  },
+  "courts/PL": {
+    label: "organization",
+    category: "Courts",
+    country: "PL",
+  },
+  "courts/PT": {
+    label: "organization",
+    category: "Courts",
+    country: "PT",
+  },
+  "courts/RO": {
+    label: "organization",
+    category: "Courts",
+    country: "RO",
+  },
+  "courts/SE": {
+    label: "organization",
+    category: "Courts",
+    country: "SE",
+  },
+  "courts/SI": {
+    label: "organization",
+    category: "Courts",
+    country: "SI",
+  },
   "courts/SK": {
     label: "organization",
     category: "Courts",
     country: "SK",
+  },
+  "courts/US": {
+    label: "organization",
+    category: "Courts",
+    country: "US",
   },
 
   // ── Banks ──────────────────────────────────────────
@@ -140,6 +250,31 @@ export const DICTIONARY_META = {
     label: "organization",
     category: "Financial",
     country: "AT",
+  },
+  "banks/AU": {
+    label: "organization",
+    category: "Financial",
+    country: "AU",
+  },
+  "banks/BE": {
+    label: "organization",
+    category: "Financial",
+    country: "BE",
+  },
+  "banks/BG": {
+    label: "organization",
+    category: "Financial",
+    country: "BG",
+  },
+  "banks/BR": {
+    label: "organization",
+    category: "Financial",
+    country: "BR",
+  },
+  "banks/CA": {
+    label: "organization",
+    category: "Financial",
+    country: "CA",
   },
   "banks/CZ": {
     label: "organization",
@@ -151,10 +286,95 @@ export const DICTIONARY_META = {
     category: "Financial",
     country: "DE",
   },
+  "banks/DK": {
+    label: "organization",
+    category: "Financial",
+    country: "DK",
+  },
+  "banks/ES": {
+    label: "organization",
+    category: "Financial",
+    country: "ES",
+  },
+  "banks/FI": {
+    label: "organization",
+    category: "Financial",
+    country: "FI",
+  },
+  "banks/FR": {
+    label: "organization",
+    category: "Financial",
+    country: "FR",
+  },
+  "banks/GB": {
+    label: "organization",
+    category: "Financial",
+    country: "GB",
+  },
+  "banks/HR": {
+    label: "organization",
+    category: "Financial",
+    country: "HR",
+  },
+  "banks/HU": {
+    label: "organization",
+    category: "Financial",
+    country: "HU",
+  },
+  "banks/IE": {
+    label: "organization",
+    category: "Financial",
+    country: "IE",
+  },
+  "banks/IT": {
+    label: "organization",
+    category: "Financial",
+    country: "IT",
+  },
+  "banks/NL": {
+    label: "organization",
+    category: "Financial",
+    country: "NL",
+  },
+  "banks/NO": {
+    label: "organization",
+    category: "Financial",
+    country: "NO",
+  },
+  "banks/PL": {
+    label: "organization",
+    category: "Financial",
+    country: "PL",
+  },
+  "banks/PT": {
+    label: "organization",
+    category: "Financial",
+    country: "PT",
+  },
+  "banks/RO": {
+    label: "organization",
+    category: "Financial",
+    country: "RO",
+  },
+  "banks/SE": {
+    label: "organization",
+    category: "Financial",
+    country: "SE",
+  },
+  "banks/SI": {
+    label: "organization",
+    category: "Financial",
+    country: "SI",
+  },
   "banks/SK": {
     label: "organization",
     category: "Financial",
     country: "SK",
+  },
+  "banks/US": {
+    label: "organization",
+    category: "Financial",
+    country: "US",
   },
 
   // ── Insurance ──────────────────────────────────────
@@ -304,19 +524,100 @@ const LOADERS: Record<
   "courts/AT": () =>
     import("./courts/AT.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
+  "courts/AU": () =>
+    import("./courts/AU.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "courts/BE": () =>
+    import("./courts/BE.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "courts/BG": () =>
+    import("./courts/BG.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "courts/BR": () =>
+    import("./courts/BR.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "courts/CA": () =>
+    import("./courts/CA.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
   "courts/CZ": () =>
     import("./courts/CZ.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
   "courts/DE": () =>
     import("./courts/DE.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
+  "courts/DK": () =>
+    import("./courts/DK.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "courts/ES": () =>
+    import("./courts/ES.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "courts/FI": () =>
+    import("./courts/FI.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "courts/FR": () =>
+    import("./courts/FR.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "courts/GB": () =>
+    import("./courts/GB.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "courts/HR": () =>
+    import("./courts/HR.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "courts/HU": () =>
+    import("./courts/HU.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "courts/IE": () =>
+    import("./courts/IE.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "courts/IT": () =>
+    import("./courts/IT.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "courts/NL": () =>
+    import("./courts/NL.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "courts/NO": () =>
+    import("./courts/NO.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "courts/PL": () =>
+    import("./courts/PL.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "courts/PT": () =>
+    import("./courts/PT.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "courts/RO": () =>
+    import("./courts/RO.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "courts/SE": () =>
+    import("./courts/SE.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "courts/SI": () =>
+    import("./courts/SI.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
   "courts/SK": () =>
     import("./courts/SK.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "courts/US": () =>
+    import("./courts/US.json") as Promise<JsonModule>,
 
   // ── Banks ──────────────────────────────────────────
   // eslint-disable-next-line typescript-eslint/promise-function-async
   "banks/AT": () =>
     import("./banks/AT.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "banks/AU": () =>
+    import("./banks/AU.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "banks/BE": () =>
+    import("./banks/BE.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "banks/BG": () =>
+    import("./banks/BG.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "banks/BR": () =>
+    import("./banks/BR.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "banks/CA": () =>
+    import("./banks/CA.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
   "banks/CZ": () =>
     import("./banks/CZ.json") as Promise<JsonModule>,
@@ -324,8 +625,59 @@ const LOADERS: Record<
   "banks/DE": () =>
     import("./banks/DE.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
+  "banks/DK": () =>
+    import("./banks/DK.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "banks/ES": () =>
+    import("./banks/ES.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "banks/FI": () =>
+    import("./banks/FI.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "banks/FR": () =>
+    import("./banks/FR.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "banks/GB": () =>
+    import("./banks/GB.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "banks/HR": () =>
+    import("./banks/HR.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "banks/HU": () =>
+    import("./banks/HU.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "banks/IE": () =>
+    import("./banks/IE.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "banks/IT": () =>
+    import("./banks/IT.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "banks/NL": () =>
+    import("./banks/NL.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "banks/NO": () =>
+    import("./banks/NO.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "banks/PL": () =>
+    import("./banks/PL.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "banks/PT": () =>
+    import("./banks/PT.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "banks/RO": () =>
+    import("./banks/RO.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "banks/SE": () =>
+    import("./banks/SE.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "banks/SI": () =>
+    import("./banks/SI.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
   "banks/SK": () =>
     import("./banks/SK.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "banks/US": () =>
+    import("./banks/US.json") as Promise<JsonModule>,
 
   // ── Insurance ──────────────────────────────────────
   // eslint-disable-next-line typescript-eslint/promise-function-async
