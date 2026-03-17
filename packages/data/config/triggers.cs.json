@@ -286,7 +286,15 @@
     }
   },
   {
-    "trigger": "PSČ",
+    "trigger": "PSČ:",
+    "label": "address",
+    "strategy": {
+      "type": "n-words",
+      "count": 2
+    }
+  },
+  {
+    "trigger": "PSČ ",
     "label": "address",
     "strategy": {
       "type": "n-words",
