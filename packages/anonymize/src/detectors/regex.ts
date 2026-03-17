@@ -122,14 +122,14 @@ const PII_PATTERNS: readonly PiiPattern[] = [
     pattern:
       /\+\d{1,3}[\s.-]?\(?\d{2,4}\)?[\s.-]?\d{3}[\s.-]?\d{2,4}[\s.-]?\d{0,4}\b/g,
   },
-  // Domestic CZ/SK phone: 9 digits, starting with 6xx
-  // or 7xx (mobile). Allows spaces/dashes between groups.
-  // Negative lookahead excludes bank account segments
-  // (digits followed by /bank_code).
+  // Domestic CZ/SK phone: 9 digits, starting with 2xx–7xx
+  // (landline 2–5, mobile 6–7). Allows spaces/dashes
+  // between groups. Negative lookahead excludes bank
+  // account segments (digits followed by /bank_code).
   {
     label: "phone number",
     pattern:
-      /\b[67]\d{2}[\s.-]?\d{3}[\s.-]?\d{3}(?![\s.-]?\d*\/)\b/g,
+      /\b[2-7]\d{2}[\s.-]?\d{3}[\s.-]?\d{3}(?![\s.-]?\d*\/)\b/g,
     score: 0.9,
   },
   {
