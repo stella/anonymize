@@ -164,6 +164,34 @@
     }
   },
   {
+    "trigger": "městský obvod",
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    }
+  },
+  {
+    "trigger": "městského obvodu",
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    }
+  },
+  {
+    "trigger": "městská část",
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    }
+  },
+  {
+    "trigger": "městské části",
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    }
+  },
+  {
     "trigger": "město ",
     "label": "organization",
     "strategy": {

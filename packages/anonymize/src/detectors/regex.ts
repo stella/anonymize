@@ -59,13 +59,17 @@ const PARTICLE =
   `von|van|dos|ibn|ben|bin|del|zum|zur|ten|ter|` +
   `da|de|di|al|el|le|la|zu|af|av)`;
 
+// Use [^\S\n] (non-newline whitespace) between name
+// words to prevent matches spanning across lines.
+const SP = "[^\\S\\n]";
+
 const TITLED_PERSON_RE = new RegExp(
   `(?:${TITLE_PREFIX})` +
-    `(?:\\s+(?:${TITLE_PREFIX}))*` +
-    "\\s+" +
+    `(?:${SP}+(?:${TITLE_PREFIX}))*` +
+    `${SP}+` +
     `(?:${NAME_WORD})` +
-    `(?:\\s{1,4}(?:${PARTICLE}\\s+)?${NAME_WORD}){1,3}` +
-    `(?:,?\\s+(?:${POST_NOMINAL}))?`,
+    `(?:${SP}{1,4}(?:${PARTICLE}${SP}+)?${NAME_WORD}){1,3}` +
+    `(?:,?${SP}+(?:${POST_NOMINAL}))?`,
   "g",
 );
 
@@ -117,6 +121,14 @@ const PII_PATTERNS: readonly PiiPattern[] = [
     label: "phone number",
     pattern:
       /\+\d{1,3}[\s.-]?\(?\d{2,4}\)?[\s.-]?\d{3}[\s.-]?\d{2,4}[\s.-]?\d{0,4}\b/g,
+  },
+  // Domestic CZ/SK phone: 9 digits, starting with 6xx
+  // or 7xx (mobile). Allows spaces/dashes between groups.
+  {
+    label: "phone number",
+    pattern:
+      /\b[67]\d{2}[\s.-]?\d{3}[\s.-]?\d{3}\b/g,
+    score: 0.9,
   },
   {
     label: "credit card number",

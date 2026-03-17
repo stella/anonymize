@@ -154,6 +154,22 @@ export const detectLegalFormEntities = async (
         continue;
       }
 
+      // Reject all-caps matches (section headings like
+      // "RÁMCOVÁ DOHODA NA" matching "NA" as a legal
+      // form). Check the prefix before the legal suffix.
+      const prefixEnd = text.lastIndexOf(",") !== -1
+        ? text.lastIndexOf(",")
+        : text.lastIndexOf(" ");
+      const prefixPart = prefixEnd > 0
+        ? text.slice(0, prefixEnd).replace(/[^a-zA-ZÀ-ž]/g, "")
+        : text.replace(/[^a-zA-ZÀ-ž]/g, "");
+      if (
+        prefixPart.length > 2 &&
+        prefixPart === prefixPart.toUpperCase()
+      ) {
+        continue;
+      }
+
       // Reject matches where the "legal form" suffix is
       // actually a Roman numeral (II, III, IV, etc.)
       const lastSpace = text.lastIndexOf(" ");
