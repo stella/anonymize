@@ -67,7 +67,8 @@ export type TriggerRule = {
 type TriggerExtractionStrategy =
   | { type: "to-next-comma" }
   | { type: "to-end-of-line" }
-  | { type: "n-words"; count: number };
+  | { type: "n-words"; count: number }
+  | { type: "company-id-value" };
 
 /**
  * Anonymisation operator types. Each operator defines

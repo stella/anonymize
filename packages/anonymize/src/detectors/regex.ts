@@ -159,100 +159,16 @@ const getRegexSet = (): RegexSet => {
   return cached;
 };
 
-// ── Company ID keyword patterns ─────────────────────
-// Capture groups for value extraction require JS
-// RegExp (regex-set doesn't expose capture groups).
-
-type CompanyIdKeyword = {
-  label:
-    | "registration number"
-    | "tax identification number";
-  keywords: readonly string[];
-};
-
-const COMPANY_ID_GROUPS: readonly CompanyIdKeyword[] = [
-  {
-    label: "registration number",
-    keywords: [
-      "IČO",
-      "IČ",
-      "identifikační číslo",
-      "registrační číslo",
-      "registration number",
-      "company id",
-      "company number",
-      "Handelsregisternummer",
-      "Handelsregister",
-      "HRB",
-      "Registernummer",
-      "SIREN",
-      "SIRET",
-      "partita IVA",
-      "codice fiscale",
-      "UID",
-    ],
-  },
-  {
-    label: "tax identification number",
-    keywords: [
-      "DIČ",
-      "daňové identifikační číslo",
-      "VAT number",
-      "VAT ID",
-      "tax identification number",
-      "tax id",
-      "Steuernummer",
-      "Steuer-Nr.",
-      "USt-IdNr.",
-      "USt-IdNr",
-      "NIP",
-      "CIF",
-      "NIF",
-      "BTW",
-    ],
-  },
-];
-
-const COMPANY_ID_SCORE = 0.95;
-
-type CompanyIdPattern = {
-  label: string;
-  pattern: RegExp;
-  score: number;
-};
-
-const buildCompanyIdPatterns = (): CompanyIdPattern[] => {
-  const patterns: CompanyIdPattern[] = [];
-  for (const group of COMPANY_ID_GROUPS) {
-    const sorted = group.keywords.toSorted(
-      (a, b) => b.length - a.length,
-    );
-    const keywordAlt = sorted
-      .map(escapeTitle)
-      .join("|");
-    const re = new RegExp(
-      `(?<!\\p{L})(?:${keywordAlt})(?:\\s*:\\s*|\\s+)` +
-        `([A-Z]{0,4}\\s?\\d[\\d\\s\\-/]{4,})`,
-      "giu",
-    );
-    patterns.push({
-      label: group.label,
-      pattern: re,
-      score: COMPANY_ID_SCORE,
-    });
-  }
-  return patterns;
-};
-
-const COMPANY_ID_PATTERNS = buildCompanyIdPatterns();
-
 // ── Public API ──────────────────────────────────────
 
 /**
  * Run regex-based PII detection. Uses @stll/regex-set
  * for a single-pass DFA scan of all PII patterns.
- * Company ID keyword patterns remain as JS RegExp
- * (capture group extraction).
+ *
+ * Company ID keywords (IČO, DIČ, VAT number, etc.)
+ * moved to trigger configs with "company-id-value"
+ * strategy — detected via the AC-powered trigger
+ * system instead.
  */
 export const detectRegexPii = (
   fullText: string,
@@ -260,7 +176,6 @@ export const detectRegexPii = (
   const results: Entity[] = [];
   const rs = getRegexSet();
 
-  // Single-pass regex-set scan
   for (const match of rs.findIter(fullText)) {
     const meta = META[match.pattern];
     if (!meta) {
@@ -280,35 +195,6 @@ export const detectRegexPii = (
       score: meta.score,
       source: DETECTION_SOURCES.REGEX,
     });
-  }
-
-  // Company ID keyword patterns (capture groups)
-  for (const {
-    label,
-    pattern,
-    score,
-  } of COMPANY_ID_PATTERNS) {
-    pattern.lastIndex = 0;
-    for (
-      let match = pattern.exec(fullText);
-      match !== null;
-      match = pattern.exec(fullText)
-    ) {
-      const value = match[1]?.trim();
-      if (!value) {
-        continue;
-      }
-      const valueIdx =
-        match.index + match[0].lastIndexOf(value);
-      results.push({
-        start: valueIdx,
-        end: valueIdx + value.length,
-        label,
-        text: value,
-        score,
-        source: DETECTION_SOURCES.REGEX,
-      });
-    }
   }
 
   return results;

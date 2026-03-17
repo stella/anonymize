@@ -228,6 +228,35 @@ const extractValue = (
       };
     }
 
+    case "company-id-value": {
+      // Skip optional colon + whitespace separator,
+      // then grab: optional country prefix (0-4
+      // uppercase letters), then digits with optional
+      // spaces/hyphens/slashes. Mirrors the old
+      // COMPANY_ID_PATTERNS regex capture group.
+      const sepMatch =
+        /^[\s:]*/.exec(valueText);
+      const sepLen = sepMatch
+        ? sepMatch[0].length
+        : 0;
+      const afterSep = valueText.slice(sepLen);
+      const idMatch =
+        /^[A-Z]{0,4}\s?\d[\d\s\-/]{4,}/i.exec(
+          afterSep,
+        );
+      if (!idMatch) {
+        return null;
+      }
+      const idText = idMatch[0].trim();
+      const idStart = valueStart + sepLen +
+        (idMatch.index ?? 0);
+      return {
+        start: idStart,
+        end: idStart + idText.length,
+        text: idText,
+      };
+    }
+
     default:
       return null;
   }

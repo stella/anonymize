@@ -43,5 +43,80 @@
     "trigger": "domiciled in",
     "label": "address",
     "strategy": { "type": "to-next-comma" }
+  },
+  {
+    "trigger": "registration number",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" }
+  },
+  {
+    "trigger": "company id",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" }
+  },
+  {
+    "trigger": "company number",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" }
+  },
+  {
+    "trigger": "SIREN",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" }
+  },
+  {
+    "trigger": "SIRET",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" }
+  },
+  {
+    "trigger": "partita IVA",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" }
+  },
+  {
+    "trigger": "codice fiscale",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" }
+  },
+  {
+    "trigger": "VAT number",
+    "label": "tax identification number",
+    "strategy": { "type": "company-id-value" }
+  },
+  {
+    "trigger": "VAT ID",
+    "label": "tax identification number",
+    "strategy": { "type": "company-id-value" }
+  },
+  {
+    "trigger": "tax identification number",
+    "label": "tax identification number",
+    "strategy": { "type": "company-id-value" }
+  },
+  {
+    "trigger": "tax id",
+    "label": "tax identification number",
+    "strategy": { "type": "company-id-value" }
+  },
+  {
+    "trigger": "NIP",
+    "label": "tax identification number",
+    "strategy": { "type": "company-id-value" }
+  },
+  {
+    "trigger": "CIF",
+    "label": "tax identification number",
+    "strategy": { "type": "company-id-value" }
+  },
+  {
+    "trigger": "NIF",
+    "label": "tax identification number",
+    "strategy": { "type": "company-id-value" }
+  },
+  {
+    "trigger": "BTW",
+    "label": "tax identification number",
+    "strategy": { "type": "company-id-value" }
   }
 ]
