@@ -78,7 +78,14 @@ export const filterFalsePositives = (entities: Entity[]): Entity[] => {
     if (TEMPLATE_PLACEHOLDER_RE.test(trimmed)) {
       continue;
     }
-    if (SECTION_NUMBER_RE.test(trimmed)) {
+    // Section numbers (§ 3, 3.2.1, 12.) are false
+    // positives unless they were captured by a trigger
+    // phrase (e.g., "č.p. 92" is an address, not a
+    // section number).
+    if (
+      SECTION_NUMBER_RE.test(trimmed) &&
+      entity.source !== "trigger"
+    ) {
       continue;
     }
     if (STANDALONE_YEAR_RE.test(trimmed)) {

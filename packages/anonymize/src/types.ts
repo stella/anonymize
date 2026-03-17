@@ -167,6 +167,7 @@ export const DEFAULT_ENTITY_LABELS = [
   "address",
   "email address",
   "date",
+  "date of birth",
   "bank account number",
   "iban",
   "tax identification number",

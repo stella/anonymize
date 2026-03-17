@@ -79,3 +79,4 @@ export {
   mergeChunkEntities,
 } from "./util/chunker";
 export { levenshtein } from "./util/levenshtein";
+export { normalizeForSearch } from "./util/normalize";

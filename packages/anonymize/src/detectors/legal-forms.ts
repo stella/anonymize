@@ -18,6 +18,17 @@ const UPPER =
 const LOWER =
   "a-záčďéěíňóřšťúůýžäöüßàâæçèêëîïôùûÿñ\\u0131";
 const CAP_WORD = `[${UPPER}][${LOWER}${UPPER}]+`;
+/** Any word (upper or lowercase start, 2+ chars). */
+const ANY_WORD = `[${UPPER}${LOWER}][${LOWER}${UPPER}]+`;
+
+/**
+ * Proper Roman numeral pattern. Rejects legal forms
+ * like LLC, CIC, LC that happen to use the same
+ * letters (I, V, X, L, C, D, M). Only matches
+ * valid Roman numeral sequences (I–MMMCMXCIX).
+ */
+const ROMAN_NUMERAL_RE =
+  /^(?=[IVXLCDM])M{0,3}(?:CM|CD|D?C{0,3})(?:XC|XL|L?X{0,3})(?:IX|IV|V?I{0,3})$/;
 
 const escapeForRegex = (form: string): string =>
   form
@@ -41,9 +52,12 @@ const buildPattern = (
     (a, b) => b.length - a.length,
   );
   const alt = sorted.map(escapeForRegex).join("|");
+  // First word must be capitalised; subsequent words
+  // can be lowercase (Czech: "Pražské služby, a.s.",
+  // "Rosa rodinné centrum, z.s.").
   const prefix =
     `(?:${CAP_WORD})` +
-    `(?:[\\s&,.-]{1,4}(?:${CAP_WORD})){0,4}`;
+    `(?:[\\s&,.-]{1,4}(?:${ANY_WORD})){0,4}`;
   const separator = requireCapBefore
     ? `(?:\\s+|,\\s*)`
     : `\\s+`;
@@ -128,8 +142,46 @@ export const detectLegalFormEntities = async (
       match !== null;
       match = re.exec(fullText)
     ) {
-      const text = match[0];
+      const raw = match[0];
+      // Trim trailing whitespace/newlines that the
+      // regex may have captured
+      const text = raw.trimEnd();
       if (text.length < 5) {
+        continue;
+      }
+
+      // Reject matches that span across paragraphs
+      // (newline in the middle = not a single entity)
+      if (text.includes("\n")) {
+        continue;
+      }
+
+      // Reject all-caps matches (section headings like
+      // "RÁMCOVÁ DOHODA NA" matching "NA" as a legal
+      // form). Check the prefix before the legal suffix.
+      const prefixEnd = text.lastIndexOf(",") !== -1
+        ? text.lastIndexOf(",")
+        : text.lastIndexOf(" ");
+      const prefixPart = prefixEnd > 0
+        ? text.slice(0, prefixEnd).replace(/[^a-zA-ZÀ-ž]/g, "")
+        : text.replace(/[^a-zA-ZÀ-ž]/g, "");
+      if (
+        prefixPart.length > 2 &&
+        prefixPart === prefixPart.toUpperCase()
+      ) {
+        continue;
+      }
+
+      // Reject matches where the "legal form" suffix is
+      // actually a Roman numeral (II, III, IV, etc.)
+      const lastSpace = text.lastIndexOf(" ");
+      const suffix = lastSpace !== -1
+        ? text.slice(lastSpace + 1).replace(/[.,]/g, "")
+        : "";
+      if (
+        suffix.length > 0 &&
+        ROMAN_NUMERAL_RE.test(suffix)
+      ) {
         continue;
       }
 

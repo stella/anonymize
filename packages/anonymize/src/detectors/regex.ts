@@ -59,13 +59,17 @@ const PARTICLE =
   `von|van|dos|ibn|ben|bin|del|zum|zur|ten|ter|` +
   `da|de|di|al|el|le|la|zu|af|av)`;
 
+// Use [^\S\n] (non-newline whitespace) between name
+// words to prevent matches spanning across lines.
+const SP = "[^\\S\\n]";
+
 const TITLED_PERSON_RE = new RegExp(
   `(?:${TITLE_PREFIX})` +
-    `(?:\\s+(?:${TITLE_PREFIX}))*` +
-    "\\s+" +
+    `(?:${SP}+(?:${TITLE_PREFIX}))*` +
+    `${SP}+` +
     `(?:${NAME_WORD})` +
-    `(?:\\s{1,4}(?:${PARTICLE}\\s+)?${NAME_WORD}){1,3}` +
-    `(?:,?\\s+(?:${POST_NOMINAL}))?`,
+    `(?:${SP}{1,4}(?:${PARTICLE}${SP}+)?${NAME_WORD}){1,3}` +
+    `(?:,?${SP}+(?:${POST_NOMINAL}))?`,
   "g",
 );
 
@@ -75,12 +79,12 @@ const TITLED_PERSON_RE = new RegExp(
  * "Mme Dupont", "Maître Leblanc", etc.
  */
 const EN_NAME_WORD = `[A-Z][a-z]+`;
-const EN_LEGAL_POST_NOMINAL = `(?:\\s+(?:QC|KC|SC|LJ|AG))?`;
+const EN_LEGAL_POST_NOMINAL = `(?:${SP}+(?:QC|KC|SC|LJ|AG))?`;
 const EN_HONORIFIC_PERSON_RE = new RegExp(
   `(?:\\bM\\.|Mrs|Ms|Miss|Messrs|Mr|Sir|Dame|Lord|Lady|` +
     `Judge|Justice|President|Mme|Mlle|\\bMe\\b|Maître)` +
-    `\\.?\\s+${EN_NAME_WORD}` +
-    `(?:[\\s-]{1,2}(?:${PARTICLE}\\s+)?` +
+    `\\.?${SP}+${EN_NAME_WORD}` +
+    `(?:(?:${SP}|-){1,2}(?:${PARTICLE}${SP}+)?` +
     `${EN_NAME_WORD}){0,3}${EN_LEGAL_POST_NOMINAL}`,
   "g",
 );
@@ -117,6 +121,16 @@ const PII_PATTERNS: readonly PiiPattern[] = [
     label: "phone number",
     pattern:
       /\+\d{1,3}[\s.-]?\(?\d{2,4}\)?[\s.-]?\d{3}[\s.-]?\d{2,4}[\s.-]?\d{0,4}\b/g,
+  },
+  // Domestic CZ/SK phone: 9 digits, starting with 6xx
+  // or 7xx (mobile). Allows spaces/dashes between groups.
+  // Negative lookahead excludes bank account segments
+  // (digits followed by /bank_code).
+  {
+    label: "phone number",
+    pattern:
+      /\b[67]\d{2}[\s.-]?\d{3}[\s.-]?\d{3}(?![\s.-]?\d*\/)\b/g,
+    score: 0.9,
   },
   {
     label: "credit card number",
@@ -171,11 +185,14 @@ const PII_PATTERNS: readonly PiiPattern[] = [
     pattern:
       /\b(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\b/g,
   },
-  // Czech bank account: prefix-account/bank_code
-  // e.g., "123-9787260287/0100", "826611/0100", "6034776349/0800"
+  // Czech bank account: optional prefix + account/bank_code
+  // e.g., "123-9787260287/0100", "6034776349/0800",
+  // "826611/0100" (bare 6-digit). Uses (?!\d) instead of
+  // \b at the end because the number may be followed
+  // directly by a letter (no space) in Czech text.
   {
     label: "bank account number",
-    pattern: /\b\d{1,6}-?\d{6,10}\/\d{4}\b/g,
+    pattern: /\b(?:\d{1,6}-)?\d{6,10}\/\d{4}(?!\d)/g,
     score: 0.95,
   },
 ];
