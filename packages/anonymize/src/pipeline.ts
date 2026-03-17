@@ -59,27 +59,34 @@ export const mergeAndDedup = (
   }
 
   // Second pass: a replacement may have widened a span,
-  // creating new overlaps. Remove lower-scoring or
-  // shorter duplicates.
-  const result = merged.toSorted(
+  // creating new overlaps. Repeat until stable to handle
+  // cascading overlaps from span-widening replacements.
+  let result = merged.toSorted(
     (a, b) => a.start - b.start,
   );
-  const deduped: Entity[] = [];
-  for (const entity of result) {
-    const existing = deduped.find(
-      (e) =>
-        entity.start < e.end && entity.end > e.start,
-    );
-    if (existing) {
-      if (shouldReplace(entity, existing)) {
-        deduped[deduped.indexOf(existing)] = entity;
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const deduped: Entity[] = [];
+    for (const entity of result) {
+      const idx = deduped.findIndex(
+        (e) =>
+          entity.start < e.end && entity.end > e.start,
+      );
+      if (idx !== -1) {
+        const existing = deduped[idx];
+        if (existing && shouldReplace(entity, existing)) {
+          deduped[idx] = entity;
+          changed = true;
+        }
+      } else {
+        deduped.push(entity);
       }
-    } else {
-      deduped.push(entity);
     }
+    result = deduped;
   }
 
-  return deduped;
+  return result;
 };
 
 /**
