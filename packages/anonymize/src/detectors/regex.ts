@@ -192,7 +192,7 @@ const PII_PATTERNS: readonly PiiPattern[] = [
   // directly by a letter (no space) in Czech text.
   {
     label: "bank account number",
-    pattern: /\b(?:\d{1,6}-)?\d{2,10}\/\d{4}(?!\d)/g,
+    pattern: /\b(?:\d{1,6}-)?\d{6,10}\/\d{4}(?!\d)/g,
     score: 0.95,
   },
 ];
