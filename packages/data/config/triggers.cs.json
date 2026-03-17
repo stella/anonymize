@@ -134,12 +134,5 @@
     "strategy": {
       "type": "to-next-comma"
     }
-  },
-  {
-    "trigger": "dále jen",
-    "label": "organization",
-    "strategy": {
-      "type": "to-next-comma"
-    }
   }
 ]
