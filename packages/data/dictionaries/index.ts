@@ -45,6 +45,11 @@ export const DICTIONARY_META = {
     category: "Names",
     country: "SK",
   },
+  "names/pl": {
+    label: "person",
+    category: "Names",
+    country: "PL",
+  },
 
   // ── Cities ─────────────────────────────────────────
   "cities/AT": {
@@ -477,6 +482,9 @@ const LOADERS: Record<
   // eslint-disable-next-line typescript-eslint/promise-function-async
   "names/sk": () =>
     import("./names/sk.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "names/pl": () =>
+    import("./names/pl.json") as Promise<JsonModule>,
 
   // ── Cities ─────────────────────────────────────────
   // eslint-disable-next-line typescript-eslint/promise-function-async

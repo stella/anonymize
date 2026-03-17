@@ -92,30 +92,6 @@
     }
   },
   {
-    "trigger": "IČO:",
-    "label": "registration number",
-    "strategy": {
-      "type": "n-words",
-      "count": 1
-    }
-  },
-  {
-    "trigger": "IČ:",
-    "label": "registration number",
-    "strategy": {
-      "type": "n-words",
-      "count": 1
-    }
-  },
-  {
-    "trigger": "DIČ:",
-    "label": "tax identification number",
-    "strategy": {
-      "type": "n-words",
-      "count": 1
-    }
-  },
-  {
     "trigger": "č.ú.:",
     "label": "bank account number",
     "strategy": {
