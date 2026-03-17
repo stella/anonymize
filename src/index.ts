@@ -46,9 +46,12 @@ export {
   extractDefinedTerms,
   findCoreferenceSpans,
 } from "./detectors/coreference";
+export { detectLegalFormEntities } from "./detectors/legal-forms";
+export { detectNameCorpus } from "./detectors/names";
 
 // ── Deny List Detector ──────────────────────────
-export { loadDenyListTerms, scanDenyList } from "./detectors/deny-list";
+export { buildDenyList, scanDenyList } from "./detectors/deny-list";
+export type { DenyListAutomaton } from "./detectors/deny-list";
 
 // ── Regions ──────────────────────────────────────
 export { REGIONS, resolveCountries } from "./regions";

@@ -17,7 +17,7 @@
   "license": "UNLICENSED",
   "dependencies": {
     "@huggingface/tokenizers": "^0.1.2",
-    "@monyone/aho-corasick": "^1.1.6"
+    "@stll/aho-corasick": "^0.1.0"
   },
   "devDependencies": {
     "typescript": "^5.9.3"

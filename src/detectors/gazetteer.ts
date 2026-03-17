@@ -1,4 +1,4 @@
-import { AhoCorasick } from "@monyone/aho-corasick";
+import { AhoCorasick } from "@stll/aho-corasick";
 
 import { DETECTION_SOURCES } from "../types";
 import type { Entity, GazetteerEntry } from "../types";
@@ -11,7 +11,9 @@ const MAX_PREFIX_OVERSHOOT = 6;
  * Collect all searchable strings (canonical + variants)
  * from gazetteer entries, mapped to their labels.
  */
-const buildSearchTerms = (entries: GazetteerEntry[]): Map<string, string> => {
+const buildSearchTerms = (
+  entries: GazetteerEntry[],
+): Map<string, string> => {
   const terms = new Map<string, string>();
   for (const entry of entries) {
     terms.set(entry.canonical, entry.label);
@@ -31,32 +33,30 @@ export const scanExact = (
   entries: GazetteerEntry[],
 ): Entity[] => {
   const terms = buildSearchTerms(entries);
-  const patterns = [...terms.keys()];
+  const patterns = Array.from(terms.keys());
 
   if (patterns.length === 0) {
     return [];
   }
 
-  // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment, typescript-eslint/no-unsafe-call
   const ac = new AhoCorasick(patterns);
   const results: Entity[] = [];
 
-  // oxlint-disable-next-line typescript-eslint/no-unsafe-call, typescript-eslint/no-unsafe-member-access
-  for (const match of ac.matchInText(fullText)) {
-    // oxlint-disable-next-line typescript-eslint/no-unsafe-argument, typescript-eslint/no-unsafe-member-access
-    const label = terms.get(match.keyword);
+  for (const match of ac.findIter(fullText)) {
+    const matchedPattern = patterns[match.pattern];
+    if (!matchedPattern) {
+      continue;
+    }
+    const label = terms.get(matchedPattern);
     if (!label) {
       continue;
     }
 
     results.push({
-      // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment, typescript-eslint/no-unsafe-member-access
-      start: match.begin,
-      // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment, typescript-eslint/no-unsafe-member-access
+      start: match.start,
       end: match.end,
       label,
-      // oxlint-disable-next-line typescript-eslint/no-unsafe-assignment, typescript-eslint/no-unsafe-member-access
-      text: match.keyword,
+      text: match.text,
       score: 1,
       source: DETECTION_SOURCES.GAZETTEER,
     });

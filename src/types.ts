@@ -138,6 +138,7 @@ export type PipelineConfig = {
   threshold: number;
   enableTriggerPhrases: boolean;
   enableRegex: boolean;
+  enableNameCorpus: boolean;
   enableDenyList: boolean;
   denyListCountries?: string[];
   denyListRegions?: string[];

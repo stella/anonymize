@@ -2,8 +2,11 @@ import {
   extractDefinedTerms,
   findCoreferenceSpans,
 } from "./detectors/coreference";
-import { loadDenyListTerms, scanDenyList } from "./detectors/deny-list";
+import { buildDenyList, scanDenyList } from "./detectors/deny-list";
+import type { DenyListAutomaton } from "./detectors/deny-list";
 import { scanExact, scanFuzzy } from "./detectors/gazetteer";
+import { detectLegalFormEntities } from "./detectors/legal-forms";
+import { detectNameCorpus } from "./detectors/names";
 import { detectRegexPii } from "./detectors/regex";
 import { detectTriggerPhrases } from "./detectors/triggers";
 import { boostNearMissEntities } from "./filters/confidence-boost";
@@ -96,6 +99,7 @@ export const runPipeline = async (
   gazetteerEntries: GazetteerEntry[],
   nerInference: NerInferenceFn | null,
   onProgress?: (step: string, detail: string) => void,
+  denyListAutomaton?: DenyListAutomaton | null,
 ): Promise<Entity[]> => {
   const log = (step: string, detail: string) => {
     onProgress?.(step, detail);
@@ -115,13 +119,43 @@ export const runPipeline = async (
     log("regex", `${regexEntities.length} matches`);
   }
 
-  // Step 2b: Deny list
+  // Step 2b: Legal form detection
+  const legalFormEntities =
+    detectLegalFormEntities(fullText);
+  if (legalFormEntities.length > 0) {
+    log(
+      "legal-forms",
+      `${legalFormEntities.length} matches`,
+    );
+  }
+
+  // Step 2c: Name corpus
+  let nameCorpusEntities: Entity[] = [];
+  if (config.enableNameCorpus) {
+    nameCorpusEntities = detectNameCorpus(fullText);
+    log(
+      "name-corpus",
+      `${nameCorpusEntities.length} matches`,
+    );
+  }
+
+  // Step 2d: Deny list
   let denyListEntities: Entity[] = [];
   if (config.enableDenyList) {
-    const terms = await loadDenyListTerms(config);
-    if (terms.size > 0) {
-      denyListEntities = scanDenyList(fullText, terms);
-      log("deny-list", `${denyListEntities.length} matches`);
+    // Build automaton if not pre-built by the caller
+    const automaton =
+      denyListAutomaton !== undefined
+        ? denyListAutomaton
+        : await buildDenyList(config);
+    if (automaton) {
+      denyListEntities = scanDenyList(
+        fullText,
+        automaton,
+      );
+      log(
+        "deny-list",
+        `${denyListEntities.length} matches`,
+      );
     }
   }
 
@@ -149,6 +183,8 @@ export const runPipeline = async (
   const preBoostEntities = [
     ...triggerEntities,
     ...regexEntities,
+    ...legalFormEntities,
+    ...nameCorpusEntities,
     ...denyListEntities,
     ...gazetteerExact,
     ...gazetteerFuzzy,
