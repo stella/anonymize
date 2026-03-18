@@ -399,5 +399,72 @@
     "strategy": {
       "type": "to-next-comma"
     }
+  },
+  {
+    "trigger": "statutární město",
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    }
+  },
+  {
+    "trigger": "statutárního města",
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    }
+  },
+  {
+    "trigger": "statutárním městě",
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    }
+  },
+  {
+    "trigger": "kontaktní osoba",
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    }
+  },
+  {
+    "trigger": "kontaktní osoba:",
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    }
+  },
+  {
+    "trigger": "datová schránka:",
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    }
+  },
+  {
+    "trigger": "datová schránka",
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    }
+  },
+  {
+    "trigger": "dat. schránka:",
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    }
+  },
+  {
+    "trigger": "dat. schránka",
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    }
   }
 ]
