@@ -148,11 +148,16 @@ const extractValue = (
     }
 
     case "to-end-of-line": {
-      const newlineIdx = valueText.indexOf("\n");
-      const end =
-        newlineIdx !== -1
-          ? newlineIdx
-          : valueText.length;
+      // Stop at newline or tab (tab separates cells
+      // in DOCX table rows).
+      const LINE_STOPS = ["\n", "\t"];
+      let end = valueText.length;
+      for (const ch of LINE_STOPS) {
+        const idx = valueText.indexOf(ch);
+        if (idx !== -1 && idx < end) {
+          end = idx;
+        }
+      }
       const rawSlice = valueText.slice(0, end);
       const extracted = rawSlice.trim();
       if (extracted.length === 0) {
