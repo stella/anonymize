@@ -56,7 +56,7 @@ type PatternMeta = {
  * To add a new pattern: append to PATTERNS and META.
  * The index must match.
  */
-const PATTERNS: string[] = [
+const PATTERNS: readonly string[] = [
   // 0: titled person (Czech/German)
   `(?:${TITLE_PREFIX})` +
     `(?:${SP}+(?:${TITLE_PREFIX}))*` +
@@ -66,7 +66,7 @@ const PATTERNS: string[] = [
     `(?:,?${SP}+(?:${POST_NOMINAL}))?`,
   // 1: English honorific person
   `(?:M\\.|Mrs|Ms|Miss|Messrs|Mr|Sir|Dame|Lord|Lady|` +
-    `Judge|Justice|President|Mme|Mlle|Me|Maître)` +
+    `Judge|Justice|President|Mme|Mlle|\\bMe\\b|Maître)` +
     `\\.?${SP}+[A-Z][a-z]+` +
     `(?:(?:${SP}|-){1,2}(?:${PARTICLE}${SP}+)?` +
     `[A-Z][a-z]+){0,3}` +
@@ -150,7 +150,8 @@ let cached: RegexSet | null = null;
 
 const getRegexSet = (): RegexSet => {
   if (!cached) {
-    cached = new RegexSet(PATTERNS);
+    // SAFETY: RegexSet doesn't mutate the array
+    cached = new RegexSet(PATTERNS as string[]);
   }
   return cached;
 };

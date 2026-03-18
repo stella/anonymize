@@ -149,9 +149,15 @@ export const detectLegalFormEntities = async (
   }
 
   const results: Entity[] = [];
-  const matches = set.sets.flatMap((rs) =>
-    rs.findIter(fullText),
-  );
+  // Collect matches from each separate RegexSet.
+  // Use for...of + push (not flatMap) because
+  // findIter may return a lazy iterable.
+  const matches: { pattern: number; start: number; end: number; text: string }[] = [];
+  for (const rs of set.sets) {
+    for (const m of rs.findIter(fullText)) {
+      matches.push(m);
+    }
+  }
 
   for (const match of matches) {
     const text = match.text.trimEnd();
