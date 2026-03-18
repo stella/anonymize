@@ -30,15 +30,28 @@ type TriggerAutomaton = {
   rules: readonly TriggerRule[];
 };
 
-let cached: TriggerAutomaton | null = null;
-let loaded = false;
+// Cache the Promise itself to prevent concurrent
+// initialization races (two simultaneous first calls
+// would both pass a boolean guard before the first
+// await resolves).
+let cachedPromise: Promise<
+  TriggerAutomaton | null
+> | null = null;
 
-const loadAutomaton = async (): Promise<
+const loadAutomaton = (): Promise<
   TriggerAutomaton | null
 > => {
-  if (loaded) {
-    return cached;
+  if (cachedPromise) {
+    return cachedPromise;
   }
+
+  cachedPromise = buildAutomaton();
+  return cachedPromise;
+};
+
+const buildAutomaton = async (): Promise<
+  TriggerAutomaton | null
+> => {
 
   const rules: TriggerRule[] = [];
 
@@ -69,8 +82,6 @@ const loadAutomaton = async (): Promise<
     ),
   ]);
 
-  loaded = true;
-
   if (rules.length === 0) {
     return null;
   }
@@ -84,8 +95,7 @@ const loadAutomaton = async (): Promise<
   // search text are already lowercased.
   const ac = new AhoCorasick(patterns);
 
-  cached = { ac, rules };
-  return cached;
+  return { ac, rules };
 };
 
 // ── Value extraction (unchanged) ────────────────────
@@ -256,7 +266,8 @@ const extractValue = (
         idMatch[0].trimStart().length;
       const idStart = triggerEnd +
         sepMatch[0].length +
-        (idMatch.index ?? 0) +
+        // idMatch.index is always 0 (anchored ^ regex)
+
         leadingSpaces;
       return {
         start: idStart,

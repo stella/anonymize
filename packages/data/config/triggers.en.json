@@ -98,20 +98,5 @@
     "trigger": "tax id",
     "label": "tax identification number",
     "strategy": { "type": "company-id-value" }
-  },
-  {
-    "trigger": "NIP",
-    "label": "tax identification number",
-    "strategy": { "type": "company-id-value" }
-  },
-  {
-    "trigger": "CIF",
-    "label": "tax identification number",
-    "strategy": { "type": "company-id-value" }
-  },
-  {
-    "trigger": "NIF",
-    "label": "tax identification number",
-    "strategy": { "type": "company-id-value" }
   }
 ]
