@@ -296,21 +296,29 @@ export const detectTriggerPhrases = async (
   const matches = automaton.ac.findIter(lowerText);
 
   for (const match of matches) {
-    // Word-boundary check: reject if preceded or
-    // followed by a letter (prevents "IČ" matching
-    // inside "IČO", or "pan" inside "panel").
+    // Left word-boundary: reject if preceded by a
+    // letter (prevents partial keyword matches).
     if (
       match.start > 0 &&
       LETTER_RE.test(lowerText[match.start - 1] ?? "")
     ) {
       continue;
     }
-    if (LETTER_RE.test(lowerText[match.end] ?? "")) {
-      continue;
-    }
 
     const rule = automaton.rules[match.pattern];
     if (!rule) {
+      continue;
+    }
+
+    // Right word-boundary: reject if followed by a
+    // letter — but skip this check when the trigger
+    // itself ends with whitespace (e.g., "pan ",
+    // "město ") since the trailing space already
+    // acts as a boundary delimiter.
+    if (
+      !rule.trigger.endsWith(" ") &&
+      LETTER_RE.test(lowerText[match.end] ?? "")
+    ) {
       continue;
     }
 
