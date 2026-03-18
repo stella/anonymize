@@ -77,15 +77,16 @@ const PATTERNS: string[] = [
     `\\s?[\\dA-Z]{0,14}\\b`,
   // 3: email
   `\\b[\\w.+\\-]+@[\\w\\-]+(?:\\.[\\w\\-]+)+\\b`,
-  // 4: international phone (+CC ...)
-  // Derived from Google libphonenumber (Apache-2.0)
-  `\\+\\d{1,3}[\\s\\-]?\\(?\\d{1,4}\\)?` +
-    `(?:[\\s\\-]?\\d){6,14}(?!\\d)`,
-  // 5: domestic phone (no country code, 7-10 digits)
-  // Groups of digits separated by spaces/dashes only
-  // (not dots — dots conflict with dates like 20.06.2016)
-  `\\b\\d{2,4}[\\s\\-]\\d{3,4}[\\s\\-]?\\d{3,4}` +
-    `(?:[\\s\\-]?\\d{1,4})?(?![\\s\\-]?\\d*/\\d)\\b`,
+  // 4: international phone
+  `\\+\\d{1,3}[\\s.\\-]?\\(?\\d{2,4}\\)?` +
+    `[\\s.\\-]?\\d{3}[\\s.\\-]?\\d{2,4}` +
+    `[\\s.\\-]?\\d{0,4}\\b`,
+  // 5: domestic CZ phone (9 digits, groups of 3)
+  // Patterns from Google libphonenumber (Apache-2.0):
+  // generalDesc: (?:[2-578]\d|60)\d{7}
+  // Covers fixed (2xx-5xx), mobile (60x,7xx), toll-free (8xx)
+  `\\b(?:[2-578]\\d|60)\\d[\\s.\\-]?\\d{3}[\\s.\\-]?\\d{3}` +
+    `(?![\\s.\\-]?\\d*/\\d)\\b`,
   // 8: credit card
   `\\b(?:4\\d{3}|5[1-5]\\d{2}|3[47]\\d{2})` +
     `[\\s.\\-]?\\d{4}[\\s.\\-]?\\d{4}` +
@@ -131,8 +132,8 @@ const META: readonly PatternMeta[] = [
   { label: "person", score: 0.95 },
   { label: "iban", score: 1 },
   { label: "email address", score: 1 },
-  { label: "phone number", score: 0.95 },
-  { label: "phone number", score: 0.85 },
+  { label: "phone number", score: 1 },
+  { label: "phone number", score: 0.9 },
   { label: "credit card number", score: 1 },
   { label: "czech birth number", score: 1 },
   { label: "date", score: 1 },
