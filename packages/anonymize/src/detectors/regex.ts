@@ -61,7 +61,7 @@ const PARTICLE =
 
 // Use [^\S\n] (non-newline whitespace) between name
 // words to prevent matches spanning across lines.
-const SP = "[^\\S\\n]";
+const SP = "[^\\S\\n\\t]";
 
 const TITLED_PERSON_RE = new RegExp(
   `(?:${TITLE_PREFIX})` +

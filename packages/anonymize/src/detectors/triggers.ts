@@ -116,7 +116,7 @@ const extractValue = (
       // Parens mark defined-term clauses in legal text
       // (e.g., "(dále jen ...)") and should not be
       // captured as part of a name/address.
-      const STOP_CHARS = [",", "\n", "("];
+      const STOP_CHARS = [",", "\n", "(", "\t"];
       let end = valueText.length;
       let foundStop = false;
       for (const ch of STOP_CHARS) {
@@ -148,11 +148,16 @@ const extractValue = (
     }
 
     case "to-end-of-line": {
-      const newlineIdx = valueText.indexOf("\n");
-      const end =
-        newlineIdx !== -1
-          ? newlineIdx
-          : valueText.length;
+      // Stop at newline or tab (tab separates cells
+      // in DOCX table rows).
+      const LINE_STOPS = ["\n", "\t"];
+      let end = valueText.length;
+      for (const ch of LINE_STOPS) {
+        const idx = valueText.indexOf(ch);
+        if (idx !== -1 && idx < end) {
+          end = idx;
+        }
+      }
       const rawSlice = valueText.slice(0, end);
       const extracted = rawSlice.trim();
       if (extracted.length === 0) {
@@ -168,7 +173,14 @@ const extractValue = (
     }
 
     case "n-words": {
-      const words = valueText
+      // Respect tab as a cell boundary (DOCX table
+      // rows use tabs between columns).
+      const tabIdx = valueText.indexOf("\t");
+      const cellText =
+        tabIdx !== -1
+          ? valueText.slice(0, tabIdx)
+          : valueText;
+      const words = cellText
         .split(WHITESPACE_RE)
         .slice(0, strategy.count);
       if (words.length === 0) {
@@ -177,7 +189,7 @@ const extractValue = (
       let actualEnd = 0;
       let searchPos = 0;
       for (const word of words) {
-        const wordIdx = valueText.indexOf(
+        const wordIdx = cellText.indexOf(
           word,
           searchPos,
         );
@@ -187,7 +199,7 @@ const extractValue = (
       return {
         start: valueStart,
         end: valueStart + actualEnd,
-        text: valueText.slice(0, actualEnd),
+        text: cellText.slice(0, actualEnd),
       };
     }
 
