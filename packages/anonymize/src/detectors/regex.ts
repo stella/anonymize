@@ -81,11 +81,11 @@ const PATTERNS: string[] = [
   `\\+\\d{1,3}[\\s.\\-]?\\(?\\d{2,4}\\)?` +
     `[\\s.\\-]?\\d{3}[\\s.\\-]?\\d{2,4}` +
     `[\\s.\\-]?\\d{0,4}\\b`,
-  // 5: domestic CZ/SK mobile phone (6xx/7xx)
-  `\\b[67]\\d{2}[\\s.\\-]?\\d{3}[\\s.\\-]?\\d{3}` +
-    `(?![\\s.\\-]?\\d*/\\d)\\b`,
-  // 6: domestic CZ/SK landline phone (2xx-5xx)
-  `\\b[2-5]\\d{2}[\\s.\\-]?\\d{3}[\\s.\\-]?\\d{3}` +
+  // 5: domestic CZ phone (9 digits, groups of 3)
+  // Patterns from Google libphonenumber (Apache-2.0):
+  // generalDesc: (?:[2-578]\d|60)\d{7}
+  // Covers fixed (2xx-5xx), mobile (60x,7xx), toll-free (8xx)
+  `\\b(?:[2-578]\\d|60)\\d[\\s.\\-]?\\d{3}[\\s.\\-]?\\d{3}` +
     `(?![\\s.\\-]?\\d*/\\d)\\b`,
   // 8: credit card
   `\\b(?:4\\d{3}|5[1-5]\\d{2}|3[47]\\d{2})` +
@@ -134,7 +134,6 @@ const META: readonly PatternMeta[] = [
   { label: "email address", score: 1 },
   { label: "phone number", score: 1 },
   { label: "phone number", score: 0.9 },
-  { label: "phone number", score: 0.7 },
   { label: "credit card number", score: 1 },
   { label: "czech birth number", score: 1 },
   { label: "date", score: 1 },
