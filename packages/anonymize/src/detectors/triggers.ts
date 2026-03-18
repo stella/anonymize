@@ -252,8 +252,12 @@ const extractValue = (
         return null;
       }
       const idText = idMatch[0].trim();
+      const leadingSpaces = idMatch[0].length -
+        idMatch[0].trimStart().length;
       const idStart = triggerEnd +
-        sepMatch[0].length + (idMatch.index ?? 0);
+        sepMatch[0].length +
+        (idMatch.index ?? 0) +
+        leadingSpaces;
       return {
         start: idStart,
         end: idStart + idText.length,

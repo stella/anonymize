@@ -128,5 +128,10 @@
     "trigger": "UID",
     "label": "registration number",
     "strategy": { "type": "company-id-value" }
+  },
+  {
+    "trigger": "BTW",
+    "label": "tax identification number",
+    "strategy": { "type": "company-id-value" }
   }
 ]
