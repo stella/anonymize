@@ -429,7 +429,23 @@
     }
   },
   {
+    "trigger": "datová schránka:",
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    }
+  },
+  {
     "trigger": "datová schránka",
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    }
+  },
+  {
+    "trigger": "dat. schránka:",
     "label": "registration number",
     "strategy": {
       "type": "n-words",
