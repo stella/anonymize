@@ -22,7 +22,7 @@
   "dependencies": {
     "@huggingface/tokenizers": "^0.1.2",
     "@stll/aho-corasick": "^0.1.2",
-    "@stll/regex-set": "^0.1.0"
+    "@stll/regex-set": "^0.3.2"
   },
   "peerDependencies": {
     "@stll/anonymize-data": ">=0.0.1"
