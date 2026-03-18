@@ -60,9 +60,9 @@ const buildPatternString = (
 // ── Cached RegexSet ─────────────────────────────────
 
 type CompiledSet = {
-  rs: RegexSet;
-  /** Pattern 0 = long forms, pattern 1 = short forms */
-  patternCount: number;
+  /** Separate RegexSet per pattern to avoid multi-pattern
+   *  DFA state explosion (0.4ms vs 8ms combined). */
+  sets: RegexSet[];
 };
 
 let cachedPromise: Promise<CompiledSet | null> | null =
@@ -128,9 +128,11 @@ const buildSet = async (): Promise<
     return null;
   }
 
+  // Build each pattern as a separate RegexSet to avoid
+  // multi-pattern DFA state explosion (two 18K+2.5K
+  // patterns combined = 8ms; separate = 0.4ms total).
   return {
-    rs: new RegexSet(patterns),
-    patternCount: patterns.length,
+    sets: patterns.map((p) => new RegexSet([p])),
   };
 };
 
@@ -147,7 +149,9 @@ export const detectLegalFormEntities = async (
   }
 
   const results: Entity[] = [];
-  const matches = set.rs.findIter(fullText);
+  const matches = set.sets.flatMap((rs) =>
+    rs.findIter(fullText),
+  );
 
   for (const match of matches) {
     const text = match.text.trimEnd();
