@@ -173,7 +173,14 @@ const extractValue = (
     }
 
     case "n-words": {
-      const words = valueText
+      // Respect tab as a cell boundary (DOCX table
+      // rows use tabs between columns).
+      const tabIdx = valueText.indexOf("\t");
+      const cellText =
+        tabIdx !== -1
+          ? valueText.slice(0, tabIdx)
+          : valueText;
+      const words = cellText
         .split(WHITESPACE_RE)
         .slice(0, strategy.count);
       if (words.length === 0) {
@@ -182,7 +189,7 @@ const extractValue = (
       let actualEnd = 0;
       let searchPos = 0;
       for (const word of words) {
-        const wordIdx = valueText.indexOf(
+        const wordIdx = cellText.indexOf(
           word,
           searchPos,
         );
@@ -192,7 +199,7 @@ const extractValue = (
       return {
         start: valueStart,
         end: valueStart + actualEnd,
-        text: valueText.slice(0, actualEnd),
+        text: cellText.slice(0, actualEnd),
       };
     }
 
