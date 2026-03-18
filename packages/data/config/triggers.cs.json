@@ -415,6 +415,13 @@
     }
   },
   {
+    "trigger": "statutárním městě",
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    }
+  },
+  {
     "trigger": "kontaktní osoba",
     "label": "person",
     "strategy": {
