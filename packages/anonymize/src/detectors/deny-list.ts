@@ -1,5 +1,10 @@
 import { AhoCorasick } from "@stll/aho-corasick";
 
+import {
+  NAME_CORPUS_FIRST_NAMES,
+  NAME_CORPUS_SURNAMES,
+  NAME_CORPUS_TITLES,
+} from "./names";
 import { resolveCountries } from "../regions";
 import { DETECTION_SOURCES } from "../types";
 import type { Entity, PipelineConfig } from "../types";
@@ -371,12 +376,32 @@ const STOPWORDS: ReadonlySet<string> = new Set([
  * Pre-built deny list automaton. Constructed once by
  * `buildDenyList`, reused across `scanDenyList` calls.
  */
+/**
+ * Source tag for each pattern in the automaton.
+ * "deny-list" = standard deny list entry
+ * "first-name" = name corpus first name
+ * "surname" = name corpus surname
+ * "title" = academic/professional title
+ */
+type PatternSource =
+  | "deny-list"
+  | "first-name"
+  | "surname"
+  | "title";
+
 export type DenyListAutomaton = {
   ac: AhoCorasick;
-  /** Maps pattern index → entity label. */
-  labels: string[];
+  /**
+   * Maps pattern index → entity labels (plural).
+   * Same pattern can have multiple labels when it
+   * appears in multiple dictionaries (e.g., "Denver"
+   * is both a person name and a city name).
+   */
+  labels: string[][];
   /** Maps pattern index → original pattern text. */
   patterns: string[];
+  /** Maps pattern index → source types (plural). */
+  sources: PatternSource[][];
 };
 
 /**
@@ -430,8 +455,11 @@ export const buildDenyList = async (
   });
 
   const patternList: string[] = [];
-  const labelList: string[] = [];
-  const seen = new Set<string>();
+  const labelList: string[][] = [];
+  const sourceList: PatternSource[][] = [];
+  // Maps lowercased pattern → index in patternList
+  // for accumulating labels from multiple dictionaries
+  const patternIndex = new Map<string, number>();
 
   const results = await Promise.all(
     ids.map(async (id) => {
@@ -441,23 +469,106 @@ export const buildDenyList = async (
     }),
   );
 
+  const addDenyListEntry = (
+    entry: string,
+    label: string,
+  ) => {
+    const normalized = normalizeForSearch(entry);
+    const lower = normalized.toLowerCase();
+    const existing = patternIndex.get(lower);
+    if (existing !== undefined) {
+      if (!labelList[existing]!.includes(label)) {
+        labelList[existing]!.push(label);
+      }
+      if (!sourceList[existing]!.includes("deny-list")) {
+        sourceList[existing]!.push("deny-list");
+      }
+    } else {
+      patternIndex.set(lower, patternList.length);
+      patternList.push(normalized);
+      labelList.push([label]);
+      sourceList.push(["deny-list"]);
+    }
+  };
+
   for (const { id, entries } of results) {
     const meta = dataModule.DICTIONARY_META[id];
     if (!meta) {
       continue;
     }
     for (const entry of entries) {
-      // Normalize typographic variants in patterns too,
-      // so both sides (pattern + search text) are
-      // consistent.
-      const normalized = normalizeForSearch(entry);
-      const lower = normalized.toLowerCase();
-      if (seen.has(lower)) {
-        continue;
+      addDenyListEntry(entry, meta.label);
+    }
+  }
+
+  // Load city dictionaries dynamically for all
+  // allowed countries. Cities cover 230 countries
+  // via GeoNames and are loaded separately from
+  // the static dictionary registry.
+  if (!excludeCategories.has("Places")) {
+    const cityCountries =
+      allowedCountries !== null
+        ? [...allowedCountries]
+        : // No country filter — load all. In practice
+          // this would be massive, so limit to a
+          // reasonable set of common legal jurisdictions.
+          [
+            "AT", "AU", "BE", "BG", "BR", "CA",
+            "CH", "CZ", "DE", "DK", "ES", "FI",
+            "FR", "GB", "GR", "HR", "HU", "IE",
+            "IT", "LU", "NL", "NO", "NZ", "PL",
+            "PT", "RO", "SE", "SI", "SK", "US",
+          ];
+    const cityEntries =
+      await dataModule.loadCityDictionaries(
+        cityCountries,
+      );
+    for (const entry of cityEntries) {
+      addDenyListEntry(entry, "address");
+    }
+  }
+
+  // Add name corpus entries — accumulate labels
+  // for entries that already exist from deny-list.
+  const addNameEntry = (
+    name: string,
+    source: PatternSource,
+  ) => {
+    const lower = name.toLowerCase();
+    const existing = patternIndex.get(lower);
+    if (existing !== undefined) {
+      if (!labelList[existing]!.includes("person")) {
+        labelList[existing]!.push("person");
       }
-      seen.add(lower);
-      patternList.push(normalized);
-      labelList.push(meta.label);
+      if (!sourceList[existing]!.includes(source)) {
+        sourceList[existing]!.push(source);
+      }
+    } else {
+      patternIndex.set(lower, patternList.length);
+      patternList.push(name);
+      labelList.push(["person"]);
+      sourceList.push([source]);
+    }
+  };
+
+  for (const name of NAME_CORPUS_FIRST_NAMES) {
+    addNameEntry(name, "first-name");
+  }
+  for (const name of NAME_CORPUS_SURNAMES) {
+    addNameEntry(name, "surname");
+  }
+  for (const title of NAME_CORPUS_TITLES) {
+    const lower = title.toLowerCase();
+    const existing = patternIndex.get(lower);
+    if (existing !== undefined) {
+      if (!sourceList[existing]!.includes("title")) {
+        sourceList[existing]!.push("title");
+      }
+    } else {
+      patternIndex.set(lower, patternList.length);
+      patternList.push(title);
+      labelList.push(["person"]);
+      sourceList.push(["title"]);
     }
   }
 
@@ -474,6 +585,7 @@ export const buildDenyList = async (
     ac,
     labels: labelList,
     patterns: patternList,
+    sources: sourceList,
   };
 };
 
@@ -502,7 +614,8 @@ const isSentenceStart = (
 type RawMatch = {
   start: number;
   end: number;
-  label: string;
+  /** All labels for this pattern (e.g., ["person", "address"]). */
+  labels: string[];
   text: string;
   patternIdx: number;
 };
@@ -557,15 +670,15 @@ export const scanDenyList = (
       continue;
     }
 
-    const label = automaton.labels[match.pattern];
-    if (!label) {
+    const labels = automaton.labels[match.pattern];
+    if (!labels || labels.length === 0) {
       continue;
     }
 
     const entry: RawMatch = {
       start: match.start,
       end: match.end,
-      label,
+      labels,
       text: matchText,
       patternIdx: match.pattern,
     };
@@ -580,8 +693,9 @@ export const scanDenyList = (
     }
   }
 
-  // Pass 2: for person names, require mid-sentence
+  // Pass 2: process all matches
   const results: Entity[] = [];
+  const nameHits: RawMatch[] = [];
 
   for (const [, matches] of Array.from(
     matchesByPattern,
@@ -591,30 +705,116 @@ export const scanDenyList = (
       continue;
     }
 
-    if (first.label === "person") {
-      const hasMidSentence = matches.some(
-        (m) => !isSentenceStart(fullText, m.start),
-      );
-      if (!hasMidSentence) {
-        continue;
+    const hasPerson = first.labels.includes("person");
+    const nonPersonLabels = first.labels.filter(
+      (l) => l !== "person",
+    );
+
+    // Person hits go to chain scoring (Pass 2b).
+    // No mid-sentence filter here — chain scoring
+    // handles standalone names with its own logic.
+    if (hasPerson) {
+      for (const m of matches) {
+        nameHits.push(m);
       }
     }
 
+    // Emit entities for all non-person labels
     for (const m of matches) {
-      const extended =
-        m.label === "person"
-          ? extendPersonName(fullText, m.start, m.end)
-          : { end: m.end, text: m.text };
-
-      results.push({
-        start: m.start,
-        end: extended.end,
-        label: m.label,
-        text: extended.text,
-        score: 0.9,
-        source: DETECTION_SOURCES.DENY_LIST,
-      });
+      for (const label of nonPersonLabels) {
+        results.push({
+          start: m.start,
+          end: m.end,
+          label,
+          text: m.text,
+          score: 0.9,
+          source: DETECTION_SOURCES.DENY_LIST,
+        });
+      }
     }
+  }
+
+  // Pass 2b: person hits — chain adjacent hits and
+  // extend to following capitalised words.
+  nameHits.sort((a, b) => a.start - b.start);
+
+  const nameConsumed = new Set<number>();
+  for (let i = 0; i < nameHits.length; i++) {
+    if (nameConsumed.has(i)) {
+      continue;
+    }
+    const hit = nameHits[i];
+    if (!hit) {
+      continue;
+    }
+
+    // Build chain of adjacent person hits
+    const chain: RawMatch[] = [hit];
+    let j = i + 1;
+
+    while (j < nameHits.length && chain.length < 5) {
+      const next = nameHits[j];
+      if (!next) {
+        break;
+      }
+      const prev = chain.at(-1);
+      if (!prev) {
+        break;
+      }
+
+      const gap = fullText.slice(prev.end, next.start);
+      if (
+        gap.length > 4 ||
+        gap.length === 0 ||
+        gap.includes("\n") ||
+        gap.includes("\t")
+      ) {
+        break;
+      }
+
+      chain.push(next);
+      j++;
+    }
+
+    // Mark chain members consumed
+    for (let k = i; k < i + chain.length; k++) {
+      nameConsumed.add(k);
+    }
+
+    // Extend to following capitalised word (for
+    // unknown surnames not in the corpus)
+    const first = chain.at(0);
+    const last = chain.at(-1);
+    if (!first || !last) {
+      continue;
+    }
+
+    const extended = extendPersonName(
+      fullText,
+      first.start,
+      last.end,
+    );
+
+    // Score: chained names get 0.9, single names 0.5
+    const score = chain.length >= 2 ? 0.9 : 0.5;
+
+    // Skip standalone single-word names at sentence
+    // start (likely not a person name)
+    if (
+      chain.length === 1 &&
+      isSentenceStart(fullText, first.start)
+    ) {
+      continue;
+    }
+
+    results.push({
+      start: first.start,
+      end: extended.end,
+      label: "person",
+      text: extended.text,
+      score,
+      source: DETECTION_SOURCES.DENY_LIST,
+    });
   }
 
   return results;
