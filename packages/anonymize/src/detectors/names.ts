@@ -1102,3 +1102,19 @@ export const detectNameCorpus = (fullText: string): Entity[] => {
 
   return entities;
 };
+
+// ── Exports for AC integration ──────────────────────
+// Used by deny-list.ts to merge name corpus into the
+// single AC automaton.
+
+export const NAME_CORPUS_FIRST_NAMES: readonly string[] =
+  [...FIRST_NAMES];
+
+export const NAME_CORPUS_SURNAMES: readonly string[] =
+  [...COMMON_SURNAMES];
+
+export const NAME_CORPUS_TITLES: readonly string[] =
+  [...TITLE_TOKENS];
+
+export const NAME_CORPUS_EXCLUDED: readonly string[] =
+  [...EXCLUDED_WORDS];
