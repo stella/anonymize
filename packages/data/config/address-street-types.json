@@ -1,0 +1,125 @@
+{
+  "_comment": "Street type words by language. Used by address seed detector to identify street names via Aho-Corasick.",
+  "cs": [
+    "alej",
+    "bulvár",
+    "nábř.",
+    "nábřeží",
+    "nám.",
+    "náměstí",
+    "sady",
+    "tř.",
+    "třída",
+    "ul.",
+    "ulice"
+  ],
+  "de": [
+    "Allee",
+    "Gasse",
+    "Platz",
+    "Ring",
+    "Straße",
+    "Strasse",
+    "Weg"
+  ],
+  "en": [
+    "Ave.",
+    "Avenue",
+    "Blvd.",
+    "Boulevard",
+    "Circle",
+    "Court",
+    "Crescent",
+    "Drive",
+    "Highway",
+    "Lane",
+    "Parkway",
+    "Place",
+    "Rd.",
+    "Road",
+    "Square",
+    "St.",
+    "Street",
+    "Terrace",
+    "Way"
+  ],
+  "es": [
+    "avenida",
+    "calle",
+    "camino",
+    "paseo",
+    "plaza"
+  ],
+  "fr": [
+    "allée",
+    "avenue",
+    "boulevard",
+    "chemin",
+    "impasse",
+    "place",
+    "quai",
+    "rue"
+  ],
+  "hu": [
+    "fasor",
+    "körút",
+    "köz",
+    "krt.",
+    "rakpart",
+    "sétány",
+    "sor",
+    "tér",
+    "u.",
+    "út",
+    "utca"
+  ],
+  "it": [
+    "corso",
+    "largo",
+    "piazza",
+    "via",
+    "viale",
+    "vicolo"
+  ],
+  "nl": [
+    "gracht",
+    "kade",
+    "laan",
+    "plein",
+    "straat",
+    "weg"
+  ],
+  "pl": [
+    "al.",
+    "aleja",
+    "bulwar",
+    "pl.",
+    "plac",
+    "rondo",
+    "skwer",
+    "ul.",
+    "ulica"
+  ],
+  "pt": [
+    "avenida",
+    "largo",
+    "praça",
+    "rua",
+    "travessa"
+  ],
+  "ro": [
+    "aleea",
+    "bd.",
+    "bulevardul",
+    "calea",
+    "piața",
+    "șoseaua",
+    "str.",
+    "strada"
+  ],
+  "sk": [
+    "námest.",
+    "námestie",
+    "ulica"
+  ]
+}

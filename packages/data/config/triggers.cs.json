@@ -1,500 +1,512 @@
 [
   {
-    "trigger": "bytem:",
     "label": "address",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "bytem:"
   },
   {
-    "trigger": "trvale bytem",
     "label": "address",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "trvale bytem"
   },
   {
-    "trigger": "sídlem:",
     "label": "address",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "sídlem:"
   },
   {
-    "trigger": "sídlem",
     "label": "address",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "sídlem"
   },
   {
-    "trigger": "nar.:",
     "label": "date of birth",
     "strategy": {
-      "type": "n-words",
-      "count": 1
-    }
+      "count": 1,
+      "type": "n-words"
+    },
+    "trigger": "nar.:"
   },
   {
-    "trigger": "narozen dne",
     "label": "date of birth",
     "strategy": {
-      "type": "n-words",
-      "count": 1
-    }
+      "count": 1,
+      "type": "n-words"
+    },
+    "trigger": "narozen dne"
   },
   {
-    "trigger": "narozena dne",
     "label": "date of birth",
     "strategy": {
-      "type": "n-words",
-      "count": 1
-    }
+      "count": 1,
+      "type": "n-words"
+    },
+    "trigger": "narozena dne"
   },
   {
-    "trigger": "narozen/a dne",
     "label": "date of birth",
     "strategy": {
-      "type": "n-words",
-      "count": 1
-    }
+      "count": 1,
+      "type": "n-words"
+    },
+    "trigger": "narozen/a dne"
   },
   {
-    "trigger": "dat.nar.",
     "label": "date of birth",
     "strategy": {
-      "type": "n-words",
-      "count": 1
-    }
+      "count": 1,
+      "type": "n-words"
+    },
+    "trigger": "dat.nar."
   },
   {
-    "trigger": "r.č.:",
     "label": "czech birth number",
     "strategy": {
-      "type": "n-words",
-      "count": 1
-    }
+      "count": 1,
+      "type": "n-words"
+    },
+    "trigger": "r.č.:"
   },
   {
-    "trigger": "rodné číslo:",
     "label": "czech birth number",
     "strategy": {
-      "type": "n-words",
-      "count": 1
-    }
+      "count": 1,
+      "type": "n-words"
+    },
+    "trigger": "rodné číslo:"
   },
   {
-    "trigger": "rodné číslo",
     "label": "czech birth number",
     "strategy": {
-      "type": "n-words",
-      "count": 1
-    }
+      "count": 1,
+      "type": "n-words"
+    },
+    "trigger": "rodné číslo"
   },
   {
-    "trigger": "č.ú.:",
     "label": "bank account number",
     "strategy": {
-      "type": "n-words",
-      "count": 1
-    }
+      "count": 1,
+      "type": "n-words"
+    },
+    "trigger": "č.ú.:"
   },
   {
-    "trigger": "číslo účtu:",
     "label": "bank account number",
     "strategy": {
-      "type": "n-words",
-      "count": 1
-    }
+      "count": 1,
+      "type": "n-words"
+    },
+    "trigger": "číslo účtu:"
   },
   {
-    "trigger": "zastoupen:",
     "label": "person",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "zastoupen:"
   },
   {
-    "trigger": "zastoupena:",
     "label": "person",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "zastoupena:"
   },
   {
-    "trigger": "zastoupen/a:",
     "label": "person",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "zastoupen/a:"
   },
   {
-    "trigger": "jednající:",
     "label": "person",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "jednající:"
   },
   {
-    "trigger": "pan ",
     "label": "person",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "pan "
   },
   {
-    "trigger": "paní ",
     "label": "person",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "paní "
   },
   {
-    "trigger": "panem ",
     "label": "person",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "panem "
   },
   {
-    "trigger": "panu ",
     "label": "person",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "panu "
   },
   {
-    "trigger": "městský obvod",
     "label": "organization",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "městský obvod"
   },
   {
-    "trigger": "městského obvodu",
     "label": "organization",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "městského obvodu"
   },
   {
-    "trigger": "městská část",
     "label": "organization",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "městská část"
   },
   {
-    "trigger": "městské části",
     "label": "organization",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "městské části"
   },
   {
-    "trigger": "město ",
     "label": "organization",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "město "
   },
   {
-    "trigger": "města ",
     "label": "organization",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "města "
   },
   {
-    "trigger": "městem ",
     "label": "organization",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "městem "
   },
   {
-    "trigger": "městu ",
     "label": "organization",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "městu "
   },
   {
-    "trigger": "obec ",
     "label": "organization",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "obec "
   },
   {
-    "trigger": "obce ",
     "label": "organization",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "obce "
   },
   {
-    "trigger": "obcí ",
     "label": "organization",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "obcí "
   },
   {
-    "trigger": "obec a katastrální území",
     "label": "address",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "obec a katastrální území"
   },
   {
-    "trigger": "katastrální území",
     "label": "address",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "katastrální území"
   },
   {
-    "trigger": "katastrálního území",
     "label": "address",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "katastrálního území"
   },
   {
-    "trigger": "č.p.",
     "label": "address",
     "strategy": {
-      "type": "n-words",
-      "count": 1
-    }
+      "count": 1,
+      "type": "n-words"
+    },
+    "trigger": "č.p."
   },
   {
-    "trigger": "čp.",
     "label": "address",
     "strategy": {
-      "type": "n-words",
-      "count": 1
-    }
+      "count": 1,
+      "type": "n-words"
+    },
+    "trigger": "čp."
   },
   {
-    "trigger": "v.s.",
     "label": "registration number",
     "strategy": {
-      "type": "n-words",
-      "count": 1
-    }
+      "count": 1,
+      "type": "n-words"
+    },
+    "trigger": "v.s."
   },
   {
-    "trigger": "PSČ:",
     "label": "address",
     "strategy": {
-      "type": "n-words",
-      "count": 2
-    }
+      "count": 2,
+      "type": "n-words"
+    },
+    "trigger": "PSČ:"
   },
   {
-    "trigger": "PSČ ",
     "label": "address",
     "strategy": {
-      "type": "n-words",
-      "count": 2
-    }
+      "count": 2,
+      "type": "n-words"
+    },
+    "trigger": "PSČ "
   },
   {
-    "trigger": "č. účtu:",
     "label": "bank account number",
     "strategy": {
-      "type": "n-words",
-      "count": 1
-    }
+      "count": 1,
+      "type": "n-words"
+    },
+    "trigger": "č. účtu:"
   },
   {
-    "trigger": "základní škola",
     "label": "organization",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "základní škola"
   },
   {
-    "trigger": "základní školy",
     "label": "organization",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "základní školy"
   },
   {
-    "trigger": "střední škola",
     "label": "organization",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "střední škola"
   },
   {
-    "trigger": "střední školy",
     "label": "organization",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "střední školy"
   },
   {
-    "trigger": "mateřská škola",
     "label": "organization",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "mateřská škola"
   },
   {
-    "trigger": "nemocnice",
     "label": "organization",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "nemocnice"
   },
   {
-    "trigger": "nemocnici",
     "label": "organization",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "nemocnici"
   },
   {
-    "trigger": "fakultní nemocnice",
     "label": "organization",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "fakultní nemocnice"
   },
   {
-    "trigger": "univerzita",
     "label": "organization",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "univerzita"
   },
   {
-    "trigger": "univerzity",
     "label": "organization",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "univerzity"
   },
   {
-    "trigger": "nadace",
     "label": "organization",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "nadace"
   },
   {
-    "trigger": "nadaci",
     "label": "organization",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "nadaci"
   },
   {
-    "trigger": "příspěvková organizace",
     "label": "organization",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "příspěvková organizace"
   },
   {
-    "trigger": "statutární město",
     "label": "organization",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "statutární město"
   },
   {
-    "trigger": "statutárního města",
     "label": "organization",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "statutárního města"
   },
   {
-    "trigger": "statutárním městě",
     "label": "organization",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "statutárním městě"
   },
   {
-    "trigger": "kontaktní osoba",
     "label": "person",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "kontaktní osoba"
   },
   {
-    "trigger": "kontaktní osoba:",
     "label": "person",
     "strategy": {
       "type": "to-next-comma"
-    }
+    },
+    "trigger": "kontaktní osoba:"
   },
   {
-    "trigger": "datová schránka:",
     "label": "registration number",
     "strategy": {
-      "type": "n-words",
-      "count": 1
-    }
+      "count": 1,
+      "type": "n-words"
+    },
+    "trigger": "datová schránka:"
   },
   {
-    "trigger": "datová schránka",
     "label": "registration number",
     "strategy": {
-      "type": "n-words",
-      "count": 1
-    }
+      "count": 1,
+      "type": "n-words"
+    },
+    "trigger": "datová schránka"
   },
   {
-    "trigger": "dat. schránka:",
     "label": "registration number",
     "strategy": {
-      "type": "n-words",
-      "count": 1
-    }
+      "count": 1,
+      "type": "n-words"
+    },
+    "trigger": "dat. schránka:"
   },
   {
-    "trigger": "dat. schránka",
     "label": "registration number",
     "strategy": {
-      "type": "n-words",
-      "count": 1
-    }
+      "count": 1,
+      "type": "n-words"
+    },
+    "trigger": "dat. schránka"
   },
   {
-    "trigger": "IČO",
     "label": "registration number",
-    "strategy": { "type": "company-id-value" }
+    "strategy": {
+      "type": "company-id-value"
+    },
+    "trigger": "IČO"
   },
   {
-    "trigger": "IČ",
     "label": "registration number",
-    "strategy": { "type": "company-id-value" }
+    "strategy": {
+      "type": "company-id-value"
+    },
+    "trigger": "IČ"
   },
   {
-    "trigger": "identifikační číslo",
     "label": "registration number",
-    "strategy": { "type": "company-id-value" }
+    "strategy": {
+      "type": "company-id-value"
+    },
+    "trigger": "identifikační číslo"
   },
   {
-    "trigger": "registrační číslo",
     "label": "registration number",
-    "strategy": { "type": "company-id-value" }
+    "strategy": {
+      "type": "company-id-value"
+    },
+    "trigger": "registrační číslo"
   },
   {
-    "trigger": "DIČ",
     "label": "tax identification number",
-    "strategy": { "type": "company-id-value" }
+    "strategy": {
+      "type": "company-id-value"
+    },
+    "trigger": "DIČ"
   },
   {
-    "trigger": "daňové identifikační číslo",
     "label": "tax identification number",
-    "strategy": { "type": "company-id-value" }
+    "strategy": {
+      "type": "company-id-value"
+    },
+    "trigger": "daňové identifikační číslo"
   }
 ]
