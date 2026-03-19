@@ -8,7 +8,9 @@
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
     "format": "turbo run format",
-    "test": "turbo run test"
+    "test": "turbo run test",
+    "check:json": "bun packages/data/scripts/sort-json.ts --check",
+    "fix:json": "bun packages/data/scripts/sort-json.ts"
   },
   "devDependencies": {
     "turbo": "^2"
