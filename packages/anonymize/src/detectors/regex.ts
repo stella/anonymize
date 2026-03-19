@@ -65,8 +65,8 @@ const PATTERNS: readonly string[] = [
     `(?:${SP}{1,4}(?:${PARTICLE}${SP}+)?${NAME_WORD}){1,3}` +
     `(?:,?${SP}+(?:${POST_NOMINAL}))?`,
   // 1: English honorific person
-  `(?:M\\.|Mrs|Ms|Miss|Messrs|Mr|Sir|Dame|Lord|Lady|` +
-    `Judge|Justice|President|Mme|Mlle|Me|Maître)` +
+  `(?:\\bM\\.|Mrs|Ms|Miss|Messrs|Mr|Sir|Dame|Lord|Lady|` +
+    `Judge|Justice|President|Mme|Mlle|\\bMe\\b|Maître)` +
     `\\.?${SP}+[A-Z][a-z]+` +
     `(?:(?:${SP}|-){1,2}(?:${PARTICLE}${SP}+)?` +
     `[A-Z][a-z]+){0,3}` +
