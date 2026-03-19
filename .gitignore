@@ -3,3 +3,7 @@ node_modules
 *.tsbuildinfo
 dist
 .turbo
+
+# Local scripts (corpus download, benchmarks)
+scripts/
+packages/data/scripts/

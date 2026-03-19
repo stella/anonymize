@@ -52,71 +52,10 @@ export const DICTIONARY_META = {
   },
 
   // ── Cities ─────────────────────────────────────────
-  "cities/AT": {
-    label: "address",
-    category: "Places",
-    country: "AT",
-  },
-  "cities/BE": {
-    label: "address",
-    category: "Places",
-    country: "BE",
-  },
-  "cities/CZ": {
-    label: "address",
-    category: "Places",
-    country: "CZ",
-  },
-  "cities/DE": {
-    label: "address",
-    category: "Places",
-    country: "DE",
-  },
-  "cities/ES": {
-    label: "address",
-    category: "Places",
-    country: "ES",
-  },
-  "cities/FR": {
-    label: "address",
-    category: "Places",
-    country: "FR",
-  },
-  "cities/GB": {
-    label: "address",
-    category: "Places",
-    country: "GB",
-  },
-  "cities/IE": {
-    label: "address",
-    category: "Places",
-    country: "IE",
-  },
-  "cities/IT": {
-    label: "address",
-    category: "Places",
-    country: "IT",
-  },
-  "cities/NL": {
-    label: "address",
-    category: "Places",
-    country: "NL",
-  },
-  "cities/PL": {
-    label: "address",
-    category: "Places",
-    country: "PL",
-  },
-  "cities/SK": {
-    label: "address",
-    category: "Places",
-    country: "SK",
-  },
-  "cities/US": {
-    label: "address",
-    category: "Places",
-    country: "US",
-  },
+  // City dictionaries are loaded dynamically via
+  // loadCityDictionary() — not registered here.
+  // See generate-cities.ts for the GeoNames pipeline.
+  // 230 countries available in cities/*.json.
 
   // ── Courts ─────────────────────────────────────────
   "courts/AT": {
@@ -486,46 +425,7 @@ const LOADERS: Record<
   "names/pl": () =>
     import("./names/pl.json") as Promise<JsonModule>,
 
-  // ── Cities ─────────────────────────────────────────
-  // eslint-disable-next-line typescript-eslint/promise-function-async
-  "cities/AT": () =>
-    import("./cities/AT.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
-  "cities/BE": () =>
-    import("./cities/BE.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
-  "cities/CZ": () =>
-    import("./cities/CZ.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
-  "cities/DE": () =>
-    import("./cities/DE.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
-  "cities/ES": () =>
-    import("./cities/ES.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
-  "cities/FR": () =>
-    import("./cities/FR.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
-  "cities/GB": () =>
-    import("./cities/GB.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
-  "cities/IE": () =>
-    import("./cities/IE.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
-  "cities/IT": () =>
-    import("./cities/IT.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
-  "cities/NL": () =>
-    import("./cities/NL.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
-  "cities/PL": () =>
-    import("./cities/PL.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
-  "cities/SK": () =>
-    import("./cities/SK.json") as Promise<JsonModule>,
-  // eslint-disable-next-line typescript-eslint/promise-function-async
-  "cities/US": () =>
-    import("./cities/US.json") as Promise<JsonModule>,
+  // ── Cities: loaded dynamically via loadCityDictionary()
 
   // ── Courts ─────────────────────────────────────────
   // eslint-disable-next-line typescript-eslint/promise-function-async
@@ -806,3 +706,73 @@ export const ALL_DICTIONARY_IDS: readonly DictionaryId[] =
   Object.keys(DICTIONARY_META).filter(
     (k): k is DictionaryId => k in DICTIONARY_META,
   );
+
+// ── City dictionaries (dynamic loading) ───────────
+//
+// City dictionaries cover 230 countries from GeoNames
+// (CC BY 4.0, pop > 5,000). They are loaded
+// dynamically by country code rather than being
+// registered in DICTIONARY_META, because the number
+// of countries would bloat the static type system.
+
+const cityCache = new Map<string, readonly string[]>();
+
+/**
+ * Load city names for a country. Returns an empty
+ * array if no dictionary exists for the country.
+ *
+ * @param countryCode ISO 3166-1 alpha-2 (e.g., "HU")
+ */
+export const loadCityDictionary = async (
+  countryCode: string,
+): Promise<readonly string[]> => {
+  const cc = countryCode.toUpperCase();
+  const cached = cityCache.get(cc);
+  if (cached) {
+    return cached;
+  }
+
+  try {
+    // SAFETY: dynamic import of JSON. The country code
+    // is validated to be 2 uppercase letters only.
+    if (!/^[A-Z]{2}$/.test(cc)) {
+      return [];
+    }
+    const mod = (await import(
+      `./cities/${cc}.json`
+    )) as JsonModule;
+    const entries = mod.default;
+    cityCache.set(cc, entries);
+    return entries;
+  } catch {
+    // Dictionary not found for this country
+    cityCache.set(cc, []);
+    return [];
+  }
+};
+
+/**
+ * Load city dictionaries for multiple countries.
+ * Returns merged array of all city names.
+ */
+export const loadCityDictionaries = async (
+  countryCodes: readonly string[],
+): Promise<readonly string[]> => {
+  const results = await Promise.all(
+    countryCodes.map(loadCityDictionary),
+  );
+  const merged: string[] = [];
+  for (const entries of results) {
+    for (const entry of entries) {
+      merged.push(entry);
+    }
+  }
+  return merged;
+};
+
+/** City dictionary metadata (same for all countries). */
+export const CITY_DICTIONARY_META: DictionaryMeta = {
+  label: "address",
+  category: "Places",
+  country: null,
+};
