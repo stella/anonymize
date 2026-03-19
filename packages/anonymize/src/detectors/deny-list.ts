@@ -364,12 +364,139 @@ const STOPWORDS: ReadonlySet<string> = new Set([
   "soud",
   "pravo",
   "narok",
-  // Country names (not PII)
+  // English legal defined terms (never PII)
+  "lease",
+  "leases",
+  "loan",
+  "loans",
+  "officer",
+  "employee",
+  "employees",
+  "master",
+  "reason",
+  "title",
+  "balance",
+  "laws",
+  "grant",
+  "ground",
+  "cover",
+  "legal",
+  "market",
+  "stretch",
+  "tunc",
+  "bridge",
+  "lien",
+  "bonus",
+  "rent",
+  "salary",
+  "agent",
+  "counsel",
+  "severance",
+  "benefits",
+  "notice",
+  "subject",
+  "offer",
+  "form",
+  "file",
+  "table",
+  "check",
+  "letter",
+  "policy",
+  "credit",
+  "cash",
+  "cost",
+  "fund",
+  "rate",
+  "loss",
+  "gain",
+  "base",
+  "suite",
+  "class",
+  "topic",
+  "bond",
+  "bonds",
+  "charter",
+  "doc",
+  "sec",
+  "true",
+  "level",
+  "power",
+  "golf",
+  "sample",
+  "hearing",
+  "finance",
+  "accounting",
+  "pension",
+  "prior",
+  "current",
+  "senior",
+  "national",
+  "delay",
+  "punch",
+  "death",
+  "chief",
+  "building",
+  "casino",
+  "sales",
+  "century",
+  "portfolio",
+  "fair",
+  // English defined terms (contract-specific)
+  "parent",
+  "drag",
+  "persons",
+  // English title/role words
+  "president",
+  "vice president",
+  "secretary",
+]);
+
+/**
+ * Words that are valid in other labels (address, org)
+ * but should never be classified as "person". Checked
+ * only in the person chain scoring path.
+ */
+const PERSON_STOPWORDS: ReadonlySet<string> = new Set([
+  // Month names (valid city names, not person names)
+  "january",
+  "february",
+  "march",
+  "april",
+  "june",
+  "july",
+  "august",
+  "september",
+  "october",
+  "november",
+  "december",
+  // Country / state / language names
+  "german",
+  "french",
+  "english",
+  "spanish",
+  "italian",
   "slovak",
   "czech",
   "polish",
   "austria",
   "germany",
+  "delaware",
+  "maryland",
+  "missouri",
+  "nevada",
+  "california",
+  "louisiana",
+  "indiana",
+  "ohio",
+  "israel",
+  // Place names that match person names
+  "page",
+  "sale",
+  "center",
+  "basic",
+  "university",
+  "dry",
+  "opportunity",
 ]);
 
 /**
@@ -711,11 +838,14 @@ export const scanDenyList = (
     );
 
     // Person hits go to chain scoring (Pass 2b).
-    // No mid-sentence filter here — chain scoring
-    // handles standalone names with its own logic.
+    // Skip words that are valid places/orgs but not
+    // person names (months, states, languages).
     if (hasPerson) {
-      for (const m of matches) {
-        nameHits.push(m);
+      const keyword = first.text.toLowerCase();
+      if (!PERSON_STOPWORDS.has(keyword)) {
+        for (const m of matches) {
+          nameHits.push(m);
+        }
       }
     }
 
