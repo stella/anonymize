@@ -466,5 +466,35 @@
       "type": "n-words",
       "count": 1
     }
+  },
+  {
+    "trigger": "IČO",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" }
+  },
+  {
+    "trigger": "IČ",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" }
+  },
+  {
+    "trigger": "identifikační číslo",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" }
+  },
+  {
+    "trigger": "registrační číslo",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" }
+  },
+  {
+    "trigger": "DIČ",
+    "label": "tax identification number",
+    "strategy": { "type": "company-id-value" }
+  },
+  {
+    "trigger": "daňové identifikační číslo",
+    "label": "tax identification number",
+    "strategy": { "type": "company-id-value" }
   }
 ]

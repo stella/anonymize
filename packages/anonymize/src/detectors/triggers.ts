@@ -1,8 +1,11 @@
+import { AhoCorasick } from "@stll/aho-corasick";
+
 import { DETECTION_SOURCES } from "../types";
 import type { Entity, TriggerRule } from "../types";
 
 const TRIGGER_SCORE = 0.95;
 const WHITESPACE_RE = /\s+/;
+const LETTER_RE = /\p{L}/u;
 
 type TriggerConfigRow = {
   trigger: string;
@@ -19,15 +22,36 @@ const mapConfig = (
     strategy: row.strategy,
   }));
 
-let cachedTriggers: readonly TriggerRule[] | null =
-  null;
+// ── Cached trigger AC automaton ─────────────────────
 
-const loadTriggers = async (): Promise<
-  readonly TriggerRule[]
+type TriggerAutomaton = {
+  ac: AhoCorasick;
+  /** Parallel array: rules[match.pattern] → rule */
+  rules: readonly TriggerRule[];
+};
+
+// Cache the Promise itself to prevent concurrent
+// initialization races (two simultaneous first calls
+// would both pass a boolean guard before the first
+// await resolves).
+let cachedPromise: Promise<
+  TriggerAutomaton | null
+> | null = null;
+
+const loadAutomaton = (): Promise<
+  TriggerAutomaton | null
 > => {
-  if (cachedTriggers) {
-    return cachedTriggers;
+  if (cachedPromise) {
+    return cachedPromise;
   }
+
+  cachedPromise = buildAutomaton();
+  return cachedPromise;
+};
+
+const buildAutomaton = async (): Promise<
+  TriggerAutomaton | null
+> => {
 
   const rules: TriggerRule[] = [];
 
@@ -58,9 +82,23 @@ const loadTriggers = async (): Promise<
     ),
   ]);
 
-  cachedTriggers = rules;
-  return rules;
+  if (rules.length === 0) {
+    return null;
+  }
+
+  // Build AC from lowercased trigger strings.
+  // rules[i] corresponds to patterns[i].
+  const patterns = rules.map((r) =>
+    r.trigger.toLowerCase(),
+  );
+  // No caseInsensitive needed: both patterns and
+  // search text are already lowercased.
+  const ac = new AhoCorasick(patterns);
+
+  return { ac, rules };
 };
+
+// ── Value extraction (unchanged) ────────────────────
 
 const LEADING_PUNCT = /^[„""»«'"()\s]+/;
 const TRAILING_PUNCT = /[""»«'"()\s]+$/;
@@ -203,71 +241,117 @@ const extractValue = (
       };
     }
 
+    case "company-id-value": {
+      // Work from the raw remaining text (before the
+      // upstream trimStart) so we can require at least
+      // a colon or whitespace separator between the
+      // keyword and value (e.g., "IČO: 12345678" or
+      // "IČO 12345678", but not "IČO12345678").
+      const raw = text.slice(triggerEnd);
+      const sepMatch =
+        /^(?:\s*:\s*|\s+)/.exec(raw);
+      if (!sepMatch) {
+        return null;
+      }
+      const afterSep = raw.slice(sepMatch[0].length);
+      const idMatch =
+        /^[A-Z]{0,4}\s?\d[\d\s\-/]{4,}/i.exec(
+          afterSep,
+        );
+      if (!idMatch) {
+        return null;
+      }
+      const idText = idMatch[0].trim();
+      const leadingSpaces = idMatch[0].length -
+        idMatch[0].trimStart().length;
+      const idStart = triggerEnd +
+        sepMatch[0].length +
+        // idMatch.index is always 0 (anchored ^ regex)
+
+        leadingSpaces;
+      return {
+        start: idStart,
+        end: idStart + idText.length,
+        text: idText,
+      };
+    }
+
     default:
       return null;
   }
 };
 
+// ── Public API ──────────────────────────────────────
+
 /**
- * Scan text for trigger phrases. Loads trigger
- * configs from @stll/anonymize-data (optional).
- * Returns empty array if data package not installed.
+ * Scan text for trigger phrases using a single
+ * Aho-Corasick pass. Loads trigger configs from
+ * @stll/anonymize-data (optional). The AC automaton
+ * and rule metadata are cached after first build.
+ *
+ * Each AC match is looked up in the parallel rules[]
+ * array via match.pattern (O(1)), then extractValue
+ * post-processes the hit.
  */
 export const detectTriggerPhrases = async (
   fullText: string,
 ): Promise<Entity[]> => {
-  const allTriggers = await loadTriggers();
+  const automaton = await loadAutomaton();
 
-  if (allTriggers.length === 0) {
+  if (!automaton) {
     return [];
   }
 
   const results: Entity[] = [];
   const lowerText = fullText.toLowerCase();
+  const matches = automaton.ac.findIter(lowerText);
 
-  for (const rule of allTriggers) {
-    const lowerTrigger = rule.trigger.toLowerCase();
-    let searchFrom = 0;
+  for (const match of matches) {
+    // Left word-boundary: reject if preceded by a
+    // letter (prevents partial keyword matches).
+    if (
+      match.start > 0 &&
+      LETTER_RE.test(lowerText[match.start - 1] ?? "")
+    ) {
+      continue;
+    }
 
-    while (searchFrom < lowerText.length) {
-      const idx = lowerText.indexOf(
-        lowerTrigger,
-        searchFrom,
-      );
-      if (idx === -1) {
-        break;
-      }
+    const rule = automaton.rules[match.pattern];
+    if (!rule) {
+      continue;
+    }
 
-      if (
-        idx > 0 &&
-        /\p{L}/u.test(lowerText[idx - 1] ?? "")
-      ) {
-        searchFrom = idx + 1;
-        continue;
-      }
+    // Right word-boundary: reject if followed by a
+    // letter — but skip this check when the trigger
+    // itself ends with whitespace (e.g., "pan ",
+    // "město ") since the trailing space already
+    // acts as a boundary delimiter.
+    if (
+      !rule.trigger.endsWith(" ") &&
+      LETTER_RE.test(lowerText[match.end] ?? "")
+    ) {
+      continue;
+    }
 
-      const triggerEnd = idx + rule.trigger.length;
-      const rawValue = extractValue(
-        fullText,
-        triggerEnd,
-        rule.strategy,
-      );
-      const value = rawValue
-        ? stripQuotes(rawValue)
-        : null;
+    const triggerEnd = match.end;
+    const rawValue = extractValue(
+      fullText,
+      triggerEnd,
+      rule.strategy,
+    );
+    const value = rawValue
+      ? stripQuotes(rawValue)
+      : null;
 
-      if (value) {
-        results.push({
-          start: value.start,
-          end: value.end,
-          label: rule.label,
-          text: value.text,
-          score: TRIGGER_SCORE,
-          source: DETECTION_SOURCES.TRIGGER,
-        });
-      }
-
-      searchFrom = triggerEnd;
+    if (value) {
+      results.push({
+        start: value.start,
+        end: value.end,
+        label: rule.label,
+        text: value.text,
+        score: TRIGGER_SCORE,
+        source: DETECTION_SOURCES.TRIGGER,
+      });
     }
   }
 

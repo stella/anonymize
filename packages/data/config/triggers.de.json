@@ -83,5 +83,70 @@
     "trigger": "Kontonummer:",
     "label": "bank account number",
     "strategy": { "type": "n-words", "count": 1 }
+  },
+  {
+    "trigger": "Handelsregisternummer",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" }
+  },
+  {
+    "trigger": "Handelsregister",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" }
+  },
+  {
+    "trigger": "HRB",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" }
+  },
+  {
+    "trigger": "Registernummer",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" }
+  },
+  {
+    "trigger": "Steuernummer",
+    "label": "tax identification number",
+    "strategy": { "type": "company-id-value" }
+  },
+  {
+    "trigger": "Steuer-Nr.",
+    "label": "tax identification number",
+    "strategy": { "type": "company-id-value" }
+  },
+  {
+    "trigger": "USt-IdNr.",
+    "label": "tax identification number",
+    "strategy": { "type": "company-id-value" }
+  },
+  {
+    "trigger": "USt-IdNr",
+    "label": "tax identification number",
+    "strategy": { "type": "company-id-value" }
+  },
+  {
+    "trigger": "UID",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" }
+  },
+  {
+    "trigger": "BTW",
+    "label": "tax identification number",
+    "strategy": { "type": "company-id-value" }
+  },
+  {
+    "trigger": "NIP",
+    "label": "tax identification number",
+    "strategy": { "type": "company-id-value" }
+  },
+  {
+    "trigger": "CIF",
+    "label": "tax identification number",
+    "strategy": { "type": "company-id-value" }
+  },
+  {
+    "trigger": "NIF",
+    "label": "tax identification number",
+    "strategy": { "type": "company-id-value" }
   }
 ]

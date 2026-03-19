@@ -5,10 +5,12 @@
  * (s.r.o., GmbH, a.s., etc.) and extending backwards
  * to capture preceding capitalised words.
  *
+ * Uses @stll/regex-set for single-pass DFA scanning.
  * Data-driven: legal forms are loaded from the optional
- * @stll/anonymize-data package. Falls back to an empty
- * set if not installed.
+ * @stll/anonymize-data package.
  */
+
+import { RegexSet } from "@stll/regex-set";
 
 import { DETECTION_SOURCES } from "../types";
 import type { Entity } from "../types";
@@ -18,15 +20,8 @@ const UPPER =
 const LOWER =
   "a-záčďéěíňóřšťúůýžäöüßàâæçèêëîïôùûÿñ\\u0131";
 const CAP_WORD = `[${UPPER}][${LOWER}${UPPER}]+`;
-/** Any word (upper or lowercase start, 2+ chars). */
 const ANY_WORD = `[${UPPER}${LOWER}][${LOWER}${UPPER}]+`;
 
-/**
- * Proper Roman numeral pattern. Rejects legal forms
- * like LLC, CIC, LC that happen to use the same
- * letters (I, V, X, L, C, D, M). Only matches
- * valid Roman numeral sequences (I–MMMCMXCIX).
- */
 const ROMAN_NUMERAL_RE =
   /^(?=[IVXLCDM])M{0,3}(?:CM|CD|D?C{0,3})(?:XC|XL|L?X{0,3})(?:IX|IV|V?I{0,3})$/;
 
@@ -40,10 +35,10 @@ const isShortForm = (form: string): boolean =>
   form.replace(/[.\s]/g, "").length <= 3 &&
   !form.includes(" ");
 
-const buildPattern = (
+const buildPatternString = (
   forms: string[],
   requireCapBefore: boolean,
-): RegExp | null => {
+): string | null => {
   if (forms.length === 0) {
     return null;
   }
@@ -52,9 +47,6 @@ const buildPattern = (
     (a, b) => b.length - a.length,
   );
   const alt = sorted.map(escapeForRegex).join("|");
-  // First word must be capitalised; subsequent words
-  // can be lowercase (Czech: "Pražské služby, a.s.",
-  // "Rosa rodinné centrum, z.s.").
   const prefix =
     `(?:${CAP_WORD})` +
     `(?:[\\s&,.-]{1,4}(?:${ANY_WORD})){0,4}`;
@@ -62,138 +54,162 @@ const buildPattern = (
     ? `(?:\\s+|,\\s*)`
     : `\\s+`;
 
-  return new RegExp(
-    `${prefix}${separator}(?:${alt})(?![${LOWER}])`,
-    "g",
-  );
+  return `${prefix}${separator}(?:${alt})(?![${LOWER}])`;
 };
 
-type CompiledPatterns = {
-  longRe: RegExp | null;
-  shortRe: RegExp | null;
+// ── Cached RegexSet ─────────────────────────────────
+
+type CompiledSet = {
+  /** Separate RegexSet per pattern to avoid multi-pattern
+   *  DFA state explosion (0.4ms vs 8ms combined). */
+  sets: RegexSet[];
 };
 
-let cached: CompiledPatterns | null = null;
+let cachedPromise: Promise<CompiledSet | null> | null =
+  null;
 
-const loadPatterns =
-  async (): Promise<CompiledPatterns> => {
-    if (cached) {
-      return cached;
-    }
+const loadSet = (): Promise<CompiledSet | null> => {
+  if (cachedPromise) {
+    return cachedPromise;
+  }
+  cachedPromise = buildSet();
+  return cachedPromise;
+};
 
-    let data: Record<string, string[]> = {};
+const buildSet = async (): Promise<
+  CompiledSet | null
+> => {
+  let data: Record<string, string[]> = {};
 
-    try {
-      const mod = await import(
-        "@stll/anonymize-data/config/legal-forms.json"
-      );
-      // eslint-disable-next-line no-unsafe-type-assertion -- JSON module shape
-      data = (
-        mod as { default: Record<string, string[]> }
-      ).default;
-    } catch {
-      // Data package not installed; no legal forms
-    }
+  try {
+    const mod = await import(
+      "@stll/anonymize-data/config/legal-forms.json"
+    );
+    // eslint-disable-next-line no-unsafe-type-assertion -- JSON module shape
+    data = (
+      mod as { default: Record<string, string[]> }
+    ).default;
+  } catch {
+    return null;
+  }
 
-    const allForms: string[] = [];
-    const seen = new Set<string>();
+  const allForms: string[] = [];
+  const seen = new Set<string>();
 
-    for (const forms of Object.values(data)) {
-      for (const form of forms) {
-        const key = form.toLowerCase();
-        if (!seen.has(key)) {
-          seen.add(key);
-          allForms.push(form);
-        }
+  for (const forms of Object.values(data)) {
+    for (const form of forms) {
+      const key = form.toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        allForms.push(form);
       }
     }
+  }
 
-    cached = {
-      longRe: buildPattern(
-        allForms.filter((f) => !isShortForm(f)),
-        false,
-      ),
-      shortRe: buildPattern(
-        allForms.filter(isShortForm),
-        true,
-      ),
-    };
+  const patterns: string[] = [];
 
-    return cached;
+  const longPattern = buildPatternString(
+    allForms.filter((f) => !isShortForm(f)),
+    false,
+  );
+  if (longPattern) {
+    patterns.push(longPattern);
+  }
+
+  const shortPattern = buildPatternString(
+    allForms.filter(isShortForm),
+    true,
+  );
+  if (shortPattern) {
+    patterns.push(shortPattern);
+  }
+
+  if (patterns.length === 0) {
+    return null;
+  }
+
+  // Build each pattern as a separate RegexSet to avoid
+  // multi-pattern DFA state explosion (two 18K+2.5K
+  // patterns combined = 8ms; separate = 0.4ms total).
+  return {
+    sets: patterns.map((p) => new RegexSet([p])),
   };
+};
 
 /**
  * Detect organization entities by legal form suffixes.
+ * Uses @stll/regex-set for single-pass DFA scanning.
  */
 export const detectLegalFormEntities = async (
   fullText: string,
 ): Promise<Entity[]> => {
-  const { longRe, shortRe } = await loadPatterns();
-  const results: Entity[] = [];
+  const set = await loadSet();
+  if (!set) {
+    return [];
+  }
 
-  for (const re of [longRe, shortRe]) {
-    if (!re) {
+  const results: Entity[] = [];
+  // Collect matches from each separate RegexSet.
+  // Use for...of + push (not flatMap) because
+  // findIter may return a lazy iterable.
+  const matches: { pattern: number; start: number; end: number; text: string }[] = [];
+  for (const rs of set.sets) {
+    for (const m of rs.findIter(fullText)) {
+      matches.push(m);
+    }
+  }
+
+  for (const match of matches) {
+    const text = match.text.trimEnd();
+    if (text.length < 5) {
       continue;
     }
-    re.lastIndex = 0;
 
-    for (
-      let match = re.exec(fullText);
-      match !== null;
-      match = re.exec(fullText)
-    ) {
-      const raw = match[0];
-      // Trim trailing whitespace/newlines that the
-      // regex may have captured
-      const text = raw.trimEnd();
-      if (text.length < 5) {
-        continue;
-      }
+    if (text.includes("\n")) {
+      continue;
+    }
 
-      // Reject matches that span across paragraphs
-      // (newline in the middle = not a single entity)
-      if (text.includes("\n")) {
-        continue;
-      }
-
-      // Reject all-caps matches (section headings like
-      // "RÁMCOVÁ DOHODA NA" matching "NA" as a legal
-      // form). Check the prefix before the legal suffix.
-      const prefixEnd = text.lastIndexOf(",") !== -1
+    // Reject all-caps matches (section headings)
+    const prefixEnd =
+      text.lastIndexOf(",") !== -1
         ? text.lastIndexOf(",")
         : text.lastIndexOf(" ");
-      const prefixPart = prefixEnd > 0
-        ? text.slice(0, prefixEnd).replace(/[^a-zA-ZÀ-ž]/g, "")
+    const prefixPart =
+      prefixEnd > 0
+        ? text
+            .slice(0, prefixEnd)
+            .replace(/[^a-zA-ZÀ-ž]/g, "")
         : text.replace(/[^a-zA-ZÀ-ž]/g, "");
-      if (
-        prefixPart.length > 2 &&
-        prefixPart === prefixPart.toUpperCase()
-      ) {
-        continue;
-      }
-
-      // Reject matches where the "legal form" suffix is
-      // actually a Roman numeral (II, III, IV, etc.)
-      const lastSpace = text.lastIndexOf(" ");
-      const suffix = lastSpace !== -1
-        ? text.slice(lastSpace + 1).replace(/[.,]/g, "")
-        : "";
-      if (
-        suffix.length > 0 &&
-        ROMAN_NUMERAL_RE.test(suffix)
-      ) {
-        continue;
-      }
-
-      results.push({
-        start: match.index,
-        end: match.index + text.length,
-        label: "organization",
-        text,
-        score: 0.9,
-        source: DETECTION_SOURCES.LEGAL_FORM,
-      });
+    if (
+      prefixPart.length > 2 &&
+      prefixPart === prefixPart.toUpperCase()
+    ) {
+      continue;
     }
+
+    // Reject Roman numeral suffixes
+    const lastSpace = text.lastIndexOf(" ");
+    const suffix =
+      lastSpace !== -1
+        ? text
+            .slice(lastSpace + 1)
+            .replace(/[.,]/g, "")
+        : "";
+    if (
+      suffix.length > 0 &&
+      ROMAN_NUMERAL_RE.test(suffix)
+    ) {
+      continue;
+    }
+
+    results.push({
+      start: match.start,
+      end: match.start + text.length,
+      label: "organization",
+      text,
+      score: 0.9,
+      source: DETECTION_SOURCES.LEGAL_FORM,
+    });
   }
 
   return results;
