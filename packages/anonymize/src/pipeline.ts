@@ -9,6 +9,7 @@ import { detectLegalFormEntities } from "./detectors/legal-forms";
 import { detectNameCorpus } from "./detectors/names";
 import { detectRegexPii } from "./detectors/regex";
 import { detectTriggerPhrases } from "./detectors/triggers";
+import { detectAddressSeeds } from "./detectors/address-seeds";
 import { boostNearMissEntities } from "./filters/confidence-boost";
 import { filterFalsePositives } from "./filters/false-positives";
 import type { Entity, GazetteerEntry, PipelineConfig } from "./types";
@@ -155,9 +156,10 @@ export const runPipeline = async (
     );
   }
 
-  // Step 2c: Name corpus
+  // Step 2c: Name corpus (skipped when deny-list is
+  // enabled — names are already in the unified AC)
   let nameCorpusEntities: Entity[] = [];
-  if (config.enableNameCorpus) {
+  if (config.enableNameCorpus && !config.enableDenyList) {
     nameCorpusEntities = detectNameCorpus(fullText);
     log(
       "name-corpus",
@@ -205,8 +207,10 @@ export const runPipeline = async (
     log("ner", `${nerEntities.length} entities`);
   }
 
-  // Step 5: Confidence boost
-  const preBoostEntities = [
+  // Step 4b: Address seed expansion — uses existing
+  // entities (cities, postal codes, triggers) as seeds
+  // to detect full address spans.
+  const preAddressEntities = [
     ...triggerEntities,
     ...regexEntities,
     ...legalFormEntities,
@@ -215,6 +219,23 @@ export const runPipeline = async (
     ...gazetteerExact,
     ...gazetteerFuzzy,
     ...nerEntities,
+  ];
+  const addressSeedEntities =
+    await detectAddressSeeds(
+      fullText,
+      preAddressEntities,
+    );
+  if (addressSeedEntities.length > 0) {
+    log(
+      "address-seeds",
+      `${addressSeedEntities.length} expanded`,
+    );
+  }
+
+  // Step 5: Confidence boost
+  const preBoostEntities = [
+    ...preAddressEntities,
+    ...addressSeedEntities,
   ];
 
   let allEntities: Entity[];
