@@ -672,10 +672,14 @@ export const buildDenyList = async (
     name: string,
     source: PatternSource,
   ) => {
-    if (name.length === 0) {
+    // Normalize same as deny-list entries so name
+    // patterns match against normalizeForSearch(text).
+    const normalized = normalizeForSearch(name)
+      .replace(/[|\\]/g, "");
+    if (normalized.length === 0) {
       return;
     }
-    const lower = name.toLowerCase();
+    const lower = normalized.toLowerCase();
     const existing = patternIndex.get(lower);
     if (existing !== undefined) {
       if (!labelList[existing]!.includes("person")) {
@@ -686,7 +690,7 @@ export const buildDenyList = async (
       }
     } else {
       patternIndex.set(lower, patternList.length);
-      patternList.push(name);
+      patternList.push(normalized);
       labelList.push(["person"]);
       sourceList.push([source]);
     }
@@ -699,7 +703,10 @@ export const buildDenyList = async (
     addNameEntry(name, "surname");
   }
   for (const title of NAME_CORPUS_TITLES) {
-    const lower = title.toLowerCase();
+    const norm = normalizeForSearch(title)
+      .replace(/[|\\]/g, "");
+    if (norm.length === 0) continue;
+    const lower = norm.toLowerCase();
     const existing = patternIndex.get(lower);
     if (existing !== undefined) {
       if (!sourceList[existing]!.includes("title")) {
@@ -707,7 +714,7 @@ export const buildDenyList = async (
       }
     } else {
       patternIndex.set(lower, patternList.length);
-      patternList.push(title);
+      patternList.push(norm);
       labelList.push(["person"]);
       sourceList.push(["title"]);
     }
