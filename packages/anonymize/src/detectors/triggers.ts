@@ -273,7 +273,6 @@ export const processTriggerMatches = (
   rules: readonly TriggerRule[],
 ): Entity[] => {
   const results: Entity[] = [];
-  const lowerText = fullText.toLowerCase();
 
   for (const match of allMatches) {
     const idx = match.pattern;
@@ -287,7 +286,7 @@ export const processTriggerMatches = (
     // letter (prevents partial keyword matches).
     if (
       match.start > 0 &&
-      LETTER_RE.test(lowerText[match.start - 1] ?? "")
+      LETTER_RE.test(fullText[match.start - 1] ?? "")
     ) {
       continue;
     }
@@ -304,7 +303,7 @@ export const processTriggerMatches = (
     // acts as a boundary delimiter.
     if (
       !rule.trigger.endsWith(" ") &&
-      LETTER_RE.test(lowerText[match.end] ?? "")
+      LETTER_RE.test(fullText[match.end] ?? "")
     ) {
       continue;
     }
