@@ -122,7 +122,12 @@ export const buildUnifiedSearch = async (
     ...triggerEntries,
   ];
 
-  const tsRegex = new TextSearch(regexAllPatterns);
+  // maxAlternations: 1 isolates every regex pattern
+  // into its own RegexSet. Prevents DFA state explosion
+  // when patterns are combined (6.35ms → 0.55ms/doc).
+  const tsRegex = new TextSearch(regexAllPatterns, {
+    maxAlternations: 1,
+  });
 
   // ── Instance 2: deny-list + street-types ────────
   // All literals, passed as plain strings.
