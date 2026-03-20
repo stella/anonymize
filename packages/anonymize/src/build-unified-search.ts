@@ -153,6 +153,7 @@ export const buildUnifiedSearch = async (
   const tsLiterals =
     literalAllPatterns.length > 0
       ? new TextSearch(literalAllPatterns, {
+          allLiteral: true,
           caseInsensitive: true,
           wholeWords: true,
           overlapStrategy: "all",
