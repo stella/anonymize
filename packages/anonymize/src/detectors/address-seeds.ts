@@ -12,7 +12,7 @@
  * hardcoded per language.
  */
 
-import type { Match, PatternEntry } from "@stll/text-search";
+import type { Match } from "@stll/text-search";
 
 import { DETECTION_SOURCES } from "../types";
 import type { Entity } from "../types";
@@ -87,11 +87,11 @@ const getBoundaryRe = async (): Promise<RegExp> => {
 
 /**
  * Build street type patterns for the unified search.
- * Returns PatternEntry[] for the unified TextSearch
+ * Returns string[] for the unified TextSearch
  * builder. Empty if data package is not installed.
  */
 export const buildStreetTypePatterns =
-  async (): Promise<PatternEntry[]> => {
+  async (): Promise<string[]> => {
     let config: DictionaryConfig = {};
     try {
       const mod = await import(

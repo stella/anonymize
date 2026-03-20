@@ -1,4 +1,4 @@
-import type { Match, PatternEntry } from "@stll/text-search";
+import type { Match } from "@stll/text-search";
 
 import { DETECTION_SOURCES } from "../types";
 import type { Entity, TriggerRule } from "../types";
@@ -26,11 +26,11 @@ const mapConfig = (
 
 /**
  * Build trigger patterns and rules from data configs.
- * Returns PatternEntry[] for the unified TextSearch
+ * Returns string[] for the unified TextSearch
  * builder and the parallel rules array.
  */
 export const buildTriggerPatterns = async (): Promise<{
-  patterns: PatternEntry[];
+  patterns: string[];
   rules: TriggerRule[];
 }> => {
   const rules: TriggerRule[] = [];

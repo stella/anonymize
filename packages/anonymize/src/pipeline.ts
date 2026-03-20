@@ -71,6 +71,28 @@ export type NerInferenceFn = (
   threshold: number,
 ) => Promise<Entity[]>;
 
+// Module-level cache for the unified search.
+// Avoids cold rebuild on every runPipeline call
+// when the caller doesn't pass cachedSearch.
+let _cachedSearch: UnifiedSearchInstance | null =
+  null;
+let _cachedSearchPromise: Promise<UnifiedSearchInstance> | null =
+  null;
+
+const getCachedSearch = async (
+  config: PipelineConfig,
+): Promise<UnifiedSearchInstance> => {
+  if (_cachedSearch) {
+    return _cachedSearch;
+  }
+  if (_cachedSearchPromise) {
+    return _cachedSearchPromise;
+  }
+  _cachedSearchPromise = buildUnifiedSearch(config);
+  _cachedSearch = await _cachedSearchPromise;
+  return _cachedSearch;
+};
+
 /**
  * Run the full detection pipeline.
  *
@@ -90,7 +112,8 @@ export const runPipeline = async (
     onProgress?.(step, detail);
   };
 
-  const search = cachedSearch ?? (await buildUnifiedSearch(config));
+  const search =
+    cachedSearch ?? (await getCachedSearch(config));
 
   // Two-pass scan (regex + literals)
   const { regexMatches, literalMatches } =
