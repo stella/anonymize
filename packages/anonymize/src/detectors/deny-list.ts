@@ -1,4 +1,4 @@
-import type { Match, PatternEntry } from "@stll/text-search";
+import type { Match } from "@stll/text-search";
 
 import {
   NAME_CORPUS_FIRST_NAMES,
@@ -519,7 +519,6 @@ type PatternSource =
  * plus parallel label/source arrays for post-processing.
  */
 export type DenyListData = {
-  entries: PatternEntry[];
   /**
    * Maps pattern index → entity labels (plural).
    * Same pattern can have multiple labels when it
@@ -603,11 +602,13 @@ export const buildDenyList = async (
     entry: string,
     label: string,
   ) => {
-    // Strip regex metacharacters so TextSearch
-    // classifies these as literals (→ AC path).
-    // Dots are kept (AC matches them literally).
+    // Strip | and \ only — these caused the 12K FP
+    // bug (| creates empty regex alternation, \ is
+    // an escape prefix). Other chars like () [] are
+    // kept since they appear in real dictionary
+    // entries and are matched literally by AC.
     const normalized = normalizeForSearch(entry)
-      .replace(/[|\\^$*+?{}[\]()]/g, "");
+      .replace(/[|\\]/g, "");
     if (normalized.length === 0) {
       return;
     }
@@ -716,19 +717,7 @@ export const buildDenyList = async (
     return null;
   }
 
-  // Build PatternEntry[] with per-pattern options
-  // for the unified TextSearch builder.
-  const entries: PatternEntry[] = patternList.map(
-    (p) => ({
-      pattern: p,
-      literal: true as const,
-      caseInsensitive: true,
-      wholeWords: true,
-    }),
-  );
-
   return {
-    entries,
     labels: labelList,
     originals: patternList,
     sources: sourceList,
