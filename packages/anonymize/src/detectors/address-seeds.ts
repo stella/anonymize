@@ -12,7 +12,7 @@
  * hardcoded per language.
  */
 
-import { TextSearch } from "@stll/text-search";
+import type { Match, PatternEntry } from "@stll/text-search";
 
 import { DETECTION_SOURCES } from "../types";
 import type { Entity } from "../types";
@@ -40,20 +40,7 @@ type DictionaryConfig = Record<
   string[] | string
 >;
 
-let cachedStreetTs: TextSearch | null = null;
 let cachedBoundaryRe: RegExp | null = null;
-
-const loadStreetTypes =
-  async (): Promise<DictionaryConfig> => {
-    try {
-      const mod = await import(
-        "@stll/anonymize-data/config/address-street-types.json"
-      );
-      return mod.default as DictionaryConfig;
-    } catch {
-      return {};
-    }
-  };
 
 const loadBoundaryWords =
   async (): Promise<DictionaryConfig> => {
@@ -66,31 +53,6 @@ const loadBoundaryWords =
       return {};
     }
   };
-
-/**
- * Build Aho-Corasick automaton for street type words.
- * Loads from dictionary on first call, then cached.
- */
-const getStreetTs = async (): Promise<TextSearch> => {
-  if (cachedStreetTs) {
-    return cachedStreetTs;
-  }
-  const config = await loadStreetTypes();
-  const words: string[] = [];
-  for (const entries of Object.values(config)) {
-    if (!Array.isArray(entries)) {
-      continue;
-    }
-    for (const word of entries) {
-      words.push(word);
-    }
-  }
-  cachedStreetTs = new TextSearch(words, {
-    caseInsensitive: true,
-    wholeWords: true,
-  });
-  return cachedStreetTs;
-};
 
 /**
  * Build regex for boundary words. Matches any
@@ -121,17 +83,56 @@ const getBoundaryRe = async (): Promise<RegExp> => {
   return cachedBoundaryRe;
 };
 
+// ── Pattern builder for unified search ──────────────
+
+/**
+ * Build street type patterns for the unified search.
+ * Returns PatternEntry[] for the unified TextSearch
+ * builder. Empty if data package is not installed.
+ */
+export const buildStreetTypePatterns =
+  async (): Promise<PatternEntry[]> => {
+    let config: DictionaryConfig = {};
+    try {
+      const mod = await import(
+        "@stll/anonymize-data/config/address-street-types.json"
+      );
+      config = mod.default as DictionaryConfig;
+    } catch {
+      return [];
+    }
+
+    // Plain strings — the unified builder sets
+    // caseInsensitive + wholeWords globally.
+    const words: string[] = [];
+    for (const values of Object.values(config)) {
+      if (!Array.isArray(values)) {
+        continue;
+      }
+      for (const word of values) {
+        words.push(word);
+      }
+    }
+    return words;
+  };
+
 // ── Seed collection ─────────────────────────────────
 
-const collectSeeds = async (
+const collectSeeds = (
+  allMatches: Match[],
+  sliceStart: number,
+  sliceEnd: number,
   fullText: string,
   existingEntities: Entity[],
-): Promise<Seed[]> => {
+): Seed[] => {
   const seeds: Seed[] = [];
 
-  // 1. Street type words via AC
-  const ac = await getStreetTs();
-  for (const match of ac.findIter(fullText)) {
+  // 1. Street type words from unified search matches
+  for (const match of allMatches) {
+    const idx = match.pattern;
+    if (idx < sliceStart || idx >= sliceEnd) {
+      continue;
+    }
     seeds.push({
       type: "street-word",
       start: match.start,
@@ -428,18 +429,26 @@ const expandCluster = async (
 // ── Public API ──────────────────────────────────────
 
 /**
- * Detect addresses by finding "seeds" (known address
- * components), clustering nearby seeds, expanding the
- * span, and scoring by seed diversity.
+ * Process address seeds from the unified search.
+ * Receives all matches; filters to the street types
+ * slice via sliceStart/sliceEnd. Uses fullText and
+ * existingEntities for seed collection, clustering,
+ * expansion, and scoring.
  *
  * Runs as a post-processor after all other detectors,
  * using their output as seed sources.
  */
-export const detectAddressSeeds = async (
+export const processAddressSeeds = async (
+  allMatches: Match[],
+  sliceStart: number,
+  sliceEnd: number,
   fullText: string,
   existingEntities: Entity[],
 ): Promise<Entity[]> => {
-  const seeds = await collectSeeds(
+  const seeds = collectSeeds(
+    allMatches,
+    sliceStart,
+    sliceEnd,
     fullText,
     existingEntities,
   );

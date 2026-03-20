@@ -1,4 +1,4 @@
-import { TextSearch } from "@stll/text-search";
+import type { Match, PatternEntry } from "@stll/text-search";
 
 import {
   NAME_CORPUS_FIRST_NAMES,
@@ -500,10 +500,6 @@ const PERSON_STOPWORDS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Pre-built deny list automaton. Constructed once by
- * `buildDenyList`, reused across `scanDenyList` calls.
- */
-/**
  * Source tag for each pattern in the automaton.
  * "deny-list" = standard deny list entry
  * "first-name" = name corpus first name
@@ -516,8 +512,14 @@ type PatternSource =
   | "surname"
   | "title";
 
-export type DenyListAutomaton = {
-  ts: TextSearch;
+/**
+ * Pre-built deny list data. Constructed once by
+ * `buildDenyList`, reused across `processDenyListMatches`
+ * calls. Contains PatternEntry[] for the unified builder
+ * plus parallel label/source arrays for post-processing.
+ */
+export type DenyListData = {
+  entries: PatternEntry[];
   /**
    * Maps pattern index → entity labels (plural).
    * Same pattern can have multiple labels when it
@@ -526,23 +528,24 @@ export type DenyListAutomaton = {
    */
   labels: string[][];
   /** Maps pattern index → original pattern text. */
-  patterns: string[];
+  originals: string[];
   /** Maps pattern index → source types (plural). */
   sources: PatternSource[][];
 };
 
 /**
  * Resolve which dictionaries to load based on country
- * and category filters, load them, and build the
- * Aho-Corasick automaton. The returned automaton can
- * be reused across multiple `scanDenyList` calls.
+ * and category filters, load them, and build the deny
+ * list data. The returned data provides PatternEntry[]
+ * for the unified builder and parallel arrays for
+ * post-processing.
  *
  * Requires `@stll/anonymize-data` to be installed.
  * Returns null if the data package is not available.
  */
 export const buildDenyList = async (
   config: DenyListConfig,
-): Promise<DenyListAutomaton | null> => {
+): Promise<DenyListData | null> => {
   const dataModule = await loadDataModule();
   if (!dataModule) {
     return null;
@@ -713,16 +716,21 @@ export const buildDenyList = async (
     return null;
   }
 
-  const ts = new TextSearch(patternList, {
-    caseInsensitive: true,
-    wholeWords: true,
-    overlapStrategy: "all",
-  });
+  // Build PatternEntry[] with per-pattern options
+  // for the unified TextSearch builder.
+  const entries: PatternEntry[] = patternList.map(
+    (p) => ({
+      pattern: p,
+      literal: true as const,
+      caseInsensitive: true,
+      wholeWords: true,
+    }),
+  );
 
   return {
-    ts,
+    entries,
     labels: labelList,
-    patterns: patternList,
+    originals: patternList,
     sources: sourceList,
   };
 };
@@ -758,8 +766,13 @@ type RawMatch = {
   patternIdx: number;
 };
 
+// ── Match processor ─────────────────────────────────
+
 /**
- * Scan text using a pre-built deny list automaton.
+ * Process deny list matches from the unified search.
+ * Receives all matches; filters to the deny list slice
+ * via sliceStart/sliceEnd. Local index into data.labels,
+ * data.originals, data.sources is match.pattern - sliceStart.
  *
  * Two-pass approach to reduce false positives:
  * 1. Collect all matches (case-insensitive,
@@ -769,23 +782,27 @@ type RawMatch = {
  *    mid-sentence occurrence to prove proper noun
  * 4. Return all occurrences of validated terms
  */
-export const scanDenyList = (
+export const processDenyListMatches = (
+  allMatches: Match[],
+  sliceStart: number,
+  sliceEnd: number,
   fullText: string,
-  automaton: DenyListAutomaton,
+  data: DenyListData,
 ): Entity[] => {
-  // Normalize typographic variants (NBSP, smart quotes,
-  // en/em dashes) for matching. Offsets remain valid
-  // because all replacements are same-length.
-  const normalized = normalizeForSearch(fullText);
-  const rawMatches = automaton.ts.findIter(normalized);
-
   // Pass 1: collect valid matches grouped by pattern
   const matchesByPattern = new Map<
     number,
     RawMatch[]
   >();
 
-  for (const match of rawMatches) {
+  for (const match of allMatches) {
+    const idx = match.pattern;
+    if (idx < sliceStart || idx >= sliceEnd) {
+      continue;
+    }
+
+    const localIdx = idx - sliceStart;
+
     const sourceChar = fullText[match.start] ?? "";
     if (!UPPER_START_RE.test(sourceChar)) {
       continue;
@@ -808,7 +825,7 @@ export const scanDenyList = (
       continue;
     }
 
-    const labels = automaton.labels[match.pattern];
+    const labels = data.labels[localIdx];
     if (!labels || labels.length === 0) {
       continue;
     }
@@ -818,16 +835,14 @@ export const scanDenyList = (
       end: match.end,
       labels,
       text: matchText,
-      patternIdx: match.pattern,
+      patternIdx: localIdx,
     };
 
-    const existing = matchesByPattern.get(
-      match.pattern,
-    );
+    const existing = matchesByPattern.get(localIdx);
     if (existing) {
       existing.push(entry);
     } else {
-      matchesByPattern.set(match.pattern, [entry]);
+      matchesByPattern.set(localIdx, [entry]);
     }
   }
 

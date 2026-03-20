@@ -39,19 +39,49 @@ export {
 } from "./operators";
 
 // ── Detectors ─────────────────────────────────────
-export { detectRegexPii } from "./detectors/regex";
-export { detectTriggerPhrases } from "./detectors/triggers";
+export {
+  REGEX_PATTERNS,
+  REGEX_META,
+  processRegexMatches,
+} from "./detectors/regex";
+export type { RegexMeta } from "./detectors/regex";
+export {
+  buildLegalFormPatterns,
+  processLegalFormMatches,
+} from "./detectors/legal-forms";
+export {
+  buildTriggerPatterns,
+  processTriggerMatches,
+} from "./detectors/triggers";
+export {
+  buildStreetTypePatterns,
+  processAddressSeeds,
+} from "./detectors/address-seeds";
 export { scanExact, scanFuzzy } from "./detectors/gazetteer";
 export {
   extractDefinedTerms,
   findCoreferenceSpans,
 } from "./detectors/coreference";
-export { detectLegalFormEntities } from "./detectors/legal-forms";
 export { detectNameCorpus } from "./detectors/names";
 
 // ── Deny List Detector ──────────────────────────
-export { buildDenyList, scanDenyList } from "./detectors/deny-list";
-export type { DenyListAutomaton } from "./detectors/deny-list";
+export {
+  buildDenyList,
+  processDenyListMatches,
+} from "./detectors/deny-list";
+export type { DenyListData } from "./detectors/deny-list";
+
+// ── Unified Search ──────────────────────────────
+export {
+  buildUnifiedSearch,
+} from "./build-unified-search";
+export type {
+  UnifiedSearchInstance,
+} from "./build-unified-search";
+export {
+  runUnifiedSearch,
+} from "./unified-search";
+export type { UnifiedResult } from "./unified-search";
 
 // ── Regions ──────────────────────────────────────
 export { REGIONS, resolveCountries } from "./regions";

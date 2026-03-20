@@ -2,77 +2,53 @@ import {
   extractDefinedTerms,
   findCoreferenceSpans,
 } from "./detectors/coreference";
-import { buildDenyList, scanDenyList } from "./detectors/deny-list";
-import type { DenyListAutomaton } from "./detectors/deny-list";
 import { scanExact, scanFuzzy } from "./detectors/gazetteer";
-import { detectLegalFormEntities } from "./detectors/legal-forms";
 import { detectNameCorpus } from "./detectors/names";
-import { detectRegexPii } from "./detectors/regex";
-import { detectTriggerPhrases } from "./detectors/triggers";
-import { detectAddressSeeds } from "./detectors/address-seeds";
+import { processRegexMatches } from "./detectors/regex";
+import { processLegalFormMatches } from "./detectors/legal-forms";
+import { processTriggerMatches } from "./detectors/triggers";
+import { processDenyListMatches } from "./detectors/deny-list";
+import { processAddressSeeds } from "./detectors/address-seeds";
 import { boostNearMissEntities } from "./filters/confidence-boost";
 import { filterFalsePositives } from "./filters/false-positives";
 import type { Entity, GazetteerEntry, PipelineConfig } from "./types";
+import {
+  buildUnifiedSearch,
+  type UnifiedSearchInstance,
+} from "./build-unified-search";
+import { runUnifiedSearch } from "./unified-search";
 
-/**
- * Check if entity `a` should replace entity `b`.
- * Prefers higher score; on tie, prefers longer span.
- */
 const shouldReplace = (a: Entity, b: Entity): boolean =>
   a.score > b.score ||
-  (a.score === b.score &&
-    a.end - a.start > b.end - b.start);
+  (a.score === b.score && a.end - a.start > b.end - b.start);
 
-/**
- * Merge entity arrays, sort by offset, and deduplicate
- * overlapping spans. Keeps the highest-scoring entity;
- * on equal score, keeps the longer span.
- */
-export const mergeAndDedup = (
-  ...layers: Entity[][]
-): Entity[] => {
+export const mergeAndDedup = (...layers: Entity[][]): Entity[] => {
   const all: Entity[] = [];
   for (const layer of layers) {
-    for (const entity of layer) {
-      all.push(entity);
-    }
+    for (const entity of layer) all.push(entity);
   }
-
-  const sorted = all.toSorted(
-    (a, b) => a.start - b.start,
-  );
-
+  const sorted = all.toSorted((a, b) => a.start - b.start);
   const merged: Entity[] = [];
   for (const entity of sorted) {
     const idx = merged.findIndex(
-      (e) =>
-        entity.start < e.end && entity.end > e.start,
+      (e) => entity.start < e.end && entity.end > e.start,
     );
-
     if (idx !== -1) {
       const existing = merged[idx];
-      if (existing && shouldReplace(entity, existing)) {
+      if (existing && shouldReplace(entity, existing))
         merged[idx] = { ...entity };
-      }
     } else {
       merged.push({ ...entity });
     }
   }
-
-  // Second pass: a replacement may have widened a span,
-  // creating new overlaps. Repeat until stable to handle
-  // cascading overlaps from span-widening replacements.
-  let result = merged.toSorted(
-    (a, b) => a.start - b.start,
-  );
+  let result = merged.toSorted((a, b) => a.start - b.start);
   let changed = true;
   while (changed) {
     changed = false;
     const deduped: Entity[] = [];
     for (const entity of result) {
       const idx = deduped.findIndex(
-        (e) =>
-          entity.start < e.end && entity.end > e.start,
+        (e) => entity.start < e.end && entity.end > e.start,
       );
       if (idx !== -1) {
         const existing = deduped[idx];
@@ -86,15 +62,9 @@ export const mergeAndDedup = (
     }
     result = deduped;
   }
-
   return result;
 };
 
-/**
- * Pipeline callback for NER inference (Step 4).
- * The caller provides this because NER runs in a Web
- * Worker and the pipeline itself stays on the main thread.
- */
 export type NerInferenceFn = (
   fullText: string,
   labels: string[],
@@ -104,21 +74,9 @@ export type NerInferenceFn = (
 /**
  * Run the full detection pipeline.
  *
- * Steps 1-3 and 5-8 are pure TypeScript on the main
- * thread. Step 4 (NER) is delegated to the caller via
- * the `nerInference` callback.
- *
- * Pipeline order:
- *   1. Trigger-phrase scan (Czech/German legal)
- *   2. Regex scan (structured PII formats)
- *   3. Aho-Corasick gazetteer scan (known entities)
- *   4. GLiNER NER (Web Worker, ONNX/WebGPU)
- *   5. Context confidence boosting
- *   6. Merge + dedup all layers
- *   7. Defined-term coreference extraction
- *   8. Re-scan with new coreference variants
- *
- * Returns the final merged entity array.
+ * Single unified TextSearch scans the text once.
+ * Results are dispatched to each detector's
+ * post-processor by pattern index range.
  */
 export const runPipeline = async (
   fullText: string,
@@ -126,40 +84,61 @@ export const runPipeline = async (
   gazetteerEntries: GazetteerEntry[],
   nerInference: NerInferenceFn | null,
   onProgress?: (step: string, detail: string) => void,
-  denyListAutomaton?: DenyListAutomaton | null,
+  cachedSearch?: UnifiedSearchInstance,
 ): Promise<Entity[]> => {
   const log = (step: string, detail: string) => {
     onProgress?.(step, detail);
   };
 
-  // Step 1: Trigger phrases
-  let triggerEntities: Entity[] = [];
-  if (config.enableTriggerPhrases) {
-    triggerEntities = await detectTriggerPhrases(fullText);
-    log("trigger-phrases", `${triggerEntities.length} matches`);
-  }
+  const search = cachedSearch ?? (await buildUnifiedSearch(config));
 
-  // Step 2: Regex
-  let regexEntities: Entity[] = [];
-  if (config.enableRegex) {
-    regexEntities = detectRegexPii(fullText);
+  // Two-pass scan (regex + literals)
+  const { regexMatches, literalMatches } =
+    runUnifiedSearch(search, fullText);
+  const { slices } = search;
+
+  const regexEntities = config.enableRegex
+    ? processRegexMatches(
+        regexMatches,
+        slices.regex.start,
+        slices.regex.end,
+      )
+    : [];
+  if (regexEntities.length > 0)
     log("regex", `${regexEntities.length} matches`);
-  }
 
-  // Step 2b: Legal form detection
-  const legalFormEntities =
-    await detectLegalFormEntities(fullText);
-  if (legalFormEntities.length > 0) {
+  const legalFormEntities = processLegalFormMatches(
+    regexMatches,
+    slices.legalForms.start,
+    slices.legalForms.end,
+  );
+  if (legalFormEntities.length > 0)
     log(
       "legal-forms",
       `${legalFormEntities.length} matches`,
     );
-  }
 
-  // Step 2c: Name corpus (skipped when deny-list is
-  // enabled — names are already in the unified AC)
+  const triggerEntities =
+    config.enableTriggerPhrases
+      ? processTriggerMatches(
+          regexMatches,
+          slices.triggers.start,
+          slices.triggers.end,
+          fullText,
+          search.triggerRules,
+        )
+      : [];
+  if (triggerEntities.length > 0)
+    log(
+      "trigger-phrases",
+      `${triggerEntities.length} matches`,
+    );
+
   let nameCorpusEntities: Entity[] = [];
-  if (config.enableNameCorpus && !config.enableDenyList) {
+  if (
+    config.enableNameCorpus &&
+    !config.enableDenyList
+  ) {
     nameCorpusEntities = detectNameCorpus(fullText);
     log(
       "name-corpus",
@@ -167,39 +146,32 @@ export const runPipeline = async (
     );
   }
 
-  // Step 2d: Deny list
-  let denyListEntities: Entity[] = [];
-  if (config.enableDenyList) {
-    // Build automaton if not pre-built by the caller
-    const automaton =
-      denyListAutomaton !== undefined
-        ? denyListAutomaton
-        : await buildDenyList(config);
-    if (automaton) {
-      denyListEntities = scanDenyList(
-        fullText,
-        automaton,
-      );
-      log(
-        "deny-list",
-        `${denyListEntities.length} matches`,
-      );
-    }
-  }
+  const denyListEntities =
+    config.enableDenyList && search.denyListData
+      ? processDenyListMatches(
+          literalMatches,
+          slices.denyList.start,
+          slices.denyList.end,
+          fullText,
+          search.denyListData,
+        )
+      : [];
+  if (denyListEntities.length > 0)
+    log(
+      "deny-list",
+      `${denyListEntities.length} matches`,
+    );
 
-  // Step 3: Gazetteer
+  // Gazetteer: per-workspace, separate search
   let gazetteerExact: Entity[] = [];
   let gazetteerFuzzy: Entity[] = [];
   if (config.enableGazetteer && gazetteerEntries.length > 0) {
     gazetteerExact = scanExact(fullText, gazetteerEntries);
     gazetteerFuzzy = scanFuzzy(fullText, gazetteerEntries, gazetteerExact);
-    log(
-      "gazetteer",
-      `${gazetteerExact.length} exact + ${gazetteerFuzzy.length} fuzzy`,
-    );
+    log("gazetteer", `${gazetteerExact.length} exact + ${gazetteerFuzzy.length} fuzzy`);
   }
 
-  // Step 4: NER
+  // NER
   let nerEntities: Entity[] = [];
   if (config.enableNer && nerInference) {
     log("ner", "running inference...");
@@ -207,75 +179,51 @@ export const runPipeline = async (
     log("ner", `${nerEntities.length} entities`);
   }
 
-  // Step 4b: Address seed expansion — uses existing
-  // entities (cities, postal codes, triggers) as seeds
-  // to detect full address spans.
+  // Address seed expansion
   const preAddressEntities = [
-    ...triggerEntities,
-    ...regexEntities,
-    ...legalFormEntities,
-    ...nameCorpusEntities,
-    ...denyListEntities,
-    ...gazetteerExact,
-    ...gazetteerFuzzy,
-    ...nerEntities,
+    ...triggerEntities, ...regexEntities, ...legalFormEntities,
+    ...nameCorpusEntities, ...denyListEntities,
+    ...gazetteerExact, ...gazetteerFuzzy, ...nerEntities,
   ];
-  const addressSeedEntities =
-    await detectAddressSeeds(
-      fullText,
-      preAddressEntities,
-    );
-  if (addressSeedEntities.length > 0) {
-    log(
-      "address-seeds",
-      `${addressSeedEntities.length} expanded`,
-    );
-  }
+  const addressSeedEntities = await processAddressSeeds(
+    literalMatches,
+    slices.streetTypes.start,
+    slices.streetTypes.end,
+    fullText,
+    preAddressEntities,
+  );
+  if (addressSeedEntities.length > 0)
+    log("address-seeds", `${addressSeedEntities.length} expanded`);
 
-  // Step 5: Confidence boost
-  const preBoostEntities = [
-    ...preAddressEntities,
-    ...addressSeedEntities,
-  ];
-
+  // Confidence boost
+  const preBoostEntities = [...preAddressEntities, ...addressSeedEntities];
   let allEntities: Entity[];
   if (config.enableConfidenceBoost) {
     allEntities = boostNearMissEntities(preBoostEntities, config.threshold);
-    const boostedCount =
-      allEntities.length -
+    const boosted = allEntities.length -
       preBoostEntities.filter((e) => e.score >= config.threshold).length;
-    if (boostedCount > 0) {
-      log("confidence-boost", `${boostedCount} near-miss entities promoted`);
-    }
+    if (boosted > 0) log("confidence-boost", `${boosted} near-miss promoted`);
   } else {
     allEntities = preBoostEntities.filter((e) => e.score >= config.threshold);
   }
 
-  // Step 6: Merge + dedup
+  // Merge + dedup
   const rawMerged = mergeAndDedup(allEntities);
   log("merge", `${rawMerged.length} after dedup`);
 
-  // Step 6b: False-positive filtering
+  // False-positive filtering
   const merged = filterFalsePositives(rawMerged);
-  if (merged.length < rawMerged.length) {
-    log(
-      "filter",
-      `removed ${rawMerged.length - merged.length} false positives`,
-    );
-  }
+  if (merged.length < rawMerged.length)
+    log("filter", `removed ${rawMerged.length - merged.length} FPs`);
 
-  // Step 7: Defined-term coreference
+  // Coreference
   if (config.enableCoreference) {
     const terms = extractDefinedTerms(fullText, merged);
-
     if (terms.length > 0) {
-      log("coreference", `${terms.length} defined terms found`);
-
-      // Step 8: Re-scan with extracted aliases
+      log("coreference", `${terms.length} defined terms`);
       const corefSpans = findCoreferenceSpans(fullText, terms);
       if (corefSpans.length > 0) {
-        log("coreference-rescan", `${corefSpans.length} alias occurrences`);
-
+        log("coreference-rescan", `${corefSpans.length} aliases`);
         return mergeAndDedup(merged, corefSpans);
       }
     }

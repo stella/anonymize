@@ -1,4 +1,4 @@
-import { TextSearch } from "@stll/text-search";
+import type { Match } from "@stll/text-search";
 
 import { POST_NOMINALS, TITLE_PREFIXES } from "../config/titles";
 import { DETECTION_SOURCES } from "../types";
@@ -44,7 +44,7 @@ const SP = "[^\\S\\n\\t]";
 // Parallel arrays: PATTERNS[i] ↔ META[i]
 // Indexed by match.pattern for O(1) lookup.
 
-type PatternMeta = {
+export type RegexMeta = {
   label: string;
   score: number;
 };
@@ -56,7 +56,7 @@ type PatternMeta = {
  * To add a new pattern: append to PATTERNS and META.
  * The index must match.
  */
-const PATTERNS: readonly string[] = [
+export const REGEX_PATTERNS: readonly string[] = [
   // 0: titled person (Czech/German)
   `(?:${TITLE_PREFIX})` +
     `(?:${SP}+(?:${TITLE_PREFIX}))*` +
@@ -133,7 +133,7 @@ const PATTERNS: readonly string[] = [
 ];
 
 /** Parallel metadata. Index = pattern index. */
-const META: readonly PatternMeta[] = [
+export const REGEX_META: readonly RegexMeta[] = [
   { label: "person", score: 0.95 },
   { label: "person", score: 0.95 },
   { label: "iban", score: 1 },
@@ -156,37 +156,29 @@ const META: readonly PatternMeta[] = [
   { label: "bank account number", score: 0.95 },
 ];
 
-// ── Cached RegexSet instance ────────────────────────
-
-let cached: TextSearch | null = null;
-
-const getRegexSet = (): TextSearch => {
-  if (!cached) {
-    // SAFETY: RegexSet doesn't mutate the array
-    cached = new TextSearch(PATTERNS as string[]);
-  }
-  return cached;
-};
-
 // ── Public API ──────────────────────────────────────
 
 /**
- * Run regex-based PII detection. Uses @stll/regex-set
- * for a single-pass DFA scan of all PII patterns.
- *
- * Company ID keywords (IČO, DIČ, VAT number, etc.)
- * moved to trigger configs with "company-id-value"
- * strategy — detected via the AC-powered trigger
- * system instead.
+ * Process regex matches from the unified search.
+ * Receives all matches; filters to the regex slice
+ * via sliceStart/sliceEnd. Local index into META is
+ * match.pattern - sliceStart.
  */
-export const detectRegexPii = (
-  fullText: string,
+export const processRegexMatches = (
+  allMatches: Match[],
+  sliceStart: number,
+  sliceEnd: number,
 ): Entity[] => {
   const results: Entity[] = [];
-  const rs = getRegexSet();
 
-  for (const match of rs.findIter(fullText)) {
-    const meta = META[match.pattern];
+  for (const match of allMatches) {
+    const idx = match.pattern;
+    if (idx < sliceStart || idx >= sliceEnd) {
+      continue;
+    }
+
+    const localIdx = idx - sliceStart;
+    const meta = REGEX_META[localIdx];
     if (!meta) {
       continue;
     }

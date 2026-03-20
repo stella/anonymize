@@ -5,12 +5,11 @@
  * (s.r.o., GmbH, a.s., etc.) and extending backwards
  * to capture preceding capitalised words.
  *
- * Uses @stll/regex-set for single-pass DFA scanning.
- * Data-driven: legal forms are loaded from the optional
- * @stll/anonymize-data package.
+ * Exports pattern definitions for the unified builder
+ * and a match processor for post-processing.
  */
 
-import { TextSearch } from "@stll/text-search";
+import type { Match } from "@stll/text-search";
 
 import { DETECTION_SOURCES } from "../types";
 import type { Entity } from "../types";
@@ -57,21 +56,16 @@ const buildPatternString = (
   return `${prefix}${separator}(?:${alt})(?![${LOWER}])`;
 };
 
-// ── Cached TextSearch ────────────────────────────────
+// ── Pattern builder for unified search ──────────────
 
-let cachedPromise: Promise<TextSearch | null> | null =
-  null;
-
-const loadSet = (): Promise<TextSearch | null> => {
-  if (cachedPromise) {
-    return cachedPromise;
-  }
-  cachedPromise = buildSet();
-  return cachedPromise;
-};
-
-const buildSet = async (): Promise<
-  TextSearch | null
+/**
+ * Build legal form regex pattern strings.
+ * Returns an array of regex strings for the unified
+ * TextSearch builder. Empty if data package is not
+ * installed.
+ */
+export const buildLegalFormPatterns = async (): Promise<
+  string[]
 > => {
   let data: Record<string, string[]> = {};
 
@@ -84,7 +78,7 @@ const buildSet = async (): Promise<
       mod as { default: Record<string, string[]> }
     ).default;
   } catch {
-    return null;
+    return [];
   }
 
   const allForms: string[] = [];
@@ -118,31 +112,29 @@ const buildSet = async (): Promise<
     patterns.push(shortPattern);
   }
 
-  if (patterns.length === 0) {
-    return null;
-  }
-
-  // TextSearch auto-isolates large alternation patterns
-  // (>50 branches), preventing DFA state explosion.
-  return new TextSearch(patterns);
+  return patterns;
 };
 
+// ── Match processor ─────────────────────────────────
+
 /**
- * Detect organization entities by legal form suffixes.
- * Uses @stll/regex-set for single-pass DFA scanning.
+ * Process legal form matches from the unified search.
+ * Receives all matches; filters to the legal forms
+ * slice via sliceStart/sliceEnd.
  */
-export const detectLegalFormEntities = async (
-  fullText: string,
-): Promise<Entity[]> => {
-  const ts = await loadSet();
-  if (!ts) {
-    return [];
-  }
-
+export const processLegalFormMatches = (
+  allMatches: Match[],
+  sliceStart: number,
+  sliceEnd: number,
+): Entity[] => {
   const results: Entity[] = [];
-  const matches = ts.findIter(fullText);
 
-  for (const match of matches) {
+  for (const match of allMatches) {
+    const idx = match.pattern;
+    if (idx < sliceStart || idx >= sliceEnd) {
+      continue;
+    }
+
     const text = match.text.trimEnd();
     if (text.length < 5) {
       continue;
