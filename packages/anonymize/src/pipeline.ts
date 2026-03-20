@@ -71,23 +71,31 @@ export type NerInferenceFn = (
   threshold: number,
 ) => Promise<Entity[]>;
 
-// Module-level cache for the unified search.
-// Avoids cold rebuild on every runPipeline call
-// when the caller doesn't pass cachedSearch.
+// Module-level cache keyed on config fingerprint.
+// Rebuilds when config changes (different countries,
+// features enabled/disabled).
+let _cachedKey = "";
 let _cachedSearch: UnifiedSearchInstance | null =
   null;
 let _cachedSearchPromise: Promise<UnifiedSearchInstance> | null =
   null;
 
+const configKey = (config: PipelineConfig): string =>
+  `${config.enableDenyList}:${config.enableTriggerPhrases}:` +
+  `${config.denyListCountries?.join(",") ?? ""}:` +
+  `${config.denyListRegions?.join(",") ?? ""}`;
+
 const getCachedSearch = async (
   config: PipelineConfig,
 ): Promise<UnifiedSearchInstance> => {
-  if (_cachedSearch) {
+  const key = configKey(config);
+  if (_cachedSearch && _cachedKey === key) {
     return _cachedSearch;
   }
-  if (_cachedSearchPromise) {
+  if (_cachedSearchPromise && _cachedKey === key) {
     return _cachedSearchPromise;
   }
+  _cachedKey = key;
   _cachedSearchPromise = buildUnifiedSearch(config);
   _cachedSearch = await _cachedSearchPromise;
   return _cachedSearch;
