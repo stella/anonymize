@@ -83,7 +83,8 @@ let _cachedSearchPromise: Promise<UnifiedSearchInstance> | null =
 const configKey = (config: PipelineConfig): string =>
   `${config.enableDenyList}:${config.enableTriggerPhrases}:` +
   `${config.denyListCountries?.join(",") ?? ""}:` +
-  `${config.denyListRegions?.join(",") ?? ""}`;
+  `${config.denyListRegions?.join(",") ?? ""}:` +
+  `${config.denyListExcludeCategories?.join(",") ?? ""}`;
 
 const getCachedSearch = async (
   config: PipelineConfig,
@@ -95,9 +96,13 @@ const getCachedSearch = async (
   if (_cachedSearchPromise && _cachedKey === key) {
     return _cachedSearchPromise;
   }
+  // Build new search. Set key AFTER build starts
+  // to prevent concurrent calls with different
+  // configs from sharing the wrong promise.
+  const promise = buildUnifiedSearch(config);
   _cachedKey = key;
-  _cachedSearchPromise = buildUnifiedSearch(config);
-  _cachedSearch = await _cachedSearchPromise;
+  _cachedSearchPromise = promise;
+  _cachedSearch = await promise;
   return _cachedSearch;
 };
 

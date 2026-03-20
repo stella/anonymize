@@ -39,7 +39,12 @@ export const scanExact = (
     return [];
   }
 
-  const ts = new TextSearch(patterns);
+  // allLiteral: gazetteer entries are user-provided
+  // strings (may contain dots, parens) that should
+  // always be matched literally via AC.
+  const ts = new TextSearch(patterns, {
+    allLiteral: true,
+  });
   const results: Entity[] = [];
 
   for (const match of ts.findIter(fullText)) {
