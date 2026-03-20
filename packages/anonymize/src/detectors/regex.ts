@@ -116,10 +116,15 @@ const PATTERNS: readonly string[] = [
     `February|March|April|May|June|July|August|` +
     `September|October|November|December)` +
     `(?:\\s+\\d{4})?\\b`,
-  // 15: IP address
+  // 15: monetary amount (leading symbol)
+  `(?:[$€£¥₽])\\s?\\d{1,3}(?:[,.\'\\s]\\d{3})*(?:[.,]\\d{1,2})?\\b`,
+  // 16: monetary amount (trailing code)
+  `\\b\\d{1,3}(?:[,.\'\\s]\\d{3})*(?:[.,]\\d{2})?\\s?` +
+    `(?:USD|EUR|GBP|CZK|PLN|HUF|CHF|SEK|NOK|DKK|RON|JPY|CNY)\\b`,
+  // 17: IP address
   `\\b(?:(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.){3}` +
     `(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\b`,
-  // 16: Czech bank account (optional prefix)
+  // 18: Czech bank account (optional prefix)
   `\\b(?:\\d{1,6}-)?\\d{6,10}/\\d{4}(?!\\d)`,
 ];
 
@@ -140,6 +145,8 @@ const META: readonly PatternMeta[] = [
   { label: "date", score: 1 },
   { label: "date", score: 1 },
   { label: "date", score: 1 },
+  { label: "monetary amount", score: 0.9 },
+  { label: "monetary amount", score: 0.9 },
   { label: "ip address", score: 1 },
   { label: "bank account number", score: 0.95 },
 ];
