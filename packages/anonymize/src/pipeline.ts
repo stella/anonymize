@@ -96,9 +96,9 @@ const getCachedSearch = async (
 /**
  * Run the full detection pipeline.
  *
- * Single unified TextSearch scans the text once.
- * Results are dispatched to each detector's
- * post-processor by pattern index range.
+ * Two TextSearch instances scan the text (regex +
+ * literals). Results are dispatched to each
+ * detector's post-processor by pattern index range.
  */
 export const runPipeline = async (
   fullText: string,
