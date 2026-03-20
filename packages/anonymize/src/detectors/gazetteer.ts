@@ -1,4 +1,4 @@
-import { AhoCorasick } from "@stll/aho-corasick";
+import { TextSearch } from "@stll/text-search";
 
 import { DETECTION_SOURCES } from "../types";
 import type { Entity, GazetteerEntry } from "../types";
@@ -39,10 +39,10 @@ export const scanExact = (
     return [];
   }
 
-  const ac = new AhoCorasick(patterns);
+  const ts = new TextSearch(patterns);
   const results: Entity[] = [];
 
-  for (const match of ac.findIter(fullText)) {
+  for (const match of ts.findIter(fullText)) {
     const matchedPattern = patterns[match.pattern];
     if (!matchedPattern) {
       continue;

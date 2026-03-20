@@ -1,4 +1,4 @@
-import { AhoCorasick } from "@stll/aho-corasick";
+import { TextSearch } from "@stll/text-search";
 
 import { DETECTION_SOURCES } from "../types";
 import type { Entity, TriggerRule } from "../types";
@@ -25,7 +25,7 @@ const mapConfig = (
 // ── Cached trigger AC automaton ─────────────────────
 
 type TriggerAutomaton = {
-  ac: AhoCorasick;
+  ts: TextSearch;
   /** Parallel array: rules[match.pattern] → rule */
   rules: readonly TriggerRule[];
 };
@@ -93,9 +93,9 @@ const buildAutomaton = async (): Promise<
   );
   // No caseInsensitive needed: both patterns and
   // search text are already lowercased.
-  const ac = new AhoCorasick(patterns);
+  const ts = new TextSearch(patterns);
 
-  return { ac, rules };
+  return { ts, rules };
 };
 
 // ── Value extraction (unchanged) ────────────────────
@@ -304,7 +304,7 @@ export const detectTriggerPhrases = async (
 
   const results: Entity[] = [];
   const lowerText = fullText.toLowerCase();
-  const matches = automaton.ac.findIter(lowerText);
+  const matches = automaton.ts.findIter(lowerText);
 
   for (const match of matches) {
     // Left word-boundary: reject if preceded by a

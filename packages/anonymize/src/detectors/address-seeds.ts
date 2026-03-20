@@ -12,7 +12,7 @@
  * hardcoded per language.
  */
 
-import { AhoCorasick } from "@stll/aho-corasick";
+import { TextSearch } from "@stll/text-search";
 
 import { DETECTION_SOURCES } from "../types";
 import type { Entity } from "../types";
@@ -40,7 +40,7 @@ type DictionaryConfig = Record<
   string[] | string
 >;
 
-let cachedStreetAC: AhoCorasick | null = null;
+let cachedStreetTs: TextSearch | null = null;
 let cachedBoundaryRe: RegExp | null = null;
 
 const loadStreetTypes =
@@ -71,9 +71,9 @@ const loadBoundaryWords =
  * Build Aho-Corasick automaton for street type words.
  * Loads from dictionary on first call, then cached.
  */
-const getStreetAC = async (): Promise<AhoCorasick> => {
-  if (cachedStreetAC) {
-    return cachedStreetAC;
+const getStreetTs = async (): Promise<TextSearch> => {
+  if (cachedStreetTs) {
+    return cachedStreetTs;
   }
   const config = await loadStreetTypes();
   const words: string[] = [];
@@ -85,11 +85,11 @@ const getStreetAC = async (): Promise<AhoCorasick> => {
       words.push(word);
     }
   }
-  cachedStreetAC = new AhoCorasick(words, {
+  cachedStreetTs = new TextSearch(words, {
     caseInsensitive: true,
     wholeWords: true,
   });
-  return cachedStreetAC;
+  return cachedStreetTs;
 };
 
 /**
@@ -130,7 +130,7 @@ const collectSeeds = async (
   const seeds: Seed[] = [];
 
   // 1. Street type words via AC
-  const ac = await getStreetAC();
+  const ac = await getStreetTs();
   for (const match of ac.findIter(fullText)) {
     seeds.push({
       type: "street-word",

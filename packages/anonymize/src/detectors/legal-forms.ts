@@ -10,7 +10,7 @@
  * @stll/anonymize-data package.
  */
 
-import { RegexSet } from "@stll/regex-set";
+import { TextSearch } from "@stll/text-search";
 
 import { DETECTION_SOURCES } from "../types";
 import type { Entity } from "../types";
@@ -57,18 +57,12 @@ const buildPatternString = (
   return `${prefix}${separator}(?:${alt})(?![${LOWER}])`;
 };
 
-// ── Cached RegexSet ─────────────────────────────────
+// ── Cached TextSearch ────────────────────────────────
 
-type CompiledSet = {
-  /** Separate RegexSet per pattern to avoid multi-pattern
-   *  DFA state explosion (0.4ms vs 8ms combined). */
-  sets: RegexSet[];
-};
-
-let cachedPromise: Promise<CompiledSet | null> | null =
+let cachedPromise: Promise<TextSearch | null> | null =
   null;
 
-const loadSet = (): Promise<CompiledSet | null> => {
+const loadSet = (): Promise<TextSearch | null> => {
   if (cachedPromise) {
     return cachedPromise;
   }
@@ -77,7 +71,7 @@ const loadSet = (): Promise<CompiledSet | null> => {
 };
 
 const buildSet = async (): Promise<
-  CompiledSet | null
+  TextSearch | null
 > => {
   let data: Record<string, string[]> = {};
 
@@ -128,12 +122,9 @@ const buildSet = async (): Promise<
     return null;
   }
 
-  // Build each pattern as a separate RegexSet to avoid
-  // multi-pattern DFA state explosion (two 18K+2.5K
-  // patterns combined = 8ms; separate = 0.4ms total).
-  return {
-    sets: patterns.map((p) => new RegexSet([p])),
-  };
+  // TextSearch auto-isolates large alternation patterns
+  // (>50 branches), preventing DFA state explosion.
+  return new TextSearch(patterns);
 };
 
 /**
@@ -143,21 +134,13 @@ const buildSet = async (): Promise<
 export const detectLegalFormEntities = async (
   fullText: string,
 ): Promise<Entity[]> => {
-  const set = await loadSet();
-  if (!set) {
+  const ts = await loadSet();
+  if (!ts) {
     return [];
   }
 
   const results: Entity[] = [];
-  // Collect matches from each separate RegexSet.
-  // Use for...of + push (not flatMap) because
-  // findIter may return a lazy iterable.
-  const matches: { pattern: number; start: number; end: number; text: string }[] = [];
-  for (const rs of set.sets) {
-    for (const m of rs.findIter(fullText)) {
-      matches.push(m);
-    }
-  }
+  const matches = ts.findIter(fullText);
 
   for (const match of matches) {
     const text = match.text.trimEnd();

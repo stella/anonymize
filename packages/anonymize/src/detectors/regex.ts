@@ -1,4 +1,4 @@
-import { RegexSet } from "@stll/regex-set";
+import { TextSearch } from "@stll/text-search";
 
 import { POST_NOMINALS, TITLE_PREFIXES } from "../config/titles";
 import { DETECTION_SOURCES } from "../types";
@@ -116,15 +116,19 @@ const PATTERNS: readonly string[] = [
     `February|March|April|May|June|July|August|` +
     `September|October|November|December)` +
     `(?:\\s+\\d{4})?\\b`,
-  // 15: monetary amount (leading symbol)
+  // 15: US date "March 7, 2023" or "March 7 2023"
+  `(?i)\\b(?:January|February|March|April|May|June|` +
+    `July|August|September|October|November|` +
+    `December)\\s+\\d{1,2},?\\s+\\d{4}\\b`,
+  // 16: monetary amount (leading symbol)
   `(?:[$€£¥₽])[^\\S\\n\\t]?\\d{1,3}(?:[,.\'[^\\S\\n\\t]]\\d{3})*(?:[.,]\\d{1,2})?\\b`,
-  // 16: monetary amount (trailing code)
+  // 17: monetary amount (trailing code)
   `\\b\\d{1,3}(?:[,.\'[^\\S\\n\\t]]\\d{3})*(?:[.,]\\d{2})?[^\\S\\n\\t]?` +
     `(?:USD|EUR|GBP|CZK|PLN|HUF|CHF|SEK|NOK|DKK|RON|JPY|CNY)\\b`,
-  // 17: IP address
+  // 18: IP address
   `\\b(?:(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.){3}` +
     `(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\b`,
-  // 18: Czech bank account (optional prefix)
+  // 19: Czech bank account (optional prefix)
   `\\b(?:\\d{1,6}-)?\\d{6,10}/\\d{4}(?!\\d)`,
 ];
 
@@ -145,6 +149,7 @@ const META: readonly PatternMeta[] = [
   { label: "date", score: 1 },
   { label: "date", score: 1 },
   { label: "date", score: 1 },
+  { label: "date", score: 1 },
   { label: "monetary amount", score: 0.9 },
   { label: "monetary amount", score: 0.9 },
   { label: "ip address", score: 1 },
@@ -153,12 +158,12 @@ const META: readonly PatternMeta[] = [
 
 // ── Cached RegexSet instance ────────────────────────
 
-let cached: RegexSet | null = null;
+let cached: TextSearch | null = null;
 
-const getRegexSet = (): RegexSet => {
+const getRegexSet = (): TextSearch => {
   if (!cached) {
     // SAFETY: RegexSet doesn't mutate the array
-    cached = new RegexSet(PATTERNS as string[]);
+    cached = new TextSearch(PATTERNS as string[]);
   }
   return cached;
 };

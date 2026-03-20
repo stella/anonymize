@@ -1,4 +1,4 @@
-import { AhoCorasick } from "@stll/aho-corasick";
+import { TextSearch } from "@stll/text-search";
 
 import {
   NAME_CORPUS_FIRST_NAMES,
@@ -517,7 +517,7 @@ type PatternSource =
   | "title";
 
 export type DenyListAutomaton = {
-  ac: AhoCorasick;
+  ts: TextSearch;
   /**
    * Maps pattern index → entity labels (plural).
    * Same pattern can have multiple labels when it
@@ -600,7 +600,14 @@ export const buildDenyList = async (
     entry: string,
     label: string,
   ) => {
-    const normalized = normalizeForSearch(entry);
+    // Strip regex metacharacters so TextSearch
+    // classifies these as literals (→ AC path).
+    // Dots are kept (AC matches them literally).
+    const normalized = normalizeForSearch(entry)
+      .replace(/[|\\^$*+?{}[\]()]/g, "");
+    if (normalized.length === 0) {
+      return;
+    }
     const lower = normalized.toLowerCase();
     const existing = patternIndex.get(lower);
     if (existing !== undefined) {
@@ -661,6 +668,9 @@ export const buildDenyList = async (
     name: string,
     source: PatternSource,
   ) => {
+    if (name.length === 0) {
+      return;
+    }
     const lower = name.toLowerCase();
     const existing = patternIndex.get(lower);
     if (existing !== undefined) {
@@ -703,13 +713,14 @@ export const buildDenyList = async (
     return null;
   }
 
-  const ac = new AhoCorasick(patternList, {
+  const ts = new TextSearch(patternList, {
     caseInsensitive: true,
     wholeWords: true,
+    overlapStrategy: "all",
   });
 
   return {
-    ac,
+    ts,
     labels: labelList,
     patterns: patternList,
     sources: sourceList,
@@ -766,7 +777,7 @@ export const scanDenyList = (
   // en/em dashes) for matching. Offsets remain valid
   // because all replacements are same-length.
   const normalized = normalizeForSearch(fullText);
-  const rawMatches = automaton.ac.findIter(normalized);
+  const rawMatches = automaton.ts.findIter(normalized);
 
   // Pass 1: collect valid matches grouped by pattern
   const matchesByPattern = new Map<
