@@ -80,6 +80,12 @@ const buildAutomaton = async (): Promise<
     tryLoad(
       "@stll/anonymize-data/config/triggers.en.json",
     ),
+    tryLoad(
+      "@stll/anonymize-data/config/triggers.pl.json",
+    ),
+    tryLoad(
+      "@stll/anonymize-data/config/triggers.hu.json",
+    ),
   ]);
 
   if (rules.length === 0) {

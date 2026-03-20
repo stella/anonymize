@@ -121,6 +121,10 @@ const PATTERNS: readonly string[] = [
     `(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\b`,
   // 16: Czech bank account (optional prefix)
   `\\b(?:\\d{1,6}-)?\\d{6,10}/\\d{4}(?!\\d)`,
+  // 17: Hungarian phone number
+  `\\+36[\\s\\-]?\\d{1,2}[\\s\\-]?\\d{3,4}[\\s\\-]?\\d{3,4}`,
+  // 18: Hungarian adószám (tax ID)
+  `\\b\\d{8}-\\d-\\d{2}\\b`,
 ];
 
 /** Parallel metadata. Index = pattern index. */
@@ -142,6 +146,8 @@ const META: readonly PatternMeta[] = [
   { label: "date", score: 1 },
   { label: "ip address", score: 1 },
   { label: "bank account number", score: 0.95 },
+  { label: "phone number", score: 0.9 },
+  { label: "tax identification number", score: 1 },
 ];
 
 // ── Cached RegexSet instance ────────────────────────
