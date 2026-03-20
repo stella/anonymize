@@ -5,6 +5,7 @@ import { DETECTION_SOURCES } from "../types";
 import type { Entity } from "../types";
 
 const MIN_PHONE_LENGTH = 7;
+const MIN_MONTH_NAME_LENGTH = 3;
 
 // ── Shared helpers ──────────────────────────────────
 
@@ -13,6 +14,11 @@ const escapeTitle = (title: string): string =>
     // eslint-disable-next-line no-useless-escape
     .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
     .replace(/\s+/g, "\\s*");
+
+/** Escape for use inside a regex alternation. */
+const escapeRegex = (s: string): string =>
+  // eslint-disable-next-line no-useless-escape
+  s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const TITLE_PREFIX = TITLE_PREFIXES.toSorted(
   (a, b) => b.length - a.length,
@@ -50,11 +56,12 @@ export type RegexMeta = {
 };
 
 /**
- * All PII regex patterns. Scanned in a single pass
+ * Static PII regex patterns. Scanned in a single pass
  * by @stll/regex-set (Rust regex-automata DFA).
  *
- * To add a new pattern: append to PATTERNS and META.
- * The index must match.
+ * Date patterns using written month names are built
+ * dynamically from date-months.json via
+ * `getDatePatterns()`.
  */
 export const REGEX_PATTERNS: readonly string[] = [
   // 0: titled person (Czech/German)
@@ -95,45 +102,20 @@ export const REGEX_PATTERNS: readonly string[] = [
     `|\\d{4}-\\d{2}-\\d{2})\\b`,
   // 9: Czech spaced dates "1. 1. 2025"
   `\\b\\d{1,2}\\.\\s+\\d{1,2}\\.\\s+\\d{4}\\b`,
-  // 10: Czech written-month "1. ledna 2025"
-  `\\b\\d{1,2}\\.\\s+(?:ledna|února|března|dubna|` +
-    `května|června|července|srpna|září|října|` +
-    `listopadu|prosince)\\s+\\d{4}\\b`,
-  // 11: German written-month "1. Januar 2025"
-  `(?i)\\b\\d{1,2}\\.\\s+(?:Januar|Februar|März|` +
-    `April|Mai|Juni|Juli|August|September|Oktober|` +
-    `November|Dezember)\\s+\\d{4}\\b`,
-  // 12: English written-month "13 July 1989"
-  `(?i)\\b\\d{1,2}\\s+(?:January|February|March|` +
-    `April|May|June|July|August|September|October|` +
-    `November|December)\\s+\\d{4}\\b`,
-  // 13: English month+year "October 1983"
-  `(?i)\\b(?:January|February|March|April|May|June|` +
-    `July|August|September|October|November|` +
-    `December)\\s+\\d{4}\\b`,
-  // 14: ordinal English dates "1st January 2025"
-  `(?i)\\b\\d{1,2}(?:st|nd|rd|th)\\s+(?:January|` +
-    `February|March|April|May|June|July|August|` +
-    `September|October|November|December)` +
-    `(?:\\s+\\d{4})?\\b`,
-  // 15: US date "March 7, 2023" or "March 7 2023"
-  `(?i)\\b(?:January|February|March|April|May|June|` +
-    `July|August|September|October|November|` +
-    `December)\\s+\\d{1,2},?\\s+\\d{4}\\b`,
-  // 16: monetary amount (leading symbol)
+  // 10: monetary amount (leading symbol)
   `(?:[$€£¥₽])[^\\S\\n\\t]?\\d{1,3}(?:[,.\'[^\\S\\n\\t]]\\d{3})*(?:[.,]\\d{1,2})?\\b`,
-  // 17: monetary amount (trailing code)
+  // 11: monetary amount (trailing code)
   `\\b\\d{1,3}(?:[,.\'[^\\S\\n\\t]]\\d{3})*(?:[.,]\\d{2})?[^\\S\\n\\t]?` +
     `(?:USD|EUR|GBP|CZK|PLN|HUF|CHF|SEK|NOK|DKK|RON|JPY|CNY)\\b`,
-  // 18: IP address
+  // 12: IP address
   `\\b(?:(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.){3}` +
     `(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\b`,
-  // 19: Czech bank account (optional prefix)
+  // 13: Czech bank account (optional prefix)
   `\\b(?:\\d{1,6}-)?\\d{6,10}/\\d{4}(?!\\d)`,
-  // 20: Hungarian Budapest landline (+36 1 XXX XXXX)
+  // 14: Hungarian Budapest landline (+36 1 XXX XXXX)
   // 2+ digit area codes handled by pattern 4 (international)
   `\\+36[\\s.\\-]?1[\\s.\\-]?\\d{3}[\\s.\\-]?\\d{4}\\b`,
-  // 21: Hungarian adószám (tax ID)
+  // 15: Hungarian adószám (tax ID)
   `\\b\\d{8}-\\d-\\d{2}\\b`,
 ];
 
@@ -149,12 +131,6 @@ export const REGEX_META: readonly RegexMeta[] = [
   { label: "czech birth number", score: 1 },
   { label: "date", score: 1 },
   { label: "date", score: 1 },
-  { label: "date", score: 1 },
-  { label: "date", score: 1 },
-  { label: "date", score: 1 },
-  { label: "date", score: 1 },
-  { label: "date", score: 1 },
-  { label: "date", score: 1 },
   { label: "monetary amount", score: 0.9 },
   { label: "monetary amount", score: 0.9 },
   { label: "ip address", score: 1 },
@@ -162,6 +138,95 @@ export const REGEX_META: readonly RegexMeta[] = [
   { label: "phone number", score: 0.9 },
   { label: "tax identification number", score: 0.95 },
 ];
+
+// ── Dynamic date patterns (22 languages) ────────────
+
+type DateMonths = Record<string, string[]>;
+
+/**
+ * Build month-name alternation from date-months.json.
+ * Deduplicates across all 22 languages, filters names
+ * shorter than 3 chars (too many false positives), and
+ * sorts longest-first so the regex engine prefers the
+ * longest match.
+ */
+const buildMonthAlternation = (
+  months: DateMonths,
+): string => {
+  const seen = new Set<string>();
+  for (const [key, names] of Object.entries(months)) {
+    if (key.startsWith("_")) continue;
+    for (const name of names) {
+      // Strip trailing dots for the regex; the dot
+      // pattern in dates handles optional dots already.
+      const clean = name.replace(/\.$/, "");
+      if (clean.length >= MIN_MONTH_NAME_LENGTH) {
+        seen.add(clean);
+      }
+    }
+  }
+  return [...seen]
+    .toSorted((a, b) => b.length - a.length)
+    .map(escapeRegex)
+    .join("|");
+};
+
+/**
+ * Build date patterns from a month-name alternation.
+ * Returns 6 patterns covering the major written-date
+ * formats across all supported languages.
+ */
+const buildDatePatternsFromMonths = (
+  alt: string,
+): string[] => [
+  // a. DD[.] Month YYYY — "1. ledna 2025", "7 March 2023"
+  `(?i)\\b\\d{1,2}\\.?\\s+(?:${alt})\\s+\\d{4}\\b`,
+  // b. Month DD[,] YYYY — "March 7, 2023" (US format)
+  `(?i)\\b(?:${alt})\\s+\\d{1,2},?\\s+\\d{4}\\b`,
+  // c. DDst/nd/rd/th Month [YYYY] — "1st January 2025"
+  `(?i)\\b\\d{1,2}(?:st|nd|rd|th)\\s+(?:${alt})` +
+    `(?:\\s+\\d{4})?\\b`,
+  // d. Month YYYY — "October 1983"
+  `(?i)\\b(?:${alt})\\s+\\d{4}\\b`,
+  // e. YYYY. Month DD. — Hungarian "2025. január 7."
+  `(?i)\\b\\d{4}\\.\\s+(?:${alt})\\s+\\d{1,2}\\.?(?:\\b|$)`,
+  // f. DD de Month [de] YYYY — Spanish "7 de enero de 2025"
+  `(?i)\\b\\d{1,2}\\s+de\\s+(?:${alt})` +
+    `(?:\\s+de)?\\s+\\d{4}\\b`,
+];
+
+/** Cached promise for date patterns. Loaded once. */
+let datePatternPromise: Promise<string[]> | null = null;
+
+const loadDatePatterns = async (): Promise<string[]> => {
+  const mod = await import(
+    "@stll/anonymize-data/config/date-months.json"
+  );
+  // Dynamic import of JSON returns { default, ...keys }.
+  // Use `default` if present (ESM wrapper), else the
+  // module itself.
+  const months: DateMonths = mod.default ?? mod;
+  const alt = buildMonthAlternation(months);
+  return buildDatePatternsFromMonths(alt);
+};
+
+/**
+ * Get dynamically built date patterns from
+ * date-months.json. Returns a cached promise; the JSON
+ * is loaded only once.
+ */
+export const getDatePatterns = (): Promise<string[]> => {
+  if (!datePatternPromise) {
+    datePatternPromise = loadDatePatterns();
+  }
+  return datePatternPromise;
+};
+
+/** Date pattern metadata (all are score 1 dates). */
+export const DATE_PATTERN_META: RegexMeta = {
+  label: "date",
+  score: 1,
+};
 
 // ── Public API ──────────────────────────────────────
 

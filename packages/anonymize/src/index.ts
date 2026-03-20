@@ -42,6 +42,8 @@ export {
 export {
   REGEX_PATTERNS,
   REGEX_META,
+  DATE_PATTERN_META,
+  getDatePatterns,
   processRegexMatches,
 } from "./detectors/regex";
 export type { RegexMeta } from "./detectors/regex";
