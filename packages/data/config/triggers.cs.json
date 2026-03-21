@@ -508,5 +508,26 @@
       "type": "company-id-value"
     },
     "trigger": "daňové identifikační číslo"
+  },
+  {
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "komise"
+  },
+  {
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "tribunál"
+  },
+  {
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "úřad"
   }
 ]

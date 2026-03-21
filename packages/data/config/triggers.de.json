@@ -219,5 +219,40 @@
       "type": "company-id-value"
     },
     "trigger": "NIF"
+  },
+  {
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "die Kommission"
+  },
+  {
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "das Gericht"
+  },
+  {
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "die Behörde"
+  },
+  {
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "der Ausschuss"
+  },
+  {
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "der Rat"
   }
 ]
