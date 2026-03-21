@@ -73,7 +73,12 @@ export const REGEX_PATTERNS: readonly string[] = [
     `(?:,?${SP}+(?:${POST_NOMINAL}))?`,
   // 1: English honorific person
   `(?:\\bM\\.|Mrs|Ms|Miss|Messrs|Mr|Sir|Dame|Lord|Lady|` +
-    `Judge|Justice|President|Mme|Mlle|\\bMe\\b|Maître)` +
+    `Judge|Justice|President|Mme|Mlle|\\bMe\\b|Maître|` +
+    `Madame|Monsieur|Mademoiselle|` +
+    `Signor|Signora|Signorina|Sig\\.|Sig\\.ra|` +
+    `Dott\\.|Avv\\.|` +
+    `Don|Doña|Señor|Señora|Sr\\.|Sra\\.|` +
+    `Domnul|Doamna)` +
     `\\.?${SP}+[A-Z][a-z]+` +
     `(?:(?:${SP}|-){1,2}(?:${PARTICLE}${SP}+)?` +
     `[A-Z][a-z]+){0,3}` +
