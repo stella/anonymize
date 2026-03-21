@@ -177,6 +177,10 @@ const STOPWORDS: ReadonlySet<string> = new Set([
   "ware",
   "leben",
   "arbeit",
+  // German legal terms (accented — AC is
+  // case-insensitive but does not strip diacritics)
+  "verfügung",
+  "kläger",
   // English/tech words that match names
   "temp",
   "fede",
