@@ -9,7 +9,13 @@ import {
 import { resolveCountries } from "../regions";
 import { DETECTION_SOURCES } from "../types";
 import type { Entity, PipelineConfig } from "../types";
+import { loadGenericRoles } from "../filters/false-positives";
 import { normalizeForSearch } from "../util/normalize";
+import {
+  ALL_UPPER_RE,
+  UPPER_START_RE,
+  isSentenceStart,
+} from "../util/text";
 
 /**
  * Try to load the optional @stll/anonymize-data package.
@@ -33,28 +39,42 @@ export type DenyListConfig = Pick<
   | "denyListExcludeCategories"
 >;
 
-const UPPER_START_RE = /^\p{Lu}/u;
-const ALL_UPPER_RE = /^\p{Lu}+$/u;
+// ── Allow list (lazy-loaded from JSON) ───────────────
 
-/**
- * Known abbreviations that should not be flagged.
- * These are common institutional acronyms that appear
- * frequently in legal text but are not PII.
- */
-const ALLOW_LIST: ReadonlySet<string> = new Set([
-  "eu",
-  "amu",
-  "ldn",
-  "mpsv",
-  "mfčr",
-  "škola",
-  "čr",
-  "sr",
-  "čssr",
-  "gdpr",
-  "dph",
-  "bic",
-]);
+let _allowList: ReadonlySet<string> | null = null;
+let _allowListPromise:
+  | Promise<ReadonlySet<string>>
+  | null = null;
+
+const loadAllowList =
+  (): Promise<ReadonlySet<string>> => {
+    if (_allowListPromise) return _allowListPromise;
+    _allowListPromise = (async () => {
+      try {
+        const mod: {
+          default?: { words?: string[] };
+        } = await import(
+          "@stll/anonymize-data/config/allow-list.json"
+        );
+        const set: ReadonlySet<string> = new Set(
+          mod.default?.words ?? [],
+        );
+        _allowList = set;
+        return set;
+      } catch {
+        const empty: ReadonlySet<string> = new Set();
+        _allowList = empty;
+        return empty;
+      }
+    })();
+    return _allowListPromise;
+  };
+
+const EMPTY_ALLOW_LIST: ReadonlySet<string> = new Set();
+
+/** Sync accessor — returns empty set before init. */
+const getAllowList = (): ReadonlySet<string> =>
+  _allowList ?? EMPTY_ALLOW_LIST;
 
 /**
  * Common EU given names present in the stopwords-iso dataset
@@ -156,77 +176,45 @@ const EMPTY_STOPWORDS: ReadonlySet<string> = new Set();
 const getStopwords = (): ReadonlySet<string> =>
   _stopwords ?? EMPTY_STOPWORDS;
 
-/**
- * Words that are valid in other labels (address, org)
- * but should never be classified as "person". Checked
- * only in the person chain scoring path.
- */
-const PERSON_STOPWORDS: ReadonlySet<string> = new Set([
-  // Month names (valid city names, not person names)
-  "january",
-  "february",
-  "march",
-  "april",
-  "june",
-  "july",
-  "august",
-  "september",
-  "october",
-  "november",
-  "december",
-  // Country / state / language names
-  "german",
-  "french",
-  "english",
-  "spanish",
-  "italian",
-  "slovak",
-  "czech",
-  "polish",
-  "austria",
-  "germany",
-  "delaware",
-  "maryland",
-  "missouri",
-  "nevada",
-  "california",
-  "louisiana",
-  "indiana",
-  "ohio",
-  "israel",
-  // European demonyms (never person names)
-  "austrian",
-  "belgian",
-  "british",
-  "bulgarian",
-  "croatian",
-  "cypriot",
-  "danish",
-  "dutch",
-  "estonian",
-  "european",
-  "finnish",
-  "greek",
-  "hungarian",
-  "irish",
-  "latvian",
-  "lithuanian",
-  "luxembourgish",
-  "maltese",
-  "polish",
-  "portuguese",
-  "romanian",
-  "slovenian",
-  "swedish",
-  // Place names that match person names
-  "page",
-  "sale",
-  "center",
-  "basic",
-  "university",
-  "dry",
-  "opportunity",
-]);
+// ── Person stopwords (lazy-loaded from JSON) ─────────
+
+let _personStopwords: ReadonlySet<string> | null = null;
+let _personStopwordsPromise:
+  | Promise<ReadonlySet<string>>
+  | null = null;
+
+const loadPersonStopwords =
+  (): Promise<ReadonlySet<string>> => {
+    if (_personStopwordsPromise) {
+      return _personStopwordsPromise;
+    }
+    _personStopwordsPromise = (async () => {
+      try {
+        const mod: {
+          default?: { words?: string[] };
+        } = await import(
+          "@stll/anonymize-data/config/person-stopwords.json"
+        );
+        const set: ReadonlySet<string> = new Set(
+          mod.default?.words ?? [],
+        );
+        _personStopwords = set;
+        return set;
+      } catch {
+        const empty: ReadonlySet<string> = new Set();
+        _personStopwords = empty;
+        return empty;
+      }
+    })();
+    return _personStopwordsPromise;
+  };
+
+const EMPTY_PERSON_STOPWORDS: ReadonlySet<string> =
+  new Set();
+
+/** Sync accessor — returns empty set before init. */
+const getPersonStopwords = (): ReadonlySet<string> =>
+  _personStopwords ?? EMPTY_PERSON_STOPWORDS;
 
 /**
  * Source tag for each pattern in the automaton.
@@ -278,9 +266,14 @@ export const buildDenyList = async (
   // and getFirstNameExclusions() are populated before
   // stopwords filtering runs.
   await initNameCorpus();
-  // Pre-load stopwords so getStopwords() is populated
-  // before processDenyListMatches runs synchronously.
-  await loadStopwords();
+  // Pre-load all JSON data so sync accessors are
+  // populated before processDenyListMatches runs.
+  await Promise.all([
+    loadStopwords(),
+    loadAllowList(),
+    loadPersonStopwords(),
+    loadGenericRoles(),
+  ]);
   const dataModule = await loadDataModule();
   if (!dataModule) {
     return null;
@@ -467,28 +460,6 @@ export const buildDenyList = async (
   };
 };
 
-const SENTENCE_END_RE = /[.!?]/;
-
-/**
- * Check if a position is at the start of a sentence.
- */
-const isSentenceStart = (
-  text: string,
-  pos: number,
-): boolean => {
-  if (pos === 0) {
-    return true;
-  }
-  let i = pos - 1;
-  while (i >= 0 && /\s/.test(text[i] ?? "")) {
-    i--;
-  }
-  if (i < 0) {
-    return true;
-  }
-  return SENTENCE_END_RE.test(text[i] ?? "");
-};
-
 type RawMatch = {
   start: number;
   end: number;
@@ -547,7 +518,7 @@ export const processDenyListMatches = (
       match.end,
     );
     const keyword = matchText.toLowerCase();
-    if (getStopwords().has(keyword) || ALLOW_LIST.has(keyword)) {
+    if (getStopwords().has(keyword) || getAllowList().has(keyword)) {
       continue;
     }
 
@@ -600,7 +571,7 @@ export const processDenyListMatches = (
     // person names (months, states, languages).
     if (hasPerson) {
       const keyword = first.text.toLowerCase();
-      if (!PERSON_STOPWORDS.has(keyword)) {
+      if (!getPersonStopwords().has(keyword)) {
         for (const m of matches) {
           nameHits.push(m);
         }
@@ -759,7 +730,7 @@ const extendPersonName = (
       const lower = stripped.toLowerCase();
       if (
         getStopwords().has(lower) ||
-        PERSON_STOPWORDS.has(lower)
+        getPersonStopwords().has(lower)
       ) {
         break;
       }
