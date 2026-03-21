@@ -1,4 +1,11 @@
 import type { Match } from "@stll/text-search";
+import type { Validator } from "@stll/stdnum";
+import {
+  at, be, bg, cz, cy, de, dk, ee, es,
+  fi, fr, gb, gr, hr, hu, ie, it, lt,
+  lu, lv, mt, nl, pl, pt, ro, se, si,
+  sk,
+} from "@stll/stdnum";
 
 import {
   HONORIFIC_BOUNDARY,
@@ -69,11 +76,245 @@ const HONORIFIC_ALT = [...HONORIFICS]
 export type RegexMeta = {
   label: string;
   score: number;
+  /** Post-match stdnum validator for confirmation. */
+  validator?: Validator;
 };
+
+// ── stdnum validator entries ────────────────────────
+// Each entry pairs a @stll/stdnum validator with a
+// label and confidence score. The candidatePattern
+// from the validator is used as the regex; the
+// validator itself is stored in META for post-match
+// confirmation (see processRegexMatches).
+
+type StdnumEntry = {
+  validator: Validator;
+  label: string;
+  score: number;
+  pattern: string;
+};
+
+const toEntry = (
+  validator: Validator,
+  label: string,
+  score: number,
+): StdnumEntry | null => {
+  if (!validator.candidatePattern) return null;
+  return {
+    validator,
+    label,
+    score,
+    pattern: validator.candidatePattern,
+  };
+};
+
+/**
+ * Stdnum validators for national/company IDs.
+ *
+ * Selection criteria: only patterns specific enough
+ * to avoid excessive false positives (country-prefixed
+ * VAT numbers, structured personal IDs). Generic
+ * digit-only patterns (e.g. \d{8}) are excluded unless
+ * the validator's checksum is strong enough to filter.
+ */
+const STDNUM_ENTRIES: readonly StdnumEntry[] = [
+  // ── Original PR #28 patterns (were 15-21) ────────
+  toEntry(hu.vat, "tax identification number", 0.95),
+  toEntry(
+    it.codiceFiscale,
+    "national identification number",
+    0.95,
+  ),
+  toEntry(
+    es.dni,
+    "national identification number",
+    0.9,
+  ),
+  toEntry(
+    es.nie,
+    "national identification number",
+    0.95,
+  ),
+  toEntry(
+    se.personnummer,
+    "national identification number",
+    0.9,
+  ),
+  toEntry(ro.cnp, "national identification number", 0.95),
+  toEntry(fr.nir, "social security number", 0.9),
+
+  // ── CZ validators ────────────────────────────────
+  toEntry(cz.dic, "tax identification number", 0.95),
+  // cz.ico and cz.rc omitted: cz.ico is \d{8} (too
+  // generic), cz.rc is \d{6}/\d{3,4} (handled by
+  // pattern 7: czech birth number)
+
+  // ── DE validators ────────────────────────────────
+  toEntry(de.vat, "tax identification number", 0.95),
+  toEntry(
+    de.idnr,
+    "tax identification number",
+    0.9,
+  ),
+  toEntry(
+    de.stnr,
+    "tax identification number",
+    0.9,
+  ),
+  toEntry(
+    de.svnr,
+    "social security number",
+    0.9,
+  ),
+
+  // ── PL validators ────────────────────────────────
+  toEntry(pl.nip, "tax identification number", 0.95),
+  toEntry(
+    pl.pesel,
+    "national identification number",
+    0.9,
+  ),
+  // pl.regon omitted: \d{9,14} too generic
+
+  // ── GB validators ────────────────────────────────
+  toEntry(gb.vat, "tax identification number", 0.95),
+  toEntry(
+    gb.nino,
+    "social security number",
+    0.95,
+  ),
+  // gb.utr omitted: \d{10} too generic
+
+  // ── AT validators ────────────────────────────────
+  toEntry(at.uid, "tax identification number", 0.95),
+  toEntry(
+    at.tin,
+    "tax identification number",
+    0.9,
+  ),
+  toEntry(
+    at.businessid,
+    "registration number",
+    0.95,
+  ),
+
+  // ── BE validators ────────────────────────────────
+  toEntry(be.vat, "tax identification number", 0.95),
+  toEntry(
+    be.nn,
+    "national identification number",
+    0.9,
+  ),
+
+  // ── NL validators ────────────────────────────────
+  toEntry(nl.vat, "tax identification number", 0.95),
+  // nl.bsn omitted: \d{9} too generic
+
+  // ── DK validators ────────────────────────────────
+  toEntry(dk.vat, "tax identification number", 0.95),
+  toEntry(
+    dk.cpr,
+    "national identification number",
+    0.9,
+  ),
+
+  // ── FI validators ────────────────────────────────
+  toEntry(fi.vat, "tax identification number", 0.95),
+  toEntry(
+    fi.hetu,
+    "national identification number",
+    0.95,
+  ),
+  toEntry(fi.ytunnus, "registration number", 0.9),
+
+  // ── BG validators ────────────────────────────────
+  toEntry(bg.vat, "tax identification number", 0.95),
+
+  // ── SK validators ────────────────────────────────
+  toEntry(sk.dic, "tax identification number", 0.95),
+  // sk.ico: \d{8} too generic; sk.rc overlaps with
+  // czech birth number pattern
+
+  // ── ES additional validators ─────────────────────
+  toEntry(es.cif, "registration number", 0.95),
+  toEntry(es.vat, "tax identification number", 0.95),
+  toEntry(es.nss, "social security number", 0.9),
+
+  // ── FR additional validators ─────────────────────
+  toEntry(fr.tva, "tax identification number", 0.95),
+  toEntry(fr.siren, "registration number", 0.9),
+  toEntry(fr.siret, "registration number", 0.9),
+
+  // ── IT additional validators ─────────────────────
+  toEntry(it.iva, "tax identification number", 0.95),
+
+  // ── IE validators ────────────────────────────────
+  toEntry(ie.vat, "tax identification number", 0.95),
+  toEntry(
+    ie.pps,
+    "national identification number",
+    0.9,
+  ),
+
+  // ── PT validators ────────────────────────────────
+  toEntry(pt.vat, "tax identification number", 0.95),
+  toEntry(
+    pt.cc,
+    "national identification number",
+    0.9,
+  ),
+
+  // ── RO additional validators ─────────────────────
+  toEntry(ro.vat, "tax identification number", 0.95),
+
+  // ── GR validators ────────────────────────────────
+  toEntry(gr.vat, "tax identification number", 0.95),
+
+  // ── HR validators ────────────────────────────────
+  toEntry(hr.vat, "tax identification number", 0.95),
+
+  // ── SI validators ────────────────────────────────
+  toEntry(si.vat, "tax identification number", 0.95),
+
+  // ── LT validators ────────────────────────────────
+  toEntry(lt.vat, "tax identification number", 0.95),
+  toEntry(
+    lt.asmens,
+    "national identification number",
+    0.9,
+  ),
+
+  // ── LV validators ────────────────────────────────
+  toEntry(lv.vat, "tax identification number", 0.95),
+
+  // ── EE validators ────────────────────────────────
+  toEntry(ee.vat, "tax identification number", 0.95),
+  toEntry(
+    ee.ik,
+    "national identification number",
+    0.9,
+  ),
+
+  // ── CY validators ────────────────────────────────
+  toEntry(cy.vat, "tax identification number", 0.95),
+
+  // ── MT validators ────────────────────────────────
+  toEntry(mt.vat, "tax identification number", 0.95),
+
+  // ── LU validators ────────────────────────────────
+  toEntry(lu.vat, "tax identification number", 0.95),
+].filter((e): e is StdnumEntry => e !== null);
 
 /**
  * Static PII regex patterns. Scanned in a single pass
  * by @stll/regex-set (Rust regex-automata DFA).
+ *
+ * Patterns 0-14: hand-written (person names, IBAN,
+ * email, phone, credit card, birth number, dates,
+ * money, IP, bank account).
+ *
+ * Patterns 15+: stdnum-derived (national/company IDs).
+ * Each has a post-match validator for confirmation.
  *
  * Date patterns using written month names are built
  * dynamically from date-months.json via
@@ -130,8 +371,10 @@ export const REGEX_PATTERNS: readonly string[] = [
   // 14: Hungarian Budapest landline (+36 1 XXX XXXX)
   // 2+ digit area codes handled by pattern 4 (international)
   `\\+36[\\s.\\-]?1[\\s.\\-]?\\d{3}[\\s.\\-]?\\d{4}\\b`,
-  // 15: Hungarian adószám (tax ID)
-  `\\b\\d{8}-\\d-\\d{2}\\b`,
+  // ── stdnum-derived patterns (15+) ──────────────────
+  // Built from @stll/stdnum candidatePatterns. Each has
+  // a post-match validator for false-positive filtering.
+  ...STDNUM_ENTRIES.map((e) => e.pattern),
 ];
 
 /** Parallel metadata. Index = pattern index. */
@@ -151,7 +394,12 @@ export const REGEX_META: readonly RegexMeta[] = [
   { label: "ip address", score: 1 },
   { label: "bank account number", score: 0.95 },
   { label: "phone number", score: 0.9 },
-  { label: "tax identification number", score: 0.95 },
+  // stdnum-derived metadata (parallel to patterns above)
+  ...STDNUM_ENTRIES.map((e) => ({
+    label: e.label,
+    score: e.score,
+    validator: e.validator,
+  })),
 ];
 
 // ── Dynamic date patterns (22 languages) ────────────
@@ -273,6 +521,11 @@ export const DATE_PATTERN_META: Readonly<RegexMeta> =
  * Receives all matches; filters to the regex slice
  * via sliceStart/sliceEnd. Local index into META is
  * match.pattern - sliceStart.
+ *
+ * For stdnum-derived patterns (those with a validator
+ * in META), the matched text is passed through the
+ * validator's validate() method. If validation fails,
+ * the match is discarded as a false positive.
  */
 export const processRegexMatches = (
   allMatches: Match[],
@@ -298,6 +551,20 @@ export const processRegexMatches = (
     ) {
       continue;
     }
+
+    // Post-match validation: if the pattern came from
+    // a stdnum validator, confirm the match text is
+    // actually valid. This eliminates false positives
+    // from the loose candidate regex.
+    if (meta.validator) {
+      const result = meta.validator.validate(
+        match.text,
+      );
+      if (!result.valid) {
+        continue;
+      }
+    }
+
     results.push({
       start: match.start,
       end: match.end,

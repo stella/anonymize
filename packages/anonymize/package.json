@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@huggingface/tokenizers": "^0.1.2",
+    "@stll/stdnum": "file:///private/tmp/stdnum",
     "@stll/text-search": "^0.1.0"
   },
   "peerDependencies": {
