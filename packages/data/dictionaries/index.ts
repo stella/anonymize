@@ -51,6 +51,13 @@ export const DICTIONARY_META = {
     country: "PL",
   },
 
+  // ── Countries ──────────────────────────────────────
+  "countries/translations": {
+    label: "address",
+    category: "Places",
+    country: null,
+  },
+
   // ── Cities ─────────────────────────────────────────
   // City dictionaries are loaded dynamically via
   // loadCityDictionary() — not registered here.
@@ -424,6 +431,11 @@ const LOADERS: Record<
   // eslint-disable-next-line typescript-eslint/promise-function-async
   "names/pl": () =>
     import("./names/pl.json") as Promise<JsonModule>,
+
+  // ── Countries ──────────────────────────────────────
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "countries/translations": () =>
+    import("./countries/translations.json") as Promise<JsonModule>,
 
   // ── Cities: loaded dynamically via loadCityDictionary()
 
