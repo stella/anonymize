@@ -56,15 +56,33 @@ const ALLOW_LIST: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Names from the first-name corpus (lowercased) that also
- * appear in the stopwords-iso dataset. These must be kept
- * out of global STOPWORDS so that person detection is not
- * silently suppressed for real given names (e.g. "Ana",
- * "Ali", "Mia", "Sara").
+ * Common EU given names present in the stopwords-iso dataset
+ * but absent from NAME_CORPUS_FIRST_NAMES. Without this
+ * supplementary set, these names would pass through the
+ * corpus-based filter and remain in the stopwords, silently
+ * suppressing person detection.
+ *
+ * Sourced from EU member state birth registries (top-100
+ * names) cross-referenced with stopwords.json.
  */
-const FIRST_NAME_EXCLUSIONS: ReadonlySet<string> = new Set(
-  NAME_CORPUS_FIRST_NAMES.map((n) => n.toLowerCase()),
-);
+const SUPPLEMENTARY_NAME_EXCLUSIONS: ReadonlySet<string> =
+  new Set([
+    "ana", "ben", "dan", "eden", "ella", "jo", "kai",
+    "lena", "may", "mia", "sam", "sara", "sue", "tim",
+    "tom",
+  ]);
+
+/**
+ * Names from the first-name corpus (lowercased) that also
+ * appear in the stopwords-iso dataset, plus supplementary
+ * common EU given names not in the corpus. These must be
+ * kept out of global STOPWORDS so that person detection is
+ * not silently suppressed for real given names.
+ */
+const FIRST_NAME_EXCLUSIONS: ReadonlySet<string> = new Set([
+  ...NAME_CORPUS_FIRST_NAMES.map((n) => n.toLowerCase()),
+  ...SUPPLEMENTARY_NAME_EXCLUSIONS,
+]);
 
 /**
  * Global stopwords: common words across 23 EU languages

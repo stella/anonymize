@@ -43,6 +43,13 @@ const OUTPUT = join(
 );
 
 // ── Collect and deduplicate ─────────────────────────
+// NOTE: The generated file intentionally retains all
+// stopwords including those that collide with given
+// names (e.g. "ana", "mia", "sara"). Name-based
+// filtering is deferred to runtime in deny-list.ts
+// via FIRST_NAME_EXCLUSIONS, so the exclusion set
+// automatically tracks corpus changes without
+// requiring regeneration of this file.
 
 const allWords = new Set<string>();
 const stats: { lang: string; count: number }[] = [];
