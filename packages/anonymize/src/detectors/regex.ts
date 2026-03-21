@@ -77,7 +77,7 @@ export const REGEX_PATTERNS: readonly string[] = [
     `Madame|Monsieur|Mademoiselle|` +
     `Signor|Signora|Signorina|Sig\\.|Sig\\.ra|` +
     `Dott\\.|Avv\\.|` +
-    `\\bDon|Doña|Señor|Señora|Sr\\.|Sra\\.|` +
+    `\\bDon|\\bDoña|Señor|Señora|Sr\\.|Sra\\.|` +
     `Domnul|Doamna)` +
     `\\.?${SP}+${NAME_WORD}` +
     `(?:(?:${SP}|-){1,2}(?:${PARTICLE}${SP}+)?` +
