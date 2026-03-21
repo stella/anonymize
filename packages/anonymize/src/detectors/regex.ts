@@ -519,18 +519,24 @@ export const DATE_PATTERN_META: Readonly<RegexMeta> =
 // ── Dynamic currency patterns ──────────────────────
 
 /**
- * JSON shape from currencies.json: ISO 4217 codes
- * and common currency symbols.
+ * JSON shape from currencies.json: ISO 4217 codes,
+ * common currency symbols, and local currency names.
  */
 type CurrenciesData = {
   codes: string[];
   symbols: string[];
+  localNames?: string[];
 };
 
 /**
- * Build symbol character class and code alternation
- * from currencies.json, then return two monetary
- * amount patterns: leading symbol and trailing code.
+ * Build symbol character class, code alternation,
+ * and local-name alternation from currencies.json,
+ * then return two monetary amount patterns: leading
+ * symbol and trailing code/name.
+ *
+ * The number sub-pattern accepts both grouped
+ * thousands (1,000) and plain integers (100000)
+ * via `\d{1,9}` to catch unformatted amounts.
  */
 const buildCurrencyPatterns = (
   data: CurrenciesData,
@@ -538,28 +544,62 @@ const buildCurrencyPatterns = (
   const symbols = data.symbols
     .map(escapeCharClass)
     .join("");
-  const codes = data.codes.join("|");
 
-  if (!symbols && !codes) return [];
+  // Build trailing alternation: ISO codes + local
+  // names, sorted longest-first to avoid partial
+  // matches. Local names that contain only ASCII
+  // letters are wrapped in (?i:...) for case-
+  // insensitive matching; abbreviations with non-
+  // ASCII or punctuation (Kč, zł, Fr.) stay
+  // case-sensitive.
+  const trailingParts: string[] = [
+    ...data.codes,
+  ];
+  if (data.localNames) {
+    trailingParts.push(...data.localNames);
+  }
+
+  const isAsciiAlpha = /^[a-zA-Z\s]+$/;
+  const trailingAlt = trailingParts
+    .toSorted((a, b) => b.length - a.length)
+    .map((name) => {
+      const escaped = escapeRegex(name);
+      // Written-out names: case-insensitive
+      if (isAsciiAlpha.test(name)) {
+        return `(?i:${escaped})`;
+      }
+      return escaped;
+    })
+    .join("|");
+
+  if (!symbols && !trailingAlt) return [];
+
+  // Number sub-pattern: grouped thousands OR plain
+  // integer up to 9 digits (covers unformatted
+  // amounts like "100000 CZK").
+  const NUM =
+    `(?:\\d{1,3}(?:[,.'[^\\S\\n\\t]]\\d{3})+` +
+    `|\\d{1,9})`;
 
   const patterns: string[] = [];
 
-  // Leading symbol: $100, €1,000.50
+  // Leading symbol: $100, €1,000.50, € 100000
   if (symbols) {
     patterns.push(
       `(?:[${symbols}])` +
         `[^\\S\\n\\t]?` +
-        `\\d{1,3}(?:[,.'[^\\S\\n\\t]]\\d{3})*` +
+        `${NUM}` +
         `(?:[.,]\\d{1,2})?\\b`,
     );
   }
 
-  // Trailing code: 100 USD, 1,000.50 CZK
-  if (codes) {
+  // Trailing code/name: 100 USD, 1,000.50 CZK,
+  // 100000 Kč, 500 korun
+  if (trailingAlt) {
     patterns.push(
-      `\\b\\d{1,3}(?:[,.'[^\\S\\n\\t]]\\d{3})*` +
-        `(?:[.,]\\d{2})?[^\\S\\n\\t]?` +
-        `(?:${codes})\\b`,
+      `\\b${NUM}` +
+        `(?:[.,]\\d{1,2})?[^\\S\\n\\t]?` +
+        `(?:${trailingAlt})\\b`,
     );
   }
 
