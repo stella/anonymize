@@ -1,53 +1,96 @@
 import { DETECTION_SOURCES } from "../types";
 import type { Entity } from "../types";
 
-/**
- * Patterns for extracting defined-term aliases in
- * legal documents. Captures the alias between quotation
- * marks following a definitional phrase.
- *
- * Supports Czech, German, English, and Slovak conventions.
- */
-const DEFINITION_PATTERNS: readonly {
+type CoreferenceConfigRow = {
+  pattern: string;
+  flags: string;
+  label: string;
+};
+
+type DefinitionPattern = {
   pattern: RegExp;
-  language: string;
-}[] = [
-  // Czech: (dale jen "X") or (dale jen 'X') or (dale jen "X")
-  {
-    pattern: /\(dále\s+jen\s+[„"'‚]([^"'""]+)[""']\)/gi,
-    language: "cs",
-  },
-  // Czech: dale jen "X" without parens
-  {
-    pattern: /dále\s+jen\s+[„"'‚]([^"'""]+)[""']/gi,
-    language: "cs",
-  },
-  // German: (nachfolgend "X") or (im Folgenden "X")
-  {
-    pattern: /\((?:nachfolgend|im\s+Folgenden)\s+[„"'‚]([^"'""]+)[""']\)/gi,
-    language: "de",
-  },
-  // German: nachfolgend "X" without parens
-  {
-    pattern: /(?:nachfolgend|im\s+Folgenden)\s+[„"'‚]([^"'""]+)[""']/gi,
-    language: "de",
-  },
-  // English: (hereinafter "X") or (the "X")
-  {
-    pattern: /\((?:hereinafter|the)\s+["'"']([^"'"']+)["'"']\)/gi,
-    language: "en",
-  },
-  // English: hereinafter referred to as "X"
-  {
-    pattern: /hereinafter\s+(?:referred\s+to\s+as\s+)?["'"']([^"'"']+)["'"']/gi,
-    language: "en",
-  },
-  // Slovak: (dalej len "X")
-  {
-    pattern: /\(ďalej\s+len\s+[„"'‚]([^"'""]+)[""']\)/gi,
-    language: "sk",
-  },
-];
+};
+
+/**
+ * Load coreference definition patterns from per-language
+ * JSON configs in @stll/anonymize-data. Follows the same
+ * `tryLoad` approach used by triggers.ts.
+ */
+const loadDefinitionPatterns =
+  async (): Promise<DefinitionPattern[]> => {
+    const patterns: DefinitionPattern[] = [];
+
+    const tryLoad = async (path: string) => {
+      try {
+        const mod = await import(path);
+        // eslint-disable-next-line no-unsafe-type-assertion -- JSON config
+        const rows = (
+          mod as {
+            default: readonly CoreferenceConfigRow[];
+          }
+        ).default;
+        for (const row of rows) {
+          patterns.push({
+            pattern: new RegExp(row.pattern, row.flags),
+          });
+        }
+      } catch {
+        // Data package not installed or file missing
+      }
+    };
+
+    await Promise.all([
+      tryLoad(
+        "@stll/anonymize-data/config/coreference.cs.json",
+      ),
+      tryLoad(
+        "@stll/anonymize-data/config/coreference.de.json",
+      ),
+      tryLoad(
+        "@stll/anonymize-data/config/coreference.en.json",
+      ),
+      tryLoad(
+        "@stll/anonymize-data/config/coreference.sk.json",
+      ),
+    ]);
+
+    return patterns;
+  };
+
+let _cachedPatterns: DefinitionPattern[] | null = null;
+let _cachedPatternsPromise: Promise<
+  DefinitionPattern[]
+> | null = null;
+let _loadAttempted = false;
+
+const getDefinitionPatterns =
+  async (): Promise<DefinitionPattern[]> => {
+    if (_cachedPatterns) {
+      return _cachedPatterns;
+    }
+    if (_cachedPatternsPromise) {
+      return _cachedPatternsPromise;
+    }
+    _cachedPatternsPromise = loadDefinitionPatterns();
+    const patterns = await _cachedPatternsPromise;
+    if (patterns.length === 0) {
+      // All loads failed; cache empty array permanently
+      // to avoid retrying dynamic imports and flooding
+      // logs on every call in high-volume pipelines.
+      _cachedPatterns = patterns;
+      if (!_loadAttempted) {
+        _loadAttempted = true;
+        console.warn(
+          "[anonymize] coreference: no definition " +
+            "patterns loaded; coreference detection " +
+            "will be inactive",
+        );
+      }
+      return patterns;
+    }
+    _cachedPatterns = patterns;
+    return _cachedPatterns;
+  };
 
 const SEARCH_WINDOW = 200;
 
@@ -69,10 +112,11 @@ type DefinedTerm = {
  * the alias. Returns alias + label pairs that can be added
  * to the gazetteer for a full-text re-scan.
  */
-export const extractDefinedTerms = (
+export const extractDefinedTerms = async (
   fullText: string,
   entities: Entity[],
-): DefinedTerm[] => {
+): Promise<DefinedTerm[]> => {
+  const definitionPatterns = await getDefinitionPatterns();
   const terms: DefinedTerm[] = [];
   const seen = new Set<string>();
 
@@ -81,7 +125,7 @@ export const extractDefinedTerms = (
     const windowEnd = Math.min(fullText.length, entity.end + SEARCH_WINDOW);
     const window = fullText.slice(windowStart, windowEnd);
 
-    for (const { pattern } of DEFINITION_PATTERNS) {
+    for (const { pattern } of definitionPatterns) {
       pattern.lastIndex = 0;
 
       for (

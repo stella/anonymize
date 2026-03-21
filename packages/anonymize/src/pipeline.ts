@@ -272,7 +272,7 @@ export const runPipeline = async (
 
   // Coreference
   if (config.enableCoreference) {
-    const terms = extractDefinedTerms(fullText, merged);
+    const terms = await extractDefinedTerms(fullText, merged);
     if (terms.length > 0) {
       log("coreference", `${terms.length} defined terms`);
       const corefSpans = findCoreferenceSpans(fullText, terms);
