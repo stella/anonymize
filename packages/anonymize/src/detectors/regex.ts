@@ -6,6 +6,7 @@ import {
   lu, lv, mt, nl, pl, pt, ro, se, si,
   sk,
 } from "@stll/stdnum";
+import { toRegex } from "@stll/stdnum/patterns";
 
 import {
   HONORIFIC_BOUNDARY,
@@ -82,8 +83,8 @@ export type RegexMeta = {
 
 // ── stdnum validator entries ────────────────────────
 // Each entry pairs a @stll/stdnum validator with a
-// label and confidence score. The candidatePattern
-// from the validator is used as the regex; the
+// label and confidence score. The pattern derived via
+// toRegex(validator).source is used as the regex; the
 // validator itself is stored in META for post-match
 // confirmation (see processRegexMatches).
 
@@ -99,12 +100,13 @@ const toEntry = (
   label: string,
   score: number,
 ): StdnumEntry | null => {
-  if (!validator.candidatePattern) return null;
+  const pattern = toRegex(validator).source;
+  if (!pattern) return null;
   return {
     validator,
     label,
     score,
-    pattern: validator.candidatePattern,
+    pattern,
   };
 };
 
@@ -372,7 +374,7 @@ export const REGEX_PATTERNS: readonly string[] = [
   // 2+ digit area codes handled by pattern 4 (international)
   `\\+36[\\s.\\-]?1[\\s.\\-]?\\d{3}[\\s.\\-]?\\d{4}\\b`,
   // ── stdnum-derived patterns (15+) ──────────────────
-  // Built from @stll/stdnum candidatePatterns. Each has
+  // Built from @stll/stdnum via toRegex(). Each has
   // a post-match validator for false-positive filtering.
   ...STDNUM_ENTRIES.map((e) => e.pattern),
 ];
@@ -553,13 +555,15 @@ export const processRegexMatches = (
     }
 
     // Post-match validation: if the pattern came from
-    // a stdnum validator, confirm the match text is
-    // actually valid. This eliminates false positives
-    // from the loose candidate regex.
+    // a stdnum validator, compact (strip separators)
+    // then validate. The candidate regex may capture
+    // spaced/dashed variants that validate() rejects
+    // without compaction.
     if (meta.validator) {
-      const result = meta.validator.validate(
+      const compacted = meta.validator.compact(
         match.text,
       );
+      const result = meta.validator.validate(compacted);
       if (!result.valid) {
         continue;
       }
