@@ -186,6 +186,7 @@ const PERSON_STOPWORDS: ReadonlySet<string> = new Set([
   "lithuanian",
   "luxembourgish",
   "maltese",
+  "polish",
   "portuguese",
   "romanian",
   "slovenian",
