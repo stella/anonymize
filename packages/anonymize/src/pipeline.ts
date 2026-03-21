@@ -13,7 +13,10 @@ import { processTriggerMatches } from "./detectors/triggers";
 import { processDenyListMatches } from "./detectors/deny-list";
 import { processAddressSeeds } from "./detectors/address-seeds";
 import { boostNearMissEntities } from "./filters/confidence-boost";
-import { filterFalsePositives } from "./filters/false-positives";
+import {
+  filterFalsePositives,
+  loadGenericRoles,
+} from "./filters/false-positives";
 import type { Entity, GazetteerEntry, PipelineConfig } from "./types";
 import {
   buildUnifiedSearch,
@@ -133,6 +136,11 @@ export const runPipeline = async (
   const log = (step: string, detail: string) => {
     onProgress?.(step, detail);
   };
+
+  // Ensure generic-roles data is loaded before
+  // filterFalsePositives runs. This is a no-op if
+  // buildDenyList already loaded it.
+  await loadGenericRoles();
 
   const search =
     cachedSearch ?? (await getCachedSearch(config));
