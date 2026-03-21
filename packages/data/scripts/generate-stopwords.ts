@@ -63,9 +63,24 @@ for (const lang of EU_LANGUAGES) {
 
   for (const word of words) {
     const lower = word.toLowerCase().trim();
-    if (lower.length > 0) {
-      allWords.add(lower);
+    // Skip entries that can never match a capitalised
+    // keyword in the pipeline (UPPER_START_RE gate):
+    // pure digits, lone symbols, and apostrophe-led
+    // contraction fragments like 'll, 'tis, 'twas.
+    if (
+      lower.length === 0 ||
+      /^\d+$/.test(lower) ||
+      /^[_]$/.test(lower) ||
+      /^['''\u2019]/.test(lower)
+    ) {
+      continue;
     }
+    // U+2206 MATHEMATICAL INCREMENT → U+03B4 Greek
+    // lowercase delta. The stopwords-iso "el" locale
+    // ships the wrong codepoint; normalise so Greek
+    // stopwords actually match real Greek text.
+    const normalised = lower.replace(/∆/g, "\u03B4");
+    allWords.add(normalised);
   }
 
   stats.push({ lang, count: words.length });
