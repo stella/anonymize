@@ -371,8 +371,8 @@ const INTL_PHONE: RegexDef = {
 
 const CZ_PHONE: RegexDef = {
   pattern:
-    `\\b[67]\\d{2}[\\s.\\-]?\\d{3}[\\s.\\-]?\\d{3}` +
-    `(?![\\s.\\-]?\\d*/\\d)\\b`,
+    `\\b[67]\\d{2}(?:[^\\S\\n]|[.\\-])?\\d{3}(?:[^\\S\\n]|[.\\-])?\\d{3}` +
+    `(?!(?:[^\\S\\n]|[.\\-])?\\d*/\\d)\\b`,
   label: "phone number",
   score: 0.9,
 };
@@ -426,8 +426,8 @@ const CZ_BANK_ACCOUNT: RegexDef = {
 // 2+ digit area codes handled by INTL_PHONE.
 const HU_LANDLINE: RegexDef = {
   pattern:
-    `\\+36[\\s.\\-]?1[\\s.\\-]?\\d{3}` +
-    `[\\s.\\-]?\\d{4}\\b`,
+    `\\+36(?:[^\\S\\n]|[.\\-])?1(?:[^\\S\\n]|[.\\-])?\\d{3}` +
+    `(?:[^\\S\\n]|[.\\-])?\\d{4}\\b`,
   label: "phone number",
   score: 0.9,
 };
