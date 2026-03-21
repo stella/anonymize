@@ -361,9 +361,9 @@ export const REGEX_PATTERNS: readonly string[] = [
   // 9: Czech spaced dates "1. 1. 2025"
   `\\b\\d{1,2}\\.\\s+\\d{1,2}\\.\\s+\\d{4}\\b`,
   // 10: monetary amount (leading symbol)
-  `(?:[$€£¥₽])[^\\S\\n\\t]?\\d{1,3}(?:[,.\'[^\\S\\n\\t]]\\d{3})*(?:[.,]\\d{1,2})?\\b`,
+  `(?:[$€£¥₽])[^\\S\\n\\t]?(?:\\d{1,3}(?:[,.\'[^\\S\\n\\t]]\\d{3})*|\\d{1,9})(?:[.,]\\d{1,2})?\\b`,
   // 11: monetary amount (trailing code)
-  `\\b\\d{1,3}(?:[,.\'[^\\S\\n\\t]]\\d{3})*(?:[.,]\\d{2})?[^\\S\\n\\t]?` +
+  `\\b(?:\\d{1,3}(?:[,.\'[^\\S\\n\\t]]\\d{3})*|\\d{1,9})(?:[.,]\\d{1,2})?[^\\S\\n\\t]?` +
     `(?:USD|EUR|GBP|CZK|PLN|HUF|CHF|SEK|NOK|DKK|RON|JPY|CNY)\\b`,
   // 12: IP address
   `\\b(?:(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.){3}` +
