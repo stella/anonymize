@@ -251,7 +251,7 @@ const extractValue = (
       }
       const afterSep = raw.slice(sepMatch[0].length);
       const idMatch =
-        /^[A-Z]{0,4}\s?\d[\d\s\-/]{4,}/i.exec(
+        /^[A-Z]{0,6}\s?\d[\d\s\-/]{4,}/i.exec(
           afterSep,
         );
       if (!idMatch) {

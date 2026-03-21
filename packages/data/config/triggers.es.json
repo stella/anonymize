@@ -44,7 +44,7 @@
   {
     "label": "date",
     "strategy": {
-      "count": 4,
+      "count": 5,
       "type": "n-words"
     },
     "trigger": "nacido el"
@@ -52,7 +52,7 @@
   {
     "label": "date",
     "strategy": {
-      "count": 4,
+      "count": 5,
       "type": "n-words"
     },
     "trigger": "nacida el"

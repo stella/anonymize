@@ -46,7 +46,7 @@
     "strategy": {
       "type": "company-id-value"
     },
-    "trigger": "CIF"
+    "trigger": "cod de identificare fiscală"
   },
   {
     "label": "tax identification number",
