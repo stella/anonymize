@@ -45,10 +45,15 @@
   ],
   "es": [
     "avenida",
+    "bulevar",
     "calle",
     "camino",
+    "carretera",
+    "glorieta",
     "paseo",
-    "plaza"
+    "plaza",
+    "ronda",
+    "travesía"
   ],
   "fr": [
     "allée",
@@ -76,7 +81,10 @@
   "it": [
     "corso",
     "largo",
+    "lungarno",
+    "lungotevere",
     "piazza",
+    "piazzale",
     "via",
     "viale",
     "vicolo"
@@ -112,8 +120,11 @@
     "bd.",
     "bulevardul",
     "calea",
+    "fundătura",
+    "intrare",
     "piața",
     "șoseaua",
+    "splaiul",
     "str.",
     "strada"
   ],
@@ -121,5 +132,12 @@
     "námest.",
     "námestie",
     "ulica"
+  ],
+  "sv": [
+    "allé",
+    "backe",
+    "gata",
+    "gränd",
+    "torg"
   ]
 }
