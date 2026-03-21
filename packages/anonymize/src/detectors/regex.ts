@@ -79,9 +79,9 @@ export const REGEX_PATTERNS: readonly string[] = [
     `Dott\\.|Avv\\.|` +
     `\\bDon|Doña|Señor|Señora|Sr\\.|Sra\\.|` +
     `Domnul|Doamna)` +
-    `\\.?${SP}+[A-Z][a-z]+` +
+    `\\.?${SP}+${NAME_WORD}` +
     `(?:(?:${SP}|-){1,2}(?:${PARTICLE}${SP}+)?` +
-    `[A-Z][a-z]+){0,3}` +
+    `${NAME_WORD}){0,3}` +
     `(?:${SP}+(?:QC|KC|SC|LJ|AG))?`,
   // 2: IBAN
   `\\b[A-Z]{2}\\d{2}\\s?[\\dA-Z]{4}\\s?[\\dA-Z]{4}` +
