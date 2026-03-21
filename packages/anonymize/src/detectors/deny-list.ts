@@ -67,9 +67,9 @@ const ALLOW_LIST: ReadonlySet<string> = new Set([
  */
 const SUPPLEMENTARY_NAME_EXCLUSIONS: ReadonlySet<string> =
   new Set([
-    "ana", "ben", "dan", "eden", "ella", "jo", "kai",
-    "lena", "may", "mia", "sam", "sara", "sue", "tim",
-    "tom",
+    "ana", "ben", "dan", "eden", "ella", "ina", "jo",
+    "kai", "lena", "may", "mia", "sam", "sara", "sue",
+    "tim", "tom",
   ]);
 
 /**
@@ -125,9 +125,11 @@ const loadStopwords = (): Promise<ReadonlySet<string>> => {
   return _stopwordsPromise;
 };
 
+const EMPTY_STOPWORDS: ReadonlySet<string> = new Set();
+
 /** Sync accessor — returns empty set before init. */
 const getStopwords = (): ReadonlySet<string> =>
-  _stopwords ?? new Set();
+  _stopwords ?? EMPTY_STOPWORDS;
 
 /**
  * Words that are valid in other labels (address, org)
