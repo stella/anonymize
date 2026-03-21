@@ -3,7 +3,10 @@ import {
   findCoreferenceSpans,
 } from "./detectors/coreference";
 import { scanExact, scanFuzzy } from "./detectors/gazetteer";
-import { detectNameCorpus } from "./detectors/names";
+import {
+  detectNameCorpus,
+  initNameCorpus,
+} from "./detectors/names";
 import { processRegexMatches } from "./detectors/regex";
 import { processLegalFormMatches } from "./detectors/legal-forms";
 import { processTriggerMatches } from "./detectors/triggers";
@@ -181,6 +184,7 @@ export const runPipeline = async (
     config.enableNameCorpus &&
     !config.enableDenyList
   ) {
+    await initNameCorpus();
     nameCorpusEntities = detectNameCorpus(fullText);
     log(
       "name-corpus",

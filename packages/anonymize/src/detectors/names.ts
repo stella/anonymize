@@ -4,720 +4,97 @@ import type { Entity } from "../types";
 // ── Name corpus ──────────────────────────────────────
 // ~600 common first names across Czech, Slovak, German,
 // English, French, Polish, Turkish, and international
-// (ECHR/legal context). Frozen set for O(1) lookup.
+// (ECHR/legal context). Loaded from JSON configs in
+// @stll/anonymize-data at init time.
+
+// Module-level data populated by initNameCorpus().
+// Before init, Sets are empty (detection returns []).
+let FIRST_NAMES: ReadonlySet<string> = new Set();
+let COMMON_SURNAMES: ReadonlySet<string> = new Set();
+let TITLE_TOKENS: ReadonlySet<string> = new Set();
+let EXCLUDED_WORDS: ReadonlySet<string> = new Set();
+
+// Exported accessors for deny-list.ts AC integration.
+// Populated by initNameCorpus().
+let _nameCorpusFirstNames: readonly string[] = [];
+let _nameCorpusSurnames: readonly string[] = [];
+let _nameCorpusTitles: readonly string[] = [];
+let _nameCorpusExcluded: readonly string[] = [];
+
+export const getNameCorpusFirstNames =
+  (): readonly string[] => _nameCorpusFirstNames;
+export const getNameCorpusSurnames =
+  (): readonly string[] => _nameCorpusSurnames;
+export const getNameCorpusTitles =
+  (): readonly string[] => _nameCorpusTitles;
+export const getNameCorpusExcluded =
+  (): readonly string[] => _nameCorpusExcluded;
+
+let _initPromise: Promise<void> | null = null;
 
 /**
- * Czech and Slovak first names. Separated from the
- * full FIRST_NAMES set for potential future use in
- * scoped inflection. Currently, inflection stripping
- * checks against the full set because Czech grammar
- * inflects all names (e.g., "Thomasem" is valid
- * instrumental of "Thomas" in Czech text).
+ * Load name corpus data from JSON config files.
+ * Safe to call multiple times; only loads once.
+ * Must be called before detectNameCorpus or the
+ * getNameCorpus*() accessors are used.
  */
-const CS_SK_FIRST_NAMES: ReadonlySet<string> = Object.freeze(
-  new Set([
-    // ── Czech male (top 100) ────────────────────────
-    "Adam",
-    "Aleš",
-    "Antonín",
-    "Arnošt",
-    "Bedřich",
-    "Blažej",
-    "Bohdan",
-    "Bohumil",
-    "Bořivoj",
-    "Bronislav",
-    "Břetislav",
-    "Ctibor",
-    "Čeněk",
-    "Čestmír",
-    "Dalibor",
-    "Daniel",
-    "David",
-    "Dobromil",
-    "Dominik",
-    "Dušan",
-    "Eduard",
-    "Emil",
-    "Ervín",
-    "Evžen",
-    "Filip",
-    "Florián",
-    "František",
-    "Gustav",
-    "Hanuš",
-    "Hubert",
-    "Hynek",
-    "Igor",
-    "Ilja",
-    "Ivan",
-    "Ivo",
-    "Jáchym",
-    "Jakub",
-    "Jan",
-    "Jaroslav",
-    "Jeroným",
-    "Jindřich",
-    "Jiří",
-    "Josef",
-    "Kamil",
-    "Karel",
-    "Karol",
-    "Kornel",
-    "Kryštof",
-    "Květoslav",
-    "Ladislav",
-    "Leoš",
-    "Leopold",
-    "Libor",
-    "Lubomír",
-    "Lukáš",
-    "Marek",
-    "Martin",
-    "Matěj",
-    "Michal",
-    "Milan",
-    "Miloslav",
-    "Miroslav",
-    "Mojmír",
-    "Norbert",
-    "Oldřich",
-    "Ondřej",
-    "Otakar",
-    "Patrik",
-    "Pavel",
-    "Petr",
-    "Přemysl",
-    "Radek",
-    "Radim",
-    "Radomír",
-    "René",
-    "Robert",
-    "Roman",
-    "Rostislav",
-    "Rudolf",
-    "Stanislav",
-    "Svatopluk",
-    "Šimon",
-    "Teodor",
-    "Tomáš",
-    "Václav",
-    "Viktor",
-    "Vilém",
-    "Vít",
-    "Vítězslav",
-    "Vladimír",
-    "Vlastimil",
-    "Vojtěch",
-    "Vratislav",
-    "Zbyněk",
-    "Zdeněk",
-    "Zikmund",
-    // ── Czech female (top 100) ──────────────────────
-    "Adéla",
-    "Alena",
-    "Alžběta",
-    "Andrea",
-    "Anežka",
-    "Anna",
-    "Barbora",
-    "Bedřiška",
-    "Blanka",
-    "Blažena",
-    "Bohumila",
-    "Božena",
-    "Cecílie",
-    "Dagmar",
-    "Dana",
-    "Darina",
-    "Denisa",
-    "Dobromila",
-    "Drahomíra",
-    "Edita",
-    "Eliška",
-    "Emilie",
-    "Eva",
-    "Františka",
-    "Gabriela",
-    "Gertruda",
-    "Hana",
-    "Hedvika",
-    "Helena",
-    "Hermína",
-    "Irena",
-    "Ivana",
-    "Izabela",
-    "Jana",
-    "Jarmila",
-    "Jaroslava",
-    "Jiřina",
-    "Jitka",
-    "Josefa",
-    "Karolína",
-    "Kateřina",
-    "Klára",
-    "Kornélie",
-    "Kristýna",
-    "Květa",
-    "Květoslava",
-    "Lenka",
-    "Leontýna",
-    "Libuše",
-    "Lucie",
-    "Ludmila",
-    "Marie",
-    "Markéta",
-    "Marta",
-    "Martina",
-    "Michaela",
-    "Milada",
-    "Milena",
-    "Miroslava",
-    "Monika",
-    "Naděžda",
-    "Natálie",
-    "Nela",
-    "Nikola",
-    "Olga",
-    "Otýlie",
-    "Pavla",
-    "Petra",
-    "Radka",
-    "Radomíra",
-    "Renata",
-    "Růžena",
-    "Simona",
-    "Soňa",
-    "Stanislava",
-    "Svatava",
-    "Světlana",
-    "Šárka",
-    "Tereza",
-    "Vendula",
-    "Veronika",
-    "Věra",
-    "Věroslava",
-    "Vlasta",
-    "Vlastimila",
-    "Zdeňka",
-    "Zdislava",
-    "Zuzana",
-    // ── Slovak (top 40) ─────────────────────────────
-    "Adrián",
-    "Branislav",
-    "Daniela",
-    "Dáša",
-    "Iveta",
-    "Ján",
-    "Jozef",
-    "Katarína",
-    "Lucia",
-    "Ľudmila",
-    "Marián",
-    "Maroš",
-    "Matúš",
-    "Mária",
-    "Peter",
-    "Radovan",
-    "Renáta",
-    "Róbert",
-    "Silvia",
-    "Štefan",
-    "Tatiana",
-    "Tibor",
-    "Viera",
-  ]),
-);
+export const initNameCorpus = (): Promise<void> => {
+  if (_initPromise) return _initPromise;
+  _initPromise = (async () => {
+    try {
+      const [
+        firstMod,
+        surnameMod,
+        titleMod,
+        exclusionMod,
+      ] = await Promise.all([
+        import(
+          "@stll/anonymize-data/config/names-first.json"
+        ) as Promise<{ default: { names: string[] } }>,
+        import(
+          "@stll/anonymize-data/config/names-surnames.json"
+        ) as Promise<{ default: { names: string[] } }>,
+        import(
+          "@stll/anonymize-data/config/names-title-tokens.json"
+        ) as Promise<{
+          default: { tokens: string[] };
+        }>,
+        import(
+          "@stll/anonymize-data/config/names-exclusions.json"
+        ) as Promise<{ default: { words: string[] } }>,
+      ]);
 
-const FIRST_NAMES: ReadonlySet<string> = Object.freeze(
-  new Set([
-    // Include all Czech/Slovak names
-    ...CS_SK_FIRST_NAMES,
-    // ── Non-Czech/Slovak names below ────────────────
-    // (inflection stripping is NOT applied to these)
+      const firstNames = firstMod.default.names;
+      const surnames = surnameMod.default.names;
+      const titles = titleMod.default.tokens;
+      const exclusions = exclusionMod.default.words;
 
-    // ── German (top 60) ─────────────────────────────
-    "Andreas",
-    "Angelika",
-    "Barbara",
-    "Bernd",
-    "Bernhard",
-    "Birgit",
-    "Brigitte",
-    "Christa",
-    "Claudia",
-    "Detlef",
-    "Dieter",
-    "Elfriede",
-    "Erika",
-    "Friedrich",
-    "Gabriele",
-    "Gerhard",
-    "Gisela",
-    "Günter",
-    "Hans",
-    "Hartmut",
-    "Heike",
-    "Heinrich",
-    "Helga",
-    "Helmut",
-    "Herbert",
-    "Hildegard",
-    "Horst",
-    "Ingrid",
-    "Julia",
-    "Jürgen",
-    "Karin",
-    "Klaus",
-    "Manfred",
-    "Matthias",
-    "Melanie",
-    "Michael",
-    "Nicole",
-    "Rainer",
-    "Renate",
-    "Sabine",
-    "Sandra",
-    "Siegfried",
-    "Stefan",
-    "Stefanie",
-    "Susanne",
-    "Thomas",
-    "Ulrich",
-    "Ursula",
-    "Uwe",
-    "Volker",
-    "Waltraud",
-    "Werner",
-    "Wolfgang",
+      FIRST_NAMES = Object.freeze(
+        new Set(firstNames),
+      );
+      COMMON_SURNAMES = Object.freeze(
+        new Set(surnames),
+      );
+      TITLE_TOKENS = Object.freeze(new Set(titles));
+      EXCLUDED_WORDS = Object.freeze(
+        new Set(exclusions),
+      );
 
-    // ── English (top 60) ────────────────────────────
-    "Alexander",
-    "Alice",
-    "Amanda",
-    "Andrew",
-    "Anne",
-    "Anthony",
-    "Benjamin",
-    "Caroline",
-    "Catherine",
-    "Charles",
-    "Charlotte",
-    "Christina",
-    "Christopher",
-    "Edward",
-    "Elizabeth",
-    "Emily",
-    "Emma",
-    "George",
-    "Grace",
-    "Hannah",
-    "Helen",
-    "Henry",
-    "James",
-    "Jane",
-    "Jennifer",
-    "Jessica",
-    "John",
-    "Joseph",
-    "Laura",
-    "Louise",
-    "Margaret",
-    "Mark",
-    "Mary",
-    "Matthew",
-    "Natalie",
-    "Oliver",
-    "Olivia",
-    "Patrick",
-    "Paul",
-    "Philip",
-    "Rachel",
-    "Rebecca",
-    "Richard",
-    "Roger",
-    "Samantha",
-    "Sarah",
-    "Simon",
-    "Sophie",
-    "Stephanie",
-    "Stephen",
-    "Timothy",
-    "Victoria",
-    "William",
-    // (David, Daniel, Thomas, Michael, Peter
-    //  already listed above)
-
-    // ── French (top 30) ─────────────────────────────
-    "Alain",
-    "André",
-    "Bernard",
-    "Christophe",
-    "Christine",
-    "Claude",
-    "Dominique",
-    "François",
-    "Françoise",
-    "Gérard",
-    "Isabelle",
-    "Jacques",
-    "Jean",
-    "Laurent",
-    "Michel",
-    "Monique",
-    "Nathalie",
-    "Nicolas",
-    "Philippe",
-    "Pierre",
-    "Stéphane",
-    "Sylvie",
-    "Sébastien",
-    "Thierry",
-    "Véronique",
-    "Yves",
-    // (Marie, Patrick already listed above)
-
-    // ── Turkish (top 20) ────────────────────────────
-    "Ahmet",
-    "Ayşe",
-    "Elif",
-    "Emine",
-    "Fatma",
-    "Hacer",
-    "Hatice",
-    "Hasan",
-    "Hüseyin",
-    "Mehmet",
-    "Meryem",
-    "Nuriye",
-    "Osman",
-    "Yusuf",
-    "Zehra",
-    "Zeynep",
-    "İbrahim",
-    "İsmail",
-    // (Ali, Mustafa already listed under International)
-
-    // ── Polish (top 20) ─────────────────────────────
-    "Agnieszka",
-    "Andrzej",
-    "Beata",
-    "Dorota",
-    "Ewa",
-    "Grażyna",
-    "Grzegorz",
-    "Janusz",
-    "Joanna",
-    "Katarzyna",
-    "Krzysztof",
-    "Magdalena",
-    "Małgorzata",
-    "Marcin",
-    "Paweł",
-    "Piotr",
-    "Tomasz",
-    "Wojciech",
-    "Zbigniew",
-    // (Barbara already listed above)
-
-    // ── International (ECHR/legal context, top 30) ──
-    "Ahmed",
-    "Ali",
-    "Antonio",
-    "Carlos",
-    "Carmen",
-    "Dolores",
-    "Fatima",
-    "Fernando",
-    "Giovanni",
-    "Giuseppe",
-    "Hassan",
-    "Ibrahim",
-    "João",
-    "Khalid",
-    "Luigi",
-    "Marco",
-    "María",
-    "Miguel",
-    "Mohammad",
-    "Mustafa",
-    "Omar",
-    "Pablo",
-    "Pedro",
-    "Pilar",
-    "Ricardo",
-    "Roberto",
-    "Rosa",
-    "Sergio",
-    "Teresa",
-  ]),
-);
-
-// ── Common surnames ─────────────────────────────────
-// ~200 common Czech/Slovak/German/Austrian surnames.
-// Frozen set for O(1) lookup performance.
-
-const COMMON_SURNAMES: ReadonlySet<string> = Object.freeze(
-  new Set([
-    // ── Czech/Slovak male surnames ──────────────────
-    "Bartoš",
-    "Beneš",
-    "Blaha",
-    "Čermák",
-    "Černý",
-    "Doležal",
-    "Duda",
-    "Dvořák",
-    "Fiala",
-    "Hájek",
-    "Holub",
-    "Horák",
-    "Hruška",
-    "Jelínek",
-    "Kadlec",
-    "Kolář",
-    "Konečný",
-    "Kopecký",
-    "Král",
-    "Kratochvíl",
-    "Krejčí",
-    "Kříž",
-    "Kubík",
-    "Kučera",
-    "Malý",
-    "Mareš",
-    "Mašek",
-    "Musil",
-    "Navrátil",
-    "Nguyen",
-    "Novák",
-    "Novotný",
-    "Němec",
-    "Pavlík",
-    "Pokorný",
-    "Polák",
-    "Pospíšil",
-    "Procházka",
-    "Růžička",
-    "Sedláček",
-    "Svoboda",
-    "Šimek",
-    "Šťastný",
-    "Tichý",
-    "Urban",
-    "Vaněk",
-    "Veselý",
-    "Vlček",
-    "Zeman",
-
-    // ── Czech/Slovak female surnames ─────────────────
-    "Černá",
-    "Dvořáková",
-    "Horáková",
-    "Kučerová",
-    "Němcová",
-    "Nováková",
-    "Novotná",
-    "Procházková",
-    "Svobodová",
-    "Veselá",
-
-    // ── German/Austrian surnames ─────────────────────
-    "Bauer",
-    "Becker",
-    "Berger",
-    "Braun",
-    "Brunner",
-    "Fischer",
-    "Fuchs",
-    "Gruber",
-    "Hartmann",
-    "Hermann",
-    "Hofer",
-    "Hoffmann",
-    "Huber",
-    "Kaiser",
-    "Koch",
-    "Koller",
-    "Köhler",
-    "Krüger",
-    "Lang",
-    "Lehmann",
-    "Maier",
-    "Mayer",
-    "Meyer",
-    "Moser",
-    "Müller",
-    "Neumann",
-    "Pichler",
-    "Richter",
-    "Schmidt",
-    "Schmid",
-    "Schmitt",
-    "Schneider",
-    "Schröder",
-    "Schulz",
-    "Schwarz",
-    "Steiner",
-    "Wagner",
-    "Weber",
-    "Werner",
-    "Winkler",
-    "Wolf",
-    "Zimmermann",
-  ]),
-);
-
-// ── Title tokens ─────────────────────────────────────
-// Titles that signal a following person name. Lowercased
-// for case-insensitive matching.
-
-const TITLE_TOKENS: ReadonlySet<string> = Object.freeze(
-  new Set([
-    "mr",
-    "mrs",
-    "ms",
-    "miss",
-    "dr",
-    "prof",
-    "doc",
-    "ing",
-    "mgr",
-    "bc",
-    "judr",
-    "mudr",
-    "mvdr",
-    "phdr",
-    "rndr",
-    "paeddr",
-    "thdr",
-    "sir",
-    "dame",
-    "lord",
-    "lady",
-    "judge",
-    "justice",
-    "maître",
-    "mme",
-    "mlle",
-    "herr",
-    "frau",
-  ]),
-);
-
-// ── False positive guards ────────────────────────────
-// Generic roles and legal terms that look like names
-// but are not PII. Lowercased for comparison.
-
-const EXCLUDED_WORDS: ReadonlySet<string> = Object.freeze(
-  new Set([
-    // Legal roles
-    "employee",
-    "employer",
-    "buyer",
-    "seller",
-    "landlord",
-    "tenant",
-    "lender",
-    "borrower",
-    "company",
-    "contractor",
-    "client",
-    "customer",
-    "supplier",
-    "vendor",
-    "party",
-    "parties",
-    "licensor",
-    "licensee",
-    "guarantor",
-    "applicant",
-    "respondent",
-    "plaintiff",
-    "defendant",
-    "claimant",
-    "advocate",
-    "prosecutor",
-    "registrar",
-    // Legal/institutional terms
-    "court",
-    "government",
-    "state",
-    "republic",
-    "parliament",
-    "council",
-    "assembly",
-    "ministry",
-    "police",
-    "chamber",
-    "tribunal",
-    "commission",
-    "section",
-    "division",
-    "article",
-    "freedom",
-    "rector",
-    // Common English words that happen to be capitalised
-    "the",
-    "this",
-    "that",
-    "with",
-    "from",
-    "under",
-    "over",
-    "between",
-    "above",
-    "below",
-    "after",
-    "before",
-    "during",
-    "since",
-    "until",
-    "upon",
-    // Czech roles
-    "zaměstnanec",
-    "zaměstnavatel",
-    "kupující",
-    "prodávající",
-    "pronajímatel",
-    "nájemce",
-    "věřitel",
-    "dlužník",
-    "společnost",
-    "zhotovitel",
-    "objednatel",
-    "strana",
-    "strany",
-    // German roles
-    "arbeitnehmer",
-    "arbeitgeber",
-    "käufer",
-    "verkäufer",
-    "vermieter",
-    "mieter",
-    "darlehensgeber",
-    "darlehensnehmer",
-    "gesellschaft",
-    "auftragnehmer",
-    "auftraggeber",
-    // Common document words that start with uppercase
-    "agreement",
-    "contract",
-    "schedule",
-    "annex",
-    "exhibit",
-    "appendix",
-    "whereas",
-    "therefore",
-    "provided",
-    "including",
-    "subject",
-    "pursuant",
-    "hereby",
-    "herein",
-    "thereof",
-  ]),
-);
+      _nameCorpusFirstNames = Object.freeze(firstNames);
+      _nameCorpusSurnames = Object.freeze(surnames);
+      _nameCorpusTitles = Object.freeze(titles);
+      _nameCorpusExcluded = Object.freeze(exclusions);
+    } catch (err) {
+      _initPromise = null; // allow retry on transient error
+      console.warn(
+        "[anonymize] Failed to load name corpus JSON"
+          + " — name detection disabled:",
+        err,
+      );
+    }
+  })();
+  return _initPromise;
+};
 
 // ── Czech/Slovak suffix stripping ────────────────────
 // Case suffixes commonly appended to names in declined
@@ -948,6 +325,9 @@ const classifyToken = (word: WordSegment): ClassifiedToken => {
  * Detect person names by looking up tokens against the
  * name corpus, then chaining adjacent name-like tokens.
  *
+ * Requires initNameCorpus() to have been called first.
+ * If not initialized, returns an empty array.
+ *
  * Scoring:
  *   TITLE + NAME/SURNAME       → 0.95
  *   NAME + NAME/SURNAME        → 0.9
@@ -1102,19 +482,3 @@ export const detectNameCorpus = (fullText: string): Entity[] => {
 
   return entities;
 };
-
-// ── Exports for AC integration ──────────────────────
-// Used by deny-list.ts to merge name corpus into the
-// single AC automaton.
-
-export const NAME_CORPUS_FIRST_NAMES: readonly string[] =
-  [...FIRST_NAMES];
-
-export const NAME_CORPUS_SURNAMES: readonly string[] =
-  [...COMMON_SURNAMES];
-
-export const NAME_CORPUS_TITLES: readonly string[] =
-  [...TITLE_TOKENS];
-
-export const NAME_CORPUS_EXCLUDED: readonly string[] =
-  [...EXCLUDED_WORDS];

@@ -1,9 +1,10 @@
 import type { Match } from "@stll/text-search";
 
 import {
-  NAME_CORPUS_FIRST_NAMES,
-  NAME_CORPUS_SURNAMES,
-  NAME_CORPUS_TITLES,
+  getNameCorpusFirstNames,
+  getNameCorpusSurnames,
+  getNameCorpusTitles,
+  initNameCorpus,
 } from "./names";
 import { resolveCountries } from "../regions";
 import { DETECTION_SOURCES } from "../types";
@@ -57,7 +58,7 @@ const ALLOW_LIST: ReadonlySet<string> = new Set([
 
 /**
  * Common EU given names present in the stopwords-iso dataset
- * but absent from NAME_CORPUS_FIRST_NAMES. Without this
+ * but absent from the first-name corpus. Without this
  * supplementary set, these names would pass through the
  * corpus-based filter and remain in the stopwords, silently
  * suppressing person detection.
@@ -78,11 +79,31 @@ const SUPPLEMENTARY_NAME_EXCLUSIONS: ReadonlySet<string> =
  * common EU given names not in the corpus. These must be
  * kept out of global STOPWORDS so that person detection is
  * not silently suppressed for real given names.
+ *
+ * Computed lazily after initNameCorpus() has populated
+ * the first-name corpus. Re-builds if corpus size changes.
  */
-const FIRST_NAME_EXCLUSIONS: ReadonlySet<string> = new Set([
-  ...NAME_CORPUS_FIRST_NAMES.map((n) => n.toLowerCase()),
-  ...SUPPLEMENTARY_NAME_EXCLUSIONS,
-]);
+let _firstNameExclusions: ReadonlySet<string> | null =
+  null;
+let _exclusionCorpusLen = 0;
+
+const getFirstNameExclusions =
+  (): ReadonlySet<string> => {
+    const corpus = getNameCorpusFirstNames();
+    // Re-build if corpus has been populated since last call
+    if (
+      _firstNameExclusions &&
+      corpus.length === _exclusionCorpusLen
+    ) {
+      return _firstNameExclusions;
+    }
+    _exclusionCorpusLen = corpus.length;
+    _firstNameExclusions = new Set([
+      ...corpus.map((n) => n.toLowerCase()),
+      ...SUPPLEMENTARY_NAME_EXCLUSIONS,
+    ]);
+    return _firstNameExclusions;
+  };
 
 /**
  * Global stopwords: common words across 23 EU languages
@@ -98,6 +119,9 @@ let _stopwords: ReadonlySet<string> | null = null;
 let _stopwordsPromise: Promise<ReadonlySet<string>> | null =
   null;
 
+// INVARIANT: must be called after initNameCorpus() has
+// resolved, so getFirstNameExclusions() sees the full
+// corpus. buildDenyList() enforces this ordering.
 const loadStopwords = (): Promise<ReadonlySet<string>> => {
   if (_stopwordsPromise) return _stopwordsPromise;
   _stopwordsPromise = (async () => {
@@ -106,7 +130,8 @@ const loadStopwords = (): Promise<ReadonlySet<string>> => {
         "@stll/anonymize-data/config/stopwords.json"
       );
       const list = (mod.default ?? []).filter(
-        (w: string) => !FIRST_NAME_EXCLUSIONS.has(w),
+        (w: string) =>
+          !getFirstNameExclusions().has(w),
       );
       const set: ReadonlySet<string> = new Set(list);
       _stopwords = set;
@@ -249,6 +274,10 @@ export type DenyListData = {
 export const buildDenyList = async (
   config: DenyListConfig,
 ): Promise<DenyListData | null> => {
+  // Pre-load name corpus so getNameCorpus*() accessors
+  // and getFirstNameExclusions() are populated before
+  // stopwords filtering runs.
+  await initNameCorpus();
   // Pre-load stopwords so getStopwords() is populated
   // before processDenyListMatches runs synchronously.
   await loadStopwords();
@@ -403,13 +432,13 @@ export const buildDenyList = async (
     }
   };
 
-  for (const name of NAME_CORPUS_FIRST_NAMES) {
+  for (const name of getNameCorpusFirstNames()) {
     addNameEntry(name, "first-name");
   }
-  for (const name of NAME_CORPUS_SURNAMES) {
+  for (const name of getNameCorpusSurnames()) {
     addNameEntry(name, "surname");
   }
-  for (const title of NAME_CORPUS_TITLES) {
+  for (const title of getNameCorpusTitles()) {
     const norm = normalizeForSearch(title)
       .replace(/[|\\]/g, "");
     if (norm.length === 0) continue;
