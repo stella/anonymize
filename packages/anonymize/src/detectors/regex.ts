@@ -121,8 +121,9 @@ const PATTERNS: readonly string[] = [
     `(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\b`,
   // 16: Czech bank account (optional prefix)
   `\\b(?:\\d{1,6}-)?\\d{6,10}/\\d{4}(?!\\d)`,
-  // 17: Hungarian phone number
-  `\\+36[\\s\\-]?\\d{1,2}[\\s\\-]?\\d{3,4}[\\s\\-]?\\d{3,4}`,
+  // 17: Hungarian Budapest landline (+36 1 XXX XXXX)
+  // 2+ digit area codes handled by pattern 4 (international)
+  `\\+36[\\s\\-]?1[\\s\\-]?\\d{3}[\\s\\-]?\\d{3,4}\\b`,
   // 18: Hungarian adószám (tax ID)
   `\\b\\d{8}-\\d-\\d{2}\\b`,
 ];
