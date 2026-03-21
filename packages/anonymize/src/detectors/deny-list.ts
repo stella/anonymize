@@ -720,8 +720,12 @@ const extendPersonName = (
         break;
       }
 
-      // Don't extend into stopwords
-      if (getStopwords().has(stripped.toLowerCase())) {
+      // Don't extend into global or person stopwords
+      const lower = stripped.toLowerCase();
+      if (
+        getStopwords().has(lower) ||
+        PERSON_STOPWORDS.has(lower)
+      ) {
         break;
       }
 
