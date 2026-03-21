@@ -1,4 +1,4 @@
-import { AhoCorasick } from "@stll/aho-corasick";
+import type { Match } from "@stll/text-search";
 
 import { DETECTION_SOURCES } from "../types";
 import type { Entity, TriggerRule } from "../types";
@@ -22,37 +22,17 @@ const mapConfig = (
     strategy: row.strategy,
   }));
 
-// ── Cached trigger AC automaton ─────────────────────
+// ── Pattern builder for unified search ──────────────
 
-type TriggerAutomaton = {
-  ac: AhoCorasick;
-  /** Parallel array: rules[match.pattern] → rule */
-  rules: readonly TriggerRule[];
-};
-
-// Cache the Promise itself to prevent concurrent
-// initialization races (two simultaneous first calls
-// would both pass a boolean guard before the first
-// await resolves).
-let cachedPromise: Promise<
-  TriggerAutomaton | null
-> | null = null;
-
-const loadAutomaton = (): Promise<
-  TriggerAutomaton | null
-> => {
-  if (cachedPromise) {
-    return cachedPromise;
-  }
-
-  cachedPromise = buildAutomaton();
-  return cachedPromise;
-};
-
-const buildAutomaton = async (): Promise<
-  TriggerAutomaton | null
-> => {
-
+/**
+ * Build trigger patterns and rules from data configs.
+ * Returns string[] for the unified TextSearch
+ * builder and the parallel rules array.
+ */
+export const buildTriggerPatterns = async (): Promise<{
+  patterns: string[];
+  rules: TriggerRule[];
+}> => {
   const rules: TriggerRule[] = [];
 
   const tryLoad = async (path: string) => {
@@ -82,23 +62,18 @@ const buildAutomaton = async (): Promise<
     ),
   ]);
 
-  if (rules.length === 0) {
-    return null;
-  }
-
-  // Build AC from lowercased trigger strings.
+  // Build patterns from lowercased trigger strings.
   // rules[i] corresponds to patterns[i].
-  const patterns = rules.map((r) =>
-    r.trigger.toLowerCase(),
+  // Plain lowercased strings — the unified builder
+  // sets caseInsensitive globally on the AC.
+  const patterns: string[] = rules.map(
+    (r) => r.trigger.toLowerCase(),
   );
-  // No caseInsensitive needed: both patterns and
-  // search text are already lowercased.
-  const ac = new AhoCorasick(patterns);
 
-  return { ac, rules };
+  return { patterns, rules };
 };
 
-// ── Value extraction (unchanged) ────────────────────
+// ── Value extraction ────────────────────────────────
 
 const LEADING_PUNCT = /^[„""»«'"()\s]+/;
 const TRAILING_PUNCT = /[""»«'"()\s]+$/;
@@ -281,42 +256,42 @@ const extractValue = (
   }
 };
 
-// ── Public API ──────────────────────────────────────
+// ── Match processor ─────────────────────────────────
 
 /**
- * Scan text for trigger phrases using a single
- * Aho-Corasick pass. Loads trigger configs from
- * @stll/anonymize-data (optional). The AC automaton
- * and rule metadata are cached after first build.
- *
- * Each AC match is looked up in the parallel rules[]
- * array via match.pattern (O(1)), then extractValue
- * post-processes the hit.
+ * Process trigger matches from the unified search.
+ * Receives all matches; filters to the trigger slice
+ * via sliceStart/sliceEnd. Uses fullText for value
+ * extraction (the unified search runs on lowercased
+ * text, but extraction needs original casing).
  */
-export const detectTriggerPhrases = async (
+export const processTriggerMatches = (
+  allMatches: Match[],
+  sliceStart: number,
+  sliceEnd: number,
   fullText: string,
-): Promise<Entity[]> => {
-  const automaton = await loadAutomaton();
-
-  if (!automaton) {
-    return [];
-  }
-
+  rules: readonly TriggerRule[],
+): Entity[] => {
   const results: Entity[] = [];
-  const lowerText = fullText.toLowerCase();
-  const matches = automaton.ac.findIter(lowerText);
 
-  for (const match of matches) {
+  for (const match of allMatches) {
+    const idx = match.pattern;
+    if (idx < sliceStart || idx >= sliceEnd) {
+      continue;
+    }
+
+    const localIdx = idx - sliceStart;
+
     // Left word-boundary: reject if preceded by a
     // letter (prevents partial keyword matches).
     if (
       match.start > 0 &&
-      LETTER_RE.test(lowerText[match.start - 1] ?? "")
+      LETTER_RE.test(fullText[match.start - 1] ?? "")
     ) {
       continue;
     }
 
-    const rule = automaton.rules[match.pattern];
+    const rule = rules[localIdx];
     if (!rule) {
       continue;
     }
@@ -328,7 +303,7 @@ export const detectTriggerPhrases = async (
     // acts as a boundary delimiter.
     if (
       !rule.trigger.endsWith(" ") &&
-      LETTER_RE.test(lowerText[match.end] ?? "")
+      LETTER_RE.test(fullText[match.end] ?? "")
     ) {
       continue;
     }

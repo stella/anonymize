@@ -1,4 +1,4 @@
-import { RegexSet } from "@stll/regex-set";
+import type { Match } from "@stll/text-search";
 
 import { POST_NOMINALS, TITLE_PREFIXES } from "../config/titles";
 import { DETECTION_SOURCES } from "../types";
@@ -44,7 +44,7 @@ const SP = "[^\\S\\n\\t]";
 // Parallel arrays: PATTERNS[i] ↔ META[i]
 // Indexed by match.pattern for O(1) lookup.
 
-type PatternMeta = {
+export type RegexMeta = {
   label: string;
   score: number;
 };
@@ -56,7 +56,7 @@ type PatternMeta = {
  * To add a new pattern: append to PATTERNS and META.
  * The index must match.
  */
-const PATTERNS: readonly string[] = [
+export const REGEX_PATTERNS: readonly string[] = [
   // 0: titled person (Czech/German)
   `(?:${TITLE_PREFIX})` +
     `(?:${SP}+(?:${TITLE_PREFIX}))*` +
@@ -116,20 +116,24 @@ const PATTERNS: readonly string[] = [
     `February|March|April|May|June|July|August|` +
     `September|October|November|December)` +
     `(?:\\s+\\d{4})?\\b`,
-  // 15: monetary amount (leading symbol)
+  // 15: US date "March 7, 2023" or "March 7 2023"
+  `(?i)\\b(?:January|February|March|April|May|June|` +
+    `July|August|September|October|November|` +
+    `December)\\s+\\d{1,2},?\\s+\\d{4}\\b`,
+  // 16: monetary amount (leading symbol)
   `(?:[$€£¥₽])[^\\S\\n\\t]?\\d{1,3}(?:[,.\'[^\\S\\n\\t]]\\d{3})*(?:[.,]\\d{1,2})?\\b`,
-  // 16: monetary amount (trailing code)
+  // 17: monetary amount (trailing code)
   `\\b\\d{1,3}(?:[,.\'[^\\S\\n\\t]]\\d{3})*(?:[.,]\\d{2})?[^\\S\\n\\t]?` +
     `(?:USD|EUR|GBP|CZK|PLN|HUF|CHF|SEK|NOK|DKK|RON|JPY|CNY)\\b`,
-  // 17: IP address
+  // 18: IP address
   `\\b(?:(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.){3}` +
     `(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\b`,
-  // 18: Czech bank account (optional prefix)
+  // 19: Czech bank account (optional prefix)
   `\\b(?:\\d{1,6}-)?\\d{6,10}/\\d{4}(?!\\d)`,
 ];
 
 /** Parallel metadata. Index = pattern index. */
-const META: readonly PatternMeta[] = [
+export const REGEX_META: readonly RegexMeta[] = [
   { label: "person", score: 0.95 },
   { label: "person", score: 0.95 },
   { label: "iban", score: 1 },
@@ -145,43 +149,36 @@ const META: readonly PatternMeta[] = [
   { label: "date", score: 1 },
   { label: "date", score: 1 },
   { label: "date", score: 1 },
+  { label: "date", score: 1 },
   { label: "monetary amount", score: 0.9 },
   { label: "monetary amount", score: 0.9 },
   { label: "ip address", score: 1 },
   { label: "bank account number", score: 0.95 },
 ];
 
-// ── Cached RegexSet instance ────────────────────────
-
-let cached: RegexSet | null = null;
-
-const getRegexSet = (): RegexSet => {
-  if (!cached) {
-    // SAFETY: RegexSet doesn't mutate the array
-    cached = new RegexSet(PATTERNS as string[]);
-  }
-  return cached;
-};
-
 // ── Public API ──────────────────────────────────────
 
 /**
- * Run regex-based PII detection. Uses @stll/regex-set
- * for a single-pass DFA scan of all PII patterns.
- *
- * Company ID keywords (IČO, DIČ, VAT number, etc.)
- * moved to trigger configs with "company-id-value"
- * strategy — detected via the AC-powered trigger
- * system instead.
+ * Process regex matches from the unified search.
+ * Receives all matches; filters to the regex slice
+ * via sliceStart/sliceEnd. Local index into META is
+ * match.pattern - sliceStart.
  */
-export const detectRegexPii = (
-  fullText: string,
+export const processRegexMatches = (
+  allMatches: Match[],
+  sliceStart: number,
+  sliceEnd: number,
 ): Entity[] => {
   const results: Entity[] = [];
-  const rs = getRegexSet();
 
-  for (const match of rs.findIter(fullText)) {
-    const meta = META[match.pattern];
+  for (const match of allMatches) {
+    const idx = match.pattern;
+    if (idx < sliceStart || idx >= sliceEnd) {
+      continue;
+    }
+
+    const localIdx = idx - sliceStart;
+    const meta = REGEX_META[localIdx];
     if (!meta) {
       continue;
     }
