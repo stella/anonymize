@@ -1,0 +1,102 @@
+[
+  {
+    "label": "address",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "domicilié au"
+  },
+  {
+    "label": "address",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "domiciliée au"
+  },
+  {
+    "label": "address",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "demeurant"
+  },
+  {
+    "label": "date",
+    "strategy": {
+      "count": 4,
+      "type": "n-words"
+    },
+    "trigger": "né le"
+  },
+  {
+    "label": "date",
+    "strategy": {
+      "count": 4,
+      "type": "n-words"
+    },
+    "trigger": "née le"
+  },
+  {
+    "label": "address",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "né à"
+  },
+  {
+    "label": "address",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "née à"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "représentée par"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "représenté par"
+  },
+  {
+    "label": "address",
+    "strategy": {
+      "type": "to-end-of-line"
+    },
+    "trigger": "siège social"
+  },
+  {
+    "label": "organization",
+    "strategy": {
+      "type": "to-end-of-line"
+    },
+    "trigger": "immatriculée au"
+  },
+  {
+    "label": "social security number",
+    "strategy": {
+      "type": "company-id-value"
+    },
+    "trigger": "numéro de sécurité sociale"
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "company-id-value"
+    },
+    "trigger": "numéro SIREN"
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "company-id-value"
+    },
+    "trigger": "numéro SIRET"
+  }
+]

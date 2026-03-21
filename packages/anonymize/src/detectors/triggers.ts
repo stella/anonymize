@@ -61,10 +61,25 @@ export const buildTriggerPatterns = async (): Promise<{
       "@stll/anonymize-data/config/triggers.en.json",
     ),
     tryLoad(
-      "@stll/anonymize-data/config/triggers.pl.json",
+      "@stll/anonymize-data/config/triggers.es.json",
+    ),
+    tryLoad(
+      "@stll/anonymize-data/config/triggers.fr.json",
     ),
     tryLoad(
       "@stll/anonymize-data/config/triggers.hu.json",
+    ),
+    tryLoad(
+      "@stll/anonymize-data/config/triggers.it.json",
+    ),
+    tryLoad(
+      "@stll/anonymize-data/config/triggers.pl.json",
+    ),
+    tryLoad(
+      "@stll/anonymize-data/config/triggers.ro.json",
+    ),
+    tryLoad(
+      "@stll/anonymize-data/config/triggers.sv.json",
     ),
   ]);
 

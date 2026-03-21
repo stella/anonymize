@@ -1,0 +1,109 @@
+[
+  {
+    "label": "address",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "con domicilio en"
+  },
+  {
+    "label": "address",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "domiciliado en"
+  },
+  {
+    "label": "address",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "domiciliada en"
+  },
+  {
+    "label": "address",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "sita en"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "representado por"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "representada por"
+  },
+  {
+    "label": "date",
+    "strategy": {
+      "count": 4,
+      "type": "n-words"
+    },
+    "trigger": "nacido el"
+  },
+  {
+    "label": "date",
+    "strategy": {
+      "count": 4,
+      "type": "n-words"
+    },
+    "trigger": "nacida el"
+  },
+  {
+    "label": "national identification number",
+    "strategy": {
+      "type": "company-id-value"
+    },
+    "trigger": "con D.N.I."
+  },
+  {
+    "label": "national identification number",
+    "strategy": {
+      "type": "company-id-value"
+    },
+    "trigger": "con DNI"
+  },
+  {
+    "label": "national identification number",
+    "strategy": {
+      "type": "company-id-value"
+    },
+    "trigger": "con N.I.E."
+  },
+  {
+    "label": "national identification number",
+    "strategy": {
+      "type": "company-id-value"
+    },
+    "trigger": "con NIE"
+  },
+  {
+    "label": "tax identification number",
+    "strategy": {
+      "type": "company-id-value"
+    },
+    "trigger": "con CIF"
+  },
+  {
+    "label": "tax identification number",
+    "strategy": {
+      "type": "company-id-value"
+    },
+    "trigger": "con NIF"
+  },
+  {
+    "label": "bank account number",
+    "strategy": {
+      "type": "to-end-of-line"
+    },
+    "trigger": "número de cuenta"
+  }
+]
