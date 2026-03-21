@@ -14,13 +14,21 @@ let COMMON_SURNAMES: ReadonlySet<string> = new Set();
 let TITLE_TOKENS: ReadonlySet<string> = new Set();
 let EXCLUDED_WORDS: ReadonlySet<string> = new Set();
 
-// Exported arrays for deny-list.ts AC integration.
+// Exported accessors for deny-list.ts AC integration.
 // Populated by initNameCorpus().
-export let NAME_CORPUS_FIRST_NAMES: readonly string[] =
-  [];
-export let NAME_CORPUS_SURNAMES: readonly string[] = [];
-export let NAME_CORPUS_TITLES: readonly string[] = [];
-export let NAME_CORPUS_EXCLUDED: readonly string[] = [];
+let _nameCorpusFirstNames: readonly string[] = [];
+let _nameCorpusSurnames: readonly string[] = [];
+let _nameCorpusTitles: readonly string[] = [];
+let _nameCorpusExcluded: readonly string[] = [];
+
+export const getNameCorpusFirstNames =
+  (): readonly string[] => _nameCorpusFirstNames;
+export const getNameCorpusSurnames =
+  (): readonly string[] => _nameCorpusSurnames;
+export const getNameCorpusTitles =
+  (): readonly string[] => _nameCorpusTitles;
+export const getNameCorpusExcluded =
+  (): readonly string[] => _nameCorpusExcluded;
 
 let _initPromise: Promise<void> | null = null;
 
@@ -28,7 +36,7 @@ let _initPromise: Promise<void> | null = null;
  * Load name corpus data from JSON config files.
  * Safe to call multiple times; only loads once.
  * Must be called before detectNameCorpus or the
- * NAME_CORPUS_* exports are used.
+ * getNameCorpus*() accessors are used.
  */
 export const initNameCorpus = (): Promise<void> => {
   if (_initPromise) return _initPromise;
@@ -72,13 +80,12 @@ export const initNameCorpus = (): Promise<void> => {
         new Set(exclusions),
       );
 
-      NAME_CORPUS_FIRST_NAMES = Object.freeze(
-        firstNames,
-      );
-      NAME_CORPUS_SURNAMES = Object.freeze(surnames);
-      NAME_CORPUS_TITLES = Object.freeze(titles);
-      NAME_CORPUS_EXCLUDED = Object.freeze(exclusions);
+      _nameCorpusFirstNames = Object.freeze(firstNames);
+      _nameCorpusSurnames = Object.freeze(surnames);
+      _nameCorpusTitles = Object.freeze(titles);
+      _nameCorpusExcluded = Object.freeze(exclusions);
     } catch (err) {
+      _initPromise = null; // allow retry on transient error
       console.warn(
         "[anonymize] Failed to load name corpus JSON"
           + " — name detection disabled:",
