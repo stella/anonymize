@@ -16,6 +16,7 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "stopwords-iso": "1.1.0",
     "typescript": "^5.9.3"
   }
 }

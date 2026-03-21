@@ -56,404 +56,80 @@ const ALLOW_LIST: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Global stopwords: common words across Czech, German,
- * English, and Slovak that happen to match name/institution
- * entries. Checked case-insensitively against matches.
+ * Common EU given names present in the stopwords-iso dataset
+ * but absent from NAME_CORPUS_FIRST_NAMES. Without this
+ * supplementary set, these names would pass through the
+ * corpus-based filter and remain in the stopwords, silently
+ * suppressing person detection.
+ *
+ * Sourced from EU member state birth registries (top-100
+ * names) cross-referenced with stopwords.json.
  */
-const STOPWORDS: ReadonlySet<string> = new Set([
-  // Titles misidentified as names
-  "ing",
-  // Czech common words that match names
-  "cena",
-  "rady",
-  "sleva",
-  "horky",
-  "osoba",
-  "dary",
-  "manka",
-  "doba",
-  "doby",
-  "dle",
-  "pro",
-  "pod",
-  "tom",
-  "nad",
-  "bude",
-  "jeho",
-  "ale",
-  "ani",
-  "pak",
-  "tak",
-  "jen",
-  "jak",
-  "kde",
-  "kdy",
-  "kdo",
-  "ted",
-  "jiz",
-  "vse",
-  "pri",
-  "bez",
-  "ven",
-  "den",
-  "rok",
-  "rad",
-  "dum",
-  "vec",
-  "cas",
-  "pan",
-  "pani",
-  "rada",
-  "veci",
-  "strana",
-  "strany",
-  "cast",
-  "konec",
-  "smlouva",
-  "smlouvy",
-  "zakon",
-  "zakona",
-  "zakonu",
-  "clanek",
-  "clanku",
-  "odstavec",
-  "sluzba",
-  "sluzby",
-  "ucel",
-  "ucelu",
-  "zpusob",
-  "oblast",
-  "celkem",
-  "pouze",
-  "rovnez",
-  "zaroven",
-  "uvedeny",
-  "dalsi",
-  "smluvni",
-  "predmet",
-  "zmena",
-  "zmeny",
-  "plneni",
-  // Czech words matching university abbreviations
-  "mu",
-  "vse",
-  // German common words that match names
-  "aber",
-  "auch",
-  "auf",
-  "aus",
-  "bei",
-  "bis",
-  "das",
-  "dem",
-  "den",
-  "der",
-  "die",
-  "ein",
-  "eine",
-  "fur",
-  "hat",
-  "ich",
-  "ist",
-  "mit",
-  "nach",
-  "nicht",
-  "noch",
-  "nur",
-  "oder",
-  "sie",
-  "und",
-  "von",
-  "war",
-  "was",
-  "wer",
-  "wie",
-  "will",
-  "sind",
-  "wird",
-  "zeit",
-  "recht",
-  "fall",
-  "ware",
-  "leben",
-  "arbeit",
-  // German legal terms (accented — AC is
-  // case-insensitive but does not strip diacritics)
-  "verfügung",
-  "kläger",
-  // English/tech words that match names
-  "temp",
-  "fede",
-  "abner",
-  "office",
-  "swift",
-  "esco",
-  "data",
-  "money",
-  "payment",
-  "contractor",
-  "seller",
-  "sellers",
-  "counsellor",
-  "count",
-  "purchase",
-  "share",
-  "price",
-  "board",
-  "group",
-  "civil",
-  "code",
-  "key",
-  "company",
-  "director",
-  "leaver",
-  "pool",
-  "change",
-  "business",
-  "day",
-  "meeting",
-  "person",
-  "service",
-  "public",
-  "stock",
-  "simple",
-  "safe",
-  "cap",
-  "standard",
-  "common",
-  "freedom",
-  "rector",
-  "court",
-  "judge",
-  "party",
-  "state",
-  "union",
-  "right",
-  "order",
-  "claim",
-  "case",
-  "article",
-  "section",
-  "the",
-  "and",
-  "for",
-  "are",
-  "but",
-  "not",
-  "you",
-  "all",
-  "any",
-  "can",
-  "had",
-  "her",
-  "his",
-  "how",
-  "its",
-  "may",
-  "new",
-  "now",
-  "old",
-  "our",
-  "own",
-  "say",
-  "too",
-  "use",
-  "way",
-  "who",
-  "did",
-  "get",
-  "has",
-  "him",
-  "let",
-  "one",
-  "run",
-  "set",
-  "try",
-  "big",
-  "end",
-  "far",
-  "few",
-  "got",
-  "law",
-  "low",
-  "man",
-  "put",
-  "red",
-  "top",
-  "yes",
-  "age",
-  "art",
-  "bar",
-  "bit",
-  "boy",
-  "car",
-  "cut",
-  "deal",
-  "fact",
-  "free",
-  "gift",
-  "half",
-  "hall",
-  "hand",
-  "here",
-  "high",
-  "hope",
-  "idea",
-  "just",
-  "kind",
-  "land",
-  "last",
-  "life",
-  "like",
-  "line",
-  "list",
-  "long",
-  "look",
-  "lord",
-  "made",
-  "make",
-  "mark",
-  "much",
-  "must",
-  "name",
-  "need",
-  "next",
-  "note",
-  "only",
-  "open",
-  "over",
-  "part",
-  "past",
-  "plan",
-  "play",
-  "real",
-  "rest",
-  "rich",
-  "rise",
-  "role",
-  "rule",
-  "same",
-  "save",
-  "side",
-  "sign",
-  "site",
-  "size",
-  "some",
-  "step",
-  "such",
-  "sure",
-  "take",
-  "tell",
-  "term",
-  "test",
-  "than",
-  "that",
-  "then",
-  "this",
-  "time",
-  "turn",
-  "upon",
-  "used",
-  "very",
-  "want",
-  "well",
-  "went",
-  "what",
-  "when",
-  "with",
-  "word",
-  "work",
-  "year",
-  // Slovak
-  "soud",
-  "pravo",
-  "narok",
-  // English legal defined terms (never PII)
-  "lease",
-  "leases",
-  "loan",
-  "loans",
-  "officer",
-  "employee",
-  "employees",
-  "master",
-  "reason",
-  "title",
-  "balance",
-  "laws",
-  "grant",
-  "ground",
-  "cover",
-  "legal",
-  "market",
-  "stretch",
-  "tunc",
-  "bridge",
-  "lien",
-  "bonus",
-  "rent",
-  "salary",
-  "agent",
-  "counsel",
-  "severance",
-  "benefits",
-  "notice",
-  "subject",
-  "offer",
-  "form",
-  "file",
-  "table",
-  "check",
-  "letter",
-  "policy",
-  "credit",
-  "cash",
-  "cost",
-  "fund",
-  "rate",
-  "loss",
-  "gain",
-  "base",
-  "suite",
-  "class",
-  "topic",
-  "bond",
-  "bonds",
-  "charter",
-  "doc",
-  "sec",
-  "true",
-  "level",
-  "power",
-  "golf",
-  "sample",
-  "hearing",
-  "finance",
-  "accounting",
-  "pension",
-  "prior",
-  "current",
-  "senior",
-  "national",
-  "delay",
-  "punch",
-  "death",
-  "chief",
-  "building",
-  "casino",
-  "sales",
-  "century",
-  "portfolio",
-  "fair",
-  // English defined terms (contract-specific)
-  "parent",
-  "drag",
-  "persons",
-  // English title/role words
-  "president",
-  "vice president",
-  "secretary",
+const SUPPLEMENTARY_NAME_EXCLUSIONS: ReadonlySet<string> =
+  new Set([
+    "ana", "ben", "dan", "eden", "ella", "ina", "jo",
+    "kai", "lena", "may", "mia", "sam", "sara", "sue",
+    "tim", "tom",
+  ]);
+
+/**
+ * Names from the first-name corpus (lowercased) that also
+ * appear in the stopwords-iso dataset, plus supplementary
+ * common EU given names not in the corpus. These must be
+ * kept out of global STOPWORDS so that person detection is
+ * not silently suppressed for real given names.
+ */
+const FIRST_NAME_EXCLUSIONS: ReadonlySet<string> = new Set([
+  ...NAME_CORPUS_FIRST_NAMES.map((n) => n.toLowerCase()),
+  ...SUPPLEMENTARY_NAME_EXCLUSIONS,
 ]);
+
+/**
+ * Global stopwords: common words across 23 EU languages
+ * sourced from the stopwords-iso dataset (MIT license).
+ * Checked case-insensitively against matches.
+ *
+ * Entries that collide with the first-name corpus are
+ * excluded so they can still be detected as person names.
+ *
+ * Regenerate: bun packages/data/scripts/generate-stopwords.ts
+ */
+let _stopwords: ReadonlySet<string> | null = null;
+let _stopwordsPromise: Promise<ReadonlySet<string>> | null =
+  null;
+
+const loadStopwords = (): Promise<ReadonlySet<string>> => {
+  if (_stopwordsPromise) return _stopwordsPromise;
+  _stopwordsPromise = (async () => {
+    try {
+      const mod: { default?: string[] } = await import(
+        "@stll/anonymize-data/config/stopwords.json"
+      );
+      const list = (mod.default ?? []).filter(
+        (w: string) => !FIRST_NAME_EXCLUSIONS.has(w),
+      );
+      const set: ReadonlySet<string> = new Set(list);
+      _stopwords = set;
+      return set;
+    } catch (err) {
+      console.warn(
+        "[anonymize] Failed to load stopwords.json"
+          + " — stopword filtering disabled:",
+        err,
+      );
+      const empty: ReadonlySet<string> = new Set();
+      _stopwords = empty;
+      return empty;
+    }
+  })();
+  return _stopwordsPromise;
+};
+
+const EMPTY_STOPWORDS: ReadonlySet<string> = new Set();
+
+/** Sync accessor — returns empty set before init. */
+const getStopwords = (): ReadonlySet<string> =>
+  _stopwords ?? EMPTY_STOPWORDS;
 
 /**
  * Words that are valid in other labels (address, org)
@@ -493,6 +169,30 @@ const PERSON_STOPWORDS: ReadonlySet<string> = new Set([
   "indiana",
   "ohio",
   "israel",
+  // European demonyms (never person names)
+  "austrian",
+  "belgian",
+  "british",
+  "bulgarian",
+  "croatian",
+  "cypriot",
+  "danish",
+  "dutch",
+  "estonian",
+  "european",
+  "finnish",
+  "greek",
+  "hungarian",
+  "irish",
+  "latvian",
+  "lithuanian",
+  "luxembourgish",
+  "maltese",
+  "polish",
+  "portuguese",
+  "romanian",
+  "slovenian",
+  "swedish",
   // Place names that match person names
   "page",
   "sale",
@@ -549,6 +249,9 @@ export type DenyListData = {
 export const buildDenyList = async (
   config: DenyListConfig,
 ): Promise<DenyListData | null> => {
+  // Pre-load stopwords so getStopwords() is populated
+  // before processDenyListMatches runs synchronously.
+  await loadStopwords();
   const dataModule = await loadDataModule();
   if (!dataModule) {
     return null;
@@ -815,7 +518,7 @@ export const processDenyListMatches = (
       match.end,
     );
     const keyword = matchText.toLowerCase();
-    if (STOPWORDS.has(keyword) || ALLOW_LIST.has(keyword)) {
+    if (getStopwords().has(keyword) || ALLOW_LIST.has(keyword)) {
       continue;
     }
 
@@ -1023,8 +726,12 @@ const extendPersonName = (
         break;
       }
 
-      // Don't extend into stopwords
-      if (STOPWORDS.has(stripped.toLowerCase())) {
+      // Don't extend into global or person stopwords
+      const lower = stripped.toLowerCase();
+      if (
+        getStopwords().has(lower) ||
+        PERSON_STOPWORDS.has(lower)
+      ) {
         break;
       }
 
