@@ -154,7 +154,7 @@ export const REGEX_META: readonly RegexMeta[] = [
   { label: "national identification number", score: 1 },
   { label: "national identification number", score: 0.9 },
   { label: "national identification number", score: 1 },
-  { label: "social security number", score: 1 },
+  { label: "social security number", score: 0.9 },
 ];
 
 // ── Dynamic date patterns (22 languages) ────────────
