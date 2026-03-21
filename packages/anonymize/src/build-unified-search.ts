@@ -22,6 +22,8 @@ import type { DenyListData } from "./detectors/deny-list";
 import {
   REGEX_PATTERNS,
   REGEX_META,
+  getCurrencyPatterns,
+  CURRENCY_PATTERN_META,
 } from "./detectors/regex";
 import {
   buildLegalFormPatterns,
@@ -66,6 +68,7 @@ export const buildUnifiedSearch = async (
     triggers,
     denyListData,
     streetTypes,
+    currencyPatterns,
   ] = await Promise.all([
     buildLegalFormPatterns(),
     config.enableTriggerPhrases
@@ -78,6 +81,7 @@ export const buildUnifiedSearch = async (
       ? buildDenyList(config)
       : Promise.resolve(null),
     buildStreetTypePatterns(),
+    getCurrencyPatterns(),
   ]);
 
   // ── Instance 1: regex + triggers + legal-forms ──
@@ -86,11 +90,26 @@ export const buildUnifiedSearch = async (
   // their own (?i) flags (caseInsensitive on AC
   // is ignored for regex since they route to
   // RegexSet). Legal-form patterns are regex too.
+  //
+  // Currency patterns (from currencies.json) are
+  // appended after the static regex patterns; their
+  // meta is spliced into regexMeta at the same offset.
+  const allRegex = [
+    ...(REGEX_PATTERNS as string[]),
+    ...currencyPatterns,
+  ];
+  const regexMeta: RegexMeta[] = [
+    ...REGEX_META,
+    ...currencyPatterns.map(
+      () => CURRENCY_PATTERN_META,
+    ),
+  ];
+
   let offset = 0;
 
   const regexSlice = {
     start: offset,
-    end: offset + REGEX_PATTERNS.length,
+    end: offset + allRegex.length,
   };
   offset = regexSlice.end;
 
@@ -117,7 +136,7 @@ export const buildUnifiedSearch = async (
   );
 
   const regexAllPatterns = [
-    ...(REGEX_PATTERNS as string[]),
+    ...allRegex,
     ...legalForms,
     ...triggerEntries,
   ];
@@ -170,7 +189,7 @@ export const buildUnifiedSearch = async (
       denyList: denyListSlice,
       streetTypes: streetTypesSlice,
     },
-    regexMeta: REGEX_META,
+    regexMeta,
     triggerRules: triggers.rules,
     denyListData,
   };
