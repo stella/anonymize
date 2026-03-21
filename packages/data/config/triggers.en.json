@@ -139,54 +139,5 @@
       "type": "company-id-value"
     },
     "trigger": "tax id"
-  },
-  {
-    "label": "organization",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "the Commission"
-  },
-  {
-    "label": "organization",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "the Tribunal"
-  },
-  {
-    "label": "organization",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "the Authority"
-  },
-  {
-    "label": "organization",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "the Board"
-  },
-  {
-    "label": "organization",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "the Committee"
-  },
-  {
-    "label": "organization",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "the Council"
-  },
-  {
-    "label": "organization",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "the Agency"
   }
 ]
