@@ -1,6 +1,11 @@
 import type { Match } from "@stll/text-search";
 
-import { POST_NOMINALS, TITLE_PREFIXES } from "../config/titles";
+import {
+  HONORIFIC_BOUNDARY,
+  HONORIFICS,
+  POST_NOMINALS,
+  TITLE_PREFIXES,
+} from "../config/titles";
 import { DETECTION_SOURCES } from "../types";
 import type { Entity } from "../types";
 
@@ -46,6 +51,17 @@ const PARTICLE =
 // Non-newline whitespace
 const SP = "[^\\S\\n\\t]";
 
+/** Honorific alternation built from titles.ts config. */
+const HONORIFIC_ALT = [...HONORIFICS]
+  .toSorted((a, b) => b.length - a.length)
+  .map((h) => {
+    const escaped = escapeRegex(h);
+    return HONORIFIC_BOUNDARY.has(h)
+      ? `\\b${escaped}`
+      : escaped;
+  })
+  .join("|");
+
 // ── Pattern metadata ────────────────────────────────
 // Parallel arrays: PATTERNS[i] ↔ META[i]
 // Indexed by match.pattern for O(1) lookup.
@@ -71,14 +87,8 @@ export const REGEX_PATTERNS: readonly string[] = [
     `(?:${NAME_WORD})` +
     `(?:${SP}{1,4}(?:${PARTICLE}${SP}+)?${NAME_WORD}){1,3}` +
     `(?:,?${SP}+(?:${POST_NOMINAL}))?`,
-  // 1: English honorific person
-  `(?:\\bM\\.|Mrs|Ms|Miss|Messrs|Mr|Sir|Dame|Lord|Lady|` +
-    `Judge|Justice|President|Mme|Mlle|\\bMe\\b|Maître|` +
-    `Madame|Monsieur|Mademoiselle|` +
-    `Signor|Signora|Signorina|Sig\\.|Sig\\.ra|` +
-    `Dott\\.|Avv\\.|` +
-    `\\bDon|\\bDoña|\\bSeñor|\\bSeñora|Sr\\.|Sra\\.|` +
-    `Domnul|Doamna)` +
+  // 1: honorific person (from honorifics.json)
+  `(?:${HONORIFIC_ALT})` +
     `\\.?${SP}+${NAME_WORD}` +
     `(?:(?:${SP}|-){1,2}(?:${PARTICLE}${SP}+)?` +
     `${NAME_WORD}){0,3}` +

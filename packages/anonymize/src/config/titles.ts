@@ -100,6 +100,62 @@ export const TITLE_PREFIXES = [
 ] as const;
 
 /**
+ * Courtesy/honorific titles that precede a person's
+ * name. Sorted alphabetically. The detector escapes
+ * dots and adds \b for entries in HONORIFIC_BOUNDARY.
+ */
+export const HONORIFICS = [
+  "Avv.",
+  "Dame",
+  "Doamna",
+  "Domnul",
+  "Don",
+  "Doña",
+  "Dott.",
+  "Judge",
+  "Justice",
+  "Lady",
+  "Lord",
+  "M.",
+  "Madame",
+  "Mademoiselle",
+  "Maître",
+  "Me",
+  "Messrs",
+  "Miss",
+  "Mlle",
+  "Mme",
+  "Monsieur",
+  "Mr",
+  "Mrs",
+  "Ms",
+  "President",
+  "Señor",
+  "Señora",
+  "Sig.",
+  "Sig.ra",
+  "Signor",
+  "Signora",
+  "Signorina",
+  "Sir",
+  "Sr.",
+  "Sra.",
+] as const;
+
+/**
+ * Honorifics that need \b word-boundary anchors
+ * (short or common words that could match mid-word).
+ */
+export const HONORIFIC_BOUNDARY = new Set([
+  "Don",
+  "Doña",
+  "M.",
+  "Me",
+  "Señor",
+  "Señora",
+]);
+
+/**
  * Post-nominal degrees (comma or space separated after name).
  * Plain text; the detector auto-escapes for regex.
  */
