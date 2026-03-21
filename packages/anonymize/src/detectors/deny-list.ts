@@ -77,23 +77,32 @@ const FIRST_NAME_EXCLUSIONS: ReadonlySet<string> = new Set(
  * Regenerate: bun packages/data/scripts/generate-stopwords.ts
  */
 let _stopwords: ReadonlySet<string> | null = null;
+let _stopwordsPromise: Promise<ReadonlySet<string>> | null =
+  null;
 
-const loadStopwords = async (): Promise<
-  ReadonlySet<string>
-> => {
-  if (_stopwords) return _stopwords;
-  try {
-    const mod: { default?: string[] } = await import(
-      "@stll/anonymize-data/config/stopwords.json"
-    );
-    const list = (mod.default ?? []).filter(
-      (w: string) => !FIRST_NAME_EXCLUSIONS.has(w),
-    );
-    _stopwords = new Set(list);
-  } catch {
-    _stopwords = new Set();
-  }
-  return _stopwords;
+const loadStopwords = (): Promise<ReadonlySet<string>> => {
+  if (_stopwords) return Promise.resolve(_stopwords);
+  if (_stopwordsPromise) return _stopwordsPromise;
+  _stopwordsPromise = (async () => {
+    try {
+      const mod: { default?: string[] } = await import(
+        "@stll/anonymize-data/config/stopwords.json"
+      );
+      const list = (mod.default ?? []).filter(
+        (w: string) => !FIRST_NAME_EXCLUSIONS.has(w),
+      );
+      _stopwords = new Set(list);
+    } catch (err) {
+      console.warn(
+        "[anonymize] Failed to load stopwords.json"
+          + " — stopword filtering disabled:",
+        err,
+      );
+      _stopwords = new Set();
+    }
+    return _stopwords;
+  })();
+  return _stopwordsPromise;
 };
 
 /** Sync accessor — returns empty set before init. */

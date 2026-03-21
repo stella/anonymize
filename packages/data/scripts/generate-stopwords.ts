@@ -54,16 +54,15 @@ for (const lang of EU_LANGUAGES) {
     continue;
   }
 
-  let added = 0;
+  const before = allWords.size;
   for (const word of words) {
     const lower = word.toLowerCase();
     if (lower.length > 0) {
       allWords.add(lower);
-      added++;
     }
   }
 
-  stats.push({ lang, count: added });
+  stats.push({ lang, count: allWords.size - before });
 }
 
 // ── Output ──────────────────────────────────────────
