@@ -17,7 +17,8 @@
  * stopwords-iso dependency.
  */
 import { writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import data from "stopwords-iso/stopwords-iso.json";
 
@@ -33,8 +34,9 @@ const EU_LANGUAGES = [
   "nl", "pl", "pt", "ro", "sk", "sl", "sv",
 ] as const;
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
 const OUTPUT = join(
-  import.meta.dir,
+  __dirname,
   "..",
   "config",
   "stopwords.json",
