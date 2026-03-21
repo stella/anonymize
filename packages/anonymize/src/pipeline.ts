@@ -144,6 +144,7 @@ export const runPipeline = async (
         regexMatches,
         slices.regex.start,
         slices.regex.end,
+        search.regexMeta,
       )
     : [];
   if (regexEntities.length > 0)

@@ -617,6 +617,7 @@ export const processRegexMatches = (
   allMatches: Match[],
   sliceStart: number,
   sliceEnd: number,
+  metaOverride?: readonly RegexMeta[],
 ): Entity[] => {
   const results: Entity[] = [];
 
@@ -627,7 +628,7 @@ export const processRegexMatches = (
     }
 
     const localIdx = idx - sliceStart;
-    const meta = REGEX_META[localIdx];
+    const meta = (metaOverride ?? REGEX_META)[localIdx];
     if (!meta) {
       continue;
     }
