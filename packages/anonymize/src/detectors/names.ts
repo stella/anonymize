@@ -1,5 +1,10 @@
 import { DETECTION_SOURCES } from "../types";
 import type { Entity } from "../types";
+import {
+  ALL_UPPER_RE,
+  UPPER_START_RE,
+  isSentenceStart,
+} from "../util/text";
 
 // ── Name corpus ──────────────────────────────────────
 // ~600 common first names across Czech, Slovak, German,
@@ -792,9 +797,6 @@ type ClassifiedToken = {
 
 // ── Helpers ──────────────────────────────────────────
 
-const UPPER_START_RE = /^\p{Lu}/u;
-const ALL_UPPER_RE = /^\p{Lu}+$/u;
-
 /**
  * Check if a token is in the first-name set, either
  * directly or after stripping Czech/Slovak inflection.
@@ -825,27 +827,6 @@ const isSurnameToken = (token: string): boolean => {
  */
 const isAbbreviation = (token: string): boolean =>
   token.length === 2 && /^\p{Lu}$/u.test(token[0] ?? "") && token[1] === ".";
-
-/**
- * Detect whether a position is at the start of a
- * sentence. Looks backward for sentence-ending
- * punctuation followed by whitespace.
- */
-const isSentenceStart = (fullText: string, position: number): boolean => {
-  if (position === 0) {
-    return true;
-  }
-  // Walk backwards past whitespace
-  let i = position - 1;
-  while (i >= 0 && /\s/.test(fullText[i] ?? "")) {
-    i--;
-  }
-  if (i < 0) {
-    return true;
-  }
-  const char = fullText[i];
-  return char === "." || char === "!" || char === "?";
-};
 
 // ── Word segmentation ────────────────────────────────
 

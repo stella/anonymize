@@ -9,6 +9,11 @@ import { resolveCountries } from "../regions";
 import { DETECTION_SOURCES } from "../types";
 import type { Entity, PipelineConfig } from "../types";
 import { normalizeForSearch } from "../util/normalize";
+import {
+  ALL_UPPER_RE,
+  UPPER_START_RE,
+  isSentenceStart,
+} from "../util/text";
 
 /**
  * Try to load the optional @stll/anonymize-data package.
@@ -31,9 +36,6 @@ export type DenyListConfig = Pick<
   | "denyListRegions"
   | "denyListExcludeCategories"
 >;
-
-const UPPER_START_RE = /^\p{Lu}/u;
-const ALL_UPPER_RE = /^\p{Lu}+$/u;
 
 /**
  * Known abbreviations that should not be flagged.
@@ -436,28 +438,6 @@ export const buildDenyList = async (
     originals: patternList,
     sources: sourceList,
   };
-};
-
-const SENTENCE_END_RE = /[.!?]/;
-
-/**
- * Check if a position is at the start of a sentence.
- */
-const isSentenceStart = (
-  text: string,
-  pos: number,
-): boolean => {
-  if (pos === 0) {
-    return true;
-  }
-  let i = pos - 1;
-  while (i >= 0 && /\s/.test(text[i] ?? "")) {
-    i--;
-  }
-  if (i < 0) {
-    return true;
-  }
-  return SENTENCE_END_RE.test(text[i] ?? "");
 };
 
 type RawMatch = {
