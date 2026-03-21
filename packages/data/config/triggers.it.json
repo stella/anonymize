@@ -4,7 +4,21 @@
     "strategy": {
       "type": "to-next-comma"
     },
-    "trigger": "nato a"
+    "trigger": "con sede in"
+  },
+  {
+    "label": "address",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "domiciliata in"
+  },
+  {
+    "label": "address",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "domiciliato in"
   },
   {
     "label": "address",
@@ -12,6 +26,13 @@
       "type": "to-next-comma"
     },
     "trigger": "nata a"
+  },
+  {
+    "label": "address",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "nato a"
   },
   {
     "label": "address",
@@ -28,25 +49,20 @@
     "trigger": "residente in"
   },
   {
-    "label": "address",
+    "label": "date",
     "strategy": {
-      "type": "to-next-comma"
+      "count": 4,
+      "type": "n-words"
     },
-    "trigger": "domiciliato in"
+    "trigger": "nata il"
   },
   {
-    "label": "address",
+    "label": "date",
     "strategy": {
-      "type": "to-next-comma"
+      "count": 4,
+      "type": "n-words"
     },
-    "trigger": "domiciliata in"
-  },
-  {
-    "label": "address",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "con sede in"
+    "trigger": "nato il"
   },
   {
     "label": "person",
@@ -60,21 +76,14 @@
     "strategy": {
       "type": "to-next-comma"
     },
-    "trigger": "rappresentato da"
+    "trigger": "rappresentata da"
   },
   {
     "label": "person",
     "strategy": {
       "type": "to-next-comma"
     },
-    "trigger": "rappresentata da"
-  },
-  {
-    "label": "tax identification number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "codice fiscale"
+    "trigger": "rappresentato da"
   },
   {
     "label": "tax identification number",
@@ -88,13 +97,20 @@
     "strategy": {
       "type": "company-id-value"
     },
-    "trigger": "partita IVA"
+    "trigger": "P.IVA"
   },
   {
     "label": "tax identification number",
     "strategy": {
       "type": "company-id-value"
     },
-    "trigger": "P.IVA"
+    "trigger": "codice fiscale"
+  },
+  {
+    "label": "tax identification number",
+    "strategy": {
+      "type": "company-id-value"
+    },
+    "trigger": "partita IVA"
   }
 ]
