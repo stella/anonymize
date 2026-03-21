@@ -141,6 +141,11 @@ export const REGEX_META: readonly RegexMeta[] = [
 
 // ── Dynamic date patterns (22 languages) ────────────
 
+/**
+ * JSON shape: language codes map to string arrays;
+ * metadata keys (prefixed `_`) map to strings.
+ * The `_` keys are skipped by `buildMonthAlternation`.
+ */
 type DateMonths = Record<string, string[] | string>;
 
 /**
@@ -154,8 +159,9 @@ const buildMonthAlternation = (
   months: DateMonths,
 ): string => {
   const seen = new Set<string>();
-  for (const [key, names] of Object.entries(months)) {
+  for (const [key, value] of Object.entries(months)) {
     if (key.startsWith("_")) continue;
+    const names = Array.isArray(value) ? value : [value];
     for (const name of names) {
       // Strip trailing dots for the regex; date patterns
       // use `\\.?` after the alternation to match optional
@@ -186,7 +192,7 @@ const buildDatePatternsFromMonths = (
   `(?i)\\b(?:${alt})\\.?\\s+\\d{1,2},?\\s+\\d{4}\\b`,
   // c. DDst/nd/rd/th Month[.] [YYYY] — "1st January 2025"
   `(?i)\\b\\d{1,2}(?:st|nd|rd|th)\\s+(?:${alt})\\.?` +
-    `(?:\\s+\\d{4})?\\b`,
+    `(?:\\s+\\d{4})?(?=\\s|[.,;!?)]|$)`,
   // d. Month[.] YYYY — "October 1983"
   `(?i)\\b(?:${alt})\\.?\\s+\\d{4}\\b`,
   // e. YYYY. Month[.] DD. — Hungarian "2025. január 7."
@@ -218,7 +224,12 @@ const loadDatePatterns = async (): Promise<string[]> => {
  */
 export const getDatePatterns = (): Promise<string[]> => {
   if (!datePatternPromise) {
-    datePatternPromise = loadDatePatterns();
+    datePatternPromise = loadDatePatterns().catch(
+      (err) => {
+        datePatternPromise = null;
+        throw err;
+      },
+    );
   }
   return datePatternPromise;
 };
