@@ -39,7 +39,7 @@
     "strategy": {
       "type": "to-end-of-line"
     },
-    "trigger": "siège social"
+    "trigger": "siège social :"
   },
   {
     "label": "date of birth",

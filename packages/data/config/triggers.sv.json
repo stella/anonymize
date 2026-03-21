@@ -32,14 +32,28 @@
     "strategy": {
       "type": "to-next-comma"
     },
-    "trigger": "folkbokförd"
+    "trigger": "folkbokförd i"
   },
   {
     "label": "address",
     "strategy": {
       "type": "to-next-comma"
     },
-    "trigger": "bosatt"
+    "trigger": "folkbokförd på"
+  },
+  {
+    "label": "address",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "bosatt i"
+  },
+  {
+    "label": "address",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "bosatt på"
   },
   {
     "label": "date of birth",
