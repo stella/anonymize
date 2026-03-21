@@ -141,7 +141,7 @@ export const REGEX_META: readonly RegexMeta[] = [
 
 // ── Dynamic date patterns (22 languages) ────────────
 
-type DateMonths = Record<string, string[]>;
+type DateMonths = Record<string, string[] | string>;
 
 /**
  * Build month-name alternation from date-months.json.
@@ -157,8 +157,9 @@ const buildMonthAlternation = (
   for (const [key, names] of Object.entries(months)) {
     if (key.startsWith("_")) continue;
     for (const name of names) {
-      // Strip trailing dots for the regex; the dot
-      // pattern in dates handles optional dots already.
+      // Strip trailing dots for the regex; date patterns
+      // use `\\.?` after the alternation to match optional
+      // abbreviation dots.
       const clean = name.replace(/\.$/, "");
       if (clean.length >= MIN_MONTH_NAME_LENGTH) {
         seen.add(clean);
@@ -179,19 +180,19 @@ const buildMonthAlternation = (
 const buildDatePatternsFromMonths = (
   alt: string,
 ): string[] => [
-  // a. DD[.] Month YYYY — "1. ledna 2025", "7 March 2023"
-  `(?i)\\b\\d{1,2}\\.?\\s+(?:${alt})\\s+\\d{4}\\b`,
-  // b. Month DD[,] YYYY — "March 7, 2023" (US format)
-  `(?i)\\b(?:${alt})\\s+\\d{1,2},?\\s+\\d{4}\\b`,
-  // c. DDst/nd/rd/th Month [YYYY] — "1st January 2025"
-  `(?i)\\b\\d{1,2}(?:st|nd|rd|th)\\s+(?:${alt})` +
+  // a. DD[.] Month[.] YYYY — "1. ledna 2025", "17 Sep. 2023"
+  `(?i)\\b\\d{1,2}\\.?\\s+(?:${alt})\\.?\\s+\\d{4}\\b`,
+  // b. Month[.] DD[,] YYYY — "March 7, 2023" (US format)
+  `(?i)\\b(?:${alt})\\.?\\s+\\d{1,2},?\\s+\\d{4}\\b`,
+  // c. DDst/nd/rd/th Month[.] [YYYY] — "1st January 2025"
+  `(?i)\\b\\d{1,2}(?:st|nd|rd|th)\\s+(?:${alt})\\.?` +
     `(?:\\s+\\d{4})?\\b`,
-  // d. Month YYYY — "October 1983"
-  `(?i)\\b(?:${alt})\\s+\\d{4}\\b`,
-  // e. YYYY. Month DD. — Hungarian "2025. január 7."
-  `(?i)\\b\\d{4}\\.\\s+(?:${alt})\\s+\\d{1,2}\\.?(?:\\b|$)`,
-  // f. DD de Month [de] YYYY — Spanish "7 de enero de 2025"
-  `(?i)\\b\\d{1,2}\\s+de\\s+(?:${alt})` +
+  // d. Month[.] YYYY — "October 1983"
+  `(?i)\\b(?:${alt})\\.?\\s+\\d{4}\\b`,
+  // e. YYYY. Month[.] DD. — Hungarian "2025. január 7."
+  `(?i)\\b\\d{4}\\.\\s+(?:${alt})\\.?\\s+\\d{1,2}\\.?(?=\\s|[.,;!?)]|$)`,
+  // f. DD de Month[.] [de] YYYY — Spanish "7 de enero de 2025"
+  `(?i)\\b\\d{1,2}\\s+de\\s+(?:${alt})\\.?` +
     `(?:\\s+de)?\\s+\\d{4}\\b`,
 ];
 
