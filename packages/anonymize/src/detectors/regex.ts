@@ -311,12 +311,15 @@ const STDNUM_ENTRIES: readonly StdnumEntry[] = [
  * Static PII regex patterns. Scanned in a single pass
  * by @stll/regex-set (Rust regex-automata DFA).
  *
- * Patterns 0-14: hand-written (person names, IBAN,
+ * Patterns 0-12: hand-written (person names, IBAN,
  * email, phone, credit card, birth number, dates,
- * money, IP, bank account).
+ * IP, bank account).
  *
- * Patterns 15+: stdnum-derived (national/company IDs).
+ * Patterns 13+: stdnum-derived (national/company IDs).
  * Each has a post-match validator for confirmation.
+ *
+ * Monetary amount patterns are built dynamically from
+ * currencies.json via `getCurrencyPatterns()`.
  *
  * Date patterns using written month names are built
  * dynamically from date-months.json via
@@ -360,20 +363,15 @@ export const REGEX_PATTERNS: readonly string[] = [
     `|\\d{4}-\\d{2}-\\d{2})\\b`,
   // 9: Czech spaced dates "1. 1. 2025"
   `\\b\\d{1,2}\\.\\s+\\d{1,2}\\.\\s+\\d{4}\\b`,
-  // 10: monetary amount (leading symbol)
-  `(?:[$€£¥₽])[^\\S\\n\\t]?\\d{1,3}(?:[,.\'[^\\S\\n\\t]]\\d{3})*(?:[.,]\\d{1,2})?\\b`,
-  // 11: monetary amount (trailing code)
-  `\\b\\d{1,3}(?:[,.\'[^\\S\\n\\t]]\\d{3})*(?:[.,]\\d{2})?[^\\S\\n\\t]?` +
-    `(?:USD|EUR|GBP|CZK|PLN|HUF|CHF|SEK|NOK|DKK|RON|JPY|CNY)\\b`,
-  // 12: IP address
+  // 10: IP address
   `\\b(?:(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.){3}` +
     `(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\b`,
-  // 13: Czech bank account (optional prefix)
+  // 11: Czech bank account (optional prefix)
   `\\b(?:\\d{1,6}-)?\\d{6,10}/\\d{4}(?!\\d)`,
-  // 14: Hungarian Budapest landline (+36 1 XXX XXXX)
+  // 12: Hungarian Budapest landline (+36 1 XXX XXXX)
   // 2+ digit area codes handled by pattern 4 (international)
   `\\+36[\\s.\\-]?1[\\s.\\-]?\\d{3}[\\s.\\-]?\\d{4}\\b`,
-  // ── stdnum-derived patterns (15+) ──────────────────
+  // ── stdnum-derived patterns (13+) ──────────────────
   // Built from @stll/stdnum via toRegex(). Each has
   // a post-match validator for false-positive filtering.
   ...STDNUM_ENTRIES.map((e) => e.pattern),
@@ -391,8 +389,6 @@ export const REGEX_META: readonly RegexMeta[] = [
   { label: "czech birth number", score: 1 },
   { label: "date", score: 1 },
   { label: "date", score: 1 },
-  { label: "monetary amount", score: 0.9 },
-  { label: "monetary amount", score: 0.9 },
   { label: "ip address", score: 1 },
   { label: "bank account number", score: 0.95 },
   { label: "phone number", score: 0.9 },
@@ -514,6 +510,94 @@ export const DATE_PATTERN_META: Readonly<RegexMeta> =
   Object.freeze({
     label: "date",
     score: 1,
+  });
+
+// ── Dynamic currency patterns ──────────────────────
+
+/**
+ * JSON shape from currencies.json: ISO 4217 codes
+ * and common currency symbols.
+ */
+type CurrenciesData = {
+  codes: string[];
+  symbols: string[];
+};
+
+/**
+ * Build symbol character class and code alternation
+ * from currencies.json, then return two monetary
+ * amount patterns: leading symbol and trailing code.
+ */
+const buildCurrencyPatterns = (
+  data: CurrenciesData,
+): string[] => {
+  const symbols = data.symbols
+    .map(escapeRegex)
+    .join("");
+  const codes = data.codes.join("|");
+
+  if (!symbols && !codes) return [];
+
+  const patterns: string[] = [];
+
+  // Leading symbol: $100, €1,000.50
+  if (symbols) {
+    patterns.push(
+      `(?:[${symbols}])` +
+        `[^\\S\\n\\t]?` +
+        `\\d{1,3}(?:[,.'[^\\S\\n\\t]]\\d{3})*` +
+        `(?:[.,]\\d{1,2})?\\b`,
+    );
+  }
+
+  // Trailing code: 100 USD, 1,000.50 CZK
+  if (codes) {
+    patterns.push(
+      `\\b\\d{1,3}(?:[,.'[^\\S\\n\\t]]\\d{3})*` +
+        `(?:[.,]\\d{2})?[^\\S\\n\\t]?` +
+        `(?:${codes})\\b`,
+    );
+  }
+
+  return patterns;
+};
+
+/** Cached promise for currency patterns. Loaded once. */
+let currencyPatternPromise:
+  | Promise<string[]>
+  | null = null;
+
+const loadCurrencyPatterns =
+  async (): Promise<string[]> => {
+    const mod = await import(
+      "@stll/anonymize-data/config/currencies.json"
+    );
+    const data: CurrenciesData = mod.default ?? mod;
+    return buildCurrencyPatterns(data);
+  };
+
+/**
+ * Get dynamically built monetary amount patterns from
+ * currencies.json. Returns a cached promise; the JSON
+ * is loaded only once.
+ */
+export const getCurrencyPatterns =
+  (): Promise<string[]> => {
+    if (!currencyPatternPromise) {
+      currencyPatternPromise =
+        loadCurrencyPatterns().catch((err) => {
+          currencyPatternPromise = null;
+          throw err;
+        });
+    }
+    return currencyPatternPromise;
+  };
+
+/** Currency pattern metadata (score 0.9). */
+export const CURRENCY_PATTERN_META: Readonly<RegexMeta> =
+  Object.freeze({
+    label: "monetary amount",
+    score: 0.9,
   });
 
 // ── Public API ──────────────────────────────────────
