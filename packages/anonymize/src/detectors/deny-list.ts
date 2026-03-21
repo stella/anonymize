@@ -4,6 +4,7 @@ import {
   NAME_CORPUS_FIRST_NAMES,
   NAME_CORPUS_SURNAMES,
   NAME_CORPUS_TITLES,
+  initNameCorpus,
 } from "./names";
 import { resolveCountries } from "../regions";
 import { DETECTION_SOURCES } from "../types";
@@ -78,11 +79,24 @@ const SUPPLEMENTARY_NAME_EXCLUSIONS: ReadonlySet<string> =
  * common EU given names not in the corpus. These must be
  * kept out of global STOPWORDS so that person detection is
  * not silently suppressed for real given names.
+ *
+ * Computed lazily after initNameCorpus() has populated
+ * NAME_CORPUS_FIRST_NAMES.
  */
-const FIRST_NAME_EXCLUSIONS: ReadonlySet<string> = new Set([
-  ...NAME_CORPUS_FIRST_NAMES.map((n) => n.toLowerCase()),
-  ...SUPPLEMENTARY_NAME_EXCLUSIONS,
-]);
+let _firstNameExclusions: ReadonlySet<string> | null =
+  null;
+
+const getFirstNameExclusions =
+  (): ReadonlySet<string> => {
+    if (_firstNameExclusions) return _firstNameExclusions;
+    _firstNameExclusions = new Set([
+      ...NAME_CORPUS_FIRST_NAMES.map((n) =>
+        n.toLowerCase(),
+      ),
+      ...SUPPLEMENTARY_NAME_EXCLUSIONS,
+    ]);
+    return _firstNameExclusions;
+  };
 
 /**
  * Global stopwords: common words across 23 EU languages
@@ -106,7 +120,8 @@ const loadStopwords = (): Promise<ReadonlySet<string>> => {
         "@stll/anonymize-data/config/stopwords.json"
       );
       const list = (mod.default ?? []).filter(
-        (w: string) => !FIRST_NAME_EXCLUSIONS.has(w),
+        (w: string) =>
+          !getFirstNameExclusions().has(w),
       );
       const set: ReadonlySet<string> = new Set(list);
       _stopwords = set;
@@ -249,6 +264,10 @@ export type DenyListData = {
 export const buildDenyList = async (
   config: DenyListConfig,
 ): Promise<DenyListData | null> => {
+  // Pre-load name corpus so NAME_CORPUS_* arrays and
+  // FIRST_NAME_EXCLUSIONS are populated before
+  // stopwords filtering runs.
+  await initNameCorpus();
   // Pre-load stopwords so getStopwords() is populated
   // before processDenyListMatches runs synchronously.
   await loadStopwords();
