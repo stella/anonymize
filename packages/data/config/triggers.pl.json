@@ -1,0 +1,58 @@
+[
+  {
+    "label": "tax identification number",
+    "strategy": {
+      "type": "company-id-value"
+    },
+    "trigger": "NIP"
+  },
+  {
+    "label": "national identification number",
+    "strategy": {
+      "type": "company-id-value"
+    },
+    "trigger": "PESEL"
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "company-id-value"
+    },
+    "trigger": "REGON"
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "company-id-value"
+    },
+    "trigger": "KRS"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "Przewodniczący:"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "Sędzia:"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "Prokurator:"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "Protokolant:"
+  }
+]

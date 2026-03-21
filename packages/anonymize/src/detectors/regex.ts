@@ -130,6 +130,11 @@ export const REGEX_PATTERNS: readonly string[] = [
     `(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\b`,
   // 19: Czech bank account (optional prefix)
   `\\b(?:\\d{1,6}-)?\\d{6,10}/\\d{4}(?!\\d)`,
+  // 17: Hungarian Budapest landline (+36 1 XXX XXXX)
+  // 2+ digit area codes handled by pattern 4 (international)
+  `\\+36[\\s.\\-]?1[\\s.\\-]?\\d{3}[\\s.\\-]?\\d{3,4}\\b`,
+  // 18: Hungarian adószám (tax ID)
+  `\\b\\d{8}-\\d-\\d{2}\\b`,
 ];
 
 /** Parallel metadata. Index = pattern index. */
@@ -154,6 +159,8 @@ export const REGEX_META: readonly RegexMeta[] = [
   { label: "monetary amount", score: 0.9 },
   { label: "ip address", score: 1 },
   { label: "bank account number", score: 0.95 },
+  { label: "phone number", score: 0.9 },
+  { label: "tax identification number", score: 1 },
 ];
 
 // ── Public API ──────────────────────────────────────

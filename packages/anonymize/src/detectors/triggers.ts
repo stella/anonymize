@@ -60,6 +60,12 @@ export const buildTriggerPatterns = async (): Promise<{
     tryLoad(
       "@stll/anonymize-data/config/triggers.en.json",
     ),
+    tryLoad(
+      "@stll/anonymize-data/config/triggers.pl.json",
+    ),
+    tryLoad(
+      "@stll/anonymize-data/config/triggers.hu.json",
+    ),
   ]);
 
   // Build patterns from lowercased trigger strings.
