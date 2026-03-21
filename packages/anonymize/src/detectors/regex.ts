@@ -33,14 +33,8 @@ const escapeRegex = (s: string): string =>
   // eslint-disable-next-line no-useless-escape
   s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-/**
- * Escape for use inside a regex character class `[...]`.
- * In addition to the standard metacharacters, this also
- * escapes `-` (range), `]` (close), and `^` (negation)
- * which are metacharacters only inside char classes.
- */
+/** Escape for use inside a regex character class. */
 const escapeCharClass = (s: string): string =>
-  // eslint-disable-next-line no-useless-escape
   s.replace(/[\]\\^-]/g, "\\$&");
 
 const TITLE_PREFIX = TITLE_PREFIXES.toSorted(
@@ -627,7 +621,7 @@ export const processRegexMatches = (
   allMatches: Match[],
   sliceStart: number,
   sliceEnd: number,
-  metaOverride: readonly RegexMeta[],
+  meta_: readonly RegexMeta[],
 ): Entity[] => {
   const results: Entity[] = [];
 
@@ -638,7 +632,7 @@ export const processRegexMatches = (
     }
 
     const localIdx = idx - sliceStart;
-    const meta = metaOverride[localIdx];
+    const meta = meta_[localIdx];
     if (!meta) {
       continue;
     }
