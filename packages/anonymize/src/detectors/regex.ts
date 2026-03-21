@@ -166,7 +166,9 @@ const buildMonthAlternation = (
       // Strip trailing dots for the regex; date patterns
       // use `\\.?` after the alternation to match optional
       // abbreviation dots.
-      const clean = name.replace(/\.$/, "");
+      const clean = name
+        .replace(/\.$/, "")
+        .toLowerCase();
       if (clean.length >= MIN_MONTH_NAME_LENGTH) {
         seen.add(clean);
       }
@@ -185,7 +187,14 @@ const buildMonthAlternation = (
  */
 const buildDatePatternsFromMonths = (
   alt: string,
-): string[] => [
+): string[] => {
+  if (!alt) {
+    // No month names survived filtering — return nothing
+    // rather than emitting patterns with (?:) that match
+    // arbitrary whitespace.
+    return [];
+  }
+  return [
   // a. DD[.] Month[.] YYYY — "1. ledna 2025", "17 Sep. 2023"
   `(?i)\\b\\d{1,2}\\.?\\s+(?:${alt})\\.?\\s+\\d{4}\\b`,
   // b. Month[.] DD[,] YYYY — "March 7, 2023" (US format)
@@ -200,7 +209,8 @@ const buildDatePatternsFromMonths = (
   // f. DD de Month[.] [de] YYYY — Spanish "7 de enero de 2025"
   `(?i)\\b\\d{1,2}\\s+de\\s+(?:${alt})\\.?` +
     `(?:\\s+de)?\\s+\\d{4}\\b`,
-];
+  ];
+};
 
 /** Cached promise for date patterns. Loaded once. */
 let datePatternPromise: Promise<string[]> | null = null;
@@ -235,10 +245,11 @@ export const getDatePatterns = (): Promise<string[]> => {
 };
 
 /** Date pattern metadata (all are score 1 dates). */
-export const DATE_PATTERN_META: RegexMeta = {
-  label: "date",
-  score: 1,
-};
+export const DATE_PATTERN_META: Readonly<RegexMeta> =
+  Object.freeze({
+    label: "date",
+    score: 1,
+  });
 
 // ── Public API ──────────────────────────────────────
 
