@@ -3,14 +3,20 @@ import {
   findCoreferenceSpans,
 } from "./detectors/coreference";
 import { scanExact, scanFuzzy } from "./detectors/gazetteer";
-import { detectNameCorpus } from "./detectors/names";
+import {
+  detectNameCorpus,
+  initNameCorpus,
+} from "./detectors/names";
 import { processRegexMatches } from "./detectors/regex";
 import { processLegalFormMatches } from "./detectors/legal-forms";
 import { processTriggerMatches } from "./detectors/triggers";
 import { processDenyListMatches } from "./detectors/deny-list";
 import { processAddressSeeds } from "./detectors/address-seeds";
 import { boostNearMissEntities } from "./filters/confidence-boost";
-import { filterFalsePositives } from "./filters/false-positives";
+import {
+  filterFalsePositives,
+  loadGenericRoles,
+} from "./filters/false-positives";
 import type { Entity, GazetteerEntry, PipelineConfig } from "./types";
 import {
   buildUnifiedSearch,
@@ -131,6 +137,11 @@ export const runPipeline = async (
     onProgress?.(step, detail);
   };
 
+  // Ensure generic-roles data is loaded before
+  // filterFalsePositives runs. This is a no-op if
+  // buildDenyList already loaded it.
+  await loadGenericRoles();
+
   const search =
     cachedSearch ?? (await getCachedSearch(config));
 
@@ -181,6 +192,7 @@ export const runPipeline = async (
     config.enableNameCorpus &&
     !config.enableDenyList
   ) {
+    await initNameCorpus();
     nameCorpusEntities = detectNameCorpus(fullText);
     log(
       "name-corpus",

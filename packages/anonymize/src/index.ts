@@ -64,7 +64,10 @@ export {
   extractDefinedTerms,
   findCoreferenceSpans,
 } from "./detectors/coreference";
-export { detectNameCorpus } from "./detectors/names";
+export {
+  detectNameCorpus,
+  initNameCorpus,
+} from "./detectors/names";
 
 // ── Deny List Detector ──────────────────────────
 export {

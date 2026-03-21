@@ -1,0 +1,17 @@
+{
+  "_comment": "Known abbreviations and institutional acronyms that should never be flagged as PII.",
+  "words": [
+    "amu",
+    "bic",
+    "čr",
+    "čssr",
+    "dph",
+    "eu",
+    "gdpr",
+    "ldn",
+    "mfčr",
+    "mpsv",
+    "sr",
+    "škola"
+  ]
+}
