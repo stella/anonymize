@@ -195,9 +195,6 @@
     "centimes",
     "dollars",
     "cents",
-    "pounds",
-    "pence",
-    "penny",
     "zł",
     "złotych",
     "złote",
@@ -219,7 +216,6 @@
     "Fr.",
     "Franken",
     "Rappen",
-    "лв",
-    "kn"
+    "лв"
   ]
 }
