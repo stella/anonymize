@@ -152,6 +152,7 @@ const STOPWORDS: ReadonlySet<string> = new Set([
   "ein",
   "eine",
   "fur",
+  "für",
   "hat",
   "ich",
   "ist",
@@ -175,8 +176,21 @@ const STOPWORDS: ReadonlySet<string> = new Set([
   "recht",
   "fall",
   "ware",
+  "wäre",
   "leben",
   "arbeit",
+  // German legal terms (accented + unaccented; AC is
+  // case-insensitive but does not strip diacritics)
+  "verfugung",
+  "verfügung",
+  "klager",
+  "kläger",
+  "beklagter",
+  // "Richter" = "judge" in German. Intentionally a
+  // stopword: false-positive rate as a common noun in
+  // German legal text far outweighs the false-negative
+  // risk of missing it as a surname.
+  "richter",
   // German common nouns (all nouns are capitalized)
   "satz",
   "kosten",
