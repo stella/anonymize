@@ -120,7 +120,7 @@ export const REGEX_PATTERNS: readonly string[] = [
   // 16: Italian codice fiscale
   `\\b[A-Z]{6}\\d{2}[ABCDEHLMPRST]\\d{2}[A-Z]\\d{3}[A-Z]\\b`,
   // 17: Spanish DNI (consistent separators)
-  `\\b(?:\\d{1,2}\\.\\d{3}\\.\\d{3}|\\d{7,8})-?[A-Z]\\b`,
+  `\\b(?:\\d{1,2}\\.\\d{3}\\.\\d{3}-[A-Z]|\\d{7,8}-?[A-Z])\\b`,
   // 18: Spanish NIE
   `\\b[XYZ]-?\\d{7}-?[A-Z]\\b`,
   // 19: Swedish personnummer (12-digit)
@@ -153,7 +153,7 @@ export const REGEX_META: readonly RegexMeta[] = [
   { label: "national identification number", score: 0.9 },
   { label: "national identification number", score: 0.95 },
   { label: "national identification number", score: 0.9 },
-  { label: "national identification number", score: 1 },
+  { label: "national identification number", score: 0.95 },
   { label: "social security number", score: 0.9 },
 ];
 
