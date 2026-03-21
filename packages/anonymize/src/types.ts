@@ -176,4 +176,5 @@ export const DEFAULT_ENTITY_LABELS = [
   "registration number",
   "credit card number",
   "passport number",
+  "monetary amount",
 ] as const;
