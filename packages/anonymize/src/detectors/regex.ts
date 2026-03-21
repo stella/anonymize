@@ -33,10 +33,10 @@ const POST_NOMINAL = POST_NOMINALS.toSorted(
   .join("|");
 
 // biome-ignore lint/security/noSecrets: diacritics char class
-const UPPER_CZ = "A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ";
+const UPPER_EXTENDED = "A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽÀÈÌÒÙ";
 // biome-ignore lint/security/noSecrets: diacritics char class
-const LOWER_CZ = "a-záčďéěíňóřšťúůýžäöüß";
-const NAME_WORD = `[${UPPER_CZ}][${LOWER_CZ}]+`;
+const LOWER_EXTENDED = "a-záčďéěíňóřšťúůýžäöüßàèìòù";
+const NAME_WORD = `[${UPPER_EXTENDED}][${LOWER_EXTENDED}]+`;
 
 const PARTICLE =
   `(?:van der|van den|de la|della|` +
@@ -117,6 +117,18 @@ export const REGEX_PATTERNS: readonly string[] = [
   `\\+36[\\s.\\-]?1[\\s.\\-]?\\d{3}[\\s.\\-]?\\d{4}\\b`,
   // 15: Hungarian adószám (tax ID)
   `\\b\\d{8}-\\d-\\d{2}\\b`,
+  // 16: Italian codice fiscale
+  `\\b[A-Z]{6}\\d{2}[A-Z]\\d{2}[A-Z]\\d{3}[A-Z]\\b`,
+  // 17: Spanish DNI
+  `\\b\\d{2}\\.?\\d{3}\\.?\\d{3}-?[A-Z]\\b`,
+  // 18: Spanish NIE
+  `\\b[XYZ]-?\\d{7}-?[A-Z]\\b`,
+  // 19: Swedish personnummer (12-digit)
+  `\\b\\d{8}-\\d{4}\\b`,
+  // 20: Romanian CNP
+  `\\b[1-8]\\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\\d|3[01])\\d{6}\\b`,
+  // 21: French NIR (social security)
+  `\\b[12]\\s?\\d{2}\\s?\\d{2}\\s?\\d{2}\\s?\\d{3}\\s?\\d{3}\\s?\\d{2}\\b`,
 ];
 
 /** Parallel metadata. Index = pattern index. */
@@ -137,6 +149,12 @@ export const REGEX_META: readonly RegexMeta[] = [
   { label: "bank account number", score: 0.95 },
   { label: "phone number", score: 0.9 },
   { label: "tax identification number", score: 0.95 },
+  { label: "tax identification number", score: 1 },
+  { label: "national identification number", score: 1 },
+  { label: "national identification number", score: 1 },
+  { label: "national identification number", score: 1 },
+  { label: "national identification number", score: 1 },
+  { label: "social security number", score: 1 },
 ];
 
 // ── Dynamic date patterns (22 languages) ────────────
