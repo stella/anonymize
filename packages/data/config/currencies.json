@@ -1,5 +1,5 @@
 {
-  "_comment": "ISO 4217 currency codes and symbols for monetary amount detection.",
+  "_comment": "ISO 4217 currency codes (active + recently withdrawn, e.g. HRK, for historical document support) and common currency symbols for monetary amount detection.",
   "codes": [
     "AED",
     "AFN",
@@ -178,6 +178,7 @@
     "₹",
     "₺",
     "₼",
-    "₽"
+    "₽",
+    "₾"
   ]
 }
