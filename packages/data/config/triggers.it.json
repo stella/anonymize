@@ -49,7 +49,7 @@
     "trigger": "residente in"
   },
   {
-    "label": "date",
+    "label": "date of birth",
     "strategy": {
       "count": 4,
       "type": "n-words"
@@ -57,7 +57,7 @@
     "trigger": "nata il"
   },
   {
-    "label": "date",
+    "label": "date of birth",
     "strategy": {
       "count": 4,
       "type": "n-words"

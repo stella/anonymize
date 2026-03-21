@@ -211,13 +211,6 @@
     "strategy": {
       "type": "company-id-value"
     },
-    "trigger": "CIF"
-  },
-  {
-    "label": "tax identification number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "NIF"
+    "trigger": "NIP"
   }
 ]

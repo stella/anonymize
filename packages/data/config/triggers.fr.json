@@ -42,7 +42,7 @@
     "trigger": "siège social"
   },
   {
-    "label": "date",
+    "label": "date of birth",
     "strategy": {
       "count": 4,
       "type": "n-words"
@@ -50,7 +50,7 @@
     "trigger": "né le"
   },
   {
-    "label": "date",
+    "label": "date of birth",
     "strategy": {
       "count": 4,
       "type": "n-words"

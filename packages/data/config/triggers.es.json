@@ -42,7 +42,7 @@
     "trigger": "representada por"
   },
   {
-    "label": "date",
+    "label": "date of birth",
     "strategy": {
       "count": 5,
       "type": "n-words"
@@ -50,7 +50,7 @@
     "trigger": "nacido el"
   },
   {
-    "label": "date",
+    "label": "date of birth",
     "strategy": {
       "count": 5,
       "type": "n-words"
