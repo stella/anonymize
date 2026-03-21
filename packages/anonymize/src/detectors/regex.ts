@@ -118,11 +118,11 @@ export const REGEX_PATTERNS: readonly string[] = [
   // 15: Hungarian adószám (tax ID)
   `\\b\\d{8}-\\d-\\d{2}\\b`,
   // 16: Italian codice fiscale
-  `\\b[A-Z]{6}\\d{2}[ABCDEHLMPRST]\\d{2}[A-Z]\\d{3}[A-Z]\\b`,
+  `\\b[A-Z]{6}\\d{2}[ABCDEHLMPRST](?:0[1-9]|[12]\\d|3[01]|4[1-9]|[56]\\d|7[01])[A-Z]\\d{3}[A-Z]\\b`,
   // 17: Spanish DNI (consistent separators)
   `\\b(?:\\d{1,2}\\.\\d{3}\\.\\d{3}-[A-Z]|\\d{7,8}-?[A-Z])\\b`,
-  // 18: Spanish NIE
-  `\\b[XYZ]-?\\d{7}-?[A-Z]\\b`,
+  // 18: Spanish NIE (consistent separators)
+  `\\b(?:[XYZ]-\\d{7}-[A-Z]|[XYZ]\\d{7}[A-Z])\\b`,
   // 19: Swedish personnummer (12-digit)
   `\\b\\d{8}-\\d{4}\\b`,
   // 20: Romanian CNP
@@ -149,7 +149,7 @@ export const REGEX_META: readonly RegexMeta[] = [
   { label: "bank account number", score: 0.95 },
   { label: "phone number", score: 0.9 },
   { label: "tax identification number", score: 0.95 },
-  { label: "tax identification number", score: 0.95 },
+  { label: "national identification number", score: 0.95 },
   { label: "national identification number", score: 0.9 },
   { label: "national identification number", score: 0.95 },
   { label: "national identification number", score: 0.9 },
