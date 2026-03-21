@@ -1,0 +1,12 @@
+[
+  {
+    "label": "(nachfolgend \"X\") or (im Folgenden \"X\")",
+    "pattern": "\\((?:nachfolgend|im\\s+Folgenden)\\s+[„\"'‚]([^\"'\"\"]+)[\"\"']\\)",
+    "flags": "gi"
+  },
+  {
+    "label": "nachfolgend \"X\" without parens",
+    "pattern": "(?:nachfolgend|im\\s+Folgenden)\\s+[„\"'‚]([^\"'\"\"]+)[\"\"']",
+    "flags": "gi"
+  }
+]
