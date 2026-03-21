@@ -74,14 +74,19 @@ const HONORIFIC_ALT = [...HONORIFICS]
   })
   .join("|");
 
-// ── Pattern metadata ────────────────────────────────
-// Parallel arrays: PATTERNS[i] ↔ META[i]
-// Indexed by match.pattern for O(1) lookup.
+// ── Pattern definitions ─────────────────────────────
 
 export type RegexMeta = {
   label: string;
   score: number;
   /** Post-match stdnum validator for confirmation. */
+  validator?: Validator;
+};
+
+type RegexDef = {
+  pattern: string;
+  label: string;
+  score: number;
   validator?: Validator;
 };
 
@@ -311,9 +316,125 @@ const STDNUM_ENTRIES: readonly StdnumEntry[] = [
   toEntry(lu.vat, "tax identification number", 0.95),
 ].filter((e): e is StdnumEntry => e !== null);
 
+// ── Named pattern definitions ────────────────────────
+
+const TITLED_PERSON: RegexDef = {
+  pattern:
+    `(?:${TITLE_PREFIX})` +
+    `(?:${SP}+(?:${TITLE_PREFIX}))*` +
+    `${SP}+` +
+    `(?:${NAME_WORD})` +
+    `(?:${SP}{1,4}(?:${PARTICLE}${SP}+)?` +
+    `${NAME_WORD}){1,3}` +
+    `(?:,?${SP}+(?:${POST_NOMINAL}))?`,
+  label: "person",
+  score: 0.95,
+};
+
+const HONORIFIC_PERSON: RegexDef = {
+  pattern:
+    `(?:${HONORIFIC_ALT})` +
+    `\\.?${SP}+${NAME_WORD}` +
+    `(?:(?:${SP}|-){1,2}(?:${PARTICLE}${SP}+)?` +
+    `${NAME_WORD}){0,3}` +
+    `(?:${SP}+(?:QC|KC|SC|LJ|AG))?`,
+  label: "person",
+  score: 0.95,
+};
+
+const IBAN: RegexDef = {
+  pattern:
+    `\\b[A-Z]{2}\\d{2}\\s?[\\dA-Z]{4}\\s?[\\dA-Z]{4}` +
+    `\\s?[\\dA-Z]{4}\\s?[\\dA-Z]{4}` +
+    `\\s?[\\dA-Z]{0,14}\\b`,
+  label: "iban",
+  score: 1,
+};
+
+const EMAIL: RegexDef = {
+  pattern:
+    `\\b[\\w.+\\-]+@[\\w\\-]+(?:\\.[\\w\\-]+)+\\b`,
+  label: "email address",
+  score: 1,
+};
+
+const INTL_PHONE: RegexDef = {
+  pattern:
+    `\\+\\d{1,3}[\\s.\\-]?\\(?\\d{2,4}\\)?` +
+    `[\\s.\\-]?\\d{3}[\\s.\\-]?\\d{2,4}` +
+    `[\\s.\\-]?\\d{0,4}\\b`,
+  label: "phone number",
+  score: 1,
+};
+
+const CZ_PHONE: RegexDef = {
+  pattern:
+    `\\b[67]\\d{2}[\\s.\\-]?\\d{3}[\\s.\\-]?\\d{3}` +
+    `(?![\\s.\\-]?\\d*/\\d)\\b`,
+  label: "phone number",
+  score: 0.9,
+};
+
+const CREDIT_CARD: RegexDef = {
+  pattern:
+    `\\b(?:4\\d{3}|5[1-5]\\d{2}|3[47]\\d{2})` +
+    `[\\s.\\-]?\\d{4}[\\s.\\-]?\\d{4}` +
+    `[\\s.\\-]?\\d{2,4}\\b`,
+  label: "credit card number",
+  score: 1,
+};
+
+const CZ_BIRTH_NUMBER: RegexDef = {
+  pattern: `\\b\\d{6}/\\d{3,4}\\b`,
+  label: "czech birth number",
+  score: 1,
+};
+
+const DATE_NUMERIC: RegexDef = {
+  pattern:
+    `\\b(?:\\d{1,2}[./]\\d{1,2}[./]\\d{2,4}` +
+    `|\\d{4}-\\d{2}-\\d{2})\\b`,
+  label: "date",
+  score: 1,
+};
+
+const DATE_CZ_SPACED: RegexDef = {
+  pattern:
+    `\\b\\d{1,2}\\.\\s+\\d{1,2}\\.\\s+\\d{4}\\b`,
+  label: "date",
+  score: 1,
+};
+
+const IP_ADDRESS: RegexDef = {
+  pattern:
+    `\\b(?:(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.){3}` +
+    `(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\b`,
+  label: "ip address",
+  score: 1,
+};
+
+const CZ_BANK_ACCOUNT: RegexDef = {
+  pattern:
+    `\\b(?:\\d{1,6}-)?\\d{6,10}/\\d{4}(?!\\d)`,
+  label: "bank account number",
+  score: 0.95,
+};
+
+// Hungarian Budapest landline (+36 1 XXX XXXX).
+// 2+ digit area codes handled by INTL_PHONE.
+const HU_LANDLINE: RegexDef = {
+  pattern:
+    `\\+36[\\s.\\-]?1[\\s.\\-]?\\d{3}` +
+    `[\\s.\\-]?\\d{4}\\b`,
+  label: "phone number",
+  score: 0.9,
+};
+
+// ── Collected definitions ────────────────────────────
+
 /**
- * Static PII regex patterns. Scanned in a single pass
- * by @stll/regex-set (Rust regex-automata DFA).
+ * All static PII regex definitions. Scanned in a
+ * single pass by @stll/regex-set (Rust DFA).
  *
  * Patterns 0-12: hand-written (person names, IBAN,
  * email, phone, credit card, birth number, dates,
@@ -329,80 +450,39 @@ const STDNUM_ENTRIES: readonly StdnumEntry[] = [
  * dynamically from date-months.json via
  * `getDatePatterns()`.
  */
-export const REGEX_PATTERNS: readonly string[] = [
-  // 0: titled person (Czech/German)
-  `(?:${TITLE_PREFIX})` +
-    `(?:${SP}+(?:${TITLE_PREFIX}))*` +
-    `${SP}+` +
-    `(?:${NAME_WORD})` +
-    `(?:${SP}{1,4}(?:${PARTICLE}${SP}+)?${NAME_WORD}){1,3}` +
-    `(?:,?${SP}+(?:${POST_NOMINAL}))?`,
-  // 1: honorific person (from honorifics.json)
-  `(?:${HONORIFIC_ALT})` +
-    `\\.?${SP}+${NAME_WORD}` +
-    `(?:(?:${SP}|-){1,2}(?:${PARTICLE}${SP}+)?` +
-    `${NAME_WORD}){0,3}` +
-    `(?:${SP}+(?:QC|KC|SC|LJ|AG))?`,
-  // 2: IBAN
-  `\\b[A-Z]{2}\\d{2}\\s?[\\dA-Z]{4}\\s?[\\dA-Z]{4}` +
-    `\\s?[\\dA-Z]{4}\\s?[\\dA-Z]{4}` +
-    `\\s?[\\dA-Z]{0,14}\\b`,
-  // 3: email
-  `\\b[\\w.+\\-]+@[\\w\\-]+(?:\\.[\\w\\-]+)+\\b`,
-  // 4: international phone
-  `\\+\\d{1,3}[\\s.\\-]?\\(?\\d{2,4}\\)?` +
-    `[\\s.\\-]?\\d{3}[\\s.\\-]?\\d{2,4}` +
-    `[\\s.\\-]?\\d{0,4}\\b`,
-  // 5: domestic CZ/SK mobile phone (6xx/7xx)
-  `\\b[67]\\d{2}[\\s.\\-]?\\d{3}[\\s.\\-]?\\d{3}` +
-    `(?![\\s.\\-]?\\d*/\\d)\\b`,
-  // 6: credit card
-  `\\b(?:4\\d{3}|5[1-5]\\d{2}|3[47]\\d{2})` +
-    `[\\s.\\-]?\\d{4}[\\s.\\-]?\\d{4}` +
-    `[\\s.\\-]?\\d{2,4}\\b`,
-  // 7: czech birth number
-  `\\b\\d{6}/\\d{3,4}\\b`,
-  // 8: date DD.MM.YYYY or YYYY-MM-DD
-  `\\b(?:\\d{1,2}[./]\\d{1,2}[./]\\d{2,4}` +
-    `|\\d{4}-\\d{2}-\\d{2})\\b`,
-  // 9: Czech spaced dates "1. 1. 2025"
-  `\\b\\d{1,2}\\.\\s+\\d{1,2}\\.\\s+\\d{4}\\b`,
-  // 10: IP address
-  `\\b(?:(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.){3}` +
-    `(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\b`,
-  // 11: Czech bank account (optional prefix)
-  `\\b(?:\\d{1,6}-)?\\d{6,10}/\\d{4}(?!\\d)`,
-  // 12: Hungarian Budapest landline (+36 1 XXX XXXX)
-  // 2+ digit area codes handled by pattern 4 (international)
-  `\\+36[\\s.\\-]?1[\\s.\\-]?\\d{3}[\\s.\\-]?\\d{4}\\b`,
-  // ── stdnum-derived patterns (13+) ──────────────────
-  // Built from @stll/stdnum via toRegex(). Each has
-  // a post-match validator for false-positive filtering.
-  ...STDNUM_ENTRIES.map((e) => e.pattern),
+const ALL_REGEX_DEFS: readonly RegexDef[] = [
+  TITLED_PERSON,
+  HONORIFIC_PERSON,
+  IBAN,
+  EMAIL,
+  INTL_PHONE,
+  CZ_PHONE,
+  CREDIT_CARD,
+  CZ_BIRTH_NUMBER,
+  DATE_NUMERIC,
+  DATE_CZ_SPACED,
+  IP_ADDRESS,
+  CZ_BANK_ACCOUNT,
+  HU_LANDLINE,
+  ...STDNUM_ENTRIES,
 ];
 
+/** Flat pattern array for text-search. */
+export const REGEX_PATTERNS: readonly string[] =
+  ALL_REGEX_DEFS.map((d) => d.pattern);
+
 /** Parallel metadata. Index = pattern index. */
-export const REGEX_META: readonly RegexMeta[] = [
-  { label: "person", score: 0.95 },
-  { label: "person", score: 0.95 },
-  { label: "iban", score: 1 },
-  { label: "email address", score: 1 },
-  { label: "phone number", score: 1 },
-  { label: "phone number", score: 0.9 },
-  { label: "credit card number", score: 1 },
-  { label: "czech birth number", score: 1 },
-  { label: "date", score: 1 },
-  { label: "date", score: 1 },
-  { label: "ip address", score: 1 },
-  { label: "bank account number", score: 0.95 },
-  { label: "phone number", score: 0.9 },
-  // stdnum-derived metadata (parallel to patterns above)
-  ...STDNUM_ENTRIES.map((e) => ({
-    label: e.label,
-    score: e.score,
-    validator: e.validator,
-  })),
-];
+export const REGEX_META: readonly RegexMeta[] =
+  ALL_REGEX_DEFS.map((d): RegexMeta => {
+    const meta: RegexMeta = {
+      label: d.label,
+      score: d.score,
+    };
+    if (d.validator) {
+      meta.validator = d.validator;
+    }
+    return meta;
+  });
 
 // ── Dynamic date patterns (22 languages) ────────────
 
