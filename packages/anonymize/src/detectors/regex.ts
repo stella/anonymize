@@ -149,7 +149,7 @@ export const REGEX_META: readonly RegexMeta[] = [
   { label: "bank account number", score: 0.95 },
   { label: "phone number", score: 0.9 },
   { label: "tax identification number", score: 0.95 },
-  { label: "tax identification number", score: 1 },
+  { label: "tax identification number", score: 0.95 },
   { label: "national identification number", score: 0.9 },
   { label: "national identification number", score: 0.95 },
   { label: "national identification number", score: 0.9 },
