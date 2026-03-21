@@ -52,8 +52,11 @@ export const DICTIONARY_META = {
   },
 
   // ── Countries ──────────────────────────────────────
+  // Known FP overlap: France, Italia, Holland, Malta
+  // are also personal names. Mitigation at matching
+  // layer (span-priority, context disambiguation).
   "countries/translations": {
-    label: "address",
+    label: "country",
     category: "Places",
     country: null,
   },
