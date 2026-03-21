@@ -534,7 +534,9 @@ const STOPWORDS: ReadonlySet<string> = new Set([
   "payroll",
   "health",
   "records",
-  "powers",
+  // Note: "powers" moved to PERSON_STOPWORDS — it is a
+  // legitimate English surname (Francis Gary Powers). Global
+  // suppression would also block org/address detection.
   "matters",
   "boards",
   "breach",
@@ -625,6 +627,9 @@ const PERSON_STOPWORDS: ReadonlySet<string> = new Set([
   // person detection; also a common surname (Gerhard Richter).
   // Court-document FP rate dominates in our ICP.
   "richter",
+  // "powers" = legal term ("powers of attorney"). Moved from
+  // global STOPWORDS; also a surname (Francis Gary Powers).
+  "powers",
   // EDGAR contract analysis — round 2
   // Countries
   "ireland",
@@ -634,6 +639,9 @@ const PERSON_STOPWORDS: ReadonlySet<string> = new Set([
   "canada",
   "mexico",
   "brazil",
+  // "india" is occasionally a given name (India Eisley),
+  // but far less common than virginia/georgia/carolina.
+  // Country references dominate in legal/contract text.
   "india",
   "china",
   "japan",
@@ -644,6 +652,11 @@ const PERSON_STOPWORDS: ReadonlySet<string> = new Set([
   // The North/South Carolina FP risk is lower than the recall
   // loss for people actually named Carolina.
   "michigan",
+  // "washington" is also a surname (Denzel Washington), but
+  // unlike "virginia"/"georgia"/"carolina" which are primarily
+  // given names, "Washington" appears overwhelmingly as a
+  // US state/city reference in EDGAR contracts. The FP rate
+  // from state references far exceeds the FN risk.
   "washington",
   "massachusetts",
   "connecticut",
