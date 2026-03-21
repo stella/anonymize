@@ -85,34 +85,6 @@
     "trigger": "company number"
   },
   {
-    "label": "registration number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "SIREN"
-  },
-  {
-    "label": "registration number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "SIRET"
-  },
-  {
-    "label": "registration number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "partita IVA"
-  },
-  {
-    "label": "registration number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "codice fiscale"
-  },
-  {
     "label": "tax identification number",
     "strategy": {
       "type": "company-id-value"
