@@ -58,13 +58,32 @@ const loadDefinitionPatterns =
   };
 
 let _cachedPatterns: DefinitionPattern[] | null = null;
+let _cachedPatternsPromise: Promise<
+  DefinitionPattern[]
+> | null = null;
 
 const getDefinitionPatterns =
   async (): Promise<DefinitionPattern[]> => {
     if (_cachedPatterns) {
       return _cachedPatterns;
     }
-    _cachedPatterns = await loadDefinitionPatterns();
+    if (_cachedPatternsPromise) {
+      return _cachedPatternsPromise;
+    }
+    _cachedPatternsPromise = loadDefinitionPatterns();
+    const patterns = await _cachedPatternsPromise;
+    if (patterns.length === 0) {
+      // All loads failed; don't cache so a retry is
+      // possible after the data package is installed.
+      _cachedPatternsPromise = null;
+      console.warn(
+        "[anonymize] coreference: no definition " +
+          "patterns loaded; coreference detection " +
+          "will be inactive",
+      );
+      return patterns;
+    }
+    _cachedPatterns = patterns;
     return _cachedPatterns;
   };
 
