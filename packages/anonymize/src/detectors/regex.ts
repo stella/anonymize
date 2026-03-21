@@ -117,9 +117,9 @@ const PATTERNS: readonly string[] = [
     `September|October|November|December)` +
     `(?:\\s+\\d{4})?\\b`,
   // 15: monetary amount (leading symbol)
-  `(?:[$€£¥₽])\\s?\\d{1,3}(?:[,.\'\\s]\\d{3})*(?:[.,]\\d{1,2})?\\b`,
+  `(?:[$€£¥₽])[^\\S\\n\\t]?\\d{1,3}(?:[,.\'[^\\S\\n\\t]]\\d{3})*(?:[.,]\\d{1,2})?\\b`,
   // 16: monetary amount (trailing code)
-  `\\b\\d{1,3}(?:[,.\'\\s]\\d{3})*(?:[.,]\\d{2})?\\s?` +
+  `\\b\\d{1,3}(?:[,.\'[^\\S\\n\\t]]\\d{3})*(?:[.,]\\d{2})?[^\\S\\n\\t]?` +
     `(?:USD|EUR|GBP|CZK|PLN|HUF|CHF|SEK|NOK|DKK|RON|JPY|CNY)\\b`,
   // 17: IP address
   `\\b(?:(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.){3}` +
