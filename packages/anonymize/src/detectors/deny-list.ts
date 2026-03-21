@@ -99,7 +99,6 @@ let _stopwordsPromise: Promise<ReadonlySet<string>> | null =
   null;
 
 const loadStopwords = (): Promise<ReadonlySet<string>> => {
-  if (_stopwords) return Promise.resolve(_stopwords);
   if (_stopwordsPromise) return _stopwordsPromise;
   _stopwordsPromise = (async () => {
     try {
