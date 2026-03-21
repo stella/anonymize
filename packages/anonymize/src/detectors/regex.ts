@@ -33,6 +33,16 @@ const escapeRegex = (s: string): string =>
   // eslint-disable-next-line no-useless-escape
   s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+/**
+ * Escape for use inside a regex character class `[...]`.
+ * In addition to the standard metacharacters, this also
+ * escapes `-` (range), `]` (close), and `^` (negation)
+ * which are metacharacters only inside char classes.
+ */
+const escapeCharClass = (s: string): string =>
+  // eslint-disable-next-line no-useless-escape
+  s.replace(/[\]\\^-]/g, "\\$&");
+
 const TITLE_PREFIX = TITLE_PREFIXES.toSorted(
   (a, b) => b.length - a.length,
 )
@@ -532,7 +542,7 @@ const buildCurrencyPatterns = (
   data: CurrenciesData,
 ): string[] => {
   const symbols = data.symbols
-    .map(escapeRegex)
+    .map(escapeCharClass)
     .join("");
   const codes = data.codes.join("|");
 
@@ -617,7 +627,7 @@ export const processRegexMatches = (
   allMatches: Match[],
   sliceStart: number,
   sliceEnd: number,
-  metaOverride?: readonly RegexMeta[],
+  metaOverride: readonly RegexMeta[],
 ): Entity[] => {
   const results: Entity[] = [];
 
@@ -628,7 +638,7 @@ export const processRegexMatches = (
     }
 
     const localIdx = idx - sliceStart;
-    const meta = (metaOverride ?? REGEX_META)[localIdx];
+    const meta = metaOverride[localIdx];
     if (!meta) {
       continue;
     }
