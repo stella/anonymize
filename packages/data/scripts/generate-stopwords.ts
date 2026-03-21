@@ -63,7 +63,7 @@ for (const lang of EU_LANGUAGES) {
 
   const before = allWords.size;
   for (const word of words) {
-    const lower = word.toLowerCase();
+    const lower = word.toLowerCase().trim();
     if (lower.length > 0) {
       allWords.add(lower);
     }

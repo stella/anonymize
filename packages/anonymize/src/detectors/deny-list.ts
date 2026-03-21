@@ -164,7 +164,7 @@ const PERSON_STOPWORDS: ReadonlySet<string> = new Set([
   "indiana",
   "ohio",
   "israel",
-  // EU demonyms (never person names)
+  // European demonyms (never person names)
   "austrian",
   "belgian",
   "british",
