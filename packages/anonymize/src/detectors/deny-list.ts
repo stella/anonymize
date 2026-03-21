@@ -58,14 +58,30 @@ const ALLOW_LIST: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * Names from the first-name corpus (lowercased) that also
+ * appear in the stopwords-iso dataset. These must be kept
+ * out of global STOPWORDS so that person detection is not
+ * silently suppressed for real given names (e.g. "Ana",
+ * "Ali", "Mia", "Sara").
+ */
+const FIRST_NAME_EXCLUSIONS: ReadonlySet<string> = new Set(
+  NAME_CORPUS_FIRST_NAMES.map((n) => n.toLowerCase()),
+);
+
+/**
  * Global stopwords: common words across 23 EU languages
  * sourced from the stopwords-iso dataset (MIT license).
  * Checked case-insensitively against matches.
  *
+ * Entries that collide with the first-name corpus are
+ * excluded so they can still be detected as person names.
+ *
  * Regenerate: bun packages/data/scripts/generate-stopwords.ts
  */
 const STOPWORDS: ReadonlySet<string> = new Set(
-  STOPWORDS_LIST as string[],
+  (STOPWORDS_LIST as string[]).filter(
+    (w) => !FIRST_NAME_EXCLUSIONS.has(w),
+  ),
 );
 
 /**
@@ -107,6 +123,8 @@ const PERSON_STOPWORDS: ReadonlySet<string> = new Set([
   "ohio",
   "israel",
   // EU demonyms (never person names)
+  "austrian",
+  "belgian",
   "british",
   "bulgarian",
   "croatian",
