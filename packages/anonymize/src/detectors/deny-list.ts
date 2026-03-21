@@ -108,16 +108,19 @@ const loadStopwords = (): Promise<ReadonlySet<string>> => {
       const list = (mod.default ?? []).filter(
         (w: string) => !FIRST_NAME_EXCLUSIONS.has(w),
       );
-      _stopwords = new Set(list);
+      const set: ReadonlySet<string> = new Set(list);
+      _stopwords = set;
+      return set;
     } catch (err) {
       console.warn(
         "[anonymize] Failed to load stopwords.json"
           + " — stopword filtering disabled:",
         err,
       );
-      _stopwords = new Set();
+      const empty: ReadonlySet<string> = new Set();
+      _stopwords = empty;
+      return empty;
     }
-    return _stopwords;
   })();
   return _stopwordsPromise;
 };

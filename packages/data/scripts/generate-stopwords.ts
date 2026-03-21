@@ -61,7 +61,6 @@ for (const lang of EU_LANGUAGES) {
     continue;
   }
 
-  const before = allWords.size;
   for (const word of words) {
     const lower = word.toLowerCase().trim();
     if (lower.length > 0) {
@@ -69,7 +68,7 @@ for (const lang of EU_LANGUAGES) {
     }
   }
 
-  stats.push({ lang, count: allWords.size - before });
+  stats.push({ lang, count: words.length });
 }
 
 // ── Output ──────────────────────────────────────────
