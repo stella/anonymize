@@ -224,6 +224,9 @@ const STOPWORDS: ReadonlySet<string> = new Set([
   "rolle",
   "grund",
   "fehlen",
+  // "schnabel" = beak/nozzle (noun) — intentionally suppressed;
+  // also a German surname (e.g. Arthur Schnabel). Court-document
+  // FP rate dominates in our ICP.
   "schnabel",
   "cloud",
   "label",
