@@ -1,7 +1,5 @@
 import type { Match } from "@stll/text-search";
 
-import STOPWORDS_LIST from "@stll/anonymize-data/config/stopwords.json";
-
 import {
   NAME_CORPUS_FIRST_NAMES,
   NAME_CORPUS_SURNAMES,
@@ -78,11 +76,29 @@ const FIRST_NAME_EXCLUSIONS: ReadonlySet<string> = new Set(
  *
  * Regenerate: bun packages/data/scripts/generate-stopwords.ts
  */
-const STOPWORDS: ReadonlySet<string> = new Set(
-  (STOPWORDS_LIST as string[]).filter(
-    (w) => !FIRST_NAME_EXCLUSIONS.has(w),
-  ),
-);
+let _stopwords: ReadonlySet<string> | null = null;
+
+const loadStopwords = async (): Promise<
+  ReadonlySet<string>
+> => {
+  if (_stopwords) return _stopwords;
+  try {
+    const mod: { default?: string[] } = await import(
+      "@stll/anonymize-data/config/stopwords.json"
+    );
+    const list = (mod.default ?? []).filter(
+      (w: string) => !FIRST_NAME_EXCLUSIONS.has(w),
+    );
+    _stopwords = new Set(list);
+  } catch {
+    _stopwords = new Set();
+  }
+  return _stopwords;
+};
+
+/** Sync accessor — returns empty set before init. */
+const getStopwords = (): ReadonlySet<string> =>
+  _stopwords ?? new Set();
 
 /**
  * Words that are valid in other labels (address, org)
@@ -201,6 +217,9 @@ export type DenyListData = {
 export const buildDenyList = async (
   config: DenyListConfig,
 ): Promise<DenyListData | null> => {
+  // Pre-load stopwords so getStopwords() is populated
+  // before processDenyListMatches runs synchronously.
+  await loadStopwords();
   const dataModule = await loadDataModule();
   if (!dataModule) {
     return null;
@@ -467,7 +486,7 @@ export const processDenyListMatches = (
       match.end,
     );
     const keyword = matchText.toLowerCase();
-    if (STOPWORDS.has(keyword) || ALLOW_LIST.has(keyword)) {
+    if (getStopwords().has(keyword) || ALLOW_LIST.has(keyword)) {
       continue;
     }
 
@@ -676,7 +695,7 @@ const extendPersonName = (
       }
 
       // Don't extend into stopwords
-      if (STOPWORDS.has(stripped.toLowerCase())) {
+      if (getStopwords().has(stripped.toLowerCase())) {
         break;
       }
 
