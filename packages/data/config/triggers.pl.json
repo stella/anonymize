@@ -7,7 +7,7 @@
     "trigger": "NIP"
   },
   {
-    "label": "identity card number",
+    "label": "national identification number",
     "strategy": {
       "type": "company-id-value"
     },

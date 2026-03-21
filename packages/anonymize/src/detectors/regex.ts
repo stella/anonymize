@@ -123,7 +123,7 @@ const PATTERNS: readonly string[] = [
   `\\b(?:\\d{1,6}-)?\\d{6,10}/\\d{4}(?!\\d)`,
   // 17: Hungarian Budapest landline (+36 1 XXX XXXX)
   // 2+ digit area codes handled by pattern 4 (international)
-  `\\+36[\\s\\-]?1[\\s\\-]?\\d{3}[\\s\\-]?\\d{3,4}\\b`,
+  `\\+36[\\s.\\-]?1[\\s.\\-]?\\d{3}[\\s.\\-]?\\d{3,4}\\b`,
   // 18: Hungarian adószám (tax ID)
   `\\b\\d{8}-\\d-\\d{2}\\b`,
 ];
