@@ -118,7 +118,7 @@ export const REGEX_PATTERNS: readonly string[] = [
   // 15: Hungarian adószám (tax ID)
   `\\b\\d{8}-\\d-\\d{2}\\b`,
   // 16: Italian codice fiscale
-  `\\b[A-Z]{6}\\d{2}[A-Z]\\d{2}[A-Z]\\d{3}[A-Z]\\b`,
+  `\\b[A-Z]{6}\\d{2}[ABCDEHLMPRST]\\d{2}[A-Z]\\d{3}[A-Z]\\b`,
   // 17: Spanish DNI
   `\\b\\d{1,2}\\.?\\d{3}\\.?\\d{3}-?[A-Z]\\b`,
   // 18: Spanish NIE
@@ -150,8 +150,8 @@ export const REGEX_META: readonly RegexMeta[] = [
   { label: "phone number", score: 0.9 },
   { label: "tax identification number", score: 0.95 },
   { label: "tax identification number", score: 1 },
-  { label: "national identification number", score: 1 },
-  { label: "national identification number", score: 1 },
+  { label: "national identification number", score: 0.9 },
+  { label: "national identification number", score: 0.95 },
   { label: "national identification number", score: 0.9 },
   { label: "national identification number", score: 1 },
   { label: "social security number", score: 0.9 },
