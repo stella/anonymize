@@ -243,13 +243,17 @@ const STOPWORDS: ReadonlySet<string> = new Set([
   "berufung",
   "beschwerde",
   "verfugung",
+  "verfügung",
   "beschluss",
   "verfahren",
   "partei",
   "parteien",
   "gericht",
+  // "Richter" = "judge"; intentional trade-off — see
+  // comment in German common nouns section above.
   "richter",
   "klager",
+  "kläger",
   "beklagter",
   "zeuge",
   "zeugin",
