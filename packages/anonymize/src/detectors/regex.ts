@@ -545,31 +545,40 @@ const buildCurrencyPatterns = (
     .map(escapeCharClass)
     .join("");
 
-  // Build trailing alternation: ISO codes + local
-  // names, sorted longest-first to avoid partial
-  // matches. Local names that contain only ASCII
-  // letters are wrapped in (?i:...) for case-
-  // insensitive matching; abbreviations with non-
-  // ASCII or punctuation (Kč, zł, Fr.) stay
-  // case-sensitive.
-  const trailingParts: string[] = [
-    ...data.codes,
-  ];
+  // Build trailing alternation: ISO codes (case-
+  // sensitive, always uppercase) + local names.
+  // Local names that contain only ASCII letters
+  // are wrapped in (?i:...) for case-insensitive
+  // matching; abbreviations with non-ASCII or
+  // punctuation (Kč, zł, Fr.) stay case-sensitive.
+  // Sorted longest-first to avoid partial matches.
+  const isAsciiAlpha = /^[a-zA-Z\s]+$/;
+
+  type TrailingPart = { len: number; alt: string };
+  const parts: TrailingPart[] = data.codes.map(
+    (code) => ({
+      len: code.length,
+      alt: escapeRegex(code),
+    }),
+  );
+
   if (data.localNames) {
-    trailingParts.push(...data.localNames);
+    for (const name of data.localNames) {
+      const escaped = escapeRegex(name);
+      if (isAsciiAlpha.test(name)) {
+        parts.push({
+          len: name.length,
+          alt: `(?i:${escaped})`,
+        });
+      } else {
+        parts.push({ len: name.length, alt: escaped });
+      }
+    }
   }
 
-  const isAsciiAlpha = /^[a-zA-Z\s]+$/;
-  const trailingAlt = trailingParts
-    .toSorted((a, b) => b.length - a.length)
-    .map((name) => {
-      const escaped = escapeRegex(name);
-      // Written-out names: case-insensitive
-      if (isAsciiAlpha.test(name)) {
-        return `(?i:${escaped})`;
-      }
-      return escaped;
-    })
+  const trailingAlt = parts
+    .toSorted((a, b) => b.len - a.len)
+    .map((p) => p.alt)
     .join("|");
 
   if (!symbols && !trailingAlt) return [];
@@ -594,12 +603,16 @@ const buildCurrencyPatterns = (
   }
 
   // Trailing code/name: 100 USD, 1,000.50 CZK,
-  // 100000 Kč, 500 korun
+  // 100000 Kč, 500 korun, 100 Fr.
+  // Use (?:\b|(?=\s|[.,;!?)]|$)) instead of bare
+  // \b so entries ending in non-word characters
+  // (e.g. "Fr.") still match at word boundaries.
   if (trailingAlt) {
     patterns.push(
       `\\b${NUM}` +
         `(?:[.,]\\d{1,2})?[^\\S\\n\\t]?` +
-        `(?:${trailingAlt})\\b`,
+        `(?:${trailingAlt})` +
+        `(?:\\b|(?=\\s|[.,;!?)]|$))`,
     );
   }
 
