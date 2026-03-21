@@ -119,8 +119,8 @@ export const REGEX_PATTERNS: readonly string[] = [
   `\\b\\d{8}-\\d-\\d{2}\\b`,
   // 16: Italian codice fiscale
   `\\b[A-Z]{6}\\d{2}[ABCDEHLMPRST]\\d{2}[A-Z]\\d{3}[A-Z]\\b`,
-  // 17: Spanish DNI
-  `\\b\\d{1,2}\\.?\\d{3}\\.?\\d{3}-?[A-Z]\\b`,
+  // 17: Spanish DNI (consistent separators)
+  `\\b(?:\\d{1,2}\\.\\d{3}\\.\\d{3}|\\d{7,8})-?[A-Z]\\b`,
   // 18: Spanish NIE
   `\\b[XYZ]-?\\d{7}-?[A-Z]\\b`,
   // 19: Swedish personnummer (12-digit)
@@ -128,7 +128,7 @@ export const REGEX_PATTERNS: readonly string[] = [
   // 20: Romanian CNP
   `\\b[1-8]\\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\\d|3[01])\\d{6}\\b`,
   // 21: French NIR (social security)
-  `\\b[12]\\s?\\d{2}\\s?\\d{2}\\s?\\d{2}\\s?\\d{3}\\s?\\d{3}\\s?\\d{2}\\b`,
+  `\\b[12]${SP}?\\d{2}${SP}?\\d{2}${SP}?\\d{2}${SP}?\\d{3}${SP}?\\d{3}${SP}?\\d{2}\\b`,
 ];
 
 /** Parallel metadata. Index = pattern index. */
