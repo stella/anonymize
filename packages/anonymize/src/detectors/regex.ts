@@ -562,10 +562,18 @@ const buildCurrencyPatterns = (
     }),
   );
 
+  // Minimum length for case-insensitive wrapping.
+  // Short abbreviations like "Ft" (2 chars) stay
+  // case-sensitive to avoid collisions (Ft vs ft/feet).
+  const MIN_CI_LENGTH = 3;
+
   if (data.localNames) {
     for (const name of data.localNames) {
       const escaped = escapeRegex(name);
-      if (isAsciiAlpha.test(name)) {
+      const wrapCI =
+        isAsciiAlpha.test(name) &&
+        name.length >= MIN_CI_LENGTH;
+      if (wrapCI) {
         parts.push({
           len: name.length,
           alt: `(?i:${escaped})`,
