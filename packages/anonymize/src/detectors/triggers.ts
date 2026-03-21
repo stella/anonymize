@@ -61,10 +61,25 @@ export const buildTriggerPatterns = async (): Promise<{
       "@stll/anonymize-data/config/triggers.en.json",
     ),
     tryLoad(
-      "@stll/anonymize-data/config/triggers.pl.json",
+      "@stll/anonymize-data/config/triggers.es.json",
+    ),
+    tryLoad(
+      "@stll/anonymize-data/config/triggers.fr.json",
     ),
     tryLoad(
       "@stll/anonymize-data/config/triggers.hu.json",
+    ),
+    tryLoad(
+      "@stll/anonymize-data/config/triggers.it.json",
+    ),
+    tryLoad(
+      "@stll/anonymize-data/config/triggers.pl.json",
+    ),
+    tryLoad(
+      "@stll/anonymize-data/config/triggers.ro.json",
+    ),
+    tryLoad(
+      "@stll/anonymize-data/config/triggers.sv.json",
     ),
   ]);
 
@@ -236,7 +251,7 @@ const extractValue = (
       }
       const afterSep = raw.slice(sepMatch[0].length);
       const idMatch =
-        /^[A-Z]{0,4}\s?\d[\d\s\-/]{4,}/i.exec(
+        /^[A-Z]{0,6}\s?\d[\d\s\-/]{4,}/i.exec(
           afterSep,
         );
       if (!idMatch) {
