@@ -362,9 +362,9 @@ const EMAIL: RegexDef = {
 // match newlines (prevents cross-line bleeding).
 const INTL_PHONE: RegexDef = {
   pattern:
-    `\\+\\d{1,3}[^\\S\\n.\\-]?\\(?\\d{2,4}\\)?` +
-    `[^\\S\\n.\\-]?\\d{3}[^\\S\\n.\\-]?\\d{2,4}` +
-    `[^\\S\\n.\\-]?\\d{0,4}\\b`,
+    `\\+\\d{1,3}(?:[^\\S\\n]|[.\\-])?\\(?\\d{2,4}\\)?` +
+    `(?:[^\\S\\n]|[.\\-])?\\d{3}(?:[^\\S\\n]|[.\\-])?\\d{2,4}` +
+    `(?:[^\\S\\n]|[.\\-])?\\d{0,4}\\b`,
   label: "phone number",
   score: 1,
 };
@@ -437,7 +437,7 @@ const HU_LANDLINE: RegexDef = {
 // space is specific enough to avoid most false
 // positives.
 const CZ_POSTAL: RegexDef = {
-  pattern: `\\b\\d{3}\\s\\d{2}\\b`,
+  pattern: `\\b\\d{3}[^\\S\\n]\\d{2}\\b`,
   label: "address",
   score: 0.7,
 };

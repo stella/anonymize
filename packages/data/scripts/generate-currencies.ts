@@ -49,7 +49,7 @@ for (const code of CODES) {
           currencyDisplay: "name",
         }).formatToParts(amount);
         const name = parts.find(p => p.type === "currency")?.value;
-        if (name && name.length >= 2 && name.length <= 30) {
+        if (name && name.length >= 3 && name.length <= 30) {
           localNames.add(name.toLowerCase());
         }
       } catch {}
@@ -65,7 +65,7 @@ const filtered = [...localNames]
 const result = {
   _comment: "Auto-generated from CLDR via Intl API. " +
     "Run: bun packages/data/scripts/generate-currencies.ts",
-  codes: CODES.sort(),
+  codes: [...CODES].sort(),
   symbols: [...symbols].sort(),
   localNames: filtered,
 };
