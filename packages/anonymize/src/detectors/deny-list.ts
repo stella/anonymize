@@ -235,7 +235,9 @@ const STOPWORDS: ReadonlySet<string> = new Set([
   "partei",
   "parteien",
   "gericht",
-  "richter",
+  // Note: "richter" moved to PERSON_STOPWORDS — it is one of
+  // the most common German surnames (Gerhard Richter). Global
+  // suppression would also block org/address detection.
   "klager",
   "kläger",
   "beklagter",
@@ -618,6 +620,11 @@ const PERSON_STOPWORDS: ReadonlySet<string> = new Set([
   "university",
   "dry",
   "opportunity",
+  // German legal terms (person-only suppression)
+  // "richter" = judge (noun) — intentionally suppressed for
+  // person detection; also a common surname (Gerhard Richter).
+  // Court-document FP rate dominates in our ICP.
+  "richter",
   // EDGAR contract analysis — round 2
   // Countries
   "ireland",
@@ -632,7 +639,10 @@ const PERSON_STOPWORDS: ReadonlySet<string> = new Set([
   "japan",
   "korea",
   // US states
-  "carolina",
+  // Note: "carolina" omitted — it is a common female given name
+  // (similar to "virginia"/"georgia" removed in a prior pass).
+  // The North/South Carolina FP risk is lower than the recall
+  // loss for people actually named Carolina.
   "michigan",
   "washington",
   "massachusetts",
