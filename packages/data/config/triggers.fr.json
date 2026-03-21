@@ -74,13 +74,6 @@
   {
     "label": "registration number",
     "strategy": {
-      "type": "to-end-of-line"
-    },
-    "trigger": "immatriculée au"
-  },
-  {
-    "label": "registration number",
-    "strategy": {
       "type": "company-id-value"
     },
     "trigger": "numéro SIREN"
