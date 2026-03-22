@@ -13,7 +13,7 @@
     "type": "git",
     "url": "git+https://github.com/stella/anonymize.git"
   },
-  "license": "UNLICENSED",
+  "license": "MIT",
   "scripts": {
     "typecheck": "tsc --noEmit",
     "lint": "echo 'no linter configured yet'",
