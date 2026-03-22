@@ -358,19 +358,21 @@ const EMAIL: RegexDef = {
   score: 1,
 };
 
+// [^\S\n] instead of \s: separators must not
+// match newlines (prevents cross-line bleeding).
 const INTL_PHONE: RegexDef = {
   pattern:
-    `\\+\\d{1,3}[\\s.\\-]?\\(?\\d{2,4}\\)?` +
-    `[\\s.\\-]?\\d{3}[\\s.\\-]?\\d{2,4}` +
-    `[\\s.\\-]?\\d{0,4}\\b`,
+    `\\+\\d{1,3}(?:[^\\S\\n]|[.\\-])?\\(?\\d{2,4}\\)?` +
+    `(?:[^\\S\\n]|[.\\-])?\\d{3}(?:[^\\S\\n]|[.\\-])?\\d{2,4}` +
+    `(?:[^\\S\\n]|[.\\-])?\\d{0,4}\\b`,
   label: "phone number",
   score: 1,
 };
 
 const CZ_PHONE: RegexDef = {
   pattern:
-    `\\b[67]\\d{2}[\\s.\\-]?\\d{3}[\\s.\\-]?\\d{3}` +
-    `(?![\\s.\\-]?\\d*/\\d)\\b`,
+    `\\b[67]\\d{2}(?:[^\\S\\n]|[.\\-])?\\d{3}(?:[^\\S\\n]|[.\\-])?\\d{3}` +
+    `(?!(?:[^\\S\\n]|[.\\-])?\\d*/\\d)\\b`,
   label: "phone number",
   score: 0.9,
 };
@@ -378,8 +380,8 @@ const CZ_PHONE: RegexDef = {
 const CREDIT_CARD: RegexDef = {
   pattern:
     `\\b(?:4\\d{3}|5[1-5]\\d{2}|3[47]\\d{2})` +
-    `[\\s.\\-]?\\d{4}[\\s.\\-]?\\d{4}` +
-    `[\\s.\\-]?\\d{2,4}\\b`,
+    `(?:[^\\S\\n]|[.\\-])?\\d{4}(?:[^\\S\\n]|[.\\-])?\\d{4}` +
+    `(?:[^\\S\\n]|[.\\-])?\\d{2,4}\\b`,
   label: "credit card number",
   score: 1,
 };
@@ -400,7 +402,7 @@ const DATE_NUMERIC: RegexDef = {
 
 const DATE_CZ_SPACED: RegexDef = {
   pattern:
-    `\\b\\d{1,2}\\.\\s+\\d{1,2}\\.\\s+\\d{4}\\b`,
+    `\\b\\d{1,2}\\.[^\\S\\n]+\\d{1,2}\\.[^\\S\\n]+\\d{4}\\b`,
   label: "date",
   score: 1,
 };
@@ -424,10 +426,20 @@ const CZ_BANK_ACCOUNT: RegexDef = {
 // 2+ digit area codes handled by INTL_PHONE.
 const HU_LANDLINE: RegexDef = {
   pattern:
-    `\\+36[\\s.\\-]?1[\\s.\\-]?\\d{3}` +
-    `[\\s.\\-]?\\d{4}\\b`,
+    `\\+36(?:[^\\S\\n]|[.\\-])?1(?:[^\\S\\n]|[.\\-])?\\d{3}` +
+    `(?:[^\\S\\n]|[.\\-])?\\d{4}\\b`,
   label: "phone number",
   score: 0.9,
+};
+
+// Czech/Slovak postal code: "110 00", "120 00".
+// The distinctive XXX XX format with mandatory
+// space is specific enough to avoid most false
+// positives.
+const CZ_POSTAL: RegexDef = {
+  pattern: `\\b\\d{3}[^\\S\\n]\\d{2}\\b`,
+  label: "address",
+  score: 0.7,
 };
 
 // ── Collected definitions ────────────────────────────
@@ -436,12 +448,9 @@ const HU_LANDLINE: RegexDef = {
  * All static PII regex definitions. Scanned in a
  * single pass by @stll/regex-set (Rust DFA).
  *
- * Patterns 0-12: hand-written (person names, IBAN,
- * email, phone, credit card, birth number, dates,
- * IP, bank account).
- *
- * Patterns 13+: stdnum-derived (national/company IDs).
- * Each has a post-match validator for confirmation.
+ * Hand-written patterns (0-13) followed by
+ * stdnum-derived patterns (14+). Each stdnum entry
+ * has a post-match validator for confirmation.
  *
  * Monetary amount patterns are built dynamically from
  * currencies.json via `getCurrencyPatterns()`.
@@ -464,6 +473,7 @@ const ALL_REGEX_DEFS: readonly RegexDef[] = [
   IP_ADDRESS,
   CZ_BANK_ACCOUNT,
   HU_LANDLINE,
+  CZ_POSTAL,
   ...STDNUM_ENTRIES,
 ];
 
