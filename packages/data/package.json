@@ -11,7 +11,7 @@
   "publishConfig": {
     "access": "restricted"
   },
-  "license": "UNLICENSED",
+  "license": "MIT",
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
