@@ -57,10 +57,7 @@ for (const code of CODES) {
   }
 }
 
-// Filter out names that are too short or too common
-const filtered = [...localNames]
-  .filter(n => n.length >= 3) // "kr" is a symbol, not a name
-  .sort();
+const filtered = [...localNames].sort();
 
 const result = {
   _comment: "Auto-generated from CLDR via Intl API. " +
@@ -70,7 +67,10 @@ const result = {
   localNames: filtered,
 };
 
-const path = "packages/data/config/currencies.json";
+const path = new URL(
+  "../config/currencies.json",
+  import.meta.url,
+).pathname;
 await Bun.write(path, JSON.stringify(result, null, 2) + "\n");
 
 console.log(`Written: ${path}`);

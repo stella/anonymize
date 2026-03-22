@@ -380,8 +380,8 @@ const CZ_PHONE: RegexDef = {
 const CREDIT_CARD: RegexDef = {
   pattern:
     `\\b(?:4\\d{3}|5[1-5]\\d{2}|3[47]\\d{2})` +
-    `[\\s.\\-]?\\d{4}[\\s.\\-]?\\d{4}` +
-    `[\\s.\\-]?\\d{2,4}\\b`,
+    `(?:[^\\S\\n]|[.\\-])?\\d{4}(?:[^\\S\\n]|[.\\-])?\\d{4}` +
+    `(?:[^\\S\\n]|[.\\-])?\\d{2,4}\\b`,
   label: "credit card number",
   score: 1,
 };
@@ -402,7 +402,7 @@ const DATE_NUMERIC: RegexDef = {
 
 const DATE_CZ_SPACED: RegexDef = {
   pattern:
-    `\\b\\d{1,2}\\.\\s+\\d{1,2}\\.\\s+\\d{4}\\b`,
+    `\\b\\d{1,2}\\.[^\\S\\n]+\\d{1,2}\\.[^\\S\\n]+\\d{4}\\b`,
   label: "date",
   score: 1,
 };
