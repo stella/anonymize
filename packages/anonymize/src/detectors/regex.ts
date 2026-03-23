@@ -442,14 +442,50 @@ const CZ_POSTAL: RegexDef = {
   score: 0.7,
 };
 
+// URL: scheme + host + optional port + path + query +
+// fragment. Trailing prose punctuation excluded but
+// ? = & # kept for query strings.
+const URL: RegexDef = {
+  pattern:
+    `https?://[\\w\\-]+(?:\\.[\\w\\-]+)+` +
+    `(?::\\d+)?` +
+    `(?:[/?#][^\\s)\\]>]*[^\\s.,;:!?)\\]>])?`,
+  label: "url",
+  score: 1,
+};
+
+// Full RFC 5952 IPv6. :: compressed form replaces
+// 1+ zero groups. Right side: 1-7 hex groups.
+const IPV6_ADDRESS: RegexDef = {
+  pattern:
+    `\\b(?:[0-9a-fA-F]{1,4}:){7}` +
+    `[0-9a-fA-F]{1,4}\\b` +
+    `|\\b(?:[0-9a-fA-F]{1,4}:){1,7}:\\b` +
+    `|::(?:[0-9a-fA-F]{1,4}:){0,6}` +
+    `[0-9a-fA-F]{1,4}`,
+  label: "ip address",
+  score: 1,
+};
+
+// MAC: colon-only OR hyphen-only (no mixed).
+const MAC_ADDRESS: RegexDef = {
+  pattern:
+    `\\b(?:[0-9a-fA-F]{2}:){5}` +
+    `[0-9a-fA-F]{2}\\b` +
+    `|\\b(?:[0-9a-fA-F]{2}-){5}` +
+    `[0-9a-fA-F]{2}\\b`,
+  label: "mac address",
+  score: 1,
+};
+
 // ── Collected definitions ────────────────────────────
 
 /**
  * All static PII regex definitions. Scanned in a
  * single pass by @stll/regex-set (Rust DFA).
  *
- * Hand-written patterns (0-13) followed by
- * stdnum-derived patterns (14+). Each stdnum entry
+ * Hand-written patterns (0-17) followed by
+ * stdnum-derived patterns (18+). Each stdnum entry
  * has a post-match validator for confirmation.
  *
  * Monetary amount patterns are built dynamically from
@@ -474,6 +510,9 @@ const ALL_REGEX_DEFS: readonly RegexDef[] = [
   CZ_BANK_ACCOUNT,
   HU_LANDLINE,
   CZ_POSTAL,
+  URL,
+  IPV6_ADDRESS,
+  MAC_ADDRESS,
   ...STDNUM_ENTRIES,
 ];
 
