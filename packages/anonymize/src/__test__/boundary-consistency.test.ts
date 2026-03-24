@@ -81,6 +81,29 @@ describe("enforceBoundaryConsistency", () => {
       expect(result[0]?.text).toBe("JanNovák");
     });
 
+    test("merges partially overlapping same-label after expansion", () => {
+      // After fixPartialWords, two entities may
+      // partially overlap. mergeAdjacent must merge.
+      const fullText = "the abc def ghi end";
+      // Entities that, after word-boundary expansion,
+      // will partially overlap around "def".
+      // "bc de" [4,9] -> expands to "abc def" [4,11]
+      // "ef gh" [10,15] -> expands to "def ghi" [8,15]
+      // overlap at [8,11]
+      const entities = [
+        makeEntity("person", 4, 9, "bc de"),
+        makeEntity("person", 10, 15, "ef gh"),
+      ];
+      const result = enforceBoundaryConsistency(
+        entities,
+        fullText,
+      );
+      expect(result).toHaveLength(1);
+      expect(result[0]?.start).toBe(4);
+      expect(result[0]?.end).toBe(15);
+      expect(result[0]?.text).toBe("abc def ghi");
+    });
+
     test("does not merge when gap exceeds 3 chars", () => {
       const fullText = "Jan     Novák";
       const entities = [

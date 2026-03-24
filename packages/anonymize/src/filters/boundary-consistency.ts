@@ -87,6 +87,16 @@ const mergeAdjacent = (
       continue;
     }
 
+    // Handle overlap created by fixPartialWords:
+    // two same-label entities may now partially overlap
+    // after word-boundary expansion.
+    if (entity.start < prev.end) {
+      prev.end = Math.max(prev.end, entity.end);
+      prev.text = fullText.slice(prev.start, prev.end);
+      prev.score = Math.max(prev.score, entity.score);
+      continue;
+    }
+
     const gap = fullText.slice(prev.end, entity.start);
     // GAP_PATTERN uses `+` quantifier, so empty gaps
     // (zero-gap / touching entities) won't match.
