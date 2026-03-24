@@ -70,6 +70,7 @@ const getRoleStopSet = async (
   if (ctx.roleStopSet) return ctx.roleStopSet;
   if (ctx.roleStopSetPromise) return ctx.roleStopSetPromise;
   const promise = (async () => {
+    let result: ReadonlySet<string>;
     try {
       const mod = await import(
         "@stll/anonymize-data/config/generic-roles.json"
@@ -77,13 +78,14 @@ const getRoleStopSet = async (
       const data = (mod.default ?? mod) as {
         roles: string[];
       };
-      ctx.roleStopSet = new Set(
+      result = new Set(
         data.roles.map((r: string) => r.toLowerCase()),
       );
     } catch {
-      ctx.roleStopSet = new Set();
+      result = new Set();
     }
-    return ctx.roleStopSet;
+    ctx.roleStopSet = result;
+    return result;
   })();
   ctx.roleStopSetPromise = promise;
   return promise;
