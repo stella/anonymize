@@ -55,10 +55,16 @@ const loadManifest = (): Promise<Manifest> => {
       }
       _manifest = parsed;
       return _manifest;
-    } catch {
-      // Manifest not available (old data package version).
-      // Cache the empty result so we don't retry the
-      // failed import on every call.
+    } catch (err) {
+      // Manifest not available (old data package version
+      // or unexpected import error). Cache the empty
+      // result so we don't retry the failed import.
+      console.warn(
+        "[anonymize] lang-loader: manifest not " +
+          "available, falling back to hardcoded " +
+          "language list:",
+        err,
+      );
       _manifest = { languages: {} };
       return _manifest;
     }
