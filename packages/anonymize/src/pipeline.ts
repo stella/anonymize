@@ -243,7 +243,7 @@ export const runPipeline = async (
   // transient failure degrades gracefully to no zones.
   let zoneInitOk = false;
   if (config.enableZoneClassification) {
-    const zoneInit = initZoneClassifier()
+    const zoneInit = initZoneClassifier(ctx)
       .then(() => {
         zoneInitOk = true;
       })
@@ -273,7 +273,7 @@ export const runPipeline = async (
   // Classify document zones once up front
   let zones: ZoneSpan[] = [];
   if (config.enableZoneClassification && zoneInitOk) {
-    zones = classifyZones(fullText);
+    zones = classifyZones(fullText, ctx);
     if (zones.length > 0) {
       const zoneNames = [
         ...new Set(zones.map((z) => z.zone)),
@@ -504,6 +504,9 @@ export const runPipeline = async (
   checkAbort(signal);
 
   // Coreference
+  // Clear stale entries unconditionally so a reused
+  // context doesn't leak sourceText across documents.
+  ctx.corefSourceMap.clear();
   if (config.enableCoreference) {
     const terms = await extractDefinedTerms(
       fullText,
@@ -512,7 +515,11 @@ export const runPipeline = async (
     );
     if (terms.length > 0) {
       log("coreference", `${terms.length} defined terms`);
-      const corefSpans = findCoreferenceSpans(fullText, terms);
+      const corefSpans = findCoreferenceSpans(
+        fullText,
+        terms,
+        ctx,
+      );
       if (corefSpans.length > 0) {
         log("coreference-rescan", `${corefSpans.length} aliases`);
         const corefMerged = mergeAndDedup(

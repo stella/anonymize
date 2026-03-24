@@ -1,4 +1,14 @@
 import type { UnifiedSearchInstance } from "./build-unified-search";
+import type { Entity } from "./types";
+
+/**
+ * Build a stable cache key for an entity that survives
+ * shallow copies (spread). Uses position + label so the
+ * key is identical for the original object and any
+ * `{ ...entity }` copy produced by mergeAndDedup.
+ */
+export const corefKey = (e: Entity): string =>
+  `${e.start}:${e.end}:${e.label}`;
 
 /**
  * Compiled RegExp pattern used for coreference
@@ -74,6 +84,24 @@ export type PipelineContext = {
   roleStopSetPromise:
     | Promise<ReadonlySet<string>>
     | null;
+
+  // ── Zone classifier ───────────────────────────
+  zoneHeadingPatterns: RegExp[] | null;
+  zoneSigningPatterns: RegExp[] | null;
+  zoneInitPromise: Promise<void> | null;
+
+  // ── Coreference source map ────────────────────
+  /**
+   * Maps coreference entities to their source entity
+   * text. Populated by findCoreferenceSpans, consumed
+   * by buildPlaceholderMap for consistent placeholder
+   * numbering across aliases and source entities.
+   *
+   * Keyed by `start:end:label` composite string so
+   * lookups survive shallow copies (e.g. from
+   * mergeAndDedup's spread operator).
+   */
+  corefSourceMap: Map<string, string>;
 };
 
 /** Create a fresh, empty pipeline context. */
@@ -103,6 +131,12 @@ export const createPipelineContext =
     corefLoadAttempted: false,
     roleStopSet: null,
     roleStopSetPromise: null,
+
+    zoneHeadingPatterns: null,
+    zoneSigningPatterns: null,
+    zoneInitPromise: null,
+
+    corefSourceMap: new Map(),
   });
 
 /**

@@ -1,4 +1,6 @@
 import type { Entity } from "../types";
+import type { PipelineContext } from "../context";
+import { defaultContext } from "../context";
 
 // ── Zone types ───────────────────────────────────
 
@@ -42,10 +44,6 @@ type SigningClauseConfig = {
     prepositions: string[];
   }>;
 };
-
-let sectionHeadingRes: RegExp[] | null = null;
-let signingClauseRes: RegExp[] | null = null;
-let _initPromise: Promise<void> | null = null;
 
 const loadSectionHeadings =
   async (): Promise<RegExp[]> => {
@@ -100,25 +98,26 @@ const loadSigningClauses =
  * Ensure config data is loaded. Call once before
  * classifyZones. Safe to call multiple times.
  */
-export const initZoneClassifier =
-  (): Promise<void> => {
-    if (_initPromise) return _initPromise;
-    _initPromise = Promise.all([
-      loadSectionHeadings(),
-      loadSigningClauses(),
-    ])
-      .then(([headings, clauses]) => {
-        sectionHeadingRes = headings;
-        signingClauseRes = clauses;
-      })
-      .catch((err: unknown) => {
-        // Clear cached promise so a subsequent call
-        // can retry after a transient failure.
-        _initPromise = null;
-        throw err;
-      });
-    return _initPromise;
-  };
+export const initZoneClassifier = (
+  ctx: PipelineContext = defaultContext,
+): Promise<void> => {
+  if (ctx.zoneInitPromise) return ctx.zoneInitPromise;
+  ctx.zoneInitPromise = Promise.all([
+    loadSectionHeadings(),
+    loadSigningClauses(),
+  ])
+    .then(([headings, clauses]) => {
+      ctx.zoneHeadingPatterns = headings;
+      ctx.zoneSigningPatterns = clauses;
+    })
+    .catch((err: unknown) => {
+      // Clear cached promise so a subsequent call
+      // can retry after a transient failure.
+      ctx.zoneInitPromise = null;
+      throw err;
+    });
+  return ctx.zoneInitPromise;
+};
 
 // ── Table detection ──────────────────────────────
 
@@ -144,10 +143,14 @@ const isTableLine = (line: string): boolean => {
  */
 export const classifyZones = (
   fullText: string,
+  ctx: PipelineContext = defaultContext,
 ): ZoneSpan[] => {
   if (fullText.length === 0) return [];
 
-  if (!sectionHeadingRes || !signingClauseRes) {
+  const headingRes = ctx.zoneHeadingPatterns;
+  const signingRes = ctx.zoneSigningPatterns;
+
+  if (!headingRes || !signingRes) {
     console.warn(
       "[anonymize] classifyZones called before " +
         "initZoneClassifier(); returning body-only",
@@ -165,7 +168,7 @@ export const classifyZones = (
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (line === undefined) continue;
-    for (const re of sectionHeadingRes) {
+    for (const re of headingRes) {
       if (re.test(line)) {
         headerEndLine = i;
         break;
@@ -179,7 +182,7 @@ export const classifyZones = (
   for (let i = lines.length - 1; i >= 0; i--) {
     const line = lines[i];
     if (line === undefined) continue;
-    for (const re of signingClauseRes) {
+    for (const re of signingRes) {
       if (re.test(line)) {
         signatureStartLine = i;
         break;

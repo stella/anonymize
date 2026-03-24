@@ -1,13 +1,16 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  corefSourceMap,
   extractDefinedTerms,
   findCoreferenceSpans,
 } from "../coreference";
 import { buildPlaceholderMap } from "../../redact";
 import { DETECTION_SOURCES } from "../../types";
 import type { Entity } from "../../types";
+import {
+  corefKey,
+  createPipelineContext,
+} from "../../context";
 
 const makeEntity = (
   label: string,
@@ -163,6 +166,7 @@ describe("findCoreferenceSpans", () => {
   });
 
   test("populates corefSourceMap for placeholder linking", () => {
+    const ctx = createPipelineContext();
     const text = "Smlouva s TP";
     const terms = [
       {
@@ -172,15 +176,20 @@ describe("findCoreferenceSpans", () => {
         sourceText: "Ing. Tomáš Procházka",
       },
     ];
-    const spans = findCoreferenceSpans(text, terms);
+    const spans = findCoreferenceSpans(
+      text,
+      terms,
+      ctx,
+    );
     expect(spans).toHaveLength(1);
     const span = spans[0]!;
-    expect(corefSourceMap.get(span)).toBe(
+    expect(ctx.corefSourceMap.get(corefKey(span))).toBe(
       "Ing. Tomáš Procházka",
     );
   });
 
   test("coref alias gets same placeholder as source entity", () => {
+    const ctx = createPipelineContext();
     // Source entity: "Ing. Tomáš Procházka" at position 0
     const sourceEntity: Entity = {
       start: 0,
@@ -192,7 +201,9 @@ describe("findCoreferenceSpans", () => {
     };
 
     // Coref alias "TP" found later in text
-    const text = "Ing. Tomáš Procházka uzavřel smlouvu. TP podepsal.";
+    const text =
+      "Ing. Tomáš Procházka uzavřel smlouvu." +
+      " TP podepsal.";
     const terms = [
       {
         alias: "TP",
@@ -201,21 +212,28 @@ describe("findCoreferenceSpans", () => {
         sourceText: "Ing. Tomáš Procházka",
       },
     ];
-    const corefSpans = findCoreferenceSpans(text, terms);
+    const corefSpans = findCoreferenceSpans(
+      text,
+      terms,
+      ctx,
+    );
     expect(corefSpans).toHaveLength(1);
 
     // Build placeholder map with both source and coref
     const allEntities = [sourceEntity, ...corefSpans];
-    const placeholderMap = buildPlaceholderMap(allEntities);
+    const placeholderMap = buildPlaceholderMap(
+      allEntities,
+      ctx,
+    );
 
     const sourceKey = `person\0Ing. Tomáš Procházka`;
-    const corefKey = `person\0TP`;
+    const aliasCompositeKey = `person\0TP`;
 
     // Both must get the same placeholder number
     expect(placeholderMap.get(sourceKey)).toBe(
       "[PERSON_1]",
     );
-    expect(placeholderMap.get(corefKey)).toBe(
+    expect(placeholderMap.get(aliasCompositeKey)).toBe(
       "[PERSON_1]",
     );
   });
