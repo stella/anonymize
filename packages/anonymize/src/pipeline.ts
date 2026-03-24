@@ -23,6 +23,12 @@ import {
   filterFalsePositives,
   loadGenericRoles,
 } from "./filters/false-positives";
+import {
+  applyZoneAdjustments,
+  classifyZones,
+  initZoneClassifier,
+  type ZoneSpan,
+} from "./filters/zone-classifier";
 import type {
   Entity,
   GazetteerEntry,
@@ -210,10 +216,30 @@ export const runPipeline = async (
 
   checkAbort(signal);
 
-  // Ensure generic-roles data is loaded before
-  // filterFalsePositives runs. This is a no-op if
-  // buildDenyList already loaded it.
-  await loadGenericRoles(ctx);
+  // Ensure generic-roles data and zone config are
+  // loaded before the pipeline runs. Both are no-ops
+  // after the first call. Zone init is isolated so a
+  // transient failure degrades gracefully to no zones.
+  let zoneInitOk = false;
+  if (config.enableZoneClassification) {
+    const zoneInit = initZoneClassifier()
+      .then(() => {
+        zoneInitOk = true;
+      })
+      .catch((err: unknown) => {
+        log("zones", "init failed; skipping");
+        console.warn(
+          "[anonymize] zone classifier init failed",
+          err,
+        );
+      });
+    await Promise.all([
+      loadGenericRoles(ctx),
+      zoneInit,
+    ]);
+  } else {
+    await loadGenericRoles(ctx);
+  }
 
   // When a pre-built search is provided, buildDenyList
   // was skipped for this context. Ensure stopwords,
@@ -221,6 +247,18 @@ export const runPipeline = async (
   // processDenyListMatches filters correctly.
   if (cachedSearch && config.enableDenyList) {
     await ensureDenyListData(ctx);
+  }
+
+  // Classify document zones once up front
+  let zones: ZoneSpan[] = [];
+  if (config.enableZoneClassification && zoneInitOk) {
+    zones = classifyZones(fullText);
+    if (zones.length > 0) {
+      const zoneNames = [
+        ...new Set(zones.map((z) => z.zone)),
+      ];
+      log("zones", zoneNames.join(", "));
+    }
   }
 
   checkAbort(signal);
@@ -391,8 +429,15 @@ export const runPipeline = async (
 
   checkAbort(signal);
 
-  // Confidence boost
-  const preBoostEntities = [...preAddressEntities, ...addressSeedEntities];
+  // Zone-based score adjustment: apply before
+  // threshold filtering so entities in PII-dense zones
+  // can cross the threshold.
+  const preBoostEntities = applyZoneAdjustments(
+    [...preAddressEntities, ...addressSeedEntities],
+    zones,
+  );
+
+  // Confidence boost + threshold filter
   let allEntities: Entity[];
   if (config.enableConfidenceBoost) {
     allEntities = boostNearMissEntities(preBoostEntities, config.threshold);
