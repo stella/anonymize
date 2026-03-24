@@ -23,7 +23,7 @@ describe("enforceBoundaryConsistency", () => {
     test("merges adjacent person entities", () => {
       const fullText = "Kontaktujte Jan Novák prosím.";
       //                          ^  ^^     ^
-      //                         11 14 15   20
+      //                         12 15 16   21
       const entities = [
         makeEntity("person", 12, 15, "Jan"),
         makeEntity("person", 16, 21, "Novák"),
@@ -63,6 +63,22 @@ describe("enforceBoundaryConsistency", () => {
         fullText,
       );
       expect(result).toHaveLength(2);
+    });
+
+    test("does not merge zero-gap (touching) entities", () => {
+      const fullText = "JanNovák";
+      const entities = [
+        makeEntity("person", 0, 3, "Jan"),
+        makeEntity("person", 3, 8, "Novák"),
+      ];
+      const result = enforceBoundaryConsistency(
+        entities,
+        fullText,
+      );
+      // Word boundary expansion makes both cover the
+      // full word; deduplication collapses to one.
+      expect(result).toHaveLength(1);
+      expect(result[0]?.text).toBe("JanNovák");
     });
 
     test("does not merge when gap exceeds 3 chars", () => {
@@ -176,6 +192,24 @@ describe("enforceBoundaryConsistency", () => {
         fullText,
       );
       expect(result).toHaveLength(2);
+    });
+
+    test("deduplicates entities expanded to same span", () => {
+      // Two partial entities that both expand to the
+      // same word boundary should collapse into one.
+      const fullText = "Kontaktujte Novák prosím.";
+      const entities = [
+        makeEntity("person", 12, 15, "Nov", 0.8),
+        makeEntity("person", 14, 17, "vák", 0.9),
+      ];
+      const result = enforceBoundaryConsistency(
+        entities,
+        fullText,
+      );
+      expect(result).toHaveLength(1);
+      expect(result[0]?.text).toBe("Novák");
+      // Higher score survives
+      expect(result[0]?.score).toBe(0.9);
     });
 
     test("keeps two non-overlapping same-label", () => {

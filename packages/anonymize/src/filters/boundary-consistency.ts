@@ -86,8 +86,9 @@ const mergeAdjacent = (
     }
 
     const gap = fullText.slice(prev.end, entity.start);
+    // GAP_PATTERN uses `+` quantifier, so empty gaps
+    // (zero-gap / touching entities) won't match.
     if (
-      gap.length > 0 &&
       gap.length <= MAX_GAP &&
       GAP_PATTERN.test(gap)
     ) {
@@ -138,6 +139,28 @@ const fixPartialWords = (
 };
 
 /**
+ * Deduplicate entities with identical [start, end, label].
+ * Keeps the entry with the highest score.
+ */
+const deduplicateSpans = (
+  entities: Entity[],
+): Entity[] => {
+  const seen = new Map<string, Entity>();
+  for (const entity of entities) {
+    const key =
+      `${entity.start}:${entity.end}:${entity.label}`;
+    const existing = seen.get(key);
+    if (
+      !existing ||
+      entity.score > existing.score
+    ) {
+      seen.set(key, entity);
+    }
+  }
+  return [...seen.values()];
+};
+
+/**
  * Step 3: remove nested same-label entities. If a
  * shorter entity is fully contained within a longer
  * entity of the same label, drop the shorter one.
@@ -159,8 +182,7 @@ const removeNestedSameLabel = (
         outer.label === entity.label &&
         outer.start <= entity.start &&
         outer.end >= entity.end &&
-        (outer.start !== entity.start ||
-          outer.end !== entity.end),
+        outer !== entity,
     );
     if (!isNested) {
       result.push(entity);
@@ -175,15 +197,18 @@ const removeNestedSameLabel = (
  * Runs after mergeAndDedup, before false-positive
  * filtering.
  *
- * 1. Merge adjacent same-label entities
- * 2. Fix partial-word boundaries
- * 3. Remove nested same-label entities
+ * 1. Fix partial-word boundaries (may create overlaps)
+ * 2. Deduplicate identical [start, end, label] spans
+ * 3. Merge adjacent same-label entities (catches any
+ *    new adjacency/overlap from step 1)
+ * 4. Remove nested same-label entities
  */
 export const enforceBoundaryConsistency = (
   entities: Entity[],
   fullText: string,
 ): Entity[] => {
-  const merged = mergeAdjacent(entities, fullText);
-  const fixed = fixPartialWords(merged, fullText);
-  return removeNestedSameLabel(fixed);
+  const fixed = fixPartialWords(entities, fullText);
+  const deduped = deduplicateSpans(fixed);
+  const merged = mergeAdjacent(deduped, fullText);
+  return removeNestedSameLabel(merged);
 };
