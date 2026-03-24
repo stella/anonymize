@@ -16,6 +16,25 @@ export type DetectionSource =
   (typeof DETECTION_SOURCES)[keyof typeof DETECTION_SOURCES];
 
 /**
+ * Priority levels for detection sources.
+ * Higher = more structurally reliable. Used during
+ * overlap resolution so deterministic detectors beat
+ * probabilistic ones regardless of raw score.
+ */
+export const DETECTOR_PRIORITY: Record<
+  DetectionSource,
+  number
+> = {
+  gazetteer: 5,
+  trigger: 4,
+  "legal-form": 3,
+  regex: 3,
+  "deny-list": 2,
+  coreference: 2,
+  ner: 1,
+};
+
+/**
  * A detected PII entity span in the source text.
  * Every detection layer produces these.
  */
