@@ -10,10 +10,16 @@
  * Lives here (application layer) rather than in the
  * AC library: what to normalize is domain-specific.
  *
- * Uses a single-pass char-code lookup instead of 7
- * sequential `replaceAll` calls. For a 50 KB document
- * this eliminates ~350 KB of intermediate string
- * allocations.
+ * Uses a char-code lookup (`Map<number, number>`) and
+ * `Uint16Array` instead of 7 sequential `replaceAll`
+ * calls. For a 50 KB document this eliminates ~350 KB
+ * of intermediate string allocations.
+ *
+ * When no replaceable characters are present (common
+ * for plain-text inputs), a fast-path scan returns the
+ * original string without any allocation. When special
+ * characters exist, the string is scanned twice: once
+ * to detect, once to build the replacement array.
  */
 
 const REPLACEMENTS: readonly [number, number][] = [

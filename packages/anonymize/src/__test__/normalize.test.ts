@@ -41,6 +41,18 @@ describe("normalizeForSearch", () => {
     expect(normalizeForSearch("")).toBe("");
   });
 
+  test("passes through non-BMP characters unchanged", () => {
+    // U+1F600 (grinning face) is a surrogate pair in UTF-16
+    const emoji = "a\uD83D\uDE00b";
+    expect(normalizeForSearch(emoji)).toBe(emoji);
+  });
+
+  test("normalises around non-BMP characters", () => {
+    expect(
+      normalizeForSearch("a\u00a0\uD83D\uDE00\u2013b"),
+    ).toBe("a \uD83D\uDE00-b");
+  });
+
   test("normalizes mixed content correctly", () => {
     // Czech legal text with NBSP, smart quotes, en-dash
     const input =
