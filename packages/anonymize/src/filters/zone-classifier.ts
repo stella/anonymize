@@ -58,7 +58,7 @@ const loadSectionHeadings =
     const data: SectionHeadingsConfig =
       mod.default ?? mod;
     return data.patterns.map(
-      (p) => new RegExp(p, "m"),
+      (p) => new RegExp(p),
     );
   };
 
@@ -374,7 +374,7 @@ export const applyZoneAdjustments = (
         ),
       });
     } else {
-      result.push(entity);
+      result.push({ ...entity });
     }
   }
   return result;
