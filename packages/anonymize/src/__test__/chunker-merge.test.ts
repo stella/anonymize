@@ -131,6 +131,8 @@ describe("mergeChunkEntities", () => {
       // Only one PERSON should survive (score 0.9).
       expect(persons).toHaveLength(1);
       expect(persons[0]?.score).toBe(0.9);
+      expect(persons[0]?.start).toBe(54);
+      expect(persons[0]?.end).toBe(64);
       // ORG is distinct, kept separately.
       expect(orgs).toHaveLength(1);
       expect(orgs[0]?.score).toBe(0.8);

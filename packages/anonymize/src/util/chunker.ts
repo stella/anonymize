@@ -66,7 +66,9 @@ const POSITION_THRESHOLD = 5;
  *
  * Uses a reverse-scan over the sorted merged array
  * so each entity only compares against nearby
- * predecessors — O(n) amortised instead of O(n²).
+ * predecessors — O(n * w) average where w is the max
+ * entities per POSITION_THRESHOLD window, O(n²) worst
+ * case when replacements dominate (splice is O(n)).
  */
 export const mergeChunkEntities = (
   chunkOffsets: number[],
@@ -107,6 +109,9 @@ export const mergeChunkEntities = (
       if (existing === undefined) {
         continue;
       }
+      // merged is kept sorted by start (splice+push
+      // maintains this); elements further back have
+      // even smaller starts, so we can break early.
       if (
         entity.start - existing.start
           >= POSITION_THRESHOLD
