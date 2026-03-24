@@ -79,7 +79,6 @@ export {
 export {
   extractDefinedTerms,
   findCoreferenceSpans,
-  corefSourceMap,
 } from "./detectors/coreference";
 export {
   detectNameCorpus,

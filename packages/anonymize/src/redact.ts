@@ -3,13 +3,14 @@ import {
   OPERATOR_REGISTRY,
   resolveOperator,
 } from "./operators";
-import { corefSourceMap } from "./detectors/coreference";
 import type {
   Entity,
   OperatorConfig,
   OperatorType,
   RedactionResult,
 } from "./types";
+import type { PipelineContext } from "./context";
+import { defaultContext } from "./context";
 
 const WHITESPACE_RE = /\s+/g;
 const PHONE_NOISE_RE = /[()\s-]/g;
@@ -54,6 +55,7 @@ const normalizeEntityText = (label: string, text: string): string => {
  */
 export const buildPlaceholderMap = (
   entities: Entity[],
+  ctx: PipelineContext = defaultContext,
 ): Map<string, string> => {
   const counters = new Map<string, number>();
   const textLabelToPlaceholder = new Map<string, string>();
@@ -72,7 +74,7 @@ export const buildPlaceholderMap = (
     // Coreference side-channel: if this entity is a
     // coref alias, look up the source entity's
     // placeholder so both get the same number.
-    const sourceText = corefSourceMap.get(entity);
+    const sourceText = ctx.corefSourceMap.get(entity);
     if (sourceText !== undefined) {
       const sourceNormalized = normalizeEntityText(
         entity.label,
@@ -121,6 +123,7 @@ export const redactText = (
   fullText: string,
   entities: Entity[],
   config: OperatorConfig = DEFAULT_OPERATOR_CONFIG,
+  ctx: PipelineContext = defaultContext,
 ): RedactionResult => {
   if (entities.length === 0) {
     return {
@@ -131,7 +134,7 @@ export const redactText = (
     };
   }
 
-  const placeholderMap = buildPlaceholderMap(entities);
+  const placeholderMap = buildPlaceholderMap(entities, ctx);
 
   const sorted = entities.toSorted((a, b) => a.start - b.start);
 

@@ -1,4 +1,5 @@
 import type { UnifiedSearchInstance } from "./build-unified-search";
+import type { Entity } from "./types";
 
 /**
  * Compiled RegExp pattern used for coreference
@@ -74,6 +75,20 @@ export type PipelineContext = {
   roleStopSetPromise:
     | Promise<ReadonlySet<string>>
     | null;
+
+  // ── Zone classifier ───────────────────────────
+  zoneHeadingPatterns: RegExp[] | null;
+  zoneSigningPatterns: RegExp[] | null;
+  zoneInitPromise: Promise<void> | null;
+
+  // ── Coreference source map ────────────────────
+  /**
+   * Maps coreference entities to their source entity
+   * text. Populated by findCoreferenceSpans, consumed
+   * by buildPlaceholderMap for consistent placeholder
+   * numbering across aliases and source entities.
+   */
+  corefSourceMap: WeakMap<Entity, string>;
 };
 
 /** Create a fresh, empty pipeline context. */
@@ -103,6 +118,12 @@ export const createPipelineContext =
     corefLoadAttempted: false,
     roleStopSet: null,
     roleStopSetPromise: null,
+
+    zoneHeadingPatterns: null,
+    zoneSigningPatterns: null,
+    zoneInitPromise: null,
+
+    corefSourceMap: new WeakMap(),
   });
 
 /**
