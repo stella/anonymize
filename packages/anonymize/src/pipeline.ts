@@ -29,6 +29,7 @@ import {
   initZoneClassifier,
   type ZoneSpan,
 } from "./filters/zone-classifier";
+import { enforceBoundaryConsistency } from "./filters/boundary-consistency";
 import type {
   Entity,
   GazetteerEntry,
@@ -463,10 +464,22 @@ export const runPipeline = async (
   const rawMerged = mergeAndDedup(allEntities);
   log("merge", `${rawMerged.length} after dedup`);
 
+  // Boundary consistency (merge adjacent, fix partial
+  // words, remove nested same-label)
+  const consistent = enforceBoundaryConsistency(
+    rawMerged,
+    fullText,
+  );
+  if (consistent.length < rawMerged.length)
+    log(
+      "boundary",
+      `${rawMerged.length - consistent.length} consolidated`,
+    );
+
   // False-positive filtering
-  const merged = filterFalsePositives(rawMerged, ctx);
-  if (merged.length < rawMerged.length)
-    log("filter", `removed ${rawMerged.length - merged.length} FPs`);
+  const merged = filterFalsePositives(consistent, ctx);
+  if (merged.length < consistent.length)
+    log("filter", `removed ${consistent.length - merged.length} FPs`);
 
   checkAbort(signal);
 
@@ -482,7 +495,19 @@ export const runPipeline = async (
       const corefSpans = findCoreferenceSpans(fullText, terms);
       if (corefSpans.length > 0) {
         log("coreference-rescan", `${corefSpans.length} aliases`);
-        return mergeAndDedup(merged, corefSpans);
+        const corefMerged = mergeAndDedup(
+          merged,
+          corefSpans,
+        );
+        const corefConsistent =
+          enforceBoundaryConsistency(
+            corefMerged,
+            fullText,
+          );
+        return filterFalsePositives(
+          corefConsistent,
+          ctx,
+        );
       }
     }
   }
