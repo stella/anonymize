@@ -15,6 +15,11 @@ const DATOVA_SCHRANKA_RE = /^[a-z0-9]{7}$/i;
 // Definitive legal form suffixes. When a person-labeled
 // trigger captures text containing one of these, the
 // entity is reclassified as "organization". Case-insensitive.
+// Definitive legal form suffixes (case-sensitive).
+// No "i" flag: short uppercase-only forms (SE, SA, AG)
+// must NOT match Czech/Slovak reflexive pronouns "se",
+// "sa" which appear in person-trigger captures like
+// "Ing. Jan Novák, se sídlem...".
 const DEFINITIVE_LEGAL_FORMS = [
   "s.r.o.", "s. r. o.", "spol. s r.o.",
   "a.s.", "a. s.",
@@ -29,22 +34,21 @@ const DEFINITIVE_LEGAL_FORMS = [
   "S.A.", "SA", "SAS", "SARL",
   "Sp. z o.o.", "S.p.A.",
 ];
-// Build regex with word boundaries on short dot-free
-// forms (AG, SE, KG, etc.) to prevent substring matches
-// in person names ("Sebastian" → SE, "Agnieszka" → AG).
+// Build case-sensitive regex. Short dot-free forms
+// (AG, SE, KG) get word boundaries to prevent substring
+// matches. All forms are uppercase in the list; the
+// regex is case-sensitive so "se"/"sa" won't match.
 const LEGAL_FORM_CHECK_RE = new RegExp(
   DEFINITIVE_LEGAL_FORMS.map((f) => {
     const escaped = f
       .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
       .replace(/\\\./g, "\\.\\s*");
-    // Short dot-free forms need word boundaries
     const isDotFree = !f.includes(".");
     const isShort = f.length <= 4;
     return isDotFree && isShort
       ? `\\b${escaped}\\b`
       : escaped;
   }).join("|"),
-  "i",
 );
 
 type TriggerConfigRow = {

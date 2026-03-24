@@ -58,14 +58,6 @@ export const boostNearMissEntities = (
 
 // ── Address backward scan ────────────────────────────
 
-/**
- * House number pattern: digits, optionally with
- * orientation number (/digits) and letter suffix.
- * Examples: "42", "2512/2a", "1033/7", "799/37"
- */
-const HOUSE_NUM_RE =
-  /\d+(?:\/\d+[a-zA-Z]?)?/;
-
 const UPPER_WORD_RE = /\p{Lu}/u;
 
 /** Header zone: top 15% of document */
