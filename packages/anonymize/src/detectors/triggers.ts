@@ -55,6 +55,13 @@ export const buildTriggerPatterns = async (): Promise<{
     },
   );
   for (const rows of allRows) {
+    if (!Array.isArray(rows)) {
+      console.warn(
+        "[anonymize] triggers: unexpected " +
+          "config shape, skipping",
+      );
+      continue;
+    }
     rules.push(...mapConfig(rows));
   }
 
