@@ -705,5 +705,101 @@
       "type": "to-next-comma"
     },
     "trigger": "členkou představenstva"
+  },
+  {
+    "label": "address",
+    "strategy": {
+      "type": "address",
+      "maxChars": 120
+    },
+    "trigger": "místo dodání:"
+  },
+  {
+    "label": "address",
+    "strategy": {
+      "type": "address",
+      "maxChars": 120
+    },
+    "trigger": "místo dodání"
+  },
+  {
+    "label": "address",
+    "strategy": {
+      "type": "address",
+      "maxChars": 120
+    },
+    "trigger": "místo plnění:"
+  },
+  {
+    "label": "address",
+    "strategy": {
+      "type": "address",
+      "maxChars": 120
+    },
+    "trigger": "místo plnění"
+  },
+  {
+    "label": "address",
+    "strategy": {
+      "type": "address",
+      "maxChars": 120
+    },
+    "trigger": "adresa:"
+  },
+  {
+    "label": "address",
+    "strategy": {
+      "type": "address",
+      "maxChars": 120
+    },
+    "trigger": "adresa"
+  },
+  {
+    "label": "address",
+    "strategy": {
+      "type": "address",
+      "maxChars": 120
+    },
+    "trigger": "doručovací adresa:"
+  },
+  {
+    "label": "address",
+    "strategy": {
+      "type": "address",
+      "maxChars": 120
+    },
+    "trigger": "doručovací adresa"
+  },
+  {
+    "label": "address",
+    "strategy": {
+      "type": "address",
+      "maxChars": 120
+    },
+    "trigger": "korespondenční adresa:"
+  },
+  {
+    "label": "address",
+    "strategy": {
+      "type": "address",
+      "maxChars": 120
+    },
+    "trigger": "korespondenční adresa"
+  },
+  {
+    "label": "address",
+    "strategy": {
+      "type": "address",
+      "maxChars": 120
+    },
+    "trigger": "fakturační adresa:"
+  },
+  {
+    "label": "address",
+    "strategy": {
+      "type": "address",
+      "maxChars": 120
+    },
+    "trigger": "fakturační adresa"
   }
 ]
