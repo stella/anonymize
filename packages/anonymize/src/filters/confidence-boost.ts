@@ -252,7 +252,9 @@ export const detectStreetPatternsNearAddresses = (
         numStart,
       ).trim().toLowerCase();
       if (
-        /^(?:od|do|ke|na|dne|ze)$/.test(firstWord)
+        /^(?:od|do|ke|na|dne|ze|ve|za|při|mezi)$/.test(
+          firstWord,
+        )
       ) {
         continue;
       }

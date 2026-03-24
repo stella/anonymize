@@ -88,8 +88,14 @@ export const filterFalsePositives = (
     }
     // Reject entities exceeding max length for their
     // label (prevents runaway trigger extractions).
+    // Exempt legal-form entities: their span is already
+    // bounded by the regex pattern, not open-ended.
     const maxLen = MAX_ENTITY_LENGTH[entity.label];
-    if (maxLen && trimmed.length > maxLen) {
+    if (
+      maxLen &&
+      trimmed.length > maxLen &&
+      entity.source !== "legal-form"
+    ) {
       continue;
     }
     // Section numbers (§ 3, 3.2.1, 12.) are false
