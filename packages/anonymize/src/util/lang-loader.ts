@@ -38,7 +38,22 @@ const loadManifest = (): Promise<Manifest> => {
         "@stll/anonymize-data/config/manifest.json"
       );
       // eslint-disable-next-line no-unsafe-type-assertion -- JSON manifest
-      _manifest = (mod.default ?? mod) as Manifest;
+      const parsed = (mod.default ?? mod) as Manifest;
+      if (
+        !parsed ||
+        typeof parsed.languages !== "object" ||
+        parsed.languages === null ||
+        Array.isArray(parsed.languages)
+      ) {
+        console.warn(
+          "[anonymize] lang-loader: manifest has " +
+            "unexpected structure, falling back " +
+            "to hardcoded list",
+        );
+        _manifest = { languages: {} };
+        return _manifest;
+      }
+      _manifest = parsed;
       return _manifest;
     } catch {
       // Manifest not available (old data package version).
@@ -176,9 +191,14 @@ export const loadLanguageConfigs = async <T>(
         .map(([code]) => code)
     : [...FALLBACK_LANGUAGES[configType]];
 
-  const results: T[] = [];
+  // Use indexed assignment so results preserve
+  // manifest declaration order regardless of import
+  // resolution timing.
+  const results: (T | undefined)[] = new Array(
+    codes.length,
+  );
 
-  const loads = codes.map(async (code) => {
+  const loads = codes.map(async (code, i) => {
     const loader = registry[code];
     if (!loader) {
       console.warn(
@@ -207,11 +227,13 @@ export const loadLanguageConfigs = async <T>(
       );
       return;
     }
-    results.push(result);
+    results[i] = result;
   });
 
   await Promise.all(loads);
-  return results;
+  return results.filter(
+    (r): r is T => r !== undefined,
+  );
 };
 
 /**
