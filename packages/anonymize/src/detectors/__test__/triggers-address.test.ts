@@ -18,6 +18,7 @@ const TRIGGERS_ONLY_CONFIG: PipelineConfig = {
   enableNer: false,
   enableConfidenceBoost: false,
   enableCoreference: false,
+  enableZoneClassification: false,
   labels: ["address"],
   workspaceId: "test",
 };
