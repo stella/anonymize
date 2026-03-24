@@ -2,7 +2,7 @@ import {
   extractDefinedTerms,
   findCoreferenceSpans,
 } from "./detectors/coreference";
-import { scanExact, scanFuzzy } from "./detectors/gazetteer";
+import { processGazetteerMatches } from "./detectors/gazetteer";
 import {
   detectNameCorpus,
   initNameCorpus,
@@ -106,11 +106,28 @@ const checkAbort = (signal?: AbortSignal): void => {
   }
 };
 
-const configKey = (config: PipelineConfig): string =>
-  `${config.enableDenyList}:${config.enableTriggerPhrases}:` +
-  `${config.denyListCountries?.toSorted().join(",") ?? ""}:` +
-  `${config.denyListRegions?.toSorted().join(",") ?? ""}:` +
-  `${config.denyListExcludeCategories?.toSorted().join(",") ?? ""}`;
+const configKey = (
+  config: PipelineConfig,
+  gazetteerEntries: GazetteerEntry[],
+): string => {
+  // Gazetteer fingerprint: sorted entry IDs +
+  // canonical forms. Cheap for 10-100 entries.
+  const gazFingerprint =
+    gazetteerEntries.length > 0
+      ? gazetteerEntries
+          .map((e) => `${e.id}:${e.canonical}`)
+          .toSorted()
+          .join(";")
+      : "";
+  return (
+    `${config.enableDenyList}:` +
+    `${config.enableTriggerPhrases}:` +
+    `${config.denyListCountries?.toSorted().join(",") ?? ""}:` +
+    `${config.denyListRegions?.toSorted().join(",") ?? ""}:` +
+    `${config.denyListExcludeCategories?.toSorted().join(",") ?? ""}:` +
+    `${config.enableGazetteer}:${gazFingerprint}`
+  );
+};
 
 /**
  * Get or build a cached search instance. Cache state
@@ -119,9 +136,10 @@ const configKey = (config: PipelineConfig): string =>
  */
 const getCachedSearch = async (
   config: PipelineConfig,
+  gazetteerEntries: GazetteerEntry[],
   ctx: PipelineContext,
 ): Promise<UnifiedSearchInstance> => {
-  const key = configKey(config);
+  const key = configKey(config, gazetteerEntries);
   if (ctx.search && ctx.searchKey === key) {
     return ctx.search;
   }
@@ -133,7 +151,11 @@ const getCachedSearch = async (
   // the new build is in flight.
   ctx.search = null;
   ctx.searchKey = key;
-  const promise = buildUnifiedSearch(config, ctx);
+  const promise = buildUnifiedSearch(
+    config,
+    gazetteerEntries,
+    ctx,
+  );
   ctx.searchPromise = promise;
   const result = await promise;
   // Guard: another call may have replaced the key
@@ -193,7 +215,12 @@ export const runPipeline = async (
   checkAbort(signal);
 
   const search =
-    cachedSearch ?? (await getCachedSearch(config, ctx));
+    cachedSearch ??
+    (await getCachedSearch(
+      config,
+      gazetteerEntries,
+      ctx,
+    ));
 
   checkAbort(signal);
 
@@ -274,14 +301,22 @@ export const runPipeline = async (
       `${denyListEntities.length} matches`,
     );
 
-  // Gazetteer: per-workspace, separate search
-  let gazetteerExact: Entity[] = [];
-  let gazetteerFuzzy: Entity[] = [];
-  if (config.enableGazetteer && gazetteerEntries.length > 0) {
-    gazetteerExact = scanExact(fullText, gazetteerEntries);
-    gazetteerFuzzy = scanFuzzy(fullText, gazetteerEntries, gazetteerExact);
-    log("gazetteer", `${gazetteerExact.length} exact + ${gazetteerFuzzy.length} fuzzy`);
-  }
+  // Gazetteer: unified into tsLiterals
+  const gazetteerEntities =
+    config.enableGazetteer && search.gazetteerData
+      ? processGazetteerMatches(
+          literalMatches,
+          slices.gazetteer.start,
+          slices.gazetteer.end,
+          fullText,
+          search.gazetteerData,
+        )
+      : [];
+  if (gazetteerEntities.length > 0)
+    log(
+      "gazetteer",
+      `${gazetteerEntities.length} matches`,
+    );
 
   checkAbort(signal);
 
@@ -295,8 +330,7 @@ export const runPipeline = async (
       ...legalFormEntities,
       ...nameCorpusEntities,
       ...denyListEntities,
-      ...gazetteerExact,
-      ...gazetteerFuzzy,
+      ...gazetteerEntities,
     ];
     const maskResult = maskDetectedSpans(
       fullText,
@@ -326,9 +360,13 @@ export const runPipeline = async (
 
   // Address seed expansion
   const preAddressEntities = [
-    ...triggerEntities, ...regexEntities, ...legalFormEntities,
-    ...nameCorpusEntities, ...denyListEntities,
-    ...gazetteerExact, ...gazetteerFuzzy, ...nerEntities,
+    ...triggerEntities,
+    ...regexEntities,
+    ...legalFormEntities,
+    ...nameCorpusEntities,
+    ...denyListEntities,
+    ...gazetteerEntities,
+    ...nerEntities,
   ];
   const addressSeedEntities = await processAddressSeeds(
     literalMatches,

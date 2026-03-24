@@ -6,15 +6,22 @@
  * 200K per-pattern object allocations:
  * 1. regex + triggers + legal-forms (mixed, ~140
  *    patterns, caseInsensitive for trigger AC)
- * 2. deny-list + street-types (200K literals,
- *    caseInsensitive + wholeWords + overlap "all")
+ * 2. deny-list + street-types + gazetteer (200K
+ *    literals, caseInsensitive + wholeWords +
+ *    overlap "all"; gazetteer fuzzy terms use
+ *    distance: 2 via @stll/fuzzy-search)
  *
- * Plain strings, zero PatternEntry objects.
+ * Plain strings for deny-list/street-types;
+ * PatternEntry objects for gazetteer fuzzy terms.
  */
 
 import { TextSearch } from "@stll/text-search";
+import type { PatternEntry } from "@stll/text-search";
 
-import type { PipelineConfig } from "./types";
+import type {
+  GazetteerEntry,
+  PipelineConfig,
+} from "./types";
 import type { RegexMeta } from "./detectors/regex";
 import type { TriggerRule } from "./types";
 import type { DenyListData } from "./detectors/deny-list";
@@ -43,16 +50,31 @@ import {
 import {
   buildStreetTypePatterns,
 } from "./detectors/address-seeds";
+import {
+  buildGazetteerPatterns,
+} from "./detectors/gazetteer";
 
 type PatternSlice = {
   start: number;
   end: number;
 };
 
+export type GazetteerData = {
+  /** Maps local pattern index to entry label. */
+  labels: string[];
+  /** Maps local pattern index to entry ID. */
+  entryIds: string[];
+  /**
+   * Whether each pattern is fuzzy (distance > 0).
+   * Used by the post-processor to assign scores.
+   */
+  isFuzzy: boolean[];
+};
+
 export type UnifiedSearchInstance = {
   /** Regex + triggers + legal-forms. */
   tsRegex: TextSearch;
-  /** Deny-list + street-types. */
+  /** Deny-list + street-types + gazetteer. */
   tsLiterals: TextSearch;
   slices: {
     regex: PatternSlice;
@@ -60,14 +82,17 @@ export type UnifiedSearchInstance = {
     triggers: PatternSlice;
     denyList: PatternSlice;
     streetTypes: PatternSlice;
+    gazetteer: PatternSlice;
   };
   regexMeta: readonly RegexMeta[];
   triggerRules: readonly TriggerRule[];
   denyListData: DenyListData | null;
+  gazetteerData: GazetteerData | null;
 };
 
 export const buildUnifiedSearch = async (
   config: PipelineConfig,
+  gazetteerEntries: GazetteerEntry[] = [],
   ctx: PipelineContext = defaultContext,
 ): Promise<UnifiedSearchInstance> => {
   const [
@@ -165,9 +190,11 @@ export const buildUnifiedSearch = async (
   // engines. No manual maxAlternations needed.
   const tsRegex = new TextSearch(regexAllPatterns);
 
-  // ── Instance 2: deny-list + street-types ────────
-  // All literals, passed as plain strings.
-  // Zero PatternEntry object allocation.
+  // ── Instance 2: deny-list + street-types + gaz ──
+  // Deny-list and street-type patterns are plain
+  // strings (allLiteral). Gazetteer adds exact
+  // literals plus fuzzy PatternEntry objects for
+  // terms >= 4 chars.
   offset = 0;
 
   const denyListOriginals =
@@ -182,10 +209,29 @@ export const buildUnifiedSearch = async (
     start: offset,
     end: offset + streetTypes.length,
   };
+  offset = streetTypesSlice.end;
 
-  const literalAllPatterns: string[] = [
+  // Gazetteer patterns (exact + fuzzy)
+  const gazResult =
+    config.enableGazetteer &&
+    gazetteerEntries.length > 0
+      ? buildGazetteerPatterns(gazetteerEntries)
+      : null;
+
+  const gazetteerSlice = {
+    start: offset,
+    end: offset +
+      (gazResult?.patterns.length ?? 0),
+  };
+
+  // Build the combined pattern array. Deny-list
+  // and street-type patterns are plain strings;
+  // gazetteer patterns may include PatternEntry
+  // objects (fuzzy).
+  const literalAllPatterns: PatternEntry[] = [
     ...denyListOriginals,
     ...streetTypes,
+    ...(gazResult?.patterns ?? []),
   ];
 
   const tsLiterals =
@@ -207,9 +253,11 @@ export const buildUnifiedSearch = async (
       triggers: triggersSlice,
       denyList: denyListSlice,
       streetTypes: streetTypesSlice,
+      gazetteer: gazetteerSlice,
     },
     regexMeta,
     triggerRules: triggers.rules,
     denyListData,
+    gazetteerData: gazResult?.data ?? null,
   };
 };
