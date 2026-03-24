@@ -555,6 +555,13 @@
     "strategy": {
       "type": "company-id-value"
     },
+    "trigger": "identifikační číslo organizace"
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "company-id-value"
+    },
     "trigger": "registrační číslo"
   },
   {
