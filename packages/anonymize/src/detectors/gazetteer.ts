@@ -62,10 +62,9 @@ export const buildGazetteerPatterns = (
   // Use per-pattern wholeWords: false because
   // user-supplied entries may contain dots or
   // special chars (e.g. "a.s.", "AT&T") that
-  // break word-boundary matching. The global
-  // wholeWords: true on tsLiterals is correct
-  // for deny-list/street-type patterns but not
-  // for arbitrary gazetteer entries.
+  // break word-boundary matching. Deny-list and
+  // street-type patterns use per-pattern
+  // wholeWords: true instead.
   for (const [term, meta] of terms) {
     patterns.push({
       pattern: term,
@@ -257,7 +256,11 @@ const tryPrefixExtension = (
   };
 };
 
-// Deprecated exports (kept for API compat)
+// Deprecated exports (kept for API compat).
+// Warnings fire once to avoid log noise.
+
+let _warnedScanExact = false;
+let _warnedScanFuzzy = false;
 
 /**
  * @deprecated Use the unified search pipeline
@@ -267,9 +270,12 @@ export const scanExact = (
   _fullText: string,
   _entries: GazetteerEntry[],
 ): Entity[] => {
-  console.warn(
-    "scanExact is deprecated; use processGazetteerMatches via runPipeline instead",
-  );
+  if (!_warnedScanExact) {
+    _warnedScanExact = true;
+    console.warn(
+      "scanExact is deprecated; use processGazetteerMatches via runPipeline instead",
+    );
+  }
   return [];
 };
 
@@ -282,8 +288,11 @@ export const scanFuzzy = (
   _entries: GazetteerEntry[],
   _exactSpans: Entity[],
 ): Entity[] => {
-  console.warn(
-    "scanFuzzy is deprecated; use processGazetteerMatches via runPipeline instead",
-  );
+  if (!_warnedScanFuzzy) {
+    _warnedScanFuzzy = true;
+    console.warn(
+      "scanFuzzy is deprecated; use processGazetteerMatches via runPipeline instead",
+    );
+  }
   return [];
 };

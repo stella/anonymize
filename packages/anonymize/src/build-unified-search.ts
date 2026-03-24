@@ -223,6 +223,7 @@ export const buildUnifiedSearch = async (
     end: offset +
       (gazResult?.patterns.length ?? 0),
   };
+  offset = gazetteerSlice.end;
 
   // Build the combined pattern array.
   // Deny-list and street-type patterns use
