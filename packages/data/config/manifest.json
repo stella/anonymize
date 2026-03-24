@@ -1,5 +1,5 @@
 {
-  "_comment": "Language manifest. Drives auto-discovery of config files. Adding a new language is a data-only change: add JSON files and update this manifest.",
+  "_comment": "Language manifest. Drives auto-discovery of config files. Adding a new language requires: (1) add JSON config files, (2) update this manifest, (3) add a static import entry in lang-loader.ts.",
   "languages": {
     "cs": {
       "triggers": true,

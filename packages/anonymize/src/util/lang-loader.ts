@@ -182,12 +182,14 @@ export const loadLanguageConfigs = async <T>(
       );
       return;
     }
+    let mod: unknown;
     try {
-      const mod = await loader();
-      results.push(mapFn(mod));
+      mod = await loader();
     } catch {
       // Config file missing or data package not installed
+      return;
     }
+    results.push(mapFn(mod));
   });
 
   await Promise.all(loads);
