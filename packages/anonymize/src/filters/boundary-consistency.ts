@@ -187,9 +187,10 @@ const mergeAdjacent = (
  * extend across newlines or into spans occupied by
  * different-label entities.
  *
- * Uses binary search to find the nearest cross-label
- * neighbors instead of scanning all entities.
- * O(n log n).
+ * Uses binary search to skip irrelevant entries when
+ * clamping at cross-label neighbors. O(n log n) in
+ * the common case; O(n^2) worst case when many
+ * same-label entities precede a cross-label boundary.
  */
 const fixPartialWords = (
   entities: Entity[],
@@ -331,10 +332,7 @@ const removeNestedSameLabel = (
       // Nested inside a same-label entity: skip.
       continue;
     }
-    maxEndByLabel.set(
-      entity.label,
-      Math.max(maxEnd ?? 0, entity.end),
-    );
+    maxEndByLabel.set(entity.label, entity.end);
     result.push(entity);
   }
 
