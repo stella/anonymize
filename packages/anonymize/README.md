@@ -42,14 +42,18 @@ npm install @stll/anonymize-data
 ```typescript
 import { runPipeline } from '@stll/anonymize'
 
-const entities = await runPipeline(text, {
-  labels: ['person', 'organization', 'address',
-           'date', 'iban', 'phone number'],
-  threshold: 0.5,
-  enableRegex: true,
-  enableTriggerPhrases: true,
-  enableLegalForms: true,
-  enableNameCorpus: true,
+const entities = await runPipeline({
+  fullText: text,
+  config: {
+    labels: ['person', 'organization', 'address',
+             'date', 'iban', 'phone number'],
+    threshold: 0.5,
+    enableRegex: true,
+    enableTriggerPhrases: true,
+    enableLegalForms: true,
+    enableNameCorpus: true,
+  },
+  gazetteerEntries: [],
 })
 ```
 
