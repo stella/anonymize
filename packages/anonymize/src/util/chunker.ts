@@ -57,10 +57,16 @@ export const computeChunkOffsets = (
   return offsets;
 };
 
+const POSITION_THRESHOLD = 5;
+
 /**
  * Merge entities from overlapping chunks back to
  * document-level offsets. Deduplicates entities that
  * appear in overlap regions (keeps highest score).
+ *
+ * Uses a reverse-scan over the sorted merged array
+ * so each entity only compares against nearby
+ * predecessors — O(n) amortised instead of O(n²).
  */
 export const mergeChunkEntities = (
   chunkOffsets: number[],
@@ -83,20 +89,41 @@ export const mergeChunkEntities = (
     }
   }
 
-  const sorted = allEntities.toSorted((a, b) => a.start - b.start);
+  const sorted = allEntities.toSorted(
+    (a, b) => a.start - b.start,
+  );
   const merged: Entity[] = [];
 
   for (const entity of sorted) {
-    const existing = merged.find(
-      (e) =>
-        e.label === entity.label &&
-        Math.abs(e.start - entity.start) < 5 &&
-        Math.abs(e.end - entity.end) < 5,
-    );
+    let dupIndex = -1;
 
-    if (existing) {
-      if (entity.score > existing.score) {
-        merged[merged.indexOf(existing)] = { ...entity };
+    // Reverse-scan: only check recent entries whose
+    // start is within the proximity threshold.
+    for (let j = merged.length - 1; j >= 0; j--) {
+      const candidate = merged[j];
+      if (
+        candidate === undefined ||
+        entity.start - candidate.start >= POSITION_THRESHOLD
+      ) {
+        break;
+      }
+      if (
+        candidate.label === entity.label &&
+        Math.abs(candidate.end - entity.end)
+          < POSITION_THRESHOLD
+      ) {
+        dupIndex = j;
+        break;
+      }
+    }
+
+    if (dupIndex !== -1) {
+      const existing = merged[dupIndex];
+      if (
+        existing !== undefined &&
+        entity.score > existing.score
+      ) {
+        merged[dupIndex] = { ...entity };
       }
     } else {
       merged.push({ ...entity });
