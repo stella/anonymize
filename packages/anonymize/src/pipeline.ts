@@ -112,8 +112,10 @@ const configKey = (
 ): string => {
   // Gazetteer fingerprint: sorted entry IDs,
   // canonical forms, labels, and variants.
-  // Cheap for 10-100 entries.
+  // Skip when gazetteer is disabled to avoid
+  // unnecessary cache misses.
   const gazFingerprint =
+    config.enableGazetteer &&
     gazetteerEntries.length > 0
       ? gazetteerEntries
           .map(
