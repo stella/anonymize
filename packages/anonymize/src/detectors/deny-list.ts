@@ -9,6 +9,8 @@ import {
 import { resolveCountries } from "../regions";
 import { DETECTION_SOURCES } from "../types";
 import type { Entity, PipelineConfig } from "../types";
+import type { PipelineContext } from "../context";
+import { defaultContext } from "../context";
 import { loadGenericRoles } from "../filters/false-positives";
 import { normalizeForSearch } from "../util/normalize";
 import {
@@ -41,40 +43,38 @@ export type DenyListConfig = Pick<
 
 // ── Allow list (lazy-loaded from JSON) ───────────────
 
-let _allowList: ReadonlySet<string> | null = null;
-let _allowListPromise:
-  | Promise<ReadonlySet<string>>
-  | null = null;
-
-const loadAllowList =
-  (): Promise<ReadonlySet<string>> => {
-    if (_allowListPromise) return _allowListPromise;
-    _allowListPromise = (async () => {
-      try {
-        const mod: {
-          default?: { words?: string[] };
-        } = await import(
-          "@stll/anonymize-data/config/allow-list.json"
-        );
-        const set: ReadonlySet<string> = new Set(
-          mod.default?.words ?? [],
-        );
-        _allowList = set;
-        return set;
-      } catch {
-        const empty: ReadonlySet<string> = new Set();
-        _allowList = empty;
-        return empty;
-      }
-    })();
-    return _allowListPromise;
-  };
+const loadAllowList = (
+  ctx: PipelineContext,
+): Promise<ReadonlySet<string>> => {
+  if (ctx.allowListPromise) return ctx.allowListPromise;
+  ctx.allowListPromise = (async () => {
+    try {
+      const mod: {
+        default?: { words?: string[] };
+      } = await import(
+        "@stll/anonymize-data/config/allow-list.json"
+      );
+      const set: ReadonlySet<string> = new Set(
+        mod.default?.words ?? [],
+      );
+      ctx.allowList = set;
+      return set;
+    } catch {
+      const empty: ReadonlySet<string> = new Set();
+      ctx.allowList = empty;
+      return empty;
+    }
+  })();
+  return ctx.allowListPromise;
+};
 
 const EMPTY_ALLOW_LIST: ReadonlySet<string> = new Set();
 
 /** Sync accessor — returns empty set before init. */
-const getAllowList = (): ReadonlySet<string> =>
-  _allowList ?? EMPTY_ALLOW_LIST;
+const getAllowList = (
+  ctx: PipelineContext,
+): ReadonlySet<string> =>
+  ctx.allowList ?? EMPTY_ALLOW_LIST;
 
 /**
  * Common EU given names present in the stopwords-iso dataset
@@ -103,27 +103,25 @@ const SUPPLEMENTARY_NAME_EXCLUSIONS: ReadonlySet<string> =
  * Computed lazily after initNameCorpus() has populated
  * the first-name corpus. Re-builds if corpus size changes.
  */
-let _firstNameExclusions: ReadonlySet<string> | null =
-  null;
-let _exclusionCorpusLen = 0;
-
-const getFirstNameExclusions =
-  (): ReadonlySet<string> => {
-    const corpus = getNameCorpusFirstNames();
-    // Re-build if corpus has been populated since last call
-    if (
-      _firstNameExclusions &&
-      corpus.length === _exclusionCorpusLen
-    ) {
-      return _firstNameExclusions;
-    }
-    _exclusionCorpusLen = corpus.length;
-    _firstNameExclusions = new Set([
-      ...corpus.map((n) => n.toLowerCase()),
-      ...SUPPLEMENTARY_NAME_EXCLUSIONS,
-    ]);
-    return _firstNameExclusions;
-  };
+const getFirstNameExclusions = (
+  ctx: PipelineContext,
+): ReadonlySet<string> => {
+  const corpus = getNameCorpusFirstNames(ctx);
+  // Re-build if corpus has been populated since last call
+  if (
+    ctx.firstNameExclusions &&
+    corpus.length === ctx.firstNameExclusionCorpusLen
+  ) {
+    return ctx.firstNameExclusions;
+  }
+  ctx.firstNameExclusionCorpusLen = corpus.length;
+  const set: ReadonlySet<string> = new Set([
+    ...corpus.map((n) => n.toLowerCase()),
+    ...SUPPLEMENTARY_NAME_EXCLUSIONS,
+  ]);
+  ctx.firstNameExclusions = set;
+  return set;
+};
 
 /**
  * Global stopwords: common words across 23 EU languages
@@ -135,26 +133,25 @@ const getFirstNameExclusions =
  *
  * Regenerate: bun packages/data/scripts/generate-stopwords.ts
  */
-let _stopwords: ReadonlySet<string> | null = null;
-let _stopwordsPromise: Promise<ReadonlySet<string>> | null =
-  null;
 
 // INVARIANT: must be called after initNameCorpus() has
 // resolved, so getFirstNameExclusions() sees the full
 // corpus. buildDenyList() enforces this ordering.
-const loadStopwords = (): Promise<ReadonlySet<string>> => {
-  if (_stopwordsPromise) return _stopwordsPromise;
-  _stopwordsPromise = (async () => {
+const loadStopwords = (
+  ctx: PipelineContext,
+): Promise<ReadonlySet<string>> => {
+  if (ctx.stopwordsPromise) return ctx.stopwordsPromise;
+  ctx.stopwordsPromise = (async () => {
     try {
       const mod: { default?: string[] } = await import(
         "@stll/anonymize-data/config/stopwords.json"
       );
       const list = (mod.default ?? []).filter(
         (w: string) =>
-          !getFirstNameExclusions().has(w),
+          !getFirstNameExclusions(ctx).has(w),
       );
       const set: ReadonlySet<string> = new Set(list);
-      _stopwords = set;
+      ctx.stopwords = set;
       return set;
     } catch (err) {
       console.warn(
@@ -163,58 +160,58 @@ const loadStopwords = (): Promise<ReadonlySet<string>> => {
         err,
       );
       const empty: ReadonlySet<string> = new Set();
-      _stopwords = empty;
+      ctx.stopwords = empty;
       return empty;
     }
   })();
-  return _stopwordsPromise;
+  return ctx.stopwordsPromise;
 };
 
 const EMPTY_STOPWORDS: ReadonlySet<string> = new Set();
 
 /** Sync accessor — returns empty set before init. */
-const getStopwords = (): ReadonlySet<string> =>
-  _stopwords ?? EMPTY_STOPWORDS;
+const getStopwords = (
+  ctx: PipelineContext,
+): ReadonlySet<string> =>
+  ctx.stopwords ?? EMPTY_STOPWORDS;
 
 // ── Person stopwords (lazy-loaded from JSON) ─────────
 
-let _personStopwords: ReadonlySet<string> | null = null;
-let _personStopwordsPromise:
-  | Promise<ReadonlySet<string>>
-  | null = null;
-
-const loadPersonStopwords =
-  (): Promise<ReadonlySet<string>> => {
-    if (_personStopwordsPromise) {
-      return _personStopwordsPromise;
+const loadPersonStopwords = (
+  ctx: PipelineContext,
+): Promise<ReadonlySet<string>> => {
+  if (ctx.personStopwordsPromise) {
+    return ctx.personStopwordsPromise;
+  }
+  ctx.personStopwordsPromise = (async () => {
+    try {
+      const mod: {
+        default?: { words?: string[] };
+      } = await import(
+        "@stll/anonymize-data/config/person-stopwords.json"
+      );
+      const set: ReadonlySet<string> = new Set(
+        mod.default?.words ?? [],
+      );
+      ctx.personStopwords = set;
+      return set;
+    } catch {
+      const empty: ReadonlySet<string> = new Set();
+      ctx.personStopwords = empty;
+      return empty;
     }
-    _personStopwordsPromise = (async () => {
-      try {
-        const mod: {
-          default?: { words?: string[] };
-        } = await import(
-          "@stll/anonymize-data/config/person-stopwords.json"
-        );
-        const set: ReadonlySet<string> = new Set(
-          mod.default?.words ?? [],
-        );
-        _personStopwords = set;
-        return set;
-      } catch {
-        const empty: ReadonlySet<string> = new Set();
-        _personStopwords = empty;
-        return empty;
-      }
-    })();
-    return _personStopwordsPromise;
-  };
+  })();
+  return ctx.personStopwordsPromise;
+};
 
 const EMPTY_PERSON_STOPWORDS: ReadonlySet<string> =
   new Set();
 
 /** Sync accessor — returns empty set before init. */
-const getPersonStopwords = (): ReadonlySet<string> =>
-  _personStopwords ?? EMPTY_PERSON_STOPWORDS;
+const getPersonStopwords = (
+  ctx: PipelineContext,
+): ReadonlySet<string> =>
+  ctx.personStopwords ?? EMPTY_PERSON_STOPWORDS;
 
 /**
  * Source tag for each pattern in the automaton.
@@ -261,18 +258,19 @@ export type DenyListData = {
  */
 export const buildDenyList = async (
   config: DenyListConfig,
+  ctx: PipelineContext = defaultContext,
 ): Promise<DenyListData | null> => {
   // Pre-load name corpus so getNameCorpus*() accessors
   // and getFirstNameExclusions() are populated before
   // stopwords filtering runs.
-  await initNameCorpus();
+  await initNameCorpus(ctx);
   // Pre-load all JSON data so sync accessors are
   // populated before processDenyListMatches runs.
   await Promise.all([
-    loadStopwords(),
-    loadAllowList(),
-    loadPersonStopwords(),
-    loadGenericRoles(),
+    loadStopwords(ctx),
+    loadAllowList(ctx),
+    loadPersonStopwords(ctx),
+    loadGenericRoles(ctx),
   ]);
   const dataModule = await loadDataModule();
   if (!dataModule) {
@@ -425,13 +423,13 @@ export const buildDenyList = async (
     }
   };
 
-  for (const name of getNameCorpusFirstNames()) {
+  for (const name of getNameCorpusFirstNames(ctx)) {
     addNameEntry(name, "first-name");
   }
-  for (const name of getNameCorpusSurnames()) {
+  for (const name of getNameCorpusSurnames(ctx)) {
     addNameEntry(name, "surname");
   }
-  for (const title of getNameCorpusTitles()) {
+  for (const title of getNameCorpusTitles(ctx)) {
     const norm = normalizeForSearch(title)
       .replace(/[|\\]/g, "");
     if (norm.length === 0) continue;
@@ -469,6 +467,29 @@ type RawMatch = {
   patternIdx: number;
 };
 
+/**
+ * Ensure all deny-list support data (stopwords, allow
+ * list, person stopwords, generic roles) is loaded on
+ * the given context. Call this before
+ * processDenyListMatches / filterFalsePositives when
+ * the search instance was built on a different context
+ * (e.g. cachedSearch).
+ */
+export const ensureDenyListData = async (
+  ctx: PipelineContext = defaultContext,
+): Promise<void> => {
+  // INVARIANT: initNameCorpus must resolve before
+  // loadStopwords so first-name exclusions are
+  // available when computing the stopword set.
+  await initNameCorpus(ctx);
+  await Promise.all([
+    loadStopwords(ctx),
+    loadAllowList(ctx),
+    loadPersonStopwords(ctx),
+    loadGenericRoles(ctx),
+  ]);
+};
+
 // ── Match processor ─────────────────────────────────
 
 /**
@@ -491,6 +512,7 @@ export const processDenyListMatches = (
   sliceEnd: number,
   fullText: string,
   data: DenyListData,
+  ctx: PipelineContext = defaultContext,
 ): Entity[] => {
   // Pass 1: collect valid matches grouped by pattern
   const matchesByPattern = new Map<
@@ -518,7 +540,7 @@ export const processDenyListMatches = (
       match.end,
     );
     const keyword = matchText.toLowerCase();
-    if (getStopwords().has(keyword) || getAllowList().has(keyword)) {
+    if (getStopwords(ctx).has(keyword) || getAllowList(ctx).has(keyword)) {
       continue;
     }
 
@@ -571,7 +593,7 @@ export const processDenyListMatches = (
     // person names (months, states, languages).
     if (hasPerson) {
       const keyword = first.text.toLowerCase();
-      if (!getPersonStopwords().has(keyword)) {
+      if (!getPersonStopwords(ctx).has(keyword)) {
         for (const m of matches) {
           nameHits.push(m);
         }
@@ -652,6 +674,7 @@ export const processDenyListMatches = (
       fullText,
       first.start,
       last.end,
+      ctx,
     );
 
     // Score: chained names get 0.9, single names 0.5
@@ -745,6 +768,7 @@ const extendPersonName = (
   text: string,
   start: number,
   end: number,
+  ctx: PipelineContext,
 ): { end: number; text: string } => {
   let newEnd = end;
 
@@ -783,8 +807,8 @@ const extendPersonName = (
       // Don't extend into global or person stopwords
       const lower = stripped.toLowerCase();
       if (
-        getStopwords().has(lower) ||
-        getPersonStopwords().has(lower)
+        getStopwords(ctx).has(lower) ||
+        getPersonStopwords(ctx).has(lower)
       ) {
         break;
       }

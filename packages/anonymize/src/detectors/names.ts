@@ -1,5 +1,7 @@
 import { DETECTION_SOURCES } from "../types";
 import type { Entity } from "../types";
+import type { PipelineContext, NameCorpusData } from "../context";
+import { defaultContext } from "../context";
 import {
   ALL_UPPER_RE,
   UPPER_START_RE,
@@ -12,40 +14,41 @@ import {
 // (ECHR/legal context). Loaded from JSON configs in
 // @stll/anonymize-data at init time.
 
-// Module-level data populated by initNameCorpus().
-// Before init, Sets are empty (detection returns []).
-let FIRST_NAMES: ReadonlySet<string> = new Set();
-let COMMON_SURNAMES: ReadonlySet<string> = new Set();
-let TITLE_TOKENS: ReadonlySet<string> = new Set();
-let EXCLUDED_WORDS: ReadonlySet<string> = new Set();
+// ── Accessors (read from context) ────────────────────
+
+const getCorpus = (
+  ctx: PipelineContext,
+): NameCorpusData | null => ctx.nameCorpus;
 
 // Exported accessors for deny-list.ts AC integration.
-// Populated by initNameCorpus().
-let _nameCorpusFirstNames: readonly string[] = [];
-let _nameCorpusSurnames: readonly string[] = [];
-let _nameCorpusTitles: readonly string[] = [];
-let _nameCorpusExcluded: readonly string[] = [];
-
-export const getNameCorpusFirstNames =
-  (): readonly string[] => _nameCorpusFirstNames;
-export const getNameCorpusSurnames =
-  (): readonly string[] => _nameCorpusSurnames;
-export const getNameCorpusTitles =
-  (): readonly string[] => _nameCorpusTitles;
-export const getNameCorpusExcluded =
-  (): readonly string[] => _nameCorpusExcluded;
-
-let _initPromise: Promise<void> | null = null;
+export const getNameCorpusFirstNames = (
+  ctx: PipelineContext = defaultContext,
+): readonly string[] =>
+  ctx.nameCorpus?.firstNamesList ?? [];
+export const getNameCorpusSurnames = (
+  ctx: PipelineContext = defaultContext,
+): readonly string[] =>
+  ctx.nameCorpus?.surnamesList ?? [];
+export const getNameCorpusTitles = (
+  ctx: PipelineContext = defaultContext,
+): readonly string[] =>
+  ctx.nameCorpus?.titlesList ?? [];
+export const getNameCorpusExcluded = (
+  ctx: PipelineContext = defaultContext,
+): readonly string[] =>
+  ctx.nameCorpus?.excludedList ?? [];
 
 /**
  * Load name corpus data from JSON config files.
- * Safe to call multiple times; only loads once.
- * Must be called before detectNameCorpus or the
- * getNameCorpus*() accessors are used.
+ * Safe to call multiple times; only loads once per
+ * context. Must be called before detectNameCorpus or
+ * the getNameCorpus*() accessors are used.
  */
-export const initNameCorpus = (): Promise<void> => {
-  if (_initPromise) return _initPromise;
-  _initPromise = (async () => {
+export const initNameCorpus = (
+  ctx: PipelineContext = defaultContext,
+): Promise<void> => {
+  if (ctx.nameCorpusPromise) return ctx.nameCorpusPromise;
+  const promise = (async () => {
     try {
       const [
         firstMod,
@@ -74,23 +77,26 @@ export const initNameCorpus = (): Promise<void> => {
       const titles = titleMod.default.tokens;
       const exclusions = exclusionMod.default.words;
 
-      FIRST_NAMES = Object.freeze(
-        new Set(firstNames),
-      );
-      COMMON_SURNAMES = Object.freeze(
-        new Set(surnames),
-      );
-      TITLE_TOKENS = Object.freeze(new Set(titles));
-      EXCLUDED_WORDS = Object.freeze(
-        new Set(exclusions),
-      );
-
-      _nameCorpusFirstNames = Object.freeze(firstNames);
-      _nameCorpusSurnames = Object.freeze(surnames);
-      _nameCorpusTitles = Object.freeze(titles);
-      _nameCorpusExcluded = Object.freeze(exclusions);
+      ctx.nameCorpus = {
+        firstNames: Object.freeze(
+          new Set(firstNames),
+        ),
+        surnames: Object.freeze(new Set(surnames)),
+        titleTokens: Object.freeze(new Set(titles)),
+        excludedWords: Object.freeze(
+          new Set(exclusions),
+        ),
+        firstNamesList: Object.freeze(firstNames),
+        surnamesList: Object.freeze(surnames),
+        titlesList: Object.freeze(titles),
+        excludedList: Object.freeze(exclusions),
+      };
     } catch (err) {
-      _initPromise = null; // allow retry on transient error
+      // Reset so the next call retries the load rather
+      // than returning this (already-resolved) failed
+      // promise. Current awaiters still get a resolved
+      // (not rejected) Promise; ctx.nameCorpus stays null.
+      ctx.nameCorpusPromise = null;
       console.warn(
         "[anonymize] Failed to load name corpus JSON"
           + " — name detection disabled:",
@@ -98,7 +104,8 @@ export const initNameCorpus = (): Promise<void> => {
       );
     }
   })();
-  return _initPromise;
+  ctx.nameCorpusPromise = promise;
+  return promise;
 };
 
 // ── Czech/Slovak suffix stripping ────────────────────
@@ -178,23 +185,31 @@ type ClassifiedToken = {
  * Check if a token is in the first-name set, either
  * directly or after stripping Czech/Slovak inflection.
  */
-const isFirstNameToken = (token: string): boolean => {
-  if (FIRST_NAMES.has(token)) {
+const isFirstNameToken = (
+  token: string,
+  corpus: NameCorpusData,
+): boolean => {
+  if (corpus.firstNames.has(token)) {
     return true;
   }
-  return stripInflection(token).some((b) => FIRST_NAMES.has(b));
+  return stripInflection(token).some(
+    (b) => corpus.firstNames.has(b),
+  );
 };
 
 /**
  * Check if a token is in the surname set, either
  * directly or after stripping Czech/Slovak inflection.
  */
-const isSurnameToken = (token: string): boolean => {
-  if (COMMON_SURNAMES.has(token)) {
+const isSurnameToken = (
+  token: string,
+  corpus: NameCorpusData,
+): boolean => {
+  if (corpus.surnames.has(token)) {
     return true;
   }
   return stripInflection(token).some(
-    (b) => COMMON_SURNAMES.has(b),
+    (b) => corpus.surnames.has(b),
   );
 };
 
@@ -243,14 +258,17 @@ const isCorpusMatch = (type: TokenType): boolean =>
 
 // ── Token classification ─────────────────────────────
 
-const classifyToken = (word: WordSegment): ClassifiedToken => {
+const classifyToken = (
+  word: WordSegment,
+  corpus: NameCorpusData,
+): ClassifiedToken => {
   const { text, start, end } = word;
   const lower = text.toLowerCase();
 
   // Strip trailing period for title check (e.g., "Ing.")
   const stripped = text.endsWith(".") ? text.slice(0, -1).toLowerCase() : lower;
 
-  if (TITLE_TOKENS.has(stripped)) {
+  if (corpus.titleTokens.has(stripped)) {
     return { text, type: TOKEN_TYPE.TITLE, start, end };
   }
 
@@ -264,7 +282,7 @@ const classifyToken = (word: WordSegment): ClassifiedToken => {
   }
 
   // Skip excluded words
-  if (EXCLUDED_WORDS.has(lower)) {
+  if (corpus.excludedWords.has(lower)) {
     return { text, type: TOKEN_TYPE.OTHER, start, end };
   }
 
@@ -283,11 +301,11 @@ const classifyToken = (word: WordSegment): ClassifiedToken => {
     return { text, type: TOKEN_TYPE.OTHER, start, end };
   }
 
-  if (isFirstNameToken(text)) {
+  if (isFirstNameToken(text, corpus)) {
     return { text, type: TOKEN_TYPE.NAME, start, end };
   }
 
-  if (isSurnameToken(text)) {
+  if (isSurnameToken(text, corpus)) {
     return { text, type: TOKEN_TYPE.SURNAME, start, end };
   }
 
@@ -318,9 +336,17 @@ const classifyToken = (word: WordSegment): ClassifiedToken => {
  *   Standalone NAME            → 0.5 (low confidence)
  *   Standalone SURNAME         → skip (too ambiguous)
  */
-export const detectNameCorpus = (fullText: string): Entity[] => {
+export const detectNameCorpus = (
+  fullText: string,
+  ctx: PipelineContext = defaultContext,
+): Entity[] => {
+  const corpus = getCorpus(ctx);
+  if (!corpus) {
+    return [];
+  }
+
   const words = segmentWords(fullText);
-  const tokens = words.map((w) => classifyToken(w));
+  const tokens = words.map((w) => classifyToken(w, corpus));
   const entities: Entity[] = [];
   const consumed = new Set<number>();
 

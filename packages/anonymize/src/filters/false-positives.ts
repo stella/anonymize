@@ -1,4 +1,6 @@
 import type { Entity } from "../types";
+import type { PipelineContext } from "../context";
+import { defaultContext } from "../context";
 
 const TEMPLATE_PLACEHOLDER_RE =
   /^(?:\.{3,}|_{3,}|\[[\w\s]+\]|\{[\w\s]+\})$/;
@@ -12,47 +14,47 @@ const STANDALONE_YEAR_RE = /^(?:19|20)\d{2}$/;
 
 // ── Generic roles (lazy-loaded from JSON) ────────────
 
-let _genericRoles: ReadonlySet<string> | null = null;
-let _genericRolesPromise:
-  | Promise<ReadonlySet<string>>
-  | null = null;
-
-/**
- * Load generic-roles.json and cache the result.
- * Must be awaited during pipeline init so the sync
- * accessor is populated before filterFalsePositives
- * runs.
- */
-export const loadGenericRoles =
-  (): Promise<ReadonlySet<string>> => {
-    if (_genericRolesPromise) return _genericRolesPromise;
-    _genericRolesPromise = (async () => {
-      try {
-        const mod: {
-          default?: { roles?: string[] };
-        } = await import(
-          "@stll/anonymize-data/config/generic-roles.json"
-        );
-        const set: ReadonlySet<string> = new Set(
-          mod.default?.roles ?? [],
-        );
-        _genericRoles = set;
-        return set;
-      } catch {
-        const empty: ReadonlySet<string> = new Set();
-        _genericRoles = empty;
-        return empty;
-      }
-    })();
-    return _genericRolesPromise;
-  };
-
 const EMPTY_GENERIC_ROLES: ReadonlySet<string> =
   new Set();
 
+/**
+ * Load generic-roles.json and cache the result on the
+ * given context. Must be awaited during pipeline init
+ * so the sync accessor is populated before
+ * filterFalsePositives runs.
+ */
+export const loadGenericRoles = (
+  ctx: PipelineContext = defaultContext,
+): Promise<ReadonlySet<string>> => {
+  if (ctx.genericRolesPromise) {
+    return ctx.genericRolesPromise;
+  }
+  ctx.genericRolesPromise = (async () => {
+    try {
+      const mod: {
+        default?: { roles?: string[] };
+      } = await import(
+        "@stll/anonymize-data/config/generic-roles.json"
+      );
+      const set: ReadonlySet<string> = new Set(
+        mod.default?.roles ?? [],
+      );
+      ctx.genericRoles = set;
+      return set;
+    } catch {
+      const empty: ReadonlySet<string> = new Set();
+      ctx.genericRoles = empty;
+      return empty;
+    }
+  })();
+  return ctx.genericRolesPromise;
+};
+
 /** Sync accessor — returns empty set before init. */
-const getGenericRoles = (): ReadonlySet<string> =>
-  _genericRoles ?? EMPTY_GENERIC_ROLES;
+const getGenericRoles = (
+  ctx: PipelineContext,
+): ReadonlySet<string> =>
+  ctx.genericRoles ?? EMPTY_GENERIC_ROLES;
 
 /**
  * Filter out entities that are likely false positives:
@@ -62,8 +64,12 @@ const getGenericRoles = (): ReadonlySet<string> =>
  * Runs as a post-processing step after all detection
  * layers have merged.
  */
-export const filterFalsePositives = (entities: Entity[]): Entity[] => {
+export const filterFalsePositives = (
+  entities: Entity[],
+  ctx: PipelineContext = defaultContext,
+): Entity[] => {
   const filtered: Entity[] = [];
+  const roles = getGenericRoles(ctx);
 
   for (const entity of entities) {
     const trimmed = entity.text.trim();
@@ -87,7 +93,7 @@ export const filterFalsePositives = (entities: Entity[]): Entity[] => {
 
     if (
       (entity.label === "person" || entity.label === "organization") &&
-      getGenericRoles().has(trimmed.toLowerCase())
+      roles.has(trimmed.toLowerCase())
     ) {
       continue;
     }
