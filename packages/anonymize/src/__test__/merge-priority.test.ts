@@ -57,6 +57,29 @@ describe("mergeAndDedup priority resolution", () => {
     expect(result[0]?.end).toBe(10);
   });
 
+  test("high-priority entity swallows two adjacent lower-priority entities", () => {
+    // Two non-overlapping NER entities
+    const ner1 = makeEntity("ner", 0.95, 0, 10);
+    const ner2 = makeEntity("ner", 0.95, 10, 20);
+    // One trigger that overlaps both
+    const trigger = makeEntity("trigger", 0.7, 5, 15);
+    const result = mergeAndDedup([ner1, ner2, trigger]);
+    // Trigger replaces ner1 (overlaps [0,10]&[5,15]),
+    // then ner2 overlaps trigger and loses on priority
+    expect(result).toHaveLength(1);
+    expect(result[0]?.source).toBe("trigger");
+  });
+
+  test("deny-list vs coreference at same priority falls back to score", () => {
+    const deny = makeEntity("deny-list", 0.85, 0, 8);
+    const coref = makeEntity("coreference", 0.9, 0, 8);
+    const result = mergeAndDedup([deny, coref]);
+    expect(result).toHaveLength(1);
+    // Same priority (2), higher score wins
+    expect(result[0]?.source).toBe("coreference");
+    expect(result[0]?.score).toBe(0.9);
+  });
+
   test("legal-form and regex have equal priority", () => {
     const legalForm = makeEntity(
       "legal-form",
