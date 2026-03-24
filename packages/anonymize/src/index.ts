@@ -30,7 +30,10 @@ export { createPipelineContext } from "./context";
 
 // ── Pipeline ──────────────────────────────────────
 export { runPipeline, mergeAndDedup } from "./pipeline";
-export type { NerInferenceFn } from "./pipeline";
+export type {
+  NerInferenceFn,
+  PipelineOptions,
+} from "./pipeline";
 
 // ── Redaction ─────────────────────────────────────
 export {

@@ -30,7 +30,11 @@ confidence boosting, false positive filtering.
 import { runPipeline, redactText } from '@stll/anonymize'
 
 // Detect entities
-const entities = await runPipeline(text, config)
+const entities = await runPipeline({
+  fullText: text,
+  config,
+  gazetteerEntries: [],
+})
 
 // Redact
 const { redactedText, redactionMap } = redactText(

@@ -32,12 +32,11 @@ describe("address trigger strategy", () => {
     const text =
       "trvale bytem Lipová 42, 110 00 Praha 1, " +
       '(dále jen "Prodávající")';
-    const entities = await runPipeline(
-      text,
-      TRIGGERS_ONLY_CONFIG,
-      [],
-      null,
-    );
+    const entities = await runPipeline({
+      fullText: text,
+      config: TRIGGERS_ONLY_CONFIG,
+      gazetteerEntries: [],
+    });
     const addr = findAddress(entities);
     expect(addr).toBeDefined();
     expect(addr!.text).toBe(
@@ -49,12 +48,11 @@ describe("address trigger strategy", () => {
     const text =
       "bytem: nábř. Kpt. Jaroše 1000/7, " +
       "170 00 Praha 7";
-    const entities = await runPipeline(
-      text,
-      TRIGGERS_ONLY_CONFIG,
-      [],
-      null,
-    );
+    const entities = await runPipeline({
+      fullText: text,
+      config: TRIGGERS_ONLY_CONFIG,
+      gazetteerEntries: [],
+    });
     const addr = findAddress(entities);
     expect(addr).toBeDefined();
     expect(addr!.text).toBe(
@@ -64,12 +62,11 @@ describe("address trigger strategy", () => {
 
   test("stops at period (sentence end)", async () => {
     const text = "trvale bytem Lipová 42.";
-    const entities = await runPipeline(
-      text,
-      TRIGGERS_ONLY_CONFIG,
-      [],
-      null,
-    );
+    const entities = await runPipeline({
+      fullText: text,
+      config: TRIGGERS_ONLY_CONFIG,
+      gazetteerEntries: [],
+    });
     const addr = findAddress(entities);
     expect(addr).toBeDefined();
     expect(addr!.text).toBe("Lipová 42");
@@ -78,12 +75,11 @@ describe("address trigger strategy", () => {
   test("stops at opening paren", async () => {
     const text =
       "trvale bytem Lipová 42 (přízemí)";
-    const entities = await runPipeline(
-      text,
-      TRIGGERS_ONLY_CONFIG,
-      [],
-      null,
-    );
+    const entities = await runPipeline({
+      fullText: text,
+      config: TRIGGERS_ONLY_CONFIG,
+      gazetteerEntries: [],
+    });
     const addr = findAddress(entities);
     expect(addr).toBeDefined();
     expect(addr!.text).toBe("Lipová 42");
@@ -96,12 +92,11 @@ describe("address trigger strategy", () => {
       "Ulice " + "Nekonečná ".repeat(15) + "42";
     const text =
       `trvale bytem ${longStreet}, 110 00 Praha 1`;
-    const entities = await runPipeline(
-      text,
-      TRIGGERS_ONLY_CONFIG,
-      [],
-      null,
-    );
+    const entities = await runPipeline({
+      fullText: text,
+      config: TRIGGERS_ONLY_CONFIG,
+      gazetteerEntries: [],
+    });
     const addr = findAddress(entities);
     expect(addr).toBeDefined();
     // The extracted text should not exceed ~120 chars

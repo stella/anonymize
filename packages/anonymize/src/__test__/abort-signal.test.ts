@@ -19,12 +19,11 @@ const minimalConfig: PipelineConfig = {
 
 describe("runPipeline abort signal", () => {
   test("completes normally without signal", async () => {
-    const result = await runPipeline(
-      "hello world",
-      minimalConfig,
-      [],
-      null,
-    );
+    const result = await runPipeline({
+      fullText: "hello world",
+      config: minimalConfig,
+      gazetteerEntries: [],
+    });
     expect(Array.isArray(result)).toBe(true);
   });
 
@@ -33,15 +32,12 @@ describe("runPipeline abort signal", () => {
     controller.abort();
 
     try {
-      await runPipeline(
-        "hello world",
-        minimalConfig,
-        [],
-        null,
-        undefined,
-        undefined,
-        controller.signal,
-      );
+      await runPipeline({
+        fullText: "hello world",
+        config: minimalConfig,
+        gazetteerEntries: [],
+        signal: controller.signal,
+      });
       // Should not reach here
       expect(true).toBe(false);
     } catch (err) {
@@ -57,15 +53,12 @@ describe("runPipeline abort signal", () => {
     controller.abort();
 
     try {
-      await runPipeline(
-        "hello world",
-        minimalConfig,
-        [],
-        null,
-        undefined,
-        undefined,
-        controller.signal,
-      );
+      await runPipeline({
+        fullText: "hello world",
+        config: minimalConfig,
+        gazetteerEntries: [],
+        signal: controller.signal,
+      });
       expect(true).toBe(false);
     } catch (err) {
       expect(
@@ -94,15 +87,13 @@ describe("runPipeline abort signal", () => {
       labels: ["person"],
     };
 
-    await runPipeline(
-      "hello world",
-      nerConfig,
-      [],
-      mockNer,
-      undefined,
-      undefined,
-      controller.signal,
-    );
+    await runPipeline({
+      fullText: "hello world",
+      config: nerConfig,
+      gazetteerEntries: [],
+      nerInference: mockNer,
+      signal: controller.signal,
+    });
 
     expect(receivedSignal).toBe(controller.signal);
   });
@@ -125,15 +116,13 @@ describe("runPipeline abort signal", () => {
     preAborted.abort();
 
     try {
-      await runPipeline(
-        "hello world",
-        nerConfig,
-        [],
-        mockNer,
-        undefined,
-        undefined,
-        preAborted.signal,
-      );
+      await runPipeline({
+        fullText: "hello world",
+        config: nerConfig,
+        gazetteerEntries: [],
+        nerInference: mockNer,
+        signal: preAborted.signal,
+      });
       expect(true).toBe(false);
     } catch (err) {
       expect(

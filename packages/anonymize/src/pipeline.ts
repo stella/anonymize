@@ -180,6 +180,28 @@ const getCachedSearch = async (
 };
 
 /**
+ * Options for {@link runPipeline}.
+ *
+ * @property cachedSearch Pre-built search instance.
+ *   When provided, `config` and `gazetteerEntries`
+ *   are not used for building; the caller must
+ *   ensure the instance matches both parameters.
+ */
+export type PipelineOptions = {
+  fullText: string;
+  config: PipelineConfig;
+  gazetteerEntries: GazetteerEntry[];
+  nerInference?: NerInferenceFn | null;
+  onProgress?: (
+    step: string,
+    detail: string,
+  ) => void;
+  cachedSearch?: UnifiedSearchInstance;
+  signal?: AbortSignal;
+  context?: PipelineContext;
+};
+
+/**
  * Run the full detection pipeline.
  *
  * Two TextSearch instances scan the text (regex +
@@ -193,22 +215,20 @@ const getCachedSearch = async (
  * Pass an optional `context` to isolate cached state
  * from other pipeline runs. If omitted, a module-level
  * default context is used (backward compatible).
- *
- * @param cachedSearch Pre-built search instance.
- *   When provided, `config` and `gazetteerEntries`
- *   are not used for building; the caller must
- *   ensure the instance matches both parameters.
  */
 export const runPipeline = async (
-  fullText: string,
-  config: PipelineConfig,
-  gazetteerEntries: GazetteerEntry[],
-  nerInference: NerInferenceFn | null,
-  onProgress?: (step: string, detail: string) => void,
-  cachedSearch?: UnifiedSearchInstance,
-  signal?: AbortSignal,
-  context?: PipelineContext,
+  options: PipelineOptions,
 ): Promise<Entity[]> => {
+  const {
+    fullText,
+    config,
+    gazetteerEntries,
+    nerInference = null,
+    onProgress,
+    cachedSearch,
+    signal,
+    context,
+  } = options;
   const ctx = context ?? defaultContext;
 
   const log = (step: string, detail: string) => {
