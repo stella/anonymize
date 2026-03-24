@@ -229,8 +229,11 @@ const tryPrefixExtension = (
   start: number,
   end: number,
 ): { end: number; text: string } | null => {
-  const maxEnd = end + MAX_PREFIX_OVERSHOOT;
-  if (maxEnd > fullText.length) {
+  const maxEnd = Math.min(
+    end + MAX_PREFIX_OVERSHOOT,
+    fullText.length,
+  );
+  if (maxEnd <= end + 1) {
     return null;
   }
 

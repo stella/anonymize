@@ -6,13 +6,15 @@
  * 200K per-pattern object allocations:
  * 1. regex + triggers + legal-forms (mixed, ~140
  *    patterns, caseInsensitive for trigger AC)
- * 2. deny-list + street-types + gazetteer (200K
- *    literals, caseInsensitive + wholeWords +
- *    overlap "all"; gazetteer fuzzy terms use
+ * 2. deny-list + street-types + gazetteer
+ *    (caseInsensitive, overlap "all";
+ *    deny-list/street-type use per-pattern
+ *    wholeWords: true; gazetteer exact use
+ *    wholeWords: false; gazetteer fuzzy use
  *    distance: 2 via @stll/fuzzy-search)
  *
- * Plain strings for deny-list/street-types;
- * PatternEntry objects for gazetteer fuzzy terms.
+ * All patterns are PatternEntry objects with
+ * per-pattern literal/wholeWords settings.
  */
 
 import { TextSearch } from "@stll/text-search";
@@ -224,22 +226,32 @@ export const buildUnifiedSearch = async (
       (gazResult?.patterns.length ?? 0),
   };
 
-  // Build the combined pattern array. Deny-list
-  // and street-type patterns are plain strings;
-  // gazetteer patterns may include PatternEntry
-  // objects (fuzzy).
+  // Build the combined pattern array.
+  // Deny-list and street-type patterns use
+  // per-pattern wholeWords: true (they are
+  // known tokens). Gazetteer exact patterns
+  // already set wholeWords: false in
+  // buildGazetteerPatterns. The global
+  // wholeWords is false so fuzzy patterns
+  // (which don't support per-pattern override)
+  // match without word-boundary constraints.
+  const wrapWholeWord = (
+    s: string,
+  ): PatternEntry => ({
+    pattern: s,
+    literal: true as const,
+    wholeWords: true,
+  });
   const literalAllPatterns: PatternEntry[] = [
-    ...denyListOriginals,
-    ...streetTypes,
+    ...denyListOriginals.map(wrapWholeWord),
+    ...streetTypes.map(wrapWholeWord),
     ...(gazResult?.patterns ?? []),
   ];
 
   const tsLiterals =
     literalAllPatterns.length > 0
       ? new TextSearch(literalAllPatterns, {
-          allLiteral: true,
           caseInsensitive: true,
-          wholeWords: true,
           overlapStrategy: "all",
         })
       : new TextSearch([]);
