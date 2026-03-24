@@ -78,7 +78,17 @@ export type NerInferenceFn = (
   fullText: string,
   labels: string[],
   threshold: number,
+  signal?: AbortSignal,
 ) => Promise<Entity[]>;
+
+const checkAbort = (signal?: AbortSignal): void => {
+  if (signal?.aborted) {
+    throw new DOMException(
+      "Pipeline aborted",
+      "AbortError",
+    );
+  }
+};
 
 // Module-level cache keyed on config fingerprint.
 // Rebuilds when config changes (different countries,
@@ -127,6 +137,10 @@ const getCachedSearch = async (
  * Two TextSearch instances scan the text (regex +
  * literals). Results are dispatched to each
  * detector's post-processor by pattern index range.
+ *
+ * Pass an AbortSignal to cancel the pipeline between
+ * stages. Throws a DOMException with name "AbortError"
+ * when cancelled.
  */
 export const runPipeline = async (
   fullText: string,
@@ -135,18 +149,25 @@ export const runPipeline = async (
   nerInference: NerInferenceFn | null,
   onProgress?: (step: string, detail: string) => void,
   cachedSearch?: UnifiedSearchInstance,
+  signal?: AbortSignal,
 ): Promise<Entity[]> => {
   const log = (step: string, detail: string) => {
     onProgress?.(step, detail);
   };
+
+  checkAbort(signal);
 
   // Ensure generic-roles data is loaded before
   // filterFalsePositives runs. This is a no-op if
   // buildDenyList already loaded it.
   await loadGenericRoles();
 
+  checkAbort(signal);
+
   const search =
     cachedSearch ?? (await getCachedSearch(config));
+
+  checkAbort(signal);
 
   // Two-pass scan (regex + literals)
   const { regexMatches, literalMatches } =
@@ -192,12 +213,15 @@ export const runPipeline = async (
       `${triggerEntities.length} matches`,
     );
 
+  checkAbort(signal);
+
   let nameCorpusEntities: Entity[] = [];
   if (
     config.enableNameCorpus &&
     !config.enableDenyList
   ) {
     await initNameCorpus();
+    checkAbort(signal);
     nameCorpusEntities = detectNameCorpus(fullText);
     log(
       "name-corpus",
@@ -230,13 +254,22 @@ export const runPipeline = async (
     log("gazetteer", `${gazetteerExact.length} exact + ${gazetteerFuzzy.length} fuzzy`);
   }
 
+  checkAbort(signal);
+
   // NER
   let nerEntities: Entity[] = [];
   if (config.enableNer && nerInference) {
     log("ner", "running inference...");
-    nerEntities = await nerInference(fullText, config.labels, config.threshold);
+    nerEntities = await nerInference(
+      fullText,
+      config.labels,
+      config.threshold,
+      signal,
+    );
     log("ner", `${nerEntities.length} entities`);
   }
+
+  checkAbort(signal);
 
   // Address seed expansion
   const preAddressEntities = [
@@ -254,6 +287,8 @@ export const runPipeline = async (
   if (addressSeedEntities.length > 0)
     log("address-seeds", `${addressSeedEntities.length} expanded`);
 
+  checkAbort(signal);
+
   // Confidence boost
   const preBoostEntities = [...preAddressEntities, ...addressSeedEntities];
   let allEntities: Entity[];
@@ -267,7 +302,7 @@ export const runPipeline = async (
   }
 
   // Street patterns near existing addresses
-  // (e.g. "Ostrovní 225/1" near "110 00 Praha 1")
+  // (e.g. "Ostrovni 225/1" near "110 00 Praha 1")
   const streetPatterns = detectStreetPatternsNearAddresses(
     fullText,
     allEntities,
@@ -285,6 +320,8 @@ export const runPipeline = async (
   const merged = filterFalsePositives(rawMerged);
   if (merged.length < rawMerged.length)
     log("filter", `removed ${rawMerged.length - merged.length} FPs`);
+
+  checkAbort(signal);
 
   // Coreference
   if (config.enableCoreference) {
