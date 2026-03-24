@@ -120,6 +120,11 @@ export type { RegionId, CountryCode } from "./regions";
 export { filterFalsePositives } from "./filters/false-positives";
 export { boostNearMissEntities } from "./filters/confidence-boost";
 export {
+  applyHotwordRules,
+  initHotwordRules,
+} from "./filters/hotword-rules";
+export type { HotwordRule } from "./filters/hotword-rules";
+export {
   classifyZones,
   applyZoneAdjustments,
   initZoneClassifier,

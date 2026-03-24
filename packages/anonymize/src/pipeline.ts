@@ -29,6 +29,10 @@ import {
   initZoneClassifier,
   type ZoneSpan,
 } from "./filters/zone-classifier";
+import {
+  applyHotwordRules,
+  initHotwordRules,
+} from "./filters/hotword-rules";
 import { enforceBoundaryConsistency } from "./filters/boundary-consistency";
 import type {
   Entity,
@@ -217,10 +221,11 @@ export const runPipeline = async (
 
   checkAbort(signal);
 
-  // Ensure generic-roles data and zone config are
-  // loaded before the pipeline runs. Both are no-ops
-  // after the first call. Zone init is isolated so a
-  // transient failure degrades gracefully to no zones.
+  // Ensure generic-roles data, zone config, and
+  // hotword rules are loaded before the pipeline
+  // runs. All are no-ops after the first call. Zone
+  // init is isolated so a transient failure degrades
+  // gracefully to no zones.
   let zoneInitOk = false;
   if (config.enableZoneClassification) {
     const zoneInit = initZoneClassifier()
@@ -237,9 +242,13 @@ export const runPipeline = async (
     await Promise.all([
       loadGenericRoles(ctx),
       zoneInit,
+      initHotwordRules(),
     ]);
   } else {
-    await loadGenericRoles(ctx);
+    await Promise.all([
+      loadGenericRoles(ctx),
+      initHotwordRules(),
+    ]);
   }
 
   // When a pre-built search is provided, buildDenyList
@@ -433,9 +442,17 @@ export const runPipeline = async (
   // Zone-based score adjustment: apply before
   // threshold filtering so entities in PII-dense zones
   // can cross the threshold.
-  const preBoostEntities = applyZoneAdjustments(
+  const zoneAdjusted = applyZoneAdjustments(
     [...preAddressEntities, ...addressSeedEntities],
     zones,
+  );
+
+  // Hotword context rules: boost or reclassify
+  // entities near relevant keywords. Applied after
+  // zone adjustments so both effects stack.
+  const preBoostEntities = applyHotwordRules(
+    zoneAdjusted,
+    fullText,
   );
 
   // Confidence boost + threshold filter
