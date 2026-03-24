@@ -227,6 +227,22 @@ export const runPipeline = async (
   // init is isolated so a transient failure degrades
   // gracefully to no zones.
   let zoneInitOk = false;
+  const enableHotwords =
+    config.enableHotwordRules !== false;
+  let hotwordInitOk = false;
+  const hotwordInit = enableHotwords
+    ? initHotwordRules()
+        .then(() => {
+          hotwordInitOk = true;
+        })
+        .catch((err: unknown) => {
+          log("hotwords", "init failed; skipping");
+          console.warn(
+            "[anonymize] hotword rules init failed",
+            err,
+          );
+        })
+    : Promise.resolve();
   if (config.enableZoneClassification) {
     const zoneInit = initZoneClassifier()
       .then(() => {
@@ -242,12 +258,12 @@ export const runPipeline = async (
     await Promise.all([
       loadGenericRoles(ctx),
       zoneInit,
-      initHotwordRules(),
+      hotwordInit,
     ]);
   } else {
     await Promise.all([
       loadGenericRoles(ctx),
-      initHotwordRules(),
+      hotwordInit,
     ]);
   }
 
@@ -450,10 +466,10 @@ export const runPipeline = async (
   // Hotword context rules: boost or reclassify
   // entities near relevant keywords. Applied after
   // zone adjustments so both effects stack.
-  const preBoostEntities = applyHotwordRules(
-    zoneAdjusted,
-    fullText,
-  );
+  const preBoostEntities =
+    enableHotwords && hotwordInitOk
+      ? applyHotwordRules(zoneAdjusted, fullText)
+      : zoneAdjusted;
 
   // Confidence boost + threshold filter
   let allEntities: Entity[];

@@ -76,7 +76,11 @@ export const initHotwordRules =
   async (): Promise<void> => {
     if (rules !== null) return;
     if (initPromise !== null) return initPromise;
-    initPromise = loadRules();
+    initPromise = loadRules().catch((err) => {
+      // Reset so callers can retry on transient failure.
+      initPromise = null;
+      throw err;
+    });
     return initPromise;
   };
 
@@ -174,7 +178,10 @@ export const applyHotwordRules = (
         if (distance > maxDistance) continue;
 
         // Distance-decayed adjustment.
-        const decay = 1 - distance / maxDistance;
+        const decay =
+          maxDistance === 0
+            ? 1
+            : 1 - distance / maxDistance;
         const adj = rule.scoreAdjustment * decay;
 
         if (Math.abs(adj) > Math.abs(bestAdjustment)) {
