@@ -77,8 +77,6 @@ export {
   processAddressSeeds,
 } from "./detectors/address-seeds";
 export {
-  scanExact,
-  scanFuzzy,
   processGazetteerMatches,
   buildGazetteerPatterns,
 } from "./detectors/gazetteer";
