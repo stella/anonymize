@@ -865,3 +865,85 @@ export const processRegexMatches = (
 
   return results;
 };
+
+// ── Dynamic signing clause patterns ────────────────
+
+type SigningClauseConfig = {
+  patterns: Array<{
+    lang: string;
+    prefix: string;
+    suffix: string;
+    prepositions: string[];
+  }>;
+};
+
+/**
+ * Build signing clause place-name patterns from
+ * signing-clauses.json. Each pattern captures the
+ * city/place name from contract signing locations.
+ *
+ * The place name sub-pattern:
+ *   \p{Lu}\p{Ll}+ (capitalized word)
+ *   optionally followed by preposition + capitalized
+ *   word (for "nad Nisou", "am Main", etc.)
+ *   optionally followed by more capitalized words
+ *   (for "Hradec Králové", "New York", etc.)
+ */
+const buildSigningClausePatterns = (
+  data: SigningClauseConfig,
+): string[] => {
+  const patterns: string[] = [];
+
+  for (const entry of data.patterns) {
+    const prepAlt =
+      entry.prepositions.length > 0
+        ? entry.prepositions.join("|")
+        : null;
+
+    // Place name: Uppercase word, optionally with
+    // preposition + uppercase, optionally more caps
+    const place = prepAlt
+      ? `(\\p{Lu}\\p{Ll}+` +
+        `(?:\\s+(?:${prepAlt})\\s+\\p{Lu}\\p{Ll}+)*` +
+        `(?:\\s+\\p{Lu}\\p{Ll}+)*)`
+      : `(\\p{Lu}\\p{Ll}+(?:[- ]\\p{Lu}\\p{Ll}+)*)`;
+
+    const full =
+      `(?:^|\\n|[^\\S\\n])` +
+      entry.prefix +
+      place +
+      (entry.suffix ? `(?:${entry.suffix})` : "");
+
+    patterns.push(full);
+  }
+
+  return patterns;
+};
+
+export const SIGNING_CLAUSE_META: Readonly<RegexMeta> =
+  { label: "address", score: 0.9 };
+
+let signingPatternPromise: Promise<string[]> | null =
+  null;
+
+const loadSigningPatterns =
+  async (): Promise<string[]> => {
+    const mod = await import(
+      "@stll/anonymize-data/config/signing-clauses.json"
+    );
+    const data: SigningClauseConfig =
+      mod.default ?? mod;
+    return buildSigningClausePatterns(data);
+  };
+
+export const getSigningClausePatterns =
+  (): Promise<string[]> => {
+    if (!signingPatternPromise) {
+      signingPatternPromise =
+        loadSigningPatterns().catch((err) => {
+          signingPatternPromise = null;
+          throw err;
+        });
+    }
+    return signingPatternPromise;
+  };

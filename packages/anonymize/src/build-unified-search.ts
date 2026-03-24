@@ -26,6 +26,8 @@ import {
   CURRENCY_PATTERN_META,
   getDatePatterns,
   DATE_PATTERN_META,
+  getSigningClausePatterns,
+  SIGNING_CLAUSE_META,
 } from "./detectors/regex";
 import {
   buildLegalFormPatterns,
@@ -72,6 +74,7 @@ export const buildUnifiedSearch = async (
     streetTypes,
     currencyPatterns,
     datePatterns,
+    signingPatterns,
   ] = await Promise.all([
     buildLegalFormPatterns(),
     config.enableTriggerPhrases
@@ -86,6 +89,7 @@ export const buildUnifiedSearch = async (
     buildStreetTypePatterns(),
     getCurrencyPatterns(),
     getDatePatterns(),
+    getSigningClausePatterns(),
   ]);
 
   // ── Instance 1: regex + triggers + legal-forms ──
@@ -102,6 +106,7 @@ export const buildUnifiedSearch = async (
     ...(REGEX_PATTERNS as string[]),
     ...currencyPatterns,
     ...datePatterns,
+    ...signingPatterns,
   ];
   const regexMeta: RegexMeta[] = [
     ...REGEX_META,
@@ -110,6 +115,9 @@ export const buildUnifiedSearch = async (
     ),
     ...datePatterns.map(
       () => DATE_PATTERN_META,
+    ),
+    ...signingPatterns.map(
+      () => SIGNING_CLAUSE_META,
     ),
   ];
 
