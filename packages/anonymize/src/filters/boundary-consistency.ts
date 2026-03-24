@@ -265,23 +265,84 @@ const removeNestedSameLabel = (
 };
 
 /**
+ * Resolve cross-label overlaps that can arise when
+ * `fixPartialWords` independently expands two
+ * different-label entities toward the same word
+ * boundary. The entity with the higher score (or
+ * longer span on tie) keeps its boundary; the other
+ * is trimmed so the overlap disappears.
+ */
+const resolveCrossLabelOverlaps = (
+  entities: Entity[],
+  fullText: string,
+): Entity[] => {
+  const sorted = entities
+    .map((e) => ({ ...e }))
+    .sort((a, b) => a.start - b.start);
+
+  for (let i = 0; i < sorted.length; i++) {
+    for (let j = i + 1; j < sorted.length; j++) {
+      const a = sorted[i];
+      const b = sorted[j];
+      if (b.start >= a.end) break; // no overlap
+      if (a.label === b.label) continue;
+
+      // Skip full containment (one entity fully
+      // inside another). Cross-label nesting is
+      // valid and should be preserved.
+      const aContainsB =
+        a.start <= b.start && a.end >= b.end;
+      const bContainsA =
+        b.start <= a.start && b.end >= a.end;
+      if (aContainsB || bContainsA) continue;
+
+      // Partial overlap. Higher score wins; on tie
+      // the longer span wins.
+      const aLen = a.end - a.start;
+      const bLen = b.end - b.start;
+      const aWins =
+        a.score > b.score ||
+        (a.score === b.score && aLen >= bLen);
+
+      if (aWins) {
+        // Trim b's start to a's end
+        b.start = a.end;
+        b.text = fullText.slice(b.start, b.end);
+      } else {
+        // Trim a's end to b's start
+        a.end = b.start;
+        a.text = fullText.slice(a.start, a.end);
+      }
+    }
+  }
+
+  // Drop any entity that was trimmed to zero width.
+  return sorted.filter((e) => e.start < e.end);
+};
+
+/**
  * Post-processing pass for entity boundary consistency.
  * Runs after mergeAndDedup, before false-positive
  * filtering.
  *
  * 1. Fix partial-word boundaries (respects cross-label
  *    neighbors to avoid introducing new overlaps)
- * 2. Deduplicate identical [start, end, label] spans
- * 3. Merge adjacent same-label entities (catches any
+ * 2. Resolve any remaining cross-label overlaps
+ * 3. Deduplicate identical [start, end, label] spans
+ * 4. Merge adjacent same-label entities (catches any
  *    new adjacency/overlap from step 1)
- * 4. Remove nested same-label entities
+ * 5. Remove nested same-label entities
  */
 export const enforceBoundaryConsistency = (
   entities: Entity[],
   fullText: string,
 ): Entity[] => {
   const fixed = fixPartialWords(entities, fullText);
-  const deduped = deduplicateSpans(fixed);
+  const resolved = resolveCrossLabelOverlaps(
+    fixed,
+    fullText,
+  );
+  const deduped = deduplicateSpans(resolved);
   const merged = mergeAdjacent(deduped, fullText);
   return removeNestedSameLabel(merged);
 };

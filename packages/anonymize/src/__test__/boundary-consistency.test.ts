@@ -110,7 +110,7 @@ describe("enforceBoundaryConsistency", () => {
       expect(result[0]?.text).toBe("abc def ghi");
     });
 
-    test("merges same-label across intervening different-label", () => {
+    test("does not merge same-label when gap contains non-whitespace", () => {
       // person "Jan" [0,3], address "x" [4,5],
       // person "Novák" [6,11]. The two person
       // entities should still be checked for
@@ -363,6 +363,42 @@ describe("enforceBoundaryConsistency", () => {
         fullText,
       );
       expect(result).toHaveLength(2);
+    });
+
+    test("resolves cross-label overlap from gap expansion", () => {
+      // Two different-label entities with a gap between
+      // them in the same word. Both expand toward the
+      // same word boundary, creating an overlap.
+      // The higher-score entity keeps its boundary.
+      const fullText = "JanXPraha";
+      // person [0,3] "Jan", address [4,9] "Praha"
+      // Both are partial words in "JanXPraha" (single
+      // word boundary at 0 and 9). Clamping uses
+      // original positions, so person expands right to
+      // address.start=4, address expands left to
+      // person.end=3. Result: person [0,4], address
+      // [3,9] — overlap at [3,4]. The resolver must
+      // trim one so no overlap remains.
+      const entities = [
+        makeEntity("person", 0, 3, "Jan", 0.9),
+        makeEntity("address", 4, 9, "Praha", 0.8),
+      ];
+      const result = enforceBoundaryConsistency(
+        entities,
+        fullText,
+      );
+      const person = result.find(
+        (e) => e.label === "person",
+      );
+      const address = result.find(
+        (e) => e.label === "address",
+      );
+      expect(person).toBeDefined();
+      expect(address).toBeDefined();
+      // No overlap
+      expect(person!.end).toBeLessThanOrEqual(
+        address!.start,
+      );
     });
   });
 });
