@@ -19,7 +19,11 @@ const UPPER =
 const LOWER =
   "a-záčďéěíňóřšťúůýžäöüßàâæçèêëîïôùûÿñ\\u0131";
 const CAP_WORD = `[${UPPER}][${LOWER}${UPPER}]+`;
-const ANY_WORD = `[${UPPER}${LOWER}][${LOWER}${UPPER}]+`;
+// ANY_WORD: mixed-case word OR short all-caps token
+// (2-3 chars, e.g. "CZ" in "Metrostav CZ s.r.o.")
+const ANY_WORD =
+  `(?:[${UPPER}${LOWER}][${LOWER}${UPPER}]+` +
+  `|[${UPPER}]{2,3})`;
 // All-caps word: 2+ uppercase letters, no lowercase.
 // For company names like "EAGLES BRNO", max 3 words.
 const ALLCAP_WORD = `[${UPPER}]{2,}`;

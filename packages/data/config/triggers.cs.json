@@ -849,5 +849,115 @@
       "count": 1
     },
     "trigger": "vložky "
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 2
+    },
+    "trigger": "sp. zn."
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 2
+    },
+    "trigger": "sp.zn."
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 2
+    },
+    "trigger": "spisové značky"
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 2
+    },
+    "trigger": "spisovou značkou"
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 2
+    },
+    "trigger": "pod sp.zn."
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "i.s."
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "v.z."
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "zastoupenou:"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "zastoupeným:"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "zastoupená:"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "zastoupený:"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "zastoupenou"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "zastoupeným"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "zastoupená"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "zastoupený"
   }
 ]
