@@ -65,7 +65,7 @@ describe("enforceBoundaryConsistency", () => {
       expect(result).toHaveLength(2);
     });
 
-    test("does not merge zero-gap (touching) entities", () => {
+    test("collapses zero-gap entities via expansion + dedup", () => {
       const fullText = "JanNovák";
       const entities = [
         makeEntity("person", 0, 3, "Jan"),
@@ -108,6 +108,30 @@ describe("enforceBoundaryConsistency", () => {
       expect(result[0]?.start).toBe(4);
       expect(result[0]?.end).toBe(15);
       expect(result[0]?.text).toBe("abc def ghi");
+    });
+
+    test("merges same-label across intervening different-label", () => {
+      // person "Jan" [0,3], address "x" [4,5],
+      // person "Novák" [6,11]. The two person
+      // entities should still be checked for
+      // merging even though address sits between.
+      const fullText = "Jan x Novák";
+      const entities = [
+        makeEntity("person", 0, 3, "Jan"),
+        makeEntity("address", 4, 5, "x"),
+        makeEntity("person", 6, 11, "Novák"),
+      ];
+      const result = enforceBoundaryConsistency(
+        entities,
+        fullText,
+      );
+      // Gap between persons is " x " (3 chars) but
+      // contains "x" which is not in GAP_PATTERN,
+      // so they should NOT merge.
+      const persons = result.filter(
+        (e) => e.label === "person",
+      );
+      expect(persons).toHaveLength(2);
     });
 
     test("does not merge when gap exceeds 3 chars", () => {

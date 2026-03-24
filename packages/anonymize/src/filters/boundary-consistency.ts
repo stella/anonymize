@@ -68,8 +68,15 @@ const wordEndAt = (
 };
 
 /**
- * Step 1: merge adjacent same-label entities separated
- * only by whitespace, comma, or hyphen (max 3 chars).
+ * Merge adjacent same-label entities separated only by
+ * whitespace, comma, or hyphen (max 3 chars). Also
+ * merges same-label entities that partially overlap
+ * (which can happen after word-boundary expansion).
+ *
+ * Looks for the last same-label entity in the result
+ * (not just the very last entity) so that an
+ * intervening different-label entity does not prevent
+ * merging.
  */
 const mergeAdjacent = (
   entities: Entity[],
@@ -81,8 +88,16 @@ const mergeAdjacent = (
   const result: Entity[] = [];
 
   for (const entity of sorted) {
-    const prev = result.at(-1);
-    if (!prev || prev.label !== entity.label) {
+    // Find the last same-label entity in result.
+    let prev: Entity | undefined;
+    for (let i = result.length - 1; i >= 0; i--) {
+      if (result[i]?.label === entity.label) {
+        prev = result[i];
+        break;
+      }
+    }
+
+    if (!prev) {
       result.push({ ...entity });
       continue;
     }
@@ -117,10 +132,10 @@ const mergeAdjacent = (
 };
 
 /**
- * Step 2: fix partial-word boundaries by extending
- * entity start/end to the nearest word boundary.
- * Does not extend across newlines or into spans
- * occupied by different-label entities.
+ * Fix partial-word boundaries by extending entity
+ * start/end to the nearest word boundary. Does not
+ * extend across newlines or into spans occupied by
+ * different-label entities.
  */
 const fixPartialWords = (
   entities: Entity[],
@@ -201,9 +216,9 @@ const deduplicateSpans = (
 };
 
 /**
- * Step 3: remove nested same-label entities. If a
- * shorter entity is fully contained within a longer
- * entity of the same label, drop the shorter one.
+ * Remove nested same-label entities. If a shorter
+ * entity is fully contained within a longer entity
+ * of the same label, drop the shorter one.
  */
 const removeNestedSameLabel = (
   entities: Entity[],
