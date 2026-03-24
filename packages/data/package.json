@@ -1,22 +1,35 @@
 {
   "name": "@stll/anonymize-data",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "description": "Deny list dictionaries and config data for @stll/anonymize",
   "type": "module",
   "exports": {
-    ".": "./dictionaries/index.ts",
-    "./dictionaries": "./dictionaries/index.ts",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./dictionaries": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
     "./config/*": "./config/*"
   },
+  "types": "dist/index.d.ts",
+  "files": ["dist", "config", "dictionaries/cities"],
   "publishConfig": {
     "access": "restricted"
   },
   "license": "MIT",
   "scripts": {
+    "build": "tsdown",
+    "prepublishOnly": "bun run build",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "stopwords-iso": "1.1.0",
+    "tsdown": "^0.12.4",
     "typescript": "^5.9.3"
   }
 }
