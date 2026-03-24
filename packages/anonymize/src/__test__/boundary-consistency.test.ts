@@ -134,6 +134,30 @@ describe("enforceBoundaryConsistency", () => {
       expect(persons).toHaveLength(2);
     });
 
+    test("does not merge when different-label occupies gap", () => {
+      // Two person entities separated by a comma that
+      // is itself tagged as punctuation. Merging them
+      // would engulf the punctuation entity.
+      const fullText = "Novák, Jan";
+      const entities = [
+        makeEntity("person", 0, 5, "Novák"),
+        makeEntity("punctuation", 5, 6, ","),
+        makeEntity("person", 7, 10, "Jan"),
+      ];
+      const result = enforceBoundaryConsistency(
+        entities,
+        fullText,
+      );
+      const persons = result.filter(
+        (e) => e.label === "person",
+      );
+      const punct = result.find(
+        (e) => e.label === "punctuation",
+      );
+      expect(persons).toHaveLength(2);
+      expect(punct).toBeDefined();
+    });
+
     test("does not merge when gap exceeds 3 chars", () => {
       const fullText = "Jan     Novák";
       const entities = [

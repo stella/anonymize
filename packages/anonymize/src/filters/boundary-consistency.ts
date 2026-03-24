@@ -115,7 +115,17 @@ const mergeAdjacent = (
     const gap = fullText.slice(prev.end, entity.start);
     // GAP_PATTERN uses `+` quantifier, so empty gaps
     // (zero-gap / touching entities) won't match.
+    // Also reject merging when a different-label entity
+    // occupies the gap range (would create cross-label
+    // overlap).
+    const gapOccupied = sorted.some(
+      (other) =>
+        other.label !== entity.label &&
+        other.start < entity.start &&
+        other.end > prev.end,
+    );
     if (
+      !gapOccupied &&
       gap.length <= MAX_GAP &&
       GAP_PATTERN.test(gap)
     ) {
@@ -146,7 +156,7 @@ const fixPartialWords = (
     (a, b) => a.start - b.start,
   );
 
-  return sorted.map((e, i) => {
+  return sorted.map((e) => {
     let newStart = wordStartAt(
       e.start,
       boundaries,

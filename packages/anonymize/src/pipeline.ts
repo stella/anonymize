@@ -470,7 +470,7 @@ export const runPipeline = async (
     rawMerged,
     fullText,
   );
-  if (consistent.length !== rawMerged.length)
+  if (consistent.length < rawMerged.length)
     log(
       "boundary",
       `${rawMerged.length - consistent.length} consolidated`,
