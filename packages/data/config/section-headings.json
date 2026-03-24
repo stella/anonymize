@@ -1,0 +1,15 @@
+{
+  "_comment": "Section heading patterns that mark the end of the header zone. Multilingual: Czech, English, German, French, Italian, Spanish, Slovak, Polish.",
+  "patterns": [
+    "^\\s*(?:I\\.|1\\.)\\s",
+    "^\\s*(?:Článek|Čl\\.)\\s",
+    "^\\s*(?:Article|Art\\.)\\s",
+    "^\\s*§\\s*\\d",
+    "^\\s*(?:Abschnitt|Kapitel)\\s",
+    "^\\s*(?:Chapitre|Section)\\s",
+    "^\\s*(?:Capitolo|Sezione)\\s",
+    "^\\s*(?:Artículo|Sección)\\s",
+    "^\\s*(?:Článok|Čl\\.)\\s",
+    "^\\s*(?:Rozdział|Artykuł)\\s"
+  ]
+}

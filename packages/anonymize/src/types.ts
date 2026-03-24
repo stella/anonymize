@@ -168,6 +168,7 @@ export type PipelineConfig = {
   enableNer: boolean;
   enableConfidenceBoost: boolean;
   enableCoreference: boolean;
+  enableZoneClassification?: boolean;
   labels: string[];
   workspaceId: string;
 };

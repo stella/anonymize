@@ -113,6 +113,16 @@ export type { RegionId, CountryCode } from "./regions";
 // ── Filters ───────────────────────────────────────
 export { filterFalsePositives } from "./filters/false-positives";
 export { boostNearMissEntities } from "./filters/confidence-boost";
+export {
+  classifyZones,
+  applyZoneAdjustments,
+  initZoneClassifier,
+  ZONE_SCORE_ADJUSTMENTS,
+} from "./filters/zone-classifier";
+export type {
+  DocumentZone,
+  ZoneSpan,
+} from "./filters/zone-classifier";
 
 // ── GLiNER Computation ────────────────────────────
 export { decodeSpans } from "./gliner/decoder";
