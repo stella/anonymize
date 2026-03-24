@@ -580,14 +580,6 @@
       "type": "n-words",
       "count": 1
     },
-    "trigger": "oddíl"
-  },
-  {
-    "label": "registration number",
-    "strategy": {
-      "type": "n-words",
-      "count": 1
-    },
     "trigger": "oddíl:"
   },
   {
@@ -605,14 +597,6 @@
       "count": 1
     },
     "trigger": "vložka:"
-  },
-  {
-    "label": "registration number",
-    "strategy": {
-      "type": "n-words",
-      "count": 1
-    },
-    "trigger": "oddílu"
   },
   {
     "label": "registration number",
@@ -801,5 +785,45 @@
       "maxChars": 120
     },
     "trigger": "fakturační adresa"
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
+    "trigger": "vložce"
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
+    "trigger": "vložkou"
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
+    "trigger": "oddílu:"
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
+    "trigger": "v oddíle "
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
+    "trigger": "oddílem "
   }
 ]

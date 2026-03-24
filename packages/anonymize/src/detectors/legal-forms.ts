@@ -49,9 +49,12 @@ const buildPatternString = (
     (a, b) => b.length - a.length,
   );
   const alt = sorted.map(escapeForRegex).join("|");
+  // Allow lowercase connectors between name words:
+  // "a" (Czech/SK), "and", "und", "et", "&", "e"
+  const CONNECTOR = `(?:[\\s&,.-]{1,4}|\\s+(?:a|and|und|et|e|y|i)\\s+)`;
   const prefix =
     `(?:${CAP_WORD})` +
-    `(?:[\\s&,.-]{1,4}(?:${ANY_WORD})){0,4}`;
+    `(?:${CONNECTOR}(?:${ANY_WORD})){0,4}`;
   const separator = requireCapBefore
     ? `(?:\\s+|,\\s*)`
     : `\\s+`;
