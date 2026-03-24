@@ -165,6 +165,7 @@ export const runPipeline = async (
     regexMatches,
     slices.legalForms.start,
     slices.legalForms.end,
+    fullText,
   );
   if (legalFormEntities.length > 0)
     log(
