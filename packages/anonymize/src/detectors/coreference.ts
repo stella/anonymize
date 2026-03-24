@@ -118,7 +118,7 @@ const getDefinitionPatterns = async (
     return patterns;
   }
   ctx.corefPatterns = patterns;
-  return ctx.corefPatterns;
+  return patterns;
 };
 
 const SEARCH_WINDOW = 200;

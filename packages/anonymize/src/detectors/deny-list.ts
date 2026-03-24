@@ -115,11 +115,12 @@ const getFirstNameExclusions = (
     return ctx.firstNameExclusions;
   }
   ctx.firstNameExclusionCorpusLen = corpus.length;
-  ctx.firstNameExclusions = new Set([
+  const set: ReadonlySet<string> = new Set([
     ...corpus.map((n) => n.toLowerCase()),
     ...SUPPLEMENTARY_NAME_EXCLUSIONS,
   ]);
-  return ctx.firstNameExclusions;
+  ctx.firstNameExclusions = set;
+  return set;
 };
 
 /**
