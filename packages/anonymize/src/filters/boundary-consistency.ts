@@ -5,9 +5,9 @@ const MAX_GAP = 3;
 
 /**
  * Characters allowed in the gap between two adjacent
- * same-label entities that should be merged.
- * Uses `[ \t]` instead of `\s` to avoid merging
- * entities across newlines.
+ * same-label entities that should be merged: spaces,
+ * tabs, commas, and hyphens. Uses `[ \t,\-]` instead
+ * of `\s` to avoid merging entities across newlines.
  */
 const GAP_PATTERN = /^[ \t,\-]+$/;
 
@@ -128,6 +128,7 @@ const mergeAdjacent = (
     const gapOccupied = sorted.some(
       (other) =>
         other.label !== entity.label &&
+        other.start >= prev.end &&
         other.start < entity.start &&
         other.end > prev.end,
     );
@@ -309,7 +310,12 @@ const resolveCrossLabelOverlaps = (
         b.start = a.end;
         b.text = fullText.slice(b.start, b.end);
       } else {
-        // Trim a's end to b's start
+        // Trim a's end to b's start. Because the
+        // array is sorted by start and a.end can only
+        // decrease, all remaining j will have
+        // b.start >= a.end so the break fires
+        // immediately: a no longer overlaps any later
+        // entity.
         a.end = b.start;
         a.text = fullText.slice(a.start, a.end);
       }
