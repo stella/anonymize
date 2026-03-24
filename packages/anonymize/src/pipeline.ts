@@ -184,6 +184,11 @@ const getCachedSearch = async (
  * Pass an optional `context` to isolate cached state
  * from other pipeline runs. If omitted, a module-level
  * default context is used (backward compatible).
+ *
+ * @param cachedSearch Pre-built search instance.
+ *   When provided, `config` and `gazetteerEntries`
+ *   are not used for building; the caller must
+ *   ensure the instance matches both parameters.
  */
 export const runPipeline = async (
   fullText: string,
