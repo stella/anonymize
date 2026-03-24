@@ -390,6 +390,7 @@ const CZ_BIRTH_NUMBER: RegexDef = {
   pattern: `\\b\\d{6}/\\d{3,4}\\b`,
   label: "czech birth number",
   score: 1,
+  validator: cz.rc,
 };
 
 const DATE_NUMERIC: RegexDef = {
@@ -452,7 +453,7 @@ const CZ_POSTAL: RegexDef = {
 // ? = & # kept for query strings.
 const URL: RegexDef = {
   pattern:
-    `https?://[\\w\\-]+(?:\\.[\\w\\-]+)+` +
+    `(?:https?://|www\\.)[\\w\\-]+(?:\\.[\\w\\-]+)+` +
     `(?::\\d+)?` +
     `(?:[/?#][^\\s)\\]>]*[^\\s.,;:!?)\\]>])?`,
   label: "url",
