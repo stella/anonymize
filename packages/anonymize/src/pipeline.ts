@@ -50,47 +50,39 @@ const shouldReplace = (
   );
 };
 
-export const mergeAndDedup = (...layers: Entity[][]): Entity[] => {
+export const mergeAndDedup = (
+  ...layers: Entity[][]
+): Entity[] => {
   const all: Entity[] = [];
   for (const layer of layers) {
     for (const entity of layer) all.push(entity);
   }
-  const sorted = all.toSorted((a, b) => a.start - b.start);
-  const merged: Entity[] = [];
-  for (const entity of sorted) {
-    const idx = merged.findIndex(
-      (e) => entity.start < e.end && entity.end > e.start,
-    );
-    if (idx !== -1) {
-      const existing = merged[idx];
-      if (existing && shouldReplace(entity, existing))
-        merged[idx] = { ...entity };
-    } else {
+  if (all.length === 0) return [];
+
+  const sorted = all.toSorted(
+    (a, b) => a.start - b.start,
+  );
+
+  // Single-pass sweep-line: since entities are sorted
+  // by start, a new entity can only overlap the tail
+  // of merged[] (all earlier entries end before it).
+  const merged: Entity[] = [{ ...sorted[0] }];
+
+  for (let i = 1; i < sorted.length; i++) {
+    const entity = sorted[i];
+    const last = merged[merged.length - 1];
+
+    if (last.end <= entity.start) {
+      // No overlap: append.
       merged.push({ ...entity });
+    } else if (shouldReplace(entity, last)) {
+      // Overlap: new entity wins.
+      merged[merged.length - 1] = { ...entity };
     }
+    // else: overlap but existing wins; discard entity.
   }
-  let result = merged.toSorted((a, b) => a.start - b.start);
-  let changed = true;
-  while (changed) {
-    changed = false;
-    const deduped: Entity[] = [];
-    for (const entity of result) {
-      const idx = deduped.findIndex(
-        (e) => entity.start < e.end && entity.end > e.start,
-      );
-      if (idx !== -1) {
-        const existing = deduped[idx];
-        if (existing && shouldReplace(entity, existing)) {
-          deduped[idx] = entity;
-          changed = true;
-        }
-      } else {
-        deduped.push(entity);
-      }
-    }
-    result = deduped;
-  }
-  return result;
+
+  return merged;
 };
 
 export type NerInferenceFn = (
