@@ -21,20 +21,17 @@ export type ZoneSpan = {
  * Header and signature blocks are dense with PII;
  * tables often contain structured identifying data.
  */
-export const ZONE_SCORE_ADJUSTMENTS: Record<
-  DocumentZone,
-  number
-> = {
+export const ZONE_SCORE_ADJUSTMENTS = {
   header: 0.1,
   signature: 0.15,
   body: 0,
   table: 0.05,
-};
+} as const satisfies Record<DocumentZone, number>;
 
 // ── Lazy-loaded config ───────────────────────────
 
 type SectionHeadingsConfig = {
-  patterns: string[];
+  patterns: Array<{ re: string; flags: string }>;
 };
 
 type SigningClauseConfig = {
@@ -58,7 +55,7 @@ const loadSectionHeadings =
     const data: SectionHeadingsConfig =
       mod.default ?? mod;
     return data.patterns.map(
-      (p) => new RegExp(p),
+      (p) => new RegExp(p.re, p.flags),
     );
   };
 
@@ -91,8 +88,10 @@ const loadSigningClauses =
           `(?:\\s+\\p{Lu}\\p{Ll}+)*`
         : `\\p{Lu}\\p{Ll}+` +
           `(?:[- ]\\p{Lu}\\p{Ll}+)*`;
+      // Anchor to the start of the line. Each line is
+      // already split on \n, so ^ suffices without m.
       const combined =
-        `(?:${prefix}${place}${suffix})`;
+        `^\\s*(?:${prefix}${place}${suffix})`;
       return new RegExp(combined, "u");
     });
   };
@@ -148,39 +147,45 @@ export const classifyZones = (
 ): ZoneSpan[] => {
   if (fullText.length === 0) return [];
 
+  if (!sectionHeadingRes || !signingClauseRes) {
+    console.warn(
+      "[anonymize] classifyZones called before " +
+        "initZoneClassifier(); returning body-only",
+    );
+    return [
+      { zone: "body", start: 0, end: fullText.length },
+    ];
+  }
+
   const lines = fullText.split("\n");
   const zones: ZoneSpan[] = [];
 
   // Find header end: first section heading line
   let headerEndLine = -1;
-  if (sectionHeadingRes) {
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      if (line === undefined) continue;
-      for (const re of sectionHeadingRes) {
-        if (re.test(line)) {
-          headerEndLine = i;
-          break;
-        }
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line === undefined) continue;
+    for (const re of sectionHeadingRes) {
+      if (re.test(line)) {
+        headerEndLine = i;
+        break;
       }
-      if (headerEndLine !== -1) break;
     }
+    if (headerEndLine !== -1) break;
   }
 
   // Find signature start: last signing clause line
   let signatureStartLine = -1;
-  if (signingClauseRes) {
-    for (let i = lines.length - 1; i >= 0; i--) {
-      const line = lines[i];
-      if (line === undefined) continue;
-      for (const re of signingClauseRes) {
-        if (re.test(line)) {
-          signatureStartLine = i;
-          break;
-        }
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const line = lines[i];
+    if (line === undefined) continue;
+    for (const re of signingClauseRes) {
+      if (re.test(line)) {
+        signatureStartLine = i;
+        break;
       }
-      if (signatureStartLine !== -1) break;
     }
+    if (signatureStartLine !== -1) break;
   }
 
   // Build offset map: line index -> char offset

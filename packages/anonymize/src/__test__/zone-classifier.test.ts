@@ -68,6 +68,26 @@ describe("classifyZones", () => {
     expect(header!.start).toBe(0);
   });
 
+  it("detects all-caps English section heading", () => {
+    const text = [
+      "PARTIES:",
+      "Buyer: Acme Corp",
+      "",
+      "ARTICLE 1",
+      "This is the body.",
+    ].join("\n");
+
+    const zones = classifyZones(text);
+    const header = zones.find(
+      (z) => z.zone === "header",
+    );
+    expect(header).toBeDefined();
+    expect(header!.start).toBe(0);
+    expect(
+      text.slice(header!.end).startsWith("ARTICLE"),
+    ).toBe(true);
+  });
+
   it("detects German section heading", () => {
     const text = [
       "Vertragsparteien:",
@@ -216,6 +236,22 @@ describe("classifyZones", () => {
     }
   });
 
+  it("does not match signing clause mid-sentence", () => {
+    const text = [
+      "1. Předmět smlouvy",
+      "Společnost se sídlem V Praze zastoupená.",
+      "Další text smlouvy.",
+    ].join("\n");
+
+    const zones = classifyZones(text);
+    const sig = zones.find(
+      (z) => z.zone === "signature",
+    );
+    // Mid-sentence "V Praze" should not trigger
+    // signature zone detection.
+    expect(sig).toBeUndefined();
+  });
+
   it("handles text with no header or signature", () => {
     const text = "Just some plain text.";
     const zones = classifyZones(text);
@@ -254,6 +290,22 @@ describe("applyZoneAdjustments", () => {
     );
     expect(result[0]!.score).toBe(
       0.6 + ZONE_SCORE_ADJUSTMENTS.signature,
+    );
+  });
+
+  it("boosts entity in table zone", () => {
+    const zones: ZoneSpan[] = [
+      { zone: "body", start: 0, end: 200 },
+      { zone: "table", start: 200, end: 350 },
+      { zone: "body", start: 350, end: 500 },
+    ];
+    const entities = [makeEntity(220, 250, 0.65)];
+    const result = applyZoneAdjustments(
+      entities,
+      zones,
+    );
+    expect(result[0]!.score).toBe(
+      0.65 + ZONE_SCORE_ADJUSTMENTS.table,
     );
   });
 

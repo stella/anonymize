@@ -1,15 +1,15 @@
 {
-  "_comment": "Section heading patterns that mark the end of the header zone. Multilingual: Czech, English, German, French, Italian, Spanish, Slovak, Polish. All patterns require a trailing numeral or roman numeral to avoid false-positives on body text.",
+  "_comment": "Section heading patterns that mark the end of the header zone. Multilingual: Czech, English, German, French, Italian, Spanish, Slovak, Polish. All patterns require a trailing numeral or roman numeral to avoid false-positives on body text. Each entry specifies its own regex flags; keyword-based patterns use 'iu' for case-insensitive Unicode matching, while the roman-numeral pattern stays case-sensitive to avoid matching lowercase list markers (i., ii.).",
   "patterns": [
-    "^\\s*(?:I\\.|1\\.)\\s",
-    "^\\s*(?:Článek|Čl\\.)\\s*\\d",
-    "^\\s*(?:Article|Art\\.)\\s*\\d",
-    "^\\s*§\\s*\\d",
-    "^\\s*(?:Abschnitt|Kapitel)\\s*\\d",
-    "^\\s*(?:Chapitre|Section)\\s*\\d",
-    "^\\s*(?:Capitolo|Sezione)\\s*\\d",
-    "^\\s*(?:Artículo|Sección)\\s*\\d",
-    "^\\s*(?:Článok|Čl\\.)\\s*\\d",
-    "^\\s*(?:Rozdział|Artykuł)\\s*\\d"
+    { "re": "^\\s*(?:I\\.|1\\.)\\s", "flags": "" },
+    { "re": "^\\s*(?:Článek|Čl\\.)\\s*\\d", "flags": "iu" },
+    { "re": "^\\s*(?:Article|Art\\.)\\s*\\d", "flags": "iu" },
+    { "re": "^\\s*§\\s*\\d", "flags": "" },
+    { "re": "^\\s*(?:Abschnitt|Kapitel)\\s*\\d", "flags": "iu" },
+    { "re": "^\\s*(?:Chapitre|Section)\\s*\\d", "flags": "iu" },
+    { "re": "^\\s*(?:Capitolo|Sezione)\\s*\\d", "flags": "iu" },
+    { "re": "^\\s*(?:Artículo|Sección)\\s*\\d", "flags": "iu" },
+    { "re": "^\\s*(?:Článok|Čl\\.)\\s*\\d", "flags": "iu" },
+    { "re": "^\\s*(?:Rozdział|Artykuł)\\s*\\d", "flags": "iu" }
   ]
 }
