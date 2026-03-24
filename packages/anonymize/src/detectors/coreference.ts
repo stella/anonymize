@@ -66,7 +66,7 @@ const loadDefinitionPatterns =
  */
 const getRoleStopSet = async (
   ctx: PipelineContext,
-): Promise<Set<string>> => {
+): Promise<ReadonlySet<string>> => {
   if (ctx.roleStopSet) {
     return ctx.roleStopSet;
   }

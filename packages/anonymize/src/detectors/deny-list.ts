@@ -475,6 +475,10 @@ type RawMatch = {
 export const ensureDenyListData = async (
   ctx: PipelineContext = defaultContext,
 ): Promise<void> => {
+  // INVARIANT: initNameCorpus must resolve before
+  // loadStopwords so first-name exclusions are
+  // available when computing the stopword set.
+  await initNameCorpus(ctx);
   await Promise.all([
     loadStopwords(ctx),
     loadAllowList(ctx),
