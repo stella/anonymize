@@ -67,23 +67,26 @@ const loadDefinitionPatterns =
 const getRoleStopSet = async (
   ctx: PipelineContext,
 ): Promise<ReadonlySet<string>> => {
-  if (ctx.roleStopSet) {
+  if (ctx.roleStopSet) return ctx.roleStopSet;
+  if (ctx.roleStopSetPromise) return ctx.roleStopSetPromise;
+  const promise = (async () => {
+    try {
+      const mod = await import(
+        "@stll/anonymize-data/config/generic-roles.json"
+      );
+      const data = (mod.default ?? mod) as {
+        roles: string[];
+      };
+      ctx.roleStopSet = new Set(
+        data.roles.map((r: string) => r.toLowerCase()),
+      );
+    } catch {
+      ctx.roleStopSet = new Set();
+    }
     return ctx.roleStopSet;
-  }
-  try {
-    const mod = await import(
-      "@stll/anonymize-data/config/generic-roles.json"
-    );
-    const data = (mod.default ?? mod) as {
-      roles: string[];
-    };
-    ctx.roleStopSet = new Set(
-      data.roles.map((r: string) => r.toLowerCase()),
-    );
-  } catch {
-    ctx.roleStopSet = new Set();
-  }
-  return ctx.roleStopSet;
+  })();
+  ctx.roleStopSetPromise = promise;
+  return promise;
 };
 
 const getDefinitionPatterns = async (

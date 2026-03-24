@@ -48,7 +48,7 @@ export const initNameCorpus = (
   ctx: PipelineContext = defaultContext,
 ): Promise<void> => {
   if (ctx.nameCorpusPromise) return ctx.nameCorpusPromise;
-  ctx.nameCorpusPromise = (async () => {
+  const promise = (async () => {
     try {
       const [
         firstMod,
@@ -104,9 +104,8 @@ export const initNameCorpus = (
       );
     }
   })();
-  // The promise is still non-null here because the catch
-  // block above has not yet executed (it's async).
-  return ctx.nameCorpusPromise;
+  ctx.nameCorpusPromise = promise;
+  return promise;
 };
 
 // ── Czech/Slovak suffix stripping ────────────────────

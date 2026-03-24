@@ -71,6 +71,9 @@ export type PipelineContext = {
     | null;
   corefLoadAttempted: boolean;
   roleStopSet: ReadonlySet<string> | null;
+  roleStopSetPromise:
+    | Promise<ReadonlySet<string>>
+    | null;
 };
 
 /** Create a fresh, empty pipeline context. */
@@ -99,6 +102,7 @@ export const createPipelineContext =
     corefPatternsPromise: null,
     corefLoadAttempted: false,
     roleStopSet: null,
+    roleStopSetPromise: null,
   });
 
 /**
