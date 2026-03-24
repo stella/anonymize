@@ -193,9 +193,17 @@ export const loadLanguageConfigs = async <
 
   const codes = hasManifestLanguages
     ? Object.entries(manifest.languages)
-        .filter(
-          ([, lang]) => lang[configType] === true,
-        )
+        .filter(([code, lang]) => {
+          if (!lang || typeof lang !== "object") {
+            console.warn(
+              `[anonymize] lang-loader: manifest ` +
+                `entry for "${code}" is not an ` +
+                `object, skipping`,
+            );
+            return false;
+          }
+          return lang[configType] === true;
+        })
         .map(([code]) => code)
     : [...FALLBACK_LANGUAGES[configType]];
 
