@@ -57,10 +57,27 @@ export const computeChunkOffsets = (
   return offsets;
 };
 
+const POSITION_THRESHOLD = 5;
+
 /**
  * Merge entities from overlapping chunks back to
  * document-level offsets. Deduplicates entities that
  * appear in overlap regions (keeps highest score).
+ *
+ * Dedup invariant: each incoming entity is compared
+ * against the highest-scored same-label near-dup in
+ * its proximity window. If it loses, it is dropped.
+ * This does NOT guarantee that all pairwise near-dup
+ * relationships in the output are resolved; a lower-
+ * scored entity can survive if the bridging entity
+ * that would have replaced it was itself dropped by
+ * a higher-scored match.
+ *
+ * Uses a reverse-scan over the sorted merged array
+ * so each entity only compares against nearby
+ * predecessors — O(n * w) average where w is the max
+ * entities per POSITION_THRESHOLD window, O(n²) worst
+ * case when replacements dominate (splice is O(n)).
  */
 export const mergeChunkEntities = (
   chunkOffsets: number[],
@@ -83,21 +100,59 @@ export const mergeChunkEntities = (
     }
   }
 
-  const sorted = allEntities.toSorted((a, b) => a.start - b.start);
+  const sorted = allEntities.toSorted(
+    (a, b) => a.start - b.start,
+  );
   const merged: Entity[] = [];
 
   for (const entity of sorted) {
-    const existing = merged.find(
-      (e) =>
-        e.label === entity.label &&
-        Math.abs(e.start - entity.start) < 5 &&
-        Math.abs(e.end - entity.end) < 5,
-    );
+    let bestDupIndex = -1;
+    let bestDupScore = -1;
 
-    if (existing) {
-      if (entity.score > existing.score) {
-        merged[merged.indexOf(existing)] = { ...entity };
+    // Reverse-scan the full proximity window. Collect
+    // the highest-scored same-label match so we dedup
+    // against the strongest existing entity, not just
+    // the nearest one.
+    for (let j = merged.length - 1; j >= 0; j--) {
+      const existing = merged[j];
+      if (existing === undefined) {
+        continue;
       }
+      // merged is kept sorted by start (splice+push
+      // maintains this); elements further back have
+      // even smaller starts, so we can break early.
+      if (
+        entity.start - existing.start
+          >= POSITION_THRESHOLD
+      ) {
+        break;
+      }
+      if (
+        existing.label === entity.label &&
+        Math.abs(existing.end - entity.end)
+          < POSITION_THRESHOLD &&
+        existing.score > bestDupScore
+      ) {
+        bestDupIndex = j;
+        bestDupScore = existing.score;
+      }
+    }
+
+    if (bestDupIndex !== -1) {
+      const existing = merged[bestDupIndex];
+      if (
+        existing !== undefined &&
+        entity.score > existing.score
+      ) {
+        // Replace with winner. Splice out the old entry
+        // and re-insert at the end to maintain sorted
+        // order (entity.start >= all prior starts).
+        merged.splice(bestDupIndex, 1);
+        merged.push({ ...entity });
+      }
+      // Entity loses to the best match and is dropped.
+      // Other lower-scored near-dups of this entity are
+      // not revisited (see docstring dedup invariant).
     } else {
       merged.push({ ...entity });
     }
