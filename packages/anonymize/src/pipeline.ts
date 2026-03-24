@@ -20,16 +20,31 @@ import {
   filterFalsePositives,
   loadGenericRoles,
 } from "./filters/false-positives";
-import type { Entity, GazetteerEntry, PipelineConfig } from "./types";
+import type {
+  Entity,
+  GazetteerEntry,
+  PipelineConfig,
+} from "./types";
+import { DETECTOR_PRIORITY } from "./types";
 import {
   buildUnifiedSearch,
   type UnifiedSearchInstance,
 } from "./build-unified-search";
 import { runUnifiedSearch } from "./unified-search";
 
-const shouldReplace = (a: Entity, b: Entity): boolean =>
-  a.score > b.score ||
-  (a.score === b.score && a.end - a.start > b.end - b.start);
+const shouldReplace = (
+  a: Entity,
+  b: Entity,
+): boolean => {
+  const aPri = DETECTOR_PRIORITY[a.source] ?? 0;
+  const bPri = DETECTOR_PRIORITY[b.source] ?? 0;
+  if (aPri !== bPri) return aPri > bPri;
+  return (
+    a.score > b.score ||
+    (a.score === b.score &&
+      a.end - a.start > b.end - b.start)
+  );
+};
 
 export const mergeAndDedup = (...layers: Entity[][]): Entity[] => {
   const all: Entity[] = [];

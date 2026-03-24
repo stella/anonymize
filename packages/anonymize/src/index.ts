@@ -15,6 +15,7 @@ export type {
 } from "./types";
 export {
   DETECTION_SOURCES,
+  DETECTOR_PRIORITY,
   OPERATOR_TYPES,
   DEFAULT_ENTITY_LABELS,
 } from "./types";
