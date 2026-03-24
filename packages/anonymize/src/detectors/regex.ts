@@ -432,6 +432,18 @@ const HU_LANDLINE: RegexDef = {
   score: 0.9,
 };
 
+// Czech license plates (SPZ/RZ).
+// New format: 3SJ 0753 — digit, two letters, space?,
+// four digits. Old format: 1A2 3456 — digit, letter,
+// digit, space?, four digits.
+const CZ_LICENSE_PLATE: RegexDef = {
+  pattern:
+    `\\b(?:\\d[A-Z]{2}\\s?\\d{4}` +
+    `|\\d[A-Z]\\d\\s?\\d{4})\\b`,
+  label: "registration number",
+  score: 0.7,
+};
+
 // Czech/Slovak postal code: "110 00", "120 00".
 // The distinctive XXX XX format with mandatory
 // space is specific enough to avoid most false
@@ -509,6 +521,7 @@ const ALL_REGEX_DEFS: readonly RegexDef[] = [
   IP_ADDRESS,
   CZ_BANK_ACCOUNT,
   HU_LANDLINE,
+  CZ_LICENSE_PLATE,
   CZ_POSTAL,
   URL,
   IPV6_ADDRESS,

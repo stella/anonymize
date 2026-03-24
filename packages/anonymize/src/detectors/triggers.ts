@@ -6,6 +6,8 @@ import type { Entity, TriggerRule } from "../types";
 const TRIGGER_SCORE = 0.95;
 const WHITESPACE_RE = /\s+/;
 const LETTER_RE = /\p{L}/u;
+const UPPERCASE_START_RE = /^\p{Lu}/u;
+const DATOVA_SCHRANKA_RE = /^[a-z0-9]{7}$/i;
 
 type TriggerConfigRow = {
   trigger: string;
@@ -214,26 +216,39 @@ const extractValue = (
         tabIdx !== -1
           ? valueText.slice(0, tabIdx)
           : valueText;
-      const words = cellText
-        .split(WHITESPACE_RE)
+      // Skip punctuation-only tokens (colons, dashes)
+      // so "datová schránka : hsaxra8" captures
+      // "hsaxra8" not ":"
+      const PUNCT_ONLY = /^[\p{P}\p{S}]+$/u;
+      const allTokens = cellText.split(WHITESPACE_RE);
+      const words = allTokens
+        .filter((w) => !PUNCT_ONLY.test(w))
         .slice(0, strategy.count);
       if (words.length === 0) {
         return null;
       }
-      let actualEnd = 0;
-      let searchPos = 0;
-      for (const word of words) {
-        const wordIdx = cellText.indexOf(
-          word,
-          searchPos,
-        );
-        actualEnd = wordIdx + word.length;
+      // Find span of the first real word
+      const firstWord = words[0];
+      if (firstWord === undefined) {
+        return null;
+      }
+      const firstIdx = cellText.indexOf(firstWord);
+      let actualEnd = firstIdx + firstWord.length;
+      // If multiple words, extend to last one
+      let searchPos = actualEnd;
+      for (let wi = 1; wi < words.length; wi++) {
+        const w = words[wi];
+        if (w === undefined) {
+          break;
+        }
+        const wIdx = cellText.indexOf(w, searchPos);
+        actualEnd = wIdx + w.length;
         searchPos = actualEnd;
       }
       return {
-        start: valueStart,
+        start: valueStart + firstIdx,
         end: valueStart + actualEnd,
-        text: cellText.slice(0, actualEnd),
+        text: cellText.slice(firstIdx, actualEnd),
       };
     }
 
@@ -441,6 +456,27 @@ export const processTriggerMatches = (
       : null;
 
     if (value) {
+      // Person triggers require the captured value to
+      // start with an uppercase letter. This prevents
+      // false positives like "kontaktní osoba pro
+      // plnění této smlouvy :" from blindly anonymizing
+      // whatever follows.
+      if (
+        rule.label === "person" &&
+        !UPPERCASE_START_RE.test(value.text)
+      ) {
+        continue;
+      }
+
+      // Datová schránka IDs are exactly 7 alphanumeric
+      // characters. Reject captures that don't match.
+      if (
+        rule.trigger.includes("schránka") &&
+        !DATOVA_SCHRANKA_RE.test(value.text)
+      ) {
+        continue;
+      }
+
       results.push({
         start: value.start,
         end: value.end,

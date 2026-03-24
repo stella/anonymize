@@ -512,5 +512,45 @@
       "type": "company-id-value"
     },
     "trigger": "daňové identifikační číslo"
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
+    "trigger": "SPZ"
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
+    "trigger": "SPZ:"
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
+    "trigger": "RZ:"
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
+    "trigger": "registrační značka"
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
+    "trigger": "registrační značka:"
   }
 ]
