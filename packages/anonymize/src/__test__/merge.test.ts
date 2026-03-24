@@ -101,6 +101,21 @@ describe("mergeAndDedup", () => {
     expect(result[0].start).toBe(5);
   });
 
+  test(
+    "chain replacement: each winner evicts the previous tail",
+    () => {
+      // sorted: [0,10,0.5] → [3,12,0.7] → [8,15,0.9]
+      // [3,12] beats [0,10]; [8,15] beats [3,12]
+      const a = entity(0, 10, 0.5);
+      const b = entity(3, 12, 0.7);
+      const c = entity(8, 15, 0.9);
+      const result = mergeAndDedup([a, b, c]);
+      expect(result).toHaveLength(1);
+      expect(result[0].score).toBe(0.9);
+      expect(result[0].start).toBe(8);
+    },
+  );
+
   test("multiple layers are flattened", () => {
     const layer1 = [entity(0, 5, 0.9)];
     const layer2 = [entity(10, 15, 0.8)];

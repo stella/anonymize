@@ -45,40 +45,25 @@ export const mergeAndDedup = (
   );
 
   // Single-pass sweep-line: since entities are sorted
-  // by start, overlaps can only occur with recent
-  // entries at the tail of merged[]. Walk backward
-  // and stop as soon as merged[j].end <= entity.start.
+  // by start, a new entity can only overlap the tail
+  // of merged[] (all earlier entries end before it).
   const merged: Entity[] = [{ ...sorted[0] }];
 
   for (let i = 1; i < sorted.length; i++) {
     const entity = sorted[i];
-    let handled = false;
+    const last = merged[merged.length - 1];
 
-    for (
-      let j = merged.length - 1;
-      j >= 0;
-      j--
-    ) {
-      const existing = merged[j];
-      if (existing.end <= entity.start) break;
-
-      if (entity.end > existing.start) {
-        if (shouldReplace(entity, existing)) {
-          merged[j] = { ...entity };
-        }
-        handled = true;
-        break;
-      }
-    }
-
-    if (!handled) {
+    if (last.end <= entity.start) {
+      // No overlap: append.
       merged.push({ ...entity });
+    } else if (shouldReplace(entity, last)) {
+      // Overlap: new entity wins.
+      merged[merged.length - 1] = { ...entity };
     }
+    // else: overlap but existing wins; discard entity.
   }
 
-  return merged.toSorted(
-    (a, b) => a.start - b.start,
-  );
+  return merged;
 };
 
 export type NerInferenceFn = (
