@@ -51,7 +51,7 @@ export const normalizeForSearch = (
   }
   if (!hasSpecial) return text;
 
-  // Single pass: build output via Uint16Array.
+  // Second pass: build output via Uint16Array.
   const len = text.length;
   const codes = new Uint16Array(len);
   for (let i = 0; i < len; i++) {
