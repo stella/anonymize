@@ -53,7 +53,6 @@ export const buildGazetteerPatterns = (
 
   const patterns: PatternEntry[] = [];
   const labels: string[] = [];
-  const entryIds: string[] = [];
   const isFuzzy: boolean[] = [];
 
   // Pass 1: exact literals (all terms).
@@ -71,7 +70,7 @@ export const buildGazetteerPatterns = (
       wholeWords: false,
     });
     labels.push(meta.label);
-    entryIds.push(meta.entryId);
+
     isFuzzy.push(false);
   }
 
@@ -87,13 +86,13 @@ export const buildGazetteerPatterns = (
       distance: MAX_EDIT_DISTANCE,
     });
     labels.push(meta.label);
-    entryIds.push(meta.entryId);
+
     isFuzzy.push(true);
   }
 
   return {
     patterns,
-    data: { labels, entryIds, isFuzzy },
+    data: { labels, isFuzzy },
   };
 };
 
@@ -264,7 +263,12 @@ const tryPrefixExtension = (
 export const scanExact = (
   _fullText: string,
   _entries: GazetteerEntry[],
-): Entity[] => [];
+): Entity[] => {
+  console.warn(
+    "scanExact is deprecated; use processGazetteerMatches via runPipeline instead",
+  );
+  return [];
+};
 
 /**
  * @deprecated Use the unified search pipeline
@@ -274,4 +278,9 @@ export const scanFuzzy = (
   _fullText: string,
   _entries: GazetteerEntry[],
   _exactSpans: Entity[],
-): Entity[] => [];
+): Entity[] => {
+  console.warn(
+    "scanFuzzy is deprecated; use processGazetteerMatches via runPipeline instead",
+  );
+  return [];
+};

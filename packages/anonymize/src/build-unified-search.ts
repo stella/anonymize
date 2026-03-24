@@ -64,8 +64,6 @@ type PatternSlice = {
 export type GazetteerData = {
   /** Maps local pattern index to entry label. */
   labels: string[];
-  /** Maps local pattern index to entry ID. */
-  entryIds: string[];
   /**
    * Whether each pattern is fuzzy (distance > 0).
    * Used by the post-processor to assign scores.
