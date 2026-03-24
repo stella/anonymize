@@ -98,4 +98,38 @@ describe("mergeChunkEntities", () => {
     expect(result).toHaveLength(1);
     expect(result[0]?.start).toBe(100);
   });
+
+  test(
+    "replacement preserves sorted invariant"
+      + " (regression: mixed labels + score upgrade)",
+    () => {
+      // Devin review scenario: A(50-60 PERSON 0.7),
+      // B(50-60 ORG 0.8), C(54-64 PERSON 0.9),
+      // D(56-66 PERSON 0.85).
+      // C dedup-replaces A; D must still dedup with C.
+      const result = mergeChunkEntities(
+        [0],
+        [
+          [
+            entity(50, 60, 0.7, "PERSON"),
+            entity(50, 60, 0.8, "ORG"),
+            entity(54, 64, 0.9, "PERSON"),
+            entity(56, 66, 0.85, "PERSON"),
+          ],
+        ],
+      );
+      const persons = result.filter(
+        (e) => e.label === "PERSON",
+      );
+      const orgs = result.filter(
+        (e) => e.label === "ORG",
+      );
+      // Only one PERSON should survive (score 0.9).
+      expect(persons).toHaveLength(1);
+      expect(persons[0]?.score).toBe(0.9);
+      // ORG is distinct, kept separately.
+      expect(orgs).toHaveLength(1);
+      expect(orgs[0]?.score).toBe(0.8);
+    },
+  );
 });

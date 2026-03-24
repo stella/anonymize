@@ -97,19 +97,25 @@ export const mergeChunkEntities = (
   for (const entity of sorted) {
     let dupIndex = -1;
 
-    // Reverse-scan: only check recent entries whose
-    // start is within the proximity threshold.
+    // Reverse-scan: check all recent entries whose
+    // start is within the proximity window. Skip
+    // non-matching labels instead of breaking, since
+    // different-label entities can interleave at the
+    // same position.
     for (let j = merged.length - 1; j >= 0; j--) {
-      const candidate = merged[j];
+      const existing = merged[j];
+      if (existing === undefined) {
+        continue;
+      }
       if (
-        candidate === undefined ||
-        entity.start - candidate.start >= POSITION_THRESHOLD
+        entity.start - existing.start
+          >= POSITION_THRESHOLD
       ) {
         break;
       }
       if (
-        candidate.label === entity.label &&
-        Math.abs(candidate.end - entity.end)
+        existing.label === entity.label &&
+        Math.abs(existing.end - entity.end)
           < POSITION_THRESHOLD
       ) {
         dupIndex = j;
@@ -123,7 +129,11 @@ export const mergeChunkEntities = (
         existing !== undefined &&
         entity.score > existing.score
       ) {
-        merged[dupIndex] = { ...entity };
+        // Replace with winner. Splice out the old entry
+        // and re-insert at the end to maintain sorted
+        // order (entity.start >= all prior starts).
+        merged.splice(dupIndex, 1);
+        merged.push({ ...entity });
       }
     } else {
       merged.push({ ...entity });
