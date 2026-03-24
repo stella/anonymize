@@ -72,6 +72,28 @@ const wordEndAt = (
 };
 
 /**
+ * Binary search: find the leftmost index in `arr`
+ * where `arr[index].start >= value`.
+ */
+const lowerBound = (
+  arr: Entity[],
+  value: number,
+): number => {
+  let lo = 0;
+  let hi = arr.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    const el = arr[mid];
+    if (el && el.start < value) {
+      lo = mid + 1;
+    } else {
+      hi = mid;
+    }
+  }
+  return lo;
+};
+
+/**
  * Merge adjacent same-label entities separated only by
  * whitespace, comma, or hyphen (max 3 chars). Also
  * merges same-label entities that partially overlap
@@ -81,6 +103,9 @@ const wordEndAt = (
  * (not just the very last entity) so that an
  * intervening different-label entity does not prevent
  * merging.
+ *
+ * Uses binary search for the `gapOccupied` check and
+ * a Map for O(1) same-label prev lookup. O(n log n).
  */
 const mergeAdjacent = (
   entities: Entity[],
@@ -90,19 +115,17 @@ const mergeAdjacent = (
     (a, b) => a.start - b.start,
   );
   const result: Entity[] = [];
+  // O(1) lookup for the last same-label entity in
+  // result, replacing the O(n) backward scan.
+  const lastByLabel = new Map<string, Entity>();
 
   for (const entity of sorted) {
-    // Find the last same-label entity in result.
-    let prev: Entity | undefined;
-    for (let i = result.length - 1; i >= 0; i--) {
-      if (result[i]?.label === entity.label) {
-        prev = result[i];
-        break;
-      }
-    }
+    const prev = lastByLabel.get(entity.label);
 
     if (!prev) {
-      result.push({ ...entity });
+      const copy = { ...entity };
+      result.push(copy);
+      lastByLabel.set(entity.label, copy);
       continue;
     }
 
@@ -121,17 +144,24 @@ const mergeAdjacent = (
     // (zero-gap / touching entities) won't match.
     // Also reject merging when a different-label entity
     // occupies the gap range (would create cross-label
-    // overlap). Correctness relies on fixPartialWords
-    // clamping expansion at cross-label neighbors so
-    // that the input to this function has no cross-label
-    // overlaps.
-    const gapOccupied = sorted.some(
-      (other) =>
+    // overlap). Use binary search to find candidates
+    // in the gap range instead of scanning all entities.
+    const gapStart = prev.end;
+    const gapEnd = entity.start;
+    const searchIdx = lowerBound(sorted, gapStart);
+    let gapOccupied = false;
+    for (let k = searchIdx; k < sorted.length; k++) {
+      const other = sorted[k];
+      if (!other || other.start >= gapEnd) break;
+      if (
         other.label !== entity.label &&
-        other.start >= prev.end &&
-        other.start < entity.start &&
-        other.end > prev.end,
-    );
+        other.end > gapStart
+      ) {
+        gapOccupied = true;
+        break;
+      }
+    }
+
     if (
       !gapOccupied &&
       gap.length <= MAX_GAP &&
@@ -142,7 +172,9 @@ const mergeAdjacent = (
       prev.text = fullText.slice(prev.start, prev.end);
       prev.score = Math.max(prev.score, entity.score);
     } else {
-      result.push({ ...entity });
+      const copy = { ...entity };
+      result.push(copy);
+      lastByLabel.set(entity.label, copy);
     }
   }
 
@@ -154,6 +186,11 @@ const mergeAdjacent = (
  * start/end to the nearest word boundary. Does not
  * extend across newlines or into spans occupied by
  * different-label entities.
+ *
+ * Uses binary search to skip irrelevant entries when
+ * clamping at cross-label neighbors. O(n log n) in
+ * the common case; O(n^2) worst case when many
+ * same-label entities precede a cross-label boundary.
  */
 const fixPartialWords = (
   entities: Entity[],
@@ -164,7 +201,15 @@ const fixPartialWords = (
     (a, b) => a.start - b.start,
   );
 
-  return sorted.map((e) => {
+  // Build a secondary array sorted by end position
+  // for efficient "nearest entity ending before me"
+  // lookups. Each entry tracks the original entity.
+  const byEnd = sorted
+    .map((e, idx) => ({ entity: e, idx }))
+    .sort((a, b) => a.entity.end - b.entity.end);
+  const endPositions = byEnd.map((x) => x.entity.end);
+
+  return sorted.map((e, eIdx) => {
     let newStart = wordStartAt(
       e.start,
       boundaries,
@@ -176,27 +221,51 @@ const fixPartialWords = (
       fullText,
     );
 
-    // Don't expand into a different-label neighbor's
-    // span. Check the previous and next entities.
-    for (const other of sorted) {
+    // Clamp start: find different-label entities whose
+    // end is in (newStart, e.start]. We search byEnd
+    // for entities with end > newStart and end <= e.start.
+    // Binary search for the first entry with
+    // end > newStart.
+    let lo = 0;
+    let hi = endPositions.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1;
+      if (
+        (endPositions[mid] ?? Number.POSITIVE_INFINITY) <=
+        newStart
+      ) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
+    }
+    // Scan forward from lo; all entries have end >
+    // newStart. Stop when end > e.start.
+    for (let k = lo; k < byEnd.length; k++) {
+      const entry = byEnd[k];
+      if (!entry || entry.entity.end > e.start) break;
+      if (entry.idx === eIdx) continue;
+      if (entry.entity.label === e.label) continue;
+      // This entity's end is in (newStart, e.start]
+      // and has a different label: clamp.
+      newStart = Math.max(
+        newStart,
+        entry.entity.end,
+      );
+    }
+
+    // Clamp end: find different-label entities whose
+    // start is in [e.end, newEnd). Use the start-sorted
+    // array with binary search.
+    const startIdx = lowerBound(sorted, e.end);
+    for (let k = startIdx; k < sorted.length; k++) {
+      const other = sorted[k];
+      if (!other || other.start >= newEnd) break;
       if (other === e) continue;
       if (other.label === e.label) continue;
-      // Clamp start: don't expand left past a
-      // different-label entity's end.
-      if (
-        other.end > newStart &&
-        other.end <= e.start
-      ) {
-        newStart = Math.max(newStart, other.end);
-      }
-      // Clamp end: don't expand right past a
-      // different-label entity's start.
-      if (
-        other.start < newEnd &&
-        other.start >= e.end
-      ) {
-        newEnd = Math.min(newEnd, other.start);
-      }
+      // This entity's start is in [e.end, newEnd)
+      // and has a different label: clamp.
+      newEnd = Math.min(newEnd, other.start);
     }
 
     if (newStart === e.start && newEnd === e.end) {
@@ -237,6 +306,9 @@ const deduplicateSpans = (
  * Remove nested same-label entities. If a shorter
  * entity is fully contained within a longer entity
  * of the same label, drop the shorter one.
+ *
+ * Uses a "max end seen" sweep per label. O(n) after
+ * the initial sort.
  */
 const removeNestedSameLabel = (
   entities: Entity[],
@@ -249,17 +321,22 @@ const removeNestedSameLabel = (
   });
 
   const result: Entity[] = [];
+  // Track the furthest end seen per label. Any entity
+  // whose end <= maxEnd for its label is nested inside
+  // a previously seen entity of the same label.
+  const maxEndByLabel = new Map<string, number>();
+
   for (const entity of sorted) {
-    const isNested = result.some(
-      (outer) =>
-        outer.label === entity.label &&
-        outer.start <= entity.start &&
-        outer.end >= entity.end &&
-        outer !== entity,
-    );
-    if (!isNested) {
-      result.push(entity);
+    const maxEnd = maxEndByLabel.get(entity.label);
+    if (
+      maxEnd !== undefined &&
+      entity.end <= maxEnd
+    ) {
+      // Nested inside a same-label entity: skip.
+      continue;
     }
+    maxEndByLabel.set(entity.label, entity.end);
+    result.push(entity);
   }
 
   return result;
@@ -272,6 +349,10 @@ const removeNestedSameLabel = (
  * boundary. The entity with the higher score (or
  * longer span on tie) keeps its boundary; the other
  * is trimmed so the overlap disappears.
+ *
+ * Preserved existing structure: sorted + early break
+ * already gives good amortized behavior. O(n^2)
+ * worst case but rare in practice.
  */
 const resolveCrossLabelOverlaps = (
   entities: Entity[],
@@ -312,11 +393,10 @@ const resolveCrossLabelOverlaps = (
         b.text = fullText.slice(b.start, b.end);
       } else {
         // Trim a's end to b's start. Because the
-        // array is sorted by start and a.end can only
-        // decrease, all remaining j will have
+        // array is sorted by start and a.end can
+        // only decrease, all remaining j will have
         // b.start >= a.end so the break fires
-        // immediately: a no longer overlaps any later
-        // entity.
+        // immediately.
         a.end = b.start;
         a.text = fullText.slice(a.start, a.end);
       }
