@@ -63,6 +63,7 @@ const loadRules = async (): Promise<void> => {
       ? new TextSearch(patterns, {
           overlapStrategy: "all",
           caseInsensitive: true,
+          wholeWords: true,
         })
       : null;
 };
@@ -186,7 +187,15 @@ export const applyHotwordRules = (
 
         if (Math.abs(adj) > Math.abs(bestAdjustment)) {
           bestAdjustment = adj;
-          bestReclassify = rule.reclassifyTo;
+          // Only carry reclassification from boost
+          // rules; a penalty winner must not silently
+          // overwrite a label set by a closer positive
+          // rule.
+          if (adj > 0) {
+            bestReclassify = rule.reclassifyTo;
+          } else {
+            bestReclassify = undefined;
+          }
         }
       }
     }

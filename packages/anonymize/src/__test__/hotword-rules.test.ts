@@ -139,6 +139,9 @@ describe("hotword rules", () => {
     // The penalty (-0.3) has greater magnitude than
     // the boost (+0.15), so penalty wins.
     expect(result[0].score).toBeLessThan(0.7);
+    // Reclassification from "narozen" must NOT apply
+    // when the penalty rule wins.
+    expect(result[0].label).toBe("date");
   });
 
   it("matches hotword before entity within proximityBefore", () => {
@@ -192,6 +195,17 @@ describe("hotword rules", () => {
     const result = applyHotwordRules([entity], text);
     expect(result).toHaveLength(1);
     expect(result[0].score).toBeLessThanOrEqual(1);
+  });
+
+  it("does not match 'bod' inside 'body' (whole-word boundary)", () => {
+    // "bod" is a Czech hotword in the penalty rule.
+    // With wholeWords matching, it must not trigger
+    // inside English words like "body".
+    const text = "body: 15.01.2024";
+    const entity = makeEntity(6, 16, "date", 0.6);
+    const result = applyHotwordRules([entity], text);
+    expect(result).toHaveLength(1);
+    expect(result[0].score).toBe(0.6);
   });
 
   it("clamps score to 0 on heavy penalty", () => {
