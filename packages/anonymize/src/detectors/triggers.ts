@@ -272,6 +272,105 @@ const extractValue = (
       };
     }
 
+    case "address": {
+      // Walk through comma-separated segments.
+      // Continue through a comma if the next segment
+      // starts with a digit (PSČ like "110 00") or
+      // an uppercase letter (city like "Praha").
+      // Stop at: newline, opening paren "(", tab,
+      // or a period that is NOT an abbreviation
+      // (abbreviation = period followed by a space
+      // and a lowercase letter, e.g. "nábř. ").
+      const maxLen = strategy.maxChars ?? 120;
+      const UPPER_RE = /\p{Lu}/u;
+      let end = 0;
+
+      while (end < valueText.length && end < maxLen) {
+        const ch = valueText[end];
+
+        // Hard stops: newline, tab, opening paren
+        if (ch === "\n" || ch === "\t" || ch === "(") {
+          break;
+        }
+
+        // Period: stop unless it's an abbreviation
+        // (followed by space + lowercase or digit)
+        if (ch === ".") {
+          const next = valueText[end + 1];
+          const afterNext = valueText[end + 2];
+          if (
+            next === " " &&
+            afterNext !== undefined &&
+            !UPPER_RE.test(afterNext) &&
+            !/\d/.test(afterNext)
+          ) {
+            // Abbreviation like "nábř. k" or "ul. n"
+            // → keep going
+            end++;
+            continue;
+          }
+          // Period before uppercase or digit or end
+          // → likely end of sentence or address.
+          // But include it if next char is a digit
+          // (e.g. "č.p. 42") or uppercase.
+          if (
+            next !== undefined &&
+            (UPPER_RE.test(next) || /\d/.test(next))
+          ) {
+            // "č.p." or similar — continue
+            end++;
+            continue;
+          }
+          // Period at end of address — stop but
+          // don't include the period
+          break;
+        }
+
+        // Comma: look ahead to see if address continues
+        if (ch === ",") {
+          // Skip comma + whitespace, check next char
+          let peek = end + 1;
+          while (
+            peek < valueText.length &&
+            (valueText[peek] === " " ||
+              valueText[peek] === "\t")
+          ) {
+            peek++;
+          }
+          const peekCh = valueText[peek];
+          if (peekCh === undefined) {
+            break;
+          }
+          // Continue if next segment starts with
+          // digit (PSČ) or uppercase (city name)
+          if (
+            /\d/.test(peekCh) ||
+            UPPER_RE.test(peekCh)
+          ) {
+            end++;
+            continue;
+          }
+          // Otherwise stop at this comma
+          break;
+        }
+
+        end++;
+      }
+
+      const rawSlice = valueText.slice(0, end);
+      const extracted = rawSlice.trim();
+      if (extracted.length === 0) {
+        return null;
+      }
+      const trailingSpaces =
+        rawSlice.length - rawSlice.trimEnd().length;
+      return {
+        start: valueStart,
+        end: valueStart + end - trailingSpaces,
+        text: extracted,
+      };
+    }
+
     default:
       return null;
   }

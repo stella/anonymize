@@ -20,7 +20,7 @@
         "typescript": "^5.9.3",
       },
       "peerDependencies": {
-        "@stll/anonymize-data": ">=0.0.1",
+        "@stll/anonymize-data": "",
       },
       "optionalPeers": [
         "@stll/anonymize-data",

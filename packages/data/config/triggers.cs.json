@@ -2,28 +2,32 @@
   {
     "label": "address",
     "strategy": {
-      "type": "to-end-of-line"
+      "type": "address",
+      "maxChars": 120
     },
     "trigger": "bytem:"
   },
   {
     "label": "address",
     "strategy": {
-      "type": "to-end-of-line"
+      "type": "address",
+      "maxChars": 120
     },
     "trigger": "trvale bytem"
   },
   {
     "label": "address",
     "strategy": {
-      "type": "to-end-of-line"
+      "type": "address",
+      "maxChars": 120
     },
     "trigger": "sídlem:"
   },
   {
     "label": "address",
     "strategy": {
-      "type": "to-end-of-line"
+      "type": "address",
+      "maxChars": 120
     },
     "trigger": "sídlem"
   },
