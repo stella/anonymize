@@ -2,6 +2,9 @@ import type { Match } from "@stll/text-search";
 
 import { DETECTION_SOURCES } from "../types";
 import type { Entity, TriggerRule } from "../types";
+import {
+  loadLanguageConfigs,
+} from "../util/lang-loader";
 
 const TRIGGER_SCORE = 0.95;
 const WHITESPACE_RE = /\s+/;
@@ -37,53 +40,23 @@ export const buildTriggerPatterns = async (): Promise<{
 }> => {
   const rules: TriggerRule[] = [];
 
-  const tryLoad = async (path: string) => {
-    try {
-      const mod = await import(path);
+  const allRows = await loadLanguageConfigs<
+    readonly TriggerConfigRow[]
+  >(
+    "triggers",
+    (mod) => {
       // eslint-disable-next-line no-unsafe-type-assertion -- JSON config
-      const rows = (
-        mod as {
-          default: readonly TriggerConfigRow[];
-        }
-      ).default;
-      rules.push(...mapConfig(rows));
-    } catch {
-      // Data package not installed or file missing
-    }
-  };
-
-  await Promise.all([
-    tryLoad(
-      "@stll/anonymize-data/config/triggers.cs.json",
-    ),
-    tryLoad(
-      "@stll/anonymize-data/config/triggers.de.json",
-    ),
-    tryLoad(
-      "@stll/anonymize-data/config/triggers.en.json",
-    ),
-    tryLoad(
-      "@stll/anonymize-data/config/triggers.es.json",
-    ),
-    tryLoad(
-      "@stll/anonymize-data/config/triggers.fr.json",
-    ),
-    tryLoad(
-      "@stll/anonymize-data/config/triggers.hu.json",
-    ),
-    tryLoad(
-      "@stll/anonymize-data/config/triggers.it.json",
-    ),
-    tryLoad(
-      "@stll/anonymize-data/config/triggers.pl.json",
-    ),
-    tryLoad(
-      "@stll/anonymize-data/config/triggers.ro.json",
-    ),
-    tryLoad(
-      "@stll/anonymize-data/config/triggers.sv.json",
-    ),
-  ]);
+      const m = mod as {
+        default?: readonly TriggerConfigRow[];
+      };
+      // eslint-disable-next-line no-unsafe-type-assertion -- JSON config
+      return (m.default ?? mod) as
+        readonly TriggerConfigRow[];
+    },
+  );
+  for (const rows of allRows) {
+    rules.push(...mapConfig(rows));
+  }
 
   // Build patterns from lowercased trigger strings.
   // rules[i] corresponds to patterns[i].

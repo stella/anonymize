@@ -1,0 +1,49 @@
+{
+  "_comment": "Language manifest. Drives auto-discovery of config files. Adding a new language is a data-only change: add JSON files and update this manifest.",
+  "languages": {
+    "cs": {
+      "triggers": true,
+      "coreference": true
+    },
+    "de": {
+      "triggers": true,
+      "coreference": true
+    },
+    "en": {
+      "triggers": true,
+      "coreference": true
+    },
+    "es": {
+      "triggers": true,
+      "coreference": false
+    },
+    "fr": {
+      "triggers": true,
+      "coreference": false
+    },
+    "hu": {
+      "triggers": true,
+      "coreference": false
+    },
+    "it": {
+      "triggers": true,
+      "coreference": false
+    },
+    "pl": {
+      "triggers": true,
+      "coreference": false
+    },
+    "ro": {
+      "triggers": true,
+      "coreference": false
+    },
+    "sk": {
+      "triggers": false,
+      "coreference": true
+    },
+    "sv": {
+      "triggers": true,
+      "coreference": false
+    }
+  }
+}
