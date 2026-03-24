@@ -361,7 +361,9 @@ export const applyZoneAdjustments = (
   entities: Entity[],
   zones: ZoneSpan[],
 ): Entity[] => {
-  if (zones.length === 0) return [...entities];
+  if (zones.length === 0) {
+    return entities.map((e) => ({ ...e }));
+  }
 
   const result: Entity[] = [];
   for (const entity of entities) {

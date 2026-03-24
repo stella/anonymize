@@ -348,5 +348,7 @@ describe("applyZoneAdjustments", () => {
     const result = applyZoneAdjustments(entities, []);
     expect(result).not.toBe(entities);
     expect(result).toEqual(entities);
+    // Entities must be spread-copied, not aliased
+    expect(result[0]).not.toBe(entities[0]);
   });
 });
