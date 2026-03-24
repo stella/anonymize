@@ -70,7 +70,12 @@ export {
   buildStreetTypePatterns,
   processAddressSeeds,
 } from "./detectors/address-seeds";
-export { scanExact, scanFuzzy } from "./detectors/gazetteer";
+export {
+  scanExact,
+  scanFuzzy,
+  processGazetteerMatches,
+  buildGazetteerPatterns,
+} from "./detectors/gazetteer";
 export {
   extractDefinedTerms,
   findCoreferenceSpans,
@@ -95,6 +100,7 @@ export {
 } from "./build-unified-search";
 export type {
   UnifiedSearchInstance,
+  GazetteerData,
 } from "./build-unified-search";
 export {
   runUnifiedSearch,

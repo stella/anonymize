@@ -52,9 +52,12 @@ const buildPatternString = (
   // Allow lowercase connectors between name words:
   // "a" (Czech/SK), "and", "und", "et", "&", "e"
   const CONNECTOR = `(?:[\\s&,.-]{1,4}|\\s+(?:a|and|und|et|e|y|i)\\s+)`;
+  // Czech state enterprise names can be 7+ words:
+  // "Národní agentura pro komunikační a informační
+  // technologie, s. p." — need generous limit.
   const prefix =
     `(?:${CAP_WORD})` +
-    `(?:${CONNECTOR}(?:${ANY_WORD})){0,4}`;
+    `(?:${CONNECTOR}(?:${ANY_WORD})){0,7}`;
   const separator = requireCapBefore
     ? `(?:\\s+|,\\s*)`
     : `\\s+`;
