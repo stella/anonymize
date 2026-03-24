@@ -228,7 +228,7 @@ export const runPipeline = async (
   // gracefully to no zones.
   let zoneInitOk = false;
   const enableHotwords =
-    config.enableHotwordRules !== false;
+    config.enableHotwordRules === true;
   let hotwordInitOk = false;
   const hotwordInit = enableHotwords
     ? initHotwordRules()
