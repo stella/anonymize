@@ -23,25 +23,32 @@ type ConfigType = "triggers" | "coreference";
 // ── Manifest loader (cached) ─────────────────────────
 
 let _manifest: Manifest | null = null;
+let _manifestPromise: Promise<Manifest> | null = null;
 
-const loadManifest = async (): Promise<Manifest> => {
+const loadManifest = (): Promise<Manifest> => {
   if (_manifest) {
-    return _manifest;
+    return Promise.resolve(_manifest);
   }
-  try {
-    const mod = await import(
-      "@stll/anonymize-data/config/manifest.json"
-    );
-    // eslint-disable-next-line no-unsafe-type-assertion -- JSON manifest
-    _manifest = (mod.default ?? mod) as Manifest;
-    return _manifest;
-  } catch {
-    // Manifest not available (old data package version).
-    // Cache the empty result so we don't retry the
-    // failed import on every call.
-    _manifest = { languages: {} };
-    return _manifest;
+  if (_manifestPromise) {
+    return _manifestPromise;
   }
+  _manifestPromise = (async () => {
+    try {
+      const mod = await import(
+        "@stll/anonymize-data/config/manifest.json"
+      );
+      // eslint-disable-next-line no-unsafe-type-assertion -- JSON manifest
+      _manifest = (mod.default ?? mod) as Manifest;
+      return _manifest;
+    } catch {
+      // Manifest not available (old data package version).
+      // Cache the empty result so we don't retry the
+      // failed import on every call.
+      _manifest = { languages: {} };
+      return _manifest;
+    }
+  })();
+  return _manifestPromise;
 };
 
 // ── Static import registries ─────────────────────────
@@ -212,4 +219,5 @@ export const loadLanguageConfigs = async <T>(
  */
 export const _resetManifestCache = (): void => {
   _manifest = null;
+  _manifestPromise = null;
 };
