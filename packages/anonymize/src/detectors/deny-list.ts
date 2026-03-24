@@ -720,8 +720,17 @@ export const processDenyListMatches = (
 // Valid Roman numerals only (I-XXX range, no invalid
 // combos like IC, LC, VC). Covers district suffixes
 // up to Praha XXX which is more than enough.
-const DISTRICT_SUFFIX_RE =
-  /^ (\d{1,2}(?!\d)|(?:XXX|XX(?:IX|IV|V?I{0,3})|X(?:IX|IV|V?I{0,3})|IX|IV|V?I{1,3}|V))(?=[\s,;.)"\n]|$)/;
+// Roman numeral district suffixes II-XXX. Standalone
+// "I" and "V" excluded: "V" clashes with Czech
+// preposition "in"; "I" is too ambiguous.
+const ROMAN_DISTRICT =
+  "XXX|XXIX|XXVIII|XXVII|XXVI|XXV|XXIV|XXIII" +
+  "|XXII|XXI|XX|XIX|XVIII|XVII|XVI|XV|XIV|XIII" +
+  "|XII|XI|X|IX|VIII|VII|VI|IV|III|II";
+const DISTRICT_SUFFIX_RE = new RegExp(
+  `^ (\\d{1,2}(?!\\d)|(?:${ROMAN_DISTRICT}))` +
+    `(?=[\\s,;.)"\\n]|$)`,
+);
 const POSTAL_PREFIX_RE = /(?:\d{3,5}|\d{3} \d{2}) $/;
 
 // Words that must NOT be absorbed into an address span

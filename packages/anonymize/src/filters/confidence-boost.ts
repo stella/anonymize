@@ -251,6 +251,12 @@ export const detectStreetPatternsNearAddresses = (
       continue;
     }
 
+    // Track if any temporal preposition was passed
+    // through during the scan (e.g., "do", "od").
+    // If so, the result is likely a date expression
+    // even if wordCount > 1 ("Praha do 225/1").
+    let hasTemporalPrep = false;
+
     // Collect words backwards until we hit:
     // - a non-letter character (except space/dot)
     // - a newline
@@ -311,6 +317,14 @@ export const detectStreetPatternsNearAddresses = (
         break;
       }
 
+      // Track temporal prepositions passed through
+      if (
+        isPrep &&
+        getTemporalPreps().has(word.toLowerCase())
+      ) {
+        hasTemporalPrep = true;
+      }
+
       streetStart = wordStart;
       wordCount++;
 
@@ -354,17 +368,12 @@ export const detectStreetPatternsNearAddresses = (
       continue;
     }
 
-    // Guard: if the sole preceding word is a temporal
-    // preposition, this is likely a date expression
-    // ("od 31/12", "do 1/1"), not an address.
-    if (wordCount === 1) {
-      const firstWord = fullText.slice(
-        streetStart,
-        numStart,
-      ).trim().toLowerCase();
-      if (getTemporalPreps().has(firstWord)) {
-        continue;
-      }
+    // Guard: reject if any temporal preposition was
+    // encountered during the backward scan. Catches
+    // both "do 225/1" (wordCount=1) and "Praha do
+    // 225/1" (wordCount=2).
+    if (hasTemporalPrep) {
+      continue;
     }
 
     // Skip if already covered
