@@ -165,8 +165,10 @@ describe("mergeChunkEntities", () => {
       expect(persons).toHaveLength(2);
       expect(persons[0]?.score).toBe(0.9);
       expect(persons[0]?.start).toBe(10);
+      expect(persons[0]?.end).toBe(15);
       expect(persons[1]?.score).toBe(0.7);
       expect(persons[1]?.start).toBe(12);
+      expect(persons[1]?.end).toBe(20);
     },
   );
 });

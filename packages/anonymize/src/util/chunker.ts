@@ -64,6 +64,15 @@ const POSITION_THRESHOLD = 5;
  * document-level offsets. Deduplicates entities that
  * appear in overlap regions (keeps highest score).
  *
+ * Dedup invariant: each incoming entity is compared
+ * against the highest-scored same-label near-dup in
+ * its proximity window. If it loses, it is dropped.
+ * This does NOT guarantee that all pairwise near-dup
+ * relationships in the output are resolved; a lower-
+ * scored entity can survive if the bridging entity
+ * that would have replaced it was itself dropped by
+ * a higher-scored match.
+ *
  * Uses a reverse-scan over the sorted merged array
  * so each entity only compares against nearby
  * predecessors — O(n * w) average where w is the max
@@ -141,6 +150,9 @@ export const mergeChunkEntities = (
         merged.splice(bestDupIndex, 1);
         merged.push({ ...entity });
       }
+      // Entity loses to the best match and is dropped.
+      // Other lower-scored near-dups of this entity are
+      // not revisited (see docstring dedup invariant).
     } else {
       merged.push({ ...entity });
     }
