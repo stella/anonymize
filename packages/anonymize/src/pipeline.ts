@@ -18,6 +18,7 @@ import { processAddressSeeds } from "./detectors/address-seeds";
 import {
   boostNearMissEntities,
   detectStreetPatternsNearAddresses,
+  detectOrphanStreetLines,
 } from "./filters/confidence-boost";
 import {
   filterFalsePositives,
@@ -514,6 +515,16 @@ export const runPipeline = async (
   if (streetPatterns.length > 0) {
     allEntities = [...allEntities, ...streetPatterns];
     log("street-context", `${streetPatterns.length} street patterns near addresses`);
+  }
+
+  // Orphan street lines in header zone
+  const orphanStreets = detectOrphanStreetLines(
+    fullText,
+    allEntities,
+  );
+  if (orphanStreets.length > 0) {
+    allEntities = [...allEntities, ...orphanStreets];
+    log("orphan-streets", `${orphanStreets.length} header street lines`);
   }
 
   // Merge + dedup

@@ -715,7 +715,10 @@ export const processDenyListMatches = (
  * leading postal codes ("80336 München").
  * Mutates the entities in place.
  */
-const DISTRICT_SUFFIX_RE = /^ (\d{1,2})(?!\d)/;
+// District suffixes: digits ("Praha 1") or Roman
+// numerals ("Příbram II", "Brno III")
+const DISTRICT_SUFFIX_RE =
+  /^ (\d{1,2}(?!\d)|[IVXLC]{1,4})(?=[\s,;.)"\n]|$)/;
 const POSTAL_PREFIX_RE = /(?:\d{3,5}|\d{3} \d{2}) $/;
 
 const extendCityDistricts = (
@@ -748,6 +751,23 @@ const extendCityDistricts = (
     const prefixM = POSTAL_PREFIX_RE.exec(beforeMatch);
     if (prefixM) {
       entity.start -= prefixM[0].length;
+      entity.text = fullText.slice(
+        entity.start,
+        entity.end,
+      );
+    }
+
+    // Trailing uppercase word: "434 01" + " Most" →
+    // "434 01 Most". Absorb if the next word starts
+    // with uppercase and is on the same line.
+    const afterExt = fullText.slice(entity.end);
+    const trailingWordM =
+      /^[\s]+(\p{Lu}\p{Ll}+)/u.exec(afterExt);
+    if (
+      trailingWordM &&
+      !trailingWordM[0].includes("\n")
+    ) {
+      entity.end += trailingWordM[0].length;
       entity.text = fullText.slice(
         entity.start,
         entity.end,

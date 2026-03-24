@@ -280,3 +280,76 @@ export const detectStreetPatternsNearAddresses = (
 
   return results;
 };
+
+// ── Orphan street lines in header zone ──────────────
+
+const ORPHAN_STREET_RE =
+  /^\s*(\p{Lu}\p{Ll}+(?:\s+\p{Lu}\p{Ll}+)*\s+\d{1,4}[a-zA-Z]?)\s*$/gmu;
+
+/**
+ * In the header zone (top 15%), find standalone lines
+ * matching "[Uppercase word(s)] [number]" that sit
+ * between other detected entities. These are almost
+ * certainly street addresses in party definitions.
+ *
+ * Example: "Evropská 710" on its own line between
+ * an organization entity and a postal code entity.
+ */
+export const detectOrphanStreetLines = (
+  fullText: string,
+  existingEntities: Entity[],
+): Entity[] => {
+  const headerEnd = Math.floor(
+    fullText.length * HEADER_ZONE_FRACTION,
+  );
+  const results: Entity[] = [];
+  ORPHAN_STREET_RE.lastIndex = 0;
+
+  for (
+    let m = ORPHAN_STREET_RE.exec(fullText);
+    m !== null;
+    m = ORPHAN_STREET_RE.exec(fullText)
+  ) {
+    const captured = m[1];
+    if (captured === undefined) {
+      continue;
+    }
+    const start = m.index + m[0].indexOf(captured);
+    const end = start + captured.length;
+
+    // Only in header zone
+    if (start >= headerEnd) {
+      continue;
+    }
+
+    // Skip if already covered
+    if (
+      existingEntities.some(
+        (e) => e.start <= start && e.end >= end,
+      )
+    ) {
+      continue;
+    }
+
+    // Must have a nearby entity (within 200 chars)
+    const hasContext = existingEntities.some(
+      (e) =>
+        Math.abs(e.start - end) < 200 ||
+        Math.abs(e.end - start) < 200,
+    );
+    if (!hasContext) {
+      continue;
+    }
+
+    results.push({
+      start,
+      end,
+      label: "address",
+      text: captured,
+      score: 0.85,
+      source: "regex",
+    });
+  }
+
+  return results;
+};
