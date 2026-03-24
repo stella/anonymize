@@ -5,6 +5,9 @@ import type {
   PipelineContext,
 } from "../context";
 import { defaultContext } from "../context";
+import {
+  loadLanguageConfigs,
+} from "../util/lang-loader";
 
 type CoreferenceConfigRow = {
   pattern: string;
@@ -14,46 +17,50 @@ type CoreferenceConfigRow = {
 
 /**
  * Load coreference definition patterns from per-language
- * JSON configs in @stll/anonymize-data. Follows the same
- * `tryLoad` approach used by triggers.ts.
+ * JSON configs in @stll/anonymize-data. Uses the
+ * language manifest for auto-discovery.
  */
 const loadDefinitionPatterns =
   async (): Promise<DefinitionPattern[]> => {
     const patterns: DefinitionPattern[] = [];
 
-    const tryLoad = async (path: string) => {
-      try {
-        const mod = await import(path);
+    const allRows = await loadLanguageConfigs<
+      readonly CoreferenceConfigRow[]
+    >(
+      "coreference",
+      (mod) => {
         // eslint-disable-next-line no-unsafe-type-assertion -- JSON config
-        const rows = (
-          mod as {
-            default: readonly CoreferenceConfigRow[];
-          }
-        ).default;
-        for (const row of rows) {
+        const m = mod as {
+          default?: readonly CoreferenceConfigRow[];
+        };
+        // eslint-disable-next-line no-unsafe-type-assertion -- JSON config
+        return (m.default ?? mod) as
+          readonly CoreferenceConfigRow[];
+      },
+    );
+
+    for (const rows of allRows) {
+      if (!Array.isArray(rows)) {
+        console.warn(
+          "[anonymize] coreference: unexpected " +
+            "config shape, skipping",
+        );
+        continue;
+      }
+      for (const row of rows) {
+        try {
           patterns.push({
             pattern: new RegExp(row.pattern, row.flags),
           });
+        } catch (err) {
+          console.warn(
+            `[anonymize] coreference: invalid ` +
+              `regex "${row.pattern}":`,
+            err,
+          );
         }
-      } catch {
-        // Data package not installed or file missing
       }
-    };
-
-    await Promise.all([
-      tryLoad(
-        "@stll/anonymize-data/config/coreference.cs.json",
-      ),
-      tryLoad(
-        "@stll/anonymize-data/config/coreference.de.json",
-      ),
-      tryLoad(
-        "@stll/anonymize-data/config/coreference.en.json",
-      ),
-      tryLoad(
-        "@stll/anonymize-data/config/coreference.sk.json",
-      ),
-    ]);
+    }
 
     return patterns;
   };
