@@ -26,7 +26,10 @@ export type {
   NameCorpusData,
   PipelineContext,
 } from "./context";
-export { createPipelineContext } from "./context";
+export {
+  corefKey,
+  createPipelineContext,
+} from "./context";
 
 // ── Pipeline ──────────────────────────────────────
 export { runPipeline, mergeAndDedup } from "./pipeline";

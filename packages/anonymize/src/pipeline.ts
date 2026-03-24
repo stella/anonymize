@@ -484,6 +484,9 @@ export const runPipeline = async (
   checkAbort(signal);
 
   // Coreference
+  // Clear stale entries unconditionally so a reused
+  // context doesn't leak sourceText across documents.
+  ctx.corefSourceMap.clear();
   if (config.enableCoreference) {
     const terms = await extractDefinedTerms(
       fullText,
