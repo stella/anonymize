@@ -17,7 +17,7 @@
     "./config/*": "./config/*"
   },
   "types": "dist/index.d.ts",
-  "files": ["dist", "config"],
+  "files": ["dist", "config", "dictionaries/cities"],
   "publishConfig": {
     "access": "restricted"
   },

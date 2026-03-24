@@ -33,7 +33,7 @@
     "@stll/text-search": "^0.3.1"
   },
   "peerDependencies": {
-    "@stll/anonymize-data": ">=0.1.0"
+    "@stll/anonymize-data": "^0.1.0"
   },
   "peerDependenciesMeta": {
     "@stll/anonymize-data": {
