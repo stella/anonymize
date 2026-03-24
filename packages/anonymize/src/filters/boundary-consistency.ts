@@ -349,9 +349,9 @@ const removeNestedSameLabel = (
  * longer span on tie) keeps its boundary; the other
  * is trimmed so the overlap disappears.
  *
- * Uses a backward-walking pointer for the inner loop
- * instead of scanning from i+1 each time. O(n)
- * amortized.
+ * Preserved existing structure: sorted + early break
+ * already gives good amortized behavior. O(n^2)
+ * worst case but rare in practice.
  */
 const resolveCrossLabelOverlaps = (
   entities: Entity[],
