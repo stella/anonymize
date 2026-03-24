@@ -8,6 +8,7 @@ import { buildPlaceholderMap } from "../../redact";
 import { DETECTION_SOURCES } from "../../types";
 import type { Entity } from "../../types";
 import {
+  corefKey,
   createPipelineContext,
 } from "../../context";
 
@@ -182,7 +183,7 @@ describe("findCoreferenceSpans", () => {
     );
     expect(spans).toHaveLength(1);
     const span = spans[0]!;
-    expect(ctx.corefSourceMap.get(span)).toBe(
+    expect(ctx.corefSourceMap.get(corefKey(span))).toBe(
       "Ing. Tomáš Procházka",
     );
   });

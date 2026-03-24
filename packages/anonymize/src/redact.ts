@@ -10,7 +10,7 @@ import type {
   RedactionResult,
 } from "./types";
 import type { PipelineContext } from "./context";
-import { defaultContext } from "./context";
+import { corefKey, defaultContext } from "./context";
 
 const WHITESPACE_RE = /\s+/g;
 const PHONE_NOISE_RE = /[()\s-]/g;
@@ -52,6 +52,11 @@ const normalizeEntityText = (label: string, text: string): string => {
  *
  * Placeholder format: [LABEL_N] where LABEL is uppercase
  * and N is a 1-based counter per label.
+ *
+ * @param ctx Pipeline context. Must be the same instance
+ *   passed to `runPipeline` (or `findCoreferenceSpans`)
+ *   so coreference placeholder links are preserved.
+ *   Defaults to `defaultContext` for single-tenant usage.
  */
 export const buildPlaceholderMap = (
   entities: Entity[],
@@ -74,7 +79,9 @@ export const buildPlaceholderMap = (
     // Coreference side-channel: if this entity is a
     // coref alias, look up the source entity's
     // placeholder so both get the same number.
-    const sourceText = ctx.corefSourceMap.get(entity);
+    const sourceText = ctx.corefSourceMap.get(
+      corefKey(entity),
+    );
     if (sourceText !== undefined) {
       const sourceNormalized = normalizeEntityText(
         entity.label,
@@ -118,6 +125,11 @@ export const buildPlaceholderMap = (
  *
  * Co-references are consistent: if the same text appears
  * multiple times, all occurrences get the same placeholder.
+ *
+ * @param ctx Pipeline context. Must be the same instance
+ *   passed to `runPipeline` (or `findCoreferenceSpans`)
+ *   so coreference placeholder links are preserved.
+ *   Defaults to `defaultContext` for single-tenant usage.
  */
 export const redactText = (
   fullText: string,

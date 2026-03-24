@@ -4,7 +4,7 @@ import type {
   DefinitionPattern,
   PipelineContext,
 } from "../context";
-import { defaultContext } from "../context";
+import { corefKey, defaultContext } from "../context";
 import {
   loadLanguageConfigs,
 } from "../util/lang-loader";
@@ -322,7 +322,10 @@ export const findCoreferenceSpans = (
         score: 0.95,
         source: DETECTION_SOURCES.COREFERENCE,
       };
-      ctx.corefSourceMap.set(entity, term.sourceText);
+      ctx.corefSourceMap.set(
+        corefKey(entity),
+        term.sourceText,
+      );
       results.push(entity);
 
       searchFrom = matchEnd;
