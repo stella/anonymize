@@ -85,14 +85,20 @@ describe("enforceBoundaryConsistency", () => {
       // After fixPartialWords, two entities may
       // partially overlap. mergeAdjacent must merge.
       const fullText = "the abc def ghi end";
-      // Entities that, after word-boundary expansion,
-      // will partially overlap around "def".
-      // "bc de" [4,9] -> expands to "abc def" [4,11]
-      // "ef gh" [10,15] -> expands to "def ghi" [8,15]
+      //                    ^      ^^      ^
+      //                    4      11      15
+      // "bc de" [5,10] -> expands to "abc def" [4,11]
+      // "ef gh" [9,14] -> expands to "def ghi" [8,15]
       // overlap at [8,11]
       const entities = [
-        makeEntity("person", 4, 9, "bc de"),
-        makeEntity("person", 10, 15, "ef gh"),
+        makeEntity(
+          "person", 5, 10,
+          fullText.slice(5, 10),
+        ),
+        makeEntity(
+          "person", 9, 14,
+          fullText.slice(9, 14),
+        ),
       ];
       const result = enforceBoundaryConsistency(
         entities,
@@ -251,6 +257,36 @@ describe("enforceBoundaryConsistency", () => {
       expect(result[0]?.text).toBe("Novák");
       // Higher score survives
       expect(result[0]?.score).toBe(0.9);
+    });
+
+    test("does not expand into different-label neighbor", () => {
+      // Two touching entities of different labels.
+      // Expansion must not cross into the neighbor's
+      // span.
+      const fullText = "JanPraha";
+      // person "Jan" [0,3], address "Praha" [3,8] but
+      // the word boundary is at 0 and 8 (single word).
+      // Without clamping, both would expand to [0,8].
+      const entities = [
+        makeEntity("person", 0, 3, "Jan", 0.9),
+        makeEntity("address", 3, 8, "Praha", 0.8),
+      ];
+      const result = enforceBoundaryConsistency(
+        entities,
+        fullText,
+      );
+      const person = result.find(
+        (e) => e.label === "person",
+      );
+      const address = result.find(
+        (e) => e.label === "address",
+      );
+      expect(person).toBeDefined();
+      expect(address).toBeDefined();
+      // No overlap
+      expect(person!.end).toBeLessThanOrEqual(
+        address!.start,
+      );
     });
 
     test("keeps two non-overlapping same-label", () => {

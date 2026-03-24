@@ -119,25 +119,53 @@ const mergeAdjacent = (
 /**
  * Step 2: fix partial-word boundaries by extending
  * entity start/end to the nearest word boundary.
- * Does not extend across newlines.
+ * Does not extend across newlines or into spans
+ * occupied by different-label entities.
  */
 const fixPartialWords = (
   entities: Entity[],
   fullText: string,
 ): Entity[] => {
   const boundaries = buildWordBoundaries(fullText);
+  const sorted = entities.toSorted(
+    (a, b) => a.start - b.start,
+  );
 
-  return entities.map((e) => {
-    const newStart = wordStartAt(
+  return sorted.map((e, i) => {
+    let newStart = wordStartAt(
       e.start,
       boundaries,
       fullText,
     );
-    const newEnd = wordEndAt(
+    let newEnd = wordEndAt(
       e.end,
       boundaries,
       fullText,
     );
+
+    // Don't expand into a different-label neighbor's
+    // span. Check the previous and next entities.
+    for (const other of sorted) {
+      if (other === e) continue;
+      if (other.label === e.label) continue;
+      // Clamp start: don't expand left past a
+      // different-label entity's end.
+      if (
+        other.end > newStart &&
+        other.end <= e.start
+      ) {
+        newStart = Math.max(newStart, other.end);
+      }
+      // Clamp end: don't expand right past a
+      // different-label entity's start.
+      if (
+        other.start < newEnd &&
+        other.start >= e.end
+      ) {
+        newEnd = Math.min(newEnd, other.start);
+      }
+    }
+
     if (newStart === e.start && newEnd === e.end) {
       return e;
     }
@@ -209,7 +237,8 @@ const removeNestedSameLabel = (
  * Runs after mergeAndDedup, before false-positive
  * filtering.
  *
- * 1. Fix partial-word boundaries (may create overlaps)
+ * 1. Fix partial-word boundaries (respects cross-label
+ *    neighbors to avoid introducing new overlaps)
  * 2. Deduplicate identical [start, end, label] spans
  * 3. Merge adjacent same-label entities (catches any
  *    new adjacency/overlap from step 1)
