@@ -74,24 +74,7 @@ export const mergeAndDedup = (
 ): Entity[] => {
   const all: Entity[] = [];
   for (const layer of layers) {
-    for (const entity of layer) {
-      // Trim whitespace from entity text and adjust
-      // start/end offsets accordingly.
-      const trimStart = entity.text.length -
-        entity.text.trimStart().length;
-      const trimEnd = entity.text.length -
-        entity.text.trimEnd().length;
-      if (trimStart > 0 || trimEnd > 0) {
-        all.push({
-          ...entity,
-          start: entity.start + trimStart,
-          end: entity.end - trimEnd,
-          text: entity.text.trim(),
-        });
-      } else {
-        all.push(entity);
-      }
-    }
+    for (const entity of layer) all.push(entity);
   }
   if (all.length === 0) return [];
 
