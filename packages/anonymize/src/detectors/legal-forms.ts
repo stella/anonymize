@@ -249,12 +249,16 @@ export const processLegalFormMatches = (
       continue;
     }
 
+    // Definitive legal forms (s.r.o., a.s., GmbH, etc.)
+    // get score 0.95 to beat person names in dedup.
+    // This ensures "Vantage Towers s.r.o." wins over
+    // "Towers" as a person name.
     results.push({
       start: match.start,
       end: match.start + text.length,
       label: "organization",
       text,
-      score: 0.9,
+      score: 0.95,
       source: DETECTION_SOURCES.LEGAL_FORM,
     });
   }
