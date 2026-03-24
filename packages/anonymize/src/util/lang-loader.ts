@@ -172,7 +172,9 @@ const FALLBACK_LANGUAGES: Record<
  * Falls back to the hardcoded language list when the
  * manifest is unavailable (backward compatibility).
  */
-export const loadLanguageConfigs = async <T>(
+export const loadLanguageConfigs = async <
+  T extends NonNullable<unknown>,
+>(
   configType: ConfigType,
   mapFn: (mod: unknown) => T,
 ): Promise<T[]> => {
