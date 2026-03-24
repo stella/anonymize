@@ -221,6 +221,7 @@ export const runPipeline = async (
     !config.enableDenyList
   ) {
     await initNameCorpus();
+    checkAbort(signal);
     nameCorpusEntities = detectNameCorpus(fullText);
     log(
       "name-corpus",

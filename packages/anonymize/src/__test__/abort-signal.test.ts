@@ -107,8 +107,7 @@ describe("runPipeline abort signal", () => {
     expect(receivedSignal).toBe(controller.signal);
   });
 
-  test("aborts before NER when signal fires during earlier stage", async () => {
-    const controller = new AbortController();
+  test("aborts before NER when signal is pre-aborted", async () => {
     let nerCalled = false;
 
     const mockNer: NerInferenceFn = async () => {
@@ -122,16 +121,6 @@ describe("runPipeline abort signal", () => {
       labels: ["person"],
     };
 
-    // Abort after a microtask to allow the pipeline
-    // to start but catch it before NER
-    const onProgress = (step: string) => {
-      // Abort as soon as any stage reports progress
-      if (step === "regex" || step === "legal-forms") {
-        controller.abort();
-      }
-    };
-
-    // With a pre-aborted signal instead (deterministic)
     const preAborted = new AbortController();
     preAborted.abort();
 
@@ -141,7 +130,7 @@ describe("runPipeline abort signal", () => {
         nerConfig,
         [],
         mockNer,
-        onProgress,
+        undefined,
         undefined,
         preAborted.signal,
       );
