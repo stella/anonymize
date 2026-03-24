@@ -326,7 +326,7 @@ const TITLED_PERSON: RegexDef = {
     `(?:${NAME_WORD})` +
     `(?:${SP}{1,4}(?:${PARTICLE}${SP}+)?` +
     `${NAME_WORD}){1,3}` +
-    `(?:,?${SP}+(?:${POST_NOMINAL}))?`,
+    `(?:,?${SP}+(?:${POST_NOMINAL})(?:,?${SP}+(?:${POST_NOMINAL}))*)?`,
   label: "person",
   score: 0.95,
 };
