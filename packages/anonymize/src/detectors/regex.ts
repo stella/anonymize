@@ -390,6 +390,7 @@ const CZ_BIRTH_NUMBER: RegexDef = {
   pattern: `\\b\\d{6}/\\d{3,4}\\b`,
   label: "czech birth number",
   score: 1,
+  validator: cz.rc,
 };
 
 const DATE_NUMERIC: RegexDef = {
@@ -452,7 +453,7 @@ const CZ_POSTAL: RegexDef = {
 // ? = & # kept for query strings.
 const URL: RegexDef = {
   pattern:
-    `https?://[\\w\\-]+(?:\\.[\\w\\-]+)+` +
+    `(?:https?://|www\\.)[\\w\\-]+(?:\\.[\\w\\-]+)+` +
     `(?::\\d+)?` +
     `(?:[/?#][^\\s)\\]>]*[^\\s.,;:!?)\\]>])?`,
   label: "url",
@@ -481,6 +482,19 @@ const MAC_ADDRESS: RegexDef = {
     `[0-9a-fA-F]{2}\\b`,
   label: "mac address",
   score: 1,
+};
+
+// SWIFT/BIC code: keyword-prefixed to avoid FPs from
+// random 8-char uppercase strings.
+// Format: 4 letters (bank) + 2 letters (country) +
+// 2 alphanum (location) + optional 3 alphanum (branch).
+const SWIFT_BIC: RegexDef = {
+  pattern:
+    `(?:SWIFT|BIC)\\s*:?\\s*` +
+    `[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}` +
+    `(?:[A-Z0-9]{3})?\\b`,
+  label: "bank account number",
+  score: 0.95,
 };
 
 // ── Collected definitions ────────────────────────────
@@ -518,6 +532,7 @@ const ALL_REGEX_DEFS: readonly RegexDef[] = [
   URL,
   IPV6_ADDRESS,
   MAC_ADDRESS,
+  SWIFT_BIC,
   ...STDNUM_ENTRIES,
 ];
 
@@ -593,9 +608,11 @@ const buildDatePatternsFromMonths = (
     // arbitrary whitespace.
     return [];
   }
+  // Optional time suffix: "19:45:50" or "19:45"
+  const TIME = `(?:\\s+\\d{1,2}:\\d{2}(?::\\d{2})?)`;
   return [
-  // a. DD[.] Month[.] YYYY — "1. ledna 2025", "17 Sep. 2023"
-  `(?i)\\b\\d{1,2}\\.?\\s+(?:${alt})\\.?\\s+\\d{4}\\b`,
+  // a. DD[.] Month[.] YYYY [HH:MM[:SS]]
+  `(?i)\\b\\d{1,2}\\.?\\s+(?:${alt})\\.?\\s+\\d{4}${TIME}?\\b`,
   // b. Month[.] DD[,] YYYY — "March 7, 2023" (US format)
   `(?i)\\b(?:${alt})\\.?\\s+\\d{1,2},?\\s+\\d{4}\\b`,
   // c. DDst/nd/rd/th Month[.] [YYYY] — "1st January 2025"

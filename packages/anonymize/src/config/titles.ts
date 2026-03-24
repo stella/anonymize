@@ -161,6 +161,7 @@ export const HONORIFIC_BOUNDARY = new Set([
  */
 export const POST_NOMINALS = [
   "Ph.D.",
+  "Ph.D",
   "CSc.",
   "DrSc.",
   "ArtD.",

@@ -4,6 +4,15 @@ import { defaultContext } from "../context";
 
 const TEMPLATE_PLACEHOLDER_RE =
   /^(?:\.{3,}|_{3,}|\[[\w\s]+\]|\{[\w\s]+\})$/;
+
+// Max entity text length by label. Prevents runaway
+// trigger extractions (e.g., "město Dobříš i okolních
+// obcí...") from producing absurdly long entities.
+const MAX_ENTITY_LENGTH: Partial<Record<string, number>> =
+  {
+    organization: 80,
+    person: 60,
+  };
 // Section/clause numbers: "§ 3", "3.2.1", "12." but NOT
 // dates like "4.3.2026" or long digit strings like IČO.
 // A section number has 1-3 digit groups of 1-3 digits each,
@@ -75,6 +84,18 @@ export const filterFalsePositives = (
     const trimmed = entity.text.trim();
 
     if (TEMPLATE_PLACEHOLDER_RE.test(trimmed)) {
+      continue;
+    }
+    // Reject entities exceeding max length for their
+    // label (prevents runaway trigger extractions).
+    // Exempt legal-form entities: their span is already
+    // bounded by the regex pattern, not open-ended.
+    const maxLen = MAX_ENTITY_LENGTH[entity.label];
+    if (
+      maxLen &&
+      trimmed.length > maxLen &&
+      entity.source !== "legal-form"
+    ) {
       continue;
     }
     // Section numbers (§ 3, 3.2.1, 12.) are false

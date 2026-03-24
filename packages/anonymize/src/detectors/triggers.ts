@@ -12,6 +12,45 @@ const LETTER_RE = /\p{L}/u;
 const UPPERCASE_START_RE = /^\p{Lu}/u;
 const DATOVA_SCHRANKA_RE = /^[a-z0-9]{7}$/i;
 
+// Definitive legal form suffixes. When a person-labeled
+// trigger captures text containing one of these, the
+// entity is reclassified as "organization". Case-insensitive.
+// Definitive legal form suffixes (case-sensitive).
+// No "i" flag: short uppercase-only forms (SE, SA, AG)
+// must NOT match Czech/Slovak reflexive pronouns "se",
+// "sa" which appear in person-trigger captures like
+// "Ing. Jan Novák, se sídlem...".
+const DEFINITIVE_LEGAL_FORMS = [
+  "s.r.o.", "s. r. o.", "spol. s r.o.",
+  "a.s.", "a. s.",
+  "v.o.s.", "v. o. s.",
+  "k.s.", "k. s.",
+  "z.s.", "z. s.",
+  "z.ú.", "z. ú.",
+  "o.p.s.", "o. p. s.",
+  "s.p.", "s. p.",
+  "GmbH", "AG", "SE", "KG", "OHG",
+  "Ltd.", "Ltd", "LLC", "LLP", "Inc.",
+  "S.A.", "SA", "SAS", "SARL",
+  "Sp. z o.o.", "S.p.A.",
+];
+// Build case-sensitive regex. Short dot-free forms
+// (AG, SE, KG) get word boundaries to prevent substring
+// matches. All forms are uppercase in the list; the
+// regex is case-sensitive so "se"/"sa" won't match.
+const LEGAL_FORM_CHECK_RE = new RegExp(
+  DEFINITIVE_LEGAL_FORMS.map((f) => {
+    const escaped = f
+      .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+      .replace(/\\\./g, "\\.\\s*");
+    const isDotFree = !f.includes(".");
+    const isShort = f.length <= 4;
+    return isDotFree && isShort
+      ? `\\b${escaped}\\b`
+      : escaped;
+  }).join("|"),
+);
+
 type TriggerConfigRow = {
   trigger: string;
   label: string;
@@ -457,10 +496,20 @@ export const processTriggerMatches = (
         continue;
       }
 
+      // If a person trigger captured text containing a
+      // definitive legal form suffix (s.r.o., GmbH, etc.),
+      // reclassify as organization. "jednající: TSC
+      // Management, s.r.o." → organization, not person.
+      const effectiveLabel =
+        rule.label === "person" &&
+        LEGAL_FORM_CHECK_RE.test(value.text)
+          ? "organization"
+          : rule.label;
+
       results.push({
         start: value.start,
         end: value.end,
-        label: rule.label,
+        label: effectiveLabel,
         text: value.text,
         score: TRIGGER_SCORE,
         source: DETECTION_SOURCES.TRIGGER,

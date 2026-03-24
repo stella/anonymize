@@ -19,7 +19,11 @@ const UPPER =
 const LOWER =
   "a-záčďéěíňóřšťúůýžäöüßàâæçèêëîïôùûÿñ\\u0131";
 const CAP_WORD = `[${UPPER}][${LOWER}${UPPER}]+`;
-const ANY_WORD = `[${UPPER}${LOWER}][${LOWER}${UPPER}]+`;
+// ANY_WORD: mixed-case word OR short all-caps token
+// (2-3 chars, e.g. "CZ" in "Metrostav CZ s.r.o.")
+const ANY_WORD =
+  `(?:[${UPPER}${LOWER}][${LOWER}${UPPER}]+` +
+  `|[${UPPER}]{2,3})`;
 // All-caps word: 2+ uppercase letters, no lowercase.
 // For company names like "EAGLES BRNO", max 3 words.
 const ALLCAP_WORD = `[${UPPER}]{2,}`;
@@ -245,12 +249,16 @@ export const processLegalFormMatches = (
       continue;
     }
 
+    // Definitive legal forms (s.r.o., a.s., GmbH, etc.)
+    // get score 0.95 to beat person names in dedup.
+    // This ensures "Vantage Towers s.r.o." wins over
+    // "Towers" as a person name.
     results.push({
       start: match.start,
       end: match.start + text.length,
       label: "organization",
       text,
-      score: 0.9,
+      score: 0.95,
       source: DETECTION_SOURCES.LEGAL_FORM,
     });
   }

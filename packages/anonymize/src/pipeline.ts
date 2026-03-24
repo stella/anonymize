@@ -18,6 +18,9 @@ import { processAddressSeeds } from "./detectors/address-seeds";
 import {
   boostNearMissEntities,
   detectStreetPatternsNearAddresses,
+  detectOrphanStreetLines,
+  initPrepositions,
+  initStreetAbbrevs,
 } from "./filters/confidence-boost";
 import {
   filterFalsePositives,
@@ -244,11 +247,9 @@ export const runPipeline = async (
 
   checkAbort(signal);
 
-  // Ensure generic-roles data, zone config, and
-  // hotword rules are loaded before the pipeline
-  // runs. All are no-ops after the first call. Zone
-  // init is isolated so a transient failure degrades
-  // gracefully to no zones.
+  // Ensure generic-roles data, zone config, hotword
+  // rules, and prepositions are loaded before the
+  // pipeline runs. All are no-ops after the first call.
   let zoneInitOk = false;
   const enableHotwords =
     config.enableHotwordRules === true;
@@ -280,12 +281,16 @@ export const runPipeline = async (
       });
     await Promise.all([
       loadGenericRoles(ctx),
+      initPrepositions(),
+      initStreetAbbrevs(),
       zoneInit,
       hotwordInit,
     ]);
   } else {
     await Promise.all([
       loadGenericRoles(ctx),
+      initPrepositions(),
+      initStreetAbbrevs(),
       hotwordInit,
     ]);
   }
@@ -514,6 +519,16 @@ export const runPipeline = async (
   if (streetPatterns.length > 0) {
     allEntities = [...allEntities, ...streetPatterns];
     log("street-context", `${streetPatterns.length} street patterns near addresses`);
+  }
+
+  // Orphan street lines in header zone
+  const orphanStreets = detectOrphanStreetLines(
+    fullText,
+    allEntities,
+  );
+  if (orphanStreets.length > 0) {
+    allEntities = [...allEntities, ...orphanStreets];
+    log("orphan-streets", `${orphanStreets.length} header street lines`);
   }
 
   // Merge + dedup

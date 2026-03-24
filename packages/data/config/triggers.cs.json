@@ -32,6 +32,64 @@
     "trigger": "sídlem"
   },
   {
+    "label": "address",
+    "strategy": {
+      "type": "address",
+      "maxChars": 120
+    },
+    "trigger": "sídlo:"
+  },
+  {
+    "label": "address",
+    "strategy": {
+      "type": "address",
+      "maxChars": 120
+    },
+    "trigger": "sídlo"
+  },
+  {
+    "label": "bank account number",
+    "strategy": {
+      "type": "to-end-of-line"
+    },
+    "trigger": "bankovní spojení:"
+  },
+  {
+    "label": "bank account number",
+    "strategy": {
+      "type": "to-end-of-line"
+    },
+    "trigger": "bankovní spojení"
+  },
+  {
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "zhotovitel:"
+  },
+  {
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "zhotovitelem"
+  },
+  {
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "objednatel:"
+  },
+  {
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "objednatelem"
+  },
+  {
     "label": "date of birth",
     "strategy": {
       "count": 1,
@@ -825,5 +883,139 @@
       "count": 1
     },
     "trigger": "oddílem "
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
+    "trigger": "oddíl "
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
+    "trigger": "vložka "
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
+    "trigger": "vložky "
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 2
+    },
+    "trigger": "sp. zn."
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 2
+    },
+    "trigger": "sp.zn."
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 2
+    },
+    "trigger": "spisové značky"
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 2
+    },
+    "trigger": "spisovou značkou"
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 2
+    },
+    "trigger": "pod sp.zn."
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "i.s."
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "v.z."
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "zastoupenou:"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "zastoupeným:"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "zastoupená:"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "zastoupený:"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "zastoupenou"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "zastoupeným"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "zastoupená"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "zastoupený"
   }
 ]

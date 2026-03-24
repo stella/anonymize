@@ -715,8 +715,41 @@ export const processDenyListMatches = (
  * leading postal codes ("80336 München").
  * Mutates the entities in place.
  */
-const DISTRICT_SUFFIX_RE = /^ (\d{1,2})(?!\d)/;
+// District suffixes: digits ("Praha 1") or Roman
+// numerals ("Příbram II", "Brno III")
+// Valid Roman numerals only (I-XXX range, no invalid
+// combos like IC, LC, VC). Covers district suffixes
+// up to Praha XXX which is more than enough.
+// Roman numeral district suffixes II-XXX. Standalone
+// "I" and "V" excluded: "V" clashes with Czech
+// preposition "in"; "I" is too ambiguous.
+const ROMAN_DISTRICT =
+  "XXX|XXIX|XXVIII|XXVII|XXVI|XXV|XXIV|XXIII" +
+  "|XXII|XXI|XX|XIX|XVIII|XVII|XVI|XV|XIV|XIII" +
+  "|XII|XI|X|IX|VIII|VII|VI|IV|III|II";
+const DISTRICT_SUFFIX_RE = new RegExp(
+  `^ (\\d{1,2}(?!\\d)|(?:${ROMAN_DISTRICT}))` +
+    `(?=[\\s,;.)"\\n]|$)`,
+);
 const POSTAL_PREFIX_RE = /(?:\d{3,5}|\d{3} \d{2}) $/;
+
+// Words that must NOT be absorbed into an address span
+// when they follow a postal-code + city pattern. Party
+// roles, organizational nouns, and common legal terms.
+const TRAILING_WORD_EXCLUSIONS: ReadonlySet<string> =
+  new Set([
+    // CZ/SK party roles
+    "nájemce", "pronajímatel", "kupující",
+    "prodávající", "objednatel", "zhotovitel",
+    "dodavatel", "odběratel", "věřitel", "dlužník",
+    "zadavatel", "uchazeč", "příjemce", "plátce",
+    // Organizational nouns
+    "správa", "sekretariát", "kancelář", "odbor",
+    "oddělení", "úřad", "inspekce", "agentura",
+    // Legal clause starters
+    "článek", "smlouva", "dodatek", "příloha",
+    "předmět", "podmínky", "ustanovení",
+  ]);
 
 const extendCityDistricts = (
   entities: Entity[],
@@ -752,6 +785,28 @@ const extendCityDistricts = (
         entity.start,
         entity.end,
       );
+    }
+
+    // Trailing uppercase word: "434 01" + " Most" →
+    // "434 01 Most". Absorb if the next word starts
+    // with uppercase and is on the same line.
+    // Guard: skip party-role or organizational terms.
+    const afterExt = fullText.slice(entity.end);
+    const trailingWordM =
+      /^[\s]+(\p{Lu}\p{Ll}+)/u.exec(afterExt);
+    if (
+      trailingWordM &&
+      !trailingWordM[0].includes("\n")
+    ) {
+      const candidate =
+        (trailingWordM[1] ?? "").toLowerCase();
+      if (!TRAILING_WORD_EXCLUSIONS.has(candidate)) {
+        entity.end += trailingWordM[0].length;
+        entity.text = fullText.slice(
+          entity.start,
+          entity.end,
+        );
+      }
     }
   }
 };
