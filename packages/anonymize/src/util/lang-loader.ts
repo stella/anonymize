@@ -228,8 +228,13 @@ export const loadLanguageConfigs = async <
     let mod: unknown;
     try {
       mod = await loader();
-    } catch {
-      // Config file missing or data package not installed
+    } catch (err) {
+      console.warn(
+        `[anonymize] lang-loader: failed to ` +
+          `import "${configType}" config for ` +
+          `"${code}":`,
+        err,
+      );
       return;
     }
     let result: T;
