@@ -1,11 +1,17 @@
 {
   "name": "@stll/anonymize",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Multi-layer PII detection and anonymization pipeline with regex, NER, deny lists, and coreference resolution",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
   },
+  "types": "dist/index.d.ts",
+  "files": ["dist"],
   "publishConfig": {
     "access": "restricted"
   },
@@ -15,6 +21,8 @@
   },
   "license": "MIT",
   "scripts": {
+    "build": "tsdown",
+    "prepublishOnly": "bun run build",
     "typecheck": "tsc --noEmit",
     "lint": "echo 'no linter configured yet'",
     "format": "echo 'no formatter configured yet'"
@@ -33,6 +41,7 @@
     }
   },
   "devDependencies": {
+    "tsdown": "^0.12.4",
     "typescript": "^5.9.3"
   }
 }
