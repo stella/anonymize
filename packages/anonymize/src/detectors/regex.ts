@@ -456,7 +456,7 @@ const CZ_POSTAL: RegexDef = {
 // "http://example.cz").
 const URL: RegexDef = {
   pattern:
-    `(?:https?://|https?:|www\\.)[\\w\\-]+(?:\\.[\\w\\-]+)+` +
+    `(?:https?:/?/?|www\\.)[\\w\\-]+(?:\\.[\\w\\-]+)+` +
     `(?::\\d+)?` +
     `(?:[/?#][^\\s)\\]>]*[^\\s.,;:!?)\\]>])?`,
   label: "url",
@@ -467,10 +467,10 @@ const URL: RegexDef = {
 // known TLD. Catches "fondkinematografie.cz" etc.
 const COMMON_TLDS =
   "com|org|net|eu|cz|sk|de|at|pl|hu|ro|fr|es|it" +
-  "|uk|nl|be|se|fi|dk|no|ch|info|io|dev";
+  "|uk|co\\.uk|nl|be|se|fi|dk|no|ch|info|io|dev";
 const BARE_DOMAIN: RegexDef = {
   pattern:
-    `\\b[\\w\\-]{3,}(?:\\.[\\w\\-]+)*` +
+    `\\b[\\w\\-]+(?:\\.[\\w\\-]+)*` +
     `\\.(?:${COMMON_TLDS})\\b` +
     `(?:[/?#][^\\s)\\]>]*[^\\s.,;:!?)\\]>])?`,
   label: "url",
@@ -761,7 +761,7 @@ const buildCurrencyPatterns = (
     for (const ch of data.symbols) {
       parts.push({
         len: ch.length,
-        alt: escapeRegex(ch),
+        alt: escapeCharClass(ch),
       });
     }
   }
