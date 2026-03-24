@@ -227,13 +227,13 @@ describe("findCoreferenceSpans", () => {
     );
 
     const sourceKey = `person\0Ing. Tomáš Procházka`;
-    const corefKey = `person\0TP`;
+    const aliasCompositeKey = `person\0TP`;
 
     // Both must get the same placeholder number
     expect(placeholderMap.get(sourceKey)).toBe(
       "[PERSON_1]",
     );
-    expect(placeholderMap.get(corefKey)).toBe(
+    expect(placeholderMap.get(aliasCompositeKey)).toBe(
       "[PERSON_1]",
     );
   });

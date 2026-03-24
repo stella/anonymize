@@ -287,6 +287,11 @@ export const findCoreferenceSpans = (
   terms: DefinedTerm[],
   ctx: PipelineContext = defaultContext,
 ): Entity[] => {
+  // Clear stale entries from previous runs so a
+  // reused context doesn't leak sourceText across
+  // documents (the old WeakMap was self-cleaning
+  // via GC; a Map is not).
+  ctx.corefSourceMap.clear();
   const results: Entity[] = [];
 
   for (const term of terms) {
