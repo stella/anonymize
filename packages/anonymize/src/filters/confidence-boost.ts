@@ -66,6 +66,59 @@ const HEADER_ZONE_FRACTION = 0.15;
 /** Context window for address adjacency */
 const STREET_CONTEXT_WINDOW = 200;
 
+// ── Preposition data (lazy-loaded from JSON) ────────
+
+type PrepositionData = {
+  address: Record<string, string[] | string>;
+  temporal: Record<string, string[] | string>;
+};
+
+let _addressPreps: ReadonlySet<string> | null = null;
+let _temporalPreps: ReadonlySet<string> | null = null;
+let _prepsPromise: Promise<void> | null = null;
+
+const loadPrepositions = async (): Promise<void> => {
+  try {
+    const mod = await import(
+      "@stll/anonymize-data/config/address-prepositions.json"
+    );
+    const data: PrepositionData = mod.default ?? mod;
+    // Merge all languages into flat sets
+    const addr = new Set<string>();
+    const temp = new Set<string>();
+    for (const words of Object.values(data.address)) {
+      if (Array.isArray(words)) {
+        for (const w of words) addr.add(w.toLowerCase());
+      }
+    }
+    for (const words of Object.values(data.temporal)) {
+      if (Array.isArray(words)) {
+        for (const w of words) temp.add(w.toLowerCase());
+      }
+    }
+    _addressPreps = addr;
+    _temporalPreps = temp;
+  } catch {
+    _addressPreps = new Set();
+    _temporalPreps = new Set();
+  }
+};
+
+/** Ensure preposition data is loaded. */
+export const initPrepositions =
+  (): Promise<void> => {
+    if (!_prepsPromise) {
+      _prepsPromise = loadPrepositions();
+    }
+    return _prepsPromise;
+  };
+
+const getAddressPreps = (): ReadonlySet<string> =>
+  _addressPreps ?? new Set();
+
+const getTemporalPreps = (): ReadonlySet<string> =>
+  _temporalPreps ?? new Set();
+
 /**
  * Scan backwards from known address entities and
  * house number patterns to find street names.
@@ -191,10 +244,9 @@ export const detectStreetPatternsNearAddresses = (
       const isUpper = UPPER_WORD_RE.test(
         word[0] ?? "",
       );
-      const isPrep =
-        /^(?:nad|pod|u|na|ve|ke|za|při|do|od|mezi)$/i.test(
-          word,
-        );
+      const isPrep = getAddressPreps().has(
+        word.toLowerCase(),
+      );
 
       if (!isUpper && !isPrep) {
         break;
@@ -251,11 +303,7 @@ export const detectStreetPatternsNearAddresses = (
         streetStart,
         numStart,
       ).trim().toLowerCase();
-      if (
-        /^(?:od|do|ke|na|dne|ze|ve|za|při|mezi)$/.test(
-          firstWord,
-        )
-      ) {
+      if (getTemporalPreps().has(firstWord)) {
         continue;
       }
     }

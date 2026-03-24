@@ -1,0 +1,30 @@
+{
+  "_comment": "Prepositions used in street/address names by language. Used by backward scan to continue through lowercase words, and by temporal guard to skip date-like patterns.",
+  "address": {
+    "cs": ["nad", "pod", "u", "na", "ve", "ke", "za", "při", "do", "od", "mezi"],
+    "sk": ["nad", "pod", "pri", "na", "vo", "ke", "za", "do", "od", "medzi"],
+    "de": ["am", "an", "im", "bei", "zum", "zur", "auf", "in", "vor"],
+    "en": ["upon", "on", "in", "by", "at", "near"],
+    "fr": ["sur", "sous", "de", "du", "des", "aux", "en"],
+    "pl": ["nad", "pod", "przy", "na", "za", "do", "od", "między"],
+    "it": ["di", "del", "della", "sul", "al"],
+    "es": ["de", "del", "en", "sobre"],
+    "hu": ["melletti", "alatti", "feletti"],
+    "ro": ["de", "din", "pe", "la"],
+    "sv": ["vid", "på", "i"]
+  },
+  "temporal": {
+    "_comment": "Prepositions that indicate temporal context (dates), not addresses. Used as negative guard.",
+    "cs": ["od", "do", "ke", "na", "dne", "ze", "ve", "za", "při", "mezi"],
+    "sk": ["od", "do", "dňa", "na", "vo", "za"],
+    "de": ["ab", "bis", "am", "vom", "seit"],
+    "en": ["from", "to", "on", "at", "since", "until", "by"],
+    "fr": ["du", "au", "dès", "depuis", "le"],
+    "pl": ["od", "do", "dnia", "na", "za"],
+    "it": ["dal", "al", "fino", "da"],
+    "es": ["del", "al", "desde", "hasta"],
+    "hu": ["tól", "ig"],
+    "ro": ["de", "din", "până"],
+    "sv": ["från", "till", "den"]
+  }
+}
