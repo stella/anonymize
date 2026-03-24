@@ -31,6 +31,10 @@ import {
   type UnifiedSearchInstance,
 } from "./build-unified-search";
 import { runUnifiedSearch } from "./unified-search";
+import {
+  maskDetectedSpans,
+  unmaskNerEntities,
+} from "./util/entity-masking";
 
 const shouldReplace = (
   a: Entity,
@@ -271,17 +275,41 @@ export const runPipeline = async (
 
   checkAbort(signal);
 
-  // NER
+  // NER (mask rule-detected spans so the model doesn't
+  // produce contradictory boundaries for known entities)
   let nerEntities: Entity[] = [];
   if (config.enableNer && nerInference) {
-    log("ner", "running inference...");
-    nerEntities = await nerInference(
+    const ruleEntities = [
+      ...triggerEntities,
+      ...regexEntities,
+      ...legalFormEntities,
+      ...nameCorpusEntities,
+      ...denyListEntities,
+      ...gazetteerExact,
+      ...gazetteerFuzzy,
+    ];
+    const maskResult = maskDetectedSpans(
       fullText,
+      ruleEntities,
+    );
+    log("ner", "running inference...");
+    const rawNer = await nerInference(
+      maskResult.maskedText,
       config.labels,
       config.threshold,
       signal,
     );
-    log("ner", `${nerEntities.length} entities`);
+    nerEntities = unmaskNerEntities(
+      rawNer,
+      maskResult,
+      fullText,
+    );
+    const dropped = rawNer.length - nerEntities.length;
+    log(
+      "ner",
+      `${nerEntities.length} entities` +
+        (dropped > 0 ? ` (${dropped} masked)` : ""),
+    );
   }
 
   checkAbort(signal);
