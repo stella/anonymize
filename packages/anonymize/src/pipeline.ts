@@ -12,7 +12,10 @@ import { processLegalFormMatches } from "./detectors/legal-forms";
 import { processTriggerMatches } from "./detectors/triggers";
 import { processDenyListMatches } from "./detectors/deny-list";
 import { processAddressSeeds } from "./detectors/address-seeds";
-import { boostNearMissEntities } from "./filters/confidence-boost";
+import {
+  boostNearMissEntities,
+  detectStreetPatternsNearAddresses,
+} from "./filters/confidence-boost";
 import {
   filterFalsePositives,
   loadGenericRoles,
@@ -165,6 +168,7 @@ export const runPipeline = async (
     regexMatches,
     slices.legalForms.start,
     slices.legalForms.end,
+    fullText,
   );
   if (legalFormEntities.length > 0)
     log(
@@ -260,6 +264,17 @@ export const runPipeline = async (
     if (boosted > 0) log("confidence-boost", `${boosted} near-miss promoted`);
   } else {
     allEntities = preBoostEntities.filter((e) => e.score >= config.threshold);
+  }
+
+  // Street patterns near existing addresses
+  // (e.g. "Ostrovní 225/1" near "110 00 Praha 1")
+  const streetPatterns = detectStreetPatternsNearAddresses(
+    fullText,
+    allEntities,
+  );
+  if (streetPatterns.length > 0) {
+    allEntities = [...allEntities, ...streetPatterns];
+    log("street-context", `${streetPatterns.length} street patterns near addresses`);
   }
 
   // Merge + dedup

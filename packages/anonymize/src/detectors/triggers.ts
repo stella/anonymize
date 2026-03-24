@@ -6,6 +6,8 @@ import type { Entity, TriggerRule } from "../types";
 const TRIGGER_SCORE = 0.95;
 const WHITESPACE_RE = /\s+/;
 const LETTER_RE = /\p{L}/u;
+const UPPERCASE_START_RE = /^\p{Lu}/u;
+const DATOVA_SCHRANKA_RE = /^[a-z0-9]{7}$/i;
 
 type TriggerConfigRow = {
   trigger: string;
@@ -214,26 +216,39 @@ const extractValue = (
         tabIdx !== -1
           ? valueText.slice(0, tabIdx)
           : valueText;
-      const words = cellText
-        .split(WHITESPACE_RE)
+      // Skip punctuation-only tokens (colons, dashes)
+      // so "datová schránka : hsaxra8" captures
+      // "hsaxra8" not ":"
+      const PUNCT_ONLY = /^[\p{P}\p{S}]+$/u;
+      const allTokens = cellText.split(WHITESPACE_RE);
+      const words = allTokens
+        .filter((w) => !PUNCT_ONLY.test(w))
         .slice(0, strategy.count);
       if (words.length === 0) {
         return null;
       }
-      let actualEnd = 0;
-      let searchPos = 0;
-      for (const word of words) {
-        const wordIdx = cellText.indexOf(
-          word,
-          searchPos,
-        );
-        actualEnd = wordIdx + word.length;
+      // Find span of the first real word
+      const firstWord = words[0];
+      if (firstWord === undefined) {
+        return null;
+      }
+      const firstIdx = cellText.indexOf(firstWord);
+      let actualEnd = firstIdx + firstWord.length;
+      // If multiple words, extend to last one
+      let searchPos = actualEnd;
+      for (let wi = 1; wi < words.length; wi++) {
+        const w = words[wi];
+        if (w === undefined) {
+          break;
+        }
+        const wIdx = cellText.indexOf(w, searchPos);
+        actualEnd = wIdx + w.length;
         searchPos = actualEnd;
       }
       return {
-        start: valueStart,
+        start: valueStart + firstIdx,
         end: valueStart + actualEnd,
-        text: cellText.slice(0, actualEnd),
+        text: cellText.slice(firstIdx, actualEnd),
       };
     }
 
@@ -269,6 +284,107 @@ const extractValue = (
         start: idStart,
         end: idStart + idText.length,
         text: idText,
+      };
+    }
+
+    case "address": {
+      // Walk through comma-separated segments.
+      // Continue through a comma if the next segment
+      // starts with a digit (PSČ like "110 00") or
+      // an uppercase letter (city like "Praha").
+      // Stop at: newline, opening paren "(", tab,
+      // or a period that is NOT an abbreviation
+      // (abbreviation = period followed by a space
+      // and a lowercase letter, e.g. "nábř. ").
+      const maxLen = strategy.maxChars ?? 120;
+      const UPPER_RE = /\p{Lu}/u;
+      let end = 0;
+
+      while (end < valueText.length && end < maxLen) {
+        const ch = valueText[end];
+
+        // Hard stops: newline, tab, opening paren
+        if (ch === "\n" || ch === "\t" || ch === "(") {
+          break;
+        }
+
+        // Period: stop unless it's an abbreviation.
+        // Abbreviation patterns in Czech addresses:
+        //   "nábř. Kpt." — period + space + letter
+        //   "č.p." — period + letter (no space)
+        //   "1000/7." — period at end of address
+        if (ch === ".") {
+          const next = valueText[end + 1];
+          const afterNext = valueText[end + 2];
+          // "č.p." or "Kpt.J" — period immediately
+          // followed by letter or digit
+          if (
+            next !== undefined &&
+            (/\p{L}/u.test(next) || /\d/.test(next))
+          ) {
+            end++;
+            continue;
+          }
+          // "nábř. Kpt." or "ul. nová" — period +
+          // space + any letter or digit. In address
+          // context, this is always an abbreviation,
+          // not end of sentence.
+          if (
+            next === " " &&
+            afterNext !== undefined &&
+            (/\p{L}/u.test(afterNext) ||
+              /\d/.test(afterNext))
+          ) {
+            end++;
+            continue;
+          }
+          // Period at end of address — stop but
+          // don't include the period
+          break;
+        }
+
+        // Comma: look ahead to see if address continues
+        if (ch === ",") {
+          // Skip comma + whitespace, check next char
+          let peek = end + 1;
+          while (
+            peek < valueText.length &&
+            (valueText[peek] === " " ||
+              valueText[peek] === "\t")
+          ) {
+            peek++;
+          }
+          const peekCh = valueText[peek];
+          if (peekCh === undefined) {
+            break;
+          }
+          // Continue if next segment starts with
+          // digit (PSČ) or uppercase (city name)
+          if (
+            /\d/.test(peekCh) ||
+            UPPER_RE.test(peekCh)
+          ) {
+            end++;
+            continue;
+          }
+          // Otherwise stop at this comma
+          break;
+        }
+
+        end++;
+      }
+
+      const rawSlice = valueText.slice(0, end);
+      const extracted = rawSlice.trim();
+      if (extracted.length === 0) {
+        return null;
+      }
+      const trailingSpaces =
+        rawSlice.length - rawSlice.trimEnd().length;
+      return {
+        start: valueStart,
+        end: valueStart + end - trailingSpaces,
+        text: extracted,
       };
     }
 
@@ -340,6 +456,27 @@ export const processTriggerMatches = (
       : null;
 
     if (value) {
+      // Person triggers require the captured value to
+      // start with an uppercase letter. This prevents
+      // false positives like "kontaktní osoba pro
+      // plnění této smlouvy :" from blindly anonymizing
+      // whatever follows.
+      if (
+        rule.label === "person" &&
+        !UPPERCASE_START_RE.test(value.text)
+      ) {
+        continue;
+      }
+
+      // Datová schránka IDs are exactly 7 alphanumeric
+      // characters. Reject captures that don't match.
+      if (
+        rule.trigger.includes("schránka") &&
+        !DATOVA_SCHRANKA_RE.test(value.text)
+      ) {
+        continue;
+      }
+
       results.push({
         start: value.start,
         end: value.end,

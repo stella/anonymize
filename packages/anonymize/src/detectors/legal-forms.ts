@@ -20,6 +20,9 @@ const LOWER =
   "a-záčďéěíňóřšťúůýžäöüßàâæçèêëîïôùûÿñ\\u0131";
 const CAP_WORD = `[${UPPER}][${LOWER}${UPPER}]+`;
 const ANY_WORD = `[${UPPER}${LOWER}][${LOWER}${UPPER}]+`;
+// All-caps word: 2+ uppercase letters, no lowercase.
+// For company names like "EAGLES BRNO", max 3 words.
+const ALLCAP_WORD = `[${UPPER}]{2,}`;
 
 const ROMAN_NUMERAL_RE =
   /^(?=[IVXLCDM])M{0,3}(?:CM|CD|D?C{0,3})(?:XC|XL|L?X{0,3})(?:IX|IV|V?I{0,3})$/;
@@ -46,9 +49,12 @@ const buildPatternString = (
     (a, b) => b.length - a.length,
   );
   const alt = sorted.map(escapeForRegex).join("|");
+  // Allow lowercase connectors between name words:
+  // "a" (Czech/SK), "and", "und", "et", "&", "e"
+  const CONNECTOR = `(?:[\\s&,.-]{1,4}|\\s+(?:a|and|und|et|e|y|i)\\s+)`;
   const prefix =
     `(?:${CAP_WORD})` +
-    `(?:[\\s&,.-]{1,4}(?:${ANY_WORD})){0,4}`;
+    `(?:${CONNECTOR}(?:${ANY_WORD})){0,4}`;
   const separator = requireCapBefore
     ? `(?:\\s+|,\\s*)`
     : `\\s+`;
@@ -112,6 +118,21 @@ export const buildLegalFormPatterns = async (): Promise<
     patterns.push(shortPattern);
   }
 
+  // All-caps company names: "EAGLES BRNO, z.s."
+  // Up to 3 all-caps words before any legal form.
+  // Uses all forms (both long and short).
+  const allcapPrefix =
+    `(?:${ALLCAP_WORD})` +
+    `(?:[\\s&,.-]{1,4}(?:${ALLCAP_WORD})){0,2}`;
+  const allcapAlt = allForms
+    .toSorted((a, b) => b.length - a.length)
+    .map(escapeForRegex)
+    .join("|");
+  patterns.push(
+    `${allcapPrefix}(?:\\s+|,\\s*)` +
+      `(?:${allcapAlt})(?![${LOWER}])`,
+  );
+
   return patterns;
 };
 
@@ -126,6 +147,7 @@ export const processLegalFormMatches = (
   allMatches: Match[],
   sliceStart: number,
   sliceEnd: number,
+  fullText?: string,
 ): Entity[] => {
   const results: Entity[] = [];
 
@@ -144,7 +166,11 @@ export const processLegalFormMatches = (
       continue;
     }
 
-    // Reject all-caps matches (section headings)
+    // Reject all-caps matches only if the entire
+    // surrounding line is all-caps (section headings
+    // like "KUPNÍ SMLOUVA"). If only the company name
+    // is all-caps ("uzavřená s EAGLES BRNO, z.s."),
+    // keep it — max 3 all-caps words are allowed.
     const prefixEnd =
       text.lastIndexOf(",") !== -1
         ? text.lastIndexOf(",")
@@ -155,10 +181,49 @@ export const processLegalFormMatches = (
             .slice(0, prefixEnd)
             .replace(/[^a-zA-ZÀ-ž]/g, "")
         : text.replace(/[^a-zA-ZÀ-ž]/g, "");
-    if (
+    const isAllCapsMatch =
       prefixPart.length > 2 &&
-      prefixPart === prefixPart.toUpperCase()
-    ) {
+      prefixPart === prefixPart.toUpperCase();
+
+    if (isAllCapsMatch && fullText) {
+      // Check: is the surrounding line also all-caps?
+      const lineStart = fullText.lastIndexOf(
+        "\n",
+        match.start,
+      );
+      const lineEnd = fullText.indexOf(
+        "\n",
+        match.end,
+      );
+      const line = fullText.slice(
+        lineStart + 1,
+        lineEnd === -1 ? fullText.length : lineEnd,
+      );
+      const lineLetters = line.replace(
+        /[^a-zA-ZÀ-ž]/g,
+        "",
+      );
+      const lineIsAllCaps =
+        lineLetters.length > 5 &&
+        lineLetters === lineLetters.toUpperCase();
+      if (lineIsAllCaps) {
+        // Entire line is all-caps → heading, skip
+        continue;
+      }
+      // Only the company name is all-caps → keep it
+      // (but limit to 3 words in prefix)
+      const wordCount =
+        prefixPart.length > 0
+          ? text
+              .slice(0, prefixEnd > 0 ? prefixEnd : text.length)
+              .trim()
+              .split(/\s+/).length
+          : 0;
+      if (wordCount > 3) {
+        continue;
+      }
+    } else if (isAllCapsMatch) {
+      // No fullText available — fall back to rejecting
       continue;
     }
 

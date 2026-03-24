@@ -676,7 +676,61 @@ export const processDenyListMatches = (
     });
   }
 
+  // Post-process: extend city/address matches to
+  // include adjacent trailing district numbers (e.g.,
+  // "Praha 1", "Brno 2"). Czech and Slovak cities
+  // commonly have numbered districts that are part of
+  // the address.
+  extendCityDistricts(results, fullText);
+
   return results;
+};
+
+/**
+ * Extend address-label entities to absorb adjacent
+ * integers: trailing district numbers ("Praha 1") and
+ * leading postal codes ("80336 München").
+ * Mutates the entities in place.
+ */
+const DISTRICT_SUFFIX_RE = /^ (\d{1,2})(?!\d)/;
+const POSTAL_PREFIX_RE = /(?:\d{3,5}|\d{3} \d{2}) $/;
+
+const extendCityDistricts = (
+  entities: Entity[],
+  fullText: string,
+): void => {
+  for (const entity of entities) {
+    if (entity.label !== "address") {
+      continue;
+    }
+
+    // Trailing: "Praha" + " 1" → "Praha 1"
+    // Trailing: "Praha" + " 1" → "Praha 1"
+    const afterMatch = fullText.slice(entity.end);
+    const suffixM = DISTRICT_SUFFIX_RE.exec(afterMatch);
+    if (suffixM) {
+      entity.end += suffixM[0].length;
+      entity.text = fullText.slice(
+        entity.start,
+        entity.end,
+      );
+    }
+
+    // Leading: "80336 " + "München" → "80336 München"
+    // Absorbs 3-5 digit postal codes before the city.
+    const beforeMatch = fullText.slice(
+      Math.max(0, entity.start - 7),
+      entity.start,
+    );
+    const prefixM = POSTAL_PREFIX_RE.exec(beforeMatch);
+    if (prefixM) {
+      entity.start -= prefixM[0].length;
+      entity.text = fullText.slice(
+        entity.start,
+        entity.end,
+      );
+    }
+  }
 };
 
 /**

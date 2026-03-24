@@ -2,28 +2,32 @@
   {
     "label": "address",
     "strategy": {
-      "type": "to-next-comma"
+      "type": "address",
+      "maxChars": 120
     },
     "trigger": "bytem:"
   },
   {
     "label": "address",
     "strategy": {
-      "type": "to-next-comma"
+      "type": "address",
+      "maxChars": 120
     },
     "trigger": "trvale bytem"
   },
   {
     "label": "address",
     "strategy": {
-      "type": "to-next-comma"
+      "type": "address",
+      "maxChars": 120
     },
     "trigger": "sídlem:"
   },
   {
     "label": "address",
     "strategy": {
-      "type": "to-next-comma"
+      "type": "address",
+      "maxChars": 120
     },
     "trigger": "sídlem"
   },
@@ -508,5 +512,318 @@
       "type": "company-id-value"
     },
     "trigger": "daňové identifikační číslo"
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
+    "trigger": "SPZ"
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
+    "trigger": "SPZ:"
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
+    "trigger": "RZ:"
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
+    "trigger": "registrační značka"
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
+    "trigger": "registrační značka:"
+  },
+  {
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "Nejvyšší kontrolní úřad"
+  },
+  {
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "Nejvyššího kontrolního úřadu"
+  },
+  {
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "Nejvyššímu kontrolnímu úřadu"
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
+    "trigger": "oddíl:"
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
+    "trigger": "vložka"
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
+    "trigger": "vložka:"
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
+    "trigger": "vložky"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "jednatelem společnosti"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "jednatelkou společnosti"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "jednatelem"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "jednatelkou"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "prokuristou"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "prokuristkou"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "ředitelem"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "ředitelkou"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "předsedou"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "místopředsedou"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "členem představenstva"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "členkou představenstva"
+  },
+  {
+    "label": "address",
+    "strategy": {
+      "type": "address",
+      "maxChars": 120
+    },
+    "trigger": "místo dodání:"
+  },
+  {
+    "label": "address",
+    "strategy": {
+      "type": "address",
+      "maxChars": 120
+    },
+    "trigger": "místo dodání"
+  },
+  {
+    "label": "address",
+    "strategy": {
+      "type": "address",
+      "maxChars": 120
+    },
+    "trigger": "místo plnění:"
+  },
+  {
+    "label": "address",
+    "strategy": {
+      "type": "address",
+      "maxChars": 120
+    },
+    "trigger": "místo plnění"
+  },
+  {
+    "label": "address",
+    "strategy": {
+      "type": "address",
+      "maxChars": 120
+    },
+    "trigger": "adresa:"
+  },
+  {
+    "label": "address",
+    "strategy": {
+      "type": "address",
+      "maxChars": 120
+    },
+    "trigger": "adresa"
+  },
+  {
+    "label": "address",
+    "strategy": {
+      "type": "address",
+      "maxChars": 120
+    },
+    "trigger": "doručovací adresa:"
+  },
+  {
+    "label": "address",
+    "strategy": {
+      "type": "address",
+      "maxChars": 120
+    },
+    "trigger": "doručovací adresa"
+  },
+  {
+    "label": "address",
+    "strategy": {
+      "type": "address",
+      "maxChars": 120
+    },
+    "trigger": "korespondenční adresa:"
+  },
+  {
+    "label": "address",
+    "strategy": {
+      "type": "address",
+      "maxChars": 120
+    },
+    "trigger": "korespondenční adresa"
+  },
+  {
+    "label": "address",
+    "strategy": {
+      "type": "address",
+      "maxChars": 120
+    },
+    "trigger": "fakturační adresa:"
+  },
+  {
+    "label": "address",
+    "strategy": {
+      "type": "address",
+      "maxChars": 120
+    },
+    "trigger": "fakturační adresa"
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
+    "trigger": "vložce"
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
+    "trigger": "vložkou"
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
+    "trigger": "oddílu:"
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
+    "trigger": "v oddíle "
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
+    "trigger": "oddílem "
   }
 ]

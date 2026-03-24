@@ -65,6 +65,7 @@ export { scanExact, scanFuzzy } from "./detectors/gazetteer";
 export {
   extractDefinedTerms,
   findCoreferenceSpans,
+  corefSourceMap,
 } from "./detectors/coreference";
 export {
   detectNameCorpus,

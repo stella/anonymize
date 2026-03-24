@@ -25,7 +25,7 @@
     "@stll/text-search": "^0.2.0"
   },
   "peerDependencies": {
-    "@stll/anonymize-data": ">=0.0.1"
+    "@stll/anonymize-data": "workspace:*"
   },
   "peerDependenciesMeta": {
     "@stll/anonymize-data": {

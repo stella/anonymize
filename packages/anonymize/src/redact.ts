@@ -3,6 +3,7 @@ import {
   OPERATOR_REGISTRY,
   resolveOperator,
 } from "./operators";
+import { corefSourceMap } from "./detectors/coreference";
 import type {
   Entity,
   OperatorConfig,
@@ -67,6 +68,29 @@ export const buildPlaceholderMap = (
     }
 
     const labelKey = entity.label.toUpperCase().replace(WHITESPACE_RE, "_");
+
+    // Coreference side-channel: if this entity is a
+    // coref alias, look up the source entity's
+    // placeholder so both get the same number.
+    const sourceText = corefSourceMap.get(entity);
+    if (sourceText !== undefined) {
+      const sourceNormalized = normalizeEntityText(
+        entity.label,
+        sourceText,
+      );
+      const sourceNormalizedKey =
+        `${labelKey}\0${sourceNormalized}`;
+      const sourceExisting =
+        normalizedToPlaceholder.get(sourceNormalizedKey);
+      if (sourceExisting) {
+        textLabelToPlaceholder.set(
+          compositeKey,
+          sourceExisting,
+        );
+        continue;
+      }
+    }
+
     const normalized = normalizeEntityText(entity.label, entity.text);
     const normalizedKey = `${labelKey}\0${normalized}`;
     const existing = normalizedToPlaceholder.get(normalizedKey);

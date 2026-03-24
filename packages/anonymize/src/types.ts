@@ -68,7 +68,8 @@ type TriggerExtractionStrategy =
   | { type: "to-next-comma" }
   | { type: "to-end-of-line" }
   | { type: "n-words"; count: number }
-  | { type: "company-id-value" };
+  | { type: "company-id-value" }
+  | { type: "address"; maxChars?: number };
 
 /**
  * Anonymisation operator types. Each operator defines
