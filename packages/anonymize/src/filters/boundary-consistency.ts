@@ -6,8 +6,10 @@ const MAX_GAP = 3;
 /**
  * Characters allowed in the gap between two adjacent
  * same-label entities that should be merged.
+ * Uses `[ \t]` instead of `\s` to avoid merging
+ * entities across newlines.
  */
-const GAP_PATTERN = /^[\s,\-]+$/;
+const GAP_PATTERN = /^[ \t,\-]+$/;
 
 /**
  * Build a set of word boundary offsets for the full

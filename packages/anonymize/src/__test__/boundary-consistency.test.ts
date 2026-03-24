@@ -106,6 +106,24 @@ describe("enforceBoundaryConsistency", () => {
       );
       expect(result).toHaveLength(1);
       expect(result[0]?.text).toBe("Novák, Jan");
+      expect(result[0]?.start).toBe(0);
+      expect(result[0]?.end).toBe(10);
+    });
+
+    test("does not merge entities across newline", () => {
+      const fullText = "Jan\nNovák";
+      const entities = [
+        makeEntity("person", 0, 3, "Jan"),
+        makeEntity("person", 4, 9, "Novák"),
+      ];
+      const result = enforceBoundaryConsistency(
+        entities,
+        fullText,
+      );
+      // Gap is "\n" which should NOT be merged
+      expect(result).toHaveLength(2);
+      expect(result[0]?.text).toBe("Jan");
+      expect(result[1]?.text).toBe("Novák");
     });
   });
 
