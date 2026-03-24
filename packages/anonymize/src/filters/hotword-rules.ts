@@ -36,7 +36,7 @@ const loadRules = async (): Promise<void> => {
     "@stll/anonymize-data/config/hotword-rules.json"
   );
   const data: HotwordRulesConfig = mod.default ?? mod;
-  rules = data.rules;
+  const loaded = data.rules;
 
   // Build a flat pattern list and the reverse map.
   const patterns: PatternEntry[] = [];
@@ -44,10 +44,10 @@ const loadRules = async (): Promise<void> => {
 
   for (
     let ruleIdx = 0;
-    ruleIdx < rules.length;
+    ruleIdx < loaded.length;
     ruleIdx++
   ) {
-    for (const hw of rules[ruleIdx].hotwords) {
+    for (const hw of loaded[ruleIdx].hotwords) {
       patterns.push({
         pattern: hw,
         literal: true,
@@ -57,8 +57,7 @@ const loadRules = async (): Promise<void> => {
     }
   }
 
-  patternToRule = mapping;
-  search =
+  const builtSearch =
     patterns.length > 0
       ? new TextSearch(patterns, {
           overlapStrategy: "all",
@@ -66,6 +65,13 @@ const loadRules = async (): Promise<void> => {
           wholeWords: true,
         })
       : null;
+
+  // Assign all module state atomically after all
+  // failable operations succeed, so a mid-flight
+  // error cannot leave a half-initialized state.
+  patternToRule = mapping;
+  search = builtSearch;
+  rules = loaded;
 };
 
 /**

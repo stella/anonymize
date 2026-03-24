@@ -64,12 +64,12 @@ describe("hotword rules", () => {
 
   it("penalizes date near 'článek'", () => {
     const text = "článek 3 ze dne 15.01.2024";
-    // "článek" ends at 7, date starts at 16
+    // "článek" ends at 6, date starts at 16
     const entity = makeEntity(16, 26, "date", 0.6);
     const result = applyHotwordRules([entity], text);
     expect(result).toHaveLength(1);
-    // Distance is 9 chars, proximityAfter is 10,
-    // so the penalty applies with slight decay.
+    // Distance is 10 chars, proximityBefore is 30,
+    // so the penalty applies with decay.
     expect(result[0].score).toBeLessThan(0.6);
   });
 
