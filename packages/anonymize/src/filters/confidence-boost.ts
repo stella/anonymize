@@ -283,8 +283,11 @@ export const detectStreetPatternsNearAddresses = (
 
 // ── Orphan street lines in header zone ──────────────
 
+// Orphan street: first word uppercase, subsequent words
+// can be lowercase (Czech: "Karlínské náměstí 7",
+// "Pražská ulice 12") or uppercase ("Národní třída 1").
 const ORPHAN_STREET_RE =
-  /^\s*(\p{Lu}\p{Ll}+(?:\s+\p{Lu}\p{Ll}+)*\s+\d{1,4}[a-zA-Z]?)\s*$/gmu;
+  /^\s*(\p{Lu}[\p{Ll}\p{Lu}]+(?:\s+[\p{Lu}\p{Ll}][\p{Ll}]+)*\s+\d{1,4}[a-zA-Z]?)\s*$/gmu;
 
 /**
  * In the header zone (top 15%), find standalone lines
