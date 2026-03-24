@@ -740,7 +740,7 @@ const buildCurrencyPatterns = (
       `(?:[${symbols}])` +
         `[^\\S\\n\\t]?` +
         `${NUM}` +
-        `(?:[.,]\\d{1,2})?\\b`,
+        `(?:[.,](?:\\d{1,2}|--?)?)?\\b`,
     );
   }
 
@@ -752,7 +752,7 @@ const buildCurrencyPatterns = (
   if (trailingAlt) {
     patterns.push(
       `\\b${NUM}` +
-        `(?:[.,]\\d{1,2})?[^\\S\\n\\t]?` +
+        `(?:[.,](?:\\d{1,2}|--?)?)?[^\\S\\n\\t]?` +
         `(?:${trailingAlt})` +
         `(?:\\b|(?=\\s|[.,;!?)]|$))`,
     );

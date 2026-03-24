@@ -693,7 +693,7 @@ export const processDenyListMatches = (
  * Mutates the entities in place.
  */
 const DISTRICT_SUFFIX_RE = /^ (\d{1,2})(?!\d)/;
-const POSTAL_PREFIX_RE = /(\d{3,5}) $/;
+const POSTAL_PREFIX_RE = /(?:\d{3,5}|\d{3} \d{2}) $/;
 
 const extendCityDistricts = (
   entities: Entity[],

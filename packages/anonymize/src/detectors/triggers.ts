@@ -320,7 +320,7 @@ const extractValue = (
           // followed by letter or digit
           if (
             next !== undefined &&
-            (UPPER_RE.test(next) || /\d/.test(next))
+            (/\p{L}/u.test(next) || /\d/.test(next))
           ) {
             end++;
             continue;
