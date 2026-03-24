@@ -79,6 +79,20 @@ describe("mergeAndDedup", () => {
   );
 
   test(
+    "overlapping entities: same score, longer wins when it arrives second",
+    () => {
+      // short=[0,4] enters merged first; long=[2,12]
+      // must actively replace it via shouldReplace
+      const short = entity(0, 4, 0.8);
+      const long = entity(2, 12, 0.8);
+      const result = mergeAndDedup([short, long]);
+      expect(result).toHaveLength(1);
+      expect(result[0].start).toBe(2);
+      expect(result[0].end).toBe(12);
+    },
+  );
+
+  test(
     "overlapping entities: lower score is dropped",
     () => {
       const high = entity(0, 10, 0.9);
