@@ -53,6 +53,16 @@ describe("normalizeForSearch", () => {
     ).toBe("a \uD83D\uDE00-b");
   });
 
+  test("handles strings exceeding CHUNK_SIZE (8192)", () => {
+    // Build a string longer than CHUNK_SIZE with NBSP
+    // scattered throughout to exercise the chunked path.
+    const base = "a".repeat(4000) + "\u00a0";
+    const input = base.repeat(3); // 12_003 chars
+    const expected = ("a".repeat(4000) + " ").repeat(3);
+    expect(input.length).toBeGreaterThan(8192);
+    expect(normalizeForSearch(input)).toBe(expected);
+  });
+
   test("normalizes mixed content correctly", () => {
     // Czech legal text with NBSP, smart quotes, en-dash
     const input =
