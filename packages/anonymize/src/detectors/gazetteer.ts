@@ -239,7 +239,7 @@ const tryPrefixExtension = (
   }
   const nextSpace = after.indexOf(" ", 1);
   const suffixEnd =
-    nextSpace > 1 ? nextSpace : after.length;
+    nextSpace !== -1 ? nextSpace : after.length;
   if (suffixEnd <= 1) {
     return null;
   }

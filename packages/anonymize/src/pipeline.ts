@@ -110,12 +110,16 @@ const configKey = (
   config: PipelineConfig,
   gazetteerEntries: GazetteerEntry[],
 ): string => {
-  // Gazetteer fingerprint: sorted entry IDs +
-  // canonical forms. Cheap for 10-100 entries.
+  // Gazetteer fingerprint: sorted entry IDs,
+  // canonical forms, labels, and variants.
+  // Cheap for 10-100 entries.
   const gazFingerprint =
     gazetteerEntries.length > 0
       ? gazetteerEntries
-          .map((e) => `${e.id}:${e.canonical}`)
+          .map(
+            (e) =>
+              `${e.id}:${e.canonical}:${e.label}:${[...e.variants].sort().join(",")}`,
+          )
           .toSorted()
           .join(";")
       : "";
