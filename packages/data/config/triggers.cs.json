@@ -573,5 +573,137 @@
       "type": "to-next-comma"
     },
     "trigger": "Nejvyššímu kontrolnímu úřadu"
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
+    "trigger": "oddíl"
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
+    "trigger": "oddíl:"
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
+    "trigger": "vložka"
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
+    "trigger": "vložka:"
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
+    "trigger": "oddílu"
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
+    "trigger": "vložky"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "jednatelem společnosti"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "jednatelkou společnosti"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "jednatelem"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "jednatelkou"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "prokuristou"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "prokuristkou"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "ředitelem"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "ředitelkou"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "předsedou"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "místopředsedou"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "členem představenstva"
+  },
+  {
+    "label": "person",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "členkou představenstva"
   }
 ]
