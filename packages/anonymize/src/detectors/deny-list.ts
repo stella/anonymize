@@ -466,6 +466,22 @@ type RawMatch = {
   patternIdx: number;
 };
 
+/**
+ * Ensure stopwords, allow list, and person stopwords
+ * are loaded on the given context. Call this before
+ * processDenyListMatches when the search instance was
+ * built on a different context (e.g. cachedSearch).
+ */
+export const ensureDenyListData = async (
+  ctx: PipelineContext = defaultContext,
+): Promise<void> => {
+  await Promise.all([
+    loadStopwords(ctx),
+    loadAllowList(ctx),
+    loadPersonStopwords(ctx),
+  ]);
+};
+
 // ── Match processor ─────────────────────────────────
 
 /**

@@ -80,6 +80,7 @@ export {
 // ── Deny List Detector ──────────────────────────
 export {
   buildDenyList,
+  ensureDenyListData,
   processDenyListMatches,
 } from "./detectors/deny-list";
 export type { DenyListData } from "./detectors/deny-list";
