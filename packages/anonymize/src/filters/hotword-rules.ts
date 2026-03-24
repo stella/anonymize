@@ -47,7 +47,9 @@ const loadRules = async (): Promise<void> => {
     ruleIdx < loaded.length;
     ruleIdx++
   ) {
-    for (const hw of loaded[ruleIdx].hotwords) {
+    const rule = loaded[ruleIdx];
+    if (!rule) continue;
+    for (const hw of rule.hotwords) {
       patterns.push({
         pattern: hw,
         literal: true,
@@ -124,6 +126,7 @@ export const applyHotwordRules = (
   const hitsByRule = new Map<number, Match[]>();
   for (const hit of hits) {
     const ruleIdx = patternToRule[hit.pattern];
+    if (ruleIdx === undefined) continue;
     let bucket = hitsByRule.get(ruleIdx);
     if (bucket === undefined) {
       bucket = [];
@@ -144,6 +147,7 @@ export const applyHotwordRules = (
       ruleIdx++
     ) {
       const rule = rules[ruleIdx];
+      if (!rule) continue;
 
       // Check if entity label matches this rule.
       if (!rule.targetLabels.includes(entity.label)) {

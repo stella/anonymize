@@ -285,6 +285,7 @@ const resolveCrossLabelOverlaps = (
     for (let j = i + 1; j < sorted.length; j++) {
       const a = sorted[i];
       const b = sorted[j];
+      if (!a || !b) continue;
       if (b.start >= a.end) break; // no overlap
       if (a.label === b.label) continue;
 

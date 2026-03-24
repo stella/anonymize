@@ -55,12 +55,20 @@ export const maskDetectedSpans = (
   // produces its own [MASKED] token, preserving token
   // boundaries for the NER model.
   const spans: { start: number; end: number }[] = [];
+  const first = sorted[0];
+  if (!first) {
+    return {
+      maskedText: fullText,
+      offsetMap: (s, e) => ({ start: s, end: e }),
+    };
+  }
   let cur = {
-    start: sorted[0].start,
-    end: sorted[0].end,
+    start: first.start,
+    end: first.end,
   };
   for (let i = 1; i < sorted.length; i++) {
     const s = sorted[i];
+    if (!s) continue;
     if (s.start < cur.end) {
       cur.end = Math.max(cur.end, s.end);
     } else {

@@ -82,11 +82,14 @@ export const mergeAndDedup = (
   // Single-pass sweep-line: since entities are sorted
   // by start, a new entity can only overlap the tail
   // of merged[] (all earlier entries end before it).
-  const merged: Entity[] = [{ ...sorted[0] }];
+  const first = sorted[0];
+  if (!first) return [];
+  const merged: Entity[] = [{ ...first }];
 
   for (let i = 1; i < sorted.length; i++) {
     const entity = sorted[i];
     const last = merged[merged.length - 1];
+    if (!entity || !last) continue;
 
     if (last.end <= entity.start) {
       // No overlap: append.
