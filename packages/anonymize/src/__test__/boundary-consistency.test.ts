@@ -401,4 +401,133 @@ describe("enforceBoundaryConsistency", () => {
       );
     });
   });
+
+  describe("performance: many entities", () => {
+    test("handles 1000 entities without behavior change", () => {
+      // Build text with 1000 names separated by spaces.
+      const names = Array.from(
+        { length: 1000 },
+        (_, i) => `Name${i}`,
+      );
+      const fullText = names.join(" ");
+
+      // Build entities matching each name.
+      const entities: Entity[] = [];
+      let offset = 0;
+      for (const name of names) {
+        entities.push(
+          makeEntity(
+            "person",
+            offset,
+            offset + name.length,
+            name,
+          ),
+        );
+        offset += name.length + 1; // +1 for space
+      }
+
+      const result = enforceBoundaryConsistency(
+        entities,
+        fullText,
+      );
+
+      // All 1000 names are separated by a single
+      // space (<=3 chars, GAP_PATTERN match), so they
+      // should merge into one big entity.
+      expect(result).toHaveLength(1);
+      expect(result[0]?.start).toBe(0);
+      expect(result[0]?.end).toBe(fullText.length);
+    });
+
+    test("handles 500 alternating labels", () => {
+      // 500 entities alternating between two labels.
+      // None should merge across labels.
+      const words = Array.from(
+        { length: 500 },
+        (_, i) => `Word${i}`,
+      );
+      const fullText = words.join(" ");
+
+      const entities: Entity[] = [];
+      let offset = 0;
+      for (let i = 0; i < words.length; i++) {
+        const word = words[i];
+        if (!word) continue;
+        entities.push(
+          makeEntity(
+            i % 2 === 0 ? "person" : "address",
+            offset,
+            offset + word.length,
+            word,
+          ),
+        );
+        offset += word.length + 1;
+      }
+
+      const result = enforceBoundaryConsistency(
+        entities,
+        fullText,
+      );
+
+      // No merging across labels; all 500 survive.
+      expect(result).toHaveLength(500);
+    });
+  });
+
+  describe("cross-label adjacent partial word", () => {
+    test("clamps expansion at cross-label boundary", () => {
+      // "HelloWorld" is a single word. Two entities
+      // of different labels split it. Expansion must
+      // not cross the label boundary.
+      const fullText = "HelloWorld";
+      const entities = [
+        makeEntity("person", 0, 5, "Hello", 0.9),
+        makeEntity("address", 5, 10, "World", 0.8),
+      ];
+      const result = enforceBoundaryConsistency(
+        entities,
+        fullText,
+      );
+      const person = result.find(
+        (e) => e.label === "person",
+      );
+      const address = result.find(
+        (e) => e.label === "address",
+      );
+      expect(person).toBeDefined();
+      expect(address).toBeDefined();
+      // No overlap
+      expect(person!.end).toBeLessThanOrEqual(
+        address!.start,
+      );
+    });
+
+    test("partial word overlap with three labels", () => {
+      // "AbcDefGhi" as one word, three labels.
+      const fullText = "AbcDefGhi";
+      const entities = [
+        makeEntity("person", 0, 3, "Abc", 0.9),
+        makeEntity("address", 3, 6, "Def", 0.8),
+        makeEntity("org", 6, 9, "Ghi", 0.7),
+      ];
+      const result = enforceBoundaryConsistency(
+        entities,
+        fullText,
+      );
+      // All three labels should survive with no
+      // overlap.
+      expect(result).toHaveLength(3);
+      const sorted = result.toSorted(
+        (a, b) => a.start - b.start,
+      );
+      for (let i = 1; i < sorted.length; i++) {
+        const prev = sorted[i - 1];
+        const curr = sorted[i];
+        if (!prev || !curr) continue;
+        expect(prev.end).toBeLessThanOrEqual(
+          curr.start,
+        );
+      }
+    });
+  });
 });
