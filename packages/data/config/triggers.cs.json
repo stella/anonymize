@@ -825,5 +825,29 @@
       "count": 1
     },
     "trigger": "oddílem "
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
+    "trigger": "oddíl "
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
+    "trigger": "vložka "
+  },
+  {
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
+    "trigger": "vložky "
   }
 ]
