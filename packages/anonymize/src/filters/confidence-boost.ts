@@ -104,12 +104,14 @@ export const detectStreetPatternsNearAddresses = (
   );
 
   // Find all house number positions in the text
-  // House numbers: 1-4 digits, optionally /digits.
-  // Exclude 5+ digit standalone numbers (postal codes,
-  // prices, years). "109", "2512/2a", "853/12" match;
-  // "25101", "2025" don't (unless they have a slash).
+  // House numbers: digits with a slash are definitive
+  // ("2512/2a", "853/12"). Standalone digits before
+  // comma are only accepted if preceded by a word that
+  // is NOT a legal section term (Article, Section, §).
+  // This prevents "Article 14," or "bod 5," from
+  // being misclassified as addresses.
   const houseNumRe =
-    /\b\d{1,4}\/\d+[a-zA-Z]?\b|\b\d{1,4}\b(?=\s*,)/g;
+    /\b\d{1,4}\/\d+[a-zA-Z]?\b/g;
   houseNumRe.lastIndex = 0;
 
   for (
