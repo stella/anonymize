@@ -97,13 +97,13 @@ export const mergeChunkEntities = (
   const merged: Entity[] = [];
 
   for (const entity of sorted) {
-    let dupIndex = -1;
+    let bestDupIndex = -1;
+    let bestDupScore = -1;
 
-    // Reverse-scan: check all recent entries whose
-    // start is within the proximity window. Skip
-    // non-matching labels instead of breaking, since
-    // different-label entities can interleave at the
-    // same position.
+    // Reverse-scan the full proximity window. Collect
+    // the highest-scored same-label match so we dedup
+    // against the strongest existing entity, not just
+    // the nearest one.
     for (let j = merged.length - 1; j >= 0; j--) {
       const existing = merged[j];
       if (existing === undefined) {
@@ -121,15 +121,16 @@ export const mergeChunkEntities = (
       if (
         existing.label === entity.label &&
         Math.abs(existing.end - entity.end)
-          < POSITION_THRESHOLD
+          < POSITION_THRESHOLD &&
+        existing.score > bestDupScore
       ) {
-        dupIndex = j;
-        break;
+        bestDupIndex = j;
+        bestDupScore = existing.score;
       }
     }
 
-    if (dupIndex !== -1) {
-      const existing = merged[dupIndex];
+    if (bestDupIndex !== -1) {
+      const existing = merged[bestDupIndex];
       if (
         existing !== undefined &&
         entity.score > existing.score
@@ -137,16 +138,7 @@ export const mergeChunkEntities = (
         // Replace with winner. Splice out the old entry
         // and re-insert at the end to maintain sorted
         // order (entity.start >= all prior starts).
-        //
-        // NOTE: the reverse-scan breaks on the first
-        // same-label match (greedy). A same-label entry
-        // with a *lower* score further back is never
-        // reached. This is safe because sorted input
-        // guarantees monotonic processing: any earlier
-        // same-label entry in `merged` either already
-        // won a previous dedup (higher score) or was
-        // itself the first arrival (no competitor yet).
-        merged.splice(dupIndex, 1);
+        merged.splice(bestDupIndex, 1);
         merged.push({ ...entity });
       }
     } else {

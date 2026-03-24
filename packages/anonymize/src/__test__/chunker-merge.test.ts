@@ -138,4 +138,35 @@ describe("mergeChunkEntities", () => {
       expect(orgs[0]?.score).toBe(0.8);
     },
   );
+
+  test(
+    "dedup picks highest-scored match in window"
+      + " (regression: greedy scan bypass)",
+    () => {
+      // A(10,15,P,0.9), B(12,20,P,0.7), C(13,19,P,0.8).
+      // B is NOT a near-dup of A (|20-15|=5 >= threshold).
+      // C matches both B (|19-20|=1) and A (|19-15|=4).
+      // C must dedup against A (highest score), not B.
+      const result = mergeChunkEntities(
+        [0],
+        [
+          [
+            entity(10, 15, 0.9, "PERSON"),
+            entity(12, 20, 0.7, "PERSON"),
+            entity(13, 19, 0.8, "PERSON"),
+          ],
+        ],
+      );
+      const persons = result.filter(
+        (e) => e.label === "PERSON",
+      );
+      // A (0.9) wins, C (0.8) is dropped as near-dup of
+      // A. B stays because it's not a near-dup of A.
+      expect(persons).toHaveLength(2);
+      expect(persons[0]?.score).toBe(0.9);
+      expect(persons[0]?.start).toBe(10);
+      expect(persons[1]?.score).toBe(0.7);
+      expect(persons[1]?.start).toBe(12);
+    },
+  );
 });
