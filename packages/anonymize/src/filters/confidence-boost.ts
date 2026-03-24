@@ -110,8 +110,13 @@ export const detectStreetPatternsNearAddresses = (
   // is NOT a legal section term (Article, Section, §).
   // This prevents "Article 14," or "bod 5," from
   // being misclassified as addresses.
+  // Require either a letter suffix (2512/2a) or a
+  // primary part > 31 to avoid matching Czech slash
+  // dates like "31/12" or "1/1". Slash house numbers
+  // in Czech addresses almost always have primary > 99
+  // or carry a letter suffix.
   const houseNumRe =
-    /\b\d{1,4}\/\d+[a-zA-Z]?\b/g;
+    /\b(?:\d{1,4}\/\d+[a-zA-Z]\b|\d{3,4}\/\d+\b)/g;
   houseNumRe.lastIndex = 0;
 
   for (
@@ -246,6 +251,21 @@ export const detectStreetPatternsNearAddresses = (
     // Skip if too short (single digit without name)
     if (streetText.length < 4) {
       continue;
+    }
+
+    // Guard: if the sole preceding word is a temporal
+    // preposition, this is likely a date expression
+    // ("od 31/12", "do 1/1"), not an address.
+    if (wordCount === 1) {
+      const firstWord = fullText.slice(
+        streetStart,
+        numStart,
+      ).trim().toLowerCase();
+      if (
+        /^(?:od|do|ke|na|dne|ze)$/.test(firstWord)
+      ) {
+        continue;
+      }
     }
 
     // Skip if already covered

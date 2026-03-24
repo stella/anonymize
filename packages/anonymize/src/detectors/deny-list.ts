@@ -721,6 +721,24 @@ const DISTRICT_SUFFIX_RE =
   /^ (\d{1,2}(?!\d)|[IVXLC]{1,4})(?=[\s,;.)"\n]|$)/;
 const POSTAL_PREFIX_RE = /(?:\d{3,5}|\d{3} \d{2}) $/;
 
+// Words that must NOT be absorbed into an address span
+// when they follow a postal-code + city pattern. Party
+// roles, organizational nouns, and common legal terms.
+const TRAILING_WORD_EXCLUSIONS: ReadonlySet<string> =
+  new Set([
+    // CZ/SK party roles
+    "nájemce", "pronajímatel", "kupující",
+    "prodávající", "objednatel", "zhotovitel",
+    "dodavatel", "odběratel", "věřitel", "dlužník",
+    "zadavatel", "uchazeč", "příjemce", "plátce",
+    // Organizational nouns
+    "správa", "sekretariát", "kancelář", "odbor",
+    "oddělení", "úřad", "inspekce", "agentura",
+    // Legal clause starters
+    "článek", "smlouva", "dodatek", "příloha",
+    "předmět", "podmínky", "ustanovení",
+  ]);
+
 const extendCityDistricts = (
   entities: Entity[],
   fullText: string,
@@ -760,6 +778,7 @@ const extendCityDistricts = (
     // Trailing uppercase word: "434 01" + " Most" →
     // "434 01 Most". Absorb if the next word starts
     // with uppercase and is on the same line.
+    // Guard: skip party-role or organizational terms.
     const afterExt = fullText.slice(entity.end);
     const trailingWordM =
       /^[\s]+(\p{Lu}\p{Ll}+)/u.exec(afterExt);
@@ -767,11 +786,15 @@ const extendCityDistricts = (
       trailingWordM &&
       !trailingWordM[0].includes("\n")
     ) {
-      entity.end += trailingWordM[0].length;
-      entity.text = fullText.slice(
-        entity.start,
-        entity.end,
-      );
+      const candidate =
+        (trailingWordM[1] ?? "").toLowerCase();
+      if (!TRAILING_WORD_EXCLUSIONS.has(candidate)) {
+        entity.end += trailingWordM[0].length;
+        entity.text = fullText.slice(
+          entity.start,
+          entity.end,
+        );
+      }
     }
   }
 };
