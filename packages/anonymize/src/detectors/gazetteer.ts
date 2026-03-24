@@ -56,9 +56,20 @@ export const buildGazetteerPatterns = (
   const entryIds: string[] = [];
   const isFuzzy: boolean[] = [];
 
-  // Pass 1: exact literals (all terms)
+  // Pass 1: exact literals (all terms).
+  // Use per-pattern wholeWords: false because
+  // user-supplied entries may contain dots or
+  // special chars (e.g. "a.s.", "AT&T") that
+  // break word-boundary matching. The global
+  // wholeWords: true on tsLiterals is correct
+  // for deny-list/street-type patterns but not
+  // for arbitrary gazetteer entries.
   for (const [term, meta] of terms) {
-    patterns.push(term);
+    patterns.push({
+      pattern: term,
+      literal: true as const,
+      wholeWords: false,
+    });
     labels.push(meta.label);
     entryIds.push(meta.entryId);
     isFuzzy.push(false);
@@ -129,42 +140,26 @@ export const processGazetteerMatches = (
       continue;
     }
 
-    const matchText = fullText.slice(
-      match.start,
-      match.end,
-    );
-
     // Try prefix extension for legal entity suffixes
     const extended = tryPrefixExtension(
       fullText,
       match.start,
       match.end,
     );
-    if (extended) {
-      exactSpans.push({
-        start: match.start,
-        end: extended.end,
-      });
-      results.push({
-        start: match.start,
-        end: extended.end,
-        label,
-        text: extended.text,
-        score: 0.9,
-        source: DETECTION_SOURCES.GAZETTEER,
-      });
-      continue;
-    }
+    const end = extended?.end ?? match.end;
+    const text =
+      extended?.text ??
+      fullText.slice(match.start, match.end);
 
     exactSpans.push({
       start: match.start,
-      end: match.end,
+      end,
     });
     results.push({
       start: match.start,
-      end: match.end,
+      end,
       label,
-      text: matchText,
+      text,
       score: 0.9,
       source: DETECTION_SOURCES.GAZETTEER,
     });
@@ -220,8 +215,14 @@ export const processGazetteerMatches = (
 };
 
 /**
- * Try to extend an exact match to include a legal
- * entity suffix. Returns null if no suffix found.
+ * Try to extend an exact match to capture one
+ * trailing token (max 6 chars) that may be a legal
+ * entity suffix (e.g., "a.s.", "GmbH", "s.r.o.").
+ *
+ * Does not validate the token against a legal-forms
+ * list; false extensions are filtered by mergeAndDedup
+ * when a legal-form detector produces a competing
+ * entity with the correct span.
  */
 const tryPrefixExtension = (
   fullText: string,
