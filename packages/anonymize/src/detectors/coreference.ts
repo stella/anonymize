@@ -127,6 +127,8 @@ type DefinedTerm = {
   label: string;
   /** Position of the definition in the source text */
   definitionStart: number;
+  /** Original entity text the alias refers to */
+  sourceText: string;
 };
 
 /**
@@ -238,6 +240,7 @@ export const extractDefinedTerms = async (
         alias,
         label: bestEntity.label,
         definitionStart: defPos,
+        sourceText: bestEntity.text,
       });
     }
   }
@@ -258,6 +261,22 @@ const isWordChar = (ch: string | undefined): boolean => {
 };
 
 /**
+ * Side-channel mapping from coreference entity →
+ * source entity text. Used by buildPlaceholderMap to
+ * assign the same placeholder number to an alias and
+ * its source entity (e.g., "TP" → "Ing. Tomáš
+ * Procházka" both become [PERSON_1]).
+ *
+ * Populated by findCoreferenceSpans, consumed by
+ * buildPlaceholderMap. Cleared on each call to
+ * findCoreferenceSpans.
+ */
+export const corefSourceMap = new WeakMap<
+  Entity,
+  string
+>();
+
+/**
  * Find all occurrences of defined-term aliases in the
  * full text. Returns Entity spans for each match.
  *
@@ -265,6 +284,10 @@ const isWordChar = (ch: string | undefined): boolean => {
  * inside "Kupujícímu". A match is valid only if the
  * character before the start and after the end are NOT
  * word characters (letter/digit).
+ *
+ * Populates the module-level `corefSourceMap` WeakMap
+ * with entries linking each coref entity to its source
+ * entity text, for consistent placeholder numbering.
  */
 export const findCoreferenceSpans = (
   fullText: string,
@@ -297,14 +320,16 @@ export const findCoreferenceSpans = (
         continue;
       }
 
-      results.push({
+      const entity: Entity = {
         start: idx,
         end: matchEnd,
         label: term.label,
         text: term.alias,
         score: 0.95,
         source: DETECTION_SOURCES.COREFERENCE,
-      });
+      };
+      corefSourceMap.set(entity, term.sourceText);
+      results.push(entity);
 
       searchFrom = matchEnd;
     }

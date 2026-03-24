@@ -293,31 +293,33 @@ const extractValue = (
           break;
         }
 
-        // Period: stop unless it's an abbreviation
-        // (followed by space + lowercase or digit)
+        // Period: stop unless it's an abbreviation.
+        // Abbreviation patterns in Czech addresses:
+        //   "nábř. Kpt." — period + space + letter
+        //   "č.p." — period + letter (no space)
+        //   "1000/7." — period at end of address
         if (ch === ".") {
           const next = valueText[end + 1];
           const afterNext = valueText[end + 2];
-          if (
-            next === " " &&
-            afterNext !== undefined &&
-            !UPPER_RE.test(afterNext) &&
-            !/\d/.test(afterNext)
-          ) {
-            // Abbreviation like "nábř. k" or "ul. n"
-            // → keep going
-            end++;
-            continue;
-          }
-          // Period before uppercase or digit or end
-          // → likely end of sentence or address.
-          // But include it if next char is a digit
-          // (e.g. "č.p. 42") or uppercase.
+          // "č.p." or "Kpt.J" — period immediately
+          // followed by letter or digit
           if (
             next !== undefined &&
             (UPPER_RE.test(next) || /\d/.test(next))
           ) {
-            // "č.p." or similar — continue
+            end++;
+            continue;
+          }
+          // "nábř. Kpt." or "ul. nová" — period +
+          // space + any letter or digit. In address
+          // context, this is always an abbreviation,
+          // not end of sentence.
+          if (
+            next === " " &&
+            afterNext !== undefined &&
+            (/\p{L}/u.test(afterNext) ||
+              /\d/.test(afterNext))
+          ) {
             end++;
             continue;
           }

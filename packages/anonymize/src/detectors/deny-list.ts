@@ -676,7 +676,42 @@ export const processDenyListMatches = (
     });
   }
 
+  // Post-process: extend city/address matches to
+  // include adjacent trailing district numbers (e.g.,
+  // "Praha 1", "Brno 2"). Czech and Slovak cities
+  // commonly have numbered districts that are part of
+  // the address.
+  extendCityDistricts(results, fullText);
+
   return results;
+};
+
+/**
+ * Extend address-label entities to include a trailing
+ * district number (1-2 digits) separated by a single
+ * space. "Praha" → "Praha 1", "Brno" → "Brno 2".
+ * Mutates the entities in place.
+ */
+const DISTRICT_SUFFIX_RE = /^ (\d{1,2})(?!\d)/;
+
+const extendCityDistricts = (
+  entities: Entity[],
+  fullText: string,
+): void => {
+  for (const entity of entities) {
+    if (entity.label !== "address") {
+      continue;
+    }
+    const afterMatch = fullText.slice(entity.end);
+    const m = DISTRICT_SUFFIX_RE.exec(afterMatch);
+    if (m) {
+      entity.end += m[0].length;
+      entity.text = fullText.slice(
+        entity.start,
+        entity.end,
+      );
+    }
+  }
 };
 
 /**
