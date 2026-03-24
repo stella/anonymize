@@ -31,47 +31,54 @@ const shouldReplace = (a: Entity, b: Entity): boolean =>
   a.score > b.score ||
   (a.score === b.score && a.end - a.start > b.end - b.start);
 
-export const mergeAndDedup = (...layers: Entity[][]): Entity[] => {
+export const mergeAndDedup = (
+  ...layers: Entity[][]
+): Entity[] => {
   const all: Entity[] = [];
   for (const layer of layers) {
     for (const entity of layer) all.push(entity);
   }
-  const sorted = all.toSorted((a, b) => a.start - b.start);
-  const merged: Entity[] = [];
-  for (const entity of sorted) {
-    const idx = merged.findIndex(
-      (e) => entity.start < e.end && entity.end > e.start,
-    );
-    if (idx !== -1) {
-      const existing = merged[idx];
-      if (existing && shouldReplace(entity, existing))
-        merged[idx] = { ...entity };
-    } else {
+  if (all.length === 0) return [];
+
+  const sorted = all.toSorted(
+    (a, b) => a.start - b.start,
+  );
+
+  // Single-pass sweep-line: since entities are sorted
+  // by start, overlaps can only occur with recent
+  // entries at the tail of merged[]. Walk backward
+  // and stop as soon as merged[j].end <= entity.start.
+  const merged: Entity[] = [{ ...sorted[0] }];
+
+  for (let i = 1; i < sorted.length; i++) {
+    const entity = sorted[i];
+    let handled = false;
+
+    for (
+      let j = merged.length - 1;
+      j >= 0;
+      j--
+    ) {
+      const existing = merged[j];
+      if (existing.end <= entity.start) break;
+
+      if (entity.end > existing.start) {
+        if (shouldReplace(entity, existing)) {
+          merged[j] = { ...entity };
+        }
+        handled = true;
+        break;
+      }
+    }
+
+    if (!handled) {
       merged.push({ ...entity });
     }
   }
-  let result = merged.toSorted((a, b) => a.start - b.start);
-  let changed = true;
-  while (changed) {
-    changed = false;
-    const deduped: Entity[] = [];
-    for (const entity of result) {
-      const idx = deduped.findIndex(
-        (e) => entity.start < e.end && entity.end > e.start,
-      );
-      if (idx !== -1) {
-        const existing = deduped[idx];
-        if (existing && shouldReplace(entity, existing)) {
-          deduped[idx] = entity;
-          changed = true;
-        }
-      } else {
-        deduped.push(entity);
-      }
-    }
-    result = deduped;
-  }
-  return result;
+
+  return merged.toSorted(
+    (a, b) => a.start - b.start,
+  );
 };
 
 export type NerInferenceFn = (
