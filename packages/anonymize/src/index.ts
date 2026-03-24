@@ -23,6 +23,7 @@ export {
 // ── Pipeline Context ─────────────────────────────
 export type {
   DefinitionPattern,
+  NameCorpusData,
   PipelineContext,
 } from "./context";
 export { createPipelineContext } from "./context";

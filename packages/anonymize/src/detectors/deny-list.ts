@@ -467,10 +467,12 @@ type RawMatch = {
 };
 
 /**
- * Ensure stopwords, allow list, and person stopwords
- * are loaded on the given context. Call this before
- * processDenyListMatches when the search instance was
- * built on a different context (e.g. cachedSearch).
+ * Ensure all deny-list support data (stopwords, allow
+ * list, person stopwords, generic roles) is loaded on
+ * the given context. Call this before
+ * processDenyListMatches / filterFalsePositives when
+ * the search instance was built on a different context
+ * (e.g. cachedSearch).
  */
 export const ensureDenyListData = async (
   ctx: PipelineContext = defaultContext,
@@ -483,6 +485,7 @@ export const ensureDenyListData = async (
     loadStopwords(ctx),
     loadAllowList(ctx),
     loadPersonStopwords(ctx),
+    loadGenericRoles(ctx),
   ]);
 };
 
