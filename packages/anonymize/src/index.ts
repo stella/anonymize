@@ -21,7 +21,10 @@ export {
 } from "./types";
 
 // ── Pipeline Context ─────────────────────────────
-export type { PipelineContext } from "./context";
+export type {
+  DefinitionPattern,
+  PipelineContext,
+} from "./context";
 export { createPipelineContext } from "./context";
 
 // ── Pipeline ──────────────────────────────────────

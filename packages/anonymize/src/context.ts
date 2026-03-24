@@ -4,7 +4,7 @@ import type { UnifiedSearchInstance } from "./build-unified-search";
  * Compiled RegExp pattern used for coreference
  * definition extraction.
  */
-type DefinitionPattern = {
+export type DefinitionPattern = {
   pattern: RegExp;
 };
 
@@ -70,7 +70,7 @@ export type PipelineContext = {
     | Promise<DefinitionPattern[]>
     | null;
   corefLoadAttempted: boolean;
-  roleStopSet: Set<string> | null;
+  roleStopSet: ReadonlySet<string> | null;
 };
 
 /** Create a fresh, empty pipeline context. */

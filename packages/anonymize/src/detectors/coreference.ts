@@ -1,16 +1,15 @@
 import { DETECTION_SOURCES } from "../types";
 import type { Entity } from "../types";
-import type { PipelineContext } from "../context";
+import type {
+  DefinitionPattern,
+  PipelineContext,
+} from "../context";
 import { defaultContext } from "../context";
 
 type CoreferenceConfigRow = {
   pattern: string;
   flags: string;
   label: string;
-};
-
-type DefinitionPattern = {
-  pattern: RegExp;
 };
 
 /**

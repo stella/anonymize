@@ -92,7 +92,10 @@ export const initNameCorpus = (
         excludedList: Object.freeze(exclusions),
       };
     } catch (err) {
-      // Allow retry on transient error
+      // Reset so the next call retries the load rather
+      // than returning this (already-resolved) failed
+      // promise. Current awaiters still get a resolved
+      // (not rejected) Promise; ctx.nameCorpus stays null.
       ctx.nameCorpusPromise = null;
       console.warn(
         "[anonymize] Failed to load name corpus JSON"
@@ -101,6 +104,8 @@ export const initNameCorpus = (
       );
     }
   })();
+  // The promise is still non-null here because the catch
+  // block above has not yet executed (it's async).
   return ctx.nameCorpusPromise;
 };
 
