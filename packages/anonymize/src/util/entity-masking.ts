@@ -50,7 +50,10 @@ export const maskDetectedSpans = (
     (a, b) => a.start - b.start || b.end - a.end,
   );
 
-  // Merge overlapping spans so we don't double-mask
+  // Merge overlapping spans so we don't double-mask.
+  // Adjacent (touching) spans are kept separate so each
+  // produces its own [MASKED] token, preserving token
+  // boundaries for the NER model.
   const spans: { start: number; end: number }[] = [];
   let cur = {
     start: sorted[0].start,
@@ -114,28 +117,22 @@ export const maskDetectedSpans = (
       }
     }
 
-    // Find cumulative shift for start position
-    let startShift = 0;
+    // Find cumulative shift for this position.
+    // Since the overlap check above guarantees both
+    // endpoints fall within the same gap zone, a
+    // single shift value applies to both.
+    let shift = 0;
     for (const seg of segments) {
       if (maskedStart >= seg.maskedEnd) {
-        startShift = seg.shift;
-      } else {
-        break;
-      }
-    }
-
-    let endShift = 0;
-    for (const seg of segments) {
-      if (maskedEnd >= seg.maskedEnd) {
-        endShift = seg.shift;
+        shift = seg.shift;
       } else {
         break;
       }
     }
 
     return {
-      start: maskedStart + startShift,
-      end: maskedEnd + endShift,
+      start: maskedStart + shift,
+      end: maskedEnd + shift,
     };
   };
 
@@ -150,30 +147,19 @@ export const maskDetectedSpans = (
 export const unmaskNerEntities = (
   nerEntities: Entity[],
   maskResult: MaskResult,
-  ruleEntities: Entity[],
   fullText: string,
 ): Entity[] => {
   const result: Entity[] = [];
 
   for (const ner of nerEntities) {
+    // offsetMap returns null when the mapped span
+    // overlaps any merged rule-entity region, so no
+    // secondary overlap check is needed.
     const mapped = maskResult.offsetMap(
       ner.start,
       ner.end,
     );
     if (mapped === null) continue;
-
-    // Double-check overlap with rule entities
-    let overlaps = false;
-    for (const rule of ruleEntities) {
-      if (
-        mapped.start < rule.end &&
-        mapped.end > rule.start
-      ) {
-        overlaps = true;
-        break;
-      }
-    }
-    if (overlaps) continue;
 
     result.push({
       ...ner,

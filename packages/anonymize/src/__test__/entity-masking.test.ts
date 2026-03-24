@@ -158,7 +158,6 @@ describe("unmaskNerEntities", () => {
       const result = unmaskNerEntities(
         rawNer,
         mask,
-        ruleEnts,
         text,
       );
       expect(result).toHaveLength(1);
@@ -178,7 +177,6 @@ describe("unmaskNerEntities", () => {
       const result = unmaskNerEntities(
         rawNer,
         mask,
-        ruleEnts,
         text,
       );
       expect(result).toHaveLength(0);
@@ -196,7 +194,6 @@ describe("unmaskNerEntities", () => {
     const result = unmaskNerEntities(
       rawNer,
       mask,
-      ruleEnts,
       text,
     );
     expect(result).toHaveLength(1);
@@ -211,7 +208,6 @@ describe("unmaskNerEntities", () => {
     const result = unmaskNerEntities(
       [],
       mask,
-      ruleEnts,
       text,
     );
     expect(result).toHaveLength(0);
