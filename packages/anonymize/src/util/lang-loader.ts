@@ -189,7 +189,18 @@ export const loadLanguageConfigs = async <T>(
       // Config file missing or data package not installed
       return;
     }
-    results.push(mapFn(mod));
+    let result: T;
+    try {
+      result = mapFn(mod);
+    } catch (err) {
+      console.warn(
+        `[anonymize] lang-loader: mapFn failed ` +
+          `for "${code}" (${configType}):`,
+        err,
+      );
+      return;
+    }
+    results.push(result);
   });
 
   await Promise.all(loads);
