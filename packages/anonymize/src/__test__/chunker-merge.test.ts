@@ -55,6 +55,8 @@ describe("mergeChunkEntities", () => {
       );
       expect(result).toHaveLength(1);
       expect(result[0]?.score).toBe(0.8);
+      expect(result[0]?.start).toBe(90);
+      expect(result[0]?.end).toBe(100);
     },
   );
 
@@ -88,6 +90,8 @@ describe("mergeChunkEntities", () => {
     );
     expect(result).toHaveLength(1);
     expect(result[0]?.score).toBe(0.95);
+    expect(result[0]?.start).toBe(51);
+    expect(result[0]?.end).toBe(61);
   });
 
   test("skips empty chunk results", () => {

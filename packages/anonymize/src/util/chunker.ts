@@ -132,6 +132,15 @@ export const mergeChunkEntities = (
         // Replace with winner. Splice out the old entry
         // and re-insert at the end to maintain sorted
         // order (entity.start >= all prior starts).
+        //
+        // NOTE: the reverse-scan breaks on the first
+        // same-label match (greedy). A same-label entry
+        // with a *lower* score further back is never
+        // reached. This is safe because sorted input
+        // guarantees monotonic processing: any earlier
+        // same-label entry in `merged` either already
+        // won a previous dedup (higher score) or was
+        // itself the first arrival (no competitor yet).
         merged.splice(dupIndex, 1);
         merged.push({ ...entity });
       }
