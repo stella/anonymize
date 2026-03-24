@@ -193,8 +193,12 @@ export const runPipeline = async (
       .then(() => {
         zoneInitOk = true;
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         log("zones", "init failed; skipping");
+        console.warn(
+          "[anonymize] zone classifier init failed",
+          err,
+        );
       });
     await Promise.all([
       loadGenericRoles(ctx),
