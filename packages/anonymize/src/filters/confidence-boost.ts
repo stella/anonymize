@@ -103,13 +103,10 @@ export const detectStreetPatternsNearAddresses = (
     fullText.length * HEADER_ZONE_FRACTION,
   );
 
-  // Find all house number positions in the text
-  // House numbers: digits with a slash are definitive
-  // ("2512/2a", "853/12"). Standalone digits before
-  // comma are only accepted if preceded by a word that
-  // is NOT a legal section term (Article, Section, §).
-  // This prevents "Article 14," or "bod 5," from
-  // being misclassified as addresses.
+  // Find all house number positions in the text.
+  // Slash-style house numbers only: either with a letter
+  // suffix ("2512/2a") or primary >= 100 ("853/12").
+  // This excludes date-like patterns ("31/12", "1/1").
   // Require either a letter suffix (2512/2a) or a
   // primary part > 31 to avoid matching Czech slash
   // dates like "31/12" or "1/1". Slash house numbers
@@ -203,7 +200,7 @@ export const detectStreetPatternsNearAddresses = (
         word[0] ?? "",
       );
       const isPrep =
-        /^(?:nad|pod|u|na|ve|ke|za|při|do|od)$/i.test(
+        /^(?:nad|pod|u|na|ve|ke|za|při|do|od|mezi)$/i.test(
           word,
         );
 
