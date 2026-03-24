@@ -119,6 +119,47 @@ const getAddressPreps = (): ReadonlySet<string> =>
 const getTemporalPreps = (): ReadonlySet<string> =>
   _temporalPreps ?? new Set();
 
+// ── Street type abbreviations (lazy-loaded) ─────────
+
+let _streetAbbrevs: ReadonlySet<string> | null = null;
+let _streetAbbrevsPromise: Promise<void> | null = null;
+
+const loadStreetAbbrevs = async (): Promise<void> => {
+  try {
+    const mod = await import(
+      "@stll/anonymize-data/config/address-street-types.json"
+    );
+    const data: Record<string, string[] | string> =
+      mod.default ?? mod;
+    const abbrevs = new Set<string>();
+    for (const [key, words] of Object.entries(data)) {
+      if (key.startsWith("_")) continue;
+      if (!Array.isArray(words)) continue;
+      for (const w of words) {
+        // Only keep abbreviated forms (with dots)
+        if (w.includes(".")) {
+          abbrevs.add(w.toLowerCase());
+        }
+      }
+    }
+    _streetAbbrevs = abbrevs;
+  } catch {
+    _streetAbbrevs = new Set();
+  }
+};
+
+/** Ensure street abbreviation data is loaded. */
+export const initStreetAbbrevs =
+  (): Promise<void> => {
+    if (!_streetAbbrevsPromise) {
+      _streetAbbrevsPromise = loadStreetAbbrevs();
+    }
+    return _streetAbbrevsPromise;
+  };
+
+const getStreetAbbrevs = (): ReadonlySet<string> =>
+  _streetAbbrevs ?? new Set();
+
 /**
  * Scan backwards from known address entities and
  * house number patterns to find street names.
@@ -211,7 +252,7 @@ export const detectStreetPatternsNearAddresses = (
     }
 
     // Collect words backwards until we hit:
-    // - a non-letter character (except space)
+    // - a non-letter character (except space/dot)
     // - a newline
     // - start of text
     // - a lowercase-only word (not a street name)
@@ -220,8 +261,13 @@ export const detectStreetPatternsNearAddresses = (
     const MAX_WORDS = 5;
 
     while (scanPos >= 0 && wordCount < MAX_WORDS) {
-      // Find end of current word
-      const wordEnd = scanPos + 1;
+      // Find end of current word. If we're on a dot,
+      // include it (street abbreviations: "ul.", "nám.")
+      let wordEnd = scanPos + 1;
+      const hasDot = fullText[scanPos] === ".";
+      if (hasDot) {
+        scanPos--;
+      }
 
       // Walk back through word chars
       while (
@@ -233,14 +279,27 @@ export const detectStreetPatternsNearAddresses = (
         scanPos--;
       }
       const wordStart = scanPos + 1;
-      const word = fullText.slice(wordStart, wordEnd);
+      const rawWord = fullText.slice(
+        wordStart,
+        wordEnd,
+      );
+      // Strip trailing dot for word checks
+      const word = hasDot
+        ? rawWord.slice(0, -1)
+        : rawWord;
 
       if (word.length === 0) {
         break;
       }
 
-      // Word must start with uppercase (street name)
-      // OR be a known preposition (nad, pod, u, na)
+      // Check if this is a known street abbreviation
+      // (e.g., "ul.", "nám.", "tř.", "nábř.")
+      const isStreetAbbrev =
+        hasDot &&
+        getStreetAbbrevs().has(rawWord.toLowerCase());
+
+      // Word must start with uppercase (street name),
+      // be a known preposition, or a street abbreviation
       const isUpper = UPPER_WORD_RE.test(
         word[0] ?? "",
       );
@@ -248,7 +307,7 @@ export const detectStreetPatternsNearAddresses = (
         word.toLowerCase(),
       );
 
-      if (!isUpper && !isPrep) {
+      if (!isUpper && !isPrep && !isStreetAbbrev) {
         break;
       }
 

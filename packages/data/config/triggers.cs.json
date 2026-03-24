@@ -32,6 +32,64 @@
     "trigger": "sídlem"
   },
   {
+    "label": "address",
+    "strategy": {
+      "type": "address",
+      "maxChars": 120
+    },
+    "trigger": "sídlo:"
+  },
+  {
+    "label": "address",
+    "strategy": {
+      "type": "address",
+      "maxChars": 120
+    },
+    "trigger": "sídlo"
+  },
+  {
+    "label": "bank account number",
+    "strategy": {
+      "type": "to-end-of-line"
+    },
+    "trigger": "bankovní spojení:"
+  },
+  {
+    "label": "bank account number",
+    "strategy": {
+      "type": "to-end-of-line"
+    },
+    "trigger": "bankovní spojení"
+  },
+  {
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "zhotovitel:"
+  },
+  {
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "zhotovitelem"
+  },
+  {
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "objednatel:"
+  },
+  {
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "objednatelem"
+  },
+  {
     "label": "date of birth",
     "strategy": {
       "count": 1,
