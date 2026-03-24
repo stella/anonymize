@@ -6,7 +6,10 @@ import type { GazetteerData } from "../build-unified-search";
 
 const MAX_EDIT_DISTANCE = 2;
 const MIN_FUZZY_LENGTH = 4;
-const MAX_PREFIX_OVERSHOOT = 6;
+// " s.r.o." = 7 bytes (space + 6 chars). Must be
+// at least 7 to capture the most common Czech LLC
+// suffix without truncating the trailing dot.
+const MAX_PREFIX_OVERSHOOT = 7;
 
 /**
  * Collect all searchable strings (canonical + variants)
