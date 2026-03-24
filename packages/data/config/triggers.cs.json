@@ -552,5 +552,26 @@
       "count": 1
     },
     "trigger": "registrační značka:"
+  },
+  {
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "Nejvyšší kontrolní úřad"
+  },
+  {
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "Nejvyššího kontrolního úřadu"
+  },
+  {
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "Nejvyššímu kontrolnímu úřadu"
   }
 ]
