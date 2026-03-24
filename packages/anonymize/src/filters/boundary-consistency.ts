@@ -104,8 +104,8 @@ const lowerBound = (
  * intervening different-label entity does not prevent
  * merging.
  *
- * Uses binary search for the `gapOccupied` check
- * instead of scanning the entire array. O(n log n).
+ * Uses binary search for the `gapOccupied` check and
+ * a Map for O(1) same-label prev lookup. O(n log n).
  */
 const mergeAdjacent = (
   entities: Entity[],
@@ -115,19 +115,17 @@ const mergeAdjacent = (
     (a, b) => a.start - b.start,
   );
   const result: Entity[] = [];
+  // O(1) lookup for the last same-label entity in
+  // result, replacing the O(n) backward scan.
+  const lastByLabel = new Map<string, Entity>();
 
   for (const entity of sorted) {
-    // Find the last same-label entity in result.
-    let prev: Entity | undefined;
-    for (let i = result.length - 1; i >= 0; i--) {
-      if (result[i]?.label === entity.label) {
-        prev = result[i];
-        break;
-      }
-    }
+    const prev = lastByLabel.get(entity.label);
 
     if (!prev) {
-      result.push({ ...entity });
+      const copy = { ...entity };
+      result.push(copy);
+      lastByLabel.set(entity.label, copy);
       continue;
     }
 
@@ -174,7 +172,9 @@ const mergeAdjacent = (
       prev.text = fullText.slice(prev.start, prev.end);
       prev.score = Math.max(prev.score, entity.score);
     } else {
-      result.push({ ...entity });
+      const copy = { ...entity };
+      result.push(copy);
+      lastByLabel.set(entity.label, copy);
     }
   }
 
@@ -230,7 +230,10 @@ const fixPartialWords = (
     let hi = endPositions.length;
     while (lo < hi) {
       const mid = (lo + hi) >>> 1;
-      if ((endPositions[mid] ?? 0) <= newStart) {
+      if (
+        (endPositions[mid] ?? Number.POSITIVE_INFINITY) <=
+        newStart
+      ) {
         lo = mid + 1;
       } else {
         hi = mid;
