@@ -37,8 +37,10 @@ const loadManifest = async (): Promise<Manifest> => {
     return _manifest;
   } catch {
     // Manifest not available (old data package version).
-    // Return empty so callers fall back gracefully.
-    return { languages: {} };
+    // Cache the empty result so we don't retry the
+    // failed import on every call.
+    _manifest = { languages: {} };
+    return _manifest;
   }
 };
 
@@ -172,6 +174,12 @@ export const loadLanguageConfigs = async <T>(
   const loads = codes.map(async (code) => {
     const loader = registry[code];
     if (!loader) {
+      console.warn(
+        `[anonymize] lang-loader: language "${code}" ` +
+          `is enabled in the manifest for ` +
+          `"${configType}" but has no loader in ` +
+          `the static registry`,
+      );
       return;
     }
     try {
