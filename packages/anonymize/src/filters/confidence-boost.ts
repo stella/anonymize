@@ -56,69 +56,224 @@ export const boostNearMissEntities = (
   return boosted;
 };
 
-// ── Street address pattern near address entities ────
+// ── Address backward scan ────────────────────────────
 
-const STREET_PATTERN_RE =
-  /\p{Lu}\p{Ll}+(?:\s+\p{Lu}\p{Ll}+)*\s+\d+(?:\/\d+[a-zA-Z]?)?/gu;
+/**
+ * House number pattern: digits, optionally with
+ * orientation number (/digits) and letter suffix.
+ * Examples: "42", "2512/2a", "1033/7", "799/37"
+ */
+const HOUSE_NUM_RE =
+  /\d+(?:\/\d+[a-zA-Z]?)?/;
 
+const UPPER_WORD_RE = /\p{Lu}/u;
+
+/** Header zone: top 15% of document */
+const HEADER_ZONE_FRACTION = 0.15;
+
+/** Context window for address adjacency */
 const STREET_CONTEXT_WINDOW = 200;
 
 /**
- * Find street-like patterns (Titlecase + house number)
- * that appear near existing address entities. These
- * patterns are too ambiguous to detect alone but are
- * reliable when adjacent to a known address (PSČ, city).
+ * Scan backwards from known address entities and
+ * house number patterns to find street names.
  *
- * Example: "Ostrovní 225/1" near "110 00 Praha 1"
+ * Strategy (a): from a house number like "2512/2a",
+ * walk left to find the first uppercase word — that's
+ * the street name start. "Mezi úvozy 2512/2a" →
+ * captures "Mezi úvozy 2512/2a".
+ *
+ * Strategy (b): if a colon ":" appears within 3 chars
+ * before the street start, boost confidence. Colons
+ * signal "label: value" pairs universal in contracts.
+ *
+ * Strategy (c): in the header zone (top 15% of doc),
+ * be more aggressive — detect street patterns even
+ * without nearby address entities.
  */
 export const detectStreetPatternsNearAddresses = (
   fullText: string,
   existingEntities: Entity[],
 ): Entity[] => {
+  const results: Entity[] = [];
   const addressEntities = existingEntities.filter(
     (e) => e.label === "address",
   );
-  if (addressEntities.length === 0) {
-    return [];
-  }
+  const headerEnd = Math.floor(
+    fullText.length * HEADER_ZONE_FRACTION,
+  );
 
-  const results: Entity[] = [];
-  STREET_PATTERN_RE.lastIndex = 0;
+  // Find all house number positions in the text
+  // House numbers: 1-4 digits, optionally /digits.
+  // Exclude 5+ digit standalone numbers (postal codes,
+  // prices, years). "109", "2512/2a", "853/12" match;
+  // "25101", "2025" don't (unless they have a slash).
+  const houseNumRe =
+    /\b\d{1,4}\/\d+[a-zA-Z]?\b|\b\d{1,4}\b(?=\s*,)/g;
+  houseNumRe.lastIndex = 0;
 
   for (
-    let m = STREET_PATTERN_RE.exec(fullText);
+    let m = houseNumRe.exec(fullText);
     m !== null;
-    m = STREET_PATTERN_RE.exec(fullText)
+    m = houseNumRe.exec(fullText)
   ) {
-    const start = m.index;
-    const end = start + m[0].length;
+    const numStart = m.index;
+    const numEnd = numStart + m[0].length;
 
     // Skip if already covered by an existing entity
     if (
       existingEntities.some(
-        (e) => e.start <= start && e.end >= end,
+        (e) => e.start <= numStart && e.end >= numEnd,
       )
     ) {
       continue;
     }
 
-    // Check if near an address entity
+    // Is this near a known address entity OR in header?
+    const inHeader = numStart < headerEnd;
     const nearAddress = addressEntities.some(
       (e) =>
-        Math.abs(e.start - end) < STREET_CONTEXT_WINDOW ||
-        Math.abs(e.end - start) < STREET_CONTEXT_WINDOW,
+        Math.abs(e.start - numEnd) <
+          STREET_CONTEXT_WINDOW ||
+        Math.abs(e.end - numStart) <
+          STREET_CONTEXT_WINDOW,
     );
 
-    if (nearAddress) {
-      results.push({
-        start,
-        end,
-        label: "address",
-        text: m[0],
-        score: 0.8,
-        source: "regex",
-      });
+    if (!inHeader && !nearAddress) {
+      continue;
     }
+
+    // Backward scan: find street name before the
+    // house number. Walk left over whitespace, then
+    // collect words that start with uppercase.
+    let scanPos = numStart - 1;
+
+    // Skip whitespace before the number
+    while (
+      scanPos >= 0 &&
+      fullText[scanPos] === " "
+    ) {
+      scanPos--;
+    }
+
+    if (scanPos < 0) {
+      continue;
+    }
+
+    // Collect words backwards until we hit:
+    // - a non-letter character (except space)
+    // - a newline
+    // - start of text
+    // - a lowercase-only word (not a street name)
+    let streetStart = scanPos + 1;
+    let wordCount = 0;
+    const MAX_WORDS = 5;
+
+    while (scanPos >= 0 && wordCount < MAX_WORDS) {
+      // Find end of current word
+      const wordEnd = scanPos + 1;
+
+      // Walk back through word chars
+      while (
+        scanPos >= 0 &&
+        /[\p{L}\p{M}]/u.test(
+          fullText[scanPos] ?? "",
+        )
+      ) {
+        scanPos--;
+      }
+      const wordStart = scanPos + 1;
+      const word = fullText.slice(wordStart, wordEnd);
+
+      if (word.length === 0) {
+        break;
+      }
+
+      // Word must start with uppercase (street name)
+      // OR be a known preposition (nad, pod, u, na)
+      const isUpper = UPPER_WORD_RE.test(
+        word[0] ?? "",
+      );
+      const isPrep =
+        /^(?:nad|pod|u|na|ve|ke|za|při|do|od)$/i.test(
+          word,
+        );
+
+      if (!isUpper && !isPrep) {
+        break;
+      }
+
+      streetStart = wordStart;
+      wordCount++;
+
+      // Skip whitespace before this word
+      while (
+        scanPos >= 0 &&
+        fullText[scanPos] === " "
+      ) {
+        scanPos--;
+      }
+
+      // Stop at newline, tab, comma, semicolon
+      const prevCh = fullText[scanPos];
+      if (
+        prevCh === "\n" ||
+        prevCh === "\t" ||
+        prevCh === ";" ||
+        prevCh === undefined
+      ) {
+        break;
+      }
+
+      // Comma: stop (it separates address from
+      // previous clause)
+      if (prevCh === ",") {
+        break;
+      }
+    }
+
+    if (wordCount === 0) {
+      continue;
+    }
+
+    const streetText = fullText.slice(
+      streetStart,
+      numEnd,
+    );
+
+    // Skip if too short (single digit without name)
+    if (streetText.length < 4) {
+      continue;
+    }
+
+    // Skip if already covered
+    if (
+      existingEntities.some(
+        (e) =>
+          e.start <= streetStart && e.end >= numEnd,
+      )
+    ) {
+      continue;
+    }
+
+    // Colon boost: if ":" appears within 5 chars
+    // before street start, this is a "label: value"
+    // pair — very high confidence.
+    const beforeStreet = fullText.slice(
+      Math.max(0, streetStart - 5),
+      streetStart,
+    );
+    const hasColon = beforeStreet.includes(":");
+    const score = hasColon ? 0.95 : inHeader ? 0.85 : 0.8;
+
+    results.push({
+      start: streetStart,
+      end: numEnd,
+      label: "address",
+      text: streetText,
+      score,
+      source: "regex",
+    });
   }
 
   return results;
