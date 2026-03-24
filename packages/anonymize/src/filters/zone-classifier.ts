@@ -93,7 +93,7 @@ const loadSigningClauses =
           `(?:[- ]\\p{Lu}\\p{Ll}+)*`;
       const combined =
         `(?:${prefix}${place}${suffix})`;
-      return new RegExp(combined, "mu");
+      return new RegExp(combined, "u");
     });
   };
 
