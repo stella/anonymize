@@ -495,7 +495,19 @@ export const runPipeline = async (
       const corefSpans = findCoreferenceSpans(fullText, terms);
       if (corefSpans.length > 0) {
         log("coreference-rescan", `${corefSpans.length} aliases`);
-        return mergeAndDedup(merged, corefSpans);
+        const corefMerged = mergeAndDedup(
+          merged,
+          corefSpans,
+        );
+        const corefConsistent =
+          enforceBoundaryConsistency(
+            corefMerged,
+            fullText,
+          );
+        return filterFalsePositives(
+          corefConsistent,
+          ctx,
+        );
       }
     }
   }
