@@ -7,7 +7,7 @@ const entity = (
   end: number,
   score: number,
   label = "PERSON",
-  source: Entity["source"] = "gliner",
+  source: Entity["source"] = "ner",
 ): Entity => ({
   start,
   end,
