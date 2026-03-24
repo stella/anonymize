@@ -2,28 +2,28 @@
   {
     "label": "address",
     "strategy": {
-      "type": "to-next-comma"
+      "type": "to-end-of-line"
     },
     "trigger": "bytem:"
   },
   {
     "label": "address",
     "strategy": {
-      "type": "to-next-comma"
+      "type": "to-end-of-line"
     },
     "trigger": "trvale bytem"
   },
   {
     "label": "address",
     "strategy": {
-      "type": "to-next-comma"
+      "type": "to-end-of-line"
     },
     "trigger": "sídlem:"
   },
   {
     "label": "address",
     "strategy": {
-      "type": "to-next-comma"
+      "type": "to-end-of-line"
     },
     "trigger": "sídlem"
   },
