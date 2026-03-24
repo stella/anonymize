@@ -19,7 +19,9 @@ const GAP_PATTERN = /^[ \t,\-]+$/;
 const buildWordBoundaries = (
   text: string,
 ): Set<number> => {
-  const segmenter = new Intl.Segmenter(undefined, {
+  // Use "und" (undetermined) locale for consistent
+  // word-boundary results across environments.
+  const segmenter = new Intl.Segmenter("und", {
     granularity: "word",
   });
   const boundaries = new Set<number>();
@@ -42,8 +44,9 @@ const wordStartAt = (
 ): number => {
   let p = pos;
   while (p > 0 && !boundaries.has(p)) {
-    // Don't cross newlines
-    if (text[p - 1] === "\n") return p;
+    // Don't cross newlines (LF or CR)
+    const prev = text[p - 1];
+    if (prev === "\n" || prev === "\r") return p;
     p--;
   }
   return p;
@@ -60,8 +63,9 @@ const wordEndAt = (
 ): number => {
   let p = pos;
   while (p < text.length && !boundaries.has(p)) {
-    // Don't cross newlines
-    if (text[p] === "\n") return p;
+    // Don't cross newlines (LF or CR)
+    const ch = text[p];
+    if (ch === "\n" || ch === "\r") return p;
     p++;
   }
   return p;
@@ -117,7 +121,10 @@ const mergeAdjacent = (
     // (zero-gap / touching entities) won't match.
     // Also reject merging when a different-label entity
     // occupies the gap range (would create cross-label
-    // overlap).
+    // overlap). Correctness relies on fixPartialWords
+    // clamping expansion at cross-label neighbors so
+    // that the input to this function has no cross-label
+    // overlaps.
     const gapOccupied = sorted.some(
       (other) =>
         other.label !== entity.label &&

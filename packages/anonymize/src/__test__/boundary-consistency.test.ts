@@ -235,7 +235,7 @@ describe("enforceBoundaryConsistency", () => {
       expect(result[0]?.start).toBe(12);
     });
 
-    test("does not extend across newline", () => {
+    test("does not extend across newline (LF)", () => {
       const fullText = "line one\nNovák";
       // Entity starts in "one" and would cross newline
       const entities = [
@@ -248,6 +248,21 @@ describe("enforceBoundaryConsistency", () => {
       // Should not extend left past the newline boundary
       // The entity start stays at word boundary of "one"
       expect(result[0]?.start).toBe(5);
+    });
+
+    test("does not extend across newline (CRLF)", () => {
+      const fullText = "line one\r\nNovák";
+      // Entity that ends mid-word before CRLF
+      const entities = [
+        makeEntity("person", 5, 7, "on"),
+      ];
+      const result = enforceBoundaryConsistency(
+        entities,
+        fullText,
+      );
+      // Should expand to "one" but not cross \r\n
+      expect(result[0]?.text).toBe("one");
+      expect(result[0]?.end).toBe(8);
     });
   });
 
