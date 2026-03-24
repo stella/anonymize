@@ -20,6 +20,10 @@ export {
   DEFAULT_ENTITY_LABELS,
 } from "./types";
 
+// ── Pipeline Context ─────────────────────────────
+export type { PipelineContext } from "./context";
+export { createPipelineContext } from "./context";
+
 // ── Pipeline ──────────────────────────────────────
 export { runPipeline, mergeAndDedup } from "./pipeline";
 export type { NerInferenceFn } from "./pipeline";

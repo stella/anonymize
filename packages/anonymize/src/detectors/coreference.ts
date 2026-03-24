@@ -1,5 +1,7 @@
 import { DETECTION_SOURCES } from "../types";
 import type { Entity } from "../types";
+import type { PipelineContext } from "../context";
+import { defaultContext } from "../context";
 
 type CoreferenceConfigRow = {
   pattern: string;
@@ -63,11 +65,11 @@ const loadDefinitionPatterns =
  * "Kupující" (Buyer), etc. are legal roles, not
  * identifying information.
  */
-let _roleStopSet: Set<string> | null = null;
-
-const getRoleStopSet = async (): Promise<Set<string>> => {
-  if (_roleStopSet) {
-    return _roleStopSet;
+const getRoleStopSet = async (
+  ctx: PipelineContext,
+): Promise<Set<string>> => {
+  if (ctx.roleStopSet) {
+    return ctx.roleStopSet;
   }
   try {
     const mod = await import(
@@ -76,49 +78,44 @@ const getRoleStopSet = async (): Promise<Set<string>> => {
     const data = (mod.default ?? mod) as {
       roles: string[];
     };
-    _roleStopSet = new Set(
+    ctx.roleStopSet = new Set(
       data.roles.map((r: string) => r.toLowerCase()),
     );
   } catch {
-    _roleStopSet = new Set();
+    ctx.roleStopSet = new Set();
   }
-  return _roleStopSet;
+  return ctx.roleStopSet;
 };
 
-let _cachedPatterns: DefinitionPattern[] | null = null;
-let _cachedPatternsPromise: Promise<
-  DefinitionPattern[]
-> | null = null;
-let _loadAttempted = false;
-
-const getDefinitionPatterns =
-  async (): Promise<DefinitionPattern[]> => {
-    if (_cachedPatterns) {
-      return _cachedPatterns;
+const getDefinitionPatterns = async (
+  ctx: PipelineContext,
+): Promise<DefinitionPattern[]> => {
+  if (ctx.corefPatterns) {
+    return ctx.corefPatterns;
+  }
+  if (ctx.corefPatternsPromise) {
+    return ctx.corefPatternsPromise;
+  }
+  ctx.corefPatternsPromise = loadDefinitionPatterns();
+  const patterns = await ctx.corefPatternsPromise;
+  if (patterns.length === 0) {
+    // All loads failed; cache empty array permanently
+    // to avoid retrying dynamic imports and flooding
+    // logs on every call in high-volume pipelines.
+    ctx.corefPatterns = patterns;
+    if (!ctx.corefLoadAttempted) {
+      ctx.corefLoadAttempted = true;
+      console.warn(
+        "[anonymize] coreference: no definition " +
+          "patterns loaded; coreference detection " +
+          "will be inactive",
+      );
     }
-    if (_cachedPatternsPromise) {
-      return _cachedPatternsPromise;
-    }
-    _cachedPatternsPromise = loadDefinitionPatterns();
-    const patterns = await _cachedPatternsPromise;
-    if (patterns.length === 0) {
-      // All loads failed; cache empty array permanently
-      // to avoid retrying dynamic imports and flooding
-      // logs on every call in high-volume pipelines.
-      _cachedPatterns = patterns;
-      if (!_loadAttempted) {
-        _loadAttempted = true;
-        console.warn(
-          "[anonymize] coreference: no definition " +
-            "patterns loaded; coreference detection " +
-            "will be inactive",
-        );
-      }
-      return patterns;
-    }
-    _cachedPatterns = patterns;
-    return _cachedPatterns;
-  };
+    return patterns;
+  }
+  ctx.corefPatterns = patterns;
+  return ctx.corefPatterns;
+};
 
 const SEARCH_WINDOW = 200;
 
@@ -155,11 +152,12 @@ const COREF_SOURCE_LABELS = new Set([
 export const extractDefinedTerms = async (
   fullText: string,
   entities: Entity[],
+  ctx: PipelineContext = defaultContext,
 ): Promise<DefinedTerm[]> => {
   const [definitionPatterns, roleStops] =
     await Promise.all([
-      getDefinitionPatterns(),
-      getRoleStopSet(),
+      getDefinitionPatterns(ctx),
+      getRoleStopSet(ctx),
     ]);
   const terms: DefinedTerm[] = [];
   const seen = new Set<string>();

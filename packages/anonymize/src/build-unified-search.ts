@@ -18,6 +18,8 @@ import type { PipelineConfig } from "./types";
 import type { RegexMeta } from "./detectors/regex";
 import type { TriggerRule } from "./types";
 import type { DenyListData } from "./detectors/deny-list";
+import type { PipelineContext } from "./context";
+import { defaultContext } from "./context";
 
 import {
   REGEX_PATTERNS,
@@ -66,6 +68,7 @@ export type UnifiedSearchInstance = {
 
 export const buildUnifiedSearch = async (
   config: PipelineConfig,
+  ctx: PipelineContext = defaultContext,
 ): Promise<UnifiedSearchInstance> => {
   const [
     legalForms,
@@ -84,7 +87,7 @@ export const buildUnifiedSearch = async (
           rules: [] as TriggerRule[],
         }),
     config.enableDenyList
-      ? buildDenyList(config)
+      ? buildDenyList(config, ctx)
       : Promise.resolve(null),
     buildStreetTypePatterns(),
     getCurrencyPatterns(),

@@ -10,7 +10,10 @@ import {
 import { processRegexMatches } from "./detectors/regex";
 import { processLegalFormMatches } from "./detectors/legal-forms";
 import { processTriggerMatches } from "./detectors/triggers";
-import { processDenyListMatches } from "./detectors/deny-list";
+import {
+  ensureDenyListData,
+  processDenyListMatches,
+} from "./detectors/deny-list";
 import { processAddressSeeds } from "./detectors/address-seeds";
 import {
   boostNearMissEntities,
@@ -35,6 +38,8 @@ import {
   maskDetectedSpans,
   unmaskNerEntities,
 } from "./util/entity-masking";
+import type { PipelineContext } from "./context";
+import { defaultContext } from "./context";
 
 const shouldReplace = (
   a: Entity,
@@ -101,43 +106,40 @@ const checkAbort = (signal?: AbortSignal): void => {
   }
 };
 
-// Module-level cache keyed on config fingerprint.
-// Rebuilds when config changes (different countries,
-// features enabled/disabled).
-let _cachedKey = "";
-let _cachedSearch: UnifiedSearchInstance | null =
-  null;
-let _cachedSearchPromise: Promise<UnifiedSearchInstance> | null =
-  null;
-
 const configKey = (config: PipelineConfig): string =>
   `${config.enableDenyList}:${config.enableTriggerPhrases}:` +
   `${config.denyListCountries?.toSorted().join(",") ?? ""}:` +
   `${config.denyListRegions?.toSorted().join(",") ?? ""}:` +
   `${config.denyListExcludeCategories?.toSorted().join(",") ?? ""}`;
 
+/**
+ * Get or build a cached search instance. Cache state
+ * lives on the provided PipelineContext, not at module
+ * level.
+ */
 const getCachedSearch = async (
   config: PipelineConfig,
+  ctx: PipelineContext,
 ): Promise<UnifiedSearchInstance> => {
   const key = configKey(config);
-  if (_cachedSearch && _cachedKey === key) {
-    return _cachedSearch;
+  if (ctx.search && ctx.searchKey === key) {
+    return ctx.search;
   }
-  if (_cachedSearchPromise && _cachedKey === key) {
-    return _cachedSearchPromise;
+  if (ctx.searchPromise && ctx.searchKey === key) {
+    return ctx.searchPromise;
   }
   // Build new search. Null the cached instance first
   // so concurrent callers don't use stale data while
   // the new build is in flight.
-  _cachedSearch = null;
-  _cachedKey = key;
-  const promise = buildUnifiedSearch(config);
-  _cachedSearchPromise = promise;
+  ctx.search = null;
+  ctx.searchKey = key;
+  const promise = buildUnifiedSearch(config, ctx);
+  ctx.searchPromise = promise;
   const result = await promise;
   // Guard: another call may have replaced the key
   // while we were awaiting. Only cache if still ours.
-  if (_cachedKey === key) {
-    _cachedSearch = result;
+  if (ctx.searchKey === key) {
+    ctx.search = result;
   }
   return result;
 };
@@ -152,6 +154,10 @@ const getCachedSearch = async (
  * Pass an AbortSignal to cancel the pipeline between
  * stages. Throws a DOMException with name "AbortError"
  * when cancelled.
+ *
+ * Pass an optional `context` to isolate cached state
+ * from other pipeline runs. If omitted, a module-level
+ * default context is used (backward compatible).
  */
 export const runPipeline = async (
   fullText: string,
@@ -161,7 +167,10 @@ export const runPipeline = async (
   onProgress?: (step: string, detail: string) => void,
   cachedSearch?: UnifiedSearchInstance,
   signal?: AbortSignal,
+  context?: PipelineContext,
 ): Promise<Entity[]> => {
+  const ctx = context ?? defaultContext;
+
   const log = (step: string, detail: string) => {
     onProgress?.(step, detail);
   };
@@ -171,12 +180,20 @@ export const runPipeline = async (
   // Ensure generic-roles data is loaded before
   // filterFalsePositives runs. This is a no-op if
   // buildDenyList already loaded it.
-  await loadGenericRoles();
+  await loadGenericRoles(ctx);
+
+  // When a pre-built search is provided, buildDenyList
+  // was skipped for this context. Ensure stopwords,
+  // allow list, and person stopwords are loaded so
+  // processDenyListMatches filters correctly.
+  if (cachedSearch && config.enableDenyList) {
+    await ensureDenyListData(ctx);
+  }
 
   checkAbort(signal);
 
   const search =
-    cachedSearch ?? (await getCachedSearch(config));
+    cachedSearch ?? (await getCachedSearch(config, ctx));
 
   checkAbort(signal);
 
@@ -231,9 +248,9 @@ export const runPipeline = async (
     config.enableNameCorpus &&
     !config.enableDenyList
   ) {
-    await initNameCorpus();
+    await initNameCorpus(ctx);
     checkAbort(signal);
-    nameCorpusEntities = detectNameCorpus(fullText);
+    nameCorpusEntities = detectNameCorpus(fullText, ctx);
     log(
       "name-corpus",
       `${nameCorpusEntities.length} matches`,
@@ -248,6 +265,7 @@ export const runPipeline = async (
           slices.denyList.end,
           fullText,
           search.denyListData,
+          ctx,
         )
       : [];
   if (denyListEntities.length > 0)
@@ -352,7 +370,7 @@ export const runPipeline = async (
   log("merge", `${rawMerged.length} after dedup`);
 
   // False-positive filtering
-  const merged = filterFalsePositives(rawMerged);
+  const merged = filterFalsePositives(rawMerged, ctx);
   if (merged.length < rawMerged.length)
     log("filter", `removed ${rawMerged.length - merged.length} FPs`);
 
@@ -360,7 +378,11 @@ export const runPipeline = async (
 
   // Coreference
   if (config.enableCoreference) {
-    const terms = await extractDefinedTerms(fullText, merged);
+    const terms = await extractDefinedTerms(
+      fullText,
+      merged,
+      ctx,
+    );
     if (terms.length > 0) {
       log("coreference", `${terms.length} defined terms`);
       const corefSpans = findCoreferenceSpans(fullText, terms);
