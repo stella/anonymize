@@ -29,11 +29,21 @@ const DEFINITIVE_LEGAL_FORMS = [
   "S.A.", "SA", "SAS", "SARL",
   "Sp. z o.o.", "S.p.A.",
 ];
+// Build regex with word boundaries on short dot-free
+// forms (AG, SE, KG, etc.) to prevent substring matches
+// in person names ("Sebastian" → SE, "Agnieszka" → AG).
 const LEGAL_FORM_CHECK_RE = new RegExp(
-  DEFINITIVE_LEGAL_FORMS.map((f) =>
-    f.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-      .replace(/\\\./g, "\\.\\s*"),
-  ).join("|"),
+  DEFINITIVE_LEGAL_FORMS.map((f) => {
+    const escaped = f
+      .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+      .replace(/\\\./g, "\\.\\s*");
+    // Short dot-free forms need word boundaries
+    const isDotFree = !f.includes(".");
+    const isShort = f.length <= 4;
+    return isDotFree && isShort
+      ? `\\b${escaped}\\b`
+      : escaped;
+  }).join("|"),
   "i",
 );
 

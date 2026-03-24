@@ -155,10 +155,11 @@ export const detectStreetPatternsNearAddresses = (
     // collect words that start with uppercase.
     let scanPos = numStart - 1;
 
-    // Skip whitespace before the number
+    // Skip whitespace before the number (including
+    // non-breaking spaces from PDF extraction)
     while (
       scanPos >= 0 &&
-      fullText[scanPos] === " "
+      /[\s\u00A0]/.test(fullText[scanPos] ?? "")
     ) {
       scanPos--;
     }
@@ -213,10 +214,10 @@ export const detectStreetPatternsNearAddresses = (
       streetStart = wordStart;
       wordCount++;
 
-      // Skip whitespace before this word
+      // Skip whitespace before this word (inc. NBSP)
       while (
         scanPos >= 0 &&
-        fullText[scanPos] === " "
+        /[\s\u00A0]/.test(fullText[scanPos] ?? "")
       ) {
         scanPos--;
       }
@@ -306,8 +307,10 @@ export const detectStreetPatternsNearAddresses = (
 // Orphan street: first word uppercase, subsequent words
 // can be lowercase (Czech: "Karlínské náměstí 7",
 // "Pražská ulice 12") or uppercase ("Národní třída 1").
+// House number requires 2+ digits to avoid matching
+// contract headings like "Příloha 1" or "Smlouva 3".
 const ORPHAN_STREET_RE =
-  /^\s*(\p{Lu}[\p{Ll}\p{Lu}]+(?:\s+[\p{Lu}\p{Ll}][\p{Ll}]+)*\s+\d{1,4}[a-zA-Z]?)\s*$/gmu;
+  /^\s*(\p{Lu}[\p{Ll}\p{Lu}]+(?:\s+[\p{Lu}\p{Ll}][\p{Ll}]+)*\s+\d{2,4}[a-zA-Z]?)\s*$/gmu;
 
 /**
  * In the header zone (top 15%), find standalone lines

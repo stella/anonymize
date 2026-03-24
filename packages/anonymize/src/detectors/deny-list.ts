@@ -717,8 +717,11 @@ export const processDenyListMatches = (
  */
 // District suffixes: digits ("Praha 1") or Roman
 // numerals ("Příbram II", "Brno III")
+// Valid Roman numerals only (I-XXX range, no invalid
+// combos like IC, LC, VC). Covers district suffixes
+// up to Praha XXX which is more than enough.
 const DISTRICT_SUFFIX_RE =
-  /^ (\d{1,2}(?!\d)|[IVXLC]{1,4})(?=[\s,;.)"\n]|$)/;
+  /^ (\d{1,2}(?!\d)|(?:XXX|XX(?:IX|IV|V?I{0,3})|X(?:IX|IV|V?I{0,3})|IX|IV|V?I{1,3}|V))(?=[\s,;.)"\n]|$)/;
 const POSTAL_PREFIX_RE = /(?:\d{3,5}|\d{3} \d{2}) $/;
 
 // Words that must NOT be absorbed into an address span
