@@ -69,7 +69,10 @@ const shouldReplace = (
   );
 };
 
-/** Labels where colons are structurally significant. */
+/**
+ * Labels where colons are structurally significant
+ * and must not be stripped by sanitizeEntities.
+ */
 const COLON_LABELS = new Set([
   "ip address",
   "mac address",
