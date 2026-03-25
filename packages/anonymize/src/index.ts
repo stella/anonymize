@@ -32,7 +32,7 @@ export {
 } from "./context";
 
 // ── Pipeline ──────────────────────────────────────
-export { runPipeline, mergeAndDedup } from "./pipeline";
+export { runPipeline, mergeAndDedup, sanitizeEntities } from "./pipeline";
 export type {
   NerInferenceFn,
   PipelineOptions,
