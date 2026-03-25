@@ -15,6 +15,7 @@ import {
   processDenyListMatches,
 } from "./detectors/deny-list";
 import { processAddressSeeds } from "./detectors/address-seeds";
+import { propagateOrgNames } from "./detectors/org-propagation";
 import {
   boostNearMissEntities,
   detectStreetPatternsNearAddresses,
@@ -663,10 +664,43 @@ export const runPipeline = async (
       `${mergedExtended.length - consistent.length} consolidated`,
     );
 
+  // Organization name propagation: strip legal form
+  // suffixes from detected orgs and re-scan for bare
+  // mentions of the base name. Gated by enableCoreference
+  // since this is a coreference-like pass. Propagated
+  // entities are filtered by the configured threshold to
+  // ensure they respect the caller's confidence floor.
+  let postOrgEntities = consistent;
+  if (config.enableCoreference) {
+    const orgPropagated = propagateOrgNames(
+      consistent,
+      fullText,
+    );
+    const thresholded = orgPropagated.filter(
+      (e) => e.score >= config.threshold,
+    );
+    if (thresholded.length > 0) {
+      postOrgEntities = mergeAndDedup(
+        consistent,
+        thresholded,
+      );
+      log(
+        "org-propagation",
+        `${thresholded.length} base names`,
+      );
+    }
+  }
+
   // False-positive filtering
-  const merged = filterFalsePositives(consistent, ctx);
-  if (merged.length < consistent.length)
-    log("filter", `removed ${consistent.length - merged.length} FPs`);
+  const merged = filterFalsePositives(
+    postOrgEntities,
+    ctx,
+  );
+  if (merged.length < postOrgEntities.length)
+    log(
+      "filter",
+      `removed ${postOrgEntities.length - merged.length} FPs`,
+    );
 
   checkAbort(signal);
 

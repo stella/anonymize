@@ -9,6 +9,7 @@ import type {
   TriggerValidation,
 } from "../types";
 import { POST_NOMINALS } from "../config/titles";
+import { LEGAL_SUFFIXES } from "../config/legal-forms";
 import { loadLanguageConfigs } from "../util/lang-loader";
 
 const TRIGGER_SCORE = 0.95;
@@ -41,41 +42,7 @@ const POST_NOMINAL_RE = new RegExp(
 // reflexive pronouns "se", "sa" which appear in
 // person-trigger captures like
 // "Ing. Jan Novák, se sídlem...".
-const DEFINITIVE_LEGAL_FORMS = [
-  "s.r.o.",
-  "s. r. o.",
-  "spol. s r.o.",
-  "a.s.",
-  "a. s.",
-  "v.o.s.",
-  "v. o. s.",
-  "k.s.",
-  "k. s.",
-  "z.s.",
-  "z. s.",
-  "z.ú.",
-  "z. ú.",
-  "o.p.s.",
-  "o. p. s.",
-  "s.p.",
-  "s. p.",
-  "GmbH",
-  "AG",
-  "SE",
-  "KG",
-  "OHG",
-  "Ltd.",
-  "Ltd",
-  "LLC",
-  "LLP",
-  "Inc.",
-  "S.A.",
-  "SA",
-  "SAS",
-  "SARL",
-  "Sp. z o.o.",
-  "S.p.A.",
-];
+const DEFINITIVE_LEGAL_FORMS = LEGAL_SUFFIXES;
 // Build case-sensitive regex. Short dot-free forms
 // (AG, SE, KG) get word boundaries to prevent substring
 // matches. All forms are uppercase in the list; the
@@ -216,12 +183,16 @@ const expandTriggerGroups = (
       }
     }
 
+    const includeTrigger =
+      group.includeTrigger ?? false;
+
     for (const trigger of allTriggers) {
       rules.push({
         trigger,
         label: group.label,
         strategy: group.strategy,
         validations: compiled,
+        includeTrigger,
       });
     }
   }
@@ -268,6 +239,32 @@ export const buildTriggerPatterns = async (): Promise<{
         groups as TriggerGroupConfig[],
       ),
     );
+  }
+
+  // Load global triggers (language-agnostic)
+  try {
+    const globalMod = await import(
+      "@stll/anonymize-data/config/triggers.global.json"
+    );
+    // eslint-disable-next-line no-unsafe-type-assertion -- JSON config
+    const globalGroups = (
+      (globalMod as { default?: unknown }).default ??
+      globalMod
+    ) as TriggerGroupConfig[];
+    if (Array.isArray(globalGroups)) {
+      rules.push(
+        ...expandTriggerGroups(globalGroups),
+      );
+    }
+  } catch (err) {
+    // Only suppress "module not found"; re-throw
+    // other errors (JSON parse, etc.).
+    if (
+      !(err instanceof Error) ||
+      !err.message.includes("Cannot find module")
+    ) {
+      throw err;
+    }
   }
 
   // Warn about cross-group trigger duplicates.
@@ -349,6 +346,35 @@ const stripQuotes = (value: {
 
 /** Hard stop characters for to-next-comma scanning. */
 const COMMA_STOP_CHARS = new Set(["\n", "("]);
+
+/**
+ * Field-label keywords that terminate address scanning.
+ * When a comma in the address strategy is followed by
+ * one of these, the address stops before the keyword.
+ */
+const ADDRESS_STOP_KEYWORDS = [
+  "číslo účtu",
+  "registrační",
+  "zastoupen",
+  "bankovní",
+  "e-mail",
+  "telefon",
+  "jednatel",
+  "ředitel",
+  "datová",
+  "vložka",
+  "sp.zn.",
+  "oddíl",
+  "swift",
+  "email",
+  "iban",
+  "dič",
+  "ičo",
+  "tel",
+  "č.ú.",
+  "bic",
+  "ič",
+];
 
 const extractValue = (
   text: string,
@@ -620,6 +646,29 @@ const extractValue = (
           if (peekCh === undefined) {
             break;
           }
+          // Check for field-label keywords after
+          // comma before continuing. Keywords like
+          // "IČ", "DIČ" start new fields.
+          const afterComma = valueText
+            .slice(end + 1)
+            .trimStart()
+            .toLowerCase();
+          const hitsKeyword =
+            ADDRESS_STOP_KEYWORDS.some((kw) => {
+              if (!afterComma.startsWith(kw))
+                return false;
+              // Guard: next char must be a delimiter
+              // (not a letter) to avoid truncating
+              // city names like "Telč" on "tel".
+              const next = afterComma[kw.length];
+              return (
+                next === undefined ||
+                /[\s:;.,!?()]/.test(next)
+              );
+            });
+          if (hitsKeyword) {
+            break;
+          }
           // Continue if next segment starts with
           // digit (PSČ) or uppercase (city name)
           if (
@@ -732,7 +781,11 @@ export const processTriggerMatches = (
       : null;
 
     if (value) {
-      // Apply declarative validations from config.
+      // Apply declarative validations to the captured
+      // value text (not the full entity including
+      // trigger). This is intentional: validations
+      // like min-length should test the extracted
+      // value, not the trigger keyword itself.
       if (
         !applyValidations(
           value.text,
@@ -742,6 +795,17 @@ export const processTriggerMatches = (
         continue;
       }
 
+      // When includeTrigger is set, the entity span
+      // starts at the trigger match, not the value.
+      const entityStart = rule.includeTrigger
+        ? match.start
+        : value.start;
+      const entityEnd = value.end;
+      const entityText = fullText.slice(
+        entityStart,
+        entityEnd,
+      );
+
       // Legal form reclassification: any person-labeled
       // trigger whose captured text contains a definitive
       // legal form suffix is reclassified as organization.
@@ -749,15 +813,15 @@ export const processTriggerMatches = (
       // is an organisation, no per-group config needed.
       const effectiveLabel =
         rule.label === "person" &&
-        LEGAL_FORM_CHECK_RE.test(value.text)
+        LEGAL_FORM_CHECK_RE.test(entityText)
           ? "organization"
           : rule.label;
 
       results.push({
-        start: value.start,
-        end: value.end,
+        start: entityStart,
+        end: entityEnd,
         label: effectiveLabel,
-        text: value.text,
+        text: entityText,
         score: TRIGGER_SCORE,
         source: DETECTION_SOURCES.TRIGGER,
       });

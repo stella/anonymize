@@ -544,18 +544,8 @@ const MAC_ADDRESS: RegexDef = {
   score: 1,
 };
 
-// SWIFT/BIC code: keyword-prefixed to avoid FPs from
-// random 8-char uppercase strings.
-// Format: 4 letters (bank) + 2 letters (country) +
-// 2 alphanum (location) + optional 3 alphanum (branch).
-const SWIFT_BIC: RegexDef = {
-  pattern:
-    `(?:SWIFT|BIC)\\s*:?\\s*` +
-    `[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}` +
-    `(?:[A-Z0-9]{3})?\\b`,
-  label: "bank account number",
-  score: 0.95,
-};
+// SWIFT/BIC moved to trigger-based detection
+// (triggers.global.json) for better composability.
 
 // ── Collected definitions ────────────────────────────
 
@@ -593,7 +583,6 @@ const ALL_REGEX_DEFS: readonly RegexDef[] = [
   URL,
   IPV6_ADDRESS,
   MAC_ADDRESS,
-  SWIFT_BIC,
   BARE_DOMAIN,
   ...STDNUM_ENTRIES,
 ];
