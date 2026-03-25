@@ -45,6 +45,9 @@
     "strategy": { "type": "to-next-comma" },
     "triggers": [
       "kontaktperson"
+    ],
+    "validations": [
+      { "type": "starts-uppercase" }
     ]
   },
   {

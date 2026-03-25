@@ -23,7 +23,10 @@
     "triggers": [
       "CONTACT_POINT"
     ],
-    "extensions": ["add-colon"]
+    "extensions": ["add-colon"],
+    "validations": [
+      { "type": "starts-uppercase" }
+    ]
   },
   {
     "id": "hu-organization",
