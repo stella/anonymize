@@ -457,7 +457,7 @@ const CZ_POSTAL: RegexDef = {
 // is not matched in isolation (e.g., "http:" at EOL).
 const URL: RegexDef = {
   pattern:
-    `(?:https?://|https?:(?=[^\\s/])|www\\.)` +
+    `(?:https?://|https?:(?=[^\\s])|www\\.)` +
     `[\\w\\-]+(?:\\.[\\w\\-]+)+` +
     `(?::\\d+)?` +
     `(?:[/?#][^\\s)\\]>]*[^\\s.,;:!?)\\]>])?`,

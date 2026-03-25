@@ -332,6 +332,23 @@ const validateFile = async (
     const triggers = Array.isArray(g.triggers)
       ? (g.triggers as unknown[])
       : [];
+    // Detect intra-group duplicates (copy-paste errors)
+    const groupSeen = new Set<string>();
+    for (const t of triggers) {
+      if (typeof t === "string") {
+        const lc = t.toLowerCase();
+        if (groupSeen.has(lc)) {
+          errors.push({
+            file: fileName,
+            groupIndex: i,
+            message:
+              `Duplicate trigger "${t}" within ` +
+              `group "${gid}"`,
+          });
+        }
+        groupSeen.add(lc);
+      }
+    }
     for (const t of triggers) {
       if (typeof t !== "string") continue;
       const key = t.toLowerCase();

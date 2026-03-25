@@ -105,6 +105,14 @@ const compileValidations = (
             (v.flags ?? "").replace(/[gy]/g, ""),
           ),
         };
+      default: {
+        // TriggerValidation is a public export; custom
+        // configs may bypass the build-time validator.
+        const _exhaustive: never = v;
+        throw new Error(
+          `Unknown validation type: ${JSON.stringify(_exhaustive)}`,
+        );
+      }
     }
   });
 
@@ -149,7 +157,13 @@ const expandTriggerGroups = (
       group.validations ?? [],
     );
 
-    // Generate trigger variants
+    // Generate trigger variants from the original
+    // trigger strings. Extensions are applied once to
+    // the base set only (not combinatorially); e.g.,
+    // ["add-colon", "normalize-spaces"] produces
+    // "trigger:", "trigger\u00A0", but NOT
+    // "trigger\u00A0:". This is intentional to avoid
+    // exponential variant growth.
     const allTriggers = new Set(group.triggers);
     for (const trigger of group.triggers) {
       if (
