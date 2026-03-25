@@ -597,14 +597,29 @@ export const runPipeline = async (
   return sanitizeEntities(merged);
 };
 
+/** Labels where colons are structurally significant. */
+const COLON_LABELS = new Set([
+  "ip address",
+  "mac address",
+]);
+
 /** Strip leading/trailing whitespace and punctuation. */
 const sanitizeEntities = (
   entities: Entity[],
 ): Entity[] =>
   entities.flatMap((e) => {
-    const leadTrimmed = e.text.replace(/^[\s:,;]+/, "");
+    const strip = COLON_LABELS.has(e.label)
+      ? /[\s,;]+/
+      : /[\s:,;]+/;
+    const leadTrimmed = e.text.replace(
+      new RegExp(`^${strip.source}`, strip.flags),
+      "",
+    );
     const lead = e.text.length - leadTrimmed.length;
-    const cleaned = leadTrimmed.replace(/[\s:,;]+$/, "");
+    const cleaned = leadTrimmed.replace(
+      new RegExp(`${strip.source}$`, strip.flags),
+      "",
+    );
     if (cleaned.length === 0) return [];
     if (cleaned === e.text) return [e];
     return [{
