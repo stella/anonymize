@@ -1,46 +1,6 @@
 import { DETECTION_SOURCES } from "../types";
 import type { Entity } from "../types";
-
-/**
- * Known legal form suffixes to strip when extracting
- * the base organization name. Ordered longest-first
- * so "spol. s r.o." matches before "s.r.o.".
- */
-const LEGAL_SUFFIXES = [
-  "spol. s r.o.",
-  "s.r.o.",
-  "s. r. o.",
-  "a.s.",
-  "a. s.",
-  "v.o.s.",
-  "v. o. s.",
-  "k.s.",
-  "k. s.",
-  "z.s.",
-  "z. s.",
-  "z.ú.",
-  "z. ú.",
-  "o.p.s.",
-  "o. p. s.",
-  "s.p.",
-  "s. p.",
-  "GmbH",
-  "AG",
-  "SE",
-  "KG",
-  "OHG",
-  "Ltd.",
-  "Ltd",
-  "LLC",
-  "LLP",
-  "Inc.",
-  "S.A.",
-  "SA",
-  "SAS",
-  "SARL",
-  "Sp. z o.o.",
-  "S.p.A.",
-];
+import { LEGAL_SUFFIXES } from "../config/legal-forms";
 
 const TRAILING_SEP = /[,\s]+$/;
 const LETTER_RE = /\p{L}/u;
