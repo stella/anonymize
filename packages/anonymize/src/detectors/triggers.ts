@@ -221,6 +221,23 @@ export const buildTriggerPatterns = async (): Promise<{
     );
   }
 
+  // Warn about cross-group trigger duplicates.
+  // Duplicates cause redundant AC matches but are
+  // not fatal (mergeAndDedup handles overlap).
+  const seen = new Map<string, string>();
+  for (const rule of rules) {
+    const key = rule.trigger.toLowerCase();
+    const prev = seen.get(key);
+    if (prev !== undefined && prev !== rule.label) {
+      console.warn(
+        `[anonymize] duplicate trigger "${rule.trigger}"` +
+          ` with conflicting labels: ` +
+          `"${prev}" vs "${rule.label}"`,
+      );
+    }
+    seen.set(key, rule.label);
+  }
+
   // Build patterns from lowercased trigger strings.
   // rules[i] corresponds to patterns[i].
   // Plain lowercased strings — the unified builder

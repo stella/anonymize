@@ -220,6 +220,34 @@ const validateFile = async (
                 `Invalid validation type: "${v.type}"`,
             });
           }
+          if (v.type === "min-length") {
+            if (
+              typeof v.min !== "number" ||
+              v.min < 1
+            ) {
+              errors.push({
+                file: fileName,
+                groupIndex: i,
+                message:
+                  `min-length requires "min" ` +
+                  `to be a number >= 1`,
+              });
+            }
+          }
+          if (v.type === "max-length") {
+            if (
+              typeof v.max !== "number" ||
+              v.max < 1
+            ) {
+              errors.push({
+                file: fileName,
+                groupIndex: i,
+                message:
+                  `max-length requires "max" ` +
+                  `to be a number >= 1`,
+              });
+            }
+          }
           if (v.type === "matches-pattern") {
             if (typeof v.pattern !== "string") {
               errors.push({

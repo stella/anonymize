@@ -91,7 +91,7 @@ export type TriggerValidation =
       type: "matches-pattern";
       pattern: string;
       flags?: string;
-    }
+    };
 
 /** Auto-generated trigger variants — closed set. */
 export type TriggerExtension =
