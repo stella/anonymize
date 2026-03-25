@@ -688,7 +688,7 @@ export const processDenyListMatches = (
       chain.length === 1 &&
       isSentenceStart(fullText, first.start)
     ) {
-      const afterEnd = extended.end;
+      const afterEnd = last.end;
       const rest = fullText.slice(afterEnd).trimStart();
       const nextIsUpper =
         rest.length > 1 &&
