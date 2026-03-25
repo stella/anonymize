@@ -264,7 +264,7 @@ export const processLegalFormMatches = (
       /[^\x00-\x7F]/.test(
         text.slice(
           0,
-          lastSpace > 0 ? lastSpace : text.length,
+          lastSpace !== -1 ? lastSpace : text.length,
         ),
       )
     ) {

@@ -592,27 +592,30 @@ export const runPipeline = async (
     log("orphan-streets", `${orphanStreets.length} header street lines`);
   }
 
-  // Extend monetary amounts to include trailing
-  // "(slovy ...)" or "(slovně ...)" parentheticals.
-  allEntities = extendMonetarySlovne(
-    allEntities,
-    fullText,
-  );
-
   // Merge + dedup
   const rawMerged = mergeAndDedup(allEntities);
   log("merge", `${rawMerged.length} after dedup`);
 
-  // Boundary consistency (merge adjacent, fix partial
-  // words, remove nested same-label)
-  const consistent = enforceBoundaryConsistency(
+  // Extend monetary amounts to include trailing
+  // "(slovy ...)" or "(slovně ...)" parentheticals.
+  // Runs after dedup so each monetary span is unique,
+  // preventing duplicate extensions from clobbering
+  // unrelated entities between e.end and newEnd.
+  const mergedExtended = extendMonetarySlovne(
     rawMerged,
     fullText,
   );
-  if (consistent.length < rawMerged.length)
+
+  // Boundary consistency (merge adjacent, fix partial
+  // words, remove nested same-label)
+  const consistent = enforceBoundaryConsistency(
+    mergedExtended,
+    fullText,
+  );
+  if (consistent.length < mergedExtended.length)
     log(
       "boundary",
-      `${rawMerged.length - consistent.length} consolidated`,
+      `${mergedExtended.length - consistent.length} consolidated`,
     );
 
   // False-positive filtering

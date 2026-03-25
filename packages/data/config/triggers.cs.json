@@ -367,7 +367,7 @@
     "strategy": { "type": "to-next-comma" },
     "extensions": [],
     "validations": [
-      { "type": "starts-uppercase" }
+      { "type": "min-length", "min": 3 }
     ]
   }
 ]
