@@ -1,8 +1,10 @@
 /**
  * Known legal form suffixes. Shared between trigger
  * detection (reclassification) and org-propagation
- * (suffix stripping). Ordered longest-first so
- * "spol. s r.o." matches before "s.r.o.".
+ * (suffix stripping). Within each family of related
+ * forms, longer variants come first so that
+ * "spol. s r.o." matches before "s.r.o." and
+ * "s. r. o." matches before "s.r.o.".
  */
 export const LEGAL_SUFFIXES = [
   "spol. s r.o.",
