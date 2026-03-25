@@ -252,10 +252,26 @@ export const processLegalFormMatches = (
       continue;
     }
 
+    // Short ASCII-only suffixes (NA, PA, LP, PC) are
+    // US-specific. Reject if the prefix contains non-
+    // ASCII chars (Czech/Slovak diacritics) — a US
+    // legal entity wouldn't have "ÚČASTI MSP NA".
+    const suffixNoDots = suffix.replace(/\./g, "");
+    if (
+      suffixNoDots.length <= 2 &&
+      !/\./.test(suffix) &&
+      /[^\x00-\x7F]/.test(
+        text.slice(
+          0,
+          lastSpace > 0 ? lastSpace : text.length,
+        ),
+      )
+    ) {
+      continue;
+    }
+
     // Definitive legal forms (s.r.o., a.s., GmbH, etc.)
     // get score 0.95 to beat person names in dedup.
-    // This ensures "Vantage Towers s.r.o." wins over
-    // "Towers" as a person name.
     results.push({
       start: match.start,
       end: match.start + text.length,
