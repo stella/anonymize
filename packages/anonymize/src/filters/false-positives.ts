@@ -118,6 +118,15 @@ export const filterFalsePositives = (
       continue;
     }
 
+    // Person names never contain digits.
+    // "Solution Pack ABL90 Flex" → reject.
+    if (
+      entity.label === "person" &&
+      /\d/.test(trimmed)
+    ) {
+      continue;
+    }
+
     if (
       (entity.label === "person" ||
         entity.label === "organization") &&
