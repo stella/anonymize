@@ -93,6 +93,8 @@ export const sanitizeEntities = (
       "",
     );
     if (cleaned.length === 0) return [];
+    // Reject entities with no alphanumeric content
+    if (!/[\p{L}\p{N}]/u.test(cleaned)) return [];
     if (cleaned === e.text) return [e];
     return [{
       ...e,
@@ -154,18 +156,59 @@ export type NerInferenceFn = (
  * "(slovy ...)" or "(slovně ...)" parenthetical that
  * spells out the amount in words. Common in Czech legal
  * documents, e.g. "1 529,-Kč (slovy jeden-tisíc)".
+ *
+ * Keywords are loaded from amount-words.json config so
+ * new languages can be added without code changes.
  */
-const SLOVNE_RE =
-  /^[^\S\n]*\((?:slovy|slovně)[^\S\n][^)\n]{1,80}\)/i;
+type AmountWordsConfig = {
+  patterns: { lang: string; keywords: string[] }[];
+};
 
-const extendMonetarySlovne = (
+const escapeRegex = (s: string): string =>
+  s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+let amountWordsRe: RegExp | null = null;
+let amountWordsLoaded = false;
+
+const getAmountWordsRe = async (): Promise<RegExp> => {
+  if (amountWordsLoaded && amountWordsRe) {
+    return amountWordsRe;
+  }
+  try {
+    const mod = await import(
+      "@stll/anonymize-data/config/amount-words.json"
+    );
+    // eslint-disable-next-line no-unsafe-type-assertion -- JSON module shape
+    const data = (mod as { default: AmountWordsConfig })
+      .default;
+    const keywords = data.patterns.flatMap(
+      (p) => p.keywords,
+    );
+    const alt = keywords
+      .map(escapeRegex)
+      .join("|");
+    amountWordsRe = new RegExp(
+      `^[^\\S\\n]*(\\((?:${alt})\\s[^)\\n]{1,80}\\))`,
+      "i",
+    );
+  } catch {
+    // Fallback: original Czech-only pattern
+    amountWordsRe =
+      /^[^\S\n]*(\((?:slovy|slovně)\s[^)\n]{1,80}\))/i;
+  }
+  amountWordsLoaded = true;
+  return amountWordsRe;
+};
+
+const extendMonetaryAmountWords = (
   entities: Entity[],
   fullText: string,
+  re: RegExp,
 ): Entity[] =>
   entities.map((e) => {
     if (e.label !== "monetary amount") return e;
     const after = fullText.slice(e.end);
-    const m = SLOVNE_RE.exec(after);
+    const m = re.exec(after);
     if (!m) return e;
     const newEnd = e.end + m[0].length;
     return {
@@ -601,9 +644,11 @@ export const runPipeline = async (
   // Runs after dedup so each monetary span is unique,
   // preventing duplicate extensions from clobbering
   // unrelated entities between e.end and newEnd.
-  const mergedExtended = extendMonetarySlovne(
+  const amountWordsRe = await getAmountWordsRe();
+  const mergedExtended = extendMonetaryAmountWords(
     rawMerged,
     fullText,
+    amountWordsRe,
   );
 
   // Boundary consistency (merge adjacent, fix partial

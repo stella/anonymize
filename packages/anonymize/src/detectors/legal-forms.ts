@@ -18,7 +18,8 @@ const UPPER =
   "A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽÄÖÜÀÂÆÇÈÊËÎÏÔÙÛŸÑ\\u0130";
 const LOWER =
   "a-záčďéěíňóřšťúůýžäöüßàâæçèêëîïôùûÿñ\\u0131";
-const CAP_WORD = `[${UPPER}][${LOWER}${UPPER}]+`;
+const CAP_WORD =
+  `(?:[${UPPER}]{2,}|[${UPPER}][${LOWER}${UPPER}]+)`;
 // ANY_WORD: mixed-case word OR short all-caps token
 // (2-3 chars, e.g. "CZ" in "Metrostav CZ s.r.o.")
 const ANY_WORD =

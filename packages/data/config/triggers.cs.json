@@ -249,6 +249,10 @@
     "triggers": [
       "IČO",
       "IČ",
+      "1ČO",
+      "1Č",
+      "lČO",
+      "lČ",
       "identifikační číslo",
       "identifikační číslo organizace",
       "registrační číslo"
