@@ -822,8 +822,9 @@ const extendCityDistricts = (
     // with uppercase and is on the same line.
     // Guard: skip party-role or organizational terms.
     const afterExt = fullText.slice(entity.end);
+    // Max 4 spaces gap — more means different column
     const trailingWordM =
-      /^[\s]+(\p{Lu}\p{Ll}+)/u.exec(afterExt);
+      /^[\s]{1,4}(\p{Lu}\p{Ll}+)/u.exec(afterExt);
     if (
       trailingWordM &&
       !trailingWordM[0].includes("\n")
