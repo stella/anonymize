@@ -1,0 +1,22 @@
+{
+  "_comment": "Patterns for written-out monetary amounts in parentheses, by language.",
+  "patterns": [
+    { "lang": "cs", "keywords": ["slovy", "slovně"] },
+    { "lang": "sk", "keywords": ["slovom", "slovami"] },
+    {
+      "lang": "de",
+      "keywords": ["in Worten", "in Buchstaben"]
+    },
+    {
+      "lang": "en",
+      "keywords": ["in words", "in letters"]
+    },
+    {
+      "lang": "fr",
+      "keywords": ["en lettres", "en toutes lettres"]
+    },
+    { "lang": "pl", "keywords": ["słownie"] },
+    { "lang": "it", "keywords": ["in lettere"] },
+    { "lang": "es", "keywords": ["en letras"] }
+  ]
+}
