@@ -3,7 +3,7 @@ import type { Entity } from "../types";
 import { LEGAL_SUFFIXES } from "../config/legal-forms";
 
 const TRAILING_SEP = /[,\s]+$/;
-const LETTER_RE = /\p{L}/u;
+const WORD_CHAR_RE = /[\p{L}\p{N}]/u;
 const ORG_PROPAGATION_SCORE = 0.9;
 
 type Seed = {
@@ -76,12 +76,13 @@ export const propagateOrgNames = (
       const matchEnd = idx + baseName.length;
 
       // Word boundary: reject if preceded or followed
-      // by a letter (prevents substring matches).
+      // by a letter or digit (prevents substring
+      // matches like "ACME" inside "ACME2").
       const prevCh = fullText[idx - 1] ?? "";
       const nextCh = fullText[matchEnd] ?? "";
       if (
-        LETTER_RE.test(prevCh) ||
-        LETTER_RE.test(nextCh)
+        WORD_CHAR_RE.test(prevCh) ||
+        WORD_CHAR_RE.test(nextCh)
       ) {
         searchFrom = idx + 1;
         continue;
