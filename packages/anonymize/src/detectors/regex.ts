@@ -467,7 +467,7 @@ const URL: RegexDef = {
 // known TLD. Catches "fondkinematografie.cz" etc.
 const COMMON_TLDS =
   "com|org|net|eu|cz|sk|de|at|pl|hu|ro|fr|es|it" +
-  "|co\\.uk|uk|nl|be|se|fi|dk|no|ch|info|io|dev";
+  "|uk|nl|be|se|fi|dk|no|ch|info|io|dev";
 const BARE_DOMAIN: RegexDef = {
   pattern:
     `\\b[\\w\\-]{3,}(?:\\.[\\w\\-]+)*` +
