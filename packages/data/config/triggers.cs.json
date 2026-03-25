@@ -473,5 +473,21 @@
       { "type": "starts-uppercase" },
       { "type": "min-length", "min": 3 }
     ]
+  },
+  {
+    "id": "cs-ministry",
+    "label": "organization",
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "ministerstvo",
+      "ministerstva",
+      "ministerstvu",
+      "ministerstvem",
+      "ministerstvím"
+    ],
+    "extensions": ["add-trailing-space"],
+    "validations": [
+      { "type": "starts-uppercase" }
+    ]
   }
 ]

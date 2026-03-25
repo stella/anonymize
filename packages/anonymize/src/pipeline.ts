@@ -134,12 +134,17 @@ export const sanitizeEntities = (
     if (cleaned.length === 0) return [];
     // Reject entities with no alphanumeric content
     if (!/[\p{L}\p{N}]/u.test(cleaned)) return [];
-    if (cleaned === e.text) return [e];
+    // Collapse internal whitespace runs (address entities
+    // spanning multiple lines in structured documents)
+    const collapsed = cleaned
+      .replace(/\s*\n\s*/g, " ")
+      .replace(/\s{2,}/g, " ");
+    if (collapsed === e.text) return [e];
     return [{
       ...e,
       start: e.start + lead,
-      end: e.start + lead + cleaned.length,
-      text: cleaned,
+      end: e.start + lead + collapsed.length,
+      text: collapsed,
     }];
   });
 
