@@ -9,7 +9,7 @@ const TEMPLATE_PLACEHOLDER_RE =
 const POSTAL_CODE_RE = /\d{3}\s?\d{2}/;
 const HAS_DIGIT_RE = /\d/;
 const ADDRESS_COMPONENTS_RE =
-  /(?:^|\s)(?:ul\.|ulice|nám\.|náměstí|tř\.|třída|nábř\.|nábřeží|č\.p\.|č\.ev\.|č\.|sídliště|bulvár)\b/i;
+  /(?:^|\s)(?:ul\.|ulice|nám\.|náměstí|tř\.|třída|nábř\.|nábřeží|č\.p\.|č\.ev\.|č\.|sídliště|bulvár)(?=[\s,./]|$)/i;
 
 // Max entity text length by label. Prevents runaway
 // trigger extractions (e.g., "město Dobříš i okolních

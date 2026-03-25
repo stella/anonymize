@@ -347,6 +347,9 @@ const stripQuotes = (value: {
   };
 };
 
+/** Hard stop characters for to-next-comma scanning. */
+const COMMA_STOP_CHARS = new Set(["\n", "(", "\t"]);
+
 const extractValue = (
   text: string,
   triggerEnd: number,
@@ -377,7 +380,6 @@ const extractValue = (
       // degree (Ph.D., CSc., MBA), skip it and continue
       // so "RNDr. Filipem Hartvichem, Ph.D., CSc."
       // captures the full name with degrees.
-      const STOP_CHARS = ["\n", "(", "\t"];
       let end = 0;
       let foundStop = false;
 
@@ -386,7 +388,7 @@ const extractValue = (
         // Hard stops: newline, paren, tab
         if (
           ch !== undefined &&
-          STOP_CHARS.includes(ch)
+          COMMA_STOP_CHARS.has(ch)
         ) {
           foundStop = true;
           break;
