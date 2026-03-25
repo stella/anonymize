@@ -122,7 +122,7 @@ export const filterFalsePositives = (
     // "Solution Pack ABL90 Flex" → reject.
     if (
       entity.label === "person" &&
-      /\d/.test(trimmed)
+      HAS_DIGIT_RE.test(trimmed)
     ) {
       continue;
     }
