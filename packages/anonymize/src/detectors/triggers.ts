@@ -14,13 +14,13 @@ const TRIGGER_SCORE = 0.95;
 const WHITESPACE_RE = /\s+/;
 const LETTER_RE = /\p{L}/u;
 
-// Definitive legal form suffixes. When a person-labeled
-// trigger captures text containing one of these, the
-// entity is reclassified as "organization". Case-insensitive.
 // Definitive legal form suffixes (case-sensitive).
-// No "i" flag: short uppercase-only forms (SE, SA, AG)
-// must NOT match Czech/Slovak reflexive pronouns "se",
-// "sa" which appear in person-trigger captures like
+// When a person-labeled trigger captures text containing
+// one of these, the entity is reclassified as
+// "organization". No "i" flag: short uppercase-only
+// forms (SE, SA, AG) must NOT match Czech/Slovak
+// reflexive pronouns "se", "sa" which appear in
+// person-trigger captures like
 // "Ing. Jan Novák, se sídlem...".
 const DEFINITIVE_LEGAL_FORMS = [
   "s.r.o.",
@@ -164,7 +164,8 @@ const expandTriggerGroups = (
         allTriggers.add(`${trigger} `);
       if (
         extensions.includes("add-colon-space") &&
-        !trigger.endsWith(": ")
+        !trigger.endsWith(": ") &&
+        !trigger.endsWith(":")
       )
         allTriggers.add(`${trigger}: `);
       if (extensions.includes("normalize-spaces")) {

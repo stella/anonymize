@@ -274,13 +274,19 @@ const validateFile = async (
               }
               try {
                 new RegExp(v.pattern, flags || undefined);
-              } catch {
+              } catch (err) {
                 errors.push({
                   file: fileName,
                   groupIndex: i,
                   message:
-                    `Invalid regex pattern: ` +
-                    `"${v.pattern}"`,
+                    `Invalid regex pattern or flags: ` +
+                    `"${v.pattern}"` +
+                    (flags
+                      ? ` (flags: "${flags}")`
+                      : "") +
+                    (err instanceof Error
+                      ? `: ${err.message}`
+                      : ""),
                 });
               }
             }
@@ -294,6 +300,11 @@ const validateFile = async (
   // Warn when the same base trigger string appears in
   // multiple groups with different strategies or labels,
   // which causes double-extraction at runtime.
+  // NOTE: only checks base triggers, not extension-
+  // generated variants. Extension-generated conflicts
+  // (e.g., group A "test" + add-colon vs group B
+  // "test:") are caught at runtime by
+  // buildTriggerPatterns' duplicate warning.
   const triggerIndex = new Map<
     string,
     { groupId: string; strategy: string; label: string }
