@@ -781,7 +781,11 @@ export const processTriggerMatches = (
       : null;
 
     if (value) {
-      // Apply declarative validations from config.
+      // Apply declarative validations to the captured
+      // value text (not the full entity including
+      // trigger). This is intentional: validations
+      // like min-length should test the extracted
+      // value, not the trigger keyword itself.
       if (
         !applyValidations(
           value.text,

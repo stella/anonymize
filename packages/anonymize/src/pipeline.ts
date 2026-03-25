@@ -666,20 +666,30 @@ export const runPipeline = async (
 
   // Organization name propagation: strip legal form
   // suffixes from detected orgs and re-scan for bare
-  // mentions of the base name.
-  const orgPropagated = propagateOrgNames(
-    consistent,
-    fullText,
-  );
-  const postOrgEntities =
-    orgPropagated.length > 0
-      ? mergeAndDedup(consistent, orgPropagated)
-      : consistent;
-  if (orgPropagated.length > 0)
-    log(
-      "org-propagation",
-      `${orgPropagated.length} base names`,
+  // mentions of the base name. Gated by enableCoreference
+  // since this is a coreference-like pass. Propagated
+  // entities are filtered by the configured threshold to
+  // ensure they respect the caller's confidence floor.
+  let postOrgEntities = consistent;
+  if (config.enableCoreference) {
+    const orgPropagated = propagateOrgNames(
+      consistent,
+      fullText,
     );
+    const thresholded = orgPropagated.filter(
+      (e) => e.score >= config.threshold,
+    );
+    if (thresholded.length > 0) {
+      postOrgEntities = mergeAndDedup(
+        consistent,
+        thresholded,
+      );
+      log(
+        "org-propagation",
+        `${thresholded.length} base names`,
+      );
+    }
+  }
 
   // False-positive filtering
   const merged = filterFalsePositives(

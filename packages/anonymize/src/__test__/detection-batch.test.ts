@@ -312,7 +312,9 @@ describe("organization name propagation", () => {
       "Zhotovitel: VINCI Construction CS a.s., " +
       "IČO: 12345678\n" +
       "VINCI Construction CS provádí práce.";
-    const entities = await detect(text);
+    const entities = await detect(text, {
+      enableCoreference: true,
+    });
     const orgs = entities.filter(
       (e) => e.label === "organization",
     );
@@ -338,7 +340,9 @@ describe("organization name propagation", () => {
       "Objednatel: ACME Czech s.r.o., IČO: 12345678\n" +
       "Zhotovitel: ACME Czech Industrial a.s., IČO: 87654321\n" +
       "ACME Czech dodává materiál.";
-    const entities = await detect(text);
+    const entities = await detect(text, {
+      enableCoreference: true,
+    });
     const orgs = entities.filter(
       (e) => e.label === "organization",
     );
@@ -351,5 +355,21 @@ describe("organization name propagation", () => {
     const starts = propagated.map((e) => e.start);
     const uniqueStarts = new Set(starts);
     expect(uniqueStarts.size).toBe(starts.length);
+  });
+
+  test("skips propagation when enableCoreference is false", async () => {
+    const text =
+      "Zhotovitel: VINCI Construction CS a.s., " +
+      "IČO: 12345678\n" +
+      "VINCI Construction CS provádí práce.";
+    const entities = await detect(text, {
+      enableCoreference: false,
+    });
+    const bareOrgs = entities.filter(
+      (e) =>
+        e.label === "organization" &&
+        e.text === "VINCI Construction CS",
+    );
+    expect(bareOrgs.length).toBe(0);
   });
 });
