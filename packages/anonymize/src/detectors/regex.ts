@@ -369,13 +369,18 @@ const INTL_PHONE: RegexDef = {
   score: 1,
 };
 
+// Czech phone numbers: mobiles start with 6/7,
+// landlines with 2-5. Restrict to [2-7] but require
+// the full 9-digit pattern to avoid matching monetary
+// amounts. The negative lookahead prevents bank
+// account patterns (digits/digits).
 const CZ_PHONE: RegexDef = {
   pattern:
     `\\b[2-7]\\d{2}(?:[^\\S\\n]|[.\\-])?\\d{3}` +
     `(?:[^\\S\\n]|[.\\-])?\\d{3}` +
     `(?!(?:[^\\S\\n]|[.\\-])?\\d*/\\d)\\b`,
   label: "phone number",
-  score: 0.9,
+  score: 0.85,
 };
 
 /**

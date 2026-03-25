@@ -351,6 +351,7 @@ const extractValue = (
   text: string,
   triggerEnd: number,
   strategy: TriggerRule["strategy"],
+  label?: string,
 ): {
   start: number;
   end: number;
@@ -390,11 +391,15 @@ const extractValue = (
           foundStop = true;
           break;
         }
-        // Comma: check if followed by post-nominal
+        // Comma: for person triggers, check if followed
+        // by a post-nominal degree (Ph.D., CSc.) and
+        // skip past it. Non-person triggers stop here.
         if (ch === ",") {
           const afterComma = valueText.slice(end);
           const degreeMatch =
-            POST_NOMINAL_RE.exec(afterComma);
+            label === "person"
+              ? POST_NOMINAL_RE.exec(afterComma)
+              : null;
           if (degreeMatch) {
             // Skip the comma + degree, continue scan
             end += degreeMatch[0].length;
@@ -712,6 +717,7 @@ export const processTriggerMatches = (
       fullText,
       triggerEnd,
       rule.strategy,
+      rule.label,
     );
     const value = rawValue
       ? stripQuotes(rawValue)
