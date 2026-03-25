@@ -215,7 +215,7 @@ export const processLegalFormMatches = (
       ).length;
       const lineIsAllCaps =
         lineLetters.length > 5 &&
-        upperCount / lineLetters.length >= 0.9;
+        upperCount / lineLetters.length >= 0.95;
       if (lineIsAllCaps) {
         // Entire line is all-caps → heading, skip
         continue;
