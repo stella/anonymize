@@ -521,8 +521,8 @@ const SWIFT_BIC: RegexDef = {
  * All static PII regex definitions. Scanned in a
  * single pass by @stll/regex-set (Rust DFA).
  *
- * Hand-written patterns (0-17) followed by
- * stdnum-derived patterns (18+). Each stdnum entry
+ * Hand-written patterns (0-18) followed by
+ * stdnum-derived patterns (19+). Each stdnum entry
  * has a post-match validator for confirmation.
  *
  * Monetary amount patterns are built dynamically from
