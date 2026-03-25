@@ -47,10 +47,11 @@ export const propagateOrgNames = (
 
   if (seeds.length === 0) return [];
 
-  // Build a set of already-covered spans for fast
-  // overlap checks.
-  const covered = entities.map(
-    (e) => [e.start, e.end] as const,
+  // Build a mutable array of already-covered spans
+  // for overlap checks. Updated as new entities are
+  // emitted to prevent duplicate propagation.
+  const covered: [number, number][] = entities.map(
+    (e) => [e.start, e.end],
   );
   const isOverlapping = (
     start: number,
