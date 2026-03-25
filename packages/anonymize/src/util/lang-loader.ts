@@ -117,6 +117,10 @@ const TRIGGER_LOADERS: Record<
     import(
       "@stll/anonymize-data/config/triggers.ro.json"
     ),
+  sk: () =>
+    import(
+      "@stll/anonymize-data/config/triggers.sk.json"
+    ),
   sv: () =>
     import(
       "@stll/anonymize-data/config/triggers.sv.json"
@@ -164,7 +168,7 @@ const FALLBACK_LANGUAGES: Record<
 > = {
   triggers: [
     "cs", "de", "en", "es", "fr",
-    "hu", "it", "pl", "ro", "sv",
+    "hu", "it", "pl", "ro", "sk", "sv",
   ],
   coreference: ["cs", "de", "en", "sk"],
 };

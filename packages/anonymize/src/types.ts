@@ -243,4 +243,5 @@ export const DEFAULT_ENTITY_LABELS = [
   "credit card number",
   "passport number",
   "monetary amount",
+  "land parcel",
 ] as const;

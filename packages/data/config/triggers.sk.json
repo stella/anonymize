@@ -1,0 +1,55 @@
+[
+  {
+    "id": "sk-parcel-number",
+    "label": "land parcel",
+    "strategy": { "type": "n-words", "count": 1 },
+    "triggers": [
+      "parc. č.",
+      "parc.č.",
+      "p.č.",
+      "parcela č.",
+      "parcelné číslo"
+    ],
+    "extensions": ["add-colon"],
+    "validations": [
+      {
+        "type": "matches-pattern",
+        "pattern": "^\\d{1,6}(?:/\\d{1,5})?$"
+      }
+    ]
+  },
+  {
+    "id": "sk-ownership-sheet",
+    "label": "land parcel",
+    "strategy": { "type": "n-words", "count": 1 },
+    "triggers": [
+      "LV č.",
+      "listu vlastníctva č.",
+      "liste vlastníctva č.",
+      "list vlastníctva č."
+    ],
+    "validations": [
+      {
+        "type": "matches-pattern",
+        "pattern": "^\\d{1,6}$"
+      }
+    ]
+  },
+  {
+    "id": "sk-cadastral-territory",
+    "label": "land parcel",
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "k.ú.",
+      "k. ú.",
+      "kat. úz.",
+      "katastrálne územie",
+      "katastrálneho územia",
+      "katastrálnom území"
+    ],
+    "validations": [
+      { "type": "starts-uppercase" },
+      { "type": "min-length", "min": 3 }
+    ]
+  }
+]

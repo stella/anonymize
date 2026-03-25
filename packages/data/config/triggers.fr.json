@@ -59,5 +59,27 @@
     "triggers": [
       "numéro de sécurité sociale"
     ]
+  },
+  {
+    "id": "fr-land-parcel",
+    "label": "land parcel",
+    "strategy": { "type": "n-words", "count": 1 },
+    "triggers": [
+      "parcelle cadastrale",
+      "parcelle n°",
+      "parcelle numéro",
+      "numéro de parcelle"
+    ],
+    "extensions": ["add-colon"]
+  },
+  {
+    "id": "fr-cadastral-ref",
+    "label": "land parcel",
+    "strategy": { "type": "to-end-of-line" },
+    "triggers": [
+      "référence cadastrale",
+      "cadastré section"
+    ],
+    "extensions": ["add-colon"]
   }
 ]

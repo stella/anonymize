@@ -88,9 +88,7 @@
     "label": "address",
     "strategy": { "type": "to-next-comma" },
     "triggers": [
-      "obec a katastrální území",
-      "katastrální území",
-      "katastrálního území"
+      "obec a katastrální území"
     ]
   },
   {
@@ -405,6 +403,74 @@
     "includeTrigger": true,
     "extensions": [],
     "validations": [
+      { "type": "min-length", "min": 3 }
+    ]
+  },
+  {
+    "id": "cs-parcel-number",
+    "label": "land parcel",
+    "strategy": { "type": "n-words", "count": 1 },
+    "triggers": [
+      "parc. č.",
+      "parc. č. st.",
+      "parc.č.",
+      "parc.č. st.",
+      "p.č.",
+      "p.č. st.",
+      "p. č.",
+      "p. č. st.",
+      "p.p.č.",
+      "st.p.č.",
+      "parcela č.",
+      "parcelní č.",
+      "parcelní číslo",
+      "pozemková parcela č.",
+      "stavební parcela č.",
+      "parc. c.",
+      "par. č."
+    ],
+    "extensions": ["add-colon"],
+    "validations": [
+      {
+        "type": "matches-pattern",
+        "pattern": "^\\d{1,6}(?:/\\d{1,5})?$"
+      }
+    ]
+  },
+  {
+    "id": "cs-ownership-sheet",
+    "label": "land parcel",
+    "strategy": { "type": "n-words", "count": 1 },
+    "triggers": [
+      "LV č.",
+      "listu vlastnictví č.",
+      "listu vlastnictví",
+      "listě vlastnictví č.",
+      "listem vlastnictví č.",
+      "list vlastnictví č."
+    ],
+    "validations": [
+      {
+        "type": "matches-pattern",
+        "pattern": "^\\d{1,6}$"
+      }
+    ]
+  },
+  {
+    "id": "cs-cadastral-territory",
+    "label": "land parcel",
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "k.ú.",
+      "k. ú.",
+      "kat. úz.",
+      "kat.úz.",
+      "katastrální území",
+      "katastrálního území",
+      "katastrálním území"
+    ],
+    "validations": [
+      { "type": "starts-uppercase" },
       { "type": "min-length", "min": 3 }
     ]
   }
