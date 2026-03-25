@@ -381,7 +381,7 @@ const CZ_PHONE: RegexDef = {
 // Captures any 9-digit number (including landlines).
 const TEL_TRIGGER_PHONE: RegexDef = {
   pattern:
-    `\\b(?:tel(?:efon)?)\\.?\\s*:?\\s*` +
+    `\\b(?:tel(?:efon)?)\\.?[^\\S\\n]*:?[^\\S\\n]*` +
     `\\d{3}(?:[^\\S\\n]|[.\\-])?\\d{3}` +
     `(?:[^\\S\\n]|[.\\-])?\\d{3}\\b`,
   label: "phone number",

@@ -154,7 +154,7 @@ export type NerInferenceFn = (
 // ...)" spells out the amount in words. Extend the
 // entity to include the entire parenthetical.
 const SLOVY_RE =
-  /^[\s,.;-]{0,4}\((?:slovy|slovně)\s[^)]*\)/i;
+  /^[\s,.;-]{0,4}\((?:slovy|slovně)\s[^)\n]*\)/i;
 
 const extendSlovyAmounts = (
   entities: Entity[],
