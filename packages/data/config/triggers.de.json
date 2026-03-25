@@ -1,209 +1,125 @@
 [
   {
+    "id": "de-address",
     "label": "address",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "wohnhaft in"
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "wohnhaft in"
+    ]
   },
   {
+    "id": "de-date-of-birth",
     "label": "date of birth",
     "strategy": {
-      "count": 1,
-      "type": "n-words"
+      "type": "n-words",
+      "count": 1
     },
-    "trigger": "geboren am"
+    "triggers": [
+      "geboren am",
+      "geb."
+    ],
+    "extensions": ["add-colon"]
   },
   {
-    "label": "date of birth",
-    "strategy": {
-      "count": 1,
-      "type": "n-words"
-    },
-    "trigger": "geb.:"
-  },
-  {
-    "label": "date of birth",
-    "strategy": {
-      "count": 1,
-      "type": "n-words"
-    },
-    "trigger": "geb."
-  },
-  {
+    "id": "de-tax-id-nwords",
     "label": "tax identification number",
     "strategy": {
-      "count": 1,
-      "type": "n-words"
+      "type": "n-words",
+      "count": 1
     },
-    "trigger": "Steuernummer:"
+    "triggers": [
+      "Steuernummer",
+      "Steuer-Nr.",
+      "USt-IdNr."
+    ],
+    "extensions": ["add-colon"]
   },
   {
-    "label": "tax identification number",
-    "strategy": {
-      "count": 1,
-      "type": "n-words"
-    },
-    "trigger": "Steuer-Nr.:"
-  },
-  {
-    "label": "tax identification number",
-    "strategy": {
-      "count": 1,
-      "type": "n-words"
-    },
-    "trigger": "USt-IdNr.:"
-  },
-  {
+    "id": "de-person",
     "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "vertreten durch"
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "vertreten durch",
+      "Geschäftsführer",
+      "Geschäftsführerin"
+    ],
+    "extensions": ["add-colon"],
+    "validations": [
+      { "type": "starts-uppercase" }
+    ],
+    "reclassifyLegalForm": true
   },
   {
-    "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "Geschäftsführer:"
+    "id": "de-registration-eol",
+    "label": "registration number",
+    "strategy": { "type": "to-end-of-line" },
+    "triggers": [
+      "eingetragen im",
+      "Handelsregister"
+    ],
+    "extensions": ["add-colon"]
   },
   {
-    "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "Geschäftsführerin:"
-  },
-  {
+    "id": "de-registration-nwords",
     "label": "registration number",
     "strategy": {
-      "type": "to-end-of-line"
+      "type": "n-words",
+      "count": 1
     },
-    "trigger": "eingetragen im"
+    "triggers": [
+      "Gläubiger-ID",
+      "Registernummer"
+    ],
+    "extensions": ["add-colon"]
   },
   {
-    "label": "registration number",
-    "strategy": {
-      "type": "to-end-of-line"
-    },
-    "trigger": "Handelsregister:"
-  },
-  {
-    "label": "registration number",
-    "strategy": {
-      "count": 1,
-      "type": "n-words"
-    },
-    "trigger": "Gläubiger-ID:"
-  },
-  {
-    "label": "registration number",
-    "strategy": {
-      "count": 1,
-      "type": "n-words"
-    },
-    "trigger": "Registernummer:"
-  },
-  {
+    "id": "de-iban",
     "label": "iban",
     "strategy": {
-      "count": 1,
-      "type": "n-words"
+      "type": "n-words",
+      "count": 1
     },
-    "trigger": "IBAN:"
+    "triggers": [
+      "IBAN"
+    ],
+    "extensions": ["add-colon"]
   },
   {
+    "id": "de-bank-account",
     "label": "bank account number",
     "strategy": {
-      "count": 1,
-      "type": "n-words"
+      "type": "n-words",
+      "count": 1
     },
-    "trigger": "BIC:"
+    "triggers": [
+      "BIC",
+      "Kontonummer"
+    ],
+    "extensions": ["add-colon"]
   },
   {
-    "label": "bank account number",
-    "strategy": {
-      "count": 1,
-      "type": "n-words"
-    },
-    "trigger": "Kontonummer:"
-  },
-  {
+    "id": "de-company-id",
     "label": "registration number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "Handelsregisternummer"
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "Handelsregisternummer",
+      "Handelsregister",
+      "HRB",
+      "Registernummer",
+      "UID"
+    ]
   },
   {
-    "label": "registration number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "Handelsregister"
-  },
-  {
-    "label": "registration number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "HRB"
-  },
-  {
-    "label": "registration number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "Registernummer"
-  },
-  {
+    "id": "de-tax-id-company",
     "label": "tax identification number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "Steuernummer"
-  },
-  {
-    "label": "tax identification number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "Steuer-Nr."
-  },
-  {
-    "label": "tax identification number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "USt-IdNr."
-  },
-  {
-    "label": "tax identification number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "USt-IdNr"
-  },
-  {
-    "label": "registration number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "UID"
-  },
-  {
-    "label": "tax identification number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "BTW"
-  },
-  {
-    "label": "tax identification number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "NIP"
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "Steuernummer",
+      "Steuer-Nr.",
+      "USt-IdNr.",
+      "USt-IdNr",
+      "BTW",
+      "NIP"
+    ]
   }
 ]

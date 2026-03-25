@@ -1,109 +1,66 @@
 [
   {
+    "id": "es-address",
     "label": "address",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "con domicilio en"
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "con domicilio en",
+      "domiciliado en",
+      "domiciliada en",
+      "sita en"
+    ]
   },
   {
-    "label": "address",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "domiciliado en"
-  },
-  {
-    "label": "address",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "domiciliada en"
-  },
-  {
-    "label": "address",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "sita en"
-  },
-  {
+    "id": "es-person",
     "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "representado por"
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "representado por",
+      "representada por"
+    ],
+    "validations": [
+      { "type": "starts-uppercase" }
+    ],
+    "reclassifyLegalForm": true
   },
   {
-    "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "representada por"
-  },
-  {
+    "id": "es-date-of-birth",
     "label": "date of birth",
     "strategy": {
-      "count": 5,
-      "type": "n-words"
+      "type": "n-words",
+      "count": 5
     },
-    "trigger": "nacido el"
+    "triggers": [
+      "nacido el",
+      "nacida el"
+    ]
   },
   {
-    "label": "date of birth",
-    "strategy": {
-      "count": 5,
-      "type": "n-words"
-    },
-    "trigger": "nacida el"
-  },
-  {
+    "id": "es-national-id",
     "label": "national identification number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "con D.N.I."
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "con D.N.I.",
+      "con DNI",
+      "con N.I.E.",
+      "con NIE"
+    ]
   },
   {
-    "label": "national identification number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "con DNI"
-  },
-  {
-    "label": "national identification number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "con N.I.E."
-  },
-  {
-    "label": "national identification number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "con NIE"
-  },
-  {
+    "id": "es-tax-id",
     "label": "tax identification number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "con CIF"
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "con CIF",
+      "con NIF"
+    ]
   },
   {
-    "label": "tax identification number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "con NIF"
-  },
-  {
+    "id": "es-bank-account",
     "label": "bank account number",
-    "strategy": {
-      "type": "to-end-of-line"
-    },
-    "trigger": "número de cuenta"
+    "strategy": { "type": "to-end-of-line" },
+    "triggers": [
+      "número de cuenta"
+    ]
   }
 ]

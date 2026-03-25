@@ -1,58 +1,43 @@
 [
   {
+    "id": "pl-tax-id",
     "label": "tax identification number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "NIP"
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "NIP"
+    ]
   },
   {
+    "id": "pl-national-id",
     "label": "national identification number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "PESEL"
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "PESEL"
+    ]
   },
   {
+    "id": "pl-company-id",
     "label": "registration number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "REGON"
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "REGON",
+      "KRS"
+    ]
   },
   {
-    "label": "registration number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "KRS"
-  },
-  {
+    "id": "pl-person",
     "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "Przewodniczący:"
-  },
-  {
-    "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "Sędzia:"
-  },
-  {
-    "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "Prokurator:"
-  },
-  {
-    "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "Protokolant:"
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "Przewodniczący",
+      "Sędzia",
+      "Prokurator",
+      "Protokolant"
+    ],
+    "extensions": ["add-colon"],
+    "validations": [
+      { "type": "starts-uppercase" }
+    ],
+    "reclassifyLegalForm": true
   }
 ]

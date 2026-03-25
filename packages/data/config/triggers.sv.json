@@ -1,94 +1,67 @@
 [
   {
+    "id": "sv-national-id",
     "label": "national identification number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "personnummer"
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "personnummer",
+      "personnr"
+    ]
   },
   {
-    "label": "national identification number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "personnr"
-  },
-  {
+    "id": "sv-company-id",
     "label": "registration number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "organisationsnummer"
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "organisationsnummer",
+      "org.nr"
+    ]
   },
   {
-    "label": "registration number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "org.nr"
-  },
-  {
+    "id": "sv-address",
     "label": "address",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "folkbokförd i"
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "folkbokförd i",
+      "folkbokförd på",
+      "bosatt i",
+      "bosatt på"
+    ]
   },
   {
-    "label": "address",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "folkbokförd på"
-  },
-  {
-    "label": "address",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "bosatt i"
-  },
-  {
-    "label": "address",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "bosatt på"
-  },
-  {
+    "id": "sv-date-of-birth",
     "label": "date of birth",
     "strategy": {
-      "count": 4,
-      "type": "n-words"
+      "type": "n-words",
+      "count": 4
     },
-    "trigger": "född den"
+    "triggers": [
+      "född den"
+    ]
   },
   {
+    "id": "sv-person",
     "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "kontaktperson"
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "kontaktperson"
+    ]
   },
   {
+    "id": "sv-bank-account",
     "label": "bank account number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "bankgiro"
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "bankgiro",
+      "plusgiro"
+    ]
   },
   {
-    "label": "bank account number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "plusgiro"
-  },
-  {
+    "id": "sv-tax-id",
     "label": "tax identification number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "momsregistreringsnummer"
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "momsregistreringsnummer"
+    ]
   }
 ]
