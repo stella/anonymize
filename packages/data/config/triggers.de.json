@@ -104,5 +104,49 @@
       "BTW",
       "NIP"
     ]
+  },
+  {
+    "id": "de-land-parcel",
+    "label": "land parcel",
+    "strategy": { "type": "n-words", "count": 1 },
+    "triggers": [
+      "Flurstück Nr.",
+      "Flst.",
+      "Flst.-Nr.",
+      "Grundstück Nr.",
+      "Grundstücksnummer",
+      "Parzelle Nr."
+    ],
+    "extensions": ["add-colon"],
+    "validations": [
+      {
+        "type": "matches-pattern",
+        "pattern": "^\\d{1,6}(?:/\\d{1,5})?$"
+      }
+    ]
+  },
+  {
+    "id": "de-land-register",
+    "label": "land parcel",
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "Grundbuch von",
+      "Grundbuchblatt",
+      "Grundbuchblatt Nr."
+    ],
+    "extensions": ["add-colon"]
+  },
+  {
+    "id": "de-cadastral-district",
+    "label": "land parcel",
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "Gemarkung",
+      "Katastralgemeinde"
+    ],
+    "validations": [
+      { "type": "starts-uppercase" },
+      { "type": "min-length", "min": 3 }
+    ]
   }
 ]

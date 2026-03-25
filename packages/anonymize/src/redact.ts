@@ -38,7 +38,12 @@ const normalizeEntityText = (label: string, text: string): string => {
   ) {
     return text.replace(SPACE_DASH_RE, "").toUpperCase();
   }
-  if (upper === "PERSON" || upper === "ORGANIZATION" || upper === "ADDRESS") {
+  if (
+    upper === "PERSON" ||
+    upper === "ORGANIZATION" ||
+    upper === "ADDRESS" ||
+    upper === "LAND_PARCEL"
+  ) {
     return text.replace(WHITESPACE_RE, " ").toLowerCase().trim();
   }
   return text.trim();

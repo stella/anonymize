@@ -38,7 +38,7 @@
       "coreference": false
     },
     "sk": {
-      "triggers": false,
+      "triggers": true,
       "coreference": true
     },
     "sv": {
