@@ -470,7 +470,7 @@ const COMMON_TLDS =
   "|uk|co\\.uk|nl|be|se|fi|dk|no|ch|info|io|dev";
 const BARE_DOMAIN: RegexDef = {
   pattern:
-    `\\b[\\w\\-]+(?:\\.[\\w\\-]+)*` +
+    `\\b[\\w\\-]{3,}(?:\\.[\\w\\-]+)*` +
     `\\.(?:${COMMON_TLDS})\\b` +
     `(?:[/?#][^\\s)\\]>]*[^\\s.,;:!?)\\]>])?`,
   label: "url",
@@ -761,7 +761,7 @@ const buildCurrencyPatterns = (
     for (const ch of data.symbols) {
       parts.push({
         len: ch.length,
-        alt: escapeCharClass(ch),
+        alt: escapeRegex(ch),
       });
     }
   }
