@@ -290,6 +290,49 @@ const validateFile = async (
     }
   }
 
+  // Intra-file duplicate trigger detection.
+  // Warn when the same base trigger string appears in
+  // multiple groups with different strategies, which
+  // causes double-extraction at runtime.
+  const triggerIndex = new Map<
+    string,
+    { groupId: string; strategy: string }
+  >();
+  for (const [i, group] of groups.entries()) {
+    const strategy =
+      typeof group.strategy === "object" &&
+      group.strategy !== null
+        ? (group.strategy as Record<string, unknown>)
+            .type
+        : "unknown";
+    const gid =
+      typeof group.id === "string"
+        ? group.id
+        : `group[${i}]`;
+    const triggers = Array.isArray(group.triggers)
+      ? group.triggers
+      : [];
+    for (const t of triggers) {
+      if (typeof t !== "string") continue;
+      const key = t.toLowerCase();
+      const prev = triggerIndex.get(key);
+      if (prev !== undefined && prev.strategy !== strategy) {
+        errors.push({
+          file: fileName,
+          groupIndex: i,
+          message:
+            `Duplicate trigger "${t}" also in ` +
+            `"${prev.groupId}" with strategy ` +
+            `"${prev.strategy}" vs "${strategy}"`,
+        });
+      }
+      triggerIndex.set(key, {
+        groupId: gid,
+        strategy: String(strategy),
+      });
+    }
+  }
+
   return errors;
 };
 

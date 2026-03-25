@@ -152,11 +152,20 @@ const expandTriggerGroups = (
     // Generate trigger variants
     const allTriggers = new Set(group.triggers);
     for (const trigger of group.triggers) {
-      if (extensions.includes("add-colon"))
+      if (
+        extensions.includes("add-colon") &&
+        !trigger.endsWith(":")
+      )
         allTriggers.add(`${trigger}:`);
-      if (extensions.includes("add-trailing-space"))
+      if (
+        extensions.includes("add-trailing-space") &&
+        !trigger.endsWith(" ")
+      )
         allTriggers.add(`${trigger} `);
-      if (extensions.includes("add-colon-space"))
+      if (
+        extensions.includes("add-colon-space") &&
+        !trigger.endsWith(": ")
+      )
         allTriggers.add(`${trigger}: `);
       if (extensions.includes("normalize-spaces")) {
         if (trigger.includes(" ")) {
@@ -224,18 +233,36 @@ export const buildTriggerPatterns = async (): Promise<{
   // Warn about cross-group trigger duplicates.
   // Duplicates cause redundant AC matches but are
   // not fatal (mergeAndDedup handles overlap).
-  const seen = new Map<string, string>();
+  const seen = new Map<
+    string,
+    { label: string; strategy: string }
+  >();
   for (const rule of rules) {
     const key = rule.trigger.toLowerCase();
     const prev = seen.get(key);
-    if (prev !== undefined && prev !== rule.label) {
-      console.warn(
-        `[anonymize] duplicate trigger "${rule.trigger}"` +
-          ` with conflicting labels: ` +
-          `"${prev}" vs "${rule.label}"`,
-      );
+    if (prev !== undefined) {
+      const labelDiff = prev.label !== rule.label;
+      const stratDiff =
+        prev.strategy !== rule.strategy.type;
+      if (labelDiff || stratDiff) {
+        console.warn(
+          `[anonymize] duplicate trigger` +
+            ` "${rule.trigger}":` +
+            (labelDiff
+              ? ` labels "${prev.label}" vs` +
+                ` "${rule.label}"`
+              : "") +
+            (stratDiff
+              ? ` strategies "${prev.strategy}" vs` +
+                ` "${rule.strategy.type}"`
+              : ""),
+        );
+      }
     }
-    seen.set(key, rule.label);
+    seen.set(key, {
+      label: rule.label,
+      strategy: rule.strategy.type,
+    });
   }
 
   // Build patterns from lowercased trigger strings.

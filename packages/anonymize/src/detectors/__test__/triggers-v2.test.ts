@@ -253,8 +253,13 @@ describe("expandTriggerGroups", () => {
       ];
       const rules = expandTriggerGroups(groups);
       const triggers = rules.map((r) => r.trigger);
-      // Set deduplication: "test", "test:", "test::"
-      // "test:" appears once (not duplicated)
+      // Set deduplication: "test" and "test:" only.
+      // "test:" is not extended with add-colon again
+      // (triggers already ending with the extension
+      // suffix are skipped), so no "test::" artifact.
+      expect(triggers).toContain("test");
+      expect(triggers).toContain("test:");
+      expect(triggers).not.toContain("test::");
       const colonCount = triggers.filter(
         (t) => t === "test:",
       ).length;

@@ -21,20 +21,6 @@
     "extensions": ["add-colon"]
   },
   {
-    "id": "de-tax-id-nwords",
-    "label": "tax identification number",
-    "strategy": {
-      "type": "n-words",
-      "count": 1
-    },
-    "triggers": [
-      "Steuernummer",
-      "Steuer-Nr.",
-      "USt-IdNr."
-    ],
-    "extensions": ["add-colon"]
-  },
-  {
     "id": "de-person",
     "label": "person",
     "strategy": { "type": "to-next-comma" },
@@ -53,8 +39,7 @@
     "label": "registration number",
     "strategy": { "type": "to-end-of-line" },
     "triggers": [
-      "eingetragen im",
-      "Handelsregister"
+      "eingetragen im"
     ],
     "extensions": ["add-colon"]
   },
@@ -66,8 +51,7 @@
       "count": 1
     },
     "triggers": [
-      "Gläubiger-ID",
-      "Registernummer"
+      "Gläubiger-ID"
     ],
     "extensions": ["add-colon"]
   },

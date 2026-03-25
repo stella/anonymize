@@ -477,9 +477,11 @@ const LONG_TLDS =
   "com|org|net|eu|cz|sk|pl|hu|ro|fr|es" +
   "|co\\.uk|nl|ch|info|io|dev";
 const SHORT_TLDS = "de|at|be|se|fi|dk|no|it|uk";
+// RFC 1123: labels cannot start or end with hyphen.
 const HOST_LABEL =
-  `[a-zA-Z0-9][a-zA-Z0-9\\-]*`;
-const BARE_HOST = `\\b[a-zA-Z0-9][a-zA-Z0-9\\-]{2,}`;
+  `[a-zA-Z0-9](?:[a-zA-Z0-9\\-]*[a-zA-Z0-9])?`;
+const BARE_HOST =
+  `\\b[a-zA-Z0-9][a-zA-Z0-9\\-]+[a-zA-Z0-9]`;
 const PATH_SUFFIX =
   `(?:[/?#][^\\s)\\]>]*[^\\s.,;:!?)\\]>])?`;
 const BARE_DOMAIN: RegexDef = {
