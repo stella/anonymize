@@ -129,7 +129,12 @@ const applyValidations = (
         if (!v.re.test(text)) return false;
         break;
       case "not-in-stopwords":
-        // TODO: needs stopword set from context
+        // TODO: needs stopword set from context.
+        // Warn so usage is not silently ignored.
+        console.warn(
+          "[anonymize] not-in-stopwords validation" +
+            " is not yet implemented; skipping",
+        );
         break;
     }
   }

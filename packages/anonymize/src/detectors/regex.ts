@@ -453,10 +453,12 @@ const CZ_POSTAL: RegexDef = {
 // ? = & # kept for query strings.
 // Allow missing // after http:/https: — common OCR
 // artifact ("http:example.cz" instead of
-// "http://example.cz").
+// "http://example.cz"). Lookahead ensures bare scheme
+// is not matched in isolation (e.g., "http:" at EOL).
 const URL: RegexDef = {
   pattern:
-    `(?:https?://|https?:|www\\.)[\\w\\-]+(?:\\.[\\w\\-]+)+` +
+    `(?:https?://|https?:(?=[^\\s/])|www\\.)` +
+    `[\\w\\-]+(?:\\.[\\w\\-]+)+` +
     `(?::\\d+)?` +
     `(?:[/?#][^\\s)\\]>]*[^\\s.,;:!?)\\]>])?`,
   label: "url",
@@ -465,12 +467,17 @@ const URL: RegexDef = {
 
 // Bare domain: no protocol/www prefix, ends with a
 // known TLD. Catches "fondkinematografie.cz" etc.
+// Uses [a-zA-Z0-9] (no underscores — invalid in
+// hostnames) and requires at least one subdomain dot
+// to reduce false positives with short ambiguous
+// TLDs (de, at, no, se, fi, dk, be).
 const COMMON_TLDS =
   "com|org|net|eu|cz|sk|de|at|pl|hu|ro|fr|es|it" +
   "|co\\.uk|uk|nl|be|se|fi|dk|no|ch|info|io|dev";
 const BARE_DOMAIN: RegexDef = {
   pattern:
-    `\\b[\\w\\-]{3,}(?:\\.[\\w\\-]+)*` +
+    `\\b[a-zA-Z0-9][a-zA-Z0-9\\-]{2,}` +
+    `(?:\\.[a-zA-Z0-9][a-zA-Z0-9\\-]*)+` +
     `\\.(?:${COMMON_TLDS})\\b` +
     `(?:[/?#][^\\s)\\]>]*[^\\s.,;:!?)\\]>])?`,
   label: "url",

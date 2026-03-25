@@ -627,6 +627,8 @@ export const runPipeline = async (
     }
   }
 
-  // mergeAndDedup already sanitizes; no extra pass needed.
-  return merged;
+  // Re-sanitize: enforceBoundaryConsistency may adjust
+  // entity boundaries after mergeAndDedup's sanitization,
+  // potentially re-introducing whitespace or punctuation.
+  return sanitizeEntities(merged);
 };
