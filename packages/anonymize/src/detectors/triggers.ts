@@ -348,7 +348,7 @@ const stripQuotes = (value: {
 };
 
 /** Hard stop characters for to-next-comma scanning. */
-const COMMA_STOP_CHARS = new Set(["\n", "(", "\t"]);
+const COMMA_STOP_CHARS = new Set(["\n", "("]);
 
 const extractValue = (
   text: string,
@@ -361,10 +361,17 @@ const extractValue = (
   text: string;
 } | null => {
   const remaining = text.slice(triggerEnd);
+  // Strip leading whitespace, colons, semicolons —
+  // triggers are often followed by ": \t\t\t" in
+  // formatted documents.
+  const stripped = remaining.replace(
+    /^[\s:;]+/,
+    "",
+  );
   const trimmedOffset =
-    remaining.length - remaining.trimStart().length;
+    remaining.length - stripped.length;
   const valueStart = triggerEnd + trimmedOffset;
-  const valueText = remaining.trimStart();
+  const valueText = stripped;
 
   if (valueText.length === 0) {
     return null;
@@ -439,7 +446,7 @@ const extractValue = (
     case "to-end-of-line": {
       // Stop at newline or tab (tab separates cells
       // in DOCX table rows).
-      const LINE_STOPS = ["\n", "\t"];
+      const LINE_STOPS = ["\n"];
       let end = valueText.length;
       for (const ch of LINE_STOPS) {
         const idx = valueText.indexOf(ch);
@@ -555,12 +562,11 @@ const extractValue = (
       while (end < valueText.length && end < maxLen) {
         const ch = valueText[end];
 
-        // Hard stops: newline, tab, opening paren
-        if (
-          ch === "\n" ||
-          ch === "\t" ||
-          ch === "("
-        ) {
+        // Hard stops: newline, opening paren.
+        // Tabs are NOT hard stops — they appear as
+        // formatting in structured documents between
+        // trigger and value.
+        if (ch === "\n" || ch === "(") {
           break;
         }
 
