@@ -14,7 +14,8 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
-    "./config/*": "./config/*"
+    "./config/*": "./config/*",
+    "./dictionaries/*": "./dictionaries/*"
   },
   "types": "dist/index.d.ts",
   "files": ["dist", "config", "dictionaries/cities"],

@@ -69,12 +69,47 @@ const shouldReplace = (
   );
 };
 
+/** Labels where colons are structurally significant. */
+const COLON_LABELS = new Set([
+  "ip address",
+  "mac address",
+]);
+
+/** Strip leading/trailing whitespace and punctuation. */
+export const sanitizeEntities = (
+  entities: Entity[],
+): Entity[] =>
+  entities.flatMap((e) => {
+    const strip = COLON_LABELS.has(e.label)
+      ? /[\s,;]+/
+      : /[\s:,;]+/;
+    const leadTrimmed = e.text.replace(
+      new RegExp(`^${strip.source}`, strip.flags),
+      "",
+    );
+    const lead = e.text.length - leadTrimmed.length;
+    const cleaned = leadTrimmed.replace(
+      new RegExp(`${strip.source}$`, strip.flags),
+      "",
+    );
+    if (cleaned.length === 0) return [];
+    if (cleaned === e.text) return [e];
+    return [{
+      ...e,
+      start: e.start + lead,
+      end: e.start + lead + cleaned.length,
+      text: cleaned,
+    }];
+  });
+
 export const mergeAndDedup = (
   ...layers: Entity[][]
 ): Entity[] => {
   const all: Entity[] = [];
   for (const layer of layers) {
-    for (const entity of layer) all.push(entity);
+    for (const entity of layer) {
+      all.push(entity);
+    }
   }
   if (all.length === 0) return [];
 
@@ -104,7 +139,7 @@ export const mergeAndDedup = (
     // else: overlap but existing wins; discard entity.
   }
 
-  return merged;
+  return sanitizeEntities(merged);
 };
 
 export type NerInferenceFn = (
@@ -582,13 +617,17 @@ export const runPipeline = async (
             corefMerged,
             fullText,
           );
-        return filterFalsePositives(
-          corefConsistent,
-          ctx,
+        return sanitizeEntities(
+          filterFalsePositives(
+            corefConsistent,
+            ctx,
+          ),
         );
       }
     }
   }
 
-  return merged;
+  // Re-sanitize: enforceBoundaryConsistency may expand
+  // spans to include leading/trailing whitespace.
+  return sanitizeEntities(merged);
 };

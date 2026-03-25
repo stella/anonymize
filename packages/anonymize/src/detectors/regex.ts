@@ -451,14 +451,32 @@ const CZ_POSTAL: RegexDef = {
 // URL: scheme + host + optional port + path + query +
 // fragment. Trailing prose punctuation excluded but
 // ? = & # kept for query strings.
+// Allow missing // after http:/https: — common OCR
+// artifact ("http:example.cz" instead of
+// "http://example.cz").
 const URL: RegexDef = {
   pattern:
-    `(?:https?://|www\\.)[\\w\\-]+(?:\\.[\\w\\-]+)+` +
+    `(?:https?://|https?:|www\\.)[\\w\\-]+(?:\\.[\\w\\-]+)+` +
     `(?::\\d+)?` +
     `(?:[/?#][^\\s)\\]>]*[^\\s.,;:!?)\\]>])?`,
   label: "url",
   score: 1,
 };
+
+// Bare domain: no protocol/www prefix, ends with a
+// known TLD. Catches "fondkinematografie.cz" etc.
+const COMMON_TLDS =
+  "com|org|net|eu|cz|sk|de|at|pl|hu|ro|fr|es|it" +
+  "|uk|nl|be|se|fi|dk|no|ch|info|io|dev";
+const BARE_DOMAIN: RegexDef = {
+  pattern:
+    `\\b[\\w\\-]{3,}(?:\\.[\\w\\-]+)*` +
+    `\\.(?:${COMMON_TLDS})\\b` +
+    `(?:[/?#][^\\s)\\]>]*[^\\s.,;:!?)\\]>])?`,
+  label: "url",
+  score: 0.9,
+};
+
 
 // Full RFC 5952 IPv6. :: compressed form replaces
 // 1+ zero groups. Right side: 1-7 hex groups.
@@ -533,6 +551,7 @@ const ALL_REGEX_DEFS: readonly RegexDef[] = [
   IPV6_ADDRESS,
   MAC_ADDRESS,
   SWIFT_BIC,
+  BARE_DOMAIN,
   ...STDNUM_ENTRIES,
 ];
 
@@ -732,6 +751,18 @@ const buildCurrencyPatterns = (
       } else {
         parts.push({ len: name.length, alt: escaped });
       }
+    }
+  }
+
+  // Also include currency symbols as trailing
+  // alternatives (e.g., "126 €", "8 190 £").
+  // These are common in European notation.
+  if (symbols) {
+    for (const ch of data.symbols) {
+      parts.push({
+        len: ch.length,
+        alt: escapeRegex(ch),
+      });
     }
   }
 
