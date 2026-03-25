@@ -22,7 +22,8 @@ const CAP_WORD =
   `(?:[${UPPER}]{2,}|[${UPPER}][${LOWER}${UPPER}]+)`;
 // ANY_WORD: mixed-case word, short all-caps token
 // (2-3 chars, e.g. "CZ" in "Metrostav CZ s.r.o."),
-// or digit-only token (1-4 digits, e.g. "2028").
+// or digit-only token (1-4 digits, e.g. "2028" in
+// "Invest 2028 s.r.o." or "12" in "Praha 12 s.r.o.").
 const ANY_WORD =
   `(?:[${UPPER}${LOWER}][${LOWER}${UPPER}]+` +
   `|[${UPPER}]{2,3}` +

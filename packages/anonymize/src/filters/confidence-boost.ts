@@ -347,7 +347,7 @@ export const detectStreetPatternsNearAddresses = (
       const isPrep = getAddressPreps().has(
         word.toLowerCase(),
       );
-      const isDigitToken = /^\d/.test(word);
+      const isDigitToken = /^\d{1,2}$/.test(word);
 
       if (
         !isUpper &&
