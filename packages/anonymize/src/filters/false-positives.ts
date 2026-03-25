@@ -139,6 +139,18 @@ export const filterFalsePositives = (
       continue;
     }
 
+    // Reject ANY trigger-sourced address without digits
+    // and without a known street-type word. Catches
+    // non-address text like "Nejsme plátci DPH !".
+    if (
+      entity.label === "address" &&
+      entity.source === "trigger" &&
+      !HAS_DIGIT_RE.test(trimmed) &&
+      !ADDRESS_COMPONENTS_RE.test(trimmed)
+    ) {
+      continue;
+    }
+
     filtered.push(entity);
   }
 

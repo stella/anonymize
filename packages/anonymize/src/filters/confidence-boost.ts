@@ -199,7 +199,7 @@ export const detectStreetPatternsNearAddresses = (
   // in Czech addresses almost always have primary > 99
   // or carry a letter suffix.
   const houseNumRe =
-    /\b(?:\d{1,4}\/\d+[a-zA-Z]\b|\d{3,4}\/\d+\b)/g;
+    /\b(?:\d{1,4}\/\d+[a-zA-Z]\b|\d{3,4}\/\d+\b|\d{1,2}\/\d{3,}\b)/g;
   houseNumRe.lastIndex = 0;
 
   for (
@@ -402,6 +402,107 @@ export const detectStreetPatternsNearAddresses = (
       label: "address",
       text: streetText,
       score,
+      source: "regex",
+    });
+  }
+
+  // ── Second scan: bare house numbers near addresses ─
+  // "Vinohradská 46" near "Praha 2" → address.
+  // Uppercase word + space + 2-4 digit number, no slash.
+  const bareHouseRe =
+    /\b(\p{Lu}[\p{Ll}\p{Lu}]+\s+\d{1,4})\b/gu;
+  bareHouseRe.lastIndex = 0;
+
+  // Merge existing + newly found entities for proximity
+  const allAddr = [
+    ...addressEntities,
+    ...results,
+  ];
+
+  // Common Czech stopwords that start uppercase at
+  // sentence beginnings but are not street names.
+  const BARE_STOPWORDS = new Set([
+    "Příloha",
+    "Smlouva",
+    "Článek",
+    "Dodatek",
+    "Celkem",
+    "Strana",
+    "Faktura",
+    "Částka",
+    "Položka",
+    "Kapitola",
+    "Zákon",
+    "Vyhláška",
+    "Nařízení",
+    "Usnesení",
+    "Rozsudek",
+    "Bod",
+    "Odstavec",
+  ]);
+
+  for (
+    let m = bareHouseRe.exec(fullText);
+    m !== null;
+    m = bareHouseRe.exec(fullText)
+  ) {
+    const captured = m[1];
+    if (captured === undefined) continue;
+
+    const start = m.index;
+    const end = start + captured.length;
+
+    // Must be on the same line as a confirmed address
+    // entity and within 50 chars.
+    const slice = fullText.slice(
+      Math.max(0, start - 50),
+      end + 50,
+    );
+    if (slice.includes("\n")) {
+      // Check if there's a newline between the match
+      // and the nearest address entity — reject if so.
+    }
+
+    const nearAddr = allAddr.some((e) => {
+      const dist = Math.min(
+        Math.abs(e.start - end),
+        Math.abs(e.end - start),
+      );
+      if (dist > 50) return false;
+      // Ensure same line: no newline between
+      const lo = Math.min(e.start, start);
+      const hi = Math.max(e.end, end);
+      const between = fullText.slice(lo, hi);
+      return !between.includes("\n");
+    });
+
+    if (!nearAddr) continue;
+
+    // Extract the uppercase word to check stopwords
+    const spaceIdx = captured.search(/\s+\d/);
+    const word =
+      spaceIdx > 0
+        ? captured.slice(0, spaceIdx)
+        : captured;
+
+    if (BARE_STOPWORDS.has(word)) continue;
+
+    // Skip if overlapping an existing entity
+    const allEntities = [
+      ...existingEntities,
+      ...results,
+    ];
+    const overlaps = allEntities.some(
+      (e) => e.start < end && e.end > start,
+    );
+    if (overlaps) continue;
+
+    results.push({
+      start,
+      end,
+      label: "address",
+      text: captured,
+      score: 0.75,
       source: "regex",
     });
   }
