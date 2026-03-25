@@ -75,22 +75,7 @@ export const mergeAndDedup = (
   const all: Entity[] = [];
   for (const layer of layers) {
     for (const entity of layer) {
-      // Trim whitespace from entity text and adjust
-      // start/end offsets accordingly.
-      const trimStart = entity.text.length -
-        entity.text.trimStart().length;
-      const trimEnd = entity.text.length -
-        entity.text.trimEnd().length;
-      if (trimStart > 0 || trimEnd > 0) {
-        all.push({
-          ...entity,
-          start: entity.start + trimStart,
-          end: entity.end - trimEnd,
-          text: entity.text.trim(),
-        });
-      } else {
-        all.push(entity);
-      }
+      all.push(entity);
     }
   }
   if (all.length === 0) return [];
@@ -599,13 +584,34 @@ export const runPipeline = async (
             corefMerged,
             fullText,
           );
-        return filterFalsePositives(
-          corefConsistent,
-          ctx,
+        return sanitizeEntities(
+          filterFalsePositives(
+            corefConsistent,
+            ctx,
+          ),
         );
       }
     }
   }
 
-  return merged;
+  return sanitizeEntities(merged);
 };
+
+/** Strip leading/trailing whitespace and punctuation. */
+const sanitizeEntities = (
+  entities: Entity[],
+): Entity[] =>
+  entities.flatMap((e) => {
+    const cleaned = e.text
+      .replace(/^[\s:,;]+/, "")
+      .replace(/[\s:,;]+$/, "");
+    if (cleaned.length === 0) return [];
+    if (cleaned === e.text) return [e];
+    const lead = e.text.indexOf(cleaned);
+    return [{
+      ...e,
+      start: e.start + lead,
+      end: e.start + lead + cleaned.length,
+      text: cleaned,
+    }];
+  });
