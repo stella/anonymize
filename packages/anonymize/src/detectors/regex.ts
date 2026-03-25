@@ -831,7 +831,18 @@ const buildCurrencyPatterns = (
       `(?:[${symbols}])` +
         `[^\\S\\n\\t]?` +
         `${NUM}` +
-        `(?:[.,](?:\\d{1,2}|--?)?)?\\b`,
+        `(?:[.,](?:\\d{1,2}[-–—]?|[-–—]{1,2})?)?\\b`,
+    );
+  }
+
+  // Leading multi-char code: "Kč 10,—", "Fr. 500"
+  // Uses the trailing alternation in reverse position.
+  if (trailingAlt) {
+    patterns.push(
+      `\\b(?:${trailingAlt})` +
+        `[^\\S\\n\\t]{0,2}` +
+        `${NUM}` +
+        `(?:[.,](?:\\d{1,2}[-–—]?|[-–—]{1,2})?)?\\b`,
     );
   }
 
@@ -843,7 +854,7 @@ const buildCurrencyPatterns = (
   if (trailingAlt) {
     patterns.push(
       `\\b${NUM}` +
-        `(?:[.,](?:\\d{1,2}|--?)?)?[^\\S\\n\\t]?` +
+        `(?:[.,](?:\\d{1,2}[-–—]?|[-–—]{1,2})?)?[^\\S\\n\\t]{0,4}` +
         `(?:${trailingAlt})` +
         `(?:\\b|(?=\\s|[.,;!?)]|$))`,
     );

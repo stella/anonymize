@@ -145,7 +145,10 @@
       "obce",
       "obcí"
     ],
-    "extensions": ["add-trailing-space"]
+    "extensions": ["add-trailing-space"],
+    "validations": [
+      { "type": "starts-uppercase" }
+    ]
   },
   {
     "id": "cs-organization-institutions",
@@ -206,7 +209,11 @@
     "triggers": [
       "bankovní spojení"
     ],
-    "extensions": ["add-colon"]
+    "extensions": ["add-colon"],
+    "validations": [
+      { "type": "has-digits" },
+      { "type": "min-length", "min": 5 }
+    ]
   },
   {
     "id": "cs-bank-account-nwords",
@@ -220,7 +227,11 @@
       "číslo účtu",
       "č. účtu"
     ],
-    "extensions": ["add-colon"]
+    "extensions": ["add-colon"],
+    "validations": [
+      { "type": "has-digits" },
+      { "type": "min-length", "min": 5 }
+    ]
   },
   {
     "id": "cs-datova-schranka",

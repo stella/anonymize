@@ -36,7 +36,10 @@ const escapeForRegex = (form: string): string =>
   form
     .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
     .replace(/\s+/g, "\\s+")
-    .replace(/\\\./g, "\\.\\s*");
+    // Use [^\S\n]? (optional horizontal whitespace)
+    // instead of \s* to prevent greedy matching across
+    // newlines which causes DFA failures in regex-set.
+    .replace(/\\\./g, "\\.[^\\S\\n]?");
 
 const isShortForm = (form: string): boolean =>
   form.replace(/[.\s]/g, "").length <= 3 &&
