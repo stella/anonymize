@@ -526,10 +526,11 @@ export const runPipeline = async (
     regexEntities,
     fullText,
   );
-  if (extendedRegex.length !== regexEntities.length) {
-    const diff =
-      extendedRegex.length - regexEntities.length;
-    log("slovy", `${diff} amounts extended`);
+  const extendedCount = extendedRegex.filter(
+    (e, i) => e !== regexEntities[i],
+  ).length;
+  if (extendedCount > 0) {
+    log("slovy", `${extendedCount} amounts extended`);
   }
 
   // Address seed expansion
