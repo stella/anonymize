@@ -658,12 +658,14 @@ const extractValue = (
               if (!afterComma.startsWith(kw))
                 return false;
               // Guard: next char must be a delimiter
-              // (not a letter) to avoid truncating
-              // city names like "Telč" on "tel".
+              // or digit to avoid truncating city
+              // names like "Telč" on "tel". Digits
+              // are included so "IČ25672541" (no
+              // space) still triggers a stop.
               const next = afterComma[kw.length];
               return (
                 next === undefined ||
-                /[\s:;.,!?()]/.test(next)
+                /[\s:;.,!?()\d]/.test(next)
               );
             });
           if (hitsKeyword) {

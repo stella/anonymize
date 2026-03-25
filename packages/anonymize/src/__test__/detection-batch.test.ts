@@ -242,6 +242,18 @@ describe("address stops at field-label keywords", () => {
     expect(addr!.text).toContain("Telč");
     expect(addr!.text).not.toContain("IČ");
   });
+
+  test("stops before keyword immediately followed by digits (no space)", async () => {
+    const entities = await detect(
+      "sídlem: Dělnická 213/12, 170 00, Praha 7, ič25672541",
+    );
+    const addr = entities.find(
+      (e) => e.label === "address",
+    );
+    expect(addr).toBeDefined();
+    expect(addr!.text).not.toContain("ič");
+    expect(addr!.text).toContain("Praha 7");
+  });
 });
 
 describe("includeTrigger for court names", () => {
@@ -371,5 +383,28 @@ describe("organization name propagation", () => {
         e.text === "VINCI Construction CS",
     );
     expect(bareOrgs.length).toBe(0);
+  });
+
+  test("does not match base name adjacent to digits", async () => {
+    const text =
+      "Zhotovitel: ACME Czech s.r.o., " +
+      "IČO: 12345678\n" +
+      "ACME Czech provádí práce.\n" +
+      "Ref: ACME Czech2 není totéž.";
+    const entities = await detect(text, {
+      enableCoreference: true,
+    });
+    const propagated = entities.filter(
+      (e) =>
+        e.label === "organization" &&
+        e.text === "ACME Czech",
+    );
+    // "ACME Czech" in "ACME Czech2" must NOT be matched
+    // (digit boundary guard). Only the standalone mention
+    // should be propagated.
+    for (const e of propagated) {
+      const nextCh = text[e.end] ?? "";
+      expect(/\d/.test(nextCh)).toBe(false);
+    }
   });
 });
