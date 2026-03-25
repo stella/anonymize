@@ -56,17 +56,55 @@ import {
 import type { PipelineContext } from "./context";
 import { defaultContext } from "./context";
 
+/**
+ * Sources backed by curated literal dictionaries.
+ * Longer matches from these sources are more specific,
+ * so the containment rule trusts their length.
+ */
+const LITERAL_SOURCES: ReadonlySet<string> = new Set([
+  "deny-list",
+  "gazetteer",
+]);
+
 const shouldReplace = (
   a: Entity,
   b: Entity,
 ): boolean => {
+  const aLen = a.end - a.start;
+  const bLen = b.end - b.start;
+  // Containment: when a literal-match entity (deny-list
+  // or gazetteer) fully contains a shorter entity with
+  // the same label, prefer the longer one. Curated
+  // dictionary entries are more specific when longer:
+  // "656 91 Brno" (deny-list) should beat "656 91"
+  // (regex) even though regex has higher priority.
+  // Non-literal sources (trigger, regex, NER) are
+  // excluded because their length does not reliably
+  // indicate accuracy.
+  if (
+    a.label === b.label &&
+    LITERAL_SOURCES.has(a.source) &&
+    a.start <= b.start &&
+    a.end >= b.end &&
+    aLen > bLen
+  ) {
+    return true;
+  }
+  if (
+    a.label === b.label &&
+    LITERAL_SOURCES.has(b.source) &&
+    b.start <= a.start &&
+    b.end >= a.end &&
+    bLen > aLen
+  ) {
+    return false;
+  }
   const aPri = DETECTOR_PRIORITY[a.source] ?? 0;
   const bPri = DETECTOR_PRIORITY[b.source] ?? 0;
   if (aPri !== bPri) return aPri > bPri;
   return (
     a.score > b.score ||
-    (a.score === b.score &&
-      a.end - a.start > b.end - b.start)
+    (a.score === b.score && aLen > bLen)
   );
 };
 
