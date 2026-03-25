@@ -307,10 +307,11 @@ export const detectStreetPatternsNearAddresses = (
         scanPos--;
       }
 
-      // Walk back through word chars
+      // Walk back through word chars (letters, marks,
+      // and digits for tokens like "28" in "28. října").
       while (
         scanPos >= 0 &&
-        /[\p{L}\p{M}]/u.test(
+        /[\p{L}\p{M}\d]/u.test(
           fullText[scanPos] ?? "",
         )
       ) {

@@ -136,7 +136,7 @@ export const buildLegalFormPatterns = async (): Promise<
   // Uses all forms (both long and short).
   const allcapPrefix =
     `(?:${ALLCAP_WORD})` +
-    `(?:[\\s&,.-]{1,4}(?:${ALLCAP_WORD})){0,2}`;
+    `(?:[\\s&,.\\-–—]{1,4}(?:${ALLCAP_WORD})){0,2}`;
   const allcapAlt = allForms
     .toSorted((a, b) => b.length - a.length)
     .map(escapeForRegex)
