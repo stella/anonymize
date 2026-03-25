@@ -635,12 +635,11 @@ const sanitizeEntities = (
   entities: Entity[],
 ): Entity[] =>
   entities.flatMap((e) => {
-    const cleaned = e.text
-      .replace(/^[\s:,;]+/, "")
-      .replace(/[\s:,;]+$/, "");
+    const leadTrimmed = e.text.replace(/^[\s:,;]+/, "");
+    const lead = e.text.length - leadTrimmed.length;
+    const cleaned = leadTrimmed.replace(/[\s:,;]+$/, "");
     if (cleaned.length === 0) return [];
     if (cleaned === e.text) return [e];
-    const lead = e.text.indexOf(cleaned);
     return [{
       ...e,
       start: e.start + lead,
