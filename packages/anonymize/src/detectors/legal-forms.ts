@@ -20,11 +20,13 @@ const LOWER =
   "a-záčďéěíňóřšťúůýžäöüßàâæçèêëîïôùûÿñ\\u0131";
 const CAP_WORD =
   `(?:[${UPPER}]{2,}|[${UPPER}][${LOWER}${UPPER}]+)`;
-// ANY_WORD: mixed-case word OR short all-caps token
-// (2-3 chars, e.g. "CZ" in "Metrostav CZ s.r.o.")
+// ANY_WORD: mixed-case word, short all-caps token
+// (2-3 chars, e.g. "CZ" in "Metrostav CZ s.r.o."),
+// or digit-only token (1-4 digits, e.g. "2028").
 const ANY_WORD =
   `(?:[${UPPER}${LOWER}][${LOWER}${UPPER}]+` +
-  `|[${UPPER}]{2,3})`;
+  `|[${UPPER}]{2,3}` +
+  `|\\d{1,4})`;
 // All-caps word: 2+ uppercase letters, no lowercase.
 // For company names like "EAGLES BRNO", max 3 words.
 const ALLCAP_WORD = `[${UPPER}]{2,}`;
@@ -59,13 +61,13 @@ const buildPatternString = (
   const alt = sorted.map(escapeForRegex).join("|");
   // Allow lowercase connectors between name words:
   // "a" (Czech/SK), "and", "und", "et", "&", "e"
-  const CONNECTOR = `(?:[\\s&,.-]{1,4}|\\s+(?:a|and|und|et|e|y|i)\\s+)`;
+  const CONNECTOR = `(?:[\\s&,.\\-–—]{1,4}|\\s+(?:a|and|und|et|e|y|i)\\s+)`;
   // Czech state enterprise names can be 7+ words:
   // "Národní agentura pro komunikační a informační
   // technologie, s. p." — need generous limit.
   const prefix =
     `(?:${CAP_WORD})` +
-    `(?:${CONNECTOR}(?:${ANY_WORD})){0,7}`;
+    `(?:${CONNECTOR}(?:${ANY_WORD})){0,10}`;
   const separator = requireCapBefore
     ? `(?:\\s+|,\\s*)`
     : `\\s+`;

@@ -337,15 +337,23 @@ export const detectStreetPatternsNearAddresses = (
         getStreetAbbrevs().has(rawWord.toLowerCase());
 
       // Word must start with uppercase (street name),
-      // be a known preposition, or a street abbreviation
+      // be a known preposition, a street abbreviation,
+      // or a digit-starting token (e.g., "28." in
+      // "28. října 1168/102").
       const isUpper = UPPER_WORD_RE.test(
         word[0] ?? "",
       );
       const isPrep = getAddressPreps().has(
         word.toLowerCase(),
       );
+      const isDigitToken = /^\d/.test(word);
 
-      if (!isUpper && !isPrep && !isStreetAbbrev) {
+      if (
+        !isUpper &&
+        !isPrep &&
+        !isStreetAbbrev &&
+        !isDigitToken
+      ) {
         break;
       }
 

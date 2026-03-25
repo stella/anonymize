@@ -70,6 +70,20 @@
     "extensions": ["add-colon"]
   },
   {
+    "id": "cs-address-abbrev",
+    "label": "address",
+    "strategy": {
+      "type": "address",
+      "maxChars": 120
+    },
+    "triggers": [
+      "adr. korespondenční",
+      "adr. trvalého pobytu",
+      "adr. pro doručování"
+    ],
+    "extensions": ["add-colon"]
+  },
+  {
     "id": "cs-address-to-next-comma",
     "label": "address",
     "strategy": { "type": "to-next-comma" },
@@ -116,7 +130,10 @@
       "objednatel",
       "objednatelem"
     ],
-    "extensions": ["add-colon"]
+    "extensions": ["add-colon"],
+    "validations": [
+      { "type": "starts-uppercase" }
+    ]
   },
   {
     "id": "cs-organization-municipalities",
