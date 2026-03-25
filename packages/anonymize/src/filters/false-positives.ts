@@ -132,8 +132,8 @@ export const filterFalsePositives = (
     if (
       entity.label === "address" &&
       trimmed.length > 40 &&
-      !HAS_DIGIT_RE.test(trimmed) &&
       !POSTAL_CODE_RE.test(trimmed) &&
+      !HAS_DIGIT_RE.test(trimmed) &&
       !ADDRESS_COMPONENTS_RE.test(trimmed)
     ) {
       continue;

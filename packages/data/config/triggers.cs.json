@@ -351,7 +351,10 @@
     ],
     "label": "organization",
     "strategy": { "type": "to-next-comma" },
-    "extensions": []
+    "extensions": [],
+    "validations": [
+      { "type": "min-length", "min": 3 }
+    ]
   },
   {
     "id": "soudy-genitive",

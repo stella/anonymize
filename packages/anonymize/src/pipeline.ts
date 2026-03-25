@@ -156,7 +156,7 @@ export type NerInferenceFn = (
  * documents, e.g. "1 529,-Kč (slovy jeden-tisíc)".
  */
 const SLOVNE_RE =
-  /^[^\S\n]*\((?:slovy|slovně)\s[^)\n]{1,80}\)/i;
+  /^[^\S\n]*\((?:slovy|slovně)[^\S\n][^)\n]{1,80}\)/i;
 
 const extendMonetarySlovne = (
   entities: Entity[],
