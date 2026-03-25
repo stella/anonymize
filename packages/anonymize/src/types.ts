@@ -108,6 +108,9 @@ export type TriggerGroupConfig = {
   strategy: TriggerStrategy;
   extensions?: TriggerExtension[];
   validations?: TriggerValidation[];
+  /** When true, include the trigger text in the
+   *  entity span (e.g., court names). */
+  includeTrigger?: boolean;
 };
 
 /** Compiled validation with pre-built regex. */
@@ -128,6 +131,7 @@ export type TriggerRule = {
   label: string;
   strategy: TriggerStrategy;
   validations: CompiledValidation[];
+  includeTrigger: boolean;
 };
 
 /**

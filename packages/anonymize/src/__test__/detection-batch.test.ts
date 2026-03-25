@@ -193,3 +193,131 @@ describe("V preposition in address", () => {
     expect(addr!.text).toContain("V Holešovičkách");
   });
 });
+
+// ── Fix batch 6 tests ──────────────────────────────
+
+describe("address stops at field-label keywords", () => {
+  test("stops before IČ", async () => {
+    const entities = await detect(
+      "sídlem: Dělnická 213/12, 170 00, Praha 7, IČ: 25672541",
+    );
+    const addr = entities.find(
+      (e) => e.label === "address",
+    );
+    expect(addr).toBeDefined();
+    expect(addr!.text).not.toContain("IČ");
+    expect(addr!.text).toContain("Praha 7");
+  });
+
+  test("stops before DIČ", async () => {
+    const entities = await detect(
+      "sídlem: Lipová 42, 110 00 Praha 1, DIČ: CZ123",
+    );
+    const addr = entities.find(
+      (e) => e.label === "address",
+    );
+    expect(addr).toBeDefined();
+    expect(addr!.text).not.toContain("DIČ");
+  });
+
+  test("stops before oddíl", async () => {
+    const entities = await detect(
+      "sídlem: Lipová 42, Praha 1, oddíl B",
+    );
+    const addr = entities.find(
+      (e) => e.label === "address",
+    );
+    expect(addr).toBeDefined();
+    expect(addr!.text).not.toContain("oddíl");
+  });
+});
+
+describe("includeTrigger for court names", () => {
+  test("includes trigger in entity span", async () => {
+    const entities = await detect(
+      "Krajský soud v Ústí nad Labem, oddíl B",
+    );
+    const org = entities.find(
+      (e) => e.label === "organization",
+    );
+    expect(org).toBeDefined();
+    expect(org!.text).toStartWith("Krajský soud");
+    expect(org!.text).toContain("Ústí nad Labem");
+  });
+
+  test("genitive form includes trigger", async () => {
+    const entities = await detect(
+      "u Krajského soudu v Praze, oddíl C",
+    );
+    const org = entities.find(
+      (e) => e.label === "organization",
+    );
+    expect(org).toBeDefined();
+    expect(org!.text).toContain("Krajského soudu");
+    expect(org!.text).toContain("Praze");
+  });
+});
+
+describe("SWIFT/BIC trigger detection", () => {
+  test("detects SWIFT code", async () => {
+    const entities = await detect(
+      "SWIFT: GIBACZPX",
+    );
+    const bank = entities.find(
+      (e) => e.label === "bank account number",
+    );
+    expect(bank).toBeDefined();
+    expect(bank!.text).toBe("GIBACZPX");
+  });
+
+  test("detects BIC code", async () => {
+    const entities = await detect(
+      "BIC: COBADEFFXXX",
+    );
+    const bank = entities.find(
+      (e) => e.label === "bank account number",
+    );
+    expect(bank).toBeDefined();
+    expect(bank!.text).toBe("COBADEFFXXX");
+  });
+
+  test("rejects short SWIFT code", async () => {
+    const entities = await detect(
+      "SWIFT: ABC",
+    );
+    const bank = entities.find(
+      (e) =>
+        e.label === "bank account number" &&
+        e.text === "ABC",
+    );
+    expect(bank).toBeUndefined();
+  });
+});
+
+describe("organization name propagation", () => {
+  test("propagates base org name without suffix", async () => {
+    const text =
+      "Zhotovitel: VINCI Construction CS a.s., " +
+      "IČO: 12345678\n" +
+      "VINCI Construction CS provádí práce.";
+    const entities = await detect(text);
+    const orgs = entities.filter(
+      (e) => e.label === "organization",
+    );
+    // Should find the original with suffix via trigger
+    expect(
+      orgs.some((e) =>
+        e.text.includes("VINCI Construction CS a.s."),
+      ),
+    ).toBe(true);
+    // The bare mention should be propagated
+    expect(
+      orgs.some(
+        (e) =>
+          e.text === "VINCI Construction CS" &&
+          !e.text.includes("a.s."),
+      ),
+    ).toBe(true);
+    expect(orgs.length).toBeGreaterThanOrEqual(2);
+  });
+});

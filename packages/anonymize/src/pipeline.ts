@@ -15,6 +15,7 @@ import {
   processDenyListMatches,
 } from "./detectors/deny-list";
 import { processAddressSeeds } from "./detectors/address-seeds";
+import { propagateOrgNames } from "./detectors/org-propagation";
 import {
   boostNearMissEntities,
   detectStreetPatternsNearAddresses,
@@ -663,10 +664,33 @@ export const runPipeline = async (
       `${mergedExtended.length - consistent.length} consolidated`,
     );
 
+  // Organization name propagation: strip legal form
+  // suffixes from detected orgs and re-scan for bare
+  // mentions of the base name.
+  const orgPropagated = propagateOrgNames(
+    consistent,
+    fullText,
+  );
+  const postOrgEntities =
+    orgPropagated.length > 0
+      ? mergeAndDedup(consistent, orgPropagated)
+      : consistent;
+  if (orgPropagated.length > 0)
+    log(
+      "org-propagation",
+      `${orgPropagated.length} base names`,
+    );
+
   // False-positive filtering
-  const merged = filterFalsePositives(consistent, ctx);
-  if (merged.length < consistent.length)
-    log("filter", `removed ${consistent.length - merged.length} FPs`);
+  const merged = filterFalsePositives(
+    postOrgEntities,
+    ctx,
+  );
+  if (merged.length < postOrgEntities.length)
+    log(
+      "filter",
+      `removed ${postOrgEntities.length - merged.length} FPs`,
+    );
 
   checkAbort(signal);
 

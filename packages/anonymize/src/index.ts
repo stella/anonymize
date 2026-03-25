@@ -89,6 +89,9 @@ export {
   findCoreferenceSpans,
 } from "./detectors/coreference";
 export {
+  propagateOrgNames,
+} from "./detectors/org-propagation";
+export {
   detectNameCorpus,
   initNameCorpus,
 } from "./detectors/names";

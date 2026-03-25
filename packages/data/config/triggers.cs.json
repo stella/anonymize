@@ -367,6 +367,7 @@
     ],
     "label": "organization",
     "strategy": { "type": "to-next-comma" },
+    "includeTrigger": true,
     "extensions": [],
     "validations": [
       { "type": "min-length", "min": 3 }
@@ -384,6 +385,7 @@
     ],
     "label": "organization",
     "strategy": { "type": "to-next-comma" },
+    "includeTrigger": true,
     "extensions": [],
     "validations": [
       { "type": "min-length", "min": 3 }

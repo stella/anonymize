@@ -1,0 +1,16 @@
+[
+  {
+    "id": "swift-bic",
+    "triggers": ["SWIFT", "BIC"],
+    "label": "bank account number",
+    "strategy": { "type": "n-words", "count": 1 },
+    "extensions": ["add-colon"],
+    "validations": [
+      {
+        "type": "matches-pattern",
+        "pattern": "^[A-Za-z0-9]{8,11}$"
+      },
+      { "type": "min-length", "min": 8 }
+    ]
+  }
+]
