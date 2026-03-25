@@ -143,7 +143,7 @@ export const sanitizeEntities = (
     return [{
       ...e,
       start: e.start + lead,
-      end: e.start + lead + cleaned.length,
+      end: e.start + lead + collapsed.length,
       text: collapsed,
     }];
   });
