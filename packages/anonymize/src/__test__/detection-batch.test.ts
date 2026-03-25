@@ -399,6 +399,9 @@ describe("organization name propagation", () => {
         e.label === "organization" &&
         e.text === "ACME Czech",
     );
+    // The standalone "ACME Czech" must be propagated
+    // (positive guard against vacuous pass).
+    expect(propagated.length).toBeGreaterThanOrEqual(1);
     // "ACME Czech" in "ACME Czech2" must NOT be matched
     // (digit boundary guard). Only the standalone mention
     // should be propagated.
