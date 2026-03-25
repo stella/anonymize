@@ -230,6 +230,18 @@ describe("address stops at field-label keywords", () => {
     expect(addr).toBeDefined();
     expect(addr!.text).not.toContain("oddíl");
   });
+
+  test("does NOT false-stop on city starting with 'tel' (Telč)", async () => {
+    const entities = await detect(
+      "sídlem: Hradecká 5, 588 56, Telč, IČ: 25672541",
+    );
+    const addr = entities.find(
+      (e) => e.label === "address",
+    );
+    expect(addr).toBeDefined();
+    expect(addr!.text).toContain("Telč");
+    expect(addr!.text).not.toContain("IČ");
+  });
 });
 
 describe("includeTrigger for court names", () => {
@@ -319,5 +331,25 @@ describe("organization name propagation", () => {
       ),
     ).toBe(true);
     expect(orgs.length).toBeGreaterThanOrEqual(2);
+  });
+
+  test("does not emit overlapping propagated entities from two seeds", async () => {
+    const text =
+      "Objednatel: ACME Czech s.r.o., IČO: 12345678\n" +
+      "Zhotovitel: ACME Czech Industrial a.s., IČO: 87654321\n" +
+      "ACME Czech dodává materiál.";
+    const entities = await detect(text);
+    const orgs = entities.filter(
+      (e) => e.label === "organization",
+    );
+    // "ACME Czech" from second seed must not overlap
+    // with a propagated span from the first seed.
+    const propagated = orgs.filter(
+      (e) => e.text === "ACME Czech",
+    );
+    // Each position should appear at most once
+    const starts = propagated.map((e) => e.start);
+    const uniqueStarts = new Set(starts);
+    expect(uniqueStarts.size).toBe(starts.length);
   });
 });
