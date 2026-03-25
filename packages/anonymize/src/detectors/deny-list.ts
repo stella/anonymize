@@ -731,7 +731,8 @@ const DISTRICT_SUFFIX_RE = new RegExp(
   `^ (\\d{1,2}(?!\\d)|(?:${ROMAN_DISTRICT}))` +
     `(?=[\\s,;.)"\\n]|$)`,
 );
-const POSTAL_PREFIX_RE = /(?:\d{3,5}|\d{3} \d{2}) $/;
+const POSTAL_PREFIX_RE =
+  /(?:\d{5}|\d{3}\s\d{2})\s+$/;
 
 // Words that must NOT be absorbed into an address span
 // when they follow a postal-code + city pattern. Party
@@ -772,10 +773,28 @@ const extendCityDistricts = (
       );
     }
 
+    // Dash-separated district name:
+    // "Praha 10 - Strašnice", "Havířov – Město"
+    const afterDistrict = fullText.slice(entity.end);
+    const dashDistrictM =
+      /^[\s]*[-–][\s]*(\p{Lu}\p{Ll}+)/u.exec(
+        afterDistrict,
+      );
+    if (
+      dashDistrictM &&
+      !dashDistrictM[0].includes("\n")
+    ) {
+      entity.end += dashDistrictM[0].length;
+      entity.text = fullText.slice(
+        entity.start,
+        entity.end,
+      );
+    }
+
     // Leading: "80336 " + "München" → "80336 München"
     // Absorbs 3-5 digit postal codes before the city.
     const beforeMatch = fullText.slice(
-      Math.max(0, entity.start - 7),
+      Math.max(0, entity.start - 10),
       entity.start,
     );
     const prefixM = POSTAL_PREFIX_RE.exec(beforeMatch);

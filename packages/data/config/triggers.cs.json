@@ -264,6 +264,7 @@
     "strategy": { "type": "company-id-value" },
     "triggers": [
       "DIČ",
+      "D1Č",
       "daňové identifikační číslo"
     ]
   },
