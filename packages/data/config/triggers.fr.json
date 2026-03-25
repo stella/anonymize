@@ -70,7 +70,10 @@
       "parcelle numéro",
       "numéro de parcelle"
     ],
-    "extensions": ["add-colon"]
+    "extensions": ["add-colon"],
+    "validations": [
+      { "type": "has-digits" }
+    ]
   },
   {
     "id": "fr-cadastral-ref",

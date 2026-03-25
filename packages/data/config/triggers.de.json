@@ -110,13 +110,11 @@
     "label": "land parcel",
     "strategy": { "type": "n-words", "count": 1 },
     "triggers": [
-      "Flurstück",
       "Flurstück Nr.",
       "Flst.",
       "Flst.-Nr.",
       "Grundstück Nr.",
       "Grundstücksnummer",
-      "Parzelle",
       "Parzelle Nr."
     ],
     "extensions": ["add-colon"],
