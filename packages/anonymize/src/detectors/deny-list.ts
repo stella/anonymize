@@ -731,8 +731,10 @@ const DISTRICT_SUFFIX_RE = new RegExp(
   `^ (\\d{1,2}(?!\\d)|(?:${ROMAN_DISTRICT}))` +
     `(?=[\\s,;.)"\\n]|$)`,
 );
+// Postal code before city: "163 00 ", "16300 ",
+// "16300 - " (with dash separator).
 const POSTAL_PREFIX_RE =
-  /(?:\d{5}|\d{3}\s\d{2})\s+$/;
+  /(?:\d{5}|\d{3}\s\d{2})\s*[-–—]?\s*$/;
 
 // Words that must NOT be absorbed into an address span
 // when they follow a postal-code + city pattern. Party
