@@ -385,7 +385,7 @@ const CZ_PHONE: RegexDef = {
  */
 const TEL_PREFIX_PHONE: RegexDef = {
   pattern:
-    `(?:\\btel(?:efon)?\\.?\\s*:?\\s*)` +
+    `(?i)(?:\\btel(?:efon)?\\.?\\s*:?\\s*)` +
     `(?:\\+?\\d{1,3}[^\\S\\n]?)?` +
     `\\d{3}(?:[^\\S\\n]|[.\\-])?\\d{3}` +
     `(?:[^\\S\\n]|[.\\-])?\\d{3}\\b`,
