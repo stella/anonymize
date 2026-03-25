@@ -60,13 +60,34 @@ const shouldReplace = (
   a: Entity,
   b: Entity,
 ): boolean => {
+  const aLen = a.end - a.start;
+  const bLen = b.end - b.start;
+  // Containment: when one entity fully contains the
+  // other AND has same label, prefer the longer one.
+  // "656 91 Brno" (deny-list) should beat "656 91"
+  // (regex) even though regex has higher priority.
+  if (
+    a.label === b.label &&
+    a.start <= b.start &&
+    a.end >= b.end &&
+    aLen > bLen
+  ) {
+    return true;
+  }
+  if (
+    a.label === b.label &&
+    b.start <= a.start &&
+    b.end >= a.end &&
+    bLen > aLen
+  ) {
+    return false;
+  }
   const aPri = DETECTOR_PRIORITY[a.source] ?? 0;
   const bPri = DETECTOR_PRIORITY[b.source] ?? 0;
   if (aPri !== bPri) return aPri > bPri;
   return (
     a.score > b.score ||
-    (a.score === b.score &&
-      a.end - a.start > b.end - b.start)
+    (a.score === b.score && aLen > bLen)
   );
 };
 
