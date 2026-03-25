@@ -56,18 +56,34 @@ import {
 import type { PipelineContext } from "./context";
 import { defaultContext } from "./context";
 
+/**
+ * Sources backed by curated literal dictionaries.
+ * Longer matches from these sources are more specific,
+ * so the containment rule trusts their length.
+ */
+const LITERAL_SOURCES: ReadonlySet<string> = new Set([
+  "deny-list",
+  "gazetteer",
+]);
+
 const shouldReplace = (
   a: Entity,
   b: Entity,
 ): boolean => {
   const aLen = a.end - a.start;
   const bLen = b.end - b.start;
-  // Containment: when one entity fully contains the
-  // other AND has same label, prefer the longer one.
+  // Containment: when a literal-match entity (deny-list
+  // or gazetteer) fully contains a shorter entity with
+  // the same label, prefer the longer one. Curated
+  // dictionary entries are more specific when longer:
   // "656 91 Brno" (deny-list) should beat "656 91"
   // (regex) even though regex has higher priority.
+  // Non-literal sources (trigger, regex, NER) are
+  // excluded because their length does not reliably
+  // indicate accuracy.
   if (
     a.label === b.label &&
+    LITERAL_SOURCES.has(a.source) &&
     a.start <= b.start &&
     a.end >= b.end &&
     aLen > bLen
@@ -76,6 +92,7 @@ const shouldReplace = (
   }
   if (
     a.label === b.label &&
+    LITERAL_SOURCES.has(b.source) &&
     b.start <= a.start &&
     b.end >= a.end &&
     bLen > aLen

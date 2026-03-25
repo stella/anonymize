@@ -94,4 +94,65 @@ describe("mergeAndDedup priority resolution", () => {
     expect(result[0]?.source).toBe("regex");
     expect(result[0]?.score).toBe(0.92);
   });
+
+  test("longer deny-list beats contained regex with same label", () => {
+    // "656 91 Brno" (deny-list, [0,11]) fully contains
+    // "656 91" (regex, [0,6]). Same label: postal code.
+    // Deny-list has lower priority (2 vs 3) but the
+    // containment rule should prefer the longer entity.
+    const regex = makeEntity(
+      "regex",
+      1,
+      0,
+      6,
+      "postal code",
+    );
+    const denyList = makeEntity(
+      "deny-list",
+      1,
+      0,
+      11,
+      "postal code",
+    );
+    const result = mergeAndDedup([regex, denyList]);
+    expect(result).toHaveLength(1);
+    expect(result[0]?.source).toBe("deny-list");
+    expect(result[0]?.end).toBe(11);
+  });
+
+  test("containment rule does not override score for same source", () => {
+    // Two regex entities with same label, one contained
+    // in the other. Higher score should still win even
+    // though the container is longer.
+    const outer = makeEntity("regex", 0.5, 0, 10);
+    const inner = makeEntity("regex", 0.9, 3, 8);
+    const result = mergeAndDedup([outer, inner]);
+    expect(result).toHaveLength(1);
+    expect(result[0]?.score).toBe(0.9);
+  });
+
+  test("containment rule only applies to literal sources", () => {
+    // A longer regex/trigger should NOT override a
+    // higher-priority shorter trigger via containment.
+    // Only deny-list and gazetteer are trusted for the
+    // "longer = more specific" heuristic.
+    const trigger = makeEntity(
+      "trigger",
+      0.95,
+      0,
+      25,
+      "address",
+    );
+    const regex = makeEntity(
+      "regex",
+      0.75,
+      0,
+      50,
+      "address",
+    );
+    const result = mergeAndDedup([trigger, regex]);
+    expect(result).toHaveLength(1);
+    // Trigger has higher priority (4 > 3), should win
+    expect(result[0]?.source).toBe("trigger");
+  });
 });
