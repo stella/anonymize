@@ -254,12 +254,17 @@ export const processLegalFormMatches = (
 
     // Short ASCII-only suffixes (NA, PA, LP, PC) are
     // US-specific. Reject if the prefix contains non-
-    // ASCII chars (Czech/Slovak diacritics) — a US
-    // legal entity wouldn't have "ÚČASTI MSP NA".
-    const suffixNoDots = suffix.replace(/\./g, "");
+    // ASCII chars (Czech diacritics) — a US legal
+    // entity wouldn't have "ÚČASTI MSP NA".
+    // Use the raw suffix from the match text (before
+    // dot-stripping) to distinguish "NA" from "a.s."
+    const rawSuffix = lastSpace !== -1
+      ? text.slice(lastSpace + 1)
+      : "";
+    const hasDotInSuffix = rawSuffix.includes(".");
     if (
-      suffixNoDots.length <= 2 &&
-      !/\./.test(suffix) &&
+      suffix.length <= 2 &&
+      !hasDotInSuffix &&
       /[^\x00-\x7F]/.test(
         text.slice(
           0,
