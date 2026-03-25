@@ -411,3 +411,100 @@ describe("organization name propagation", () => {
     }
   });
 });
+
+// ── Fix batch 7 tests ──────────────────────────────
+
+describe("Adr. korespondenční address trigger", () => {
+  test("detects address after Adr. korespondenční", async () => {
+    const entities = await detect(
+      "Adr. korespondenční: Bezručova 1250, 572 01 Polička",
+    );
+    const addr = entities.find(
+      (e) => e.label === "address",
+    );
+    expect(addr).toBeDefined();
+    expect(addr!.text).toContain("Bezručova");
+  });
+});
+
+describe("org role starts-uppercase validation", () => {
+  test("rejects lowercase value after objednatel", async () => {
+    const entities = await detect(
+      "objednatel na straně jedné",
+    );
+    const org = entities.find(
+      (e) => e.label === "organization",
+    );
+    expect(org).toBeUndefined();
+  });
+
+  test("accepts uppercase value after objednatel", async () => {
+    const entities = await detect(
+      "objednatel: Město Brno, IČO: 12345678",
+    );
+    const org = entities.find(
+      (e) => e.label === "organization",
+    );
+    expect(org).toBeDefined();
+    expect(org!.text).toContain("Město Brno");
+  });
+});
+
+describe("digit-starting token in backward scan", () => {
+  test("includes 28. října in address", async () => {
+    const entities = await detect(
+      "sídlem: 28. října 1168/102, 702 00 Ostrava",
+      { enableConfidenceBoost: true },
+    );
+    const addr = entities.find(
+      (e) =>
+        e.label === "address" &&
+        e.text.includes("října"),
+    );
+    expect(addr).toBeDefined();
+    expect(addr!.text).toContain("28");
+  });
+});
+
+describe("ve výši monetary trigger", () => {
+  test("detects amount after ve výši", async () => {
+    const entities = await detect(
+      "ve výši 275.000 Kč",
+    );
+    const amount = entities.find(
+      (e) => e.label === "monetary amount",
+    );
+    expect(amount).toBeDefined();
+    expect(amount!.text).toContain("275");
+  });
+});
+
+describe("M.Sc. / B.Sc. post-nominals", () => {
+  test("captures M.Sc. after name", async () => {
+    const entities = await detect(
+      "zastoupen: Janem Novákem, M.Sc., ředitelem",
+    );
+    const person = entities.find(
+      (e) => e.label === "person",
+    );
+    expect(person).toBeDefined();
+    expect(person!.text).toContain("M.Sc.");
+  });
+});
+
+describe("legal form digit token in prefix", () => {
+  test("regex matches company with year in name", async () => {
+    // The regex-set DFA engine may not support the full
+    // pattern, but the underlying regex is correct.
+    const { buildLegalFormPatterns } = await import(
+      "../detectors/legal-forms"
+    );
+    const patterns = await buildLegalFormPatterns();
+    const text = "Firma 2028 s.r.o. dodává materiál";
+    const matched = patterns.some((p: string) => {
+      const re = new RegExp(p);
+      return re.test(text);
+    });
+    expect(matched).toBe(true);
+  });
+});

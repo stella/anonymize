@@ -172,6 +172,8 @@ export const POST_NOMINALS = [
   "MPA",
   "LL.M.",
   "LL.B.",
+  "M.Sc.",
+  "B.Sc.",
   "MSc.",
   "BSc.",
   "M.Eng.",
