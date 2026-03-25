@@ -681,12 +681,21 @@ export const processDenyListMatches = (
     const score = chain.length >= 2 ? 0.9 : 0.5;
 
     // Skip standalone single-word names at sentence
-    // start (likely not a person name)
+    // start (likely not a person name) — BUT keep it
+    // if the word after the chain is also uppercase
+    // (likely a full name: "Alena Zemanová").
     if (
       chain.length === 1 &&
       isSentenceStart(fullText, first.start)
     ) {
-      continue;
+      const afterEnd = extended.end;
+      const rest = fullText.slice(afterEnd).trimStart();
+      const nextIsUpper =
+        rest.length > 1 &&
+        /^\p{Lu}\p{Ll}/u.test(rest);
+      if (!nextIsUpper) {
+        continue;
+      }
     }
 
     results.push({
