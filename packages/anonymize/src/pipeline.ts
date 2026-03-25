@@ -627,7 +627,24 @@ export const runPipeline = async (
     }
   }
 
-  // Re-sanitize: enforceBoundaryConsistency may expand
-  // spans to include leading/trailing whitespace.
   return sanitizeEntities(merged);
 };
+
+/** Strip leading/trailing whitespace and punctuation. */
+const sanitizeEntities = (
+  entities: Entity[],
+): Entity[] =>
+  entities.flatMap((e) => {
+    const cleaned = e.text
+      .replace(/^[\s:,;]+/, "")
+      .replace(/[\s:,;]+$/, "");
+    if (cleaned.length === 0) return [];
+    if (cleaned === e.text) return [e];
+    const lead = e.text.indexOf(cleaned);
+    return [{
+      ...e,
+      start: e.start + lead,
+      end: e.start + lead + cleaned.length,
+      text: cleaned,
+    }];
+  });
