@@ -210,9 +210,12 @@ export const processLegalFormMatches = (
         /[^a-zA-ZÀ-ž]/g,
         "",
       );
+      const upperCount = [...lineLetters].filter(
+        (c) => c === c.toUpperCase(),
+      ).length;
       const lineIsAllCaps =
         lineLetters.length > 5 &&
-        lineLetters === lineLetters.toUpperCase();
+        upperCount / lineLetters.length >= 0.95;
       if (lineIsAllCaps) {
         // Entire line is all-caps → heading, skip
         continue;
@@ -236,23 +239,40 @@ export const processLegalFormMatches = (
 
     // Reject Roman numeral suffixes
     const lastSpace = text.lastIndexOf(" ");
-    const suffix =
+    const rawSuffix =
       lastSpace !== -1
-        ? text
-            .slice(lastSpace + 1)
-            .replace(/[.,]/g, "")
+        ? text.slice(lastSpace + 1)
         : "";
+    const suffixClean = rawSuffix.replace(/[.,]/g, "");
     if (
-      suffix.length > 0 &&
-      ROMAN_NUMERAL_RE.test(suffix)
+      suffixClean.length > 0 &&
+      ROMAN_NUMERAL_RE.test(suffixClean)
+    ) {
+      continue;
+    }
+
+    // Short ASCII-only suffixes (NA, PA, LP, PC) are
+    // US-specific. Reject if the prefix contains non-
+    // ASCII chars (Czech/Slovak diacritics) — a US
+    // legal entity wouldn't have "ÚČASTI MSP NA".
+    // Test for dots in the raw suffix (before dot
+    // stripping) to protect Czech dotted forms like
+    // "a.s." and "k.s.".
+    if (
+      suffixClean.length <= 2 &&
+      !/\./.test(rawSuffix) &&
+      /[^\x00-\x7F]/.test(
+        text.slice(
+          0,
+          lastSpace !== -1 ? lastSpace : text.length,
+        ),
+      )
     ) {
       continue;
     }
 
     // Definitive legal forms (s.r.o., a.s., GmbH, etc.)
     // get score 0.95 to beat person names in dedup.
-    // This ensures "Vantage Towers s.r.o." wins over
-    // "Towers" as a person name.
     results.push({
       start: match.start,
       end: match.start + text.length,

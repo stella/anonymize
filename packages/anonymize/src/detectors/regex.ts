@@ -369,12 +369,34 @@ const INTL_PHONE: RegexDef = {
   score: 1,
 };
 
+// Czech phone numbers: mobiles start with 6/7,
+// landlines with 2-5. Restrict to [2-7] but require
+// the full 9-digit pattern to avoid matching monetary
+// amounts. The negative lookahead prevents bank
+// account patterns (digits/digits).
 const CZ_PHONE: RegexDef = {
   pattern:
-    `\\b[67]\\d{2}(?:[^\\S\\n]|[.\\-])?\\d{3}(?:[^\\S\\n]|[.\\-])?\\d{3}` +
-    `(?!(?:[^\\S\\n]|[.\\-])?\\d*/\\d)\\b`,
+    `\\b[2-7]\\d{2}(?:[^\\S\\n]|[.\\-])?\\d{3}` +
+    `(?:[^\\S\\n]|[.\\-])?\\d{3}` +
+    `(?!(?:[^\\S\\n]|[.\\-])?\\d*/\\d)` +
+    `(?![^\\S\\n]*(?:Kč|,-|korun|EUR|USD|€|\\$))\\b`,
   label: "phone number",
-  score: 0.9,
+  score: 0.85,
+};
+
+/**
+ * Phone numbers prefixed with "tel.:" or "telefon:".
+ * Captures the number after the prefix, including
+ * optional international code (+420).
+ */
+const TEL_PREFIX_PHONE: RegexDef = {
+  pattern:
+    `(?:\\b[Tt]el(?:efon)?\\.?\\s*:?\\s*)` +
+    `(?:\\+?\\d{1,3}[^\\S\\n]?)?` +
+    `\\d{3}(?:[^\\S\\n]|[.\\-])?\\d{3}` +
+    `(?:[^\\S\\n]|[.\\-])?\\d{3}\\b`,
+  label: "phone number",
+  score: 0.95,
 };
 
 const CREDIT_CARD: RegexDef = {
@@ -559,6 +581,7 @@ const ALL_REGEX_DEFS: readonly RegexDef[] = [
   EMAIL,
   INTL_PHONE,
   CZ_PHONE,
+  TEL_PREFIX_PHONE,
   CREDIT_CARD,
   CZ_BIRTH_NUMBER,
   DATE_NUMERIC,

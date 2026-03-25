@@ -338,5 +338,39 @@
       "spisovou značkou",
       "pod sp.zn."
     ]
+  },
+  {
+    "id": "soudy-nominative",
+    "triggers": [
+      "krajský soud",
+      "okresní soud",
+      "městský soud",
+      "nejvyšší soud",
+      "ústavní soud",
+      "obvodní soud"
+    ],
+    "label": "organization",
+    "strategy": { "type": "to-next-comma" },
+    "extensions": [],
+    "validations": [
+      { "type": "min-length", "min": 3 }
+    ]
+  },
+  {
+    "id": "soudy-genitive",
+    "triggers": [
+      "krajského soudu",
+      "okresního soudu",
+      "městského soudu",
+      "nejvyššího soudu",
+      "ústavního soudu",
+      "obvodního soudu"
+    ],
+    "label": "organization",
+    "strategy": { "type": "to-next-comma" },
+    "extensions": [],
+    "validations": [
+      { "type": "min-length", "min": 3 }
+    ]
   }
 ]

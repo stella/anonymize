@@ -8,11 +8,30 @@ import type {
   TriggerRule,
   TriggerValidation,
 } from "../types";
+import { POST_NOMINALS } from "../config/titles";
 import { loadLanguageConfigs } from "../util/lang-loader";
 
 const TRIGGER_SCORE = 0.95;
 const WHITESPACE_RE = /\s+/;
 const LETTER_RE = /\p{L}/u;
+
+/**
+ * Post-nominal degree regex. When a comma-stop is
+ * followed by a known post-nominal (Ph.D., CSc., MBA
+ * etc.), skip the comma and degree, then continue.
+ */
+const POST_NOMINAL_RE = new RegExp(
+  `^,\\s*(?:${POST_NOMINALS.toSorted(
+    (a, b) => b.length - a.length,
+  )
+    .map((d) =>
+      d
+        .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+        .replace(/\\\./g, "\\.\\s*"),
+    )
+    .join("|")})\\.?`,
+  "i",
+);
 
 // Definitive legal form suffixes (case-sensitive).
 // When a person-labeled trigger captures text containing
@@ -328,10 +347,14 @@ const stripQuotes = (value: {
   };
 };
 
+/** Hard stop characters for to-next-comma scanning. */
+const COMMA_STOP_CHARS = new Set(["\n", "(", "\t"]);
+
 const extractValue = (
   text: string,
   triggerEnd: number,
   strategy: TriggerRule["strategy"],
+  label?: string,
 ): {
   start: number;
   end: number;
@@ -353,16 +376,44 @@ const extractValue = (
       // Parens mark defined-term clauses in legal text
       // (e.g., "(dále jen ...)") and should not be
       // captured as part of a name/address.
-      const STOP_CHARS = [",", "\n", "(", "\t"];
-      let end = valueText.length;
+      // When a comma is followed by a known post-nominal
+      // degree (Ph.D., CSc., MBA), skip it and continue
+      // so "RNDr. Filipem Hartvichem, Ph.D., CSc."
+      // captures the full name with degrees.
+      let end = 0;
       let foundStop = false;
-      for (const ch of STOP_CHARS) {
-        const idx = valueText.indexOf(ch);
-        if (idx !== -1 && idx < end) {
-          end = idx;
+
+      while (end < valueText.length) {
+        const ch = valueText[end];
+        // Hard stops: newline, paren, tab
+        if (
+          ch !== undefined &&
+          COMMA_STOP_CHARS.has(ch)
+        ) {
           foundStop = true;
+          break;
         }
+        // Comma: for person triggers, check if followed
+        // by a post-nominal degree (Ph.D., CSc.) and
+        // skip past it. Non-person triggers stop here.
+        if (ch === ",") {
+          const afterComma = valueText.slice(end);
+          const degreeMatch =
+            label === "person"
+              ? POST_NOMINAL_RE.exec(afterComma)
+              : null;
+          if (degreeMatch) {
+            // Skip the comma + degree, continue scan
+            end += degreeMatch[0].length;
+            continue;
+          }
+          // Regular comma — stop here
+          foundStop = true;
+          break;
+        }
+        end++;
       }
+
       // Only cap at 100 chars when no stop char was
       // found (fallback for unterminated values). When
       // a stop char exists, respect its position even
@@ -668,6 +719,7 @@ export const processTriggerMatches = (
       fullText,
       triggerEnd,
       rule.strategy,
+      rule.label,
     );
     const value = rawValue
       ? stripQuotes(rawValue)

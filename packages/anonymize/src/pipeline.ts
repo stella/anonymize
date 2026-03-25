@@ -149,6 +149,32 @@ export type NerInferenceFn = (
   signal?: AbortSignal,
 ) => Promise<Entity[]>;
 
+/**
+ * Extend monetary amount entities to include a trailing
+ * "(slovy ...)" or "(slovně ...)" parenthetical that
+ * spells out the amount in words. Common in Czech legal
+ * documents, e.g. "1 529,-Kč (slovy jeden-tisíc)".
+ */
+const SLOVNE_RE =
+  /^[^\S\n]*\((?:slovy|slovně)[^\S\n][^)\n]{1,80}\)/i;
+
+const extendMonetarySlovne = (
+  entities: Entity[],
+  fullText: string,
+): Entity[] =>
+  entities.map((e) => {
+    if (e.label !== "monetary amount") return e;
+    const after = fullText.slice(e.end);
+    const m = SLOVNE_RE.exec(after);
+    if (!m) return e;
+    const newEnd = e.end + m[0].length;
+    return {
+      ...e,
+      end: newEnd,
+      text: fullText.slice(e.start, newEnd),
+    };
+  });
+
 const checkAbort = (signal?: AbortSignal): void => {
   if (signal?.aborted) {
     throw new DOMException(
@@ -570,16 +596,26 @@ export const runPipeline = async (
   const rawMerged = mergeAndDedup(allEntities);
   log("merge", `${rawMerged.length} after dedup`);
 
-  // Boundary consistency (merge adjacent, fix partial
-  // words, remove nested same-label)
-  const consistent = enforceBoundaryConsistency(
+  // Extend monetary amounts to include trailing
+  // "(slovy ...)" or "(slovně ...)" parentheticals.
+  // Runs after dedup so each monetary span is unique,
+  // preventing duplicate extensions from clobbering
+  // unrelated entities between e.end and newEnd.
+  const mergedExtended = extendMonetarySlovne(
     rawMerged,
     fullText,
   );
-  if (consistent.length < rawMerged.length)
+
+  // Boundary consistency (merge adjacent, fix partial
+  // words, remove nested same-label)
+  const consistent = enforceBoundaryConsistency(
+    mergedExtended,
+    fullText,
+  );
+  if (consistent.length < mergedExtended.length)
     log(
       "boundary",
-      `${rawMerged.length - consistent.length} consolidated`,
+      `${mergedExtended.length - consistent.length} consolidated`,
     );
 
   // False-positive filtering
