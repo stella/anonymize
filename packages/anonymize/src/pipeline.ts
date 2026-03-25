@@ -149,6 +149,32 @@ export type NerInferenceFn = (
   signal?: AbortSignal,
 ) => Promise<Entity[]>;
 
+/**
+ * Extend monetary amount entities to include a trailing
+ * "(slovy ...)" or "(slovně ...)" parenthetical that
+ * spells out the amount in words. Common in Czech legal
+ * documents, e.g. "1 529,-Kč (slovy jeden-tisíc)".
+ */
+const SLOVNE_RE =
+  /^[\s]*\((?:slovy|slovně)\s[^)]{1,80}\)/i;
+
+const extendMonetarySlovne = (
+  entities: Entity[],
+  fullText: string,
+): Entity[] =>
+  entities.map((e) => {
+    if (e.label !== "monetary amount") return e;
+    const after = fullText.slice(e.end);
+    const m = SLOVNE_RE.exec(after);
+    if (!m) return e;
+    const newEnd = e.end + m[0].length;
+    return {
+      ...e,
+      end: newEnd,
+      text: fullText.slice(e.start, newEnd),
+    };
+  });
+
 const checkAbort = (signal?: AbortSignal): void => {
   if (signal?.aborted) {
     throw new DOMException(
@@ -565,6 +591,13 @@ export const runPipeline = async (
     allEntities = [...allEntities, ...orphanStreets];
     log("orphan-streets", `${orphanStreets.length} header street lines`);
   }
+
+  // Extend monetary amounts to include trailing
+  // "(slovy ...)" or "(slovně ...)" parentheticals.
+  allEntities = extendMonetarySlovne(
+    allEntities,
+    fullText,
+  );
 
   // Merge + dedup
   const rawMerged = mergeAndDedup(allEntities);

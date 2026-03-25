@@ -210,9 +210,12 @@ export const processLegalFormMatches = (
         /[^a-zA-ZÀ-ž]/g,
         "",
       );
+      const upperCount = [...lineLetters].filter(
+        (c) => c === c.toUpperCase(),
+      ).length;
       const lineIsAllCaps =
         lineLetters.length > 5 &&
-        lineLetters === lineLetters.toUpperCase();
+        upperCount / lineLetters.length >= 0.9;
       if (lineIsAllCaps) {
         // Entire line is all-caps → heading, skip
         continue;

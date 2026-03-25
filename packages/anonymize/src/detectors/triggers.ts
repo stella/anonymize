@@ -8,11 +8,30 @@ import type {
   TriggerRule,
   TriggerValidation,
 } from "../types";
+import { POST_NOMINALS } from "../config/titles";
 import { loadLanguageConfigs } from "../util/lang-loader";
 
 const TRIGGER_SCORE = 0.95;
 const WHITESPACE_RE = /\s+/;
 const LETTER_RE = /\p{L}/u;
+
+/**
+ * Post-nominal degree regex. When a comma-stop is
+ * followed by a known post-nominal (Ph.D., CSc., MBA
+ * etc.), skip the comma and degree, then continue.
+ */
+const POST_NOMINAL_RE = new RegExp(
+  `^,\\s*(?:${POST_NOMINALS.toSorted(
+    (a, b) => b.length - a.length,
+  )
+    .map((d) =>
+      d
+        .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+        .replace(/\\\./g, "\\.\\s*"),
+    )
+    .join("|")})\\.?`,
+  "i",
+);
 
 // Definitive legal form suffixes (case-sensitive).
 // When a person-labeled trigger captures text containing
@@ -353,16 +372,41 @@ const extractValue = (
       // Parens mark defined-term clauses in legal text
       // (e.g., "(dále jen ...)") and should not be
       // captured as part of a name/address.
-      const STOP_CHARS = [",", "\n", "(", "\t"];
-      let end = valueText.length;
+      // When a comma is followed by a known post-nominal
+      // degree (Ph.D., CSc., MBA), skip it and continue
+      // so "RNDr. Filipem Hartvichem, Ph.D., CSc."
+      // captures the full name with degrees.
+      const STOP_CHARS = ["\n", "(", "\t"];
+      let end = 0;
       let foundStop = false;
-      for (const ch of STOP_CHARS) {
-        const idx = valueText.indexOf(ch);
-        if (idx !== -1 && idx < end) {
-          end = idx;
+
+      while (end < valueText.length) {
+        const ch = valueText[end];
+        // Hard stops: newline, paren, tab
+        if (
+          ch !== undefined &&
+          STOP_CHARS.includes(ch)
+        ) {
           foundStop = true;
+          break;
         }
+        // Comma: check if followed by post-nominal
+        if (ch === ",") {
+          const afterComma = valueText.slice(end);
+          const degreeMatch =
+            POST_NOMINAL_RE.exec(afterComma);
+          if (degreeMatch) {
+            // Skip the comma + degree, continue scan
+            end += degreeMatch[0].length;
+            continue;
+          }
+          // Regular comma — stop here
+          foundStop = true;
+          break;
+        }
+        end++;
       }
+
       // Only cap at 100 chars when no stop char was
       // found (fallback for unterminated values). When
       // a stop char exists, respect its position even

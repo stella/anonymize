@@ -5,6 +5,12 @@ import { defaultContext } from "../context";
 const TEMPLATE_PLACEHOLDER_RE =
   /^(?:\.{3,}|_{3,}|\[[\w\s]+\]|\{[\w\s]+\})$/;
 
+// Patterns that indicate a genuine address (not prose).
+const POSTAL_CODE_RE = /\d{3}\s?\d{2}/;
+const HAS_DIGIT_RE = /\d/;
+const ADDRESS_COMPONENTS_RE =
+  /(?:^|\s)(?:ul\.|ulice|nám\.|náměstí|tř\.|třída|nábř\.|nábřeží|č\.p\.|č\.ev\.|č\.|sídliště|bulvár)\b/i;
+
 // Max entity text length by label. Prevents runaway
 // trigger extractions (e.g., "město Dobříš i okolních
 // obcí...") from producing absurdly long entities.
@@ -113,8 +119,22 @@ export const filterFalsePositives = (
     }
 
     if (
-      (entity.label === "person" || entity.label === "organization") &&
+      (entity.label === "person" ||
+        entity.label === "organization") &&
       roles.has(trimmed.toLowerCase())
+    ) {
+      continue;
+    }
+
+    // Reject long address entities that look like prose:
+    // no digits, no postal code, no known address
+    // component (street abbreviations, etc.).
+    if (
+      entity.label === "address" &&
+      trimmed.length > 40 &&
+      !HAS_DIGIT_RE.test(trimmed) &&
+      !POSTAL_CODE_RE.test(trimmed) &&
+      !ADDRESS_COMPONENTS_RE.test(trimmed)
     ) {
       continue;
     }

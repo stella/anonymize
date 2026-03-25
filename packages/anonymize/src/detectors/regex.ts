@@ -371,10 +371,26 @@ const INTL_PHONE: RegexDef = {
 
 const CZ_PHONE: RegexDef = {
   pattern:
-    `\\b[67]\\d{2}(?:[^\\S\\n]|[.\\-])?\\d{3}(?:[^\\S\\n]|[.\\-])?\\d{3}` +
+    `\\b[2-7]\\d{2}(?:[^\\S\\n]|[.\\-])?\\d{3}` +
+    `(?:[^\\S\\n]|[.\\-])?\\d{3}` +
     `(?!(?:[^\\S\\n]|[.\\-])?\\d*/\\d)\\b`,
   label: "phone number",
   score: 0.9,
+};
+
+/**
+ * Phone numbers prefixed with "tel.:" or "telefon:".
+ * Captures the number after the prefix, including
+ * optional international code (+420).
+ */
+const TEL_PREFIX_PHONE: RegexDef = {
+  pattern:
+    `(?:tel(?:efon)?\\.?\\s*:?\\s*)` +
+    `(?:\\+?\\d{1,3}[^\\S\\n]?)?` +
+    `\\d{3}(?:[^\\S\\n]|[.\\-])?\\d{3}` +
+    `(?:[^\\S\\n]|[.\\-])?\\d{3}\\b`,
+  label: "phone number",
+  score: 0.95,
 };
 
 const CREDIT_CARD: RegexDef = {
@@ -559,6 +575,7 @@ const ALL_REGEX_DEFS: readonly RegexDef[] = [
   EMAIL,
   INTL_PHONE,
   CZ_PHONE,
+  TEL_PREFIX_PHONE,
   CREDIT_CARD,
   CZ_BIRTH_NUMBER,
   DATE_NUMERIC,
