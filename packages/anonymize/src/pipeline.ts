@@ -188,13 +188,13 @@ const getAmountWordsRe = async (): Promise<RegExp> => {
       .map(escapeRegex)
       .join("|");
     amountWordsRe = new RegExp(
-      `^[^\\S\\n]*(\\((?:${alt})\\s[^)\\n]{1,80}\\))`,
+      `^[,;]?[^\\S\\n]*(\\((?:${alt})[:\\s][^)\\n]{1,120}\\))`,
       "i",
     );
   } catch {
     // Fallback: original Czech-only pattern
     amountWordsRe =
-      /^[^\S\n]*(\((?:slovy|slovně)\s[^)\n]{1,80}\))/i;
+      /^[,;]?[^\S\n]*(\((?:slovy|slovně)[:\s][^)\n]{1,120}\))/i;
   }
   amountWordsLoaded = true;
   return amountWordsRe;

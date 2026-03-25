@@ -145,7 +145,10 @@
       "obce",
       "obcí"
     ],
-    "extensions": ["add-trailing-space"]
+    "extensions": ["add-trailing-space"],
+    "validations": [
+      { "type": "starts-uppercase" }
+    ]
   },
   {
     "id": "cs-organization-institutions",
