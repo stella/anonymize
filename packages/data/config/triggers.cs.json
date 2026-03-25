@@ -340,23 +340,34 @@
     ]
   },
   {
-    "id": "soudy",
+    "id": "soudy-nominative",
     "triggers": [
       "krajský soud",
-      "krajského soudu",
       "okresní soud",
-      "okresního soudu",
       "městský soud",
-      "městského soudu",
       "nejvyšší soud",
-      "nejvyššího soudu",
       "ústavní soud",
-      "ústavního soudu",
-      "obvodní soud",
-      "obvodního soudu"
+      "obvodní soud"
     ],
     "label": "organization",
     "strategy": { "type": "to-next-comma" },
     "extensions": []
+  },
+  {
+    "id": "soudy-genitive",
+    "triggers": [
+      "krajského soudu",
+      "okresního soudu",
+      "městského soudu",
+      "nejvyššího soudu",
+      "ústavního soudu",
+      "obvodního soudu"
+    ],
+    "label": "organization",
+    "strategy": { "type": "to-next-comma" },
+    "extensions": [],
+    "validations": [
+      { "type": "starts-uppercase" }
+    ]
   }
 ]
