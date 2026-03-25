@@ -239,32 +239,28 @@ export const processLegalFormMatches = (
 
     // Reject Roman numeral suffixes
     const lastSpace = text.lastIndexOf(" ");
-    const suffix =
+    const rawSuffix =
       lastSpace !== -1
-        ? text
-            .slice(lastSpace + 1)
-            .replace(/[.,]/g, "")
+        ? text.slice(lastSpace + 1)
         : "";
+    const suffixClean = rawSuffix.replace(/[.,]/g, "");
     if (
-      suffix.length > 0 &&
-      ROMAN_NUMERAL_RE.test(suffix)
+      suffixClean.length > 0 &&
+      ROMAN_NUMERAL_RE.test(suffixClean)
     ) {
       continue;
     }
 
     // Short ASCII-only suffixes (NA, PA, LP, PC) are
     // US-specific. Reject if the prefix contains non-
-    // ASCII chars (Czech diacritics) — a US legal
-    // entity wouldn't have "ÚČASTI MSP NA".
-    // Use the raw suffix from the match text (before
-    // dot-stripping) to distinguish "NA" from "a.s."
-    const rawSuffix = lastSpace !== -1
-      ? text.slice(lastSpace + 1)
-      : "";
-    const hasDotInSuffix = rawSuffix.includes(".");
+    // ASCII chars (Czech/Slovak diacritics) — a US
+    // legal entity wouldn't have "ÚČASTI MSP NA".
+    // Test for dots in the raw suffix (before dot
+    // stripping) to protect Czech dotted forms like
+    // "a.s." and "k.s.".
     if (
-      suffix.length <= 2 &&
-      !hasDotInSuffix &&
+      suffixClean.length <= 2 &&
+      !/\./.test(rawSuffix) &&
       /[^\x00-\x7F]/.test(
         text.slice(
           0,

@@ -131,6 +131,56 @@ describe("NA legal form with non-ASCII prefix", () => {
   });
 });
 
+describe("NA filter does not reject dotted Czech forms", () => {
+  // Unit-level test for processLegalFormMatches:
+  // the NA/PA short-suffix filter must not reject
+  // dotted Czech forms (a.s., k.s.) even when the
+  // prefix contains diacritics.
+  test("keeps a.s. with diacritics via processLegalFormMatches", () => {
+    const { processLegalFormMatches } = require(
+      "../detectors/legal-forms",
+    );
+    const fullText =
+      "podepsaná Čistá Energie a.s. dne 1. 1. 2020";
+    // Simulate a regex match for "Čistá Energie a.s."
+    const fakeMatch = {
+      pattern: 0,
+      start: 10,
+      end: 28,
+      text: "Čistá Energie a.s.",
+    };
+    const results = processLegalFormMatches(
+      [fakeMatch],
+      0,
+      1,
+      fullText,
+    );
+    expect(results.length).toBe(1);
+    expect(results[0]!.text).toBe("Čistá Energie a.s.");
+  });
+
+  test("rejects NA with diacritics prefix", () => {
+    const { processLegalFormMatches } = require(
+      "../detectors/legal-forms",
+    );
+    const fullText =
+      "PODPORA ÚČASTI MSP NA VELETRZÍCH";
+    const fakeMatch = {
+      pattern: 0,
+      start: 8,
+      end: 21,
+      text: "ÚČASTI MSP NA",
+    };
+    const results = processLegalFormMatches(
+      [fakeMatch],
+      0,
+      1,
+      fullText,
+    );
+    expect(results.length).toBe(0);
+  });
+});
+
 describe("V preposition in address", () => {
   test("includes V at start of address", async () => {
     const entities = await detect(
