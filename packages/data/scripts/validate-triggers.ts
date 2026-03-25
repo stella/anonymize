@@ -161,6 +161,19 @@ const validateFile = async (
             `n-words strategy requires count >= 1`,
         });
       }
+      if (
+        s.type === "address" &&
+        s.maxChars !== undefined &&
+        (typeof s.maxChars !== "number" ||
+          s.maxChars < 1)
+      ) {
+        errors.push({
+          file: fileName,
+          groupIndex: i,
+          message:
+            `address strategy maxChars must be >= 1`,
+        });
+      }
     }
 
     // Optional: extensions

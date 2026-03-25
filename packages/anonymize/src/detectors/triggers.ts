@@ -140,6 +140,12 @@ const applyValidations = (
       case "matches-pattern":
         if (!v.re.test(text)) return false;
         break;
+      default: {
+        const _exhaustive: never = v;
+        throw new Error(
+          `Unknown compiled validation type: ${JSON.stringify(_exhaustive)}`,
+        );
+      }
     }
   }
   return true;
@@ -438,6 +444,7 @@ const extractValue = (
           break;
         }
         const wIdx = cellText.indexOf(w, searchPos);
+        if (wIdx === -1) break;
         actualEnd = wIdx + w.length;
         searchPos = actualEnd;
       }
