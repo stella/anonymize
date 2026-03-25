@@ -97,10 +97,14 @@ const compileValidations = (
       case "matches-pattern":
         return {
           type: "matches-pattern",
-          re: new RegExp(v.pattern, v.flags),
+          // Strip g/y flags: the compiled regex is shared
+          // across all rules in the group and must be
+          // stateless (no lastIndex advancement).
+          re: new RegExp(
+            v.pattern,
+            (v.flags ?? "").replace(/[gy]/g, ""),
+          ),
         };
-      case "not-in-stopwords":
-        return { type: "not-in-stopwords" };
     }
   });
 
@@ -127,14 +131,6 @@ const applyValidations = (
         break;
       case "matches-pattern":
         if (!v.re.test(text)) return false;
-        break;
-      case "not-in-stopwords":
-        // TODO: needs stopword set from context.
-        // Warn so usage is not silently ignored.
-        console.warn(
-          "[anonymize] not-in-stopwords validation" +
-            " is not yet implemented; skipping",
-        );
         break;
     }
   }

@@ -92,7 +92,6 @@ export type TriggerValidation =
       pattern: string;
       flags?: string;
     }
-  | { type: "not-in-stopwords" };
 
 /** Auto-generated trigger variants — closed set. */
 export type TriggerExtension =
@@ -118,8 +117,7 @@ export type CompiledValidation =
   | { type: "max-length"; max: number }
   | { type: "no-digits"; re: RegExp }
   | { type: "has-digits"; re: RegExp }
-  | { type: "matches-pattern"; re: RegExp }
-  | { type: "not-in-stopwords" };
+  | { type: "matches-pattern"; re: RegExp };
 
 /**
  * Runtime rule — one per trigger string after

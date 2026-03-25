@@ -24,7 +24,6 @@ const VALID_VALIDATION_TYPES = new Set([
   "no-digits",
   "has-digits",
   "matches-pattern",
-  "not-in-stopwords",
 ]);
 
 const VALID_EXTENSIONS = new Set([
@@ -231,13 +230,22 @@ const validateFile = async (
                   `"pattern" string`,
               });
             } else {
+              const flags =
+                typeof v.flags === "string"
+                  ? v.flags
+                  : "";
+              if (/[gy]/.test(flags)) {
+                errors.push({
+                  file: fileName,
+                  groupIndex: i,
+                  message:
+                    `matches-pattern: "g" and "y" ` +
+                    `flags are not allowed (regex ` +
+                    `is shared and stateful)`,
+                });
+              }
               try {
-                new RegExp(
-                  v.pattern,
-                  typeof v.flags === "string"
-                    ? v.flags
-                    : undefined,
-                );
+                new RegExp(v.pattern, flags || undefined);
               } catch {
                 errors.push({
                   file: fileName,

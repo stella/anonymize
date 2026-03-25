@@ -468,18 +468,29 @@ const URL: RegexDef = {
 // Bare domain: no protocol/www prefix, ends with a
 // known TLD. Catches "fondkinematografie.cz" etc.
 // Uses [a-zA-Z0-9] (no underscores — invalid in
-// hostnames) and requires at least one subdomain dot
-// to reduce false positives with short ambiguous
-// TLDs (de, at, no, se, fi, dk, be).
-const COMMON_TLDS =
-  "com|org|net|eu|cz|sk|de|at|pl|hu|ro|fr|es|it" +
-  "|co\\.uk|uk|nl|be|se|fi|dk|no|ch|info|io|dev";
+// hostnames). Short ambiguous TLDs (de, at, no, se,
+// fi, dk, be, it, uk) require at least one subdomain
+// dot to reduce false positives in European legal
+// text; unambiguous TLDs allow bare second-level
+// domains (e.g., "fondkinematografie.cz").
+const LONG_TLDS =
+  "com|org|net|eu|cz|sk|pl|hu|ro|fr|es" +
+  "|co\\.uk|nl|ch|info|io|dev";
+const SHORT_TLDS = "de|at|be|se|fi|dk|no|it|uk";
+const HOST_LABEL =
+  `[a-zA-Z0-9][a-zA-Z0-9\\-]*`;
+const BARE_HOST = `\\b[a-zA-Z0-9][a-zA-Z0-9\\-]{2,}`;
+const PATH_SUFFIX =
+  `(?:[/?#][^\\s)\\]>]*[^\\s.,;:!?)\\]>])?`;
 const BARE_DOMAIN: RegexDef = {
   pattern:
-    `\\b[a-zA-Z0-9][a-zA-Z0-9\\-]{2,}` +
-    `(?:\\.[a-zA-Z0-9][a-zA-Z0-9\\-]*)+` +
-    `\\.(?:${COMMON_TLDS})\\b` +
-    `(?:[/?#][^\\s)\\]>]*[^\\s.,;:!?)\\]>])?`,
+    // Unambiguous TLDs: bare SLDs ok (one dot)
+    `${BARE_HOST}(?:\\.${HOST_LABEL})*` +
+    `\\.(?:${LONG_TLDS})\\b${PATH_SUFFIX}` +
+    `|` +
+    // Short/ambiguous TLDs: require subdomain (two+ dots)
+    `${BARE_HOST}(?:\\.${HOST_LABEL})+` +
+    `\\.(?:${SHORT_TLDS})\\b${PATH_SUFFIX}`,
   label: "url",
   score: 0.9,
 };
