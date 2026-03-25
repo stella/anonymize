@@ -1,116 +1,52 @@
 [
   {
+    "id": "it-address",
     "label": "address",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "con sede in"
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "con sede in",
+      "domiciliata in",
+      "domiciliato in",
+      "nata a",
+      "nato a",
+      "residente a",
+      "residente in"
+    ]
   },
   {
-    "label": "address",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "domiciliata in"
-  },
-  {
-    "label": "address",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "domiciliato in"
-  },
-  {
-    "label": "address",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "nata a"
-  },
-  {
-    "label": "address",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "nato a"
-  },
-  {
-    "label": "address",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "residente a"
-  },
-  {
-    "label": "address",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "residente in"
-  },
-  {
+    "id": "it-date-of-birth",
     "label": "date of birth",
     "strategy": {
-      "count": 4,
-      "type": "n-words"
+      "type": "n-words",
+      "count": 4
     },
-    "trigger": "nata il"
+    "triggers": [
+      "nata il",
+      "nato il"
+    ]
   },
   {
-    "label": "date of birth",
-    "strategy": {
-      "count": 4,
-      "type": "n-words"
-    },
-    "trigger": "nato il"
-  },
-  {
+    "id": "it-person",
     "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "nella persona di"
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "nella persona di",
+      "rappresentata da",
+      "rappresentato da"
+    ],
+    "validations": [
+      { "type": "starts-uppercase" }
+    ]
   },
   {
-    "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "rappresentata da"
-  },
-  {
-    "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "rappresentato da"
-  },
-  {
+    "id": "it-tax-id",
     "label": "tax identification number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "C.F."
-  },
-  {
-    "label": "tax identification number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "P.IVA"
-  },
-  {
-    "label": "tax identification number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "codice fiscale"
-  },
-  {
-    "label": "tax identification number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "partita IVA"
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "C.F.",
+      "P.IVA",
+      "codice fiscale",
+      "partita IVA"
+    ]
   }
 ]

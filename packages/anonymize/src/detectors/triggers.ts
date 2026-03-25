@@ -1,38 +1,61 @@
 import type { Match } from "@stll/text-search";
 
 import { DETECTION_SOURCES } from "../types";
-import type { Entity, TriggerRule } from "../types";
-import {
-  loadLanguageConfigs,
-} from "../util/lang-loader";
+import type {
+  CompiledValidation,
+  Entity,
+  TriggerGroupConfig,
+  TriggerRule,
+  TriggerValidation,
+} from "../types";
+import { loadLanguageConfigs } from "../util/lang-loader";
 
 const TRIGGER_SCORE = 0.95;
 const WHITESPACE_RE = /\s+/;
 const LETTER_RE = /\p{L}/u;
-const UPPERCASE_START_RE = /^\p{Lu}/u;
-const DATOVA_SCHRANKA_RE = /^[a-z0-9]{7}$/i;
 
-// Definitive legal form suffixes. When a person-labeled
-// trigger captures text containing one of these, the
-// entity is reclassified as "organization". Case-insensitive.
 // Definitive legal form suffixes (case-sensitive).
-// No "i" flag: short uppercase-only forms (SE, SA, AG)
-// must NOT match Czech/Slovak reflexive pronouns "se",
-// "sa" which appear in person-trigger captures like
+// When a person-labeled trigger captures text containing
+// one of these, the entity is reclassified as
+// "organization". No "i" flag: short uppercase-only
+// forms (SE, SA, AG) must NOT match Czech/Slovak
+// reflexive pronouns "se", "sa" which appear in
+// person-trigger captures like
 // "Ing. Jan Novák, se sídlem...".
 const DEFINITIVE_LEGAL_FORMS = [
-  "s.r.o.", "s. r. o.", "spol. s r.o.",
-  "a.s.", "a. s.",
-  "v.o.s.", "v. o. s.",
-  "k.s.", "k. s.",
-  "z.s.", "z. s.",
-  "z.ú.", "z. ú.",
-  "o.p.s.", "o. p. s.",
-  "s.p.", "s. p.",
-  "GmbH", "AG", "SE", "KG", "OHG",
-  "Ltd.", "Ltd", "LLC", "LLP", "Inc.",
-  "S.A.", "SA", "SAS", "SARL",
-  "Sp. z o.o.", "S.p.A.",
+  "s.r.o.",
+  "s. r. o.",
+  "spol. s r.o.",
+  "a.s.",
+  "a. s.",
+  "v.o.s.",
+  "v. o. s.",
+  "k.s.",
+  "k. s.",
+  "z.s.",
+  "z. s.",
+  "z.ú.",
+  "z. ú.",
+  "o.p.s.",
+  "o. p. s.",
+  "s.p.",
+  "s. p.",
+  "GmbH",
+  "AG",
+  "SE",
+  "KG",
+  "OHG",
+  "Ltd.",
+  "Ltd",
+  "LLC",
+  "LLP",
+  "Inc.",
+  "S.A.",
+  "SA",
+  "SAS",
+  "SARL",
+  "Sp. z o.o.",
+  "S.p.A.",
 ];
 // Build case-sensitive regex. Short dot-free forms
 // (AG, SE, KG) get word boundaries to prevent substring
@@ -51,20 +74,140 @@ const LEGAL_FORM_CHECK_RE = new RegExp(
   }).join("|"),
 );
 
-type TriggerConfigRow = {
-  trigger: string;
-  label: string;
-  strategy: TriggerRule["strategy"];
+// ── Validation compilation ─────────────────────────
+
+const compileValidations = (
+  validations: TriggerValidation[],
+): CompiledValidation[] =>
+  validations.map((v): CompiledValidation => {
+    switch (v.type) {
+      case "starts-uppercase":
+        return {
+          type: "starts-uppercase",
+          re: /^\p{Lu}/u,
+        };
+      case "min-length":
+        return { type: "min-length", min: v.min };
+      case "max-length":
+        return { type: "max-length", max: v.max };
+      case "no-digits":
+        return { type: "no-digits", re: /\d/ };
+      case "has-digits":
+        return { type: "has-digits", re: /\d/ };
+      case "matches-pattern":
+        return {
+          type: "matches-pattern",
+          // Strip g/y flags: the compiled regex is shared
+          // across all rules in the group and must be
+          // stateless (no lastIndex advancement).
+          re: new RegExp(
+            v.pattern,
+            (v.flags ?? "").replace(/[gy]/g, ""),
+          ),
+        };
+      default: {
+        // TriggerValidation is a public export; custom
+        // configs may bypass the build-time validator.
+        const _exhaustive: never = v;
+        throw new Error(
+          `Unknown validation type: ${JSON.stringify(_exhaustive)}`,
+        );
+      }
+    }
+  });
+
+const applyValidations = (
+  text: string,
+  validations: CompiledValidation[],
+): boolean => {
+  for (const v of validations) {
+    switch (v.type) {
+      case "starts-uppercase":
+        if (!v.re.test(text)) return false;
+        break;
+      case "min-length":
+        if (text.length < v.min) return false;
+        break;
+      case "max-length":
+        if (text.length > v.max) return false;
+        break;
+      case "no-digits":
+        if (v.re.test(text)) return false;
+        break;
+      case "has-digits":
+        if (!v.re.test(text)) return false;
+        break;
+      case "matches-pattern":
+        if (!v.re.test(text)) return false;
+        break;
+      default: {
+        const _exhaustive: never = v;
+        throw new Error(
+          `Unknown compiled validation type: ${JSON.stringify(_exhaustive)}`,
+        );
+      }
+    }
+  }
+  return true;
 };
 
-const mapConfig = (
-  rows: readonly TriggerConfigRow[],
-): readonly TriggerRule[] =>
-  rows.map((row) => ({
-    trigger: row.trigger,
-    label: row.label,
-    strategy: row.strategy,
-  }));
+// ── Trigger expansion ──────────────────────────────
+
+const expandTriggerGroups = (
+  groups: TriggerGroupConfig[],
+): TriggerRule[] => {
+  const rules: TriggerRule[] = [];
+  for (const group of groups) {
+    const extensions = group.extensions ?? [];
+    const compiled = compileValidations(
+      group.validations ?? [],
+    );
+
+    // Generate trigger variants from the original
+    // trigger strings. Extensions are applied once to
+    // the base set only (not combinatorially); e.g.,
+    // ["add-colon", "normalize-spaces"] produces
+    // "trigger:", "trigger\u00A0", but NOT
+    // "trigger\u00A0:". This is intentional to avoid
+    // exponential variant growth.
+    const allTriggers = new Set(group.triggers);
+    for (const trigger of group.triggers) {
+      if (
+        extensions.includes("add-colon") &&
+        !trigger.endsWith(":")
+      )
+        allTriggers.add(`${trigger}:`);
+      if (
+        extensions.includes("add-trailing-space") &&
+        !trigger.endsWith(" ")
+      )
+        allTriggers.add(`${trigger} `);
+      if (
+        extensions.includes("add-colon-space") &&
+        !trigger.endsWith(": ") &&
+        !trigger.endsWith(":")
+      )
+        allTriggers.add(`${trigger}: `);
+      if (extensions.includes("normalize-spaces")) {
+        if (trigger.includes(" ")) {
+          allTriggers.add(
+            trigger.replace(/ /g, "\u00A0"),
+          );
+        }
+      }
+    }
+
+    for (const trigger of allTriggers) {
+      rules.push({
+        trigger,
+        label: group.label,
+        strategy: group.strategy,
+        validations: compiled,
+      });
+    }
+  }
+  return rules;
+};
 
 // ── Pattern builder for unified search ──────────────
 
@@ -79,37 +222,76 @@ export const buildTriggerPatterns = async (): Promise<{
 }> => {
   const rules: TriggerRule[] = [];
 
-  const allRows = await loadLanguageConfigs<
-    readonly TriggerConfigRow[]
+  const allGroups = await loadLanguageConfigs<
+    readonly TriggerGroupConfig[]
   >(
     "triggers",
     (mod) => {
       // eslint-disable-next-line no-unsafe-type-assertion -- JSON config
       const m = mod as {
-        default?: readonly TriggerConfigRow[];
+        default?: readonly TriggerGroupConfig[];
       };
       // eslint-disable-next-line no-unsafe-type-assertion -- JSON config
       return (m.default ?? mod) as
-        readonly TriggerConfigRow[];
+        readonly TriggerGroupConfig[];
     },
   );
-  for (const rows of allRows) {
-    if (!Array.isArray(rows)) {
+  for (const groups of allGroups) {
+    if (!Array.isArray(groups)) {
       console.warn(
         "[anonymize] triggers: unexpected " +
           "config shape, skipping",
       );
       continue;
     }
-    rules.push(...mapConfig(rows));
+    rules.push(
+      ...expandTriggerGroups(
+        groups as TriggerGroupConfig[],
+      ),
+    );
+  }
+
+  // Warn about cross-group trigger duplicates.
+  // Duplicates cause redundant AC matches but are
+  // not fatal (mergeAndDedup handles overlap).
+  const seen = new Map<
+    string,
+    { label: string; strategy: string }
+  >();
+  for (const rule of rules) {
+    const key = rule.trigger.toLowerCase();
+    const prev = seen.get(key);
+    if (prev !== undefined) {
+      const labelDiff = prev.label !== rule.label;
+      const stratDiff =
+        prev.strategy !== rule.strategy.type;
+      if (labelDiff || stratDiff) {
+        console.warn(
+          `[anonymize] duplicate trigger` +
+            ` "${rule.trigger}":` +
+            (labelDiff
+              ? ` labels "${prev.label}" vs` +
+                ` "${rule.label}"`
+              : "") +
+            (stratDiff
+              ? ` strategies "${prev.strategy}" vs` +
+                ` "${rule.strategy.type}"`
+              : ""),
+        );
+      }
+    }
+    seen.set(key, {
+      label: rule.label,
+      strategy: rule.strategy.type,
+    });
   }
 
   // Build patterns from lowercased trigger strings.
   // rules[i] corresponds to patterns[i].
   // Plain lowercased strings — the unified builder
   // sets caseInsensitive globally on the AC.
-  const patterns: string[] = rules.map(
-    (r) => r.trigger.toLowerCase(),
+  const patterns: string[] = rules.map((r) =>
+    r.trigger.toLowerCase(),
   );
 
   return { patterns, rules };
@@ -181,9 +363,10 @@ const extractValue = (
           foundStop = true;
         }
       }
-      // Only cap at 100 chars when no stop char was found
-      // (fallback for unterminated values). When a stop
-      // char exists, respect its position even if > 100.
+      // Only cap at 100 chars when no stop char was
+      // found (fallback for unterminated values). When
+      // a stop char exists, respect its position even
+      // if > 100.
       if (!foundStop) {
         end = Math.min(end, 100);
       }
@@ -261,6 +444,7 @@ const extractValue = (
           break;
         }
         const wIdx = cellText.indexOf(w, searchPos);
+        if (wIdx === -1) break;
         actualEnd = wIdx + w.length;
         searchPos = actualEnd;
       }
@@ -278,26 +462,24 @@ const extractValue = (
       // keyword and value (e.g., "IČO: 12345678" or
       // "IČO 12345678", but not "IČO12345678").
       const raw = text.slice(triggerEnd);
-      const sepMatch =
-        /^(?:\s*:\s*|\s+)/.exec(raw);
+      const sepMatch = /^(?:\s*:\s*|\s+)/.exec(raw);
       if (!sepMatch) {
         return null;
       }
       const afterSep = raw.slice(sepMatch[0].length);
       const idMatch =
-        /^[A-Z]{0,6}\s?\d[\d\s\-/]{4,}/i.exec(
-          afterSep,
-        );
+        /^[A-Z]{0,6}\s?\d[\d\s\-/]{4,}/i.exec(afterSep);
       if (!idMatch) {
         return null;
       }
       const idText = idMatch[0].trim();
-      const leadingSpaces = idMatch[0].length -
+      const leadingSpaces =
+        idMatch[0].length -
         idMatch[0].trimStart().length;
-      const idStart = triggerEnd +
+      const idStart =
+        triggerEnd +
         sepMatch[0].length +
         // idMatch.index is always 0 (anchored ^ regex)
-
         leadingSpaces;
       return {
         start: idStart,
@@ -323,7 +505,11 @@ const extractValue = (
         const ch = valueText[end];
 
         // Hard stops: newline, tab, opening paren
-        if (ch === "\n" || ch === "\t" || ch === "(") {
+        if (
+          ch === "\n" ||
+          ch === "\t" ||
+          ch === "("
+        ) {
           break;
         }
 
@@ -391,6 +577,19 @@ const extractValue = (
         }
 
         end++;
+      }
+
+      // When the loop stopped at maxLen, trim back to
+      // the last word boundary so fixPartialWords does
+      // not extend the entity beyond the configured max.
+      if (end >= maxLen) {
+        const lastSpace = valueText.lastIndexOf(
+          " ",
+          end - 1,
+        );
+        if (lastSpace > 0) {
+          end = lastSpace;
+        }
       }
 
       const rawSlice = valueText.slice(0, end);
@@ -475,31 +674,21 @@ export const processTriggerMatches = (
       : null;
 
     if (value) {
-      // Person triggers require the captured value to
-      // start with an uppercase letter. This prevents
-      // false positives like "kontaktní osoba pro
-      // plnění této smlouvy :" from blindly anonymizing
-      // whatever follows.
+      // Apply declarative validations from config.
       if (
-        rule.label === "person" &&
-        !UPPERCASE_START_RE.test(value.text)
+        !applyValidations(
+          value.text,
+          rule.validations,
+        )
       ) {
         continue;
       }
 
-      // Datová schránka IDs are exactly 7 alphanumeric
-      // characters. Reject captures that don't match.
-      if (
-        rule.trigger.includes("schránka") &&
-        !DATOVA_SCHRANKA_RE.test(value.text)
-      ) {
-        continue;
-      }
-
-      // If a person trigger captured text containing a
-      // definitive legal form suffix (s.r.o., GmbH, etc.),
-      // reclassify as organization. "jednající: TSC
-      // Management, s.r.o." → organization, not person.
+      // Legal form reclassification: any person-labeled
+      // trigger whose captured text contains a definitive
+      // legal form suffix is reclassified as organization.
+      // This is universal — every person with a legal form
+      // is an organisation, no per-group config needed.
       const effectiveLabel =
         rule.label === "person" &&
         LEGAL_FORM_CHECK_RE.test(value.text)
@@ -518,4 +707,11 @@ export const processTriggerMatches = (
   }
 
   return results;
+};
+
+// Re-export for testing
+export {
+  expandTriggerGroups,
+  compileValidations,
+  applyValidations,
 };

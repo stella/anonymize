@@ -72,23 +72,63 @@ export type GazetteerEntry = {
   source: "manual" | "confirmed-from-model";
 };
 
-/**
- * Trigger phrase rule for Czech/German legal documents.
- * The trigger is a prefix; the value following it is
- * extracted as a PII entity.
- */
-export type TriggerRule = {
-  trigger: string;
-  label: string;
-  strategy: TriggerExtractionStrategy;
-};
-
-type TriggerExtractionStrategy =
+/** Extraction strategy — closed discriminated union. */
+export type TriggerStrategy =
   | { type: "to-next-comma" }
   | { type: "to-end-of-line" }
   | { type: "n-words"; count: number }
   | { type: "company-id-value" }
   | { type: "address"; maxChars?: number };
+
+/** Validation rules — closed discriminated union. */
+export type TriggerValidation =
+  | { type: "starts-uppercase" }
+  | { type: "min-length"; min: number }
+  | { type: "max-length"; max: number }
+  | { type: "no-digits" }
+  | { type: "has-digits" }
+  | {
+      type: "matches-pattern";
+      pattern: string;
+      flags?: string;
+    };
+
+/** Auto-generated trigger variants — closed set. */
+export type TriggerExtension =
+  | "add-colon"
+  | "add-trailing-space"
+  | "add-colon-space"
+  | "normalize-spaces";
+
+/** V2 trigger config entry (JSON shape). */
+export type TriggerGroupConfig = {
+  id?: string;
+  triggers: string[];
+  label: string;
+  strategy: TriggerStrategy;
+  extensions?: TriggerExtension[];
+  validations?: TriggerValidation[];
+};
+
+/** Compiled validation with pre-built regex. */
+export type CompiledValidation =
+  | { type: "starts-uppercase"; re: RegExp }
+  | { type: "min-length"; min: number }
+  | { type: "max-length"; max: number }
+  | { type: "no-digits"; re: RegExp }
+  | { type: "has-digits"; re: RegExp }
+  | { type: "matches-pattern"; re: RegExp };
+
+/**
+ * Runtime rule — one per trigger string after
+ * expansion. Fed to the Aho-Corasick automaton.
+ */
+export type TriggerRule = {
+  trigger: string;
+  label: string;
+  strategy: TriggerStrategy;
+  validations: CompiledValidation[];
+};
 
 /**
  * Anonymisation operator types. Each operator defines

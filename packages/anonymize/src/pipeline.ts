@@ -627,7 +627,8 @@ export const runPipeline = async (
     }
   }
 
-  // Re-sanitize: enforceBoundaryConsistency may expand
-  // spans to include leading/trailing whitespace.
+  // Re-sanitize: enforceBoundaryConsistency may adjust
+  // entity boundaries after mergeAndDedup's sanitization,
+  // potentially re-introducing whitespace or punctuation.
   return sanitizeEntities(merged);
 };

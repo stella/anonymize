@@ -1,95 +1,63 @@
 [
   {
+    "id": "fr-address",
     "label": "address",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "demeurant"
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "demeurant",
+      "domicilié au",
+      "domiciliée au",
+      "né à",
+      "née à"
+    ]
   },
   {
+    "id": "fr-address-eol",
     "label": "address",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "domicilié au"
+    "strategy": { "type": "to-end-of-line" },
+    "triggers": [
+      "siège social :"
+    ]
   },
   {
-    "label": "address",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "domiciliée au"
-  },
-  {
-    "label": "address",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "né à"
-  },
-  {
-    "label": "address",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "née à"
-  },
-  {
-    "label": "address",
-    "strategy": {
-      "type": "to-end-of-line"
-    },
-    "trigger": "siège social :"
-  },
-  {
+    "id": "fr-date-of-birth",
     "label": "date of birth",
     "strategy": {
-      "count": 4,
-      "type": "n-words"
+      "type": "n-words",
+      "count": 4
     },
-    "trigger": "né le"
+    "triggers": [
+      "né le",
+      "née le"
+    ]
   },
   {
-    "label": "date of birth",
-    "strategy": {
-      "count": 4,
-      "type": "n-words"
-    },
-    "trigger": "née le"
-  },
-  {
+    "id": "fr-person",
     "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "représenté par"
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "représenté par",
+      "représentée par"
+    ],
+    "validations": [
+      { "type": "starts-uppercase" }
+    ]
   },
   {
-    "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "représentée par"
-  },
-  {
+    "id": "fr-company-id",
     "label": "registration number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "numéro SIREN"
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "numéro SIREN",
+      "numéro SIRET"
+    ]
   },
   {
-    "label": "registration number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "numéro SIRET"
-  },
-  {
+    "id": "fr-social-security",
     "label": "social security number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "numéro de sécurité sociale"
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "numéro de sécurité sociale"
+    ]
   }
 ]

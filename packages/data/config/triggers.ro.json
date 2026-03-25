@@ -1,96 +1,66 @@
 [
   {
+    "id": "ro-address",
     "label": "address",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "domiciliat în"
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "domiciliat în",
+      "domiciliată în",
+      "domiciliul în",
+      "cu sediul în"
+    ]
   },
   {
-    "label": "address",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "domiciliată în"
-  },
-  {
-    "label": "address",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "domiciliul în"
-  },
-  {
-    "label": "address",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "cu sediul în"
-  },
-  {
+    "id": "ro-national-id",
     "label": "national identification number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "CNP"
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "CNP"
+    ]
   },
   {
+    "id": "ro-tax-id",
     "label": "tax identification number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "CUI"
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "CUI",
+      "cod de identificare fiscală",
+      "cod fiscal"
+    ]
   },
   {
-    "label": "tax identification number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "cod de identificare fiscală"
-  },
-  {
-    "label": "tax identification number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "cod fiscal"
-  },
-  {
+    "id": "ro-identity-card",
     "label": "identity card number",
     "strategy": {
-      "count": 4,
-      "type": "n-words"
+      "type": "n-words",
+      "count": 4
     },
-    "trigger": "seria și numărul"
+    "triggers": [
+      "seria și numărul"
+    ]
   },
   {
+    "id": "ro-person",
     "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "reprezentat de"
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "reprezentat de",
+      "reprezentată de"
+    ],
+    "validations": [
+      { "type": "starts-uppercase" }
+    ]
   },
   {
-    "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "reprezentată de"
-  },
-  {
+    "id": "ro-date-of-birth",
     "label": "date of birth",
     "strategy": {
-      "count": 4,
-      "type": "n-words"
+      "type": "n-words",
+      "count": 4
     },
-    "trigger": "născut la"
-  },
-  {
-    "label": "date of birth",
-    "strategy": {
-      "count": 4,
-      "type": "n-words"
-    },
-    "trigger": "născută la"
+    "triggers": [
+      "născut la",
+      "născută la"
+    ]
   }
 ]

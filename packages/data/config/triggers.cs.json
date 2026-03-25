@@ -1,1028 +1,342 @@
 [
   {
+    "id": "cs-person-to-next-comma",
+    "label": "person",
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "zastoupen",
+      "zastoupena",
+      "zastoupen/a",
+      "zastoupená",
+      "zastoupený",
+      "zastoupenou",
+      "zastoupeným",
+      "jednající",
+      "jednatelem společnosti",
+      "jednatelkou společnosti",
+      "jednatelem",
+      "jednatelkou",
+      "prokuristou",
+      "prokuristkou",
+      "ředitelem",
+      "ředitelkou",
+      "předsedou",
+      "místopředsedou",
+      "členem představenstva",
+      "členkou představenstva",
+      "kontaktní osoba",
+      "i.s.",
+      "v.z."
+    ],
+    "extensions": ["add-colon"],
+    "validations": [
+      { "type": "starts-uppercase" }
+    ]
+  },
+  {
+    "id": "cs-person-trailing-space",
+    "label": "person",
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "pan",
+      "paní",
+      "panem",
+      "panu"
+    ],
+    "extensions": ["add-trailing-space"],
+    "validations": [
+      { "type": "starts-uppercase" }
+    ]
+  },
+  {
+    "id": "cs-address-full",
     "label": "address",
     "strategy": {
       "type": "address",
       "maxChars": 120
     },
-    "trigger": "bytem:"
+    "triggers": [
+      "bytem:",
+      "trvale bytem",
+      "sídlem",
+      "sídlo",
+      "adresa",
+      "doručovací adresa",
+      "korespondenční adresa",
+      "fakturační adresa",
+      "místo dodání",
+      "místo plnění"
+    ],
+    "extensions": ["add-colon"]
   },
   {
+    "id": "cs-address-to-next-comma",
+    "label": "address",
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "obec a katastrální území",
+      "katastrální území",
+      "katastrálního území"
+    ]
+  },
+  {
+    "id": "cs-address-house-number",
     "label": "address",
     "strategy": {
-      "type": "address",
-      "maxChars": 120
+      "type": "n-words",
+      "count": 1
     },
-    "trigger": "trvale bytem"
+    "triggers": [
+      "č.p.",
+      "čp."
+    ]
   },
   {
+    "id": "cs-address-psc",
     "label": "address",
     "strategy": {
-      "type": "address",
-      "maxChars": 120
+      "type": "n-words",
+      "count": 2
     },
-    "trigger": "sídlem:"
+    "triggers": [
+      "PSČ"
+    ],
+    "extensions": [
+      "add-colon",
+      "add-trailing-space"
+    ]
   },
   {
-    "label": "address",
-    "strategy": {
-      "type": "address",
-      "maxChars": 120
-    },
-    "trigger": "sídlem"
-  },
-  {
-    "label": "address",
-    "strategy": {
-      "type": "address",
-      "maxChars": 120
-    },
-    "trigger": "sídlo:"
-  },
-  {
-    "label": "address",
-    "strategy": {
-      "type": "address",
-      "maxChars": 120
-    },
-    "trigger": "sídlo"
-  },
-  {
-    "label": "bank account number",
-    "strategy": {
-      "type": "to-end-of-line"
-    },
-    "trigger": "bankovní spojení:"
-  },
-  {
-    "label": "bank account number",
-    "strategy": {
-      "type": "to-end-of-line"
-    },
-    "trigger": "bankovní spojení"
-  },
-  {
+    "id": "cs-organization-roles",
     "label": "organization",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "zhotovitel:"
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "zhotovitel",
+      "zhotovitelem",
+      "objednatel",
+      "objednatelem"
+    ],
+    "extensions": ["add-colon"]
   },
   {
+    "id": "cs-organization-municipalities",
     "label": "organization",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "zhotovitelem"
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "městský obvod",
+      "městského obvodu",
+      "městská část",
+      "městské části",
+      "statutární město",
+      "statutárního města",
+      "statutárním městě"
+    ]
   },
   {
+    "id": "cs-organization-trailing-space",
     "label": "organization",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "objednatel:"
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "město",
+      "města",
+      "městem",
+      "městu",
+      "obec",
+      "obce",
+      "obcí"
+    ],
+    "extensions": ["add-trailing-space"]
   },
   {
+    "id": "cs-organization-institutions",
     "label": "organization",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "objednatelem"
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "základní škola",
+      "základní školy",
+      "střední škola",
+      "střední školy",
+      "mateřská škola",
+      "nemocnice",
+      "nemocnici",
+      "fakultní nemocnice",
+      "univerzita",
+      "univerzity",
+      "nadace",
+      "nadaci",
+      "příspěvková organizace",
+      "Nejvyšší kontrolní úřad",
+      "Nejvyššího kontrolního úřadu",
+      "Nejvyššímu kontrolnímu úřadu"
+    ]
   },
   {
+    "id": "cs-date-of-birth",
     "label": "date of birth",
     "strategy": {
-      "count": 1,
-      "type": "n-words"
+      "type": "n-words",
+      "count": 1
     },
-    "trigger": "nar.:"
+    "triggers": [
+      "nar.",
+      "narozen dne",
+      "narozena dne",
+      "narozen/a dne",
+      "dat.nar."
+    ],
+    "extensions": ["add-colon"]
   },
   {
-    "label": "date of birth",
-    "strategy": {
-      "count": 1,
-      "type": "n-words"
-    },
-    "trigger": "narozen dne"
-  },
-  {
-    "label": "date of birth",
-    "strategy": {
-      "count": 1,
-      "type": "n-words"
-    },
-    "trigger": "narozena dne"
-  },
-  {
-    "label": "date of birth",
-    "strategy": {
-      "count": 1,
-      "type": "n-words"
-    },
-    "trigger": "narozen/a dne"
-  },
-  {
-    "label": "date of birth",
-    "strategy": {
-      "count": 1,
-      "type": "n-words"
-    },
-    "trigger": "dat.nar."
-  },
-  {
+    "id": "cs-birth-number",
     "label": "czech birth number",
     "strategy": {
-      "count": 1,
-      "type": "n-words"
+      "type": "n-words",
+      "count": 1
     },
-    "trigger": "r.č.:"
+    "triggers": [
+      "r.č.",
+      "rodné číslo"
+    ],
+    "extensions": ["add-colon"]
   },
   {
-    "label": "czech birth number",
-    "strategy": {
-      "count": 1,
-      "type": "n-words"
-    },
-    "trigger": "rodné číslo:"
+    "id": "cs-bank-account-eol",
+    "label": "bank account number",
+    "strategy": { "type": "to-end-of-line" },
+    "triggers": [
+      "bankovní spojení"
+    ],
+    "extensions": ["add-colon"]
   },
   {
-    "label": "czech birth number",
-    "strategy": {
-      "count": 1,
-      "type": "n-words"
-    },
-    "trigger": "rodné číslo"
-  },
-  {
+    "id": "cs-bank-account-nwords",
     "label": "bank account number",
     "strategy": {
-      "count": 1,
-      "type": "n-words"
+      "type": "n-words",
+      "count": 1
     },
-    "trigger": "č.ú.:"
+    "triggers": [
+      "č.ú.",
+      "číslo účtu",
+      "č. účtu"
+    ],
+    "extensions": ["add-colon"]
   },
   {
-    "label": "bank account number",
-    "strategy": {
-      "count": 1,
-      "type": "n-words"
-    },
-    "trigger": "číslo účtu:"
-  },
-  {
-    "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "zastoupen:"
-  },
-  {
-    "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "zastoupena:"
-  },
-  {
-    "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "zastoupen/a:"
-  },
-  {
-    "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "jednající:"
-  },
-  {
-    "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "pan "
-  },
-  {
-    "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "paní "
-  },
-  {
-    "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "panem "
-  },
-  {
-    "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "panu "
-  },
-  {
-    "label": "organization",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "městský obvod"
-  },
-  {
-    "label": "organization",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "městského obvodu"
-  },
-  {
-    "label": "organization",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "městská část"
-  },
-  {
-    "label": "organization",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "městské části"
-  },
-  {
-    "label": "organization",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "město "
-  },
-  {
-    "label": "organization",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "města "
-  },
-  {
-    "label": "organization",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "městem "
-  },
-  {
-    "label": "organization",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "městu "
-  },
-  {
-    "label": "organization",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "obec "
-  },
-  {
-    "label": "organization",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "obce "
-  },
-  {
-    "label": "organization",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "obcí "
-  },
-  {
-    "label": "address",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "obec a katastrální území"
-  },
-  {
-    "label": "address",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "katastrální území"
-  },
-  {
-    "label": "address",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "katastrálního území"
-  },
-  {
-    "label": "address",
-    "strategy": {
-      "count": 1,
-      "type": "n-words"
-    },
-    "trigger": "č.p."
-  },
-  {
-    "label": "address",
-    "strategy": {
-      "count": 1,
-      "type": "n-words"
-    },
-    "trigger": "čp."
-  },
-  {
+    "id": "cs-datova-schranka",
     "label": "registration number",
     "strategy": {
-      "count": 1,
-      "type": "n-words"
+      "type": "n-words",
+      "count": 1
     },
-    "trigger": "v.s."
+    "triggers": [
+      "datová schránka",
+      "dat. schránka"
+    ],
+    "extensions": ["add-colon"],
+    "validations": [
+      {
+        "type": "matches-pattern",
+        "pattern": "^[a-z0-9]{7}$",
+        "flags": "i"
+      }
+    ]
   },
   {
-    "label": "address",
-    "strategy": {
-      "count": 2,
-      "type": "n-words"
-    },
-    "trigger": "PSČ:"
-  },
-  {
-    "label": "address",
-    "strategy": {
-      "count": 2,
-      "type": "n-words"
-    },
-    "trigger": "PSČ "
-  },
-  {
-    "label": "bank account number",
-    "strategy": {
-      "count": 1,
-      "type": "n-words"
-    },
-    "trigger": "č. účtu:"
-  },
-  {
-    "label": "organization",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "základní škola"
-  },
-  {
-    "label": "organization",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "základní školy"
-  },
-  {
-    "label": "organization",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "střední škola"
-  },
-  {
-    "label": "organization",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "střední školy"
-  },
-  {
-    "label": "organization",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "mateřská škola"
-  },
-  {
-    "label": "organization",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "nemocnice"
-  },
-  {
-    "label": "organization",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "nemocnici"
-  },
-  {
-    "label": "organization",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "fakultní nemocnice"
-  },
-  {
-    "label": "organization",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "univerzita"
-  },
-  {
-    "label": "organization",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "univerzity"
-  },
-  {
-    "label": "organization",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "nadace"
-  },
-  {
-    "label": "organization",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "nadaci"
-  },
-  {
-    "label": "organization",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "příspěvková organizace"
-  },
-  {
-    "label": "organization",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "statutární město"
-  },
-  {
-    "label": "organization",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "statutárního města"
-  },
-  {
-    "label": "organization",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "statutárním městě"
-  },
-  {
-    "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "kontaktní osoba"
-  },
-  {
-    "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "kontaktní osoba:"
-  },
-  {
+    "id": "cs-company-id",
     "label": "registration number",
-    "strategy": {
-      "count": 1,
-      "type": "n-words"
-    },
-    "trigger": "datová schránka:"
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "IČO",
+      "IČ",
+      "identifikační číslo",
+      "identifikační číslo organizace",
+      "registrační číslo"
+    ]
   },
   {
-    "label": "registration number",
-    "strategy": {
-      "count": 1,
-      "type": "n-words"
-    },
-    "trigger": "datová schránka"
-  },
-  {
-    "label": "registration number",
-    "strategy": {
-      "count": 1,
-      "type": "n-words"
-    },
-    "trigger": "dat. schránka:"
-  },
-  {
-    "label": "registration number",
-    "strategy": {
-      "count": 1,
-      "type": "n-words"
-    },
-    "trigger": "dat. schránka"
-  },
-  {
-    "label": "registration number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "IČO"
-  },
-  {
-    "label": "registration number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "IČ"
-  },
-  {
-    "label": "registration number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "identifikační číslo"
-  },
-  {
-    "label": "registration number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "identifikační číslo organizace"
-  },
-  {
-    "label": "registration number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "registrační číslo"
-  },
-  {
+    "id": "cs-tax-id",
     "label": "tax identification number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "DIČ"
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "DIČ",
+      "daňové identifikační číslo"
+    ]
   },
   {
-    "label": "tax identification number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "daňové identifikační číslo"
-  },
-  {
+    "id": "cs-vehicle-registration",
     "label": "registration number",
     "strategy": {
       "type": "n-words",
       "count": 1
     },
-    "trigger": "SPZ"
+    "triggers": [
+      "SPZ",
+      "RZ",
+      "registrační značka"
+    ],
+    "extensions": ["add-colon"]
   },
   {
+    "id": "cs-oddil",
     "label": "registration number",
     "strategy": {
       "type": "n-words",
       "count": 1
     },
-    "trigger": "SPZ:"
+    "triggers": [
+      "oddíl",
+      "oddílu",
+      "v oddíle",
+      "oddílem"
+    ],
+    "extensions": [
+      "add-colon",
+      "add-trailing-space"
+    ]
   },
   {
+    "id": "cs-vlozka",
     "label": "registration number",
     "strategy": {
       "type": "n-words",
       "count": 1
     },
-    "trigger": "RZ:"
+    "triggers": [
+      "vložka",
+      "vložky",
+      "vložce",
+      "vložkou"
+    ],
+    "extensions": [
+      "add-colon",
+      "add-trailing-space"
+    ]
   },
   {
+    "id": "cs-vs",
     "label": "registration number",
     "strategy": {
       "type": "n-words",
       "count": 1
     },
-    "trigger": "registrační značka"
+    "triggers": [
+      "v.s."
+    ]
   },
   {
-    "label": "registration number",
-    "strategy": {
-      "type": "n-words",
-      "count": 1
-    },
-    "trigger": "registrační značka:"
-  },
-  {
-    "label": "organization",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "Nejvyšší kontrolní úřad"
-  },
-  {
-    "label": "organization",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "Nejvyššího kontrolního úřadu"
-  },
-  {
-    "label": "organization",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "Nejvyššímu kontrolnímu úřadu"
-  },
-  {
-    "label": "registration number",
-    "strategy": {
-      "type": "n-words",
-      "count": 1
-    },
-    "trigger": "oddíl:"
-  },
-  {
-    "label": "registration number",
-    "strategy": {
-      "type": "n-words",
-      "count": 1
-    },
-    "trigger": "vložka"
-  },
-  {
-    "label": "registration number",
-    "strategy": {
-      "type": "n-words",
-      "count": 1
-    },
-    "trigger": "vložka:"
-  },
-  {
-    "label": "registration number",
-    "strategy": {
-      "type": "n-words",
-      "count": 1
-    },
-    "trigger": "vložky"
-  },
-  {
-    "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "jednatelem společnosti"
-  },
-  {
-    "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "jednatelkou společnosti"
-  },
-  {
-    "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "jednatelem"
-  },
-  {
-    "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "jednatelkou"
-  },
-  {
-    "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "prokuristou"
-  },
-  {
-    "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "prokuristkou"
-  },
-  {
-    "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "ředitelem"
-  },
-  {
-    "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "ředitelkou"
-  },
-  {
-    "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "předsedou"
-  },
-  {
-    "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "místopředsedou"
-  },
-  {
-    "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "členem představenstva"
-  },
-  {
-    "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "členkou představenstva"
-  },
-  {
-    "label": "address",
-    "strategy": {
-      "type": "address",
-      "maxChars": 120
-    },
-    "trigger": "místo dodání:"
-  },
-  {
-    "label": "address",
-    "strategy": {
-      "type": "address",
-      "maxChars": 120
-    },
-    "trigger": "místo dodání"
-  },
-  {
-    "label": "address",
-    "strategy": {
-      "type": "address",
-      "maxChars": 120
-    },
-    "trigger": "místo plnění:"
-  },
-  {
-    "label": "address",
-    "strategy": {
-      "type": "address",
-      "maxChars": 120
-    },
-    "trigger": "místo plnění"
-  },
-  {
-    "label": "address",
-    "strategy": {
-      "type": "address",
-      "maxChars": 120
-    },
-    "trigger": "adresa:"
-  },
-  {
-    "label": "address",
-    "strategy": {
-      "type": "address",
-      "maxChars": 120
-    },
-    "trigger": "adresa"
-  },
-  {
-    "label": "address",
-    "strategy": {
-      "type": "address",
-      "maxChars": 120
-    },
-    "trigger": "doručovací adresa:"
-  },
-  {
-    "label": "address",
-    "strategy": {
-      "type": "address",
-      "maxChars": 120
-    },
-    "trigger": "doručovací adresa"
-  },
-  {
-    "label": "address",
-    "strategy": {
-      "type": "address",
-      "maxChars": 120
-    },
-    "trigger": "korespondenční adresa:"
-  },
-  {
-    "label": "address",
-    "strategy": {
-      "type": "address",
-      "maxChars": 120
-    },
-    "trigger": "korespondenční adresa"
-  },
-  {
-    "label": "address",
-    "strategy": {
-      "type": "address",
-      "maxChars": 120
-    },
-    "trigger": "fakturační adresa:"
-  },
-  {
-    "label": "address",
-    "strategy": {
-      "type": "address",
-      "maxChars": 120
-    },
-    "trigger": "fakturační adresa"
-  },
-  {
-    "label": "registration number",
-    "strategy": {
-      "type": "n-words",
-      "count": 1
-    },
-    "trigger": "vložce"
-  },
-  {
-    "label": "registration number",
-    "strategy": {
-      "type": "n-words",
-      "count": 1
-    },
-    "trigger": "vložkou"
-  },
-  {
-    "label": "registration number",
-    "strategy": {
-      "type": "n-words",
-      "count": 1
-    },
-    "trigger": "oddílu:"
-  },
-  {
-    "label": "registration number",
-    "strategy": {
-      "type": "n-words",
-      "count": 1
-    },
-    "trigger": "v oddíle "
-  },
-  {
-    "label": "registration number",
-    "strategy": {
-      "type": "n-words",
-      "count": 1
-    },
-    "trigger": "oddílem "
-  },
-  {
-    "label": "registration number",
-    "strategy": {
-      "type": "n-words",
-      "count": 1
-    },
-    "trigger": "oddíl "
-  },
-  {
-    "label": "registration number",
-    "strategy": {
-      "type": "n-words",
-      "count": 1
-    },
-    "trigger": "vložka "
-  },
-  {
-    "label": "registration number",
-    "strategy": {
-      "type": "n-words",
-      "count": 1
-    },
-    "trigger": "vložky "
-  },
-  {
+    "id": "cs-sp-zn",
     "label": "registration number",
     "strategy": {
       "type": "n-words",
       "count": 2
     },
-    "trigger": "sp. zn."
-  },
-  {
-    "label": "registration number",
-    "strategy": {
-      "type": "n-words",
-      "count": 2
-    },
-    "trigger": "sp.zn."
-  },
-  {
-    "label": "registration number",
-    "strategy": {
-      "type": "n-words",
-      "count": 2
-    },
-    "trigger": "spisové značky"
-  },
-  {
-    "label": "registration number",
-    "strategy": {
-      "type": "n-words",
-      "count": 2
-    },
-    "trigger": "spisovou značkou"
-  },
-  {
-    "label": "registration number",
-    "strategy": {
-      "type": "n-words",
-      "count": 2
-    },
-    "trigger": "pod sp.zn."
-  },
-  {
-    "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "i.s."
-  },
-  {
-    "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "v.z."
-  },
-  {
-    "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "zastoupenou:"
-  },
-  {
-    "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "zastoupeným:"
-  },
-  {
-    "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "zastoupená:"
-  },
-  {
-    "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "zastoupený:"
-  },
-  {
-    "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "zastoupenou"
-  },
-  {
-    "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "zastoupeným"
-  },
-  {
-    "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "zastoupená"
-  },
-  {
-    "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "zastoupený"
+    "triggers": [
+      "sp. zn.",
+      "sp.zn.",
+      "spisové značky",
+      "spisovou značkou",
+      "pod sp.zn."
+    ]
   }
 ]

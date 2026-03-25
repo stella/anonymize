@@ -1,115 +1,59 @@
 [
   {
+    "id": "en-person",
     "label": "person",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "represented by"
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "represented by"
+    ],
+    "validations": [
+      { "type": "starts-uppercase" }
+    ]
   },
   {
+    "id": "en-date-of-birth",
     "label": "date of birth",
     "strategy": {
-      "count": 4,
-      "type": "n-words"
+      "type": "n-words",
+      "count": 4
     },
-    "trigger": "born on"
+    "triggers": [
+      "born on"
+    ]
   },
   {
+    "id": "en-address",
     "label": "address",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "born in"
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "born in",
+      "residing at",
+      "residing in",
+      "resident of",
+      "national of",
+      "living in",
+      "domiciled in"
+    ]
   },
   {
-    "label": "address",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "residing at"
-  },
-  {
-    "label": "address",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "residing in"
-  },
-  {
-    "label": "address",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "resident of"
-  },
-  {
-    "label": "address",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "national of"
-  },
-  {
-    "label": "address",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "living in"
-  },
-  {
-    "label": "address",
-    "strategy": {
-      "type": "to-next-comma"
-    },
-    "trigger": "domiciled in"
-  },
-  {
+    "id": "en-company-id",
     "label": "registration number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "registration number"
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "registration number",
+      "company id",
+      "company number"
+    ]
   },
   {
-    "label": "registration number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "company id"
-  },
-  {
-    "label": "registration number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "company number"
-  },
-  {
+    "id": "en-tax-id",
     "label": "tax identification number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "VAT number"
-  },
-  {
-    "label": "tax identification number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "VAT ID"
-  },
-  {
-    "label": "tax identification number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "tax identification number"
-  },
-  {
-    "label": "tax identification number",
-    "strategy": {
-      "type": "company-id-value"
-    },
-    "trigger": "tax id"
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "VAT number",
+      "VAT ID",
+      "tax identification number",
+      "tax id"
+    ]
   }
 ]
