@@ -1,5 +1,37 @@
 import type { Entity } from "../types";
 
+// Common Czech words that start uppercase at sentence
+// beginnings but are not street names. Module-level
+// to avoid allocation in a hot loop.
+const BARE_STOPWORDS = new Set([
+  "Příloha",
+  "Smlouva",
+  "Článek",
+  "Dodatek",
+  "Celkem",
+  "Strana",
+  "Faktura",
+  "Částka",
+  "Položka",
+  "Kapitola",
+  "Zákon",
+  "Vyhláška",
+  "Nařízení",
+  "Usnesení",
+  "Rozsudek",
+  "Bod",
+  "Odstavec",
+  "Záloha",
+  "Zbývá",
+  "Dne",
+  "Platba",
+  "Datum",
+  "Splatnost",
+  "Variabilní",
+  "Konstantní",
+  "Specifický",
+]);
+
 const NEAR_MISS_BAND = 0.15;
 const BOOST_PER_NEIGHBOUR = 0.05;
 const CONTEXT_WINDOW_CHARS = 150;
@@ -408,9 +440,10 @@ export const detectStreetPatternsNearAddresses = (
 
   // ── Second scan: bare house numbers near addresses ─
   // "Vinohradská 46" near "Praha 2" → address.
-  // Uppercase word + space + 2-4 digit number, no slash.
+  // Uppercase word + space + 1-3 digit number, no slash.
+  // Capped at 3 digits to exclude year numbers (2024).
   const bareHouseRe =
-    /(?<=\s|^)(\p{Lu}\p{Ll}[\p{Ll}\p{Lu}]+\s+\d{1,4})\b/gu;
+    /(?<=\s|^)(\p{Lu}\p{Ll}[\p{Ll}\p{Lu}]+\s+\d{1,3})\b/gu;
   bareHouseRe.lastIndex = 0;
 
   // Merge existing + newly found entities for proximity
@@ -418,28 +451,6 @@ export const detectStreetPatternsNearAddresses = (
     ...addressEntities,
     ...results,
   ];
-
-  // Common Czech stopwords that start uppercase at
-  // sentence beginnings but are not street names.
-  const BARE_STOPWORDS = new Set([
-    "Příloha",
-    "Smlouva",
-    "Článek",
-    "Dodatek",
-    "Celkem",
-    "Strana",
-    "Faktura",
-    "Částka",
-    "Položka",
-    "Kapitola",
-    "Zákon",
-    "Vyhláška",
-    "Nařízení",
-    "Usnesení",
-    "Rozsudek",
-    "Bod",
-    "Odstavec",
-  ]);
 
   for (
     let m = bareHouseRe.exec(fullText);
