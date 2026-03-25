@@ -199,7 +199,7 @@ export const detectStreetPatternsNearAddresses = (
   // in Czech addresses almost always have primary > 99
   // or carry a letter suffix.
   const houseNumRe =
-    /\b(?:\d{1,4}\/\d+[a-zA-Z]\b|\d{3,4}\/\d+\b|\d{1,2}\/\d{3,}\b)/g;
+    /\b(?:\d{1,4}\/\d+[a-zA-Z]\b|\d{3,4}\/\d+\b|(?:1[3-9]|[2-9]\d)\/\d{3,}\b)/g;
   houseNumRe.lastIndex = 0;
 
   for (
@@ -410,7 +410,7 @@ export const detectStreetPatternsNearAddresses = (
   // "Vinohradská 46" near "Praha 2" → address.
   // Uppercase word + space + 2-4 digit number, no slash.
   const bareHouseRe =
-    /\b(\p{Lu}[\p{Ll}\p{Lu}]+\s+\d{1,4})\b/gu;
+    /(?<=\s|^)(\p{Lu}\p{Ll}[\p{Ll}\p{Lu}]+\s+\d{1,4})\b/gu;
   bareHouseRe.lastIndex = 0;
 
   // Merge existing + newly found entities for proximity
@@ -454,15 +454,6 @@ export const detectStreetPatternsNearAddresses = (
 
     // Must be on the same line as a confirmed address
     // entity and within 50 chars.
-    const slice = fullText.slice(
-      Math.max(0, start - 50),
-      end + 50,
-    );
-    if (slice.includes("\n")) {
-      // Check if there's a newline between the match
-      // and the nearest address entity — reject if so.
-    }
-
     const nearAddr = allAddr.some((e) => {
       const dist = Math.min(
         Math.abs(e.start - end),

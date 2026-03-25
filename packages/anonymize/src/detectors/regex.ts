@@ -839,8 +839,8 @@ const buildCurrencyPatterns = (
   // Uses the trailing alternation in reverse position.
   if (trailingAlt) {
     patterns.push(
-      `(?:${trailingAlt})` +
-        `[^\\S\\n]{0,2}` +
+      `\\b(?:${trailingAlt})` +
+        `[^\\S\\n\\t]{0,2}` +
         `${NUM}` +
         `(?:[.,](?:\\d{1,2}[-–—]?|[-–—]{1,2})?)?\\b`,
     );
@@ -854,7 +854,7 @@ const buildCurrencyPatterns = (
   if (trailingAlt) {
     patterns.push(
       `\\b${NUM}` +
-        `(?:[.,](?:\\d{1,2}[-–—]?|[-–—]{1,2})?)?[^\\S\\n]{0,4}` +
+        `(?:[.,](?:\\d{1,2}[-–—]?|[-–—]{1,2})?)?[^\\S\\n\\t]{0,4}` +
         `(?:${trailingAlt})` +
         `(?:\\b|(?=\\s|[.,;!?)]|$))`,
     );
