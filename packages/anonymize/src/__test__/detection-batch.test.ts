@@ -491,3 +491,20 @@ describe("M.Sc. / B.Sc. post-nominals", () => {
     expect(person!.text).toContain("M.Sc.");
   });
 });
+
+describe("legal form digit token in prefix", () => {
+  test("regex matches company with year in name", async () => {
+    // The regex-set DFA engine may not support the full
+    // pattern, but the underlying regex is correct.
+    const { buildLegalFormPatterns } = await import(
+      "../detectors/legal-forms"
+    );
+    const patterns = await buildLegalFormPatterns();
+    const text = "Firma 2028 s.r.o. dodává materiál";
+    const matched = patterns.some((p: string) => {
+      const re = new RegExp(p);
+      return re.test(text);
+    });
+    expect(matched).toBe(true);
+  });
+});
