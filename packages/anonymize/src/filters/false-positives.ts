@@ -5,6 +5,12 @@ import { defaultContext } from "../context";
 const TEMPLATE_PLACEHOLDER_RE =
   /^(?:\.{3,}|_{3,}|\[[\w\s]+\]|\{[\w\s]+\})$/;
 
+// Postal code pattern (CZ/SK: "110 00", generic 5-digit)
+const HAS_POSTAL_RE = /\b\d{3}\s?\d{2}\b/;
+// Known street/city type words (Czech)
+const ADDRESS_COMPONENT_RE =
+  /\b(?:ulice|ul\.|třída|tř\.|náměstí|nám\.|nábřeží|nábř\.|sídliště|město|obec|Praha|Brno|Ostrava|Plzeň|Liberec|Olomouc|České Budějovice)\b/i;
+
 // Max entity text length by label. Prevents runaway
 // trigger extractions (e.g., "město Dobříš i okolních
 // obcí...") from producing absurdly long entities.
@@ -115,6 +121,20 @@ export const filterFalsePositives = (
     if (
       (entity.label === "person" || entity.label === "organization") &&
       roles.has(trimmed.toLowerCase())
+    ) {
+      continue;
+    }
+
+    // Reject address entities > 40 chars that contain
+    // no digits, no postal code pattern, and no known
+    // address component word. These are likely prose
+    // sentences captured by an "adresa" trigger.
+    if (
+      entity.label === "address" &&
+      trimmed.length > 40 &&
+      !/\d/.test(trimmed) &&
+      !HAS_POSTAL_RE.test(trimmed) &&
+      !ADDRESS_COMPONENT_RE.test(trimmed)
     ) {
       continue;
     }

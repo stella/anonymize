@@ -371,10 +371,21 @@ const INTL_PHONE: RegexDef = {
 
 const CZ_PHONE: RegexDef = {
   pattern:
-    `\\b[67]\\d{2}(?:[^\\S\\n]|[.\\-])?\\d{3}(?:[^\\S\\n]|[.\\-])?\\d{3}` +
+    `\\b[2-7]\\d{2}(?:[^\\S\\n]|[.\\-])?\\d{3}(?:[^\\S\\n]|[.\\-])?\\d{3}` +
     `(?!(?:[^\\S\\n]|[.\\-])?\\d*/\\d)\\b`,
   label: "phone number",
   score: 0.9,
+};
+
+// Phone preceded by "tel." / "tel.:" / "telefon:" trigger.
+// Captures any 9-digit number (including landlines).
+const TEL_TRIGGER_PHONE: RegexDef = {
+  pattern:
+    `(?:tel(?:efon)?)\\.?\\s*:?\\s*` +
+    `\\d{3}(?:[^\\S\\n]|[.\\-])?\\d{3}` +
+    `(?:[^\\S\\n]|[.\\-])?\\d{3}\\b`,
+  label: "phone number",
+  score: 0.95,
 };
 
 const CREDIT_CARD: RegexDef = {
@@ -538,6 +549,7 @@ const ALL_REGEX_DEFS: readonly RegexDef[] = [
   IBAN,
   EMAIL,
   INTL_PHONE,
+  TEL_TRIGGER_PHONE,
   CZ_PHONE,
   CREDIT_CARD,
   CZ_BIRTH_NUMBER,

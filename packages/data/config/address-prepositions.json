@@ -1,7 +1,7 @@
 {
   "_comment": "Prepositions used in street/address names by language. Used by backward scan to continue through lowercase words, and by temporal guard to skip date-like patterns.",
   "address": {
-    "cs": ["nad", "pod", "u", "na", "ve", "ke", "za", "při", "do", "od", "mezi"],
+    "cs": ["v", "nad", "pod", "u", "na", "ve", "ke", "za", "při", "do", "od", "mezi"],
     "sk": ["nad", "pod", "pri", "na", "vo", "ke", "za", "do", "od", "medzi"],
     "de": ["am", "an", "im", "bei", "zum", "zur", "auf", "in", "vor"],
     "en": ["upon", "on", "in", "by", "at", "near"],

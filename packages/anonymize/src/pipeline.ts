@@ -149,6 +149,30 @@ export type NerInferenceFn = (
   signal?: AbortSignal,
 ) => Promise<Entity[]>;
 
+// ── Slovy parenthetical extension ────────────────────
+// After a monetary amount, "(slovy ...)" or "(slovně
+// ...)" spells out the amount in words. Extend the
+// entity to include the entire parenthetical.
+const SLOVY_RE =
+  /^[\s,.;-]{0,4}\((?:slovy|slovně)\s[^)]*\)/i;
+
+const extendSlovyAmounts = (
+  entities: Entity[],
+  fullText: string,
+): Entity[] =>
+  entities.map((e) => {
+    if (e.label !== "monetary amount") return e;
+    const after = fullText.slice(e.end);
+    const match = SLOVY_RE.exec(after);
+    if (!match) return e;
+    const newEnd = e.end + match[0].length;
+    return {
+      ...e,
+      end: newEnd,
+      text: fullText.slice(e.start, newEnd),
+    };
+  });
+
 const checkAbort = (signal?: AbortSignal): void => {
   if (signal?.aborted) {
     throw new DOMException(
@@ -496,10 +520,22 @@ export const runPipeline = async (
 
   checkAbort(signal);
 
+  // Extend monetary amounts that are followed by
+  // "(slovy ...)" or "(slovně ...)" parentheticals.
+  const extendedRegex = extendSlovyAmounts(
+    regexEntities,
+    fullText,
+  );
+  if (extendedRegex.length !== regexEntities.length) {
+    const diff =
+      extendedRegex.length - regexEntities.length;
+    log("slovy", `${diff} amounts extended`);
+  }
+
   // Address seed expansion
   const preAddressEntities = [
     ...triggerEntities,
-    ...regexEntities,
+    ...extendedRegex,
     ...legalFormEntities,
     ...nameCorpusEntities,
     ...denyListEntities,

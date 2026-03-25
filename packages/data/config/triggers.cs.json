@@ -1024,5 +1024,89 @@
       "type": "to-next-comma"
     },
     "trigger": "zastoupený"
+  },
+  {
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "krajský soud"
+  },
+  {
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "krajského soudu"
+  },
+  {
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "okresní soud"
+  },
+  {
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "okresního soudu"
+  },
+  {
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "městský soud"
+  },
+  {
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "městského soudu"
+  },
+  {
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "nejvyšší soud"
+  },
+  {
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "nejvyššího soudu"
+  },
+  {
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "ústavní soud"
+  },
+  {
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "ústavního soudu"
+  },
+  {
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "obvodní soud"
+  },
+  {
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma"
+    },
+    "trigger": "obvodního soudu"
   }
 ]

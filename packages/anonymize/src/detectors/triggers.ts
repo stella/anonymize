@@ -1,5 +1,6 @@
 import type { Match } from "@stll/text-search";
 
+import { POST_NOMINALS } from "../config/titles";
 import { DETECTION_SOURCES } from "../types";
 import type { Entity, TriggerRule } from "../types";
 import {
@@ -11,6 +12,20 @@ const WHITESPACE_RE = /\s+/;
 const LETTER_RE = /\p{L}/u;
 const UPPERCASE_START_RE = /^\p{Lu}/u;
 const DATOVA_SCHRANKA_RE = /^[a-z0-9]{7}$/i;
+
+// Build a regex that matches known post-nominal
+// degrees at the start of a string. Used by the
+// "to-next-comma" strategy to skip commas before
+// degrees like "Ph.D., CSc.".
+const POST_NOMINAL_RE = new RegExp(
+  `^\\s*(?:${POST_NOMINALS.map(
+    (d) =>
+      d
+        .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+        .replace(/\\\./g, "\\.\\s*"),
+  ).join("|")})`,
+  "i",
+);
 
 // Definitive legal form suffixes. When a person-labeled
 // trigger captures text containing one of these, the
@@ -171,16 +186,44 @@ const extractValue = (
       // Parens mark defined-term clauses in legal text
       // (e.g., "(dále jen ...)") and should not be
       // captured as part of a name/address.
-      const STOP_CHARS = [",", "\n", "(", "\t"];
+      // When a comma precedes a known post-nominal
+      // degree (Ph.D., CSc.), skip past it.
+      const NON_COMMA_STOPS = ["\n", "(", "\t"];
       let end = valueText.length;
       let foundStop = false;
-      for (const ch of STOP_CHARS) {
+
+      // Find nearest non-comma stop
+      for (const ch of NON_COMMA_STOPS) {
         const idx = valueText.indexOf(ch);
         if (idx !== -1 && idx < end) {
           end = idx;
           foundStop = true;
         }
       }
+
+      // Walk through commas, skipping those before
+      // post-nominal degrees.
+      let commaPos = valueText.indexOf(",");
+      while (
+        commaPos !== -1 &&
+        commaPos < end
+      ) {
+        const afterComma =
+          valueText.slice(commaPos + 1);
+        if (POST_NOMINAL_RE.test(afterComma)) {
+          // This comma precedes a degree; skip it
+          commaPos = valueText.indexOf(
+            ",",
+            commaPos + 1,
+          );
+          continue;
+        }
+        // Real stop comma
+        end = commaPos;
+        foundStop = true;
+        break;
+      }
+
       // Only cap at 100 chars when no stop char was found
       // (fallback for unterminated values). When a stop
       // char exists, respect its position even if > 100.
