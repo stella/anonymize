@@ -172,8 +172,6 @@ const expandTriggerGroups = (
         label: group.label,
         strategy: group.strategy,
         validations: compiled,
-        reclassifyLegalForm:
-          group.reclassifyLegalForm ?? false,
       });
     }
   }
@@ -606,12 +604,13 @@ export const processTriggerMatches = (
         continue;
       }
 
-      // Legal form reclassification: if the trigger
-      // config has reclassifyLegalForm enabled and
-      // the captured text contains a definitive
-      // legal form suffix, override the label.
+      // Legal form reclassification: any person-labeled
+      // trigger whose captured text contains a definitive
+      // legal form suffix is reclassified as organization.
+      // This is universal — every person with a legal form
+      // is an organisation, no per-group config needed.
       const effectiveLabel =
-        rule.reclassifyLegalForm &&
+        rule.label === "person" &&
         LEGAL_FORM_CHECK_RE.test(value.text)
           ? "organization"
           : rule.label;

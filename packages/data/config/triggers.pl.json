@@ -37,7 +37,6 @@
     "extensions": ["add-colon"],
     "validations": [
       { "type": "starts-uppercase" }
-    ],
-    "reclassifyLegalForm": true
+    ]
   }
 ]

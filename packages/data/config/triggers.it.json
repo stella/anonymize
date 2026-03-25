@@ -36,8 +36,7 @@
     ],
     "validations": [
       { "type": "starts-uppercase" }
-    ],
-    "reclassifyLegalForm": true
+    ]
   },
   {
     "id": "it-tax-id",

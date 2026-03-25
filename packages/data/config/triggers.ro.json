@@ -49,8 +49,7 @@
     ],
     "validations": [
       { "type": "starts-uppercase" }
-    ],
-    "reclassifyLegalForm": true
+    ]
   },
   {
     "id": "ro-date-of-birth",

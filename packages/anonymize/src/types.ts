@@ -109,7 +109,6 @@ export type TriggerGroupConfig = {
   strategy: TriggerStrategy;
   extensions?: TriggerExtension[];
   validations?: TriggerValidation[];
-  reclassifyLegalForm?: boolean;
 };
 
 /** Compiled validation with pre-built regex. */
@@ -131,7 +130,6 @@ export type TriggerRule = {
   label: string;
   strategy: TriggerStrategy;
   validations: CompiledValidation[];
-  reclassifyLegalForm: boolean;
 };
 
 /**

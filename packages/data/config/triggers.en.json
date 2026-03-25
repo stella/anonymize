@@ -8,8 +8,7 @@
     ],
     "validations": [
       { "type": "starts-uppercase" }
-    ],
-    "reclassifyLegalForm": true
+    ]
   },
   {
     "id": "en-date-of-birth",

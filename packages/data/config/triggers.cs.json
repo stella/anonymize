@@ -31,8 +31,7 @@
     "extensions": ["add-colon"],
     "validations": [
       { "type": "starts-uppercase" }
-    ],
-    "reclassifyLegalForm": true
+    ]
   },
   {
     "id": "cs-person-trailing-space",
@@ -47,8 +46,7 @@
     "extensions": ["add-trailing-space"],
     "validations": [
       { "type": "starts-uppercase" }
-    ],
-    "reclassifyLegalForm": true
+    ]
   },
   {
     "id": "cs-address-full",

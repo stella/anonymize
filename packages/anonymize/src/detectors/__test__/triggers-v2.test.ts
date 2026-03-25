@@ -263,35 +263,6 @@ describe("expandTriggerGroups", () => {
   );
 
   test(
-    "reclassifyLegalForm defaults to false",
-    () => {
-      const groups: TriggerGroupConfig[] = [
-        {
-          triggers: ["test"],
-          label: "person",
-          strategy: { type: "to-next-comma" },
-        },
-      ];
-      const rules = expandTriggerGroups(groups);
-      expect(rules[0]?.reclassifyLegalForm)
-        .toBe(false);
-    },
-  );
-
-  test("reclassifyLegalForm carries through", () => {
-    const groups: TriggerGroupConfig[] = [
-      {
-        triggers: ["zastoupen"],
-        label: "person",
-        strategy: { type: "to-next-comma" },
-        reclassifyLegalForm: true,
-      },
-    ];
-    const rules = expandTriggerGroups(groups);
-    expect(rules[0]?.reclassifyLegalForm).toBe(true);
-  });
-
-  test(
     "validations are shared across expanded rules",
     () => {
       const groups: TriggerGroupConfig[] = [

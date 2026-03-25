@@ -46,8 +46,7 @@
     "extensions": ["add-colon"],
     "validations": [
       { "type": "starts-uppercase" }
-    ],
-    "reclassifyLegalForm": true
+    ]
   },
   {
     "id": "de-registration-eol",

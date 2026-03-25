@@ -41,8 +41,7 @@
     ],
     "validations": [
       { "type": "starts-uppercase" }
-    ],
-    "reclassifyLegalForm": true
+    ]
   },
   {
     "id": "fr-company-id",
