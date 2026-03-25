@@ -572,6 +572,19 @@ const extractValue = (
         end++;
       }
 
+      // When the loop stopped at maxLen, trim back to
+      // the last word boundary so fixPartialWords does
+      // not extend the entity beyond the configured max.
+      if (end >= maxLen) {
+        const lastSpace = valueText.lastIndexOf(
+          " ",
+          end - 1,
+        );
+        if (lastSpace > 0) {
+          end = lastSpace;
+        }
+      }
+
       const rawSlice = valueText.slice(0, end);
       const extracted = rawSlice.trim();
       if (extracted.length === 0) {

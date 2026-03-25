@@ -34,6 +34,15 @@ const buildWordBoundaries = (
 };
 
 /**
+ * Characters that act as hard stops when scanning
+ * backward for a word boundary. Entity boundaries
+ * should never extend past these.
+ */
+const WORD_START_STOPS = new Set([
+  "\n", "\r", ",", ";", "(", ")", "[", "]",
+]);
+
+/**
  * Find the word-start offset at or before `pos`.
  * Scans left until a word boundary is found.
  */
@@ -44,13 +53,26 @@ const wordStartAt = (
 ): number => {
   let p = pos;
   while (p > 0 && !boundaries.has(p)) {
-    // Don't cross newlines (LF or CR)
     const prev = text[p - 1];
-    if (prev === "\n" || prev === "\r") return p;
+    if (
+      prev !== undefined &&
+      WORD_START_STOPS.has(prev)
+    ) {
+      return p;
+    }
     p--;
   }
   return p;
 };
+
+/**
+ * Characters that act as hard stops when scanning
+ * forward for a word boundary. Entity boundaries
+ * should never extend past these.
+ */
+const WORD_END_STOPS = new Set([
+  "\n", "\r", ",", ";", ".", "(", ")", "[", "]",
+]);
 
 /**
  * Find the word-end offset at or after `pos`.
@@ -63,9 +85,10 @@ const wordEndAt = (
 ): number => {
   let p = pos;
   while (p < text.length && !boundaries.has(p)) {
-    // Don't cross newlines (LF or CR)
     const ch = text[p];
-    if (ch === "\n" || ch === "\r") return p;
+    if (ch !== undefined && WORD_END_STOPS.has(ch)) {
+      return p;
+    }
     p++;
   }
   return p;
