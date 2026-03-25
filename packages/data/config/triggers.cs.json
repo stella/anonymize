@@ -56,7 +56,7 @@
       "maxChars": 120
     },
     "triggers": [
-      "bytem",
+      "bytem:",
       "trvale bytem",
       "sídlem",
       "sídlo",

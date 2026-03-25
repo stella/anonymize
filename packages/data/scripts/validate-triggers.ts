@@ -292,43 +292,64 @@ const validateFile = async (
 
   // Intra-file duplicate trigger detection.
   // Warn when the same base trigger string appears in
-  // multiple groups with different strategies, which
-  // causes double-extraction at runtime.
+  // multiple groups with different strategies or labels,
+  // which causes double-extraction at runtime.
   const triggerIndex = new Map<
     string,
-    { groupId: string; strategy: string }
+    { groupId: string; strategy: string; label: string }
   >();
   for (const [i, group] of groups.entries()) {
+    // group is Record<string, unknown> from JSON parse
+    const g = group as Record<string, unknown>;
+    const stratObj = g.strategy;
     const strategy =
-      typeof group.strategy === "object" &&
-      group.strategy !== null
-        ? (group.strategy as Record<string, unknown>)
-            .type
+      typeof stratObj === "object" &&
+      stratObj !== null &&
+      "type" in stratObj
+        ? String(
+            (stratObj as Record<string, unknown>).type,
+          )
+        : "unknown";
+    const label =
+      typeof g.label === "string"
+        ? g.label
         : "unknown";
     const gid =
-      typeof group.id === "string"
-        ? group.id
+      typeof g.id === "string"
+        ? g.id
         : `group[${i}]`;
-    const triggers = Array.isArray(group.triggers)
-      ? group.triggers
+    const triggers = Array.isArray(g.triggers)
+      ? (g.triggers as unknown[])
       : [];
     for (const t of triggers) {
       if (typeof t !== "string") continue;
       const key = t.toLowerCase();
       const prev = triggerIndex.get(key);
-      if (prev !== undefined && prev.strategy !== strategy) {
-        errors.push({
-          file: fileName,
-          groupIndex: i,
-          message:
-            `Duplicate trigger "${t}" also in ` +
-            `"${prev.groupId}" with strategy ` +
-            `"${prev.strategy}" vs "${strategy}"`,
-        });
+      if (prev !== undefined) {
+        const stratDiff = prev.strategy !== strategy;
+        const labelDiff = prev.label !== label;
+        if (stratDiff || labelDiff) {
+          errors.push({
+            file: fileName,
+            groupIndex: i,
+            message:
+              `Duplicate trigger "${t}" also in ` +
+              `"${prev.groupId}"` +
+              (stratDiff
+                ? ` (strategy: "${prev.strategy}"` +
+                  ` vs "${strategy}")`
+                : "") +
+              (labelDiff
+                ? ` (label: "${prev.label}"` +
+                  ` vs "${label}")`
+                : ""),
+          });
+        }
       }
       triggerIndex.set(key, {
         groupId: gid,
-        strategy: String(strategy),
+        strategy,
+        label,
       });
     }
   }
