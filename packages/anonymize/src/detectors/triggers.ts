@@ -654,9 +654,18 @@ const extractValue = (
             .trimStart()
             .toLowerCase();
           const hitsKeyword =
-            ADDRESS_STOP_KEYWORDS.some(
-              (kw) => afterComma.startsWith(kw),
-            );
+            ADDRESS_STOP_KEYWORDS.some((kw) => {
+              if (!afterComma.startsWith(kw))
+                return false;
+              // Guard: next char must be a delimiter
+              // (not a letter) to avoid truncating
+              // city names like "Telč" on "tel".
+              const next = afterComma[kw.length];
+              return (
+                next === undefined ||
+                /[\s:;.,!?()]/.test(next)
+              );
+            });
           if (hitsKeyword) {
             break;
           }

@@ -87,6 +87,7 @@ export const propagateOrgNames = (
       }
 
       // Skip if already covered by an existing entity
+      // or a previously propagated result.
       if (!isOverlapping(idx, matchEnd)) {
         results.push({
           start: idx,
@@ -96,6 +97,7 @@ export const propagateOrgNames = (
           score: ORG_PROPAGATION_SCORE,
           source: DETECTION_SOURCES.COREFERENCE,
         });
+        covered.push([idx, matchEnd]);
       }
 
       searchFrom = matchEnd;
