@@ -456,7 +456,7 @@ const CZ_POSTAL: RegexDef = {
 // "http://example.cz").
 const URL: RegexDef = {
   pattern:
-    `(?:https?:/?/?|www\\.)[\\w\\-]+(?:\\.[\\w\\-]+)+` +
+    `(?:https?://|https?:|www\\.)[\\w\\-]+(?:\\.[\\w\\-]+)+` +
     `(?::\\d+)?` +
     `(?:[/?#][^\\s)\\]>]*[^\\s.,;:!?)\\]>])?`,
   label: "url",
