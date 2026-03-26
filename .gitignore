@@ -7,3 +7,5 @@ dist
 # Local scripts (corpus download, benchmarks)
 scripts/
 packages/data/scripts/
+!packages/anonymize/scripts/
+!packages/anonymize/scripts/check-char-groups-sync.ts

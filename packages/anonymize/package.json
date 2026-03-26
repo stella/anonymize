@@ -23,7 +23,8 @@
   },
   "license": "MIT",
   "scripts": {
-    "build": "tsdown",
+    "build": "bun run check:char-groups-sync && tsdown",
+    "check:char-groups-sync": "bun scripts/check-char-groups-sync.ts",
     "prepublishOnly": "bun run build",
     "typecheck": "tsc --noEmit",
     "lint": "echo 'no linter configured yet'",

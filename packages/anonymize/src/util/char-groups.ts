@@ -1,3 +1,5 @@
+import charGroupsJson from "./char-groups-data.json";
+
 /**
  * Centralized Unicode character equivalence groups.
  *
@@ -29,13 +31,7 @@ const REGEX_CLASS_SPECIAL = /[\\\]^-]/;
 const escapeForCharClass = (ch: string): string =>
   REGEX_CLASS_SPECIAL.test(ch) ? `\\${ch}` : ch;
 
-// Bundle char-group data directly so importing this module
-// does not rely on a sync require() at runtime.
-// Source: packages/data/config/char-groups.json
-import charGroupsJson from "./char-groups-data.json";
-
-const loadConfig = (): CharGroupsConfig =>
-  charGroupsJson as CharGroupsConfig;
+const config = charGroupsJson as CharGroupsConfig;
 
 /**
  * Get the raw characters for a named group.
@@ -44,7 +40,6 @@ const loadConfig = (): CharGroupsConfig =>
 export const charSet = (
   group: string,
 ): readonly string[] => {
-  const config = loadConfig();
   const g = config.groups[group];
   if (!g) {
     throw new Error(
