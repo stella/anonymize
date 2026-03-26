@@ -532,3 +532,37 @@ describe("legal form digit token in prefix", () => {
     expect(matched).toBe(true);
   });
 });
+
+describe("YYYY.MM.DD date format", () => {
+  test("detects dot-separated ISO date", async () => {
+    const entities = await detect(
+      "smlouva ze dne 2024.01.15 byla podepsána",
+    );
+    const date = entities.find(
+      (e) => e.label === "date",
+    );
+    expect(date).toBeDefined();
+    expect(date!.text).toBe("2024.01.15");
+  });
+
+  test("still detects dash-separated ISO date", async () => {
+    const entities = await detect(
+      "smlouva ze dne 2024-01-15 byla podepsána",
+    );
+    const date = entities.find(
+      (e) => e.label === "date",
+    );
+    expect(date).toBeDefined();
+    expect(date!.text).toBe("2024-01-15");
+  });
+
+  test("rejects mixed separators", async () => {
+    const entities = await detect(
+      "kód produktu 2024-01.15 v katalogu",
+    );
+    const date = entities.find(
+      (e) => e.label === "date" && e.text === "2024-01.15",
+    );
+    expect(date).toBeUndefined();
+  });
+});
