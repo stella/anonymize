@@ -617,6 +617,8 @@ const buildDatePatternsFromMonths = (alt: string): string[] => {
     `(?i)\\b\\d{1,2}\\.?\\s+(?:${alt})\\.?\\s+\\d{4}${TIME}?\\b`,
     // b. Month[.] DD[,] YYYY — "March 7, 2023" (US format)
     `(?i)\\b(?:${alt})\\.?\\s+\\d{1,2},?\\s+\\d{4}\\b`,
+    // g. Month[.] DD — "December 31" (no year, US format)
+    `(?i)\\b(?:${alt})\\.?\\s+\\d{1,2}(?=\\s|[.,;!?)]|$)`,
     // c. DDst/nd/rd/th Month[.] [YYYY] — "1st January 2025"
     `(?i)\\b\\d{1,2}(?:st|nd|rd|th)\\s+(?:${alt})\\.?` +
       `(?:\\s+\\d{4})?(?=\\s|[.,;!?)]|$)`,
@@ -625,7 +627,8 @@ const buildDatePatternsFromMonths = (alt: string): string[] => {
     // e. YYYY. Month[.] DD. — Hungarian "2025. január 7."
     `(?i)\\b\\d{4}\\.\\s+(?:${alt})\\.?\\s+\\d{1,2}\\.?(?=\\s|[.,;!?)]|$)`,
     // f. DD de Month[.] [de] YYYY — Spanish "7 de enero de 2025"
-    `(?i)\\b\\d{1,2}\\s+de\\s+(?:${alt})\\.?` + `(?:\\s+de)?\\s+\\d{4}\\b`,
+    `(?i)\\b\\d{1,2}\\s+de\\s+(?:${alt})\\.?` +
+      `(?:\\s+de)?\\s+\\d{4}\\b`,
   ];
 };
 
