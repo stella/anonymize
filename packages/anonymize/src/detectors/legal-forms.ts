@@ -193,13 +193,9 @@ const extendBackward = (
     const { word, start: wordStart } = found;
 
     const isUpper = /^\p{Lu}/u.test(word);
-    const isShortCaps =
-      word.length <= 3 &&
-      word === word.toUpperCase() &&
-      /^[\p{Lu}]+$/u.test(word);
     const isConnector = CONNECTOR_RE.test(word);
 
-    if (isUpper || isShortCaps) {
+    if (isUpper) {
       // Uppercase word — always accept
       pos = wordStart;
     } else if (isConnector) {
@@ -208,12 +204,11 @@ const extendBackward = (
       const prev = findWordBefore(fullText, wordStart);
       if (!prev) break;
       const prevIsUpper = /^\p{Lu}/u.test(prev.word);
-      const prevIsShortCaps =
-        prev.word.length <= 3 &&
-        prev.word === prev.word.toUpperCase() &&
-        /^[\p{Lu}]+$/u.test(prev.word);
-      if (!prevIsUpper && !prevIsShortCaps) break;
-      // Accept both the connector and the word before
+      if (!prevIsUpper) break;
+      // Move pos back to the start of the word that
+      // precedes the connector; the connector and all
+      // whitespace between it and prev.start are
+      // included implicitly in the entity slice.
       pos = prev.start;
     } else {
       break;
