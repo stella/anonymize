@@ -18,6 +18,7 @@ import {
   UPPER_START_RE,
   isSentenceStart,
 } from "../util/text";
+import { DASH } from "../util/char-groups";
 
 /**
  * Try to load the optional @stll/anonymize-data package.
@@ -743,7 +744,9 @@ const DISTRICT_SUFFIX_RE = new RegExp(
 // Postal code before city: "163 00 ", "16300 ",
 // "16300 - " (with dash separator).
 const POSTAL_PREFIX_RE =
-  /(?:\d{5}|\d{3}\s\d{2})\s*[-–—]?\s*$/;
+  new RegExp(
+    `(?:\\d{5}|\\d{3}\\s\\d{2})\\s*${DASH}?\\s*$`,
+  );
 
 // Words that must NOT be absorbed into an address span
 // when they follow a postal-code + city pattern. Party
