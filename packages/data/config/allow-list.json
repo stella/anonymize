@@ -6,6 +6,7 @@
     "base",
     "bic",
     "board",
+    "bonus",
     "business",
     "change",
     "chief",
@@ -35,12 +36,15 @@
     "mfčr",
     "mobile",
     "mpsv",
+    "not",
     "note",
+    "notice",
     "officer",
     "otter",
     "pacht",
     "party",
     "payment",
+    "period",
     "power",
     "prime",
     "rate",
@@ -59,6 +63,7 @@
     "škola",
     "tato",
     "term",
+    "to",
     "trust"
   ]
 }
