@@ -46,6 +46,7 @@
       "Territory of"
     ],
     "includeTrigger": true,
+    "extensions": ["normalize-spaces"],
     "validations": [
       { "type": "starts-uppercase" }
     ]
