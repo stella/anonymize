@@ -149,19 +149,19 @@ const findWordBefore = (
 ): { word: string; start: number } | null => {
   let scan = pos - 1;
   // Skip horizontal whitespace
-  while (
-    scan >= 0 &&
-    text[scan] !== "\n" &&
-    /\s/.test(text[scan]!)
-  ) {
+  while (scan >= 0) {
+    const ch = text.charAt(scan);
+    if (ch === "\n" || !/\s/.test(ch)) break;
     scan--;
   }
-  if (scan < 0 || text[scan] === "\n") return null;
+  if (scan < 0 || text.charAt(scan) === "\n") {
+    return null;
+  }
 
   const wordEnd = scan + 1;
   while (
     scan >= 0 &&
-    /[\p{L}\p{M}&]/u.test(text[scan]!)
+    /[\p{L}\p{M}&]/u.test(text.charAt(scan))
   ) {
     scan--;
   }
