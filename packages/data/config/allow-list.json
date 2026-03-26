@@ -1,5 +1,5 @@
 {
-  "_comment": "Known abbreviations and institutional acronyms that should never be flagged as PII.",
+  "_comment": "Known abbreviations, institutional acronyms, and common words that should never be flagged as PII.",
   "words": [
     "amu",
     "bic",
@@ -12,8 +12,12 @@
     "mfčr",
     "mpsv",
     "pacht",
+    "sleva",
+    "smlouva",
+    "spory",
     "sr",
     "subject",
-    "škola"
+    "škola",
+    "tato"
   ]
 }
