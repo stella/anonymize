@@ -549,6 +549,21 @@ const MAC_ADDRESS: RegexDef = {
 // SWIFT/BIC moved to trigger-based detection
 // (triggers.global.json) for better composability.
 
+// 12-hour time: "5:00 p.m.", "12:30 AM", "5:00p.m.",
+// "11:00 a.m. Eastern Time". Captures HH:MM and the
+// am/pm marker; optional timezone suffix is not
+// included (it's not PII). Case spelled out explicitly
+// (no (?i)) because DFA compilation fails with
+// Unicode + case-insensitive flag on this pattern.
+const TIME_12H: RegexDef = {
+  pattern:
+    `\\b(?:1[0-2]|0?[1-9]):[0-5]\\d` +
+    `[^\\S\\n]?(?:[aApP]\\.?[mM]\\.?)` +
+    `(?=[\\s,;!?)]|$)`,
+  label: "date",
+  score: 0.9,
+};
+
 // ── Collected definitions ────────────────────────────
 
 /**
@@ -586,6 +601,7 @@ const ALL_REGEX_DEFS: readonly RegexDef[] = [
   IPV6_ADDRESS,
   MAC_ADDRESS,
   BARE_DOMAIN,
+  TIME_12H,
   ...STDNUM_ENTRIES,
 ];
 
