@@ -152,8 +152,9 @@ const buildEntityRows = (
     .map((e, j) => {
       const color = COLORS[e.label] ?? "#9a9cb8";
       const ctx = escAttr(contextSnippet(fullText, e));
+      const tag = e.label.replace(/\s+/g, "-");
       return [
-        `<tr class="entity-row" data-ctx="${ctx}">`,
+        `<tr class="entity-row" data-ctx="${ctx}" data-label="${tag}">`,
         `<td>${j + 1}</td>`,
         `<td style="color:${color}">${esc(e.label)}</td>`,
         `<td>${esc(e.text)}</td>`,
@@ -270,10 +271,13 @@ document.addEventListener('click', function(e) {
     .forEach(function(r) { r.remove(); });
   var ctx = row.getAttribute('data-ctx');
   if (!ctx) return;
-  // Replace ███ marker with <mark>entity text</mark>
+  // Replace ███ marker with <label>entity text</label>
   var entityText = row.querySelectorAll('td')[2].textContent;
+  var label = row.getAttribute('data-label') || 'entity';
+  var tag = label.replace(/\\s+/g, '-');
   var display = ctx.replace('███',
-    '<mark>' + entityText + '</mark>');
+    '<mark>&lt;' + tag + '&gt;' + entityText +
+    '&lt;/' + tag + '&gt;</mark>');
   var tr = document.createElement('tr');
   tr.className = 'ctx-row';
   tr.innerHTML = '<td colspan="5">' + display + '</td>';
