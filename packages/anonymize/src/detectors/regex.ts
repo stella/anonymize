@@ -16,6 +16,7 @@ import {
 } from "../config/titles";
 import { DETECTION_SOURCES } from "../types";
 import type { Entity } from "../types";
+import { DASH } from "../util/char-groups";
 
 const MIN_PHONE_LENGTH = 7;
 const MIN_MONTH_NAME_LENGTH = 3;
@@ -820,7 +821,7 @@ const buildCurrencyPatterns = (
       `(?:[${symbols}])` +
         `[^\\S\\n\\t]?` +
         `${NUM}` +
-        `(?:[.,][^\\S\\n\\t]?(?:\\d{1,2}[-–—]?|[-–—]{1,2})?)?\\b`,
+        `(?:[.,][^\\S\\n\\t]?(?:\\d{1,2}${DASH}?|${DASH}{1,2})?)?\\b`,
     );
   }
 
@@ -831,7 +832,7 @@ const buildCurrencyPatterns = (
       `\\b(?:${trailingAlt})` +
         `[^\\S\\n\\t]{0,2}` +
         `${NUM}` +
-        `(?:[.,][^\\S\\n\\t]?(?:\\d{1,2}[-–—]?|[-–—]{1,2})?)?\\b`,
+        `(?:[.,][^\\S\\n\\t]?(?:\\d{1,2}${DASH}?|${DASH}{1,2})?)?\\b`,
     );
   }
 
@@ -843,7 +844,7 @@ const buildCurrencyPatterns = (
   if (trailingAlt) {
     patterns.push(
       `\\b${NUM}` +
-        `(?:[.,][^\\S\\n\\t]?(?:\\d{1,2}[-–—]?|[-–—]{1,2})?)?[^\\S\\n\\t]{0,4}` +
+        `(?:[.,][^\\S\\n\\t]?(?:\\d{1,2}${DASH}?|${DASH}{1,2})?)?[^\\S\\n\\t]{0,4}` +
         `(?:${trailingAlt})` +
         `(?:\\b|(?=\\s|[.,;!?)]|$))`,
     );

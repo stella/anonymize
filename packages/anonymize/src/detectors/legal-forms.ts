@@ -13,6 +13,7 @@ import type { Match } from "@stll/text-search";
 
 import { DETECTION_SOURCES } from "../types";
 import type { Entity } from "../types";
+import { DASH_INNER } from "../util/char-groups";
 
 const UPPER =
   "A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽÄÖÜÀÂÆÇÈÊËÎÏÔÙÛŸÑ\\u0130";
@@ -62,7 +63,7 @@ const buildPatternString = (
   const alt = sorted.map(escapeForRegex).join("|");
   // Allow lowercase connectors between name words:
   // "a" (Czech/SK), "and", "und", "et", "&", "e"
-  const CONNECTOR = `(?:[\\s&,.\\-–—]{1,4}|\\s+(?:a|and|und|et|e|y|i)\\s+)`;
+  const CONNECTOR = `(?:[\\s&,.${DASH_INNER}]{1,4}|\\s+(?:a|and|und|et|e|y|i)\\s+)`;
   // Czech state enterprise names can be 7+ words:
   // "Národní agentura pro komunikační a informační
   // technologie, s. p." — need generous limit.
@@ -137,7 +138,7 @@ export const buildLegalFormPatterns = async (): Promise<
   // Uses all forms (both long and short).
   const allcapPrefix =
     `(?:${ALLCAP_WORD})` +
-    `(?:[\\s&,.\\-–—]{1,4}(?:${ALLCAP_WORD})){0,2}`;
+    `(?:[\\s&,.${DASH_INNER}]{1,4}(?:${ALLCAP_WORD})){0,2}`;
   const allcapAlt = allForms
     .toSorted((a, b) => b.length - a.length)
     .map(escapeForRegex)

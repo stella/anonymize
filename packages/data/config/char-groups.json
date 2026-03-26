@@ -1,0 +1,90 @@
+{
+  "_comment": "Unicode character equivalence groups. Used to build regex character classes that match all variants of a character type.",
+  "groups": {
+    "dash": {
+      "description": "Dash-like characters (hyphens, en-dash, em-dash, minus)",
+      "chars": [
+        { "char": "-", "name": "hyphen-minus", "code": "U+002D" },
+        { "char": "\u2013", "name": "en-dash", "code": "U+2013" },
+        { "char": "\u2014", "name": "em-dash", "code": "U+2014" },
+        { "char": "\u2010", "name": "hyphen", "code": "U+2010" },
+        { "char": "\u2011", "name": "non-breaking hyphen", "code": "U+2011" },
+        { "char": "\u2212", "name": "minus sign", "code": "U+2212" },
+        { "char": "\u2043", "name": "hyphen bullet", "code": "U+2043" }
+      ]
+    },
+    "space": {
+      "description": "Space-like characters",
+      "chars": [
+        { "char": " ", "name": "space", "code": "U+0020" },
+        { "char": "\u00A0", "name": "no-break space", "code": "U+00A0" },
+        { "char": "\u2002", "name": "en space", "code": "U+2002" },
+        { "char": "\u2003", "name": "em space", "code": "U+2003" },
+        { "char": "\u2009", "name": "thin space", "code": "U+2009" },
+        { "char": "\u200A", "name": "hair space", "code": "U+200A" },
+        { "char": "\u202F", "name": "narrow no-break space", "code": "U+202F" }
+      ]
+    },
+    "quote-double": {
+      "description": "Double quotation marks",
+      "chars": [
+        { "char": "\"", "name": "quotation mark", "code": "U+0022" },
+        { "char": "\u201C", "name": "left double quotation mark", "code": "U+201C" },
+        { "char": "\u201D", "name": "right double quotation mark", "code": "U+201D" },
+        { "char": "\u201E", "name": "double low-9 quotation mark", "code": "U+201E" },
+        { "char": "\u00AB", "name": "left guillemet", "code": "U+00AB" },
+        { "char": "\u00BB", "name": "right guillemet", "code": "U+00BB" }
+      ]
+    },
+    "quote-single": {
+      "description": "Single quotation marks and apostrophes",
+      "chars": [
+        { "char": "'", "name": "apostrophe", "code": "U+0027" },
+        { "char": "\u2018", "name": "left single quotation mark", "code": "U+2018" },
+        { "char": "\u2019", "name": "right single quotation mark", "code": "U+2019" },
+        { "char": "\u201A", "name": "single low-9 quotation mark", "code": "U+201A" },
+        { "char": "\u2039", "name": "left single guillemet", "code": "U+2039" },
+        { "char": "\u203A", "name": "right single guillemet", "code": "U+203A" },
+        { "char": "\u02BC", "name": "modifier letter apostrophe", "code": "U+02BC" }
+      ]
+    },
+    "dot": {
+      "description": "Dot-like characters",
+      "chars": [
+        { "char": ".", "name": "full stop", "code": "U+002E" },
+        { "char": "\u00B7", "name": "middle dot", "code": "U+00B7" },
+        { "char": "\u2022", "name": "bullet", "code": "U+2022" },
+        { "char": "\u2024", "name": "one dot leader", "code": "U+2024" }
+      ]
+    },
+    "slash": {
+      "description": "Slash-like characters",
+      "chars": [
+        { "char": "/", "name": "solidus", "code": "U+002F" },
+        { "char": "\u2044", "name": "fraction slash", "code": "U+2044" },
+        { "char": "\u2215", "name": "division slash", "code": "U+2215" }
+      ]
+    },
+    "colon": {
+      "description": "Colon-like characters",
+      "chars": [
+        { "char": ":", "name": "colon", "code": "U+003A" },
+        { "char": "\uA789", "name": "modifier letter colon", "code": "U+A789" },
+        { "char": "\u2236", "name": "ratio", "code": "U+2236" }
+      ]
+    },
+    "comma": {
+      "description": "Comma-like characters",
+      "chars": [
+        { "char": ",", "name": "comma", "code": "U+002C" },
+        { "char": "\u201A", "name": "single low-9 quotation mark (used as comma)", "code": "U+201A" }
+      ]
+    },
+    "ellipsis": {
+      "description": "Ellipsis characters",
+      "chars": [
+        { "char": "\u2026", "name": "horizontal ellipsis", "code": "U+2026" }
+      ]
+    }
+  }
+}
