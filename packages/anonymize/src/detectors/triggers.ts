@@ -15,6 +15,11 @@ import { loadLanguageConfigs } from "../util/lang-loader";
 const TRIGGER_SCORE = 0.95;
 const WHITESPACE_RE = /\s+/;
 const LETTER_RE = /\p{L}/u;
+/**
+ * Decimal-comma pattern: comma followed by digit or
+ * dash notation ("0,05%", "1.529,50 Kč", "98.000,- Kč").
+ */
+const DECIMAL_COMMA_RE = /^,(?:\d|[-\u2013\u2014]{1,2})/;
 
 /**
  * Post-nominal degree regex. When a comma-stop is
@@ -434,7 +439,7 @@ const extractValue = (
           // Decimal separator: comma followed by digit or
           // dash notation ("0,05%", "1.529,50 Kč",
           // "98.000,- Kč", "98.000,-- Kč")
-          if (/^,(?:\d|[-–—]{1,2})/.test(afterComma)) {
+          if (DECIMAL_COMMA_RE.test(afterComma)) {
             end++;
             continue;
           }
