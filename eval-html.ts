@@ -39,7 +39,9 @@ const CONFIG: PipelineConfig = {
   enableRegex: true,
   enableNameCorpus: true,
   enableDenyList: true,
-  denyListCountries: ["CZ", "SK", "DE"],
+  denyListCountries: [
+    "CZ", "SK", "DE", "US", "GB", "FR", "AT", "CH",
+  ],
   enableGazetteer: false,
   enableNer: false,
   enableConfidenceBoost: false,
