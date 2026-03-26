@@ -479,6 +479,30 @@ describe("ve výši monetary trigger", () => {
   });
 });
 
+describe("decimal comma continuation", () => {
+  test("continues past decimal comma in amount", async () => {
+    const entities = await detect(
+      "ve výši 1.529,50 Kč",
+    );
+    const amount = entities.find(
+      (e) => e.label === "monetary amount",
+    );
+    expect(amount).toBeDefined();
+    expect(amount!.text).toContain("1.529,50");
+  });
+
+  test("continues past dash notation ,- Kč", async () => {
+    const entities = await detect(
+      "ve výši 98.000,- Kč",
+    );
+    const amount = entities.find(
+      (e) => e.label === "monetary amount",
+    );
+    expect(amount).toBeDefined();
+    expect(amount!.text).toContain("98.000,-");
+  });
+});
+
 describe("M.Sc. / B.Sc. post-nominals", () => {
   test("captures M.Sc. after name", async () => {
     const entities = await detect(
