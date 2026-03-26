@@ -431,6 +431,13 @@ const extractValue = (
         // skip past it. Non-person triggers stop here.
         if (ch === ",") {
           const afterComma = valueText.slice(end);
+          // Decimal separator: comma followed by digit or
+          // dash notation ("0,05%", "1.529,50 Kč",
+          // "98.000,- Kč", "98.000,-- Kč")
+          if (/^,(?:\d|[-–—]{1,2})/.test(afterComma)) {
+            end++;
+            continue;
+          }
           const degreeMatch =
             label === "person"
               ? POST_NOMINAL_RE.exec(afterComma)
