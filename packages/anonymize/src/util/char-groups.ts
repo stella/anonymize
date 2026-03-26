@@ -107,6 +107,7 @@ export const charClassInner = (
  */
 export const charPattern = (group: string): string => {
   const chars = charSet(group);
+  // SAFETY: length === 1 guarantees index 0 exists.
   if (chars.length === 1) return chars[0]!;
   const escaped = chars.map((ch) =>
     ch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
