@@ -238,6 +238,45 @@ export const buildTriggerPatterns = async (): Promise<{
     }
   }
 
+  // Load year-words from JSON dictionary and create
+  // date triggers: "rok 2022" → date entity.
+  try {
+    const yearMod = await import(
+      "@stll/anonymize-data/config/year-words.json"
+    );
+    // eslint-disable-next-line no-unsafe-type-assertion -- JSON
+    const data = (
+      (yearMod as { default?: unknown }).default ??
+      yearMod
+    ) as Record<string, string | string[]>;
+    const seen = new Set<string>();
+    const yearValidation = compileValidations([
+      {
+        type: "matches-pattern",
+        pattern: "^(?:19|20)\\d{2}\\.?$",
+      },
+    ]);
+    for (const [key, words] of Object.entries(data)) {
+      if (key.startsWith("_") || !Array.isArray(words)) {
+        continue;
+      }
+      for (const word of words) {
+        const lc = word.toLowerCase();
+        if (seen.has(lc)) continue;
+        seen.add(lc);
+        rules.push({
+          trigger: word,
+          label: "date",
+          strategy: { type: "n-words", count: 1 },
+          validations: yearValidation,
+          includeTrigger: false,
+        });
+      }
+    }
+  } catch {
+    // year-words.json not available — skip
+  }
+
   // Warn about cross-group trigger duplicates.
   // Duplicates cause redundant AC matches but are
   // not fatal (mergeAndDedup handles overlap).

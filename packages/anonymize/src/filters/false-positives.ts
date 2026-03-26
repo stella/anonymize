@@ -113,7 +113,13 @@ export const filterFalsePositives = (
     if (SECTION_NUMBER_RE.test(trimmed) && entity.source !== "trigger") {
       continue;
     }
-    if (STANDALONE_YEAR_RE.test(trimmed)) {
+    // Standalone years (2022, 1995) without a trigger
+    // context are noise. Trigger-sourced years are
+    // valid ("rok 2022", "year 2019").
+    if (
+      STANDALONE_YEAR_RE.test(trimmed) &&
+      entity.source !== "trigger"
+    ) {
       continue;
     }
 
