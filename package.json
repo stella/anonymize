@@ -13,6 +13,6 @@
     "fix:json": "bun packages/data/scripts/sort-json.ts"
   },
   "devDependencies": {
-    "turbo": "^2"
+    "turbo": "^2.8.20"
   }
 }
