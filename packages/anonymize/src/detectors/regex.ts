@@ -419,7 +419,8 @@ const CZ_BIRTH_NUMBER: RegexDef = {
 const DATE_NUMERIC: RegexDef = {
   pattern:
     `\\b(?:\\d{1,2}[./]\\d{1,2}[./]\\d{2,4}` +
-    `|\\d{4}-\\d{2}-\\d{2})\\b`,
+    `|\\d{4}-\\d{2}-\\d{2}` +
+    `|\\d{4}\\.\\d{2}\\.\\d{2})\\b`,
   label: "date",
   score: 1,
 };
