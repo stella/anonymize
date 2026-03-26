@@ -627,3 +627,29 @@ describe("State of / Commonwealth of jurisdiction trigger", () => {
   });
 });
 
+describe("12-hour time detection", () => {
+  test("detects '5:00 p.m.'", async () => {
+    const entities = await detect(
+      "the deadline is 5:00 p.m. Eastern Time",
+    );
+    const date = entities.find(
+      (e) => e.label === "date",
+    );
+    expect(date).toBeDefined();
+    expect(date!.text).toContain("5:00");
+    expect(date!.text).toContain("p.m.");
+  });
+
+  test("detects '12:30 AM'", async () => {
+    const entities = await detect(
+      "meeting starts at 12:30 AM on Monday",
+    );
+    const date = entities.find(
+      (e) =>
+        e.label === "date" &&
+        e.text.includes("12:30"),
+    );
+    expect(date).toBeDefined();
+    expect(date!.text).toContain("AM");
+  });
+});
