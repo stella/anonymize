@@ -36,6 +36,19 @@
     ]
   },
   {
+    "id": "en-jurisdiction",
+    "label": "address",
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "State of",
+      "Commonwealth of"
+    ],
+    "includeTrigger": true,
+    "validations": [
+      { "type": "starts-uppercase" }
+    ]
+  },
+  {
     "id": "en-company-id",
     "label": "registration number",
     "strategy": { "type": "company-id-value" },

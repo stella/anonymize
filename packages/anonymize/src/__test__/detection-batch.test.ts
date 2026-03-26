@@ -566,3 +566,51 @@ describe("YYYY.MM.DD date format", () => {
     expect(date).toBeUndefined();
   });
 });
+
+describe("State of / Commonwealth of jurisdiction trigger", () => {
+  test("detects 'State of Delaware' as address", async () => {
+    const entities = await detect(
+      "organized under the laws of the State of Delaware",
+    );
+    const addr = entities.find(
+      (e) => e.label === "address",
+    );
+    expect(addr).toBeDefined();
+    expect(addr!.text).toBe("State of Delaware");
+  });
+
+  test("detects all-caps 'STATE OF NEW YORK'", async () => {
+    const entities = await detect(
+      "GOVERNED BY THE LAWS OF THE STATE OF NEW YORK",
+    );
+    const addr = entities.find(
+      (e) => e.label === "address",
+    );
+    expect(addr).toBeDefined();
+    expect(addr!.text).toBe("STATE OF NEW YORK");
+  });
+
+  test("detects 'Commonwealth of Virginia'", async () => {
+    const entities = await detect(
+      "incorporated in the Commonwealth of Virginia",
+    );
+    const addr = entities.find(
+      (e) => e.label === "address",
+    );
+    expect(addr).toBeDefined();
+    expect(addr!.text).toBe("Commonwealth of Virginia");
+  });
+
+  test("rejects 'state of mind' (lowercase)", async () => {
+    const entities = await detect(
+      "regardless of the state of mind of the party",
+    );
+    const addr = entities.find(
+      (e) =>
+        e.label === "address" &&
+        e.text.toLowerCase().includes("mind"),
+    );
+    expect(addr).toBeUndefined();
+  });
+});
+
