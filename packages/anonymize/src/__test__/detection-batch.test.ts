@@ -601,6 +601,19 @@ describe("State of / Commonwealth of jurisdiction trigger", () => {
     expect(addr!.text).toBe("Commonwealth of Virginia");
   });
 
+  test("known limitation: title-case 'State of Mind' is detected (FP)", async () => {
+    const entities = await detect(
+      "The State of Mind Academy was founded in 2010",
+    );
+    const addr = entities.find(
+      (e) => e.label === "address" && e.text.includes("Mind"),
+    );
+    // This is a known false positive — starts-uppercase
+    // cannot distinguish proper nouns from title-case
+    // generic words. Tracked for future improvement.
+    expect(addr).toBeDefined();
+  });
+
   test("rejects 'state of mind' (lowercase)", async () => {
     const entities = await detect(
       "regardless of the state of mind of the party",

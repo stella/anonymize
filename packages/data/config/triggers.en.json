@@ -41,7 +41,9 @@
     "strategy": { "type": "to-next-comma" },
     "triggers": [
       "State of",
-      "Commonwealth of"
+      "Commonwealth of",
+      "District of",
+      "Territory of"
     ],
     "includeTrigger": true,
     "validations": [
