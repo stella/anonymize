@@ -48,6 +48,21 @@ implementations are original.
 - https://github.com/FinNLP/humannames
 - License: MIT
 
+### Wikidata — Given Names and Family Names (CC0 1.0)
+
+- Per-language given names and family names for 11
+  European languages (cs, sk, de, pl, hu, ro, fr,
+  es, it, en, sv)
+- Queried via Wikidata SPARQL (P31: Q202444 given
+  name, Q101352 family name)
+- Used in: `dictionaries/names/first/*.json`,
+  `dictionaries/names/surnames/*.json`
+- Czech/Slovak feminine surname forms (-ová, -á)
+  generated algorithmically from masculine forms
+- https://www.wikidata.org
+- License: Creative Commons CC0 1.0 Universal
+  Public Domain Dedication
+
 ### GeoNames (CC BY 4.0)
 
 - City and place names from the GeoNames gazetteer
