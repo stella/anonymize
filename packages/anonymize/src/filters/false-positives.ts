@@ -11,6 +11,12 @@ const HAS_DIGIT_RE = /\d/;
 const ADDRESS_COMPONENTS_RE =
   /(?:^|\s)(?:ul\.|ulice|nám\.|náměstí|tř\.|třída|nábř\.|nábřeží|č\.p\.|č\.ev\.|č\.|sídliště|bulvár)(?=[\s,./]|$)/i;
 
+// Jurisdiction patterns: "State of X", "Commonwealth of X",
+// "District of X", "Territory of X"
+// — valid address entities without digits or street words.
+const JURISDICTION_RE =
+  /^(?:state|commonwealth|district|territory)\s+of\s+/i;
+
 // Max entity text length by label. Prevents runaway
 // trigger extractions (e.g., "město Dobříš i okolních
 // obcí...") from producing absurdly long entities.
@@ -143,7 +149,8 @@ export const filterFalsePositives = (
       trimmed.length > 40 &&
       !POSTAL_CODE_RE.test(trimmed) &&
       !HAS_DIGIT_RE.test(trimmed) &&
-      !ADDRESS_COMPONENTS_RE.test(trimmed)
+      !ADDRESS_COMPONENTS_RE.test(trimmed) &&
+      !JURISDICTION_RE.test(trimmed)
     ) {
       continue;
     }
@@ -151,11 +158,15 @@ export const filterFalsePositives = (
     // Reject ANY trigger-sourced address without digits
     // and without a known street-type word. Catches
     // non-address text like "Nejsme plátci DPH !".
+    // Exempt jurisdiction patterns ("State of ...",
+    // "Commonwealth of ...") which are valid addresses
+    // without digits.
     if (
       entity.label === "address" &&
       entity.source === "trigger" &&
       !HAS_DIGIT_RE.test(trimmed) &&
-      !ADDRESS_COMPONENTS_RE.test(trimmed)
+      !ADDRESS_COMPONENTS_RE.test(trimmed) &&
+      !JURISDICTION_RE.test(trimmed)
     ) {
       continue;
     }
