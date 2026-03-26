@@ -82,27 +82,46 @@ const dedup = (entities: Entity[]): Entity[] => {
   return used;
 };
 
+type HighlightResult = {
+  html: string;
+  spanIdByEntityIdx: Map<number, number>;
+};
+
 const highlight = (
   text: string,
   entities: Entity[],
-): string => {
+  docIdx: number,
+): HighlightResult => {
   const sorted = dedup(
     entities.toSorted((a, b) => a.start - b.start),
   );
+  // Build a lookup: for each entity index in the
+  // original array, what span index did it get?
+  const spanIdByEntityIdx = new Map<number, number>();
+  for (let si = 0; si < sorted.length; si++) {
+    const s = sorted[si];
+    if (!s) continue;
+    const origIdx = entities.indexOf(s);
+    if (origIdx !== -1) spanIdByEntityIdx.set(origIdx, si);
+  }
+
   let result = "";
   let pos = 0;
-  for (const e of sorted) {
+  for (let si = 0; si < sorted.length; si++) {
+    const e = sorted[si];
+    if (!e) continue;
     if (e.start > pos) result += esc(text.slice(pos, e.start));
     const color = COLORS[e.label] ?? "#dfe6e9";
     result +=
-      `<span class="entity" style="background:${color}22;` +
+      `<span class="entity" id="e${docIdx}-${si}" ` +
+      `style="background:${color}22;` +
       `border-bottom:2px solid ${color}" ` +
       `title="${esc(e.label)} (${e.score.toFixed(2)}, ` +
       `${e.source})">${esc(e.text)}</span>`;
     pos = e.end;
   }
   if (pos < text.length) result += esc(text.slice(pos));
-  return result;
+  return { html: result, spanIdByEntityIdx };
 };
 
 type DocResult = {
@@ -126,16 +145,27 @@ const buildHtml = (docs: DocResult[]): string => {
     .join("");
   const panels = docs
     .map((d, i) => {
+      const { html, spanIdByEntityIdx } = highlight(
+        d.text,
+        d.entities,
+        i,
+      );
       const rows = d.entities
-        .map(
-          (e, j) =>
-            `<tr><td>${j + 1}</td>` +
+        .map((e, j) => {
+          const spanId = spanIdByEntityIdx.get(j);
+          const onclick =
+            spanId !== undefined
+              ? ` class="clickable" onclick="scrollToEntity('e${i}-${spanId}')"`
+              : "";
+          return (
+            `<tr${onclick}><td>${j + 1}</td>` +
             `<td style="color:${COLORS[e.label] ?? "#9a9cb8"}">` +
             `${esc(e.label)}</td>` +
             `<td>${esc(e.text)}</td>` +
             `<td>${e.source}</td>` +
-            `<td>${e.score.toFixed(2)}</td></tr>`,
-        )
+            `<td>${e.score.toFixed(2)}</td></tr>`
+          );
+        })
         .join("");
       return (
         `<div class="panel${i === 0 ? " active" : ""}" ` +
@@ -143,7 +173,7 @@ const buildHtml = (docs: DocResult[]): string => {
         `<div class="split">` +
         `<div class="pane"><h3>Original</h3>` +
         `<div class="content">` +
-        `${highlight(d.text, d.entities)}</div></div>` +
+        `${html}</div></div>` +
         `<div class="pane"><h3>Redacted</h3>` +
         `<div class="content">` +
         `${esc(d.redactedText)}</div></div></div>` +
@@ -196,6 +226,12 @@ const buildHtml = (docs: DocResult[]): string => {
     `font-weight:500}` +
     `td{color:var(--text)}` +
     `tr:hover td{background:var(--surface2)}` +
+    `tr.clickable{cursor:pointer}` +
+    `tr.clickable:hover td{background:var(--accent)22}` +
+    `.entity.flash{outline:2px solid #fff;` +
+    `outline-offset:1px;animation:flash .8s ease-out}` +
+    `@keyframes flash{0%{outline-color:#fff}` +
+    `100%{outline-color:transparent}}` +
     `</style></head><body>` +
     `<h2>Eval — ${docs.length} docs, ` +
     `${totalEntities} entities</h2>` +
@@ -205,6 +241,13 @@ const buildHtml = (docs: DocResult[]): string => {
     `.forEach((t,j)=>t.classList.toggle('active',j===i));` +
     `document.querySelectorAll('.panel')` +
     `.forEach((p,j)=>p.classList.toggle('active',j===i))` +
+    `}function scrollToEntity(id){` +
+    `var el=document.getElementById(id);` +
+    `if(!el)return;` +
+    `el.scrollIntoView({behavior:'smooth',block:'center'});` +
+    `el.classList.remove('flash');` +
+    `void el.offsetWidth;` +
+    `el.classList.add('flash')` +
     `}</script></body></html>`
   );
 };
