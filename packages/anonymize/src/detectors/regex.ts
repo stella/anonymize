@@ -558,7 +558,7 @@ const MAC_ADDRESS: RegexDef = {
 const TIME_12H: RegexDef = {
   pattern:
     `\\b(?:1[0-2]|0?[1-9]):[0-5]\\d` +
-    `\\s?(?:[aApP]\\.?[mM]\\.?)` +
+    `[^\\S\\n]?(?:[aApP]\\.?[mM]\\.?)` +
     `(?=[\\s,;!?)]|$)`,
   label: "date",
   score: 0.9,

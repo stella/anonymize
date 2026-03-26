@@ -633,10 +633,21 @@ describe("12-hour time detection", () => {
       "the deadline is 5:00 p.m. Eastern Time",
     );
     const date = entities.find(
-      (e) => e.label === "date",
+      (e) => e.label === "date" && e.text.includes("5:00"),
     );
     expect(date).toBeDefined();
     expect(date!.text).toContain("5:00");
+    expect(date!.text).toContain("p.m.");
+  });
+
+  test("detects '5:00p.m.' (no space)", async () => {
+    const entities = await detect(
+      "submit by 5:00p.m. today",
+    );
+    const date = entities.find(
+      (e) => e.label === "date" && e.text.includes("5:00"),
+    );
+    expect(date).toBeDefined();
     expect(date!.text).toContain("p.m.");
   });
 
