@@ -1,12 +1,10 @@
 /**
  * Centralized Unicode character equivalence groups.
  *
- * Loads char-groups.json from @stll/anonymize-data and
- * provides helpers to build regex character classes that
- * match all typographic variants of a character type
+ * Bundles the char-groups config directly into the package
+ * and provides helpers to build regex character classes
+ * that match all typographic variants of a character type
  * (dashes, spaces, quotes, etc.).
- *
- * The JSON is loaded lazily on first access and cached.
  */
 
 type CharEntry = {
@@ -31,18 +29,13 @@ const REGEX_CLASS_SPECIAL = /[\\\]^-]/;
 const escapeForCharClass = (ch: string): string =>
   REGEX_CLASS_SPECIAL.test(ch) ? `\\${ch}` : ch;
 
-let cached: CharGroupsConfig | undefined;
+// Bundle char-group data directly so importing this module
+// does not rely on a sync require() at runtime.
+// Source: packages/data/config/char-groups.json
+import charGroupsJson from "./char-groups-data.json";
 
-const loadConfig = (): CharGroupsConfig => {
-  if (cached) return cached;
-  // Dynamic import would be async; use require for
-  // sync access since this runs in Bun/Node.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  cached = require(
-    "@stll/anonymize-data/config/char-groups.json",
-  ) as CharGroupsConfig;
-  return cached;
-};
+const loadConfig = (): CharGroupsConfig =>
+  charGroupsJson as CharGroupsConfig;
 
 /**
  * Get the raw characters for a named group.

@@ -1,0 +1,505 @@
+{
+  "_comment": "Unicode character equivalence groups. Used to build regex character classes that match all variants of a character type.",
+  "groups": {
+    "dash": {
+      "description": "Dash-like characters (hyphens, en-dash, em-dash, minus)",
+      "chars": [
+        {
+          "char": "-",
+          "name": "hyphen-minus",
+          "code": "U+002D"
+        },
+        {
+          "char": "–",
+          "name": "en-dash",
+          "code": "U+2013"
+        },
+        {
+          "char": "—",
+          "name": "em-dash",
+          "code": "U+2014"
+        },
+        {
+          "char": "‐",
+          "name": "hyphen",
+          "code": "U+2010"
+        },
+        {
+          "char": "‑",
+          "name": "non-breaking hyphen",
+          "code": "U+2011"
+        },
+        {
+          "char": "−",
+          "name": "minus sign",
+          "code": "U+2212"
+        },
+        {
+          "char": "⁃",
+          "name": "hyphen bullet",
+          "code": "U+2043"
+        },
+        {
+          "char": "‒",
+          "name": "figure dash",
+          "code": "U+2012"
+        },
+        {
+          "char": "―",
+          "name": "horizontal bar",
+          "code": "U+2015"
+        },
+        {
+          "char": "⸺",
+          "name": "two-em dash",
+          "code": "U+2E3A"
+        },
+        {
+          "char": "⸻",
+          "name": "three-em dash",
+          "code": "U+2E3B"
+        },
+        {
+          "char": "־",
+          "name": "Hebrew maqaf",
+          "code": "U+05BE"
+        }
+      ]
+    },
+    "space": {
+      "description": "Space-like characters",
+      "chars": [
+        {
+          "char": " ",
+          "name": "space",
+          "code": "U+0020"
+        },
+        {
+          "char": " ",
+          "name": "no-break space",
+          "code": "U+00A0"
+        },
+        {
+          "char": " ",
+          "name": "en space",
+          "code": "U+2002"
+        },
+        {
+          "char": " ",
+          "name": "em space",
+          "code": "U+2003"
+        },
+        {
+          "char": " ",
+          "name": "thin space",
+          "code": "U+2009"
+        },
+        {
+          "char": " ",
+          "name": "hair space",
+          "code": "U+200A"
+        },
+        {
+          "char": " ",
+          "name": "narrow no-break space",
+          "code": "U+202F"
+        },
+        {
+          "char": " ",
+          "name": "Ogham space mark",
+          "code": "U+1680"
+        },
+        {
+          "char": " ",
+          "name": "en quad",
+          "code": "U+2000"
+        },
+        {
+          "char": " ",
+          "name": "em quad",
+          "code": "U+2001"
+        },
+        {
+          "char": " ",
+          "name": "three-per-em space",
+          "code": "U+2004"
+        },
+        {
+          "char": " ",
+          "name": "four-per-em space",
+          "code": "U+2005"
+        },
+        {
+          "char": " ",
+          "name": "six-per-em space",
+          "code": "U+2006"
+        },
+        {
+          "char": " ",
+          "name": "figure space",
+          "code": "U+2007"
+        },
+        {
+          "char": " ",
+          "name": "punctuation space",
+          "code": "U+2008"
+        },
+        {
+          "char": " ",
+          "name": "medium mathematical space",
+          "code": "U+205F"
+        },
+        {
+          "char": "　",
+          "name": "ideographic space",
+          "code": "U+3000"
+        },
+        {
+          "char": "​",
+          "name": "zero width space",
+          "code": "U+200B"
+        }
+      ]
+    },
+    "quote-double": {
+      "description": "Double quotation marks",
+      "chars": [
+        {
+          "char": "\"",
+          "name": "quotation mark",
+          "code": "U+0022"
+        },
+        {
+          "char": "“",
+          "name": "left double quotation mark",
+          "code": "U+201C"
+        },
+        {
+          "char": "”",
+          "name": "right double quotation mark",
+          "code": "U+201D"
+        },
+        {
+          "char": "„",
+          "name": "double low-9 quotation mark",
+          "code": "U+201E"
+        },
+        {
+          "char": "«",
+          "name": "left guillemet",
+          "code": "U+00AB"
+        },
+        {
+          "char": "»",
+          "name": "right guillemet",
+          "code": "U+00BB"
+        }
+      ]
+    },
+    "quote-single": {
+      "description": "Single quotation marks and apostrophes",
+      "chars": [
+        {
+          "char": "'",
+          "name": "apostrophe",
+          "code": "U+0027"
+        },
+        {
+          "char": "‘",
+          "name": "left single quotation mark",
+          "code": "U+2018"
+        },
+        {
+          "char": "’",
+          "name": "right single quotation mark",
+          "code": "U+2019"
+        },
+        {
+          "char": "‚",
+          "name": "single low-9 quotation mark",
+          "code": "U+201A"
+        },
+        {
+          "char": "‹",
+          "name": "left single guillemet",
+          "code": "U+2039"
+        },
+        {
+          "char": "›",
+          "name": "right single guillemet",
+          "code": "U+203A"
+        },
+        {
+          "char": "ʼ",
+          "name": "modifier letter apostrophe",
+          "code": "U+02BC"
+        },
+        {
+          "char": "´",
+          "name": "acute accent",
+          "code": "U+00B4"
+        },
+        {
+          "char": "`",
+          "name": "grave accent",
+          "code": "U+0060"
+        },
+        {
+          "char": "ʽ",
+          "name": "modifier letter reversed comma",
+          "code": "U+02BD"
+        },
+        {
+          "char": "ʾ",
+          "name": "modifier letter right half ring",
+          "code": "U+02BE"
+        },
+        {
+          "char": "ʿ",
+          "name": "modifier letter left half ring",
+          "code": "U+02BF"
+        },
+        {
+          "char": "ˈ",
+          "name": "modifier letter vertical line",
+          "code": "U+02C8"
+        }
+      ]
+    },
+    "dot": {
+      "description": "Dot-like characters",
+      "chars": [
+        {
+          "char": ".",
+          "name": "full stop",
+          "code": "U+002E"
+        },
+        {
+          "char": "·",
+          "name": "middle dot",
+          "code": "U+00B7"
+        },
+        {
+          "char": "•",
+          "name": "bullet",
+          "code": "U+2022"
+        },
+        {
+          "char": "․",
+          "name": "one dot leader",
+          "code": "U+2024"
+        },
+        {
+          "char": "。",
+          "name": "CJK full stop",
+          "code": "U+3002"
+        },
+        {
+          "char": "׃",
+          "name": "Hebrew sof pasuq",
+          "code": "U+05C3"
+        }
+      ]
+    },
+    "slash": {
+      "description": "Slash-like characters",
+      "chars": [
+        {
+          "char": "/",
+          "name": "solidus",
+          "code": "U+002F"
+        },
+        {
+          "char": "⁄",
+          "name": "fraction slash",
+          "code": "U+2044"
+        },
+        {
+          "char": "∕",
+          "name": "division slash",
+          "code": "U+2215"
+        }
+      ]
+    },
+    "colon": {
+      "description": "Colon-like characters",
+      "chars": [
+        {
+          "char": ":",
+          "name": "colon",
+          "code": "U+003A"
+        },
+        {
+          "char": "꞉",
+          "name": "modifier letter colon",
+          "code": "U+A789"
+        },
+        {
+          "char": "∶",
+          "name": "ratio",
+          "code": "U+2236"
+        },
+        {
+          "char": "：",
+          "name": "full-width colon",
+          "code": "U+FF1A"
+        },
+        {
+          "char": "፥",
+          "name": "Ethiopic colon",
+          "code": "U+1365"
+        }
+      ]
+    },
+    "comma": {
+      "description": "Comma-like characters",
+      "chars": [
+        {
+          "char": ",",
+          "name": "comma",
+          "code": "U+002C"
+        },
+        {
+          "char": "‚",
+          "name": "single low-9 quotation mark (used as comma)",
+          "code": "U+201A"
+        },
+        {
+          "char": "،",
+          "name": "Arabic comma",
+          "code": "U+060C"
+        },
+        {
+          "char": "、",
+          "name": "ideographic comma",
+          "code": "U+3001"
+        },
+        {
+          "char": "，",
+          "name": "full-width comma",
+          "code": "U+FF0C"
+        },
+        {
+          "char": "﹐",
+          "name": "small comma",
+          "code": "U+FE50"
+        },
+        {
+          "char": "՝",
+          "name": "Armenian comma",
+          "code": "U+055D"
+        }
+      ]
+    },
+    "ellipsis": {
+      "description": "Ellipsis characters",
+      "chars": [
+        {
+          "char": "…",
+          "name": "horizontal ellipsis",
+          "code": "U+2026"
+        }
+      ]
+    },
+    "question-mark": {
+      "description": "Question mark variants",
+      "chars": [
+        {
+          "char": "?",
+          "name": "question mark",
+          "code": "U+003F"
+        },
+        {
+          "char": "？",
+          "name": "full-width question mark",
+          "code": "U+FF1F"
+        },
+        {
+          "char": "⁇",
+          "name": "double question mark",
+          "code": "U+2047"
+        },
+        {
+          "char": "⁈",
+          "name": "question exclamation mark",
+          "code": "U+2048"
+        },
+        {
+          "char": "؟",
+          "name": "Arabic question mark",
+          "code": "U+061F"
+        },
+        {
+          "char": "‽",
+          "name": "interrobang",
+          "code": "U+203D"
+        }
+      ]
+    },
+    "exclamation-mark": {
+      "description": "Exclamation mark variants",
+      "chars": [
+        {
+          "char": "!",
+          "name": "exclamation mark",
+          "code": "U+0021"
+        },
+        {
+          "char": "！",
+          "name": "full-width exclamation mark",
+          "code": "U+FF01"
+        },
+        {
+          "char": "‼",
+          "name": "double exclamation mark",
+          "code": "U+203C"
+        },
+        {
+          "char": "¡",
+          "name": "inverted exclamation mark",
+          "code": "U+00A1"
+        }
+      ]
+    },
+    "semicolon": {
+      "description": "Semicolon variants",
+      "chars": [
+        {
+          "char": ";",
+          "name": "semicolon",
+          "code": "U+003B"
+        },
+        {
+          "char": "؛",
+          "name": "Arabic semicolon",
+          "code": "U+061B"
+        },
+        {
+          "char": "；",
+          "name": "full-width semicolon",
+          "code": "U+FF1B"
+        },
+        {
+          "char": "፤",
+          "name": "Ethiopic semicolon",
+          "code": "U+1364"
+        }
+      ]
+    },
+    "underscore": {
+      "description": "Underscore variants",
+      "chars": [
+        {
+          "char": "_",
+          "name": "low line",
+          "code": "U+005F"
+        },
+        {
+          "char": "＿",
+          "name": "full-width low line",
+          "code": "U+FF3F"
+        }
+      ]
+    }
+  }
+}
