@@ -21,7 +21,8 @@
   "files": [
     "dist",
     "config",
-    "dictionaries/cities"
+    "dictionaries/cities",
+    "dictionaries/names"
   ],
   "publishConfig": {
     "access": "restricted"

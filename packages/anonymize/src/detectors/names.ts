@@ -9,10 +9,10 @@ import {
 } from "../util/text";
 
 // ── Name corpus ──────────────────────────────────────
-// ~600 common first names across Czech, Slovak, German,
-// English, French, Polish, Turkish, and international
-// (ECHR/legal context). Loaded from JSON configs in
-// @stll/anonymize-data at init time.
+// Per-language first names and surnames loaded from
+// Wikidata-sourced dictionaries in @stll/anonymize-data,
+// plus legacy config/names-*.json for backwards compat.
+// Merged at init time across all configured languages.
 
 // ── Accessors (read from context) ────────────────────
 
@@ -39,7 +39,37 @@ export const getNameCorpusExcluded = (
   ctx.nameCorpus?.excludedList ?? [];
 
 /**
- * Load name corpus data from JSON config files.
+ * Languages with per-language first/surname
+ * dictionaries in @stll/anonymize-data.
+ */
+const NAME_LANGUAGES = [
+  "cs", "sk", "de", "pl", "hu",
+  "ro", "fr", "es", "it", "en", "sv",
+] as const;
+
+type JsonArrayModule = {
+  default: readonly string[];
+};
+
+/**
+ * Try importing a JSON module; return empty array
+ * if not found.
+ */
+const tryImportArray = async (
+  path: string,
+): Promise<readonly string[]> => {
+  try {
+    const mod = (await import(path)) as JsonArrayModule;
+    return mod.default;
+  } catch {
+    return [];
+  }
+};
+
+/**
+ * Load name corpus data from per-language dictionary
+ * files and legacy config files. Merges all sources.
+ *
  * Safe to call multiple times; only loads once per
  * context. Must be called before detectNameCorpus or
  * the getNameCorpus*() accessors are used.
@@ -50,9 +80,10 @@ export const initNameCorpus = (
   if (ctx.nameCorpusPromise) return ctx.nameCorpusPromise;
   const promise = (async () => {
     try {
+      // Load legacy config files (backwards compat)
       const [
-        firstMod,
-        surnameMod,
+        legacyFirstMod,
+        legacySurnameMod,
         titleMod,
         exclusionMod,
       ] = await Promise.all([
@@ -72,22 +103,73 @@ export const initNameCorpus = (
         ) as Promise<{ default: { words: string[] } }>,
       ]);
 
-      const firstNames = firstMod.default.names;
-      const surnames = surnameMod.default.names;
+      // Load per-language dictionaries in parallel
+      const firstImports = NAME_LANGUAGES.map(
+        (lang) => tryImportArray(
+          `@stll/anonymize-data/dictionaries/names/first/${lang}.json`,
+        ),
+      );
+      const surnameImports = NAME_LANGUAGES.map(
+        (lang) => tryImportArray(
+          `@stll/anonymize-data/dictionaries/names/surnames/${lang}.json`,
+        ),
+      );
+
+      const [firstResults, surnameResults] =
+        await Promise.all([
+          Promise.all(firstImports),
+          Promise.all(surnameImports),
+        ]);
+
+      // Merge: legacy config + all per-language files
+      const firstNames: string[] = [
+        ...legacyFirstMod.default.names,
+      ];
+      for (const names of firstResults) {
+        for (const name of names) {
+          firstNames.push(name);
+        }
+      }
+
+      const surnames: string[] = [
+        ...legacySurnameMod.default.names,
+      ];
+      for (const names of surnameResults) {
+        for (const name of names) {
+          surnames.push(name);
+        }
+      }
+
+      // Deduplicate (preserve first occurrence)
+      const dedup = (arr: string[]): string[] => {
+        const seen = new Set<string>();
+        const result: string[] = [];
+        for (const item of arr) {
+          if (seen.has(item)) continue;
+          seen.add(item);
+          result.push(item);
+        }
+        return result;
+      };
+
+      const dedupFirst = dedup(firstNames);
+      const dedupSurnames = dedup(surnames);
       const titles = titleMod.default.tokens;
       const exclusions = exclusionMod.default.words;
 
       ctx.nameCorpus = {
         firstNames: Object.freeze(
-          new Set(firstNames),
+          new Set(dedupFirst),
         ),
-        surnames: Object.freeze(new Set(surnames)),
+        surnames: Object.freeze(
+          new Set(dedupSurnames),
+        ),
         titleTokens: Object.freeze(new Set(titles)),
         excludedWords: Object.freeze(
           new Set(exclusions),
         ),
-        firstNamesList: Object.freeze(firstNames),
-        surnamesList: Object.freeze(surnames),
+        firstNamesList: Object.freeze(dedupFirst),
+        surnamesList: Object.freeze(dedupSurnames),
         titlesList: Object.freeze(titles),
         excludedList: Object.freeze(exclusions),
       };

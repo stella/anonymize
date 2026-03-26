@@ -25,30 +25,123 @@ type DictionaryMeta = {
 
 export const DICTIONARY_META = {
   // ── Names ──────────────────────────────────────────
+  // Global mixed-gender name list (195K, fallback).
   "names/global": {
     label: "person",
     category: "Names",
     country: null,
   },
-  "names/cs": {
+  // Per-language first names (Wikidata CC0).
+  "names/first/cs": {
     label: "person",
     category: "Names",
     country: "CZ",
   },
-  "names/de": {
-    label: "person",
-    category: "Names",
-    country: "DE",
-  },
-  "names/sk": {
+  "names/first/sk": {
     label: "person",
     category: "Names",
     country: "SK",
   },
-  "names/pl": {
+  "names/first/de": {
+    label: "person",
+    category: "Names",
+    country: "DE",
+  },
+  "names/first/pl": {
     label: "person",
     category: "Names",
     country: "PL",
+  },
+  "names/first/hu": {
+    label: "person",
+    category: "Names",
+    country: "HU",
+  },
+  "names/first/ro": {
+    label: "person",
+    category: "Names",
+    country: "RO",
+  },
+  "names/first/fr": {
+    label: "person",
+    category: "Names",
+    country: "FR",
+  },
+  "names/first/es": {
+    label: "person",
+    category: "Names",
+    country: "ES",
+  },
+  "names/first/it": {
+    label: "person",
+    category: "Names",
+    country: "IT",
+  },
+  "names/first/en": {
+    label: "person",
+    category: "Names",
+    country: "GB",
+  },
+  "names/first/sv": {
+    label: "person",
+    category: "Names",
+    country: "SE",
+  },
+  // Per-language surnames (Wikidata CC0).
+  "names/surnames/cs": {
+    label: "person",
+    category: "Names",
+    country: "CZ",
+  },
+  "names/surnames/sk": {
+    label: "person",
+    category: "Names",
+    country: "SK",
+  },
+  "names/surnames/de": {
+    label: "person",
+    category: "Names",
+    country: "DE",
+  },
+  "names/surnames/pl": {
+    label: "person",
+    category: "Names",
+    country: "PL",
+  },
+  "names/surnames/hu": {
+    label: "person",
+    category: "Names",
+    country: "HU",
+  },
+  "names/surnames/ro": {
+    label: "person",
+    category: "Names",
+    country: "RO",
+  },
+  "names/surnames/fr": {
+    label: "person",
+    category: "Names",
+    country: "FR",
+  },
+  "names/surnames/es": {
+    label: "person",
+    category: "Names",
+    country: "ES",
+  },
+  "names/surnames/it": {
+    label: "person",
+    category: "Names",
+    country: "IT",
+  },
+  "names/surnames/en": {
+    label: "person",
+    category: "Names",
+    country: "GB",
+  },
+  "names/surnames/sv": {
+    label: "person",
+    category: "Names",
+    country: "SE",
   },
 
   // ── Countries ──────────────────────────────────────
@@ -422,18 +515,74 @@ const LOADERS: Record<
   // eslint-disable-next-line typescript-eslint/promise-function-async
   "names/global": () =>
     import("./names/global.json") as Promise<JsonModule>,
+  // ── First names (Wikidata CC0) ──────────────────
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "names/cs": () =>
-    import("./names/cs.json") as Promise<JsonModule>,
+  "names/first/cs": () =>
+    import("./names/first/cs.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "names/de": () =>
-    import("./names/de.json") as Promise<JsonModule>,
+  "names/first/sk": () =>
+    import("./names/first/sk.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "names/sk": () =>
-    import("./names/sk.json") as Promise<JsonModule>,
+  "names/first/de": () =>
+    import("./names/first/de.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "names/pl": () =>
-    import("./names/pl.json") as Promise<JsonModule>,
+  "names/first/pl": () =>
+    import("./names/first/pl.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "names/first/hu": () =>
+    import("./names/first/hu.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "names/first/ro": () =>
+    import("./names/first/ro.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "names/first/fr": () =>
+    import("./names/first/fr.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "names/first/es": () =>
+    import("./names/first/es.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "names/first/it": () =>
+    import("./names/first/it.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "names/first/en": () =>
+    import("./names/first/en.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "names/first/sv": () =>
+    import("./names/first/sv.json") as Promise<JsonModule>,
+  // ── Surnames (Wikidata CC0) ─────────────────────
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "names/surnames/cs": () =>
+    import("./names/surnames/cs.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "names/surnames/sk": () =>
+    import("./names/surnames/sk.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "names/surnames/de": () =>
+    import("./names/surnames/de.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "names/surnames/pl": () =>
+    import("./names/surnames/pl.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "names/surnames/hu": () =>
+    import("./names/surnames/hu.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "names/surnames/ro": () =>
+    import("./names/surnames/ro.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "names/surnames/fr": () =>
+    import("./names/surnames/fr.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "names/surnames/es": () =>
+    import("./names/surnames/es.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "names/surnames/it": () =>
+    import("./names/surnames/it.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "names/surnames/en": () =>
+    import("./names/surnames/en.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "names/surnames/sv": () =>
+    import("./names/surnames/sv.json") as Promise<JsonModule>,
 
   // ── Countries ──────────────────────────────────────
   // eslint-disable-next-line typescript-eslint/promise-function-async
