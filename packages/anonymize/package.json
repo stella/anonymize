@@ -1,6 +1,6 @@
 {
   "name": "@stll/anonymize",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Multi-layer PII detection and anonymization pipeline with regex, NER, deny lists, and coreference resolution",
   "type": "module",
   "exports": {
