@@ -17,8 +17,9 @@
  * per-pattern literal/wholeWords settings.
  */
 
-import { TextSearch } from "@stll/text-search";
-import type { PatternEntry } from "@stll/text-search";
+import type { PatternEntry, TextSearch } from "@stll/text-search";
+
+import { getTextSearch } from "./search-engine";
 
 import type {
   GazetteerEntry,
@@ -188,7 +189,7 @@ export const buildUnifiedSearch = async (
   // TextSearch auto-detects DFA state explosion
   // (build time > 2ms) and falls back to individual
   // engines. No manual maxAlternations needed.
-  const tsRegex = new TextSearch(regexAllPatterns);
+  const tsRegex = new (getTextSearch())(regexAllPatterns);
 
   // ── Instance 2: deny-list + street-types + gaz ──
   // Deny-list and street-type patterns are plain
@@ -249,11 +250,11 @@ export const buildUnifiedSearch = async (
 
   const tsLiterals =
     literalAllPatterns.length > 0
-      ? new TextSearch(literalAllPatterns, {
+      ? new (getTextSearch())(literalAllPatterns, {
           caseInsensitive: true,
           overlapStrategy: "all",
         })
-      : new TextSearch([]);
+      : new (getTextSearch())([]);
 
   return {
     tsRegex,
