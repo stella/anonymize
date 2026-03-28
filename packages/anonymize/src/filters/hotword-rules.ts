@@ -1,5 +1,6 @@
-import { TextSearch } from "@stll/text-search";
 import type { Match, PatternEntry } from "@stll/text-search";
+
+import { getTextSearch } from "../search-engine";
 import type { Entity } from "../types";
 
 // ── Types ───────────────────────────────────────────
@@ -20,7 +21,7 @@ type HotwordRulesConfig = {
 // ── Lazy-loaded state ───────────────────────────────
 
 let rules: HotwordRule[] | null = null;
-let search: TextSearch | null = null;
+let search: { findIter: (text: string) => Match[] } | null = null;
 /**
  * Maps each TextSearch pattern index back to the
  * rule index that owns it, so a single AC scan
@@ -61,7 +62,7 @@ const loadRules = async (): Promise<void> => {
 
   const builtSearch =
     patterns.length > 0
-      ? new TextSearch(patterns, {
+      ? new (getTextSearch())(patterns, {
           overlapStrategy: "all",
           caseInsensitive: true,
           wholeWords: true,
