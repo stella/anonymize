@@ -6,8 +6,12 @@
  * match all typographic variants of a character type
  * (dashes, spaces, quotes, etc.).
  *
- * The JSON is loaded lazily on first access and cached.
+ * The JSON is statically imported so the bundler inlines
+ * it, avoiding a runtime require() that breaks browsers.
  */
+
+import charGroupsJson from
+  "@stll/anonymize-data/config/char-groups.json";
 
 type CharEntry = {
   char: string;
@@ -31,18 +35,9 @@ const REGEX_CLASS_SPECIAL = /[\\\]^-]/;
 const escapeForCharClass = (ch: string): string =>
   REGEX_CLASS_SPECIAL.test(ch) ? `\\${ch}` : ch;
 
-let cached: CharGroupsConfig | undefined;
-
-const loadConfig = (): CharGroupsConfig => {
-  if (cached) return cached;
-  // Dynamic import would be async; use require for
-  // sync access since this runs in Bun/Node.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  cached = require(
-    "@stll/anonymize-data/config/char-groups.json",
-  ) as CharGroupsConfig;
-  return cached;
-};
+// SAFETY: JSON shape matches CharGroupsConfig by contract
+// with @stll/anonymize-data.
+const config = charGroupsJson as CharGroupsConfig;
 
 /**
  * Get the raw characters for a named group.
@@ -51,7 +46,6 @@ const loadConfig = (): CharGroupsConfig => {
 export const charSet = (
   group: string,
 ): readonly string[] => {
-  const config = loadConfig();
   const g = config.groups[group];
   if (!g) {
     throw new Error(
