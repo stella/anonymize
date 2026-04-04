@@ -37,6 +37,28 @@ npm install @stll/anonymize
 npm install @stll/anonymize-data
 ```
 
+For browsers, install `@stll/anonymize-wasm`
+instead. It pulls in the same API through
+WebAssembly via `@stll/text-search-wasm`.
+
+### Using with Vite (browser target)
+
+`@stll/anonymize-wasm` pulls in four transitive
+WebAssembly packages. Vite's dep pre-bundler
+rewrites `import.meta.url`, which breaks the
+relative `.wasm` paths those loaders emit. Import
+the bundled plugin so all five packages are
+excluded from pre-bundling:
+
+```ts
+// vite.config.ts
+import stllWasm from "@stll/anonymize-wasm/vite";
+
+export default {
+  plugins: [stllWasm()],
+};
+```
+
 ## Quick Start
 
 ```typescript

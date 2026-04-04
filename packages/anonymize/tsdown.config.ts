@@ -19,4 +19,14 @@ export default defineConfig([
     sourcemap: true,
     hash: false,
   },
+  {
+    entry: ["src/vite.ts"],
+    outDir: "wasm/dist",
+    format: ["esm"],
+    dts: true,
+    clean: false,
+    sourcemap: true,
+    hash: false,
+    deps: { neverBundle: [/^vite$/] },
+  },
 ]);

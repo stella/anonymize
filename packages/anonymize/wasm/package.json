@@ -9,6 +9,10 @@
     ".": {
       "types": "./dist/wasm.d.mts",
       "import": "./dist/wasm.mjs"
+    },
+    "./vite": {
+      "types": "./dist/vite.d.mts",
+      "import": "./dist/vite.mjs"
     }
   },
   "files": [
@@ -28,10 +32,14 @@
     "@stll/text-search-wasm": "^0.1.0"
   },
   "peerDependencies": {
-    "@stll/anonymize-data": "^0.0.3"
+    "@stll/anonymize-data": "^0.0.3",
+    "vite": ">=5 <10"
   },
   "peerDependenciesMeta": {
     "@stll/anonymize-data": {
+      "optional": true
+    },
+    "vite": {
       "optional": true
     }
   }
