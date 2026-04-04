@@ -84,23 +84,13 @@ export const buildPlaceholderMap = (
     // Coreference side-channel: if this entity is a
     // coref alias, look up the source entity's
     // placeholder so both get the same number.
-    const sourceText = ctx.corefSourceMap.get(
-      corefKey(entity),
-    );
+    const sourceText = ctx.corefSourceMap.get(corefKey(entity));
     if (sourceText !== undefined) {
-      const sourceNormalized = normalizeEntityText(
-        entity.label,
-        sourceText,
-      );
-      const sourceNormalizedKey =
-        `${labelKey}\0${sourceNormalized}`;
-      const sourceExisting =
-        normalizedToPlaceholder.get(sourceNormalizedKey);
+      const sourceNormalized = normalizeEntityText(entity.label, sourceText);
+      const sourceNormalizedKey = `${labelKey}\0${sourceNormalized}`;
+      const sourceExisting = normalizedToPlaceholder.get(sourceNormalizedKey);
       if (sourceExisting) {
-        textLabelToPlaceholder.set(
-          compositeKey,
-          sourceExisting,
-        );
+        textLabelToPlaceholder.set(compositeKey, sourceExisting);
         continue;
       }
     }

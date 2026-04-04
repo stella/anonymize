@@ -27,16 +27,12 @@ describe("charSet", () => {
       "comma",
     ];
     for (const group of groups) {
-      expect(charSet(group).length).toBeGreaterThanOrEqual(
-        2,
-      );
+      expect(charSet(group).length).toBeGreaterThanOrEqual(2);
     }
   });
 
   test("throws on unknown group", () => {
-    expect(() => charSet("nonexistent")).toThrow(
-      /Unknown char group/,
-    );
+    expect(() => charSet("nonexistent")).toThrow(/Unknown char group/);
   });
 
   test("dash group contains ASCII hyphen", () => {
@@ -67,18 +63,9 @@ describe("charClass", () => {
   });
 
   test("produced regex is valid", () => {
-    const groups = [
-      "dash",
-      "space",
-      "quote-double",
-      "slash",
-      "dot",
-      "colon",
-    ];
+    const groups = ["dash", "space", "quote-double", "slash", "dot", "colon"];
     for (const group of groups) {
-      expect(
-        () => new RegExp(charClass(group)),
-      ).not.toThrow();
+      expect(() => new RegExp(charClass(group))).not.toThrow();
     }
   });
 });
@@ -190,9 +177,7 @@ describe("pre-built constants", () => {
 describe("regex integration", () => {
   test("currency dash notation matches", () => {
     // Pattern from regex.ts: decimal part with dashes
-    const re = new RegExp(
-      `\\d+,${DASH}{1,2}`,
-    );
+    const re = new RegExp(`\\d+,${DASH}{1,2}`);
     expect(re.test("100,-")).toBe(true);
     expect(re.test("100,\u2014")).toBe(true);
     expect(re.test("100,--")).toBe(true);
@@ -200,9 +185,7 @@ describe("regex integration", () => {
   });
 
   test("postal code dash pattern matches", () => {
-    const re = new RegExp(
-      `\\d{5}\\s*${DASH}?\\s*$`,
-    );
+    const re = new RegExp(`\\d{5}\\s*${DASH}?\\s*$`);
     expect(re.test("16300 ")).toBe(true);
     expect(re.test("16300 - ")).toBe(true);
     expect(re.test("16300 \u2013 ")).toBe(true);

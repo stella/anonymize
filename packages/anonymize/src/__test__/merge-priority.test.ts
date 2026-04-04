@@ -29,12 +29,7 @@ describe("mergeAndDedup priority resolution", () => {
 
   test("gazetteer beats everything", () => {
     const gaz = makeEntity("gazetteer", 0.8, 5, 15);
-    const trigger = makeEntity(
-      "trigger",
-      0.99,
-      5,
-      15,
-    );
+    const trigger = makeEntity("trigger", 0.99, 5, 15);
     const ner = makeEntity("ner", 0.99, 5, 15);
     const result = mergeAndDedup([ner, trigger, gaz]);
     expect(result).toHaveLength(1);
@@ -81,12 +76,7 @@ describe("mergeAndDedup priority resolution", () => {
   });
 
   test("legal-form and regex have equal priority", () => {
-    const legalForm = makeEntity(
-      "legal-form",
-      0.88,
-      0,
-      12,
-    );
+    const legalForm = makeEntity("legal-form", 0.88, 0, 12);
     const regex = makeEntity("regex", 0.92, 0, 12);
     const result = mergeAndDedup([legalForm, regex]);
     expect(result).toHaveLength(1);
@@ -100,20 +90,8 @@ describe("mergeAndDedup priority resolution", () => {
     // "656 91" (regex, [0,6]). Same label: postal code.
     // Deny-list has lower priority (2 vs 3) but the
     // containment rule should prefer the longer entity.
-    const regex = makeEntity(
-      "regex",
-      1,
-      0,
-      6,
-      "postal code",
-    );
-    const denyList = makeEntity(
-      "deny-list",
-      1,
-      0,
-      11,
-      "postal code",
-    );
+    const regex = makeEntity("regex", 1, 0, 6, "postal code");
+    const denyList = makeEntity("deny-list", 1, 0, 11, "postal code");
     const result = mergeAndDedup([regex, denyList]);
     expect(result).toHaveLength(1);
     expect(result[0]?.source).toBe("deny-list");
@@ -136,20 +114,8 @@ describe("mergeAndDedup priority resolution", () => {
     // higher-priority shorter trigger via containment.
     // Only deny-list and gazetteer are trusted for the
     // "longer = more specific" heuristic.
-    const trigger = makeEntity(
-      "trigger",
-      0.95,
-      0,
-      25,
-      "address",
-    );
-    const regex = makeEntity(
-      "regex",
-      0.75,
-      0,
-      50,
-      "address",
-    );
+    const trigger = makeEntity("trigger", 0.95, 0, 25, "address");
+    const regex = makeEntity("regex", 0.75, 0, 50, "address");
     const result = mergeAndDedup([trigger, regex]);
     expect(result).toHaveLength(1);
     // Trigger has higher priority (4 > 3), should win

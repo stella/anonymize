@@ -14,13 +14,8 @@
     "id": "es-person",
     "label": "person",
     "strategy": { "type": "to-next-comma" },
-    "triggers": [
-      "representado por",
-      "representada por"
-    ],
-    "validations": [
-      { "type": "starts-uppercase" }
-    ]
+    "triggers": ["representado por", "representada por"],
+    "validations": [{ "type": "starts-uppercase" }]
   },
   {
     "id": "es-date-of-birth",
@@ -29,37 +24,24 @@
       "type": "n-words",
       "count": 5
     },
-    "triggers": [
-      "nacido el",
-      "nacida el"
-    ]
+    "triggers": ["nacido el", "nacida el"]
   },
   {
     "id": "es-national-id",
     "label": "national identification number",
     "strategy": { "type": "company-id-value" },
-    "triggers": [
-      "con D.N.I.",
-      "con DNI",
-      "con N.I.E.",
-      "con NIE"
-    ]
+    "triggers": ["con D.N.I.", "con DNI", "con N.I.E.", "con NIE"]
   },
   {
     "id": "es-tax-id",
     "label": "tax identification number",
     "strategy": { "type": "company-id-value" },
-    "triggers": [
-      "con CIF",
-      "con NIF"
-    ]
+    "triggers": ["con CIF", "con NIF"]
   },
   {
     "id": "es-bank-account",
     "label": "bank account number",
     "strategy": { "type": "to-end-of-line" },
-    "triggers": [
-      "número de cuenta"
-    ]
+    "triggers": ["número de cuenta"]
   }
 ]

@@ -8,11 +8,7 @@ import {
 import type { ZoneSpan } from "../filters/zone-classifier";
 import type { Entity } from "../types";
 
-const makeEntity = (
-  start: number,
-  end: number,
-  score: number,
-): Entity => ({
+const makeEntity = (start: number, end: number, score: number): Entity => ({
   start,
   end,
   label: "person",
@@ -41,14 +37,10 @@ describe("classifyZones", () => {
     ].join("\n");
 
     const zones = classifyZones(text);
-    const header = zones.find(
-      (z) => z.zone === "header",
-    );
+    const header = zones.find((z) => z.zone === "header");
     expect(header).toBeDefined();
     // Header ends at the line containing "Článek 1"
-    expect(
-      text.slice(header!.end).startsWith("Článek"),
-    ).toBe(true);
+    expect(text.slice(header!.end).startsWith("Článek")).toBe(true);
   });
 
   it("detects English section heading", () => {
@@ -61,9 +53,7 @@ describe("classifyZones", () => {
     ].join("\n");
 
     const zones = classifyZones(text);
-    const header = zones.find(
-      (z) => z.zone === "header",
-    );
+    const header = zones.find((z) => z.zone === "header");
     expect(header).toBeDefined();
     expect(header!.start).toBe(0);
   });
@@ -78,14 +68,10 @@ describe("classifyZones", () => {
     ].join("\n");
 
     const zones = classifyZones(text);
-    const header = zones.find(
-      (z) => z.zone === "header",
-    );
+    const header = zones.find((z) => z.zone === "header");
     expect(header).toBeDefined();
     expect(header!.start).toBe(0);
-    expect(
-      text.slice(header!.end).startsWith("ARTICLE"),
-    ).toBe(true);
+    expect(text.slice(header!.end).startsWith("ARTICLE")).toBe(true);
   });
 
   it("detects German section heading", () => {
@@ -97,9 +83,7 @@ describe("classifyZones", () => {
     ].join("\n");
 
     const zones = classifyZones(text);
-    const header = zones.find(
-      (z) => z.zone === "header",
-    );
+    const header = zones.find((z) => z.zone === "header");
     expect(header).toBeDefined();
   });
 
@@ -113,9 +97,7 @@ describe("classifyZones", () => {
     ].join("\n");
 
     const zones = classifyZones(text);
-    const sig = zones.find(
-      (z) => z.zone === "signature",
-    );
+    const sig = zones.find((z) => z.zone === "signature");
     expect(sig).toBeDefined();
     expect(sig!.end).toBe(text.length);
   });
@@ -129,9 +111,7 @@ describe("classifyZones", () => {
     ].join("\n");
 
     const zones = classifyZones(text);
-    const table = zones.find(
-      (z) => z.zone === "table",
-    );
+    const table = zones.find((z) => z.zone === "table");
     expect(table).toBeDefined();
   });
 
@@ -145,9 +125,7 @@ describe("classifyZones", () => {
     ].join("\n");
 
     const zones = classifyZones(text);
-    const body = zones.find(
-      (z) => z.zone === "body",
-    );
+    const body = zones.find((z) => z.zone === "body");
     expect(body).toBeDefined();
   });
 
@@ -165,18 +143,12 @@ describe("classifyZones", () => {
     ].join("\n");
 
     const zones = classifyZones(text);
-    const sorted = zones.toSorted(
-      (a, b) => a.start - b.start,
-    );
+    const sorted = zones.toSorted((a, b) => a.start - b.start);
     expect(sorted[0]!.start).toBe(0);
-    expect(sorted[sorted.length - 1]!.end).toBe(
-      text.length,
-    );
+    expect(sorted[sorted.length - 1]!.end).toBe(text.length);
 
     for (let i = 1; i < sorted.length; i++) {
-      expect(sorted[i]!.start).toBe(
-        sorted[i - 1]!.end,
-      );
+      expect(sorted[i]!.start).toBe(sorted[i - 1]!.end);
     }
   });
 
@@ -195,21 +167,13 @@ describe("classifyZones", () => {
     ].join("\n");
 
     const zones = classifyZones(text);
-    const sorted = zones.toSorted(
-      (a, b) => a.start - b.start,
-    );
+    const sorted = zones.toSorted((a, b) => a.start - b.start);
     expect(sorted[0]!.start).toBe(0);
-    expect(sorted[sorted.length - 1]!.end).toBe(
-      text.length,
-    );
+    expect(sorted[sorted.length - 1]!.end).toBe(text.length);
     for (let i = 1; i < sorted.length; i++) {
-      expect(sorted[i]!.start).toBe(
-        sorted[i - 1]!.end,
-      );
+      expect(sorted[i]!.start).toBe(sorted[i - 1]!.end);
     }
-    expect(
-      sorted.some((z) => z.zone === "table"),
-    ).toBe(true);
+    expect(sorted.some((z) => z.zone === "table")).toBe(true);
   });
 
   it("handles signing clause before section heading", () => {
@@ -225,14 +189,10 @@ describe("classifyZones", () => {
     ].join("\n");
 
     const zones = classifyZones(text);
-    const sorted = zones.toSorted(
-      (a, b) => a.start - b.start,
-    );
+    const sorted = zones.toSorted((a, b) => a.start - b.start);
     // No overlapping zones
     for (let i = 1; i < sorted.length; i++) {
-      expect(sorted[i]!.start).toBeGreaterThanOrEqual(
-        sorted[i - 1]!.end,
-      );
+      expect(sorted[i]!.start).toBeGreaterThanOrEqual(sorted[i - 1]!.end);
     }
   });
 
@@ -244,9 +204,7 @@ describe("classifyZones", () => {
     ].join("\n");
 
     const zones = classifyZones(text);
-    const sig = zones.find(
-      (z) => z.zone === "signature",
-    );
+    const sig = zones.find((z) => z.zone === "signature");
     // Mid-sentence "V Praze" should not trigger
     // signature zone detection.
     expect(sig).toBeUndefined();
@@ -256,9 +214,7 @@ describe("classifyZones", () => {
     const text = "Just some plain text.";
     const zones = classifyZones(text);
     expect(zones.length).toBeGreaterThan(0);
-    expect(
-      zones.every((z) => z.zone === "body"),
-    ).toBe(true);
+    expect(zones.every((z) => z.zone === "body")).toBe(true);
   });
 });
 
@@ -269,13 +225,8 @@ describe("applyZoneAdjustments", () => {
       { zone: "body", start: 100, end: 500 },
     ];
     const entities = [makeEntity(10, 30, 0.7)];
-    const result = applyZoneAdjustments(
-      entities,
-      zones,
-    );
-    expect(result[0]!.score).toBe(
-      0.7 + ZONE_SCORE_ADJUSTMENTS.header,
-    );
+    const result = applyZoneAdjustments(entities, zones);
+    expect(result[0]!.score).toBe(0.7 + ZONE_SCORE_ADJUSTMENTS.header);
   });
 
   it("boosts entity in signature zone", () => {
@@ -284,13 +235,8 @@ describe("applyZoneAdjustments", () => {
       { zone: "signature", start: 400, end: 500 },
     ];
     const entities = [makeEntity(420, 450, 0.6)];
-    const result = applyZoneAdjustments(
-      entities,
-      zones,
-    );
-    expect(result[0]!.score).toBe(
-      0.6 + ZONE_SCORE_ADJUSTMENTS.signature,
-    );
+    const result = applyZoneAdjustments(entities, zones);
+    expect(result[0]!.score).toBe(0.6 + ZONE_SCORE_ADJUSTMENTS.signature);
   });
 
   it("boosts entity in table zone", () => {
@@ -300,43 +246,26 @@ describe("applyZoneAdjustments", () => {
       { zone: "body", start: 350, end: 500 },
     ];
     const entities = [makeEntity(220, 250, 0.65)];
-    const result = applyZoneAdjustments(
-      entities,
-      zones,
-    );
-    expect(result[0]!.score).toBe(
-      0.65 + ZONE_SCORE_ADJUSTMENTS.table,
-    );
+    const result = applyZoneAdjustments(entities, zones);
+    expect(result[0]!.score).toBe(0.65 + ZONE_SCORE_ADJUSTMENTS.table);
   });
 
   it("does not modify body entities", () => {
-    const zones: ZoneSpan[] = [
-      { zone: "body", start: 0, end: 500 },
-    ];
+    const zones: ZoneSpan[] = [{ zone: "body", start: 0, end: 500 }];
     const entities = [makeEntity(100, 120, 0.7)];
-    const result = applyZoneAdjustments(
-      entities,
-      zones,
-    );
+    const result = applyZoneAdjustments(entities, zones);
     expect(result[0]!.score).toBe(0.7);
   });
 
   it("caps score at 1.0", () => {
-    const zones: ZoneSpan[] = [
-      { zone: "signature", start: 0, end: 100 },
-    ];
+    const zones: ZoneSpan[] = [{ zone: "signature", start: 0, end: 100 }];
     const entities = [makeEntity(10, 30, 0.95)];
-    const result = applyZoneAdjustments(
-      entities,
-      zones,
-    );
+    const result = applyZoneAdjustments(entities, zones);
     expect(result[0]!.score).toBe(1.0);
   });
 
   it("does not mutate input entities", () => {
-    const zones: ZoneSpan[] = [
-      { zone: "header", start: 0, end: 100 },
-    ];
+    const zones: ZoneSpan[] = [{ zone: "header", start: 0, end: 100 }];
     const original = makeEntity(10, 30, 0.7);
     const entities = [original];
     applyZoneAdjustments(entities, zones);

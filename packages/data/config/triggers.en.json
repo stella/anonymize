@@ -3,12 +3,8 @@
     "id": "en-person",
     "label": "person",
     "strategy": { "type": "to-next-comma" },
-    "triggers": [
-      "represented by"
-    ],
-    "validations": [
-      { "type": "starts-uppercase" }
-    ]
+    "triggers": ["represented by"],
+    "validations": [{ "type": "starts-uppercase" }]
   },
   {
     "id": "en-date-of-birth",
@@ -17,9 +13,7 @@
       "type": "n-words",
       "count": 4
     },
-    "triggers": [
-      "born on"
-    ]
+    "triggers": ["born on"]
   },
   {
     "id": "en-address",
@@ -39,37 +33,21 @@
     "id": "en-jurisdiction",
     "label": "address",
     "strategy": { "type": "to-next-comma" },
-    "triggers": [
-      "State of",
-      "Commonwealth of",
-      "District of",
-      "Territory of"
-    ],
+    "triggers": ["State of", "Commonwealth of", "District of", "Territory of"],
     "includeTrigger": true,
     "extensions": ["normalize-spaces"],
-    "validations": [
-      { "type": "starts-uppercase" }
-    ]
+    "validations": [{ "type": "starts-uppercase" }]
   },
   {
     "id": "en-company-id",
     "label": "registration number",
     "strategy": { "type": "company-id-value" },
-    "triggers": [
-      "registration number",
-      "company id",
-      "company number"
-    ]
+    "triggers": ["registration number", "company id", "company number"]
   },
   {
     "id": "en-tax-id",
     "label": "tax identification number",
     "strategy": { "type": "company-id-value" },
-    "triggers": [
-      "VAT number",
-      "VAT ID",
-      "tax identification number",
-      "tax id"
-    ]
+    "triggers": ["VAT number", "VAT ID", "tax identification number", "tax id"]
   }
 ]

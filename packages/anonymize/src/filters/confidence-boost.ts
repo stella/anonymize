@@ -111,9 +111,8 @@ let _prepsPromise: Promise<void> | null = null;
 
 const loadPrepositions = async (): Promise<void> => {
   try {
-    const mod = await import(
-      "@stll/anonymize-data/config/address-prepositions.json"
-    );
+    const mod =
+      await import("@stll/anonymize-data/config/address-prepositions.json");
     const data: PrepositionData = mod.default ?? mod;
     // Merge all languages into flat sets
     const addr = new Set<string>();
@@ -137,19 +136,16 @@ const loadPrepositions = async (): Promise<void> => {
 };
 
 /** Ensure preposition data is loaded. */
-export const initPrepositions =
-  (): Promise<void> => {
-    if (!_prepsPromise) {
-      _prepsPromise = loadPrepositions();
-    }
-    return _prepsPromise;
-  };
+export const initPrepositions = (): Promise<void> => {
+  if (!_prepsPromise) {
+    _prepsPromise = loadPrepositions();
+  }
+  return _prepsPromise;
+};
 
-const getAddressPreps = (): ReadonlySet<string> =>
-  _addressPreps ?? new Set();
+const getAddressPreps = (): ReadonlySet<string> => _addressPreps ?? new Set();
 
-const getTemporalPreps = (): ReadonlySet<string> =>
-  _temporalPreps ?? new Set();
+const getTemporalPreps = (): ReadonlySet<string> => _temporalPreps ?? new Set();
 
 // ── Street type abbreviations (lazy-loaded) ─────────
 
@@ -158,11 +154,9 @@ let _streetAbbrevsPromise: Promise<void> | null = null;
 
 const loadStreetAbbrevs = async (): Promise<void> => {
   try {
-    const mod = await import(
-      "@stll/anonymize-data/config/address-street-types.json"
-    );
-    const data: Record<string, string[] | string> =
-      mod.default ?? mod;
+    const mod =
+      await import("@stll/anonymize-data/config/address-street-types.json");
+    const data: Record<string, string[] | string> = mod.default ?? mod;
     const abbrevs = new Set<string>();
     for (const [key, words] of Object.entries(data)) {
       if (key.startsWith("_")) continue;
@@ -181,16 +175,14 @@ const loadStreetAbbrevs = async (): Promise<void> => {
 };
 
 /** Ensure street abbreviation data is loaded. */
-export const initStreetAbbrevs =
-  (): Promise<void> => {
-    if (!_streetAbbrevsPromise) {
-      _streetAbbrevsPromise = loadStreetAbbrevs();
-    }
-    return _streetAbbrevsPromise;
-  };
+export const initStreetAbbrevs = (): Promise<void> => {
+  if (!_streetAbbrevsPromise) {
+    _streetAbbrevsPromise = loadStreetAbbrevs();
+  }
+  return _streetAbbrevsPromise;
+};
 
-const getStreetAbbrevs = (): ReadonlySet<string> =>
-  _streetAbbrevs ?? new Set();
+const getStreetAbbrevs = (): ReadonlySet<string> => _streetAbbrevs ?? new Set();
 
 /**
  * Scan backwards from known address entities and
@@ -214,12 +206,8 @@ export const detectStreetPatternsNearAddresses = (
   existingEntities: Entity[],
 ): Entity[] => {
   const results: Entity[] = [];
-  const addressEntities = existingEntities.filter(
-    (e) => e.label === "address",
-  );
-  const headerEnd = Math.floor(
-    fullText.length * HEADER_ZONE_FRACTION,
-  );
+  const addressEntities = existingEntities.filter((e) => e.label === "address");
+  const headerEnd = Math.floor(fullText.length * HEADER_ZONE_FRACTION);
 
   // Find all house number positions in the text.
   // Slash-style house numbers only: either with a letter
@@ -243,11 +231,7 @@ export const detectStreetPatternsNearAddresses = (
     const numEnd = numStart + m[0].length;
 
     // Skip if already covered by an existing entity
-    if (
-      existingEntities.some(
-        (e) => e.start <= numStart && e.end >= numEnd,
-      )
-    ) {
+    if (existingEntities.some((e) => e.start <= numStart && e.end >= numEnd)) {
       continue;
     }
 
@@ -255,10 +239,8 @@ export const detectStreetPatternsNearAddresses = (
     const inHeader = numStart < headerEnd;
     const nearAddress = addressEntities.some(
       (e) =>
-        Math.abs(e.start - numEnd) <
-          STREET_CONTEXT_WINDOW ||
-        Math.abs(e.end - numStart) <
-          STREET_CONTEXT_WINDOW,
+        Math.abs(e.start - numEnd) < STREET_CONTEXT_WINDOW ||
+        Math.abs(e.end - numStart) < STREET_CONTEXT_WINDOW,
     );
 
     if (!inHeader && !nearAddress) {
@@ -272,10 +254,7 @@ export const detectStreetPatternsNearAddresses = (
 
     // Skip whitespace before the number (including
     // non-breaking spaces from PDF extraction)
-    while (
-      scanPos >= 0 &&
-      /[\s\u00A0]/.test(fullText[scanPos] ?? "")
-    ) {
+    while (scanPos >= 0 && /[\s\u00A0]/.test(fullText[scanPos] ?? "")) {
       scanPos--;
     }
 
@@ -309,23 +288,13 @@ export const detectStreetPatternsNearAddresses = (
 
       // Walk back through word chars (letters, marks,
       // and digits for tokens like "28" in "28. října").
-      while (
-        scanPos >= 0 &&
-        /[\p{L}\p{M}\d]/u.test(
-          fullText[scanPos] ?? "",
-        )
-      ) {
+      while (scanPos >= 0 && /[\p{L}\p{M}\d]/u.test(fullText[scanPos] ?? "")) {
         scanPos--;
       }
       const wordStart = scanPos + 1;
-      const rawWord = fullText.slice(
-        wordStart,
-        wordEnd,
-      );
+      const rawWord = fullText.slice(wordStart, wordEnd);
       // Strip trailing dot for word checks
-      const word = hasDot
-        ? rawWord.slice(0, -1)
-        : rawWord;
+      const word = hasDot ? rawWord.slice(0, -1) : rawWord;
 
       if (word.length === 0) {
         break;
@@ -334,35 +303,22 @@ export const detectStreetPatternsNearAddresses = (
       // Check if this is a known street abbreviation
       // (e.g., "ul.", "nám.", "tř.", "nábř.")
       const isStreetAbbrev =
-        hasDot &&
-        getStreetAbbrevs().has(rawWord.toLowerCase());
+        hasDot && getStreetAbbrevs().has(rawWord.toLowerCase());
 
       // Word must start with uppercase (street name),
       // be a known preposition, a street abbreviation,
       // or a digit-starting token (e.g., "28." in
       // "28. října 1168/102").
-      const isUpper = UPPER_WORD_RE.test(
-        word[0] ?? "",
-      );
-      const isPrep = getAddressPreps().has(
-        word.toLowerCase(),
-      );
+      const isUpper = UPPER_WORD_RE.test(word[0] ?? "");
+      const isPrep = getAddressPreps().has(word.toLowerCase());
       const isDigitToken = /^\d{1,2}$/.test(word);
 
-      if (
-        !isUpper &&
-        !isPrep &&
-        !isStreetAbbrev &&
-        !isDigitToken
-      ) {
+      if (!isUpper && !isPrep && !isStreetAbbrev && !isDigitToken) {
         break;
       }
 
       // Track temporal prepositions passed through
-      if (
-        isPrep &&
-        getTemporalPreps().has(word.toLowerCase())
-      ) {
+      if (isPrep && getTemporalPreps().has(word.toLowerCase())) {
         hasTemporalPrep = true;
       }
 
@@ -370,10 +326,7 @@ export const detectStreetPatternsNearAddresses = (
       wordCount++;
 
       // Skip whitespace before this word (inc. NBSP)
-      while (
-        scanPos >= 0 &&
-        /[\s\u00A0]/.test(fullText[scanPos] ?? "")
-      ) {
+      while (scanPos >= 0 && /[\s\u00A0]/.test(fullText[scanPos] ?? "")) {
         scanPos--;
       }
 
@@ -399,10 +352,7 @@ export const detectStreetPatternsNearAddresses = (
       continue;
     }
 
-    const streetText = fullText.slice(
-      streetStart,
-      numEnd,
-    );
+    const streetText = fullText.slice(streetStart, numEnd);
 
     // Skip if too short (single digit without name)
     if (streetText.length < 4) {
@@ -419,10 +369,7 @@ export const detectStreetPatternsNearAddresses = (
 
     // Skip if already covered
     if (
-      existingEntities.some(
-        (e) =>
-          e.start <= streetStart && e.end >= numEnd,
-      )
+      existingEntities.some((e) => e.start <= streetStart && e.end >= numEnd)
     ) {
       continue;
     }
@@ -451,15 +398,11 @@ export const detectStreetPatternsNearAddresses = (
   // "Vinohradská 46" near "Praha 2" → address.
   // Uppercase word + space + 1-3 digit number, no slash.
   // Capped at 3 digits to exclude year numbers (2024).
-  const bareHouseRe =
-    /(?<=\s|^)(\p{Lu}\p{Ll}[\p{Ll}\p{Lu}]+\s+\d{1,3})\b/gu;
+  const bareHouseRe = /(?<=\s|^)(\p{Lu}\p{Ll}[\p{Ll}\p{Lu}]+\s+\d{1,3})\b/gu;
   bareHouseRe.lastIndex = 0;
 
   // Merge existing + newly found entities for proximity
-  const allAddr = [
-    ...addressEntities,
-    ...results,
-  ];
+  const allAddr = [...addressEntities, ...results];
 
   for (
     let m = bareHouseRe.exec(fullText);
@@ -475,10 +418,7 @@ export const detectStreetPatternsNearAddresses = (
     // Must be on the same line as a confirmed address
     // entity and within 50 chars.
     const nearAddr = allAddr.some((e) => {
-      const dist = Math.min(
-        Math.abs(e.start - end),
-        Math.abs(e.end - start),
-      );
+      const dist = Math.min(Math.abs(e.start - end), Math.abs(e.end - start));
       if (dist > 50) return false;
       // Ensure same line: no newline between
       const lo = Math.min(e.start, start);
@@ -491,21 +431,13 @@ export const detectStreetPatternsNearAddresses = (
 
     // Extract the uppercase word to check stopwords
     const spaceIdx = captured.search(/\s+\d/);
-    const word =
-      spaceIdx > 0
-        ? captured.slice(0, spaceIdx)
-        : captured;
+    const word = spaceIdx > 0 ? captured.slice(0, spaceIdx) : captured;
 
     if (BARE_STOPWORDS.has(word)) continue;
 
     // Skip if overlapping an existing entity
-    const allEntities = [
-      ...existingEntities,
-      ...results,
-    ];
-    const overlaps = allEntities.some(
-      (e) => e.start < end && e.end > start,
-    );
+    const allEntities = [...existingEntities, ...results];
+    const overlaps = allEntities.some((e) => e.start < end && e.end > start);
     if (overlaps) continue;
 
     results.push({
@@ -544,9 +476,7 @@ export const detectOrphanStreetLines = (
   fullText: string,
   existingEntities: Entity[],
 ): Entity[] => {
-  const headerEnd = Math.floor(
-    fullText.length * HEADER_ZONE_FRACTION,
-  );
+  const headerEnd = Math.floor(fullText.length * HEADER_ZONE_FRACTION);
   const results: Entity[] = [];
   ORPHAN_STREET_RE.lastIndex = 0;
 
@@ -568,19 +498,13 @@ export const detectOrphanStreetLines = (
     }
 
     // Skip if already covered
-    if (
-      existingEntities.some(
-        (e) => e.start <= start && e.end >= end,
-      )
-    ) {
+    if (existingEntities.some((e) => e.start <= start && e.end >= end)) {
       continue;
     }
 
     // Must have a nearby entity (within 200 chars)
     const hasContext = existingEntities.some(
-      (e) =>
-        Math.abs(e.start - end) < 200 ||
-        Math.abs(e.end - start) < 200,
+      (e) => Math.abs(e.start - end) < 200 || Math.abs(e.end - start) < 200,
     );
     if (!hasContext) {
       continue;

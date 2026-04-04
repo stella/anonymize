@@ -20,9 +20,7 @@ const LETTER_RE = /\p{L}/u;
  * Decimal-comma pattern: comma followed by digit or
  * dash notation ("0,05%", "1.529,50 Kč", "98.000,- Kč").
  */
-const DECIMAL_COMMA_RE = new RegExp(
-  `^,(?:\\d|${DASH}{1,2})`,
-);
+const DECIMAL_COMMA_RE = new RegExp(`^,(?:\\d|${DASH}{1,2})`);
 
 /**
  * Post-nominal degree regex. When a comma-stop is
@@ -30,13 +28,9 @@ const DECIMAL_COMMA_RE = new RegExp(
  * etc.), skip the comma and degree, then continue.
  */
 const POST_NOMINAL_RE = new RegExp(
-  `^,\\s*(?:${POST_NOMINALS.toSorted(
-    (a, b) => b.length - a.length,
-  )
+  `^,\\s*(?:${POST_NOMINALS.toSorted((a, b) => b.length - a.length)
     .map((d) =>
-      d
-        .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-        .replace(/\\\./g, "\\.\\s*"),
+      d.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\\\./g, "\\.\\s*"),
     )
     .join("|")})\\.?`,
   "i",
@@ -62,9 +56,7 @@ const LEGAL_FORM_CHECK_RE = new RegExp(
       .replace(/\\\./g, "\\.\\s*");
     const isDotFree = !f.includes(".");
     const isShort = f.length <= 4;
-    return isDotFree && isShort
-      ? `\\b${escaped}\\b`
-      : escaped;
+    return isDotFree && isShort ? `\\b${escaped}\\b` : escaped;
   }).join("|"),
 );
 
@@ -94,10 +86,7 @@ const compileValidations = (
           // Strip g/y flags: the compiled regex is shared
           // across all rules in the group and must be
           // stateless (no lastIndex advancement).
-          re: new RegExp(
-            v.pattern,
-            (v.flags ?? "").replace(/[gy]/g, ""),
-          ),
+          re: new RegExp(v.pattern, (v.flags ?? "").replace(/[gy]/g, "")),
         };
       default: {
         // TriggerValidation is a public export; custom
@@ -147,15 +136,11 @@ const applyValidations = (
 
 // ── Trigger expansion ──────────────────────────────
 
-const expandTriggerGroups = (
-  groups: TriggerGroupConfig[],
-): TriggerRule[] => {
+const expandTriggerGroups = (groups: TriggerGroupConfig[]): TriggerRule[] => {
   const rules: TriggerRule[] = [];
   for (const group of groups) {
     const extensions = group.extensions ?? [];
-    const compiled = compileValidations(
-      group.validations ?? [],
-    );
+    const compiled = compileValidations(group.validations ?? []);
 
     // Generate trigger variants from the original
     // trigger strings. Extensions are applied once to
@@ -166,15 +151,9 @@ const expandTriggerGroups = (
     // exponential variant growth.
     const allTriggers = new Set(group.triggers);
     for (const trigger of group.triggers) {
-      if (
-        extensions.includes("add-colon") &&
-        !trigger.endsWith(":")
-      )
+      if (extensions.includes("add-colon") && !trigger.endsWith(":"))
         allTriggers.add(`${trigger}:`);
-      if (
-        extensions.includes("add-trailing-space") &&
-        !trigger.endsWith(" ")
-      )
+      if (extensions.includes("add-trailing-space") && !trigger.endsWith(" "))
         allTriggers.add(`${trigger} `);
       if (
         extensions.includes("add-colon-space") &&
@@ -184,15 +163,12 @@ const expandTriggerGroups = (
         allTriggers.add(`${trigger}: `);
       if (extensions.includes("normalize-spaces")) {
         if (trigger.includes(" ")) {
-          allTriggers.add(
-            trigger.replace(/ /g, "\u00A0"),
-          );
+          allTriggers.add(trigger.replace(/ /g, "\u00A0"));
         }
       }
     }
 
-    const includeTrigger =
-      group.includeTrigger ?? false;
+    const includeTrigger = group.includeTrigger ?? false;
 
     for (const trigger of allTriggers) {
       rules.push({
@@ -220,9 +196,7 @@ export const buildTriggerPatterns = async (): Promise<{
 }> => {
   const rules: TriggerRule[] = [];
 
-  const allGroups = await loadLanguageConfigs<
-    readonly TriggerGroupConfig[]
-  >(
+  const allGroups = await loadLanguageConfigs<readonly TriggerGroupConfig[]>(
     "triggers",
     (mod) => {
       // eslint-disable-next-line no-unsafe-type-assertion -- JSON config
@@ -230,39 +204,28 @@ export const buildTriggerPatterns = async (): Promise<{
         default?: readonly TriggerGroupConfig[];
       };
       // eslint-disable-next-line no-unsafe-type-assertion -- JSON config
-      return (m.default ?? mod) as
-        readonly TriggerGroupConfig[];
+      return (m.default ?? mod) as readonly TriggerGroupConfig[];
     },
   );
   for (const groups of allGroups) {
     if (!Array.isArray(groups)) {
       console.warn(
-        "[anonymize] triggers: unexpected " +
-          "config shape, skipping",
+        "[anonymize] triggers: unexpected " + "config shape, skipping",
       );
       continue;
     }
-    rules.push(
-      ...expandTriggerGroups(
-        groups as TriggerGroupConfig[],
-      ),
-    );
+    rules.push(...expandTriggerGroups(groups as TriggerGroupConfig[]));
   }
 
   // Load global triggers (language-agnostic)
   try {
-    const globalMod = await import(
-      "@stll/anonymize-data/config/triggers.global.json"
-    );
+    const globalMod =
+      await import("@stll/anonymize-data/config/triggers.global.json");
     // eslint-disable-next-line no-unsafe-type-assertion -- JSON config
-    const globalGroups = (
-      (globalMod as { default?: unknown }).default ??
-      globalMod
-    ) as TriggerGroupConfig[];
+    const globalGroups = ((globalMod as { default?: unknown }).default ??
+      globalMod) as TriggerGroupConfig[];
     if (Array.isArray(globalGroups)) {
-      rules.push(
-        ...expandTriggerGroups(globalGroups),
-      );
+      rules.push(...expandTriggerGroups(globalGroups));
     }
   } catch (err) {
     // Only suppress "module not found"; re-throw
@@ -278,28 +241,22 @@ export const buildTriggerPatterns = async (): Promise<{
   // Warn about cross-group trigger duplicates.
   // Duplicates cause redundant AC matches but are
   // not fatal (mergeAndDedup handles overlap).
-  const seen = new Map<
-    string,
-    { label: string; strategy: string }
-  >();
+  const seen = new Map<string, { label: string; strategy: string }>();
   for (const rule of rules) {
     const key = rule.trigger.toLowerCase();
     const prev = seen.get(key);
     if (prev !== undefined) {
       const labelDiff = prev.label !== rule.label;
-      const stratDiff =
-        prev.strategy !== rule.strategy.type;
+      const stratDiff = prev.strategy !== rule.strategy.type;
       if (labelDiff || stratDiff) {
         console.warn(
           `[anonymize] duplicate trigger` +
             ` "${rule.trigger}":` +
             (labelDiff
-              ? ` labels "${prev.label}" vs` +
-                ` "${rule.label}"`
+              ? ` labels "${prev.label}" vs` + ` "${rule.label}"`
               : "") +
             (stratDiff
-              ? ` strategies "${prev.strategy}" vs` +
-                ` "${rule.strategy.type}"`
+              ? ` strategies "${prev.strategy}" vs` + ` "${rule.strategy.type}"`
               : ""),
         );
       }
@@ -314,9 +271,7 @@ export const buildTriggerPatterns = async (): Promise<{
   // rules[i] corresponds to patterns[i].
   // Plain lowercased strings — the unified builder
   // sets caseInsensitive globally on the AC.
-  const patterns: string[] = rules.map((r) =>
-    r.trigger.toLowerCase(),
-  );
+  const patterns: string[] = rules.map((r) => r.trigger.toLowerCase());
 
   return { patterns, rules };
 };
@@ -336,12 +291,8 @@ const stripQuotes = (value: {
   text: string;
 } | null => {
   const leadingMatch = LEADING_PUNCT.exec(value.text);
-  const leadingLen = leadingMatch
-    ? leadingMatch[0].length
-    : 0;
-  const stripped = value.text
-    .slice(leadingLen)
-    .replace(TRAILING_PUNCT, "");
+  const leadingLen = leadingMatch ? leadingMatch[0].length : 0;
+  const stripped = value.text.slice(leadingLen).replace(TRAILING_PUNCT, "");
   if (stripped.length === 0) {
     return null;
   }
@@ -398,12 +349,8 @@ const extractValue = (
   // Strip leading whitespace, colons, semicolons —
   // triggers are often followed by ": \t\t\t" in
   // formatted documents.
-  const stripped = remaining.replace(
-    /^[\s:;]+/,
-    "",
-  );
-  const trimmedOffset =
-    remaining.length - stripped.length;
+  const stripped = remaining.replace(/^[\s:;]+/, "");
+  const trimmedOffset = remaining.length - stripped.length;
   const valueStart = triggerEnd + trimmedOffset;
   const valueText = stripped;
 
@@ -427,10 +374,7 @@ const extractValue = (
       while (end < valueText.length) {
         const ch = valueText[end];
         // Hard stops: newline, paren, tab
-        if (
-          ch !== undefined &&
-          COMMA_STOP_CHARS.has(ch)
-        ) {
+        if (ch !== undefined && COMMA_STOP_CHARS.has(ch)) {
           foundStop = true;
           break;
         }
@@ -447,9 +391,7 @@ const extractValue = (
             continue;
           }
           const degreeMatch =
-            label === "person"
-              ? POST_NOMINAL_RE.exec(afterComma)
-              : null;
+            label === "person" ? POST_NOMINAL_RE.exec(afterComma) : null;
           if (degreeMatch) {
             // Skip the comma + degree, continue scan
             end += degreeMatch[0].length;
@@ -475,8 +417,7 @@ const extractValue = (
       if (extracted.length === 0) {
         return null;
       }
-      const trailingSpaces =
-        rawSlice.length - rawSlice.trimEnd().length;
+      const trailingSpaces = rawSlice.length - rawSlice.trimEnd().length;
       return {
         start: valueStart,
         end: valueStart + end - trailingSpaces,
@@ -500,8 +441,7 @@ const extractValue = (
       if (extracted.length === 0) {
         return null;
       }
-      const trailingSpaces =
-        rawSlice.length - rawSlice.trimEnd().length;
+      const trailingSpaces = rawSlice.length - rawSlice.trimEnd().length;
       return {
         start: valueStart,
         end: valueStart + end - trailingSpaces,
@@ -513,10 +453,7 @@ const extractValue = (
       // Respect tab as a cell boundary (DOCX table
       // rows use tabs between columns).
       const tabIdx = valueText.indexOf("\t");
-      const cellText =
-        tabIdx !== -1
-          ? valueText.slice(0, tabIdx)
-          : valueText;
+      const cellText = tabIdx !== -1 ? valueText.slice(0, tabIdx) : valueText;
       // Skip punctuation-only tokens (colons, dashes)
       // so "datová schránka : hsaxra8" captures
       // "hsaxra8" not ":"
@@ -566,15 +503,12 @@ const extractValue = (
         return null;
       }
       const afterSep = raw.slice(sepMatch[0].length);
-      const idMatch =
-        /^[A-Z]{0,6}\s?\d[\d\s\-/]{4,}/i.exec(afterSep);
+      const idMatch = /^[A-Z]{0,6}\s?\d[\d\s\-/]{4,}/i.exec(afterSep);
       if (!idMatch) {
         return null;
       }
       const idText = idMatch[0].trim();
-      const leadingSpaces =
-        idMatch[0].length -
-        idMatch[0].trimStart().length;
+      const leadingSpaces = idMatch[0].length - idMatch[0].trimStart().length;
       const idStart =
         triggerEnd +
         sepMatch[0].length +
@@ -621,10 +555,7 @@ const extractValue = (
           const afterNext = valueText[end + 2];
           // "č.p." or "Kpt.J" — period immediately
           // followed by letter or digit
-          if (
-            next !== undefined &&
-            (/\p{L}/u.test(next) || /\d/.test(next))
-          ) {
+          if (next !== undefined && (/\p{L}/u.test(next) || /\d/.test(next))) {
             end++;
             continue;
           }
@@ -635,8 +566,7 @@ const extractValue = (
           if (
             next === " " &&
             afterNext !== undefined &&
-            (/\p{L}/u.test(afterNext) ||
-              /\d/.test(afterNext))
+            (/\p{L}/u.test(afterNext) || /\d/.test(afterNext))
           ) {
             end++;
             continue;
@@ -652,8 +582,7 @@ const extractValue = (
           let peek = end + 1;
           while (
             peek < valueText.length &&
-            (valueText[peek] === " " ||
-              valueText[peek] === "\t")
+            (valueText[peek] === " " || valueText[peek] === "\t")
           ) {
             peek++;
           }
@@ -668,30 +597,22 @@ const extractValue = (
             .slice(end + 1)
             .trimStart()
             .toLowerCase();
-          const hitsKeyword =
-            ADDRESS_STOP_KEYWORDS.some((kw) => {
-              if (!afterComma.startsWith(kw))
-                return false;
-              // Guard: next char must be a delimiter
-              // or digit to avoid truncating city
-              // names like "Telč" on "tel". Digits
-              // are included so "IČ25672541" (no
-              // space) still triggers a stop.
-              const next = afterComma[kw.length];
-              return (
-                next === undefined ||
-                /[\s:;.,!?()\d]/.test(next)
-              );
-            });
+          const hitsKeyword = ADDRESS_STOP_KEYWORDS.some((kw) => {
+            if (!afterComma.startsWith(kw)) return false;
+            // Guard: next char must be a delimiter
+            // or digit to avoid truncating city
+            // names like "Telč" on "tel". Digits
+            // are included so "IČ25672541" (no
+            // space) still triggers a stop.
+            const next = afterComma[kw.length];
+            return next === undefined || /[\s:;.,!?()\d]/.test(next);
+          });
           if (hitsKeyword) {
             break;
           }
           // Continue if next segment starts with
           // digit (PSČ) or uppercase (city name)
-          if (
-            /\d/.test(peekCh) ||
-            UPPER_RE.test(peekCh)
-          ) {
+          if (/\d/.test(peekCh) || UPPER_RE.test(peekCh)) {
             end++;
             continue;
           }
@@ -706,10 +627,7 @@ const extractValue = (
       // the last word boundary so fixPartialWords does
       // not extend the entity beyond the configured max.
       if (end >= maxLen) {
-        const lastSpace = valueText.lastIndexOf(
-          " ",
-          end - 1,
-        );
+        const lastSpace = valueText.lastIndexOf(" ", end - 1);
         if (lastSpace > 0) {
           end = lastSpace;
         }
@@ -720,8 +638,7 @@ const extractValue = (
       if (extracted.length === 0) {
         return null;
       }
-      const trailingSpaces =
-        rawSlice.length - rawSlice.trimEnd().length;
+      const trailingSpaces = rawSlice.length - rawSlice.trimEnd().length;
       return {
         start: valueStart,
         end: valueStart + end - trailingSpaces,
@@ -762,10 +679,7 @@ export const processTriggerMatches = (
 
     // Left word-boundary: reject if preceded by a
     // letter (prevents partial keyword matches).
-    if (
-      match.start > 0 &&
-      LETTER_RE.test(fullText[match.start - 1] ?? "")
-    ) {
+    if (match.start > 0 && LETTER_RE.test(fullText[match.start - 1] ?? "")) {
       continue;
     }
 
@@ -793,9 +707,7 @@ export const processTriggerMatches = (
       rule.strategy,
       rule.label,
     );
-    const value = rawValue
-      ? stripQuotes(rawValue)
-      : null;
+    const value = rawValue ? stripQuotes(rawValue) : null;
 
     if (value) {
       // Apply declarative validations to the captured
@@ -803,25 +715,15 @@ export const processTriggerMatches = (
       // trigger). This is intentional: validations
       // like min-length should test the extracted
       // value, not the trigger keyword itself.
-      if (
-        !applyValidations(
-          value.text,
-          rule.validations,
-        )
-      ) {
+      if (!applyValidations(value.text, rule.validations)) {
         continue;
       }
 
       // When includeTrigger is set, the entity span
       // starts at the trigger match, not the value.
-      const entityStart = rule.includeTrigger
-        ? match.start
-        : value.start;
+      const entityStart = rule.includeTrigger ? match.start : value.start;
       const entityEnd = value.end;
-      const entityText = fullText.slice(
-        entityStart,
-        entityEnd,
-      );
+      const entityText = fullText.slice(entityStart, entityEnd);
 
       // Legal form reclassification: any person-labeled
       // trigger whose captured text contains a definitive
@@ -829,8 +731,7 @@ export const processTriggerMatches = (
       // This is universal — every person with a legal form
       // is an organisation, no per-group config needed.
       const effectiveLabel =
-        rule.label === "person" &&
-        LEGAL_FORM_CHECK_RE.test(entityText)
+        rule.label === "person" && LEGAL_FORM_CHECK_RE.test(entityText)
           ? "organization"
           : rule.label;
 
@@ -849,8 +750,4 @@ export const processTriggerMatches = (
 };
 
 // Re-export for testing
-export {
-  expandTriggerGroups,
-  compileValidations,
-  applyValidations,
-};
+export { expandTriggerGroups, compileValidations, applyValidations };

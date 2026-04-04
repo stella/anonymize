@@ -4,11 +4,7 @@ import { defaultContext } from "../context";
 
 // ── Zone types ───────────────────────────────────
 
-export type DocumentZone =
-  | "header"
-  | "signature"
-  | "body"
-  | "table";
+export type DocumentZone = "header" | "signature" | "body" | "table";
 
 export type ZoneSpan = {
   zone: DocumentZone;
@@ -45,54 +41,39 @@ type SigningClauseConfig = {
   }>;
 };
 
-const loadSectionHeadings =
-  async (): Promise<RegExp[]> => {
-    const mod = await import(
-      "@stll/anonymize-data/config/section-headings.json"
-    );
-    const data: SectionHeadingsConfig =
-      mod.default ?? mod;
-    return data.patterns.map(
-      (p) => new RegExp(p.re, p.flags),
-    );
-  };
+const loadSectionHeadings = async (): Promise<RegExp[]> => {
+  const mod = await import("@stll/anonymize-data/config/section-headings.json");
+  const data: SectionHeadingsConfig = mod.default ?? mod;
+  return data.patterns.map((p) => new RegExp(p.re, p.flags));
+};
 
-const loadSigningClauses =
-  async (): Promise<RegExp[]> => {
-    const mod = await import(
-      "@stll/anonymize-data/config/signing-clauses.json"
-    );
-    const data: SigningClauseConfig =
-      mod.default ?? mod;
-    return data.patterns.map((p) => {
-      // Build a pattern that matches the signing
-      // clause prefix at the start of a line.
-      // Note: prefix/suffix are regex fragments by
-      // design (e.g. `(?:V|Ve)\\s+`), not literals.
-      const prefix = p.prefix || "";
-      const suffix = p.suffix || "";
-      // Include prepositions so multi-word place
-      // names like "Ústí nad Labem" are matched,
-      // consistent with buildSigningClausePatterns
-      // in detectors/regex.ts.
-      const prepAlt =
-        p.prepositions.length > 0
-          ? p.prepositions.join("|")
-          : null;
-      const place = prepAlt
-        ? `\\p{Lu}\\p{Ll}+` +
-          `(?:\\s+(?:${prepAlt})` +
-          `\\s+\\p{Lu}\\p{Ll}+)*` +
-          `(?:\\s+\\p{Lu}\\p{Ll}+)*`
-        : `\\p{Lu}\\p{Ll}+` +
-          `(?:[- ]\\p{Lu}\\p{Ll}+)*`;
-      // Anchor to the start of the line. Each line is
-      // already split on \n, so ^ suffices without m.
-      const combined =
-        `^\\s*(?:${prefix}${place}${suffix})`;
-      return new RegExp(combined, "u");
-    });
-  };
+const loadSigningClauses = async (): Promise<RegExp[]> => {
+  const mod = await import("@stll/anonymize-data/config/signing-clauses.json");
+  const data: SigningClauseConfig = mod.default ?? mod;
+  return data.patterns.map((p) => {
+    // Build a pattern that matches the signing
+    // clause prefix at the start of a line.
+    // Note: prefix/suffix are regex fragments by
+    // design (e.g. `(?:V|Ve)\\s+`), not literals.
+    const prefix = p.prefix || "";
+    const suffix = p.suffix || "";
+    // Include prepositions so multi-word place
+    // names like "Ústí nad Labem" are matched,
+    // consistent with buildSigningClausePatterns
+    // in detectors/regex.ts.
+    const prepAlt = p.prepositions.length > 0 ? p.prepositions.join("|") : null;
+    const place = prepAlt
+      ? `\\p{Lu}\\p{Ll}+` +
+        `(?:\\s+(?:${prepAlt})` +
+        `\\s+\\p{Lu}\\p{Ll}+)*` +
+        `(?:\\s+\\p{Lu}\\p{Ll}+)*`
+      : `\\p{Lu}\\p{Ll}+` + `(?:[- ]\\p{Lu}\\p{Ll}+)*`;
+    // Anchor to the start of the line. Each line is
+    // already split on \n, so ^ suffices without m.
+    const combined = `^\\s*(?:${prefix}${place}${suffix})`;
+    return new RegExp(combined, "u");
+  });
+};
 
 /**
  * Ensure config data is loaded. Call once before
@@ -155,9 +136,7 @@ export const classifyZones = (
       "[anonymize] classifyZones called before " +
         "initZoneClassifier(); returning body-only",
     );
-    return [
-      { zone: "body", start: 0, end: fullText.length },
-    ];
+    return [{ zone: "body", start: 0, end: fullText.length }];
   }
 
   const lines = fullText.split("\n");
@@ -202,14 +181,11 @@ export const classifyZones = (
 
   // Determine zone boundaries
   let headerEndOffset =
-    headerEndLine >= 0
-      ? (lineOffsets[headerEndLine] ?? 0)
-      : 0;
+    headerEndLine >= 0 ? (lineOffsets[headerEndLine] ?? 0) : 0;
 
   const signatureStartOffset =
     signatureStartLine >= 0
-      ? (lineOffsets[signatureStartLine] ??
-        fullText.length)
+      ? (lineOffsets[signatureStartLine] ?? fullText.length)
       : fullText.length;
 
   // Guard: if the signing clause appears before
@@ -238,20 +214,14 @@ export const classifyZones = (
   }
 
   // Scan body region for table zones
-  const bodyStart =
-    headerEndLine > 0 ? headerEndOffset : 0;
+  const bodyStart = headerEndLine > 0 ? headerEndOffset : 0;
   const bodyEnd =
-    signatureStartLine >= 0
-      ? signatureStartOffset
-      : fullText.length;
+    signatureStartLine >= 0 ? signatureStartOffset : fullText.length;
 
   let tableStart = -1;
   for (
     let i = Math.max(headerEndLine, 0);
-    i <
-    (signatureStartLine >= 0
-      ? signatureStartLine
-      : lines.length);
+    i < (signatureStartLine >= 0 ? signatureStartLine : lines.length);
     i++
   ) {
     const line = lines[i];
@@ -275,9 +245,7 @@ export const classifyZones = (
     // Close table at the end of body range
     if (
       i ===
-        (signatureStartLine >= 0
-          ? signatureStartLine - 1
-          : lines.length - 1) &&
+        (signatureStartLine >= 0 ? signatureStartLine - 1 : lines.length - 1) &&
       tableStart !== -1
     ) {
       zones.push({
@@ -290,9 +258,7 @@ export const classifyZones = (
   }
 
   // Fill body gaps between header/table/signature
-  const sortedSpecial = zones.toSorted(
-    (a, b) => a.start - b.start,
-  );
+  const sortedSpecial = zones.toSorted((a, b) => a.start - b.start);
 
   let cursor = bodyStart;
   const bodyZones: ZoneSpan[] = [];
@@ -326,9 +292,7 @@ export const classifyZones = (
     });
   }
 
-  return zones.toSorted(
-    (a, b) => a.start - b.start,
-  );
+  return zones.toSorted((a, b) => a.start - b.start);
 };
 
 // ── Entity zone lookup ───────────────────────────
@@ -337,15 +301,9 @@ export const classifyZones = (
  * Find which zone an entity's midpoint falls in.
  * Returns "body" if no zone matches (defensive).
  */
-const findZone = (
-  midpoint: number,
-  zones: ZoneSpan[],
-): DocumentZone => {
+const findZone = (midpoint: number, zones: ZoneSpan[]): DocumentZone => {
   for (const span of zones) {
-    if (
-      midpoint >= span.start &&
-      midpoint < span.end
-    ) {
+    if (midpoint >= span.start && midpoint < span.end) {
       return span.zone;
     }
   }
@@ -370,18 +328,14 @@ export const applyZoneAdjustments = (
 
   const result: Entity[] = [];
   for (const entity of entities) {
-    const midpoint =
-      (entity.start + entity.end) / 2;
+    const midpoint = (entity.start + entity.end) / 2;
     const zone = findZone(midpoint, zones);
     const adjustment = ZONE_SCORE_ADJUSTMENTS[zone];
 
     if (adjustment > 0) {
       result.push({
         ...entity,
-        score: Math.min(
-          1,
-          entity.score + adjustment,
-        ),
+        score: Math.min(1, entity.score + adjustment),
       });
     } else {
       result.push({ ...entity });

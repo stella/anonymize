@@ -27,8 +27,8 @@
     "prepublishOnly": "bun run build",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json && tsc --noEmit -p tsconfig.wasm.json",
     "test": "bun test",
-    "lint": "echo 'no linter configured yet'",
-    "format": "echo 'no formatter configured yet'"
+    "lint": "prettier --check . --ignore-path ../../.prettierignore",
+    "format": "prettier --write . --ignore-path ../../.prettierignore"
   },
   "dependencies": {
     "@huggingface/tokenizers": "^0.1.2",

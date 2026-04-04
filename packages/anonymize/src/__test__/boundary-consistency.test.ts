@@ -28,10 +28,7 @@ describe("enforceBoundaryConsistency", () => {
         makeEntity("person", 12, 15, "Jan"),
         makeEntity("person", 16, 21, "Novák"),
       ];
-      const result = enforceBoundaryConsistency(
-        entities,
-        fullText,
-      );
+      const result = enforceBoundaryConsistency(entities, fullText);
       expect(result).toHaveLength(1);
       expect(result[0]?.text).toBe("Jan Novák");
       expect(result[0]?.start).toBe(12);
@@ -44,10 +41,7 @@ describe("enforceBoundaryConsistency", () => {
         makeEntity("person", 0, 3, "Jan", 0.8),
         makeEntity("person", 4, 9, "Novák", 0.95),
       ];
-      const result = enforceBoundaryConsistency(
-        entities,
-        fullText,
-      );
+      const result = enforceBoundaryConsistency(entities, fullText);
       expect(result).toHaveLength(1);
       expect(result[0]?.score).toBe(0.95);
     });
@@ -58,10 +52,7 @@ describe("enforceBoundaryConsistency", () => {
         makeEntity("person", 0, 3, "Jan"),
         makeEntity("address", 4, 9, "Praha"),
       ];
-      const result = enforceBoundaryConsistency(
-        entities,
-        fullText,
-      );
+      const result = enforceBoundaryConsistency(entities, fullText);
       expect(result).toHaveLength(2);
     });
 
@@ -71,10 +62,7 @@ describe("enforceBoundaryConsistency", () => {
         makeEntity("person", 0, 3, "Jan"),
         makeEntity("person", 3, 8, "Novák"),
       ];
-      const result = enforceBoundaryConsistency(
-        entities,
-        fullText,
-      );
+      const result = enforceBoundaryConsistency(entities, fullText);
       // Word boundary expansion makes both cover the
       // full word; deduplication collapses to one.
       expect(result).toHaveLength(1);
@@ -91,19 +79,10 @@ describe("enforceBoundaryConsistency", () => {
       // "ef gh" [9,14] -> expands to "def ghi" [8,15]
       // overlap at [8,11]
       const entities = [
-        makeEntity(
-          "person", 5, 10,
-          fullText.slice(5, 10),
-        ),
-        makeEntity(
-          "person", 9, 14,
-          fullText.slice(9, 14),
-        ),
+        makeEntity("person", 5, 10, fullText.slice(5, 10)),
+        makeEntity("person", 9, 14, fullText.slice(9, 14)),
       ];
-      const result = enforceBoundaryConsistency(
-        entities,
-        fullText,
-      );
+      const result = enforceBoundaryConsistency(entities, fullText);
       expect(result).toHaveLength(1);
       expect(result[0]?.start).toBe(4);
       expect(result[0]?.end).toBe(15);
@@ -121,16 +100,11 @@ describe("enforceBoundaryConsistency", () => {
         makeEntity("address", 4, 5, "x"),
         makeEntity("person", 6, 11, "Novák"),
       ];
-      const result = enforceBoundaryConsistency(
-        entities,
-        fullText,
-      );
+      const result = enforceBoundaryConsistency(entities, fullText);
       // Gap between persons is " x " (3 chars) but
       // contains "x" which is not in GAP_PATTERN,
       // so they should NOT merge.
-      const persons = result.filter(
-        (e) => e.label === "person",
-      );
+      const persons = result.filter((e) => e.label === "person");
       expect(persons).toHaveLength(2);
     });
 
@@ -144,16 +118,9 @@ describe("enforceBoundaryConsistency", () => {
         makeEntity("punctuation", 5, 6, ","),
         makeEntity("person", 7, 10, "Jan"),
       ];
-      const result = enforceBoundaryConsistency(
-        entities,
-        fullText,
-      );
-      const persons = result.filter(
-        (e) => e.label === "person",
-      );
-      const punct = result.find(
-        (e) => e.label === "punctuation",
-      );
+      const result = enforceBoundaryConsistency(entities, fullText);
+      const persons = result.filter((e) => e.label === "person");
+      const punct = result.find((e) => e.label === "punctuation");
       expect(persons).toHaveLength(2);
       expect(punct).toBeDefined();
     });
@@ -164,10 +131,7 @@ describe("enforceBoundaryConsistency", () => {
         makeEntity("person", 0, 3, "Jan"),
         makeEntity("person", 8, 13, "Novák"),
       ];
-      const result = enforceBoundaryConsistency(
-        entities,
-        fullText,
-      );
+      const result = enforceBoundaryConsistency(entities, fullText);
       expect(result).toHaveLength(2);
     });
 
@@ -177,10 +141,7 @@ describe("enforceBoundaryConsistency", () => {
         makeEntity("person", 0, 5, "Novák"),
         makeEntity("person", 7, 10, "Jan"),
       ];
-      const result = enforceBoundaryConsistency(
-        entities,
-        fullText,
-      );
+      const result = enforceBoundaryConsistency(entities, fullText);
       expect(result).toHaveLength(1);
       expect(result[0]?.text).toBe("Novák, Jan");
       expect(result[0]?.start).toBe(0);
@@ -193,10 +154,7 @@ describe("enforceBoundaryConsistency", () => {
         makeEntity("person", 0, 3, "Jan"),
         makeEntity("person", 4, 9, "Novák"),
       ];
-      const result = enforceBoundaryConsistency(
-        entities,
-        fullText,
-      );
+      const result = enforceBoundaryConsistency(entities, fullText);
       // Gap is "\n" which should NOT be merged
       expect(result).toHaveLength(2);
       expect(result[0]?.text).toBe("Jan");
@@ -208,13 +166,8 @@ describe("enforceBoundaryConsistency", () => {
     test("extends entity ending mid-word", () => {
       const fullText = "Kontaktujte Novák prosím.";
       // Entity ends at "Nová" (missing the "k")
-      const entities = [
-        makeEntity("person", 12, 16, "Nová"),
-      ];
-      const result = enforceBoundaryConsistency(
-        entities,
-        fullText,
-      );
+      const entities = [makeEntity("person", 12, 16, "Nová")];
+      const result = enforceBoundaryConsistency(entities, fullText);
       expect(result).toHaveLength(1);
       expect(result[0]?.text).toBe("Novák");
       expect(result[0]?.end).toBe(17);
@@ -223,13 +176,8 @@ describe("enforceBoundaryConsistency", () => {
     test("extends entity starting mid-word", () => {
       const fullText = "Kontaktujte Novák prosím.";
       // Entity starts at "ová" (missing "N")
-      const entities = [
-        makeEntity("person", 13, 17, "ovák"),
-      ];
-      const result = enforceBoundaryConsistency(
-        entities,
-        fullText,
-      );
+      const entities = [makeEntity("person", 13, 17, "ovák")];
+      const result = enforceBoundaryConsistency(entities, fullText);
       expect(result).toHaveLength(1);
       expect(result[0]?.text).toBe("Novák");
       expect(result[0]?.start).toBe(12);
@@ -238,13 +186,8 @@ describe("enforceBoundaryConsistency", () => {
     test("does not extend across newline (LF)", () => {
       const fullText = "line one\nNovák";
       // Entity starts in "one" and would cross newline
-      const entities = [
-        makeEntity("person", 5, 14, "one\nNovák"),
-      ];
-      const result = enforceBoundaryConsistency(
-        entities,
-        fullText,
-      );
+      const entities = [makeEntity("person", 5, 14, "one\nNovák")];
+      const result = enforceBoundaryConsistency(entities, fullText);
       // Should not extend left past the newline boundary
       // The entity start stays at word boundary of "one"
       expect(result[0]?.start).toBe(5);
@@ -253,13 +196,8 @@ describe("enforceBoundaryConsistency", () => {
     test("does not extend across newline (CRLF)", () => {
       const fullText = "line one\r\nNovák";
       // Entity that ends mid-word before CRLF
-      const entities = [
-        makeEntity("person", 5, 7, "on"),
-      ];
-      const result = enforceBoundaryConsistency(
-        entities,
-        fullText,
-      );
+      const entities = [makeEntity("person", 5, 7, "on")];
+      const result = enforceBoundaryConsistency(entities, fullText);
       // Should expand to "one" but not cross \r\n
       expect(result[0]?.text).toBe("one");
       expect(result[0]?.end).toBe(8);
@@ -270,18 +208,10 @@ describe("enforceBoundaryConsistency", () => {
     test("removes shorter nested same-label entity", () => {
       const fullText = "Ing. Pavel Novák";
       const entities = [
-        makeEntity(
-          "person",
-          0,
-          16,
-          "Ing. Pavel Novák",
-        ),
+        makeEntity("person", 0, 16, "Ing. Pavel Novák"),
         makeEntity("person", 5, 10, "Pavel"),
       ];
-      const result = enforceBoundaryConsistency(
-        entities,
-        fullText,
-      );
+      const result = enforceBoundaryConsistency(entities, fullText);
       expect(result).toHaveLength(1);
       expect(result[0]?.text).toBe("Ing. Pavel Novák");
     });
@@ -289,18 +219,10 @@ describe("enforceBoundaryConsistency", () => {
     test("keeps nested entity with different label", () => {
       const fullText = "Ing. Pavel Novák";
       const entities = [
-        makeEntity(
-          "person",
-          0,
-          16,
-          "Ing. Pavel Novák",
-        ),
+        makeEntity("person", 0, 16, "Ing. Pavel Novák"),
         makeEntity("organization", 5, 10, "Pavel"),
       ];
-      const result = enforceBoundaryConsistency(
-        entities,
-        fullText,
-      );
+      const result = enforceBoundaryConsistency(entities, fullText);
       expect(result).toHaveLength(2);
     });
 
@@ -312,10 +234,7 @@ describe("enforceBoundaryConsistency", () => {
         makeEntity("person", 12, 15, "Nov", 0.8),
         makeEntity("person", 14, 17, "vák", 0.9),
       ];
-      const result = enforceBoundaryConsistency(
-        entities,
-        fullText,
-      );
+      const result = enforceBoundaryConsistency(entities, fullText);
       expect(result).toHaveLength(1);
       expect(result[0]?.text).toBe("Novák");
       // Higher score survives
@@ -334,22 +253,13 @@ describe("enforceBoundaryConsistency", () => {
         makeEntity("person", 0, 3, "Jan", 0.9),
         makeEntity("address", 3, 8, "Praha", 0.8),
       ];
-      const result = enforceBoundaryConsistency(
-        entities,
-        fullText,
-      );
-      const person = result.find(
-        (e) => e.label === "person",
-      );
-      const address = result.find(
-        (e) => e.label === "address",
-      );
+      const result = enforceBoundaryConsistency(entities, fullText);
+      const person = result.find((e) => e.label === "person");
+      const address = result.find((e) => e.label === "address");
       expect(person).toBeDefined();
       expect(address).toBeDefined();
       // No overlap
-      expect(person!.end).toBeLessThanOrEqual(
-        address!.start,
-      );
+      expect(person!.end).toBeLessThanOrEqual(address!.start);
     });
 
     test("keeps two non-overlapping same-label", () => {
@@ -358,10 +268,7 @@ describe("enforceBoundaryConsistency", () => {
         makeEntity("person", 0, 9, "Jan Novák"),
         makeEntity("person", 12, 25, "Pavel Svoboda"),
       ];
-      const result = enforceBoundaryConsistency(
-        entities,
-        fullText,
-      );
+      const result = enforceBoundaryConsistency(entities, fullText);
       expect(result).toHaveLength(2);
     });
 
@@ -383,53 +290,31 @@ describe("enforceBoundaryConsistency", () => {
         makeEntity("person", 0, 3, "Jan", 0.9),
         makeEntity("address", 4, 9, "Praha", 0.8),
       ];
-      const result = enforceBoundaryConsistency(
-        entities,
-        fullText,
-      );
-      const person = result.find(
-        (e) => e.label === "person",
-      );
-      const address = result.find(
-        (e) => e.label === "address",
-      );
+      const result = enforceBoundaryConsistency(entities, fullText);
+      const person = result.find((e) => e.label === "person");
+      const address = result.find((e) => e.label === "address");
       expect(person).toBeDefined();
       expect(address).toBeDefined();
       // No overlap
-      expect(person!.end).toBeLessThanOrEqual(
-        address!.start,
-      );
+      expect(person!.end).toBeLessThanOrEqual(address!.start);
     });
   });
 
   describe("performance: many entities", () => {
     test("handles 1000 entities without behavior change", () => {
       // Build text with 1000 names separated by spaces.
-      const names = Array.from(
-        { length: 1000 },
-        (_, i) => `Name${i}`,
-      );
+      const names = Array.from({ length: 1000 }, (_, i) => `Name${i}`);
       const fullText = names.join(" ");
 
       // Build entities matching each name.
       const entities: Entity[] = [];
       let offset = 0;
       for (const name of names) {
-        entities.push(
-          makeEntity(
-            "person",
-            offset,
-            offset + name.length,
-            name,
-          ),
-        );
+        entities.push(makeEntity("person", offset, offset + name.length, name));
         offset += name.length + 1; // +1 for space
       }
 
-      const result = enforceBoundaryConsistency(
-        entities,
-        fullText,
-      );
+      const result = enforceBoundaryConsistency(entities, fullText);
 
       // All 1000 names are separated by a single
       // space (<=3 chars, GAP_PATTERN match), so they
@@ -442,10 +327,7 @@ describe("enforceBoundaryConsistency", () => {
     test("handles 500 alternating labels", () => {
       // 500 entities alternating between two labels.
       // None should merge across labels.
-      const words = Array.from(
-        { length: 500 },
-        (_, i) => `Word${i}`,
-      );
+      const words = Array.from({ length: 500 }, (_, i) => `Word${i}`);
       const fullText = words.join(" ");
 
       const entities: Entity[] = [];
@@ -464,10 +346,7 @@ describe("enforceBoundaryConsistency", () => {
         offset += word.length + 1;
       }
 
-      const result = enforceBoundaryConsistency(
-        entities,
-        fullText,
-      );
+      const result = enforceBoundaryConsistency(entities, fullText);
 
       // No merging across labels; all 500 survive.
       expect(result).toHaveLength(500);
@@ -484,22 +363,13 @@ describe("enforceBoundaryConsistency", () => {
         makeEntity("person", 0, 5, "Hello", 0.9),
         makeEntity("address", 5, 10, "World", 0.8),
       ];
-      const result = enforceBoundaryConsistency(
-        entities,
-        fullText,
-      );
-      const person = result.find(
-        (e) => e.label === "person",
-      );
-      const address = result.find(
-        (e) => e.label === "address",
-      );
+      const result = enforceBoundaryConsistency(entities, fullText);
+      const person = result.find((e) => e.label === "person");
+      const address = result.find((e) => e.label === "address");
       expect(person).toBeDefined();
       expect(address).toBeDefined();
       // No overlap
-      expect(person!.end).toBeLessThanOrEqual(
-        address!.start,
-      );
+      expect(person!.end).toBeLessThanOrEqual(address!.start);
     });
 
     test("partial word overlap with three labels", () => {
@@ -510,23 +380,16 @@ describe("enforceBoundaryConsistency", () => {
         makeEntity("address", 3, 6, "Def", 0.8),
         makeEntity("org", 6, 9, "Ghi", 0.7),
       ];
-      const result = enforceBoundaryConsistency(
-        entities,
-        fullText,
-      );
+      const result = enforceBoundaryConsistency(entities, fullText);
       // All three labels should survive with no
       // overlap.
       expect(result).toHaveLength(3);
-      const sorted = result.toSorted(
-        (a, b) => a.start - b.start,
-      );
+      const sorted = result.toSorted((a, b) => a.start - b.start);
       for (let i = 1; i < sorted.length; i++) {
         const prev = sorted[i - 1];
         const curr = sorted[i];
         if (!prev || !curr) continue;
-        expect(prev.end).toBeLessThanOrEqual(
-          curr.start,
-        );
+        expect(prev.end).toBeLessThanOrEqual(curr.start);
       }
     });
   });

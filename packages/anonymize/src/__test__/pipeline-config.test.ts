@@ -1,9 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  createPipelineContext,
-  runPipeline,
-} from "../index";
+import { createPipelineContext, runPipeline } from "../index";
 import type { PipelineConfig } from "../types";
 
 const BASE_CONFIG: PipelineConfig = {
@@ -21,10 +18,7 @@ const BASE_CONFIG: PipelineConfig = {
   workspaceId: "test",
 };
 
-const detect = async (
-  fullText: string,
-  config: Partial<PipelineConfig>,
-) =>
+const detect = async (fullText: string, config: Partial<PipelineConfig>) =>
   runPipeline({
     fullText,
     config: {
@@ -36,57 +30,74 @@ const detect = async (
   });
 
 describe("pipeline config semantics", () => {
+  test("empty labels do not suppress deterministic detectors", async () => {
+    const entities = await detect("Datum narození: 2024-01-02", {
+      enableRegex: true,
+      labels: [],
+    });
+    expect(entities.some((entity) => entity.label === "date")).toBe(true);
+  });
+
   test("labels filter applies to deterministic detectors", async () => {
-    const entities = await detect(
-      "Datum narození: 2024-01-02",
-      {
-        enableRegex: true,
-        labels: ["person"],
-      },
-    );
+    const entities = await detect("Datum narození: 2024-01-02", {
+      enableRegex: true,
+      labels: ["person"],
+    });
     expect(entities).toHaveLength(0);
   });
 
-  test("enableLegalForms disables legal-form detection", async () => {
-    const entities = await detect(
-      "Acme s.r.o.",
-      {
-        enableLegalForms: false,
-        labels: ["organization"],
-      },
+  test("enableLegalForms flag gates legal-form detection", async () => {
+    const withFlag = await detect("Acme s.r.o.", {
+      enableLegalForms: true,
+      labels: ["organization"],
+    });
+    expect(withFlag.some((entity) => entity.label === "organization")).toBe(
+      true,
     );
-    expect(entities).toHaveLength(0);
+
+    const withoutFlag = await detect("Acme s.r.o.", {
+      enableLegalForms: false,
+      labels: ["organization"],
+    });
+    expect(withoutFlag).toHaveLength(0);
   });
 
   test("enableNameCorpus disables name matches in deny-list mode", async () => {
-    const entities = await detect(
-      "Jan Novak",
-      {
-        enableDenyList: true,
-        enableNameCorpus: false,
-        denyListCountries: ["CZ"],
-        labels: ["person"],
-      },
-    );
+    const entities = await detect("Jan Novak", {
+      enableDenyList: true,
+      enableNameCorpus: false,
+      denyListCountries: ["CZ"],
+      labels: ["person"],
+    });
     expect(entities).toHaveLength(0);
   });
 
   test("enableNameCorpus keeps name matches available in deny-list mode", async () => {
-    const entities = await detect(
-      "Jan Novak",
-      {
-        enableDenyList: true,
-        enableNameCorpus: true,
-        denyListCountries: ["CZ"],
-        labels: ["person"],
-      },
-    );
+    const entities = await detect("Jan Novak", {
+      enableDenyList: true,
+      enableNameCorpus: true,
+      denyListCountries: ["CZ"],
+      labels: ["person"],
+    });
     expect(
       entities.some(
-        (entity) =>
-          entity.label === "person" &&
-          entity.text === "Jan Novak",
+        (entity) => entity.label === "person" && entity.text === "Jan Novak",
       ),
     ).toBe(true);
+  });
+
+  test("address-only output still respects non-address bounds during seed expansion", async () => {
+    const entities = await detect(
+      "Acme s.r.o., Dělnická 213/12, 170 00 Praha 7",
+      {
+        enableLegalForms: true,
+        labels: ["address"],
+      },
+    );
+    const address = entities.find((entity) => entity.label === "address");
+    expect(address).toBeDefined();
+    expect(address!.text).toContain("Dělnická 213/12");
+    expect(address!.text).toContain("Praha 7");
+    expect(address!.text).not.toContain("Acme");
   });
 });

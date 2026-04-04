@@ -7,8 +7,7 @@ import type { Entity } from "./types";
  * key is identical for the original object and any
  * `{ ...entity }` copy produced by mergeAndDedup.
  */
-export const corefKey = (e: Entity): string =>
-  `${e.start}:${e.end}:${e.label}`;
+export const corefKey = (e: Entity): string => `${e.start}:${e.end}:${e.label}`;
 
 /**
  * Compiled RegExp pattern used for coreference
@@ -61,29 +60,21 @@ export type PipelineContext = {
   allowList: ReadonlySet<string> | null;
   allowListPromise: Promise<ReadonlySet<string>> | null;
   personStopwords: ReadonlySet<string> | null;
-  personStopwordsPromise:
-    | Promise<ReadonlySet<string>>
-    | null;
+  personStopwordsPromise: Promise<ReadonlySet<string>> | null;
   /** First-name exclusions for stopword filtering. */
   firstNameExclusions: ReadonlySet<string> | null;
   firstNameExclusionCorpusLen: number;
 
   // ── Generic roles (false-positive filter) ─────
   genericRoles: ReadonlySet<string> | null;
-  genericRolesPromise:
-    | Promise<ReadonlySet<string>>
-    | null;
+  genericRolesPromise: Promise<ReadonlySet<string>> | null;
 
   // ── Coreference ───────────────────────────────
   corefPatterns: DefinitionPattern[] | null;
-  corefPatternsPromise:
-    | Promise<DefinitionPattern[]>
-    | null;
+  corefPatternsPromise: Promise<DefinitionPattern[]> | null;
   corefLoadAttempted: boolean;
   roleStopSet: ReadonlySet<string> | null;
-  roleStopSetPromise:
-    | Promise<ReadonlySet<string>>
-    | null;
+  roleStopSetPromise: Promise<ReadonlySet<string>> | null;
 
   // ── Zone classifier ───────────────────────────
   zoneHeadingPatterns: RegExp[] | null;
@@ -105,44 +96,42 @@ export type PipelineContext = {
 };
 
 /** Create a fresh, empty pipeline context. */
-export const createPipelineContext =
-  (): PipelineContext => ({
-    search: null,
-    searchKey: "",
-    searchPromise: null,
+export const createPipelineContext = (): PipelineContext => ({
+  search: null,
+  searchKey: "",
+  searchPromise: null,
 
-    nameCorpus: null,
-    nameCorpusPromise: null,
+  nameCorpus: null,
+  nameCorpusPromise: null,
 
-    stopwords: null,
-    stopwordsPromise: null,
-    allowList: null,
-    allowListPromise: null,
-    personStopwords: null,
-    personStopwordsPromise: null,
-    firstNameExclusions: null,
-    firstNameExclusionCorpusLen: 0,
+  stopwords: null,
+  stopwordsPromise: null,
+  allowList: null,
+  allowListPromise: null,
+  personStopwords: null,
+  personStopwordsPromise: null,
+  firstNameExclusions: null,
+  firstNameExclusionCorpusLen: 0,
 
-    genericRoles: null,
-    genericRolesPromise: null,
+  genericRoles: null,
+  genericRolesPromise: null,
 
-    corefPatterns: null,
-    corefPatternsPromise: null,
-    corefLoadAttempted: false,
-    roleStopSet: null,
-    roleStopSetPromise: null,
+  corefPatterns: null,
+  corefPatternsPromise: null,
+  corefLoadAttempted: false,
+  roleStopSet: null,
+  roleStopSetPromise: null,
 
-    zoneHeadingPatterns: null,
-    zoneSigningPatterns: null,
-    zoneInitPromise: null,
+  zoneHeadingPatterns: null,
+  zoneSigningPatterns: null,
+  zoneInitPromise: null,
 
-    corefSourceMap: new Map(),
-  });
+  corefSourceMap: new Map(),
+});
 
 /**
  * Module-level default context. Used when callers
  * don't provide an explicit context, preserving full
  * backward compatibility with the existing API.
  */
-export const defaultContext: PipelineContext =
-  createPipelineContext();
+export const defaultContext: PipelineContext = createPipelineContext();

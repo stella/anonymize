@@ -507,14 +507,10 @@ type JsonModule = { default: readonly string[] };
 // SAFETY: dynamic import() of JSON modules returns
 // { default: T } in Bun. The cast is required because
 // TS infers a wider type for dynamic imports.
-const LOADERS: Record<
-  DictionaryId,
-  () => Promise<JsonModule>
-> = {
+const LOADERS: Record<DictionaryId, () => Promise<JsonModule>> = {
   // ── Names ──────────────────────────────────────────
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "names/global": () =>
-    import("./names/global.json") as Promise<JsonModule>,
+  "names/global": () => import("./names/global.json") as Promise<JsonModule>,
   // ── First names (Wikidata CC0) ──────────────────
   // eslint-disable-next-line typescript-eslint/promise-function-async
   "names/first/cs": () =>
@@ -593,171 +589,117 @@ const LOADERS: Record<
 
   // ── Courts ─────────────────────────────────────────
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "courts/AT": () =>
-    import("./courts/AT.json") as Promise<JsonModule>,
+  "courts/AT": () => import("./courts/AT.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "courts/AU": () =>
-    import("./courts/AU.json") as Promise<JsonModule>,
+  "courts/AU": () => import("./courts/AU.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "courts/BE": () =>
-    import("./courts/BE.json") as Promise<JsonModule>,
+  "courts/BE": () => import("./courts/BE.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "courts/BG": () =>
-    import("./courts/BG.json") as Promise<JsonModule>,
+  "courts/BG": () => import("./courts/BG.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "courts/BR": () =>
-    import("./courts/BR.json") as Promise<JsonModule>,
+  "courts/BR": () => import("./courts/BR.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "courts/CA": () =>
-    import("./courts/CA.json") as Promise<JsonModule>,
+  "courts/CA": () => import("./courts/CA.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "courts/CZ": () =>
-    import("./courts/CZ.json") as Promise<JsonModule>,
+  "courts/CZ": () => import("./courts/CZ.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "courts/DE": () =>
-    import("./courts/DE.json") as Promise<JsonModule>,
+  "courts/DE": () => import("./courts/DE.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "courts/DK": () =>
-    import("./courts/DK.json") as Promise<JsonModule>,
+  "courts/DK": () => import("./courts/DK.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "courts/ES": () =>
-    import("./courts/ES.json") as Promise<JsonModule>,
+  "courts/ES": () => import("./courts/ES.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "courts/FI": () =>
-    import("./courts/FI.json") as Promise<JsonModule>,
+  "courts/FI": () => import("./courts/FI.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "courts/FR": () =>
-    import("./courts/FR.json") as Promise<JsonModule>,
+  "courts/FR": () => import("./courts/FR.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "courts/GB": () =>
-    import("./courts/GB.json") as Promise<JsonModule>,
+  "courts/GB": () => import("./courts/GB.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "courts/HR": () =>
-    import("./courts/HR.json") as Promise<JsonModule>,
+  "courts/HR": () => import("./courts/HR.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "courts/HU": () =>
-    import("./courts/HU.json") as Promise<JsonModule>,
+  "courts/HU": () => import("./courts/HU.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "courts/IE": () =>
-    import("./courts/IE.json") as Promise<JsonModule>,
+  "courts/IE": () => import("./courts/IE.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "courts/IT": () =>
-    import("./courts/IT.json") as Promise<JsonModule>,
+  "courts/IT": () => import("./courts/IT.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "courts/NL": () =>
-    import("./courts/NL.json") as Promise<JsonModule>,
+  "courts/NL": () => import("./courts/NL.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "courts/NO": () =>
-    import("./courts/NO.json") as Promise<JsonModule>,
+  "courts/NO": () => import("./courts/NO.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "courts/PL": () =>
-    import("./courts/PL.json") as Promise<JsonModule>,
+  "courts/PL": () => import("./courts/PL.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "courts/PT": () =>
-    import("./courts/PT.json") as Promise<JsonModule>,
+  "courts/PT": () => import("./courts/PT.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "courts/RO": () =>
-    import("./courts/RO.json") as Promise<JsonModule>,
+  "courts/RO": () => import("./courts/RO.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "courts/SE": () =>
-    import("./courts/SE.json") as Promise<JsonModule>,
+  "courts/SE": () => import("./courts/SE.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "courts/SI": () =>
-    import("./courts/SI.json") as Promise<JsonModule>,
+  "courts/SI": () => import("./courts/SI.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "courts/SK": () =>
-    import("./courts/SK.json") as Promise<JsonModule>,
+  "courts/SK": () => import("./courts/SK.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "courts/US": () =>
-    import("./courts/US.json") as Promise<JsonModule>,
+  "courts/US": () => import("./courts/US.json") as Promise<JsonModule>,
 
   // ── Banks ──────────────────────────────────────────
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "banks/AT": () =>
-    import("./banks/AT.json") as Promise<JsonModule>,
+  "banks/AT": () => import("./banks/AT.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "banks/AU": () =>
-    import("./banks/AU.json") as Promise<JsonModule>,
+  "banks/AU": () => import("./banks/AU.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "banks/BE": () =>
-    import("./banks/BE.json") as Promise<JsonModule>,
+  "banks/BE": () => import("./banks/BE.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "banks/BG": () =>
-    import("./banks/BG.json") as Promise<JsonModule>,
+  "banks/BG": () => import("./banks/BG.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "banks/BR": () =>
-    import("./banks/BR.json") as Promise<JsonModule>,
+  "banks/BR": () => import("./banks/BR.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "banks/CA": () =>
-    import("./banks/CA.json") as Promise<JsonModule>,
+  "banks/CA": () => import("./banks/CA.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "banks/CZ": () =>
-    import("./banks/CZ.json") as Promise<JsonModule>,
+  "banks/CZ": () => import("./banks/CZ.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "banks/DE": () =>
-    import("./banks/DE.json") as Promise<JsonModule>,
+  "banks/DE": () => import("./banks/DE.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "banks/DK": () =>
-    import("./banks/DK.json") as Promise<JsonModule>,
+  "banks/DK": () => import("./banks/DK.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "banks/ES": () =>
-    import("./banks/ES.json") as Promise<JsonModule>,
+  "banks/ES": () => import("./banks/ES.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "banks/FI": () =>
-    import("./banks/FI.json") as Promise<JsonModule>,
+  "banks/FI": () => import("./banks/FI.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "banks/FR": () =>
-    import("./banks/FR.json") as Promise<JsonModule>,
+  "banks/FR": () => import("./banks/FR.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "banks/GB": () =>
-    import("./banks/GB.json") as Promise<JsonModule>,
+  "banks/GB": () => import("./banks/GB.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "banks/HR": () =>
-    import("./banks/HR.json") as Promise<JsonModule>,
+  "banks/HR": () => import("./banks/HR.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "banks/HU": () =>
-    import("./banks/HU.json") as Promise<JsonModule>,
+  "banks/HU": () => import("./banks/HU.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "banks/IE": () =>
-    import("./banks/IE.json") as Promise<JsonModule>,
+  "banks/IE": () => import("./banks/IE.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "banks/IT": () =>
-    import("./banks/IT.json") as Promise<JsonModule>,
+  "banks/IT": () => import("./banks/IT.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "banks/NL": () =>
-    import("./banks/NL.json") as Promise<JsonModule>,
+  "banks/NL": () => import("./banks/NL.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "banks/NO": () =>
-    import("./banks/NO.json") as Promise<JsonModule>,
+  "banks/NO": () => import("./banks/NO.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "banks/PL": () =>
-    import("./banks/PL.json") as Promise<JsonModule>,
+  "banks/PL": () => import("./banks/PL.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "banks/PT": () =>
-    import("./banks/PT.json") as Promise<JsonModule>,
+  "banks/PT": () => import("./banks/PT.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "banks/RO": () =>
-    import("./banks/RO.json") as Promise<JsonModule>,
+  "banks/RO": () => import("./banks/RO.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "banks/SE": () =>
-    import("./banks/SE.json") as Promise<JsonModule>,
+  "banks/SE": () => import("./banks/SE.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "banks/SI": () =>
-    import("./banks/SI.json") as Promise<JsonModule>,
+  "banks/SI": () => import("./banks/SI.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "banks/SK": () =>
-    import("./banks/SK.json") as Promise<JsonModule>,
+  "banks/SK": () => import("./banks/SK.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "banks/US": () =>
-    import("./banks/US.json") as Promise<JsonModule>,
+  "banks/US": () => import("./banks/US.json") as Promise<JsonModule>,
 
   // ── Insurance ──────────────────────────────────────
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "insurance/CZ": () =>
-    import("./insurance/CZ.json") as Promise<JsonModule>,
+  "insurance/CZ": () => import("./insurance/CZ.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
-  "insurance/DE": () =>
-    import("./insurance/DE.json") as Promise<JsonModule>,
+  "insurance/DE": () => import("./insurance/DE.json") as Promise<JsonModule>,
 
   // ── Education ──────────────────────────────────────
   // eslint-disable-next-line typescript-eslint/promise-function-async
@@ -829,9 +771,7 @@ export const loadDictionary = async (
 export const loadDictionaries = async (
   ...ids: DictionaryId[]
 ): Promise<readonly string[]> => {
-  const results = await Promise.all(
-    ids.map(loadDictionary),
-  );
+  const results = await Promise.all(ids.map(loadDictionary));
   const merged: string[] = [];
   for (const entries of results) {
     for (const entry of entries) {
@@ -848,9 +788,7 @@ export const loadDictionaries = async (
 export const loadDictionarySet = async (
   ...ids: DictionaryId[]
 ): Promise<ReadonlySet<string>> => {
-  const results = await Promise.all(
-    ids.map(loadDictionary),
-  );
+  const results = await Promise.all(ids.map(loadDictionary));
   const set = new Set<string>();
   for (const entries of results) {
     for (const entry of entries) {
@@ -866,10 +804,9 @@ export const clearDictionaryCache = (): void => {
 };
 
 /** All dictionary IDs, derived from metadata keys. */
-export const ALL_DICTIONARY_IDS: readonly DictionaryId[] =
-  Object.keys(DICTIONARY_META).filter(
-    (k): k is DictionaryId => k in DICTIONARY_META,
-  );
+export const ALL_DICTIONARY_IDS: readonly DictionaryId[] = Object.keys(
+  DICTIONARY_META,
+).filter((k): k is DictionaryId => k in DICTIONARY_META);
 
 // ── City dictionaries (dynamic loading) ───────────
 //
@@ -922,9 +859,7 @@ export const loadCityDictionary = async (
 export const loadCityDictionaries = async (
   countryCodes: readonly string[],
 ): Promise<readonly string[]> => {
-  const results = await Promise.all(
-    countryCodes.map(loadCityDictionary),
-  );
+  const results = await Promise.all(countryCodes.map(loadCityDictionary));
   const merged: string[] = [];
   for (const entries of results) {
     for (const entry of entries) {

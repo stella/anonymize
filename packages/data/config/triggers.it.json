@@ -20,33 +20,19 @@
       "type": "n-words",
       "count": 4
     },
-    "triggers": [
-      "nata il",
-      "nato il"
-    ]
+    "triggers": ["nata il", "nato il"]
   },
   {
     "id": "it-person",
     "label": "person",
     "strategy": { "type": "to-next-comma" },
-    "triggers": [
-      "nella persona di",
-      "rappresentata da",
-      "rappresentato da"
-    ],
-    "validations": [
-      { "type": "starts-uppercase" }
-    ]
+    "triggers": ["nella persona di", "rappresentata da", "rappresentato da"],
+    "validations": [{ "type": "starts-uppercase" }]
   },
   {
     "id": "it-tax-id",
     "label": "tax identification number",
     "strategy": { "type": "company-id-value" },
-    "triggers": [
-      "C.F.",
-      "P.IVA",
-      "codice fiscale",
-      "partita IVA"
-    ]
+    "triggers": ["C.F.", "P.IVA", "codice fiscale", "partita IVA"]
   }
 ]

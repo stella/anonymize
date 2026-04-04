@@ -21,10 +21,7 @@ import type { PatternEntry, TextSearch } from "@stll/text-search";
 
 import { getTextSearch } from "./search-engine";
 
-import type {
-  GazetteerEntry,
-  PipelineConfig,
-} from "./types";
+import type { GazetteerEntry, PipelineConfig } from "./types";
 import type { RegexMeta } from "./detectors/regex";
 import type { TriggerRule } from "./types";
 import type { DenyListData } from "./detectors/deny-list";
@@ -41,21 +38,11 @@ import {
   getSigningClausePatterns,
   SIGNING_CLAUSE_META,
 } from "./detectors/regex";
-import {
-  buildLegalFormPatterns,
-} from "./detectors/legal-forms";
-import {
-  buildTriggerPatterns,
-} from "./detectors/triggers";
-import {
-  buildDenyList,
-} from "./detectors/deny-list";
-import {
-  buildStreetTypePatterns,
-} from "./detectors/address-seeds";
-import {
-  buildGazetteerPatterns,
-} from "./detectors/gazetteer";
+import { buildLegalFormPatterns } from "./detectors/legal-forms";
+import { buildTriggerPatterns } from "./detectors/triggers";
+import { buildDenyList } from "./detectors/deny-list";
+import { buildStreetTypePatterns } from "./detectors/address-seeds";
+import { buildGazetteerPatterns } from "./detectors/gazetteer";
 
 type PatternSlice = {
   start: number;
@@ -114,9 +101,7 @@ export const buildUnifiedSearch = async (
           patterns: [] as string[],
           rules: [] as TriggerRule[],
         }),
-    config.enableDenyList
-      ? buildDenyList(config, ctx)
-      : Promise.resolve(null),
+    config.enableDenyList ? buildDenyList(config, ctx) : Promise.resolve(null),
     buildStreetTypePatterns(),
     getCurrencyPatterns(),
     getDatePatterns(),
@@ -141,15 +126,9 @@ export const buildUnifiedSearch = async (
   ];
   const regexMeta: RegexMeta[] = [
     ...REGEX_META,
-    ...currencyPatterns.map(
-      () => CURRENCY_PATTERN_META,
-    ),
-    ...datePatterns.map(
-      () => DATE_PATTERN_META,
-    ),
-    ...signingPatterns.map(
-      () => SIGNING_CLAUSE_META,
-    ),
+    ...currencyPatterns.map(() => CURRENCY_PATTERN_META),
+    ...datePatterns.map(() => DATE_PATTERN_META),
+    ...signingPatterns.map(() => SIGNING_CLAUSE_META),
   ];
 
   let offset = 0;
@@ -174,19 +153,13 @@ export const buildUnifiedSearch = async (
   // Trigger patterns need caseInsensitive on AC
   // (only ~120 objects, not 200K). Regex/legal-form
   // patterns are bare strings (auto-classified).
-  const triggerEntries = triggers.patterns.map(
-    (p) => ({
-      pattern: p,
-      literal: true as const,
-      caseInsensitive: true,
-    }),
-  );
+  const triggerEntries = triggers.patterns.map((p) => ({
+    pattern: p,
+    literal: true as const,
+    caseInsensitive: true,
+  }));
 
-  const regexAllPatterns = [
-    ...allRegex,
-    ...legalForms,
-    ...triggerEntries,
-  ];
+  const regexAllPatterns = [...allRegex, ...legalForms, ...triggerEntries];
 
   // TextSearch auto-detects DFA state explosion
   // (build time > 2ms) and falls back to individual
@@ -200,8 +173,7 @@ export const buildUnifiedSearch = async (
   // terms >= 4 chars.
   offset = 0;
 
-  const denyListOriginals =
-    denyListData?.originals ?? [];
+  const denyListOriginals = denyListData?.originals ?? [];
   const denyListSlice = {
     start: offset,
     end: offset + denyListOriginals.length,
@@ -216,15 +188,13 @@ export const buildUnifiedSearch = async (
 
   // Gazetteer patterns (exact + fuzzy)
   const gazResult =
-    config.enableGazetteer &&
-    gazetteerEntries.length > 0
+    config.enableGazetteer && gazetteerEntries.length > 0
       ? buildGazetteerPatterns(gazetteerEntries)
       : null;
 
   const gazetteerSlice = {
     start: offset,
-    end: offset +
-      (gazResult?.patterns.length ?? 0),
+    end: offset + (gazResult?.patterns.length ?? 0),
   };
   offset = gazetteerSlice.end;
 
@@ -237,9 +207,7 @@ export const buildUnifiedSearch = async (
   // wholeWords is false so fuzzy patterns
   // (which don't support per-pattern override)
   // match without word-boundary constraints.
-  const wrapWholeWord = (
-    s: string,
-  ): PatternEntry => ({
+  const wrapWholeWord = (s: string): PatternEntry => ({
     pattern: s,
     literal: true as const,
     wholeWords: true,

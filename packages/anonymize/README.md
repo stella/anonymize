@@ -20,7 +20,7 @@ legal form detection across 20+ languages.
   and 1000+ forms across 20+ countries
 - **GLiNER NER** — zero-shot named entity recognition
 - **Deny-list gazetteer** — workspace-scoped Aho-Corasick
-  + fuzzy matching
+  - fuzzy matching
 - **Coreference** — tracks "dále jen" / "hereinafter"
   aliases with Czech declension variants
 - **Confidence boosting** — context-aware score adjustment
@@ -40,13 +40,19 @@ npm install @stll/anonymize-data
 ## Quick Start
 
 ```typescript
-import { runPipeline } from '@stll/anonymize'
+import { runPipeline } from "@stll/anonymize";
 
 const entities = await runPipeline({
   fullText: text,
   config: {
-    labels: ['person', 'organization', 'address',
-             'date', 'iban', 'phone number'],
+    labels: [
+      "person",
+      "organization",
+      "address",
+      "date",
+      "iban",
+      "phone number",
+    ],
     threshold: 0.5,
     enableRegex: true,
     enableTriggerPhrases: true,
@@ -57,11 +63,16 @@ const entities = await runPipeline({
     enableNer: false,
     enableConfidenceBoost: true,
     enableCoreference: true,
-    workspaceId: 'default',
+    workspaceId: "default",
   },
   gazetteerEntries: [],
-})
+});
 ```
+
+## Notes
+
+- `labels: []` means no deterministic output label filter. If NER is enabled, it falls back to the default label set.
+- `enableNameCorpus` also controls whether first names, surnames, and titles are injected into deny-list matching when `enableDenyList` is enabled.
 
 ## Architecture
 

@@ -39,9 +39,7 @@ type ValidationError = {
   message: string;
 };
 
-const validateFile = async (
-  filePath: string,
-): Promise<ValidationError[]> => {
+const validateFile = async (filePath: string): Promise<ValidationError[]> => {
   const errors: ValidationError[] = [];
   const fileName = filePath.split("/").pop() ?? filePath;
 
@@ -80,11 +78,7 @@ const validateFile = async (
 
   for (let i = 0; i < groups.length; i++) {
     const group = groups[i];
-    if (
-      typeof group !== "object" ||
-      group === null ||
-      Array.isArray(group)
-    ) {
+    if (typeof group !== "object" || group === null || Array.isArray(group)) {
       errors.push({
         file: fileName,
         groupIndex: i,
@@ -96,10 +90,7 @@ const validateFile = async (
     const g = group as Record<string, unknown>;
 
     // Required: triggers (string[])
-    if (
-      !Array.isArray(g.triggers) ||
-      g.triggers.length === 0
-    ) {
+    if (!Array.isArray(g.triggers) || g.triggers.length === 0) {
       errors.push({
         file: fileName,
         groupIndex: i,
@@ -119,10 +110,7 @@ const validateFile = async (
     }
 
     // Required: label (string)
-    if (
-      typeof g.label !== "string" ||
-      g.label.length === 0
-    ) {
+    if (typeof g.label !== "string" || g.label.length === 0) {
       errors.push({
         file: fileName,
         groupIndex: i,
@@ -131,10 +119,7 @@ const validateFile = async (
     }
 
     // Required: strategy
-    if (
-      typeof g.strategy !== "object" ||
-      g.strategy === null
-    ) {
+    if (typeof g.strategy !== "object" || g.strategy === null) {
       errors.push({
         file: fileName,
         groupIndex: i,
@@ -146,8 +131,7 @@ const validateFile = async (
         errors.push({
           file: fileName,
           groupIndex: i,
-          message:
-            `Invalid strategy type: "${s.type}"`,
+          message: `Invalid strategy type: "${s.type}"`,
         });
       }
       if (
@@ -157,21 +141,18 @@ const validateFile = async (
         errors.push({
           file: fileName,
           groupIndex: i,
-          message:
-            `n-words strategy requires count >= 1`,
+          message: `n-words strategy requires count >= 1`,
         });
       }
       if (
         s.type === "address" &&
         s.maxChars !== undefined &&
-        (typeof s.maxChars !== "number" ||
-          s.maxChars < 1)
+        (typeof s.maxChars !== "number" || s.maxChars < 1)
       ) {
         errors.push({
           file: fileName,
           groupIndex: i,
-          message:
-            `address strategy maxChars must be >= 1`,
+          message: `address strategy maxChars must be >= 1`,
         });
       }
     }
@@ -190,8 +171,7 @@ const validateFile = async (
             errors.push({
               file: fileName,
               groupIndex: i,
-              message:
-                `Invalid extension: "${ext}"`,
+              message: `Invalid extension: "${ext}"`,
             });
           }
         }
@@ -208,56 +188,37 @@ const validateFile = async (
         });
       } else {
         for (const val of g.validations) {
-          if (
-            typeof val !== "object" ||
-            val === null
-          ) {
+          if (typeof val !== "object" || val === null) {
             errors.push({
               file: fileName,
               groupIndex: i,
-              message:
-                `Each validation must be an object`,
+              message: `Each validation must be an object`,
             });
             continue;
           }
           const v = val as Record<string, unknown>;
-          if (
-            !VALID_VALIDATION_TYPES.has(
-              v.type as string,
-            )
-          ) {
+          if (!VALID_VALIDATION_TYPES.has(v.type as string)) {
             errors.push({
               file: fileName,
               groupIndex: i,
-              message:
-                `Invalid validation type: "${v.type}"`,
+              message: `Invalid validation type: "${v.type}"`,
             });
           }
           if (v.type === "min-length") {
-            if (
-              typeof v.min !== "number" ||
-              v.min < 1
-            ) {
+            if (typeof v.min !== "number" || v.min < 1) {
               errors.push({
                 file: fileName,
                 groupIndex: i,
-                message:
-                  `min-length requires "min" ` +
-                  `to be a number >= 1`,
+                message: `min-length requires "min" ` + `to be a number >= 1`,
               });
             }
           }
           if (v.type === "max-length") {
-            if (
-              typeof v.max !== "number" ||
-              v.max < 1
-            ) {
+            if (typeof v.max !== "number" || v.max < 1) {
               errors.push({
                 file: fileName,
                 groupIndex: i,
-                message:
-                  `max-length requires "max" ` +
-                  `to be a number >= 1`,
+                message: `max-length requires "max" ` + `to be a number >= 1`,
               });
             }
           }
@@ -266,15 +227,10 @@ const validateFile = async (
               errors.push({
                 file: fileName,
                 groupIndex: i,
-                message:
-                  `matches-pattern requires ` +
-                  `"pattern" string`,
+                message: `matches-pattern requires ` + `"pattern" string`,
               });
             } else {
-              const flags =
-                typeof v.flags === "string"
-                  ? v.flags
-                  : "";
+              const flags = typeof v.flags === "string" ? v.flags : "";
               if (/[gy]/.test(flags)) {
                 errors.push({
                   file: fileName,
@@ -294,12 +250,8 @@ const validateFile = async (
                   message:
                     `Invalid regex pattern or flags: ` +
                     `"${v.pattern}"` +
-                    (flags
-                      ? ` (flags: "${flags}")`
-                      : "") +
-                    (err instanceof Error
-                      ? `: ${err.message}`
-                      : ""),
+                    (flags ? ` (flags: "${flags}")` : "") +
+                    (err instanceof Error ? `: ${err.message}` : ""),
                 });
               }
             }
@@ -327,24 +279,12 @@ const validateFile = async (
     const g = group as Record<string, unknown>;
     const stratObj = g.strategy;
     const strategy =
-      typeof stratObj === "object" &&
-      stratObj !== null &&
-      "type" in stratObj
-        ? String(
-            (stratObj as Record<string, unknown>).type,
-          )
+      typeof stratObj === "object" && stratObj !== null && "type" in stratObj
+        ? String((stratObj as Record<string, unknown>).type)
         : "unknown";
-    const label =
-      typeof g.label === "string"
-        ? g.label
-        : "unknown";
-    const gid =
-      typeof g.id === "string"
-        ? g.id
-        : `group[${i}]`;
-    const triggers = Array.isArray(g.triggers)
-      ? (g.triggers as unknown[])
-      : [];
+    const label = typeof g.label === "string" ? g.label : "unknown";
+    const gid = typeof g.id === "string" ? g.id : `group[${i}]`;
+    const triggers = Array.isArray(g.triggers) ? (g.triggers as unknown[]) : [];
     // Detect intra-group duplicates (copy-paste errors)
     const groupSeen = new Set<string>();
     for (const t of triggers) {
@@ -354,9 +294,7 @@ const validateFile = async (
           errors.push({
             file: fileName,
             groupIndex: i,
-            message:
-              `Duplicate trigger "${t}" within ` +
-              `group "${gid}"`,
+            message: `Duplicate trigger "${t}" within ` + `group "${gid}"`,
           });
         }
         groupSeen.add(lc);
@@ -377,13 +315,9 @@ const validateFile = async (
               `Duplicate trigger "${t}" also in ` +
               `"${prev.groupId}"` +
               (stratDiff
-                ? ` (strategy: "${prev.strategy}"` +
-                  ` vs "${strategy}")`
+                ? ` (strategy: "${prev.strategy}"` + ` vs "${strategy}")`
                 : "") +
-              (labelDiff
-                ? ` (label: "${prev.label}"` +
-                  ` vs "${label}")`
-                : ""),
+              (labelDiff ? ` (label: "${prev.label}"` + ` vs "${label}")` : ""),
           });
         }
       }
@@ -399,15 +333,10 @@ const validateFile = async (
 };
 
 const main = async (): Promise<void> => {
-  const configDir = join(
-    import.meta.dir,
-    "..",
-    "config",
-  );
+  const configDir = join(import.meta.dir, "..", "config");
   const files = await readdir(configDir);
   const triggerFiles = files.filter(
-    (f) =>
-      f.startsWith("triggers.") && f.endsWith(".json"),
+    (f) => f.startsWith("triggers.") && f.endsWith(".json"),
   );
 
   if (triggerFiles.length === 0) {
@@ -425,10 +354,7 @@ const main = async (): Promise<void> => {
     if (errors.length > 0) {
       console.error(`\n${file}:`);
       for (const err of errors) {
-        const loc =
-          err.groupIndex >= 0
-            ? ` [group ${err.groupIndex}]`
-            : "";
+        const loc = err.groupIndex >= 0 ? ` [group ${err.groupIndex}]` : "";
         console.error(`  ${loc} ${err.message}`);
       }
     } else {
@@ -437,15 +363,11 @@ const main = async (): Promise<void> => {
   }
 
   if (totalErrors > 0) {
-    console.error(
-      `\n${totalErrors} error(s) found.`,
-    );
+    console.error(`\n${totalErrors} error(s) found.`);
     process.exit(1);
   }
 
-  console.log(
-    `\nAll ${triggerFiles.length} trigger configs valid.`,
-  );
+  console.log(`\nAll ${triggerFiles.length} trigger configs valid.`);
 };
 
 main();

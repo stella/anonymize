@@ -13,11 +13,7 @@ import type { PipelineContext } from "../context";
 import { defaultContext } from "../context";
 import { loadGenericRoles } from "../filters/false-positives";
 import { normalizeForSearch } from "../util/normalize";
-import {
-  ALL_UPPER_RE,
-  UPPER_START_RE,
-  isSentenceStart,
-} from "../util/text";
+import { ALL_UPPER_RE, UPPER_START_RE, isSentenceStart } from "../util/text";
 import { DASH } from "../util/char-groups";
 
 /**
@@ -45,20 +41,14 @@ export type DenyListConfig = Pick<
 
 // ── Allow list (lazy-loaded from JSON) ───────────────
 
-const loadAllowList = (
-  ctx: PipelineContext,
-): Promise<ReadonlySet<string>> => {
+const loadAllowList = (ctx: PipelineContext): Promise<ReadonlySet<string>> => {
   if (ctx.allowListPromise) return ctx.allowListPromise;
   ctx.allowListPromise = (async () => {
     try {
       const mod: {
         default?: { words?: string[] };
-      } = await import(
-        "@stll/anonymize-data/config/allow-list.json"
-      );
-      const set: ReadonlySet<string> = new Set(
-        mod.default?.words ?? [],
-      );
+      } = await import("@stll/anonymize-data/config/allow-list.json");
+      const set: ReadonlySet<string> = new Set(mod.default?.words ?? []);
       ctx.allowList = set;
       return set;
     } catch {
@@ -73,9 +63,7 @@ const loadAllowList = (
 const EMPTY_ALLOW_LIST: ReadonlySet<string> = new Set();
 
 /** Sync accessor — returns empty set before init. */
-const getAllowList = (
-  ctx: PipelineContext,
-): ReadonlySet<string> =>
+const getAllowList = (ctx: PipelineContext): ReadonlySet<string> =>
   ctx.allowList ?? EMPTY_ALLOW_LIST;
 
 /**
@@ -88,12 +76,24 @@ const getAllowList = (
  * Sourced from EU member state birth registries (top-100
  * names) cross-referenced with stopwords.json.
  */
-const SUPPLEMENTARY_NAME_EXCLUSIONS: ReadonlySet<string> =
-  new Set([
-    "ana", "ben", "dan", "eden", "ella", "ina", "jo",
-    "kai", "lena", "may", "mia", "sam", "sara", "sue",
-    "tim", "tom",
-  ]);
+const SUPPLEMENTARY_NAME_EXCLUSIONS: ReadonlySet<string> = new Set([
+  "ana",
+  "ben",
+  "dan",
+  "eden",
+  "ella",
+  "ina",
+  "jo",
+  "kai",
+  "lena",
+  "may",
+  "mia",
+  "sam",
+  "sara",
+  "sue",
+  "tim",
+  "tom",
+]);
 
 /**
  * Names from the first-name corpus (lowercased) that also
@@ -105,9 +105,7 @@ const SUPPLEMENTARY_NAME_EXCLUSIONS: ReadonlySet<string> =
  * Computed lazily after initNameCorpus() has populated
  * the first-name corpus. Re-builds if corpus size changes.
  */
-const getFirstNameExclusions = (
-  ctx: PipelineContext,
-): ReadonlySet<string> => {
+const getFirstNameExclusions = (ctx: PipelineContext): ReadonlySet<string> => {
   const corpus = getNameCorpusFirstNames(ctx);
   // Re-build if corpus has been populated since last call
   if (
@@ -139,26 +137,22 @@ const getFirstNameExclusions = (
 // INVARIANT: must be called after initNameCorpus() has
 // resolved, so getFirstNameExclusions() sees the full
 // corpus. buildDenyList() enforces this ordering.
-const loadStopwords = (
-  ctx: PipelineContext,
-): Promise<ReadonlySet<string>> => {
+const loadStopwords = (ctx: PipelineContext): Promise<ReadonlySet<string>> => {
   if (ctx.stopwordsPromise) return ctx.stopwordsPromise;
   ctx.stopwordsPromise = (async () => {
     try {
-      const mod: { default?: string[] } = await import(
-        "@stll/anonymize-data/config/stopwords.json"
-      );
+      const mod: { default?: string[] } =
+        await import("@stll/anonymize-data/config/stopwords.json");
       const list = (mod.default ?? []).filter(
-        (w: string) =>
-          !getFirstNameExclusions(ctx).has(w),
+        (w: string) => !getFirstNameExclusions(ctx).has(w),
       );
       const set: ReadonlySet<string> = new Set(list);
       ctx.stopwords = set;
       return set;
     } catch (err) {
       console.warn(
-        "[anonymize] Failed to load stopwords.json"
-          + " — stopword filtering disabled:",
+        "[anonymize] Failed to load stopwords.json" +
+          " — stopword filtering disabled:",
         err,
       );
       const empty: ReadonlySet<string> = new Set();
@@ -172,9 +166,7 @@ const loadStopwords = (
 const EMPTY_STOPWORDS: ReadonlySet<string> = new Set();
 
 /** Sync accessor — returns empty set before init. */
-const getStopwords = (
-  ctx: PipelineContext,
-): ReadonlySet<string> =>
+const getStopwords = (ctx: PipelineContext): ReadonlySet<string> =>
   ctx.stopwords ?? EMPTY_STOPWORDS;
 
 // ── Person stopwords (lazy-loaded from JSON) ─────────
@@ -189,12 +181,8 @@ const loadPersonStopwords = (
     try {
       const mod: {
         default?: { words?: string[] };
-      } = await import(
-        "@stll/anonymize-data/config/person-stopwords.json"
-      );
-      const set: ReadonlySet<string> = new Set(
-        mod.default?.words ?? [],
-      );
+      } = await import("@stll/anonymize-data/config/person-stopwords.json");
+      const set: ReadonlySet<string> = new Set(mod.default?.words ?? []);
       ctx.personStopwords = set;
       return set;
     } catch {
@@ -206,13 +194,10 @@ const loadPersonStopwords = (
   return ctx.personStopwordsPromise;
 };
 
-const EMPTY_PERSON_STOPWORDS: ReadonlySet<string> =
-  new Set();
+const EMPTY_PERSON_STOPWORDS: ReadonlySet<string> = new Set();
 
 /** Sync accessor — returns empty set before init. */
-const getPersonStopwords = (
-  ctx: PipelineContext,
-): ReadonlySet<string> =>
+const getPersonStopwords = (ctx: PipelineContext): ReadonlySet<string> =>
   ctx.personStopwords ?? EMPTY_PERSON_STOPWORDS;
 
 /**
@@ -222,11 +207,7 @@ const getPersonStopwords = (
  * "surname" = name corpus surname
  * "title" = academic/professional title
  */
-type PatternSource =
-  | "deny-list"
-  | "first-name"
-  | "surname"
-  | "title";
+type PatternSource = "deny-list" | "first-name" | "surname" | "title";
 
 /**
  * Pre-built deny list data. Constructed once by
@@ -285,9 +266,7 @@ export const buildDenyList = async (
   );
 
   const excluded = config.denyListExcludeCategories;
-  const excludeCategories = excluded
-    ? new Set(excluded)
-    : new Set<string>();
+  const excludeCategories = excluded ? new Set(excluded) : new Set<string>();
 
   const allIds = [...dataModule.ALL_DICTIONARY_IDS];
 
@@ -297,10 +276,7 @@ export const buildDenyList = async (
       return false;
     }
 
-    if (
-      !config.enableNameCorpus &&
-      meta.category === "Names"
-    ) {
+    if (!config.enableNameCorpus && meta.category === "Names") {
       return false;
     }
 
@@ -328,23 +304,18 @@ export const buildDenyList = async (
 
   const results = await Promise.all(
     ids.map(async (id) => {
-      const entries =
-        await dataModule.loadDictionary(id);
+      const entries = await dataModule.loadDictionary(id);
       return { id, entries };
     }),
   );
 
-  const addDenyListEntry = (
-    entry: string,
-    label: string,
-  ) => {
+  const addDenyListEntry = (entry: string, label: string) => {
     // Strip | and \ only — these caused the 12K FP
     // bug (| creates empty regex alternation, \ is
     // an escape prefix). Other chars like () [] are
     // kept since they appear in real dictionary
     // entries and are matched literally by AC.
-    const normalized = normalizeForSearch(entry)
-      .replace(/[|\\]/g, "");
+    const normalized = normalizeForSearch(entry).replace(/[|\\]/g, "");
     if (normalized.length === 0) {
       return;
     }
@@ -387,16 +358,38 @@ export const buildDenyList = async (
           // this would be massive, so limit to a
           // reasonable set of common legal jurisdictions.
           [
-            "AT", "AU", "BE", "BG", "BR", "CA",
-            "CH", "CZ", "DE", "DK", "ES", "FI",
-            "FR", "GB", "GR", "HR", "HU", "IE",
-            "IT", "LU", "NL", "NO", "NZ", "PL",
-            "PT", "RO", "SE", "SI", "SK", "US",
+            "AT",
+            "AU",
+            "BE",
+            "BG",
+            "BR",
+            "CA",
+            "CH",
+            "CZ",
+            "DE",
+            "DK",
+            "ES",
+            "FI",
+            "FR",
+            "GB",
+            "GR",
+            "HR",
+            "HU",
+            "IE",
+            "IT",
+            "LU",
+            "NL",
+            "NO",
+            "NZ",
+            "PL",
+            "PT",
+            "RO",
+            "SE",
+            "SI",
+            "SK",
+            "US",
           ];
-    const cityEntries =
-      await dataModule.loadCityDictionaries(
-        cityCountries,
-      );
+    const cityEntries = await dataModule.loadCityDictionaries(cityCountries);
     for (const entry of cityEntries) {
       addDenyListEntry(entry, "address");
     }
@@ -404,14 +397,10 @@ export const buildDenyList = async (
 
   // Add name corpus entries — accumulate labels
   // for entries that already exist from deny-list.
-  const addNameEntry = (
-    name: string,
-    source: PatternSource,
-  ) => {
+  const addNameEntry = (name: string, source: PatternSource) => {
     // Normalize same as deny-list entries so name
     // patterns match against normalizeForSearch(text).
-    const normalized = normalizeForSearch(name)
-      .replace(/[|\\]/g, "");
+    const normalized = normalizeForSearch(name).replace(/[|\\]/g, "");
     if (normalized.length === 0) {
       return;
     }
@@ -432,10 +421,7 @@ export const buildDenyList = async (
     }
   };
 
-  if (
-    config.enableNameCorpus &&
-    !excludeCategories.has("Names")
-  ) {
+  if (config.enableNameCorpus && !excludeCategories.has("Names")) {
     for (const name of getNameCorpusFirstNames(ctx)) {
       addNameEntry(name, "first-name");
     }
@@ -443,8 +429,7 @@ export const buildDenyList = async (
       addNameEntry(name, "surname");
     }
     for (const title of getNameCorpusTitles(ctx)) {
-      const norm = normalizeForSearch(title)
-        .replace(/[|\\]/g, "");
+      const norm = normalizeForSearch(title).replace(/[|\\]/g, "");
       if (norm.length === 0) continue;
       const lower = norm.toLowerCase();
       const existing = patternIndex.get(lower);
@@ -529,10 +514,7 @@ export const processDenyListMatches = (
   ctx: PipelineContext = defaultContext,
 ): Entity[] => {
   // Pass 1: collect valid matches grouped by pattern
-  const matchesByPattern = new Map<
-    number,
-    RawMatch[]
-  >();
+  const matchesByPattern = new Map<number, RawMatch[]>();
 
   for (const match of allMatches) {
     const idx = match.pattern;
@@ -549,10 +531,7 @@ export const processDenyListMatches = (
 
     // Use original text for display; normalized was
     // only for the AC search.
-    const matchText = fullText.slice(
-      match.start,
-      match.end,
-    );
+    const matchText = fullText.slice(match.start, match.end);
     const keyword = matchText.toLowerCase();
     if (getStopwords(ctx).has(keyword) || getAllowList(ctx).has(keyword)) {
       continue;
@@ -589,18 +568,14 @@ export const processDenyListMatches = (
   const results: Entity[] = [];
   const nameHits: RawMatch[] = [];
 
-  for (const [, matches] of Array.from(
-    matchesByPattern,
-  )) {
+  for (const [, matches] of Array.from(matchesByPattern)) {
     const first = matches[0];
     if (!first) {
       continue;
     }
 
     const hasPerson = first.labels.includes("person");
-    const nonPersonLabels = first.labels.filter(
-      (l) => l !== "person",
-    );
+    const nonPersonLabels = first.labels.filter((l) => l !== "person");
 
     // Person hits go to chain scoring (Pass 2b).
     // Skip words that are valid places/orgs but not
@@ -684,12 +659,7 @@ export const processDenyListMatches = (
       continue;
     }
 
-    const extended = extendPersonName(
-      fullText,
-      first.start,
-      last.end,
-      ctx,
-    );
+    const extended = extendPersonName(fullText, first.start, last.end, ctx);
 
     // Score: chained names get 0.9, single names 0.5
     const score = chain.length >= 2 ? 0.9 : 0.5;
@@ -698,15 +668,10 @@ export const processDenyListMatches = (
     // start (likely not a person name) — BUT keep it
     // if the word after the chain is also uppercase
     // (likely a full name: "Alena Zemanová").
-    if (
-      chain.length === 1 &&
-      isSentenceStart(fullText, first.start)
-    ) {
+    if (chain.length === 1 && isSentenceStart(fullText, first.start)) {
       const afterEnd = last.end;
       const rest = fullText.slice(afterEnd).trimStart();
-      const nextIsUpper =
-        rest.length > 1 &&
-        /^\p{Lu}\p{Ll}/u.test(rest);
+      const nextIsUpper = rest.length > 1 && /^\p{Lu}\p{Ll}/u.test(rest);
       if (!nextIsUpper) {
         continue;
       }
@@ -751,38 +716,53 @@ const ROMAN_DISTRICT =
   "|XXII|XXI|XX|XIX|XVIII|XVII|XVI|XV|XIV|XIII" +
   "|XII|XI|X|IX|VIII|VII|VI|IV|III|II";
 const DISTRICT_SUFFIX_RE = new RegExp(
-  `^ (\\d{1,2}(?!\\d)|(?:${ROMAN_DISTRICT}))` +
-    `(?=[\\s,;.)"\\n]|$)`,
+  `^ (\\d{1,2}(?!\\d)|(?:${ROMAN_DISTRICT}))` + `(?=[\\s,;.)"\\n]|$)`,
 );
 // Postal code before city: "163 00 ", "16300 ",
 // "16300 - " (with dash separator).
-const POSTAL_PREFIX_RE =
-  new RegExp(
-    `(?:\\d{5}|\\d{3}\\s\\d{2})\\s*${DASH}?\\s*$`,
-  );
+const POSTAL_PREFIX_RE = new RegExp(
+  `(?:\\d{5}|\\d{3}\\s\\d{2})\\s*${DASH}?\\s*$`,
+);
 
 // Words that must NOT be absorbed into an address span
 // when they follow a postal-code + city pattern. Party
 // roles, organizational nouns, and common legal terms.
-const TRAILING_WORD_EXCLUSIONS: ReadonlySet<string> =
-  new Set([
-    // CZ/SK party roles
-    "nájemce", "pronajímatel", "kupující",
-    "prodávající", "objednatel", "zhotovitel",
-    "dodavatel", "odběratel", "věřitel", "dlužník",
-    "zadavatel", "uchazeč", "příjemce", "plátce",
-    // Organizational nouns
-    "správa", "sekretariát", "kancelář", "odbor",
-    "oddělení", "úřad", "inspekce", "agentura",
-    // Legal clause starters
-    "článek", "smlouva", "dodatek", "příloha",
-    "předmět", "podmínky", "ustanovení",
-  ]);
+const TRAILING_WORD_EXCLUSIONS: ReadonlySet<string> = new Set([
+  // CZ/SK party roles
+  "nájemce",
+  "pronajímatel",
+  "kupující",
+  "prodávající",
+  "objednatel",
+  "zhotovitel",
+  "dodavatel",
+  "odběratel",
+  "věřitel",
+  "dlužník",
+  "zadavatel",
+  "uchazeč",
+  "příjemce",
+  "plátce",
+  // Organizational nouns
+  "správa",
+  "sekretariát",
+  "kancelář",
+  "odbor",
+  "oddělení",
+  "úřad",
+  "inspekce",
+  "agentura",
+  // Legal clause starters
+  "článek",
+  "smlouva",
+  "dodatek",
+  "příloha",
+  "předmět",
+  "podmínky",
+  "ustanovení",
+]);
 
-const extendCityDistricts = (
-  entities: Entity[],
-  fullText: string,
-): void => {
+const extendCityDistricts = (entities: Entity[], fullText: string): void => {
   for (const entity of entities) {
     if (entity.label !== "address") {
       continue;
@@ -794,28 +774,16 @@ const extendCityDistricts = (
     const suffixM = DISTRICT_SUFFIX_RE.exec(afterMatch);
     if (suffixM) {
       entity.end += suffixM[0].length;
-      entity.text = fullText.slice(
-        entity.start,
-        entity.end,
-      );
+      entity.text = fullText.slice(entity.start, entity.end);
     }
 
     // Dash-separated district name:
     // "Praha 10 - Strašnice", "Havířov – Město"
     const afterDistrict = fullText.slice(entity.end);
-    const dashDistrictM =
-      /^[\s]*[-–][\s]*(\p{Lu}\p{Ll}+)/u.exec(
-        afterDistrict,
-      );
-    if (
-      dashDistrictM &&
-      !dashDistrictM[0].includes("\n")
-    ) {
+    const dashDistrictM = /^[\s]*[-–][\s]*(\p{Lu}\p{Ll}+)/u.exec(afterDistrict);
+    if (dashDistrictM && !dashDistrictM[0].includes("\n")) {
       entity.end += dashDistrictM[0].length;
-      entity.text = fullText.slice(
-        entity.start,
-        entity.end,
-      );
+      entity.text = fullText.slice(entity.start, entity.end);
     }
 
     // Leading: "80336 " + "München" → "80336 München"
@@ -827,10 +795,7 @@ const extendCityDistricts = (
     const prefixM = POSTAL_PREFIX_RE.exec(beforeMatch);
     if (prefixM) {
       entity.start -= prefixM[0].length;
-      entity.text = fullText.slice(
-        entity.start,
-        entity.end,
-      );
+      entity.text = fullText.slice(entity.start, entity.end);
     }
 
     // Trailing uppercase word: "434 01" + " Most" →
@@ -839,20 +804,12 @@ const extendCityDistricts = (
     // Guard: skip party-role or organizational terms.
     const afterExt = fullText.slice(entity.end);
     // Max 4 spaces gap — more means different column
-    const trailingWordM =
-      /^[\s]{1,4}(\p{Lu}\p{Ll}+)/u.exec(afterExt);
-    if (
-      trailingWordM &&
-      !trailingWordM[0].includes("\n")
-    ) {
-      const candidate =
-        (trailingWordM[1] ?? "").toLowerCase();
+    const trailingWordM = /^[\s]{1,4}(\p{Lu}\p{Ll}+)/u.exec(afterExt);
+    if (trailingWordM && !trailingWordM[0].includes("\n")) {
+      const candidate = (trailingWordM[1] ?? "").toLowerCase();
       if (!TRAILING_WORD_EXCLUSIONS.has(candidate)) {
         entity.end += trailingWordM[0].length;
-        entity.text = fullText.slice(
-          entity.start,
-          entity.end,
-        );
+        entity.text = fullText.slice(entity.start, entity.end);
       }
     }
   }
@@ -892,10 +849,7 @@ const extendPersonName = (
 
       // Find end of this word
       let wordEnd = wordStart;
-      while (
-        wordEnd < text.length &&
-        !/\s/.test(text[wordEnd] ?? "")
-      ) {
+      while (wordEnd < text.length && !/\s/.test(text[wordEnd] ?? "")) {
         wordEnd++;
       }
 
@@ -908,10 +862,7 @@ const extendPersonName = (
 
       // Don't extend into global or person stopwords
       const lower = stripped.toLowerCase();
-      if (
-        getStopwords(ctx).has(lower) ||
-        getPersonStopwords(ctx).has(lower)
-      ) {
+      if (getStopwords(ctx).has(lower) || getPersonStopwords(ctx).has(lower)) {
         break;
       }
 

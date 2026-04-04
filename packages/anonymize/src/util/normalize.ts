@@ -38,9 +38,7 @@ const CHAR_MAP = new Map<number, number>(REPLACEMENTS);
  *  hitting the call-stack limit on very large strings. */
 const CHUNK_SIZE = 8192;
 
-export const normalizeForSearch = (
-  text: string,
-): string => {
+export const normalizeForSearch = (text: string): string => {
   // Fast path: skip allocation when nothing to replace.
   let hasSpecial = false;
   for (let i = 0; i < text.length; i++) {
@@ -68,9 +66,7 @@ export const normalizeForSearch = (
   let result = "";
   for (let offset = 0; offset < len; offset += CHUNK_SIZE) {
     const end = Math.min(offset + CHUNK_SIZE, len);
-    result += String.fromCharCode(
-      ...codes.subarray(offset, end),
-    );
+    result += String.fromCharCode(...codes.subarray(offset, end));
   }
   return result;
 };

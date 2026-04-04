@@ -14,19 +14,13 @@
     "id": "ro-national-id",
     "label": "national identification number",
     "strategy": { "type": "company-id-value" },
-    "triggers": [
-      "CNP"
-    ]
+    "triggers": ["CNP"]
   },
   {
     "id": "ro-tax-id",
     "label": "tax identification number",
     "strategy": { "type": "company-id-value" },
-    "triggers": [
-      "CUI",
-      "cod de identificare fiscală",
-      "cod fiscal"
-    ]
+    "triggers": ["CUI", "cod de identificare fiscală", "cod fiscal"]
   },
   {
     "id": "ro-identity-card",
@@ -35,21 +29,14 @@
       "type": "n-words",
       "count": 4
     },
-    "triggers": [
-      "seria și numărul"
-    ]
+    "triggers": ["seria și numărul"]
   },
   {
     "id": "ro-person",
     "label": "person",
     "strategy": { "type": "to-next-comma" },
-    "triggers": [
-      "reprezentat de",
-      "reprezentată de"
-    ],
-    "validations": [
-      { "type": "starts-uppercase" }
-    ]
+    "triggers": ["reprezentat de", "reprezentată de"],
+    "validations": [{ "type": "starts-uppercase" }]
   },
   {
     "id": "ro-date-of-birth",
@@ -58,9 +45,6 @@
       "type": "n-words",
       "count": 4
     },
-    "triggers": [
-      "născut la",
-      "născută la"
-    ]
+    "triggers": ["născut la", "născută la"]
   }
 ]

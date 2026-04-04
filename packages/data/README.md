@@ -34,8 +34,8 @@ Used as a peer dependency of `@stll/anonymize`.
 Import config or dictionary files directly:
 
 ```typescript
-import triggers from '@stll/anonymize-data/config/triggers.cs.json'
-import cities from '@stll/anonymize-data/dictionaries/cities/CZ.json'
+import triggers from "@stll/anonymize-data/config/triggers.cs.json";
+import cities from "@stll/anonymize-data/dictionaries/cities/CZ.json";
 ```
 
 ## License

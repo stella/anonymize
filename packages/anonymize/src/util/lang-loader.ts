@@ -34,9 +34,7 @@ const loadManifest = (): Promise<Manifest> => {
   }
   _manifestPromise = (async () => {
     try {
-      const mod = await import(
-        "@stll/anonymize-data/config/manifest.json"
-      );
+      const mod = await import("@stll/anonymize-data/config/manifest.json");
       // eslint-disable-next-line no-unsafe-type-assertion -- JSON manifest
       const parsed = (mod.default ?? mod) as Manifest;
       if (
@@ -77,76 +75,25 @@ const loadManifest = (): Promise<Manifest> => {
 // the import paths. Each registry maps language code
 // to a lazy loader thunk.
 
-const TRIGGER_LOADERS: Record<
-  string,
-  () => Promise<unknown>
-> = {
-  cs: () =>
-    import(
-      "@stll/anonymize-data/config/triggers.cs.json"
-    ),
-  de: () =>
-    import(
-      "@stll/anonymize-data/config/triggers.de.json"
-    ),
-  en: () =>
-    import(
-      "@stll/anonymize-data/config/triggers.en.json"
-    ),
-  es: () =>
-    import(
-      "@stll/anonymize-data/config/triggers.es.json"
-    ),
-  fr: () =>
-    import(
-      "@stll/anonymize-data/config/triggers.fr.json"
-    ),
-  hu: () =>
-    import(
-      "@stll/anonymize-data/config/triggers.hu.json"
-    ),
-  it: () =>
-    import(
-      "@stll/anonymize-data/config/triggers.it.json"
-    ),
-  pl: () =>
-    import(
-      "@stll/anonymize-data/config/triggers.pl.json"
-    ),
-  ro: () =>
-    import(
-      "@stll/anonymize-data/config/triggers.ro.json"
-    ),
-  sk: () =>
-    import(
-      "@stll/anonymize-data/config/triggers.sk.json"
-    ),
-  sv: () =>
-    import(
-      "@stll/anonymize-data/config/triggers.sv.json"
-    ),
+const TRIGGER_LOADERS: Record<string, () => Promise<unknown>> = {
+  cs: () => import("@stll/anonymize-data/config/triggers.cs.json"),
+  de: () => import("@stll/anonymize-data/config/triggers.de.json"),
+  en: () => import("@stll/anonymize-data/config/triggers.en.json"),
+  es: () => import("@stll/anonymize-data/config/triggers.es.json"),
+  fr: () => import("@stll/anonymize-data/config/triggers.fr.json"),
+  hu: () => import("@stll/anonymize-data/config/triggers.hu.json"),
+  it: () => import("@stll/anonymize-data/config/triggers.it.json"),
+  pl: () => import("@stll/anonymize-data/config/triggers.pl.json"),
+  ro: () => import("@stll/anonymize-data/config/triggers.ro.json"),
+  sk: () => import("@stll/anonymize-data/config/triggers.sk.json"),
+  sv: () => import("@stll/anonymize-data/config/triggers.sv.json"),
 };
 
-const COREFERENCE_LOADERS: Record<
-  string,
-  () => Promise<unknown>
-> = {
-  cs: () =>
-    import(
-      "@stll/anonymize-data/config/coreference.cs.json"
-    ),
-  de: () =>
-    import(
-      "@stll/anonymize-data/config/coreference.de.json"
-    ),
-  en: () =>
-    import(
-      "@stll/anonymize-data/config/coreference.en.json"
-    ),
-  sk: () =>
-    import(
-      "@stll/anonymize-data/config/coreference.sk.json"
-    ),
+const COREFERENCE_LOADERS: Record<string, () => Promise<unknown>> = {
+  cs: () => import("@stll/anonymize-data/config/coreference.cs.json"),
+  de: () => import("@stll/anonymize-data/config/coreference.de.json"),
+  en: () => import("@stll/anonymize-data/config/coreference.en.json"),
+  sk: () => import("@stll/anonymize-data/config/coreference.sk.json"),
 };
 
 const LOADER_REGISTRIES: Record<
@@ -162,14 +109,8 @@ const LOADER_REGISTRIES: Record<
 // package). Matches the hardcoded lists that existed
 // before the manifest was introduced.
 
-const FALLBACK_LANGUAGES: Record<
-  ConfigType,
-  readonly string[]
-> = {
-  triggers: [
-    "cs", "de", "en", "es", "fr",
-    "hu", "it", "pl", "ro", "sk", "sv",
-  ],
+const FALLBACK_LANGUAGES: Record<ConfigType, readonly string[]> = {
+  triggers: ["cs", "de", "en", "es", "fr", "hu", "it", "pl", "ro", "sk", "sv"],
   coreference: ["cs", "de", "en", "sk"],
 };
 
@@ -182,9 +123,7 @@ const FALLBACK_LANGUAGES: Record<
  * Falls back to the hardcoded language list when the
  * manifest is unavailable (backward compatibility).
  */
-export const loadLanguageConfigs = async <
-  T extends NonNullable<unknown>,
->(
+export const loadLanguageConfigs = async <T extends NonNullable<unknown>>(
   configType: ConfigType,
   mapFn: (mod: unknown) => T,
 ): Promise<T[]> => {
@@ -192,8 +131,7 @@ export const loadLanguageConfigs = async <
   const registry = LOADER_REGISTRIES[configType];
 
   // Determine which language codes to load
-  const hasManifestLanguages =
-    Object.keys(manifest.languages).length > 0;
+  const hasManifestLanguages = Object.keys(manifest.languages).length > 0;
 
   const codes = hasManifestLanguages
     ? Object.entries(manifest.languages)
@@ -214,9 +152,7 @@ export const loadLanguageConfigs = async <
   // Use indexed assignment so results preserve
   // manifest declaration order regardless of import
   // resolution timing.
-  const results: (T | undefined)[] = new Array(
-    codes.length,
-  );
+  const results: (T | undefined)[] = new Array(codes.length);
 
   const loads = codes.map(async (code, i) => {
     const loader = registry[code];
@@ -256,9 +192,7 @@ export const loadLanguageConfigs = async <
   });
 
   await Promise.all(loads);
-  return results.filter(
-    (r): r is T => r !== undefined,
-  );
+  return results.filter((r): r is T => r !== undefined);
 };
 
 /**

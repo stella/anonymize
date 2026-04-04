@@ -21,10 +21,7 @@ const CONFIG: PipelineConfig = {
   workspaceId: "test",
 };
 
-const expectOrg = async (
-  text: string,
-  expected: string,
-) => {
+const expectOrg = async (text: string, expected: string) => {
   const ctx = createPipelineContext();
   const entities = await runPipeline({
     fullText: text,
@@ -32,9 +29,7 @@ const expectOrg = async (
     gazetteerEntries: [],
     context: ctx,
   });
-  const org = entities.find(
-    (e) => e.label === "organization",
-  );
+  const org = entities.find((e) => e.label === "organization");
   expect(org).toBeDefined();
   expect(org!.text).toBe(expected);
 };
@@ -47,9 +42,7 @@ const expectNoOrg = async (text: string) => {
     gazetteerEntries: [],
     context: ctx,
   });
-  const orgs = entities.filter(
-    (e) => e.label === "organization",
-  );
+  const orgs = entities.filter((e) => e.label === "organization");
   expect(orgs.length).toBe(0);
 };
 
@@ -57,17 +50,11 @@ const expectNoOrg = async (text: string) => {
 
 describe("Czech s.r.o. companies", () => {
   test("simple two-word", async () => {
-    await expectOrg(
-      "Qubus s.r.o.",
-      "Qubus s.r.o.",
-    );
+    await expectOrg("Qubus s.r.o.", "Qubus s.r.o.");
   });
 
   test("with ampersand connector", async () => {
-    await expectOrg(
-      "Auto Kubíček s.r.o.",
-      "Auto Kubíček s.r.o.",
-    );
+    await expectOrg("Auto Kubíček s.r.o.", "Auto Kubíček s.r.o.");
   });
 
   test("all-caps brand + mixed", async () => {
@@ -78,24 +65,15 @@ describe("Czech s.r.o. companies", () => {
   });
 
   test("hyphenated name", async () => {
-    await expectOrg(
-      "Indu-Light Praha s.r.o.",
-      "Indu-Light Praha s.r.o.",
-    );
+    await expectOrg("Indu-Light Praha s.r.o.", "Indu-Light Praha s.r.o.");
   });
 
   test("short country code", async () => {
-    await expectOrg(
-      "Metrostav CZ s.r.o.",
-      "Metrostav CZ s.r.o.",
-    );
+    await expectOrg("Metrostav CZ s.r.o.", "Metrostav CZ s.r.o.");
   });
 
   test("spol. s r.o. variant", async () => {
-    await expectOrg(
-      "BAS Rudice spol. s r.o.",
-      "BAS Rudice spol. s r.o.",
-    );
+    await expectOrg("BAS Rudice spol. s r.o.", "BAS Rudice spol. s r.o.");
   });
 
   test("ROTHLEHNER pracovní plošiny s.r.o.", async () => {
@@ -106,10 +84,7 @@ describe("Czech s.r.o. companies", () => {
   });
 
   test("English words in name", async () => {
-    await expectOrg(
-      "Be a Future s.r.o.",
-      "Be a Future s.r.o.",
-    );
+    await expectOrg("Be a Future s.r.o.", "Be a Future s.r.o.");
   });
 });
 
@@ -117,24 +92,15 @@ describe("Czech s.r.o. companies", () => {
 
 describe("Czech a.s. companies", () => {
   test("simple", async () => {
-    await expectOrg(
-      "Leastex, a.s.",
-      "Leastex, a.s.",
-    );
+    await expectOrg("Leastex, a.s.", "Leastex, a.s.");
   });
 
   test("multi-word with country", async () => {
-    await expectOrg(
-      "VINCI Construction CS a.s.",
-      "VINCI Construction CS a.s.",
-    );
+    await expectOrg("VINCI Construction CS a.s.", "VINCI Construction CS a.s.");
   });
 
   test("bank name", async () => {
-    await expectOrg(
-      "Komerční banky, a.s.",
-      "Komerční banky, a.s.",
-    );
+    await expectOrg("Komerční banky, a.s.", "Komerční banky, a.s.");
   });
 
   test("with a. s. (spaced)", async () => {
@@ -145,10 +111,7 @@ describe("Czech a.s. companies", () => {
   });
 
   test("RENATEX CZ a.s.", async () => {
-    await expectOrg(
-      "RENATEX CZ a.s.",
-      "RENATEX CZ a.s.",
-    );
+    await expectOrg("RENATEX CZ a.s.", "RENATEX CZ a.s.");
   });
 });
 
@@ -156,17 +119,11 @@ describe("Czech a.s. companies", () => {
 
 describe("other Czech legal forms", () => {
   test("z.s. (spolek)", async () => {
-    await expectOrg(
-      "EAGLES BRNO, z.s.",
-      "EAGLES BRNO, z.s.",
-    );
+    await expectOrg("EAGLES BRNO, z.s.", "EAGLES BRNO, z.s.");
   });
 
   test("z.ú. (ústav)", async () => {
-    await expectOrg(
-      "České Budějovice z.ú.",
-      "České Budějovice z.ú.",
-    );
+    await expectOrg("České Budějovice z.ú.", "České Budějovice z.ú.");
   });
 
   test("příspěvková organizace", async () => {
@@ -177,10 +134,7 @@ describe("other Czech legal forms", () => {
   });
 
   test("státní podnik s.p.", async () => {
-    await expectOrg(
-      "Česká pošta s.p.",
-      "Česká pošta s.p.",
-    );
+    await expectOrg("Česká pošta s.p.", "Česká pošta s.p.");
   });
 
   test("long state enterprise name", async () => {
@@ -195,17 +149,11 @@ describe("other Czech legal forms", () => {
 
 describe("German legal forms", () => {
   test("GmbH", async () => {
-    await expectOrg(
-      "Siemens GmbH",
-      "Siemens GmbH",
-    );
+    await expectOrg("Siemens GmbH", "Siemens GmbH");
   });
 
   test("AG", async () => {
-    await expectOrg(
-      "Deutsche Bank AG",
-      "Deutsche Bank AG",
-    );
+    await expectOrg("Deutsche Bank AG", "Deutsche Bank AG");
   });
 });
 
@@ -213,14 +161,10 @@ describe("German legal forms", () => {
 
 describe("should NOT detect organization", () => {
   test("all-caps heading with NA", async () => {
-    await expectNoOrg(
-      "PODPORA ÚČASTI MSP NA VELETRZÍCH",
-    );
+    await expectNoOrg("PODPORA ÚČASTI MSP NA VELETRZÍCH");
   });
 
   test("all-caps heading (90% threshold)", async () => {
-    await expectNoOrg(
-      "PODPORA ÚČASTI NA VELETRZÍCH (preview)",
-    );
+    await expectNoOrg("PODPORA ÚČASTI NA VELETRZÍCH (preview)");
   });
 });

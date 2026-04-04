@@ -2,11 +2,7 @@ import { DETECTION_SOURCES } from "../types";
 import type { Entity } from "../types";
 import type { PipelineContext, NameCorpusData } from "../context";
 import { defaultContext } from "../context";
-import {
-  ALL_UPPER_RE,
-  UPPER_START_RE,
-  isSentenceStart,
-} from "../util/text";
+import { ALL_UPPER_RE, UPPER_START_RE, isSentenceStart } from "../util/text";
 
 // ── Name corpus ──────────────────────────────────────
 // Per-language first names and surnames loaded from
@@ -16,35 +12,39 @@ import {
 
 // ── Accessors (read from context) ────────────────────
 
-const getCorpus = (
-  ctx: PipelineContext,
-): NameCorpusData | null => ctx.nameCorpus;
+const getCorpus = (ctx: PipelineContext): NameCorpusData | null =>
+  ctx.nameCorpus;
 
 // Exported accessors for deny-list.ts AC integration.
 export const getNameCorpusFirstNames = (
   ctx: PipelineContext = defaultContext,
-): readonly string[] =>
-  ctx.nameCorpus?.firstNamesList ?? [];
+): readonly string[] => ctx.nameCorpus?.firstNamesList ?? [];
 export const getNameCorpusSurnames = (
   ctx: PipelineContext = defaultContext,
-): readonly string[] =>
-  ctx.nameCorpus?.surnamesList ?? [];
+): readonly string[] => ctx.nameCorpus?.surnamesList ?? [];
 export const getNameCorpusTitles = (
   ctx: PipelineContext = defaultContext,
-): readonly string[] =>
-  ctx.nameCorpus?.titlesList ?? [];
+): readonly string[] => ctx.nameCorpus?.titlesList ?? [];
 export const getNameCorpusExcluded = (
   ctx: PipelineContext = defaultContext,
-): readonly string[] =>
-  ctx.nameCorpus?.excludedList ?? [];
+): readonly string[] => ctx.nameCorpus?.excludedList ?? [];
 
 /**
  * Languages with per-language first/surname
  * dictionaries in @stll/anonymize-data.
  */
 const NAME_LANGUAGES = [
-  "cs", "sk", "de", "pl", "hu",
-  "ro", "fr", "es", "it", "en", "sv",
+  "cs",
+  "sk",
+  "de",
+  "pl",
+  "hu",
+  "ro",
+  "fr",
+  "es",
+  "it",
+  "en",
+  "sv",
 ] as const;
 
 type JsonArrayModule = {
@@ -55,9 +55,7 @@ type JsonArrayModule = {
  * Try importing a JSON module; return empty array
  * if not found.
  */
-const tryImportArray = async (
-  path: string,
-): Promise<readonly string[]> => {
+const tryImportArray = async (path: string): Promise<readonly string[]> => {
   try {
     const mod = (await import(path)) as JsonArrayModule;
     return mod.default;
@@ -81,59 +79,48 @@ export const initNameCorpus = (
   const promise = (async () => {
     try {
       // Load legacy config files (backwards compat)
-      const [
-        legacyFirstMod,
-        legacySurnameMod,
-        titleMod,
-        exclusionMod,
-      ] = await Promise.all([
-        import(
-          "@stll/anonymize-data/config/names-first.json"
-        ) as Promise<{ default: { names: string[] } }>,
-        import(
-          "@stll/anonymize-data/config/names-surnames.json"
-        ) as Promise<{ default: { names: string[] } }>,
-        import(
-          "@stll/anonymize-data/config/names-title-tokens.json"
-        ) as Promise<{
-          default: { tokens: string[] };
-        }>,
-        import(
-          "@stll/anonymize-data/config/names-exclusions.json"
-        ) as Promise<{ default: { words: string[] } }>,
-      ]);
+      const [legacyFirstMod, legacySurnameMod, titleMod, exclusionMod] =
+        await Promise.all([
+          import("@stll/anonymize-data/config/names-first.json") as Promise<{
+            default: { names: string[] };
+          }>,
+          import("@stll/anonymize-data/config/names-surnames.json") as Promise<{
+            default: { names: string[] };
+          }>,
+          import("@stll/anonymize-data/config/names-title-tokens.json") as Promise<{
+            default: { tokens: string[] };
+          }>,
+          import("@stll/anonymize-data/config/names-exclusions.json") as Promise<{
+            default: { words: string[] };
+          }>,
+        ]);
 
       // Load per-language dictionaries in parallel
-      const firstImports = NAME_LANGUAGES.map(
-        (lang) => tryImportArray(
+      const firstImports = NAME_LANGUAGES.map((lang) =>
+        tryImportArray(
           `@stll/anonymize-data/dictionaries/names/first/${lang}.json`,
         ),
       );
-      const surnameImports = NAME_LANGUAGES.map(
-        (lang) => tryImportArray(
+      const surnameImports = NAME_LANGUAGES.map((lang) =>
+        tryImportArray(
           `@stll/anonymize-data/dictionaries/names/surnames/${lang}.json`,
         ),
       );
 
-      const [firstResults, surnameResults] =
-        await Promise.all([
-          Promise.all(firstImports),
-          Promise.all(surnameImports),
-        ]);
+      const [firstResults, surnameResults] = await Promise.all([
+        Promise.all(firstImports),
+        Promise.all(surnameImports),
+      ]);
 
       // Merge: legacy config + all per-language files
-      const firstNames: string[] = [
-        ...legacyFirstMod.default.names,
-      ];
+      const firstNames: string[] = [...legacyFirstMod.default.names];
       for (const names of firstResults) {
         for (const name of names) {
           firstNames.push(name);
         }
       }
 
-      const surnames: string[] = [
-        ...legacySurnameMod.default.names,
-      ];
+      const surnames: string[] = [...legacySurnameMod.default.names];
       for (const names of surnameResults) {
         for (const name of names) {
           surnames.push(name);
@@ -158,16 +145,10 @@ export const initNameCorpus = (
       const exclusions = exclusionMod.default.words;
 
       ctx.nameCorpus = {
-        firstNames: Object.freeze(
-          new Set(dedupFirst),
-        ),
-        surnames: Object.freeze(
-          new Set(dedupSurnames),
-        ),
+        firstNames: Object.freeze(new Set(dedupFirst)),
+        surnames: Object.freeze(new Set(dedupSurnames)),
         titleTokens: Object.freeze(new Set(titles)),
-        excludedWords: Object.freeze(
-          new Set(exclusions),
-        ),
+        excludedWords: Object.freeze(new Set(exclusions)),
         firstNamesList: Object.freeze(dedupFirst),
         surnamesList: Object.freeze(dedupSurnames),
         titlesList: Object.freeze(titles),
@@ -180,8 +161,8 @@ export const initNameCorpus = (
       // (not rejected) Promise; ctx.nameCorpus stays null.
       ctx.nameCorpusPromise = null;
       console.warn(
-        "[anonymize] Failed to load name corpus JSON"
-          + " — name detection disabled:",
+        "[anonymize] Failed to load name corpus JSON" +
+          " — name detection disabled:",
         err,
       );
     }
@@ -216,20 +197,13 @@ const INFLECTION_SUFFIXES = [
 const stripInflection = (token: string): string[] => {
   const candidates: string[] = [];
   for (const suffix of INFLECTION_SUFFIXES) {
-    if (
-      token.length > suffix.length + 2 &&
-      token.endsWith(suffix)
-    ) {
+    if (token.length > suffix.length + 2 && token.endsWith(suffix)) {
       const base = token.slice(0, -suffix.length);
       if (/^\p{Lu}/u.test(base)) {
         candidates.push(base);
         // Czech feminine: -a → -ou (instrumental),
         // -a → -é (dative/locative), -a → -u (accusative)
-        if (
-          suffix === "ou" ||
-          suffix === "é" ||
-          suffix === "u"
-        ) {
+        if (suffix === "ou" || suffix === "é" || suffix === "u") {
           candidates.push(`${base}a`);
         }
         // Czech feminine: -a → -ovi is not valid, but
@@ -267,32 +241,22 @@ type ClassifiedToken = {
  * Check if a token is in the first-name set, either
  * directly or after stripping Czech/Slovak inflection.
  */
-const isFirstNameToken = (
-  token: string,
-  corpus: NameCorpusData,
-): boolean => {
+const isFirstNameToken = (token: string, corpus: NameCorpusData): boolean => {
   if (corpus.firstNames.has(token)) {
     return true;
   }
-  return stripInflection(token).some(
-    (b) => corpus.firstNames.has(b),
-  );
+  return stripInflection(token).some((b) => corpus.firstNames.has(b));
 };
 
 /**
  * Check if a token is in the surname set, either
  * directly or after stripping Czech/Slovak inflection.
  */
-const isSurnameToken = (
-  token: string,
-  corpus: NameCorpusData,
-): boolean => {
+const isSurnameToken = (token: string, corpus: NameCorpusData): boolean => {
   if (corpus.surnames.has(token)) {
     return true;
   }
-  return stripInflection(token).some(
-    (b) => corpus.surnames.has(b),
-  );
+  return stripInflection(token).some((b) => corpus.surnames.has(b));
 };
 
 /**

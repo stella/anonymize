@@ -93,8 +93,7 @@ export const maskDetectedSpans = (
     cumulativeShift += delta;
 
     // Position of mask token in masked text
-    const maskedStart =
-      span.start - (cumulativeShift - delta);
+    const maskedStart = span.start - (cumulativeShift - delta);
     const maskedEnd = maskedStart + MASK_LEN;
 
     segments.push({
@@ -117,10 +116,7 @@ export const maskDetectedSpans = (
   ): { start: number; end: number } | null => {
     // Check if span overlaps any masked region
     for (const seg of segments) {
-      if (
-        maskedStart < seg.maskedEnd &&
-        maskedEnd > seg.maskedStart
-      ) {
+      if (maskedStart < seg.maskedEnd && maskedEnd > seg.maskedStart) {
         return null;
       }
     }
@@ -163,10 +159,7 @@ export const unmaskNerEntities = (
     // offsetMap returns null when the mapped span
     // overlaps any merged rule-entity region, so no
     // secondary overlap check is needed.
-    const mapped = maskResult.offsetMap(
-      ner.start,
-      ner.end,
-    );
+    const mapped = maskResult.offsetMap(ner.start, ner.end);
     if (mapped === null) continue;
 
     result.push({

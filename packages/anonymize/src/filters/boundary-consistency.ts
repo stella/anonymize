@@ -16,9 +16,7 @@ const GAP_PATTERN = /^[ \t,\-]+$/;
  * text using `Intl.Segmenter`. Returns a sorted array
  * of offsets where words start and end.
  */
-const buildWordBoundaries = (
-  text: string,
-): Set<number> => {
+const buildWordBoundaries = (text: string): Set<number> => {
   // Use "und" (undetermined) locale for consistent
   // word-boundary results across environments.
   const segmenter = new Intl.Segmenter("und", {
@@ -38,9 +36,7 @@ const buildWordBoundaries = (
  * backward for a word boundary. Entity boundaries
  * should never extend past these.
  */
-const WORD_START_STOPS = new Set([
-  "\n", "\r", ",", ";", "(", ")", "[", "]",
-]);
+const WORD_START_STOPS = new Set(["\n", "\r", ",", ";", "(", ")", "[", "]"]);
 
 /**
  * Find the word-start offset at or before `pos`.
@@ -54,10 +50,7 @@ const wordStartAt = (
   let p = pos;
   while (p > 0 && !boundaries.has(p)) {
     const prev = text[p - 1];
-    if (
-      prev !== undefined &&
-      WORD_START_STOPS.has(prev)
-    ) {
+    if (prev !== undefined && WORD_START_STOPS.has(prev)) {
       return p;
     }
     p--;
@@ -70,9 +63,7 @@ const wordStartAt = (
  * forward for a word boundary. Entity boundaries
  * should never extend past these.
  */
-const WORD_END_STOPS = new Set([
-  "\n", "\r", ",", ";", ".", "(", ")", "[", "]",
-]);
+const WORD_END_STOPS = new Set(["\n", "\r", ",", ";", ".", "(", ")", "[", "]"]);
 
 /**
  * Find the word-end offset at or after `pos`.
@@ -98,10 +89,7 @@ const wordEndAt = (
  * Binary search: find the leftmost index in `arr`
  * where `arr[index].start >= value`.
  */
-const lowerBound = (
-  arr: Entity[],
-  value: number,
-): number => {
+const lowerBound = (arr: Entity[], value: number): number => {
   let lo = 0;
   let hi = arr.length;
   while (lo < hi) {
@@ -130,13 +118,8 @@ const lowerBound = (
  * Uses binary search for the `gapOccupied` check and
  * a Map for O(1) same-label prev lookup. O(n log n).
  */
-const mergeAdjacent = (
-  entities: Entity[],
-  fullText: string,
-): Entity[] => {
-  const sorted = entities.toSorted(
-    (a, b) => a.start - b.start,
-  );
+const mergeAdjacent = (entities: Entity[], fullText: string): Entity[] => {
+  const sorted = entities.toSorted((a, b) => a.start - b.start);
   const result: Entity[] = [];
   // O(1) lookup for the last same-label entity in
   // result, replacing the O(n) backward scan.
@@ -176,20 +159,13 @@ const mergeAdjacent = (
     for (let k = searchIdx; k < sorted.length; k++) {
       const other = sorted[k];
       if (!other || other.start >= gapEnd) break;
-      if (
-        other.label !== entity.label &&
-        other.end > gapStart
-      ) {
+      if (other.label !== entity.label && other.end > gapStart) {
         gapOccupied = true;
         break;
       }
     }
 
-    if (
-      !gapOccupied &&
-      gap.length <= MAX_GAP &&
-      GAP_PATTERN.test(gap)
-    ) {
+    if (!gapOccupied && gap.length <= MAX_GAP && GAP_PATTERN.test(gap)) {
       // Merge into prev
       prev.end = entity.end;
       prev.text = fullText.slice(prev.start, prev.end);
@@ -215,14 +191,9 @@ const mergeAdjacent = (
  * the common case; O(n^2) worst case when many
  * same-label entities precede a cross-label boundary.
  */
-const fixPartialWords = (
-  entities: Entity[],
-  fullText: string,
-): Entity[] => {
+const fixPartialWords = (entities: Entity[], fullText: string): Entity[] => {
   const boundaries = buildWordBoundaries(fullText);
-  const sorted = entities.toSorted(
-    (a, b) => a.start - b.start,
-  );
+  const sorted = entities.toSorted((a, b) => a.start - b.start);
 
   // Build a secondary array sorted by end position
   // for efficient "nearest entity ending before me"
@@ -233,16 +204,8 @@ const fixPartialWords = (
   const endPositions = byEnd.map((x) => x.entity.end);
 
   return sorted.map((e, eIdx) => {
-    let newStart = wordStartAt(
-      e.start,
-      boundaries,
-      fullText,
-    );
-    let newEnd = wordEndAt(
-      e.end,
-      boundaries,
-      fullText,
-    );
+    let newStart = wordStartAt(e.start, boundaries, fullText);
+    let newEnd = wordEndAt(e.end, boundaries, fullText);
 
     // Clamp start: find different-label entities whose
     // end is in (newStart, e.start]. We search byEnd
@@ -253,10 +216,7 @@ const fixPartialWords = (
     let hi = endPositions.length;
     while (lo < hi) {
       const mid = (lo + hi) >>> 1;
-      if (
-        (endPositions[mid] ?? Number.POSITIVE_INFINITY) <=
-        newStart
-      ) {
+      if ((endPositions[mid] ?? Number.POSITIVE_INFINITY) <= newStart) {
         lo = mid + 1;
       } else {
         hi = mid;
@@ -271,10 +231,7 @@ const fixPartialWords = (
       if (entry.entity.label === e.label) continue;
       // This entity's end is in (newStart, e.start]
       // and has a different label: clamp.
-      newStart = Math.max(
-        newStart,
-        entry.entity.end,
-      );
+      newStart = Math.max(newStart, entry.entity.end);
     }
 
     // Clamp end: find different-label entities whose
@@ -307,18 +264,12 @@ const fixPartialWords = (
  * Deduplicate entities with identical [start, end, label].
  * Keeps the entry with the highest score.
  */
-const deduplicateSpans = (
-  entities: Entity[],
-): Entity[] => {
+const deduplicateSpans = (entities: Entity[]): Entity[] => {
   const seen = new Map<string, Entity>();
   for (const entity of entities) {
-    const key =
-      `${entity.start}:${entity.end}:${entity.label}`;
+    const key = `${entity.start}:${entity.end}:${entity.label}`;
     const existing = seen.get(key);
-    if (
-      !existing ||
-      entity.score > existing.score
-    ) {
+    if (!existing || entity.score > existing.score) {
       seen.set(key, entity);
     }
   }
@@ -333,9 +284,7 @@ const deduplicateSpans = (
  * Uses a "max end seen" sweep per label. O(n) after
  * the initial sort.
  */
-const removeNestedSameLabel = (
-  entities: Entity[],
-): Entity[] => {
+const removeNestedSameLabel = (entities: Entity[]): Entity[] => {
   // Sort by start asc, then by length desc so the
   // longer entity comes first.
   const sorted = entities.toSorted((a, b) => {
@@ -351,10 +300,7 @@ const removeNestedSameLabel = (
 
   for (const entity of sorted) {
     const maxEnd = maxEndByLabel.get(entity.label);
-    if (
-      maxEnd !== undefined &&
-      entity.end <= maxEnd
-    ) {
+    if (maxEnd !== undefined && entity.end <= maxEnd) {
       // Nested inside a same-label entity: skip.
       continue;
     }
@@ -396,19 +342,15 @@ const resolveCrossLabelOverlaps = (
       // Skip full containment (one entity fully
       // inside another). Cross-label nesting is
       // valid and should be preserved.
-      const aContainsB =
-        a.start <= b.start && a.end >= b.end;
-      const bContainsA =
-        b.start <= a.start && b.end >= a.end;
+      const aContainsB = a.start <= b.start && a.end >= b.end;
+      const bContainsA = b.start <= a.start && b.end >= a.end;
       if (aContainsB || bContainsA) continue;
 
       // Partial overlap. Higher score wins; on tie
       // the longer span wins.
       const aLen = a.end - a.start;
       const bLen = b.end - b.start;
-      const aWins =
-        a.score > b.score ||
-        (a.score === b.score && aLen >= bLen);
+      const aWins = a.score > b.score || (a.score === b.score && aLen >= bLen);
 
       if (aWins) {
         // Trim b's start to a's end
@@ -448,10 +390,7 @@ export const enforceBoundaryConsistency = (
   fullText: string,
 ): Entity[] => {
   const fixed = fixPartialWords(entities, fullText);
-  const resolved = resolveCrossLabelOverlaps(
-    fixed,
-    fullText,
-  );
+  const resolved = resolveCrossLabelOverlaps(fixed, fullText);
   const deduped = deduplicateSpans(resolved);
   const merged = mergeAdjacent(deduped, fullText);
   return removeNestedSameLabel(merged);
