@@ -10,8 +10,7 @@
  * it, avoiding a runtime require() that breaks browsers.
  */
 
-import charGroupsJson from
-  "@stll/anonymize-data/config/char-groups.json";
+import charGroupsJson from "@stll/anonymize-data/config/char-groups.json";
 
 type CharEntry = {
   char: string;
@@ -43,14 +42,10 @@ const config = charGroupsJson as CharGroupsConfig;
  * Get the raw characters for a named group.
  * Throws if the group does not exist.
  */
-export const charSet = (
-  group: string,
-): readonly string[] => {
+export const charSet = (group: string): readonly string[] => {
   const g = config.groups[group];
   if (!g) {
-    throw new Error(
-      `Unknown char group: "${group}"`,
-    );
+    throw new Error(`Unknown char group: "${group}"`);
   }
   return g.chars.map((entry) => entry.char);
 };
@@ -81,9 +76,7 @@ export const charClass = (group: string): string => {
  * inside a larger character class, e.g.:
  *   `[\\s&,.${charClassInner("dash")}]`
  */
-export const charClassInner = (
-  group: string,
-): string => {
+export const charClassInner = (group: string): string => {
   const chars = charSet(group);
   const sorted = [...chars].sort((a, b) => {
     if (a === "-") return -1;
@@ -103,9 +96,7 @@ export const charPattern = (group: string): string => {
   const chars = charSet(group);
   // SAFETY: length === 1 guarantees index 0 exists.
   if (chars.length === 1) return chars[0]!;
-  const escaped = chars.map((ch) =>
-    ch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
-  );
+  const escaped = chars.map((ch) => ch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
   return `(?:${escaped.join("|")})`;
 };
 

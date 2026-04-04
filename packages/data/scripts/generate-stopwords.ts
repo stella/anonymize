@@ -29,18 +29,33 @@ const STOPWORDS_DATA = data as Record<string, string[]>;
  * Maltese ("mt") is not available in the dataset.
  */
 const EU_LANGUAGES = [
-  "bg", "cs", "da", "de", "el", "en", "es", "et",
-  "fi", "fr", "ga", "hr", "hu", "it", "lt", "lv",
-  "nl", "pl", "pt", "ro", "sk", "sl", "sv",
+  "bg",
+  "cs",
+  "da",
+  "de",
+  "el",
+  "en",
+  "es",
+  "et",
+  "fi",
+  "fr",
+  "ga",
+  "hr",
+  "hu",
+  "it",
+  "lt",
+  "lv",
+  "nl",
+  "pl",
+  "pt",
+  "ro",
+  "sk",
+  "sl",
+  "sv",
 ] as const;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const OUTPUT = join(
-  __dirname,
-  "..",
-  "config",
-  "stopwords.json",
-);
+const OUTPUT = join(__dirname, "..", "config", "stopwords.json");
 
 // ── Collect and deduplicate ─────────────────────────
 // NOTE: The generated file intentionally retains all

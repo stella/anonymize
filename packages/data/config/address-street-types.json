@@ -13,15 +13,7 @@
     "ul.",
     "ulice"
   ],
-  "de": [
-    "Allee",
-    "Gasse",
-    "Platz",
-    "Ring",
-    "Straße",
-    "Strasse",
-    "Weg"
-  ],
+  "de": ["Allee", "Gasse", "Platz", "Ring", "Straße", "Strasse", "Weg"],
   "en": [
     "Ave.",
     "Avenue",
@@ -89,14 +81,7 @@
     "viale",
     "vicolo"
   ],
-  "nl": [
-    "gracht",
-    "kade",
-    "laan",
-    "plein",
-    "straat",
-    "weg"
-  ],
+  "nl": ["gracht", "kade", "laan", "plein", "straat", "weg"],
   "pl": [
     "al.",
     "aleja",
@@ -108,13 +93,7 @@
     "ul.",
     "ulica"
   ],
-  "pt": [
-    "avenida",
-    "largo",
-    "praça",
-    "rua",
-    "travessa"
-  ],
+  "pt": ["avenida", "largo", "praça", "rua", "travessa"],
   "ro": [
     "aleea",
     "bd.",
@@ -128,16 +107,6 @@
     "str.",
     "strada"
   ],
-  "sk": [
-    "námest.",
-    "námestie",
-    "ulica"
-  ],
-  "sv": [
-    "allé",
-    "backe",
-    "gata",
-    "gränd",
-    "torg"
-  ]
+  "sk": ["námest.", "námestie", "ulica"],
+  "sv": ["allé", "backe", "gata", "gränd", "torg"]
 }

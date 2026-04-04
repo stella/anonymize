@@ -3,9 +3,7 @@ import { normalizeForSearch } from "../util/normalize";
 
 describe("normalizeForSearch", () => {
   test("replaces NBSP with space", () => {
-    expect(normalizeForSearch("hello\u00a0world")).toBe(
-      "hello world",
-    );
+    expect(normalizeForSearch("hello\u00a0world")).toBe("hello world");
   });
 
   test("replaces figure space with space", () => {
@@ -17,9 +15,7 @@ describe("normalizeForSearch", () => {
   });
 
   test("replaces en-dash with hyphen", () => {
-    expect(normalizeForSearch("2020\u20132024")).toBe(
-      "2020-2024",
-    );
+    expect(normalizeForSearch("2020\u20132024")).toBe("2020-2024");
   });
 
   test("replaces em-dash with hyphen", () => {
@@ -27,9 +23,7 @@ describe("normalizeForSearch", () => {
   });
 
   test("replaces smart quotes with ASCII quotes", () => {
-    expect(
-      normalizeForSearch("\u201chello\u201d"),
-    ).toBe('"hello"');
+    expect(normalizeForSearch("\u201chello\u201d")).toBe('"hello"');
   });
 
   test("returns plain text as-is (fast path)", () => {
@@ -48,9 +42,9 @@ describe("normalizeForSearch", () => {
   });
 
   test("normalises around non-BMP characters", () => {
-    expect(
-      normalizeForSearch("a\u00a0\uD83D\uDE00\u2013b"),
-    ).toBe("a \uD83D\uDE00-b");
+    expect(normalizeForSearch("a\u00a0\uD83D\uDE00\u2013b")).toBe(
+      "a \uD83D\uDE00-b",
+    );
   });
 
   test("handles strings exceeding CHUNK_SIZE (8192)", () => {
@@ -68,9 +62,7 @@ describe("normalizeForSearch", () => {
     const input =
       "\u201cSmlouva\u00a0\u010d.\u202f42\u201d " +
       "\u2013\u00a0viz\u00a0p\u0159\u00edloha";
-    const expected =
-      '"Smlouva \u010d. 42" ' +
-      "- viz p\u0159\u00edloha";
+    const expected = '"Smlouva \u010d. 42" ' + "- viz p\u0159\u00edloha";
     expect(normalizeForSearch(input)).toBe(expected);
   });
 });

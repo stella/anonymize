@@ -19,10 +19,7 @@ const MAX_PREFIX_OVERSHOOT = 7;
 export const buildSearchTerms = (
   entries: GazetteerEntry[],
 ): Map<string, { label: string; entryId: string }> => {
-  const terms = new Map<
-    string,
-    { label: string; entryId: string }
-  >();
+  const terms = new Map<string, { label: string; entryId: string }>();
   for (const entry of entries) {
     const meta = {
       label: entry.label,
@@ -142,15 +139,9 @@ export const processGazetteerMatches = (
     }
 
     // Try prefix extension for legal entity suffixes
-    const extended = tryPrefixExtension(
-      fullText,
-      match.start,
-      match.end,
-    );
+    const extended = tryPrefixExtension(fullText, match.start, match.end);
     const end = extended?.end ?? match.end;
-    const text =
-      extended?.text ??
-      fullText.slice(match.start, match.end);
+    const text = extended?.text ?? fullText.slice(match.start, match.end);
 
     exactSpans.push({
       start: match.start,
@@ -191,17 +182,13 @@ export const processGazetteerMatches = (
 
     // Skip if overlapping any exact span
     const overlapsExact = exactSpans.some(
-      (e) =>
-        match.start < e.end && match.end > e.start,
+      (e) => match.start < e.end && match.end > e.start,
     );
     if (overlapsExact) {
       continue;
     }
 
-    const matchText = fullText.slice(
-      match.start,
-      match.end,
-    );
+    const matchText = fullText.slice(match.start, match.end);
     results.push({
       start: match.start,
       end: match.end,
@@ -230,10 +217,7 @@ const tryPrefixExtension = (
   start: number,
   end: number,
 ): { end: number; text: string } | null => {
-  const maxEnd = Math.min(
-    end + MAX_PREFIX_OVERSHOOT,
-    fullText.length,
-  );
+  const maxEnd = Math.min(end + MAX_PREFIX_OVERSHOOT, fullText.length);
   if (maxEnd <= end + 1) {
     return null;
   }
@@ -243,8 +227,7 @@ const tryPrefixExtension = (
     return null;
   }
   const nextSpace = after.indexOf(" ", 1);
-  const suffixEnd =
-    nextSpace !== -1 ? nextSpace : after.length;
+  const suffixEnd = nextSpace !== -1 ? nextSpace : after.length;
   if (suffixEnd <= 1) {
     return null;
   }

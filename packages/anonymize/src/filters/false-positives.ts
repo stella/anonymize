@@ -2,8 +2,7 @@ import type { Entity } from "../types";
 import type { PipelineContext } from "../context";
 import { defaultContext } from "../context";
 
-const TEMPLATE_PLACEHOLDER_RE =
-  /^(?:\.{3,}|_{3,}|\[[\w\s]+\]|\{[\w\s]+\})$/;
+const TEMPLATE_PLACEHOLDER_RE = /^(?:\.{3,}|_{3,}|\[[\w\s]+\]|\{[\w\s]+\})$/;
 
 // Patterns that indicate a genuine address (not prose).
 const POSTAL_CODE_RE = /\d{3}\s?\d{2}/;
@@ -14,29 +13,25 @@ const ADDRESS_COMPONENTS_RE =
 // Jurisdiction patterns: "State of X", "Commonwealth of X",
 // "District of X", "Territory of X"
 // — valid address entities without digits or street words.
-const JURISDICTION_RE =
-  /^(?:state|commonwealth|district|territory)\s+of\s+/i;
+const JURISDICTION_RE = /^(?:state|commonwealth|district|territory)\s+of\s+/i;
 
 // Max entity text length by label. Prevents runaway
 // trigger extractions (e.g., "město Dobříš i okolních
 // obcí...") from producing absurdly long entities.
-const MAX_ENTITY_LENGTH: Partial<Record<string, number>> =
-  {
-    organization: 80,
-    person: 60,
-  };
+const MAX_ENTITY_LENGTH: Partial<Record<string, number>> = {
+  organization: 80,
+  person: 60,
+};
 // Section/clause numbers: "§ 3", "3.2.1", "12." but NOT
 // dates like "4.3.2026" or long digit strings like IČO.
 // A section number has 1-3 digit groups of 1-3 digits each,
 // never ending with a 4-digit group (that's a year).
-const SECTION_NUMBER_RE =
-  /^(?:§\s*)?\d{1,3}(?:\.\d{1,3}){0,4}\.?$/;
+const SECTION_NUMBER_RE = /^(?:§\s*)?\d{1,3}(?:\.\d{1,3}){0,4}\.?$/;
 const STANDALONE_YEAR_RE = /^(?:19|20)\d{2}$/;
 
 // ── Generic roles (lazy-loaded from JSON) ────────────
 
-const EMPTY_GENERIC_ROLES: ReadonlySet<string> =
-  new Set();
+const EMPTY_GENERIC_ROLES: ReadonlySet<string> = new Set();
 
 /**
  * Load generic-roles.json and cache the result on the
@@ -54,12 +49,8 @@ export const loadGenericRoles = (
     try {
       const mod: {
         default?: { roles?: string[] };
-      } = await import(
-        "@stll/anonymize-data/config/generic-roles.json"
-      );
-      const set: ReadonlySet<string> = new Set(
-        mod.default?.roles ?? [],
-      );
+      } = await import("@stll/anonymize-data/config/generic-roles.json");
+      const set: ReadonlySet<string> = new Set(mod.default?.roles ?? []);
       ctx.genericRoles = set;
       return set;
     } catch {
@@ -72,9 +63,7 @@ export const loadGenericRoles = (
 };
 
 /** Sync accessor — returns empty set before init. */
-const getGenericRoles = (
-  ctx: PipelineContext,
-): ReadonlySet<string> =>
+const getGenericRoles = (ctx: PipelineContext): ReadonlySet<string> =>
   ctx.genericRoles ?? EMPTY_GENERIC_ROLES;
 
 /**
@@ -103,21 +92,14 @@ export const filterFalsePositives = (
     // Exempt legal-form entities: their span is already
     // bounded by the regex pattern, not open-ended.
     const maxLen = MAX_ENTITY_LENGTH[entity.label];
-    if (
-      maxLen &&
-      trimmed.length > maxLen &&
-      entity.source !== "legal-form"
-    ) {
+    if (maxLen && trimmed.length > maxLen && entity.source !== "legal-form") {
       continue;
     }
     // Section numbers (§ 3, 3.2.1, 12.) are false
     // positives unless they were captured by a trigger
     // phrase (e.g., "č.p. 92" is an address, not a
     // section number).
-    if (
-      SECTION_NUMBER_RE.test(trimmed) &&
-      entity.source !== "trigger"
-    ) {
+    if (SECTION_NUMBER_RE.test(trimmed) && entity.source !== "trigger") {
       continue;
     }
     if (STANDALONE_YEAR_RE.test(trimmed)) {
@@ -126,16 +108,12 @@ export const filterFalsePositives = (
 
     // Person names never contain digits.
     // "Solution Pack ABL90 Flex" → reject.
-    if (
-      entity.label === "person" &&
-      HAS_DIGIT_RE.test(trimmed)
-    ) {
+    if (entity.label === "person" && HAS_DIGIT_RE.test(trimmed)) {
       continue;
     }
 
     if (
-      (entity.label === "person" ||
-        entity.label === "organization") &&
+      (entity.label === "person" || entity.label === "organization") &&
       roles.has(trimmed.toLowerCase())
     ) {
       continue;

@@ -7,6 +7,7 @@ const minimalConfig: PipelineConfig = {
   threshold: 0.5,
   enableTriggerPhrases: false,
   enableRegex: false,
+  enableLegalForms: false,
   enableNameCorpus: false,
   enableDenyList: false,
   enableGazetteer: false,
@@ -42,9 +43,7 @@ describe("runPipeline abort signal", () => {
       expect(true).toBe(false);
     } catch (err) {
       expect(err).toBeInstanceOf(DOMException);
-      expect(
-        (err as DOMException).name,
-      ).toBe("AbortError");
+      expect((err as DOMException).name).toBe("AbortError");
     }
   });
 
@@ -61,9 +60,7 @@ describe("runPipeline abort signal", () => {
       });
       expect(true).toBe(false);
     } catch (err) {
-      expect(
-        (err as DOMException).message,
-      ).toBe("Pipeline aborted");
+      expect((err as DOMException).message).toBe("Pipeline aborted");
     }
   });
 
@@ -125,9 +122,7 @@ describe("runPipeline abort signal", () => {
       });
       expect(true).toBe(false);
     } catch (err) {
-      expect(
-        (err as DOMException).name,
-      ).toBe("AbortError");
+      expect((err as DOMException).name).toBe("AbortError");
       expect(nerCalled).toBe(false);
     }
   });

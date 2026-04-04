@@ -33,9 +33,7 @@ let initPromise: Promise<void> | null = null;
 // ── Init ────────────────────────────────────────────
 
 const loadRules = async (): Promise<void> => {
-  const mod = await import(
-    "@stll/anonymize-data/config/hotword-rules.json"
-  );
+  const mod = await import("@stll/anonymize-data/config/hotword-rules.json");
   const data: HotwordRulesConfig = mod.default ?? mod;
   const loaded = data.rules;
 
@@ -43,11 +41,7 @@ const loadRules = async (): Promise<void> => {
   const patterns: PatternEntry[] = [];
   const mapping: number[] = [];
 
-  for (
-    let ruleIdx = 0;
-    ruleIdx < loaded.length;
-    ruleIdx++
-  ) {
+  for (let ruleIdx = 0; ruleIdx < loaded.length; ruleIdx++) {
     const rule = loaded[ruleIdx];
     if (!rule) continue;
     for (const hw of rule.hotwords) {
@@ -82,17 +76,47 @@ const loadRules = async (): Promise<void> => {
  * Safe to call multiple times; subsequent calls
  * are no-ops.
  */
-export const initHotwordRules =
-  async (): Promise<void> => {
-    if (rules !== null) return;
-    if (initPromise !== null) return initPromise;
-    initPromise = loadRules().catch((err) => {
-      // Reset so callers can retry on transient failure.
-      initPromise = null;
-      throw err;
-    });
-    return initPromise;
-  };
+export const initHotwordRules = async (): Promise<void> => {
+  if (rules !== null) return;
+  if (initPromise !== null) return initPromise;
+  initPromise = loadRules().catch((err) => {
+    // Reset so callers can retry on transient failure.
+    initPromise = null;
+    throw err;
+  });
+  return initPromise;
+};
+
+/**
+ * Expand requested output labels with any source labels
+ * that hotword rules may reclassify into them.
+ *
+ * Example: requesting only "date of birth" still needs
+ * "date" candidates to survive until the hotword pass.
+ * If rules are not initialized, or if no labels were
+ * requested, returns the input labels unchanged.
+ */
+export const expandLabelsForHotwordRules = (
+  requestedLabels: readonly string[],
+): readonly string[] => {
+  if (rules === null || requestedLabels.length === 0) {
+    return requestedLabels;
+  }
+
+  const requested = new Set(requestedLabels);
+  const expanded = new Set(requestedLabels);
+
+  for (const rule of rules) {
+    if (rule.reclassifyTo === undefined || !requested.has(rule.reclassifyTo)) {
+      continue;
+    }
+    for (const label of rule.targetLabels) {
+      expanded.add(label);
+    }
+  }
+
+  return [...expanded];
+};
 
 // ── Application ─────────────────────────────────────
 
@@ -142,11 +166,7 @@ export const applyHotwordRules = (
     let bestAdjustment = 0;
     let bestReclassify: string | undefined;
 
-    for (
-      let ruleIdx = 0;
-      ruleIdx < rules.length;
-      ruleIdx++
-    ) {
+    for (let ruleIdx = 0; ruleIdx < rules.length; ruleIdx++) {
       const rule = rules[ruleIdx];
       if (!rule) continue;
 
@@ -181,19 +201,13 @@ export const applyHotwordRules = (
           // Hotword overlaps the entity: distance 0,
           // use larger window for max.
           distance = 0;
-          maxDistance = Math.max(
-            rule.proximityBefore,
-            rule.proximityAfter,
-          );
+          maxDistance = Math.max(rule.proximityBefore, rule.proximityAfter);
         }
 
         if (distance > maxDistance) continue;
 
         // Distance-decayed adjustment.
-        const decay =
-          maxDistance === 0
-            ? 1
-            : 1 - distance / maxDistance;
+        const decay = maxDistance === 0 ? 1 : 1 - distance / maxDistance;
         const adj = rule.scoreAdjustment * decay;
 
         if (Math.abs(adj) > Math.abs(bestAdjustment)) {
@@ -216,14 +230,9 @@ export const applyHotwordRules = (
       continue;
     }
 
-    const newScore = Math.min(
-      1,
-      Math.max(0, entity.score + bestAdjustment),
-    );
+    const newScore = Math.min(1, Math.max(0, entity.score + bestAdjustment));
     const newLabel =
-      bestReclassify !== undefined
-        ? bestReclassify
-        : entity.label;
+      bestReclassify !== undefined ? bestReclassify : entity.label;
 
     result.push({
       ...entity,

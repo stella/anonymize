@@ -1,22 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  extractDefinedTerms,
-  findCoreferenceSpans,
-} from "../coreference";
+import { extractDefinedTerms, findCoreferenceSpans } from "../coreference";
 import { buildPlaceholderMap } from "../../redact";
 import { DETECTION_SOURCES } from "../../types";
 import type { Entity } from "../../types";
-import {
-  corefKey,
-  createPipelineContext,
-} from "../../context";
+import { corefKey, createPipelineContext } from "../../context";
 
-const makeEntity = (
-  label: string,
-  text: string,
-  start: number,
-): Entity => ({
+const makeEntity = (label: string, text: string, start: number): Entity => ({
   label,
   text,
   start,
@@ -34,42 +24,27 @@ describe("extractDefinedTerms", () => {
       makeEntity("person", "Ing. Tomáš Procházka", 0),
       makeEntity("organization", "ABC s.r.o.", 47),
     ];
-    const terms = await extractDefinedTerms(
-      text,
-      entities,
-    );
+    const terms = await extractDefinedTerms(text, entities);
     expect(terms).toHaveLength(0);
   });
 
   test("tracks non-role aliases", async () => {
-    const text =
-      'Ing. Tomáš Procházka (dále jen „TP")';
-    const entities = [
-      makeEntity("person", "Ing. Tomáš Procházka", 0),
-    ];
-    const terms = await extractDefinedTerms(
-      text,
-      entities,
-    );
+    const text = 'Ing. Tomáš Procházka (dále jen „TP")';
+    const entities = [makeEntity("person", "Ing. Tomáš Procházka", 0)];
+    const terms = await extractDefinedTerms(text, entities);
     const tp = terms.find((t) => t.alias === "TP");
     expect(tp).toBeDefined();
     expect(tp?.label).toBe("person");
-    expect(tp?.sourceText).toBe(
-      "Ing. Tomáš Procházka",
-    );
+    expect(tp?.sourceText).toBe("Ing. Tomáš Procházka");
   });
 
   test("inherits label from nearest person/org", async () => {
-    const text =
-      'ABC s.r.o., IČO: 12345678 (dále jen „Firma")';
+    const text = 'ABC s.r.o., IČO: 12345678 (dále jen „Firma")';
     const entities = [
       makeEntity("organization", "ABC s.r.o.", 0),
       makeEntity("registration number", "12345678", 17),
     ];
-    const terms = await extractDefinedTerms(
-      text,
-      entities,
-    );
+    const terms = await extractDefinedTerms(text, entities);
     const firma = terms.find((t) => t.alias === "Firma");
     if (firma) {
       expect(firma.label).toBe("organization");
@@ -79,18 +54,14 @@ describe("extractDefinedTerms", () => {
   test("ignores definitions with no nearby person/org", async () => {
     const text = 'splatnost 30 dnů (dále jen „Lhůta")';
     const entities = [makeEntity("date", "30 dnů", 10)];
-    const terms = await extractDefinedTerms(
-      text,
-      entities,
-    );
+    const terms = await extractDefinedTerms(text, entities);
     expect(terms).toHaveLength(0);
   });
 });
 
 describe("findCoreferenceSpans", () => {
   test("respects word boundaries", () => {
-    const text =
-      "Kupující obdržel. Kupujícímu náleží.";
+    const text = "Kupující obdržel. Kupujícímu náleží.";
     const terms = [
       {
         alias: "Kupující",
@@ -176,16 +147,10 @@ describe("findCoreferenceSpans", () => {
         sourceText: "Ing. Tomáš Procházka",
       },
     ];
-    const spans = findCoreferenceSpans(
-      text,
-      terms,
-      ctx,
-    );
+    const spans = findCoreferenceSpans(text, terms, ctx);
     expect(spans).toHaveLength(1);
     const span = spans[0]!;
-    expect(ctx.corefSourceMap.get(corefKey(span))).toBe(
-      "Ing. Tomáš Procházka",
-    );
+    expect(ctx.corefSourceMap.get(corefKey(span))).toBe("Ing. Tomáš Procházka");
   });
 
   test("coref alias gets same placeholder as source entity", () => {
@@ -201,9 +166,7 @@ describe("findCoreferenceSpans", () => {
     };
 
     // Coref alias "TP" found later in text
-    const text =
-      "Ing. Tomáš Procházka uzavřel smlouvu." +
-      " TP podepsal.";
+    const text = "Ing. Tomáš Procházka uzavřel smlouvu." + " TP podepsal.";
     const terms = [
       {
         alias: "TP",
@@ -212,29 +175,18 @@ describe("findCoreferenceSpans", () => {
         sourceText: "Ing. Tomáš Procházka",
       },
     ];
-    const corefSpans = findCoreferenceSpans(
-      text,
-      terms,
-      ctx,
-    );
+    const corefSpans = findCoreferenceSpans(text, terms, ctx);
     expect(corefSpans).toHaveLength(1);
 
     // Build placeholder map with both source and coref
     const allEntities = [sourceEntity, ...corefSpans];
-    const placeholderMap = buildPlaceholderMap(
-      allEntities,
-      ctx,
-    );
+    const placeholderMap = buildPlaceholderMap(allEntities, ctx);
 
     const sourceKey = `person\0Ing. Tomáš Procházka`;
     const aliasCompositeKey = `person\0TP`;
 
     // Both must get the same placeholder number
-    expect(placeholderMap.get(sourceKey)).toBe(
-      "[PERSON_1]",
-    );
-    expect(placeholderMap.get(aliasCompositeKey)).toBe(
-      "[PERSON_1]",
-    );
+    expect(placeholderMap.get(sourceKey)).toBe("[PERSON_1]");
+    expect(placeholderMap.get(aliasCompositeKey)).toBe("[PERSON_1]");
   });
 });

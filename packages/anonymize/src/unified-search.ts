@@ -22,14 +22,12 @@ export const runUnifiedSearch = (
   // Pass 1: regex + triggers + legal-forms
   // on original text (regex patterns encode
   // their own case flags)
-  const regexMatches =
-    instance.tsRegex.findIter(fullText);
+  const regexMatches = instance.tsRegex.findIter(fullText);
 
   // Pass 2: deny-list + street-types on
   // normalized text (NBSP, smart quotes folded)
   const normalized = normalizeForSearch(fullText);
-  const literalMatches =
-    instance.tsLiterals.findIter(normalized);
+  const literalMatches = instance.tsLiterals.findIter(normalized);
 
   return { regexMatches, literalMatches };
 };

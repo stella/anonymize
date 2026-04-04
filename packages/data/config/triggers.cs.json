@@ -29,24 +29,15 @@
       "v.z."
     ],
     "extensions": ["add-colon"],
-    "validations": [
-      { "type": "starts-uppercase" }
-    ]
+    "validations": [{ "type": "starts-uppercase" }]
   },
   {
     "id": "cs-person-trailing-space",
     "label": "person",
     "strategy": { "type": "to-next-comma" },
-    "triggers": [
-      "pan",
-      "paní",
-      "panem",
-      "panu"
-    ],
+    "triggers": ["pan", "paní", "panem", "panu"],
     "extensions": ["add-trailing-space"],
-    "validations": [
-      { "type": "starts-uppercase" }
-    ]
+    "validations": [{ "type": "starts-uppercase" }]
   },
   {
     "id": "cs-address-full",
@@ -87,9 +78,7 @@
     "id": "cs-address-to-next-comma",
     "label": "address",
     "strategy": { "type": "to-next-comma" },
-    "triggers": [
-      "obec a katastrální území"
-    ]
+    "triggers": ["obec a katastrální území"]
   },
   {
     "id": "cs-address-house-number",
@@ -98,10 +87,7 @@
       "type": "n-words",
       "count": 1
     },
-    "triggers": [
-      "č.p.",
-      "čp."
-    ]
+    "triggers": ["č.p.", "čp."]
   },
   {
     "id": "cs-address-psc",
@@ -110,28 +96,16 @@
       "type": "n-words",
       "count": 2
     },
-    "triggers": [
-      "PSČ"
-    ],
-    "extensions": [
-      "add-colon",
-      "add-trailing-space"
-    ]
+    "triggers": ["PSČ"],
+    "extensions": ["add-colon", "add-trailing-space"]
   },
   {
     "id": "cs-organization-roles",
     "label": "organization",
     "strategy": { "type": "to-next-comma" },
-    "triggers": [
-      "zhotovitel",
-      "zhotovitelem",
-      "objednatel",
-      "objednatelem"
-    ],
+    "triggers": ["zhotovitel", "zhotovitelem", "objednatel", "objednatelem"],
     "extensions": ["add-colon"],
-    "validations": [
-      { "type": "starts-uppercase" }
-    ]
+    "validations": [{ "type": "starts-uppercase" }]
   },
   {
     "id": "cs-organization-municipalities",
@@ -151,19 +125,9 @@
     "id": "cs-organization-trailing-space",
     "label": "organization",
     "strategy": { "type": "to-next-comma" },
-    "triggers": [
-      "město",
-      "města",
-      "městem",
-      "městu",
-      "obec",
-      "obce",
-      "obcí"
-    ],
+    "triggers": ["město", "města", "městem", "městu", "obec", "obce", "obcí"],
     "extensions": ["add-trailing-space"],
-    "validations": [
-      { "type": "starts-uppercase" }
-    ]
+    "validations": [{ "type": "starts-uppercase" }]
   },
   {
     "id": "cs-organization-institutions",
@@ -211,19 +175,14 @@
       "type": "n-words",
       "count": 1
     },
-    "triggers": [
-      "r.č.",
-      "rodné číslo"
-    ],
+    "triggers": ["r.č.", "rodné číslo"],
     "extensions": ["add-colon"]
   },
   {
     "id": "cs-bank-account-eol",
     "label": "bank account number",
     "strategy": { "type": "to-end-of-line" },
-    "triggers": [
-      "bankovní spojení"
-    ],
+    "triggers": ["bankovní spojení"],
     "extensions": ["add-colon"],
     "validations": [
       { "type": "has-digits" },
@@ -237,11 +196,7 @@
       "type": "n-words",
       "count": 1
     },
-    "triggers": [
-      "č.ú.",
-      "číslo účtu",
-      "č. účtu"
-    ],
+    "triggers": ["č.ú.", "číslo účtu", "č. účtu"],
     "extensions": ["add-colon"],
     "validations": [
       { "type": "has-digits" },
@@ -255,10 +210,7 @@
       "type": "n-words",
       "count": 1
     },
-    "triggers": [
-      "datová schránka",
-      "dat. schránka"
-    ],
+    "triggers": ["datová schránka", "dat. schránka"],
     "extensions": ["add-colon"],
     "validations": [
       {
@@ -288,11 +240,7 @@
     "id": "cs-tax-id",
     "label": "tax identification number",
     "strategy": { "type": "company-id-value" },
-    "triggers": [
-      "DIČ",
-      "D1Č",
-      "daňové identifikační číslo"
-    ]
+    "triggers": ["DIČ", "D1Č", "daňové identifikační číslo"]
   },
   {
     "id": "cs-vehicle-registration",
@@ -301,11 +249,7 @@
       "type": "n-words",
       "count": 1
     },
-    "triggers": [
-      "SPZ",
-      "RZ",
-      "registrační značka"
-    ],
+    "triggers": ["SPZ", "RZ", "registrační značka"],
     "extensions": ["add-colon"]
   },
   {
@@ -315,16 +259,8 @@
       "type": "n-words",
       "count": 1
     },
-    "triggers": [
-      "oddíl",
-      "oddílu",
-      "v oddíle",
-      "oddílem"
-    ],
-    "extensions": [
-      "add-colon",
-      "add-trailing-space"
-    ]
+    "triggers": ["oddíl", "oddílu", "v oddíle", "oddílem"],
+    "extensions": ["add-colon", "add-trailing-space"]
   },
   {
     "id": "cs-vlozka",
@@ -333,16 +269,8 @@
       "type": "n-words",
       "count": 1
     },
-    "triggers": [
-      "vložka",
-      "vložky",
-      "vložce",
-      "vložkou"
-    ],
-    "extensions": [
-      "add-colon",
-      "add-trailing-space"
-    ]
+    "triggers": ["vložka", "vložky", "vložce", "vložkou"],
+    "extensions": ["add-colon", "add-trailing-space"]
   },
   {
     "id": "cs-vs",
@@ -351,9 +279,7 @@
       "type": "n-words",
       "count": 1
     },
-    "triggers": [
-      "v.s."
-    ]
+    "triggers": ["v.s."]
   },
   {
     "id": "cs-sp-zn",
@@ -384,9 +310,7 @@
     "strategy": { "type": "to-next-comma" },
     "includeTrigger": true,
     "extensions": [],
-    "validations": [
-      { "type": "min-length", "min": 3 }
-    ]
+    "validations": [{ "type": "min-length", "min": 3 }]
   },
   {
     "id": "soudy-genitive",
@@ -402,9 +326,7 @@
     "strategy": { "type": "to-next-comma" },
     "includeTrigger": true,
     "extensions": [],
-    "validations": [
-      { "type": "min-length", "min": 3 }
-    ]
+    "validations": [{ "type": "min-length", "min": 3 }]
   },
   {
     "id": "cs-parcel-number",
@@ -486,8 +408,6 @@
       "ministerstvím"
     ],
     "extensions": ["add-trailing-space"],
-    "validations": [
-      { "type": "starts-uppercase" }
-    ]
+    "validations": [{ "type": "starts-uppercase" }]
   }
 ]

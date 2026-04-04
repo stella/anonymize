@@ -1,12 +1,7 @@
 {
   "rules": [
     {
-      "hotwords": [
-        "rodné číslo",
-        "r.č.",
-        "birth number",
-        "Geburtsnummer"
-      ],
+      "hotwords": ["rodné číslo", "r.č.", "birth number", "Geburtsnummer"],
       "targetLabels": ["czech birth number"],
       "scoreAdjustment": 0.25,
       "proximityBefore": 60,
@@ -50,9 +45,7 @@
         "Steuernummer",
         "VAT"
       ],
-      "targetLabels": [
-        "tax identification number"
-      ],
+      "targetLabels": ["tax identification number"],
       "scoreAdjustment": 0.2,
       "proximityBefore": 60,
       "proximityAfter": 60
@@ -80,34 +73,20 @@
         "IBAN",
         "bankovní spojení"
       ],
-      "targetLabels": [
-        "bank account number",
-        "iban"
-      ],
+      "targetLabels": ["bank account number", "iban"],
       "scoreAdjustment": 0.15,
       "proximityBefore": 60,
       "proximityAfter": 60
     },
     {
-      "hotwords": [
-        "e-mail",
-        "email",
-        "E-Mail"
-      ],
+      "hotwords": ["e-mail", "email", "E-Mail"],
       "targetLabels": ["email address"],
       "scoreAdjustment": 0.1,
       "proximityBefore": 60,
       "proximityAfter": 60
     },
     {
-      "hotwords": [
-        "adresa",
-        "sídlo",
-        "sídlem",
-        "bytem",
-        "Adresse",
-        "address"
-      ],
+      "hotwords": ["adresa", "sídlo", "sídlem", "bytem", "Adresse", "address"],
       "targetLabels": ["address"],
       "scoreAdjustment": 0.15,
       "proximityBefore": 80,

@@ -12,6 +12,7 @@ const TRIGGERS_ONLY_CONFIG: PipelineConfig = {
   threshold: 0.5,
   enableTriggerPhrases: true,
   enableRegex: false,
+  enableLegalForms: false,
   enableNameCorpus: false,
   enableDenyList: false,
   enableGazetteer: false,
@@ -22,16 +23,13 @@ const TRIGGERS_ONLY_CONFIG: PipelineConfig = {
   workspaceId: "test",
 };
 
-const findAddress = (
-  entities: Entity[],
-): Entity | undefined =>
+const findAddress = (entities: Entity[]): Entity | undefined =>
   entities.find((e) => e.label === "address");
 
 describe("address trigger strategy", () => {
   test("standard: captures full address with PSC and city", async () => {
     const text =
-      "trvale bytem Lipová 42, 110 00 Praha 1, " +
-      '(dále jen "Prodávající")';
+      "trvale bytem Lipová 42, 110 00 Praha 1, " + '(dále jen "Prodávající")';
     const entities = await runPipeline({
       fullText: text,
       config: TRIGGERS_ONLY_CONFIG,
@@ -39,15 +37,11 @@ describe("address trigger strategy", () => {
     });
     const addr = findAddress(entities);
     expect(addr).toBeDefined();
-    expect(addr!.text).toBe(
-      "Lipová 42, 110 00 Praha 1",
-    );
+    expect(addr!.text).toBe("Lipová 42, 110 00 Praha 1");
   });
 
   test("abbreviated street: captures full address", async () => {
-    const text =
-      "bytem: nábř. Kpt. Jaroše 1000/7, " +
-      "170 00 Praha 7";
+    const text = "bytem: nábř. Kpt. Jaroše 1000/7, " + "170 00 Praha 7";
     const entities = await runPipeline({
       fullText: text,
       config: TRIGGERS_ONLY_CONFIG,
@@ -55,9 +49,7 @@ describe("address trigger strategy", () => {
     });
     const addr = findAddress(entities);
     expect(addr).toBeDefined();
-    expect(addr!.text).toBe(
-      "nábř. Kpt. Jaroše 1000/7, 170 00 Praha 7",
-    );
+    expect(addr!.text).toBe("nábř. Kpt. Jaroše 1000/7, 170 00 Praha 7");
   });
 
   test("stops at period (sentence end)", async () => {
@@ -73,8 +65,7 @@ describe("address trigger strategy", () => {
   });
 
   test("stops at opening paren", async () => {
-    const text =
-      "trvale bytem Lipová 42 (přízemí)";
+    const text = "trvale bytem Lipová 42 (přízemí)";
     const entities = await runPipeline({
       fullText: text,
       config: TRIGGERS_ONLY_CONFIG,
@@ -88,10 +79,8 @@ describe("address trigger strategy", () => {
   test("respects max char limit", async () => {
     // Build a long address that exceeds default 120
     // char limit. The strategy should truncate.
-    const longStreet =
-      "Ulice " + "Nekonečná ".repeat(15) + "42";
-    const text =
-      `trvale bytem ${longStreet}, 110 00 Praha 1`;
+    const longStreet = "Ulice " + "Nekonečná ".repeat(15) + "42";
+    const text = `trvale bytem ${longStreet}, 110 00 Praha 1`;
     const entities = await runPipeline({
       fullText: text,
       config: TRIGGERS_ONLY_CONFIG,

@@ -26,8 +26,6 @@
     "label": "monetary amount",
     "strategy": { "type": "to-next-comma" },
     "extensions": ["add-colon"],
-    "validations": [
-      { "type": "has-digits" }
-    ]
+    "validations": [{ "type": "has-digits" }]
   }
 ]

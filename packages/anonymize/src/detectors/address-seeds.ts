@@ -35,24 +35,19 @@ type Seed = {
 
 // ── Dictionary loading ──────────────────────────────
 
-type DictionaryConfig = Record<
-  string,
-  string[] | string
->;
+type DictionaryConfig = Record<string, string[] | string>;
 
 let cachedBoundaryRe: RegExp | null = null;
 
-const loadBoundaryWords =
-  async (): Promise<DictionaryConfig> => {
-    try {
-      const mod = await import(
-        "@stll/anonymize-data/config/address-boundaries.json"
-      );
-      return mod.default as DictionaryConfig;
-    } catch {
-      return {};
-    }
-  };
+const loadBoundaryWords = async (): Promise<DictionaryConfig> => {
+  try {
+    const mod =
+      await import("@stll/anonymize-data/config/address-boundaries.json");
+    return mod.default as DictionaryConfig;
+  } catch {
+    return {};
+  }
+};
 
 /**
  * Build regex for boundary words. Matches any
@@ -70,16 +65,13 @@ const getBoundaryRe = async (): Promise<RegExp> => {
     }
     for (const word of entries) {
       // Escape regex special chars
-      words.push(
-        word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
-      );
+      words.push(word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
     }
   }
   // Sort longest first so longer phrases match first
   words.sort((a, b) => b.length - a.length);
-  cachedBoundaryRe = words.length > 0
-    ? new RegExp(`\\b(?:${words.join("|")})\\b`, "i")
-    : /(?!)/; // never matches
+  cachedBoundaryRe =
+    words.length > 0 ? new RegExp(`\\b(?:${words.join("|")})\\b`, "i") : /(?!)/; // never matches
   return cachedBoundaryRe;
 };
 
@@ -90,31 +82,29 @@ const getBoundaryRe = async (): Promise<RegExp> => {
  * Returns string[] for the unified TextSearch
  * builder. Empty if data package is not installed.
  */
-export const buildStreetTypePatterns =
-  async (): Promise<string[]> => {
-    let config: DictionaryConfig = {};
-    try {
-      const mod = await import(
-        "@stll/anonymize-data/config/address-street-types.json"
-      );
-      config = mod.default as DictionaryConfig;
-    } catch {
-      return [];
-    }
+export const buildStreetTypePatterns = async (): Promise<string[]> => {
+  let config: DictionaryConfig = {};
+  try {
+    const mod =
+      await import("@stll/anonymize-data/config/address-street-types.json");
+    config = mod.default as DictionaryConfig;
+  } catch {
+    return [];
+  }
 
-    // Plain strings — the unified builder sets
-    // caseInsensitive + wholeWords globally.
-    const words: string[] = [];
-    for (const values of Object.values(config)) {
-      if (!Array.isArray(values)) {
-        continue;
-      }
-      for (const word of values) {
-        words.push(word);
-      }
+  // Plain strings — the unified builder sets
+  // caseInsensitive + wholeWords globally.
+  const words: string[] = [];
+  for (const values of Object.values(config)) {
+    if (!Array.isArray(values)) {
+      continue;
     }
-    return words;
-  };
+    for (const word of values) {
+      words.push(word);
+    }
+  }
+  return words;
+};
 
 // ── Seed collection ─────────────────────────────────
 
@@ -153,10 +143,7 @@ const collectSeeds = (
         end: e.end,
         text: e.text,
       });
-    } else if (
-      e.source === "trigger" &&
-      /^\d/.test(e.text)
-    ) {
+    } else if (e.source === "trigger" && /^\d/.test(e.text)) {
       seeds.push({
         type: "postal-code",
         start: e.start,
@@ -176,17 +163,12 @@ const collectSeeds = (
   // 3. Standalone postal codes (multiple formats):
   //   Czech/Slovak: NNN NN (e.g., 140 00)
   //   Polish: NN-NNN (e.g., 00-950)
-  const postalRe =
-    /\b(?:\d{3}\s\d{2}|\d{2}-\d{3})\b/g;
+  const postalRe = /\b(?:\d{3}\s\d{2}|\d{2}-\d{3})\b/g;
   let postalMatch;
-  while (
-    (postalMatch = postalRe.exec(fullText)) !== null
-  ) {
+  while ((postalMatch = postalRe.exec(fullText)) !== null) {
     const start = postalMatch.index;
     const end = start + postalMatch[0].length;
-    const alreadyCovered = seeds.some(
-      (s) => s.start <= start && s.end >= end,
-    );
+    const alreadyCovered = seeds.some((s) => s.start <= start && s.end >= end);
     if (!alreadyCovered) {
       seeds.push({
         type: "postal-code",
@@ -203,20 +185,14 @@ const collectSeeds = (
   const streetNumRe =
     /\b(\p{Lu}\p{Ll}{2,})\s+(\d{1,5}(?:\/\d{1,5})?)\s*[,\n]/gu;
   let streetMatch;
-  while (
-    (streetMatch = streetNumRe.exec(fullText)) !== null
-  ) {
+  while ((streetMatch = streetNumRe.exec(fullText)) !== null) {
     const matchedStreet = streetMatch[1];
     const matchedNum = streetMatch[2];
     if (!matchedStreet || !matchedNum) {
       continue;
     }
     const start = streetMatch.index;
-    const end =
-      start +
-      matchedStreet.length +
-      1 +
-      matchedNum.length;
+    const end = start + matchedStreet.length + 1 + matchedNum.length;
     seeds.push({
       type: "street-word",
       start,
@@ -236,10 +212,7 @@ type SeedCluster = {
   end: number;
 };
 
-const clusterSeeds = (
-  seeds: Seed[],
-  maxGap: number,
-): SeedCluster[] => {
+const clusterSeeds = (seeds: Seed[], maxGap: number): SeedCluster[] => {
   const first = seeds[0];
   if (!first) {
     return [];
@@ -276,12 +249,8 @@ const clusterSeeds = (
 
 // ── Score a cluster ─────────────────────────────────
 
-const scoreCluster = (
-  cluster: SeedCluster,
-): number => {
-  const types = new Set(
-    cluster.seeds.map((s) => s.type),
-  );
+const scoreCluster = (cluster: SeedCluster): number => {
+  const types = new Set(cluster.seeds.map((s) => s.type));
 
   // Need at least 2 different seed types for an
   // address (e.g., city + postal code, or street
@@ -337,10 +306,7 @@ const expandCluster = async (
   let leftPos = start;
   while (leftPos > leftBound) {
     let p = leftPos - 1;
-    while (
-      p >= 0 &&
-      (fullText[p] === " " || fullText[p] === ",")
-    ) {
+    while (p >= 0 && (fullText[p] === " " || fullText[p] === ",")) {
       p--;
     }
     if (p < 0) break;
@@ -351,16 +317,11 @@ const expandCluster = async (
     }
     const word = fullText.slice(p + 1, wordEnd);
 
-    if (
-      word.length < 2 ||
-      (!/^\p{Lu}/u.test(word) && !/^\d/.test(word))
-    ) {
+    if (word.length < 2 || (!/^\p{Lu}/u.test(word) && !/^\d/.test(word))) {
       break;
     }
 
-    if (
-      fullText.slice(p + 1, leftPos).includes("\n")
-    ) {
+    if (fullText.slice(p + 1, leftPos).includes("\n")) {
       break;
     }
 
@@ -372,18 +333,12 @@ const expandCluster = async (
   // double newline, or 200 char cap.
   let rightPos = end;
   const remaining = fullText.slice(rightPos);
-  let nearestBoundary = Math.min(
-    remaining.length,
-    200,
-  );
+  let nearestBoundary = Math.min(remaining.length, 200);
 
   // Stop at dictionary-defined boundary words
   const boundaryRe = await getBoundaryRe();
   const boundaryMatch = boundaryRe.exec(remaining);
-  if (
-    boundaryMatch &&
-    boundaryMatch.index < nearestBoundary
-  ) {
+  if (boundaryMatch && boundaryMatch.index < nearestBoundary) {
     nearestBoundary = boundaryMatch.index;
   }
 
@@ -400,23 +355,15 @@ const expandCluster = async (
 
   // Stop at double newline (paragraph break)
   const doubleNewline = remaining.indexOf("\n\n");
-  if (
-    doubleNewline !== -1 &&
-    doubleNewline < nearestBoundary
-  ) {
+  if (doubleNewline !== -1 && doubleNewline < nearestBoundary) {
     nearestBoundary = doubleNewline;
   }
 
-  const expanded = remaining
-    .slice(0, nearestBoundary)
-    .trimEnd();
+  const expanded = remaining.slice(0, nearestBoundary).trimEnd();
   rightPos = end + expanded.length;
 
   // Trim trailing punctuation
-  while (
-    rightPos > end &&
-    /[,;:\s]/.test(fullText[rightPos - 1] ?? "")
-  ) {
+  while (rightPos > end && /[,;:\s]/.test(fullText[rightPos - 1] ?? "")) {
     rightPos--;
   }
 

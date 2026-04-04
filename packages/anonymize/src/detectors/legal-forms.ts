@@ -15,12 +15,9 @@ import { DETECTION_SOURCES } from "../types";
 import type { Entity } from "../types";
 import { DASH_INNER } from "../util/char-groups";
 
-const UPPER =
-  "A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽÄÖÜÀÂÆÇÈÊËÎÏÔÙÛŸÑ\\u0130";
-const LOWER =
-  "a-záčďéěíňóřšťúůýžäöüßàâæçèêëîïôùûÿñ\\u0131";
-const CAP_WORD =
-  `(?:[${UPPER}]{2,}|[${UPPER}][${LOWER}${UPPER}]+)`;
+const UPPER = "A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽÄÖÜÀÂÆÇÈÊËÎÏÔÙÛŸÑ\\u0130";
+const LOWER = "a-záčďéěíňóřšťúůýžäöüßàâæçèêëîïôùûÿñ\\u0131";
+const CAP_WORD = `(?:[${UPPER}]{2,}|[${UPPER}][${LOWER}${UPPER}]+)`;
 // ANY_WORD: mixed-case word, short all-caps token
 // (2-3 chars, e.g. "CZ" in "Metrostav CZ s.r.o."),
 // or digit-only token (1-4 digits, e.g. "2028" in
@@ -46,8 +43,7 @@ const escapeForRegex = (form: string): string =>
     .replace(/\\\./g, "\\.[^\\S\\n]?");
 
 const isShortForm = (form: string): boolean =>
-  form.replace(/[.\s]/g, "").length <= 3 &&
-  !form.includes(" ");
+  form.replace(/[.\s]/g, "").length <= 3 && !form.includes(" ");
 
 const buildPatternString = (
   forms: string[],
@@ -57,9 +53,7 @@ const buildPatternString = (
     return null;
   }
 
-  const sorted = forms.toSorted(
-    (a, b) => b.length - a.length,
-  );
+  const sorted = forms.toSorted((a, b) => b.length - a.length);
   const alt = sorted.map(escapeForRegex).join("|");
   // Allow lowercase connectors between name words:
   // "a" (Czech/SK), "and", "und", "et", "&", "e"
@@ -67,12 +61,8 @@ const buildPatternString = (
   // Czech state enterprise names can be 7+ words:
   // "Národní agentura pro komunikační a informační
   // technologie, s. p." — need generous limit.
-  const prefix =
-    `(?:${CAP_WORD})` +
-    `(?:${CONNECTOR}(?:${ANY_WORD})){0,10}`;
-  const separator = requireCapBefore
-    ? `(?:\\s+|,\\s*)`
-    : `\\s+`;
+  const prefix = `(?:${CAP_WORD})` + `(?:${CONNECTOR}(?:${ANY_WORD})){0,10}`;
+  const separator = requireCapBefore ? `(?:\\s+|,\\s*)` : `\\s+`;
 
   return `${prefix}${separator}(?:${alt})(?![${LOWER}])`;
 };
@@ -85,19 +75,13 @@ const buildPatternString = (
  * TextSearch builder. Empty if data package is not
  * installed.
  */
-export const buildLegalFormPatterns = async (): Promise<
-  string[]
-> => {
+export const buildLegalFormPatterns = async (): Promise<string[]> => {
   let data: Record<string, string[]> = {};
 
   try {
-    const mod = await import(
-      "@stll/anonymize-data/config/legal-forms.json"
-    );
+    const mod = await import("@stll/anonymize-data/config/legal-forms.json");
     // eslint-disable-next-line no-unsafe-type-assertion -- JSON module shape
-    data = (
-      mod as { default: Record<string, string[]> }
-    ).default;
+    data = (mod as { default: Record<string, string[]> }).default;
   } catch {
     return [];
   }
@@ -125,10 +109,7 @@ export const buildLegalFormPatterns = async (): Promise<
     patterns.push(longPattern);
   }
 
-  const shortPattern = buildPatternString(
-    allForms.filter(isShortForm),
-    true,
-  );
+  const shortPattern = buildPatternString(allForms.filter(isShortForm), true);
   if (shortPattern) {
     patterns.push(shortPattern);
   }
@@ -144,8 +125,7 @@ export const buildLegalFormPatterns = async (): Promise<
     .map(escapeForRegex)
     .join("|");
   patterns.push(
-    `${allcapPrefix}(?:\\s+|,\\s*)` +
-      `(?:${allcapAlt})(?![${LOWER}])`,
+    `${allcapPrefix}(?:\\s+|,\\s*)` + `(?:${allcapAlt})(?![${LOWER}])`,
   );
 
   return patterns;
@@ -192,38 +172,25 @@ export const processLegalFormMatches = (
         : text.lastIndexOf(" ");
     const prefixPart =
       prefixEnd > 0
-        ? text
-            .slice(0, prefixEnd)
-            .replace(/[^a-zA-ZÀ-ž]/g, "")
+        ? text.slice(0, prefixEnd).replace(/[^a-zA-ZÀ-ž]/g, "")
         : text.replace(/[^a-zA-ZÀ-ž]/g, "");
     const isAllCapsMatch =
-      prefixPart.length > 2 &&
-      prefixPart === prefixPart.toUpperCase();
+      prefixPart.length > 2 && prefixPart === prefixPart.toUpperCase();
 
     if (isAllCapsMatch && fullText) {
       // Check: is the surrounding line also all-caps?
-      const lineStart = fullText.lastIndexOf(
-        "\n",
-        match.start,
-      );
-      const lineEnd = fullText.indexOf(
-        "\n",
-        match.end,
-      );
+      const lineStart = fullText.lastIndexOf("\n", match.start);
+      const lineEnd = fullText.indexOf("\n", match.end);
       const line = fullText.slice(
         lineStart + 1,
         lineEnd === -1 ? fullText.length : lineEnd,
       );
-      const lineLetters = line.replace(
-        /[^a-zA-ZÀ-ž]/g,
-        "",
-      );
+      const lineLetters = line.replace(/[^a-zA-ZÀ-ž]/g, "");
       const upperCount = [...lineLetters].filter(
         (c) => c === c.toUpperCase(),
       ).length;
       const lineIsAllCaps =
-        lineLetters.length > 5 &&
-        upperCount / lineLetters.length >= 0.95;
+        lineLetters.length > 5 && upperCount / lineLetters.length >= 0.95;
       if (lineIsAllCaps) {
         // Entire line is all-caps → heading, skip
         continue;
@@ -247,15 +214,9 @@ export const processLegalFormMatches = (
 
     // Reject Roman numeral suffixes
     const lastSpace = text.lastIndexOf(" ");
-    const rawSuffix =
-      lastSpace !== -1
-        ? text.slice(lastSpace + 1)
-        : "";
+    const rawSuffix = lastSpace !== -1 ? text.slice(lastSpace + 1) : "";
     const suffixClean = rawSuffix.replace(/[.,]/g, "");
-    if (
-      suffixClean.length > 0 &&
-      ROMAN_NUMERAL_RE.test(suffixClean)
-    ) {
+    if (suffixClean.length > 0 && ROMAN_NUMERAL_RE.test(suffixClean)) {
       continue;
     }
 
@@ -270,10 +231,7 @@ export const processLegalFormMatches = (
       suffixClean.length <= 2 &&
       !/\./.test(rawSuffix) &&
       /[^\x00-\x7F]/.test(
-        text.slice(
-          0,
-          lastSpace !== -1 ? lastSpace : text.length,
-        ),
+        text.slice(0, lastSpace !== -1 ? lastSpace : text.length),
       )
     ) {
       continue;

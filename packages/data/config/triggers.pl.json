@@ -3,41 +3,27 @@
     "id": "pl-tax-id",
     "label": "tax identification number",
     "strategy": { "type": "company-id-value" },
-    "triggers": [
-      "NIP"
-    ]
+    "triggers": ["NIP"]
   },
   {
     "id": "pl-national-id",
     "label": "national identification number",
     "strategy": { "type": "company-id-value" },
-    "triggers": [
-      "PESEL"
-    ]
+    "triggers": ["PESEL"]
   },
   {
     "id": "pl-company-id",
     "label": "registration number",
     "strategy": { "type": "company-id-value" },
-    "triggers": [
-      "REGON",
-      "KRS"
-    ]
+    "triggers": ["REGON", "KRS"]
   },
   {
     "id": "pl-person",
     "label": "person",
     "strategy": { "type": "to-next-comma" },
-    "triggers": [
-      "Przewodniczący",
-      "Sędzia",
-      "Prokurator",
-      "Protokolant"
-    ],
+    "triggers": ["Przewodniczący", "Sędzia", "Prokurator", "Protokolant"],
     "extensions": ["add-colon"],
-    "validations": [
-      { "type": "starts-uppercase" }
-    ]
+    "validations": [{ "type": "starts-uppercase" }]
   },
   {
     "id": "pl-land-parcel",
@@ -74,10 +60,7 @@
     "id": "pl-cadastral-district",
     "label": "land parcel",
     "strategy": { "type": "to-next-comma" },
-    "triggers": [
-      "obręb ewidencyjny",
-      "obręb"
-    ],
+    "triggers": ["obręb ewidencyjny", "obręb"],
     "extensions": ["add-trailing-space"],
     "validations": [
       { "type": "starts-uppercase" },

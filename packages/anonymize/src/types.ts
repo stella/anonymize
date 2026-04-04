@@ -21,10 +21,7 @@ export type DetectionSource =
  * overlap resolution so deterministic detectors beat
  * probabilistic ones regardless of raw score.
  */
-export const DETECTOR_PRIORITY: Record<
-  DetectionSource,
-  number
-> = {
+export const DETECTOR_PRIORITY: Record<DetectionSource, number> = {
   gazetteer: 5,
   trigger: 4,
   "legal-form": 3,
@@ -203,6 +200,19 @@ export type PipelineConfig = {
   threshold: number;
   enableTriggerPhrases: boolean;
   enableRegex: boolean;
+  /**
+   * Enables legal-form organization detection.
+   * Required for typed callers; legacy untyped
+   * callers that omit this field are treated as
+   * enabled at runtime for backward compatibility.
+   */
+  enableLegalForms: boolean;
+  /**
+   * Enables first-name/surname/title corpus matching.
+   * When deny-list mode is enabled, this also controls
+   * whether name-corpus entries are injected into the
+   * deny-list search automaton.
+   */
   enableNameCorpus: boolean;
   enableDenyList: boolean;
   denyListCountries?: string[];
@@ -214,6 +224,11 @@ export type PipelineConfig = {
   enableCoreference: boolean;
   enableZoneClassification?: boolean;
   enableHotwordRules?: boolean;
+  /**
+   * Requested output labels. An empty array means
+   * "do not filter by label" for deterministic
+   * detectors; NER falls back to DEFAULT_ENTITY_LABELS.
+   */
   labels: string[];
   workspaceId: string;
 };
@@ -245,3 +260,7 @@ export const DEFAULT_ENTITY_LABELS = [
   "monetary amount",
   "land parcel",
 ] as const;
+
+export const isLegalFormsEnabled = (
+  config: Pick<PipelineConfig, "enableLegalForms">,
+): boolean => config.enableLegalForms !== false;

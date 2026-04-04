@@ -3,13 +3,7 @@
     "id": "sk-parcel-number",
     "label": "land parcel",
     "strategy": { "type": "n-words", "count": 1 },
-    "triggers": [
-      "parc. č.",
-      "parc.č.",
-      "p.č.",
-      "parcela č.",
-      "parcelné číslo"
-    ],
+    "triggers": ["parc. č.", "parc.č.", "p.č.", "parcela č.", "parcelné číslo"],
     "extensions": ["add-colon"],
     "validations": [
       {

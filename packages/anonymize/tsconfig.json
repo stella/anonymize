@@ -4,7 +4,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "target": "ES2023",
-    "lib": ["ESNext"],
+    "lib": ["ESNext", "DOM"],
     "allowJs": true,
     "resolveJsonModule": true,
     "moduleDetection": "force",
@@ -23,6 +23,11 @@
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true
   },
-  "include": ["src"],
-  "exclude": ["node_modules"]
+  "include": ["src/**/*.ts"],
+  "exclude": [
+    "node_modules",
+    "src/**/__test__/**",
+    "src/**/*.test.ts",
+    "src/wasm.ts"
+  ]
 }

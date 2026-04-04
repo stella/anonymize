@@ -2,7 +2,7 @@
   "$schema": "https://turborepo.com/schema.json",
   "tasks": {
     "typecheck": {
-      "outputs": [".cache/tsbuildinfo.json"]
+      "outputs": []
     },
     "lint": {},
     "format": {},

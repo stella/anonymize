@@ -38,70 +38,53 @@ describe("mergeAndDedup", () => {
     const c = entity(20, 25, 0.7);
     const result = mergeAndDedup([a, b, c]);
     expect(result).toHaveLength(3);
-    expect(result.map((e) => e.start)).toEqual([
-      0, 10, 20,
-    ]);
+    expect(result.map((e) => e.start)).toEqual([0, 10, 20]);
   });
 
-  test(
-    "adjacent non-overlapping entities are kept",
-    () => {
-      // end === start means no overlap
-      const a = entity(0, 5, 0.9);
-      const b = entity(5, 10, 0.8);
-      const result = mergeAndDedup([a, b]);
-      expect(result).toHaveLength(2);
-    },
-  );
+  test("adjacent non-overlapping entities are kept", () => {
+    // end === start means no overlap
+    const a = entity(0, 5, 0.9);
+    const b = entity(5, 10, 0.8);
+    const result = mergeAndDedup([a, b]);
+    expect(result).toHaveLength(2);
+  });
 
-  test(
-    "overlapping entities: higher score wins",
-    () => {
-      const low = entity(0, 10, 0.5);
-      const high = entity(3, 8, 0.9);
-      const result = mergeAndDedup([low, high]);
-      expect(result).toHaveLength(1);
-      expect(result[0].score).toBe(0.9);
-      expect(result[0].start).toBe(3);
-    },
-  );
+  test("overlapping entities: higher score wins", () => {
+    const low = entity(0, 10, 0.5);
+    const high = entity(3, 8, 0.9);
+    const result = mergeAndDedup([low, high]);
+    expect(result).toHaveLength(1);
+    expect(result[0].score).toBe(0.9);
+    expect(result[0].start).toBe(3);
+  });
 
-  test(
-    "overlapping entities: same score, longer wins",
-    () => {
-      const short = entity(2, 6, 0.8);
-      const long = entity(0, 10, 0.8);
-      const result = mergeAndDedup([short, long]);
-      expect(result).toHaveLength(1);
-      expect(result[0].start).toBe(0);
-      expect(result[0].end).toBe(10);
-    },
-  );
+  test("overlapping entities: same score, longer wins", () => {
+    const short = entity(2, 6, 0.8);
+    const long = entity(0, 10, 0.8);
+    const result = mergeAndDedup([short, long]);
+    expect(result).toHaveLength(1);
+    expect(result[0].start).toBe(0);
+    expect(result[0].end).toBe(10);
+  });
 
-  test(
-    "overlapping entities: same score, longer wins when it arrives second",
-    () => {
-      // short=[0,4] enters merged first; long=[2,12]
-      // must actively replace it via shouldReplace
-      const short = entity(0, 4, 0.8);
-      const long = entity(2, 12, 0.8);
-      const result = mergeAndDedup([short, long]);
-      expect(result).toHaveLength(1);
-      expect(result[0].start).toBe(2);
-      expect(result[0].end).toBe(12);
-    },
-  );
+  test("overlapping entities: same score, longer wins when it arrives second", () => {
+    // short=[0,4] enters merged first; long=[2,12]
+    // must actively replace it via shouldReplace
+    const short = entity(0, 4, 0.8);
+    const long = entity(2, 12, 0.8);
+    const result = mergeAndDedup([short, long]);
+    expect(result).toHaveLength(1);
+    expect(result[0].start).toBe(2);
+    expect(result[0].end).toBe(12);
+  });
 
-  test(
-    "overlapping entities: lower score is dropped",
-    () => {
-      const high = entity(0, 10, 0.9);
-      const low = entity(3, 8, 0.5);
-      const result = mergeAndDedup([high, low]);
-      expect(result).toHaveLength(1);
-      expect(result[0].score).toBe(0.9);
-    },
-  );
+  test("overlapping entities: lower score is dropped", () => {
+    const high = entity(0, 10, 0.9);
+    const low = entity(3, 8, 0.5);
+    const result = mergeAndDedup([high, low]);
+    expect(result).toHaveLength(1);
+    expect(result[0].score).toBe(0.9);
+  });
 
   test("3-way overlap keeps best entity", () => {
     const a = entity(0, 10, 0.5);
@@ -115,20 +98,17 @@ describe("mergeAndDedup", () => {
     expect(result[0].start).toBe(5);
   });
 
-  test(
-    "chain replacement: each winner evicts the previous tail",
-    () => {
-      // sorted: [0,10,0.5] → [3,12,0.7] → [8,15,0.9]
-      // [3,12] beats [0,10]; [8,15] beats [3,12]
-      const a = entity(0, 10, 0.5);
-      const b = entity(3, 12, 0.7);
-      const c = entity(8, 15, 0.9);
-      const result = mergeAndDedup([a, b, c]);
-      expect(result).toHaveLength(1);
-      expect(result[0].score).toBe(0.9);
-      expect(result[0].start).toBe(8);
-    },
-  );
+  test("chain replacement: each winner evicts the previous tail", () => {
+    // sorted: [0,10,0.5] → [3,12,0.7] → [8,15,0.9]
+    // [3,12] beats [0,10]; [8,15] beats [3,12]
+    const a = entity(0, 10, 0.5);
+    const b = entity(3, 12, 0.7);
+    const c = entity(8, 15, 0.9);
+    const result = mergeAndDedup([a, b, c]);
+    expect(result).toHaveLength(1);
+    expect(result[0].score).toBe(0.9);
+    expect(result[0].start).toBe(8);
+  });
 
   test("multiple layers are flattened", () => {
     const layer1 = [entity(0, 5, 0.9)];
@@ -142,9 +122,7 @@ describe("mergeAndDedup", () => {
     const b = entity(0, 5, 0.8);
     const c = entity(10, 15, 0.7);
     const result = mergeAndDedup([a, b, c]);
-    expect(result.map((e) => e.start)).toEqual([
-      0, 10, 20,
-    ]);
+    expect(result.map((e) => e.start)).toEqual([0, 10, 20]);
   });
 
   test("entities are shallow-copied", () => {

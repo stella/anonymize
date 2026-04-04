@@ -3,9 +3,7 @@
     "allowJs": true,
     "esModuleInterop": true,
     "exactOptionalPropertyTypes": true,
-    "lib": [
-      "ESNext"
-    ],
+    "lib": ["ESNext"],
     "module": "Preserve",
     "moduleDetection": "force",
     "moduleResolution": "Bundler",
@@ -17,10 +15,6 @@
     "target": "ES2023",
     "verbatimModuleSyntax": true
   },
-  "exclude": [
-    "node_modules"
-  ],
-  "include": [
-    "dictionaries"
-  ]
+  "exclude": ["node_modules"],
+  "include": ["dictionaries"]
 }

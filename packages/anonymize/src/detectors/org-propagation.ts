@@ -50,16 +50,9 @@ export const propagateOrgNames = (
   // Build a mutable array of already-covered spans
   // for overlap checks. Updated as new entities are
   // emitted to prevent duplicate propagation.
-  const covered: [number, number][] = entities.map(
-    (e) => [e.start, e.end],
-  );
-  const isOverlapping = (
-    start: number,
-    end: number,
-  ): boolean =>
-    covered.some(
-      ([cs, ce]) => start < ce && end > cs,
-    );
+  const covered: [number, number][] = entities.map((e) => [e.start, e.end]);
+  const isOverlapping = (start: number, end: number): boolean =>
+    covered.some(([cs, ce]) => start < ce && end > cs);
 
   const results: Entity[] = [];
 
@@ -67,10 +60,7 @@ export const propagateOrgNames = (
     const { baseName, label } = seed;
     let searchFrom = 0;
     while (searchFrom < fullText.length) {
-      const idx = fullText.indexOf(
-        baseName,
-        searchFrom,
-      );
+      const idx = fullText.indexOf(baseName, searchFrom);
       if (idx === -1) break;
 
       const matchEnd = idx + baseName.length;
@@ -80,10 +70,7 @@ export const propagateOrgNames = (
       // matches like "ACME" inside "ACME2").
       const prevCh = fullText[idx - 1] ?? "";
       const nextCh = fullText[matchEnd] ?? "";
-      if (
-        WORD_CHAR_RE.test(prevCh) ||
-        WORD_CHAR_RE.test(nextCh)
-      ) {
+      if (WORD_CHAR_RE.test(prevCh) || WORD_CHAR_RE.test(nextCh)) {
         searchFrom = idx + 1;
         continue;
       }

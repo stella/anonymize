@@ -100,9 +100,7 @@ export const mergeChunkEntities = (
     }
   }
 
-  const sorted = allEntities.toSorted(
-    (a, b) => a.start - b.start,
-  );
+  const sorted = allEntities.toSorted((a, b) => a.start - b.start);
   const merged: Entity[] = [];
 
   for (const entity of sorted) {
@@ -121,16 +119,12 @@ export const mergeChunkEntities = (
       // merged is kept sorted by start (splice+push
       // maintains this); elements further back have
       // even smaller starts, so we can break early.
-      if (
-        entity.start - existing.start
-          >= POSITION_THRESHOLD
-      ) {
+      if (entity.start - existing.start >= POSITION_THRESHOLD) {
         break;
       }
       if (
         existing.label === entity.label &&
-        Math.abs(existing.end - entity.end)
-          < POSITION_THRESHOLD &&
+        Math.abs(existing.end - entity.end) < POSITION_THRESHOLD &&
         existing.score > bestDupScore
       ) {
         bestDupIndex = j;
@@ -140,10 +134,7 @@ export const mergeChunkEntities = (
 
     if (bestDupIndex !== -1) {
       const existing = merged[bestDupIndex];
-      if (
-        existing !== undefined &&
-        entity.score > existing.score
-      ) {
+      if (existing !== undefined && entity.score > existing.score) {
         // Replace with winner. Splice out the old entry
         // and re-insert at the end to maintain sorted
         // order (entity.start >= all prior starts).

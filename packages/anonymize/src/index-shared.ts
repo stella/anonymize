@@ -30,17 +30,11 @@ export type {
   NameCorpusData,
   PipelineContext,
 } from "./context";
-export {
-  corefKey,
-  createPipelineContext,
-} from "./context";
+export { corefKey, createPipelineContext } from "./context";
 
 // ── Pipeline ──────────────────────────────────────
 export { runPipeline, mergeAndDedup, sanitizeEntities } from "./pipeline";
-export type {
-  NerInferenceFn,
-  PipelineOptions,
-} from "./pipeline";
+export type { NerInferenceFn, PipelineOptions } from "./pipeline";
 
 // ── Redaction ─────────────────────────────────────
 export {
@@ -88,13 +82,8 @@ export {
   extractDefinedTerms,
   findCoreferenceSpans,
 } from "./detectors/coreference";
-export {
-  propagateOrgNames,
-} from "./detectors/org-propagation";
-export {
-  detectNameCorpus,
-  initNameCorpus,
-} from "./detectors/names";
+export { propagateOrgNames } from "./detectors/org-propagation";
+export { detectNameCorpus, initNameCorpus } from "./detectors/names";
 
 // ── Deny List Detector ──────────────────────────
 export {
@@ -105,16 +94,12 @@ export {
 export type { DenyListData } from "./detectors/deny-list";
 
 // ── Unified Search ──────────────────────────────
-export {
-  buildUnifiedSearch,
-} from "./build-unified-search";
+export { buildUnifiedSearch } from "./build-unified-search";
 export type {
   UnifiedSearchInstance,
   GazetteerData,
 } from "./build-unified-search";
-export {
-  runUnifiedSearch,
-} from "./unified-search";
+export { runUnifiedSearch } from "./unified-search";
 export type { UnifiedResult } from "./unified-search";
 
 // ── Regions ──────────────────────────────────────
@@ -129,10 +114,7 @@ export type { RegionId, CountryCode } from "./regions";
 // ── Filters ───────────────────────────────────────
 export { filterFalsePositives } from "./filters/false-positives";
 export { boostNearMissEntities } from "./filters/confidence-boost";
-export {
-  applyHotwordRules,
-  initHotwordRules,
-} from "./filters/hotword-rules";
+export { applyHotwordRules, initHotwordRules } from "./filters/hotword-rules";
 export type { HotwordRule } from "./filters/hotword-rules";
 export {
   classifyZones,
@@ -140,10 +122,7 @@ export {
   initZoneClassifier,
   ZONE_SCORE_ADJUSTMENTS,
 } from "./filters/zone-classifier";
-export type {
-  DocumentZone,
-  ZoneSpan,
-} from "./filters/zone-classifier";
+export type { DocumentZone, ZoneSpan } from "./filters/zone-classifier";
 
 // ── GLiNER Computation ────────────────────────────
 export { decodeSpans } from "./gliner/decoder";

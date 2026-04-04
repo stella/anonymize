@@ -25,9 +25,10 @@
   "scripts": {
     "build": "tsdown",
     "prepublishOnly": "bun run build",
-    "typecheck": "tsc --noEmit",
-    "lint": "echo 'no linter configured yet'",
-    "format": "echo 'no formatter configured yet'"
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json && tsc --noEmit -p tsconfig.wasm.json",
+    "test": "bun test",
+    "lint": "prettier --check . --ignore-path ../../.prettierignore",
+    "format": "prettier --write . --ignore-path ../../.prettierignore"
   },
   "dependencies": {
     "@huggingface/tokenizers": "^0.1.2",
@@ -43,6 +44,8 @@
     }
   },
   "devDependencies": {
+    "@stll/text-search-wasm": "^0.1.2",
+    "bun-types": "^1.3.11",
     "tsdown": "^0.21.6",
     "typescript": "^5.9.3"
   }

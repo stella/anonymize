@@ -3,30 +3,19 @@
     "id": "sv-national-id",
     "label": "national identification number",
     "strategy": { "type": "company-id-value" },
-    "triggers": [
-      "personnummer",
-      "personnr"
-    ]
+    "triggers": ["personnummer", "personnr"]
   },
   {
     "id": "sv-company-id",
     "label": "registration number",
     "strategy": { "type": "company-id-value" },
-    "triggers": [
-      "organisationsnummer",
-      "org.nr"
-    ]
+    "triggers": ["organisationsnummer", "org.nr"]
   },
   {
     "id": "sv-address",
     "label": "address",
     "strategy": { "type": "to-next-comma" },
-    "triggers": [
-      "folkbokförd i",
-      "folkbokförd på",
-      "bosatt i",
-      "bosatt på"
-    ]
+    "triggers": ["folkbokförd i", "folkbokförd på", "bosatt i", "bosatt på"]
   },
   {
     "id": "sv-date-of-birth",
@@ -35,36 +24,25 @@
       "type": "n-words",
       "count": 4
     },
-    "triggers": [
-      "född den"
-    ]
+    "triggers": ["född den"]
   },
   {
     "id": "sv-person",
     "label": "person",
     "strategy": { "type": "to-next-comma" },
-    "triggers": [
-      "kontaktperson"
-    ],
-    "validations": [
-      { "type": "starts-uppercase" }
-    ]
+    "triggers": ["kontaktperson"],
+    "validations": [{ "type": "starts-uppercase" }]
   },
   {
     "id": "sv-bank-account",
     "label": "bank account number",
     "strategy": { "type": "company-id-value" },
-    "triggers": [
-      "bankgiro",
-      "plusgiro"
-    ]
+    "triggers": ["bankgiro", "plusgiro"]
   },
   {
     "id": "sv-tax-id",
     "label": "tax identification number",
     "strategy": { "type": "company-id-value" },
-    "triggers": [
-      "momsregistreringsnummer"
-    ]
+    "triggers": ["momsregistreringsnummer"]
   }
 ]

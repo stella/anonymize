@@ -30,23 +30,9 @@
     "registered",
     "represented"
   ],
-  "fr": [
-    "immatriculée",
-    "inscrite",
-    "représenté",
-    "représentée"
-  ],
-  "hu": [
-    "bejegyzett",
-    "cégjegyzékszám",
-    "képviseli"
-  ],
-  "it": [
-    "iscritta",
-    "rappresentata",
-    "rappresentato",
-    "registro imprese"
-  ],
+  "fr": ["immatriculée", "inscrite", "représenté", "représentée"],
+  "hu": ["bejegyzett", "cégjegyzékszám", "képviseli"],
+  "it": ["iscritta", "rappresentata", "rappresentato", "registro imprese"],
   "pl": [
     "reprezentowana",
     "reprezentowany",
@@ -56,25 +42,7 @@
     "wpisany",
     "zarejestrowana"
   ],
-  "ro": [
-    "înregistrată",
-    "reprezentat",
-    "reprezentată"
-  ],
-  "sk": [
-    "konajúci",
-    "zapísaná",
-    "zapísaný",
-    "zastúpená",
-    "zastúpený"
-  ],
-  "universal": [
-    "e-mail",
-    "email",
-    "fax",
-    "http",
-    "https",
-    "tel",
-    "www"
-  ]
+  "ro": ["înregistrată", "reprezentat", "reprezentată"],
+  "sk": ["konajúci", "zapísaná", "zapísaný", "zastúpená", "zastúpený"],
+  "universal": ["e-mail", "email", "fax", "http", "https", "tel", "www"]
 }

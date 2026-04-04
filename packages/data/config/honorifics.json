@@ -1,13 +1,6 @@
 {
   "_comment": "Courtesy and professional titles that precede a person's name. Used to build the honorific-person regex pattern.",
-  "boundary": [
-    "Don",
-    "Doña",
-    "M.",
-    "Me",
-    "Señor",
-    "Señora"
-  ],
+  "boundary": ["Don", "Doña", "M.", "Me", "Señor", "Señora"],
   "titles": [
     "Avv.",
     "Dame",

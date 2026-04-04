@@ -19,10 +19,7 @@ const SENTENCE_END_RE = /[.!?]/;
  * punctuation (.!?). Position 0 and positions preceded
  * only by whitespace are considered sentence starts.
  */
-export const isSentenceStart = (
-  text: string,
-  pos: number,
-): boolean => {
+export const isSentenceStart = (text: string, pos: number): boolean => {
   if (pos === 0) {
     return true;
   }

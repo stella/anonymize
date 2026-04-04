@@ -1,13 +1,8 @@
 import { DETECTION_SOURCES } from "../types";
 import type { Entity } from "../types";
-import type {
-  DefinitionPattern,
-  PipelineContext,
-} from "../context";
+import type { DefinitionPattern, PipelineContext } from "../context";
 import { corefKey, defaultContext } from "../context";
-import {
-  loadLanguageConfigs,
-} from "../util/lang-loader";
+import { loadLanguageConfigs } from "../util/lang-loader";
 
 type CoreferenceConfigRow = {
   pattern: string;
@@ -20,50 +15,44 @@ type CoreferenceConfigRow = {
  * JSON configs in @stll/anonymize-data. Uses the
  * language manifest for auto-discovery.
  */
-const loadDefinitionPatterns =
-  async (): Promise<DefinitionPattern[]> => {
-    const patterns: DefinitionPattern[] = [];
+const loadDefinitionPatterns = async (): Promise<DefinitionPattern[]> => {
+  const patterns: DefinitionPattern[] = [];
 
-    const allRows = await loadLanguageConfigs<
-      readonly CoreferenceConfigRow[]
-    >(
-      "coreference",
-      (mod) => {
-        // eslint-disable-next-line no-unsafe-type-assertion -- JSON config
-        const m = mod as {
-          default?: readonly CoreferenceConfigRow[];
-        };
-        // eslint-disable-next-line no-unsafe-type-assertion -- JSON config
-        return (m.default ?? mod) as
-          readonly CoreferenceConfigRow[];
-      },
-    );
+  const allRows = await loadLanguageConfigs<readonly CoreferenceConfigRow[]>(
+    "coreference",
+    (mod) => {
+      // eslint-disable-next-line no-unsafe-type-assertion -- JSON config
+      const m = mod as {
+        default?: readonly CoreferenceConfigRow[];
+      };
+      // eslint-disable-next-line no-unsafe-type-assertion -- JSON config
+      return (m.default ?? mod) as readonly CoreferenceConfigRow[];
+    },
+  );
 
-    for (const rows of allRows) {
-      if (!Array.isArray(rows)) {
+  for (const rows of allRows) {
+    if (!Array.isArray(rows)) {
+      console.warn(
+        "[anonymize] coreference: unexpected " + "config shape, skipping",
+      );
+      continue;
+    }
+    for (const row of rows) {
+      try {
+        patterns.push({
+          pattern: new RegExp(row.pattern, row.flags),
+        });
+      } catch (err) {
         console.warn(
-          "[anonymize] coreference: unexpected " +
-            "config shape, skipping",
+          `[anonymize] coreference: invalid ` + `regex "${row.pattern}":`,
+          err,
         );
-        continue;
-      }
-      for (const row of rows) {
-        try {
-          patterns.push({
-            pattern: new RegExp(row.pattern, row.flags),
-          });
-        } catch (err) {
-          console.warn(
-            `[anonymize] coreference: invalid ` +
-              `regex "${row.pattern}":`,
-            err,
-          );
-        }
       }
     }
+  }
 
-    return patterns;
-  };
+  return patterns;
+};
 
 /**
  * Load generic role terms that should NOT be treated
@@ -79,15 +68,12 @@ const getRoleStopSet = async (
   const promise = (async () => {
     let result: ReadonlySet<string>;
     try {
-      const mod = await import(
-        "@stll/anonymize-data/config/generic-roles.json"
-      );
+      const mod =
+        await import("@stll/anonymize-data/config/generic-roles.json");
       const data = (mod.default ?? mod) as {
         roles: string[];
       };
-      result = new Set(
-        data.roles.map((r: string) => r.toLowerCase()),
-      );
+      result = new Set(data.roles.map((r: string) => r.toLowerCase()));
     } catch {
       result = new Set();
     }
@@ -155,28 +141,22 @@ type DefinedTerm = {
  * Only parties (person, organization) have defined-term
  * aliases in legal text. Dates, addresses, IDs do not.
  */
-const COREF_SOURCE_LABELS = new Set([
-  "person",
-  "organization",
-]);
+const COREF_SOURCE_LABELS = new Set(["person", "organization"]);
 
 export const extractDefinedTerms = async (
   fullText: string,
   entities: Entity[],
   ctx: PipelineContext = defaultContext,
 ): Promise<DefinedTerm[]> => {
-  const [definitionPatterns, roleStops] =
-    await Promise.all([
-      getDefinitionPatterns(ctx),
-      getRoleStopSet(ctx),
-    ]);
+  const [definitionPatterns, roleStops] = await Promise.all([
+    getDefinitionPatterns(ctx),
+    getRoleStopSet(ctx),
+  ]);
   const terms: DefinedTerm[] = [];
   const seen = new Set<string>();
 
   // Sort entities by position for nearest-preceding lookup
-  const sorted = [...entities].sort(
-    (a, b) => a.start - b.start,
-  );
+  const sorted = [...entities].sort((a, b) => a.start - b.start);
 
   // Strategy: find all "dále jen" definitions in the
   // text, then for each one, find the nearest PRECEDING
@@ -303,9 +283,7 @@ export const findCoreferenceSpans = (
       // match and after the match must not be a word
       // character. This prevents "Kupující" matching
       // inside "Kupujícímu".
-      const charBefore = idx > 0
-        ? fullText[idx - 1]
-        : undefined;
+      const charBefore = idx > 0 ? fullText[idx - 1] : undefined;
       const charAfter = fullText[matchEnd];
 
       if (isWordChar(charBefore) || isWordChar(charAfter)) {
@@ -322,10 +300,7 @@ export const findCoreferenceSpans = (
         score: 0.95,
         source: DETECTION_SOURCES.COREFERENCE,
       };
-      ctx.corefSourceMap.set(
-        corefKey(entity),
-        term.sourceText,
-      );
+      ctx.corefSourceMap.set(corefKey(entity), term.sourceText);
       results.push(entity);
 
       searchFrom = matchEnd;

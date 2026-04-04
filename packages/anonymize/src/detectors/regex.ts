@@ -1,9 +1,33 @@
 import type { Match } from "@stll/text-search";
 import type { Validator } from "@stll/stdnum";
 import {
-  at, be, bg, cz, cy, de, dk, ee, es,
-  fi, fr, gb, gr, hr, hu, ie, it, lt,
-  lu, lv, mt, nl, pl, pt, ro, se, si,
+  at,
+  be,
+  bg,
+  cz,
+  cy,
+  de,
+  dk,
+  ee,
+  es,
+  fi,
+  fr,
+  gb,
+  gr,
+  hr,
+  hu,
+  ie,
+  it,
+  lt,
+  lu,
+  lv,
+  mt,
+  nl,
+  pl,
+  pt,
+  ro,
+  se,
+  si,
   sk,
 } from "@stll/stdnum";
 import { toRegex } from "@stll/stdnum/patterns";
@@ -35,18 +59,13 @@ const escapeRegex = (s: string): string =>
   s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 /** Escape for use inside a regex character class. */
-const escapeCharClass = (s: string): string =>
-  s.replace(/[\]\\^-]/g, "\\$&");
+const escapeCharClass = (s: string): string => s.replace(/[\]\\^-]/g, "\\$&");
 
-const TITLE_PREFIX = TITLE_PREFIXES.toSorted(
-  (a, b) => b.length - a.length,
-)
+const TITLE_PREFIX = TITLE_PREFIXES.toSorted((a, b) => b.length - a.length)
   .map(escapeTitle)
   .join("|");
 
-const POST_NOMINAL = POST_NOMINALS.toSorted(
-  (a, b) => b.length - a.length,
-)
+const POST_NOMINAL = POST_NOMINALS.toSorted((a, b) => b.length - a.length)
   .map(escapeTitle)
   .join("|");
 
@@ -69,9 +88,7 @@ const HONORIFIC_ALT = [...HONORIFICS]
   .toSorted((a, b) => b.length - a.length)
   .map((h) => {
     const escaped = escapeRegex(h);
-    return HONORIFIC_BOUNDARY.has(h)
-      ? `\\b${escaped}`
-      : escaped;
+    return HONORIFIC_BOUNDARY.has(h) ? `\\b${escaped}` : escaped;
   })
   .join("|");
 
@@ -132,26 +149,10 @@ const toEntry = (
 const STDNUM_ENTRIES: readonly StdnumEntry[] = [
   // ── Original PR #28 patterns (were 15-21) ────────
   toEntry(hu.vat, "tax identification number", 0.95),
-  toEntry(
-    it.codiceFiscale,
-    "national identification number",
-    0.95,
-  ),
-  toEntry(
-    es.dni,
-    "national identification number",
-    0.9,
-  ),
-  toEntry(
-    es.nie,
-    "national identification number",
-    0.95,
-  ),
-  toEntry(
-    se.personnummer,
-    "national identification number",
-    0.9,
-  ),
+  toEntry(it.codiceFiscale, "national identification number", 0.95),
+  toEntry(es.dni, "national identification number", 0.9),
+  toEntry(es.nie, "national identification number", 0.95),
+  toEntry(se.personnummer, "national identification number", 0.9),
   toEntry(ro.cnp, "national identification number", 0.95),
   toEntry(fr.nir, "social security number", 0.9),
 
@@ -163,60 +164,28 @@ const STDNUM_ENTRIES: readonly StdnumEntry[] = [
 
   // ── DE validators ────────────────────────────────
   toEntry(de.vat, "tax identification number", 0.95),
-  toEntry(
-    de.idnr,
-    "tax identification number",
-    0.9,
-  ),
-  toEntry(
-    de.stnr,
-    "tax identification number",
-    0.9,
-  ),
-  toEntry(
-    de.svnr,
-    "social security number",
-    0.9,
-  ),
+  toEntry(de.idnr, "tax identification number", 0.9),
+  toEntry(de.stnr, "tax identification number", 0.9),
+  toEntry(de.svnr, "social security number", 0.9),
 
   // ── PL validators ────────────────────────────────
   toEntry(pl.nip, "tax identification number", 0.95),
-  toEntry(
-    pl.pesel,
-    "national identification number",
-    0.9,
-  ),
+  toEntry(pl.pesel, "national identification number", 0.9),
   // pl.regon omitted: \d{9,14} too generic
 
   // ── GB validators ────────────────────────────────
   toEntry(gb.vat, "tax identification number", 0.95),
-  toEntry(
-    gb.nino,
-    "social security number",
-    0.95,
-  ),
+  toEntry(gb.nino, "social security number", 0.95),
   // gb.utr omitted: \d{10} too generic
 
   // ── AT validators ────────────────────────────────
   toEntry(at.uid, "tax identification number", 0.95),
-  toEntry(
-    at.tin,
-    "tax identification number",
-    0.9,
-  ),
-  toEntry(
-    at.businessid,
-    "registration number",
-    0.95,
-  ),
+  toEntry(at.tin, "tax identification number", 0.9),
+  toEntry(at.businessid, "registration number", 0.95),
 
   // ── BE validators ────────────────────────────────
   toEntry(be.vat, "tax identification number", 0.95),
-  toEntry(
-    be.nn,
-    "national identification number",
-    0.9,
-  ),
+  toEntry(be.nn, "national identification number", 0.9),
 
   // ── NL validators ────────────────────────────────
   toEntry(nl.vat, "tax identification number", 0.95),
@@ -224,19 +193,11 @@ const STDNUM_ENTRIES: readonly StdnumEntry[] = [
 
   // ── DK validators ────────────────────────────────
   toEntry(dk.vat, "tax identification number", 0.95),
-  toEntry(
-    dk.cpr,
-    "national identification number",
-    0.9,
-  ),
+  toEntry(dk.cpr, "national identification number", 0.9),
 
   // ── FI validators ────────────────────────────────
   toEntry(fi.vat, "tax identification number", 0.95),
-  toEntry(
-    fi.hetu,
-    "national identification number",
-    0.95,
-  ),
+  toEntry(fi.hetu, "national identification number", 0.95),
   toEntry(fi.ytunnus, "registration number", 0.9),
 
   // ── BG validators ────────────────────────────────
@@ -262,19 +223,11 @@ const STDNUM_ENTRIES: readonly StdnumEntry[] = [
 
   // ── IE validators ────────────────────────────────
   toEntry(ie.vat, "tax identification number", 0.95),
-  toEntry(
-    ie.pps,
-    "national identification number",
-    0.9,
-  ),
+  toEntry(ie.pps, "national identification number", 0.9),
 
   // ── PT validators ────────────────────────────────
   toEntry(pt.vat, "tax identification number", 0.95),
-  toEntry(
-    pt.cc,
-    "national identification number",
-    0.9,
-  ),
+  toEntry(pt.cc, "national identification number", 0.9),
 
   // ── RO additional validators ─────────────────────
   toEntry(ro.vat, "tax identification number", 0.95),
@@ -290,22 +243,14 @@ const STDNUM_ENTRIES: readonly StdnumEntry[] = [
 
   // ── LT validators ────────────────────────────────
   toEntry(lt.vat, "tax identification number", 0.95),
-  toEntry(
-    lt.asmens,
-    "national identification number",
-    0.9,
-  ),
+  toEntry(lt.asmens, "national identification number", 0.9),
 
   // ── LV validators ────────────────────────────────
   toEntry(lv.vat, "tax identification number", 0.95),
 
   // ── EE validators ────────────────────────────────
   toEntry(ee.vat, "tax identification number", 0.95),
-  toEntry(
-    ee.ik,
-    "national identification number",
-    0.9,
-  ),
+  toEntry(ee.ik, "national identification number", 0.9),
 
   // ── CY validators ────────────────────────────────
   toEntry(cy.vat, "tax identification number", 0.95),
@@ -353,8 +298,7 @@ const IBAN: RegexDef = {
 };
 
 const EMAIL: RegexDef = {
-  pattern:
-    `\\b[\\w.+\\-]+@[\\w\\-]+(?:\\.[\\w\\-]+)+\\b`,
+  pattern: `\\b[\\w.+\\-]+@[\\w\\-]+(?:\\.[\\w\\-]+)+\\b`,
   label: "email address",
   score: 1,
 };
@@ -426,8 +370,7 @@ const DATE_NUMERIC: RegexDef = {
 };
 
 const DATE_CZ_SPACED: RegexDef = {
-  pattern:
-    `\\b\\d{1,2}\\.[^\\S\\n]+\\d{1,2}\\.[^\\S\\n]+\\d{4}\\b`,
+  pattern: `\\b\\d{1,2}\\.[^\\S\\n]+\\d{1,2}\\.[^\\S\\n]+\\d{4}\\b`,
   label: "date",
   score: 1,
 };
@@ -441,8 +384,7 @@ const IP_ADDRESS: RegexDef = {
 };
 
 const CZ_BANK_ACCOUNT: RegexDef = {
-  pattern:
-    `\\b(?:\\d{1,6}-)?\\d{6,10}/\\d{4}(?!\\d)`,
+  pattern: `\\b(?:\\d{1,6}-)?\\d{6,10}/\\d{4}(?!\\d)`,
   label: "bank account number",
   score: 0.95,
 };
@@ -498,16 +440,12 @@ const URL: RegexDef = {
 // text; unambiguous TLDs allow bare second-level
 // domains (e.g., "fondkinematografie.cz").
 const LONG_TLDS =
-  "com|org|net|eu|cz|sk|pl|hu|ro|fr|es" +
-  "|co\\.uk|nl|ch|info|io|dev";
+  "com|org|net|eu|cz|sk|pl|hu|ro|fr|es" + "|co\\.uk|nl|ch|info|io|dev";
 const SHORT_TLDS = "de|at|be|se|fi|dk|no|it|uk";
 // RFC 1123: labels cannot start or end with hyphen.
-const HOST_LABEL =
-  `[a-zA-Z0-9](?:[a-zA-Z0-9\\-]*[a-zA-Z0-9])?`;
-const BARE_HOST =
-  `\\b[a-zA-Z0-9][a-zA-Z0-9\\-]+[a-zA-Z0-9]`;
-const PATH_SUFFIX =
-  `(?:[/?#][^\\s)\\]>]*[^\\s.,;:!?)\\]>])?`;
+const HOST_LABEL = `[a-zA-Z0-9](?:[a-zA-Z0-9\\-]*[a-zA-Z0-9])?`;
+const BARE_HOST = `\\b[a-zA-Z0-9][a-zA-Z0-9\\-]+[a-zA-Z0-9]`;
+const PATH_SUFFIX = `(?:[/?#][^\\s)\\]>]*[^\\s.,;:!?)\\]>])?`;
 const BARE_DOMAIN: RegexDef = {
   pattern:
     // Unambiguous TLDs: bare SLDs ok (one dot)
@@ -520,7 +458,6 @@ const BARE_DOMAIN: RegexDef = {
   label: "url",
   score: 0.9,
 };
-
 
 // Full RFC 5952 IPv6. :: compressed form replaces
 // 1+ zero groups. Right side: 1-7 hex groups.
@@ -606,12 +543,13 @@ const ALL_REGEX_DEFS: readonly RegexDef[] = [
 ];
 
 /** Flat pattern array for text-search. */
-export const REGEX_PATTERNS: readonly string[] =
-  ALL_REGEX_DEFS.map((d) => d.pattern);
+export const REGEX_PATTERNS: readonly string[] = ALL_REGEX_DEFS.map(
+  (d) => d.pattern,
+);
 
 /** Parallel metadata. Index = pattern index. */
-export const REGEX_META: readonly RegexMeta[] =
-  ALL_REGEX_DEFS.map((d): RegexMeta => {
+export const REGEX_META: readonly RegexMeta[] = ALL_REGEX_DEFS.map(
+  (d): RegexMeta => {
     const meta: RegexMeta = {
       label: d.label,
       score: d.score,
@@ -620,7 +558,8 @@ export const REGEX_META: readonly RegexMeta[] =
       meta.validator = d.validator;
     }
     return meta;
-  });
+  },
+);
 
 // ── Dynamic date patterns (22 languages) ────────────
 
@@ -638,9 +577,7 @@ type DateMonths = Record<string, string[] | string>;
  * sorts longest-first so the regex engine prefers the
  * longest match.
  */
-const buildMonthAlternation = (
-  months: DateMonths,
-): string => {
+const buildMonthAlternation = (months: DateMonths): string => {
   const seen = new Set<string>();
   for (const [key, value] of Object.entries(months)) {
     if (key.startsWith("_")) continue;
@@ -649,9 +586,7 @@ const buildMonthAlternation = (
       // Strip trailing dots for the regex; date patterns
       // use `\\.?` after the alternation to match optional
       // abbreviation dots.
-      const clean = name
-        .replace(/\.$/, "")
-        .toLowerCase();
+      const clean = name.replace(/\.$/, "").toLowerCase();
       if (clean.length >= MIN_MONTH_NAME_LENGTH) {
         seen.add(clean);
       }
@@ -668,9 +603,7 @@ const buildMonthAlternation = (
  * Returns 6 patterns covering the major written-date
  * formats across all supported languages.
  */
-const buildDatePatternsFromMonths = (
-  alt: string,
-): string[] => {
+const buildDatePatternsFromMonths = (alt: string): string[] => {
   if (!alt) {
     // No month names survived filtering — return nothing
     // rather than emitting patterns with (?:) that match
@@ -680,20 +613,19 @@ const buildDatePatternsFromMonths = (
   // Optional time suffix: "19:45:50" or "19:45"
   const TIME = `(?:\\s+\\d{1,2}:\\d{2}(?::\\d{2})?)`;
   return [
-  // a. DD[.] Month[.] YYYY [HH:MM[:SS]]
-  `(?i)\\b\\d{1,2}\\.?\\s+(?:${alt})\\.?\\s+\\d{4}${TIME}?\\b`,
-  // b. Month[.] DD[,] YYYY — "March 7, 2023" (US format)
-  `(?i)\\b(?:${alt})\\.?\\s+\\d{1,2},?\\s+\\d{4}\\b`,
-  // c. DDst/nd/rd/th Month[.] [YYYY] — "1st January 2025"
-  `(?i)\\b\\d{1,2}(?:st|nd|rd|th)\\s+(?:${alt})\\.?` +
-    `(?:\\s+\\d{4})?(?=\\s|[.,;!?)]|$)`,
-  // d. Month[.] YYYY — "October 1983"
-  `(?i)\\b(?:${alt})\\.?\\s+\\d{4}\\b`,
-  // e. YYYY. Month[.] DD. — Hungarian "2025. január 7."
-  `(?i)\\b\\d{4}\\.\\s+(?:${alt})\\.?\\s+\\d{1,2}\\.?(?=\\s|[.,;!?)]|$)`,
-  // f. DD de Month[.] [de] YYYY — Spanish "7 de enero de 2025"
-  `(?i)\\b\\d{1,2}\\s+de\\s+(?:${alt})\\.?` +
-    `(?:\\s+de)?\\s+\\d{4}\\b`,
+    // a. DD[.] Month[.] YYYY [HH:MM[:SS]]
+    `(?i)\\b\\d{1,2}\\.?\\s+(?:${alt})\\.?\\s+\\d{4}${TIME}?\\b`,
+    // b. Month[.] DD[,] YYYY — "March 7, 2023" (US format)
+    `(?i)\\b(?:${alt})\\.?\\s+\\d{1,2},?\\s+\\d{4}\\b`,
+    // c. DDst/nd/rd/th Month[.] [YYYY] — "1st January 2025"
+    `(?i)\\b\\d{1,2}(?:st|nd|rd|th)\\s+(?:${alt})\\.?` +
+      `(?:\\s+\\d{4})?(?=\\s|[.,;!?)]|$)`,
+    // d. Month[.] YYYY — "October 1983"
+    `(?i)\\b(?:${alt})\\.?\\s+\\d{4}\\b`,
+    // e. YYYY. Month[.] DD. — Hungarian "2025. január 7."
+    `(?i)\\b\\d{4}\\.\\s+(?:${alt})\\.?\\s+\\d{1,2}\\.?(?=\\s|[.,;!?)]|$)`,
+    // f. DD de Month[.] [de] YYYY — Spanish "7 de enero de 2025"
+    `(?i)\\b\\d{1,2}\\s+de\\s+(?:${alt})\\.?` + `(?:\\s+de)?\\s+\\d{4}\\b`,
   ];
 };
 
@@ -701,9 +633,7 @@ const buildDatePatternsFromMonths = (
 let datePatternPromise: Promise<string[]> | null = null;
 
 const loadDatePatterns = async (): Promise<string[]> => {
-  const mod = await import(
-    "@stll/anonymize-data/config/date-months.json"
-  );
+  const mod = await import("@stll/anonymize-data/config/date-months.json");
   // Dynamic import of JSON returns { default, ...keys }.
   // Use `default` if present (ESM wrapper), else the
   // module itself.
@@ -719,22 +649,19 @@ const loadDatePatterns = async (): Promise<string[]> => {
  */
 export const getDatePatterns = (): Promise<string[]> => {
   if (!datePatternPromise) {
-    datePatternPromise = loadDatePatterns().catch(
-      (err) => {
-        datePatternPromise = null;
-        throw err;
-      },
-    );
+    datePatternPromise = loadDatePatterns().catch((err) => {
+      datePatternPromise = null;
+      throw err;
+    });
   }
   return datePatternPromise;
 };
 
 /** Date pattern metadata (all are score 1 dates). */
-export const DATE_PATTERN_META: Readonly<RegexMeta> =
-  Object.freeze({
-    label: "date",
-    score: 1,
-  });
+export const DATE_PATTERN_META: Readonly<RegexMeta> = Object.freeze({
+  label: "date",
+  score: 1,
+});
 
 // ── Dynamic currency patterns ──────────────────────
 
@@ -758,12 +685,8 @@ type CurrenciesData = {
  * thousands (1,000) and plain integers (100000)
  * via `\d{1,9}` to catch unformatted amounts.
  */
-const buildCurrencyPatterns = (
-  data: CurrenciesData,
-): string[] => {
-  const symbols = data.symbols
-    .map(escapeCharClass)
-    .join("");
+const buildCurrencyPatterns = (data: CurrenciesData): string[] => {
+  const symbols = data.symbols.map(escapeCharClass).join("");
 
   // Build trailing alternation: ISO codes (case-
   // sensitive, always uppercase) + local names.
@@ -775,12 +698,10 @@ const buildCurrencyPatterns = (
   const isAsciiAlpha = /^[a-zA-Z\s]+$/;
 
   type TrailingPart = { len: number; alt: string };
-  const parts: TrailingPart[] = data.codes.map(
-    (code) => ({
-      len: code.length,
-      alt: escapeRegex(code),
-    }),
-  );
+  const parts: TrailingPart[] = data.codes.map((code) => ({
+    len: code.length,
+    alt: escapeRegex(code),
+  }));
 
   // Minimum length for case-insensitive wrapping.
   // Short abbreviations like "Ft" (2 chars) stay
@@ -790,9 +711,7 @@ const buildCurrencyPatterns = (
   if (data.localNames) {
     for (const name of data.localNames) {
       const escaped = escapeRegex(name);
-      const wrapCI =
-        isAsciiAlpha.test(name) &&
-        name.length >= MIN_CI_LENGTH;
+      const wrapCI = isAsciiAlpha.test(name) && name.length >= MIN_CI_LENGTH;
       if (wrapCI) {
         parts.push({
           len: name.length,
@@ -826,9 +745,7 @@ const buildCurrencyPatterns = (
   // Number sub-pattern: grouped thousands OR plain
   // integer up to 9 digits (covers unformatted
   // amounts like "100000 CZK").
-  const NUM =
-    `(?:\\d{1,3}(?:[,.'[^\\S\\n\\t]]\\d{3})+` +
-    `|\\d{1,9})`;
+  const NUM = `(?:\\d{1,3}(?:[,.'[^\\S\\n\\t]]\\d{3})+` + `|\\d{1,9})`;
 
   const patterns: string[] = [];
 
@@ -871,42 +788,34 @@ const buildCurrencyPatterns = (
 };
 
 /** Cached promise for currency patterns. Loaded once. */
-let currencyPatternPromise:
-  | Promise<string[]>
-  | null = null;
+let currencyPatternPromise: Promise<string[]> | null = null;
 
-const loadCurrencyPatterns =
-  async (): Promise<string[]> => {
-    const mod = await import(
-      "@stll/anonymize-data/config/currencies.json"
-    );
-    const data: CurrenciesData = mod.default ?? mod;
-    return buildCurrencyPatterns(data);
-  };
+const loadCurrencyPatterns = async (): Promise<string[]> => {
+  const mod = await import("@stll/anonymize-data/config/currencies.json");
+  const data: CurrenciesData = mod.default ?? mod;
+  return buildCurrencyPatterns(data);
+};
 
 /**
  * Get dynamically built monetary amount patterns from
  * currencies.json. Returns a cached promise; the JSON
  * is loaded only once.
  */
-export const getCurrencyPatterns =
-  (): Promise<string[]> => {
-    if (!currencyPatternPromise) {
-      currencyPatternPromise =
-        loadCurrencyPatterns().catch((err) => {
-          currencyPatternPromise = null;
-          throw err;
-        });
-    }
-    return currencyPatternPromise;
-  };
+export const getCurrencyPatterns = (): Promise<string[]> => {
+  if (!currencyPatternPromise) {
+    currencyPatternPromise = loadCurrencyPatterns().catch((err) => {
+      currencyPatternPromise = null;
+      throw err;
+    });
+  }
+  return currencyPatternPromise;
+};
 
 /** Currency pattern metadata (score 0.9). */
-export const CURRENCY_PATTERN_META: Readonly<RegexMeta> =
-  Object.freeze({
-    label: "monetary amount",
-    score: 0.9,
-  });
+export const CURRENCY_PATTERN_META: Readonly<RegexMeta> = Object.freeze({
+  label: "monetary amount",
+  score: 0.9,
+});
 
 // ── Public API ──────────────────────────────────────
 
@@ -940,10 +849,7 @@ export const processRegexMatches = (
     if (!meta) {
       continue;
     }
-    if (
-      meta.label === "phone number" &&
-      match.text.length < MIN_PHONE_LENGTH
-    ) {
+    if (meta.label === "phone number" && match.text.length < MIN_PHONE_LENGTH) {
       continue;
     }
 
@@ -953,9 +859,7 @@ export const processRegexMatches = (
     // spaced/dashed variants that validate() rejects
     // without compaction.
     if (meta.validator) {
-      const compacted = meta.validator.compact(
-        match.text,
-      );
+      const compacted = meta.validator.compact(match.text);
       const result = meta.validator.validate(compacted);
       if (!result.valid) {
         continue;
@@ -998,16 +902,12 @@ type SigningClauseConfig = {
  *   optionally followed by more capitalized words
  *   (for "Hradec Králové", "New York", etc.)
  */
-const buildSigningClausePatterns = (
-  data: SigningClauseConfig,
-): string[] => {
+const buildSigningClausePatterns = (data: SigningClauseConfig): string[] => {
   const patterns: string[] = [];
 
   for (const entry of data.patterns) {
     const prepAlt =
-      entry.prepositions.length > 0
-        ? entry.prepositions.join("|")
-        : null;
+      entry.prepositions.length > 0 ? entry.prepositions.join("|") : null;
 
     // Place name: Uppercase word, optionally with
     // preposition + uppercase, optionally more caps
@@ -1029,30 +929,25 @@ const buildSigningClausePatterns = (
   return patterns;
 };
 
-export const SIGNING_CLAUSE_META: Readonly<RegexMeta> =
-  { label: "address", score: 0.9 };
+export const SIGNING_CLAUSE_META: Readonly<RegexMeta> = {
+  label: "address",
+  score: 0.9,
+};
 
-let signingPatternPromise: Promise<string[]> | null =
-  null;
+let signingPatternPromise: Promise<string[]> | null = null;
 
-const loadSigningPatterns =
-  async (): Promise<string[]> => {
-    const mod = await import(
-      "@stll/anonymize-data/config/signing-clauses.json"
-    );
-    const data: SigningClauseConfig =
-      mod.default ?? mod;
-    return buildSigningClausePatterns(data);
-  };
+const loadSigningPatterns = async (): Promise<string[]> => {
+  const mod = await import("@stll/anonymize-data/config/signing-clauses.json");
+  const data: SigningClauseConfig = mod.default ?? mod;
+  return buildSigningClausePatterns(data);
+};
 
-export const getSigningClausePatterns =
-  (): Promise<string[]> => {
-    if (!signingPatternPromise) {
-      signingPatternPromise =
-        loadSigningPatterns().catch((err) => {
-          signingPatternPromise = null;
-          throw err;
-        });
-    }
-    return signingPatternPromise;
-  };
+export const getSigningClausePatterns = (): Promise<string[]> => {
+  if (!signingPatternPromise) {
+    signingPatternPromise = loadSigningPatterns().catch((err) => {
+      signingPatternPromise = null;
+      throw err;
+    });
+  }
+  return signingPatternPromise;
+};
