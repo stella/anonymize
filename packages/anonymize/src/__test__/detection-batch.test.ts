@@ -4,12 +4,14 @@ import {
   DEFAULT_ENTITY_LABELS,
   createPipelineContext,
 } from "../index";
+import { processLegalFormMatches } from "../detectors/legal-forms";
 import type { PipelineConfig } from "../types";
 
 const CONFIG: PipelineConfig = {
   threshold: 0.3,
   enableTriggerPhrases: true,
   enableRegex: true,
+  enableLegalForms: true,
   enableNameCorpus: false,
   enableDenyList: false,
   enableGazetteer: false,
@@ -137,9 +139,6 @@ describe("NA filter does not reject dotted Czech forms", () => {
   // dotted Czech forms (a.s., k.s.) even when the
   // prefix contains diacritics.
   test("keeps a.s. with diacritics via processLegalFormMatches", () => {
-    const { processLegalFormMatches } = require(
-      "../detectors/legal-forms",
-    );
     const fullText =
       "podepsaná Čistá Energie a.s. dne 1. 1. 2020";
     // Simulate a regex match for "Čistá Energie a.s."
@@ -160,9 +159,6 @@ describe("NA filter does not reject dotted Czech forms", () => {
   });
 
   test("rejects NA with diacritics prefix", () => {
-    const { processLegalFormMatches } = require(
-      "../detectors/legal-forms",
-    );
     const fullText =
       "PODPORA ÚČASTI MSP NA VELETRZÍCH";
     const fakeMatch = {

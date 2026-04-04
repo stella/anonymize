@@ -262,6 +262,22 @@ const extendMonetaryAmountWords = (
     };
   });
 
+const createAllowedLabelSet = (
+  config: PipelineConfig,
+): ReadonlySet<string> =>
+  new Set(config.labels);
+
+const filterAllowedLabels = (
+  entities: Entity[],
+  allowedLabels: ReadonlySet<string>,
+): Entity[] =>
+  entities.filter((e) => allowedLabels.has(e.label));
+
+const labelIsAllowed = (
+  label: string,
+  allowedLabels: ReadonlySet<string>,
+): boolean => allowedLabels.has(label);
+
 const checkAbort = (signal?: AbortSignal): void => {
   if (signal?.aborted) {
     throw new DOMException(
@@ -293,6 +309,8 @@ const configKey = (
   return (
     `${config.enableDenyList}:` +
     `${config.enableTriggerPhrases}:` +
+    `${config.enableLegalForms}:` +
+    `${config.enableNameCorpus}:` +
     `${config.denyListCountries?.toSorted().join(",") ?? ""}:` +
     `${config.denyListRegions?.toSorted().join(",") ?? ""}:` +
     `${config.denyListExcludeCategories?.toSorted().join(",") ?? ""}:` +
@@ -388,6 +406,7 @@ export const runPipeline = async (
     context,
   } = options;
   const ctx = context ?? defaultContext;
+  const allowedLabels = createAllowedLabelSet(config);
 
   const log = (step: string, detail: string) => {
     onProgress?.(step, detail);
@@ -480,22 +499,30 @@ export const runPipeline = async (
     runUnifiedSearch(search, fullText);
   const { slices } = search;
 
-  const regexEntities = config.enableRegex
-    ? processRegexMatches(
-        regexMatches,
-        slices.regex.start,
-        slices.regex.end,
-        search.regexMeta,
-      )
-    : [];
+  const regexEntities = filterAllowedLabels(
+    config.enableRegex
+      ? processRegexMatches(
+          regexMatches,
+          slices.regex.start,
+          slices.regex.end,
+          search.regexMeta,
+        )
+      : [],
+    allowedLabels,
+  );
   if (regexEntities.length > 0)
     log("regex", `${regexEntities.length} matches`);
 
-  const legalFormEntities = processLegalFormMatches(
-    regexMatches,
-    slices.legalForms.start,
-    slices.legalForms.end,
-    fullText,
+  const legalFormEntities = filterAllowedLabels(
+    config.enableLegalForms
+      ? processLegalFormMatches(
+          regexMatches,
+          slices.legalForms.start,
+          slices.legalForms.end,
+          fullText,
+        )
+      : [],
+    allowedLabels,
   );
   if (legalFormEntities.length > 0)
     log(
@@ -504,15 +531,18 @@ export const runPipeline = async (
     );
 
   const triggerEntities =
-    config.enableTriggerPhrases
-      ? processTriggerMatches(
-          regexMatches,
-          slices.triggers.start,
-          slices.triggers.end,
-          fullText,
-          search.triggerRules,
-        )
-      : [];
+    filterAllowedLabels(
+      config.enableTriggerPhrases
+        ? processTriggerMatches(
+            regexMatches,
+            slices.triggers.start,
+            slices.triggers.end,
+            fullText,
+            search.triggerRules,
+          )
+        : [],
+      allowedLabels,
+    );
   if (triggerEntities.length > 0)
     log(
       "trigger-phrases",
@@ -528,7 +558,10 @@ export const runPipeline = async (
   ) {
     await initNameCorpus(ctx);
     checkAbort(signal);
-    nameCorpusEntities = detectNameCorpus(fullText, ctx);
+    nameCorpusEntities = filterAllowedLabels(
+      detectNameCorpus(fullText, ctx),
+      allowedLabels,
+    );
     log(
       "name-corpus",
       `${nameCorpusEntities.length} matches`,
@@ -536,16 +569,19 @@ export const runPipeline = async (
   }
 
   const denyListEntities =
-    config.enableDenyList && search.denyListData
-      ? processDenyListMatches(
-          literalMatches,
-          slices.denyList.start,
-          slices.denyList.end,
-          fullText,
-          search.denyListData,
-          ctx,
-        )
-      : [];
+    filterAllowedLabels(
+      config.enableDenyList && search.denyListData
+        ? processDenyListMatches(
+            literalMatches,
+            slices.denyList.start,
+            slices.denyList.end,
+            fullText,
+            search.denyListData,
+            ctx,
+          )
+        : [],
+      allowedLabels,
+    );
   if (denyListEntities.length > 0)
     log(
       "deny-list",
@@ -554,15 +590,18 @@ export const runPipeline = async (
 
   // Gazetteer: unified into tsLiterals
   const gazetteerEntities =
-    config.enableGazetteer && search.gazetteerData
-      ? processGazetteerMatches(
-          literalMatches,
-          slices.gazetteer.start,
-          slices.gazetteer.end,
-          fullText,
-          search.gazetteerData,
-        )
-      : [];
+    filterAllowedLabels(
+      config.enableGazetteer && search.gazetteerData
+        ? processGazetteerMatches(
+            literalMatches,
+            slices.gazetteer.start,
+            slices.gazetteer.end,
+            fullText,
+            search.gazetteerData,
+          )
+        : [],
+      allowedLabels,
+    );
   if (gazetteerEntities.length > 0)
     log(
       "gazetteer",
@@ -594,10 +633,13 @@ export const runPipeline = async (
       config.threshold,
       signal,
     );
-    nerEntities = unmaskNerEntities(
-      rawNer,
-      maskResult,
-      fullText,
+    nerEntities = filterAllowedLabels(
+      unmaskNerEntities(
+        rawNer,
+        maskResult,
+        fullText,
+      ),
+      allowedLabels,
     );
     const dropped = rawNer.length - nerEntities.length;
     log(
@@ -619,13 +661,18 @@ export const runPipeline = async (
     ...gazetteerEntities,
     ...nerEntities,
   ];
-  const addressSeedEntities = await processAddressSeeds(
-    literalMatches,
-    slices.streetTypes.start,
-    slices.streetTypes.end,
-    fullText,
-    preAddressEntities,
-  );
+  const addressSeedEntities = labelIsAllowed(
+    "address",
+    allowedLabels,
+  )
+    ? await processAddressSeeds(
+        literalMatches,
+        slices.streetTypes.start,
+        slices.streetTypes.end,
+        fullText,
+        preAddressEntities,
+      )
+    : [];
   if (addressSeedEntities.length > 0)
     log("address-seeds", `${addressSeedEntities.length} expanded`);
 
@@ -644,7 +691,10 @@ export const runPipeline = async (
   // zone adjustments so both effects stack.
   const preBoostEntities =
     enableHotwords && hotwordInitOk
-      ? applyHotwordRules(zoneAdjusted, fullText)
+      ? filterAllowedLabels(
+          applyHotwordRules(zoneAdjusted, fullText),
+          allowedLabels,
+        )
       : zoneAdjusted;
 
   // Confidence boost + threshold filter
@@ -660,20 +710,30 @@ export const runPipeline = async (
 
   // Street patterns near existing addresses
   // (e.g. "Ostrovni 225/1" near "110 00 Praha 1")
-  const streetPatterns = detectStreetPatternsNearAddresses(
-    fullText,
-    allEntities,
-  );
+  const streetPatterns = labelIsAllowed(
+    "address",
+    allowedLabels,
+  )
+    ? detectStreetPatternsNearAddresses(
+        fullText,
+        allEntities,
+      )
+    : [];
   if (streetPatterns.length > 0) {
     allEntities = [...allEntities, ...streetPatterns];
     log("street-context", `${streetPatterns.length} street patterns near addresses`);
   }
 
   // Orphan street lines in header zone
-  const orphanStreets = detectOrphanStreetLines(
-    fullText,
-    allEntities,
-  );
+  const orphanStreets = labelIsAllowed(
+    "address",
+    allowedLabels,
+  )
+    ? detectOrphanStreetLines(
+        fullText,
+        allEntities,
+      )
+    : [];
   if (orphanStreets.length > 0) {
     allEntities = [...allEntities, ...orphanStreets];
     log("orphan-streets", `${orphanStreets.length} header street lines`);
@@ -714,7 +774,10 @@ export const runPipeline = async (
   // entities are filtered by the configured threshold to
   // ensure they respect the caller's confidence floor.
   let postOrgEntities = consistent;
-  if (config.enableCoreference) {
+  if (
+    config.enableCoreference &&
+    labelIsAllowed("organization", allowedLabels)
+  ) {
     const orgPropagated = propagateOrgNames(
       consistent,
       fullText,
@@ -776,9 +839,12 @@ export const runPipeline = async (
             fullText,
           );
         return sanitizeEntities(
-          filterFalsePositives(
-            corefConsistent,
-            ctx,
+          filterAllowedLabels(
+            filterFalsePositives(
+              corefConsistent,
+              ctx,
+            ),
+            allowedLabels,
           ),
         );
       }
@@ -788,5 +854,7 @@ export const runPipeline = async (
   // Re-sanitize: enforceBoundaryConsistency may adjust
   // entity boundaries after mergeAndDedup's sanitization,
   // potentially re-introducing whitespace or punctuation.
-  return sanitizeEntities(merged);
+  return sanitizeEntities(
+    filterAllowedLabels(merged, allowedLabels),
+  );
 };

@@ -10,6 +10,7 @@ const CONFIG: PipelineConfig = {
   threshold: 0.3,
   enableTriggerPhrases: true,
   enableRegex: true,
+  enableLegalForms: true,
   enableNameCorpus: false,
   enableDenyList: false,
   enableGazetteer: false,

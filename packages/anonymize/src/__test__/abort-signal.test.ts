@@ -7,6 +7,7 @@ const minimalConfig: PipelineConfig = {
   threshold: 0.5,
   enableTriggerPhrases: false,
   enableRegex: false,
+  enableLegalForms: false,
   enableNameCorpus: false,
   enableDenyList: false,
   enableGazetteer: false,

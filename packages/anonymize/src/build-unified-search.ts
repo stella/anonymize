@@ -105,7 +105,9 @@ export const buildUnifiedSearch = async (
     datePatterns,
     signingPatterns,
   ] = await Promise.all([
-    buildLegalFormPatterns(),
+    config.enableLegalForms
+      ? buildLegalFormPatterns()
+      : Promise.resolve([] as string[]),
     config.enableTriggerPhrases
       ? buildTriggerPatterns()
       : Promise.resolve({

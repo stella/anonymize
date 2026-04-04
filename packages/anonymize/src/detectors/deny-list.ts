@@ -37,6 +37,7 @@ const loadDataModule = async (): Promise<
 export type DenyListConfig = Pick<
   PipelineConfig,
   | "enableDenyList"
+  | "enableNameCorpus"
   | "denyListCountries"
   | "denyListRegions"
   | "denyListExcludeCategories"
@@ -296,6 +297,13 @@ export const buildDenyList = async (
       return false;
     }
 
+    if (
+      !config.enableNameCorpus &&
+      meta.category === "Names"
+    ) {
+      return false;
+    }
+
     if (excludeCategories.has(meta.category)) {
       return false;
     }
@@ -424,27 +432,32 @@ export const buildDenyList = async (
     }
   };
 
-  for (const name of getNameCorpusFirstNames(ctx)) {
-    addNameEntry(name, "first-name");
-  }
-  for (const name of getNameCorpusSurnames(ctx)) {
-    addNameEntry(name, "surname");
-  }
-  for (const title of getNameCorpusTitles(ctx)) {
-    const norm = normalizeForSearch(title)
-      .replace(/[|\\]/g, "");
-    if (norm.length === 0) continue;
-    const lower = norm.toLowerCase();
-    const existing = patternIndex.get(lower);
-    if (existing !== undefined) {
-      if (!sourceList[existing]!.includes("title")) {
-        sourceList[existing]!.push("title");
+  if (
+    config.enableNameCorpus &&
+    !excludeCategories.has("Names")
+  ) {
+    for (const name of getNameCorpusFirstNames(ctx)) {
+      addNameEntry(name, "first-name");
+    }
+    for (const name of getNameCorpusSurnames(ctx)) {
+      addNameEntry(name, "surname");
+    }
+    for (const title of getNameCorpusTitles(ctx)) {
+      const norm = normalizeForSearch(title)
+        .replace(/[|\\]/g, "");
+      if (norm.length === 0) continue;
+      const lower = norm.toLowerCase();
+      const existing = patternIndex.get(lower);
+      if (existing !== undefined) {
+        if (!sourceList[existing]!.includes("title")) {
+          sourceList[existing]!.push("title");
+        }
+      } else {
+        patternIndex.set(lower, patternList.length);
+        patternList.push(norm);
+        labelList.push(["person"]);
+        sourceList.push(["title"]);
       }
-    } else {
-      patternIndex.set(lower, patternList.length);
-      patternList.push(norm);
-      labelList.push(["person"]);
-      sourceList.push(["title"]);
     }
   }
 

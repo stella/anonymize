@@ -12,6 +12,7 @@ const TRIGGERS_ONLY_CONFIG: PipelineConfig = {
   threshold: 0.5,
   enableTriggerPhrases: true,
   enableRegex: false,
+  enableLegalForms: false,
   enableNameCorpus: false,
   enableDenyList: false,
   enableGazetteer: false,

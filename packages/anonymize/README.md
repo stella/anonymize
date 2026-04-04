@@ -52,6 +52,12 @@ const entities = await runPipeline({
     enableTriggerPhrases: true,
     enableLegalForms: true,
     enableNameCorpus: true,
+    enableDenyList: false,
+    enableGazetteer: false,
+    enableNer: false,
+    enableConfidenceBoost: true,
+    enableCoreference: true,
+    workspaceId: 'default',
   },
   gazetteerEntries: [],
 })
