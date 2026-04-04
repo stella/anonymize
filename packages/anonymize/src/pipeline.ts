@@ -30,7 +30,11 @@ import {
   initZoneClassifier,
   type ZoneSpan,
 } from "./filters/zone-classifier";
-import { applyHotwordRules, initHotwordRules } from "./filters/hotword-rules";
+import {
+  applyHotwordRules,
+  expandLabelsForHotwordRules,
+  initHotwordRules,
+} from "./filters/hotword-rules";
 import { enforceBoundaryConsistency } from "./filters/boundary-consistency";
 import type { Entity, GazetteerEntry, PipelineConfig } from "./types";
 import { DEFAULT_ENTITY_LABELS, DETECTOR_PRIORITY } from "./types";
@@ -226,8 +230,12 @@ const extendMonetaryAmountWords = (
 
 type AllowedLabelSet = ReadonlySet<string> | null;
 
+const createAllowedLabelSetFromLabels = (
+  labels: readonly string[],
+): AllowedLabelSet => (labels.length > 0 ? new Set(labels) : null);
+
 const createAllowedLabelSet = (config: PipelineConfig): AllowedLabelSet =>
-  config.labels.length > 0 ? new Set(config.labels) : null;
+  createAllowedLabelSetFromLabels(config.labels);
 
 const filterAllowedLabels = (
   entities: Entity[],
@@ -244,8 +252,14 @@ const labelIsAllowed = (
   allowedLabels: AllowedLabelSet,
 ): boolean => !allowedLabels || allowedLabels.has(label);
 
-const getRequestedNerLabels = (config: PipelineConfig): readonly string[] =>
-  config.labels.length > 0 ? config.labels : DEFAULT_ENTITY_LABELS;
+const getRequestedNerLabels = (
+  config: PipelineConfig,
+  expandForHotwords = false,
+): readonly string[] => {
+  const labels =
+    config.labels.length > 0 ? config.labels : DEFAULT_ENTITY_LABELS;
+  return expandForHotwords ? expandLabelsForHotwordRules(labels) : labels;
+};
 
 const checkAbort = (signal?: AbortSignal): void => {
   if (signal?.aborted) {
@@ -433,6 +447,13 @@ export const runPipeline = async (
 
   checkAbort(signal);
 
+  const hotwordsActive = enableHotwords && hotwordInitOk;
+  const preHotwordAllowedLabels = hotwordsActive
+    ? createAllowedLabelSetFromLabels(
+        expandLabelsForHotwordRules(config.labels),
+      )
+    : allowedLabels;
+
   const search =
     cachedSearch ?? (await getCachedSearch(config, gazetteerEntries, ctx));
 
@@ -450,7 +471,10 @@ export const runPipeline = async (
         search.regexMeta,
       )
     : [];
-  const regexEntities = filterAllowedLabels(rawRegexEntities, allowedLabels);
+  const regexEntities = filterAllowedLabels(
+    rawRegexEntities,
+    preHotwordAllowedLabels,
+  );
   if (regexEntities.length > 0) log("regex", `${regexEntities.length} matches`);
 
   const rawLegalFormEntities = config.enableLegalForms
@@ -463,7 +487,7 @@ export const runPipeline = async (
     : [];
   const legalFormEntities = filterAllowedLabels(
     rawLegalFormEntities,
-    allowedLabels,
+    preHotwordAllowedLabels,
   );
   if (legalFormEntities.length > 0)
     log("legal-forms", `${legalFormEntities.length} matches`);
@@ -479,7 +503,7 @@ export const runPipeline = async (
     : [];
   const triggerEntities = filterAllowedLabels(
     rawTriggerEntities,
-    allowedLabels,
+    preHotwordAllowedLabels,
   );
   if (triggerEntities.length > 0)
     log("trigger-phrases", `${triggerEntities.length} matches`);
@@ -494,7 +518,7 @@ export const runPipeline = async (
     rawNameCorpusEntities = detectNameCorpus(fullText, ctx);
     nameCorpusEntities = filterAllowedLabels(
       rawNameCorpusEntities,
-      allowedLabels,
+      preHotwordAllowedLabels,
     );
     log("name-corpus", `${nameCorpusEntities.length} matches`);
   }
@@ -512,7 +536,7 @@ export const runPipeline = async (
       : [];
   const denyListEntities = filterAllowedLabels(
     rawDenyListEntities,
-    allowedLabels,
+    preHotwordAllowedLabels,
   );
   if (denyListEntities.length > 0)
     log("deny-list", `${denyListEntities.length} matches`);
@@ -530,48 +554,13 @@ export const runPipeline = async (
       : [];
   const gazetteerEntities = filterAllowedLabels(
     rawGazetteerEntities,
-    allowedLabels,
+    preHotwordAllowedLabels,
   );
   if (gazetteerEntities.length > 0)
     log("gazetteer", `${gazetteerEntities.length} matches`);
 
   checkAbort(signal);
 
-  // NER (mask rule-detected spans so the model doesn't
-  // produce contradictory boundaries for known entities)
-  let nerEntities: Entity[] = [];
-  if (config.enableNer && nerInference) {
-    const ruleContextEntities = [
-      ...rawTriggerEntities,
-      ...rawRegexEntities,
-      ...rawLegalFormEntities,
-      ...rawNameCorpusEntities,
-      ...rawDenyListEntities,
-      ...rawGazetteerEntities,
-    ];
-    const maskResult = maskDetectedSpans(fullText, ruleContextEntities);
-    log("ner", "running inference...");
-    const rawNer = await nerInference(
-      maskResult.maskedText,
-      [...getRequestedNerLabels(config)],
-      config.threshold,
-      signal,
-    );
-    nerEntities = filterAllowedLabels(
-      unmaskNerEntities(rawNer, maskResult, fullText),
-      allowedLabels,
-    );
-    const dropped = rawNer.length - nerEntities.length;
-    log(
-      "ner",
-      `${nerEntities.length} entities` +
-        (dropped > 0 ? ` (${dropped} masked)` : ""),
-    );
-  }
-
-  checkAbort(signal);
-
-  // Address seed expansion
   const ruleContextEntities = [
     ...rawTriggerEntities,
     ...rawRegexEntities,
@@ -580,6 +569,34 @@ export const runPipeline = async (
     ...rawDenyListEntities,
     ...rawGazetteerEntities,
   ];
+
+  // NER (mask rule-detected spans so the model doesn't
+  // produce contradictory boundaries for known entities)
+  let nerEntities: Entity[] = [];
+  if (config.enableNer && nerInference) {
+    const maskResult = maskDetectedSpans(fullText, ruleContextEntities);
+    log("ner", "running inference...");
+    const rawNer = await nerInference(
+      maskResult.maskedText,
+      [...getRequestedNerLabels(config, hotwordsActive)],
+      config.threshold,
+      signal,
+    );
+    const unmaskedNer = unmaskNerEntities(rawNer, maskResult, fullText);
+    nerEntities = filterAllowedLabels(unmaskedNer, preHotwordAllowedLabels);
+    const masked = rawNer.length - unmaskedNer.length;
+    const labelFiltered = unmaskedNer.length - nerEntities.length;
+    log(
+      "ner",
+      `${nerEntities.length} entities` +
+        (masked > 0 ? ` (${masked} masked)` : "") +
+        (labelFiltered > 0 ? ` (${labelFiltered} label-filtered)` : ""),
+    );
+  }
+
+  checkAbort(signal);
+
+  // Address seed expansion
   const preAddressEntities = [
     ...triggerEntities,
     ...regexEntities,
@@ -614,13 +631,12 @@ export const runPipeline = async (
   // Hotword context rules: boost or reclassify
   // entities near relevant keywords. Applied after
   // zone adjustments so both effects stack.
-  const preBoostEntities =
-    enableHotwords && hotwordInitOk
-      ? filterAllowedLabels(
-          applyHotwordRules(zoneAdjusted, fullText),
-          allowedLabels,
-        )
-      : zoneAdjusted;
+  const preBoostEntities = hotwordsActive
+    ? filterAllowedLabels(
+        applyHotwordRules(zoneAdjusted, fullText),
+        allowedLabels,
+      )
+    : zoneAdjusted;
 
   // Confidence boost + threshold filter
   let allEntities: Entity[];

@@ -87,6 +87,37 @@ export const initHotwordRules = async (): Promise<void> => {
   return initPromise;
 };
 
+/**
+ * Expand requested output labels with any source labels
+ * that hotword rules may reclassify into them.
+ *
+ * Example: requesting only "date of birth" still needs
+ * "date" candidates to survive until the hotword pass.
+ * If rules are not initialized, returns the input
+ * labels unchanged.
+ */
+export const expandLabelsForHotwordRules = (
+  requestedLabels: readonly string[],
+): readonly string[] => {
+  if (rules === null || requestedLabels.length === 0) {
+    return requestedLabels;
+  }
+
+  const requested = new Set(requestedLabels);
+  const expanded = new Set(requestedLabels);
+
+  for (const rule of rules) {
+    if (rule.reclassifyTo === undefined || !requested.has(rule.reclassifyTo)) {
+      continue;
+    }
+    for (const label of rule.targetLabels) {
+      expanded.add(label);
+    }
+  }
+
+  return [...expanded];
+};
+
 // ── Application ─────────────────────────────────────
 
 /**

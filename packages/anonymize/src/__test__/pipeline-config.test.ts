@@ -86,6 +86,20 @@ describe("pipeline config semantics", () => {
     ).toBe(true);
   });
 
+  test("hotword reclassification can promote filtered source labels into requested output labels", async () => {
+    const entities = await detect("narozen dne 12.03.1990 v Praze", {
+      enableRegex: true,
+      enableHotwordRules: true,
+      labels: ["date of birth"],
+    });
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "date of birth" && entity.text === "12.03.1990",
+      ),
+    ).toBe(true);
+  });
+
   test("address-only output still respects non-address bounds during seed expansion", async () => {
     const entities = await detect(
       "Acme s.r.o., Dělnická 213/12, 170 00 Praha 7",
