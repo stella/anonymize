@@ -200,6 +200,12 @@ export type PipelineConfig = {
   threshold: number;
   enableTriggerPhrases: boolean;
   enableRegex: boolean;
+  /**
+   * Enables legal-form organization detection.
+   * Required for typed callers; legacy untyped
+   * callers that omit this field are treated as
+   * enabled at runtime for backward compatibility.
+   */
   enableLegalForms: boolean;
   /**
    * Enables first-name/surname/title corpus matching.
@@ -254,3 +260,7 @@ export const DEFAULT_ENTITY_LABELS = [
   "monetary amount",
   "land parcel",
 ] as const;
+
+export const isLegalFormsEnabled = (
+  config: Pick<PipelineConfig, "enableLegalForms">,
+): boolean => config.enableLegalForms !== false;

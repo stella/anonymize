@@ -37,7 +37,11 @@ import {
 } from "./filters/hotword-rules";
 import { enforceBoundaryConsistency } from "./filters/boundary-consistency";
 import type { Entity, GazetteerEntry, PipelineConfig } from "./types";
-import { DEFAULT_ENTITY_LABELS, DETECTOR_PRIORITY } from "./types";
+import {
+  DEFAULT_ENTITY_LABELS,
+  DETECTOR_PRIORITY,
+  isLegalFormsEnabled,
+} from "./types";
 import {
   buildUnifiedSearch,
   type UnifiedSearchInstance,
@@ -271,6 +275,7 @@ const configKey = (
   config: PipelineConfig,
   gazetteerEntries: GazetteerEntry[],
 ): string => {
+  const legalFormsEnabled = isLegalFormsEnabled(config);
   // Gazetteer fingerprint: sorted entry IDs,
   // canonical forms, labels, and variants.
   // Skip when gazetteer is disabled to avoid
@@ -288,7 +293,7 @@ const configKey = (
   return (
     `${config.enableDenyList}:` +
     `${config.enableTriggerPhrases}:` +
-    `${config.enableLegalForms}:` +
+    `${legalFormsEnabled}:` +
     `${config.enableNameCorpus}:` +
     `${config.denyListCountries?.toSorted().join(",") ?? ""}:` +
     `${config.denyListRegions?.toSorted().join(",") ?? ""}:` +
@@ -379,6 +384,7 @@ export const runPipeline = async (
   } = options;
   const ctx = context ?? defaultContext;
   const allowedLabels = createAllowedLabelSet(config);
+  const legalFormsEnabled = isLegalFormsEnabled(config);
 
   const log = (step: string, detail: string) => {
     onProgress?.(step, detail);
@@ -477,7 +483,7 @@ export const runPipeline = async (
   );
   if (regexEntities.length > 0) log("regex", `${regexEntities.length} matches`);
 
-  const rawLegalFormEntities = config.enableLegalForms
+  const rawLegalFormEntities = legalFormsEnabled
     ? processLegalFormMatches(
         regexMatches,
         slices.legalForms.start,

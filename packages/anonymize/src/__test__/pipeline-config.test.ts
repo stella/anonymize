@@ -62,6 +62,22 @@ describe("pipeline config semantics", () => {
     expect(withoutFlag).toHaveLength(0);
   });
 
+  test("legacy configs without enableLegalForms keep legal-form detection enabled", async () => {
+    const entities = await runPipeline({
+      fullText: "Acme s.r.o.",
+      config: {
+        ...BASE_CONFIG,
+        enableLegalForms: undefined,
+        labels: ["organization"],
+      } as unknown as PipelineConfig,
+      gazetteerEntries: [],
+      context: createPipelineContext(),
+    });
+    expect(entities.some((entity) => entity.label === "organization")).toBe(
+      true,
+    );
+  });
+
   test("enableNameCorpus disables name matches in deny-list mode", async () => {
     const entities = await detect("Jan Novak", {
       enableDenyList: true,

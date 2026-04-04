@@ -21,7 +21,11 @@ import type { PatternEntry, TextSearch } from "@stll/text-search";
 
 import { getTextSearch } from "./search-engine";
 
-import type { GazetteerEntry, PipelineConfig } from "./types";
+import {
+  isLegalFormsEnabled,
+  type GazetteerEntry,
+  type PipelineConfig,
+} from "./types";
 import type { RegexMeta } from "./detectors/regex";
 import type { TriggerRule } from "./types";
 import type { DenyListData } from "./detectors/deny-list";
@@ -83,6 +87,7 @@ export const buildUnifiedSearch = async (
   gazetteerEntries: GazetteerEntry[] = [],
   ctx: PipelineContext = defaultContext,
 ): Promise<UnifiedSearchInstance> => {
+  const legalFormsEnabled = isLegalFormsEnabled(config);
   const [
     legalForms,
     triggers,
@@ -92,7 +97,7 @@ export const buildUnifiedSearch = async (
     datePatterns,
     signingPatterns,
   ] = await Promise.all([
-    config.enableLegalForms
+    legalFormsEnabled
       ? buildLegalFormPatterns()
       : Promise.resolve([] as string[]),
     config.enableTriggerPhrases

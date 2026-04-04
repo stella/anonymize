@@ -93,8 +93,8 @@ export const initHotwordRules = async (): Promise<void> => {
  *
  * Example: requesting only "date of birth" still needs
  * "date" candidates to survive until the hotword pass.
- * If rules are not initialized, returns the input
- * labels unchanged.
+ * If rules are not initialized, or if no labels were
+ * requested, returns the input labels unchanged.
  */
 export const expandLabelsForHotwordRules = (
   requestedLabels: readonly string[],
