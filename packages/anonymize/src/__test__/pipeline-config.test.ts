@@ -100,6 +100,36 @@ describe("pipeline config semantics", () => {
     ).toBe(true);
   });
 
+  test("address seed expansion keeps unfiltered NER boundaries in context", async () => {
+    const fullText = "Jan Novák, Olbrachtova 1929/62, 140 00 Praha 4";
+    const personEnd = fullText.indexOf(",");
+    const entities = await runPipeline({
+      fullText,
+      config: {
+        ...BASE_CONFIG,
+        enableNer: true,
+        labels: ["address"],
+      },
+      gazetteerEntries: [],
+      context: createPipelineContext(),
+      nerInference: async () => [
+        {
+          start: 0,
+          end: personEnd,
+          label: "person",
+          text: fullText.slice(0, personEnd),
+          score: 0.95,
+          source: "ner",
+        },
+      ],
+    });
+    const address = entities.find((entity) => entity.label === "address");
+    expect(address).toBeDefined();
+    expect(address!.text).toContain("Olbrachtova 1929/62");
+    expect(address!.text).toContain("140 00 Praha 4");
+    expect(address!.text).not.toContain("Jan Novák");
+  });
+
   test("address-only output still respects non-address bounds during seed expansion", async () => {
     const entities = await detect(
       "Acme s.r.o., Dělnická 213/12, 170 00 Praha 7",

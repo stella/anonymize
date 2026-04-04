@@ -572,6 +572,7 @@ export const runPipeline = async (
 
   // NER (mask rule-detected spans so the model doesn't
   // produce contradictory boundaries for known entities)
+  let rawNerEntities: Entity[] = [];
   let nerEntities: Entity[] = [];
   if (config.enableNer && nerInference) {
     const maskResult = maskDetectedSpans(fullText, ruleContextEntities);
@@ -582,10 +583,10 @@ export const runPipeline = async (
       config.threshold,
       signal,
     );
-    const unmaskedNer = unmaskNerEntities(rawNer, maskResult, fullText);
-    nerEntities = filterAllowedLabels(unmaskedNer, preHotwordAllowedLabels);
-    const masked = rawNer.length - unmaskedNer.length;
-    const labelFiltered = unmaskedNer.length - nerEntities.length;
+    rawNerEntities = unmaskNerEntities(rawNer, maskResult, fullText);
+    nerEntities = filterAllowedLabels(rawNerEntities, preHotwordAllowedLabels);
+    const masked = rawNer.length - rawNerEntities.length;
+    const labelFiltered = rawNerEntities.length - nerEntities.length;
     log(
       "ner",
       `${nerEntities.length} entities` +
@@ -612,7 +613,7 @@ export const runPipeline = async (
         slices.streetTypes.start,
         slices.streetTypes.end,
         fullText,
-        [...ruleContextEntities, ...nerEntities],
+        [...ruleContextEntities, ...rawNerEntities],
       )
     : [];
   if (addressSeedEntities.length > 0)
