@@ -200,6 +200,12 @@ const EMPTY_PERSON_STOPWORDS: ReadonlySet<string> = new Set();
 const getPersonStopwords = (ctx: PipelineContext): ReadonlySet<string> =>
   ctx.personStopwords ?? EMPTY_PERSON_STOPWORDS;
 
+const PERSON_CHAIN_BREAK_RE = /[!?;:]|,/u;
+
+const isInitialContinuationGap = (text: string, gap: string): boolean =>
+  (/^\p{Lu}$/u.test(text) && /^\.[^\S\n]{1,2}$/u.test(gap)) ||
+  /^[^\S\n]{1,2}(?:\p{Lu}\.[^\S\n]{1,2})+$/u.test(gap);
+
 /**
  * Source tag for each pattern in the automaton.
  * "deny-list" = standard deny list entry
@@ -633,11 +639,15 @@ export const processDenyListMatches = (
       }
 
       const gap = fullText.slice(prev.end, next.start);
+      const breaksOnPeriod =
+        gap.includes(".") && !isInitialContinuationGap(prev.text, gap);
       if (
         gap.length > 4 ||
         gap.length === 0 ||
         gap.includes("\n") ||
-        gap.includes("\t")
+        gap.includes("\t") ||
+        PERSON_CHAIN_BREAK_RE.test(gap) ||
+        breaksOnPeriod
       ) {
         break;
       }

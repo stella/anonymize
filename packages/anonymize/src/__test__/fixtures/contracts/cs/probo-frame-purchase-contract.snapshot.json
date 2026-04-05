@@ -1,0 +1,193 @@
+{
+  "entityCount": 25,
+  "counts": {
+    "organization": 2,
+    "address": 6,
+    "registration number": 2,
+    "tax identification number": 2,
+    "bank account number": 1,
+    "person": 5,
+    "phone number": 2,
+    "email address": 3,
+    "date": 1,
+    "monetary amount": 1
+  },
+  "entities": [
+    {
+      "start": 78,
+      "end": 96,
+      "label": "organization",
+      "text": "Jablonec nad Nisou",
+      "source": "trigger"
+    },
+    {
+      "start": 110,
+      "end": 125,
+      "label": "organization",
+      "text": "PROBO-NB s.r.o.",
+      "source": "legal-form"
+    },
+    {
+      "start": 153,
+      "end": 185,
+      "label": "address",
+      "text": "Rumburských hrdinů 819, Nový Bor",
+      "source": "trigger"
+    },
+    {
+      "start": 203,
+      "end": 209,
+      "label": "address",
+      "text": "473 01",
+      "source": "regex"
+    },
+    {
+      "start": 216,
+      "end": 224,
+      "label": "registration number",
+      "text": "00262340",
+      "source": "trigger"
+    },
+    {
+      "start": 230,
+      "end": 238,
+      "label": "registration number",
+      "text": "05328942",
+      "source": "trigger"
+    },
+    {
+      "start": 245,
+      "end": 255,
+      "label": "tax identification number",
+      "text": "CZ00262340",
+      "source": "trigger"
+    },
+    {
+      "start": 261,
+      "end": 271,
+      "label": "tax identification number",
+      "text": "CZ05328942",
+      "source": "trigger"
+    },
+    {
+      "start": 285,
+      "end": 296,
+      "label": "bank account number",
+      "text": "121451/0100",
+      "source": "trigger"
+    },
+    {
+      "start": 314,
+      "end": 326,
+      "label": "person",
+      "text": "Petr Machara",
+      "source": "trigger"
+    },
+    {
+      "start": 347,
+      "end": 365,
+      "label": "address",
+      "text": "Jablonec nad Nisou",
+      "source": "deny-list"
+    },
+    {
+      "start": 368,
+      "end": 390,
+      "label": "phone number",
+      "text": "tel.: +420 777 182 814",
+      "source": "regex"
+    },
+    {
+      "start": 409,
+      "end": 429,
+      "label": "person",
+      "text": "Bc. Vratislav Pavlín",
+      "source": "trigger"
+    },
+    {
+      "start": 439,
+      "end": 458,
+      "label": "email address",
+      "text": "machara@probo-nb.cz",
+      "source": "regex"
+    },
+    {
+      "start": 460,
+      "end": 477,
+      "label": "phone number",
+      "text": "tel.: 483 357 250",
+      "source": "regex"
+    },
+    {
+      "start": 488,
+      "end": 511,
+      "label": "email address",
+      "text": "pavlin@mestojablonec.cz",
+      "source": "regex"
+    },
+    {
+      "start": 662,
+      "end": 680,
+      "label": "address",
+      "text": "Jablonec nad Nisou",
+      "source": "deny-list"
+    },
+    {
+      "start": 830,
+      "end": 853,
+      "label": "address",
+      "text": "Náspu 5, 460 01 Liberec",
+      "source": "regex"
+    },
+    {
+      "start": 1153,
+      "end": 1165,
+      "label": "date",
+      "text": "31. 12. 2026",
+      "source": "regex"
+    },
+    {
+      "start": 1376,
+      "end": 1386,
+      "label": "monetary amount",
+      "text": "200 000 Kč",
+      "source": "regex"
+    },
+    {
+      "start": 1538,
+      "end": 1554,
+      "label": "address",
+      "text": "Náspu 5, Liberec",
+      "source": "regex"
+    },
+    {
+      "start": 1773,
+      "end": 1800,
+      "label": "email address",
+      "text": "epodatelna@mestojablonec.cz",
+      "source": "regex"
+    },
+    {
+      "start": 2946,
+      "end": 2965,
+      "label": "person",
+      "text": "Mgr. Jana Matěchová",
+      "source": "regex"
+    },
+    {
+      "start": 3089,
+      "end": 3109,
+      "label": "person",
+      "text": "Bc. Vratislav Pavlín",
+      "source": "regex"
+    },
+    {
+      "start": 3169,
+      "end": 3183,
+      "label": "person",
+      "text": "Nikola Vašková",
+      "source": "deny-list"
+    }
+  ],
+  "redactedText": "Rámcová kupní smlouva\n\nSD/2026/0172\n\n\n\nKupující\tProdávající\n\nStatutární město [ORGANIZATION_1]\tNázev firmy: [ORGANIZATION_2]\n\nMírové náměstí 19\tadresa: [ADDRESS_1]\n\nPSČ 466 01\tPSČ: [ADDRESS_2]\n\nIČO: [REGISTRATION_NUMBER_1]\tIČO: [REGISTRATION_NUMBER_2]\n\nDIČ: [TAX_IDENTIFICATION_NUMBER_1]\tDIČ: [TAX_IDENTIFICATION_NUMBER_2]\n\nčíslo účtu: [BANK_ACCOUNT_NUMBER_1]\tkontaktní osoba: [PERSON_1]\n\nbankovní ústav: KB [ADDRESS_3] \t\t[PHONE_NUMBER_1]\n\nkontaktní osoba: [PERSON_2]\t\te-mail: [EMAIL_ADDRESS_1]\n\n[PHONE_NUMBER_2]\t\n\ne-mail: [EMAIL_ADDRESS_2]\n\n\n\n\n\n\t\t\n\nI.\n\nPředmět smlouvy\n\n\n\n\n\nPředmětem této smlouvy jsou průběžné dodávky věcných a ochranných prostředků pro jednotky sboru dobrovolných hasičů [ADDRESS_3]. \n\n\n\nZboží bude dodáváno nebo osobně odebíráno na základě jednotlivých objednávek. Zboží si bude kupující vyzvedávat osobně na prodejně na adrese: U [ADDRESS_4], pokud nebude dohodnuto jinak.\n\n\n\nPředmětem této smlouvy je dále závazek kupujícího uhradit prodávajícímu za řádné a včasné plnění sjednanou cenu, to vše za podmínek stanovených nebo předpokládaných touto smlouvou.\n\n\n\n\n\nII.\n\nTermín dodání\n\n\n\nTato rámcová smlouva se uzavírá na dobu určitou, a to do [DATE_1] nebo do vyčerpání celkové ceny plnění dle čl. III. odst. 1 této smlouvy, dle toho, která z uvedených skutečností nastane dříve.\n\n\n\n\n\nIII.\n\nCena a platební podmínky\n\n\n\nCena za předmět plnění nepřesáhne v součtu [MONETARY_AMOUNT_1] bez DPH.\n\n\n\nCena za předmět plnění bude hrazena průběžně na základě vystavených faktur, popř. hotovostní/bezhotovostní platbou na prodejně na adrese U [ADDRESS_5]. Přílohou faktury bude seznam odebraného zboží.\n\n\n\n\n\n\n\nSplatnost faktury (bez ohledu na datum uvedený na faktuře) je 30 dní ode dne, kdy byla doručena na podatelnu MMJN (prostřednictvím datové schránky wufbr2a nebo na [EMAIL_ADDRESS_3]). \n\n\n\n\n\nIV.\n\nZáruční doba\n\n\n\nK předmětu plnění poskytuje prodávající záruční dobu v délce 24 měsíců. \n\n\n\n\n\nV.\n\nZávěrečná ustanovení\n\n\n\nVztahy dle této smlouvy se řídí zák. č. 89/2012 Sb., občanský zákoník.\n\n\n\nTuto smlouvu lze měnit či doplňovat pouze písemnými dodatky podepsanými oběma stranami.\n\n\n\nTato smlouva bude uveřejněna v souladu se zák. č. 340/2015 Sb., o registru smluv. Obě smluvní strany prohlašují, že skutečnosti uvedené v této smlouvě nejsou obchodním tajemstvím a lze je zveřejnit stanoveným způsobem bez omezení či zvláštních podmínek.\n\n\n\nTato smlouva je podepsaná vlastnoručně, nebo elektronicky. Je-li smlouva podepsaná vlastnoručně, je vyhotovena v počtu 2 stejnopisů, kdy každá ze smluvních stran obdrží po 1 vyhotovení. Je-li smlouva podepsána elektronicky, je podepsána pomocí elektronického podpisu založeného na kvalifikovaném certifikátu vydaném akreditovaným poskytovatelem certifikačních služeb.\n\n\n\n\n\n\n\nV Jablonci nad Nisou dne:\t                                                     V                             dne: \n\n\t\t\t\n\n\n\n\n\n…………………………….…                                                             ………………………………\n\n[PERSON_3] \t\n\nvedoucí kanceláře primátora \t\t\t                      za dodavatele/prodávajícího\n\n\t \t\t\t\t\t          \n\n\n\n\n\n……………………………….\n\n[PERSON_2]\n\nvedoucí oddělení krizového řízení\n\n\n\n\n\n\n\n…………………………………..\n\n[PERSON_4]\n\nza věcnou správnost"
+}

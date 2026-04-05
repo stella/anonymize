@@ -1,0 +1,148 @@
+{
+  "entityCount": 19,
+  "counts": {
+    "organization": 5,
+    "address": 3,
+    "registration number": 4,
+    "tax identification number": 2,
+    "bank account number": 1,
+    "person": 2,
+    "date": 2
+  },
+  "entities": [
+    {
+      "start": 151,
+      "end": 164,
+      "label": "organization",
+      "text": "Sanofi s.r.o.",
+      "source": "legal-form"
+    },
+    {
+      "start": 177,
+      "end": 220,
+      "label": "address",
+      "text": "Generála Píky 430/26, Dejvice, 160 00 Praha",
+      "source": "trigger"
+    },
+    {
+      "start": 227,
+      "end": 235,
+      "label": "registration number",
+      "text": "44848200",
+      "source": "trigger"
+    },
+    {
+      "start": 242,
+      "end": 252,
+      "label": "tax identification number",
+      "text": "CZ44848200",
+      "source": "trigger"
+    },
+    {
+      "start": 272,
+      "end": 314,
+      "label": "bank account number",
+      "text": "Citibank Europe plc., č.ú. 2015410204/2600",
+      "source": "trigger"
+    },
+    {
+      "start": 355,
+      "end": 378,
+      "label": "organization",
+      "text": "Městským soudem v Praze",
+      "source": "deny-list"
+    },
+    {
+      "start": 396,
+      "end": 400,
+      "label": "registration number",
+      "text": "5968",
+      "source": "trigger"
+    },
+    {
+      "start": 501,
+      "end": 518,
+      "label": "organization",
+      "text": "Nemocnice Blansko",
+      "source": "deny-list"
+    },
+    {
+      "start": 527,
+      "end": 557,
+      "label": "address",
+      "text": "Sadová 1596/33, Blansko 678 31",
+      "source": "trigger"
+    },
+    {
+      "start": 564,
+      "end": 572,
+      "label": "registration number",
+      "text": "00386634",
+      "source": "trigger"
+    },
+    {
+      "start": 579,
+      "end": 589,
+      "label": "tax identification number",
+      "text": "CZ00386634",
+      "source": "trigger"
+    },
+    {
+      "start": 664,
+      "end": 668,
+      "label": "address",
+      "text": "Brno",
+      "source": "deny-list"
+    },
+    {
+      "start": 687,
+      "end": 691,
+      "label": "registration number",
+      "text": "1603",
+      "source": "trigger"
+    },
+    {
+      "start": 705,
+      "end": 737,
+      "label": "person",
+      "text": "MUDr. Vladimíra Danihelková, MBA",
+      "source": "regex"
+    },
+    {
+      "start": 1448,
+      "end": 1461,
+      "label": "date",
+      "text": "...2. 2. 2026",
+      "source": "regex"
+    },
+    {
+      "start": 1487,
+      "end": 1498,
+      "label": "date",
+      "text": "…3. 3. 2026",
+      "source": "regex"
+    },
+    {
+      "start": 1603,
+      "end": 1616,
+      "label": "organization",
+      "text": "Sanofi s.r.o.",
+      "source": "legal-form"
+    },
+    {
+      "start": 1617,
+      "end": 1634,
+      "label": "organization",
+      "text": "Nemocnice Blansko",
+      "source": "deny-list"
+    },
+    {
+      "start": 1647,
+      "end": 1679,
+      "label": "person",
+      "text": "MUDr. Vladimíra Danihelková, MBA",
+      "source": "regex"
+    }
+  ],
+  "redactedText": "Příloha č. 3a26 ke Smlouvě o poskytnutí obratového bonusu (COMMA CAF ID 266, ze dne 2.4. 2019 ) uzavřené mezi smluvními stranami, kterými jsou:\n\n\n\n\n\n\n\n[ORGANIZATION_1]\n\nSe sídlem: [ADDRESS_1]\n\nIČO: [REGISTRATION_NUMBER_1]\n\nDIČ: [TAX_IDENTIFICATION_NUMBER_1]\n\nBankovní spojení: [BANK_ACCOUNT_NUMBER_1] \n\nZapsaná v obchodním rejstříku vedeném [ORGANIZATION_2], oddíl C, vložka [REGISTRATION_NUMBER_2] \n\nZastoupená: [OU   OU], Head of Trade Department Czech Republic\n\n(dále jen „Společnost“)\n\n \n\na \n\n\n\n[ORGANIZATION_3]\n\nSídlo: [ADDRESS_2]\n\nIČO: [REGISTRATION_NUMBER_3]\n\nDIČ: [TAX_IDENTIFICATION_NUMBER_2]\n\nBankovní spojení:  [XX   XX]\n\nZapsaná v obchodním rejstříku vedeném u KS [ADDRESS_3], oddíl Pr, vložka [REGISTRATION_NUMBER_4]\n\nZastoupená: [PERSON_1], ředitelka\n\n(dále též „Zdravotnické zařízení“).\n\n\n\nObsahem této přílohy je dohoda o podmínkách dosažení a o výši obratového bonusu pro tyto produkty: \n\n\n\n[XX   XX]\n\n\n\nReferenční období: [XX   XX]\n\n\n\nPotřebná výše obratu v referenčním období:\n\n \n\n[XX    XX] \n\n[XX    XX] \n\n[XX    XX] \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nObratový bonus poskytnutý Zdravotnickému zařízení bude vyplacen pouze podle jednoho pásma, a to v souladu s dosaženou výší obratu Zdravotnickým zařízením v referenčním období:\n\n\n\n [XX    XX] % z obratu dosaženého Zdravotnickým zařízením\n\n [XX    XX] % z obratu dosaženého Zdravotnickým zařízením\n\n [XX    XX] % z obratu dosaženého Zdravotnickým zařízením\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nV Praze, dne [DATE_1]..........\tV Blansku, dne [DATE_2].........\n\n\n\n\n\n_______________________________________\t      __________________________________________\n\n[ORGANIZATION_1]\t[ORGANIZATION_3]\n\n[OU    OU]\t[PERSON_1] \n\nHead of Trade Department Czech Republic\t         ředitelka"
+}

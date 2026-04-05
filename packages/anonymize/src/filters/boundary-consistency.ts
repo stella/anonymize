@@ -36,7 +36,17 @@ const buildWordBoundaries = (text: string): Set<number> => {
  * backward for a word boundary. Entity boundaries
  * should never extend past these.
  */
-const WORD_START_STOPS = new Set(["\n", "\r", ",", ";", "(", ")", "[", "]"]);
+const WORD_START_STOPS = new Set([
+  "\n",
+  "\r",
+  ",",
+  ";",
+  "(",
+  ")",
+  "[",
+  "]",
+  "&",
+]);
 
 /**
  * Find the word-start offset at or before `pos`.
@@ -63,7 +73,18 @@ const wordStartAt = (
  * forward for a word boundary. Entity boundaries
  * should never extend past these.
  */
-const WORD_END_STOPS = new Set(["\n", "\r", ",", ";", ".", "(", ")", "[", "]"]);
+const WORD_END_STOPS = new Set([
+  "\n",
+  "\r",
+  ",",
+  ";",
+  ".",
+  "(",
+  ")",
+  "[",
+  "]",
+  "&",
+]);
 
 /**
  * Find the word-end offset at or after `pos`.
