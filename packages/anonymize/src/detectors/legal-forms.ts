@@ -47,7 +47,7 @@ const isShortForm = (form: string): boolean =>
 
 const buildPatternString = (
   forms: string[],
-  requireCapBefore: boolean,
+  _requireCapBefore: boolean,
 ): string | null => {
   if (forms.length === 0) {
     return null;
@@ -62,7 +62,10 @@ const buildPatternString = (
   // "Národní agentura pro komunikační a informační
   // technologie, s. p." — need generous limit.
   const prefix = `(?:${CAP_WORD})` + `(?:${CONNECTOR}(?:${ANY_WORD})){0,10}`;
-  const separator = requireCapBefore ? `(?:\\s+|,\\s*)` : `\\s+`;
+  // Both long and short forms allow comma separator.
+  // "Krajská správa, příspěvková organizace" needs
+  // comma before the long-form suffix.
+  const separator = `(?:\\s+|,\\s*)`;
 
   return `${prefix}${separator}(?:${alt})(?![${LOWER}])`;
 };

@@ -133,6 +133,13 @@ describe("other Czech legal forms", () => {
     );
   });
 
+  test("comma before příspěvková organizace", async () => {
+    await expectOrg(
+      "Krajská správa, příspěvková organizace",
+      "Krajská správa, příspěvková organizace",
+    );
+  });
+
   test("státní podnik s.p.", async () => {
     await expectOrg("Česká pošta s.p.", "Česká pošta s.p.");
   });
