@@ -217,6 +217,22 @@ describe("contract quality regressions", () => {
     ).toBe(false);
   });
 
+  test("keeps address continuations after street abbreviations", async () => {
+    const entities = await detect("The employee is residing at 123 Main St. Suite 100.");
+
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "address" && entity.text.includes("Suite 100"),
+        ),
+    ).toBe(true);
+    expect(
+      entities.some(
+        (entity) => entity.label === "address" && entity.text === "123 Main St",
+      ),
+    ).toBe(false);
+  });
+
   test("rejects all-caps document headings as organizations", async () => {
     const entities = await detect(
       "THIS AMENDMENT NO. 1 TO AMENDED AND RESTATED EMPLOYMENT AGREEMENT",

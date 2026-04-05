@@ -44,25 +44,30 @@ const LEGAL_FORM_HEADING_RE = /\b(?:agreement|amendment|contract|exhibit)\b/iu;
 const LEADING_ARTIFACT_RE = /^(?:\.\s)+/u;
 const ADDRESS_ROLE_PREFIX_RE =
   /^(?:prodávajícího|kupujícího|objednatele|zhotovitele|pronajímatele|dodavatele|odběratele|zaměstnance|zaměstnavatele|nájemce)\s+(?=(?:\p{Lu}|\d|ul\.?|ulice|nám\.?|náměstí|tř\.?|třída|nábř\.?|nábřeží|č\.p\.?|č\.ev\.?|sídliště))/iu;
-const ADDRESS_SENTENCE_BOUNDARY_RE = /\.(?=\s+\p{Lu})/gu;
 const ADDRESS_INLINE_ABBREV_AFTER_RE =
   /^(?:\p{Lu}[\p{L}\p{M}]{0,3}\.|ul\.?|nám\.?|tř\.?|nábř\.?|č\.p\.?|č\.ev\.?)/u;
+const ADDRESS_INLINE_ABBREV_BEFORE_RE =
+  /(?:^|[\s,])(?:st|ave|rd|dr|blvd|ln|hwy|pkwy|cir|ct|pl|sq|ter|trl|ste|apt|bldg|fl|ul|nám|tř|nábř|č\.p|č\.ev)$/iu;
+const ADDRESS_CONTINUATION_WORD_RE =
+  /^(?:suite|building|floor|unit|apartment|room|tower|wing|block|bldg|ste|apt|fl)\b/iu;
 
 const trimTrailingAddressProse = (text: string): string => {
-  ADDRESS_SENTENCE_BOUNDARY_RE.lastIndex = 0;
-
-  for (
-    let match = ADDRESS_SENTENCE_BOUNDARY_RE.exec(text);
-    match !== null;
-    match = ADDRESS_SENTENCE_BOUNDARY_RE.exec(text)
-  ) {
+  for (const match of text.matchAll(/\.(?=\s+\p{Lu})/gu)) {
     const cutoff = match.index;
+    if (cutoff === undefined) {
+      continue;
+    }
     const before = text.slice(0, cutoff);
     if (!HAS_DIGIT_RE.test(before)) {
       continue;
     }
     const after = text.slice(cutoff + 1).trimStart();
-    if (after.length < 5 || ADDRESS_INLINE_ABBREV_AFTER_RE.test(after)) {
+    if (
+      after.length < 5 ||
+      ADDRESS_INLINE_ABBREV_AFTER_RE.test(after) ||
+      ADDRESS_INLINE_ABBREV_BEFORE_RE.test(before.trimEnd()) ||
+      ADDRESS_CONTINUATION_WORD_RE.test(after)
+    ) {
       continue;
     }
     return before.trimEnd();
