@@ -154,4 +154,22 @@ describe("contract quality regressions", () => {
       ),
     ).toBe(true);
   });
+
+  test("does not emit pagination markers as addresses", async () => {
+    const entities = await detect("Page Follows");
+
+    expect(
+      entities.some((entity) => entity.label === "address"),
+    ).toBe(false);
+  });
+
+  test("does not emit generic Czech heading words as addresses", async () => {
+    const entities = await detect("Lhůta pro doručení činí 10 dní.");
+
+    expect(
+      entities.some(
+        (entity) => entity.label === "address" && entity.text === "Lhůta",
+      ),
+    ).toBe(false);
+  });
 });

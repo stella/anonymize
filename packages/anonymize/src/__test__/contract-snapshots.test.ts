@@ -148,6 +148,126 @@ const FIXTURES: ContractFixture[] = [
       ).toBe(false);
     },
   },
+  {
+    name: "czech vinci donation agreement",
+    textPath: join(FIXTURES_DIR, "cs", "vinci-donation-agreement.txt"),
+    snapshotPath: join(
+      FIXTURES_DIR,
+      "cs",
+      "vinci-donation-agreement.snapshot.json",
+    ),
+    assertQuality: (entities) => {
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "organization" &&
+            entity.text === "VINCI Construction CS a.s.",
+        ),
+      ).toBe(true);
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "person" &&
+            entity.text.includes("Martinem Borovkou"),
+        ),
+      ).toBe(true);
+    },
+  },
+  {
+    name: "czech eagles rental agreement",
+    textPath: join(FIXTURES_DIR, "cs", "eagles-rental-agreement.txt"),
+    snapshotPath: join(
+      FIXTURES_DIR,
+      "cs",
+      "eagles-rental-agreement.snapshot.json",
+    ),
+    assertQuality: (entities) => {
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "organization" &&
+            entity.text === "EAGLES BRNO, z.s.",
+        ),
+      ).toBe(true);
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "organization" &&
+            entity.text ===
+              "Základní škola, Brno, Kamínky 5, příspěvková organizace",
+        ),
+      ).toBe(true);
+    },
+  },
+  {
+    name: "czech nakit legal services framework",
+    textPath: join(
+      FIXTURES_DIR,
+      "cs",
+      "nakit-legal-services-framework.txt",
+    ),
+    snapshotPath: join(
+      FIXTURES_DIR,
+      "cs",
+      "nakit-legal-services-framework.snapshot.json",
+    ),
+    assertQuality: (entities) => {
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "organization" &&
+            entity.text ===
+              "Národní agentura pro komunikační a informační technologie, s. p.",
+        ),
+      ).toBe(true);
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "person" && entity.text === "Mgr. Ondřej Durďák",
+        ),
+      ).toBe(true);
+      expect(
+        entities.some(
+          (entity) => entity.label === "address" && entity.text === "Lhůta",
+        ),
+      ).toBe(false);
+    },
+  },
+  {
+    name: "edgar gt biopharma employment amendment",
+    textPath: join(
+      FIXTURES_DIR,
+      "en",
+      "gt-biopharma-employment-amendment.txt",
+    ),
+    snapshotPath: join(
+      FIXTURES_DIR,
+      "en",
+      "gt-biopharma-employment-amendment.snapshot.json",
+    ),
+    assertQuality: (entities) => {
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "organization" &&
+            entity.text === "GT Biopharma, Inc.",
+        ),
+      ).toBe(true);
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "person" && entity.text === "Michael Breen",
+        ),
+      ).toBe(true);
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "address" &&
+            (entity.text === "Page" || entity.text === "Page Follows"),
+        ),
+      ).toBe(false);
+    },
+  },
 ];
 
 const toSnapshot = (
