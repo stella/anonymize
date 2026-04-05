@@ -172,4 +172,58 @@ describe("contract quality regressions", () => {
       ),
     ).toBe(false);
   });
+
+  test("skips party-role prefixes before addresses", async () => {
+    const entities = await detect(
+      "Místem předání je sídlo prodávajícího Na Květnici 1657/16, 140 00 Praha 4.",
+    );
+
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "address" &&
+          entity.text === "Na Květnici 1657/16, 140 00 Praha 4",
+      ),
+    ).toBe(true);
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "address" &&
+          entity.text.startsWith("prodávajícího "),
+      ),
+    ).toBe(false);
+  });
+
+  test("stops address entities at the next sentence", async () => {
+    const entities = await detect(
+      "Zboží si bude kupující vyzvedávat osobně na adrese U Náspu 5, Liberec. Přílohou faktury bude seznam odebraného zboží.",
+    );
+
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "address" && entity.text.includes("Přílohou"),
+      ),
+    ).toBe(false);
+  });
+
+  test("does not extend dates into html entities", async () => {
+    const entities = await detect("Employee has pre-scheduled vacation from July 1 &#150; 15, 2022.");
+
+    expect(
+      entities.some(
+        (entity) => entity.label === "date" && entity.text.includes("&#"),
+      ),
+    ).toBe(false);
+  });
+
+  test("rejects all-caps document headings as organizations", async () => {
+    const entities = await detect(
+      "THIS AMENDMENT NO. 1 TO AMENDED AND RESTATED EMPLOYMENT AGREEMENT",
+    );
+
+    expect(
+      entities.some((entity) => entity.label === "organization"),
+    ).toBe(false);
+  });
 });

@@ -268,6 +268,123 @@ const FIXTURES: ContractFixture[] = [
       ).toBe(false);
     },
   },
+  {
+    name: "edgar healthcare trust employment amendment",
+    textPath: join(
+      FIXTURES_DIR,
+      "en",
+      "healthcare-trust-employment-amendment.txt",
+    ),
+    snapshotPath: join(
+      FIXTURES_DIR,
+      "en",
+      "healthcare-trust-employment-amendment.snapshot.json",
+    ),
+    assertQuality: (entities) => {
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "person" &&
+            entity.text === "Amanda L. Houghton",
+        ),
+      ).toBe(true);
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "person" && entity.text === "Peter N. Foss",
+        ),
+      ).toBe(true);
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "organization" &&
+            entity.text ===
+              "THIS AMENDMENT NO. 1 TO AMENDED AND RESTATED EMPLOYMENT AGREEMENT",
+        ),
+      ).toBe(false);
+      expect(
+        entities.some(
+          (entity) => entity.label === "date" && entity.text.includes("&#"),
+        ),
+      ).toBe(false);
+    },
+  },
+  {
+    name: "czech probo frame purchase contract",
+    textPath: join(FIXTURES_DIR, "cs", "probo-frame-purchase-contract.txt"),
+    snapshotPath: join(
+      FIXTURES_DIR,
+      "cs",
+      "probo-frame-purchase-contract.snapshot.json",
+    ),
+    assertQuality: (entities) => {
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "organization" &&
+            entity.text === "PROBO-NB s.r.o.",
+        ),
+      ).toBe(true);
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "person" &&
+            entity.text === "Bc. Vratislav Pavlín",
+        ),
+      ).toBe(true);
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "person" && entity.text.includes("e-mail:"),
+        ),
+      ).toBe(false);
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "address" && entity.text.includes("Přílohou"),
+        ),
+      ).toBe(false);
+    },
+  },
+  {
+    name: "czech patrik nguyen used vehicle sale",
+    textPath: join(FIXTURES_DIR, "cs", "patrik-nguyen-used-vehicle-sale.txt"),
+    snapshotPath: join(
+      FIXTURES_DIR,
+      "cs",
+      "patrik-nguyen-used-vehicle-sale.snapshot.json",
+    ),
+    assertQuality: (entities) => {
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "organization" &&
+            entity.text ===
+              "Zdravotnickými zařízeními Ministerstva spravedlnosti, státní příspěvkovou organizací",
+        ),
+      ).toBe(true);
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "person" && entity.text === "Patrik Nguyen",
+        ),
+      ).toBe(true);
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "address" &&
+            entity.text === "Na Květnici 1657/16, 140 00 Praha 4",
+        ),
+      ).toBe(true);
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "address" &&
+            entity.text.startsWith("prodávajícího "),
+        ),
+      ).toBe(false);
+    },
+  },
 ];
 
 const toSnapshot = (

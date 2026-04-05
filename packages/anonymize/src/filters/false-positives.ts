@@ -40,6 +40,74 @@ const PERSON_TRAILING_NOUNS: ReadonlySet<string> = new Set([
   "period",
   "reform",
 ]);
+const LEGAL_FORM_HEADING_RE = /\b(?:agreement|amendment|contract|exhibit)\b/iu;
+const LEADING_ARTIFACT_RE = /^(?:\.\s)+/u;
+const ADDRESS_ROLE_PREFIX_RE =
+  /^(?:prodávajícího|kupujícího|objednatele|zhotovitele|pronajímatele|dodavatele|odběratele|zaměstnance|zaměstnavatele|nájemce)\s+(?=(?:\p{Lu}|\d|ul\.?|ulice|nám\.?|náměstí|tř\.?|třída|nábř\.?|nábřeží|č\.p\.?|č\.ev\.?|sídliště))/iu;
+const ADDRESS_SENTENCE_BOUNDARY_RE = /\.(?=\s+\p{Lu})/gu;
+const ADDRESS_INLINE_ABBREV_AFTER_RE =
+  /^(?:\p{Lu}[\p{L}\p{M}]{0,3}\.|ul\.?|nám\.?|tř\.?|nábř\.?|č\.p\.?|č\.ev\.?)/u;
+
+const trimTrailingAddressProse = (text: string): string => {
+  ADDRESS_SENTENCE_BOUNDARY_RE.lastIndex = 0;
+
+  for (
+    let match = ADDRESS_SENTENCE_BOUNDARY_RE.exec(text);
+    match !== null;
+    match = ADDRESS_SENTENCE_BOUNDARY_RE.exec(text)
+  ) {
+    const cutoff = match.index;
+    const before = text.slice(0, cutoff);
+    if (!HAS_DIGIT_RE.test(before)) {
+      continue;
+    }
+    const after = text.slice(cutoff + 1).trimStart();
+    if (after.length < 5 || ADDRESS_INLINE_ABBREV_AFTER_RE.test(after)) {
+      continue;
+    }
+    return before.trimEnd();
+  }
+
+  return text;
+};
+
+const normalizeEntity = (entity: Entity): Entity | null => {
+  let start = entity.start;
+  let text = entity.text;
+
+  const trimLeading = (re: RegExp) => {
+    const match = re.exec(text);
+    if (!match) {
+      return;
+    }
+    start += match[0].length;
+    text = text.slice(match[0].length);
+  };
+
+  trimLeading(LEADING_ARTIFACT_RE);
+  trimLeading(/^\s+/u);
+
+  if (entity.label === "address") {
+    trimLeading(ADDRESS_ROLE_PREFIX_RE);
+    text = trimTrailingAddressProse(text);
+  }
+
+  const trailingMatch = /[,\s]+$/u.exec(text);
+  if (trailingMatch) {
+    text = text.slice(0, text.length - trailingMatch[0].length);
+  }
+
+  if (text.length === 0) {
+    return null;
+  }
+
+  return {
+    ...entity,
+    start,
+    end: start + text.length,
+    text,
+  };
+};
 
 // ── Generic roles (lazy-loaded from JSON) ────────────
 
@@ -95,9 +163,14 @@ export const filterFalsePositives = (
   const roles = getGenericRoles(ctx);
 
   for (const entity of entities) {
+    const normalized = normalizeEntity(entity);
+    if (!normalized) {
+      continue;
+    }
+
     // Strip leading ". " artifacts from trigger extraction
     // after abbreviations ("dat. nar.", "č.p.").
-    const trimmed = entity.text.replace(/^(?:\.\s)+/, "").trim();
+    const trimmed = normalized.text;
 
     if (TEMPLATE_PLACEHOLDER_RE.test(trimmed)) {
       continue;
@@ -106,21 +179,25 @@ export const filterFalsePositives = (
     // label (prevents runaway trigger extractions).
     // Exempt legal-form entities: their span is already
     // bounded by the regex pattern, not open-ended.
-    const maxLen = MAX_ENTITY_LENGTH[entity.label];
-    if (maxLen && trimmed.length > maxLen && entity.source !== "legal-form") {
+    const maxLen = MAX_ENTITY_LENGTH[normalized.label];
+    if (
+      maxLen &&
+      trimmed.length > maxLen &&
+      normalized.source !== "legal-form"
+    ) {
       continue;
     }
     // Section numbers (§ 3, 3.2.1, 12.) are false
     // positives unless they were captured by a trigger
     // phrase (e.g., "č.p. 92" is an address, not a
     // section number).
-    if (SECTION_NUMBER_RE.test(trimmed) && entity.source !== "trigger") {
+    if (SECTION_NUMBER_RE.test(trimmed) && normalized.source !== "trigger") {
       continue;
     }
     // Standalone years (2022, 1995) without a trigger
     // context are noise. Trigger-sourced years are
     // valid ("rok 2022", "year 2019").
-    if (STANDALONE_YEAR_RE.test(trimmed) && entity.source !== "trigger") {
+    if (STANDALONE_YEAR_RE.test(trimmed) && normalized.source !== "trigger") {
       continue;
     }
 
@@ -130,14 +207,14 @@ export const filterFalsePositives = (
       fullText &&
       /^\d/.test(trimmed) &&
       NUMBER_ABBREV_RE.test(
-        fullText.slice(Math.max(0, entity.start - 10), entity.start),
+        fullText.slice(Math.max(0, normalized.start - 10), normalized.start),
       )
     ) {
       continue;
     }
 
     if (
-      entity.label === "registration number" &&
+      normalized.label === "registration number" &&
       /^[\p{L}]{1,2}$/u.test(trimmed)
     ) {
       continue;
@@ -145,11 +222,11 @@ export const filterFalsePositives = (
 
     // Person names never contain digits.
     // "Solution Pack ABL90 Flex" → reject.
-    if (entity.label === "person" && HAS_DIGIT_RE.test(trimmed)) {
+    if (normalized.label === "person" && HAS_DIGIT_RE.test(trimmed)) {
       continue;
     }
 
-    if (entity.label === "person") {
+    if (normalized.label === "person") {
       const tokens = trimmed.split(/\s+/u);
       const last = tokens.at(-1)?.replace(/[.,;:!?]+$/u, "").toLowerCase();
       if (tokens.length > 1 && last && PERSON_TRAILING_NOUNS.has(last)) {
@@ -158,8 +235,17 @@ export const filterFalsePositives = (
     }
 
     if (
-      (entity.label === "person" || entity.label === "organization") &&
+      (normalized.label === "person" || normalized.label === "organization") &&
       roles.has(trimmed.toLowerCase())
+    ) {
+      continue;
+    }
+
+    if (
+      normalized.label === "organization" &&
+      normalized.source === "legal-form" &&
+      trimmed === trimmed.toUpperCase() &&
+      LEGAL_FORM_HEADING_RE.test(trimmed)
     ) {
       continue;
     }
@@ -168,7 +254,7 @@ export const filterFalsePositives = (
     // no digits, no postal code, no known address
     // component (street abbreviations, etc.).
     if (
-      entity.label === "address" &&
+      normalized.label === "address" &&
       trimmed.length > 40 &&
       !POSTAL_CODE_RE.test(trimmed) &&
       !HAS_DIGIT_RE.test(trimmed) &&
@@ -185,8 +271,8 @@ export const filterFalsePositives = (
     // "Commonwealth of ...") which are valid addresses
     // without digits.
     if (
-      entity.label === "address" &&
-      entity.source === "trigger" &&
+      normalized.label === "address" &&
+      normalized.source === "trigger" &&
       !HAS_DIGIT_RE.test(trimmed) &&
       !ADDRESS_COMPONENTS_RE.test(trimmed) &&
       !JURISDICTION_RE.test(trimmed)
@@ -194,11 +280,14 @@ export const filterFalsePositives = (
       continue;
     }
 
-    if (entity.label === "address" && SIGNING_CLAUSE_ADDRESS_RE.test(trimmed)) {
+    if (
+      normalized.label === "address" &&
+      SIGNING_CLAUSE_ADDRESS_RE.test(trimmed)
+    ) {
       continue;
     }
 
-    filtered.push(entity);
+    filtered.push(normalized);
   }
 
   return filtered;

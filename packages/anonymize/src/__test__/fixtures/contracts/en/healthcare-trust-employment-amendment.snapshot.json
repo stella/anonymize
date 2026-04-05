@@ -1,0 +1,194 @@
+{
+  "entityCount": 26,
+  "counts": {
+    "person": 8,
+    "date": 10,
+    "address": 2,
+    "monetary amount": 6
+  },
+  "entities": [
+    {
+      "start": 129,
+      "end": 144,
+      "label": "person",
+      "text": "Amanda Houghton",
+      "source": "deny-list"
+    },
+    {
+      "start": 279,
+      "end": 293,
+      "label": "date",
+      "text": "March 11, 2022",
+      "source": "regex"
+    },
+    {
+      "start": 346,
+      "end": 354,
+      "label": "address",
+      "text": "Maryland",
+      "source": "deny-list"
+    },
+    {
+      "start": 625,
+      "end": 637,
+      "label": "date",
+      "text": "July 8, 2016",
+      "source": "regex"
+    },
+    {
+      "start": 681,
+      "end": 694,
+      "label": "date",
+      "text": "July 14, 2017",
+      "source": "regex"
+    },
+    {
+      "start": 699,
+      "end": 713,
+      "label": "date",
+      "text": "March 18, 2019",
+      "source": "regex"
+    },
+    {
+      "start": 1493,
+      "end": 1507,
+      "label": "date",
+      "text": "March 13, 2023",
+      "source": "regex"
+    },
+    {
+      "start": 2560,
+      "end": 2570,
+      "label": "date",
+      "text": "March 2022",
+      "source": "regex"
+    },
+    {
+      "start": 2652,
+      "end": 2665,
+      "label": "person",
+      "text": "Peter N. Foss",
+      "source": "deny-list"
+    },
+    {
+      "start": 2679,
+      "end": 2692,
+      "label": "person",
+      "text": "Peter N. Foss",
+      "source": "deny-list"
+    },
+    {
+      "start": 2769,
+      "end": 2787,
+      "label": "person",
+      "text": "Amanda L. Houghton",
+      "source": "deny-list"
+    },
+    {
+      "start": 2792,
+      "end": 2810,
+      "label": "person",
+      "text": "Amanda L. Houghton",
+      "source": "deny-list"
+    },
+    {
+      "start": 2898,
+      "end": 2916,
+      "label": "person",
+      "text": "Amanda L. Houghton",
+      "source": "deny-list"
+    },
+    {
+      "start": 3155,
+      "end": 3163,
+      "label": "address",
+      "text": "Maryland",
+      "source": "deny-list"
+    },
+    {
+      "start": 3433,
+      "end": 3445,
+      "label": "date",
+      "text": "July 8, 2016",
+      "source": "regex"
+    },
+    {
+      "start": 3489,
+      "end": 3502,
+      "label": "date",
+      "text": "July 14, 2017",
+      "source": "regex"
+    },
+    {
+      "start": 3507,
+      "end": 3521,
+      "label": "date",
+      "text": "March 18, 2019",
+      "source": "regex"
+    },
+    {
+      "start": 4065,
+      "end": 4073,
+      "label": "monetary amount",
+      "text": "$450,000",
+      "source": "regex"
+    },
+    {
+      "start": 4323,
+      "end": 4333,
+      "label": "monetary amount",
+      "text": "$2,250,000",
+      "source": "regex"
+    },
+    {
+      "start": 4463,
+      "end": 4471,
+      "label": "monetary amount",
+      "text": "$450,000",
+      "source": "regex"
+    },
+    {
+      "start": 4530,
+      "end": 4538,
+      "label": "monetary amount",
+      "text": "$450,000",
+      "source": "regex"
+    },
+    {
+      "start": 4577,
+      "end": 4585,
+      "label": "monetary amount",
+      "text": "$450,000",
+      "source": "regex"
+    },
+    {
+      "start": 5670,
+      "end": 5678,
+      "label": "monetary amount",
+      "text": "$540,000",
+      "source": "regex"
+    },
+    {
+      "start": 7516,
+      "end": 7522,
+      "label": "date",
+      "text": "July 1",
+      "source": "regex"
+    },
+    {
+      "start": 8510,
+      "end": 8523,
+      "label": "person",
+      "text": "Peter N. Foss",
+      "source": "deny-list"
+    },
+    {
+      "start": 8601,
+      "end": 8619,
+      "label": "person",
+      "text": "Amanda L. Houghton",
+      "source": "deny-list"
+    }
+  ],
+  "redactedText": "EX-99.2\n3\nd331351dex992.htm\nEX-99.2\n\nEX-99.2\n\n \n\n Exhibit 99.2 \n\nAMENDMENT NO. 1 TO AMENDED AND RESTATED EMPLOYMENT AGREEMENT \n\n([PERSON_1]) \n\n THIS\nAMENDMENT NO. 1 TO AMENDED AND RESTATED EMPLOYMENT AGREEMENT (the &#147;Amendment&#148;) is entered into and effective as of [DATE_1] by and between HEALTHCARE TRUST OF AMERICA, INC., a [ADDRESS_1] corporation (the\n&#147;Company&#148;), and AMANDA L. HOUGHTON (the &#147;Executive&#148;). \n\n RECITALS \n\nWHEREAS, the Company employs Executive as its Executive Vice President &#151; Asset Management under the terms of an Amended and\nRestated Employment Agreement dated [DATE_2], as amended by two letter agreements dated [DATE_3] and [DATE_4] (collectively, the &#147;Employment Agreement&#148;); and \n\nWHEREAS, the Company is contemplating a merger transaction with Healthcare Realty Trust Incorporated (&#147;Transaction&#148;); \n\nWHEREAS, the parties desire to modify the Employment Agreement with this amendment; \n\nNOW, THEREFORE, in consideration of the foregoing premises, and other good and valuable consideration, the receipt and sufficiency of\nwhich are hereby affirmed, the Company and Executive agree to the following changes to the Employment Agreement: \n\n 1. Irrespective of\nwhether the Transaction closes or is abandoned, the term of the Employment Agreement (as provided in Section 2 of the Employment Agreement) will be extended so that the Expiration Date (as defined in the Employment Agreement) will be\n[DATE_5] (such term being subject to earlier termination as provided in Section 7 of the Employment Agreement). \n\n 2. Upon\nthe closing of the Transaction, the amendment set forth in Exhibit A hereto shall apply and be executed by the Company and the Executive. \n\n3. This Amendment represents the entire understanding among the parties with respect to the subject matter hereof, and this Amendment\nsupersedes any and all prior understandings, agreements, plans and negotiations, whether written or oral, with respect to the subject matter hereof. All modifications to the Employment Agreement, as amended hereby, must be in writing and signed by\nthe party against whom enforcement of such modification is sought. Except as expressly amended by this Amendment, the Employment Agreement remains unaltered and in full force and effect. This Amendment may be executed in one or more counterparts,\nall of which taken together shall constitute one and the same agreement. \n\n \n\n 1 \n\n IN WITNESS WHEREOF, the parties hereto have executed this Amendment this 11th day of [DATE_6]. \n\n \n\n \n\n \n \n\nCOMPANY: \n\n \n\nHEALTHCARE TRUST OF AMERICA, INC. \n\n \n \n\nBy: \n \n /s/ [PERSON_2]\n\n \n\nName: \n \n[PERSON_2] \n\nTitle: \n \nPresident and Chief Executive Officer \n\n \n\nEXECUTIVE: \n\n \n\n /s/ [PERSON_3]\n\n \n\n[PERSON_3] \n\n \n\n 2 \n\n EXHIBIT A \n\nAMENDMENT NO. 1 TO AMENDED AND RESTATED EMPLOYMENT AGREEMENT \n\n([PERSON_3]) \n\nTHIS AMENDMENT NO. 1 TO AMENDED AND RESTATED EMPLOYMENT AGREEMENT (the &#147;Amendment&#148;) is entered into and effective as of\n______________ 2022 (the &#147;Effective Date&#148;) by and between HEALTHCARE TRUST OF AMERICA, INC., a [ADDRESS_1] corporation (the &#147;Company&#148;), and AMANDA L. HOUGHTON (the &#147;Executive&#148;). \n\nRECITALS \n\nWHEREAS, the Company employs Executive as its Executive Vice President &#150; Asset Management under the terms of an Amended and\nRestated Employment Agreement dated [DATE_2], as amended by two letter agreements dated [DATE_3] and [DATE_4] (collectively, the &#147;Employment Agreement&#148;); and \n\nWHEREAS, the parties desire to modify the Employment Agreement with this amendment; \n\nNOW, THEREFORE, in consideration of the foregoing premises, and other good and valuable consideration, the receipt and sufficiency of\nwhich are hereby affirmed, the Company and Executive agree to the following to amend the Employment Agreement as of the Effective Date as follows: \n\n1. Section 5.1 of the Employment Agreement is generally amended to stipulate that Executive&#146;s Base Salary is [MONETARY_AMOUNT_1]. \n\n2. Section 5 of the Employment Agreement is modified by the addition of the following Section 5.8: \n\n5.8 Corporate Transaction Bonus. On or before the date which is 15 days following the Transaction, the Company shall pay\nExecutive the amount of [MONETARY_AMOUNT_2] (the &#147;Corporate Transaction Bonus&#148;), which amount is equal to the sum of (a) two times Executive&#146;s Base Salary of [MONETARY_AMOUNT_1] per annum, (b) two times Executive&#146;s Target\nBonus of [MONETARY_AMOUNT_1], and (c) an additional cash amount of [MONETARY_AMOUNT_1]. Payment of the Corporate Transaction Bonus shall satisfy and discharge any and all obligations of the Company to pay Separation Benefits pursuant to\nSection 8.6(a). \n\n 3. Section 8.5 of the Employment Agreement shall be deleted in its entirety and the\nfollowing substituted in its place: \n\n 8.5 General Release. The Executive shall execute a customary general release in a form\nsatisfactory to the Company (the &#147;Release&#148;) as a condition to the receipt of any Separation Benefits, Corporate Transaction Bonus or the Obligatory Non-Compete Payment provided for in\nSection 8.10. Nothing in this Section 8 shall be deemed to operate or shall operate as a release, settlement or discharge of any liability of the Executive to the Company or others for any action\nor omission by the Executive, including, without limitation, any actions which formed, or could have formed, the basis for termination of the Executive&#146;s employment for Cause. \n\n \n\n 3 \n\n 4. Section 8.8 of the Employment Agreement is generally amended to stipulate that the\namount of the Non-Compete Payment is [MONETARY_AMOUNT_3]. \n\n 5. Section 8 of the Employment Agreement is\nmodified by the addition of the following Section 8.10: \n\n 8.10 Obligatory\nNon-Compete Payment. If (1) the Transaction occurs during the Employment Period, and (2) Executive&#146;s employment is terminated pursuant to Section 8.4, the Company\nshall pay Executive the Non-Compete Payment on the terms set forth in Section 8.8 (the &#147;Obligatory Non-Compete\nPayment&#148;) and Executive shall be subject to the non-competition covenant in Section 9.2 following the Date of Termination without any further requirement of election or\nnotice. During the period Executive is receiving monthly installments of the Obligatory Non-Compete Payment, Executive agrees to provide consulting services to the Company upon request during normal business\nhours and shall be reimbursed for reasonable out-of-pocket expenses incurred in provided such consulting services. \n\n7. In the event of a Transaction, Executive agrees that she may not terminate her employment for Good Reason prior to the date which is 90\ndays following a Transaction (the &#147;Transition Period&#148;), except in the event of a material breach by Company of the Employment Agreement. Executive further agrees that (a) Executive&#146;s ineligibility for equity incentive grants\nduring the Transition Period shall not constitute a breach of the Employment Agreement by Company, and (b) travel obligations to the Company&#146;s corporate office or any of its regional offices for the purposes of performing services, not\nexceeding 10 days in any 30 day period, shall not constitute a breach by Company of the Employment Agreement. During the Transition Period, it is understood that Employee will be allowed a remote work environment during non-travel days. In addition, Company understands Employee has pre-scheduled vacation from [DATE_7] &#150; 15, 2022. \n\n8. This Amendment represents the entire understanding among the parties with respect to the subject matter hereof, and, as of the Effective\nDate, this Amendment supersedes any and all prior understandings, agreements, plans and negotiations, whether written or oral, with respect to the subject matter hereof. All modifications to the Employment Agreement, as amended hereby, must be in\nwriting and signed by the party against whom enforcement of such modification is sought. Except as expressly amended by this Amendment, the Employment Agreement remains unaltered and in full force and effect. This Amendment may be executed in one or\nmore counterparts, all of which taken together shall constitute one and the same agreement. \n\n [Execution Page Follows] \n\n \n\n 4 \n\n IN WITNESS WHEREOF, the parties hereto have executed this Amendment to be effective\nas of the Effective Date. \n\n \n\n \n\n \n \n\nCOMPANY: \n\n \n\nHEALTHCARE TRUST OF AMERICA, INC. \n\n \n \n\nBy: \n \n \n\n \n\nName: \n \n[PERSON_2] \n\nTitle: \n \nPresident and Chief Executive Officer \n\n \n\nEXECUTIVE: \n\n \n\n \n\n \n\n[PERSON_3] \n\n \n\n 5"
+}
