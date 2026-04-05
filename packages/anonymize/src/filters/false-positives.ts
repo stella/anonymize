@@ -33,6 +33,8 @@ const STANDALONE_YEAR_RE = /^(?:19|20)\d{2}$/;
 // "no.", "n.", "čís." — when a numeric entity is preceded
 // by one of these, it's a reference number, not PII.
 const NUMBER_ABBREV_RE = /(?:^|[\s(])(?:č|čís|nr|no|n)\.\s*$/i;
+const SIGNING_CLAUSE_ADDRESS_RE =
+  /^(?:v|ve)\s+[^\d,\n]{1,40}\s+dne$/iu;
 
 // ── Generic roles (lazy-loaded from JSON) ────────────
 
@@ -129,6 +131,13 @@ export const filterFalsePositives = (
       continue;
     }
 
+    if (
+      entity.label === "registration number" &&
+      /^[\p{L}]$/u.test(trimmed)
+    ) {
+      continue;
+    }
+
     // Person names never contain digits.
     // "Solution Pack ABL90 Flex" → reject.
     if (entity.label === "person" && HAS_DIGIT_RE.test(trimmed)) {
@@ -169,6 +178,10 @@ export const filterFalsePositives = (
       !ADDRESS_COMPONENTS_RE.test(trimmed) &&
       !JURISDICTION_RE.test(trimmed)
     ) {
+      continue;
+    }
+
+    if (entity.label === "address" && SIGNING_CLAUSE_ADDRESS_RE.test(trimmed)) {
       continue;
     }
 

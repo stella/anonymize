@@ -235,6 +235,8 @@ type ClassifiedToken = {
   end: number;
 };
 
+const PERSON_CHAIN_BREAK_RE = /[.!?;:]/u;
+
 // ── Helpers ──────────────────────────────────────────
 
 /**
@@ -434,7 +436,7 @@ export const detectNameCorpus = (
       const prev = chain.at(-1);
       if (prev) {
         const gap = fullText.slice(prev.end, next.start);
-        if (gap.includes("\n")) {
+        if (gap.includes("\n") || PERSON_CHAIN_BREAK_RE.test(gap)) {
           break;
         }
       }
