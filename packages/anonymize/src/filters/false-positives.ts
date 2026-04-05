@@ -34,7 +34,7 @@ const STANDALONE_YEAR_RE = /^(?:19|20)\d{2}$/;
 // by one of these, it's a reference number, not PII.
 const NUMBER_ABBREV_RE = /(?:^|[\s(])(?:č|čís|nr|no|n)\.\s*$/i;
 const SIGNING_CLAUSE_ADDRESS_RE =
-  /^(?:v|ve)\s+[^\d,\n]{1,40}\s+dne$/iu;
+  /^(?:v|ve)\s+[^\d,\n]{1,40},?\s+dne$/iu;
 const PERSON_TRAILING_NOUNS: ReadonlySet<string> = new Set([
   "association",
   "period",
@@ -138,7 +138,7 @@ export const filterFalsePositives = (
 
     if (
       entity.label === "registration number" &&
-      /^[\p{L}]$/u.test(trimmed)
+      /^[\p{L}]{1,2}$/u.test(trimmed)
     ) {
       continue;
     }

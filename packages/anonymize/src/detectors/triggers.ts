@@ -339,7 +339,7 @@ const stripQuotes = (value: {
 };
 
 /** Hard stop characters for to-next-comma scanning. */
-const COMMA_STOP_CHARS = new Set(["\n", "("]);
+const COMMA_STOP_CHARS = new Set(["\n", "(", "\t"]);
 
 /**
  * Field-label keywords that terminate address scanning.

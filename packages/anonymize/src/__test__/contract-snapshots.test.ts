@@ -113,6 +113,41 @@ const FIXTURES: ContractFixture[] = [
       ).toBe(false);
     },
   },
+  {
+    name: "czech sanofi bonus agreement",
+    textPath: join(FIXTURES_DIR, "cs", "sanofi-bonus-agreement.txt"),
+    snapshotPath: join(
+      FIXTURES_DIR,
+      "cs",
+      "sanofi-bonus-agreement.snapshot.json",
+    ),
+    assertQuality: (entities) => {
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "organization" && entity.text === "Sanofi s.r.o.",
+        ),
+      ).toBe(true);
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "organization" &&
+            entity.text === "Nemocnice Blansko",
+        ),
+      ).toBe(true);
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "registration number" && entity.text === "Pr",
+        ),
+      ).toBe(false);
+      expect(
+        entities.some(
+          (entity) => entity.label === "address" && entity.text === "Republic",
+        ),
+      ).toBe(false);
+    },
+  },
 ];
 
 const toSnapshot = (

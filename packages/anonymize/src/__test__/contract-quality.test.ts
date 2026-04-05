@@ -79,12 +79,36 @@ describe("contract quality regressions", () => {
     ).toBe(false);
   });
 
+  test("stops trigger extraction at tab-separated columns", async () => {
+    const entities = await detect(
+      "Název firmy:\tPROBO-NB s.r.o.\tkontaktní osoba: Petr Machara\te-mail: machara@probo-nb.cz",
+    );
+
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "organization" && entity.text === "PROBO-NB s.r.o.",
+      ),
+    ).toBe(true);
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "person" && entity.text.includes("e-mail:"),
+      ),
+    ).toBe(false);
+  });
+
   test("rejects signing-clause pseudo-addresses", async () => {
-    const entities = await detect("V Brně dne 1. 1. 2026");
+    const entities = await detect("V Brně dne 1. 1. 2026 V Praze, dne 2. 2. 2026");
 
     expect(
       entities.some(
         (entity) => entity.label === "address" && entity.text === "V Brně dne",
+      ),
+    ).toBe(false);
+    expect(
+      entities.some(
+        (entity) => entity.label === "address" && entity.text === "V Praze, dne",
       ),
     ).toBe(false);
   });
@@ -100,5 +124,34 @@ describe("contract quality regressions", () => {
           entity.label === "registration number" && entity.text === "C",
       ),
     ).toBe(false);
+  });
+
+  test("rejects short alphabetic court markers as registration numbers", async () => {
+    const entities = await detect(
+      "zapsaná pod spisovou značkou Pr 5968 u Městského soudu v Praze",
+    );
+
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "registration number" && entity.text === "Pr",
+      ),
+    ).toBe(false);
+  });
+
+  test("does not emit standalone Republic as an address", async () => {
+    const entities = await detect("Sanofi Czech Republic s.r.o.");
+
+    expect(
+      entities.some(
+        (entity) => entity.label === "address" && entity.text === "Republic",
+      ),
+    ).toBe(false);
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "organization" && entity.text === "Sanofi Czech Republic s.r.o.",
+      ),
+    ).toBe(true);
   });
 });
