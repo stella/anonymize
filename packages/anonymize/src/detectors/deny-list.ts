@@ -13,10 +13,7 @@ import type { PipelineContext } from "../context";
 import { defaultContext } from "../context";
 import { loadGenericRoles } from "../filters/false-positives";
 import { normalizeForSearch } from "../util/normalize";
-import {
-  ALL_UPPER_RE,
-  UPPER_START_RE,
-} from "../util/text";
+import { ALL_UPPER_RE, UPPER_START_RE } from "../util/text";
 import { DASH } from "../util/char-groups";
 
 /**

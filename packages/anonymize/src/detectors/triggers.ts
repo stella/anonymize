@@ -241,14 +241,10 @@ export const buildTriggerPatterns = async (): Promise<{
   // Load year-words from JSON dictionary and create
   // date triggers: "rok 2022" → date entity.
   try {
-    const yearMod = await import(
-      "@stll/anonymize-data/config/year-words.json"
-    );
+    const yearMod = await import("@stll/anonymize-data/config/year-words.json");
     // eslint-disable-next-line no-unsafe-type-assertion -- JSON
-    const data = (
-      (yearMod as { default?: unknown }).default ??
-      yearMod
-    ) as Record<string, string | string[]>;
+    const data = ((yearMod as { default?: unknown }).default ??
+      yearMod) as Record<string, string | string[]>;
     const seen = new Set<string>();
     const yearValidation = compileValidations([
       {

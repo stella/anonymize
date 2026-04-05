@@ -7,10 +7,7 @@ import {
   DEFAULT_OPERATOR_CONFIG,
   createPipelineContext,
 } from "./packages/anonymize/src/index";
-import type {
-  Entity,
-  PipelineConfig,
-} from "./packages/anonymize/src/types";
+import type { Entity, PipelineConfig } from "./packages/anonymize/src/types";
 
 // ── Constants ───────────────────────────────────
 
@@ -39,9 +36,7 @@ const CONFIG: PipelineConfig = {
   enableRegex: true,
   enableNameCorpus: true,
   enableDenyList: true,
-  denyListCountries: [
-    "CZ", "SK", "DE", "US", "GB", "FR", "AT", "CH",
-  ],
+  denyListCountries: ["CZ", "SK", "DE", "US", "GB", "FR", "AT", "CH"],
   enableGazetteer: false,
   enableNer: false,
   enableConfidenceBoost: false,
@@ -72,17 +67,13 @@ const escAttr = (s: string): string =>
 const dedup = (entities: Entity[]): Entity[] => {
   const used: Entity[] = [];
   for (const e of entities) {
-    if (!used.some((u) => e.start < u.end && e.end > u.start))
-      used.push(e);
+    if (!used.some((u) => e.start < u.end && e.end > u.start)) used.push(e);
   }
   return used;
 };
 
 /** Extract a context snippet around an entity. */
-const contextSnippet = (
-  fullText: string,
-  entity: Entity,
-): string => {
+const contextSnippet = (fullText: string, entity: Entity): string => {
   const before = fullText
     .slice(Math.max(0, entity.start - CONTEXT_CHARS), entity.start)
     .replace(/\n/g, " ");
@@ -90,8 +81,7 @@ const contextSnippet = (
     .slice(entity.end, entity.end + CONTEXT_CHARS)
     .replace(/\n/g, " ");
   const prefix = entity.start > CONTEXT_CHARS ? "…" : "";
-  const suffix =
-    entity.end + CONTEXT_CHARS < fullText.length ? "…" : "";
+  const suffix = entity.end + CONTEXT_CHARS < fullText.length ? "…" : "";
   return `${prefix}${before}███${after}${suffix}`;
 };
 
@@ -119,13 +109,8 @@ const processDoc = async (path: string) => {
 
 // ── Highlight ───────────────────────────────────
 
-const highlight = (
-  text: string,
-  entities: Entity[],
-): string => {
-  const sorted = dedup(
-    entities.toSorted((a, b) => a.start - b.start),
-  );
+const highlight = (text: string, entities: Entity[]): string => {
+  const sorted = dedup(entities.toSorted((a, b) => a.start - b.start));
   let result = "";
   let pos = 0;
   for (const e of sorted) {
@@ -146,10 +131,7 @@ const highlight = (
 
 // ── Entity table rows ───────────────────────────
 
-const buildEntityRows = (
-  entities: Entity[],
-  fullText: string,
-): string =>
+const buildEntityRows = (entities: Entity[], fullText: string): string =>
   entities
     .map((e, j) => {
       const color = COLORS[e.label] ?? "#9a9cb8";
@@ -253,6 +235,12 @@ tr.ctx-row td mark {
 `.trim();
 
 const JS = `
+function escapeHtml(text) {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
 function showTab(i) {
   document.querySelectorAll('.tab')
     .forEach((t, j) => t.classList.toggle('active', j === i));
@@ -277,8 +265,9 @@ document.addEventListener('click', function(e) {
   var entityText = row.querySelectorAll('td')[2].textContent;
   var label = row.getAttribute('data-label') || 'entity';
   var tag = label.replace(/\\s+/g, '-');
+  var escapedEntityText = escapeHtml(entityText || '');
   var display = ctx.replace('███',
-    '<mark>&lt;' + tag + '&gt;' + entityText +
+    '<mark>&lt;' + tag + '&gt;' + escapedEntityText +
     '&lt;/' + tag + '&gt;</mark>');
   var tr = document.createElement('tr');
   tr.className = 'ctx-row';
@@ -288,10 +277,7 @@ document.addEventListener('click', function(e) {
 `.trim();
 
 const buildHtml = (docs: DocResult[]): string => {
-  const totalEntities = docs.reduce(
-    (s, d) => s + d.entities.length,
-    0,
-  );
+  const totalEntities = docs.reduce((s, d) => s + d.entities.length, 0);
 
   const tabs = docs
     .map(
@@ -370,13 +356,9 @@ const run = async () => {
   const docs = await Promise.all(inputs.map(processDoc));
   await Bun.write(outputPath, buildHtml(docs));
   const ms = (performance.now() - start).toFixed(0);
-  const total = docs.reduce(
-    (s, d) => s + d.entities.length,
-    0,
-  );
+  const total = docs.reduce((s, d) => s + d.entities.length, 0);
   console.log(
-    `${docs.length} docs, ${total} entities ` +
-      `(${ms}ms) → ${outputPath}`,
+    `${docs.length} docs, ${total} entities ` + `(${ms}ms) → ${outputPath}`,
   );
 };
 

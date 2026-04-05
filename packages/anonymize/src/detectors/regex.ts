@@ -627,8 +627,7 @@ const buildDatePatternsFromMonths = (alt: string): string[] => {
     // e. YYYY. Month[.] DD. — Hungarian "2025. január 7."
     `(?i)\\b\\d{4}\\.\\s+(?:${alt})\\.?\\s+\\d{1,2}\\.?(?=\\s|[.,;!?)]|$)`,
     // f. DD de Month[.] [de] YYYY — Spanish "7 de enero de 2025"
-    `(?i)\\b\\d{1,2}\\s+de\\s+(?:${alt})\\.?` +
-      `(?:\\s+de)?\\s+\\d{4}\\b`,
+    `(?i)\\b\\d{1,2}\\s+de\\s+(?:${alt})\\.?` + `(?:\\s+de)?\\s+\\d{4}\\b`,
   ];
 };
 
@@ -767,18 +766,14 @@ const buildCurrencyPatterns = (data: CurrenciesData): string[] => {
   // Leading symbol: $100, €1,000.50, € 100000
   if (symbols) {
     patterns.push(
-      `(?:[${symbols}])` +
-        `[^\\S\\n\\t]?` +
-        `${NUM}${DECIMAL}${END}`,
+      `(?:[${symbols}])` + `[^\\S\\n\\t]?` + `${NUM}${DECIMAL}${END}`,
     );
   }
 
   // Leading multi-char code: "Kč 10,—", "Fr. 500"
   if (trailingAlt) {
     patterns.push(
-      `\\b(?:${trailingAlt})` +
-        `[^\\S\\n\\t]{0,2}` +
-        `${NUM}${DECIMAL}${END}`,
+      `\\b(?:${trailingAlt})` + `[^\\S\\n\\t]{0,2}` + `${NUM}${DECIMAL}${END}`,
     );
   }
 
@@ -786,8 +781,7 @@ const buildCurrencyPatterns = (data: CurrenciesData): string[] => {
   // 100000 Kč, 500 korun, 100 Fr.
   if (trailingAlt) {
     patterns.push(
-      `\\b${NUM}${DECIMAL}[^\\S\\n\\t]{0,4}` +
-        `(?:${trailingAlt})${END}`,
+      `\\b${NUM}${DECIMAL}[^\\S\\n\\t]{0,4}` + `(?:${trailingAlt})${END}`,
     );
   }
 

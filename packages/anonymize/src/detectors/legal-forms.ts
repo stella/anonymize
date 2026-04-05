@@ -58,13 +58,9 @@ const buildPatternString = (forms: string[]): string | null => {
   // followed by a lowercase-starting word — this
   // prevents greedy extension across entity boundaries
   // like "Foo s.r.o. a BAR s.r.o."
-  const LOWER_CONNECTOR =
-    `\\s+(?:a|and|und|et|e|y|i)\\s+(?=[${LOWER}])`;
-  const SEPARATOR =
-    `(?:[\\s&,.${DASH_INNER}]{1,4}|${LOWER_CONNECTOR})`;
-  const prefix =
-    `(?:${CAP_WORD})` +
-    `(?:${SEPARATOR}(?:${ANY_WORD})){0,10}`;
+  const LOWER_CONNECTOR = `\\s+(?:a|and|und|et|e|y|i)\\s+(?=[${LOWER}])`;
+  const SEPARATOR = `(?:[\\s&,.${DASH_INNER}]{1,4}|${LOWER_CONNECTOR})`;
+  const prefix = `(?:${CAP_WORD})` + `(?:${SEPARATOR}(?:${ANY_WORD})){0,10}`;
   const separator = `(?:\\s+|,\\s*)`;
 
   return `${prefix}${separator}(?:${alt})(?![${LOWER}])`;
@@ -104,7 +100,9 @@ export const buildLegalFormPatterns = async (): Promise<string[]> => {
 
   const patterns: string[] = [];
 
-  const longPattern = buildPatternString(allForms.filter((f) => !isShortForm(f)));
+  const longPattern = buildPatternString(
+    allForms.filter((f) => !isShortForm(f)),
+  );
   if (longPattern) {
     patterns.push(longPattern);
   }
@@ -134,8 +132,7 @@ export const buildLegalFormPatterns = async (): Promise<string[]> => {
 
 // ── Backward extension ──────────────────────────────
 
-const CONNECTOR_RE =
-  /^(?:a|and|und|et|e|y|i|&)$/i;
+const CONNECTOR_RE = /^(?:a|and|und|et|e|y|i|&)$/i;
 
 /**
  * Find the word ending just before `pos` in `text`,
@@ -159,10 +156,7 @@ const findWordBefore = (
   }
 
   const wordEnd = scan + 1;
-  while (
-    scan >= 0 &&
-    /[\p{L}\p{M}&]/u.test(text.charAt(scan))
-  ) {
+  while (scan >= 0 && /[\p{L}\p{M}&]/u.test(text.charAt(scan))) {
     scan--;
   }
   const wordStart = scan + 1;
@@ -180,10 +174,7 @@ const findWordBefore = (
  * when there is a valid word before them — a trailing
  * connector at an entity boundary is not consumed.
  */
-const extendBackward = (
-  fullText: string,
-  matchStart: number,
-): number => {
+const extendBackward = (fullText: string, matchStart: number): number => {
   let pos = matchStart;
 
   while (pos > 0) {
@@ -254,10 +245,7 @@ export const processLegalFormMatches = (
     let entityStart = match.start;
     let entityText = text;
     if (fullText) {
-      const extended = extendBackward(
-        fullText,
-        match.start,
-      );
+      const extended = extendBackward(fullText, match.start);
       if (extended < match.start) {
         entityStart = extended;
         entityText = fullText
@@ -288,14 +276,8 @@ export const processLegalFormMatches = (
 
     if (isAllCapsMatch && fullText) {
       // Check: is the surrounding line also all-caps?
-      const lineStart = fullText.lastIndexOf(
-        "\n",
-        entityStart,
-      );
-      const lineEnd = fullText.indexOf(
-        "\n",
-        entityStart + entityText.length,
-      );
+      const lineStart = fullText.lastIndexOf("\n", entityStart);
+      const lineEnd = fullText.indexOf("\n", entityStart + entityText.length);
       const line = fullText.slice(
         lineStart + 1,
         lineEnd === -1 ? fullText.length : lineEnd,
@@ -315,12 +297,7 @@ export const processLegalFormMatches = (
       const wordCount =
         prefixPart.length > 0
           ? entityText
-              .slice(
-                0,
-                prefixEnd > 0
-                  ? prefixEnd
-                  : entityText.length,
-              )
+              .slice(0, prefixEnd > 0 ? prefixEnd : entityText.length)
               .trim()
               .split(/\s+/).length
           : 0;
@@ -341,10 +318,7 @@ export const processLegalFormMatches = (
 
     // Reject Roman numeral suffixes
     const lastSpace = entityText.lastIndexOf(" ");
-    const rawSuffix =
-      lastSpace !== -1
-        ? entityText.slice(lastSpace + 1)
-        : "";
+    const rawSuffix = lastSpace !== -1 ? entityText.slice(lastSpace + 1) : "";
     const suffixClean = rawSuffix.replace(/[.,]/g, "");
     if (suffixClean.length > 0 && ROMAN_NUMERAL_RE.test(suffixClean)) {
       continue;
@@ -361,12 +335,7 @@ export const processLegalFormMatches = (
       suffixClean.length <= 2 &&
       !/\./.test(rawSuffix) &&
       /[^\x00-\x7F]/.test(
-        entityText.slice(
-          0,
-          lastSpace !== -1
-            ? lastSpace
-            : entityText.length,
-        ),
+        entityText.slice(0, lastSpace !== -1 ? lastSpace : entityText.length),
       )
     ) {
       continue;

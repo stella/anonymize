@@ -166,9 +166,7 @@
       "dat.nar."
     ],
     "extensions": ["add-colon"],
-    "validations": [
-      { "type": "max-length", "value": 30 }
-    ]
+    "validations": [{ "type": "max-length", "max": 30 }]
   },
   {
     "id": "cs-birth-number",

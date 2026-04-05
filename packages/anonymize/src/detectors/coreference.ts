@@ -129,24 +129,15 @@ const SEARCH_WINDOW = 200;
  * 3. Substring: alias is a substring of the entity
  *    or vice versa (min 3 chars)
  */
-const hasEntitySimilarity = (
-  alias: string,
-  entityText: string,
-): boolean => {
+const hasEntitySimilarity = (alias: string, entityText: string): boolean => {
   const aliasLower = alias.toLowerCase();
   const entityLower = entityText.toLowerCase();
 
   // Substring check (min 3 chars to avoid noise)
-  if (
-    aliasLower.length >= 3 &&
-    entityLower.includes(aliasLower)
-  ) {
+  if (aliasLower.length >= 3 && entityLower.includes(aliasLower)) {
     return true;
   }
-  if (
-    entityLower.length >= 3 &&
-    aliasLower.includes(entityLower)
-  ) {
+  if (entityLower.length >= 3 && aliasLower.includes(entityLower)) {
     return true;
   }
 
@@ -175,11 +166,7 @@ const hasEntitySimilarity = (
     alias.length >= 2 &&
     alias.length <= entityWords.length
   ) {
-    for (
-      let start = 0;
-      start <= entityWords.length - alias.length;
-      start++
-    ) {
+    for (let start = 0; start <= entityWords.length - alias.length; start++) {
       const initials = entityWords
         .slice(start, start + alias.length)
         .map((w) => w.charAt(0))
@@ -296,16 +283,13 @@ export const extractDefinedTerms = async (
         continue;
       }
 
-      // Clause-boundary gate: reject if a period or
-      // semicolon sits between the source entity and
-      // the definition. These are hard clause terminators
-      // in all target languages and indicate the
-      // definition belongs to a different clause.
-      const gapText = fullText.slice(
-        bestEntity.end,
-        defPos,
-      );
-      if (/[.;]/.test(gapText)) {
+      // Clause-boundary gate: reject if a semicolon or
+      // sentence-ending period sits between the source
+      // entity and the definition. Periods inside
+      // abbreviations like "r.č." should not block an
+      // otherwise valid definition.
+      const gapText = fullText.slice(bestEntity.end, defPos);
+      if (/(?:;|\.(?=\s*(?:["'„‚(]*\p{Lu}|$)))/u.test(gapText)) {
         continue;
       }
 

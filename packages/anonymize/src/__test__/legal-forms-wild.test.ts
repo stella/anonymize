@@ -34,10 +34,7 @@ const expectOrg = async (text: string, expected: string) => {
   expect(org!.text).toBe(expected);
 };
 
-const expectOrgs = async (
-  text: string,
-  expected: string[],
-) => {
+const expectOrgs = async (text: string, expected: string[]) => {
   const ctx = createPipelineContext();
   const entities = await runPipeline({
     fullText: text,
@@ -186,17 +183,14 @@ describe("German legal forms", () => {
 
 describe("connector separation", () => {
   test("two entities separated by connector", async () => {
-    await expectOrgs(
-      "RELAKA s.r.o. a AGROBIOPLYN s.r.o.",
-      ["RELAKA s.r.o.", "AGROBIOPLYN s.r.o."],
-    );
+    await expectOrgs("RELAKA s.r.o. a AGROBIOPLYN s.r.o.", [
+      "RELAKA s.r.o.",
+      "AGROBIOPLYN s.r.o.",
+    ]);
   });
 
   test("backward extension through connector", async () => {
-    await expectOrg(
-      "Be a Future s.r.o.",
-      "Be a Future s.r.o.",
-    );
+    await expectOrg("Be a Future s.r.o.", "Be a Future s.r.o.");
   });
 
   test("long name with internal connectors", async () => {

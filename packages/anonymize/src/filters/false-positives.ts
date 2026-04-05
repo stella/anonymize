@@ -32,8 +32,7 @@ const STANDALONE_YEAR_RE = /^(?:19|20)\d{2}$/;
 // Number-abbreviation prefixes: "č.", "Nr.", "No.", "nr.",
 // "no.", "n.", "čís." — when a numeric entity is preceded
 // by one of these, it's a reference number, not PII.
-const NUMBER_ABBREV_RE =
-  /(?:^|[\s(])(?:č|čís|nr|no|n)\.\s*$/i;
+const NUMBER_ABBREV_RE = /(?:^|[\s(])(?:č|čís|nr|no|n)\.\s*$/i;
 
 // ── Generic roles (lazy-loaded from JSON) ────────────
 
@@ -91,9 +90,7 @@ export const filterFalsePositives = (
   for (const entity of entities) {
     // Strip leading ". " artifacts from trigger extraction
     // after abbreviations ("dat. nar.", "č.p.").
-    const trimmed = entity.text
-      .replace(/^(?:\.\s)+/, "")
-      .trim();
+    const trimmed = entity.text.replace(/^(?:\.\s)+/, "").trim();
 
     if (TEMPLATE_PLACEHOLDER_RE.test(trimmed)) {
       continue;
@@ -116,10 +113,7 @@ export const filterFalsePositives = (
     // Standalone years (2022, 1995) without a trigger
     // context are noise. Trigger-sourced years are
     // valid ("rok 2022", "year 2019").
-    if (
-      STANDALONE_YEAR_RE.test(trimmed) &&
-      entity.source !== "trigger"
-    ) {
+    if (STANDALONE_YEAR_RE.test(trimmed) && entity.source !== "trigger") {
       continue;
     }
 
@@ -129,10 +123,7 @@ export const filterFalsePositives = (
       fullText &&
       /^\d/.test(trimmed) &&
       NUMBER_ABBREV_RE.test(
-        fullText.slice(
-          Math.max(0, entity.start - 10),
-          entity.start,
-        ),
+        fullText.slice(Math.max(0, entity.start - 10), entity.start),
       )
     ) {
       continue;
