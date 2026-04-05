@@ -156,8 +156,7 @@
     "id": "cs-date-of-birth",
     "label": "date of birth",
     "strategy": {
-      "type": "n-words",
-      "count": 1
+      "type": "to-next-comma"
     },
     "triggers": [
       "nar.",
@@ -166,7 +165,8 @@
       "narozen/a dne",
       "dat.nar."
     ],
-    "extensions": ["add-colon"]
+    "extensions": ["add-colon"],
+    "validations": [{ "type": "max-length", "max": 30 }]
   },
   {
     "id": "cs-birth-number",

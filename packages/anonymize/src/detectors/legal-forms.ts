@@ -45,26 +45,22 @@ const escapeForRegex = (form: string): string =>
 const isShortForm = (form: string): boolean =>
   form.replace(/[.\s]/g, "").length <= 3 && !form.includes(" ");
 
-const buildPatternString = (
-  forms: string[],
-  _requireCapBefore: boolean,
-): string | null => {
+const buildPatternString = (forms: string[]): string | null => {
   if (forms.length === 0) {
     return null;
   }
 
   const sorted = forms.toSorted((a, b) => b.length - a.length);
   const alt = sorted.map(escapeForRegex).join("|");
-  // Allow lowercase connectors between name words:
-  // "a" (Czech/SK), "and", "und", "et", "&", "e"
-  const CONNECTOR = `(?:[\\s&,.${DASH_INNER}]{1,4}|\\s+(?:a|and|und|et|e|y|i)\\s+)`;
-  // Czech state enterprise names can be 7+ words:
-  // "Národní agentura pro komunikační a informační
-  // technologie, s. p." — need generous limit.
-  const prefix = `(?:${CAP_WORD})` + `(?:${CONNECTOR}(?:${ANY_WORD})){0,10}`;
-  // Both long and short forms allow comma separator.
-  // "Krajská správa, příspěvková organizace" needs
-  // comma before the long-form suffix.
+  // Separator between name words: space, ampersand,
+  // comma, dot, hyphen (1-4 chars). Connector words
+  // (a, and, und, et, e, y, i) are allowed only when
+  // followed by a lowercase-starting word — this
+  // prevents greedy extension across entity boundaries
+  // like "Foo s.r.o. a BAR s.r.o."
+  const LOWER_CONNECTOR = `\\s+(?:a|and|und|et|e|y|i)\\s+(?=[${LOWER}])`;
+  const SEPARATOR = `(?:[\\s&,.${DASH_INNER}]{1,4}|${LOWER_CONNECTOR})`;
+  const prefix = `(?:${CAP_WORD})` + `(?:${SEPARATOR}(?:${ANY_WORD})){0,10}`;
   const separator = `(?:\\s+|,\\s*)`;
 
   return `${prefix}${separator}(?:${alt})(?![${LOWER}])`;
@@ -106,13 +102,12 @@ export const buildLegalFormPatterns = async (): Promise<string[]> => {
 
   const longPattern = buildPatternString(
     allForms.filter((f) => !isShortForm(f)),
-    false,
   );
   if (longPattern) {
     patterns.push(longPattern);
   }
 
-  const shortPattern = buildPatternString(allForms.filter(isShortForm), true);
+  const shortPattern = buildPatternString(allForms.filter(isShortForm));
   if (shortPattern) {
     patterns.push(shortPattern);
   }
@@ -120,6 +115,7 @@ export const buildLegalFormPatterns = async (): Promise<string[]> => {
   // All-caps company names: "EAGLES BRNO, z.s."
   // Up to 3 all-caps words before any legal form.
   // Uses all forms (both long and short).
+  // No connectors — backward extension handles them.
   const allcapPrefix =
     `(?:${ALLCAP_WORD})` +
     `(?:[\\s&,.${DASH_INNER}]{1,4}(?:${ALLCAP_WORD})){0,2}`;
@@ -132,6 +128,85 @@ export const buildLegalFormPatterns = async (): Promise<string[]> => {
   );
 
   return patterns;
+};
+
+// ── Backward extension ──────────────────────────────
+
+const CONNECTOR_RE = /^(?:a|and|und|et|e|y|i|&)$/i;
+
+/**
+ * Find the word ending just before `pos` in `text`,
+ * skipping any whitespace (not newlines).
+ * Returns null if no word is found (e.g., at start
+ * of text, or preceded by non-word chars like ".").
+ */
+const findWordBefore = (
+  text: string,
+  pos: number,
+): { word: string; start: number } | null => {
+  let scan = pos - 1;
+  // Skip horizontal whitespace
+  while (scan >= 0) {
+    const ch = text.charAt(scan);
+    if (ch === "\n" || !/\s/.test(ch)) break;
+    scan--;
+  }
+  if (scan < 0 || text.charAt(scan) === "\n") {
+    return null;
+  }
+
+  const wordEnd = scan + 1;
+  while (scan >= 0 && /[\p{L}\p{M}&]/u.test(text.charAt(scan))) {
+    scan--;
+  }
+  const wordStart = scan + 1;
+  const word = text.slice(wordStart, wordEnd);
+  if (word.length === 0) return null;
+  return { word, start: wordStart };
+};
+
+/**
+ * Extend a match backward through uppercase words and
+ * lowercase connectors. Stops at start of text,
+ * newline, or a word that doesn't qualify.
+ *
+ * Connectors (a, and, und, et, ...) are only consumed
+ * when there is a valid word before them — a trailing
+ * connector at an entity boundary is not consumed.
+ */
+const extendBackward = (fullText: string, matchStart: number): number => {
+  let pos = matchStart;
+
+  while (pos > 0) {
+    const found = findWordBefore(fullText, pos);
+    if (!found) break;
+
+    const { word, start: wordStart } = found;
+
+    const isUpper = /^\p{Lu}/u.test(word);
+    const isConnector = CONNECTOR_RE.test(word);
+
+    if (isUpper) {
+      // Uppercase word — always accept
+      pos = wordStart;
+    } else if (isConnector) {
+      // Connector — only accept if there is a valid
+      // (uppercase-starting) word before it
+      const prev = findWordBefore(fullText, wordStart);
+      if (!prev) break;
+      const prevIsUpper = /^\p{Lu}/u.test(prev.word);
+      if (!prevIsUpper) break;
+      // Move pos back to the start of the word that
+      // precedes the connector; the connector and all
+      // whitespace between it and prev.start are
+      // included implicitly in the entity slice.
+      pos = prev.start;
+    } else {
+      break;
+    }
+  }
+
+  return pos;
 };
 
 // ── Match processor ─────────────────────────────────
@@ -164,26 +239,45 @@ export const processLegalFormMatches = (
       continue;
     }
 
+    // Extend backward through connectors if fullText
+    // is available (captures "Be a Future" from just
+    // "Future s.r.o.")
+    let entityStart = match.start;
+    let entityText = text;
+    if (fullText) {
+      const extended = extendBackward(fullText, match.start);
+      if (extended < match.start) {
+        entityStart = extended;
+        entityText = fullText
+          .slice(extended, match.start + text.length)
+          .trimEnd();
+      }
+    }
+
     // Reject all-caps matches only if the entire
     // surrounding line is all-caps (section headings
     // like "KUPNÍ SMLOUVA"). If only the company name
     // is all-caps ("uzavřená s EAGLES BRNO, z.s."),
     // keep it — max 3 all-caps words are allowed.
-    const prefixEnd =
-      text.lastIndexOf(",") !== -1
-        ? text.lastIndexOf(",")
-        : text.lastIndexOf(" ");
-    const prefixPart =
-      prefixEnd > 0
-        ? text.slice(0, prefixEnd).replace(/[^a-zA-ZÀ-ž]/g, "")
-        : text.replace(/[^a-zA-ZÀ-ž]/g, "");
-    const isAllCapsMatch =
+    const getPrefixInfo = (value: string) => {
+      const prefixEnd =
+        value.lastIndexOf(",") !== -1
+          ? value.lastIndexOf(",")
+          : value.lastIndexOf(" ");
+      const prefixPart =
+        prefixEnd > 0
+          ? value.slice(0, prefixEnd).replace(/[^a-zA-ZÀ-ž]/g, "")
+          : value.replace(/[^a-zA-ZÀ-ž]/g, "");
+      return { prefixEnd, prefixPart };
+    };
+    let { prefixEnd, prefixPart } = getPrefixInfo(entityText);
+    let isAllCapsMatch =
       prefixPart.length > 2 && prefixPart === prefixPart.toUpperCase();
 
     if (isAllCapsMatch && fullText) {
       // Check: is the surrounding line also all-caps?
-      const lineStart = fullText.lastIndexOf("\n", match.start);
-      const lineEnd = fullText.indexOf("\n", match.end);
+      const lineStart = fullText.lastIndexOf("\n", entityStart);
+      const lineEnd = fullText.indexOf("\n", entityStart + entityText.length);
       const line = fullText.slice(
         lineStart + 1,
         lineEnd === -1 ? fullText.length : lineEnd,
@@ -202,13 +296,20 @@ export const processLegalFormMatches = (
       // (but limit to 3 words in prefix)
       const wordCount =
         prefixPart.length > 0
-          ? text
-              .slice(0, prefixEnd > 0 ? prefixEnd : text.length)
+          ? entityText
+              .slice(0, prefixEnd > 0 ? prefixEnd : entityText.length)
               .trim()
               .split(/\s+/).length
           : 0;
       if (wordCount > 3) {
-        continue;
+        // Keep the original regex match if backward
+        // extension alone pushed the name past the
+        // all-caps 3-word guard.
+        entityStart = match.start;
+        entityText = text;
+        ({ prefixEnd, prefixPart } = getPrefixInfo(entityText));
+        isAllCapsMatch =
+          prefixPart.length > 2 && prefixPart === prefixPart.toUpperCase();
       }
     } else if (isAllCapsMatch) {
       // No fullText available — fall back to rejecting
@@ -216,8 +317,8 @@ export const processLegalFormMatches = (
     }
 
     // Reject Roman numeral suffixes
-    const lastSpace = text.lastIndexOf(" ");
-    const rawSuffix = lastSpace !== -1 ? text.slice(lastSpace + 1) : "";
+    const lastSpace = entityText.lastIndexOf(" ");
+    const rawSuffix = lastSpace !== -1 ? entityText.slice(lastSpace + 1) : "";
     const suffixClean = rawSuffix.replace(/[.,]/g, "");
     if (suffixClean.length > 0 && ROMAN_NUMERAL_RE.test(suffixClean)) {
       continue;
@@ -234,7 +335,7 @@ export const processLegalFormMatches = (
       suffixClean.length <= 2 &&
       !/\./.test(rawSuffix) &&
       /[^\x00-\x7F]/.test(
-        text.slice(0, lastSpace !== -1 ? lastSpace : text.length),
+        entityText.slice(0, lastSpace !== -1 ? lastSpace : entityText.length),
       )
     ) {
       continue;
@@ -243,10 +344,10 @@ export const processLegalFormMatches = (
     // Definitive legal forms (s.r.o., a.s., GmbH, etc.)
     // get score 0.95 to beat person names in dedup.
     results.push({
-      start: match.start,
-      end: match.start + text.length,
+      start: entityStart,
+      end: entityStart + entityText.length,
       label: "organization",
-      text,
+      text: entityText,
       score: 0.95,
       source: DETECTION_SOURCES.LEGAL_FORM,
     });

@@ -116,6 +116,70 @@ const getDefinitionPatterns = async (
 
 const SEARCH_WINDOW = 200;
 
+/**
+ * Check whether an alias has textual similarity to
+ * the source entity. Prevents roles and structural
+ * terms from being treated as name aliases.
+ *
+ * Three checks (any passes → similar):
+ * 1. Word overlap: a word in the alias appears in the
+ *    entity (case-insensitive, min 2 chars)
+ * 2. Initials: alias letters match first letters of
+ *    entity words ("TB" ↔ "Tomas Bata")
+ * 3. Substring: alias is a substring of the entity
+ *    or vice versa (min 3 chars)
+ */
+const hasEntitySimilarity = (alias: string, entityText: string): boolean => {
+  const aliasLower = alias.toLowerCase();
+  const entityLower = entityText.toLowerCase();
+
+  // Substring check (min 3 chars to avoid noise)
+  if (aliasLower.length >= 3 && entityLower.includes(aliasLower)) {
+    return true;
+  }
+  if (entityLower.length >= 3 && aliasLower.includes(entityLower)) {
+    return true;
+  }
+
+  // Word overlap: split both into words, check for
+  // any shared word of 2+ characters
+  const aliasWords = aliasLower
+    .split(/[\s.,;:'"()/-]+/)
+    .filter((w) => w.length >= 2);
+  const entityWords = entityLower
+    .split(/[\s.,;:'"()/-]+/)
+    .filter((w) => w.length >= 2);
+  const entityWordSet = new Set(entityWords);
+  for (const word of aliasWords) {
+    if (entityWordSet.has(word)) {
+      return true;
+    }
+  }
+
+  // Initials: alias is all uppercase and each letter
+  // matches the first letter of a consecutive run of
+  // entity words. "TP" ↔ "Ing. Tomáš Procházka"
+  // (skips "Ing." and matches T+P). Check all
+  // starting positions to handle title prefixes.
+  if (
+    /^[\p{Lu}]+$/u.test(alias) &&
+    alias.length >= 2 &&
+    alias.length <= entityWords.length
+  ) {
+    for (let start = 0; start <= entityWords.length - alias.length; start++) {
+      const initials = entityWords
+        .slice(start, start + alias.length)
+        .map((w) => w.charAt(0))
+        .join("");
+      if (initials === aliasLower) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+};
+
 type DefinedTerm = {
   alias: string;
   label: string;
@@ -216,6 +280,25 @@ export const extractDefinedTerms = async (
       }
 
       if (bestEntity === null) {
+        continue;
+      }
+
+      // Clause-boundary gate: reject if a semicolon or
+      // sentence-ending period sits between the source
+      // entity and the definition. Periods inside
+      // abbreviations like "r.č." should not block an
+      // otherwise valid definition.
+      const gapText = fullText.slice(bestEntity.end, defPos);
+      if (/(?:;|\.(?=\s*(?:["'„‚(]*\p{Lu}|$)))/u.test(gapText)) {
+        continue;
+      }
+
+      // Similarity gate: the alias must have textual
+      // overlap with the source entity. Prevents roles
+      // ("Executive", "Seller") and structural terms
+      // ("Agreement", "Effective Date") from being
+      // treated as name aliases.
+      if (!hasEntitySimilarity(alias, bestEntity.text)) {
         continue;
       }
 

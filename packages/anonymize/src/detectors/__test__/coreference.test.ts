@@ -51,6 +51,23 @@ describe("extractDefinedTerms", () => {
     }
   });
 
+  test("keeps valid definitions across abbreviation periods", async () => {
+    const text = 'ABC s.r.o., IČO: 12345678, r.č. 900101/1234 (dále jen „ABC")';
+    const entities = [
+      makeEntity("organization", "ABC s.r.o.", 0),
+      makeEntity("registration number", "12345678", text.indexOf("12345678")),
+      makeEntity(
+        "czech birth number",
+        "900101/1234",
+        text.indexOf("900101/1234"),
+      ),
+    ];
+    const terms = await extractDefinedTerms(text, entities);
+    const abc = terms.find((t) => t.alias === "ABC");
+    expect(abc).toBeDefined();
+    expect(abc?.label).toBe("organization");
+  });
+
   test("ignores definitions with no nearby person/org", async () => {
     const text = 'splatnost 30 dnů (dále jen „Lhůta")';
     const entities = [makeEntity("date", "30 dnů", 10)];

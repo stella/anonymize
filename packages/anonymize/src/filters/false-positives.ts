@@ -29,6 +29,11 @@ const MAX_ENTITY_LENGTH: Partial<Record<string, number>> = {
 const SECTION_NUMBER_RE = /^(?:§\s*)?\d{1,3}(?:\.\d{1,3}){0,4}\.?$/;
 const STANDALONE_YEAR_RE = /^(?:19|20)\d{2}$/;
 
+// Number-abbreviation prefixes: "č.", "Nr.", "No.", "nr.",
+// "no.", "n.", "čís." — when a numeric entity is preceded
+// by one of these, it's a reference number, not PII.
+const NUMBER_ABBREV_RE = /(?:^|[\s(])(?:č|čís|nr|no|n)\.\s*$/i;
+
 // ── Generic roles (lazy-loaded from JSON) ────────────
 
 const EMPTY_GENERIC_ROLES: ReadonlySet<string> = new Set();
@@ -77,12 +82,15 @@ const getGenericRoles = (ctx: PipelineContext): ReadonlySet<string> =>
 export const filterFalsePositives = (
   entities: Entity[],
   ctx: PipelineContext = defaultContext,
+  fullText?: string,
 ): Entity[] => {
   const filtered: Entity[] = [];
   const roles = getGenericRoles(ctx);
 
   for (const entity of entities) {
-    const trimmed = entity.text.trim();
+    // Strip leading ". " artifacts from trigger extraction
+    // after abbreviations ("dat. nar.", "č.p.").
+    const trimmed = entity.text.replace(/^(?:\.\s)+/, "").trim();
 
     if (TEMPLATE_PLACEHOLDER_RE.test(trimmed)) {
       continue;
@@ -102,7 +110,22 @@ export const filterFalsePositives = (
     if (SECTION_NUMBER_RE.test(trimmed) && entity.source !== "trigger") {
       continue;
     }
-    if (STANDALONE_YEAR_RE.test(trimmed)) {
+    // Standalone years (2022, 1995) without a trigger
+    // context are noise. Trigger-sourced years are
+    // valid ("rok 2022", "year 2019").
+    if (STANDALONE_YEAR_RE.test(trimmed) && entity.source !== "trigger") {
+      continue;
+    }
+
+    // Numeric entities preceded by a number abbreviation
+    // ("č.", "Nr.", "No.") are reference numbers, not PII.
+    if (
+      fullText &&
+      /^\d/.test(trimmed) &&
+      NUMBER_ABBREV_RE.test(
+        fullText.slice(Math.max(0, entity.start - 10), entity.start),
+      )
+    ) {
       continue;
     }
 

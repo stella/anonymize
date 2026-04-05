@@ -13,7 +13,7 @@ import type { PipelineContext } from "../context";
 import { defaultContext } from "../context";
 import { loadGenericRoles } from "../filters/false-positives";
 import { normalizeForSearch } from "../util/normalize";
-import { ALL_UPPER_RE, UPPER_START_RE, isSentenceStart } from "../util/text";
+import { ALL_UPPER_RE, UPPER_START_RE } from "../util/text";
 import { DASH } from "../util/char-groups";
 
 /**
@@ -664,11 +664,12 @@ export const processDenyListMatches = (
     // Score: chained names get 0.9, single names 0.5
     const score = chain.length >= 2 ? 0.9 : 0.5;
 
-    // Skip standalone single-word names at sentence
-    // start (likely not a person name) — BUT keep it
-    // if the word after the chain is also uppercase
+    // Single-word deny-list matches are too noisy:
+    // "Rate", "Server", "Code" etc. are surnames but
+    // also common English words. Only accept single-
+    // word matches when the next word is also uppercase
     // (likely a full name: "Alena Zemanová").
-    if (chain.length === 1 && isSentenceStart(fullText, first.start)) {
+    if (chain.length === 1) {
       const afterEnd = last.end;
       const rest = fullText.slice(afterEnd).trimStart();
       const nextIsUpper = rest.length > 1 && /^\p{Lu}\p{Ll}/u.test(rest);

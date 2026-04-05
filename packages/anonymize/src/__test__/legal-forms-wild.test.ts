@@ -34,6 +34,21 @@ const expectOrg = async (text: string, expected: string) => {
   expect(org!.text).toBe(expected);
 };
 
+const expectOrgs = async (text: string, expected: string[]) => {
+  const ctx = createPipelineContext();
+  const entities = await runPipeline({
+    fullText: text,
+    config: CONFIG,
+    gazetteerEntries: [],
+    context: ctx,
+  });
+  const orgs = entities
+    .filter((e) => e.label === "organization")
+    .map((e) => e.text)
+    .sort();
+  expect(orgs).toEqual(expected.sort());
+};
+
 const expectNoOrg = async (text: string) => {
   const ctx = createPipelineContext();
   const entities = await runPipeline({
@@ -161,6 +176,35 @@ describe("German legal forms", () => {
 
   test("AG", async () => {
     await expectOrg("Deutsche Bank AG", "Deutsche Bank AG");
+  });
+});
+
+// ── Connector separation ─────────────────────
+
+describe("connector separation", () => {
+  test("two entities separated by connector", async () => {
+    await expectOrgs("RELAKA s.r.o. a AGROBIOPLYN s.r.o.", [
+      "RELAKA s.r.o.",
+      "AGROBIOPLYN s.r.o.",
+    ]);
+  });
+
+  test("backward extension through connector", async () => {
+    await expectOrg("Be a Future s.r.o.", "Be a Future s.r.o.");
+  });
+
+  test("long name with internal connectors", async () => {
+    await expectOrg(
+      "Krajská správa a údržba silnic Vysočiny, příspěvková organizace",
+      "Krajská správa a údržba silnic Vysočiny, příspěvková organizace",
+    );
+  });
+
+  test("ampersand in company name", async () => {
+    await expectOrg(
+      "MAKRO Cash & Carry ČR s.r.o.",
+      "MAKRO Cash & Carry ČR s.r.o.",
+    );
   });
 });
 

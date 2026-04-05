@@ -104,10 +104,13 @@ const COLON_LABELS = new Set(["ip address", "mac address"]);
 export const sanitizeEntities = (entities: Entity[]): Entity[] =>
   entities.flatMap((e) => {
     const strip = COLON_LABELS.has(e.label) ? /[\s,;]+/ : /[\s:,;]+/;
-    const leadTrimmed = e.text.replace(
-      new RegExp(`^${strip.source}`, strip.flags),
-      "",
-    );
+    // Also strip leading dots followed by whitespace —
+    // artifact from trigger extraction after abbreviations
+    // like "dat. nar." or "č.p." where the extraction
+    // starts at the trailing dot of the abbreviation.
+    const leadTrimmed = e.text
+      .replace(/^(?:\.\s)+/, "")
+      .replace(new RegExp(`^${strip.source}`, strip.flags), "");
     const lead = e.text.length - leadTrimmed.length;
     const cleaned = leadTrimmed.replace(
       new RegExp(`${strip.source}$`, strip.flags),
@@ -726,7 +729,7 @@ export const runPipeline = async (
   }
 
   // False-positive filtering
-  const merged = filterFalsePositives(postOrgEntities, ctx);
+  const merged = filterFalsePositives(postOrgEntities, ctx, fullText);
   if (merged.length < postOrgEntities.length)
     log("filter", `removed ${postOrgEntities.length - merged.length} FPs`);
 
@@ -750,7 +753,7 @@ export const runPipeline = async (
         );
         return sanitizeEntities(
           filterAllowedLabels(
-            filterFalsePositives(corefConsistent, ctx),
+            filterFalsePositives(corefConsistent, ctx, fullText),
             allowedLabels,
           ),
         );

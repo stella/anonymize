@@ -40,7 +40,7 @@ import {
 } from "../config/titles";
 import { DETECTION_SOURCES } from "../types";
 import type { Entity } from "../types";
-import { DASH } from "../util/char-groups";
+import { DASH, DASH_INNER } from "../util/char-groups";
 
 const MIN_PHONE_LENGTH = 7;
 const MIN_MONTH_NAME_LENGTH = 3;
@@ -617,6 +617,8 @@ const buildDatePatternsFromMonths = (alt: string): string[] => {
     `(?i)\\b\\d{1,2}\\.?\\s+(?:${alt})\\.?\\s+\\d{4}${TIME}?\\b`,
     // b. Month[.] DD[,] YYYY — "March 7, 2023" (US format)
     `(?i)\\b(?:${alt})\\.?\\s+\\d{1,2},?\\s+\\d{4}\\b`,
+    // g. Month[.] DD — "December 31" (no year, US format)
+    `(?i)\\b(?:${alt})\\.?\\s+\\d{1,2}(?=\\s|[.,;!?)]|$)`,
     // c. DDst/nd/rd/th Month[.] [YYYY] — "1st January 2025"
     `(?i)\\b\\d{1,2}(?:st|nd|rd|th)\\s+(?:${alt})\\.?` +
       `(?:\\s+\\d{4})?(?=\\s|[.,;!?)]|$)`,
@@ -749,38 +751,37 @@ const buildCurrencyPatterns = (data: CurrenciesData): string[] => {
 
   const patterns: string[] = [];
 
+  // Decimal part: dot/comma must be followed by at
+  // least one digit or dash. Without this, a trailing
+  // sentence period ("$25,000,000.") gets consumed by
+  // the optional group, breaking the \b anchor.
+  // Use lookahead (?=\d|DASH) after [.,] to ensure
+  // the separator is actually a decimal marker.
+  const DECIMAL =
+    `(?:[.,](?=\\d|[${DASH_INNER}])` +
+    `[^\\S\\n\\t]?` +
+    `(?:\\d{1,2}${DASH}?|${DASH}{1,2}))?`;
+  const END = `(?:\\b|(?=\\s|[.,;!?)]|$))`;
+
   // Leading symbol: $100, €1,000.50, € 100000
   if (symbols) {
     patterns.push(
-      `(?:[${symbols}])` +
-        `[^\\S\\n\\t]?` +
-        `${NUM}` +
-        `(?:[.,][^\\S\\n\\t]?(?:\\d{1,2}${DASH}?|${DASH}{1,2})?)?\\b`,
+      `(?:[${symbols}])` + `[^\\S\\n\\t]?` + `${NUM}${DECIMAL}${END}`,
     );
   }
 
   // Leading multi-char code: "Kč 10,—", "Fr. 500"
-  // Uses the trailing alternation in reverse position.
   if (trailingAlt) {
     patterns.push(
-      `\\b(?:${trailingAlt})` +
-        `[^\\S\\n\\t]{0,2}` +
-        `${NUM}` +
-        `(?:[.,][^\\S\\n\\t]?(?:\\d{1,2}${DASH}?|${DASH}{1,2})?)?\\b`,
+      `\\b(?:${trailingAlt})` + `[^\\S\\n\\t]{0,2}` + `${NUM}${DECIMAL}${END}`,
     );
   }
 
   // Trailing code/name: 100 USD, 1,000.50 CZK,
   // 100000 Kč, 500 korun, 100 Fr.
-  // Use (?:\b|(?=\s|[.,;!?)]|$)) instead of bare
-  // \b so entries ending in non-word characters
-  // (e.g. "Fr.") still match at word boundaries.
   if (trailingAlt) {
     patterns.push(
-      `\\b${NUM}` +
-        `(?:[.,][^\\S\\n\\t]?(?:\\d{1,2}${DASH}?|${DASH}{1,2})?)?[^\\S\\n\\t]{0,4}` +
-        `(?:${trailingAlt})` +
-        `(?:\\b|(?=\\s|[.,;!?)]|$))`,
+      `\\b${NUM}${DECIMAL}[^\\S\\n\\t]{0,4}` + `(?:${trailingAlt})${END}`,
     );
   }
 
