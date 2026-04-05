@@ -133,6 +133,7 @@ export const buildLegalFormPatterns = async (): Promise<string[]> => {
 // ── Backward extension ──────────────────────────────
 
 const CONNECTOR_RE = /^(?:a|and|und|et|e|y|i|&)$/i;
+const LEADING_CLAUSE_RE = /(?:^|\s)(?:by\s+and\s+between|is\s+between)\s+/giu;
 
 /**
  * Find the word ending just before `pos` in `text`,
@@ -209,6 +210,28 @@ const extendBackward = (fullText: string, matchStart: number): number => {
   return pos;
 };
 
+const trimLeadingClause = (
+  text: string,
+): { offset: number; text: string } => {
+  let cut = -1;
+
+  for (const match of text.matchAll(LEADING_CLAUSE_RE)) {
+    cut = match.index + match[0].length;
+  }
+
+  if (cut <= 0) {
+    return { offset: 0, text };
+  }
+
+  const trimmed = text.slice(cut);
+  const leadingWs = trimmed.match(/^\s*/u)?.[0].length ?? 0;
+
+  return {
+    offset: cut + leadingWs,
+    text: trimmed.slice(leadingWs),
+  };
+};
+
 // ── Match processor ─────────────────────────────────
 
 /**
@@ -252,6 +275,12 @@ export const processLegalFormMatches = (
           .slice(extended, match.start + text.length)
           .trimEnd();
       }
+    }
+
+    const clauseTrim = trimLeadingClause(entityText);
+    if (clauseTrim.offset > 0) {
+      entityStart += clauseTrim.offset;
+      entityText = clauseTrim.text;
     }
 
     // Reject all-caps matches only if the entire

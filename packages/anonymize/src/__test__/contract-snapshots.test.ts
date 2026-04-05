@@ -72,6 +72,47 @@ const FIXTURES: ContractFixture[] = [
       ).toBe(false);
     },
   },
+  {
+    name: "edgar employment agreement",
+    textPath: join(
+      FIXTURES_DIR,
+      "en",
+      "pra-group-employment-agreement.txt",
+    ),
+    snapshotPath: join(
+      FIXTURES_DIR,
+      "en",
+      "pra-group-employment-agreement.snapshot.json",
+    ),
+    assertQuality: (entities) => {
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "organization" && entity.text === "PRA Group, Inc.",
+        ),
+      ).toBe(true);
+      expect(
+        entities.some(
+          (entity) => entity.label === "person" && entity.text === "Vikram A. Atal",
+        ),
+      ).toBe(true);
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "organization" && entity.text === "Committee",
+        ),
+      ).toBe(false);
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "person" &&
+            (entity.text === "COBRA Reimbursement Period" ||
+              entity.text === "American Arbitration Association" ||
+              entity.text === "Dodd-Frank Wall Street Reform"),
+        ),
+      ).toBe(false);
+    },
+  },
 ];
 
 const toSnapshot = (
