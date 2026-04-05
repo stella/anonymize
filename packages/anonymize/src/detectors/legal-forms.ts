@@ -61,10 +61,7 @@ const buildPatternString = (
   // Czech state enterprise names can be 7+ words:
   // "Národní agentura pro komunikační a informační
   // technologie, s. p." — need generous limit.
-<<<<<<< HEAD
-  const prefix =
-    `(?:${CAP_WORD})` +
-    `(?:${CONNECTOR}(?:${ANY_WORD})){0,10}`;
+  const prefix = `(?:${CAP_WORD})` + `(?:${CONNECTOR}(?:${ANY_WORD})){0,10}`;
   // Both long and short forms allow comma separator.
   // "Krajská správa, příspěvková organizace" needs
   // comma before the long-form suffix.
