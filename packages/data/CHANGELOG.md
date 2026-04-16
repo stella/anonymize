@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Fixes
+
+- Publish the full dictionary catalog referenced by the data package exports.
+- Document the data package surface more clearly for consumers and maintainers.
+
 ## 0.0.1 (2026-03-22)
 
 ### Features

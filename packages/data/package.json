@@ -1,6 +1,6 @@
 {
   "name": "@stll/anonymize-data",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Deny list dictionaries and config data for @stll/anonymize",
   "type": "module",
   "exports": {
@@ -20,8 +20,17 @@
   "types": "dist/index.d.ts",
   "files": [
     "dist",
+    "ATTRIBUTION.md",
+    "CHANGELOG.md",
     "config",
+    "dictionaries/banks",
     "dictionaries/cities",
+    "dictionaries/courts",
+    "dictionaries/education",
+    "dictionaries/government",
+    "dictionaries/healthcare",
+    "dictionaries/insurance",
+    "dictionaries/international",
     "dictionaries/names"
   ],
   "publishConfig": {

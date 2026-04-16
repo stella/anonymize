@@ -33,8 +33,7 @@ const STANDALONE_YEAR_RE = /^(?:19|20)\d{2}$/;
 // "no.", "n.", "čís." — when a numeric entity is preceded
 // by one of these, it's a reference number, not PII.
 const NUMBER_ABBREV_RE = /(?:^|[\s(])(?:č|čís|nr|no|n)\.\s*$/i;
-const SIGNING_CLAUSE_ADDRESS_RE =
-  /^(?:v|ve)\s+[^\d,\n]{1,40},?\s+dne$/iu;
+const SIGNING_CLAUSE_ADDRESS_RE = /^(?:v|ve)\s+[^\d,\n]{1,40},?\s+dne$/iu;
 const PERSON_TRAILING_NOUNS: ReadonlySet<string> = new Set([
   "association",
   "period",
@@ -233,7 +232,10 @@ export const filterFalsePositives = (
 
     if (normalized.label === "person") {
       const tokens = trimmed.split(/\s+/u);
-      const last = tokens.at(-1)?.replace(/[.,;:!?]+$/u, "").toLowerCase();
+      const last = tokens
+        .at(-1)
+        ?.replace(/[.,;:!?]+$/u, "")
+        .toLowerCase();
       if (tokens.length > 1 && last && PERSON_TRAILING_NOUNS.has(last)) {
         continue;
       }

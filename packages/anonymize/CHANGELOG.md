@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Fixes
+
+- Document the runtime package more clearly for install and browser usage.
+- Keep the data package peer dependency aligned with the published data surface.
+
 ## 0.0.1 (2026-03-22)
 
 ### Features

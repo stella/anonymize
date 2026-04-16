@@ -46,7 +46,8 @@ describe("contract quality regressions", () => {
     ).toBe(true);
     expect(
       entities.some(
-        (entity) => entity.label === "person" && entity.text === "Vikram A. Atal",
+        (entity) =>
+          entity.label === "person" && entity.text === "Vikram A. Atal",
       ),
     ).toBe(true);
   });
@@ -99,7 +100,9 @@ describe("contract quality regressions", () => {
   });
 
   test("rejects signing-clause pseudo-addresses", async () => {
-    const entities = await detect("V Brně dne 1. 1. 2026 V Praze, dne 2. 2. 2026");
+    const entities = await detect(
+      "V Brně dne 1. 1. 2026 V Praze, dne 2. 2. 2026",
+    );
 
     expect(
       entities.some(
@@ -108,7 +111,8 @@ describe("contract quality regressions", () => {
     ).toBe(false);
     expect(
       entities.some(
-        (entity) => entity.label === "address" && entity.text === "V Praze, dne",
+        (entity) =>
+          entity.label === "address" && entity.text === "V Praze, dne",
       ),
     ).toBe(false);
   });
@@ -150,7 +154,8 @@ describe("contract quality regressions", () => {
     expect(
       entities.some(
         (entity) =>
-          entity.label === "organization" && entity.text === "Sanofi Czech Republic s.r.o.",
+          entity.label === "organization" &&
+          entity.text === "Sanofi Czech Republic s.r.o.",
       ),
     ).toBe(true);
   });
@@ -158,9 +163,7 @@ describe("contract quality regressions", () => {
   test("does not emit pagination markers as addresses", async () => {
     const entities = await detect("Page Follows");
 
-    expect(
-      entities.some((entity) => entity.label === "address"),
-    ).toBe(false);
+    expect(entities.some((entity) => entity.label === "address")).toBe(false);
   });
 
   test("does not emit generic Czech heading words as addresses", async () => {
@@ -208,7 +211,9 @@ describe("contract quality regressions", () => {
   });
 
   test("does not extend dates into html entities", async () => {
-    const entities = await detect("Employee has pre-scheduled vacation from July 1 &#150; 15, 2022.");
+    const entities = await detect(
+      "Employee has pre-scheduled vacation from July 1 &#150; 15, 2022.",
+    );
 
     expect(
       entities.some(
@@ -218,13 +223,15 @@ describe("contract quality regressions", () => {
   });
 
   test("keeps address continuations after street abbreviations", async () => {
-    const entities = await detect("The employee is residing at 123 Main St. Suite 100.");
+    const entities = await detect(
+      "The employee is residing at 123 Main St. Suite 100.",
+    );
 
     expect(
       entities.some(
         (entity) =>
           entity.label === "address" && entity.text.includes("Suite 100"),
-        ),
+      ),
     ).toBe(true);
     expect(
       entities.some(
@@ -238,8 +245,8 @@ describe("contract quality regressions", () => {
       "THIS AMENDMENT NO. 1 TO AMENDED AND RESTATED EMPLOYMENT AGREEMENT",
     );
 
-    expect(
-      entities.some((entity) => entity.label === "organization"),
-    ).toBe(false);
+    expect(entities.some((entity) => entity.label === "organization")).toBe(
+      false,
+    );
   });
 });

@@ -210,9 +210,7 @@ const extendBackward = (fullText: string, matchStart: number): number => {
   return pos;
 };
 
-const trimLeadingClause = (
-  text: string,
-): { offset: number; text: string } => {
+const trimLeadingClause = (text: string): { offset: number; text: string } => {
   let cut = -1;
 
   for (const match of text.matchAll(LEADING_CLAUSE_RE)) {

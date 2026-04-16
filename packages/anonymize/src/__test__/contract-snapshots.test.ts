@@ -32,7 +32,10 @@ const CONFIG: PipelineConfig = {
   workspaceId: "contract-snapshot-test",
 };
 
-type SnapshotEntity = Pick<Entity, "start" | "end" | "label" | "text" | "source">;
+type SnapshotEntity = Pick<
+  Entity,
+  "start" | "end" | "label" | "text" | "source"
+>;
 
 type ContractSnapshot = {
   entityCount: number;
@@ -67,18 +70,15 @@ const FIXTURES: ContractFixture[] = [
       expect(
         entities.some(
           (entity) =>
-            entity.label === "address" && /^(?:V|Ve)\s+.+\s+dne$/u.test(entity.text),
+            entity.label === "address" &&
+            /^(?:V|Ve)\s+.+\s+dne$/u.test(entity.text),
         ),
       ).toBe(false);
     },
   },
   {
     name: "edgar employment agreement",
-    textPath: join(
-      FIXTURES_DIR,
-      "en",
-      "pra-group-employment-agreement.txt",
-    ),
+    textPath: join(FIXTURES_DIR, "en", "pra-group-employment-agreement.txt"),
     snapshotPath: join(
       FIXTURES_DIR,
       "en",
@@ -88,12 +88,14 @@ const FIXTURES: ContractFixture[] = [
       expect(
         entities.some(
           (entity) =>
-            entity.label === "organization" && entity.text === "PRA Group, Inc.",
+            entity.label === "organization" &&
+            entity.text === "PRA Group, Inc.",
         ),
       ).toBe(true);
       expect(
         entities.some(
-          (entity) => entity.label === "person" && entity.text === "Vikram A. Atal",
+          (entity) =>
+            entity.label === "person" && entity.text === "Vikram A. Atal",
         ),
       ).toBe(true);
       expect(
@@ -201,11 +203,7 @@ const FIXTURES: ContractFixture[] = [
   },
   {
     name: "czech nakit legal services framework",
-    textPath: join(
-      FIXTURES_DIR,
-      "cs",
-      "nakit-legal-services-framework.txt",
-    ),
+    textPath: join(FIXTURES_DIR, "cs", "nakit-legal-services-framework.txt"),
     snapshotPath: join(
       FIXTURES_DIR,
       "cs",
@@ -235,11 +233,7 @@ const FIXTURES: ContractFixture[] = [
   },
   {
     name: "edgar gt biopharma employment amendment",
-    textPath: join(
-      FIXTURES_DIR,
-      "en",
-      "gt-biopharma-employment-amendment.txt",
-    ),
+    textPath: join(FIXTURES_DIR, "en", "gt-biopharma-employment-amendment.txt"),
     snapshotPath: join(
       FIXTURES_DIR,
       "en",
@@ -284,8 +278,7 @@ const FIXTURES: ContractFixture[] = [
       expect(
         entities.some(
           (entity) =>
-            entity.label === "person" &&
-            entity.text === "Amanda L. Houghton",
+            entity.label === "person" && entity.text === "Amanda L. Houghton",
         ),
       ).toBe(true);
       expect(
@@ -328,8 +321,7 @@ const FIXTURES: ContractFixture[] = [
       expect(
         entities.some(
           (entity) =>
-            entity.label === "person" &&
-            entity.text === "Bc. Vratislav Pavlín",
+            entity.label === "person" && entity.text === "Bc. Vratislav Pavlín",
         ),
       ).toBe(true);
       expect(

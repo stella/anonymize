@@ -5,6 +5,7 @@
   "packageManager": "bun@1.3.10",
   "workspaces": ["packages/*"],
   "scripts": {
+    "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
     "format": "turbo run format",
