@@ -1,0 +1,187 @@
+Česká republika - Ústřední kontrolní a zkušební ústav zemědělský
+
+organizační složka státu
+
+sídlo: Hroznová 63/2, 603 00 Brno
+
+IČO: 00020338
+
+jejímž jménem jedná 
+
+bankovní spojení :	Česká národní banka
+
+číslo účtu:		
+
+kontaktní osoba: 	
+
+(dále jen objednatel)
+
+
+
+a
+
+
+
+Database CZ, spol. s r.o.
+
+sídlo: Na Bítýškách 582, 664 71 Veverská Bítýška
+
+zastoupená 
+
+zapsaná v OR vedeném u Krajského soudu v Brně, oddíl C, vložka 30549 
+
+bankovní spojení :	Fio banka, a.s.
+
+číslo účtu:		
+
+IČO:			25529005
+
+DIČ:			CZ25529005
+
+kontakt. údaje: 	
+
+(dále jen zhotovitel)
+
+
+
+u z a v í r a j í  podle § 1746 odst. 2 zákona č. 89/2012 Sb., občanský zákoník, ve znění pozdějších předpisů
+
+
+
+Servisní smlouvu č. 01/NOÚ/2026
+
+o správě Informačního systému Národního odrůdového úřadu
+
+
+
+
+
+čl. I.
+
+Předmět plnění smlouvy
+
+
+
+Předmětem smlouvy je zajištění provozu a drobného rozvoje Informačního systému NOÚ (dále jen IS) Národního odrůdového úřadu ÚKZÚZ (dále jen “odbor”), instalovaném na serveru Národního odrůdového úřadu ÚKZÚZ v Brně.
+
+
+
+čl. II.
+
+Práva a povinnosti účastníků smlouvy
+
+
+
+Účastníci smlouvy se dohodli na spolupráci při zajištění provozu a drobného rozvoje IS objednatele.
+
+A)  Zhotovitel se zavazuje:
+
+Poskytovat konzultace všem pracovníkům odboru na všech pracovištích, kde je IS objednatele využíván, prostřednictvím hl. koordinátora projektu 
+
+Provádět ve spolupráci s hlavním koordinátorem odboru průběžnou kontrolu provozu a všech agend IS ve snaze předcházet nestandardním stavům. Tato kontrola bude prováděna v sídle objednatele 12x ročně a to vždy do 25. dne kalendářního měsíce pokud se obě smluvní strany nedohodnou na jiných termínech.
+
+Zasáhnout formou servisní činnosti při úpravách nastavení HW a SW IS včetně dílčích programátorských prací vč. drobného rozvoje přímo na pracovišti ÚKZÚZ Brno, v případě vzniku poruchové situace do 48 hodin od nahlášení poruchy nedohodnou-li se obě smluvní strany v daném případě jinak.
+
+Každý servisní zásah nebo plánovanou kontrolu potvrdí zhotovitel do pracovního listu zřízeného objednatelem na pracovišti IS. Objednatel umožní zhotoviteli on-line přístup ke spravovaným serverům IS NOÚ.
+
+Spolupracovat při sumárním zpracování výstupů, při tvorbě nadstandardních výstupů z IS objednatele a při úpravách struktury a funkce databáze souvisejících se změnami příslušné legislativy (zákon č. 219/2003 Sb., o oběhu osiva a sadby a zákon č. 408/2000 Sb., o ochraně práv k odrůdám) a pracovních postupů.
+
+Dodržovat bezpečnostní předpisy a pokyny při práci ve služebních prostorách objednatele v souvislosti s realizací předmětu této smlouvy.
+
+B)  Objednatel se zavazuje:
+
+Umožnit zhotoviteli přístup k IS za účelem provádění úkonů dohodnutých v předmětu této smlouvy a vytvořit mu podmínky pro realizaci závazku.
+
+Včas a řádně uhrazovat zhotoviteli částku dohodnutou v článku IV. této smlouvy.
+
+
+
+čl. III.
+
+Poskytnutí záruky funkčnosti IS
+
+
+
+1. Zhotovitel poskytuje záruku týkající se funkčnosti jím dodaných programů pod operačním systémem Linux.
+
+2. Zhotovitel poskytuje plnou záruku na funkčnost systému po dobu, kdy zodpovídá za správu jím dodaných programů v rámci IS.
+
+3. Poskytování záruky skončí v okamžiku zjištění nekvalifikovaného zásahu do programů, provedení zásahu do systémových nastavení počítače, operačního systému počítače a instalovaných služeb operačního systému, které mají přímý vliv na správnou funkci IS.
+
+4. Zhotovitel neodpovídá za vady vzniklé neodborným užíváním systému, chybami obsluhy z řad zaměstnanců objednatele, vadnými či nekontrolovanými vstupními daty, zásahy vyšší moci, prokazatelně úmyslným zničením nebo smazáním systému.
+
+5. Zhotovitel neposkytuje záruku a nenese zodpovědnost za správnost pořízených dat do IS objednatele.
+
+čl. IV.
+
+Finanční relace smlouvy
+
+
+
+Cena servisního zásahu je složena z ceny za dopravu do místa plnění (viz. čl. II odst. A) bod  3.) a ceny práce strávené vlastním zásahem. Cena za dopravu do místa plnění je dohodnuta na 12,- Kč za kilometr bez DPH, DPH 3,- Kč, vč. DPH 15,- Kč. Cena za 1 hodinu práce strávené vlastním zásahem je dohodnuta na 1.300,-Kč bez DPH, DPH 273,- Kč, 1.573,- Kč vč. DPH, započítává se každá započatá půlhodina.
+
+Cena za 1 hodinu konzultace dle čl. II. odst. A) bod 1, týkající se práce se systémem z hlediska uživatele, je dohodnuta na 1.300,- Kč bez DPH, 21% DPH  273,-   Kč, vč. DPH 1.573,-  Kč,  a je splatná měsíčně, započítává se každá započatá čtvrthodina.
+
+Cena za 1 hodinu drobného rozvoje dle čl. II. odst. A) bod 3 je dohodnuta na 1.500,- Kč bez DPH, DPH 315,- Kč, 1.815,- Kč vč. DPH  a je splatná měsíčně. Započítává se každá započatá půlhodina.
+
+Cena za 1 hodinu práce na zpracování sumárních výstupů dle čl. II. odst. A) bod 5 je dohodnuta na 1.500,- Kč bez DPH, DPH 315,- Kč, 1.815,- Kč vč. DPH  a je splatná měsíčně. Započítává se každá započatá půlhodina.
+
+Celková cena plnění podle této smlouvy v žádném případě nesmí překročit 290.000,-Kč  bez DPH. V případě, že zhotovitel zjistí pravděpodobnost přiblížení k této částce nebo její dosažení, zavazuje se neprodleně informovat o této skutečnosti objednatele za účelem dohody o případném dalším novém závazku. Na základě této smlouvy je fakturace převyšující celkovou částku 290.000,-Kč bez DPH zcela nepřípustná.
+
+Ceny jsou stanoveny jako nejvýše přípustné a je možné je překročit jen za podmínek stanovených v této smlouvě. V případě legislativní změny sazby DPH bude zhotovitel účtovat objednateli DPH dle platných a účinných právních předpisů. Cena bez DPH tímto není dotčena. DPH je ve výši 21 %.
+
+Zhotovitelem budou fakturovány jednotlivé provedené práce, o provedení prací bude sepsán a přiložen k faktuře akceptační protokol, který bude předem odsouhlasen vedoucím Oddělení informatiky. Splatnost faktur je 15 dnů ode dne jejich doručení objednateli.
+
+
+
+čl. V.
+
+Časové relace smlouvy
+
+
+
+Smlouva se uzavírá na dobu určitou od 1.3.2026 do 28.2.2027.
+
+
+
+čl. VI.
+
+Kontaktní osoby objednatele
+
+
+
+Za objednatele jednají ve věcech odborných, ředitel Národního odrůdového úřadu ÚKZÚZ, , vedoucí Oddělení informatiky a, vedoucí Oddělení zkoušek užitné hodnoty, který je současně hlavním koordinátorem za objednatele.
+
+čl. VII.
+
+Závěrečná ustanovení
+
+
+
+Smluvní strany se zavazují v plném rozsahu zachovávat povinnost mlčenlivosti a povinnost chránit důvěrné informace vyplývající z této smlouvy a též z příslušných právních předpisů, zejména povinnosti vyplývající z Nařízení Evropského parlamentu a Rady EU č. 2016/679 o ochraně fyzických osob v souvislosti se zpracováním osobních údajů a o volném pohybu těchto údajů, a zákonem č. 110/2019 Sb., o zpracování osobních údajů. Smluvní strany se v této souvislosti zavazují poučit veškeré osoby, které se na jejich straně budou podílet na plnění této smlouvy, o výše uvedených povinnostech mlčenlivosti a ochrany důvěrných informací a dále se zavazují vhodným způsobem zajistit dodržování těchto povinností všemi osobami podílejícími se na plnění této smlouvy.
+
+Smlouva nabývá platnosti dnem jejího podpisu oběma smluvními stranami a účinnosti dnem jejího zveřejnění v registru smluv.
+
+Smluvní strany prohlašují, že tato smlouva neobsahuje žádné obchodní tajemství ani jiné utajované skutečnosti. Zhotovitel je srozuměn se skutečností, že objednatel v souladu s příslušnými právními předpisy tuto smlouvu zveřejní v registru smluv.
+
+Jakékoliv změny v obsahu této smlouvy lze činit výhradně formou písemných dodatků podepsaných oběma účastníky smlouvy.
+
+Smlouva je dána ve třech vyhotoveních, objednatel obdrží dvě paré, zhotovitel jedno paré, z nichž každé má platnost originálu.
+
+Vztahy mezi smluvními stranami výslovně neupravené touto smlouvou se řídí zákonem č. 89/2012 Sb., občanský zákoník, ve znění pozdějších předpisů.
+
+Smluvní strany souhlasně prohlašují, že smlouvu přečetly, s jejím zněním souhlasí, tuto smlouvu uzavírají dobrovolně a na důkaz těchto skutečností připojují své podpisy.
+
+
+
+
+
+
+
+
+
+V Brně dne 					V Praze dne
+
+
+
+Za zhotovitele					Za objednatele

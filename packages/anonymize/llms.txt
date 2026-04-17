@@ -1,0 +1,53 @@
+# @stll/anonymize
+
+Multi-layer PII detection and anonymization for
+legal documents. Supports 20+ languages with
+Czech/Slovak specialization.
+
+## Pipeline
+
+Six detection layers run in parallel, results
+merged with dedup:
+
+1. **Regex** — structured PII (IBAN, email, phone,
+   dates, birth numbers, company IDs)
+2. **Triggers** — keyword proximity ("bytem" →
+   address, "narozen" → date)
+3. **Legal forms** — organization suffix detection
+   (s.r.o., GmbH, Ltd.)
+4. **Name corpus** — first/last name matching with
+   Czech declension handling
+5. **Gazetteer** — workspace deny lists via
+   Aho-Corasick + Levenshtein fuzzy
+6. **GLiNER NER** — zero-shot transformer NER
+
+Post-processing: coreference (alias tracking),
+confidence boosting, false positive filtering.
+
+## API
+
+```typescript
+import { runPipeline, redactText } from '@stll/anonymize'
+
+// Detect entities
+const entities = await runPipeline({
+  fullText: text,
+  config,
+  gazetteerEntries: [],
+})
+
+// Redact
+const { redactedText, redactionMap } = redactText(
+  text, entities, { type: 'replace' }
+)
+// redactedText: "[PERSON_1] prodává [ORGANIZATION_1]..."
+// redactionMap: { "[PERSON_1]": "Jan Novák", ... }
+```
+
+## Entity Labels
+
+person, organization, address, date, phone number,
+email address, iban, bank account number, credit card
+number, czech birth number, registration number,
+tax identification number, identity card number,
+passport number

@@ -1,0 +1,21 @@
+{
+  "name": "anonymize",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "packageManager": "bun@1.3.12",
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint",
+    "format": "turbo run format",
+    "test": "turbo run test",
+    "check:json": "bun run --cwd packages/data lint:json",
+    "fix:json": "bun run --cwd packages/data format:json"
+  },
+  "devDependencies": {
+    "prettier": "^3.6.2",
+    "turbo": "^2"
+  }
+}

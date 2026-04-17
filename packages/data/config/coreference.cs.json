@@ -1,0 +1,12 @@
+[
+  {
+    "label": "(dale jen \"X\") or (dale jen 'X') or (dale jen \"X\")",
+    "pattern": "\\(dále\\s+jen\\s+[„\"'‚]([^\"'\"\"]+)[\"\"']\\)",
+    "flags": "gi"
+  },
+  {
+    "label": "dale jen \"X\" without parens",
+    "pattern": "dále\\s+jen\\s+[„\"'‚]([^\"'\"\"]+)[\"\"']",
+    "flags": "gi"
+  }
+]

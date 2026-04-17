@@ -1,0 +1,33 @@
+{
+  "_comment": "Lowercase title tokens that signal a person name follows. Used for token classification in the name chain detector.",
+  "tokens": [
+    "bc",
+    "dame",
+    "doc",
+    "dr",
+    "frau",
+    "herr",
+    "ing",
+    "judge",
+    "judr",
+    "justice",
+    "lady",
+    "lord",
+    "maître",
+    "mgr",
+    "miss",
+    "mlle",
+    "mme",
+    "mr",
+    "mrs",
+    "ms",
+    "mudr",
+    "mvdr",
+    "paeddr",
+    "phdr",
+    "prof",
+    "rndr",
+    "sir",
+    "thdr"
+  ]
+}

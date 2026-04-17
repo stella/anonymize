@@ -1,0 +1,61 @@
+{
+  "name": "@stll/anonymize-data",
+  "version": "0.0.4",
+  "description": "Deny list dictionaries and config data for @stll/anonymize",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./dictionaries": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./config/*": "./config/*",
+    "./dictionaries/*": "./dictionaries/*"
+  },
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "ATTRIBUTION.md",
+    "CHANGELOG.md",
+    "config",
+    "dictionaries/banks",
+    "dictionaries/cities",
+    "dictionaries/courts",
+    "dictionaries/education",
+    "dictionaries/government",
+    "dictionaries/healthcare",
+    "dictionaries/insurance",
+    "dictionaries/international",
+    "dictionaries/names"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stella/anonymize.git"
+  },
+  "license": "MIT",
+  "scripts": {
+    "build": "tsdown",
+    "prepublishOnly": "bun run build",
+    "typecheck": "tsc --noEmit",
+    "validate:triggers": "bun run scripts/validate-triggers.ts",
+    "lint:code": "prettier --check . --ignore-path ../../.prettierignore",
+    "lint:json": "prettier --check \"config/**/*.json\"",
+    "lint": "bun run validate:triggers && bun run lint:code && bun run lint:json",
+    "format:code": "prettier --write . --ignore-path ../../.prettierignore",
+    "format:json": "prettier --write \"config/**/*.json\"",
+    "format": "bun run format:code && bun run format:json"
+  },
+  "devDependencies": {
+    "stopwords-iso": "1.1.0",
+    "tsdown": "^0.12.4",
+    "typescript": "^5.9.3"
+  }
+}

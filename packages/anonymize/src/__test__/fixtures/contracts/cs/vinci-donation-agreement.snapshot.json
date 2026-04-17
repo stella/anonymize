@@ -1,0 +1,134 @@
+{
+  "entityCount": 17,
+  "counts": {
+    "organization": 2,
+    "address": 2,
+    "registration number": 3,
+    "tax identification number": 2,
+    "person": 6,
+    "monetary amount": 1,
+    "date": 1
+  },
+  "entities": [
+    {
+      "start": 152,
+      "end": 178,
+      "label": "organization",
+      "text": "VINCI Construction CS a.s.",
+      "source": "legal-form"
+    },
+    {
+      "start": 188,
+      "end": 221,
+      "label": "address",
+      "text": "U Michelského lesa 1581/2 Praha 4",
+      "source": "trigger"
+    },
+    {
+      "start": 228,
+      "end": 236,
+      "label": "registration number",
+      "text": "14080672",
+      "source": "trigger"
+    },
+    {
+      "start": 244,
+      "end": 255,
+      "label": "tax identification number",
+      "text": "CZ 14080672",
+      "source": "trigger"
+    },
+    {
+      "start": 270,
+      "end": 292,
+      "label": "person",
+      "text": "Ing. Martinem Borovkou",
+      "source": "regex"
+    },
+    {
+      "start": 323,
+      "end": 345,
+      "label": "person",
+      "text": "Ing. Erikou Kohoutovou",
+      "source": "regex"
+    },
+    {
+      "start": 411,
+      "end": 434,
+      "label": "organization",
+      "text": "Městským soudem v Praze",
+      "source": "deny-list"
+    },
+    {
+      "start": 452,
+      "end": 456,
+      "label": "registration number",
+      "text": "9654",
+      "source": "trigger"
+    },
+    {
+      "start": 569,
+      "end": 596,
+      "label": "address",
+      "text": "Thákurova 7, 166 29 Praha 6",
+      "source": "trigger"
+    },
+    {
+      "start": 611,
+      "end": 619,
+      "label": "registration number",
+      "text": "68407700",
+      "source": "trigger"
+    },
+    {
+      "start": 635,
+      "end": 645,
+      "label": "tax identification number",
+      "text": "CZ68407700",
+      "source": "trigger"
+    },
+    {
+      "start": 668,
+      "end": 703,
+      "label": "person",
+      "text": "prof. Ing. Petrem Konvalinkou, CSc.",
+      "source": "regex"
+    },
+    {
+      "start": 1025,
+      "end": 1091,
+      "label": "monetary amount",
+      "text": "275.000,00- Kč, (slovy: dvě stě sedmdesát pět tisíc korun českých)",
+      "source": "trigger"
+    },
+    {
+      "start": 2406,
+      "end": 2420,
+      "label": "date",
+      "text": "27. dubna 2016",
+      "source": "regex"
+    },
+    {
+      "start": 4346,
+      "end": 4365,
+      "label": "person",
+      "text": "Ing. Martin Borovka",
+      "source": "regex"
+    },
+    {
+      "start": 4445,
+      "end": 4465,
+      "label": "person",
+      "text": "Ing. Erika Kohoutová",
+      "source": "regex"
+    },
+    {
+      "start": 4545,
+      "end": 4577,
+      "label": "person",
+      "text": "prof. Ing. Petr Konvalinka, CSc.",
+      "source": "regex"
+    }
+  ],
+  "redactedText": "Darovací smlouva\n\n\n\nuzavřená podle ustanovení § 2055 a násl. zákona č. 89/2012 Sb., občanský zákoník,\n\n ve znění pozdějších předpisů \n\n\n\nDárce:        \t[ORGANIZATION_1]\t\n\nsídlo:\t[ADDRESS_1]\n\nIČ: \t[REGISTRATION_NUMBER_1]\n\nDIČ: \t[TAX_IDENTIFICATION_NUMBER_1]\n\nzastoupený: \t[PERSON_1], předsedou představenstva\n\n\ta [PERSON_2], členkou představenstva\n\n\n\nzapsaná v obchodním rejstříku vedeném [ORGANIZATION_2], oddíl B, vložka [REGISTRATION_NUMBER_2]\n\n\n\n(dále jen „dárce“)\n\n\n\na\n\nObdarovaný:\tČeské vysoké učení technické v Praze, Fakulta stavební\n\nsídlo:\t\t        [ADDRESS_2]\n\nIČ:\t\t        [REGISTRATION_NUMBER_3]\n\nDIČ:\t\t        [TAX_IDENTIFICATION_NUMBER_2]\n\nzastoupený:         \t[PERSON_3], FEng., děkanem fakulty\n\n\n\nbankovní spojení:\tXXX\n\nč. ú.:\tXXX\n\n\t\n\n(dále jen ”obdarovaný”)  \n\n\n\n(dárce a obdarovaný jsou dále uváděni společně jako „smluvní strany“ nebo kterýkoli z nich samostatně jen jako „strana\")\n\n\n\nČl. I.\n\nPředmět smlouvy;\n\n\n\nDárce touto smlouvou bezplatně daruje obdarovanému finanční částku ve výši [MONETARY_AMOUNT_1], (dále jen „dar“).\n\n\n\nDárce poskytuje dar obdarovanému dobrovolně a nespojuje s ním žádné protiplnění ze strany obdarovaného.\n\n\n\nDar bude dárcem poukázán na účet obdarovaného uvedený v záhlaví této smlouvy, a to do 30 dnů od uzavření této smlouvy. Obdarovaný vystaví dárci potvrzení o přijetí daru.\n\n\n\nČl. II.\n\nÚčel\n\n\n\nDárce poskytuje dar uvedený v čl. I odst. 1 této smlouvy pro účely podpory studentských akcí, úhradu nákladů spojených s organizací studentských soutěží, stipendií nebo úhradu nákladů na pedagogické účely.\n\n\n\nObdarovaný dar přijímá a zavazuje se jej použít výhradně pro účely uvedené v čl. II. odst. 1 této smlouvy.\n\n\n\nObdarovaný se zavazuje kdykoliv na vyžádání dárce předložit doklady o využití daru v souladu se sjednaným účelem.\n\n\n\nČl. III.\n\nZávěrečná ujednání\n\n\n\nDárce je oprávněn od smlouvy odstoupit a požadovat po obdarovaném vrácení daru, a to v případě, že obdarovaný použije dar k jinému než sjednanému účelu uvedenému v čl. II. odst. 1 smlouvy nebo obdarovaný nepředloží dárci doklady o využití daru podle čl. II. odst. 3 smlouvy. \n\n\n\nSmluvní strany se zavazují při zpracování a/nebo předávání osobních údajů v souvislosti s touto smlouvou dodržovat pravidla stanovená zákonem č. 110/2019 Sb., o zpracování osobních údajů a nařízení Evropského parlamentu a Rady (EU) 2016/679 ze dne [DATE_1] o ochraně fyzických osob v souvislosti se zpracováním osobních údajů a o volném pohybu těchto údajů a o zrušení směrnice 95/46/ES (obecné nařízení o ochraně osobních údajů).\n\n\n\nTato smlouva je vyhotovena v elektronické podobě a podepsána platnými uznávanými elektronickými podpisy zástupců smluvních stran dle zákona č. 297/2016 Sb., o službách vytvářejících důvěru pro elektronické transakce.\n\n\n\nObdarovaný prohlašuje, že se před uzavřením této Smlouvy seznámil s Compliance kodexem Skupiny VINCI Construction CS, Kodexem jednání proti korupci VINCI a Chartou etiky a jednání VINCI, Chartou vztahů se subdodavateli VINCI, VINCI průvodcem lidskými právy a Manifestem VINCI, které jsou veřejně přístupné na webových stránkách dárce (https://www.vinci-construction.cz/etika), přičemž povinnosti vyplývající obdarovanému z těchto dokumentů se obdarovaný zavazuje dodržovat.\n\n\n\nTuto smlouvu lze doplňovat či měnit pouze formou písemných očíslovaných dodatků podepsaných oprávněnými zástupci smluvních stran. Za písemnou formu nebude pro tento účel považována výměna e-mailových či jiných elektronických zpráv.\n\n\n\nNení-li v této smlouvě stanoveno jinak, vztahují se na práva a závazky podle této smlouvy ustanovení zákona č. 89/2012 Sb., občanský zákoník, ve znění pozdějších předpisů.\n\n\n\nSmluvní strany souhlasí s uveřejněním této smlouvy v registru smluv podle zákona č. 340/2015 Sb., o registru smluv, které zajistí obdarovaný; pokud některá ze smluvních stran považuje některé informace uvedené ve smlouvě za osobní údaj či za obchodní tajemství, či údaje, které je možné neuveřejnit podle zákona, musí takové informace výslovně takto označit v průběhu kontraktačního procesu.\n\n\n\nTato smlouva nabývá platnosti dnem podpisu zástupci dárce i obdarovaného. Účinnosti smlouva nabývá dnem zveřejnění v registru smluv. \n\nV Praze dne ………..\n\n\n\nV Praze dne ……….\n\nza dárce\n\n\n\nza obdarovaného\n\n\n\n\n\n\n\nPodpis:_____________________\n\nJméno: [PERSON_4]\n\nFunkce: předseda představenstva\n\n\n\n\n\n\n\n\n\nPodpis:_____________________\n\nJméno: [PERSON_5]\n\nFunkce: členka představenstva\n\n\n\n\n\n\n\n\n\n\n\nPodpis:_____________________\n\nJméno: [PERSON_6], FEng.\n\nFunkce: děkan fakulty"
+}

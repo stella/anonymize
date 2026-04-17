@@ -1,0 +1,9 @@
+node_modules
+.cache
+*.tsbuildinfo
+dist
+.turbo
+
+# Local scripts (corpus download, benchmarks)
+scripts/
+packages/data/scripts/

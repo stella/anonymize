@@ -1,0 +1,14 @@
+{
+  "$schema": "https://turborepo.com/schema.json",
+  "tasks": {
+    "build": {
+      "outputs": ["dist/**", "wasm/dist/**"]
+    },
+    "typecheck": {
+      "outputs": []
+    },
+    "lint": {},
+    "format": {},
+    "test": {}
+  }
+}

@@ -1,0 +1,125 @@
+{
+  "rules": [
+    {
+      "hotwords": ["rodné číslo", "r.č.", "birth number", "Geburtsnummer"],
+      "targetLabels": ["czech birth number"],
+      "scoreAdjustment": 0.25,
+      "proximityBefore": 60,
+      "proximityAfter": 60
+    },
+    {
+      "hotwords": [
+        "narozen",
+        "narozena",
+        "nar.",
+        "dat.nar.",
+        "geboren",
+        "born",
+        "née"
+      ],
+      "targetLabels": ["date"],
+      "scoreAdjustment": 0.15,
+      "reclassifyTo": "date of birth",
+      "proximityBefore": 60,
+      "proximityAfter": 60
+    },
+    {
+      "hotwords": [
+        "IČO",
+        "IČ",
+        "identifikační číslo",
+        "reg. č.",
+        "Handelsregister",
+        "company number"
+      ],
+      "targetLabels": ["registration number"],
+      "scoreAdjustment": 0.2,
+      "proximityBefore": 60,
+      "proximityAfter": 60
+    },
+    {
+      "hotwords": [
+        "DIČ",
+        "daňové identifikační číslo",
+        "tax ID",
+        "Steuernummer",
+        "VAT"
+      ],
+      "targetLabels": ["tax identification number"],
+      "scoreAdjustment": 0.2,
+      "proximityBefore": 60,
+      "proximityAfter": 60
+    },
+    {
+      "hotwords": [
+        "tel.",
+        "telefon",
+        "phone",
+        "mobil",
+        "fax",
+        "Telefon",
+        "Handy"
+      ],
+      "targetLabels": ["phone number"],
+      "scoreAdjustment": 0.15,
+      "proximityBefore": 60,
+      "proximityAfter": 60
+    },
+    {
+      "hotwords": [
+        "č.ú.",
+        "číslo účtu",
+        "bank account",
+        "IBAN",
+        "bankovní spojení"
+      ],
+      "targetLabels": ["bank account number", "iban"],
+      "scoreAdjustment": 0.15,
+      "proximityBefore": 60,
+      "proximityAfter": 60
+    },
+    {
+      "hotwords": ["e-mail", "email", "E-Mail"],
+      "targetLabels": ["email address"],
+      "scoreAdjustment": 0.1,
+      "proximityBefore": 60,
+      "proximityAfter": 60
+    },
+    {
+      "hotwords": ["adresa", "sídlo", "sídlem", "bytem", "Adresse", "address"],
+      "targetLabels": ["address"],
+      "scoreAdjustment": 0.15,
+      "proximityBefore": 80,
+      "proximityAfter": 150
+    },
+    {
+      "hotwords": [
+        "jednatel",
+        "ředitel",
+        "předseda",
+        "prokurista",
+        "Geschäftsführer",
+        "director"
+      ],
+      "targetLabels": ["person"],
+      "scoreAdjustment": 0.1,
+      "proximityBefore": 200,
+      "proximityAfter": 30
+    },
+    {
+      "hotwords": [
+        "článek",
+        "článku",
+        "paragraf",
+        "section",
+        "article",
+        "bod",
+        "odstavec"
+      ],
+      "targetLabels": ["date", "address"],
+      "scoreAdjustment": -0.3,
+      "proximityBefore": 30,
+      "proximityAfter": 10
+    }
+  ]
+}

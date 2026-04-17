@@ -1,0 +1,103 @@
+{
+  "entityCount": 13,
+  "counts": {
+    "date": 5,
+    "organization": 1,
+    "address": 1,
+    "person": 6
+  },
+  "entities": [
+    {
+      "start": 208,
+      "end": 223,
+      "label": "date",
+      "text": "August 26, 2025",
+      "source": "regex"
+    },
+    {
+      "start": 248,
+      "end": 262,
+      "label": "date",
+      "text": "April 29, 2025",
+      "source": "regex"
+    },
+    {
+      "start": 314,
+      "end": 332,
+      "label": "organization",
+      "text": "GT Biopharma, Inc.",
+      "source": "legal-form"
+    },
+    {
+      "start": 336,
+      "end": 344,
+      "label": "address",
+      "text": "Delaware",
+      "source": "deny-list"
+    },
+    {
+      "start": 384,
+      "end": 397,
+      "label": "person",
+      "text": "Michael Breen",
+      "source": "deny-list"
+    },
+    {
+      "start": 527,
+      "end": 543,
+      "label": "date",
+      "text": "November 8, 2021",
+      "source": "regex"
+    },
+    {
+      "start": 608,
+      "end": 621,
+      "label": "date",
+      "text": "June 17, 2022",
+      "source": "regex"
+    },
+    {
+      "start": 626,
+      "end": 642,
+      "label": "date",
+      "text": "February 20 2023",
+      "source": "regex"
+    },
+    {
+      "start": 4565,
+      "end": 4575,
+      "label": "person",
+      "text": "Alan Urban",
+      "source": "deny-list"
+    },
+    {
+      "start": 4591,
+      "end": 4595,
+      "label": "person",
+      "text": "Alan",
+      "source": "deny-list"
+    },
+    {
+      "start": 4597,
+      "end": 4602,
+      "label": "person",
+      "text": "Urban",
+      "source": "deny-list"
+    },
+    {
+      "start": 4688,
+      "end": 4701,
+      "label": "person",
+      "text": "Michael Breen",
+      "source": "deny-list"
+    },
+    {
+      "start": 4717,
+      "end": 4724,
+      "label": "person",
+      "text": "Michael",
+      "source": "deny-list"
+    }
+  ],
+  "redactedText": "EX-10.1\n2\nex10-1.htm\nEX-10.1\n\n \n\n \n\nExhibit\n10.1\n\n \n\nAMENDMENT\nNO. 3 \n\nTO\n\nEMPLOYMENT\nAGREEMENT\n\n \n\nThis\nAmendment No. 3 to the Employment Agreement (this &ldquo;Amendment No. 3&rdquo;) is entered into as of [DATE_1], and is effective\nas of [DATE_2], (the &ldquo;Effective Date&rdquo;) by and between [ORGANIZATION_1], a [ADDRESS_1] corporation (&ldquo;Parent&rdquo;)\nand [PERSON_1] (&ldquo;Executive&rdquo;).\n\n \n\nRECITALS\n\n \n\nA. Parent\nand Executive are parties to that certain employment agreement dated as of [DATE_3], as amended by Amendment No. 1 and\nAmendment No. 2, dated as of [DATE_4] and [DATE_5], respectively (as amended, the &ldquo;Employment\nAgreement&rdquo;).\n\n \n\nB. Parent\nand Executive desire to amend certain provisions of the Employment Agreement on the terms and conditions set forth\nherein.\n\n \n\nAGREEMENT\n\n \n\nNOW,\nTHEREFORE, in consideration of the mutual covenants and agreements contained herein and other good and valuable consideration, the receipt\nand sufficiency of which are hereby acknowledged, Parent and Executive agree as set forth below:\n\n \n\n1.\nAmendment to Section 1 of the Employment Agreement.\n\n \n\nSection\n1 of the Employment Agreement is hereby amended and restated to read as follows:\n\n \n\n&ldquo;Executive\nshall be employed by Parent and each of its subsidiaries as its Chairman of the Board reporting to Parent&rsquo;s Board of Directors,\nand as its Chief Executive Officer in accordance with Section 2 herein. Executive agrees to devote the necessary business time, energy\nand skill to his duties at Parent. These duties of Executive under this Employment Agreement shall include all those duties customarily\nperformed by a company&rsquo;s executive chairman of the board and its chief executive officer, as well as providing advice and consultation\non general corporate matters in other projects as may be assigned by Parent&rsquo;s Board of Directors on an as needed basis. Executive\nshall perform his duties from the United Kingdom or such other location outside of the United Kingdom and the United States as he shall\nin his discretion deem appropriate. During the term of Executive&rsquo;s employment, Executive shall be permitted to serve on boards\nof directors of for profit or not-for-profit entities provided such service does not adversely affect the performance of Executive&rsquo;s\nduties to Parent under this agreement and were not in conflict with the interests of Parent.&rdquo;\n\n \n\n2.\nAmendment to Section 2 of the Employment Agreement.\n\n \n\nSection\n2 of the Employment Agreement is hereby amended and restated to read as follows:\n\n \n\n&ldquo;This\nEmployment Agreement shall remain in effect for a period of two years from the Effective Date and thereafter will automatically renew\nfor successive two-year periods unless either party provides 90 days prior written notice the termination. Upon the termination of Executive&rsquo;s\nemployment prior to the expiration of the term of this Employment Agreement, Executive shall receive the applicable benefits set forth\nin this Employment Agreement. Upon the termination of Executive&rsquo;s employment for any reason, neither Executive nor Parent shall\nhave any further obligation or liability under this Employment Agreement to the other, except as set forth below.&rdquo;\n\n \n\n3.\nEffect on the Employment Agreement. Except as expressly set forth in this Amendment No. 3, the Employment Agreement remains in\nfull force and effect and is hereby ratified and confirmed. Any reference to the Employment Agreement from and after the date hereof\nshall be deemed and construed as meaning the Employment Agreement as modified by this Amendment.\n\n \n\n4. Definitions.\nCapitalized terms used but not otherwise defined in this Amendment No. 3 shall have the meanings ascribed to them in the Employment\nAgreement.\n\n \n\n5.\nCounterparts. This Amendment No. 3 may be executed in two or more counterparts (including by means of facsimile or electronic\ntransmission in portable document format (pdf) or comparable electronic transmission), any one of which need not contain the\nsignatures of more than one party, but each of which will be an original and all of which together shall constitute one and the same\nagreement binding on all the parties hereto.\n\n \n\n***Signature\nPage Follows***\n\n \n\n \n\n \n\n \n\n \n\nWitnesseth,\nthe parties hereto have caused this Amendment No. 3 to the Employment Agreement to be duly executed by their respective authorized signatories\nas of the date first above written.\n\n \n\n \n \n GT\n BIOPHARMA, INC.: \n\n \n \n \n\n \n \n \n /s/\n [PERSON_2] \n\n \n \n Name: \n [PERSON_3]\n [PERSON_4] \n\n \n \n Title: \n Chief\n Financial Officer \n\n \n \n\n \n \n executive: \n\n \n \n \n\n \n \n \n /s/\n [PERSON_1] \n\n \n \n Name: \n [PERSON_5]\n Breen \n\n \n \n\n***Signature\nPage to Amendment No. 3 to the Employment Agreement***"
+}

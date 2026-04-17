@@ -1,0 +1,125 @@
+[
+  {
+    "id": "de-address",
+    "label": "address",
+    "strategy": { "type": "to-next-comma" },
+    "triggers": ["wohnhaft in"]
+  },
+  {
+    "id": "de-date-of-birth",
+    "label": "date of birth",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
+    "triggers": ["geboren am", "geb."],
+    "extensions": ["add-colon"]
+  },
+  {
+    "id": "de-person",
+    "label": "person",
+    "strategy": { "type": "to-next-comma" },
+    "triggers": ["vertreten durch", "Geschäftsführer", "Geschäftsführerin"],
+    "extensions": ["add-colon"],
+    "validations": [{ "type": "starts-uppercase" }]
+  },
+  {
+    "id": "de-registration-eol",
+    "label": "registration number",
+    "strategy": { "type": "to-end-of-line" },
+    "triggers": ["eingetragen im"],
+    "extensions": ["add-colon"]
+  },
+  {
+    "id": "de-registration-nwords",
+    "label": "registration number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
+    "triggers": ["Gläubiger-ID"],
+    "extensions": ["add-colon"]
+  },
+  {
+    "id": "de-iban",
+    "label": "iban",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
+    "triggers": ["IBAN"],
+    "extensions": ["add-colon"]
+  },
+  {
+    "id": "de-bank-account",
+    "label": "bank account number",
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
+    "triggers": ["BIC", "Kontonummer"],
+    "extensions": ["add-colon"]
+  },
+  {
+    "id": "de-company-id",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "Handelsregisternummer",
+      "Handelsregister",
+      "HRB",
+      "Registernummer",
+      "UID"
+    ]
+  },
+  {
+    "id": "de-tax-id-company",
+    "label": "tax identification number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "Steuernummer",
+      "Steuer-Nr.",
+      "USt-IdNr.",
+      "USt-IdNr",
+      "BTW",
+      "NIP"
+    ]
+  },
+  {
+    "id": "de-land-parcel",
+    "label": "land parcel",
+    "strategy": { "type": "n-words", "count": 1 },
+    "triggers": [
+      "Flurstück Nr.",
+      "Flst.",
+      "Flst.-Nr.",
+      "Grundstück Nr.",
+      "Grundstücksnummer",
+      "Parzelle Nr."
+    ],
+    "extensions": ["add-colon"],
+    "validations": [
+      {
+        "type": "matches-pattern",
+        "pattern": "^\\d{1,6}(?:/\\d{1,5})?$"
+      }
+    ]
+  },
+  {
+    "id": "de-land-register",
+    "label": "land parcel",
+    "strategy": { "type": "to-next-comma" },
+    "triggers": ["Grundbuch von", "Grundbuchblatt", "Grundbuchblatt Nr."],
+    "extensions": ["add-colon"]
+  },
+  {
+    "id": "de-cadastral-district",
+    "label": "land parcel",
+    "strategy": { "type": "to-next-comma" },
+    "triggers": ["Gemarkung", "Katastralgemeinde"],
+    "validations": [
+      { "type": "starts-uppercase" },
+      { "type": "min-length", "min": 3 }
+    ]
+  }
+]
