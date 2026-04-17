@@ -41,7 +41,6 @@ jobs:
 
       - name: Install dependencies
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           npm_config_audit: "false"
           npm_config_fund: "false"
         run: npm install --include=optional --prefer-offline
@@ -96,7 +95,6 @@ jobs:
 
       - name: Install dependencies
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           npm_config_audit: "false"
           npm_config_fund: "false"
         run: npm install --include=optional --prefer-offline
@@ -107,5 +105,21 @@ jobs:
       - name: Publish package
         working-directory: ${{ matrix.package }}
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --provenance --access restricted
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          PACKAGE_NAME=$(node -p "require('./package.json').name")
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+
+          if npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version --json >/tmp/published-version.json 2>/dev/null; then
+            PUBLISHED_VERSION=$(node -p "JSON.parse(require('fs').readFileSync('/tmp/published-version.json','utf8'))")
+            if [[ "${PUBLISHED_VERSION}" == "${PACKAGE_VERSION}" ]]; then
+              echo "${PACKAGE_NAME}@${PACKAGE_VERSION} already published; skipping."
+              exit 0
+            fi
+          fi
+
+          if [[ -n "${NPM_TOKEN:-}" ]]; then
+            export NODE_AUTH_TOKEN="$NPM_TOKEN"
+          fi
+
+          npm publish --provenance --access public

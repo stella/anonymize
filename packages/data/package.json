@@ -34,7 +34,7 @@
     "dictionaries/names"
   ],
   "publishConfig": {
-    "access": "restricted"
+    "access": "public"
   },
   "license": "MIT",
   "scripts": {

@@ -39,7 +39,6 @@ jobs:
 
       - name: Install dependencies
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           npm_config_audit: "false"
           npm_config_fund: "false"
         run: npm install --include=optional --prefer-offline
