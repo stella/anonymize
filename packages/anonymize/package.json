@@ -26,7 +26,7 @@
     "build": "tsdown",
     "prepublishOnly": "bun run build",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json && tsc --noEmit -p tsconfig.wasm.json",
-    "test": "bun test",
+    "test": "bun test --preload ./src/__test__/setup.ts",
     "lint": "prettier --check . --ignore-path ../../.prettierignore",
     "format": "prettier --write . --ignore-path ../../.prettierignore"
   },
