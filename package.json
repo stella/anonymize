@@ -2,6 +2,7 @@
   "name": "anonymize",
   "version": "0.0.0",
   "private": true,
+  "license": "MIT",
   "packageManager": "bun@1.3.12",
   "workspaces": ["packages/*"],
   "scripts": {
