@@ -206,9 +206,15 @@ export const filterFalsePositives = (
     }
 
     // Numeric entities preceded by a number abbreviation
-    // ("č.", "Nr.", "No.") are reference numbers, not PII.
+    // ("č.", "Nr.", "No.") are usually reference
+    // numbers, not PII. Apply this only to non-trigger
+    // entities: trigger-based detections intentionally
+    // use these abbreviations as their semantic anchor
+    // (e.g. "parc. č. 852/2", "LV č. 154",
+    // "Flurstück Nr. 1234").
     if (
       fullText &&
+      normalized.source !== "trigger" &&
       /^\d/.test(trimmed) &&
       NUMBER_ABBREV_RE.test(
         fullText.slice(Math.max(0, normalized.start - 10), normalized.start),

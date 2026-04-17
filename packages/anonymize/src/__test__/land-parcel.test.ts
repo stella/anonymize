@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { runPipeline } from "../pipeline";
+import { runPipeline } from "../index";
 import type { Entity, PipelineConfig } from "../types";
 
 const TRIGGERS_ONLY_CONFIG: PipelineConfig = {

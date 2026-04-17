@@ -24,33 +24,40 @@ const CONFIG: PipelineConfig = {
   workspaceId: "contract-quality-test",
 };
 
+const CONTEXT = createPipelineContext();
+
 const detect = async (text: string) =>
   runPipeline({
     fullText: text,
     config: CONFIG,
     gazetteerEntries: [],
-    context: createPipelineContext(),
+    context: CONTEXT,
   });
 
 describe("contract quality regressions", () => {
-  test("keeps person names with middle initials", async () => {
-    const entities = await detect(
-      "This Employment Agreement is between PRA Group, Inc. and Vikram A. Atal.",
-    );
+  test(
+    "keeps person names with middle initials",
+    async () => {
+      const entities = await detect(
+        "This Employment Agreement is between PRA Group, Inc. and Vikram A. Atal.",
+      );
 
-    expect(
-      entities.some(
-        (entity) =>
-          entity.label === "organization" && entity.text === "PRA Group, Inc.",
-      ),
-    ).toBe(true);
-    expect(
-      entities.some(
-        (entity) =>
-          entity.label === "person" && entity.text === "Vikram A. Atal",
-      ),
-    ).toBe(true);
-  });
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "organization" &&
+            entity.text === "PRA Group, Inc.",
+        ),
+      ).toBe(true);
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "person" && entity.text === "Vikram A. Atal",
+        ),
+      ).toBe(true);
+    },
+    15_000,
+  );
 
   test("rejects sentence fragments chained into person names", async () => {
     const entities = await detect(

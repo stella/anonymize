@@ -32,6 +32,8 @@ const CONFIG: PipelineConfig = {
   workspaceId: "contract-snapshot-test",
 };
 
+const CONTEXT = createPipelineContext();
+
 type SnapshotEntity = Pick<
   Entity,
   "start" | "end" | "label" | "text" | "source"
@@ -421,17 +423,16 @@ describe("contract snapshots", () => {
   for (const fixture of FIXTURES) {
     test(fixture.name, async () => {
       const fullText = readFileSync(fixture.textPath, "utf8");
-      const ctx = createPipelineContext();
       const entities = await runPipeline({
         fullText,
         config: CONFIG,
         gazetteerEntries: [],
-        context: ctx,
+        context: CONTEXT,
       });
 
       fixture.assertQuality?.(entities);
 
-      const snapshot = toSnapshot(fullText, entities, ctx);
+      const snapshot = toSnapshot(fullText, entities, CONTEXT);
 
       if (UPDATE_SNAPSHOTS || !existsSync(fixture.snapshotPath)) {
         writeSnapshot(fixture.snapshotPath, snapshot);
