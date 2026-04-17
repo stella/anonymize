@@ -34,13 +34,15 @@ jobs:
 
       - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ env.BUN_VERSION }}-${{ hashFiles('bun.lock') }}
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('bun.lock', 'package.json', 'packages/*/package.json') }}
 
       - name: Install dependencies
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: bun install --frozen-lockfile
+          npm_config_audit: "false"
+          npm_config_fund: "false"
+        run: npm install --include=optional --prefer-offline
 
       - name: Build
         run: bun run build
