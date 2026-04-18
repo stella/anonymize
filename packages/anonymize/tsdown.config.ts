@@ -18,6 +18,14 @@ export default defineConfig([
     clean: true,
     sourcemap: true,
     hash: false,
+    deps: {
+      neverBundle: [
+        /^@stll\/text-search-wasm$/,
+        /^@stll\/aho-corasick-wasm$/,
+        /^@stll\/fuzzy-search-wasm$/,
+        /^@stll\/regex-set-wasm$/,
+      ],
+    },
   },
   {
     entry: ["src/vite.ts"],
