@@ -6,7 +6,7 @@
  * Only used in tests — production consumers load and pass
  * dictionaries themselves.
  */
-import type { Dictionaries } from "../types";
+import type { Dictionaries, DictionaryMeta } from "../types";
 
 let cached: Dictionaries | null = null;
 
@@ -18,10 +18,7 @@ export const loadTestDictionaries = async (): Promise<Dictionaries> => {
   // Load all dictionaries
   const allIds = [...dataModule.ALL_DICTIONARY_IDS];
   const denyList: Record<string, readonly string[]> = {};
-  const denyListMeta: Record<
-    string,
-    { label: string; category: string; country: string | null }
-  > = {};
+  const denyListMeta: Record<string, DictionaryMeta> = {};
 
   const results = await Promise.all(
     allIds.map(async (id) => {
@@ -34,7 +31,8 @@ export const loadTestDictionaries = async (): Promise<Dictionaries> => {
     const meta = dataModule.DICTIONARY_META[id];
     if (!meta) continue;
     denyList[id] = entries;
-    denyListMeta[id] = meta;
+    // SAFETY: anonymize-data categories match DenyListCategory at runtime
+    denyListMeta[id] = meta as DictionaryMeta;
   }
 
   // Load per-language first names and surnames
@@ -111,7 +109,7 @@ export const loadTestDictionaries = async (): Promise<Dictionaries> => {
   ];
   const cities = await dataModule.loadCityDictionaries(CITY_COUNTRIES);
 
-  cached = {
+  const result: Dictionaries = {
     firstNames,
     surnames,
     denyList,
@@ -119,5 +117,6 @@ export const loadTestDictionaries = async (): Promise<Dictionaries> => {
     cities,
   };
 
-  return cached;
+  cached = result;
+  return result;
 };
