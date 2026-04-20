@@ -8,27 +8,18 @@ import {
 } from "./names";
 import { resolveCountries } from "../regions";
 import { DETECTION_SOURCES } from "../types";
-import type { Entity, PipelineConfig } from "../types";
+import type {
+  Dictionaries,
+  DictionaryMeta,
+  Entity,
+  PipelineConfig,
+} from "../types";
 import type { PipelineContext } from "../context";
 import { defaultContext } from "../context";
 import { loadGenericRoles } from "../filters/false-positives";
 import { normalizeForSearch } from "../util/normalize";
 import { ALL_UPPER_RE, UPPER_START_RE } from "../util/text";
 import { DASH } from "../util/char-groups";
-
-/**
- * Try to load the optional @stll/anonymize-data package.
- * Returns null if not installed.
- */
-const loadDataModule = async (): Promise<
-  typeof import("@stll/anonymize-data") | null
-> => {
-  try {
-    return await import("@stll/anonymize-data");
-  } catch {
-    return null;
-  }
-};
 
 export type DenyListConfig = Pick<
   PipelineConfig,
@@ -37,6 +28,7 @@ export type DenyListConfig = Pick<
   | "denyListCountries"
   | "denyListRegions"
   | "denyListExcludeCategories"
+  | "dictionaries"
 >;
 
 // ── Allow list (lazy-loaded from JSON) ───────────────
@@ -237,13 +229,13 @@ export type DenyListData = {
 
 /**
  * Resolve which dictionaries to load based on country
- * and category filters, load them, and build the deny
- * list data. The returned data provides PatternEntry[]
- * for the unified builder and parallel arrays for
+ * and category filters, then build the deny list data.
+ * The returned data provides PatternEntry[] for the
+ * unified builder and parallel arrays for
  * post-processing.
  *
- * Requires `@stll/anonymize-data` to be installed.
- * Returns null if the data package is not available.
+ * Dictionary data is injected via `config.dictionaries`.
+ * Returns null if no dictionaries are provided.
  */
 export const buildDenyList = async (
   config: DenyListConfig,
@@ -252,7 +244,7 @@ export const buildDenyList = async (
   // Pre-load name corpus so getNameCorpus*() accessors
   // and getFirstNameExclusions() are populated before
   // stopwords filtering runs.
-  await initNameCorpus(ctx);
+  await initNameCorpus(ctx, config.dictionaries);
   // Pre-load all JSON data so sync accessors are
   // populated before processDenyListMatches runs.
   await Promise.all([
@@ -261,9 +253,15 @@ export const buildDenyList = async (
     loadPersonStopwords(ctx),
     loadGenericRoles(ctx),
   ]);
-  const dataModule = await loadDataModule();
-  if (!dataModule) {
-    return null;
+
+  const dictionaries = config.dictionaries;
+  const hasDenyList = dictionaries?.denyList && dictionaries?.denyListMeta;
+  const hasCities = dictionaries?.cities && dictionaries.cities.length > 0;
+
+  // No dictionary data available — skip deny-list building
+  if (!hasDenyList && !hasCities) {
+    // Still build name corpus entries if available
+    return buildNameCorpusOnly(config, ctx);
   }
 
   const allowedCountries = resolveCountries(
@@ -274,46 +272,12 @@ export const buildDenyList = async (
   const excluded = config.denyListExcludeCategories;
   const excludeCategories = excluded ? new Set(excluded) : new Set<string>();
 
-  const allIds = [...dataModule.ALL_DICTIONARY_IDS];
-
-  const ids = allIds.filter((id) => {
-    const meta = dataModule.DICTIONARY_META[id];
-    if (!meta) {
-      return false;
-    }
-
-    if (!config.enableNameCorpus && meta.category === "Names") {
-      return false;
-    }
-
-    if (excludeCategories.has(meta.category)) {
-      return false;
-    }
-
-    if (allowedCountries === null) {
-      return true;
-    }
-
-    if (meta.country === null) {
-      return true;
-    }
-
-    return allowedCountries.has(meta.country);
-  });
-
   const patternList: string[] = [];
   const labelList: string[][] = [];
   const sourceList: PatternSource[][] = [];
   // Maps lowercased pattern → index in patternList
   // for accumulating labels from multiple dictionaries
   const patternIndex = new Map<string, number>();
-
-  const results = await Promise.all(
-    ids.map(async (id) => {
-      const entries = await dataModule.loadDictionary(id);
-      return { id, entries };
-    }),
-  );
 
   const addDenyListEntry = (entry: string, label: string) => {
     // Strip | and \ only — these caused the 12K FP
@@ -342,67 +306,131 @@ export const buildDenyList = async (
     }
   };
 
-  for (const { id, entries } of results) {
-    const meta = dataModule.DICTIONARY_META[id];
-    if (!meta) {
-      continue;
-    }
-    for (const entry of entries) {
-      addDenyListEntry(entry, meta.label);
+  // Load dictionaries from injected data
+  if (hasDenyList) {
+    const denyListData = dictionaries.denyList!;
+    const metaData = dictionaries.denyListMeta!;
+
+    for (const [id, entries] of Object.entries(denyListData)) {
+      const meta: DictionaryMeta | undefined = metaData[id];
+      if (!meta) {
+        continue;
+      }
+
+      if (!config.enableNameCorpus && meta.category === "Names") {
+        continue;
+      }
+
+      if (excludeCategories.has(meta.category)) {
+        continue;
+      }
+
+      if (allowedCountries !== null && meta.country !== null) {
+        if (!allowedCountries.has(meta.country)) {
+          continue;
+        }
+      }
+
+      for (const entry of entries) {
+        addDenyListEntry(entry, meta.label);
+      }
     }
   }
 
-  // Load city dictionaries dynamically for all
-  // allowed countries. Cities cover 230 countries
-  // via GeoNames and are loaded separately from
-  // the static dictionary registry.
-  if (!excludeCategories.has("Places")) {
-    const cityCountries =
-      allowedCountries !== null
-        ? [...allowedCountries]
-        : // No country filter — load all. In practice
-          // this would be massive, so limit to a
-          // reasonable set of common legal jurisdictions.
-          [
-            "AT",
-            "AU",
-            "BE",
-            "BG",
-            "BR",
-            "CA",
-            "CH",
-            "CZ",
-            "DE",
-            "DK",
-            "ES",
-            "FI",
-            "FR",
-            "GB",
-            "GR",
-            "HR",
-            "HU",
-            "IE",
-            "IT",
-            "LU",
-            "NL",
-            "NO",
-            "NZ",
-            "PL",
-            "PT",
-            "RO",
-            "SE",
-            "SI",
-            "SK",
-            "US",
-          ];
-    const cityEntries = await dataModule.loadCityDictionaries(cityCountries);
-    for (const entry of cityEntries) {
+  // Add pre-loaded city entries
+  if (hasCities && !excludeCategories.has("Places")) {
+    for (const entry of dictionaries.cities!) {
       addDenyListEntry(entry, "address");
     }
   }
 
   // Add name corpus entries — accumulate labels
   // for entries that already exist from deny-list.
+  appendNameCorpusEntries(
+    config,
+    ctx,
+    patternList,
+    labelList,
+    sourceList,
+    patternIndex,
+  );
+
+  if (patternList.length === 0) {
+    return null;
+  }
+
+  return {
+    labels: labelList,
+    originals: patternList,
+    sources: sourceList,
+  };
+};
+
+/**
+ * Build deny-list data containing only name corpus
+ * entries (no external dictionaries). Used when no
+ * dictionary data is injected but name corpus is
+ * enabled.
+ */
+const buildNameCorpusOnly = (
+  config: DenyListConfig,
+  ctx: PipelineContext,
+): DenyListData | null => {
+  if (!config.enableNameCorpus) {
+    return null;
+  }
+
+  const excluded = config.denyListExcludeCategories;
+  const excludeCategories = excluded ? new Set(excluded) : new Set<string>();
+  if (excludeCategories.has("Names")) {
+    return null;
+  }
+
+  const patternList: string[] = [];
+  const labelList: string[][] = [];
+  const sourceList: PatternSource[][] = [];
+  const patternIndex = new Map<string, number>();
+
+  appendNameCorpusEntries(
+    config,
+    ctx,
+    patternList,
+    labelList,
+    sourceList,
+    patternIndex,
+  );
+
+  if (patternList.length === 0) {
+    return null;
+  }
+
+  return {
+    labels: labelList,
+    originals: patternList,
+    sources: sourceList,
+  };
+};
+
+/**
+ * Append name corpus entries (first names, surnames,
+ * titles) to the pattern arrays. Shared between
+ * buildDenyList and buildNameCorpusOnly.
+ */
+const appendNameCorpusEntries = (
+  config: DenyListConfig,
+  ctx: PipelineContext,
+  patternList: string[],
+  labelList: string[][],
+  sourceList: PatternSource[][],
+  patternIndex: Map<string, number>,
+): void => {
+  const excluded = config.denyListExcludeCategories;
+  const excludeCategories = excluded ? new Set(excluded) : new Set<string>();
+
+  if (!config.enableNameCorpus || excludeCategories.has("Names")) {
+    return;
+  }
+
   const addNameEntry = (name: string, source: PatternSource) => {
     // Normalize same as deny-list entries so name
     // patterns match against normalizeForSearch(text).
@@ -427,40 +455,28 @@ export const buildDenyList = async (
     }
   };
 
-  if (config.enableNameCorpus && !excludeCategories.has("Names")) {
-    for (const name of getNameCorpusFirstNames(ctx)) {
-      addNameEntry(name, "first-name");
-    }
-    for (const name of getNameCorpusSurnames(ctx)) {
-      addNameEntry(name, "surname");
-    }
-    for (const title of getNameCorpusTitles(ctx)) {
-      const norm = normalizeForSearch(title).replace(/[|\\]/g, "");
-      if (norm.length === 0) continue;
-      const lower = norm.toLowerCase();
-      const existing = patternIndex.get(lower);
-      if (existing !== undefined) {
-        if (!sourceList[existing]!.includes("title")) {
-          sourceList[existing]!.push("title");
-        }
-      } else {
-        patternIndex.set(lower, patternList.length);
-        patternList.push(norm);
-        labelList.push(["person"]);
-        sourceList.push(["title"]);
+  for (const name of getNameCorpusFirstNames(ctx)) {
+    addNameEntry(name, "first-name");
+  }
+  for (const name of getNameCorpusSurnames(ctx)) {
+    addNameEntry(name, "surname");
+  }
+  for (const title of getNameCorpusTitles(ctx)) {
+    const norm = normalizeForSearch(title).replace(/[|\\]/g, "");
+    if (norm.length === 0) continue;
+    const lower = norm.toLowerCase();
+    const existing = patternIndex.get(lower);
+    if (existing !== undefined) {
+      if (!sourceList[existing]!.includes("title")) {
+        sourceList[existing]!.push("title");
       }
+    } else {
+      patternIndex.set(lower, patternList.length);
+      patternList.push(norm);
+      labelList.push(["person"]);
+      sourceList.push(["title"]);
     }
   }
-
-  if (patternList.length === 0) {
-    return null;
-  }
-
-  return {
-    labels: labelList,
-    originals: patternList,
-    sources: sourceList,
-  };
 };
 
 type RawMatch = {
@@ -482,11 +498,12 @@ type RawMatch = {
  */
 export const ensureDenyListData = async (
   ctx: PipelineContext = defaultContext,
+  dictionaries?: Dictionaries,
 ): Promise<void> => {
   // INVARIANT: initNameCorpus must resolve before
   // loadStopwords so first-name exclusions are
   // available when computing the stopword set.
-  await initNameCorpus(ctx);
+  await initNameCorpus(ctx, dictionaries);
   await Promise.all([
     loadStopwords(ctx),
     loadAllowList(ctx),

@@ -5,7 +5,14 @@ import {
   DEFAULT_ENTITY_LABELS,
   runPipeline,
 } from "../index";
-import type { PipelineConfig } from "../types";
+import type { Dictionaries, PipelineConfig } from "../types";
+import { loadTestDictionaries } from "./load-dictionaries";
+
+let dictionaries: Dictionaries;
+const getDictionaries = async () => {
+  if (!dictionaries) dictionaries = await loadTestDictionaries();
+  return dictionaries;
+};
 
 const CONFIG: PipelineConfig = {
   threshold: 0.3,
@@ -29,7 +36,7 @@ const CONTEXT = createPipelineContext();
 const detect = async (text: string) =>
   runPipeline({
     fullText: text,
-    config: CONFIG,
+    config: { ...CONFIG, dictionaries: await getDictionaries() },
     gazetteerEntries: [],
     context: CONTEXT,
   });

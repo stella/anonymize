@@ -1,14 +1,14 @@
 import { DETECTION_SOURCES } from "../types";
-import type { Entity } from "../types";
+import type { Dictionaries, Entity } from "../types";
 import type { PipelineContext, NameCorpusData } from "../context";
 import { defaultContext } from "../context";
 import { ALL_UPPER_RE, UPPER_START_RE, isSentenceStart } from "../util/text";
 
 // ── Name corpus ──────────────────────────────────────
 // Per-language first names and surnames loaded from
-// Wikidata-sourced dictionaries from @stll/anonymize-data (optional),
-// plus legacy config/names-*.json for backwards compat.
-// Merged at init time across all configured languages.
+// injected dictionaries (optional) plus legacy
+// config/names-*.json for backwards compat. Merged at
+// init time across all configured languages.
 
 // ── Accessors (read from context) ────────────────────
 
@@ -30,50 +30,20 @@ export const getNameCorpusExcluded = (
 ): readonly string[] => ctx.nameCorpus?.excludedList ?? [];
 
 /**
- * Languages with per-language first/surname
- * dictionaries from @stll/anonymize-data (optional).
- */
-const NAME_LANGUAGES = [
-  "cs",
-  "sk",
-  "de",
-  "pl",
-  "hu",
-  "ro",
-  "fr",
-  "es",
-  "it",
-  "en",
-  "sv",
-] as const;
-
-type JsonArrayModule = {
-  default: readonly string[];
-};
-
-/**
- * Try importing a JSON module; return empty array
- * if not found.
- */
-const tryImportArray = async (path: string): Promise<readonly string[]> => {
-  try {
-    const mod = (await import(path)) as JsonArrayModule;
-    return mod.default;
-  } catch {
-    return [];
-  }
-};
-
-/**
- * Load name corpus data from per-language dictionary
- * files and legacy config files. Merges all sources.
+ * Load name corpus data from injected dictionaries
+ * and legacy config files. Merges all sources.
  *
  * Safe to call multiple times; only loads once per
  * context. Must be called before detectNameCorpus or
  * the getNameCorpus*() accessors are used.
+ *
+ * @param dictionaries Optional pre-loaded dictionaries
+ *   with per-language first names and surnames. When
+ *   omitted, only legacy config files are used.
  */
 export const initNameCorpus = (
   ctx: PipelineContext = defaultContext,
+  dictionaries?: Dictionaries,
 ): Promise<void> => {
   if (ctx.nameCorpusPromise) return ctx.nameCorpusPromise;
   const promise = (async () => {
@@ -95,35 +65,22 @@ export const initNameCorpus = (
           }>,
         ]);
 
-      // Load per-language dictionaries in parallel
-      const firstImports = NAME_LANGUAGES.map((lang) =>
-        tryImportArray(
-          `@stll/anonymize-data/dictionaries/names/first/${lang}.json`,
-        ),
-      );
-      const surnameImports = NAME_LANGUAGES.map((lang) =>
-        tryImportArray(
-          `@stll/anonymize-data/dictionaries/names/surnames/${lang}.json`,
-        ),
-      );
-
-      const [firstResults, surnameResults] = await Promise.all([
-        Promise.all(firstImports),
-        Promise.all(surnameImports),
-      ]);
-
-      // Merge: legacy config + all per-language files
+      // Merge: legacy config + injected per-language files
       const firstNames: string[] = [...legacyFirstMod.default.names];
-      for (const names of firstResults) {
-        for (const name of names) {
-          firstNames.push(name);
+      if (dictionaries?.firstNames) {
+        for (const names of Object.values(dictionaries.firstNames)) {
+          for (const name of names) {
+            firstNames.push(name);
+          }
         }
       }
 
       const surnames: string[] = [...legacySurnameMod.default.names];
-      for (const names of surnameResults) {
-        for (const name of names) {
-          surnames.push(name);
+      if (dictionaries?.surnames) {
+        for (const names of Object.values(dictionaries.surnames)) {
+          for (const name of names) {
+            surnames.push(name);
+          }
         }
       }
 
