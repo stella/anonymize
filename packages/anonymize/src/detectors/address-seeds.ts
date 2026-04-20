@@ -41,8 +41,7 @@ let cachedBoundaryRe: RegExp | null = null;
 
 const loadBoundaryWords = async (): Promise<DictionaryConfig> => {
   try {
-    const mod =
-      await import("@stll/anonymize-data/config/address-boundaries.json");
+    const mod = await import("../data/address-boundaries.json");
     return mod.default as DictionaryConfig;
   } catch {
     return {};
@@ -85,8 +84,7 @@ const getBoundaryRe = async (): Promise<RegExp> => {
 export const buildStreetTypePatterns = async (): Promise<string[]> => {
   let config: DictionaryConfig = {};
   try {
-    const mod =
-      await import("@stll/anonymize-data/config/address-street-types.json");
+    const mod = await import("../data/address-street-types.json");
     config = mod.default as DictionaryConfig;
   } catch {
     return [];

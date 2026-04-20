@@ -1,6 +1,6 @@
 {
   "name": "@stll/anonymize",
-  "version": "1.0.8",
+  "version": "1.0.9",
   "description": "Multi-layer PII detection and anonymization pipeline with regex, NER, deny lists, and coreference resolution",
   "type": "module",
   "exports": {
@@ -34,14 +34,6 @@
     "@huggingface/tokenizers": "^0.1.2",
     "@stll/stdnum": "^0.0.1",
     "@stll/text-search": "^1.0.1"
-  },
-  "peerDependencies": {
-    "@stll/anonymize-data": "^0.0.4"
-  },
-  "peerDependenciesMeta": {
-    "@stll/anonymize-data": {
-      "optional": true
-    }
   },
   "devDependencies": {
     "@stll/text-search-wasm": "^1.0.1",

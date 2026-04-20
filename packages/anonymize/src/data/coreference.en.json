@@ -1,0 +1,12 @@
+[
+  {
+    "label": "(hereinafter \"X\") or (the \"X\")",
+    "pattern": "\\((?:hereinafter|the)\\s+[\"'\"']([^\"'\"']+)[\"'\"']\\)",
+    "flags": "gi"
+  },
+  {
+    "label": "hereinafter referred to as \"X\"",
+    "pattern": "hereinafter\\s+(?:referred\\s+to\\s+as\\s+)?[\"'\"']([^\"'\"']+)[\"'\"']",
+    "flags": "gi"
+  }
+]

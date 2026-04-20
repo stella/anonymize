@@ -1,0 +1,62 @@
+[
+  {
+    "id": "fr-address",
+    "label": "address",
+    "strategy": { "type": "to-next-comma" },
+    "triggers": ["demeurant", "domicilié au", "domiciliée au", "né à", "née à"]
+  },
+  {
+    "id": "fr-address-eol",
+    "label": "address",
+    "strategy": { "type": "to-end-of-line" },
+    "triggers": ["siège social :"]
+  },
+  {
+    "id": "fr-date-of-birth",
+    "label": "date of birth",
+    "strategy": {
+      "type": "n-words",
+      "count": 4
+    },
+    "triggers": ["né le", "née le"]
+  },
+  {
+    "id": "fr-person",
+    "label": "person",
+    "strategy": { "type": "to-next-comma" },
+    "triggers": ["représenté par", "représentée par"],
+    "validations": [{ "type": "starts-uppercase" }]
+  },
+  {
+    "id": "fr-company-id",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": ["numéro SIREN", "numéro SIRET"]
+  },
+  {
+    "id": "fr-social-security",
+    "label": "social security number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": ["numéro de sécurité sociale"]
+  },
+  {
+    "id": "fr-land-parcel",
+    "label": "land parcel",
+    "strategy": { "type": "n-words", "count": 1 },
+    "triggers": [
+      "parcelle cadastrale",
+      "parcelle n°",
+      "parcelle numéro",
+      "numéro de parcelle"
+    ],
+    "extensions": ["add-colon"],
+    "validations": [{ "type": "has-digits" }]
+  },
+  {
+    "id": "fr-cadastral-ref",
+    "label": "land parcel",
+    "strategy": { "type": "to-end-of-line" },
+    "triggers": ["référence cadastrale", "cadastré section"],
+    "extensions": ["add-colon"]
+  }
+]

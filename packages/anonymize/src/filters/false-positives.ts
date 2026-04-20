@@ -133,7 +133,7 @@ export const loadGenericRoles = (
     try {
       const mod: {
         default?: { roles?: string[] };
-      } = await import("@stll/anonymize-data/config/generic-roles.json");
+      } = await import("../data/generic-roles.json");
       const set: ReadonlySet<string> = new Set(mod.default?.roles ?? []);
       ctx.genericRoles = set;
       return set;

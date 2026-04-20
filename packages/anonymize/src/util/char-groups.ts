@@ -1,8 +1,9 @@
 /**
  * Centralized Unicode character equivalence groups.
  *
- * Loads char-groups.json from @stll/anonymize-data and
- * provides helpers to build regex character classes that
+ * Centralized Unicode character equivalence groups.
+ *
+ * Provides helpers to build regex character classes that
  * match all typographic variants of a character type
  * (dashes, spaces, quotes, etc.).
  *
@@ -10,7 +11,7 @@
  * it, avoiding a runtime require() that breaks browsers.
  */
 
-import charGroupsJson from "@stll/anonymize-data/config/char-groups.json";
+import charGroupsJson from "../data/char-groups.json";
 
 type CharEntry = {
   char: string;
@@ -34,8 +35,7 @@ const REGEX_CLASS_SPECIAL = /[\\\]^-]/;
 const escapeForCharClass = (ch: string): string =>
   REGEX_CLASS_SPECIAL.test(ch) ? `\\${ch}` : ch;
 
-// SAFETY: JSON shape matches CharGroupsConfig by contract
-// with @stll/anonymize-data.
+// SAFETY: JSON shape matches CharGroupsConfig by contract.
 const config = charGroupsJson as CharGroupsConfig;
 
 /**

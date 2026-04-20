@@ -1,0 +1,47 @@
+[
+  {
+    "id": "es-address",
+    "label": "address",
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "con domicilio en",
+      "domiciliado en",
+      "domiciliada en",
+      "sita en"
+    ]
+  },
+  {
+    "id": "es-person",
+    "label": "person",
+    "strategy": { "type": "to-next-comma" },
+    "triggers": ["representado por", "representada por"],
+    "validations": [{ "type": "starts-uppercase" }]
+  },
+  {
+    "id": "es-date-of-birth",
+    "label": "date of birth",
+    "strategy": {
+      "type": "n-words",
+      "count": 5
+    },
+    "triggers": ["nacido el", "nacida el"]
+  },
+  {
+    "id": "es-national-id",
+    "label": "national identification number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": ["con D.N.I.", "con DNI", "con N.I.E.", "con NIE"]
+  },
+  {
+    "id": "es-tax-id",
+    "label": "tax identification number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": ["con CIF", "con NIF"]
+  },
+  {
+    "id": "es-bank-account",
+    "label": "bank account number",
+    "strategy": { "type": "to-end-of-line" },
+    "triggers": ["número de cuenta"]
+  }
+]

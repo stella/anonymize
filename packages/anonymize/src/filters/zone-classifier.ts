@@ -42,13 +42,13 @@ type SigningClauseConfig = {
 };
 
 const loadSectionHeadings = async (): Promise<RegExp[]> => {
-  const mod = await import("@stll/anonymize-data/config/section-headings.json");
+  const mod = await import("../data/section-headings.json");
   const data: SectionHeadingsConfig = mod.default ?? mod;
   return data.patterns.map((p) => new RegExp(p.re, p.flags));
 };
 
 const loadSigningClauses = async (): Promise<RegExp[]> => {
-  const mod = await import("@stll/anonymize-data/config/signing-clauses.json");
+  const mod = await import("../data/signing-clauses.json");
   const data: SigningClauseConfig = mod.default ?? mod;
   return data.patterns.map((p) => {
     // Build a pattern that matches the signing

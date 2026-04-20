@@ -1,0 +1,70 @@
+[
+  {
+    "id": "pl-tax-id",
+    "label": "tax identification number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": ["NIP"]
+  },
+  {
+    "id": "pl-national-id",
+    "label": "national identification number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": ["PESEL"]
+  },
+  {
+    "id": "pl-company-id",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": ["REGON", "KRS"]
+  },
+  {
+    "id": "pl-person",
+    "label": "person",
+    "strategy": { "type": "to-next-comma" },
+    "triggers": ["Przewodniczący", "Sędzia", "Prokurator", "Protokolant"],
+    "extensions": ["add-colon"],
+    "validations": [{ "type": "starts-uppercase" }]
+  },
+  {
+    "id": "pl-land-parcel",
+    "label": "land parcel",
+    "strategy": { "type": "n-words", "count": 1 },
+    "triggers": [
+      "działka nr",
+      "działka ewidencyjna nr",
+      "dz. ew. nr",
+      "dz. nr",
+      "numer ewidencyjny działki"
+    ],
+    "extensions": ["add-colon"],
+    "validations": [
+      {
+        "type": "matches-pattern",
+        "pattern": "^\\d{1,6}(?:/\\d{1,5})?$"
+      }
+    ]
+  },
+  {
+    "id": "pl-land-register",
+    "label": "land parcel",
+    "strategy": { "type": "n-words", "count": 1 },
+    "triggers": [
+      "KW nr",
+      "księga wieczysta nr",
+      "księgi wieczystej nr",
+      "księdze wieczystej nr"
+    ],
+    "extensions": ["add-colon"]
+  },
+  {
+    "id": "pl-cadastral-district",
+    "label": "land parcel",
+    "strategy": { "type": "to-next-comma" },
+    "triggers": ["obręb ewidencyjny", "obręb"],
+    "extensions": ["add-trailing-space"],
+    "validations": [
+      { "type": "starts-uppercase" },
+      { "type": "min-length", "min": 3 }
+    ]
+  }
+]

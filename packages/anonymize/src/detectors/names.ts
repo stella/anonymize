@@ -6,7 +6,7 @@ import { ALL_UPPER_RE, UPPER_START_RE, isSentenceStart } from "../util/text";
 
 // ── Name corpus ──────────────────────────────────────
 // Per-language first names and surnames loaded from
-// Wikidata-sourced dictionaries in @stll/anonymize-data,
+// Wikidata-sourced dictionaries from @stll/anonymize-data (optional),
 // plus legacy config/names-*.json for backwards compat.
 // Merged at init time across all configured languages.
 
@@ -31,7 +31,7 @@ export const getNameCorpusExcluded = (
 
 /**
  * Languages with per-language first/surname
- * dictionaries in @stll/anonymize-data.
+ * dictionaries from @stll/anonymize-data (optional).
  */
 const NAME_LANGUAGES = [
   "cs",
@@ -81,16 +81,16 @@ export const initNameCorpus = (
       // Load legacy config files (backwards compat)
       const [legacyFirstMod, legacySurnameMod, titleMod, exclusionMod] =
         await Promise.all([
-          import("@stll/anonymize-data/config/names-first.json") as Promise<{
+          import("../data/names-first.json") as Promise<{
             default: { names: string[] };
           }>,
-          import("@stll/anonymize-data/config/names-surnames.json") as Promise<{
+          import("../data/names-surnames.json") as Promise<{
             default: { names: string[] };
           }>,
-          import("@stll/anonymize-data/config/names-title-tokens.json") as Promise<{
+          import("../data/names-title-tokens.json") as Promise<{
             default: { tokens: string[] };
           }>,
-          import("@stll/anonymize-data/config/names-exclusions.json") as Promise<{
+          import("../data/names-exclusions.json") as Promise<{
             default: { words: string[] };
           }>,
         ]);

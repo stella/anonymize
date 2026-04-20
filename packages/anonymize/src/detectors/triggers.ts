@@ -219,8 +219,7 @@ export const buildTriggerPatterns = async (): Promise<{
 
   // Load global triggers (language-agnostic)
   try {
-    const globalMod =
-      await import("@stll/anonymize-data/config/triggers.global.json");
+    const globalMod = await import("../data/triggers.global.json");
     // eslint-disable-next-line no-unsafe-type-assertion -- JSON config
     const globalGroups = ((globalMod as { default?: unknown }).default ??
       globalMod) as TriggerGroupConfig[];
@@ -241,7 +240,7 @@ export const buildTriggerPatterns = async (): Promise<{
   // Load year-words from JSON dictionary and create
   // date triggers: "rok 2022" → date entity.
   try {
-    const yearMod = await import("@stll/anonymize-data/config/year-words.json");
+    const yearMod = await import("../data/year-words.json");
     // eslint-disable-next-line no-unsafe-type-assertion -- JSON
     const data = ((yearMod as { default?: unknown }).default ??
       yearMod) as Record<string, string | string[]>;

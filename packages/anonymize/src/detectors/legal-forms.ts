@@ -78,7 +78,7 @@ export const buildLegalFormPatterns = async (): Promise<string[]> => {
   let data: Record<string, string[]> = {};
 
   try {
-    const mod = await import("@stll/anonymize-data/config/legal-forms.json");
+    const mod = await import("../data/legal-forms.json");
     // eslint-disable-next-line no-unsafe-type-assertion -- JSON module shape
     data = (mod as { default: Record<string, string[]> }).default;
   } catch {

@@ -33,7 +33,7 @@ let initPromise: Promise<void> | null = null;
 // ── Init ────────────────────────────────────────────
 
 const loadRules = async (): Promise<void> => {
-  const mod = await import("@stll/anonymize-data/config/hotword-rules.json");
+  const mod = await import("../data/hotword-rules.json");
   const data: HotwordRulesConfig = mod.default ?? mod;
   const loaded = data.rules;
 
