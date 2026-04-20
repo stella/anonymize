@@ -1,6 +1,6 @@
 {
   "name": "@stll/anonymize-wasm",
-  "version": "0.1.7",
+  "version": "1.0.8",
   "description": "PII detection and anonymization for browsers via WebAssembly. Same API as @stll/anonymize.",
   "type": "module",
   "module": "dist/wasm.mjs",
@@ -29,7 +29,7 @@
   "dependencies": {
     "@huggingface/tokenizers": "^0.1.2",
     "@stll/stdnum": "^0.0.1",
-    "@stll/text-search-wasm": "^1.0.0"
+    "@stll/text-search-wasm": "^1.0.1"
   },
   "peerDependencies": {
     "@stll/anonymize-data": "^0.0.4",
