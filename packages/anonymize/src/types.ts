@@ -196,6 +196,61 @@ export type DenyListCategory =
   | "Organizations"
   | "International";
 
+/**
+ * Metadata for a single dictionary entry in the
+ * deny-list system. Mirrors the shape from
+ * `@stll/anonymize-data` so consumers can pass
+ * pre-loaded data without the runtime dependency.
+ */
+export type DictionaryMeta = {
+  label: string;
+  category: DenyListCategory;
+  country: string | null;
+};
+
+/**
+ * Pre-loaded dictionary data for dependency injection.
+ * Consumers that want name/city/deny-list detection
+ * import from `@stll/anonymize-data` themselves and
+ * pass the data here; the anonymize package itself
+ * has zero cross-package imports.
+ *
+ * All fields are optional. When a field is absent,
+ * the corresponding detection path is skipped (same
+ * behavior as when `@stll/anonymize-data` was not
+ * installed).
+ */
+export type Dictionaries = {
+  /**
+   * First names per language code (e.g., "cs", "de").
+   * Merged with legacy config names at init time.
+   */
+  firstNames?: Readonly<Record<string, readonly string[]>>;
+  /**
+   * Surnames per language code.
+   * Merged with legacy config names at init time.
+   */
+  surnames?: Readonly<Record<string, readonly string[]>>;
+  /**
+   * Pre-loaded deny-list dictionaries keyed by
+   * dictionary ID (e.g., "courts/CZ", "banks/DE").
+   * Each value is the array of terms for that
+   * dictionary.
+   */
+  denyList?: Readonly<Record<string, readonly string[]>>;
+  /**
+   * Metadata per dictionary ID. Required when
+   * `denyList` is provided so the pipeline knows
+   * labels, categories, and country filters.
+   */
+  denyListMeta?: Readonly<Record<string, DictionaryMeta>>;
+  /**
+   * Pre-loaded city names, already merged across
+   * all desired countries.
+   */
+  cities?: readonly string[];
+};
+
 export type PipelineConfig = {
   threshold: number;
   enableTriggerPhrases: boolean;
@@ -231,6 +286,13 @@ export type PipelineConfig = {
    */
   labels: string[];
   workspaceId: string;
+  /**
+   * Pre-loaded dictionary data for name, deny-list,
+   * and city detection. When omitted, dictionary-based
+   * detection paths are skipped. Consumers load from
+   * `@stll/anonymize-data` and pass the data here.
+   */
+  dictionaries?: Dictionaries;
 };
 
 /**

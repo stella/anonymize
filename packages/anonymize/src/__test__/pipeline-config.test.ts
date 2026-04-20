@@ -1,7 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
 import { createPipelineContext, runPipeline } from "../index";
-import type { PipelineConfig } from "../types";
+import type { Dictionaries, PipelineConfig } from "../types";
+import { loadTestDictionaries } from "./load-dictionaries";
+
+let dictionaries: Dictionaries;
+const getDictionaries = async () => {
+  if (!dictionaries) dictionaries = await loadTestDictionaries();
+  return dictionaries;
+};
 
 const BASE_CONFIG: PipelineConfig = {
   threshold: 0.5,
@@ -84,6 +91,7 @@ describe("pipeline config semantics", () => {
       enableNameCorpus: false,
       denyListCountries: ["CZ"],
       labels: ["person"],
+      dictionaries: await getDictionaries(),
     });
     expect(entities).toHaveLength(0);
   });
@@ -94,6 +102,7 @@ describe("pipeline config semantics", () => {
       enableNameCorpus: true,
       denyListCountries: ["CZ"],
       labels: ["person"],
+      dictionaries: await getDictionaries(),
     });
     expect(
       entities.some(

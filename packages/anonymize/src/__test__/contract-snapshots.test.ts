@@ -10,10 +10,17 @@ import {
   runPipeline,
 } from "../index";
 import type { PipelineContext } from "../context";
-import type { Entity, PipelineConfig } from "../types";
+import type { Dictionaries, Entity, PipelineConfig } from "../types";
+import { loadTestDictionaries } from "./load-dictionaries";
 
 const FIXTURES_DIR = join(import.meta.dir, "fixtures", "contracts");
 const UPDATE_SNAPSHOTS = process.env.UPDATE_CONTRACT_SNAPSHOTS === "1";
+
+let dictionaries: Dictionaries;
+const getDictionaries = async () => {
+  if (!dictionaries) dictionaries = await loadTestDictionaries();
+  return dictionaries;
+};
 
 const CONFIG: PipelineConfig = {
   threshold: 0.3,
@@ -425,7 +432,7 @@ describe("contract snapshots", () => {
       const fullText = readFileSync(fixture.textPath, "utf8");
       const entities = await runPipeline({
         fullText,
-        config: CONFIG,
+        config: { ...CONFIG, dictionaries: await getDictionaries() },
         gazetteerEntries: [],
         context: CONTEXT,
       });

@@ -5,6 +5,8 @@ export type {
   ReviewDecision,
   DetectionSource,
   DenyListCategory,
+  Dictionaries,
+  DictionaryMeta,
   GazetteerEntry,
   TriggerStrategy,
   TriggerValidation,
@@ -107,8 +109,9 @@ export { REGIONS, resolveCountries } from "./regions";
 export type { RegionId, CountryCode } from "./regions";
 
 // ── Dictionaries ─────────────────────────────────
-// Install @stll/anonymize-data for deny list
-// dictionaries. Import directly from that package:
+// Pass pre-loaded dictionary data via
+// PipelineConfig.dictionaries. Load from
+// @stll/anonymize-data in your consumer code:
 //   import { loadDictionary } from "@stll/anonymize-data"
 
 // ── Filters ───────────────────────────────────────

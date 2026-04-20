@@ -441,7 +441,7 @@ export const runPipeline = async (
   // allow list, and person stopwords are loaded so
   // processDenyListMatches filters correctly.
   if (cachedSearch && config.enableDenyList) {
-    await ensureDenyListData(ctx);
+    await ensureDenyListData(ctx, config.dictionaries);
   }
 
   // Classify document zones once up front
@@ -522,7 +522,7 @@ export const runPipeline = async (
   let rawNameCorpusEntities: Entity[] = [];
   let nameCorpusEntities: Entity[] = [];
   if (config.enableNameCorpus && !config.enableDenyList) {
-    await initNameCorpus(ctx);
+    await initNameCorpus(ctx, config.dictionaries);
     checkAbort(signal);
     rawNameCorpusEntities = detectNameCorpus(fullText, ctx);
     nameCorpusEntities = filterAllowedLabels(
