@@ -110,9 +110,8 @@ export type { RegionId, CountryCode } from "./regions";
 
 // ── Dictionaries ─────────────────────────────────
 // Pass pre-loaded dictionary data via
-// PipelineConfig.dictionaries. Load from
-// @stll/anonymize-data in your consumer code:
-//   import { loadDictionary } from "@stll/anonymize-data"
+// PipelineConfig.dictionaries. Load from the
+// anonymize-data package in your consumer code.
 
 // ── Filters ───────────────────────────────────────
 export { filterFalsePositives } from "./filters/false-positives";

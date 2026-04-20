@@ -199,8 +199,8 @@ export type DenyListCategory =
 /**
  * Metadata for a single dictionary entry in the
  * deny-list system. Mirrors the shape from
- * `@stll/anonymize-data` so consumers can pass
- * pre-loaded data without the runtime dependency.
+ * the anonymize-data package so consumers can pass
+ * pre-loaded data without a runtime dependency.
  */
 export type DictionaryMeta = {
   label: string;
@@ -211,14 +211,13 @@ export type DictionaryMeta = {
 /**
  * Pre-loaded dictionary data for dependency injection.
  * Consumers that want name/city/deny-list detection
- * import from `@stll/anonymize-data` themselves and
- * pass the data here; the anonymize package itself
- * has zero cross-package imports.
+ * load dictionaries themselves (e.g. from the
+ * anonymize-data package) and pass them here; the
+ * anonymize package has zero cross-package imports.
  *
  * All fields are optional. When a field is absent,
  * the corresponding detection path is skipped (same
- * behavior as when `@stll/anonymize-data` was not
- * installed).
+ * behavior as when no dictionaries are available).
  */
 export type Dictionaries = {
   /**
@@ -290,7 +289,7 @@ export type PipelineConfig = {
    * Pre-loaded dictionary data for name, deny-list,
    * and city detection. When omitted, dictionary-based
    * detection paths are skipped. Consumers load from
-   * `@stll/anonymize-data` and pass the data here.
+   * the anonymize-data package and pass the data here.
    */
   dictionaries?: Dictionaries;
 };
