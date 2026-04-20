@@ -111,8 +111,7 @@ let _prepsPromise: Promise<void> | null = null;
 
 const loadPrepositions = async (): Promise<void> => {
   try {
-    const mod =
-      await import("@stll/anonymize-data/config/address-prepositions.json");
+    const mod = await import("../data/address-prepositions.json");
     const data: PrepositionData = mod.default ?? mod;
     // Merge all languages into flat sets
     const addr = new Set<string>();
@@ -154,8 +153,7 @@ let _streetAbbrevsPromise: Promise<void> | null = null;
 
 const loadStreetAbbrevs = async (): Promise<void> => {
   try {
-    const mod =
-      await import("@stll/anonymize-data/config/address-street-types.json");
+    const mod = await import("../data/address-street-types.json");
     const data: Record<string, string[] | string> = mod.default ?? mod;
     const abbrevs = new Set<string>();
     for (const [key, words] of Object.entries(data)) {

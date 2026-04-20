@@ -200,7 +200,7 @@ const getAmountWordsRe = async (): Promise<RegExp> => {
     return amountWordsRe;
   }
   try {
-    const mod = await import("@stll/anonymize-data/config/amount-words.json");
+    const mod = await import("./data/amount-words.json");
     // eslint-disable-next-line no-unsafe-type-assertion -- JSON module shape
     const data = (mod as { default: AmountWordsConfig }).default;
     const keywords = data.patterns.flatMap((p) => p.keywords);

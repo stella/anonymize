@@ -1,10 +1,12 @@
 /**
  * Language manifest loader and config auto-discovery.
  *
- * Reads `manifest.json` from @stll/anonymize-data to
- * determine which languages have which config types,
- * then loads them via a static registry of import()
- * calls (string literals for bundler compatibility).
+ * Language manifest loader and config auto-discovery.
+ *
+ * Reads manifest.json to determine which languages have
+ * which config types, then loads them via a static
+ * registry of import() calls (string literals for
+ * bundler compatibility).
  */
 
 // ── Types ────────────────────────────────────────────
@@ -34,7 +36,7 @@ const loadManifest = (): Promise<Manifest> => {
   }
   _manifestPromise = (async () => {
     try {
-      const mod = await import("@stll/anonymize-data/config/manifest.json");
+      const mod = await import("../data/manifest.json");
       // eslint-disable-next-line no-unsafe-type-assertion -- JSON manifest
       const parsed = (mod.default ?? mod) as Manifest;
       if (
@@ -76,24 +78,24 @@ const loadManifest = (): Promise<Manifest> => {
 // to a lazy loader thunk.
 
 const TRIGGER_LOADERS: Record<string, () => Promise<unknown>> = {
-  cs: () => import("@stll/anonymize-data/config/triggers.cs.json"),
-  de: () => import("@stll/anonymize-data/config/triggers.de.json"),
-  en: () => import("@stll/anonymize-data/config/triggers.en.json"),
-  es: () => import("@stll/anonymize-data/config/triggers.es.json"),
-  fr: () => import("@stll/anonymize-data/config/triggers.fr.json"),
-  hu: () => import("@stll/anonymize-data/config/triggers.hu.json"),
-  it: () => import("@stll/anonymize-data/config/triggers.it.json"),
-  pl: () => import("@stll/anonymize-data/config/triggers.pl.json"),
-  ro: () => import("@stll/anonymize-data/config/triggers.ro.json"),
-  sk: () => import("@stll/anonymize-data/config/triggers.sk.json"),
-  sv: () => import("@stll/anonymize-data/config/triggers.sv.json"),
+  cs: () => import("../data/triggers.cs.json"),
+  de: () => import("../data/triggers.de.json"),
+  en: () => import("../data/triggers.en.json"),
+  es: () => import("../data/triggers.es.json"),
+  fr: () => import("../data/triggers.fr.json"),
+  hu: () => import("../data/triggers.hu.json"),
+  it: () => import("../data/triggers.it.json"),
+  pl: () => import("../data/triggers.pl.json"),
+  ro: () => import("../data/triggers.ro.json"),
+  sk: () => import("../data/triggers.sk.json"),
+  sv: () => import("../data/triggers.sv.json"),
 };
 
 const COREFERENCE_LOADERS: Record<string, () => Promise<unknown>> = {
-  cs: () => import("@stll/anonymize-data/config/coreference.cs.json"),
-  de: () => import("@stll/anonymize-data/config/coreference.de.json"),
-  en: () => import("@stll/anonymize-data/config/coreference.en.json"),
-  sk: () => import("@stll/anonymize-data/config/coreference.sk.json"),
+  cs: () => import("../data/coreference.cs.json"),
+  de: () => import("../data/coreference.de.json"),
+  en: () => import("../data/coreference.en.json"),
+  sk: () => import("../data/coreference.sk.json"),
 };
 
 const LOADER_REGISTRIES: Record<

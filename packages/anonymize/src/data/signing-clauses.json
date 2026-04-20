@@ -1,0 +1,53 @@
+{
+  "_comment": "Signing clause patterns. Captures the place name from contract signing locations. Each entry: prefix (before place), suffix (after place), prepositions (allowed inside multi-word place names).",
+  "patterns": [
+    {
+      "lang": "cs",
+      "prefix": "(?:V|Ve)\\s+",
+      "suffix": "\\s*,?\\s*dne",
+      "prepositions": ["nad", "pod", "u", "ve", "na"]
+    },
+    {
+      "lang": "sk",
+      "prefix": "(?:V|Vo)\\s+",
+      "suffix": "\\s*,?\\s*dňa",
+      "prepositions": ["nad", "pod", "pri"]
+    },
+    {
+      "lang": "de",
+      "prefix": "",
+      "suffix": "\\s*,\\s*den",
+      "prepositions": ["am", "an", "im"]
+    },
+    {
+      "lang": "fr",
+      "prefix": "(?:Fait\\s+)?[Àà]\\s+",
+      "suffix": "\\s*,?\\s*le",
+      "prepositions": []
+    },
+    {
+      "lang": "en",
+      "prefix": "(?:Signed|Executed)\\s+in\\s+",
+      "suffix": "",
+      "prepositions": []
+    },
+    {
+      "lang": "pl",
+      "prefix": "(?:W|We)\\s+",
+      "suffix": "\\s*,?\\s*dnia",
+      "prepositions": ["nad", "pod", "przy"]
+    },
+    {
+      "lang": "it",
+      "prefix": "(?:Fatto\\s+)?[Aa]\\s+",
+      "suffix": "\\s*,?\\s*(?:il|lì)",
+      "prepositions": []
+    },
+    {
+      "lang": "es",
+      "prefix": "(?:Firmado\\s+)?[Ee]n\\s+",
+      "suffix": "\\s*,?\\s*(?:a|el)",
+      "prepositions": ["de", "del"]
+    }
+  ]
+}

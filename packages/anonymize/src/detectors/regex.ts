@@ -635,7 +635,7 @@ const buildDatePatternsFromMonths = (alt: string): string[] => {
 let datePatternPromise: Promise<string[]> | null = null;
 
 const loadDatePatterns = async (): Promise<string[]> => {
-  const mod = await import("@stll/anonymize-data/config/date-months.json");
+  const mod = await import("../data/date-months.json");
   // Dynamic import of JSON returns { default, ...keys }.
   // Use `default` if present (ESM wrapper), else the
   // module itself.
@@ -792,7 +792,7 @@ const buildCurrencyPatterns = (data: CurrenciesData): string[] => {
 let currencyPatternPromise: Promise<string[]> | null = null;
 
 const loadCurrencyPatterns = async (): Promise<string[]> => {
-  const mod = await import("@stll/anonymize-data/config/currencies.json");
+  const mod = await import("../data/currencies.json");
   const data: CurrenciesData = mod.default ?? mod;
   return buildCurrencyPatterns(data);
 };
@@ -938,7 +938,7 @@ export const SIGNING_CLAUSE_META: Readonly<RegexMeta> = {
 let signingPatternPromise: Promise<string[]> | null = null;
 
 const loadSigningPatterns = async (): Promise<string[]> => {
-  const mod = await import("@stll/anonymize-data/config/signing-clauses.json");
+  const mod = await import("../data/signing-clauses.json");
   const data: SigningClauseConfig = mod.default ?? mod;
   return buildSigningClausePatterns(data);
 };

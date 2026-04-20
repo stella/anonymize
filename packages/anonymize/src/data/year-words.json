@@ -1,0 +1,16 @@
+{
+  "_comment": "Words meaning 'year' in various languages. Used as date triggers: 'rok 2022' → date.",
+  "cs": ["rok", "roku", "roce", "rokem", "roků"],
+  "sk": ["rok", "roku", "roce", "rokom", "rokov"],
+  "de": ["Jahr", "Jahre", "Jahren", "Jahres"],
+  "en": ["year"],
+  "fr": ["année", "an"],
+  "es": ["año"],
+  "it": ["anno"],
+  "pt": ["ano"],
+  "pl": ["rok", "roku", "roce", "rokiem", "roków"],
+  "sv": ["år", "året"],
+  "nl": ["jaar"],
+  "hu": ["év", "évben"],
+  "ro": ["an", "anul", "anului"]
+}

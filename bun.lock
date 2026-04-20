@@ -11,7 +11,7 @@
     },
     "packages/anonymize": {
       "name": "@stll/anonymize",
-      "version": "1.0.8",
+      "version": "1.0.9",
       "dependencies": {
         "@huggingface/tokenizers": "^0.1.2",
         "@stll/stdnum": "^0.0.1",
@@ -24,12 +24,6 @@
         "typescript": "^5.9.3",
         "vite": "^7.0.0",
       },
-      "peerDependencies": {
-        "@stll/anonymize-data": "^0.0.4",
-      },
-      "optionalPeers": [
-        "@stll/anonymize-data",
-      ],
     },
     "packages/data": {
       "name": "@stll/anonymize-data",

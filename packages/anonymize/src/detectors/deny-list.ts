@@ -47,7 +47,7 @@ const loadAllowList = (ctx: PipelineContext): Promise<ReadonlySet<string>> => {
     try {
       const mod: {
         default?: { words?: string[] };
-      } = await import("@stll/anonymize-data/config/allow-list.json");
+      } = await import("../data/allow-list.json");
       const set: ReadonlySet<string> = new Set(mod.default?.words ?? []);
       ctx.allowList = set;
       return set;
@@ -142,7 +142,7 @@ const loadStopwords = (ctx: PipelineContext): Promise<ReadonlySet<string>> => {
   ctx.stopwordsPromise = (async () => {
     try {
       const mod: { default?: string[] } =
-        await import("@stll/anonymize-data/config/stopwords.json");
+        await import("../data/stopwords.json");
       const list = (mod.default ?? []).filter(
         (w: string) => !getFirstNameExclusions(ctx).has(w),
       );
@@ -181,7 +181,7 @@ const loadPersonStopwords = (
     try {
       const mod: {
         default?: { words?: string[] };
-      } = await import("@stll/anonymize-data/config/person-stopwords.json");
+      } = await import("../data/person-stopwords.json");
       const set: ReadonlySet<string> = new Set(mod.default?.words ?? []);
       ctx.personStopwords = set;
       return set;

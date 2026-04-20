@@ -1,0 +1,48 @@
+{
+  "_comment": "Boundary words that signal the end of an address span. Multi-language. Used by address seed detector to stop expansion.",
+  "cs": [
+    "jednající",
+    "jednajícím",
+    "jejímž jménem",
+    "kontaktní osoba",
+    "zapsán",
+    "zapsaná",
+    "zapsané",
+    "zapsaný",
+    "zastoupená",
+    "zastoupené",
+    "zastoupený"
+  ],
+  "de": [
+    "amtsgericht",
+    "eingetragen",
+    "geschäftsführer",
+    "handelsregister",
+    "vertreten"
+  ],
+  "en": [
+    "attention",
+    "attn",
+    "c/o",
+    "care of",
+    "contact person",
+    "incorporated",
+    "registered",
+    "represented"
+  ],
+  "fr": ["immatriculée", "inscrite", "représenté", "représentée"],
+  "hu": ["bejegyzett", "cégjegyzékszám", "képviseli"],
+  "it": ["iscritta", "rappresentata", "rappresentato", "registro imprese"],
+  "pl": [
+    "reprezentowana",
+    "reprezentowany",
+    "wpisana",
+    "wpisane",
+    "wpisano",
+    "wpisany",
+    "zarejestrowana"
+  ],
+  "ro": ["înregistrată", "reprezentat", "reprezentată"],
+  "sk": ["konajúci", "zapísaná", "zapísaný", "zastúpená", "zastúpený"],
+  "universal": ["e-mail", "email", "fax", "http", "https", "tel", "www"]
+}

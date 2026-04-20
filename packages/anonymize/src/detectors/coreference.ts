@@ -12,7 +12,7 @@ type CoreferenceConfigRow = {
 
 /**
  * Load coreference definition patterns from per-language
- * JSON configs in @stll/anonymize-data. Uses the
+ * JSON configs in src/data/. Uses the
  * language manifest for auto-discovery.
  */
 const loadDefinitionPatterns = async (): Promise<DefinitionPattern[]> => {
@@ -68,8 +68,7 @@ const getRoleStopSet = async (
   const promise = (async () => {
     let result: ReadonlySet<string>;
     try {
-      const mod =
-        await import("@stll/anonymize-data/config/generic-roles.json");
+      const mod = await import("../data/generic-roles.json");
       const data = (mod.default ?? mod) as {
         roles: string[];
       };
