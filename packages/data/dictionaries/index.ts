@@ -875,3 +875,54 @@ export const CITY_DICTIONARY_META: DictionaryMeta = {
   category: "Places",
   country: null,
 };
+
+// ── Name dictionaries (first + surnames by language) ─
+
+const NAME_LANGUAGES = [
+  "cs",
+  "sk",
+  "de",
+  "pl",
+  "hu",
+  "ro",
+  "fr",
+  "es",
+  "it",
+  "en",
+  "sv",
+] as const;
+
+export type NameLanguage = (typeof NAME_LANGUAGES)[number];
+
+/**
+ * Load first-name and surname dictionaries for the
+ * requested languages. Returns the shape expected by
+ * `PipelineConfig.dictionaries`.
+ *
+ * Results are cached per-language; repeated calls with
+ * the same languages are essentially free.
+ */
+export const loadNameDictionaries = async (
+  languages: readonly NameLanguage[] = NAME_LANGUAGES,
+): Promise<{
+  firstNames: Record<string, readonly string[]>;
+  surnames: Record<string, readonly string[]>;
+}> => {
+  const firstNames: Record<string, readonly string[]> = {};
+  const surnames: Record<string, readonly string[]> = {};
+
+  await Promise.all(
+    languages.map(async (lang) => {
+      const firstId = `names/first/${lang}` as DictionaryId;
+      const surnameId = `names/surnames/${lang}` as DictionaryId;
+      if (firstId in LOADERS) {
+        firstNames[lang] = await loadDictionary(firstId);
+      }
+      if (surnameId in LOADERS) {
+        surnames[lang] = await loadDictionary(surnameId);
+      }
+    }),
+  );
+
+  return { firstNames, surnames };
+};
