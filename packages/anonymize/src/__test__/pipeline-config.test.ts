@@ -132,6 +132,39 @@ describe("pipeline config semantics", () => {
     ]);
   });
 
+  test("custom deny-list entries preserve caller-owned exact terms", async () => {
+    const entities = await detect(
+      "Use api-key for ACME in the integration notes.",
+      {
+        enableDenyList: true,
+        customDenyList: [
+          {
+            value: "api-key",
+            label: "secret",
+          },
+          {
+            value: "ACME",
+            label: "organization",
+          },
+        ],
+        labels: ["secret", "organization"],
+      },
+    );
+
+    expect(entities).toEqual([
+      expect.objectContaining({
+        label: "secret",
+        text: "api-key",
+        source: "deny-list",
+      }),
+      expect.objectContaining({
+        label: "organization",
+        text: "ACME",
+        source: "deny-list",
+      }),
+    ]);
+  });
+
   test("custom regexes add caller-owned deterministic detectors", async () => {
     const entities = await detect("Internal matter STLL-4821 is referenced.", {
       enableRegex: true,

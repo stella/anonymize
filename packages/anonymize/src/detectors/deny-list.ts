@@ -202,11 +202,17 @@ const isInitialContinuationGap = (text: string, gap: string): boolean =>
 /**
  * Source tag for each pattern in the automaton.
  * "deny-list" = standard deny list entry
+ * "custom-deny-list" = caller-owned exact term
  * "first-name" = name corpus first name
  * "surname" = name corpus surname
  * "title" = academic/professional title
  */
-type PatternSource = "deny-list" | "first-name" | "surname" | "title";
+type PatternSource =
+  | "deny-list"
+  | "custom-deny-list"
+  | "first-name"
+  | "surname"
+  | "title";
 
 /**
  * Pre-built deny list data. Constructed once by
@@ -282,7 +288,11 @@ export const buildDenyList = async (
   // for accumulating labels from multiple dictionaries
   const patternIndex = new Map<string, number>();
 
-  const addDenyListEntry = (entry: string, label: string) => {
+  const addDenyListEntry = (
+    entry: string,
+    label: string,
+    source: PatternSource = "deny-list",
+  ) => {
     // Strip | and \ only — these caused the 12K FP
     // bug (| creates empty regex alternation, \ is
     // an escape prefix). Other chars like () [] are
@@ -298,14 +308,14 @@ export const buildDenyList = async (
       if (!labelList[existing]!.includes(label)) {
         labelList[existing]!.push(label);
       }
-      if (!sourceList[existing]!.includes("deny-list")) {
-        sourceList[existing]!.push("deny-list");
+      if (!sourceList[existing]!.includes(source)) {
+        sourceList[existing]!.push(source);
       }
     } else {
       patternIndex.set(lower, patternList.length);
       patternList.push(normalized);
       labelList.push([label]);
-      sourceList.push(["deny-list"]);
+      sourceList.push([source]);
     }
   };
 
@@ -349,9 +359,9 @@ export const buildDenyList = async (
 
   if (hasCustomDenyList) {
     for (const entry of config.customDenyList!) {
-      addDenyListEntry(entry.value, entry.label);
+      addDenyListEntry(entry.value, entry.label, "custom-deny-list");
       for (const variant of entry.variants ?? []) {
-        addDenyListEntry(variant, entry.label);
+        addDenyListEntry(variant, entry.label, "custom-deny-list");
       }
     }
   }
@@ -496,6 +506,7 @@ type RawMatch = {
   end: number;
   /** All labels for this pattern (e.g., ["person", "address"]). */
   labels: string[];
+  sources: PatternSource[];
   text: string;
   patternIdx: number;
 };
@@ -558,9 +569,11 @@ export const processDenyListMatches = (
     }
 
     const localIdx = idx - sliceStart;
+    const sources = data.sources[localIdx] ?? [];
+    const isCustomDenyList = sources.includes("custom-deny-list");
 
     const sourceChar = fullText[match.start] ?? "";
-    if (!UPPER_START_RE.test(sourceChar)) {
+    if (!isCustomDenyList && !UPPER_START_RE.test(sourceChar)) {
       continue;
     }
 
@@ -568,13 +581,16 @@ export const processDenyListMatches = (
     // only for the AC search.
     const matchText = fullText.slice(match.start, match.end);
     const keyword = matchText.toLowerCase();
-    if (getStopwords(ctx).has(keyword) || getAllowList(ctx).has(keyword)) {
+    if (
+      !isCustomDenyList &&
+      (getStopwords(ctx).has(keyword) || getAllowList(ctx).has(keyword))
+    ) {
       continue;
     }
 
     // Skip ALL-CAPS tokens (likely acronyms, not PII)
     // unless surrounding context is also all-caps
-    if (ALL_UPPER_RE.test(matchText)) {
+    if (!isCustomDenyList && ALL_UPPER_RE.test(matchText)) {
       continue;
     }
 
@@ -587,6 +603,7 @@ export const processDenyListMatches = (
       start: match.start,
       end: match.end,
       labels,
+      sources,
       text: matchText,
       patternIdx: localIdx,
     };
@@ -611,6 +628,23 @@ export const processDenyListMatches = (
 
     const hasPerson = first.labels.includes("person");
     const nonPersonLabels = first.labels.filter((l) => l !== "person");
+    const isCustomDenyList = first.sources.includes("custom-deny-list");
+
+    if (isCustomDenyList) {
+      for (const m of matches) {
+        for (const label of m.labels) {
+          results.push({
+            start: m.start,
+            end: m.end,
+            label,
+            text: m.text,
+            score: 0.9,
+            source: DETECTION_SOURCES.DENY_LIST,
+          });
+        }
+      }
+      continue;
+    }
 
     // Person hits go to chain scoring (Pass 2b).
     // Skip words that are valid places/orgs but not
