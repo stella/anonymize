@@ -134,7 +134,7 @@ describe("pipeline config semantics", () => {
 
   test("custom deny-list entries preserve caller-owned exact terms", async () => {
     const entities = await detect(
-      "Use api-key for ACME in the integration notes.",
+      "Use api-key for ACME, DOMAIN\\user, foo|bar, and Buyer.",
       {
         enableDenyList: true,
         customDenyList: [
@@ -146,8 +146,20 @@ describe("pipeline config semantics", () => {
             value: "ACME",
             label: "organization",
           },
+          {
+            value: "DOMAIN\\user",
+            label: "account",
+          },
+          {
+            value: "foo|bar",
+            label: "token",
+          },
+          {
+            value: "Buyer",
+            label: "organization",
+          },
         ],
-        labels: ["secret", "organization"],
+        labels: ["account", "secret", "organization", "token"],
       },
     );
 
@@ -156,11 +168,59 @@ describe("pipeline config semantics", () => {
         label: "secret",
         text: "api-key",
         source: "deny-list",
+        sourceDetail: "custom-deny-list",
       }),
       expect.objectContaining({
         label: "organization",
         text: "ACME",
         source: "deny-list",
+        sourceDetail: "custom-deny-list",
+      }),
+      expect.objectContaining({
+        label: "account",
+        text: "DOMAIN\\user",
+        source: "deny-list",
+        sourceDetail: "custom-deny-list",
+      }),
+      expect.objectContaining({
+        label: "token",
+        text: "foo|bar",
+        source: "deny-list",
+        sourceDetail: "custom-deny-list",
+      }),
+      expect.objectContaining({
+        label: "organization",
+        text: "Buyer",
+        source: "deny-list",
+        sourceDetail: "custom-deny-list",
+      }),
+    ]);
+  });
+
+  test("custom deny-list labels do not promote merged corpus labels", async () => {
+    const entities = await detect("Jan was used as the project codename.", {
+      enableDenyList: true,
+      enableNameCorpus: true,
+      customDenyList: [
+        {
+          value: "Jan",
+          label: "project",
+        },
+      ],
+      labels: [],
+      dictionaries: {
+        firstNames: {
+          en: ["Jan"],
+        },
+      },
+    });
+
+    expect(entities).toEqual([
+      expect.objectContaining({
+        label: "project",
+        text: "Jan",
+        source: "deny-list",
+        sourceDetail: "custom-deny-list",
       }),
     ]);
   });

@@ -42,6 +42,7 @@ export type Entity = {
   text: string;
   score: number;
   source: DetectionSource;
+  sourceDetail?: "custom-deny-list";
 };
 
 /**

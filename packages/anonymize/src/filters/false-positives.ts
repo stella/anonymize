@@ -249,6 +249,7 @@ export const filterFalsePositives = (
 
     if (
       (normalized.label === "person" || normalized.label === "organization") &&
+      normalized.sourceDetail !== "custom-deny-list" &&
       roles.has(trimmed.toLowerCase())
     ) {
       continue;

@@ -228,6 +228,8 @@ export type DenyListData = {
    * is both a person name and a city name).
    */
   labels: string[][];
+  /** Maps pattern index → labels contributed by custom entries. */
+  customLabels: string[][];
   /** Maps pattern index → original pattern text. */
   originals: string[];
   /** Maps pattern index → source types (plural). */
@@ -283,6 +285,7 @@ export const buildDenyList = async (
 
   const patternList: string[] = [];
   const labelList: string[][] = [];
+  const customLabelList: string[][] = [];
   const sourceList: PatternSource[][] = [];
   // Maps lowercased pattern → index in patternList
   // for accumulating labels from multiple dictionaries
@@ -293,12 +296,13 @@ export const buildDenyList = async (
     label: string,
     source: PatternSource = "deny-list",
   ) => {
-    // Strip | and \ only — these caused the 12K FP
+    // Strip | and \ only for curated data — these caused the 12K FP
     // bug (| creates empty regex alternation, \ is
-    // an escape prefix). Other chars like () [] are
-    // kept since they appear in real dictionary
-    // entries and are matched literally by AC.
-    const normalized = normalizeForSearch(entry).replace(/[|\\]/g, "");
+    // an escape prefix). Caller-owned custom terms stay exact.
+    const normalized =
+      source === "custom-deny-list"
+        ? normalizeForSearch(entry)
+        : normalizeForSearch(entry).replace(/[|\\]/g, "");
     if (normalized.length === 0) {
       return;
     }
@@ -311,10 +315,17 @@ export const buildDenyList = async (
       if (!sourceList[existing]!.includes(source)) {
         sourceList[existing]!.push(source);
       }
+      if (
+        source === "custom-deny-list" &&
+        !customLabelList[existing]!.includes(label)
+      ) {
+        customLabelList[existing]!.push(label);
+      }
     } else {
       patternIndex.set(lower, patternList.length);
       patternList.push(normalized);
       labelList.push([label]);
+      customLabelList.push(source === "custom-deny-list" ? [label] : []);
       sourceList.push([source]);
     }
   };
@@ -383,6 +394,7 @@ export const buildDenyList = async (
 
   return {
     labels: labelList,
+    customLabels: customLabelList,
     originals: patternList,
     sources: sourceList,
   };
@@ -410,6 +422,7 @@ const buildNameCorpusOnly = (
 
   const patternList: string[] = [];
   const labelList: string[][] = [];
+  const customLabelList: string[][] = [];
   const sourceList: PatternSource[][] = [];
   const patternIndex = new Map<string, number>();
 
@@ -428,6 +441,7 @@ const buildNameCorpusOnly = (
 
   return {
     labels: labelList,
+    customLabels: customLabelList,
     originals: patternList,
     sources: sourceList,
   };
@@ -506,6 +520,7 @@ type RawMatch = {
   end: number;
   /** All labels for this pattern (e.g., ["person", "address"]). */
   labels: string[];
+  customLabels: string[];
   sources: PatternSource[];
   text: string;
   patternIdx: number;
@@ -570,39 +585,37 @@ export const processDenyListMatches = (
 
     const localIdx = idx - sliceStart;
     const sources = data.sources[localIdx] ?? [];
-    const isCustomDenyList = sources.includes("custom-deny-list");
-
-    const sourceChar = fullText[match.start] ?? "";
-    if (!isCustomDenyList && !UPPER_START_RE.test(sourceChar)) {
-      continue;
-    }
 
     // Use original text for display; normalized was
     // only for the AC search.
     const matchText = fullText.slice(match.start, match.end);
+    const sourceChar = fullText[match.start] ?? "";
     const keyword = matchText.toLowerCase();
-    if (
-      !isCustomDenyList &&
-      (getStopwords(ctx).has(keyword) || getAllowList(ctx).has(keyword))
-    ) {
-      continue;
-    }
-
-    // Skip ALL-CAPS tokens (likely acronyms, not PII)
-    // unless surrounding context is also all-caps
-    if (!isCustomDenyList && ALL_UPPER_RE.test(matchText)) {
-      continue;
-    }
 
     const labels = data.labels[localIdx];
-    if (!labels || labels.length === 0) {
+    const customLabels = data.customLabels[localIdx] ?? [];
+    if ((!labels || labels.length === 0) && customLabels.length === 0) {
+      continue;
+    }
+
+    const passesCuratedFilters =
+      UPPER_START_RE.test(sourceChar) &&
+      !getStopwords(ctx).has(keyword) &&
+      !getAllowList(ctx).has(keyword) &&
+      !ALL_UPPER_RE.test(matchText);
+    const curatedLabels = passesCuratedFilters
+      ? (labels ?? []).filter((label) => !customLabels.includes(label))
+      : [];
+
+    if (curatedLabels.length === 0 && customLabels.length === 0) {
       continue;
     }
 
     const entry: RawMatch = {
       start: match.start,
       end: match.end,
-      labels,
+      labels: curatedLabels,
+      customLabels,
       sources,
       text: matchText,
       patternIdx: localIdx,
@@ -626,23 +639,24 @@ export const processDenyListMatches = (
       continue;
     }
 
+    for (const m of matches) {
+      for (const label of m.customLabels) {
+        results.push({
+          start: m.start,
+          end: m.end,
+          label,
+          text: m.text,
+          score: 0.9,
+          source: DETECTION_SOURCES.DENY_LIST,
+          sourceDetail: "custom-deny-list",
+        });
+      }
+    }
+
     const hasPerson = first.labels.includes("person");
     const nonPersonLabels = first.labels.filter((l) => l !== "person");
-    const isCustomDenyList = first.sources.includes("custom-deny-list");
 
-    if (isCustomDenyList) {
-      for (const m of matches) {
-        for (const label of m.labels) {
-          results.push({
-            start: m.start,
-            end: m.end,
-            label,
-            text: m.text,
-            score: 0.9,
-            source: DETECTION_SOURCES.DENY_LIST,
-          });
-        }
-      }
+    if (first.labels.length === 0) {
       continue;
     }
 
