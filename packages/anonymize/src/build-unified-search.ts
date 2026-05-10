@@ -90,6 +90,7 @@ export const buildUnifiedSearch = async (
   ctx: PipelineContext = defaultContext,
 ): Promise<UnifiedSearchInstance> => {
   const legalFormsEnabled = isLegalFormsEnabled(config);
+  const customRegexes = config.enableRegex ? (config.customRegexes ?? []) : [];
   const [
     legalForms,
     triggers,
@@ -130,17 +131,17 @@ export const buildUnifiedSearch = async (
     ...currencyPatterns,
     ...datePatterns,
     ...signingPatterns,
-    ...(config.customRegexes?.map((entry) => entry.pattern) ?? []),
+    ...customRegexes.map((entry) => entry.pattern),
   ];
   const regexMeta: RegexMeta[] = [
     ...REGEX_META,
     ...currencyPatterns.map(() => CURRENCY_PATTERN_META),
     ...datePatterns.map(() => DATE_PATTERN_META),
     ...signingPatterns.map(() => SIGNING_CLAUSE_META),
-    ...(config.customRegexes?.map((entry) => ({
+    ...customRegexes.map((entry) => ({
       label: entry.label,
       score: entry.score ?? DEFAULT_CUSTOM_REGEX_SCORE,
-    })) ?? []),
+    })),
   ];
 
   let offset = 0;

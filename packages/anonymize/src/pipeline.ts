@@ -244,6 +244,8 @@ const createAllowedLabelSetFromLabels = (
 const createAllowedLabelSet = (config: PipelineConfig): AllowedLabelSet =>
   createAllowedLabelSetFromLabels(config.labels);
 
+const DEFAULT_CUSTOM_REGEX_SCORE = 0.9;
+
 const filterAllowedLabels = (
   entities: Entity[],
   allowedLabels: AllowedLabelSet,
@@ -286,16 +288,17 @@ const configKey = (
             (entry) =>
               `${entry.label}:${entry.value}:${[...(entry.variants ?? [])].sort().join(",")}`,
           )
-          .toSorted()
+          .sort()
           .join(";")
       : "";
   const customRegexFingerprint =
     config.enableRegex && config.customRegexes
       ? config.customRegexes
           .map(
-            (entry) => `${entry.label}:${entry.score ?? ""}:${entry.pattern}`,
+            (entry) =>
+              `${entry.label}:${entry.score ?? DEFAULT_CUSTOM_REGEX_SCORE}:${entry.pattern}`,
           )
-          .toSorted()
+          .sort()
           .join(";")
       : "";
   // Gazetteer fingerprint: sorted entry IDs,
@@ -317,6 +320,7 @@ const configKey = (
     `${config.enableTriggerPhrases}:` +
     `${legalFormsEnabled}:` +
     `${config.enableNameCorpus}:` +
+    `${config.enableRegex}:` +
     `${config.denyListCountries?.toSorted().join(",") ?? ""}:` +
     `${config.denyListRegions?.toSorted().join(",") ?? ""}:` +
     `${config.denyListExcludeCategories?.toSorted().join(",") ?? ""}:` +
