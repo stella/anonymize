@@ -209,6 +209,29 @@ export type DictionaryMeta = {
 };
 
 /**
+ * Caller-supplied exact terms for deny-list matching.
+ * These entries are merged with the published deny-list
+ * dictionaries when `enableDenyList` is enabled.
+ */
+export type CustomDenyListEntry = {
+  value: string;
+  label: string;
+  variants?: readonly string[];
+};
+
+/**
+ * Caller-supplied regex detector. The pattern is passed
+ * to the underlying text-search regex engine, so use its
+ * supported regex syntax. Inline flags such as `(?i)` are
+ * accepted when supported by that engine.
+ */
+export type CustomRegexPattern = {
+  pattern: string;
+  label: string;
+  score?: number;
+};
+
+/**
  * Pre-loaded dictionary data for dependency injection.
  * Consumers that want name/city/deny-list detection
  * load dictionaries themselves (e.g. from the
@@ -272,6 +295,16 @@ export type PipelineConfig = {
   denyListCountries?: string[];
   denyListRegions?: string[];
   denyListExcludeCategories?: string[];
+  /**
+   * Caller-owned exact terms to match through the
+   * deny-list layer. Requires `enableDenyList: true`.
+   */
+  customDenyList?: readonly CustomDenyListEntry[];
+  /**
+   * Caller-owned regex detectors. Requires
+   * `enableRegex: true`.
+   */
+  customRegexes?: readonly CustomRegexPattern[];
   enableGazetteer: boolean;
   enableNer: boolean;
   enableConfidenceBoost: boolean;

@@ -5,6 +5,9 @@ env:
   NPM_VERSION: "11.11.1"
 
 on:
+  push:
+    branches: [main]
+    paths: [VERSION]
   workflow_dispatch:
     inputs:
       publish_to_npm:
@@ -37,13 +40,16 @@ jobs:
       - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
           path: ~/.npm
-          key: ${{ runner.os }}-npm-${{ hashFiles('bun.lock', 'package.json', 'packages/*/package.json') }}
+          key: ${{ runner.os }}-npm-${{ hashFiles('bun.lock', 'VERSION', 'package.json', 'packages/*/package.json') }}
 
       - name: Install dependencies
         env:
           npm_config_audit: "false"
           npm_config_fund: "false"
         run: npm install --include=optional --prefer-offline
+
+      - name: Sync runtime package versions
+        run: bun run sync:version
 
       - name: Build
         run: bun run build
@@ -62,7 +68,7 @@ jobs:
 
   publish:
     needs: verify
-    if: inputs.publish_to_npm == true
+    if: github.event_name == 'push' || inputs.publish_to_npm == true
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -93,13 +99,16 @@ jobs:
       - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
           path: ~/.npm
-          key: ${{ runner.os }}-npm-${{ hashFiles('bun.lock', 'package.json', 'packages/*/package.json') }}
+          key: ${{ runner.os }}-npm-${{ hashFiles('bun.lock', 'VERSION', 'package.json', 'packages/*/package.json') }}
 
       - name: Install dependencies
         env:
           npm_config_audit: "false"
           npm_config_fund: "false"
         run: npm install --include=optional --prefer-offline
+
+      - name: Sync runtime package versions
+        run: bun run sync:version
 
       - name: Build
         run: bun run build

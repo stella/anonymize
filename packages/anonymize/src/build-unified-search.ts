@@ -48,6 +48,8 @@ import { buildDenyList } from "./detectors/deny-list";
 import { buildStreetTypePatterns } from "./detectors/address-seeds";
 import { buildGazetteerPatterns } from "./detectors/gazetteer";
 
+const DEFAULT_CUSTOM_REGEX_SCORE = 0.9;
+
 type PatternSlice = {
   start: number;
   end: number;
@@ -128,12 +130,17 @@ export const buildUnifiedSearch = async (
     ...currencyPatterns,
     ...datePatterns,
     ...signingPatterns,
+    ...(config.customRegexes?.map((entry) => entry.pattern) ?? []),
   ];
   const regexMeta: RegexMeta[] = [
     ...REGEX_META,
     ...currencyPatterns.map(() => CURRENCY_PATTERN_META),
     ...datePatterns.map(() => DATE_PATTERN_META),
     ...signingPatterns.map(() => SIGNING_CLAUSE_META),
+    ...(config.customRegexes?.map((entry) => ({
+      label: entry.label,
+      score: entry.score ?? DEFAULT_CUSTOM_REGEX_SCORE,
+    })) ?? []),
   ];
 
   let offset = 0;

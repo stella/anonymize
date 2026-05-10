@@ -111,6 +111,48 @@ describe("pipeline config semantics", () => {
     ).toBe(true);
   });
 
+  test("custom deny-list entries are matched without published dictionaries", async () => {
+    const entities = await detect("Project Nebula appears in the agreement.", {
+      enableDenyList: true,
+      customDenyList: [
+        {
+          value: "Project Nebula",
+          label: "organization",
+          variants: ["Nebula Programme"],
+        },
+      ],
+      labels: ["organization"],
+    });
+    expect(entities).toEqual([
+      expect.objectContaining({
+        label: "organization",
+        text: "Project Nebula",
+        source: "deny-list",
+      }),
+    ]);
+  });
+
+  test("custom regexes add caller-owned deterministic detectors", async () => {
+    const entities = await detect("Internal matter STLL-4821 is referenced.", {
+      enableRegex: true,
+      customRegexes: [
+        {
+          pattern: "\\bSTLL-[0-9]{4}\\b",
+          label: "matter reference",
+          score: 1,
+        },
+      ],
+      labels: ["matter reference"],
+    });
+    expect(entities).toEqual([
+      expect.objectContaining({
+        label: "matter reference",
+        text: "STLL-4821",
+        source: "regex",
+      }),
+    ]);
+  });
+
   test("hotword reclassification can promote filtered source labels into requested output labels", async () => {
     const entities = await detect("narozen dne 12.03.1990 v Praze", {
       enableRegex: true,

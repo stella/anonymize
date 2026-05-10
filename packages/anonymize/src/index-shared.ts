@@ -4,6 +4,8 @@ export type {
   ReviewedEntity,
   ReviewDecision,
   DetectionSource,
+  CustomDenyListEntry,
+  CustomRegexPattern,
   DenyListCategory,
   Dictionaries,
   DictionaryMeta,

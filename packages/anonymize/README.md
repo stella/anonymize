@@ -50,6 +50,48 @@ const entities = await runPipeline({
 });
 ```
 
+## Caller-owned deny lists and regexes
+
+Use `customDenyList` for exact terms and variants that you control. These are matched by the deny-list layer, so keep `enableDenyList: true`.
+
+```ts
+const entities = await runPipeline({
+  fullText: text,
+  config: {
+    ...baseConfig,
+    enableDenyList: true,
+    customDenyList: [
+      {
+        value: "Project Nebula",
+        variants: ["Nebula Programme"],
+        label: "organization",
+      },
+    ],
+  },
+  gazetteerEntries: [],
+});
+```
+
+Use `customRegexes` for deterministic patterns that are not built into the package. These are matched by the regex layer, so keep `enableRegex: true`.
+
+```ts
+const entities = await runPipeline({
+  fullText: text,
+  config: {
+    ...baseConfig,
+    enableRegex: true,
+    customRegexes: [
+      {
+        pattern: "\\bSTLL-[0-9]{4}\\b",
+        label: "matter reference",
+        score: 1,
+      },
+    ],
+  },
+  gazetteerEntries: [],
+});
+```
+
 ## Browser setup
 
 If you use Vite with the WASM build, exclude the bundle from dependency pre-bundling:
@@ -67,6 +109,7 @@ export default {
 - `labels: []` disables deterministic label filtering; when NER is enabled it falls back to the default label set.
 - `enableNameCorpus` also controls whether first names, surnames, and titles are injected into deny-list matching when `enableDenyList` is enabled.
 - The optional `@stll/anonymize-data` package carries the published dictionary and trigger data used by the deny-list layer.
+- `customDenyList` and `customRegexes` are part of the pipeline config and are included in the internal search cache key.
 
 ## Built on
 

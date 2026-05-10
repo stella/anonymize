@@ -28,6 +28,7 @@ export type DenyListConfig = Pick<
   | "denyListCountries"
   | "denyListRegions"
   | "denyListExcludeCategories"
+  | "customDenyList"
   | "dictionaries"
 >;
 
@@ -257,9 +258,11 @@ export const buildDenyList = async (
   const dictionaries = config.dictionaries;
   const hasDenyList = dictionaries?.denyList && dictionaries?.denyListMeta;
   const hasCities = dictionaries?.cities && dictionaries.cities.length > 0;
+  const hasCustomDenyList =
+    config.customDenyList !== undefined && config.customDenyList.length > 0;
 
   // No dictionary data available — skip deny-list building
-  if (!hasDenyList && !hasCities) {
+  if (!hasDenyList && !hasCities && !hasCustomDenyList) {
     // Still build name corpus entries if available
     return buildNameCorpusOnly(config, ctx);
   }
@@ -341,6 +344,15 @@ export const buildDenyList = async (
   if (hasCities && !excludeCategories.has("Places")) {
     for (const entry of dictionaries.cities!) {
       addDenyListEntry(entry, "address");
+    }
+  }
+
+  if (hasCustomDenyList) {
+    for (const entry of config.customDenyList!) {
+      addDenyListEntry(entry.value, entry.label);
+      for (const variant of entry.variants ?? []) {
+        addDenyListEntry(variant, entry.label);
+      }
     }
   }
 

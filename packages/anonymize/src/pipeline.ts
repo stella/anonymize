@@ -279,6 +279,25 @@ const configKey = (
   gazetteerEntries: GazetteerEntry[],
 ): string => {
   const legalFormsEnabled = isLegalFormsEnabled(config);
+  const customDenyFingerprint =
+    config.enableDenyList && config.customDenyList
+      ? config.customDenyList
+          .map(
+            (entry) =>
+              `${entry.label}:${entry.value}:${[...(entry.variants ?? [])].sort().join(",")}`,
+          )
+          .toSorted()
+          .join(";")
+      : "";
+  const customRegexFingerprint =
+    config.enableRegex && config.customRegexes
+      ? config.customRegexes
+          .map(
+            (entry) => `${entry.label}:${entry.score ?? ""}:${entry.pattern}`,
+          )
+          .toSorted()
+          .join(";")
+      : "";
   // Gazetteer fingerprint: sorted entry IDs,
   // canonical forms, labels, and variants.
   // Skip when gazetteer is disabled to avoid
@@ -301,6 +320,8 @@ const configKey = (
     `${config.denyListCountries?.toSorted().join(",") ?? ""}:` +
     `${config.denyListRegions?.toSorted().join(",") ?? ""}:` +
     `${config.denyListExcludeCategories?.toSorted().join(",") ?? ""}:` +
+    `${customDenyFingerprint}:` +
+    `${customRegexFingerprint}:` +
     `${config.enableGazetteer}:${gazFingerprint}`
   );
 };

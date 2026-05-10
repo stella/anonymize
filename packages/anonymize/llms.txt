@@ -36,6 +36,23 @@ const entities = await runPipeline({
   gazetteerEntries: [],
 })
 
+// Caller-owned exact terms and regex detectors
+const customEntities = await runPipeline({
+  fullText: text,
+  config: {
+    ...config,
+    enableDenyList: true,
+    enableRegex: true,
+    customDenyList: [
+      { value: 'Project Nebula', label: 'organization' },
+    ],
+    customRegexes: [
+      { pattern: '\\bSTLL-[0-9]{4}\\b', label: 'matter reference', score: 1 },
+    ],
+  },
+  gazetteerEntries: [],
+})
+
 // Redact
 const { redactedText, redactionMap } = redactText(
   text, entities, { type: 'replace' }
