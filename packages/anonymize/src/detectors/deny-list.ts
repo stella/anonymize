@@ -194,6 +194,7 @@ const getPersonStopwords = (ctx: PipelineContext): ReadonlySet<string> =>
   ctx.personStopwords ?? EMPTY_PERSON_STOPWORDS;
 
 const PERSON_CHAIN_BREAK_RE = /[!?;:]|,/u;
+const WORD_CHAR_RE = /[\p{L}\p{N}]/u;
 
 const isInitialContinuationGap = (text: string, gap: string): boolean =>
   (/^\p{Lu}$/u.test(text) && /^\.[^\S\n]{1,2}$/u.test(gap)) ||
@@ -526,6 +527,25 @@ type RawMatch = {
   patternIdx: number;
 };
 
+const customMatchHasValidEdges = (
+  fullText: string,
+  start: number,
+  end: number,
+  pattern: string,
+): boolean => {
+  const first = pattern.at(0) ?? "";
+  const last = pattern.at(-1) ?? "";
+  const prev = fullText[start - 1] ?? "";
+  const next = fullText[end] ?? "";
+  if (WORD_CHAR_RE.test(first) && WORD_CHAR_RE.test(prev)) {
+    return false;
+  }
+  if (WORD_CHAR_RE.test(last) && WORD_CHAR_RE.test(next)) {
+    return false;
+  }
+  return true;
+};
+
 /**
  * Ensure all deny-list support data (stopwords, allow
  * list, person stopwords, generic roles) is loaded on
@@ -593,7 +613,16 @@ export const processDenyListMatches = (
     const keyword = matchText.toLowerCase();
 
     const labels = data.labels[localIdx];
-    const customLabels = data.customLabels[localIdx] ?? [];
+    const pattern = data.originals[localIdx] ?? "";
+    const customPatternLabels = data.customLabels[localIdx] ?? [];
+    const customLabels = customMatchHasValidEdges(
+      fullText,
+      match.start,
+      match.end,
+      pattern,
+    )
+      ? customPatternLabels
+      : [];
     if ((!labels || labels.length === 0) && customLabels.length === 0) {
       continue;
     }
@@ -604,7 +633,7 @@ export const processDenyListMatches = (
       !getAllowList(ctx).has(keyword) &&
       !ALL_UPPER_RE.test(matchText);
     const curatedLabels = passesCuratedFilters
-      ? (labels ?? []).filter((label) => !customLabels.includes(label))
+      ? (labels ?? []).filter((label) => !customPatternLabels.includes(label))
       : [];
 
     if (curatedLabels.length === 0 && customLabels.length === 0) {

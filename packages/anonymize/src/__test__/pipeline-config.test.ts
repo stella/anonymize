@@ -268,21 +268,66 @@ describe("pipeline config semantics", () => {
   });
 
   test("plain custom deny-list entries keep token boundaries", async () => {
-    const entities = await detect("annual review for Joanne and Ann.", {
+    const entities = await detect(
+      "annual review for Joanne, ABC++, A, Ann, and C++.",
+      {
+        enableDenyList: true,
+        customDenyList: [
+          {
+            value: "Ann",
+            label: "person",
+          },
+          {
+            value: "A",
+            label: "grade",
+          },
+          {
+            value: "C++",
+            label: "language",
+          },
+        ],
+        labels: ["grade", "language", "person"],
+      },
+    );
+
+    expect(entities).toEqual([
+      expect.objectContaining({
+        label: "grade",
+        text: "A",
+        source: "deny-list",
+        sourceDetail: "custom-deny-list",
+      }),
+      expect.objectContaining({
+        label: "person",
+        text: "Ann",
+        source: "deny-list",
+        sourceDetail: "custom-deny-list",
+      }),
+      expect.objectContaining({
+        label: "language",
+        text: "C++",
+        source: "deny-list",
+        sourceDetail: "custom-deny-list",
+      }),
+    ]);
+  });
+
+  test("custom deny-list monetary amounts skip amount-word widening", async () => {
+    const entities = await detect("Invoice 1 529,-Kč (slovy jeden tisíc).", {
       enableDenyList: true,
       customDenyList: [
         {
-          value: "Ann",
-          label: "person",
+          value: "1 529,-Kč",
+          label: "monetary amount",
         },
       ],
-      labels: ["person"],
+      labels: ["monetary amount"],
     });
 
     expect(entities).toEqual([
       expect.objectContaining({
-        label: "person",
-        text: "Ann",
+        label: "monetary amount",
+        text: "1 529,-Kč",
         source: "deny-list",
         sourceDetail: "custom-deny-list",
       }),
@@ -352,6 +397,29 @@ describe("pipeline config semantics", () => {
       expect.objectContaining({
         label: "project",
         text: "Jan",
+        source: "deny-list",
+        sourceDetail: "custom-deny-list",
+      }),
+    ]);
+  });
+
+  test("custom deny-list organizations do not seed propagation", async () => {
+    const entities = await detect("Acme s.r.o. signed. Acme later paid.", {
+      enableDenyList: true,
+      enableCoreference: true,
+      customDenyList: [
+        {
+          value: "Acme s.r.o.",
+          label: "organization",
+        },
+      ],
+      labels: ["organization"],
+    });
+
+    expect(entities).toEqual([
+      expect.objectContaining({
+        label: "organization",
+        text: "Acme s.r.o.",
         source: "deny-list",
         sourceDetail: "custom-deny-list",
       }),

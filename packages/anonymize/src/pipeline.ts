@@ -273,7 +273,7 @@ const extendMonetaryAmountWords = (
   re: RegExp,
 ): Entity[] =>
   entities.map((e) => {
-    if (e.label !== "monetary amount" || e.sourceDetail === "custom-regex") {
+    if (e.label !== "monetary amount" || isCallerOwnedEntity(e)) {
       return e;
     }
     const after = fullText.slice(e.end);

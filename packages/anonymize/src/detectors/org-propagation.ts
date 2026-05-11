@@ -6,6 +6,10 @@ const TRAILING_SEP = /[,\s]+$/;
 const WORD_CHAR_RE = /[\p{L}\p{N}]/u;
 const ORG_PROPAGATION_SCORE = 0.9;
 
+const isCallerOwnedEntity = (entity: Entity): boolean =>
+  entity.sourceDetail === "custom-deny-list" ||
+  entity.sourceDetail === "custom-regex";
+
 type Seed = {
   baseName: string;
   label: string;
@@ -27,6 +31,7 @@ export const propagateOrgNames = (
 
   for (const e of entities) {
     if (e.label !== "organization") continue;
+    if (isCallerOwnedEntity(e)) continue;
     for (const suffix of LEGAL_SUFFIXES) {
       if (e.text.endsWith(suffix)) {
         const base = e.text
