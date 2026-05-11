@@ -12,9 +12,9 @@ body = """
 ## Unreleased
 {% endif %}\
 {% for group, commits in commits | group_by(attribute="group") %}
-### {{ group }}
+### {{ group | striptags | trim }}
 {% for commit in commits %}
-- {% if commit.scope %}**{{ commit.scope }}**: {% endif %}{{ commit.message | split(pat="\\n") | first | trim }}\
+- {% if commit.scope %}**{{ commit.scope }}**: {% endif %}{{ commit.message | trim }}\
 {% endfor %}
 {% endfor %}\n
 """
@@ -29,21 +29,24 @@ conventional_commits = true
 filter_unconventional = true
 split_commits = false
 filter_commits = false
+protect_breaking_commits = true
 tag_pattern = "^v[0-9]+\\.[0-9]+\\.[0-9]+(-(rc|beta|alpha)\\.[0-9]+)?$"
 sort_commits = "newest"
 
 # Order matters: first matching parser wins.
 commit_parsers = [
-  { message = "^feat",            group = "Features" },
-  { message = "^fix",             group = "Bug Fixes" },
-  { message = "^perf",            group = "Performance" },
-  { message = "^refactor",        group = "Refactor" },
-  { message = "^docs",            group = "Documentation" },
-  { message = "^test",            group = "Tests" },
-  { message = "^chore\\(deps\\)", group = "Dependencies" },
-  { message = "^chore",           group = "Miscellaneous" },
+  { message = "^\\w+(\\([^)]+\\))?!", group = "<!-- 0 -->Breaking Changes" },
+  { footer = "BREAKING CHANGE",       group = "<!-- 0 -->Breaking Changes" },
+  { message = "^feat",                group = "<!-- 1 -->Features" },
+  { message = "^fix",                 group = "<!-- 2 -->Bug Fixes" },
+  { message = "^perf",                group = "<!-- 3 -->Performance" },
+  { message = "^refactor",            group = "<!-- 4 -->Refactor" },
+  { message = "^docs",                group = "<!-- 5 -->Documentation" },
+  { message = "^test",                group = "<!-- 6 -->Tests" },
+  { message = "^chore\\(deps\\)",     group = "<!-- 7 -->Dependencies" },
+  { message = "^chore",               group = "<!-- 8 -->Miscellaneous" },
   { message = "^style",           skip  = true },
   { message = "^ci",              skip  = true },
   { message = "^build",           skip  = true },
-  { message = "^revert",          group = "Reverts" },
+  { message = "^revert",          group = "<!-- 9 -->Reverts" },
 ]
