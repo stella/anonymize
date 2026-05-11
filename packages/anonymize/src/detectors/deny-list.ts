@@ -653,27 +653,18 @@ export const processDenyListMatches = (
       }
     }
 
-    const hasPerson = first.labels.includes("person");
-    const nonPersonLabels = first.labels.filter((l) => l !== "person");
-
-    if (first.labels.length === 0) {
-      continue;
-    }
-
-    // Person hits go to chain scoring (Pass 2b).
-    // Skip words that are valid places/orgs but not
-    // person names (months, states, languages).
-    if (hasPerson) {
-      const keyword = first.text.toLowerCase();
-      if (!getPersonStopwords(ctx).has(keyword)) {
-        for (const m of matches) {
+    // Curated labels are evaluated per match because
+    // custom-only matches can share a pattern with
+    // curated matches while failing curated FP filters.
+    for (const m of matches) {
+      if (m.labels.includes("person")) {
+        const keyword = m.text.toLowerCase();
+        if (!getPersonStopwords(ctx).has(keyword)) {
           nameHits.push(m);
         }
       }
-    }
 
-    // Emit entities for all non-person labels
-    for (const m of matches) {
+      const nonPersonLabels = m.labels.filter((l) => l !== "person");
       for (const label of nonPersonLabels) {
         results.push({
           start: m.start,

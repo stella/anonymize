@@ -86,6 +86,14 @@ describe("mergeAndDedup", () => {
     expect(result[0].score).toBe(0.9);
   });
 
+  test("identical spans with different labels are kept", () => {
+    const person = entity(0, 5, 0.9, "person");
+    const project = entity(0, 5, 0.9, "project");
+    const result = mergeAndDedup([person, project]);
+    expect(result).toHaveLength(2);
+    expect(result.map((e) => e.label)).toEqual(["person", "project"]);
+  });
+
   test("3-way overlap keeps best entity", () => {
     const a = entity(0, 10, 0.5);
     const b = entity(5, 15, 0.9);

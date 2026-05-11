@@ -159,6 +159,32 @@ export const mergeAndDedup = (...layers: Entity[][]): Entity[] => {
     if (last.end <= entity.start) {
       // No overlap: append.
       merged.push({ ...entity });
+    } else if (last.start === entity.start && last.end === entity.end) {
+      const sameLabelIndex = (() => {
+        for (let j = merged.length - 1; j >= 0; j--) {
+          const existing = merged[j];
+          if (!existing) {
+            continue;
+          }
+          if (existing.start !== entity.start || existing.end !== entity.end) {
+            break;
+          }
+          if (existing.label === entity.label) {
+            return j;
+          }
+        }
+        return -1;
+      })();
+
+      if (sameLabelIndex === -1) {
+        merged.push({ ...entity });
+        continue;
+      }
+
+      const sameLabel = merged[sameLabelIndex];
+      if (sameLabel && shouldReplace(entity, sameLabel)) {
+        merged[sameLabelIndex] = { ...entity };
+      }
     } else if (shouldReplace(entity, last)) {
       // Overlap: new entity wins.
       merged[merged.length - 1] = { ...entity };
@@ -284,22 +310,28 @@ const configKey = (
   const customDenyFingerprint =
     config.enableDenyList && config.customDenyList
       ? config.customDenyList
-          .map(
-            (entry) =>
-              `${entry.label}:${entry.value}:${[...(entry.variants ?? [])].sort().join(",")}`,
+          .map((entry) =>
+            JSON.stringify({
+              label: entry.label,
+              value: entry.value,
+              variants: [...(entry.variants ?? [])].sort(),
+            }),
           )
           .sort()
-          .join(";")
+          .join("\n")
       : "";
   const customRegexFingerprint =
     config.enableRegex && config.customRegexes
       ? config.customRegexes
-          .map(
-            (entry) =>
-              `${entry.label}:${entry.score ?? DEFAULT_CUSTOM_REGEX_SCORE}:${entry.pattern}`,
+          .map((entry) =>
+            JSON.stringify({
+              label: entry.label,
+              pattern: entry.pattern,
+              score: entry.score ?? DEFAULT_CUSTOM_REGEX_SCORE,
+            }),
           )
           .sort()
-          .join(";")
+          .join("\n")
       : "";
   // Gazetteer fingerprint: sorted entry IDs,
   // canonical forms, labels, and variants.

@@ -141,6 +141,7 @@ export const buildUnifiedSearch = async (
     ...customRegexes.map((entry) => ({
       label: entry.label,
       score: entry.score ?? DEFAULT_CUSTOM_REGEX_SCORE,
+      sourceDetail: "custom-regex" as const,
     })),
   ];
 

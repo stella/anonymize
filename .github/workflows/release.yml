@@ -114,6 +114,7 @@ jobs:
         run: bun run build
 
       - name: Publish package
+        if: github.event_name != 'push' || matrix.package != 'packages/data'
         working-directory: ${{ matrix.package }}
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -134,7 +134,7 @@ describe("pipeline config semantics", () => {
 
   test("custom deny-list entries preserve caller-owned exact terms", async () => {
     const entities = await detect(
-      "Use api-key for ACME, DOMAIN\\user, foo|bar, and Buyer.",
+      "Use api-key for ACME, DOMAIN\\user, foo|bar, 2024, 3.2.1, and Buyer.",
       {
         enableDenyList: true,
         customDenyList: [
@@ -155,11 +155,26 @@ describe("pipeline config semantics", () => {
             label: "token",
           },
           {
+            value: "2024",
+            label: "project",
+          },
+          {
+            value: "3.2.1",
+            label: "matter",
+          },
+          {
             value: "Buyer",
             label: "organization",
           },
         ],
-        labels: ["account", "secret", "organization", "token"],
+        labels: [
+          "account",
+          "matter",
+          "secret",
+          "organization",
+          "project",
+          "token",
+        ],
       },
     );
 
@@ -189,12 +204,65 @@ describe("pipeline config semantics", () => {
         sourceDetail: "custom-deny-list",
       }),
       expect.objectContaining({
+        label: "project",
+        text: "2024",
+        source: "deny-list",
+        sourceDetail: "custom-deny-list",
+      }),
+      expect.objectContaining({
+        label: "matter",
+        text: "3.2.1",
+        source: "deny-list",
+        sourceDetail: "custom-deny-list",
+      }),
+      expect.objectContaining({
         label: "organization",
         text: "Buyer",
         source: "deny-list",
         sourceDetail: "custom-deny-list",
       }),
     ]);
+  });
+
+  test("custom deny-list labels do not suppress later curated matches", async () => {
+    const entities = await detect("acme and Acme are both mentioned.", {
+      enableDenyList: true,
+      customDenyList: [
+        {
+          value: "Acme",
+          label: "project",
+        },
+      ],
+      labels: [],
+      dictionaries: {
+        denyList: {
+          "organizations/test": ["Acme"],
+        },
+        denyListMeta: {
+          "organizations/test": {
+            label: "organization",
+            category: "Organizations",
+            country: null,
+          },
+        },
+      },
+    });
+
+    expect(
+      entities.some(
+        (entity) => entity.label === "project" && entity.text === "acme",
+      ),
+    ).toBe(true);
+    expect(
+      entities.some(
+        (entity) => entity.label === "organization" && entity.text === "Acme",
+      ),
+    ).toBe(true);
+    expect(
+      entities.some(
+        (entity) => entity.label === "organization" && entity.text === "acme",
+      ),
+    ).toBe(false);
   });
 
   test("custom deny-list labels do not promote merged corpus labels", async () => {
@@ -242,6 +310,29 @@ describe("pipeline config semantics", () => {
         label: "matter reference",
         text: "STLL-4821",
         source: "regex",
+        sourceDetail: "custom-regex",
+      }),
+    ]);
+  });
+
+  test("custom regexes preserve caller-owned false-positive-looking matches", async () => {
+    const entities = await detect("Matter AB is referenced.", {
+      enableRegex: true,
+      customRegexes: [
+        {
+          pattern: "\\bAB\\b",
+          label: "registration number",
+          score: 1,
+        },
+      ],
+      labels: ["registration number"],
+    });
+    expect(entities).toEqual([
+      expect.objectContaining({
+        label: "registration number",
+        text: "AB",
+        source: "regex",
+        sourceDetail: "custom-regex",
       }),
     ]);
   });
