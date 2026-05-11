@@ -269,7 +269,7 @@ describe("pipeline config semantics", () => {
 
   test("plain custom deny-list entries keep token boundaries", async () => {
     const entities = await detect(
-      "annual review for Joanne, ABC++, A, Ann, and C++.",
+      "annual review for Joanne, ABC++, C++foo, A, Ann, and C++.",
       {
         enableDenyList: true,
         customDenyList: [
@@ -332,6 +332,41 @@ describe("pipeline config semantics", () => {
         sourceDetail: "custom-deny-list",
       }),
     ]);
+  });
+
+  test("custom deny-list labels do not relax curated boundaries", async () => {
+    const entities = await detect("ABC++ and C++foo and C++ are listed.", {
+      enableDenyList: true,
+      customDenyList: [
+        {
+          value: "C++",
+          label: "language",
+        },
+      ],
+      labels: ["language", "technology"],
+      dictionaries: {
+        denyList: {
+          "technology/test": ["C++"],
+        },
+        denyListMeta: {
+          "technology/test": {
+            label: "technology",
+            category: "Organizations",
+            country: null,
+          },
+        },
+      },
+    });
+
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "language" &&
+          entity.text === "C++" &&
+          entity.sourceDetail === "custom-deny-list",
+      ),
+    ).toBe(true);
+    expect(entities.some((entity) => entity.text !== "C++")).toBe(false);
   });
 
   test("custom deny-list labels do not suppress later curated matches", async () => {
@@ -420,6 +455,32 @@ describe("pipeline config semantics", () => {
       expect.objectContaining({
         label: "organization",
         text: "Acme s.r.o.",
+        source: "deny-list",
+        sourceDetail: "custom-deny-list",
+      }),
+    ]);
+  });
+
+  test("custom deny-list organizations do not seed coreference", async () => {
+    const entities = await detect(
+      'Acme Incorporated (hereinafter "Acme") later paid Acme.',
+      {
+        enableDenyList: true,
+        enableCoreference: true,
+        customDenyList: [
+          {
+            value: "Acme Incorporated",
+            label: "organization",
+          },
+        ],
+        labels: ["organization"],
+      },
+    );
+
+    expect(entities).toEqual([
+      expect.objectContaining({
+        label: "organization",
+        text: "Acme Incorporated",
         source: "deny-list",
         sourceDetail: "custom-deny-list",
       }),
@@ -632,6 +693,76 @@ describe("pipeline config semantics", () => {
     expect(entities.some((entity) => entity.text === "ABC 2024-01-02")).toBe(
       false,
     );
+  });
+
+  test("custom regexes skip hotword relabeling", async () => {
+    const entities = await detect("narozen dne 12.03.1990", {
+      enableRegex: true,
+      enableHotwordRules: true,
+      customRegexes: [
+        {
+          pattern: "12\\.03\\.1990",
+          label: "date",
+          score: 1,
+        },
+      ],
+      labels: ["date"],
+    });
+
+    expect(entities).toEqual([
+      expect.objectContaining({
+        label: "date",
+        text: "12.03.1990",
+        source: "regex",
+        sourceDetail: "custom-regex",
+      }),
+    ]);
+  });
+
+  test("unrequested custom regexes do not constrain address context", async () => {
+    const entities = await detect("Olbrachtova 1929/62, 140 00 Praha 4", {
+      enableRegex: true,
+      customRegexes: [
+        {
+          pattern: "Praha",
+          label: "person",
+          score: 1,
+        },
+      ],
+      labels: ["address"],
+    });
+
+    const address = entities.find((entity) => entity.label === "address");
+    expect(address).toBeDefined();
+    expect(address!.text).toContain("Olbrachtova 1929/62");
+    expect(address!.text).toContain("140 00 Praha 4");
+  });
+
+  test("custom regex organizations do not seed coreference", async () => {
+    const entities = await detect(
+      'Acme Incorporated (hereinafter "Acme") later paid Acme.',
+      {
+        enableRegex: true,
+        enableCoreference: true,
+        customRegexes: [
+          {
+            pattern: "Acme Incorporated",
+            label: "organization",
+            score: 1,
+          },
+        ],
+        labels: ["organization"],
+      },
+    );
+
+    expect(entities).toEqual([
+      expect.objectContaining({
+        label: "organization",
+        text: "Acme Incorporated",
+        source: "regex",
+        sourceDetail: "custom-regex",
+      }),
+    ]);
   });
 
   test("custom regex phone numbers bypass built-in length gates", async () => {

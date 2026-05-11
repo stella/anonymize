@@ -533,14 +533,15 @@ const customMatchHasValidEdges = (
   end: number,
   pattern: string,
 ): boolean => {
-  const first = pattern.at(0) ?? "";
-  const last = pattern.at(-1) ?? "";
+  if (!WORD_CHAR_RE.test(pattern)) {
+    return true;
+  }
   const prev = fullText[start - 1] ?? "";
   const next = fullText[end] ?? "";
-  if (WORD_CHAR_RE.test(first) && WORD_CHAR_RE.test(prev)) {
+  if (WORD_CHAR_RE.test(prev)) {
     return false;
   }
-  if (WORD_CHAR_RE.test(last) && WORD_CHAR_RE.test(next)) {
+  if (WORD_CHAR_RE.test(next)) {
     return false;
   }
   return true;
@@ -615,14 +616,13 @@ export const processDenyListMatches = (
     const labels = data.labels[localIdx];
     const pattern = data.originals[localIdx] ?? "";
     const customPatternLabels = data.customLabels[localIdx] ?? [];
-    const customLabels = customMatchHasValidEdges(
+    const customEdgesAreValid = customMatchHasValidEdges(
       fullText,
       match.start,
       match.end,
       pattern,
-    )
-      ? customPatternLabels
-      : [];
+    );
+    const customLabels = customEdgesAreValid ? customPatternLabels : [];
     if ((!labels || labels.length === 0) && customLabels.length === 0) {
       continue;
     }
@@ -633,7 +633,10 @@ export const processDenyListMatches = (
       !getAllowList(ctx).has(keyword) &&
       !ALL_UPPER_RE.test(matchText);
     const curatedLabels = passesCuratedFilters
-      ? (labels ?? []).filter((label) => !customPatternLabels.includes(label))
+      ? (labels ?? []).filter(
+          (label) =>
+            !customPatternLabels.includes(label) && customEdgesAreValid,
+        )
       : [];
 
     if (curatedLabels.length === 0 && customLabels.length === 0) {

@@ -682,10 +682,11 @@ export const runPipeline = async (
   const ruleContextEntities = [
     ...rawTriggerEntities,
     ...rawRegexEntities,
-    ...rawCustomRegexEntities,
+    ...customRegexEntities,
     ...rawLegalFormEntities,
     ...rawNameCorpusEntities,
-    ...rawDenyListEntities,
+    ...rawCuratedDenyListEntities,
+    ...customDenyListEntities,
     ...rawGazetteerEntities,
   ];
   const nerMaskEntities = [
@@ -761,12 +762,22 @@ export const runPipeline = async (
   // Hotword context rules: boost or reclassify
   // entities near relevant keywords. Applied after
   // zone adjustments so both effects stack.
-  const preBoostEntities = hotwordsActive
-    ? filterAllowedLabels(
-        applyHotwordRules(zoneAdjusted, fullText),
+  const preBoostEntities = (() => {
+    if (!hotwordsActive) {
+      return zoneAdjusted;
+    }
+    const hotwordCandidates = zoneAdjusted.filter(
+      (entity) => !isCallerOwnedEntity(entity),
+    );
+    const callerOwnedEntities = zoneAdjusted.filter(isCallerOwnedEntity);
+    return [
+      ...filterAllowedLabels(
+        applyHotwordRules(hotwordCandidates, fullText),
         allowedLabels,
-      )
-    : zoneAdjusted;
+      ),
+      ...callerOwnedEntities,
+    ];
+  })();
 
   // Confidence boost + threshold filter
   let allEntities: Entity[];
@@ -860,7 +871,10 @@ export const runPipeline = async (
   // context doesn't leak sourceText across documents.
   ctx.corefSourceMap.clear();
   if (config.enableCoreference) {
-    const terms = await extractDefinedTerms(fullText, merged, ctx);
+    const coreferenceSeeds = merged.filter(
+      (entity) => !isCallerOwnedEntity(entity),
+    );
+    const terms = await extractDefinedTerms(fullText, coreferenceSeeds, ctx);
     if (terms.length > 0) {
       log("coreference", `${terms.length} defined terms`);
       const corefSpans = findCoreferenceSpans(fullText, terms, ctx);
