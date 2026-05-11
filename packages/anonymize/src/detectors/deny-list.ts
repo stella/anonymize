@@ -846,6 +846,9 @@ const extendCityDistricts = (entities: Entity[], fullText: string): void => {
     if (entity.label !== "address") {
       continue;
     }
+    if (entity.sourceDetail === "custom-deny-list") {
+      continue;
+    }
 
     // Trailing: "Praha" + " 1" → "Praha 1"
     // Trailing: "Praha" + " 1" → "Praha 1"

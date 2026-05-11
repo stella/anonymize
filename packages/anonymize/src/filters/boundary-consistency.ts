@@ -3,6 +3,9 @@ import type { Entity } from "../types";
 /** Max gap (in chars) between entities to merge. */
 const MAX_GAP = 3;
 
+const hasLockedBoundary = (entity: Entity): boolean =>
+  entity.sourceDetail === "custom-regex";
+
 /**
  * Characters allowed in the gap between two adjacent
  * same-label entities that should be merged: spaces,
@@ -147,6 +150,13 @@ const mergeAdjacent = (entities: Entity[], fullText: string): Entity[] => {
   const lastByLabel = new Map<string, Entity>();
 
   for (const entity of sorted) {
+    if (hasLockedBoundary(entity)) {
+      const copy = { ...entity };
+      result.push(copy);
+      lastByLabel.set(entity.label, copy);
+      continue;
+    }
+
     const prev = lastByLabel.get(entity.label);
 
     if (!prev) {
@@ -159,7 +169,7 @@ const mergeAdjacent = (entities: Entity[], fullText: string): Entity[] => {
     // Handle overlap created by fixPartialWords:
     // two same-label entities may now partially overlap
     // after word-boundary expansion.
-    if (entity.start < prev.end) {
+    if (!hasLockedBoundary(prev) && entity.start < prev.end) {
       prev.end = Math.max(prev.end, entity.end);
       prev.text = fullText.slice(prev.start, prev.end);
       prev.score = Math.max(prev.score, entity.score);
@@ -225,6 +235,10 @@ const fixPartialWords = (entities: Entity[], fullText: string): Entity[] => {
   const endPositions = byEnd.map((x) => x.entity.end);
 
   return sorted.map((e, eIdx) => {
+    if (hasLockedBoundary(e)) {
+      return e;
+    }
+
     let newStart = wordStartAt(e.start, boundaries, fullText);
     let newEnd = wordEndAt(e.end, boundaries, fullText);
 
@@ -371,7 +385,12 @@ const resolveCrossLabelOverlaps = (
       // the longer span wins.
       const aLen = a.end - a.start;
       const bLen = b.end - b.start;
-      const aWins = a.score > b.score || (a.score === b.score && aLen >= bLen);
+      const aLocked = hasLockedBoundary(a);
+      const bLocked = hasLockedBoundary(b);
+      const aWins =
+        aLocked !== bLocked
+          ? aLocked
+          : a.score > b.score || (a.score === b.score && aLen >= bLen);
 
       if (aWins) {
         // Trim b's start to a's end

@@ -159,37 +159,44 @@ export const mergeAndDedup = (...layers: Entity[][]): Entity[] => {
     if (last.end <= entity.start) {
       // No overlap: append.
       merged.push({ ...entity });
-    } else if (last.start === entity.start && last.end === entity.end) {
-      const sameLabelIndex = (() => {
-        for (let j = merged.length - 1; j >= 0; j--) {
-          const existing = merged[j];
-          if (!existing) {
-            continue;
-          }
-          if (existing.start !== entity.start || existing.end !== entity.end) {
-            break;
-          }
-          if (existing.label === entity.label) {
-            return j;
-          }
-        }
-        return -1;
-      })();
+      continue;
+    }
 
+    const overlapStart = (() => {
+      for (let j = merged.length - 1; j >= 0; j--) {
+        const existing = merged[j];
+        if (!existing || existing.end <= entity.start) {
+          return j + 1;
+        }
+      }
+      return 0;
+    })();
+    const overlaps = merged.slice(overlapStart);
+    const hasPartialOverlap = overlaps.some(
+      (existing) =>
+        existing.start !== entity.start || existing.end !== entity.end,
+    );
+
+    if (!hasPartialOverlap) {
+      const sameLabelIndex = overlaps.findIndex(
+        (existing) => existing.label === entity.label,
+      );
       if (sameLabelIndex === -1) {
         merged.push({ ...entity });
         continue;
       }
 
-      const sameLabel = merged[sameLabelIndex];
+      const actualIndex = overlapStart + sameLabelIndex;
+      const sameLabel = merged[actualIndex];
       if (sameLabel && shouldReplace(entity, sameLabel)) {
-        merged[sameLabelIndex] = { ...entity };
+        merged[actualIndex] = { ...entity };
       }
-    } else if (shouldReplace(entity, last)) {
-      // Overlap: new entity wins.
-      merged[merged.length - 1] = { ...entity };
+      continue;
     }
-    // else: overlap but existing wins; discard entity.
+
+    if (overlaps.every((existing) => shouldReplace(entity, existing))) {
+      merged.splice(overlapStart, overlaps.length, { ...entity });
+    }
   }
 
   return sanitizeEntities(merged);

@@ -94,6 +94,19 @@ describe("mergeAndDedup", () => {
     expect(result.map((e) => e.label)).toEqual(["person", "project"]);
   });
 
+  test("later partial overlap replaces all duplicate-span losers", () => {
+    const person = entity(0, 10, 0.9, "person");
+    const project = entity(0, 10, 0.9, "project");
+    const organization = entity(5, 15, 0.95, "organization");
+    const result = mergeAndDedup([person, project, organization]);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      start: 5,
+      end: 15,
+      label: "organization",
+    });
+  });
+
   test("3-way overlap keeps best entity", () => {
     const a = entity(0, 10, 0.5);
     const b = entity(5, 15, 0.9);

@@ -293,6 +293,28 @@ describe("pipeline config semantics", () => {
     ]);
   });
 
+  test("custom address deny-list entries preserve exact spans", async () => {
+    const entities = await detect("Office moved to Praha 1 yesterday.", {
+      enableDenyList: true,
+      customDenyList: [
+        {
+          value: "Praha",
+          label: "address",
+        },
+      ],
+      labels: ["address"],
+    });
+
+    expect(entities).toEqual([
+      expect.objectContaining({
+        label: "address",
+        text: "Praha",
+        source: "deny-list",
+        sourceDetail: "custom-deny-list",
+      }),
+    ]);
+  });
+
   test("custom regexes add caller-owned deterministic detectors", async () => {
     const entities = await detect("Internal matter STLL-4821 is referenced.", {
       enableRegex: true,
@@ -309,6 +331,29 @@ describe("pipeline config semantics", () => {
       expect.objectContaining({
         label: "matter reference",
         text: "STLL-4821",
+        source: "regex",
+        sourceDetail: "custom-regex",
+      }),
+    ]);
+  });
+
+  test("custom regexes preserve caller-owned match boundaries", async () => {
+    const entities = await detect("Token XABCY is referenced.", {
+      enableRegex: true,
+      customRegexes: [
+        {
+          pattern: "ABC",
+          label: "code",
+          score: 1,
+        },
+      ],
+      labels: ["code"],
+    });
+
+    expect(entities).toEqual([
+      expect.objectContaining({
+        label: "code",
+        text: "ABC",
         source: "regex",
         sourceDetail: "custom-regex",
       }),
