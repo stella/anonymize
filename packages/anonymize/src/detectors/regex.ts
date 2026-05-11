@@ -851,7 +851,11 @@ export const processRegexMatches = (
     if (!meta) {
       continue;
     }
-    if (meta.label === "phone number" && match.text.length < MIN_PHONE_LENGTH) {
+    if (
+      meta.sourceDetail !== "custom-regex" &&
+      meta.label === "phone number" &&
+      match.text.length < MIN_PHONE_LENGTH
+    ) {
       continue;
     }
 

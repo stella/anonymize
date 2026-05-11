@@ -61,9 +61,22 @@ const LITERAL_SOURCES: ReadonlySet<string> = new Set([
   "gazetteer",
 ]);
 
+const isCallerOwnedEntity = (entity: Entity): boolean =>
+  entity.sourceDetail === "custom-deny-list" ||
+  entity.sourceDetail === "custom-regex";
+
+const hasLockedBoundary = (entity: Entity): boolean =>
+  entity.sourceDetail === "custom-regex";
+
 const shouldReplace = (a: Entity, b: Entity): boolean => {
   const aLen = a.end - a.start;
   const bLen = b.end - b.start;
+  const aCallerOwned = isCallerOwnedEntity(a);
+  const bCallerOwned = isCallerOwnedEntity(b);
+  if (aCallerOwned !== bCallerOwned) {
+    return aCallerOwned;
+  }
+
   // Containment: when a literal-match entity (deny-list
   // or gazetteer) fully contains a shorter entity with
   // the same label, prefer the longer one. Curated
@@ -103,6 +116,10 @@ const COLON_LABELS = new Set(["ip address", "mac address"]);
 /** Strip leading/trailing whitespace and punctuation. */
 export const sanitizeEntities = (entities: Entity[]): Entity[] =>
   entities.flatMap((e) => {
+    if (hasLockedBoundary(e)) {
+      return [e];
+    }
+
     const strip = COLON_LABELS.has(e.label) ? /[\s,;]+/ : /[\s:,;]+/;
     // Also strip leading dots followed by whitespace —
     // artifact from trigger extraction after abbreviations
@@ -256,7 +273,9 @@ const extendMonetaryAmountWords = (
   re: RegExp,
 ): Entity[] =>
   entities.map((e) => {
-    if (e.label !== "monetary amount") return e;
+    if (e.label !== "monetary amount" || e.sourceDetail === "custom-regex") {
+      return e;
+    }
     const after = fullText.slice(e.end);
     const m = re.exec(after);
     if (!m) return e;
@@ -533,7 +552,10 @@ export const runPipeline = async (
   checkAbort(signal);
 
   // Two-pass scan (regex + literals)
-  const { regexMatches, literalMatches } = runUnifiedSearch(search, fullText);
+  const { regexMatches, customRegexMatches, literalMatches } = runUnifiedSearch(
+    search,
+    fullText,
+  );
   const { slices } = search;
 
   const rawRegexEntities = config.enableRegex
@@ -544,8 +566,16 @@ export const runPipeline = async (
         search.regexMeta,
       )
     : [];
+  const rawCustomRegexEntities = config.enableRegex
+    ? processRegexMatches(
+        customRegexMatches,
+        slices.customRegex.start,
+        slices.customRegex.end,
+        search.customRegexMeta,
+      )
+    : [];
   const regexEntities = filterAllowedLabels(
-    rawRegexEntities,
+    [...rawRegexEntities, ...rawCustomRegexEntities],
     preHotwordAllowedLabels,
   );
   if (regexEntities.length > 0) log("regex", `${regexEntities.length} matches`);
@@ -637,6 +667,7 @@ export const runPipeline = async (
   const ruleContextEntities = [
     ...rawTriggerEntities,
     ...rawRegexEntities,
+    ...rawCustomRegexEntities,
     ...rawLegalFormEntities,
     ...rawNameCorpusEntities,
     ...rawDenyListEntities,

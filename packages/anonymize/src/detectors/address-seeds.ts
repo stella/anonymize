@@ -134,6 +134,9 @@ const collectSeeds = (
     if (e.label !== "address") {
       continue;
     }
+    if (e.sourceDetail === "custom-deny-list") {
+      continue;
+    }
     if (e.source === "deny-list") {
       seeds.push({
         type: "city",

@@ -12,6 +12,7 @@ import { normalizeForSearch } from "./util/normalize";
 export type UnifiedResult = {
   /** All matches from both instances combined. */
   regexMatches: Match[];
+  customRegexMatches: Match[];
   literalMatches: Match[];
 };
 
@@ -23,11 +24,12 @@ export const runUnifiedSearch = (
   // on original text (regex patterns encode
   // their own case flags)
   const regexMatches = instance.tsRegex.findIter(fullText);
+  const customRegexMatches = instance.tsCustomRegex.findIter(fullText);
 
   // Pass 2: deny-list + street-types on
   // normalized text (NBSP, smart quotes folded)
   const normalized = normalizeForSearch(fullText);
   const literalMatches = instance.tsLiterals.findIter(normalized);
 
-  return { regexMatches, literalMatches };
+  return { regexMatches, customRegexMatches, literalMatches };
 };

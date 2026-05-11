@@ -153,7 +153,6 @@ const mergeAdjacent = (entities: Entity[], fullText: string): Entity[] => {
     if (hasLockedBoundary(entity)) {
       const copy = { ...entity };
       result.push(copy);
-      lastByLabel.set(entity.label, copy);
       continue;
     }
 
@@ -196,7 +195,12 @@ const mergeAdjacent = (entities: Entity[], fullText: string): Entity[] => {
       }
     }
 
-    if (!gapOccupied && gap.length <= MAX_GAP && GAP_PATTERN.test(gap)) {
+    if (
+      !hasLockedBoundary(prev) &&
+      !gapOccupied &&
+      gap.length <= MAX_GAP &&
+      GAP_PATTERN.test(gap)
+    ) {
       // Merge into prev
       prev.end = entity.end;
       prev.text = fullText.slice(prev.start, prev.end);

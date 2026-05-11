@@ -68,10 +68,13 @@ export type GazetteerData = {
 export type UnifiedSearchInstance = {
   /** Regex + triggers + legal-forms. */
   tsRegex: TextSearch;
+  /** Caller-owned custom regexes, isolated for overlap preservation. */
+  tsCustomRegex: TextSearch;
   /** Deny-list + street-types + gazetteer. */
   tsLiterals: TextSearch;
   slices: {
     regex: PatternSlice;
+    customRegex: PatternSlice;
     legalForms: PatternSlice;
     triggers: PatternSlice;
     denyList: PatternSlice;
@@ -79,6 +82,7 @@ export type UnifiedSearchInstance = {
     gazetteer: PatternSlice;
   };
   regexMeta: readonly RegexMeta[];
+  customRegexMeta: readonly RegexMeta[];
   triggerRules: readonly TriggerRule[];
   denyListData: DenyListData | null;
   gazetteerData: GazetteerData | null;
@@ -131,19 +135,18 @@ export const buildUnifiedSearch = async (
     ...currencyPatterns,
     ...datePatterns,
     ...signingPatterns,
-    ...customRegexes.map((entry) => entry.pattern),
   ];
   const regexMeta: RegexMeta[] = [
     ...REGEX_META,
     ...currencyPatterns.map(() => CURRENCY_PATTERN_META),
     ...datePatterns.map(() => DATE_PATTERN_META),
     ...signingPatterns.map(() => SIGNING_CLAUSE_META),
-    ...customRegexes.map((entry) => ({
-      label: entry.label,
-      score: entry.score ?? DEFAULT_CUSTOM_REGEX_SCORE,
-      sourceDetail: "custom-regex" as const,
-    })),
   ];
+  const customRegexMeta: RegexMeta[] = customRegexes.map((entry) => ({
+    label: entry.label,
+    score: entry.score ?? DEFAULT_CUSTOM_REGEX_SCORE,
+    sourceDetail: "custom-regex" as const,
+  }));
 
   let offset = 0;
 
@@ -152,6 +155,11 @@ export const buildUnifiedSearch = async (
     end: offset + allRegex.length,
   };
   offset = regexSlice.end;
+
+  const customRegexSlice = {
+    start: 0,
+    end: customRegexes.length,
+  };
 
   const legalFormsSlice = {
     start: offset,
@@ -179,6 +187,12 @@ export const buildUnifiedSearch = async (
   // (build time > 2ms) and falls back to individual
   // engines. No manual maxAlternations needed.
   const tsRegex = new (getTextSearch())(regexAllPatterns);
+  const tsCustomRegex = new (getTextSearch())(
+    customRegexes.map((entry) => entry.pattern),
+    {
+      overlapStrategy: "all",
+    },
+  );
 
   // ── Instance 2: deny-list + street-types + gaz ──
   // Deny-list and street-type patterns are plain
@@ -221,14 +235,19 @@ export const buildUnifiedSearch = async (
   // wholeWords is false so fuzzy patterns
   // (which don't support per-pattern override)
   // match without word-boundary constraints.
-  const wrapWholeWord = (s: string): PatternEntry => ({
+  const wrapWholeWord = (s: string, wholeWords: boolean): PatternEntry => ({
     pattern: s,
     literal: true as const,
-    wholeWords: true,
+    wholeWords,
   });
   const literalAllPatterns: PatternEntry[] = [
-    ...denyListOriginals.map(wrapWholeWord),
-    ...streetTypes.map(wrapWholeWord),
+    ...denyListOriginals.map((pattern, index) =>
+      wrapWholeWord(
+        pattern,
+        !(denyListData?.sources[index] ?? []).includes("custom-deny-list"),
+      ),
+    ),
+    ...streetTypes.map((pattern) => wrapWholeWord(pattern, true)),
     ...(gazResult?.patterns ?? []),
   ];
 
@@ -242,9 +261,11 @@ export const buildUnifiedSearch = async (
 
   return {
     tsRegex,
+    tsCustomRegex,
     tsLiterals,
     slices: {
       regex: regexSlice,
+      customRegex: customRegexSlice,
       legalForms: legalFormsSlice,
       triggers: triggersSlice,
       denyList: denyListSlice,
@@ -252,6 +273,7 @@ export const buildUnifiedSearch = async (
       gazetteer: gazetteerSlice,
     },
     regexMeta,
+    customRegexMeta,
     triggerRules: triggers.rules,
     denyListData,
     gazetteerData: gazResult?.data ?? null,

@@ -134,7 +134,7 @@ describe("pipeline config semantics", () => {
 
   test("custom deny-list entries preserve caller-owned exact terms", async () => {
     const entities = await detect(
-      "Use api-key for ACME, DOMAIN\\user, foo|bar, 2024, 3.2.1, and Buyer.",
+      "Use api-key for ACME, DOMAIN\\user, foo|bar, 2024, 3.2.1, Buyer, .env, @acme, and C++.",
       {
         enableDenyList: true,
         customDenyList: [
@@ -166,9 +166,24 @@ describe("pipeline config semantics", () => {
             value: "Buyer",
             label: "organization",
           },
+          {
+            value: ".env",
+            label: "file",
+          },
+          {
+            value: "@acme",
+            label: "handle",
+          },
+          {
+            value: "C++",
+            label: "language",
+          },
         ],
         labels: [
           "account",
+          "file",
+          "handle",
+          "language",
           "matter",
           "secret",
           "organization",
@@ -218,6 +233,24 @@ describe("pipeline config semantics", () => {
       expect.objectContaining({
         label: "organization",
         text: "Buyer",
+        source: "deny-list",
+        sourceDetail: "custom-deny-list",
+      }),
+      expect.objectContaining({
+        label: "file",
+        text: ".env",
+        source: "deny-list",
+        sourceDetail: "custom-deny-list",
+      }),
+      expect.objectContaining({
+        label: "handle",
+        text: "@acme",
+        source: "deny-list",
+        sourceDetail: "custom-deny-list",
+      }),
+      expect.objectContaining({
+        label: "language",
+        text: "C++",
         source: "deny-list",
         sourceDetail: "custom-deny-list",
       }),
@@ -294,7 +327,7 @@ describe("pipeline config semantics", () => {
   });
 
   test("custom address deny-list entries preserve exact spans", async () => {
-    const entities = await detect("Office moved to Praha 1 yesterday.", {
+    const entities = await detect("Office moved to 140 00 Praha 1 yesterday.", {
       enableDenyList: true,
       customDenyList: [
         {
@@ -337,6 +370,29 @@ describe("pipeline config semantics", () => {
     ]);
   });
 
+  test("custom regexes preserve caller-owned spans during merge", async () => {
+    const entities = await detect("Version 2024-01-02 is referenced.", {
+      enableRegex: true,
+      customRegexes: [
+        {
+          pattern: "\\d{4}",
+          label: "code",
+          score: 1,
+        },
+      ],
+      labels: [],
+    });
+
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "code" &&
+          entity.text === "2024" &&
+          entity.sourceDetail === "custom-regex",
+      ),
+    ).toBe(true);
+  });
+
   test("custom regexes preserve caller-owned match boundaries", async () => {
     const entities = await detect("Token XABCY is referenced.", {
       enableRegex: true,
@@ -354,6 +410,71 @@ describe("pipeline config semantics", () => {
       expect.objectContaining({
         label: "code",
         text: "ABC",
+        source: "regex",
+        sourceDetail: "custom-regex",
+      }),
+    ]);
+  });
+
+  test("custom regexes skip boundary and amount widening", async () => {
+    const entities = await detect(
+      "Invoice 1 529,-Kč (slovy jeden tisíc) and ABC 2024-01-02.",
+      {
+        enableRegex: true,
+        customRegexes: [
+          {
+            pattern: "1 529,-Kč",
+            label: "monetary amount",
+            score: 1,
+          },
+          {
+            pattern: " ABC,?",
+            label: "date",
+            score: 1,
+          },
+        ],
+        labels: ["date", "monetary amount"],
+      },
+    );
+
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "monetary amount" &&
+          entity.text === "1 529,-Kč" &&
+          entity.sourceDetail === "custom-regex",
+      ),
+    ).toBe(true);
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "date" &&
+          entity.text === " ABC" &&
+          entity.sourceDetail === "custom-regex",
+      ),
+    ).toBe(true);
+    expect(entities.some((entity) => entity.text === "ABC 2024-01-02")).toBe(
+      false,
+    );
+  });
+
+  test("custom regex phone numbers bypass built-in length gates", async () => {
+    const entities = await detect("Internal extension 1234 is listed.", {
+      enableRegex: true,
+      customRegexes: [
+        {
+          pattern: "\\b\\d{4}\\b",
+          label: "phone number",
+          score: 1,
+        },
+      ],
+      labels: ["phone number"],
+    });
+
+    expect(entities).toEqual([
+      expect.objectContaining({
+        label: "phone number",
+        text: "1234",
         source: "regex",
         sourceDetail: "custom-regex",
       }),
