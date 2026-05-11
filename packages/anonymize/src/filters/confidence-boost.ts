@@ -37,6 +37,10 @@ const BOOST_PER_NEIGHBOUR = 0.05;
 const CONTEXT_WINDOW_CHARS = 150;
 const HIGH_CONFIDENCE_FLOOR = 0.9;
 
+const isCallerOwnedEntity = (entity: Entity): boolean =>
+  entity.sourceDetail === "custom-deny-list" ||
+  entity.sourceDetail === "custom-regex";
+
 /**
  * Boost confidence of near-miss NER entities that appear
  * near high-confidence detections (regex, trigger phrase).
@@ -204,7 +208,10 @@ export const detectStreetPatternsNearAddresses = (
   existingEntities: Entity[],
 ): Entity[] => {
   const results: Entity[] = [];
-  const addressEntities = existingEntities.filter((e) => e.label === "address");
+  const contextEntities = existingEntities.filter(
+    (entity) => !(entity.label === "address" && isCallerOwnedEntity(entity)),
+  );
+  const addressEntities = contextEntities.filter((e) => e.label === "address");
   const headerEnd = Math.floor(fullText.length * HEADER_ZONE_FRACTION);
 
   // Find all house number positions in the text.
@@ -475,6 +482,9 @@ export const detectOrphanStreetLines = (
   existingEntities: Entity[],
 ): Entity[] => {
   const headerEnd = Math.floor(fullText.length * HEADER_ZONE_FRACTION);
+  const contextEntities = existingEntities.filter(
+    (entity) => !(entity.label === "address" && isCallerOwnedEntity(entity)),
+  );
   const results: Entity[] = [];
   ORPHAN_STREET_RE.lastIndex = 0;
 
@@ -501,7 +511,7 @@ export const detectOrphanStreetLines = (
     }
 
     // Must have a nearby entity (within 200 chars)
-    const hasContext = existingEntities.some(
+    const hasContext = contextEntities.some(
       (e) => Math.abs(e.start - end) < 200 || Math.abs(e.end - start) < 200,
     );
     if (!hasContext) {

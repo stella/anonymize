@@ -4,6 +4,7 @@ import type { Entity } from "../types";
 const MAX_GAP = 3;
 
 const hasLockedBoundary = (entity: Entity): boolean =>
+  entity.sourceDetail === "custom-deny-list" ||
   entity.sourceDetail === "custom-regex";
 
 /**

@@ -49,6 +49,7 @@ import { buildStreetTypePatterns } from "./detectors/address-seeds";
 import { buildGazetteerPatterns } from "./detectors/gazetteer";
 
 const DEFAULT_CUSTOM_REGEX_SCORE = 0.9;
+const EDGE_ALNUM_RE = /^[\p{L}\p{N}].*[\p{L}\p{N}]$/u;
 
 type PatternSlice = {
   start: number;
@@ -240,11 +241,15 @@ export const buildUnifiedSearch = async (
     literal: true as const,
     wholeWords,
   });
+  const customDenyListNeedsWholeWords = (pattern: string): boolean =>
+    EDGE_ALNUM_RE.test(pattern);
   const literalAllPatterns: PatternEntry[] = [
     ...denyListOriginals.map((pattern, index) =>
       wrapWholeWord(
         pattern,
-        !(denyListData?.sources[index] ?? []).includes("custom-deny-list"),
+        (denyListData?.sources[index] ?? []).includes("custom-deny-list")
+          ? customDenyListNeedsWholeWords(pattern)
+          : true,
       ),
     ),
     ...streetTypes.map((pattern) => wrapWholeWord(pattern, true)),

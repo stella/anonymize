@@ -171,7 +171,7 @@ export const filterFalsePositives = (
   const roles = getGenericRoles(ctx);
 
   for (const entity of entities) {
-    if (entity.sourceDetail === "custom-regex") {
+    if (isCallerOwnedEntity(entity)) {
       filtered.push(entity);
       continue;
     }

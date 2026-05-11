@@ -134,7 +134,7 @@ describe("pipeline config semantics", () => {
 
   test("custom deny-list entries preserve caller-owned exact terms", async () => {
     const entities = await detect(
-      "Use api-key for ACME, DOMAIN\\user, foo|bar, 2024, 3.2.1, Buyer, .env, @acme, and C++.",
+      "Use api-key for ACME, DOMAIN\\user, foo|bar, 2024, 3.2.1, Buyer, .env, @acme, C++, and :ACME;.",
       {
         enableDenyList: true,
         customDenyList: [
@@ -177,6 +177,10 @@ describe("pipeline config semantics", () => {
           {
             value: "C++",
             label: "language",
+          },
+          {
+            value: ":ACME;",
+            label: "token",
           },
         ],
         labels: [
@@ -251,6 +255,34 @@ describe("pipeline config semantics", () => {
       expect.objectContaining({
         label: "language",
         text: "C++",
+        source: "deny-list",
+        sourceDetail: "custom-deny-list",
+      }),
+      expect.objectContaining({
+        label: "token",
+        text: ":ACME;",
+        source: "deny-list",
+        sourceDetail: "custom-deny-list",
+      }),
+    ]);
+  });
+
+  test("plain custom deny-list entries keep token boundaries", async () => {
+    const entities = await detect("annual review for Joanne and Ann.", {
+      enableDenyList: true,
+      customDenyList: [
+        {
+          value: "Ann",
+          label: "person",
+        },
+      ],
+      labels: ["person"],
+    });
+
+    expect(entities).toEqual([
+      expect.objectContaining({
+        label: "person",
+        text: "Ann",
         source: "deny-list",
         sourceDetail: "custom-deny-list",
       }),
@@ -342,6 +374,82 @@ describe("pipeline config semantics", () => {
       expect.objectContaining({
         label: "address",
         text: "Praha",
+        source: "deny-list",
+        sourceDetail: "custom-deny-list",
+      }),
+    ]);
+  });
+
+  test("custom address deny-list entries bypass role-prefix normalization", async () => {
+    const entities = await detect("Adresa: nájemce Praha.", {
+      enableDenyList: true,
+      customDenyList: [
+        {
+          value: "nájemce Praha",
+          label: "address",
+        },
+      ],
+      labels: ["address"],
+    });
+
+    expect(entities).toEqual([
+      expect.objectContaining({
+        label: "address",
+        text: "nájemce Praha",
+        source: "deny-list",
+        sourceDetail: "custom-deny-list",
+      }),
+    ]);
+  });
+
+  test("custom address deny-list entries do not anchor street-context expansion", async () => {
+    const entities = await detect(`${"x".repeat(200)} Ostrovní 225/1, Praha`, {
+      enableDenyList: true,
+      customDenyList: [
+        {
+          value: "Praha",
+          label: "address",
+        },
+      ],
+      labels: ["address"],
+    });
+
+    expect(entities).toEqual([
+      expect.objectContaining({
+        label: "address",
+        text: "Praha",
+        source: "deny-list",
+        sourceDetail: "custom-deny-list",
+      }),
+    ]);
+  });
+
+  test("adjacent custom deny-list entries preserve exact spans", async () => {
+    const entities = await detect("Reference ABC-DEF is listed.", {
+      enableDenyList: true,
+      customDenyList: [
+        {
+          value: "ABC",
+          label: "code",
+        },
+        {
+          value: "DEF",
+          label: "code",
+        },
+      ],
+      labels: ["code"],
+    });
+
+    expect(entities).toEqual([
+      expect.objectContaining({
+        label: "code",
+        text: "ABC",
+        source: "deny-list",
+        sourceDetail: "custom-deny-list",
+      }),
+      expect.objectContaining({
+        label: "code",
+        text: "DEF",
         source: "deny-list",
         sourceDetail: "custom-deny-list",
       }),
@@ -499,6 +607,48 @@ describe("pipeline config semantics", () => {
         text: "AB",
         source: "regex",
         sourceDetail: "custom-regex",
+      }),
+    ]);
+  });
+
+  test("label-filtered custom regexes do not mask requested NER labels", async () => {
+    const fullText = "John met Alice.";
+    const entities = await runPipeline({
+      fullText,
+      config: {
+        ...BASE_CONFIG,
+        enableRegex: true,
+        enableNer: true,
+        customRegexes: [
+          {
+            pattern: "John",
+            label: "code",
+          },
+        ],
+        labels: ["person"],
+      },
+      gazetteerEntries: [],
+      context: createPipelineContext(),
+      nerInference: async (maskedText) => {
+        expect(maskedText).toBe(fullText);
+        return [
+          {
+            start: 0,
+            end: 4,
+            label: "person",
+            text: "John",
+            score: 0.95,
+            source: "ner",
+          },
+        ];
+      },
+    });
+
+    expect(entities).toEqual([
+      expect.objectContaining({
+        label: "person",
+        text: "John",
+        source: "ner",
       }),
     ]);
   });

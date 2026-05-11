@@ -66,7 +66,7 @@ const isCallerOwnedEntity = (entity: Entity): boolean =>
   entity.sourceDetail === "custom-regex";
 
 const hasLockedBoundary = (entity: Entity): boolean =>
-  entity.sourceDetail === "custom-regex";
+  isCallerOwnedEntity(entity);
 
 const shouldReplace = (a: Entity, b: Entity): boolean => {
   const aLen = a.end - a.start;
@@ -574,8 +574,12 @@ export const runPipeline = async (
         search.customRegexMeta,
       )
     : [];
+  const customRegexEntities = filterAllowedLabels(
+    rawCustomRegexEntities,
+    preHotwordAllowedLabels,
+  );
   const regexEntities = filterAllowedLabels(
-    [...rawRegexEntities, ...rawCustomRegexEntities],
+    [...rawRegexEntities, ...customRegexEntities],
     preHotwordAllowedLabels,
   );
   if (regexEntities.length > 0) log("regex", `${regexEntities.length} matches`);
@@ -664,6 +668,17 @@ export const runPipeline = async (
 
   checkAbort(signal);
 
+  const rawCustomDenyListEntities = rawDenyListEntities.filter((entity) =>
+    isCallerOwnedEntity(entity),
+  );
+  const rawCuratedDenyListEntities = rawDenyListEntities.filter(
+    (entity) => !isCallerOwnedEntity(entity),
+  );
+  const customDenyListEntities = filterAllowedLabels(
+    rawCustomDenyListEntities,
+    preHotwordAllowedLabels,
+  );
+
   const ruleContextEntities = [
     ...rawTriggerEntities,
     ...rawRegexEntities,
@@ -673,13 +688,23 @@ export const runPipeline = async (
     ...rawDenyListEntities,
     ...rawGazetteerEntities,
   ];
+  const nerMaskEntities = [
+    ...rawTriggerEntities,
+    ...rawRegexEntities,
+    ...customRegexEntities,
+    ...rawLegalFormEntities,
+    ...rawNameCorpusEntities,
+    ...rawCuratedDenyListEntities,
+    ...customDenyListEntities,
+    ...rawGazetteerEntities,
+  ];
 
   // NER (mask rule-detected spans so the model doesn't
   // produce contradictory boundaries for known entities)
   let rawNerEntities: Entity[] = [];
   let nerEntities: Entity[] = [];
   if (config.enableNer && nerInference) {
-    const maskResult = maskDetectedSpans(fullText, ruleContextEntities);
+    const maskResult = maskDetectedSpans(fullText, nerMaskEntities);
     log("ner", "running inference...");
     const rawNer = await nerInference(
       maskResult.maskedText,
