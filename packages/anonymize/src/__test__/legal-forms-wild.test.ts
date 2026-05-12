@@ -206,6 +206,31 @@ describe("connector separation", () => {
       "MAKRO Cash & Carry ČR s.r.o.",
     );
   });
+
+  test("two-word name plus and Company suffix", async () => {
+    await expectOrg(
+      "Acme Widgets and Company, Inc.",
+      "Acme Widgets and Company, Inc.",
+    );
+  });
+
+  test("name plus and Company across in-name preposition", async () => {
+    await expectOrg(
+      "The Bank of America and Trust Company, Inc.",
+      "The Bank of America and Trust Company, Inc.",
+    );
+  });
+
+  test("person and company boundary preserved", async () => {
+    await expectOrgs("Paul Newman and Apple, Inc.", ["Apple, Inc."]);
+  });
+
+  test("multi-word org with internal and connector", async () => {
+    await expectOrg(
+      "UniCredit Bank Czech Republic and Slovakia, a.s.",
+      "UniCredit Bank Czech Republic and Slovakia, a.s.",
+    );
+  });
 });
 
 // ── False positives to reject ─────────────────
