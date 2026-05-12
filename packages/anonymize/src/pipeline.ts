@@ -313,13 +313,22 @@ const labelIsAllowed = (
   allowedLabels: AllowedLabelSet,
 ): boolean => !allowedLabels || allowedLabels.has(label);
 
+// MISC is intentionally a label without detection — only the
+// custom deny-list path produces it. Asking the NER schema for
+// MISC would invite zero-shot guesses that contradict that
+// contract and cause over-redaction.
+const NON_NER_LABELS: ReadonlySet<string> = new Set(["misc"]);
+
 const getRequestedNerLabels = (
   config: PipelineConfig,
   expandForHotwords = false,
 ): readonly string[] => {
   const labels =
     config.labels.length > 0 ? config.labels : DEFAULT_ENTITY_LABELS;
-  return expandForHotwords ? expandLabelsForHotwordRules(labels) : labels;
+  const expanded = expandForHotwords
+    ? expandLabelsForHotwordRules(labels)
+    : labels;
+  return expanded.filter((label) => !NON_NER_LABELS.has(label));
 };
 
 const checkAbort = (signal?: AbortSignal): void => {

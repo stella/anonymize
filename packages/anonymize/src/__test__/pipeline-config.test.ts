@@ -974,4 +974,55 @@ describe("misc entity label", () => {
     );
     expect(redactionMap.get("[MISC_1]")).toBe("Widget X");
   });
+
+  test("misc case-variants share a placeholder", async () => {
+    // `Widget X` and `widget x` are the same real-world entity from
+    // the user's perspective; redact.ts case-normalises MISC so both
+    // surface forms collapse to one placeholder, matching
+    // PERSON/ORG/ADDRESS behaviour.
+    const fullText = "Widget X starts a sentence; later widget x reappears.";
+    const entities = await detect(fullText, {
+      enableDenyList: true,
+      customDenyList: [{ value: "Widget X", label: "misc" }],
+      labels: ["misc"],
+    });
+    const { redactedText, redactionMap } = redactText(fullText, entities);
+    expect(redactedText).toBe(
+      "[MISC_1] starts a sentence; later [MISC_1] reappears.",
+    );
+    expect(redactionMap.size).toBe(1);
+  });
+
+  test("misc is excluded from the NER label schema", async () => {
+    // MISC is a custom-deny-list-only label; surfacing it to the
+    // NER schema would invite zero-shot guesses on arbitrary spans.
+    const seenLabels: string[][] = [];
+    await runPipeline({
+      fullText: "Some sentence.",
+      config: {
+        threshold: 0.5,
+        enableTriggerPhrases: false,
+        enableRegex: false,
+        enableLegalForms: false,
+        enableNameCorpus: false,
+        enableDenyList: false,
+        enableGazetteer: false,
+        enableNer: true,
+        enableConfidenceBoost: false,
+        enableCoreference: false,
+        labels: [...DEFAULT_ENTITY_LABELS],
+        workspaceId: "test",
+      },
+      gazetteerEntries: [],
+      context: createPipelineContext(),
+      nerInference: async (_text, labels) => {
+        seenLabels.push([...labels]);
+        return [];
+      },
+    });
+    expect(seenLabels.length).toBe(1);
+    expect(seenLabels[0]).not.toContain("misc");
+    // Sanity: other defaults still flow through unchanged.
+    expect(seenLabels[0]).toContain("person");
+  });
 });

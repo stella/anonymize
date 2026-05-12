@@ -42,7 +42,8 @@ const normalizeEntityText = (label: string, text: string): string => {
     upper === "PERSON" ||
     upper === "ORGANIZATION" ||
     upper === "ADDRESS" ||
-    upper === "LAND_PARCEL"
+    upper === "LAND_PARCEL" ||
+    upper === "MISC"
   ) {
     return text.replace(WHITESPACE_RE, " ").toLowerCase().trim();
   }
