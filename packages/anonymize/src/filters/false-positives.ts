@@ -1,6 +1,7 @@
 import type { Entity } from "../types";
 import type { PipelineContext } from "../context";
 import { defaultContext } from "../context";
+import { normalizeHomoglyphs } from "../util/homoglyphs";
 
 const TEMPLATE_PLACEHOLDER_RE = /^(?:\.{3,}|_{3,}|\[[\w\s]+\]|\{[\w\s]+\})$/;
 
@@ -256,14 +257,18 @@ export const filterFalsePositives = (
         .at(-1)
         ?.replace(/[.,;:!?]+$/u, "")
         .toLowerCase();
-      if (tokens.length > 1 && last && PERSON_TRAILING_NOUNS.has(last)) {
+      if (
+        tokens.length > 1 &&
+        last &&
+        PERSON_TRAILING_NOUNS.has(normalizeHomoglyphs(last))
+      ) {
         continue;
       }
     }
 
     if (
       (normalized.label === "person" || normalized.label === "organization") &&
-      roles.has(trimmed.toLowerCase())
+      roles.has(normalizeHomoglyphs(trimmed).toLowerCase())
     ) {
       continue;
     }
