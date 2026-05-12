@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
-import { createPipelineContext, runPipeline } from "../index";
+import {
+  createPipelineContext,
+  DEFAULT_ENTITY_LABELS,
+  redactText,
+  runPipeline,
+} from "../index";
 import type { Dictionaries, PipelineConfig } from "../types";
 import { loadTestDictionaries } from "./load-dictionaries";
 
@@ -909,5 +914,64 @@ describe("pipeline config semantics", () => {
     expect(address!.text).toContain("Dělnická 213/12");
     expect(address!.text).toContain("Praha 7");
     expect(address!.text).not.toContain("Acme");
+  });
+});
+
+describe("misc entity label", () => {
+  test("misc is exported in DEFAULT_ENTITY_LABELS", () => {
+    expect(DEFAULT_ENTITY_LABELS).toContain("misc");
+  });
+
+  test("no detector fires misc on plain text", async () => {
+    const entities = await detect(
+      "Jan Novák lives in Praha and works at Acme s.r.o.",
+      {
+        enableRegex: true,
+        enableLegalForms: true,
+        enableTriggerPhrases: true,
+        enableDenyList: true,
+        enableNameCorpus: true,
+        enableGazetteer: true,
+        denyListCountries: ["CZ"],
+        labels: [...DEFAULT_ENTITY_LABELS],
+        dictionaries: await getDictionaries(),
+      },
+    );
+    expect(entities.some((entity) => entity.label === "misc")).toBe(false);
+  });
+
+  test("custom deny-list with misc label yields [MISC_N] placeholder", async () => {
+    const fullText = "The case file references Widget X and Widget X again.";
+    const entities = await detect(fullText, {
+      enableDenyList: true,
+      customDenyList: [
+        {
+          value: "Widget X",
+          label: "misc",
+        },
+      ],
+      labels: ["misc"],
+    });
+
+    expect(entities).toEqual([
+      expect.objectContaining({
+        label: "misc",
+        text: "Widget X",
+        source: "deny-list",
+        sourceDetail: "custom-deny-list",
+      }),
+      expect.objectContaining({
+        label: "misc",
+        text: "Widget X",
+        source: "deny-list",
+        sourceDetail: "custom-deny-list",
+      }),
+    ]);
+
+    const { redactedText, redactionMap } = redactText(fullText, entities);
+    expect(redactedText).toBe(
+      "The case file references [MISC_1] and [MISC_1] again.",
+    );
+    expect(redactionMap.get("[MISC_1]")).toBe("Widget X");
   });
 });

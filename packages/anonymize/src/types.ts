@@ -354,6 +354,7 @@ export const DEFAULT_ENTITY_LABELS = [
   "passport number",
   "monetary amount",
   "land parcel",
+  "misc",
 ] as const;
 
 export const isLegalFormsEnabled = (
