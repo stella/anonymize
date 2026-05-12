@@ -169,6 +169,7 @@ const CONNECTOR_RE = /^(?:a|and|und|et|e|y|i|&)$/i;
 // "<First> <Last> and <ORG>" and we stop rather than
 // swallow the personal name into the org span.
 const AND_TYPE_CONNECTOR_RE = /^(?:and|und|et)$/i;
+const UPPER_LETTER_RE = /^\p{Lu}/u;
 const LEADING_CLAUSE_RE = /(?:^|\s)(?:by\s+and\s+between|is\s+between)\s+/giu;
 
 /**
@@ -214,7 +215,7 @@ const countUpperWordsBefore = (fullText: string, pos: number): number => {
   while (scan > 0) {
     const found = findWordBefore(fullText, scan);
     if (!found) break;
-    if (!/^\p{Lu}/u.test(found.word)) break;
+    if (!UPPER_LETTER_RE.test(found.word)) break;
     count++;
     scan = found.start;
   }
@@ -242,7 +243,7 @@ const extendBackward = (fullText: string, matchStart: number): number => {
 
     const { word, start: wordStart } = found;
 
-    const isUpper = /^\p{Lu}/u.test(word);
+    const isUpper = UPPER_LETTER_RE.test(word);
     const isConnector = CONNECTOR_RE.test(word);
 
     if (isUpper) {
@@ -261,7 +262,7 @@ const extendBackward = (fullText: string, matchStart: number): number => {
       // (uppercase-starting) word before it
       const prev = findWordBefore(fullText, wordStart);
       if (!prev) break;
-      const prevIsUpper = /^\p{Lu}/u.test(prev.word);
+      const prevIsUpper = UPPER_LETTER_RE.test(prev.word);
       if (!prevIsUpper) break;
       // Move pos back to the start of the word that
       // precedes the connector; the connector and all

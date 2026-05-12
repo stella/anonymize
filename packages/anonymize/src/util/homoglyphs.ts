@@ -16,8 +16,10 @@
  *
  * Mappings are restricted to letters that are visually
  * indistinguishable from Latin in common fonts. Glyphs
- * that only resemble Latin at small sizes (e.g.
- * Cyrillic `в` vs `B`) are deliberately omitted.
+ * whose lowercase form does not resemble Latin (e.g.
+ * Cyrillic lowercase `в`, which looks nothing like
+ * lowercase `b`) are omitted from the lowercase
+ * section even when their uppercase form is included.
  */
 
 const REPLACEMENTS: readonly [number, number][] = [
@@ -68,6 +70,10 @@ const REPLACEMENTS: readonly [number, number][] = [
 
 const CHAR_MAP = new Map<number, number>(REPLACEMENTS);
 
+/** Chunk size for `String.fromCharCode` to avoid hitting
+ *  the call-stack limit on very large strings. */
+const CHUNK_SIZE = 8192;
+
 export const normalizeHomoglyphs = (text: string): string => {
   let hasSpecial = false;
   for (let i = 0; i < text.length; i++) {
@@ -84,5 +90,15 @@ export const normalizeHomoglyphs = (text: string): string => {
     const code = text.charCodeAt(i);
     codes[i] = CHAR_MAP.get(code) ?? code;
   }
-  return String.fromCharCode(...codes);
+
+  if (len <= CHUNK_SIZE) {
+    return String.fromCharCode(...codes);
+  }
+
+  let result = "";
+  for (let offset = 0; offset < len; offset += CHUNK_SIZE) {
+    const end = Math.min(offset + CHUNK_SIZE, len);
+    result += String.fromCharCode(...codes.subarray(offset, end));
+  }
+  return result;
 };
