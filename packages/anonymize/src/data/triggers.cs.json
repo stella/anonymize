@@ -329,6 +329,44 @@
     "validations": [{ "type": "min-length", "min": 3 }]
   },
   {
+    "id": "soudy-instrumental",
+    "triggers": [
+      "krajským soudem",
+      "okresním soudem",
+      "městským soudem",
+      "nejvyšším soudem",
+      "ústavním soudem",
+      "obvodním soudem"
+    ],
+    "label": "organization",
+    "strategy": { "type": "to-next-comma" },
+    "includeTrigger": true,
+    "extensions": [],
+    "validations": [{ "type": "min-length", "min": 3 }]
+  },
+  {
+    "id": "soudy-dative-locative",
+    "triggers": [
+      "krajskému soudu",
+      "okresnímu soudu",
+      "městskému soudu",
+      "nejvyššímu soudu",
+      "ústavnímu soudu",
+      "obvodnímu soudu",
+      "krajském soudu",
+      "okresním soudu",
+      "městském soudu",
+      "nejvyšším soudu",
+      "ústavním soudu",
+      "obvodním soudu"
+    ],
+    "label": "organization",
+    "strategy": { "type": "to-next-comma" },
+    "includeTrigger": true,
+    "extensions": [],
+    "validations": [{ "type": "min-length", "min": 3 }]
+  },
+  {
     "id": "cs-parcel-number",
     "label": "land parcel",
     "strategy": { "type": "n-words", "count": 1 },

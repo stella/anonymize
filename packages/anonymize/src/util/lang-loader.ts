@@ -14,13 +14,14 @@
 type ManifestLanguage = {
   triggers?: boolean;
   coreference?: boolean;
+  legalRoleHeads?: boolean;
 };
 
 type Manifest = {
   languages: Record<string, ManifestLanguage>;
 };
 
-type ConfigType = "triggers" | "coreference";
+type ConfigType = "triggers" | "coreference" | "legalRoleHeads";
 
 // ── Manifest loader (cached) ─────────────────────────
 
@@ -98,12 +99,20 @@ const COREFERENCE_LOADERS: Record<string, () => Promise<unknown>> = {
   sk: () => import("../data/coreference.sk.json"),
 };
 
+const LEGAL_ROLE_HEAD_LOADERS: Record<string, () => Promise<unknown>> = {
+  cs: () => import("../data/legal-role-heads.cs.json"),
+  de: () => import("../data/legal-role-heads.de.json"),
+  en: () => import("../data/legal-role-heads.en.json"),
+  "pt-br": () => import("../data/legal-role-heads.pt-br.json"),
+};
+
 const LOADER_REGISTRIES: Record<
   ConfigType,
   Record<string, () => Promise<unknown>>
 > = {
   triggers: TRIGGER_LOADERS,
   coreference: COREFERENCE_LOADERS,
+  legalRoleHeads: LEGAL_ROLE_HEAD_LOADERS,
 };
 
 // ── Fallback language lists ──────────────────────────
@@ -114,6 +123,7 @@ const LOADER_REGISTRIES: Record<
 const FALLBACK_LANGUAGES: Record<ConfigType, readonly string[]> = {
   triggers: ["cs", "de", "en", "es", "fr", "hu", "it", "pl", "ro", "sk", "sv"],
   coreference: ["cs", "de", "en", "sk"],
+  legalRoleHeads: ["cs", "de", "en", "pt-br"],
 };
 
 // ── Public API ───────────────────────────────────────

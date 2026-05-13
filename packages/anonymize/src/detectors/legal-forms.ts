@@ -14,29 +14,74 @@ import type { Match } from "@stll/text-search";
 import { DETECTION_SOURCES } from "../types";
 import type { Entity } from "../types";
 import { DASH_INNER } from "../util/char-groups";
+import { loadLanguageConfigs } from "../util/lang-loader";
 
 const UPPER = "A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽÄÖÜÀÂÆÇÈÊËÎÏÔÙÛŸÑ\\u0130";
 const LOWER = "a-záčďéěíňóřšťúůýžäöüßàâæçèêëîïôùûÿñ\\u0131";
 const CAP_WORD = `(?:[${UPPER}]{2,}|[${UPPER}][${LOWER}${UPPER}]+)`;
-// ANY_WORD: mixed-case word, short all-caps token
-// (2-3 chars, e.g. "CZ" in "Metrostav CZ s.r.o."),
-// or digit-only token (1-4 digits, e.g. "2028" in
-// "Invest 2028 s.r.o." or "12" in "Praha 12 s.r.o.").
-// Excludes "and"/"und"/"et" so the prefix can't span
-// entity boundaries like "Paul Newman and Apple, Inc."
-// — those connectors are still permitted inside
-// LOWER_CONNECTOR when followed by a lowercase word.
-const ANY_WORD =
-  `(?:(?!(?:and|und|et)(?![${UPPER}${LOWER}]))` +
-  `[${UPPER}${LOWER}][${LOWER}${UPPER}]+` +
-  `|[${UPPER}]{2,3}` +
-  `|\\d{1,4})`;
 // All-caps word: 2+ uppercase letters, no lowercase.
 // For company names like "EAGLES BRNO", max 3 words.
 const ALLCAP_WORD = `[${UPPER}]{2,}`;
 
 const ROMAN_NUMERAL_RE =
   /^(?=[IVXLCDM])M{0,3}(?:CM|CD|D?C{0,3})(?:XC|XL|L?X{0,3})(?:IX|IV|V?I{0,3})$/;
+
+// Generic legal/contract role words that should never appear
+// at the head of an organisation name. When a greedy regex
+// sweep includes one of these as the first word, the span is
+// a sentence fragment, not a real company (e.g. "Vendor 1
+// owns an equity interest in the Acme s.r.o. company"). The
+// processor trims back to the last real Cap-starting word in
+// that case. Per-language word lists live under
+// `data/legal-role-heads.<lang>.json`; loaded lazily and
+// cached on first use.
+type LegalRoleHeadsConfig = {
+  words: readonly string[];
+};
+
+let legalRoleHeadsCache: ReadonlySet<string> | null = null;
+let legalRoleHeadsPromise: Promise<ReadonlySet<string>> | null = null;
+
+const loadLegalRoleHeads = async (): Promise<ReadonlySet<string>> => {
+  if (legalRoleHeadsCache) return legalRoleHeadsCache;
+  if (legalRoleHeadsPromise) return legalRoleHeadsPromise;
+  legalRoleHeadsPromise = (async () => {
+    const sets = await loadLanguageConfigs<LegalRoleHeadsConfig>(
+      "legalRoleHeads",
+      (mod) => {
+        // eslint-disable-next-line no-unsafe-type-assertion -- JSON config shape
+        const m = mod as {
+          default?: LegalRoleHeadsConfig;
+        };
+        // eslint-disable-next-line no-unsafe-type-assertion -- JSON config shape
+        return (m.default ?? mod) as LegalRoleHeadsConfig;
+      },
+    );
+    const all = new Set<string>();
+    for (const entry of sets) {
+      if (!entry || !Array.isArray(entry.words)) continue;
+      for (const word of entry.words) {
+        if (typeof word === "string" && word.length > 0) {
+          all.add(word.toLowerCase());
+        }
+      }
+    }
+    legalRoleHeadsCache = all;
+    return all;
+  })();
+  return legalRoleHeadsPromise;
+};
+
+// Synchronous helper used inside `processLegalFormMatches`,
+// which is a sync function called once per pipeline run. The
+// pipeline calls `warmLegalRoleHeads()` before invoking it, so
+// the cache is populated by the time matches are processed.
+const getLegalRoleHeadsSync = (): ReadonlySet<string> =>
+  legalRoleHeadsCache ?? new Set<string>();
+
+export const warmLegalRoleHeads = async (): Promise<void> => {
+  await loadLegalRoleHeads();
+};
 
 const escapeForRegex = (form: string): string =>
   form
@@ -77,19 +122,26 @@ const buildPatternString = (forms: string[]): string | null => {
   const LOWER_WORD =
     `(?:(?!(?:and|und|et)(?![${UPPER}${LOWER}]))` +
     `[${LOWER}][${LOWER}${UPPER}]+)`;
+  // Any word, used in the tail. Same exclusion for
+  // standalone "and"/"und"/"et" as LOWER_WORD.
+  const ANY_WORD_TAIL =
+    `(?:(?!(?:and|und|et)(?![${UPPER}${LOWER}]))` +
+    `[${UPPER}${LOWER}][${LOWER}${UPPER}]+` +
+    `|[${UPPER}]{2,3}` +
+    `|\\d{1,4})`;
   // Prefix structure:
   //   CapWord (SimpleSep CapOrNumWord)*           # strict head
-  //   ( SimpleSep LowerWord                       # optional tail must
-  //     ((LowerConnector|SimpleSep) AnyWord)* )?  # start lowercase
-  // The tail (with LowerConnector) is only reachable
-  // after at least one lowercase token — so it can't
-  // bridge "<Cap> <Cap> and lower …" patterns across
-  // an entity boundary (e.g. "Paul Newman and company
-  // Apple, Inc.").
+  //   ( SimpleSep LowerWord                       # optional tail starts
+  //     ((LowerConnector|SimpleSep) AnyWord)* )?  #   with a lowercase
+  // The tail is bounded to a handful of tokens so legitimate
+  // multi-word names ("Národní agentura pro komunikační a
+  // informační technologie, s. p.", "Bank of America, Inc.")
+  // still match while sentence fragments containing six-plus
+  // words ahead of the legal form don't get swept in.
   const head = `(?:${CAP_WORD})(?:${SIMPLE_SEP}(?:${CAP_OR_NUM_WORD})){0,10}`;
   const tail =
     `${SIMPLE_SEP}(?:${LOWER_WORD})` +
-    `(?:(?:${LOWER_CONNECTOR}|${SIMPLE_SEP})(?:${ANY_WORD})){0,10}`;
+    `(?:(?:${LOWER_CONNECTOR}|${SIMPLE_SEP})(?:${ANY_WORD_TAIL})){0,6}`;
   const prefix = `(?:${head})(?:${tail})?`;
   const separator = `(?:\\s+|,\\s*)`;
 
@@ -357,21 +409,59 @@ export const processLegalFormMatches = (
       continue;
     }
 
-    if (text.includes("\n")) {
+    // Trim spans whose first word is a generic legal/contract
+    // role. The pattern can greedily sweep across a sentence
+    // ("Vendor 1 owns an equity interest in the Acme s.r.o.
+    // company"); when that happens, fall back to the last
+    // uppercase-starting word before the legal form so we still
+    // emit a real entity ("Acme s.r.o.") rather than dropping
+    // the highlight entirely.
+    const roleHeads = getLegalRoleHeadsSync();
+    const firstWordMatch = /^[\p{L}\p{M}]+/u.exec(text);
+    let processedStart = match.start;
+    let processedText = text;
+    if (
+      firstWordMatch !== null &&
+      roleHeads.has(firstWordMatch[0].toLowerCase())
+    ) {
+      // Walk through the text and find the LAST uppercase-
+      // starting word that isn't itself a generic legal role.
+      // That word becomes the new entity head; everything before
+      // it is sentence noise. Falls back to dropping the match
+      // if no usable Cap word is found.
+      const allCapMatches = [
+        ...text.matchAll(/(?<![\p{L}\p{N}])[\p{Lu}][\p{L}\p{M}\p{N}]*/gu),
+      ];
+      let lastUsable: { word: string; index: number } | null = null;
+      for (let i = allCapMatches.length - 1; i >= 0; i--) {
+        const m = allCapMatches[i];
+        if (m?.index === undefined) continue;
+        if (roleHeads.has(m[0].toLowerCase())) continue;
+        lastUsable = { word: m[0], index: m.index };
+        break;
+      }
+      if (lastUsable === null) {
+        continue;
+      }
+      processedStart = match.start + lastUsable.index;
+      processedText = text.slice(lastUsable.index);
+    }
+
+    if (processedText.includes("\n")) {
       continue;
     }
 
     // Extend backward through connectors if fullText
     // is available (captures "Be a Future" from just
     // "Future s.r.o.")
-    let entityStart = match.start;
-    let entityText = text;
+    let entityStart = processedStart;
+    let entityText = processedText;
     if (fullText) {
-      const extended = extendBackward(fullText, match.start);
-      if (extended < match.start) {
+      const extended = extendBackward(fullText, processedStart);
+      if (extended < processedStart) {
         entityStart = extended;
         entityText = fullText
-          .slice(extended, match.start + text.length)
+          .slice(extended, processedStart + processedText.length)
           .trimEnd();
       }
     }
