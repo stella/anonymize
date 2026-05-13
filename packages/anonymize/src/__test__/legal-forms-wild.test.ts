@@ -262,10 +262,9 @@ describe("role-head sentence trim", () => {
   });
 
   test("trim preserves in-name preposition (Bank of America)", async () => {
-    await expectOrgs(
-      "Vendor grants Bank of America Inc. exclusive rights.",
-      ["Bank of America Inc."],
-    );
+    await expectOrgs("Vendor grants Bank of America Inc. exclusive rights.", [
+      "Bank of America Inc.",
+    ]);
   });
 
   test("role word that IS the company is kept (no trim)", async () => {
@@ -273,6 +272,9 @@ describe("role-head sentence trim", () => {
   });
 
   test("cap-only chain starting with role word is kept (no trim)", async () => {
-    await expectOrg("Client Solutions Inc. delivered the project.", "Client Solutions Inc.");
+    await expectOrg(
+      "Client Solutions Inc. delivered the project.",
+      "Client Solutions Inc.",
+    );
   });
 });

@@ -319,8 +319,7 @@ const extendBackward = (
   const headWord =
     ENTITY_HEAD_WORD_RE.exec(fullText.slice(matchStart))?.[0] ?? "";
   const suffixMode =
-    options.forceSuffixMode === true ||
-    COMPANY_SUFFIX_WORDS_RE.test(headWord);
+    options.forceSuffixMode === true || COMPANY_SUFFIX_WORDS_RE.test(headWord);
 
   let pos = matchStart;
 
@@ -461,9 +460,7 @@ export const processLegalFormMatches = (
       // and taking everything from the next character on.
       const lastSepMatch = /[\s,]+(?=\S+$)/u.exec(text);
       const suffixOffset =
-        lastSepMatch !== null
-          ? lastSepMatch.index + lastSepMatch[0].length
-          : 0;
+        lastSepMatch !== null ? lastSepMatch.index + lastSepMatch[0].length : 0;
       // Detect sentence noise: any lowercase-starting token
       // between the role-head and the suffix that isn't itself
       // a known in-name connector. If none, the match is a
