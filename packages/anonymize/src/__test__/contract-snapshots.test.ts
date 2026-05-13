@@ -386,6 +386,138 @@ const FIXTURES: ContractFixture[] = [
       ).toBe(false);
     },
   },
+  {
+    name: "czech asset transfer with court declensions",
+    textPath: join(FIXTURES_DIR, "cs", "asset-transfer-court-declensions.txt"),
+    snapshotPath: join(
+      FIXTURES_DIR,
+      "cs",
+      "asset-transfer-court-declensions.snapshot.json",
+    ),
+    assertQuality: (entities) => {
+      // Instrumental case ("Krajským soudem v Ústí nad Labem",
+      // "Městským soudem v Praze") must be detected — these
+      // declensions were missed before triggers.cs gained
+      // soudy-instrumental and soudy-dative-locative groups.
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "organization" &&
+            entity.text === "Krajským soudem v Ústí nad Labem",
+        ),
+      ).toBe(true);
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "organization" &&
+            entity.text === "Městským soudem v Praze",
+        ),
+      ).toBe(true);
+      // Dative case in the closing clause ("Krajského soudu" —
+      // actually genitive — appears in the "spory ... u
+      // Krajského soudu v Praze" final paragraph). At minimum
+      // the legal-form ORGs must survive intact.
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "organization" &&
+            entity.text === "ČEZ Distribuce, a.s.",
+        ),
+      ).toBe(true);
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "organization" &&
+            entity.text === "RETO Holding s.r.o.",
+        ),
+      ).toBe(true);
+      // Role-head sentence-trim regression: the IČO blocks have
+      // role words ("Prodávající", "Kupující") at the head; we
+      // should NOT swallow whole-clause descriptions as orgs.
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "organization" &&
+            entity.text.startsWith("Prodávající") &&
+            entity.text.length > 40,
+        ),
+      ).toBe(false);
+    },
+  },
+  {
+    name: "english software license agreement",
+    textPath: join(FIXTURES_DIR, "en", "software-license-agreement.txt"),
+    snapshotPath: join(
+      FIXTURES_DIR,
+      "en",
+      "software-license-agreement.snapshot.json",
+    ),
+    assertQuality: (entities) => {
+      // Multi-word org with in-name preposition: "Bank of
+      // America, N.A." must capture the whole span (regression
+      // for the legal-form forceSuffixMode walk).
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "organization" &&
+            entity.text.startsWith("Bank of America"),
+        ),
+      ).toBe(true);
+      // English LLC + Inc. detection.
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "organization" &&
+            entity.text === "Aurelia Analytics, Inc.",
+        ),
+      ).toBe(true);
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "organization" &&
+            entity.text === "Northwind Capital Partners LLC",
+        ),
+      ).toBe(true);
+      // Generic English role words ("Licensor", "Licensee")
+      // must NOT be emitted as orgs even when they appear next
+      // to capitalised entity references.
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "organization" &&
+            (entity.text === "Licensor" || entity.text === "Licensee"),
+        ),
+      ).toBe(false);
+    },
+  },
+  {
+    name: "german geschäftsführer service agreement",
+    textPath: join(FIXTURES_DIR, "de", "geschaeftsfuehrer-dienstvertrag.txt"),
+    snapshotPath: join(
+      FIXTURES_DIR,
+      "de",
+      "geschaeftsfuehrer-dienstvertrag.snapshot.json",
+    ),
+    assertQuality: (entities) => {
+      // GmbH suffix capture + multi-word name.
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "organization" &&
+            entity.text === "Drachenfels Beteiligungen GmbH",
+        ),
+      ).toBe(true);
+      // German role-head words must not be emitted as orgs.
+      expect(
+        entities.some(
+          (entity) =>
+            entity.label === "organization" &&
+            (entity.text === "Geschäftsführerin" ||
+              entity.text === "Gesellschaft"),
+        ),
+      ).toBe(false);
+    },
+  },
 ];
 
 const toSnapshot = (

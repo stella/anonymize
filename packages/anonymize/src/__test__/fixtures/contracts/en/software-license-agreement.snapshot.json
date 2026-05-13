@@ -1,0 +1,226 @@
+{
+  "entityCount": 30,
+  "counts": {
+    "date": 3,
+    "organization": 8,
+    "address": 6,
+    "person": 9,
+    "monetary amount": 1,
+    "tax identification number": 1,
+    "email address": 1,
+    "phone number": 1
+  },
+  "entities": [
+    {
+      "start": 100,
+      "end": 117,
+      "label": "date",
+      "text": "February 12, 2025",
+      "source": "regex"
+    },
+    {
+      "start": 162,
+      "end": 185,
+      "label": "organization",
+      "text": "Aurelia Analytics, Inc.",
+      "source": "legal-form"
+    },
+    {
+      "start": 189,
+      "end": 197,
+      "label": "address",
+      "text": "Delaware",
+      "source": "deny-list"
+    },
+    {
+      "start": 259,
+      "end": 272,
+      "label": "person",
+      "text": "Orange Street",
+      "source": "deny-list"
+    },
+    {
+      "start": 259,
+      "end": 284,
+      "label": "address",
+      "text": "Orange Street, Wilmington",
+      "source": "deny-list"
+    },
+    {
+      "start": 386,
+      "end": 406,
+      "label": "person",
+      "text": "Ms. Priya Ramanathan",
+      "source": "regex"
+    },
+    {
+      "start": 417,
+      "end": 447,
+      "label": "organization",
+      "text": "Northwind Capital Partners LLC",
+      "source": "legal-form"
+    },
+    {
+      "start": 451,
+      "end": 459,
+      "label": "address",
+      "text": "New York",
+      "source": "deny-list"
+    },
+    {
+      "start": 510,
+      "end": 521,
+      "label": "person",
+      "text": "West Street",
+      "source": "deny-list"
+    },
+    {
+      "start": 523,
+      "end": 531,
+      "label": "address",
+      "text": "New York",
+      "source": "deny-list"
+    },
+    {
+      "start": 631,
+      "end": 651,
+      "label": "person",
+      "text": "Jonathan H. Whitaker",
+      "source": "deny-list"
+    },
+    {
+      "start": 892,
+      "end": 907,
+      "label": "organization",
+      "text": "Bank of America",
+      "source": "deny-list"
+    },
+    {
+      "start": 1273,
+      "end": 1289,
+      "label": "monetary amount",
+      "text": "USD 1,250,000.00",
+      "source": "regex"
+    },
+    {
+      "start": 1398,
+      "end": 1414,
+      "label": "organization",
+      "text": "Wells Fargo Bank",
+      "source": "deny-list"
+    },
+    {
+      "start": 1452,
+      "end": 1462,
+      "label": "tax identification number",
+      "text": "4537891022",
+      "source": "regex"
+    },
+    {
+      "start": 1572,
+      "end": 1595,
+      "label": "organization",
+      "text": "Aurelia Analytics, Inc.",
+      "source": "legal-form"
+    },
+    {
+      "start": 1603,
+      "end": 1619,
+      "label": "person",
+      "text": "Legal Department",
+      "source": "deny-list"
+    },
+    {
+      "start": 1629,
+      "end": 1642,
+      "label": "person",
+      "text": "Orange Street",
+      "source": "deny-list"
+    },
+    {
+      "start": 1629,
+      "end": 1654,
+      "label": "address",
+      "text": "Orange Street, Wilmington",
+      "source": "deny-list"
+    },
+    {
+      "start": 1703,
+      "end": 1734,
+      "label": "email address",
+      "text": "legal@aurelia-analytics.example",
+      "source": "regex"
+    },
+    {
+      "start": 1755,
+      "end": 1785,
+      "label": "organization",
+      "text": "Northwind Capital Partners LLC",
+      "source": "legal-form"
+    },
+    {
+      "start": 1817,
+      "end": 1828,
+      "label": "person",
+      "text": "West Street",
+      "source": "deny-list"
+    },
+    {
+      "start": 1830,
+      "end": 1838,
+      "label": "address",
+      "text": "New York",
+      "source": "deny-list"
+    },
+    {
+      "start": 1858,
+      "end": 1872,
+      "label": "phone number",
+      "text": "212) 555-0142.",
+      "source": "trigger"
+    },
+    {
+      "start": 1972,
+      "end": 1995,
+      "label": "organization",
+      "text": "Aurelia Analytics, Inc.",
+      "source": "legal-form"
+    },
+    {
+      "start": 2013,
+      "end": 2043,
+      "label": "organization",
+      "text": "Northwind Capital Partners LLC",
+      "source": "legal-form"
+    },
+    {
+      "start": 2124,
+      "end": 2140,
+      "label": "person",
+      "text": "Priya Ramanathan",
+      "source": "deny-list"
+    },
+    {
+      "start": 2165,
+      "end": 2185,
+      "label": "person",
+      "text": "Jonathan H. Whitaker",
+      "source": "deny-list"
+    },
+    {
+      "start": 2258,
+      "end": 2275,
+      "label": "date",
+      "text": "February 12, 2025",
+      "source": "regex"
+    },
+    {
+      "start": 2299,
+      "end": 2316,
+      "label": "date",
+      "text": "February 12, 2025",
+      "source": "regex"
+    }
+  ],
+  "redactedText": "SOFTWARE LICENSE AGREEMENT\n\nThis Software License Agreement (the \"Agreement\") is entered into as of [DATE_1]\n(the \"Effective Date\") by and between:\n\n(1) [ORGANIZATION_1], a [ADDRESS_1] corporation\n    with its principal place of business at 1209 [PERSON_1], Wilmington, DE 19801,\n    EIN: 87-2451993\n    (the \"Licensor\"), represented by its Chief Executive Officer,\n    [PERSON_2]; and\n\n(2) [ORGANIZATION_2], a [ADDRESS_3] limited liability company\n    with offices at 200 [PERSON_3], [ADDRESS_3], NY 10282,\n    EIN: 13-3994801\n    (the \"Licensee\"), represented by its Managing Director,\n    Dr. [PERSON_4].\n\nRecitals\nLicensor has developed certain proprietary analytics software (\"Software\") and\nis willing to grant Licensee a license under the terms set forth herein.\nLicensee desires to obtain such a license to integrate the Software with its\n[ORGANIZATION_3], N.A. treasury operations and to deploy it across the Acme &\nCompany Holdings group of subsidiaries.\n\n1. License Grant. Subject to the terms of this Agreement, Licensor hereby grants\n   to Licensee a non-exclusive, non-transferable license to use the Software\n   solely for internal business purposes.\n\n2. Fees. Licensee shall pay Licensor an annual license fee of [MONETARY_AMOUNT_1]\n   (one million two hundred fifty thousand U.S. dollars), payable to the\n   account designated by Licensor ([ORGANIZATION_4], N.A., routing 121000248,\n   account [TAX_IDENTIFICATION_NUMBER_1]).\n\n3. Notices. Any notice required hereunder shall be sent to the following\n   addresses:\n   If to Licensor: [ORGANIZATION_1], Attn: [PERSON_5],\n   1209 [PERSON_1], Wilmington, DE 19801; with a copy to general counsel\n   at [EMAIL_ADDRESS_1].\n   If to Licensee: [ORGANIZATION_2], Attn: General Counsel,\n   200 [PERSON_3], [ADDRESS_3], NY 10282; phone: ([PHONE_NUMBER_1]\n\nIN WITNESS WHEREOF, the parties have executed this Agreement as of the\nEffective Date.\n\nLICENSOR: [ORGANIZATION_1]        LICENSEE: [ORGANIZATION_2]\nBy: ____________________________         By: ____________________________\nName: [PERSON_6]                   Name: [PERSON_4]\nTitle: Chief Executive Officer           Title: Managing Director\nDate: [DATE_1]                  Date: [DATE_1]\n"
+}

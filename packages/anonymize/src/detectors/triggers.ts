@@ -487,6 +487,17 @@ const extractValue = (
     }
 
     case "to-end-of-line": {
+      // Only capture on the SAME line as the trigger. The
+      // generic leading-whitespace strip above swallows
+      // newlines, which would let a header-style trigger
+      // ("Bankovní spojení\nKupní cena bude uhrazena na ...")
+      // consume the next line wholesale. If the strip
+      // crossed a newline, the trigger has no inline value
+      // and the strategy emits nothing.
+      const consumed = remaining.length - valueText.length;
+      if (consumed > 0 && remaining.slice(0, consumed).includes("\n")) {
+        return null;
+      }
       // Stop at newline or tab (tab separates cells
       // in DOCX table rows).
       const LINE_STOPS = ["\n"];

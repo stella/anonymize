@@ -1,0 +1,49 @@
+SOFTWARE LICENSE AGREEMENT
+
+This Software License Agreement (the "Agreement") is entered into as of February 12, 2025
+(the "Effective Date") by and between:
+
+(1) Aurelia Analytics, Inc., a Delaware corporation
+    with its principal place of business at 1209 Orange Street, Wilmington, DE 19801,
+    EIN: 87-2451993
+    (the "Licensor"), represented by its Chief Executive Officer,
+    Ms. Priya Ramanathan; and
+
+(2) Northwind Capital Partners LLC, a New York limited liability company
+    with offices at 200 West Street, New York, NY 10282,
+    EIN: 13-3994801
+    (the "Licensee"), represented by its Managing Director,
+    Dr. Jonathan H. Whitaker.
+
+Recitals
+Licensor has developed certain proprietary analytics software ("Software") and
+is willing to grant Licensee a license under the terms set forth herein.
+Licensee desires to obtain such a license to integrate the Software with its
+Bank of America, N.A. treasury operations and to deploy it across the Acme &
+Company Holdings group of subsidiaries.
+
+1. License Grant. Subject to the terms of this Agreement, Licensor hereby grants
+   to Licensee a non-exclusive, non-transferable license to use the Software
+   solely for internal business purposes.
+
+2. Fees. Licensee shall pay Licensor an annual license fee of USD 1,250,000.00
+   (one million two hundred fifty thousand U.S. dollars), payable to the
+   account designated by Licensor (Wells Fargo Bank, N.A., routing 121000248,
+   account 4537891022).
+
+3. Notices. Any notice required hereunder shall be sent to the following
+   addresses:
+   If to Licensor: Aurelia Analytics, Inc., Attn: Legal Department,
+   1209 Orange Street, Wilmington, DE 19801; with a copy to general counsel
+   at legal@aurelia-analytics.example.
+   If to Licensee: Northwind Capital Partners LLC, Attn: General Counsel,
+   200 West Street, New York, NY 10282; phone: (212) 555-0142.
+
+IN WITNESS WHEREOF, the parties have executed this Agreement as of the
+Effective Date.
+
+LICENSOR: Aurelia Analytics, Inc.        LICENSEE: Northwind Capital Partners LLC
+By: ____________________________         By: ____________________________
+Name: Priya Ramanathan                   Name: Jonathan H. Whitaker
+Title: Chief Executive Officer           Title: Managing Director
+Date: February 12, 2025                  Date: February 12, 2025

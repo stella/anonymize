@@ -5,6 +5,7 @@ import {
 import { processGazetteerMatches } from "./detectors/gazetteer";
 import { detectNameCorpus, initNameCorpus } from "./detectors/names";
 import { processRegexMatches } from "./detectors/regex";
+import { LEGAL_SUFFIXES } from "./config/legal-forms";
 import {
   processLegalFormMatches,
   warmLegalRoleHeads,
@@ -132,10 +133,29 @@ export const sanitizeEntities = (entities: Entity[]): Entity[] =>
       .replace(/^(?:\.\s)+/, "")
       .replace(new RegExp(`^${strip.source}`, strip.flags), "");
     const lead = e.text.length - leadTrimmed.length;
-    const cleaned = leadTrimmed.replace(
+    let cleaned = leadTrimmed.replace(
       new RegExp(`${strip.source}$`, strip.flags),
       "",
     );
+    // Trailing-period strip for organization entities that
+    // don't end in a legal-form abbreviation. Court trigger
+    // captures often include the sentence terminator
+    // ("Krajského soudu v Praze." → "Krajského soudu v Praze").
+    // Keep the period only when the entity ends with a
+    // recognised suffix from `LEGAL_SUFFIXES`, so genuine
+    // company names ("Inc.", "Ltd.", "s.r.o.", "s. p.", …)
+    // retain their final dot. The check covers spaced
+    // variants too: comparing against the LEGAL_SUFFIXES
+    // entries directly keeps this layer in sync with
+    // whatever vocabulary the detectors recognise.
+    if (e.label === "organization" && cleaned.endsWith(".")) {
+      const keepsPeriod = LEGAL_SUFFIXES.some((suffix) =>
+        cleaned.endsWith(suffix),
+      );
+      if (!keepsPeriod) {
+        cleaned = cleaned.slice(0, -1).trimEnd();
+      }
+    }
     if (cleaned.length === 0) return [];
     // Reject entities with no alphanumeric content
     if (!/[\p{L}\p{N}]/u.test(cleaned)) return [];

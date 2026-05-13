@@ -1,0 +1,212 @@
+{
+  "entityCount": 28,
+  "counts": {
+    "organization": 8,
+    "address": 5,
+    "registration number": 6,
+    "tax identification number": 2,
+    "person": 1,
+    "date": 4,
+    "monetary amount": 1,
+    "bank account number": 1
+  },
+  "entities": [
+    {
+      "start": 120,
+      "end": 140,
+      "label": "organization",
+      "text": "ČEZ Distribuce, a.s.",
+      "source": "legal-form"
+    },
+    {
+      "start": 148,
+      "end": 188,
+      "label": "address",
+      "text": "Teplická 874/8, 405 02 Děčín IV-Podmokly",
+      "source": "trigger"
+    },
+    {
+      "start": 194,
+      "end": 202,
+      "label": "registration number",
+      "text": "24729035",
+      "source": "trigger"
+    },
+    {
+      "start": 208,
+      "end": 218,
+      "label": "tax identification number",
+      "text": "CZ24729035",
+      "source": "trigger"
+    },
+    {
+      "start": 257,
+      "end": 289,
+      "label": "organization",
+      "text": "Krajským soudem v Ústí nad Labem",
+      "source": "trigger"
+    },
+    {
+      "start": 307,
+      "end": 311,
+      "label": "registration number",
+      "text": "2145",
+      "source": "trigger"
+    },
+    {
+      "start": 323,
+      "end": 347,
+      "label": "person",
+      "text": "Ing. Pavlem Cyranim, MBA",
+      "source": "regex"
+    },
+    {
+      "start": 389,
+      "end": 402,
+      "label": "date",
+      "text": "3. dubna 1972",
+      "source": "regex"
+    },
+    {
+      "start": 431,
+      "end": 445,
+      "label": "address",
+      "text": "110 00 Praha 1",
+      "source": "deny-list"
+    },
+    {
+      "start": 476,
+      "end": 496,
+      "label": "organization",
+      "text": "Komerční banka, a.s.",
+      "source": "legal-form"
+    },
+    {
+      "start": 504,
+      "end": 542,
+      "label": "address",
+      "text": "Na Příkopě 33 č.p. 969, 114 07 Praha 1",
+      "source": "trigger"
+    },
+    {
+      "start": 548,
+      "end": 556,
+      "label": "registration number",
+      "text": "45317054",
+      "source": "trigger"
+    },
+    {
+      "start": 562,
+      "end": 572,
+      "label": "tax identification number",
+      "text": "CZ45317054",
+      "source": "trigger"
+    },
+    {
+      "start": 611,
+      "end": 634,
+      "label": "organization",
+      "text": "Městským soudem v Praze",
+      "source": "trigger"
+    },
+    {
+      "start": 652,
+      "end": 656,
+      "label": "registration number",
+      "text": "1360",
+      "source": "trigger"
+    },
+    {
+      "start": 725,
+      "end": 740,
+      "label": "date",
+      "text": "14. května 1971",
+      "source": "regex"
+    },
+    {
+      "start": 748,
+      "end": 774,
+      "label": "address",
+      "text": "Karlova 14, 110 00 Praha 1",
+      "source": "regex"
+    },
+    {
+      "start": 886,
+      "end": 905,
+      "label": "organization",
+      "text": "RETO Holding s.r.o.",
+      "source": "legal-form"
+    },
+    {
+      "start": 912,
+      "end": 920,
+      "label": "registration number",
+      "text": "03991122",
+      "source": "trigger"
+    },
+    {
+      "start": 932,
+      "end": 961,
+      "label": "address",
+      "text": "Dlouhá 705/16, 110 00 Praha 1",
+      "source": "trigger"
+    },
+    {
+      "start": 1001,
+      "end": 1024,
+      "label": "organization",
+      "text": "Městským soudem v Praze",
+      "source": "trigger"
+    },
+    {
+      "start": 1042,
+      "end": 1048,
+      "label": "registration number",
+      "text": "240118",
+      "source": "trigger"
+    },
+    {
+      "start": 1073,
+      "end": 1155,
+      "label": "monetary amount",
+      "text": "124 500 000 Kč (slovy: jedno sto dvacet čtyři miliony pět set tisíc korun českých)",
+      "source": "regex"
+    },
+    {
+      "start": 1239,
+      "end": 1257,
+      "label": "bank account number",
+      "text": "27-9402310277/0100",
+      "source": "trigger"
+    },
+    {
+      "start": 1267,
+      "end": 1287,
+      "label": "organization",
+      "text": "Komerční banky, a.s.",
+      "source": "legal-form"
+    },
+    {
+      "start": 1383,
+      "end": 1397,
+      "label": "date",
+      "text": "18. dubna 2025",
+      "source": "regex"
+    },
+    {
+      "start": 1464,
+      "end": 1487,
+      "label": "organization",
+      "text": "Krajského soudu v Praze",
+      "source": "trigger"
+    },
+    {
+      "start": 1502,
+      "end": 1516,
+      "label": "date",
+      "text": "18. dubna 2025",
+      "source": "regex"
+    }
+  ],
+  "redactedText": "Smlouva o převodu obchodního podílu\n\nuzavřená podle § 207 zákona č. 90/2012 Sb., o obchodních korporacích\n\nProdávající: [ORGANIZATION_1]\nsídlo: [ADDRESS_1]\nIČO: [REGISTRATION_NUMBER_1]\nDIČ: [TAX_IDENTIFICATION_NUMBER_1]\nzapsaná v obchodním rejstříku vedeném [ORGANIZATION_2], oddíl B, vložka [REGISTRATION_NUMBER_2]\nzastoupená [PERSON_1], předsedou představenstva,\nnarozeným dne [DATE_1],\nbytem Václavské náměstí 9, [ADDRESS_2]\n(\"Prodávající\")\n\na\n\nKupující: [ORGANIZATION_3]\nsídlo: [ADDRESS_3]\nIČO: [REGISTRATION_NUMBER_3]\nDIČ: [TAX_IDENTIFICATION_NUMBER_2]\nzapsaná v obchodním rejstříku vedeném [ORGANIZATION_4], oddíl B, vložka [REGISTRATION_NUMBER_4]\nzastoupená Janem Juchelkou, předsedou představenstva,\nnarozeným dne [DATE_2],\nbytem [ADDRESS_4]\n(\"Kupující\")\n\n1. Předmět smlouvy\nProdávající převádí Kupujícímu obchodní podíl o velikosti 49 % ve společnosti\n[ORGANIZATION_5], IČO: [REGISTRATION_NUMBER_5], se sídlem [ADDRESS_5],\nzapsané v obchodním rejstříku vedeném [ORGANIZATION_4], oddíl C, vložka [REGISTRATION_NUMBER_6],\nza celkovou kupní cenu [MONETARY_AMOUNT_1].\n\n2. Bankovní spojení\nKupní cena bude uhrazena na bankovní účet Prodávajícího č.ú. [BANK_ACCOUNT_NUMBER_1]\nvedený u [ORGANIZATION_6], a to do 30 dnů od podpisu této smlouvy.\n\n3. Závěrečná ustanovení\nSmlouva nabývá účinnosti dne [DATE_3].\nSmluvní strany se dohodly, že případné spory budou rozhodovány u [ORGANIZATION_7].\n\nV Praze dne [DATE_3]\n"
+}

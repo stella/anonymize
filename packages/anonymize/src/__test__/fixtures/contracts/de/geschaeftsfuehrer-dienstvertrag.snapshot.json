@@ -1,0 +1,192 @@
+{
+  "entityCount": 25,
+  "counts": {
+    "organization": 5,
+    "address": 6,
+    "registration number": 1,
+    "person": 5,
+    "date of birth": 2,
+    "date": 3,
+    "monetary amount": 1,
+    "iban": 1,
+    "bank account number": 1
+  },
+  "entities": [
+    {
+      "start": 49,
+      "end": 79,
+      "label": "organization",
+      "text": "Drachenfels Beteiligungen GmbH",
+      "source": "legal-form"
+    },
+    {
+      "start": 91,
+      "end": 123,
+      "label": "address",
+      "text": "Königsallee 27, 40212 Düsseldorf",
+      "source": "regex"
+    },
+    {
+      "start": 144,
+      "end": 203,
+      "label": "registration number",
+      "text": "Handelsregister des Amtsgerichts Düsseldorf unter HRB 78219",
+      "source": "trigger"
+    },
+    {
+      "start": 261,
+      "end": 281,
+      "label": "person",
+      "text": "Dr. Friedrich Albers",
+      "source": "regex"
+    },
+    {
+      "start": 298,
+      "end": 301,
+      "label": "date of birth",
+      "text": "21.",
+      "source": "trigger"
+    },
+    {
+      "start": 326,
+      "end": 360,
+      "label": "address",
+      "text": "Schadowstraße 11, 40212 Düsseldorf",
+      "source": "regex"
+    },
+    {
+      "start": 412,
+      "end": 437,
+      "label": "person",
+      "text": "Frau Karoline M. Brentano",
+      "source": "deny-list"
+    },
+    {
+      "start": 454,
+      "end": 457,
+      "label": "date of birth",
+      "text": "09.",
+      "source": "trigger"
+    },
+    {
+      "start": 482,
+      "end": 514,
+      "label": "address",
+      "text": "Bismarckring 18, 65183 Wiesbaden",
+      "source": "regex"
+    },
+    {
+      "start": 655,
+      "end": 668,
+      "label": "date",
+      "text": "1. April 2025",
+      "source": "regex"
+    },
+    {
+      "start": 848,
+      "end": 866,
+      "label": "organization",
+      "text": "Beteiligungen GmbH",
+      "source": "legal-form"
+    },
+    {
+      "start": 995,
+      "end": 1009,
+      "label": "monetary amount",
+      "text": "EUR 285.000,00",
+      "source": "trigger"
+    },
+    {
+      "start": 1142,
+      "end": 1162,
+      "label": "person",
+      "text": "Karoline M. Brentano",
+      "source": "deny-list"
+    },
+    {
+      "start": 1171,
+      "end": 1198,
+      "label": "iban",
+      "text": "DE89 3704 0044 0532 0130 00",
+      "source": "trigger"
+    },
+    {
+      "start": 1206,
+      "end": 1217,
+      "label": "bank account number",
+      "text": "COBADEFFXXX",
+      "source": "trigger"
+    },
+    {
+      "start": 1220,
+      "end": 1224,
+      "label": "organization",
+      "text": "Bank",
+      "source": "deny-list"
+    },
+    {
+      "start": 1226,
+      "end": 1240,
+      "label": "organization",
+      "text": "Commerzbank AG",
+      "source": "legal-form"
+    },
+    {
+      "start": 1250,
+      "end": 1259,
+      "label": "address",
+      "text": "Wiesbaden",
+      "source": "deny-list"
+    },
+    {
+      "start": 1300,
+      "end": 1313,
+      "label": "date",
+      "text": "1. April 2025",
+      "source": "regex"
+    },
+    {
+      "start": 1595,
+      "end": 1605,
+      "label": "address",
+      "text": "Düsseldorf",
+      "source": "deny-list"
+    },
+    {
+      "start": 1693,
+      "end": 1708,
+      "label": "address",
+      "text": "Düsseldorf, den",
+      "source": "regex"
+    },
+    {
+      "start": 1709,
+      "end": 1722,
+      "label": "date",
+      "text": "18. März 2025",
+      "source": "regex"
+    },
+    {
+      "start": 1793,
+      "end": 1823,
+      "label": "organization",
+      "text": "Drachenfels Beteiligungen GmbH",
+      "source": "legal-form"
+    },
+    {
+      "start": 1833,
+      "end": 1853,
+      "label": "person",
+      "text": "Karoline M. Brentano",
+      "source": "deny-list"
+    },
+    {
+      "start": 1870,
+      "end": 1908,
+      "label": "person",
+      "text": "Dr. Friedrich Albers Geschäftsführerin",
+      "source": "trigger"
+    }
+  ],
+  "redactedText": "Geschäftsführer-Dienstvertrag\n\nzwischen\n\n(1) der [ORGANIZATION_1],\n    Sitz: [ADDRESS_1],\n    eingetragen im [REGISTRATION_NUMBER_1],\n    vertreten durch den Aufsichtsratsvorsitzenden Herrn [PERSON_1],\n    geboren am [DATE_OF_BIRTH_1] März 1968,\n    wohnhaft [ADDRESS_2]\n    (nachfolgend \"Gesellschaft\" genannt)\n\nund\n\n(2) [PERSON_2],\n    geboren am [DATE_OF_BIRTH_2] Juli 1982,\n    wohnhaft [ADDRESS_3],\n    Steuer-ID: 78 123 456 789\n    (nachfolgend \"Geschäftsführerin\" genannt)\n\n§ 1 Aufgabengebiet\nDie Geschäftsführerin wird mit Wirkung zum [DATE_1] zur alleinvertretungs-\nberechtigten Geschäftsführerin der Gesellschaft bestellt. Sie führt die Geschäfte\nder Gesellschaft im Einklang mit dem Gesellschaftsvertrag der Drachenfels\n[ORGANIZATION_2] und den Beschlüssen der Gesellschafterversammlung.\n\n§ 2 Vergütung\nDie Geschäftsführerin erhält ein Jahresfestgehalt in Höhe von [MONETARY_AMOUNT_1]\n(in Worten: zweihundertfünfundachtzigtausend Euro), zahlbar in zwölf gleichen\nMonatsraten auf das folgende Konto:\n  Kontoinhaberin: [PERSON_3]\n  IBAN: [IBAN_1]\n  BIC: [BANK_ACCOUNT_NUMBER_1]\n  [ORGANIZATION_3]: [ORGANIZATION_4], Filiale [ADDRESS_4]\n\n§ 3 Vertragsdauer\nDer Vertrag tritt am [DATE_1] in Kraft und wird zunächst auf drei Jahre\ngeschlossen. Er verlängert sich automatisch um weitere zwei Jahre, sofern\nkeine Partei mit einer Frist von sechs Monaten vor Ablauf kündigt.\n\n§ 4 Gerichtsstand\nErfüllungsort und Gerichtsstand für alle Streitigkeiten aus diesem Vertrag ist\n[ADDRESS_5]. Sollten einzelne Bestimmungen unwirksam sein, bleibt der Vertrag\nim Übrigen wirksam.\n\n[ADDRESS_6] [DATE_2]\n\n____________________________            ____________________________\n[ORGANIZATION_1]          [PERSON_3]\nvertreten durch [PERSON_4]rin\n"
+}
