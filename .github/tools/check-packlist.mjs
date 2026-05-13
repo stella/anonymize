@@ -15,8 +15,8 @@ const PACKAGES = [
   {
     dir: "packages/data",
     expected: [
-      "dist/index.d.ts",
-      "dist/index.js",
+      "dist/index.d.mts",
+      "dist/index.mjs",
       "README.md",
       "LICENSE",
       "ATTRIBUTION.md",
