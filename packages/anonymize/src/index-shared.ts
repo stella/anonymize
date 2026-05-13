@@ -69,6 +69,7 @@ export type { RegexMeta } from "./detectors/regex";
 export {
   buildLegalFormPatterns,
   processLegalFormMatches,
+  warmLegalRoleHeads,
 } from "./detectors/legal-forms";
 export {
   buildTriggerPatterns,

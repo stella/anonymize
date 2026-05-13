@@ -244,3 +244,97 @@ describe("should NOT detect organization", () => {
     await expectNoOrg("PODPORA ÚČASTI NA VELETRZÍCH (preview)");
   });
 });
+
+// ── Role-head sentence-fragment trimming ──────
+
+describe("role-head sentence trim", () => {
+  test("Czech sentence fragment trimmed to trailing org", async () => {
+    await expectOrgs(
+      "Prodávající 1 je vlastníkem podílu ve společnosti Acme s.r.o.",
+      ["Acme s.r.o."],
+    );
+  });
+
+  test("trim preserves multi-word trailing org name", async () => {
+    await expectOrgs("Vendor 1 owns Acme Holdings s.r.o. in this deal.", [
+      "Acme Holdings s.r.o.",
+    ]);
+  });
+
+  test("trim preserves in-name preposition (Bank of America)", async () => {
+    await expectOrgs("Vendor grants Bank of America Inc. exclusive rights.", [
+      "Bank of America Inc.",
+    ]);
+  });
+
+  test("role word that IS the company is kept (no trim)", async () => {
+    await expectOrg("Vendor s.r.o. and its subsidiaries.", "Vendor s.r.o.");
+  });
+
+  test("cap-only chain starting with role word is kept (no trim)", async () => {
+    await expectOrg(
+      "Client Solutions Inc. delivered the project.",
+      "Client Solutions Inc.",
+    );
+  });
+
+  test("trim preserves Czech state form with lowercase tail", async () => {
+    await expectOrgs(
+      "Prodávající vlastní Národní agentura pro komunikační a informační technologie, s. p.",
+      ["Národní agentura pro komunikační a informační technologie, s. p."],
+    );
+  });
+
+  test("trim handles multi-token legal suffix (spol. s r.o.)", async () => {
+    await expectOrgs(
+      "Prodávající vlastní Acme spol. s r.o. v této transakci.",
+      ["Acme spol. s r.o."],
+    );
+  });
+
+  test("role-word name with lowercase descriptive word is kept", async () => {
+    await expectOrg(
+      "Client solutions Inc. delivered the project.",
+      "Client solutions Inc.",
+    );
+  });
+
+  test("English Corp. anchors via the full legal-form vocabulary", async () => {
+    await expectOrgs("Vendor owns Acme Corp. through a subsidiary.", [
+      "Acme Corp.",
+    ]);
+  });
+
+  test("clause noun between verb and org is skipped", async () => {
+    await expectOrgs("Vendor signed Agreement with Acme Inc. last quarter.", [
+      "Acme Inc.",
+    ]);
+  });
+
+  test("appositive role-head after a sentence verb is skipped", async () => {
+    await expectOrgs("Vendor grants Licensee Acme Inc. a license.", [
+      "Acme Inc.",
+    ]);
+  });
+
+  test("title-cased sentence verb (Owns) still triggers the trim", async () => {
+    await expectOrgs("Vendor Owns Acme Inc.", ["Acme Inc."]);
+  });
+});
+
+describe("court triggers with stop-words", () => {
+  test("instrumental court stops before 'dne' when no comma", async () => {
+    await expectOrgs("Městským soudem v Praze dne 1. 1. 2020 vydán nález.", [
+      "Městským soudem v Praze",
+    ]);
+  });
+});
+
+describe("long state-form legal names", () => {
+  test("ten-token lowercase tail still matches as one entity", async () => {
+    await expectOrg(
+      "Národní agentura pro podporu rozvoje vzdělávání kultury sportu mládeže republiky, z.s.",
+      "Národní agentura pro podporu rozvoje vzdělávání kultury sportu mládeže republiky, z.s.",
+    );
+  });
+});

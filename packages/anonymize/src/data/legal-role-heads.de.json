@@ -1,0 +1,26 @@
+{
+  "_comment": "German contract/legal role words. Used by the legal-form detector to recognise sentence-level false positives and trim them back to the trailing organisation name.",
+  "words": [
+    "verkäufer",
+    "verkaeufer",
+    "käufer",
+    "kaeufer",
+    "vermieter",
+    "mieter",
+    "arbeitgeber",
+    "arbeitnehmer",
+    "auftraggeber",
+    "auftragnehmer",
+    "darlehensgeber",
+    "darlehensnehmer",
+    "lizenzgeber",
+    "lizenznehmer",
+    "verleiher",
+    "entleiher",
+    "vertragspartei",
+    "vertragsparteien",
+    "schuldner",
+    "gläubiger",
+    "glaeubiger"
+  ]
+}

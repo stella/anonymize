@@ -5,6 +5,15 @@ import { LEGAL_SUFFIXES } from "../config/legal-forms";
 const TRAILING_SEP = /[,\s]+$/;
 const WORD_CHAR_RE = /[\p{L}\p{N}]/u;
 const ORG_PROPAGATION_SCORE = 0.9;
+// Common determiners that prefix a defined-term shorthand for
+// the originating company in mid-document references. After
+// declaring `Acme s.r.o.` (or `Acme Corp.`) we treat
+// "Společnost Acme", "Společnosti Acme" (Czech declensions),
+// "the Company Acme", or "die Gesellschaft Acme" as the same
+// organisation and extend the highlighted span to cover them.
+// Match is case-insensitive and word-bounded.
+const ORG_DETERMINER_RE =
+  /(?<![\p{L}\p{N}])(společnost(?:i|í|em|u)?|spolecnost(?:i|em|u)?|the\s+(?:company|corporation|firm)|die\s+(?:gesellschaft|firma)|la\s+(?:société|empresa|sociedad)|el\s+(?:empresa|sociedad))\s+$/iu;
 
 const isCallerOwnedEntity = (entity: Entity): boolean =>
   entity.sourceDetail === "custom-deny-list" ||
@@ -80,18 +89,39 @@ export const propagateOrgNames = (
         continue;
       }
 
+      // Extend the span backward to include a Czech / English
+      // "Společnost"/"the Company"-style determiner if present.
+      // Without this, after `("Společnost Acme")` the
+      // propagator would only highlight the bare "Acme" in
+      // later mentions like "Společnost Acme" — losing the
+      // determiner that's part of the referring phrase.
+      let spanStart = idx;
+      const lookbackStart = Math.max(0, idx - 40);
+      const lookback = fullText.slice(lookbackStart, idx);
+      const determinerMatch = ORG_DETERMINER_RE.exec(lookback);
+      if (determinerMatch !== null) {
+        // The match string may include a leading separator
+        // char (the alternation accepts `^` or `[\s ]`) and
+        // trailing whitespace; the capture group is the
+        // determiner itself, so locate it inside the wider
+        // match to skip whatever separators were consumed.
+        const determiner = determinerMatch[1] ?? "";
+        const offsetInMatch = determinerMatch[0].indexOf(determiner);
+        spanStart = lookbackStart + determinerMatch.index + offsetInMatch;
+      }
+
       // Skip if already covered by an existing entity
       // or a previously propagated result.
-      if (!isOverlapping(idx, matchEnd)) {
+      if (!isOverlapping(spanStart, matchEnd)) {
         results.push({
-          start: idx,
+          start: spanStart,
           end: matchEnd,
           label,
-          text: baseName,
+          text: fullText.slice(spanStart, matchEnd),
           score: ORG_PROPAGATION_SCORE,
           source: DETECTION_SOURCES.COREFERENCE,
         });
-        covered.push([idx, matchEnd]);
+        covered.push([spanStart, matchEnd]);
       }
 
       searchFrom = matchEnd;

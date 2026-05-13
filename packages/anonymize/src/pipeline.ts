@@ -5,7 +5,10 @@ import {
 import { processGazetteerMatches } from "./detectors/gazetteer";
 import { detectNameCorpus, initNameCorpus } from "./detectors/names";
 import { processRegexMatches } from "./detectors/regex";
-import { processLegalFormMatches } from "./detectors/legal-forms";
+import {
+  processLegalFormMatches,
+  warmLegalRoleHeads,
+} from "./detectors/legal-forms";
 import { processTriggerMatches } from "./detectors/triggers";
 import {
   ensureDenyListData,
@@ -593,6 +596,12 @@ export const runPipeline = async (
   );
   if (regexEntities.length > 0) log("regex", `${regexEntities.length} matches`);
 
+  if (legalFormsEnabled) {
+    // Populate the per-language legal-role-head cache so the
+    // synchronous match processor below can read it. Cheap and
+    // idempotent — only the first call kicks the loads.
+    await warmLegalRoleHeads();
+  }
   const rawLegalFormEntities = legalFormsEnabled
     ? processLegalFormMatches(
         regexMatches,

@@ -11,32 +11,243 @@
 
 import type { Match } from "@stll/text-search";
 
+import { LEGAL_SUFFIXES } from "../config/legal-forms";
 import { DETECTION_SOURCES } from "../types";
 import type { Entity } from "../types";
 import { DASH_INNER } from "../util/char-groups";
+import { loadLanguageConfigs } from "../util/lang-loader";
+
+// Verb-like tokens that signal sentence context: when one of
+// these appears between a role-head opening and the legal form,
+// the match is a swept sentence fragment, not an organisation
+// name. Names like "Client solutions Inc." or "Vendor consulting
+// Ltd." don't contain any of these, so they pass through the
+// trim untouched. Lowercased; matched case-insensitively.
+const SENTENCE_VERB_INDICATORS: ReadonlySet<string> = new Set([
+  // Czech
+  "je",
+  "jsou",
+  "byl",
+  "byla",
+  "byly",
+  "bude",
+  "není",
+  "vlastní",
+  "vlastníkem",
+  "prodává",
+  "prodal",
+  "prodala",
+  "koupil",
+  "koupila",
+  "kupuje",
+  "platí",
+  "hradí",
+  "podepsal",
+  "podepsala",
+  "podepisuje",
+  "uzavírá",
+  "uzavřel",
+  "uzavřela",
+  "zavazuje",
+  "dluží",
+  // English
+  "is",
+  "are",
+  "was",
+  "were",
+  "owns",
+  "grants",
+  "sells",
+  "sold",
+  "buys",
+  "bought",
+  "has",
+  "holds",
+  "agrees",
+  "pays",
+  "paid",
+  "owes",
+  "signs",
+  "signed",
+  "leases",
+  "rents",
+  // German
+  "ist",
+  "sind",
+  "war",
+  "waren",
+  "besitzt",
+  "gewährt",
+  "verkauft",
+  "kauft",
+  "hat",
+  "unterzeichnet",
+  "zahlt",
+]);
 
 const UPPER = "A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽÄÖÜÀÂÆÇÈÊËÎÏÔÙÛŸÑ\\u0130";
 const LOWER = "a-záčďéěíňóřšťúůýžäöüßàâæçèêëîïôùûÿñ\\u0131";
 const CAP_WORD = `(?:[${UPPER}]{2,}|[${UPPER}][${LOWER}${UPPER}]+)`;
-// ANY_WORD: mixed-case word, short all-caps token
-// (2-3 chars, e.g. "CZ" in "Metrostav CZ s.r.o."),
-// or digit-only token (1-4 digits, e.g. "2028" in
-// "Invest 2028 s.r.o." or "12" in "Praha 12 s.r.o.").
-// Excludes "and"/"und"/"et" so the prefix can't span
-// entity boundaries like "Paul Newman and Apple, Inc."
-// — those connectors are still permitted inside
-// LOWER_CONNECTOR when followed by a lowercase word.
-const ANY_WORD =
-  `(?:(?!(?:and|und|et)(?![${UPPER}${LOWER}]))` +
-  `[${UPPER}${LOWER}][${LOWER}${UPPER}]+` +
-  `|[${UPPER}]{2,3}` +
-  `|\\d{1,4})`;
 // All-caps word: 2+ uppercase letters, no lowercase.
 // For company names like "EAGLES BRNO", max 3 words.
 const ALLCAP_WORD = `[${UPPER}]{2,}`;
 
 const ROMAN_NUMERAL_RE =
   /^(?=[IVXLCDM])M{0,3}(?:CM|CD|D?C{0,3})(?:XC|XL|L?X{0,3})(?:IX|IV|V?I{0,3})$/;
+
+// Generic legal/contract role words that should never appear
+// at the head of an organisation name. When a greedy regex
+// sweep includes one of these as the first word, the span is
+// a sentence fragment, not a real company (e.g. "Vendor 1
+// owns an equity interest in the Acme s.r.o. company"). The
+// processor trims back to the last real Cap-starting word in
+// that case. Per-language word lists live under
+// `data/legal-role-heads.<lang>.json`; loaded lazily and
+// cached on first use.
+type LegalRoleHeadsConfig = {
+  words: readonly string[];
+};
+
+let legalRoleHeadsCache: ReadonlySet<string> | null = null;
+let legalRoleHeadsPromise: Promise<ReadonlySet<string>> | null = null;
+
+const loadLegalRoleHeads = async (): Promise<ReadonlySet<string>> => {
+  if (legalRoleHeadsCache) return legalRoleHeadsCache;
+  if (legalRoleHeadsPromise) return legalRoleHeadsPromise;
+  legalRoleHeadsPromise = (async () => {
+    const sets = await loadLanguageConfigs<LegalRoleHeadsConfig>(
+      "legalRoleHeads",
+      (mod) => {
+        // eslint-disable-next-line no-unsafe-type-assertion -- JSON config shape
+        const m = mod as {
+          default?: LegalRoleHeadsConfig;
+        };
+        // eslint-disable-next-line no-unsafe-type-assertion -- JSON config shape
+        return (m.default ?? mod) as LegalRoleHeadsConfig;
+      },
+    );
+    const all = new Set<string>();
+    for (const entry of sets) {
+      if (!entry || !Array.isArray(entry.words)) continue;
+      for (const word of entry.words) {
+        if (typeof word === "string" && word.length > 0) {
+          all.add(word.toLowerCase());
+        }
+      }
+    }
+    legalRoleHeadsCache = all;
+    return all;
+  })();
+  return legalRoleHeadsPromise;
+};
+
+// Synchronous helper used inside `processLegalFormMatches`,
+// which is a sync function called once per pipeline run. The
+// pipeline calls `warmLegalRoleHeads()` before invoking it, so
+// the cache is populated by the time matches are processed.
+const getLegalRoleHeadsSync = (): ReadonlySet<string> =>
+  legalRoleHeadsCache ?? new Set<string>();
+
+export const warmLegalRoleHeads = async (): Promise<void> => {
+  await Promise.all([loadLegalRoleHeads(), loadAllLegalSuffixes()]);
+};
+
+// Suffix anchoring during the role-head trim needs the FULL
+// legal-form vocabulary (not just the small `LEGAL_SUFFIXES`
+// propagation list). "Vendor owns Acme Corp." has to anchor on
+// "Corp." but `LEGAL_SUFFIXES` is Czech-leaning; load the same
+// JSON the pattern builder uses and flatten it once.
+let allLegalSuffixesCache: readonly string[] | null = null;
+let allLegalSuffixesPromise: Promise<readonly string[]> | null = null;
+
+const loadAllLegalSuffixes = async (): Promise<readonly string[]> => {
+  if (allLegalSuffixesCache) return allLegalSuffixesCache;
+  if (allLegalSuffixesPromise) return allLegalSuffixesPromise;
+  allLegalSuffixesPromise = (async () => {
+    let data: Record<string, string[]> = {};
+    try {
+      const mod = await import("../data/legal-forms.json");
+      // eslint-disable-next-line no-unsafe-type-assertion -- JSON module shape
+      data = (mod as { default: Record<string, string[]> }).default;
+    } catch {
+      data = {};
+    }
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const list of Object.values(data)) {
+      for (const form of list) {
+        if (typeof form !== "string" || form.length === 0) continue;
+        if (seen.has(form)) continue;
+        seen.add(form);
+        out.push(form);
+      }
+    }
+    for (const form of LEGAL_SUFFIXES) {
+      if (!seen.has(form)) {
+        seen.add(form);
+        out.push(form);
+      }
+    }
+    // Sort longest-first so multi-token suffixes like
+    // "spol. s r.o." anchor before nested shorter forms.
+    out.sort((a, b) => b.length - a.length);
+    allLegalSuffixesCache = out;
+    return out;
+  })();
+  return allLegalSuffixesPromise;
+};
+
+const getAllLegalSuffixesSync = (): readonly string[] =>
+  allLegalSuffixesCache ?? LEGAL_SUFFIXES;
+
+// Common contract clause nouns that appear in legal prose
+// between a sentence-verb and the company name. When the trim
+// scans forward for the org's first Cap word, these are skipped
+// like role-heads so we don't anchor on "Agreement" / "License"
+// in patterns such as "Vendor signed Agreement with Acme Inc.".
+const CLAUSE_NOUN_HEADS: ReadonlySet<string> = new Set([
+  // English
+  "agreement",
+  "agreements",
+  "contract",
+  "contracts",
+  "license",
+  "licence",
+  "lease",
+  "memorandum",
+  "notice",
+  "exhibit",
+  "schedule",
+  "addendum",
+  "amendment",
+  "appendix",
+  "attachment",
+  // Czech
+  "smlouva",
+  "smlouvy",
+  "smlouvu",
+  "smlouvou",
+  "dohoda",
+  "dohody",
+  "dohodu",
+  "dohodou",
+  "licence",
+  "licenci",
+  "příloha",
+  "přílohy",
+  "přílohu",
+  "dodatek",
+  "dodatku",
+  "oznámení",
+  // German
+  "vertrag",
+  "vertrages",
+  "vereinbarung",
+  "vereinbarungen",
+  "lizenz",
+  "anlage",
+  "anhang",
+]);
 
 const escapeForRegex = (form: string): string =>
   form
@@ -77,19 +288,31 @@ const buildPatternString = (forms: string[]): string | null => {
   const LOWER_WORD =
     `(?:(?!(?:and|und|et)(?![${UPPER}${LOWER}]))` +
     `[${LOWER}][${LOWER}${UPPER}]+)`;
+  // Any word, used in the tail. Same exclusion for
+  // standalone "and"/"und"/"et" as LOWER_WORD.
+  const ANY_WORD_TAIL =
+    `(?:(?!(?:and|und|et)(?![${UPPER}${LOWER}]))` +
+    `[${UPPER}${LOWER}][${LOWER}${UPPER}]+` +
+    `|[${UPPER}]{2,3}` +
+    `|\\d{1,4})`;
   // Prefix structure:
   //   CapWord (SimpleSep CapOrNumWord)*           # strict head
-  //   ( SimpleSep LowerWord                       # optional tail must
-  //     ((LowerConnector|SimpleSep) AnyWord)* )?  # start lowercase
-  // The tail (with LowerConnector) is only reachable
-  // after at least one lowercase token — so it can't
-  // bridge "<Cap> <Cap> and lower …" patterns across
-  // an entity boundary (e.g. "Paul Newman and company
-  // Apple, Inc.").
+  //   ( SimpleSep LowerWord                       # optional tail starts
+  //     ((LowerConnector|SimpleSep) AnyWord)* )?  #   with a lowercase
+  // The tail is bounded to a handful of tokens so legitimate
+  // multi-word names ("Národní agentura pro komunikační a
+  // informační technologie, s. p.", "Bank of America, Inc.")
+  // still match while sentence fragments containing six-plus
+  // words ahead of the legal form don't get swept in.
   const head = `(?:${CAP_WORD})(?:${SIMPLE_SEP}(?:${CAP_OR_NUM_WORD})){0,10}`;
+  // Tail allows up to 10 tokens so long state-form names
+  // ("Národní agentura pro podporu rozvoje vzdělávání …, z.s.")
+  // still match end-to-end. Sentence-fragment over-extension
+  // is handled later by the role-head trim, not by tightening
+  // this regex.
   const tail =
     `${SIMPLE_SEP}(?:${LOWER_WORD})` +
-    `(?:(?:${LOWER_CONNECTOR}|${SIMPLE_SEP})(?:${ANY_WORD})){0,10}`;
+    `(?:(?:${LOWER_CONNECTOR}|${SIMPLE_SEP})(?:${ANY_WORD_TAIL})){0,10}`;
   const prefix = `(?:${head})(?:${tail})?`;
   const separator = `(?:\\s+|,\\s*)`;
 
@@ -252,12 +475,22 @@ const countUpperWordsBefore = (fullText: string, pos: number): number => {
  * suffix-mode we also cross in-name prepositions
  * ("Bank of America and Trust Company, Inc.").
  */
-const extendBackward = (fullText: string, matchStart: number): number => {
+const extendBackward = (
+  fullText: string,
+  matchStart: number,
+  options: { forceSuffixMode?: boolean } = {},
+): number => {
   // Read the first word of the match to decide whether
-  // we're inside a multi-word organisation name.
+  // we're inside a multi-word organisation name. Callers
+  // that enter the walk from a known legal-form suffix
+  // (Inc., Ltd., etc.) can pass `forceSuffixMode: true`
+  // to enable in-name preposition crossing ("Bank of
+  // America Inc.") without having to widen
+  // COMPANY_SUFFIX_WORDS_RE to every legal-form suffix.
   const headWord =
     ENTITY_HEAD_WORD_RE.exec(fullText.slice(matchStart))?.[0] ?? "";
-  const suffixMode = COMPANY_SUFFIX_WORDS_RE.test(headWord);
+  const suffixMode =
+    options.forceSuffixMode === true || COMPANY_SUFFIX_WORDS_RE.test(headWord);
 
   let pos = matchStart;
 
@@ -337,6 +570,14 @@ const trimLeadingClause = (text: string): { offset: number; text: string } => {
  * Process legal form matches from the unified search.
  * Receives all matches; filters to the legal forms
  * slice via sliceStart/sliceEnd.
+ *
+ * The role-head trimming step reads per-language data from
+ * a cache that `runPipeline` warms via `warmLegalRoleHeads()`
+ * before calling this. Callers that invoke
+ * `processLegalFormMatches` directly (without going through
+ * `runPipeline`) must `await warmLegalRoleHeads()` first;
+ * otherwise the trim falls back to a no-op and sentence-
+ * fragment fixes do not apply.
  */
 export const processLegalFormMatches = (
   allMatches: Match[],
@@ -357,21 +598,163 @@ export const processLegalFormMatches = (
       continue;
     }
 
-    if (text.includes("\n")) {
+    // Trim spans whose first word is a generic legal/contract
+    // role IF the match also contains a sentence-verb signal
+    // ("owns", "je vlastníkem", "grants") between the role head
+    // and the trailing legal-form suffix. Without that strong
+    // signal we keep the match intact — role words are also
+    // legitimate components of organisation names ("Client
+    // Solutions Inc.", "Client solutions Inc.", "Vendor s.r.o.",
+    // "Vendor consulting Ltd."). When the signal is present
+    // we slice the match at the first uppercase-starting word
+    // that follows the last sentence-verb (and skip any role-
+    // head word that lands at the new start), so multi-word
+    // names ("Acme Holdings s.r.o."), in-name prepositions
+    // ("Bank of America Inc."), lowercase-tail Czech state
+    // forms ("Národní agentura pro komunikační a informační
+    // technologie, s. p."), and multi-token legal suffixes
+    // ("spol. s r.o.") all survive the trim.
+    const roleHeads = getLegalRoleHeadsSync();
+    const firstWordMatch = /^[\p{L}\p{M}]+/u.exec(text);
+    let processedStart = match.start;
+    let processedText = text;
+    // True when the role-head trim slices the match. The
+    // subsequent extendBackward step is suppressed in that case
+    // — extending back would re-absorb the very prose the trim
+    // just removed (e.g. "Vendor grants Licensee Acme Inc." →
+    // trim to "Acme Inc." → extendBackward walks back across
+    // "Licensee" again and emits "Licensee Acme Inc.").
+    let trimmed = false;
+    if (
+      firstWordMatch !== null &&
+      roleHeads.has(firstWordMatch[0].toLowerCase())
+    ) {
+      // Find the legal-form suffix's position inside `text` by
+      // scanning the full legal-form vocabulary (loaded from
+      // `data/legal-forms.json` in `warmLegalRoleHeads`-style
+      // fashion). Sorted longest-first so multi-token suffixes
+      // ("spol. s r.o.", "akciová společnost") anchor before
+      // shorter nested forms ("s.r.o.", "společnost").
+      let suffixOffset = -1;
+      for (const suffix of getAllLegalSuffixesSync()) {
+        const idx = text.lastIndexOf(suffix);
+        if (idx !== -1 && idx + suffix.length >= text.length - 1) {
+          suffixOffset = idx;
+          break;
+        }
+      }
+      if (suffixOffset < 0) {
+        // Couldn't locate the suffix; fall through without
+        // trimming. The greedy regex will still produce the
+        // match — better some highlight than none.
+      } else {
+        // Scan the middle (between the role-head and the legal-
+        // form suffix) for a sentence-verb token. Position of
+        // the LAST verb determines where the org name starts.
+        const midStart = firstWordMatch[0].length;
+        const midEnd = suffixOffset;
+        const midSection = text.slice(midStart, midEnd);
+        let lastVerbEndInMid = -1;
+        for (const match of midSection.matchAll(
+          // Match any word (capital or lowercase start); the
+          // verb-indicator set lookup is lowercased so e.g.
+          // title-cased "Owns" in "Vendor Owns Acme Inc."
+          // still counts as a sentence verb.
+          /(?<![\p{L}\p{N}])[\p{L}\p{M}]+/gu,
+        )) {
+          if (
+            match[0] !== undefined &&
+            match.index !== undefined &&
+            SENTENCE_VERB_INDICATORS.has(match[0].toLowerCase())
+          ) {
+            lastVerbEndInMid = match.index + match[0].length;
+          }
+        }
+        // Also treat a digit immediately after the role-head
+        // ("Vendor 1", "Prodávající 2") as a sentence signal.
+        // Numbered party references rarely appear in company
+        // names but always appear in clause text.
+        const digitAfterRole = /^\s+\d+(?:\.|\b)/u.test(midSection);
+        // Appositive role-head detection: when the legal-form
+        // regex matched a span starting at a role-head ("Licensee
+        // Acme Inc.") but there's no verb in the matched mid
+        // section, look at the preceding word in fullText. If
+        // that word is a sentence verb ("Vendor grants Licensee
+        // Acme Inc."), the role-head is appositive prose and
+        // should be skipped just like an in-match role token.
+        let appositiveRoleHead = false;
+        if (!digitAfterRole && lastVerbEndInMid === -1 && fullText) {
+          const before = fullText.slice(
+            Math.max(0, match.start - 40),
+            match.start,
+          );
+          const prevWord = /(?<![\p{L}\p{N}])(\p{L}[\p{L}\p{M}]*)\s*$/u.exec(
+            before,
+          );
+          if (
+            prevWord !== null &&
+            SENTENCE_VERB_INDICATORS.has(prevWord[1]!.toLowerCase())
+          ) {
+            appositiveRoleHead = true;
+          }
+        }
+        if (lastVerbEndInMid !== -1 || digitAfterRole || appositiveRoleHead) {
+          // Pick the first Cap-starting word in `text` after
+          // the last verb (or, if only a digit signal fired,
+          // after the role-head itself). Skip role-heads
+          // ("Vendor grants Licensee Acme Inc.") and clause
+          // nouns ("Vendor signed Agreement with Acme Inc.")
+          // so the anchor lands on the real company name.
+          // When trim was triggered by an appositive role-head
+          // (no in-match verb), the role-head itself is the
+          // thing to skip — scan starts from after the role
+          // head's first word.
+          const scanStart =
+            lastVerbEndInMid !== -1 ? midStart + lastVerbEndInMid : midStart;
+          const capRe = /(?<![\p{L}\p{N}])\p{Lu}[\p{L}\p{M}\p{N}]*/gu;
+          capRe.lastIndex = scanStart;
+          let capMatch: RegExpExecArray | null = null;
+          for (
+            let next = capRe.exec(text);
+            next !== null;
+            next = capRe.exec(text)
+          ) {
+            if (next.index >= suffixOffset) {
+              break;
+            }
+            const lc = next[0].toLowerCase();
+            if (roleHeads.has(lc) || CLAUSE_NOUN_HEADS.has(lc)) {
+              continue;
+            }
+            capMatch = next;
+            break;
+          }
+          if (capMatch === null) {
+            // No real cap-word before the suffix; drop.
+            continue;
+          }
+          processedStart = match.start + capMatch.index;
+          processedText = text.slice(capMatch.index);
+          trimmed = true;
+        }
+      }
+    }
+
+    if (processedText.includes("\n")) {
       continue;
     }
 
     // Extend backward through connectors if fullText
     // is available (captures "Be a Future" from just
     // "Future s.r.o.")
-    let entityStart = match.start;
-    let entityText = text;
-    if (fullText) {
-      const extended = extendBackward(fullText, match.start);
-      if (extended < match.start) {
+    let entityStart = processedStart;
+    let entityText = processedText;
+    if (fullText && !trimmed) {
+      const extended = extendBackward(fullText, processedStart);
+      if (extended < processedStart) {
         entityStart = extended;
         entityText = fullText
-          .slice(extended, match.start + text.length)
+          .slice(extended, processedStart + processedText.length)
           .trimEnd();
       }
     }

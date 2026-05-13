@@ -50,7 +50,7 @@
       "end": 378,
       "label": "organization",
       "text": "Městským soudem v Praze",
-      "source": "deny-list"
+      "source": "trigger"
     },
     {
       "start": 396,

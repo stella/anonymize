@@ -402,6 +402,21 @@ const extractValue = (
       // degree (Ph.D., CSc., MBA), skip it and continue
       // so "RNDr. Filipem Hartvichem, Ph.D., CSc."
       // captures the full name with degrees.
+      // Also stop at any of the trigger's configured
+      // `stopWords` so e.g. a court trigger ("Městským
+      // soudem v Praze") doesn't sweep into the following
+      // clause ("dne 1. 1. 2020") when the comma is
+      // missing.
+      const stopWords = strategy.stopWords ?? [];
+      const stopWordRe =
+        stopWords.length > 0
+          ? new RegExp(
+              `^(?:${stopWords
+                .map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+                .join("|")})(?![\\p{L}\\p{N}])`,
+              "iu",
+            )
+          : null;
       let end = 0;
       let foundStop = false;
 
@@ -409,6 +424,18 @@ const extractValue = (
         const ch = valueText[end];
         // Hard stops: newline, paren, tab
         if (ch !== undefined && COMMA_STOP_CHARS.has(ch)) {
+          foundStop = true;
+          break;
+        }
+        // Trigger-supplied stop words (e.g. "dne", "vložka"
+        // for court triggers). Only check at word starts so
+        // a stopword that happens to appear inside a longer
+        // token doesn't terminate prematurely.
+        if (
+          stopWordRe !== null &&
+          (end === 0 || !/[\p{L}\p{N}]/u.test(valueText[end - 1] ?? "")) &&
+          stopWordRe.test(valueText.slice(end))
+        ) {
           foundStop = true;
           break;
         }
