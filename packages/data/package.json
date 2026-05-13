@@ -56,6 +56,6 @@
   "devDependencies": {
     "stopwords-iso": "1.1.0",
     "tsdown": "^0.12.4",
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.3"
   }
 }
