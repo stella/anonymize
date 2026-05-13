@@ -713,12 +713,13 @@ export const runPipeline = async (
   // produce contradictory boundaries for known entities)
   let rawNerEntities: Entity[] = [];
   let nerEntities: Entity[] = [];
-  if (config.enableNer && nerInference) {
+  const requestedNerLabels = getRequestedNerLabels(config, hotwordsActive);
+  if (config.enableNer && nerInference && requestedNerLabels.length > 0) {
     const maskResult = maskDetectedSpans(fullText, nerMaskEntities);
     log("ner", "running inference...");
     const rawNer = await nerInference(
       maskResult.maskedText,
-      [...getRequestedNerLabels(config, hotwordsActive)],
+      [...requestedNerLabels],
       config.threshold,
       signal,
     );

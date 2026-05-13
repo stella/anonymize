@@ -993,6 +993,39 @@ describe("misc entity label", () => {
     expect(redactionMap.size).toBe(1);
   });
 
+  test("NER inference is skipped when only misc labels are requested", async () => {
+    // Filtering misc out of the NER schema can leave the
+    // schema empty (e.g. caller passes `labels: ["misc"]`).
+    // Many NER backends reject empty label arrays; the
+    // pipeline should skip the call entirely in that case.
+    let nerCalled = false;
+    await runPipeline({
+      fullText: "Project Widget X is mentioned.",
+      config: {
+        threshold: 0.5,
+        enableTriggerPhrases: false,
+        enableRegex: false,
+        enableLegalForms: false,
+        enableNameCorpus: false,
+        enableDenyList: true,
+        enableGazetteer: false,
+        enableNer: true,
+        enableConfidenceBoost: false,
+        enableCoreference: false,
+        customDenyList: [{ value: "Widget X", label: "misc" }],
+        labels: ["misc"],
+        workspaceId: "test",
+      },
+      gazetteerEntries: [],
+      context: createPipelineContext(),
+      nerInference: async () => {
+        nerCalled = true;
+        return [];
+      },
+    });
+    expect(nerCalled).toBe(false);
+  });
+
   test("misc is excluded from the NER label schema", async () => {
     // MISC is a custom-deny-list-only label; surfacing it to the
     // NER schema would invite zero-shot guesses on arbitrary spans.
