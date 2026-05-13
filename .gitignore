@@ -7,3 +7,4 @@ dist
 # Local scripts (corpus download, benchmarks)
 scripts/
 packages/data/scripts/
+package-lock.json
