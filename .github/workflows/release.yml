@@ -113,58 +113,53 @@ jobs:
       - name: Build
         run: bun run build
 
+      - name: Read package metadata
+        id: package
+        working-directory: ${{ matrix.package }}
+        run: |
+          package_name="$(node -p "require('./package.json').name")"
+          artifact_name="$(
+            node -e '
+              const name = require("./package.json").name;
+              console.log(`npm-tarball-${name.replace(/^@/, "").replace(/[\\/]/g, "-")}`);
+            '
+          )"
+
+          echo "name=${package_name}" >> "$GITHUB_OUTPUT"
+          echo "artifact_name=${artifact_name}" >> "$GITHUB_OUTPUT"
+
+      - name: Pack package
+        if: github.event_name != 'push' || matrix.package != 'packages/data'
+        id: pack
+        working-directory: ${{ matrix.package }}
+        run: |
+          set -euo pipefail
+          pack_dir="$RUNNER_TEMP/npm-tarballs"
+          mkdir -p "$pack_dir"
+
+          pack_json="$(npm pack --json --ignore-scripts --pack-destination "$pack_dir")"
+          filename="$(
+            node -e '
+              const pack = JSON.parse(process.argv[1]);
+              console.log(pack[0].filename);
+            ' "$pack_json"
+          )"
+
+          echo "tarball=${pack_dir}/${filename}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload package tarball
+        if: github.event_name != 'push' || matrix.package != 'packages/data'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v5
+        with:
+          name: ${{ steps.package.outputs.artifact_name }}
+          path: ${{ steps.pack.outputs.tarball }}
+          if-no-files-found: error
+
       - name: Publish package
         if: github.event_name != 'push' || matrix.package != 'packages/data'
-        working-directory: ${{ matrix.package }}
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          PACKAGE_NAME=$(node -p "require('./package.json').name")
-          PACKAGE_VERSION=$(node -p "require('./package.json').version")
-          PUBLISHED_VERSION_JSON=/tmp/published-version.json
-          PUBLISH_ERROR_LOG="$RUNNER_TEMP/npm-publish-error.log"
-
-          version_is_published() {
-            npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version --json >"$PUBLISHED_VERSION_JSON" 2>/dev/null
-          }
-
-          if [[ -n "${NPM_TOKEN:-}" ]]; then
-            export NODE_AUTH_TOKEN="$NPM_TOKEN"
-            unset NPM_CONFIG_USERCONFIG
-          else
-            unset NODE_AUTH_TOKEN
-            export NPM_CONFIG_USERCONFIG="$RUNNER_TEMP/.npmrc-trusted"
-            printf '%s\n' \
-              '@stll:registry=https://registry.npmjs.org' \
-              >"$NPM_CONFIG_USERCONFIG"
-          fi
-
-          if version_is_published; then
-            PUBLISHED_VERSION=$(node -p "JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'))" "$PUBLISHED_VERSION_JSON")
-            if [[ "${PUBLISHED_VERSION}" == "${PACKAGE_VERSION}" ]]; then
-              echo "${PACKAGE_NAME}@${PACKAGE_VERSION} already published; skipping."
-              exit 0
-            fi
-          fi
-
-          if npm publish --provenance --access public 2>"$PUBLISH_ERROR_LOG"; then
-            exit 0
-          fi
-
-          cat "$PUBLISH_ERROR_LOG" >&2
-
-          for attempt in 1 2 3 4 5; do
-            sleep "$attempt"
-            if version_is_published; then
-              PUBLISHED_VERSION=$(node -p "JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'))" "$PUBLISHED_VERSION_JSON")
-              if [[ "${PUBLISHED_VERSION}" == "${PACKAGE_VERSION}" ]]; then
-                echo "${PACKAGE_NAME}@${PACKAGE_VERSION} became visible after publish attempt; treating as success."
-                exit 0
-              fi
-            fi
-          done
-
-          exit 1
+        uses: stella/.github/.github/actions/npm-publish-hardened@4292546b5b6e5bd8660bd727913b4038644c3d0b
+        with:
+          tarball: ${{ steps.pack.outputs.tarball }}
 
   github-release:
     name: Create GitHub release
@@ -177,6 +172,12 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 0
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: npm-tarball-*
+          path: release-artifacts
+          merge-multiple: true
 
       - name: Read and validate VERSION
         id: version
@@ -255,10 +256,17 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_REF: ${{ steps.version.outputs.tag }}
         run: |
+          mapfile -t assets < <(find release-artifacts -maxdepth 1 -type f -name '*.tgz' | sort)
+          if ((${#assets[@]} == 0)); then
+            echo "::error::No npm tarball artifacts found for release upload"
+            exit 1
+          fi
+
           if gh release view "$RELEASE_REF" >/dev/null 2>&1; then
             gh release edit "$RELEASE_REF" \
               --title "$RELEASE_REF" \
               --notes-file NOTES.md
+            gh release upload "$RELEASE_REF" "${assets[@]}" --clobber
             exit 0
           fi
 
@@ -268,6 +276,7 @@ jobs:
           fi
 
           gh release create "$RELEASE_REF" \
+            "${assets[@]}" \
             --title "$RELEASE_REF" \
             --notes-file NOTES.md \
             --verify-tag \
