@@ -72,7 +72,19 @@ export type GazetteerEntry = {
 
 /** Extraction strategy — closed discriminated union. */
 export type TriggerStrategy =
-  | { type: "to-next-comma" }
+  | {
+      type: "to-next-comma";
+      /**
+       * Optional list of lowercase keywords that terminate
+       * the value scan, in addition to commas/newlines. Useful
+       * for triggers like court names that may continue past
+       * a missing comma into adjacent clause text ("Městským
+       * soudem v Praze dne 1. 1. 2020"); listing `"dne"` here
+       * stops the scan at the date boundary. Matched on a
+       * word-boundary, case-insensitive.
+       */
+      stopWords?: string[];
+    }
   | { type: "to-end-of-line" }
   | { type: "n-words"; count: number }
   | { type: "company-id-value" }

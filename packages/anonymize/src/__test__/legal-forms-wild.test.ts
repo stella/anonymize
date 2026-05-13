@@ -316,4 +316,25 @@ describe("role-head sentence trim", () => {
       "Acme Inc.",
     ]);
   });
+
+  test("title-cased sentence verb (Owns) still triggers the trim", async () => {
+    await expectOrgs("Vendor Owns Acme Inc.", ["Acme Inc."]);
+  });
+});
+
+describe("court triggers with stop-words", () => {
+  test("instrumental court stops before 'dne' when no comma", async () => {
+    await expectOrgs("Městským soudem v Praze dne 1. 1. 2020 vydán nález.", [
+      "Městským soudem v Praze",
+    ]);
+  });
+});
+
+describe("long state-form legal names", () => {
+  test("ten-token lowercase tail still matches as one entity", async () => {
+    await expectOrg(
+      "Národní agentura pro podporu rozvoje vzdělávání kultury sportu mládeže republiky, z.s.",
+      "Národní agentura pro podporu rozvoje vzdělávání kultury sportu mládeže republiky, z.s.",
+    );
+  });
 });

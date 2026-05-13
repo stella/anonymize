@@ -305,9 +305,14 @@ const buildPatternString = (forms: string[]): string | null => {
   // still match while sentence fragments containing six-plus
   // words ahead of the legal form don't get swept in.
   const head = `(?:${CAP_WORD})(?:${SIMPLE_SEP}(?:${CAP_OR_NUM_WORD})){0,10}`;
+  // Tail allows up to 10 tokens so long state-form names
+  // ("Národní agentura pro podporu rozvoje vzdělávání …, z.s.")
+  // still match end-to-end. Sentence-fragment over-extension
+  // is handled later by the role-head trim, not by tightening
+  // this regex.
   const tail =
     `${SIMPLE_SEP}(?:${LOWER_WORD})` +
-    `(?:(?:${LOWER_CONNECTOR}|${SIMPLE_SEP})(?:${ANY_WORD_TAIL})){0,6}`;
+    `(?:(?:${LOWER_CONNECTOR}|${SIMPLE_SEP})(?:${ANY_WORD_TAIL})){0,10}`;
   const prefix = `(?:${head})(?:${tail})?`;
   const separator = `(?:\\s+|,\\s*)`;
 
@@ -651,7 +656,11 @@ export const processLegalFormMatches = (
         const midSection = text.slice(midStart, midEnd);
         let lastVerbEndInMid = -1;
         for (const match of midSection.matchAll(
-          /(?<![\p{L}\p{N}])\p{Ll}[\p{L}\p{M}]*/gu,
+          // Match any word (capital or lowercase start); the
+          // verb-indicator set lookup is lowercased so e.g.
+          // title-cased "Owns" in "Vendor Owns Acme Inc."
+          // still counts as a sentence verb.
+          /(?<![\p{L}\p{N}])[\p{L}\p{M}]+/gu,
         )) {
           if (
             match[0] !== undefined &&
