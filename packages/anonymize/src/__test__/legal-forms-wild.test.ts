@@ -298,4 +298,22 @@ describe("role-head sentence trim", () => {
       "Client solutions Inc.",
     );
   });
+
+  test("English Corp. anchors via the full legal-form vocabulary", async () => {
+    await expectOrgs("Vendor owns Acme Corp. through a subsidiary.", [
+      "Acme Corp.",
+    ]);
+  });
+
+  test("clause noun between verb and org is skipped", async () => {
+    await expectOrgs("Vendor signed Agreement with Acme Inc. last quarter.", [
+      "Acme Inc.",
+    ]);
+  });
+
+  test("appositive role-head after a sentence verb is skipped", async () => {
+    await expectOrgs("Vendor grants Licensee Acme Inc. a license.", [
+      "Acme Inc.",
+    ]);
+  });
 });

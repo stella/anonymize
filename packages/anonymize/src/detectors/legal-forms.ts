@@ -149,8 +149,105 @@ const getLegalRoleHeadsSync = (): ReadonlySet<string> =>
   legalRoleHeadsCache ?? new Set<string>();
 
 export const warmLegalRoleHeads = async (): Promise<void> => {
-  await loadLegalRoleHeads();
+  await Promise.all([loadLegalRoleHeads(), loadAllLegalSuffixes()]);
 };
+
+// Suffix anchoring during the role-head trim needs the FULL
+// legal-form vocabulary (not just the small `LEGAL_SUFFIXES`
+// propagation list). "Vendor owns Acme Corp." has to anchor on
+// "Corp." but `LEGAL_SUFFIXES` is Czech-leaning; load the same
+// JSON the pattern builder uses and flatten it once.
+let allLegalSuffixesCache: readonly string[] | null = null;
+let allLegalSuffixesPromise: Promise<readonly string[]> | null = null;
+
+const loadAllLegalSuffixes = async (): Promise<readonly string[]> => {
+  if (allLegalSuffixesCache) return allLegalSuffixesCache;
+  if (allLegalSuffixesPromise) return allLegalSuffixesPromise;
+  allLegalSuffixesPromise = (async () => {
+    let data: Record<string, string[]> = {};
+    try {
+      const mod = await import("../data/legal-forms.json");
+      // eslint-disable-next-line no-unsafe-type-assertion -- JSON module shape
+      data = (mod as { default: Record<string, string[]> }).default;
+    } catch {
+      data = {};
+    }
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const list of Object.values(data)) {
+      for (const form of list) {
+        if (typeof form !== "string" || form.length === 0) continue;
+        if (seen.has(form)) continue;
+        seen.add(form);
+        out.push(form);
+      }
+    }
+    for (const form of LEGAL_SUFFIXES) {
+      if (!seen.has(form)) {
+        seen.add(form);
+        out.push(form);
+      }
+    }
+    // Sort longest-first so multi-token suffixes like
+    // "spol. s r.o." anchor before nested shorter forms.
+    out.sort((a, b) => b.length - a.length);
+    allLegalSuffixesCache = out;
+    return out;
+  })();
+  return allLegalSuffixesPromise;
+};
+
+const getAllLegalSuffixesSync = (): readonly string[] =>
+  allLegalSuffixesCache ?? LEGAL_SUFFIXES;
+
+// Common contract clause nouns that appear in legal prose
+// between a sentence-verb and the company name. When the trim
+// scans forward for the org's first Cap word, these are skipped
+// like role-heads so we don't anchor on "Agreement" / "License"
+// in patterns such as "Vendor signed Agreement with Acme Inc.".
+const CLAUSE_NOUN_HEADS: ReadonlySet<string> = new Set([
+  // English
+  "agreement",
+  "agreements",
+  "contract",
+  "contracts",
+  "license",
+  "licence",
+  "lease",
+  "memorandum",
+  "notice",
+  "exhibit",
+  "schedule",
+  "addendum",
+  "amendment",
+  "appendix",
+  "attachment",
+  // Czech
+  "smlouva",
+  "smlouvy",
+  "smlouvu",
+  "smlouvou",
+  "dohoda",
+  "dohody",
+  "dohodu",
+  "dohodou",
+  "licence",
+  "licenci",
+  "příloha",
+  "přílohy",
+  "přílohu",
+  "dodatek",
+  "dodatku",
+  "oznámení",
+  // German
+  "vertrag",
+  "vertrages",
+  "vereinbarung",
+  "vereinbarungen",
+  "lizenz",
+  "anlage",
+  "anhang",
+]);
 
 const escapeForRegex = (form: string): string =>
   form
@@ -516,16 +613,25 @@ export const processLegalFormMatches = (
     const firstWordMatch = /^[\p{L}\p{M}]+/u.exec(text);
     let processedStart = match.start;
     let processedText = text;
+    // True when the role-head trim slices the match. The
+    // subsequent extendBackward step is suppressed in that case
+    // — extending back would re-absorb the very prose the trim
+    // just removed (e.g. "Vendor grants Licensee Acme Inc." →
+    // trim to "Acme Inc." → extendBackward walks back across
+    // "Licensee" again and emits "Licensee Acme Inc.").
+    let trimmed = false;
     if (
       firstWordMatch !== null &&
       roleHeads.has(firstWordMatch[0].toLowerCase())
     ) {
       // Find the legal-form suffix's position inside `text` by
-      // testing the canonical suffix list. Longer forms come
-      // first in LEGAL_SUFFIXES (e.g. "spol. s r.o." before
-      // "s.r.o.") so the multi-token forms anchor correctly.
+      // scanning the full legal-form vocabulary (loaded from
+      // `data/legal-forms.json` in `warmLegalRoleHeads`-style
+      // fashion). Sorted longest-first so multi-token suffixes
+      // ("spol. s r.o.", "akciová společnost") anchor before
+      // shorter nested forms ("s.r.o.", "společnost").
       let suffixOffset = -1;
-      for (const suffix of LEGAL_SUFFIXES) {
+      for (const suffix of getAllLegalSuffixesSync()) {
         const idx = text.lastIndexOf(suffix);
         if (idx !== -1 && idx + suffix.length >= text.length - 1) {
           suffixOffset = idx;
@@ -560,27 +666,67 @@ export const processLegalFormMatches = (
         // Numbered party references rarely appear in company
         // names but always appear in clause text.
         const digitAfterRole = /^\s+\d+(?:\.|\b)/u.test(midSection);
-        if (lastVerbEndInMid !== -1 || digitAfterRole) {
+        // Appositive role-head detection: when the legal-form
+        // regex matched a span starting at a role-head ("Licensee
+        // Acme Inc.") but there's no verb in the matched mid
+        // section, look at the preceding word in fullText. If
+        // that word is a sentence verb ("Vendor grants Licensee
+        // Acme Inc."), the role-head is appositive prose and
+        // should be skipped just like an in-match role token.
+        let appositiveRoleHead = false;
+        if (!digitAfterRole && lastVerbEndInMid === -1 && fullText) {
+          const before = fullText.slice(
+            Math.max(0, match.start - 40),
+            match.start,
+          );
+          const prevWord = /(?<![\p{L}\p{N}])(\p{L}[\p{L}\p{M}]*)\s*$/u.exec(
+            before,
+          );
+          if (
+            prevWord !== null &&
+            SENTENCE_VERB_INDICATORS.has(prevWord[1]!.toLowerCase())
+          ) {
+            appositiveRoleHead = true;
+          }
+        }
+        if (lastVerbEndInMid !== -1 || digitAfterRole || appositiveRoleHead) {
           // Pick the first Cap-starting word in `text` after
           // the last verb (or, if only a digit signal fired,
-          // after the role-head itself). Falls back to dropping
-          // the match if there's no usable Cap word before the
-          // suffix.
+          // after the role-head itself). Skip role-heads
+          // ("Vendor grants Licensee Acme Inc.") and clause
+          // nouns ("Vendor signed Agreement with Acme Inc.")
+          // so the anchor lands on the real company name.
+          // When trim was triggered by an appositive role-head
+          // (no in-match verb), the role-head itself is the
+          // thing to skip — scan starts from after the role
+          // head's first word.
           const scanStart =
             lastVerbEndInMid !== -1 ? midStart + lastVerbEndInMid : midStart;
           const capRe = /(?<![\p{L}\p{N}])\p{Lu}[\p{L}\p{M}\p{N}]*/gu;
           capRe.lastIndex = scanStart;
-          const capMatch = capRe.exec(text);
-          if (
-            capMatch === null ||
-            capMatch.index >= suffixOffset ||
-            roleHeads.has(capMatch[0].toLowerCase())
+          let capMatch: RegExpExecArray | null = null;
+          for (
+            let next = capRe.exec(text);
+            next !== null;
+            next = capRe.exec(text)
           ) {
+            if (next.index >= suffixOffset) {
+              break;
+            }
+            const lc = next[0].toLowerCase();
+            if (roleHeads.has(lc) || CLAUSE_NOUN_HEADS.has(lc)) {
+              continue;
+            }
+            capMatch = next;
+            break;
+          }
+          if (capMatch === null) {
             // No real cap-word before the suffix; drop.
             continue;
           }
           processedStart = match.start + capMatch.index;
           processedText = text.slice(capMatch.index);
+          trimmed = true;
         }
       }
     }
@@ -594,7 +740,7 @@ export const processLegalFormMatches = (
     // "Future s.r.o.")
     let entityStart = processedStart;
     let entityText = processedText;
-    if (fullText) {
+    if (fullText && !trimmed) {
       const extended = extendBackward(fullText, processedStart);
       if (extended < processedStart) {
         entityStart = extended;
