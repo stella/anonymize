@@ -304,12 +304,23 @@ const countUpperWordsBefore = (fullText: string, pos: number): number => {
  * suffix-mode we also cross in-name prepositions
  * ("Bank of America and Trust Company, Inc.").
  */
-const extendBackward = (fullText: string, matchStart: number): number => {
+const extendBackward = (
+  fullText: string,
+  matchStart: number,
+  options: { forceSuffixMode?: boolean } = {},
+): number => {
   // Read the first word of the match to decide whether
-  // we're inside a multi-word organisation name.
+  // we're inside a multi-word organisation name. Callers
+  // that enter the walk from a known legal-form suffix
+  // (Inc., Ltd., etc.) can pass `forceSuffixMode: true`
+  // to enable in-name preposition crossing ("Bank of
+  // America Inc.") without having to widen
+  // COMPANY_SUFFIX_WORDS_RE to every legal-form suffix.
   const headWord =
     ENTITY_HEAD_WORD_RE.exec(fullText.slice(matchStart))?.[0] ?? "";
-  const suffixMode = COMPANY_SUFFIX_WORDS_RE.test(headWord);
+  const suffixMode =
+    options.forceSuffixMode === true ||
+    COMPANY_SUFFIX_WORDS_RE.test(headWord);
 
   let pos = matchStart;
 
@@ -389,6 +400,14 @@ const trimLeadingClause = (text: string): { offset: number; text: string } => {
  * Process legal form matches from the unified search.
  * Receives all matches; filters to the legal forms
  * slice via sliceStart/sliceEnd.
+ *
+ * The role-head trimming step reads per-language data from
+ * a cache that `runPipeline` warms via `warmLegalRoleHeads()`
+ * before calling this. Callers that invoke
+ * `processLegalFormMatches` directly (without going through
+ * `runPipeline`) must `await warmLegalRoleHeads()` first;
+ * otherwise the trim falls back to a no-op and sentence-
+ * fragment fixes do not apply.
  */
 export const processLegalFormMatches = (
   allMatches: Match[],
@@ -410,41 +429,93 @@ export const processLegalFormMatches = (
     }
 
     // Trim spans whose first word is a generic legal/contract
-    // role. The pattern can greedily sweep across a sentence
-    // ("Vendor 1 owns an equity interest in the Acme s.r.o.
-    // company"); when that happens, fall back to the last
-    // uppercase-starting word before the legal form so we still
-    // emit a real entity ("Acme s.r.o.") rather than dropping
-    // the highlight entirely.
+    // role IF the match also contains sentence noise (a
+    // descriptive lowercase word like "owns" / "je vlastníkem")
+    // between the role head and the trailing legal-form suffix.
+    // Without the sentence-noise signal we keep the match intact
+    // — a role word can also be the actual head of a company
+    // name ("Client Solutions Inc.", "Vendor s.r.o."). When the
+    // signal is present the leading sentence is dropped and the
+    // entity is rebuilt from `extendBackward` rooted at the
+    // legal-form suffix, so multi-word names ("Acme Holdings
+    // s.r.o.", "Bank of America Inc.") and in-name prepositions
+    // survive the trim.
     const roleHeads = getLegalRoleHeadsSync();
     const firstWordMatch = /^[\p{L}\p{M}]+/u.exec(text);
     let processedStart = match.start;
     let processedText = text;
+    // When set, the subsequent extendBackward step is skipped:
+    // the role-head trim has already run extendBackward from
+    // the legal-form suffix and chosen the entity start, so
+    // running it again would walk back into the very sentence
+    // noise we just removed.
+    let skipExtendBackward = false;
     if (
       firstWordMatch !== null &&
-      roleHeads.has(firstWordMatch[0].toLowerCase())
+      roleHeads.has(firstWordMatch[0].toLowerCase()) &&
+      fullText
     ) {
-      // Walk through the text and find the LAST uppercase-
-      // starting word that isn't itself a generic legal role.
-      // That word becomes the new entity head; everything before
-      // it is sentence noise. Falls back to dropping the match
-      // if no usable Cap word is found.
-      const allCapMatches = [
-        ...text.matchAll(/(?<![\p{L}\p{N}])[\p{Lu}][\p{L}\p{M}\p{N}]*/gu),
-      ];
-      let lastUsable: { word: string; index: number } | null = null;
-      for (let i = allCapMatches.length - 1; i >= 0; i--) {
-        const m = allCapMatches[i];
-        if (m?.index === undefined) continue;
-        if (roleHeads.has(m[0].toLowerCase())) continue;
-        lastUsable = { word: m[0], index: m.index };
-        break;
+      // Anchor the trim at the legal-form suffix's position
+      // inside fullText. The suffix sits at the trailing end of
+      // the match; locate it by finding the last whitespace run
+      // and taking everything from the next character on.
+      const lastSepMatch = /[\s,]+(?=\S+$)/u.exec(text);
+      const suffixOffset =
+        lastSepMatch !== null
+          ? lastSepMatch.index + lastSepMatch[0].length
+          : 0;
+      // Detect sentence noise: any lowercase-starting token
+      // between the role-head and the suffix that isn't itself
+      // a known in-name connector. If none, the match is a
+      // legitimate cap-only name where the role word happens
+      // to be the head — keep it.
+      const midSection = text.slice(firstWordMatch[0].length, suffixOffset);
+      const hasSentenceNoise = /(?<![\p{L}\p{N}])\p{Ll}[\p{L}\p{M}]+/u.test(
+        midSection.replace(
+          /(?<![\p{L}\p{N}])(?:of|the|and|or|de|du|le|la|al|el|y|e|i|a|und|et|van|von|der|die|das|den)(?![\p{L}\p{N}])/giu,
+          "",
+        ),
+      );
+      if (hasSentenceNoise) {
+        // Walk backward from the suffix start through the
+        // existing extendBackward logic, which already handles
+        // cap-words, connectors, and in-name prepositions.
+        const suffixStartInFull = match.start + suffixOffset;
+        const extended = extendBackward(fullText, suffixStartInFull, {
+          forceSuffixMode: true,
+        });
+        // Refuse to keep the role-head as the new head. If
+        // extendBackward stops at it, advance one cap-word to
+        // the right. If no usable cap remains, drop the match.
+        let trimmedStart = extended;
+        let trimmedEnd = match.start + text.length;
+        // If extended landed inside the role-head, push past it
+        // to the next cap-word inside the match.
+        while (trimmedStart < suffixStartInFull) {
+          const wordAtStart = /^[\p{L}\p{M}]+/u.exec(
+            fullText.slice(trimmedStart, suffixStartInFull),
+          );
+          if (
+            wordAtStart === null ||
+            !roleHeads.has(wordAtStart[0].toLowerCase())
+          ) {
+            break;
+          }
+          // Skip past this role-head + the whitespace after it.
+          const advanceBy = /^\S+\s+/u.exec(
+            fullText.slice(trimmedStart, suffixStartInFull),
+          );
+          if (!advanceBy) break;
+          trimmedStart += advanceBy[0].length;
+        }
+        if (trimmedStart >= suffixStartInFull) {
+          // No real cap-word survived the trim; drop the match.
+          continue;
+        }
+        processedStart = trimmedStart;
+        processedText = fullText.slice(trimmedStart, trimmedEnd);
+        skipExtendBackward = true;
       }
-      if (lastUsable === null) {
-        continue;
-      }
-      processedStart = match.start + lastUsable.index;
-      processedText = text.slice(lastUsable.index);
     }
 
     if (processedText.includes("\n")) {
@@ -456,7 +527,7 @@ export const processLegalFormMatches = (
     // "Future s.r.o.")
     let entityStart = processedStart;
     let entityText = processedText;
-    if (fullText) {
+    if (fullText && !skipExtendBackward) {
       const extended = extendBackward(fullText, processedStart);
       if (extended < processedStart) {
         entityStart = extended;

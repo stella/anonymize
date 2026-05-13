@@ -244,3 +244,35 @@ describe("should NOT detect organization", () => {
     await expectNoOrg("PODPORA ÚČASTI NA VELETRZÍCH (preview)");
   });
 });
+
+// ── Role-head sentence-fragment trimming ──────
+
+describe("role-head sentence trim", () => {
+  test("Czech sentence fragment trimmed to trailing org", async () => {
+    await expectOrgs(
+      "Prodávající 1 je vlastníkem podílu ve společnosti Acme s.r.o.",
+      ["Acme s.r.o."],
+    );
+  });
+
+  test("trim preserves multi-word trailing org name", async () => {
+    await expectOrgs("Vendor 1 owns Acme Holdings s.r.o. in this deal.", [
+      "Acme Holdings s.r.o.",
+    ]);
+  });
+
+  test("trim preserves in-name preposition (Bank of America)", async () => {
+    await expectOrgs(
+      "Vendor grants Bank of America Inc. exclusive rights.",
+      ["Bank of America Inc."],
+    );
+  });
+
+  test("role word that IS the company is kept (no trim)", async () => {
+    await expectOrg("Vendor s.r.o. and its subsidiaries.", "Vendor s.r.o.");
+  });
+
+  test("cap-only chain starting with role word is kept (no trim)", async () => {
+    await expectOrg("Client Solutions Inc. delivered the project.", "Client Solutions Inc.");
+  });
+});
