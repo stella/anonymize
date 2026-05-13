@@ -5,19 +5,19 @@
   "type": "module",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "default": "./dist/index.js"
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.mjs"
     },
     "./dictionaries": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "default": "./dist/index.js"
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.mjs"
     },
     "./config/*": "./config/*",
     "./dictionaries/*": "./dictionaries/*"
   },
-  "types": "dist/index.d.ts",
+  "types": "dist/index.d.mts",
   "files": [
     "dist",
     "ATTRIBUTION.md",
@@ -55,7 +55,7 @@
   },
   "devDependencies": {
     "stopwords-iso": "1.1.0",
-    "tsdown": "^0.12.4",
-    "typescript": "^5.9.3"
+    "tsdown": "^0.22.0",
+    "typescript": "^6.0.3"
   }
 }
