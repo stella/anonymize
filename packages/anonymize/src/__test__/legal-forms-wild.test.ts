@@ -277,4 +277,25 @@ describe("role-head sentence trim", () => {
       "Client Solutions Inc.",
     );
   });
+
+  test("trim preserves Czech state form with lowercase tail", async () => {
+    await expectOrgs(
+      "Prodávající vlastní Národní agentura pro komunikační a informační technologie, s. p.",
+      ["Národní agentura pro komunikační a informační technologie, s. p."],
+    );
+  });
+
+  test("trim handles multi-token legal suffix (spol. s r.o.)", async () => {
+    await expectOrgs(
+      "Prodávající vlastní Acme spol. s r.o. v této transakci.",
+      ["Acme spol. s r.o."],
+    );
+  });
+
+  test("role-word name with lowercase descriptive word is kept", async () => {
+    await expectOrg(
+      "Client solutions Inc. delivered the project.",
+      "Client solutions Inc.",
+    );
+  });
 });

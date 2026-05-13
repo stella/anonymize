@@ -11,10 +11,79 @@
 
 import type { Match } from "@stll/text-search";
 
+import { LEGAL_SUFFIXES } from "../config/legal-forms";
 import { DETECTION_SOURCES } from "../types";
 import type { Entity } from "../types";
 import { DASH_INNER } from "../util/char-groups";
 import { loadLanguageConfigs } from "../util/lang-loader";
+
+// Verb-like tokens that signal sentence context: when one of
+// these appears between a role-head opening and the legal form,
+// the match is a swept sentence fragment, not an organisation
+// name. Names like "Client solutions Inc." or "Vendor consulting
+// Ltd." don't contain any of these, so they pass through the
+// trim untouched. Lowercased; matched case-insensitively.
+const SENTENCE_VERB_INDICATORS: ReadonlySet<string> = new Set([
+  // Czech
+  "je",
+  "jsou",
+  "byl",
+  "byla",
+  "byly",
+  "bude",
+  "není",
+  "vlastní",
+  "vlastníkem",
+  "prodává",
+  "prodal",
+  "prodala",
+  "koupil",
+  "koupila",
+  "kupuje",
+  "platí",
+  "hradí",
+  "podepsal",
+  "podepsala",
+  "podepisuje",
+  "uzavírá",
+  "uzavřel",
+  "uzavřela",
+  "zavazuje",
+  "dluží",
+  // English
+  "is",
+  "are",
+  "was",
+  "were",
+  "owns",
+  "grants",
+  "sells",
+  "sold",
+  "buys",
+  "bought",
+  "has",
+  "holds",
+  "agrees",
+  "pays",
+  "paid",
+  "owes",
+  "signs",
+  "signed",
+  "leases",
+  "rents",
+  // German
+  "ist",
+  "sind",
+  "war",
+  "waren",
+  "besitzt",
+  "gewährt",
+  "verkauft",
+  "kauft",
+  "hat",
+  "unterzeichnet",
+  "zahlt",
+]);
 
 const UPPER = "A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽÄÖÜÀÂÆÇÈÊËÎÏÔÙÛŸÑ\\u0130";
 const LOWER = "a-záčďéěíňóřšťúůýžäöüßàâæçèêëîïôùûÿñ\\u0131";
@@ -428,90 +497,91 @@ export const processLegalFormMatches = (
     }
 
     // Trim spans whose first word is a generic legal/contract
-    // role IF the match also contains sentence noise (a
-    // descriptive lowercase word like "owns" / "je vlastníkem")
-    // between the role head and the trailing legal-form suffix.
-    // Without the sentence-noise signal we keep the match intact
-    // — a role word can also be the actual head of a company
-    // name ("Client Solutions Inc.", "Vendor s.r.o."). When the
-    // signal is present the leading sentence is dropped and the
-    // entity is rebuilt from `extendBackward` rooted at the
-    // legal-form suffix, so multi-word names ("Acme Holdings
-    // s.r.o.", "Bank of America Inc.") and in-name prepositions
-    // survive the trim.
+    // role IF the match also contains a sentence-verb signal
+    // ("owns", "je vlastníkem", "grants") between the role head
+    // and the trailing legal-form suffix. Without that strong
+    // signal we keep the match intact — role words are also
+    // legitimate components of organisation names ("Client
+    // Solutions Inc.", "Client solutions Inc.", "Vendor s.r.o.",
+    // "Vendor consulting Ltd."). When the signal is present
+    // we slice the match at the first uppercase-starting word
+    // that follows the last sentence-verb (and skip any role-
+    // head word that lands at the new start), so multi-word
+    // names ("Acme Holdings s.r.o."), in-name prepositions
+    // ("Bank of America Inc."), lowercase-tail Czech state
+    // forms ("Národní agentura pro komunikační a informační
+    // technologie, s. p."), and multi-token legal suffixes
+    // ("spol. s r.o.") all survive the trim.
     const roleHeads = getLegalRoleHeadsSync();
     const firstWordMatch = /^[\p{L}\p{M}]+/u.exec(text);
     let processedStart = match.start;
     let processedText = text;
-    // When set, the subsequent extendBackward step is skipped:
-    // the role-head trim has already run extendBackward from
-    // the legal-form suffix and chosen the entity start, so
-    // running it again would walk back into the very sentence
-    // noise we just removed.
-    let skipExtendBackward = false;
     if (
       firstWordMatch !== null &&
-      roleHeads.has(firstWordMatch[0].toLowerCase()) &&
-      fullText
+      roleHeads.has(firstWordMatch[0].toLowerCase())
     ) {
-      // Anchor the trim at the legal-form suffix's position
-      // inside fullText. The suffix sits at the trailing end of
-      // the match; locate it by finding the last whitespace run
-      // and taking everything from the next character on.
-      const lastSepMatch = /[\s,]+(?=\S+$)/u.exec(text);
-      const suffixOffset =
-        lastSepMatch !== null ? lastSepMatch.index + lastSepMatch[0].length : 0;
-      // Detect sentence noise: any lowercase-starting token
-      // between the role-head and the suffix that isn't itself
-      // a known in-name connector. If none, the match is a
-      // legitimate cap-only name where the role word happens
-      // to be the head — keep it.
-      const midSection = text.slice(firstWordMatch[0].length, suffixOffset);
-      const hasSentenceNoise = /(?<![\p{L}\p{N}])\p{Ll}[\p{L}\p{M}]+/u.test(
-        midSection.replace(
-          /(?<![\p{L}\p{N}])(?:of|the|and|or|de|du|le|la|al|el|y|e|i|a|und|et|van|von|der|die|das|den)(?![\p{L}\p{N}])/giu,
-          "",
-        ),
-      );
-      if (hasSentenceNoise) {
-        // Walk backward from the suffix start through the
-        // existing extendBackward logic, which already handles
-        // cap-words, connectors, and in-name prepositions.
-        const suffixStartInFull = match.start + suffixOffset;
-        const extended = extendBackward(fullText, suffixStartInFull, {
-          forceSuffixMode: true,
-        });
-        // Refuse to keep the role-head as the new head. If
-        // extendBackward stops at it, advance one cap-word to
-        // the right. If no usable cap remains, drop the match.
-        let trimmedStart = extended;
-        let trimmedEnd = match.start + text.length;
-        // If extended landed inside the role-head, push past it
-        // to the next cap-word inside the match.
-        while (trimmedStart < suffixStartInFull) {
-          const wordAtStart = /^[\p{L}\p{M}]+/u.exec(
-            fullText.slice(trimmedStart, suffixStartInFull),
-          );
+      // Find the legal-form suffix's position inside `text` by
+      // testing the canonical suffix list. Longer forms come
+      // first in LEGAL_SUFFIXES (e.g. "spol. s r.o." before
+      // "s.r.o.") so the multi-token forms anchor correctly.
+      let suffixOffset = -1;
+      for (const suffix of LEGAL_SUFFIXES) {
+        const idx = text.lastIndexOf(suffix);
+        if (idx !== -1 && idx + suffix.length >= text.length - 1) {
+          suffixOffset = idx;
+          break;
+        }
+      }
+      if (suffixOffset < 0) {
+        // Couldn't locate the suffix; fall through without
+        // trimming. The greedy regex will still produce the
+        // match — better some highlight than none.
+      } else {
+        // Scan the middle (between the role-head and the legal-
+        // form suffix) for a sentence-verb token. Position of
+        // the LAST verb determines where the org name starts.
+        const midStart = firstWordMatch[0].length;
+        const midEnd = suffixOffset;
+        const midSection = text.slice(midStart, midEnd);
+        let lastVerbEndInMid = -1;
+        for (const match of midSection.matchAll(
+          /(?<![\p{L}\p{N}])\p{Ll}[\p{L}\p{M}]*/gu,
+        )) {
           if (
-            wordAtStart === null ||
-            !roleHeads.has(wordAtStart[0].toLowerCase())
+            match[0] !== undefined &&
+            match.index !== undefined &&
+            SENTENCE_VERB_INDICATORS.has(match[0].toLowerCase())
           ) {
-            break;
+            lastVerbEndInMid = match.index + match[0].length;
           }
-          // Skip past this role-head + the whitespace after it.
-          const advanceBy = /^\S+\s+/u.exec(
-            fullText.slice(trimmedStart, suffixStartInFull),
-          );
-          if (!advanceBy) break;
-          trimmedStart += advanceBy[0].length;
         }
-        if (trimmedStart >= suffixStartInFull) {
-          // No real cap-word survived the trim; drop the match.
-          continue;
+        // Also treat a digit immediately after the role-head
+        // ("Vendor 1", "Prodávající 2") as a sentence signal.
+        // Numbered party references rarely appear in company
+        // names but always appear in clause text.
+        const digitAfterRole = /^\s+\d+(?:\.|\b)/u.test(midSection);
+        if (lastVerbEndInMid !== -1 || digitAfterRole) {
+          // Pick the first Cap-starting word in `text` after
+          // the last verb (or, if only a digit signal fired,
+          // after the role-head itself). Falls back to dropping
+          // the match if there's no usable Cap word before the
+          // suffix.
+          const scanStart =
+            lastVerbEndInMid !== -1 ? midStart + lastVerbEndInMid : midStart;
+          const capRe = /(?<![\p{L}\p{N}])\p{Lu}[\p{L}\p{M}\p{N}]*/gu;
+          capRe.lastIndex = scanStart;
+          const capMatch = capRe.exec(text);
+          if (
+            capMatch === null ||
+            capMatch.index >= suffixOffset ||
+            roleHeads.has(capMatch[0].toLowerCase())
+          ) {
+            // No real cap-word before the suffix; drop.
+            continue;
+          }
+          processedStart = match.start + capMatch.index;
+          processedText = text.slice(capMatch.index);
         }
-        processedStart = trimmedStart;
-        processedText = fullText.slice(trimmedStart, trimmedEnd);
-        skipExtendBackward = true;
       }
     }
 
@@ -524,7 +594,7 @@ export const processLegalFormMatches = (
     // "Future s.r.o.")
     let entityStart = processedStart;
     let entityText = processedText;
-    if (fullText && !skipExtendBackward) {
+    if (fullText) {
       const extended = extendBackward(fullText, processedStart);
       if (extended < processedStart) {
         entityStart = extended;
