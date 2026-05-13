@@ -115,56 +115,9 @@ jobs:
 
       - name: Publish package
         if: github.event_name != 'push' || matrix.package != 'packages/data'
-        working-directory: ${{ matrix.package }}
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          PACKAGE_NAME=$(node -p "require('./package.json').name")
-          PACKAGE_VERSION=$(node -p "require('./package.json').version")
-          PUBLISHED_VERSION_JSON=/tmp/published-version.json
-          PUBLISH_ERROR_LOG="$RUNNER_TEMP/npm-publish-error.log"
-
-          version_is_published() {
-            npm view "${PACKAGE_NAME}@${PACKAGE_VERSION}" version --json >"$PUBLISHED_VERSION_JSON" 2>/dev/null
-          }
-
-          if [[ -n "${NPM_TOKEN:-}" ]]; then
-            export NODE_AUTH_TOKEN="$NPM_TOKEN"
-            unset NPM_CONFIG_USERCONFIG
-          else
-            unset NODE_AUTH_TOKEN
-            export NPM_CONFIG_USERCONFIG="$RUNNER_TEMP/.npmrc-trusted"
-            printf '%s\n' \
-              '@stll:registry=https://registry.npmjs.org' \
-              >"$NPM_CONFIG_USERCONFIG"
-          fi
-
-          if version_is_published; then
-            PUBLISHED_VERSION=$(node -p "JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'))" "$PUBLISHED_VERSION_JSON")
-            if [[ "${PUBLISHED_VERSION}" == "${PACKAGE_VERSION}" ]]; then
-              echo "${PACKAGE_NAME}@${PACKAGE_VERSION} already published; skipping."
-              exit 0
-            fi
-          fi
-
-          if npm publish --provenance --access public 2>"$PUBLISH_ERROR_LOG"; then
-            exit 0
-          fi
-
-          cat "$PUBLISH_ERROR_LOG" >&2
-
-          for attempt in 1 2 3 4 5; do
-            sleep "$attempt"
-            if version_is_published; then
-              PUBLISHED_VERSION=$(node -p "JSON.parse(require('fs').readFileSync(process.argv[1],'utf8'))" "$PUBLISHED_VERSION_JSON")
-              if [[ "${PUBLISHED_VERSION}" == "${PACKAGE_VERSION}" ]]; then
-                echo "${PACKAGE_NAME}@${PACKAGE_VERSION} became visible after publish attempt; treating as success."
-                exit 0
-              fi
-            fi
-          done
-
-          exit 1
+        uses: stella/.github/.github/actions/npm-publish-hardened@44c8092f11c2f454916c320aa7d2144c173329d8
+        with:
+          package-dir: ${{ matrix.package }}
 
   github-release:
     name: Create GitHub release
