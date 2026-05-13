@@ -5,8 +5,8 @@ import {
 import { processGazetteerMatches } from "./detectors/gazetteer";
 import { detectNameCorpus, initNameCorpus } from "./detectors/names";
 import { processRegexMatches } from "./detectors/regex";
-import { LEGAL_SUFFIXES } from "./config/legal-forms";
 import {
+  getKnownLegalSuffixes,
   processLegalFormMatches,
   warmLegalRoleHeads,
 } from "./detectors/legal-forms";
@@ -141,17 +141,22 @@ export const sanitizeEntities = (entities: Entity[]): Entity[] =>
     // don't end in a legal-form abbreviation. Court trigger
     // captures often include the sentence terminator
     // ("Krajského soudu v Praze." → "Krajského soudu v Praze").
-    // Keep the period only when the entity ends with a
-    // recognised suffix from `LEGAL_SUFFIXES`, so genuine
-    // company names ("Inc.", "Ltd.", "s.r.o.", "s. p.", …)
-    // retain their final dot. The check covers spaced
-    // variants too: comparing against the LEGAL_SUFFIXES
-    // entries directly keeps this layer in sync with
-    // whatever vocabulary the detectors recognise.
-    if (e.label === "organization" && cleaned.endsWith(".")) {
-      const keepsPeriod = LEGAL_SUFFIXES.some((suffix) =>
-        cleaned.endsWith(suffix),
-      );
+    // Exact deny-list and gazetteer spans are skipped — those
+    // boundaries come from curated dictionaries and may legally
+    // end in `.` (e.g. "U.S.C."); normalising them here would
+    // leave the dot dangling outside the redaction.
+    // For everything else, keep the period when it follows the
+    // FULL detector vocabulary (data/legal-forms.json plus
+    // `LEGAL_SUFFIXES`), not only the small propagation list,
+    // so detected forms like "Acme Kft." or "Bank of America,
+    // N.A." retain their final dot.
+    if (
+      e.label === "organization" &&
+      cleaned.endsWith(".") &&
+      !LITERAL_SOURCES.has(e.source)
+    ) {
+      const known = getKnownLegalSuffixes();
+      const keepsPeriod = known.some((suffix) => cleaned.endsWith(suffix));
       if (!keepsPeriod) {
         cleaned = cleaned.slice(0, -1).trimEnd();
       }

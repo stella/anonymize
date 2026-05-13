@@ -200,6 +200,17 @@ const loadAllLegalSuffixes = async (): Promise<readonly string[]> => {
 const getAllLegalSuffixesSync = (): readonly string[] =>
   allLegalSuffixesCache ?? LEGAL_SUFFIXES;
 
+/**
+ * Sync accessor for the full legal-form vocabulary
+ * (`data/legal-forms.json` plus `LEGAL_SUFFIXES`,
+ * longest-first). Falls back to `LEGAL_SUFFIXES` when
+ * `warmLegalRoleHeads()` has not run yet. Exposed so the
+ * trailing-period strip in `sanitizeEntities` can keep
+ * pace with the detector vocabulary rather than only the
+ * smaller `LEGAL_SUFFIXES` propagation list.
+ */
+export const getKnownLegalSuffixes = getAllLegalSuffixesSync;
+
 // Common contract clause nouns that appear in legal prose
 // between a sentence-verb and the company name. When the trim
 // scans forward for the org's first Cap word, these are skipped
@@ -348,6 +359,18 @@ export const buildLegalFormPatterns = async (): Promise<string[]> => {
         seen.add(key);
         allForms.push(form);
       }
+    }
+  }
+  // Bring `LEGAL_SUFFIXES` entries that aren't already in
+  // `data/legal-forms.json` into the detector vocabulary too
+  // — otherwise additions there only reach the propagation
+  // and trailing-period passes, and the detector keeps
+  // missing them on fresh prose ("Bank of America, N.A.").
+  for (const form of LEGAL_SUFFIXES) {
+    const key = form.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      allForms.push(form);
     }
   }
 
