@@ -1171,17 +1171,32 @@ const extendCityDistricts = (entities: Entity[], fullText: string): void => {
  */
 /**
  * Defined-term marker: an opening typographic or straight
- * quote sitting one character before the chain start
- * (`"Bond Hedge Transactions"`, `"Blue Sky Laws"`). Legal
- * documents reserve quoted capitalised phrases for
- * defined terms; the contents are not personal names even
- * when individual tokens collide with the name corpus.
+ * quote sitting one character before the chain start, AND
+ * a closing quote within a short window followed by a
+ * definitional cue (`means`, `shall mean`, `shall have
+ * the meaning`, `refers to`). Legal documents reserve
+ * this construction for defined terms; the contents are
+ * not personal names even when individual tokens collide
+ * with the name corpus.
+ *
+ * Plain quotations like `"John Unknown" said ...` do NOT
+ * count: there is no definitional cue, so the trailing
+ * surname extension is still allowed to absorb `Unknown`.
  */
-const OPENING_QUOTE_RE = /["“‟‘‛«]/u;
+const OPENING_QUOTE_RE = /["'“„‟‘‛«]/u;
+const CLOSING_QUOTE_AND_CUE_RE =
+  /["'”’»][\s,]*(?:means|shall\s+mean|shall\s+have\s+the\s+meaning|refers?\s+to|has\s+the\s+meaning|is\s+defined)/iu;
+const DEFINED_TERM_LOOKAHEAD = 120;
 const isInsideDefinedTermQuote = (text: string, start: number): boolean => {
   if (start === 0) return false;
   const prev = text[start - 1] ?? "";
-  return OPENING_QUOTE_RE.test(prev);
+  if (!OPENING_QUOTE_RE.test(prev)) return false;
+  // Require a closing quote followed by a definitional
+  // cue within a short window. Plain ordinary quotations
+  // ("John Unknown" said ...) lack the cue and remain
+  // eligible for surname extension.
+  const window = text.slice(start, start + DEFINED_TERM_LOOKAHEAD);
+  return CLOSING_QUOTE_AND_CUE_RE.test(window);
 };
 
 const extendPersonName = (
@@ -1221,23 +1236,26 @@ const extendPersonName = (
       // them so the allow-list / stopword check sees the
       // bare word.
       const word = text.slice(wordStart, wordEnd);
-      const stripped = word.replace(/[,;.”"’']+$/, "");
+      const stripped = word.replace(/[,;.”"’'“»]+$/, "");
       if (stripped.length < 2) {
         break;
       }
 
-      // Don't extend into stopwords, person stopwords, or
-      // allow-listed common words. The allow list catches
-      // English plurals/derivatives that case-fold to name
-      // corpus tokens but never name a real person
-      // ("Blue Sky Laws", "Bond Hedge Transactions",
-      // "Tesla Shares").
+      // Don't extend into stopwords or person stopwords.
+      // The global allow list is intentionally NOT consulted
+      // here: real surnames such as `Law`, `Tesla`, or
+      // `Vote` are common English words and live on the
+      // allow list to suppress single-token noise, but they
+      // are legitimate name extensions when preceded by a
+      // first name in plain prose (`John Law`, `Elon
+      // Tesla`). Defined-term contexts (`"Blue Sky Laws"`,
+      // `"Bond Hedge Transactions"`) are filtered earlier by
+      // `isInsideDefinedTermQuote`, so by the time
+      // `extendPersonName` runs we are in ordinary prose and
+      // the allow-list block would only swallow real
+      // surnames.
       const lower = stripped.toLowerCase();
-      if (
-        getStopwords(ctx).has(lower) ||
-        getPersonStopwords(ctx).has(lower) ||
-        getAllowList(ctx).has(lower)
-      ) {
+      if (getStopwords(ctx).has(lower) || getPersonStopwords(ctx).has(lower)) {
         break;
       }
 

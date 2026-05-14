@@ -89,17 +89,32 @@ describe("deny-list curation", () => {
     expect(oilAlone).toBeUndefined();
   });
 
-  test("name chain does not extend past an allow-listed common noun", async () => {
+  test("name chain stops at allow-listed noun inside defined-term quote", async () => {
     // "Blue" + "Sky" both case-fold to name-corpus tokens.
-    // The chain forms but the trailing-word extension must
-    // stop at "Laws" (allow-listed). Span must not include
-    // "Laws".
-    const text = "Section 4.4(b) Compliance with Blue Sky Laws of every State.";
+    // Inside a defined-term quote with a definitional cue
+    // ("shall mean"), the chain emission must not promote
+    // "Laws" into the span.
+    const text = '"Blue Sky Laws" shall mean state securities laws.';
     const entities = await detect(text);
     const includesLaws = entities.some(
       (e) => e.label === "person" && e.text.includes("Laws"),
     );
     expect(includesLaws).toBe(false);
+  });
+
+  test("ordinary person name extends past allow-listed common-word surname", async () => {
+    // Real surnames like "Law" or "Tesla" appear on the
+    // global allow list to suppress single-token noise, but
+    // they are legitimate extensions when preceded by a
+    // first name in plain prose. The fallback must absorb
+    // them; otherwise the emitted entity would end at the
+    // first name and leave the surname un-anonymised.
+    const text = "John Law signed the report on Monday.";
+    const entities = await detect(text);
+    const fullName = entities.find(
+      (e) => e.label === "person" && e.text === "John Law",
+    );
+    expect(fullName).toBeDefined();
   });
 
   test("trailing curly closing quote is stripped during person extension", async () => {
