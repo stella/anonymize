@@ -305,6 +305,7 @@ const scoreCluster = (cluster: SeedCluster): number => {
 const NON_ADDRESS_LABELS = new Set([
   "registration number",
   "tax identification number",
+  "national identification number",
   "person",
   "bank account number",
   "email address",

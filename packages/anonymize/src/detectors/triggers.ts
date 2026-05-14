@@ -689,7 +689,19 @@ const extractValue = (
       if (!idMatch) {
         return null;
       }
-      const idText = idMatch[0].trim();
+      // Optional trailing check letter must sit flush against
+      // the last digit of the base match (no intervening
+      // whitespace). This captures Spanish DNI / NIE / CIF /
+      // NIF check letters (e.g. `DNI 12345678Z`,
+      // `NIF A12345678J`) without sliding into the next word.
+      const baseEndsOnDigit = /\d$/.test(idMatch[0]);
+      const trailingLetterMatch = baseEndsOnDigit
+        ? /^[A-Z]/i.exec(afterSep.slice(idMatch[0].length))
+        : null;
+      const idRaw = trailingLetterMatch
+        ? idMatch[0] + trailingLetterMatch[0]
+        : idMatch[0];
+      const idText = idRaw.trim();
       const leadingSpaces = idMatch[0].length - idMatch[0].trimStart().length;
       const idStart =
         triggerEnd +

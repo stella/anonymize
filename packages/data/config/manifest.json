@@ -23,7 +23,8 @@
     },
     "es": {
       "triggers": true,
-      "coreference": true
+      "coreference": true,
+      "legalRoleHeads": true
     },
     "fr": {
       "triggers": true,

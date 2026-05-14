@@ -211,7 +211,9 @@ const STDNUM_ENTRIES: readonly StdnumEntry[] = [
   // czech birth number pattern
 
   // ── ES additional validators ─────────────────────
-  toEntry(es.cif, "registration number", 0.95),
+  // es.cif omitted: stdnum's candidatePattern is over-fit
+  // to the spec letter and misses real-world prefixes;
+  // covered by the format-level ES_CIF regex below.
   toEntry(es.vat, "tax identification number", 0.95),
   toEntry(es.nss, "social security number", 0.9),
 

@@ -266,7 +266,14 @@ const loadStreetTypeRe = async (): Promise<RegExp | null> => {
       const escaped = words.map((w) =>
         w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
       );
-      cachedStreetTypeRe = new RegExp(`\\b(?:${escaped.join("|")})\\b`, "iu");
+      // Unicode-class lookarounds rather than `\b` so entries
+      // ending in `.` or `/` (Spanish `Av.`, `C/`) still match
+      // when followed by whitespace; `\b` does not fire after
+      // non-word characters.
+      cachedStreetTypeRe = new RegExp(
+        `(?<![\\p{L}\\p{N}])(?:${escaped.join("|")})(?![\\p{L}\\p{N}])`,
+        "iu",
+      );
     }
   } catch {
     cachedStreetTypeRe = null;
