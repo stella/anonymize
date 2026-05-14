@@ -692,6 +692,21 @@ const TIME_12H: RegexDef = {
   score: 0.9,
 };
 
+// Percentages and financial rates. Captures the form
+// `\d+(.\d+)?%` so values like `3.875%`, `5.000%`,
+// `0.25%`, and `0%` surface. Percentages are not
+// classically personally identifying, but in legal text
+// they routinely fingerprint specific debt instruments
+// (`3.875% Senior Notes due 2027`) and tax brackets;
+// labelling them as `monetary amount` keeps the
+// operator-side handling consistent with how other
+// quantitative identifiers are redacted.
+const PERCENT_RATE: RegexDef = {
+  pattern: `\\b\\d{1,3}(?:\\.\\d{1,4})?%`,
+  label: "monetary amount",
+  score: 0.85,
+};
+
 // ── Collected definitions ────────────────────────────
 
 /**
@@ -741,6 +756,7 @@ const ALL_REGEX_DEFS: readonly RegexDef[] = [
   UK_POSTCODE,
   UK_NINO,
   TIME_12H,
+  PERCENT_RATE,
   ...STDNUM_ENTRIES,
 ];
 
