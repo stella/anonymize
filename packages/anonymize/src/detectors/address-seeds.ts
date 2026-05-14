@@ -89,11 +89,11 @@ const getBoundaryRe = async (): Promise<RegExp> => {
   words.sort((a, b) => b.length - a.length);
   // Word-boundary lookarounds via unicode letter/number
   // classes — `\b` doesn't fire after non-word chars, so a
-  // phrase ending in `.` (e.g. `sp. zn.`, `r.č.`, Spanish
-  // `con C.I.F.`) would never match with `\b...\b`. The
-  // lookarounds anchor on the absence of a letter/digit on
-  // either side, which works regardless of the phrase's
-  // last character.
+  // phrase ending in `.` (e.g. `sp. zn.`, `r.č.`, Italian
+  // `C.F.`, Spanish `con C.I.F.`) would never match with
+  // `\b...\b`. The lookarounds anchor on the absence of a
+  // letter/digit on either side, which works regardless of
+  // the phrase's last character.
   cachedBoundaryRe =
     words.length > 0
       ? new RegExp(
@@ -211,23 +211,31 @@ const collectSeeds = (
   }
 
   // 3b. Italian CAP: 5 consecutive digits followed by a
-  // capitalised word ("41012 Carpi"). The capitalised
-  // word requirement prevents random 5-digit numbers
-  // (years, IDs) from being treated as postal codes.
-  const itCapRe = /\b\d{5}(?=\s+\p{Lu}\p{Ll}+)/gu;
+  // capitalised word ("41012 Carpi", "41012 MODENA"). The
+  // capitalised word requirement keeps random 5-digit IDs
+  // (years, order numbers) out, and the explicit
+  // street-or-trigger-within-80-chars gate keeps a stray
+  // "12345 Paris" reference from accidentally clustering
+  // into an address in non-Italian text.
+  const itCapRe = /\b\d{5}(?=\s+\p{Lu}\p{L}+)/gu;
   let itCapMatch;
   while ((itCapMatch = itCapRe.exec(fullText)) !== null) {
     const start = itCapMatch.index;
     const end = start + itCapMatch[0].length;
     const alreadyCovered = seeds.some((s) => s.start <= start && s.end >= end);
-    if (!alreadyCovered) {
-      seeds.push({
-        type: "postal-code",
-        start,
-        end,
-        text: itCapMatch[0],
-      });
-    }
+    if (alreadyCovered) continue;
+    const hasNearbyAddressEvidence = seeds.some(
+      (s) =>
+        (s.type === "street-word" || s.type === "address-trigger") &&
+        Math.abs(s.start - start) <= 80,
+    );
+    if (!hasNearbyAddressEvidence) continue;
+    seeds.push({
+      type: "postal-code",
+      start,
+      end,
+      text: itCapMatch[0],
+    });
   }
 
   // 4. Street name + house number pattern:

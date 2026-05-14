@@ -52,7 +52,7 @@
     "id": "it-cap",
     "label": "address",
     "strategy": { "type": "n-words", "count": 1 },
-    "triggers": ["C.A.P.", "CAP"],
+    "triggers": ["C.A.P."],
     "includeTrigger": false,
     "validations": [{ "type": "matches-pattern", "pattern": "^\\d{5}$" }]
   }
