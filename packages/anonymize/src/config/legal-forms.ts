@@ -62,6 +62,12 @@ const RAW_LEGAL_SUFFIXES = [
   "Sp. z o.o.",
   "Sp. k.",
   "Sp. j.",
+  // Brazilian / Portuguese
+  "Ltda.",
+  "S/A",
+  "EIRELI",
+  "EPP",
+  "MEI",
 ];
 
 export const LEGAL_SUFFIXES: readonly string[] = [...RAW_LEGAL_SUFFIXES].sort(

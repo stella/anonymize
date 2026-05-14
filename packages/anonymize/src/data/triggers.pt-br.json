@@ -21,7 +21,14 @@
     "id": "pt-br-person-honorific",
     "label": "person",
     "strategy": { "type": "to-next-comma" },
-    "triggers": ["Sr.", "Sra.", "Srta.", "Exmo. Sr.", "Exma. Sra."],
+    "triggers": [
+      "Exmo. Sr.",
+      "Exma. Sra.",
+      "Ilmo. Sr.",
+      "Ilma. Sra.",
+      "Senhor",
+      "Senhora"
+    ],
     "extensions": ["add-trailing-space"],
     "validations": [{ "type": "starts-uppercase" }]
   },
@@ -30,7 +37,6 @@
     "label": "address",
     "strategy": { "type": "address", "maxChars": 120 },
     "triggers": [
-      "endereço",
       "com sede na",
       "com sede no",
       "com sede em",
