@@ -205,7 +205,7 @@
   },
   {
     "id": "cs-birth-number",
-    "label": "czech birth number",
+    "label": "birth number",
     "strategy": {
       "type": "n-words",
       "count": 1

@@ -2,7 +2,7 @@
   "rules": [
     {
       "hotwords": ["rodné číslo", "r.č.", "birth number", "Geburtsnummer"],
-      "targetLabels": ["czech birth number"],
+      "targetLabels": ["birth number"],
       "scoreAdjustment": 0.25,
       "proximityBefore": 60,
       "proximityAfter": 60

@@ -356,7 +356,7 @@ const CREDIT_CARD: RegexDef = {
 
 const CZ_BIRTH_NUMBER: RegexDef = {
   pattern: `\\b\\d{6}/\\d{3,4}\\b`,
-  label: "czech birth number",
+  label: "birth number",
   score: 1,
   validator: cz.rc,
 };

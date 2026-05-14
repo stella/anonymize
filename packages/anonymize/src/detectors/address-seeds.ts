@@ -87,8 +87,17 @@ const getBoundaryRe = async (): Promise<RegExp> => {
   }
   // Sort longest first so longer phrases match first
   words.sort((a, b) => b.length - a.length);
+  // Word-boundary lookarounds via unicode letter/number
+  // classes — `\b` doesn't fire after non-word chars, so a
+  // phrase ending in `.` (e.g. `sp. zn.`, `r.č.`) would
+  // never match with `\b...\b`.
   cachedBoundaryRe =
-    words.length > 0 ? new RegExp(`\\b(?:${words.join("|")})\\b`, "i") : /(?!)/; // never matches
+    words.length > 0
+      ? new RegExp(
+          `(?<![\\p{L}\\p{N}])(?:${words.join("|")})(?![\\p{L}\\p{N}])`,
+          "iu",
+        )
+      : /(?!)/;
   return cachedBoundaryRe;
 };
 

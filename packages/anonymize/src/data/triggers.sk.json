@@ -121,7 +121,9 @@
       "obec",
       "obce",
       "obci"
-    ]
+    ],
+    "extensions": ["add-trailing-space"],
+    "validations": [{ "type": "starts-uppercase" }]
   },
   {
     "id": "sk-organization-trailing-space",
@@ -170,7 +172,7 @@
   },
   {
     "id": "sk-birth-number",
-    "label": "czech birth number",
+    "label": "birth number",
     "strategy": { "type": "n-words", "count": 1 },
     "triggers": ["r.č.", "r. č.", "rodné číslo"],
     "extensions": ["add-colon"]
@@ -233,7 +235,13 @@
     "label": "registration number",
     "strategy": { "type": "n-words", "count": 1 },
     "triggers": ["oddiel", "oddiele", "oddielu", "oddielom"],
-    "extensions": ["add-colon", "add-trailing-space"]
+    "extensions": ["add-colon", "add-trailing-space"],
+    "validations": [
+      {
+        "type": "matches-pattern",
+        "pattern": "^(?:Sa|Sro|Sr|Po|Dr|Pšn|Insre|Po-Re)$"
+      }
+    ]
   },
   {
     "id": "sk-vlozka",

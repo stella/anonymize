@@ -56,11 +56,7 @@ describe("extractDefinedTerms", () => {
     const entities = [
       makeEntity("organization", "ABC s.r.o.", 0),
       makeEntity("registration number", "12345678", text.indexOf("12345678")),
-      makeEntity(
-        "czech birth number",
-        "900101/1234",
-        text.indexOf("900101/1234"),
-      ),
+      makeEntity("birth number", "900101/1234", text.indexOf("900101/1234")),
     ];
     const terms = await extractDefinedTerms(text, entities);
     const abc = terms.find((t) => t.alias === "ABC");

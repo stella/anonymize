@@ -25,11 +25,11 @@ describe("hotword rules", () => {
     // "rodné číslo: 123456/7890"
     //  ^0         ^14    ^22
     const text = "rodné číslo: 123456/7890";
-    const entity = makeEntity(13, 24, "czech birth number", 0.5);
+    const entity = makeEntity(13, 24, "birth number", 0.5);
     const result = applyHotwordRules([entity], text);
     expect(result).toHaveLength(1);
     expect(result[0].score).toBeGreaterThan(0.5);
-    expect(result[0].label).toBe("czech birth number");
+    expect(result[0].label).toBe("birth number");
   });
 
   it("reclassifies date to 'date of birth' " + "near 'narozen'", () => {
@@ -136,7 +136,7 @@ describe("hotword rules", () => {
     // Entity already at 0.95, boost of 0.25 should
     // clamp to 1.0.
     const text = "rodné číslo: 123456/7890";
-    const entity = makeEntity(13, 24, "czech birth number", 0.95);
+    const entity = makeEntity(13, 24, "birth number", 0.95);
     const result = applyHotwordRules([entity], text);
     expect(result).toHaveLength(1);
     expect(result[0].score).toBeLessThanOrEqual(1);

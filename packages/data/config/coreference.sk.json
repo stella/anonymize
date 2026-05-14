@@ -1,7 +1,22 @@
 [
   {
-    "label": "(dalej len \"X\")",
-    "pattern": "\\(ďalej\\s+len\\s+[„\"'‚]([^\"'\"\"]+)[\"\"']\\)",
+    "label": "(ďalej len \"X\") in parentheses",
+    "pattern": "\\(ďalej\\s+len\\s+[„\"'‚,]*([^\"'„“,;.\\n)]+?)[\"'„“,;.]*\\s*\\)",
+    "flags": "gi"
+  },
+  {
+    "label": "ďalej len \"X\" without parens",
+    "pattern": "ďalej\\s+len\\s+[„\"'‚,]([^\"'„“,;.\\n]+?)[\"'„“]",
+    "flags": "gi"
+  },
+  {
+    "label": "(ďalej spolu ako \"X\")",
+    "pattern": "\\(ďalej\\s+spolu\\s+(?:len|ako)\\s+[„\"'‚,]*([^\"'„“,;.\\n)]+?)[\"'„“,;.]*\\s*\\)",
+    "flags": "gi"
+  },
+  {
+    "label": "(ďalej tiež \"X\")",
+    "pattern": "\\(ďalej\\s+tiež\\s+[„\"'‚,]*([^\"'„“,;.\\n)]+?)[\"'„“,;.]*\\s*\\)",
     "flags": "gi"
   }
 ]
