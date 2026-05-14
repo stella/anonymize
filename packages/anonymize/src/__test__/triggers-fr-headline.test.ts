@@ -136,4 +136,46 @@ describe("French headline-style trigger regressions", () => {
       addresses.some((a) => a.text.toLowerCase().includes("avenue victor")),
     ).toBe(true);
   });
+
+  test("court trigger captures contracted 'du' article", async () => {
+    const text = "Tribunal judiciaire du Mans statue sur l'affaire.";
+    const ents = await runFr(text);
+    const orgs = ents.filter((e) => e.label === "organization");
+    expect(orgs.some((o) => o.text.includes("Mans"))).toBe(true);
+  });
+
+  test("court trigger captures contracted 'des' article", async () => {
+    const text =
+      "Conseil de prud'hommes des Sables-d'Olonne a rendu son jugement.";
+    const ents = await runFr(text);
+    const orgs = ents.filter((e) => e.label === "organization");
+    expect(orgs.some((o) => o.text.includes("Sables-d'Olonne"))).toBe(true);
+  });
+
+  test("court trigger keeps city with hyphenated -sur- segment", async () => {
+    const text = "Tribunal judiciaire de Saint-Maur-sur-Loire, chambre 1.";
+    const ents = await runFr(text);
+    const orgs = ents.filter((e) => e.label === "organization");
+    expect(orgs.some((o) => o.text.includes("Saint-Maur-sur-Loire"))).toBe(
+      true,
+    );
+  });
+
+  test("person trigger reclassifies SASU (full-vocab suffix) as organization", async () => {
+    const text = "Le mandat est exécuté agissant par ACME SASU.";
+    const ents = await runFr(text);
+    const acme = ents.find((e) => e.text.includes("ACME SASU"));
+    expect(acme).toBeDefined();
+    expect(acme?.label).toBe("organization");
+  });
+
+  test("hyphenated French role head (Sous-traitant) is trimmed off org match", async () => {
+    const text = "Sous-traitant est Acme SAS pour ce projet.";
+    const ents = await runFr(text);
+    const orgs = ents.filter((e) => e.label === "organization");
+    expect(orgs.some((o) => o.text.startsWith("Acme"))).toBe(true);
+    for (const o of orgs) {
+      expect(o.text.toLowerCase()).not.toContain("sous-traitant");
+    }
+  });
 });

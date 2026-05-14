@@ -654,7 +654,13 @@ export const processLegalFormMatches = (
     // technologie, s. p."), and multi-token legal suffixes
     // ("spol. s r.o.") all survive the trim.
     const roleHeads = getLegalRoleHeadsSync();
-    const firstWordMatch = /^[\p{L}\p{M}]+/u.exec(text);
+    // Match the first token. Hyphenated forms ("Sous-traitant",
+    // "co-contractant") are valid role heads in some languages,
+    // so consume any internal `-letter` runs alongside the
+    // letter-only head. The lookup uses the full hyphenated form
+    // first, then falls back to just the leading letter run when
+    // the role-head set lists only the bare prefix.
+    const firstWordMatch = /^[\p{L}\p{M}]+(?:-[\p{L}\p{M}]+)*/u.exec(text);
     let processedStart = match.start;
     let processedText = text;
     // True when the role-head trim slices the match. The
@@ -664,10 +670,14 @@ export const processLegalFormMatches = (
     // trim to "Acme Inc." → extendBackward walks back across
     // "Licensee" again and emits "Licensee Acme Inc.").
     let trimmed = false;
-    if (
+    const firstWordText = firstWordMatch?.[0] ?? "";
+    const firstWordLeading = /^[\p{L}\p{M}]+/u.exec(firstWordText)?.[0] ?? "";
+    const isRoleHead =
       firstWordMatch !== null &&
-      roleHeads.has(firstWordMatch[0].toLowerCase())
-    ) {
+      (roleHeads.has(firstWordText.toLowerCase()) ||
+        (firstWordLeading.length > 0 &&
+          roleHeads.has(firstWordLeading.toLowerCase())));
+    if (isRoleHead) {
       // Find the legal-form suffix's position inside `text` by
       // scanning the full legal-form vocabulary (loaded from
       // `data/legal-forms.json` in `warmLegalRoleHeads`-style

@@ -12,7 +12,7 @@ import type {
   ValidIdValidator,
 } from "../types";
 import { POST_NOMINALS } from "../config/titles";
-import { LEGAL_SUFFIXES } from "../config/legal-forms";
+import { getKnownLegalSuffixes } from "./legal-forms";
 import { loadLanguageConfigs } from "../util/lang-loader";
 import { DASH } from "../util/char-groups";
 
@@ -52,21 +52,46 @@ const POST_NOMINAL_RE = new RegExp(
 // reflexive pronouns "se", "sa" which appear in
 // person-trigger captures like
 // "Ing. Jan Novák, se sídlem...".
-const DEFINITIVE_LEGAL_FORMS = LEGAL_SUFFIXES;
-// Build case-sensitive regex. Short dot-free forms
-// (AG, SE, KG) get word boundaries to prevent substring
-// matches. All forms are uppercase in the list; the
-// regex is case-sensitive so "se"/"sa" won't match.
-const LEGAL_FORM_CHECK_RE = new RegExp(
-  DEFINITIVE_LEGAL_FORMS.map((f) => {
+//
+// The reclassification regex is built from the FULL legal-
+// form vocabulary (`data/legal-forms.json` plus
+// `LEGAL_SUFFIXES`) via `getKnownLegalSuffixes()`. The
+// pipeline always calls `warmLegalRoleHeads()` before
+// triggers run, so by the time `getLegalFormCheckRe()` is
+// invoked the cache is populated. The regex is built
+// lazily and re-cached when the underlying vocabulary
+// reference changes.
+const buildLegalFormCheckRe = (forms: readonly string[]): RegExp => {
+  // Dot-free letter-only forms get Unicode-aware word
+  // boundaries so short uppercase forms ("SE", "AG") and
+  // longer single-word forms ("Branch", "Limited") don't
+  // match as substrings of unrelated tokens. Forms with
+  // dots already terminate at non-letter chars naturally.
+  const parts = forms.map((f) => {
     const escaped = f
       .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
       .replace(/\\\./g, "\\.\\s*");
-    const isDotFree = !f.includes(".");
-    const isShort = f.length <= 4;
-    return isDotFree && isShort ? `\\b${escaped}\\b` : escaped;
-  }).join("|"),
-);
+    const isLetterOnly = /^[\p{L}\p{M}]+$/u.test(f);
+    return isLetterOnly
+      ? `(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`
+      : escaped;
+  });
+  return new RegExp(parts.join("|"), "u");
+};
+
+let cachedLegalFormCheckRe: RegExp | null = null;
+let cachedLegalFormCheckSource: readonly string[] | null = null;
+const getLegalFormCheckRe = (): RegExp => {
+  const source = getKnownLegalSuffixes();
+  if (
+    cachedLegalFormCheckSource !== source ||
+    cachedLegalFormCheckRe === null
+  ) {
+    cachedLegalFormCheckSource = source;
+    cachedLegalFormCheckRe = buildLegalFormCheckRe(source);
+  }
+  return cachedLegalFormCheckRe;
+};
 
 // ── Validation compilation ─────────────────────────
 
@@ -1200,7 +1225,7 @@ export const processTriggerMatches = (
       // This is universal — every person with a legal form
       // is an organisation, no per-group config needed.
       const effectiveLabel =
-        rule.label === "person" && LEGAL_FORM_CHECK_RE.test(entityText)
+        rule.label === "person" && getLegalFormCheckRe().test(entityText)
           ? "organization"
           : rule.label;
 
