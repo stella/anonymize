@@ -122,15 +122,15 @@
   ],
   "pt": ["avenida", "largo", "praça", "rua", "travessa"],
   "pt-br": [
-    "Alameda",
-    "Av.",
-    "Avenida",
-    "Estrada",
-    "Largo",
-    "Praça",
-    "Rodovia",
-    "Rua",
-    "Travessa"
+    "alameda",
+    "av.",
+    "avenida",
+    "estrada",
+    "largo",
+    "praça",
+    "rodovia",
+    "rua",
+    "travessa"
   ],
   "ro": [
     "aleea",

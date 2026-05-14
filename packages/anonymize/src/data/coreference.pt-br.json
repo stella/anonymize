@@ -1,17 +1,12 @@
 [
   {
     "label": "(doravante denominada \"X\") / (doravante denominado \"X\")",
-    "pattern": "doravante\\s+denominad[ao]s?(?:\\s+simplesmente)?\\s+[\"'\"']?([^\"'\"',;.\\n]+?)[\"'\"',;.\\n]",
+    "pattern": "doravante\\s+denominad[ao]s?(?:\\s+simplesmente)?\\s+[\"']?([^\"',;.\\n]+?)[\"',;.\\n]",
     "flags": "gi"
   },
   {
     "label": "doravante referida como \"X\"",
-    "pattern": "doravante\\s+(?:referid[ao]|design[ao]d[ao])s?(?:\\s+como)?\\s+[\"'\"']?([^\"'\"',;.\\n]+?)[\"'\"',;.\\n]",
-    "flags": "gi"
-  },
-  {
-    "label": "(\"X\") parenthetical define-term",
-    "pattern": "\\(\\s*[\"'\"']([^\"'\"']+)[\"'\"']\\s*\\)",
+    "pattern": "doravante\\s+(?:referid[ao]|design[ao]d[ao])s?(?:\\s+como)?\\s+[\"']?([^\"',;.\\n]+?)[\"',;.\\n]",
     "flags": "gi"
   }
 ]

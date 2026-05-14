@@ -86,7 +86,7 @@
       "end": 651,
       "label": "person",
       "text": "Jonathan H. Whitaker",
-      "source": "trigger"
+      "source": "deny-list"
     },
     {
       "start": 892,

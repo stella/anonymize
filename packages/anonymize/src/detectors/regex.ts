@@ -512,7 +512,7 @@ const BR_CNPJ_FORMATTED: RegexDef = {
 //   32.456.789-X SSP/SP
 const BR_RG_WITH_SSP: RegexDef = {
   pattern:
-    `\\b\\d{1,2}\\.?\\d{3}\\.?\\d{3}` +
+    `\\b\\d{1,3}\\.?\\d{3}\\.?\\d{3}` +
     `(?:${DASH}[0-9A-Za-z])?` +
     `[^\\S\\n]+SSP(?:/[A-Z]{2})?\\b`,
   label: "national identification number",
@@ -520,11 +520,13 @@ const BR_RG_WITH_SSP: RegexDef = {
 };
 
 // Brazilian OAB (lawyer registration). Format:
-// "OAB/UF NNNN" or "OAB/UF NNN.NNN" — two-letter state
-// code, then 3–6 digits optionally with a thousand
-// separator dot.
+// "OAB/UF NNNNNN" or "OAB/UF NNN.NNN" — two-letter
+// state code, optional "nº" / "n." marker, then 4–6
+// digits with optional thousand separator dot.
 const BR_OAB: RegexDef = {
-  pattern: `\\bOAB/[A-Z]{2}[^\\S\\n]+\\d{1,3}(?:\\.\\d{3})*\\b`,
+  pattern:
+    `\\bOAB/[A-Z]{2}[^\\S\\n]+(?:n[º°.][^\\S\\n]*)?` +
+    `(?:\\d{1,3}(?:\\.\\d{3})+|\\d{4,6})\\b`,
   label: "registration number",
   score: 0.95,
 };

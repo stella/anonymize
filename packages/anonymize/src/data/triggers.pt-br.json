@@ -21,15 +21,7 @@
     "id": "pt-br-person-honorific",
     "label": "person",
     "strategy": { "type": "to-next-comma" },
-    "triggers": [
-      "Sr.",
-      "Sra.",
-      "Srta.",
-      "Dr.",
-      "Dra.",
-      "Exmo. Sr.",
-      "Exma. Sra."
-    ],
+    "triggers": ["Sr.", "Sra.", "Srta.", "Exmo. Sr.", "Exma. Sra."],
     "extensions": ["add-trailing-space"],
     "validations": [{ "type": "starts-uppercase" }]
   },
@@ -107,7 +99,6 @@
     "label": "registration number",
     "strategy": { "type": "n-words", "count": 1 },
     "triggers": [
-      "OAB",
       "OAB/AC",
       "OAB/AL",
       "OAB/AP",
@@ -135,7 +126,9 @@
       "OAB/SP",
       "OAB/SE",
       "OAB/TO"
-    ]
+    ],
+    "extensions": ["add-trailing-space"],
+    "validations": [{ "type": "has-digits" }]
   },
   {
     "id": "pt-br-state-registration",
