@@ -3,13 +3,67 @@
     "id": "fr-address",
     "label": "address",
     "strategy": { "type": "to-next-comma" },
-    "triggers": ["demeurant", "domicilié au", "domiciliée au", "né à", "née à"]
+    "triggers": [
+      "demeurant",
+      "demeurant à",
+      "demeurant au",
+      "domicilié à",
+      "domicilié au",
+      "domiciliée à",
+      "domiciliée au",
+      "résidant à",
+      "résidant au",
+      "résidante à",
+      "résidante au",
+      "né à",
+      "née à",
+      "ayant son adresse à",
+      "ayant son adresse au"
+    ]
   },
   {
-    "id": "fr-address-eol",
+    "id": "fr-registered-office",
     "label": "address",
-    "strategy": { "type": "to-end-of-line" },
-    "triggers": ["siège social :"]
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "ayant son siège à",
+      "ayant son siège au",
+      "ayant son siège social à",
+      "ayant son siège social au",
+      "dont le siège social est à",
+      "dont le siège social est situé à",
+      "dont le siège est à",
+      "dont le siège est situé à"
+    ]
+  },
+  {
+    "id": "fr-address-headline",
+    "label": "address",
+    "strategy": {
+      "type": "to-next-comma",
+      "stopWords": [
+        "rcs",
+        "siren",
+        "siret",
+        "tva",
+        "par",
+        "le",
+        "immatriculée",
+        "immatriculé",
+        "inscrite",
+        "inscrit",
+        "représentée",
+        "représenté"
+      ]
+    },
+    "triggers": [
+      "siège social :",
+      "siège social:",
+      "adresse :",
+      "adresse:",
+      "adresse postale :",
+      "adresse postale:"
+    ]
   },
   {
     "id": "fr-date-of-birth",
@@ -24,20 +78,62 @@
     "id": "fr-person",
     "label": "person",
     "strategy": { "type": "to-next-comma" },
-    "triggers": ["représenté par", "représentée par"],
+    "triggers": [
+      "représenté par",
+      "représentée par",
+      "agissant en qualité de mandataire",
+      "agissant par",
+      "pris en la personne de"
+    ],
     "validations": [{ "type": "starts-uppercase" }]
   },
   {
     "id": "fr-company-id",
     "label": "registration number",
     "strategy": { "type": "company-id-value" },
-    "triggers": ["numéro SIREN", "numéro SIRET"]
+    "triggers": [
+      "numéro SIREN",
+      "numéro SIRET",
+      "numéro de SIREN",
+      "numéro de SIRET",
+      "n° SIREN",
+      "n° SIRET",
+      "SIREN n°",
+      "SIRET n°",
+      "SIREN :",
+      "SIRET :",
+      "immatriculée au RCS sous le numéro",
+      "immatriculé au RCS sous le numéro",
+      "inscrite au RCS sous le numéro",
+      "inscrit au RCS sous le numéro",
+      "immatriculée sous le numéro",
+      "immatriculé sous le numéro"
+    ]
+  },
+  {
+    "id": "fr-tax-id",
+    "label": "tax identification number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "numéro de TVA",
+      "numéro de TVA intracommunautaire",
+      "TVA intracommunautaire",
+      "n° TVA",
+      "TVA n°",
+      "TVA :"
+    ]
   },
   {
     "id": "fr-social-security",
     "label": "social security number",
     "strategy": { "type": "company-id-value" },
-    "triggers": ["numéro de sécurité sociale"]
+    "triggers": [
+      "numéro de sécurité sociale",
+      "n° de sécurité sociale",
+      "n° SS",
+      "NIR :",
+      "NIR n°"
+    ]
   },
   {
     "id": "fr-land-parcel",
@@ -58,5 +154,40 @@
     "strategy": { "type": "to-end-of-line" },
     "triggers": ["référence cadastrale", "cadastré section"],
     "extensions": ["add-colon"]
+  },
+  {
+    "id": "fr-court-jurisdiction",
+    "label": "address",
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "Tribunal judiciaire de",
+      "Tribunal de commerce de",
+      "Cour d'appel de",
+      "Conseil de prud'hommes de"
+    ],
+    "includeTrigger": true,
+    "extensions": ["normalize-spaces"],
+    "validations": [{ "type": "starts-uppercase" }]
+  },
+  {
+    "id": "fr-postal-code",
+    "label": "address",
+    "strategy": { "type": "to-end-of-line" },
+    "triggers": ["code postal :", "code postal:", "CP :", "CP:"]
+  },
+  {
+    "id": "fr-phone",
+    "label": "phone number",
+    "strategy": { "type": "to-end-of-line" },
+    "triggers": [
+      "téléphone :",
+      "téléphone:",
+      "tél :",
+      "tél:",
+      "tél. :",
+      "tél.:",
+      "portable :",
+      "portable:"
+    ]
   }
 ]
