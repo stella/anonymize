@@ -17,8 +17,8 @@
       "legalRoleHeads": true
     },
     "pt-br": {
-      "triggers": false,
-      "coreference": false,
+      "triggers": true,
+      "coreference": true,
       "legalRoleHeads": true
     },
     "es": {
