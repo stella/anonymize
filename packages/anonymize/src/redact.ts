@@ -34,7 +34,13 @@ const normalizeEntityText = (label: string, text: string): string => {
     upper === "IBAN" ||
     upper === "BANK_ACCOUNT_NUMBER" ||
     upper === "TAX_IDENTIFICATION_NUMBER" ||
-    upper === "REGISTRATION_NUMBER"
+    upper === "REGISTRATION_NUMBER" ||
+    upper === "NATIONAL_IDENTIFICATION_NUMBER" ||
+    upper === "SOCIAL_SECURITY_NUMBER" ||
+    upper === "BIRTH_NUMBER" ||
+    upper === "IDENTITY_CARD_NUMBER" ||
+    upper === "PASSPORT_NUMBER" ||
+    upper === "CREDIT_CARD_NUMBER"
   ) {
     return text.replace(SPACE_DASH_RE, "").toUpperCase();
   }

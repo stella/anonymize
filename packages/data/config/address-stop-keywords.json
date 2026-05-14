@@ -18,6 +18,19 @@
     "ič"
   ],
   "en": ["e-mail", "email", "tel", "swift", "iban", "bic"],
+  "pl": [
+    "nip",
+    "krs",
+    "regon",
+    "pesel",
+    "numer konta",
+    "konto bankowe",
+    "rachunek bankowy",
+    "tel.",
+    "telefon",
+    "e-mail",
+    "email"
+  ],
   "sk": [
     "číslo účtu",
     "bankové spojenie",

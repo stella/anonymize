@@ -165,8 +165,16 @@ const getGenericRoles = (ctx: PipelineContext): ReadonlySet<string> =>
 // a genuine address component. Falls back to a permissive
 // match-nothing regex before init.
 
-const NO_MATCH_RE = /^\b$/;
-let _streetTypesRe: RegExp = NO_MATCH_RE;
+// Baseline regex used when address-street-types.json
+// has not been loaded yet (e.g. callers using
+// `filterFalsePositives` directly without going through
+// `runPipeline`). Mirrors the previous hardcoded Czech
+// street-word anchors so trigger-sourced digitless
+// Czech addresses ("Národní třída") still survive the
+// digit gate before initAddressComponents() runs.
+const STREET_TYPES_SEED_RE =
+  /(?:^|\s)(?:ul\.|ulice|nám\.|náměstí|tř\.|třída|nábř\.|nábřeží|bulvár)(?=[\s,./]|$)/i;
+let _streetTypesRe: RegExp = STREET_TYPES_SEED_RE;
 let _streetTypesPromise: Promise<void> | null = null;
 
 const escapeRegex = (s: string): string =>
@@ -188,7 +196,7 @@ const loadStreetTypeRegex = async (): Promise<void> => {
       }
     }
     if (words.size === 0) {
-      _streetTypesRe = NO_MATCH_RE;
+      _streetTypesRe = STREET_TYPES_SEED_RE;
       return;
     }
     // Longest first so "aleja" doesn't shadow "al."
@@ -201,7 +209,7 @@ const loadStreetTypeRegex = async (): Promise<void> => {
       "iu",
     );
   } catch {
-    _streetTypesRe = NO_MATCH_RE;
+    _streetTypesRe = STREET_TYPES_SEED_RE;
   }
 };
 

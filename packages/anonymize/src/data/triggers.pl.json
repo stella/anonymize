@@ -108,8 +108,6 @@
       "z siedzibą w",
       "z siedzibą we",
       "z siedzibą przy",
-      "siedziba",
-      "siedzibą",
       "adres pocztowy",
       "adres siedziby",
       "adres do korespondencji",
@@ -131,6 +129,12 @@
       "miejsce wykonywania pracy"
     ],
     "extensions": ["add-colon"]
+  },
+  {
+    "id": "pl-address-seat-label",
+    "label": "address",
+    "strategy": { "type": "address", "maxChars": 120 },
+    "triggers": ["siedziba:", "siedzibą:"]
   },
   {
     "id": "pl-amount-prefix",
