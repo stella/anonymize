@@ -148,7 +148,33 @@
   {
     "id": "fr-court-jurisdiction",
     "label": "organization",
-    "strategy": { "type": "to-next-comma" },
+    "strategy": {
+      "type": "to-next-comma",
+      "stopWords": [
+        "par",
+        "saisi",
+        "saisie",
+        "selon",
+        "suivant",
+        "dans",
+        "pour",
+        "sur",
+        "en",
+        "qui",
+        "dont",
+        "dont le",
+        "lors",
+        "lors de",
+        "lorsque",
+        "afin",
+        "afin de",
+        "au sujet",
+        "à la demande",
+        "à propos",
+        "ayant",
+        "agissant"
+      ]
+    },
     "triggers": [
       "Tribunal judiciaire de",
       "Tribunal judiciaire d'",

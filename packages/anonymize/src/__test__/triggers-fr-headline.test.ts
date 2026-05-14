@@ -96,4 +96,44 @@ describe("French headline-style trigger regressions", () => {
       expect(a.text.toLowerCase()).not.toContain("email");
     }
   });
+
+  test("court trigger stops before 'par' clause when no comma", async () => {
+    const text = "Cour d'appel de Paris par le demandeur";
+    const ents = await runFr(text);
+    const orgs = ents.filter((e) => e.label === "organization");
+    expect(orgs.length).toBeGreaterThan(0);
+    for (const o of orgs) {
+      expect(o.text.toLowerCase()).not.toContain("par le demandeur");
+      expect(o.text.toLowerCase()).not.toContain("demandeur");
+    }
+  });
+
+  test("compact colon address headline captures letter-leading value", async () => {
+    // No space after the colon and the value starts with a
+    // letter. Before the boundary-check fix, the trigger
+    // was rejected outright; now it fires and the address
+    // strategy captures the city + street.
+    const text = "Adresse:Paris 10 rue de la Paix.";
+    const ents = await runFr(text);
+    const addresses = ents.filter((e) => e.label === "address");
+    expect(addresses.some((a) => a.text.toLowerCase().includes("paris"))).toBe(
+      true,
+    );
+  });
+
+  test("SIREN n° with no space captures the digits", async () => {
+    const text = "SIREN n°123456789 du registre.";
+    const ents = await runFr(text);
+    const regs = ents.filter((e) => e.label === "registration number");
+    expect(regs.some((e) => e.text.includes("123456789"))).toBe(true);
+  });
+
+  test("street-type words keep no-digit French addresses", async () => {
+    const text = "Adresse : avenue Victor Hugo";
+    const ents = await runFr(text);
+    const addresses = ents.filter((e) => e.label === "address");
+    expect(
+      addresses.some((a) => a.text.toLowerCase().includes("avenue victor")),
+    ).toBe(true);
+  });
 });

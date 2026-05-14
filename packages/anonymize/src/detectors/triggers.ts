@@ -786,8 +786,21 @@ const extractValue = (
       // a colon or whitespace separator between the
       // keyword and value (e.g., "IČO: 12345678" or
       // "IČO 12345678", but not "IČO12345678").
+      //
+      // Exception: when the trigger itself ends in a
+      // number-marker character ("n°", "№", "#"), the
+      // value can follow the marker without any
+      // intervening separator ("SIREN n°123456789"). In
+      // that case we accept an empty separator too.
       const raw = text.slice(triggerEnd);
-      const sepMatch = /^(?:\s*:\s*|\s+)/.exec(raw);
+      const triggerLastChar = text[triggerEnd - 1] ?? "";
+      const allowEmptySep =
+        triggerLastChar === "°" ||
+        triggerLastChar === "º" ||
+        triggerLastChar === "№" ||
+        triggerLastChar === "#";
+      const sepRe = allowEmptySep ? /^(?:\s*:\s*|\s+|)/ : /^(?:\s*:\s*|\s+)/;
+      const sepMatch = sepRe.exec(raw);
       if (!sepMatch) {
         return null;
       }
@@ -1139,13 +1152,17 @@ export const processTriggerMatches = (
       continue;
     }
 
-    // Right word-boundary: reject if followed by a
-    // letter — but skip this check when the trigger
-    // itself ends with whitespace (e.g., "pan ",
-    // "město ") since the trailing space already
-    // acts as a boundary delimiter.
+    // Right word-boundary: reject only when the trigger
+    // ends with a letter AND is followed by another
+    // letter (which would mean the keyword bleeds into
+    // a longer word, e.g. "pan" inside "pana"). Triggers
+    // ending in punctuation (`:`, `'`, `’`, `°`, `.`, …)
+    // or whitespace are already self-bounded: whatever
+    // follows cannot extend the keyword token, so any
+    // following character (letter, digit, etc.) is fine.
+    const triggerLastChar = rule.trigger.at(-1) ?? "";
     if (
-      !rule.trigger.endsWith(" ") &&
+      LETTER_RE.test(triggerLastChar) &&
       LETTER_RE.test(fullText[match.end] ?? "")
     ) {
       continue;
