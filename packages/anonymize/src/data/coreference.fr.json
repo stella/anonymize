@@ -1,12 +1,12 @@
 [
   {
     "label": "(ci-après dénommé(e) \"X\") with French guillemets or quotes",
-    "pattern": "\\(\\s*ci-après\\s+(?:dénommée?s?|désignée?s?|appelée?s?)\\s+(?:la|le|les|l['’])?\\s*[«\"'„‚]([^»\"'\"”‟]+)[»\"'\"”]\\s*\\)",
+    "pattern": "\\(\\s*ci-après\\s+(?:dénommée?s?|désignée?s?|appelée?s?)(?:\\(e\\)s?)?\\s+(?:la|le|les|l['’])?\\s*[«\"'„‚]([^»\"'\"”‟]+)[»\"'\"”]\\s*\\)",
     "flags": "giu"
   },
   {
     "label": "ci-après dénommé \"X\" (no parens, French quotes)",
-    "pattern": "ci-après\\s+(?:dénommée?s?|désignée?s?|appelée?s?)\\s+(?:la|le|les|l['’])?\\s*[«\"'„‚]([^»\"'\"”‟]+)[»\"'\"”]",
+    "pattern": "ci-après\\s+(?:dénommée?s?|désignée?s?|appelée?s?)(?:\\(e\\)s?)?\\s+(?:la|le|les|l['’])?\\s*[«\"'„‚]([^»\"'\"”‟]+)[»\"'\"”]",
     "flags": "giu"
   },
   {
@@ -16,12 +16,12 @@
   },
   {
     "label": "désigné ci-après \"X\"",
-    "pattern": "désignée?s?\\s+ci-après\\s+(?:comme\\s+)?(?:la|le|les|l['’])?\\s*[«\"'„‚]([^»\"'\"”‟]+)[»\"'\"”]",
+    "pattern": "désignée?s?(?:\\(e\\)s?)?\\s+ci-après\\s+(?:comme\\s+)?(?:la|le|les|l['’])?\\s*[«\"'„‚]([^»\"'\"”‟]+)[»\"'\"”]",
     "flags": "giu"
   },
   {
     "label": "dénommé(e) ci-après \"X\"",
-    "pattern": "dénommée?s?\\s+ci-après\\s+(?:la|le|les|l['’])?\\s*[«\"'„‚]([^»\"'\"”‟]+)[»\"'\"”]",
+    "pattern": "dénommée?s?(?:\\(e\\)s?)?\\s+ci-après\\s+(?:la|le|les|l['’])?\\s*[«\"'„‚]([^»\"'\"”‟]+)[»\"'\"”]",
     "flags": "giu"
   }
 ]

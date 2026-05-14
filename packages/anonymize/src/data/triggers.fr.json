@@ -39,23 +39,7 @@
   {
     "id": "fr-address-headline",
     "label": "address",
-    "strategy": {
-      "type": "to-next-comma",
-      "stopWords": [
-        "rcs",
-        "siren",
-        "siret",
-        "tva",
-        "par",
-        "le",
-        "immatriculée",
-        "immatriculé",
-        "inscrite",
-        "inscrit",
-        "représentée",
-        "représenté"
-      ]
-    },
+    "strategy": { "type": "to-end-of-line" },
     "triggers": [
       "siège social :",
       "siège social:",
@@ -107,7 +91,9 @@
       "inscrite au RCS sous le numéro",
       "inscrit au RCS sous le numéro",
       "immatriculée sous le numéro",
-      "immatriculé sous le numéro"
+      "immatriculé sous le numéro",
+      "inscrite sous le numéro",
+      "inscrit sous le numéro"
     ]
   },
   {
