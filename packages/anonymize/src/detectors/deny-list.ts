@@ -231,6 +231,68 @@ const getAddressStopwords = (ctx: PipelineContext): ReadonlySet<string> =>
 const SINGLE_WORD_RE = /^\p{L}+$/u;
 
 /**
+ * Format-level address signals — structurally numeric or
+ * 2-letter-state patterns, language-agnostic. The street-type
+ * vocabulary is loaded from `address-street-types.json` so new
+ * languages contribute via data, not code.
+ *   - `,\s*[A-Z]{2}\b` → US state abbreviation after a comma
+ *   - `\b\d{5}(?:-\d{4})?\b` → US ZIP / ZIP+4
+ *   - `\b\d{3}\s\d{2}\b` → Czech/Slovak postal block (140 00)
+ *   - `\b\d{2}-\d{3}\b` → Polish postal code (00-950)
+ */
+const ADDRESS_FORMAT_RE =
+  /,\s*\p{Lu}{2}\b|\b\d{5}(?:-\d{4})?\b|\b\d{3}\s\d{2}\b|\b\d{2}-\d{3}\b/u;
+
+let cachedStreetTypeRe: RegExp | null = null;
+let streetTypeReLoaded = false;
+
+const loadStreetTypeRe = async (): Promise<RegExp | null> => {
+  if (streetTypeReLoaded) return cachedStreetTypeRe;
+  try {
+    const mod: { default?: Record<string, unknown> } =
+      await import("../data/address-street-types.json");
+    const config = mod.default ?? {};
+    const words: string[] = [];
+    for (const value of Object.values(config)) {
+      if (!Array.isArray(value)) continue;
+      for (const word of value) {
+        if (typeof word === "string" && word.length > 0) words.push(word);
+      }
+    }
+    if (words.length === 0) {
+      cachedStreetTypeRe = null;
+    } else {
+      words.sort((a, b) => b.length - a.length);
+      const escaped = words.map((w) =>
+        w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+      );
+      cachedStreetTypeRe = new RegExp(`\\b(?:${escaped.join("|")})\\b`, "iu");
+    }
+  } catch {
+    cachedStreetTypeRe = null;
+  }
+  streetTypeReLoaded = true;
+  return cachedStreetTypeRe;
+};
+
+const getStreetTypeRe = (): RegExp | null =>
+  streetTypeReLoaded ? cachedStreetTypeRe : null;
+
+const hasAdjacentAddressEvidence = (
+  fullText: string,
+  start: number,
+  end: number,
+): boolean => {
+  const window = fullText.slice(
+    Math.max(0, start - 40),
+    Math.min(fullText.length, end + 40),
+  );
+  if (ADDRESS_FORMAT_RE.test(window)) return true;
+  const streetRe = getStreetTypeRe();
+  return streetRe !== null && streetRe.test(window);
+};
+
+/**
  * Capitalised words that almost never start a person name. When a
  * single-token surname candidate is immediately followed by one of
  * these, the "next-word is uppercase" promotion heuristic would
@@ -340,6 +402,7 @@ export const buildDenyList = async (
     loadAllowList(ctx),
     loadPersonStopwords(ctx),
     loadAddressStopwords(ctx),
+    loadStreetTypeRe(),
     loadGenericRoles(ctx),
   ]);
 
@@ -647,6 +710,7 @@ export const ensureDenyListData = async (
     loadAllowList(ctx),
     loadPersonStopwords(ctx),
     loadAddressStopwords(ctx),
+    loadStreetTypeRe(),
     loadGenericRoles(ctx),
   ]);
 };
@@ -779,15 +843,20 @@ export const processDenyListMatches = (
       const nonPersonLabels = m.labels.filter((l) => l !== "person");
       // Single-token city-dictionary collisions (Price, Union,
       // Brent, Time, …) are common English words that GeoNames
-      // happens to also know as tiny villages. Drop them so the
-      // "Purchase Price" / "European Union" prose stops getting
-      // tagged as an address. Multi-token spans bypass this gate
-      // — "Lake Union, WA" still resolves correctly.
+      // also knows as tiny villages. Drop them so "Purchase
+      // Price" / "European Union" prose stops getting tagged
+      // as an address — but only when there's no surrounding
+      // address context. "Union, WA 98592" or "Price, UT" stay,
+      // because a state abbreviation or ZIP nearby confirms the
+      // city interpretation.
       const isStopwordSingleAddress =
         SINGLE_WORD_RE.test(m.text) &&
         getAddressStopwords(ctx).has(m.text.toLowerCase());
+      const suppressAddress =
+        isStopwordSingleAddress &&
+        !hasAdjacentAddressEvidence(fullText, m.start, m.end);
       for (const label of nonPersonLabels) {
-        if (label === "address" && isStopwordSingleAddress) {
+        if (label === "address" && suppressAddress) {
           continue;
         }
         results.push({

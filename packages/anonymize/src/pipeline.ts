@@ -145,12 +145,13 @@ const PRECISE_OVER_ADDRESS: ReadonlySet<string> = new Set([
 /**
  * Labels the `person` chain wins against at identical offsets. The
  * chain carries adjacent-name evidence (deny-list surname plus a
- * capitalised follow-up) that a single-token dictionary collision
- * does not.
+ * capitalised follow-up) a single-token dictionary collision does
+ * not. Kept narrow: organizations are NOT here — "Morgan Stanley"
+ * legitimately appears in both the org and name dictionaries, and
+ * the existing detector priority is the right tie-breaker there.
  */
 const PERSON_PREFERRED_OVER: ReadonlySet<string> = new Set([
   "address",
-  "organization",
   "land parcel",
 ]);
 
@@ -177,7 +178,29 @@ const resolveSameSpanLabelConflicts = (entities: Entity[]): Entity[] => {
       (l) => l !== "address" && PRECISE_OVER_ADDRESS.has(l),
     );
 
+    // When entities at the same offsets have different labels,
+    // also let detector priority break ties: a `legal-form`
+    // organization hit (priority 3) should keep its label over a
+    // coincident `deny-list` person hit (priority 2). Compute the
+    // max priority once so we can drop strictly-lower-priority
+    // duplicates regardless of label.
+    let maxPriority = -1;
     for (const e of group) {
+      if (hasLockedBoundary(e)) continue;
+      const pri = DETECTOR_PRIORITY[e.source] ?? 0;
+      if (pri > maxPriority) maxPriority = pri;
+    }
+
+    for (const e of group) {
+      // Caller-owned spans (custom deny-list / custom regex) carry
+      // explicit user intent; never drop them in favour of a
+      // detector-generated label.
+      if (hasLockedBoundary(e)) continue;
+      const pri = DETECTOR_PRIORITY[e.source] ?? 0;
+      if (pri < maxPriority) {
+        dropped.add(e);
+        continue;
+      }
       if (hasPerson && PERSON_PREFERRED_OVER.has(e.label)) {
         dropped.add(e);
         continue;
