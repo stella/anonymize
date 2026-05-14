@@ -473,12 +473,16 @@ const ES_CIF: RegexDef = {
 
 // Brazilian CEP (Código de Endereçamento Postal):
 // NNNNN-NNN. Distinctive 5-digit + hyphen + 3-digit
-// shape (no other Brazilian ID uses it).
-const BR_CEP: RegexDef = {
-  pattern: `\\b\\d{5}${DASH}\\d{3}\\b`,
-  label: "address",
-  score: 0.9,
-};
+// shape, but the bare form is indistinguishable from
+// non-address order/ticket/reference numbers
+// ("Order 12345-678"), so it is not emitted as an
+// active address regex. Instead the shape is consumed
+// by `processAddressSeeds` as a postal-code seed, so
+// expansion only fires when other street/city signals
+// cluster around it (e.g.
+// "Rua Augusta, 123, 01001-000 São Paulo").
+//
+// Kept here as documentation only.
 
 // Brazilian CPF (personal tax ID), formatted form
 // only: NNN.NNN.NNN-NN. Dotted/dashed form is matched
@@ -658,7 +662,6 @@ const ALL_REGEX_DEFS: readonly RegexDef[] = [
   ES_DNI,
   ES_NIE,
   ES_CIF,
-  BR_CEP,
   BR_CPF_FORMATTED,
   BR_CNPJ_FORMATTED,
   BR_RG_WITH_SSP,

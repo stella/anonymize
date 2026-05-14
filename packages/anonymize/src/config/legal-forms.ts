@@ -62,11 +62,18 @@ const RAW_LEGAL_SUFFIXES = [
   "Sp. z o.o.",
   "Sp. k.",
   "Sp. j.",
-  // Brazilian / Portuguese
+  // Brazilian / Portuguese. Both title-case and
+  // all-caps spellings appear in BR contracts; the
+  // reclassification regex is case-sensitive so each
+  // spelling needs an explicit entry.
   "Ltda.",
+  "LTDA.",
+  "Ltda",
+  "LTDA",
   "S/A",
   "EIRELI",
   "EPP",
+  "ME",
   "MEI",
 ];
 

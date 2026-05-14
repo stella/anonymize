@@ -1,4 +1,6 @@
 import type { Match } from "@stll/text-search";
+import { br } from "@stll/stdnum";
+import type { Validator } from "@stll/stdnum";
 
 import { DETECTION_SOURCES } from "../types";
 import type {
@@ -7,11 +9,17 @@ import type {
   TriggerGroupConfig,
   TriggerRule,
   TriggerValidation,
+  ValidIdValidator,
 } from "../types";
 import { POST_NOMINALS } from "../config/titles";
 import { LEGAL_SUFFIXES } from "../config/legal-forms";
 import { loadLanguageConfigs } from "../util/lang-loader";
 import { DASH } from "../util/char-groups";
+
+const VALID_ID_VALIDATORS: Record<ValidIdValidator, Validator> = {
+  "br.cpf": br.cpf,
+  "br.cnpj": br.cnpj,
+};
 
 const TRIGGER_SCORE = 0.95;
 const WHITESPACE_RE = /\s+/;
@@ -88,6 +96,24 @@ const compileValidations = (
           // stateless (no lastIndex advancement).
           re: new RegExp(v.pattern, (v.flags ?? "").replace(/[gy]/g, "")),
         };
+      case "valid-id": {
+        const validator = VALID_ID_VALIDATORS[v.validator];
+        if (!validator) {
+          throw new Error(
+            `Unknown valid-id validator: ${JSON.stringify(v.validator)}`,
+          );
+        }
+        return {
+          type: "valid-id",
+          check: (value) => {
+            // stdnum validators expect compact digits only;
+            // strip formatting (spaces, dots, dashes,
+            // slashes) so dotted/spaced IDs still validate.
+            const compact = value.replace(/[\s.\-/]/g, "");
+            return validator.validate(compact).valid;
+          },
+        };
+      }
       default: {
         // TriggerValidation is a public export; custom
         // configs may bypass the build-time validator.
@@ -122,6 +148,9 @@ const applyValidations = (
         break;
       case "matches-pattern":
         if (!v.re.test(text)) return false;
+        break;
+      case "valid-id":
+        if (!v.check(text)) return false;
         break;
       default: {
         const _exhaustive: never = v;

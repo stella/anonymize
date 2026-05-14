@@ -121,6 +121,18 @@
     "ulicy"
   ],
   "pt": ["avenida", "largo", "praça", "rua", "travessa"],
+  "pt-br": [
+    "alameda",
+    "av.",
+    "avenida",
+    "estrada",
+    "largo",
+    "praça",
+    "praca",
+    "rodovia",
+    "rua",
+    "travessa"
+  ],
   "ro": [
     "aleea",
     "bd.",

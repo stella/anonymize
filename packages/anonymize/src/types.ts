@@ -101,7 +101,19 @@ export type TriggerValidation =
       type: "matches-pattern";
       pattern: string;
       flags?: string;
-    };
+    }
+  /**
+   * Run a named stdnum validator (checksum + length)
+   * against the captured value. Keeps the trigger
+   * path symmetrical with the formatted-regex
+   * detectors so e.g. `CPF nº 00000000000` does not
+   * survive as a tax-ID entity.
+   */
+  | { type: "valid-id"; validator: ValidIdValidator };
+
+/** Built-in stdnum validators that can be referenced
+ *  by `valid-id` validations. */
+export type ValidIdValidator = "br.cpf" | "br.cnpj";
 
 /** Auto-generated trigger variants — closed set. */
 export type TriggerExtension =
@@ -130,7 +142,8 @@ export type CompiledValidation =
   | { type: "max-length"; max: number }
   | { type: "no-digits"; re: RegExp }
   | { type: "has-digits"; re: RegExp }
-  | { type: "matches-pattern"; re: RegExp };
+  | { type: "matches-pattern"; re: RegExp }
+  | { type: "valid-id"; check: (value: string) => boolean };
 
 /**
  * Runtime rule — one per trigger string after

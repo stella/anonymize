@@ -194,7 +194,12 @@ const collectSeeds = (
   // 3. Standalone postal codes (multiple formats):
   //   Czech/Slovak: NNN NN (e.g., 140 00)
   //   Polish: NN-NNN (e.g., 00-950)
-  const postalRe = /\b(?:\d{3}\s\d{2}|\d{2}-\d{3})\b/g;
+  //   Brazilian CEP: NNNNN-NNN (e.g., 01001-000)
+  // The CEP shape is intentionally seed-only: bare
+  // NNNNN-NNN sequences match plenty of non-address
+  // identifiers, so we let address clustering require
+  // a second BR street/city signal before redaction.
+  const postalRe = /\b(?:\d{3}\s\d{2}|\d{2}-\d{3}|\d{5}-\d{3})\b/g;
   let postalMatch;
   while ((postalMatch = postalRe.exec(fullText)) !== null) {
     const start = postalMatch.index;

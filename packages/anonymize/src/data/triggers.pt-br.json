@@ -73,13 +73,15 @@
       "CNPJ sob o nº",
       "inscrita no CNPJ",
       "inscrito no CNPJ"
-    ]
+    ],
+    "validations": [{ "type": "valid-id", "validator": "br.cnpj" }]
   },
   {
     "id": "pt-br-cpf",
     "label": "tax identification number",
     "strategy": { "type": "company-id-value" },
-    "triggers": ["CPF", "CPF/MF", "CPF nº", "CPF sob nº", "CPF sob o nº"]
+    "triggers": ["CPF", "CPF/MF", "CPF nº", "CPF sob nº", "CPF sob o nº"],
+    "validations": [{ "type": "valid-id", "validator": "br.cpf" }]
   },
   {
     "id": "pt-br-rg",
