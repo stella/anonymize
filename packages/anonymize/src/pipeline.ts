@@ -142,6 +142,7 @@ const PRECISE_OVER_ADDRESS: ReadonlySet<string> = new Set([
   "tax identification number",
   "registration number",
   "identity card number",
+  "national identification number",
   "passport number",
   "credit card number",
 ]);

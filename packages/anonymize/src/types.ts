@@ -362,6 +362,7 @@ export const DEFAULT_ENTITY_LABELS = [
   "tax identification number",
   "identity card number",
   "birth number",
+  "national identification number",
   "registration number",
   "credit card number",
   "passport number",

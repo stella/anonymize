@@ -151,8 +151,9 @@ const STDNUM_ENTRIES: readonly StdnumEntry[] = [
   // ── Original PR #28 patterns (were 15-21) ────────
   toEntry(hu.vat, "tax identification number", 0.95),
   toEntry(it.codiceFiscale, "national identification number", 0.95),
-  toEntry(es.dni, "national identification number", 0.9),
-  toEntry(es.nie, "national identification number", 0.95),
+  // es.dni / es.nie omitted: stdnum patterns are over-fit to
+  // the spec letter (`Q` / `X`) and miss real-world prefixes;
+  // covered by the format-level ES_DNI / ES_NIE regex below.
   toEntry(se.personnummer, "national identification number", 0.9),
   toEntry(ro.cnp, "national identification number", 0.95),
   toEntry(fr.nir, "social security number", 0.9),
@@ -210,7 +211,9 @@ const STDNUM_ENTRIES: readonly StdnumEntry[] = [
   // czech birth number pattern
 
   // ── ES additional validators ─────────────────────
-  toEntry(es.cif, "registration number", 0.95),
+  // es.cif omitted: stdnum's candidatePattern is over-fit
+  // to the spec letter and misses real-world prefixes;
+  // covered by the format-level ES_CIF regex below.
   toEntry(es.vat, "tax identification number", 0.95),
   toEntry(es.nss, "social security number", 0.9),
 
@@ -415,6 +418,51 @@ const CZ_POSTAL: RegexDef = {
   score: 0.7,
 };
 
+// Spanish postal code (CP): 5 digits preceded by a
+// CP marker ("C.P.", "CP", "código postal"). The
+// marker is required to avoid matching arbitrary
+// 5-digit numbers (document IDs, ISBNs, etc.).
+// The pattern uses `includeTrigger`-style prefixing:
+// the marker is part of the match span (length
+// trimmed downstream if needed).
+const ES_POSTAL: RegexDef = {
+  pattern:
+    `\\b(?:C\\.?P\\.?|[Cc][óo]digo[^\\S\\n]+postal)` +
+    `[^\\S\\n]{0,3}:?[^\\S\\n]{0,3}\\d{5}\\b`,
+  label: "address",
+  score: 0.7,
+};
+
+// Spanish DNI: 8 digits + 1 letter. Letter is a
+// checksum; post-match validator confirms.
+// Pattern derived from stdnum (es.dni) candidatePattern,
+// constrained for DFA compatibility.
+const ES_DNI: RegexDef = {
+  pattern: `\\b\\d{8}-?[A-Za-z]\\b`,
+  label: "national identification number",
+  score: 0.9,
+  validator: es.dni,
+};
+
+// Spanish NIE: X/Y/Z + 7 digits + check letter.
+// Pattern derived from stdnum (es.nie) candidatePattern.
+const ES_NIE: RegexDef = {
+  pattern: `\\b[XYZxyz]-?\\d{7}-?[A-Za-z]\\b`,
+  label: "national identification number",
+  score: 0.95,
+  validator: es.nie,
+};
+
+// Spanish CIF: org-type letter (A-H, J, N, P-S, U-W),
+// then 7 digits, then a check character (digit or A-J).
+// Pattern derived from stdnum (es.cif) candidatePattern.
+const ES_CIF: RegexDef = {
+  pattern: `\\b[A-HJNP-SUVWa-hjnp-suvw]-?\\d{7}-?[0-9A-Ja-j]\\b`,
+  label: "registration number",
+  score: 0.95,
+  validator: es.cif,
+};
+
 // URL: scheme + host + optional port + path + query +
 // fragment. Trailing prose punctuation excluded but
 // ? = & # kept for query strings.
@@ -535,6 +583,10 @@ const ALL_REGEX_DEFS: readonly RegexDef[] = [
   CZ_BANK_ACCOUNT,
   HU_LANDLINE,
   CZ_POSTAL,
+  ES_POSTAL,
+  ES_DNI,
+  ES_NIE,
+  ES_CIF,
   URL,
   IPV6_ADDRESS,
   MAC_ADDRESS,
