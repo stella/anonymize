@@ -4,19 +4,25 @@
   "private": true,
   "license": "MIT",
   "packageManager": "bun@1.3.13",
-  "workspaces": ["packages/*"],
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
     "format": "turbo run format",
+    "format:check": "prettier --check . --ignore-path .prettierignore",
     "test": "turbo run test",
     "sync:version": "node .github/tools/sync-runtime-version.mjs",
     "check:version": "node .github/tools/sync-runtime-version.mjs --check",
     "check:json": "bun run --cwd packages/data lint:json",
-    "fix:json": "bun run --cwd packages/data format:json"
+    "fix:json": "bun run --cwd packages/data format:json",
+    "hooks:install": "lefthook install",
+    "hooks:uninstall": "lefthook uninstall"
   },
   "devDependencies": {
+    "lefthook": "^2.1.6",
     "prettier": "^3.8.3",
     "turbo": "^2.9.10"
   }
