@@ -129,6 +129,8 @@ export const HONORIFICS = [
   "Mr",
   "Mrs",
   "Ms",
+  "Pr",
+  "Pr.",
   "President",
   "Señor",
   "Señora",
@@ -151,6 +153,8 @@ export const HONORIFIC_BOUNDARY = new Set([
   "Doña",
   "M.",
   "Me",
+  "Pr",
+  "Pr.",
   "Señor",
   "Señora",
 ]);

@@ -65,6 +65,7 @@
     "triggers": [
       "représenté par",
       "représentée par",
+      "agissant en qualité de mandataire de",
       "agissant en qualité de mandataire",
       "agissant par",
       "pris en la personne de"
@@ -146,7 +147,7 @@
   },
   {
     "id": "fr-court-jurisdiction",
-    "label": "address",
+    "label": "organization",
     "strategy": { "type": "to-next-comma" },
     "triggers": [
       "Tribunal judiciaire de",
@@ -179,6 +180,12 @@
       "tél.:",
       "portable :",
       "portable:"
+    ],
+    "validations": [
+      {
+        "type": "matches-pattern",
+        "pattern": "(?:\\d[^\\d]*){6,}"
+      }
     ]
   }
 ]
