@@ -80,8 +80,7 @@ describe("UK financial-crime additions", () => {
   });
 
   test("Companies House number after the trigger is captured", async () => {
-    const text =
-      "Acme Holdings Ltd (Companies House: 09876543) is the parent.";
+    const text = "Acme Holdings Ltd (Companies House: 09876543) is the parent.";
     const ents = await run(text);
     const reg = ents.find(
       (e) => e.label === "registration number" && e.text === "09876543",
@@ -93,8 +92,7 @@ describe("UK financial-crime additions", () => {
     const text = "Self Assessment UTR: 1234567890 was filed late.";
     const ents = await run(text);
     const utr = ents.find(
-      (e) =>
-        e.label === "tax identification number" && e.text === "1234567890",
+      (e) => e.label === "tax identification number" && e.text === "1234567890",
     );
     expect(utr).toBeDefined();
   });
