@@ -79,14 +79,24 @@
       "proximityAfter": 60
     },
     {
-      "hotwords": ["e-mail", "email", "E-Mail"],
+      "hotwords": ["e-mail", "email", "E-Mail", "pec"],
       "targetLabels": ["email address"],
       "scoreAdjustment": 0.1,
       "proximityBefore": 60,
       "proximityAfter": 60
     },
     {
-      "hotwords": ["adresa", "sídlo", "sídlem", "bytem", "Adresse", "address"],
+      "hotwords": [
+        "adresa",
+        "sídlo",
+        "sídlem",
+        "bytem",
+        "Adresse",
+        "address",
+        "indirizzo",
+        "sede legale",
+        "sede"
+      ],
       "targetLabels": ["address"],
       "scoreAdjustment": 0.15,
       "proximityBefore": 80,

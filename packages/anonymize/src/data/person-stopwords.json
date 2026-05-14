@@ -104,6 +104,26 @@
     "union",
     "university",
     "vendor",
-    "waiver"
+    "waiver",
+    "borgo",
+    "contrada",
+    "corso",
+    "indirizzo",
+    "largo",
+    "lungarno",
+    "lungomare",
+    "lungotevere",
+    "piazza",
+    "piazzale",
+    "salita",
+    "sede",
+    "sezione",
+    "strada",
+    "stradone",
+    "traversa",
+    "via",
+    "viale",
+    "vico",
+    "vicolo"
   ]
 }

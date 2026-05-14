@@ -7,7 +7,13 @@
     { "re": "^\\s*§\\s*\\d", "flags": "" },
     { "re": "^\\s*(?:Abschnitt|Kapitel)\\s*\\d", "flags": "iu" },
     { "re": "^\\s*(?:Chapitre|Section)\\s*\\d", "flags": "iu" },
-    { "re": "^\\s*(?:Capitolo|Sezione)\\s*\\d", "flags": "iu" },
+    { "re": "^\\s*(?:Capitolo|Sezione|Articolo)\\s*\\d", "flags": "iu" },
+    { "re": "^\\s*SEZIONE\\s+[IVX]+\\b", "flags": "u" },
+    { "re": "^\\s*ARTICOLO\\s+\\d", "flags": "iu" },
+    {
+      "re": "^\\s*(?:AMMINISTRAZIONE\\s+AGGIUDICATRICE|ALTRE\\s+INFORMAZIONI|OGGETTO|PROCEDURA)\\b",
+      "flags": "u"
+    },
     { "re": "^\\s*(?:Artículo|Sección)\\s*\\d", "flags": "iu" },
     {
       "re": "^\\s*(?:Článok|Čl\\.|Oddiel|Odsek|Príloha)\\s*\\d",
