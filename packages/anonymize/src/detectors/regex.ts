@@ -4,6 +4,7 @@ import {
   at,
   be,
   bg,
+  br,
   cz,
   cy,
   de,
@@ -264,6 +265,13 @@ const STDNUM_ENTRIES: readonly StdnumEntry[] = [
 
   // ── LU validators ────────────────────────────────
   toEntry(lu.vat, "tax identification number", 0.95),
+
+  // ── BR validators ────────────────────────────────
+  // CPF (personal tax ID, 11 digits, checksum). Higher
+  // score than the generic phone patterns so the
+  // overlap resolver prefers the tax-ID label.
+  toEntry(br.cpf, "tax identification number", 0.95),
+  toEntry(br.cnpj, "tax identification number", 0.95),
 ].filter((e): e is StdnumEntry => e !== null);
 
 // ── Named pattern definitions ────────────────────────
@@ -463,6 +471,64 @@ const ES_CIF: RegexDef = {
   validator: es.cif,
 };
 
+// Brazilian CEP (Código de Endereçamento Postal):
+// NNNNN-NNN. Distinctive 5-digit + hyphen + 3-digit
+// shape (no other Brazilian ID uses it).
+const BR_CEP: RegexDef = {
+  pattern: `\\b\\d{5}${DASH}\\d{3}\\b`,
+  label: "address",
+  score: 0.9,
+};
+
+// Brazilian CPF (personal tax ID), formatted form
+// only: NNN.NNN.NNN-NN. The mandatory dot/dash
+// separators make this distinctive enough to bypass
+// checksum validation — compact 11-digit CPFs go
+// through the stdnum entry below (which validates).
+//
+// Score must beat the generic phone patterns so the
+// overlap resolver assigns the tax-ID label.
+const BR_CPF_FORMATTED: RegexDef = {
+  pattern: `\\b\\d{3}\\.\\d{3}\\.\\d{3}${DASH}\\d{2}\\b`,
+  label: "tax identification number",
+  score: 0.95,
+};
+
+// Brazilian CNPJ (company tax ID), formatted:
+// NN.NNN.NNN/NNNN-NN. The slash is unique to CNPJ
+// and gives high precision without checksum validation.
+const BR_CNPJ_FORMATTED: RegexDef = {
+  pattern: `\\b\\d{2}\\.\\d{3}\\.\\d{3}/\\d{4}${DASH}\\d{2}\\b`,
+  label: "tax identification number",
+  score: 0.95,
+};
+
+// Brazilian RG (Registro Geral, state-issued identity).
+// Format is non-uniform across states; the most reliable
+// anchor is the trailing "SSP/UF" issuer marker. Captures
+// the number and the SSP suffix.
+//   12.345.678 SSP/DF
+//   45.678.901-2 SSP/SP
+//   32.456.789-X SSP/SP
+const BR_RG_WITH_SSP: RegexDef = {
+  pattern:
+    `\\b\\d{1,2}\\.?\\d{3}\\.?\\d{3}` +
+    `(?:${DASH}[0-9A-Za-z])?` +
+    `[^\\S\\n]+SSP(?:/[A-Z]{2})?\\b`,
+  label: "national identification number",
+  score: 0.95,
+};
+
+// Brazilian OAB (lawyer registration). Format:
+// "OAB/UF NNNN" or "OAB/UF NNN.NNN" — two-letter state
+// code, then 3–6 digits optionally with a thousand
+// separator dot.
+const BR_OAB: RegexDef = {
+  pattern: `\\bOAB/[A-Z]{2}[^\\S\\n]+\\d{1,3}(?:\\.\\d{3})*\\b`,
+  label: "registration number",
+  score: 0.95,
+};
+
 // URL: scheme + host + optional port + path + query +
 // fragment. Trailing prose punctuation excluded but
 // ? = & # kept for query strings.
@@ -587,6 +653,11 @@ const ALL_REGEX_DEFS: readonly RegexDef[] = [
   ES_DNI,
   ES_NIE,
   ES_CIF,
+  BR_CEP,
+  BR_CPF_FORMATTED,
+  BR_CNPJ_FORMATTED,
+  BR_RG_WITH_SSP,
+  BR_OAB,
   URL,
   IPV6_ADDRESS,
   MAC_ADDRESS,
