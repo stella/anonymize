@@ -236,7 +236,7 @@
     "id": "sk-vat-id",
     "label": "tax identification number",
     "strategy": { "type": "company-id-value" },
-    "triggers": ["IČ DPH", "IČDPH", "ič dph"]
+    "triggers": ["IČ DPH", "IČDPH"]
   },
   {
     "id": "sk-vehicle-registration",
