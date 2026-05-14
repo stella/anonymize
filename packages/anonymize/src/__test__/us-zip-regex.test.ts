@@ -73,4 +73,37 @@ describe("US ZIP+4 regex", () => {
     );
     expect(zip).toBeDefined();
   });
+
+  test("ZIP+4 substring inside a longer hyphenated identifier does not match", async () => {
+    // `12-34567-8901` and `12345-6789-0` look like ZIP+4
+    // if scanned with only `\b` on each side. The
+    // lookbehind/lookahead reject adjacent digits and
+    // dashes so order/case/account numbers are not
+    // redacted as addresses.
+    const text =
+      "Order number 12-34567-8901 references case 12345-6789-0 for billing.";
+    const entities = await detect(text);
+    const spurious = entities.find(
+      (e) =>
+        e.label === "address" &&
+        (e.text === "34567-8901" || e.text === "12345-6789"),
+    );
+    expect(spurious).toBeUndefined();
+  });
+
+  test("ZIP+4 with typographic dash separators is captured", async () => {
+    // OCR and professional typesetting commonly substitute
+    // ASCII hyphen with en-dash (`–`) or non-breaking
+    // hyphen (`‑`). The ZIP+4 pattern uses the shared
+    // `DASH` class to accept those variants.
+    const enDash = "Notices to 100 Main St, Palo Alto, CA 94304–1050.";
+    const nbHyphen = "Notices to 100 Main St, Palo Alto, CA 94304‑1050.";
+    for (const text of [enDash, nbHyphen]) {
+      const entities = await detect(text);
+      const zip = entities.find(
+        (e) => e.label === "address" && /^94304.1050$/.test(e.text),
+      );
+      expect(zip).toBeDefined();
+    }
+  });
 });

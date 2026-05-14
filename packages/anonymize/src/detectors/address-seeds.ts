@@ -288,14 +288,17 @@ const collectSeeds = (
   //   Czech/Slovak: NNN NN (e.g., 140 00)
   //   Polish: NN-NNN (e.g., 00-950)
   //   Brazilian CEP: NNNNN-NNN (e.g., 01001-000)
+  //   US ZIP+4: NNNNN-NNNN (e.g., 94304-1050)
   // The CEP shape collides with bare order/ticket numbers
   // ("Order 12345-678"), and the cluster's other seed
   // could be a non-BR deny-list city. To prevent that, the
   // CEP-shaped seed is only kept when a pt-BR cue word
   // (rua/avenida/CNPJ/CPF/RG/…) appears within the cluster
   // window around it. The Czech/Slovak and Polish shapes
-  // are distinctive enough not to need a similar gate.
-  const postalRe = /\b(?:\d{3}\s\d{2}|\d{2}-\d{3}|\d{5}-\d{3})\b/g;
+  // are distinctive enough not to need a similar gate; the
+  // US ZIP+4 shape is also distinctive (the hyphen + four
+  // trailing digits is unambiguous in real prose).
+  const postalRe = /\b(?:\d{3}\s\d{2}|\d{2}-\d{3}|\d{5}-\d{3}|\d{5}-\d{4})\b/g;
   let postalMatch;
   while ((postalMatch = postalRe.exec(fullText)) !== null) {
     const start = postalMatch.index;

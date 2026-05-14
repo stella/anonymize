@@ -624,8 +624,18 @@ const IPV6_ADDRESS: RegexDef = {
 // distinctive enough to emit on its own. The bare ZIP5
 // shape (\d{5}) is too generic to fire without context;
 // it lands instead in the address-seed clustering pass.
+//
+// Uses the shared `DASH` group so values copied from PDFs
+// or OCR with typographic dash variants (en-dash, non-
+// breaking hyphen, etc.) still match. Lookbehind/lookahead
+// reject adjacent digits or dashes so longer hyphenated
+// identifiers like `12-34567-8901` or `12345-6789-0` do
+// not produce spurious ZIP+4 matches on their substrings.
 const US_ZIP_PLUS_FOUR: RegexDef = {
-  pattern: `\\b\\d{5}-\\d{4}\\b`,
+  pattern:
+    `(?<![\\d${DASH_INNER}])` +
+    `\\d{5}${DASH}\\d{4}` +
+    `(?![\\d${DASH_INNER}])`,
   label: "address",
   score: 0.9,
 };
