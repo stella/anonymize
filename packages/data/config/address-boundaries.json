@@ -60,7 +60,19 @@
   ],
   "fr": ["immatriculée", "inscrite", "représenté", "représentée"],
   "hu": ["bejegyzett", "cégjegyzékszám", "képviseli"],
-  "it": ["iscritta", "rappresentata", "rappresentato", "registro imprese"],
+  "it": [
+    "C.F.",
+    "P.IVA",
+    "codice fiscale",
+    "iscritta",
+    "iscritto",
+    "partita IVA",
+    "punti di contatto",
+    "rappresentata",
+    "rappresentato",
+    "registro imprese",
+    "responsabile del procedimento"
+  ],
   "pl": [
     "reprezentowana",
     "reprezentowany",

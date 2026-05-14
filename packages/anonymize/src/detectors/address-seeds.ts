@@ -210,6 +210,26 @@ const collectSeeds = (
     }
   }
 
+  // 3b. Italian CAP: 5 consecutive digits followed by a
+  // capitalised word ("41012 Carpi"). The capitalised
+  // word requirement prevents random 5-digit numbers
+  // (years, IDs) from being treated as postal codes.
+  const itCapRe = /\b\d{5}(?=\s+\p{Lu}\p{Ll}+)/gu;
+  let itCapMatch;
+  while ((itCapMatch = itCapRe.exec(fullText)) !== null) {
+    const start = itCapMatch.index;
+    const end = start + itCapMatch[0].length;
+    const alreadyCovered = seeds.some((s) => s.start <= start && s.end >= end);
+    if (!alreadyCovered) {
+      seeds.push({
+        type: "postal-code",
+        start,
+        end,
+        text: itCapMatch[0],
+      });
+    }
+  }
+
   // 4. Street name + house number pattern:
   // [CapitalizedWord] [number](/[number])?,
   // e.g., "Olbrachtova 1929/62," or "Kamínky 5,"

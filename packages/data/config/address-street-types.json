@@ -78,15 +78,27 @@
     "utca"
   ],
   "it": [
+    "borgo",
+    "calle",
+    "contrada",
     "corso",
     "largo",
     "lungarno",
+    "lungomare",
     "lungotevere",
+    "passeggiata",
     "piazza",
     "piazzale",
+    "salita",
+    "strada",
+    "stradone",
+    "traversa",
     "via",
     "viale",
-    "vicolo"
+    "vico",
+    "vicolo",
+    "v.le",
+    "v.lo"
   ],
   "nl": ["gracht", "kade", "laan", "plein", "straat", "weg"],
   "pl": [
