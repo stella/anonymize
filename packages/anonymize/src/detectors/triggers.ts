@@ -747,6 +747,29 @@ const extractValue = (
         if (ch === ".") {
           const next = valueText[end + 1];
           const afterNext = valueText[end + 2];
+          // Field-label check: if the text after the
+          // period (with optional space) begins with a
+          // known stop-keyword (e.g. "C.F.", "P.IVA"),
+          // treat the period as a clause boundary even
+          // when followed by a letter/digit. Without
+          // this, "Via Roma 1. C.F. 12345678901" would
+          // absorb the tax-id label into the address.
+          const afterPeriod = valueText
+            .slice(end + 1)
+            .replace(/^\s+/, "")
+            .toLowerCase();
+          if (afterPeriod.length > 0) {
+            const hitsKeywordAfterPeriod = getAddressStopKeywordsSync().some(
+              (kw) => {
+                if (!afterPeriod.startsWith(kw)) return false;
+                const afterKw = afterPeriod[kw.length];
+                return afterKw === undefined || /[\s:;.,!?()\d]/.test(afterKw);
+              },
+            );
+            if (hitsKeywordAfterPeriod) {
+              break;
+            }
+          }
           // "č.p." or "Kpt.J" — period immediately
           // followed by letter or digit
           if (next !== undefined && (/\p{L}/u.test(next) || /\d/.test(next))) {

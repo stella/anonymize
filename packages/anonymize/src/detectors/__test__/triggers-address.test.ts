@@ -76,6 +76,23 @@ describe("address trigger strategy", () => {
     expect(addr!.text).toBe("Lipová 42");
   });
 
+  test("italian: stops at period followed by stop-keyword", async () => {
+    // "Via Roma 1. C.F. 12345678901" — period acts as
+    // a clause boundary because "C.F." is a known
+    // field-label stop-keyword. Without the check, the
+    // period would be treated as an abbreviation and the
+    // address would absorb the tax-id label/value.
+    const text = "con sede in Via Roma 1. C.F. 12345678901";
+    const entities = await runPipeline({
+      fullText: text,
+      config: TRIGGERS_ONLY_CONFIG,
+      gazetteerEntries: [],
+    });
+    const addr = findAddress(entities);
+    expect(addr).toBeDefined();
+    expect(addr!.text).toBe("Via Roma 1");
+  });
+
   test("respects max char limit", async () => {
     // Build a long address that exceeds default 120
     // char limit. The strategy should truncate.

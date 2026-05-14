@@ -1,5 +1,6 @@
 {
   "_comment": "Single-token English/legal words that collide with tiny entries in city dictionaries (GeoNames-based). When the deny-list pass would emit one of these as a standalone `address` hit, it is dropped — almost certainly a Purchase Price / European Union / Effective Time false positive, not a real place. Multi-token matches (e.g. 'Lake Union, WA') are unaffected because the filter only fires on single-token spans.",
+  "_it_comment": "Italian additions are conservative: only common-noun Italian words that collide with city dictionary entries. Real Italian cities are NOT listed; multi-token spans (`Via Trieste`, `41012 Modena`) are unaffected.",
   "words": [
     "agenda",
     "agent",
@@ -42,6 +43,34 @@
     "urbana",
     "ventosa",
     "vendor",
-    "waiver"
+    "waiver",
+    "amministrazione",
+    "appaltante",
+    "appalto",
+    "articolo",
+    "cliente",
+    "concedente",
+    "concessionario",
+    "conduttore",
+    "denominazione",
+    "esecuzione",
+    "fornitore",
+    "indirizzo",
+    "informazioni",
+    "lavoratore",
+    "lavoro",
+    "locatore",
+    "luogo",
+    "magazzino",
+    "mandante",
+    "mandatario",
+    "oggetto",
+    "piano",
+    "procedimento",
+    "procedura",
+    "responsabile",
+    "sede",
+    "sezione",
+    "venditore"
   ]
 }
