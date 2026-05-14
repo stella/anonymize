@@ -17,6 +17,24 @@ const HAS_DIGIT_RE = /\d/;
 const ADDRESS_COMPONENT_EXTRA_RE =
   /(?:^|\s)(?:č\.p\.|č\.ev\.|č\.|sídliště)(?=[\s,./]|$)/i;
 
+// Bare French "cours" is ambiguous: "Cours Mirabeau" is a
+// genuine street, but "au cours du contrat" is prose. Real
+// addresses either include digits (caught by the prior
+// rule) or a capitalized proper-name token right after
+// `cours`. Returns true when the only address-component
+// token in `text` is bare lowercase `cours` AND it is not
+// followed by a capitalized name token, i.e. the entity is
+// almost certainly prose and should be rejected.
+const BARE_COURS_PROSE_RE = /(?:^|\s)cours(?!\s+\p{Lu})(?=[\s,./]|$)/u;
+const isOnlyAmbiguousCours = (text: string): boolean => {
+  if (!BARE_COURS_PROSE_RE.test(text)) return false;
+  // Strip every bare "cours" occurrence; if anything else
+  // still matches a street-type word, the entity has
+  // other street-type evidence and is not "only cours".
+  const stripped = text.replace(/(?:^|\s)cours(?=[\s,./]|$)/gi, " ");
+  return !hasAddressComponent(stripped);
+};
+
 // Jurisdiction patterns: "State of X", "Commonwealth of X",
 // "District of X", "Territory of X"
 // — valid address entities without digits or street words.
@@ -387,12 +405,26 @@ export const filterFalsePositives = (
     // without digits. The street-type fallback covers
     // non-Czech vocabulary loaded from JSON, so e.g.
     // Italian `Via Roma` is preserved.
+    //
+    // Special case: French "cours" is highly ambiguous
+    // ("au cours du contrat" vs. "Cours Mirabeau"). When
+    // bare `cours` is the only street-type token and the
+    // entity has no digits, require it to look like a
+    // proper-name address (capitalized token following).
     if (
       normalized.label === "address" &&
       normalized.source === "trigger" &&
       !HAS_DIGIT_RE.test(trimmed) &&
       !hasAddressComponent(trimmed) &&
       !JURISDICTION_RE.test(trimmed)
+    ) {
+      continue;
+    }
+    if (
+      normalized.label === "address" &&
+      normalized.source === "trigger" &&
+      !HAS_DIGIT_RE.test(trimmed) &&
+      isOnlyAmbiguousCours(trimmed)
     ) {
       continue;
     }

@@ -728,10 +728,14 @@ export const runPipeline = async (
   );
   if (regexEntities.length > 0) log("regex", `${regexEntities.length} matches`);
 
-  if (legalFormsEnabled) {
+  if (legalFormsEnabled || config.enableTriggerPhrases) {
     // Populate the per-language legal-role-head cache so the
     // synchronous match processor below can read it. Cheap and
     // idempotent — only the first call kicks the loads.
+    // Triggers also need this: the trigger reclassification step
+    // (person → organization when the captured text contains a
+    // legal-form suffix) reads `getKnownLegalSuffixes()`, which
+    // falls back to the seed list until the cache is warmed.
     await warmLegalRoleHeads();
   }
   const rawLegalFormEntities = legalFormsEnabled
