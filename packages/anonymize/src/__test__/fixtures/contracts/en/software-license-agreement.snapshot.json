@@ -40,10 +40,10 @@
       "source": "deny-list"
     },
     {
-      "start": 259,
+      "start": 274,
       "end": 284,
       "label": "address",
-      "text": "Orange Street, Wilmington",
+      "text": "Wilmington",
       "source": "deny-list"
     },
     {
@@ -138,10 +138,10 @@
       "source": "deny-list"
     },
     {
-      "start": 1629,
+      "start": 1644,
       "end": 1654,
       "label": "address",
-      "text": "Orange Street, Wilmington",
+      "text": "Wilmington",
       "source": "deny-list"
     },
     {
@@ -222,5 +222,5 @@
       "source": "regex"
     }
   ],
-  "redactedText": "SOFTWARE LICENSE AGREEMENT\n\nThis Software License Agreement (the \"Agreement\") is entered into as of [DATE_1]\n(the \"Effective Date\") by and between:\n\n(1) [ORGANIZATION_1], a [ADDRESS_1] corporation\n    with its principal place of business at 1209 [PERSON_1], Wilmington, DE 19801,\n    EIN: 87-2451993\n    (the \"Licensor\"), represented by its Chief Executive Officer,\n    [PERSON_2]; and\n\n(2) [ORGANIZATION_2], a [ADDRESS_3] limited liability company\n    with offices at 200 [PERSON_3], [ADDRESS_3], NY 10282,\n    EIN: 13-3994801\n    (the \"Licensee\"), represented by its Managing Director,\n    Dr. [PERSON_4].\n\nRecitals\nLicensor has developed certain proprietary analytics software (\"Software\") and\nis willing to grant Licensee a license under the terms set forth herein.\nLicensee desires to obtain such a license to integrate the Software with its\n[ORGANIZATION_3] treasury operations and to deploy it across the Acme &\nCompany Holdings group of subsidiaries.\n\n1. License Grant. Subject to the terms of this Agreement, Licensor hereby grants\n   to Licensee a non-exclusive, non-transferable license to use the Software\n   solely for internal business purposes.\n\n2. Fees. Licensee shall pay Licensor an annual license fee of [MONETARY_AMOUNT_1]\n   (one million two hundred fifty thousand U.S. dollars), payable to the\n   account designated by Licensor ([ORGANIZATION_4], routing 121000248,\n   account [TAX_IDENTIFICATION_NUMBER_1]).\n\n3. Notices. Any notice required hereunder shall be sent to the following\n   addresses:\n   If to Licensor: [ORGANIZATION_1], Attn: [PERSON_5],\n   1209 [PERSON_1], Wilmington, DE 19801; with a copy to general counsel\n   at [EMAIL_ADDRESS_1].\n   If to Licensee: [ORGANIZATION_2], Attn: General Counsel,\n   200 [PERSON_3], [ADDRESS_3], NY 10282; phone: ([PHONE_NUMBER_1]\n\nIN WITNESS WHEREOF, the parties have executed this Agreement as of the\nEffective Date.\n\nLICENSOR: [ORGANIZATION_1]        LICENSEE: [ORGANIZATION_2]\nBy: ____________________________         By: ____________________________\nName: [PERSON_6]                   Name: [PERSON_4]\nTitle: Chief Executive Officer           Title: Managing Director\nDate: [DATE_1]                  Date: [DATE_1]\n"
+  "redactedText": "SOFTWARE LICENSE AGREEMENT\n\nThis Software License Agreement (the \"Agreement\") is entered into as of [DATE_1]\n(the \"Effective Date\") by and between:\n\n(1) [ORGANIZATION_1], a [ADDRESS_1] corporation\n    with its principal place of business at 1209 [PERSON_1], [ADDRESS_2], DE 19801,\n    EIN: 87-2451993\n    (the \"Licensor\"), represented by its Chief Executive Officer,\n    [PERSON_2]; and\n\n(2) [ORGANIZATION_2], a [ADDRESS_3] limited liability company\n    with offices at 200 [PERSON_3], [ADDRESS_3], NY 10282,\n    EIN: 13-3994801\n    (the \"Licensee\"), represented by its Managing Director,\n    Dr. [PERSON_4].\n\nRecitals\nLicensor has developed certain proprietary analytics software (\"Software\") and\nis willing to grant Licensee a license under the terms set forth herein.\nLicensee desires to obtain such a license to integrate the Software with its\n[ORGANIZATION_3] treasury operations and to deploy it across the Acme &\nCompany Holdings group of subsidiaries.\n\n1. License Grant. Subject to the terms of this Agreement, Licensor hereby grants\n   to Licensee a non-exclusive, non-transferable license to use the Software\n   solely for internal business purposes.\n\n2. Fees. Licensee shall pay Licensor an annual license fee of [MONETARY_AMOUNT_1]\n   (one million two hundred fifty thousand U.S. dollars), payable to the\n   account designated by Licensor ([ORGANIZATION_4], routing 121000248,\n   account [TAX_IDENTIFICATION_NUMBER_1]).\n\n3. Notices. Any notice required hereunder shall be sent to the following\n   addresses:\n   If to Licensor: [ORGANIZATION_1], Attn: [PERSON_5],\n   1209 [PERSON_1], [ADDRESS_2], DE 19801; with a copy to general counsel\n   at [EMAIL_ADDRESS_1].\n   If to Licensee: [ORGANIZATION_2], Attn: General Counsel,\n   200 [PERSON_3], [ADDRESS_3], NY 10282; phone: ([PHONE_NUMBER_1]\n\nIN WITNESS WHEREOF, the parties have executed this Agreement as of the\nEffective Date.\n\nLICENSOR: [ORGANIZATION_1]        LICENSEE: [ORGANIZATION_2]\nBy: ____________________________         By: ____________________________\nName: [PERSON_6]                   Name: [PERSON_4]\nTitle: Chief Executive Officer           Title: Managing Director\nDate: [DATE_1]                  Date: [DATE_1]\n"
 }
