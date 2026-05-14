@@ -3,15 +3,23 @@
   "languages": {
     "cs": {
       "triggers": true,
-      "coreference": true
+      "coreference": true,
+      "legalRoleHeads": true
     },
     "de": {
       "triggers": true,
-      "coreference": true
+      "coreference": true,
+      "legalRoleHeads": true
     },
     "en": {
       "triggers": true,
-      "coreference": true
+      "coreference": true,
+      "legalRoleHeads": true
+    },
+    "pt-br": {
+      "triggers": false,
+      "coreference": false,
+      "legalRoleHeads": true
     },
     "es": {
       "triggers": true,
@@ -39,7 +47,8 @@
     },
     "sk": {
       "triggers": true,
-      "coreference": true
+      "coreference": true,
+      "legalRoleHeads": true
     },
     "sv": {
       "triggers": true,

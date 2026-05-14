@@ -23,67 +23,61 @@ import { loadLanguageConfigs } from "../util/lang-loader";
 // name. Names like "Client solutions Inc." or "Vendor consulting
 // Ltd." don't contain any of these, so they pass through the
 // trim untouched. Lowercased; matched case-insensitively.
-const SENTENCE_VERB_INDICATORS: ReadonlySet<string> = new Set([
-  // Czech
+//
+// Sourced from `data/sentence-verb-indicators.json` (per-
+// language so verb morphology stays next to other per-language
+// data). Loaded lazily; the seed below covers the most common
+// indicators across cs/en/de so the sync accessor keeps working
+// before `warmSentenceVerbIndicators()` resolves.
+const SENTENCE_VERB_INDICATORS_SEED: ReadonlySet<string> = new Set([
   "je",
   "jsou",
-  "byl",
-  "byla",
-  "byly",
-  "bude",
-  "není",
-  "vlastní",
-  "vlastníkem",
-  "prodává",
-  "prodal",
-  "prodala",
-  "koupil",
-  "koupila",
-  "kupuje",
-  "platí",
-  "hradí",
-  "podepsal",
-  "podepsala",
-  "podepisuje",
-  "uzavírá",
-  "uzavřel",
-  "uzavřela",
-  "zavazuje",
-  "dluží",
-  // English
   "is",
   "are",
-  "was",
-  "were",
-  "owns",
-  "grants",
-  "sells",
-  "sold",
-  "buys",
-  "bought",
-  "has",
-  "holds",
-  "agrees",
-  "pays",
-  "paid",
-  "owes",
-  "signs",
-  "signed",
-  "leases",
-  "rents",
-  // German
   "ist",
   "sind",
-  "war",
-  "waren",
-  "besitzt",
-  "gewährt",
-  "verkauft",
-  "kauft",
-  "hat",
-  "unterzeichnet",
-  "zahlt",
 ]);
+
+let sentenceVerbIndicatorsCache: ReadonlySet<string> | null = null;
+let sentenceVerbIndicatorsPromise: Promise<ReadonlySet<string>> | null = null;
+
+const loadSentenceVerbIndicators = async (): Promise<ReadonlySet<string>> => {
+  if (sentenceVerbIndicatorsCache) return sentenceVerbIndicatorsCache;
+  if (sentenceVerbIndicatorsPromise) return sentenceVerbIndicatorsPromise;
+  sentenceVerbIndicatorsPromise = (async () => {
+    let data: Record<string, unknown> = {};
+    try {
+      const mod = await import("../data/sentence-verb-indicators.json");
+      // eslint-disable-next-line no-unsafe-type-assertion -- JSON module shape
+      const parsed =
+        (mod as { default?: Record<string, unknown> }).default ?? mod;
+      // eslint-disable-next-line no-unsafe-type-assertion -- JSON module shape
+      data = parsed as Record<string, unknown>;
+    } catch (err) {
+      console.warn(
+        "[anonymize] legal-forms: failed to load " +
+          "sentence-verb-indicators.json, falling back " +
+          "to seed list:",
+        err,
+      );
+    }
+    const all = new Set<string>(SENTENCE_VERB_INDICATORS_SEED);
+    for (const [key, value] of Object.entries(data)) {
+      if (key.startsWith("_")) continue;
+      if (!Array.isArray(value)) continue;
+      for (const verb of value) {
+        if (typeof verb !== "string" || verb.length === 0) continue;
+        all.add(verb.toLowerCase());
+      }
+    }
+    sentenceVerbIndicatorsCache = all;
+    return all;
+  })();
+  return sentenceVerbIndicatorsPromise;
+};
+
+const getSentenceVerbIndicatorsSync = (): ReadonlySet<string> =>
+  sentenceVerbIndicatorsCache ?? SENTENCE_VERB_INDICATORS_SEED;
 
 const UPPER = "A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽÄÖÜÀÂÆÇÈÊËÎÏÔÙÛŸÑ\\u0130";
 const LOWER = "a-záčďéěíňóřšťúůýžäöüßàâæçèêëîïôùûÿñ\\u0131";
@@ -149,7 +143,11 @@ const getLegalRoleHeadsSync = (): ReadonlySet<string> =>
   legalRoleHeadsCache ?? new Set<string>();
 
 export const warmLegalRoleHeads = async (): Promise<void> => {
-  await Promise.all([loadLegalRoleHeads(), loadAllLegalSuffixes()]);
+  await Promise.all([
+    loadLegalRoleHeads(),
+    loadAllLegalSuffixes(),
+    loadSentenceVerbIndicators(),
+  ]);
 };
 
 // Suffix anchoring during the role-head trim needs the FULL
@@ -684,6 +682,7 @@ export const processLegalFormMatches = (
         const midStart = firstWordMatch[0].length;
         const midEnd = suffixOffset;
         const midSection = text.slice(midStart, midEnd);
+        const verbIndicators = getSentenceVerbIndicatorsSync();
         let lastVerbEndInMid = -1;
         for (const match of midSection.matchAll(
           // Match any word (capital or lowercase start); the
@@ -695,7 +694,7 @@ export const processLegalFormMatches = (
           if (
             match[0] !== undefined &&
             match.index !== undefined &&
-            SENTENCE_VERB_INDICATORS.has(match[0].toLowerCase())
+            verbIndicators.has(match[0].toLowerCase())
           ) {
             lastVerbEndInMid = match.index + match[0].length;
           }
@@ -723,7 +722,7 @@ export const processLegalFormMatches = (
           );
           if (
             prevWord !== null &&
-            SENTENCE_VERB_INDICATORS.has(prevWord[1]!.toLowerCase())
+            getSentenceVerbIndicatorsSync().has(prevWord[1]!.toLowerCase())
           ) {
             appositiveRoleHead = true;
           }

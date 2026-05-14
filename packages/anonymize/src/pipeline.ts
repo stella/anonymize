@@ -10,7 +10,10 @@ import {
   processLegalFormMatches,
   warmLegalRoleHeads,
 } from "./detectors/legal-forms";
-import { processTriggerMatches } from "./detectors/triggers";
+import {
+  processTriggerMatches,
+  warmAddressStopKeywords,
+} from "./detectors/triggers";
 import {
   ensureDenyListData,
   processDenyListMatches,
@@ -740,6 +743,12 @@ export const runPipeline = async (
   if (legalFormEntities.length > 0)
     log("legal-forms", `${legalFormEntities.length} matches`);
 
+  if (config.enableTriggerPhrases) {
+    // Populate the address-stop-keywords cache so the
+    // synchronous address strategy uses the merged
+    // per-language list instead of the seed fallback.
+    await warmAddressStopKeywords();
+  }
   const rawTriggerEntities = config.enableTriggerPhrases
     ? processTriggerMatches(
         regexMatches,

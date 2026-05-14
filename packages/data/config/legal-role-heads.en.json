@@ -1,0 +1,30 @@
+{
+  "_comment": "English contract/legal role words. Used by the legal-form detector to recognise sentence-level false positives and trim them back to the trailing organisation name.",
+  "words": [
+    "buyer",
+    "seller",
+    "vendor",
+    "purchaser",
+    "lender",
+    "borrower",
+    "employer",
+    "employee",
+    "contractor",
+    "subcontractor",
+    "client",
+    "customer",
+    "landlord",
+    "tenant",
+    "licensor",
+    "licensee",
+    "lessor",
+    "lessee",
+    "party",
+    "parties",
+    "guarantor",
+    "assignor",
+    "assignee",
+    "disclosing",
+    "receiving"
+  ]
+}

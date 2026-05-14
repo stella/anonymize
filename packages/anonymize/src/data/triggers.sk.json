@@ -151,9 +151,24 @@
       "nadácia",
       "príspevková organizácia",
       "rozpočtová organizácia",
-      "občianske združenie",
-      "Najvyšší kontrolný úrad"
-    ]
+      "občianske združenie"
+    ],
+    "extensions": ["add-trailing-space"],
+    "validations": [{ "type": "starts-uppercase" }]
+  },
+  {
+    "id": "sk-organization-fixed-name-institutions",
+    "label": "organization",
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "Najvyšší kontrolný úrad",
+      "Slovenský pozemkový fond",
+      "Sociálna poisťovňa",
+      "Všeobecná zdravotná poisťovňa",
+      "Národná banka Slovenska"
+    ],
+    "includeTrigger": true,
+    "validations": [{ "type": "min-length", "min": 3 }]
   },
   {
     "id": "sk-date-of-birth",
@@ -239,7 +254,7 @@
     "validations": [
       {
         "type": "matches-pattern",
-        "pattern": "^(?:Sa|Sro|Sr|Po|Dr|Pšn|Insre|Po-Re)$"
+        "pattern": "^(?:Sa|Sro|Sr|Po|Dr|Pšn|Insre|Po-Re)[,.;:]?$"
       }
     ]
   },
@@ -247,7 +262,16 @@
     "id": "sk-vlozka",
     "label": "registration number",
     "strategy": { "type": "n-words", "count": 1 },
-    "triggers": ["vložka", "vložky", "vložke", "vložkou"],
+    "triggers": [
+      "vložka číslo",
+      "vložka č.",
+      "vložky číslo",
+      "vložky č.",
+      "vložka",
+      "vložky",
+      "vložke",
+      "vložkou"
+    ],
     "extensions": ["add-colon", "add-trailing-space"]
   },
   {
@@ -321,7 +345,8 @@
       "ministerstvom"
     ],
     "extensions": ["add-trailing-space"],
-    "validations": [{ "type": "starts-uppercase" }]
+    "includeTrigger": true,
+    "validations": [{ "type": "min-length", "min": 6 }]
   },
   {
     "id": "sk-courts-nominative",
@@ -374,6 +399,62 @@
       "najvyššieho súdu",
       "ústavného súdu",
       "špecializovaného trestného súdu"
+    ],
+    "includeTrigger": true,
+    "extensions": [],
+    "validations": [{ "type": "min-length", "min": 3 }]
+  },
+  {
+    "id": "sk-courts-instrumental",
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma",
+      "stopWords": [
+        "dňa",
+        "oddiel",
+        "oddiele",
+        "vložka",
+        "vložky",
+        "sp.zn.",
+        "sp. zn.",
+        "pod"
+      ]
+    },
+    "triggers": [
+      "okresným súdom",
+      "krajským súdom",
+      "mestským súdom",
+      "najvyšším súdom",
+      "ústavným súdom",
+      "špecializovaným trestným súdom"
+    ],
+    "includeTrigger": true,
+    "extensions": [],
+    "validations": [{ "type": "min-length", "min": 3 }]
+  },
+  {
+    "id": "sk-courts-locative",
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma",
+      "stopWords": [
+        "dňa",
+        "oddiel",
+        "oddiele",
+        "vložka",
+        "vložky",
+        "sp.zn.",
+        "sp. zn.",
+        "pod"
+      ]
+    },
+    "triggers": [
+      "okresnom súde",
+      "krajskom súde",
+      "mestskom súde",
+      "najvyššom súde",
+      "ústavnom súde",
+      "špecializovanom trestnom súde"
     ],
     "includeTrigger": true,
     "extensions": [],

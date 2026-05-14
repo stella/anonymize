@@ -1,5 +1,293 @@
 [
   {
+    "id": "sk-person-to-next-comma",
+    "label": "person",
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "zastúpený",
+      "zastúpená",
+      "zastúpené",
+      "zastúpeným",
+      "zastúpenou",
+      "zastúpení",
+      "konajúci",
+      "konajúca",
+      "konajúcim",
+      "v zastúpení",
+      "splnomocnený zástupca",
+      "splnomocnená zástupkyňa",
+      "štatutárny orgán",
+      "štatutárny zástupca",
+      "konateľ spoločnosti",
+      "konateľka spoločnosti",
+      "konateľom",
+      "konateľkou",
+      "prokurista",
+      "prokuristom",
+      "predseda predstavenstva",
+      "podpredseda predstavenstva",
+      "člen predstavenstva",
+      "členka predstavenstva",
+      "riaditeľ",
+      "riaditeľka",
+      "riaditeľom",
+      "riaditeľkou",
+      "kontaktná osoba"
+    ],
+    "extensions": ["add-colon"],
+    "validations": [{ "type": "starts-uppercase" }]
+  },
+  {
+    "id": "sk-person-trailing-space",
+    "label": "person",
+    "strategy": { "type": "to-next-comma" },
+    "triggers": ["pán", "pani", "pána", "panu", "pánom", "paniam"],
+    "extensions": ["add-trailing-space"],
+    "validations": [{ "type": "starts-uppercase" }]
+  },
+  {
+    "id": "sk-address-full",
+    "label": "address",
+    "strategy": { "type": "address", "maxChars": 120 },
+    "triggers": [
+      "sídlo",
+      "sídlom",
+      "so sídlom",
+      "miesto podnikania",
+      "miestom podnikania",
+      "trvalý pobyt",
+      "trvalým pobytom",
+      "bytom",
+      "adresa",
+      "adresa trvalého pobytu",
+      "doručovacia adresa",
+      "korešpondenčná adresa",
+      "fakturačná adresa",
+      "miesto dodania",
+      "miesto plnenia"
+    ],
+    "extensions": ["add-colon"]
+  },
+  {
+    "id": "sk-address-house-number",
+    "label": "address",
+    "strategy": { "type": "n-words", "count": 1 },
+    "triggers": [
+      "č.d.",
+      "súp. č.",
+      "súpisné číslo",
+      "or. č.",
+      "orientačné číslo"
+    ]
+  },
+  {
+    "id": "sk-address-psc",
+    "label": "address",
+    "strategy": { "type": "n-words", "count": 2 },
+    "triggers": ["PSČ"],
+    "extensions": ["add-colon", "add-trailing-space"]
+  },
+  {
+    "id": "sk-organization-roles",
+    "label": "organization",
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "zhotoviteľ",
+      "zhotoviteľom",
+      "objednávateľ",
+      "objednávateľom",
+      "dodávateľ",
+      "dodávateľom",
+      "odberateľ",
+      "odberateľom",
+      "poskytovateľ",
+      "poskytovateľom",
+      "prijímateľ",
+      "prijímateľom"
+    ],
+    "extensions": ["add-colon"],
+    "validations": [{ "type": "starts-uppercase" }]
+  },
+  {
+    "id": "sk-organization-municipalities",
+    "label": "organization",
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "mestská časť",
+      "mestskej časti",
+      "mestská polícia",
+      "hlavné mesto",
+      "hlavného mesta",
+      "obec",
+      "obce",
+      "obci"
+    ],
+    "extensions": ["add-trailing-space"],
+    "validations": [{ "type": "starts-uppercase" }]
+  },
+  {
+    "id": "sk-organization-trailing-space",
+    "label": "organization",
+    "strategy": { "type": "to-next-comma" },
+    "triggers": ["mesto", "mesta", "mestom", "mestu"],
+    "extensions": ["add-trailing-space"],
+    "validations": [{ "type": "starts-uppercase" }]
+  },
+  {
+    "id": "sk-organization-institutions",
+    "label": "organization",
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "základná škola",
+      "základnej školy",
+      "stredná škola",
+      "strednej školy",
+      "materská škola",
+      "nemocnica",
+      "nemocnice",
+      "fakultná nemocnica",
+      "univerzita",
+      "univerzity",
+      "nadácia",
+      "príspevková organizácia",
+      "rozpočtová organizácia",
+      "občianske združenie"
+    ],
+    "extensions": ["add-trailing-space"],
+    "validations": [{ "type": "starts-uppercase" }]
+  },
+  {
+    "id": "sk-organization-fixed-name-institutions",
+    "label": "organization",
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "Najvyšší kontrolný úrad",
+      "Slovenský pozemkový fond",
+      "Sociálna poisťovňa",
+      "Všeobecná zdravotná poisťovňa",
+      "Národná banka Slovenska"
+    ],
+    "includeTrigger": true,
+    "validations": [{ "type": "min-length", "min": 3 }]
+  },
+  {
+    "id": "sk-date-of-birth",
+    "label": "date of birth",
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "nar.",
+      "narodený dňa",
+      "narodená dňa",
+      "narodený/á dňa",
+      "dát. nar.",
+      "dátum narodenia"
+    ],
+    "extensions": ["add-colon"],
+    "validations": [{ "type": "max-length", "max": 30 }]
+  },
+  {
+    "id": "sk-birth-number",
+    "label": "birth number",
+    "strategy": { "type": "n-words", "count": 1 },
+    "triggers": ["r.č.", "r. č.", "rodné číslo"],
+    "extensions": ["add-colon"]
+  },
+  {
+    "id": "sk-bank-account-eol",
+    "label": "bank account number",
+    "strategy": { "type": "to-end-of-line" },
+    "triggers": ["bankové spojenie"],
+    "extensions": ["add-colon"],
+    "validations": [
+      { "type": "has-digits" },
+      { "type": "min-length", "min": 5 }
+    ]
+  },
+  {
+    "id": "sk-bank-account-nwords",
+    "label": "bank account number",
+    "strategy": { "type": "n-words", "count": 1 },
+    "triggers": ["č. účtu", "č.ú.", "číslo účtu"],
+    "extensions": ["add-colon"],
+    "validations": [
+      { "type": "has-digits" },
+      { "type": "min-length", "min": 5 }
+    ]
+  },
+  {
+    "id": "sk-company-id",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "IČO",
+      "1ČO",
+      "lČO",
+      "identifikačné číslo",
+      "identifikačné číslo organizácie"
+    ]
+  },
+  {
+    "id": "sk-tax-id",
+    "label": "tax identification number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": ["DIČ", "D1Č", "daňové identifikačné číslo"]
+  },
+  {
+    "id": "sk-vat-id",
+    "label": "tax identification number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": ["IČ DPH", "IČDPH", "ič dph"]
+  },
+  {
+    "id": "sk-vehicle-registration",
+    "label": "registration number",
+    "strategy": { "type": "n-words", "count": 1 },
+    "triggers": ["EČV", "ŠPZ", "evidenčné číslo vozidla"],
+    "extensions": ["add-colon"]
+  },
+  {
+    "id": "sk-oddiel",
+    "label": "registration number",
+    "strategy": { "type": "n-words", "count": 1 },
+    "triggers": ["oddiel", "oddiele", "oddielu", "oddielom"],
+    "extensions": ["add-colon", "add-trailing-space"],
+    "validations": [
+      {
+        "type": "matches-pattern",
+        "pattern": "^(?:Sa|Sro|Sr|Po|Dr|Pšn|Insre|Po-Re)[,.;:]?$"
+      }
+    ]
+  },
+  {
+    "id": "sk-vlozka",
+    "label": "registration number",
+    "strategy": { "type": "n-words", "count": 1 },
+    "triggers": [
+      "vložka číslo",
+      "vložka č.",
+      "vložky číslo",
+      "vložky č.",
+      "vložka",
+      "vložky",
+      "vložke",
+      "vložkou"
+    ],
+    "extensions": ["add-colon", "add-trailing-space"]
+  },
+  {
+    "id": "sk-sp-zn",
+    "label": "registration number",
+    "strategy": { "type": "n-words", "count": 2 },
+    "triggers": [
+      "sp. zn.",
+      "sp.zn.",
+      "spisovej značky",
+      "spisovou značkou",
+      "pod sp. zn.",
+      "pod sp.zn."
+    ]
+  },
+  {
     "id": "sk-parcel-number",
     "label": "land parcel",
     "strategy": { "type": "n-words", "count": 1 },
@@ -45,5 +333,131 @@
       { "type": "starts-uppercase" },
       { "type": "min-length", "min": 3 }
     ]
+  },
+  {
+    "id": "sk-ministry",
+    "label": "organization",
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "ministerstvo",
+      "ministerstva",
+      "ministerstvu",
+      "ministerstvom"
+    ],
+    "extensions": ["add-trailing-space"],
+    "includeTrigger": true,
+    "validations": [{ "type": "min-length", "min": 6 }]
+  },
+  {
+    "id": "sk-courts-nominative",
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma",
+      "stopWords": [
+        "dňa",
+        "oddiel",
+        "oddiele",
+        "vložka",
+        "vložky",
+        "sp.zn.",
+        "sp. zn.",
+        "pod"
+      ]
+    },
+    "triggers": [
+      "okresný súd",
+      "krajský súd",
+      "mestský súd",
+      "najvyšší súd",
+      "ústavný súd",
+      "špecializovaný trestný súd"
+    ],
+    "includeTrigger": true,
+    "extensions": [],
+    "validations": [{ "type": "min-length", "min": 3 }]
+  },
+  {
+    "id": "sk-courts-genitive",
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma",
+      "stopWords": [
+        "dňa",
+        "oddiel",
+        "oddiele",
+        "vložka",
+        "vložky",
+        "sp.zn.",
+        "sp. zn.",
+        "pod"
+      ]
+    },
+    "triggers": [
+      "okresného súdu",
+      "krajského súdu",
+      "mestského súdu",
+      "najvyššieho súdu",
+      "ústavného súdu",
+      "špecializovaného trestného súdu"
+    ],
+    "includeTrigger": true,
+    "extensions": [],
+    "validations": [{ "type": "min-length", "min": 3 }]
+  },
+  {
+    "id": "sk-courts-instrumental",
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma",
+      "stopWords": [
+        "dňa",
+        "oddiel",
+        "oddiele",
+        "vložka",
+        "vložky",
+        "sp.zn.",
+        "sp. zn.",
+        "pod"
+      ]
+    },
+    "triggers": [
+      "okresným súdom",
+      "krajským súdom",
+      "mestským súdom",
+      "najvyšším súdom",
+      "ústavným súdom",
+      "špecializovaným trestným súdom"
+    ],
+    "includeTrigger": true,
+    "extensions": [],
+    "validations": [{ "type": "min-length", "min": 3 }]
+  },
+  {
+    "id": "sk-courts-locative",
+    "label": "organization",
+    "strategy": {
+      "type": "to-next-comma",
+      "stopWords": [
+        "dňa",
+        "oddiel",
+        "oddiele",
+        "vložka",
+        "vložky",
+        "sp.zn.",
+        "sp. zn.",
+        "pod"
+      ]
+    },
+    "triggers": [
+      "okresnom súde",
+      "krajskom súde",
+      "mestskom súde",
+      "najvyššom súde",
+      "ústavnom súde",
+      "špecializovanom trestnom súde"
+    ],
+    "includeTrigger": true,
+    "extensions": [],
+    "validations": [{ "type": "min-length", "min": 3 }]
   }
 ]

@@ -369,8 +369,21 @@ const isSentenceTerminator = (text: string, periodIndex: number): boolean => {
  * Field-label keywords that terminate address scanning.
  * When a comma in the address strategy is followed by
  * one of these, the address stops before the keyword.
+ *
+ * The list is sourced from
+ * `data/address-stop-keywords.json` (per-language so new
+ * languages can drop in their own labels without
+ * touching this file). `loadAddressStopKeywords` unions
+ * every language into a single longest-first array;
+ * `getAddressStopKeywordsSync` returns the cached union
+ * and falls back to a seed list so the strategy keeps
+ * working before the warmup promise resolves.
+ *
+ * The address strategy doesn't know the document
+ * language, so a flat union is intentional: any
+ * language's labels can appear in any address.
  */
-const ADDRESS_STOP_KEYWORDS = [
+const ADDRESS_STOP_KEYWORDS_SEED: readonly string[] = [
   "číslo účtu",
   "registrační",
   "zastoupen",
@@ -393,6 +406,69 @@ const ADDRESS_STOP_KEYWORDS = [
   "bic",
   "ič",
 ];
+
+let addressStopKeywordsCache: readonly string[] | null = null;
+let addressStopKeywordsPromise: Promise<readonly string[]> | null = null;
+
+const loadAddressStopKeywords = async (): Promise<readonly string[]> => {
+  if (addressStopKeywordsCache) return addressStopKeywordsCache;
+  if (addressStopKeywordsPromise) return addressStopKeywordsPromise;
+  addressStopKeywordsPromise = (async () => {
+    let data: Record<string, unknown> = {};
+    try {
+      const mod = await import("../data/address-stop-keywords.json");
+      // eslint-disable-next-line no-unsafe-type-assertion -- JSON module shape
+      const parsed =
+        (mod as { default?: Record<string, unknown> }).default ?? mod;
+      // eslint-disable-next-line no-unsafe-type-assertion -- JSON module shape
+      data = parsed as Record<string, unknown>;
+    } catch (err) {
+      console.warn(
+        "[anonymize] triggers: failed to load " +
+          "address-stop-keywords.json, falling back to " +
+          "seed list:",
+        err,
+      );
+    }
+    const seen = new Set<string>();
+    const out: string[] = [];
+    const addAll = (list: readonly string[]): void => {
+      for (const kw of list) {
+        if (typeof kw !== "string" || kw.length === 0) continue;
+        const lower = kw.toLowerCase();
+        if (seen.has(lower)) continue;
+        seen.add(lower);
+        out.push(lower);
+      }
+    };
+    for (const [key, value] of Object.entries(data)) {
+      if (key.startsWith("_")) continue;
+      if (!Array.isArray(value)) continue;
+      addAll(value as readonly string[]);
+    }
+    addAll(ADDRESS_STOP_KEYWORDS_SEED);
+    // Sort longest-first so multi-word labels
+    // ("bankové spojenie", "číslo účtu") match
+    // before nested shorter ones ("č.").
+    out.sort((a, b) => b.length - a.length);
+    addressStopKeywordsCache = out;
+    return out;
+  })();
+  return addressStopKeywordsPromise;
+};
+
+const getAddressStopKeywordsSync = (): readonly string[] =>
+  addressStopKeywordsCache ?? ADDRESS_STOP_KEYWORDS_SEED;
+
+/**
+ * Warm the address-stop-keywords cache. Pipeline callers
+ * await this before invoking trigger detection so the
+ * synchronous `extractValue` path uses the merged list
+ * instead of the seed fallback.
+ */
+export const warmAddressStopKeywords = async (): Promise<void> => {
+  await loadAddressStopKeywords();
+};
 
 const extractValue = (
   text: string,
@@ -703,7 +779,7 @@ const extractValue = (
             .slice(end + 1)
             .trimStart()
             .toLowerCase();
-          const hitsKeyword = ADDRESS_STOP_KEYWORDS.some((kw) => {
+          const hitsKeyword = getAddressStopKeywordsSync().some((kw) => {
             if (!afterComma.startsWith(kw)) return false;
             // Guard: next char must be a delimiter
             // or digit to avoid truncating city

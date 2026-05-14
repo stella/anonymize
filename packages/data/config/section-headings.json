@@ -9,7 +9,10 @@
     { "re": "^\\s*(?:Chapitre|Section)\\s*\\d", "flags": "iu" },
     { "re": "^\\s*(?:Capitolo|Sezione)\\s*\\d", "flags": "iu" },
     { "re": "^\\s*(?:Artículo|Sección)\\s*\\d", "flags": "iu" },
-    { "re": "^\\s*(?:Článok|Čl\\.)\\s*\\d", "flags": "iu" },
+    {
+      "re": "^\\s*(?:Článok|Čl\\.|Oddiel|Odsek|Príloha)\\s*\\d",
+      "flags": "iu"
+    },
     { "re": "^\\s*(?:Rozdział|Artykuł)\\s*\\d", "flags": "iu" }
   ]
 }
