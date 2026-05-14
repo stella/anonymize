@@ -10,11 +10,11 @@ It contains the runtime package, the published data package, and the browser/WAS
 
 ## Packages
 
-| Package | Purpose |
-| --- | --- |
-| `@stll/anonymize` | Native runtime for multi-layer PII detection and anonymization |
-| `@stll/anonymize-data` | Published deny-list dictionaries and trigger/config data |
-| `@stll/anonymize-wasm` | Browser/WASM build of the runtime |
+| Package                | Purpose                                                        |
+| ---------------------- | -------------------------------------------------------------- |
+| `@stll/anonymize`      | Native runtime for multi-layer PII detection and anonymization |
+| `@stll/anonymize-data` | Published deny-list dictionaries and trigger/config data       |
+| `@stll/anonymize-wasm` | Browser/WASM build of the runtime                              |
 
 ## Install
 
@@ -40,6 +40,15 @@ bun install --frozen-lockfile
 bun run lint
 bun run typecheck
 bun run test
+```
+
+### Git hooks (opt-in)
+
+Lefthook config lives at [`lefthook.yml`](lefthook.yml) and is not auto-installed. To enable local hooks (format on pre-commit, typecheck + format check on pre-push):
+
+```bash
+bun run hooks:install
+# bun run hooks:uninstall to remove
 ```
 
 ## Release hygiene
