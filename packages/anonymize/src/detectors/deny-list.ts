@@ -803,10 +803,22 @@ export const processDenyListMatches = (
       continue;
     }
 
+    // All-uppercase acronym patterns ("OIL", "OP", "BIS")
+    // case-fold to common English words under the AC's
+    // caseInsensitive flag and match mixed-case occurrences
+    // ("Oil", "Op"). Require all-uppercase patterns to
+    // match all-uppercase source text so acronym dictionary
+    // entries cannot collide with everyday prose.
+    const patternIsAcronym =
+      pattern.length > 0 && pattern.length <= 5 && ALL_UPPER_RE.test(pattern);
+    const acronymMatchesAcronym =
+      !patternIsAcronym || ALL_UPPER_RE.test(matchText);
+
     const passesCuratedFilters =
       UPPER_START_RE.test(sourceChar) &&
       !getStopwords(ctx).has(keyword) &&
       !getAllowList(ctx).has(keyword) &&
+      acronymMatchesAcronym &&
       !ALL_UPPER_RE.test(matchText);
     const curatedLabels = passesCuratedFilters
       ? (labels ?? []).filter(
@@ -962,7 +974,22 @@ export const processDenyListMatches = (
       continue;
     }
 
-    const extended = extendPersonName(fullText, first.start, last.end, ctx);
+    // Skip the trailing-capitalised-word extension when the
+    // chain sits inside a defined-term quote
+    // (`"Bond Hedge Transactions"`, `"Blue Sky Laws"`).
+    // Legal prose uses curly or straight quotes to introduce
+    // capitalised noun phrases that are not personal names;
+    // chaining beyond the name corpus inside that bracketed
+    // context produces unstable spans like
+    // `"Bond Hedge Transactions"`-as-person.
+    const insideDefinedTermQuote = isInsideDefinedTermQuote(
+      fullText,
+      first.start,
+    );
+
+    const extended = insideDefinedTermQuote
+      ? { end: last.end, text: fullText.slice(first.start, last.end) }
+      : extendPersonName(fullText, first.start, last.end, ctx);
 
     // Score: chained names get 0.9, single names 0.5
     const score = chain.length >= 2 ? 0.9 : 0.5;
@@ -1142,6 +1169,21 @@ const extendCityDistricts = (entities: Entity[], fullText: string): void => {
  * by a capitalized word (for "Miroslav Braňka" when
  * only "Braňka" matched).
  */
+/**
+ * Defined-term marker: an opening typographic or straight
+ * quote sitting one character before the chain start
+ * (`"Bond Hedge Transactions"`, `"Blue Sky Laws"`). Legal
+ * documents reserve quoted capitalised phrases for
+ * defined terms; the contents are not personal names even
+ * when individual tokens collide with the name corpus.
+ */
+const OPENING_QUOTE_RE = /["“‟‘‛«]/u;
+const isInsideDefinedTermQuote = (text: string, start: number): boolean => {
+  if (start === 0) return false;
+  const prev = text[start - 1] ?? "";
+  return OPENING_QUOTE_RE.test(prev);
+};
+
 const extendPersonName = (
   text: string,
   start: number,
@@ -1172,16 +1214,30 @@ const extendPersonName = (
         wordEnd++;
       }
 
-      // Skip trailing punctuation (commas, etc.)
+      // Skip trailing punctuation (commas, periods,
+      // typographic closing quotes). Curly quotes survive
+      // normalisation because they often appear inside
+      // defined-term clauses (`"Blue Sky Laws"`); strip
+      // them so the allow-list / stopword check sees the
+      // bare word.
       const word = text.slice(wordStart, wordEnd);
-      const stripped = word.replace(/[,;.]+$/, "");
+      const stripped = word.replace(/[,;.”"’']+$/, "");
       if (stripped.length < 2) {
         break;
       }
 
-      // Don't extend into global or person stopwords
+      // Don't extend into stopwords, person stopwords, or
+      // allow-listed common words. The allow list catches
+      // English plurals/derivatives that case-fold to name
+      // corpus tokens but never name a real person
+      // ("Blue Sky Laws", "Bond Hedge Transactions",
+      // "Tesla Shares").
       const lower = stripped.toLowerCase();
-      if (getStopwords(ctx).has(lower) || getPersonStopwords(ctx).has(lower)) {
+      if (
+        getStopwords(ctx).has(lower) ||
+        getPersonStopwords(ctx).has(lower) ||
+        getAllowList(ctx).has(lower)
+      ) {
         break;
       }
 
