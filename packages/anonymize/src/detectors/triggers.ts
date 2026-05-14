@@ -357,12 +357,29 @@ const COMMA_STOP_CHARS = new Set(["\n", "(", "\t", ";"]);
  */
 const NEXT_IS_SENTENCE_START_RE = /^\.(?:\s+\p{Lu}|\s*$)/u;
 const SENTENCE_TAIL_RE = /\p{Ll}{5,}$/u;
+/**
+ * Short currency-abbreviation tail (zł, Kč, gr, Ft, kr,
+ * лв, USD, PLN, EUR, …). When a period follows one of
+ * these and the next token starts uppercase, treat it as
+ * a sentence boundary even though the tail is too short
+ * to satisfy `SENTENCE_TAIL_RE`. Without this, amount
+ * triggers using `to-next-comma` swallow the following
+ * clause: `"w kwocie 1000 zł. Termin płatności…"`.
+ *
+ * Currency codes are uppercase (`USD`, `PLN`); local
+ * names mix case (`zł`, `Kč`, `Ft`). The negative
+ * lookbehind on a letter ensures we match only when the
+ * abbreviation is a standalone token.
+ */
+const CURRENCY_TAIL_RE =
+  /(?<![\p{L}])(?:zł|Kč|gr|Ft|kr|лв|USD|PLN|EUR|CZK|GBP|CHF|HUF|RON|SEK|NOK|DKK)$/u;
 
 const isSentenceTerminator = (text: string, periodIndex: number): boolean => {
   if (!NEXT_IS_SENTENCE_START_RE.test(text.slice(periodIndex))) {
     return false;
   }
-  return SENTENCE_TAIL_RE.test(text.slice(0, periodIndex));
+  const head = text.slice(0, periodIndex);
+  return SENTENCE_TAIL_RE.test(head) || CURRENCY_TAIL_RE.test(head);
 };
 
 /**
@@ -684,13 +701,26 @@ const extractValue = (
       if (!sepMatch) {
         return null;
       }
-      const afterSep = raw.slice(sepMatch[0].length);
-      // Letter prefix (e.g., VAT prefix "CZ", "PL") must
-      // be uppercase: lowercase letters would let label
-      // tokens like "nr"/"numer" sneak into the captured
-      // value when a bare trigger fires next to a
-      // "... nr" variant ("PESEL nr 44051401458").
-      const idMatch = /^[A-Z]{0,6}\s?\d[\d\s\-/]{4,}/.exec(afterSep);
+      let afterSep = raw.slice(sepMatch[0].length);
+      // Skip a leading number-label word (e.g.
+      // "PESEL nr 44051401458", "NIP numer 1234567890",
+      // "REGON № 123456789") that may appear between the
+      // trigger and the value. The label is consumed
+      // along with its trailing separator so the
+      // case-insensitive prefix regex below cannot mistake
+      // it for a VAT country prefix like "cz"/"pl".
+      const labelMatch =
+        /^(?:nr\.?|numer|n\.?|№|nº|no\.?)(?:\s*:\s*|\s+)/i.exec(afterSep);
+      let labelOffset = 0;
+      if (labelMatch) {
+        labelOffset = labelMatch[0].length;
+        afterSep = afterSep.slice(labelOffset);
+      }
+      // Optional letter prefix (e.g., VAT prefix "CZ",
+      // "PL"). Case-insensitive so lowercase variants
+      // ("DIČ cz12345678", "VAT number pl1234567890")
+      // still validate via stdnum downstream.
+      const idMatch = /^[A-Z]{0,6}\s?\d[\d\s\-/]{4,}/i.exec(afterSep);
       if (!idMatch) {
         return null;
       }
@@ -711,6 +741,7 @@ const extractValue = (
       const idStart =
         triggerEnd +
         sepMatch[0].length +
+        labelOffset +
         // idMatch.index is always 0 (anchored ^ regex)
         leadingSpaces;
       return {

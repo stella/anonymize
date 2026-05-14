@@ -71,7 +71,6 @@
     "triggers": [
       "Pana",
       "Panią",
-      "Państwo",
       "dr hab.",
       "prof.",
       "prof. dr hab.",
@@ -81,6 +80,21 @@
       "inż.",
       "inż"
     ],
+    "extensions": ["add-trailing-space"],
+    "validations": [
+      { "type": "starts-uppercase" },
+      {
+        "type": "matches-pattern",
+        "pattern": "^\\p{Lu}[\\p{L}'\\-]*(?:\\s+\\p{Lu}[\\p{L}'\\-]*)?$",
+        "flags": "u"
+      }
+    ]
+  },
+  {
+    "id": "pl-person-honorific-plural",
+    "label": "person",
+    "strategy": { "type": "n-words", "count": 1 },
+    "triggers": ["Państwo"],
     "extensions": ["add-trailing-space"],
     "validations": [{ "type": "starts-uppercase" }]
   },
