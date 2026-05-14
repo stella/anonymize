@@ -316,7 +316,10 @@ const POSTNOMINAL_PERSON: RegexDef = {
     `${NAME_WORD}` +
     `(?:(?:${SP}|-){1,2}(?:${PARTICLE}${SP}+)?` +
     `${NAME_WORD}){1,3}` +
-    `${SP}+(?:KC|QC)\\b`,
+    // Either `Name KC` or `Name, KC` — UK convention
+    // varies between Bar Council style (no comma) and
+    // older legal-citation style (with comma).
+    `,?${SP}+(?:KC|QC)\\b`,
   label: "person",
   score: 0.95,
 };

@@ -57,7 +57,10 @@
     "triggers": ["Companies House", "Company No.", "Company No", "CRN"],
     "extensions": ["add-colon", "add-colon-space"],
     "validations": [
-      { "type": "matches-pattern", "pattern": "^[A-Z]{2}?\\d{6,8}$" }
+      {
+        "type": "matches-pattern",
+        "pattern": "^(?:SC|NI|OC|SO|R|FC|GE|GS|IC|IP|LP|NC|NF|NL|NO|NP|NR|NZ|RC|SA|SF|SI|SL|SP|SR|SZ)?\\d{6,8}$"
+      }
     ]
   },
   {

@@ -1,10 +1,15 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
 import {
   createPipelineContext,
   DEFAULT_ENTITY_LABELS,
   runPipeline,
 } from "../index";
+
+// Fresh PipelineContext per test pays the regex-set DFA
+// build cost (~1-3 s); 15 s gives headroom on CI without
+// hiding real perf regressions.
+setDefaultTimeout(15_000);
 import type { Dictionaries, PipelineConfig } from "../types";
 import { loadTestDictionaries } from "./load-dictionaries";
 
@@ -33,13 +38,24 @@ const getDictionaries = async () => {
   return cachedDictionaries;
 };
 
+// Share one PipelineContext across every test in this file
+// so the heavy deny-list + regex-set initialisation runs
+// once. Each test still feeds fresh text through
+// `runPipeline`; only the cached search-engine + dictionary
+// state is reused.
+let sharedCtx: ReturnType<typeof createPipelineContext> | undefined;
+const getCtx = () => {
+  if (!sharedCtx) sharedCtx = createPipelineContext();
+  return sharedCtx;
+};
+
 const run = async (text: string) => {
   const dictionaries = await getDictionaries();
   return runPipeline({
     fullText: text,
     config: { ...CONFIG, dictionaries },
     gazetteerEntries: [],
-    context: createPipelineContext(),
+    context: getCtx(),
   });
 };
 
