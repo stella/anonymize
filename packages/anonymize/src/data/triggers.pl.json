@@ -110,7 +110,7 @@
       "z siedzibą przy",
       "siedziba",
       "siedzibą",
-      "adres",
+      "adres pocztowy",
       "adres siedziby",
       "adres do korespondencji",
       "adres korespondencyjny",
@@ -143,11 +143,20 @@
       "w łącznej wysokości",
       "za łączną cenę",
       "za cenę",
-      "wynosi",
-      "wynagrodzenie w wysokości"
+      "wynagrodzenie w wysokości",
+      "wynagrodzenie wynosi",
+      "cena wynosi",
+      "kwota wynosi"
     ],
     "extensions": ["add-colon"],
-    "validations": [{ "type": "has-digits" }]
+    "validations": [
+      { "type": "has-digits" },
+      {
+        "type": "matches-pattern",
+        "pattern": "(?:PLN|zł|EUR|USD|CZK|CHF|GBP|\\$|€|£)",
+        "flags": "i"
+      }
+    ]
   },
   {
     "id": "pl-land-parcel",
