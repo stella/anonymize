@@ -1080,7 +1080,7 @@ const buildCurrencyPatterns = (data: CurrenciesData): string[] => {
   const abbrAlt = MAGNITUDE_ABBREVIATIONS.map(escapeRegex).join("|");
   const MAGNITUDE =
     `(?:` +
-    `[^\\S\\n\\t]+(?i:${wordsAlt})s?\\b` +
+    `[^\\S\\n\\t]+(?i:(?:${wordsAlt})s?)\\b` +
     `|` +
     `[^\\S\\n\\t]?(?i:${abbrAlt})\\b` +
     `)?`;

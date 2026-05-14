@@ -96,6 +96,16 @@ describe("monetary amounts with magnitude suffix", () => {
     expect(money.find((e) => e.text === "100 million USD")).toBeDefined();
   });
 
+  test("matches uppercase plural forms ('MILLIONS')", async () => {
+    // The plural `s` must sit inside the case-insensitive
+    // group; otherwise uppercase plurals slip back to
+    // the bare-number fallback.
+    const money = findMoney(
+      await detect("Estimated at $25 MILLIONS worldwide."),
+    );
+    expect(money.find((e) => e.text === "$25 MILLIONS")).toBeDefined();
+  });
+
   test("'25 people' is not a monetary amount", async () => {
     const money = findMoney(await detect("Around 25 people attended."));
     expect(money).toHaveLength(0);
