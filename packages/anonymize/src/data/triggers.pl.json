@@ -3,27 +3,147 @@
     "id": "pl-tax-id",
     "label": "tax identification number",
     "strategy": { "type": "company-id-value" },
-    "triggers": ["NIP"]
+    "triggers": [
+      "NIP",
+      "NIP nr",
+      "NIP:",
+      "numer NIP",
+      "o numerze NIP",
+      "posługującą się numerem NIP",
+      "posługującym się numerem NIP",
+      "posiadającą NIP",
+      "posiadającym NIP"
+    ]
   },
   {
     "id": "pl-national-id",
     "label": "national identification number",
     "strategy": { "type": "company-id-value" },
-    "triggers": ["PESEL"]
+    "triggers": [
+      "PESEL",
+      "PESEL nr",
+      "numer PESEL",
+      "o numerze PESEL",
+      "nr PESEL"
+    ]
   },
   {
     "id": "pl-company-id",
     "label": "registration number",
     "strategy": { "type": "company-id-value" },
-    "triggers": ["REGON", "KRS"]
+    "triggers": [
+      "REGON",
+      "REGON nr",
+      "numer REGON",
+      "KRS",
+      "KRS nr",
+      "KRS pod numerem",
+      "KRS pod nr",
+      "pod numerem KRS",
+      "pod nr KRS",
+      "wpisana do KRS pod numerem",
+      "wpisany do KRS pod numerem",
+      "zarejestrowana w KRS pod numerem",
+      "zarejestrowany w KRS pod numerem",
+      "numer KRS"
+    ]
   },
   {
-    "id": "pl-person",
+    "id": "pl-person-represented",
+    "label": "person",
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "reprezentowana przez",
+      "reprezentowany przez",
+      "reprezentowaną przez",
+      "reprezentowanego przez",
+      "w imieniu której działa",
+      "w imieniu którego działa",
+      "działając przez",
+      "działającego w imieniu"
+    ],
+    "validations": [{ "type": "starts-uppercase" }]
+  },
+  {
+    "id": "pl-person-honorific",
+    "label": "person",
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "Pan",
+      "Pani",
+      "Pana",
+      "Panem",
+      "Panią",
+      "Panu",
+      "Państwo",
+      "dr",
+      "dr hab.",
+      "dr hab",
+      "prof.",
+      "prof",
+      "prof. dr hab.",
+      "prof. dr hab",
+      "mgr",
+      "mgr inż.",
+      "mgr inż",
+      "inż.",
+      "inż"
+    ],
+    "extensions": ["add-trailing-space"],
+    "validations": [{ "type": "starts-uppercase" }]
+  },
+  {
+    "id": "pl-person-court",
     "label": "person",
     "strategy": { "type": "to-next-comma" },
     "triggers": ["Przewodniczący", "Sędzia", "Prokurator", "Protokolant"],
     "extensions": ["add-colon"],
     "validations": [{ "type": "starts-uppercase" }]
+  },
+  {
+    "id": "pl-address-full",
+    "label": "address",
+    "strategy": { "type": "address", "maxChars": 120 },
+    "triggers": [
+      "z siedzibą w",
+      "z siedzibą we",
+      "z siedzibą przy",
+      "siedziba",
+      "siedzibą",
+      "adres",
+      "adres siedziby",
+      "adres do korespondencji",
+      "adres korespondencyjny",
+      "zamieszkały w",
+      "zamieszkała w",
+      "zamieszkałym w",
+      "zamieszkałą w",
+      "zamieszkałego w",
+      "zamieszkałej w",
+      "zamieszkały przy",
+      "zamieszkała przy",
+      "miejsce zamieszkania",
+      "miejscem zamieszkania",
+      "miejsce wykonywania pracy"
+    ],
+    "extensions": ["add-colon"]
+  },
+  {
+    "id": "pl-amount-prefix",
+    "label": "monetary amount",
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "w kwocie",
+      "w wysokości",
+      "w łącznej kwocie",
+      "w łącznej wysokości",
+      "za łączną cenę",
+      "za cenę",
+      "wynosi",
+      "wynagrodzenie w wysokości"
+    ],
+    "extensions": ["add-colon"],
+    "validations": [{ "type": "has-digits" }]
   },
   {
     "id": "pl-land-parcel",

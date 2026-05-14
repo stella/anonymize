@@ -18,6 +18,9 @@
       "re": "^\\s*(?:Článok|Čl\\.|Oddiel|Odsek|Príloha)\\s*\\d",
       "flags": "iu"
     },
-    { "re": "^\\s*(?:Rozdział|Artykuł)\\s*\\d", "flags": "iu" }
+    {
+      "re": "^\\s*(?:Rozdział|Artykuł|Paragraf|Załącznik)\\s*\\d",
+      "flags": "iu"
+    }
   ]
 }

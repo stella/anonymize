@@ -41,7 +41,8 @@
     },
     "pl": {
       "triggers": true,
-      "coreference": false
+      "coreference": true,
+      "legalRoleHeads": true
     },
     "ro": {
       "triggers": true,
