@@ -104,6 +104,7 @@ const LEGAL_ROLE_HEAD_LOADERS: Record<string, () => Promise<unknown>> = {
   de: () => import("../data/legal-role-heads.de.json"),
   en: () => import("../data/legal-role-heads.en.json"),
   "pt-br": () => import("../data/legal-role-heads.pt-br.json"),
+  sk: () => import("../data/legal-role-heads.sk.json"),
 };
 
 const LOADER_REGISTRIES: Record<
@@ -123,7 +124,7 @@ const LOADER_REGISTRIES: Record<
 const FALLBACK_LANGUAGES: Record<ConfigType, readonly string[]> = {
   triggers: ["cs", "de", "en", "es", "fr", "hu", "it", "pl", "ro", "sk", "sv"],
   coreference: ["cs", "de", "en", "sk"],
-  legalRoleHeads: ["cs", "de", "en", "pt-br"],
+  legalRoleHeads: ["cs", "de", "en", "pt-br", "sk"],
 };
 
 // ── Public API ───────────────────────────────────────

@@ -107,6 +107,19 @@
     "str.",
     "strada"
   ],
-  "sk": ["námest.", "námestie", "ulica"],
+  "sk": [
+    "alej",
+    "cesta",
+    "nábr.",
+    "nábrežie",
+    "nám.",
+    "námest.",
+    "námestie",
+    "sady",
+    "tr.",
+    "trieda",
+    "ul.",
+    "ulica"
+  ],
   "sv": ["allé", "backe", "gata", "gränd", "torg"]
 }

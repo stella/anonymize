@@ -52,6 +52,30 @@
     "zarejestrowana"
   ],
   "ro": ["înregistrată", "reprezentat", "reprezentată"],
-  "sk": ["konajúci", "zapísaná", "zapísaný", "zastúpená", "zastúpený"],
+  "sk": [
+    "IČO",
+    "DIČ",
+    "IČ DPH",
+    "bankové spojenie",
+    "číslo účtu",
+    "konajúci",
+    "konajúca",
+    "kontaktná osoba",
+    "registrovaný",
+    "registrovaná",
+    "splnomocnený zástupca",
+    "splnomocnená zástupkyňa",
+    "štatutárny orgán",
+    "štatutárny zástupca",
+    "v zastúpení",
+    "zapísaná",
+    "zapísaný",
+    "zapísané",
+    "zaregistrovaná",
+    "zaregistrovaný",
+    "zastúpená",
+    "zastúpený",
+    "zastúpené"
+  ],
   "universal": ["e-mail", "email", "fax", "http", "https", "tel", "www"]
 }

@@ -47,7 +47,8 @@
     },
     "sk": {
       "triggers": true,
-      "coreference": true
+      "coreference": true,
+      "legalRoleHeads": true
     },
     "sv": {
       "triggers": true,
