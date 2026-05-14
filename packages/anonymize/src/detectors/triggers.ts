@@ -366,13 +366,16 @@ const SENTENCE_TAIL_RE = /\p{Ll}{5,}$/u;
  * triggers using `to-next-comma` swallow the following
  * clause: `"w kwocie 1000 zł. Termin płatności…"`.
  *
- * Currency codes are uppercase (`USD`, `PLN`); local
- * names mix case (`zł`, `Kč`, `Ft`). The negative
- * lookbehind on a letter ensures we match only when the
- * abbreviation is a standalone token.
+ * Currency codes are typically uppercase (`USD`, `PLN`)
+ * but appear lowercased in informal writing (`pln`, `eur`);
+ * local names mix case (`zł`, `Kč`, `Ft`); symbols
+ * (`€`, `$`, `£`) appear after the amount as well. The
+ * negative lookbehind on a letter ensures the abbreviation
+ * is matched only as a standalone token; symbols are
+ * matched unconditionally since they are not letters.
  */
 const CURRENCY_TAIL_RE =
-  /(?<![\p{L}])(?:zł|Kč|gr|Ft|kr|лв|USD|PLN|EUR|CZK|GBP|CHF|HUF|RON|SEK|NOK|DKK)$/u;
+  /(?:(?<![\p{L}])(?:zł|Kč|gr|Ft|kr|лв|USD|PLN|EUR|CZK|GBP|CHF|HUF|RON|SEK|NOK|DKK)|[€$£])$/iu;
 
 const isSentenceTerminator = (text: string, periodIndex: number): boolean => {
   if (!NEXT_IS_SENTENCE_START_RE.test(text.slice(periodIndex))) {
@@ -813,14 +816,21 @@ const extractValue = (
             continue;
           }
           // "nábř. Kpt." or "ul. nová" — period +
-          // space + any letter or digit. In address
-          // context, this is always an abbreviation,
-          // not end of sentence.
+          // space + any letter or digit. Treat as an
+          // abbreviation unless this is a genuine
+          // sentence boundary (real word before, then
+          // ". " + uppercase start) — that case
+          // happens when the address has already ended
+          // and the next clause begins, e.g.
+          // "z siedzibą w Warszawie. Kapitał…".
           if (
             next === " " &&
             afterNext !== undefined &&
             (/\p{L}/u.test(afterNext) || /\d/.test(afterNext))
           ) {
+            if (isSentenceTerminator(valueText, end)) {
+              break;
+            }
             end++;
             continue;
           }
