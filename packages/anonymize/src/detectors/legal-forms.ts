@@ -147,6 +147,7 @@ export const warmLegalRoleHeads = async (): Promise<void> => {
     loadLegalRoleHeads(),
     loadAllLegalSuffixes(),
     loadSentenceVerbIndicators(),
+    loadClauseNounHeads(),
   ]);
 };
 
@@ -214,49 +215,55 @@ export const getKnownLegalSuffixes = getAllLegalSuffixesSync;
 // scans forward for the org's first Cap word, these are skipped
 // like role-heads so we don't anchor on "Agreement" / "License"
 // in patterns such as "Vendor signed Agreement with Acme Inc.".
-const CLAUSE_NOUN_HEADS: ReadonlySet<string> = new Set([
-  // English
+//
+// Sourced from `data/clause-noun-heads.json` (per-language so
+// vocabulary stays next to other per-language data). Loaded
+// lazily; `warmLegalRoleHeads()` resolves the cache before
+// `processLegalFormMatches` runs.
+const CLAUSE_NOUN_HEADS_SEED: ReadonlySet<string> = new Set([
   "agreement",
-  "agreements",
   "contract",
-  "contracts",
-  "license",
-  "licence",
-  "lease",
-  "memorandum",
-  "notice",
-  "exhibit",
-  "schedule",
-  "addendum",
-  "amendment",
-  "appendix",
-  "attachment",
-  // Czech
-  "smlouva",
-  "smlouvy",
-  "smlouvu",
-  "smlouvou",
-  "dohoda",
-  "dohody",
-  "dohodu",
-  "dohodou",
-  "licence",
-  "licenci",
-  "příloha",
-  "přílohy",
-  "přílohu",
-  "dodatek",
-  "dodatku",
-  "oznámení",
-  // German
-  "vertrag",
-  "vertrages",
-  "vereinbarung",
-  "vereinbarungen",
-  "lizenz",
-  "anlage",
-  "anhang",
 ]);
+
+let clauseNounHeadsCache: ReadonlySet<string> | null = null;
+let clauseNounHeadsPromise: Promise<ReadonlySet<string>> | null = null;
+
+const loadClauseNounHeads = async (): Promise<ReadonlySet<string>> => {
+  if (clauseNounHeadsCache) return clauseNounHeadsCache;
+  if (clauseNounHeadsPromise) return clauseNounHeadsPromise;
+  clauseNounHeadsPromise = (async () => {
+    let data: Record<string, unknown> = {};
+    try {
+      const mod = await import("../data/clause-noun-heads.json");
+      // eslint-disable-next-line no-unsafe-type-assertion -- JSON module shape
+      const parsed =
+        (mod as { default?: Record<string, unknown> }).default ?? mod;
+      // eslint-disable-next-line no-unsafe-type-assertion -- JSON module shape
+      data = parsed as Record<string, unknown>;
+    } catch (err) {
+      console.warn(
+        "[anonymize] legal-forms: failed to load " +
+          "clause-noun-heads.json, falling back to seed list:",
+        err,
+      );
+    }
+    const all = new Set<string>(CLAUSE_NOUN_HEADS_SEED);
+    for (const [key, value] of Object.entries(data)) {
+      if (key.startsWith("_")) continue;
+      if (!Array.isArray(value)) continue;
+      for (const noun of value) {
+        if (typeof noun !== "string" || noun.length === 0) continue;
+        all.add(noun.toLowerCase());
+      }
+    }
+    clauseNounHeadsCache = all;
+    return all;
+  })();
+  return clauseNounHeadsPromise;
+};
+
+const getClauseNounHeadsSync = (): ReadonlySet<string> =>
+  clauseNounHeadsCache ?? CLAUSE_NOUN_HEADS_SEED;
 
 const escapeForRegex = (form: string): string =>
   form
@@ -742,6 +749,7 @@ export const processLegalFormMatches = (
             lastVerbEndInMid !== -1 ? midStart + lastVerbEndInMid : midStart;
           const capRe = /(?<![\p{L}\p{N}])\p{Lu}[\p{L}\p{M}\p{N}]*/gu;
           capRe.lastIndex = scanStart;
+          const clauseNouns = getClauseNounHeadsSync();
           let capMatch: RegExpExecArray | null = null;
           for (
             let next = capRe.exec(text);
@@ -752,7 +760,7 @@ export const processLegalFormMatches = (
               break;
             }
             const lc = next[0].toLowerCase();
-            if (roleHeads.has(lc) || CLAUSE_NOUN_HEADS.has(lc)) {
+            if (roleHeads.has(lc) || clauseNouns.has(lc)) {
               continue;
             }
             capMatch = next;

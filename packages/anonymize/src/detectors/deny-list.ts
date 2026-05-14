@@ -263,15 +263,40 @@ const loadStreetTypeRe = async (): Promise<RegExp | null> => {
       cachedStreetTypeRe = null;
     } else {
       words.sort((a, b) => b.length - a.length);
-      const escaped = words.map((w) =>
-        w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
-      );
+      const isLetterDigit = (c: string): boolean => /[\p{L}\p{N}]/u.test(c);
+      const wordLikeTail: string[] = [];
+      const punctTail: string[] = [];
+      for (const w of words) {
+        const escaped = w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const last = w.at(-1) ?? "";
+        // Entries ending in a letter/digit need the trailing
+        // negative lookahead to enforce a word boundary
+        // (`Avenue` should not match inside `Avenues`). Entries
+        // ending in punctuation like `Av.` or `C/` cannot
+        // continue into another letter/digit and a trailing
+        // lookahead would actually exclude valid forms such as
+        // `C/Mayor` (no space).
+        if (isLetterDigit(last)) {
+          wordLikeTail.push(escaped);
+        } else {
+          punctTail.push(escaped);
+        }
+      }
+      const branches: string[] = [];
+      if (wordLikeTail.length > 0) {
+        branches.push(`(?:${wordLikeTail.join("|")})(?![\\p{L}\\p{N}])`);
+      }
+      if (punctTail.length > 0) {
+        branches.push(`(?:${punctTail.join("|")})`);
+      }
       // Unicode-class lookarounds rather than `\b` so entries
       // ending in `.` or `/` (Spanish `Av.`, `C/`) still match
-      // when followed by whitespace; `\b` does not fire after
-      // non-word characters.
+      // when followed by whitespace OR a letter (`C/Mayor`);
+      // `\b` does not fire after non-word characters and a
+      // uniform trailing lookahead would block the no-space
+      // form.
       cachedStreetTypeRe = new RegExp(
-        `(?<![\\p{L}\\p{N}])(?:${escaped.join("|")})(?![\\p{L}\\p{N}])`,
+        `(?<![\\p{L}\\p{N}])(?:${branches.join("|")})`,
         "iu",
       );
     }
