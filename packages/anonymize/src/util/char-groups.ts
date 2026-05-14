@@ -118,8 +118,23 @@ export const SPACE = charClass("space");
 /** Regex char class matching all double-quote variants. */
 export const QUOTE_DOUBLE = charClass("quote-double");
 
+/** Inner content of the double-quote char class (no brackets). */
+export const QUOTE_DOUBLE_INNER = charClassInner("quote-double");
+
 /** Regex char class matching all single-quote variants. */
 export const QUOTE_SINGLE = charClass("quote-single");
+
+/** Inner content of the single-quote char class (no brackets). */
+export const QUOTE_SINGLE_INNER = charClassInner("quote-single");
+
+/**
+ * Inline opening-bracket characters that frequently introduce
+ * a defined-term parenthetical immediately after an address or
+ * organization span (e.g. `…GA 30326, USA (the "Premises")`).
+ * Hardcoded rather than data-driven because the set is tiny,
+ * regex-special, and not language-dependent.
+ */
+export const OPENING_BRACKETS_INNER = "(\\[{";
 
 /** Regex char class matching all slash variants. */
 export const SLASH = charClass("slash");

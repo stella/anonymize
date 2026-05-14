@@ -61,6 +61,8 @@ export type PipelineContext = {
   allowListPromise: Promise<ReadonlySet<string>> | null;
   personStopwords: ReadonlySet<string> | null;
   personStopwordsPromise: Promise<ReadonlySet<string>> | null;
+  addressStopwords: ReadonlySet<string> | null;
+  addressStopwordsPromise: Promise<ReadonlySet<string>> | null;
   /** First-name exclusions for stopword filtering. */
   firstNameExclusions: ReadonlySet<string> | null;
   firstNameExclusionCorpusLen: number;
@@ -110,6 +112,8 @@ export const createPipelineContext = (): PipelineContext => ({
   allowListPromise: null,
   personStopwords: null,
   personStopwordsPromise: null,
+  addressStopwords: null,
+  addressStopwordsPromise: null,
   firstNameExclusions: null,
   firstNameExclusionCorpusLen: 0,
 

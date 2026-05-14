@@ -369,15 +369,22 @@ export const buildLegalFormPatterns = async (): Promise<string[]> => {
   // Up to 3 all-caps words before any legal form.
   // Uses all forms (both long and short).
   // No connectors — backward extension handles them.
+  // Horizontal whitespace only ([ \t], not \s): SEC-style
+  // signature blocks have heading markers ("AMENDMENT NO. 13
+  // …\nNOVELIS SOUTH AMERICA HOLDINGS LLC") where allowing
+  // newlines lets the prefix sweep across the heading into the
+  // next-line LLC, then leaves residue like "TO SECOND" after
+  // the role-head trim. Keeping the separator on-line confines
+  // the pattern to a single physical line.
   const allcapPrefix =
     `(?:${ALLCAP_WORD})` +
-    `(?:[\\s&,.${DASH_INNER}]{1,4}(?:${ALLCAP_WORD})){0,2}`;
+    `(?:[ \\t&,.${DASH_INNER}]{1,4}(?:${ALLCAP_WORD})){0,2}`;
   const allcapAlt = allForms
     .toSorted((a, b) => b.length - a.length)
     .map(escapeForRegex)
     .join("|");
   patterns.push(
-    `${allcapPrefix}(?:\\s+|,\\s*)` + `(?:${allcapAlt})(?![${LOWER}])`,
+    `${allcapPrefix}(?:[ \\t]+|,[ \\t]*)` + `(?:${allcapAlt})(?![${LOWER}])`,
   );
 
   return patterns;

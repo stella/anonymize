@@ -16,6 +16,24 @@ import type { Match } from "@stll/text-search";
 
 import { DETECTION_SOURCES } from "../types";
 import type { Entity } from "../types";
+import {
+  OPENING_BRACKETS_INNER,
+  QUOTE_DOUBLE_INNER,
+  QUOTE_SINGLE_INNER,
+} from "../util/char-groups";
+
+/**
+ * Trailing chars that should never end an address span. Combines
+ * structural separators, opening brackets, and typographic quote
+ * variants so a span like `… GA 30326, USA (the "Premises")`
+ * does not pull the parenthetical opener into the address.
+ * The prime (`′`) catches measurement tails (`5′`) that the
+ * cluster occasionally absorbs.
+ */
+const ADDRESS_TRAILING_TRIM_RE = new RegExp(
+  `[,;:\\s${OPENING_BRACKETS_INNER}${QUOTE_DOUBLE_INNER}${QUOTE_SINGLE_INNER}′]`,
+  "u",
+);
 
 // ── Seed types ──────────────────────────────────────
 
@@ -363,8 +381,10 @@ const expandCluster = async (
   const expanded = remaining.slice(0, nearestBoundary).trimEnd();
   rightPos = end + expanded.length;
 
-  // Trim trailing punctuation
-  while (rightPos > end && /[,;:\s]/.test(fullText[rightPos - 1] ?? "")) {
+  while (
+    rightPos > end &&
+    ADDRESS_TRAILING_TRIM_RE.test(fullText[rightPos - 1] ?? "")
+  ) {
     rightPos--;
   }
 

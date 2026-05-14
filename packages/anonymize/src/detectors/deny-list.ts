@@ -193,6 +193,84 @@ const EMPTY_PERSON_STOPWORDS: ReadonlySet<string> = new Set();
 const getPersonStopwords = (ctx: PipelineContext): ReadonlySet<string> =>
   ctx.personStopwords ?? EMPTY_PERSON_STOPWORDS;
 
+// ── Address stopwords (single-token city collisions) ──
+
+const loadAddressStopwords = (
+  ctx: PipelineContext,
+): Promise<ReadonlySet<string>> => {
+  if (ctx.addressStopwordsPromise) {
+    return ctx.addressStopwordsPromise;
+  }
+  ctx.addressStopwordsPromise = (async () => {
+    try {
+      const mod: { default?: { words?: string[] } } =
+        await import("../data/address-stopwords.json");
+      const set: ReadonlySet<string> = new Set(mod.default?.words ?? []);
+      ctx.addressStopwords = set;
+      return set;
+    } catch {
+      const empty: ReadonlySet<string> = new Set();
+      ctx.addressStopwords = empty;
+      return empty;
+    }
+  })();
+  return ctx.addressStopwordsPromise;
+};
+
+const EMPTY_ADDRESS_STOPWORDS: ReadonlySet<string> = new Set();
+
+const getAddressStopwords = (ctx: PipelineContext): ReadonlySet<string> =>
+  ctx.addressStopwords ?? EMPTY_ADDRESS_STOPWORDS;
+
+/**
+ * Word characters in unicode property notation. The check is
+ * "single-token" — no internal whitespace — and we keep dashes
+ * tokens like "K-12" out by requiring the surface to be a single
+ * uninterrupted run of letters or marks.
+ */
+const SINGLE_WORD_RE = /^\p{L}+$/u;
+
+/**
+ * Capitalised words that almost never start a person name. When a
+ * single-token surname candidate is immediately followed by one of
+ * these, the "next-word is uppercase" promotion heuristic would
+ * otherwise turn section headings ("Purchase Price↵The Purchaser
+ * undertakes…") into spurious person hits. Kept narrow on purpose;
+ * the surrounding pipeline still chains real names via the deny-list
+ * cascade when both halves are surnames.
+ */
+const SENTENCE_STARTER_WORDS: ReadonlySet<string> = new Set([
+  "The",
+  "This",
+  "These",
+  "Those",
+  "An",
+  "Any",
+  "All",
+  "Each",
+  "Every",
+  "No",
+  "Now",
+  "Whereas",
+  "Whereby",
+  "Wherein",
+  "Whereof",
+  "Notwithstanding",
+  "Subject",
+  "In",
+  "On",
+  "At",
+  "By",
+  "For",
+  "If",
+  "Upon",
+  "Unless",
+  "Until",
+  "Provided",
+  "Pursuant",
+  "Such",
+]);
+
 const PERSON_CHAIN_BREAK_RE = /[!?;:]|,/u;
 const WORD_CHAR_RE = /[\p{L}\p{N}]/u;
 
@@ -261,6 +339,7 @@ export const buildDenyList = async (
     loadStopwords(ctx),
     loadAllowList(ctx),
     loadPersonStopwords(ctx),
+    loadAddressStopwords(ctx),
     loadGenericRoles(ctx),
   ]);
 
@@ -567,6 +646,7 @@ export const ensureDenyListData = async (
     loadStopwords(ctx),
     loadAllowList(ctx),
     loadPersonStopwords(ctx),
+    loadAddressStopwords(ctx),
     loadGenericRoles(ctx),
   ]);
 };
@@ -697,7 +777,19 @@ export const processDenyListMatches = (
       }
 
       const nonPersonLabels = m.labels.filter((l) => l !== "person");
+      // Single-token city-dictionary collisions (Price, Union,
+      // Brent, Time, …) are common English words that GeoNames
+      // happens to also know as tiny villages. Drop them so the
+      // "Purchase Price" / "European Union" prose stops getting
+      // tagged as an address. Multi-token spans bypass this gate
+      // — "Lake Union, WA" still resolves correctly.
+      const isStopwordSingleAddress =
+        SINGLE_WORD_RE.test(m.text) &&
+        getAddressStopwords(ctx).has(m.text.toLowerCase());
       for (const label of nonPersonLabels) {
+        if (label === "address" && isStopwordSingleAddress) {
+          continue;
+        }
         results.push({
           start: m.start,
           end: m.end,
@@ -778,12 +870,24 @@ export const processDenyListMatches = (
     // "Rate", "Server", "Code" etc. are surnames but
     // also common English words. Only accept single-
     // word matches when the next word is also uppercase
-    // (likely a full name: "Alena Zemanová").
+    // (likely a full name: "Alena Zemanová"). Skip
+    // sentence-starter articles ("The Purchaser…")
+    // which otherwise turn section headings like
+    // "Purchase Price↵The Purchaser…" into person hits.
     if (chain.length === 1) {
       const afterEnd = last.end;
       const rest = fullText.slice(afterEnd).trimStart();
+      // Require Cap + lowercase: filters out acronyms like
+      // "EU", "USA" so "Rady EU" doesn't read as a name.
       const nextIsUpper = rest.length > 1 && /^\p{Lu}\p{Ll}/u.test(rest);
       if (!nextIsUpper) {
+        continue;
+      }
+      // Reject sentence-starter articles ("The Purchaser…")
+      // so section headings followed by a sentence don't
+      // get promoted to person hits.
+      const nextWord = /^\p{L}+/u.exec(rest)?.[0] ?? "";
+      if (SENTENCE_STARTER_WORDS.has(nextWord)) {
         continue;
       }
     }
