@@ -117,7 +117,10 @@ export type { RegionId, CountryCode } from "./regions";
 // anonymize-data package in your consumer code.
 
 // ── Filters ───────────────────────────────────────
-export { filterFalsePositives } from "./filters/false-positives";
+export {
+  filterFalsePositives,
+  initStreetTypeFallback,
+} from "./filters/false-positives";
 export { boostNearMissEntities } from "./filters/confidence-boost";
 export { applyHotwordRules, initHotwordRules } from "./filters/hotword-rules";
 export type { HotwordRule } from "./filters/hotword-rules";

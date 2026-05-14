@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { filterFalsePositives } from "../false-positives";
+import {
+  filterFalsePositives,
+  initStreetTypeFallback,
+} from "../false-positives";
 import type { Entity } from "../../types";
 
 const person = (text: string): Entity => ({
@@ -9,6 +12,15 @@ const person = (text: string): Entity => ({
   text,
   score: 0.9,
   source: "ner",
+});
+
+const triggerAddress = (text: string): Entity => ({
+  start: 0,
+  end: text.length,
+  label: "address",
+  text,
+  score: 0.9,
+  source: "trigger",
 });
 
 describe("person entities containing digits", () => {
@@ -26,5 +38,14 @@ describe("person entities containing digits", () => {
     const result = filterFalsePositives([person("Jan Novák")]);
     expect(result).toHaveLength(1);
     expect(result[0]!.text).toBe("Jan Novák");
+  });
+});
+
+describe("street-type fallback for direct callers", () => {
+  test("keeps digitless trigger-sourced address after warm-up", async () => {
+    await initStreetTypeFallback();
+    const result = filterFalsePositives([triggerAddress("Via Roma")]);
+    expect(result).toHaveLength(1);
+    expect(result[0]!.text).toBe("Via Roma");
   });
 });
