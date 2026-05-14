@@ -68,6 +68,16 @@ export type TriggerStrategy =
        * word-boundary, case-insensitive.
        */
       stopWords?: string[];
+      /**
+       * Hard cap on the captured span length, in characters,
+       * regardless of where the next comma / stop char sits.
+       * Use for triggers that label short formulaic phrases
+       * ("State of Delaware") and must not absorb the rest
+       * of a long forum-selection clause when the comma is
+       * sentences away. Falls back to the default 100-char
+       * fallback when omitted.
+       */
+      maxLength?: number;
     }
   | { type: "to-end-of-line" }
   | { type: "n-words"; count: number }

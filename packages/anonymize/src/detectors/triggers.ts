@@ -396,8 +396,14 @@ const stripQuotes = (value: {
   };
 };
 
-/** Hard stop characters for to-next-comma scanning. */
-const COMMA_STOP_CHARS = new Set(["\n", "(", "\t", ";"]);
+/**
+ * Hard stop characters for to-next-comma scanning. A closing
+ * parenthesis or closing bracket terminates a clause just like
+ * an opening one: `State of New York or any other jurisdiction)`
+ * is the tail of a parenthesised insertion, not the start of a
+ * larger phrase that should be absorbed into a jurisdiction span.
+ */
+const COMMA_STOP_CHARS = new Set(["\n", "(", ")", "[", "]", "\t", ";"]);
 
 /**
  * Sentence-terminator detection: a period that genuinely ends
@@ -708,6 +714,24 @@ const extractValue = (
       // if > 100.
       if (!foundStop) {
         end = Math.min(end, 100);
+      }
+      // Per-trigger hard length cap. Applies even when a
+      // stop char was found, so jurisdiction triggers
+      // ("State of Delaware") cannot absorb forum-selection
+      // clauses that legitimately end at a comma sentences
+      // away ("…in the event any dispute arises out of…").
+      // When capping, retreat to the previous word boundary
+      // so the returned span never ends mid-word.
+      if (strategy.maxLength !== undefined && end > strategy.maxLength) {
+        let capped = strategy.maxLength;
+        while (
+          capped > 0 &&
+          /[\p{L}\p{N}]/u.test(valueText[capped - 1] ?? "") &&
+          /[\p{L}\p{N}]/u.test(valueText[capped] ?? "")
+        ) {
+          capped--;
+        }
+        end = capped;
       }
 
       const rawSlice = valueText.slice(0, end);
