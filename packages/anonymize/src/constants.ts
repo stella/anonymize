@@ -38,18 +38,18 @@ export type DetectionSource =
  * overlap resolution so deterministic detectors beat
  * probabilistic ones regardless of raw score.
  */
-export const DETECTOR_PRIORITY: Record<DetectionSource, number> = {
-  gazetteer: 5,
-  trigger: 4,
-  "legal-form": 3,
-  regex: 3,
-  "deny-list": 2,
-  coreference: 2,
-  ner: 1,
-};
+export const DETECTOR_PRIORITY = {
+  [DETECTION_SOURCES.GAZETTEER]: 5,
+  [DETECTION_SOURCES.TRIGGER]: 4,
+  [DETECTION_SOURCES.LEGAL_FORM]: 3,
+  [DETECTION_SOURCES.REGEX]: 3,
+  [DETECTION_SOURCES.DENY_LIST]: 2,
+  [DETECTION_SOURCES.COREFERENCE]: 2,
+  [DETECTION_SOURCES.NER]: 1,
+} as const satisfies Record<DetectionSource, number>;
 
 /**
- * Anonymisation operator types. Each operator defines
+ * Anonymization operator types. Each operator defines
  * how a confirmed entity is replaced in the output.
  */
 export const OPERATOR_TYPES = ["replace", "redact"] as const;

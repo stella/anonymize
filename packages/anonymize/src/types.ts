@@ -1,6 +1,12 @@
 // Runtime-free constants live in `./constants`; re-exported
 // here for back-compat with existing call sites that import
 // from `@stll/anonymize` directly.
+//
+// `verbatimModuleSyntax` requires an explicit type-only
+// import for any name used locally as a type even when it
+// is also re-exported below — applies to `DetectionSource`
+// (used by `Entity`) and `OperatorType` (used by
+// `OperatorConfig`).
 import type { DetectionSource, OperatorType } from "./constants";
 
 export {
@@ -150,8 +156,6 @@ export type TriggerRule = {
 };
 
 export { OPERATOR_TYPES, type OperatorType } from "./constants";
-// `OperatorType` is used locally below — `verbatimModuleSyntax`
-// requires an explicit type-only import alongside the re-export.
 
 /** Per-label operator selection. Key is the entity label. */
 export type OperatorConfig = {
