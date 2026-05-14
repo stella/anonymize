@@ -193,4 +193,10 @@ export const POST_NOMINALS = [
   "CIPT",
   "CIPP/E",
   "CIPP",
+
+  // UK senior barrister rank (King's/Queen's Counsel).
+  // Bare-letter form (no comma required), so the
+  // detector treats it like Ph.D./MBA: name + space + KC.
+  "KC",
+  "QC",
 ] as const;

@@ -474,6 +474,11 @@ export const DICTIONARY_META = {
     category: "Government",
     country: "DE",
   },
+  "government/ministries-GB": {
+    label: "organization",
+    category: "Government",
+    country: "GB",
+  },
   "government/ministries-SK": {
     label: "organization",
     category: "Government",
@@ -725,6 +730,9 @@ const LOADERS: Record<DictionaryId, () => Promise<JsonModule>> = {
   // eslint-disable-next-line typescript-eslint/promise-function-async
   "government/ministries-DE": () =>
     import("./government/ministries-DE.json") as Promise<JsonModule>,
+  // eslint-disable-next-line typescript-eslint/promise-function-async
+  "government/ministries-GB": () =>
+    import("./government/ministries-GB.json") as Promise<JsonModule>,
   // eslint-disable-next-line typescript-eslint/promise-function-async
   "government/ministries-SK": () =>
     import("./government/ministries-SK.json") as Promise<JsonModule>,

@@ -302,6 +302,25 @@ const HONORIFIC_PERSON: RegexDef = {
   score: 0.95,
 };
 
+// Bare post-nominal anchor: a multi-word capitalised
+// name followed by a UK senior-barrister rank
+// (KC/QC). Picks up "John Smith KC" /
+// "Jane Doe-Robinson QC" without requiring a title
+// prefix or honorific. Other post-nominals (Ph.D.,
+// MBA, …) are intentionally NOT in this alternation
+// — they over-fire on non-name patterns. KC/QC are
+// safe because the two-letter rank only ever follows
+// a real person name in UK prose.
+const POSTNOMINAL_PERSON: RegexDef = {
+  pattern:
+    `${NAME_WORD}` +
+    `(?:(?:${SP}|-){1,2}(?:${PARTICLE}${SP}+)?` +
+    `${NAME_WORD}){1,3}` +
+    `${SP}+(?:KC|QC)\\b`,
+  label: "person",
+  score: 0.95,
+};
+
 const IBAN: RegexDef = {
   pattern:
     `\\b[A-Z]{2}\\d{2}\\s?[\\dA-Z]{4}\\s?[\\dA-Z]{4}` +
@@ -612,6 +631,47 @@ const MAC_ADDRESS: RegexDef = {
 // SWIFT/BIC moved to trigger-based detection
 // (triggers.global.json) for better composability.
 
+// UK postcode (standard outward + inward). Covers:
+//   "SW1A 1AA", "EC4A 1AB", "M1 1AE", "B33 8TH",
+//   "CR2 6XH", "DN55 1PT", "GIR 0AA" (Girobank).
+// Strict format: outward area letter(s) + digit/digit
+// (or digit+letter) + space + inward digit + 2 letters.
+// Space between outward and inward is optional in
+// freely-typed text.
+const UK_POSTCODE: RegexDef = {
+  pattern:
+    `\\b(?:` +
+    // GIR 0AA — historic Girobank postcode
+    `GIR[^\\S\\n]?0AA` +
+    `|` +
+    // Standard outward (1-2 letters, 1-2 digits, opt. letter)
+    `[A-PR-UWYZ](?:[A-HK-Y][0-9](?:[0-9]|[ABEHMNPRV-Y])?|[0-9](?:[0-9]|[A-HJKPS-UW])?)` +
+    `[^\\S\\n]?[0-9][ABD-HJLNP-UW-Z]{2}` +
+    `)\\b`,
+  label: "address",
+  score: 0.9,
+};
+
+// UK National Insurance Number. Two-letter prefix +
+// six digits + optional suffix letter A-D. Strict
+// prefix rules (first letter not D/F/I/Q/U/V, second
+// letter not D/F/I/O/Q/U/V) are enforced by the
+// stdnum `gb.nino` validator at post-match time; the
+// Rust DFA upstream rejects negative lookaheads.
+// Allow optional space between each NINO segment so
+// the common printed form `AB 12 34 56 C` matches —
+// stdnum's own candidatePattern (`[A-Z]{2}\d{6}[A-Z]`)
+// only catches the compact form.
+const UK_NINO: RegexDef = {
+  pattern:
+    `\\b[A-CEGHJ-PR-TW-Z][A-CEGHJ-NPR-TW-Z]` +
+    `[^\\S\\n]?\\d{2}[^\\S\\n]?\\d{2}[^\\S\\n]?\\d{2}` +
+    `[^\\S\\n]?[A-D]?\\b`,
+  label: "social security number",
+  score: 0.95,
+  validator: gb.nino,
+};
+
 // 12-hour time: "5:00 p.m.", "12:30 AM", "5:00p.m.",
 // "11:00 a.m. Eastern Time". Captures HH:MM and the
 // am/pm marker; optional timezone suffix is not
@@ -647,6 +707,7 @@ const TIME_12H: RegexDef = {
 const ALL_REGEX_DEFS: readonly RegexDef[] = [
   TITLED_PERSON,
   HONORIFIC_PERSON,
+  POSTNOMINAL_PERSON,
   IBAN,
   EMAIL,
   INTL_PHONE,
@@ -672,6 +733,8 @@ const ALL_REGEX_DEFS: readonly RegexDef[] = [
   IPV6_ADDRESS,
   MAC_ADDRESS,
   BARE_DOMAIN,
+  UK_POSTCODE,
+  UK_NINO,
   TIME_12H,
   ...STDNUM_ENTRIES,
 ];

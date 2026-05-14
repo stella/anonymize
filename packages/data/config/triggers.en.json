@@ -49,5 +49,28 @@
     "label": "tax identification number",
     "strategy": { "type": "company-id-value" },
     "triggers": ["VAT number", "VAT ID", "tax identification number", "tax id"]
+  },
+  {
+    "id": "en-uk-companies-house",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": ["Companies House", "Company No.", "Company No", "CRN"],
+    "extensions": ["add-colon", "add-colon-space"],
+    "validations": [
+      { "type": "matches-pattern", "pattern": "^[A-Z]{2}?\\d{6,8}$" }
+    ]
+  },
+  {
+    "id": "en-uk-utr",
+    "label": "tax identification number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "UTR",
+      "Unique Tax Reference",
+      "Unique Taxpayer Reference",
+      "Self Assessment UTR"
+    ],
+    "extensions": ["add-colon", "add-colon-space"],
+    "validations": [{ "type": "matches-pattern", "pattern": "^\\d{10}$" }]
   }
 ]
