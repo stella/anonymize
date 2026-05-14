@@ -812,11 +812,12 @@ const extractValue = (
       // then 4+ value chars. The trailing class permits
       // letters so alphanumeric VAT keys like
       // "FR1A123456789" and French NIR Corsican department
-      // codes like "1 84 12 2A 075 …" are captured, but
-      // each letter must be followed by a digit or
-      // whitespace (`[A-Z](?:\d|(?=\s))`) so the regex
-      // cannot grow into running prose words.
-      // Case-insensitive so lowercase variants
+      // codes like "1 84 12 2A 075 …" are captured. A
+      // letter is only admitted when it is glued directly
+      // to a preceding digit (`(?<=\d)[A-Z]`), so the
+      // regex cannot grow past whitespace into a one-letter
+      // prose word ("SIREN 123456789 a son siège" stops at
+      // "9"). Case-insensitive so lowercase variants
       // ("DIČ cz12345678", "VAT number pl1234567890")
       // still validate via stdnum downstream. Dots are
       // permitted inside the value so dotted IDs such as
@@ -826,17 +827,16 @@ const extractValue = (
       // dot-permitting tail so single-digit dotted dates
       // ("6.11.2025") after triggers like "DNI" or "RG"
       // do not slide in. Stricter checksum validation for
-      // CPF/CNPJ runs in the regex detector. Letters are
-      // also allowed when glued directly to a preceding
-      // digit and followed by a digit or whitespace
-      // (`[A-Z](?:\d|(?=\s))`) so alphanumeric VAT keys
-      // like "FR1A123456789" and French NIR Corsican
-      // department codes like "1 84 12 2A 075 …" are
-      // captured without sliding into running prose words.
+      // CPF/CNPJ runs in the regex detector. A letter is
+      // only admitted when it is glued directly to a
+      // preceding digit (`(?<=\d)[A-Z]`), so the regex
+      // cannot grow past whitespace into a one-letter
+      // prose word ("SIREN 123456789 a son siège" stops
+      // at "9"). This still captures alphanumeric VAT
+      // keys like "FR1A123456789" and French NIR Corsican
+      // department codes like "1 84 12 2A 075 …".
       const idMatch =
-        /^[A-Z]{0,6}\s?\d{2}(?:[A-Z](?:\d|(?=\s))|[\d\s.\-/]){3,}/i.exec(
-          afterSep,
-        );
+        /^[A-Z]{0,6}\s?\d{2}(?:(?<=\d)[A-Z]|[\d\s.\-/]){3,}/i.exec(afterSep);
       if (!idMatch) {
         return null;
       }

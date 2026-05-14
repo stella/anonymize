@@ -164,7 +164,10 @@
   {
     "id": "fr-postal-code",
     "label": "address",
-    "strategy": { "type": "to-end-of-line" },
+    "strategy": {
+      "type": "match-pattern",
+      "pattern": "\\d{5}"
+    },
     "triggers": ["code postal :", "code postal:", "CP :", "CP:"]
   },
   {
