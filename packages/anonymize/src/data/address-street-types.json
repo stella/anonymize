@@ -36,14 +36,21 @@
     "Way"
   ],
   "es": [
+    "Av.",
+    "Avda.",
     "avenida",
     "bulevar",
+    "C/",
     "calle",
     "camino",
+    "carrera",
     "carretera",
+    "Cra.",
+    "Ctra.",
     "glorieta",
     "paseo",
     "plaza",
+    "Pza.",
     "ronda",
     "travesía"
   ],
