@@ -338,7 +338,32 @@ const stripQuotes = (value: {
 };
 
 /** Hard stop characters for to-next-comma scanning. */
-const COMMA_STOP_CHARS = new Set(["\n", "(", "\t"]);
+const COMMA_STOP_CHARS = new Set(["\n", "(", "\t", ";"]);
+
+/**
+ * Sentence-terminator detection: a period that genuinely ends
+ * one clause and starts another. Used by `to-next-comma` so
+ * governing-law clauses ("…State of New York. SECTION 2…")
+ * don't sweep across the period.
+ *
+ * Heuristic: the word *before* the period must be a real word
+ * (>= 5 lowercase letters), and the period must be followed by
+ * whitespace and an uppercase letter (or end-of-text). This
+ * keeps the rule from firing on:
+ *   - title abbreviations ("RNDr. Filipem", "Mr. Smith")
+ *   - street-type abbreviations ("Ste. 100", "Ave. Pleasant")
+ *   - degree abbreviations ("Ph.D. Smith")
+ * which all have a short or mixed-case word before the dot.
+ */
+const NEXT_IS_SENTENCE_START_RE = /^\.(?:\s+\p{Lu}|\s*$)/u;
+const SENTENCE_TAIL_RE = /\p{Ll}{5,}$/u;
+
+const isSentenceTerminator = (text: string, periodIndex: number): boolean => {
+  if (!NEXT_IS_SENTENCE_START_RE.test(text.slice(periodIndex))) {
+    return false;
+  }
+  return SENTENCE_TAIL_RE.test(text.slice(0, periodIndex));
+};
 
 /**
  * Field-label keywords that terminate address scanning.
@@ -422,8 +447,17 @@ const extractValue = (
 
       while (end < valueText.length) {
         const ch = valueText[end];
-        // Hard stops: newline, paren, tab
+        // Hard stops: newline, paren, tab, semicolon
         if (ch !== undefined && COMMA_STOP_CHARS.has(ch)) {
+          foundStop = true;
+          break;
+        }
+        // Sentence terminator: a period that genuinely ends
+        // a clause ("…State of Louisiana shall govern its
+        // construction. SECTION 3.05…"). The helper rejects
+        // abbreviation dots (Ste./RNDr./Mr.) by requiring a
+        // real word before the period.
+        if (ch === "." && isSentenceTerminator(valueText, end)) {
           foundStop = true;
           break;
         }
