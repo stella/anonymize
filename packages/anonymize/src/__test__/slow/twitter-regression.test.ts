@@ -17,7 +17,9 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { describe, expect, test } from "bun:test";
+import { describe, expect, setDefaultTimeout, test } from "bun:test";
+
+setDefaultTimeout(60_000);
 
 import {
   createPipelineContext,
@@ -686,9 +688,7 @@ describe("twitter merger — false negatives (regression)", () => {
   test.skip("TODO(anon-223): false negative — convertible-note coupon rates (0.25%, 0.375%, 0%) not detected", async () => {
     const entities = await getEntities();
     const rates = ["0.25%", "0.375%", "0%"];
-    expect(rates.every((r) => entities.some((e) => e.text.includes(r)))).toBe(
-      true,
-    );
+    expect(rates.every((r) => entities.some((e) => e.text === r))).toBe(true);
   });
 
   test.skip('TODO(anon-224): false negative — note maturity years ("due 2027" etc.) not detected', async () => {
@@ -723,9 +723,8 @@ describe("twitter merger — false negatives (regression)", () => {
     // outstanding shares.
     const entities = await getEntities();
     expect(
-      entities.some(
-        (e) =>
-          /^(?:5,000,000,000|763,577,530)$/.test(e.text) && e.label !== "date",
+      ["5,000,000,000", "763,577,530"].every((v) =>
+        entities.some((e) => e.text === v && e.label !== "date"),
       ),
     ).toBe(true);
   });
