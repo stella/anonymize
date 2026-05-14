@@ -67,7 +67,7 @@
   {
     "id": "pl-person-honorific",
     "label": "person",
-    "strategy": { "type": "to-next-comma" },
+    "strategy": { "type": "n-words", "count": 2 },
     "triggers": [
       "Pan",
       "Pani",
