@@ -2,7 +2,7 @@ import { defineConfig } from "tsdown";
 
 export default defineConfig([
   {
-    entry: ["src/index.ts"],
+    entry: ["src/index.ts", "src/constants.ts"],
     outDir: "dist",
     format: ["esm"],
     dts: true,
@@ -11,7 +11,7 @@ export default defineConfig([
     hash: false,
   },
   {
-    entry: ["src/wasm.ts"],
+    entry: ["src/wasm.ts", "src/constants.ts"],
     outDir: "wasm/dist",
     format: ["esm"],
     dts: true,

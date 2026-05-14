@@ -1,35 +1,13 @@
-/**
- * Source of a detected entity span.
- * Ordered by detection layer in the pipeline.
- */
-export const DETECTION_SOURCES = {
-  TRIGGER: "trigger",
-  REGEX: "regex",
-  DENY_LIST: "deny-list",
-  LEGAL_FORM: "legal-form",
-  GAZETTEER: "gazetteer",
-  NER: "ner",
-  COREFERENCE: "coreference",
-} as const;
+// Runtime-free constants live in `./constants`; re-exported
+// here for back-compat with existing call sites that import
+// from `@stll/anonymize` directly.
+import type { DetectionSource, OperatorType } from "./constants";
 
-export type DetectionSource =
-  (typeof DETECTION_SOURCES)[keyof typeof DETECTION_SOURCES];
-
-/**
- * Priority levels for detection sources.
- * Higher = more structurally reliable. Used during
- * overlap resolution so deterministic detectors beat
- * probabilistic ones regardless of raw score.
- */
-export const DETECTOR_PRIORITY: Record<DetectionSource, number> = {
-  gazetteer: 5,
-  trigger: 4,
-  "legal-form": 3,
-  regex: 3,
-  "deny-list": 2,
-  coreference: 2,
-  ner: 1,
-};
+export {
+  DETECTION_SOURCES,
+  DETECTOR_PRIORITY,
+  type DetectionSource,
+} from "./constants";
 
 /**
  * A detected PII entity span in the source text.
@@ -171,13 +149,9 @@ export type TriggerRule = {
   includeTrigger: boolean;
 };
 
-/**
- * Anonymisation operator types. Each operator defines
- * how a confirmed entity is replaced in the output.
- */
-export const OPERATOR_TYPES = ["replace", "redact"] as const;
-
-export type OperatorType = (typeof OPERATOR_TYPES)[number];
+export { OPERATOR_TYPES, type OperatorType } from "./constants";
+// `OperatorType` is used locally below — `verbatimModuleSyntax`
+// requires an explicit type-only import alongside the re-export.
 
 /** Per-label operator selection. Key is the entity label. */
 export type OperatorConfig = {
@@ -367,37 +341,7 @@ export type PipelineConfig = {
   dictionaries?: Dictionaries;
 };
 
-/**
- * Canonical entity labels used across the pipeline.
- * NER models may use different native labels; the bench
- * NER wrapper maps model output to these canonical names.
- *
- * These labels are ephemeral: entities are regenerated on
- * every pipeline run and never persisted to the database.
- * Renaming a label here requires no migration.
- */
-export const DEFAULT_ENTITY_LABELS = [
-  "person",
-  "organization",
-  "phone number",
-  "address",
-  "email address",
-  "date",
-  "date of birth",
-  "bank account number",
-  "iban",
-  "tax identification number",
-  "identity card number",
-  "birth number",
-  "national identification number",
-  "social security number",
-  "registration number",
-  "credit card number",
-  "passport number",
-  "monetary amount",
-  "land parcel",
-  "misc",
-] as const;
+export { DEFAULT_ENTITY_LABELS } from "./constants";
 
 export const isLegalFormsEnabled = (
   config: Pick<PipelineConfig, "enableLegalForms">,
