@@ -4,9 +4,9 @@ import {
   createPipelineContext,
   DEFAULT_ENTITY_LABELS,
   runPipeline,
-} from "../index";
-import type { Dictionaries, PipelineConfig } from "../types";
-import { loadTestDictionaries } from "./load-dictionaries";
+} from "../../index";
+import type { Dictionaries, PipelineConfig } from "../../types";
+import { loadTestDictionaries } from "../load-dictionaries";
 
 let dictionaries: Dictionaries;
 const getDictionaries = async () => {

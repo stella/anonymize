@@ -1,11 +1,20 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import {
   runPipeline,
   DEFAULT_ENTITY_LABELS,
   createPipelineContext,
 } from "../index";
 import { processLegalFormMatches } from "../detectors/legal-forms";
+import type { PipelineContext } from "../context";
 import type { PipelineConfig } from "../types";
+
+// The Rust regex-set DFA build is CPU-bound and can briefly
+// exceed the 5 s default when CI is under load. Most tests
+// in this file build a fresh PipelineContext just to keep
+// scenarios isolated, so the per-test build cost adds up.
+// 15 s gives enough headroom to absorb the cold start without
+// hiding real perf regressions.
+setDefaultTimeout(15_000);
 
 const CONFIG: PipelineConfig = {
   threshold: 0.3,
@@ -22,13 +31,24 @@ const CONFIG: PipelineConfig = {
   workspaceId: "test",
 };
 
+// One shared PipelineContext for every test in this file. The
+// context caches the unified search instance (the expensive
+// DFA build), so reusing it means we pay the build cost once
+// instead of once per `detect()` call. Each test still gets
+// a fresh `runPipeline` invocation against fresh input, which
+// is what the test cases actually care about.
+let sharedCtx: PipelineContext | undefined;
+const getCtx = (): PipelineContext => {
+  if (!sharedCtx) sharedCtx = createPipelineContext();
+  return sharedCtx;
+};
+
 const detect = async (text: string, config?: Partial<PipelineConfig>) => {
-  const ctx = createPipelineContext();
   return runPipeline({
     fullText: text,
     config: { ...CONFIG, ...config },
     gazetteerEntries: [],
-    context: ctx,
+    context: getCtx(),
   });
 };
 

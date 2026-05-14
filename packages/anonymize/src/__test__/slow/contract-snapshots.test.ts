@@ -8,12 +8,12 @@ import {
   DEFAULT_ENTITY_LABELS,
   redactText,
   runPipeline,
-} from "../index";
-import type { PipelineContext } from "../context";
-import type { Dictionaries, Entity, PipelineConfig } from "../types";
-import { loadTestDictionaries } from "./load-dictionaries";
+} from "../../index";
+import type { PipelineContext } from "../../context";
+import type { Dictionaries, Entity, PipelineConfig } from "../../types";
+import { loadTestDictionaries } from "../load-dictionaries";
 
-const FIXTURES_DIR = join(import.meta.dir, "fixtures", "contracts");
+const FIXTURES_DIR = join(import.meta.dir, "..", "fixtures", "contracts");
 const UPDATE_SNAPSHOTS = process.env.UPDATE_CONTRACT_SNAPSHOTS === "1";
 
 let dictionaries: Dictionaries;
