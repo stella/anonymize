@@ -29,7 +29,7 @@ import {
 } from "./filters/confidence-boost";
 import {
   filterFalsePositives,
-  initStreetTypeFallback,
+  initAddressComponents,
   loadGenericRoles,
 } from "./filters/false-positives";
 import {
@@ -647,7 +647,7 @@ export const runPipeline = async (
       loadGenericRoles(ctx),
       initPrepositions(),
       initStreetAbbrevs(),
-      initStreetTypeFallback(),
+      initAddressComponents(),
       warmAddressStopKeywords(),
       zoneInit,
       hotwordInit,
@@ -657,7 +657,7 @@ export const runPipeline = async (
       loadGenericRoles(ctx),
       initPrepositions(),
       initStreetAbbrevs(),
-      initStreetTypeFallback(),
+      initAddressComponents(),
       warmAddressStopKeywords(),
       hotwordInit,
     ]);

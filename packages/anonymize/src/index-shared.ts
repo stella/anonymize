@@ -119,7 +119,7 @@ export type { RegionId, CountryCode } from "./regions";
 // ── Filters ───────────────────────────────────────
 export {
   filterFalsePositives,
-  initStreetTypeFallback,
+  initAddressComponents,
 } from "./filters/false-positives";
 export { boostNearMissEntities } from "./filters/confidence-boost";
 export { applyHotwordRules, initHotwordRules } from "./filters/hotword-rules";

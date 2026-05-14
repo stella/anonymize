@@ -8,58 +8,14 @@ const TEMPLATE_PLACEHOLDER_RE = /^(?:\.{3,}|_{3,}|\[[\w\s]+\]|\{[\w\s]+\})$/;
 // Patterns that indicate a genuine address (not prose).
 const POSTAL_CODE_RE = /\d{3}\s?\d{2}/;
 const HAS_DIGIT_RE = /\d/;
-const ADDRESS_COMPONENTS_RE =
-  /(?:^|\s)(?:ul\.|ulice|nám\.|náměstí|tř\.|třída|nábř\.|nábřeží|č\.p\.|č\.ev\.|č\.|sídliště|bulvár)(?=[\s,./]|$)/i;
-
-// Multilingual street-type fallback: loaded from
-// `address-street-types.json` so digitless trigger-sourced
-// addresses anchored by a non-Czech street word (e.g. Italian
-// `residente in Via Roma`) are not dropped by the digit gate.
-// Falls back to `null` (no extra acceptance) before warm-up.
-let _streetTypeFallbackRe: RegExp | null = null;
-let _streetTypeFallbackPromise: Promise<void> | null = null;
-
-const loadStreetTypeFallback = async (): Promise<void> => {
-  try {
-    const mod: { default?: Record<string, unknown> } =
-      await import("../data/address-street-types.json");
-    const data = mod.default ?? {};
-    const words: string[] = [];
-    for (const [key, value] of Object.entries(data)) {
-      if (key.startsWith("_")) continue;
-      if (!Array.isArray(value)) continue;
-      for (const w of value) {
-        if (typeof w === "string" && w.length > 0) words.push(w);
-      }
-    }
-    if (words.length === 0) {
-      _streetTypeFallbackRe = null;
-      return;
-    }
-    words.sort((a, b) => b.length - a.length);
-    const escaped = words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-    // Anchor at the start of the entity text; punctuation-safe
-    // lookaround so dotted forms (`v.le`, `ul.`) match before a
-    // following space, comma, or letter.
-    _streetTypeFallbackRe = new RegExp(
-      `^(?:${escaped.join("|")})(?![\\p{L}\\p{N}])`,
-      "iu",
-    );
-  } catch {
-    _streetTypeFallbackRe = null;
-  }
-};
-
-/** Ensure street-type fallback regex is loaded. */
-export const initStreetTypeFallback = (): Promise<void> => {
-  if (!_streetTypeFallbackPromise) {
-    _streetTypeFallbackPromise = loadStreetTypeFallback();
-  }
-  return _streetTypeFallbackPromise;
-};
-
-const matchesStreetTypeFallback = (text: string): boolean =>
-  _streetTypeFallbackRe?.test(text) ?? false;
+// Address-component anchors not derived from per-language
+// street-type vocabulary: Czech house/parcel number forms
+// (č.p., č.ev., č.) and "sídliště" (housing estate) which
+// is a settlement type rather than a street type. Polish,
+// English, etc. street vocabulary is loaded from
+// address-street-types.json via initAddressComponents.
+const ADDRESS_COMPONENT_EXTRA_RE =
+  /(?:^|\s)(?:č\.p\.|č\.ev\.|č\.|sídliště)(?=[\s,./]|$)/i;
 
 // Jurisdiction patterns: "State of X", "Commonwealth of X",
 // "District of X", "Territory of X"
@@ -200,6 +156,71 @@ export const loadGenericRoles = (
 /** Sync accessor — returns empty set before init. */
 const getGenericRoles = (ctx: PipelineContext): ReadonlySet<string> =>
   ctx.genericRoles ?? EMPTY_GENERIC_ROLES;
+
+// ── Street-type vocabulary (lazy-loaded from JSON) ───
+//
+// Builds a single regex from address-street-types.json
+// that recognises any per-language street word (Polish
+// "aleja", "ulicy"; English "Street", "Avenue"; etc.) as
+// a genuine address component. Falls back to a permissive
+// match-nothing regex before init.
+
+const NO_MATCH_RE = /^\b$/;
+let _streetTypesRe: RegExp = NO_MATCH_RE;
+let _streetTypesPromise: Promise<void> | null = null;
+
+const escapeRegex = (s: string): string =>
+  s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const loadStreetTypeRegex = async (): Promise<void> => {
+  try {
+    const mod: { default?: Record<string, string[] | string> } =
+      await import("../data/address-street-types.json");
+    const data = mod.default ?? {};
+    const words = new Set<string>();
+    for (const [key, val] of Object.entries(data)) {
+      if (key.startsWith("_")) continue;
+      if (!Array.isArray(val)) continue;
+      for (const w of val) {
+        if (typeof w === "string" && w.length > 0) {
+          words.add(w.toLowerCase());
+        }
+      }
+    }
+    if (words.size === 0) {
+      _streetTypesRe = NO_MATCH_RE;
+      return;
+    }
+    // Longest first so "aleja" doesn't shadow "al."
+    const alternation = [...words]
+      .sort((a, b) => b.length - a.length)
+      .map(escapeRegex)
+      .join("|");
+    _streetTypesRe = new RegExp(
+      `(?:^|\\s)(?:${alternation})(?=[\\s,./]|$)`,
+      "iu",
+    );
+  } catch {
+    _streetTypesRe = NO_MATCH_RE;
+  }
+};
+
+/** Ensure street-type vocabulary is loaded. */
+export const initAddressComponents = (): Promise<void> => {
+  if (!_streetTypesPromise) {
+    _streetTypesPromise = loadStreetTypeRegex();
+  }
+  return _streetTypesPromise;
+};
+
+/**
+ * True when `text` contains a recognised address
+ * component: either a per-language street word (loaded
+ * from JSON) or a language-agnostic anchor such as a
+ * Czech house number form.
+ */
+const hasAddressComponent = (text: string): boolean =>
+  _streetTypesRe.test(text) || ADDRESS_COMPONENT_EXTRA_RE.test(text);
 
 const isCallerOwnedEntity = (entity: Entity): boolean =>
   entity.sourceDetail === "custom-deny-list" ||
@@ -344,9 +365,8 @@ export const filterFalsePositives = (
       trimmed.length > 40 &&
       !POSTAL_CODE_RE.test(trimmed) &&
       !HAS_DIGIT_RE.test(trimmed) &&
-      !ADDRESS_COMPONENTS_RE.test(trimmed) &&
-      !JURISDICTION_RE.test(trimmed) &&
-      !matchesStreetTypeFallback(trimmed)
+      !hasAddressComponent(trimmed) &&
+      !JURISDICTION_RE.test(trimmed)
     ) {
       continue;
     }
@@ -363,9 +383,8 @@ export const filterFalsePositives = (
       normalized.label === "address" &&
       normalized.source === "trigger" &&
       !HAS_DIGIT_RE.test(trimmed) &&
-      !ADDRESS_COMPONENTS_RE.test(trimmed) &&
-      !JURISDICTION_RE.test(trimmed) &&
-      !matchesStreetTypeFallback(trimmed)
+      !hasAddressComponent(trimmed) &&
+      !JURISDICTION_RE.test(trimmed)
     ) {
       continue;
     }

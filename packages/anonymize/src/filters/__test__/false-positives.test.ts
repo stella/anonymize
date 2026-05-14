@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   filterFalsePositives,
-  initStreetTypeFallback,
+  initAddressComponents,
 } from "../false-positives";
 import type { Entity } from "../../types";
 
@@ -43,7 +43,7 @@ describe("person entities containing digits", () => {
 
 describe("street-type fallback for direct callers", () => {
   test("keeps digitless trigger-sourced address after warm-up", async () => {
-    await initStreetTypeFallback();
+    await initAddressComponents();
     const result = filterFalsePositives([triggerAddress("Via Roma")]);
     expect(result).toHaveLength(1);
     expect(result[0]!.text).toBe("Via Roma");
