@@ -58,6 +58,10 @@ type ContractFixture = {
   textPath: string;
   snapshotPath: string;
   assertQuality?: (entities: Entity[]) => void;
+  // Override the default 5s bun:test timeout for large
+  // public-filing fixtures (the Twitter merger doc is
+  // ~277 KB and walks every detector).
+  timeoutMs?: number;
 };
 
 const FIXTURES: ContractFixture[] = [
@@ -491,6 +495,22 @@ const FIXTURES: ContractFixture[] = [
     },
   },
   {
+    name: "edgar twitter merger agreement",
+    textPath: join(FIXTURES_DIR, "en", "twitter-merger-agreement.txt"),
+    snapshotPath: join(
+      FIXTURES_DIR,
+      "en",
+      "twitter-merger-agreement.snapshot.json",
+    ),
+    // Quality assertions intentionally minimal here — the explicit
+    // regression cases (false-positive deny-list bleed, missing
+    // party names, address-block truncation, defined-term
+    // coreference) live in slow/twitter-regression.test.ts marked
+    // `test.skip` until each detector bug is fixed. This snapshot
+    // exists only to make the diff visible going forward.
+    timeoutMs: 60_000,
+  },
+  {
     name: "german geschäftsführer service agreement",
     textPath: join(FIXTURES_DIR, "de", "geschaeftsfuehrer-dienstvertrag.txt"),
     snapshotPath: join(
@@ -560,28 +580,32 @@ const writeSnapshot = (path: string, snapshot: ContractSnapshot) => {
 
 describe("contract snapshots", () => {
   for (const fixture of FIXTURES) {
-    test(fixture.name, async () => {
-      const fullText = readFileSync(fixture.textPath, "utf8");
-      const entities = await runPipeline({
-        fullText,
-        config: { ...CONFIG, dictionaries: await getDictionaries() },
-        gazetteerEntries: [],
-        context: CONTEXT,
-      });
+    test(
+      fixture.name,
+      async () => {
+        const fullText = readFileSync(fixture.textPath, "utf8");
+        const entities = await runPipeline({
+          fullText,
+          config: { ...CONFIG, dictionaries: await getDictionaries() },
+          gazetteerEntries: [],
+          context: CONTEXT,
+        });
 
-      fixture.assertQuality?.(entities);
+        fixture.assertQuality?.(entities);
 
-      const snapshot = toSnapshot(fullText, entities, CONTEXT);
+        const snapshot = toSnapshot(fullText, entities, CONTEXT);
 
-      if (UPDATE_SNAPSHOTS || !existsSync(fixture.snapshotPath)) {
-        writeSnapshot(fixture.snapshotPath, snapshot);
-      }
+        if (UPDATE_SNAPSHOTS || !existsSync(fixture.snapshotPath)) {
+          writeSnapshot(fixture.snapshotPath, snapshot);
+        }
 
-      const expected = JSON.parse(
-        readFileSync(fixture.snapshotPath, "utf8"),
-      ) as ContractSnapshot;
+        const expected = JSON.parse(
+          readFileSync(fixture.snapshotPath, "utf8"),
+        ) as ContractSnapshot;
 
-      expect(snapshot).toEqual(expected);
-    });
+        expect(snapshot).toEqual(expected);
+      },
+      fixture.timeoutMs,
+    );
   }
 });
