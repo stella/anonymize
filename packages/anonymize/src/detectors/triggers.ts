@@ -814,9 +814,12 @@ const extractValue = (
       // permitted inside the value so dotted IDs such as
       // Brazilian RG ("12.345.678-9") and dotted CPF/CNPJ
       // values introduced by triggers are captured.
-      // Stricter checksum validation for CPF/CNPJ runs in
-      // the regex detector.
-      const idMatch = /^[A-Z]{0,6}\s?\d[\d\s.\-/]{4,}/i.exec(afterSep);
+      // Require at least two leading digits before the
+      // dot-permitting tail so single-digit dotted dates
+      // ("6.11.2025") after triggers like "DNI" or "RG"
+      // do not slide in. Stricter checksum validation for
+      // CPF/CNPJ runs in the regex detector.
+      const idMatch = /^[A-Z]{0,6}\s?\d{2}[\d\s.\-/]{3,}/i.exec(afterSep);
       if (!idMatch) {
         return null;
       }
