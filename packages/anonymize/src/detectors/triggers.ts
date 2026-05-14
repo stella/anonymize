@@ -346,17 +346,49 @@ const COMMA_STOP_CHARS = new Set(["\n", "(", "\t", ";"]);
  * governing-law clauses ("…State of New York. SECTION 2…")
  * don't sweep across the period.
  *
- * Heuristic: the word *before* the period must be a real word
- * (>= 5 lowercase letters), and the period must be followed by
- * whitespace and an uppercase letter (or end-of-text). This
- * keeps the rule from firing on:
- *   - title abbreviations ("RNDr. Filipem", "Mr. Smith")
- *   - street-type abbreviations ("Ste. 100", "Ave. Pleasant")
- *   - degree abbreviations ("Ph.D. Smith")
- * which all have a short or mixed-case word before the dot.
+ * Three positive signals (any one terminates):
+ *   1. Long lowercase tail before the dot (>= 5 letters) —
+ *      catches "…construction. SECTION 2…", "…vykonává.".
+ *   2. Currency/amount tail (zł, Kč, USD, €) — catches
+ *      "…w kwocie 1000 zł. Termin płatności…".
+ *   3. Proper-noun head: a capitalized word of >= 4 letters
+ *      ending in lowercase, with no internal uppercase, AND
+ *      a substantial next clause (Capital + >= 2 lowercase).
+ *      Catches short city names that the lowercase-tail rule
+ *      misses: "…z siedzibą w Łódź. Kapitał zakładowy…",
+ *      "…seat in Brno. Section 2…".
+ *
+ * The rule must NOT fire on:
+ *   - title abbreviations: "Mr.", "Mrs.", "Dr.", "Hon.",
+ *     "Sr.", "Jr." (head <= 3 chars or insufficient Ll tail)
+ *   - degree abbreviations: "Ph.D.", "RNDr.", "MUDr.",
+ *     "Ing." (internal periods or internal uppercase block
+ *      the proper-noun pattern)
+ *   - street-type abbreviations: "Ste.", "Ave.", "Inc.",
+ *     "ul.", "al.", "nábř." (lowercase initials or
+ *     insufficient Ll tail)
+ *   - small-word lowercase abbreviations: "prof.", "inż.",
+ *     "hab." (no leading uppercase, so the proper-noun rule
+ *     can't fire)
  */
 const NEXT_IS_SENTENCE_START_RE = /^\.(?:\s+\p{Lu}|\s*$)/u;
 const SENTENCE_TAIL_RE = /\p{Ll}{5,}$/u;
+/**
+ * Proper-noun tail: capital letter + >= 3 lowercase letters,
+ * preceded by a non-letter and non-period (so we don't slice
+ * into the middle of an acronym or a multi-dot abbreviation).
+ * The 4-character minimum excludes 2–3-char titles ("Mr",
+ * "Mrs", "Dr", "Inc", "Ste"); the all-lowercase tail
+ * excludes mixed-case degrees ("RNDr", "MUDr").
+ */
+const PROPER_NOUN_HEAD_RE = /(?:^|[^\p{L}.])\p{Lu}\p{Ll}{3,}$/u;
+/**
+ * Next clause begins with a real word: capital + >= 2
+ * lowercase letters. Filters cases where a capitalized
+ * abbreviation (e.g., "Smith Inc.") follows a proper noun,
+ * which would otherwise look sentence-like.
+ */
+const NEXT_IS_REAL_SENTENCE_RE = /^\.\s+\p{Lu}\p{Ll}{2,}/u;
 /**
  * Short currency-abbreviation tail (zł, Kč, gr, Ft, kr,
  * лв, USD, PLN, EUR, …). When a period follows one of
@@ -378,11 +410,18 @@ const CURRENCY_TAIL_RE =
   /(?:(?<![\p{L}])(?:zł|Kč|gr|Ft|kr|лв|USD|PLN|EUR|CZK|GBP|CHF|HUF|RON|SEK|NOK|DKK)|[€$£])$/iu;
 
 const isSentenceTerminator = (text: string, periodIndex: number): boolean => {
-  if (!NEXT_IS_SENTENCE_START_RE.test(text.slice(periodIndex))) {
+  const tail = text.slice(periodIndex);
+  if (!NEXT_IS_SENTENCE_START_RE.test(tail)) {
     return false;
   }
   const head = text.slice(0, periodIndex);
-  return SENTENCE_TAIL_RE.test(head) || CURRENCY_TAIL_RE.test(head);
+  if (SENTENCE_TAIL_RE.test(head) || CURRENCY_TAIL_RE.test(head)) {
+    return true;
+  }
+  // Proper-noun head (short city names like "Łódź.",
+  // "Brno.", "York.") gated by a real-word next clause
+  // to avoid breaking on title chains ("Mrs. Smith Inc.").
+  return PROPER_NOUN_HEAD_RE.test(head) && NEXT_IS_REAL_SENTENCE_RE.test(tail);
 };
 
 /**
