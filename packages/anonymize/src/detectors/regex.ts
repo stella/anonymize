@@ -948,19 +948,35 @@ type CurrenciesData = {
 /**
  * Magnitude suffixes that turn a bare number into a
  * larger monetary amount: `$25 million`, `EUR 1.5
- * billion`, `$500K`, `$2bn`. Kept as a typed constant
- * (rather than an inline regex alternation) so locale
+ * billion`, `$500K`, `$2bn`. Kept as typed constants
+ * (rather than inline regex alternations) so locale
  * variants can be added without touching pattern code.
  *
- * Word forms are matched case-insensitively and allow
- * an optional trailing plural `s` ("two millions" is
- * ungrammatical but appears in translated text).
+ * Three groups with deliberately different casing
+ * rules:
  *
- * Abbreviations cover finance/journalism shorthand. We
- * deliberately exclude single-letter `B`/`T` because
- * they collide with too many non-monetary contexts
- * (grades, classes, model designators); `bn`/`tn` are
- * the unambiguous forms used in serious prose.
+ *   - `MAGNITUDE_WORDS` — written-out units. Matched
+ *     case-insensitively with an optional plural `s`
+ *     because uppercase contract headings and badly
+ *     pluralised translations both appear in the wild.
+ *
+ *   - `MAGNITUDE_ABBREVIATIONS_CI` — multi-letter
+ *     abbreviations (`bn`, `bln`, `tn`, `trn`). Safe
+ *     to match case-insensitively: no plausible
+ *     non-monetary collision with `BN`/`Bn`/`bn` after
+ *     a currency prefix.
+ *
+ *   - `MAGNITUDE_ABBREVIATIONS_CS` — single-letter
+ *     abbreviations (`K`, `M`). Matched case-
+ *     sensitively (uppercase only) because lowercase
+ *     `m` collides with the metre unit (`$25 m cable`)
+ *     and lowercase `k` with kelvin/kilo. The
+ *     finance/journalism convention for these
+ *     shorthands is uppercase anyway (`$500K`, `$25M`).
+ *
+ * Single-letter `B` and `T` are deliberately omitted
+ * even in uppercase form: too many non-monetary
+ * collisions (grades, classes, model designators).
  */
 const MAGNITUDE_WORDS: readonly string[] = [
   "thousand",
@@ -970,14 +986,14 @@ const MAGNITUDE_WORDS: readonly string[] = [
   "quadrillion",
 ];
 
-const MAGNITUDE_ABBREVIATIONS: readonly string[] = [
+const MAGNITUDE_ABBREVIATIONS_CI: readonly string[] = [
   "bn",
   "bln",
   "tn",
   "trn",
-  "K",
-  "M",
 ];
+
+const MAGNITUDE_ABBREVIATIONS_CS: readonly string[] = ["K", "M"];
 
 /**
  * Build symbol character class, code alternation,
@@ -1065,24 +1081,26 @@ const buildCurrencyPatterns = (data: CurrenciesData): string[] => {
     `(?:\\d{1,2}${DASH}?|${DASH}{1,2}))?`;
   const END = `(?:\\b|(?=\\s|[.,;!?)]|$))`;
 
-  // Optional magnitude suffix: "$25 million", "$2bn".
-  // Word form: requires preceding whitespace and allows
-  //   an optional plural `s` ("billions"). Wrapped in
-  //   (?i:...) so the alternation matches regardless of
-  //   case without enabling case-insensitive mode for
-  //   the whole pattern (currency codes stay strict).
-  // Abbrev form: optional preceding whitespace so both
-  //   "$25K" (attached) and "$25 K" (spaced) work.
-  // The trailing \b prevents an abbrev letter from
-  // eating into the next word: "$25 km" keeps to "$25"
-  // because " k" + "m" has no word boundary after `k`.
+  // Optional magnitude suffix: "$25 million", "$2bn",
+  // "$500K". Word and CI-abbrev branches accept any
+  // case; the CS-abbrev branch requires the uppercase
+  // form so lowercase `m`/`k` (metre, kelvin) does not
+  // hijack a perfectly innocent "$25 m cable" span.
+  //
+  // Each branch ends in `\b`, which prevents an abbrev
+  // letter from eating into the next word ("$25 km"
+  // stays at "$25" because ` k` + `m` has no word
+  // boundary after the `k`).
   const wordsAlt = MAGNITUDE_WORDS.map(escapeRegex).join("|");
-  const abbrAlt = MAGNITUDE_ABBREVIATIONS.map(escapeRegex).join("|");
+  const abbrCiAlt = MAGNITUDE_ABBREVIATIONS_CI.map(escapeRegex).join("|");
+  const abbrCsAlt = MAGNITUDE_ABBREVIATIONS_CS.map(escapeRegex).join("|");
   const MAGNITUDE =
     `(?:` +
     `[^\\S\\n\\t]+(?i:(?:${wordsAlt})s?)\\b` +
     `|` +
-    `[^\\S\\n\\t]?(?i:${abbrAlt})\\b` +
+    `[^\\S\\n\\t]?(?i:${abbrCiAlt})\\b` +
+    `|` +
+    `[^\\S\\n\\t]?(?:${abbrCsAlt})\\b` +
     `)?`;
 
   // Leading symbol: $100, €1,000.50, € 100000,

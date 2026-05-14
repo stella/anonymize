@@ -129,4 +129,19 @@ describe("monetary amounts with magnitude suffix", () => {
     expect(money).toHaveLength(1);
     expect(money[0]!.text).toBe("$25");
   });
+
+  test("'$25 m cable' is not extended (lowercase m = metre, not million)", async () => {
+    // Single-letter K/M are case-sensitive: lowercase
+    // `m` after a price is overwhelmingly metres, not
+    // million ("$25 m cable", "$10 m above sea level").
+    // Finance/journalism shorthand always capitalises.
+    const money = findMoney(await detect("Need a $25 m cable for the rig."));
+    expect(money).toHaveLength(1);
+    expect(money[0]!.text).toBe("$25");
+  });
+
+  test("'$25M' uppercase abbreviation still captures as million", async () => {
+    const money = findMoney(await detect("Round closed at $25M."));
+    expect(money.find((e) => e.text === "$25M")).toBeDefined();
+  });
 });
