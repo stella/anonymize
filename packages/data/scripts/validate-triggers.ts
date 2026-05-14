@@ -15,6 +15,7 @@ const VALID_STRATEGY_TYPES = new Set([
   "n-words",
   "company-id-value",
   "address",
+  "match-pattern",
 ]);
 
 const VALID_VALIDATION_TYPES = new Set([
@@ -160,6 +161,34 @@ const validateFile = async (filePath: string): Promise<ValidationError[]> => {
           groupIndex: i,
           message: `address strategy maxChars must be >= 1`,
         });
+      }
+      if (s.type === "match-pattern") {
+        if (typeof s.pattern !== "string" || s.pattern.length === 0) {
+          errors.push({
+            file: fileName,
+            groupIndex: i,
+            message: `match-pattern strategy requires a non-empty pattern`,
+          });
+        } else {
+          try {
+            new RegExp(s.pattern, typeof s.flags === "string" ? s.flags : "");
+          } catch (err) {
+            errors.push({
+              file: fileName,
+              groupIndex: i,
+              message: `match-pattern strategy has invalid regex: ${
+                err instanceof Error ? err.message : String(err)
+              }`,
+            });
+          }
+        }
+        if (s.flags !== undefined && typeof s.flags !== "string") {
+          errors.push({
+            file: fileName,
+            groupIndex: i,
+            message: `match-pattern strategy flags must be a string`,
+          });
+        }
       }
     }
 

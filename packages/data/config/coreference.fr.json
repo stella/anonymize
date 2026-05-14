@@ -1,0 +1,27 @@
+[
+  {
+    "label": "(ci-après dénommé(e) \"X\") with French guillemets or quotes",
+    "pattern": "\\(\\s*ci-après\\s+(?:dénommée?s?|désignée?s?|appelée?s?)(?:\\(e\\)s?)?\\s+(?:la|le|les|l['’])?\\s*[«\"'„‚]([^»\"'\"”‟]+)[»\"'\"”]\\s*\\)",
+    "flags": "giu"
+  },
+  {
+    "label": "ci-après dénommé \"X\" (no parens, French quotes)",
+    "pattern": "ci-après\\s+(?:dénommée?s?|désignée?s?|appelée?s?)(?:\\(e\\)s?)?\\s+(?:la|le|les|l['’])?\\s*[«\"'„‚]([^»\"'\"”‟]+)[»\"'\"”]",
+    "flags": "giu"
+  },
+  {
+    "label": "(« X ») or (\"X\") — bare parenthetical define-term",
+    "pattern": "\\(\\s*[«\"'„‚](?:la|le|les|l['’])?\\s*([^»\"'\"”‟]+)[»\"'\"”]\\s*\\)",
+    "flags": "giu"
+  },
+  {
+    "label": "désigné ci-après \"X\"",
+    "pattern": "désignée?s?(?:\\(e\\)s?)?\\s+ci-après\\s+(?:comme\\s+)?(?:la|le|les|l['’])?\\s*[«\"'„‚]([^»\"'\"”‟]+)[»\"'\"”]",
+    "flags": "giu"
+  },
+  {
+    "label": "dénommé(e) ci-après \"X\"",
+    "pattern": "dénommée?s?(?:\\(e\\)s?)?\\s+ci-après\\s+(?:la|le|les|l['’])?\\s*[«\"'„‚]([^»\"'\"”‟]+)[»\"'\"”]",
+    "flags": "giu"
+  }
+]

@@ -88,7 +88,21 @@ export type TriggerStrategy =
   | { type: "to-end-of-line" }
   | { type: "n-words"; count: number }
   | { type: "company-id-value" }
-  | { type: "address"; maxChars?: number };
+  | { type: "address"; maxChars?: number }
+  | {
+      /**
+       * Extract the first regex match in the value text.
+       * Useful for shape-bounded values that follow a
+       * label on the same line as other fields, where
+       * `to-end-of-line` would over-capture. The pattern
+       * is anchored to the start of the (already
+       * leading-whitespace-stripped) value, so use
+       * `(?:.*?)` prefix only when intentional.
+       */
+      type: "match-pattern";
+      pattern: string;
+      flags?: string;
+    };
 
 /** Validation rules — closed discriminated union. */
 export type TriggerValidation =

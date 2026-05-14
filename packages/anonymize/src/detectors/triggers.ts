@@ -811,9 +811,11 @@ const extractValue = (
       // "PL", "FR"), optional whitespace, then a digit,
       // then 4+ value chars. The trailing class permits
       // letters so alphanumeric VAT keys like
-      // "FR1A123456789" are captured, but each letter must
-      // be followed by a digit (`[A-Z]\d`) so the regex
-      // cannot grow into running prose after the ID.
+      // "FR1A123456789" and French NIR Corsican department
+      // codes like "1 84 12 2A 075 …" are captured, but
+      // each letter must be followed by a digit or
+      // whitespace (`[A-Z](?:\d|(?=\s))`) so the regex
+      // cannot grow into running prose words.
       // Case-insensitive so lowercase variants
       // ("DIČ cz12345678", "VAT number pl1234567890")
       // still validate via stdnum downstream. Dots are
@@ -826,12 +828,15 @@ const extractValue = (
       // do not slide in. Stricter checksum validation for
       // CPF/CNPJ runs in the regex detector. Letters are
       // also allowed when glued directly to a preceding
-      // digit (`[A-Z]\d`) so alphanumeric VAT keys like
-      // "FR1A123456789" are captured without sliding into
-      // running prose.
-      const idMatch = /^[A-Z]{0,6}\s?\d{2}(?:[A-Z]\d|[\d\s.\-/]){3,}/i.exec(
-        afterSep,
-      );
+      // digit and followed by a digit or whitespace
+      // (`[A-Z](?:\d|(?=\s))`) so alphanumeric VAT keys
+      // like "FR1A123456789" and French NIR Corsican
+      // department codes like "1 84 12 2A 075 …" are
+      // captured without sliding into running prose words.
+      const idMatch =
+        /^[A-Z]{0,6}\s?\d{2}(?:[A-Z](?:\d|(?=\s))|[\d\s.\-/]){3,}/i.exec(
+          afterSep,
+        );
       if (!idMatch) {
         return null;
       }
@@ -1016,6 +1021,38 @@ const extractValue = (
         start: valueStart,
         end: valueStart + end - trailingSpaces,
         text: extracted,
+      };
+    }
+
+    case "match-pattern": {
+      // Search the value text for the first occurrence
+      // of the configured pattern and use that span as
+      // the extracted entity. Stops at the first newline
+      // so a header-style trigger cannot pull a value
+      // from a following line. The compiled regex strips
+      // `g`/`y` flags so it stays stateless across calls.
+      const nlIdx = valueText.indexOf("\n");
+      const searchText = nlIdx === -1 ? valueText : valueText.slice(0, nlIdx);
+      if (searchText.length === 0) {
+        return null;
+      }
+      const flags = (strategy.flags ?? "").replace(/[gy]/g, "");
+      let re: RegExp;
+      try {
+        re = new RegExp(strategy.pattern, flags);
+      } catch {
+        return null;
+      }
+      const m = re.exec(searchText);
+      if (!m || m[0].length === 0) {
+        return null;
+      }
+      const matchStart = m.index;
+      const matchEnd = matchStart + m[0].length;
+      return {
+        start: valueStart + matchStart,
+        end: valueStart + matchEnd,
+        text: m[0],
       };
     }
 
