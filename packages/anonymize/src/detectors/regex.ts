@@ -481,10 +481,10 @@ const BR_CEP: RegexDef = {
 };
 
 // Brazilian CPF (personal tax ID), formatted form
-// only: NNN.NNN.NNN-NN. The mandatory dot/dash
-// separators make this distinctive enough to bypass
-// checksum validation — compact 11-digit CPFs go
-// through the stdnum entry below (which validates).
+// only: NNN.NNN.NNN-NN. Dotted/dashed form is matched
+// by the distinctive separators; the br.cpf validator
+// rejects placeholder values such as "000.000.000-00"
+// or other invalid checksums.
 //
 // Score must beat the generic phone patterns so the
 // overlap resolver assigns the tax-ID label.
@@ -492,15 +492,18 @@ const BR_CPF_FORMATTED: RegexDef = {
   pattern: `\\b\\d{3}\\.\\d{3}\\.\\d{3}${DASH}\\d{2}\\b`,
   label: "tax identification number",
   score: 0.95,
+  validator: br.cpf,
 };
 
 // Brazilian CNPJ (company tax ID), formatted:
 // NN.NNN.NNN/NNNN-NN. The slash is unique to CNPJ
-// and gives high precision without checksum validation.
+// for shape, and the br.cnpj validator filters
+// placeholder values such as "12.345.678/0001-00".
 const BR_CNPJ_FORMATTED: RegexDef = {
   pattern: `\\b\\d{2}\\.\\d{3}\\.\\d{3}/\\d{4}${DASH}\\d{2}\\b`,
   label: "tax identification number",
   score: 0.95,
+  validator: br.cnpj,
 };
 
 // Brazilian RG (Registro Geral, state-issued identity).

@@ -307,6 +307,11 @@ export const buildTriggerPatterns = async (): Promise<{
   // sets caseInsensitive globally on the AC.
   const patterns: string[] = rules.map((r) => r.trigger.toLowerCase());
 
+  // Warm the address stop-keywords cache so the
+  // synchronous `extractValue` (address strategy) can
+  // read it without an async hop.
+  await loadAddressStopKeywords();
+
   return { patterns, rules };
 };
 
@@ -408,6 +413,11 @@ const NEXT_IS_REAL_SENTENCE_RE = /^\.\s+\p{Lu}\p{Ll}{2,}/u;
  */
 const CURRENCY_TAIL_RE =
   /(?:(?<![\p{L}])(?:zł|Kč|gr|Ft|kr|лв|USD|PLN|EUR|CZK|GBP|CHF|HUF|RON|SEK|NOK|DKK)|[€$£])$/iu;
+// Numeric sentence tail: a digit immediately before the
+// period (e.g. monetary amounts "R$ 1.000,00." or
+// "EUR 5.000.") signals a sentence end too, so amount
+// triggers do not consume the next clause.
+const NUMERIC_SENTENCE_TAIL_RE = /\d$/;
 
 const isSentenceTerminator = (text: string, periodIndex: number): boolean => {
   const tail = text.slice(periodIndex);
@@ -415,7 +425,11 @@ const isSentenceTerminator = (text: string, periodIndex: number): boolean => {
     return false;
   }
   const head = text.slice(0, periodIndex);
-  if (SENTENCE_TAIL_RE.test(head) || CURRENCY_TAIL_RE.test(head)) {
+  if (
+    SENTENCE_TAIL_RE.test(head) ||
+    CURRENCY_TAIL_RE.test(head) ||
+    NUMERIC_SENTENCE_TAIL_RE.test(head)
+  ) {
     return true;
   }
   // Proper-noun head (short city names like "Łódź.",
@@ -699,9 +713,14 @@ const extractValue = (
       // so "datová schránka : hsaxra8" captures
       // "hsaxra8" not ":"
       const PUNCT_ONLY = /^[\p{P}\p{S}]+$/u;
+      // Skip generic "number" markers (PT: "nº/n°/n.",
+      // FR/IT/ES use "n°", general "№") so triggers
+      // like "OAB/SP nº 123456" capture the actual
+      // identifier, not the marker.
+      const NUMBER_MARKER = /^(?:n[ºo°.]|№)$/i;
       const allTokens = cellText.split(WHITESPACE_RE);
       const words = allTokens
-        .filter((w) => !PUNCT_ONLY.test(w))
+        .filter((w) => !PUNCT_ONLY.test(w) && !NUMBER_MARKER.test(w))
         .slice(0, strategy.count);
       if (words.length === 0) {
         return null;
@@ -746,13 +765,14 @@ const extractValue = (
       let afterSep = raw.slice(sepMatch[0].length);
       // Skip a leading number-label word (e.g.
       // "PESEL nr 44051401458", "NIP numer 1234567890",
-      // "REGON № 123456789") that may appear between the
-      // trigger and the value. The label is consumed
+      // "REGON № 123456789", "RG nº 12.345.678-9",
+      // "CPF n° 123.456.789-00") that may appear between
+      // the trigger and the value. The label is consumed
       // along with its trailing separator so the
       // case-insensitive prefix regex below cannot mistake
       // it for a VAT country prefix like "cz"/"pl".
       const labelMatch =
-        /^(?:nr\.?|numer|n\.?|№|nº|no\.?)(?:\s*:\s*|\s+)/i.exec(afterSep);
+        /^(?:nr\.?|numer|n[ºo°.]|№|no\.?)(?:\s*:\s*|\s+)/i.exec(afterSep);
       let labelOffset = 0;
       if (labelMatch) {
         labelOffset = labelMatch[0].length;
@@ -761,8 +781,13 @@ const extractValue = (
       // Optional letter prefix (e.g., VAT prefix "CZ",
       // "PL"). Case-insensitive so lowercase variants
       // ("DIČ cz12345678", "VAT number pl1234567890")
-      // still validate via stdnum downstream.
-      const idMatch = /^[A-Z]{0,6}\s?\d[\d\s\-/]{4,}/i.exec(afterSep);
+      // still validate via stdnum downstream. Dots are
+      // permitted inside the value so dotted IDs such as
+      // Brazilian RG ("12.345.678-9") and dotted CPF/CNPJ
+      // values introduced by triggers are captured.
+      // Stricter checksum validation for CPF/CNPJ runs in
+      // the regex detector.
+      const idMatch = /^[A-Z]{0,6}\s?\d[\d\s.\-/]{4,}/i.exec(afterSep);
       if (!idMatch) {
         return null;
       }
@@ -894,7 +919,9 @@ const extractValue = (
           }
           // Check for field-label keywords after
           // comma before continuing. Keywords like
-          // "IČ", "DIČ" start new fields.
+          // "IČ", "DIČ" start new fields. Loaded
+          // from per-language JSON config so every
+          // enabled language's stop words apply.
           const afterComma = valueText
             .slice(end + 1)
             .trimStart()
