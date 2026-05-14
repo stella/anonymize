@@ -808,35 +808,45 @@ const extractValue = (
         afterSep = afterSep.slice(labelOffset);
       }
       // Value shape: optional country prefix (e.g. "CZ",
-      // "PL", "FR"), optional whitespace, then a digit,
-      // then 4+ value chars. The trailing class permits
-      // letters so alphanumeric VAT keys like
-      // "FR1A123456789" and French NIR Corsican department
-      // codes like "1 84 12 2A 075 …" are captured. A
-      // letter is only admitted when it is glued directly
-      // to a preceding digit (`(?<=\d)[A-Z]`), so the
-      // regex cannot grow past whitespace into a one-letter
-      // prose word ("SIREN 123456789 a son siège" stops at
-      // "9"). Case-insensitive so lowercase variants
+      // "PL", "FR"), optional whitespace, an optional
+      // 2-char alphanumeric key with optional trailing
+      // space (covers spaced French VAT keys whose first
+      // char is a letter, like "FR A1 123456789" or
+      // "FR AB 123456789"), then a digit, then 4+ value
+      // chars. The trailing class permits letters so
+      // alphanumeric VAT keys like "FR1A123456789" and
+      // French NIR Corsican department codes like
+      // "1 84 12 2A 075 …" are captured. A letter is only
+      // admitted when it is glued directly to a preceding
+      // digit (`(?<=\d)[A-Z]`), so the regex cannot grow
+      // past whitespace into a one-letter prose word
+      // ("SIREN 123456789 a son siège" stops at "9").
+      // Case-insensitive so lowercase variants
       // ("DIČ cz12345678", "VAT number pl1234567890")
-      // still validate via stdnum downstream. Dots are
-      // permitted inside the value so dotted IDs such as
-      // Brazilian RG ("12.345.678-9") and dotted CPF/CNPJ
-      // values introduced by triggers are captured.
-      // Require at least two leading digits before the
-      // dot-permitting tail so single-digit dotted dates
-      // ("6.11.2025") after triggers like "DNI" or "RG"
-      // do not slide in. Stricter checksum validation for
-      // CPF/CNPJ runs in the regex detector. A letter is
-      // only admitted when it is glued directly to a
-      // preceding digit (`(?<=\d)[A-Z]`), so the regex
-      // cannot grow past whitespace into a one-letter
-      // prose word ("SIREN 123456789 a son siège" stops
-      // at "9"). This still captures alphanumeric VAT
-      // keys like "FR1A123456789" and French NIR Corsican
-      // department codes like "1 84 12 2A 075 …".
+      // still validate via stdnum downstream. An optional
+      // 2-char alphanumeric key with optional trailing
+      // space covers spaced French VAT keys whose first
+      // char is a letter, like "FR A1 123456789" or
+      // "FR AB 123456789". Dots are permitted inside the
+      // value so dotted IDs such as Brazilian RG
+      // ("12.345.678-9") and dotted CPF/CNPJ values
+      // introduced by triggers are captured. Require at
+      // least two leading digits before the dot-permitting
+      // tail so single-digit dotted dates ("6.11.2025")
+      // after triggers like "DNI" or "RG" do not slide
+      // in. Stricter checksum validation for CPF/CNPJ runs
+      // in the regex detector. A letter is only admitted
+      // when it is glued directly to a preceding digit
+      // (`(?<=\d)[A-Z]`), so the regex cannot grow past
+      // whitespace into a one-letter prose word
+      // ("SIREN 123456789 a son siège" stops at "9").
+      // This still captures alphanumeric VAT keys like
+      // "FR1A123456789" and French NIR Corsican department
+      // codes like "1 84 12 2A 075 …".
       const idMatch =
-        /^[A-Z]{0,6}\s?\d{2}(?:(?<=\d)[A-Z]|[\d\s.\-/]){3,}/i.exec(afterSep);
+        /^[A-Z]{0,6}\s?(?:[A-Z0-9]{2}\s?)?\d{2}(?:(?<=\d)[A-Z]|[\d\s.\-/]){3,}/i.exec(
+          afterSep,
+        );
       if (!idMatch) {
         return null;
       }
@@ -878,6 +888,7 @@ const extractValue = (
       // and a lowercase letter, e.g. "nábř. ").
       const maxLen = strategy.maxChars ?? 120;
       const UPPER_RE = /\p{Lu}/u;
+      const stopKeywords = getAddressStopKeywordsSync();
       let end = 0;
 
       while (end < valueText.length && end < maxLen) {
@@ -889,6 +900,25 @@ const extractValue = (
         // trigger and value.
         if (ch === "\n" || ch === "(") {
           break;
+        }
+
+        // Whitespace boundary: when an address has no
+        // commas (e.g. headline-style triggers like
+        // "Adresse : 10 rue de la Paix Email : a@b.fr"),
+        // the comma-scoped stop-keyword check below
+        // never fires. Re-check the stop list at every
+        // whitespace boundary so a following field
+        // label terminates the address before its value.
+        if (ch === " " || ch === "\t") {
+          const afterWs = valueText.slice(end).trimStart().toLowerCase();
+          const hitsKeyword = stopKeywords.some((kw) => {
+            if (!afterWs.startsWith(kw)) return false;
+            const next = afterWs[kw.length];
+            return next === undefined || /[\s:;.,!?()\d]/.test(next);
+          });
+          if (hitsKeyword) {
+            break;
+          }
         }
 
         // Period: stop unless it's an abbreviation.
@@ -1025,21 +1055,32 @@ const extractValue = (
     }
 
     case "match-pattern": {
-      // Search the value text for the first occurrence
-      // of the configured pattern and use that span as
-      // the extracted entity. Stops at the first newline
-      // so a header-style trigger cannot pull a value
-      // from a following line. The compiled regex strips
-      // `g`/`y` flags so it stays stateless across calls.
+      // Anchor the configured pattern to the start of the
+      // value text (after the generic leading-whitespace/
+      // colon strip above). This prevents a missing or
+      // placeholder value from stealing the next numeric
+      // field on the same line: e.g. with a phone trigger
+      // applied to `Téléphone : non communiqué SIREN :
+      // 123456789`, an unanchored search would pull the
+      // SIREN digits into the phone entity. Stops at the
+      // first newline so a header-style trigger cannot
+      // pull a value from a following line. The compiled
+      // regex strips `g`/`y` flags so it stays stateless
+      // across calls.
       const nlIdx = valueText.indexOf("\n");
       const searchText = nlIdx === -1 ? valueText : valueText.slice(0, nlIdx);
       if (searchText.length === 0) {
         return null;
       }
       const flags = (strategy.flags ?? "").replace(/[gy]/g, "");
+      // Wrap the pattern in a non-capturing group so a
+      // leading anchor authored in the config (e.g. `^`)
+      // and authored alternation precedence still work
+      // when the engine prepends its own start anchor.
+      const anchoredSource = `^(?:${strategy.pattern})`;
       let re: RegExp;
       try {
-        re = new RegExp(strategy.pattern, flags);
+        re = new RegExp(anchoredSource, flags);
       } catch {
         return null;
       }

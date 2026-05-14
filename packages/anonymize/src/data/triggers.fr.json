@@ -39,7 +39,7 @@
   {
     "id": "fr-address-headline",
     "label": "address",
-    "strategy": { "type": "to-end-of-line" },
+    "strategy": { "type": "address", "maxChars": 120 },
     "triggers": [
       "siège social :",
       "siège social:",
@@ -151,11 +151,23 @@
     "strategy": { "type": "to-next-comma" },
     "triggers": [
       "Tribunal judiciaire de",
+      "Tribunal judiciaire d'",
+      "Tribunal judiciaire d’",
       "Tribunal de commerce de",
+      "Tribunal de commerce d'",
+      "Tribunal de commerce d’",
       "Cour d'appel de",
       "Cour d’appel de",
+      "Cour d'appel d'",
+      "Cour d'appel d’",
+      "Cour d’appel d'",
+      "Cour d’appel d’",
       "Conseil de prud'hommes de",
-      "Conseil de prud’hommes de"
+      "Conseil de prud’hommes de",
+      "Conseil de prud'hommes d'",
+      "Conseil de prud'hommes d’",
+      "Conseil de prud’hommes d'",
+      "Conseil de prud’hommes d’"
     ],
     "includeTrigger": true,
     "extensions": ["normalize-spaces"],

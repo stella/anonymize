@@ -3,6 +3,29 @@ import type { Entity } from "../types";
 import type { DefinitionPattern, PipelineContext } from "../context";
 import { corefKey, defaultContext } from "../context";
 import { loadLanguageConfigs } from "../util/lang-loader";
+import { getKnownLegalSuffixes } from "./legal-forms";
+
+/**
+ * Case-insensitive set of every known legal-form suffix
+ * with whitespace normalized away. Used by the
+ * coreference scan to reject parenthetical define-term
+ * captures whose alias is only a legal-form
+ * abbreviation (e.g. "(« SAS »)" after "ACME SAS"),
+ * which would otherwise propagate generic suffix
+ * mentions as document-wide org aliases.
+ */
+const isLegalFormAlias = (alias: string): boolean => {
+  const normalized = alias.replace(/\s+/g, "").toLowerCase();
+  if (normalized.length === 0) {
+    return false;
+  }
+  for (const suffix of getKnownLegalSuffixes()) {
+    if (suffix.replace(/\s+/g, "").toLowerCase() === normalized) {
+      return true;
+    }
+  }
+  return false;
+};
 
 type CoreferenceConfigRow = {
   pattern: string;
@@ -249,6 +272,17 @@ export const extractDefinedTerms = async (
       // Only track aliases that are themselves
       // identifying (initials, name fragments, etc.)
       if (roleStops.has(alias.toLowerCase())) {
+        continue;
+      }
+
+      // Skip aliases that are nothing but a legal-form
+      // abbreviation ("SAS", "SARL", "S.A.", "GmbH").
+      // A parenthetical like `ACME SAS (« SAS »)` would
+      // otherwise pass the substring-similarity check
+      // against "ACME SAS" and cause every standalone
+      // "SAS" mention in the document to be redacted as
+      // an organization alias.
+      if (isLegalFormAlias(alias)) {
         continue;
       }
 
