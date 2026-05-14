@@ -79,8 +79,8 @@ const loadSentenceVerbIndicators = async (): Promise<ReadonlySet<string>> => {
 const getSentenceVerbIndicatorsSync = (): ReadonlySet<string> =>
   sentenceVerbIndicatorsCache ?? SENTENCE_VERB_INDICATORS_SEED;
 
-const UPPER = "A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽÄÖÜÀÂÆÇÈÊËÎÏÔÙÛŸÑ\\u0130";
-const LOWER = "a-záčďéěíňóřšťúůýžäöüßàâæçèêëîïôùûÿñ\\u0131";
+const UPPER = "A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽÄÖÜÀÂÆÇÈÊËÎÏÔÙÛŸÑĄĆĘŁŃŚŹŻ\\u0130";
+const LOWER = "a-záčďéěíňóřšťúůýžäöüßàâæçèêëîïôùûÿñąćęłńśźż\\u0131";
 const CAP_WORD = `(?:[${UPPER}]{2,}|[${UPPER}][${LOWER}${UPPER}]+)`;
 // All-caps word: 2+ uppercase letters, no lowercase.
 // For company names like "EAGLES BRNO", max 3 words.
