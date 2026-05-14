@@ -620,6 +620,16 @@ const IPV6_ADDRESS: RegexDef = {
   score: 1,
 };
 
+// US ZIP+4 (NNNNN-NNNN). The hyphenated form is
+// distinctive enough to emit on its own. The bare ZIP5
+// shape (\d{5}) is too generic to fire without context;
+// it lands instead in the address-seed clustering pass.
+const US_ZIP_PLUS_FOUR: RegexDef = {
+  pattern: `\\b\\d{5}-\\d{4}\\b`,
+  label: "address",
+  score: 0.9,
+};
+
 // MAC: colon-only OR hyphen-only (no mixed).
 const MAC_ADDRESS: RegexDef = {
   pattern:
@@ -727,6 +737,7 @@ const ALL_REGEX_DEFS: readonly RegexDef[] = [
   HU_LANDLINE,
   CZ_POSTAL,
   ES_POSTAL,
+  US_ZIP_PLUS_FOUR,
   ES_DNI,
   ES_NIE,
   ES_CIF,
