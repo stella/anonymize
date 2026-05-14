@@ -656,18 +656,20 @@ const UK_POSTCODE: RegexDef = {
 };
 
 // UK National Insurance Number. Two-letter prefix +
-// six digits + optional suffix letter A-D. Strict
-// prefix rules (first letter not D/F/I/Q/U/V, second
-// letter not D/F/I/O/Q/U/V) are enforced by the
-// stdnum `gb.nino` validator at post-match time; the
-// Rust DFA upstream rejects negative lookaheads.
-// Allow optional space between each NINO segment so
-// the common printed form `AB 12 34 56 C` matches —
-// stdnum's own candidatePattern (`[A-Z]{2}\d{6}[A-Z]`)
-// only catches the compact form.
+// six digits + optional suffix letter A-D. Per HMRC:
+// first letter not D/F/I/Q/U/V; second letter not
+// D/F/I/O/Q/U/V; and several explicit prefix blocks
+// (BG, GB, KN, NK, NT, TN, ZZ). The character classes
+// here enforce the per-position letter rules; the
+// stdnum `gb.nino` validator handles the blocked
+// prefixes at post-match time. Negative lookaheads
+// are avoided because the Rust DFA upstream rejects
+// them. Optional spaces between segments cover the
+// common printed form `AB 12 34 56 C` — stdnum's own
+// candidatePattern (`[A-Z]{2}\d{6}[A-Z]`) misses it.
 const UK_NINO: RegexDef = {
   pattern:
-    `\\b[A-CEGHJ-PR-TW-Z][A-CEGHJ-NPR-TW-Z]` +
+    `\\b[A-CEGHJ-PR-TWXYZ][A-CEGHJ-NPR-TWXYZ]` +
     `[^\\S\\n]?\\d{2}[^\\S\\n]?\\d{2}[^\\S\\n]?\\d{2}` +
     `[^\\S\\n]?[A-D]?\\b`,
   label: "social security number",
