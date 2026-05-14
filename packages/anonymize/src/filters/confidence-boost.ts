@@ -65,6 +65,14 @@ const BARE_STOPWORDS = new Set([
   "Notes",
   "Rule",
   "Rules",
+  "Attachment",
+  "Attachments",
+  "Volume",
+  "Volumes",
+  "Book",
+  "Books",
+  "Part",
+  "Parts",
 ]);
 
 const NEAR_MISS_BAND = 0.15;

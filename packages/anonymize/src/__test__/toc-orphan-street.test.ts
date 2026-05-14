@@ -74,16 +74,24 @@ describe("TOC + orphan-street guardrails", () => {
   test("`Section <N>` near an address span is not promoted to an address", async () => {
     // The bare-house-number scan looks for `<Uppercase> <number>`
     // within 50 chars of a confirmed address on the same line.
-    // Without the `Section` stopword the contract reference
-    // would be tagged as an address.
-    const text =
-      "“Post-Closing Welfare Plans” shall have the meaning set forth in " +
-      "Section 6.9(b).";
+    // We seed a confirmed address (`PSČ 160 00`) so the
+    // near-address branch actually runs; without the `Section`
+    // stopword the contract reference would be tagged as an
+    // address. Removing `Section` from `BARE_STOPWORDS`
+    // produces an `address` entity with text `Section 6`,
+    // which is what this test guards against.
+    const text = "PSČ 160 00. Section 6 is referenced.";
     const entities = await detect(text);
-    const section6 = entities.find(
+    // Sanity-check that the anchor address is detected so the
+    // near-address branch actually runs.
+    const anchor = entities.find(
+      (e) => e.label === "address" && e.text.includes("160"),
+    );
+    expect(anchor).toBeDefined();
+    const sectionAddr = entities.find(
       (e) => e.label === "address" && e.text === "Section 6",
     );
-    expect(section6).toBeUndefined();
+    expect(sectionAddr).toBeUndefined();
   });
 
   test("real header-zone single-line orphan address still fires", async () => {
