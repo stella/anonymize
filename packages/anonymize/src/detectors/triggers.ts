@@ -978,7 +978,8 @@ const extractValue = (
           // ". " + uppercase start) — that case
           // happens when the address has already ended
           // and the next clause begins, e.g.
-          // "z siedzibą w Warszawie. Kapitał…".
+          // "z siedzibą w Warszawie. Kapitał…" /
+          // "Adresse : 10 rue de la Paix. Jean Dupont…".
           if (
             next === " " &&
             afterNext !== undefined &&

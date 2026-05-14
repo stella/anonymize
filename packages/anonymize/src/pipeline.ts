@@ -1028,6 +1028,15 @@ export const runPipeline = async (
   // context doesn't leak sourceText across documents.
   ctx.corefSourceMap.clear();
   if (config.enableCoreference) {
+    // Coreference's alias filter rejects parenthetical
+    // captures that are nothing but a legal-form suffix
+    // ("(« SAS »)"), which needs the full vocabulary from
+    // `data/legal-forms.json`. Warm it here so configs
+    // that enable coreference without legal-form detection
+    // still see the complete suffix set.
+    if (!legalFormsEnabled) {
+      await warmLegalRoleHeads();
+    }
     const coreferenceSeeds = merged.filter(
       (entity) => !isCallerOwnedEntity(entity),
     );
