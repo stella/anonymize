@@ -151,8 +151,9 @@ const STDNUM_ENTRIES: readonly StdnumEntry[] = [
   // ── Original PR #28 patterns (were 15-21) ────────
   toEntry(hu.vat, "tax identification number", 0.95),
   toEntry(it.codiceFiscale, "national identification number", 0.95),
-  toEntry(es.dni, "national identification number", 0.9),
-  toEntry(es.nie, "national identification number", 0.95),
+  // es.dni / es.nie omitted: stdnum patterns are over-fit to
+  // the spec letter (`Q` / `X`) and miss real-world prefixes;
+  // covered by the format-level ES_DNI / ES_NIE regex below.
   toEntry(se.personnummer, "national identification number", 0.9),
   toEntry(ro.cnp, "national identification number", 0.95),
   toEntry(fr.nir, "social security number", 0.9),

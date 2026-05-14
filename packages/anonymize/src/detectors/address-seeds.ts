@@ -89,8 +89,11 @@ const getBoundaryRe = async (): Promise<RegExp> => {
   words.sort((a, b) => b.length - a.length);
   // Word-boundary lookarounds via unicode letter/number
   // classes — `\b` doesn't fire after non-word chars, so a
-  // phrase ending in `.` (e.g. `sp. zn.`, `r.č.`) would
-  // never match with `\b...\b`.
+  // phrase ending in `.` (e.g. `sp. zn.`, `r.č.`, Spanish
+  // `con C.I.F.`) would never match with `\b...\b`. The
+  // lookarounds anchor on the absence of a letter/digit on
+  // either side, which works regardless of the phrase's
+  // last character.
   cachedBoundaryRe =
     words.length > 0
       ? new RegExp(

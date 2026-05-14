@@ -23,7 +23,7 @@
     },
     "es": {
       "triggers": true,
-      "coreference": false
+      "coreference": true
     },
     "fr": {
       "triggers": true,

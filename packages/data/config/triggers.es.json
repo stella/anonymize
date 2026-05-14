@@ -17,11 +17,7 @@
     "id": "es-person",
     "label": "person",
     "strategy": { "type": "to-next-comma" },
-    "triggers": [
-      "representado por",
-      "representada por",
-      "actuando en nombre de"
-    ],
+    "triggers": ["representado por", "representada por"],
     "validations": [{ "type": "starts-uppercase" }]
   },
   {
