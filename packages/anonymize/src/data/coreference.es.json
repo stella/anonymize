@@ -1,0 +1,17 @@
+[
+  {
+    "label": "(en adelante, \"X\") or (en lo sucesivo \"X\")",
+    "pattern": "\\(\\s*(?:en\\s+adelante|en\\s+lo\\s+sucesivo|denominad[oa]\\s+en\\s+adelante|denominad[oa])\\s*,?\\s*[\"'„«‚“”‘’]([^\"'“”‘’«»]+)[\"'“”‘’»]\\s*\\)",
+    "flags": "gi"
+  },
+  {
+    "label": "en adelante \"X\" (without parens)",
+    "pattern": "(?:en\\s+adelante|en\\s+lo\\s+sucesivo|denominad[oa]\\s+en\\s+adelante)\\s*,?\\s*[\"'„«‚“”‘’]([^\"'“”‘’«»]+)[\"'“”‘’»]",
+    "flags": "gi"
+  },
+  {
+    "label": "(la \"X\") or (el \"X\") — defined-term alias",
+    "pattern": "\\(\\s*(?:la|el|las|los)\\s+[\"'„«‚“”‘’]([^\"'“”‘’«»]+)[\"'“”‘’»]\\s*\\)",
+    "flags": "gi"
+  }
+]
