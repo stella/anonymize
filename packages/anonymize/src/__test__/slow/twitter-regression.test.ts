@@ -81,6 +81,15 @@ const hasEntity = (
 const exact = (label: string, text: string) => (e: Entity) =>
   e.label === label && e.text === text;
 
+// Collapse any whitespace run (incl. nbsp  ) to a single space.
+// Several SEC counsel/firm spans in the fixture contain nbsp; without
+// this, a plain-space target would not match an nbsp-bearing emission
+// and a still-present false positive could pass silently.
+const normWs = (s: string) => s.replace(/\s+/g, " ");
+
+const exactNormWs = (label: string, text: string) => (e: Entity) =>
+  e.label === label && normWs(e.text) === normWs(text);
+
 describe("twitter merger — false positives (regression)", () => {
   // ── deny-list: generic legal/role terms tagged as person ────
 
@@ -382,12 +391,12 @@ describe("twitter merger — false positives (regression)", () => {
     expect(hasEntity(entities, exact("address", "The Merger 13"))).toBe(false);
   });
 
-  test.skip('TODO(anon-142): false positive — "Section 6" tagged as address', async () => {
+  test('TODO(anon-142): false positive — "Section 6" tagged as address', async () => {
     const entities = await getEntities();
     expect(hasEntity(entities, exact("address", "Section 6"))).toBe(false);
   });
 
-  test.skip('TODO(anon-143): false positive — "Section 8" tagged as address', async () => {
+  test('TODO(anon-143): false positive — "Section 8" tagged as address', async () => {
     const entities = await getEntities();
     expect(hasEntity(entities, exact("address", "Section 8"))).toBe(false);
   });
@@ -408,24 +417,32 @@ describe("twitter merger — false positives (regression)", () => {
   });
 
   test.skip('TODO(anon-146): false positive — "Meagher & Flom LLP" tagged as person', async () => {
-    // Fragment of "Skadden, Arps, Slate, Meagher & Flom LLP"
+    // Fragment of "Skadden, Arps, Slate, Meagher & Flom LLP".
+    // Fixture contains an nbsp variant; normalize whitespace so an
+    // nbsp-bearing FP cannot pass silently against a plain-space target.
     const entities = await getEntities();
-    expect(hasEntity(entities, exact("person", "Meagher & Flom LLP"))).toBe(
-      false,
-    );
+    expect(
+      hasEntity(entities, exactNormWs("person", "Meagher & Flom LLP")),
+    ).toBe(false);
   });
 
   test.skip('TODO(anon-147): false positive — "Wilson Sonsini Goodrich & Rosati" tagged as person', async () => {
     const entities = await getEntities();
     expect(
-      hasEntity(entities, exact("person", "Wilson Sonsini Goodrich & Rosati")),
+      hasEntity(
+        entities,
+        exactNormWs("person", "Wilson Sonsini Goodrich & Rosati"),
+      ),
     ).toBe(false);
   });
 
   test.skip('TODO(anon-148): false positive — "Simpson Thacher & Bartlett LLP" tagged as person', async () => {
     const entities = await getEntities();
     expect(
-      hasEntity(entities, exact("person", "Simpson Thacher & Bartlett LLP")),
+      hasEntity(
+        entities,
+        exactNormWs("person", "Simpson Thacher & Bartlett LLP"),
+      ),
     ).toBe(false);
   });
 
@@ -469,9 +486,16 @@ describe("twitter merger — false negatives (regression)", () => {
   test.skip('TODO(anon-201): false negative — "X Holdings I, Inc." not consistently tagged as organization', async () => {
     // Context: preamble "is made by and among Twitter,
     // Inc.,..., X Holdings I, Inc., a Delaware corporation..."
+    // Pin the specific preamble occurrence (offset < 500) so a
+    // late-document mention does not silently satisfy the assertion.
     const entities = await getEntities();
     expect(
-      hasEntity(entities, exact("organization", "X Holdings I, Inc.")),
+      entities.some(
+        (e) =>
+          e.label === "organization" &&
+          e.text === "X Holdings I, Inc." &&
+          e.start < 500,
+      ),
     ).toBe(true);
   });
 
@@ -522,7 +546,7 @@ describe("twitter merger — false negatives (regression)", () => {
     expect(
       hasEntity(
         entities,
-        exact("organization", "Skadden, Arps, Slate, Meagher & Flom LLP"),
+        exactNormWs("organization", "Skadden, Arps, Slate, Meagher & Flom LLP"),
       ),
     ).toBe(true);
   });
@@ -584,7 +608,7 @@ describe("twitter merger — false negatives (regression)", () => {
     ).toBe(true);
   });
 
-  test.skip('TODO(anon-214): false negative — bare "Barclays" not detected as organization', async () => {
+  test('TODO(anon-214): false negative — bare "Barclays" not detected as organization', async () => {
     // Context: section 5.6 brokers.
     const entities = await getEntities();
     expect(
@@ -705,17 +729,6 @@ describe("twitter merger — false negatives (regression)", () => {
     expect(hasEntity(entities, exact("monetary amount", "$25 million"))).toBe(
       true,
     );
-  });
-
-  test.skip('TODO(anon-226): false negative — large written-out amount "one billion dollars" not detected', async () => {
-    // Marked deferred-ish; raise visibility of the gap.
-    const entities = await getEntities();
-    expect(
-      entities.some(
-        (e) =>
-          e.label === "monetary amount" && /one billion dollars/i.test(e.text),
-      ),
-    ).toBe(true);
   });
 
   test.skip("TODO(anon-227): false negative — comma-grouped share counts not detected", async () => {
@@ -861,7 +874,7 @@ describe("twitter merger — false negatives (regression)", () => {
     ).toBe(true);
   });
 
-  test.skip('TODO(anon-242): false negative — "World Health Organization" boundary stable across releases', async () => {
+  test('TODO(anon-242): false negative — "World Health Organization" boundary stable across releases', async () => {
     // Pin the current pass to catch regressions if a
     // detector tweak truncates the span.
     const entities = await getEntities();
