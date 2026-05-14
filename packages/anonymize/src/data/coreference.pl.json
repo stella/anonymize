@@ -1,22 +1,22 @@
 [
   {
     "label": "(zwana/y dalej \"X\") parenthetical define-term",
-    "pattern": "zwan[ayąe]?\\s+dalej\\s+[\"'\"„‚]([^\"'\"\"’”]+)[\"'\"”’]",
+    "pattern": "zwan(?:ym|ej|[ayąei])?\\s+dalej\\s+[\"'„‚]([^\"'”’]+)[\"'”’]",
     "flags": "gi"
   },
   {
     "label": "dalej zwana/y \"X\"",
-    "pattern": "dalej\\s+zwan[ayąe]?\\s+[\"'\"„‚]([^\"'\"\"’”]+)[\"'\"”’]",
+    "pattern": "dalej\\s+zwan(?:ym|ej|[ayąei])?\\s+[\"'„‚]([^\"'”’]+)[\"'”’]",
     "flags": "gi"
   },
   {
     "label": "(\"X\") parenthetical define-term",
-    "pattern": "\\(\\s*[\"'\"„‚]([^\"'\"\"’”]+)[\"'\"”’]\\s*\\)",
+    "pattern": "\\(\\s*[\"'„‚]([^\"'”’]+)[\"'”’]\\s*\\)",
     "flags": "gi"
   },
   {
     "label": "zwanymi dalej łącznie \"X\"",
-    "pattern": "zwanymi\\s+dalej\\s+(?:łącznie\\s+)?[\"'\"„‚]([^\"'\"\"’”]+)[\"'\"”’]",
+    "pattern": "zwanymi\\s+dalej\\s+(?:łącznie\\s+)?[\"'„‚]([^\"'”’]+)[\"'”’]",
     "flags": "gi"
   }
 ]
