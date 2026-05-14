@@ -807,8 +807,14 @@ const extractValue = (
         labelOffset = labelMatch[0].length;
         afterSep = afterSep.slice(labelOffset);
       }
-      // Optional letter prefix (e.g., VAT prefix "CZ",
-      // "PL"). Case-insensitive so lowercase variants
+      // Value shape: optional country prefix (e.g. "CZ",
+      // "PL", "FR"), optional whitespace, then a digit,
+      // then 4+ value chars. The trailing class permits
+      // letters so alphanumeric VAT keys like
+      // "FR1A123456789" are captured, but each letter must
+      // be followed by a digit (`[A-Z]\d`) so the regex
+      // cannot grow into running prose after the ID.
+      // Case-insensitive so lowercase variants
       // ("DIČ cz12345678", "VAT number pl1234567890")
       // still validate via stdnum downstream. Dots are
       // permitted inside the value so dotted IDs such as
@@ -818,8 +824,14 @@ const extractValue = (
       // dot-permitting tail so single-digit dotted dates
       // ("6.11.2025") after triggers like "DNI" or "RG"
       // do not slide in. Stricter checksum validation for
-      // CPF/CNPJ runs in the regex detector.
-      const idMatch = /^[A-Z]{0,6}\s?\d{2}[\d\s.\-/]{3,}/i.exec(afterSep);
+      // CPF/CNPJ runs in the regex detector. Letters are
+      // also allowed when glued directly to a preceding
+      // digit (`[A-Z]\d`) so alphanumeric VAT keys like
+      // "FR1A123456789" are captured without sliding into
+      // running prose.
+      const idMatch = /^[A-Z]{0,6}\s?\d{2}(?:[A-Z]\d|[\d\s.\-/]){3,}/i.exec(
+        afterSep,
+      );
       if (!idMatch) {
         return null;
       }

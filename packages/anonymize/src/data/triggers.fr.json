@@ -24,7 +24,7 @@
   {
     "id": "fr-registered-office",
     "label": "address",
-    "strategy": { "type": "to-next-comma" },
+    "strategy": { "type": "address", "maxChars": 120 },
     "triggers": [
       "ayant son siège à",
       "ayant son siège au",
@@ -84,8 +84,8 @@
       "n° SIRET",
       "SIREN n°",
       "SIRET n°",
-      "SIREN :",
-      "SIRET :",
+      "SIREN",
+      "SIRET",
       "immatriculée au RCS sous le numéro",
       "immatriculé au RCS sous le numéro",
       "inscrite au RCS sous le numéro",
@@ -94,7 +94,8 @@
       "immatriculé sous le numéro",
       "inscrite sous le numéro",
       "inscrit sous le numéro"
-    ]
+    ],
+    "extensions": ["add-colon", "add-colon-space"]
   },
   {
     "id": "fr-tax-id",
@@ -106,8 +107,9 @@
       "TVA intracommunautaire",
       "n° TVA",
       "TVA n°",
-      "TVA :"
-    ]
+      "TVA"
+    ],
+    "extensions": ["add-colon", "add-colon-space"]
   },
   {
     "id": "fr-social-security",
@@ -117,9 +119,10 @@
       "numéro de sécurité sociale",
       "n° de sécurité sociale",
       "n° SS",
-      "NIR :",
+      "NIR",
       "NIR n°"
-    ]
+    ],
+    "extensions": ["add-colon", "add-colon-space"]
   },
   {
     "id": "fr-land-parcel",
@@ -149,7 +152,9 @@
       "Tribunal judiciaire de",
       "Tribunal de commerce de",
       "Cour d'appel de",
-      "Conseil de prud'hommes de"
+      "Cour d’appel de",
+      "Conseil de prud'hommes de",
+      "Conseil de prud’hommes de"
     ],
     "includeTrigger": true,
     "extensions": ["normalize-spaces"],

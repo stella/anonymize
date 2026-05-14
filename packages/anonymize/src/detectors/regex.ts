@@ -70,11 +70,13 @@ const POST_NOMINAL = POST_NOMINALS.toSorted((a, b) => b.length - a.length)
   .map(escapeTitle)
   .join("|");
 
-// biome-ignore lint/security/noSecrets: diacritics char class
-const UPPER_CZ = "A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ";
-// biome-ignore lint/security/noSecrets: diacritics char class
-const LOWER_CZ = "a-záčďéěíňóřšťúůýžäöüß";
-const NAME_WORD = `[${UPPER_CZ}][${LOWER_CZ}]+`;
+// Unicode property classes keep the name-word pattern
+// language-agnostic: any uppercase letter followed by
+// lowercase letters works for cs/de/fr/it/es/sk and any
+// future language with cased scripts. The Rust regex
+// engine downstream (@stll/text-search) supports \p{Lu}
+// and \p{Ll} natively.
+const NAME_WORD = `\\p{Lu}\\p{Ll}+`;
 
 const PARTICLE =
   `(?:van der|van den|de la|della|` +
