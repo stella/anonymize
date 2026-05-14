@@ -11,6 +11,56 @@ const HAS_DIGIT_RE = /\d/;
 const ADDRESS_COMPONENTS_RE =
   /(?:^|\s)(?:ul\.|ulice|nám\.|náměstí|tř\.|třída|nábř\.|nábřeží|č\.p\.|č\.ev\.|č\.|sídliště|bulvár)(?=[\s,./]|$)/i;
 
+// Multilingual street-type fallback: loaded from
+// `address-street-types.json` so digitless trigger-sourced
+// addresses anchored by a non-Czech street word (e.g. Italian
+// `residente in Via Roma`) are not dropped by the digit gate.
+// Falls back to `null` (no extra acceptance) before warm-up.
+let _streetTypeFallbackRe: RegExp | null = null;
+let _streetTypeFallbackPromise: Promise<void> | null = null;
+
+const loadStreetTypeFallback = async (): Promise<void> => {
+  try {
+    const mod: { default?: Record<string, unknown> } =
+      await import("../data/address-street-types.json");
+    const data = mod.default ?? {};
+    const words: string[] = [];
+    for (const [key, value] of Object.entries(data)) {
+      if (key.startsWith("_")) continue;
+      if (!Array.isArray(value)) continue;
+      for (const w of value) {
+        if (typeof w === "string" && w.length > 0) words.push(w);
+      }
+    }
+    if (words.length === 0) {
+      _streetTypeFallbackRe = null;
+      return;
+    }
+    words.sort((a, b) => b.length - a.length);
+    const escaped = words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+    // Anchor at the start of the entity text; punctuation-safe
+    // lookaround so dotted forms (`v.le`, `ul.`) match before a
+    // following space, comma, or letter.
+    _streetTypeFallbackRe = new RegExp(
+      `^(?:${escaped.join("|")})(?![\\p{L}\\p{N}])`,
+      "iu",
+    );
+  } catch {
+    _streetTypeFallbackRe = null;
+  }
+};
+
+/** Ensure street-type fallback regex is loaded. */
+export const initStreetTypeFallback = (): Promise<void> => {
+  if (!_streetTypeFallbackPromise) {
+    _streetTypeFallbackPromise = loadStreetTypeFallback();
+  }
+  return _streetTypeFallbackPromise;
+};
+
+const matchesStreetTypeFallback = (text: string): boolean =>
+  _streetTypeFallbackRe?.test(text) ?? false;
+
 // Jurisdiction patterns: "State of X", "Commonwealth of X",
 // "District of X", "Territory of X"
 // — valid address entities without digits or street words.
@@ -295,7 +345,8 @@ export const filterFalsePositives = (
       !POSTAL_CODE_RE.test(trimmed) &&
       !HAS_DIGIT_RE.test(trimmed) &&
       !ADDRESS_COMPONENTS_RE.test(trimmed) &&
-      !JURISDICTION_RE.test(trimmed)
+      !JURISDICTION_RE.test(trimmed) &&
+      !matchesStreetTypeFallback(trimmed)
     ) {
       continue;
     }
@@ -305,13 +356,16 @@ export const filterFalsePositives = (
     // non-address text like "Nejsme plátci DPH !".
     // Exempt jurisdiction patterns ("State of ...",
     // "Commonwealth of ...") which are valid addresses
-    // without digits.
+    // without digits. The street-type fallback covers
+    // non-Czech vocabulary loaded from JSON, so e.g.
+    // Italian `Via Roma` is preserved.
     if (
       normalized.label === "address" &&
       normalized.source === "trigger" &&
       !HAS_DIGIT_RE.test(trimmed) &&
       !ADDRESS_COMPONENTS_RE.test(trimmed) &&
-      !JURISDICTION_RE.test(trimmed)
+      !JURISDICTION_RE.test(trimmed) &&
+      !matchesStreetTypeFallback(trimmed)
     ) {
       continue;
     }

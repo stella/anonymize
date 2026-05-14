@@ -214,9 +214,14 @@ const collectSeeds = (
   // capitalised word ("41012 Carpi", "41012 MODENA"). The
   // capitalised word requirement keeps random 5-digit IDs
   // (years, order numbers) out, and the explicit
-  // street-or-trigger-within-80-chars gate keeps a stray
+  // address-evidence-within-80-chars gate keeps a stray
   // "12345 Paris" reference from accidentally clustering
-  // into an address in non-Italian text.
+  // into an address in non-Italian text. A bare "via"
+  // street-word does not count on its own — it is also a
+  // common English preposition matched case-insensitively
+  // ("sent via form 12345 Paris"), so require either an
+  // address trigger / city / postal seed nearby, or a
+  // street-word other than a standalone lowercase "via".
   const itCapRe = /\b\d{5}(?=\s+\p{Lu}\p{L}+)/gu;
   let itCapMatch;
   while ((itCapMatch = itCapRe.exec(fullText)) !== null) {
@@ -224,11 +229,19 @@ const collectSeeds = (
     const end = start + itCapMatch[0].length;
     const alreadyCovered = seeds.some((s) => s.start <= start && s.end >= end);
     if (alreadyCovered) continue;
-    const hasNearbyAddressEvidence = seeds.some(
-      (s) =>
-        (s.type === "street-word" || s.type === "address-trigger") &&
-        Math.abs(s.start - start) <= 80,
-    );
+    const hasNearbyAddressEvidence = seeds.some((s) => {
+      if (Math.abs(s.start - start) > 80) return false;
+      if (s.type === "address-trigger") return true;
+      if (s.type === "city") return true;
+      if (s.type === "postal-code") return true;
+      if (s.type === "street-word") {
+        // Reject the bare English preposition "via" as the
+        // sole signal; any longer or non-"via" street word
+        // (Piazza, Viale, Corso, Via Roma) still qualifies.
+        return s.text.toLowerCase() !== "via";
+      }
+      return false;
+    });
     if (!hasNearbyAddressEvidence) continue;
     seeds.push({
       type: "postal-code",
