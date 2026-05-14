@@ -87,6 +87,7 @@ const TRIGGER_LOADERS: Record<string, () => Promise<unknown>> = {
   hu: () => import("../data/triggers.hu.json"),
   it: () => import("../data/triggers.it.json"),
   pl: () => import("../data/triggers.pl.json"),
+  "pt-br": () => import("../data/triggers.pt-br.json"),
   ro: () => import("../data/triggers.ro.json"),
   sk: () => import("../data/triggers.sk.json"),
   sv: () => import("../data/triggers.sv.json"),
@@ -99,6 +100,7 @@ const COREFERENCE_LOADERS: Record<string, () => Promise<unknown>> = {
   es: () => import("../data/coreference.es.json"),
   it: () => import("../data/coreference.it.json"),
   pl: () => import("../data/coreference.pl.json"),
+  "pt-br": () => import("../data/coreference.pt-br.json"),
   sk: () => import("../data/coreference.sk.json"),
 };
 
@@ -128,8 +130,21 @@ const LOADER_REGISTRIES: Record<
 // before the manifest was introduced.
 
 const FALLBACK_LANGUAGES: Record<ConfigType, readonly string[]> = {
-  triggers: ["cs", "de", "en", "es", "fr", "hu", "it", "pl", "ro", "sk", "sv"],
-  coreference: ["cs", "de", "en", "es", "it", "pl", "sk"],
+  triggers: [
+    "cs",
+    "de",
+    "en",
+    "es",
+    "fr",
+    "hu",
+    "it",
+    "pl",
+    "pt-br",
+    "ro",
+    "sk",
+    "sv",
+  ],
+  coreference: ["cs", "de", "en", "es", "it", "pl", "pt-br", "sk"],
   legalRoleHeads: ["cs", "de", "en", "es", "it", "pl", "pt-br", "sk"],
 };
 

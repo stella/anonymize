@@ -12,7 +12,7 @@ const HAS_DIGIT_RE = /\d/;
 // street-type vocabulary: Czech house/parcel number forms
 // (č.p., č.ev., č.) and "sídliště" (housing estate) which
 // is a settlement type rather than a street type. Polish,
-// English, etc. street vocabulary is loaded from
+// pt-BR, English, etc. street vocabulary is loaded from
 // address-street-types.json via initAddressComponents.
 const ADDRESS_COMPONENT_EXTRA_RE =
   /(?:^|\s)(?:č\.p\.|č\.ev\.|č\.|sídliště)(?=[\s,./]|$)/i;

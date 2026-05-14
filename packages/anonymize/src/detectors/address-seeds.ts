@@ -66,6 +66,98 @@ const loadBoundaryWords = async (): Promise<DictionaryConfig> => {
   }
 };
 
+// ── pt-BR CEP context gating ────────────────────────
+//
+// The bare `\d{5}-\d{3}` CEP shape collides with non-
+// address identifiers ("Order 12345-678"), so the seed
+// is only accepted when a pt-BR cue word appears within
+// the cluster window around it. The cue regex is built
+// once from the pt-BR entries of `address-street-types`
+// and `address-boundaries` (no hardcoded language strings
+// in TS). The window matches the seed-cluster gap so a
+// CEP that would otherwise cluster with a non-BR `city`
+// seed is filtered out before clustering.
+
+const BR_CEP_CONTEXT_WINDOW = 200;
+
+let cachedBrCepContextRe: RegExp | null = null;
+let cachedBrCepContextPromise: Promise<RegExp | null> | null = null;
+
+const loadBrCueWords = async (): Promise<readonly string[]> => {
+  const sources = await Promise.all([
+    (async () => {
+      try {
+        const mod = await import("../data/address-street-types.json");
+        // eslint-disable-next-line no-unsafe-type-assertion -- JSON shape
+        return (mod.default as DictionaryConfig)["pt-br"];
+      } catch {
+        return undefined;
+      }
+    })(),
+    (async () => {
+      try {
+        const mod = await import("../data/address-boundaries.json");
+        // eslint-disable-next-line no-unsafe-type-assertion -- JSON shape
+        return (mod.default as DictionaryConfig)["pt-br"];
+      } catch {
+        return undefined;
+      }
+    })(),
+  ]);
+
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const entry of sources) {
+    if (!Array.isArray(entry)) continue;
+    for (const word of entry) {
+      if (typeof word !== "string" || word.length === 0) continue;
+      const key = word.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(word);
+    }
+  }
+  return out;
+};
+
+const getBrCepContextRe = async (): Promise<RegExp | null> => {
+  if (cachedBrCepContextRe !== null) {
+    return cachedBrCepContextRe;
+  }
+  if (cachedBrCepContextPromise) {
+    return cachedBrCepContextPromise;
+  }
+  cachedBrCepContextPromise = (async () => {
+    const words = await loadBrCueWords();
+    if (words.length === 0) return null;
+    const escaped = words
+      .toSorted((a, b) => b.length - a.length)
+      .map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+    const re = new RegExp(
+      `(?<![\\p{L}\\p{N}])(?:${escaped.join("|")})(?![\\p{L}\\p{N}])`,
+      "iu",
+    );
+    cachedBrCepContextRe = re;
+    return re;
+  })();
+  return cachedBrCepContextPromise;
+};
+
+const hasBrCueNearby = (
+  fullText: string,
+  start: number,
+  end: number,
+  re: RegExp,
+): boolean => {
+  const windowStart = Math.max(0, start - BR_CEP_CONTEXT_WINDOW);
+  const windowEnd = Math.min(fullText.length, end + BR_CEP_CONTEXT_WINDOW);
+  const window = fullText.slice(windowStart, windowEnd);
+  // Build a fresh non-global RegExp per call — sharing
+  // would carry lastIndex across calls.
+  const probe = new RegExp(re.source, re.flags.replace("g", ""));
+  return probe.test(window);
+};
+
 /**
  * Build regex for boundary words. Matches any
  * boundary word preceded by a word boundary.
@@ -142,6 +234,7 @@ const collectSeeds = (
   sliceEnd: number,
   fullText: string,
   existingEntities: Entity[],
+  brCepContextRe: RegExp | null,
 ): Seed[] => {
   const seeds: Seed[] = [];
 
@@ -194,20 +287,37 @@ const collectSeeds = (
   // 3. Standalone postal codes (multiple formats):
   //   Czech/Slovak: NNN NN (e.g., 140 00)
   //   Polish: NN-NNN (e.g., 00-950)
-  const postalRe = /\b(?:\d{3}\s\d{2}|\d{2}-\d{3})\b/g;
+  //   Brazilian CEP: NNNNN-NNN (e.g., 01001-000)
+  // The CEP shape collides with bare order/ticket numbers
+  // ("Order 12345-678"), and the cluster's other seed
+  // could be a non-BR deny-list city. To prevent that, the
+  // CEP-shaped seed is only kept when a pt-BR cue word
+  // (rua/avenida/CNPJ/CPF/RG/…) appears within the cluster
+  // window around it. The Czech/Slovak and Polish shapes
+  // are distinctive enough not to need a similar gate.
+  const postalRe = /\b(?:\d{3}\s\d{2}|\d{2}-\d{3}|\d{5}-\d{3})\b/g;
   let postalMatch;
   while ((postalMatch = postalRe.exec(fullText)) !== null) {
     const start = postalMatch.index;
     const end = start + postalMatch[0].length;
     const alreadyCovered = seeds.some((s) => s.start <= start && s.end >= end);
-    if (!alreadyCovered) {
-      seeds.push({
-        type: "postal-code",
-        start,
-        end,
-        text: postalMatch[0],
-      });
+    if (alreadyCovered) {
+      continue;
     }
+    const isCepShape = /^\d{5}-\d{3}$/.test(postalMatch[0]);
+    if (
+      isCepShape &&
+      (brCepContextRe === null ||
+        !hasBrCueNearby(fullText, start, end, brCepContextRe))
+    ) {
+      continue;
+    }
+    seeds.push({
+      type: "postal-code",
+      start,
+      end,
+      text: postalMatch[0],
+    });
   }
 
   // 3b. Italian CAP: 5 consecutive digits followed by a
@@ -470,12 +580,14 @@ export const processAddressSeeds = async (
   fullText: string,
   existingEntities: Entity[],
 ): Promise<Entity[]> => {
+  const brCepContextRe = await getBrCepContextRe();
   const seeds = collectSeeds(
     allMatches,
     sliceStart,
     sliceEnd,
     fullText,
     existingEntities,
+    brCepContextRe,
   );
   const clusters = clusterSeeds(seeds, 150);
 

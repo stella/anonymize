@@ -1,0 +1,170 @@
+[
+  {
+    "id": "pt-br-person-represented",
+    "label": "person",
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "representada por",
+      "representado por",
+      "neste ato representada por",
+      "neste ato representado por",
+      "neste ato representada pelo",
+      "neste ato representada pela",
+      "neste ato representado pelo",
+      "neste ato representado pela",
+      "por intermédio de",
+      "por intermédio do"
+    ],
+    "validations": [{ "type": "starts-uppercase" }]
+  },
+  {
+    "id": "pt-br-person-honorific",
+    "label": "person",
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "Exmo. Sr.",
+      "Exma. Sra.",
+      "Ilmo. Sr.",
+      "Ilma. Sra.",
+      "Senhor",
+      "Senhora"
+    ],
+    "extensions": ["add-trailing-space"],
+    "validations": [{ "type": "starts-uppercase" }]
+  },
+  {
+    "id": "pt-br-address-full",
+    "label": "address",
+    "strategy": { "type": "address", "maxChars": 120 },
+    "triggers": [
+      "com sede na",
+      "com sede no",
+      "com sede em",
+      "com sede à",
+      "estabelecida na",
+      "estabelecido na",
+      "estabelecida no",
+      "estabelecido no",
+      "residente e domiciliada na",
+      "residente e domiciliado na",
+      "residente e domiciliada em",
+      "residente e domiciliado em",
+      "residente e domiciliada no",
+      "residente e domiciliado no",
+      "residente em",
+      "residente na",
+      "residente no",
+      "domiciliada em",
+      "domiciliado em",
+      "domiciliada na",
+      "domiciliado na"
+    ],
+    "extensions": ["add-colon"]
+  },
+  {
+    "id": "pt-br-cnpj",
+    "label": "tax identification number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "CNPJ",
+      "CNPJ/MF",
+      "CNPJ nº",
+      "CNPJ sob nº",
+      "CNPJ sob o nº",
+      "inscrita no CNPJ",
+      "inscrito no CNPJ"
+    ],
+    "validations": [{ "type": "valid-id", "validator": "br.cnpj" }]
+  },
+  {
+    "id": "pt-br-cpf",
+    "label": "tax identification number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": ["CPF", "CPF/MF", "CPF nº", "CPF sob nº", "CPF sob o nº"],
+    "validations": [{ "type": "valid-id", "validator": "br.cpf" }]
+  },
+  {
+    "id": "pt-br-rg",
+    "label": "national identification number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "RG",
+      "RG nº",
+      "Cédula de Identidade",
+      "Cédula de Identidade nº",
+      "Carteira de Identidade",
+      "Carteira de Identidade nº",
+      "portador da Cédula de Identidade",
+      "portadora da Cédula de Identidade",
+      "portador da Carteira de Identidade",
+      "portadora da Carteira de Identidade",
+      "portador do RG",
+      "portadora do RG"
+    ]
+  },
+  {
+    "id": "pt-br-oab",
+    "label": "registration number",
+    "strategy": { "type": "n-words", "count": 1 },
+    "triggers": [
+      "OAB/AC",
+      "OAB/AL",
+      "OAB/AP",
+      "OAB/AM",
+      "OAB/BA",
+      "OAB/CE",
+      "OAB/DF",
+      "OAB/ES",
+      "OAB/GO",
+      "OAB/MA",
+      "OAB/MT",
+      "OAB/MS",
+      "OAB/MG",
+      "OAB/PA",
+      "OAB/PB",
+      "OAB/PR",
+      "OAB/PE",
+      "OAB/PI",
+      "OAB/RJ",
+      "OAB/RN",
+      "OAB/RS",
+      "OAB/RO",
+      "OAB/RR",
+      "OAB/SC",
+      "OAB/SP",
+      "OAB/SE",
+      "OAB/TO"
+    ],
+    "extensions": ["add-trailing-space"],
+    "validations": [{ "type": "has-digits" }]
+  },
+  {
+    "id": "pt-br-state-registration",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "Inscrição Estadual",
+      "Inscrição Estadual nº",
+      "Inscrição Municipal",
+      "Inscrição Municipal nº",
+      "NIRE",
+      "NIRE nº"
+    ]
+  },
+  {
+    "id": "pt-br-amount-prefix",
+    "label": "monetary amount",
+    "strategy": { "type": "to-next-comma" },
+    "triggers": [
+      "no valor de",
+      "no valor total de",
+      "no importe de",
+      "pelo valor de",
+      "pelo valor total de",
+      "valor global de",
+      "valor total de"
+    ],
+    "extensions": ["add-colon"],
+    "validations": [{ "type": "has-digits" }]
+  }
+]

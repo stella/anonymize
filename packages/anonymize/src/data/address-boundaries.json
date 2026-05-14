@@ -103,6 +103,24 @@
     "zwaną dalej",
     "zwanego dalej"
   ],
+  "pt-br": [
+    "CNPJ",
+    "CPF",
+    "RG",
+    "OAB",
+    "inscrita",
+    "inscrito",
+    "Inscrição Estadual",
+    "Inscrição Municipal",
+    "neste ato representada",
+    "neste ato representado",
+    "doravante denominada",
+    "doravante denominado",
+    "registrada",
+    "registrado",
+    "portador",
+    "portadora"
+  ],
   "ro": ["înregistrată", "reprezentat", "reprezentată"],
   "sk": [
     "IČO",

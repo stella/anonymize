@@ -4,6 +4,7 @@ import {
   at,
   be,
   bg,
+  br,
   cz,
   cy,
   de,
@@ -264,6 +265,13 @@ const STDNUM_ENTRIES: readonly StdnumEntry[] = [
 
   // ── LU validators ────────────────────────────────
   toEntry(lu.vat, "tax identification number", 0.95),
+
+  // ── BR validators ────────────────────────────────
+  // CPF (personal tax ID, 11 digits, checksum). Higher
+  // score than the generic phone patterns so the
+  // overlap resolver prefers the tax-ID label.
+  toEntry(br.cpf, "tax identification number", 0.95),
+  toEntry(br.cnpj, "tax identification number", 0.95),
 ].filter((e): e is StdnumEntry => e !== null);
 
 // ── Named pattern definitions ────────────────────────
@@ -463,6 +471,73 @@ const ES_CIF: RegexDef = {
   validator: es.cif,
 };
 
+// Brazilian CEP (Código de Endereçamento Postal):
+// NNNNN-NNN. Distinctive 5-digit + hyphen + 3-digit
+// shape, but the bare form is indistinguishable from
+// non-address order/ticket/reference numbers
+// ("Order 12345-678"), so it is not emitted as an
+// active address regex. Instead the shape is consumed
+// by `processAddressSeeds` as a postal-code seed, so
+// expansion only fires when other street/city signals
+// cluster around it (e.g.
+// "Rua Augusta, 123, 01001-000 São Paulo").
+//
+// Kept here as documentation only.
+
+// Brazilian CPF (personal tax ID), formatted form
+// only: NNN.NNN.NNN-NN. Dotted/dashed form is matched
+// by the distinctive separators; the br.cpf validator
+// rejects placeholder values such as "000.000.000-00"
+// or other invalid checksums.
+//
+// Score must beat the generic phone patterns so the
+// overlap resolver assigns the tax-ID label.
+const BR_CPF_FORMATTED: RegexDef = {
+  pattern: `\\b\\d{3}\\.\\d{3}\\.\\d{3}${DASH}\\d{2}\\b`,
+  label: "tax identification number",
+  score: 0.95,
+  validator: br.cpf,
+};
+
+// Brazilian CNPJ (company tax ID), formatted:
+// NN.NNN.NNN/NNNN-NN. The slash is unique to CNPJ
+// for shape, and the br.cnpj validator filters
+// placeholder values such as "12.345.678/0001-00".
+const BR_CNPJ_FORMATTED: RegexDef = {
+  pattern: `\\b\\d{2}\\.\\d{3}\\.\\d{3}/\\d{4}${DASH}\\d{2}\\b`,
+  label: "tax identification number",
+  score: 0.95,
+  validator: br.cnpj,
+};
+
+// Brazilian RG (Registro Geral, state-issued identity).
+// Format is non-uniform across states; the most reliable
+// anchor is the trailing "SSP/UF" issuer marker. Captures
+// the number and the SSP suffix.
+//   12.345.678 SSP/DF
+//   45.678.901-2 SSP/SP
+//   32.456.789-X SSP/SP
+const BR_RG_WITH_SSP: RegexDef = {
+  pattern:
+    `\\b\\d{1,3}\\.?\\d{3}\\.?\\d{3}` +
+    `(?:${DASH}[0-9A-Za-z])?` +
+    `[^\\S\\n]+SSP(?:/[A-Z]{2})?\\b`,
+  label: "national identification number",
+  score: 0.95,
+};
+
+// Brazilian OAB (lawyer registration). Format:
+// "OAB/UF NNNNNN" or "OAB/UF NNN.NNN" — two-letter
+// state code, optional "nº" / "n." marker, then 4–6
+// digits with optional thousand separator dot.
+const BR_OAB: RegexDef = {
+  pattern:
+    `\\bOAB/[A-Z]{2}[^\\S\\n]+(?:n[º°.][^\\S\\n]*)?` +
+    `(?:\\d{1,3}(?:\\.\\d{3})+|\\d{4,6})\\b`,
+  label: "registration number",
+  score: 0.95,
+};
+
 // URL: scheme + host + optional port + path + query +
 // fragment. Trailing prose punctuation excluded but
 // ? = & # kept for query strings.
@@ -587,6 +662,10 @@ const ALL_REGEX_DEFS: readonly RegexDef[] = [
   ES_DNI,
   ES_NIE,
   ES_CIF,
+  BR_CPF_FORMATTED,
+  BR_CNPJ_FORMATTED,
+  BR_RG_WITH_SSP,
+  BR_OAB,
   URL,
   IPV6_ADDRESS,
   MAC_ADDRESS,

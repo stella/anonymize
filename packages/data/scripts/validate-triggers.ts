@@ -24,7 +24,13 @@ const VALID_VALIDATION_TYPES = new Set([
   "no-digits",
   "has-digits",
   "matches-pattern",
+  "valid-id",
 ]);
+
+// Allow-list of named ID validators implemented by the
+// runtime. Keep in sync with `ValidIdValidator` in
+// packages/anonymize/src/types.ts.
+const VALID_ID_VALIDATORS = new Set(["br.cpf", "br.cnpj"]);
 
 const VALID_EXTENSIONS = new Set([
   "add-colon",
@@ -254,6 +260,21 @@ const validateFile = async (filePath: string): Promise<ValidationError[]> => {
                     (err instanceof Error ? `: ${err.message}` : ""),
                 });
               }
+            }
+          }
+          if (v.type === "valid-id") {
+            if (
+              typeof v.validator !== "string" ||
+              !VALID_ID_VALIDATORS.has(v.validator)
+            ) {
+              errors.push({
+                file: fileName,
+                groupIndex: i,
+                message:
+                  `valid-id requires "validator" to be ` +
+                  `one of: ${[...VALID_ID_VALIDATORS].join(", ")} ` +
+                  `(got: ${JSON.stringify(v.validator)})`,
+              });
             }
           }
         }

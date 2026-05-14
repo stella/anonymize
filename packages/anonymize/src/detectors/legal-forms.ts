@@ -355,13 +355,18 @@ export const buildLegalFormPatterns = async (): Promise<string[]> => {
   }
 
   const allForms: string[] = [];
+  // Dedupe case-sensitively so all-caps and title-case
+  // spellings of the same form ("Ltda." vs "LTDA.",
+  // "Pty Ltd" vs "PTY LTD") both reach the detector
+  // regex. The escaped alternatives are matched case-
+  // sensitively, so dropping one spelling silently blinds
+  // the detector to that casing in real documents.
   const seen = new Set<string>();
 
   for (const forms of Object.values(data)) {
     for (const form of forms) {
-      const key = form.toLowerCase();
-      if (!seen.has(key)) {
-        seen.add(key);
+      if (!seen.has(form)) {
+        seen.add(form);
         allForms.push(form);
       }
     }
@@ -372,9 +377,8 @@ export const buildLegalFormPatterns = async (): Promise<string[]> => {
   // and trailing-period passes, and the detector keeps
   // missing them on fresh prose ("Bank of America, N.A.").
   for (const form of LEGAL_SUFFIXES) {
-    const key = form.toLowerCase();
-    if (!seen.has(key)) {
-      seen.add(key);
+    if (!seen.has(form)) {
+      seen.add(form);
       allForms.push(form);
     }
   }
