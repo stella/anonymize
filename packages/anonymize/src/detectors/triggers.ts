@@ -685,7 +685,12 @@ const extractValue = (
         return null;
       }
       const afterSep = raw.slice(sepMatch[0].length);
-      const idMatch = /^[A-Z]{0,6}\s?\d[\d\s\-/]{4,}/i.exec(afterSep);
+      // Letter prefix (e.g., VAT prefix "CZ", "PL") must
+      // be uppercase: lowercase letters would let label
+      // tokens like "nr"/"numer" sneak into the captured
+      // value when a bare trigger fires next to a
+      // "... nr" variant ("PESEL nr 44051401458").
+      const idMatch = /^[A-Z]{0,6}\s?\d[\d\s\-/]{4,}/.exec(afterSep);
       if (!idMatch) {
         return null;
       }
