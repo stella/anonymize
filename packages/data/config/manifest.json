@@ -36,7 +36,8 @@
     },
     "it": {
       "triggers": true,
-      "coreference": false
+      "coreference": true,
+      "legalRoleHeads": true
     },
     "pl": {
       "triggers": true,

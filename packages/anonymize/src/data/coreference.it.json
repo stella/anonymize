@@ -1,0 +1,22 @@
+[
+  {
+    "label": "(in seguito \"X\") or (di seguito \"X\")",
+    "pattern": "\\((?:in\\s+seguito|di\\s+seguito|qui\\s+di\\s+seguito|nel\\s+seguito)\\s+(?:denominata|denominato|detta|detto|indicata|indicato|anche|la|il)?\\s*[\"'“”«»‘’‚]([^\"'“”«»‘’‚]+)[\"'“”«»‘’‚]\\)",
+    "flags": "gi"
+  },
+  {
+    "label": "(denominato/denominata \"X\")",
+    "pattern": "\\((?:denominata|denominato|qui\\s+di\\s+seguito\\s+denominata|qui\\s+di\\s+seguito\\s+denominato)\\s+[\"'“”«»‘’‚]([^\"'“”«»‘’‚]+)[\"'“”«»‘’‚]\\)",
+    "flags": "gi"
+  },
+  {
+    "label": "(la/il \"X\")",
+    "pattern": "\\((?:la|il|lo|le|gli|l')\\s*[\"'“”«»‘’‚]([^\"'“”«»‘’‚]+)[\"'“”«»‘’‚]\\)",
+    "flags": "gi"
+  },
+  {
+    "label": "denominata/denominato \"X\" without parens",
+    "pattern": "(?:in\\s+seguito|di\\s+seguito)\\s+(?:denominata|denominato|detta|detto|indicata|indicato)\\s+[\"'“”«»‘’‚]([^\"'“”«»‘’‚]+)[\"'“”«»‘’‚]",
+    "flags": "gi"
+  }
+]
