@@ -60,6 +60,8 @@ const RAW_LEGAL_SUFFIXES = [
   "S.p.A.",
   // Polish
   "Sp. z o.o.",
+  "Sp. k.",
+  "Sp. j.",
 ];
 
 export const LEGAL_SUFFIXES: readonly string[] = [...RAW_LEGAL_SUFFIXES].sort(

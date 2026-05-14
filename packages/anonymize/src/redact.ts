@@ -14,7 +14,14 @@ import { corefKey, defaultContext } from "./context";
 
 const WHITESPACE_RE = /\s+/g;
 const PHONE_NOISE_RE = /[()\s-]/g;
-const SPACE_DASH_RE = /[\s-]/g;
+// Strip all separators the ID detectors accept so the
+// same real-world value canonicalises to one placeholder:
+//   - whitespace and `-` for IBAN, NIP, REGON, etc.
+//   - `/` for birth numbers ("900101/1234") and Czech
+//     bank accounts ("123-4567/0100").
+//   - `.` for credit cards ("4111.1111.1111.1111") and
+//     other dotted IDs.
+const ID_SEPARATOR_RE = /[\s\-/.]/g;
 
 /**
  * Normalize entity text so that surface-form variations
@@ -42,7 +49,7 @@ const normalizeEntityText = (label: string, text: string): string => {
     upper === "PASSPORT_NUMBER" ||
     upper === "CREDIT_CARD_NUMBER"
   ) {
-    return text.replace(SPACE_DASH_RE, "").toUpperCase();
+    return text.replace(ID_SEPARATOR_RE, "").toUpperCase();
   }
   if (
     upper === "PERSON" ||
