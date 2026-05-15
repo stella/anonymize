@@ -1,14 +1,18 @@
 import { describe, expect, test } from "bun:test";
 import { sanitizeEntities } from "../pipeline";
-import type { Entity } from "../types";
+import type { DetectionSource, Entity } from "../types";
 
-const make = (text: string, label = "organization"): Entity => ({
+const make = (
+  text: string,
+  label = "organization",
+  source: DetectionSource = "ner",
+): Entity => ({
   start: 0,
   end: text.length,
   label,
   text,
   score: 0.9,
-  source: "ner",
+  source,
 });
 
 const trim = (text: string, label?: string): string => {
@@ -82,6 +86,32 @@ describe("sanitizeEntities — trailing typographic punctuation", () => {
     // `Inc.` is a known legal-form suffix; the period
     // should survive.
     expect(trim(`Acme Inc.`)).toBe("Acme Inc.");
+  });
+
+  test("preserves address abbreviation period", () => {
+    expect(trim("123 Main St.", "address")).toBe("123 Main St.");
+  });
+
+  test("strips non-abbreviation periods from address spans", () => {
+    expect(
+      trim("Kodaňská 1441/46, Vršovice, 101 00 Praha 10.", "address"),
+    ).toBe("Kodaňská 1441/46, Vršovice, 101 00 Praha 10");
+    expect(trim("State of Delaware.", "address")).toBe("State of Delaware");
+  });
+
+  test("preserves literal dictionary punctuation", () => {
+    const literals = [
+      make("Hello bank!", "organization", "deny-list"),
+      make(`"Juez y parte"`, "organization", "deny-list"),
+      make("'Bank van lening'", "organization", "deny-list"),
+      make("Vista!", "organization", "gazetteer"),
+    ];
+    expect(sanitizeEntities(literals).map((e) => e.text)).toEqual([
+      "Hello bank!",
+      `"Juez y parte"`,
+      "'Bank van lening'",
+      "Vista!",
+    ]);
   });
 
   test("drops entity that becomes empty after trim", () => {

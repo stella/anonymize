@@ -76,6 +76,9 @@ const isCallerOwnedEntity = (entity: Entity): boolean =>
 const hasLockedBoundary = (entity: Entity): boolean =>
   isCallerOwnedEntity(entity);
 
+const hasCuratedLiteralBoundary = (entity: Entity): boolean =>
+  LITERAL_SOURCES.has(entity.source);
+
 const shouldReplace = (a: Entity, b: Entity): boolean => {
   const aLen = a.end - a.start;
   const bLen = b.end - b.start;
@@ -138,6 +141,7 @@ const PERIOD_STRIPPED_LABELS: ReadonlySet<string> = new Set([
   "location",
   "address",
 ]);
+const ADDRESS_FINAL_ABBREV_RE = /(?:^|[\s,])\p{L}{1,4}\.$/u;
 
 /**
  * Labels whose detectors emit precise, evidence-backed spans. When
@@ -242,10 +246,12 @@ const resolveSameSpanLabelConflicts = (entities: Entity[]): Entity[] => {
  * Trailing typographic punctuation that detectors
  * occasionally swallow when a capture runs to the end
  * of a sentence or quoted phrase. Stripped from every
- * non-locked entity regardless of detector source:
- * none of these characters belong inside an entity
- * name in practice, and leaving them attached produces
- * dangling characters after redaction
+ * non-literal, non-locked entity: curated dictionary and
+ * gazetteer entries define their own exact boundaries, and
+ * some legitimate literals include punctuation
+ * (`Hello bank!`, `"Juez y parte"`). For fuzzy detector
+ * spans, leaving these characters attached produces dangling
+ * characters after redaction
  * (e.g. `Bond Hedge Documentation"` →
  * `Bond Hedge Documentation`).
  *
@@ -293,7 +299,7 @@ const TRAILING_TRIM_BY_LABEL = {
 /** Strip leading/trailing whitespace and punctuation. */
 export const sanitizeEntities = (entities: Entity[]): Entity[] =>
   entities.flatMap((e) => {
-    if (hasLockedBoundary(e)) {
+    if (hasLockedBoundary(e) || hasCuratedLiteralBoundary(e)) {
       return [e];
     }
 
@@ -336,7 +342,9 @@ export const sanitizeEntities = (entities: Entity[]): Entity[] =>
       !LITERAL_SOURCES.has(e.source)
     ) {
       const known = getKnownLegalSuffixes();
-      const keepsPeriod = known.some((suffix) => cleaned.endsWith(suffix));
+      const keepsPeriod =
+        known.some((suffix) => cleaned.endsWith(suffix)) ||
+        (e.label === "address" && ADDRESS_FINAL_ABBREV_RE.test(cleaned));
       if (!keepsPeriod) {
         cleaned = cleaned.slice(0, -1).trimEnd();
       }
