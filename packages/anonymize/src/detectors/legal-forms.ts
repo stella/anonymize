@@ -1271,13 +1271,34 @@ const trimLeadingClause = (text: string): { offset: number; text: string } => {
   const directPrefixAlternation = trims.directPrefixes
     .map(escapeForRegex)
     .join("|");
+  // "among" / "amongst" / "between" can legitimately
+  // appear inside a title-case org name ("Food For
+  // Thought Among Friends LLC", "The Space In Between
+  // LLC"). For those prefixes we require a clause
+  // separator (comma) immediately before the prefix,
+  // which is the structural signal that distinguishes
+  // a connector ("Investment Agreement, dated as of
+  // March 9, 2020, among Twitter, Inc.") from a name
+  // component.
+  const COMMA_GATED_DIRECT_PREFIXES: ReadonlySet<string> = new Set([
+    "among",
+    "amongst",
+    "between",
+  ]);
   if (directPrefixAlternation.length > 0) {
     const directPrefixRe = new RegExp(
       `\\b(?:${directPrefixAlternation})${HSPACE}+(?=\\p{Lu})`,
       "giu",
     );
     for (const match of text.matchAll(directPrefixRe)) {
+      const matchedPrefix = match[0].trim().toLowerCase();
       const before = text.slice(0, match.index);
+      if (
+        COMMA_GATED_DIRECT_PREFIXES.has(matchedPrefix) &&
+        !/,\s*$/u.test(before)
+      ) {
+        continue;
+      }
       const words = before.match(/\p{L}[\p{L}\p{M}]*/gu) ?? [];
       const hasProsePrefix =
         words.length >= 3 && words.some((word) => /\p{Ll}/u.test(word));

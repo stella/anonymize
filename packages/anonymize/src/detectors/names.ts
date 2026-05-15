@@ -356,6 +356,18 @@ const classifyToken = (
     };
   }
 
+  // `Intl.Segmenter` splits middle initials into a
+  // letter word and a separate punctuation segment
+  // ("R." → word "R" + "."), so the standard
+  // `isAbbreviation` check (which requires a length-2
+  // "X." token) misses them. Recognise a single
+  // uppercase letter immediately followed by a "." in
+  // the source text as an abbreviation too, so chains
+  // like "ADAM R. BARTOŠ" don't break on the initial.
+  if (text.length === 1 && UPPER_START_RE.test(text) && fullText[end] === ".") {
+    return { text, type: TOKEN_TYPE.ABBREVIATION, start, end };
+  }
+
   // Skip excluded words
   if (corpus.excludedWords.has(lower)) {
     return { text, type: TOKEN_TYPE.OTHER, start, end };
