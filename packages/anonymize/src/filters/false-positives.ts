@@ -93,14 +93,25 @@ const countWordTokens = (text: string): number => {
 const ALL_CAPS_LINE_LETTER_THRESHOLD = 5;
 const ALL_CAPS_LINE_RATIO = 0.95;
 const ALL_CAPS_LINE_PROSE_EXTRA_LETTERS = 20;
-// Section-number prefix at the very start of a line:
-// "17.", "§ 3", "3.2.1." — anything that looks like a
-// clause-numbering scheme followed by an uppercase
-// title token. Used to reject all-caps section titles
-// regardless of length.
+// A genuine party caption has the shape "Name[, ]Suffix"
+// — short, with a comma marking the suffix break (or no
+// suffix-style separator at all). Heading lines such as
+// "REGISTRATION STATEMENT" or Czech "RÁMCOVÁ DOHODA NA
+// POSKYTOVÁNÍ PRÁVNÍCH SLUŽEB" are longer prose-style
+// sequences without a comma. The word-count cutoff is
+// deliberately permissive; legitimate firm names like
+// "European Bank for Reconstruction and Development"
+// (6 words) keep their comma + legal-form suffix, so
+// they retain the suffix break test above.
+const ALL_CAPS_LINE_HEADING_WORD_LIMIT = 5;
+// Section-number prefix at the start of a line, with
+// optional leading whitespace so indented headings
+// ("    17. NO ASSIGNMENT.", "§ 3") still match. The
+// trailing uppercase character anchors the title token.
 const SECTION_HEADING_PREFIX_RE =
-  /^(?:§\s*)?\d{1,3}(?:\.\d{1,3}){0,4}\.?\s*\p{Lu}/u;
+  /^\s*(?:§\s*)?\d{1,3}(?:\.\d{1,3}){0,4}\.?\s*\p{Lu}/u;
 const LINE_LETTER_RE = /\p{L}/gu;
+const ENTITY_WORD_TOKEN_RE = /\p{L}[\p{L}\p{M}\p{N}'’\-]*/gu;
 const isAllCapsBoilerplateLine = (
   fullText: string,
   start: number,
@@ -136,11 +147,24 @@ const isAllCapsBoilerplateLine = (
   if (upperCount / letterCount < ALL_CAPS_LINE_RATIO) return false;
   // Numbered section headings are always boilerplate.
   if (SECTION_HEADING_PREFIX_RE.test(line)) return true;
-  // Otherwise: only treat as boilerplate when there is
-  // substantial all-caps prose *outside* the entity
-  // span. Party captions occupy nearly the entire line
-  // and survive this gate.
-  return outsideEntityLetters >= ALL_CAPS_LINE_PROSE_EXTRA_LETTERS;
+  // SEC legend / paragraph: substantial all-caps prose
+  // outside the entity span.
+  if (outsideEntityLetters >= ALL_CAPS_LINE_PROSE_EXTRA_LETTERS) return true;
+  // Heading-shape inside the entity itself: many words
+  // and no comma to mark a Name+Suffix break. Czech
+  // section titles ("RÁMCOVÁ DOHODA NA POSKYTOVÁNÍ
+  // PRÁVNÍCH SLUŽEB") match here. Real captions like
+  // "ACME CORPORATION" (2 words, no comma) and
+  // "TWITTER, INC." (comma) survive.
+  const entityText = fullText.slice(start, start + length);
+  const entityWordCount = (entityText.match(ENTITY_WORD_TOKEN_RE) ?? []).length;
+  if (
+    entityWordCount > ALL_CAPS_LINE_HEADING_WORD_LIMIT &&
+    !entityText.includes(",")
+  ) {
+    return true;
+  }
+  return false;
 };
 const isAllCapsCandidate = (text: string): boolean =>
   text === text.toUpperCase() && /\p{Lu}/u.test(text);

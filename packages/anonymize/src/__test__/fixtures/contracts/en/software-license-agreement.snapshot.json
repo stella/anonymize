@@ -177,14 +177,14 @@
       "end": 2140,
       "label": "person",
       "text": "Priya Ramanathan",
-      "source": "deny-list"
+      "source": "trigger"
     },
     {
       "start": 2165,
       "end": 2185,
       "label": "person",
       "text": "Jonathan H. Whitaker",
-      "source": "deny-list"
+      "source": "trigger"
     },
     {
       "start": 2258,

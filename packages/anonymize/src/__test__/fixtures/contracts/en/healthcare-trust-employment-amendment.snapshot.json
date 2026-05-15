@@ -90,7 +90,7 @@
       "end": 2692,
       "label": "person",
       "text": "Peter N. Foss",
-      "source": "deny-list"
+      "source": "trigger"
     },
     {
       "start": 2769,
@@ -209,7 +209,7 @@
       "end": 8523,
       "label": "person",
       "text": "Peter N. Foss",
-      "source": "deny-list"
+      "source": "trigger"
     },
     {
       "start": 8601,

@@ -1595,60 +1595,14 @@ export const processLegalFormMatches = (
         prefixPart.length > 2 && prefixPart === prefixPart.toUpperCase();
 
       if (isAllCapsMatch && fullText) {
-        // Check the surrounding line. An all-caps line is
-        // EITHER a party caption (real org rendered in
-        // caps on its own line, e.g. "TWITTER, INC.")
-        // or a section heading ("KUPNÍ SMLOUVA",
-        // "17. NO ASSIGNMENT."). Distinguishing signals:
-        //   - section headings open with a clause number,
-        //   - long all-caps paragraphs contain substantial
-        //     prose outside the matched span.
-        // Party captions occupy nearly the whole line and
-        // have no leading clause number, so they survive.
-        const lineStart = fullText.lastIndexOf("\n", entityStart);
-        const lineEnd = fullText.indexOf("\n", entityStart + entityText.length);
-        const line = fullText.slice(
-          lineStart + 1,
-          lineEnd === -1 ? fullText.length : lineEnd,
-        );
-        const entityRelStart = entityStart - (lineStart + 1);
-        const entityRelEnd = entityRelStart + entityText.length;
-        let lineLetterCount = 0;
-        let lineUpperCount = 0;
-        let lineOutsideLetters = 0;
-        for (let i = 0; i < line.length; i++) {
-          const ch = line[i];
-          if (ch === undefined || !/[a-zA-ZÀ-ž]/.test(ch)) continue;
-          lineLetterCount += 1;
-          if (ch === ch.toUpperCase()) lineUpperCount += 1;
-          if (i < entityRelStart || i >= entityRelEnd) {
-            lineOutsideLetters += 1;
-          }
-        }
-        const lineIsAllCaps =
-          lineLetterCount > 5 && lineUpperCount / lineLetterCount >= 0.95;
-        const sectionHeadingPrefix =
-          /^(?:§\s*)?\d{1,3}(?:\.\d{1,3}){0,4}\.?\s*\p{Lu}/u.test(line);
-        // A genuine party caption always renders the
-        // suffix on the trailing side of a comma
-        // ("TWITTER, INC."). Section titles such as
-        // Czech "RÁMCOVÁ DOHODA NA POSKYTOVÁNÍ PRÁVNÍCH
-        // SLUŽEB" have no comma — they're prose run
-        // together, not "Name, Suffix" structures, so
-        // they fail this gate.
-        const hasCommaBeforeSuffix = entityText.lastIndexOf(",") > 0;
-        const isBoilerplateLine =
-          lineIsAllCaps &&
-          (sectionHeadingPrefix ||
-            lineOutsideLetters >= 20 ||
-            !hasCommaBeforeSuffix);
-        if (isBoilerplateLine) {
-          // Section heading or boilerplate prose paragraph
-          // — skip.
-          continue;
-        }
-        // Only the company name is all-caps → keep it
-        // (but limit to 3 words in prefix)
+        // Boilerplate-vs-caption discrimination is
+        // handled centrally by isAllCapsBoilerplateLine
+        // in filters/false-positives.ts; we no longer
+        // duplicate it here. Keep the local guard that
+        // restores the original regex match if backward
+        // extension swept too many cap words into the
+        // prefix — the centralised post-filter still
+        // sees that restored span.
         const wordCount =
           prefixPart.length > 0
             ? entityText
@@ -1657,9 +1611,6 @@ export const processLegalFormMatches = (
                 .split(/\s+/).length
             : 0;
         if (wordCount > 3) {
-          // Keep the original regex match if backward
-          // extension alone pushed the name past the
-          // all-caps 3-word guard.
           entityStart = match.start;
           entityText = text;
           ({ prefixEnd, prefixPart } = getPrefixInfo(entityText));
@@ -1667,7 +1618,7 @@ export const processLegalFormMatches = (
             prefixPart.length > 2 && prefixPart === prefixPart.toUpperCase();
         }
       } else if (isAllCapsMatch) {
-        // No fullText available — fall back to rejecting
+        // No fullText available — fall back to rejecting.
         continue;
       }
 
