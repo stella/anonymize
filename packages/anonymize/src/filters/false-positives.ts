@@ -47,6 +47,73 @@ const MAX_ENTITY_LENGTH: Partial<Record<string, number>> = {
   organization: 80,
   person: 60,
 };
+
+// Per-label upper bound on word count. Real-world
+// organisation names cap out well below this even for
+// long firm names ("European Bank for Reconstruction
+// and Development" — 6). A trigger or coreference span
+// running past this is almost certainly absorbing prose.
+// Only open-ended sources (trigger, coreference) are
+// subject to this cap: gazetteer/NER/regex detections
+// are bounded by their dictionary, model, or pattern
+// and may legitimately span longer names like "The
+// University of Texas Health Science Center at Houston".
+const MAX_ENTITY_WORDS: Partial<Record<string, number>> = {
+  organization: 8,
+};
+const OPEN_ENDED_SOURCES: ReadonlySet<string> = new Set([
+  "trigger",
+  "coreference",
+]);
+const WORD_TOKEN_RE = /\p{L}[\p{L}\p{M}\p{N}'’\-./]*/gu;
+const countWordTokens = (text: string): number => {
+  let count = 0;
+  WORD_TOKEN_RE.lastIndex = 0;
+  while (WORD_TOKEN_RE.exec(text) !== null) count += 1;
+  return count;
+};
+
+// Lines whose visible letters are overwhelmingly
+// uppercase are headings or boilerplate disclosure
+// blocks (SEC legends, "THIS INSTRUMENT AND ANY
+// SECURITIES ..." clauses). Detectors anchored to
+// uppercase tokens otherwise pull bigrams like
+// "SECURITIES ACT" or "REGISTRATION STATEMENT" out of
+// these blocks as organization spans, which is almost
+// always wrong.
+const ALL_CAPS_LINE_LETTER_THRESHOLD = 5;
+const ALL_CAPS_LINE_RATIO = 0.95;
+const LINE_LETTER_RE = /\p{L}/gu;
+const isAllCapsSurroundingLine = (
+  fullText: string,
+  start: number,
+  length: number,
+): boolean => {
+  const lineStart = fullText.lastIndexOf("\n", start) + 1;
+  const lineEndIdx = fullText.indexOf("\n", start + length);
+  const line = fullText.slice(
+    lineStart,
+    lineEndIdx === -1 ? fullText.length : lineEndIdx,
+  );
+  let letterCount = 0;
+  let upperCount = 0;
+  LINE_LETTER_RE.lastIndex = 0;
+  for (
+    let m = LINE_LETTER_RE.exec(line);
+    m !== null;
+    m = LINE_LETTER_RE.exec(line)
+  ) {
+    const ch = m[0];
+    letterCount += 1;
+    if (ch === ch.toUpperCase() && ch !== ch.toLowerCase()) {
+      upperCount += 1;
+    }
+  }
+  if (letterCount <= ALL_CAPS_LINE_LETTER_THRESHOLD) return false;
+  return upperCount / letterCount >= ALL_CAPS_LINE_RATIO;
+};
+const isAllCapsCandidate = (text: string): boolean =>
+  text === text.toUpperCase() && /\p{Lu}/u.test(text);
 // Section/clause numbers: "§ 3", "3.2.1", "12." but NOT
 // dates like "4.3.2026" or long digit strings like IČO.
 // A section number has 1-3 digit groups of 1-3 digits each,
@@ -300,6 +367,42 @@ export const filterFalsePositives = (
       maxLen &&
       trimmed.length > maxLen &&
       normalized.source !== "legal-form"
+    ) {
+      continue;
+    }
+    // Word-count cap. The byte-length cap above only
+    // catches truly runaway spans; a 70-char trigger
+    // capture full of short jargon words still slips
+    // through despite being clearly prose. Org names in
+    // practice cap out at 6 words even for verbose firm
+    // names; 8 leaves headroom without admitting a full
+    // boilerplate clause.
+    const maxWords = MAX_ENTITY_WORDS[normalized.label];
+    if (
+      maxWords &&
+      OPEN_ENDED_SOURCES.has(normalized.source) &&
+      countWordTokens(trimmed) > maxWords
+    ) {
+      continue;
+    }
+    // SEC-style legends, numbered section headings
+    // ("17.NO ASSIGNMENT."), and other boilerplate
+    // disclosure blocks render as all-uppercase lines.
+    // Detectors anchored to uppercase tokens otherwise
+    // emit bigrams like "SECURITIES ACT" or
+    // "REGISTRATION STATEMENT" as organization spans,
+    // and the legal-form regex matches headings such as
+    // "NO ASSIGNMENT". Real party captions almost always
+    // carry a legal-form suffix ("ACME CORPORATION")
+    // and survive via the legal-forms detector's own
+    // 3-word-on-mixed-case pathway, so we gate every
+    // all-caps organization candidate whose surrounding
+    // line is itself all-caps regardless of source.
+    if (
+      fullText &&
+      normalized.label === "organization" &&
+      isAllCapsCandidate(trimmed) &&
+      isAllCapsSurroundingLine(fullText, normalized.start, trimmed.length)
     ) {
       continue;
     }
