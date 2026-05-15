@@ -620,30 +620,6 @@ const IPV6_ADDRESS: RegexDef = {
   score: 1,
 };
 
-// US ZIP+4 (NNNNN-NNNN). The hyphenated form is
-// distinctive enough to emit on its own. The bare ZIP5
-// shape (\d{5}) is too generic to fire without context;
-// it lands instead in the address-seed clustering pass.
-//
-// Uses the shared `DASH` group so values copied from PDFs
-// or OCR with typographic dash variants (en-dash, non-
-// breaking hyphen, etc.) still match. Lookbehind/lookahead
-// reject adjacent letters, digits, underscores, or dashes so
-// longer identifiers like `A94304-1050B`, `12-34567-8901`,
-// or `12345-6789-0` do not produce spurious ZIP+4 matches
-// on their substrings.
-const US_ZIP_PLUS_FOUR: RegexDef = {
-  pattern:
-    `(?<![\\p{L}\\p{N}_${DASH_INNER}])` +
-    `\\d{5}${DASH}\\d{4}` +
-    `(?![\\p{L}\\p{N}_${DASH_INNER}])`,
-  label: "address",
-  // Standalone ZIP+4 is useful evidence, but a seed-expanded
-  // street/city/postal cluster should win overlap dedup so the
-  // full address is redacted when enough context exists.
-  score: 0.75,
-};
-
 // MAC: colon-only OR hyphen-only (no mixed).
 const MAC_ADDRESS: RegexDef = {
   pattern:
@@ -751,7 +727,6 @@ const ALL_REGEX_DEFS: readonly RegexDef[] = [
   HU_LANDLINE,
   CZ_POSTAL,
   ES_POSTAL,
-  US_ZIP_PLUS_FOUR,
   ES_DNI,
   ES_NIE,
   ES_CIF,

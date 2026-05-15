@@ -2,8 +2,8 @@
  * Regression tests for the US ZIP+4 regex. Bare ZIP5
  * (`\d{5}`) is too generic to emit on its own and is
  * intentionally handled by address-seed clustering;
- * the hyphenated ZIP+4 shape is distinctive enough to
- * fire as a standalone address.
+ * the hyphenated ZIP+4 shape still needs nearby address
+ * evidence because order IDs can share that shape.
  */
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
@@ -68,7 +68,7 @@ describe("US ZIP+4 regex", () => {
     expect(zip).toBeUndefined();
   });
 
-  test("ZIP+4 in mid-sentence prose is captured", async () => {
+  test("ZIP+4 in mid-sentence address prose is captured", async () => {
     const text =
       "Notices shall be delivered to 100 Main St, Springfield, IL 62701-1234 at all times.";
     const entities = await detect(text);
@@ -78,6 +78,27 @@ describe("US ZIP+4 regex", () => {
         e.text.includes("Main St") &&
         e.text.includes("Springfield") &&
         e.text.includes("62701-1234"),
+    );
+    expect(address).toBeDefined();
+  });
+
+  test("ZIP+4 after city-like prose is not captured without address evidence", async () => {
+    const text = "Palo Alto processed order 94304-1050 yesterday.";
+    const entities = await detect(text);
+    const spurious = entities.find(
+      (e) => e.label === "address" && e.text.includes("94304-1050"),
+    );
+    expect(spurious).toBeUndefined();
+  });
+
+  test("ZIP+4 after US state abbreviation is captured", async () => {
+    const text = "Notices shall be sent to Palo Alto, CA 94304-1050.";
+    const entities = await detect(text);
+    const address = entities.find(
+      (e) =>
+        e.label === "address" &&
+        e.text.includes("Palo Alto") &&
+        e.text.includes("94304-1050"),
     );
     expect(address).toBeDefined();
   });

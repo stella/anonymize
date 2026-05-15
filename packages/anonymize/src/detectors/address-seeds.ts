@@ -44,6 +44,10 @@ const POSTAL_CODE_RE = new RegExp(
   "gu",
 );
 const BR_CEP_SHAPE_RE = new RegExp(`^\\d{5}${DASH}\\d{3}$`, "u");
+const US_ZIP_PLUS_FOUR_SHAPE_RE = new RegExp(`^\\d{5}${DASH}\\d{4}$`, "u");
+const US_STATE_ABBREV_BEFORE_ZIP_RE =
+  /(?:^|[^A-Za-z0-9])(?:A[KLRZ]|C[AOT]|D[CE]|F[LM]|G[AU]|HI|I[ADLN]|K[SY]|LA|M[ADEHINOPST]|N[CDEHJMVY]|O[HKR]|P[AR]|RI|S[CD]|T[NX]|UT|V[AIT]|W[AIVY])\s*,?\s*$/u;
+const US_ZIP_CONTEXT_WINDOW = 120;
 
 // ── Seed types ──────────────────────────────────────
 
@@ -166,6 +170,25 @@ const hasBrCueNearby = (
   // would carry lastIndex across calls.
   const probe = new RegExp(re.source, re.flags.replace("g", ""));
   return probe.test(window);
+};
+
+const hasUsZipPlusFourContext = (
+  fullText: string,
+  start: number,
+  seeds: readonly Seed[],
+): boolean => {
+  const stateWindowStart = Math.max(0, start - 24);
+  const stateWindow = fullText.slice(stateWindowStart, start);
+  if (US_STATE_ABBREV_BEFORE_ZIP_RE.test(stateWindow)) {
+    return true;
+  }
+
+  return seeds.some((seed) => {
+    if (Math.abs(seed.start - start) > US_ZIP_CONTEXT_WINDOW) {
+      return false;
+    }
+    return seed.type === "address-trigger" || seed.type === "street-word";
+  });
 };
 
 /**
@@ -305,9 +328,9 @@ const collectSeeds = (
   // CEP-shaped seed is only kept when a pt-BR cue word
   // (rua/avenida/CNPJ/CPF/RG/…) appears within the cluster
   // window around it. The Czech/Slovak and Polish shapes
-  // are distinctive enough not to need a similar gate; the
-  // US ZIP+4 shape is also distinctive (the hyphen + four
-  // trailing digits is unambiguous in real prose).
+  // are distinctive enough not to need a similar gate. US
+  // ZIP+4 seeds are only kept with nearby address evidence
+  // because business/order IDs often share the same shape.
   const postalRe = POSTAL_CODE_RE;
   postalRe.lastIndex = 0;
   let postalMatch;
@@ -323,6 +346,13 @@ const collectSeeds = (
       isCepShape &&
       (brCepContextRe === null ||
         !hasBrCueNearby(fullText, start, end, brCepContextRe))
+    ) {
+      continue;
+    }
+    const isUsZipPlusFourShape = US_ZIP_PLUS_FOUR_SHAPE_RE.test(postalMatch[0]);
+    if (
+      isUsZipPlusFourShape &&
+      !hasUsZipPlusFourContext(fullText, start, seeds)
     ) {
       continue;
     }
