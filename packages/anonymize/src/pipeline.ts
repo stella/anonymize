@@ -122,6 +122,24 @@ const shouldReplace = (a: Entity, b: Entity): boolean => {
 const COLON_LABELS = new Set(["ip address", "mac address"]);
 
 /**
+ * Labels whose entities should have a trailing sentence
+ * `.` stripped during sanitisation. Restricted to
+ * proper-noun-style labels where a final period is
+ * almost always the sentence terminator that ran into
+ * the capture, not a structural part of the value.
+ * Numeric labels (`date`, `date of birth`, `phone
+ * number`, `monetary amount`, `time`) and `person`
+ * stay out — German writes `21. März`, post-nominal
+ * degrees write `M.Sc.`, times write `5:00 p.m.`, and
+ * stripping the dot would corrupt those spans.
+ */
+const PERIOD_STRIPPED_LABELS: ReadonlySet<string> = new Set([
+  "organization",
+  "location",
+  "address",
+]);
+
+/**
  * Labels whose detectors emit precise, evidence-backed spans. When
  * one of these fires at the exact same offsets as a fuzzier
  * `address` hit (city dictionary lookup, address-seed cluster), the
@@ -220,6 +238,38 @@ const resolveSameSpanLabelConflicts = (entities: Entity[]): Entity[] => {
   return entities.filter((e) => !dropped.has(e));
 };
 
+/**
+ * Trailing typographic punctuation that detectors
+ * occasionally swallow when a capture runs to the end
+ * of a sentence or quoted phrase. Stripped from every
+ * non-locked entity regardless of detector source:
+ * none of these characters belong inside an entity
+ * name in practice, and leaving them attached produces
+ * dangling characters after redaction
+ * (e.g. `Bond Hedge Documentation"` →
+ * `Bond Hedge Documentation`).
+ *
+ * `)` is deliberately omitted — monetary amounts are
+ * extended to include trailing "(slovy ...)" / "(in
+ * words ...)" parentheticals where the closing paren
+ * is structural, and stripping it would leave the open
+ * paren dangling. `.` is also omitted because the
+ * trailing-period rule below has label-aware handling
+ * (legal-form abbreviations keep their dot).
+ */
+const TRAILING_PUNCT_CLASS = `["“”‘’'»!?]`;
+
+/**
+ * Leading typographic punctuation that detectors
+ * occasionally swallow when a capture starts at an
+ * opening quote. `(` is deliberately omitted — it is
+ * almost always the opening of a structural
+ * parenthetical (registration number group, monetary
+ * "(slovy ...)" extension) that the detector
+ * intentionally captured.
+ */
+const LEADING_PUNCT_CLASS = `["“”‘’'«¿¡]`;
+
 /** Strip leading/trailing whitespace and punctuation. */
 export const sanitizeEntities = (entities: Entity[]): Entity[] =>
   entities.flatMap((e) => {
@@ -232,29 +282,38 @@ export const sanitizeEntities = (entities: Entity[]): Entity[] =>
     // artifact from trigger extraction after abbreviations
     // like "dat. nar." or "č.p." where the extraction
     // starts at the trailing dot of the abbreviation.
-    const leadTrimmed = e.text
-      .replace(/^(?:\.\s)+/, "")
-      .replace(new RegExp(`^${strip.source}`, strip.flags), "");
-    const lead = e.text.length - leadTrimmed.length;
-    let cleaned = leadTrimmed.replace(
-      new RegExp(`${strip.source}$`, strip.flags),
-      "",
+    // The typographic-punctuation passes run in a loop
+    // alongside the whitespace strip so combinations like
+    // `"Some Org",` or ` "Name" ` collapse cleanly.
+    const leadRe = new RegExp(
+      `^(?:\\.\\s|${strip.source}|${LEADING_PUNCT_CLASS})+`,
     );
-    // Trailing-period strip for organization entities that
-    // don't end in a legal-form abbreviation. Court trigger
-    // captures often include the sentence terminator
-    // ("Krajského soudu v Praze." → "Krajského soudu v Praze").
-    // Exact deny-list and gazetteer spans are skipped — those
-    // boundaries come from curated dictionaries and may legally
-    // end in `.` (e.g. "U.S.C."); normalising them here would
-    // leave the dot dangling outside the redaction.
-    // For everything else, keep the period when it follows the
-    // FULL detector vocabulary (data/legal-forms.json plus
-    // `LEGAL_SUFFIXES`), not only the small propagation list,
-    // so detected forms like "Acme Kft." or "Bank of America,
-    // N.A." retain their final dot.
+    const trailRe = new RegExp(`(?:${strip.source}|${TRAILING_PUNCT_CLASS})+$`);
+    const leadTrimmed = e.text.replace(leadRe, "");
+    const lead = e.text.length - leadTrimmed.length;
+    let cleaned = leadTrimmed.replace(trailRe, "");
+    // Trailing-period strip for proper-noun labels that
+    // don't end in a legal-form abbreviation. Trigger
+    // and NER captures often include the sentence
+    // terminator
+    // ("Krajského soudu v Praze." → "Krajského soudu v Praze",
+    // "State of Delaware." → "State of Delaware").
+    // Numeric labels (`date`, `phone number`, `monetary
+    // amount`, `time`, etc.) and the `person` label keep
+    // their trailing period — German dates write `21.`,
+    // post-nominals write `M.Sc.`, times write `p.m.`,
+    // all of which are structurally significant.
+    // Exact deny-list and gazetteer spans are skipped —
+    // those boundaries come from curated dictionaries
+    // and may legally end in `.` (e.g. "U.S.C."); for
+    // everything else, keep the period when it follows
+    // the FULL detector vocabulary (data/legal-forms.json
+    // plus `LEGAL_SUFFIXES`), not only the small
+    // propagation list, so detected forms like "Acme
+    // Kft." or "Bank of America, N.A." retain their
+    // final dot.
     if (
-      e.label === "organization" &&
+      PERIOD_STRIPPED_LABELS.has(e.label) &&
       cleaned.endsWith(".") &&
       !LITERAL_SOURCES.has(e.source)
     ) {
@@ -264,6 +323,11 @@ export const sanitizeEntities = (entities: Entity[]): Entity[] =>
         cleaned = cleaned.slice(0, -1).trimEnd();
       }
     }
+    // After the period strip, re-run the trailing-punctuation
+    // pass in case the period sat between the entity and
+    // already-stripped quotes/parens (e.g., `Foo."` →
+    // `Foo.` → `Foo`).
+    cleaned = cleaned.replace(trailRe, "");
     if (cleaned.length === 0) return [];
     // Reject entities with no alphanumeric content
     if (!/[\p{L}\p{N}]/u.test(cleaned)) return [];
