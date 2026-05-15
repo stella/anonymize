@@ -47,6 +47,7 @@ import { buildTriggerPatterns } from "./detectors/triggers";
 import { buildDenyList } from "./detectors/deny-list";
 import { buildStreetTypePatterns } from "./detectors/address-seeds";
 import { buildGazetteerPatterns } from "./detectors/gazetteer";
+import { buildCountryPatterns, type CountryData } from "./detectors/countries";
 import { expandLabelsForHotwordRules } from "./filters/hotword-rules";
 
 const DEFAULT_CUSTOM_REGEX_SCORE = 0.9;
@@ -91,12 +92,14 @@ export type UnifiedSearchInstance = {
     denyList: PatternSlice;
     streetTypes: PatternSlice;
     gazetteer: PatternSlice;
+    countries: PatternSlice;
   };
   regexMeta: readonly RegexMeta[];
   customRegexMeta: readonly RegexMeta[];
   triggerRules: readonly TriggerRule[];
   denyListData: DenyListData | null;
   gazetteerData: GazetteerData | null;
+  countryData: CountryData | null;
 };
 
 export const buildUnifiedSearch = async (
@@ -264,6 +267,20 @@ export const buildUnifiedSearch = async (
   };
   offset = gazetteerSlice.end;
 
+  // Country patterns: ISO 3166-1 names, curated aliases,
+  // alpha-3 codes. Literal + case-insensitive + whole-word.
+  const countryResult =
+    config.enableCountries === false ||
+    !labelIsAllowed("country", allowedLabels)
+      ? null
+      : buildCountryPatterns();
+
+  const countriesSlice = {
+    start: offset,
+    end: offset + (countryResult?.patterns.length ?? 0),
+  };
+  offset = countriesSlice.end;
+
   // Build the combined pattern array.
   // Deny-list and street-type patterns use
   // per-pattern wholeWords: true (they are
@@ -294,6 +311,7 @@ export const buildUnifiedSearch = async (
     ),
     ...streetTypes.map((pattern) => wrapWholeWord(pattern, true)),
     ...(gazResult?.patterns ?? []),
+    ...(countryResult?.patterns ?? []),
   ];
 
   const tsLiterals =
@@ -316,11 +334,13 @@ export const buildUnifiedSearch = async (
       denyList: denyListSlice,
       streetTypes: streetTypesSlice,
       gazetteer: gazetteerSlice,
+      countries: countriesSlice,
     },
     regexMeta,
     customRegexMeta,
     triggerRules: triggers.rules,
     denyListData,
     gazetteerData: gazResult?.data ?? null,
+    countryData: countryResult?.data ?? null,
   };
 };

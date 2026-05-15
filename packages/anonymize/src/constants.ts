@@ -25,6 +25,7 @@ export const DETECTION_SOURCES = {
   DENY_LIST: "deny-list",
   LEGAL_FORM: "legal-form",
   GAZETTEER: "gazetteer",
+  COUNTRY: "country",
   NER: "ner",
   COREFERENCE: "coreference",
 } as const;
@@ -43,6 +44,7 @@ export const DETECTOR_PRIORITY = {
   [DETECTION_SOURCES.TRIGGER]: 4,
   [DETECTION_SOURCES.LEGAL_FORM]: 3,
   [DETECTION_SOURCES.REGEX]: 3,
+  [DETECTION_SOURCES.COUNTRY]: 3,
   [DETECTION_SOURCES.DENY_LIST]: 2,
   [DETECTION_SOURCES.COREFERENCE]: 2,
   [DETECTION_SOURCES.NER]: 1,
@@ -70,6 +72,7 @@ export const DEFAULT_ENTITY_LABELS = [
   "organization",
   "phone number",
   "address",
+  "country",
   "email address",
   "date",
   "date of birth",
