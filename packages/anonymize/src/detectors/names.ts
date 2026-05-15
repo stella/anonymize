@@ -309,6 +309,26 @@ const isCorpusMatch = (type: TokenType): boolean =>
 // still rejecting acronyms in mixed-case prose.
 const ALL_CAPS_NAME_LINE_RATIO = 0.9;
 const ALL_CAPS_NAME_LINE_MIN_LETTERS = 3;
+// Name-shape filter for the all-caps recovery path:
+// real party-caption and signature lines contain only
+// a handful of letter tokens and no digits ("ELON R.
+// MUSK", "X HOLDINGS I, INC."). Disclosure/heading
+// lines that happen to include a corpus first name
+// ("SERVICE MARK LICENSE", "ANNUAL STATEMENT OF
+// COMPLIANCE") fail this check and stay OTHER.
+const ALL_CAPS_NAME_LINE_MAX_TOKENS = 6;
+const isAllCapsLineNameShaped = (fullText: string, start: number): boolean => {
+  const lineStart = fullText.lastIndexOf("\n", start - 1) + 1;
+  const lineEndIdx = fullText.indexOf("\n", start);
+  const line = fullText.slice(
+    lineStart,
+    lineEndIdx === -1 ? fullText.length : lineEndIdx,
+  );
+  if (/\d/.test(line)) return false;
+  const tokens = line.match(/\p{L}[\p{L}\p{M}'\-]*/gu) ?? [];
+  return tokens.length > 0 && tokens.length <= ALL_CAPS_NAME_LINE_MAX_TOKENS;
+};
+
 const isAllCapsContextLine = (fullText: string, start: number): boolean => {
   const lineStart = fullText.lastIndexOf("\n", start - 1) + 1;
   const lineEndIdx = fullText.indexOf("\n", start);
@@ -364,8 +384,30 @@ const classifyToken = (
   // uppercase letter immediately followed by a "." in
   // the source text as an abbreviation too, so chains
   // like "ADAM R. BARTOŠ" don't break on the initial.
+  //
+  // Standalone enumerators ("A. Definitions",
+  // "Section R. Adam") look identical to middle
+  // initials at the token level. Distinguish by the
+  // previous word on the same line: a middle initial
+  // is always preceded by a name-corpus first name,
+  // so only classify as ABBREVIATION when that
+  // structural context is present.
   if (text.length === 1 && UPPER_START_RE.test(text) && fullText[end] === ".") {
-    return { text, type: TOKEN_TYPE.ABBREVIATION, start, end };
+    const lineStart = fullText.lastIndexOf("\n", start - 1) + 1;
+    const before = fullText.slice(lineStart, start).trimEnd();
+    const lastWord = /\p{L}[\p{L}\p{M}'\-]*$/u.exec(before)?.[0];
+    if (lastWord) {
+      const lookup = (token: string): boolean =>
+        isFirstNameToken(token, corpus) ||
+        isFirstNameToken(
+          (token[0] ?? "") + token.slice(1).toLowerCase(),
+          corpus,
+        );
+      if (lookup(lastWord)) {
+        return { text, type: TOKEN_TYPE.ABBREVIATION, start, end };
+      }
+    }
+    return { text, type: TOKEN_TYPE.OTHER, start, end };
   }
 
   // Skip excluded words
@@ -378,13 +420,20 @@ const classifyToken = (
     return { text, type: TOKEN_TYPE.OTHER, start, end };
   }
 
-  // All-uppercase tokens > 3 chars are usually acronyms,
-  // but in a signature or title block they are real
-  // names rendered in caps ("ELON R. MUSK"). Allow the
-  // corpus lookup in title-case only when the line
-  // itself is overwhelmingly upper-case.
-  if (text.length > 3 && ALL_UPPER_RE.test(text)) {
-    if (isAllCapsContextLine(fullText, start)) {
+  // All-uppercase tokens >= 3 chars are usually
+  // acronyms, but in a signature or title block they are
+  // real names rendered in caps ("ELON R. MUSK", "JAN
+  // NOVÁK"). Allow the corpus lookup in title-case only
+  // when (a) the line itself is overwhelmingly upper-
+  // case and (b) the line looks name-shaped — few
+  // tokens, no digits — so all-caps disclosure prose
+  // such as "SERVICE MARK LICENSE" doesn't surface
+  // "MARK" as a person via the corpus.
+  if (text.length >= 3 && ALL_UPPER_RE.test(text)) {
+    if (
+      isAllCapsContextLine(fullText, start) &&
+      isAllCapsLineNameShaped(fullText, start)
+    ) {
       const titleCased = (text[0] ?? "") + text.slice(1).toLowerCase();
       if (isFirstNameToken(titleCased, corpus)) {
         return { text, type: TOKEN_TYPE.NAME, start, end };
@@ -546,6 +595,17 @@ export const detectNameCorpus = (
       // Standalone first NAME → low confidence
       // Skip if at sentence start (likely not a name)
       if (isSentenceStart(fullText, token.start)) {
+        continue;
+      }
+      // Standalone all-caps corpus hits are too
+      // ambiguous on their own to emit. "MARK" inside
+      // "SERVICE MARK LICENSE" matches the corpus but
+      // is plainly a common noun in context; we need
+      // chain evidence (another name token, a title,
+      // an abbreviation) before we trust an all-caps
+      // first-name token as a person.
+      const first = chain[0];
+      if (first && ALL_UPPER_RE.test(first.text) && first.text.length >= 3) {
         continue;
       }
       score = 0.5;
