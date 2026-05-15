@@ -987,9 +987,11 @@ export const processDenyListMatches = (
       first.start,
     );
 
-    const extended = insideDefinedTermQuote
-      ? { end: last.end, text: fullText.slice(first.start, last.end) }
-      : extendPersonName(fullText, first.start, last.end, ctx);
+    if (insideDefinedTermQuote) {
+      continue;
+    }
+
+    const extended = extendPersonName(fullText, first.start, last.end, ctx);
 
     // Score: chained names get 0.9, single names 0.5
     const score = chain.length >= 2 ? 0.9 : 0.5;

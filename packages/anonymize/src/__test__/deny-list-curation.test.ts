@@ -89,17 +89,17 @@ describe("deny-list curation", () => {
     expect(oilAlone).toBeUndefined();
   });
 
-  test("name chain stops at allow-listed noun inside defined-term quote", async () => {
+  test("name chain is suppressed inside defined-term quote", async () => {
     // "Blue" + "Sky" both case-fold to name-corpus tokens.
     // Inside a defined-term quote with a definitional cue
-    // ("shall mean"), the chain emission must not promote
-    // "Laws" into the span.
+    // ("shall mean"), the chain must not emit as a person at
+    // all. The phrase is legal terminology, not a name.
     const text = '"Blue Sky Laws" shall mean state securities laws.';
     const entities = await detect(text);
-    const includesLaws = entities.some(
-      (e) => e.label === "person" && e.text.includes("Laws"),
+    const definedTermPerson = entities.find(
+      (e) => e.label === "person" && e.text.includes("Blue"),
     );
-    expect(includesLaws).toBe(false);
+    expect(definedTermPerson).toBeUndefined();
   });
 
   test("ordinary person name extends past allow-listed common-word surname", async () => {
@@ -117,6 +117,18 @@ describe("deny-list curation", () => {
     expect(fullName).toBeDefined();
   });
 
+  test("ordinary quoted person name still extends to unknown surname", async () => {
+    // A plain quotation without a definitional cue is ordinary
+    // prose, not a legal defined term. The fallback surname
+    // extension must still protect the whole quoted name.
+    const text = '"John Unknown" said the report was complete.';
+    const entities = await detect(text);
+    const fullName = entities.find(
+      (e) => e.label === "person" && e.text === "John Unknown",
+    );
+    expect(fullName).toBeDefined();
+  });
+
   test("trailing curly closing quote is stripped during person extension", async () => {
     // Before the fix, `extendPersonName` stripped only
     // `[,;.]` and missed `”`, so the curly-quoted
@@ -128,18 +140,16 @@ describe("deny-list curation", () => {
     expect(withTrailingQuote).toBe(false);
   });
 
-  test('quoted defined-term ("Bond Hedge Transactions") does not extend beyond chain', async () => {
+  test('quoted defined-term ("Bond Hedge Transactions") is not emitted as a person', async () => {
     // Inside a typographic-quote defined-term clause, the
-    // person chain emission must not promote the trailing
-    // English noun into the span. The deny-list detector
-    // skips the extend step when the chain start follows
-    // an opening quote.
+    // person chain emission must not produce a partial
+    // person span from the name-corpus tokens.
     const text =
       "“Bond Hedge Transactions” shall mean the call option transactions.";
     const entities = await detect(text);
-    const withTransactions = entities.some(
-      (e) => e.label === "person" && e.text.includes("Transactions"),
+    const definedTermPerson = entities.find(
+      (e) => e.label === "person" && e.text.includes("Bond"),
     );
-    expect(withTransactions).toBe(false);
+    expect(definedTermPerson).toBeUndefined();
   });
 });
