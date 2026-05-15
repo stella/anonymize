@@ -26,7 +26,7 @@ export type Entity = {
   text: string;
   score: number;
   source: DetectionSource;
-  sourceDetail?: "custom-deny-list" | "custom-regex";
+  sourceDetail?: "custom-deny-list" | "custom-regex" | "gazetteer-extension";
 };
 
 /**

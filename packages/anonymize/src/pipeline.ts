@@ -23,6 +23,7 @@ import { propagateOrgNames } from "./detectors/org-propagation";
 import {
   boostNearMissEntities,
   detectStreetPatternsNearAddresses,
+  getStreetAbbrevs,
   detectOrphanStreetLines,
   initPrepositions,
   initStreetAbbrevs,
@@ -76,6 +77,14 @@ const isCallerOwnedEntity = (entity: Entity): boolean =>
 const hasLockedBoundary = (entity: Entity): boolean =>
   isCallerOwnedEntity(entity);
 
+const LITERAL_BOUNDARY_PUNCT_RE = /^["“„‟‘‛'«]|["”’'»!.]$/u;
+
+const hasCuratedLiteralBoundary = (entity: Entity): boolean =>
+  LITERAL_SOURCES.has(entity.source) &&
+  entity.label !== "person" &&
+  entity.sourceDetail !== "gazetteer-extension" &&
+  LITERAL_BOUNDARY_PUNCT_RE.test(entity.text);
+
 const shouldReplace = (a: Entity, b: Entity): boolean => {
   const aLen = a.end - a.start;
   const bLen = b.end - b.start;
@@ -120,6 +129,37 @@ const shouldReplace = (a: Entity, b: Entity): boolean => {
 
 /** Labels where colons are structurally significant. */
 const COLON_LABELS = new Set(["ip address", "mac address"]);
+
+/**
+ * Labels whose entities should have a trailing sentence
+ * `.` stripped during sanitisation. Restricted to
+ * proper-noun-style labels where a final period is
+ * almost always the sentence terminator that ran into
+ * the capture, not a structural part of the value.
+ * Numeric labels (`date`, `date of birth`, `phone
+ * number`, `monetary amount`, `time`) and `person`
+ * stay out — German writes `21. März`, post-nominal
+ * degrees write `M.Sc.`, times write `5:00 p.m.`, and
+ * stripping the dot would corrupt those spans.
+ */
+const PERIOD_STRIPPED_LABELS: ReadonlySet<string> = new Set([
+  "organization",
+  "location",
+  "address",
+]);
+const ADDRESS_FINAL_TOKEN_RE = /(?:^|[\s,])([\p{L}\p{M}.]+\.)$/u;
+const LOCATION_FINAL_DOTTED_ABBREV_RE = /(?:^|[\s,])(?:\p{Lu}\.){2,}$/u;
+
+const hasKnownAddressFinalAbbrev = (text: string): boolean => {
+  const finalToken = ADDRESS_FINAL_TOKEN_RE.exec(text)?.[1];
+  if (!finalToken) {
+    return false;
+  }
+  return getStreetAbbrevs().has(finalToken.toLowerCase());
+};
+
+const hasLocationFinalAbbrev = (text: string): boolean =>
+  LOCATION_FINAL_DOTTED_ABBREV_RE.test(text);
 
 /**
  * Labels whose detectors emit precise, evidence-backed spans. When
@@ -220,50 +260,118 @@ const resolveSameSpanLabelConflicts = (entities: Entity[]): Entity[] => {
   return entities.filter((e) => !dropped.has(e));
 };
 
+/**
+ * Trailing typographic punctuation that detectors
+ * occasionally swallow when a capture runs to the end
+ * of a sentence or quoted phrase. Stripped from every
+ * non-literal, non-locked entity. Curated dictionary and
+ * gazetteer entries with punctuation that is clearly part of
+ * the literal (`Hello bank!`, `"Juez y parte"`) keep their
+ * own boundaries. Generated/extended spans from the same
+ * sources still pass through cleanup so dangling punctuation
+ * does not become part of the redaction
+ * (e.g. `Bond Hedge Documentation"` →
+ * `Bond Hedge Documentation`).
+ *
+ * `)` is deliberately omitted — monetary amounts are
+ * extended to include trailing "(slovy ...)" / "(in
+ * words ...)" parentheticals where the closing paren
+ * is structural, and stripping it would leave the open
+ * paren dangling. `.` is also omitted because the
+ * trailing-period rule below has label-aware handling
+ * (legal-form abbreviations keep their dot).
+ */
+const TRAILING_PUNCT_CLASS = `["“”‘’'»!?]`;
+
+/**
+ * Leading typographic punctuation that detectors
+ * occasionally swallow when a capture starts at an
+ * opening quote. `(` is deliberately omitted — it is
+ * almost always the opening of a structural
+ * parenthetical (registration number group, monetary
+ * "(slovy ...)" extension) that the detector
+ * intentionally captured.
+ */
+const LEADING_PUNCT_CLASS = `["“”‘’'«¿¡]`;
+const STRIP_BY_LABEL = {
+  colon: /[\s,;]+/,
+  default: /[\s:,;]+/,
+} as const;
+const LEADING_TRIM_BY_LABEL = {
+  colon: new RegExp(
+    `^(?:\\.\\s|${STRIP_BY_LABEL.colon.source}|${LEADING_PUNCT_CLASS})+`,
+  ),
+  default: new RegExp(
+    `^(?:\\.\\s|${STRIP_BY_LABEL.default.source}|${LEADING_PUNCT_CLASS})+`,
+  ),
+} as const;
+const TRAILING_TRIM_BY_LABEL = {
+  colon: new RegExp(
+    `(?:${STRIP_BY_LABEL.colon.source}|${TRAILING_PUNCT_CLASS})+$`,
+  ),
+  default: new RegExp(
+    `(?:${STRIP_BY_LABEL.default.source}|${TRAILING_PUNCT_CLASS})+$`,
+  ),
+} as const;
+
 /** Strip leading/trailing whitespace and punctuation. */
 export const sanitizeEntities = (entities: Entity[]): Entity[] =>
   entities.flatMap((e) => {
-    if (hasLockedBoundary(e)) {
+    if (hasLockedBoundary(e) || hasCuratedLiteralBoundary(e)) {
       return [e];
     }
 
-    const strip = COLON_LABELS.has(e.label) ? /[\s,;]+/ : /[\s:,;]+/;
+    const stripKind = COLON_LABELS.has(e.label) ? "colon" : "default";
     // Also strip leading dots followed by whitespace —
     // artifact from trigger extraction after abbreviations
     // like "dat. nar." or "č.p." where the extraction
     // starts at the trailing dot of the abbreviation.
-    const leadTrimmed = e.text
-      .replace(/^(?:\.\s)+/, "")
-      .replace(new RegExp(`^${strip.source}`, strip.flags), "");
+    // The typographic-punctuation passes run in a loop
+    // alongside the whitespace strip so combinations like
+    // `"Some Org",` or ` "Name" ` collapse cleanly.
+    const leadRe = LEADING_TRIM_BY_LABEL[stripKind];
+    const trailRe = TRAILING_TRIM_BY_LABEL[stripKind];
+    const leadTrimmed = e.text.replace(leadRe, "");
     const lead = e.text.length - leadTrimmed.length;
-    let cleaned = leadTrimmed.replace(
-      new RegExp(`${strip.source}$`, strip.flags),
-      "",
-    );
-    // Trailing-period strip for organization entities that
-    // don't end in a legal-form abbreviation. Court trigger
-    // captures often include the sentence terminator
-    // ("Krajského soudu v Praze." → "Krajského soudu v Praze").
-    // Exact deny-list and gazetteer spans are skipped — those
-    // boundaries come from curated dictionaries and may legally
-    // end in `.` (e.g. "U.S.C."); normalising them here would
-    // leave the dot dangling outside the redaction.
-    // For everything else, keep the period when it follows the
-    // FULL detector vocabulary (data/legal-forms.json plus
-    // `LEGAL_SUFFIXES`), not only the small propagation list,
-    // so detected forms like "Acme Kft." or "Bank of America,
-    // N.A." retain their final dot.
+    let cleaned = leadTrimmed.replace(trailRe, "");
+    // Trailing-period strip for proper-noun labels that
+    // don't end in a legal-form abbreviation. Trigger
+    // and NER captures often include the sentence
+    // terminator
+    // ("Krajského soudu v Praze." → "Krajského soudu v Praze",
+    // "State of Delaware." → "State of Delaware").
+    // Numeric labels (`date`, `phone number`, `monetary
+    // amount`, `time`, etc.) and the `person` label keep
+    // their trailing period — German dates write `21.`,
+    // post-nominals write `M.Sc.`, times write `p.m.`,
+    // all of which are structurally significant.
+    // Literal deny-list and gazetteer spans whose
+    // punctuation is part of the dictionary entry are
+    // skipped above. For everything else, keep the period
+    // when it follows the FULL detector vocabulary
+    // (data/legal-forms.json plus `LEGAL_SUFFIXES`), not
+    // only the small propagation list, so detected forms
+    // like "Acme Kft." or "Bank of America, N.A." retain
+    // their final dot.
     if (
-      e.label === "organization" &&
+      PERIOD_STRIPPED_LABELS.has(e.label) &&
       cleaned.endsWith(".") &&
       !LITERAL_SOURCES.has(e.source)
     ) {
       const known = getKnownLegalSuffixes();
-      const keepsPeriod = known.some((suffix) => cleaned.endsWith(suffix));
+      const keepsPeriod =
+        known.some((suffix) => cleaned.endsWith(suffix)) ||
+        (e.label === "address" && hasKnownAddressFinalAbbrev(cleaned)) ||
+        (e.label === "location" && hasLocationFinalAbbrev(cleaned));
       if (!keepsPeriod) {
         cleaned = cleaned.slice(0, -1).trimEnd();
       }
     }
+    // After the period strip, re-run the trailing-punctuation
+    // pass in case the period sat between the entity and
+    // already-stripped quotes/parens (e.g., `Foo."` →
+    // `Foo.` → `Foo`).
+    cleaned = cleaned.replace(trailRe, "");
     if (cleaned.length === 0) return [];
     // Reject entities with no alphanumeric content
     if (!/[\p{L}\p{N}]/u.test(cleaned)) return [];

@@ -1,3 +1,4 @@
+import addressStreetTypesJson from "../data/address-street-types.json";
 import type { Entity } from "../types";
 
 // Capitalised words that look like the start of an
@@ -195,27 +196,34 @@ const getTemporalPreps = (): ReadonlySet<string> => _temporalPreps ?? new Set();
 
 // ── Street type abbreviations (lazy-loaded) ─────────
 
-let _streetAbbrevs: ReadonlySet<string> | null = null;
+const buildStreetAbbrevs = (
+  data: Record<string, unknown>,
+): ReadonlySet<string> => {
+  const abbrevs = new Set<string>();
+  for (const [key, words] of Object.entries(data)) {
+    if (key.startsWith("_")) continue;
+    if (!Array.isArray(words)) continue;
+    for (const word of words) {
+      if (typeof word === "string" && word.includes(".")) {
+        abbrevs.add(word.toLowerCase());
+      }
+    }
+  }
+  return abbrevs;
+};
+
+let _streetAbbrevs: ReadonlySet<string> | null = buildStreetAbbrevs(
+  addressStreetTypesJson,
+);
 let _streetAbbrevsPromise: Promise<void> | null = null;
 
 const loadStreetAbbrevs = async (): Promise<void> => {
   try {
     const mod = await import("../data/address-street-types.json");
     const data: Record<string, string[] | string> = mod.default ?? mod;
-    const abbrevs = new Set<string>();
-    for (const [key, words] of Object.entries(data)) {
-      if (key.startsWith("_")) continue;
-      if (!Array.isArray(words)) continue;
-      for (const w of words) {
-        // Only keep abbreviated forms (with dots)
-        if (w.includes(".")) {
-          abbrevs.add(w.toLowerCase());
-        }
-      }
-    }
-    _streetAbbrevs = abbrevs;
+    _streetAbbrevs = buildStreetAbbrevs(data);
   } catch {
-    _streetAbbrevs = new Set();
+    _streetAbbrevs ??= new Set();
   }
 };
 
@@ -227,7 +235,8 @@ export const initStreetAbbrevs = (): Promise<void> => {
   return _streetAbbrevsPromise;
 };
 
-const getStreetAbbrevs = (): ReadonlySet<string> => _streetAbbrevs ?? new Set();
+export const getStreetAbbrevs = (): ReadonlySet<string> =>
+  _streetAbbrevs ?? new Set();
 
 /**
  * Scan backwards from known address entities and
