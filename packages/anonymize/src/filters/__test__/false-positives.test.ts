@@ -128,4 +128,14 @@ describe("organization word-count guardrail", () => {
     const result = filterFalsePositives([orgAt(text, 0, "legal-form")]);
     expect(result).toHaveLength(1);
   });
+
+  const longOrgSources: Entity["source"][] = ["gazetteer", "ner", "regex"];
+  test.each(longOrgSources)(
+    "keeps a long %s-detected org name beyond the word cap",
+    (source: Entity["source"]) => {
+      const text = "The University of Texas Health Science Center at Houston";
+      const result = filterFalsePositives([orgAt(text, 0, source)]);
+      expect(result).toHaveLength(1);
+    },
+  );
 });

@@ -53,12 +53,18 @@ const MAX_ENTITY_LENGTH: Partial<Record<string, number>> = {
 // long firm names ("European Bank for Reconstruction
 // and Development" — 6). A trigger or coreference span
 // running past this is almost certainly absorbing prose.
-// Legal-form-anchored spans are exempted because their
-// extent is bounded by the regex pattern, not by an
-// open-ended trigger window.
+// Only open-ended sources (trigger, coreference) are
+// subject to this cap: gazetteer/NER/regex detections
+// are bounded by their dictionary, model, or pattern
+// and may legitimately span longer names like "The
+// University of Texas Health Science Center at Houston".
 const MAX_ENTITY_WORDS: Partial<Record<string, number>> = {
   organization: 8,
 };
+const OPEN_ENDED_SOURCES: ReadonlySet<string> = new Set([
+  "trigger",
+  "coreference",
+]);
 const WORD_TOKEN_RE = /\p{L}[\p{L}\p{M}\p{N}'’\-./]*/gu;
 const countWordTokens = (text: string): number => {
   let count = 0;
@@ -106,21 +112,8 @@ const isAllCapsSurroundingLine = (
   if (letterCount <= ALL_CAPS_LINE_LETTER_THRESHOLD) return false;
   return upperCount / letterCount >= ALL_CAPS_LINE_RATIO;
 };
-const isAllCapsCandidate = (text: string): boolean => {
-  let hasLetter = false;
-  for (const ch of text) {
-    const lower = ch.toLowerCase();
-    if (ch === lower) {
-      // Either non-letter (always equal) or a lowercase
-      // letter (different). Discriminate via toUpperCase.
-      const upper = ch.toUpperCase();
-      if (upper !== ch) return false;
-    } else {
-      hasLetter = true;
-    }
-  }
-  return hasLetter;
-};
+const isAllCapsCandidate = (text: string): boolean =>
+  text === text.toUpperCase() && /\p{Lu}/u.test(text);
 // Section/clause numbers: "§ 3", "3.2.1", "12." but NOT
 // dates like "4.3.2026" or long digit strings like IČO.
 // A section number has 1-3 digit groups of 1-3 digits each,
@@ -387,20 +380,24 @@ export const filterFalsePositives = (
     const maxWords = MAX_ENTITY_WORDS[normalized.label];
     if (
       maxWords &&
-      normalized.source !== "legal-form" &&
+      OPEN_ENDED_SOURCES.has(normalized.source) &&
       countWordTokens(trimmed) > maxWords
     ) {
       continue;
     }
-    // SEC-style legends and other boilerplate disclosure
-    // blocks render as long all-uppercase paragraphs.
+    // SEC-style legends, numbered section headings
+    // ("17.NO ASSIGNMENT."), and other boilerplate
+    // disclosure blocks render as all-uppercase lines.
     // Detectors anchored to uppercase tokens otherwise
     // emit bigrams like "SECURITIES ACT" or
-    // "REGISTRATION STATEMENT" as organization spans.
-    // legal-forms already self-rejects this pattern (see
-    // legal-forms.ts:1541) but other sources don't, so
-    // gate every all-caps organization candidate whose
-    // surrounding line is itself all-caps.
+    // "REGISTRATION STATEMENT" as organization spans,
+    // and the legal-form regex matches headings such as
+    // "NO ASSIGNMENT". Real party captions almost always
+    // carry a legal-form suffix ("ACME CORPORATION")
+    // and survive via the legal-forms detector's own
+    // 3-word-on-mixed-case pathway, so we gate every
+    // all-caps organization candidate whose surrounding
+    // line is itself all-caps regardless of source.
     if (
       fullText &&
       normalized.label === "organization" &&
