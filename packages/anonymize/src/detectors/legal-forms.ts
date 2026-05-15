@@ -154,6 +154,7 @@ export const warmLegalRoleHeads = async (): Promise<void> => {
     loadAllLegalSuffixes(),
     loadSentenceVerbIndicators(),
     loadClauseNounHeads(),
+    loadConnectorProseHeads(),
     loadStructuralSingleCapPrefixes(),
   ]);
 };
@@ -165,6 +166,22 @@ export const warmLegalRoleHeads = async (): Promise<void> => {
 // JSON the pattern builder uses and flatten it once.
 let allLegalSuffixesCache: readonly string[] | null = null;
 let allLegalSuffixesPromise: Promise<readonly string[]> | null = null;
+let normalizedLegalBoundarySuffixesCache: ReadonlySet<string> | null = null;
+let normalizedInNameLegalFormWordsCache: ReadonlySet<string> | null = null;
+
+const normalizeLegalSuffixToken = (suffix: string): string =>
+  suffix.replace(/[.,\s]/g, "");
+
+const isBoundaryLegalSuffixForm = (form: string): boolean => {
+  const normalized = normalizeLegalSuffixToken(form);
+  if (normalized.length === 0) {
+    return false;
+  }
+  if (LEGAL_SUFFIXES.includes(form)) {
+    return true;
+  }
+  return /[.]/u.test(form) || normalized === normalized.toUpperCase();
+};
 
 const loadAllLegalSuffixes = async (): Promise<readonly string[]> => {
   if (allLegalSuffixesCache) return allLegalSuffixesCache;
@@ -198,6 +215,18 @@ const loadAllLegalSuffixes = async (): Promise<readonly string[]> => {
     // "spol. s r.o." anchor before nested shorter forms.
     out.sort((a, b) => b.length - a.length);
     allLegalSuffixesCache = out;
+    normalizedLegalBoundarySuffixesCache = new Set(
+      out
+        .filter(isBoundaryLegalSuffixForm)
+        .map(normalizeLegalSuffixToken)
+        .filter((suffix) => suffix.length > 0),
+    );
+    normalizedInNameLegalFormWordsCache = new Set(
+      out
+        .filter((form) => !isBoundaryLegalSuffixForm(form) && !/\s/u.test(form))
+        .map(normalizeLegalSuffixToken)
+        .filter((suffix) => suffix.length > 0),
+    );
     return out;
   })();
   return allLegalSuffixesPromise;
@@ -205,6 +234,17 @@ const loadAllLegalSuffixes = async (): Promise<readonly string[]> => {
 
 const getAllLegalSuffixesSync = (): readonly string[] =>
   allLegalSuffixesCache ?? LEGAL_SUFFIXES;
+
+const getNormalizedLegalBoundarySuffixesSync = (): ReadonlySet<string> =>
+  normalizedLegalBoundarySuffixesCache ??
+  new Set(
+    LEGAL_SUFFIXES.map(normalizeLegalSuffixToken).filter(
+      (suffix) => suffix.length > 0,
+    ),
+  );
+
+const getNormalizedInNameLegalFormWordsSync = (): ReadonlySet<string> =>
+  normalizedInNameLegalFormWordsCache ?? new Set<string>();
 
 /**
  * Sync accessor for the full legal-form vocabulary
@@ -271,6 +311,49 @@ const loadClauseNounHeads = async (): Promise<ReadonlySet<string>> => {
 
 const getClauseNounHeadsSync = (): ReadonlySet<string> =>
   clauseNounHeadsCache ?? CLAUSE_NOUN_HEADS_SEED;
+
+let connectorProseHeadsCache: ReadonlySet<string> | null = null;
+let connectorProseHeadsPromise: Promise<ReadonlySet<string>> | null = null;
+
+const loadConnectorProseHeads = async (): Promise<ReadonlySet<string>> => {
+  if (connectorProseHeadsCache) {
+    return connectorProseHeadsCache;
+  }
+  if (connectorProseHeadsPromise) {
+    return connectorProseHeadsPromise;
+  }
+
+  connectorProseHeadsPromise = (async () => {
+    let data: { roles?: unknown } = {};
+    try {
+      const mod = await import("../data/generic-roles.json");
+      const parsed = (mod as { default?: { roles?: unknown } }).default ?? mod;
+      data = parsed as { roles?: unknown };
+    } catch (err) {
+      console.warn(
+        "[anonymize] legal-forms: failed to load generic-roles.json:",
+        err,
+      );
+    }
+
+    const all = new Set<string>();
+    if (Array.isArray(data.roles)) {
+      for (const role of data.roles) {
+        if (typeof role === "string" && role.length > 0) {
+          all.add(role.toLowerCase());
+        }
+      }
+    }
+
+    connectorProseHeadsCache = all;
+    return all;
+  })();
+
+  return connectorProseHeadsPromise;
+};
+
+const getConnectorProseHeadsSync = (): ReadonlySet<string> =>
+  connectorProseHeadsCache ?? new Set<string>();
 
 let structuralSingleCapPrefixesCache: ReadonlySet<string> | null = null;
 let structuralSingleCapPrefixesPromise: Promise<ReadonlySet<string>> | null =
@@ -339,6 +422,19 @@ const escapeForRegex = (form: string): string =>
 const isShortForm = (form: string): boolean =>
   form.replace(/[.\s]/g, "").length <= 3 && !form.includes(" ");
 
+const buildDottedAbbreviationAlternation = (forms: readonly string[]): string =>
+  [
+    ...new Set(
+      forms
+        .filter((form) => /^[\p{Lu}][\p{L}\p{M}]{0,5}\.$/u.test(form))
+        .map((form) => form.slice(0, -1))
+        .filter((form) => form.length > 0),
+    ),
+  ]
+    .toSorted((a, b) => b.length - a.length)
+    .map(escapeForRegex)
+    .join("|");
+
 const buildPatternString = (forms: string[]): string | null => {
   if (forms.length === 0) {
     return null;
@@ -387,7 +483,15 @@ const buildPatternString = (forms: string[]): string | null => {
   // informační technologie, s. p.", "Bank of America, Inc.")
   // still match while sentence fragments containing six-plus
   // words ahead of the legal form don't get swept in.
-  const head = `(?:${CAP_WORD})(?:${SIMPLE_SEP}(?:${CAP_OR_NUM_WORD})){0,10}`;
+  //
+  const dottedAbbreviationAlt = buildDottedAbbreviationAlternation(forms);
+  const dottedAbbreviationTail =
+    dottedAbbreviationAlt.length > 0
+      ? `(?:${SIMPLE_SEP}(?:${dottedAbbreviationAlt})\\.)?`
+      : "";
+  const head =
+    `(?:${CAP_WORD})(?:${SIMPLE_SEP}(?:${CAP_OR_NUM_WORD})){0,10}` +
+    dottedAbbreviationTail;
   // Tail allows up to 10 tokens so long state-form names
   // ("Národní agentura pro podporu rozvoje vzdělávání …, z.s.")
   // still match end-to-end. Sentence-fragment over-extension
@@ -672,19 +776,45 @@ const hasMiddleInitialBefore = (fullText: string, pos: number): boolean => {
 /**
  * Count consecutive uppercase-starting words immediately
  * before `pos`. Stops at the first non-upper word or at
- * text/line start. Used to disambiguate "<First> <Last>
- * and <ORG>" from "<Multi-word Org> and <Continuation>".
+ * text/line start. Used to disambiguate sentence prose
+ * ("<First> <Last> and <ORG>", "<Defined-Term> and
+ * <ORG>") from multi-word organisation names that span
+ * an "and" connector ("UniCredit Bank Czech Republic and
+ * Slovakia, a.s.").
+ *
+ * When `crossInNamePreps` is true, the walk also steps
+ * over in-name lowercase prepositions ("of", "the") as
+ * long as they sit between two upper words. This lets
+ * the suffix-mode "and"-crossing logic see through
+ * "<Trust ← and ← America ← of ← Bank>" and emit one
+ * full organisation span.
  */
-const countUpperWordsBefore = (fullText: string, pos: number): number => {
+const countUpperWordsBefore = (
+  fullText: string,
+  pos: number,
+  crossInNamePreps = false,
+): number => {
   let count = 0;
   let scan = pos;
   while (scan > 0) {
     const found = findWordBefore(fullText, scan);
     if (found) {
-      if (!UPPER_LETTER_RE.test(found.word)) break;
-      count++;
-      scan = found.start;
-      continue;
+      if (UPPER_LETTER_RE.test(found.word)) {
+        count++;
+        scan = found.start;
+        continue;
+      }
+      if (crossInNamePreps && IN_NAME_PREPOSITION_RE.test(found.word)) {
+        // Only cross the preposition when it sits between
+        // two uppercase words — never when it sentence-
+        // starts the phrase.
+        const prev = findWordBefore(fullText, found.start);
+        if (!prev) break;
+        if (!UPPER_LETTER_RE.test(prev.word)) break;
+        scan = found.start;
+        continue;
+      }
+      break;
     }
 
     let p = scan - 1;
@@ -703,6 +833,65 @@ const countUpperWordsBefore = (fullText: string, pos: number): number => {
     break;
   }
   return count;
+};
+
+/**
+ * True when `word` is a recognized legal-form suffix
+ * (case-sensitive against the legal-forms vocabulary).
+ * Used when deciding whether to cross an "and" connector
+ * during backward extension — if the word immediately
+ * preceding the connector is itself a legal-form suffix,
+ * the "and" sits between two organisation names rather
+ * than inside one ("Morgan Securities LLC and Allen &
+ * Company LLC"), so the walk must stop there.
+ */
+const isKnownLegalFormSuffix = (word: string): boolean => {
+  if (word.length === 0) {
+    return false;
+  }
+  return getNormalizedLegalBoundarySuffixesSync().has(word);
+};
+
+const isInNameLegalFormWord = (word: string): boolean => {
+  if (word.length === 0) {
+    return false;
+  }
+  return getNormalizedInNameLegalFormWordsSync().has(word);
+};
+
+/**
+ * If `pos` is immediately preceded (modulo horizontal
+ * whitespace) by an initial-dot run like `J.P.`, `U.S.`,
+ * or `N.A.`, return the position where the initial run
+ * starts. Otherwise return `pos` unchanged. The run must
+ * be word-bounded on the left so we never absorb a stray
+ * sentence-ending dot.
+ */
+const skipInitialsBackward = (fullText: string, pos: number): number => {
+  // Skip horizontal whitespace only — initials must sit
+  // on the same line as the rest of the org name.
+  let scan = pos - 1;
+  while (scan >= 0) {
+    const ch = fullText.charAt(scan);
+    if (ch === "\n" || !/\s/.test(ch)) break;
+    scan--;
+  }
+  if (scan < 0 || fullText.charAt(scan) !== ".") return pos;
+  // Match one or more `<Upper>.` tokens at the right
+  // edge of `fullText[0..scan+1]`. Allows optional
+  // single horizontal space between tokens
+  // ("J. P. Morgan" as well as "J.P. Morgan").
+  const scanLimit = Math.max(0, scan + 1 - 100);
+  const head = fullText.slice(scanLimit, scan + 1);
+  const initialsRe = /(?:\p{Lu}\.[^\S\n]?){2,}$/u;
+  const match = initialsRe.exec(head);
+  if (match === null) return pos;
+  const start = scanLimit + match.index;
+  if (start > 0) {
+    const prevCh = fullText.charAt(start - 1);
+    if (/[\p{L}\p{M}\p{N}]/u.test(prevCh)) return pos;
+  }
+  return start;
 };
 
 /**
@@ -756,32 +945,69 @@ const extendBackward = (
       pos = wordStart;
     } else if (isConnector) {
       if (AND_TYPE_CONNECTOR_RE.test(word)) {
-        const upperWordsBefore = countUpperWordsBefore(fullText, wordStart);
+        // Decide whether the "and" sits inside one
+        // organisation name or between two sentence
+        // tokens. Heuristics, applied in order:
+        //
+        // 1. If the word immediately before the "and"
+        //    is itself a known legal-form suffix
+        //    ("Morgan Securities LLC and Allen &
+        //    Company LLC", "Apple, Inc. and Microsoft
+        //    Corp."), the "and" separates two orgs —
+        //    break regardless of mode.
+        // 2. A single uppercase word before the "and"
+        //    is almost always a defined-term clause
+        //    noun ("the Company and Barclays Bank
+        //    PLC", "Company and Bank of America,
+        //    N.A.") rather than part of the org
+        //    name — break regardless of mode.
+        // 3. Outside suffix mode, also break on two
+        //    upper words (typical person-name
+        //    pattern: "Paul Newman and Apple, Inc.").
+        //    Three or more upper words signals a
+        //    real multi-word organisation name
+        //    ("UniCredit Bank Czech Republic and
+        //    Slovakia, a.s."), so the walk crosses.
+        // 4. In suffix mode the regex already
+        //    captured a leading legal-form suffix
+        //    word ("…and Company, Inc."), so any
+        //    multi-word prefix should flow through.
+        const prev = findWordBefore(fullText, wordStart);
+        if (!prev) break;
+        if (!UPPER_LETTER_RE.test(prev.word)) break;
+        if (isKnownLegalFormSuffix(prev.word)) break;
+        const upperWordsBefore = countUpperWordsBefore(
+          fullText,
+          wordStart,
+          suffixMode,
+        );
         const middleInitialBefore = hasMiddleInitialBefore(fullText, wordStart);
+        if (
+          upperWordsBefore <= 1 &&
+          (getClauseNounHeadsSync().has(prev.word.toLowerCase()) ||
+            getConnectorProseHeadsSync().has(prev.word.toLowerCase()))
+        ) {
+          break;
+        }
         const personNameBoundary = suffixMode
           ? middleInitialBefore &&
             hasSingleCapPrefixBefore(fullText, matchStart)
-          : upperWordsBefore === 2 || middleInitialBefore;
+          : (upperWordsBefore === 2 && !isInNameLegalFormWord(prev.word)) ||
+            middleInitialBefore;
         if (personNameBoundary) {
-          // Looks like "<First> <Last> and <ORG>" or
-          // "<First> M. <Last> and X Holdings, Inc.".
-          // Keep the person name out of the org span while
-          // still allowing longer internal company names such
-          // as "UniCredit Bank Czech Republic and Slovakia, a.s."
           break;
         }
+        pos = prev.start;
+      } else {
+        // Non-"and" connector (`&`, `e`, `y`, `i`,
+        // standalone `a`). Cross when there's a valid
+        // uppercase-starting word before it.
+        const prev = findWordBefore(fullText, wordStart);
+        if (!prev) break;
+        const prevIsUpper = UPPER_LETTER_RE.test(prev.word);
+        if (!prevIsUpper) break;
+        pos = prev.start;
       }
-      // Connector — only accept if there is a valid
-      // (uppercase-starting) word before it
-      const prev = findWordBefore(fullText, wordStart);
-      if (!prev) break;
-      const prevIsUpper = UPPER_LETTER_RE.test(prev.word);
-      if (!prevIsUpper) break;
-      // Move pos back to the start of the word that
-      // precedes the connector; the connector and all
-      // whitespace between it and prev.start are
-      // included implicitly in the entity slice.
-      pos = prev.start;
     } else if (isInNamePrep) {
       // In suffix-mode only: cross lowercase in-name
       // prepositions ("of", "the") when the preceding
@@ -794,6 +1020,15 @@ const extendBackward = (
       break;
     }
   }
+
+  // After the word walk finishes, absorb any leading
+  // initial-dot run that the letter-based word scan
+  // skipped over ("J.P. Morgan Securities LLC",
+  // "U.S. Bancorp Inc."). The walk above stops at the
+  // dot because `findWordBefore` only consumes letters,
+  // so without this step the entity start lands on the
+  // first non-initial word.
+  pos = skipInitialsBackward(fullText, pos);
 
   return pos;
 };
