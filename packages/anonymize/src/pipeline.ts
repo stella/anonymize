@@ -3,6 +3,7 @@ import {
   findCoreferenceSpans,
 } from "./detectors/coreference";
 import { processGazetteerMatches } from "./detectors/gazetteer";
+import { processCountryMatches } from "./detectors/countries";
 import { detectNameCorpus, initNameCorpus } from "./detectors/names";
 import { detectSignatures } from "./detectors/signatures";
 import { processRegexMatches } from "./detectors/regex";
@@ -122,6 +123,31 @@ const shouldReplace = (a: Entity, b: Entity): boolean => {
   ) {
     return false;
   }
+
+  // Cross-label containment for country: a country token
+  // contained inside a longer person or organization span
+  // is almost always a first-name collision ("Chad Smith",
+  // "Georgia Smith", "Jordan Williams"). The longer span
+  // carries more evidence — keep it and drop the country.
+  if (
+    a.label === "country" &&
+    (b.label === "person" || b.label === "organization") &&
+    b.start <= a.start &&
+    b.end >= a.end &&
+    bLen > aLen
+  ) {
+    return false;
+  }
+  if (
+    b.label === "country" &&
+    (a.label === "person" || a.label === "organization") &&
+    a.start <= b.start &&
+    a.end >= b.end &&
+    aLen > bLen
+  ) {
+    return true;
+  }
+
   const aPri = DETECTOR_PRIORITY[a.source] ?? 0;
   const bPri = DETECTOR_PRIORITY[b.source] ?? 0;
   if (aPri !== bPri) return aPri > bPri;
@@ -635,7 +661,8 @@ const configKey = (
     `${config.denyListExcludeCategories?.toSorted().join(",") ?? ""}:` +
     `${customDenyFingerprint}:` +
     `${customRegexFingerprint}:` +
-    `${config.enableGazetteer}:${gazFingerprint}`
+    `${config.enableGazetteer}:${gazFingerprint}:` +
+    `${config.enableCountries !== false}`
   );
 };
 
@@ -979,6 +1006,22 @@ export const runPipeline = async (
   if (gazetteerEntities.length > 0)
     log("gazetteer", `${gazetteerEntities.length} matches`);
 
+  const rawCountryEntities = search.countryData
+    ? processCountryMatches(
+        literalMatches,
+        slices.countries.start,
+        slices.countries.end,
+        fullText,
+        search.countryData,
+      )
+    : [];
+  const countryEntities = filterAllowedLabels(
+    rawCountryEntities,
+    preHotwordAllowedLabels,
+  );
+  if (countryEntities.length > 0)
+    log("countries", `${countryEntities.length} matches`);
+
   checkAbort(signal);
 
   const rawCustomDenyListEntities = rawDenyListEntities.filter((entity) =>
@@ -1050,6 +1093,7 @@ export const runPipeline = async (
     ...nameCorpusEntities,
     ...denyListEntities,
     ...gazetteerEntities,
+    ...countryEntities,
     ...nerEntities,
   ];
   const addressSeedEntities = labelIsAllowed("address", allowedLabels)

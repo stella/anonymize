@@ -354,6 +354,13 @@ export type PipelineConfig = {
    */
   customRegexes?: readonly CustomRegexPattern[];
   enableGazetteer: boolean;
+  /**
+   * Detect country names (ISO 3166-1 names, curated
+   * aliases, alpha-3 codes). Defaults to true. Names
+   * span all manifest languages plus widely-used
+   * additions (Dutch, Russian, Chinese, Arabic, etc.).
+   */
+  enableCountries?: boolean;
   enableNer: boolean;
   enableConfidenceBoost: boolean;
   enableCoreference: boolean;
