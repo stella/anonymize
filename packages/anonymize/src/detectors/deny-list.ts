@@ -868,9 +868,11 @@ export const processDenyListMatches = (
             !customPatternLabels.includes(label) && customEdgesAreValid,
         )
       : [];
-    const suffixCollision =
-      !sources.includes("custom-deny-list") &&
-      isDottedAcronymSuffixCollision(fullText, match.start, matchText);
+    const suffixCollision = isDottedAcronymSuffixCollision(
+      fullText,
+      match.start,
+      matchText,
+    );
     const filteredCuratedLabels = suffixCollision ? [] : curatedLabels;
 
     if (filteredCuratedLabels.length === 0 && customLabels.length === 0) {

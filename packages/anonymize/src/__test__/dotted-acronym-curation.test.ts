@@ -108,6 +108,21 @@ describe("dotted-acronym deny-list curation", () => {
     expect(qa).toBeDefined();
   });
 
+  test("custom duplicates do not disable curated suffix filtering", async () => {
+    const text = "The citation E.D.N.J. remains public.";
+    const entities = await detect(text, {
+      customDenyList: [{ value: "D.N.J.", label: "person" }],
+    });
+    const customHit = entities.find(
+      (e) => e.label === "person" && e.text === "D.N.J.",
+    );
+    const curatedHit = entities.find(
+      (e) => e.label === "organization" && e.text === "D.N.J.",
+    );
+    expect(customHit).toBeDefined();
+    expect(curatedHit).toBeUndefined();
+  });
+
   test("curated dotted city aliases are preserved as addresses", async () => {
     // Dotted place aliases such as `L.A.` are address data,
     // not the noisy court/bank/hospital acronym class. Keep
