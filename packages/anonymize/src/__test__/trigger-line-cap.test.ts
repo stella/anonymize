@@ -99,6 +99,20 @@ describe("trigger value length cap", () => {
     }
   });
 
+  test("phone-label trigger rejects inline non-phone fields before later phone", async () => {
+    const text =
+      "Phone: 2026-05-15 SSN or FEIN: 12-3456789 Address: " +
+      "123 Long Form Signature Field Phone: +1 (555) 123-4567\n";
+
+    const entities = await detect(text);
+    const phones = entities.filter((e) => e.label === "phone number");
+    expect(phones.some((e) => e.text.includes("(555) 123-4567"))).toBe(true);
+    for (const phone of phones) {
+      expect(phone.text).not.toContain("SSN");
+      expect(phone.text).not.toContain("Address:");
+    }
+  });
+
   test("legitimate end-of-line value below the cap is preserved verbatim", async () => {
     // A short, well-formed value on its own line is
     // captured in full — the cap should never truncate

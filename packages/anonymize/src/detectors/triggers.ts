@@ -614,10 +614,18 @@ export const warmAddressStopKeywords = async (): Promise<void> => {
 const MAX_TRIGGER_VALUE_LEN = 100;
 const MIN_TRIGGER_PHONE_DIGITS = 5;
 const PHONE_VALUE_START_RE = /^[+(\d]/;
+const ISO_DATE_PREFIX_RE = /^\d{4}-\d{2}-\d{2}\b/;
+const INLINE_FIELD_LABEL_RE = /\b[\p{L}][\p{L}\p{M} /-]{1,32}:/u;
 
 const isPlausiblePhoneTriggerValue = (value: string): boolean => {
   const trimmed = value.trimStart();
   if (!PHONE_VALUE_START_RE.test(trimmed)) {
+    return false;
+  }
+  if (ISO_DATE_PREFIX_RE.test(trimmed)) {
+    return false;
+  }
+  if (INLINE_FIELD_LABEL_RE.test(trimmed)) {
     return false;
   }
   let digits = 0;
