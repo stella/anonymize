@@ -994,8 +994,24 @@ const MAGNITUDE_ABBREVIATIONS_CI: readonly string[] = [
 ];
 
 const MAGNITUDE_ABBREVIATIONS_CS: readonly string[] = ["K", "M"];
+const SHARE_QUANTITY_MODIFIERS: readonly string[] = [
+  "ordinary",
+  "common",
+  "preferred",
+  "registered",
+  "treasury",
+  "voting",
+  "non-voting",
+  "restricted",
+  "class",
+  "series",
+];
+const SHARE_QUANTITY_MODIFIER_ALT =
+  SHARE_QUANTITY_MODIFIERS.map(escapeRegex).join("|");
 const QUANTITY_FOLLOWER_RE =
-  "(?![^\\S\\n\\t]+(?i:(?:shares?|stocks?|securities?|units?))\\b)";
+  "(?![^\\S\\n\\t]+(?i:" +
+  `(?:(?:${SHARE_QUANTITY_MODIFIER_ALT})[^\\S\\n\\t]+){0,3}` +
+  "(?:shares?|stocks?|securities?|units?))\\b)";
 
 /**
  * Build symbol character class, code alternation,

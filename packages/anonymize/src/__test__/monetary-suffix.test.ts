@@ -109,6 +109,15 @@ describe("monetary amounts with magnitude suffix", () => {
     expect(money).toHaveLength(0);
   });
 
+  test("does not treat modified stock quantities as monetary amounts", async () => {
+    const money = findMoney(
+      await detect(
+        "The fund bought 100 million AMD ordinary shares yesterday.",
+      ),
+    );
+    expect(money).toHaveLength(0);
+  });
+
   test("matches uppercase plural forms ('MILLIONS')", async () => {
     // The plural `s` must sit inside the case-insensitive
     // group; otherwise uppercase plurals slip back to
