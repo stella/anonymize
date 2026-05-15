@@ -45,9 +45,19 @@ const POSTAL_CODE_RE = new RegExp(
 );
 const BR_CEP_SHAPE_RE = new RegExp(`^\\d{5}${DASH}\\d{3}$`, "u");
 const US_ZIP_PLUS_FOUR_SHAPE_RE = new RegExp(`^\\d{5}${DASH}\\d{4}$`, "u");
-const US_STATE_ABBREV_BEFORE_ZIP_RE =
-  /(?:^|[^A-Za-z0-9])(?:A[KLRZ]|C[AOT]|D[CE]|F[LM]|G[AU]|HI|I[ADLN]|K[SY]|LA|M[ADEHINOPST]|N[CDEHJMVY]|O[HKR]|P[AR]|RI|S[CD]|T[NX]|UT|V[AIT]|W[AIVY])\s*,?\s*$/u;
+const US_STATE_ABBREV =
+  "A[KLRZ]|C[AOT]|D[CE]|F[LM]|G[AU]|HI|I[ADLN]|K[SY]|LA|" +
+  "M[ADEHINOPST]|N[CDEHJMVY]|O[HKR]|P[AR]|RI|S[CD]|T[NX]|" +
+  "UT|V[AIT]|W[AIVY]";
+const US_STATE_ABBREV_BEFORE_ZIP_RE = new RegExp(
+  `(?:^|[^A-Za-z0-9])(${US_STATE_ABBREV})\\s*,?\\s*$`,
+  "u",
+);
 const US_ZIP_CONTEXT_WINDOW = 120;
+const US_CITY_ZIP_GAP_RE = /^[\s,]+$/u;
+const HOUSE_NUMBER_BEFORE_STREET_RE =
+  /\b\d{1,6}(?:[-/]\d{1,6})?\s+(?:\p{Lu}\p{L}+[^\S\n\t]+){0,4}$/u;
+const HOUSE_NUMBER_AFTER_STREET_RE = /^[^\S\n\t]+\d{1,6}(?:[-/]\d{1,6})?\b/u;
 
 // ── Seed types ──────────────────────────────────────
 
@@ -56,6 +66,7 @@ type SeedType =
   | "house-number"
   | "postal-code"
   | "city"
+  | "state"
   | "address-trigger";
 
 type Seed = {
@@ -172,23 +183,80 @@ const hasBrCueNearby = (
   return probe.test(window);
 };
 
-const hasUsZipPlusFourContext = (
+type UsZipPlusFourContext = {
+  stateSeed: Seed | null;
+  hasContext: boolean;
+};
+
+const getUsStateSeedBeforeZip = (
   fullText: string,
   start: number,
-  seeds: readonly Seed[],
-): boolean => {
+): Seed | null => {
   const stateWindowStart = Math.max(0, start - 24);
   const stateWindow = fullText.slice(stateWindowStart, start);
-  if (US_STATE_ABBREV_BEFORE_ZIP_RE.test(stateWindow)) {
+  const match = US_STATE_ABBREV_BEFORE_ZIP_RE.exec(stateWindow);
+  const state = match?.[1];
+  if (!match || !state) {
+    return null;
+  }
+
+  const stateOffset = match[0].indexOf(state);
+  const stateStart = stateWindowStart + match.index + stateOffset;
+  return {
+    type: "state",
+    start: stateStart,
+    end: stateStart + state.length,
+    text: state,
+  };
+};
+
+const hasHouseNumberNearStreetWord = (
+  fullText: string,
+  seed: Seed,
+): boolean => {
+  if (/\d/.test(seed.text)) {
     return true;
   }
 
-  return seeds.some((seed) => {
+  const before = fullText.slice(Math.max(0, seed.start - 50), seed.start);
+  if (HOUSE_NUMBER_BEFORE_STREET_RE.test(before)) {
+    return true;
+  }
+
+  const after = fullText.slice(
+    seed.end,
+    Math.min(fullText.length, seed.end + 24),
+  );
+  return HOUSE_NUMBER_AFTER_STREET_RE.test(after);
+};
+
+const getUsZipPlusFourContext = (
+  fullText: string,
+  start: number,
+  seeds: readonly Seed[],
+): UsZipPlusFourContext => {
+  const stateSeed = getUsStateSeedBeforeZip(fullText, start);
+  if (stateSeed !== null) {
+    return { stateSeed, hasContext: true };
+  }
+
+  const hasContext = seeds.some((seed) => {
     if (Math.abs(seed.start - start) > US_ZIP_CONTEXT_WINDOW) {
       return false;
     }
-    return seed.type === "address-trigger" || seed.type === "street-word";
+    if (seed.type === "address-trigger") {
+      return true;
+    }
+    if (seed.type === "city" && seed.end <= start) {
+      const gap = fullText.slice(seed.end, start);
+      return US_CITY_ZIP_GAP_RE.test(gap);
+    }
+    if (seed.type === "street-word") {
+      return hasHouseNumberNearStreetWord(fullText, seed);
+    }
+    return false;
   });
+  return { stateSeed: null, hasContext };
 };
 
 /**
@@ -350,11 +418,21 @@ const collectSeeds = (
       continue;
     }
     const isUsZipPlusFourShape = US_ZIP_PLUS_FOUR_SHAPE_RE.test(postalMatch[0]);
-    if (
-      isUsZipPlusFourShape &&
-      !hasUsZipPlusFourContext(fullText, start, seeds)
-    ) {
-      continue;
+    if (isUsZipPlusFourShape) {
+      const usContext = getUsZipPlusFourContext(fullText, start, seeds);
+      if (!usContext.hasContext) {
+        continue;
+      }
+      const stateSeed = usContext.stateSeed;
+      if (stateSeed !== null) {
+        const hasStateSeed = seeds.some(
+          (seed) =>
+            seed.start === stateSeed.start && seed.end === stateSeed.end,
+        );
+        if (!hasStateSeed) {
+          seeds.push(stateSeed);
+        }
+      }
     }
     seeds.push({
       type: "postal-code",
@@ -489,6 +567,7 @@ const scoreCluster = (cluster: SeedCluster): number => {
 
   if (types.has("postal-code")) score += 0.15;
   if (types.has("city")) score += 0.15;
+  if (types.has("state")) score += 0.15;
   if (types.has("street-word")) score += 0.15;
   if (types.has("address-trigger")) score += 0.1;
 

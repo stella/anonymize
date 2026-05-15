@@ -14,7 +14,8 @@ import {
   DEFAULT_ENTITY_LABELS,
   runPipeline,
 } from "../index";
-import type { Entity, PipelineConfig } from "../types";
+import type { Entity, Dictionaries, PipelineConfig } from "../types";
+import type { PipelineContext } from "../context";
 import { loadTestDictionaries } from "./load-dictionaries";
 
 const baseConfig: Omit<PipelineConfig, "dictionaries"> = {
@@ -34,14 +35,25 @@ const baseConfig: Omit<PipelineConfig, "dictionaries"> = {
   workspaceId: "us-zip-regex-test",
 };
 
+let dictionariesPromise: Promise<Dictionaries> | undefined;
+const getDictionaries = (): Promise<Dictionaries> => {
+  dictionariesPromise ??= loadTestDictionaries();
+  return dictionariesPromise;
+};
+
+let sharedContext: PipelineContext | undefined;
+const getContext = (): PipelineContext => {
+  sharedContext ??= createPipelineContext();
+  return sharedContext;
+};
+
 const detect = async (fullText: string): Promise<Entity[]> => {
-  const dictionaries = await loadTestDictionaries();
-  const context = createPipelineContext();
+  const dictionaries = await getDictionaries();
   return runPipeline({
     fullText,
     config: { ...baseConfig, dictionaries },
     gazetteerEntries: [],
-    context,
+    context: getContext(),
   });
 };
 
@@ -101,6 +113,37 @@ describe("US ZIP+4 regex", () => {
         e.text.includes("94304-1050"),
     );
     expect(address).toBeDefined();
+  });
+
+  test("state-qualified ZIP+4 fragment is captured", async () => {
+    const entities = await detect("Mailed to CA 94304-1050.");
+    const address = entities.find(
+      (e) =>
+        e.label === "address" &&
+        e.text.includes("CA") &&
+        e.text.includes("94304-1050"),
+    );
+    expect(address).toBeDefined();
+  });
+
+  test("adjacent city and ZIP+4 fragment is captured", async () => {
+    const entities = await detect("Mailed to Palo Alto 94304-1050.");
+    const address = entities.find(
+      (e) =>
+        e.label === "address" &&
+        e.text.includes("Palo Alto") &&
+        e.text.includes("94304-1050"),
+    );
+    expect(address).toBeDefined();
+  });
+
+  test("street word alone does not admit ZIP+4-shaped IDs", async () => {
+    const text = "The Road docket 94304-1050 is closed.";
+    const entities = await detect(text);
+    const spurious = entities.find(
+      (e) => e.label === "address" && e.text.includes("94304-1050"),
+    );
+    expect(spurious).toBeUndefined();
   });
 
   test("ZIP+4 substring inside a longer hyphenated identifier does not match", async () => {
