@@ -803,10 +803,22 @@ export const processDenyListMatches = (
       continue;
     }
 
+    // All-uppercase acronym patterns ("OIL", "OP", "BIS")
+    // case-fold to common English words under the AC's
+    // caseInsensitive flag and match mixed-case occurrences
+    // ("Oil", "Op"). Require all-uppercase patterns to
+    // match all-uppercase source text so acronym dictionary
+    // entries cannot collide with everyday prose.
+    const patternIsAcronym =
+      pattern.length > 0 && pattern.length <= 5 && ALL_UPPER_RE.test(pattern);
+    const acronymMatchesAcronym =
+      !patternIsAcronym || ALL_UPPER_RE.test(matchText);
+
     const passesCuratedFilters =
       UPPER_START_RE.test(sourceChar) &&
       !getStopwords(ctx).has(keyword) &&
       !getAllowList(ctx).has(keyword) &&
+      acronymMatchesAcronym &&
       !ALL_UPPER_RE.test(matchText);
     const curatedLabels = passesCuratedFilters
       ? (labels ?? []).filter(
@@ -959,6 +971,24 @@ export const processDenyListMatches = (
     const first = chain.at(0);
     const last = chain.at(-1);
     if (!first || !last) {
+      continue;
+    }
+
+    // Skip the trailing-capitalised-word extension when the
+    // chain sits inside a defined-term quote
+    // (`"Bond Hedge Transactions"`, `"Blue Sky Laws"`).
+    // Legal prose uses curly or straight quotes to introduce
+    // capitalised noun phrases that are not personal names;
+    // chaining beyond the name corpus inside that bracketed
+    // context produces unstable spans like
+    // `"Bond Hedge Transactions"`-as-person.
+    const insideDefinedTermQuote = isSuppressibleDefinedTermQuote(
+      fullText,
+      first.start,
+      ctx,
+    );
+
+    if (insideDefinedTermQuote) {
       continue;
     }
 
@@ -1142,6 +1172,152 @@ const extendCityDistricts = (entities: Entity[], fullText: string): void => {
  * by a capitalized word (for "Miroslav Braňka" when
  * only "Braňka" matched).
  */
+/**
+ * Defined-term marker: an opening typographic or straight
+ * quote enclosing the chain start, AND a closing quote
+ * within a short window followed by a
+ * definitional cue (`means`, `shall mean`, `shall have
+ * the meaning(s)`, `refers to`). Legal documents reserve
+ * this construction for defined terms; the contents are
+ * not personal names even when individual tokens collide
+ * with the name corpus.
+ *
+ * Plain quotations like `"John Unknown" said ...` do NOT
+ * count: there is no definitional cue, so the trailing
+ * surname extension is still allowed to absorb `Unknown`.
+ */
+const OPENING_QUOTES = new Set(['"', "'", "“", "„", "‟", "‘", "‛", "«"]);
+const CLOSING_QUOTES = new Set(['"', "'", "”", "’", "»", "“"]);
+const DEFINED_TERM_CUE_RE =
+  /^[\s,]*(?:means?|shall\s+means?|shall\s+have\s+the\s+meanings?|refers?\s+to|has\s+the\s+meanings?|is\s+defined)\b/iu;
+const DEFINED_TERM_LOOKAHEAD = 120;
+const DEFINED_TERM_LOOKBEHIND = 80;
+const EMPTY_GENERIC_ROLES: ReadonlySet<string> = new Set();
+
+type DefinedTermQuote = {
+  content: string;
+  afterClosingQuote: string;
+};
+
+const isLetter = (ch: string | undefined): boolean =>
+  ch !== undefined && /^\p{L}$/u.test(ch);
+
+const isApostropheInsideWord = (text: string, index: number): boolean =>
+  isLetter(text[index - 1]) && isLetter(text[index + 1]);
+
+const isQuoteBoundary = (text: string, index: number): boolean => {
+  const ch = text[index];
+  if (ch !== "'" && ch !== "’") {
+    return true;
+  }
+  return !isApostropheInsideWord(text, index);
+};
+
+const findDefinedTermQuoteContent = (
+  text: string,
+  start: number,
+): DefinedTermQuote | null => {
+  const min = Math.max(0, start - DEFINED_TERM_LOOKBEHIND);
+  let quoteStart = -1;
+  for (let i = start - 1; i >= min; i--) {
+    const ch = text[i];
+    if (ch === "\n") {
+      break;
+    }
+    if (ch && OPENING_QUOTES.has(ch) && isQuoteBoundary(text, i)) {
+      quoteStart = i;
+      break;
+    }
+    if (ch && CLOSING_QUOTES.has(ch) && isQuoteBoundary(text, i)) {
+      break;
+    }
+  }
+  if (quoteStart === -1) {
+    return null;
+  }
+
+  const max = Math.min(text.length, quoteStart + 1 + DEFINED_TERM_LOOKAHEAD);
+  for (let i = start; i < max; i++) {
+    const ch = text[i];
+    if (!ch || !CLOSING_QUOTES.has(ch) || !isQuoteBoundary(text, i)) {
+      continue;
+    }
+    const after = text.slice(i + 1, max);
+    if (!DEFINED_TERM_CUE_RE.test(after)) {
+      return null;
+    }
+    return {
+      content: text.slice(quoteStart + 1, i),
+      afterClosingQuote: after,
+    };
+  }
+
+  return null;
+};
+
+const FIRST_WORD_RE = /^\p{L}+/u;
+const WORD_RE = /\p{L}+/gu;
+
+const startsWithKnownFirstName = (
+  quoteContent: string,
+  ctx: PipelineContext,
+): boolean => {
+  const firstWord = FIRST_WORD_RE.exec(quoteContent.trim())?.[0];
+  if (!firstWord) {
+    return false;
+  }
+  const firstNames = new Set(
+    getNameCorpusFirstNames(ctx).map((name) => name.toLowerCase()),
+  );
+  return firstNames.has(firstWord.toLowerCase());
+};
+
+const hasPersonRoleDefinition = (
+  afterClosingQuote: string,
+  ctx: PipelineContext,
+): boolean => {
+  const roleWords =
+    afterClosingQuote
+      .replace(DEFINED_TERM_CUE_RE, "")
+      .match(WORD_RE)
+      ?.slice(0, 8) ?? [];
+  if (roleWords.length === 0) {
+    return false;
+  }
+
+  const genericRoles = ctx.genericRoles ?? EMPTY_GENERIC_ROLES;
+  return roleWords.some((word) => genericRoles.has(word.toLowerCase()));
+};
+
+const isSuppressibleDefinedTermQuote = (
+  text: string,
+  start: number,
+  ctx: PipelineContext,
+): boolean => {
+  const definedTermQuote = findDefinedTermQuoteContent(text, start);
+  if (definedTermQuote === null) {
+    return false;
+  }
+
+  const words = definedTermQuote.content.match(WORD_RE) ?? [];
+
+  // A quoted defined term can itself be a real person:
+  // `"John Smith" shall mean the employee...`. Preserve those
+  // when the definition itself points at a legal/business role
+  // from dictionary data. Legal terms such as `"Bond Hedge"`
+  // stay suppressible even if their first token collides with
+  // a given-name corpus entry.
+  if (
+    words.length >= 2 &&
+    startsWithKnownFirstName(definedTermQuote.content, ctx) &&
+    hasPersonRoleDefinition(definedTermQuote.afterClosingQuote, ctx)
+  ) {
+    return false;
+  }
+
+  return words.length >= 2;
+};
+
 const extendPersonName = (
   text: string,
   start: number,
@@ -1172,14 +1348,31 @@ const extendPersonName = (
         wordEnd++;
       }
 
-      // Skip trailing punctuation (commas, etc.)
+      // Skip trailing punctuation (commas, periods,
+      // typographic closing quotes). Curly quotes survive
+      // normalisation because they often appear inside
+      // defined-term clauses (`"Blue Sky Laws"`); strip
+      // them so the allow-list / stopword check sees the
+      // bare word.
       const word = text.slice(wordStart, wordEnd);
-      const stripped = word.replace(/[,;.]+$/, "");
+      const stripped = word.replace(/[,;.”"’'“»]+$/, "");
       if (stripped.length < 2) {
         break;
       }
 
-      // Don't extend into global or person stopwords
+      // Don't extend into stopwords or person stopwords.
+      // The global allow list is intentionally NOT consulted
+      // here: real surnames such as `Law`, `Tesla`, or
+      // `Vote` are common English words and live on the
+      // allow list to suppress single-token noise, but they
+      // are legitimate name extensions when preceded by a
+      // first name in plain prose (`John Law`, `Elon
+      // Tesla`). Defined-term contexts (`"Blue Sky Laws"`,
+      // `"Bond Hedge Transactions"`) are filtered earlier by
+      // `isInsideDefinedTermQuote`, so by the time
+      // `extendPersonName` runs we are in ordinary prose and
+      // the allow-list block would only swallow real
+      // surnames.
       const lower = stripped.toLowerCase();
       if (getStopwords(ctx).has(lower) || getPersonStopwords(ctx).has(lower)) {
         break;
