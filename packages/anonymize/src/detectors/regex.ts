@@ -60,8 +60,20 @@ const escapeRegex = (s: string): string =>
   // eslint-disable-next-line no-useless-escape
   s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+const escapeRegexPhrase = (s: string): string =>
+  escapeRegex(s.trim()).replace(/\s+/g, "[^\\S\\n\\t]+");
+
 /** Escape for use inside a regex character class. */
 const escapeCharClass = (s: string): string => s.replace(/[\]\\^-]/g, "\\$&");
+
+const toSortedAlternation = (values: readonly string[]): string =>
+  [
+    ...new Set(
+      values.map(escapeRegexPhrase).filter((value) => value.length > 0),
+    ),
+  ]
+    .toSorted((a, b) => b.length - a.length)
+    .join("|");
 
 const TITLE_PREFIX = TITLE_PREFIXES.toSorted((a, b) => b.length - a.length)
   .map(escapeTitle)
@@ -113,7 +125,7 @@ type RegexDef = {
   validator?: Validator;
 };
 
-type PercentWordsConfig = {
+type AmountWordsConfig = {
   percentages?: Array<{
     lang: string;
     keywords: string[];
@@ -123,7 +135,20 @@ type PercentWordsConfig = {
     standalone?: string[];
     allowSpaceCompoundSeparator?: boolean;
   }>;
+  magnitudeSuffixes?: Array<{
+    lang: string;
+    words?: string[];
+    abbreviationsCaseInsensitive?: string[];
+    abbreviationsCaseSensitive?: string[];
+  }>;
+  shareQuantityTerms?: Array<{
+    lang: string;
+    modifiers?: string[];
+    nouns: string[];
+  }>;
 };
+
+const AMOUNT_WORDS = amountWordsConfig as AmountWordsConfig;
 
 // ── stdnum validator entries ────────────────────────
 // Each entry pairs a @stll/stdnum validator with a
@@ -713,7 +738,7 @@ const PERCENT_RANGE =
   `${PERCENT_RANGE_NUMBER}[^\\S\\n]*${DASH}[^\\S\\n]*` +
   `${PERCENT_RANGE_NUMBER}[^\\S\\n]{0,2}%`;
 
-const buildPercentWordPattern = (config: PercentWordsConfig): string => {
+const buildPercentWordPattern = (config: AmountWordsConfig): string => {
   const phrases: string[] = [];
   for (const entry of config.percentages ?? []) {
     const ones = entry.ones.map(escapeRegex);
@@ -732,7 +757,7 @@ const buildPercentWordPattern = (config: PercentWordsConfig): string => {
   return phrases.length > 0 ? `(?i:(?:${phrases.join("|")}))` : "(?!)";
 };
 
-const PERCENT_WORD = buildPercentWordPattern(amountWordsConfig);
+const PERCENT_WORD = buildPercentWordPattern(AMOUNT_WORDS);
 
 // Percentages and financial rates. Captures signed numeric
 // values with dot or comma decimals, grouped thousands, and
@@ -945,73 +970,71 @@ type CurrenciesData = {
   localNames?: string[];
 };
 
-/**
- * Magnitude suffixes that turn a bare number into a
- * larger monetary amount: `$25 million`, `EUR 1.5
- * billion`, `$500K`, `$2bn`. Kept as typed constants
- * (rather than inline regex alternations) so locale
- * variants can be added without touching pattern code.
- *
- * Three groups with deliberately different casing
- * rules:
- *
- *   - `MAGNITUDE_WORDS` — written-out units. Matched
- *     case-insensitively with an optional plural `s`
- *     because uppercase contract headings and badly
- *     pluralised translations both appear in the wild.
- *
- *   - `MAGNITUDE_ABBREVIATIONS_CI` — multi-letter
- *     abbreviations (`bn`, `bln`, `tn`, `trn`). Safe
- *     to match case-insensitively: no plausible
- *     non-monetary collision with `BN`/`Bn`/`bn` after
- *     a currency prefix.
- *
- *   - `MAGNITUDE_ABBREVIATIONS_CS` — single-letter
- *     abbreviations (`K`, `M`). Matched case-
- *     sensitively (uppercase only) because lowercase
- *     `m` collides with the metre unit (`$25 m cable`)
- *     and lowercase `k` with kelvin/kilo. The
- *     finance/journalism convention for these
- *     shorthands is uppercase anyway (`$500K`, `$25M`).
- *
- * Single-letter `B` and `T` are deliberately omitted
- * even in uppercase form: too many non-monetary
- * collisions (grades, classes, model designators).
- */
-const MAGNITUDE_WORDS: readonly string[] = [
-  "thousand",
-  "million",
-  "billion",
-  "trillion",
-  "quadrillion",
-];
+type FinancialLexicons = {
+  magnitude: string;
+  quantityFollowerGuard: string;
+};
 
-const MAGNITUDE_ABBREVIATIONS_CI: readonly string[] = [
-  "bn",
-  "bln",
-  "tn",
-  "trn",
-];
+const buildMagnitudePattern = (config: AmountWordsConfig): string => {
+  const words: string[] = [];
+  const caseInsensitiveAbbreviations: string[] = [];
+  const caseSensitiveAbbreviations: string[] = [];
 
-const MAGNITUDE_ABBREVIATIONS_CS: readonly string[] = ["K", "M"];
-const SHARE_QUANTITY_MODIFIERS: readonly string[] = [
-  "ordinary",
-  "common",
-  "preferred",
-  "registered",
-  "treasury",
-  "voting",
-  "non-voting",
-  "restricted",
-  "class",
-  "series",
-];
-const SHARE_QUANTITY_MODIFIER_ALT =
-  SHARE_QUANTITY_MODIFIERS.map(escapeRegex).join("|");
-const QUANTITY_FOLLOWER_RE =
-  "(?![^\\S\\n\\t]+(?i:" +
-  `(?:(?:${SHARE_QUANTITY_MODIFIER_ALT})[^\\S\\n\\t]+){0,3}` +
-  "(?:shares?|stocks?|securities?|units?))\\b)";
+  for (const entry of config.magnitudeSuffixes ?? []) {
+    words.push(...(entry.words ?? []));
+    caseInsensitiveAbbreviations.push(
+      ...(entry.abbreviationsCaseInsensitive ?? []),
+    );
+    caseSensitiveAbbreviations.push(
+      ...(entry.abbreviationsCaseSensitive ?? []),
+    );
+  }
+
+  const branches: string[] = [];
+  const wordsAlt = toSortedAlternation(words);
+  const abbreviationCiAlt = toSortedAlternation(caseInsensitiveAbbreviations);
+  const abbreviationCsAlt = toSortedAlternation(caseSensitiveAbbreviations);
+
+  if (wordsAlt) {
+    branches.push(`[^\\S\\n\\t]+(?i:(?:${wordsAlt}))\\b`);
+  }
+  if (abbreviationCiAlt) {
+    branches.push(`[^\\S\\n\\t]?(?i:${abbreviationCiAlt})\\b`);
+  }
+  if (abbreviationCsAlt) {
+    branches.push(`[^\\S\\n\\t]?(?:${abbreviationCsAlt})\\b`);
+  }
+
+  return branches.length > 0 ? `(?:${branches.join("|")})?` : "";
+};
+
+const buildQuantityFollowerGuard = (config: AmountWordsConfig): string => {
+  const modifiers: string[] = [];
+  const nouns: string[] = [];
+
+  for (const entry of config.shareQuantityTerms ?? []) {
+    modifiers.push(...(entry.modifiers ?? []));
+    nouns.push(...entry.nouns);
+  }
+
+  const modifierAlt = toSortedAlternation(modifiers);
+  const nounAlt = toSortedAlternation(nouns);
+  if (!nounAlt) return "";
+
+  const modifierPrefix = modifierAlt
+    ? `(?:(?:${modifierAlt})[^\\S\\n\\t]+){0,3}`
+    : "";
+
+  return `(?![^\\S\\n\\t]+(?i:` + `${modifierPrefix}(?:${nounAlt}))\\b)`;
+};
+
+const buildFinancialLexicons = (config: AmountWordsConfig): FinancialLexicons =>
+  Object.freeze({
+    magnitude: buildMagnitudePattern(config),
+    quantityFollowerGuard: buildQuantityFollowerGuard(config),
+  });
+
+const FINANCIAL_LEXICONS = buildFinancialLexicons(AMOUNT_WORDS);
 
 /**
  * Build symbol character class, code alternation,
@@ -1099,27 +1122,7 @@ const buildCurrencyPatterns = (data: CurrenciesData): string[] => {
     `(?:\\d{1,2}${DASH}?|${DASH}{1,2}))?`;
   const END = `(?:\\b|(?=\\s|[.,;!?)]|$))`;
 
-  // Optional magnitude suffix: "$25 million", "$2bn",
-  // "$500K". Word and CI-abbrev branches accept any
-  // case; the CS-abbrev branch requires the uppercase
-  // form so lowercase `m`/`k` (metre, kelvin) does not
-  // hijack a perfectly innocent "$25 m cable" span.
-  //
-  // Each branch ends in `\b`, which prevents an abbrev
-  // letter from eating into the next word ("$25 km"
-  // stays at "$25" because ` k` + `m` has no word
-  // boundary after the `k`).
-  const wordsAlt = MAGNITUDE_WORDS.map(escapeRegex).join("|");
-  const abbrCiAlt = MAGNITUDE_ABBREVIATIONS_CI.map(escapeRegex).join("|");
-  const abbrCsAlt = MAGNITUDE_ABBREVIATIONS_CS.map(escapeRegex).join("|");
-  const MAGNITUDE =
-    `(?:` +
-    `[^\\S\\n\\t]+(?i:(?:${wordsAlt})s?)\\b` +
-    `|` +
-    `[^\\S\\n\\t]?(?i:${abbrCiAlt})\\b` +
-    `|` +
-    `[^\\S\\n\\t]?(?:${abbrCsAlt})\\b` +
-    `)?`;
+  const MAGNITUDE = FINANCIAL_LEXICONS.magnitude;
 
   // Leading symbol: $100, €1,000.50, € 100000,
   // $25 million, $2bn.
@@ -1154,7 +1157,7 @@ const buildCurrencyPatterns = (data: CurrenciesData): string[] => {
     patterns.push(
       `${optionalLeadingSymbol}${NUM}${DECIMAL}${MAGNITUDE}` +
         `[^\\S\\n\\t]{0,4}` +
-        `(?:${trailingAlt})${QUANTITY_FOLLOWER_RE}${END}`,
+        `(?:${trailingAlt})${FINANCIAL_LEXICONS.quantityFollowerGuard}${END}`,
     );
   }
 
