@@ -34,15 +34,29 @@ const RAW_LEGAL_SUFFIXES = [
   "SE",
   "KG",
   "OHG",
-  // English (UK/US/AU/IE)
+  // English (UK/US/AU/IE). Title-case and ALL-CAPS
+  // spellings both appear in real filings (party
+  // captions and signature blocks render in caps);
+  // the regex matches case-sensitively, so both
+  // spellings need explicit entries.
   "Ltd.",
   "Ltd",
+  "LTD.",
+  "LTD",
   "LLC",
   "LLP",
   "Inc.",
+  "INC.",
+  "Inc",
+  "INC",
   "Corp.",
+  "CORP.",
+  "Corp",
+  "CORP",
   "Corporation",
+  "CORPORATION",
   "Co.",
+  "CO.",
   "LP",
   "L.P.",
   "PLC",
@@ -52,6 +66,8 @@ const RAW_LEGAL_SUFFIXES = [
   "B.V.",
   "Pty Ltd.",
   "Pty Ltd",
+  "PTY LTD.",
+  "PTY LTD",
   // French / Iberian / Italian
   "S.A.",
   "SA",

@@ -1595,21 +1595,56 @@ export const processLegalFormMatches = (
         prefixPart.length > 2 && prefixPart === prefixPart.toUpperCase();
 
       if (isAllCapsMatch && fullText) {
-        // Check: is the surrounding line also all-caps?
+        // Check the surrounding line. An all-caps line is
+        // EITHER a party caption (real org rendered in
+        // caps on its own line, e.g. "TWITTER, INC.")
+        // or a section heading ("KUPNÍ SMLOUVA",
+        // "17. NO ASSIGNMENT."). Distinguishing signals:
+        //   - section headings open with a clause number,
+        //   - long all-caps paragraphs contain substantial
+        //     prose outside the matched span.
+        // Party captions occupy nearly the whole line and
+        // have no leading clause number, so they survive.
         const lineStart = fullText.lastIndexOf("\n", entityStart);
         const lineEnd = fullText.indexOf("\n", entityStart + entityText.length);
         const line = fullText.slice(
           lineStart + 1,
           lineEnd === -1 ? fullText.length : lineEnd,
         );
-        const lineLetters = line.replace(/[^a-zA-ZÀ-ž]/g, "");
-        const upperCount = [...lineLetters].filter(
-          (c) => c === c.toUpperCase(),
-        ).length;
+        const entityRelStart = entityStart - (lineStart + 1);
+        const entityRelEnd = entityRelStart + entityText.length;
+        let lineLetterCount = 0;
+        let lineUpperCount = 0;
+        let lineOutsideLetters = 0;
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i];
+          if (ch === undefined || !/[a-zA-ZÀ-ž]/.test(ch)) continue;
+          lineLetterCount += 1;
+          if (ch === ch.toUpperCase()) lineUpperCount += 1;
+          if (i < entityRelStart || i >= entityRelEnd) {
+            lineOutsideLetters += 1;
+          }
+        }
         const lineIsAllCaps =
-          lineLetters.length > 5 && upperCount / lineLetters.length >= 0.95;
-        if (lineIsAllCaps) {
-          // Entire line is all-caps → heading, skip
+          lineLetterCount > 5 && lineUpperCount / lineLetterCount >= 0.95;
+        const sectionHeadingPrefix =
+          /^(?:§\s*)?\d{1,3}(?:\.\d{1,3}){0,4}\.?\s*\p{Lu}/u.test(line);
+        // A genuine party caption always renders the
+        // suffix on the trailing side of a comma
+        // ("TWITTER, INC."). Section titles such as
+        // Czech "RÁMCOVÁ DOHODA NA POSKYTOVÁNÍ PRÁVNÍCH
+        // SLUŽEB" have no comma — they're prose run
+        // together, not "Name, Suffix" structures, so
+        // they fail this gate.
+        const hasCommaBeforeSuffix = entityText.lastIndexOf(",") > 0;
+        const isBoilerplateLine =
+          lineIsAllCaps &&
+          (sectionHeadingPrefix ||
+            lineOutsideLetters >= 20 ||
+            !hasCommaBeforeSuffix);
+        if (isBoilerplateLine) {
+          // Section heading or boilerplate prose paragraph
+          // — skip.
           continue;
         }
         // Only the company name is all-caps → keep it

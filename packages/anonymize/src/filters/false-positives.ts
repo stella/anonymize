@@ -74,17 +74,34 @@ const countWordTokens = (text: string): number => {
 };
 
 // Lines whose visible letters are overwhelmingly
-// uppercase are headings or boilerplate disclosure
-// blocks (SEC legends, "THIS INSTRUMENT AND ANY
-// SECURITIES ..." clauses). Detectors anchored to
-// uppercase tokens otherwise pull bigrams like
-// "SECURITIES ACT" or "REGISTRATION STATEMENT" out of
-// these blocks as organization spans, which is almost
-// always wrong.
+// uppercase are EITHER:
+//   - heading/boilerplate prose (SEC securities legends,
+//     "THIS INSTRUMENT AND ANY SECURITIES ..." clauses,
+//     numbered section headings such as "17.NO
+//     ASSIGNMENT."),
+//   - or genuine party captions where a real org name
+//     happens to be rendered in caps on its own line
+//     ("TWITTER, INC.", "X HOLDINGS I, INC.").
+// The old guard rejected both cases. We now keep
+// captions: the deciding signal is whether the line
+// contains substantial *prose* outside the candidate
+// span. SEC legends sprawl across the line; captions
+// occupy nearly all of it. A numbered section heading
+// ("17.NO ASSIGNMENT.") is also rejected outright
+// because its all-caps span is part of the section
+// title, not a party name.
 const ALL_CAPS_LINE_LETTER_THRESHOLD = 5;
 const ALL_CAPS_LINE_RATIO = 0.95;
+const ALL_CAPS_LINE_PROSE_EXTRA_LETTERS = 20;
+// Section-number prefix at the very start of a line:
+// "17.", "§ 3", "3.2.1." — anything that looks like a
+// clause-numbering scheme followed by an uppercase
+// title token. Used to reject all-caps section titles
+// regardless of length.
+const SECTION_HEADING_PREFIX_RE =
+  /^(?:§\s*)?\d{1,3}(?:\.\d{1,3}){0,4}\.?\s*\p{Lu}/u;
 const LINE_LETTER_RE = /\p{L}/gu;
-const isAllCapsSurroundingLine = (
+const isAllCapsBoilerplateLine = (
   fullText: string,
   start: number,
   length: number,
@@ -97,6 +114,9 @@ const isAllCapsSurroundingLine = (
   );
   let letterCount = 0;
   let upperCount = 0;
+  let outsideEntityLetters = 0;
+  const entityRelStart = start - lineStart;
+  const entityRelEnd = entityRelStart + length;
   LINE_LETTER_RE.lastIndex = 0;
   for (
     let m = LINE_LETTER_RE.exec(line);
@@ -108,9 +128,19 @@ const isAllCapsSurroundingLine = (
     if (ch === ch.toUpperCase() && ch !== ch.toLowerCase()) {
       upperCount += 1;
     }
+    if (m.index < entityRelStart || m.index >= entityRelEnd) {
+      outsideEntityLetters += 1;
+    }
   }
   if (letterCount <= ALL_CAPS_LINE_LETTER_THRESHOLD) return false;
-  return upperCount / letterCount >= ALL_CAPS_LINE_RATIO;
+  if (upperCount / letterCount < ALL_CAPS_LINE_RATIO) return false;
+  // Numbered section headings are always boilerplate.
+  if (SECTION_HEADING_PREFIX_RE.test(line)) return true;
+  // Otherwise: only treat as boilerplate when there is
+  // substantial all-caps prose *outside* the entity
+  // span. Party captions occupy nearly the entire line
+  // and survive this gate.
+  return outsideEntityLetters >= ALL_CAPS_LINE_PROSE_EXTRA_LETTERS;
 };
 const isAllCapsCandidate = (text: string): boolean =>
   text === text.toUpperCase() && /\p{Lu}/u.test(text);
@@ -402,7 +432,7 @@ export const filterFalsePositives = (
       fullText &&
       normalized.label === "organization" &&
       isAllCapsCandidate(trimmed) &&
-      isAllCapsSurroundingLine(fullText, normalized.start, trimmed.length)
+      isAllCapsBoilerplateLine(fullText, normalized.start, trimmed.length)
     ) {
       continue;
     }
