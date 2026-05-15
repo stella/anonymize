@@ -763,21 +763,22 @@ const extractValue = (
       // in DOCX table rows).
       const LINE_STOPS = ["\n"];
       let end = valueText.length;
+      let foundLineStop = false;
       for (const ch of LINE_STOPS) {
         const idx = valueText.indexOf(ch);
         if (idx !== -1 && idx < end) {
           end = idx;
+          foundLineStop = true;
         }
       }
-      // Cap regardless of whether a newline was found.
-      // HTML-flattened text and signature blocks routinely
-      // pack hundreds of chars (a chain of "Phone:" /
-      // "Name:" pseudo-fields) onto a single logical line;
-      // without a cap the strategy emits one giant entity
-      // covering the whole block. Legitimate end-of-line
-      // values (a name, an address, a phone number) fit
-      // comfortably inside the cap.
-      end = Math.min(end, MAX_TRIGGER_VALUE_LEN);
+      // Cap only when no real line delimiter was found. HTML-
+      // flattened text and signature blocks routinely pack
+      // hundreds of chars (a chain of "Phone:" / "Name:"
+      // pseudo-fields) onto one logical line; newline-terminated
+      // values should still capture through the delimiter.
+      if (!foundLineStop) {
+        end = Math.min(end, MAX_TRIGGER_VALUE_LEN);
+      }
       const rawSlice = valueText.slice(0, end);
       const extracted = rawSlice.trim();
       if (extracted.length === 0) {

@@ -51,13 +51,30 @@ describe("trigger value length cap", () => {
     // signature blocks onto one logical line. Uses
     // generic placeholder labels — no doc-specific text.
     const filler = "Date: Name: Title: Address: Phone: Fax: ".repeat(8).trim();
-    const text = `Signatory block. Phone: ${filler}\nNext paragraph.`;
+    const text = `Signatory block. Phone: +1 ${filler}`;
 
     const entities = await detect(text);
     const phones = entities.filter((e) => e.label === "phone number");
+    expect(phones.length).toBeGreaterThan(0);
     for (const phone of phones) {
       expect(phone.text.length).toBeLessThanOrEqual(100);
     }
+  });
+
+  test("newline-terminated trigger value longer than cap is preserved", async () => {
+    const account =
+      "CZ6508000000192000145399 " +
+      "payment instructions ".repeat(6) +
+      "variable symbol 123456";
+    expect(account.length).toBeGreaterThan(100);
+
+    const text = `Bankovní spojení: ${account}\nNext paragraph.`;
+    const entities = await detect(text);
+    const bankAccount = entities.find(
+      (e) => e.label === "bank account number" && e.text.includes("123456"),
+    );
+    expect(bankAccount).toBeDefined();
+    expect(bankAccount!.text).toBe(account.trim());
   });
 
   test("phone-label trigger entity must contain digits", async () => {
