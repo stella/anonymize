@@ -23,6 +23,7 @@ import { propagateOrgNames } from "./detectors/org-propagation";
 import {
   boostNearMissEntities,
   detectStreetPatternsNearAddresses,
+  getStreetAbbrevs,
   detectOrphanStreetLines,
   initPrepositions,
   initStreetAbbrevs,
@@ -76,8 +77,12 @@ const isCallerOwnedEntity = (entity: Entity): boolean =>
 const hasLockedBoundary = (entity: Entity): boolean =>
   isCallerOwnedEntity(entity);
 
+const LITERAL_BOUNDARY_PUNCT_RE = /^["“„‟‘‛'«]|["”’'»!.]$/u;
+
 const hasCuratedLiteralBoundary = (entity: Entity): boolean =>
-  LITERAL_SOURCES.has(entity.source);
+  LITERAL_SOURCES.has(entity.source) &&
+  entity.label !== "person" &&
+  LITERAL_BOUNDARY_PUNCT_RE.test(entity.text);
 
 const shouldReplace = (a: Entity, b: Entity): boolean => {
   const aLen = a.end - a.start;
@@ -141,7 +146,15 @@ const PERIOD_STRIPPED_LABELS: ReadonlySet<string> = new Set([
   "location",
   "address",
 ]);
-const ADDRESS_FINAL_ABBREV_RE = /(?:^|[\s,])\p{L}{1,4}\.$/u;
+const ADDRESS_FINAL_TOKEN_RE = /(?:^|[\s,])([\p{L}\p{M}.]+\.)$/u;
+
+const hasKnownAddressFinalAbbrev = (text: string): boolean => {
+  const finalToken = ADDRESS_FINAL_TOKEN_RE.exec(text)?.[1];
+  if (!finalToken) {
+    return false;
+  }
+  return getStreetAbbrevs().has(finalToken.toLowerCase());
+};
 
 /**
  * Labels whose detectors emit precise, evidence-backed spans. When
@@ -246,12 +259,12 @@ const resolveSameSpanLabelConflicts = (entities: Entity[]): Entity[] => {
  * Trailing typographic punctuation that detectors
  * occasionally swallow when a capture runs to the end
  * of a sentence or quoted phrase. Stripped from every
- * non-literal, non-locked entity: curated dictionary and
- * gazetteer entries define their own exact boundaries, and
- * some legitimate literals include punctuation
- * (`Hello bank!`, `"Juez y parte"`). For fuzzy detector
- * spans, leaving these characters attached produces dangling
- * characters after redaction
+ * non-literal, non-locked entity. Curated dictionary and
+ * gazetteer entries with punctuation that is clearly part of
+ * the literal (`Hello bank!`, `"Juez y parte"`) keep their
+ * own boundaries. Generated/extended spans from the same
+ * sources still pass through cleanup so dangling punctuation
+ * does not become part of the redaction
  * (e.g. `Bond Hedge Documentation"` →
  * `Bond Hedge Documentation`).
  *
@@ -327,15 +340,14 @@ export const sanitizeEntities = (entities: Entity[]): Entity[] =>
     // their trailing period — German dates write `21.`,
     // post-nominals write `M.Sc.`, times write `p.m.`,
     // all of which are structurally significant.
-    // Exact deny-list and gazetteer spans are skipped —
-    // those boundaries come from curated dictionaries
-    // and may legally end in `.` (e.g. "U.S.C."); for
-    // everything else, keep the period when it follows
-    // the FULL detector vocabulary (data/legal-forms.json
-    // plus `LEGAL_SUFFIXES`), not only the small
-    // propagation list, so detected forms like "Acme
-    // Kft." or "Bank of America, N.A." retain their
-    // final dot.
+    // Literal deny-list and gazetteer spans whose
+    // punctuation is part of the dictionary entry are
+    // skipped above. For everything else, keep the period
+    // when it follows the FULL detector vocabulary
+    // (data/legal-forms.json plus `LEGAL_SUFFIXES`), not
+    // only the small propagation list, so detected forms
+    // like "Acme Kft." or "Bank of America, N.A." retain
+    // their final dot.
     if (
       PERIOD_STRIPPED_LABELS.has(e.label) &&
       cleaned.endsWith(".") &&
@@ -344,7 +356,7 @@ export const sanitizeEntities = (entities: Entity[]): Entity[] =>
       const known = getKnownLegalSuffixes();
       const keepsPeriod =
         known.some((suffix) => cleaned.endsWith(suffix)) ||
-        (e.label === "address" && ADDRESS_FINAL_ABBREV_RE.test(cleaned));
+        (e.label === "address" && hasKnownAddressFinalAbbrev(cleaned));
       if (!keepsPeriod) {
         cleaned = cleaned.slice(0, -1).trimEnd();
       }

@@ -227,7 +227,8 @@ export const initStreetAbbrevs = (): Promise<void> => {
   return _streetAbbrevsPromise;
 };
 
-const getStreetAbbrevs = (): ReadonlySet<string> => _streetAbbrevs ?? new Set();
+export const getStreetAbbrevs = (): ReadonlySet<string> =>
+  _streetAbbrevs ?? new Set();
 
 /**
  * Scan backwards from known address entities and

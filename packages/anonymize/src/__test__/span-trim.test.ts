@@ -1,6 +1,7 @@
-import { describe, expect, test } from "bun:test";
+import { beforeAll, describe, expect, test } from "bun:test";
 import { sanitizeEntities } from "../pipeline";
 import type { DetectionSource, Entity } from "../types";
+import { initStreetAbbrevs } from "../filters/confidence-boost";
 
 const make = (
   text: string,
@@ -21,6 +22,10 @@ const trim = (text: string, label?: string): string => {
 };
 
 describe("sanitizeEntities — trailing typographic punctuation", () => {
+  beforeAll(async () => {
+    await initStreetAbbrevs();
+  });
+
   test("strips ASCII double quote", () => {
     expect(trim(`Bond Hedge Documentation"`)).toBe("Bond Hedge Documentation");
   });
@@ -97,6 +102,7 @@ describe("sanitizeEntities — trailing typographic punctuation", () => {
       trim("Kodaňská 1441/46, Vršovice, 101 00 Praha 10.", "address"),
     ).toBe("Kodaňská 1441/46, Vršovice, 101 00 Praha 10");
     expect(trim("State of Delaware.", "address")).toBe("State of Delaware");
+    expect(trim("Brno.", "address")).toBe("Brno");
   });
 
   test("preserves literal dictionary punctuation", () => {
@@ -112,6 +118,18 @@ describe("sanitizeEntities — trailing typographic punctuation", () => {
       "'Bank van lening'",
       "Vista!",
     ]);
+  });
+
+  test("still trims generated spans from literal-backed sources", () => {
+    const [name] = sanitizeEntities([
+      make("John Smith:", "person", "deny-list"),
+    ]);
+    expect(name?.text).toBe("John Smith");
+
+    const [extendedGazetteer] = sanitizeEntities([
+      make("Acme Inc.,", "organization", "gazetteer"),
+    ]);
+    expect(extendedGazetteer?.text).toBe("Acme Inc.");
   });
 
   test("drops entity that becomes empty after trim", () => {
