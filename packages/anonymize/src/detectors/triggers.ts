@@ -603,6 +603,16 @@ export const warmAddressStopKeywords = async (): Promise<void> => {
   await loadAddressStopKeywords();
 };
 
+// Hard cap for unterminated trigger values. Applies to
+// strategies that scan forward until a delimiter
+// (`to-next-comma`, `to-end-of-line`). Prevents a missing
+// delimiter — common in HTML-flattened or single-paragraph
+// PDFs where a whole signature block lives on one line —
+// from turning a trigger into a multi-hundred-character
+// entity. 100 chars covers normal full-name + address
+// lines while bounding pathological inputs.
+const MAX_TRIGGER_VALUE_LEN = 100;
+
 const extractValue = (
   text: string,
   triggerEnd: number,
@@ -759,6 +769,15 @@ const extractValue = (
           end = idx;
         }
       }
+      // Cap regardless of whether a newline was found.
+      // HTML-flattened text and signature blocks routinely
+      // pack hundreds of chars (a chain of "Phone:" /
+      // "Name:" pseudo-fields) onto a single logical line;
+      // without a cap the strategy emits one giant entity
+      // covering the whole block. Legitimate end-of-line
+      // values (a name, an address, a phone number) fit
+      // comfortably inside the cap.
+      end = Math.min(end, MAX_TRIGGER_VALUE_LEN);
       const rawSlice = valueText.slice(0, end);
       const extracted = rawSlice.trim();
       if (extracted.length === 0) {
@@ -1224,6 +1243,17 @@ export const processTriggerMatches = (
       // like min-length should test the extracted
       // value, not the trigger keyword itself.
       if (!applyValidations(value.text, rule.validations)) {
+        continue;
+      }
+
+      // Label-shape invariant: a phone-number entity
+      // must contain at least one digit. Triggers like
+      // a multilingual "Phone:" / "PHONE:" / "Tel.:"
+      // can fire on signature blocks where the digit
+      // value is blank ("Phone: Date: ..."); without
+      // this check the strategy emits a digitless
+      // entity that no downstream consumer can use.
+      if (rule.label === "phone number" && !/\d/.test(value.text)) {
         continue;
       }
 
