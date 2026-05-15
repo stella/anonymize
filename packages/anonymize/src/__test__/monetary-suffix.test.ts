@@ -179,6 +179,27 @@ describe("monetary amounts with magnitude suffix", () => {
     expect(schedule[0]!.text).toBe("$10");
   });
 
+  test("ambiguous multilingual suffixes do not apply globally", async () => {
+    const setAside = findMoney(await detect("We paid $25 set aside for fees."));
+    expect(setAside).toHaveLength(1);
+    expect(setAside[0]!.text).toBe("$25");
+
+    const film = findMoney(
+      await detect("The order includes $25 mil spec film."),
+    );
+    expect(film).toHaveLength(1);
+    expect(film[0]!.text).toBe("$25");
+  });
+
+  test("share-quantity guard keeps ordinary English nouns", async () => {
+    const money = findMoney(
+      await detect("The estimate lists 100 USD parts and 50 USD labor."),
+    );
+    expect(money.map((entity) => entity.text)).toEqual(
+      expect.arrayContaining(["100 USD", "50 USD"]),
+    );
+  });
+
   test("'$25M' uppercase abbreviation still captures as million", async () => {
     const money = findMoney(await detect("Round closed at $25M."));
     expect(money.find((e) => e.text === "$25M")).toBeDefined();

@@ -67,7 +67,6 @@
         "sto",
         "sta",
         "stě",
-        "set",
         "sty",
         "stovka",
         "stovky",
@@ -85,7 +84,7 @@
         "biliony",
         "bilionů"
       ],
-      "abbreviationsCaseInsensitive": ["mil", "mld"],
+      "abbreviationsCaseInsensitive": ["mld"],
       "abbreviationsCaseSensitive": ["K", "M"]
     },
     {
@@ -130,7 +129,6 @@
         "cien",
         "ciento",
         "cientos",
-        "mil",
         "millón",
         "millones",
         "billón",
@@ -179,7 +177,6 @@
       "words": [
         "sto",
         "sta",
-        "set",
         "stów",
         "stoma",
         "setki",
@@ -207,7 +204,6 @@
         "cento",
         "centena",
         "centenas",
-        "mil",
         "milhão",
         "milhões",
         "bilhão",
@@ -242,7 +238,7 @@
         "bilióny",
         "biliónov"
       ],
-      "abbreviationsCaseInsensitive": ["mil", "mld"],
+      "abbreviationsCaseInsensitive": ["mld"],
       "abbreviationsCaseSensitive": ["K", "M"]
     }
   ],
@@ -333,7 +329,7 @@
         "classe",
         "série"
       ],
-      "nouns": ["actions", "titres", "parts", "unités"]
+      "nouns": ["actions", "titres", "unités"]
     },
     {
       "lang": "it",
