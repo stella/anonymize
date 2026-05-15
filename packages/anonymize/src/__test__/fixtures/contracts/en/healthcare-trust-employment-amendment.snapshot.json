@@ -83,7 +83,7 @@
       "end": 2665,
       "label": "person",
       "text": "Peter N. Foss",
-      "source": "deny-list"
+      "source": "trigger"
     },
     {
       "start": 2679,
@@ -97,7 +97,7 @@
       "end": 2787,
       "label": "person",
       "text": "Amanda L. Houghton",
-      "source": "deny-list"
+      "source": "trigger"
     },
     {
       "start": 2792,

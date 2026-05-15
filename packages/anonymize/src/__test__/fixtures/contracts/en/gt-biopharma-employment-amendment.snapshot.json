@@ -75,7 +75,7 @@
       "end": 4575,
       "label": "person",
       "text": "Alan Urban",
-      "source": "deny-list"
+      "source": "trigger"
     },
     {
       "start": 4591,
@@ -89,7 +89,7 @@
       "end": 4701,
       "label": "person",
       "text": "Michael Breen",
-      "source": "deny-list"
+      "source": "trigger"
     },
     {
       "start": 4717,
