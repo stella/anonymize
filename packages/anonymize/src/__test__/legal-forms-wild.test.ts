@@ -21,13 +21,18 @@ const CONFIG: PipelineConfig = {
   workspaceId: "test",
 };
 
+let sharedCtx: ReturnType<typeof createPipelineContext> | undefined;
+const getCtx = () => {
+  if (!sharedCtx) sharedCtx = createPipelineContext();
+  return sharedCtx;
+};
+
 const expectOrg = async (text: string, expected: string) => {
-  const ctx = createPipelineContext();
   const entities = await runPipeline({
     fullText: text,
     config: CONFIG,
     gazetteerEntries: [],
-    context: ctx,
+    context: getCtx(),
   });
   const org = entities.find((e) => e.label === "organization");
   expect(org).toBeDefined();
@@ -35,12 +40,11 @@ const expectOrg = async (text: string, expected: string) => {
 };
 
 const expectOrgs = async (text: string, expected: string[]) => {
-  const ctx = createPipelineContext();
   const entities = await runPipeline({
     fullText: text,
     config: CONFIG,
     gazetteerEntries: [],
-    context: ctx,
+    context: getCtx(),
   });
   const orgs = entities
     .filter((e) => e.label === "organization")
@@ -50,12 +54,11 @@ const expectOrgs = async (text: string, expected: string[]) => {
 };
 
 const expectNoOrg = async (text: string) => {
-  const ctx = createPipelineContext();
   const entities = await runPipeline({
     fullText: text,
     config: CONFIG,
     gazetteerEntries: [],
-    context: ctx,
+    context: getCtx(),
   });
   const orgs = entities.filter((e) => e.label === "organization");
   expect(orgs.length).toBe(0);

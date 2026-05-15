@@ -30,6 +30,12 @@ const BASE_CONFIG: PipelineConfig = {
   workspaceId: "test",
 };
 
+let sharedCtx: ReturnType<typeof createPipelineContext> | undefined;
+const getCtx = () => {
+  if (!sharedCtx) sharedCtx = createPipelineContext();
+  return sharedCtx;
+};
+
 const detect = async (fullText: string, config: Partial<PipelineConfig>) =>
   runPipeline({
     fullText,
@@ -38,7 +44,7 @@ const detect = async (fullText: string, config: Partial<PipelineConfig>) =>
       ...config,
     },
     gazetteerEntries: [],
-    context: createPipelineContext(),
+    context: getCtx(),
   });
 
 describe("pipeline config semantics", () => {

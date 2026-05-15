@@ -33,13 +33,19 @@ const getDictionaries = async () => {
   return cachedDictionaries;
 };
 
+let sharedCtx: ReturnType<typeof createPipelineContext> | undefined;
+const getCtx = () => {
+  if (!sharedCtx) sharedCtx = createPipelineContext();
+  return sharedCtx;
+};
+
 const runFr = async (text: string) => {
   const dictionaries = await getDictionaries();
   return runPipeline({
     fullText: text,
     config: { ...CONFIG, dictionaries },
     gazetteerEntries: [],
-    context: createPipelineContext(),
+    context: getCtx(),
   });
 };
 
