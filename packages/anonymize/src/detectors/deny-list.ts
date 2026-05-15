@@ -60,6 +60,26 @@ const getAllowList = (ctx: PipelineContext): ReadonlySet<string> =>
   ctx.allowList ?? EMPTY_ALLOW_LIST;
 
 /**
+ * Curated dictionary entries that are pure dotted
+ * single-letter acronyms (e.g. `S.C.`, `D.D.C.`, `H.M.G.`)
+ * are dropped at build time. The AC search matches
+ * case-insensitively on token boundaries where `.` is not
+ * a word character, so any such short acronym collides
+ * with a longer dotted citation that ends in the same
+ * letters — `S.C.` matches inside `U.S.C.`, `D.C.` matches
+ * inside `Washington D.C.`, and so on. The same
+ * organisations are always also listed under their full
+ * name in the dictionary, so dropping the abbreviation
+ * costs nothing while preventing the collision class
+ * entirely. Caller-supplied custom entries are exempted
+ * in case a user deliberately wants such a token redacted.
+ */
+const DOTTED_ACRONYM_RE = /^(?:\p{L}\.){1,4}\p{L}?$/u;
+
+const isCuratedNoiseAcronym = (normalized: string): boolean =>
+  DOTTED_ACRONYM_RE.test(normalized);
+
+/**
  * Common EU given names present in the stopwords-iso dataset
  * but absent from the first-name corpus. Without this
  * supplementary set, these names would pass through the
@@ -481,6 +501,9 @@ export const buildDenyList = async (
     if (normalized.length === 0) {
       return;
     }
+    if (source !== "custom-deny-list" && isCuratedNoiseAcronym(normalized)) {
+      return;
+    }
     const lower = normalized.toLowerCase();
     const existing = patternIndex.get(lower);
     if (existing !== undefined) {
@@ -647,6 +670,9 @@ const appendNameCorpusEntries = (
     // patterns match against normalizeForSearch(text).
     const normalized = normalizeForSearch(name).replace(/[|\\]/g, "");
     if (normalized.length === 0) {
+      return;
+    }
+    if (isCuratedNoiseAcronym(normalized)) {
       return;
     }
     const lower = normalized.toLowerCase();
