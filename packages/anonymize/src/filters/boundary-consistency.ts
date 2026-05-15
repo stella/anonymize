@@ -217,6 +217,10 @@ const mergeAdjacent = (entities: Entity[], fullText: string): Entity[] => {
           gap.includes(",")
         )
       ) &&
+      // Country entities are atomic; never merge two
+      // countries across a separator. "USA, Czechia, and
+      // Mexico" must stay three distinct spans, not one.
+      entity.label !== "country" &&
       !gapOccupied &&
       gap.length <= MAX_GAP &&
       GAP_PATTERN.test(gap)
