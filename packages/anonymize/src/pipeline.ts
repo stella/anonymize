@@ -269,6 +269,26 @@ const TRAILING_PUNCT_CLASS = `["“”‘’'»!?]`;
  * intentionally captured.
  */
 const LEADING_PUNCT_CLASS = `["“”‘’'«¿¡]`;
+const STRIP_BY_LABEL = {
+  colon: /[\s,;]+/,
+  default: /[\s:,;]+/,
+} as const;
+const LEADING_TRIM_BY_LABEL = {
+  colon: new RegExp(
+    `^(?:\\.\\s|${STRIP_BY_LABEL.colon.source}|${LEADING_PUNCT_CLASS})+`,
+  ),
+  default: new RegExp(
+    `^(?:\\.\\s|${STRIP_BY_LABEL.default.source}|${LEADING_PUNCT_CLASS})+`,
+  ),
+} as const;
+const TRAILING_TRIM_BY_LABEL = {
+  colon: new RegExp(
+    `(?:${STRIP_BY_LABEL.colon.source}|${TRAILING_PUNCT_CLASS})+$`,
+  ),
+  default: new RegExp(
+    `(?:${STRIP_BY_LABEL.default.source}|${TRAILING_PUNCT_CLASS})+$`,
+  ),
+} as const;
 
 /** Strip leading/trailing whitespace and punctuation. */
 export const sanitizeEntities = (entities: Entity[]): Entity[] =>
@@ -277,7 +297,7 @@ export const sanitizeEntities = (entities: Entity[]): Entity[] =>
       return [e];
     }
 
-    const strip = COLON_LABELS.has(e.label) ? /[\s,;]+/ : /[\s:,;]+/;
+    const stripKind = COLON_LABELS.has(e.label) ? "colon" : "default";
     // Also strip leading dots followed by whitespace —
     // artifact from trigger extraction after abbreviations
     // like "dat. nar." or "č.p." where the extraction
@@ -285,10 +305,8 @@ export const sanitizeEntities = (entities: Entity[]): Entity[] =>
     // The typographic-punctuation passes run in a loop
     // alongside the whitespace strip so combinations like
     // `"Some Org",` or ` "Name" ` collapse cleanly.
-    const leadRe = new RegExp(
-      `^(?:\\.\\s|${strip.source}|${LEADING_PUNCT_CLASS})+`,
-    );
-    const trailRe = new RegExp(`(?:${strip.source}|${TRAILING_PUNCT_CLASS})+$`);
+    const leadRe = LEADING_TRIM_BY_LABEL[stripKind];
+    const trailRe = TRAILING_TRIM_BY_LABEL[stripKind];
     const leadTrimmed = e.text.replace(leadRe, "");
     const lead = e.text.length - leadTrimmed.length;
     let cleaned = leadTrimmed.replace(trailRe, "");
