@@ -82,6 +82,7 @@ const LITERAL_BOUNDARY_PUNCT_RE = /^["“„‟‘‛'«]|["”’'»!.]$/u;
 const hasCuratedLiteralBoundary = (entity: Entity): boolean =>
   LITERAL_SOURCES.has(entity.source) &&
   entity.label !== "person" &&
+  entity.sourceDetail !== "gazetteer-extension" &&
   LITERAL_BOUNDARY_PUNCT_RE.test(entity.text);
 
 const shouldReplace = (a: Entity, b: Entity): boolean => {
@@ -147,6 +148,7 @@ const PERIOD_STRIPPED_LABELS: ReadonlySet<string> = new Set([
   "address",
 ]);
 const ADDRESS_FINAL_TOKEN_RE = /(?:^|[\s,])([\p{L}\p{M}.]+\.)$/u;
+const LOCATION_FINAL_DOTTED_ABBREV_RE = /(?:^|[\s,])(?:\p{Lu}\.){2,}$/u;
 
 const hasKnownAddressFinalAbbrev = (text: string): boolean => {
   const finalToken = ADDRESS_FINAL_TOKEN_RE.exec(text)?.[1];
@@ -155,6 +157,9 @@ const hasKnownAddressFinalAbbrev = (text: string): boolean => {
   }
   return getStreetAbbrevs().has(finalToken.toLowerCase());
 };
+
+const hasLocationFinalAbbrev = (text: string): boolean =>
+  LOCATION_FINAL_DOTTED_ABBREV_RE.test(text);
 
 /**
  * Labels whose detectors emit precise, evidence-backed spans. When
@@ -356,7 +361,8 @@ export const sanitizeEntities = (entities: Entity[]): Entity[] =>
       const known = getKnownLegalSuffixes();
       const keepsPeriod =
         known.some((suffix) => cleaned.endsWith(suffix)) ||
-        (e.label === "address" && hasKnownAddressFinalAbbrev(cleaned));
+        (e.label === "address" && hasKnownAddressFinalAbbrev(cleaned)) ||
+        (e.label === "location" && hasLocationFinalAbbrev(cleaned));
       if (!keepsPeriod) {
         cleaned = cleaned.slice(0, -1).trimEnd();
       }

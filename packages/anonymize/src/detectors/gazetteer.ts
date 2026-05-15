@@ -140,6 +140,7 @@ export const processGazetteerMatches = (
 
     // Try prefix extension for legal entity suffixes
     const extended = tryPrefixExtension(fullText, match.start, match.end);
+    const isExtended = extended !== null;
     const end = extended?.end ?? match.end;
     const text = extended?.text ?? fullText.slice(match.start, match.end);
 
@@ -147,14 +148,18 @@ export const processGazetteerMatches = (
       start: match.start,
       end,
     });
-    results.push({
+    const entity: Entity = {
       start: match.start,
       end,
       label,
       text,
       score: 0.9,
       source: DETECTION_SOURCES.GAZETTEER,
-    });
+    };
+    if (isExtended) {
+      entity.sourceDetail = "gazetteer-extension";
+    }
+    results.push(entity);
   }
 
   // Pass 2: fuzzy matches (isFuzzy === true),

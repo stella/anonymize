@@ -1,7 +1,6 @@
-import { beforeAll, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { sanitizeEntities } from "../pipeline";
 import type { DetectionSource, Entity } from "../types";
-import { initStreetAbbrevs } from "../filters/confidence-boost";
 
 const make = (
   text: string,
@@ -22,10 +21,6 @@ const trim = (text: string, label?: string): string => {
 };
 
 describe("sanitizeEntities — trailing typographic punctuation", () => {
-  beforeAll(async () => {
-    await initStreetAbbrevs();
-  });
-
   test("strips ASCII double quote", () => {
     expect(trim(`Bond Hedge Documentation"`)).toBe("Bond Hedge Documentation");
   });
@@ -97,6 +92,10 @@ describe("sanitizeEntities — trailing typographic punctuation", () => {
     expect(trim("123 Main St.", "address")).toBe("123 Main St.");
   });
 
+  test("preserves location abbreviation period", () => {
+    expect(trim("Washington, D.C.", "location")).toBe("Washington, D.C.");
+  });
+
   test("strips non-abbreviation periods from address spans", () => {
     expect(
       trim("Kodaňská 1441/46, Vršovice, 101 00 Praha 10.", "address"),
@@ -130,6 +129,14 @@ describe("sanitizeEntities — trailing typographic punctuation", () => {
       make("Acme Inc.,", "organization", "gazetteer"),
     ]);
     expect(extendedGazetteer?.text).toBe("Acme Inc.");
+
+    const [punctuatedGazetteerExtension] = sanitizeEntities([
+      {
+        ...make("Acme GmbH!", "organization", "gazetteer"),
+        sourceDetail: "gazetteer-extension",
+      },
+    ]);
+    expect(punctuatedGazetteerExtension?.text).toBe("Acme GmbH");
   });
 
   test("drops entity that becomes empty after trim", () => {
