@@ -1,0 +1,52 @@
+{
+  "_comment": "Structural document-unit words that can precede a single-letter or letter-number marker before a legal form word, e.g. 'Schedule A LLC Members' or 'Exhibit A-1 LLC Agreement'. Lowercased; matched case-insensitively. Organised per-language; runtime unions all languages because match spans do not carry a language tag.",
+  "en": [
+    "annex",
+    "appendix",
+    "article",
+    "attachment",
+    "clause",
+    "exhibit",
+    "paragraph",
+    "part",
+    "schedule",
+    "section"
+  ],
+  "cs": ["bod", "paragraf", "podbod", "ustanovení", "článek"],
+  "sk": [
+    "bod",
+    "hlava",
+    "oddiel",
+    "odsek",
+    "pododdiel",
+    "sekcia",
+    "časť",
+    "článok"
+  ],
+  "de": [
+    "absatz",
+    "abschnitt",
+    "abteilung",
+    "anlage",
+    "anhang",
+    "artikel",
+    "kapitel",
+    "klausel",
+    "punkt",
+    "sektion",
+    "unterabschnitt",
+    "unterpunkt"
+  ],
+  "es": ["anexo", "apartado", "artículo", "cláusula", "sección"],
+  "fr": ["annexe", "article", "clause", "paragraphe", "partie", "section"],
+  "it": [
+    "allegato",
+    "appendice",
+    "articolo",
+    "clausola",
+    "paragrafo",
+    "sezione"
+  ],
+  "pl": ["aneksem", "artykuł", "paragraf", "punkt", "sekcja", "załącznik"],
+  "pt-br": ["anexo", "artigo", "cláusula", "parágrafo", "seção"]
+}

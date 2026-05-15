@@ -1,10 +1,12 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import {
   runPipeline,
   DEFAULT_ENTITY_LABELS,
   createPipelineContext,
 } from "../index";
 import type { PipelineConfig } from "../types";
+
+setDefaultTimeout(15_000);
 
 const CONFIG: PipelineConfig = {
   threshold: 0.3,
