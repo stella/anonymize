@@ -603,6 +603,52 @@ export const warmAddressStopKeywords = async (): Promise<void> => {
   await loadAddressStopKeywords();
 };
 
+// Hard cap for unterminated trigger values. Applies to
+// strategies that scan forward until a delimiter
+// (`to-next-comma`, `to-end-of-line`). Prevents a missing
+// delimiter — common in HTML-flattened or single-paragraph
+// PDFs where a whole signature block lives on one line —
+// from turning a trigger into a multi-hundred-character
+// entity. 100 chars covers normal full-name + address
+// lines while bounding pathological inputs.
+const MAX_TRIGGER_VALUE_LEN = 100;
+const MIN_TRIGGER_PHONE_DIGITS = 5;
+const PHONE_VALUE_START_RE = /^[+(\d]/;
+const ISO_DATE_PREFIX_RE = /^\d{4}-\d{2}-\d{2}\b/;
+const INLINE_FIELD_LABEL_RE = /\b[\p{L}][\p{L}\p{M} /-]{1,32}:/u;
+const INLINE_FIELD_LABEL_STOP_RE =
+  /(?:^|[^\S\n\t])[\p{L}][\p{L}\p{M} /-]{1,32}:/u;
+
+const capAtWordBoundary = (valueText: string, cap: number): number => {
+  let capped = cap;
+  const isWordChar = (i: number): boolean =>
+    /[\p{L}\p{N}]/u.test(valueText[i] ?? "");
+  while (capped > 0 && isWordChar(capped - 1) && isWordChar(capped)) {
+    capped--;
+  }
+  return capped;
+};
+
+const isPlausiblePhoneTriggerValue = (value: string): boolean => {
+  const trimmed = value.trimStart();
+  if (!PHONE_VALUE_START_RE.test(trimmed)) {
+    return false;
+  }
+  if (ISO_DATE_PREFIX_RE.test(trimmed)) {
+    return false;
+  }
+  if (INLINE_FIELD_LABEL_RE.test(trimmed)) {
+    return false;
+  }
+  let digits = 0;
+  for (const ch of trimmed) {
+    if (/\d/.test(ch)) {
+      digits++;
+    }
+  }
+  return digits >= MIN_TRIGGER_PHONE_DIGITS;
+};
+
 const extractValue = (
   text: string,
   triggerEnd: number,
@@ -715,13 +761,7 @@ const extractValue = (
       // the returned span never ends mid-word.
       const lengthCap = strategy.maxLength ?? 100;
       if (end > lengthCap) {
-        let capped = lengthCap;
-        const isWordChar = (i: number): boolean =>
-          /[\p{L}\p{N}]/u.test(valueText[i] ?? "");
-        while (capped > 0 && isWordChar(capped - 1) && isWordChar(capped)) {
-          capped--;
-        }
-        end = capped;
+        end = capAtWordBoundary(valueText, lengthCap);
       }
 
       const rawSlice = valueText.slice(0, end);
@@ -751,13 +791,35 @@ const extractValue = (
       }
       // Stop at newline or tab (tab separates cells
       // in DOCX table rows).
-      const LINE_STOPS = ["\n"];
+      const LINE_STOPS = ["\n", "\t"];
       let end = valueText.length;
+      let foundLineStop = false;
       for (const ch of LINE_STOPS) {
         const idx = valueText.indexOf(ch);
         if (idx !== -1 && idx < end) {
           end = idx;
+          foundLineStop = true;
         }
+      }
+      if (label === "phone number") {
+        const inlineLabel = INLINE_FIELD_LABEL_STOP_RE.exec(
+          valueText.slice(0, end),
+        );
+        if (inlineLabel) {
+          end = inlineLabel.index;
+          foundLineStop = true;
+        }
+      }
+      // Cap only when no real line delimiter was found. HTML-
+      // flattened text and signature blocks routinely pack
+      // hundreds of chars (a chain of "Phone:" / "Name:"
+      // pseudo-fields) onto one logical line; newline-terminated
+      // values should still capture through the delimiter.
+      if (!foundLineStop) {
+        end = capAtWordBoundary(
+          valueText,
+          Math.min(end, MAX_TRIGGER_VALUE_LEN),
+        );
       }
       const rawSlice = valueText.slice(0, end);
       const extracted = rawSlice.trim();
@@ -1224,6 +1286,22 @@ export const processTriggerMatches = (
       // like min-length should test the extracted
       // value, not the trigger keyword itself.
       if (!applyValidations(value.text, rule.validations)) {
+        continue;
+      }
+
+      // Label-shape invariant: a phone-number entity
+      // must start like a phone value and contain enough
+      // digits. Triggers like
+      // a multilingual "Phone:" / "PHONE:" / "Tel.:"
+      // can fire on signature blocks where the digit
+      // value is blank ("Phone: Date: 2026-05-15 ...");
+      // without this check the strategy emits a long
+      // high-priority phone entity that can overlap and
+      // suppress the later real phone number.
+      if (
+        rule.label === "phone number" &&
+        !isPlausiblePhoneTriggerValue(value.text)
+      ) {
         continue;
       }
 
