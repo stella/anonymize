@@ -612,6 +612,22 @@ export const warmAddressStopKeywords = async (): Promise<void> => {
 // entity. 100 chars covers normal full-name + address
 // lines while bounding pathological inputs.
 const MAX_TRIGGER_VALUE_LEN = 100;
+const MIN_TRIGGER_PHONE_DIGITS = 5;
+const PHONE_VALUE_START_RE = /^[+(\d]/;
+
+const isPlausiblePhoneTriggerValue = (value: string): boolean => {
+  const trimmed = value.trimStart();
+  if (!PHONE_VALUE_START_RE.test(trimmed)) {
+    return false;
+  }
+  let digits = 0;
+  for (const ch of trimmed) {
+    if (/\d/.test(ch)) {
+      digits++;
+    }
+  }
+  return digits >= MIN_TRIGGER_PHONE_DIGITS;
+};
 
 const extractValue = (
   text: string,
@@ -1248,13 +1264,18 @@ export const processTriggerMatches = (
       }
 
       // Label-shape invariant: a phone-number entity
-      // must contain at least one digit. Triggers like
+      // must start like a phone value and contain enough
+      // digits. Triggers like
       // a multilingual "Phone:" / "PHONE:" / "Tel.:"
       // can fire on signature blocks where the digit
-      // value is blank ("Phone: Date: ..."); without
-      // this check the strategy emits a digitless
-      // entity that no downstream consumer can use.
-      if (rule.label === "phone number" && !/\d/.test(value.text)) {
+      // value is blank ("Phone: Date: 2026-05-15 ...");
+      // without this check the strategy emits a long
+      // high-priority phone entity that can overlap and
+      // suppress the later real phone number.
+      if (
+        rule.label === "phone number" &&
+        !isPlausiblePhoneTriggerValue(value.text)
+      ) {
         continue;
       }
 

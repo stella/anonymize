@@ -44,20 +44,22 @@ const detect = async (text: string) =>
 // single logical line stretches for hundreds of chars.
 describe("trigger value length cap", () => {
   test("to-end-of-line trigger does not consume a multi-field signature block", async () => {
-    // Synthetic input: a blank "Phone:" field followed by
+    // Synthetic input: a bank-account field followed by
     // a long chain of other form labels on the same line.
     // Matches the failure shape observed on real estate
     // exhibits where HTML stripping concatenates
-    // signature blocks onto one logical line. Uses
-    // generic placeholder labels — no doc-specific text.
+    // signature blocks onto one logical line.
+    const account = "CZ6508000000192000145399";
     const filler = "Date: Name: Title: Address: Phone: Fax: ".repeat(8).trim();
-    const text = `Signatory block. Phone: +1 ${filler}`;
+    const text = `Signatory block. Bankovní spojení: ${account} ${filler}`;
 
     const entities = await detect(text);
-    const phones = entities.filter((e) => e.label === "phone number");
-    expect(phones.length).toBeGreaterThan(0);
-    for (const phone of phones) {
-      expect(phone.text.length).toBeLessThanOrEqual(100);
+    const bankAccounts = entities.filter(
+      (e) => e.label === "bank account number",
+    );
+    expect(bankAccounts.length).toBeGreaterThan(0);
+    for (const bankAccount of bankAccounts) {
+      expect(bankAccount.text.length).toBeLessThanOrEqual(100);
     }
   });
 
@@ -78,17 +80,22 @@ describe("trigger value length cap", () => {
   });
 
   test("phone-label trigger entity must contain digits", async () => {
-    // Same shape, but check the label-shape invariant
-    // directly: any phone-number entity returned by the
-    // trigger pipeline carries at least one digit.
+    // Same shape, but check the label-shape invariant:
+    // a blank phone label followed by other digit-bearing
+    // fields must not create a long high-priority phone
+    // entity that overlaps and suppresses the later real
+    // phone value.
     const text =
-      "Phone: Date: SSN or FEIN: Address: Phone: Fax:\n" +
+      "Phone: Date: 2026-05-15 SSN or FEIN: 12-3456789 Address: " +
       "Phone: +1 (555) 123-4567\n";
 
     const entities = await detect(text);
     const phones = entities.filter((e) => e.label === "phone number");
+    expect(phones.length).toBeGreaterThan(0);
+    expect(phones.some((e) => e.text.includes("555"))).toBe(true);
     for (const phone of phones) {
-      expect(phone.text).toMatch(/\d/);
+      expect(phone.text).not.toContain("Date:");
+      expect(phone.text.trimStart()).toMatch(/^[+(\d]/);
     }
   });
 
