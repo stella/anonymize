@@ -61,23 +61,35 @@ const getAllowList = (ctx: PipelineContext): ReadonlySet<string> =>
 
 /**
  * Curated dictionary entries that are pure dotted
- * single-letter acronyms (e.g. `S.C.`, `D.D.C.`, `H.M.G.`)
- * are dropped at build time. The AC search matches
+ * single-letter acronyms (e.g. `S.C.`, `D.N.J.`, `C.E.C.`)
+ * need targeted suffix guards. The AC search matches
  * case-insensitively on token boundaries where `.` is not
- * a word character, so any such short acronym collides
- * with a longer dotted citation that ends in the same
- * letters — `S.C.` matches inside `U.S.C.`, `D.C.` matches
- * inside `Washington D.C.`, and so on. The same
- * organisations are always also listed under their full
- * name in the dictionary, so dropping the abbreviation
- * costs nothing while preventing the collision class
- * entirely. Caller-supplied custom entries are exempted
- * in case a user deliberately wants such a token redacted.
+ * a word character, so `S.C.` can match inside `U.S.C.`.
+ * Two-segment non-address aliases are too noisy and are
+ * dropped at build time; longer official aliases stay
+ * searchable and are only suppressed when the source text
+ * shows they are the tail of a longer dotted token.
+ * Caller-supplied custom entries are exempted.
  */
 const DOTTED_ACRONYM_RE = /^(?=.{3,}$)\p{L}(?:\.\p{L}){0,3}\.?$/u;
 
 const isCuratedNoiseAcronym = (normalized: string): boolean =>
   DOTTED_ACRONYM_RE.test(normalized);
+
+const dottedAcronymSegmentCount = (normalized: string): number =>
+  normalized.split(".").filter(Boolean).length;
+
+const isShortCuratedNoiseAcronym = (normalized: string): boolean =>
+  isCuratedNoiseAcronym(normalized) &&
+  dottedAcronymSegmentCount(normalized) <= 2;
+
+const isDottedAcronymSuffixCollision = (
+  fullText: string,
+  start: number,
+  matchText: string,
+): boolean =>
+  isCuratedNoiseAcronym(matchText) &&
+  /[\p{L}]\.$/u.test(fullText.slice(Math.max(0, start - 2), start));
 
 /**
  * Common EU given names present in the stopwords-iso dataset
@@ -504,7 +516,7 @@ export const buildDenyList = async (
     if (
       source !== "custom-deny-list" &&
       label !== "address" &&
-      isCuratedNoiseAcronym(normalized)
+      isShortCuratedNoiseAcronym(normalized)
     ) {
       return;
     }
@@ -856,15 +868,19 @@ export const processDenyListMatches = (
             !customPatternLabels.includes(label) && customEdgesAreValid,
         )
       : [];
+    const suffixCollision =
+      !sources.includes("custom-deny-list") &&
+      isDottedAcronymSuffixCollision(fullText, match.start, matchText);
+    const filteredCuratedLabels = suffixCollision ? [] : curatedLabels;
 
-    if (curatedLabels.length === 0 && customLabels.length === 0) {
+    if (filteredCuratedLabels.length === 0 && customLabels.length === 0) {
       continue;
     }
 
     const entry: RawMatch = {
       start: match.start,
       end: match.end,
-      labels: curatedLabels,
+      labels: filteredCuratedLabels,
       customLabels,
       sources,
       text: matchText,

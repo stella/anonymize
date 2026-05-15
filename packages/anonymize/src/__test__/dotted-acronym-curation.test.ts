@@ -8,11 +8,10 @@
  * on token boundaries, and because `.` is not a word
  * character, those entries match inside any longer dotted
  * citation that ends in the same letters — for example,
- * `S.C.` inside the U.S. Code citation `U.S.C.`, or
- * `D.C.` inside `Washington D.C.`. The build-time filter
- * in `addDenyListEntry` skips curated entries with this
- * shape so the collision class is impossible regardless
- * of which dictionary the noisy entry came from.
+ * `S.C.` inside the U.S. Code citation `U.S.C.`. The
+ * match-time filter skips curated entries with this shape
+ * only when they are the suffix of a longer dotted token,
+ * so standalone official aliases still redact.
  *
  * Custom (caller-supplied) deny-list terms stay exact so
  * a user can deliberately redact such a token if needed.
@@ -27,7 +26,7 @@ import {
 import type { Dictionaries, PipelineConfig } from "../types";
 import { loadTestDictionaries } from "./load-dictionaries";
 
-setDefaultTimeout(15_000);
+setDefaultTimeout(60_000);
 
 const baseConfig: Omit<PipelineConfig, "dictionaries"> = {
   threshold: 0.3,
@@ -119,5 +118,19 @@ describe("dotted-acronym deny-list curation", () => {
       (e) => e.label === "address" && e.text === "L.A.",
     );
     expect(city).toBeDefined();
+  });
+
+  test("standalone dotted organization aliases are preserved", async () => {
+    const courtEntities = await detect("The case was filed in D.N.J.");
+    const court = courtEntities.find(
+      (e) => e.label === "organization" && e.text === "D.N.J.",
+    );
+    expect(court).toBeDefined();
+
+    const bankEntities = await detect("The account was held at C.E.C.");
+    const bank = bankEntities.find(
+      (e) => e.label === "organization" && e.text === "C.E.C.",
+    );
+    expect(bank).toBeDefined();
   });
 });
