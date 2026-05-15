@@ -1,9 +1,14 @@
 import type { Entity } from "../types";
 
-// Common Czech words that start uppercase at sentence
-// beginnings but are not street names. Module-level
-// to avoid allocation in a hot loop.
+// Capitalised words that look like the start of an
+// `[Uppercase] [number]` address (Czech: "Vinohradská 12")
+// but in contract prose introduce a section, clause, or
+// document reference instead ("Section 6", "Article 9").
+// Listed here so the `bareHouseRe` near-address scan does
+// not promote them to address spans. Module-level to avoid
+// allocation in a hot loop.
 const BARE_STOPWORDS = new Set([
+  // ── Czech ────────────────────────────────────────
   "Příloha",
   "Smlouva",
   "Článek",
@@ -30,6 +35,44 @@ const BARE_STOPWORDS = new Set([
   "Variabilní",
   "Konstantní",
   "Specifický",
+  // ── English ──────────────────────────────────────
+  "Section",
+  "Sections",
+  "Article",
+  "Articles",
+  "Schedule",
+  "Schedules",
+  "Exhibit",
+  "Exhibits",
+  "Annex",
+  "Annexes",
+  "Appendix",
+  "Appendices",
+  "Clause",
+  "Clauses",
+  "Chapter",
+  "Chapters",
+  "Paragraph",
+  "Paragraphs",
+  "Subsection",
+  "Subsections",
+  "Form",
+  "Page",
+  "Pages",
+  "Item",
+  "Items",
+  "Note",
+  "Notes",
+  "Rule",
+  "Rules",
+  "Attachment",
+  "Attachments",
+  "Volume",
+  "Volumes",
+  "Book",
+  "Books",
+  "Part",
+  "Parts",
 ]);
 
 const NEAR_MISS_BAND = 0.15;
@@ -465,8 +508,12 @@ export const detectStreetPatternsNearAddresses = (
 // "Pražská ulice 12") or uppercase ("Národní třída 1").
 // House number requires 2+ digits to avoid matching
 // contract headings like "Příloha 1" or "Smlouva 3".
+// Inner whitespace is constrained to non-newline runs so a
+// table-of-contents block like
+// `Litigation\n  \n \n26\n` does not accidentally satisfy
+// the pattern: a real street + number sits on a single line.
 const ORPHAN_STREET_RE =
-  /^\s*(\p{Lu}[\p{Ll}\p{Lu}]+(?:\s+[\p{Lu}\p{Ll}][\p{Ll}]+)*\s+\d{2,4}[a-zA-Z]?)\s*$/gmu;
+  /^[^\S\n]*(\p{Lu}[\p{Ll}\p{Lu}]+(?:[^\S\n]+[\p{Lu}\p{Ll}][\p{Ll}]+)*[^\S\n]+\d{2,4}[a-zA-Z]?)[^\S\n]*$/gmu;
 
 /**
  * In the header zone (top 15%), find standalone lines
