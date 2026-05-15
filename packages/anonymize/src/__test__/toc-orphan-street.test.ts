@@ -94,6 +94,17 @@ describe("TOC + orphan-street guardrails", () => {
     expect(sectionAddr).toBeUndefined();
   });
 
+  test("structural part labels near an address span are not promoted to addresses", async () => {
+    const text = "PSČ 160 00. Attachment 2 and Part 4 are referenced.";
+    const entities = await detect(text);
+    const structuralAddresses = entities.filter(
+      (e) =>
+        e.label === "address" &&
+        (e.text === "Attachment 2" || e.text === "Part 4"),
+    );
+    expect(structuralAddresses).toEqual([]);
+  });
+
   test("real header-zone single-line orphan address still fires", async () => {
     // The fix should not regress the original purpose: a
     // standalone street + number line in the header zone
