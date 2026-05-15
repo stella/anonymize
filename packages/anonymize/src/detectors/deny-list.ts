@@ -982,9 +982,10 @@ export const processDenyListMatches = (
     // chaining beyond the name corpus inside that bracketed
     // context produces unstable spans like
     // `"Bond Hedge Transactions"`-as-person.
-    const insideDefinedTermQuote = isInsideDefinedTermQuote(
+    const insideDefinedTermQuote = isSuppressibleDefinedTermQuote(
       fullText,
       first.start,
+      ctx,
     );
 
     if (insideDefinedTermQuote) {
@@ -1173,10 +1174,10 @@ const extendCityDistricts = (entities: Entity[], fullText: string): void => {
  */
 /**
  * Defined-term marker: an opening typographic or straight
- * quote sitting one character before the chain start, AND
- * a closing quote within a short window followed by a
+ * quote enclosing the chain start, AND a closing quote
+ * within a short window followed by a
  * definitional cue (`means`, `shall mean`, `shall have
- * the meaning`, `refers to`). Legal documents reserve
+ * the meaning(s)`, `refers to`). Legal documents reserve
  * this construction for defined terms; the contents are
  * not personal names even when individual tokens collide
  * with the name corpus.
@@ -1185,20 +1186,94 @@ const extendCityDistricts = (entities: Entity[], fullText: string): void => {
  * count: there is no definitional cue, so the trailing
  * surname extension is still allowed to absorb `Unknown`.
  */
-const OPENING_QUOTE_RE = /["'“„‟‘‛«]/u;
-const CLOSING_QUOTE_AND_CUE_RE =
-  /["'”’»][\s,]*(?:means|shall\s+mean|shall\s+have\s+the\s+meaning|refers?\s+to|has\s+the\s+meaning|is\s+defined)/iu;
+const OPENING_QUOTES = new Set(['"', "'", "“", "„", "‟", "‘", "‛", "«"]);
+const CLOSING_QUOTES = new Set(['"', "'", "”", "’", "»", "“"]);
+const DEFINED_TERM_CUE_RE =
+  /^[\s,]*(?:means?|shall\s+means?|shall\s+have\s+the\s+meanings?|refers?\s+to|has\s+the\s+meanings?|is\s+defined)\b/iu;
 const DEFINED_TERM_LOOKAHEAD = 120;
-const isInsideDefinedTermQuote = (text: string, start: number): boolean => {
-  if (start === 0) return false;
-  const prev = text[start - 1] ?? "";
-  if (!OPENING_QUOTE_RE.test(prev)) return false;
-  // Require a closing quote followed by a definitional
-  // cue within a short window. Plain ordinary quotations
-  // ("John Unknown" said ...) lack the cue and remain
-  // eligible for surname extension.
-  const window = text.slice(start, start + DEFINED_TERM_LOOKAHEAD);
-  return CLOSING_QUOTE_AND_CUE_RE.test(window);
+const DEFINED_TERM_LOOKBEHIND = 80;
+
+const findDefinedTermQuoteContent = (
+  text: string,
+  start: number,
+): string | null => {
+  const min = Math.max(0, start - DEFINED_TERM_LOOKBEHIND);
+  let quoteStart = -1;
+  for (let i = start - 1; i >= min; i--) {
+    const ch = text[i];
+    if (ch === "\n") {
+      break;
+    }
+    if (ch && OPENING_QUOTES.has(ch)) {
+      quoteStart = i;
+      break;
+    }
+    if (ch && CLOSING_QUOTES.has(ch)) {
+      break;
+    }
+  }
+  if (quoteStart === -1) {
+    return null;
+  }
+
+  const max = Math.min(text.length, quoteStart + 1 + DEFINED_TERM_LOOKAHEAD);
+  for (let i = start; i < max; i++) {
+    const ch = text[i];
+    if (!ch || !CLOSING_QUOTES.has(ch)) {
+      continue;
+    }
+    const after = text.slice(i + 1, max);
+    if (!DEFINED_TERM_CUE_RE.test(after)) {
+      return null;
+    }
+    return text.slice(quoteStart + 1, i);
+  }
+
+  return null;
+};
+
+const FIRST_WORD_RE = /^\p{L}+/u;
+const WORD_RE = /\p{L}+/gu;
+
+const startsWithKnownFirstName = (
+  quoteContent: string,
+  ctx: PipelineContext,
+): boolean => {
+  const firstWord = FIRST_WORD_RE.exec(quoteContent.trim())?.[0];
+  if (!firstWord) {
+    return false;
+  }
+  const firstNames = new Set(
+    getNameCorpusFirstNames(ctx).map((name) => name.toLowerCase()),
+  );
+  return firstNames.has(firstWord.toLowerCase());
+};
+
+const isSuppressibleDefinedTermQuote = (
+  text: string,
+  start: number,
+  ctx: PipelineContext,
+): boolean => {
+  const quoteContent = findDefinedTermQuoteContent(text, start);
+  if (quoteContent === null) {
+    return false;
+  }
+
+  const words = quoteContent.match(WORD_RE) ?? [];
+
+  // A quoted defined term can itself be a real person:
+  // `"John Smith" shall mean the employee...`. Keep compact
+  // first-name-led two-word chains; there is no separate
+  // name-corpus detector fallback when deny-list mode owns
+  // the name pass. Longer capitalized defined terms such as
+  // `"Blue Sky Laws"` or `"Bond Hedge Transactions"` remain
+  // suppressible even when their first token happens to be
+  // present in a given-name corpus.
+  if (words.length <= 2 && startsWithKnownFirstName(quoteContent, ctx)) {
+    return false;
+  }
+
+  return words.length >= 2;
 };
 
 const extendPersonName = (

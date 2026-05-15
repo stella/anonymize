@@ -19,6 +19,7 @@ import {
   runPipeline,
 } from "../index";
 import type { Entity, PipelineConfig } from "../types";
+import type { PipelineContext } from "../context";
 import { loadTestDictionaries } from "./load-dictionaries";
 
 const baseConfig: Omit<PipelineConfig, "dictionaries"> = {
@@ -38,14 +39,25 @@ const baseConfig: Omit<PipelineConfig, "dictionaries"> = {
   workspaceId: "deny-list-curation-test",
 };
 
+let dictionariesPromise: ReturnType<typeof loadTestDictionaries> | undefined;
+const getDictionaries = () => {
+  dictionariesPromise ??= loadTestDictionaries();
+  return dictionariesPromise;
+};
+
+let sharedContext: PipelineContext | undefined;
+const getContext = (): PipelineContext => {
+  sharedContext ??= createPipelineContext();
+  return sharedContext;
+};
+
 const detect = async (fullText: string): Promise<Entity[]> => {
-  const dictionaries = await loadTestDictionaries();
-  const context = createPipelineContext();
+  const dictionaries = await getDictionaries();
   return runPipeline({
     fullText,
     config: { ...baseConfig, dictionaries },
     gazetteerEntries: [],
-    context,
+    context: getContext(),
   });
 };
 
@@ -149,6 +161,35 @@ describe("deny-list curation", () => {
     const entities = await detect(text);
     const definedTermPerson = entities.find(
       (e) => e.label === "person" && e.text.includes("Bond"),
+    );
+    expect(definedTermPerson).toBeUndefined();
+  });
+
+  test("real person name inside defined-term quote is still emitted", async () => {
+    const text =
+      '"John Smith" shall mean the employee named in this Agreement.';
+    const entities = await detect(text);
+    const person = entities.find(
+      (e) => e.label === "person" && e.text === "John Smith",
+    );
+    expect(person).toBeDefined();
+  });
+
+  test("prefixed defined-term quote is suppressed even when name hit is not first", async () => {
+    const text = '"Applicable Blue Sky Laws" shall mean state securities laws.';
+    const entities = await detect(text);
+    const definedTermPerson = entities.find(
+      (e) => e.label === "person" && e.text.includes("Blue"),
+    );
+    expect(definedTermPerson).toBeUndefined();
+  });
+
+  test("German quote and plural meaning cue are treated as defined-term syntax", async () => {
+    const text =
+      "„Blue Sky Laws“ shall have the meanings set forth in Section 1.1.";
+    const entities = await detect(text);
+    const definedTermPerson = entities.find(
+      (e) => e.label === "person" && e.text.includes("Blue"),
     );
     expect(definedTermPerson).toBeUndefined();
   });
