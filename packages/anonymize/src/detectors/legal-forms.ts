@@ -525,6 +525,16 @@ const findWordBefore = (
   return { word, start: wordStart };
 };
 
+const hasSingleCapPrefixBefore = (
+  fullText: string,
+  matchStart: number,
+): boolean => {
+  const prev = findWordBefore(fullText, matchStart);
+  return (
+    prev !== null && prev.word.length === 1 && UPPER_LETTER_RE.test(prev.word)
+  );
+};
+
 /**
  * Count consecutive uppercase-starting words immediately
  * before `pos`. Stops at the first non-upper word or at
@@ -611,13 +621,23 @@ const extendBackward = (
       // Uppercase word — always accept
       pos = wordStart;
     } else if (isConnector) {
-      if (
-        AND_TYPE_CONNECTOR_RE.test(word) &&
-        countUpperWordsBefore(fullText, wordStart) >= 2
-      ) {
-        // Looks like "<First> <Last> and <ORG>" — keep
-        // the person name out of the org span.
-        break;
+      if (AND_TYPE_CONNECTOR_RE.test(word)) {
+        const upperWordsBefore = countUpperWordsBefore(fullText, wordStart);
+        const personNameBoundary =
+          upperWordsBefore >= 2 && upperWordsBefore <= 3;
+        const singleCapCompanyAfterBoundary =
+          suffixMode && hasSingleCapPrefixBefore(fullText, matchStart);
+        if (
+          personNameBoundary &&
+          (!suffixMode || singleCapCompanyAfterBoundary)
+        ) {
+          // Looks like "<First> <Last> and <ORG>" or
+          // "<First> M. <Last> and X Holdings, Inc.".
+          // Keep the person name out of the org span while
+          // still allowing longer internal company names such
+          // as "UniCredit Bank Czech Republic and Slovakia, a.s."
+          break;
+        }
       }
       // Connector — only accept if there is a valid
       // (uppercase-starting) word before it
