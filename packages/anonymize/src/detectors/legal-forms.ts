@@ -82,6 +82,12 @@ const getSentenceVerbIndicatorsSync = (): ReadonlySet<string> =>
 const UPPER = "A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽÄÖÜÀÂÆÇÈÊËÎÏÔÙÛŸÑĄĆĘŁŃŚŹŻ\\u0130";
 const LOWER = "a-záčďéěíňóřšťúůýžäöüßàâæçèêëîïôùûÿñąćęłńśźż\\u0131";
 const CAP_WORD = `(?:[${UPPER}]{2,}|[${UPPER}][${LOWER}${UPPER}]+)`;
+// Standalone single uppercase letter — used inside company
+// names like "X Holdings I, Inc." or "X Corp." where the
+// company token or a Roman-numeral-shaped suffix is one
+// character long. The negative lookahead keeps it from
+// eating the first letter of a real multi-letter Cap word.
+const SINGLE_CAP = `[${UPPER}](?![${LOWER}${UPPER}])`;
 // All-caps word: 2+ uppercase letters, no lowercase.
 // For company names like "EAGLES BRNO", max 3 words.
 const ALLCAP_WORD = `[${UPPER}]{2,}`;
@@ -297,8 +303,13 @@ const buildPatternString = (forms: string[]): string | null => {
   const SIMPLE_SEP = `(?:${HSPACE}|[&,.${DASH_INNER}]){1,4}`;
   // Uppercase- or digit-only word for the strict head.
   // Lowercase-starting tokens can only appear in the
-  // optional tail below.
-  const CAP_OR_NUM_WORD = `(?:${CAP_WORD}|\\d{1,4})`;
+  // optional tail below. Single uppercase letters
+  // ("I", "X") are accepted so party names like
+  // "X Holdings I, Inc." survive the head walk —
+  // standalone single-cap heads still need a real cap
+  // word continuation or the trailing legal-form suffix
+  // to anchor the match.
+  const CAP_OR_NUM_WORD = `(?:${CAP_WORD}|${SINGLE_CAP}|\\d{1,4})`;
   // A lowercase-starting word, excluding "and"/"und"/
   // "et" so they cannot sneak past the connector guard.
   const LOWER_WORD =
@@ -417,6 +428,24 @@ export const buildLegalFormPatterns = async (): Promise<string[]> => {
     .join("|");
   patterns.push(
     `${allcapPrefix}(?:[ \\t]+|,[ \\t]*)` + `(?:${allcapAlt})(?![${LOWER}])`,
+  );
+
+  // Single-letter company name immediately followed by a
+  // legal-form suffix ("X Corp.", "X Inc."). Kept on its
+  // own narrow pattern with a tight horizontal-space-only
+  // separator so digits or stray Cap letters between the
+  // initial and the suffix do not anchor a sweep — the
+  // generic head pattern above stays at 2+ characters to
+  // avoid lighting up on Czech postcode rows like
+  // "PSČ 466 01\tPS" where a single uppercase letter sits
+  // far ahead of the suffix.
+  const singleCapAlt = allForms
+    .toSorted((a, b) => b.length - a.length)
+    .map(escapeForRegex)
+    .join("|");
+  patterns.push(
+    `(?:^|(?<=[^${UPPER}${LOWER}\\p{N}]))[${UPPER}][ \\t]+` +
+      `(?:${singleCapAlt})(?![${LOWER}])`,
   );
 
   return patterns;
