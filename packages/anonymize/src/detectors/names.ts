@@ -301,9 +301,41 @@ const isCorpusMatch = (type: TokenType): boolean =>
 
 // ── Token classification ─────────────────────────────
 
+// True when the line containing `start` is itself
+// predominantly upper-case (signature block, title
+// block, party caption). Used so the acronym filter
+// below can still match all-caps tokens that match
+// the name corpus in title-case ("ELON R. MUSK") while
+// still rejecting acronyms in mixed-case prose.
+const ALL_CAPS_NAME_LINE_RATIO = 0.9;
+const ALL_CAPS_NAME_LINE_MIN_LETTERS = 3;
+const isAllCapsContextLine = (fullText: string, start: number): boolean => {
+  const lineStart = fullText.lastIndexOf("\n", start - 1) + 1;
+  const lineEndIdx = fullText.indexOf("\n", start);
+  const line = fullText.slice(
+    lineStart,
+    lineEndIdx === -1 ? fullText.length : lineEndIdx,
+  );
+  let letters = 0;
+  let upper = 0;
+  for (const ch of line) {
+    if (/\p{L}/u.test(ch)) {
+      letters += 1;
+      if (ch === ch.toUpperCase() && ch !== ch.toLowerCase()) {
+        upper += 1;
+      }
+    }
+  }
+  if (letters < ALL_CAPS_NAME_LINE_MIN_LETTERS) {
+    return false;
+  }
+  return upper / letters >= ALL_CAPS_NAME_LINE_RATIO;
+};
+
 const classifyToken = (
   word: WordSegment,
   corpus: NameCorpusData,
+  fullText: string,
 ): ClassifiedToken => {
   const { text, start, end } = word;
   const lower = text.toLowerCase();
@@ -334,8 +366,21 @@ const classifyToken = (
     return { text, type: TOKEN_TYPE.OTHER, start, end };
   }
 
-  // Skip all-uppercase tokens > 3 chars (likely acronyms)
+  // All-uppercase tokens > 3 chars are usually acronyms,
+  // but in a signature or title block they are real
+  // names rendered in caps ("ELON R. MUSK"). Allow the
+  // corpus lookup in title-case only when the line
+  // itself is overwhelmingly upper-case.
   if (text.length > 3 && ALL_UPPER_RE.test(text)) {
+    if (isAllCapsContextLine(fullText, start)) {
+      const titleCased = (text[0] ?? "") + text.slice(1).toLowerCase();
+      if (isFirstNameToken(titleCased, corpus)) {
+        return { text, type: TOKEN_TYPE.NAME, start, end };
+      }
+      if (isSurnameToken(titleCased, corpus)) {
+        return { text, type: TOKEN_TYPE.SURNAME, start, end };
+      }
+    }
     return { text, type: TOKEN_TYPE.OTHER, start, end };
   }
 
@@ -389,7 +434,7 @@ export const detectNameCorpus = (
   }
 
   const words = segmentWords(fullText);
-  const tokens = words.map((w) => classifyToken(w, corpus));
+  const tokens = words.map((w) => classifyToken(w, corpus, fullText));
   const entities: Entity[] = [];
   const consumed = new Set<number>();
 

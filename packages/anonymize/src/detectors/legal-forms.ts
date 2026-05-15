@@ -907,12 +907,16 @@ const splitEmbeddedLegalFormList = (
         continue;
       }
 
+      // Cut at every list boundary that immediately
+      // follows a legal-form suffix. The left segment
+      // is a complete org; the right segment is filtered
+      // below by the per-segment suffix gate. Previously
+      // we required the *right* side to end in a suffix
+      // too, which let lists like "Morgan Stanley & Co.
+      // LLC, Bank of America" be captured as one org
+      // because the trailing "Bank of America" lacks a
+      // suffix.
       const nextStart = suffixEnd + boundary[0].length;
-      const remainder = entityText.slice(nextStart);
-      if (!getAllLegalSuffixesSync().some((form) => remainder.endsWith(form))) {
-        continue;
-      }
-
       cuts.push(nextStart);
     }
   }
@@ -931,6 +935,17 @@ const splitEmbeddedLegalFormList = (
     }
     const segmentText = entityText.slice(start, end).replace(/[,\s;]+$/u, "");
     if (segmentText.length === 0) {
+      continue;
+    }
+    // Skip the segment unless it ends with a recognised
+    // legal-form suffix. This drops the right-hand side
+    // of a list-cut when only the left side carries a
+    // suffix (see split note above), letting other
+    // detectors claim the remainder if appropriate.
+    const endsWithSuffix = getAllLegalSuffixesSync().some((form) =>
+      segmentText.endsWith(form),
+    );
+    if (!endsWithSuffix) {
       continue;
     }
     segments.push({

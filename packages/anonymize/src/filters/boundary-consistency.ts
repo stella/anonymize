@@ -204,9 +204,18 @@ const mergeAdjacent = (entities: Entity[], fullText: string): Entity[] => {
     if (
       !hasLockedBoundary(prev) &&
       !(
-        isLegalFormOrganization(prev) &&
-        isLegalFormOrganization(entity) &&
-        gap.includes(",")
+        // A legal-form match has a precise regex-bounded
+        // extent; never extend it across a comma into a
+        // sibling org span, even if that sibling came
+        // from a probabilistic source. This stops list
+        // items like "Morgan Stanley & Co. LLC, Bank of
+        // America Merrill Lynch" from collapsing into a
+        // single span just because the deny-list detected
+        // "Bank of America" next door.
+        (
+          (isLegalFormOrganization(prev) || isLegalFormOrganization(entity)) &&
+          gap.includes(",")
+        )
       ) &&
       !gapOccupied &&
       gap.length <= MAX_GAP &&
