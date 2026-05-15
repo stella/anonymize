@@ -30,10 +30,10 @@ const getCtx = (): PipelineContext => {
   return sharedCtx;
 };
 
-const detect = async (text: string) =>
+const detect = async (text: string, override?: Partial<PipelineConfig>) =>
   runPipeline({
     fullText: text,
-    config: CONFIG,
+    config: { ...CONFIG, ...override },
     gazetteerEntries: [],
     context: getCtx(),
   });
@@ -79,6 +79,41 @@ describe("trigger value length cap", () => {
     expect(bankAccount!.text).toBe(account.trim());
   });
 
+  test("tab-terminated trigger value longer than cap is preserved", async () => {
+    const account =
+      "CZ6508000000192000145399 " +
+      "payment instructions ".repeat(6) +
+      "variable symbol 123456";
+    expect(account.length).toBeGreaterThan(100);
+
+    const text = `Bankovní spojení: ${account}\tNext cell.`;
+    const entities = await detect(text);
+    const bankAccount = entities.find(
+      (e) => e.label === "bank account number" && e.text.includes("123456"),
+    );
+    expect(bankAccount).toBeDefined();
+    expect(bankAccount!.text).toBe(account.trim());
+  });
+
+  test("unterminated cap does not cut through account numbers", async () => {
+    const iban = "CZ6508000000192000145399";
+    const prose = "payment instructions ".repeat(4);
+    const text = `Bankovní spojení: ${prose}${iban} trailing words without delimiter`;
+
+    const entities = await detect(text);
+    expect(entities.some((e) => e.label === "iban" && e.text === iban)).toBe(
+      true,
+    );
+    expect(
+      entities.some(
+        (e) =>
+          e.label === "bank account number" &&
+          e.text !== iban &&
+          e.text.includes(iban.slice(0, 8)),
+      ),
+    ).toBe(false);
+  });
+
   test("phone-label trigger entity must contain digits", async () => {
     // Same shape, but check the label-shape invariant:
     // a blank phone label followed by other digit-bearing
@@ -111,6 +146,15 @@ describe("trigger value length cap", () => {
       expect(phone.text).not.toContain("SSN");
       expect(phone.text).not.toContain("Address:");
     }
+  });
+
+  test("phone-label trigger keeps valid prefix before later inline labels", async () => {
+    const text = "PHONE: 555-12345 FAX: 555-99999\n";
+
+    const entities = await detect(text, { enableRegex: false });
+    const phones = entities.filter((e) => e.label === "phone number");
+    expect(phones.some((e) => e.text === "555-12345")).toBe(true);
+    expect(phones.every((e) => !e.text.includes("FAX"))).toBe(true);
   });
 
   test("legitimate end-of-line value below the cap is preserved verbatim", async () => {
