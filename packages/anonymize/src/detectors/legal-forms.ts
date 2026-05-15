@@ -1595,25 +1595,14 @@ export const processLegalFormMatches = (
         prefixPart.length > 2 && prefixPart === prefixPart.toUpperCase();
 
       if (isAllCapsMatch && fullText) {
-        // Check: is the surrounding line also all-caps?
-        const lineStart = fullText.lastIndexOf("\n", entityStart);
-        const lineEnd = fullText.indexOf("\n", entityStart + entityText.length);
-        const line = fullText.slice(
-          lineStart + 1,
-          lineEnd === -1 ? fullText.length : lineEnd,
-        );
-        const lineLetters = line.replace(/[^a-zA-ZÀ-ž]/g, "");
-        const upperCount = [...lineLetters].filter(
-          (c) => c === c.toUpperCase(),
-        ).length;
-        const lineIsAllCaps =
-          lineLetters.length > 5 && upperCount / lineLetters.length >= 0.95;
-        if (lineIsAllCaps) {
-          // Entire line is all-caps → heading, skip
-          continue;
-        }
-        // Only the company name is all-caps → keep it
-        // (but limit to 3 words in prefix)
+        // Boilerplate-vs-caption discrimination is
+        // handled centrally by isAllCapsBoilerplateLine
+        // in filters/false-positives.ts; we no longer
+        // duplicate it here. Keep the local guard that
+        // restores the original regex match if backward
+        // extension swept too many cap words into the
+        // prefix — the centralised post-filter still
+        // sees that restored span.
         const wordCount =
           prefixPart.length > 0
             ? entityText
@@ -1622,9 +1611,6 @@ export const processLegalFormMatches = (
                 .split(/\s+/).length
             : 0;
         if (wordCount > 3) {
-          // Keep the original regex match if backward
-          // extension alone pushed the name past the
-          // all-caps 3-word guard.
           entityStart = match.start;
           entityText = text;
           ({ prefixEnd, prefixPart } = getPrefixInfo(entityText));
@@ -1632,7 +1618,7 @@ export const processLegalFormMatches = (
             prefixPart.length > 2 && prefixPart === prefixPart.toUpperCase();
         }
       } else if (isAllCapsMatch) {
-        // No fullText available — fall back to rejecting
+        // No fullText available — fall back to rejecting.
         continue;
       }
 

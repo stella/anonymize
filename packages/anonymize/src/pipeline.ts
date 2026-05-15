@@ -4,6 +4,7 @@ import {
 } from "./detectors/coreference";
 import { processGazetteerMatches } from "./detectors/gazetteer";
 import { detectNameCorpus, initNameCorpus } from "./detectors/names";
+import { detectSignatures } from "./detectors/signatures";
 import { processRegexMatches } from "./detectors/regex";
 import {
   getKnownLegalSuffixes,
@@ -915,6 +916,18 @@ export const runPipeline = async (
   if (triggerEntities.length > 0)
     log("trigger-phrases", `${triggerEntities.length} matches`);
 
+  // Signature-block recognition. Always on: the
+  // anchors ("/s/", "Name:", "By:", "IN WITNESS
+  // WHEREOF") are unambiguous legal-document markers
+  // and produce no matches in unrelated prose.
+  const rawSignatureEntities = detectSignatures(fullText, ctx);
+  const signatureEntities = filterAllowedLabels(
+    rawSignatureEntities,
+    preHotwordAllowedLabels,
+  );
+  if (signatureEntities.length > 0)
+    log("signatures", `${signatureEntities.length} matches`);
+
   checkAbort(signal);
 
   let rawNameCorpusEntities: Entity[] = [];
@@ -1031,6 +1044,7 @@ export const runPipeline = async (
   // Address seed expansion
   const preAddressEntities = [
     ...triggerEntities,
+    ...signatureEntities,
     ...regexEntities,
     ...legalFormEntities,
     ...nameCorpusEntities,
