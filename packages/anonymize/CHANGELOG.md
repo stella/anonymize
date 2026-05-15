@@ -2,8 +2,13 @@
 
 ## Unreleased
 
+## 1.4.1 (2026-05-15)
+
 ### Fixes
 
+- Capture legal-form organization names with internal commas, single-letter party names, dotted firm initials, ampersands, and comma-separated suffixes.
+- Keep structural schedule/article/exhibit labels and ordinary sentence-final words out of legal-form organization matches.
+- Move financial magnitude and share-quantity lexicons into language data while avoiding ambiguous global suffix false positives.
 - Document the runtime package more clearly for install and browser usage.
 - Keep the data package peer dependency aligned with the published data surface.
 
