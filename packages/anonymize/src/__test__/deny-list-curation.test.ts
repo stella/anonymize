@@ -175,6 +175,35 @@ describe("deny-list curation", () => {
     expect(person).toBeDefined();
   });
 
+  test("longer real person name inside defined-term quote is still emitted", async () => {
+    const text =
+      '"John Michael Smith" shall mean the employee named in this Agreement.';
+    const entities = await detect(text);
+    const person = entities.find(
+      (e) => e.label === "person" && e.text === "John Michael Smith",
+    );
+    expect(person).toBeDefined();
+  });
+
+  test("possessive inside defined-term quote does not hide the quote boundary", async () => {
+    const text =
+      '"Borrower\'s Blue Sky Laws" shall mean state securities laws.';
+    const entities = await detect(text);
+    const definedTermPerson = entities.find(
+      (e) => e.label === "person" && e.text.includes("Blue"),
+    );
+    expect(definedTermPerson).toBeUndefined();
+  });
+
+  test("first-name legal term is suppressed without a role definition", async () => {
+    const text = '"Bond Hedge" shall mean state securities laws.';
+    const entities = await detect(text);
+    const definedTermPerson = entities.find(
+      (e) => e.label === "person" && e.text.includes("Bond"),
+    );
+    expect(definedTermPerson).toBeUndefined();
+  });
+
   test("prefixed defined-term quote is suppressed even when name hit is not first", async () => {
     const text = '"Applicable Blue Sky Laws" shall mean state securities laws.';
     const entities = await detect(text);

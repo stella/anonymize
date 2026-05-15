@@ -1192,11 +1192,31 @@ const DEFINED_TERM_CUE_RE =
   /^[\s,]*(?:means?|shall\s+means?|shall\s+have\s+the\s+meanings?|refers?\s+to|has\s+the\s+meanings?|is\s+defined)\b/iu;
 const DEFINED_TERM_LOOKAHEAD = 120;
 const DEFINED_TERM_LOOKBEHIND = 80;
+const EMPTY_GENERIC_ROLES: ReadonlySet<string> = new Set();
+
+type DefinedTermQuote = {
+  content: string;
+  afterClosingQuote: string;
+};
+
+const isLetter = (ch: string | undefined): boolean =>
+  ch !== undefined && /^\p{L}$/u.test(ch);
+
+const isApostropheInsideWord = (text: string, index: number): boolean =>
+  isLetter(text[index - 1]) && isLetter(text[index + 1]);
+
+const isQuoteBoundary = (text: string, index: number): boolean => {
+  const ch = text[index];
+  if (ch !== "'" && ch !== "’") {
+    return true;
+  }
+  return !isApostropheInsideWord(text, index);
+};
 
 const findDefinedTermQuoteContent = (
   text: string,
   start: number,
-): string | null => {
+): DefinedTermQuote | null => {
   const min = Math.max(0, start - DEFINED_TERM_LOOKBEHIND);
   let quoteStart = -1;
   for (let i = start - 1; i >= min; i--) {
@@ -1204,11 +1224,11 @@ const findDefinedTermQuoteContent = (
     if (ch === "\n") {
       break;
     }
-    if (ch && OPENING_QUOTES.has(ch)) {
+    if (ch && OPENING_QUOTES.has(ch) && isQuoteBoundary(text, i)) {
       quoteStart = i;
       break;
     }
-    if (ch && CLOSING_QUOTES.has(ch)) {
+    if (ch && CLOSING_QUOTES.has(ch) && isQuoteBoundary(text, i)) {
       break;
     }
   }
@@ -1219,14 +1239,17 @@ const findDefinedTermQuoteContent = (
   const max = Math.min(text.length, quoteStart + 1 + DEFINED_TERM_LOOKAHEAD);
   for (let i = start; i < max; i++) {
     const ch = text[i];
-    if (!ch || !CLOSING_QUOTES.has(ch)) {
+    if (!ch || !CLOSING_QUOTES.has(ch) || !isQuoteBoundary(text, i)) {
       continue;
     }
     const after = text.slice(i + 1, max);
     if (!DEFINED_TERM_CUE_RE.test(after)) {
       return null;
     }
-    return text.slice(quoteStart + 1, i);
+    return {
+      content: text.slice(quoteStart + 1, i),
+      afterClosingQuote: after,
+    };
   }
 
   return null;
@@ -1249,27 +1272,46 @@ const startsWithKnownFirstName = (
   return firstNames.has(firstWord.toLowerCase());
 };
 
+const hasPersonRoleDefinition = (
+  afterClosingQuote: string,
+  ctx: PipelineContext,
+): boolean => {
+  const roleWords =
+    afterClosingQuote
+      .replace(DEFINED_TERM_CUE_RE, "")
+      .match(WORD_RE)
+      ?.slice(0, 8) ?? [];
+  if (roleWords.length === 0) {
+    return false;
+  }
+
+  const genericRoles = ctx.genericRoles ?? EMPTY_GENERIC_ROLES;
+  return roleWords.some((word) => genericRoles.has(word.toLowerCase()));
+};
+
 const isSuppressibleDefinedTermQuote = (
   text: string,
   start: number,
   ctx: PipelineContext,
 ): boolean => {
-  const quoteContent = findDefinedTermQuoteContent(text, start);
-  if (quoteContent === null) {
+  const definedTermQuote = findDefinedTermQuoteContent(text, start);
+  if (definedTermQuote === null) {
     return false;
   }
 
-  const words = quoteContent.match(WORD_RE) ?? [];
+  const words = definedTermQuote.content.match(WORD_RE) ?? [];
 
   // A quoted defined term can itself be a real person:
-  // `"John Smith" shall mean the employee...`. Keep compact
-  // first-name-led two-word chains; there is no separate
-  // name-corpus detector fallback when deny-list mode owns
-  // the name pass. Longer capitalized defined terms such as
-  // `"Blue Sky Laws"` or `"Bond Hedge Transactions"` remain
-  // suppressible even when their first token happens to be
-  // present in a given-name corpus.
-  if (words.length <= 2 && startsWithKnownFirstName(quoteContent, ctx)) {
+  // `"John Smith" shall mean the employee...`. Preserve those
+  // when the definition itself points at a legal/business role
+  // from dictionary data. Legal terms such as `"Bond Hedge"`
+  // stay suppressible even if their first token collides with
+  // a given-name corpus entry.
+  if (
+    words.length >= 2 &&
+    startsWithKnownFirstName(definedTermQuote.content, ctx) &&
+    hasPersonRoleDefinition(definedTermQuote.afterClosingQuote, ctx)
+  ) {
     return false;
   }
 
