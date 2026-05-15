@@ -68,6 +68,37 @@ describe("percent / rate regex", () => {
     expect(ninety?.label).toBe("monetary amount");
   });
 
+  test("decimal comma, signed, and spaced percent forms are captured whole", async () => {
+    const text = "The 3,875% notes, -0,5 % floor, and 21 % threshold apply.";
+    const entities = await detect(text);
+    const percents = new Set(
+      entities.filter((e) => e.label === "monetary amount").map((e) => e.text),
+    );
+    for (const expected of ["3,875%", "-0,5 %", "21 %"]) {
+      expect(percents.has(expected)).toBe(true);
+    }
+    expect(percents.has("875%")).toBe(false);
+    expect(percents.has("5 %")).toBe(false);
+  });
+
+  test("grouped percentage values are captured whole", async () => {
+    const text = "The penalty rate is 1,000.25% of the reference amount.";
+    const entities = await detect(text);
+    const grouped = entities.find((e) => e.text === "1,000.25%");
+    expect(grouped?.label).toBe("monetary amount");
+  });
+
+  test("written-out percentages paired with numerals are redacted together", async () => {
+    const text =
+      "Ownership thresholds are fifty percent (50%) and sixty-five percent (65%).";
+    const entities = await detect(text);
+    const spans = new Set(
+      entities.filter((e) => e.label === "monetary amount").map((e) => e.text),
+    );
+    expect(spans.has("fifty percent (50%)")).toBe(true);
+    expect(spans.has("sixty-five percent (65%)")).toBe(true);
+  });
+
   test("trailing % is required (bare decimals are not matched)", async () => {
     const text = "The ratio 0.375 of total notes is reserved.";
     const entities = await detect(text);

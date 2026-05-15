@@ -39,6 +39,7 @@ import {
   POST_NOMINALS,
   TITLE_PREFIXES,
 } from "../config/titles";
+import amountWordsConfig from "../data/amount-words.json";
 import { DETECTION_SOURCES } from "../types";
 import type { Entity } from "../types";
 import { DASH, DASH_INNER } from "../util/char-groups";
@@ -110,6 +111,17 @@ type RegexDef = {
   label: string;
   score: number;
   validator?: Validator;
+};
+
+type PercentWordsConfig = {
+  percentages?: Array<{
+    lang: string;
+    keywords: string[];
+    ones: string[];
+    teens: string[];
+    tens: string[];
+    compoundSeparator?: string;
+  }>;
 };
 
 // ── stdnum validator entries ────────────────────────
@@ -692,17 +704,46 @@ const TIME_12H: RegexDef = {
   score: 0.9,
 };
 
-// Percentages and financial rates. Captures the form
-// `\d+(.\d+)?%` so values like `3.875%`, `5.000%`,
-// `0.25%`, and `0%` surface. Percentages are not
-// classically personally identifying, but in legal text
-// they routinely fingerprint specific debt instruments
-// (`3.875% Senior Notes due 2027`) and tax brackets;
-// labelling them as `monetary amount` keeps the
-// operator-side handling consistent with how other
-// quantitative identifiers are redacted.
+const PERCENT_NUMBER =
+  `(?:[+${DASH_INNER}])?` +
+  `(?:\\d{1,3}(?:[.,]\\d{3})+(?:[.,]\\d{1,4})?|\\d+(?:[.,]\\d{1,4})?)`;
+const PERCENT_TOKEN = `${PERCENT_NUMBER}[^\\S\\n]{0,2}%`;
+
+const buildPercentWordPattern = (config: PercentWordsConfig): string => {
+  const phrases: string[] = [];
+  for (const entry of config.percentages ?? []) {
+    const ones = entry.ones.map(escapeRegex);
+    const baseWords = [...ones, ...entry.teens, ...entry.tens].map(escapeRegex);
+    const separator = escapeRegex(entry.compoundSeparator ?? "-");
+    const word =
+      `(?:${baseWords.join("|")})` +
+      (ones.length > 0 ? `(?:${separator}(?:${ones.join("|")}))?` : "");
+    const keyword = `(?:${entry.keywords.map(escapeRegex).join("|")})`;
+    phrases.push(`${word}[^\\S\\n]+${keyword}`);
+  }
+  return phrases.length > 0 ? `(?i:(?:${phrases.join("|")}))` : "(?!)";
+};
+
+const PERCENT_WORD = buildPercentWordPattern(amountWordsConfig);
+
+// Percentages and financial rates. Captures signed numeric
+// values with dot or comma decimals, grouped thousands, and
+// locale-style spacing before `%`. Also widens written-out
+// legal thresholds paired with a numeric parenthetical
+// (`fifty percent (50%)`) so the text does not disclose the
+// exact value after only the parenthesized token is redacted.
+// Percentages are not classically personally identifying, but
+// in legal text they routinely fingerprint specific debt
+// instruments (`3.875% Senior Notes due 2027`) and tax
+// brackets; labelling them as `monetary amount` keeps the
+// operator-side handling consistent with how other quantitative
+// identifiers are redacted.
 const PERCENT_RATE: RegexDef = {
-  pattern: `\\b\\d{1,3}(?:\\.\\d{1,4})?%`,
+  pattern:
+    `(?<![\\p{L}\\p{N}_])(?:` +
+    `${PERCENT_WORD}[^\\S\\n]*\\([^\\S\\n]*${PERCENT_TOKEN}[^\\S\\n]*\\)` +
+    `|${PERCENT_TOKEN}` +
+    `)(?![\\p{L}\\p{N}_])`,
   label: "monetary amount",
   score: 0.85,
 };

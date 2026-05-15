@@ -1,5 +1,5 @@
 {
-  "_comment": "Patterns for written-out monetary amounts in parentheses, by language.",
+  "_comment": "Patterns for written-out monetary amounts and numeric percentage phrases, by language.",
   "patterns": [
     { "lang": "cs", "keywords": ["slovy", "slovně"] },
     { "lang": "sk", "keywords": ["slovom", "slovami"] },
@@ -18,5 +18,45 @@
     { "lang": "pl", "keywords": ["słownie"] },
     { "lang": "it", "keywords": ["in lettere"] },
     { "lang": "es", "keywords": ["en letras"] }
+  ],
+  "percentages": [
+    {
+      "lang": "en",
+      "keywords": ["percent"],
+      "ones": [
+        "one",
+        "two",
+        "three",
+        "four",
+        "five",
+        "six",
+        "seven",
+        "eight",
+        "nine"
+      ],
+      "teens": [
+        "ten",
+        "eleven",
+        "twelve",
+        "thirteen",
+        "fourteen",
+        "fifteen",
+        "sixteen",
+        "seventeen",
+        "eighteen",
+        "nineteen"
+      ],
+      "tens": [
+        "twenty",
+        "thirty",
+        "forty",
+        "fifty",
+        "sixty",
+        "seventy",
+        "eighty",
+        "ninety"
+      ],
+      "compoundSeparator": "-"
+    }
   ]
 }
