@@ -46,13 +46,17 @@ const detect = async (fullText: string): Promise<Entity[]> => {
 };
 
 describe("US ZIP+4 regex", () => {
-  test("ZIP+4 inside a US notice address fires as address", async () => {
-    const text = "650 Page Mill Road\nPalo Alto, CA 94304-1050\nAttn: Counsel";
+  test("ZIP+4 inside a US notice address expands to the full address", async () => {
+    const text = "650 Page Mill Road, Palo Alto, CA 94304-1050, Attn: Counsel";
     const entities = await detect(text);
-    const zip = entities.find(
-      (e) => e.label === "address" && e.text === "94304-1050",
+    const fullAddress = entities.find(
+      (e) =>
+        e.label === "address" &&
+        e.text.includes("650 Page Mill Road") &&
+        e.text.includes("Palo Alto") &&
+        e.text.includes("94304-1050"),
     );
-    expect(zip).toBeDefined();
+    expect(fullAddress).toBeDefined();
   });
 
   test("bare ZIP5 not absorbed by ZIP+4 lookaround", async () => {
@@ -68,10 +72,14 @@ describe("US ZIP+4 regex", () => {
     const text =
       "Notices shall be delivered to 100 Main St, Springfield, IL 62701-1234 at all times.";
     const entities = await detect(text);
-    const zip = entities.find(
-      (e) => e.label === "address" && e.text === "62701-1234",
+    const address = entities.find(
+      (e) =>
+        e.label === "address" &&
+        e.text.includes("Main St") &&
+        e.text.includes("Springfield") &&
+        e.text.includes("62701-1234"),
     );
-    expect(zip).toBeDefined();
+    expect(address).toBeDefined();
   });
 
   test("ZIP+4 substring inside a longer hyphenated identifier does not match", async () => {
@@ -91,6 +99,15 @@ describe("US ZIP+4 regex", () => {
     expect(spurious).toBeUndefined();
   });
 
+  test("ZIP+4 substring inside an alphanumeric identifier does not match", async () => {
+    const text = "SKU A94304-1050B was shipped to Springfield.";
+    const entities = await detect(text);
+    const spurious = entities.find(
+      (e) => e.label === "address" && e.text.includes("94304-1050"),
+    );
+    expect(spurious).toBeUndefined();
+  });
+
   test("ZIP+4 with typographic dash separators is captured", async () => {
     // OCR and professional typesetting commonly substitute
     // ASCII hyphen with en-dash (`–`) or non-breaking
@@ -100,10 +117,23 @@ describe("US ZIP+4 regex", () => {
     const nbHyphen = "Notices to 100 Main St, Palo Alto, CA 94304‑1050.";
     for (const text of [enDash, nbHyphen]) {
       const entities = await detect(text);
-      const zip = entities.find(
-        (e) => e.label === "address" && /^94304.1050$/.test(e.text),
+      const zipOrAddress = entities.find(
+        (e) => e.label === "address" && /94304.1050/.test(e.text),
       );
-      expect(zip).toBeDefined();
+      expect(zipOrAddress).toBeDefined();
     }
+  });
+
+  test("typographic ZIP+4 participates in address-seed expansion", async () => {
+    const text = "100 Main St, Palo Alto, CA 94304–1050";
+    const entities = await detect(text);
+    const fullAddress = entities.find(
+      (e) =>
+        e.label === "address" &&
+        e.text.includes("Main St") &&
+        e.text.includes("Palo Alto") &&
+        e.text.includes("94304–1050"),
+    );
+    expect(fullAddress).toBeDefined();
   });
 });

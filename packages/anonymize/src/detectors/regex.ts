@@ -628,16 +628,20 @@ const IPV6_ADDRESS: RegexDef = {
 // Uses the shared `DASH` group so values copied from PDFs
 // or OCR with typographic dash variants (en-dash, non-
 // breaking hyphen, etc.) still match. Lookbehind/lookahead
-// reject adjacent digits or dashes so longer hyphenated
-// identifiers like `12-34567-8901` or `12345-6789-0` do
-// not produce spurious ZIP+4 matches on their substrings.
+// reject adjacent letters, digits, underscores, or dashes so
+// longer identifiers like `A94304-1050B`, `12-34567-8901`,
+// or `12345-6789-0` do not produce spurious ZIP+4 matches
+// on their substrings.
 const US_ZIP_PLUS_FOUR: RegexDef = {
   pattern:
-    `(?<![\\d${DASH_INNER}])` +
+    `(?<![\\p{L}\\p{N}_${DASH_INNER}])` +
     `\\d{5}${DASH}\\d{4}` +
-    `(?![\\d${DASH_INNER}])`,
+    `(?![\\p{L}\\p{N}_${DASH_INNER}])`,
   label: "address",
-  score: 0.9,
+  // Standalone ZIP+4 is useful evidence, but a seed-expanded
+  // street/city/postal cluster should win overlap dedup so the
+  // full address is redacted when enough context exists.
+  score: 0.75,
 };
 
 // MAC: colon-only OR hyphen-only (no mixed).

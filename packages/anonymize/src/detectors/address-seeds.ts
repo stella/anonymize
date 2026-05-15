@@ -17,6 +17,8 @@ import type { Match } from "@stll/text-search";
 import { DETECTION_SOURCES } from "../types";
 import type { Entity } from "../types";
 import {
+  DASH,
+  DASH_INNER,
   OPENING_BRACKETS_INNER,
   QUOTE_DOUBLE_INNER,
   QUOTE_SINGLE_INNER,
@@ -34,6 +36,14 @@ const ADDRESS_TRAILING_TRIM_RE = new RegExp(
   `[,;:\\s${OPENING_BRACKETS_INNER}${QUOTE_DOUBLE_INNER}${QUOTE_SINGLE_INNER}′]`,
   "u",
 );
+const POSTAL_ADJACENT = `\\p{L}\\p{N}_${DASH_INNER}`;
+const POSTAL_CODE_RE = new RegExp(
+  `(?<![${POSTAL_ADJACENT}])` +
+    `(?:\\d{3}\\s\\d{2}|\\d{2}${DASH}\\d{3}|\\d{5}${DASH}\\d{3}|\\d{5}${DASH}\\d{4})` +
+    `(?![${POSTAL_ADJACENT}])`,
+  "gu",
+);
+const BR_CEP_SHAPE_RE = new RegExp(`^\\d{5}${DASH}\\d{3}$`, "u");
 
 // ── Seed types ──────────────────────────────────────
 
@@ -298,7 +308,8 @@ const collectSeeds = (
   // are distinctive enough not to need a similar gate; the
   // US ZIP+4 shape is also distinctive (the hyphen + four
   // trailing digits is unambiguous in real prose).
-  const postalRe = /\b(?:\d{3}\s\d{2}|\d{2}-\d{3}|\d{5}-\d{3}|\d{5}-\d{4})\b/g;
+  const postalRe = POSTAL_CODE_RE;
+  postalRe.lastIndex = 0;
   let postalMatch;
   while ((postalMatch = postalRe.exec(fullText)) !== null) {
     const start = postalMatch.index;
@@ -307,7 +318,7 @@ const collectSeeds = (
     if (alreadyCovered) {
       continue;
     }
-    const isCepShape = /^\d{5}-\d{3}$/.test(postalMatch[0]);
+    const isCepShape = BR_CEP_SHAPE_RE.test(postalMatch[0]);
     if (
       isCepShape &&
       (brCepContextRe === null ||
