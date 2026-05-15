@@ -74,7 +74,7 @@ const getAllowList = (ctx: PipelineContext): ReadonlySet<string> =>
  * entirely. Caller-supplied custom entries are exempted
  * in case a user deliberately wants such a token redacted.
  */
-const DOTTED_ACRONYM_RE = /^(?:\p{L}\.){1,4}\p{L}?$/u;
+const DOTTED_ACRONYM_RE = /^(?=.{3,}$)\p{L}(?:\.\p{L}){0,3}\.?$/u;
 
 const isCuratedNoiseAcronym = (normalized: string): boolean =>
   DOTTED_ACRONYM_RE.test(normalized);
@@ -501,7 +501,11 @@ export const buildDenyList = async (
     if (normalized.length === 0) {
       return;
     }
-    if (source !== "custom-deny-list" && isCuratedNoiseAcronym(normalized)) {
+    if (
+      source !== "custom-deny-list" &&
+      label !== "address" &&
+      isCuratedNoiseAcronym(normalized)
+    ) {
       return;
     }
     const lower = normalized.toLowerCase();

@@ -108,4 +108,16 @@ describe("dotted-acronym deny-list curation", () => {
     );
     expect(qa).toBeDefined();
   });
+
+  test("curated dotted city aliases are preserved as addresses", async () => {
+    // Dotted place aliases such as `L.A.` are address data,
+    // not the noisy court/bank/hospital acronym class. Keep
+    // them available for address redaction while filtering
+    // non-address dictionary collisions like `S.C.`.
+    const entities = await detect("The notice was sent to L.A.");
+    const city = entities.find(
+      (e) => e.label === "address" && e.text === "L.A.",
+    );
+    expect(city).toBeDefined();
+  });
 });
