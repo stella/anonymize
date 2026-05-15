@@ -96,6 +96,19 @@ describe("monetary amounts with magnitude suffix", () => {
     expect(money.find((e) => e.text === "100 million USD")).toBeDefined();
   });
 
+  test("captures '$25 million USD' with the leading symbol", async () => {
+    const money = findMoney(await detect("Purchase price: $25 million USD."));
+    expect(money.find((e) => e.text === "$25 million USD")).toBeDefined();
+    expect(money.find((e) => e.text === "25 million USD")).toBeUndefined();
+  });
+
+  test("does not treat stock quantities as monetary amounts", async () => {
+    const money = findMoney(
+      await detect("The fund bought 100 million AMD shares yesterday."),
+    );
+    expect(money).toHaveLength(0);
+  });
+
   test("matches uppercase plural forms ('MILLIONS')", async () => {
     // The plural `s` must sit inside the case-insensitive
     // group; otherwise uppercase plurals slip back to

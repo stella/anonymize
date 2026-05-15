@@ -994,6 +994,8 @@ const MAGNITUDE_ABBREVIATIONS_CI: readonly string[] = [
 ];
 
 const MAGNITUDE_ABBREVIATIONS_CS: readonly string[] = ["K", "M"];
+const QUANTITY_FOLLOWER_RE =
+  "(?![^\\S\\n\\t]+(?i:(?:shares?|stocks?|securities?|units?))\\b)";
 
 /**
  * Build symbol character class, code alternation,
@@ -1124,15 +1126,19 @@ const buildCurrencyPatterns = (data: CurrenciesData): string[] => {
   }
 
   // Trailing code/name: 100 USD, 1,000.50 CZK,
-  // 100000 Kč, 500 korun, 100 Fr., 25 million USD.
+  // 100000 Kč, 500 korun, 100 Fr., 25 million USD,
+  // $25 million USD.
   // Magnitude sits between the number and the code so
   // "100 million USD" parses naturally; the existing
   // 0-4 whitespace span absorbs the separator.
   if (trailingAlt) {
+    const optionalLeadingSymbol = symbols
+      ? `(?<![\\p{L}\\p{N}_])(?:[${symbols}][^\\S\\n\\t]?)?`
+      : "\\b";
     patterns.push(
-      `\\b${NUM}${DECIMAL}${MAGNITUDE}` +
+      `${optionalLeadingSymbol}${NUM}${DECIMAL}${MAGNITUDE}` +
         `[^\\S\\n\\t]{0,4}` +
-        `(?:${trailingAlt})${END}`,
+        `(?:${trailingAlt})${QUANTITY_FOLLOWER_RE}${END}`,
     );
   }
 
