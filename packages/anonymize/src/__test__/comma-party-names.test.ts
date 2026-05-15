@@ -63,6 +63,34 @@ describe("party names with internal comma before legal form", () => {
     );
   });
 
+  test("single-letter party with comma before suffix is captured", async () => {
+    const orgs = await collectOrgs(`X, Inc. signed the joinder.`);
+    expect(orgs).toContain("X, Inc.");
+  });
+
+  test("single-letter party after middle-initial person does not absorb surname", async () => {
+    const orgs = await collectOrgs(`Elon R. Musk and X Corp. signed.`);
+    expect(orgs).toContain("X Corp.");
+    expect(orgs).not.toContain("Musk and X Corp.");
+  });
+
+  test("single-letter holding company after middle-initial person does not absorb surname", async () => {
+    const orgs = await collectOrgs(
+      `Elon R. Musk and X Holdings I, Inc. signed.`,
+    );
+    expect(orgs).toContain("X Holdings I, Inc.");
+    expect(orgs).not.toContain("Musk and X Holdings I, Inc.");
+  });
+
+  test("schedule labels and uppercase word prefixes are not treated as companies", async () => {
+    const orgs = await collectOrgs(
+      `Schedule A LLC Members and Article X Corp. Governance are headings. Exhibit X SEAL is attached.`,
+    );
+    expect(orgs).not.toContain("Schedule A LLC");
+    expect(orgs).not.toContain("Article X Corp.");
+    expect(orgs).not.toContain("Exhibit X SE");
+  });
+
   test("Twitter merger preamble — all three corporate parties detected", async () => {
     const orgs = await collectOrgs(
       `THIS AGREEMENT AND PLAN OF MERGER, dated as of April 25, 2022 (this "Agreement"), is made by and among Twitter, Inc., a Delaware corporation (the "Company"), X Holdings I, Inc., a Delaware corporation ("Parent"), X Holdings II, Inc., a Delaware corporation and a direct wholly owned Subsidiary of Parent ("Acquisition Sub"), and Elon R. Musk (the "Equity Investor").`,

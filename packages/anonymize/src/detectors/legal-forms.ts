@@ -439,13 +439,9 @@ export const buildLegalFormPatterns = async (): Promise<string[]> => {
   // avoid lighting up on Czech postcode rows like
   // "PSČ 466 01\tPS" where a single uppercase letter sits
   // far ahead of the suffix.
-  const singleCapAlt = allForms
-    .toSorted((a, b) => b.length - a.length)
-    .map(escapeForRegex)
-    .join("|");
   patterns.push(
-    `(?:^|(?<=[^${UPPER}${LOWER}\\p{N}]))[${UPPER}][ \\t]+` +
-      `(?:${singleCapAlt})(?![${LOWER}])`,
+    `(?:^|(?<=[^${UPPER}${LOWER}\\p{N}]))[${UPPER}](?:[ \\t]+|,[ \\t]*)` +
+      `(?:${allcapAlt})(?![${UPPER}${LOWER}\\p{N}])`,
   );
 
   return patterns;
@@ -475,6 +471,28 @@ const COMPANY_SUFFIX_WORDS_RE =
 const IN_NAME_PREPOSITION_RE = /^(?:of|the)$/i;
 const ENTITY_HEAD_WORD_RE = /^[\p{L}\p{M}&]+/u;
 const LEADING_CLAUSE_RE = /(?:^|\s)(?:by\s+and\s+between|is\s+between)\s+/giu;
+const BARE_SINGLE_CAP_LEGAL_FORM_RE = new RegExp(
+  `^[${UPPER}](?:[ \\t]+|,[ \\t]*)`,
+  "u",
+);
+const STRUCTURAL_SINGLE_CAP_PREFIXES = new Set([
+  "Schedule",
+  "Article",
+  "Exhibit",
+  "Attachment",
+  "Appendix",
+  "Annex",
+  "Part",
+  "Section",
+]);
+const STRUCTURAL_SINGLE_CAP_RE = new RegExp(
+  `^([\\p{L}\\p{M}]+)[ \\t]+[${UPPER}](?:[ \\t]+|,[ \\t]*)`,
+  "u",
+);
+const isStructuralSingleCapMatch = (text: string): boolean => {
+  const first = STRUCTURAL_SINGLE_CAP_RE.exec(text)?.[1];
+  return first !== undefined && STRUCTURAL_SINGLE_CAP_PREFIXES.has(first);
+};
 
 /**
  * Find the word ending just before `pos` in `text`,
@@ -518,10 +536,27 @@ const countUpperWordsBefore = (fullText: string, pos: number): number => {
   let scan = pos;
   while (scan > 0) {
     const found = findWordBefore(fullText, scan);
-    if (!found) break;
-    if (!UPPER_LETTER_RE.test(found.word)) break;
-    count++;
-    scan = found.start;
+    if (found) {
+      if (!UPPER_LETTER_RE.test(found.word)) break;
+      count++;
+      scan = found.start;
+      continue;
+    }
+
+    let p = scan - 1;
+    while (p >= 0 && (fullText[p] === " " || fullText[p] === "\t")) {
+      p--;
+    }
+    if (
+      p >= 1 &&
+      fullText[p] === "." &&
+      UPPER_LETTER_RE.test(fullText[p - 1] ?? "")
+    ) {
+      count++;
+      scan = p - 1;
+      continue;
+    }
+    break;
   }
   return count;
 };
@@ -577,9 +612,8 @@ const extendBackward = (
       pos = wordStart;
     } else if (isConnector) {
       if (
-        !suffixMode &&
         AND_TYPE_CONNECTOR_RE.test(word) &&
-        countUpperWordsBefore(fullText, wordStart) === 2
+        countUpperWordsBefore(fullText, wordStart) >= 2
       ) {
         // Looks like "<First> <Last> and <ORG>" — keep
         // the person name out of the org span.
@@ -692,6 +726,9 @@ export const processLegalFormMatches = (
     const firstWordMatch = /^[\p{L}\p{M}]+(?:-[\p{L}\p{M}]+)*/u.exec(text);
     let processedStart = match.start;
     let processedText = text;
+    if (isStructuralSingleCapMatch(processedText)) {
+      continue;
+    }
     // True when the role-head trim slices the match. The
     // subsequent extendBackward step is suppressed in that case
     // — extending back would re-absorb the very prose the trim
@@ -830,7 +867,11 @@ export const processLegalFormMatches = (
     let entityStart = processedStart;
     let entityText = processedText;
     if (fullText && !trimmed) {
-      const extended = extendBackward(fullText, processedStart);
+      const shouldExtendBackward =
+        !BARE_SINGLE_CAP_LEGAL_FORM_RE.test(processedText);
+      const extended = shouldExtendBackward
+        ? extendBackward(fullText, processedStart)
+        : processedStart;
       if (extended < processedStart) {
         entityStart = extended;
         entityText = fullText
