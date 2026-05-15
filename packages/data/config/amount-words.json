@@ -23,6 +23,7 @@
     {
       "lang": "en",
       "keywords": ["percent"],
+      "standalone": ["zero", "one hundred"],
       "ones": [
         "one",
         "two",
@@ -56,7 +57,7 @@
         "eighty",
         "ninety"
       ],
-      "compoundSeparator": "-"
+      "allowSpaceCompoundSeparator": true
     }
   ]
 }

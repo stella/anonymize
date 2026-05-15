@@ -120,7 +120,8 @@ type PercentWordsConfig = {
     ones: string[];
     teens: string[];
     tens: string[];
-    compoundSeparator?: string;
+    standalone?: string[];
+    allowSpaceCompoundSeparator?: boolean;
   }>;
 };
 
@@ -704,20 +705,27 @@ const TIME_12H: RegexDef = {
   score: 0.9,
 };
 
-const PERCENT_NUMBER =
-  `(?:[+${DASH_INNER}])?` +
-  `(?:\\d{1,3}(?:[.,]\\d{3})+(?:[.,]\\d{1,4})?|\\d+(?:[.,]\\d{1,4})?)`;
+const PERCENT_NUMBER_BODY = `(?:\\d{1,3}(?:[.,]\\d{3})+(?:[.,]\\d{1,4})?|\\d+(?:[.,]\\d{1,4})?)`;
+const PERCENT_NUMBER = `(?:[+${DASH_INNER}])?${PERCENT_NUMBER_BODY}`;
 const PERCENT_TOKEN = `${PERCENT_NUMBER}[^\\S\\n]{0,2}%`;
+const PERCENT_RANGE_NUMBER = `\\d+(?:[.,]\\d{1,4})?`;
+const PERCENT_RANGE =
+  `${PERCENT_RANGE_NUMBER}[^\\S\\n]*${DASH}[^\\S\\n]*` +
+  `${PERCENT_RANGE_NUMBER}[^\\S\\n]{0,2}%`;
 
 const buildPercentWordPattern = (config: PercentWordsConfig): string => {
   const phrases: string[] = [];
   for (const entry of config.percentages ?? []) {
     const ones = entry.ones.map(escapeRegex);
+    const standalone = (entry.standalone ?? []).map(escapeRegex);
     const baseWords = [...ones, ...entry.teens, ...entry.tens].map(escapeRegex);
-    const separator = escapeRegex(entry.compoundSeparator ?? "-");
-    const word =
+    const compoundSeparator = entry.allowSpaceCompoundSeparator
+      ? `(?:${DASH}|[^\\S\\n]+)`
+      : DASH;
+    const compound =
       `(?:${baseWords.join("|")})` +
-      (ones.length > 0 ? `(?:${separator}(?:${ones.join("|")}))?` : "");
+      (ones.length > 0 ? `(?:${compoundSeparator}(?:${ones.join("|")}))?` : "");
+    const word = `(?:${[...standalone, compound].join("|")})`;
     const keyword = `(?:${entry.keywords.map(escapeRegex).join("|")})`;
     phrases.push(`${word}[^\\S\\n]+${keyword}`);
   }
@@ -740,8 +748,9 @@ const PERCENT_WORD = buildPercentWordPattern(amountWordsConfig);
 // identifiers are redacted.
 const PERCENT_RATE: RegexDef = {
   pattern:
-    `(?<![\\p{L}\\p{N}_])(?:` +
+    `(?<![\\p{L}\\p{N}_.,])(?:` +
     `${PERCENT_WORD}[^\\S\\n]*\\([^\\S\\n]*${PERCENT_TOKEN}[^\\S\\n]*\\)` +
+    `|${PERCENT_RANGE}` +
     `|${PERCENT_TOKEN}` +
     `)(?![\\p{L}\\p{N}_])`,
   label: "monetary amount",
