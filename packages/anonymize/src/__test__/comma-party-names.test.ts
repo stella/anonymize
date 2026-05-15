@@ -84,11 +84,28 @@ describe("party names with internal comma before legal form", () => {
 
   test("schedule labels and uppercase word prefixes are not treated as companies", async () => {
     const orgs = await collectOrgs(
-      `Schedule A LLC Members and Article X Corp. Governance are headings. Exhibit X SEAL is attached.`,
+      `Schedule A LLC Members and Article X Corp. Governance are headings. Exhibit X SEAL is attached. SCHEDULE A LLC Members and Exhibit A-1 LLC Agreement are labels.`,
     );
     expect(orgs).not.toContain("Schedule A LLC");
+    expect(orgs).not.toContain("A LLC");
     expect(orgs).not.toContain("Article X Corp.");
+    expect(orgs).not.toContain("X Corp.");
     expect(orgs).not.toContain("Exhibit X SE");
+    expect(orgs).not.toContain("SCHEDULE A LLC");
+    expect(orgs).not.toContain("Exhibit A-1 LLC");
+  });
+
+  test("coordinated company names before and are preserved", async () => {
+    const orgs = await collectOrgs(
+      `John Smith and Company, Inc., Acme Technologies and X Holdings I, Inc., and Acme Medical Devices and Research LLC signed.`,
+    );
+    expect(orgs).toEqual(
+      expect.arrayContaining([
+        "John Smith and Company, Inc.",
+        "Acme Technologies and X Holdings I, Inc.",
+        "Acme Medical Devices and Research LLC",
+      ]),
+    );
   });
 
   test("Twitter merger preamble — all three corporate parties detected", async () => {

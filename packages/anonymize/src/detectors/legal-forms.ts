@@ -154,6 +154,7 @@ export const warmLegalRoleHeads = async (): Promise<void> => {
     loadAllLegalSuffixes(),
     loadSentenceVerbIndicators(),
     loadClauseNounHeads(),
+    loadStructuralSingleCapPrefixes(),
   ]);
 };
 
@@ -270,6 +271,61 @@ const loadClauseNounHeads = async (): Promise<ReadonlySet<string>> => {
 
 const getClauseNounHeadsSync = (): ReadonlySet<string> =>
   clauseNounHeadsCache ?? CLAUSE_NOUN_HEADS_SEED;
+
+let structuralSingleCapPrefixesCache: ReadonlySet<string> | null = null;
+let structuralSingleCapPrefixesPromise: Promise<ReadonlySet<string>> | null =
+  null;
+
+const loadStructuralSingleCapPrefixes = async (): Promise<
+  ReadonlySet<string>
+> => {
+  if (structuralSingleCapPrefixesCache) {
+    return structuralSingleCapPrefixesCache;
+  }
+  if (structuralSingleCapPrefixesPromise) {
+    return structuralSingleCapPrefixesPromise;
+  }
+
+  structuralSingleCapPrefixesPromise = (async () => {
+    let data: Record<string, unknown> = {};
+    try {
+      const mod = await import("../data/structural-single-cap-prefixes.json");
+      const parsed =
+        (mod as { default?: Record<string, unknown> }).default ?? mod;
+      data = parsed as Record<string, unknown>;
+    } catch (err) {
+      console.warn(
+        "[anonymize] legal-forms: failed to load " +
+          "structural-single-cap-prefixes.json:",
+        err,
+      );
+    }
+
+    const all = new Set<string>();
+    for (const [key, value] of Object.entries(data)) {
+      if (key.startsWith("_")) {
+        continue;
+      }
+      if (!Array.isArray(value)) {
+        continue;
+      }
+      for (const prefix of value) {
+        if (typeof prefix !== "string" || prefix.length === 0) {
+          continue;
+        }
+        all.add(prefix.toLowerCase());
+      }
+    }
+
+    structuralSingleCapPrefixesCache = all;
+    return all;
+  })();
+
+  return structuralSingleCapPrefixesPromise;
+};
+
+const getStructuralSingleCapPrefixesSync = (): ReadonlySet<string> =>
+  structuralSingleCapPrefixesCache ?? new Set<string>();
 
 const escapeForRegex = (form: string): string =>
   form
@@ -475,23 +531,16 @@ const BARE_SINGLE_CAP_LEGAL_FORM_RE = new RegExp(
   `^[${UPPER}](?:[ \\t]+|,[ \\t]*)`,
   "u",
 );
-const STRUCTURAL_SINGLE_CAP_PREFIXES = new Set([
-  "Schedule",
-  "Article",
-  "Exhibit",
-  "Attachment",
-  "Appendix",
-  "Annex",
-  "Part",
-  "Section",
-]);
 const STRUCTURAL_SINGLE_CAP_RE = new RegExp(
-  `^([\\p{L}\\p{M}]+)[ \\t]+[${UPPER}](?:[ \\t]+|,[ \\t]*)`,
+  `^([\\p{L}\\p{M}]+)[ \\t]+[${UPPER}](?:[.${DASH_INNER}]?\\d{1,3})?(?:[ \\t]+|,[ \\t]*)`,
   "u",
 );
 const isStructuralSingleCapMatch = (text: string): boolean => {
   const first = STRUCTURAL_SINGLE_CAP_RE.exec(text)?.[1];
-  return first !== undefined && STRUCTURAL_SINGLE_CAP_PREFIXES.has(first);
+  return (
+    first !== undefined &&
+    getStructuralSingleCapPrefixesSync().has(first.toLowerCase())
+  );
 };
 
 /**
@@ -532,6 +581,91 @@ const hasSingleCapPrefixBefore = (
   const prev = findWordBefore(fullText, matchStart);
   return (
     prev !== null && prev.word.length === 1 && UPPER_LETTER_RE.test(prev.word)
+  );
+};
+
+const isBareSingleCapStructuralInnerMatch = (
+  fullText: string,
+  matchStart: number,
+  text: string,
+): boolean => {
+  if (!BARE_SINGLE_CAP_LEGAL_FORM_RE.test(text)) {
+    return false;
+  }
+
+  const prev = findWordBefore(fullText, matchStart);
+  return (
+    prev !== null &&
+    getStructuralSingleCapPrefixesSync().has(prev.word.toLowerCase())
+  );
+};
+
+const trimEmbeddedLegalFormListPrefix = (
+  entityStart: number,
+  entityText: string,
+): { entityStart: number; entityText: string } => {
+  let cut = -1;
+
+  for (const suffix of getAllLegalSuffixesSync()) {
+    const suffixClean = suffix.replace(/[.,\s]/g, "");
+    if (suffixClean.length > 0 && ROMAN_NUMERAL_RE.test(suffixClean)) {
+      continue;
+    }
+
+    let fromIndex = 0;
+    while (fromIndex < entityText.length) {
+      const suffixStart = entityText.indexOf(suffix, fromIndex);
+      if (suffixStart === -1) {
+        break;
+      }
+      fromIndex = suffixStart + suffix.length;
+
+      const suffixEnd = suffixStart + suffix.length;
+      if (suffixEnd >= entityText.length - 1) {
+        continue;
+      }
+
+      const afterSuffix = entityText.slice(suffixEnd);
+      const boundary = /^,\s+(?=\p{Lu})/u.exec(afterSuffix);
+      if (boundary === null) {
+        continue;
+      }
+
+      const nextStart = suffixEnd + boundary[0].length;
+      const remainder = entityText.slice(nextStart);
+      if (!getAllLegalSuffixesSync().some((form) => remainder.endsWith(form))) {
+        continue;
+      }
+
+      cut = Math.max(cut, nextStart);
+    }
+  }
+
+  if (cut <= 0) {
+    return { entityStart, entityText };
+  }
+
+  return {
+    entityStart: entityStart + cut,
+    entityText: entityText.slice(cut),
+  };
+};
+
+const hasMiddleInitialBefore = (fullText: string, pos: number): boolean => {
+  const previousWord = findWordBefore(fullText, pos);
+  if (!previousWord) {
+    return false;
+  }
+
+  let scan = previousWord.start - 1;
+  while (scan >= 0 && (fullText[scan] === " " || fullText[scan] === "\t")) {
+    scan--;
+  }
+
+  return (
+    scan >= 1 &&
+    fullText[scan] === "." &&
+    UPPER_LETTER_RE.test(fullText[scan - 1] ?? "")
   );
 };
 
@@ -623,14 +757,12 @@ const extendBackward = (
     } else if (isConnector) {
       if (AND_TYPE_CONNECTOR_RE.test(word)) {
         const upperWordsBefore = countUpperWordsBefore(fullText, wordStart);
-        const personNameBoundary =
-          upperWordsBefore >= 2 && upperWordsBefore <= 3;
-        const singleCapCompanyAfterBoundary =
-          suffixMode && hasSingleCapPrefixBefore(fullText, matchStart);
-        if (
-          personNameBoundary &&
-          (!suffixMode || singleCapCompanyAfterBoundary)
-        ) {
+        const middleInitialBefore = hasMiddleInitialBefore(fullText, wordStart);
+        const personNameBoundary = suffixMode
+          ? middleInitialBefore &&
+            hasSingleCapPrefixBefore(fullText, matchStart)
+          : upperWordsBefore === 2 || middleInitialBefore;
+        if (personNameBoundary) {
           // Looks like "<First> <Last> and <ORG>" or
           // "<First> M. <Last> and X Holdings, Inc.".
           // Keep the person name out of the org span while
@@ -746,7 +878,11 @@ export const processLegalFormMatches = (
     const firstWordMatch = /^[\p{L}\p{M}]+(?:-[\p{L}\p{M}]+)*/u.exec(text);
     let processedStart = match.start;
     let processedText = text;
-    if (isStructuralSingleCapMatch(processedText)) {
+    if (
+      isStructuralSingleCapMatch(processedText) ||
+      (fullText !== undefined &&
+        isBareSingleCapStructuralInnerMatch(fullText, match.start, text))
+    ) {
       continue;
     }
     // True when the role-head trim slices the match. The
@@ -899,6 +1035,10 @@ export const processLegalFormMatches = (
           .trimEnd();
       }
     }
+
+    const listTrim = trimEmbeddedLegalFormListPrefix(entityStart, entityText);
+    entityStart = listTrim.entityStart;
+    entityText = listTrim.entityText;
 
     const clauseTrim = trimLeadingClause(entityText);
     if (clauseTrim.offset > 0) {

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { enforceBoundaryConsistency } from "../filters/boundary-consistency";
+import { DETECTION_SOURCES } from "../types";
 import type { Entity } from "../types";
 
 const makeEntity = (
@@ -146,6 +147,25 @@ describe("enforceBoundaryConsistency", () => {
       expect(result[0]?.text).toBe("Novák, Jan");
       expect(result[0]?.start).toBe(0);
       expect(result[0]?.end).toBe(10);
+    });
+
+    test("does not merge legal-form organizations separated by comma", () => {
+      const fullText = "Twitter, Inc., X Corp.";
+      const entities = [
+        {
+          ...makeEntity("organization", 0, 13, "Twitter, Inc."),
+          source: DETECTION_SOURCES.LEGAL_FORM,
+        },
+        {
+          ...makeEntity("organization", 15, 22, "X Corp."),
+          source: DETECTION_SOURCES.LEGAL_FORM,
+        },
+      ];
+      const result = enforceBoundaryConsistency(entities, fullText);
+      expect(result.map((entity) => entity.text)).toEqual([
+        "Twitter, Inc.",
+        "X Corp.",
+      ]);
     });
 
     test("does not merge entities across newline", () => {

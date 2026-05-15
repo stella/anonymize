@@ -1,4 +1,5 @@
 import type { Entity } from "../types";
+import { DETECTION_SOURCES } from "../types";
 
 /** Max gap (in chars) between entities to merge. */
 const MAX_GAP = 3;
@@ -14,6 +15,10 @@ const hasLockedBoundary = (entity: Entity): boolean =>
  * of `\s` to avoid merging entities across newlines.
  */
 const GAP_PATTERN = /^[ \t,\-]+$/;
+
+const isLegalFormOrganization = (entity: Entity): boolean =>
+  entity.label === "organization" &&
+  entity.source === DETECTION_SOURCES.LEGAL_FORM;
 
 /**
  * Build a set of word boundary offsets for the full
@@ -198,6 +203,11 @@ const mergeAdjacent = (entities: Entity[], fullText: string): Entity[] => {
 
     if (
       !hasLockedBoundary(prev) &&
+      !(
+        isLegalFormOrganization(prev) &&
+        isLegalFormOrganization(entity) &&
+        gap.includes(",")
+      ) &&
       !gapOccupied &&
       gap.length <= MAX_GAP &&
       GAP_PATTERN.test(gap)
