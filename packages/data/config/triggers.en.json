@@ -32,7 +32,22 @@
   {
     "id": "en-jurisdiction",
     "label": "address",
-    "strategy": { "type": "to-next-comma" },
+    "strategy": {
+      "type": "to-next-comma",
+      "maxLength": 30,
+      "stopWords": [
+        "or",
+        "and",
+        "in",
+        "sitting",
+        "shall",
+        "that",
+        "which",
+        "without",
+        "for",
+        "to"
+      ]
+    },
     "triggers": ["State of", "Commonwealth of", "District of", "Territory of"],
     "includeTrigger": true,
     "extensions": ["normalize-spaces"],

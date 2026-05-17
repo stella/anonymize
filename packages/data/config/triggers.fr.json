@@ -2,7 +2,9 @@
   {
     "id": "fr-address",
     "label": "address",
-    "strategy": { "type": "to-next-comma" },
+    "strategy": {
+      "type": "to-next-comma"
+    },
     "triggers": [
       "demeurant",
       "demeurant à",
@@ -24,7 +26,9 @@
   {
     "id": "fr-registered-office",
     "label": "address",
-    "strategy": { "type": "to-next-comma" },
+    "strategy": {
+      "type": "to-next-comma"
+    },
     "triggers": [
       "ayant son siège à",
       "ayant son siège au",
@@ -39,13 +43,19 @@
   {
     "id": "fr-address-headline",
     "label": "address",
-    "strategy": { "type": "address", "maxChars": 120 },
+    "strategy": {
+      "type": "address",
+      "maxChars": 120
+    },
     "triggers": [
       "siège social :",
+      "siège social :",
       "siège social:",
       "adresse :",
+      "adresse :",
       "adresse:",
       "adresse postale :",
+      "adresse postale :",
       "adresse postale:"
     ]
   },
@@ -61,7 +71,9 @@
   {
     "id": "fr-person",
     "label": "person",
-    "strategy": { "type": "to-next-comma" },
+    "strategy": {
+      "type": "to-next-comma"
+    },
     "triggers": [
       "représenté par",
       "représentée par",
@@ -70,12 +82,18 @@
       "agissant par",
       "pris en la personne de"
     ],
-    "validations": [{ "type": "starts-uppercase" }]
+    "validations": [
+      {
+        "type": "starts-uppercase"
+      }
+    ]
   },
   {
     "id": "fr-company-id",
     "label": "registration number",
-    "strategy": { "type": "company-id-value" },
+    "strategy": {
+      "type": "company-id-value"
+    },
     "triggers": [
       "numéro SIREN",
       "numéro SIRET",
@@ -101,7 +119,9 @@
   {
     "id": "fr-tax-id",
     "label": "tax identification number",
-    "strategy": { "type": "company-id-value" },
+    "strategy": {
+      "type": "company-id-value"
+    },
     "triggers": [
       "numéro de TVA",
       "numéro de TVA intracommunautaire",
@@ -115,7 +135,9 @@
   {
     "id": "fr-social-security",
     "label": "social security number",
-    "strategy": { "type": "company-id-value" },
+    "strategy": {
+      "type": "company-id-value"
+    },
     "triggers": [
       "numéro de sécurité sociale",
       "n° de sécurité sociale",
@@ -128,7 +150,10 @@
   {
     "id": "fr-land-parcel",
     "label": "land parcel",
-    "strategy": { "type": "n-words", "count": 1 },
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
     "triggers": [
       "parcelle cadastrale",
       "parcelle n°",
@@ -136,12 +161,18 @@
       "numéro de parcelle"
     ],
     "extensions": ["add-colon"],
-    "validations": [{ "type": "has-digits" }]
+    "validations": [
+      {
+        "type": "has-digits"
+      }
+    ]
   },
   {
     "id": "fr-cadastral-ref",
     "label": "land parcel",
-    "strategy": { "type": "to-end-of-line" },
+    "strategy": {
+      "type": "to-end-of-line"
+    },
     "triggers": ["référence cadastrale", "cadastré section"],
     "extensions": ["add-colon"]
   },
@@ -207,7 +238,11 @@
     ],
     "includeTrigger": true,
     "extensions": ["normalize-spaces"],
-    "validations": [{ "type": "starts-uppercase" }]
+    "validations": [
+      {
+        "type": "starts-uppercase"
+      }
+    ]
   },
   {
     "id": "fr-postal-code",
@@ -227,12 +262,25 @@
     },
     "triggers": [
       "téléphone :",
+      "téléphone :",
       "téléphone:",
+      "telephone :",
+      "telephone :",
+      "telephone:",
       "tél :",
+      "tél :",
       "tél:",
+      "tel :",
+      "tel :",
+      "tel:",
       "tél. :",
+      "tél. :",
       "tél.:",
+      "tel. :",
+      "tel. :",
+      "tel.:",
       "portable :",
+      "portable :",
       "portable:"
     ],
     "validations": [
