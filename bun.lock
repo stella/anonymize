@@ -26,6 +26,12 @@
         "typescript": "^6.0.3",
         "vite": "^8.0.11",
       },
+      "peerDependencies": {
+        "@stll/anonymize-data": "^0.0.6",
+      },
+      "optionalPeers": [
+        "@stll/anonymize-data",
+      ],
     },
     "packages/data": {
       "name": "@stll/anonymize-data",

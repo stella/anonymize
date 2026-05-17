@@ -37,9 +37,13 @@
     "@stll/text-search-wasm": "^1.0.1"
   },
   "peerDependencies": {
+    "@stll/anonymize-data": "^0.0.6",
     "vite": ">=5 <10"
   },
   "peerDependenciesMeta": {
+    "@stll/anonymize-data": {
+      "optional": true
+    },
     "vite": {
       "optional": true
     }
