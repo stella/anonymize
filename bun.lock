@@ -12,7 +12,7 @@
     },
     "packages/anonymize": {
       "name": "@stll/anonymize",
-      "version": "1.3.0",
+      "version": "1.4.4",
       "dependencies": {
         "@huggingface/tokenizers": "^0.1.3",
         "@stll/stdnum": "^0.0.1",
@@ -26,10 +26,16 @@
         "typescript": "^6.0.3",
         "vite": "^8.0.11",
       },
+      "peerDependencies": {
+        "@stll/anonymize-data": "^0.0.6",
+      },
+      "optionalPeers": [
+        "@stll/anonymize-data",
+      ],
     },
     "packages/data": {
       "name": "@stll/anonymize-data",
-      "version": "0.0.5",
+      "version": "0.0.6",
       "devDependencies": {
         "stopwords-iso": "1.1.0",
         "tsdown": "^0.22.0",

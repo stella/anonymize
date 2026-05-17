@@ -41,6 +41,14 @@
     "@stll/stdnum": "^0.0.1",
     "@stll/text-search": "^1.0.1"
   },
+  "peerDependencies": {
+    "@stll/anonymize-data": "^0.0.6"
+  },
+  "peerDependenciesMeta": {
+    "@stll/anonymize-data": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@stll/anonymize-data": "workspace:*",
     "@stll/text-search-wasm": "^1.0.1",
