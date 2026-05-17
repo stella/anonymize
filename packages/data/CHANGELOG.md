@@ -1,9 +1,13 @@
 # Changelog
 
-## Unreleased
+## 0.0.6 (2026-05-17)
 
 ### Fixes
 
+- Bring `config/` into byte-parity with the runtime tree at
+  `packages/anonymize/src/data/`. Affected files: `allow-list.json`,
+  `common-words-en.json`, `legal-form-leading-clauses.json`,
+  `person-stopwords.json`, `triggers.en.json`, `triggers.fr.json`.
 - Publish the full dictionary catalog referenced by the data package exports.
 - Document the data package surface more clearly for consumers and maintainers.
 
