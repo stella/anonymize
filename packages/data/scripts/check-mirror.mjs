@@ -39,7 +39,8 @@ const hashFile = (path) => {
 
 const main = () => {
   for (const dir of [RUNTIME_DIR, MIRROR_DIR]) {
-    if (!statSync(dir).isDirectory()) {
+    const stat = statSync(dir, { throwIfNoEntry: false });
+    if (!stat || !stat.isDirectory()) {
       console.error(`check:mirror: expected directory at ${dir}`);
       process.exit(1);
     }
