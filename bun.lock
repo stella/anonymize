@@ -15,7 +15,7 @@
       "version": "1.4.4",
       "dependencies": {
         "@huggingface/tokenizers": "^0.1.3",
-        "@stll/stdnum": "^0.0.1",
+        "@stll/stdnum": "^1.0.0",
         "@stll/text-search": "^1.0.1",
       },
       "devDependencies": {
@@ -154,7 +154,7 @@
 
     "@stll/regex-set-wasm32-wasi": ["@stll/regex-set-wasm32-wasi@1.0.1", "", { "dependencies": { "@napi-rs/wasm-runtime": "^1.1.3" }, "cpu": "none" }, "sha512-i2EE+VjpNYEMXqaYmOwNtsFz0h8lW+tsQF8SzG0fAerEe/rnZ1bNXr14K7Spm3tDC0fMCXzmBnNT2T2g2bCujw=="],
 
-    "@stll/stdnum": ["@stll/stdnum@0.0.1", "", {}, "sha512-YVYjfxU9zgmPS/6YhHHuMgBPv9hEgtCKcwprzP20mebLoP+Pt0v/6FvbfVzxlBBDCqhkit/IXT20EcE/PhSAfA=="],
+    "@stll/stdnum": ["@stll/stdnum@1.0.0", "", {}, "sha512-Hf3mCNqRyHWKl3PgwWgghJ45rw7sW6qMXZirUL+uah2qZpXKmhBlOrrToScgGYbq1OIDy5u3Il3PVFw4ppAf1A=="],
 
     "@stll/text-search": ["@stll/text-search@1.0.1", "", { "dependencies": { "@stll/aho-corasick": "^1.0.0", "@stll/fuzzy-search": "^1.0.0", "@stll/regex-set": "^1.0.1" } }, "sha512-+guyHygcUCREU6dVOJwj2oApfaw8WI9xfq5sIlCuL/KLJktywPnwP5dMHmI7pd7vtXH57v/XXI+KvNjXAXlX0g=="],
 
