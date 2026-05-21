@@ -51,6 +51,10 @@ const runFr = async (text: string) => {
 };
 
 describe("French headline-style trigger regressions", () => {
+  // Hook builds the full pipeline (AC + RegexSet over French
+  // dictionaries via NAPI-RS); under cumulative suite load
+  // this occasionally spikes past the 5s default. 30s gives
+  // ~3x headroom over the worst observed (11.3s).
   beforeAll(async () => {
     const dictionaries = await getDictionaries();
     await preparePipelineSearch({
@@ -58,7 +62,7 @@ describe("French headline-style trigger regressions", () => {
       gazetteerEntries: [],
       context: getCtx(),
     });
-  });
+  }, 30_000);
 
   test("phone trigger does not steal a following SIREN value", async () => {
     const text = "Téléphone : non communiqué SIREN : 123456789";
