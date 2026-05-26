@@ -33,7 +33,7 @@
   "license": "MIT",
   "dependencies": {
     "@huggingface/tokenizers": "^0.1.3",
-    "@stll/stdnum": "^0.0.1",
+    "@stll/stdnum": "^1.0.0",
     "@stll/text-search-wasm": "^1.0.1"
   },
   "peerDependencies": {
