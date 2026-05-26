@@ -121,29 +121,46 @@ describe("country detector", () => {
     expect(hits).not.toContain("working in");
   });
 
-  test("enableCountries: false disables the new detector", async () => {
-    // Note: the existing deny-list ships a "countries/translations"
-    // dictionary with label "country", so a few European country
-    // names are still caught via deny-list even with the new
-    // detector disabled. The detector specifically should produce
-    // zero entities sourced from "country".
+  test("enableCountries: false disables country detection entirely", async () => {
+    // With the legacy countries/translations deny-list dictionary
+    // removed in favour of the new detector, the flag has a single
+    // gate; toggling it off produces zero `country` entities from
+    // any source.
     const text = "Operations span Japan, Brazil, and Mexico.";
     const entities = await detect(text, { enableCountries: false });
-    const fromNewDetector = entities.filter((e) => e.source === "country");
-    expect(fromNewDetector).toEqual([]);
+    expect(entities.filter((e) => e.label === "country")).toEqual([]);
   });
 
-  test("common-word CLDR forms (Man, Island) are NOT flagged", async () => {
+  test("common-word CLDR forms (Man, Island, Indie) are NOT flagged", async () => {
     // "Man" is Norwegian for Isle of Man; "Island" is
-    // Icelandic for Iceland (also de/da/no/sv). Both are
-    // blocked because every English "man" / "island"
-    // would otherwise emit a country entity.
-    const text = "The man signed the deed on the island site.";
+    // Icelandic for Iceland (also de/da/no/sv); "Indie"
+    // is the Czech/Polish form for India and collides with
+    // the English adjective. All blocked because every
+    // English "man" / "island" / "indie" would otherwise
+    // emit a country entity.
+    const text =
+      "The man signed the deed on the island site for our indie label.";
     const found = countries(await detect(text));
     expect(found).not.toContain("man");
     expect(found).not.toContain("Man");
     expect(found).not.toContain("island");
     expect(found).not.toContain("Island");
+    expect(found).not.toContain("indie");
+    expect(found).not.toContain("Indie");
+  });
+
+  test("en-dash CLDR forms match against normalised input", async () => {
+    // CLDR ships names like "Kongo – Kinshasa" (cs/CD) and
+    // "Hongkong – ZAO Číny" (cs/HK) with U+2013 en-dashes.
+    // The unified literal search runs against
+    // normalizeForSearch(fullText), which rewrites en-/em-
+    // dashes to ASCII hyphens, so the country patterns must
+    // be normalised before registration or those names are
+    // silently missed in any real input.
+    const text = "Účastníci jsou z Kongo – Kinshasa a Hongkong – ZAO Číny.";
+    const found = countries(await detect(text));
+    expect(found.some((s) => s.toLowerCase().includes("kongo"))).toBe(true);
+    expect(found.some((s) => s.toLowerCase().includes("hongkong"))).toBe(true);
   });
 
   test("'America' alone is NOT flagged (continent vs country)", async () => {

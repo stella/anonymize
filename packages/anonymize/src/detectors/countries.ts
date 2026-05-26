@@ -2,6 +2,7 @@ import type { Match, PatternEntry } from "@stll/text-search";
 
 import { DETECTION_SOURCES } from "../constants";
 import type { Entity } from "../types";
+import { normalizeForSearch } from "../util/normalize";
 
 import countriesData from "../data/countries.json" with { type: "json" };
 
@@ -21,11 +22,13 @@ const INCLUDE_ALPHA2 = false;
  * English/global words. Filtered before registration so
  * they never become whole-word case-insensitive country
  * patterns. Examples: "Island" is Icelandic for Iceland
- * (also Da/No/Sv/Fi); "Man" is Norwegian for Isle of Man.
- * Both would flag every English occurrence as a country.
+ * (also Da/No/Sv/Fi); "Man" is Norwegian for Isle of Man;
+ * "Indie" is the Czech and Polish form of India and
+ * collides with the English adjective ("indie developer").
+ * All would flag every English occurrence as a country.
  */
 const NAME_BLOCKLIST: ReadonlySet<string> = new Set(
-  ["man", "island"].map((s) => s.toLowerCase()),
+  ["man", "island", "indie"].map((s) => s.toLowerCase()),
 );
 
 /**
@@ -98,17 +101,26 @@ export const buildCountryPatterns = (): {
   ) => {
     const trimmed = surface.trim();
     if (trimmed.length === 0) return;
-    const key = trimmed.toLowerCase();
+    // The unified literal search runs against
+    // `normalizeForSearch(fullText)`, which rewrites NBSP / smart
+    // quotes / en–em-dashes to their ASCII equivalents. CLDR
+    // ships names with en-dashes ("Kongo – Kinshasa", "Hongkong –
+    // ZAO Číny") and smart apostrophes; without the same
+    // normalization on the pattern side those names would never
+    // match real input. Replacements are same-length, so match
+    // offsets in the original text stay valid.
+    const normalized = normalizeForSearch(trimmed);
+    const key = normalized.toLowerCase();
     if (NAME_BLOCKLIST.has(key)) return;
     if (!surfaceToMeta.has(key)) {
-      surfaceToMeta.set(key, { display: trimmed, isoCode, variant });
+      surfaceToMeta.set(key, { display: normalized, isoCode, variant });
     }
     // Typographic-apostrophe variants. CLDR ships only the
     // curly form ("Côte d’Ivoire"); legal/OCR text routinely
     // uses the straight one ("Côte d'Ivoire"). Register both
     // so either renders match.
     if (trimmed.includes("’") || trimmed.includes("‘")) {
-      const straight = trimmed.replaceAll(/[‘’]/g, "'");
+      const straight = normalizeForSearch(trimmed.replaceAll(/[‘’]/g, "'"));
       const straightKey = straight.toLowerCase();
       if (!surfaceToMeta.has(straightKey)) {
         surfaceToMeta.set(straightKey, {

@@ -222,9 +222,16 @@ const PRECISE_OVER_ADDRESS: ReadonlySet<string> = new Set([
  * not. Kept narrow: organizations are NOT here — "Morgan Stanley"
  * legitimately appears in both the org and name dictionaries, and
  * the existing detector priority is the right tie-breaker there.
+ *
+ * `country` is included because the country detector runs at the
+ * same offsets as deny-list person matches for names like `Chad`,
+ * `Georgia`, `Jordan` (all valid first names AND country names).
+ * Letting a higher-priority country span win there would mark
+ * `Chad Smith` as country + leave `Smith` unredacted.
  */
 const PERSON_PREFERRED_OVER: ReadonlySet<string> = new Set([
   "address",
+  "country",
   "land parcel",
 ]);
 
@@ -251,15 +258,35 @@ const resolveSameSpanLabelConflicts = (entities: Entity[]): Entity[] => {
       (l) => l !== "address" && PRECISE_OVER_ADDRESS.has(l),
     );
 
+    // Person-preferred drops are decided up front so the
+    // priority-based pass below doesn't keep a higher-pri country
+    // span (e.g., `Chad` from the country detector at priority 3)
+    // while also dropping the lower-pri person hit (`Chad` from
+    // the deny-list at priority 2) for being below the same group's
+    // max. Without this, person tokens that happen to be country
+    // names would be flipped to `country` and the surrounding
+    // surname left exposed.
+    const yieldingToPerson = new Set<Entity>();
+    if (hasPerson) {
+      for (const e of group) {
+        if (hasLockedBoundary(e)) continue;
+        if (PERSON_PREFERRED_OVER.has(e.label)) {
+          yieldingToPerson.add(e);
+        }
+      }
+    }
+
     // When entities at the same offsets have different labels,
     // also let detector priority break ties: a `legal-form`
     // organization hit (priority 3) should keep its label over a
     // coincident `deny-list` person hit (priority 2). Compute the
-    // max priority once so we can drop strictly-lower-priority
-    // duplicates regardless of label.
+    // max priority over entities NOT already yielding to person,
+    // so the person hit isn't accidentally crowded out by the
+    // priority of the very entity it's beating.
     let maxPriority = -1;
     for (const e of group) {
       if (hasLockedBoundary(e)) continue;
+      if (yieldingToPerson.has(e)) continue;
       const pri = DETECTOR_PRIORITY[e.source] ?? 0;
       if (pri > maxPriority) maxPriority = pri;
     }
@@ -269,12 +296,12 @@ const resolveSameSpanLabelConflicts = (entities: Entity[]): Entity[] => {
       // explicit user intent; never drop them in favour of a
       // detector-generated label.
       if (hasLockedBoundary(e)) continue;
-      const pri = DETECTOR_PRIORITY[e.source] ?? 0;
-      if (pri < maxPriority) {
+      if (yieldingToPerson.has(e)) {
         dropped.add(e);
         continue;
       }
-      if (hasPerson && PERSON_PREFERRED_OVER.has(e.label)) {
+      const pri = DETECTOR_PRIORITY[e.source] ?? 0;
+      if (pri < maxPriority) {
         dropped.add(e);
         continue;
       }
