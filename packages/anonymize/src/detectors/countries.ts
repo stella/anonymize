@@ -183,6 +183,28 @@ export const buildCountryPatterns = (): {
 };
 
 /**
+ * Whether the match starts on a proper-noun character.
+ * The unified literal search is case-insensitive, so
+ * lowercase common nouns that share spelling with a
+ * country name ("turkey" the bird, "china" the porcelain,
+ * "jordan" the basketball player nickname) would otherwise
+ * be flagged. CLDR canonical names and the curated alias
+ * list are always proper nouns; require uppercase when the
+ * first character is a letter so common-noun usage in
+ * prose isn't redacted. Non-letter starts (digits in
+ * "U.S.A.", etc.) are accepted as-is.
+ */
+const startsAsProperNoun = (text: string, start: number): boolean => {
+  const ch = text.charAt(start);
+  if (ch.length === 0) return false;
+  const upper = ch.toUpperCase();
+  const lower = ch.toLowerCase();
+  // Non-letter character → no case to enforce.
+  if (upper === lower) return true;
+  return ch === upper;
+};
+
+/**
  * Convert raw country matches into Entity objects.
  * Filters to the country slice and emits one entity per
  * match. Score is constant (0.95) for all variants;
@@ -204,6 +226,8 @@ export const processCountryMatches = (
     const localIdx = idx - sliceStart;
     const label = data.labels[localIdx];
     if (!label) continue;
+
+    if (!startsAsProperNoun(fullText, match.start)) continue;
 
     results.push({
       start: match.start,

@@ -149,6 +149,23 @@ describe("country detector", () => {
     expect(found).not.toContain("Indie");
   });
 
+  test("lowercase common-noun homographs are NOT flagged", async () => {
+    // The literal-search slice is case-insensitive, so without a
+    // proper-noun-start filter `turkey` the bird, `china` the
+    // porcelain, and `jordan` the basketball player would all
+    // match country aliases.
+    const text =
+      "We had turkey for dinner and packed it in china before " +
+      "watching Jordan play.";
+    const found = countries(await detect(text));
+    expect(found).not.toContain("turkey");
+    expect(found).not.toContain("china");
+    expect(found).not.toContain("jordan");
+    // Proper-noun "Jordan" (capitalized) can still match Jordan
+    // the country — the basketball reference is one example of
+    // why the same-span person rule above matters.
+  });
+
   test("en-dash CLDR forms match against normalised input", async () => {
     // CLDR ships names like "Kongo – Kinshasa" (cs/CD) and
     // "Hongkong – ZAO Číny" (cs/HK) with U+2013 en-dashes.
