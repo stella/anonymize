@@ -121,12 +121,16 @@ describe("country detector", () => {
     expect(hits).not.toContain("working in");
   });
 
-  test("enableCountries: false disables country detection entirely", async () => {
-    // With the legacy countries/translations deny-list dictionary
-    // removed in favour of the new detector, the flag has a single
-    // gate; toggling it off produces zero `country` entities from
-    // any source.
-    const text = "Operations span Japan, Brazil, and Mexico.";
+  test("enableCountries: false disables country detection across all sources", async () => {
+    // The flag must zero out country redaction end-to-end, not just
+    // the new country slice in build-unified-search. The legacy
+    // countries/translations deny-list dictionary is still loaded
+    // (it ships Czech declensions the CLDR canonicals don't carry),
+    // so the deny-list builder needs its own gate too — the test
+    // exercises both paths by mixing English, German, and Polish
+    // names alongside CS declined forms.
+    const text =
+      "Operations span Japan, Brazil, Mexico, Německo, Hiszpania, and České republiky.";
     const entities = await detect(text, { enableCountries: false });
     expect(entities.filter((e) => e.label === "country")).toEqual([]);
   });

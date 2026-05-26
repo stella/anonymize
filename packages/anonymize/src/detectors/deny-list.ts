@@ -31,6 +31,7 @@ export type DenyListConfig = Pick<
   | "denyListExcludeCategories"
   | "customDenyList"
   | "dictionaries"
+  | "enableCountries"
 >;
 
 // ── Allow list (lazy-loaded from JSON) ───────────────
@@ -628,6 +629,17 @@ export const buildDenyList = async (
       }
 
       if (excludeCategories.has(meta.category)) {
+        continue;
+      }
+
+      // enableCountries: false must zero-out country redaction
+      // across both the new country detector and the legacy
+      // `countries/translations` dictionary, which ships Czech
+      // declensions ("České republiky", "Slovenskou republikou",
+      // …) the CLDR canonicals don't carry. Without this gate,
+      // toggling the flag would silently keep the legacy path
+      // active.
+      if (meta.label === "country" && config.enableCountries === false) {
         continue;
       }
 
