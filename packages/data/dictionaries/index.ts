@@ -144,16 +144,6 @@ export const DICTIONARY_META = {
     country: "SE",
   },
 
-  // ── Countries ──────────────────────────────────────
-  // Known FP overlap: France, Italia, Holland, Malta
-  // are also personal names. Mitigation at matching
-  // layer (span-priority, context disambiguation).
-  "countries/translations": {
-    label: "country",
-    category: "Places",
-    country: null,
-  },
-
   // ── Cities ─────────────────────────────────────────
   // City dictionaries are loaded dynamically via
   // loadCityDictionary() — not registered here.
@@ -584,11 +574,6 @@ const LOADERS: Record<DictionaryId, () => Promise<JsonModule>> = {
   // eslint-disable-next-line typescript-eslint/promise-function-async
   "names/surnames/sv": () =>
     import("./names/surnames/sv.json") as Promise<JsonModule>,
-
-  // ── Countries ──────────────────────────────────────
-  // eslint-disable-next-line typescript-eslint/promise-function-async
-  "countries/translations": () =>
-    import("./countries/translations.json") as Promise<JsonModule>,
 
   // ── Cities: loaded dynamically via loadCityDictionary()
 
