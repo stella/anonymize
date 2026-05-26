@@ -47,11 +47,11 @@
       "source": "trigger"
     },
     {
-      "start": 307,
+      "start": 291,
       "end": 311,
       "label": "registration number",
-      "text": "2145",
-      "source": "trigger"
+      "text": "oddíl B, vložka 2145",
+      "source": "regex"
     },
     {
       "start": 323,
@@ -110,11 +110,11 @@
       "source": "trigger"
     },
     {
-      "start": 652,
+      "start": 636,
       "end": 656,
       "label": "registration number",
-      "text": "1360",
-      "source": "trigger"
+      "text": "oddíl B, vložka 1360",
+      "source": "regex"
     },
     {
       "start": 725,
@@ -166,11 +166,11 @@
       "source": "trigger"
     },
     {
-      "start": 1042,
+      "start": 1026,
       "end": 1048,
       "label": "registration number",
-      "text": "240118",
-      "source": "trigger"
+      "text": "oddíl C, vložka 240118",
+      "source": "regex"
     },
     {
       "start": 1073,
@@ -215,5 +215,5 @@
       "source": "regex"
     }
   ],
-  "redactedText": "Smlouva o převodu obchodního podílu\n\nuzavřená podle § 207 zákona č. 90/2012 Sb., o obchodních korporacích\n\nProdávající: [ORGANIZATION_1]\nsídlo: [ADDRESS_1]\nIČO: [REGISTRATION_NUMBER_1]\nDIČ: [TAX_IDENTIFICATION_NUMBER_1]\nzapsaná v obchodním rejstříku vedeném [ORGANIZATION_2], oddíl B, vložka [REGISTRATION_NUMBER_2]\nzastoupená [PERSON_1], předsedou představenstva,\nnarozeným dne [DATE_1],\nbytem Václavské náměstí 9, [ADDRESS_2]\n(\"Prodávající\")\n\na\n\nKupující: [ORGANIZATION_3]\nsídlo: [ADDRESS_3]\nIČO: [REGISTRATION_NUMBER_3]\nDIČ: [TAX_IDENTIFICATION_NUMBER_2]\nzapsaná v obchodním rejstříku vedeném [ORGANIZATION_4], oddíl B, vložka [REGISTRATION_NUMBER_4]\nzastoupená Janem Juchelkou, předsedou představenstva,\nnarozeným dne [DATE_2],\nbytem [ADDRESS_4]\n(\"Kupující\")\n\n1. Předmět smlouvy\nProdávající převádí Kupujícímu obchodní podíl o velikosti [MONETARY_AMOUNT_1] ve společnosti\n[ORGANIZATION_5], IČO: [REGISTRATION_NUMBER_5], se sídlem [ADDRESS_5],\nzapsané v obchodním rejstříku vedeném [ORGANIZATION_4], oddíl C, vložka [REGISTRATION_NUMBER_6],\nza celkovou kupní cenu [MONETARY_AMOUNT_2].\n\n2. Bankovní spojení\nKupní cena bude uhrazena na bankovní účet Prodávajícího č.ú. [BANK_ACCOUNT_NUMBER_1]\nvedený u [ORGANIZATION_6], a to do 30 dnů od podpisu této smlouvy.\n\n3. Závěrečná ustanovení\nSmlouva nabývá účinnosti dne [DATE_3].\nSmluvní strany se dohodly, že případné spory budou rozhodovány u [ORGANIZATION_7].\n\nV Praze dne [DATE_3]\n"
+  "redactedText": "Smlouva o převodu obchodního podílu\n\nuzavřená podle § 207 zákona č. 90/2012 Sb., o obchodních korporacích\n\nProdávající: [ORGANIZATION_1]\nsídlo: [ADDRESS_1]\nIČO: [REGISTRATION_NUMBER_1]\nDIČ: [TAX_IDENTIFICATION_NUMBER_1]\nzapsaná v obchodním rejstříku vedeném [ORGANIZATION_2], [REGISTRATION_NUMBER_2]\nzastoupená [PERSON_1], předsedou představenstva,\nnarozeným dne [DATE_1],\nbytem Václavské náměstí 9, [ADDRESS_2]\n(\"Prodávající\")\n\na\n\nKupující: [ORGANIZATION_3]\nsídlo: [ADDRESS_3]\nIČO: [REGISTRATION_NUMBER_3]\nDIČ: [TAX_IDENTIFICATION_NUMBER_2]\nzapsaná v obchodním rejstříku vedeném [ORGANIZATION_4], [REGISTRATION_NUMBER_4]\nzastoupená Janem Juchelkou, předsedou představenstva,\nnarozeným dne [DATE_2],\nbytem [ADDRESS_4]\n(\"Kupující\")\n\n1. Předmět smlouvy\nProdávající převádí Kupujícímu obchodní podíl o velikosti [MONETARY_AMOUNT_1] ve společnosti\n[ORGANIZATION_5], IČO: [REGISTRATION_NUMBER_5], se sídlem [ADDRESS_5],\nzapsané v obchodním rejstříku vedeném [ORGANIZATION_4], [REGISTRATION_NUMBER_6],\nza celkovou kupní cenu [MONETARY_AMOUNT_2].\n\n2. Bankovní spojení\nKupní cena bude uhrazena na bankovní účet Prodávajícího č.ú. [BANK_ACCOUNT_NUMBER_1]\nvedený u [ORGANIZATION_6], a to do 30 dnů od podpisu této smlouvy.\n\n3. Závěrečná ustanovení\nSmlouva nabývá účinnosti dne [DATE_3].\nSmluvní strany se dohodly, že případné spory budou rozhodovány u [ORGANIZATION_7].\n\nV Praze dne [DATE_3]\n"
 }
