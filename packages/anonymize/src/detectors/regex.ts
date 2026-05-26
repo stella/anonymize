@@ -100,8 +100,12 @@ const PARTICLE =
   `von|van|dos|ibn|ben|bin|del|zum|zur|ten|ter|` +
   `da|de|di|al|el|le|la|zu|af|av)`;
 
-// Non-newline whitespace
-const SP = "[^\\S\\n\\t]";
+// Non-newline whitespace. Tabs are admitted because
+// DOCX exports routinely place a TAB between an
+// academic title and the following name (table-cell
+// layouts like "Ing.\tStanislav Braňka"); newlines
+// are not, so spans cannot bleed across paragraphs.
+const SP = "[^\\S\\n]";
 
 /** Honorific alternation built from titles.ts config. */
 const HONORIFIC_ALT = [...HONORIFICS]
