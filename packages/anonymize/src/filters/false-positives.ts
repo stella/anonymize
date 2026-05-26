@@ -1,6 +1,7 @@
 import type { Entity } from "../types";
 import type { PipelineContext } from "../context";
 import { defaultContext } from "../context";
+import { getPersonStopwords } from "../detectors/deny-list";
 import { normalizeHomoglyphs } from "../util/homoglyphs";
 
 const TEMPLATE_PLACEHOLDER_RE = /^(?:\.{3,}|_{3,}|\[[\w\s]+\]|\{[\w\s]+\})$/;
@@ -503,6 +504,23 @@ export const filterFalsePositives = (
     // "Solution Pack ABL90 Flex" → reject.
     if (normalized.label === "person" && HAS_DIGIT_RE.test(trimmed)) {
       continue;
+    }
+
+    // Demonstrative pronouns and other words that collide
+    // with rare given names in the corpus (e.g. Czech
+    // "Tato" — both a sentence-opening demonstrative and
+    // an Italian/Iberian first name). The deny-list path
+    // applies this filter itself; this catches the same
+    // tokens when they leak out of NER or any other
+    // single-token person source.
+    if (normalized.label === "person") {
+      const trimmedToken = trimmed.replace(/[.,;:!?]+$/u, "").trim();
+      if (
+        !/\s/.test(trimmedToken) &&
+        getPersonStopwords(ctx).has(trimmedToken.toLowerCase())
+      ) {
+        continue;
+      }
     }
 
     if (normalized.label === "person") {

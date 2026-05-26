@@ -247,7 +247,7 @@ const loadPersonStopwords = (
 const EMPTY_PERSON_STOPWORDS: ReadonlySet<string> = new Set();
 
 /** Sync accessor — returns empty set before init. */
-const getPersonStopwords = (ctx: PipelineContext): ReadonlySet<string> =>
+export const getPersonStopwords = (ctx: PipelineContext): ReadonlySet<string> =>
   ctx.personStopwords ?? EMPTY_PERSON_STOPWORDS;
 
 // ── Address stopwords (single-token city collisions) ──

@@ -71,6 +71,26 @@ describe("Czech demonstrative pronouns are never persons", () => {
       expect(entities.some((e) => e.label === "person")).toBe(false);
     }
   });
+
+  // NER-like emission path: filterFalsePositives is the
+  // shared gate any single-token person span passes
+  // through, regardless of which detector produced it.
+  test("filterFalsePositives drops single-token 'Tato' person", async () => {
+    const { filterFalsePositives } = await import("../filters/false-positives");
+    const { ensureDenyListData } = await import("../detectors/deny-list");
+    const ctx = createPipelineContext();
+    await ensureDenyListData(ctx);
+    const fakeNer = {
+      start: 0,
+      end: 4,
+      label: "person" as const,
+      text: "Tato",
+      score: 0.95,
+      source: "ner" as const,
+    };
+    const filtered = filterFalsePositives([fakeNer], ctx, "Tato smlouva");
+    expect(filtered.filter((e) => e.label === "person")).toEqual([]);
+  });
 });
 
 // ── Case 2: "Ing." title separators (tabs, NBSPs, …) ────
