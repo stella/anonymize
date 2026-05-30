@@ -22,7 +22,7 @@
     "hooks:uninstall": "lefthook uninstall"
   },
   "devDependencies": {
-    "lefthook": "^2.1.6",
+    "lefthook": "^2.1.8",
     "prettier": "^3.8.3",
     "turbo": "^2.9.14"
   }
