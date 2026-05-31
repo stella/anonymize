@@ -279,7 +279,6 @@ export const buildUnifiedSearch = async (
     start: offset,
     end: offset + (countryResult?.patterns.length ?? 0),
   };
-  offset = countriesSlice.end;
 
   // Build the combined pattern array.
   // Deny-list and street-type patterns use

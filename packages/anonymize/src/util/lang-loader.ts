@@ -188,7 +188,7 @@ export const loadLanguageConfigs = async <T extends NonNullable<unknown>>(
   // Use indexed assignment so results preserve
   // manifest declaration order regardless of import
   // resolution timing.
-  const results: (T | undefined)[] = new Array(codes.length);
+  const results: (T | undefined)[] = codes.map(() => undefined);
 
   const loads = codes.map(async (code, i) => {
     const loader = registry[code];

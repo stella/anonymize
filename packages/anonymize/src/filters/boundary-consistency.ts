@@ -11,10 +11,10 @@ const hasLockedBoundary = (entity: Entity): boolean =>
 /**
  * Characters allowed in the gap between two adjacent
  * same-label entities that should be merged: spaces,
- * tabs, commas, and hyphens. Uses `[ \t,\-]` instead
+ * tabs, commas, and hyphens. Uses `[ \t,-]` instead
  * of `\s` to avoid merging entities across newlines.
  */
-const GAP_PATTERN = /^[ \t,\-]+$/;
+const GAP_PATTERN = /^[ \t,-]+$/;
 
 const isLegalFormOrganization = (entity: Entity): boolean =>
   entity.label === "organization" &&

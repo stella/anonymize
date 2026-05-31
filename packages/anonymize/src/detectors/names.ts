@@ -325,7 +325,7 @@ const isAllCapsLineNameShaped = (fullText: string, start: number): boolean => {
     lineEndIdx === -1 ? fullText.length : lineEndIdx,
   );
   if (/\d/.test(line)) return false;
-  const tokens = line.match(/\p{L}[\p{L}\p{M}'\-]*/gu) ?? [];
+  const tokens = line.match(/\p{L}[\p{L}\p{M}'-]*/gu) ?? [];
   return tokens.length > 0 && tokens.length <= ALL_CAPS_NAME_LINE_MAX_TOKENS;
 };
 
@@ -395,7 +395,7 @@ const classifyToken = (
   if (text.length === 1 && UPPER_START_RE.test(text) && fullText[end] === ".") {
     const lineStart = fullText.lastIndexOf("\n", start - 1) + 1;
     const before = fullText.slice(lineStart, start).trimEnd();
-    const lastWord = /\p{L}[\p{L}\p{M}'\-]*$/u.exec(before)?.[0];
+    const lastWord = /\p{L}[\p{L}\p{M}'-]*$/u.exec(before)?.[0];
     if (lastWord) {
       const lookup = (token: string): boolean =>
         isFirstNameToken(token, corpus) ||
@@ -577,7 +577,7 @@ export const detectNameCorpus = (
     ).length;
 
     // Determine score based on chain composition
-    let score = 0;
+    let score: number;
 
     if (hasTitle && hasCorpusName) {
       // TITLE + NAME/SURNAME → high confidence

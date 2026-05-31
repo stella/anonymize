@@ -88,7 +88,7 @@ describe("deny-list curation", () => {
       if (!commonWords.has(original.toLowerCase())) continue;
 
       const labels = data.labels[index] ?? [];
-      if (labels.length === 0 || labels.every((label) => label === "address")) {
+      if (labels.every((label) => label === "address")) {
         continue;
       }
 
@@ -150,7 +150,7 @@ describe("deny-list curation", () => {
     const leakedAddresses = entities
       .filter((entity) => entity.label === "address")
       .map((entity) => entity.text.toLowerCase())
-      .filter((text) => collisionWords.includes(text));
+      .filter((candidate) => collisionWords.includes(candidate));
 
     expect(leakedAddresses).toEqual([]);
   });

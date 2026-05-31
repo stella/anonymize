@@ -439,7 +439,12 @@ export const detectStreetPatternsNearAddresses = (
       streetStart,
     );
     const hasColon = beforeStreet.includes(":");
-    const score = hasColon ? 0.95 : inHeader ? 0.85 : 0.8;
+    let score = 0.8;
+    if (hasColon) {
+      score = 0.95;
+    } else if (inHeader) {
+      score = 0.85;
+    }
 
     results.push({
       start: streetStart,

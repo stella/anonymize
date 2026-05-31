@@ -368,14 +368,18 @@ if (watchMode) {
   let debounce: ReturnType<typeof setTimeout> | null = null;
   console.log(`Watching ${inputs.length} file(s)...`);
 
-  for (const path of inputs) {
-    watch(path, () => {
+  const watchInput = (inputPath: string) => {
+    watch(inputPath, () => {
       if (debounce) clearTimeout(debounce);
       debounce = setTimeout(async () => {
         debounce = null;
-        console.log(`\nFile changed: ${path}`);
+        console.log(`\nFile changed: ${inputPath}`);
         await run();
       }, 300);
     });
+  };
+
+  for (const path of inputs) {
+    watchInput(path);
   }
 }

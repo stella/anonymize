@@ -5,6 +5,8 @@ minimumReleaseAge = 432_000
 # First-party Stella packages ship in coordinated release
 # waves, so allow fresh internal versions immediately.
 minimumReleaseAgeExcludes = [
+  "@stll/typescript-config",
+  "@stll/oxlint-config",
   "@stll/aho-corasick",
   "@stll/aho-corasick-darwin-arm64",
   "@stll/aho-corasick-darwin-x64",

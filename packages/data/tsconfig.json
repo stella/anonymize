@@ -1,19 +1,9 @@
 {
+  "extends": "@stll/typescript-config/library.json",
   "compilerOptions": {
-    "allowJs": true,
-    "esModuleInterop": true,
-    "exactOptionalPropertyTypes": true,
     "lib": ["ESNext"],
-    "module": "Preserve",
-    "moduleDetection": "force",
-    "moduleResolution": "Bundler",
     "noEmit": true,
-    "noUncheckedIndexedAccess": true,
-    "resolveJsonModule": true,
-    "skipLibCheck": true,
-    "strict": true,
-    "target": "ES2023",
-    "verbatimModuleSyntax": true
+    "target": "ES2023"
   },
   "exclude": ["node_modules"],
   "include": ["dictionaries"]

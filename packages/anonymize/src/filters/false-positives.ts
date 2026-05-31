@@ -112,7 +112,7 @@ const ALL_CAPS_LINE_HEADING_WORD_LIMIT = 5;
 const SECTION_HEADING_PREFIX_RE =
   /^\s*(?:§\s*)?\d{1,3}(?:\.\d{1,3}){0,4}\.?\s*\p{Lu}/u;
 const LINE_LETTER_RE = /\p{L}/gu;
-const ENTITY_WORD_TOKEN_RE = /\p{L}[\p{L}\p{M}\p{N}'’\-]*/gu;
+const ENTITY_WORD_TOKEN_RE = /\p{L}[\p{L}\p{M}\p{N}'’-]*/gu;
 const isAllCapsBoilerplateLine = (
   fullText: string,
   start: number,
