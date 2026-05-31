@@ -145,7 +145,7 @@ describe("classifyZones", () => {
     const zones = classifyZones(text);
     const sorted = zones.toSorted((a, b) => a.start - b.start);
     expect(sorted[0]!.start).toBe(0);
-    expect(sorted[sorted.length - 1]!.end).toBe(text.length);
+    expect(sorted.at(-1)!.end).toBe(text.length);
 
     for (let i = 1; i < sorted.length; i++) {
       expect(sorted[i]!.start).toBe(sorted[i - 1]!.end);
@@ -169,7 +169,7 @@ describe("classifyZones", () => {
     const zones = classifyZones(text);
     const sorted = zones.toSorted((a, b) => a.start - b.start);
     expect(sorted[0]!.start).toBe(0);
-    expect(sorted[sorted.length - 1]!.end).toBe(text.length);
+    expect(sorted.at(-1)!.end).toBe(text.length);
     for (let i = 1; i < sorted.length; i++) {
       expect(sorted[i]!.start).toBe(sorted[i - 1]!.end);
     }

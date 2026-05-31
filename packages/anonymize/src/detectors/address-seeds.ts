@@ -310,7 +310,7 @@ const getBoundaryRe = async (): Promise<RegExp> => {
  * builder. Empty if data package is not installed.
  */
 export const buildStreetTypePatterns = async (): Promise<string[]> => {
-  let config: DictionaryConfig = {};
+  let config: DictionaryConfig;
   try {
     const mod = await import("../data/address-street-types.json");
     config = mod.default as DictionaryConfig;

@@ -114,6 +114,27 @@ describe("trigger value length cap", () => {
     ).toBe(false);
   });
 
+  test("german IBAN trigger captures spaced account numbers", async () => {
+    const iban = "DE89 3704 0044 0532 0130 00";
+    const entities = await detect(`IBAN: ${iban}\nBIC: COBADEFFXXX`);
+
+    expect(entities.some((e) => e.label === "iban" && e.text === iban)).toBe(
+      true,
+    );
+    expect(entities.some((e) => e.label === "iban" && e.text === "DE89")).toBe(
+      false,
+    );
+  });
+
+  test("IBAN trigger accepts shorter valid account lengths", async () => {
+    const iban = "NO93 8601 1117 947";
+    const entities = await detect(`IBAN: ${iban}\nBIC: DNBANOKKXXX`);
+
+    expect(entities.some((e) => e.label === "iban" && e.text === iban)).toBe(
+      true,
+    );
+  });
+
   test("phone-label trigger entity must contain digits", async () => {
     // Same shape, but check the label-shape invariant:
     // a blank phone label followed by other digit-bearing

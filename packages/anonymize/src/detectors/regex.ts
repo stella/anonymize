@@ -1173,10 +1173,10 @@ const buildCurrencyPatterns = (data: CurrenciesData): string[] => {
   // alternatives (e.g., "126 €", "8 190 £").
   // These are common in European notation.
   if (symbols) {
-    for (const ch of data.symbols) {
+    for (const symbolChar of data.symbols) {
       parts.push({
-        len: ch.length,
-        alt: escapeRegex(ch),
+        len: symbolChar.length,
+        alt: escapeRegex(symbolChar),
       });
     }
   }

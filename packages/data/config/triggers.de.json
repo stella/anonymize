@@ -44,8 +44,8 @@
     "id": "de-iban",
     "label": "iban",
     "strategy": {
-      "type": "n-words",
-      "count": 1
+      "type": "match-pattern",
+      "pattern": "\\b[A-Z]{2}\\d{2}(?=(?:\\s?[\\dA-Z]){11,30}\\b)(?:\\s?[\\dA-Z]{1,4}){3,8}\\b"
     },
     "triggers": ["IBAN"],
     "extensions": ["add-colon"]

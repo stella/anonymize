@@ -264,7 +264,7 @@ const loadAllLegalSuffixes = async (): Promise<readonly string[]> => {
   if (allLegalSuffixesCache) return allLegalSuffixesCache;
   if (allLegalSuffixesPromise) return allLegalSuffixesPromise;
   allLegalSuffixesPromise = (async () => {
-    let data: Record<string, string[]> = {};
+    let data: Record<string, string[]>;
     try {
       const mod = await import("../data/legal-forms.json");
       // eslint-disable-next-line no-unsafe-type-assertion -- JSON module shape
@@ -591,7 +591,7 @@ const buildPatternString = (forms: string[]): string | null => {
  * installed.
  */
 export const buildLegalFormPatterns = async (): Promise<string[]> => {
-  let data: Record<string, string[]> = {};
+  let data: Record<string, string[]>;
 
   try {
     const mod = await import("../data/legal-forms.json");
@@ -1428,9 +1428,9 @@ export const processLegalFormMatches = (
       // shorter nested forms ("s.r.o.", "společnost").
       let suffixOffset = -1;
       for (const suffix of getAllLegalSuffixesSync()) {
-        const idx = text.lastIndexOf(suffix);
-        if (idx !== -1 && idx + suffix.length >= text.length - 1) {
-          suffixOffset = idx;
+        const suffixIdx = text.lastIndexOf(suffix);
+        if (suffixIdx !== -1 && suffixIdx + suffix.length >= text.length - 1) {
+          suffixOffset = suffixIdx;
           break;
         }
       }
@@ -1447,7 +1447,7 @@ export const processLegalFormMatches = (
         const midSection = text.slice(midStart, midEnd);
         const verbIndicators = getSentenceVerbIndicatorsSync();
         let lastVerbEndInMid = -1;
-        for (const match of midSection.matchAll(
+        for (const wordMatch of midSection.matchAll(
           // Match any word (capital or lowercase start); the
           // verb-indicator set lookup is lowercased so e.g.
           // title-cased "Owns" in "Vendor Owns Acme Inc."
@@ -1455,11 +1455,11 @@ export const processLegalFormMatches = (
           /(?<![\p{L}\p{N}])[\p{L}\p{M}]+/gu,
         )) {
           if (
-            match[0] !== undefined &&
-            match.index !== undefined &&
-            verbIndicators.has(match[0].toLowerCase())
+            wordMatch[0] !== undefined &&
+            wordMatch.index !== undefined &&
+            verbIndicators.has(wordMatch[0].toLowerCase())
           ) {
-            lastVerbEndInMid = match.index + match[0].length;
+            lastVerbEndInMid = wordMatch.index + wordMatch[0].length;
           }
         }
         // Also treat a digit immediately after the role-head
@@ -1613,9 +1613,6 @@ export const processLegalFormMatches = (
         if (wordCount > 3) {
           entityStart = match.start;
           entityText = text;
-          ({ prefixEnd, prefixPart } = getPrefixInfo(entityText));
-          isAllCapsMatch =
-            prefixPart.length > 2 && prefixPart === prefixPart.toUpperCase();
         }
       } else if (isAllCapsMatch) {
         // No fullText available — fall back to rejecting.
@@ -1643,7 +1640,7 @@ export const processLegalFormMatches = (
       if (
         suffixClean.length <= 2 &&
         !/\./.test(rawSuffix) &&
-        /[^\x00-\x7F]/.test(
+        /[^\p{ASCII}]/u.test(
           stripDocxSpaces(
             entityText.slice(
               0,

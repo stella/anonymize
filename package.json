@@ -10,7 +10,9 @@
   "scripts": {
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
-    "lint": "turbo run lint",
+    "lint": "turbo run lint && bun run lint:oxlint",
+    "lint:oxlint": "bun --bun oxlint -c oxlint.config.ts --deny-warnings --type-aware .",
+    "lint:fix": "bun --bun oxlint -c oxlint.config.ts --type-aware --fix .",
     "format": "turbo run format",
     "format:check": "prettier --check . --ignore-path .prettierignore",
     "test": "turbo run test",
@@ -22,7 +24,11 @@
     "hooks:uninstall": "lefthook uninstall"
   },
   "devDependencies": {
+    "@stll/oxlint-config": "^0.2.0",
+    "@stll/typescript-config": "^0.2.0",
     "lefthook": "^2.1.8",
+    "oxlint": "^1.67.0",
+    "oxlint-tsgolint": "^0.23.0",
     "prettier": "^3.8.3",
     "turbo": "^2.9.14"
   }

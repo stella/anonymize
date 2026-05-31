@@ -463,7 +463,7 @@ export const mergeAndDedup = (...layers: Entity[][]): Entity[] => {
 
   for (let i = 1; i < sorted.length; i++) {
     const entity = sorted[i];
-    const last = merged[merged.length - 1];
+    const last = merged.at(-1);
     if (!entity || !last) continue;
 
     if (last.end <= entity.start) {
@@ -1208,11 +1208,11 @@ export const runPipeline = async (
   // Runs after dedup so each monetary span is unique,
   // preventing duplicate extensions from clobbering
   // unrelated entities between e.end and newEnd.
-  const amountWordsRe = await getAmountWordsRe();
+  const monetaryAmountWordsRe = await getAmountWordsRe();
   const mergedExtended = extendMonetaryAmountWords(
     rawMerged,
     fullText,
-    amountWordsRe,
+    monetaryAmountWordsRe,
   );
 
   // Boundary consistency (merge adjacent, fix partial
