@@ -29,9 +29,9 @@
  *     validation chain is reused as-is.
  */
 
-import type { Match } from "@stll/text-search";
-import { TextSearch } from "@stll/text-search";
+import type { Match, TextSearch } from "@stll/text-search";
 
+import { getTextSearch } from "../search-engine";
 import type { Entity } from "../types";
 import {
   getKnownLegalSuffixes,
@@ -72,9 +72,13 @@ let cachedSuffixSearch: { ts: TextSearch; suffixes: readonly string[] } | null =
 // `regex: false` mode — `.` is a wildcard unless escaped. Dotted
 // suffixes (`Inc.`, `s.r.o.`, `S.A.`) need their metacharacters
 // escaped before they hit the pattern set; otherwise `o.d.` would
-// match `ood` inside `Food`.
-const escapeRegex = (s: string): string =>
-  s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+// match `ood` inside `Food`. Whitespace runs in multi-token suffixes
+// (`Pty Ltd`, `a. s.`, `s. r. o.`) get widened to the horizontal-
+// whitespace class so real-text NBSP / non-breaking variants between
+// tokens still match.
+const HSPACE_RE = "(?:[^\\S\\n]|[  ])";
+const escapeForSuffixPattern = (s: string): string =>
+  s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, `${HSPACE_RE}+`);
 
 const getSuffixSearch = (): {
   ts: TextSearch;
@@ -88,10 +92,13 @@ const getSuffixSearch = (): {
   // longest-first, which gives the regex backend longest-match-
   // first behaviour for overlapping forms like `LLP` vs `LLLP` vs
   // `PLLC`.
-  const patterns = suffixes.map(escapeRegex);
-  const ts = new TextSearch(patterns, {
-    regex: true,
-  } as unknown as never);
+  const patterns = suffixes.map(escapeForSuffixPattern);
+  // Use the injected TextSearch constructor so the wasm build
+  // (`@stll/anonymize-wasm`) gets its own indirection — a static
+  // import from `@stll/text-search` here would bypass the
+  // `initTextSearch`/`getTextSearch` wiring in `src/wasm.ts`.
+  const Ctor = getTextSearch();
+  const ts = new Ctor(patterns, { regex: true } as unknown as never);
   cachedSuffixSearch = { ts, suffixes };
   return cachedSuffixSearch;
 };

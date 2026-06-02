@@ -42,7 +42,6 @@ import {
   getSigningClausePatterns,
   SIGNING_CLAUSE_META,
 } from "./detectors/regex";
-import { buildLegalFormPatterns } from "./detectors/legal-forms";
 import { buildTriggerPatterns } from "./detectors/triggers";
 import { buildDenyList } from "./detectors/deny-list";
 import { buildStreetTypePatterns } from "./detectors/address-seeds";
@@ -118,8 +117,12 @@ export const buildUnifiedSearch = async (
         labelIsAllowed(entry.label, allowedLabels),
       )
     : [];
+  // Legal-form detection lives in `detectors/legal-forms-v2.ts`
+  // as an AC suffix pass + TS-side validator; the unified search
+  // no longer carries legal-form regex patterns. `legalFormsEnabled`
+  // still gates whether the v2 detector runs in the pipeline, but
+  // its pattern slice is always empty.
   const [
-    legalForms,
     triggers,
     denyListData,
     streetTypes,
@@ -127,9 +130,6 @@ export const buildUnifiedSearch = async (
     datePatterns,
     signingPatterns,
   ] = await Promise.all([
-    legalFormsEnabled
-      ? buildLegalFormPatterns()
-      : Promise.resolve([] as string[]),
     config.enableTriggerPhrases
       ? buildTriggerPatterns()
       : Promise.resolve({
@@ -148,6 +148,13 @@ export const buildUnifiedSearch = async (
       ? getSigningClausePatterns()
       : Promise.resolve([] as string[]),
   ]);
+  // Read but never populated: the legal-form slice in the unified
+  // search is permanently empty after the v2 rewrite. Tracking it
+  // here as a 0-length slice keeps the downstream slice math
+  // (start/end offsets for the regex meta) compatible with code
+  // that hasn't migrated to v2-aware indexing yet.
+  const legalForms: readonly string[] = [];
+  void legalFormsEnabled;
 
   // ── Instance 1: regex + triggers + legal-forms ──
   // Trigger patterns are lowercased strings with
