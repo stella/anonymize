@@ -38,7 +38,8 @@ CodeRabbit, Gemini, GitHub Copilot, Devin, Greptile, and similar bots.
 5. **Reply inline** to each bot comment:
 
    ```bash
-   gh api -X POST repos/{owner}/{repo}/pulls/"$PR_NUMBER"/comments/{comment_id}/replies \
+   COMMENT_ID="123456789"
+   gh api -X POST repos/{owner}/{repo}/pulls/"$PR_NUMBER"/comments/"$COMMENT_ID"/replies \
      -f body="[response]"
    ```
 
