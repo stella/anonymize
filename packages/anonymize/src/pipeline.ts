@@ -9,7 +9,6 @@ import { detectSignatures } from "./detectors/signatures";
 import { processRegexMatches } from "./detectors/regex";
 import {
   getKnownLegalSuffixes,
-  processLegalFormMatches,
   warmLegalRoleHeads,
 } from "./detectors/legal-forms";
 import { detectLegalFormsV2 } from "./detectors/legal-forms-v2";
@@ -51,6 +50,7 @@ import { enforceBoundaryConsistency } from "./filters/boundary-consistency";
 import type { Entity, GazetteerEntry, PipelineConfig } from "./types";
 import {
   DEFAULT_ENTITY_LABELS,
+  DETECTION_SOURCES,
   DETECTOR_PRIORITY,
   isLegalFormsEnabled,
 } from "./types";
@@ -118,6 +118,32 @@ const shouldReplace = (a: Entity, b: Entity): boolean => {
   if (
     a.label === b.label &&
     LITERAL_SOURCES.has(b.source) &&
+    b.start <= a.start &&
+    b.end >= a.end &&
+    bLen > aLen
+  ) {
+    return false;
+  }
+
+  // Legal-form containment: a v2 legal-form entity span anchors on
+  // a suffix and grows back through CapWords + connectors, so its
+  // length DOES reliably indicate accuracy. When such a span fully
+  // contains a shorter same-label entity from a higher-priority
+  // detector (typically a trigger reclassifying a city name like
+  // `Prahy` inside `Technologie hlavního města Prahy, a. s.`), the
+  // legal-form span wins regardless of source priority.
+  if (
+    a.label === b.label &&
+    a.source === DETECTION_SOURCES.LEGAL_FORM &&
+    a.start <= b.start &&
+    a.end >= b.end &&
+    aLen > bLen
+  ) {
+    return true;
+  }
+  if (
+    a.label === b.label &&
+    b.source === DETECTION_SOURCES.LEGAL_FORM &&
     b.start <= a.start &&
     b.end >= a.end &&
     bLen > aLen
@@ -934,19 +960,8 @@ export const runPipeline = async (
     // falls back to the seed list until the cache is warmed.
     await warmLegalRoleHeads();
   }
-  // v2 detector: same warm-up cache, different algorithm. When
-  // `enableLegalFormsV2` is on we replace the v1 match processor
-  // with the AC + validator pipeline. Both paths emit the same
-  // Entity shape, so the rest of the pipeline is oblivious.
   const rawLegalFormEntities = legalFormsEnabled
-    ? config.enableLegalFormsV2 === true
-      ? detectLegalFormsV2(fullText)
-      : processLegalFormMatches(
-          regexMatches,
-          slices.legalForms.start,
-          slices.legalForms.end,
-          fullText,
-        )
+    ? detectLegalFormsV2(fullText)
     : [];
   const legalFormEntities = filterAllowedLabels(
     rawLegalFormEntities,

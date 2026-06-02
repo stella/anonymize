@@ -79,22 +79,11 @@ const loadSentenceVerbIndicators = async (): Promise<ReadonlySet<string>> => {
 const getSentenceVerbIndicatorsSync = (): ReadonlySet<string> =>
   sentenceVerbIndicatorsCache ?? SENTENCE_VERB_INDICATORS_SEED;
 
-const UPPER = "A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽÄÖÜÀÂÆÇÈÊËÎÏÔÙÛŸÑĄĆĘŁŃŚŹŻ\\u0130";
-const LOWER = "a-záčďéěíňóřšťúůýžäöüßàâæçèêëîïôùûÿñąćęłńśźż\\u0131";
-const CAP_WORD = `(?:[${UPPER}]{2,}|[${UPPER}][${LOWER}${UPPER}]+)`;
-// Standalone single uppercase letter — used inside company
-// names like "X Holdings I, Inc." or "X Corp." where the
-// company token or a Roman-numeral-shaped suffix is one
-// character long. The negative lookahead keeps it from
-// eating the first letter of a real multi-letter Cap word.
-const SINGLE_CAP = `[${UPPER}](?![${LOWER}${UPPER}])`;
-// All-caps word: 2+ uppercase letters, no lowercase.
-// For company names like "EAGLES BRNO", max 3 words.
-const ALLCAP_WORD = `[${UPPER}]{2,}`;
 // Horizontal whitespace as understood by DOCX text extraction.
 // `regex`/TextSearch does not treat NBSP variants as `\s`, but
 // company names often contain them between words and legal forms.
 const HSPACE = "(?:[^\\S\\n]|[  ])";
+const UPPER = "A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽÄÖÜÀÂÆÇÈÊËÎÏÔÙÛŸÑĄĆĘŁŃŚŹŻ\\u0130";
 const LEGAL_LIST_BOUNDARY_RE = new RegExp(
   `^[,;]${HSPACE}+(?=\\p{Lu}|(?:\\p{Lu}\\.${HSPACE}?){2,})`,
   "u",
@@ -487,100 +476,13 @@ const loadStructuralSingleCapPrefixes = async (): Promise<
 const getStructuralSingleCapPrefixesSync = (): ReadonlySet<string> =>
   structuralSingleCapPrefixesCache ?? new Set<string>();
 
+// Used by the trim helpers below to escape literal suffix tokens
+// before injecting them into runtime-built regexes.
 const escapeForRegex = (form: string): string =>
   form
     .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
     .replace(/\s+/g, `${HSPACE}+`)
-    // Use [^\S\n]? (optional horizontal whitespace)
-    // instead of \s* to prevent greedy matching across
-    // newlines which causes DFA failures in regex-set.
     .replace(/\\\./g, `\\.${HSPACE}?`);
-
-const isShortForm = (form: string): boolean =>
-  form.replace(/[.\s]/g, "").length <= 3 && !form.includes(" ");
-
-const buildDottedAbbreviationAlternation = (forms: readonly string[]): string =>
-  [
-    ...new Set(
-      forms
-        .filter((form) => /^[\p{Lu}][\p{L}\p{M}]{0,5}\.$/u.test(form))
-        .map((form) => form.slice(0, -1))
-        .filter((form) => form.length > 0),
-    ),
-  ]
-    .toSorted((a, b) => b.length - a.length)
-    .map(escapeForRegex)
-    .join("|");
-
-const buildPatternString = (forms: string[]): string | null => {
-  if (forms.length === 0) {
-    return null;
-  }
-
-  const sorted = forms.toSorted((a, b) => b.length - a.length);
-  const alt = sorted.map(escapeForRegex).join("|");
-  // Separator between name words: space, ampersand,
-  // comma, dot, hyphen (1-4 chars). Connector words
-  // (a, and, und, et, e, y, i) are allowed only when
-  // followed by a lowercase-starting word.
-  // Horizontal whitespace only (no newline) — keeping
-  // newlines out of the separators prevents the DFA
-  // size from blowing up across line boundaries and
-  // matches the existing pattern in escapeForRegex.
-  const LOWER_CONNECTOR = `${HSPACE}+(?:a|and|und|et|e|y|i)${HSPACE}+(?=[${LOWER}])`;
-  const SIMPLE_SEP = `(?:${HSPACE}|[&,.${DASH_INNER}]){1,4}`;
-  // Uppercase- or digit-only word for the strict head.
-  // Lowercase-starting tokens can only appear in the
-  // optional tail below. Single uppercase letters
-  // ("I", "X") are accepted so party names like
-  // "X Holdings I, Inc." survive the head walk —
-  // standalone single-cap heads still need a real cap
-  // word continuation or the trailing legal-form suffix
-  // to anchor the match.
-  const CAP_OR_NUM_WORD = `(?:${CAP_WORD}|${SINGLE_CAP}|\\d{1,4})`;
-  // A lowercase-starting word, excluding "and"/"und"/
-  // "et" so they cannot sneak past the connector guard.
-  const LOWER_WORD =
-    `(?:(?!(?:and|und|et)(?![${UPPER}${LOWER}]))` +
-    `[${LOWER}][${LOWER}${UPPER}]+)`;
-  // Any word, used in the tail. Same exclusion for
-  // standalone "and"/"und"/"et" as LOWER_WORD.
-  const ANY_WORD_TAIL =
-    `(?:(?!(?:and|und|et)(?![${UPPER}${LOWER}]))` +
-    `[${UPPER}${LOWER}][${LOWER}${UPPER}]+` +
-    `|[${UPPER}]{2,3}` +
-    `|\\d{1,4})`;
-  // Prefix structure:
-  //   CapWord (SimpleSep CapOrNumWord)*           # strict head
-  //   ( SimpleSep LowerWord                       # optional tail starts
-  //     ((LowerConnector|SimpleSep) AnyWord)* )?  #   with a lowercase
-  // The tail is bounded to a handful of tokens so legitimate
-  // multi-word names ("Národní agentura pro komunikační a
-  // informační technologie, s. p.", "Bank of America, Inc.")
-  // still match while sentence fragments containing six-plus
-  // words ahead of the legal form don't get swept in.
-  //
-  const dottedAbbreviationAlt = buildDottedAbbreviationAlternation(forms);
-  const dottedAbbreviationTail =
-    dottedAbbreviationAlt.length > 0
-      ? `(?:${SIMPLE_SEP}(?:${dottedAbbreviationAlt})\\.)?`
-      : "";
-  const head =
-    `(?:${CAP_WORD})(?:${SIMPLE_SEP}(?:${CAP_OR_NUM_WORD})){0,10}` +
-    dottedAbbreviationTail;
-  // Tail allows up to 10 tokens so long state-form names
-  // ("Národní agentura pro podporu rozvoje vzdělávání …, z.s.")
-  // still match end-to-end. Sentence-fragment over-extension
-  // is handled later by the role-head trim, not by tightening
-  // this regex.
-  const tail =
-    `${SIMPLE_SEP}(?:${LOWER_WORD})` +
-    `(?:(?:${LOWER_CONNECTOR}|${SIMPLE_SEP})(?:${ANY_WORD_TAIL})){0,10}`;
-  const prefix = `(?:${head})(?:${tail})?`;
-  const separator = `(?:${HSPACE}+|,${HSPACE}*)`;
-
-  return `${prefix}${separator}(?:${alt})(?![${LOWER}])`;
-};
 
 // ── Pattern builder for unified search ──────────────
 
@@ -591,131 +493,16 @@ const buildPatternString = (forms: string[]): string | null => {
  * installed.
  */
 export const buildLegalFormPatterns = async (): Promise<string[]> => {
-  let data: Record<string, string[]>;
-
-  try {
-    const mod = await import("../data/legal-forms.json");
-    // eslint-disable-next-line no-unsafe-type-assertion -- JSON module shape
-    data = (mod as { default: Record<string, string[]> }).default;
-  } catch {
-    return [];
-  }
-
-  const allForms: string[] = [];
-  // Dedupe case-sensitively so all-caps and title-case
-  // spellings of the same form ("Ltda." vs "LTDA.",
-  // "Pty Ltd" vs "PTY LTD") both reach the detector
-  // regex. The escaped alternatives are matched case-
-  // sensitively, so dropping one spelling silently blinds
-  // the detector to that casing in real documents.
-  const seen = new Set<string>();
-
-  for (const forms of Object.values(data)) {
-    for (const form of forms) {
-      if (!seen.has(form)) {
-        seen.add(form);
-        allForms.push(form);
-      }
-    }
-  }
-  // Bring `LEGAL_SUFFIXES` entries that aren't already in
-  // `data/legal-forms.json` into the detector vocabulary too
-  // — otherwise additions there only reach the propagation
-  // and trailing-period passes, and the detector keeps
-  // missing them on fresh prose ("Bank of America, N.A.").
-  for (const form of LEGAL_SUFFIXES) {
-    if (!seen.has(form)) {
-      seen.add(form);
-      allForms.push(form);
-    }
-  }
-
-  const patterns: string[] = [];
-
-  const longPattern = buildPatternString(
-    allForms.filter((f) => !isShortForm(f)),
-  );
-  if (longPattern) {
-    patterns.push(longPattern);
-  }
-
-  const shortPattern = buildPatternString(allForms.filter(isShortForm));
-  if (shortPattern) {
-    patterns.push(shortPattern);
-  }
-  const allcapAlt = allForms
-    .toSorted((a, b) => b.length - a.length)
-    .map(escapeForRegex)
-    .join("|");
-  const mixedNameSep = `(?:${HSPACE}|[&,.${DASH_INNER}]){1,4}`;
-
-  const capitalizedNoDigitPrefix =
-    `(?:${CAP_WORD})` +
-    `(?:${mixedNameSep}(?:${CAP_WORD}|${ALLCAP_WORD})){1,8}`;
-  patterns.push(
-    `${capitalizedNoDigitPrefix}(?:${HSPACE}+|,${HSPACE}*)` +
-      `(?:${allcapAlt})(?![${LOWER}])`,
-  );
-
-  // Brand acronyms followed by mixed-case place or product
-  // words: "IKEA Bratislava, s.r.o.". The generic pattern can
-  // over-capture from preceding clause prose before reaching the
-  // suffix; this narrower pattern anchors directly on the acronym
-  // head so the merge step can keep the precise organization span.
-  const allcapMixedPrefix =
-    `(?:${ALLCAP_WORD})` +
-    `(?:${mixedNameSep}(?:${CAP_WORD}|${ALLCAP_WORD}|\\d{1,4})){1,6}`;
-  patterns.push(
-    `${allcapMixedPrefix}(?:${HSPACE}+|,${HSPACE}*)` +
-      `(?:${allcapAlt})(?![${LOWER}])`,
-  );
-
-  // SEC/EDGAR HTML often wraps terminal legal forms onto
-  // the next physical line after a dotted business
-  // designator: "Goldman Sachs & Co.\nLLC". Keep the
-  // newline allowance this narrow so ordinary legal-form
-  // matching still cannot sweep across headings or
-  // paragraph boundaries.
-  const dottedLineWrapPrefix =
-    `(?:${CAP_WORD})` +
-    `(?:${mixedNameSep}(?:${CAP_WORD}|${ALLCAP_WORD})){1,8}` +
-    `\\.${HSPACE}*\\n${HSPACE}*`;
-  patterns.push(`${dottedLineWrapPrefix}(?:${allcapAlt})(?![${LOWER}])`);
-
-  // All-caps company names: "EAGLES BRNO, z.s."
-  // Up to 3 all-caps words before any legal form.
-  // Uses all forms (both long and short).
-  // No connectors — backward extension handles them.
-  // Horizontal whitespace only ([ \t], not \s): SEC-style
-  // signature blocks have heading markers ("AMENDMENT NO. 13
-  // …\nNOVELIS SOUTH AMERICA HOLDINGS LLC") where allowing
-  // newlines lets the prefix sweep across the heading into the
-  // next-line LLC, then leaves residue like "TO SECOND" after
-  // the role-head trim. Keeping the separator on-line confines
-  // the pattern to a single physical line.
-  const allcapPrefix =
-    `(?:${ALLCAP_WORD})` +
-    `(?:(?:${HSPACE}|[&,.${DASH_INNER}]){1,4}(?:${ALLCAP_WORD})){0,2}`;
-  patterns.push(
-    `${allcapPrefix}(?:${HSPACE}+|,${HSPACE}*)` +
-      `(?:${allcapAlt})(?![${LOWER}])`,
-  );
-
-  // Single-letter company name immediately followed by a
-  // legal-form suffix ("X Corp.", "X Inc."). Kept on its
-  // own narrow pattern with a tight horizontal-space-only
-  // separator so digits or stray Cap letters between the
-  // initial and the suffix do not anchor a sweep — the
-  // generic head pattern above stays at 2+ characters to
-  // avoid lighting up on Czech postcode rows like
-  // "PSČ 466 01\tPS" where a single uppercase letter sits
-  // far ahead of the suffix.
-  patterns.push(
-    `(?:^|(?<=[^${UPPER}${LOWER}\\p{N}]))[${UPPER}](?:${HSPACE}+|,${HSPACE}*)` +
-      `(?:${allcapAlt})(?![${UPPER}${LOWER}\\p{N}])`,
-  );
-
-  return patterns;
+  // The legal-form detector was rewritten to the candidate +
+  // validator architecture in `legal-forms-v2.ts`. The unified
+  // search no longer carries any legal-form regex patterns —
+  // suffix discovery now goes through an Aho-Corasick literal
+  // pass and the rough span around each hit is handed to the
+  // existing `processLegalFormMatches` validator chain.
+  // Returning an empty list keeps the unified-search builder
+  // happy without compiling the ~7 KB monolithic regex that
+  // tripped the upstream text-search DFA on long preambles.
+  return [];
 };
 
 // ── Backward extension ──────────────────────────────

@@ -424,17 +424,17 @@ describe("M.Sc. / B.Sc. post-nominals", () => {
 });
 
 describe("legal form digit token in prefix", () => {
-  test("regex matches company with year in name", async () => {
-    // The regex-set DFA engine may not support the full
-    // pattern, but the underlying regex is correct.
-    const { buildLegalFormPatterns } = await import("../detectors/legal-forms");
-    const patterns = await buildLegalFormPatterns();
-    const text = "Firma 2028 s.r.o. dodává materiál";
-    const matched = patterns.some((p: string) => {
-      const re = new RegExp(p);
-      return re.test(text);
-    });
-    expect(matched).toBe(true);
+  test("company with year in name is detected end-to-end", async () => {
+    // After the v2 legal-form rewrite, suffix discovery goes
+    // through an Aho-Corasick literal pass and the backward
+    // walker admits digit tokens (`Firma 2028 s.r.o.`). The
+    // assertion is now end-to-end through `runPipeline` rather
+    // than a white-box check on the obsolete regex builder.
+    const entities = await detect("Firma 2028 s.r.o. dodává materiál");
+    const org = entities.find(
+      (e) => e.label === "organization" && e.text.includes("Firma 2028 s.r.o."),
+    );
+    expect(org).toBeDefined();
   });
 });
 
