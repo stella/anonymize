@@ -13,13 +13,15 @@
     "lint": "turbo run lint && bun run lint:oxlint",
     "lint:oxlint": "bun --bun oxlint -c oxlint.config.ts --deny-warnings --type-aware .",
     "lint:fix": "bun --bun oxlint -c oxlint.config.ts --type-aware --fix .",
-    "format": "turbo run format && oxfmt . '!packages/**'",
-    "format:check": "turbo run format -- --check && oxfmt --check . '!packages/**'",
+    "format": "turbo run format && oxfmt . '!packages/**' '!.ai/**' '!.agents/**' '!.claude/**' '!AGENTS.md' '!CLAUDE.md' '!GEMINI.md'",
+    "format:check": "turbo run format -- --check && oxfmt --check . '!packages/**' '!.ai/**' '!.agents/**' '!.claude/**' '!AGENTS.md' '!CLAUDE.md' '!GEMINI.md'",
     "test": "turbo run test",
     "sync:version": "node .github/tools/sync-runtime-version.mjs",
     "check:version": "node .github/tools/sync-runtime-version.mjs --check",
     "hooks:install": "lefthook install",
-    "hooks:uninstall": "lefthook uninstall"
+    "hooks:uninstall": "lefthook uninstall",
+    "sync-ai": "bash scripts/sync-ai-skills.sh",
+    "sync-ai:check": "bash scripts/sync-ai-skills.sh --check"
   },
   "devDependencies": {
     "@stll/oxlint-config": "^0.2.0",
