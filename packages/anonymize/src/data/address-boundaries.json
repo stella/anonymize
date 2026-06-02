@@ -168,5 +168,15 @@
     "zastúpený",
     "zastúpené"
   ],
-  "universal": ["e-mail", "email", "fax", "http", "https", "tel", "www"]
+  "universal": [
+    "e-mail",
+    "email",
+    "fax",
+    "http",
+    "https",
+    "phone",
+    "tel",
+    "telephone",
+    "www"
+  ]
 }

@@ -707,6 +707,43 @@ const expandCluster = async (
   };
 };
 
+// Allow a span containing line breaks only when the cluster carries
+// independent evidence on both sides of the break — a "street" signal
+// (street-word or house-number) and a "destination" signal (postal-code
+// or city). This admits the dominant US notice-block shape
+//
+//   One American Road
+//   Cleveland, Ohio 44144-2398
+//
+// while still rejecting clusters whose only multi-line evidence is a
+// single weak seed picking up an adjacent unrelated line. A single
+// internal newline is the cap: anything richer than that is structural
+// over-reach.
+const STREET_SEED_TYPES: ReadonlySet<SeedType> = new Set([
+  "street-word",
+  "house-number",
+]);
+const DESTINATION_SEED_TYPES: ReadonlySet<SeedType> = new Set([
+  "postal-code",
+  "city",
+]);
+
+const passesNewlineBoundaryCheck = (
+  text: string,
+  cluster: SeedCluster,
+): boolean => {
+  const newlines = (text.match(/\n/gu) ?? []).length;
+  if (newlines === 0) return true;
+  if (newlines > 1) return false;
+  let hasStreet = false;
+  let hasDestination = false;
+  for (const seed of cluster.seeds) {
+    if (STREET_SEED_TYPES.has(seed.type)) hasStreet = true;
+    if (DESTINATION_SEED_TYPES.has(seed.type)) hasDestination = true;
+  }
+  return hasStreet && hasDestination;
+};
+
 // ── Public API ──────────────────────────────────────
 
 /**
@@ -757,9 +794,7 @@ export const processAddressSeeds = async (
       continue;
     }
 
-    // Skip if it contains a newline (likely crossed
-    // a structural boundary)
-    if (text.includes("\n")) {
+    if (!passesNewlineBoundaryCheck(text, cluster)) {
       continue;
     }
 
