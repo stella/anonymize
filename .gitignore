@@ -10,3 +10,6 @@ scripts/*
 !scripts/sync-ai-skills.sh
 packages/data/scripts/
 package-lock.json
+
+# Local-only scratch workspace.
+packages/anonymize/hunt/
