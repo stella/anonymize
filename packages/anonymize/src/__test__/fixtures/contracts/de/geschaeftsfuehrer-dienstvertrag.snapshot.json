@@ -42,10 +42,10 @@
     },
     {
       "start": 298,
-      "end": 301,
+      "end": 311,
       "label": "date of birth",
-      "text": "21.",
-      "source": "trigger"
+      "text": "21. März 1968",
+      "source": "regex"
     },
     {
       "start": 326,
@@ -63,10 +63,10 @@
     },
     {
       "start": 454,
-      "end": 457,
+      "end": 467,
       "label": "date of birth",
-      "text": "09.",
-      "source": "trigger"
+      "text": "09. Juli 1982",
+      "source": "regex"
     },
     {
       "start": 482,
@@ -181,5 +181,5 @@
       "source": "trigger"
     }
   ],
-  "redactedText": "Geschäftsführer-Dienstvertrag\n\nzwischen\n\n(1) der [ORGANIZATION_1],\n    Sitz: [ADDRESS_1],\n    eingetragen im [REGISTRATION_NUMBER_1],\n    vertreten durch den Aufsichtsratsvorsitzenden Herrn [PERSON_1],\n    geboren am [DATE_OF_BIRTH_1] März 1968,\n    wohnhaft [ADDRESS_2]\n    (nachfolgend \"Gesellschaft\" genannt)\n\nund\n\n(2) [PERSON_2],\n    geboren am [DATE_OF_BIRTH_2] Juli 1982,\n    wohnhaft [ADDRESS_3],\n    Steuer-ID: 78 123 456 789\n    (nachfolgend \"Geschäftsführerin\" genannt)\n\n§ 1 Aufgabengebiet\nDie Geschäftsführerin wird mit Wirkung zum [DATE_1] zur alleinvertretungs-\nberechtigten Geschäftsführerin der Gesellschaft bestellt. Sie führt die Geschäfte\nder Gesellschaft im Einklang mit dem Gesellschaftsvertrag der Drachenfels\n[ORGANIZATION_2] und den Beschlüssen der Gesellschafterversammlung.\n\n§ 2 Vergütung\nDie Geschäftsführerin erhält ein Jahresfestgehalt in Höhe von [MONETARY_AMOUNT_1]\n(in Worten: zweihundertfünfundachtzigtausend Euro), zahlbar in zwölf gleichen\nMonatsraten auf das folgende Konto:\n  Kontoinhaberin: [PERSON_3]\n  IBAN: [IBAN_1]\n  BIC: [BANK_ACCOUNT_NUMBER_1]\n  Bank: [ORGANIZATION_3], Filiale [ADDRESS_4]\n\n§ 3 Vertragsdauer\nDer Vertrag tritt am [DATE_1] in Kraft und wird zunächst auf drei Jahre\ngeschlossen. Er verlängert sich automatisch um weitere zwei Jahre, sofern\nkeine Partei mit einer Frist von sechs Monaten vor Ablauf kündigt.\n\n§ 4 Gerichtsstand\nErfüllungsort und Gerichtsstand für alle Streitigkeiten aus diesem Vertrag ist\n[ADDRESS_5]. Sollten einzelne Bestimmungen unwirksam sein, bleibt der Vertrag\nim Übrigen wirksam.\n\n[ADDRESS_6] [DATE_2]\n\n____________________________            ____________________________\n[ORGANIZATION_1]          [PERSON_3]\nvertreten durch [PERSON_4]rin\n"
+  "redactedText": "Geschäftsführer-Dienstvertrag\n\nzwischen\n\n(1) der [ORGANIZATION_1],\n    Sitz: [ADDRESS_1],\n    eingetragen im [REGISTRATION_NUMBER_1],\n    vertreten durch den Aufsichtsratsvorsitzenden Herrn [PERSON_1],\n    geboren am [DATE_OF_BIRTH_1],\n    wohnhaft [ADDRESS_2]\n    (nachfolgend \"Gesellschaft\" genannt)\n\nund\n\n(2) [PERSON_2],\n    geboren am [DATE_OF_BIRTH_2],\n    wohnhaft [ADDRESS_3],\n    Steuer-ID: 78 123 456 789\n    (nachfolgend \"Geschäftsführerin\" genannt)\n\n§ 1 Aufgabengebiet\nDie Geschäftsführerin wird mit Wirkung zum [DATE_1] zur alleinvertretungs-\nberechtigten Geschäftsführerin der Gesellschaft bestellt. Sie führt die Geschäfte\nder Gesellschaft im Einklang mit dem Gesellschaftsvertrag der Drachenfels\n[ORGANIZATION_2] und den Beschlüssen der Gesellschafterversammlung.\n\n§ 2 Vergütung\nDie Geschäftsführerin erhält ein Jahresfestgehalt in Höhe von [MONETARY_AMOUNT_1]\n(in Worten: zweihundertfünfundachtzigtausend Euro), zahlbar in zwölf gleichen\nMonatsraten auf das folgende Konto:\n  Kontoinhaberin: [PERSON_3]\n  IBAN: [IBAN_1]\n  BIC: [BANK_ACCOUNT_NUMBER_1]\n  Bank: [ORGANIZATION_3], Filiale [ADDRESS_4]\n\n§ 3 Vertragsdauer\nDer Vertrag tritt am [DATE_1] in Kraft und wird zunächst auf drei Jahre\ngeschlossen. Er verlängert sich automatisch um weitere zwei Jahre, sofern\nkeine Partei mit einer Frist von sechs Monaten vor Ablauf kündigt.\n\n§ 4 Gerichtsstand\nErfüllungsort und Gerichtsstand für alle Streitigkeiten aus diesem Vertrag ist\n[ADDRESS_5]. Sollten einzelne Bestimmungen unwirksam sein, bleibt der Vertrag\nim Übrigen wirksam.\n\n[ADDRESS_6] [DATE_2]\n\n____________________________            ____________________________\n[ORGANIZATION_1]          [PERSON_3]\nvertreten durch [PERSON_4]rin\n"
 }

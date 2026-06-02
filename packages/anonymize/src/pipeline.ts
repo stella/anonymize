@@ -151,6 +151,36 @@ const shouldReplace = (a: Entity, b: Entity): boolean => {
     return false;
   }
 
+  // Same-start same-label longest-wins rule for shape-extending
+  // detectors. For labels where the entity naturally extends to
+  // include trailing context (a date that grows from `21.` to
+  // `21. März 1968`, a monetary amount that grows from `273,-`
+  // to `273,- Kč`), the longer span at the same offset is the
+  // correct boundary regardless of which detector emitted it.
+  // Without this rule the priority comparison below picks the
+  // shorter-but-higher-priority trigger and discards the full
+  // entity. The list is intentionally narrow — `address`,
+  // `organization`, `person` keep the priority semantics
+  // because their detectors don't have the same "trigger
+  // captures a prefix, regex captures the whole shape"
+  // relationship.
+  const LONGEST_WINS_LABELS: ReadonlySet<string> = new Set([
+    "date",
+    "date of birth",
+    "monetary amount",
+    "phone number",
+    "email address",
+    "url",
+  ]);
+  if (
+    a.label === b.label &&
+    a.start === b.start &&
+    aLen !== bLen &&
+    LONGEST_WINS_LABELS.has(a.label)
+  ) {
+    return aLen > bLen;
+  }
+
   // Cross-label containment for country: a country token
   // contained inside a longer person or organization span
   // is almost always a first-name collision ("Chad Smith",
