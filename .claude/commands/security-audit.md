@@ -41,7 +41,7 @@ layer on repo-specific risks.
 7. **Review dependency risk**:
 
    ```bash
-   bun pm audit
+   bun audit
    ```
 
    Use the repo's equivalent audit command if it does not use Bun. Also check
