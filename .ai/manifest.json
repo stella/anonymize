@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "agents": {
+    "title": "anonymize Development Guidelines",
+    "modules": [
+      "stella-public-repo",
+      "engineering",
+      "typescript",
+      "testing",
+      "linting"
+    ],
+    "local": ".ai/local/agents.md"
+  }
+}

@@ -5,6 +5,8 @@ dist
 .turbo
 
 # Local scripts (corpus download, benchmarks)
-scripts/
+scripts/*
+!scripts/link-codex-skills.sh
+!scripts/sync-ai-skills.sh
 packages/data/scripts/
 package-lock.json
