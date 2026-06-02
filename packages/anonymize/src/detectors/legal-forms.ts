@@ -1316,7 +1316,7 @@ const trimLeadingClause = (text: string): { offset: number; text: string } => {
         // sentence verb ("This Agreement is entered into between
         // Acme Inc."): the verb is the structural cue that this is
         // clause prose, not an in-name component.
-        const beforeWords = before.match(/\p{L}[\p{L}\p{M}]*/gu) ?? [];
+        const beforeWords = before.match(/\p{L}[\p{L}\p{M}'’]*/gu) ?? [];
         const hasSentenceVerb = beforeWords.some((word) =>
           verbIndicators.has(word.toLowerCase()),
         );
@@ -1324,7 +1324,7 @@ const trimLeadingClause = (text: string): { offset: number; text: string } => {
           continue;
         }
       }
-      const words = before.match(/\p{L}[\p{L}\p{M}]*/gu) ?? [];
+      const words = before.match(/\p{L}[\p{L}\p{M}'’]*/gu) ?? [];
       const hasProsePrefix =
         words.length >= 3 && words.some((word) => /\p{Ll}/u.test(word));
       if (hasProsePrefix) {
