@@ -341,14 +341,27 @@ const STDNUM_ENTRIES: readonly StdnumEntry[] = [
   toEntry(br.cnpj, "tax identification number", 0.95),
 
   // ── CN validators ────────────────────────────────
-  // RIC (Resident Identity Card, 18-digit with MOD 11-2
-  // checksum; also accepts the legacy 15-digit form).
-  // The stdnum pattern is broad ([A-Z0-9]{15,18}) but
-  // the validator enforces the embedded YYYYMMDD birth
-  // date and the check digit, so order/case numbers
-  // and other 15-18-character alphanumerics that happen
-  // to match the shape get filtered out.
-  toEntry(cn.ric, "national identification number", 0.95),
+  // RIC (Resident Identity Card, 18-digit modern form:
+  // region + YYYYMMDD + sequence + MOD 11-2 check digit,
+  // last position may be `X`). The pattern is tightened
+  // to a digit-only `\d{17}[\dX]` shape so it can't
+  // match alphanumeric blobs that share the length
+  // bucket; the validator then enforces the embedded
+  // birth date and the checksum.
+  //
+  // The legacy 15-digit form is NOT covered: its bare
+  // `\d{15}` shape is shadowed by the `fr.nir` pattern
+  // (also 15 digits) in the unified text-search engine,
+  // which returns only one match per position and picks
+  // the earlier-registered pattern. The modern 18-digit
+  // form has dominated CN issuance since 1999, so the
+  // gap is theoretical for current corpora.
+  {
+    validator: cn.ric,
+    label: "national identification number",
+    score: 0.95,
+    pattern: "(?<!\\w)\\d{17}[\\dX](?!\\w)",
+  },
 ].filter((e): e is StdnumEntry => e !== null);
 
 // ── Named pattern definitions ────────────────────────

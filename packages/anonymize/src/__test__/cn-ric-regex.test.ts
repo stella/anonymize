@@ -97,4 +97,24 @@ describe("CN RIC 18-digit national identifier", () => {
     );
     expect(spurious).toBeUndefined();
   });
+
+  test("19-digit numeric blob does not tag the leading 18-digit substring", async () => {
+    // Lookahead must prevent the matcher from consuming 18 of 19
+    // digits and reporting an inner span as a national ID.
+    const text = "Order number 1201021963052110809 was placed.";
+    const entities = await detect(text);
+    const spurious = entities.find((e) =>
+      e.text.includes("120102196305211080"),
+    );
+    expect(spurious).toBeUndefined();
+  });
+
+  test("17-digit numeric blob is not tagged as a RIC", async () => {
+    // The pattern requires exactly 18 (with check digit) or 15
+    // digits; 17 must not match either alternative.
+    const text = "Reference 12010219630521108 in the dossier.";
+    const entities = await detect(text);
+    const spurious = entities.find((e) => e.text.includes("12010219630521108"));
+    expect(spurious).toBeUndefined();
+  });
 });
