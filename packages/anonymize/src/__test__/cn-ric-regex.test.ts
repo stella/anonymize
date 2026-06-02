@@ -76,6 +76,29 @@ describe("CN RIC 18-digit national identifier", () => {
     expect(hit?.label).toBe("national identification number");
   });
 
+  test("valid 18-digit RIC with lowercase x check digit is tagged", async () => {
+    // Real-world IDs are commonly written with lowercase `x`; the
+    // pattern must accept it and the stdnum validator's compact step
+    // normalises the case for the checksum.
+    const text = "Citizen 51010319530317097x signed the agreement.";
+    const entities = await detect(text);
+    const hit = entities.find((e) => e.text.includes("51010319530317097x"));
+    expect(hit).toBeDefined();
+    expect(hit?.label).toBe("national identification number");
+  });
+
+  test("RIC preceded by a CJK label is tagged", async () => {
+    // Chinese-language label `身份证号` (ID-card number) precedes the
+    // value with no separator. The ASCII identifier boundary lets the
+    // pattern match across the boundary; a Unicode `\w` boundary would
+    // have blocked it.
+    const text = "身份证号120102196305211080 已登记。";
+    const entities = await detect(text);
+    const hit = entities.find((e) => e.text.includes("120102196305211080"));
+    expect(hit).toBeDefined();
+    expect(hit?.label).toBe("national identification number");
+  });
+
   test("18-digit number with an invalid birth date is not tagged", async () => {
     // Digits 7-14 = 20102800 — no month 28 — must be rejected by the
     // validator's date check.
