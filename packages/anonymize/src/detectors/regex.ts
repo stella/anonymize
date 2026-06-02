@@ -7,6 +7,7 @@ import {
   bg,
   br,
   ch,
+  cn,
   cz,
   cy,
   de,
@@ -338,6 +339,16 @@ const STDNUM_ENTRIES: readonly StdnumEntry[] = [
   // overlap resolver prefers the tax-ID label.
   toEntry(br.cpf, "tax identification number", 0.95),
   toEntry(br.cnpj, "tax identification number", 0.95),
+
+  // ── CN validators ────────────────────────────────
+  // RIC (Resident Identity Card, 18-digit with MOD 11-2
+  // checksum; also accepts the legacy 15-digit form).
+  // The stdnum pattern is broad ([A-Z0-9]{15,18}) but
+  // the validator enforces the embedded YYYYMMDD birth
+  // date and the check digit, so order/case numbers
+  // and other 15-18-character alphanumerics that happen
+  // to match the shape get filtered out.
+  toEntry(cn.ric, "national identification number", 0.95),
 ].filter((e): e is StdnumEntry => e !== null);
 
 // ── Named pattern definitions ────────────────────────
