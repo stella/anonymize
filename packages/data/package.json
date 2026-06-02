@@ -47,12 +47,8 @@
     "typecheck": "tsc --noEmit",
     "validate:triggers": "bun run scripts/validate-triggers.ts",
     "check:mirror": "node scripts/check-mirror.mjs",
-    "lint:code": "prettier --check . --ignore-path ../../.prettierignore",
-    "lint:json": "prettier --check \"config/**/*.json\"",
-    "lint": "bun run validate:triggers && bun run check:mirror && bun run lint:code && bun run lint:json",
-    "format:code": "prettier --write . --ignore-path ../../.prettierignore",
-    "format:json": "prettier --write \"config/**/*.json\"",
-    "format": "bun run format:code && bun run format:json"
+    "lint": "bun run validate:triggers && bun run check:mirror",
+    "format": "oxfmt ."
   },
   "devDependencies": {
     "stopwords-iso": "1.1.0",

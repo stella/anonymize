@@ -1,5 +1,0 @@
-bun.lock
-**/.turbo/**
-**/dist/**
-packages/data/config/**/*.json
-packages/data/dictionaries/**/*.json

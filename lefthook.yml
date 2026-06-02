@@ -13,22 +13,11 @@ pre-commit:
     # `stage_fixed: true` will `git add` the whole file after
     # formatting, which pulls any unstaged hunks into the
     # commit. Accepted trade-off — partial-hunk commits across
-    # files Prettier touches are rare, and the alternative
+    # files the formatter touches are rare, and the alternative
     # (failing the hook) blocks the common case.
     format:
-      run: bunx prettier --write --ignore-unknown --ignore-path .prettierignore --no-error-on-unmatched-pattern {staged_files}
+      run: bun --bun oxfmt --no-error-on-unmatched-pattern {staged_files}
       stage_fixed: true
-    # The root `.prettierignore` excludes `packages/data/**/*.json`
-    # because that data has its own format pipeline in
-    # `@stll/anonymize-data`. Skip the ignore file here so the
-    # pre-commit check actually enforces formatting on staged
-    # data JSON.
-    json-data:
-      glob:
-        - "packages/data/config/*.json"
-        - "packages/data/config/**/*.json"
-        - "packages/data/dictionaries/**/*.json"
-      run: bunx prettier --check --ignore-path /dev/null {staged_files}
 
 pre-push:
   parallel: true

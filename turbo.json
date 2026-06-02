@@ -1,5 +1,6 @@
 {
   "$schema": "https://turborepo.com/schema.json",
+  "globalDependencies": [".oxfmtrc.json"],
   "tasks": {
     "build": {
       "outputs": ["dist/**", "wasm/dist/**"]

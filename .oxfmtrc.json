@@ -1,0 +1,6 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "ignorePatterns": ["bun.lock", "**/.turbo/**", "**/dist/**", "cliff.toml"],
+  "printWidth": 80,
+  "sortPackageJson": false
+}
