@@ -1316,9 +1316,15 @@ const trimLeadingClause = (text: string): { offset: number; text: string } => {
         // sentence verb ("This Agreement is entered into between
         // Acme Inc."): the verb is the structural cue that this is
         // clause prose, not an in-name component.
+        //
+        // Only lowercase verb forms count. A title-case "Is" inside a
+        // company name ("Everything Is Better Between Friends LLC")
+        // is in-name capitalisation, not clause prose; the original
+        // comma gate keeps protecting those.
         const beforeWords = before.match(/\p{L}[\p{L}\p{M}'’]*/gu) ?? [];
-        const hasSentenceVerb = beforeWords.some((word) =>
-          verbIndicators.has(word.toLowerCase()),
+        const hasSentenceVerb = beforeWords.some(
+          (word) =>
+            /^\p{Ll}/u.test(word) && verbIndicators.has(word.toLowerCase()),
         );
         if (!hasComma && !hasSentenceVerb) {
           continue;
@@ -1395,6 +1401,21 @@ export const processLegalFormMatches = (
     const text = match.text.trimEnd();
     if (text.length < 5) {
       continue;
+    }
+
+    // Post-match accented-letter boundary. The pattern's trailing
+    // lookahead is ASCII-only (`(?![A-Za-z0-9])`) because the regex
+    // backend hits DFA limits on a wider Unicode-aware class — see
+    // hunt/HANDOVER-textsearch.md. The ASCII-only lookahead still
+    // accepts short all-caps suffixes followed by an accented Latin
+    // letter (`AG` in `Minha AGÊNCIA`, `SA` in `PLANO DE SAÚDE`).
+    // Reject post-hoc by inspecting the character immediately after
+    // the matched span.
+    if (fullText) {
+      const next = fullText.charCodeAt(match.end);
+      if (Number.isFinite(next) && /\p{L}/u.test(fullText.charAt(match.end))) {
+        continue;
+      }
     }
 
     // Trim spans whose first word is a generic legal/contract
