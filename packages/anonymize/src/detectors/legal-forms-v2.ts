@@ -138,7 +138,7 @@ const isLeadingSeparator = (fullText: string, suffixStart: number): boolean => {
 
 const HEAD_TOKEN_CAP = 20;
 
-const TOKEN_RE = /[\p{L}\p{N}'’.&\-]+/u;
+const TOKEN_RE = /[\p{L}\p{N}'’.&-]+/u;
 
 // Treat NBSP (U+00A0) and narrow NBSP (U+202F) as whitespace —
 // DOCX exports routinely use them between name tokens and the
@@ -401,7 +401,7 @@ const dropOverlapping = (candidates: SynthMatch[]): SynthMatch[] => {
   );
   const out: SynthMatch[] = [];
   for (const c of sorted) {
-    const last = out[out.length - 1];
+    const last = out.at(-1);
     if (last && c.start >= last.start && c.end <= last.end) continue;
     out.push(c);
   }
