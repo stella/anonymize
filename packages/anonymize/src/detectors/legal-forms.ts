@@ -579,7 +579,20 @@ const buildPatternString = (forms: string[]): string | null => {
   const prefix = `(?:${head})(?:${tail})?`;
   const separator = `(?:${HSPACE}+|,${HSPACE}*)`;
 
-  return `${prefix}${separator}(?:${alt})(?![${LOWER}])`;
+  // The suffix lookahead used to be `(?![${LOWER}])`, which forbade
+  // only a following lowercase letter — short all-caps legal forms
+  // like `AG`, `SA`, `SC`, `GP`, `NL` would happily match the first
+  // two/three characters of common English ALL-CAPS words
+  // (`AG` in `AGREEMENT`, `SC` in `SCHEDULE`). Forbidding any ASCII
+  // letter or digit on the trailing side gives the suffix a real
+  // word boundary while still permitting punctuation tails
+  // (`Acme Inc.,`, `Acme LLC.`). Kept to ASCII so the negated
+  // character class stays small enough that the Rust regex backend's
+  // DFA construction doesn't blow up against long greedy heads
+  // (the Latin-extended class union triggers catastrophic
+  // backtracking in `… (this "Agreement") … among Twitter, Inc.`
+  // shaped preambles).
+  return `${prefix}${separator}(?:${alt})(?![A-Za-z0-9])`;
 };
 
 // ── Pattern builder for unified search ──────────────
@@ -654,7 +667,7 @@ export const buildLegalFormPatterns = async (): Promise<string[]> => {
     `(?:${mixedNameSep}(?:${CAP_WORD}|${ALLCAP_WORD})){1,8}`;
   patterns.push(
     `${capitalizedNoDigitPrefix}(?:${HSPACE}+|,${HSPACE}*)` +
-      `(?:${allcapAlt})(?![${LOWER}])`,
+      `(?:${allcapAlt})(?![A-Za-z0-9])`,
   );
 
   // Brand acronyms followed by mixed-case place or product
@@ -667,7 +680,7 @@ export const buildLegalFormPatterns = async (): Promise<string[]> => {
     `(?:${mixedNameSep}(?:${CAP_WORD}|${ALLCAP_WORD}|\\d{1,4})){1,6}`;
   patterns.push(
     `${allcapMixedPrefix}(?:${HSPACE}+|,${HSPACE}*)` +
-      `(?:${allcapAlt})(?![${LOWER}])`,
+      `(?:${allcapAlt})(?![A-Za-z0-9])`,
   );
 
   // SEC/EDGAR HTML often wraps terminal legal forms onto
@@ -680,7 +693,7 @@ export const buildLegalFormPatterns = async (): Promise<string[]> => {
     `(?:${CAP_WORD})` +
     `(?:${mixedNameSep}(?:${CAP_WORD}|${ALLCAP_WORD})){1,8}` +
     `\\.${HSPACE}*\\n${HSPACE}*`;
-  patterns.push(`${dottedLineWrapPrefix}(?:${allcapAlt})(?![${LOWER}])`);
+  patterns.push(`${dottedLineWrapPrefix}(?:${allcapAlt})(?![A-Za-z0-9])`);
 
   // All-caps company names: "EAGLES BRNO, z.s."
   // Up to 3 all-caps words before any legal form.
@@ -698,7 +711,7 @@ export const buildLegalFormPatterns = async (): Promise<string[]> => {
     `(?:(?:${HSPACE}|[&,.${DASH_INNER}]){1,4}(?:${ALLCAP_WORD})){0,2}`;
   patterns.push(
     `${allcapPrefix}(?:${HSPACE}+|,${HSPACE}*)` +
-      `(?:${allcapAlt})(?![${LOWER}])`,
+      `(?:${allcapAlt})(?![A-Za-z0-9])`,
   );
 
   // Single-letter company name immediately followed by a
@@ -1285,6 +1298,7 @@ const trimLeadingClause = (text: string): { offset: number; text: string } => {
     "amongst",
     "between",
   ]);
+  const verbIndicators = getSentenceVerbIndicatorsSync();
   if (directPrefixAlternation.length > 0) {
     const directPrefixRe = new RegExp(
       `\\b(?:${directPrefixAlternation})${HSPACE}+(?=\\p{Lu})`,
@@ -1293,11 +1307,22 @@ const trimLeadingClause = (text: string): { offset: number; text: string } => {
     for (const match of text.matchAll(directPrefixRe)) {
       const matchedPrefix = match[0].trim().toLowerCase();
       const before = text.slice(0, match.index);
-      if (
-        COMMA_GATED_DIRECT_PREFIXES.has(matchedPrefix) &&
-        !/,\s*$/u.test(before)
-      ) {
-        continue;
+      if (COMMA_GATED_DIRECT_PREFIXES.has(matchedPrefix)) {
+        const hasComma = /,\s*$/u.test(before);
+        // The comma gate exists to distinguish "Investment Agreement,
+        // dated as of …, among Twitter, Inc." (connector → trim)
+        // from "Food For Thought Among Friends LLC" (in-name word →
+        // keep). Lift the gate when the preceding text contains a
+        // sentence verb ("This Agreement is entered into between
+        // Acme Inc."): the verb is the structural cue that this is
+        // clause prose, not an in-name component.
+        const beforeWords = before.match(/\p{L}[\p{L}\p{M}]*/gu) ?? [];
+        const hasSentenceVerb = beforeWords.some((word) =>
+          verbIndicators.has(word.toLowerCase()),
+        );
+        if (!hasComma && !hasSentenceVerb) {
+          continue;
+        }
       }
       const words = before.match(/\p{L}[\p{L}\p{M}]*/gu) ?? [];
       const hasProsePrefix =
