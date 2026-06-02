@@ -9,14 +9,14 @@ self-review, quality checks, and open a draft PR.
 
    ```bash
    CURRENT=$(git branch --show-current)
-   if [ "$CURRENT" = "main" ] || [ "$CURRENT" = "master" ]; then
-     echo "Error: /open-pr must not run from the default branch."
+   if [ -z "$CURRENT" ] || [ "$CURRENT" = "main" ] || [ "$CURRENT" = "master" ]; then
+     echo "Error: /open-pr must run from an active feature branch."
      exit 1
    fi
    ```
 
-   If on main, abort and ask the user which feature branch to
-   use.
+   If on a default branch or detached HEAD, abort and ask the
+   user which feature branch to use.
 
    Check whether the current checkout is safe to use for PR prep:
 
@@ -45,11 +45,19 @@ self-review, quality checks, and open a draft PR.
    accidental lockfile changes out of the PR unless the task
    explicitly requires them.
 
-3. **Rebase onto remote main**:
+3. **Rebase onto the remote default branch**:
 
    ```bash
-   git fetch origin main
-   git rebase origin/main
+   DEFAULT_BRANCH="$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null | sed 's@^origin/@@')"
+   if [ -z "$DEFAULT_BRANCH" ]; then
+     DEFAULT_BRANCH="$(gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name' 2>/dev/null)"
+   fi
+   if [ -z "$DEFAULT_BRANCH" ]; then
+     DEFAULT_BRANCH="main"
+   fi
+
+   git fetch origin "$DEFAULT_BRANCH"
+   git rebase "origin/$DEFAULT_BRANCH"
    ```
 
    If conflicts arise, resolve them. After resolving, continue
@@ -57,10 +65,10 @@ self-review, quality checks, and open a draft PR.
 
 4. **Self-review against CLAUDE.md conventions**:
 
-   Get the full diff against main:
+   Get the full diff against the default branch:
 
    ```bash
-   git diff origin/main --name-only
+   git diff "origin/$DEFAULT_BRANCH" --name-only
    ```
 
    Read every changed file in full. Review against the
@@ -73,7 +81,7 @@ self-review, quality checks, and open a draft PR.
 
    ```bash
    bun run lint \
-     && bun run format \
+     && bun run format:check \
      && bun run typecheck \
      && bun run test
    ```

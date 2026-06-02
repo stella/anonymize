@@ -1,6 +1,6 @@
 ---
 name: rabbit-round
-description: 'Process automated PR review comments systematically. Use this for CodeRabbit, Gemini, GitHub Copilot, Devin, Greptile, and similar bots.'
+description: "Process automated PR review comments systematically. Use this for CodeRabbit, Gemini, GitHub Copilot, Devin, Greptile, and similar bots."
 ---
 
 # Rabbit Round
@@ -13,7 +13,7 @@ CodeRabbit, Gemini, GitHub Copilot, Devin, Greptile, and similar bots.
 1. **Get context**:
 
    ```bash
-   gh pr view --json number -q '.number'
+   PR_NUMBER=$(gh pr view --json number -q '.number')
    gh api user --jq '.login'
    git rev-parse HEAD
    ```
@@ -21,7 +21,7 @@ CodeRabbit, Gemini, GitHub Copilot, Devin, Greptile, and similar bots.
 2. **Fetch review comments** from the PR:
 
    ```bash
-   gh api repos/{owner}/{repo}/pulls/{pr_number}/comments --paginate
+   gh api repos/:owner/:repo/pulls/"$PR_NUMBER"/comments --paginate
    ```
 
    Filter for known bot accounts. Do not treat human review comments as bot comments.
@@ -38,7 +38,7 @@ CodeRabbit, Gemini, GitHub Copilot, Devin, Greptile, and similar bots.
 5. **Reply inline** to each bot comment:
 
    ```bash
-   gh api -X POST repos/{owner}/{repo}/pulls/{pr_number}/comments/{comment_id}/replies \
+   gh api -X POST repos/:owner/:repo/pulls/"$PR_NUMBER"/comments/{comment_id}/replies \
      -f body="[response]"
    ```
 
@@ -62,6 +62,7 @@ CodeRabbit, Gemini, GitHub Copilot, Devin, Greptile, and similar bots.
 ## Decision Guidelines
 
 **Accept when the suggestion:**
+
 - fixes a bug or real edge case
 - improves type safety
 - adds missing tests
@@ -69,6 +70,7 @@ CodeRabbit, Gemini, GitHub Copilot, Devin, Greptile, and similar bots.
 - tightens security or validation appropriately
 
 **Push back when the suggestion:**
+
 - assumes facts not true in this codebase
 - conflicts with canonical specs or official sources
 - adds complexity for little benefit
