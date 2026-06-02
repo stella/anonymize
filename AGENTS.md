@@ -5,19 +5,26 @@
 
 ## Stella Context
 
-Stella is an open-source legal workspace and set of legal-data tooling.
+Stella is an open-source legal workspace.
+
+## Ideal Customer Profile (ICP)
+
+**Current focus: mid-size law firms, 5-50 lawyers.**
+Pragmatic, cost-conscious, not overly technical.
+
+**Scale target: Magic Circle firms (2,000-5,000+ lawyers).**
+The architecture must not block scaling to this level. See the Scalability section
+below for decision guidelines.
 
 International audience: do not assume English language or English typography
 conventions are universal. Highlight competing standards (date formats, quotation
 marks, citation styles, legal terminology) when relevant.
 
-## Public Repository Context
+## Regulated Industry
 
-- Treat legal data, personal data, and repository secrets as sensitive.
-- Keep project instructions, PRs, commits, and comments limited to public engineering
-  context visible from the repository and diff.
-- Do not publish private user, customer, infrastructure, incident, pricing, roadmap,
-  or competitive context in generated instructions or GitHub artifacts.
+Stella handles privileged legal data. All code must meet **SOC 2 Type II** and
+**ISO 27001** standards: least privilege, audit trails, encryption, workspace
+isolation, ethical walls. Full checklist in `/conventions-security`.
 
 ## GitHub Interactions
 

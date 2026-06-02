@@ -16,7 +16,7 @@ CodeRabbit, Gemini, GitHub Copilot, Devin, Greptile, and similar bots.
 2. **Fetch review comments** from the PR:
 
    ```bash
-   gh api repos/{owner}/{repo}/pulls/"$PR_NUMBER"/comments --paginate
+   gh api repos/:owner/:repo/pulls/"$PR_NUMBER"/comments --paginate
    ```
 
    Filter for known bot accounts. Do not treat human review comments as bot comments.
@@ -33,8 +33,7 @@ CodeRabbit, Gemini, GitHub Copilot, Devin, Greptile, and similar bots.
 5. **Reply inline** to each bot comment:
 
    ```bash
-   COMMENT_ID="123456789"
-   gh api -X POST repos/{owner}/{repo}/pulls/"$PR_NUMBER"/comments/"$COMMENT_ID"/replies \
+   gh api -X POST repos/:owner/:repo/pulls/"$PR_NUMBER"/comments/{comment_id}/replies \
      -f body="[response]"
    ```
 

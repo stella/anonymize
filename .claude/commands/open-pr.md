@@ -77,15 +77,14 @@ self-review, quality checks, and open a draft PR.
    violations directly; don't just list them. Commit fixes
    separately with `fix: address self-review findings`.
 
-5. **Run quality checks using the repo's actual commands**:
+5. **Run all quality checks**:
 
-   Run the checks the repository already defines for linting,
-   typechecking, tests, and non-mutating format verification.
-   If the repo defines `format:check`, use it. If it only
-   defines a mutating `format` script, do not run it as
-   verification unless you also commit the formatter output.
-   Prefer documenting a missing format check in the PR body over
-   inventing a one-off command that is inconsistent with the repo.
+   ```bash
+   bun run lint \
+     && bun run format:check \
+     && bun run typecheck \
+     && bun run test
+   ```
 
    If any check fails, fix the issue and re-run. Commit fixes
    with `fix: lint/format/type errors`.
