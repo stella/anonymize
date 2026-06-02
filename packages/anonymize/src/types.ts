@@ -324,6 +324,18 @@ export type PipelineConfig = {
    */
   enableLegalForms: boolean;
   /**
+   * Opt-in switch for the v2 legal-form detector — an
+   * Aho-Corasick suffix pass + code-side validator that
+   * replaces the monolithic regex used by the v1 path.
+   * v2 is ~20× faster on real 30 KB contracts and is not
+   * affected by the upstream text-search DFA limits that
+   * cause v1 to miss matches on long preambles with
+   * embedded parentheticals (see PR for context). Default
+   * false until parity with v1 is fully established on
+   * the snapshot fixtures; flip on per-workspace to canary.
+   */
+  enableLegalFormsV2?: boolean;
+  /**
    * Enables first-name/surname/title corpus matching.
    * When deny-list mode is enabled, this also controls
    * whether name-corpus entries are injected into the

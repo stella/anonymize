@@ -12,6 +12,7 @@ import {
   processLegalFormMatches,
   warmLegalRoleHeads,
 } from "./detectors/legal-forms";
+import { detectLegalFormsV2 } from "./detectors/legal-forms-v2";
 import {
   processTriggerMatches,
   warmAddressStopKeywords,
@@ -933,13 +934,19 @@ export const runPipeline = async (
     // falls back to the seed list until the cache is warmed.
     await warmLegalRoleHeads();
   }
+  // v2 detector: same warm-up cache, different algorithm. When
+  // `enableLegalFormsV2` is on we replace the v1 match processor
+  // with the AC + validator pipeline. Both paths emit the same
+  // Entity shape, so the rest of the pipeline is oblivious.
   const rawLegalFormEntities = legalFormsEnabled
-    ? processLegalFormMatches(
-        regexMatches,
-        slices.legalForms.start,
-        slices.legalForms.end,
-        fullText,
-      )
+    ? config.enableLegalFormsV2 === true
+      ? detectLegalFormsV2(fullText)
+      : processLegalFormMatches(
+          regexMatches,
+          slices.legalForms.start,
+          slices.legalForms.end,
+          fullText,
+        )
     : [];
   const legalFormEntities = filterAllowedLabels(
     rawLegalFormEntities,
