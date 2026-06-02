@@ -707,18 +707,18 @@ const expandCluster = async (
   };
 };
 
-// Allow a span containing line breaks only when the cluster carries
-// independent evidence on both sides of the break — a "street" signal
-// (street-word or house-number) and a "destination" signal (postal-code
-// or city). This admits the dominant US notice-block shape
+// Allow a span containing exactly one line break only when the cluster
+// carries independent address evidence on both sides of the break: a
+// "street" seed (street-word or house-number) above the newline AND a
+// "destination" seed (postal-code or city) below (or vice-versa).
+// This admits the dominant US notice-block shape
 //
 //   One American Road
 //   Cleveland, Ohio 44144-2398
 //
-// while still rejecting clusters whose only multi-line evidence is a
-// single weak seed picking up an adjacent unrelated line. A single
-// internal newline is the cap: anything richer than that is structural
-// over-reach.
+// while rejecting both the single-line case that got right-expanded
+// across a newline (all seeds above the break, prose below) and the
+// structurally over-reaching case with two or more internal newlines.
 const STREET_SEED_TYPES: ReadonlySet<SeedType> = new Set([
   "street-word",
   "house-number",
@@ -729,20 +729,40 @@ const DESTINATION_SEED_TYPES: ReadonlySet<SeedType> = new Set([
 ]);
 
 const passesNewlineBoundaryCheck = (
+  spanStart: number,
   text: string,
   cluster: SeedCluster,
 ): boolean => {
   const newlines = (text.match(/\n/gu) ?? []).length;
   if (newlines === 0) return true;
   if (newlines > 1) return false;
-  let hasStreet = false;
-  let hasDestination = false;
+
+  const relativeNewline = text.indexOf("\n");
+  const newlineAbs = spanStart + relativeNewline;
+
+  let streetAbove = false;
+  let streetBelow = false;
+  let destAbove = false;
+  let destBelow = false;
   for (const seed of cluster.seeds) {
-    if (STREET_SEED_TYPES.has(seed.type)) hasStreet = true;
-    if (DESTINATION_SEED_TYPES.has(seed.type)) hasDestination = true;
+    const isAbove = seed.end <= newlineAbs;
+    const isStreet = STREET_SEED_TYPES.has(seed.type);
+    const isDest = DESTINATION_SEED_TYPES.has(seed.type);
+    if (isStreet && isAbove) streetAbove = true;
+    if (isStreet && !isAbove) streetBelow = true;
+    if (isDest && isAbove) destAbove = true;
+    if (isDest && !isAbove) destBelow = true;
   }
-  return hasStreet && hasDestination;
+  return (streetAbove && destBelow) || (streetBelow && destAbove);
 };
+
+// Normalise CRLF paragraph breaks to LF for the address-seed
+// newline-boundary check. Windows/PDF-extracted contracts commonly use
+// `\r\n`, which leaves the expanded text with paragraph breaks the
+// LF-only `\n\n` stop in `expandCluster` doesn't catch and inflates the
+// internal-newline count past the single-newline cap.
+const normaliseLineBreaks = (text: string): string =>
+  text.replace(/\r\n?/gu, "\n");
 
 // ── Public API ──────────────────────────────────────
 
@@ -794,7 +814,9 @@ export const processAddressSeeds = async (
       continue;
     }
 
-    if (!passesNewlineBoundaryCheck(text, cluster)) {
+    if (
+      !passesNewlineBoundaryCheck(start, normaliseLineBreaks(text), cluster)
+    ) {
       continue;
     }
 

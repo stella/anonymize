@@ -109,8 +109,12 @@ describe("TOC + orphan-street guardrails", () => {
     // The fix should not regress the original purpose: a
     // standalone street + number line in the header zone
     // bracketed by other entities still has to be picked
-    // up as an address. Pad the document so the address
-    // lands inside the top 15% header-zone window.
+    // up as an address. With multi-line notice-block support,
+    // the street line and the city/zip line below it are
+    // joined into one span, but the street component must
+    // still appear somewhere inside the emitted address.
+    // Pad the document so the address lands inside the top
+    // 15% header-zone window.
     const tail =
       "\n\nPlatba: bezhotovostně.\n" +
       "Smluvní strany berou na vědomí veškeré podmínky.\n".repeat(40);
@@ -121,9 +125,9 @@ describe("TOC + orphan-street guardrails", () => {
       "Praha 6, PSČ 160 00\n" +
       tail;
     const entities = await detect(text);
-    const orphan = entities.find(
-      (e) => e.label === "address" && e.text === "Evropská 710",
+    const address = entities.find(
+      (e) => e.label === "address" && e.text.includes("Evropská 710"),
     );
-    expect(orphan).toBeDefined();
+    expect(address).toBeDefined();
   });
 });
