@@ -493,7 +493,8 @@ const TEL_PREFIX_PHONE: RegexDef = {
  * overlap resolver when both fire on the same span.
  */
 const US_PAREN_PHONE: RegexDef = {
-  pattern: `\\(\\d{3}\\)[^\\S\\n]?\\d{3}` + `(?:[^\\S\\n]|[.\\-])\\d{4}\\b`,
+  pattern:
+    `\\(\\d{3}\\)(?:[^\\S\\n]|[.\\-])?\\d{3}` + `(?:[^\\S\\n]|[.\\-])\\d{4}\\b`,
   label: "phone number",
   score: 0.9,
 };

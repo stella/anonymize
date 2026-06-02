@@ -86,6 +86,18 @@ describe("US paren phone (NNN) NNN-NNNN", () => {
     expectPhone(entities, "(818) 548.9288");
   });
 
+  test("captured with dash separator right after the closing paren", async () => {
+    const text = "Forward calls to (212)-735-3000 during business hours.";
+    const entities = await detect(text);
+    expectPhone(entities, "(212)-735-3000");
+  });
+
+  test("captured with dot separator right after the closing paren", async () => {
+    const text = "Reception at (212).735.3000 — please reach out.";
+    const entities = await detect(text);
+    expectPhone(entities, "(212).735.3000");
+  });
+
   test("multiple paren phones in adjacent lines", async () => {
     const text = [
       "The committee can be reached at (206) 652-3710 or (212) 728-9255.",
