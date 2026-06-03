@@ -24,8 +24,8 @@
     "sync-ai:check": "bash scripts/sync-ai-skills.sh --check"
   },
   "devDependencies": {
-    "@stll/oxlint-config": "^0.2.0",
-    "@stll/typescript-config": "^0.2.0",
+    "@stll/oxlint-config": "^0.3.0",
+    "@stll/typescript-config": "^0.3.0",
     "lefthook": "^2.1.8",
     "oxfmt": "^0.52.0",
     "oxlint": "^1.67.0",
