@@ -201,6 +201,15 @@ const mergeAdjacent = (entities: Entity[], fullText: string): Entity[] => {
       }
     }
 
+    // Touching entities (entity.start === prev.end) leave a zero-
+    // length gap that GAP_PATTERN's `+` quantifier refuses to match;
+    // the two would stay split even though they sit flush against
+    // each other. `cs-address-psc` emits a leading-space variant of
+    // the postal code that ends up flush with the preceding street
+    // address (`Kamínky 302/16, Brno` + ` 634 00`); treat them as
+    // mergeable.
+    const isMergeableGap =
+      gap.length === 0 || (gap.length <= MAX_GAP && GAP_PATTERN.test(gap));
     if (
       !hasLockedBoundary(prev) &&
       !(
@@ -222,8 +231,7 @@ const mergeAdjacent = (entities: Entity[], fullText: string): Entity[] => {
       // Mexico" must stay three distinct spans, not one.
       entity.label !== "country" &&
       !gapOccupied &&
-      gap.length <= MAX_GAP &&
-      GAP_PATTERN.test(gap)
+      isMergeableGap
     ) {
       // Merge into prev
       prev.end = entity.end;

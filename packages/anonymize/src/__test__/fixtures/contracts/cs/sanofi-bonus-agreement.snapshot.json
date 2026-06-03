@@ -1,7 +1,7 @@
 {
-  "entityCount": 21,
+  "entityCount": 20,
   "counts": {
-    "organization": 5,
+    "organization": 4,
     "address": 3,
     "registration number": 4,
     "tax identification number": 2,
@@ -132,17 +132,10 @@
     },
     {
       "start": 1603,
-      "end": 1616,
-      "label": "organization",
-      "text": "Sanofi s.r.o.",
-      "source": "legal-form"
-    },
-    {
-      "start": 1617,
       "end": 1634,
       "label": "organization",
-      "text": "Nemocnice Blansko",
-      "source": "deny-list"
+      "text": "Sanofi s.r.o.\tNemocnice Blansko",
+      "source": "legal-form"
     },
     {
       "start": 1647,
@@ -159,5 +152,5 @@
       "source": "country"
     }
   ],
-  "redactedText": "Příloha č. 3a26 ke Smlouvě o poskytnutí obratového bonusu (COMMA CAF ID 266, ze dne 2.4. 2019 ) uzavřené mezi smluvními stranami, kterými jsou:\n\n\n\n\n\n\n\n[ORGANIZATION_1]\n\nSe sídlem: [ADDRESS_1]\n\nIČO: [REGISTRATION_NUMBER_1]\n\nDIČ: [TAX_IDENTIFICATION_NUMBER_1]\n\nBankovní spojení: [BANK_ACCOUNT_NUMBER_1] \n\nZapsaná v obchodním rejstříku vedeném [ORGANIZATION_2], [REGISTRATION_NUMBER_2] \n\nZastoupená: [OU   OU], Head of Trade Department [COUNTRY_1]\n\n(dále jen „Společnost“)\n\n \n\na \n\n\n\n[ORGANIZATION_3]\n\nSídlo: [ADDRESS_2]\n\nIČO: [REGISTRATION_NUMBER_3]\n\nDIČ: [TAX_IDENTIFICATION_NUMBER_2]\n\nBankovní spojení:  [XX   XX]\n\nZapsaná v obchodním rejstříku vedeném u KS [ADDRESS_3], oddíl Pr, vložka [REGISTRATION_NUMBER_4]\n\nZastoupená: [PERSON_1], ředitelka\n\n(dále též „Zdravotnické zařízení“).\n\n\n\nObsahem této přílohy je dohoda o podmínkách dosažení a o výši obratového bonusu pro tyto produkty: \n\n\n\n[XX   XX]\n\n\n\nReferenční období: [XX   XX]\n\n\n\nPotřebná výše obratu v referenčním období:\n\n \n\n[XX    XX] \n\n[XX    XX] \n\n[XX    XX] \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nObratový bonus poskytnutý Zdravotnickému zařízení bude vyplacen pouze podle jednoho pásma, a to v souladu s dosaženou výší obratu Zdravotnickým zařízením v referenčním období:\n\n\n\n [XX    XX] % z obratu dosaženého Zdravotnickým zařízením\n\n [XX    XX] % z obratu dosaženého Zdravotnickým zařízením\n\n [XX    XX] % z obratu dosaženého Zdravotnickým zařízením\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nV Praze, dne ...[DATE_1]..........\tV Blansku, dne …[DATE_2].........\n\n\n\n\n\n_______________________________________\t      __________________________________________\n\n[ORGANIZATION_1]\t[ORGANIZATION_3]\n\n[OU    OU]\t[PERSON_1] \n\nHead of Trade Department [COUNTRY_1]\t         ředitelka"
+  "redactedText": "Příloha č. 3a26 ke Smlouvě o poskytnutí obratového bonusu (COMMA CAF ID 266, ze dne 2.4. 2019 ) uzavřené mezi smluvními stranami, kterými jsou:\n\n\n\n\n\n\n\n[ORGANIZATION_1]\n\nSe sídlem: [ADDRESS_1]\n\nIČO: [REGISTRATION_NUMBER_1]\n\nDIČ: [TAX_IDENTIFICATION_NUMBER_1]\n\nBankovní spojení: [BANK_ACCOUNT_NUMBER_1] \n\nZapsaná v obchodním rejstříku vedeném [ORGANIZATION_2], [REGISTRATION_NUMBER_2] \n\nZastoupená: [OU   OU], Head of Trade Department [COUNTRY_1]\n\n(dále jen „Společnost“)\n\n \n\na \n\n\n\n[ORGANIZATION_3]\n\nSídlo: [ADDRESS_2]\n\nIČO: [REGISTRATION_NUMBER_3]\n\nDIČ: [TAX_IDENTIFICATION_NUMBER_2]\n\nBankovní spojení:  [XX   XX]\n\nZapsaná v obchodním rejstříku vedeném u KS [ADDRESS_3], oddíl Pr, vložka [REGISTRATION_NUMBER_4]\n\nZastoupená: [PERSON_1], ředitelka\n\n(dále též „Zdravotnické zařízení“).\n\n\n\nObsahem této přílohy je dohoda o podmínkách dosažení a o výši obratového bonusu pro tyto produkty: \n\n\n\n[XX   XX]\n\n\n\nReferenční období: [XX   XX]\n\n\n\nPotřebná výše obratu v referenčním období:\n\n \n\n[XX    XX] \n\n[XX    XX] \n\n[XX    XX] \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nObratový bonus poskytnutý Zdravotnickému zařízení bude vyplacen pouze podle jednoho pásma, a to v souladu s dosaženou výší obratu Zdravotnickým zařízením v referenčním období:\n\n\n\n [XX    XX] % z obratu dosaženého Zdravotnickým zařízením\n\n [XX    XX] % z obratu dosaženého Zdravotnickým zařízením\n\n [XX    XX] % z obratu dosaženého Zdravotnickým zařízením\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\nV Praze, dne ...[DATE_1]..........\tV Blansku, dne …[DATE_2].........\n\n\n\n\n\n_______________________________________\t      __________________________________________\n\n[ORGANIZATION_4]\n\n[OU    OU]\t[PERSON_1] \n\nHead of Trade Department [COUNTRY_1]\t         ředitelka"
 }
