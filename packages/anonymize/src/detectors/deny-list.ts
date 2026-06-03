@@ -425,6 +425,12 @@ const SENTENCE_STARTER_WORDS: ReadonlySet<string> = new Set([
 
 const PERSON_CHAIN_BREAK_RE = /[!?;:]|,/u;
 const WORD_CHAR_RE = /[\p{L}\p{N}]/u;
+const CURATED_PATTERN_SYNTAX_RE = /[|\\]/g;
+
+const stripCuratedPatternSyntax = (value: string): string =>
+  value.includes("|") || value.includes("\\")
+    ? value.replace(CURATED_PATTERN_SYNTAX_RE, "")
+    : value;
 
 const isInitialContinuationGap = (text: string, gap: string): boolean =>
   (/^\p{Lu}$/u.test(text) && /^\.[^\S\n]{1,2}$/u.test(gap)) ||
@@ -447,6 +453,93 @@ type PatternSource =
   | "surname"
   | "title";
 
+type PatternLabels = string | string[];
+type PatternSources = PatternSource | PatternSource[];
+
+const EMPTY_PATTERN_LABELS: readonly string[] = [];
+const EMPTY_PATTERN_SOURCES: readonly PatternSource[] = [];
+
+const patternLabels = (
+  labels: PatternLabels | undefined,
+): readonly string[] => {
+  if (labels === undefined) {
+    return EMPTY_PATTERN_LABELS;
+  }
+  return Array.isArray(labels) ? labels : [labels];
+};
+
+const patternSources = (
+  sources: PatternSources | undefined,
+): readonly PatternSource[] => {
+  if (sources === undefined) {
+    return EMPTY_PATTERN_SOURCES;
+  }
+  return Array.isArray(sources) ? sources : [sources];
+};
+
+const addPatternLabel = (
+  list: PatternLabels[],
+  index: number,
+  label: string,
+): void => {
+  const existing = list[index];
+  if (existing === undefined) {
+    list[index] = label;
+    return;
+  }
+  if (Array.isArray(existing)) {
+    if (!existing.includes(label)) {
+      existing.push(label);
+    }
+    return;
+  }
+  if (existing !== label) {
+    list[index] = [existing, label];
+  }
+};
+
+const addPatternSource = (
+  list: PatternSources[],
+  index: number,
+  source: PatternSource,
+): void => {
+  const existing = list[index];
+  if (existing === undefined) {
+    list[index] = source;
+    return;
+  }
+  if (Array.isArray(existing)) {
+    if (!existing.includes(source)) {
+      existing.push(source);
+    }
+    return;
+  }
+  if (existing !== source) {
+    list[index] = [existing, source];
+  }
+};
+
+const addOptionalPatternLabel = (
+  list: (PatternLabels | undefined)[],
+  index: number,
+  label: string,
+): void => {
+  const existing = list[index];
+  if (existing === undefined) {
+    list[index] = label;
+    return;
+  }
+  if (Array.isArray(existing)) {
+    if (!existing.includes(label)) {
+      existing.push(label);
+    }
+    return;
+  }
+  if (existing !== label) {
+    list[index] = [existing, label];
+  }
+};
+
 /**
  * Pre-built deny list data. Constructed once by
  * `buildDenyList`, reused across `processDenyListMatches`
@@ -460,13 +553,13 @@ export type DenyListData = {
    * appears in multiple dictionaries (e.g., "Denver"
    * is both a person name and a city name).
    */
-  labels: string[][];
+  labels: PatternLabels[];
   /** Maps pattern index → labels contributed by custom entries. */
-  customLabels: string[][];
+  customLabels: (PatternLabels | undefined)[];
   /** Maps pattern index → original pattern text. */
   originals: string[];
   /** Maps pattern index → source types (plural). */
-  sources: PatternSource[][];
+  sources: PatternSources[];
 };
 
 const getCityEntries = (
@@ -554,9 +647,9 @@ export const buildDenyList = async (
   const excludeCategories = excluded ? new Set(excluded) : new Set<string>();
 
   const patternList: string[] = [];
-  const labelList: string[][] = [];
-  const customLabelList: string[][] = [];
-  const sourceList: PatternSource[][] = [];
+  const labelList: PatternLabels[] = [];
+  const customLabelList: (PatternLabels | undefined)[] = [];
+  const sourceList: PatternSources[] = [];
   // Maps lowercased pattern → index in patternList
   // for accumulating labels from multiple dictionaries
   const patternIndex = new Map<string, number>();
@@ -572,7 +665,7 @@ export const buildDenyList = async (
     const normalized =
       source === "custom-deny-list"
         ? normalizeForSearch(entry)
-        : normalizeForSearch(entry).replace(/[|\\]/g, "");
+        : stripCuratedPatternSyntax(normalizeForSearch(entry));
     if (normalized.length === 0) {
       return;
     }
@@ -587,24 +680,22 @@ export const buildDenyList = async (
     }
     const existing = patternIndex.get(lower);
     if (existing !== undefined) {
-      if (!labelList[existing]!.includes(label)) {
-        labelList[existing]!.push(label);
-      }
-      if (!sourceList[existing]!.includes(source)) {
-        sourceList[existing]!.push(source);
-      }
+      addPatternLabel(labelList, existing, label);
+      addPatternSource(sourceList, existing, source);
       if (
         source === "custom-deny-list" &&
-        !customLabelList[existing]!.includes(label)
+        !patternLabels(customLabelList[existing]).includes(label)
       ) {
-        customLabelList[existing]!.push(label);
+        addOptionalPatternLabel(customLabelList, existing, label);
       }
     } else {
       patternIndex.set(lower, patternList.length);
       patternList.push(normalized);
-      labelList.push([label]);
-      customLabelList.push(source === "custom-deny-list" ? [label] : []);
-      sourceList.push([source]);
+      labelList.push(label);
+      if (source === "custom-deny-list") {
+        customLabelList[patternList.length - 1] = label;
+      }
+      sourceList.push(source);
     }
   };
 
@@ -715,9 +806,9 @@ const buildNameCorpusOnly = (
   }
 
   const patternList: string[] = [];
-  const labelList: string[][] = [];
-  const customLabelList: string[][] = [];
-  const sourceList: PatternSource[][] = [];
+  const labelList: PatternLabels[] = [];
+  const customLabelList: (PatternLabels | undefined)[] = [];
+  const sourceList: PatternSources[] = [];
   const patternIndex = new Map<string, number>();
 
   appendNameCorpusEntries(
@@ -750,8 +841,8 @@ const appendNameCorpusEntries = (
   config: DenyListConfig,
   ctx: PipelineContext,
   patternList: string[],
-  labelList: string[][],
-  sourceList: PatternSource[][],
+  labelList: PatternLabels[],
+  sourceList: PatternSources[],
   patternIndex: Map<string, number>,
 ): void => {
   const excluded = config.denyListExcludeCategories;
@@ -764,7 +855,7 @@ const appendNameCorpusEntries = (
   const addNameEntry = (name: string, source: PatternSource) => {
     // Normalize same as deny-list entries so name
     // patterns match against normalizeForSearch(text).
-    const normalized = normalizeForSearch(name).replace(/[|\\]/g, "");
+    const normalized = stripCuratedPatternSyntax(normalizeForSearch(name));
     if (normalized.length === 0) {
       return;
     }
@@ -774,17 +865,13 @@ const appendNameCorpusEntries = (
     const lower = normalized.toLowerCase();
     const existing = patternIndex.get(lower);
     if (existing !== undefined) {
-      if (!labelList[existing]!.includes("person")) {
-        labelList[existing]!.push("person");
-      }
-      if (!sourceList[existing]!.includes(source)) {
-        sourceList[existing]!.push(source);
-      }
+      addPatternLabel(labelList, existing, "person");
+      addPatternSource(sourceList, existing, source);
     } else {
       patternIndex.set(lower, patternList.length);
       patternList.push(normalized);
-      labelList.push(["person"]);
-      sourceList.push([source]);
+      labelList.push("person");
+      sourceList.push(source);
     }
   };
 
@@ -795,19 +882,17 @@ const appendNameCorpusEntries = (
     addNameEntry(name, "surname");
   }
   for (const title of getNameCorpusTitles(ctx)) {
-    const norm = normalizeForSearch(title).replace(/[|\\]/g, "");
+    const norm = stripCuratedPatternSyntax(normalizeForSearch(title));
     if (norm.length === 0) continue;
     const lower = norm.toLowerCase();
     const existing = patternIndex.get(lower);
     if (existing !== undefined) {
-      if (!sourceList[existing]!.includes("title")) {
-        sourceList[existing]!.push("title");
-      }
+      addPatternSource(sourceList, existing, "title");
     } else {
       patternIndex.set(lower, patternList.length);
       patternList.push(norm);
-      labelList.push(["person"]);
-      sourceList.push(["title"]);
+      labelList.push("person");
+      sourceList.push("title");
     }
   }
 };
@@ -816,9 +901,9 @@ type RawMatch = {
   start: number;
   end: number;
   /** All labels for this pattern (e.g., ["person", "address"]). */
-  labels: string[];
-  customLabels: string[];
-  sources: PatternSource[];
+  labels: readonly string[];
+  customLabels: readonly string[];
+  sources: readonly PatternSource[];
   text: string;
   patternIdx: number;
 };
@@ -904,7 +989,7 @@ export const processDenyListMatches = (
     }
 
     const localIdx = idx - sliceStart;
-    const sources = data.sources[localIdx] ?? [];
+    const sources = patternSources(data.sources[localIdx]);
 
     // Use original text for display; normalized was
     // only for the AC search.
@@ -912,9 +997,9 @@ export const processDenyListMatches = (
     const sourceChar = fullText[match.start] ?? "";
     const keyword = matchText.toLowerCase();
 
-    const labels = data.labels[localIdx];
+    const labels = patternLabels(data.labels[localIdx]);
     const pattern = data.originals[localIdx] ?? "";
-    const customPatternLabels = data.customLabels[localIdx] ?? [];
+    const customPatternLabels = patternLabels(data.customLabels[localIdx]);
     const customEdgesAreValid = customMatchHasValidEdges(
       fullText,
       match.start,
@@ -922,7 +1007,7 @@ export const processDenyListMatches = (
       pattern,
     );
     const customLabels = customEdgesAreValid ? customPatternLabels : [];
-    if ((!labels || labels.length === 0) && customLabels.length === 0) {
+    if (labels.length === 0 && customLabels.length === 0) {
       continue;
     }
 
@@ -944,7 +1029,7 @@ export const processDenyListMatches = (
       acronymMatchesAcronym &&
       !ALL_UPPER_RE.test(matchText);
     const curatedLabels = passesCuratedFilters
-      ? (labels ?? []).filter(
+      ? labels.filter(
           (label) =>
             !customPatternLabels.includes(label) && customEdgesAreValid,
         )

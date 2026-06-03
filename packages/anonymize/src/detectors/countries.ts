@@ -71,6 +71,13 @@ type RawCountryData = {
   aliases: Record<string, string[]>;
 };
 
+type CountryPatterns = {
+  patterns: PatternEntry[];
+  data: CountryData;
+};
+
+let cachedCountryPatterns: CountryPatterns | null = null;
+
 /**
  * Build country patterns for the literal search instance.
  * Returns patterns and parallel metadata arrays.
@@ -85,6 +92,10 @@ export const buildCountryPatterns = (): {
   patterns: PatternEntry[];
   data: CountryData;
 } => {
+  if (cachedCountryPatterns !== null) {
+    return cachedCountryPatterns;
+  }
+
   const raw = countriesData as RawCountryData;
 
   // Map surface form (lowercased) → { isoCode, variant }.
@@ -179,7 +190,8 @@ export const buildCountryPatterns = (): {
     variants.push(variant);
   }
 
-  return { patterns, data: { labels, isoCodes, variants } };
+  cachedCountryPatterns = { patterns, data: { labels, isoCodes, variants } };
+  return cachedCountryPatterns;
 };
 
 /**

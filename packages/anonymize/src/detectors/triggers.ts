@@ -53,44 +53,48 @@ const POST_NOMINAL_RE = new RegExp(
 // person-trigger captures like
 // "Ing. Jan Novák, se sídlem...".
 //
-// The reclassification regex is built from the FULL legal-
-// form vocabulary (`data/legal-forms.json` plus
-// `LEGAL_SUFFIXES`) via `getKnownLegalSuffixes()`. The
-// pipeline always calls `warmLegalRoleHeads()` before
-// triggers run, so by the time `getLegalFormCheckRe()` is
-// invoked the cache is populated. The regex is built
-// lazily and re-cached when the underlying vocabulary
-// reference changes.
-const buildLegalFormCheckRe = (forms: readonly string[]): RegExp => {
-  // Dot-free letter-only forms get Unicode-aware word
-  // boundaries so short uppercase forms ("SE", "AG") and
-  // longer single-word forms ("Branch", "Limited") don't
-  // match as substrings of unrelated tokens. Forms with
-  // dots already terminate at non-letter chars naturally.
-  const parts = forms.map((f) => {
-    const escaped = f
-      .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-      .replace(/\\\./g, "\\.\\s*");
-    const isLetterOnly = /^[\p{L}\p{M}]+$/u.test(f);
-    return isLetterOnly
-      ? `(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`
-      : escaped;
-  });
-  return new RegExp(parts.join("|"), "u");
+let cachedLegalFormCheckSource: readonly string[] | null = null;
+let cachedLegalFormCheckForms: readonly string[] = [];
+const LEGAL_FORM_ALNUM_RE = /[\p{L}\p{N}]/u;
+const LETTER_ONLY_LEGAL_FORM_RE = /^[\p{L}\p{M}]+$/u;
+
+const getLegalFormCheckForms = (): readonly string[] => {
+  const source = getKnownLegalSuffixes();
+  if (cachedLegalFormCheckSource !== source) {
+    cachedLegalFormCheckSource = source;
+    cachedLegalFormCheckForms = source;
+  }
+  return cachedLegalFormCheckForms;
 };
 
-let cachedLegalFormCheckRe: RegExp | null = null;
-let cachedLegalFormCheckSource: readonly string[] | null = null;
-const getLegalFormCheckRe = (): RegExp => {
-  const source = getKnownLegalSuffixes();
-  if (
-    cachedLegalFormCheckSource !== source ||
-    cachedLegalFormCheckRe === null
-  ) {
-    cachedLegalFormCheckSource = source;
-    cachedLegalFormCheckRe = buildLegalFormCheckRe(source);
+const hasKnownLegalFormSuffix = (text: string): boolean => {
+  for (const form of getLegalFormCheckForms()) {
+    let fromIndex = 0;
+    while (fromIndex < text.length) {
+      const start = text.indexOf(form, fromIndex);
+      if (start === -1) {
+        break;
+      }
+      const end = start + form.length;
+      fromIndex = start + 1;
+
+      // Dot-free letter-only forms get Unicode-aware word
+      // boundaries so short uppercase forms ("SE", "AG") and
+      // longer single-word forms ("Branch", "Limited") don't
+      // match as substrings of unrelated tokens. Forms with
+      // punctuation already terminate naturally.
+      if (!LETTER_ONLY_LEGAL_FORM_RE.test(form)) {
+        return true;
+      }
+      if (
+        !LEGAL_FORM_ALNUM_RE.test(text[start - 1] ?? "") &&
+        !LEGAL_FORM_ALNUM_RE.test(text[end] ?? "")
+      ) {
+        return true;
+      }
+    }
   }
-  return cachedLegalFormCheckRe;
+  return false;
 };
 
 // ── Validation compilation ─────────────────────────
@@ -239,15 +243,19 @@ const expandTriggerGroups = (groups: TriggerGroupConfig[]): TriggerRule[] => {
 
 // ── Pattern builder for unified search ──────────────
 
+type TriggerPatterns = {
+  patterns: string[];
+  rules: TriggerRule[];
+};
+
+let triggerPatternsPromise: Promise<TriggerPatterns> | null = null;
+
 /**
  * Build trigger patterns and rules from data configs.
  * Returns string[] for the unified TextSearch
  * builder and the parallel rules array.
  */
-export const buildTriggerPatterns = async (): Promise<{
-  patterns: string[];
-  rules: TriggerRule[];
-}> => {
+const loadTriggerPatterns = async (): Promise<TriggerPatterns> => {
   const rules: TriggerRule[] = [];
 
   const allGroups = await loadLanguageConfigs<readonly TriggerGroupConfig[]>(
@@ -367,6 +375,11 @@ export const buildTriggerPatterns = async (): Promise<{
   await loadAddressStopKeywords();
 
   return { patterns, rules };
+};
+
+export const buildTriggerPatterns = async (): Promise<TriggerPatterns> => {
+  triggerPatternsPromise ??= loadTriggerPatterns();
+  return triggerPatternsPromise;
 };
 
 // ── Value extraction ────────────────────────────────
@@ -613,6 +626,9 @@ export const warmAddressStopKeywords = async (): Promise<void> => {
 // lines while bounding pathological inputs.
 const MAX_TRIGGER_VALUE_LEN = 100;
 const MIN_TRIGGER_PHONE_DIGITS = 5;
+const TRIGGER_LOOKAHEAD_MARGIN = 128;
+const LINE_TRIGGER_LOOKAHEAD = 2_048;
+const MATCH_PATTERN_LOOKAHEAD = 512;
 const PHONE_VALUE_START_RE = /^[+(\d]/;
 const ISO_DATE_PREFIX_RE = /^\d{4}-\d{2}-\d{2}\b/;
 const INLINE_FIELD_LABEL_RE = /\b[\p{L}][\p{L}\p{M} /-]{1,32}:/u;
@@ -649,6 +665,29 @@ const isPlausiblePhoneTriggerValue = (value: string): boolean => {
   return digits >= MIN_TRIGGER_PHONE_DIGITS;
 };
 
+const getTriggerLookahead = (strategy: TriggerRule["strategy"]): number => {
+  switch (strategy.type) {
+    case "to-next-comma":
+      return (strategy.maxLength ?? 100) + TRIGGER_LOOKAHEAD_MARGIN;
+    case "to-end-of-line":
+      return LINE_TRIGGER_LOOKAHEAD;
+    case "n-words":
+      return strategy.count * 64 + TRIGGER_LOOKAHEAD_MARGIN;
+    case "company-id-value":
+      return 256;
+    case "address":
+      return (strategy.maxChars ?? 120) + TRIGGER_LOOKAHEAD_MARGIN;
+    case "match-pattern":
+      return MATCH_PATTERN_LOOKAHEAD;
+    default: {
+      const _exhaustive: never = strategy;
+      throw new Error(
+        `Unknown trigger strategy: ${JSON.stringify(_exhaustive)}`,
+      );
+    }
+  }
+};
+
 const extractValue = (
   text: string,
   triggerEnd: number,
@@ -659,7 +698,11 @@ const extractValue = (
   end: number;
   text: string;
 } | null => {
-  const remaining = text.slice(triggerEnd);
+  const lookaheadEnd = Math.min(
+    text.length,
+    triggerEnd + getTriggerLookahead(strategy),
+  );
+  const remaining = text.slice(triggerEnd, lookaheadEnd);
   // Strip leading whitespace, colons, semicolons —
   // triggers are often followed by ": \t\t\t" in
   // formatted documents.
@@ -1317,7 +1360,7 @@ export const processTriggerMatches = (
       // This is universal — every person with a legal form
       // is an organisation, no per-group config needed.
       const effectiveLabel =
-        rule.label === "person" && getLegalFormCheckRe().test(entityText)
+        rule.label === "person" && hasKnownLegalFormSuffix(entityText)
           ? "organization"
           : rule.label;
 

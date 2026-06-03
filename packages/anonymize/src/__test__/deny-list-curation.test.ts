@@ -72,6 +72,13 @@ const commonWords = new Set(
 const toTitleCase = (word: string): string =>
   word.slice(0, 1).toUpperCase() + word.slice(1).toLowerCase();
 
+const asArray = <T>(value: T | T[] | undefined): readonly T[] => {
+  if (value === undefined) {
+    return [];
+  }
+  return Array.isArray(value) ? value : [value];
+};
+
 describe("deny-list curation", () => {
   test("curated common-word patterns are dropped before automaton build", async () => {
     const dictionaries = await getDictionaries();
@@ -87,12 +94,12 @@ describe("deny-list curation", () => {
       if (!SINGLE_WORD_RE.test(original)) continue;
       if (!commonWords.has(original.toLowerCase())) continue;
 
-      const labels = data.labels[index] ?? [];
+      const labels = asArray(data.labels[index]);
       if (labels.every((label) => label === "address")) {
         continue;
       }
 
-      const sources = data.sources[index] ?? [];
+      const sources = asArray(data.sources[index]);
       const hasCuratedSource = sources.some(
         (source) => source === "deny-list" || source === "surname",
       );

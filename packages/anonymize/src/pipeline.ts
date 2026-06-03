@@ -48,7 +48,12 @@ import {
   initHotwordRules,
 } from "./filters/hotword-rules";
 import { enforceBoundaryConsistency } from "./filters/boundary-consistency";
-import type { Entity, GazetteerEntry, PipelineConfig } from "./types";
+import type {
+  Dictionaries,
+  Entity,
+  GazetteerEntry,
+  PipelineConfig,
+} from "./types";
 import {
   DEFAULT_ENTITY_LABELS,
   DETECTION_SOURCES,
@@ -879,10 +884,59 @@ const configKey = (
   );
 };
 
+type SharedSearchCacheValue =
+  | Promise<UnifiedSearchInstance>
+  | UnifiedSearchInstance;
+
+// Prepared search instances are immutable after construction
+// except for lazy regex slots, which only memoize their own
+// RegexSet. Scope the shared cache by dictionary object identity
+// so callers with different workspace dictionaries do not share
+// deny-list automata accidentally.
+const sharedSearchByDictionaries = new WeakMap<
+  Dictionaries,
+  Map<string, SharedSearchCacheValue>
+>();
+const sharedSearchWithoutDictionaries = new Map<
+  string,
+  SharedSearchCacheValue
+>();
+
+const sharedSearchCacheFor = (
+  dictionaries: Dictionaries | undefined,
+): Map<string, SharedSearchCacheValue> => {
+  if (dictionaries === undefined) {
+    return sharedSearchWithoutDictionaries;
+  }
+  const cached = sharedSearchByDictionaries.get(dictionaries);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const created = new Map<string, SharedSearchCacheValue>();
+  sharedSearchByDictionaries.set(dictionaries, created);
+  return created;
+};
+
+const ensureSearchSupportData = async (
+  config: PipelineConfig,
+  ctx: PipelineContext,
+): Promise<void> => {
+  if (!config.enableDenyList) {
+    return;
+  }
+  await ensureDenyListData(
+    ctx,
+    config.dictionaries,
+    config.nameCorpusLanguages,
+  );
+};
+
 /**
  * Get or build a cached search instance. Cache state
- * lives on the provided PipelineContext, not at module
- * level.
+ * lives on the provided PipelineContext first. A
+ * dictionary-scoped process cache prevents fresh
+ * contexts with the same immutable dictionary bundle
+ * from rebuilding identical automata.
  */
 const getCachedSearch = async (
   config: PipelineConfig,
@@ -896,6 +950,18 @@ const getCachedSearch = async (
   if (ctx.searchPromise && ctx.searchKey === key) {
     return ctx.searchPromise;
   }
+
+  const sharedCache = sharedSearchCacheFor(config.dictionaries);
+  const shared = sharedCache.get(key);
+  if (shared !== undefined) {
+    const result = await shared;
+    await ensureSearchSupportData(config, ctx);
+    ctx.search = result;
+    ctx.searchKey = key;
+    ctx.searchPromise = null;
+    return result;
+  }
+
   // Build new search. Null the cached instance first
   // so concurrent callers don't use stale data while
   // the new build is in flight.
@@ -903,7 +969,19 @@ const getCachedSearch = async (
   ctx.searchKey = key;
   const promise = buildUnifiedSearch(config, gazetteerEntries, ctx);
   ctx.searchPromise = promise;
-  const result = await promise;
+  sharedCache.set(key, promise);
+  let result: UnifiedSearchInstance;
+  try {
+    result = await promise;
+  } catch (err) {
+    if (sharedCache.get(key) === promise) {
+      sharedCache.delete(key);
+    }
+    throw err;
+  }
+  if (sharedCache.get(key) === promise) {
+    sharedCache.set(key, result);
+  }
   // Guard: another call may have replaced the key
   // while we were awaiting. Only cache if still ours.
   if (ctx.searchKey === key) {

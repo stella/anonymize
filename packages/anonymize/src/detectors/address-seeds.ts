@@ -309,7 +309,9 @@ const getBoundaryRe = async (): Promise<RegExp> => {
  * Returns string[] for the unified TextSearch
  * builder. Empty if data package is not installed.
  */
-export const buildStreetTypePatterns = async (): Promise<string[]> => {
+let streetTypePatternsPromise: Promise<string[]> | null = null;
+
+const loadStreetTypePatterns = async (): Promise<string[]> => {
   let config: DictionaryConfig;
   try {
     const mod = await import("../data/address-street-types.json");
@@ -330,6 +332,11 @@ export const buildStreetTypePatterns = async (): Promise<string[]> => {
     }
   }
   return words;
+};
+
+export const buildStreetTypePatterns = async (): Promise<string[]> => {
+  streetTypePatternsPromise ??= loadStreetTypePatterns();
+  return streetTypePatternsPromise;
 };
 
 // ── Seed collection ─────────────────────────────────

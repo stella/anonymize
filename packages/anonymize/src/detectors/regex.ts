@@ -1112,11 +1112,28 @@ type CurrenciesData = {
 };
 
 type FinancialLexicons = {
-  magnitude: string;
+  magnitudeOptional: string;
+  magnitudeRequired: string;
+  magnitudePrefilterTerms: readonly string[];
   quantityFollowerGuard: string;
 };
 
-const buildMagnitudePattern = (config: AmountWordsConfig): string => {
+type CurrencyPatternEntry = {
+  pattern: string;
+  literal?: false;
+  lazy: true;
+  prefilterAny: readonly string[];
+  prefilterCaseInsensitive: boolean;
+  prefilterRegex?: RegExp;
+};
+
+type MagnitudePattern = {
+  optional: string;
+  required: string;
+  prefilterTerms: readonly string[];
+};
+
+const buildMagnitudePattern = (config: AmountWordsConfig): MagnitudePattern => {
   const words: string[] = [];
   const caseInsensitiveAbbreviations: string[] = [];
   const caseSensitiveAbbreviations: string[] = [];
@@ -1146,7 +1163,16 @@ const buildMagnitudePattern = (config: AmountWordsConfig): string => {
     branches.push(`[^\\S\\n\\t]?(?:${abbreviationCsAlt})\\b`);
   }
 
-  return branches.length > 0 ? `(?:${branches.join("|")})?` : "";
+  const required = branches.length > 0 ? `(?:${branches.join("|")})` : "";
+  return {
+    optional: required ? `${required}?` : "",
+    required,
+    prefilterTerms: [
+      ...words,
+      ...caseInsensitiveAbbreviations,
+      ...caseSensitiveAbbreviations,
+    ],
+  };
 };
 
 const buildQuantityFollowerGuard = (config: AmountWordsConfig): string => {
@@ -1169,11 +1195,17 @@ const buildQuantityFollowerGuard = (config: AmountWordsConfig): string => {
   return `(?![^\\S\\n\\t]+(?i:` + `${modifierPrefix}(?:${nounAlt}))\\b)`;
 };
 
-const buildFinancialLexicons = (config: AmountWordsConfig): FinancialLexicons =>
-  Object.freeze({
-    magnitude: buildMagnitudePattern(config),
+const buildFinancialLexicons = (
+  config: AmountWordsConfig,
+): FinancialLexicons => {
+  const magnitude = buildMagnitudePattern(config);
+  return Object.freeze({
+    magnitudeOptional: magnitude.optional,
+    magnitudeRequired: magnitude.required,
+    magnitudePrefilterTerms: magnitude.prefilterTerms,
     quantityFollowerGuard: buildQuantityFollowerGuard(config),
   });
+};
 
 const FINANCIAL_LEXICONS = buildFinancialLexicons(AMOUNT_WORDS);
 
@@ -1187,7 +1219,9 @@ const FINANCIAL_LEXICONS = buildFinancialLexicons(AMOUNT_WORDS);
  * thousands (1,000) and plain integers (100000)
  * via `\d{1,9}` to catch unformatted amounts.
  */
-const buildCurrencyPatterns = (data: CurrenciesData): string[] => {
+const buildCurrencyPatternEntries = (
+  data: CurrenciesData,
+): CurrencyPatternEntry[] => {
   const symbols = data.symbols.map(escapeCharClass).join("");
 
   // Build trailing alternation: ISO codes (case-
@@ -1199,11 +1233,13 @@ const buildCurrencyPatterns = (data: CurrenciesData): string[] => {
   // Sorted longest-first to avoid partial matches.
   const isAsciiAlpha = /^[a-zA-Z\s]+$/;
 
-  type TrailingPart = { len: number; alt: string };
-  const parts: TrailingPart[] = data.codes.map((code) => ({
+  type CurrencyTermPart = { term: string; len: number; alt: string };
+  const codeParts: CurrencyTermPart[] = data.codes.map((code) => ({
+    term: code,
     len: code.length,
     alt: escapeRegex(code),
   }));
+  const localNameParts: CurrencyTermPart[] = [];
 
   // Minimum length for case-insensitive wrapping.
   // Short abbreviations like "Ft" (2 chars) stay
@@ -1215,12 +1251,17 @@ const buildCurrencyPatterns = (data: CurrenciesData): string[] => {
       const escaped = escapeRegex(name);
       const wrapCI = isAsciiAlpha.test(name) && name.length >= MIN_CI_LENGTH;
       if (wrapCI) {
-        parts.push({
+        localNameParts.push({
+          term: name,
           len: name.length,
           alt: `(?i:${escaped})`,
         });
       } else {
-        parts.push({ len: name.length, alt: escaped });
+        localNameParts.push({
+          term: name,
+          len: name.length,
+          alt: escaped,
+        });
       }
     }
   }
@@ -1228,16 +1269,16 @@ const buildCurrencyPatterns = (data: CurrenciesData): string[] => {
   // Also include currency symbols as trailing
   // alternatives (e.g., "126 €", "8 190 £").
   // These are common in European notation.
-  if (symbols) {
-    for (const symbolChar of data.symbols) {
-      parts.push({
-        len: symbolChar.length,
-        alt: escapeRegex(symbolChar),
-      });
-    }
-  }
-
-  const trailingAlt = parts
+  const toPartAlternation = (parts: readonly CurrencyTermPart[]): string =>
+    parts
+      .toSorted((a, b) => b.len - a.len)
+      .map((p) => p.alt)
+      .join("|");
+  const codeAlt = toPartAlternation(codeParts);
+  const localNameAlt = toPartAlternation(localNameParts);
+  const codeTerms = codeParts.map((part) => part.term);
+  const localNameTerms = localNameParts.map((part) => part.term);
+  const trailingAlt = [...codeParts, ...localNameParts]
     .toSorted((a, b) => b.len - a.len)
     .map((p) => p.alt)
     .join("|");
@@ -1248,8 +1289,90 @@ const buildCurrencyPatterns = (data: CurrenciesData): string[] => {
   // integer up to 9 digits (covers unformatted
   // amounts like "100000 CZK").
   const NUM = `(?:\\d{1,3}(?:[,.'[^\\S\\n\\t]]\\d{3})+` + `|\\d{1,9})`;
+  const PREFILTER_NUM = `(?:\\d{1,3}(?:[,.'\\s]\\d{3})+|\\d{1,9})`;
+  const PREFILTER_DECIMAL =
+    `(?:[.,](?=\\d|[${DASH_INNER}])` +
+    `\\s?(?:\\d{1,2}${DASH}?|${DASH}{1,2}))?`;
 
-  const patterns: string[] = [];
+  const patterns: CurrencyPatternEntry[] = [];
+  const lazyCurrencyPattern = (
+    pattern: string,
+    prefilterAny: readonly string[],
+    prefilterCaseInsensitive: boolean,
+    prefilterRegex?: RegExp,
+  ): CurrencyPatternEntry => ({
+    pattern,
+    lazy: true,
+    prefilterAny,
+    prefilterCaseInsensitive,
+    ...(prefilterRegex ? { prefilterRegex } : {}),
+  });
+  const makeLeadingPrefilter = (
+    terms: readonly string[],
+    caseInsensitive: boolean,
+  ): RegExp | undefined => {
+    const termAlt = toSortedAlternation(terms);
+    if (!termAlt) return undefined;
+    return new RegExp(
+      `(?:^|[^\\p{L}\\p{N}_])(?:${termAlt})[^\\S\\n\\t]{0,2}\\d`,
+      caseInsensitive ? "iu" : "u",
+    );
+  };
+  const makeTrailingPrefilter = (
+    terms: readonly string[],
+    caseInsensitive: boolean,
+  ): RegExp | undefined => {
+    const termAlt = toSortedAlternation(terms);
+    if (!termAlt) return undefined;
+    return new RegExp(
+      `${PREFILTER_NUM}${PREFILTER_DECIMAL}[^\\S\\n\\t]{0,4}(?:${termAlt})`,
+      caseInsensitive ? "iu" : "u",
+    );
+  };
+  const makeLeadingMagnitudePrefilter = (
+    terms: readonly string[],
+    caseInsensitive: boolean,
+  ): RegExp | undefined => {
+    const termAlt = toSortedAlternation(terms);
+    const magnitudeAlt = toSortedAlternation(
+      FINANCIAL_LEXICONS.magnitudePrefilterTerms,
+    );
+    if (!termAlt || !magnitudeAlt) return undefined;
+    return new RegExp(
+      `(?:^|[^\\p{L}\\p{N}_])(?:${termAlt})` +
+        `[^\\S\\n\\t]{0,2}${PREFILTER_NUM}${PREFILTER_DECIMAL}` +
+        `[^\\S\\n\\t]{0,8}(?:${magnitudeAlt})(?:$|[^\\p{L}\\p{N}_])`,
+      caseInsensitive ? "iu" : "u",
+    );
+  };
+  const makeLeadingSymbolMagnitudePrefilter = (): RegExp | undefined => {
+    const magnitudeAlt = toSortedAlternation(
+      FINANCIAL_LEXICONS.magnitudePrefilterTerms,
+    );
+    if (!magnitudeAlt) return undefined;
+    return new RegExp(
+      `(?:^|[^\\p{L}\\p{N}_])(?:[${symbols}])` +
+        `[^\\S\\n\\t]{0,2}${PREFILTER_NUM}${PREFILTER_DECIMAL}` +
+        `[^\\S\\n\\t]{0,8}(?:${magnitudeAlt})(?:$|[^\\p{L}\\p{N}_])`,
+      "iu",
+    );
+  };
+  const makeTrailingMagnitudePrefilter = (
+    terms: readonly string[],
+    caseInsensitive: boolean,
+  ): RegExp | undefined => {
+    const termAlt = toSortedAlternation(terms);
+    const magnitudeAlt = toSortedAlternation(
+      FINANCIAL_LEXICONS.magnitudePrefilterTerms,
+    );
+    if (!termAlt || !magnitudeAlt) return undefined;
+    return new RegExp(
+      `${PREFILTER_NUM}${PREFILTER_DECIMAL}` +
+        `[^\\S\\n\\t]{0,8}(?:${magnitudeAlt})(?:$|[^\\p{L}\\p{N}_])` +
+        `[\\s\\S]{0,24}(?:${termAlt})`,
+      caseInsensitive ? "iu" : "u",
+    );
+  };
 
   // Decimal part: dot/comma must be followed by at
   // least one digit or dash. Without this, a trailing
@@ -1263,26 +1386,84 @@ const buildCurrencyPatterns = (data: CurrenciesData): string[] => {
     `(?:\\d{1,2}${DASH}?|${DASH}{1,2}))?`;
   const END = `(?:\\b|(?=\\s|[.,;!?)]|$))`;
 
-  const MAGNITUDE = FINANCIAL_LEXICONS.magnitude;
+  const MAGNITUDE_OPTIONAL = FINANCIAL_LEXICONS.magnitudeOptional;
+  const MAGNITUDE_REQUIRED = FINANCIAL_LEXICONS.magnitudeRequired;
 
-  // Leading symbol: $100, €1,000.50, € 100000,
-  // $25 million, $2bn.
+  // Leading symbol: $100, €1,000.50, € 100000.
+  // Magnitude-bearing forms ($25 million, $2bn)
+  // are a separate pattern: making the magnitude
+  // suffix optional in this very broad symbol pattern
+  // forces the regex engine to do much more work on
+  // EDGAR-style contracts with large numeric sections.
   if (symbols) {
     patterns.push(
-      `(?:[${symbols}])` +
-        `[^\\S\\n\\t]?` +
-        `${NUM}${DECIMAL}${MAGNITUDE}${END}`,
+      lazyCurrencyPattern(
+        `(?:[${symbols}])` + `[^\\S\\n\\t]?` + `${NUM}${DECIMAL}${END}`,
+        data.symbols,
+        true,
+      ),
     );
+    if (MAGNITUDE_REQUIRED) {
+      patterns.push(
+        lazyCurrencyPattern(
+          `(?:[${symbols}])` +
+            `[^\\S\\n\\t]?` +
+            `${NUM}${DECIMAL}${MAGNITUDE_REQUIRED}${END}`,
+          data.symbols,
+          true,
+          makeLeadingSymbolMagnitudePrefilter(),
+        ),
+      );
+    }
   }
 
   // Leading multi-char code: "Kč 10,—", "Fr. 500",
   // "EUR 1.5 billion".
-  if (trailingAlt) {
+  if (codeAlt) {
     patterns.push(
-      `\\b(?:${trailingAlt})` +
-        `[^\\S\\n\\t]{0,2}` +
-        `${NUM}${DECIMAL}${MAGNITUDE}${END}`,
+      lazyCurrencyPattern(
+        `\\b(?:${codeAlt})` + `[^\\S\\n\\t]{0,2}` + `${NUM}${DECIMAL}${END}`,
+        codeTerms,
+        false,
+        makeLeadingPrefilter(codeTerms, false),
+      ),
     );
+    if (MAGNITUDE_REQUIRED) {
+      patterns.push(
+        lazyCurrencyPattern(
+          `\\b(?:${codeAlt})` +
+            `[^\\S\\n\\t]{0,2}` +
+            `${NUM}${DECIMAL}${MAGNITUDE_REQUIRED}${END}`,
+          codeTerms,
+          false,
+          makeLeadingMagnitudePrefilter(codeTerms, false),
+        ),
+      );
+    }
+  }
+  if (localNameAlt) {
+    patterns.push(
+      lazyCurrencyPattern(
+        `\\b(?:${localNameAlt})` +
+          `[^\\S\\n\\t]{0,2}` +
+          `${NUM}${DECIMAL}${END}`,
+        localNameTerms,
+        true,
+        makeLeadingPrefilter(localNameTerms, true),
+      ),
+    );
+    if (MAGNITUDE_REQUIRED) {
+      patterns.push(
+        lazyCurrencyPattern(
+          `\\b(?:${localNameAlt})` +
+            `[^\\S\\n\\t]{0,2}` +
+            `${NUM}${DECIMAL}${MAGNITUDE_REQUIRED}${END}`,
+          localNameTerms,
+          true,
+          makeLeadingMagnitudePrefilter(localNameTerms, true),
+        ),
+      );
+    }
   }
 
   // Trailing code/name: 100 USD, 1,000.50 CZK,
@@ -1291,14 +1472,72 @@ const buildCurrencyPatterns = (data: CurrenciesData): string[] => {
   // Magnitude sits between the number and the code so
   // "100 million USD" parses naturally; the existing
   // 0-4 whitespace span absorbs the separator.
-  if (trailingAlt) {
-    const optionalLeadingSymbol = symbols
-      ? `(?<![\\p{L}\\p{N}_])(?:[${symbols}][^\\S\\n\\t]?)?`
-      : "\\b";
+  const optionalLeadingSymbol = symbols
+    ? `(?<![\\p{L}\\p{N}_])(?:[${symbols}][^\\S\\n\\t]?)?`
+    : "\\b";
+  if (codeAlt) {
     patterns.push(
-      `${optionalLeadingSymbol}${NUM}${DECIMAL}${MAGNITUDE}` +
-        `[^\\S\\n\\t]{0,4}` +
-        `(?:${trailingAlt})${FINANCIAL_LEXICONS.quantityFollowerGuard}${END}`,
+      lazyCurrencyPattern(
+        `${optionalLeadingSymbol}${NUM}${DECIMAL}` +
+          `[^\\S\\n\\t]{0,4}` +
+          `(?:${codeAlt})${END}`,
+        codeTerms,
+        false,
+        makeTrailingPrefilter(codeTerms, false),
+      ),
+    );
+    if (MAGNITUDE_REQUIRED) {
+      patterns.push(
+        lazyCurrencyPattern(
+          `${optionalLeadingSymbol}${NUM}${DECIMAL}${MAGNITUDE_REQUIRED}` +
+            `[^\\S\\n\\t]{0,4}` +
+            `(?:${codeAlt})${FINANCIAL_LEXICONS.quantityFollowerGuard}${END}`,
+          codeTerms,
+          false,
+          makeTrailingMagnitudePrefilter(codeTerms, false),
+        ),
+      );
+    }
+  }
+  if (localNameAlt) {
+    patterns.push(
+      lazyCurrencyPattern(
+        `${optionalLeadingSymbol}${NUM}${DECIMAL}` +
+          `[^\\S\\n\\t]{0,4}` +
+          `(?:${localNameAlt})${END}`,
+        localNameTerms,
+        true,
+        makeTrailingPrefilter(localNameTerms, true),
+      ),
+    );
+    if (MAGNITUDE_REQUIRED) {
+      patterns.push(
+        lazyCurrencyPattern(
+          `${optionalLeadingSymbol}${NUM}${DECIMAL}${MAGNITUDE_REQUIRED}` +
+            `[^\\S\\n\\t]{0,4}` +
+            `(?:${localNameAlt})${FINANCIAL_LEXICONS.quantityFollowerGuard}${END}`,
+          localNameTerms,
+          true,
+          makeTrailingMagnitudePrefilter(localNameTerms, true),
+        ),
+      );
+    }
+  }
+
+  if (symbols) {
+    const trailingSymbolPrefilter = new RegExp(
+      `${PREFILTER_NUM}${PREFILTER_DECIMAL}[^\\S\\n\\t]{0,4}[${symbols}]`,
+      "u",
+    );
+    patterns.push(
+      lazyCurrencyPattern(
+        `${NUM}${DECIMAL}${MAGNITUDE_OPTIONAL}` +
+          `[^\\S\\n\\t]{0,4}` +
+          `(?:[${symbols}])${END}`,
+        data.symbols,
+        true,
+        trailingSymbolPrefilter,
+      ),
     );
   }
 
@@ -1307,12 +1546,18 @@ const buildCurrencyPatterns = (data: CurrenciesData): string[] => {
 
 /** Cached promise for currency patterns. Loaded once. */
 let currencyPatternPromise: Promise<string[]> | null = null;
+let currencyPatternEntryPromise: Promise<CurrencyPatternEntry[]> | null = null;
 
-const loadCurrencyPatterns = async (): Promise<string[]> => {
+const loadCurrencyPatternEntries = async (): Promise<
+  CurrencyPatternEntry[]
+> => {
   const mod = await import("../data/currencies.json");
   const data: CurrenciesData = mod.default ?? mod;
-  return buildCurrencyPatterns(data);
+  return buildCurrencyPatternEntries(data);
 };
+
+const loadCurrencyPatterns = async (): Promise<string[]> =>
+  (await loadCurrencyPatternEntries()).map((entry) => entry.pattern);
 
 /**
  * Get dynamically built monetary amount patterns from
@@ -1327,6 +1572,18 @@ export const getCurrencyPatterns = (): Promise<string[]> => {
     });
   }
   return currencyPatternPromise;
+};
+
+export const getCurrencyPatternEntries = (): Promise<
+  CurrencyPatternEntry[]
+> => {
+  if (!currencyPatternEntryPromise) {
+    currencyPatternEntryPromise = loadCurrencyPatternEntries().catch((err) => {
+      currencyPatternEntryPromise = null;
+      throw err;
+    });
+  }
+  return currencyPatternEntryPromise;
 };
 
 /** Currency pattern metadata (score 0.9). */

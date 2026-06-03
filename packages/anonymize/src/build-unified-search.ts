@@ -35,7 +35,7 @@ import { defaultContext } from "./context";
 import {
   REGEX_PATTERNS,
   REGEX_META,
-  getCurrencyPatterns,
+  getCurrencyPatternEntries,
   CURRENCY_PATTERN_META,
   getDatePatterns,
   DATE_PATTERN_META,
@@ -139,8 +139,8 @@ export const buildUnifiedSearch = async (
     config.enableDenyList ? buildDenyList(config, ctx) : Promise.resolve(null),
     buildStreetTypePatterns(),
     config.enableRegex && labelIsAllowed("monetary amount", allowedLabels)
-      ? getCurrencyPatterns()
-      : Promise.resolve([] as string[]),
+      ? getCurrencyPatternEntries()
+      : Promise.resolve([] as PatternEntry[]),
     config.enableRegex && labelIsAllowed("date", allowedLabels)
       ? getDatePatterns()
       : Promise.resolve([] as string[]),
@@ -166,7 +166,7 @@ export const buildUnifiedSearch = async (
   // Currency patterns (from currencies.json) are
   // appended after the static regex patterns; their
   // meta is spliced into regexMeta at the same offset.
-  const allRegex: string[] = [];
+  const allRegex: PatternEntry[] = [];
   const regexMeta: RegexMeta[] = [];
   if (config.enableRegex) {
     for (const [index, pattern] of REGEX_PATTERNS.entries()) {
@@ -231,9 +231,9 @@ export const buildUnifiedSearch = async (
 
   const regexAllPatterns = [...allRegex, ...legalForms, ...triggerEntries];
 
-  // TextSearch auto-detects DFA state explosion
-  // (build time > 2ms) and falls back to individual
-  // engines. No manual maxAlternations needed.
+  // TextSearch uses static complexity routing for
+  // regex patterns: common regexes share bounded
+  // chunks, while high-risk patterns are isolated.
   const tsRegex = new (getTextSearch())(regexAllPatterns);
   const tsCustomRegex = new (getTextSearch())(
     customRegexes.map((entry) => entry.pattern),
@@ -306,23 +306,49 @@ export const buildUnifiedSearch = async (
     const last = pattern.at(-1) ?? "";
     return ALNUM_RE.test(first) && ALNUM_RE.test(last);
   };
-  const literalAllPatterns: PatternEntry[] = [
-    ...denyListOriginals.map((pattern, index) =>
-      wrapWholeWord(
-        pattern,
-        (denyListData?.sources[index] ?? []).includes("custom-deny-list")
-          ? customDenyListNeedsWholeWords(pattern)
-          : true,
-      ),
-    ),
-    ...streetTypes.map((pattern) => wrapWholeWord(pattern, true)),
-    ...(gazResult?.patterns ?? []),
-    ...(countryResult?.patterns ?? []),
-  ];
+  const literalPatternText = (entry: PatternEntry): string => {
+    if (typeof entry === "string") return entry;
+    if (entry instanceof RegExp) {
+      throw new Error("Expected literal country pattern, got RegExp");
+    }
+    if (entry.pattern instanceof RegExp) {
+      throw new Error("Expected literal country pattern, got RegExp entry");
+    }
+    return entry.pattern;
+  };
+  const hasCustomDenyListPatterns =
+    denyListData?.sources.some((sources) =>
+      sources.includes("custom-deny-list"),
+    ) ?? false;
+  const canUseGlobalWholeWordLiterals =
+    !hasCustomDenyListPatterns && gazResult === null;
+  const literalAllPatterns: PatternEntry[] | string[] =
+    canUseGlobalWholeWordLiterals
+      ? [
+          ...denyListOriginals,
+          ...streetTypes,
+          ...(countryResult?.patterns.map(literalPatternText) ?? []),
+        ]
+      : [
+          ...denyListOriginals.map((pattern, index) =>
+            wrapWholeWord(
+              pattern,
+              (denyListData?.sources[index] ?? []).includes("custom-deny-list")
+                ? customDenyListNeedsWholeWords(pattern)
+                : true,
+            ),
+          ),
+          ...streetTypes.map((pattern) => wrapWholeWord(pattern, true)),
+          ...(gazResult?.patterns ?? []),
+          ...(countryResult?.patterns ?? []),
+        ];
 
   const tsLiterals =
     literalAllPatterns.length > 0
       ? new (getTextSearch())(literalAllPatterns, {
+          ...(canUseGlobalWholeWordLiterals
+            ? { allLiteral: true, wholeWords: true }
+            : {}),
           caseInsensitive: true,
           overlapStrategy: "all",
         })

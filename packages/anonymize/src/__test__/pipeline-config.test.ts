@@ -98,6 +98,57 @@ describe("pipeline config semantics", () => {
     expect(second).toBe(first);
   });
 
+  test("preparePipelineSearch reuses shared search across fresh contexts", async () => {
+    const testDictionaries = await getDictionaries();
+    const config = {
+      ...BASE_CONFIG,
+      dictionaries: testDictionaries,
+      enableRegex: true,
+      labels: ["email address"],
+    };
+    const firstContext = createPipelineContext();
+    const secondContext = createPipelineContext();
+
+    const first = await preparePipelineSearch({
+      config,
+      context: firstContext,
+    });
+    const second = await preparePipelineSearch({
+      config,
+      context: secondContext,
+    });
+
+    expect(second).toBe(first);
+    expect(secondContext.search).toBe(first);
+  });
+
+  test("preparePipelineSearch does not share across dictionary objects", async () => {
+    const testDictionaries = await getDictionaries();
+    const config = {
+      ...BASE_CONFIG,
+      dictionaries: testDictionaries,
+      enableRegex: true,
+      labels: ["email address"],
+    };
+    const clonedConfig = {
+      ...config,
+      dictionaries: {
+        ...testDictionaries,
+      },
+    };
+
+    const first = await preparePipelineSearch({
+      config,
+      context: createPipelineContext(),
+    });
+    const second = await preparePipelineSearch({
+      config: clonedConfig,
+      context: createPipelineContext(),
+    });
+
+    expect(second).not.toBe(first);
+  });
+
   test("enableLegalForms flag gates legal-form detection", async () => {
     const withFlag = await detect("Acme s.r.o.", {
       enableLegalForms: true,
