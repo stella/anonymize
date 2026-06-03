@@ -129,6 +129,24 @@ describe("multi-line US notice-block addresses", () => {
     expect(spurious).toBeUndefined();
   });
 
+  test("inline address followed by an unrelated next line is trimmed, not dropped", async () => {
+    // The expansion can walk through a single newline up to its 200-
+    // char cap; without a trim, the newline-boundary check would drop
+    // the whole span because all street/destination evidence sits
+    // above the break.
+    const text =
+      "Notices shall be delivered to 650 Page Mill Road, Palo Alto, CA 94304-1050.\nPlease review the schedule.";
+    const entities = await detect(text);
+    const address = entities.find(
+      (e) =>
+        e.label === "address" &&
+        e.text.includes("Page Mill") &&
+        e.text.includes("94304-1050"),
+    );
+    expect(address).toBeDefined();
+    expect(address?.text).not.toContain("Please review");
+  });
+
   test("address span does not jump across a paragraph break (double newline)", async () => {
     const text = [
       "First street is One American Road, Cleveland, Ohio 44144-2398.",

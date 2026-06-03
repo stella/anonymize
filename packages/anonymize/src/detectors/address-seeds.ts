@@ -728,14 +728,19 @@ const DESTINATION_SEED_TYPES: ReadonlySet<SeedType> = new Set([
   "city",
 ]);
 
-const passesNewlineBoundaryCheck = (
+type NewlineBoundaryResolution =
+  | { kind: "keep" }
+  | { kind: "drop" }
+  | { kind: "trim"; relativeEnd: number };
+
+const resolveNewlineBoundary = (
   spanStart: number,
   text: string,
   cluster: SeedCluster,
-): boolean => {
+): NewlineBoundaryResolution => {
   const newlines = (text.match(/\n/gu) ?? []).length;
-  if (newlines === 0) return true;
-  if (newlines > 1) return false;
+  if (newlines === 0) return { kind: "keep" };
+  if (newlines > 1) return { kind: "drop" };
 
   const relativeNewline = text.indexOf("\n");
   const newlineAbs = spanStart + relativeNewline;
@@ -753,7 +758,23 @@ const passesNewlineBoundaryCheck = (
     if (isDest && isAbove) destAbove = true;
     if (isDest && !isAbove) destBelow = true;
   }
-  return (streetAbove && destBelow) || (streetBelow && destAbove);
+
+  // True multi-line notice block: street and destination evidence
+  // straddle the newline (`One American Road\nCleveland, Ohio 44144`).
+  if ((streetAbove && destBelow) || (streetBelow && destAbove)) {
+    return { kind: "keep" };
+  }
+
+  // Inline address followed by unrelated prose on the next line
+  // (`650 Page Mill Road, Palo Alto, CA 94304-1050.\nPlease review…`).
+  // The expansion walked through the newline up to its 200-char cap,
+  // but the complete address sits entirely above the break. Trim back
+  // to the line above instead of dropping the whole span.
+  if (streetAbove && destAbove) {
+    return { kind: "trim", relativeEnd: relativeNewline };
+  }
+
+  return { kind: "drop" };
 };
 
 // Normalise CRLF paragraph breaks to LF for the address-seed
@@ -807,24 +828,24 @@ export const processAddressSeeds = async (
       cluster,
       existingEntities,
     );
-    const text = fullText.slice(start, end).trim();
-
-    // Skip very short or very long spans
-    if (text.length < 5 || text.length > 300) {
-      continue;
-    }
-
-    if (
-      !passesNewlineBoundaryCheck(start, normaliseLineBreaks(text), cluster)
-    ) {
-      continue;
-    }
+    const rawText = fullText.slice(start, end);
+    const resolution = resolveNewlineBoundary(
+      start,
+      normaliseLineBreaks(rawText),
+      cluster,
+    );
+    if (resolution.kind === "drop") continue;
+    const effectiveText =
+      resolution.kind === "trim"
+        ? rawText.slice(0, resolution.relativeEnd).trim()
+        : rawText.trim();
+    if (effectiveText.length < 5 || effectiveText.length > 300) continue;
 
     results.push({
       start,
-      end: start + text.length,
+      end: start + effectiveText.length,
       label: "address",
-      text,
+      text: effectiveText,
       score,
       source: DETECTION_SOURCES.REGEX,
     });
