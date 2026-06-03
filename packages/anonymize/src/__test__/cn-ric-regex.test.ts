@@ -133,11 +133,26 @@ describe("CN RIC 18-digit national identifier", () => {
   });
 
   test("17-digit numeric blob is not tagged as a RIC", async () => {
-    // The pattern requires exactly 18 (with check digit) or 15
-    // digits; 17 must not match either alternative.
+    // The pattern requires exactly the 18-digit modern form.
     const text = "Reference 12010219630521108 in the dossier.";
     const entities = await detect(text);
     const spurious = entities.find((e) => e.text.includes("12010219630521108"));
     expect(spurious).toBeUndefined();
+  });
+
+  test("legacy 15-digit form is not tagged as a CN RIC", async () => {
+    // The pre-1999 15-digit form shares its bare `\d{15}` shape with
+    // fr.nir (also 15 digits). The unified text-search returns one
+    // match per offset and picks the earlier-registered pattern, so a
+    // 15-digit alternative for cn.ric would shadow legitimate French
+    // SSNs. The trade-off is documented in detectors/regex.ts.
+    const text = "Legacy ID 110105491001321 was recorded.";
+    const entities = await detect(text);
+    const hit = entities.find(
+      (e) =>
+        e.label === "national identification number" &&
+        e.text.includes("110105491001321"),
+    );
+    expect(hit).toBeUndefined();
   });
 });
