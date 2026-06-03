@@ -479,6 +479,26 @@ const TEL_PREFIX_PHONE: RegexDef = {
   score: 0.95,
 };
 
+/**
+ * US phone numbers in the (NNN) NNN-NNNN form. Dominant
+ * shape in US notice blocks ("(212) 735-3000"); not
+ * covered by INTL_PHONE (which requires a leading `+`)
+ * or TEL_PREFIX_PHONE (which requires a `tel.:` label).
+ *
+ * The parenthesised area code is the constraint that
+ * keeps this from matching random digit clusters —
+ * `(212) 555-1212` looks like nothing else in a contract.
+ * Score below INTL_PHONE (1) and TEL_PREFIX_PHONE (0.95)
+ * so labelled / fully-qualified forms still win the
+ * overlap resolver when both fire on the same span.
+ */
+const US_PAREN_PHONE: RegexDef = {
+  pattern:
+    `\\(\\d{3}\\)(?:[^\\S\\n]|[.\\-])?\\d{3}` + `(?:[^\\S\\n]|[.\\-])\\d{4}\\b`,
+  label: "phone number",
+  score: 0.9,
+};
+
 const CREDIT_CARD: RegexDef = {
   pattern:
     `\\b(?:4\\d{3}|5[1-5]\\d{2}|3[47]\\d{2})` +
@@ -923,6 +943,7 @@ const ALL_REGEX_DEFS: readonly RegexDef[] = [
   INTL_PHONE,
   CZ_PHONE,
   TEL_PREFIX_PHONE,
+  US_PAREN_PHONE,
   CREDIT_CARD,
   CZ_BIRTH_NUMBER,
   CZ_COMMERCIAL_REGISTER,
