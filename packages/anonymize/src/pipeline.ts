@@ -83,6 +83,14 @@ const hasLockedBoundary = (entity: Entity): boolean =>
 
 const LITERAL_BOUNDARY_PUNCT_RE = /^["“„‟‘‛'«]|["”’'»!.]$/u;
 
+// Bare postal-code shapes used by the address-containment rule.
+// Covers Czech `160 00`, German/EU `12345`, US ZIP / ZIP+4
+// (`94304`, `94304-1050`), and the standard `\d{3} \d{2}` /
+// `\d{2}-\d{3}` continental variants. Surrounding whitespace
+// is allowed so the trigger detector's trimmed span still matches.
+const BARE_POSTAL_CODE_RE =
+  /^\s*(?:\d{3}\s?\d{2}|\d{2}[-–]\d{3}|\d{5}(?:[-–]\d{3,4})?)\s*$/u;
+
 const hasCuratedLiteralBoundary = (entity: Entity): boolean =>
   LITERAL_SOURCES.has(entity.source) &&
   entity.label !== "person" &&
@@ -126,20 +134,22 @@ const shouldReplace = (a: Entity, b: Entity): boolean => {
     return false;
   }
 
-  // Address containment: an address span emitted by the multi-seed
-  // expander (regex) that fully contains a shorter same-label entity
-  // from a higher-priority detector (typically a trigger reclassifying
-  // just the postal code, `160 00` inside
-  // `Evropská 710\nPraha 6, PSČ 160 00`) is the complete address.
-  // The shorter span is a fragment of the same data point, not a
-  // competing piece of evidence — the longer wins regardless of
-  // source priority.
+  // Postal-code inside a fuller address: when a longer same-label
+  // address span fully contains a shorter span whose text is just
+  // a bare postal code (Czech `160 00`, German `12345`, US `94304`
+  // or `94304-1050`), the shorter span is a fragment of the same
+  // data point. The longer span wins regardless of source priority.
+  // Bare postal-code text without surrounding street/city evidence
+  // is the only narrow case where containment beats the priority
+  // comparison; field-label trims (\`… IČ\`, \`… oddíl\`) and other
+  // address-vs-address comparisons stay on the standard path.
   if (
     a.label === "address" &&
     b.label === "address" &&
     a.start <= b.start &&
     a.end >= b.end &&
-    aLen > bLen
+    aLen > bLen &&
+    BARE_POSTAL_CODE_RE.test(b.text)
   ) {
     return true;
   }
@@ -148,7 +158,8 @@ const shouldReplace = (a: Entity, b: Entity): boolean => {
     b.label === "address" &&
     b.start <= a.start &&
     b.end >= a.end &&
-    bLen > aLen
+    bLen > aLen &&
+    BARE_POSTAL_CODE_RE.test(a.text)
   ) {
     return false;
   }

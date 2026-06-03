@@ -120,7 +120,7 @@
       "end": 3748,
       "label": "address",
       "text": "Na Květnici 1657/16, 140 00 Praha 4",
-      "source": "regex"
+      "source": "trigger"
     },
     {
       "start": 4091,
