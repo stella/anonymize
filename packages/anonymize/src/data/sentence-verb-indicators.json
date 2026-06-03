@@ -47,7 +47,10 @@
     "signs",
     "signed",
     "leases",
-    "rents"
+    "rents",
+    "entered",
+    "made",
+    "executed"
   ],
   "de": [
     "ist",

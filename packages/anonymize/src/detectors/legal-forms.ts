@@ -1072,6 +1072,7 @@ const trimLeadingClause = (text: string): { offset: number; text: string } => {
     "amongst",
     "between",
   ]);
+  const verbIndicators = getSentenceVerbIndicatorsSync();
   if (directPrefixAlternation.length > 0) {
     const directPrefixRe = new RegExp(
       `\\b(?:${directPrefixAlternation})${HSPACE}+(?=\\p{Lu})`,
@@ -1080,13 +1081,27 @@ const trimLeadingClause = (text: string): { offset: number; text: string } => {
     for (const match of text.matchAll(directPrefixRe)) {
       const matchedPrefix = match[0].trim().toLowerCase();
       const before = text.slice(0, match.index);
-      if (
-        COMMA_GATED_DIRECT_PREFIXES.has(matchedPrefix) &&
-        !/,\s*$/u.test(before)
-      ) {
-        continue;
+      if (COMMA_GATED_DIRECT_PREFIXES.has(matchedPrefix)) {
+        // The comma gate distinguishes the connector use
+        // ("Investment Agreement, dated as of …, among Twitter,
+        // Inc.") from an in-name word ("Food For Thought Among
+        // Friends LLC"). Lift the gate when a lowercase sentence-verb
+        // token appears in the preceding text ("This Agreement is
+        // entered into between Acme Inc.") — the verb is the
+        // structural cue that this is clause prose, not a name
+        // component. Title-case "Is" / "Between" inside a company
+        // name stays protected because only lowercase forms count.
+        const hasComma = /,\s*$/u.test(before);
+        const beforeWords = before.match(/\p{L}[\p{L}\p{M}'’]*/gu) ?? [];
+        const hasSentenceVerb = beforeWords.some(
+          (word) =>
+            /^\p{Ll}/u.test(word) && verbIndicators.has(word.toLowerCase()),
+        );
+        if (!hasComma && !hasSentenceVerb) {
+          continue;
+        }
       }
-      const words = before.match(/\p{L}[\p{L}\p{M}]*/gu) ?? [];
+      const words = before.match(/\p{L}[\p{L}\p{M}'’]*/gu) ?? [];
       const hasProsePrefix =
         words.length >= 3 && words.some((word) => /\p{Ll}/u.test(word));
       if (hasProsePrefix) {
