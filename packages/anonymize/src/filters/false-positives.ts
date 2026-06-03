@@ -260,6 +260,70 @@ const normalizeEntity = (entity: Entity): Entity | null => {
   };
 };
 
+// ── Document-structure headings (lazy-loaded from JSON) ──
+//
+// Per-language list of heading words (`příloha`, `anlage`,
+// `schedule`, …) that the trigger detector emits as organisations
+// when they precede an ordinal-abbreviation+digit shape
+// (`č. 2`, `Nr. 3`, `No. 4`). The set is loaded once and cached on
+// the module — the heading vocabulary is language-data, not state.
+
+let cachedHeadingRe: RegExp | null = null;
+let cachedHeadingPromise: Promise<RegExp> | null = null;
+const ORDINAL_MARKER = "(?:č|no|nr|n)\\.?";
+
+const buildHeadingRegex = (words: readonly string[]): RegExp => {
+  if (words.length === 0) {
+    return /[\s\S](?!)/u;
+  }
+  const sorted = [...words].sort((a, b) => b.length - a.length);
+  const escaped = sorted
+    .map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("|");
+  return new RegExp(
+    `^(?:${escaped})[\\s\\u00a0]+(?:${ORDINAL_MARKER}|#)[\\s\\u00a0]*\\d`,
+    "iu",
+  );
+};
+
+const loadHeadingWords = async (): Promise<readonly string[]> => {
+  try {
+    const mod = await import("../data/document-structure-headings.json");
+    // eslint-disable-next-line no-unsafe-type-assertion -- JSON shape
+    const data = (mod as { default?: Record<string, unknown> }).default ?? mod;
+    // eslint-disable-next-line no-unsafe-type-assertion -- JSON shape
+    const entries = Object.entries(data as Record<string, unknown>);
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const [key, value] of entries) {
+      if (key.startsWith("_")) continue;
+      if (!Array.isArray(value)) continue;
+      for (const word of value) {
+        if (typeof word !== "string" || word.length === 0) continue;
+        const lc = word.toLowerCase();
+        if (seen.has(lc)) continue;
+        seen.add(lc);
+        out.push(lc);
+      }
+    }
+    return out;
+  } catch {
+    return [];
+  }
+};
+
+export const loadDocumentStructureHeadings = async (): Promise<void> => {
+  if (cachedHeadingRe) return;
+  cachedHeadingPromise ??= loadHeadingWords().then(buildHeadingRegex);
+  cachedHeadingRe = await cachedHeadingPromise;
+};
+
+const isDocumentStructureHeading = (text: string): boolean => {
+  const re = cachedHeadingRe;
+  if (!re) return false;
+  return re.test(text);
+};
+
 // ── Generic roles (lazy-loaded from JSON) ────────────
 
 const EMPTY_GENERIC_ROLES: ReadonlySet<string> = new Set();
@@ -496,6 +560,19 @@ export const filterFalsePositives = (
     if (
       normalized.label === "registration number" &&
       /^[\p{L}]{1,2}$/u.test(trimmed)
+    ) {
+      continue;
+    }
+
+    // Document-structure headings (Czech `Příloha č.2`, German
+    // `Anlage Nr. 3`, English `Schedule No. 4`) get captured by the
+    // trigger detector as organizations. They are scaffolding, not
+    // party references. The heading vocabulary lives in
+    // `data/document-structure-headings.json`; the regex composes the
+    // current word set with the cross-language ordinal abbreviations.
+    if (
+      normalized.label === "organization" &&
+      isDocumentStructureHeading(trimmed)
     ) {
       continue;
     }

@@ -33,6 +33,7 @@ import {
 import {
   filterFalsePositives,
   initAddressComponents,
+  loadDocumentStructureHeadings,
   loadGenericRoles,
 } from "./filters/false-positives";
 import {
@@ -118,6 +119,33 @@ const shouldReplace = (a: Entity, b: Entity): boolean => {
   if (
     a.label === b.label &&
     LITERAL_SOURCES.has(b.source) &&
+    b.start <= a.start &&
+    b.end >= a.end &&
+    bLen > aLen
+  ) {
+    return false;
+  }
+
+  // Address containment: an address span emitted by the multi-seed
+  // expander (regex) that fully contains a shorter same-label entity
+  // from a higher-priority detector (typically a trigger reclassifying
+  // just the postal code, `160 00` inside
+  // `Evropská 710\nPraha 6, PSČ 160 00`) is the complete address.
+  // The shorter span is a fragment of the same data point, not a
+  // competing piece of evidence — the longer wins regardless of
+  // source priority.
+  if (
+    a.label === "address" &&
+    b.label === "address" &&
+    a.start <= b.start &&
+    a.end >= b.end &&
+    aLen > bLen
+  ) {
+    return true;
+  }
+  if (
+    a.label === "address" &&
+    b.label === "address" &&
     b.start <= a.start &&
     b.end >= a.end &&
     bLen > aLen
@@ -886,6 +914,7 @@ export const runPipeline = async (
       });
     await Promise.all([
       loadGenericRoles(ctx),
+      loadDocumentStructureHeadings(),
       initPrepositions(),
       initStreetAbbrevs(),
       initAddressComponents(),
@@ -896,6 +925,7 @@ export const runPipeline = async (
   } else {
     await Promise.all([
       loadGenericRoles(ctx),
+      loadDocumentStructureHeadings(),
       initPrepositions(),
       initStreetAbbrevs(),
       initAddressComponents(),
