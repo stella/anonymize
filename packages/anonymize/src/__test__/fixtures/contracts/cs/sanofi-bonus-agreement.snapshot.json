@@ -117,17 +117,17 @@
       "source": "regex"
     },
     {
-      "start": 1451,
+      "start": 1448,
       "end": 1461,
       "label": "date",
-      "text": "2. 2. 2026",
+      "text": "...2. 2. 2026",
       "source": "regex"
     },
     {
-      "start": 1488,
+      "start": 1487,
       "end": 1498,
       "label": "date",
-      "text": "3. 3. 2026",
+      "text": "…3. 3. 2026",
       "source": "regex"
     },
     {

@@ -277,10 +277,23 @@ const countUpperBefore = (fullText: string, pos: number): number => {
   return count;
 };
 
+// Once at least one capitalised token has been admitted, refuse to
+// bridge more than this many consecutive lowercase tokens. The bridge
+// cap protects against sentence-prose sweeps like
+// `Specifikace a přesná poloha místností v areálu Základní školy …`
+// where a sentence-start CapWord precedes a long prose run. Long
+// lowercase TAILS preceding the first CapWord stay admitted, so
+// Czech state-form names with many descriptor tokens
+// (`Národní agentura pro podporu rozvoje vzdělávání … republiky,
+// z.s.`) survive — the cap only fires after a CapWord is already in
+// the span.
+const MAX_LOWER_BRIDGE = 4;
+
 const walkBackward = (fullText: string, suffixStart: number): number => {
   let pos = suffixStart;
   let stepsLeft = HEAD_TOKEN_CAP;
   let leftmostCapPos = -1;
+  let lowerBridgeRun = 0;
 
   while (stepsLeft > 0) {
     const tok = findTokenBefore(fullText, pos);
@@ -331,6 +344,14 @@ const walkBackward = (fullText: string, suffixStart: number): number => {
 
     if (UPPER_LETTER_RE.test(tok.text)) {
       leftmostCapPos = tok.start;
+      lowerBridgeRun = 0;
+    } else if (LOWER_LETTER_RE.test(tok.text)) {
+      if (leftmostCapPos >= 0) {
+        lowerBridgeRun++;
+        if (lowerBridgeRun > MAX_LOWER_BRIDGE) break;
+      }
+    } else {
+      lowerBridgeRun = 0;
     }
     pos = tok.start;
     stepsLeft--;
