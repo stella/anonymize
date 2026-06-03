@@ -274,6 +274,17 @@ const fixPartialWords = (entities: Entity[], fullText: string): Entity[] => {
     if (hasLockedBoundary(e)) {
       return e;
     }
+    // The entity's stored `text` is its source-of-truth display;
+    // an upstream collapse pass (e.g. monetary `273,-   Kč` →
+    // `273,- Kč`) intentionally divorces `text` from
+    // `fullText.slice(start, end)`. Letting `wordStartAt`/`wordEndAt`
+    // recompute the span here would overwrite the entity text with
+    // the raw slice and lose the collapsed-out characters. Treat
+    // such entities as having locked boundaries — their detector
+    // already chose the right span.
+    if (e.text !== fullText.slice(e.start, e.end)) {
+      return e;
+    }
 
     let newStart = wordStartAt(e.start, boundaries, fullText);
     let newEnd = wordEndAt(e.end, boundaries, fullText);

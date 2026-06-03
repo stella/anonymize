@@ -547,23 +547,15 @@ export const sanitizeEntities = (entities: Entity[]): Entity[] =>
     if (cleaned.length === 0) return [];
     // Reject entities with no alphanumeric content
     if (!/[\p{L}\p{N}]/u.test(cleaned)) return [];
-    // Collapse internal whitespace runs in the displayed
-    // text (multi-line address blocks, monetary amounts
-    // with a wide gap before the currency). The span end
-    // is the source-end minus the trailing trim — using
-    // `collapsed.length` here would silently move the end
-    // inside the source whenever an internal run was
-    // shortened, breaking boundary logic.
+    // Collapse internal whitespace runs (address entities
+    // spanning multiple lines in structured documents)
     const collapsed = cleaned.replace(/\s*\n\s*/g, " ").replace(/\s{2,}/g, " ");
     if (collapsed === e.text) return [e];
-    const newStart = e.start + lead;
-    const trailTrimLen = leadTrimmed.length - cleaned.length;
-    const newEnd = e.end - trailTrimLen;
     return [
       {
         ...e,
-        start: newStart,
-        end: newEnd,
+        start: e.start + lead,
+        end: e.start + lead + collapsed.length,
         text: collapsed,
       },
     ];
