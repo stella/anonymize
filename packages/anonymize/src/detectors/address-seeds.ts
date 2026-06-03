@@ -707,6 +707,84 @@ const expandCluster = async (
   };
 };
 
+// Allow a span containing exactly one line break only when the cluster
+// carries independent address evidence on both sides of the break: a
+// "street" seed (street-word or house-number) above the newline AND a
+// "destination" seed (postal-code or city) below (or vice-versa).
+// This admits the dominant US notice-block shape
+//
+//   One American Road
+//   Cleveland, Ohio 44144-2398
+//
+// while rejecting both the single-line case that got right-expanded
+// across a newline (all seeds above the break, prose below) and the
+// structurally over-reaching case with two or more internal newlines.
+const STREET_SEED_TYPES: ReadonlySet<SeedType> = new Set([
+  "street-word",
+  "house-number",
+]);
+const DESTINATION_SEED_TYPES: ReadonlySet<SeedType> = new Set([
+  "postal-code",
+  "city",
+]);
+
+type NewlineBoundaryResolution =
+  | { kind: "keep" }
+  | { kind: "drop" }
+  | { kind: "trim"; relativeEnd: number };
+
+const resolveNewlineBoundary = (
+  spanStart: number,
+  text: string,
+  cluster: SeedCluster,
+): NewlineBoundaryResolution => {
+  const newlines = (text.match(/\n/gu) ?? []).length;
+  if (newlines === 0) return { kind: "keep" };
+  if (newlines > 1) return { kind: "drop" };
+
+  const relativeNewline = text.indexOf("\n");
+  const newlineAbs = spanStart + relativeNewline;
+
+  let streetAbove = false;
+  let streetBelow = false;
+  let destAbove = false;
+  let destBelow = false;
+  for (const seed of cluster.seeds) {
+    const isAbove = seed.end <= newlineAbs;
+    const isStreet = STREET_SEED_TYPES.has(seed.type);
+    const isDest = DESTINATION_SEED_TYPES.has(seed.type);
+    if (isStreet && isAbove) streetAbove = true;
+    if (isStreet && !isAbove) streetBelow = true;
+    if (isDest && isAbove) destAbove = true;
+    if (isDest && !isAbove) destBelow = true;
+  }
+
+  // True multi-line notice block: street and destination evidence
+  // straddle the newline (`One American Road\nCleveland, Ohio 44144`).
+  if ((streetAbove && destBelow) || (streetBelow && destAbove)) {
+    return { kind: "keep" };
+  }
+
+  // Inline address followed by unrelated prose on the next line
+  // (`650 Page Mill Road, Palo Alto, CA 94304-1050.\nPlease review…`).
+  // The expansion walked through the newline up to its 200-char cap,
+  // but the complete address sits entirely above the break. Trim back
+  // to the line above instead of dropping the whole span.
+  if (streetAbove && destAbove) {
+    return { kind: "trim", relativeEnd: relativeNewline };
+  }
+
+  return { kind: "drop" };
+};
+
+// Normalise CRLF paragraph breaks to LF for the address-seed
+// newline-boundary check. Windows/PDF-extracted contracts commonly use
+// `\r\n`, which leaves the expanded text with paragraph breaks the
+// LF-only `\n\n` stop in `expandCluster` doesn't catch and inflates the
+// internal-newline count past the single-newline cap.
+const normaliseLineBreaks = (text: string): string =>
+  text.replace(/\r\n?/gu, "\n");
+
 // ── Public API ──────────────────────────────────────
 
 /**
@@ -750,24 +828,24 @@ export const processAddressSeeds = async (
       cluster,
       existingEntities,
     );
-    const text = fullText.slice(start, end).trim();
-
-    // Skip very short or very long spans
-    if (text.length < 5 || text.length > 300) {
-      continue;
-    }
-
-    // Skip if it contains a newline (likely crossed
-    // a structural boundary)
-    if (text.includes("\n")) {
-      continue;
-    }
+    const rawText = fullText.slice(start, end);
+    const resolution = resolveNewlineBoundary(
+      start,
+      normaliseLineBreaks(rawText),
+      cluster,
+    );
+    if (resolution.kind === "drop") continue;
+    const effectiveText =
+      resolution.kind === "trim"
+        ? rawText.slice(0, resolution.relativeEnd).trim()
+        : rawText.trim();
+    if (effectiveText.length < 5 || effectiveText.length > 300) continue;
 
     results.push({
       start,
-      end: start + text.length,
+      end: start + effectiveText.length,
       label: "address",
-      text,
+      text: effectiveText,
       score,
       source: DETECTION_SOURCES.REGEX,
     });
