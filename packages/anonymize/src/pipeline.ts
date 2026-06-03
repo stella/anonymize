@@ -443,6 +443,16 @@ const TRAILING_PUNCT_CLASS = `["“”‘’'»!?]`;
  * intentionally captured.
  */
 const LEADING_PUNCT_CLASS = `["“”‘’'«¿¡]`;
+const LEADING_ELLIPSIS_RE = /^(?:\.{2,}|…+)/u;
+const ELLIPSIS_PREFIX_LABELS: ReadonlySet<string> = new Set([
+  "date",
+  "date of birth",
+  "monetary amount",
+  "phone number",
+  "email address",
+  "url",
+  "time",
+]);
 const STRIP_BY_LABEL = {
   colon: /[\s,;]+/,
   default: /[\s:,;]+/,
@@ -481,7 +491,19 @@ export const sanitizeEntities = (entities: Entity[]): Entity[] =>
     // `"Some Org",` or ` "Name" ` collapse cleanly.
     const leadRe = LEADING_TRIM_BY_LABEL[stripKind];
     const trailRe = TRAILING_TRIM_BY_LABEL[stripKind];
-    const leadTrimmed = e.text.replace(leadRe, "");
+    // Sentence-tail ellipsis: a date or other shape-extending
+    // entity that sits at the end of a clause sometimes gets
+    // captured with the preceding `...` / `…` run still attached
+    // (`V Praze, dne ...2. 2. 2026` → `...2. 2. 2026`). The
+    // generic punctuation strip below doesn't touch them because
+    // the trailing dots aren't followed by whitespace. Strip the
+    // run explicitly for the labels that have this shape — numeric
+    // values where leading punctuation is never structurally part
+    // of the entity.
+    const ellipsisStripped = ELLIPSIS_PREFIX_LABELS.has(e.label)
+      ? e.text.replace(LEADING_ELLIPSIS_RE, "")
+      : e.text;
+    const leadTrimmed = ellipsisStripped.replace(leadRe, "");
     const lead = e.text.length - leadTrimmed.length;
     let cleaned = leadTrimmed.replace(trailRe, "");
     // Trailing-period strip for proper-noun labels that
