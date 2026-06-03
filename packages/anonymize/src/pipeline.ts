@@ -547,15 +547,23 @@ export const sanitizeEntities = (entities: Entity[]): Entity[] =>
     if (cleaned.length === 0) return [];
     // Reject entities with no alphanumeric content
     if (!/[\p{L}\p{N}]/u.test(cleaned)) return [];
-    // Collapse internal whitespace runs (address entities
-    // spanning multiple lines in structured documents)
+    // Collapse internal whitespace runs in the displayed
+    // text (multi-line address blocks, monetary amounts
+    // with a wide gap before the currency). The span end
+    // is the source-end minus the trailing trim — using
+    // `collapsed.length` here would silently move the end
+    // inside the source whenever an internal run was
+    // shortened, breaking boundary logic.
     const collapsed = cleaned.replace(/\s*\n\s*/g, " ").replace(/\s{2,}/g, " ");
     if (collapsed === e.text) return [e];
+    const newStart = e.start + lead;
+    const trailTrimLen = leadTrimmed.length - cleaned.length;
+    const newEnd = e.end - trailTrimLen;
     return [
       {
         ...e,
-        start: e.start + lead,
-        end: e.start + lead + collapsed.length,
+        start: newStart,
+        end: newEnd,
         text: collapsed,
       },
     ];
@@ -697,6 +705,74 @@ const extendMonetaryAmountWords = (
       text: fullText.slice(e.start, newEnd),
     };
   });
+
+let monetaryTrailingCurrencyRe: RegExp | null = null;
+let monetaryTrailingCurrencyLoaded = false;
+
+type CurrenciesData = {
+  codes?: string[];
+  symbols?: string[];
+  localNames?: string[];
+};
+
+const getMonetaryTrailingCurrencyRe = async (): Promise<RegExp | null> => {
+  if (monetaryTrailingCurrencyLoaded) return monetaryTrailingCurrencyRe;
+  try {
+    const mod = await import("./data/currencies.json");
+    const data: CurrenciesData = mod.default ?? mod;
+    const codes = (data.codes ?? []).filter((c) => /^[A-Z]{2,4}$/.test(c));
+    const names = (data.localNames ?? []).filter((n) => n.length > 0);
+    const parts: string[] = [];
+    if (names.length > 0) {
+      parts.push(names.map(escapeRegex).join("|"));
+    }
+    if (codes.length > 0) {
+      parts.push(codes.map(escapeRegex).join("|"));
+    }
+    if (parts.length === 0) {
+      monetaryTrailingCurrencyRe = null;
+    } else {
+      const alt = parts.join("|");
+      monetaryTrailingCurrencyRe = new RegExp(
+        `^([^\\S\\n\\t]{0,4})(${alt})(?![\\p{L}\\p{N}])`,
+        "u",
+      );
+    }
+  } catch {
+    monetaryTrailingCurrencyRe = null;
+  }
+  monetaryTrailingCurrencyLoaded = true;
+  return monetaryTrailingCurrencyRe;
+};
+
+// Extend a monetary-amount entity to include a trailing currency
+// code/name when one sits within a short whitespace gap after the
+// captured span (`273,-` followed by `   Kč`, `1 000` followed by
+// ` CZK`). The unified regex backend occasionally drops the longer
+// currency pattern in favour of a shorter NUM-only match depending
+// on Rust regex DFA construction order; this post-process pass
+// re-attaches the suffix from \`currencies.json\` so the boundary
+// is the same regardless of which match resolved.
+const extendMonetaryTrailingCurrency = (
+  entities: Entity[],
+  fullText: string,
+  re: RegExp | null,
+): Entity[] => {
+  if (!re) return entities;
+  return entities.map((e) => {
+    if (e.label !== "monetary amount" || isCallerOwnedEntity(e)) return e;
+    if (/\p{L}/u.test(e.text.slice(-1) ?? "")) return e;
+    const after = fullText.slice(e.end);
+    const m = re.exec(after);
+    if (!m) return e;
+    const newEnd = e.end + m[0].length;
+    return {
+      ...e,
+      end: newEnd,
+      text: fullText.slice(e.start, newEnd),
+    };
+  });
+};
 
 type AllowedLabelSet = ReadonlySet<string> | null;
 
@@ -1324,8 +1400,14 @@ export const runPipeline = async (
   // preventing duplicate extensions from clobbering
   // unrelated entities between e.end and newEnd.
   const monetaryAmountWordsRe = await getAmountWordsRe();
-  const mergedExtended = extendMonetaryAmountWords(
+  const monetaryTrailingRe = await getMonetaryTrailingCurrencyRe();
+  const mergedWithCurrency = extendMonetaryTrailingCurrency(
     rawMerged,
+    fullText,
+    monetaryTrailingRe,
+  );
+  const mergedExtended = extendMonetaryAmountWords(
+    mergedWithCurrency,
     fullText,
     monetaryAmountWordsRe,
   );
