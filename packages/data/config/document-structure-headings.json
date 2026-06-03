@@ -1,0 +1,14 @@
+{
+  "_comment": "Document-structure heading words per language. Captured by the trigger detector as organizations when followed by 'no. N' / 'č. N' / 'Nr. N' / similar, they are scaffolding (appendix titles, schedule headings, exhibit labels), not party names. Each entry lists the heading words; the false-positive filter rejects an organization span whose first word matches one of these followed by a numerical ordinal abbreviation and a digit. Lowercased; matched case-insensitively. Organized per-language because the heading vocabulary is language-specific; at runtime the filter unions every language's list into a single set because match spans don't carry a language tag.",
+  "cs": ["příloha", "dodatek", "schéma", "exhibit", "tabulka"],
+  "sk": ["príloha", "dodatok", "exhibit", "tabuľka"],
+  "pl": ["załącznik", "aneks", "schemat", "tabela"],
+  "de": ["anlage", "anhang", "anlage", "exhibit", "tabelle"],
+  "en": ["appendix", "annex", "exhibit", "schedule", "attachment", "table"],
+  "fr": ["annexe", "appendice", "tableau", "exhibit"],
+  "it": ["allegato", "appendice", "tabella", "exhibit"],
+  "es": ["anexo", "apéndice", "tabla", "exhibit"],
+  "pt-br": ["anexo", "apêndice", "tabela", "exhibit"],
+  "ro": ["anexa", "apendice", "tabel", "exhibit"],
+  "hu": ["melléklet", "függelék", "táblázat", "exhibit"]
+}

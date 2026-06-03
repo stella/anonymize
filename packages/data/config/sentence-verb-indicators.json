@@ -47,7 +47,16 @@
     "signs",
     "signed",
     "leases",
-    "rents"
+    "rents",
+    "entered",
+    "made",
+    "executed",
+    "retained",
+    "hired",
+    "engaged",
+    "appointed",
+    "named",
+    "sued"
   ],
   "de": [
     "ist",
