@@ -417,6 +417,7 @@ const synthMatch = (
 export const detectLegalFormsV2 = (fullText: string): Entity[] => {
   const { ts } = getSuffixSearch();
   const candidates: SynthMatch[] = [];
+  const trimmedCandidates = new Set<SynthMatch>();
 
   for (const match of ts.findIter(fullText)) {
     const suffixStart = match.start;
@@ -467,8 +468,9 @@ export const detectLegalFormsV2 = (fullText: string): Entity[] => {
       effectiveSuffixStart,
     );
     if (candidateStart >= effectiveSuffixStart) continue;
-
-    candidates.push(synthMatch(candidateStart, suffixEnd, fullText));
+    const candidate = synthMatch(candidateStart, suffixEnd, fullText);
+    if (candidateStart !== walkerStart) trimmedCandidates.add(candidate);
+    candidates.push(candidate);
   }
 
   if (candidates.length === 0) return [];
@@ -486,7 +488,26 @@ export const detectLegalFormsV2 = (fullText: string): Entity[] => {
   // role-head trim, leading-clause trim, embedded-list split,
   // line-break check, all-caps-line rejection, post-match
   // accented-letter boundary — all already implemented there.
-  return processLegalFormMatches(dedupedCandidates, 0, 1, fullText);
+  //
+  // Split by whether the verb trim moved the start. Trimmed
+  // candidates skip v1's `extendBackward` because re-extending
+  // would walk back across the prose the trim just removed
+  // (`Vendor grants Licensee Acme Inc.` → trim to `Acme Inc.`
+  // → extend back through `Licensee`). Un-trimmed candidates
+  // still benefit from `extendBackward` for in-name preposition
+  // crossings the v2 walker doesn't perform (`The Bank of
+  // America and Trust Company, Inc.`).
+  const trimmed: SynthMatch[] = [];
+  const untrimmed: SynthMatch[] = [];
+  for (const c of dedupedCandidates) {
+    (trimmedCandidates.has(c) ? trimmed : untrimmed).push(c);
+  }
+  return [
+    ...processLegalFormMatches(trimmed, 0, 1, fullText, {
+      suppressExtendBackward: true,
+    }),
+    ...processLegalFormMatches(untrimmed, 0, 1, fullText),
+  ];
 };
 
 const dropOverlapping = (candidates: SynthMatch[]): SynthMatch[] => {

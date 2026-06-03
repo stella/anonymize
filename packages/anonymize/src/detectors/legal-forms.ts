@@ -1160,6 +1160,7 @@ export const processLegalFormMatches = (
   sliceStart: number,
   sliceEnd: number,
   fullText?: string,
+  options: { suppressExtendBackward?: boolean } = {},
 ): Entity[] => {
   const results: Entity[] = [];
 
@@ -1344,7 +1345,7 @@ export const processLegalFormMatches = (
     // "Future s.r.o.")
     let entityStart = processedStart;
     let entityText = processedText;
-    if (fullText && !trimmed) {
+    if (fullText && !trimmed && options.suppressExtendBackward !== true) {
       const shouldExtendBackward =
         !BARE_SINGLE_CAP_LEGAL_FORM_RE.test(processedText);
       const extended = shouldExtendBackward
