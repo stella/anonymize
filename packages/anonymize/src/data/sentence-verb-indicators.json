@@ -50,7 +50,13 @@
     "rents",
     "entered",
     "made",
-    "executed"
+    "executed",
+    "retained",
+    "hired",
+    "engaged",
+    "appointed",
+    "named",
+    "sued"
   ],
   "de": [
     "ist",

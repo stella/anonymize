@@ -34,7 +34,10 @@ import type { Match, TextSearch } from "@stll/text-search";
 import { getTextSearch } from "../search-engine";
 import type { Entity } from "../types";
 import {
+  getClauseNounHeadsSync,
   getKnownLegalSuffixes,
+  getLegalRoleHeadsSync,
+  getSentenceVerbIndicatorsSync,
   processLegalFormMatches,
   warmLegalRoleHeads,
 } from "./legal-forms";
@@ -125,7 +128,19 @@ const isLeadingSeparator = (fullText: string, suffixStart: number): boolean => {
   // The separator between the head and the suffix is at most
   // a single space, comma, or run of those — anything else
   // means we'd be slicing into a real word.
-  return !ANY_LETTER_OR_DIGIT_RE.test(prev);
+  if (ANY_LETTER_OR_DIGIT_RE.test(prev)) return false;
+  // A dot preceded by a letter is the inside of a longer dotted
+  // abbreviation (`18 U.S.C.` → the `S.C.` hit is inside the citation,
+  // not the start of a fresh suffix). The same shape is fine when a
+  // CJK/space precedes the dot; only a Latin letter signals continuation.
+  if (
+    prev === "." &&
+    suffixStart >= 2 &&
+    ANY_LETTER_RE.test(fullText.charAt(suffixStart - 2))
+  ) {
+    return false;
+  }
+  return true;
 };
 
 // ── Greedy backward walker ──────────────────────────────────────
@@ -324,6 +339,58 @@ const walkBackward = (fullText: string, suffixStart: number): number => {
   return leftmostCapPos < 0 ? suffixStart : leftmostCapPos;
 };
 
+const CAP_TOKEN_RE = /(?<![\p{L}\p{N}])\p{Lu}[\p{L}\p{M}\p{N}'’.&-]*/gu;
+const LOWER_WORD_RE = /(?<![\p{L}\p{N}])\p{Ll}[\p{L}\p{M}'’]*/gu;
+
+/**
+ * Post-walker verb gate. The walker admits any lowercase token so
+ * Czech and German extended state-form tails (`Krajská správa,
+ * příspěvková organizace`, `Národní agentura pro komunikační a
+ * informační technologie, s. p.`) keep their full vocabulary. The
+ * trade-off is that prose sentences ending in a legal-form descriptor
+ * (`...převádí na příspěvková organizace.`) get swept too. When the
+ * candidate text contains a known lowercase sentence-verb token we
+ * slide `candidateStart` forward to the first capitalised token after
+ * the last verb; if no capitalised token follows the verb, the
+ * candidate is prose and gets dropped.
+ */
+const trimToFirstCapAfterVerb = (
+  fullText: string,
+  candidateStart: number,
+  suffixStart: number,
+): number => {
+  if (candidateStart >= suffixStart) return candidateStart;
+  const head = fullText.slice(candidateStart, suffixStart);
+  const verbIndicators = getSentenceVerbIndicatorsSync();
+  let lastVerbEnd = -1;
+  for (const wordMatch of head.matchAll(LOWER_WORD_RE)) {
+    if (
+      wordMatch.index !== undefined &&
+      verbIndicators.has(wordMatch[0].toLowerCase())
+    ) {
+      lastVerbEnd = wordMatch.index + wordMatch[0].length;
+    }
+  }
+  if (lastVerbEnd < 0) return candidateStart;
+  // Skip role-heads (`Licensee`, `Buyer`, `Prodávající`) and clause
+  // nouns (`Agreement`, `Section`, `Schedule`) that appear between
+  // the verb and the real organisation name — both behave like
+  // appositive labels, not company names.
+  const roleHeads = getLegalRoleHeadsSync();
+  const clauseNouns = getClauseNounHeadsSync();
+  CAP_TOKEN_RE.lastIndex = lastVerbEnd;
+  for (
+    let next = CAP_TOKEN_RE.exec(head);
+    next !== null;
+    next = CAP_TOKEN_RE.exec(head)
+  ) {
+    const word = next[0].toLowerCase();
+    if (roleHeads.has(word) || clauseNouns.has(word)) continue;
+    return candidateStart + next.index;
+  }
+  return suffixStart;
+};
+
 // ── Public API ──────────────────────────────────────────────────
 
 export const warmLegalFormsV2 = warmLegalRoleHeads;
@@ -358,28 +425,48 @@ export const detectLegalFormsV2 = (fullText: string): Entity[] => {
     // SEC EDGAR line wrap: `Goldman Sachs & Co.\nLLC` — terminal
     // suffix on its own line after a dotted business designator.
     // Allow crossing a single newline ONLY when the line above
-    // ends in `<word>.` (a dotted abbreviation). v1 has the same
-    // narrow allowance in its DOTTED_LINE_WRAP pattern.
+    // ends in `<word>.` (a dotted abbreviation). Indentation on
+    // the suffix line is preserved verbatim in EDGAR HTML, so the
+    // newline check skips any leading horizontal whitespace first.
     let effectiveSuffixStart = suffixStart;
-    if (suffixStart > 0 && fullText.charAt(suffixStart - 1) === "\n") {
-      const prevLineEnd = suffixStart - 1;
-      const trimmedEnd = (() => {
-        let p = prevLineEnd;
+    {
+      let scan = suffixStart;
+      while (scan > 0) {
+        const ch = fullText.charAt(scan - 1);
+        if (ch === " " || ch === "\t") {
+          scan--;
+          continue;
+        }
+        break;
+      }
+      if (scan > 0 && fullText.charAt(scan - 1) === "\n") {
+        let p = scan - 1;
         while (p > 0 && fullText.charAt(p - 1) === " ") p--;
-        return p;
-      })();
-      if (trimmedEnd > 0 && fullText.charAt(trimmedEnd - 1) === ".") {
-        effectiveSuffixStart = trimmedEnd;
+        if (p > 0 && fullText.charAt(p - 1) === ".") {
+          effectiveSuffixStart = p;
+        }
       }
     }
 
-    if (!isLeadingSeparator(fullText, effectiveSuffixStart)) continue;
+    // The leading-separator check runs on the ORIGINAL suffix start
+    // so the dotted-abbreviation rejection (`18 U.S.C.` → reject the
+    // inner `S.C.` hit) does not also fire on legitimate line-wrap
+    // candidates whose remapped anchor lands on a dotted designator
+    // (`Goldman Sachs & Co.\nLLC` → LLC's original prev char is a
+    // space, not a dotted-citation continuation).
+    if (!isLeadingSeparator(fullText, suffixStart)) continue;
     if (!isTrailingBoundary(fullText, suffixEnd)) continue;
 
-    const candidateStart = walkBackward(fullText, effectiveSuffixStart);
-    if (candidateStart >= effectiveSuffixStart) continue; // no head body
-    if (crossesSentenceEnd(fullText, candidateStart, effectiveSuffixStart))
+    const walkerStart = walkBackward(fullText, effectiveSuffixStart);
+    if (walkerStart >= effectiveSuffixStart) continue; // no head body
+    if (crossesSentenceEnd(fullText, walkerStart, effectiveSuffixStart))
       continue;
+    const candidateStart = trimToFirstCapAfterVerb(
+      fullText,
+      walkerStart,
+      effectiveSuffixStart,
+    );
+    if (candidateStart >= effectiveSuffixStart) continue;
 
     candidates.push(synthMatch(candidateStart, suffixEnd, fullText));
   }

@@ -76,7 +76,7 @@ const loadSentenceVerbIndicators = async (): Promise<ReadonlySet<string>> => {
   return sentenceVerbIndicatorsPromise;
 };
 
-const getSentenceVerbIndicatorsSync = (): ReadonlySet<string> =>
+export const getSentenceVerbIndicatorsSync = (): ReadonlySet<string> =>
   sentenceVerbIndicatorsCache ?? SENTENCE_VERB_INDICATORS_SEED;
 
 // Horizontal whitespace as understood by DOCX text extraction.
@@ -210,7 +210,7 @@ const loadLegalRoleHeads = async (): Promise<ReadonlySet<string>> => {
 // which is a sync function called once per pipeline run. The
 // pipeline calls `warmLegalRoleHeads()` before invoking it, so
 // the cache is populated by the time matches are processed.
-const getLegalRoleHeadsSync = (): ReadonlySet<string> =>
+export const getLegalRoleHeadsSync = (): ReadonlySet<string> =>
   legalRoleHeadsCache ?? new Set<string>();
 
 export const warmLegalRoleHeads = async (): Promise<void> => {
@@ -375,7 +375,7 @@ const loadClauseNounHeads = async (): Promise<ReadonlySet<string>> => {
   return clauseNounHeadsPromise;
 };
 
-const getClauseNounHeadsSync = (): ReadonlySet<string> =>
+export const getClauseNounHeadsSync = (): ReadonlySet<string> =>
   clauseNounHeadsCache ?? CLAUSE_NOUN_HEADS_SEED;
 
 let connectorProseHeadsCache: ReadonlySet<string> | null = null;
