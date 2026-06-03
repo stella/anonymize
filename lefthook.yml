@@ -16,7 +16,7 @@ pre-commit:
     # files the formatter touches are rare, and the alternative
     # (failing the hook) blocks the common case.
     format:
-      run: bun --bun oxfmt --no-error-on-unmatched-pattern {staged_files}
+      run: bun --bun oxfmt --no-error-on-unmatched-pattern {staged_files} "!.ai/**" "!.agents/**" "!.claude/**" "!AGENTS.md" "!CLAUDE.md" "!GEMINI.md"
       stage_fixed: true
 
 pre-push:

@@ -59,7 +59,7 @@ If the request is vague, default to:
    - run `bun outdated --filter="*"` for Bun workspace packages
    - run `cargo outdated --root-deps-only` for Cargo crates. If
      `cargo-outdated` is missing, prefer `cargo binstall
-cargo-outdated` when available (prebuilt binary, seconds)
+     cargo-outdated` when available (prebuilt binary, seconds)
      over `cargo install cargo-outdated` (compiles from source,
      several minutes). As a fallback, use `cargo update --dry-run`
      plus targeted `cargo search` / `cargo info` checks
@@ -152,7 +152,7 @@ cargo-outdated` when available (prebuilt binary, seconds)
       first
     - then run repo checks relevant to the touched surfaces
     - for Bun package updates, default to `bun run lint`, `bun run
-typecheck`, and the relevant tests
+      typecheck`, and the relevant tests
     - for Cargo updates, run `cargo check` and `cargo test` when
       crates touch logic, not just deps
     - verify generated artifacts explicitly when the upgraded
