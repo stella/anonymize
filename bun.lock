@@ -16,7 +16,7 @@
     },
     "packages/anonymize": {
       "name": "@stll/anonymize",
-      "version": "1.4.6",
+      "version": "1.4.7",
       "dependencies": {
         "@huggingface/tokenizers": "^0.1.3",
         "@stll/stdnum": "^1.0.0",
