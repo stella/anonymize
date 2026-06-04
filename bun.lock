@@ -20,11 +20,11 @@
       "dependencies": {
         "@huggingface/tokenizers": "^0.1.3",
         "@stll/stdnum": "^1.0.0",
-        "@stll/text-search": "^1.0.2",
+        "@stll/text-search": "^1.0.4",
       },
       "devDependencies": {
         "@stll/anonymize-data": "workspace:*",
-        "@stll/text-search-wasm": "^1.0.2",
+        "@stll/text-search-wasm": "^1.0.4",
         "bun-types": "^1.3.14",
         "tsdown": "^0.22.0",
         "typescript": "^6.0.3",
@@ -200,19 +200,19 @@
 
     "@rolldown/pluginutils": ["@rolldown/pluginutils@1.0.0", "", {}, "sha512-aKs/3GSWyV0mrhNmt/96/Z3yczC3yvrzYATCiCXQebBsGyYzjNdUphRVLeJQ67ySKVXRfMxt2lm12pmXvbPFQQ=="],
 
-    "@stll/aho-corasick": ["@stll/aho-corasick@1.0.1", "", { "optionalDependencies": { "@stll/aho-corasick-darwin-arm64": "1.0.1", "@stll/aho-corasick-darwin-x64": "1.0.1", "@stll/aho-corasick-linux-arm64-gnu": "1.0.1", "@stll/aho-corasick-linux-x64-gnu": "1.0.1", "@stll/aho-corasick-wasm32-wasi": "1.0.1" } }, "sha512-YMe7gTya7lmClt5trnQZL1u/WTefbIsZTOxaPtgmEdTFvK9IvTaRnsstLkl09GTZ55g9dB82GA+lU8QY60Hxow=="],
+    "@stll/aho-corasick": ["@stll/aho-corasick@1.0.2", "", { "optionalDependencies": { "@stll/aho-corasick-darwin-arm64": "1.0.2", "@stll/aho-corasick-darwin-x64": "1.0.2", "@stll/aho-corasick-linux-arm64-gnu": "1.0.2", "@stll/aho-corasick-linux-x64-gnu": "1.0.2", "@stll/aho-corasick-wasm32-wasi": "1.0.2" } }, "sha512-KKgpnxNmzFZ2HplngU/3kiifbeZU1/nsOP6Xnc/3pNXmlu6npon4m8Ws/Vns7msgsmM9oVj1E6f5901qwDjp0A=="],
 
-    "@stll/aho-corasick-darwin-arm64": ["@stll/aho-corasick-darwin-arm64@1.0.1", "", { "os": "darwin", "cpu": "arm64" }, "sha512-CHTBEVF7rAK6Y4W0jpA5c733f98Q9F3vi308a0vtXafmI4SemqQsWL2cAWZ+bgC7CGHd56koSYDMBcEMsosEbw=="],
+    "@stll/aho-corasick-darwin-arm64": ["@stll/aho-corasick-darwin-arm64@1.0.2", "", { "os": "darwin", "cpu": "arm64" }, "sha512-mMFGFW3XNky+/z34Zxb9dEC5OmP63YfH1P1JBTQwifSQxx0YF0EfRJzlIJDarDJH0hiw9ZEy2QWZAi4N9IQYXw=="],
 
-    "@stll/aho-corasick-darwin-x64": ["@stll/aho-corasick-darwin-x64@1.0.1", "", { "os": "darwin", "cpu": "x64" }, "sha512-z/mI56+vZ8pidjKTO6m7FHGt3zYqfhu+vSHjvo7k+aNcgbt4+LWKypdWi1s68GCYp//XM8Sehc9hYrsYRRydRg=="],
+    "@stll/aho-corasick-darwin-x64": ["@stll/aho-corasick-darwin-x64@1.0.2", "", { "os": "darwin", "cpu": "x64" }, "sha512-60U17ymzo+QCMxENRe87YKVacrZy7jgsvGbDDHnTMyM4CojzrfTUcAuyxI+d/9jcJCSJUBZBFVGKdsBR/T0njQ=="],
 
-    "@stll/aho-corasick-linux-arm64-gnu": ["@stll/aho-corasick-linux-arm64-gnu@1.0.1", "", { "os": "linux", "cpu": "arm64" }, "sha512-8cENNpEYE1yVPx5+lH2aUWVnH+7KIXlfONdsW1Hw4Qp7Wa7j3X+CYMg7+WuMP6SC/zBKXEvRirq17LOhpx0jPQ=="],
+    "@stll/aho-corasick-linux-arm64-gnu": ["@stll/aho-corasick-linux-arm64-gnu@1.0.2", "", { "os": "linux", "cpu": "arm64" }, "sha512-A8Uxsbgf6UJ3zhtsQn/Cn0Y/d5tj3tZ2HVDxbO7spJe4bK+MEZ4hsVy0GB9EboTBl7Unbt1PlOLMaDdc64kpqA=="],
 
-    "@stll/aho-corasick-linux-x64-gnu": ["@stll/aho-corasick-linux-x64-gnu@1.0.1", "", { "os": "linux", "cpu": "x64" }, "sha512-9dLa0j9CJ56t0MO97+wvH/mjvp1kKA06FxJQCXJhqC41enbc2yzXLIwgbvyzToGAnULHK9k5PWzhiJcpkCAQ+Q=="],
+    "@stll/aho-corasick-linux-x64-gnu": ["@stll/aho-corasick-linux-x64-gnu@1.0.2", "", { "os": "linux", "cpu": "x64" }, "sha512-HQiXqpFNrJ9kycJ02onTYWqMLbSL/32e5JsM3+v5EWuvXzxN2iW1nSwT+8KnAeNGjiL8EHNcUPtDoLd5QXelVQ=="],
 
-    "@stll/aho-corasick-wasm": ["@stll/aho-corasick-wasm@1.0.1", "", { "dependencies": { "@napi-rs/wasm-runtime": "^1.1.3" }, "peerDependencies": { "vite": ">=5 <10" }, "optionalPeers": ["vite"] }, "sha512-02671uVPgwgp/O2gwmRpWJt9xrm9ARyIoSO26GdleGd6hY8u/eStpQorpkhTAIPCErcNnYK5R+vFXy274r/jDg=="],
+    "@stll/aho-corasick-wasm": ["@stll/aho-corasick-wasm@1.0.2", "", { "dependencies": { "@napi-rs/wasm-runtime": "^1.1.3" }, "peerDependencies": { "vite": ">=5 <10" }, "optionalPeers": ["vite"] }, "sha512-RY1WHYZaN1S8DGCspLF/R72RsBICT0GpYfJibKVP4w93qLiiSf/Ch/0remLR5Uajk0ERfZp+Lndgfx17HLJUXw=="],
 
-    "@stll/aho-corasick-wasm32-wasi": ["@stll/aho-corasick-wasm32-wasi@1.0.1", "", { "dependencies": { "@napi-rs/wasm-runtime": "^1.1.3" }, "cpu": "none" }, "sha512-f+ZSlHAFGH9wGOVX1y0OeHXsFcGRlE+nOjL0Ue9Heweb0r+gGHEIixVIn2w99s5hSa8cxxHswXPJIp5tebEIbA=="],
+    "@stll/aho-corasick-wasm32-wasi": ["@stll/aho-corasick-wasm32-wasi@1.0.2", "", { "dependencies": { "@napi-rs/wasm-runtime": "^1.1.3" }, "cpu": "none" }, "sha512-ZdsRNF1A2J6Mw0RpNN1eW8PCLh8Ske/x1uTsociaN6A715cOm3icN6WX2nVKkDhijSAZV+HfAlmhq75tHdFI0A=="],
 
     "@stll/anonymize": ["@stll/anonymize@workspace:packages/anonymize"],
 
@@ -234,25 +234,25 @@
 
     "@stll/oxlint-config": ["@stll/oxlint-config@0.3.0", "", { "peerDependencies": { "oxlint": ">=1.66.0", "oxlint-tsgolint": ">=0.23.0" } }, "sha512-kT4jS/0mgMejp5LUrQ7joHljyphqQr2kk2zGyuJGiJqFz7pHnp9lPJw5WmDyoOqEC34+jkHh0vPeNcZIEiXhog=="],
 
-    "@stll/regex-set": ["@stll/regex-set@1.0.2", "", { "optionalDependencies": { "@stll/regex-set-darwin-arm64": "1.0.2", "@stll/regex-set-darwin-x64": "1.0.2", "@stll/regex-set-linux-arm64-gnu": "1.0.2", "@stll/regex-set-linux-x64-gnu": "1.0.2", "@stll/regex-set-wasm32-wasi": "1.0.2" } }, "sha512-XC/hRFfRtiZRSd7hpFXlWWxVzQSdlUhEVWxLMzAYRbKSI2BK2L0p2tWe1qcrcZRpF9uN2QB9RqkZ0AA5eZe1Rw=="],
+    "@stll/regex-set": ["@stll/regex-set@1.0.3", "", { "optionalDependencies": { "@stll/regex-set-darwin-arm64": "1.0.3", "@stll/regex-set-darwin-x64": "1.0.3", "@stll/regex-set-linux-arm64-gnu": "1.0.3", "@stll/regex-set-linux-x64-gnu": "1.0.3", "@stll/regex-set-wasm32-wasi": "1.0.3" } }, "sha512-5KvPyEOTBd4qxwKM+g7Sde9l3f/vIxS0CuQzsqll80aPfFs+lRrSPTw7JUpqoAVEsxFQxeqm74X5Oa89waKVrA=="],
 
-    "@stll/regex-set-darwin-arm64": ["@stll/regex-set-darwin-arm64@1.0.2", "", { "os": "darwin", "cpu": "arm64" }, "sha512-U0s2S24fCtd+XV2e+t4FM4cd1Gyi+7V0p36nwaOsrSP+xk9fXtPJMovt5hh5fD/+e7fROAmH4G/9CadyW1ulbw=="],
+    "@stll/regex-set-darwin-arm64": ["@stll/regex-set-darwin-arm64@1.0.3", "", { "os": "darwin", "cpu": "arm64" }, "sha512-bbhWz9hyt8P0md+GNeB542QSkEd4sG/4wozm8kiBqMOD/F8ekxAF9J/SfEnbZbTIbRRNMtZ/jOHkXBPjdHTA/Q=="],
 
-    "@stll/regex-set-darwin-x64": ["@stll/regex-set-darwin-x64@1.0.2", "", { "os": "darwin", "cpu": "x64" }, "sha512-TCj/V2CVBje5wUwFU0s1MNDbgHagS2Fm2NYJqIyd/OAVX6MwtO7rZ0dq4hNIZ4iLgZnheD/gKOmXmZoOLSrJEw=="],
+    "@stll/regex-set-darwin-x64": ["@stll/regex-set-darwin-x64@1.0.3", "", { "os": "darwin", "cpu": "x64" }, "sha512-kkIrmEAhSRQWz+wE/yJqpfXdu0sVoXirLfV+H8NpwamCZoysQGygtsYbpd+ho5Hbepgsnedljpd+MWPODMA1iA=="],
 
-    "@stll/regex-set-linux-arm64-gnu": ["@stll/regex-set-linux-arm64-gnu@1.0.2", "", { "os": "linux", "cpu": "arm64" }, "sha512-ZwMGjK5xBqISPuJcXkLueqH7aQO9xF2B9gASDgKHUchuD0Zwp6dC3G1c9Q4TIJqf1OvWXO7VzcSQYm2lvmbsMQ=="],
+    "@stll/regex-set-linux-arm64-gnu": ["@stll/regex-set-linux-arm64-gnu@1.0.3", "", { "os": "linux", "cpu": "arm64" }, "sha512-XIW2wz207w35F3vyFBHJVA7YNXaKTT5b+N9YQIwbzvCx3u4MsiejW/AmIdtNJ7lCs5fQdx+D2WUo75CCXf8CZA=="],
 
-    "@stll/regex-set-linux-x64-gnu": ["@stll/regex-set-linux-x64-gnu@1.0.2", "", { "os": "linux", "cpu": "x64" }, "sha512-uho/IJ/HBxp8hbV4wjE6TQXCJJkhCQnLYprEgmvvpYytGz9PHWoV8rTNPSouL4XiSZA6VQ/NwJT4HGTvU8H4MQ=="],
+    "@stll/regex-set-linux-x64-gnu": ["@stll/regex-set-linux-x64-gnu@1.0.3", "", { "os": "linux", "cpu": "x64" }, "sha512-l29AEbjHNi5ncLwjTP9lDkZA2z0aIuOcnXiqM+BXvYeFF1Uys+aQ6JVpiUlb6FUjRkfdMAB4eG19qryYFvxu8Q=="],
 
-    "@stll/regex-set-wasm": ["@stll/regex-set-wasm@1.0.2", "", { "dependencies": { "@napi-rs/wasm-runtime": "^1.1.3" }, "peerDependencies": { "vite": ">=5 <10" }, "optionalPeers": ["vite"] }, "sha512-2g83PIf7QQOPSA+d6U5T6Iibozwb4tTQ55+HE3p/h7R5Ov3Mp1N+4X+oXLpTBnkJf4LBYC+8tEZxQpMvOIO4wA=="],
+    "@stll/regex-set-wasm": ["@stll/regex-set-wasm@1.0.3", "", { "dependencies": { "@napi-rs/wasm-runtime": "^1.1.3" }, "peerDependencies": { "vite": ">=5 <10" }, "optionalPeers": ["vite"] }, "sha512-bFvUfpT1HbLc4puXwhKwiS7842bcRwQjEF5baTL+l3yvTeEKKoNPOOTFfRjs0ybW5gymBSG1VX6a//gBcKUSLQ=="],
 
-    "@stll/regex-set-wasm32-wasi": ["@stll/regex-set-wasm32-wasi@1.0.2", "", { "dependencies": { "@napi-rs/wasm-runtime": "^1.1.3" }, "cpu": "none" }, "sha512-GEpKKZoc/5jDY6WXjqsX/0JzcqYl+fcLJjmQngrn8Mp/JzIMQN+8Tk4dHjj/vDT1i12UhzpaUFCGcIAJTpglfQ=="],
+    "@stll/regex-set-wasm32-wasi": ["@stll/regex-set-wasm32-wasi@1.0.3", "", { "dependencies": { "@napi-rs/wasm-runtime": "^1.1.3" }, "cpu": "none" }, "sha512-PoiDlDkydeW6VMLG0FnJyWoMnIlGCytD3RNpTLZcRyeuNUI9p6Q0YZXBeTxFTlSkNQz9kPco4T9KjZk69pbKcw=="],
 
     "@stll/stdnum": ["@stll/stdnum@1.0.0", "", {}, "sha512-Hf3mCNqRyHWKl3PgwWgghJ45rw7sW6qMXZirUL+uah2qZpXKmhBlOrrToScgGYbq1OIDy5u3Il3PVFw4ppAf1A=="],
 
-    "@stll/text-search": ["@stll/text-search@1.0.2", "", { "dependencies": { "@stll/aho-corasick": "^1.0.1", "@stll/fuzzy-search": "^1.1.0", "@stll/regex-set": "^1.0.2" } }, "sha512-AOv4SuokD2nzoXCRj1zGx5UuT8kavZAXOUU+hc9c0o8+lTsgg7coYgHOBAXe2Mh5UpmclJqm98HgJJnBdBjG9Q=="],
+    "@stll/text-search": ["@stll/text-search@1.0.4", "", { "dependencies": { "@stll/aho-corasick": "^1.0.2", "@stll/fuzzy-search": "^1.1.0", "@stll/regex-set": "^1.0.3" } }, "sha512-UuPGukJiYV7uCqWbeV1MXKATiCGe4jXI7BsKXW0bEAlthFZ+rw90yqJy0EKRnijFMuqBaKE+eLCo1PwpK/FLjg=="],
 
-    "@stll/text-search-wasm": ["@stll/text-search-wasm@1.0.2", "", { "dependencies": { "@stll/aho-corasick-wasm": "^1.0.1", "@stll/fuzzy-search-wasm": "^1.1.0", "@stll/regex-set-wasm": "^1.0.2" }, "peerDependencies": { "vite": ">=5 <10" }, "optionalPeers": ["vite"] }, "sha512-fgUNeNDL3DbR+hnWoYvwi2SLT0Rb/bKOL3Pqn6s2y2m4f/LNUNdWlMPvtkT9d4m9tBk1wzcktgCl4H5ADXKITw=="],
+    "@stll/text-search-wasm": ["@stll/text-search-wasm@1.0.4", "", { "dependencies": { "@stll/aho-corasick-wasm": "^1.0.2", "@stll/fuzzy-search-wasm": "^1.1.0", "@stll/regex-set-wasm": "^1.0.3" }, "peerDependencies": { "vite": ">=5 <10" }, "optionalPeers": ["vite"] }, "sha512-qzlhHl6iTgpOBc+c+y+2/mCi5LPZ84OfW9twJpD/G83e0IUYPHOhK7A7/Lwj119vexM1++BufoKRPdb5332r0w=="],
 
     "@stll/typescript-config": ["@stll/typescript-config@0.3.0", "", {}, "sha512-l0dj2IirCUKbSRSJ9Xwfu4vg8SjtfRlg5MEYGrx6lo/q2GLxS6MhFY+5hPOk36bJB99grqgmUtJql9Qg0WxIhw=="],
 
