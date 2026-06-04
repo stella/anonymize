@@ -3,7 +3,10 @@
     "id": "swift-bic",
     "triggers": ["SWIFT", "BIC"],
     "label": "bank account number",
-    "strategy": { "type": "n-words", "count": 1 },
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
     "extensions": ["add-colon"],
     "validations": [
       {
@@ -17,16 +20,25 @@
     "triggers": [
       "ABA",
       "ABA Number",
+      "RTN",
       "Routing Number",
       "Routing No.",
       "Routing Transit Number"
     ],
     "label": "bank account number",
-    "strategy": { "type": "n-words", "count": 1 },
+    "strategy": {
+      "type": "n-words",
+      "count": 1
+    },
     "extensions": ["add-colon"],
     "validations": [
-      { "type": "has-digits" },
-      { "type": "valid-id", "validator": "us.rtn" }
+      {
+        "type": "has-digits"
+      },
+      {
+        "type": "valid-id",
+        "validator": "us.rtn"
+      }
     ]
   },
   {
@@ -41,8 +53,14 @@
       "por un importe de"
     ],
     "label": "monetary amount",
-    "strategy": { "type": "to-next-comma" },
+    "strategy": {
+      "type": "to-next-comma"
+    },
     "extensions": ["add-colon"],
-    "validations": [{ "type": "has-digits" }]
+    "validations": [
+      {
+        "type": "has-digits"
+      }
+    ]
   }
 ]

@@ -62,6 +62,14 @@ describe("US ABA routing number — cue + checksum recognizer", () => {
     ).toContain("122100024");
   });
 
+  // The valid-id check strips separators before validating, so a routing
+  // number printed with dashes still passes the checksum.
+  test("a dash-separated routing number is captured and validated", async () => {
+    expect(
+      bankAccounts(await run("Wire to ABA: 1221-0002-4 for the transfer.")),
+    ).toContain("1221-0002-4");
+  });
+
   // Invariant 1 — the checksum is mandatory: a cued but checksum-invalid
   // 9-digit number is not emitted (123456789 fails the ABA MOD-10 weights).
   test("a checksum-invalid number after the cue is rejected", async () => {
