@@ -88,4 +88,16 @@ describe("labeled phone / fax / telecopy numbers", () => {
       phones(await run("Please send a fax to the registered office.")),
     ).toHaveLength(0);
   });
+
+  // Invariant — a real phone has >=3 digit groups, so a two-group numeric
+  // range right after a verb-used cue ("Please fax 2018-2019") is not a phone.
+  // This keeps year/section/page ranges from being redacted as phone numbers.
+  test("a verb-used cue followed by a two-group range is not a phone", async () => {
+    expect(phones(await run("Please fax 2018-2019 tax returns"))).toHaveLength(
+      0,
+    );
+    expect(phones(await run("fax 100-200 pages to the office"))).toHaveLength(
+      0,
+    );
+  });
 });
