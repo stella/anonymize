@@ -1,5 +1,5 @@
 import type { Match } from "@stll/text-search";
-import { br } from "@stll/stdnum";
+import { br, us } from "@stll/stdnum";
 import type { Validator } from "@stll/stdnum";
 
 import { DETECTION_SOURCES } from "../types";
@@ -19,6 +19,7 @@ import { DASH } from "../util/char-groups";
 const VALID_ID_VALIDATORS: Record<ValidIdValidator, Validator> = {
   "br.cpf": br.cpf,
   "br.cnpj": br.cnpj,
+  "us.rtn": us.rtn,
 };
 
 const TRIGGER_SCORE = 0.95;

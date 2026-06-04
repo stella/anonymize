@@ -121,7 +121,7 @@ export type TriggerValidation =
 
 /** Built-in stdnum validators that can be referenced
  *  by `valid-id` validations. */
-export type ValidIdValidator = "br.cpf" | "br.cnpj";
+export type ValidIdValidator = "br.cpf" | "br.cnpj" | "us.rtn";
 
 /** Auto-generated trigger variants — closed set. */
 export type TriggerExtension =

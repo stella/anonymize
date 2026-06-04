@@ -31,7 +31,7 @@ const VALID_VALIDATION_TYPES = new Set([
 // Allow-list of named ID validators implemented by the
 // runtime. Keep in sync with `ValidIdValidator` in
 // packages/anonymize/src/types.ts.
-const VALID_ID_VALIDATORS = new Set(["br.cpf", "br.cnpj"]);
+const VALID_ID_VALIDATORS = new Set(["br.cpf", "br.cnpj", "us.rtn"]);
 
 const VALID_EXTENSIONS = new Set([
   "add-colon",

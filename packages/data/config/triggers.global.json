@@ -13,6 +13,23 @@
     ]
   },
   {
+    "id": "us-aba-routing",
+    "triggers": [
+      "ABA",
+      "ABA Number",
+      "Routing Number",
+      "Routing No.",
+      "Routing Transit Number"
+    ],
+    "label": "bank account number",
+    "strategy": { "type": "n-words", "count": 1 },
+    "extensions": ["add-colon"],
+    "validations": [
+      { "type": "has-digits" },
+      { "type": "valid-id", "validator": "us.rtn" }
+    ]
+  },
+  {
     "id": "amount-prefix",
     "triggers": [
       "ve výši",
