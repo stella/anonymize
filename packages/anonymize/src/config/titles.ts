@@ -160,6 +160,36 @@ export const HONORIFIC_BOUNDARY = new Set([
 ]);
 
 /**
+ * Honorifics that are abbreviations: a dot after them is an
+ * abbreviation dot (same sentence), so the detector keeps an
+ * optional `.` between the title and the name ("Mr. Smith").
+ * Every other honorific is a full word — a trailing dot ends a
+ * sentence, so the detector must NOT consume it (otherwise a span
+ * like "President. The Employee" crosses the sentence boundary).
+ *
+ * Maintained explicitly, NOT derived from "ends in a dot": "Mr" is
+ * an abbreviation written without a dot, and "Lord" is a full word.
+ */
+export const HONORIFIC_ABBREVIATION = new Set([
+  "Avv.",
+  "Dott.",
+  "M.",
+  "Me",
+  "Messrs",
+  "Mlle",
+  "Mme",
+  "Mr",
+  "Mrs",
+  "Ms",
+  "Pr",
+  "Pr.",
+  "Sig.",
+  "Sig.ra",
+  "Sr.",
+  "Sra.",
+]);
+
+/**
  * Post-nominal degrees (comma or space separated after name).
  * Plain text; the detector auto-escapes for regex.
  */

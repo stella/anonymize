@@ -39,6 +39,7 @@ import {
 import { toRegex } from "@stll/stdnum/patterns";
 
 import {
+  HONORIFIC_ABBREVIATION,
   HONORIFIC_BOUNDARY,
   HONORIFICS,
   POST_NOMINALS,
@@ -108,14 +109,27 @@ const PARTICLE =
 // are not, so spans cannot bleed across paragraphs.
 const SP = "[^\\S\\n]";
 
-/** Honorific alternation built from titles.ts config. */
-const HONORIFIC_ALT = [...HONORIFICS]
-  .toSorted((a, b) => b.length - a.length)
-  .map((h) => {
-    const escaped = escapeRegex(h);
-    return HONORIFIC_BOUNDARY.has(h) ? `\\b${escaped}` : escaped;
-  })
-  .join("|");
+/** Honorific alternation built from titles.ts config. Sorted
+ * longest-first so e.g. "Sig.ra" wins over "Sig.". */
+const buildHonorificAlt = (entries: readonly string[]): string =>
+  [...entries]
+    .toSorted((a, b) => b.length - a.length)
+    .map((h) => {
+      const escaped = escapeRegex(h);
+      return HONORIFIC_BOUNDARY.has(h) ? `\\b${escaped}` : escaped;
+    })
+    .join("|");
+
+// Abbreviation honorifics ("Mr", "Sr.") may be followed by an
+// abbreviation dot; full-word honorifics ("President", "Lord")
+// may not, so a sentence-ending period after them is not consumed
+// and the person span stops at the sentence boundary.
+const HONORIFIC_ABBREV_ALT = buildHonorificAlt(
+  HONORIFICS.filter((h) => HONORIFIC_ABBREVIATION.has(h)),
+);
+const HONORIFIC_FULLWORD_ALT = buildHonorificAlt(
+  HONORIFICS.filter((h) => !HONORIFIC_ABBREVIATION.has(h)),
+);
 
 // ── Pattern definitions ─────────────────────────────
 
@@ -392,8 +406,8 @@ const TITLED_PERSON: RegexDef = {
 
 const HONORIFIC_PERSON: RegexDef = {
   pattern:
-    `(?:${HONORIFIC_ALT})` +
-    `\\.?${SP}+${NAME_WORD}` +
+    `(?:(?:${HONORIFIC_ABBREV_ALT})\\.?|(?:${HONORIFIC_FULLWORD_ALT}))` +
+    `${SP}+${NAME_WORD}` +
     `(?:(?:${SP}|-){1,2}(?:${PARTICLE}${SP}+)?` +
     `${NAME_WORD}){0,3}` +
     `(?:${SP}+(?:QC|KC|SC|LJ|AG))?`,
