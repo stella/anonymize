@@ -63,6 +63,12 @@ describe("honorific person span respects sentence boundaries", () => {
     );
   });
 
+  test("an abbreviation honorific without a dot (British style) still matches", async () => {
+    expect(persons(await run("We met Mr John Smith yesterday."))).toContain(
+      "Mr John Smith",
+    );
+  });
+
   test("a Spanish abbreviation honorific (Sr.) keeps its dot", async () => {
     expect(persons(await run("Sr. Alfonso García signed the deed."))).toContain(
       "Sr. Alfonso García",
