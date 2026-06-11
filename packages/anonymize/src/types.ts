@@ -8,6 +8,7 @@
 // (used by `Entity`) and `OperatorType` (used by
 // `OperatorConfig`).
 import type { DetectionSource, OperatorType } from "./constants";
+import { DETECTION_SOURCES } from "./constants";
 
 export {
   DETECTION_SOURCES,
@@ -16,18 +17,49 @@ export {
 } from "./constants";
 
 /**
- * A detected PII entity span in the source text.
- * Every detection layer produces these.
+ * Fields shared by every entity span in the source text.
  */
-export type Entity = {
+type EntityBase = {
   start: number;
   end: number;
   label: string;
   text: string;
   score: number;
-  source: DetectionSource;
   sourceDetail?: "custom-deny-list" | "custom-regex" | "gazetteer-extension";
 };
+
+/**
+ * A PII entity span found by a primary detection layer
+ * (regex, NER, legal forms, deny list, ...).
+ */
+export type DetectedEntity = EntityBase & {
+  source: Exclude<DetectionSource, typeof DETECTION_SOURCES.COREFERENCE>;
+};
+
+/**
+ * An alias mention of a previously detected entity: a
+ * defined term ("the Seller") or a propagated bare
+ * mention ("Acme" after "Acme Corp.").
+ *
+ * `corefSourceText` is required by construction, so an
+ * alias cannot exist without the link back to its source
+ * entity. Placeholder numbering reads it to give the
+ * alias the same placeholder as the source. The link
+ * travels with the entity instead of living in a
+ * side-channel map that a producer could forget to
+ * write — or that a later pass could clear.
+ */
+export type CorefAliasEntity = EntityBase & {
+  source: typeof DETECTION_SOURCES.COREFERENCE;
+  /** Full text of the source entity this alias refers to. */
+  corefSourceText: string;
+};
+
+/**
+ * A detected PII entity span in the source text.
+ * Every detection layer produces these.
+ */
+export type Entity = DetectedEntity | CorefAliasEntity;
 
 /**
  * Entity after human review. Extends the base Entity

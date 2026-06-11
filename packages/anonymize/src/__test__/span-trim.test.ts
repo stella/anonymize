@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { sanitizeEntities } from "../pipeline";
-import type { DetectionSource, Entity } from "../types";
+import type { DetectedEntity, Entity } from "../types";
 
 const make = (
   text: string,
   label = "organization",
-  source: DetectionSource = "ner",
+  source: DetectedEntity["source"] = "ner",
 ): Entity => ({
   start: 0,
   end: text.length,

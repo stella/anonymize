@@ -1,0 +1,81 @@
+import { describe, expect, test } from "bun:test";
+
+import {
+  createPipelineContext,
+  DEFAULT_ENTITY_LABELS,
+  redactText,
+  runPipeline,
+} from "../index";
+import type { PipelineConfig } from "../types";
+
+const CONFIG: PipelineConfig = {
+  threshold: 0.3,
+  enableTriggerPhrases: true,
+  enableRegex: true,
+  enableLegalForms: true,
+  enableNameCorpus: false,
+  enableDenyList: false,
+  enableGazetteer: false,
+  enableNer: false,
+  enableConfidenceBoost: false,
+  enableCoreference: true,
+  labels: [...DEFAULT_ENTITY_LABELS],
+  workspaceId: "test",
+};
+
+const redactWith = async (
+  fullText: string,
+  ctx = createPipelineContext(),
+): Promise<string> => {
+  const entities = await runPipeline({
+    fullText,
+    config: CONFIG,
+    gazetteerEntries: [],
+    context: ctx,
+  });
+  return redactText(fullText, entities, undefined, ctx).redactedText;
+};
+
+describe("org propagation placeholder consistency", () => {
+  test("bare mention gets the same placeholder as the full form", async () => {
+    const redacted = await redactWith(
+      `This deed is made by Initech Corporation, a Delaware corporation. ` +
+        `The obligations of Initech are set out below.`,
+    );
+    // Full form and propagated bare mention must share one
+    // placeholder so the redacted document stays readable
+    // and the de-anonymization key stays unambiguous.
+    expect(redacted).toContain("[ORGANIZATION_1], a Delaware");
+    expect(redacted).toContain("The obligations of [ORGANIZATION_1]");
+    expect(redacted).not.toContain("[ORGANIZATION_2]");
+  });
+
+  test("two parties keep distinct placeholders across bare mentions", async () => {
+    const redacted = await redactWith(
+      `This Agreement is between Acme Corporation, a Delaware ` +
+        `corporation, and GlobalTech Solutions Inc., a California ` +
+        `corporation. Acme shall pay GlobalTech Solutions within 30 days.`,
+    );
+    const tags = [...redacted.matchAll(/\[ORGANIZATION_(\d)\]/g)].map(
+      (m) => m[1],
+    );
+    // Acme + GlobalTech, each mentioned twice, in order.
+    expect(tags).toEqual(["1", "2", "1", "2"]);
+  });
+
+  test("reused context does not leak placeholder links across documents", async () => {
+    const ctx = createPipelineContext();
+    await redactWith(
+      `This deed is made by GlobalTech Solutions Inc., a California ` +
+        `corporation. The obligations of GlobalTech Solutions apply.`,
+      ctx,
+    );
+    const second = await redactWith(
+      `This deed is made by Initech Corporation, a Delaware corporation. ` +
+        `The obligations of Initech are set out below.`,
+      ctx,
+    );
+    expect(second).toContain("The obligations of [ORGANIZATION_1]");
+    expect(second).not.toContain("[ORGANIZATION_2]");
+  });
+});

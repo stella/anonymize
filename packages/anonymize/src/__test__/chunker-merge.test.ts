@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { Entity } from "../types";
+import type { DetectedEntity, Entity } from "../types";
 import { mergeChunkEntities } from "../util/chunker";
 
 const entity = (
@@ -7,7 +7,7 @@ const entity = (
   end: number,
   score: number,
   label = "PERSON",
-  source: Entity["source"] = "ner",
+  source: DetectedEntity["source"] = "ner",
 ): Entity => ({
   start,
   end,

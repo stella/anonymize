@@ -1,7 +1,7 @@
 import { DETECTION_SOURCES } from "../types";
 import type { Entity } from "../types";
 import type { DefinitionPattern, PipelineContext } from "../context";
-import { corefKey, defaultContext } from "../context";
+import { defaultContext } from "../context";
 import { loadLanguageConfigs } from "../util/lang-loader";
 import { getKnownLegalSuffixes } from "./legal-forms";
 
@@ -374,14 +374,17 @@ const isWordChar = (ch: string | undefined): boolean => {
  * character before the start and after the end are NOT
  * word characters (letter/digit).
  *
- * Populates `ctx.corefSourceMap` with entries linking
- * each coref entity to its source entity text, for
- * consistent placeholder numbering.
+ * Each returned alias carries `corefSourceText` linking
+ * it to its source entity text, for consistent
+ * placeholder numbering.
+ *
+ * @param _ctx Unused. Kept for signature compatibility;
+ *   alias links now travel on the entities themselves.
  */
 export const findCoreferenceSpans = (
   fullText: string,
   terms: DefinedTerm[],
-  ctx: PipelineContext = defaultContext,
+  _ctx: PipelineContext = defaultContext,
 ): Entity[] => {
   const results: Entity[] = [];
 
@@ -408,16 +411,15 @@ export const findCoreferenceSpans = (
         continue;
       }
 
-      const entity: Entity = {
+      results.push({
         start: idx,
         end: matchEnd,
         label: term.label,
         text: term.alias,
         score: 0.95,
         source: DETECTION_SOURCES.COREFERENCE,
-      };
-      ctx.corefSourceMap.set(corefKey(entity), term.sourceText);
-      results.push(entity);
+        corefSourceText: term.sourceText,
+      });
 
       searchFrom = matchEnd;
     }

@@ -4,7 +4,7 @@ import { extractDefinedTerms, findCoreferenceSpans } from "../coreference";
 import { buildPlaceholderMap } from "../../redact";
 import { DETECTION_SOURCES } from "../../types";
 import type { Entity } from "../../types";
-import { corefKey, createPipelineContext } from "../../context";
+import { createPipelineContext } from "../../context";
 
 const makeEntity = (label: string, text: string, start: number): Entity => ({
   label,
@@ -149,8 +149,7 @@ describe("findCoreferenceSpans", () => {
     }
   });
 
-  test("populates corefSourceMap for placeholder linking", () => {
-    const ctx = createPipelineContext();
+  test("aliases carry corefSourceText for placeholder linking", () => {
     const text = "Smlouva s TP";
     const terms = [
       {
@@ -160,10 +159,12 @@ describe("findCoreferenceSpans", () => {
         sourceText: "Ing. Tomáš Procházka",
       },
     ];
-    const spans = findCoreferenceSpans(text, terms, ctx);
+    const spans = findCoreferenceSpans(text, terms);
     expect(spans).toHaveLength(1);
     const span = spans[0]!;
-    expect(ctx.corefSourceMap.get(corefKey(span))).toBe("Ing. Tomáš Procházka");
+    expect(
+      span.source === "coreference" ? span.corefSourceText : undefined,
+    ).toBe("Ing. Tomáš Procházka");
   });
 
   test("coref alias gets same placeholder as source entity", () => {

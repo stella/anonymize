@@ -22,6 +22,8 @@ const isCallerOwnedEntity = (entity: Entity): boolean =>
 type Seed = {
   baseName: string;
   label: string;
+  /** Full entity text the propagated mentions link to. */
+  sourceText: string;
 };
 
 /**
@@ -30,6 +32,12 @@ type Seed = {
  * to get the base name, and re-scan the full text for
  * bare mentions of that base name. Returns new entities
  * for occurrences not already covered.
+ *
+ * Propagated mentions are coref aliases: each carries
+ * `corefSourceText` linking it to the full seed entity
+ * text, so placeholder numbering assigns the bare
+ * mention the same placeholder as its source ("Acme"
+ * and "Acme Corp." both become [ORGANIZATION_1]).
  */
 export const propagateOrgNames = (
   entities: Entity[],
@@ -52,6 +60,7 @@ export const propagateOrgNames = (
           seeds.push({
             baseName: base,
             label: e.label,
+            sourceText: e.text,
           });
         }
         break;
@@ -120,6 +129,7 @@ export const propagateOrgNames = (
           text: fullText.slice(spanStart, matchEnd),
           score: ORG_PROPAGATION_SCORE,
           source: DETECTION_SOURCES.COREFERENCE,
+          corefSourceText: seed.sourceText,
         });
         covered.push([spanStart, matchEnd]);
       }

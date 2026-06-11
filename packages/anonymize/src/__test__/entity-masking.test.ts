@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { maskDetectedSpans, unmaskNerEntities } from "../util/entity-masking";
-import type { Entity } from "../types";
+import type { DetectedEntity, Entity } from "../types";
 
 const entity = (
   start: number,
   end: number,
   label = "person",
   score = 0.95,
-  source: Entity["source"] = "trigger",
+  source: DetectedEntity["source"] = "trigger",
 ): Entity => ({
   start,
   end,

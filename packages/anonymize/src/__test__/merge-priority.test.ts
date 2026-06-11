@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import { mergeAndDedup } from "../pipeline";
-import type { DetectionSource, Entity } from "../types";
+import type { DetectedEntity, Entity } from "../types";
 
 const makeEntity = (
-  source: DetectionSource,
+  source: DetectedEntity["source"],
   score: number,
   start: number,
   end: number,
@@ -67,7 +67,13 @@ describe("mergeAndDedup priority resolution", () => {
 
   test("deny-list vs coreference at same priority falls back to score", () => {
     const deny = makeEntity("deny-list", 0.85, 0, 8);
-    const coref = makeEntity("coreference", 0.9, 0, 8);
+    // Coref aliases must carry their source link by
+    // construction, so build one explicitly.
+    const coref: Entity = {
+      ...makeEntity("regex", 0.9, 0, 8),
+      source: "coreference",
+      corefSourceText: "Source Entity Ltd.",
+    };
     const result = mergeAndDedup([deny, coref]);
     expect(result).toHaveLength(1);
     // Same priority (2), higher score wins

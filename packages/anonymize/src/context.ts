@@ -6,6 +6,10 @@ import type { Entity } from "./types";
  * shallow copies (spread). Uses position + label so the
  * key is identical for the original object and any
  * `{ ...entity }` copy produced by mergeAndDedup.
+ *
+ * @deprecated No longer used internally: coref alias
+ *   links travel on the entities themselves
+ *   (`corefSourceText`). Kept for API compatibility.
  */
 export const corefKey = (e: Entity): string => `${e.start}:${e.end}:${e.label}`;
 
@@ -83,19 +87,6 @@ export type PipelineContext = {
   zoneHeadingPatterns: RegExp[] | null;
   zoneSigningPatterns: RegExp[] | null;
   zoneInitPromise: Promise<void> | null;
-
-  // ── Coreference source map ────────────────────
-  /**
-   * Maps coreference entities to their source entity
-   * text. Populated by findCoreferenceSpans, consumed
-   * by buildPlaceholderMap for consistent placeholder
-   * numbering across aliases and source entities.
-   *
-   * Keyed by `start:end:label` composite string so
-   * lookups survive shallow copies (e.g. from
-   * mergeAndDedup's spread operator).
-   */
-  corefSourceMap: Map<string, string>;
 };
 
 /** Create a fresh, empty pipeline context. */
@@ -131,8 +122,6 @@ export const createPipelineContext = (): PipelineContext => ({
   zoneHeadingPatterns: null,
   zoneSigningPatterns: null,
   zoneInitPromise: null,
-
-  corefSourceMap: new Map(),
 });
 
 /**

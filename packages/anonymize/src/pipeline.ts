@@ -1520,9 +1520,6 @@ export const runPipeline = async (
   checkAbort(signal);
 
   // Coreference
-  // Clear stale entries unconditionally so a reused
-  // context doesn't leak sourceText across documents.
-  ctx.corefSourceMap.clear();
   if (config.enableCoreference) {
     // Coreference's alias filter rejects parenthetical
     // captures that are nothing but a legal-form suffix

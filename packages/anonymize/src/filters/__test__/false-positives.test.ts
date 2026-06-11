@@ -3,7 +3,7 @@ import {
   filterFalsePositives,
   initAddressComponents,
 } from "../false-positives";
-import type { Entity } from "../../types";
+import type { DetectedEntity, Entity } from "../../types";
 
 const person = (text: string): Entity => ({
   start: 0,
@@ -53,7 +53,7 @@ describe("street-type fallback for direct callers", () => {
 const orgAt = (
   text: string,
   start: number,
-  source: Entity["source"] = "trigger",
+  source: DetectedEntity["source"] = "trigger",
 ): Entity => ({
   start,
   end: start + text.length,
@@ -129,10 +129,14 @@ describe("organization word-count guardrail", () => {
     expect(result).toHaveLength(1);
   });
 
-  const longOrgSources: Entity["source"][] = ["gazetteer", "ner", "regex"];
+  const longOrgSources: DetectedEntity["source"][] = [
+    "gazetteer",
+    "ner",
+    "regex",
+  ];
   test.each(longOrgSources)(
     "keeps a long %s-detected org name beyond the word cap",
-    (source: Entity["source"]) => {
+    (source: DetectedEntity["source"]) => {
       const text = "The University of Texas Health Science Center at Houston";
       const result = filterFalsePositives([orgAt(text, 0, source)]);
       expect(result).toHaveLength(1);

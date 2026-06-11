@@ -10,7 +10,7 @@ import type {
   RedactionResult,
 } from "./types";
 import type { PipelineContext } from "./context";
-import { corefKey, defaultContext } from "./context";
+import { defaultContext } from "./context";
 
 const WHITESPACE_RE = /\s+/g;
 const PHONE_NOISE_RE = /[()\s-]/g;
@@ -72,14 +72,13 @@ const normalizeEntityText = (label: string, text: string): string => {
  * Placeholder format: [LABEL_N] where LABEL is uppercase
  * and N is a 1-based counter per label.
  *
- * @param ctx Pipeline context. Must be the same instance
- *   passed to `runPipeline` (or `findCoreferenceSpans`)
- *   so coreference placeholder links are preserved.
- *   Defaults to `defaultContext` for single-tenant usage.
+ * @param _ctx Unused. Kept for signature compatibility;
+ *   coref alias links now travel on the entities
+ *   themselves (`corefSourceText`).
  */
 export const buildPlaceholderMap = (
   entities: Entity[],
-  ctx: PipelineContext = defaultContext,
+  _ctx: PipelineContext = defaultContext,
 ): Map<string, string> => {
   const counters = new Map<string, number>();
   const textLabelToPlaceholder = new Map<string, string>();
@@ -95,10 +94,13 @@ export const buildPlaceholderMap = (
 
     const labelKey = entity.label.toUpperCase().replace(WHITESPACE_RE, "_");
 
-    // Coreference side-channel: if this entity is a
-    // coref alias, look up the source entity's
-    // placeholder so both get the same number.
-    const sourceText = ctx.corefSourceMap.get(corefKey(entity));
+    // If this entity is a coref alias, look up the
+    // source entity's placeholder so both get the same
+    // number. The link is carried on the entity itself,
+    // so it cannot be lost between detection and
+    // redaction.
+    const sourceText =
+      entity.source === "coreference" ? entity.corefSourceText : undefined;
     if (sourceText !== undefined) {
       const sourceNormalized = normalizeEntityText(entity.label, sourceText);
       const sourceNormalizedKey = `${labelKey}\0${sourceNormalized}`;

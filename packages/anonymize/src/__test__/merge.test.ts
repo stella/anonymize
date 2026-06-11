@@ -1,13 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { mergeAndDedup } from "../pipeline";
-import type { Entity } from "../types";
+import type { DetectedEntity, Entity } from "../types";
 
 const entity = (
   start: number,
   end: number,
   score: number,
   label = "PERSON",
-  source: Entity["source"] = "regex",
+  source: DetectedEntity["source"] = "regex",
 ): Entity => ({
   start,
   end,
