@@ -1,10 +1,12 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { basename, join, resolve } from "node:path";
+import { createInterface } from "node:readline/promises";
 
 import type {
   createPipelineContext,
   deanonymise,
+  Dictionaries,
   Entity,
   exportRedactionKey,
   OperatorConfig,
@@ -17,8 +19,8 @@ import type {
 import { DEFAULT_ENTITY_LABELS } from "@stll/anonymize/constants";
 
 import type { CliOptions } from "./args";
-import { HELP, parseCliArgs, UsageError } from "./args";
-import { loadCliDictionaries } from "./dictionaries";
+import { HELP, parseCliArgs, parseCountries, UsageError } from "./args";
+import type { DictionaryScope } from "./dictionary-scope";
 
 /**
  * The pipeline functions the CLI needs. Satisfied by both
@@ -32,6 +34,16 @@ export type AnonymizeApi = {
   preparePipelineSearch: typeof preparePipelineSearch;
   redactText: typeof redactText;
   runPipeline: typeof runPipeline;
+};
+
+/**
+ * Everything an entry point injects: the pipeline engine
+ * and the dictionary source (npm data package for the
+ * Node bin, embedded gzip blob for the compiled binary).
+ */
+export type CliEngine = {
+  api: AnonymizeApi;
+  loadDictionaries: (scope: DictionaryScope) => Promise<Dictionaries>;
 };
 
 const cliVersion = (): string => {
@@ -83,8 +95,9 @@ const validateLabels = (labels: readonly string[]): string[] => {
 
 const buildPipelineConfig = async (
   opts: CliOptions,
+  loadDictionaries: CliEngine["loadDictionaries"],
 ): Promise<PipelineConfig> => {
-  const dictionaries = await loadCliDictionaries({
+  const dictionaries = await loadDictionaries({
     languages: opts.languages,
     countries: opts.countries,
   });
@@ -168,6 +181,38 @@ const parseRedactionKey = (raw: string): Map<string, string> => {
   return map;
 };
 
+/**
+ * Ask for a country scope when running interactively on
+ * files with no scope flags. Skipped for piped stdin so
+ * the CLI stays scriptable.
+ */
+export const shouldPromptForScope = (
+  opts: CliOptions,
+  tty: { stdinIsTTY: boolean; stderrIsTTY: boolean },
+): boolean =>
+  opts.countries === undefined &&
+  opts.languages === undefined &&
+  !opts.quiet &&
+  opts.files.length > 0 &&
+  tty.stdinIsTTY &&
+  tty.stderrIsTTY;
+
+const promptForCountries = async (): Promise<string[] | undefined> => {
+  const rl = createInterface({
+    input: process.stdin,
+    output: process.stderr,
+  });
+  try {
+    const answer = await rl.question(
+      "Country scope (ISO codes like CZ,DE,GB; Enter loads all): ",
+    );
+    const trimmed = answer.trim();
+    return trimmed === "" ? undefined : parseCountries(trimmed);
+  } finally {
+    rl.close();
+  }
+};
+
 const runDeanonymise = async (
   opts: CliOptions,
   api: AnonymizeApi,
@@ -223,7 +268,7 @@ const summarize = (entities: Entity[]): string => {
 
 const runAnonymise = async (
   opts: CliOptions,
-  api: AnonymizeApi,
+  { api, loadDictionaries }: CliEngine,
 ): Promise<void> => {
   const multi = opts.files.length > 1;
   if (multi && opts.output === undefined) {
@@ -239,8 +284,15 @@ const runAnonymise = async (
     throw new UsageError('--key requires --mode "replace"');
   }
 
-  const inputs = await readInputs(opts.files);
-  const config = await buildPipelineConfig(opts);
+  const scoped = shouldPromptForScope(opts, {
+    stdinIsTTY: process.stdin.isTTY === true,
+    stderrIsTTY: process.stderr.isTTY === true,
+  })
+    ? { ...opts, countries: await promptForCountries() }
+    : opts;
+
+  const inputs = await readInputs(scoped.files);
+  const config = await buildPipelineConfig(scoped, loadDictionaries);
 
   const buildContext = api.createPipelineContext();
   const cachedSearch = await api.preparePipelineSearch({
@@ -297,7 +349,7 @@ const runAnonymise = async (
   }
 };
 
-const dispatch = async (api: AnonymizeApi): Promise<void> => {
+const dispatch = async (engine: CliEngine): Promise<void> => {
   const opts = parseCliArgs(process.argv.slice(2));
   if (opts.help) {
     process.stdout.write(HELP);
@@ -308,19 +360,19 @@ const dispatch = async (api: AnonymizeApi): Promise<void> => {
     return;
   }
   if (opts.deanonymiseKeyPath !== undefined) {
-    await runDeanonymise(opts, api);
+    await runDeanonymise(opts, engine.api);
     return;
   }
-  await runAnonymise(opts, api);
+  await runAnonymise(opts, engine);
 };
 
 /**
  * Run the CLI against the given engine and set the
  * process exit code (0 ok, 1 runtime error, 2 usage).
  */
-export const runCli = async (api: AnonymizeApi): Promise<void> => {
+export const runCli = async (engine: CliEngine): Promise<void> => {
   try {
-    await dispatch(api);
+    await dispatch(engine);
   } catch (err) {
     if (err instanceof UsageError) {
       process.stderr.write(`anonymize: ${err.message}\n`);

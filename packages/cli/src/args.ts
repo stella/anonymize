@@ -59,11 +59,33 @@ Options:
   -h, --help                Show this help
   -v, --version             Show the version
 
+Interactive prompt:
+  When run on files from a terminal without --countries or
+  --languages, the CLI asks once which country scope to load.
+  Piped stdin/stderr or --quiet skips the prompt, so scripts
+  and agents never block on input.
+
+Exit codes:
+  0  success
+  1  runtime error (message on stderr)
+  2  usage error (message on stderr)
+
+JSON output (--json):
+  { "entityCount": number,
+    "entities": [{ "start": number, "end": number,
+                   "label": string, "text": string,
+                   "score": number, "source": string }],
+    "redactedText": string }
+  Offsets are UTF-16 code-unit indexes into the input.
+  The stderr summary contains entity counts only, never
+  the detected text.
+
 Examples:
   anonymize contract.txt > contract.anon.txt
   anonymize -k contract.key.json -o contract.anon.txt contract.txt
   anonymize -d contract.key.json contract.anon.txt
   cat notes.md | anonymize --countries CZ,SK --languages cs,sk
+  anonymize --json --quiet input.txt | jq '.entities[].label'
 `;
 
 const splitList = (value: string): string[] =>
@@ -94,7 +116,7 @@ const parseMode = (raw: string): CliMode => {
 
 const COUNTRY_CODE_RE = /^[A-Za-z]{2}$/;
 
-const parseCountries = (raw: string): string[] => {
+export const parseCountries = (raw: string): string[] => {
   const countries = splitList(raw).map((code) => code.toUpperCase());
   const invalid = countries.find((code) => !COUNTRY_CODE_RE.test(code));
   if (invalid) {

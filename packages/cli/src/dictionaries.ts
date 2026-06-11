@@ -9,6 +9,11 @@ import {
 } from "@stll/anonymize-data";
 
 import { UsageError } from "./args";
+import type { DictionaryScope } from "./dictionary-scope";
+import {
+  NAME_DICTIONARY_PREFIXES,
+  nameLanguageOfDictionary,
+} from "./dictionary-scope";
 
 /**
  * Countries with bundled city dictionaries that are
@@ -47,13 +52,6 @@ const DEFAULT_CITY_COUNTRIES = [
   "US",
 ] as const;
 
-const NAME_DICTIONARY_PREFIXES = ["names/first/", "names/surnames/"] as const;
-
-const nameLanguageOfDictionary = (id: string): string | null => {
-  const prefix = NAME_DICTIONARY_PREFIXES.find((p) => id.startsWith(p));
-  return prefix ? id.slice(prefix.length) : null;
-};
-
 const availableNameLanguages = (): readonly string[] =>
   ALL_DICTIONARY_IDS.filter((id) =>
     id.startsWith(NAME_DICTIONARY_PREFIXES[0]),
@@ -74,10 +72,7 @@ const validateLanguages = (
   return languages as readonly NameLanguage[];
 };
 
-export type LoadCliDictionariesOptions = {
-  languages?: readonly string[] | undefined;
-  countries?: readonly string[] | undefined;
-};
+export type LoadCliDictionariesOptions = DictionaryScope;
 
 /**
  * Load the bundled @stll/anonymize-data dictionaries,

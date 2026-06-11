@@ -19,14 +19,14 @@
   "license": "MIT",
   "scripts": {
     "build": "tsdown",
-    "compile": "bun scripts/copy-wasm-payloads.ts && bun build --compile '--asset-naming=[name].[ext]' src/compile.ts --outfile dist/anonymize",
+    "compile": "bun scripts/copy-wasm-payloads.ts && bun scripts/embed-data.ts && bun build --compile '--asset-naming=[name].[ext]' src/compile.ts --outfile dist/anonymize",
     "prepublishOnly": "bun run build",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
     "test": "bun test --timeout 60000",
     "format": "oxfmt ."
   },
   "dependencies": {
-    "@stll/anonymize": "^1.4.7",
+    "@stll/anonymize": "^1.4.8",
     "@stll/anonymize-data": "^0.0.6"
   },
   "devDependencies": {

@@ -4,3 +4,8 @@ declare module "*.wasm" {
   const path: string;
   export default path;
 }
+
+declare module "*.json.gz" {
+  const path: string;
+  export default path;
+}
