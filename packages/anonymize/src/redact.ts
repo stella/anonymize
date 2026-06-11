@@ -215,12 +215,19 @@ export const redactText = (
     // iterates redactionMap (replace entries only).
     operatorMap.set(placeholder, opType);
 
-    // Only populate redactionMap for reversible operators
+    // Only populate redactionMap for reversible operators.
+    // A coref alias contributes its source's full text, so
+    // a forward alias ("Acme" before "Acme Corporation")
+    // cannot pin the shortened surface form as the key's
+    // canonical value for the shared placeholder.
     if (
       operator.reversibility === "reversible" &&
       !redactionMap.has(placeholder)
     ) {
-      redactionMap.set(placeholder, entity.text);
+      redactionMap.set(
+        placeholder,
+        entity.source === "coreference" ? entity.corefSourceText : entity.text,
+      );
     }
 
     cursor = entity.end;

@@ -92,6 +92,26 @@ describe("org propagation placeholder consistency", () => {
     expect(redacted).not.toContain("[ORGANIZATION_2]");
   });
 
+  test("forward alias stores the source's full text in the redaction key", async () => {
+    const ctx = createPipelineContext();
+    const fullText =
+      `Initech term sheet. This deed is made by Initech Corporation, ` +
+      `a Delaware corporation.`;
+    const entities = await runPipeline({
+      fullText,
+      config: CONFIG,
+      gazetteerEntries: [],
+      context: ctx,
+    });
+    const result = redactText(fullText, entities, undefined, ctx);
+    // The alias occurs first, but the key's canonical
+    // value must be the full source form so deanonymise
+    // restores the complete name.
+    expect(result.redactionMap.get("[ORGANIZATION_1]")).toBe(
+      "Initech Corporation",
+    );
+  });
+
   test("bare mention with two competing sources keeps its own placeholder", async () => {
     const redacted = await redactWith(
       `Initech LLC and Initech Corporation are affiliates. ` +
