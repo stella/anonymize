@@ -15,7 +15,7 @@ import { POST_NOMINALS } from "../config/titles";
 import { getKnownLegalSuffixes } from "./legal-forms";
 import { NAME_PARTICLE } from "./signatures";
 import { loadLanguageConfigs } from "../util/lang-loader";
-import { DASH } from "../util/char-groups";
+import { DASH, DASH_INNER } from "../util/char-groups";
 
 const VALID_ID_VALIDATORS: Record<ValidIdValidator, Validator> = {
   "br.cpf": br.cpf,
@@ -664,7 +664,16 @@ const TRIGGER_LOOKAHEAD_MARGIN = 128;
 const LINE_TRIGGER_LOOKAHEAD = 2_048;
 const MATCH_PATTERN_LOOKAHEAD = 512;
 const PHONE_VALUE_START_RE = /^[+(\d]/;
-const PHONE_SHAPE_PREFIX_RE = /^[+(\d][\d\s()./-]*/;
+/**
+ * Phone-shaped run: an opening "+", "(", or digit, then
+ * any mix of digits, whitespace, parens, dots, slashes,
+ * and dash variants. The dash class includes every
+ * typographic dash (U+2011 non-breaking hyphen, U+2013
+ * en-dash, etc.) via `DASH_INNER` so a Unicode separator
+ * ("+1 555‑123‑4567") does not break the run and leave the
+ * number unredacted.
+ */
+const PHONE_SHAPE_PREFIX_RE = new RegExp(`^[+(\\d][\\d\\s()./${DASH_INNER}]*`);
 /**
  * Optional phone-extension suffix following the numeric
  * run: "ext", "ext.", "extension", or "x" (case-
@@ -927,19 +936,26 @@ const extractValue = (
           if (extension !== null) {
             shapeEnd += extension[0].length;
           }
+          // Only bind when the phone shape stops before the
+          // current `end` — i.e. the shape, not a genuine
+          // line delimiter, is what terminates the value. A
+          // shape that runs all the way to a real newline/tab
+          // is a legitimate long labelled line and is left
+          // untouched (no cap), mirroring how newline-
+          // terminated bank-account values survive the cap.
           if (shapeEnd > 0 && shapeEnd < end) {
-            end = shapeEnd;
+            // Apply the 100-char cap only to this shape-
+            // derived stop so a pathological all-digits run
+            // ("1 1 1 …" for hundreds of chars, with a later
+            // shape-breaking "Signed by …") cannot produce an
+            // over-long phone entity. Mirror the fallback's
+            // word-boundary retreat.
+            end =
+              shapeEnd > MAX_TRIGGER_VALUE_LEN
+                ? capAtWordBoundary(valueText, MAX_TRIGGER_VALUE_LEN)
+                : shapeEnd;
             foundLineStop = true;
           }
-        }
-        // The shape bound sets foundLineStop, which skips
-        // the generic length-cap fallback below. Enforce the
-        // 100-char cap here so a pathological all-digits run
-        // ("1 1 1 …" for hundreds of chars) cannot produce
-        // an over-long phone entity. Mirror the fallback's
-        // word-boundary retreat via capAtWordBoundary.
-        if (foundLineStop && end > MAX_TRIGGER_VALUE_LEN) {
-          end = capAtWordBoundary(valueText, MAX_TRIGGER_VALUE_LEN);
         }
       }
       // Cap only when no real line delimiter was found. HTML-

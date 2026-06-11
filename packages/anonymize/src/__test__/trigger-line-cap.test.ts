@@ -237,6 +237,39 @@ describe("trigger value length cap", () => {
     }
   });
 
+  test("newline-terminated multi-phone line longer than cap is preserved", async () => {
+    // A genuinely newline-terminated phone line longer than
+    // the 100-char cap: the cap applies only to a shape-
+    // derived stop, never to a real line delimiter. Mirrors
+    // the bank-account "newline-terminated … is preserved"
+    // case. Digits, slashes, and spaces only so the whole
+    // line stays inside the phone shape.
+    const numbers = Array.from(
+      { length: 12 },
+      (_, i) => `555-10${String(i).padStart(2, "0")}`,
+    ).join(" / ");
+    expect(numbers.length).toBeGreaterThan(100);
+
+    const text = `Phone: ${numbers}\nNext line.`;
+    const entities = await detect(text, { enableRegex: false });
+    const phone = entities.find(
+      (e) => e.label === "phone number" && e.text.includes("1011"),
+    );
+    expect(phone).toBeDefined();
+    expect(phone!.text).toBe(numbers);
+  });
+
+  test("phone shape spans a unicode dash separator", async () => {
+    // A non-breaking hyphen (U+2011) between number groups
+    // must not break the shape run: without the dash class
+    // the run stops at "+1 555" and fails the >=5-digit
+    // plausibility check, dropping the number entirely.
+    const text = "PHONE: +1 555‑123‑4567\nNext line.";
+    const entities = await detect(text, { enableRegex: false });
+    const phones = entities.filter((e) => e.label === "phone number");
+    expect(phones.some((e) => e.text.includes("4567"))).toBe(true);
+  });
+
   test("legitimate end-of-line value below the cap is preserved verbatim", async () => {
     // A short, well-formed value on its own line is
     // captured in full — the cap should never truncate
