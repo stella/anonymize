@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 1.4.9 (2026-06-11)
+
+### Features
+
+- Windows x64 support: require `@stll/text-search` >=1.0.6, whose native engines now ship `win32-x64-msvc` bindings. `@stll/anonymize` loads natively on Windows.
+
 ## 1.4.1 (2026-05-15)
 
 ### Fixes
