@@ -48,6 +48,10 @@ const PACKAGES = [
       "package.json",
     ],
   },
+  {
+    dir: "packages/cli",
+    expected: ["dist/cli.mjs", "README.md", "LICENSE", "package.json"],
+  },
 ];
 
 for (const { dir, expected } of PACKAGES) {

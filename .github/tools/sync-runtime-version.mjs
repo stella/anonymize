@@ -6,6 +6,7 @@ const VERSION_RE = /^[0-9]+\.[0-9]+\.[0-9]+(-(rc|beta|alpha)\.[0-9]+)?$/;
 const PACKAGE_FILES = [
   "packages/anonymize/package.json",
   "packages/anonymize/wasm/package.json",
+  "packages/cli/package.json",
 ];
 
 const checkOnly = process.argv.includes("--check");

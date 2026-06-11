@@ -39,7 +39,7 @@
     },
     "packages/cli": {
       "name": "@stll/anonymize-cli",
-      "version": "0.1.0",
+      "version": "1.4.8",
       "bin": {
         "anonymize": "./dist/cli.mjs",
       },
