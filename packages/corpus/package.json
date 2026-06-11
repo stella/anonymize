@@ -1,0 +1,22 @@
+{
+  "name": "@stll/anonymize-corpus",
+  "version": "0.0.0",
+  "description": "Corpus evaluation tooling: fetch public documents, run the detection pipeline, diff runs against frozen verdicts",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
+    "test": "bun test",
+    "format": "oxfmt ."
+  },
+  "dependencies": {
+    "@stll/anonymize": "^1.4.9",
+    "@stll/anonymize-data": "^0.0.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.2",
+    "bun-types": "^1.3.14",
+    "typescript": "^6.0.3"
+  }
+}

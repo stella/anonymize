@@ -72,6 +72,19 @@
         "typescript": "^6.0.3",
       },
     },
+    "packages/corpus": {
+      "name": "@stll/anonymize-corpus",
+      "version": "0.0.0",
+      "dependencies": {
+        "@stll/anonymize": "^1.4.8",
+        "@stll/anonymize-data": "^0.0.6",
+      },
+      "devDependencies": {
+        "@types/node": "^25.9.2",
+        "bun-types": "^1.3.14",
+        "typescript": "^6.0.3",
+      },
+    },
     "packages/data": {
       "name": "@stll/anonymize-data",
       "version": "0.0.6",
@@ -254,6 +267,8 @@
     "@stll/anonymize": ["@stll/anonymize@workspace:packages/anonymize"],
 
     "@stll/anonymize-cli": ["@stll/anonymize-cli@workspace:packages/cli"],
+
+    "@stll/anonymize-corpus": ["@stll/anonymize-corpus@workspace:packages/corpus"],
 
     "@stll/anonymize-data": ["@stll/anonymize-data@workspace:packages/data"],
 

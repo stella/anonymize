@@ -27,6 +27,12 @@ export default library({
       },
     },
     {
+      files: ["packages/corpus/src/**"],
+      rules: {
+        "no-console": "off",
+      },
+    },
+    {
       files: ["packages/data/dictionaries/index.ts"],
       rules: {
         "promise/always-return": "off",

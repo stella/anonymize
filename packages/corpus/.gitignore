@@ -1,0 +1,8 @@
+# Document bodies are re-fetchable via the manifest and never committed.
+corpus/raw/
+
+# Run artifacts are derived from the corpus and the current pipeline.
+corpus/runs/
+
+# Case-law verdicts quote personal data from court decisions; local only.
+corpus/verdicts/case-law/
