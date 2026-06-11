@@ -15,6 +15,7 @@ It contains the runtime package, the published data package, and the browser/WAS
 | `@stll/anonymize`      | Native runtime for multi-layer PII detection and anonymization |
 | `@stll/anonymize-data` | Published deny-list dictionaries and trigger/config data       |
 | `@stll/anonymize-wasm` | Browser/WASM build of the runtime                              |
+| `@stll/anonymize-cli`  | Command-line anonymization (`anonymize` binary)                |
 
 ## Install
 
@@ -24,6 +25,13 @@ bun add @stll/anonymize
 bun add @stll/anonymize-data
 # Browser / Vite usage
 bun add @stll/anonymize-wasm
+```
+
+Or anonymize from the terminal without installing:
+
+```bash
+echo "Contact Jan Novák at jan.novak@example.com" | bunx @stll/anonymize-cli
+# Contact [PERSON_1] at [EMAIL_ADDRESS_1]
 ```
 
 ## What it does
