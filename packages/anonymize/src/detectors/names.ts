@@ -186,10 +186,11 @@ type DeclensionRule = {
 const DECLENSION_RULES: readonly DeclensionRule[] = [
   // Masculine, hard/neutral consonant final (Jan, Novák):
   // gen/acc -a, dat/loc/voc -u, dat/loc -ovi, instr -em
-  // (cs) / -om (sk).
+  // (cs) / -om (sk). ł counts as a hard consonant so
+  // bundled Polish names (Paweł) decline in cs/sk text.
   {
     ending: "",
-    gate: /[bdfghklmnpqrstvwxz]$/u,
+    gate: /[bdfghklmnpqrstvwxzł]$/u,
     forms: ["a", "u", "ovi", "em", "om"],
   },
   // Masculine vocative -e after non-velar hard consonants

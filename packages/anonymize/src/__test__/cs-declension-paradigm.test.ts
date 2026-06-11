@@ -88,6 +88,9 @@ describe("Czech masculine declension (Jan Novák)", () => {
 
   test("instrumental: s Janem Novákem (exact regression)", () =>
     expectPersonCovering("Smlouva s Janem Novákem.", "Janem Novákem"));
+
+  test("instrumental: ł-final first name (s Pawełem Novákem)", () =>
+    expectPersonCovering("Jednání s Pawełem Novákem.", "Pawełem Novákem"));
 });
 
 describe("Czech feminine declension (Jana Nováková)", () => {
