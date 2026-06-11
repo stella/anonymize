@@ -6,6 +6,7 @@ const packageRoot = join(import.meta.dir, "..");
 
 export const CORPUS_DIR = join(packageRoot, "corpus");
 export const MANIFEST_PATH = join(CORPUS_DIR, "manifest.json");
+export const SKIPLIST_PATH = join(CORPUS_DIR, "skiplist.json");
 export const RAW_DIR = join(CORPUS_DIR, "raw");
 export const RUNS_DIR = join(CORPUS_DIR, "runs");
 export const VERDICTS_DIR = join(CORPUS_DIR, "verdicts");

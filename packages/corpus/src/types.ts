@@ -25,6 +25,21 @@ export type Manifest = {
   entries: ManifestEntry[];
 };
 
+export type SkipEntry = {
+  /** Document id (EDGAR `accession:filename`) that was skipped. */
+  id: string;
+  /** Why the document was skipped, e.g. a size bound it violated. */
+  reason: string;
+};
+
+/**
+ * Documents the fetcher intentionally did not store, so repeated
+ * searches do not re-download them on every run.
+ */
+export type SkipList = {
+  entries: SkipEntry[];
+};
+
 export type RunEntity = {
   start: number;
   end: number;

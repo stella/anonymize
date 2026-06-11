@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { VerdictsFile, VerdictSpan } from "../types";
-import { judgedKeys, validateVerdicts } from "../verdicts";
+import { judgedVerdictsByKey, validateVerdicts } from "../verdicts";
 
 const TEXT = "Jane Doe works at Acme Corp in Prague.";
 
@@ -65,14 +65,26 @@ describe("validateVerdicts", () => {
   });
 });
 
-describe("judgedKeys", () => {
-  test("keys spans by offsets and label", () => {
-    const keys = judgedKeys(file([span({})]));
-    expect(keys.has("0:8:person")).toBe(true);
-    expect(keys.has("0:8:organization")).toBe(false);
+describe("judgedVerdictsByKey", () => {
+  test("keys verdicts by offsets and label", () => {
+    const byKey = judgedVerdictsByKey(
+      file([
+        span({}),
+        span({
+          start: 18,
+          end: 27,
+          value: "Acme Corp",
+          label: "organization",
+          verdict: "fn",
+        }),
+      ]),
+    );
+    expect(byKey.get("0:8:person")).toBe("tp");
+    expect(byKey.get("18:27:organization")).toBe("fn");
+    expect(byKey.has("0:8:organization")).toBe(false);
   });
 
   test("handles missing verdict files", () => {
-    expect(judgedKeys(null).size).toBe(0);
+    expect(judgedVerdictsByKey(null).size).toBe(0);
   });
 });

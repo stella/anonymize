@@ -4,9 +4,9 @@ import { parseArgs } from "node:util";
 
 import { loadManifest } from "./manifest";
 import { RUN_SUMMARY_FILE, RUNS_DIR, rawPath } from "./paths";
-import type { RunDocument, RunEntity } from "./types";
+import type { RunDocument, RunEntity, SpanVerdict } from "./types";
 import {
-  judgedKeys,
+  judgedVerdictsByKey,
   loadVerdictsForDoc,
   spanKey,
   validateVerdicts,
@@ -15,18 +15,22 @@ import {
 export type DocDiff = {
   docId: string;
   sha256: string;
-  /** Spans present now but not in the baseline: FP candidates. */
+  /** New, unjudged spans: FP candidates to triage. */
   added: RunEntity[];
-  /** Spans present in the baseline but gone now: FN candidates. */
+  /** Disappeared, unjudged spans: FN candidates to triage. */
   removed: RunEntity[];
+  /** Disappeared spans whose key was judged `tp`: real regressions. */
+  regressions: RunEntity[];
+  /** Newly detected spans whose key was judged `fn`: known gaps now closed. */
+  fixed: RunEntity[];
 };
 
 export type DiffDocumentsOptions = {
   current: RunDocument;
   /** Null compares against nothing: every unjudged span is a candidate. */
   baseline: RunDocument | null;
-  /** Span keys already covered by a verdict; never re-surfaced. */
-  judged: ReadonlySet<string>;
+  /** Verdict by span key; drives regression/fixed buckets and filtering. */
+  judged: ReadonlyMap<string, SpanVerdict>;
 };
 
 export const diffDocuments = ({
@@ -41,16 +45,52 @@ export const diffDocuments = ({
     current.entities.map((entity) => spanKey(entity)),
   );
 
-  const added = current.entities.filter((entity) => {
+  const added: RunEntity[] = [];
+  const fixed: RunEntity[] = [];
+  for (const entity of current.entities) {
     const key = spanKey(entity);
-    return !baselineKeys.has(key) && !judged.has(key);
-  });
-  const removed = (baseline?.entities ?? []).filter((entity) => {
-    const key = spanKey(entity);
-    return !currentKeys.has(key) && !judged.has(key);
-  });
+    if (baselineKeys.has(key)) {
+      continue;
+    }
+    const verdict = judged.get(key);
+    if (verdict === "fn") {
+      // A span previously judged a miss is now detected: a fix.
+      fixed.push(entity);
+      continue;
+    }
+    // tp/fp are already accounted for; surface only unjudged new spans.
+    if (verdict === undefined) {
+      added.push(entity);
+    }
+  }
 
-  return { docId: current.docId, sha256: current.sha256, added, removed };
+  const removed: RunEntity[] = [];
+  const regressions: RunEntity[] = [];
+  for (const entity of baseline?.entities ?? []) {
+    const key = spanKey(entity);
+    if (currentKeys.has(key)) {
+      continue;
+    }
+    const verdict = judged.get(key);
+    if (verdict === "tp") {
+      // A confirmed detection vanished from the run: a regression.
+      regressions.push(entity);
+      continue;
+    }
+    // fp disappearing is expected; only unjudged misses are FN candidates.
+    if (verdict === undefined) {
+      removed.push(entity);
+    }
+  }
+
+  return {
+    docId: current.docId,
+    sha256: current.sha256,
+    added,
+    removed,
+    regressions,
+    fixed,
+  };
 };
 
 const loadRunDocuments = async (
@@ -81,10 +121,13 @@ const isMainModule = import.meta.path === Bun.main;
 if (isMainModule) {
   const usage = `Usage: bun src/diff.ts --run <name> [--baseline <name>]
 
-Reports unjudged span candidates in a run: FP candidates (spans the
-baseline did not have, or all spans when no baseline is given) and FN
-candidates (baseline spans that disappeared). Spans already covered by
-a verdict file are excluded. JSON on stdout, summary on stderr.`;
+Reports span changes in a run against an optional baseline:
+  added        new, unjudged spans (FP candidates to triage)
+  removed      disappeared, unjudged spans (FN candidates to triage)
+  regressions  disappeared spans previously judged "tp" (real losses)
+  fixed        newly detected spans previously judged "fn" (gaps closed)
+Spans judged "tp"/"fp" are not re-surfaced as candidates; a vanished
+"fp" is expected and dropped. JSON on stdout, summary on stderr.`;
 
   const { values } = parseArgs({
     options: {
@@ -129,27 +172,36 @@ a verdict file are excluded. JSON on stdout, summary on stderr.`;
     const diff = diffDocuments({
       current: doc,
       baseline: baseline?.get(doc.sha256) ?? null,
-      judged: judgedKeys(verdicts),
+      judged: judgedVerdictsByKey(verdicts),
     });
-    if (diff.added.length > 0 || diff.removed.length > 0) {
+    if (
+      diff.added.length > 0 ||
+      diff.removed.length > 0 ||
+      diff.regressions.length > 0 ||
+      diff.fixed.length > 0
+    ) {
       diffs.push(diff);
     }
   }
 
-  const addedTotal = diffs.reduce((sum, diff) => sum + diff.added.length, 0);
-  const removedTotal = diffs.reduce(
-    (sum, diff) => sum + diff.removed.length,
-    0,
-  );
+  const sumOf = (pick: (diff: DocDiff) => RunEntity[]): number =>
+    diffs.reduce((sum, diff) => sum + pick(diff).length, 0);
+
+  const addedTotal = sumOf((diff) => diff.added);
+  const removedTotal = sumOf((diff) => diff.removed);
+  const regressionTotal = sumOf((diff) => diff.regressions);
+  const fixedTotal = sumOf((diff) => diff.fixed);
 
   console.log(
     JSON.stringify(
       {
         run: values.run,
         baseline: values.baseline ?? null,
-        documentsWithCandidates: diffs.length,
+        documentsWithChanges: diffs.length,
         fpCandidates: addedTotal,
         fnCandidates: removedTotal,
+        regressions: regressionTotal,
+        fixed: fixedTotal,
         docs: diffs,
       },
       null,
@@ -157,6 +209,8 @@ a verdict file are excluded. JSON on stdout, summary on stderr.`;
     ),
   );
   console.error(
-    `${diffs.length} documents need triage: ${addedTotal} FP candidates, ${removedTotal} FN candidates (${judgedSpanCount} spans already judged)`,
+    `${diffs.length} documents changed: ${addedTotal} FP candidates, ` +
+      `${removedTotal} FN candidates, ${regressionTotal} regressions, ` +
+      `${fixedTotal} fixed (${judgedSpanCount} spans already judged)`,
   );
 }

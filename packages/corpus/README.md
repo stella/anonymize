@@ -10,6 +10,7 @@ looks at what changed.
 ```
 corpus/
   manifest.json        committed   every document ever fetched (id, source, query, sha256)
+  skiplist.json        committed   ids the fetcher saw but did not store (e.g. size bounds)
   raw/                 gitignored  plain-text document bodies, re-fetchable via the manifest
   runs/                gitignored  per-document pipeline output, keyed by content hash
   verdicts/
@@ -25,11 +26,24 @@ go in the manifest).
 ## Workflow
 
 1. **Fetch** new documents. The manifest is the memory: known ids are skipped,
-   so repeated searches never re-download or re-introduce documents.
+   so repeated searches never re-download or re-introduce documents. Documents
+   that fail the size bounds are recorded in `skiplist.json` so the same
+   oversized or stub filings are not re-downloaded on every search.
 
    ```sh
    EDGAR_USER_AGENT="name email@example.com" \
      bun src/fetch.ts --query "employment agreement" --query "lease agreement" --limit 25
+   ```
+
+   On a fresh clone `corpus/raw/` is empty (it is gitignored) while
+   `manifest.json` is committed. Use `--refill` to restore the raw bodies for
+   every committed manifest entry: it re-downloads each missing document, re-runs
+   extraction, and verifies the result still matches the recorded `sha256`. A
+   mismatch means the extraction logic changed since the document was recorded
+   and fails loudly. `--refill` ignores `--query` and adds no new documents.
+
+   ```sh
+   EDGAR_USER_AGENT="name email@example.com" bun src/fetch.ts --refill
    ```
 
 2. **Run** the rules pipeline (NER off, same configuration as
@@ -41,9 +55,17 @@ go in the manifest).
    ```
 
 3. **Diff** the run to get the triage queue. Without `--baseline` every span is
-   a candidate; with one, only spans that appeared or disappeared. Spans already
-   covered by a verdict file are excluded either way, so triage effort is never
-   repeated.
+   a candidate; with one, only spans that appeared or disappeared. The diff is
+   verdict-aware and reports four buckets per document:
+   - `added`: new, unjudged spans (FP candidates to triage).
+   - `removed`: disappeared, unjudged spans (FN candidates to triage).
+   - `regressions`: spans previously judged `tp` that vanished from the run; a
+     real loss that must surface even though the span is already judged.
+   - `fixed`: spans previously judged `fn` that the pipeline now detects.
+
+   Spans judged `tp`/`fp` are not re-surfaced as candidates, and a vanished `fp`
+   is expected and dropped, so triage effort is never repeated while genuine
+   regressions still appear.
 
    ```sh
    bun src/diff.ts --run abc1234 --baseline def5678 > triage.json

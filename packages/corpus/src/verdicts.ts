@@ -2,6 +2,7 @@ import { verdictsPath } from "./paths";
 import {
   CORPUS_SOURCES,
   SPAN_VERDICTS,
+  type SpanVerdict,
   type VerdictsFile,
   type VerdictSpan,
 } from "./types";
@@ -31,10 +32,21 @@ export const loadVerdictsForDoc = async (
   return null;
 };
 
-export const judgedKeys = (
+/**
+ * Verdict keyed by span position+label. A span that was judged once
+ * carries its verdict (tp/fp/fn) so the differ can react to it: a
+ * disappearing `tp` is a regression, a `fp` is expected to vanish, etc.
+ * When the same key has conflicting verdicts the last one wins.
+ */
+export const judgedVerdictsByKey = (
   verdicts: VerdictsFile | null,
-): ReadonlySet<string> =>
-  new Set((verdicts?.spans ?? []).map((span) => spanKey(span)));
+): ReadonlyMap<string, SpanVerdict> => {
+  const byKey = new Map<string, SpanVerdict>();
+  for (const span of verdicts?.spans ?? []) {
+    byKey.set(spanKey(span), span.verdict);
+  }
+  return byKey;
+};
 
 export type VerdictIssue = {
   spanIndex: number;

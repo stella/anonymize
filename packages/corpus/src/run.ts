@@ -1,4 +1,4 @@
-import { mkdirSync } from "node:fs";
+import { mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 
@@ -37,8 +37,13 @@ if (values.help) {
 }
 
 const git = (args: string[]): string => {
-  const proc = Bun.spawnSync(["git", ...args], { cwd: import.meta.dir });
-  return proc.exitCode === 0 ? proc.stdout.toString().trim() : "";
+  // Bun.spawnSync throws if the git binary is absent; fall back to "".
+  try {
+    const proc = Bun.spawnSync(["git", ...args], { cwd: import.meta.dir });
+    return proc.exitCode === 0 ? proc.stdout.toString().trim() : "";
+  } catch {
+    return "";
+  }
 };
 
 const defaultRunName = (): string => {
@@ -88,6 +93,11 @@ const config: PipelineConfig = {
 const context = createPipelineContext();
 await preparePipelineSearch({ config, context });
 
+// Forcing reuses an existing run name; clear stale <sha256>.json
+// artifacts so removed documents do not linger beside fresh output.
+if (values.force) {
+  rmSync(runDir, { recursive: true, force: true });
+}
 mkdirSync(runDir, { recursive: true });
 
 let totalEntities = 0;

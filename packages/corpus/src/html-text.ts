@@ -12,13 +12,29 @@ const NAMED_ENTITIES: Record<string, string> = {
   quot: '"',
 };
 
+/** Largest valid Unicode code point (U+10FFFF). */
+const MAX_CODE_POINT = 0x10_ff_ff;
+
+const decodeNumeric = (codePoint: number, fallback: string): string => {
+  // String.fromCodePoint throws on NaN (malformed like `&#abc;`) and
+  // on out-of-range values (e.g. `&#x110000;`); leave the source intact.
+  if (
+    !Number.isInteger(codePoint) ||
+    codePoint < 0 ||
+    codePoint > MAX_CODE_POINT
+  ) {
+    return fallback;
+  }
+  return String.fromCodePoint(codePoint);
+};
+
 const decodeEntities = (text: string): string =>
   text.replaceAll(/&(#x?[\da-f]+|[a-z]+);/gi, (match, body: string): string => {
     if (body.startsWith("#x") || body.startsWith("#X")) {
-      return String.fromCodePoint(Number.parseInt(body.slice(2), 16));
+      return decodeNumeric(Number.parseInt(body.slice(2), 16), match);
     }
     if (body.startsWith("#")) {
-      return String.fromCodePoint(Number.parseInt(body.slice(1), 10));
+      return decodeNumeric(Number.parseInt(body.slice(1), 10), match);
     }
     return NAMED_ENTITIES[body.toLowerCase()] ?? match;
   });

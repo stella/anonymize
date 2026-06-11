@@ -1,8 +1,12 @@
 const EFTS_SEARCH_URL = "https://efts.sec.gov/LATEST/search-index";
 const EDGAR_ARCHIVES_URL = "https://www.sec.gov/Archives/edgar/data";
 
-/** Exhibit type prefix for material contracts. */
-const MATERIAL_CONTRACT_PREFIX = "EX-10";
+/**
+ * Material-contract exhibit types: exactly `EX-10`, or `EX-10`
+ * followed by a non-digit (e.g. `EX-10.1`). Excludes `EX-101`
+ * (XBRL interactive data), which shares the `EX-10` prefix.
+ */
+const MATERIAL_CONTRACT_RE = /^EX-10(?:\D|$)/;
 
 /** SEC asks for polite spacing between requests. */
 const REQUEST_SPACING_MS = 220;
@@ -36,7 +40,7 @@ export type EdgarDocumentRef = {
 };
 
 export const isMaterialContract = (fileType: string | undefined): boolean =>
-  fileType?.startsWith(MATERIAL_CONTRACT_PREFIX) ?? false;
+  fileType !== undefined && MATERIAL_CONTRACT_RE.test(fileType);
 
 export const buildDocumentUrl = ({
   cik,
@@ -80,6 +84,8 @@ export type EdgarClient = {
     pages: number;
   }) => Promise<EdgarDocumentRef[]>;
   fetchDocument: (ref: EdgarDocumentRef) => Promise<string>;
+  /** Fetch a raw document body by URL (used by manifest refill). */
+  fetchUrl: (url: string) => Promise<string>;
 };
 
 /**
@@ -104,10 +110,23 @@ export const createEdgarClient = ({
         await sleep(wait);
       }
       lastRequestAt = Date.now();
-      const response = await fetch(url, {
-        headers: { "User-Agent": userAgent },
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-      });
+
+      let response: Response;
+      try {
+        response = await fetch(url, {
+          headers: { "User-Agent": userAgent },
+          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        });
+      } catch (cause) {
+        // Network errors and timeouts (AbortSignal.timeout) throw;
+        // retry them with the same backoff as 429/503 responses.
+        if (attempt === MAX_ATTEMPTS) {
+          throw new Error(`GET ${url} failed: request error`, { cause });
+        }
+        await sleep(RETRY_BASE_DELAY_MS * attempt);
+        continue;
+      }
+
       if (response.ok) {
         return response;
       }
@@ -153,6 +172,10 @@ export const createEdgarClient = ({
     },
     fetchDocument: async (ref) => {
       const response = await politeFetch(ref.url);
+      return response.text();
+    },
+    fetchUrl: async (url) => {
+      const response = await politeFetch(url);
       return response.text();
     },
   };

@@ -27,6 +27,13 @@ describe("htmlToText", () => {
     expect(htmlToText("a &bogus; b")).toBe("a &bogus; b");
   });
 
+  test("leaves malformed and out-of-range numeric entities untouched", () => {
+    // &#abc; parses to NaN; &#x110000; is past the max code point.
+    expect(htmlToText("a &#abc; b")).toBe("a &#abc; b");
+    expect(htmlToText("a &#x110000; b")).toBe("a &#x110000; b");
+    expect(htmlToText("a &#xabc; b")).toBe("a ઼ b");
+  });
+
   test("collapses whitespace runs but preserves paragraph breaks", () => {
     const html = "<p>one</p>\n\n\n<p>two   three</p>";
     expect(htmlToText(html)).toBe("one\n\ntwo three");

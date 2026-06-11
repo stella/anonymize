@@ -6,11 +6,18 @@ describe("isMaterialContract", () => {
   test("accepts EX-10 variants", () => {
     expect(isMaterialContract("EX-10")).toBe(true);
     expect(isMaterialContract("EX-10.1")).toBe(true);
+    expect(isMaterialContract("EX-10.12")).toBe(true);
   });
 
   test("rejects other exhibits and missing types", () => {
     expect(isMaterialContract("EX-99.1")).toBe(false);
     expect(isMaterialContract(undefined)).toBe(false);
+  });
+
+  test("rejects EX-101 XBRL interactive data despite the EX-10 prefix", () => {
+    expect(isMaterialContract("EX-101")).toBe(false);
+    expect(isMaterialContract("EX-101.INS")).toBe(false);
+    expect(isMaterialContract("EX-104")).toBe(false);
   });
 });
 
