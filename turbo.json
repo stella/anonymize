@@ -6,6 +6,7 @@
       "outputs": ["dist/**", "wasm/dist/**"]
     },
     "typecheck": {
+      "dependsOn": ["^build"],
       "outputs": []
     },
     "lint": {},
