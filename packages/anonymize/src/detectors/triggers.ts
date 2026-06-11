@@ -665,6 +665,14 @@ const LINE_TRIGGER_LOOKAHEAD = 2_048;
 const MATCH_PATTERN_LOOKAHEAD = 512;
 const PHONE_VALUE_START_RE = /^[+(\d]/;
 const PHONE_SHAPE_PREFIX_RE = /^[+(\d][\d\s()./-]*/;
+/**
+ * Optional phone-extension suffix following the numeric
+ * run: "ext", "ext.", "extension", or "x" (case-
+ * insensitive) plus 1-6 digits, with optional leading
+ * whitespace. Matches "+1 555 123 4567 ext. 89" and
+ * "555-1234 x42" so the shape bound keeps the extension.
+ */
+const PHONE_EXTENSION_SUFFIX_RE = /^\s*(?:ext\.?|extension|x)\s*\d{1,6}/i;
 const ISO_DATE_PREFIX_RE = /^\d{4}-\d{2}-\d{2}\b/;
 const INLINE_FIELD_LABEL_RE = /\b[\p{L}][\p{L}\p{M} /-]{1,32}:/u;
 const INLINE_FIELD_LABEL_STOP_RE =
@@ -893,13 +901,45 @@ const extractValue = (
         // ("... phone +420 777 123 456. Signed on ...")
         // cannot swallow the rest of a single-line
         // paragraph through the line delimiter.
-        const shape = PHONE_SHAPE_PREFIX_RE.exec(valueText.slice(0, end));
+        //
+        // A dot followed by whitespace is a sentence
+        // boundary, not a phone separator ("555.123.4567"
+        // has no whitespace after its dots), so bound the
+        // shape scan before the first ". " — otherwise the
+        // shape class (dot, space, digits) would run into a
+        // following numbered clause ("…123 456. 1. Defs…").
+        const region = valueText.slice(0, end);
+        const sentenceBreak = /\.\s/.exec(region);
+        const shapeRegion =
+          sentenceBreak !== null
+            ? region.slice(0, sentenceBreak.index)
+            : region;
+        const shape = PHONE_SHAPE_PREFIX_RE.exec(shapeRegion);
         if (shape) {
-          const shapeEnd = shape[0].replace(/\D+$/, "").length;
+          // Trim trailing separators/whitespace so the run
+          // ends on a digit, then re-admit an optional
+          // extension suffix ("ext. 89", "x42") that sits
+          // just past the numeric run.
+          let shapeEnd = shape[0].replace(/\D+$/, "").length;
+          const extension = PHONE_EXTENSION_SUFFIX_RE.exec(
+            region.slice(shapeEnd),
+          );
+          if (extension !== null) {
+            shapeEnd += extension[0].length;
+          }
           if (shapeEnd > 0 && shapeEnd < end) {
             end = shapeEnd;
             foundLineStop = true;
           }
+        }
+        // The shape bound sets foundLineStop, which skips
+        // the generic length-cap fallback below. Enforce the
+        // 100-char cap here so a pathological all-digits run
+        // ("1 1 1 …" for hundreds of chars) cannot produce
+        // an over-long phone entity. Mirror the fallback's
+        // word-boundary retreat via capAtWordBoundary.
+        if (foundLineStop && end > MAX_TRIGGER_VALUE_LEN) {
+          end = capAtWordBoundary(valueText, MAX_TRIGGER_VALUE_LEN);
         }
       }
       // Cap only when no real line delimiter was found. HTML-

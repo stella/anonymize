@@ -196,6 +196,47 @@ describe("trigger value length cap", () => {
     }
   });
 
+  test("phone shape stops at a sentence boundary before a numbered clause", async () => {
+    // A dot followed by whitespace ends the phone-shaped
+    // run: the shape class (dot, space, digits) must not
+    // run through ". 1. Definitions…" and swallow the
+    // following numbered clause.
+    const text =
+      "Contact: jane.doe@example.com, phone +420 777 123 456. " +
+      "1. Definitions apply as stated.\n";
+
+    const entities = await detect(text);
+    const phones = entities.filter((e) => e.label === "phone number");
+    expect(phones.some((e) => e.text === "+420 777 123 456")).toBe(true);
+    for (const phone of phones) {
+      expect(phone.text).not.toContain("Definitions");
+      expect(phone.text.endsWith(". 1")).toBe(false);
+    }
+  });
+
+  test("phone shape keeps a trailing extension suffix", async () => {
+    const text = "PHONE: +1 555 123 4567 ext. 89\nNext line.";
+
+    const entities = await detect(text, { enableRegex: false });
+    const phones = entities.filter((e) => e.label === "phone number");
+    expect(phones.some((e) => e.text === "+1 555 123 4567 ext. 89")).toBe(true);
+  });
+
+  test("phone shape bound stays within the length cap", async () => {
+    // Pathological single-line run: hundreds of chars of
+    // digits and spaces with no line delimiter. The shape
+    // bound must not bypass the 100-char cap.
+    const run = "1 ".repeat(120).trim();
+    const text = `PHONE: ${run} Signed by John`;
+
+    const entities = await detect(text, { enableRegex: false });
+    const phones = entities.filter((e) => e.label === "phone number");
+    expect(phones.length).toBeGreaterThan(0);
+    for (const phone of phones) {
+      expect(phone.text.length).toBeLessThanOrEqual(100);
+    }
+  });
+
   test("legitimate end-of-line value below the cap is preserved verbatim", async () => {
     // A short, well-formed value on its own line is
     // captured in full — the cap should never truncate
