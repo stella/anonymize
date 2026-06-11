@@ -178,6 +178,24 @@ describe("trigger value length cap", () => {
     expect(phones.every((e) => !e.text.includes("FAX"))).toBe(true);
   });
 
+  test("phone trigger value stops at the end of the phone-shaped run", async () => {
+    // Mid-sentence trigger on a single-line paragraph
+    // (HTML-flattened contract): the value must end with
+    // the number, not run through the line delimiter and
+    // swallow the rest of the sentence.
+    const text =
+      "Contact: jane.doe@example.com, phone +420 777 123 456. " +
+      "Signed on 1 January 2024 by Jane Doe and witnessed by John Smith.\n";
+
+    const entities = await detect(text);
+    const phones = entities.filter((e) => e.label === "phone number");
+    expect(phones.some((e) => e.text === "+420 777 123 456")).toBe(true);
+    for (const phone of phones) {
+      expect(phone.text).not.toContain("Signed");
+      expect(phone.text).not.toContain("Jane");
+    }
+  });
+
   test("legitimate end-of-line value below the cap is preserved verbatim", async () => {
     // A short, well-formed value on its own line is
     // captured in full — the cap should never truncate

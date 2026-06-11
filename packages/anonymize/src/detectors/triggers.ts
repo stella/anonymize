@@ -664,6 +664,7 @@ const TRIGGER_LOOKAHEAD_MARGIN = 128;
 const LINE_TRIGGER_LOOKAHEAD = 2_048;
 const MATCH_PATTERN_LOOKAHEAD = 512;
 const PHONE_VALUE_START_RE = /^[+(\d]/;
+const PHONE_SHAPE_PREFIX_RE = /^[+(\d][\d\s()./-]*/;
 const ISO_DATE_PREFIX_RE = /^\d{4}-\d{2}-\d{2}\b/;
 const INLINE_FIELD_LABEL_RE = /\b[\p{L}][\p{L}\p{M} /-]{1,32}:/u;
 const INLINE_FIELD_LABEL_STOP_RE =
@@ -885,6 +886,20 @@ const extractValue = (
         if (inlineLabel) {
           end = inlineLabel.index;
           foundLineStop = true;
+        }
+        // A phone value is digits plus separators and ends
+        // on a digit. Cut the capture at the end of the
+        // phone-shaped run so a mid-sentence trigger
+        // ("... phone +420 777 123 456. Signed on ...")
+        // cannot swallow the rest of a single-line
+        // paragraph through the line delimiter.
+        const shape = PHONE_SHAPE_PREFIX_RE.exec(valueText.slice(0, end));
+        if (shape) {
+          const shapeEnd = shape[0].replace(/\D+$/, "").length;
+          if (shapeEnd > 0 && shapeEnd < end) {
+            end = shapeEnd;
+            foundLineStop = true;
+          }
         }
       }
       // Cap only when no real line delimiter was found. HTML-
