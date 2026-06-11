@@ -1,11 +1,11 @@
 {
-  "entityCount": 29,
+  "entityCount": 30,
   "counts": {
     "organization": 8,
     "address": 5,
     "registration number": 6,
     "tax identification number": 2,
-    "person": 1,
+    "person": 2,
     "date": 4,
     "monetary amount": 2,
     "bank account number": 1
@@ -117,6 +117,13 @@
       "source": "regex"
     },
     {
+      "start": 668,
+      "end": 683,
+      "label": "person",
+      "text": "Janem Juchelkou",
+      "source": "deny-list"
+    },
+    {
       "start": 725,
       "end": 740,
       "label": "date",
@@ -215,5 +222,5 @@
       "source": "regex"
     }
   ],
-  "redactedText": "Smlouva o převodu obchodního podílu\n\nuzavřená podle § 207 zákona č. 90/2012 Sb., o obchodních korporacích\n\nProdávající: [ORGANIZATION_1]\nsídlo: [ADDRESS_1]\nIČO: [REGISTRATION_NUMBER_1]\nDIČ: [TAX_IDENTIFICATION_NUMBER_1]\nzapsaná v obchodním rejstříku vedeném [ORGANIZATION_2], [REGISTRATION_NUMBER_2]\nzastoupená [PERSON_1], předsedou představenstva,\nnarozeným dne [DATE_1],\nbytem Václavské náměstí 9, [ADDRESS_2]\n(\"Prodávající\")\n\na\n\nKupující: [ORGANIZATION_3]\nsídlo: [ADDRESS_3]\nIČO: [REGISTRATION_NUMBER_3]\nDIČ: [TAX_IDENTIFICATION_NUMBER_2]\nzapsaná v obchodním rejstříku vedeném [ORGANIZATION_4], [REGISTRATION_NUMBER_4]\nzastoupená Janem Juchelkou, předsedou představenstva,\nnarozeným dne [DATE_2],\nbytem [ADDRESS_4]\n(\"Kupující\")\n\n1. Předmět smlouvy\nProdávající převádí Kupujícímu obchodní podíl o velikosti [MONETARY_AMOUNT_1] ve společnosti\n[ORGANIZATION_5], IČO: [REGISTRATION_NUMBER_5], se sídlem [ADDRESS_5],\nzapsané v obchodním rejstříku vedeném [ORGANIZATION_4], [REGISTRATION_NUMBER_6],\nza celkovou kupní cenu [MONETARY_AMOUNT_2].\n\n2. Bankovní spojení\nKupní cena bude uhrazena na bankovní účet Prodávajícího č.ú. [BANK_ACCOUNT_NUMBER_1]\nvedený u [ORGANIZATION_6], a to do 30 dnů od podpisu této smlouvy.\n\n3. Závěrečná ustanovení\nSmlouva nabývá účinnosti dne [DATE_3].\nSmluvní strany se dohodly, že případné spory budou rozhodovány u [ORGANIZATION_7].\n\nV Praze dne [DATE_3]\n"
+  "redactedText": "Smlouva o převodu obchodního podílu\n\nuzavřená podle § 207 zákona č. 90/2012 Sb., o obchodních korporacích\n\nProdávající: [ORGANIZATION_1]\nsídlo: [ADDRESS_1]\nIČO: [REGISTRATION_NUMBER_1]\nDIČ: [TAX_IDENTIFICATION_NUMBER_1]\nzapsaná v obchodním rejstříku vedeném [ORGANIZATION_2], [REGISTRATION_NUMBER_2]\nzastoupená [PERSON_1], předsedou představenstva,\nnarozeným dne [DATE_1],\nbytem Václavské náměstí 9, [ADDRESS_2]\n(\"Prodávající\")\n\na\n\nKupující: [ORGANIZATION_3]\nsídlo: [ADDRESS_3]\nIČO: [REGISTRATION_NUMBER_3]\nDIČ: [TAX_IDENTIFICATION_NUMBER_2]\nzapsaná v obchodním rejstříku vedeném [ORGANIZATION_4], [REGISTRATION_NUMBER_4]\nzastoupená [PERSON_2], předsedou představenstva,\nnarozeným dne [DATE_2],\nbytem [ADDRESS_4]\n(\"Kupující\")\n\n1. Předmět smlouvy\nProdávající převádí Kupujícímu obchodní podíl o velikosti [MONETARY_AMOUNT_1] ve společnosti\n[ORGANIZATION_5], IČO: [REGISTRATION_NUMBER_5], se sídlem [ADDRESS_5],\nzapsané v obchodním rejstříku vedeném [ORGANIZATION_4], [REGISTRATION_NUMBER_6],\nza celkovou kupní cenu [MONETARY_AMOUNT_2].\n\n2. Bankovní spojení\nKupní cena bude uhrazena na bankovní účet Prodávajícího č.ú. [BANK_ACCOUNT_NUMBER_1]\nvedený u [ORGANIZATION_6], a to do 30 dnů od podpisu této smlouvy.\n\n3. Závěrečná ustanovení\nSmlouva nabývá účinnosti dne [DATE_3].\nSmluvní strany se dohodly, že případné spory budou rozhodovány u [ORGANIZATION_7].\n\nV Praze dne [DATE_3]\n"
 }

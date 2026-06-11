@@ -162,45 +162,163 @@ export const initNameCorpus = (
   return promise;
 };
 
-// ── Czech/Slovak suffix stripping ────────────────────
-// Case suffixes commonly appended to names in declined
-// Czech/Slovak text. Ordered longest-first.
+// ── Czech/Slovak declension paradigm ─────────────────
+// Full case paradigm (genitive, dative, accusative,
+// vocative, locative, instrumental) for Czech and
+// Slovak first names and surnames. One rule table
+// drives both directions:
+//  - expandNameDeclensions() generates declined
+//    variants injected as deny-list AC patterns;
+//  - stripInflection() maps a declined token back to
+//    nominative candidates for corpus lookup.
+// Rules are gated purely by the orthographic shape of
+// the nominative ending; never by individual names.
 
-const INFLECTION_SUFFIXES = [
-  "ovi", // dative
-  "em", // instrumental
-  "om", // instrumental (some stems)
-  "ou", // instrumental feminine
-  "é", // dative/locative feminine
-  "a", // genitive
-  "u", // accusative/locative
-] as const;
+type DeclensionRule = {
+  /** Nominative ending replaced by each form ("" appends). */
+  ending: string;
+  /** Shape gate tested against the lowercased nominative. */
+  gate: RegExp;
+  /** Case endings substituted for `ending`. */
+  forms: readonly string[];
+};
+
+const DECLENSION_RULES: readonly DeclensionRule[] = [
+  // Masculine, hard/neutral consonant final (Jan, Novák):
+  // gen/acc -a, dat/loc/voc -u, dat/loc -ovi, instr -em
+  // (cs) / -om (sk).
+  {
+    ending: "",
+    gate: /[bdfghklmnpqrstvwxz]$/u,
+    forms: ["a", "u", "ovi", "em", "om"],
+  },
+  // Masculine vocative -e after non-velar hard consonants
+  // (Jane, Adame). Velars take -u (Nováku) and r
+  // palatalises (Petře), so they are not licensed here.
+  { ending: "", gate: /[bdflmnpstvwz]$/u, forms: ["e"] },
+  // Masculine, soft consonant final (Tomáš, Ondřej, Kráľ):
+  // cs gen/acc -e, dat/loc/voc -i, sk gen/acc -a,
+  // dat/loc -ovi, instr -em (cs) / -om (sk).
+  {
+    ending: "",
+    gate: /[cčďťňřšžjľ]$/u,
+    forms: ["e", "i", "a", "ovi", "em", "om"],
+  },
+  // Fleeting -e-: Czech drops the e before case endings
+  // (Marek → Marka, Pavel → Pavla/Pavle, Němec → Němce).
+  // The consonant rules above keep the Slovak forms that
+  // retain the e (Mareka, Marekovi).
+  {
+    ending: "ek",
+    gate: /[^aeiouyáéěíóôúůý]ek$/u,
+    forms: ["ka", "ku", "kovi", "kem", "kom"],
+  },
+  {
+    ending: "el",
+    gate: /[^aeiouyáéěíóôúůý]el$/u,
+    forms: ["la", "lu", "le", "lovi", "lem", "lom"],
+  },
+  {
+    ending: "ec",
+    gate: /[^aeiouyáéěíóôúůý]ec$/u,
+    forms: ["ce", "ci", "covi", "cem", "com"],
+  },
+  // -a final, hard stem (Jana, Svoboda): gen -y, acc -u,
+  // voc -o, instr -ou, masculine dat/loc -ovi.
+  {
+    ending: "a",
+    gate: /[^cčďťňřšžji]a$/u,
+    forms: ["y", "u", "o", "ou", "ovi"],
+  },
+  // -a final, soft stem (Saša): gen -i instead of -y.
+  {
+    ending: "a",
+    gate: /[cčďťňřšžj]a$/u,
+    forms: ["i", "u", "o", "ou", "ovi"],
+  },
+  // -ia final (Mária, Lívia): sk gen -ie, dat/loc -ii,
+  // acc -iu, instr -iou.
+  { ending: "a", gate: /ia$/u, forms: ["e", "i", "u", "ou"] },
+  // Feminine dative/locative with regular stem
+  // alternation (Jitka → Jitce, Barbora → Barboře cs /
+  // Barbore sk, Olga → Olze, Jana → Janě cs / Jane sk,
+  // Tereza → Tereze).
+  { ending: "ka", gate: /ka$/u, forms: ["ce"] },
+  { ending: "ra", gate: /ra$/u, forms: ["ře", "re"] },
+  { ending: "ha", gate: /ha$/u, forms: ["ze"] },
+  { ending: "ga", gate: /ga$/u, forms: ["ze"] },
+  { ending: "cha", gate: /cha$/u, forms: ["še"] },
+  { ending: "a", gate: /[bdfmnptv]a$/u, forms: ["ě", "e"] },
+  { ending: "a", gate: /[szl]a$/u, forms: ["e"] },
+  // -á final, adjectival feminine (Nováková, Veselá):
+  // cs gen/dat/loc -é, acc/instr -ou; sk gen/dat/loc
+  // -ej, acc -ú.
+  { ending: "á", gate: /á$/u, forms: ["é", "ou", "ej", "ú"] },
+  // -ý final, adjectival masculine (Černý, Veselý):
+  // gen/acc -ého, dat -ému, loc -ém, instr -ým.
+  { ending: "ý", gate: /ý$/u, forms: ["ého", "ému", "ém", "ým"] },
+  // -í/-i/-y final (Jiří, Krejčí, Henry): pronominal
+  // declension +ho (gen/acc), +mu (dat), +m (loc/instr).
+  { ending: "", gate: /[íiy]$/u, forms: ["ho", "mu", "m"] },
+  // -e/-ie final feminine (Alice, Marie, Lucie):
+  // dat/acc/loc -i, instr -í.
+  { ending: "e", gate: /[^aeouyáéěíóôúůý]e$/u, forms: ["i", "í"] },
+  // -o final masculine (Ivo, Janko, Hugo): gen/acc -a,
+  // dat/loc -ovi, instr -em (cs) / -om (sk).
+  { ending: "o", gate: /o$/u, forms: ["a", "ovi", "em", "om"] },
+];
 
 /**
- * Strip common Czech/Slovak case suffixes from a token.
- * Returns candidate base forms if stripping produces a
- * plausible name (capitalised, length >= 3).
- *
- * For the "-ou" instrumental feminine suffix, also yields
- * base + "a" (e.g., "Editou" → "Edit" and "Edita")
- * because Czech feminine names decline -a → -ou.
+ * Generate declined Czech/Slovak variants of a
+ * nominative name. Only variants licensed by the
+ * ending-shape rules are produced, which bounds the
+ * deny-list AC pattern growth. Returns an empty array
+ * for names too short to decline safely.
+ */
+export const expandNameDeclensions = (name: string): string[] => {
+  if (name.length < 3) {
+    return [];
+  }
+  const lower = name.toLowerCase();
+  const variants: string[] = [];
+  for (const rule of DECLENSION_RULES) {
+    if (!rule.gate.test(lower)) {
+      continue;
+    }
+    const stem = name.slice(0, name.length - rule.ending.length);
+    if (stem.length < 2) {
+      continue;
+    }
+    for (const form of rule.forms) {
+      variants.push(stem + form);
+    }
+  }
+  return variants;
+};
+
+/**
+ * Strip Czech/Slovak case endings from a token using
+ * the inverse of DECLENSION_RULES. Returns candidate
+ * nominative forms; each candidate is validated against
+ * the rule's shape gate, so only bases the paradigm
+ * could actually have declined are proposed. Callers
+ * check candidates against the name corpus.
  */
 const stripInflection = (token: string): string[] => {
   const candidates: string[] = [];
-  for (const suffix of INFLECTION_SUFFIXES) {
-    if (token.length > suffix.length + 2 && token.endsWith(suffix)) {
-      const base = token.slice(0, -suffix.length);
-      if (/^\p{Lu}/u.test(base)) {
-        candidates.push(base);
-        // Czech feminine: -a → -ou (instrumental),
-        // -a → -é (dative/locative), -a → -u (accusative)
-        if (suffix === "ou" || suffix === "é" || suffix === "u") {
-          candidates.push(`${base}a`);
-        }
-        // Czech feminine: -a → -ovi is not valid, but
-        // -e → -em is (e.g., "Kalhousem" → "Kalhous")
-        // which is already handled by stripping "em".
+  for (const rule of DECLENSION_RULES) {
+    for (const form of rule.forms) {
+      if (token.length <= form.length + 2 || !token.endsWith(form)) {
+        continue;
       }
+      const base = token.slice(0, token.length - form.length) + rule.ending;
+      if (!/^\p{Lu}/u.test(base)) {
+        continue;
+      }
+      if (!rule.gate.test(base.toLowerCase())) {
+        continue;
+      }
+      candidates.push(base);
     }
   }
   return candidates;

@@ -1,6 +1,7 @@
 import type { Match } from "@stll/text-search";
 
 import {
+  expandNameDeclensions,
   getNameCorpusFirstNames,
   getNameCorpusSurnames,
   getNameCorpusTitles,
@@ -63,6 +64,12 @@ const getAllowList = (ctx: PipelineContext): ReadonlySet<string> =>
 
 let commonWordsPromise: Promise<ReadonlySet<string>> | null = null;
 let commonWordsCache: ReadonlySet<string> | null = null;
+
+const EMPTY_COMMON_WORDS: ReadonlySet<string> = new Set();
+
+/** Sync accessor — returns empty set before init. */
+const getCommonWords = (): ReadonlySet<string> =>
+  commonWordsCache ?? EMPTY_COMMON_WORDS;
 
 const loadCommonWords = (): Promise<ReadonlySet<string>> => {
   if (commonWordsCache) return Promise.resolve(commonWordsCache);
@@ -875,11 +882,29 @@ const appendNameCorpusEntries = (
     }
   };
 
+  // Inject declined Czech/Slovak variants alongside the
+  // nominative so the whole-word AC search matches names
+  // in running declined text ("s Janem Novákem"). Variant
+  // generation is gated by ending shape, which bounds the
+  // pattern-count growth. Variants that collide with
+  // common English words are dropped, mirroring the
+  // surname curation in initNameCorpus.
+  const commonWords = getCommonWords();
+  const addDeclinedVariants = (name: string, source: PatternSource) => {
+    for (const variant of expandNameDeclensions(name)) {
+      if (commonWords.has(variant.toLowerCase())) {
+        continue;
+      }
+      addNameEntry(variant, source);
+    }
+  };
   for (const name of getNameCorpusFirstNames(ctx)) {
     addNameEntry(name, "first-name");
+    addDeclinedVariants(name, "first-name");
   }
   for (const name of getNameCorpusSurnames(ctx)) {
     addNameEntry(name, "surname");
+    addDeclinedVariants(name, "surname");
   }
   for (const title of getNameCorpusTitles(ctx)) {
     const norm = stripCuratedPatternSyntax(normalizeForSearch(title));
