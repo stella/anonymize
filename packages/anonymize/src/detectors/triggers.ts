@@ -13,6 +13,7 @@ import type {
 } from "../types";
 import { POST_NOMINALS } from "../config/titles";
 import { getKnownLegalSuffixes } from "./legal-forms";
+import { NAME_PARTICLE } from "./signatures";
 import { loadLanguageConfigs } from "../util/lang-loader";
 import { DASH } from "../util/char-groups";
 
@@ -43,6 +44,32 @@ const POST_NOMINAL_RE = new RegExp(
     )
     .join("|")})\\.?`,
   "i",
+);
+
+// ── Person name-run boundary ────────────────────────
+//
+// A person value captured by a trigger must look like a
+// name: a run of capitalized tokens (any cased script,
+// so diacritics work: Novák, Müller, Łukasz). A token
+// may contain name-internal hyphens, apostrophes and
+// periods (initials "J.", degrees "Ph.D.", "MUDr.").
+// Short lowercase onomastic particles (von, van, de,
+// della, …) are allowed between capitalized tokens —
+// shape rule via the curated NAME_PARTICLE set shared
+// with the signature detector, never a per-name list.
+// A comma is only crossed when the delimiter-scan in
+// `extractValue` already vetted it (post-nominal degree
+// or decimal), so the optional `,` here cannot bridge
+// independent clauses. The run ends at the first token
+// that does not fit the shape: a lowercase prose word,
+// a digit-bearing token, or clause punctuation.
+//
+// Compiled once at module load; no per-token regexes.
+const PERSON_NAME_TOKEN = "\\p{Lu}[\\p{L}\\p{M}.'’\\-]*";
+const PERSON_NAME_RUN_RE = new RegExp(
+  `^${PERSON_NAME_TOKEN}` +
+    `(?:,?[ \\t]+(?:${NAME_PARTICLE}[ \\t]+){0,2}${PERSON_NAME_TOKEN})*`,
+  "u",
 );
 
 // Definitive legal form suffixes (case-sensitive).
@@ -1352,8 +1379,8 @@ export const processTriggerMatches = (
       // When includeTrigger is set, the entity span
       // starts at the trigger match, not the value.
       const entityStart = rule.includeTrigger ? match.start : value.start;
-      const entityEnd = value.end;
-      const entityText = fullText.slice(entityStart, entityEnd);
+      let entityEnd = value.end;
+      let entityText = fullText.slice(entityStart, entityEnd);
 
       // Legal form reclassification: any person-labeled
       // trigger whose captured text contains a definitive
@@ -1364,6 +1391,24 @@ export const processTriggerMatches = (
         rule.label === "person" && hasKnownLegalFormSuffix(entityText)
           ? "organization"
           : rule.label;
+
+      // Person name-run boundary: bound the value to its
+      // leading run of name-shaped tokens so a delimiter
+      // scan that found no comma cannot sweep following
+      // prose into the span ("Pan Novák bydlí v Praze."
+      // must capture "Novák", not the whole clause).
+      // Applies only to values still labeled person (a
+      // legal-form capture stays greedy: trimming would
+      // drop the suffix the reclassification relies on).
+      // Values that do not start with a name token are
+      // left as-is for the declarative validations.
+      if (effectiveLabel === "person") {
+        const run = PERSON_NAME_RUN_RE.exec(value.text);
+        if (run !== null && run[0].length < value.text.length) {
+          entityEnd = value.start + run[0].length;
+          entityText = fullText.slice(entityStart, entityEnd);
+        }
+      }
 
       results.push({
         start: entityStart,
