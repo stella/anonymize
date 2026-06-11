@@ -13,7 +13,12 @@ import {
 import { loadCorpusDictionaries } from "./dictionaries";
 import { sha256Hex } from "./hash";
 import { loadManifest } from "./manifest";
-import { RUN_SUMMARY_FILE, RUNS_DIR, rawPath } from "./paths";
+import {
+  assertValidRunName,
+  RUN_SUMMARY_FILE,
+  RUNS_DIR,
+  rawPath,
+} from "./paths";
 import type { RunDocument, RunEntity, RunSummary } from "./types";
 
 const usage = `Usage: bun src/run.ts [--out <name>] [--force]
@@ -53,6 +58,7 @@ const defaultRunName = (): string => {
 };
 
 const runName = values.out ?? defaultRunName();
+assertValidRunName(runName);
 const runDir = join(RUNS_DIR, runName);
 
 if (

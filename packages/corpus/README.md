@@ -25,6 +25,10 @@ go in the manifest).
 
 ## Workflow
 
+**Prerequisites.** The tools import the workspace packages from their built
+`dist/` output (gitignored). On a fresh clone run `bun install && bun run build`
+from the repo root (turbo builds the workspace packages) before first use.
+
 1. **Fetch** new documents. The manifest is the memory: known ids are skipped,
    so repeated searches never re-download or re-introduce documents. Documents
    that fail the size bounds are recorded in `skiplist.json` so the same

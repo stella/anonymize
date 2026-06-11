@@ -3,7 +3,12 @@ import { join } from "node:path";
 import { parseArgs } from "node:util";
 
 import { loadManifest } from "./manifest";
-import { RUN_SUMMARY_FILE, RUNS_DIR, rawPath } from "./paths";
+import {
+  assertValidRunName,
+  RUN_SUMMARY_FILE,
+  RUNS_DIR,
+  rawPath,
+} from "./paths";
 import type { RunDocument, RunEntity, VerdictSpan } from "./types";
 import {
   judgedVerdictsByKey,
@@ -102,6 +107,7 @@ export const diffDocuments = ({
 const loadRunDocuments = async (
   runName: string,
 ): Promise<Map<string, RunDocument>> => {
+  assertValidRunName(runName);
   const runDir = join(RUNS_DIR, runName);
   const docs = new Map<string, RunDocument>();
   let files: string[];
