@@ -66,9 +66,15 @@ const POST_NOMINAL_RE = new RegExp(
 //
 // Compiled once at module load; no per-token regexes.
 const PERSON_NAME_TOKEN = "\\p{Lu}[\\p{L}\\p{M}.'’\\-]*";
+// A particle is space-separated ("van der Meer") or
+// apostrophe-attached ("Jean d'Arc"). Runs opening with
+// a lowercase particle ("von Bülow" directly after the
+// trigger) are rejected upstream by the starts-uppercase
+// validation, so the run anchors on a capitalized token.
+const PERSON_NAME_PARTICLE_SEP = `(?:${NAME_PARTICLE}[ \\t]+|d['’])`;
 const PERSON_NAME_RUN_RE = new RegExp(
   `^${PERSON_NAME_TOKEN}` +
-    `(?:,?[ \\t]+(?:${NAME_PARTICLE}[ \\t]+){0,2}${PERSON_NAME_TOKEN})*`,
+    `(?:,?[ \\t]+(?:${PERSON_NAME_PARTICLE_SEP}){0,2}${PERSON_NAME_TOKEN})*`,
   "u",
 );
 

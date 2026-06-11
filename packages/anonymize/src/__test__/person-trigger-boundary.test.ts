@@ -151,4 +151,16 @@ describe("person trigger extraction stops at the name run", () => {
     );
     expect(persons).toContain("Janem Novákem");
   });
+
+  test("apostrophe-attached particle stays in the run", async () => {
+    const persons = personTexts(await detect("Pan Jean d'Arc přijel pozdě."));
+    expect(persons).toContain("Jean d'Arc");
+  });
+
+  test("Portuguese surname particles are not truncated", async () => {
+    const persons = personTexts(
+      await detect("Pan João dos Santos přijel pozdě."),
+    );
+    expect(persons).toContain("João dos Santos");
+  });
 });
