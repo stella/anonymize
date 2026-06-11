@@ -9,6 +9,7 @@ const REQUEST_SPACING_MS = 220;
 const RETRYABLE_STATUS = new Set([429, 503]);
 const MAX_ATTEMPTS = 4;
 const RETRY_BASE_DELAY_MS = 1_000;
+const REQUEST_TIMEOUT_MS = 30_000;
 const PAGE_SIZE = 100;
 
 export type EftsHit = {
@@ -105,6 +106,7 @@ export const createEdgarClient = ({
       lastRequestAt = Date.now();
       const response = await fetch(url, {
         headers: { "User-Agent": userAgent },
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
       if (response.ok) {
         return response;
