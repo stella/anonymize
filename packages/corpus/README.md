@@ -59,8 +59,8 @@ go in the manifest).
    verdict-aware and reports four buckets per document:
    - `added`: new, unjudged spans (FP candidates to triage).
    - `removed`: disappeared, unjudged spans (FN candidates to triage).
-   - `regressions`: spans previously judged `tp` that vanished from the run; a
-     real loss that must surface even though the span is already judged.
+   - `regressions`: spans judged `tp` that the run no longer detects; derived
+     from the verdicts themselves, so they surface with or without a baseline.
    - `fixed`: spans previously judged `fn` that the pipeline now detects.
 
    Spans judged `tp`/`fp` are not re-surfaced as candidates, and a vanished `fp`

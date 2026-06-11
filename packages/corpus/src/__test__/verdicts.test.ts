@@ -79,8 +79,9 @@ describe("judgedVerdictsByKey", () => {
         }),
       ]),
     );
-    expect(byKey.get("0:8:person")).toBe("tp");
-    expect(byKey.get("18:27:organization")).toBe("fn");
+    expect(byKey.get("0:8:person")?.verdict).toBe("tp");
+    expect(byKey.get("18:27:organization")?.verdict).toBe("fn");
+    expect(byKey.get("18:27:organization")?.value).toBe("Acme Corp");
     expect(byKey.has("0:8:organization")).toBe(false);
   });
 

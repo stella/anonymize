@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
 import { diffDocuments } from "../diff";
-import type { RunDocument, RunEntity, SpanVerdict } from "../types";
+import type {
+  RunDocument,
+  RunEntity,
+  SpanVerdict,
+  VerdictSpan,
+} from "../types";
 import { spanKey } from "../verdicts";
 
 const entity = (
@@ -19,10 +24,17 @@ const doc = (entities: RunEntity[]): RunDocument => ({
   entities,
 });
 
+const verdictSpan = (
+  { start, end, label, text }: RunEntity,
+  verdict: SpanVerdict,
+): VerdictSpan => ({ start, end, value: text, label, verdict });
+
 const judged = (
   pairs: [RunEntity, SpanVerdict][],
-): ReadonlyMap<string, SpanVerdict> =>
-  new Map(pairs.map(([span, verdict]) => [spanKey(span), verdict]));
+): ReadonlyMap<string, VerdictSpan> =>
+  new Map(
+    pairs.map(([span, verdict]) => [spanKey(span), verdictSpan(span, verdict)]),
+  );
 
 const jane = entity(0, 8, "person", "Jane Doe");
 const acme = entity(20, 29, "organization", "Acme Corp");
@@ -60,7 +72,21 @@ describe("diffDocuments", () => {
       judged: judged([[acme, "tp"]]),
     });
     expect(diff.removed).toEqual([]);
-    expect(diff.regressions).toEqual([acme]);
+    expect(diff.regressions).toEqual([verdictSpan(acme, "tp")]);
+  });
+
+  test("a tp verdict missing from the run is a regression even without a baseline", () => {
+    const diff = diffDocuments({
+      current: doc([jane]),
+      baseline: null,
+      judged: judged([
+        [jane, "tp"],
+        [acme, "tp"],
+      ]),
+    });
+    expect(diff.added).toEqual([]);
+    expect(diff.removed).toEqual([]);
+    expect(diff.regressions).toEqual([verdictSpan(acme, "tp")]);
   });
 
   test("a disappeared fp span is expected and dropped from removed", () => {

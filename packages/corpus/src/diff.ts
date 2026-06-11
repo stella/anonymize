@@ -4,7 +4,7 @@ import { parseArgs } from "node:util";
 
 import { loadManifest } from "./manifest";
 import { RUN_SUMMARY_FILE, RUNS_DIR, rawPath } from "./paths";
-import type { RunDocument, RunEntity, SpanVerdict } from "./types";
+import type { RunDocument, RunEntity, VerdictSpan } from "./types";
 import {
   judgedVerdictsByKey,
   loadVerdictsForDoc,
@@ -19,8 +19,12 @@ export type DocDiff = {
   added: RunEntity[];
   /** Disappeared, unjudged spans: FN candidates to triage. */
   removed: RunEntity[];
-  /** Disappeared spans whose key was judged `tp`: real regressions. */
-  regressions: RunEntity[];
+  /**
+   * Judged-`tp` spans the current run no longer detects: real
+   * regressions. Derived from the verdicts, so they surface with or
+   * without a baseline run.
+   */
+  regressions: VerdictSpan[];
   /** Newly detected spans whose key was judged `fn`: known gaps now closed. */
   fixed: RunEntity[];
 };
@@ -29,8 +33,8 @@ export type DiffDocumentsOptions = {
   current: RunDocument;
   /** Null compares against nothing: every unjudged span is a candidate. */
   baseline: RunDocument | null;
-  /** Verdict by span key; drives regression/fixed buckets and filtering. */
-  judged: ReadonlyMap<string, SpanVerdict>;
+  /** Judged span by key; drives regression/fixed buckets and filtering. */
+  judged: ReadonlyMap<string, VerdictSpan>;
 };
 
 export const diffDocuments = ({
@@ -52,7 +56,7 @@ export const diffDocuments = ({
     if (baselineKeys.has(key)) {
       continue;
     }
-    const verdict = judged.get(key);
+    const verdict = judged.get(key)?.verdict;
     if (verdict === "fn") {
       // A span previously judged a miss is now detected: a fix.
       fixed.push(entity);
@@ -65,21 +69,23 @@ export const diffDocuments = ({
   }
 
   const removed: RunEntity[] = [];
-  const regressions: RunEntity[] = [];
   for (const entity of baseline?.entities ?? []) {
     const key = spanKey(entity);
-    if (currentKeys.has(key)) {
+    // Judged spans never re-surface here: a vanished `fp` is expected,
+    // and a vanished `tp` is reported via the verdict scan below.
+    if (currentKeys.has(key) || judged.has(key)) {
       continue;
     }
-    const verdict = judged.get(key);
-    if (verdict === "tp") {
-      // A confirmed detection vanished from the run: a regression.
-      regressions.push(entity);
-      continue;
-    }
-    // fp disappearing is expected; only unjudged misses are FN candidates.
-    if (verdict === undefined) {
-      removed.push(entity);
+    removed.push(entity);
+  }
+
+  // Regressions come from the verdicts, not the baseline: a span
+  // judged `tp` that the current run misses is a real loss even on a
+  // first run after checkout, when no baseline exists yet.
+  const regressions: VerdictSpan[] = [];
+  for (const span of judged.values()) {
+    if (span.verdict === "tp" && !currentKeys.has(spanKey(span))) {
+      regressions.push(span);
     }
   }
 
@@ -124,7 +130,8 @@ if (isMainModule) {
 Reports span changes in a run against an optional baseline:
   added        new, unjudged spans (FP candidates to triage)
   removed      disappeared, unjudged spans (FN candidates to triage)
-  regressions  disappeared spans previously judged "tp" (real losses)
+  regressions  spans judged "tp" that the run no longer detects (real
+               losses; reported with or without a baseline)
   fixed        newly detected spans previously judged "fn" (gaps closed)
 Spans judged "tp"/"fp" are not re-surfaced as candidates; a vanished
 "fp" is expected and dropped. JSON on stdout, summary on stderr.`;
@@ -184,8 +191,9 @@ Spans judged "tp"/"fp" are not re-surfaced as candidates; a vanished
     }
   }
 
-  const sumOf = (pick: (diff: DocDiff) => RunEntity[]): number =>
-    diffs.reduce((sum, diff) => sum + pick(diff).length, 0);
+  const sumOf = (
+    pick: (diff: DocDiff) => readonly (RunEntity | VerdictSpan)[],
+  ): number => diffs.reduce((sum, diff) => sum + pick(diff).length, 0);
 
   const addedTotal = sumOf((diff) => diff.added);
   const removedTotal = sumOf((diff) => diff.removed);
