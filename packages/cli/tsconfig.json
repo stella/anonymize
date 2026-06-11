@@ -4,6 +4,7 @@
   "compilerOptions": {
     "lib": ["ESNext"],
     "noEmit": true,
+    "resolveJsonModule": true,
     "target": "ES2023",
     "types": ["node", "bun-types"]
   },

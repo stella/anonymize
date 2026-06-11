@@ -1,5 +1,5 @@
+import { realpathSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { createRequire } from "node:module";
 import { basename, join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 
@@ -12,11 +12,12 @@ import type {
   OperatorConfig,
   OperatorType,
   PipelineConfig,
-  preparePipelineSearch,
   redactText,
   runPipeline,
 } from "@stll/anonymize";
 import { DEFAULT_ENTITY_LABELS } from "@stll/anonymize/constants";
+
+import pkg from "../package.json" with { type: "json" };
 
 import type { CliOptions } from "./args";
 import { HELP, parseCliArgs, parseCountries, UsageError } from "./args";
@@ -31,7 +32,6 @@ export type AnonymizeApi = {
   createPipelineContext: typeof createPipelineContext;
   deanonymise: typeof deanonymise;
   exportRedactionKey: typeof exportRedactionKey;
-  preparePipelineSearch: typeof preparePipelineSearch;
   redactText: typeof redactText;
   runPipeline: typeof runPipeline;
 };
@@ -46,11 +46,23 @@ export type CliEngine = {
   loadDictionaries: (scope: DictionaryScope) => Promise<Dictionaries>;
 };
 
-const cliVersion = (): string => {
-  const requireFromHere = createRequire(import.meta.url);
-  // SAFETY: our own package.json always carries a version.
-  const pkg = requireFromHere("../package.json") as { version: string };
-  return pkg.version;
+// Statically imported so the version is baked into both
+// the npm bundle and the compiled binary; a runtime
+// package.json lookup would fail inside the binary's
+// virtual filesystem.
+const cliVersion = (): string => pkg.version;
+
+/**
+ * Filesystem identity of a path: realpath when it exists
+ * (so symlinks to the same file compare equal), lexical
+ * resolution otherwise (the file may not exist yet).
+ */
+const canonicalPath = (path: string): string => {
+  try {
+    return realpathSync(path);
+  } catch {
+    return resolve(path);
+  }
 };
 
 const readStdin = async (): Promise<string> => {
@@ -169,6 +181,13 @@ const parseRedactionKey = (raw: string): Map<string, string> => {
     );
   }
   const { entries } = parsed as RedactionKeyFile;
+  if (
+    typeof entries !== "object" ||
+    entries === null ||
+    Array.isArray(entries)
+  ) {
+    throw new UsageError('redaction key "entries" must be an object');
+  }
   const map = new Map<string, string>();
   for (const [placeholder, entry] of Object.entries(entries)) {
     if (typeof entry?.original !== "string") {
@@ -230,6 +249,11 @@ const runDeanonymise = async (
   }
   const input = inputs[0];
   if (!input) throw new UsageError("no input to deanonymise");
+  if (opts.output !== undefined) {
+    guardWriteTargets(input.path === null ? [] : [input.path], [
+      { path: opts.output, flag: "--output" },
+    ]);
+  }
   await writeOutput(opts.output, api.deanonymise(input.text, redactionMap));
 };
 
@@ -245,13 +269,31 @@ const outputPathFor = (
   return join(opts.output, basename(input.path));
 };
 
-const guardAgainstOverwrite = (
-  input: NamedInput,
-  outputPath: string | undefined,
+/**
+ * Reject any write target (output or key file) whose
+ * filesystem identity collides with an input file or with
+ * another write target. Symlinks count as collisions.
+ */
+const guardWriteTargets = (
+  inputPaths: readonly string[],
+  writeTargets: readonly { path: string; flag: string }[],
 ): void => {
-  if (input.path === null || outputPath === undefined) return;
-  if (resolve(input.path) === resolve(outputPath)) {
-    throw new UsageError(`refusing to overwrite input file "${input.path}"`);
+  const inputs = new Set(inputPaths.map(canonicalPath));
+  const seen = new Map<string, string>();
+  for (const target of writeTargets) {
+    const canonical = canonicalPath(target.path);
+    if (inputs.has(canonical)) {
+      throw new UsageError(
+        `refusing to overwrite input file "${target.path}" (${target.flag})`,
+      );
+    }
+    const clash = seen.get(canonical);
+    if (clash !== undefined) {
+      throw new UsageError(
+        `${target.flag} "${target.path}" collides with ${clash}`,
+      );
+    }
+    seen.set(canonical, `${target.flag} "${target.path}"`);
   }
 };
 
@@ -292,28 +334,44 @@ const runAnonymise = async (
     : opts;
 
   const inputs = await readInputs(scoped.files);
+
+  // Validate every write target before any work: output
+  // collisions (same basename from different input dirs,
+  // symlinks to an input, --key hitting the output) fail
+  // fast instead of silently clobbering files mid-batch.
+  const outputPaths = inputs.map((input) => outputPathFor(input, opts, multi));
+  const writeTargets: { path: string; flag: string }[] = [];
+  for (const path of outputPaths) {
+    if (path !== undefined) writeTargets.push({ path, flag: "--output" });
+  }
+  if (opts.keyPath !== undefined) {
+    writeTargets.push({ path: opts.keyPath, flag: "--key" });
+  }
+  guardWriteTargets(
+    inputs.flatMap((input) => (input.path === null ? [] : [input.path])),
+    writeTargets,
+  );
+
   const config = await buildPipelineConfig(scoped, loadDictionaries);
 
-  const buildContext = api.createPipelineContext();
-  const cachedSearch = await api.preparePipelineSearch({
-    config,
-    context: buildContext,
-  });
+  // One shared context for the whole batch: the first
+  // runPipeline builds the search automaton after its own
+  // init steps (hotword rules included) and caches it on
+  // the context for the remaining files. Cross-document
+  // reuse is supported — coref links travel on entities.
+  const context = api.createPipelineContext();
 
   if (multi && opts.output !== undefined) {
     await mkdir(opts.output, { recursive: true });
   }
 
-  for (const input of inputs) {
-    const outputPath = outputPathFor(input, opts, multi);
-    guardAgainstOverwrite(input, outputPath);
+  for (const [index, input] of inputs.entries()) {
+    const outputPath = outputPaths[index];
 
-    const context = api.createPipelineContext();
     const entities = await api.runPipeline({
       fullText: input.text,
       config,
       gazetteerEntries: [],
-      cachedSearch,
       context,
     });
     const result = api.redactText(

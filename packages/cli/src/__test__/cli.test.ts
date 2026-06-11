@@ -112,3 +112,37 @@ test("refuses to overwrite the input file", async () => {
   expect(code).toBe(2);
   expect(err).toContain("refusing to overwrite");
 });
+
+test("refuses a key path that collides with the output", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "anonymize-cli-"));
+  const inputPath = join(dir, "input.txt");
+  const outPath = join(dir, "out.txt");
+  await writeFile(inputPath, SAMPLE, "utf8");
+  const { code, err } = await run([
+    ...SCOPE,
+    "-o",
+    outPath,
+    "-k",
+    outPath,
+    inputPath,
+  ]);
+  expect(code).toBe(2);
+  expect(err).toContain("collides");
+});
+
+test("refuses batch inputs with colliding basenames", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "anonymize-cli-"));
+  const a = join(dir, "a");
+  const b = join(dir, "b");
+  await Bun.write(join(a, "same.txt"), SAMPLE);
+  await Bun.write(join(b, "same.txt"), SAMPLE);
+  const { code, err } = await run([
+    ...SCOPE,
+    "-o",
+    join(dir, "out"),
+    join(a, "same.txt"),
+    join(b, "same.txt"),
+  ]);
+  expect(code).toBe(2);
+  expect(err).toContain("collides");
+});

@@ -10,6 +10,8 @@
     },
     "lint": {},
     "format": {},
-    "test": {}
+    "test": {
+      "dependsOn": ["^build"]
+    }
   }
 }

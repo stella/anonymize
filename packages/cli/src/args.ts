@@ -48,7 +48,8 @@ Options:
                             (default: all bundled)
       --countries <list>    ISO 3166-1 alpha-2 codes scoping deny
                             lists and city data, e.g. "CZ,DE,GB"
-                            (default: all bundled)
+                            (default: all deny lists; city data
+                            for a 30-country default set)
       --threshold <n>       Minimum confidence score, 0-1
                             (default: ${DEFAULT_THRESHOLD})
       --redact-string <s>   Replacement text in redact mode
@@ -88,11 +89,14 @@ Examples:
   anonymize --json --quiet input.txt | jq '.entities[].label'
 `;
 
-const splitList = (value: string): string[] =>
-  value
-    .split(",")
-    .map((part) => part.trim())
-    .filter((part) => part.length > 0);
+const splitList = (value: string): string[] => [
+  ...new Set(
+    value
+      .split(",")
+      .map((part) => part.trim())
+      .filter((part) => part.length > 0),
+  ),
+];
 
 const parseThreshold = (raw: string): number => {
   const value = Number(raw);
@@ -117,7 +121,9 @@ const parseMode = (raw: string): CliMode => {
 const COUNTRY_CODE_RE = /^[A-Za-z]{2}$/;
 
 export const parseCountries = (raw: string): string[] => {
-  const countries = splitList(raw).map((code) => code.toUpperCase());
+  const countries = [
+    ...new Set(splitList(raw).map((code) => code.toUpperCase())),
+  ];
   const invalid = countries.find((code) => !COUNTRY_CODE_RE.test(code));
   if (invalid) {
     throw new UsageError(
