@@ -78,4 +78,31 @@ describe("org propagation placeholder consistency", () => {
     expect(second).toContain("The obligations of [ORGANIZATION_1]");
     expect(second).not.toContain("[ORGANIZATION_2]");
   });
+
+  test("bare mention before the full form shares its placeholder", async () => {
+    const redacted = await redactWith(
+      `Initech term sheet. This deed is made by Initech Corporation, ` +
+        `a Delaware corporation.`,
+    );
+    // The forward alias reserves the placeholder under
+    // the source key, so the later full form joins it
+    // instead of allocating a second number.
+    expect(redacted).toContain("[ORGANIZATION_1] term sheet");
+    expect(redacted).toContain("made by [ORGANIZATION_1],");
+    expect(redacted).not.toContain("[ORGANIZATION_2]");
+  });
+
+  test("bare mention with two competing sources keeps its own placeholder", async () => {
+    const redacted = await redactWith(
+      `Initech LLC and Initech Corporation are affiliates. ` +
+        `Initech shall notify both parties.`,
+    );
+    const tags = [...redacted.matchAll(/\[ORGANIZATION_(\d)\]/g)].map(
+      (m) => m[1],
+    );
+    // Forcing the bare mention onto either full form
+    // would corrupt the redaction key, so it gets its
+    // own placeholder.
+    expect(tags).toEqual(["1", "2", "3"]);
+  });
 });

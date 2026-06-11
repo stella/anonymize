@@ -43,8 +43,7 @@ export const propagateOrgNames = (
   entities: Entity[],
   fullText: string,
 ): Entity[] => {
-  const seeds: Seed[] = [];
-  const seenBases = new Set<string>();
+  const seedByBase = new Map<string, Seed>();
 
   for (const e of entities) {
     if (e.label !== "organization") continue;
@@ -55,19 +54,31 @@ export const propagateOrgNames = (
           .slice(0, -suffix.length)
           .replace(TRAILING_SEP, "")
           .trim();
-        if (base.length >= 3 && !seenBases.has(base)) {
-          seenBases.add(base);
-          seeds.push({
-            baseName: base,
-            label: e.label,
-            sourceText: e.text,
-          });
+        if (base.length >= 3) {
+          const existing = seedByBase.get(base);
+          if (existing === undefined) {
+            seedByBase.set(base, {
+              baseName: base,
+              label: e.label,
+              sourceText: e.text,
+            });
+          } else if (existing.sourceText !== e.text) {
+            // Distinct full forms share this base
+            // ("Acme LLC" vs "Acme Corporation").
+            // Linking bare mentions to either one would
+            // corrupt the redaction key, so link them to
+            // the base name itself: all bare mentions
+            // still share one placeholder, distinct from
+            // both full forms.
+            existing.sourceText = base;
+          }
         }
         break;
       }
     }
   }
 
+  const seeds = [...seedByBase.values()];
   if (seeds.length === 0) return [];
 
   // Build a mutable array of already-covered spans
