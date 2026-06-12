@@ -31,6 +31,7 @@ type QualityReportJson = {
     docs: number;
     docsPerLanguage: Record<string, number>;
     goldEntities: number;
+    skippedDocs?: string[];
   };
   labelsFilter: string[] | null;
   modes: Record<"exact" | "overlap", ModeReportJson>;
@@ -74,6 +75,16 @@ const renderQuality = (report: QualityReportJson): string[] => {
   lines.push(
     `${report.corpus.docs} documents, ${integer(report.corpus.goldEntities)} reference entities.${filterNote}`,
   );
+  const skipped = report.corpus.skippedDocs ?? [];
+  if (skipped.length > 0) {
+    const languages = [
+      ...new Set(skipped.map((id) => id.split("/").at(0) ?? id)),
+    ].toSorted();
+    lines.push("");
+    lines.push(
+      `Skipped ${skipped.length} corpus documents (no support for: ${languages.join(", ")}).`,
+    );
+  }
   for (const mode of ["exact", "overlap"] as const) {
     const modeReport = report.modes[mode];
     lines.push("");

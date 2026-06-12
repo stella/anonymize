@@ -97,6 +97,65 @@ bun run bench:quality -- --predictions path/to/predictions.json \
 bun run bench:render
 ```
 
+## Comparison runs
+
+Committed results include two external tools run on the same corpus
+and scored by the same scorer. Both runs are restricted (via
+`--labels`) to labels the tool claims to detect, so micro averages
+are not comparable across tools with different filters; compare per
+label.
+
+### Microsoft Presidio
+
+`comparison/presidio/run.py` (pinned deps in `requirements.txt`)
+runs `presidio-analyzer` with its documented spaCy defaults
+(`en_core_web_lg`, `de_core_news_lg`) and writes the interchange
+format. Scored labels: person, organization, email address, phone
+number, date.
+
+Read the numbers with these caveats:
+
+- **Czech is skipped entirely**: Presidio has no Czech language
+  support, so 8 of 13 corpus documents cannot be processed at all.
+- **Organizations are enabled deliberately.** Presidio ignores
+  spaCy `ORG` spans by default because they are noisy; the run
+  enables them because organizations are unavoidable in legal
+  contracts. The resulting false-positive count shows why the
+  default exists.
+- **`DATE_TIME` is broader than the reference `date` label** (it
+  also matches durations and relative time), which depresses
+  Presidio's date precision; this is a label-mapping asymmetry, not
+  purely a detection failure.
+- Labels Presidio has no recognizers for on this corpus
+  (registration numbers, tax identifiers, monetary amounts,
+  addresses as street-level spans) are excluded rather than scored
+  as zero.
+
+Reproduce:
+
+```sh
+python3 -m venv .venv && .venv/bin/pip install -r comparison/presidio/requirements.txt
+.venv/bin/python -m spacy download en_core_web_lg
+.venv/bin/python -m spacy download de_core_news_lg
+.venv/bin/python comparison/presidio/run.py
+bun src/run-quality.ts --predictions results/predictions.presidio.json \
+  --labels "person,organization,email address,phone number,date"
+bun run bench:render
+```
+
+### compromise
+
+`src/run-compromise.ts` runs the compromise NLP library (the
+closest JS-ecosystem baseline that reports spans) on the English
+documents only; scored labels: person, organization.
+
+```sh
+bun src/run-compromise.ts
+bun src/run-quality.ts --predictions results/predictions.compromise.json \
+  --labels "person,organization"
+bun run bench:render
+```
+
 ## Throughput methodology
 
 One-time costs (dictionary load, search automaton preparation) are

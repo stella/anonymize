@@ -1,0 +1,295 @@
+{
+  "tool": "compromise",
+  "docs": [
+    {
+      "id": "en/gt-biopharma-employment-amendment.txt",
+      "entities": [
+        {
+          "start": 384,
+          "end": 397,
+          "label": "person"
+        },
+        {
+          "start": 4291,
+          "end": 4306,
+          "label": "person"
+        },
+        {
+          "start": 4565,
+          "end": 4575,
+          "label": "person"
+        },
+        {
+          "start": 4591,
+          "end": 4595,
+          "label": "person"
+        },
+        {
+          "start": 4688,
+          "end": 4701,
+          "label": "person"
+        },
+        {
+          "start": 4717,
+          "end": 4724,
+          "label": "person"
+        },
+        {
+          "start": 328,
+          "end": 333,
+          "label": "organization"
+        },
+        {
+          "start": 1379,
+          "end": 1399,
+          "label": "organization"
+        },
+        {
+          "start": 1895,
+          "end": 1915,
+          "label": "organization"
+        },
+        {
+          "start": 4538,
+          "end": 4543,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "id": "en/healthcare-trust-employment-amendment.txt",
+      "entities": [
+        {
+          "start": 129,
+          "end": 146,
+          "label": "person"
+        },
+        {
+          "start": 398,
+          "end": 416,
+          "label": "person"
+        },
+        {
+          "start": 2652,
+          "end": 2665,
+          "label": "person"
+        },
+        {
+          "start": 2679,
+          "end": 2692,
+          "label": "person"
+        },
+        {
+          "start": 2769,
+          "end": 2787,
+          "label": "person"
+        },
+        {
+          "start": 2792,
+          "end": 2810,
+          "label": "person"
+        },
+        {
+          "start": 2898,
+          "end": 2918,
+          "label": "person"
+        },
+        {
+          "start": 3207,
+          "end": 3225,
+          "label": "person"
+        },
+        {
+          "start": 8285,
+          "end": 8298,
+          "label": "person"
+        },
+        {
+          "start": 8510,
+          "end": 8523,
+          "label": "person"
+        },
+        {
+          "start": 8601,
+          "end": 8619,
+          "label": "person"
+        },
+        {
+          "start": 338,
+          "end": 343,
+          "label": "organization"
+        },
+        {
+          "start": 538,
+          "end": 554,
+          "label": "organization"
+        },
+        {
+          "start": 2628,
+          "end": 2632,
+          "label": "organization"
+        },
+        {
+          "start": 3147,
+          "end": 3152,
+          "label": "organization"
+        },
+        {
+          "start": 3346,
+          "end": 3362,
+          "label": "organization"
+        },
+        {
+          "start": 8476,
+          "end": 8480,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "id": "en/pra-group-employment-agreement.txt",
+      "entities": [
+        {
+          "start": 2782,
+          "end": 2791,
+          "label": "person"
+        },
+        {
+          "start": 36471,
+          "end": 36479,
+          "label": "person"
+        },
+        {
+          "start": 36496,
+          "end": 36511,
+          "label": "person"
+        },
+        {
+          "start": 39213,
+          "end": 39222,
+          "label": "person"
+        },
+        {
+          "start": 39861,
+          "end": 39870,
+          "label": "person"
+        },
+        {
+          "start": 191,
+          "end": 206,
+          "label": "organization"
+        },
+        {
+          "start": 288,
+          "end": 293,
+          "label": "organization"
+        },
+        {
+          "start": 1859,
+          "end": 1880,
+          "label": "organization"
+        },
+        {
+          "start": 3614,
+          "end": 3636,
+          "label": "organization"
+        },
+        {
+          "start": 20259,
+          "end": 20264,
+          "label": "organization"
+        },
+        {
+          "start": 25424,
+          "end": 25446,
+          "label": "organization"
+        },
+        {
+          "start": 36422,
+          "end": 36437,
+          "label": "organization"
+        },
+        {
+          "start": 39935,
+          "end": 39968,
+          "label": "organization"
+        },
+        {
+          "start": 48165,
+          "end": 48180,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "id": "en/software-license-agreement.txt",
+      "entities": [
+        {
+          "start": 162,
+          "end": 180,
+          "label": "person"
+        },
+        {
+          "start": 386,
+          "end": 407,
+          "label": "person"
+        },
+        {
+          "start": 627,
+          "end": 652,
+          "label": "person"
+        },
+        {
+          "start": 756,
+          "end": 770,
+          "label": "person"
+        },
+        {
+          "start": 1013,
+          "end": 1027,
+          "label": "person"
+        },
+        {
+          "start": 1572,
+          "end": 1590,
+          "label": "person"
+        },
+        {
+          "start": 1972,
+          "end": 1990,
+          "label": "person"
+        },
+        {
+          "start": 2165,
+          "end": 2185,
+          "label": "person"
+        },
+        {
+          "start": 181,
+          "end": 186,
+          "label": "organization"
+        },
+        {
+          "start": 969,
+          "end": 991,
+          "label": "organization"
+        },
+        {
+          "start": 1388,
+          "end": 1415,
+          "label": "organization"
+        },
+        {
+          "start": 1591,
+          "end": 1620,
+          "label": "organization"
+        },
+        {
+          "start": 1991,
+          "end": 1995,
+          "label": "organization"
+        }
+      ]
+    }
+  ]
+}

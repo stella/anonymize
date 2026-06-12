@@ -83,3 +83,71 @@ The reference annotations derive from reviewed pipeline output, so the anonymize
 | cs       |  207 |    100.0% | 100.0% | 100.0% |
 | de       |   24 |    100.0% | 100.0% | 100.0% |
 | en       |  101 |    100.0% | 100.0% | 100.0% |
+
+### compromise
+
+4 documents, 101 reference entities. Scored labels: person, organization.
+
+Skipped 9 corpus documents (no support for: cs, de).
+
+#### exact match
+
+| Label           | Gold | Precision | Recall |    F1 |
+| --------------- | ---: | --------: | -----: | ----: |
+| organization    |   19 |     12.5% |  15.8% | 14.0% |
+| person          |   19 |     40.0% |  63.2% | 49.0% |
+| **all (micro)** |   38 |     27.8% |  39.5% | 32.6% |
+
+| Language | Gold | Precision | Recall |    F1 |
+| -------- | ---: | --------: | -----: | ----: |
+| en       |   38 |     27.8% |  39.5% | 32.6% |
+
+#### overlap match
+
+| Label           | Gold | Precision | Recall |    F1 |
+| --------------- | ---: | --------: | -----: | ----: |
+| organization    |   19 |     58.3% |  73.7% | 65.1% |
+| person          |   19 |     53.3% |  84.2% | 65.3% |
+| **all (micro)** |   38 |     55.6% |  78.9% | 65.2% |
+
+| Language | Gold | Precision | Recall |    F1 |
+| -------- | ---: | --------: | -----: | ----: |
+| en       |   38 |     55.6% |  78.9% | 65.2% |
+
+### presidio
+
+5 documents, 125 reference entities. Scored labels: person, organization, email address, phone number, date.
+
+Skipped 8 corpus documents (no support for: cs).
+
+#### exact match
+
+| Label           | Gold | Precision | Recall |    F1 |
+| --------------- | ---: | --------: | -----: | ----: |
+| date            |   27 |     14.4% |  51.9% | 22.6% |
+| email address   |    1 |      0.0% |   0.0% |  0.0% |
+| organization    |   23 |      6.9% |  60.9% | 12.4% |
+| person          |   24 |     59.3% |  66.7% | 62.7% |
+| phone number    |    1 |      0.0% |   0.0% |  0.0% |
+| **all (micro)** |   76 |     13.4% |  57.9% | 21.8% |
+
+| Language | Gold | Precision | Recall |    F1 |
+| -------- | ---: | --------: | -----: | ----: |
+| de       |   12 |     30.0% |  25.0% | 27.3% |
+| en       |   64 |     12.9% |  64.1% | 21.5% |
+
+#### overlap match
+
+| Label           | Gold | Precision | Recall |    F1 |
+| --------------- | ---: | --------: | -----: | ----: |
+| date            |   27 |     23.7% |  85.2% | 37.1% |
+| email address   |    1 |      0.0% |   0.0% |  0.0% |
+| organization    |   23 |      9.4% |  82.6% | 16.9% |
+| person          |   24 |     81.5% |  91.7% | 86.3% |
+| phone number    |    1 |     50.0% | 100.0% | 66.7% |
+| **all (micro)** |   76 |     19.8% |  85.5% | 32.2% |
+
+| Language | Gold | Precision | Recall |    F1 |
+| -------- | ---: | --------: | -----: | ----: |
+| de       |   12 |     60.0% |  50.0% | 54.5% |
+| en       |   64 |     18.6% |  92.2% | 30.9% |

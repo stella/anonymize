@@ -1,0 +1,1670 @@
+{
+  "tool": "presidio",
+  "docs": [
+    {
+      "id": "de/geschaeftsfuehrer-dienstvertrag.txt",
+      "entities": [
+        {
+          "start": 255,
+          "end": 281,
+          "label": "person"
+        },
+        {
+          "start": 417,
+          "end": 437,
+          "label": "person"
+        },
+        {
+          "start": 673,
+          "end": 722,
+          "label": "organization"
+        },
+        {
+          "start": 727,
+          "end": 739,
+          "label": "organization"
+        },
+        {
+          "start": 778,
+          "end": 802,
+          "label": "organization"
+        },
+        {
+          "start": 1142,
+          "end": 1162,
+          "label": "person"
+        },
+        {
+          "start": 1206,
+          "end": 1217,
+          "label": "organization"
+        },
+        {
+          "start": 1226,
+          "end": 1240,
+          "label": "organization"
+        },
+        {
+          "start": 1833,
+          "end": 1853,
+          "label": "person"
+        },
+        {
+          "start": 1874,
+          "end": 1890,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "id": "en/gt-biopharma-employment-amendment.txt",
+      "entities": [
+        {
+          "start": 0,
+          "end": 7,
+          "label": "organization"
+        },
+        {
+          "start": 208,
+          "end": 223,
+          "label": "date"
+        },
+        {
+          "start": 248,
+          "end": 262,
+          "label": "date"
+        },
+        {
+          "start": 314,
+          "end": 332,
+          "label": "organization"
+        },
+        {
+          "start": 384,
+          "end": 397,
+          "label": "person"
+        },
+        {
+          "start": 527,
+          "end": 543,
+          "label": "date"
+        },
+        {
+          "start": 608,
+          "end": 621,
+          "label": "date"
+        },
+        {
+          "start": 626,
+          "end": 642,
+          "label": "date"
+        },
+        {
+          "start": 1060,
+          "end": 1066,
+          "label": "organization"
+        },
+        {
+          "start": 1301,
+          "end": 1307,
+          "label": "organization"
+        },
+        {
+          "start": 1356,
+          "end": 1365,
+          "label": "organization"
+        },
+        {
+          "start": 1379,
+          "end": 1412,
+          "label": "organization"
+        },
+        {
+          "start": 1895,
+          "end": 1928,
+          "label": "organization"
+        },
+        {
+          "start": 2380,
+          "end": 2386,
+          "label": "organization"
+        },
+        {
+          "start": 2686,
+          "end": 2697,
+          "label": "date"
+        },
+        {
+          "start": 2698,
+          "end": 2707,
+          "label": "date"
+        },
+        {
+          "start": 2787,
+          "end": 2795,
+          "label": "date"
+        },
+        {
+          "start": 2833,
+          "end": 2840,
+          "label": "date"
+        },
+        {
+          "start": 3812,
+          "end": 3836,
+          "label": "organization"
+        },
+        {
+          "start": 4323,
+          "end": 4333,
+          "label": "person"
+        },
+        {
+          "start": 4565,
+          "end": 4575,
+          "label": "person"
+        },
+        {
+          "start": 4688,
+          "end": 4701,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "id": "en/healthcare-trust-employment-amendment.txt",
+      "entities": [
+        {
+          "start": 129,
+          "end": 144,
+          "label": "person"
+        },
+        {
+          "start": 216,
+          "end": 240,
+          "label": "organization"
+        },
+        {
+          "start": 279,
+          "end": 287,
+          "label": "date"
+        },
+        {
+          "start": 289,
+          "end": 293,
+          "label": "date"
+        },
+        {
+          "start": 309,
+          "end": 342,
+          "label": "organization"
+        },
+        {
+          "start": 368,
+          "end": 390,
+          "label": "organization"
+        },
+        {
+          "start": 398,
+          "end": 416,
+          "label": "person"
+        },
+        {
+          "start": 473,
+          "end": 480,
+          "label": "organization"
+        },
+        {
+          "start": 538,
+          "end": 554,
+          "label": "organization"
+        },
+        {
+          "start": 625,
+          "end": 637,
+          "label": "date"
+        },
+        {
+          "start": 681,
+          "end": 694,
+          "label": "date"
+        },
+        {
+          "start": 699,
+          "end": 713,
+          "label": "date"
+        },
+        {
+          "start": 729,
+          "end": 749,
+          "label": "organization"
+        },
+        {
+          "start": 787,
+          "end": 794,
+          "label": "organization"
+        },
+        {
+          "start": 838,
+          "end": 874,
+          "label": "organization"
+        },
+        {
+          "start": 1155,
+          "end": 1162,
+          "label": "organization"
+        },
+        {
+          "start": 1271,
+          "end": 1282,
+          "label": "organization"
+        },
+        {
+          "start": 1493,
+          "end": 1501,
+          "label": "date"
+        },
+        {
+          "start": 1503,
+          "end": 1507,
+          "label": "date"
+        },
+        {
+          "start": 1733,
+          "end": 1740,
+          "label": "organization"
+        },
+        {
+          "start": 2247,
+          "end": 2256,
+          "label": "organization"
+        },
+        {
+          "start": 2543,
+          "end": 2570,
+          "label": "date"
+        },
+        {
+          "start": 2599,
+          "end": 2632,
+          "label": "organization"
+        },
+        {
+          "start": 2652,
+          "end": 2665,
+          "label": "person"
+        },
+        {
+          "start": 2679,
+          "end": 2692,
+          "label": "person"
+        },
+        {
+          "start": 2769,
+          "end": 2787,
+          "label": "person"
+        },
+        {
+          "start": 2792,
+          "end": 2810,
+          "label": "person"
+        },
+        {
+          "start": 2898,
+          "end": 2916,
+          "label": "person"
+        },
+        {
+          "start": 2987,
+          "end": 3011,
+          "label": "organization"
+        },
+        {
+          "start": 3091,
+          "end": 3100,
+          "label": "organization"
+        },
+        {
+          "start": 3118,
+          "end": 3151,
+          "label": "organization"
+        },
+        {
+          "start": 3207,
+          "end": 3225,
+          "label": "person"
+        },
+        {
+          "start": 3281,
+          "end": 3288,
+          "label": "organization"
+        },
+        {
+          "start": 3346,
+          "end": 3362,
+          "label": "organization"
+        },
+        {
+          "start": 3433,
+          "end": 3445,
+          "label": "date"
+        },
+        {
+          "start": 3489,
+          "end": 3502,
+          "label": "date"
+        },
+        {
+          "start": 3507,
+          "end": 3521,
+          "label": "date"
+        },
+        {
+          "start": 3537,
+          "end": 3557,
+          "label": "organization"
+        },
+        {
+          "start": 3833,
+          "end": 3840,
+          "label": "organization"
+        },
+        {
+          "start": 4242,
+          "end": 4249,
+          "label": "date"
+        },
+        {
+          "start": 4689,
+          "end": 4696,
+          "label": "organization"
+        },
+        {
+          "start": 5056,
+          "end": 5075,
+          "label": "organization"
+        },
+        {
+          "start": 5305,
+          "end": 5314,
+          "label": "organization"
+        },
+        {
+          "start": 5322,
+          "end": 5329,
+          "label": "organization"
+        },
+        {
+          "start": 5374,
+          "end": 5383,
+          "label": "organization"
+        },
+        {
+          "start": 5643,
+          "end": 5666,
+          "label": "organization"
+        },
+        {
+          "start": 5699,
+          "end": 5723,
+          "label": "organization"
+        },
+        {
+          "start": 5802,
+          "end": 5821,
+          "label": "organization"
+        },
+        {
+          "start": 6053,
+          "end": 6073,
+          "label": "organization"
+        },
+        {
+          "start": 6309,
+          "end": 6316,
+          "label": "date"
+        },
+        {
+          "start": 6333,
+          "end": 6367,
+          "label": "organization"
+        },
+        {
+          "start": 6721,
+          "end": 6728,
+          "label": "date"
+        },
+        {
+          "start": 6834,
+          "end": 6869,
+          "label": "organization"
+        },
+        {
+          "start": 7215,
+          "end": 7222,
+          "label": "date"
+        },
+        {
+          "start": 7230,
+          "end": 7236,
+          "label": "date"
+        },
+        {
+          "start": 7278,
+          "end": 7313,
+          "label": "organization"
+        },
+        {
+          "start": 7436,
+          "end": 7440,
+          "label": "date"
+        },
+        {
+          "start": 7455,
+          "end": 7462,
+          "label": "organization"
+        },
+        {
+          "start": 7516,
+          "end": 7528,
+          "label": "date"
+        },
+        {
+          "start": 7534,
+          "end": 7538,
+          "label": "date"
+        },
+        {
+          "start": 8054,
+          "end": 8063,
+          "label": "organization"
+        },
+        {
+          "start": 8447,
+          "end": 8480,
+          "label": "organization"
+        },
+        {
+          "start": 8510,
+          "end": 8523,
+          "label": "person"
+        },
+        {
+          "start": 8601,
+          "end": 8619,
+          "label": "person"
+        }
+      ]
+    },
+    {
+      "id": "en/pra-group-employment-agreement.txt",
+      "entities": [
+        {
+          "start": 0,
+          "end": 7,
+          "label": "organization"
+        },
+        {
+          "start": 123,
+          "end": 139,
+          "label": "date"
+        },
+        {
+          "start": 191,
+          "end": 206,
+          "label": "organization"
+        },
+        {
+          "start": 208,
+          "end": 232,
+          "label": "organization"
+        },
+        {
+          "start": 239,
+          "end": 253,
+          "label": "person"
+        },
+        {
+          "start": 356,
+          "end": 363,
+          "label": "organization"
+        },
+        {
+          "start": 432,
+          "end": 446,
+          "label": "date"
+        },
+        {
+          "start": 587,
+          "end": 609,
+          "label": "organization"
+        },
+        {
+          "start": 730,
+          "end": 741,
+          "label": "date"
+        },
+        {
+          "start": 743,
+          "end": 747,
+          "label": "date"
+        },
+        {
+          "start": 782,
+          "end": 806,
+          "label": "organization"
+        },
+        {
+          "start": 900,
+          "end": 924,
+          "label": "organization"
+        },
+        {
+          "start": 1331,
+          "end": 1344,
+          "label": "organization"
+        },
+        {
+          "start": 1377,
+          "end": 1398,
+          "label": "organization"
+        },
+        {
+          "start": 1855,
+          "end": 1895,
+          "label": "organization"
+        },
+        {
+          "start": 2154,
+          "end": 2161,
+          "label": "organization"
+        },
+        {
+          "start": 2245,
+          "end": 2250,
+          "label": "organization"
+        },
+        {
+          "start": 2979,
+          "end": 3013,
+          "label": "organization"
+        },
+        {
+          "start": 3097,
+          "end": 3108,
+          "label": "date"
+        },
+        {
+          "start": 3112,
+          "end": 3116,
+          "label": "date"
+        },
+        {
+          "start": 3265,
+          "end": 3279,
+          "label": "date"
+        },
+        {
+          "start": 3366,
+          "end": 3372,
+          "label": "date"
+        },
+        {
+          "start": 3546,
+          "end": 3553,
+          "label": "organization"
+        },
+        {
+          "start": 3595,
+          "end": 3602,
+          "label": "date"
+        },
+        {
+          "start": 3610,
+          "end": 3636,
+          "label": "organization"
+        },
+        {
+          "start": 3674,
+          "end": 3679,
+          "label": "organization"
+        },
+        {
+          "start": 3757,
+          "end": 3766,
+          "label": "organization"
+        },
+        {
+          "start": 4012,
+          "end": 4018,
+          "label": "date"
+        },
+        {
+          "start": 4225,
+          "end": 4234,
+          "label": "organization"
+        },
+        {
+          "start": 4269,
+          "end": 4277,
+          "label": "date"
+        },
+        {
+          "start": 4416,
+          "end": 4425,
+          "label": "organization"
+        },
+        {
+          "start": 4487,
+          "end": 4501,
+          "label": "date"
+        },
+        {
+          "start": 4645,
+          "end": 4654,
+          "label": "organization"
+        },
+        {
+          "start": 4843,
+          "end": 4874,
+          "label": "organization"
+        },
+        {
+          "start": 5383,
+          "end": 5390,
+          "label": "organization"
+        },
+        {
+          "start": 5410,
+          "end": 5414,
+          "label": "person"
+        },
+        {
+          "start": 5741,
+          "end": 5748,
+          "label": "organization"
+        },
+        {
+          "start": 5926,
+          "end": 5933,
+          "label": "organization"
+        },
+        {
+          "start": 6235,
+          "end": 6242,
+          "label": "organization"
+        },
+        {
+          "start": 6556,
+          "end": 6577,
+          "label": "organization"
+        },
+        {
+          "start": 6711,
+          "end": 6721,
+          "label": "organization"
+        },
+        {
+          "start": 7357,
+          "end": 7382,
+          "label": "organization"
+        },
+        {
+          "start": 8371,
+          "end": 8378,
+          "label": "organization"
+        },
+        {
+          "start": 9576,
+          "end": 9595,
+          "label": "date"
+        },
+        {
+          "start": 9615,
+          "end": 9623,
+          "label": "date"
+        },
+        {
+          "start": 9660,
+          "end": 9681,
+          "label": "date"
+        },
+        {
+          "start": 9829,
+          "end": 9836,
+          "label": "date"
+        },
+        {
+          "start": 9947,
+          "end": 9952,
+          "label": "organization"
+        },
+        {
+          "start": 10418,
+          "end": 10439,
+          "label": "organization"
+        },
+        {
+          "start": 10546,
+          "end": 10567,
+          "label": "organization"
+        },
+        {
+          "start": 10691,
+          "end": 10716,
+          "label": "organization"
+        },
+        {
+          "start": 11227,
+          "end": 11234,
+          "label": "organization"
+        },
+        {
+          "start": 11507,
+          "end": 11514,
+          "label": "organization"
+        },
+        {
+          "start": 11612,
+          "end": 11628,
+          "label": "organization"
+        },
+        {
+          "start": 11643,
+          "end": 11667,
+          "label": "organization"
+        },
+        {
+          "start": 11768,
+          "end": 11775,
+          "label": "organization"
+        },
+        {
+          "start": 12043,
+          "end": 12048,
+          "label": "organization"
+        },
+        {
+          "start": 12150,
+          "end": 12157,
+          "label": "organization"
+        },
+        {
+          "start": 12271,
+          "end": 12278,
+          "label": "organization"
+        },
+        {
+          "start": 12391,
+          "end": 12396,
+          "label": "organization"
+        },
+        {
+          "start": 12563,
+          "end": 12570,
+          "label": "organization"
+        },
+        {
+          "start": 12644,
+          "end": 12651,
+          "label": "organization"
+        },
+        {
+          "start": 12743,
+          "end": 12754,
+          "label": "date"
+        },
+        {
+          "start": 13309,
+          "end": 13332,
+          "label": "organization"
+        },
+        {
+          "start": 13461,
+          "end": 13466,
+          "label": "organization"
+        },
+        {
+          "start": 13592,
+          "end": 13632,
+          "label": "organization"
+        },
+        {
+          "start": 13862,
+          "end": 13890,
+          "label": "organization"
+        },
+        {
+          "start": 14175,
+          "end": 14186,
+          "label": "date"
+        },
+        {
+          "start": 14363,
+          "end": 14370,
+          "label": "date"
+        },
+        {
+          "start": 15320,
+          "end": 15344,
+          "label": "organization"
+        },
+        {
+          "start": 16262,
+          "end": 16276,
+          "label": "date"
+        },
+        {
+          "start": 16309,
+          "end": 16316,
+          "label": "organization"
+        },
+        {
+          "start": 16565,
+          "end": 16598,
+          "label": "organization"
+        },
+        {
+          "start": 17150,
+          "end": 17155,
+          "label": "organization"
+        },
+        {
+          "start": 17164,
+          "end": 17185,
+          "label": "date"
+        },
+        {
+          "start": 17640,
+          "end": 17645,
+          "label": "organization"
+        },
+        {
+          "start": 18151,
+          "end": 18184,
+          "label": "organization"
+        },
+        {
+          "start": 18233,
+          "end": 18240,
+          "label": "organization"
+        },
+        {
+          "start": 18635,
+          "end": 18642,
+          "label": "organization"
+        },
+        {
+          "start": 18662,
+          "end": 18692,
+          "label": "organization"
+        },
+        {
+          "start": 18775,
+          "end": 18783,
+          "label": "date"
+        },
+        {
+          "start": 18928,
+          "end": 18935,
+          "label": "date"
+        },
+        {
+          "start": 19074,
+          "end": 19084,
+          "label": "date"
+        },
+        {
+          "start": 19107,
+          "end": 19115,
+          "label": "date"
+        },
+        {
+          "start": 19323,
+          "end": 19330,
+          "label": "date"
+        },
+        {
+          "start": 19341,
+          "end": 19348,
+          "label": "organization"
+        },
+        {
+          "start": 19476,
+          "end": 19488,
+          "label": "date"
+        },
+        {
+          "start": 19543,
+          "end": 19560,
+          "label": "date"
+        },
+        {
+          "start": 19571,
+          "end": 19579,
+          "label": "date"
+        },
+        {
+          "start": 19683,
+          "end": 19691,
+          "label": "organization"
+        },
+        {
+          "start": 19895,
+          "end": 19902,
+          "label": "date"
+        },
+        {
+          "start": 19913,
+          "end": 19920,
+          "label": "organization"
+        },
+        {
+          "start": 19972,
+          "end": 19996,
+          "label": "date"
+        },
+        {
+          "start": 20028,
+          "end": 20045,
+          "label": "date"
+        },
+        {
+          "start": 20094,
+          "end": 20101,
+          "label": "date"
+        },
+        {
+          "start": 20229,
+          "end": 20247,
+          "label": "date"
+        },
+        {
+          "start": 20287,
+          "end": 20318,
+          "label": "organization"
+        },
+        {
+          "start": 20624,
+          "end": 20631,
+          "label": "date"
+        },
+        {
+          "start": 21231,
+          "end": 21256,
+          "label": "organization"
+        },
+        {
+          "start": 21436,
+          "end": 21446,
+          "label": "date"
+        },
+        {
+          "start": 21458,
+          "end": 21466,
+          "label": "date"
+        },
+        {
+          "start": 21635,
+          "end": 21639,
+          "label": "date"
+        },
+        {
+          "start": 21663,
+          "end": 21693,
+          "label": "organization"
+        },
+        {
+          "start": 21721,
+          "end": 21728,
+          "label": "date"
+        },
+        {
+          "start": 21766,
+          "end": 21771,
+          "label": "organization"
+        },
+        {
+          "start": 21791,
+          "end": 21798,
+          "label": "date"
+        },
+        {
+          "start": 21862,
+          "end": 21869,
+          "label": "organization"
+        },
+        {
+          "start": 22025,
+          "end": 22031,
+          "label": "date"
+        },
+        {
+          "start": 22441,
+          "end": 22466,
+          "label": "organization"
+        },
+        {
+          "start": 22470,
+          "end": 22474,
+          "label": "date"
+        },
+        {
+          "start": 22518,
+          "end": 22526,
+          "label": "organization"
+        },
+        {
+          "start": 22727,
+          "end": 22734,
+          "label": "organization"
+        },
+        {
+          "start": 23037,
+          "end": 23048,
+          "label": "organization"
+        },
+        {
+          "start": 23089,
+          "end": 23096,
+          "label": "organization"
+        },
+        {
+          "start": 23330,
+          "end": 23351,
+          "label": "date"
+        },
+        {
+          "start": 23462,
+          "end": 23469,
+          "label": "organization"
+        },
+        {
+          "start": 23556,
+          "end": 23567,
+          "label": "organization"
+        },
+        {
+          "start": 23614,
+          "end": 23619,
+          "label": "organization"
+        },
+        {
+          "start": 23764,
+          "end": 23769,
+          "label": "organization"
+        },
+        {
+          "start": 24069,
+          "end": 24090,
+          "label": "date"
+        },
+        {
+          "start": 24343,
+          "end": 24350,
+          "label": "organization"
+        },
+        {
+          "start": 24496,
+          "end": 24529,
+          "label": "organization"
+        },
+        {
+          "start": 25440,
+          "end": 25465,
+          "label": "organization"
+        },
+        {
+          "start": 25525,
+          "end": 25545,
+          "label": "date"
+        },
+        {
+          "start": 25556,
+          "end": 25563,
+          "label": "organization"
+        },
+        {
+          "start": 25883,
+          "end": 25890,
+          "label": "organization"
+        },
+        {
+          "start": 25897,
+          "end": 25911,
+          "label": "date"
+        },
+        {
+          "start": 25994,
+          "end": 26019,
+          "label": "organization"
+        },
+        {
+          "start": 26037,
+          "end": 26061,
+          "label": "date"
+        },
+        {
+          "start": 26239,
+          "end": 26246,
+          "label": "organization"
+        },
+        {
+          "start": 26407,
+          "end": 26431,
+          "label": "organization"
+        },
+        {
+          "start": 26485,
+          "end": 26492,
+          "label": "organization"
+        },
+        {
+          "start": 26540,
+          "end": 26547,
+          "label": "organization"
+        },
+        {
+          "start": 26716,
+          "end": 26723,
+          "label": "organization"
+        },
+        {
+          "start": 26850,
+          "end": 26857,
+          "label": "organization"
+        },
+        {
+          "start": 27484,
+          "end": 27491,
+          "label": "organization"
+        },
+        {
+          "start": 27562,
+          "end": 27586,
+          "label": "organization"
+        },
+        {
+          "start": 27818,
+          "end": 27825,
+          "label": "organization"
+        },
+        {
+          "start": 28011,
+          "end": 28018,
+          "label": "organization"
+        },
+        {
+          "start": 28175,
+          "end": 28182,
+          "label": "organization"
+        },
+        {
+          "start": 28246,
+          "end": 28270,
+          "label": "organization"
+        },
+        {
+          "start": 28461,
+          "end": 28485,
+          "label": "organization"
+        },
+        {
+          "start": 29164,
+          "end": 29171,
+          "label": "organization"
+        },
+        {
+          "start": 29799,
+          "end": 29806,
+          "label": "organization"
+        },
+        {
+          "start": 29918,
+          "end": 29925,
+          "label": "organization"
+        },
+        {
+          "start": 30251,
+          "end": 30258,
+          "label": "organization"
+        },
+        {
+          "start": 30414,
+          "end": 30442,
+          "label": "organization"
+        },
+        {
+          "start": 30446,
+          "end": 30450,
+          "label": "date"
+        },
+        {
+          "start": 31585,
+          "end": 31592,
+          "label": "organization"
+        },
+        {
+          "start": 31875,
+          "end": 31880,
+          "label": "organization"
+        },
+        {
+          "start": 32251,
+          "end": 32276,
+          "label": "organization"
+        },
+        {
+          "start": 32681,
+          "end": 32702,
+          "label": "organization"
+        },
+        {
+          "start": 32721,
+          "end": 32753,
+          "label": "organization"
+        },
+        {
+          "start": 32785,
+          "end": 32792,
+          "label": "organization"
+        },
+        {
+          "start": 33067,
+          "end": 33074,
+          "label": "organization"
+        },
+        {
+          "start": 33313,
+          "end": 33318,
+          "label": "organization"
+        },
+        {
+          "start": 33537,
+          "end": 33544,
+          "label": "organization"
+        },
+        {
+          "start": 33698,
+          "end": 33705,
+          "label": "organization"
+        },
+        {
+          "start": 33899,
+          "end": 33906,
+          "label": "organization"
+        },
+        {
+          "start": 34022,
+          "end": 34034,
+          "label": "date"
+        },
+        {
+          "start": 34454,
+          "end": 34461,
+          "label": "organization"
+        },
+        {
+          "start": 34537,
+          "end": 34544,
+          "label": "organization"
+        },
+        {
+          "start": 35084,
+          "end": 35091,
+          "label": "organization"
+        },
+        {
+          "start": 35194,
+          "end": 35201,
+          "label": "organization"
+        },
+        {
+          "start": 35237,
+          "end": 35248,
+          "label": "date"
+        },
+        {
+          "start": 35249,
+          "end": 35258,
+          "label": "date"
+        },
+        {
+          "start": 35890,
+          "end": 35899,
+          "label": "date"
+        },
+        {
+          "start": 36115,
+          "end": 36124,
+          "label": "date"
+        },
+        {
+          "start": 36135,
+          "end": 36142,
+          "label": "date"
+        },
+        {
+          "start": 36198,
+          "end": 36207,
+          "label": "date"
+        },
+        {
+          "start": 36405,
+          "end": 36412,
+          "label": "organization"
+        },
+        {
+          "start": 36422,
+          "end": 36437,
+          "label": "organization"
+        },
+        {
+          "start": 36496,
+          "end": 36511,
+          "label": "person"
+        },
+        {
+          "start": 36587,
+          "end": 36613,
+          "label": "person"
+        },
+        {
+          "start": 36614,
+          "end": 36625,
+          "label": "organization"
+        },
+        {
+          "start": 37384,
+          "end": 37391,
+          "label": "organization"
+        },
+        {
+          "start": 37505,
+          "end": 37512,
+          "label": "organization"
+        },
+        {
+          "start": 37557,
+          "end": 37564,
+          "label": "organization"
+        },
+        {
+          "start": 37716,
+          "end": 37723,
+          "label": "organization"
+        },
+        {
+          "start": 37809,
+          "end": 37816,
+          "label": "organization"
+        },
+        {
+          "start": 38412,
+          "end": 38428,
+          "label": "organization"
+        },
+        {
+          "start": 38558,
+          "end": 38563,
+          "label": "organization"
+        },
+        {
+          "start": 39193,
+          "end": 39221,
+          "label": "organization"
+        },
+        {
+          "start": 39931,
+          "end": 39967,
+          "label": "organization"
+        },
+        {
+          "start": 40340,
+          "end": 40347,
+          "label": "organization"
+        },
+        {
+          "start": 40769,
+          "end": 40776,
+          "label": "organization"
+        },
+        {
+          "start": 41008,
+          "end": 41013,
+          "label": "organization"
+        },
+        {
+          "start": 41584,
+          "end": 41609,
+          "label": "organization"
+        },
+        {
+          "start": 41920,
+          "end": 41945,
+          "label": "organization"
+        },
+        {
+          "start": 41949,
+          "end": 41953,
+          "label": "date"
+        },
+        {
+          "start": 41967,
+          "end": 41988,
+          "label": "organization"
+        },
+        {
+          "start": 43165,
+          "end": 43188,
+          "label": "organization"
+        },
+        {
+          "start": 43862,
+          "end": 43875,
+          "label": "date"
+        },
+        {
+          "start": 43890,
+          "end": 43899,
+          "label": "date"
+        },
+        {
+          "start": 44415,
+          "end": 44426,
+          "label": "date"
+        },
+        {
+          "start": 44437,
+          "end": 44453,
+          "label": "date"
+        },
+        {
+          "start": 44796,
+          "end": 44813,
+          "label": "date"
+        },
+        {
+          "start": 46585,
+          "end": 46610,
+          "label": "organization"
+        },
+        {
+          "start": 46650,
+          "end": 46657,
+          "label": "organization"
+        },
+        {
+          "start": 46922,
+          "end": 46933,
+          "label": "organization"
+        },
+        {
+          "start": 47079,
+          "end": 47087,
+          "label": "organization"
+        },
+        {
+          "start": 48123,
+          "end": 48145,
+          "label": "date"
+        },
+        {
+          "start": 48165,
+          "end": 48180,
+          "label": "organization"
+        }
+      ]
+    },
+    {
+      "id": "en/software-license-agreement.txt",
+      "entities": [
+        {
+          "start": 100,
+          "end": 111,
+          "label": "date"
+        },
+        {
+          "start": 113,
+          "end": 117,
+          "label": "date"
+        },
+        {
+          "start": 162,
+          "end": 185,
+          "label": "organization"
+        },
+        {
+          "start": 390,
+          "end": 395,
+          "label": "person"
+        },
+        {
+          "start": 417,
+          "end": 447,
+          "label": "organization"
+        },
+        {
+          "start": 631,
+          "end": 651,
+          "label": "person"
+        },
+        {
+          "start": 874,
+          "end": 882,
+          "label": "organization"
+        },
+        {
+          "start": 892,
+          "end": 907,
+          "label": "organization"
+        },
+        {
+          "start": 909,
+          "end": 913,
+          "label": "organization"
+        },
+        {
+          "start": 962,
+          "end": 985,
+          "label": "organization"
+        },
+        {
+          "start": 1159,
+          "end": 1167,
+          "label": "organization"
+        },
+        {
+          "start": 1251,
+          "end": 1257,
+          "label": "date"
+        },
+        {
+          "start": 1398,
+          "end": 1414,
+          "label": "organization"
+        },
+        {
+          "start": 1430,
+          "end": 1439,
+          "label": "date"
+        },
+        {
+          "start": 1572,
+          "end": 1595,
+          "label": "organization"
+        },
+        {
+          "start": 1597,
+          "end": 1619,
+          "label": "organization"
+        },
+        {
+          "start": 1656,
+          "end": 1664,
+          "label": "organization"
+        },
+        {
+          "start": 1703,
+          "end": 1734,
+          "label": "organization"
+        },
+        {
+          "start": 1755,
+          "end": 1785,
+          "label": "organization"
+        },
+        {
+          "start": 1787,
+          "end": 1808,
+          "label": "organization"
+        },
+        {
+          "start": 1972,
+          "end": 1990,
+          "label": "organization"
+        },
+        {
+          "start": 2013,
+          "end": 2039,
+          "label": "organization"
+        },
+        {
+          "start": 2124,
+          "end": 2159,
+          "label": "person"
+        },
+        {
+          "start": 2165,
+          "end": 2185,
+          "label": "person"
+        },
+        {
+          "start": 2258,
+          "end": 2269,
+          "label": "date"
+        },
+        {
+          "start": 2299,
+          "end": 2310,
+          "label": "date"
+        },
+        {
+          "start": 2312,
+          "end": 2316,
+          "label": "date"
+        },
+        {
+          "start": 1857,
+          "end": 1871,
+          "label": "phone number"
+        },
+        {
+          "start": 1452,
+          "end": 1462,
+          "label": "phone number"
+        }
+      ]
+    }
+  ]
+}

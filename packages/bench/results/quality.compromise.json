@@ -1,0 +1,109 @@
+{
+  "tool": "compromise",
+  "generatedAt": "2026-06-12T11:44:16.453Z",
+  "corpus": {
+    "docs": 4,
+    "docsPerLanguage": {
+      "en": 4
+    },
+    "goldEntities": 101,
+    "skippedDocs": [
+      "cs/asset-transfer-court-declensions.txt",
+      "cs/database-cz-service-contract.txt",
+      "cs/eagles-rental-agreement.txt",
+      "cs/nakit-legal-services-framework.txt",
+      "cs/patrik-nguyen-used-vehicle-sale.txt",
+      "cs/probo-frame-purchase-contract.txt",
+      "cs/sanofi-bonus-agreement.txt",
+      "cs/vinci-donation-agreement.txt",
+      "de/geschaeftsfuehrer-dienstvertrag.txt"
+    ]
+  },
+  "labelsFilter": ["person", "organization"],
+  "modes": {
+    "exact": {
+      "micro": {
+        "truePositives": 15,
+        "falsePositives": 39,
+        "falseNegatives": 23,
+        "goldCount": 38,
+        "precision": 0.2777777777777778,
+        "recall": 0.39473684210526316,
+        "f1": 0.32608695652173914
+      },
+      "perLabel": {
+        "organization": {
+          "truePositives": 3,
+          "falsePositives": 21,
+          "falseNegatives": 16,
+          "goldCount": 19,
+          "precision": 0.125,
+          "recall": 0.15789473684210525,
+          "f1": 0.13953488372093023
+        },
+        "person": {
+          "truePositives": 12,
+          "falsePositives": 18,
+          "falseNegatives": 7,
+          "goldCount": 19,
+          "precision": 0.4,
+          "recall": 0.631578947368421,
+          "f1": 0.4897959183673469
+        }
+      },
+      "perLanguage": {
+        "en": {
+          "truePositives": 15,
+          "falsePositives": 39,
+          "falseNegatives": 23,
+          "goldCount": 38,
+          "precision": 0.2777777777777778,
+          "recall": 0.39473684210526316,
+          "f1": 0.32608695652173914
+        }
+      }
+    },
+    "overlap": {
+      "micro": {
+        "truePositives": 30,
+        "falsePositives": 24,
+        "falseNegatives": 8,
+        "goldCount": 38,
+        "precision": 0.5555555555555556,
+        "recall": 0.7894736842105263,
+        "f1": 0.6521739130434783
+      },
+      "perLabel": {
+        "organization": {
+          "truePositives": 14,
+          "falsePositives": 10,
+          "falseNegatives": 5,
+          "goldCount": 19,
+          "precision": 0.5833333333333334,
+          "recall": 0.7368421052631579,
+          "f1": 0.6511627906976745
+        },
+        "person": {
+          "truePositives": 16,
+          "falsePositives": 14,
+          "falseNegatives": 3,
+          "goldCount": 19,
+          "precision": 0.5333333333333333,
+          "recall": 0.8421052631578947,
+          "f1": 0.653061224489796
+        }
+      },
+      "perLanguage": {
+        "en": {
+          "truePositives": 30,
+          "falsePositives": 24,
+          "falseNegatives": 8,
+          "goldCount": 38,
+          "precision": 0.5555555555555556,
+          "recall": 0.7894736842105263,
+          "f1": 0.6521739130434783
+        }
+      }
+    }
+  }
+}

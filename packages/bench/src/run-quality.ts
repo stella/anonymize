@@ -37,6 +37,7 @@ type QualityReport = {
     docs: number;
     docsPerLanguage: Record<string, number>;
     goldEntities: number;
+    skippedDocs: string[];
   };
   labelsFilter: string[] | null;
   modes: Record<MatchMode, ModeReport>;
@@ -52,20 +53,24 @@ const { values: args } = parseArgs({
 
 const labelsFilter = args.labels?.split(",").map((label) => label.trim());
 
-const docs = loadGoldDocuments();
+const allDocs = loadGoldDocuments();
 const predictions: PredictionsFile = args.predictions
   ? // SAFETY: --predictions files are produced by bench adapters with this shape
     (JSON.parse(readFileSync(args.predictions, "utf8")) as PredictionsFile)
-  : await runAnonymizeAdapter(docs);
+  : await runAnonymizeAdapter(allDocs);
 
 const predictionsById = new Map(
   predictions.docs.map((doc) => [doc.id, doc.entities]),
 );
 
-const missingDocs = docs.filter((doc) => !predictionsById.has(doc.id));
-if (missingDocs.length > 0) {
-  const ids = missingDocs.map((doc) => doc.id).join(", ");
-  throw new Error(`predictions missing for: ${ids}`);
+// Tools without support for a corpus language omit those documents;
+// they are reported as skipped instead of scored as zero recall.
+const docs = allDocs.filter((doc) => predictionsById.has(doc.id));
+const skippedDocIds = allDocs
+  .filter((doc) => !predictionsById.has(doc.id))
+  .map((doc) => doc.id);
+if (docs.length === 0) {
+  throw new Error("predictions cover no corpus documents");
 }
 
 const buildModeReport = (mode: MatchMode): ModeReport => {
@@ -109,6 +114,7 @@ const report: QualityReport = {
     docs: docs.length,
     docsPerLanguage,
     goldEntities: docs.reduce((sum, doc) => sum + doc.gold.length, 0),
+    skippedDocs: skippedDocIds,
   },
   labelsFilter: labelsFilter ?? null,
   modes: {
