@@ -744,7 +744,7 @@ const PASSPORT_CONTEXT: RegexDef = {
     `[^\\S\\n]{0,4}(?i:passports?)` +
     `(?:[^\\S\\n]+(?:(?i:number)|(?i:no\\.?)|#))?` +
     `[^\\S\\n]{0,4}:?[^\\S\\n]{0,4}` +
-    `(?:[A-Z]{1,2}\\d{6,8}|\\d{7,9})\\b`,
+    `(?:[A-Za-z]{1,2}\\d{6,8}|\\d{7,9})\\b`,
   label: "passport number",
   score: 0.96,
 };
@@ -755,7 +755,7 @@ const FR_CNI_CONTEXT: RegexDef = {
     `(?i:French)[^\\S\\n]+(?i:national)[^\\S\\n]+(?i:identity)[^\\S\\n]+(?i:card))` +
     `(?:[^\\S\\n]+(?:(?i:number)|(?i:no\\.?)|(?i:n[°o]\\.?)))?` +
     `[^\\S\\n]{0,4}:?[^\\S\\n]{0,4}` +
-    `[A-Z0-9]{9,12}\\b`,
+    `[A-Za-z0-9]{9,12}\\b`,
   label: "identity card number",
   score: 0.96,
 };
@@ -766,7 +766,7 @@ const CY_TIC_CONTEXT: RegexDef = {
     `(?:(?i:TIC)|(?i:tax)[^\\S\\n]+(?i:identification)[^\\S\\n]+(?i:code))` +
     `(?:[^\\S\\n]+(?:(?i:number)|(?i:no\\.?)|#))?` +
     `[^\\S\\n]{0,4}:?[^\\S\\n]{0,4}` +
-    `\\d{8}[A-Z]\\b`,
+    `\\d{8}[A-Za-z]\\b`,
   label: "tax identification number",
   score: 0.96,
 };
@@ -788,18 +788,18 @@ const UK_DRIVING_LICENCE_CONTEXT: RegexDef = {
     `(?i:driving)[^\\S\\n]+(?i:licen[cs]e)` +
     `(?:[^\\S\\n]+(?:(?i:number)|(?i:no\\.?)|#))?` +
     `[^\\S\\n]{0,4}:?[^\\S\\n]{0,4}` +
-    `[A-Z]{5}\\d{6}[A-Z0-9]{2}\\d[A-Z]{2}\\b`,
+    `[A-Za-z]{5}\\d{6}[A-Za-z0-9]{2}\\d[A-Za-z]{2}\\b`,
   label: "identity card number",
   score: 0.96,
 };
 
 const US_DRIVER_LICENSE_CONTEXT: RegexDef = {
   pattern:
-    `\\b(?:(?i:U\\.?S\\.?)|(?i:USA)|(?i:United)[^\\S\\n]+(?i:States)|[A-Z]{2})?` +
+    `\\b(?:(?i:U\\.?S\\.?)|(?i:USA)|(?i:United)[^\\S\\n]+(?i:States)|[A-Za-z]{2})?` +
     `[^\\S\\n]{0,4}(?:(?i:driver'?s?)|(?i:driving))[^\\S\\n]+(?i:licen[cs]e)` +
     `(?:[^\\S\\n]+(?:(?i:number)|(?i:no\\.?)|#))?` +
     `[^\\S\\n]{0,4}:?[^\\S\\n]{0,4}` +
-    `[A-Z0-9]{5,15}\\b`,
+    `[A-Za-z0-9]{5,15}\\b`,
   label: "identity card number",
   score: 0.8,
 };
@@ -809,7 +809,7 @@ const MEDICAL_LICENSE_CONTEXT: RegexDef = {
     `\\b(?:(?i:medical)|(?i:physician)|(?i:doctor)|(?i:surgeon)|(?i:nursing)|(?i:nurse)|(?i:GMC)|(?i:NMC))` +
     `(?:[^\\S\\n]+(?:(?i:licen[cs]e)|(?i:registration)|(?i:reg\\.?)|(?i:pin)|(?i:number)|(?i:no\\.?)))*` +
     `[^\\S\\n]{0,4}:?[^\\S\\n]{0,4}` +
-    `[A-Z]{0,3}\\d{5,8}\\b`,
+    `[A-Za-z]{0,3}\\d{5,8}\\b`,
   label: "registration number",
   score: 0.85,
 };

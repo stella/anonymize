@@ -142,6 +142,48 @@ describe("deterministic identifier gap regexes", () => {
     );
   });
 
+  test("contextual letter identifiers accept lowercase values", async () => {
+    const entities = await detect(
+      [
+        "Passport No. a1234567 was listed on the form.",
+        "French national identity card no ab1234567 was copied.",
+        "Cyprus TIC: 12345678x was recorded.",
+        "UK driving licence morga657054sm9ij was verified.",
+        "ca driver license no d1234567 was scanned.",
+        "GMC number: abc12345 was checked.",
+      ].join("\n"),
+    );
+
+    expect(entities).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "passport number",
+          text: "Passport No. a1234567",
+        }),
+        expect.objectContaining({
+          label: "identity card number",
+          text: "French national identity card no ab1234567",
+        }),
+        expect.objectContaining({
+          label: "tax identification number",
+          text: "Cyprus TIC: 12345678x",
+        }),
+        expect.objectContaining({
+          label: "identity card number",
+          text: "UK driving licence morga657054sm9ij",
+        }),
+        expect.objectContaining({
+          label: "identity card number",
+          text: "ca driver license no d1234567",
+        }),
+        expect.objectContaining({
+          label: "registration number",
+          text: "GMC number: abc12345",
+        }),
+      ]),
+    );
+  });
+
   test("broad shapes do not fire without required context", async () => {
     const entities = await detect(
       [
