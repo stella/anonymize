@@ -1,6 +1,7 @@
 const SCRIPT_STYLE_RE = /<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi;
 const COMMENT_RE = /<!--[\s\S]*?-->/g;
-const BLOCK_BREAK_RE = /<\/(?:p|div|tr|h[1-6]|li|blockquote|pre)>|<br\s*\/?>/gi;
+const BLOCK_BREAK_RE =
+  /<\/(?:p|div|tr|h[1-6]|li|blockquote|pre)>|<br\b[^>]*>/gi;
 const TAG_RE = /<[^>]+>/g;
 
 const NAMED_ENTITIES: Record<string, string> = {

@@ -9,7 +9,7 @@ import {
   RUNS_DIR,
   rawPath,
 } from "./paths";
-import type { RunDocument, RunEntity, VerdictSpan } from "./types";
+import type { RunDocument, RunEntity, RunSummary, VerdictSpan } from "./types";
 import {
   judgedVerdictsByKey,
   loadVerdictsForDoc,
@@ -104,11 +104,22 @@ export const diffDocuments = ({
   };
 };
 
-const loadRunDocuments = async (
-  runName: string,
-): Promise<Map<string, RunDocument>> => {
+type LoadedRun = {
+  docs: Map<string, RunDocument>;
+  summary: RunSummary;
+};
+
+const loadRun = async (runName: string): Promise<LoadedRun> => {
   assertValidRunName(runName);
   const runDir = join(RUNS_DIR, runName);
+  const summaryFile = Bun.file(join(runDir, RUN_SUMMARY_FILE));
+  if (!(await summaryFile.exists())) {
+    console.error(
+      `run "${runName}" is missing ${RUN_SUMMARY_FILE}; it may be incomplete`,
+    );
+    process.exit(1);
+  }
+  const summary = (await summaryFile.json()) as RunSummary;
   const docs = new Map<string, RunDocument>();
   let files: string[];
   try {
@@ -123,9 +134,26 @@ const loadRunDocuments = async (
     }
     // SAFETY: run artifacts are only written by src/run.ts.
     const doc = (await Bun.file(join(runDir, file)).json()) as RunDocument;
-    docs.set(doc.sha256, doc);
+    if (docs.has(doc.docId)) {
+      console.error(`run "${runName}" has duplicate artifact for ${doc.docId}`);
+      process.exit(1);
+    }
+    docs.set(doc.docId, doc);
   }
-  return docs;
+  const entityCount = [...docs.values()].reduce(
+    (sum, doc) => sum + doc.entities.length,
+    0,
+  );
+  if (
+    docs.size !== summary.documentCount ||
+    entityCount !== summary.entityCount
+  ) {
+    console.error(
+      `run "${runName}" is incomplete: summary records ${summary.documentCount} documents/${summary.entityCount} entities, artifacts contain ${docs.size} documents/${entityCount} entities`,
+    );
+    process.exit(1);
+  }
+  return { docs, summary };
 };
 
 const isMainModule = import.meta.path === Bun.main;
@@ -155,10 +183,8 @@ Spans judged "tp"/"fp" are not re-surfaced as candidates; a vanished
     process.exit(values.help ? 0 : 1);
   }
 
-  const current = await loadRunDocuments(values.run);
-  const baseline = values.baseline
-    ? await loadRunDocuments(values.baseline)
-    : null;
+  const current = await loadRun(values.run);
+  const baseline = values.baseline ? await loadRun(values.baseline) : null;
   const manifest = await loadManifest();
   const textBySha = new Map(
     manifest.entries.map((entry) => [entry.sha256, rawPath(entry.id)]),
@@ -167,7 +193,7 @@ Spans judged "tp"/"fp" are not re-surfaced as candidates; a vanished
   const diffs: DocDiff[] = [];
   let judgedSpanCount = 0;
 
-  for (const doc of current.values()) {
+  for (const doc of current.docs.values()) {
     const verdicts = await loadVerdictsForDoc(doc.sha256);
     if (verdicts) {
       const path = textBySha.get(doc.sha256);
@@ -195,7 +221,7 @@ Spans judged "tp"/"fp" are not re-surfaced as candidates; a vanished
     }
     const diff = diffDocuments({
       current: doc,
-      baseline: baseline?.get(doc.sha256) ?? null,
+      baseline: baseline?.docs.get(doc.docId) ?? null,
       judged: judgedVerdictsByKey(verdicts),
     });
     if (

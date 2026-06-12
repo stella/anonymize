@@ -1,9 +1,10 @@
 import { parseArgs } from "node:util";
 
-import { createEdgarClient } from "./edgar";
+import { createEdgarClient, isSupportedDocumentFile } from "./edgar";
 import { sha256Hex } from "./hash";
 import { htmlToText, looksLikeHtml } from "./html-text";
 import { loadManifest, mergeManifestEntries, saveManifest } from "./manifest";
+import { positiveIntegerOption } from "./options";
 import { rawPath } from "./paths";
 import { loadSkipList, mergeSkipEntries, saveSkipList } from "./skiplist";
 import type { ManifestEntry, SkipEntry } from "./types";
@@ -108,8 +109,23 @@ if (queries.length === 0) {
   process.exit(1);
 }
 
-const limit = Number(values.limit ?? DEFAULT_LIMIT_PER_QUERY);
-const pages = Number(values.pages ?? DEFAULT_PAGES_PER_QUERY);
+let limit: number;
+let pages: number;
+try {
+  limit = positiveIntegerOption({
+    name: "limit",
+    value: values.limit,
+    fallback: DEFAULT_LIMIT_PER_QUERY,
+  });
+  pages = positiveIntegerOption({
+    name: "pages",
+    value: values.pages,
+    fallback: DEFAULT_PAGES_PER_QUERY,
+  });
+} catch (error) {
+  console.error(error instanceof Error ? error.message : error);
+  process.exit(1);
+}
 const forms = values.forms ?? DEFAULT_FORMS;
 
 const manifest = await loadManifest();
@@ -138,6 +154,12 @@ for (const query of queries) {
   for (const ref of fresh) {
     if (taken >= limit) {
       break;
+    }
+    if (!isSupportedDocumentFile(ref.filename)) {
+      const reason = `unsupported document type: ${ref.filename}`;
+      console.error(`  skip ${ref.id}: ${reason}`);
+      newSkips.push({ id: ref.id, reason });
+      continue;
     }
     const body = await client.fetchDocument(ref);
     const text = extractText(ref.filename, body);

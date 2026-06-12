@@ -11,6 +11,12 @@ describe("htmlToText", () => {
     );
   });
 
+  test("keeps attributed br elements as line breaks", () => {
+    expect(htmlToText('John Doe<br class="page-break">123 Main St')).toBe(
+      "John Doe\n123 Main St",
+    );
+  });
+
   test("removes script and style blocks entirely", () => {
     const html =
       "<style>p { color: red; }</style><p>kept</p><script>var hidden = 1;</script>";

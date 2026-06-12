@@ -7,6 +7,7 @@ const EDGAR_ARCHIVES_URL = "https://www.sec.gov/Archives/edgar/data";
  * (XBRL interactive data), which shares the `EX-10` prefix.
  */
 const MATERIAL_CONTRACT_RE = /^EX-10(?:\D|$)/;
+const TEXT_DOCUMENT_RE = /\.(?:html?|txt)$/i;
 
 /** SEC asks for polite spacing between requests. */
 const REQUEST_SPACING_MS = 220;
@@ -41,6 +42,9 @@ export type EdgarDocumentRef = {
 
 export const isMaterialContract = (fileType: string | undefined): boolean =>
   fileType !== undefined && MATERIAL_CONTRACT_RE.test(fileType);
+
+export const isSupportedDocumentFile = (filename: string): boolean =>
+  TEXT_DOCUMENT_RE.test(filename);
 
 export const buildDocumentUrl = ({
   cik,

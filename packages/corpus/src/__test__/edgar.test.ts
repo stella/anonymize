@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
-import { buildDocumentUrl, isMaterialContract, parseHit } from "../edgar";
+import {
+  buildDocumentUrl,
+  isMaterialContract,
+  isSupportedDocumentFile,
+  parseHit,
+} from "../edgar";
 
 describe("isMaterialContract", () => {
   test("accepts EX-10 variants", () => {
@@ -32,6 +37,19 @@ describe("buildDocumentUrl", () => {
     ).toBe(
       "https://www.sec.gov/Archives/edgar/data/320193/000032019324000001/ex10-1.htm",
     );
+  });
+});
+
+describe("isSupportedDocumentFile", () => {
+  test("accepts text and HTML exhibits", () => {
+    expect(isSupportedDocumentFile("agreement.htm")).toBe(true);
+    expect(isSupportedDocumentFile("agreement.HTML")).toBe(true);
+    expect(isSupportedDocumentFile("agreement.txt")).toBe(true);
+  });
+
+  test("rejects binary attachments", () => {
+    expect(isSupportedDocumentFile("agreement.pdf")).toBe(false);
+    expect(isSupportedDocumentFile("agreement.docx")).toBe(false);
   });
 });
 

@@ -48,5 +48,9 @@ export const rawFileName = (docId: string): string =>
 export const rawPath = (docId: string): string =>
   join(RAW_DIR, rawFileName(docId));
 
+/** Keep duplicate-content documents as distinct run artifacts. */
+export const runArtifactFileName = (docId: string, sha256: string): string =>
+  `${sha256}-${sha256Hex(docId).slice(0, 8)}.json`;
+
 export const verdictsPath = (source: CorpusSource, sha256: string): string =>
   join(VERDICTS_DIR, source, `${sha256}.json`);

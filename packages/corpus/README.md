@@ -10,9 +10,10 @@ looks at what changed.
 ```
 corpus/
   manifest.json        committed   every document ever fetched (id, source, query, sha256)
-  skiplist.json        committed   ids the fetcher saw but did not store (e.g. size bounds)
+  skiplist.json        committed   ids the fetcher saw but did not store
   raw/                 gitignored  plain-text document bodies, re-fetchable via the manifest
   runs/                gitignored  per-document pipeline output, keyed by content hash
+  triage/              gitignored  generated diff reports containing detected spans
   verdicts/
     edgar/             committed   triaged spans for public SEC filings
     case-law/          gitignored  triaged spans quoting personal data stay local
@@ -52,7 +53,8 @@ from the repo root (turbo builds the workspace packages) before first use.
 
 2. **Run** the rules pipeline (NER off, same configuration as
    `scripts/contract-perf.mjs`) over the whole corpus. Artifacts land in
-   `corpus/runs/<git-sha>/<sha256>.json`.
+   `corpus/runs/<git-sha>/<sha256>-<doc-id-hash>.json`, so separate filings
+   with identical extracted text remain separate documents.
 
    ```sh
    bun src/run.ts
@@ -72,7 +74,8 @@ from the repo root (turbo builds the workspace packages) before first use.
    regressions still appear.
 
    ```sh
-   bun src/diff.ts --run abc1234 --baseline def5678 > triage.json
+   mkdir -p corpus/triage
+   bun src/diff.ts --run abc1234 --baseline def5678 > corpus/triage/triage.json
    ```
 
 4. **Triage** the candidates (manually or with an LLM assist) and record the

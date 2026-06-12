@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
 
@@ -15,6 +15,7 @@ import { sha256Hex } from "./hash";
 import { loadManifest } from "./manifest";
 import {
   assertValidRunName,
+  runArtifactFileName,
   RUN_SUMMARY_FILE,
   RUNS_DIR,
   rawPath,
@@ -24,7 +25,7 @@ import type { RunDocument, RunEntity, RunSummary } from "./types";
 const usage = `Usage: bun src/run.ts [--out <name>] [--force]
 
 Runs the rules pipeline (NER off) over every manifest document and
-writes per-document artifacts to corpus/runs/<name>/<sha256>.json.
+writes per-document artifacts to corpus/runs/<name>/<sha256>-<id-hash>.json.
 <name> defaults to the current git short SHA (plus "-dirty" when the
 tree has uncommitted changes).`;
 
@@ -61,10 +62,7 @@ const runName = values.out ?? defaultRunName();
 assertValidRunName(runName);
 const runDir = join(RUNS_DIR, runName);
 
-if (
-  (await Bun.file(join(runDir, RUN_SUMMARY_FILE)).exists()) &&
-  !values.force
-) {
+if (existsSync(runDir) && !values.force) {
   console.error(`run "${runName}" already exists; use --force to overwrite`);
   process.exit(1);
 }
@@ -99,7 +97,7 @@ const config: PipelineConfig = {
 const context = createPipelineContext();
 await preparePipelineSearch({ config, context });
 
-// Forcing reuses an existing run name; clear stale <sha256>.json
+// Forcing reuses an existing run name; clear stale document
 // artifacts so removed documents do not linger beside fresh output.
 if (values.force) {
   rmSync(runDir, { recursive: true, force: true });
@@ -151,7 +149,7 @@ for (const entry of manifest.entries) {
     entities,
   };
   await Bun.write(
-    join(runDir, `${entry.sha256}.json`),
+    join(runDir, runArtifactFileName(entry.id, entry.sha256)),
     `${JSON.stringify(doc, null, 2)}\n`,
   );
   totalEntities += entities.length;

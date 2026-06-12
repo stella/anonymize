@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { isValidRunName, rawFileName } from "../paths";
+import { isValidRunName, rawFileName, runArtifactFileName } from "../paths";
 
 describe("isValidRunName", () => {
   test("rejects path-traversal and separator names", () => {
@@ -25,5 +25,13 @@ describe("rawFileName", () => {
     // `a:b` and `a_b` both collapse to the `a_b` stem; the id hash must keep
     // their file names distinct so one never overwrites the other.
     expect(rawFileName("a:b")).not.toBe(rawFileName("a_b"));
+  });
+});
+
+describe("runArtifactFileName", () => {
+  test("keeps same-content documents distinct", () => {
+    expect(runArtifactFileName("accession-a", "same-sha")).not.toBe(
+      runArtifactFileName("accession-b", "same-sha"),
+    );
   });
 });
