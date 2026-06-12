@@ -950,10 +950,14 @@ const extractValue = (
             // shape-breaking "Signed by …") cannot produce an
             // over-long phone entity. Mirror the fallback's
             // word-boundary retreat.
-            end =
+            const cappedShapeEnd =
               shapeEnd > MAX_TRIGGER_VALUE_LEN
-                ? capAtWordBoundary(valueText, MAX_TRIGGER_VALUE_LEN)
+                ? Math.min(
+                    capAtWordBoundary(valueText, MAX_TRIGGER_VALUE_LEN),
+                    MAX_TRIGGER_VALUE_LEN,
+                  )
                 : shapeEnd;
+            end = cappedShapeEnd;
             foundLineStop = true;
           }
         }
