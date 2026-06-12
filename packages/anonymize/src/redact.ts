@@ -14,6 +14,9 @@ import { defaultContext } from "./context";
 
 const WHITESPACE_RE = /\s+/g;
 const PHONE_NOISE_RE = /[()\s-]/g;
+const ETHEREUM_ADDRESS_RE = /0x[0-9A-Fa-f]{40}/;
+const BECH32_ADDRESS_RE = /\bbc1[ac-hj-np-z02-9]{11,71}\b/i;
+const BASE58_ADDRESS_RE = /\b[13][a-km-zA-HJ-NP-Z1-9]{25,34}\b/;
 // Strip all separators the ID detectors accept so the
 // same real-world value canonicalises to one placeholder:
 //   - whitespace and `-` for IBAN, NIP, REGON, etc.
@@ -22,6 +25,23 @@ const PHONE_NOISE_RE = /[()\s-]/g;
 //   - `.` for credit cards ("4111.1111.1111.1111") and
 //     other dotted IDs.
 const ID_SEPARATOR_RE = /[\s\-/.]/g;
+
+const normalizeCryptoText = (text: string): string => {
+  const trimmed = text.trim();
+
+  const ethereumAddress = ETHEREUM_ADDRESS_RE.exec(trimmed)?.[0];
+  if (ethereumAddress) {
+    return ethereumAddress.toLowerCase();
+  }
+
+  const bech32Address = BECH32_ADDRESS_RE.exec(trimmed)?.[0];
+  if (bech32Address) {
+    return bech32Address.toLowerCase();
+  }
+
+  const base58Address = BASE58_ADDRESS_RE.exec(trimmed)?.[0];
+  return base58Address ?? trimmed;
+};
 
 /**
  * Normalize entity text so that surface-form variations
@@ -36,6 +56,9 @@ const normalizeEntityText = (label: string, text: string): string => {
   }
   if (upper === "PHONE_NUMBER" || upper === "PHONE") {
     return text.replace(PHONE_NOISE_RE, "");
+  }
+  if (upper === "CRYPTO") {
+    return normalizeCryptoText(text);
   }
   if (
     upper === "IBAN" ||

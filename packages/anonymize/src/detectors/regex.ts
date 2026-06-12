@@ -802,7 +802,7 @@ const UK_DRIVING_LICENCE_CONTEXT: RegexDef = {
 const US_DRIVER_LICENSE_CONTEXT: RegexDef = {
   pattern:
     `\\b(?:(?:(?i:U\\.?S\\.?)|(?i:USA)|(?i:United)[^\\S\\n]+(?i:States)|${US_STATE_CODE})` +
-    `[^\\S\\n]{1,4})?(?:(?i:driver'?s?)|(?i:driving))[^\\S\\n]+(?i:licen[cs]e)` +
+    `[^\\S\\n]{1,4})?(?:(?i:driver['’]?s?)|(?i:driving))[^\\S\\n]+(?i:licen[cs]e)` +
     `(?:` +
     `[^\\S\\n]+(?:(?i:number)|(?i:no\\.?)|#)` +
     `[^\\S\\n]{0,4}:?[^\\S\\n]{0,4}[A-Za-z0-9]{5,15}` +
@@ -822,7 +822,7 @@ const MEDICAL_LICENSE_CONTEXT: RegexDef = {
     `(?:[^\\S\\n]+(?:(?i:licen[cs]e)|(?i:registration)|(?i:reg\\.?)|(?i:pin)|(?i:number)|(?i:no\\.?)))+` +
     `)` +
     `[^\\S\\n]{0,4}:?[^\\S\\n]{0,4}` +
-    `[A-Za-z]{0,3}\\d{5,8}\\b`,
+    `(?:[A-Za-z]{0,3}\\d{5,8}|\\d{2}[A-Za-z]\\d{4}[A-Za-z])\\b`,
   label: "registration number",
   score: 0.85,
 };
@@ -832,7 +832,7 @@ const CRYPTO_WALLET_ADDRESS: RegexDef = {
     `\\b(?:0x[0-9A-Fa-f]{40}` +
     `|bc1[ac-hj-np-z02-9]{11,71}` +
     `|BC1[AC-HJ-NP-Z02-9]{11,71})\\b` +
-    `|\\b(?:(?i:BTC|Bitcoin|crypto|wallet)[^\\S\\n]{0,4}:?[^\\S\\n]{1,8}){1,3}` +
+    `|\\b(?:(?i:BTC|Bitcoin|crypto|wallet|address)[^\\S\\n]{0,4}:?[^\\S\\n]{1,8}){1,4}` +
     `[13][a-km-zA-HJ-NP-Z1-9]{25,34}\\b`,
   label: "crypto",
   score: 0.85,

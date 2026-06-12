@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   createPipelineContext,
   DEFAULT_ENTITY_LABELS,
+  redactText,
   runPipeline,
 } from "../index";
 import type { Entity, PipelineConfig } from "../types";
@@ -43,6 +44,7 @@ describe("deterministic identifier gap regexes", () => {
       [
         "ETH wallet 0x742d35Cc6634C0532925a3b844Bc454e4438f44e.",
         "BTC wallet 1BoatSLRHtKNngkdXEeobR76b53LETtpyT.",
+        "Bitcoin address 1BoatSLRHtKNngkdXEeobR76b53LETtpyT was copied.",
         "Bitcoin address BC1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7KYGT080.",
       ].join("\n"),
     );
@@ -56,6 +58,10 @@ describe("deterministic identifier gap regexes", () => {
         expect.objectContaining({
           label: "crypto",
           text: "BTC wallet 1BoatSLRHtKNngkdXEeobR76b53LETtpyT",
+        }),
+        expect.objectContaining({
+          label: "crypto",
+          text: "Bitcoin address 1BoatSLRHtKNngkdXEeobR76b53LETtpyT",
         }),
         expect.objectContaining({
           label: "crypto",
@@ -122,7 +128,9 @@ describe("deterministic identifier gap regexes", () => {
         "UK driving licence MORGA657054SM9IJ was verified.",
         "UK driving licence LEE99706030J99AB was verified.",
         "CA driver license no D1234567 was scanned.",
+        "CA driver’s license no D1234567 was scanned.",
         "GMC number: 1234567 was checked.",
+        "NMC PIN 12A3456B was checked.",
       ].join("\n"),
     );
 
@@ -157,11 +165,42 @@ describe("deterministic identifier gap regexes", () => {
           text: "CA driver license no D1234567",
         }),
         expect.objectContaining({
+          label: "identity card number",
+          text: "CA driver’s license no D1234567",
+        }),
+        expect.objectContaining({
           label: "registration number",
           text: "GMC number: 1234567",
         }),
+        expect.objectContaining({
+          label: "registration number",
+          text: "NMC PIN 12A3456B",
+        }),
       ]),
     );
+  });
+
+  test("equivalent crypto spellings share placeholders", async () => {
+    const fullText = [
+      "ETH wallet 0x742d35Cc6634C0532925a3b844Bc454e4438f44e.",
+      "ETH wallet 0x742d35cc6634c0532925a3b844bc454e4438f44e.",
+      "BTC wallet BC1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7KYGT080.",
+      "BTC wallet bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kygt080.",
+      "BTC wallet 1BoatSLRHtKNngkdXEeobR76b53LETtpyT.",
+      "BTC wallet 1BoatSLRHtKNngkdXEeobR76b53LETtpyt.",
+    ].join("\n");
+
+    const entities = await detect(fullText);
+    const { redactedText, redactionMap } = redactText(fullText, entities);
+
+    expect(redactedText).toContain(
+      "ETH wallet [CRYPTO_1].\nETH wallet [CRYPTO_1].",
+    );
+    expect(redactedText).toContain(
+      "BTC wallet [CRYPTO_2].\nBTC wallet [CRYPTO_2].",
+    );
+    expect(redactedText).toContain("[CRYPTO_3].\n[CRYPTO_4].");
+    expect(redactionMap.size).toBe(4);
   });
 
   test("contextual letter identifiers accept lowercase values", async () => {
