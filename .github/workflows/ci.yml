@@ -25,6 +25,9 @@ jobs:
           registry-url: https://registry.npmjs.org
           scope: "@stll"
 
+      - name: Verify Bun workflow pin
+        run: node .github/tools/check-bun-workflows.mjs
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
