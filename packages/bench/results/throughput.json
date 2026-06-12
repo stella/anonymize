@@ -1,0 +1,142 @@
+{
+  "generatedAt": "2026-06-12T11:27:49.606Z",
+  "environment": {
+    "bun": "1.3.14",
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpu": "Apple M3"
+  },
+  "settings": {
+    "iterations": 10,
+    "warmup": 2
+  },
+  "oneTime": {
+    "dictionaryLoadMs": 202.265,
+    "prepareMs": 777.44
+  },
+  "corpus": {
+    "docs": 13,
+    "totalChars": 146106,
+    "medianPassMs": 185.536,
+    "charsPerSecond": 787480
+  },
+  "documents": [
+    {
+      "id": "cs/asset-transfer-court-declensions.txt",
+      "language": "cs",
+      "chars": 1517,
+      "medianMs": 4.081,
+      "minMs": 3.478,
+      "maxMs": 6.955,
+      "charsPerSecond": 371745
+    },
+    {
+      "id": "cs/database-cz-service-contract.txt",
+      "language": "cs",
+      "chars": 7924,
+      "medianMs": 9.883,
+      "minMs": 8.588,
+      "maxMs": 13.129,
+      "charsPerSecond": 801766
+    },
+    {
+      "id": "cs/eagles-rental-agreement.txt",
+      "language": "cs",
+      "chars": 6970,
+      "medianMs": 8.975,
+      "minMs": 8.094,
+      "maxMs": 11.058,
+      "charsPerSecond": 776587
+    },
+    {
+      "id": "cs/nakit-legal-services-framework.txt",
+      "language": "cs",
+      "chars": 45767,
+      "medianMs": 62.223,
+      "minMs": 59.606,
+      "maxMs": 71.866,
+      "charsPerSecond": 735535
+    },
+    {
+      "id": "cs/patrik-nguyen-used-vehicle-sale.txt",
+      "language": "cs",
+      "chars": 8391,
+      "medianMs": 15.503,
+      "minMs": 14.645,
+      "maxMs": 18.458,
+      "charsPerSecond": 541236
+    },
+    {
+      "id": "cs/probo-frame-purchase-contract.txt",
+      "language": "cs",
+      "chars": 3204,
+      "medianMs": 7.125,
+      "minMs": 6.098,
+      "maxMs": 7.661,
+      "charsPerSecond": 449708
+    },
+    {
+      "id": "cs/sanofi-bonus-agreement.txt",
+      "language": "cs",
+      "chars": 1740,
+      "medianMs": 3.637,
+      "minMs": 3.358,
+      "maxMs": 4.733,
+      "charsPerSecond": 478430
+    },
+    {
+      "id": "cs/vinci-donation-agreement.txt",
+      "language": "cs",
+      "chars": 4607,
+      "medianMs": 6.326,
+      "minMs": 5.614,
+      "maxMs": 8.226,
+      "charsPerSecond": 728219
+    },
+    {
+      "id": "de/geschaeftsfuehrer-dienstvertrag.txt",
+      "language": "de",
+      "chars": 1912,
+      "medianMs": 4.712,
+      "minMs": 4.231,
+      "maxMs": 9.883,
+      "charsPerSecond": 405789
+    },
+    {
+      "id": "en/gt-biopharma-employment-amendment.txt",
+      "language": "en",
+      "chars": 4806,
+      "medianMs": 5.098,
+      "minMs": 4.768,
+      "maxMs": 8.735,
+      "charsPerSecond": 942646
+    },
+    {
+      "id": "en/healthcare-trust-employment-amendment.txt",
+      "language": "en",
+      "chars": 8627,
+      "medianMs": 10.648,
+      "minMs": 9.966,
+      "maxMs": 18.707,
+      "charsPerSecond": 810201
+    },
+    {
+      "id": "en/pra-group-employment-agreement.txt",
+      "language": "en",
+      "chars": 48324,
+      "medianMs": 33.065,
+      "minMs": 30.881,
+      "maxMs": 46.263,
+      "charsPerSecond": 1461483
+    },
+    {
+      "id": "en/software-license-agreement.txt",
+      "language": "en",
+      "chars": 2317,
+      "medianMs": 5.759,
+      "minMs": 5.263,
+      "maxMs": 14.676,
+      "charsPerSecond": 402334
+    }
+  ]
+}
