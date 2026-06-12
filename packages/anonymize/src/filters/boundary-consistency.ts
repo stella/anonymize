@@ -8,6 +8,10 @@ const hasLockedBoundary = (entity: Entity): boolean =>
   entity.sourceDetail === "custom-deny-list" ||
   entity.sourceDetail === "custom-regex";
 
+const hasDetectorLockedBoundary = (entity: Entity): boolean =>
+  entity.label === "phone number" &&
+  entity.source === DETECTION_SOURCES.TRIGGER;
+
 /**
  * Characters allowed in the gap between two adjacent
  * same-label entities that should be merged: spaces,
@@ -271,7 +275,7 @@ const fixPartialWords = (entities: Entity[], fullText: string): Entity[] => {
   const endPositions = byEnd.map((x) => x.entity.end);
 
   return sorted.map((e, eIdx) => {
-    if (hasLockedBoundary(e)) {
+    if (hasLockedBoundary(e) || hasDetectorLockedBoundary(e)) {
       return e;
     }
     // The entity's stored `text` is its source-of-truth display;

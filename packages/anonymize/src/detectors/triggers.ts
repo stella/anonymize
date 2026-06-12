@@ -1429,7 +1429,7 @@ export const processTriggerMatches = (
       rule.strategy,
       rule.label,
     );
-    const value = rawValue ? stripQuotes(rawValue) : null;
+    let value = rawValue ? stripQuotes(rawValue) : null;
 
     if (value) {
       // Apply declarative validations to the captured
@@ -1455,6 +1455,26 @@ export const processTriggerMatches = (
         !isPlausiblePhoneTriggerValue(value.text)
       ) {
         continue;
+      }
+      if (
+        rule.label === "phone number" &&
+        value.text.length > MAX_TRIGGER_VALUE_LEN &&
+        fullText[value.end] !== "\n" &&
+        fullText[value.end] !== "\t"
+      ) {
+        const cappedEnd = Math.min(
+          capAtWordBoundary(value.text, MAX_TRIGGER_VALUE_LEN),
+          MAX_TRIGGER_VALUE_LEN,
+        );
+        const cappedText = value.text.slice(0, cappedEnd).trimEnd();
+        if (cappedText.length === 0) {
+          continue;
+        }
+        value = {
+          ...value,
+          end: value.start + cappedText.length,
+          text: cappedText,
+        };
       }
 
       // When includeTrigger is set, the entity span
