@@ -53,6 +53,9 @@ import { DASH, DASH_INNER } from "../util/char-groups";
 const MIN_PHONE_LENGTH = 7;
 const MIN_MONTH_NAME_LENGTH = 3;
 const NHS_NUMBER_LENGTH = 10;
+const US_STATE_CODE =
+  "(?i:A[KLZR]|C[AOT]|D[CE]|FL|GA|HI|I[ADLN]|K[SY]|LA|M[ADEHINOPST]|" +
+  "N[CDEHJMVY]|O[HKR]|PA|RI|S[CD]|T[NX]|UT|V[AIT]|W[AIVY])";
 
 // ── Shared helpers ──────────────────────────────────
 
@@ -659,7 +662,7 @@ const NHS_NUMBER: Validator = {
   abbreviation: "NHS",
   aliases: ["NHS number"] as const,
   candidatePattern:
-    "\\b(?:(?i:NHS)(?:[^\\S\\n]+(?i:number))?|" +
+    "\\b(?:(?i:NHS)(?:[^\\S\\n]+(?:(?i:number)|(?i:no\\.?)|#))?|" +
     "(?i:National)[^\\S\\n]+(?i:Health)[^\\S\\n]+(?i:Service)[^\\S\\n]+(?i:number))" +
     "[^\\S\\n]{0,4}:?[^\\S\\n]{0,4}\\d{3}[^\\S\\n]?\\d{3}[^\\S\\n]?\\d{4}\\b",
   scope: "country",
@@ -715,7 +718,7 @@ const NHS_NUMBER: Validator = {
     }
 
     const normalizedExpected = expected === 11 ? 0 : expected;
-    if (Number(compacted.at(-1)) !== normalizedExpected) {
+    if (Number(compacted[9]) !== normalizedExpected) {
       return {
         valid: false,
         error: {
@@ -738,10 +741,10 @@ const NHS_NUMBER_CONTEXT: RegexDef = {
 
 const PASSPORT_CONTEXT: RegexDef = {
   pattern:
-    `\\b(?:(?i:U\\.?S\\.?)|(?i:USA)|(?i:United)[^\\S\\n]+(?i:States)|` +
+    `\\b(?:(?:(?i:U\\.?S\\.?)|(?i:USA)|(?i:United)[^\\S\\n]+(?i:States)|` +
     `(?i:UK)|(?i:U\\.?K\\.?)|(?i:GBR)|(?i:British)|(?i:EU)|` +
-    `(?i:European)|(?i:France)|(?i:French))?` +
-    `[^\\S\\n]{0,4}(?i:passports?)` +
+    `(?i:European)|(?i:France)|(?i:French))[^\\S\\n]{1,4})?` +
+    `(?i:passports?)` +
     `(?:[^\\S\\n]+(?:(?i:number)|(?i:no\\.?)|#))?` +
     `[^\\S\\n]{0,4}:?[^\\S\\n]{0,4}` +
     `(?:[A-Za-z]{1,2}\\d{6,8}|\\d{7,9})\\b`,
@@ -753,16 +756,19 @@ const FR_CNI_CONTEXT: RegexDef = {
   pattern:
     `\\b(?:(?i:CNI)|(?i:carte)[^\\S\\n]+(?i:nationale)[^\\S\\n]+d[’'](?i:identit[ée])|` +
     `(?i:French)[^\\S\\n]+(?i:national)[^\\S\\n]+(?i:identity)[^\\S\\n]+(?i:card))` +
-    `(?:[^\\S\\n]+(?:(?i:number)|(?i:no\\.?)|(?i:n[°o]\\.?)))?` +
-    `[^\\S\\n]{0,4}:?[^\\S\\n]{0,4}` +
-    `[A-Za-z0-9]{9,12}\\b`,
+    `(?:` +
+    `[^\\S\\n]+(?:(?i:number)|(?i:no\\.?)|(?i:n[°ºo]\\.?))` +
+    `[^\\S\\n]{0,4}:?[^\\S\\n]{0,4}[A-Za-z0-9]{9,12}` +
+    `|[^\\S\\n]{0,4}:?[^\\S\\n]{0,4}` +
+    `(?=[A-Za-z0-9]{0,11}\\d)[A-Za-z0-9]{9,12}` +
+    `)\\b`,
   label: "identity card number",
   score: 0.96,
 };
 
 const CY_TIC_CONTEXT: RegexDef = {
   pattern:
-    `\\b(?:(?i:Cyprus)|(?i:Cypriot))?[^\\S\\n]{0,4}` +
+    `\\b(?:(?:(?i:Cyprus)|(?i:Cypriot))[^\\S\\n]{1,4})?` +
     `(?:(?i:TIC)|(?i:tax)[^\\S\\n]+(?i:identification)[^\\S\\n]+(?i:code))` +
     `(?:[^\\S\\n]+(?:(?i:number)|(?i:no\\.?)|#))?` +
     `[^\\S\\n]{0,4}:?[^\\S\\n]{0,4}` +
@@ -784,30 +790,37 @@ const CY_ID_CARD_CONTEXT: RegexDef = {
 
 const UK_DRIVING_LICENCE_CONTEXT: RegexDef = {
   pattern:
-    `\\b(?:(?i:UK)|(?i:U\\.?K\\.?)|(?i:British))?[^\\S\\n]{0,4}` +
+    `\\b(?:(?:(?i:UK)|(?i:U\\.?K\\.?)|(?i:British))[^\\S\\n]{1,4})?` +
     `(?i:driving)[^\\S\\n]+(?i:licen[cs]e)` +
     `(?:[^\\S\\n]+(?:(?i:number)|(?i:no\\.?)|#))?` +
     `[^\\S\\n]{0,4}:?[^\\S\\n]{0,4}` +
-    `[A-Za-z]{5}\\d{6}[A-Za-z0-9]{2}\\d[A-Za-z]{2}\\b`,
+    `[A-Za-z9]{5}\\d{6}[A-Za-z0-9]{2}\\d[A-Za-z]{2}\\b`,
   label: "identity card number",
   score: 0.96,
 };
 
 const US_DRIVER_LICENSE_CONTEXT: RegexDef = {
   pattern:
-    `\\b(?:(?i:U\\.?S\\.?)|(?i:USA)|(?i:United)[^\\S\\n]+(?i:States)|[A-Za-z]{2})?` +
-    `[^\\S\\n]{0,4}(?:(?i:driver'?s?)|(?i:driving))[^\\S\\n]+(?i:licen[cs]e)` +
-    `(?:[^\\S\\n]+(?:(?i:number)|(?i:no\\.?)|#))?` +
-    `[^\\S\\n]{0,4}:?[^\\S\\n]{0,4}` +
-    `[A-Za-z0-9]{5,15}\\b`,
+    `\\b(?:(?:(?i:U\\.?S\\.?)|(?i:USA)|(?i:United)[^\\S\\n]+(?i:States)|${US_STATE_CODE})` +
+    `[^\\S\\n]{1,4})?(?:(?i:driver'?s?)|(?i:driving))[^\\S\\n]+(?i:licen[cs]e)` +
+    `(?:` +
+    `[^\\S\\n]+(?:(?i:number)|(?i:no\\.?)|#)` +
+    `[^\\S\\n]{0,4}:?[^\\S\\n]{0,4}[A-Za-z0-9]{5,15}` +
+    `|[^\\S\\n]{0,4}:?[^\\S\\n]{0,4}` +
+    `(?=[A-Za-z0-9]{0,14}\\d)[A-Za-z0-9]{5,15}` +
+    `)\\b`,
   label: "identity card number",
   score: 0.8,
 };
 
 const MEDICAL_LICENSE_CONTEXT: RegexDef = {
   pattern:
-    `\\b(?:(?i:medical)|(?i:physician)|(?i:doctor)|(?i:surgeon)|(?i:nursing)|(?i:nurse)|(?i:GMC)|(?i:NMC))` +
+    `\\b(?:` +
+    `(?:(?i:GMC)|(?i:NMC))` +
     `(?:[^\\S\\n]+(?:(?i:licen[cs]e)|(?i:registration)|(?i:reg\\.?)|(?i:pin)|(?i:number)|(?i:no\\.?)))*` +
+    `|(?:(?i:medical)|(?i:physician)|(?i:doctor)|(?i:surgeon)|(?i:nursing)|(?i:nurse))` +
+    `(?:[^\\S\\n]+(?:(?i:licen[cs]e)|(?i:registration)|(?i:reg\\.?)|(?i:pin)|(?i:number)|(?i:no\\.?)))+` +
+    `)` +
     `[^\\S\\n]{0,4}:?[^\\S\\n]{0,4}` +
     `[A-Za-z]{0,3}\\d{5,8}\\b`,
   label: "registration number",
@@ -817,8 +830,10 @@ const MEDICAL_LICENSE_CONTEXT: RegexDef = {
 const CRYPTO_WALLET_ADDRESS: RegexDef = {
   pattern:
     `\\b(?:0x[0-9A-Fa-f]{40}` +
-    `|[13][a-km-zA-HJ-NP-Z1-9]{25,34}` +
-    `|bc1[ac-hj-np-z02-9]{11,71})\\b`,
+    `|bc1[ac-hj-np-z02-9]{11,71}` +
+    `|BC1[AC-HJ-NP-Z02-9]{11,71})\\b` +
+    `|\\b(?:(?i:BTC|Bitcoin|crypto|wallet)[^\\S\\n]{0,4}:?[^\\S\\n]{1,8}){1,3}` +
+    `[13][a-km-zA-HJ-NP-Z1-9]{25,34}\\b`,
   label: "crypto",
   score: 0.85,
 };

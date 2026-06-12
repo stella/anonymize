@@ -43,6 +43,7 @@ describe("deterministic identifier gap regexes", () => {
       [
         "ETH wallet 0x742d35Cc6634C0532925a3b844Bc454e4438f44e.",
         "BTC wallet 1BoatSLRHtKNngkdXEeobR76b53LETtpyT.",
+        "Bitcoin address BC1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7KYGT080.",
       ].join("\n"),
     );
 
@@ -54,7 +55,11 @@ describe("deterministic identifier gap regexes", () => {
         }),
         expect.objectContaining({
           label: "crypto",
-          text: "1BoatSLRHtKNngkdXEeobR76b53LETtpyT",
+          text: "BTC wallet 1BoatSLRHtKNngkdXEeobR76b53LETtpyT",
+        }),
+        expect.objectContaining({
+          label: "crypto",
+          text: "BC1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7KYGT080",
         }),
       ]),
     );
@@ -85,6 +90,7 @@ describe("deterministic identifier gap regexes", () => {
     const entities = await detect(
       [
         "NHS number 401 023 2137 was present.",
+        "NHS No. 401 023 2137 was also present.",
         "NHS number 401 023 2138 was a typo.",
       ].join("\n"),
     );
@@ -93,6 +99,12 @@ describe("deterministic identifier gap regexes", () => {
       expect.objectContaining({
         label: "national identification number",
         text: "NHS number 401 023 2137",
+      }),
+    );
+    expect(entities).toContainEqual(
+      expect.objectContaining({
+        label: "national identification number",
+        text: "NHS No. 401 023 2137",
       }),
     );
     expect(
@@ -104,9 +116,11 @@ describe("deterministic identifier gap regexes", () => {
     const entities = await detect(
       [
         "CNI: 12AB34567 was attached.",
+        "CNI nº 12AB34567 was attached.",
         "Cyprus TIC: 12345678X was recorded.",
         "Cypriot ID card no 123456 was copied.",
         "UK driving licence MORGA657054SM9IJ was verified.",
+        "UK driving licence LEE99706030J99AB was verified.",
         "CA driver license no D1234567 was scanned.",
         "GMC number: 1234567 was checked.",
       ].join("\n"),
@@ -119,6 +133,10 @@ describe("deterministic identifier gap regexes", () => {
           text: "CNI: 12AB34567",
         }),
         expect.objectContaining({
+          label: "identity card number",
+          text: "CNI nº 12AB34567",
+        }),
+        expect.objectContaining({
           label: "tax identification number",
           text: "Cyprus TIC: 12345678X",
         }),
@@ -129,6 +147,10 @@ describe("deterministic identifier gap regexes", () => {
         expect.objectContaining({
           label: "identity card number",
           text: "UK driving licence MORGA657054SM9IJ",
+        }),
+        expect.objectContaining({
+          label: "identity card number",
+          text: "UK driving licence LEE99706030J99AB",
         }),
         expect.objectContaining({
           label: "identity card number",
@@ -189,6 +211,9 @@ describe("deterministic identifier gap regexes", () => {
       [
         "The release tag was A12345678 and ticket 123456789.",
         "The license agreement number 1234567 remains public.",
+        "CNI application and driver license renewal are generic nouns.",
+        "The doctor 123456 note and nurse 202406 rota remain public.",
+        "Reference 3KMUV89zYwKQ8Z7gkP5p2nR4sA is not a wallet.",
         "Transaction hash " +
           "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.",
       ].join("\n"),
