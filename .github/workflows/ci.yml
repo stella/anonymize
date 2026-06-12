@@ -49,6 +49,9 @@ jobs:
       - name: Lint
         run: bun run lint
 
+      - name: Verify data mirror
+        run: bun run --cwd packages/data check:mirror
+
       - name: Format
         run: bun run format:check
 
