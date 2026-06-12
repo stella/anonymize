@@ -17,6 +17,7 @@ const PHONE_NOISE_RE = /[()\s-]/g;
 const ETHEREUM_ADDRESS_RE = /0x[0-9A-Fa-f]{40}/;
 const BECH32_ADDRESS_RE = /\bbc1[ac-hj-np-z02-9]{11,71}\b/i;
 const BASE58_ADDRESS_RE = /\b[13][a-km-zA-HJ-NP-Z1-9]{25,34}\b/;
+const NHS_NUMBER_CUE_RE = /\b(?:NHS|National\s+Health\s+Service)\b/i;
 // Strip all separators the ID detectors accept so the
 // same real-world value canonicalises to one placeholder:
 //   - whitespace and `-` for IBAN, NIP, REGON, etc.
@@ -59,6 +60,12 @@ const normalizeEntityText = (label: string, text: string): string => {
   }
   if (upper === "CRYPTO") {
     return normalizeCryptoText(text);
+  }
+  if (
+    upper === "NATIONAL_IDENTIFICATION_NUMBER" &&
+    NHS_NUMBER_CUE_RE.test(text)
+  ) {
+    return text.replace(/\D/g, "");
   }
   if (
     upper === "IBAN" ||

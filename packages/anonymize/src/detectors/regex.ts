@@ -8,6 +8,7 @@ import {
   br,
   ch,
   cn,
+  crypto,
   cz,
   cy,
   de,
@@ -52,10 +53,9 @@ import { DASH, DASH_INNER } from "../util/char-groups";
 
 const MIN_PHONE_LENGTH = 7;
 const MIN_MONTH_NAME_LENGTH = 3;
-const NHS_NUMBER_LENGTH = 10;
 const US_STATE_CODE =
-  "(?i:A[KLZR]|C[AOT]|D[CE]|FL|GA|HI|I[ADLN]|K[SY]|LA|M[ADEHINOPST]|" +
-  "N[CDEHJMVY]|O[HKR]|PA|RI|S[CD]|T[NX]|UT|V[AIT]|W[AIVY])";
+  "(?:(?i:A[KLZR]|C[AOT]|D[CE]|FL|GA|HI|I[ADL]|K[SY]|LA|M[ADEHINOPST]|" +
+  "N[CDEHJMVY]|O[HK]|PA|RI|S[CD]|T[NX]|UT|V[AIT]|W[AIVY])|I[Nn]|iN|O[Rr]|oR)";
 
 // ── Shared helpers ──────────────────────────────────
 
@@ -143,6 +143,8 @@ export type RegexMeta = {
   sourceDetail?: Entity["sourceDetail"];
   /** Post-match stdnum validator for confirmation. */
   validator?: Validator;
+  /** Extract the identifier portion when context is part of the regex span. */
+  validatorInput?: (text: string) => string;
 };
 
 type RegexDef = {
@@ -150,6 +152,7 @@ type RegexDef = {
   label: string;
   score: number;
   validator?: Validator;
+  validatorInput?: (text: string) => string;
 };
 
 type AmountWordsConfig = {
@@ -656,87 +659,15 @@ const ES_CIF: RegexDef = {
   validator: es.cif,
 };
 
-const NHS_NUMBER: Validator = {
-  name: "UK NHS Number",
-  localName: "NHS number",
-  abbreviation: "NHS",
-  aliases: ["NHS number"] as const,
-  candidatePattern:
+const NHS_NUMBER_CONTEXT: RegexDef = {
+  pattern:
     "\\b(?:(?i:NHS)(?:[^\\S\\n]+(?:(?i:number)|(?i:no\\.?)|#))?|" +
     "(?i:National)[^\\S\\n]+(?i:Health)[^\\S\\n]+(?i:Service)[^\\S\\n]+(?i:number))" +
     "[^\\S\\n]{0,4}:?[^\\S\\n]{0,4}\\d{3}[^\\S\\n]?\\d{3}[^\\S\\n]?\\d{4}\\b",
-  scope: "country",
-  country: "GB",
-  entityType: "person",
-  description: "UK National Health Service patient identifier",
-  lengths: [NHS_NUMBER_LENGTH] as const,
-  examples: ["4010232137"] as const,
-  compact: (value: string): string => value.replace(/\D/g, ""),
-  format: (value: string): string => {
-    const compacted = value.replace(/\D/g, "");
-    return (
-      `${compacted.slice(0, 3)} ${compacted.slice(3, 6)}` +
-      ` ${compacted.slice(6, 10)}`
-    );
-  },
-  validate: (value: string) => {
-    const compacted = value.replace(/\D/g, "");
-    if (compacted.length !== NHS_NUMBER_LENGTH) {
-      return {
-        valid: false,
-        error: {
-          code: "INVALID_LENGTH",
-          message: "UK NHS number must contain 10 digits",
-        },
-      };
-    }
-    if (!/^\d{10}$/.test(compacted)) {
-      return {
-        valid: false,
-        error: {
-          code: "INVALID_FORMAT",
-          message: "UK NHS number must contain digits only",
-        },
-      };
-    }
-
-    let weightedSum = 0;
-    for (let i = 0; i < NHS_NUMBER_LENGTH - 1; i += 1) {
-      const digit = Number(compacted[i]);
-      weightedSum += digit * (NHS_NUMBER_LENGTH - i);
-    }
-    const remainder = weightedSum % 11;
-    const expected = 11 - remainder;
-    if (expected === 10) {
-      return {
-        valid: false,
-        error: {
-          code: "INVALID_CHECKSUM",
-          message: "UK NHS number checksum cannot be 10",
-        },
-      };
-    }
-
-    const normalizedExpected = expected === 11 ? 0 : expected;
-    if (Number(compacted[9]) !== normalizedExpected) {
-      return {
-        valid: false,
-        error: {
-          code: "INVALID_CHECKSUM",
-          message: "UK NHS number checksum is invalid",
-        },
-      };
-    }
-
-    return { valid: true, compact: compacted };
-  },
-};
-
-const NHS_NUMBER_CONTEXT: RegexDef = {
-  pattern: NHS_NUMBER.candidatePattern ?? "(?!)",
   label: "national identification number",
   score: 0.95,
-  validator: NHS_NUMBER,
+  validator: gb.nhs,
+  validatorInput: (text) => text.replace(/\D/g, ""),
 };
 
 const PASSPORT_CONTEXT: RegexDef = {
@@ -747,7 +678,7 @@ const PASSPORT_CONTEXT: RegexDef = {
     `(?i:passports?)` +
     `(?:[^\\S\\n]+(?:(?i:number)|(?i:no\\.?)|#))?` +
     `[^\\S\\n]{0,4}:?[^\\S\\n]{0,4}` +
-    `(?:[A-Za-z]{1,2}\\d{6,8}|\\d{7,9})\\b`,
+    `(?:[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b`,
   label: "passport number",
   score: 0.96,
 };
@@ -827,6 +758,11 @@ const MEDICAL_LICENSE_CONTEXT: RegexDef = {
   score: 0.85,
 };
 
+const CRYPTO_WALLET_CANDIDATE = crypto.wallet.candidatePattern ?? "(?!)";
+const CRYPTO_WALLET_CANDIDATE_REGEX = new RegExp(CRYPTO_WALLET_CANDIDATE);
+const getCryptoWalletCandidate = (text: string): string =>
+  CRYPTO_WALLET_CANDIDATE_REGEX.exec(text)?.[0] ?? text;
+
 const CRYPTO_WALLET_ADDRESS: RegexDef = {
   pattern:
     `\\b(?:0x[0-9A-Fa-f]{40}` +
@@ -836,6 +772,8 @@ const CRYPTO_WALLET_ADDRESS: RegexDef = {
     `[13][a-km-zA-HJ-NP-Z1-9]{25,34}\\b`,
   label: "crypto",
   score: 0.85,
+  validator: crypto.wallet,
+  validatorInput: getCryptoWalletCandidate,
 };
 
 const AU_ABN_FORMATTED: RegexDef = {
@@ -1199,6 +1137,9 @@ export const REGEX_META: readonly RegexMeta[] = ALL_REGEX_DEFS.map(
     };
     if (d.validator) {
       meta.validator = d.validator;
+    }
+    if (d.validatorInput) {
+      meta.validatorInput = d.validatorInput;
     }
     return meta;
   },
@@ -1847,7 +1788,10 @@ export const processRegexMatches = (
     // spaced/dashed variants that validate() rejects
     // without compaction.
     if (meta.validator) {
-      const compacted = meta.validator.compact(match.text);
+      const validatorText = meta.validatorInput
+        ? meta.validatorInput(match.text)
+        : match.text;
+      const compacted = meta.validator.compact(validatorText);
       const result = meta.validator.validate(compacted);
       if (!result.valid) {
         continue;

@@ -45,7 +45,7 @@ describe("deterministic identifier gap regexes", () => {
         "ETH wallet 0x742d35Cc6634C0532925a3b844Bc454e4438f44e.",
         "BTC wallet 1BoatSLRHtKNngkdXEeobR76b53LETtpyT.",
         "Bitcoin address 1BoatSLRHtKNngkdXEeobR76b53LETtpyT was copied.",
-        "Bitcoin address BC1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7KYGT080.",
+        "Bitcoin address BC1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7KV8F3T4.",
       ].join("\n"),
     );
 
@@ -65,7 +65,7 @@ describe("deterministic identifier gap regexes", () => {
         }),
         expect.objectContaining({
           label: "crypto",
-          text: "BC1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7KYGT080",
+          text: "BC1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7KV8F3T4",
         }),
       ]),
     );
@@ -77,6 +77,7 @@ describe("deterministic identifier gap regexes", () => {
         "US passport number X12345678 was inspected.",
         "UK passport no 123456789 was copied.",
         "Passport No. A1234567 was listed on the form.",
+        "French passport number 12AB34567 was checked.",
       ].join("\n"),
     );
 
@@ -88,6 +89,7 @@ describe("deterministic identifier gap regexes", () => {
         "US passport number X12345678",
         "UK passport no 123456789",
         "Passport No. A1234567",
+        "French passport number 12AB34567",
       ]),
     );
   });
@@ -184,8 +186,8 @@ describe("deterministic identifier gap regexes", () => {
     const fullText = [
       "ETH wallet 0x742d35Cc6634C0532925a3b844Bc454e4438f44e.",
       "ETH wallet 0x742d35cc6634c0532925a3b844bc454e4438f44e.",
-      "BTC wallet BC1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7KYGT080.",
-      "BTC wallet bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kygt080.",
+      "BTC wallet BC1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7KV8F3T4.",
+      "BTC wallet bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4.",
       "BTC wallet 1BoatSLRHtKNngkdXEeobR76b53LETtpyT.",
       "BTC wallet 1BoatSLRHtKNngkdXEeobR76b53LETtpyt.",
     ].join("\n");
@@ -199,8 +201,28 @@ describe("deterministic identifier gap regexes", () => {
     expect(redactedText).toContain(
       "BTC wallet [CRYPTO_2].\nBTC wallet [CRYPTO_2].",
     );
-    expect(redactedText).toContain("[CRYPTO_3].\n[CRYPTO_4].");
-    expect(redactionMap.size).toBe(4);
+    expect(redactedText).toContain(
+      "[CRYPTO_3].\nBTC wallet 1BoatSLRHtKNngkdXEeobR76b53LETtpyt.",
+    );
+    expect(redactionMap.size).toBe(3);
+  });
+
+  test("equivalent NHS cues share placeholders", async () => {
+    const fullText = [
+      "NHS number 401 023 2137 was present.",
+      "NHS No. 401 023 2137 was also present.",
+    ].join("\n");
+
+    const entities = await detect(fullText);
+    const { redactedText, redactionMap } = redactText(fullText, entities);
+
+    expect(redactedText).toContain(
+      "[NATIONAL_IDENTIFICATION_NUMBER_1] was present.",
+    );
+    expect(redactedText).toContain(
+      "[NATIONAL_IDENTIFICATION_NUMBER_1] was also present.",
+    );
+    expect(redactionMap.size).toBe(1);
   });
 
   test("contextual letter identifiers accept lowercase values", async () => {
@@ -211,6 +233,8 @@ describe("deterministic identifier gap regexes", () => {
         "Cyprus TIC: 12345678x was recorded.",
         "UK driving licence morga657054sm9ij was verified.",
         "ca driver license no d1234567 was scanned.",
+        "In driver license no D1234567 was scanned.",
+        "Or driver license no D1234567 was scanned.",
         "GMC number: abc12345 was checked.",
       ].join("\n"),
     );
@@ -236,6 +260,14 @@ describe("deterministic identifier gap regexes", () => {
         expect.objectContaining({
           label: "identity card number",
           text: "ca driver license no d1234567",
+        }),
+        expect.objectContaining({
+          label: "identity card number",
+          text: "In driver license no D1234567",
+        }),
+        expect.objectContaining({
+          label: "identity card number",
+          text: "Or driver license no D1234567",
         }),
         expect.objectContaining({
           label: "registration number",
@@ -266,6 +298,31 @@ describe("deterministic identifier gap regexes", () => {
           "identity card number",
           "registration number",
         ].includes(entity.label),
+      ),
+    ).toBe(false);
+  });
+
+  test("ambiguous lowercase state words are not swallowed as prefixes", async () => {
+    const entities = await detect(
+      [
+        "submitted in driver license no D1234567 keeps the preposition.",
+        "renewed or driver license no D1234567 keeps the conjunction.",
+      ].join("\n"),
+    );
+
+    expect(entities).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "identity card number",
+          text: "driver license no D1234567",
+        }),
+      ]),
+    );
+    expect(
+      entities.some(
+        (entity) =>
+          entity.text === "in driver license no D1234567" ||
+          entity.text === "or driver license no D1234567",
       ),
     ).toBe(false);
   });
