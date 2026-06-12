@@ -37,6 +37,44 @@ export const getNameCorpusNonWesternNames = (
   ctx: PipelineContext = defaultContext,
 ): readonly string[] => ctx.nameCorpus?.nonWesternNamesList ?? [];
 
+const NONWESTERN_LOCALE_KEYS = [
+  "in",
+  "ar",
+  "ja-latn",
+  "ko",
+  "zh-latn",
+  "th",
+  "vi",
+  "fil",
+  "id",
+] as const;
+
+const normalizeCorpusLanguage = (language: string): string =>
+  language.toLowerCase();
+
+const getScopedNonWesternLocaleKeys = (
+  languages: readonly string[] | undefined,
+): readonly (typeof NONWESTERN_LOCALE_KEYS)[number][] => {
+  if (languages === undefined) {
+    return NONWESTERN_LOCALE_KEYS;
+  }
+  const allowed = new Set(languages.map(normalizeCorpusLanguage));
+  return NONWESTERN_LOCALE_KEYS.filter((locale) => allowed.has(locale));
+};
+
+const getScopedNonWesternHonorifics = (
+  languages: readonly string[] | undefined,
+): string[] => {
+  const entries = Object.entries(NONWESTERN_HONORIFICS);
+  if (languages === undefined) {
+    return entries.flatMap(([, forms]) => forms);
+  }
+  const allowed = new Set(languages.map(normalizeCorpusLanguage));
+  return entries
+    .filter(([locale]) => allowed.has(normalizeCorpusLanguage(locale)))
+    .flatMap(([, forms]) => forms);
+};
+
 /**
  * Load name corpus data from injected dictionaries
  * and legacy config files. Merges all sources.
@@ -145,7 +183,9 @@ export const initNameCorpus = (
       // Strip trailing dots/dashes and lowercase so they
       // match the lowercased form used in classifyToken.
       const titles = [...titleMod.default.tokens];
-      for (const form of Object.values(NONWESTERN_HONORIFICS).flat()) {
+      const scopedNonWesternHonorifics =
+        getScopedNonWesternHonorifics(languages);
+      for (const form of scopedNonWesternHonorifics) {
         titles.push(form.replace(/[.-]+$/u, "").toLowerCase());
       }
       const dedupTitles = dedup(titles);
@@ -166,7 +206,7 @@ export const initNameCorpus = (
         titleAbbrSet.add(form.replace(/[.-]+$/u, "").toLowerCase());
       }
       // Non-Western honorifics with dotted forms (Smt., Pt., Adv., etc.)
-      for (const form of Object.values(NONWESTERN_HONORIFICS).flat()) {
+      for (const form of scopedNonWesternHonorifics) {
         if (form.endsWith(".")) {
           titleAbbrSet.add(form.replace(/[.-]+$/u, "").toLowerCase());
         }
@@ -176,19 +216,7 @@ export const initNameCorpus = (
 
       // ── Load non-Western name tokens ────────────────
       // Per-locale JSON files + optional injected data.
-      // Always load all locales (small files); the
-      // language-scoping config uses different keys.
-      const nwLocaleKeys = [
-        "in",
-        "ar",
-        "ja-latn",
-        "ko",
-        "zh-latn",
-        "th",
-        "vi",
-        "fil",
-        "id",
-      ] as const;
+      const nwLocaleKeys = getScopedNonWesternLocaleKeys(languages);
       const [nwNameMods, nwExcludedMod] = await Promise.all([
         Promise.all(
           nwLocaleKeys.map(
@@ -210,7 +238,17 @@ export const initNameCorpus = (
         }
       }
       if (dictionaries?.nonWesternNames) {
-        for (const [, names] of Object.entries(dictionaries.nonWesternNames)) {
+        const entries =
+          languages === undefined
+            ? Object.entries(dictionaries.nonWesternNames)
+            : (() => {
+                const allowed = new Set(languages.map(normalizeCorpusLanguage));
+                return Object.entries(dictionaries.nonWesternNames).filter(
+                  ([language]) =>
+                    allowed.has(normalizeCorpusLanguage(language)),
+                );
+              })();
+        for (const [, names] of entries) {
           for (const name of names) {
             nonWesternNames.push(name);
           }

@@ -34,14 +34,21 @@ const detect = async (text: string): Promise<Entity[]> => {
   });
 };
 
-const detectWithDenyList = async (text: string): Promise<Entity[]> => {
+const detectWithConfig = async (
+  text: string,
+  config: PipelineConfig,
+): Promise<Entity[]> => {
   const context = createPipelineContext();
   return runPipeline({
     fullText: text,
-    config: { ...baseConfig, enableDenyList: true },
+    config,
     gazetteerEntries: [],
     context,
   });
+};
+
+const detectWithDenyList = async (text: string): Promise<Entity[]> => {
+  return detectWithConfig(text, { ...baseConfig, enableDenyList: true });
 };
 
 /** Direct detector call; returns raw entities without pipeline post-processing. */
@@ -716,17 +723,54 @@ describe("Non-Western Name Detection", () => {
         ...baseConfig,
         enableNameCorpus: false,
       };
-      const context = createPipelineContext();
       const matches = persons(
-        await runPipeline({
-          fullText: "Rahul Sharma signed the document.",
-          config: noCorpusConfig,
-          gazetteerEntries: [],
-          context,
-        }),
+        await detectWithConfig(
+          "Rahul Sharma signed the document.",
+          noCorpusConfig,
+        ),
       );
       // With name corpus disabled, the non-Western detector should not fire
       expect(matches.every((m) => m.text !== "Rahul Sharma")).toBe(true);
+    });
+
+    test("nameCorpusLanguages scopes built-in non-Western names", async () => {
+      const csMatches = persons(
+        await detectWithConfig("The witness Sato testified.", {
+          ...baseConfig,
+          nameCorpusLanguages: ["cs"],
+        }),
+      );
+      const jaMatches = persons(
+        await detectWithConfig("The witness Sato testified.", {
+          ...baseConfig,
+          nameCorpusLanguages: ["ja-latn"],
+        }),
+      );
+
+      expect(csMatches.length).toBe(0);
+      expect(jaMatches.some((m) => m.text === "Sato")).toBe(true);
+    });
+
+    test("nameCorpusLanguages scopes non-Western honorifics", async () => {
+      const csMatches = persons(
+        await detectWithConfig("Ong Nguyen Van Minh attended the hearing.", {
+          ...baseConfig,
+          nameCorpusLanguages: ["cs"],
+        }),
+      );
+      const viMatches = persons(
+        await detectWithConfig("Ong Nguyen Van Minh attended the hearing.", {
+          ...baseConfig,
+          nameCorpusLanguages: ["vi"],
+        }),
+      );
+
+      expect(csMatches.every((m) => m.text !== "Ong Nguyen Van Minh")).toBe(
+        true,
+      );
+      expect(viMatches.some((m) => m.text === "Ong Nguyen Van Minh")).toBe(
+        true,
+      );
     });
   });
 });
