@@ -1,0 +1,26 @@
+{
+  "name": "@stll/anonymize-bench",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Reproducible quality and throughput benchmarks for @stll/anonymize",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "bench": "bun run bench:quality && bun run bench:throughput && bun run bench:render",
+    "bench:quality": "bun src/run-quality.ts",
+    "bench:throughput": "bun src/run-throughput.ts",
+    "bench:render": "bun src/render-results.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "bun test",
+    "format": "oxfmt ."
+  },
+  "dependencies": {
+    "@stll/anonymize": "workspace:*",
+    "@stll/anonymize-data": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.2",
+    "bun-types": "^1.3.14",
+    "typescript": "^6.0.3"
+  }
+}

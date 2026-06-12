@@ -1,0 +1,334 @@
+{
+  "tool": "anonymize",
+  "generatedAt": "2026-06-12T11:26:03.458Z",
+  "corpus": {
+    "docs": 13,
+    "docsPerLanguage": {
+      "cs": 8,
+      "de": 1,
+      "en": 4
+    },
+    "goldEntities": 332
+  },
+  "labelsFilter": null,
+  "modes": {
+    "exact": {
+      "micro": {
+        "truePositives": 332,
+        "falsePositives": 0,
+        "falseNegatives": 0,
+        "goldCount": 332,
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      },
+      "perLabel": {
+        "address": {
+          "truePositives": 55,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "goldCount": 55,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        },
+        "bank account number": {
+          "truePositives": 4,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "goldCount": 4,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        },
+        "country": {
+          "truePositives": 11,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "goldCount": 11,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        },
+        "date": {
+          "truePositives": 52,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "goldCount": 52,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        },
+        "date of birth": {
+          "truePositives": 2,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "goldCount": 2,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        },
+        "email address": {
+          "truePositives": 4,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "goldCount": 4,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        },
+        "iban": {
+          "truePositives": 1,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "goldCount": 1,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        },
+        "monetary amount": {
+          "truePositives": 54,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "goldCount": 54,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        },
+        "organization": {
+          "truePositives": 56,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "goldCount": 56,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        },
+        "person": {
+          "truePositives": 48,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "goldCount": 48,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        },
+        "phone number": {
+          "truePositives": 3,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "goldCount": 3,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        },
+        "registration number": {
+          "truePositives": 27,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "goldCount": 27,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        },
+        "tax identification number": {
+          "truePositives": 15,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "goldCount": 15,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        }
+      },
+      "perLanguage": {
+        "cs": {
+          "truePositives": 207,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "goldCount": 207,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        },
+        "de": {
+          "truePositives": 24,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "goldCount": 24,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        },
+        "en": {
+          "truePositives": 101,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "goldCount": 101,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        }
+      }
+    },
+    "overlap": {
+      "micro": {
+        "truePositives": 332,
+        "falsePositives": 0,
+        "falseNegatives": 0,
+        "goldCount": 332,
+        "precision": 1,
+        "recall": 1,
+        "f1": 1
+      },
+      "perLabel": {
+        "address": {
+          "truePositives": 55,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "goldCount": 55,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        },
+        "bank account number": {
+          "truePositives": 4,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "goldCount": 4,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        },
+        "country": {
+          "truePositives": 11,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "goldCount": 11,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        },
+        "date": {
+          "truePositives": 52,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "goldCount": 52,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        },
+        "date of birth": {
+          "truePositives": 2,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "goldCount": 2,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        },
+        "email address": {
+          "truePositives": 4,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "goldCount": 4,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        },
+        "iban": {
+          "truePositives": 1,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "goldCount": 1,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        },
+        "monetary amount": {
+          "truePositives": 54,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "goldCount": 54,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        },
+        "organization": {
+          "truePositives": 56,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "goldCount": 56,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        },
+        "person": {
+          "truePositives": 48,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "goldCount": 48,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        },
+        "phone number": {
+          "truePositives": 3,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "goldCount": 3,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        },
+        "registration number": {
+          "truePositives": 27,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "goldCount": 27,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        },
+        "tax identification number": {
+          "truePositives": 15,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "goldCount": 15,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        }
+      },
+      "perLanguage": {
+        "cs": {
+          "truePositives": 207,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "goldCount": 207,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        },
+        "de": {
+          "truePositives": 24,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "goldCount": 24,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        },
+        "en": {
+          "truePositives": 101,
+          "falsePositives": 0,
+          "falseNegatives": 0,
+          "goldCount": 101,
+          "precision": 1,
+          "recall": 1,
+          "f1": 1
+        }
+      }
+    }
+  }
+}
