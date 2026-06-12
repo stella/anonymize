@@ -52,6 +52,7 @@ import { DASH, DASH_INNER } from "../util/char-groups";
 
 const MIN_PHONE_LENGTH = 7;
 const MIN_MONTH_NAME_LENGTH = 3;
+const NHS_NUMBER_LENGTH = 10;
 
 // ── Shared helpers ──────────────────────────────────
 
@@ -652,6 +653,176 @@ const ES_CIF: RegexDef = {
   validator: es.cif,
 };
 
+const NHS_NUMBER: Validator = {
+  name: "UK NHS Number",
+  localName: "NHS number",
+  abbreviation: "NHS",
+  aliases: ["NHS number"] as const,
+  candidatePattern:
+    "\\b(?:(?i:NHS)(?:[^\\S\\n]+(?i:number))?|" +
+    "(?i:National)[^\\S\\n]+(?i:Health)[^\\S\\n]+(?i:Service)[^\\S\\n]+(?i:number))" +
+    "[^\\S\\n]{0,4}:?[^\\S\\n]{0,4}\\d{3}[^\\S\\n]?\\d{3}[^\\S\\n]?\\d{4}\\b",
+  scope: "country",
+  country: "GB",
+  entityType: "person",
+  description: "UK National Health Service patient identifier",
+  lengths: [NHS_NUMBER_LENGTH] as const,
+  examples: ["4010232137"] as const,
+  compact: (value: string): string => value.replace(/\D/g, ""),
+  format: (value: string): string => {
+    const compacted = value.replace(/\D/g, "");
+    return (
+      `${compacted.slice(0, 3)} ${compacted.slice(3, 6)}` +
+      ` ${compacted.slice(6, 10)}`
+    );
+  },
+  validate: (value: string) => {
+    const compacted = value.replace(/\D/g, "");
+    if (compacted.length !== NHS_NUMBER_LENGTH) {
+      return {
+        valid: false,
+        error: {
+          code: "INVALID_LENGTH",
+          message: "UK NHS number must contain 10 digits",
+        },
+      };
+    }
+    if (!/^\d{10}$/.test(compacted)) {
+      return {
+        valid: false,
+        error: {
+          code: "INVALID_FORMAT",
+          message: "UK NHS number must contain digits only",
+        },
+      };
+    }
+
+    let weightedSum = 0;
+    for (let i = 0; i < NHS_NUMBER_LENGTH - 1; i += 1) {
+      const digit = Number(compacted[i]);
+      weightedSum += digit * (NHS_NUMBER_LENGTH - i);
+    }
+    const remainder = weightedSum % 11;
+    const expected = 11 - remainder;
+    if (expected === 10) {
+      return {
+        valid: false,
+        error: {
+          code: "INVALID_CHECKSUM",
+          message: "UK NHS number checksum cannot be 10",
+        },
+      };
+    }
+
+    const normalizedExpected = expected === 11 ? 0 : expected;
+    if (Number(compacted.at(-1)) !== normalizedExpected) {
+      return {
+        valid: false,
+        error: {
+          code: "INVALID_CHECKSUM",
+          message: "UK NHS number checksum is invalid",
+        },
+      };
+    }
+
+    return { valid: true, compact: compacted };
+  },
+};
+
+const NHS_NUMBER_CONTEXT: RegexDef = {
+  pattern: NHS_NUMBER.candidatePattern ?? "(?!)",
+  label: "national identification number",
+  score: 0.95,
+  validator: NHS_NUMBER,
+};
+
+const PASSPORT_CONTEXT: RegexDef = {
+  pattern:
+    `\\b(?:(?i:U\\.?S\\.?)|(?i:USA)|(?i:United)[^\\S\\n]+(?i:States)|` +
+    `(?i:UK)|(?i:U\\.?K\\.?)|(?i:GBR)|(?i:British)|(?i:EU)|` +
+    `(?i:European)|(?i:France)|(?i:French))?` +
+    `[^\\S\\n]{0,4}(?i:passports?)` +
+    `(?:[^\\S\\n]+(?:(?i:number)|(?i:no\\.?)|#))?` +
+    `[^\\S\\n]{0,4}:?[^\\S\\n]{0,4}` +
+    `(?:[A-Z]{1,2}\\d{6,8}|\\d{7,9})\\b`,
+  label: "passport number",
+  score: 0.96,
+};
+
+const FR_CNI_CONTEXT: RegexDef = {
+  pattern:
+    `\\b(?:(?i:CNI)|(?i:carte)[^\\S\\n]+(?i:nationale)[^\\S\\n]+d[’'](?i:identit[ée])|` +
+    `(?i:French)[^\\S\\n]+(?i:national)[^\\S\\n]+(?i:identity)[^\\S\\n]+(?i:card))` +
+    `(?:[^\\S\\n]+(?:(?i:number)|(?i:no\\.?)|(?i:n[°o]\\.?)))?` +
+    `[^\\S\\n]{0,4}:?[^\\S\\n]{0,4}` +
+    `[A-Z0-9]{9,12}\\b`,
+  label: "identity card number",
+  score: 0.96,
+};
+
+const CY_TIC_CONTEXT: RegexDef = {
+  pattern:
+    `\\b(?:(?i:Cyprus)|(?i:Cypriot))?[^\\S\\n]{0,4}` +
+    `(?:(?i:TIC)|(?i:tax)[^\\S\\n]+(?i:identification)[^\\S\\n]+(?i:code))` +
+    `(?:[^\\S\\n]+(?:(?i:number)|(?i:no\\.?)|#))?` +
+    `[^\\S\\n]{0,4}:?[^\\S\\n]{0,4}` +
+    `\\d{8}[A-Z]\\b`,
+  label: "tax identification number",
+  score: 0.96,
+};
+
+const CY_ID_CARD_CONTEXT: RegexDef = {
+  pattern:
+    `\\b(?:(?i:Cyprus)|(?i:Cypriot))[^\\S\\n]+` +
+    `(?:(?i:identity)[^\\S\\n]+(?i:card)|(?i:ID)[^\\S\\n]+(?i:card))` +
+    `(?:[^\\S\\n]+(?:(?i:number)|(?i:no\\.?)|#))?` +
+    `[^\\S\\n]{0,4}:?[^\\S\\n]{0,4}` +
+    `\\d{6,8}\\b`,
+  label: "identity card number",
+  score: 0.96,
+};
+
+const UK_DRIVING_LICENCE_CONTEXT: RegexDef = {
+  pattern:
+    `\\b(?:(?i:UK)|(?i:U\\.?K\\.?)|(?i:British))?[^\\S\\n]{0,4}` +
+    `(?i:driving)[^\\S\\n]+(?i:licen[cs]e)` +
+    `(?:[^\\S\\n]+(?:(?i:number)|(?i:no\\.?)|#))?` +
+    `[^\\S\\n]{0,4}:?[^\\S\\n]{0,4}` +
+    `[A-Z]{5}\\d{6}[A-Z0-9]{2}\\d[A-Z]{2}\\b`,
+  label: "identity card number",
+  score: 0.96,
+};
+
+const US_DRIVER_LICENSE_CONTEXT: RegexDef = {
+  pattern:
+    `\\b(?:(?i:U\\.?S\\.?)|(?i:USA)|(?i:United)[^\\S\\n]+(?i:States)|[A-Z]{2})?` +
+    `[^\\S\\n]{0,4}(?:(?i:driver'?s?)|(?i:driving))[^\\S\\n]+(?i:licen[cs]e)` +
+    `(?:[^\\S\\n]+(?:(?i:number)|(?i:no\\.?)|#))?` +
+    `[^\\S\\n]{0,4}:?[^\\S\\n]{0,4}` +
+    `[A-Z0-9]{5,15}\\b`,
+  label: "identity card number",
+  score: 0.8,
+};
+
+const MEDICAL_LICENSE_CONTEXT: RegexDef = {
+  pattern:
+    `\\b(?:(?i:medical)|(?i:physician)|(?i:doctor)|(?i:surgeon)|(?i:nursing)|(?i:nurse)|(?i:GMC)|(?i:NMC))` +
+    `(?:[^\\S\\n]+(?:(?i:licen[cs]e)|(?i:registration)|(?i:reg\\.?)|(?i:pin)|(?i:number)|(?i:no\\.?)))*` +
+    `[^\\S\\n]{0,4}:?[^\\S\\n]{0,4}` +
+    `[A-Z]{0,3}\\d{5,8}\\b`,
+  label: "registration number",
+  score: 0.85,
+};
+
+const CRYPTO_WALLET_ADDRESS: RegexDef = {
+  pattern:
+    `\\b(?:0x[0-9A-Fa-f]{40}` +
+    `|[13][a-km-zA-HJ-NP-Z1-9]{25,34}` +
+    `|bc1[ac-hj-np-z02-9]{11,71})\\b`,
+  label: "crypto",
+  score: 0.85,
+};
+
 const AU_ABN_FORMATTED: RegexDef = {
   pattern: `\\b\\d{2}[^\\S\\n]\\d{3}[^\\S\\n]\\d{3}[^\\S\\n]\\d{3}\\b`,
   label: "tax identification number",
@@ -971,6 +1142,15 @@ const ALL_REGEX_DEFS: readonly RegexDef[] = [
   ES_DNI,
   ES_NIE,
   ES_CIF,
+  NHS_NUMBER_CONTEXT,
+  PASSPORT_CONTEXT,
+  FR_CNI_CONTEXT,
+  CY_TIC_CONTEXT,
+  CY_ID_CARD_CONTEXT,
+  UK_DRIVING_LICENCE_CONTEXT,
+  US_DRIVER_LICENSE_CONTEXT,
+  MEDICAL_LICENSE_CONTEXT,
+  CRYPTO_WALLET_ADDRESS,
   AU_ABN_FORMATTED,
   NO_ORGNR_FORMATTED,
   NO_MVA_FORMATTED,

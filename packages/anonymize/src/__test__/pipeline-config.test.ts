@@ -1009,6 +1009,10 @@ describe("pipeline config semantics", () => {
 });
 
 describe("misc entity label", () => {
+  test("crypto is exported in DEFAULT_ENTITY_LABELS", () => {
+    expect(DEFAULT_ENTITY_LABELS).toContain("crypto");
+  });
+
   test("misc is exported in DEFAULT_ENTITY_LABELS", () => {
     expect(DEFAULT_ENTITY_LABELS).toContain("misc");
   });
@@ -1084,9 +1088,10 @@ describe("misc entity label", () => {
     expect(redactionMap.size).toBe(1);
   });
 
-  test("NER inference is skipped when only misc labels are requested", async () => {
-    // Filtering misc out of the NER schema can leave the
-    // schema empty (e.g. caller passes `labels: ["misc"]`).
+  test("NER inference is skipped when only non-NER labels are requested", async () => {
+    // Filtering deterministic/custom-only labels out of the
+    // NER schema can leave the schema empty (e.g.
+    // caller passes `labels: ["crypto", "misc"]`).
     // Many NER backends reject empty label arrays; the
     // pipeline should skip the call entirely in that case.
     let nerCalled = false;
@@ -1104,7 +1109,7 @@ describe("misc entity label", () => {
         enableConfidenceBoost: false,
         enableCoreference: false,
         customDenyList: [{ value: "Widget X", label: "misc" }],
-        labels: ["misc"],
+        labels: ["crypto", "misc"],
         workspaceId: "test",
       },
       gazetteerEntries: [],
@@ -1117,9 +1122,10 @@ describe("misc entity label", () => {
     expect(nerCalled).toBe(false);
   });
 
-  test("misc is excluded from the NER label schema", async () => {
-    // MISC is a custom-deny-list-only label; surfacing it to the
-    // NER schema would invite zero-shot guesses on arbitrary spans.
+  test("non-NER labels are excluded from the NER label schema", async () => {
+    // These labels are deterministic/custom-only; surfacing them
+    // to the NER schema would invite zero-shot guesses on
+    // arbitrary spans.
     const seenLabels: string[][] = [];
     await runPipeline({
       fullText: "Some sentence.",
@@ -1145,6 +1151,7 @@ describe("misc entity label", () => {
       },
     });
     expect(seenLabels.length).toBe(1);
+    expect(seenLabels[0]).not.toContain("crypto");
     expect(seenLabels[0]).not.toContain("misc");
     // Sanity: other defaults still flow through unchanged.
     expect(seenLabels[0]).toContain("person");
