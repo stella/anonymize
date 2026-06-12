@@ -662,7 +662,8 @@ const ES_CIF: RegexDef = {
 const NHS_NUMBER_CONTEXT: RegexDef = {
   pattern:
     "\\b(?:(?i:NHS)(?:[^\\S\\n]+(?:(?i:number)|(?i:no\\.?)|#))?|" +
-    "(?i:National)[^\\S\\n]+(?i:Health)[^\\S\\n]+(?i:Service)[^\\S\\n]+(?i:number))" +
+    "(?i:National)[^\\S\\n]+(?i:Health)[^\\S\\n]+(?i:Service)" +
+    "[^\\S\\n]+(?:(?i:number)|(?i:no\\.?)|#))" +
     "[^\\S\\n]{0,4}:?[^\\S\\n]{0,4}\\d{3}[^\\S\\n]?\\d{3}[^\\S\\n]?\\d{4}\\b",
   label: "national identification number",
   score: 0.95,
@@ -685,7 +686,7 @@ const PASSPORT_CONTEXT: RegexDef = {
 
 const FR_CNI_CONTEXT: RegexDef = {
   pattern:
-    `\\b(?:(?i:CNI)|(?i:carte)[^\\S\\n]+(?i:nationale)[^\\S\\n]+d[’'](?i:identit[ée])|` +
+    `\\b(?:(?i:CNI)|(?i:carte)[^\\S\\n]+(?i:nationale)[^\\S\\n]+(?i:d)[’'](?i:identit[ée])|` +
     `(?i:French)[^\\S\\n]+(?i:national)[^\\S\\n]+(?i:identity)[^\\S\\n]+(?i:card))` +
     `(?:` +
     `[^\\S\\n]+(?:(?i:number)|(?i:no\\.?)|(?i:n[°ºo]\\.?))` +

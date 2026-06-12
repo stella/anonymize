@@ -18,6 +18,8 @@ const ETHEREUM_ADDRESS_RE = /0x[0-9A-Fa-f]{40}/;
 const BECH32_ADDRESS_RE = /\bbc1[ac-hj-np-z02-9]{11,71}\b/i;
 const BASE58_ADDRESS_RE = /\b[13][a-km-zA-HJ-NP-Z1-9]{25,34}\b/;
 const NHS_NUMBER_CUE_RE = /\b(?:NHS|National\s+Health\s+Service)\b/i;
+const PASSPORT_IDENTIFIER_RE =
+  /\b(?:[A-Za-z]{1,2}\d{6,8}|\d{2}[A-Za-z]{2}\d{5}|\d{7,9})\b/;
 // Strip all separators the ID detectors accept so the
 // same real-world value canonicalises to one placeholder:
 //   - whitespace and `-` for IBAN, NIP, REGON, etc.
@@ -42,6 +44,11 @@ const normalizeCryptoText = (text: string): string => {
 
   const base58Address = BASE58_ADDRESS_RE.exec(trimmed)?.[0];
   return base58Address ?? trimmed;
+};
+
+const normalizePassportText = (text: string): string => {
+  const passportIdentifier = PASSPORT_IDENTIFIER_RE.exec(text)?.[0] ?? text;
+  return passportIdentifier.replace(ID_SEPARATOR_RE, "").toUpperCase();
 };
 
 /**
@@ -76,10 +83,12 @@ const normalizeEntityText = (label: string, text: string): string => {
     upper === "SOCIAL_SECURITY_NUMBER" ||
     upper === "BIRTH_NUMBER" ||
     upper === "IDENTITY_CARD_NUMBER" ||
-    upper === "PASSPORT_NUMBER" ||
     upper === "CREDIT_CARD_NUMBER"
   ) {
     return text.replace(ID_SEPARATOR_RE, "").toUpperCase();
+  }
+  if (upper === "PASSPORT_NUMBER") {
+    return normalizePassportText(text);
   }
   if (
     upper === "PERSON" ||

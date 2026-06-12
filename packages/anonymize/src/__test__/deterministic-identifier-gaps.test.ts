@@ -99,6 +99,8 @@ describe("deterministic identifier gap regexes", () => {
       [
         "NHS number 401 023 2137 was present.",
         "NHS No. 401 023 2137 was also present.",
+        "National Health Service No. 401 023 2137 was repeated.",
+        "National Health Service # 401 023 2137 was repeated again.",
         "NHS number 401 023 2138 was a typo.",
       ].join("\n"),
     );
@@ -115,6 +117,18 @@ describe("deterministic identifier gap regexes", () => {
         text: "NHS No. 401 023 2137",
       }),
     );
+    expect(entities).toContainEqual(
+      expect.objectContaining({
+        label: "national identification number",
+        text: "National Health Service No. 401 023 2137",
+      }),
+    );
+    expect(entities).toContainEqual(
+      expect.objectContaining({
+        label: "national identification number",
+        text: "National Health Service # 401 023 2137",
+      }),
+    );
     expect(
       entities.some((entity) => entity.text.includes("401 023 2138")),
     ).toBe(false);
@@ -125,6 +139,7 @@ describe("deterministic identifier gap regexes", () => {
       [
         "CNI: 12AB34567 was attached.",
         "CNI nº 12AB34567 was attached.",
+        "Carte Nationale D’Identité n° 12AB34567 was attached.",
         "Cyprus TIC: 12345678X was recorded.",
         "Cypriot ID card no 123456 was copied.",
         "UK driving licence MORGA657054SM9IJ was verified.",
@@ -145,6 +160,10 @@ describe("deterministic identifier gap regexes", () => {
         expect.objectContaining({
           label: "identity card number",
           text: "CNI nº 12AB34567",
+        }),
+        expect.objectContaining({
+          label: "identity card number",
+          text: "Carte Nationale D’Identité n° 12AB34567",
         }),
         expect.objectContaining({
           label: "tax identification number",
@@ -211,6 +230,8 @@ describe("deterministic identifier gap regexes", () => {
     const fullText = [
       "NHS number 401 023 2137 was present.",
       "NHS No. 401 023 2137 was also present.",
+      "National Health Service No. 401 023 2137 was repeated.",
+      "National Health Service # 401 023 2137 was repeated again.",
     ].join("\n");
 
     const entities = await detect(fullText);
@@ -221,6 +242,28 @@ describe("deterministic identifier gap regexes", () => {
     );
     expect(redactedText).toContain(
       "[NATIONAL_IDENTIFICATION_NUMBER_1] was also present.",
+    );
+    expect(redactedText).toContain(
+      "[NATIONAL_IDENTIFICATION_NUMBER_1] was repeated.",
+    );
+    expect(redactedText).toContain(
+      "[NATIONAL_IDENTIFICATION_NUMBER_1] was repeated again.",
+    );
+    expect(redactionMap.size).toBe(1);
+  });
+
+  test("equivalent passport cues share placeholders", async () => {
+    const fullText = [
+      "US passport number X12345678 was inspected.",
+      "Passport No. X12345678 was listed on the form.",
+    ].join("\n");
+
+    const entities = await detect(fullText);
+    const { redactedText, redactionMap } = redactText(fullText, entities);
+
+    expect(redactedText).toContain("[PASSPORT_NUMBER_1] was inspected.");
+    expect(redactedText).toContain(
+      "[PASSPORT_NUMBER_1] was listed on the form.",
     );
     expect(redactionMap.size).toBe(1);
   });
