@@ -816,11 +816,10 @@ const labelIsAllowed = (
   allowedLabels: AllowedLabelSet,
 ): boolean => !allowedLabels || allowedLabels.has(label);
 
-// MISC is intentionally a label without detection — only the
-// custom deny-list path produces it. Asking the NER schema for
-// MISC would invite zero-shot guesses that contradict that
-// contract and cause over-redaction.
-const NON_NER_LABELS: ReadonlySet<string> = new Set(["misc"]);
+// These labels are deterministic/custom-only. Asking the NER
+// schema for them would invite zero-shot guesses that
+// contradict that contract and cause over-redaction.
+const NON_NER_LABELS: ReadonlySet<string> = new Set(["crypto", "misc"]);
 
 const getRequestedNerLabels = (
   config: PipelineConfig,

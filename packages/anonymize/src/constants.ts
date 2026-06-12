@@ -86,6 +86,7 @@ export const DEFAULT_ENTITY_LABELS = [
   "registration number",
   "credit card number",
   "passport number",
+  "crypto",
   "monetary amount",
   "land parcel",
   "misc",

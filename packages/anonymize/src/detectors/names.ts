@@ -49,21 +49,24 @@ const NONWESTERN_LOCALE_KEYS = [
   "id",
 ] as const;
 
-type NonWesternNamesModule = { default: { names: string[] } };
+type NonWesternNamesModule = Promise<{ default: { names: string[] } }>;
 
-const NONWESTERN_NAME_LOADERS: Record<
+// Literal import specifiers so the bundler resolves each corpus
+// file into the build output; a template-literal specifier survives
+// bundling as a runtime-relative path that does not exist in dist.
+const NONWESTERN_NAME_IMPORTS: Record<
   (typeof NONWESTERN_LOCALE_KEYS)[number],
-  () => Promise<NonWesternNamesModule>
+  () => NonWesternNamesModule
 > = {
-  ar: () => import("../data/names-nw-ar.json"),
-  fil: () => import("../data/names-nw-fil.json"),
-  id: () => import("../data/names-nw-id.json"),
   in: () => import("../data/names-nw-in.json"),
+  ar: () => import("../data/names-nw-ar.json"),
   "ja-latn": () => import("../data/names-nw-ja-latn.json"),
   ko: () => import("../data/names-nw-ko.json"),
+  "zh-latn": () => import("../data/names-nw-zh-latn.json"),
   th: () => import("../data/names-nw-th.json"),
   vi: () => import("../data/names-nw-vi.json"),
-  "zh-latn": () => import("../data/names-nw-zh-latn.json"),
+  fil: () => import("../data/names-nw-fil.json"),
+  id: () => import("../data/names-nw-id.json"),
 };
 
 const normalizeCorpusLanguage = (language: string): string =>
@@ -236,7 +239,7 @@ export const initNameCorpus = (
       const nwLocaleKeys = getScopedNonWesternLocaleKeys(languages);
       const [nwNameMods, nwExcludedMod] = await Promise.all([
         Promise.all(
-          nwLocaleKeys.map((locale) => NONWESTERN_NAME_LOADERS[locale]()),
+          nwLocaleKeys.map((locale) => NONWESTERN_NAME_IMPORTS[locale]()),
         ),
         import("../data/names-nw-excluded-allcaps.json") as Promise<{
           default: { words: string[] };

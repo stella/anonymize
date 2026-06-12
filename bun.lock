@@ -16,10 +16,10 @@
     },
     "packages/anonymize": {
       "name": "@stll/anonymize",
-      "version": "1.4.10",
+      "version": "1.4.11",
       "dependencies": {
         "@huggingface/tokenizers": "^0.1.3",
-        "@stll/stdnum": "^2.0.1",
+        "@stll/stdnum": "^2.1.0",
         "@stll/text-search": "^1.0.6",
       },
       "devDependencies": {
@@ -39,10 +39,10 @@
     },
     "packages/anonymize/wasm": {
       "name": "@stll/anonymize-wasm",
-      "version": "1.4.10",
+      "version": "1.4.11",
       "dependencies": {
         "@huggingface/tokenizers": "^0.1.3",
-        "@stll/stdnum": "^2.0.1",
+        "@stll/stdnum": "^2.1.0",
         "@stll/text-search-wasm": "^1.0.5",
       },
       "peerDependencies": {
@@ -56,12 +56,12 @@
     },
     "packages/cli": {
       "name": "@stll/anonymize-cli",
-      "version": "1.4.10",
+      "version": "1.4.11",
       "bin": {
         "anonymize": "./dist/cli.mjs",
       },
       "dependencies": {
-        "@stll/anonymize": "^1.4.10",
+        "@stll/anonymize": "^1.4.11",
         "@stll/anonymize-data": "^0.0.6",
       },
       "devDependencies": {
@@ -76,7 +76,7 @@
       "name": "@stll/anonymize-corpus",
       "version": "0.0.0",
       "dependencies": {
-        "@stll/anonymize": "^1.4.10",
+        "@stll/anonymize": "^1.4.11",
         "@stll/anonymize-data": "^0.0.6",
       },
       "devDependencies": {
@@ -308,7 +308,7 @@
 
     "@stll/regex-set-win32-x64-msvc": ["@stll/regex-set-win32-x64-msvc@1.0.5", "", { "os": "win32", "cpu": "x64" }, "sha512-3NyR0UpI141KRQhFAqOmjzDmC8S4o32RluDqFOYzfd8bkFX+KQ1MRYn6TgN3HqbuTnzQBBiCDF9iaG/h8wzQqQ=="],
 
-    "@stll/stdnum": ["@stll/stdnum@2.0.1", "", {}, "sha512-NqE/jVGT4Ve9r4/tvTDrCIkWynw4PYzlINbM65wKSymgfyRnHsYpsZaAZY5TKPs0qCzM7O3BY2Pmj7mT8uoxEw=="],
+    "@stll/stdnum": ["@stll/stdnum@2.1.0", "", {}, "sha512-8IdWPXIgqZqvL05qaAQQPPsgS7gzjbXMDHvXFFjv3xepPyIUuxJPkZLHmnmjoExsBJGaz0sbr1gyUYr+A2pVng=="],
 
     "@stll/text-search": ["@stll/text-search@1.0.6", "", { "dependencies": { "@stll/aho-corasick": "^1.0.4", "@stll/fuzzy-search": "^1.1.2", "@stll/regex-set": "^1.0.5" } }, "sha512-gjBAD7rssDe7SKMoouRfzourSfI+ssWv/HdiSAUXAJe6SvZgpqI2ePbeCnGzaGj1wij4QI+QgpZpqPWlXDNM+Q=="],
 

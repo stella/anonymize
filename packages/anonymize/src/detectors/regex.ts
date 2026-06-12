@@ -8,6 +8,7 @@ import {
   br,
   ch,
   cn,
+  crypto,
   cz,
   cy,
   de,
@@ -52,6 +53,9 @@ import { DASH, DASH_INNER } from "../util/char-groups";
 
 const MIN_PHONE_LENGTH = 7;
 const MIN_MONTH_NAME_LENGTH = 3;
+const US_STATE_CODE =
+  "(?:(?i:A[KLZR]|C[AOT]|D[CE]|FL|GA|HI|I[ADL]|K[SY]|LA|M[ADEHINOPST]|" +
+  "N[CDEHJMVY]|O[HK]|PA|RI|S[CD]|T[NX]|UT|V[AIT]|W[AIVY])|I[Nn]|iN|O[Rr]|oR)";
 
 // ── Shared helpers ──────────────────────────────────
 
@@ -139,6 +143,8 @@ export type RegexMeta = {
   sourceDetail?: Entity["sourceDetail"];
   /** Post-match stdnum validator for confirmation. */
   validator?: Validator;
+  /** Extract the identifier portion when context is part of the regex span. */
+  validatorInput?: (text: string) => string;
 };
 
 type RegexDef = {
@@ -146,6 +152,7 @@ type RegexDef = {
   label: string;
   score: number;
   validator?: Validator;
+  validatorInput?: (text: string) => string;
 };
 
 type AmountWordsConfig = {
@@ -652,6 +659,124 @@ const ES_CIF: RegexDef = {
   validator: es.cif,
 };
 
+const NHS_NUMBER_CONTEXT: RegexDef = {
+  pattern:
+    "\\b(?:(?i:NHS)(?:[^\\S\\n]+(?:(?i:number)|(?i:no\\.?)|#))?|" +
+    "(?i:National)[^\\S\\n]+(?i:Health)[^\\S\\n]+(?i:Service)" +
+    "[^\\S\\n]+(?:(?i:number)|(?i:no\\.?)|#))" +
+    "[^\\S\\n]{0,4}:?[^\\S\\n]{0,4}\\d{3}[^\\S\\n]?\\d{3}[^\\S\\n]?\\d{4}\\b",
+  label: "national identification number",
+  score: 0.95,
+  validator: gb.nhs,
+  validatorInput: (text) => text.replace(/\D/g, ""),
+};
+
+const PASSPORT_CONTEXT: RegexDef = {
+  pattern:
+    `\\b(?:(?:(?i:U\\.?S\\.?)|(?i:USA)|(?i:United)[^\\S\\n]+(?i:States)|` +
+    `(?i:UK)|(?i:U\\.?K\\.?)|(?i:GBR)|(?i:British)|(?i:EU)|` +
+    `(?i:European)|(?i:France)|(?i:French))[^\\S\\n]{1,4})?` +
+    `(?i:passports?)` +
+    `(?:[^\\S\\n]+(?:(?i:number)|(?i:no\\.?)|#))?` +
+    `[^\\S\\n]{0,4}:?[^\\S\\n]{0,4}` +
+    `(?:[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b`,
+  label: "passport number",
+  score: 0.96,
+};
+
+const FR_CNI_CONTEXT: RegexDef = {
+  pattern:
+    `\\b(?:(?i:CNI)|(?i:carte)[^\\S\\n]+(?i:nationale)[^\\S\\n]+(?i:d)[’'](?i:identit[ée])|` +
+    `(?i:French)[^\\S\\n]+(?i:national)[^\\S\\n]+(?i:identity)[^\\S\\n]+(?i:card))` +
+    `(?:` +
+    `[^\\S\\n]+(?:(?i:number)|(?i:no\\.?)|(?i:n[°ºo]\\.?))` +
+    `[^\\S\\n]{0,4}:?[^\\S\\n]{0,4}[A-Za-z0-9]{9,12}` +
+    `|[^\\S\\n]{0,4}:?[^\\S\\n]{0,4}` +
+    `(?=[A-Za-z0-9]{0,11}\\d)[A-Za-z0-9]{9,12}` +
+    `)\\b`,
+  label: "identity card number",
+  score: 0.96,
+};
+
+const CY_TIC_CONTEXT: RegexDef = {
+  pattern:
+    `\\b(?:(?:(?i:Cyprus)|(?i:Cypriot))[^\\S\\n]{1,4})?` +
+    `(?:(?i:TIC)|(?i:tax)[^\\S\\n]+(?i:identification)[^\\S\\n]+(?i:code))` +
+    `(?:[^\\S\\n]+(?:(?i:number)|(?i:no\\.?)|#))?` +
+    `[^\\S\\n]{0,4}:?[^\\S\\n]{0,4}` +
+    `\\d{8}[A-Za-z]\\b`,
+  label: "tax identification number",
+  score: 0.96,
+};
+
+const CY_ID_CARD_CONTEXT: RegexDef = {
+  pattern:
+    `\\b(?:(?i:Cyprus)|(?i:Cypriot))[^\\S\\n]+` +
+    `(?:(?i:identity)[^\\S\\n]+(?i:card)|(?i:ID)[^\\S\\n]+(?i:card))` +
+    `(?:[^\\S\\n]+(?:(?i:number)|(?i:no\\.?)|#))?` +
+    `[^\\S\\n]{0,4}:?[^\\S\\n]{0,4}` +
+    `\\d{6,8}\\b`,
+  label: "identity card number",
+  score: 0.96,
+};
+
+const UK_DRIVING_LICENCE_CONTEXT: RegexDef = {
+  pattern:
+    `\\b(?:(?:(?i:UK)|(?i:U\\.?K\\.?)|(?i:British))[^\\S\\n]{1,4})?` +
+    `(?i:driving)[^\\S\\n]+(?i:licen[cs]e)` +
+    `(?:[^\\S\\n]+(?:(?i:number)|(?i:no\\.?)|#))?` +
+    `[^\\S\\n]{0,4}:?[^\\S\\n]{0,4}` +
+    `[A-Za-z9]{5}\\d{6}[A-Za-z0-9]{2}\\d[A-Za-z]{2}\\b`,
+  label: "identity card number",
+  score: 0.96,
+};
+
+const US_DRIVER_LICENSE_CONTEXT: RegexDef = {
+  pattern:
+    `\\b(?:(?:(?i:U\\.?S\\.?)|(?i:USA)|(?i:United)[^\\S\\n]+(?i:States)|${US_STATE_CODE})` +
+    `[^\\S\\n]{1,4})?(?:(?i:driver['’]?s?)|(?i:driving))[^\\S\\n]+(?i:licen[cs]e)` +
+    `(?:` +
+    `[^\\S\\n]+(?:(?i:number)|(?i:no\\.?)|#)` +
+    `[^\\S\\n]{0,4}:?[^\\S\\n]{0,4}[A-Za-z0-9]{5,15}` +
+    `|[^\\S\\n]{0,4}:?[^\\S\\n]{0,4}` +
+    `(?=[A-Za-z0-9]{0,14}\\d)[A-Za-z0-9]{5,15}` +
+    `)\\b`,
+  label: "identity card number",
+  score: 0.8,
+};
+
+const MEDICAL_LICENSE_CONTEXT: RegexDef = {
+  pattern:
+    `\\b(?:` +
+    `(?:(?i:GMC)|(?i:NMC))` +
+    `(?:[^\\S\\n]+(?:(?i:licen[cs]e)|(?i:registration)|(?i:reg\\.?)|(?i:pin)|(?i:number)|(?i:no\\.?)))*` +
+    `|(?:(?i:medical)|(?i:physician)|(?i:doctor)|(?i:surgeon)|(?i:nursing)|(?i:nurse))` +
+    `(?:[^\\S\\n]+(?:(?i:licen[cs]e)|(?i:registration)|(?i:reg\\.?)|(?i:pin)|(?i:number)|(?i:no\\.?)))+` +
+    `)` +
+    `[^\\S\\n]{0,4}:?[^\\S\\n]{0,4}` +
+    `(?:[A-Za-z]{0,3}\\d{5,8}|\\d{2}[A-Za-z]\\d{4}[A-Za-z])\\b`,
+  label: "registration number",
+  score: 0.85,
+};
+
+const CRYPTO_WALLET_CANDIDATE = crypto.wallet.candidatePattern ?? "(?!)";
+const CRYPTO_WALLET_CANDIDATE_REGEX = new RegExp(CRYPTO_WALLET_CANDIDATE);
+const getCryptoWalletCandidate = (text: string): string =>
+  CRYPTO_WALLET_CANDIDATE_REGEX.exec(text)?.[0] ?? text;
+
+const CRYPTO_WALLET_ADDRESS: RegexDef = {
+  pattern:
+    `\\b(?:0x[0-9A-Fa-f]{40}` +
+    `|bc1[ac-hj-np-z02-9]{11,71}` +
+    `|BC1[AC-HJ-NP-Z02-9]{11,71})\\b` +
+    `|\\b(?:(?i:BTC|Bitcoin|crypto|wallet|address)[^\\S\\n]{0,4}:?[^\\S\\n]{1,8}){1,4}` +
+    `[13][a-km-zA-HJ-NP-Z1-9]{25,34}\\b`,
+  label: "crypto",
+  score: 0.85,
+  validator: crypto.wallet,
+  validatorInput: getCryptoWalletCandidate,
+};
+
 const AU_ABN_FORMATTED: RegexDef = {
   pattern: `\\b\\d{2}[^\\S\\n]\\d{3}[^\\S\\n]\\d{3}[^\\S\\n]\\d{3}\\b`,
   label: "tax identification number",
@@ -971,6 +1096,15 @@ const ALL_REGEX_DEFS: readonly RegexDef[] = [
   ES_DNI,
   ES_NIE,
   ES_CIF,
+  NHS_NUMBER_CONTEXT,
+  PASSPORT_CONTEXT,
+  FR_CNI_CONTEXT,
+  CY_TIC_CONTEXT,
+  CY_ID_CARD_CONTEXT,
+  UK_DRIVING_LICENCE_CONTEXT,
+  US_DRIVER_LICENSE_CONTEXT,
+  MEDICAL_LICENSE_CONTEXT,
+  CRYPTO_WALLET_ADDRESS,
   AU_ABN_FORMATTED,
   NO_ORGNR_FORMATTED,
   NO_MVA_FORMATTED,
@@ -1004,6 +1138,9 @@ export const REGEX_META: readonly RegexMeta[] = ALL_REGEX_DEFS.map(
     };
     if (d.validator) {
       meta.validator = d.validator;
+    }
+    if (d.validatorInput) {
+      meta.validatorInput = d.validatorInput;
     }
     return meta;
   },
@@ -1652,7 +1789,10 @@ export const processRegexMatches = (
     // spaced/dashed variants that validate() rejects
     // without compaction.
     if (meta.validator) {
-      const compacted = meta.validator.compact(match.text);
+      const validatorText = meta.validatorInput
+        ? meta.validatorInput(match.text)
+        : match.text;
+      const compacted = meta.validator.compact(validatorText);
       const result = meta.validator.validate(compacted);
       if (!result.valid) {
         continue;
