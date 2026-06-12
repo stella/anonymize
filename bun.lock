@@ -61,7 +61,7 @@
         "anonymize": "./dist/cli.mjs",
       },
       "dependencies": {
-        "@stll/anonymize": "^1.4.9",
+        "@stll/anonymize": "^1.4.10",
         "@stll/anonymize-data": "^0.0.6",
       },
       "devDependencies": {
@@ -76,7 +76,7 @@
       "name": "@stll/anonymize-corpus",
       "version": "0.0.0",
       "dependencies": {
-        "@stll/anonymize": "^1.4.9",
+        "@stll/anonymize": "^1.4.10",
         "@stll/anonymize-data": "^0.0.6",
       },
       "devDependencies": {

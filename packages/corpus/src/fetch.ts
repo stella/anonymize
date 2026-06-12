@@ -125,7 +125,10 @@ const newSkips: SkipEntry[] = [];
 for (const query of queries) {
   const refs = await client.searchMaterialContracts({ query, forms, pages });
   const fresh = refs.filter(
-    (ref) => !knownIds.has(ref.id) && !newEntries.some((e) => e.id === ref.id),
+    (ref) =>
+      !knownIds.has(ref.id) &&
+      !newEntries.some((entry) => entry.id === ref.id) &&
+      !newSkips.some((entry) => entry.id === ref.id),
   );
   console.error(
     `query "${query}": ${refs.length} hits, ${fresh.length} new, taking up to ${limit}`,

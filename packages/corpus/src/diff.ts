@@ -171,14 +171,25 @@ Spans judged "tp"/"fp" are not re-surfaced as candidates; a vanished
     const verdicts = await loadVerdictsForDoc(doc.sha256);
     if (verdicts) {
       const path = textBySha.get(doc.sha256);
-      const text = path ? await Bun.file(path).text() : null;
-      if (text !== null) {
-        for (const issue of validateVerdicts({ verdicts, text })) {
-          console.error(
-            `invalid verdict for ${doc.docId} span ${issue.spanIndex}: ${issue.message}`,
-          );
-          process.exit(1);
-        }
+      if (!path) {
+        console.error(
+          `verdicts for ${doc.docId} (${doc.sha256}) have no manifest entry; cannot validate offsets`,
+        );
+        process.exit(1);
+      }
+      const textFile = Bun.file(path);
+      if (!(await textFile.exists())) {
+        console.error(
+          `missing raw text for ${doc.docId}; run fetch with --refill before diffing verdicts`,
+        );
+        process.exit(1);
+      }
+      const text = await textFile.text();
+      for (const issue of validateVerdicts({ verdicts, text })) {
+        console.error(
+          `invalid verdict for ${doc.docId} span ${issue.spanIndex}: ${issue.message}`,
+        );
+        process.exit(1);
       }
       judgedSpanCount += verdicts.spans.length;
     }

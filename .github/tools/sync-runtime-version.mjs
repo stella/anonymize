@@ -9,6 +9,7 @@ const PACKAGE_FILES = [
   "packages/cli/package.json",
 ];
 
+const LOCK_FILE = "bun.lock";
 const checkOnly = process.argv.includes("--check");
 const version = readFileSync("VERSION", "utf8").trim();
 
@@ -24,6 +25,7 @@ let hasMismatch = false;
 // Internal dependency ranges that must track the synced
 // version (the CLI consumes the runtime it ships with).
 const SYNCED_DEPENDENCY = "@stll/anonymize";
+const SYNCED_DEPENDENCY_RANGE_RE = /("@stll\/anonymize": "\^)([^"]+)(")/g;
 
 for (const file of PACKAGE_FILES) {
   const pkg = JSON.parse(readFileSync(file, "utf8"));
@@ -54,6 +56,33 @@ for (const file of PACKAGE_FILES) {
   }
   writeFileSync(file, `${JSON.stringify(pkg, null, 2)}\n`);
   console.log(`Updated ${file} to ${version}`);
+}
+
+const lockText = readFileSync(LOCK_FILE, "utf8");
+let lockChanged = false;
+const syncedLockText = lockText.replaceAll(
+  SYNCED_DEPENDENCY_RANGE_RE,
+  (match, prefix, lockedVersion, suffix) => {
+    if (lockedVersion === version) {
+      return match;
+    }
+    if (checkOnly) {
+      console.error(
+        `${LOCK_FILE} has ${SYNCED_DEPENDENCY}@^${lockedVersion}; expected ^${version}`,
+      );
+      hasMismatch = true;
+      return match;
+    }
+    lockChanged = true;
+    return `${prefix}${version}${suffix}`;
+  },
+);
+
+if (lockChanged) {
+  writeFileSync(LOCK_FILE, syncedLockText);
+  console.log(
+    `Updated ${LOCK_FILE} ${SYNCED_DEPENDENCY} ranges to ^${version}`,
+  );
 }
 
 if (hasMismatch) {
