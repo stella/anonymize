@@ -34,6 +34,7 @@
     "test": "bun test --preload ./src/__test__/setup.ts --timeout 15000",
     "test:fast": "bun run test src/__test__/*.test.ts",
     "perf:contracts": "bun scripts/contract-perf.mjs",
+    "smoke:dist": "bun scripts/dist-smoke.mjs",
     "format": "oxfmt ."
   },
   "dependencies": {

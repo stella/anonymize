@@ -9,7 +9,9 @@ export default library({
     "packages/*/dist/",
     "packages/anonymize/wasm/dist/",
   ],
+  jsPlugins: ["./oxlint.plugin.ts"],
   rules: {
+    "stll/no-dynamic-import-specifier": "error",
     "no-non-null-assertion": "off",
     "require-await": "off",
     "typescript/dot-notation": "off",
@@ -31,6 +33,17 @@ export default library({
       rules: {
         "promise/always-return": "off",
         "typescript/no-confusing-void-expression": "off",
+      },
+    },
+    {
+      // Computed import() is safe where imports resolve at runtime
+      // instead of being bundled: the data package ships its raw
+      // dictionary JSON in the tarball (paths pinned by
+      // check-packlist), and tests/bench resolve package subpaths
+      // from node_modules.
+      files: ["packages/data/**", "packages/bench/**", "**/__test__/**"],
+      rules: {
+        "stll/no-dynamic-import-specifier": "off",
       },
     },
   ],

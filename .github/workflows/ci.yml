@@ -66,3 +66,6 @@ jobs:
 
       - name: Verify package tarballs
         run: node .github/tools/check-packlist.mjs
+
+      - name: Smoke test built artifact
+        run: bun run --cwd packages/anonymize smoke:dist

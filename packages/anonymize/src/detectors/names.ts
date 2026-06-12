@@ -58,17 +58,15 @@ const NONWESTERN_NAME_IMPORTS: Record<
   (typeof NONWESTERN_LOCALE_KEYS)[number],
   () => NonWesternNamesModule
 > = {
-  in: () => import("../data/names-nw-in.json") as NonWesternNamesModule,
-  ar: () => import("../data/names-nw-ar.json") as NonWesternNamesModule,
-  "ja-latn": () =>
-    import("../data/names-nw-ja-latn.json") as NonWesternNamesModule,
-  ko: () => import("../data/names-nw-ko.json") as NonWesternNamesModule,
-  "zh-latn": () =>
-    import("../data/names-nw-zh-latn.json") as NonWesternNamesModule,
-  th: () => import("../data/names-nw-th.json") as NonWesternNamesModule,
-  vi: () => import("../data/names-nw-vi.json") as NonWesternNamesModule,
-  fil: () => import("../data/names-nw-fil.json") as NonWesternNamesModule,
-  id: () => import("../data/names-nw-id.json") as NonWesternNamesModule,
+  in: () => import("../data/names-nw-in.json"),
+  ar: () => import("../data/names-nw-ar.json"),
+  "ja-latn": () => import("../data/names-nw-ja-latn.json"),
+  ko: () => import("../data/names-nw-ko.json"),
+  "zh-latn": () => import("../data/names-nw-zh-latn.json"),
+  th: () => import("../data/names-nw-th.json"),
+  vi: () => import("../data/names-nw-vi.json"),
+  fil: () => import("../data/names-nw-fil.json"),
+  id: () => import("../data/names-nw-id.json"),
 };
 
 const normalizeCorpusLanguage = (language: string): string =>
