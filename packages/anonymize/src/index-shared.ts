@@ -102,8 +102,6 @@ export {
   initNameCorpus,
   getNameCorpusNonWesternNames,
 } from "./detectors/names";
-/** @deprecated Use detectNameCorpus instead */
-export { detectNonWesternNames } from "./detectors/locale-name-detector";
 
 // ── Deny List Detector ──────────────────────────
 export {

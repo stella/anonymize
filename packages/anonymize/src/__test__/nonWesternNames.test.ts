@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   createPipelineContext,
   runPipeline,
-  detectNonWesternNames,
+  detectNameCorpus,
   initNameCorpus,
 } from "../index";
 import type { Entity, PipelineConfig } from "../types";
@@ -45,7 +45,7 @@ const ensureDirectCtx = async (): Promise<void> => {
 };
 const detectDirect = async (text: string): Promise<Entity[]> => {
   await ensureDirectCtx();
-  return detectNonWesternNames(text, directCtx);
+  return detectNameCorpus(text, directCtx);
 };
 
 const persons = (entities: Entity[]): Entity[] =>
