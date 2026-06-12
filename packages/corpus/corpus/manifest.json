@@ -1,3 +1,94 @@
 {
-  "entries": []
+  "entries": [
+    {
+      "id": "0000811808-16-000052:amendedexhibit101seventham.htm",
+      "source": "edgar",
+      "url": "https://www.sec.gov/Archives/edgar/data/811808/000081180816000052/amendedexhibit101seventham.htm",
+      "query": "employment agreement",
+      "language": "en",
+      "sha256": "c96f8eb94e99f9c47b6e374935bfe9fead26a247e39f33e71a0213e8fe7ca3b5",
+      "fetchedAt": "2026-06-12T20:35:24.932Z"
+    },
+    {
+      "id": "0000950134-02-003237:d95755ex10-165.txt",
+      "source": "edgar",
+      "url": "https://www.sec.gov/Archives/edgar/data/941552/000095013402003237/d95755ex10-165.txt",
+      "query": "lease agreement",
+      "language": "en",
+      "sha256": "10a7cdd76fc3e658e31a55a3b764fe94dd5255555ac28792eea60d6006ac7bfb",
+      "fetchedAt": "2026-06-12T20:35:27.781Z"
+    },
+    {
+      "id": "0000950144-03-012447:g85712exv10w21.txt",
+      "source": "edgar",
+      "url": "https://www.sec.gov/Archives/edgar/data/1094320/000095014403012447/g85712exv10w21.txt",
+      "query": "lease agreement",
+      "language": "en",
+      "sha256": "8cd19085d4deeb65be01945d18a8b181a22aeaf706d9747eb1ddef11b027698a",
+      "fetchedAt": "2026-06-12T20:35:27.509Z"
+    },
+    {
+      "id": "0001074140-02-000114:doc2.txt",
+      "source": "edgar",
+      "url": "https://www.sec.gov/Archives/edgar/data/1083449/000107414002000114/doc2.txt",
+      "query": "lease agreement",
+      "language": "en",
+      "sha256": "d5918b8bed8617ce9297abef6386312f2f1362955cfcecd979d8ffaf2c565d8f",
+      "fetchedAt": "2026-06-12T20:35:28.176Z"
+    },
+    {
+      "id": "0001144204-05-000351:v010809_ex10-1.txt",
+      "source": "edgar",
+      "url": "https://www.sec.gov/Archives/edgar/data/810509/000114420405000351/v010809_ex10-1.txt",
+      "query": "employment agreement",
+      "language": "en",
+      "sha256": "a8990024db7f65f5ece7357b9ea1f274c098780463f2c3b6d5110ae77485dbd6",
+      "fetchedAt": "2026-06-12T20:35:24.235Z"
+    },
+    {
+      "id": "0001144204-07-000612:v061988_ex10-1.htm",
+      "source": "edgar",
+      "url": "https://www.sec.gov/Archives/edgar/data/810509/000114420407000612/v061988_ex10-1.htm",
+      "query": "employment agreement",
+      "language": "en",
+      "sha256": "4fbd7290d3c32b8e9ed05a96e01de1b0183a046b53f2c0e42bf48e3e79e582e8",
+      "fetchedAt": "2026-06-12T20:35:24.541Z"
+    },
+    {
+      "id": "0001213900-23-063662:ea180762ex10-14_patriciaacq.htm",
+      "source": "edgar",
+      "url": "https://www.sec.gov/Archives/edgar/data/1832483/000121390023063662/ea180762ex10-14_patriciaacq.htm",
+      "query": "lease agreement",
+      "language": "en",
+      "sha256": "107323626b04795b4bdaf482f04781bb3badff722746b2ab8a67ffbf06290684",
+      "fetchedAt": "2026-06-12T20:35:27.187Z"
+    },
+    {
+      "id": "0001299933-17-000650:exhibit2.htm",
+      "source": "edgar",
+      "url": "https://www.sec.gov/Archives/edgar/data/1325878/000129993317000650/exhibit2.htm",
+      "query": "lease agreement",
+      "language": "en",
+      "sha256": "5607a122a660f4f6f0e85ecf9a22ca13fbbb0d2e5dc401814c550415665bf945",
+      "fetchedAt": "2026-06-12T20:35:26.663Z"
+    },
+    {
+      "id": "0001437749-13-004313:ftfc20130409_8kex10-20.htm",
+      "source": "edgar",
+      "url": "https://www.sec.gov/Archives/edgar/data/1395585/000143774913004313/ftfc20130409_8kex10-20.htm",
+      "query": "employment agreement",
+      "language": "en",
+      "sha256": "72f5b6f0784d2e04300b6354d457b03dc8a14f30accee1cb1e8e7db61d9ec63c",
+      "fetchedAt": "2026-06-12T20:35:23.607Z"
+    },
+    {
+      "id": "0001437749-16-026314:ex10-25.htm",
+      "source": "edgar",
+      "url": "https://www.sec.gov/Archives/edgar/data/1395585/000143774916026314/ex10-25.htm",
+      "query": "employment agreement",
+      "language": "en",
+      "sha256": "5fdacd3e69a6ab4d3dbc2248a26101783340b0b1c2705f577a9e24e9e0aea2a5",
+      "fetchedAt": "2026-06-12T20:35:23.993Z"
+    }
+  ]
 }
