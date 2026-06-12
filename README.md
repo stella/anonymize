@@ -41,6 +41,17 @@ echo "Contact Jan Novák at jan.novak@example.com" | bunx @stll/anonymize-cli
 - NER, coreference handling, and confidence boosting
 - Native, browser, and Vite-compatible entrypoints
 
+## Benchmarks
+
+[`packages/bench`](packages/bench) holds reproducible throughput and
+quality benchmarks for the deterministic pipeline, plus comparison
+runs of Microsoft Presidio and compromise on the same legal-contract
+corpus scored by the same scorer. See
+[`packages/bench/results/RESULTS.md`](packages/bench/results/RESULTS.md)
+for current numbers and
+[`packages/bench/README.md`](packages/bench/README.md) for the
+methodology and its limits.
+
 ## Development
 
 ```bash
@@ -70,3 +81,4 @@ bun run hooks:install
 - [`packages/anonymize`](packages/anonymize)
 - [`packages/data`](packages/data)
 - [`packages/anonymize/wasm`](packages/anonymize/wasm)
+- [`packages/bench`](packages/bench)

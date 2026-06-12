@@ -1,0 +1,187 @@
+{
+  "tool": "presidio",
+  "generatedAt": "2026-06-12T11:43:06.688Z",
+  "corpus": {
+    "docs": 5,
+    "docsPerLanguage": {
+      "de": 1,
+      "en": 4
+    },
+    "goldEntities": 125,
+    "skippedDocs": [
+      "cs/asset-transfer-court-declensions.txt",
+      "cs/database-cz-service-contract.txt",
+      "cs/eagles-rental-agreement.txt",
+      "cs/nakit-legal-services-framework.txt",
+      "cs/patrik-nguyen-used-vehicle-sale.txt",
+      "cs/probo-frame-purchase-contract.txt",
+      "cs/sanofi-bonus-agreement.txt",
+      "cs/vinci-donation-agreement.txt"
+    ]
+  },
+  "labelsFilter": [
+    "person",
+    "organization",
+    "email address",
+    "phone number",
+    "date"
+  ],
+  "modes": {
+    "exact": {
+      "micro": {
+        "truePositives": 44,
+        "falsePositives": 284,
+        "falseNegatives": 32,
+        "goldCount": 76,
+        "precision": 0.13414634146341464,
+        "recall": 0.5789473684210527,
+        "f1": 0.21782178217821782
+      },
+      "perLabel": {
+        "date": {
+          "truePositives": 14,
+          "falsePositives": 83,
+          "falseNegatives": 13,
+          "goldCount": 27,
+          "precision": 0.14432989690721648,
+          "recall": 0.5185185185185185,
+          "f1": 0.2258064516129032
+        },
+        "email address": {
+          "truePositives": 0,
+          "falsePositives": 0,
+          "falseNegatives": 1,
+          "goldCount": 1,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0
+        },
+        "organization": {
+          "truePositives": 14,
+          "falsePositives": 188,
+          "falseNegatives": 9,
+          "goldCount": 23,
+          "precision": 0.06930693069306931,
+          "recall": 0.6086956521739131,
+          "f1": 0.12444444444444444
+        },
+        "person": {
+          "truePositives": 16,
+          "falsePositives": 11,
+          "falseNegatives": 8,
+          "goldCount": 24,
+          "precision": 0.5925925925925926,
+          "recall": 0.6666666666666666,
+          "f1": 0.627450980392157
+        },
+        "phone number": {
+          "truePositives": 0,
+          "falsePositives": 2,
+          "falseNegatives": 1,
+          "goldCount": 1,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0
+        }
+      },
+      "perLanguage": {
+        "de": {
+          "truePositives": 3,
+          "falsePositives": 7,
+          "falseNegatives": 9,
+          "goldCount": 12,
+          "precision": 0.3,
+          "recall": 0.25,
+          "f1": 0.2727272727272727
+        },
+        "en": {
+          "truePositives": 41,
+          "falsePositives": 277,
+          "falseNegatives": 23,
+          "goldCount": 64,
+          "precision": 0.1289308176100629,
+          "recall": 0.640625,
+          "f1": 0.21465968586387435
+        }
+      }
+    },
+    "overlap": {
+      "micro": {
+        "truePositives": 65,
+        "falsePositives": 263,
+        "falseNegatives": 11,
+        "goldCount": 76,
+        "precision": 0.19817073170731708,
+        "recall": 0.8552631578947368,
+        "f1": 0.3217821782178218
+      },
+      "perLabel": {
+        "date": {
+          "truePositives": 23,
+          "falsePositives": 74,
+          "falseNegatives": 4,
+          "goldCount": 27,
+          "precision": 0.23711340206185566,
+          "recall": 0.8518518518518519,
+          "f1": 0.3709677419354838
+        },
+        "email address": {
+          "truePositives": 0,
+          "falsePositives": 0,
+          "falseNegatives": 1,
+          "goldCount": 1,
+          "precision": 0,
+          "recall": 0,
+          "f1": 0
+        },
+        "organization": {
+          "truePositives": 19,
+          "falsePositives": 183,
+          "falseNegatives": 4,
+          "goldCount": 23,
+          "precision": 0.09405940594059406,
+          "recall": 0.8260869565217391,
+          "f1": 0.1688888888888889
+        },
+        "person": {
+          "truePositives": 22,
+          "falsePositives": 5,
+          "falseNegatives": 2,
+          "goldCount": 24,
+          "precision": 0.8148148148148148,
+          "recall": 0.9166666666666666,
+          "f1": 0.8627450980392156
+        },
+        "phone number": {
+          "truePositives": 1,
+          "falsePositives": 1,
+          "falseNegatives": 0,
+          "goldCount": 1,
+          "precision": 0.5,
+          "recall": 1,
+          "f1": 0.6666666666666666
+        }
+      },
+      "perLanguage": {
+        "de": {
+          "truePositives": 6,
+          "falsePositives": 4,
+          "falseNegatives": 6,
+          "goldCount": 12,
+          "precision": 0.6,
+          "recall": 0.5,
+          "f1": 0.5454545454545454
+        },
+        "en": {
+          "truePositives": 59,
+          "falsePositives": 259,
+          "falseNegatives": 5,
+          "goldCount": 64,
+          "precision": 0.18553459119496854,
+          "recall": 0.921875,
+          "f1": 0.30890052356020936
+        }
+      }
+    }
+  }
+}

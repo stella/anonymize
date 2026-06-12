@@ -1,6 +1,6 @@
 {
   "tool": "anonymize",
-  "generatedAt": "2026-06-12T11:26:03.458Z",
+  "generatedAt": "2026-06-12T11:44:41.920Z",
   "corpus": {
     "docs": 13,
     "docsPerLanguage": {
@@ -8,7 +8,8 @@
       "de": 1,
       "en": 4
     },
-    "goldEntities": 332
+    "goldEntities": 332,
+    "skippedDocs": []
   },
   "labelsFilter": null,
   "modes": {

@@ -1,0 +1,5 @@
+presidio-analyzer==2.2.359
+spacy==3.8.13
+# Models (installed via `python -m spacy download <name>`):
+#   en_core_web_lg
+#   de_core_news_lg
