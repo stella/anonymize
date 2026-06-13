@@ -1,3 +1,4 @@
+import { sha256Hex } from "./hash";
 import { verdictsPath } from "./paths";
 import {
   CORPUS_SOURCES,
@@ -68,7 +69,11 @@ const validateSpan = (span: VerdictSpan, text: string): string | null => {
   }
   const actual = text.slice(span.start, span.end);
   if (actual !== span.value) {
-    return `value mismatch at [${span.start}, ${span.end}): expected ${JSON.stringify(span.value)}, document has ${JSON.stringify(actual)}`;
+    // Case-law verdict files quote personal data and stay gitignored, yet
+    // diff.ts prints these messages to stderr. Never echo the verbatim span
+    // or document slice; report lengths and short content hashes so a
+    // mismatch stays locatable without leaking the underlying text.
+    return `value mismatch at [${span.start}, ${span.end}): expected ${span.value.length} chars (sha ${sha256Hex(span.value).slice(0, 8)}), document has ${actual.length} chars (sha ${sha256Hex(actual).slice(0, 8)})`;
   }
   return null;
 };

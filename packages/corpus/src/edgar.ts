@@ -15,7 +15,6 @@ const RETRYABLE_STATUS = new Set([429, 503]);
 const MAX_ATTEMPTS = 4;
 const RETRY_BASE_DELAY_MS = 1_000;
 const REQUEST_TIMEOUT_MS = 30_000;
-const PAGE_SIZE = 100;
 
 export type EftsHit = {
   _id: string;
@@ -146,11 +145,17 @@ export const createEdgarClient = ({
   return {
     searchMaterialContracts: async ({ query, forms, pages }) => {
       const refs: EdgarDocumentRef[] = [];
+      // EFTS paginates by `from` and returns a fixed page regardless of any
+      // size hint, so advance the offset by the hits actually returned rather
+      // than a presumed page size (otherwise a 100-stride over 10-hit pages
+      // skips results), and stop once a page comes back empty. `pages` caps
+      // how many requests we make.
+      let from = 0;
       for (let page = 0; page < pages; page += 1) {
         const params = new URLSearchParams({
           q: `"${query}"`,
           forms,
-          from: String(page * PAGE_SIZE),
+          from: String(from),
         });
         const response = await politeFetch(
           `${EFTS_SEARCH_URL}?${params.toString()}`,
@@ -159,6 +164,9 @@ export const createEdgarClient = ({
         // optional chaining below tolerates missing fields.
         const body = (await response.json()) as EftsResponse;
         const hits = body.hits?.hits ?? [];
+        if (hits.length === 0) {
+          break;
+        }
         for (const hit of hits) {
           if (!isMaterialContract(hit._source.file_type)) {
             continue;
@@ -168,9 +176,7 @@ export const createEdgarClient = ({
             refs.push(ref);
           }
         }
-        if (hits.length < PAGE_SIZE) {
-          break;
-        }
+        from += hits.length;
       }
       return refs;
     },

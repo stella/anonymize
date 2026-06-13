@@ -29,8 +29,14 @@ const decodeNumeric = (codePoint: number, fallback: string): string => {
   return String.fromCodePoint(codePoint);
 };
 
+// Hex (`#x1a`), decimal (`#26`), and named (`amp`) entity bodies. The hex
+// and decimal classes are kept separate so a mixed body like `#123abc` matches
+// neither numeric branch (it is left intact) rather than having
+// `Number.parseInt("123abc", 10)` silently decode the `123` prefix.
+const ENTITY_RE = /&(#x[\da-f]+|#\d+|[a-z]+);/gi;
+
 const decodeEntities = (text: string): string =>
-  text.replaceAll(/&(#x?[\da-f]+|[a-z]+);/gi, (match, body: string): string => {
+  text.replaceAll(ENTITY_RE, (match, body: string): string => {
     if (body.startsWith("#x") || body.startsWith("#X")) {
       return decodeNumeric(Number.parseInt(body.slice(2), 16), match);
     }

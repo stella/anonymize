@@ -219,9 +219,14 @@ Spans judged "tp"/"fp" are not re-surfaced as candidates; a vanished
       }
       judgedSpanCount += verdicts.spans.length;
     }
+    // Only diff against a baseline extracted from the same document text.
+    // Span keys are offsets, so a baseline whose sha256 differs (the document
+    // was re-extracted under the same id) would compare offsets across
+    // unrelated content; treat a changed hash as having no baseline.
+    const baselineDoc = baseline?.docs.get(doc.docId) ?? null;
     const diff = diffDocuments({
       current: doc,
-      baseline: baseline?.docs.get(doc.docId) ?? null,
+      baseline: baselineDoc?.sha256 === doc.sha256 ? baselineDoc : null,
       judged: judgedVerdictsByKey(verdicts),
     });
     if (

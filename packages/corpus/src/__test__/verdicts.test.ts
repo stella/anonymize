@@ -35,13 +35,18 @@ describe("validateVerdicts", () => {
     expect(validateVerdicts({ verdicts, text: TEXT })).toEqual([]);
   });
 
-  test("flags value mismatches", () => {
+  test("flags value mismatches without leaking the span or document text", () => {
     const issues = validateVerdicts({
       verdicts: file([span({ value: "Jane Roe" })]),
       text: TEXT,
     });
     expect(issues).toHaveLength(1);
-    expect(issues[0].message).toContain("value mismatch");
+    const { message } = issues[0] ?? { message: "" };
+    expect(message).toContain("value mismatch");
+    // Case-law verdict text is sensitive: the message reports lengths and
+    // hashes, never the verbatim span value or document slice.
+    expect(message).not.toContain("Jane Roe");
+    expect(message).not.toContain("Jane Doe");
   });
 
   test("flags out-of-range and inverted offsets", () => {

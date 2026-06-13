@@ -38,6 +38,9 @@ describe("htmlToText", () => {
     expect(htmlToText("a &#abc; b")).toBe("a &#abc; b");
     expect(htmlToText("a &#x110000; b")).toBe("a &#x110000; b");
     expect(htmlToText("a &#xabc; b")).toBe("a ઼ b");
+    // A decimal body with trailing letters must not decode its numeric
+    // prefix (`&#123abc;` is not `&#123;` followed by "abc;").
+    expect(htmlToText("a &#123abc; b")).toBe("a &#123abc; b");
   });
 
   test("collapses whitespace runs but preserves paragraph breaks", () => {
