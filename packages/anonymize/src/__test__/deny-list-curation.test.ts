@@ -201,6 +201,19 @@ describe("deny-list curation", () => {
     expect(leakedPeople).toEqual([]);
   });
 
+  test("bond is preserved as a surname after a first name", async () => {
+    // `Bond` lives on the allow list, not the person stopwords:
+    // a leading/standalone "Bond" (legal noun: "Bond Trustee")
+    // is suppressed, but a real first name carries the surname
+    // through `extendPersonName`, which never consults the allow
+    // list. Same mechanism as `John Law` / `Elon Tesla`.
+    const text = "This agreement is signed by James Bond on behalf of Acme.";
+    const entities = await detect(text);
+    const people = entities.filter((entity) => entity.label === "person");
+
+    expect(people.map((entity) => entity.text)).toContain("James Bond");
+  });
+
   test("basic rent is not expanded from a city hit into an address", async () => {
     const text = "Basic Rent shall be paid monthly under this Lease.";
     const entities = await detect(text);
