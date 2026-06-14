@@ -129,7 +129,12 @@ export const boostNearMissEntities = (
     const boostedScore = entity.score + neighbourCount * BOOST_PER_NEIGHBOUR;
 
     if (boostedScore >= threshold) {
-      boosted.push({ ...entity, score: boostedScore });
+      // Clamp to the 0..1 score invariant. Several confirmed
+      // neighbours can push a near-miss past 1.0; downstream
+      // sorting, thresholding, and display all assume scores
+      // never exceed 1, matching the clamps in zone-classifier
+      // and hotword-rules.
+      boosted.push({ ...entity, score: Math.min(1, boostedScore) });
     }
   }
 
