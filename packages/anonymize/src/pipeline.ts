@@ -571,15 +571,20 @@ export const sanitizeEntities = (entities: Entity[]): Entity[] =>
     if (cleaned.length === 0) return [];
     // Reject entities with no alphanumeric content
     if (!/[\p{L}\p{N}]/u.test(cleaned)) return [];
-    // Collapse internal whitespace runs (address entities
-    // spanning multiple lines in structured documents)
+    // Collapse internal whitespace runs for the display/
+    // placeholder text (address entities spanning multiple
+    // lines in structured documents). The OFFSETS must still
+    // cover the raw span: `end` is derived from the trimmed
+    // raw length (`cleaned`), not the collapsed length — using
+    // the collapsed length undershoots the span and would leave
+    // the trailing characters un-redacted ("2025" -> "25").
     const collapsed = cleaned.replace(/\s*\n\s*/g, " ").replace(/\s{2,}/g, " ");
     if (collapsed === e.text) return [e];
     return [
       {
         ...e,
         start: e.start + lead,
-        end: e.start + lead + collapsed.length,
+        end: e.start + lead + cleaned.length,
         text: collapsed,
       },
     ];
