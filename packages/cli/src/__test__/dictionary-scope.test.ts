@@ -69,6 +69,7 @@ const opts = (overrides: Partial<CliOptions>): CliOptions => ({
   quiet: false,
   help: false,
   version: false,
+  listLabels: false,
   ...overrides,
 });
 
