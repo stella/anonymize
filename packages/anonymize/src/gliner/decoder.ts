@@ -25,7 +25,12 @@ const hasOverlapping = (
   if (a0 === b0 && a1 === b1) {
     return !multiLabel;
   }
-  return !(a0 > b1 || b0 > a1);
+  // Offsets are half-open character spans ([start, end)), so
+  // touching spans like [0,5) and [5,9) do NOT overlap. Use the
+  // strict test (matches token-decoder); the inclusive form
+  // `!(a0 > b1 || b0 > a1)` wrongly drops legitimately adjacent
+  // entities.
+  return a0 < b1 && b0 < a1;
 };
 
 /**
