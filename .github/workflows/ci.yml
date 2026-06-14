@@ -43,8 +43,11 @@ jobs:
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
-      - name: Sync runtime package versions
-        run: bun run sync:version
+      - name: Check runtime package versions
+        # Verify, do not mutate: a PR that bumps VERSION without bumping
+        # the package versions (or vice versa) must fail CI, not be
+        # silently patched in-job.
+        run: bun run check:version
 
       - name: Build
         run: bun run build
@@ -69,3 +72,10 @@ jobs:
 
       - name: Smoke test built artifact
         run: bun run --cwd packages/anonymize smoke:dist
+
+      - name: Contract performance (informational)
+        # Surfaces pipeline-latency regressions against the thresholds in
+        # contract-perf.mjs. Non-blocking for now (shared-runner timing is
+        # noisy); promote to a hard gate once a stable baseline is set.
+        continue-on-error: true
+        run: bun run --cwd packages/anonymize perf:contracts
