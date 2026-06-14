@@ -24,6 +24,7 @@ export type CliOptions = {
   quiet: boolean;
   help: boolean;
   version: boolean;
+  listLabels: boolean;
 };
 
 export const HELP = `Usage: anonymize [options] [file ...]
@@ -62,6 +63,8 @@ Options:
       --quiet               Suppress the summary on stderr
   -h, --help                Show this help
   -v, --version             Show the version
+      --list-labels         List detectable entity labels and the
+                            short aliases accepted by --labels
 
 Interactive prompt:
   When run on files from a terminal without --countries or
@@ -167,6 +170,7 @@ export const parseCliArgs = (argv: string[]): CliOptions => {
     quiet: values.quiet === true,
     help: values.help === true,
     version: values.version === true,
+    listLabels: values["list-labels"] === true,
   };
 };
 
@@ -187,5 +191,6 @@ const PARSE_CONFIG = {
     quiet: { type: "boolean" },
     help: { type: "boolean", short: "h" },
     version: { type: "boolean", short: "v" },
+    "list-labels": { type: "boolean" },
   },
 } as const;
