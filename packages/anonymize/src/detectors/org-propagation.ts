@@ -1,6 +1,7 @@
 import { DETECTION_SOURCES } from "../types";
 import type { Entity } from "../types";
 import { LEGAL_SUFFIXES } from "../config/legal-forms";
+import { isCallerOwnedEntity } from "../util/entity-source";
 
 const TRAILING_SEP = /[,\s]+$/;
 const WORD_CHAR_RE = /[\p{L}\p{N}]/u;
@@ -14,10 +15,6 @@ const ORG_PROPAGATION_SCORE = 0.9;
 // Match is case-insensitive and word-bounded.
 const ORG_DETERMINER_RE =
   /(?<![\p{L}\p{N}])(společnost(?:i|í|em|u)?|spolecnost(?:i|em|u)?|the\s+(?:company|corporation|firm)|die\s+(?:gesellschaft|firma)|la\s+(?:société|empresa|sociedad)|el\s+(?:empresa|sociedad))\s+$/iu;
-
-const isCallerOwnedEntity = (entity: Entity): boolean =>
-  entity.sourceDetail === "custom-deny-list" ||
-  entity.sourceDetail === "custom-regex";
 
 type Seed = {
   baseName: string;

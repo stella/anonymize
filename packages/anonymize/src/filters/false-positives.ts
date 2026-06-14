@@ -1,6 +1,7 @@
 import type { Entity } from "../types";
 import type { PipelineContext } from "../context";
 import { defaultContext } from "../context";
+import { isCallerOwnedEntity } from "../util/entity-source";
 import { getPersonStopwords } from "../detectors/deny-list";
 import { normalizeHomoglyphs } from "../util/homoglyphs";
 
@@ -489,10 +490,6 @@ export const initAddressComponents = (): Promise<void> => {
  */
 const hasAddressComponent = (text: string): boolean =>
   _streetTypesRe.test(text) || ADDRESS_COMPONENT_EXTRA_RE.test(text);
-
-const isCallerOwnedEntity = (entity: Entity): boolean =>
-  entity.sourceDetail === "custom-deny-list" ||
-  entity.sourceDetail === "custom-regex";
 
 /**
  * Filter out entities that are likely false positives:
