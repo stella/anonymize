@@ -146,3 +146,48 @@ test("refuses batch inputs with colliding basenames", async () => {
   expect(code).toBe(2);
   expect(err).toContain("collides");
 });
+
+test("--labels accepts short aliases for multi-word labels", async () => {
+  // "email" resolves to the canonical "email address" label.
+  // Before alias support this hard-errored with exit code 2.
+  const { out, code } = await run(
+    [...SCOPE, "--quiet", "--labels", "email,person"],
+    SAMPLE,
+  );
+  expect(code).toBe(0);
+  expect(out).not.toContain("jan.novak@example.com");
+  expect(out).toContain("[EMAIL_ADDRESS_1]");
+});
+
+test("--labels rejects an unknown label with a usage error", async () => {
+  const { err, code } = await run(
+    [...SCOPE, "--quiet", "--labels", "definitely-not-a-label"],
+    SAMPLE,
+  );
+  expect(code).toBe(2);
+  expect(err).toContain("unknown label");
+});
+
+test("--json --mode redact omits detected text from the payload", async () => {
+  const { out, code } = await run(
+    [...SCOPE, "--quiet", "--json", "--mode", "redact"],
+    SAMPLE,
+  );
+  expect(code).toBe(0);
+
+  const payload = JSON.parse(out) as {
+    entityCount: number;
+    entities: Array<Record<string, unknown>>;
+    redactedText: string;
+  };
+
+  expect(payload.entityCount).toBeGreaterThan(0);
+  for (const e of payload.entities) {
+    expect(e).not.toHaveProperty("text");
+    expect(e).not.toHaveProperty("corefSourceText");
+  }
+  // No detected PII anywhere in the JSON.
+  expect(out).not.toContain("jan.novak@example.com");
+  expect(out).not.toContain("Novák");
+  expect(payload.redactedText).toContain("[REDACTED]");
+});
