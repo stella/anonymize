@@ -36,6 +36,11 @@ export type NameCorpusData = {
    *  (e.g., "dr", "smt", "atty"). */
   titleAbbreviations: ReadonlySet<string>;
   excludedWords: ReadonlySet<string>;
+  /** Lowercased common English words. A name chain whose
+   *  every token is a common word (e.g. "Loan Documents",
+   *  where "Loan" coincides with a Vietnamese given name)
+   *  is treated as a common-word phrase, not a person. */
+  commonWords: ReadonlySet<string>;
   /** Non-Western name tokens merged across all locales. */
   nonWesternNames: ReadonlySet<string>;
   /** All-caps acronyms excluded from name detection. */

@@ -807,4 +807,35 @@ describe("Non-Western Name Detection", () => {
       );
     });
   });
+
+  // ── Common-word collisions ─────────────────────────────────────────
+  // Some non-Western given names coincide with everyday English words
+  // ("Loan" is both a Vietnamese name and the noun). A capitalized
+  // phrase made entirely of such common words ("Loan Documents", "Loan
+  // Amount") is a defined term, not a person, and must not be chained
+  // into a person span on the strength of a single ambiguous token.
+  describe("common-word collisions", () => {
+    test("does not flag a common-word phrase as a person (Loan Documents)", async () => {
+      const matches = persons(
+        await detect(
+          "All warranties contained in the Loan Documents are true and correct.",
+        ),
+      );
+      expect(matches.some((m) => m.text.includes("Loan"))).toBe(false);
+    });
+
+    test("does not flag Loan Amount as a person", async () => {
+      const matches = persons(
+        await detect("The numerator is the Maximum Loan Amount for the asset."),
+      );
+      expect(matches.some((m) => m.text.includes("Loan"))).toBe(false);
+    });
+
+    test("still detects a genuine name sharing the ambiguous token (Loan Nguyen)", async () => {
+      const matches = persons(
+        await detect("The lease was signed by Loan Nguyen last week."),
+      );
+      expect(matches.some((m) => m.text === "Loan Nguyen")).toBe(true);
+    });
+  });
 });

@@ -278,6 +278,7 @@ export const initNameCorpus = (
         titleTokens: Object.freeze(new Set(dedupTitles)),
         titleAbbreviations: Object.freeze(titleAbbrSet),
         excludedWords: Object.freeze(new Set(exclusions)),
+        commonWords: Object.freeze(commonWords),
         nonWesternNames: Object.freeze(new Set(dedupNonWestern)),
         excludedAllCaps: Object.freeze(new Set(dedupExcludedAllCaps)),
         firstNamesList: Object.freeze(dedupFirst),
@@ -1213,6 +1214,16 @@ export const detectNameCorpus = (
       (t) => t.type === TOKEN_TYPE.CAPITALIZED,
     ).length;
     const nonWesternCount = chain.filter((t) => t.nonWestern).length;
+    // A chain whose every token is a common English word is a
+    // common-word phrase, not a person — even when one token
+    // happens to coincide with a non-Western given name (e.g.
+    // "Loan Documents"/"Loan Amount", where "Loan" is also a
+    // Vietnamese name). Only used to veto the weakest
+    // single-non-Western-token heuristic below; chains with a
+    // second corpus name, title, or connector are unaffected.
+    const chainAllCommonWords = chain.every((t) =>
+      corpus.commonWords.has(t.text.toLowerCase()),
+    );
 
     // Determine score based on chain composition
     let score: number;
@@ -1229,7 +1240,8 @@ export const detectNameCorpus = (
         score = 0.9;
       } else if (
         nonWesternCount > 0 &&
-        (capitalizedCount > 0 || hasAbbreviation)
+        (capitalizedCount > 0 || hasAbbreviation) &&
+        !chainAllCommonWords
       ) {
         score = 0.9;
       } else if (
