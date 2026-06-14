@@ -33,13 +33,6 @@ const addresses = async (text: string): Promise<Entity[]> => {
 };
 
 describe("address gazetteer noise", () => {
-  test("does not flag a short alphanumeric code (A2) as address", async () => {
-    const found = await addresses(
-      "The note carries an A2 rating from the agency.",
-    );
-    expect(found.some((e) => e.text === "A2")).toBe(false);
-  });
-
   test("does not flag month words (August, March) as address", async () => {
     const found = await addresses("Rent is due in August and again in March.");
     expect(found.some((e) => e.text === "August" || e.text === "March")).toBe(

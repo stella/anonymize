@@ -124,14 +124,6 @@ const loadMonthNames = (): Promise<ReadonlySet<string>> => {
 };
 
 /**
- * Short alphanumeric codes (e.g. "A2", "NL416") appear in
- * city gazetteers as postal/grid artifacts, not place names.
- * Real city names are not one or two letters followed by
- * digits, so these are dropped from address patterns.
- */
-const ADDRESS_CODE_RE = /^\p{L}{1,2}\d+$/u;
-
-/**
  * Curated dictionary entries that are pure dotted
  * single-letter acronyms (e.g. `S.C.`, `D.N.J.`, `C.E.C.`)
  * need targeted suffix guards. The AC search matches
@@ -670,6 +662,7 @@ export const buildDenyList = async (
     loadPersonStopwords(ctx),
     loadAddressStopwords(ctx),
     loadCommonWords(),
+    loadMonthNames(),
     loadStreetTypeRe(),
     loadGenericRoles(ctx),
   ]);
@@ -728,13 +721,13 @@ export const buildDenyList = async (
         if (isShortCuratedNoiseAcronym(normalized)) {
           return;
         }
-      } else if (ADDRESS_CODE_RE.test(normalized) || monthNames.has(lower)) {
-        // City gazetteers carry non-place artifacts (postal/grid
-        // codes like "A2", month words like "August") that surface
-        // as address false positives in prose. The common-word
-        // filter is deliberately not applied to addresses (most
-        // cities are ordinary words), so these two narrow shapes
-        // are dropped explicitly instead.
+      } else if (monthNames.has(lower)) {
+        // Some city gazetteer entries collide with month words
+        // (e.g. a place named "August"); in prose these are
+        // overwhelmingly dates, so they surface as address false
+        // positives. The common-word filter is deliberately not
+        // applied to addresses (most cities are ordinary words),
+        // so month words are dropped explicitly instead.
         return;
       }
     }
