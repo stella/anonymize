@@ -576,8 +576,16 @@ describe("contract snapshots", () => {
 
         const snapshot = toSnapshot(fullText, entities, CONTEXT);
 
-        if (UPDATE_SNAPSHOTS || !existsSync(fixture.snapshotPath)) {
+        if (UPDATE_SNAPSHOTS) {
           writeSnapshot(fixture.snapshotPath, snapshot);
+        } else if (!existsSync(fixture.snapshotPath)) {
+          // Fail closed: writing-then-asserting against a freshly
+          // generated snapshot would pass unconditionally and silently
+          // stop protecting this fixture.
+          throw new Error(
+            `Missing snapshot for "${fixture.name}" at ${fixture.snapshotPath}. ` +
+              `Run with UPDATE_CONTRACT_SNAPSHOTS=1 to create it.`,
+          );
         }
 
         const expected = JSON.parse(

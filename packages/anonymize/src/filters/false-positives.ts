@@ -252,10 +252,19 @@ const normalizeEntity = (entity: Entity): Entity | null => {
     return null;
   }
 
+  // `text` is the collapsed display form, so it can be shorter than
+  // the raw span ([entity.start, entity.end]). Derive the new end
+  // from the original span minus the characters trimmed off the back,
+  // not from start + text.length — the latter undershoots a collapsed
+  // entity and would leave the trailing characters un-redacted.
+  const removedFromFront = start - entity.start;
+  const removedFromBack = entity.text.length - removedFromFront - text.length;
+  const end = entity.end - removedFromBack;
+
   return {
     ...entity,
     start,
-    end: start + text.length,
+    end,
     text,
   };
 };
