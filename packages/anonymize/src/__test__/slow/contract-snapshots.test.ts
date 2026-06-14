@@ -3,14 +3,10 @@ import { dirname, join } from "node:path";
 
 import { describe, expect, test } from "bun:test";
 
-import {
-  createPipelineContext,
-  DEFAULT_ENTITY_LABELS,
-  redactText,
-  runPipeline,
-} from "../../index";
+import { createPipelineContext, redactText, runPipeline } from "../../index";
 import type { PipelineContext } from "../../context";
-import type { Dictionaries, Entity, PipelineConfig } from "../../types";
+import type { Dictionaries, Entity } from "../../types";
+import { contractTestConfig } from "../contract-config";
 import { loadTestDictionaries } from "../load-dictionaries";
 
 const FIXTURES_DIR = join(import.meta.dir, "..", "fixtures", "contracts");
@@ -22,22 +18,7 @@ const getDictionaries = async () => {
   return dictionaries;
 };
 
-const CONFIG: PipelineConfig = {
-  threshold: 0.3,
-  enableTriggerPhrases: true,
-  enableRegex: true,
-  enableLegalForms: true,
-  enableNameCorpus: true,
-  enableDenyList: true,
-  enableGazetteer: false,
-  enableNer: false,
-  enableConfidenceBoost: true,
-  enableCoreference: true,
-  enableHotwordRules: true,
-  enableZoneClassification: true,
-  labels: [...DEFAULT_ENTITY_LABELS],
-  workspaceId: "contract-snapshot-test",
-};
+const CONFIG = contractTestConfig("contract-snapshot-test");
 
 const CONTEXT = createPipelineContext();
 
