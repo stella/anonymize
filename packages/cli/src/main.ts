@@ -456,6 +456,24 @@ const runAnonymise = async (
   }
 };
 
+/**
+ * Render the canonical entity labels and the short aliases
+ * accepted by --labels, for the --list-labels discovery flag.
+ */
+const formatLabelList = (): string => {
+  const lines: string[] = ["Detectable entity labels (pass to --labels):"];
+  for (const label of DEFAULT_ENTITY_LABELS) {
+    lines.push(`  ${label}`);
+  }
+  lines.push("", "Short aliases:");
+  const aliases = Object.entries(LABEL_ALIASES);
+  const width = Math.max(...aliases.map(([alias]) => alias.length));
+  for (const [alias, canonical] of aliases) {
+    lines.push(`  ${alias.padEnd(width)}  ->  ${canonical}`);
+  }
+  return `${lines.join("\n")}\n`;
+};
+
 const dispatch = async (engine: CliEngine): Promise<void> => {
   const opts = parseCliArgs(process.argv.slice(2));
   if (opts.help) {
@@ -464,6 +482,10 @@ const dispatch = async (engine: CliEngine): Promise<void> => {
   }
   if (opts.version) {
     process.stdout.write(`${cliVersion()}\n`);
+    return;
+  }
+  if (opts.listLabels) {
+    process.stdout.write(formatLabelList());
     return;
   }
   if (opts.deanonymiseKeyPath !== undefined) {
