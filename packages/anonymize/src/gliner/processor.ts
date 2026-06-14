@@ -148,8 +148,13 @@ const encodeInputs = (
   return [allInputIds, allAttentionMasks, allWordsMasks];
 };
 
-/** Build span index pairs and masks for the model. */
-const prepareSpans = (
+/**
+ * Build span index pairs and masks for the model.
+ *
+ * Exported for unit testing the span-mask invariant; not part
+ * of the public package barrel.
+ */
+export const prepareSpans = (
   batchTokens: string[][],
   maxWidth: number,
 ): { spanIdxs: number[][][]; spanMasks: boolean[][] } => {
@@ -165,7 +170,12 @@ const prepareSpans = (
       for (let j = 0; j < maxWidth; j++) {
         const endIdx = Math.min(i + j, len - 1);
         idx.push([i, endIdx]);
-        mask.push(endIdx < len);
+        // A span of width j starting at word i is valid only
+        // when it fits inside the sequence. Compare the
+        // unclamped end against len: a clamped endIdx is always
+        // < len, which would mark every span valid and feed the
+        // model spurious wide spans at the tail of the sequence.
+        mask.push(i + j < len);
       }
     }
 
