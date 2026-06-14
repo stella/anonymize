@@ -154,8 +154,10 @@ export type { EntityResult, RawInferenceResult } from "./gliner/types";
 // ── Utilities ─────────────────────────────────────
 export {
   chunkText,
+  chunkTextWithOffsets,
   computeChunkOffsets,
   mergeChunkEntities,
 } from "./util/chunker";
+export type { ChunkSpan } from "./util/chunker";
 export { levenshtein } from "./util/levenshtein";
 export { normalizeForSearch } from "./util/normalize";
