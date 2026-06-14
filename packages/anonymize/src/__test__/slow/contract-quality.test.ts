@@ -1,11 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  createPipelineContext,
-  DEFAULT_ENTITY_LABELS,
-  runPipeline,
-} from "../../index";
-import type { Dictionaries, PipelineConfig } from "../../types";
+import { createPipelineContext, runPipeline } from "../../index";
+import type { Dictionaries } from "../../types";
+import { contractTestConfig } from "../contract-config";
 import { loadTestDictionaries } from "../load-dictionaries";
 
 let dictionaries: Dictionaries;
@@ -14,22 +11,7 @@ const getDictionaries = async () => {
   return dictionaries;
 };
 
-const CONFIG: PipelineConfig = {
-  threshold: 0.3,
-  enableTriggerPhrases: true,
-  enableRegex: true,
-  enableLegalForms: true,
-  enableNameCorpus: true,
-  enableDenyList: true,
-  enableGazetteer: false,
-  enableNer: false,
-  enableConfidenceBoost: true,
-  enableCoreference: true,
-  enableHotwordRules: true,
-  enableZoneClassification: true,
-  labels: [...DEFAULT_ENTITY_LABELS],
-  workspaceId: "contract-quality-test",
-};
+const CONFIG = contractTestConfig("contract-quality-test");
 
 const CONTEXT = createPipelineContext();
 

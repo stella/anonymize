@@ -3,13 +3,9 @@ import { join } from "node:path";
 
 import { describe, expect, test } from "bun:test";
 
-import {
-  createPipelineContext,
-  DEFAULT_ENTITY_LABELS,
-  redactText,
-  runPipeline,
-} from "../../index";
-import type { Dictionaries, PipelineConfig } from "../../types";
+import { createPipelineContext, redactText, runPipeline } from "../../index";
+import type { Dictionaries } from "../../types";
+import { contractTestConfig } from "../contract-config";
 import { loadTestDictionaries } from "../load-dictionaries";
 
 const FIXTURES_DIR = join(import.meta.dir, "..", "fixtures", "contracts");
@@ -32,22 +28,7 @@ const FIXTURES = [
   "en/software-license-agreement.txt",
 ];
 
-const CONFIG: PipelineConfig = {
-  threshold: 0.3,
-  enableTriggerPhrases: true,
-  enableRegex: true,
-  enableLegalForms: true,
-  enableNameCorpus: true,
-  enableDenyList: true,
-  enableGazetteer: false,
-  enableNer: false,
-  enableConfidenceBoost: true,
-  enableCoreference: true,
-  enableHotwordRules: true,
-  enableZoneClassification: true,
-  labels: [...DEFAULT_ENTITY_LABELS],
-  workspaceId: "pipeline-invariants-test",
-};
+const CONFIG = contractTestConfig("pipeline-invariants-test");
 
 let dictionaries: Dictionaries | null = null;
 const getDictionaries = async (): Promise<Dictionaries> => {
