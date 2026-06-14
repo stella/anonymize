@@ -43,7 +43,10 @@ Options:
   -d, --deanonymise <path>  Restore redacted text using the
                             redaction key at <path>
       --labels <list>       Comma-separated entity labels to detect
-                            (default: all)
+                            (default: all). Accepts canonical labels
+                            ("email address"), short aliases (email,
+                            phone, org, dob, ssn), and hyphen/underscore
+                            forms ("credit-card-number")
       --languages <list>    Name-corpus languages, e.g. "cs,de,en"
                             (default: all bundled)
       --countries <list>    ISO 3166-1 alpha-2 codes scoping deny

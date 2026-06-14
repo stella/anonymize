@@ -92,17 +92,51 @@ const readInputs = async (files: string[]): Promise<NamedInput[]> => {
   );
 };
 
-const validateLabels = (labels: readonly string[]): string[] => {
-  // Widening the literal tuple to string[] is safe here;
-  // we only test membership.
+// Short aliases for the canonical multi-word labels so that
+// `--labels person,email,iban` works without quoting the space
+// in "email address". Separator-insensitive resolution (below)
+// additionally accepts hyphen/underscore forms such as
+// "credit-card-number".
+const LABEL_ALIASES: Record<string, string> = {
+  email: "email address",
+  phone: "phone number",
+  org: "organization",
+  organisation: "organization",
+  dob: "date of birth",
+  ssn: "social security number",
+  "tax id": "tax identification number",
+  passport: "passport number",
+  "credit card": "credit card number",
+  "national id": "national identification number",
+};
+
+const LABEL_SEPARATOR_RE = /[\s_-]+/g;
+
+/**
+ * Resolve a user-supplied label token to a canonical label.
+ * Lowercases and collapses separators, then maps known short
+ * aliases. Unknown tokens are returned normalized so the
+ * caller can report them verbatim.
+ */
+const canonicalizeLabel = (raw: string): string => {
+  const normalized = raw.toLowerCase().replace(LABEL_SEPARATOR_RE, " ").trim();
   const known: readonly string[] = DEFAULT_ENTITY_LABELS;
-  const invalid = labels.find((label) => !known.includes(label));
+  if (known.includes(normalized)) {
+    return normalized;
+  }
+  return LABEL_ALIASES[normalized] ?? normalized;
+};
+
+const validateLabels = (labels: readonly string[]): string[] => {
+  const known: readonly string[] = DEFAULT_ENTITY_LABELS;
+  const resolved = labels.map(canonicalizeLabel);
+  const invalid = resolved.find((label) => !known.includes(label));
   if (invalid) {
     throw new UsageError(
-      `--labels: unknown label "${invalid}"; available: ${DEFAULT_ENTITY_LABELS.join(", ")}`,
+      `--labels: unknown label "${invalid}"; available: ${DEFAULT_ENTITY_LABELS.join(", ")} (aliases: ${Object.keys(LABEL_ALIASES).join(", ")})`,
     );
   }
-  return [...labels];
+  return resolved;
 };
 
 const buildPipelineConfig = async (
@@ -382,9 +416,24 @@ const runAnonymise = async (
     );
 
     if (opts.json) {
+      // In redact mode the user chose irreversibility, so the
+      // JSON must not carry any detected text. Whitelist the
+      // non-sensitive metadata fields; this drops `text` and a
+      // coref alias's `corefSourceText`. Offsets index the
+      // caller's own input and are kept.
+      const jsonEntities =
+        opts.mode === "redact"
+          ? entities.map(({ start, end, label, score, source }) => ({
+              start,
+              end,
+              label,
+              score,
+              source,
+            }))
+          : entities;
       const payload = {
         entityCount: result.entityCount,
-        entities,
+        entities: jsonEntities,
         redactedText: result.redactedText,
       };
       await writeOutput(outputPath, `${JSON.stringify(payload, null, 2)}\n`);
