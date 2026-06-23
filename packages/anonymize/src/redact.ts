@@ -18,6 +18,7 @@ const ETHEREUM_ADDRESS_RE = /0x[0-9A-Fa-f]{40}/;
 const BECH32_ADDRESS_RE = /\bbc1[ac-hj-np-z02-9]{11,71}\b/i;
 const BASE58_ADDRESS_RE = /\b[13][a-km-zA-HJ-NP-Z1-9]{25,34}\b/;
 const NHS_NUMBER_CUE_RE = /\b(?:NHS|National\s+Health\s+Service)\b/i;
+const PLACEHOLDER_TOKEN_RE = /\[[^\]\s]+_[1-9]\d*\]/g;
 const PASSPORT_IDENTIFIER_RE =
   /\b(?:[A-Za-z]{1,2}\d{6,8}|\d{2}[A-Za-z]{2}\d{5}|\d{7,9})\b/;
 // Strip all separators the ID detectors accept so the
@@ -28,6 +29,27 @@ const PASSPORT_IDENTIFIER_RE =
 //   - `.` for credit cards ("4111.1111.1111.1111") and
 //     other dotted IDs.
 const ID_SEPARATOR_RE = /[\s\-/.]/g;
+
+const nextPlaceholder = (
+  labelKey: string,
+  counters: Map<string, number>,
+  reservedPlaceholders: ReadonlySet<string>,
+): string => {
+  let count = counters.get(labelKey) ?? 0;
+
+  while (true) {
+    count += 1;
+    const placeholder = `[${labelKey}_${count}]`;
+    if (reservedPlaceholders.has(placeholder)) continue;
+
+    counters.set(labelKey, count);
+    return placeholder;
+  }
+};
+
+const collectReservedPlaceholders = (
+  reservedText: string,
+): ReadonlySet<string> => new Set(reservedText.match(PLACEHOLDER_TOKEN_RE));
 
 const normalizeCryptoText = (text: string): string => {
   const trimmed = text.trim();
@@ -106,22 +128,29 @@ const normalizeEntityText = (label: string, text: string): string => {
  * Build a stable mapping from entity text to numbered
  * placeholders. Same real-world value always maps to the
  * same placeholder (e.g., "Dr. Muller" and "Dr.  Muller"
- * both become [PERSON_1]).
+ * share one person placeholder).
  *
- * Placeholder format: [LABEL_N] where LABEL is uppercase
- * and N is a 1-based counter per label.
+ * Placeholder format: [LABEL_N] where LABEL is uppercase.
+ * N is allocated per label and skips tokens already present
+ * in reserved text.
  *
  * @param _ctx Unused. Kept for signature compatibility;
  *   coref alias links now travel on the entities
  *   themselves (`corefSourceText`).
  */
+type PlaceholderMapOptions = {
+  reservedText?: string;
+};
+
 export const buildPlaceholderMap = (
   entities: Entity[],
   _ctx: PipelineContext = defaultContext,
+  { reservedText = "" }: PlaceholderMapOptions = {},
 ): Map<string, string> => {
   const counters = new Map<string, number>();
   const textLabelToPlaceholder = new Map<string, string>();
   const normalizedToPlaceholder = new Map<string, string>();
+  const reservedPlaceholders = collectReservedPlaceholders(reservedText);
 
   const sorted = entities.toSorted((a, b) => a.start - b.start);
 
@@ -167,10 +196,11 @@ export const buildPlaceholderMap = (
       continue;
     }
 
-    const count = (counters.get(labelKey) ?? 0) + 1;
-    counters.set(labelKey, count);
-
-    const placeholder = `[${labelKey}_${count}]`;
+    const placeholder = nextPlaceholder(
+      labelKey,
+      counters,
+      reservedPlaceholders,
+    );
     textLabelToPlaceholder.set(compositeKey, placeholder);
     normalizedToPlaceholder.set(normalizedKey, placeholder);
     if (sourceNormalizedKey !== undefined) {
@@ -208,7 +238,9 @@ export const redactText = (
     };
   }
 
-  const placeholderMap = buildPlaceholderMap(entities, ctx);
+  const placeholderMap = buildPlaceholderMap(entities, ctx, {
+    reservedText: fullText,
+  });
 
   const sorted = entities.toSorted((a, b) => a.start - b.start);
 
