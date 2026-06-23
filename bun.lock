@@ -17,7 +17,7 @@
     },
     "packages/anonymize": {
       "name": "@stll/anonymize",
-      "version": "1.4.11",
+      "version": "1.5.0",
       "dependencies": {
         "@huggingface/tokenizers": "^0.1.3",
         "@stll/stdnum": "^2.1.1",
@@ -40,7 +40,7 @@
     },
     "packages/anonymize/wasm": {
       "name": "@stll/anonymize-wasm",
-      "version": "1.4.11",
+      "version": "1.5.0",
       "dependencies": {
         "@huggingface/tokenizers": "^0.1.3",
         "@stll/stdnum": "^2.1.1",
@@ -57,12 +57,12 @@
     },
     "packages/cli": {
       "name": "@stll/anonymize-cli",
-      "version": "1.4.11",
+      "version": "1.5.0",
       "bin": {
         "anonymize": "./dist/cli.mjs",
       },
       "dependencies": {
-        "@stll/anonymize": "^1.4.11",
+        "@stll/anonymize": "^1.5.0",
         "@stll/anonymize-data": "^0.0.6",
       },
       "devDependencies": {
