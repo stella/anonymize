@@ -4,6 +4,9 @@
 # originate from .ai/local-skills/ or .ai/shared/skills/.
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR/.."
+
 if [ ! -d ".ai/shared/skills" ]; then
   echo "warning: .ai/shared submodule not initialized; skipping skill source check" >&2
   echo "  fix: git submodule update --init" >&2
