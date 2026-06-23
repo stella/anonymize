@@ -1,5 +1,4 @@
-import { DEFAULT_ENTITY_LABELS } from "../index";
-import type { PipelineConfig } from "../types";
+import { DEFAULT_ENTITY_LABELS, type PipelineConfig } from "../types";
 
 /**
  * Shared pipeline config for the contract fixture tests
