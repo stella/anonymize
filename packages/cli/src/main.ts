@@ -484,7 +484,10 @@ const formatLabelList = (): string => {
   }
   lines.push("", "Short aliases:");
   const aliases = Object.entries(LABEL_ALIASES);
-  const width = Math.max(...aliases.map(([alias]) => alias.length));
+  let width = 0;
+  for (const [alias] of aliases) {
+    width = Math.max(width, alias.length);
+  }
   for (const [alias, canonical] of aliases) {
     lines.push(`  ${alias.padEnd(width)}  ->  ${canonical}`);
   }
