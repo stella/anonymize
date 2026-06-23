@@ -41,4 +41,6 @@ jobs:
             Python-2.0,
             Zlib,
             Unicode-3.0
+          allow-dependencies-licenses: >-
+            pkg:npm/fast-check
           comment-summary-in-pr: always
