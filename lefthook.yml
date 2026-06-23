@@ -10,6 +10,8 @@ no_auto_install: true
 pre-commit:
   parallel: false
   commands:
+    secrets:
+      run: bun run secrets:check:staged
     # `stage_fixed: true` will `git add` the whole file after
     # formatting, which pulls any unstaged hunks into the
     # commit. Accepted trade-off — partial-hunk commits across

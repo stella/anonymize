@@ -20,6 +20,7 @@
     "sync:version": "node .github/tools/sync-runtime-version.mjs",
     "check:version": "node .github/tools/sync-runtime-version.mjs --check",
     "check:bun": "node .github/tools/check-bun-workflows.mjs",
+    "secrets:check:staged": "bash scripts/check-staged-secrets.sh",
     "hooks:install": "lefthook install",
     "hooks:uninstall": "lefthook uninstall",
     "sync-ai": "bash scripts/sync-ai-skills.sh",

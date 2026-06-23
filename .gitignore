@@ -6,6 +6,7 @@ dist
 
 # Local scripts (corpus download, benchmarks)
 scripts/*
+!scripts/check-staged-secrets.sh
 !scripts/link-codex-skills.sh
 !scripts/sync-ai-skills.sh
 packages/data/scripts/
