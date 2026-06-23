@@ -23,6 +23,19 @@ const triggerAddress = (text: string): Entity => ({
   source: "trigger",
 });
 
+const triggerAddressAt = (
+  text: string,
+  start: number,
+  rawLength: number,
+): Entity => ({
+  start,
+  end: start + rawLength,
+  label: "address",
+  text,
+  score: 0.9,
+  source: "trigger",
+});
+
 describe("person entities containing digits", () => {
   test("rejects person with digits", () => {
     const result = filterFalsePositives([person("Solution Pack ABL90 Flex")]);
@@ -47,6 +60,36 @@ describe("street-type fallback for direct callers", () => {
     const result = filterFalsePositives([triggerAddress("Via Roma")]);
     expect(result).toHaveLength(1);
     expect(result[0]!.text).toBe("Via Roma");
+  });
+});
+
+describe("raw-span address normalization", () => {
+  test("trims collapsed role prefixes and trailing prose with raw offsets", () => {
+    const fullText =
+      "Sídlo objednatele\n  č.p. 12. This sentence is not part of the address.";
+    const rawStart = fullText.indexOf("objednatele");
+    const rawEnd = fullText.length;
+    const addressStart = fullText.indexOf("č.p. 12");
+    const addressEnd = addressStart + "č.p. 12".length;
+
+    const result = filterFalsePositives(
+      [
+        triggerAddressAt(
+          "objednatele č.p. 12. This sentence is not part of the address.",
+          rawStart,
+          rawEnd - rawStart,
+        ),
+      ],
+      undefined,
+      fullText,
+    );
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      start: addressStart,
+      end: addressEnd,
+      text: "č.p. 12",
+    });
   });
 });
 

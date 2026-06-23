@@ -5,6 +5,7 @@
     "": {
       "name": "anonymize",
       "devDependencies": {
+        "@stll/anonymize-data": "workspace:*",
         "@stll/oxlint-config": "^0.3.0",
         "@stll/typescript-config": "^0.3.0",
         "lefthook": "^2.1.9",

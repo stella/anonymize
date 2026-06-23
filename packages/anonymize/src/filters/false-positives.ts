@@ -222,7 +222,59 @@ const trimTrailingAddressProse = (text: string): string => {
   return text;
 };
 
-const normalizeEntity = (entity: Entity): Entity | null => {
+const collapseEntityWhitespace = (text: string): string =>
+  text.replace(/\s*\n\s*/g, " ").replace(/\s{2,}/g, " ");
+
+const normalizeEntityFromRaw = (
+  entity: Entity,
+  fullText: string,
+): Entity | null => {
+  let start = entity.start;
+  let end = entity.end;
+  let text = fullText.slice(start, end);
+
+  const trimLeading = (re: RegExp) => {
+    const match = re.exec(text);
+    if (!match) {
+      return;
+    }
+    start += match[0].length;
+    text = text.slice(match[0].length);
+  };
+
+  trimLeading(LEADING_ARTIFACT_RE);
+  trimLeading(/^\s+/u);
+
+  if (entity.label === "address") {
+    trimLeading(ADDRESS_ROLE_PREFIX_RE);
+    const beforeTrim = text;
+    text = trimTrailingAddressProse(text);
+    end -= beforeTrim.length - text.length;
+  }
+
+  const trailingMatch = /[,\s]+$/u.exec(text);
+  if (trailingMatch) {
+    end -= trailingMatch[0].length;
+    text = text.slice(0, text.length - trailingMatch[0].length);
+  }
+
+  if (text.length === 0) {
+    return null;
+  }
+
+  return {
+    ...entity,
+    start,
+    end,
+    text: collapseEntityWhitespace(text),
+  };
+};
+
+const normalizeEntity = (entity: Entity, fullText?: string): Entity | null => {
+  if (fullText !== undefined) {
+    return normalizeEntityFromRaw(entity, fullText);
+  }
+
   let start = entity.start;
   let text = entity.text;
 
@@ -252,11 +304,6 @@ const normalizeEntity = (entity: Entity): Entity | null => {
     return null;
   }
 
-  // `text` is the collapsed display form, so it can be shorter than
-  // the raw span ([entity.start, entity.end]). Derive the new end
-  // from the original span minus the characters trimmed off the back,
-  // not from start + text.length — the latter undershoots a collapsed
-  // entity and would leave the trailing characters un-redacted.
   const removedFromFront = start - entity.start;
   const removedFromBack = entity.text.length - removedFromFront - text.length;
   const end = entity.end - removedFromBack;
@@ -469,7 +516,7 @@ export const filterFalsePositives = (
       continue;
     }
 
-    const normalized = normalizeEntity(entity);
+    const normalized = normalizeEntity(entity, fullText);
     if (!normalized) {
       continue;
     }
