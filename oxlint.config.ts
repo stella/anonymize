@@ -6,6 +6,7 @@ export default library({
   },
   ignorePatterns: [
     ".turbo/",
+    ".claude/worktrees/",
     "packages/*/dist/",
     "packages/anonymize/wasm/dist/",
   ],

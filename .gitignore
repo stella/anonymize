@@ -4,6 +4,9 @@ node_modules
 dist
 .turbo
 
+# Claude Code local worktrees.
+.claude/worktrees/
+
 # Local scripts (corpus download, benchmarks)
 scripts/*
 !scripts/check-ai-skill-sources.sh
