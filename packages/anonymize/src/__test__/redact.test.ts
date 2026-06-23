@@ -75,6 +75,40 @@ describe("redactText / deanonymise round-trip", () => {
     expect(result.redactionMap.size).toBe(1);
     expect([...result.redactionMap.keys()]).toEqual(["[EMAIL_ADDRESS_1]"]);
   });
+
+  test("literal placeholder-like source text is not deanonymised", () => {
+    const text = "Keep [PERSON_1]; Alice Smith signs.";
+    const entities = [at(text, "person", "Alice Smith")];
+
+    const result = redactText(text, entities);
+
+    expect(result.redactedText).toBe("Keep [PERSON_1]; [PERSON_2] signs.");
+    expect([...result.redactionMap.keys()]).toEqual(["[PERSON_2]"]);
+    expect(deanonymise(result.redactedText, result.redactionMap)).toBe(text);
+  });
+
+  test("repeated values share the first non-colliding placeholder", () => {
+    const value = "Alice Smith";
+    const text = `Existing [PERSON_1]. ${value} called. ${value} signed.`;
+    const first = text.indexOf(value);
+    const second = text.indexOf(value, first + 1);
+    const entities: Entity[] = [first, second].map((start) => ({
+      start,
+      end: start + value.length,
+      label: "person",
+      text: value,
+      score: 0.99,
+      source: "ner",
+    }));
+
+    const result = redactText(text, entities);
+
+    expect(result.redactedText).toBe(
+      "Existing [PERSON_1]. [PERSON_2] called. [PERSON_2] signed.",
+    );
+    expect(result.redactionMap.get("[PERSON_2]")).toBe(value);
+    expect(deanonymise(result.redactedText, result.redactionMap)).toBe(text);
+  });
 });
 
 describe("operator behavior", () => {
@@ -145,5 +179,20 @@ describe("buildPlaceholderMap", () => {
     const map = buildPlaceholderMap(entities);
     expect(map.get("person\0Alice Smith")).toBe("[PERSON_1]");
     expect(map.get("person\0Bob Jones")).toBe("[PERSON_2]");
+  });
+
+  test("skips placeholders already present in reserved text", () => {
+    const text = "[PERSON_1], [PERSON_2], Alice Smith, and Bob Jones.";
+    const entities = [
+      at(text, "person", "Alice Smith"),
+      at(text, "person", "Bob Jones"),
+    ];
+
+    const map = buildPlaceholderMap(entities, undefined, {
+      reservedText: text,
+    });
+
+    expect(map.get("person\0Alice Smith")).toBe("[PERSON_3]");
+    expect(map.get("person\0Bob Jones")).toBe("[PERSON_4]");
   });
 });
