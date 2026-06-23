@@ -5,6 +5,10 @@ import { describe, expect, test } from "bun:test";
 
 import { createPipelineContext, redactText, runPipeline } from "../../index";
 import type { Dictionaries } from "../../types";
+import {
+  assertEntityInvariants,
+  assertRedactionInvariants,
+} from "../assert-invariants";
 import { contractTestConfig } from "../contract-config";
 import { loadTestDictionaries } from "../load-dictionaries";
 
@@ -39,14 +43,6 @@ const getDictionaries = async (): Promise<Dictionaries> => {
 const readFixture = (rel: string): string =>
   readFileSync(join(FIXTURES_DIR, rel), "utf8").replaceAll("\r\n", "\n");
 
-// The entity `text` is the display/placeholder form with internal
-// whitespace collapsed; the offsets address the raw span. The
-// redaction-safety invariant is therefore whitespace-insensitive:
-// the collapsed slice must equal the collapsed text. This still
-// catches truncation/misalignment (the offsets covering the wrong
-// content) while allowing the intentional whitespace normalization.
-const collapseWs = (s: string): string => s.replace(/\s+/g, " ").trim();
-
 describe("pipeline output invariants", () => {
   for (const rel of FIXTURES) {
     test(
@@ -61,27 +57,12 @@ describe("pipeline output invariants", () => {
           context,
         });
 
-        for (const e of entities) {
-          // Offsets address a real, non-empty region of the source.
-          expect(e.start).toBeGreaterThanOrEqual(0);
-          expect(e.end).toBeLessThanOrEqual(fullText.length);
-          expect(e.start).toBeLessThan(e.end);
-          // The offsets cover the entity's content (whitespace-
-          // insensitive; see collapseWs). Catches the undershoot
-          // class of bug where redaction would leave a fragment.
-          expect(collapseWs(fullText.slice(e.start, e.end))).toBe(
-            collapseWs(e.text),
-          );
-          // Score stays within the 0..1 invariant.
-          expect(e.score).toBeGreaterThanOrEqual(0);
-          expect(e.score).toBeLessThanOrEqual(1);
-        }
+        assertEntityInvariants(fullText, entities);
 
         // Redaction is well-formed and drops at most as many spans as
         // were detected (overlaps removed, never invented).
         const result = redactText(fullText, entities, undefined, context);
-        expect(result.entityCount).toBeLessThanOrEqual(entities.length);
-        expect(typeof result.redactedText).toBe("string");
+        assertRedactionInvariants(entities, result);
       },
       20_000,
     );
