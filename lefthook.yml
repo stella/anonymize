@@ -12,6 +12,9 @@ pre-commit:
   commands:
     secrets:
       run: bun run secrets:check:staged
+    ai-skills:
+      glob: "{.agents/skills,.ai/local-skills,.ai/shared/skills,.claude/commands}/**"
+      run: bash scripts/check-ai-skill-sources.sh
     # `stage_fixed: true` will `git add` the whole file after
     # formatting, which pulls any unstaged hunks into the
     # commit. Accepted trade-off — partial-hunk commits across
@@ -30,6 +33,8 @@ pre-push:
       run: bun --filter @stll/anonymize-data typecheck
     format:
       run: bun run format:check
+    ai-skills:
+      run: bash scripts/check-ai-skill-sources.sh
     # Tests intentionally not run here: the full @stll/anonymize suite
     # takes ~7 minutes, which exceeds the pre-push budget. Swap to a
     # `test:fast` script once one exists, e.g.:
