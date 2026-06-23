@@ -1,6 +1,6 @@
 {
   "name": "@stll/anonymize-cli",
-  "version": "1.4.11",
+  "version": "1.5.0",
   "description": "Command-line PII detection and anonymization powered by @stll/anonymize",
   "type": "module",
   "bin": {
@@ -26,7 +26,7 @@
     "format": "oxfmt ."
   },
   "dependencies": {
-    "@stll/anonymize": "^1.4.11",
+    "@stll/anonymize": "^1.5.0",
     "@stll/anonymize-data": "^0.0.6"
   },
   "devDependencies": {

@@ -4,6 +4,7 @@ import {
 } from "./detectors/coreference";
 import { processGazetteerMatches } from "./detectors/gazetteer";
 import { processCountryMatches } from "./detectors/countries";
+import { isCallerOwnedEntity } from "./util/entity-source";
 import { detectNameCorpus, initNameCorpus } from "./detectors/names";
 import { detectSignatures } from "./detectors/signatures";
 import { processRegexMatches } from "./detectors/regex";
@@ -78,10 +79,6 @@ const LITERAL_SOURCES: ReadonlySet<string> = new Set([
   "deny-list",
   "gazetteer",
 ]);
-
-const isCallerOwnedEntity = (entity: Entity): boolean =>
-  entity.sourceDetail === "custom-deny-list" ||
-  entity.sourceDetail === "custom-regex";
 
 const hasLockedBoundary = (entity: Entity): boolean =>
   isCallerOwnedEntity(entity);

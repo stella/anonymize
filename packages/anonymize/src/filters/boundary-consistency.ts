@@ -1,12 +1,12 @@
 import type { Entity } from "../types";
 import { DETECTION_SOURCES } from "../types";
+import { isCallerOwnedEntity } from "../util/entity-source";
 
 /** Max gap (in chars) between entities to merge. */
 const MAX_GAP = 3;
 
 const hasLockedBoundary = (entity: Entity): boolean =>
-  entity.sourceDetail === "custom-deny-list" ||
-  entity.sourceDetail === "custom-regex";
+  isCallerOwnedEntity(entity);
 
 const hasDetectorLockedBoundary = (entity: Entity): boolean =>
   entity.label === "phone number" &&

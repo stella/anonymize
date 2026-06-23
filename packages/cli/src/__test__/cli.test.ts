@@ -168,6 +168,15 @@ test("--labels rejects an unknown label with a usage error", async () => {
   expect(err).toContain("unknown label");
 });
 
+test("--list-labels prints canonical labels and aliases", async () => {
+  const { out, code } = await run(["--list-labels"]);
+  expect(code).toBe(0);
+  expect(out).toContain("person");
+  expect(out).toContain("email address");
+  // The alias table maps short forms to canonical labels.
+  expect(out).toMatch(/email\s+->\s+email address/);
+});
+
 test("--json --mode redact omits detected text from the payload", async () => {
   const { out, code } = await run(
     [...SCOPE, "--quiet", "--json", "--mode", "redact"],

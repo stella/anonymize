@@ -1,5 +1,6 @@
 import addressStreetTypesJson from "../data/address-street-types.json";
 import type { Entity } from "../types";
+import { isCallerOwnedEntity } from "../util/entity-source";
 
 // Capitalised words that look like the start of an
 // `[Uppercase] [number]` address (Czech: "Vinohradská 12")
@@ -80,10 +81,6 @@ const NEAR_MISS_BAND = 0.15;
 const BOOST_PER_NEIGHBOUR = 0.05;
 const CONTEXT_WINDOW_CHARS = 150;
 const HIGH_CONFIDENCE_FLOOR = 0.9;
-
-const isCallerOwnedEntity = (entity: Entity): boolean =>
-  entity.sourceDetail === "custom-deny-list" ||
-  entity.sourceDetail === "custom-regex";
 
 /**
  * Boost confidence of near-miss NER entities that appear
