@@ -18,7 +18,7 @@ const ETHEREUM_ADDRESS_RE = /0x[0-9A-Fa-f]{40}/;
 const BECH32_ADDRESS_RE = /\bbc1[ac-hj-np-z02-9]{11,71}\b/i;
 const BASE58_ADDRESS_RE = /\b[13][a-km-zA-HJ-NP-Z1-9]{25,34}\b/;
 const NHS_NUMBER_CUE_RE = /\b(?:NHS|National\s+Health\s+Service)\b/i;
-const PLACEHOLDER_TOKEN_RE = /\[[^\]\s]+_[1-9]\d*\]/g;
+const PLACEHOLDER_TOKEN_RE = /\[[^\s[\]]+_[1-9]\d*\]/g;
 const PASSPORT_IDENTIFIER_RE =
   /\b(?:[A-Za-z]{1,2}\d{6,8}|\d{2}[A-Za-z]{2}\d{5}|\d{7,9})\b/;
 // Strip all separators the ID detectors accept so the

@@ -87,6 +87,17 @@ describe("redactText / deanonymise round-trip", () => {
     expect(deanonymise(result.redactedText, result.redactionMap)).toBe(text);
   });
 
+  test("literal placeholders inside extra brackets are reserved", () => {
+    const text = "Keep [[PERSON_1]]; Alice Smith signs.";
+    const entities = [at(text, "person", "Alice Smith")];
+
+    const result = redactText(text, entities);
+
+    expect(result.redactedText).toBe("Keep [[PERSON_1]]; [PERSON_2] signs.");
+    expect([...result.redactionMap.keys()]).toEqual(["[PERSON_2]"]);
+    expect(deanonymise(result.redactedText, result.redactionMap)).toBe(text);
+  });
+
   test("repeated values share the first non-colliding placeholder", () => {
     const value = "Alice Smith";
     const text = `Existing [PERSON_1]. ${value} called. ${value} signed.`;
