@@ -151,7 +151,7 @@ test("--labels accepts short aliases for multi-word labels", async () => {
   // "email" resolves to the canonical "email address" label.
   // Before alias support this hard-errored with exit code 2.
   const { out, code } = await run(
-    [...SCOPE, "--quiet", "--labels", "email,person"],
+    [...SCOPE, "--quiet", "--labels", "email,email-address,person"],
     SAMPLE,
   );
   expect(code).toBe(0);

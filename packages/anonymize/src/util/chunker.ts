@@ -40,6 +40,9 @@ export const chunkTextWithOffsets = (text: string): ChunkSpan[] => {
     if (chunk.trim().length > MIN_CHUNK_LENGTH) {
       chunks.push({ text: chunk, offset });
     }
+    if (end === text.length) {
+      break;
+    }
     offset = Math.max(offset + 1, end - OVERLAP_CHARS);
   }
 

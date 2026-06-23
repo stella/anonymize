@@ -92,12 +92,14 @@ const readInputs = async (files: string[]): Promise<NamedInput[]> => {
   );
 };
 
+type EntityLabel = (typeof DEFAULT_ENTITY_LABELS)[number];
+
 // Short aliases for the canonical multi-word labels so that
 // `--labels person,email,iban` works without quoting the space
 // in "email address". Separator-insensitive resolution (below)
 // additionally accepts hyphen/underscore forms such as
 // "credit-card-number".
-const LABEL_ALIASES: Record<string, string> = {
+const LABEL_ALIASES: Record<string, EntityLabel> = {
   email: "email address",
   phone: "phone number",
   org: "organization",
@@ -111,6 +113,10 @@ const LABEL_ALIASES: Record<string, string> = {
 };
 
 const LABEL_SEPARATOR_RE = /[\s_-]+/g;
+const ENTITY_LABEL_SET: ReadonlySet<string> = new Set(DEFAULT_ENTITY_LABELS);
+
+const isEntityLabel = (label: string): label is EntityLabel =>
+  ENTITY_LABEL_SET.has(label);
 
 /**
  * Resolve a user-supplied label token to a canonical label.
@@ -127,16 +133,27 @@ const canonicalizeLabel = (raw: string): string => {
   return LABEL_ALIASES[normalized] ?? normalized;
 };
 
-const validateLabels = (labels: readonly string[]): string[] => {
-  const known: readonly string[] = DEFAULT_ENTITY_LABELS;
-  const resolved = labels.map(canonicalizeLabel);
-  const invalid = resolved.find((label) => !known.includes(label));
-  if (invalid) {
-    throw new UsageError(
-      `--labels: unknown label "${invalid}"; available: ${DEFAULT_ENTITY_LABELS.join(", ")} (aliases: ${Object.keys(LABEL_ALIASES).join(", ")})`,
-    );
+const validateLabels = (labels: readonly string[]): EntityLabel[] => {
+  const resolved = [...new Set(labels.map(canonicalizeLabel))];
+  const valid: EntityLabel[] = [];
+  const availableLabels = DEFAULT_ENTITY_LABELS.join(", ");
+  const availableAliases = Object.keys(LABEL_ALIASES).join(", ");
+  for (const label of resolved) {
+    if (!isEntityLabel(label)) {
+      throw new UsageError(
+        [
+          "--labels: unknown label",
+          JSON.stringify(label) + ";",
+          "available:",
+          availableLabels,
+          "(aliases:",
+          availableAliases + ")",
+        ].join(" "),
+      );
+    }
+    valid.push(label);
   }
-  return resolved;
+  return valid;
 };
 
 const buildPipelineConfig = async (
