@@ -3,6 +3,7 @@ node_modules
 *.tsbuildinfo
 dist
 .turbo
+target/
 
 # Claude Code local worktrees.
 .claude/worktrees/

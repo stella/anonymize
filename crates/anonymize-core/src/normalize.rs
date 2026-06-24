@@ -1,0 +1,292 @@
+const PHONE_NOISE: [char; 3] = ['(', ')', '-'];
+const ID_SEPARATORS: [char; 3] = ['-', '/', '.'];
+
+pub(crate) fn label_key(label: &str) -> String {
+  let uppercase = uppercase(label);
+  collapse_whitespace(&uppercase, "_", false)
+}
+
+pub(crate) fn placeholder_fallback(label: &str) -> String {
+  format!("[{}]", label_key(label))
+}
+
+pub(crate) fn normalize_entity_text(label: &str, text: &str) -> String {
+  let upper = label_key(label);
+
+  if upper == "EMAIL_ADDRESS" || upper == "EMAIL" {
+    return text.to_lowercase().trim().to_owned();
+  }
+  if upper == "PHONE_NUMBER" || upper == "PHONE" {
+    return text
+      .chars()
+      .filter(|ch| !ch.is_whitespace() && !PHONE_NOISE.contains(ch))
+      .collect();
+  }
+  if upper == "CRYPTO" {
+    return normalize_crypto_text(text);
+  }
+  if upper == "NATIONAL_IDENTIFICATION_NUMBER" && contains_nhs_cue(text) {
+    return text.chars().filter(char::is_ascii_digit).collect();
+  }
+  if is_identifier_label(&upper) {
+    return strip_id_separators(text).to_uppercase();
+  }
+  if upper == "PASSPORT_NUMBER" {
+    return normalize_passport_text(text);
+  }
+  if is_collapsible_text_label(&upper) {
+    return collapse_whitespace(text, " ", false)
+      .to_lowercase()
+      .trim()
+      .to_owned();
+  }
+
+  text.trim().to_owned()
+}
+
+fn uppercase(text: &str) -> String {
+  let mut output = String::new();
+  for ch in text.chars() {
+    output.extend(ch.to_uppercase());
+  }
+  output
+}
+
+fn collapse_whitespace(text: &str, replacement: &str, trim: bool) -> String {
+  let mut output = String::new();
+  let mut in_whitespace = false;
+
+  for ch in text.chars() {
+    if ch.is_whitespace() {
+      if !in_whitespace {
+        output.push_str(replacement);
+        in_whitespace = true;
+      }
+      continue;
+    }
+
+    output.push(ch);
+    in_whitespace = false;
+  }
+
+  if trim {
+    return output.trim().to_owned();
+  }
+  output
+}
+
+fn strip_id_separators(text: &str) -> String {
+  text
+    .chars()
+    .filter(|ch| !ch.is_whitespace() && !ID_SEPARATORS.contains(ch))
+    .collect()
+}
+
+fn is_identifier_label(upper: &str) -> bool {
+  matches!(
+    upper,
+    "IBAN"
+      | "BANK_ACCOUNT_NUMBER"
+      | "TAX_IDENTIFICATION_NUMBER"
+      | "REGISTRATION_NUMBER"
+      | "NATIONAL_IDENTIFICATION_NUMBER"
+      | "SOCIAL_SECURITY_NUMBER"
+      | "BIRTH_NUMBER"
+      | "IDENTITY_CARD_NUMBER"
+      | "CREDIT_CARD_NUMBER"
+  )
+}
+
+fn is_collapsible_text_label(upper: &str) -> bool {
+  matches!(
+    upper,
+    "PERSON" | "ORGANIZATION" | "ADDRESS" | "LAND_PARCEL" | "MISC"
+  )
+}
+
+fn contains_nhs_cue(text: &str) -> bool {
+  let lower = text.to_lowercase();
+  contains_word(&lower, "nhs")
+    || collapse_whitespace(&lower, " ", true)
+      .contains("national health service")
+}
+
+fn normalize_crypto_text(text: &str) -> String {
+  let trimmed = text.trim();
+
+  if let Some(address) = find_ethereum_address(trimmed) {
+    return address.to_lowercase();
+  }
+  if let Some(address) = find_bech32_address(trimmed) {
+    return address.to_lowercase();
+  }
+  if let Some(address) = find_base58_address(trimmed) {
+    return address.to_owned();
+  }
+
+  trimmed.to_owned()
+}
+
+fn find_ethereum_address(text: &str) -> Option<&str> {
+  for (start, _) in text.match_indices("0x") {
+    let end = start.saturating_add(42);
+    let Some(candidate) = text.get(start..end) else {
+      continue;
+    };
+    if candidate.chars().skip(2).all(|ch| ch.is_ascii_hexdigit()) {
+      return Some(candidate);
+    }
+  }
+
+  None
+}
+
+fn find_bech32_address(text: &str) -> Option<&str> {
+  find_ascii_token(text, |token| {
+    let lower = token.to_lowercase();
+    lower.len() >= 14
+      && lower.len() <= 74
+      && lower.starts_with("bc1")
+      && lower
+        .chars()
+        .skip(3)
+        .all(|ch| matches!(ch, 'a'..='h' | 'j'..='n' | 'p'..='z' | '0'..='9'))
+  })
+}
+
+fn find_base58_address(text: &str) -> Option<&str> {
+  find_ascii_token(text, |token| {
+    let len = token.len();
+    (26..=35).contains(&len)
+      && (token.starts_with('1') || token.starts_with('3'))
+      && token.chars().all(is_base58_char)
+  })
+}
+
+fn find_ascii_token(
+  text: &str,
+  predicate: impl Fn(&str) -> bool,
+) -> Option<&str> {
+  let mut token_start = None;
+
+  for (index, ch) in text.char_indices() {
+    if ch.is_ascii_alphanumeric() {
+      if token_start.is_none() {
+        token_start = Some(index);
+      }
+      continue;
+    }
+
+    if let Some(start) = token_start {
+      let token = text.get(start..index)?;
+      if predicate(token) {
+        return Some(token);
+      }
+      token_start = None;
+    }
+  }
+
+  let start = token_start?;
+  let token = text.get(start..)?;
+  predicate(token).then_some(token)
+}
+
+const fn is_base58_char(ch: char) -> bool {
+  matches!(
+    ch,
+    'a'..='k'
+      | 'm'..='z'
+      | 'A'..='H'
+      | 'J'..='N'
+      | 'P'..='Z'
+      | '1'..='9'
+  )
+}
+
+fn normalize_passport_text(text: &str) -> String {
+  let passport_identifier =
+    find_ascii_token(text, is_passport_identifier).unwrap_or(text);
+  strip_id_separators(passport_identifier).to_uppercase()
+}
+
+fn is_passport_identifier(token: &str) -> bool {
+  let chars: Vec<char> = token.chars().collect();
+  matches_letters_digits(&chars, 1, 2, 6, 8)
+    || matches_digits_letters_digits(&chars, 2, 2, 5)
+    || (token.len() >= 7
+      && token.len() <= 9
+      && token.chars().all(|ch| ch.is_ascii_digit()))
+}
+
+fn matches_letters_digits(
+  chars: &[char],
+  min_letters: usize,
+  max_letters: usize,
+  min_digits: usize,
+  max_digits: usize,
+) -> bool {
+  for letter_count in min_letters..=max_letters {
+    let digit_count = chars.len().saturating_sub(letter_count);
+    if digit_count < min_digits || digit_count > max_digits {
+      continue;
+    }
+    let Some((letters, digits)) = chars.split_at_checked(letter_count) else {
+      continue;
+    };
+    if letters.iter().all(char::is_ascii_alphabetic)
+      && digits.iter().all(char::is_ascii_digit)
+    {
+      return true;
+    }
+  }
+
+  false
+}
+
+fn matches_digits_letters_digits(
+  chars: &[char],
+  first_digits: usize,
+  letters_count: usize,
+  last_digits: usize,
+) -> bool {
+  let expected_len = first_digits
+    .saturating_add(letters_count)
+    .saturating_add(last_digits);
+  if chars.len() != expected_len {
+    return false;
+  }
+
+  let Some((first, tail)) = chars.split_at_checked(first_digits) else {
+    return false;
+  };
+  let Some((letters, last)) = tail.split_at_checked(letters_count) else {
+    return false;
+  };
+
+  first.iter().all(char::is_ascii_digit)
+    && letters.iter().all(char::is_ascii_alphabetic)
+    && last.iter().all(char::is_ascii_digit)
+}
+
+fn contains_word(text: &str, word: &str) -> bool {
+  let mut start = 0;
+  while let Some(relative) = text.get(start..).and_then(|tail| tail.find(word))
+  {
+    let word_start = start.saturating_add(relative);
+    let word_end = word_start.saturating_add(word.len());
+    let before_ok = text
+      .get(..word_start)
+      .and_then(|prefix| prefix.chars().next_back())
+      .is_none_or(|ch| !ch.is_alphanumeric());
+    let after_ok = text
+      .get(word_end..)
+      .and_then(|suffix| suffix.chars().next())
+      .is_none_or(|ch| !ch.is_alphanumeric());
+    if before_ok && after_ok {
+      return true;
+    }
+    start = word_end;
+  }
+
+  false
+}
