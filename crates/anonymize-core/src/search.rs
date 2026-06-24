@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use stella_aho_corasick_core as literal_core;
 use stella_fuzzy_search_core as fuzzy_core;
 use stella_regex_set_core as regex_core;
@@ -8,6 +9,11 @@ use crate::types::{Error, Result, SearchEngine, SearchMatch};
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SearchPattern {
   Literal(String),
+  LiteralWithOptions {
+    pattern: String,
+    case_insensitive: Option<bool>,
+    whole_words: Option<bool>,
+  },
   Regex(String),
   Fuzzy {
     pattern: String,
@@ -22,7 +28,7 @@ pub struct SearchOptions {
   pub fuzzy: FuzzySearchOptions,
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
 pub struct LiteralSearchOptions {
   pub case_insensitive: bool,
   pub whole_words: bool,
@@ -51,21 +57,27 @@ impl Default for FuzzySearchOptions {
 }
 
 pub struct SearchIndex {
-  literal: Option<literal_core::AhoCorasick>,
-  literal_pattern_indexes: Vec<u32>,
+  literal: Vec<LiteralSlot>,
   regex: Option<regex_core::RegexSet>,
   regex_pattern_indexes: Vec<u32>,
   fuzzy: Option<fuzzy_core::FuzzySearch>,
   fuzzy_pattern_indexes: Vec<u32>,
 }
 
+struct LiteralSlot {
+  engine: literal_core::AhoCorasick,
+  pattern_indexes: Vec<u32>,
+}
+
+type LiteralPatternGroup = (Vec<String>, Vec<u32>);
+
 impl SearchIndex {
   pub fn new(
     patterns: Vec<SearchPattern>,
     options: SearchOptions,
   ) -> Result<Self> {
-    let mut literal_patterns = Vec::<String>::new();
-    let mut literal_pattern_indexes = Vec::<u32>::new();
+    let mut literal_groups =
+      BTreeMap::<LiteralSearchOptions, LiteralPatternGroup>::new();
     let mut regex_patterns = Vec::<String>::new();
     let mut regex_pattern_indexes = Vec::<u32>::new();
     let mut fuzzy_patterns = Vec::<fuzzy_core::PatternEntry>::new();
@@ -75,8 +87,28 @@ impl SearchIndex {
       let pattern_index = pattern_index(index)?;
       match entry {
         SearchPattern::Literal(value) => {
-          literal_patterns.push(value);
-          literal_pattern_indexes.push(pattern_index);
+          push_literal_pattern(
+            &mut literal_groups,
+            options.literal,
+            value,
+            pattern_index,
+          );
+        }
+        SearchPattern::LiteralWithOptions {
+          pattern,
+          case_insensitive,
+          whole_words,
+        } => {
+          push_literal_pattern(
+            &mut literal_groups,
+            LiteralSearchOptions {
+              case_insensitive: case_insensitive
+                .unwrap_or(options.literal.case_insensitive),
+              whole_words: whole_words.unwrap_or(options.literal.whole_words),
+            },
+            pattern,
+            pattern_index,
+          );
         }
         SearchPattern::Regex(value) => {
           regex_patterns.push(value);
@@ -95,13 +127,12 @@ impl SearchIndex {
       }
     }
 
-    let literal = build_literal(literal_patterns, options)?;
-    let regex = build_regex(regex_patterns, options)?;
-    let fuzzy = build_fuzzy(fuzzy_patterns, options)?;
+    let literal = build_literal_slots(literal_groups)?;
+    let regex = build_regex(regex_patterns, options.regex)?;
+    let fuzzy = build_fuzzy(fuzzy_patterns, options.fuzzy)?;
 
     Ok(Self {
       literal,
-      literal_pattern_indexes,
       regex,
       regex_pattern_indexes,
       fuzzy,
@@ -112,13 +143,14 @@ impl SearchIndex {
   pub fn find_iter(&self, haystack: &str) -> Result<Vec<SearchMatch>> {
     let mut matches = Vec::new();
 
-    if let Some(literal) = &self.literal {
+    for slot in &self.literal {
       // Downstream merge priority chooses among overlaps.
       extend_triple_matches(
         &mut matches,
         SearchEngine::Literal,
-        &self.literal_pattern_indexes,
-        &literal
+        &slot.pattern_indexes,
+        &slot
+          .engine
           .find_overlapping_iter_packed(haystack)
           .map_err(|err| Error::Search {
             engine: SearchEngine::Literal,
@@ -175,13 +207,17 @@ impl SearchIndex {
   }
 
   pub fn is_match(&self, haystack: &str) -> Result<bool> {
-    if let Some(literal) = &self.literal
-      && literal.is_match(haystack).map_err(|err| Error::Search {
-        engine: SearchEngine::Literal,
-        reason: err.to_string(),
-      })?
-    {
-      return Ok(true);
+    for slot in &self.literal {
+      if slot
+        .engine
+        .is_match(haystack)
+        .map_err(|err| Error::Search {
+          engine: SearchEngine::Literal,
+          reason: err.to_string(),
+        })?
+      {
+        return Ok(true);
+      }
     }
 
     if let Some(regex) = &self.regex
@@ -203,9 +239,37 @@ impl SearchIndex {
   }
 }
 
+fn push_literal_pattern(
+  groups: &mut BTreeMap<LiteralSearchOptions, LiteralPatternGroup>,
+  options: LiteralSearchOptions,
+  pattern: String,
+  pattern_index: u32,
+) {
+  let (patterns, pattern_indexes) = groups.entry(options).or_default();
+  patterns.push(pattern);
+  pattern_indexes.push(pattern_index);
+}
+
+fn build_literal_slots(
+  groups: BTreeMap<LiteralSearchOptions, LiteralPatternGroup>,
+) -> Result<Vec<LiteralSlot>> {
+  let mut slots = Vec::new();
+
+  for (options, (patterns, pattern_indexes)) in groups {
+    if let Some(engine) = build_literal(patterns, options)? {
+      slots.push(LiteralSlot {
+        engine,
+        pattern_indexes,
+      });
+    }
+  }
+
+  Ok(slots)
+}
+
 fn build_literal(
   patterns: Vec<String>,
-  options: SearchOptions,
+  options: LiteralSearchOptions,
 ) -> Result<Option<literal_core::AhoCorasick>> {
   if patterns.is_empty() {
     return Ok(None);
@@ -215,9 +279,9 @@ fn build_literal(
     patterns,
     literal_core::Options {
       match_kind: literal_core::MatchKind::LeftmostFirst,
-      case_insensitive: options.literal.case_insensitive,
+      case_insensitive: options.case_insensitive,
       dfa: false,
-      whole_words: options.literal.whole_words,
+      whole_words: options.whole_words,
     },
   )
   .map(Some)
@@ -229,7 +293,7 @@ fn build_literal(
 
 fn build_regex(
   patterns: Vec<String>,
-  options: SearchOptions,
+  options: RegexSearchOptions,
 ) -> Result<Option<regex_core::RegexSet>> {
   if patterns.is_empty() {
     return Ok(None);
@@ -238,7 +302,7 @@ fn build_regex(
   regex_core::RegexSet::new(
     patterns,
     regex_core::Options {
-      whole_words: options.regex.whole_words,
+      whole_words: options.whole_words,
       unicode_boundaries: true,
     },
   )
@@ -251,7 +315,7 @@ fn build_regex(
 
 fn build_fuzzy(
   patterns: Vec<fuzzy_core::PatternEntry>,
-  options: SearchOptions,
+  options: FuzzySearchOptions,
 ) -> Result<Option<fuzzy_core::FuzzySearch>> {
   if patterns.is_empty() {
     return Ok(None);
@@ -261,10 +325,10 @@ fn build_fuzzy(
     patterns,
     fuzzy_core::Options {
       metric: fuzzy_core::Metric::Levenshtein,
-      normalize_diacritics: options.fuzzy.normalize_diacritics,
+      normalize_diacritics: options.normalize_diacritics,
       unicode_boundaries: true,
-      whole_words: options.fuzzy.whole_words,
-      case_insensitive: options.fuzzy.case_insensitive,
+      whole_words: options.whole_words,
+      case_insensitive: options.case_insensitive,
     },
   )
   .map(Some)

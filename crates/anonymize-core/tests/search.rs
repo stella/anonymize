@@ -128,6 +128,88 @@ fn search_index_returns_overlapping_literal_matches() {
 }
 
 #[test]
+fn search_index_supports_per_pattern_literal_word_boundaries() {
+  let index = SearchIndex::new(
+    vec![
+      SearchPattern::LiteralWithOptions {
+        pattern: String::from("he"),
+        case_insensitive: None,
+        whole_words: Some(true),
+      },
+      SearchPattern::LiteralWithOptions {
+        pattern: String::from("s.r.o."),
+        case_insensitive: None,
+        whole_words: Some(false),
+      },
+    ],
+    SearchOptions::default(),
+  )
+  .unwrap();
+
+  let matches = index.find_iter("shell Acme s.r.o. he").unwrap();
+
+  assert_eq!(
+    matches,
+    vec![
+      SearchMatch::Literal {
+        pattern: 1,
+        start: 11,
+        end: 17,
+      },
+      SearchMatch::Literal {
+        pattern: 0,
+        start: 18,
+        end: 20,
+      },
+    ]
+  );
+}
+
+#[test]
+fn search_index_supports_per_pattern_literal_case_sensitivity() {
+  let index = SearchIndex::new(
+    vec![
+      SearchPattern::LiteralWithOptions {
+        pattern: String::from("alice"),
+        case_insensitive: Some(true),
+        whole_words: None,
+      },
+      SearchPattern::LiteralWithOptions {
+        pattern: String::from("bob"),
+        case_insensitive: Some(false),
+        whole_words: None,
+      },
+    ],
+    SearchOptions {
+      literal: LiteralSearchOptions {
+        case_insensitive: false,
+        whole_words: true,
+      },
+      ..SearchOptions::default()
+    },
+  )
+  .unwrap();
+
+  let matches = index.find_iter("Alice Bob bob").unwrap();
+
+  assert_eq!(
+    matches,
+    vec![
+      SearchMatch::Literal {
+        pattern: 0,
+        start: 0,
+        end: 5,
+      },
+      SearchMatch::Literal {
+        pattern: 1,
+        start: 10,
+        end: 13,
+      },
+    ]
+  );
+}
+
+#[test]
 fn search_index_reports_match_presence_across_engines() {
   let index = SearchIndex::new(
     vec![
