@@ -1,8 +1,8 @@
 #![allow(clippy::expect_used, clippy::float_cmp, clippy::unwrap_used)]
 
 use stella_anonymize_core::{
-  DetectionSource, PipelineEntity, SourceDetail, merge_and_dedup,
-  sanitize_entities,
+  DetectionSource, PipelineEntity, SourceDetail, enforce_boundary_consistency,
+  merge_and_dedup, sanitize_entities,
 };
 
 fn entity(
@@ -213,4 +213,159 @@ fn sanitize_drops_empty_entities() {
   )]);
 
   assert!(result.is_empty());
+}
+
+#[test]
+fn boundary_merges_adjacent_same_label_entities() {
+  let full_text = "Kontaktujte Jan Novák prosím.";
+  let result = enforce_boundary_consistency(
+    &[
+      entity(DetectionSource::Ner, 0.8, 12, 15, "person"),
+      entity(DetectionSource::Ner, 0.95, 16, 21, "person"),
+    ],
+    full_text,
+  )
+  .unwrap();
+
+  assert_eq!(result.len(), 1);
+  let person = result.first().expect("person");
+  assert_eq!(person.text, "Jan Novák");
+  assert_eq!(person.start, 12);
+  assert_eq!(person.end, 21);
+  assert_eq!(person.score, 0.95);
+}
+
+#[test]
+fn boundary_expands_partial_words() {
+  let full_text = "Kontaktujte Novák prosím.";
+  let result = enforce_boundary_consistency(
+    &[PipelineEntity::detected(
+      12,
+      16,
+      "person",
+      "Nová",
+      0.9,
+      DetectionSource::Ner,
+    )],
+    full_text,
+  )
+  .unwrap();
+
+  assert_eq!(result.len(), 1);
+  let person = result.first().expect("person");
+  assert_eq!(person.text, "Novák");
+  assert_eq!(person.end, 17);
+}
+
+#[test]
+fn boundary_clamps_expansion_at_cross_label_neighbors() {
+  let full_text = "JanPraha";
+  let result = enforce_boundary_consistency(
+    &[
+      entity(DetectionSource::Ner, 0.9, 0, 3, "person"),
+      entity(DetectionSource::Ner, 0.8, 3, 8, "address"),
+    ],
+    full_text,
+  )
+  .unwrap();
+
+  assert_eq!(result.len(), 2);
+  let person = result
+    .iter()
+    .find(|entry| entry.label == "person")
+    .expect("person");
+  let address = result
+    .iter()
+    .find(|entry| entry.label == "address")
+    .expect("address");
+  assert!(person.end <= address.start);
+}
+
+#[test]
+fn boundary_resolves_cross_label_partial_overlaps() {
+  let full_text = "JanXPraha";
+  let result = enforce_boundary_consistency(
+    &[
+      entity(DetectionSource::Ner, 0.9, 0, 3, "person"),
+      entity(DetectionSource::Ner, 0.8, 4, 9, "address"),
+    ],
+    full_text,
+  )
+  .unwrap();
+
+  assert_eq!(result.len(), 2);
+  let person = result
+    .iter()
+    .find(|entry| entry.label == "person")
+    .expect("person");
+  let address = result
+    .iter()
+    .find(|entry| entry.label == "address")
+    .expect("address");
+  assert!(person.end <= address.start);
+}
+
+#[test]
+fn boundary_removes_nested_same_label_entities() {
+  let full_text = "Ing. Pavel Novák";
+  let result = enforce_boundary_consistency(
+    &[
+      PipelineEntity::detected(
+        0,
+        16,
+        "person",
+        "Ing. Pavel Novák",
+        0.9,
+        DetectionSource::Ner,
+      ),
+      PipelineEntity::detected(
+        5,
+        10,
+        "person",
+        "Pavel",
+        0.8,
+        DetectionSource::Ner,
+      ),
+    ],
+    full_text,
+  )
+  .unwrap();
+
+  assert_eq!(result.len(), 1);
+  assert_eq!(result.first().expect("person").text, "Ing. Pavel Novák");
+}
+
+#[test]
+fn boundary_does_not_merge_legal_form_orgs_across_comma() {
+  let full_text = "Twitter, Inc., X Corp.";
+  let result = enforce_boundary_consistency(
+    &[
+      PipelineEntity::detected(
+        0,
+        13,
+        "organization",
+        "Twitter, Inc.",
+        0.9,
+        DetectionSource::LegalForm,
+      ),
+      PipelineEntity::detected(
+        15,
+        22,
+        "organization",
+        "X Corp.",
+        0.8,
+        DetectionSource::LegalForm,
+      ),
+    ],
+    full_text,
+  )
+  .unwrap();
+
+  assert_eq!(
+    result
+      .iter()
+      .map(|entry| entry.text.as_str())
+      .collect::<Vec<_>>(),
+    vec!["Twitter, Inc.", "X Corp."]
+  );
 }

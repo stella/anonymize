@@ -13,8 +13,8 @@ pub(crate) mod utf16;
 pub use placeholders::build_placeholder_map;
 pub use redact::{deanonymise, redact_text};
 pub use resolution::{
-  DetectionSource, PipelineEntity, SourceDetail, merge_and_dedup,
-  sanitize_entities,
+  DetectionSource, PipelineEntity, SourceDetail, enforce_boundary_consistency,
+  merge_and_dedup, sanitize_entities,
 };
 pub use search::{
   FuzzySearchOptions, LiteralSearchOptions, RegexSearchOptions, SearchIndex,
