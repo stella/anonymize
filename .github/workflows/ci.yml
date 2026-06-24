@@ -87,3 +87,9 @@ jobs:
         # noisy); promote to a hard gate once a stable baseline is set.
         continue-on-error: true
         run: bun run --cwd packages/anonymize perf:contracts
+
+      - name: Native adapter performance (informational)
+        # Emits aggregate TS/NAPI and Python/PyO3 timings for the shared
+        # Rust-backed static adapter contract.
+        continue-on-error: true
+        run: bun run --cwd packages/anonymize perf:native-adapters

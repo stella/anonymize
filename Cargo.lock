@@ -444,6 +444,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "stella-anonymize-adapter-contract"
+version = "1.5.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "stella-anonymize-core",
+]
+
+[[package]]
 name = "stella-anonymize-core"
 version = "1.5.0"
 dependencies = [
@@ -459,6 +468,8 @@ dependencies = [
  "napi",
  "napi-build",
  "napi-derive",
+ "serde_json",
+ "stella-anonymize-adapter-contract",
  "stella-anonymize-core",
 ]
 
@@ -467,8 +478,9 @@ name = "stella-anonymize-py"
 version = "1.5.0"
 dependencies = [
  "pyo3",
- "serde",
+ "pyo3-build-config",
  "serde_json",
+ "stella-anonymize-adapter-contract",
  "stella-anonymize-core",
 ]
 
