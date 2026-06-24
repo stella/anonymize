@@ -2,9 +2,9 @@
 
 use stella_anonymize_core::{
   CountryMatchData, DetectionSource, FuzzySearchOptions, GazetteerMatchData,
-  LiteralSearchOptions, PatternSlice, PreparedSearch, PreparedSearchConfig,
-  PreparedSearchSlices, RegexMatchMeta, RegexSearchOptions, SearchOptions,
-  SearchPattern, SourceDetail,
+  LiteralSearchOptions, OperatorConfig, PatternSlice, PreparedSearch,
+  PreparedSearchConfig, PreparedSearchSlices, RegexMatchMeta,
+  RegexSearchOptions, SearchOptions, SearchPattern, SourceDetail,
 };
 
 #[test]
@@ -115,4 +115,68 @@ fn prepared_search_emits_static_detector_entities() {
   );
   assert_eq!(result.gazetteer_entities[0].text, "Acme s.r.o.");
   assert_eq!(result.country_entities[0].source, DetectionSource::Country);
+}
+
+#[test]
+fn prepared_search_redacts_static_entities_end_to_end() {
+  let prepared = PreparedSearch::new(PreparedSearchConfig {
+    regex_patterns: vec![SearchPattern::Regex(String::from(
+      r"\b[A-Z]{2}\d{4}\b",
+    ))],
+    custom_regex_patterns: vec![],
+    literal_patterns: vec![
+      SearchPattern::LiteralWithOptions {
+        pattern: String::from("Acme"),
+        case_insensitive: Some(true),
+        whole_words: Some(false),
+      },
+      SearchPattern::LiteralWithOptions {
+        pattern: String::from("Turkey"),
+        case_insensitive: Some(true),
+        whole_words: Some(true),
+      },
+    ],
+    regex_options: SearchOptions {
+      regex: RegexSearchOptions { whole_words: false },
+      ..SearchOptions::default()
+    },
+    custom_regex_options: SearchOptions::default(),
+    literal_options: SearchOptions {
+      literal: LiteralSearchOptions {
+        case_insensitive: true,
+        whole_words: false,
+      },
+      ..SearchOptions::default()
+    },
+    slices: PreparedSearchSlices {
+      regex: PatternSlice { start: 0, end: 1 },
+      gazetteer: PatternSlice { start: 0, end: 1 },
+      countries: PatternSlice { start: 1, end: 2 },
+      ..PreparedSearchSlices::default()
+    },
+    regex_meta: vec![RegexMatchMeta::new("registration number", 0.9)],
+    custom_regex_meta: vec![],
+    gazetteer_data: Some(GazetteerMatchData {
+      labels: vec![String::from("organization")],
+      is_fuzzy: vec![false],
+    }),
+    country_data: Some(CountryMatchData {
+      labels: vec![String::from("country")],
+    }),
+  })
+  .unwrap();
+
+  let result = prepared
+    .redact_static_entities(
+      "Acme s.r.o. filed AB1234 in Turkey.",
+      &OperatorConfig::default(),
+    )
+    .unwrap();
+
+  assert_eq!(
+    result.redaction.redacted_text,
+    "[ORGANIZATION_1] filed [REGISTRATION_NUMBER_1] in [COUNTRY_1]."
+  );
+  assert_eq!(result.redaction.entity_count, 3);
+  assert_eq!(result.resolved_entities.len(), 3);
 }

@@ -16,7 +16,7 @@ pub use normalize::normalize_for_search;
 pub use placeholders::build_placeholder_map;
 pub use prepared::{
   PreparedSearch, PreparedSearchConfig, PreparedSearchMatches,
-  PreparedSearchSlices, StaticDetectionResult,
+  PreparedSearchSlices, StaticDetectionResult, StaticRedactionResult,
 };
 pub use processors::{
   CountryMatchData, GazetteerMatchData, PatternSlice, RegexMatchMeta,
