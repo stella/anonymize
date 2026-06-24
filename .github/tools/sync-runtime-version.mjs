@@ -10,7 +10,16 @@ const PACKAGE_FILES = [
   "packages/cli/package.json",
 ];
 
+const CARGO_WORKSPACE_MANIFEST = "Cargo.toml";
+const CARGO_LOCKED_PACKAGES = [
+  "stella-anonymize-adapter-contract",
+  "stella-anonymize-core",
+  "stella-anonymize-napi",
+  "stella-anonymize-py",
+];
+const PYPROJECT_FILES = ["crates/anonymize-py/pyproject.toml"];
 const LOCK_FILE = "bun.lock";
+const CARGO_LOCK_FILE = "Cargo.lock";
 const checkOnly = process.argv.includes("--check");
 const version = readFileSync("VERSION", "utf8").trim();
 
@@ -29,6 +38,29 @@ const SYNCED_DEPENDENCY = "@stll/anonymize";
 const SYNCED_DEPENDENCY_RANGE_RE = /("@stll\/anonymize": "\^)([^"]+)(")/g;
 
 const escapeRegExp = (value) => value.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const syncTextVersion = ({ file, label, re }) => {
+  const text = readFileSync(file, "utf8");
+  const match = text.match(re);
+  if (!match) {
+    console.error(`${file} has no ${label} version entry`);
+    hasMismatch = true;
+    return;
+  }
+  const current = match[2];
+  if (current === version) {
+    return;
+  }
+  if (checkOnly) {
+    console.error(
+      `${file} has ${label} version ${current}; expected ${version}`,
+    );
+    hasMismatch = true;
+    return;
+  }
+  writeFileSync(file, text.replace(re, `$1${version}$3`));
+  console.log(`Updated ${file} ${label} version to ${version}`);
+};
 
 for (const file of PACKAGE_FILES) {
   const pkg = JSON.parse(readFileSync(file, "utf8"));
@@ -59,6 +91,34 @@ for (const file of PACKAGE_FILES) {
   }
   writeFileSync(file, `${JSON.stringify(pkg, null, 2)}\n`);
   console.log(`Updated ${file} to ${version}`);
+}
+
+syncTextVersion({
+  file: CARGO_WORKSPACE_MANIFEST,
+  label: "Cargo workspace",
+  re: /(\[workspace\.package\][\s\S]*?\nversion\s*=\s*")([^"]+)(")/,
+});
+
+for (const file of PYPROJECT_FILES) {
+  const text = readFileSync(file, "utf8");
+  const explicitVersion = text.match(/^version\s*=\s*"([^"]+)"/m);
+  if (explicitVersion) {
+    syncTextVersion({
+      file,
+      label: "Python project",
+      re: /(^version\s*=\s*")([^"]+)(")/m,
+    });
+    continue;
+  }
+
+  if (/\bdynamic\s*=\s*\[[^\]]*"version"[^\]]*\]/m.test(text)) {
+    continue;
+  }
+
+  console.error(
+    `${file} must either derive version dynamically from Cargo or match VERSION`,
+  );
+  hasMismatch = true;
 }
 
 const lockText = readFileSync(LOCK_FILE, "utf8");
@@ -113,6 +173,45 @@ if (lockChanged) {
   writeFileSync(LOCK_FILE, syncedLockText);
   console.log(
     `Updated ${LOCK_FILE} workspace versions and ${SYNCED_DEPENDENCY} ranges to ${version}`,
+  );
+}
+
+const cargoLockText = readFileSync(CARGO_LOCK_FILE, "utf8");
+let cargoLockChanged = false;
+let syncedCargoLockText = cargoLockText;
+
+for (const packageName of CARGO_LOCKED_PACKAGES) {
+  const packageVersionRe = new RegExp(
+    `(\\[\\[package\\]\\]\\nname = "${escapeRegExp(packageName)}"\\nversion = ")([^"]+)(")`,
+  );
+  const match = syncedCargoLockText.match(packageVersionRe);
+  if (!match) {
+    console.error(`${CARGO_LOCK_FILE} has no package entry for ${packageName}`);
+    hasMismatch = true;
+    continue;
+  }
+  const lockedVersion = match[2];
+  if (lockedVersion === version) {
+    continue;
+  }
+  if (checkOnly) {
+    console.error(
+      `${CARGO_LOCK_FILE} package ${packageName} has version ${lockedVersion}; expected ${version}`,
+    );
+    hasMismatch = true;
+    continue;
+  }
+  syncedCargoLockText = syncedCargoLockText.replace(
+    packageVersionRe,
+    `$1${version}$3`,
+  );
+  cargoLockChanged = true;
+}
+
+if (cargoLockChanged) {
+  writeFileSync(CARGO_LOCK_FILE, syncedCargoLockText);
+  console.log(
+    `Updated ${CARGO_LOCK_FILE} local package versions to ${version}`,
   );
 }
 
