@@ -1,7 +1,8 @@
 use crate::normalize::normalize_for_search;
 use crate::processors::{
-  CountryMatchData, GazetteerMatchData, PatternSlice, RegexMatchMeta,
-  process_country_matches, process_gazetteer_matches, process_regex_matches,
+  CountryMatchData, DenyListMatchData, GazetteerMatchData, PatternSlice,
+  RegexMatchMeta, ensure_custom_deny_list_sources, process_country_matches,
+  process_deny_list_matches, process_gazetteer_matches, process_regex_matches,
 };
 use crate::redact::redact_text;
 use crate::resolution::{
@@ -21,6 +22,7 @@ pub struct PreparedSearch {
   slices: PreparedSearchSlices,
   regex_meta: Vec<RegexMatchMeta>,
   custom_regex_meta: Vec<RegexMatchMeta>,
+  deny_list_data: Option<DenyListMatchData>,
   gazetteer_data: Option<GazetteerMatchData>,
   country_data: Option<CountryMatchData>,
 }
@@ -48,6 +50,7 @@ pub struct PreparedSearchConfig {
   pub slices: PreparedSearchSlices,
   pub regex_meta: Vec<RegexMatchMeta>,
   pub custom_regex_meta: Vec<RegexMatchMeta>,
+  pub deny_list_data: Option<DenyListMatchData>,
   pub gazetteer_data: Option<GazetteerMatchData>,
   pub country_data: Option<CountryMatchData>,
 }
@@ -64,6 +67,7 @@ pub struct StaticDetectionResult {
   pub matches: PreparedSearchMatches,
   pub regex_entities: Vec<PipelineEntity>,
   pub custom_regex_entities: Vec<PipelineEntity>,
+  pub deny_list_entities: Vec<PipelineEntity>,
   pub gazetteer_entities: Vec<PipelineEntity>,
   pub country_entities: Vec<PipelineEntity>,
 }
@@ -77,7 +81,7 @@ pub struct StaticRedactionResult {
 
 impl PreparedSearch {
   pub fn new(config: PreparedSearchConfig) -> Result<Self> {
-    validate_supported_slices(&config.slices)?;
+    validate_supported_config(&config)?;
 
     Ok(Self {
       regex: SearchIndex::new(config.regex_patterns, config.regex_options)?,
@@ -92,6 +96,7 @@ impl PreparedSearch {
       slices: config.slices,
       regex_meta: config.regex_meta,
       custom_regex_meta: config.custom_regex_meta,
+      deny_list_data: config.deny_list_data,
       gazetteer_data: config.gazetteer_data,
       country_data: config.country_data,
     })
@@ -124,6 +129,16 @@ impl PreparedSearch {
       full_text,
       &self.custom_regex_meta,
     )?;
+    let deny_list_entities = if let Some(data) = &self.deny_list_data {
+      process_deny_list_matches(
+        &matches.literal,
+        self.slices.deny_list,
+        full_text,
+        data,
+      )?
+    } else {
+      Vec::new()
+    };
     let gazetteer_entities = if let Some(data) = &self.gazetteer_data {
       process_gazetteer_matches(
         &matches.literal,
@@ -149,6 +164,7 @@ impl PreparedSearch {
       matches,
       regex_entities,
       custom_regex_entities,
+      deny_list_entities,
       gazetteer_entities,
       country_entities,
     })
@@ -178,11 +194,11 @@ impl PreparedSearch {
   }
 }
 
-fn validate_supported_slices(slices: &PreparedSearchSlices) -> Result<()> {
-  reject_unsupported_slice(slices.legal_forms, "legal_forms")?;
-  reject_unsupported_slice(slices.triggers, "triggers")?;
-  reject_unsupported_slice(slices.deny_list, "deny_list")?;
-  reject_unsupported_slice(slices.street_types, "street_types")
+fn validate_supported_config(config: &PreparedSearchConfig) -> Result<()> {
+  reject_unsupported_slice(config.slices.legal_forms, "legal_forms")?;
+  reject_unsupported_slice(config.slices.triggers, "triggers")?;
+  validate_deny_list_config(config)?;
+  reject_unsupported_slice(config.slices.street_types, "street_types")
 }
 
 const fn reject_unsupported_slice(
@@ -196,6 +212,61 @@ const fn reject_unsupported_slice(
   Err(Error::UnsupportedStaticSlice { slice: name })
 }
 
+fn validate_deny_list_config(config: &PreparedSearchConfig) -> Result<()> {
+  if config.slices.deny_list.is_empty() {
+    return Ok(());
+  }
+
+  let Some(data) = &config.deny_list_data else {
+    return Err(Error::UnsupportedStaticSlice { slice: "deny_list" });
+  };
+
+  validate_static_data_length(
+    "deny_list.labels",
+    config.slices.deny_list,
+    data.labels.len(),
+  )?;
+  validate_static_data_length(
+    "deny_list.custom_labels",
+    config.slices.deny_list,
+    data.custom_labels.len(),
+  )?;
+  validate_static_data_length(
+    "deny_list.originals",
+    config.slices.deny_list,
+    data.originals.len(),
+  )?;
+  validate_static_data_length(
+    "deny_list.sources",
+    config.slices.deny_list,
+    data.sources.len(),
+  )?;
+  ensure_custom_deny_list_sources(data)
+}
+
+fn validate_static_data_length(
+  field: &'static str,
+  slice: PatternSlice,
+  actual: usize,
+) -> Result<()> {
+  let expected = usize::try_from(slice.len()).map_err(|_| {
+    Error::StaticDataLengthMismatch {
+      field,
+      expected: usize::MAX,
+      actual,
+    }
+  })?;
+  if actual == expected {
+    return Ok(());
+  }
+
+  Err(Error::StaticDataLengthMismatch {
+    field,
+    expected,
+    actual,
+  })
+}
+
 impl StaticDetectionResult {
   #[must_use]
   pub fn all_entities(&self) -> Vec<PipelineEntity> {
@@ -203,11 +274,13 @@ impl StaticDetectionResult {
       .regex_entities
       .len()
       .saturating_add(self.custom_regex_entities.len())
+      .saturating_add(self.deny_list_entities.len())
       .saturating_add(self.gazetteer_entities.len())
       .saturating_add(self.country_entities.len());
     let mut entities = Vec::with_capacity(capacity);
     entities.extend(self.regex_entities.iter().cloned());
     entities.extend(self.custom_regex_entities.iter().cloned());
+    entities.extend(self.deny_list_entities.iter().cloned());
     entities.extend(self.gazetteer_entities.iter().cloned());
     entities.extend(self.country_entities.iter().cloned());
     entities

@@ -13,6 +13,12 @@ const configJson = JSON.stringify({
   literal_patterns: [
     {
       kind: "literal-with-options",
+      pattern: "Secret Code",
+      case_insensitive: true,
+      whole_words: true,
+    },
+    {
+      kind: "literal-with-options",
       pattern: "Acme",
       case_insensitive: true,
       whole_words: false,
@@ -37,13 +43,20 @@ const configJson = JSON.stringify({
   slices: {
     regex: { start: 0, end: 1 },
     custom_regex: { start: 0, end: 1 },
-    gazetteer: { start: 0, end: 2 },
-    countries: { start: 2, end: 3 },
+    deny_list: { start: 0, end: 1 },
+    gazetteer: { start: 1, end: 3 },
+    countries: { start: 3, end: 4 },
   },
   regex_meta: [{ label: "registration number", score: 0.9 }],
   custom_regex_meta: [
     { label: "matter id", score: 1, source_detail: "custom-regex" },
   ],
+  deny_list_data: {
+    labels: [["matter"]],
+    custom_labels: [["matter"]],
+    originals: ["Secret Code"],
+    sources: [["custom-deny-list"]],
+  },
   gazetteer_data: {
     labels: ["organization", "address"],
     is_fuzzy: [false, true],
@@ -162,6 +175,7 @@ function buildCases() {
     undefined,
     JSON.stringify({ operators: { country: "redact" } }),
     JSON.stringify({ operators: { address: "redact", country: "redact" } }),
+    JSON.stringify({ operators: { matter: "redact" } }),
   ];
   const fixtureCases = [];
 
@@ -172,7 +186,7 @@ function buildCases() {
     fixtureCases.push({
       text:
         `Reference ${registration} for Acme s.r.o. near ` +
-        `${place}, Turkey, matter ${matter}.`,
+        `${place}, Turkey, matter ${matter}, code Secret Code.`,
       operatorsJson: operators[index % operators.length],
     });
   }
@@ -200,6 +214,15 @@ function toNapiConfig(config) {
     },
     regexMeta: config.regex_meta.map(toNapiRegexMeta),
     customRegexMeta: config.custom_regex_meta.map(toNapiRegexMeta),
+    denyListData:
+      config.deny_list_data === undefined
+        ? undefined
+        : {
+            labels: config.deny_list_data.labels,
+            customLabels: config.deny_list_data.custom_labels,
+            originals: config.deny_list_data.originals,
+            sources: config.deny_list_data.sources,
+          },
     gazetteerData:
       config.gazetteer_data === undefined
         ? undefined

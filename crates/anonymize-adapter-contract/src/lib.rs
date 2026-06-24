@@ -2,9 +2,9 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 use stella_anonymize_core::{
-  CountryMatchData, DetectionSource, FuzzySearchOptions, GazetteerMatchData,
-  LiteralSearchOptions, OperatorConfig, OperatorType, PatternSlice,
-  PreparedSearchConfig, PreparedSearchSlices, RegexMatchMeta,
+  CountryMatchData, DenyListMatchData, DetectionSource, FuzzySearchOptions,
+  GazetteerMatchData, LiteralSearchOptions, OperatorConfig, OperatorType,
+  PatternSlice, PreparedSearchConfig, PreparedSearchSlices, RegexMatchMeta,
   RegexSearchOptions, SearchOptions, SearchPattern, SourceDetail,
   StaticRedactionResult,
 };
@@ -100,6 +100,14 @@ pub struct BindingCountryMatchData {
   pub labels: Vec<String>,
 }
 
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BindingDenyListMatchData {
+  pub labels: Vec<Vec<String>>,
+  pub custom_labels: Vec<Vec<String>>,
+  pub originals: Vec<String>,
+  pub sources: Vec<Vec<String>>,
+}
+
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 pub struct BindingPreparedSearchConfig {
   #[serde(default)]
@@ -120,6 +128,8 @@ pub struct BindingPreparedSearchConfig {
   pub regex_meta: Vec<BindingRegexMatchMeta>,
   #[serde(default)]
   pub custom_regex_meta: Vec<BindingRegexMatchMeta>,
+  #[serde(default)]
+  pub deny_list_data: Option<BindingDenyListMatchData>,
   #[serde(default)]
   pub gazetteer_data: Option<BindingGazetteerMatchData>,
   #[serde(default)]
@@ -186,6 +196,12 @@ pub fn prepared_search_config_from_binding(
     slices: slices_from_binding(&config.slices),
     regex_meta: regex_meta_from_binding(config.regex_meta)?,
     custom_regex_meta: regex_meta_from_binding(config.custom_regex_meta)?,
+    deny_list_data: config.deny_list_data.map(|data| DenyListMatchData {
+      labels: data.labels,
+      custom_labels: data.custom_labels,
+      originals: data.originals,
+      sources: data.sources,
+    }),
     gazetteer_data: config.gazetteer_data.map(|data| GazetteerMatchData {
       labels: data.labels,
       is_fuzzy: data.is_fuzzy,

@@ -1,9 +1,10 @@
 #![allow(clippy::expect_used, clippy::indexing_slicing, clippy::unwrap_used)]
 
 use stella_anonymize_core::{
-  CountryMatchData, DetectionSource, GazetteerMatchData, PatternSlice,
-  PipelineEntity, RegexMatchMeta, SearchMatch, SourceDetail,
-  process_country_matches, process_gazetteer_matches, process_regex_matches,
+  CountryMatchData, DenyListMatchData, DetectionSource, Error,
+  GazetteerMatchData, PatternSlice, PipelineEntity, RegexMatchMeta,
+  SearchMatch, SourceDetail, process_country_matches,
+  process_deny_list_matches, process_gazetteer_matches, process_regex_matches,
 };
 
 #[test]
@@ -102,6 +103,100 @@ fn regex_processor_preserves_custom_regex_source_detail() {
   .unwrap();
 
   assert_eq!(entities[0].source_detail, Some(SourceDetail::CustomRegex));
+}
+
+#[test]
+fn deny_list_processor_emits_custom_labels() {
+  let matches = vec![SearchMatch::Literal {
+    pattern: 3,
+    start: 0,
+    end: 11,
+  }];
+  let data = DenyListMatchData {
+    labels: vec![vec![String::from("matter")]],
+    custom_labels: vec![vec![String::from("matter")]],
+    originals: vec![String::from("Secret Code")],
+    sources: vec![vec![String::from("custom-deny-list")]],
+  };
+
+  let entities = process_deny_list_matches(
+    &matches,
+    PatternSlice { start: 3, end: 4 },
+    "Secret Code filed",
+    &data,
+  )
+  .unwrap();
+
+  assert_eq!(entities.len(), 1);
+  assert_eq!(entities[0].text, "Secret Code");
+  assert_eq!(entities[0].source, DetectionSource::DenyList);
+  assert_eq!(
+    entities[0].source_detail,
+    Some(SourceDetail::CustomDenyList)
+  );
+}
+
+#[test]
+fn deny_list_processor_rejects_embedded_custom_word_matches() {
+  let matches = vec![
+    SearchMatch::Literal {
+      pattern: 0,
+      start: 0,
+      end: 6,
+    },
+    SearchMatch::Literal {
+      pattern: 0,
+      start: 14,
+      end: 20,
+    },
+  ];
+  let data = DenyListMatchData {
+    labels: vec![vec![String::from("matter")]],
+    custom_labels: vec![vec![String::from("matter")]],
+    originals: vec![String::from("Secret")],
+    sources: vec![vec![String::from("custom-deny-list")]],
+  };
+
+  let entities = process_deny_list_matches(
+    &matches,
+    PatternSlice { start: 0, end: 1 },
+    "Secret filed xSecret.",
+    &data,
+  )
+  .unwrap();
+
+  assert_eq!(entities.len(), 1);
+  assert_eq!(entities[0].text, "Secret");
+}
+
+#[test]
+fn deny_list_processor_rejects_curated_sources() {
+  let matches = vec![SearchMatch::Literal {
+    pattern: 0,
+    start: 0,
+    end: 6,
+  }];
+  let data = DenyListMatchData {
+    labels: vec![vec![String::from("address")]],
+    custom_labels: vec![vec![]],
+    originals: vec![String::from("Prague")],
+    sources: vec![vec![String::from("city")]],
+  };
+
+  let error = process_deny_list_matches(
+    &matches,
+    PatternSlice { start: 0, end: 1 },
+    "Prague",
+    &data,
+  )
+  .unwrap_err();
+
+  assert_eq!(
+    error,
+    Error::UnsupportedDenyListSource {
+      source: String::from("city")
+    }
+  );
 }
 
 #[test]

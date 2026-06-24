@@ -32,6 +32,14 @@ pub enum Error {
   UnsupportedStaticSlice {
     slice: &'static str,
   },
+  UnsupportedDenyListSource {
+    source: String,
+  },
+  StaticDataLengthMismatch {
+    field: &'static str,
+    expected: usize,
+    actual: usize,
+  },
 }
 
 impl fmt::Display for Error {
@@ -71,6 +79,22 @@ impl fmt::Display for Error {
         write!(
           formatter,
           "Static slice '{slice}' is configured but not supported by native core"
+        )
+      }
+      Self::UnsupportedDenyListSource { source } => {
+        write!(
+          formatter,
+          "Deny-list source '{source}' is not supported by native core"
+        )
+      }
+      Self::StaticDataLengthMismatch {
+        field,
+        expected,
+        actual,
+      } => {
+        write!(
+          formatter,
+          "Static data field '{field}' has {actual} item(s), expected {expected}"
         )
       }
     }
