@@ -11,10 +11,10 @@ fn normalize_for_search_matches_ts_replacements() {
 }
 
 #[test]
-fn normalize_for_search_preserves_utf16_width() {
+fn normalize_for_search_does_not_preserve_byte_width() {
   let input = "a\u{00a0}\u{1f600}\u{2013}b";
   let output = normalize_for_search(input);
 
   assert_eq!(output, "a \u{1f600}-b");
-  assert_eq!(output.encode_utf16().count(), input.encode_utf16().count());
+  assert_ne!(output.len(), input.len());
 }

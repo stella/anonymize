@@ -1,4 +1,7 @@
-use super::common::{is_caller_owned, utf16_len};
+use crate::byte_offsets::ByteOffsets;
+use crate::types::Result;
+
+use super::common::{byte_len, is_caller_owned};
 use super::{DetectionSource, PipelineEntity, SourceDetail};
 
 const LEGAL_PERIOD_SUFFIXES: &str =
@@ -16,7 +19,7 @@ pub fn sanitize_entities(entities: &[PipelineEntity]) -> Vec<PipelineEntity> {
       continue;
     }
 
-    let Some(cleaned) = clean_entity_text(entity) else {
+    let Some(cleaned) = clean_entity_text(entity, &entity.text) else {
       continue;
     };
     sanitized.push(cleaned);
@@ -25,12 +28,37 @@ pub fn sanitize_entities(entities: &[PipelineEntity]) -> Vec<PipelineEntity> {
   sanitized
 }
 
-fn clean_entity_text(entity: &PipelineEntity) -> Option<PipelineEntity> {
-  let mut start_byte = 0;
-  let mut end_byte = entity.text.len();
+pub(crate) fn sanitize_entities_with_source(
+  entities: &[PipelineEntity],
+  full_text: &str,
+) -> Result<Vec<PipelineEntity>> {
+  let offsets = ByteOffsets::new(full_text);
+  let mut sanitized = Vec::new();
 
-  while let Some((ch, len)) = first_char(entity.text.get(start_byte..end_byte)?)
-  {
+  for entity in entities {
+    if is_caller_owned(entity) || has_curated_literal_boundary(entity) {
+      sanitized.push(entity.clone());
+      continue;
+    }
+
+    let raw_text = offsets.slice(full_text, entity.start, entity.end)?;
+    let Some(cleaned) = clean_entity_text(entity, &raw_text) else {
+      continue;
+    };
+    sanitized.push(cleaned);
+  }
+
+  Ok(sanitized)
+}
+
+fn clean_entity_text(
+  entity: &PipelineEntity,
+  raw_text: &str,
+) -> Option<PipelineEntity> {
+  let mut start_byte = 0;
+  let mut end_byte = raw_text.len();
+
+  while let Some((ch, len)) = first_char(raw_text.get(start_byte..end_byte)?) {
     if ch.is_whitespace() || is_leading_trim(ch, &entity.label) {
       start_byte = start_byte.saturating_add(len);
       continue;
@@ -38,8 +66,7 @@ fn clean_entity_text(entity: &PipelineEntity) -> Option<PipelineEntity> {
     break;
   }
 
-  while let Some((ch, len)) = last_char(entity.text.get(start_byte..end_byte)?)
-  {
+  while let Some((ch, len)) = last_char(raw_text.get(start_byte..end_byte)?) {
     if ch.is_whitespace() || is_trailing_trim(ch, &entity.label) {
       end_byte = end_byte.saturating_sub(len);
       continue;
@@ -47,12 +74,11 @@ fn clean_entity_text(entity: &PipelineEntity) -> Option<PipelineEntity> {
     break;
   }
 
-  if should_strip_period(entity, start_byte, end_byte) {
+  if should_strip_period(entity, raw_text, start_byte, end_byte) {
     end_byte = end_byte.saturating_sub('.'.len_utf8());
   }
 
-  while let Some((ch, len)) = last_char(entity.text.get(start_byte..end_byte)?)
-  {
+  while let Some((ch, len)) = last_char(raw_text.get(start_byte..end_byte)?) {
     if ch.is_whitespace() || is_trailing_trim(ch, &entity.label) {
       end_byte = end_byte.saturating_sub(len);
       continue;
@@ -64,16 +90,16 @@ fn clean_entity_text(entity: &PipelineEntity) -> Option<PipelineEntity> {
     return None;
   }
 
-  let cleaned_raw = entity.text.get(start_byte..end_byte)?;
+  let cleaned_raw = raw_text.get(start_byte..end_byte)?;
   if !cleaned_raw.chars().any(char::is_alphanumeric) {
     return None;
   }
 
   let display_text = collapse_display_whitespace(cleaned_raw);
-  let start = entity.start.saturating_add(utf16_len(
-    entity.text.get(..start_byte).unwrap_or_default(),
-  ));
-  let end = start.saturating_add(utf16_len(cleaned_raw));
+  let start = entity
+    .start
+    .saturating_add(byte_len(raw_text.get(..start_byte).unwrap_or_default()));
+  let end = start.saturating_add(byte_len(cleaned_raw));
 
   let mut cleaned = entity.clone();
   cleaned.start = start;
@@ -146,6 +172,7 @@ const fn is_literal_boundary_punct(ch: char) -> bool {
 
 fn should_strip_period(
   entity: &PipelineEntity,
+  raw_text: &str,
   start_byte: usize,
   end_byte: usize,
 ) -> bool {
@@ -155,7 +182,7 @@ fn should_strip_period(
   ) {
     return false;
   }
-  let Some(text) = entity.text.get(start_byte..end_byte) else {
+  let Some(text) = raw_text.get(start_byte..end_byte) else {
     return false;
   };
   if !text.ends_with('.') || known_period_suffix(text) {

@@ -59,7 +59,7 @@ fn search_index_routes_literal_regex_and_fuzzy_patterns() {
 }
 
 #[test]
-fn search_index_preserves_utf16_offsets_from_primitive_engines() {
+fn search_index_preserves_byte_offsets_from_primitive_engines() {
   const SUPPLEMENTARY_SCALAR: &str = "\u{1F9EA}";
 
   let index = SearchIndex::new(
@@ -80,12 +80,12 @@ fn search_index_preserves_utf16_offsets_from_primitive_engines() {
       SearchMatch::Regex {
         pattern: 1,
         start: 2,
-        end: 4,
+        end: 6,
       },
       SearchMatch::Literal {
         pattern: 0,
-        start: 5,
-        end: 8,
+        start: 7,
+        end: 10,
       },
     ]
   );

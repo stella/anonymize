@@ -19,6 +19,12 @@ const configJson = JSON.stringify({
     },
     {
       kind: "literal-with-options",
+      pattern: "Prague",
+      case_insensitive: true,
+      whole_words: true,
+    },
+    {
+      kind: "literal-with-options",
       pattern: "Acme",
       case_insensitive: true,
       whole_words: false,
@@ -43,19 +49,31 @@ const configJson = JSON.stringify({
   slices: {
     regex: { start: 0, end: 1 },
     custom_regex: { start: 0, end: 1 },
-    deny_list: { start: 0, end: 1 },
-    gazetteer: { start: 1, end: 3 },
-    countries: { start: 3, end: 4 },
+    deny_list: { start: 0, end: 2 },
+    gazetteer: { start: 2, end: 4 },
+    countries: { start: 4, end: 5 },
   },
   regex_meta: [{ label: "registration number", score: 0.9 }],
   custom_regex_meta: [
     { label: "matter id", score: 1, source_detail: "custom-regex" },
   ],
   deny_list_data: {
-    labels: [["matter"]],
-    custom_labels: [["matter"]],
-    originals: ["Secret Code"],
-    sources: [["custom-deny-list"]],
+    labels: [["matter"], ["address"]],
+    custom_labels: [["matter"], []],
+    originals: ["Secret Code", "Prague"],
+    sources: [["custom-deny-list"], ["city"]],
+    filters: {
+      stopwords: [],
+      allow_list: [],
+      person_stopwords: [],
+      address_stopwords: [],
+      street_types: [],
+      first_names: [],
+      generic_roles: [],
+      sentence_starters: [],
+      trailing_address_word_exclusions: [],
+      defined_term_cues: [],
+    },
   },
   gazetteer_data: {
     labels: ["organization", "address"],
@@ -186,7 +204,7 @@ function buildCases() {
     fixtureCases.push({
       text:
         `Reference ${registration} for Acme s.r.o. near ` +
-        `${place}, Turkey, matter ${matter}, code Secret Code.`,
+        `${place}, Turkey, Prague, matter ${matter}, code Secret Code.`,
       operatorsJson: operators[index % operators.length],
     });
   }
@@ -222,6 +240,10 @@ function toNapiConfig(config) {
             customLabels: config.deny_list_data.custom_labels,
             originals: config.deny_list_data.originals,
             sources: config.deny_list_data.sources,
+            filters:
+              config.deny_list_data.filters === undefined
+                ? undefined
+                : toNapiDenyListFilters(config.deny_list_data.filters),
           },
     gazetteerData:
       config.gazetteer_data === undefined
@@ -241,6 +263,10 @@ function toNapiPattern(pattern) {
     distance: pattern.distance,
     caseInsensitive: pattern.case_insensitive,
     wholeWords: pattern.whole_words,
+    lazy: pattern.lazy,
+    prefilterAny: pattern.prefilter_any,
+    prefilterCaseInsensitive: pattern.prefilter_case_insensitive,
+    prefilterRegex: pattern.prefilter_regex,
   };
 }
 
@@ -264,6 +290,22 @@ function toNapiRegexMeta(meta) {
     score: meta.score,
     sourceDetail: meta.source_detail,
     requiresValidation: meta.requires_validation,
+    minByteLength: meta.min_byte_length,
+  };
+}
+
+function toNapiDenyListFilters(filters) {
+  return {
+    stopwords: filters.stopwords,
+    allowList: filters.allow_list,
+    personStopwords: filters.person_stopwords,
+    addressStopwords: filters.address_stopwords,
+    streetTypes: filters.street_types,
+    firstNames: filters.first_names,
+    genericRoles: filters.generic_roles,
+    sentenceStarters: filters.sentence_starters,
+    trailingAddressWordExclusions: filters.trailing_address_word_exclusions,
+    definedTermCues: filters.defined_term_cues,
   };
 }
 

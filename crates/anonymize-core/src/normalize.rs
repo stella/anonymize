@@ -2,6 +2,34 @@ const PHONE_NOISE: [char; 3] = ['(', ')', '-'];
 const ID_SEPARATORS: [char; 3] = ['-', '/', '.'];
 const IDENTIFIER_CUES: &str = include_str!("../data/identifier-cues.txt");
 
+use crate::types::{Error, Result};
+
+pub(crate) struct NormalizedSearchText {
+  text: String,
+  byte_to_original: Option<Vec<u32>>,
+}
+
+impl NormalizedSearchText {
+  pub(crate) fn as_str(&self) -> &str {
+    &self.text
+  }
+
+  pub(crate) fn map_span(&self, start: u32, end: u32) -> Result<(u32, u32)> {
+    if start > end {
+      return Err(Error::InvalidSpan { start, end });
+    }
+
+    let Some(byte_to_original) = &self.byte_to_original else {
+      return Ok((start, end));
+    };
+
+    Ok((
+      map_normalized_offset(byte_to_original, start)?,
+      map_normalized_offset(byte_to_original, end)?,
+    ))
+  }
+}
+
 #[must_use]
 pub fn normalize_for_search(text: &str) -> String {
   let mut has_replacement = false;
@@ -20,6 +48,76 @@ pub fn normalize_for_search(text: &str) -> String {
     output.push(replacement_char(ch));
   }
   output
+}
+
+pub(crate) fn normalize_for_search_with_byte_map(
+  text: &str,
+) -> Result<NormalizedSearchText> {
+  let mut has_replacement = false;
+  for ch in text.chars() {
+    if replacement_char(ch) != ch {
+      has_replacement = true;
+      break;
+    }
+  }
+  if !has_replacement {
+    return Ok(NormalizedSearchText {
+      text: text.to_owned(),
+      byte_to_original: None,
+    });
+  }
+
+  let mut output = String::with_capacity(text.len());
+  let mut byte_to_original = vec![0_u32];
+  for (original_start, ch) in text.char_indices() {
+    set_boundary(
+      &mut byte_to_original,
+      output.len(),
+      checked_u32(original_start)?,
+    );
+    output.push(replacement_char(ch));
+    set_boundary(
+      &mut byte_to_original,
+      output.len(),
+      checked_u32(original_start.saturating_add(ch.len_utf8()))?,
+    );
+  }
+
+  Ok(NormalizedSearchText {
+    text: output,
+    byte_to_original: Some(byte_to_original),
+  })
+}
+
+fn set_boundary(
+  byte_to_original: &mut Vec<u32>,
+  normalized_offset: usize,
+  original_offset: u32,
+) {
+  if byte_to_original.len() <= normalized_offset {
+    byte_to_original.resize(normalized_offset.saturating_add(1), u32::MAX);
+  }
+  if let Some(slot) = byte_to_original.get_mut(normalized_offset) {
+    *slot = original_offset;
+  }
+}
+
+fn map_normalized_offset(byte_to_original: &[u32], offset: u32) -> Result<u32> {
+  let index = usize::try_from(offset)
+    .map_err(|_| Error::ByteOffsetOutOfBounds { offset })?;
+  let mapped = byte_to_original
+    .get(index)
+    .copied()
+    .ok_or(Error::ByteOffsetOutOfBounds { offset })?;
+  if mapped == u32::MAX {
+    return Err(Error::ByteOffsetInsideCodepoint { offset });
+  }
+  Ok(mapped)
+}
+
+fn checked_u32(offset: usize) -> Result<u32> {
+  u32::try_from(offset)
+    .map_err(|_| Error::ByteOffsetOutOfBounds { offset: u32::MAX })
 }
 
 // Normalization decides placeholder identity.
