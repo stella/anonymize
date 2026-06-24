@@ -41,4 +41,8 @@ jobs:
             Python-2.0,
             Zlib,
             Unicode-3.0
+          allow-dependencies-licenses: >-
+            pkg:cargo/stella-aho-corasick-core,
+            pkg:cargo/stella-fuzzy-search-core,
+            pkg:cargo/stella-regex-set-core
           comment-summary-in-pr: always
