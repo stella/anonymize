@@ -23,6 +23,7 @@ import { getTextSearch } from "./search-engine";
 
 import {
   isLegalFormsEnabled,
+  type CustomRegexPattern,
   type GazetteerEntry,
   type PipelineConfig,
 } from "./types";
@@ -182,11 +183,49 @@ export type UnifiedSearchInstance = {
   nativeStaticConfig: NativePreparedSearchConfig;
 };
 
-export const buildUnifiedSearch = async (
+type GazetteerPatternResult = {
+  patterns: PatternEntry[];
+  data: GazetteerData;
+};
+
+type CountryPatternResult = {
+  patterns: PatternEntry[];
+  data: CountryData;
+};
+
+type UnifiedSearchSources = {
+  allRegex: PatternEntry[];
+  regexMeta: RegexMeta[];
+  customRegexes: CustomRegexPattern[];
+  customRegexMeta: RegexMeta[];
+  legalForms: readonly string[];
+  triggers: {
+    patterns: string[];
+    rules: TriggerRule[];
+  };
+  denyListData: DenyListData | null;
+  streetTypes: string[];
+  gazResult: GazetteerPatternResult | null;
+  countryResult: CountryPatternResult | null;
+  slices: UnifiedSearchInstance["slices"];
+  literalAllPatterns: PatternEntry[] | string[];
+  canUseGlobalWholeWordLiterals: boolean;
+  customDenyListNeedsWholeWords: (pattern: string) => boolean;
+};
+
+export type NativeStaticSearchBundle = {
+  nativeStaticConfig: NativePreparedSearchConfig;
+  slices: UnifiedSearchInstance["slices"];
+  regexMeta: readonly RegexMeta[];
+  customRegexMeta: readonly RegexMeta[];
+  denyListData: DenyListData | null;
+};
+
+const buildUnifiedSearchSources = async (
   config: PipelineConfig,
   gazetteerEntries: GazetteerEntry[] = [],
   ctx: PipelineContext = defaultContext,
-): Promise<UnifiedSearchInstance> => {
+): Promise<UnifiedSearchSources> => {
   const legalFormsEnabled = isLegalFormsEnabled(config);
   const searchLabels =
     config.enableHotwordRules === true
@@ -301,28 +340,6 @@ export const buildUnifiedSearch = async (
     end: offset + triggers.patterns.length,
   };
 
-  // Trigger patterns need caseInsensitive on AC
-  // (only ~120 objects, not 200K). Regex/legal-form
-  // patterns are bare strings (auto-classified).
-  const triggerEntries = triggers.patterns.map((p) => ({
-    pattern: p,
-    literal: true as const,
-    caseInsensitive: true,
-  }));
-
-  const regexAllPatterns = [...allRegex, ...legalForms, ...triggerEntries];
-
-  // TextSearch uses static complexity routing for
-  // regex patterns: common regexes share bounded
-  // chunks, while high-risk patterns are isolated.
-  const tsRegex = new (getTextSearch())(regexAllPatterns);
-  const tsCustomRegex = new (getTextSearch())(
-    customRegexes.map((entry) => entry.pattern),
-    {
-      overlapStrategy: "all",
-    },
-  );
-
   // ── Instance 2: deny-list + street-types + gaz ──
   // Deny-list and street-type patterns are plain
   // strings (allLiteral). Gazetteer adds exact
@@ -424,34 +441,17 @@ export const buildUnifiedSearch = async (
           ...(countryResult?.patterns ?? []),
         ];
 
-  const tsLiterals =
-    literalAllPatterns.length > 0
-      ? new (getTextSearch())(literalAllPatterns, {
-          ...(canUseGlobalWholeWordLiterals
-            ? { allLiteral: true, wholeWords: true }
-            : {}),
-          caseInsensitive: true,
-          overlapStrategy: "all",
-        })
-      : new (getTextSearch())([]);
-
-  const nativeStaticConfig = buildNativeStaticConfig({
-    regexPatterns: allRegex,
+  return {
+    allRegex,
     regexMeta,
     customRegexes,
     customRegexMeta,
+    legalForms,
+    triggers,
     denyListData,
-    gazetteerPatterns: gazResult?.patterns ?? [],
-    gazetteerData: gazResult?.data ?? null,
-    countryPatterns: countryResult?.patterns ?? [],
-    countryData: countryResult?.data ?? null,
-    customDenyListNeedsWholeWords,
-  });
-
-  return {
-    tsRegex,
-    tsCustomRegex,
-    tsLiterals,
+    streetTypes,
+    gazResult,
+    countryResult,
     slices: {
       regex: regexSlice,
       customRegex: customRegexSlice,
@@ -462,12 +462,110 @@ export const buildUnifiedSearch = async (
       gazetteer: gazetteerSlice,
       countries: countriesSlice,
     },
-    regexMeta,
-    customRegexMeta,
-    triggerRules: triggers.rules,
-    denyListData,
-    gazetteerData: gazResult?.data ?? null,
-    countryData: countryResult?.data ?? null,
+    literalAllPatterns,
+    canUseGlobalWholeWordLiterals,
+    customDenyListNeedsWholeWords,
+  };
+};
+
+export const buildNativeStaticSearchBundle = async (
+  config: PipelineConfig,
+  gazetteerEntries: GazetteerEntry[] = [],
+  ctx: PipelineContext = defaultContext,
+): Promise<NativeStaticSearchBundle> => {
+  const sources = await buildUnifiedSearchSources(
+    config,
+    gazetteerEntries,
+    ctx,
+  );
+  return {
+    nativeStaticConfig: buildNativeStaticConfig({
+      regexPatterns: sources.allRegex,
+      regexMeta: sources.regexMeta,
+      customRegexes: sources.customRegexes,
+      customRegexMeta: sources.customRegexMeta,
+      denyListData: sources.denyListData,
+      gazetteerPatterns: sources.gazResult?.patterns ?? [],
+      gazetteerData: sources.gazResult?.data ?? null,
+      countryPatterns: sources.countryResult?.patterns ?? [],
+      countryData: sources.countryResult?.data ?? null,
+      customDenyListNeedsWholeWords: sources.customDenyListNeedsWholeWords,
+    }),
+    slices: sources.slices,
+    regexMeta: sources.regexMeta,
+    customRegexMeta: sources.customRegexMeta,
+    denyListData: sources.denyListData,
+  };
+};
+
+export const buildUnifiedSearch = async (
+  config: PipelineConfig,
+  gazetteerEntries: GazetteerEntry[] = [],
+  ctx: PipelineContext = defaultContext,
+): Promise<UnifiedSearchInstance> => {
+  const sources = await buildUnifiedSearchSources(
+    config,
+    gazetteerEntries,
+    ctx,
+  );
+  const triggerEntries = sources.triggers.patterns.map((p) => ({
+    pattern: p,
+    literal: true as const,
+    caseInsensitive: true,
+  }));
+
+  const regexAllPatterns = [
+    ...sources.allRegex,
+    ...sources.legalForms,
+    ...triggerEntries,
+  ];
+
+  // TextSearch uses static complexity routing for
+  // regex patterns: common regexes share bounded
+  // chunks, while high-risk patterns are isolated.
+  const tsRegex = new (getTextSearch())(regexAllPatterns);
+  const tsCustomRegex = new (getTextSearch())(
+    sources.customRegexes.map((entry) => entry.pattern),
+    {
+      overlapStrategy: "all",
+    },
+  );
+
+  const tsLiterals =
+    sources.literalAllPatterns.length > 0
+      ? new (getTextSearch())(sources.literalAllPatterns, {
+          ...(sources.canUseGlobalWholeWordLiterals
+            ? { allLiteral: true, wholeWords: true }
+            : {}),
+          caseInsensitive: true,
+          overlapStrategy: "all",
+        })
+      : new (getTextSearch())([]);
+
+  const nativeStaticConfig = buildNativeStaticConfig({
+    regexPatterns: sources.allRegex,
+    regexMeta: sources.regexMeta,
+    customRegexes: sources.customRegexes,
+    customRegexMeta: sources.customRegexMeta,
+    denyListData: sources.denyListData,
+    gazetteerPatterns: sources.gazResult?.patterns ?? [],
+    gazetteerData: sources.gazResult?.data ?? null,
+    countryPatterns: sources.countryResult?.patterns ?? [],
+    countryData: sources.countryResult?.data ?? null,
+    customDenyListNeedsWholeWords: sources.customDenyListNeedsWholeWords,
+  });
+
+  return {
+    tsRegex,
+    tsCustomRegex,
+    tsLiterals,
+    slices: sources.slices,
+    regexMeta: sources.regexMeta,
+    customRegexMeta: sources.customRegexMeta,
+    triggerRules: sources.triggers.rules,
+    denyListData: sources.denyListData,
+    gazetteerData: sources.gazResult?.data ?? null,
+    countryData: sources.countryResult?.data ?? null,
     nativeStaticConfig,
   };
 };

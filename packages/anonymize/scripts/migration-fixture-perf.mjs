@@ -183,7 +183,15 @@ async function runWorker() {
   const context = indexModule.createPipelineContext();
 
   const prepareStart = Bun.nanoseconds();
-  const search = await indexModule.preparePipelineSearch({ config, context });
+  const search =
+    runtime === "native-static"
+      ? await prepareNativeStaticSearch({
+          sourceRoot,
+          variant,
+          config,
+          context,
+        })
+      : await indexModule.preparePipelineSearch({ config, context });
   const prepareMs = elapsedMs(prepareStart);
   const nativeRewrite = describeNativeRewrite(config, search, runtime);
 
@@ -267,6 +275,27 @@ async function runWorker() {
       snapshots,
     })}\n`,
   );
+}
+
+async function prepareNativeStaticSearch({
+  sourceRoot,
+  variant,
+  config,
+  context,
+}) {
+  const module = await importSource(
+    sourceRoot,
+    "packages/anonymize/src/build-unified-search.ts",
+    variant,
+  );
+  const buildNativeStaticSearchBundle = Reflect.get(
+    Object(module),
+    "buildNativeStaticSearchBundle",
+  );
+  if (typeof buildNativeStaticSearchBundle !== "function") {
+    throw new TypeError("Native static search bundle builder is unavailable");
+  }
+  return buildNativeStaticSearchBundle(config, [], context);
 }
 
 async function runTypeScriptFixtureSweep({
