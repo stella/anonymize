@@ -4,6 +4,7 @@
 
 pub(crate) mod normalize;
 mod placeholders;
+mod prepared;
 mod processors;
 mod redact;
 mod resolution;
@@ -13,6 +14,10 @@ pub(crate) mod utf16;
 
 pub use normalize::normalize_for_search;
 pub use placeholders::build_placeholder_map;
+pub use prepared::{
+  PreparedSearch, PreparedSearchConfig, PreparedSearchMatches,
+  PreparedSearchSlices, StaticDetectionResult,
+};
 pub use processors::{
   CountryMatchData, GazetteerMatchData, PatternSlice, RegexMatchMeta,
   process_country_matches, process_gazetteer_matches, process_regex_matches,

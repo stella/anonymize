@@ -8,7 +8,7 @@ const GAZETTEER_FUZZY_SCORE: f64 = 0.85;
 const COUNTRY_SCORE: f64 = 0.95;
 const MAX_GAZETTEER_PREFIX_OVERSHOOT: u32 = 7;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct PatternSlice {
   pub start: u32,
   pub end: u32,
