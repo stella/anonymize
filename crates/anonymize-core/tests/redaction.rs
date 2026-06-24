@@ -10,6 +10,15 @@ use stella_anonymize_core::{
 };
 
 fn entity(text: &str, label: &str, value: &str) -> Entity {
+  entity_with_display_text(text, label, value, value)
+}
+
+fn entity_with_display_text(
+  text: &str,
+  label: &str,
+  value: &str,
+  display_text: &str,
+) -> Entity {
   let byte_start = text
     .find(value)
     .unwrap_or_else(|| panic!("missing fixture value: {value}"));
@@ -18,7 +27,7 @@ fn entity(text: &str, label: &str, value: &str) -> Entity {
     .unwrap_or_else(|| panic!("invalid fixture boundary: {byte_start}"));
   let start = utf16_len(prefix);
   let end = start.saturating_add(utf16_len(value));
-  Entity::detected(start, end, label, value)
+  Entity::detected(start, end, label, display_text)
 }
 
 fn utf16_len(text: &str) -> u32 {
@@ -253,6 +262,23 @@ fn detected_original_uses_redacted_source_span() {
     deanonymise(&result.redacted_text, &result.redaction_map),
     text
   );
+}
+
+#[test]
+fn detected_placeholder_identity_uses_sanitized_text() {
+  let text = "Dates: 21.\nMärz 1968 and 21. März 1968.";
+  let normalized = "21. März 1968";
+  let entities = vec![
+    entity_with_display_text(text, "date", "21.\nMärz 1968", normalized),
+    entity(text, "date", normalized),
+  ];
+
+  let result =
+    redact_text(text, &entities, &OperatorConfig::default()).unwrap();
+
+  assert_eq!(result.redacted_text, "Dates: [DATE_1] and [DATE_1].");
+  assert_eq!(result.redaction_map.len(), 1);
+  assert_eq!(result.redaction_map[0].original, "21.\nMärz 1968");
 }
 
 #[test]

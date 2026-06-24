@@ -16,6 +16,11 @@ pub struct PatternSlice {
 
 impl PatternSlice {
   #[must_use]
+  pub const fn is_empty(self) -> bool {
+    self.start >= self.end
+  }
+
+  #[must_use]
   pub const fn contains(self, pattern: u32) -> bool {
     pattern >= self.start && pattern < self.end
   }
