@@ -661,7 +661,6 @@ function describeNativeRewrite(config, search, runtime) {
   const unsupportedPipelineStages = describeUnsupportedPipelineStages(
     config,
     search,
-    denyListSourceCounts,
   );
 
   return {
@@ -684,11 +683,7 @@ function describeNativeRewrite(config, search, runtime) {
   };
 }
 
-function describeUnsupportedPipelineStages(
-  config,
-  search,
-  denyListSourceCounts,
-) {
+function describeUnsupportedPipelineStages(config, search) {
   const stages = [];
   if (config.enableLegalForms) {
     stages.push("legal-forms-v2");
