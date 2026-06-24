@@ -10,7 +10,8 @@ use crate::resolution::{
 };
 use crate::search::{SearchIndex, SearchOptions, SearchPattern};
 use crate::types::{
-  Entity, EntityKind, OperatorConfig, RedactionResult, Result, SearchMatch,
+  Entity, EntityKind, Error, OperatorConfig, RedactionResult, Result,
+  SearchMatch,
 };
 
 pub struct PreparedSearch {
@@ -76,6 +77,8 @@ pub struct StaticRedactionResult {
 
 impl PreparedSearch {
   pub fn new(config: PreparedSearchConfig) -> Result<Self> {
+    validate_supported_slices(&config.slices)?;
+
     Ok(Self {
       regex: SearchIndex::new(config.regex_patterns, config.regex_options)?,
       custom_regex: SearchIndex::new(
@@ -173,6 +176,24 @@ impl PreparedSearch {
       redaction,
     })
   }
+}
+
+fn validate_supported_slices(slices: &PreparedSearchSlices) -> Result<()> {
+  reject_unsupported_slice(slices.legal_forms, "legal_forms")?;
+  reject_unsupported_slice(slices.triggers, "triggers")?;
+  reject_unsupported_slice(slices.deny_list, "deny_list")?;
+  reject_unsupported_slice(slices.street_types, "street_types")
+}
+
+const fn reject_unsupported_slice(
+  slice: PatternSlice,
+  name: &'static str,
+) -> Result<()> {
+  if slice.is_empty() {
+    return Ok(());
+  }
+
+  Err(Error::UnsupportedStaticSlice { slice: name })
 }
 
 impl StaticDetectionResult {

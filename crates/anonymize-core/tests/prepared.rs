@@ -1,11 +1,27 @@
 #![allow(clippy::expect_used, clippy::indexing_slicing, clippy::unwrap_used)]
 
 use stella_anonymize_core::{
-  CountryMatchData, DetectionSource, FuzzySearchOptions, GazetteerMatchData,
-  LiteralSearchOptions, OperatorConfig, PatternSlice, PreparedSearch,
-  PreparedSearchConfig, PreparedSearchSlices, RegexMatchMeta,
+  CountryMatchData, DetectionSource, Error, FuzzySearchOptions,
+  GazetteerMatchData, LiteralSearchOptions, OperatorConfig, PatternSlice,
+  PreparedSearch, PreparedSearchConfig, PreparedSearchSlices, RegexMatchMeta,
   RegexSearchOptions, SearchOptions, SearchPattern, SourceDetail,
 };
+
+fn empty_config(slices: PreparedSearchSlices) -> PreparedSearchConfig {
+  PreparedSearchConfig {
+    regex_patterns: vec![],
+    custom_regex_patterns: vec![],
+    literal_patterns: vec![],
+    regex_options: SearchOptions::default(),
+    custom_regex_options: SearchOptions::default(),
+    literal_options: SearchOptions::default(),
+    slices,
+    regex_meta: vec![],
+    custom_regex_meta: vec![],
+    gazetteer_data: None,
+    country_data: None,
+  }
+}
 
 #[test]
 fn prepared_search_runs_normalized_literal_pass() {
@@ -179,4 +195,47 @@ fn prepared_search_redacts_static_entities_end_to_end() {
   );
   assert_eq!(result.redaction.entity_count, 3);
   assert_eq!(result.resolved_entities.len(), 3);
+}
+
+#[test]
+fn prepared_search_rejects_unsupported_static_slices() {
+  let unsupported = PatternSlice { start: 0, end: 1 };
+  let cases = [
+    (
+      "legal_forms",
+      PreparedSearchSlices {
+        legal_forms: unsupported,
+        ..PreparedSearchSlices::default()
+      },
+    ),
+    (
+      "triggers",
+      PreparedSearchSlices {
+        triggers: unsupported,
+        ..PreparedSearchSlices::default()
+      },
+    ),
+    (
+      "deny_list",
+      PreparedSearchSlices {
+        deny_list: unsupported,
+        ..PreparedSearchSlices::default()
+      },
+    ),
+    (
+      "street_types",
+      PreparedSearchSlices {
+        street_types: unsupported,
+        ..PreparedSearchSlices::default()
+      },
+    ),
+  ];
+
+  for (slice, slices) in cases {
+    let error = PreparedSearch::new(empty_config(slices))
+      .err()
+      .expect("unsupported slice should be rejected");
+
+    assert_eq!(error, Error::UnsupportedStaticSlice { slice });
+  }
 }

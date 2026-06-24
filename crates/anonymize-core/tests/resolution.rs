@@ -258,6 +258,53 @@ fn boundary_expands_partial_words() {
 }
 
 #[test]
+fn boundary_expands_inside_apostrophe_names() {
+  let full_text = "Kontaktujte O'Connor prosím.";
+  let start = utf16_len("Kontaktujte O'");
+  let end = start.saturating_add(utf16_len("Connor"));
+  let result = enforce_boundary_consistency(
+    &[PipelineEntity::detected(
+      start,
+      end,
+      "person",
+      "Connor",
+      0.9,
+      DetectionSource::Ner,
+    )],
+    full_text,
+  )
+  .unwrap();
+
+  assert_eq!(result.len(), 1);
+  let person = result.first().expect("person");
+  assert_eq!(person.start, utf16_len("Kontaktujte "));
+  assert_eq!(person.text, "O'Connor");
+}
+
+#[test]
+fn boundary_expands_across_combining_marks() {
+  let full_text = "Podepsal Cafe\u{0301}.";
+  let start = utf16_len("Podepsal ");
+  let end = start.saturating_add(utf16_len("Cafe"));
+  let result = enforce_boundary_consistency(
+    &[PipelineEntity::detected(
+      start,
+      end,
+      "organization",
+      "Cafe",
+      0.9,
+      DetectionSource::Ner,
+    )],
+    full_text,
+  )
+  .unwrap();
+
+  assert_eq!(result.len(), 1);
+  let organization = result.first().expect("organization");
+  assert_eq!(organization.text, "Cafe\u{0301}");
+}
+
+#[test]
 fn boundary_clamps_expansion_at_cross_label_neighbors() {
   let full_text = "JanPraha";
   let result = enforce_boundary_consistency(

@@ -297,8 +297,8 @@ fn word_boundaries(spans: &[CharSpan]) -> BTreeSet<u32> {
   let mut run_start = None::<u32>;
   let mut run_end = None::<u32>;
 
-  for span in spans {
-    if span.ch.is_alphanumeric() {
+  for (index, span) in spans.iter().enumerate() {
+    if is_word_body(span.ch) || is_word_connector_between(spans, index) {
       if run_start.is_none() {
         run_start = Some(span.start);
       }
@@ -318,6 +318,44 @@ fn word_boundaries(spans: &[CharSpan]) -> BTreeSet<u32> {
   }
 
   boundaries
+}
+
+fn is_word_connector_between(spans: &[CharSpan], index: usize) -> bool {
+  let Some(span) = spans.get(index) else {
+    return false;
+  };
+  if !is_word_connector(span.ch) {
+    return false;
+  }
+
+  let Some(previous) = index.checked_sub(1).and_then(|prev| spans.get(prev))
+  else {
+    return false;
+  };
+  let Some(next) = spans.get(index.saturating_add(1)) else {
+    return false;
+  };
+
+  is_word_body(previous.ch) && is_word_body(next.ch)
+}
+
+const fn is_word_connector(ch: char) -> bool {
+  matches!(ch, '\'' | '\u{2018}' | '\u{2019}' | '\u{02bc}' | '\u{ff07}')
+}
+
+fn is_word_body(ch: char) -> bool {
+  ch.is_alphanumeric() || is_combining_mark(ch)
+}
+
+const fn is_combining_mark(ch: char) -> bool {
+  matches!(
+    ch,
+    '\u{0300}'..='\u{036f}'
+      | '\u{1ab0}'..='\u{1aff}'
+      | '\u{1dc0}'..='\u{1dff}'
+      | '\u{20d0}'..='\u{20ff}'
+      | '\u{fe20}'..='\u{fe2f}'
+  )
 }
 
 fn word_start_at(
