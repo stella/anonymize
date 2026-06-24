@@ -1,0 +1,25 @@
+[package]
+name = "stella-anonymize-napi"
+version.workspace = true
+edition.workspace = true
+description = "Native bindings for Stella anonymization core"
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+napi = { version = "3", default-features = false, features = [
+  "napi9",
+  "serde-json",
+] }
+napi-derive = "3"
+stella-anonymize-core = { path = "../anonymize-core" }
+
+[build-dependencies]
+napi-build = "2"
+
+[lints]
+workspace = true

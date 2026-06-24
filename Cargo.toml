@@ -1,5 +1,9 @@
 [workspace]
-members = ["crates/anonymize-core"]
+members = [
+  "crates/anonymize-core",
+  "crates/anonymize-napi",
+  "crates/anonymize-py",
+]
 resolver = "3"
 
 [workspace.package]
