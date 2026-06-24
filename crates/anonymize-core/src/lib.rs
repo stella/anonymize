@@ -5,12 +5,17 @@
 pub(crate) mod normalize;
 mod placeholders;
 mod redact;
+mod resolution;
 mod search;
 mod types;
 pub(crate) mod utf16;
 
 pub use placeholders::build_placeholder_map;
 pub use redact::{deanonymise, redact_text};
+pub use resolution::{
+  DetectionSource, PipelineEntity, SourceDetail, merge_and_dedup,
+  sanitize_entities,
+};
 pub use search::{
   FuzzySearchOptions, LiteralSearchOptions, RegexSearchOptions, SearchIndex,
   SearchOptions, SearchPattern,
