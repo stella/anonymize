@@ -1,5 +1,7 @@
 #![allow(clippy::redundant_pub_crate)]
 
+//! Core anonymization contracts shared by host-language bindings.
+
 pub(crate) mod normalize;
 mod placeholders;
 mod redact;

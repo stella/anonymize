@@ -4,6 +4,7 @@ use stella_regex_set_core as regex_core;
 
 use crate::types::{Error, Result, SearchEngine, SearchMatch};
 
+// Preserves caller pattern indexes across primitive engines.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SearchPattern {
   Literal(String),
@@ -112,6 +113,7 @@ impl SearchIndex {
     let mut matches = Vec::new();
 
     if let Some(literal) = &self.literal {
+      // Downstream merge priority chooses among overlaps.
       extend_triple_matches(
         &mut matches,
         SearchEngine::Literal,
