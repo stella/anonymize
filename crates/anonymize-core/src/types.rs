@@ -5,9 +5,27 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Error {
-  InvalidSpan { start: u32, end: u32 },
-  Utf16OffsetOutOfBounds { offset: u32 },
-  Utf16OffsetInsideSurrogate { offset: u32 },
+  InvalidSpan {
+    start: u32,
+    end: u32,
+  },
+  Utf16OffsetOutOfBounds {
+    offset: u32,
+  },
+  Utf16OffsetInsideSurrogate {
+    offset: u32,
+  },
+  Search {
+    engine: SearchEngine,
+    reason: String,
+  },
+  InvalidPackedSearchResult {
+    engine: SearchEngine,
+    len: usize,
+  },
+  PatternIndexOutOfRange {
+    index: usize,
+  },
 }
 
 impl fmt::Display for Error {
@@ -24,6 +42,18 @@ impl fmt::Display for Error {
           formatter,
           "UTF-16 offset is not a scalar boundary: {offset}"
         )
+      }
+      Self::Search { engine, reason } => {
+        write!(formatter, "{engine} search failed: {reason}")
+      }
+      Self::InvalidPackedSearchResult { engine, len } => {
+        write!(
+          formatter,
+          "{engine} search returned malformed packed matches of length {len}"
+        )
+      }
+      Self::PatternIndexOutOfRange { index } => {
+        write!(formatter, "Search pattern index exceeds u32 range: {index}")
       }
     }
   }
@@ -163,4 +193,79 @@ pub struct RedactionResult {
   pub redaction_map: Vec<RedactionEntry>,
   pub operator_map: Vec<OperatorEntry>,
   pub entity_count: usize,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SearchEngine {
+  Literal,
+  Regex,
+  Fuzzy,
+}
+
+impl fmt::Display for SearchEngine {
+  fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    match self {
+      Self::Literal => formatter.write_str("literal"),
+      Self::Regex => formatter.write_str("regex"),
+      Self::Fuzzy => formatter.write_str("fuzzy"),
+    }
+  }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SearchMatch {
+  Literal {
+    pattern: u32,
+    start: u32,
+    end: u32,
+  },
+  Regex {
+    pattern: u32,
+    start: u32,
+    end: u32,
+  },
+  Fuzzy {
+    pattern: u32,
+    start: u32,
+    end: u32,
+    distance: u32,
+  },
+}
+
+impl SearchMatch {
+  #[must_use]
+  pub const fn engine(&self) -> SearchEngine {
+    match self {
+      Self::Literal { .. } => SearchEngine::Literal,
+      Self::Regex { .. } => SearchEngine::Regex,
+      Self::Fuzzy { .. } => SearchEngine::Fuzzy,
+    }
+  }
+
+  #[must_use]
+  pub const fn pattern(&self) -> u32 {
+    match self {
+      Self::Literal { pattern, .. }
+      | Self::Regex { pattern, .. }
+      | Self::Fuzzy { pattern, .. } => *pattern,
+    }
+  }
+
+  #[must_use]
+  pub const fn start(&self) -> u32 {
+    match self {
+      Self::Literal { start, .. }
+      | Self::Regex { start, .. }
+      | Self::Fuzzy { start, .. } => *start,
+    }
+  }
+
+  #[must_use]
+  pub const fn end(&self) -> u32 {
+    match self {
+      Self::Literal { end, .. }
+      | Self::Regex { end, .. }
+      | Self::Fuzzy { end, .. } => *end,
+    }
+  }
 }
