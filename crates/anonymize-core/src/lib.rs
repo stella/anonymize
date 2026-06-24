@@ -11,6 +11,7 @@ mod search;
 mod types;
 pub(crate) mod utf16;
 
+pub use normalize::normalize_for_search;
 pub use placeholders::build_placeholder_map;
 pub use processors::{
   CountryMatchData, GazetteerMatchData, PatternSlice, RegexMatchMeta,

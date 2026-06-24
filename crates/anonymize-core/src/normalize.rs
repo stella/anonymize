@@ -2,6 +2,26 @@ const PHONE_NOISE: [char; 3] = ['(', ')', '-'];
 const ID_SEPARATORS: [char; 3] = ['-', '/', '.'];
 const IDENTIFIER_CUES: &str = include_str!("../data/identifier-cues.txt");
 
+#[must_use]
+pub fn normalize_for_search(text: &str) -> String {
+  let mut has_replacement = false;
+  for ch in text.chars() {
+    if replacement_char(ch) != ch {
+      has_replacement = true;
+      break;
+    }
+  }
+  if !has_replacement {
+    return text.to_owned();
+  }
+
+  let mut output = String::with_capacity(text.len());
+  for ch in text.chars() {
+    output.push(replacement_char(ch));
+  }
+  output
+}
+
 // Normalization decides placeholder identity.
 pub(crate) fn label_key(label: &str) -> String {
   let uppercase = uppercase(label);
@@ -406,4 +426,13 @@ fn contains_word(text: &str, word: &str) -> bool {
   }
 
   false
+}
+
+const fn replacement_char(ch: char) -> char {
+  match ch {
+    '\u{00a0}' | '\u{2007}' | '\u{202f}' => ' ',
+    '\u{2013}' | '\u{2014}' => '-',
+    '\u{201c}' | '\u{201d}' => '"',
+    _ => ch,
+  }
 }
