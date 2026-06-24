@@ -139,6 +139,7 @@ impl Default for OperatorConfig {
 pub struct PlaceholderEntry {
   pub label: String,
   pub text: String,
+  pub source_text: Option<String>,
   pub placeholder: String,
 }
 
@@ -155,24 +156,60 @@ impl PlaceholderMap {
 
   #[must_use]
   pub fn get(&self, label: &str, text: &str) -> Option<&str> {
+    self.get_with_source(label, text, None).or_else(|| {
+      self
+        .entries
+        .iter()
+        .find(|entry| entry.label == label && entry.text == text)
+        .map(|entry| entry.placeholder.as_str())
+    })
+  }
+
+  #[must_use]
+  pub(crate) fn get_entity(&self, entity: &Entity) -> Option<&str> {
+    self.get_with_source(
+      &entity.label,
+      &entity.text,
+      coreference_source_text(entity),
+    )
+  }
+
+  fn get_with_source(
+    &self,
+    label: &str,
+    text: &str,
+    source_text: Option<&str>,
+  ) -> Option<&str> {
     self
       .entries
       .iter()
-      .find(|entry| entry.label == label && entry.text == text)
+      .find(|entry| {
+        entry.label == label
+          && entry.text == text
+          && entry.source_text.as_deref() == source_text
+      })
       .map(|entry| entry.placeholder.as_str())
   }
 
-  pub(super) fn has(&self, label: &str, text: &str) -> bool {
-    self.get(label, text).is_some()
+  pub(super) fn has_entity(&self, entity: &Entity) -> bool {
+    self.get_entity(entity).is_some()
   }
 
-  pub(super) fn push(&mut self, label: &str, text: &str, placeholder: &str) {
+  pub(super) fn push_entity(&mut self, entity: &Entity, placeholder: &str) {
     self.entries.push(PlaceholderEntry {
-      label: label.to_owned(),
-      text: text.to_owned(),
+      label: entity.label.clone(),
+      text: entity.text.clone(),
+      source_text: coreference_source_text(entity).map(ToOwned::to_owned),
       placeholder: placeholder.to_owned(),
     });
   }
+}
+
+fn coreference_source_text(entity: &Entity) -> Option<&str> {
+  let EntityKind::Coreference { source_text } = &entity.kind else {
+    return None;
+  };
+  Some(source_text)
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

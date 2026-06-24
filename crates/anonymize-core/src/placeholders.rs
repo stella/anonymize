@@ -23,58 +23,39 @@ pub fn build_placeholder_map(
   sorted.sort_by_key(|entity| entity.start);
 
   for entity in &sorted {
-    if placeholder_map.has(&entity.label, &entity.text) {
+    if placeholder_map.has_entity(entity) {
       continue;
     }
 
     let label_key = label_key(&entity.label);
-    let source_normalized_key = source_normalized_key(entity, &label_key);
-
-    if let Some(source_key) = source_normalized_key.as_ref()
-      && let Some(existing) = normalized_to_placeholder.get(source_key)
-    {
-      placeholder_map.push(&entity.label, &entity.text, existing);
-      continue;
-    }
-
-    let normalized = normalize_entity_text(&entity.label, &entity.text);
-    let normalized_key = NormalizedKey {
-      label_key: label_key.clone(),
-      text: normalized,
-    };
+    let normalized_key = normalized_key(entity, &label_key);
 
     if let Some(existing) = normalized_to_placeholder.get(&normalized_key) {
-      placeholder_map.push(&entity.label, &entity.text, existing);
-      if let Some(source_key) = source_normalized_key {
-        normalized_to_placeholder.insert(source_key, existing.clone());
-      }
+      placeholder_map.push_entity(entity, existing);
       continue;
     }
 
     let placeholder =
       next_placeholder(&label_key, &mut counters, &reserved_placeholders);
-    placeholder_map.push(&entity.label, &entity.text, &placeholder);
-    normalized_to_placeholder.insert(normalized_key, placeholder.clone());
-    if let Some(source_key) = source_normalized_key {
-      normalized_to_placeholder.insert(source_key, placeholder);
-    }
+    placeholder_map.push_entity(entity, &placeholder);
+    normalized_to_placeholder.insert(normalized_key, placeholder);
   }
 
   placeholder_map
 }
 
-fn source_normalized_key(
-  entity: &Entity,
-  label_key: &str,
-) -> Option<NormalizedKey> {
-  let EntityKind::Coreference { source_text } = &entity.kind else {
-    return None;
+fn normalized_key(entity: &Entity, label_key: &str) -> NormalizedKey {
+  let text = match &entity.kind {
+    EntityKind::Detected => normalize_entity_text(&entity.label, &entity.text),
+    EntityKind::Coreference { source_text } => {
+      normalize_entity_text(&entity.label, source_text)
+    }
   };
 
-  Some(NormalizedKey {
+  NormalizedKey {
     label_key: label_key.to_owned(),
-    text: normalize_entity_text(&entity.label, source_text),
-  })
+    text,
+  }
 }
 
 fn next_placeholder(

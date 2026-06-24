@@ -92,6 +92,42 @@ fn search_index_preserves_utf16_offsets_from_primitive_engines() {
 }
 
 #[test]
+fn search_index_returns_overlapping_literal_matches() {
+  let index = SearchIndex::new(
+    vec![
+      SearchPattern::Literal(String::from("Alice")),
+      SearchPattern::Literal(String::from("Alice Smith")),
+    ],
+    SearchOptions {
+      literal: LiteralSearchOptions {
+        case_insensitive: false,
+        whole_words: true,
+      },
+      ..SearchOptions::default()
+    },
+  )
+  .unwrap();
+
+  let matches = index.find_iter("Alice Smith signed.").unwrap();
+
+  assert_eq!(
+    matches,
+    vec![
+      SearchMatch::Literal {
+        pattern: 0,
+        start: 0,
+        end: 5,
+      },
+      SearchMatch::Literal {
+        pattern: 1,
+        start: 0,
+        end: 11,
+      },
+    ]
+  );
+}
+
+#[test]
 fn search_index_reports_match_presence_across_engines() {
   let index = SearchIndex::new(
     vec![
