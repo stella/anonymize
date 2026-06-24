@@ -1,0 +1,222 @@
+use super::common::{is_caller_owned, utf16_len};
+use super::{DetectionSource, PipelineEntity, SourceDetail};
+
+const LEGAL_PERIOD_SUFFIXES: &str =
+  include_str!("../../data/legal-period-suffixes.txt");
+const ADDRESS_FINAL_ABBREVS: &str =
+  include_str!("../../data/address-final-abbrevs.txt");
+
+#[must_use]
+pub fn sanitize_entities(entities: &[PipelineEntity]) -> Vec<PipelineEntity> {
+  let mut sanitized = Vec::new();
+
+  for entity in entities {
+    if is_caller_owned(entity) || has_curated_literal_boundary(entity) {
+      sanitized.push(entity.clone());
+      continue;
+    }
+
+    let Some(cleaned) = clean_entity_text(entity) else {
+      continue;
+    };
+    sanitized.push(cleaned);
+  }
+
+  sanitized
+}
+
+fn clean_entity_text(entity: &PipelineEntity) -> Option<PipelineEntity> {
+  let mut start_byte = 0;
+  let mut end_byte = entity.text.len();
+
+  while let Some((ch, len)) = first_char(entity.text.get(start_byte..end_byte)?)
+  {
+    if ch.is_whitespace() || is_leading_trim(ch, &entity.label) {
+      start_byte = start_byte.saturating_add(len);
+      continue;
+    }
+    break;
+  }
+
+  while let Some((ch, len)) = last_char(entity.text.get(start_byte..end_byte)?)
+  {
+    if ch.is_whitespace() || is_trailing_trim(ch, &entity.label) {
+      end_byte = end_byte.saturating_sub(len);
+      continue;
+    }
+    break;
+  }
+
+  if should_strip_period(entity, start_byte, end_byte) {
+    end_byte = end_byte.saturating_sub('.'.len_utf8());
+  }
+
+  while let Some((ch, len)) = last_char(entity.text.get(start_byte..end_byte)?)
+  {
+    if ch.is_whitespace() || is_trailing_trim(ch, &entity.label) {
+      end_byte = end_byte.saturating_sub(len);
+      continue;
+    }
+    break;
+  }
+
+  if start_byte >= end_byte {
+    return None;
+  }
+
+  let cleaned_raw = entity.text.get(start_byte..end_byte)?;
+  if !cleaned_raw.chars().any(char::is_alphanumeric) {
+    return None;
+  }
+
+  let display_text = collapse_display_whitespace(cleaned_raw);
+  let start = entity.start.saturating_add(utf16_len(
+    entity.text.get(..start_byte).unwrap_or_default(),
+  ));
+  let end = start.saturating_add(utf16_len(cleaned_raw));
+
+  let mut cleaned = entity.clone();
+  cleaned.start = start;
+  cleaned.end = end;
+  cleaned.text = display_text;
+  Some(cleaned)
+}
+
+fn has_curated_literal_boundary(entity: &PipelineEntity) -> bool {
+  matches!(
+    entity.source,
+    DetectionSource::DenyList | DetectionSource::Gazetteer
+  ) && entity.label != "person"
+    && entity.source_detail != Some(SourceDetail::GazetteerExtension)
+    && entity
+      .text
+      .chars()
+      .next()
+      .into_iter()
+      .chain(entity.text.chars().next_back())
+      .any(is_literal_boundary_punct)
+}
+
+fn is_leading_trim(ch: char, label: &str) -> bool {
+  if label_allows_colon(label) {
+    matches!(
+      ch,
+      ',' | ';' | '"' | '\'' | '“' | '”' | '‘' | '’' | '«' | '¿' | '¡'
+    )
+  } else {
+    matches!(
+      ch,
+      ',' | ';' | ':' | '"' | '\'' | '“' | '”' | '‘' | '’' | '«' | '¿' | '¡'
+    )
+  }
+}
+
+fn is_trailing_trim(ch: char, label: &str) -> bool {
+  if label_allows_colon(label) {
+    matches!(
+      ch,
+      ',' | ';' | '"' | '\'' | '“' | '”' | '‘' | '’' | '»' | '!' | '?'
+    )
+  } else {
+    matches!(
+      ch,
+      ',' | ';' | ':' | '"' | '\'' | '“' | '”' | '‘' | '’' | '»' | '!' | '?'
+    )
+  }
+}
+
+const fn is_literal_boundary_punct(ch: char) -> bool {
+  matches!(
+    ch,
+    '"'
+      | '\''
+      | '“'
+      | '”'
+      | '„'
+      | '‟'
+      | '‘'
+      | '’'
+      | '‛'
+      | '«'
+      | '»'
+      | '!'
+      | '.'
+  )
+}
+
+fn should_strip_period(
+  entity: &PipelineEntity,
+  start_byte: usize,
+  end_byte: usize,
+) -> bool {
+  if !matches!(
+    entity.label.as_str(),
+    "organization" | "location" | "address"
+  ) {
+    return false;
+  }
+  let Some(text) = entity.text.get(start_byte..end_byte) else {
+    return false;
+  };
+  if !text.ends_with('.') || known_period_suffix(text) {
+    return false;
+  }
+  if entity.label == "address" && known_address_final_abbrev(text) {
+    return false;
+  }
+  !(entity.label == "location" && known_location_final_abbrev(text))
+}
+
+fn known_period_suffix(text: &str) -> bool {
+  LEGAL_PERIOD_SUFFIXES
+    .lines()
+    .any(|suffix| text.ends_with(suffix))
+}
+
+fn known_address_final_abbrev(text: &str) -> bool {
+  ADDRESS_FINAL_ABBREVS.lines().any(|suffix| {
+    text
+      .strip_suffix(suffix)
+      .is_some_and(|prefix| prefix.ends_with(char::is_whitespace))
+  })
+}
+
+fn known_location_final_abbrev(text: &str) -> bool {
+  text.ends_with("D.C.")
+    || text
+      .split_whitespace()
+      .next_back()
+      .is_some_and(|token| token.chars().filter(|ch| *ch == '.').count() >= 2)
+}
+
+fn label_allows_colon(label: &str) -> bool {
+  matches!(label, "ip address" | "mac address")
+}
+
+fn collapse_display_whitespace(text: &str) -> String {
+  let mut output = String::new();
+  let mut in_whitespace = false;
+
+  for ch in text.chars() {
+    if ch.is_whitespace() {
+      if !in_whitespace {
+        output.push(' ');
+        in_whitespace = true;
+      }
+      continue;
+    }
+
+    output.push(ch);
+    in_whitespace = false;
+  }
+
+  output
+}
+
+fn first_char(text: &str) -> Option<(char, usize)> {
+  text.chars().next().map(|ch| (ch, ch.len_utf8()))
+}
+
+fn last_char(text: &str) -> Option<(char, usize)> {
+  text.chars().next_back().map(|ch| (ch, ch.len_utf8()))
+}
