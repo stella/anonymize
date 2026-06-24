@@ -26,6 +26,9 @@ pub enum Error {
   PatternIndexOutOfRange {
     index: usize,
   },
+  UnsupportedRegexValidation {
+    pattern: u32,
+  },
 }
 
 impl fmt::Display for Error {
@@ -54,6 +57,12 @@ impl fmt::Display for Error {
       }
       Self::PatternIndexOutOfRange { index } => {
         write!(formatter, "Search pattern index exceeds u32 range: {index}")
+      }
+      Self::UnsupportedRegexValidation { pattern } => {
+        write!(
+          formatter,
+          "Regex pattern {pattern} requires validation that is not available in core"
+        )
       }
     }
   }
