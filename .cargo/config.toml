@@ -1,0 +1,8 @@
+# Use sparse index for faster resolution.
+[registries.crates-io]
+protocol = "sparse"
+
+[alias]
+ci-fmt = "fmt --all -- --check"
+ci-clippy = "clippy --workspace --all-targets --all-features --locked -- -D warnings"
+ci-test = "test --workspace --all-features --locked"
