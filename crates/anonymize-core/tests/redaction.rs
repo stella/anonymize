@@ -89,6 +89,43 @@ fn normalized_identifier_values_share_placeholder() {
 }
 
 #[test]
+fn contextual_identifier_cues_share_identifier_placeholder() {
+  let text = "CNI: 12AB34567 was present. CNI nº 12AB34567 was repeated.";
+  let entities = vec![
+    entity(text, "national identification number", "CNI: 12AB34567"),
+    entity(text, "national identification number", "CNI nº 12AB34567"),
+  ];
+
+  let result =
+    redact_text(text, &entities, &OperatorConfig::default()).unwrap();
+
+  assert_eq!(result.redaction_map.len(), 1);
+  assert_eq!(
+    result.redaction_map[0].placeholder,
+    "[NATIONAL_IDENTIFICATION_NUMBER_1]"
+  );
+}
+
+#[test]
+fn spaced_identifier_values_still_share_placeholder() {
+  let text =
+    "Card 4242 4242 4242 4242 was present. Card 4242424242424242 repeated.";
+  let entities = vec![
+    entity(text, "credit card number", "4242 4242 4242 4242"),
+    entity(text, "credit card number", "4242424242424242"),
+  ];
+
+  let result =
+    redact_text(text, &entities, &OperatorConfig::default()).unwrap();
+
+  assert_eq!(result.redaction_map.len(), 1);
+  assert_eq!(
+    result.redaction_map[0].placeholder,
+    "[CREDIT_CARD_NUMBER_1]"
+  );
+}
+
+#[test]
 fn coreference_alias_uses_source_placeholder_and_value() {
   let text = "Acme signed. Acme Corporation countersigned.";
   let alias_start = text.find("Acme").unwrap_or(0);
@@ -119,6 +156,36 @@ fn coreference_alias_uses_source_placeholder_and_value() {
     "[ORGANIZATION_1] signed. [ORGANIZATION_1] countersigned."
   );
   assert_eq!(result.redaction_map[0].original, "Acme Corporation");
+}
+
+#[test]
+fn same_alias_text_can_point_to_different_source_placeholders() {
+  let text = "Smith met Smith.";
+  let first = text.find("Smith").unwrap_or(0);
+  let second = text.rfind("Smith").unwrap_or(first);
+  let entities = vec![
+    Entity::coreference(
+      u32::try_from(first).unwrap_or(u32::MAX),
+      u32::try_from(first.saturating_add("Smith".len())).unwrap_or(u32::MAX),
+      "person",
+      "Smith",
+      "Alice Smith",
+    ),
+    Entity::coreference(
+      u32::try_from(second).unwrap_or(u32::MAX),
+      u32::try_from(second.saturating_add("Smith".len())).unwrap_or(u32::MAX),
+      "person",
+      "Smith",
+      "Bob Smith",
+    ),
+  ];
+
+  let result =
+    redact_text(text, &entities, &OperatorConfig::default()).unwrap();
+
+  assert_eq!(result.redacted_text, "[PERSON_1] met [PERSON_2].");
+  assert_eq!(result.redaction_map[0].original, "Alice Smith");
+  assert_eq!(result.redaction_map[1].original, "Bob Smith");
 }
 
 #[test]
@@ -165,6 +232,21 @@ fn utf16_offsets_apply_non_ascii_spans() {
 }
 
 #[test]
+fn detected_original_uses_redacted_source_span() {
+  let text = "Alice signed.";
+  let entities = vec![Entity::detected(0, 5, "person", "Bob")];
+
+  let result =
+    redact_text(text, &entities, &OperatorConfig::default()).unwrap();
+
+  assert_eq!(result.redaction_map[0].original, "Alice");
+  assert_eq!(
+    deanonymise(&result.redacted_text, &result.redaction_map),
+    text
+  );
+}
+
+#[test]
 fn invalid_utf16_boundary_is_rejected() {
   let text = "A 🦀 Bob";
   let entities = vec![Entity::detected(3, 5, "person", " Bob")];
@@ -173,6 +255,17 @@ fn invalid_utf16_boundary_is_rejected() {
     .expect_err("offset inside a surrogate pair must fail");
 
   assert_eq!(error, Error::Utf16OffsetInsideSurrogate { offset: 3 });
+}
+
+#[test]
+fn empty_spans_are_rejected() {
+  let text = "Alice";
+  let entities = vec![Entity::detected(0, 0, "person", "")];
+
+  let error = redact_text(text, &entities, &OperatorConfig::default())
+    .expect_err("empty entity spans must fail");
+
+  assert_eq!(error, Error::InvalidSpan { start: 0, end: 0 });
 }
 
 #[test]
@@ -249,4 +342,21 @@ fn equivalent_passport_cues_share_placeholders() {
 
   assert_eq!(result.redaction_map.len(), 1);
   assert_eq!(result.redaction_map[0].placeholder, "[PASSPORT_NUMBER_1]");
+}
+
+#[test]
+fn passport_prefixes_split_by_separators_stay_distinct() {
+  let text =
+    "Passport X-12345678 was inspected. Passport Y 12345678 was listed.";
+  let entities = vec![
+    entity(text, "passport number", "X-12345678"),
+    entity(text, "passport number", "Y 12345678"),
+  ];
+
+  let result =
+    redact_text(text, &entities, &OperatorConfig::default()).unwrap();
+
+  assert_eq!(result.redaction_map.len(), 2);
+  assert_eq!(result.redaction_map[0].placeholder, "[PASSPORT_NUMBER_1]");
+  assert_eq!(result.redaction_map[1].placeholder, "[PASSPORT_NUMBER_2]");
 }
