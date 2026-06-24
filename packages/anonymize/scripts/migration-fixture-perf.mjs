@@ -26,6 +26,8 @@ const BASELINE_REF =
   process.env.ANONYMIZE_MIGRATION_BASELINE_REF ?? "origin/main";
 const COMPARE_BASELINE =
   process.env.ANONYMIZE_MIGRATION_COMPARE_BASELINE !== "0";
+const REQUIRE_NATIVE_PIPELINE =
+  process.env.ANONYMIZE_MIGRATION_REQUIRE_NATIVE_PIPELINE === "1";
 const WARM_ITERATIONS = positiveIntegerEnv(
   "ANONYMIZE_MIGRATION_WARM_ITERATIONS",
   2,
@@ -66,6 +68,15 @@ async function runCoordinator() {
       tempRoot,
     });
     printVariantSummary(candidate);
+
+    if (
+      REQUIRE_NATIVE_PIPELINE &&
+      !candidate.nativeRewrite.measuredInPipeline
+    ) {
+      throw new Error(
+        "Native pipeline is required, but the candidate run used the TypeScript pipeline",
+      );
+    }
 
     if (baseline !== null) {
       const comparison = compareSnapshots(baseline, candidate);
@@ -150,8 +161,9 @@ async function runWorker() {
   const context = indexModule.createPipelineContext();
 
   const prepareStart = Bun.nanoseconds();
-  await indexModule.preparePipelineSearch({ config, context });
+  const search = await indexModule.preparePipelineSearch({ config, context });
   const prepareMs = elapsedMs(prepareStart);
+  const nativeRewrite = describeNativeRewrite(config, search);
 
   const coldRun = await runFixtureSweep({
     indexModule,
@@ -175,6 +187,7 @@ async function runWorker() {
   const warmRunMs = roundMs(warmRuns.reduce((sum, run) => sum + run.ms, 0));
   const warmAvgMs =
     WARM_ITERATIONS === 0 ? 0 : roundMs(warmRunMs / WARM_ITERATIONS);
+  const fixtureTimings = summarizeFixtureTimings(coldRun, warmRuns);
   const snapshots = Object.fromEntries(
     coldRun.fixtures.map((fixture) => [fixture.fixture, fixture.snapshot]),
   );
@@ -184,6 +197,8 @@ async function runWorker() {
     `${JSON.stringify({
       event: "fixture-migration-variant",
       variant,
+      pipelineRuntime: "typescript",
+      nativeRewrite,
       fixtureCount: fixtures.length,
       warmIterations: WARM_ITERATIONS,
       timings: {
@@ -193,9 +208,11 @@ async function runWorker() {
         coldRunMs: coldRun.ms,
         coldPipelineMs: roundMs(dictionaryMs + prepareMs + coldRun.ms),
         coldTotalMs: roundMs(importMs + dictionaryMs + prepareMs + coldRun.ms),
+        warmRunMsByIteration: warmRuns.map((run) => run.ms),
         warmRunMs,
         warmAvgMs,
       },
+      fixtureTimings,
       fixtures: coldRun.fixtures.map(
         ({ fixture, ms, entityCount, redactedTextLength }) => ({
           fixture,
@@ -292,6 +309,10 @@ function compareSnapshots(baseline, candidate) {
     fixtureCount: fixtureNames.size,
     mismatches,
     timingComparison: timingComparison(baseline, candidate),
+    nativeRewrite: {
+      baseline: baseline.nativeRewrite,
+      candidate: candidate.nativeRewrite,
+    },
   };
 }
 
@@ -358,12 +379,189 @@ function printVariantSummary(result) {
     JSON.stringify({
       event: result.event,
       variant: result.variant,
+      pipelineRuntime: result.pipelineRuntime,
+      nativeRewrite: result.nativeRewrite,
       fixtureCount: result.fixtureCount,
       warmIterations: result.warmIterations,
       timings: result.timings,
+      fixtureTimings: result.fixtureTimings,
       fixtures: result.fixtures,
     }),
   );
+}
+
+function describeNativeRewrite(config, search) {
+  const sliceLengths = Object.fromEntries(
+    Object.entries(search.slices).map(([name, slice]) => [
+      name,
+      sliceLength(slice),
+    ]),
+  );
+  const regexValidationSlots = countRegexValidationSlots(search.regexMeta);
+  const denyListSourceCounts = countDenyListSources(search.denyListData);
+  const unsupportedSearchSlots = [
+    unsupportedSlot("regex", regexValidationSlots, "regex validators"),
+    unsupportedSlot("triggers", sliceLengths.triggers, "trigger extraction"),
+    unsupportedSlot("streetTypes", sliceLengths.streetTypes, "address seeds"),
+    unsupportedSlot(
+      "denyList",
+      denyListSourceCounts.curated,
+      "curated deny-list semantics",
+    ),
+  ].filter((slot) => slot.count > 0);
+  const supportedSearchSlots =
+    Math.max(0, sliceLengths.regex - regexValidationSlots) +
+    sliceLengths.customRegex +
+    denyListSourceCounts.customOnly +
+    sliceLengths.gazetteer +
+    sliceLengths.countries;
+  const totalSearchSlots = Object.values(sliceLengths).reduce(
+    (sum, length) => sum + length,
+    0,
+  );
+  const unsupportedPipelineStages = describeUnsupportedPipelineStages(
+    config,
+    search,
+    denyListSourceCounts,
+  );
+
+  return {
+    measuredInPipeline: false,
+    pipelineRuntime: "typescript",
+    fullPipelineNativeEligible:
+      unsupportedSearchSlots.length === 0 &&
+      unsupportedPipelineStages.length === 0,
+    searchSlotCoverage: {
+      supported: supportedSearchSlots,
+      total: totalSearchSlots,
+      ratio:
+        totalSearchSlots === 0
+          ? 1
+          : roundMs(supportedSearchSlots / totalSearchSlots),
+    },
+    sliceLengths,
+    unsupportedSearchSlots,
+    unsupportedPipelineStages,
+  };
+}
+
+function describeUnsupportedPipelineStages(
+  config,
+  search,
+  denyListSourceCounts,
+) {
+  const stages = [];
+  if (config.enableLegalForms) {
+    stages.push("legal-forms-v2");
+  }
+  if (config.enableTriggerPhrases) {
+    stages.push("triggers");
+  }
+  if (config.enableDenyList && denyListSourceCounts.curated > 0) {
+    stages.push("curated-deny-list");
+  }
+  if (config.enableNameCorpus) {
+    stages.push("name-corpus");
+  }
+  if (config.enableHotwordRules) {
+    stages.push("hotword-rules");
+  }
+  if (config.enableZoneClassification) {
+    stages.push("zone-classification");
+  }
+  if (config.enableConfidenceBoost) {
+    stages.push("confidence-boost");
+  }
+  if (config.enableCoreference) {
+    stages.push("coreference");
+  }
+  if (sliceLength(search.slices.streetTypes) > 0) {
+    stages.push("address-seeds");
+  }
+
+  stages.push("signatures", "false-positive-filters", "final-extensions");
+  return stages;
+}
+
+function countRegexValidationSlots(regexMeta) {
+  return regexMeta.reduce(
+    (count, meta) => count + (meta.requiresValidation === true ? 1 : 0),
+    0,
+  );
+}
+
+function countDenyListSources(denyListData) {
+  if (!denyListData) {
+    return { customOnly: 0, curated: 0 };
+  }
+
+  let customOnly = 0;
+  let curated = 0;
+  for (const sources of denyListData.sources) {
+    const sourceList = Array.isArray(sources) ? sources : [sources];
+    if (
+      sourceList.length > 0 &&
+      sourceList.every((source) => source === "custom-deny-list")
+    ) {
+      customOnly += 1;
+    } else {
+      curated += 1;
+    }
+  }
+
+  return { customOnly, curated };
+}
+
+function unsupportedSlot(slice, count, reason) {
+  return { slice, count, reason };
+}
+
+function sliceLength(slice) {
+  return Math.max(0, Number(slice.end ?? 0) - Number(slice.start ?? 0));
+}
+
+function summarizeFixtureTimings(coldRun, warmRuns) {
+  return {
+    cold: summarizeRunFixtures(coldRun.fixtures),
+    warm:
+      warmRuns.length === 0
+        ? null
+        : summarizeRunFixtures(warmRuns.flatMap((run) => run.fixtures)),
+    byFixture: coldRun.fixtures.map((coldFixture, index) => {
+      const warmMs = warmRuns
+        .map((run) => run.fixtures.at(index)?.ms)
+        .filter((ms) => typeof ms === "number");
+      return {
+        fixture: coldFixture.fixture,
+        coldMs: coldFixture.ms,
+        warmAvgMs:
+          warmMs.length === 0
+            ? null
+            : roundMs(warmMs.reduce((sum, ms) => sum + ms, 0) / warmMs.length),
+      };
+    }),
+  };
+}
+
+function summarizeRunFixtures(fixtures) {
+  const values = fixtures.map((fixture) => fixture.ms).sort((a, b) => a - b);
+  return {
+    minMs: percentile(values, 0),
+    p50Ms: percentile(values, 0.5),
+    p95Ms: percentile(values, 0.95),
+    maxMs: percentile(values, 1),
+  };
+}
+
+function percentile(values, fraction) {
+  if (values.length === 0) {
+    return 0;
+  }
+  const index = Math.min(
+    values.length - 1,
+    Math.max(0, Math.ceil(values.length * fraction) - 1),
+  );
+  return roundMs(values[index]);
 }
 
 function firstDifferentIndex(left, right) {
