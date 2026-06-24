@@ -67,6 +67,7 @@ pub enum EntityKind {
   Coreference { source_text: String },
 }
 
+/// Source span with UTF-16 offsets.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Entity {
   pub start: u32,
@@ -143,6 +144,7 @@ pub struct PlaceholderEntry {
   pub placeholder: String,
 }
 
+/// Deterministic placeholder lookup for one document.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct PlaceholderMap {
   entries: Vec<PlaceholderEntry>,
@@ -249,6 +251,7 @@ impl fmt::Display for SearchEngine {
   }
 }
 
+/// Search match with the caller's pattern index.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SearchMatch {
   Literal {

@@ -22,12 +22,15 @@ pub fn redact_text(
 
   let offsets = Utf16Offsets::new(full_text);
   validate_spans(entities, &offsets)?;
+
+  // Reversible originals come from the source span, not caller display text.
   let entities = entities_with_source_text(full_text, entities, &offsets)?;
 
   let placeholder_map = build_placeholder_map(&entities, full_text);
   let mut sorted = entities;
   sorted.sort_by_key(|entity| entity.start);
 
+  // Existing contract: first accepted span wins overlaps.
   let mut non_overlapping = Vec::<Entity>::new();
   let mut last_end = 0;
   for entity in sorted {
@@ -100,6 +103,7 @@ pub fn deanonymise(
 
 fn validate_spans(entities: &[Entity], offsets: &Utf16Offsets) -> Result<()> {
   for entity in entities {
+    // Empty spans would insert without redacting.
     if entity.start >= entity.end {
       return Err(crate::types::Error::InvalidSpan {
         start: entity.start,

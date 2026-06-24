@@ -3,6 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::normalize::{label_key, normalize_entity_text};
 use crate::types::{Entity, EntityKind, PlaceholderMap};
 
+// Document-local placeholder key.
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 struct NormalizedKey {
   label_key: String,
@@ -45,6 +46,7 @@ pub fn build_placeholder_map(
 }
 
 fn normalized_key(entity: &Entity, label_key: &str) -> NormalizedKey {
+  // Coreference aliases key by source identity, not alias text.
   let text = match &entity.kind {
     EntityKind::Detected => normalize_entity_text(&entity.label, &entity.text),
     EntityKind::Coreference { source_text } => {

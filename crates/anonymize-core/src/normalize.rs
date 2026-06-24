@@ -1,6 +1,7 @@
 const PHONE_NOISE: [char; 3] = ['(', ')', '-'];
 const ID_SEPARATORS: [char; 3] = ['-', '/', '.'];
 
+// Normalization decides placeholder identity.
 pub(crate) fn label_key(label: &str) -> String {
   let uppercase = uppercase(label);
   collapse_whitespace(&uppercase, "_", false)
@@ -83,6 +84,7 @@ fn strip_id_separators(text: &str) -> String {
 }
 
 fn normalize_identifier_text(text: &str) -> String {
+  // Strip contextual cues before comparing identifiers.
   find_compact_ascii_identifier(text, true, is_generic_identifier)
     .unwrap_or_else(|| strip_id_separators(text).to_uppercase())
 }
