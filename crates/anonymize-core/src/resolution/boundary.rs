@@ -1,16 +1,16 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::byte_offsets::ByteOffsets;
 use crate::types::Result;
-use crate::utf16::Utf16Offsets;
 
-use super::common::{contains_span, entity_len, is_caller_owned, utf16_len};
+use super::common::{byte_len, contains_span, entity_len, is_caller_owned};
 use super::{DetectionSource, PipelineEntity};
 
 pub fn enforce_boundary_consistency(
   entities: &[PipelineEntity],
   full_text: &str,
 ) -> Result<Vec<PipelineEntity>> {
-  let offsets = Utf16Offsets::new(full_text);
+  let offsets = ByteOffsets::new(full_text);
   let spans = char_spans(full_text);
   let boundaries = word_boundaries(&spans);
   let fixed =
@@ -31,7 +31,7 @@ struct CharSpan {
 fn fix_partial_words(
   entities: &[PipelineEntity],
   full_text: &str,
-  offsets: &Utf16Offsets,
+  offsets: &ByteOffsets<'_>,
   spans: &[CharSpan],
   boundaries: &BTreeSet<u32>,
 ) -> Result<Vec<PipelineEntity>> {
@@ -83,7 +83,7 @@ fn fix_partial_words(
 fn resolve_cross_label_overlaps(
   entities: &[PipelineEntity],
   full_text: &str,
-  offsets: &Utf16Offsets,
+  offsets: &ByteOffsets<'_>,
 ) -> Result<Vec<PipelineEntity>> {
   let mut sorted = entities.to_vec();
   sorted.sort_by_key(|entity| entity.start);
@@ -172,7 +172,7 @@ fn deduplicate_spans(entities: &[PipelineEntity]) -> Vec<PipelineEntity> {
 fn merge_adjacent(
   entities: &[PipelineEntity],
   full_text: &str,
-  offsets: &Utf16Offsets,
+  offsets: &ByteOffsets<'_>,
 ) -> Result<Vec<PipelineEntity>> {
   let mut sorted = entities.to_vec();
   sorted.sort_by_key(|entity| entity.start);
@@ -279,7 +279,7 @@ fn char_spans(text: &str) -> Vec<CharSpan> {
   let mut offset = 0_u32;
 
   for ch in text.chars() {
-    let width = u32::try_from(ch.len_utf16()).unwrap_or(u32::MAX);
+    let width = u32::try_from(ch.len_utf8()).unwrap_or(u32::MAX);
     let end = offset.saturating_add(width);
     spans.push(CharSpan {
       start: offset,
@@ -401,7 +401,7 @@ fn merge_into_previous(
   previous_index: usize,
   entity: &PipelineEntity,
   full_text: &str,
-  offsets: &Utf16Offsets,
+  offsets: &ByteOffsets<'_>,
 ) -> Result<()> {
   if let Some(previous) = entities.get_mut(previous_index) {
     previous.end = previous.end.max(entity.end);
@@ -427,7 +427,7 @@ fn is_legal_form_organization(entity: &PipelineEntity) -> bool {
 
 fn is_mergeable_gap(gap: &str) -> bool {
   gap.is_empty()
-    || (utf16_len(gap) <= 3
+    || (byte_len(gap) <= 3
       && gap.chars().all(|ch| matches!(ch, ' ' | '\t' | ',' | '-')))
 }
 

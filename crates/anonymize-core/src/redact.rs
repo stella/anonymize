@@ -1,10 +1,10 @@
+use crate::byte_offsets::ByteOffsets;
 use crate::normalize::placeholder_fallback;
 use crate::placeholders::build_placeholder_map;
 use crate::types::{
   Entity, EntityKind, OperatorConfig, OperatorEntry, OperatorType,
   RedactionEntry, RedactionResult, Result,
 };
-use crate::utf16::Utf16Offsets;
 
 pub fn redact_text(
   full_text: &str,
@@ -20,7 +20,7 @@ pub fn redact_text(
     });
   }
 
-  let offsets = Utf16Offsets::new(full_text);
+  let offsets = ByteOffsets::new(full_text);
   validate_spans(entities, &offsets)?;
 
   let placeholder_map = build_placeholder_map(entities, full_text);
@@ -99,7 +99,10 @@ pub fn deanonymise(
   result
 }
 
-fn validate_spans(entities: &[Entity], offsets: &Utf16Offsets) -> Result<()> {
+fn validate_spans(
+  entities: &[Entity],
+  offsets: &ByteOffsets<'_>,
+) -> Result<()> {
   for entity in entities {
     // Empty spans would insert without redacting.
     if entity.start >= entity.end {
@@ -124,7 +127,7 @@ struct RedactionSpan {
 fn redaction_spans(
   full_text: &str,
   entities: &[Entity],
-  offsets: &Utf16Offsets,
+  offsets: &ByteOffsets<'_>,
 ) -> Result<Vec<RedactionSpan>> {
   let mut resolved = Vec::with_capacity(entities.len());
 

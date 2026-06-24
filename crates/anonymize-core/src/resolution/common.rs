@@ -18,6 +18,6 @@ pub(crate) const fn is_caller_owned(entity: &PipelineEntity) -> bool {
   )
 }
 
-pub(crate) fn utf16_len(text: &str) -> u32 {
-  u32::try_from(text.encode_utf16().count()).unwrap_or(u32::MAX)
+pub(crate) fn byte_len(text: &str) -> u32 {
+  u32::try_from(text.len()).unwrap_or(u32::MAX)
 }

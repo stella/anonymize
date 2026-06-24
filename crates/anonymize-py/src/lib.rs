@@ -4,9 +4,13 @@ use stella_anonymize_adapter_contract::{
   BindingOperatorConfig, BindingOperatorEntry, BindingPipelineEntity,
   BindingPreparedSearchConfig, BindingRedactionEntry, BindingRedactionResult,
   BindingStaticRedactionResult, ContractError, operator_config_from_binding,
-  prepared_search_config_from_binding, static_redaction_result_to_binding,
+  prepared_search_config_from_binding,
+  static_redaction_diagnostic_result_to_binding,
+  static_redaction_diagnostics_to_binding, static_redaction_result_to_binding,
 };
-use stella_anonymize_core::PreparedSearch as CorePreparedSearch;
+use stella_anonymize_core::{
+  PreparedSearch as CorePreparedSearch, StaticRedactionDiagnostics,
+};
 
 #[pyclass(name = "RedactionEntry", get_all, skip_from_py_object)]
 #[derive(Clone)]
@@ -53,6 +57,7 @@ pub struct PyStaticRedactionResult {
 #[pyclass(name = "PreparedSearch")]
 pub struct PyPreparedSearch {
   inner: CorePreparedSearch,
+  prepare_diagnostics: StaticRedactionDiagnostics,
 }
 
 #[pymethods]
@@ -60,12 +65,23 @@ impl PyPreparedSearch {
   #[new]
   fn new(config_json: &str) -> PyResult<Self> {
     let config = parse_prepared_search_config(config_json)?;
-    let inner = CorePreparedSearch::new(
+    let result = CorePreparedSearch::new_with_diagnostics(
       prepared_search_config_from_binding(config)
         .map_err(|error| to_py_contract_error(&error))?,
     )
     .map_err(|error| to_py_core_error(&error))?;
-    Ok(Self { inner })
+    Ok(Self {
+      inner: result.prepared,
+      prepare_diagnostics: result.diagnostics,
+    })
+  }
+
+  fn prepare_diagnostics_json(&self) -> PyResult<String> {
+    let diagnostics =
+      static_redaction_diagnostics_to_binding(self.prepare_diagnostics.clone());
+
+    serde_json::to_string(&diagnostics)
+      .map_err(|error| to_py_serde_error(&error))
   }
 
   fn redact_static_entities(
@@ -95,6 +111,28 @@ impl PyPreparedSearch {
     serde_json::to_string(&to_binding_static_redaction_result(result))
       .map_err(|error| to_py_serde_error(&error))
   }
+
+  fn redact_static_entities_diagnostics_json(
+    &self,
+    full_text: &str,
+    operators_json: Option<&str>,
+  ) -> PyResult<String> {
+    let operators = parse_operator_config(operators_json)?;
+    let mut result = self
+      .inner
+      .redact_static_entities_with_diagnostics(
+        full_text,
+        &operator_config_from_binding(operators)
+          .map_err(|error| to_py_contract_error(&error))?,
+      )
+      .map_err(|error| to_py_core_error(&error))?;
+    let mut diagnostics = self.prepare_diagnostics.clone();
+    diagnostics.extend(result.diagnostics);
+    result.diagnostics = diagnostics;
+    let result = static_redaction_diagnostic_result_to_binding(result);
+
+    serde_json::to_string(&result).map_err(|error| to_py_serde_error(&error))
+  }
 }
 
 #[pyfunction]
@@ -105,6 +143,16 @@ fn redact_static_entities_json(
 ) -> PyResult<String> {
   let prepared = PyPreparedSearch::new(config_json)?;
   prepared.redact_static_entities_json(full_text, operators_json)
+}
+
+#[pyfunction]
+fn redact_static_entities_diagnostics_json(
+  config_json: &str,
+  full_text: &str,
+  operators_json: Option<&str>,
+) -> PyResult<String> {
+  let prepared = PyPreparedSearch::new(config_json)?;
+  prepared.redact_static_entities_diagnostics_json(full_text, operators_json)
 }
 
 #[pyfunction]
@@ -267,6 +315,10 @@ fn stella_anonymize_core_py(module: &Bound<'_, PyModule>) -> PyResult<()> {
   module.add_class::<PyPipelineEntity>()?;
   module
     .add_function(wrap_pyfunction!(redact_static_entities_json, module)?)?;
+  module.add_function(wrap_pyfunction!(
+    redact_static_entities_diagnostics_json,
+    module
+  )?)?;
   module.add_function(wrap_pyfunction!(normalize_for_search, module)?)?;
   Ok(())
 }

@@ -3,15 +3,17 @@ use std::collections::BTreeMap;
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use stella_anonymize_adapter_contract::{
-  BindingCountryMatchData, BindingDenyListMatchData, BindingGazetteerMatchData,
-  BindingOperatorConfig, BindingOperatorEntry, BindingPatternSlice,
-  BindingPreparedSearchConfig, BindingPreparedSearchSlices,
-  BindingRedactionResult, BindingRegexMatchMeta, BindingSearchOptions,
-  BindingSearchPattern, BindingStaticRedactionResult, ContractError,
-  operator_config_from_binding, prepared_search_config_from_binding,
-  static_redaction_result_to_binding,
+  BindingCountryMatchData, BindingDenyListFilterData, BindingDenyListMatchData,
+  BindingGazetteerMatchData, BindingOperatorConfig, BindingOperatorEntry,
+  BindingPatternSlice, BindingPreparedSearchConfig,
+  BindingPreparedSearchSlices, BindingRedactionResult, BindingRegexMatchMeta,
+  BindingSearchOptions, BindingSearchPattern, BindingStaticRedactionResult,
+  ContractError, operator_config_from_binding,
+  prepared_search_config_from_binding,
+  static_redaction_diagnostic_result_to_binding,
+  static_redaction_diagnostics_to_binding, static_redaction_result_to_binding,
 };
-use stella_anonymize_core::PreparedSearch;
+use stella_anonymize_core::{PreparedSearch, StaticRedactionDiagnostics};
 
 #[napi(object)]
 pub struct JsSearchPattern {
@@ -20,6 +22,10 @@ pub struct JsSearchPattern {
   pub distance: Option<u32>,
   pub case_insensitive: Option<bool>,
   pub whole_words: Option<bool>,
+  pub lazy: Option<bool>,
+  pub prefilter_any: Option<Vec<String>>,
+  pub prefilter_case_insensitive: Option<bool>,
+  pub prefilter_regex: Option<String>,
 }
 
 #[napi(object)]
@@ -56,6 +62,7 @@ pub struct JsRegexMatchMeta {
   pub score: f64,
   pub source_detail: Option<String>,
   pub requires_validation: Option<bool>,
+  pub min_byte_length: Option<u32>,
 }
 
 #[napi(object)]
@@ -75,6 +82,21 @@ pub struct JsDenyListMatchData {
   pub custom_labels: Vec<Vec<String>>,
   pub originals: Vec<String>,
   pub sources: Vec<Vec<String>>,
+  pub filters: Option<JsDenyListFilterData>,
+}
+
+#[napi(object)]
+pub struct JsDenyListFilterData {
+  pub stopwords: Vec<String>,
+  pub allow_list: Vec<String>,
+  pub person_stopwords: Vec<String>,
+  pub address_stopwords: Vec<String>,
+  pub street_types: Vec<String>,
+  pub first_names: Vec<String>,
+  pub generic_roles: Vec<String>,
+  pub sentence_starters: Vec<String>,
+  pub trailing_address_word_exclusions: Vec<String>,
+  pub defined_term_cues: Vec<String>,
 }
 
 #[napi(object)]
@@ -176,8 +198,45 @@ pub fn redact_static_entities_json(
 }
 
 #[napi]
+#[allow(clippy::needless_pass_by_value)]
+pub fn redact_static_entities_diagnostics_json(
+  config_json: String,
+  full_text: String,
+  operators_json: Option<String>,
+) -> Result<String> {
+  let config =
+    serde_json::from_str::<BindingPreparedSearchConfig>(&config_json)
+      .map_err(|error| to_napi_serde_error(&error))?;
+  let operators = operators_json
+    .as_deref()
+    .map(serde_json::from_str::<BindingOperatorConfig>)
+    .transpose()
+    .map_err(|error| to_napi_serde_error(&error))?;
+  let prepared = PreparedSearch::new_with_diagnostics(
+    prepared_search_config_from_binding(config)
+      .map_err(|error| to_napi_contract_error(&error))?,
+  )
+  .map_err(|error| to_napi_core_error(&error))?;
+  let mut diagnostics = prepared.diagnostics;
+  let mut result = prepared
+    .prepared
+    .redact_static_entities_with_diagnostics(
+      &full_text,
+      &operator_config_from_binding(operators)
+        .map_err(|error| to_napi_contract_error(&error))?,
+    )
+    .map_err(|error| to_napi_core_error(&error))?;
+  diagnostics.extend(result.diagnostics);
+  result.diagnostics = diagnostics;
+  let result = static_redaction_diagnostic_result_to_binding(result);
+
+  serde_json::to_string(&result).map_err(|error| to_napi_serde_error(&error))
+}
+
+#[napi]
 pub struct NativePreparedSearch {
   inner: PreparedSearch,
+  prepare_diagnostics: StaticRedactionDiagnostics,
 }
 
 #[napi]
@@ -186,9 +245,21 @@ impl NativePreparedSearch {
   pub fn new(config: JsPreparedSearchConfig) -> Result<Self> {
     let config = prepared_search_config_from_binding(to_binding_config(config))
       .map_err(|error| to_napi_contract_error(&error))?;
-    PreparedSearch::new(config)
-      .map(|inner| Self { inner })
-      .map_err(|error| to_napi_core_error(&error))
+    let result = PreparedSearch::new_with_diagnostics(config)
+      .map_err(|error| to_napi_core_error(&error))?;
+    Ok(Self {
+      inner: result.prepared,
+      prepare_diagnostics: result.diagnostics,
+    })
+  }
+
+  #[napi]
+  pub fn prepare_diagnostics_json(&self) -> Result<String> {
+    let diagnostics =
+      static_redaction_diagnostics_to_binding(self.prepare_diagnostics.clone());
+
+    serde_json::to_string(&diagnostics)
+      .map_err(|error| to_napi_serde_error(&error))
   }
 
   #[napi]
@@ -207,6 +278,25 @@ impl NativePreparedSearch {
       .map(static_redaction_result_to_binding)
       .map(to_js_static_redaction_result)
       .map_err(|error| to_napi_core_error(&error))?
+  }
+
+  #[napi]
+  #[allow(clippy::needless_pass_by_value)]
+  pub fn redact_static_entities_diagnostics_json(
+    &self,
+    full_text: String,
+    operators: Option<JsOperatorConfig>,
+  ) -> Result<String> {
+    let operators =
+      operator_config_from_binding(operators.map(to_binding_operator_config))
+        .map_err(|error| to_napi_contract_error(&error))?;
+    let result = self
+      .inner
+      .redact_static_entities_with_diagnostics(&full_text, &operators)
+      .map(static_redaction_diagnostic_result_to_binding)
+      .map_err(|error| to_napi_core_error(&error))?;
+
+    serde_json::to_string(&result).map_err(|error| to_napi_serde_error(&error))
   }
 }
 
@@ -232,6 +322,7 @@ fn to_binding_config(
         custom_labels: data.custom_labels,
         originals: data.originals,
         sources: data.sources,
+        filters: data.filters.map(to_binding_deny_list_filters),
       }
     }),
     gazetteer_data: config.gazetteer_data.map(|data| {
@@ -246,6 +337,23 @@ fn to_binding_config(
   }
 }
 
+fn to_binding_deny_list_filters(
+  filters: JsDenyListFilterData,
+) -> BindingDenyListFilterData {
+  BindingDenyListFilterData {
+    stopwords: filters.stopwords,
+    allow_list: filters.allow_list,
+    person_stopwords: filters.person_stopwords,
+    address_stopwords: filters.address_stopwords,
+    street_types: filters.street_types,
+    first_names: filters.first_names,
+    generic_roles: filters.generic_roles,
+    sentence_starters: filters.sentence_starters,
+    trailing_address_word_exclusions: filters.trailing_address_word_exclusions,
+    defined_term_cues: filters.defined_term_cues,
+  }
+}
+
 fn to_binding_patterns(
   patterns: Vec<JsSearchPattern>,
 ) -> Vec<BindingSearchPattern> {
@@ -257,6 +365,10 @@ fn to_binding_patterns(
       distance: pattern.distance,
       case_insensitive: pattern.case_insensitive,
       whole_words: pattern.whole_words,
+      lazy: pattern.lazy,
+      prefilter_any: pattern.prefilter_any,
+      prefilter_case_insensitive: pattern.prefilter_case_insensitive,
+      prefilter_regex: pattern.prefilter_regex,
     })
     .collect()
 }
@@ -304,6 +416,7 @@ fn to_binding_regex_meta(
       score: entry.score,
       source_detail: entry.source_detail,
       requires_validation: entry.requires_validation,
+      min_byte_length: entry.min_byte_length,
     })
     .collect()
 }

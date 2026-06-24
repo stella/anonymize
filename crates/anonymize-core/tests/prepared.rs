@@ -1,11 +1,11 @@
 #![allow(clippy::expect_used, clippy::indexing_slicing, clippy::unwrap_used)]
 
 use stella_anonymize_core::{
-  CountryMatchData, DenyListMatchData, DetectionSource, Error,
-  FuzzySearchOptions, GazetteerMatchData, LiteralSearchOptions, OperatorConfig,
-  PatternSlice, PreparedSearch, PreparedSearchConfig, PreparedSearchSlices,
-  RegexMatchMeta, RegexSearchOptions, SearchOptions, SearchPattern,
-  SourceDetail,
+  CountryMatchData, DenyListFilterData, DenyListMatchData, DetectionSource,
+  DiagnosticEventKind, DiagnosticStage, Error, FuzzySearchOptions,
+  GazetteerMatchData, LiteralSearchOptions, OperatorConfig, PatternSlice,
+  PreparedSearch, PreparedSearchConfig, PreparedSearchSlices, RegexMatchMeta,
+  RegexSearchOptions, SearchOptions, SearchPattern, SourceDetail,
 };
 
 fn empty_config(slices: PreparedSearchSlices) -> PreparedSearchConfig {
@@ -111,6 +111,7 @@ fn prepared_search_emits_static_detector_entities() {
       score: 1.0,
       source_detail: Some(SourceDetail::CustomRegex),
       requires_validation: false,
+      min_byte_length: None,
     }],
     deny_list_data: None,
     gazetteer_data: Some(GazetteerMatchData {
@@ -203,6 +204,75 @@ fn prepared_search_redacts_static_entities_end_to_end() {
 }
 
 #[test]
+fn prepared_search_reports_static_redaction_diagnostics() {
+  let prepared = PreparedSearch::new(PreparedSearchConfig {
+    regex_patterns: vec![SearchPattern::Regex(String::from(
+      r"\b[A-Z]{2}\d{4}\b",
+    ))],
+    custom_regex_patterns: vec![],
+    literal_patterns: vec![SearchPattern::LiteralWithOptions {
+      pattern: String::from("Acme"),
+      case_insensitive: Some(true),
+      whole_words: Some(false),
+    }],
+    regex_options: SearchOptions {
+      regex: RegexSearchOptions { whole_words: false },
+      ..SearchOptions::default()
+    },
+    custom_regex_options: SearchOptions::default(),
+    literal_options: SearchOptions {
+      literal: LiteralSearchOptions {
+        case_insensitive: true,
+        whole_words: false,
+      },
+      ..SearchOptions::default()
+    },
+    slices: PreparedSearchSlices {
+      regex: PatternSlice { start: 0, end: 1 },
+      gazetteer: PatternSlice { start: 0, end: 1 },
+      ..PreparedSearchSlices::default()
+    },
+    regex_meta: vec![RegexMatchMeta::new("registration number", 0.9)],
+    custom_regex_meta: vec![],
+    deny_list_data: None,
+    gazetteer_data: Some(GazetteerMatchData {
+      labels: vec![String::from("organization")],
+      is_fuzzy: vec![false],
+    }),
+    country_data: None,
+  })
+  .unwrap();
+
+  let result = prepared
+    .redact_static_entities_with_diagnostics(
+      "Acme s.r.o. filed AB1234.",
+      &OperatorConfig::default(),
+    )
+    .unwrap();
+
+  assert_eq!(
+    result.result.redaction.redacted_text,
+    "[ORGANIZATION_1] filed [REGISTRATION_NUMBER_1]."
+  );
+  assert!(result.diagnostics.events.iter().any(|event| {
+    event.stage == DiagnosticStage::SearchRegex
+      && event.kind == DiagnosticEventKind::StageSummary
+      && event.count == Some(1)
+  }));
+  assert!(result.diagnostics.events.iter().any(|event| {
+    event.stage == DiagnosticStage::Sanitize
+      && event.kind == DiagnosticEventKind::Entity
+      && event.label.as_deref() == Some("organization")
+      && event.span_valid == Some(true)
+  }));
+  assert!(result.diagnostics.events.iter().any(|event| {
+    event.stage == DiagnosticStage::Redaction
+      && event.kind == DiagnosticEventKind::StageSummary
+      && event.count == Some(2)
+  }));
+}
+
+#[test]
 fn prepared_search_redacts_custom_deny_list_entities() {
   let prepared = PreparedSearch::new(PreparedSearchConfig {
     regex_patterns: vec![],
@@ -232,6 +302,7 @@ fn prepared_search_redacts_custom_deny_list_entities() {
       custom_labels: vec![vec![String::from("matter")]],
       originals: vec![String::from("Secret Code")],
       sources: vec![vec![String::from("custom-deny-list")]],
+      filters: None,
     }),
     gazetteer_data: None,
     country_data: None,
@@ -294,13 +365,50 @@ fn prepared_search_rejects_unsupported_static_slices() {
 }
 
 #[test]
-fn prepared_search_rejects_curated_deny_list_sources() {
+fn prepared_search_redacts_curated_deny_list_entities() {
+  let prepared = PreparedSearch::new(PreparedSearchConfig {
+    literal_patterns: vec![SearchPattern::LiteralWithOptions {
+      pattern: String::from("Prague"),
+      case_insensitive: Some(true),
+      whole_words: Some(true),
+    }],
+    literal_options: SearchOptions {
+      literal: LiteralSearchOptions {
+        case_insensitive: true,
+        whole_words: false,
+      },
+      ..SearchOptions::default()
+    },
+    deny_list_data: Some(DenyListMatchData {
+      labels: vec![vec![String::from("address")]],
+      custom_labels: vec![vec![]],
+      originals: vec![String::from("Prague")],
+      sources: vec![vec![String::from("city")]],
+      filters: Some(DenyListFilterData::default()),
+    }),
+    ..empty_config(PreparedSearchSlices {
+      deny_list: PatternSlice { start: 0, end: 1 },
+      ..PreparedSearchSlices::default()
+    })
+  })
+  .unwrap();
+
+  let result = prepared
+    .redact_static_entities("Prague filed.", &OperatorConfig::default())
+    .unwrap();
+
+  assert_eq!(result.redaction.redacted_text, "[ADDRESS_1] filed.");
+}
+
+#[test]
+fn prepared_search_rejects_curated_deny_list_without_filters() {
   let error = PreparedSearch::new(PreparedSearchConfig {
     deny_list_data: Some(DenyListMatchData {
       labels: vec![vec![String::from("address")]],
       custom_labels: vec![vec![]],
       originals: vec![String::from("Prague")],
       sources: vec![vec![String::from("city")]],
+      filters: None,
     }),
     ..empty_config(PreparedSearchSlices {
       deny_list: PatternSlice { start: 0, end: 1 },
@@ -312,8 +420,8 @@ fn prepared_search_rejects_curated_deny_list_sources() {
 
   assert_eq!(
     error,
-    Error::UnsupportedDenyListSource {
-      source: String::from("city")
+    Error::MissingStaticData {
+      field: "deny_list.filters"
     }
   );
 }
@@ -326,6 +434,7 @@ fn prepared_search_rejects_truncated_deny_list_data() {
       custom_labels: vec![],
       originals: vec![String::from("Secret Code")],
       sources: vec![vec![String::from("custom-deny-list")]],
+      filters: None,
     }),
     ..empty_config(PreparedSearchSlices {
       deny_list: PatternSlice { start: 0, end: 1 },

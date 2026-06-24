@@ -1,11 +1,7 @@
-use std::collections::BTreeMap;
-use stella_aho_corasick_core as literal_core;
-use stella_fuzzy_search_core as fuzzy_core;
-use stella_regex_set_core as regex_core;
+use stella_text_search_core as text_search;
 
 use crate::types::{Error, Result, SearchEngine, SearchMatch};
 
-// Preserves caller pattern indexes across primitive engines.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SearchPattern {
   Literal(String),
@@ -15,6 +11,13 @@ pub enum SearchPattern {
     whole_words: Option<bool>,
   },
   Regex(String),
+  RegexWithOptions {
+    pattern: String,
+    lazy: bool,
+    prefilter_any: Vec<String>,
+    prefilter_case_insensitive: Option<bool>,
+    prefilter_regex: Option<String>,
+  },
   Fuzzy {
     pattern: String,
     distance: Option<u8>,
@@ -57,143 +60,153 @@ impl Default for FuzzySearchOptions {
 }
 
 pub struct SearchIndex {
-  literal: Vec<LiteralSlot>,
-  regex: Option<regex_core::RegexSet>,
-  regex_pattern_indexes: Vec<u32>,
-  fuzzy: Option<fuzzy_core::FuzzySearch>,
-  fuzzy_pattern_indexes: Vec<u32>,
+  slots: Vec<SearchSlot>,
 }
 
-struct LiteralSlot {
-  engine: literal_core::AhoCorasick,
+struct SearchSlot {
+  engine: SlotEngine,
+  search: text_search::TextSearch,
   pattern_indexes: Vec<u32>,
 }
 
-type LiteralPatternGroup = (Vec<String>, Vec<u32>);
+#[derive(Clone, Copy)]
+enum SlotEngine {
+  Literal,
+  Regex,
+  Fuzzy,
+}
 
 impl SearchIndex {
   pub fn new(
     patterns: Vec<SearchPattern>,
     options: SearchOptions,
   ) -> Result<Self> {
-    let mut literal_groups =
-      BTreeMap::<LiteralSearchOptions, LiteralPatternGroup>::new();
-    let mut regex_patterns = Vec::<String>::new();
-    let mut regex_pattern_indexes = Vec::<u32>::new();
-    let mut fuzzy_patterns = Vec::<fuzzy_core::PatternEntry>::new();
-    let mut fuzzy_pattern_indexes = Vec::<u32>::new();
+    let mut literals = Vec::new();
+    let mut literal_indexes = Vec::new();
+    let mut regex = Vec::new();
+    let mut regex_indexes = Vec::new();
+    let mut fuzzy = Vec::new();
+    let mut fuzzy_indexes = Vec::new();
 
     for (index, entry) in patterns.into_iter().enumerate() {
       let pattern_index = pattern_index(index)?;
       match entry {
-        SearchPattern::Literal(value) => {
-          push_literal_pattern(
-            &mut literal_groups,
-            options.literal,
-            value,
-            pattern_index,
-          );
+        SearchPattern::Literal(pattern) => {
+          literals.push(text_search::PatternEntry::Literal(
+            text_search::LiteralPattern {
+              pattern,
+              name: None,
+              case_insensitive: None,
+              whole_words: None,
+            },
+          ));
+          literal_indexes.push(pattern_index);
         }
         SearchPattern::LiteralWithOptions {
           pattern,
           case_insensitive,
           whole_words,
         } => {
-          push_literal_pattern(
-            &mut literal_groups,
-            LiteralSearchOptions {
-              case_insensitive: case_insensitive
-                .unwrap_or(options.literal.case_insensitive),
-              whole_words: whole_words.unwrap_or(options.literal.whole_words),
+          literals.push(text_search::PatternEntry::Literal(
+            text_search::LiteralPattern {
+              pattern,
+              name: None,
+              case_insensitive,
+              whole_words,
             },
-            pattern,
-            pattern_index,
-          );
+          ));
+          literal_indexes.push(pattern_index);
         }
-        SearchPattern::Regex(value) => {
-          regex_patterns.push(value);
-          regex_pattern_indexes.push(pattern_index);
+        SearchPattern::Regex(pattern) => {
+          regex.push(text_search::PatternEntry::Regex(
+            text_search::RegexPattern::new(pattern),
+          ));
+          regex_indexes.push(pattern_index);
         }
-        SearchPattern::Fuzzy {
-          pattern: fuzzy_pattern,
-          distance,
+        SearchPattern::RegexWithOptions {
+          pattern,
+          lazy,
+          prefilter_any,
+          prefilter_case_insensitive,
+          prefilter_regex,
         } => {
-          fuzzy_patterns.push(fuzzy_core::PatternEntry {
-            pattern: fuzzy_pattern,
-            distance,
-          });
-          fuzzy_pattern_indexes.push(pattern_index);
+          let mut regex_pattern = text_search::RegexPattern::new(pattern);
+          regex_pattern.lazy = lazy;
+          regex_pattern.prefilter_any = prefilter_any;
+          regex_pattern.prefilter_case_insensitive = prefilter_case_insensitive;
+          regex_pattern.prefilter_regex = prefilter_regex;
+          regex.push(text_search::PatternEntry::Regex(regex_pattern));
+          regex_indexes.push(pattern_index);
+        }
+        SearchPattern::Fuzzy { pattern, distance } => {
+          fuzzy.push(text_search::PatternEntry::Fuzzy(
+            text_search::FuzzyPattern::new(
+              pattern,
+              distance.map_or(
+                text_search::FuzzyDistance::Auto,
+                text_search::FuzzyDistance::Exact,
+              ),
+            ),
+          ));
+          fuzzy_indexes.push(pattern_index);
         }
       }
     }
 
-    let literal = build_literal_slots(literal_groups)?;
-    let regex = build_regex(regex_patterns, options.regex)?;
-    let fuzzy = build_fuzzy(fuzzy_patterns, options.fuzzy)?;
-
-    Ok(Self {
-      literal,
+    let mut slots = Vec::new();
+    push_slot(
+      &mut slots,
+      SlotEngine::Literal,
+      literals,
+      literal_indexes,
+      literal_options(options.literal),
+    )?;
+    push_slot(
+      &mut slots,
+      SlotEngine::Regex,
       regex,
-      regex_pattern_indexes,
+      regex_indexes,
+      regex_options(options.regex),
+    )?;
+    push_slot(
+      &mut slots,
+      SlotEngine::Fuzzy,
       fuzzy,
-      fuzzy_pattern_indexes,
-    })
+      fuzzy_indexes,
+      fuzzy_options(options.fuzzy),
+    )?;
+
+    Ok(Self { slots })
   }
 
   pub fn find_iter(&self, haystack: &str) -> Result<Vec<SearchMatch>> {
     let mut matches = Vec::new();
-
-    for slot in &self.literal {
-      // Downstream merge priority chooses among overlaps.
-      extend_triple_matches(
-        &mut matches,
-        SearchEngine::Literal,
-        &slot.pattern_indexes,
-        &slot
-          .engine
-          .find_overlapping_iter_packed(haystack)
-          .map_err(|err| Error::Search {
-            engine: SearchEngine::Literal,
-            reason: err.to_string(),
-          })?,
-        |pattern, start, end| SearchMatch::Literal {
-          pattern,
-          start,
-          end,
-        },
-      )?;
-    }
-
-    if let Some(regex) = &self.regex {
-      extend_triple_matches(
-        &mut matches,
-        SearchEngine::Regex,
-        &self.regex_pattern_indexes,
-        &regex
-          .find_iter_packed(haystack)
-          .map_err(|err| Error::Search {
-            engine: SearchEngine::Regex,
-            reason: err.to_string(),
-          })?,
-        |pattern, start, end| SearchMatch::Regex {
-          pattern,
-          start,
-          end,
-        },
-      )?;
-    }
-
-    if let Some(fuzzy) = &self.fuzzy {
-      extend_fuzzy_matches(
-        &mut matches,
-        &self.fuzzy_pattern_indexes,
-        &fuzzy
-          .find_iter_packed(haystack)
-          .map_err(|err| Error::Search {
-            engine: SearchEngine::Fuzzy,
-            reason: err.to_string(),
-          })?,
-      )?;
+    for slot in &self.slots {
+      for found in slot
+        .search
+        .find_iter(haystack)
+        .map_err(|error| search_error(&error))?
+      {
+        let pattern = remap_pattern(slot, found.pattern)?;
+        matches.push(match slot.engine {
+          SlotEngine::Literal => SearchMatch::Literal {
+            pattern,
+            start: found.start,
+            end: found.end,
+          },
+          SlotEngine::Regex => SearchMatch::Regex {
+            pattern,
+            start: found.start,
+            end: found.end,
+          },
+          SlotEngine::Fuzzy => SearchMatch::Fuzzy {
+            pattern,
+            start: found.start,
+            end: found.end,
+            distance: found.distance.unwrap_or(0),
+          },
+        });
+      }
     }
 
     matches.sort_by(|left, right| {
@@ -207,222 +220,103 @@ impl SearchIndex {
   }
 
   pub fn is_match(&self, haystack: &str) -> Result<bool> {
-    for slot in &self.literal {
+    for slot in &self.slots {
       if slot
-        .engine
+        .search
         .is_match(haystack)
-        .map_err(|err| Error::Search {
-          engine: SearchEngine::Literal,
-          reason: err.to_string(),
-        })?
+        .map_err(|error| search_error(&error))?
       {
         return Ok(true);
       }
-    }
-
-    if let Some(regex) = &self.regex
-      && regex.is_match(haystack)
-    {
-      return Ok(true);
-    }
-
-    if let Some(fuzzy) = &self.fuzzy
-      && fuzzy.is_match(haystack).map_err(|err| Error::Search {
-        engine: SearchEngine::Fuzzy,
-        reason: err.to_string(),
-      })?
-    {
-      return Ok(true);
     }
 
     Ok(false)
   }
 }
 
-fn push_literal_pattern(
-  groups: &mut BTreeMap<LiteralSearchOptions, LiteralPatternGroup>,
-  options: LiteralSearchOptions,
-  pattern: String,
-  pattern_index: u32,
-) {
-  let (patterns, pattern_indexes) = groups.entry(options).or_default();
-  patterns.push(pattern);
-  pattern_indexes.push(pattern_index);
+fn push_slot(
+  slots: &mut Vec<SearchSlot>,
+  engine: SlotEngine,
+  patterns: Vec<text_search::PatternEntry>,
+  pattern_indexes: Vec<u32>,
+  options: text_search::TextSearchOptions,
+) -> Result<()> {
+  if patterns.is_empty() {
+    return Ok(());
+  }
+
+  let search = text_search::TextSearch::new(patterns, options)
+    .map_err(|error| search_error(&error))?;
+  slots.push(SearchSlot {
+    engine,
+    search,
+    pattern_indexes,
+  });
+  Ok(())
 }
 
-fn build_literal_slots(
-  groups: BTreeMap<LiteralSearchOptions, LiteralPatternGroup>,
-) -> Result<Vec<LiteralSlot>> {
-  let mut slots = Vec::new();
+fn literal_options(
+  options: LiteralSearchOptions,
+) -> text_search::TextSearchOptions {
+  text_search::TextSearchOptions {
+    case_insensitive: options.case_insensitive,
+    whole_words: options.whole_words,
+    overlap_strategy: text_search::OverlapStrategy::All,
+    ..text_search::TextSearchOptions::default()
+  }
+}
 
-  for (options, (patterns, pattern_indexes)) in groups {
-    if let Some(engine) = build_literal(patterns, options)? {
-      slots.push(LiteralSlot {
-        engine,
-        pattern_indexes,
-      });
+fn regex_options(
+  options: RegexSearchOptions,
+) -> text_search::TextSearchOptions {
+  text_search::TextSearchOptions {
+    whole_words: options.whole_words,
+    ..text_search::TextSearchOptions::default()
+  }
+}
+
+fn fuzzy_options(
+  options: FuzzySearchOptions,
+) -> text_search::TextSearchOptions {
+  text_search::TextSearchOptions {
+    case_insensitive: options.case_insensitive,
+    whole_words: options.whole_words,
+    normalize_diacritics: options.normalize_diacritics,
+    ..text_search::TextSearchOptions::default()
+  }
+}
+
+fn remap_pattern(slot: &SearchSlot, local_pattern: u32) -> Result<u32> {
+  let index = usize::try_from(local_pattern).map_err(|_| {
+    Error::PatternIndexNotAddressable {
+      pattern: local_pattern,
+    }
+  })?;
+  slot
+    .pattern_indexes
+    .get(index)
+    .copied()
+    .ok_or_else(|| Error::Search {
+      engine: slot.engine.into(),
+      reason: format!("Missing pattern map entry for {local_pattern}"),
+    })
+}
+
+fn search_error(error: &text_search::Error) -> Error {
+  Error::Search {
+    engine: SearchEngine::Text,
+    reason: error.to_string(),
+  }
+}
+
+impl From<SlotEngine> for SearchEngine {
+  fn from(value: SlotEngine) -> Self {
+    match value {
+      SlotEngine::Literal => Self::Literal,
+      SlotEngine::Regex => Self::Regex,
+      SlotEngine::Fuzzy => Self::Fuzzy,
     }
   }
-
-  Ok(slots)
-}
-
-fn build_literal(
-  patterns: Vec<String>,
-  options: LiteralSearchOptions,
-) -> Result<Option<literal_core::AhoCorasick>> {
-  if patterns.is_empty() {
-    return Ok(None);
-  }
-
-  literal_core::AhoCorasick::new(
-    patterns,
-    literal_core::Options {
-      match_kind: literal_core::MatchKind::LeftmostFirst,
-      case_insensitive: options.case_insensitive,
-      dfa: false,
-      whole_words: options.whole_words,
-    },
-  )
-  .map(Some)
-  .map_err(|err| Error::Search {
-    engine: SearchEngine::Literal,
-    reason: err.to_string(),
-  })
-}
-
-fn build_regex(
-  patterns: Vec<String>,
-  options: RegexSearchOptions,
-) -> Result<Option<regex_core::RegexSet>> {
-  if patterns.is_empty() {
-    return Ok(None);
-  }
-
-  regex_core::RegexSet::new(
-    patterns,
-    regex_core::Options {
-      whole_words: options.whole_words,
-      unicode_boundaries: true,
-    },
-  )
-  .map(Some)
-  .map_err(|err| Error::Search {
-    engine: SearchEngine::Regex,
-    reason: err.to_string(),
-  })
-}
-
-fn build_fuzzy(
-  patterns: Vec<fuzzy_core::PatternEntry>,
-  options: FuzzySearchOptions,
-) -> Result<Option<fuzzy_core::FuzzySearch>> {
-  if patterns.is_empty() {
-    return Ok(None);
-  }
-
-  fuzzy_core::FuzzySearch::new(
-    patterns,
-    fuzzy_core::Options {
-      metric: fuzzy_core::Metric::Levenshtein,
-      normalize_diacritics: options.normalize_diacritics,
-      unicode_boundaries: true,
-      whole_words: options.whole_words,
-      case_insensitive: options.case_insensitive,
-    },
-  )
-  .map(Some)
-  .map_err(|err| Error::Search {
-    engine: SearchEngine::Fuzzy,
-    reason: err.to_string(),
-  })
-}
-
-fn extend_triple_matches(
-  matches: &mut Vec<SearchMatch>,
-  engine: SearchEngine,
-  pattern_indexes: &[u32],
-  packed: &[u32],
-  make_match: impl Fn(u32, u32, u32) -> SearchMatch,
-) -> Result<()> {
-  let chunks = packed.chunks_exact(3);
-  if !chunks.remainder().is_empty() {
-    return Err(invalid_packed_search_result(engine, packed.len()));
-  }
-
-  for chunk in chunks {
-    let [local_pattern, start, end] = chunk else {
-      return Err(invalid_packed_search_result(engine, packed.len()));
-    };
-    let pattern = pattern_index_from_packed(
-      engine,
-      pattern_indexes,
-      *local_pattern,
-      packed.len(),
-    )?;
-
-    matches.push(make_match(pattern, *start, *end));
-  }
-
-  Ok(())
-}
-
-fn extend_fuzzy_matches(
-  matches: &mut Vec<SearchMatch>,
-  pattern_indexes: &[u32],
-  packed: &[u32],
-) -> Result<()> {
-  let chunks = packed.chunks_exact(4);
-  if !chunks.remainder().is_empty() {
-    return Err(invalid_packed_search_result(
-      SearchEngine::Fuzzy,
-      packed.len(),
-    ));
-  }
-
-  for chunk in chunks {
-    let [local_pattern, start, end, distance] = chunk else {
-      return Err(invalid_packed_search_result(
-        SearchEngine::Fuzzy,
-        packed.len(),
-      ));
-    };
-    let pattern = pattern_index_from_packed(
-      SearchEngine::Fuzzy,
-      pattern_indexes,
-      *local_pattern,
-      packed.len(),
-    )?;
-
-    matches.push(SearchMatch::Fuzzy {
-      pattern,
-      start: *start,
-      end: *end,
-      distance: *distance,
-    });
-  }
-
-  Ok(())
-}
-
-fn pattern_index_from_packed(
-  engine: SearchEngine,
-  pattern_indexes: &[u32],
-  local_pattern: u32,
-  len: usize,
-) -> Result<u32> {
-  usize::try_from(local_pattern)
-    .ok()
-    .and_then(|index| pattern_indexes.get(index))
-    .copied()
-    .ok_or_else(|| invalid_packed_search_result(engine, len))
-}
-
-const fn invalid_packed_search_result(
-  engine: SearchEngine,
-  len: usize,
-) -> Error {
-  Error::InvalidPackedSearchResult { engine, len }
 }
 
 fn pattern_index(index: usize) -> Result<u32> {

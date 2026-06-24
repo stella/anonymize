@@ -76,6 +76,26 @@ const escapeRegexPhrase = (s: string): string =>
 /** Escape for use inside a regex character class. */
 const escapeCharClass = (s: string): string => s.replace(/[\]\\^-]/g, "\\$&");
 
+const utf8ByteLength = (text: string): number => {
+  let length = 0;
+  for (const char of text) {
+    const codePoint = char.codePointAt(0);
+    if (codePoint === undefined) {
+      continue;
+    }
+    if (codePoint <= 0x7f) {
+      length += 1;
+    } else if (codePoint <= 0x7ff) {
+      length += 2;
+    } else if (codePoint <= 0xffff) {
+      length += 3;
+    } else {
+      length += 4;
+    }
+  }
+  return length;
+};
+
 const toSortedAlternation = (values: readonly string[]): string =>
   [
     ...new Set(
@@ -141,6 +161,7 @@ export type RegexMeta = {
   label: string;
   score: number;
   sourceDetail?: Entity["sourceDetail"];
+  minByteLength?: number;
   /** Post-match stdnum validator for confirmation. */
   validator?: Validator;
   /** Extract the identifier portion when context is part of the regex span. */
@@ -151,6 +172,7 @@ type RegexDef = {
   pattern: string;
   label: string;
   score: number;
+  minByteLength?: number;
   validator?: Validator;
   validatorInput?: (text: string) => string;
 };
@@ -468,6 +490,7 @@ const INTL_PHONE: RegexDef = {
     `(?:[^\\S\\n]|[.\\-])?\\d{0,4}\\b`,
   label: "phone number",
   score: 1,
+  minByteLength: MIN_PHONE_LENGTH,
 };
 
 // Czech phone numbers: mobiles start with 6/7,
@@ -483,6 +506,7 @@ const CZ_PHONE: RegexDef = {
     `(?![^\\S\\n]*(?:Kč|,-|korun|EUR|USD|€|\\$))\\b`,
   label: "phone number",
   score: 0.85,
+  minByteLength: MIN_PHONE_LENGTH,
 };
 
 /**
@@ -498,6 +522,7 @@ const TEL_PREFIX_PHONE: RegexDef = {
     `(?:[^\\S\\n]|[.\\-])?\\d{3}\\b`,
   label: "phone number",
   score: 0.95,
+  minByteLength: MIN_PHONE_LENGTH,
 };
 
 /**
@@ -518,6 +543,7 @@ const US_PAREN_PHONE: RegexDef = {
     `\\(\\d{3}\\)(?:[^\\S\\n]|[.\\-])?\\d{3}` + `(?:[^\\S\\n]|[.\\-])\\d{4}\\b`,
   label: "phone number",
   score: 0.9,
+  minByteLength: MIN_PHONE_LENGTH,
 };
 
 const CREDIT_CARD: RegexDef = {
@@ -597,6 +623,7 @@ const HU_LANDLINE: RegexDef = {
     `(?:[^\\S\\n]|[.\\-])?\\d{4}\\b`,
   label: "phone number",
   score: 0.9,
+  minByteLength: MIN_PHONE_LENGTH,
 };
 
 // Czech license plates (SPZ/RZ).
@@ -1138,6 +1165,9 @@ export const REGEX_META: readonly RegexMeta[] = ALL_REGEX_DEFS.map(
     };
     if (d.validator) {
       meta.validator = d.validator;
+    }
+    if (d.minByteLength) {
+      meta.minByteLength = d.minByteLength;
     }
     if (d.validatorInput) {
       meta.validatorInput = d.validatorInput;
@@ -1777,8 +1807,8 @@ export const processRegexMatches = (
     }
     if (
       meta.sourceDetail !== "custom-regex" &&
-      meta.label === "phone number" &&
-      match.text.length < MIN_PHONE_LENGTH
+      meta.minByteLength !== undefined &&
+      utf8ByteLength(match.text) < meta.minByteLength
     ) {
       continue;
     }

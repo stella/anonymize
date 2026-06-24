@@ -25,13 +25,13 @@ fn entity_with_display_text(
   let prefix = text
     .get(..byte_start)
     .unwrap_or_else(|| panic!("invalid fixture boundary: {byte_start}"));
-  let start = utf16_len(prefix);
-  let end = start.saturating_add(utf16_len(value));
+  let start = byte_len(prefix);
+  let end = start.saturating_add(byte_len(value));
   Entity::detected(start, end, label, display_text)
 }
 
-fn utf16_len(text: &str) -> u32 {
-  u32::try_from(text.encode_utf16().count()).unwrap_or(u32::MAX)
+fn byte_len(text: &str) -> u32 {
+  u32::try_from(text.len()).unwrap_or(u32::MAX)
 }
 
 #[test]
@@ -237,10 +237,10 @@ fn redact_operator_is_not_reversible() {
 }
 
 #[test]
-fn utf16_offsets_apply_non_ascii_spans() {
+fn byte_offsets_apply_non_ascii_spans() {
   let text = "A 🦀 Bob";
-  let start = 5;
-  let end = 8;
+  let start = byte_len("A 🦀 ");
+  let end = start.saturating_add(byte_len("Bob"));
   let entities = vec![Entity::detected(start, end, "person", "Bob")];
 
   let result =
@@ -282,14 +282,14 @@ fn detected_placeholder_identity_uses_sanitized_text() {
 }
 
 #[test]
-fn invalid_utf16_boundary_is_rejected() {
+fn invalid_byte_boundary_is_rejected() {
   let text = "A 🦀 Bob";
   let entities = vec![Entity::detected(3, 5, "person", " Bob")];
 
   let error = redact_text(text, &entities, &OperatorConfig::default())
     .expect_err("offset inside a surrogate pair must fail");
 
-  assert_eq!(error, Error::Utf16OffsetInsideSurrogate { offset: 3 });
+  assert_eq!(error, Error::ByteOffsetInsideCodepoint { offset: 3 });
 }
 
 #[test]
