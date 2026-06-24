@@ -57,6 +57,12 @@ const CONFIG_JSON = JSON.stringify({
   literal_patterns: [
     {
       kind: "literal-with-options",
+      pattern: "Secret Code",
+      case_insensitive: true,
+      whole_words: true,
+    },
+    {
+      kind: "literal-with-options",
       pattern: "Acme",
       case_insensitive: true,
       whole_words: false,
@@ -81,13 +87,20 @@ const CONFIG_JSON = JSON.stringify({
   slices: {
     regex: { start: 0, end: 1 },
     custom_regex: { start: 0, end: 1 },
-    gazetteer: { start: 0, end: 2 },
-    countries: { start: 2, end: 3 },
+    deny_list: { start: 0, end: 1 },
+    gazetteer: { start: 1, end: 3 },
+    countries: { start: 3, end: 4 },
   },
   regex_meta: [{ label: "registration number", score: 0.9 }],
   custom_regex_meta: [
     { label: "matter id", score: 1, source_detail: "custom-regex" },
   ],
+  deny_list_data: {
+    labels: [["matter"]],
+    custom_labels: [["matter"]],
+    originals: ["Secret Code"],
+    sources: [["custom-deny-list"]],
+  },
   gazetteer_data: {
     labels: ["organization", "address"],
     is_fuzzy: [false, true],
@@ -180,6 +193,7 @@ const operatorsArb = fc.option(
     { country: "redact" },
     { address: "redact", country: "redact" },
     { "matter id": "redact" },
+    { matter: "redact" },
   ),
   { nil: null },
 );
@@ -198,7 +212,8 @@ const generatedCaseArb: fc.Arbitrary<GeneratedNativeCase> = fc
     ({ left, middle, right, registration, matter, fuzzyPlace, operators }) => {
       const text =
         `${left}Reference ${registration} for Acme s.r.o. near ` +
-        `${fuzzyPlace}, Turkey, matter ${matter}.${middle}${right}`;
+        `${fuzzyPlace}, Turkey, matter ${matter}, code Secret Code.` +
+        `${middle}${right}`;
       return {
         text,
         operators,
@@ -208,6 +223,7 @@ const generatedCaseArb: fc.Arbitrary<GeneratedNativeCase> = fc
           fuzzyPlace,
           "Turkey",
           matter,
+          "Secret Code",
         ],
       };
     },
@@ -243,7 +259,7 @@ describe("native adapter parity", () => {
           for (const [index, item] of cases.entries()) {
             const result = tsResults.at(index);
             expect(result).toBeDefined();
-            expect(result?.redaction.entity_count).toBe(5);
+            expect(result?.redaction.entity_count).toBe(6);
             for (const value of item.sensitiveValues) {
               expect(result?.redaction.redacted_text).not.toContain(value);
             }
