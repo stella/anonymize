@@ -2,13 +2,15 @@ use std::collections::BTreeMap;
 
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
-use stella_anonymize_core::{
-  CountryMatchData, DetectionSource, FuzzySearchOptions, GazetteerMatchData,
-  LiteralSearchOptions, OperatorConfig, OperatorType, PatternSlice,
-  PreparedSearch, PreparedSearchConfig, PreparedSearchSlices, RegexMatchMeta,
-  RegexSearchOptions, SearchOptions, SearchPattern, SourceDetail,
-  StaticRedactionResult,
+use stella_anonymize_adapter_contract::{
+  BindingCountryMatchData, BindingGazetteerMatchData, BindingOperatorConfig,
+  BindingOperatorEntry, BindingPatternSlice, BindingPreparedSearchConfig,
+  BindingPreparedSearchSlices, BindingRedactionResult, BindingRegexMatchMeta,
+  BindingSearchOptions, BindingSearchPattern, BindingStaticRedactionResult,
+  ContractError, operator_config_from_binding,
+  prepared_search_config_from_binding, static_redaction_result_to_binding,
 };
+use stella_anonymize_core::PreparedSearch;
 
 #[napi(object)]
 pub struct JsSearchPattern {
@@ -132,6 +134,38 @@ pub fn normalize_for_search(text: String) -> String {
 }
 
 #[napi]
+#[allow(clippy::needless_pass_by_value)]
+pub fn redact_static_entities_json(
+  config_json: String,
+  full_text: String,
+  operators_json: Option<String>,
+) -> Result<String> {
+  let config =
+    serde_json::from_str::<BindingPreparedSearchConfig>(&config_json)
+      .map_err(|error| to_napi_serde_error(&error))?;
+  let operators = operators_json
+    .as_deref()
+    .map(serde_json::from_str::<BindingOperatorConfig>)
+    .transpose()
+    .map_err(|error| to_napi_serde_error(&error))?;
+  let prepared = PreparedSearch::new(
+    prepared_search_config_from_binding(config)
+      .map_err(|error| to_napi_contract_error(&error))?,
+  )
+  .map_err(|error| to_napi_core_error(&error))?;
+  let result = prepared
+    .redact_static_entities(
+      &full_text,
+      &operator_config_from_binding(operators)
+        .map_err(|error| to_napi_contract_error(&error))?,
+    )
+    .map(static_redaction_result_to_binding)
+    .map_err(|error| to_napi_core_error(&error))?;
+
+  serde_json::to_string(&result).map_err(|error| to_napi_serde_error(&error))
+}
+
+#[napi]
 pub struct NativePreparedSearch {
   inner: PreparedSearch,
 }
@@ -140,9 +174,11 @@ pub struct NativePreparedSearch {
 impl NativePreparedSearch {
   #[napi(constructor)]
   pub fn new(config: JsPreparedSearchConfig) -> Result<Self> {
-    PreparedSearch::new(to_prepared_search_config(config)?)
+    let config = prepared_search_config_from_binding(to_binding_config(config))
+      .map_err(|error| to_napi_contract_error(&error))?;
+    PreparedSearch::new(config)
       .map(|inner| Self { inner })
-      .map_err(|error| to_napi_error(&error))
+      .map_err(|error| to_napi_core_error(&error))
   }
 
   #[napi]
@@ -152,168 +188,121 @@ impl NativePreparedSearch {
     full_text: String,
     operators: Option<JsOperatorConfig>,
   ) -> Result<JsStaticRedactionResult> {
-    let operator_config = to_operator_config(operators)?;
+    let operators =
+      operator_config_from_binding(operators.map(to_binding_operator_config))
+        .map_err(|error| to_napi_contract_error(&error))?;
     self
       .inner
-      .redact_static_entities(&full_text, &operator_config)
-      .map(to_static_redaction_result)
-      .map_err(|error| to_napi_error(&error))
+      .redact_static_entities(&full_text, &operators)
+      .map(static_redaction_result_to_binding)
+      .map(to_js_static_redaction_result)
+      .map_err(|error| to_napi_core_error(&error))?
   }
 }
 
-fn to_prepared_search_config(
+fn to_binding_config(
   config: JsPreparedSearchConfig,
-) -> Result<PreparedSearchConfig> {
-  Ok(PreparedSearchConfig {
-    regex_patterns: to_search_patterns(config.regex_patterns)?,
-    custom_regex_patterns: to_search_patterns(config.custom_regex_patterns)?,
-    literal_patterns: to_search_patterns(config.literal_patterns)?,
-    regex_options: to_search_options(config.regex_options),
-    custom_regex_options: to_search_options(config.custom_regex_options),
-    literal_options: to_search_options(config.literal_options),
-    slices: to_slices(config.slices),
-    regex_meta: to_regex_meta(config.regex_meta),
-    custom_regex_meta: to_regex_meta(config.custom_regex_meta),
-    gazetteer_data: config.gazetteer_data.map(|data| GazetteerMatchData {
-      labels: data.labels,
-      is_fuzzy: data.is_fuzzy,
+) -> BindingPreparedSearchConfig {
+  BindingPreparedSearchConfig {
+    regex_patterns: to_binding_patterns(config.regex_patterns),
+    custom_regex_patterns: to_binding_patterns(config.custom_regex_patterns),
+    literal_patterns: to_binding_patterns(config.literal_patterns),
+    regex_options: config.regex_options.as_ref().map(to_binding_options),
+    custom_regex_options: config
+      .custom_regex_options
+      .as_ref()
+      .map(to_binding_options),
+    literal_options: config.literal_options.as_ref().map(to_binding_options),
+    slices: to_binding_slices(&config.slices),
+    regex_meta: to_binding_regex_meta(config.regex_meta),
+    custom_regex_meta: to_binding_regex_meta(config.custom_regex_meta),
+    gazetteer_data: config.gazetteer_data.map(|data| {
+      BindingGazetteerMatchData {
+        labels: data.labels,
+        is_fuzzy: data.is_fuzzy,
+      }
     }),
-    country_data: config.country_data.map(|data| CountryMatchData {
+    country_data: config.country_data.map(|data| BindingCountryMatchData {
       labels: data.labels,
     }),
-  })
+  }
 }
 
-fn to_search_patterns(
+fn to_binding_patterns(
   patterns: Vec<JsSearchPattern>,
-) -> Result<Vec<SearchPattern>> {
+) -> Vec<BindingSearchPattern> {
   patterns
     .into_iter()
-    .map(|pattern| match pattern.kind.as_str() {
-      "literal" => Ok(SearchPattern::Literal(pattern.pattern)),
-      "literal-with-options" => Ok(SearchPattern::LiteralWithOptions {
-        pattern: pattern.pattern,
-        case_insensitive: pattern.case_insensitive,
-        whole_words: pattern.whole_words,
-      }),
-      "regex" => Ok(SearchPattern::Regex(pattern.pattern)),
-      "fuzzy" => Ok(SearchPattern::Fuzzy {
-        pattern: pattern.pattern,
-        distance: pattern
-          .distance
-          .map(|distance| {
-            u8::try_from(distance).map_err(|_| {
-              Error::from_reason(format!(
-                "Fuzzy distance exceeds u8 range: {distance}"
-              ))
-            })
-          })
-          .transpose()?,
-      }),
-      _ => Err(Error::from_reason(format!(
-        "Unsupported search pattern kind: {}",
-        pattern.kind
-      ))),
+    .map(|pattern| BindingSearchPattern {
+      kind: pattern.kind,
+      pattern: pattern.pattern,
+      distance: pattern.distance,
+      case_insensitive: pattern.case_insensitive,
+      whole_words: pattern.whole_words,
     })
     .collect()
 }
 
-fn to_search_options(options: Option<JsSearchOptions>) -> SearchOptions {
-  let Some(options) = options else {
-    return SearchOptions::default();
-  };
-
-  SearchOptions {
-    literal: LiteralSearchOptions {
-      case_insensitive: options.literal_case_insensitive.unwrap_or(false),
-      whole_words: options.literal_whole_words.unwrap_or(false),
-    },
-    regex: RegexSearchOptions {
-      whole_words: options.regex_whole_words.unwrap_or(false),
-    },
-    fuzzy: FuzzySearchOptions {
-      case_insensitive: options.fuzzy_case_insensitive.unwrap_or(false),
-      whole_words: options.fuzzy_whole_words.unwrap_or(true),
-      normalize_diacritics: options.fuzzy_normalize_diacritics.unwrap_or(false),
-    },
+const fn to_binding_options(options: &JsSearchOptions) -> BindingSearchOptions {
+  BindingSearchOptions {
+    literal_case_insensitive: options.literal_case_insensitive,
+    literal_whole_words: options.literal_whole_words,
+    regex_whole_words: options.regex_whole_words,
+    fuzzy_case_insensitive: options.fuzzy_case_insensitive,
+    fuzzy_whole_words: options.fuzzy_whole_words,
+    fuzzy_normalize_diacritics: options.fuzzy_normalize_diacritics,
   }
 }
 
-fn to_slices(slices: JsPreparedSearchSlices) -> PreparedSearchSlices {
-  PreparedSearchSlices {
-    regex: to_slice(slices.regex),
-    custom_regex: to_slice(slices.custom_regex),
-    legal_forms: to_slice(slices.legal_forms),
-    triggers: to_slice(slices.triggers),
-    deny_list: to_slice(slices.deny_list),
-    street_types: to_slice(slices.street_types),
-    gazetteer: to_slice(slices.gazetteer),
-    countries: to_slice(slices.countries),
+fn to_binding_slices(
+  slices: &JsPreparedSearchSlices,
+) -> BindingPreparedSearchSlices {
+  BindingPreparedSearchSlices {
+    regex: slices.regex.as_ref().map(to_binding_slice),
+    custom_regex: slices.custom_regex.as_ref().map(to_binding_slice),
+    legal_forms: slices.legal_forms.as_ref().map(to_binding_slice),
+    triggers: slices.triggers.as_ref().map(to_binding_slice),
+    deny_list: slices.deny_list.as_ref().map(to_binding_slice),
+    street_types: slices.street_types.as_ref().map(to_binding_slice),
+    gazetteer: slices.gazetteer.as_ref().map(to_binding_slice),
+    countries: slices.countries.as_ref().map(to_binding_slice),
   }
 }
 
-fn to_slice(slice: Option<JsPatternSlice>) -> PatternSlice {
-  slice.map_or_else(PatternSlice::default, |slice| PatternSlice {
+const fn to_binding_slice(slice: &JsPatternSlice) -> BindingPatternSlice {
+  BindingPatternSlice {
     start: slice.start,
     end: slice.end,
-  })
+  }
 }
 
-fn to_regex_meta(meta: Vec<JsRegexMatchMeta>) -> Vec<RegexMatchMeta> {
+fn to_binding_regex_meta(
+  meta: Vec<JsRegexMatchMeta>,
+) -> Vec<BindingRegexMatchMeta> {
   meta
     .into_iter()
-    .map(|entry| RegexMatchMeta {
+    .map(|entry| BindingRegexMatchMeta {
       label: entry.label,
       score: entry.score,
-      source_detail: entry.source_detail.as_deref().and_then(to_source_detail),
-      requires_validation: entry.requires_validation.unwrap_or(false),
+      source_detail: entry.source_detail,
+      requires_validation: entry.requires_validation,
     })
     .collect()
 }
 
-fn to_source_detail(value: &str) -> Option<SourceDetail> {
-  match value {
-    "custom-deny-list" => Some(SourceDetail::CustomDenyList),
-    "custom-regex" => Some(SourceDetail::CustomRegex),
-    "gazetteer-extension" => Some(SourceDetail::GazetteerExtension),
-    _ => None,
+fn to_binding_operator_config(
+  config: JsOperatorConfig,
+) -> BindingOperatorConfig {
+  BindingOperatorConfig {
+    operators: config.operators,
+    redact_string: config.redact_string,
   }
 }
 
-fn to_operator_config(
-  config: Option<JsOperatorConfig>,
-) -> Result<OperatorConfig> {
-  let Some(config) = config else {
-    return Ok(OperatorConfig::default());
-  };
-
-  let mut operators = BTreeMap::new();
-  for (label, value) in config.operators.unwrap_or_default() {
-    operators.insert(label, to_operator_type(&value)?);
-  }
-
-  Ok(OperatorConfig {
-    operators,
-    redact_string: config
-      .redact_string
-      .unwrap_or_else(|| String::from("[REDACTED]")),
-  })
-}
-
-fn to_operator_type(value: &str) -> Result<OperatorType> {
-  match value {
-    "replace" => Ok(OperatorType::Replace),
-    "redact" => Ok(OperatorType::Redact),
-    _ => Err(Error::from_reason(format!(
-      "Unsupported anonymization operator: {value}"
-    ))),
-  }
-}
-
-fn to_static_redaction_result(
-  result: StaticRedactionResult,
-) -> JsStaticRedactionResult {
-  JsStaticRedactionResult {
+fn to_js_static_redaction_result(
+  result: BindingStaticRedactionResult,
+) -> Result<JsStaticRedactionResult> {
+  Ok(JsStaticRedactionResult {
     resolved_entities: result
       .resolved_entities
       .into_iter()
@@ -323,67 +312,57 @@ fn to_static_redaction_result(
         label: entity.label,
         text: entity.text,
         score: entity.score,
-        source: detection_source_name(entity.source),
-        source_detail: entity.source_detail.map(source_detail_name),
+        source: entity.source,
+        source_detail: entity.source_detail,
       })
       .collect(),
-    redaction: JsRedactionResult {
-      redacted_text: result.redaction.redacted_text,
-      redaction_map: result
-        .redaction
-        .redaction_map
-        .into_iter()
-        .map(|entry| JsRedactionEntry {
-          placeholder: entry.placeholder,
-          original: entry.original,
-        })
-        .collect(),
-      operator_map: result
-        .redaction
-        .operator_map
-        .into_iter()
-        .map(|entry| JsOperatorEntry {
-          placeholder: entry.placeholder,
-          operator: operator_name(entry.operator),
-        })
-        .collect(),
-      entity_count: u32::try_from(result.redaction.entity_count)
-        .unwrap_or(u32::MAX),
-    },
-  }
+    redaction: to_js_redaction_result(result.redaction)?,
+  })
 }
 
-fn detection_source_name(source: DetectionSource) -> String {
-  match source {
-    DetectionSource::Trigger => "trigger",
-    DetectionSource::Regex => "regex",
-    DetectionSource::DenyList => "deny-list",
-    DetectionSource::LegalForm => "legal-form",
-    DetectionSource::Gazetteer => "gazetteer",
-    DetectionSource::Country => "country",
-    DetectionSource::Ner => "ner",
-    DetectionSource::Coreference => "coreference",
-  }
-  .to_owned()
+fn to_js_redaction_result(
+  result: BindingRedactionResult,
+) -> Result<JsRedactionResult> {
+  Ok(JsRedactionResult {
+    redacted_text: result.redacted_text,
+    redaction_map: result
+      .redaction_map
+      .into_iter()
+      .map(|entry| JsRedactionEntry {
+        placeholder: entry.placeholder,
+        original: entry.original,
+      })
+      .collect(),
+    operator_map: to_js_operator_entries(result.operator_map),
+    entity_count: u32::try_from(result.entity_count).map_err(|_| {
+      Error::from_reason(format!(
+        "Entity count exceeds u32 range: {}",
+        result.entity_count
+      ))
+    })?,
+  })
 }
 
-fn source_detail_name(detail: SourceDetail) -> String {
-  match detail {
-    SourceDetail::CustomDenyList => "custom-deny-list",
-    SourceDetail::CustomRegex => "custom-regex",
-    SourceDetail::GazetteerExtension => "gazetteer-extension",
-  }
-  .to_owned()
+fn to_js_operator_entries(
+  entries: Vec<BindingOperatorEntry>,
+) -> Vec<JsOperatorEntry> {
+  entries
+    .into_iter()
+    .map(|entry| JsOperatorEntry {
+      placeholder: entry.placeholder,
+      operator: entry.operator,
+    })
+    .collect()
 }
 
-fn operator_name(operator: OperatorType) -> String {
-  match operator {
-    OperatorType::Replace => "replace",
-    OperatorType::Redact => "redact",
-  }
-  .to_owned()
+fn to_napi_core_error(error: &stella_anonymize_core::Error) -> Error {
+  Error::from_reason(error.to_string())
 }
 
-fn to_napi_error(error: &stella_anonymize_core::Error) -> Error {
+fn to_napi_contract_error(error: &ContractError) -> Error {
+  Error::from_reason(error.to_string())
+}
+
+fn to_napi_serde_error(error: &serde_json::Error) -> Error {
   Error::from_reason(error.to_string())
 }

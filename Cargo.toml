@@ -1,5 +1,6 @@
 [workspace]
 members = [
+  "crates/anonymize-adapter-contract",
   "crates/anonymize-core",
   "crates/anonymize-napi",
   "crates/anonymize-py",
