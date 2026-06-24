@@ -10,15 +10,19 @@ use stella_anonymize_core::{
 };
 
 fn entity(text: &str, label: &str, value: &str) -> Entity {
-  let start = text
+  let byte_start = text
     .find(value)
     .unwrap_or_else(|| panic!("missing fixture value: {value}"));
-  Entity::detected(
-    u32::try_from(start).unwrap_or(u32::MAX),
-    u32::try_from(start.saturating_add(value.len())).unwrap_or(u32::MAX),
-    label,
-    value,
-  )
+  let prefix = text
+    .get(..byte_start)
+    .unwrap_or_else(|| panic!("invalid fixture boundary: {byte_start}"));
+  let start = utf16_len(prefix);
+  let end = start.saturating_add(utf16_len(value));
+  Entity::detected(start, end, label, value)
+}
+
+fn utf16_len(text: &str) -> u32 {
+  u32::try_from(text.encode_utf16().count()).unwrap_or(u32::MAX)
 }
 
 #[test]
@@ -90,10 +94,15 @@ fn normalized_identifier_values_share_placeholder() {
 
 #[test]
 fn contextual_identifier_cues_share_identifier_placeholder() {
-  let text = "CNI: 12AB34567 was present. CNI nº 12AB34567 was repeated.";
+  let text = concat!(
+    "CNI: 12AB34567 was present. ",
+    "CNI nº 12AB34567 was repeated. ",
+    "CNI 12AB34567 was listed."
+  );
   let entities = vec![
     entity(text, "national identification number", "CNI: 12AB34567"),
     entity(text, "national identification number", "CNI nº 12AB34567"),
+    entity(text, "national identification number", "CNI 12AB34567"),
   ];
 
   let result =
