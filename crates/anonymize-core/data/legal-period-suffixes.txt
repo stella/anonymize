@@ -4,4 +4,10 @@ Corp.
 N.A.
 Kft.
 S.A.
+a.s.
 a. s.
+s.r.o.
+spol. s r.o.
+Pty Ltd.
+Ltda.
+S.a.s.

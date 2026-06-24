@@ -3,9 +3,15 @@ use crate::processors::{
   CountryMatchData, GazetteerMatchData, PatternSlice, RegexMatchMeta,
   process_country_matches, process_gazetteer_matches, process_regex_matches,
 };
-use crate::resolution::PipelineEntity;
+use crate::redact::redact_text;
+use crate::resolution::{
+  PipelineEntity, enforce_boundary_consistency, merge_and_dedup,
+  sanitize_entities,
+};
 use crate::search::{SearchIndex, SearchOptions, SearchPattern};
-use crate::types::{Result, SearchMatch};
+use crate::types::{
+  Entity, EntityKind, OperatorConfig, RedactionResult, Result, SearchMatch,
+};
 
 pub struct PreparedSearch {
   regex: SearchIndex,
@@ -59,6 +65,13 @@ pub struct StaticDetectionResult {
   pub custom_regex_entities: Vec<PipelineEntity>,
   pub gazetteer_entities: Vec<PipelineEntity>,
   pub country_entities: Vec<PipelineEntity>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct StaticRedactionResult {
+  pub detections: StaticDetectionResult,
+  pub resolved_entities: Vec<PipelineEntity>,
+  pub redaction: RedactionResult,
 }
 
 impl PreparedSearch {
@@ -136,5 +149,64 @@ impl PreparedSearch {
       gazetteer_entities,
       country_entities,
     })
+  }
+
+  pub fn redact_static_entities(
+    &self,
+    full_text: &str,
+    operators: &OperatorConfig,
+  ) -> Result<StaticRedactionResult> {
+    let detections = self.detect_static_entities(full_text)?;
+    let raw_entities = detections.all_entities();
+    let merged = merge_and_dedup(&raw_entities);
+    let consistent = enforce_boundary_consistency(&merged, full_text)?;
+    let resolved_entities = sanitize_entities(&consistent);
+    let redaction_entities = resolved_entities
+      .iter()
+      .map(to_redaction_entity)
+      .collect::<Vec<_>>();
+    let redaction = redact_text(full_text, &redaction_entities, operators)?;
+
+    Ok(StaticRedactionResult {
+      detections,
+      resolved_entities,
+      redaction,
+    })
+  }
+}
+
+impl StaticDetectionResult {
+  #[must_use]
+  pub fn all_entities(&self) -> Vec<PipelineEntity> {
+    let capacity = self
+      .regex_entities
+      .len()
+      .saturating_add(self.custom_regex_entities.len())
+      .saturating_add(self.gazetteer_entities.len())
+      .saturating_add(self.country_entities.len());
+    let mut entities = Vec::with_capacity(capacity);
+    entities.extend(self.regex_entities.iter().cloned());
+    entities.extend(self.custom_regex_entities.iter().cloned());
+    entities.extend(self.gazetteer_entities.iter().cloned());
+    entities.extend(self.country_entities.iter().cloned());
+    entities
+  }
+}
+
+fn to_redaction_entity(entity: &PipelineEntity) -> Entity {
+  match &entity.kind {
+    EntityKind::Detected => Entity::detected(
+      entity.start,
+      entity.end,
+      entity.label.clone(),
+      entity.text.clone(),
+    ),
+    EntityKind::Coreference { source_text } => Entity::coreference(
+      entity.start,
+      entity.end,
+      entity.label.clone(),
+      entity.text.clone(),
+      source_text.clone(),
+    ),
   }
 }
