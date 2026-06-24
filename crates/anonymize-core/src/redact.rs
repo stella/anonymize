@@ -25,7 +25,7 @@ pub fn redact_text(
 
   let placeholder_map = build_placeholder_map(entities, full_text);
   let mut sorted = entities.to_vec();
-  sorted.sort_by(|left, right| left.start.cmp(&right.start));
+  sorted.sort_by_key(|entity| entity.start);
 
   let mut non_overlapping = Vec::<Entity>::new();
   let mut last_end = 0;

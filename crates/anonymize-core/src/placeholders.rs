@@ -20,7 +20,7 @@ pub fn build_placeholder_map(
   let mut placeholder_map = PlaceholderMap::default();
 
   let mut sorted = entities.to_vec();
-  sorted.sort_by(|left, right| left.start.cmp(&right.start));
+  sorted.sort_by_key(|entity| entity.start);
 
   for entity in &sorted {
     if placeholder_map.has(&entity.label, &entity.text) {
