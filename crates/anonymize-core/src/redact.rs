@@ -23,20 +23,17 @@ pub fn redact_text(
   let offsets = Utf16Offsets::new(full_text);
   validate_spans(entities, &offsets)?;
 
-  // Reversible originals come from the source span, not caller display text.
-  let entities = entities_with_source_text(full_text, entities, &offsets)?;
-
-  let placeholder_map = build_placeholder_map(&entities, full_text);
-  let mut sorted = entities;
-  sorted.sort_by_key(|entity| entity.start);
+  let placeholder_map = build_placeholder_map(entities, full_text);
+  let mut sorted = redaction_spans(full_text, entities, &offsets)?;
+  sorted.sort_by_key(|span| span.entity.start);
 
   // Existing contract: first accepted span wins overlaps.
-  let mut non_overlapping = Vec::<Entity>::new();
+  let mut non_overlapping = Vec::<RedactionSpan>::new();
   let mut last_end = 0;
-  for entity in sorted {
-    if entity.start >= last_end {
-      last_end = entity.end;
-      non_overlapping.push(entity);
+  for span in sorted {
+    if span.entity.start >= last_end {
+      last_end = span.entity.end;
+      non_overlapping.push(span);
     }
   }
 
@@ -45,7 +42,8 @@ pub fn redact_text(
   let mut operator_map = Vec::<OperatorEntry>::new();
   let mut cursor = 0;
 
-  for entity in &non_overlapping {
+  for span in &non_overlapping {
+    let entity = &span.entity;
     if entity.start > cursor {
       parts.push(offsets.slice(full_text, cursor, entity.start)?);
     }
@@ -67,7 +65,7 @@ pub fn redact_text(
     {
       redaction_map.push(RedactionEntry {
         placeholder: placeholder.clone(),
-        original: entity_original_text(entity),
+        original: redaction_original_text(span),
       });
     }
 
@@ -118,18 +116,23 @@ fn validate_spans(entities: &[Entity], offsets: &Utf16Offsets) -> Result<()> {
   Ok(())
 }
 
-fn entities_with_source_text(
+struct RedactionSpan {
+  entity: Entity,
+  source_text: String,
+}
+
+fn redaction_spans(
   full_text: &str,
   entities: &[Entity],
   offsets: &Utf16Offsets,
-) -> Result<Vec<Entity>> {
+) -> Result<Vec<RedactionSpan>> {
   let mut resolved = Vec::with_capacity(entities.len());
 
   for entity in entities {
-    let mut resolved_entity = entity.clone();
-    resolved_entity.text =
-      offsets.slice(full_text, entity.start, entity.end)?;
-    resolved.push(resolved_entity);
+    resolved.push(RedactionSpan {
+      entity: entity.clone(),
+      source_text: offsets.slice(full_text, entity.start, entity.end)?,
+    });
   }
 
   Ok(resolved)
@@ -172,9 +175,9 @@ fn redaction_value<'a>(
     .map(|entry| entry.original.as_str())
 }
 
-fn entity_original_text(entity: &Entity) -> String {
-  match &entity.kind {
-    EntityKind::Detected => entity.text.clone(),
+fn redaction_original_text(span: &RedactionSpan) -> String {
+  match &span.entity.kind {
+    EntityKind::Detected => span.source_text.clone(),
     EntityKind::Coreference { source_text } => source_text.clone(),
   }
 }

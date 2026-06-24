@@ -29,6 +29,9 @@ pub enum Error {
   UnsupportedRegexValidation {
     pattern: u32,
   },
+  UnsupportedStaticSlice {
+    slice: &'static str,
+  },
 }
 
 impl fmt::Display for Error {
@@ -62,6 +65,12 @@ impl fmt::Display for Error {
         write!(
           formatter,
           "Regex pattern {pattern} requires validation that is not available in core"
+        )
+      }
+      Self::UnsupportedStaticSlice { slice } => {
+        write!(
+          formatter,
+          "Static slice '{slice}' is configured but not supported by native core"
         )
       }
     }
