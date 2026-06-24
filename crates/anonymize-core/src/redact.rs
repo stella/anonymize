@@ -22,9 +22,10 @@ pub fn redact_text(
 
   let offsets = Utf16Offsets::new(full_text);
   validate_spans(entities, &offsets)?;
+  let entities = entities_with_source_text(full_text, entities, &offsets)?;
 
-  let placeholder_map = build_placeholder_map(entities, full_text);
-  let mut sorted = entities.to_vec();
+  let placeholder_map = build_placeholder_map(&entities, full_text);
+  let mut sorted = entities;
   sorted.sort_by_key(|entity| entity.start);
 
   let mut non_overlapping = Vec::<Entity>::new();
@@ -47,7 +48,7 @@ pub fn redact_text(
     }
 
     let placeholder = placeholder_map
-      .get(&entity.label, &entity.text)
+      .get_entity(entity)
       .map_or_else(|| placeholder_fallback(&entity.label), ToOwned::to_owned);
     let operator = operator_for(config, &entity.label);
     let replacement = match operator {
@@ -99,7 +100,7 @@ pub fn deanonymise(
 
 fn validate_spans(entities: &[Entity], offsets: &Utf16Offsets) -> Result<()> {
   for entity in entities {
-    if entity.start > entity.end {
+    if entity.start >= entity.end {
       return Err(crate::types::Error::InvalidSpan {
         start: entity.start,
         end: entity.end,
@@ -111,6 +112,23 @@ fn validate_spans(entities: &[Entity], offsets: &Utf16Offsets) -> Result<()> {
   }
 
   Ok(())
+}
+
+fn entities_with_source_text(
+  full_text: &str,
+  entities: &[Entity],
+  offsets: &Utf16Offsets,
+) -> Result<Vec<Entity>> {
+  let mut resolved = Vec::with_capacity(entities.len());
+
+  for entity in entities {
+    let mut resolved_entity = entity.clone();
+    resolved_entity.text =
+      offsets.slice(full_text, entity.start, entity.end)?;
+    resolved.push(resolved_entity);
+  }
+
+  Ok(resolved)
 }
 
 fn operator_for(config: &OperatorConfig, label: &str) -> OperatorType {

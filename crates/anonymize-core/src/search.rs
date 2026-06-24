@@ -117,7 +117,7 @@ impl SearchIndex {
         SearchEngine::Literal,
         &self.literal_pattern_indexes,
         &literal
-          .find_iter_packed(haystack)
+          .find_overlapping_iter_packed(haystack)
           .map_err(|err| Error::Search {
             engine: SearchEngine::Literal,
             reason: err.to_string(),

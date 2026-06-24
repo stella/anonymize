@@ -29,7 +29,7 @@ pub(crate) fn normalize_entity_text(label: &str, text: &str) -> String {
     return text.chars().filter(char::is_ascii_digit).collect();
   }
   if is_identifier_label(&upper) {
-    return strip_id_separators(text).to_uppercase();
+    return normalize_identifier_text(text);
   }
   if upper == "PASSPORT_NUMBER" {
     return normalize_passport_text(text);
@@ -80,6 +80,11 @@ fn strip_id_separators(text: &str) -> String {
     .chars()
     .filter(|ch| !ch.is_whitespace() && !ID_SEPARATORS.contains(ch))
     .collect()
+}
+
+fn normalize_identifier_text(text: &str) -> String {
+  find_compact_ascii_identifier(text, true, is_generic_identifier)
+    .unwrap_or_else(|| strip_id_separators(text).to_uppercase())
 }
 
 fn is_identifier_label(upper: &str) -> bool {
@@ -191,6 +196,76 @@ fn find_ascii_token(
   predicate(token).then_some(token)
 }
 
+fn find_compact_ascii_identifier(
+  text: &str,
+  allow_whitespace: bool,
+  predicate: impl Fn(&str) -> bool,
+) -> Option<String> {
+  for (start, ch) in text.char_indices() {
+    if !is_identifier_start(text, start, ch) {
+      continue;
+    }
+    let Some(candidate) =
+      compact_ascii_identifier_from(text, start, allow_whitespace, &predicate)
+    else {
+      continue;
+    };
+    return Some(candidate);
+  }
+
+  None
+}
+
+fn compact_ascii_identifier_from(
+  text: &str,
+  start: usize,
+  allow_whitespace: bool,
+  predicate: &impl Fn(&str) -> bool,
+) -> Option<String> {
+  let mut compact = String::new();
+  let mut last_valid = None;
+  let tail = text.get(start..)?;
+
+  for ch in tail.chars() {
+    if ch.is_ascii_alphanumeric() {
+      compact.push(ch.to_ascii_uppercase());
+      continue;
+    }
+
+    if is_identifier_separator(ch, allow_whitespace) {
+      if predicate(&compact) {
+        last_valid = Some(compact.clone());
+      }
+      continue;
+    }
+
+    break;
+  }
+
+  if predicate(&compact) {
+    return Some(compact);
+  }
+  last_valid
+}
+
+fn is_identifier_start(text: &str, index: usize, ch: char) -> bool {
+  ch.is_ascii_alphanumeric()
+    && text
+      .get(..index)
+      .and_then(|prefix| prefix.chars().next_back())
+      .is_none_or(|previous| !previous.is_ascii_alphanumeric())
+}
+
+fn is_identifier_separator(ch: char, allow_whitespace: bool) -> bool {
+  ID_SEPARATORS.contains(&ch) || (allow_whitespace && ch.is_whitespace())
+}
+
+fn is_generic_identifier(candidate: &str) -> bool {
+  (5..=64).contains(&candidate.len())
+    && candidate.chars().any(|ch| ch.is_ascii_digit())
+    && candidate.chars().all(|ch| ch.is_ascii_alphanumeric())
+}
+
 const fn is_base58_char(ch: char) -> bool {
   matches!(
     ch,
@@ -204,9 +279,8 @@ const fn is_base58_char(ch: char) -> bool {
 }
 
 fn normalize_passport_text(text: &str) -> String {
-  let passport_identifier =
-    find_ascii_token(text, is_passport_identifier).unwrap_or(text);
-  strip_id_separators(passport_identifier).to_uppercase()
+  find_compact_ascii_identifier(text, true, is_passport_identifier)
+    .unwrap_or_else(|| strip_id_separators(text).to_uppercase())
 }
 
 fn is_passport_identifier(token: &str) -> bool {
