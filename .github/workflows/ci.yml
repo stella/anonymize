@@ -43,6 +43,14 @@ jobs:
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
+      - name: Setup Rust
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt,clippy
+          rustup default stable
+
+      - name: Rust checks
+        run: bun run rust:check
+
       - name: Check runtime package versions
         # Verify, do not mutate: a PR that bumps VERSION without bumping
         # the package versions (or vice versa) must fail CI, not be
