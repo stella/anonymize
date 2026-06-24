@@ -18,9 +18,11 @@ import type {
 import type { PipelineContext } from "../context";
 import { defaultContext } from "../context";
 import { loadGenericRoles } from "../filters/false-positives";
+import { buildStreetTypePatterns } from "./address-seeds";
 import { normalizeForSearch } from "../util/normalize";
 import { ALL_UPPER_RE, UPPER_START_RE } from "../util/text";
 import { DASH } from "../util/char-groups";
+import denyListFiltersByLanguage from "../data/deny-list-filters.json";
 
 export type DenyListConfig = Pick<
   PipelineConfig,
@@ -420,46 +422,73 @@ const hasAdjacentAddressEvidence = (
   return streetRe !== null && streetRe.test(window);
 };
 
-/**
- * Capitalised words that almost never start a person name. When a
- * single-token surname candidate is immediately followed by one of
- * these, the "next-word is uppercase" promotion heuristic would
- * otherwise turn section headings ("Purchase Price↵The Purchaser
- * undertakes…") into spurious person hits. Kept narrow on purpose;
- * the surrounding pipeline still chains real names via the deny-list
- * cascade when both halves are surnames.
- */
-const SENTENCE_STARTER_WORDS: ReadonlySet<string> = new Set([
-  "The",
-  "This",
-  "These",
-  "Those",
-  "An",
-  "Any",
-  "All",
-  "Each",
-  "Every",
-  "No",
-  "Now",
-  "Whereas",
-  "Whereby",
-  "Wherein",
-  "Whereof",
-  "Notwithstanding",
-  "Subject",
-  "In",
-  "On",
-  "At",
-  "By",
-  "For",
-  "If",
-  "Upon",
-  "Unless",
-  "Until",
-  "Provided",
-  "Pursuant",
-  "Such",
-]);
+type DenyListLanguageFilters = {
+  sentenceStarters?: readonly string[];
+  trailingAddressWordExclusions?: readonly string[];
+  definedTermCues?: readonly string[];
+};
+
+export type DenyListFilterData = {
+  stopwords: string[];
+  allowList: string[];
+  personStopwords: string[];
+  addressStopwords: string[];
+  streetTypes: string[];
+  firstNames: string[];
+  genericRoles: string[];
+  sentenceStarters: string[];
+  trailingAddressWordExclusions: string[];
+  definedTermCues: string[];
+};
+
+const DENY_LIST_FILTER_GROUPS: readonly DenyListLanguageFilters[] =
+  Object.values(denyListFiltersByLanguage);
+
+const lowerSortedUnique = (values: Iterable<string>): string[] =>
+  [...new Set([...values].map((value) => value.toLowerCase()))].toSorted();
+
+const escapeRegExp = (value: string): string =>
+  value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const collectLanguageFilterValues = (
+  selector: (filters: DenyListLanguageFilters) => readonly string[] | undefined,
+): string[] =>
+  lowerSortedUnique(
+    DENY_LIST_FILTER_GROUPS.flatMap((filters) => selector(filters) ?? []),
+  );
+
+const DENY_LIST_STATIC_FILTERS = {
+  definedTermCues: collectLanguageFilterValues(
+    (filters) => filters.definedTermCues,
+  ),
+  sentenceStarters: collectLanguageFilterValues(
+    (filters) => filters.sentenceStarters,
+  ),
+  trailingAddressWordExclusions: collectLanguageFilterValues(
+    (filters) => filters.trailingAddressWordExclusions,
+  ),
+};
+
+const SENTENCE_STARTER_WORDS: ReadonlySet<string> = new Set(
+  DENY_LIST_STATIC_FILTERS.sentenceStarters,
+);
+const TRAILING_ADDRESS_WORD_EXCLUSIONS: ReadonlySet<string> = new Set(
+  DENY_LIST_STATIC_FILTERS.trailingAddressWordExclusions,
+);
+
+const buildDefinedTermCueRe = (): RegExp => {
+  const cues = DENY_LIST_STATIC_FILTERS.definedTermCues.toSorted(
+    (left, right) => right.length - left.length,
+  );
+  if (cues.length === 0) {
+    return /$(?!)/;
+  }
+  const pattern = cues
+    .map((cue) => escapeRegExp(cue).replace(/\s+/g, "\\s+"))
+    .join("|");
+  return new RegExp(`^[\\s,]*(?:${pattern})\\b`, "iu");
+};
+const DEFINED_TERM_CUE_RE = buildDefinedTermCueRe();
 
 const PERSON_CHAIN_BREAK_RE = /[!?;:]|,/u;
 const WORD_CHAR_RE = /[\p{L}\p{N}]/u;
@@ -601,6 +630,7 @@ export type DenyListData = {
   originals: string[];
   /** Maps pattern index → source types (plural). */
   sources: PatternSources[];
+  filters: DenyListFilterData;
 };
 
 const getCityEntries = (
@@ -668,6 +698,7 @@ export const buildDenyList = async (
   ]);
   const commonWords = await loadCommonWords();
   const monthNames = await loadMonthNames();
+  const filters = await buildDenyListFilterData(ctx);
 
   const dictionaries = config.dictionaries;
   const hasDenyList = dictionaries?.denyList && dictionaries?.denyListMeta;
@@ -683,7 +714,7 @@ export const buildDenyList = async (
   // No dictionary data available — skip deny-list building
   if (!hasDenyList && !hasCities && !hasCustomDenyList) {
     // Still build name corpus entries if available
-    return buildNameCorpusOnly(config, ctx);
+    return buildNameCorpusOnly(config, ctx, filters);
   }
 
   const excluded = config.denyListExcludeCategories;
@@ -835,6 +866,7 @@ export const buildDenyList = async (
     customLabels: customLabelList,
     originals: patternList,
     sources: sourceList,
+    filters,
   };
 };
 
@@ -847,6 +879,7 @@ export const buildDenyList = async (
 const buildNameCorpusOnly = (
   config: DenyListConfig,
   ctx: PipelineContext,
+  filters: DenyListFilterData,
 ): DenyListData | null => {
   if (!config.enableNameCorpus) {
     return null;
@@ -882,6 +915,7 @@ const buildNameCorpusOnly = (
     customLabels: customLabelList,
     originals: patternList,
     sources: sourceList,
+    filters,
   };
 };
 
@@ -978,6 +1012,26 @@ type RawMatch = {
   text: string;
   patternIdx: number;
 };
+
+const buildStreetTypeFilterValues = async (): Promise<string[]> =>
+  lowerSortedUnique(await buildStreetTypePatterns());
+
+const buildDenyListFilterData = async (
+  ctx: PipelineContext,
+): Promise<DenyListFilterData> => ({
+  stopwords: [...getStopwords(ctx)],
+  allowList: [...getAllowList(ctx)],
+  personStopwords: [...getPersonStopwords(ctx)],
+  addressStopwords: [...getAddressStopwords(ctx)],
+  streetTypes: await buildStreetTypeFilterValues(),
+  firstNames: [...getNameCorpusFirstNames(ctx)],
+  genericRoles: [...(ctx.genericRoles ?? EMPTY_GENERIC_ROLES)],
+  sentenceStarters: [...DENY_LIST_STATIC_FILTERS.sentenceStarters],
+  trailingAddressWordExclusions: [
+    ...DENY_LIST_STATIC_FILTERS.trailingAddressWordExclusions,
+  ],
+  definedTermCues: [...DENY_LIST_STATIC_FILTERS.definedTermCues],
+});
 
 const customMatchHasValidEdges = (
   fullText: string,
@@ -1262,14 +1316,9 @@ export const processDenyListMatches = (
       continue;
     }
 
-    // Skip the trailing-capitalised-word extension when the
-    // chain sits inside a defined-term quote
-    // (`"Bond Hedge Transactions"`, `"Blue Sky Laws"`).
-    // Legal prose uses curly or straight quotes to introduce
-    // capitalised noun phrases that are not personal names;
-    // chaining beyond the name corpus inside that bracketed
-    // context produces unstable spans like
-    // `"Bond Hedge Transactions"`-as-person.
+    // Skip extension inside quoted defined-term contexts:
+    // legal prose often uses quoted capitalised noun phrases
+    // that are not personal names.
     const insideDefinedTermQuote = isSuppressibleDefinedTermQuote(
       fullText,
       first.start,
@@ -1285,28 +1334,22 @@ export const processDenyListMatches = (
     // Score: chained names get 0.9, single names 0.5
     const score = chain.length >= 2 ? 0.9 : 0.5;
 
-    // Single-word deny-list matches are too noisy:
-    // "Rate", "Server", "Code" etc. are surnames but
-    // also common English words. Only accept single-
-    // word matches when the next word is also uppercase
-    // (likely a full name: "Alena Zemanová"). Skip
-    // sentence-starter articles ("The Purchaser…")
-    // which otherwise turn section headings like
-    // "Purchase Price↵The Purchaser…" into person hits.
+    // Single-word deny-list matches are noisy. Only accept
+    // them when the next token has the shape of a name word,
+    // while excluding language-data sentence starters.
     if (chain.length === 1) {
       const afterEnd = last.end;
       const rest = fullText.slice(afterEnd).trimStart();
-      // Require Cap + lowercase: filters out acronyms like
-      // "EU", "USA" so "Rady EU" doesn't read as a name.
+      // Require Cap + lowercase so acronym-shaped tokens
+      // do not promote a single-token hit.
       const nextIsUpper = rest.length > 1 && /^\p{Lu}\p{Ll}/u.test(rest);
       if (!nextIsUpper) {
         continue;
       }
-      // Reject sentence-starter articles ("The Purchaser…")
-      // so section headings followed by a sentence don't
-      // get promoted to person hits.
+      // Reject sentence starters so headings followed by
+      // prose do not get promoted to person hits.
       const nextWord = /^\p{L}+/u.exec(rest)?.[0] ?? "";
-      if (SENTENCE_STARTER_WORDS.has(nextWord)) {
+      if (SENTENCE_STARTER_WORDS.has(nextWord.toLowerCase())) {
         continue;
       }
     }
@@ -1358,44 +1401,6 @@ const POSTAL_PREFIX_RE = new RegExp(
   `(?:\\d{5}|\\d{3}\\s\\d{2})\\s*${DASH}?\\s*$`,
 );
 
-// Words that must NOT be absorbed into an address span
-// when they follow a postal-code + city pattern. Party
-// roles, organizational nouns, and common legal terms.
-const TRAILING_WORD_EXCLUSIONS: ReadonlySet<string> = new Set([
-  // CZ/SK party roles
-  "nájemce",
-  "pronajímatel",
-  "kupující",
-  "prodávající",
-  "objednatel",
-  "zhotovitel",
-  "dodavatel",
-  "odběratel",
-  "věřitel",
-  "dlužník",
-  "zadavatel",
-  "uchazeč",
-  "příjemce",
-  "plátce",
-  // Organizational nouns
-  "správa",
-  "sekretariát",
-  "kancelář",
-  "odbor",
-  "oddělení",
-  "úřad",
-  "inspekce",
-  "agentura",
-  // Legal clause starters
-  "článek",
-  "smlouva",
-  "dodatek",
-  "příloha",
-  "předmět",
-  "podmínky",
-  "ustanovení",
-]);
-
 const extendCityDistricts = (entities: Entity[], fullText: string): void => {
   for (const entity of entities) {
     if (entity.label !== "address") {
@@ -1446,7 +1451,7 @@ const extendCityDistricts = (entities: Entity[], fullText: string): void => {
     const trailingWordM = /^[\s]{1,4}(\p{Lu}\p{Ll}+)/u.exec(afterExt);
     if (trailingWordM && !trailingWordM[0].includes("\n")) {
       const candidate = (trailingWordM[1] ?? "").toLowerCase();
-      if (!TRAILING_WORD_EXCLUSIONS.has(candidate)) {
+      if (!TRAILING_ADDRESS_WORD_EXCLUSIONS.has(candidate)) {
         entity.end += trailingWordM[0].length;
         entity.text = fullText.slice(entity.start, entity.end);
       }
@@ -1456,30 +1461,20 @@ const extendCityDistricts = (entities: Entity[], fullText: string): void => {
 
 /**
  * Extend a person name match to include subsequent
- * capitalized words. "Pavel" + " Heřmánek" → "Pavel
- * Heřmánek". Stops at lowercase words, punctuation,
- * or end of text. Also extends backward if preceded
- * by a capitalized word (for "Miroslav Braňka" when
- * only "Braňka" matched).
+ * capitalized words. Stops at lowercase words,
+ * punctuation, or end of text.
  */
 /**
  * Defined-term marker: an opening typographic or straight
  * quote enclosing the chain start, AND a closing quote
- * within a short window followed by a
- * definitional cue (`means`, `shall mean`, `shall have
- * the meaning(s)`, `refers to`). Legal documents reserve
- * this construction for defined terms; the contents are
- * not personal names even when individual tokens collide
- * with the name corpus.
- *
- * Plain quotations like `"John Unknown" said ...` do NOT
- * count: there is no definitional cue, so the trailing
- * surname extension is still allowed to absorb `Unknown`.
+ * within a short window followed by a language-data
+ * definitional cue. Legal documents reserve this
+ * construction for defined terms; the contents are not
+ * personal names even when individual tokens collide with
+ * the name corpus.
  */
 const OPENING_QUOTES = new Set(['"', "'", "“", "„", "‟", "‘", "‛", "«"]);
 const CLOSING_QUOTES = new Set(['"', "'", "”", "’", "»", "“"]);
-const DEFINED_TERM_CUE_RE =
-  /^[\s,]*(?:means?|shall\s+means?|shall\s+have\s+the\s+meanings?|refers?\s+to|has\s+the\s+meanings?|is\s+defined)\b/iu;
 const DEFINED_TERM_LOOKAHEAD = 120;
 const DEFINED_TERM_LOOKBEHIND = 80;
 const EMPTY_GENERIC_ROLES: ReadonlySet<string> = new Set();
@@ -1591,12 +1586,9 @@ const isSuppressibleDefinedTermQuote = (
 
   const words = definedTermQuote.content.match(WORD_RE) ?? [];
 
-  // A quoted defined term can itself be a real person:
-  // `"John Smith" shall mean the employee...`. Preserve those
-  // when the definition itself points at a legal/business role
-  // from dictionary data. Legal terms such as `"Bond Hedge"`
-  // stay suppressible even if their first token collides with
-  // a given-name corpus entry.
+  // A quoted defined term can itself be a real person.
+  // Preserve those when the definition points at a role from
+  // dictionary data.
   if (
     words.length >= 2 &&
     startsWithKnownFirstName(definedTermQuote.content, ctx) &&
@@ -1638,31 +1630,17 @@ const extendPersonName = (
         wordEnd++;
       }
 
-      // Skip trailing punctuation (commas, periods,
-      // typographic closing quotes). Curly quotes survive
-      // normalisation because they often appear inside
-      // defined-term clauses (`"Blue Sky Laws"`); strip
-      // them so the allow-list / stopword check sees the
-      // bare word.
+      // Skip trailing punctuation and typographic closing
+      // quotes so stopword checks see the bare word.
       const word = text.slice(wordStart, wordEnd);
       const stripped = word.replace(/[,;.”"’'“»]+$/, "");
       if (stripped.length < 2) {
         break;
       }
 
-      // Don't extend into stopwords or person stopwords.
-      // The global allow list is intentionally NOT consulted
-      // here: real surnames such as `Law`, `Tesla`, or
-      // `Vote` are common English words and live on the
-      // allow list to suppress single-token noise, but they
-      // are legitimate name extensions when preceded by a
-      // first name in plain prose (`John Law`, `Elon
-      // Tesla`). Defined-term contexts (`"Blue Sky Laws"`,
-      // `"Bond Hedge Transactions"`) are filtered earlier by
-      // `isInsideDefinedTermQuote`, so by the time
-      // `extendPersonName` runs we are in ordinary prose and
-      // the allow-list block would only swallow real
-      // surnames.
+      // Do not consult the global allow list here: common
+      // words can be legitimate name extensions once a first
+      // name has established person context.
       const lower = stripped.toLowerCase();
       if (getStopwords(ctx).has(lower) || getPersonStopwords(ctx).has(lower)) {
         break;

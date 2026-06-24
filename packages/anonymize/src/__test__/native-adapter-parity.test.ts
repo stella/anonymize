@@ -15,6 +15,11 @@ type NativeAdapter = {
     fullText: string,
     operatorsJson?: string,
   ) => string;
+  redactStaticEntitiesDiagnosticsJson: (
+    configJson: string,
+    fullText: string,
+    operatorsJson?: string,
+  ) => string;
 };
 
 type RedactionEntry = {
@@ -43,6 +48,30 @@ type StaticRedactionResult = {
   };
 };
 
+type StaticRedactionDiagnosticResult = {
+  result: StaticRedactionResult;
+  diagnostics: {
+    events: Array<{
+      stage: string;
+      kind: string;
+      count?: number;
+      engine?: string;
+      pattern?: number;
+      source?: string;
+      source_detail?: string;
+      label?: string;
+      start?: number;
+      end?: number;
+      text?: string;
+      score?: number;
+      span_valid?: boolean;
+      elapsed_us?: number;
+      input_bytes?: number;
+      reason?: string;
+    }>;
+  };
+};
+
 type GeneratedNativeCase = {
   text: string;
   operators: Record<string, string> | null;
@@ -58,6 +87,12 @@ const CONFIG_JSON = JSON.stringify({
     {
       kind: "literal-with-options",
       pattern: "Secret Code",
+      case_insensitive: true,
+      whole_words: true,
+    },
+    {
+      kind: "literal-with-options",
+      pattern: "Prague",
       case_insensitive: true,
       whole_words: true,
     },
@@ -87,19 +122,31 @@ const CONFIG_JSON = JSON.stringify({
   slices: {
     regex: { start: 0, end: 1 },
     custom_regex: { start: 0, end: 1 },
-    deny_list: { start: 0, end: 1 },
-    gazetteer: { start: 1, end: 3 },
-    countries: { start: 3, end: 4 },
+    deny_list: { start: 0, end: 2 },
+    gazetteer: { start: 2, end: 4 },
+    countries: { start: 4, end: 5 },
   },
   regex_meta: [{ label: "registration number", score: 0.9 }],
   custom_regex_meta: [
     { label: "matter id", score: 1, source_detail: "custom-regex" },
   ],
   deny_list_data: {
-    labels: [["matter"]],
-    custom_labels: [["matter"]],
-    originals: ["Secret Code"],
-    sources: [["custom-deny-list"]],
+    labels: [["matter"], ["address"]],
+    custom_labels: [["matter"], []],
+    originals: ["Secret Code", "Prague"],
+    sources: [["custom-deny-list"], ["city"]],
+    filters: {
+      stopwords: [],
+      allow_list: [],
+      person_stopwords: [],
+      address_stopwords: [],
+      street_types: [],
+      first_names: [],
+      generic_roles: [],
+      sentence_starters: [],
+      trailing_address_word_exclusions: [],
+      defined_term_cues: [],
+    },
   },
   gazetteer_data: {
     labels: ["organization", "address"],
@@ -212,7 +259,7 @@ const generatedCaseArb: fc.Arbitrary<GeneratedNativeCase> = fc
     ({ left, middle, right, registration, matter, fuzzyPlace, operators }) => {
       const text =
         `${left}Reference ${registration} for Acme s.r.o. near ` +
-        `${fuzzyPlace}, Turkey, matter ${matter}, code Secret Code.` +
+        `${fuzzyPlace}, Turkey, Prague, matter ${matter}, code Secret Code.` +
         `${middle}${right}`;
       return {
         text,
@@ -222,6 +269,7 @@ const generatedCaseArb: fc.Arbitrary<GeneratedNativeCase> = fc
           "Acme s.r.o.",
           fuzzyPlace,
           "Turkey",
+          "Prague",
           matter,
           "Secret Code",
         ],
@@ -259,7 +307,7 @@ describe("native adapter parity", () => {
           for (const [index, item] of cases.entries()) {
             const result = tsResults.at(index);
             expect(result).toBeDefined();
-            expect(result?.redaction.entity_count).toBe(6);
+            expect(result?.redaction.entity_count).toBe(7);
             for (const value of item.sensitiveValues) {
               expect(result?.redaction.redacted_text).not.toContain(value);
             }
@@ -268,6 +316,49 @@ describe("native adapter parity", () => {
       ),
       { numRuns: 5, seed: 20_260_624 },
     );
+  });
+
+  test("diagnostics JSON is identical through TS and Python adapters", () => {
+    const adapters = getAdapters();
+    const text =
+      "Reference AB1234 for Acme s.r.o. near Fuzztovn, Turkey, " +
+      "Prague, matter MAT-123, code Secret Code.";
+    const operators = { country: "redact" };
+
+    const tsResult = runTsDiagnosticsAdapter(adapters.native, text, operators);
+    const pyResult = callPythonDiagnostics(
+      adapters.pythonModulePath,
+      text,
+      operators,
+    );
+
+    expect(stripDiagnosticTimings(pyResult)).toEqual(
+      stripDiagnosticTimings(tsResult),
+    );
+    expect(
+      tsResult.diagnostics.events.some(
+        (event) =>
+          event.kind === "stage-summary" &&
+          typeof event.elapsed_us === "number",
+      ),
+    ).toBe(true);
+    expect(
+      tsResult.diagnostics.events.some(
+        (event) =>
+          event.stage === "search.literal" &&
+          event.kind === "stage-summary" &&
+          typeof event.count === "number" &&
+          event.count > 0,
+      ),
+    ).toBe(true);
+    expect(
+      tsResult.diagnostics.events.some(
+        (event) =>
+          event.stage === "resolution.sanitize" &&
+          event.kind === "entity" &&
+          event.span_valid === true,
+      ),
+    ).toBe(true);
   });
 });
 
@@ -314,13 +405,22 @@ const loadNativeAdapter = (nativePath: string): NativeAdapter => {
     Object(loaded),
     "redactStaticEntitiesJson",
   );
+  const redactStaticEntitiesDiagnosticsJson = Reflect.get(
+    Object(loaded),
+    "redactStaticEntitiesDiagnosticsJson",
+  );
   if (
     typeof normalizeForSearch !== "function" ||
-    typeof redactStaticEntitiesJson !== "function"
+    typeof redactStaticEntitiesJson !== "function" ||
+    typeof redactStaticEntitiesDiagnosticsJson !== "function"
   ) {
     throw new TypeError("Native anonymize adapter exports are incomplete");
   }
-  return { normalizeForSearch, redactStaticEntitiesJson };
+  return {
+    normalizeForSearch,
+    redactStaticEntitiesJson,
+    redactStaticEntitiesDiagnosticsJson,
+  };
 };
 
 const runTsAdapter = (
@@ -331,6 +431,21 @@ const runTsAdapter = (
   const operatorsJson = operatorConfigJson(operators);
   return JSON.parse(
     adapter.redactStaticEntitiesJson(CONFIG_JSON, text, operatorsJson),
+  );
+};
+
+const runTsDiagnosticsAdapter = (
+  adapter: NativeAdapter,
+  text: string,
+  operators: Record<string, string> | null,
+): StaticRedactionDiagnosticResult => {
+  const operatorsJson = operatorConfigJson(operators);
+  return JSON.parse(
+    adapter.redactStaticEntitiesDiagnosticsJson(
+      CONFIG_JSON,
+      text,
+      operatorsJson,
+    ),
   );
 };
 
@@ -397,6 +512,74 @@ print(module.normalize_for_search(payload["text"]))
     rmSync(payloadDir, { recursive: true, force: true });
   }
 };
+
+const callPythonDiagnostics = (
+  pythonModulePath: string,
+  text: string,
+  operators: Record<string, string> | null,
+): StaticRedactionDiagnosticResult => {
+  const payloadDir = mkdtempSync(
+    join(tmpdir(), "stella-anonymize-diagnostics-"),
+  );
+  const payloadPath = join(payloadDir, "payload.json");
+  writeFileSync(
+    payloadPath,
+    JSON.stringify({
+      config_json: CONFIG_JSON,
+      text,
+      operators_json: operatorConfigJson(operators),
+    }),
+  );
+  try {
+    const output = runCommand(
+      "python3",
+      [
+        "-c",
+        `
+import importlib.util
+import json
+import os
+import pathlib
+
+module_path = pathlib.Path(os.environ["STELLA_ANONYMIZE_PY_MODULE"])
+payload_path = pathlib.Path(os.environ["STELLA_ANONYMIZE_PAYLOAD"])
+spec = importlib.util.spec_from_file_location(
+    "stella_anonymize_core_py",
+    module_path,
+)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+payload = json.loads(payload_path.read_text())
+print(
+    module.redact_static_entities_diagnostics_json(
+        payload["config_json"],
+        payload["text"],
+        payload.get("operators_json"),
+    )
+)
+`,
+      ],
+      {
+        STELLA_ANONYMIZE_PAYLOAD: payloadPath,
+        STELLA_ANONYMIZE_PY_MODULE: pythonModulePath,
+      },
+    );
+    return JSON.parse(output);
+  } finally {
+    rmSync(payloadDir, { recursive: true, force: true });
+  }
+};
+
+const stripDiagnosticTimings = (
+  result: StaticRedactionDiagnosticResult,
+): StaticRedactionDiagnosticResult => ({
+  result: result.result,
+  diagnostics: {
+    events: result.diagnostics.events.map(
+      ({ elapsed_us: _elapsedUs, ...event }) => event,
+    ),
+  },
+});
 
 const operatorConfigJson = (
   operators: Record<string, string> | null,

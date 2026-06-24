@@ -2,6 +2,8 @@
 
 //! Core anonymization contracts shared by host-language bindings.
 
+pub(crate) mod byte_offsets;
+mod diagnostics;
 pub(crate) mod normalize;
 mod placeholders;
 mod prepared;
@@ -10,18 +12,22 @@ mod redact;
 mod resolution;
 mod search;
 mod types;
-pub(crate) mod utf16;
 
+pub use diagnostics::{
+  DiagnosticEvent, DiagnosticEventKind, DiagnosticStage,
+  StaticRedactionDiagnostics,
+};
 pub use normalize::normalize_for_search;
 pub use placeholders::build_placeholder_map;
 pub use prepared::{
-  PreparedSearch, PreparedSearchConfig, PreparedSearchMatches,
-  PreparedSearchSlices, StaticDetectionResult, StaticRedactionResult,
+  PreparedSearch, PreparedSearchBuildResult, PreparedSearchConfig,
+  PreparedSearchMatches, PreparedSearchSlices, StaticDetectionResult,
+  StaticRedactionDiagnosticResult, StaticRedactionResult,
 };
 pub use processors::{
-  CountryMatchData, DenyListMatchData, GazetteerMatchData, PatternSlice,
-  RegexMatchMeta, process_country_matches, process_deny_list_matches,
-  process_gazetteer_matches, process_regex_matches,
+  CountryMatchData, DenyListFilterData, DenyListMatchData, GazetteerMatchData,
+  PatternSlice, RegexMatchMeta, process_country_matches,
+  process_deny_list_matches, process_gazetteer_matches, process_regex_matches,
 };
 pub use redact::{deanonymise, redact_text};
 pub use resolution::{

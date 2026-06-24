@@ -27,11 +27,11 @@ fn text_entity(
   label: &str,
   source: DetectionSource,
 ) -> PipelineEntity {
-  PipelineEntity::detected(0, utf16_len(text), label, text, 0.9, source)
+  PipelineEntity::detected(0, byte_len(text), label, text, 0.9, source)
 }
 
-fn utf16_len(text: &str) -> u32 {
-  u32::try_from(text.encode_utf16().count()).unwrap_or(u32::MAX)
+fn byte_len(text: &str) -> u32 {
+  u32::try_from(text.len()).unwrap_or(u32::MAX)
 }
 
 #[test]
@@ -153,11 +153,11 @@ fn same_span_country_loses_to_person() {
 }
 
 #[test]
-fn sanitize_trims_punctuation_and_updates_utf16_offsets() {
+fn sanitize_trims_punctuation_and_updates_byte_offsets() {
   let mut input =
     text_entity("\"Tesla Shares\"", "organization", DetectionSource::Ner);
   input.start = 10;
-  input.end = 10_u32.saturating_add(utf16_len(&input.text));
+  input.end = 10_u32.saturating_add(byte_len(&input.text));
 
   let result = sanitize_entities(&[input]);
   assert_eq!(result.len(), 1);
@@ -218,10 +218,20 @@ fn sanitize_drops_empty_entities() {
 #[test]
 fn boundary_merges_adjacent_same_label_entities() {
   let full_text = "Kontaktujte Jan Novák prosím.";
+  let jan_start = byte_len("Kontaktujte ");
+  let jan_end = jan_start.saturating_add(byte_len("Jan"));
+  let surname_start = jan_end.saturating_add(byte_len(" "));
+  let surname_end = surname_start.saturating_add(byte_len("Novák"));
   let result = enforce_boundary_consistency(
     &[
-      entity(DetectionSource::Ner, 0.8, 12, 15, "person"),
-      entity(DetectionSource::Ner, 0.95, 16, 21, "person"),
+      entity(DetectionSource::Ner, 0.8, jan_start, jan_end, "person"),
+      entity(
+        DetectionSource::Ner,
+        0.95,
+        surname_start,
+        surname_end,
+        "person",
+      ),
     ],
     full_text,
   )
@@ -230,18 +240,20 @@ fn boundary_merges_adjacent_same_label_entities() {
   assert_eq!(result.len(), 1);
   let person = result.first().expect("person");
   assert_eq!(person.text, "Jan Novák");
-  assert_eq!(person.start, 12);
-  assert_eq!(person.end, 21);
+  assert_eq!(person.start, jan_start);
+  assert_eq!(person.end, surname_end);
   assert_eq!(person.score, 0.95);
 }
 
 #[test]
 fn boundary_expands_partial_words() {
   let full_text = "Kontaktujte Novák prosím.";
+  let start = byte_len("Kontaktujte ");
+  let partial_end = start.saturating_add(byte_len("Nová"));
   let result = enforce_boundary_consistency(
     &[PipelineEntity::detected(
-      12,
-      16,
+      start,
+      partial_end,
       "person",
       "Nová",
       0.9,
@@ -254,14 +266,14 @@ fn boundary_expands_partial_words() {
   assert_eq!(result.len(), 1);
   let person = result.first().expect("person");
   assert_eq!(person.text, "Novák");
-  assert_eq!(person.end, 17);
+  assert_eq!(person.end, start.saturating_add(byte_len("Novák")));
 }
 
 #[test]
 fn boundary_expands_inside_apostrophe_names() {
   let full_text = "Kontaktujte O'Connor prosím.";
-  let start = utf16_len("Kontaktujte O'");
-  let end = start.saturating_add(utf16_len("Connor"));
+  let start = byte_len("Kontaktujte O'");
+  let end = start.saturating_add(byte_len("Connor"));
   let result = enforce_boundary_consistency(
     &[PipelineEntity::detected(
       start,
@@ -277,15 +289,15 @@ fn boundary_expands_inside_apostrophe_names() {
 
   assert_eq!(result.len(), 1);
   let person = result.first().expect("person");
-  assert_eq!(person.start, utf16_len("Kontaktujte "));
+  assert_eq!(person.start, byte_len("Kontaktujte "));
   assert_eq!(person.text, "O'Connor");
 }
 
 #[test]
 fn boundary_expands_across_combining_marks() {
   let full_text = "Podepsal Cafe\u{0301}.";
-  let start = utf16_len("Podepsal ");
-  let end = start.saturating_add(utf16_len("Cafe"));
+  let start = byte_len("Podepsal ");
+  let end = start.saturating_add(byte_len("Cafe"));
   let result = enforce_boundary_consistency(
     &[PipelineEntity::detected(
       start,
@@ -359,7 +371,7 @@ fn boundary_removes_nested_same_label_entities() {
     &[
       PipelineEntity::detected(
         0,
-        16,
+        byte_len("Ing. Pavel Novák"),
         "person",
         "Ing. Pavel Novák",
         0.9,

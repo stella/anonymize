@@ -1,14 +1,14 @@
 #![allow(clippy::expect_used, clippy::indexing_slicing, clippy::unwrap_used)]
 
 use stella_anonymize_core::{
-  CountryMatchData, DenyListMatchData, DetectionSource, Error,
-  GazetteerMatchData, PatternSlice, PipelineEntity, RegexMatchMeta,
+  CountryMatchData, DenyListFilterData, DenyListMatchData, DetectionSource,
+  Error, GazetteerMatchData, PatternSlice, PipelineEntity, RegexMatchMeta,
   SearchMatch, SourceDetail, process_country_matches,
   process_deny_list_matches, process_gazetteer_matches, process_regex_matches,
 };
 
 #[test]
-fn regex_processor_filters_slice_and_short_phone_matches() {
+fn regex_processor_filters_slice_and_short_matches_by_meta() {
   let matches = vec![
     SearchMatch::Regex {
       pattern: 0,
@@ -28,7 +28,13 @@ fn regex_processor_filters_slice_and_short_phone_matches() {
   ];
   let meta = vec![
     RegexMatchMeta::new("person", 0.8),
-    RegexMatchMeta::new("phone number", 0.8),
+    RegexMatchMeta {
+      label: String::from("short gated"),
+      score: 0.8,
+      source_detail: None,
+      requires_validation: false,
+      min_byte_length: Some(7),
+    },
   ];
 
   let entities = process_regex_matches(
@@ -64,6 +70,7 @@ fn regex_processor_rejects_unported_validators() {
     score: 0.9,
     source_detail: None,
     requires_validation: true,
+    min_byte_length: None,
   }];
 
   let err = process_regex_matches(
@@ -92,6 +99,7 @@ fn regex_processor_preserves_custom_regex_source_detail() {
     score: 0.7,
     source_detail: Some(SourceDetail::CustomRegex),
     requires_validation: false,
+    min_byte_length: None,
   }];
 
   let entities = process_regex_matches(
@@ -117,6 +125,7 @@ fn deny_list_processor_emits_custom_labels() {
     custom_labels: vec![vec![String::from("matter")]],
     originals: vec![String::from("Secret Code")],
     sources: vec![vec![String::from("custom-deny-list")]],
+    filters: None,
   };
 
   let entities = process_deny_list_matches(
@@ -155,6 +164,7 @@ fn deny_list_processor_rejects_embedded_custom_word_matches() {
     custom_labels: vec![vec![String::from("matter")]],
     originals: vec![String::from("Secret")],
     sources: vec![vec![String::from("custom-deny-list")]],
+    filters: None,
   };
 
   let entities = process_deny_list_matches(
@@ -170,7 +180,7 @@ fn deny_list_processor_rejects_embedded_custom_word_matches() {
 }
 
 #[test]
-fn deny_list_processor_rejects_curated_sources() {
+fn deny_list_processor_emits_curated_non_person_labels() {
   let matches = vec![SearchMatch::Literal {
     pattern: 0,
     start: 0,
@@ -181,6 +191,35 @@ fn deny_list_processor_rejects_curated_sources() {
     custom_labels: vec![vec![]],
     originals: vec![String::from("Prague")],
     sources: vec![vec![String::from("city")]],
+    filters: Some(DenyListFilterData::default()),
+  };
+
+  let entities = process_deny_list_matches(
+    &matches,
+    PatternSlice { start: 0, end: 1 },
+    "Prague",
+    &data,
+  )
+  .unwrap();
+
+  assert_eq!(entities.len(), 1);
+  assert_eq!(entities[0].label, "address");
+  assert_eq!(entities[0].source_detail, None);
+}
+
+#[test]
+fn deny_list_processor_rejects_curated_sources_without_filters() {
+  let matches = vec![SearchMatch::Literal {
+    pattern: 0,
+    start: 0,
+    end: 6,
+  }];
+  let data = DenyListMatchData {
+    labels: vec![vec![String::from("address")]],
+    custom_labels: vec![vec![]],
+    originals: vec![String::from("Prague")],
+    sources: vec![vec![String::from("city")]],
+    filters: None,
   };
 
   let error = process_deny_list_matches(
@@ -193,8 +232,8 @@ fn deny_list_processor_rejects_curated_sources() {
 
   assert_eq!(
     error,
-    Error::UnsupportedDenyListSource {
-      source: String::from("city")
+    Error::MissingStaticData {
+      field: "deny_list.filters"
     }
   );
 }

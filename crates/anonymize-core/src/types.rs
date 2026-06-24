@@ -9,10 +9,10 @@ pub enum Error {
     start: u32,
     end: u32,
   },
-  Utf16OffsetOutOfBounds {
+  ByteOffsetOutOfBounds {
     offset: u32,
   },
-  Utf16OffsetInsideSurrogate {
+  ByteOffsetInsideCodepoint {
     offset: u32,
   },
   Search {
@@ -26,6 +26,9 @@ pub enum Error {
   PatternIndexOutOfRange {
     index: usize,
   },
+  PatternIndexNotAddressable {
+    pattern: u32,
+  },
   UnsupportedRegexValidation {
     pattern: u32,
   },
@@ -34,6 +37,9 @@ pub enum Error {
   },
   UnsupportedDenyListSource {
     source: String,
+  },
+  MissingStaticData {
+    field: &'static str,
   },
   StaticDataLengthMismatch {
     field: &'static str,
@@ -48,14 +54,11 @@ impl fmt::Display for Error {
       Self::InvalidSpan { start, end } => {
         write!(formatter, "Invalid entity span: {start}..{end}")
       }
-      Self::Utf16OffsetOutOfBounds { offset } => {
-        write!(formatter, "UTF-16 offset is out of bounds: {offset}")
+      Self::ByteOffsetOutOfBounds { offset } => {
+        write!(formatter, "Byte offset is out of bounds: {offset}")
       }
-      Self::Utf16OffsetInsideSurrogate { offset } => {
-        write!(
-          formatter,
-          "UTF-16 offset is not a scalar boundary: {offset}"
-        )
+      Self::ByteOffsetInsideCodepoint { offset } => {
+        write!(formatter, "Byte offset is not a UTF-8 boundary: {offset}")
       }
       Self::Search { engine, reason } => {
         write!(formatter, "{engine} search failed: {reason}")
@@ -68,6 +71,12 @@ impl fmt::Display for Error {
       }
       Self::PatternIndexOutOfRange { index } => {
         write!(formatter, "Search pattern index exceeds u32 range: {index}")
+      }
+      Self::PatternIndexNotAddressable { pattern } => {
+        write!(
+          formatter,
+          "Search pattern index is not addressable: {pattern}"
+        )
       }
       Self::UnsupportedRegexValidation { pattern } => {
         write!(
@@ -86,6 +95,9 @@ impl fmt::Display for Error {
           formatter,
           "Deny-list source '{source}' is not supported by native core"
         )
+      }
+      Self::MissingStaticData { field } => {
+        write!(formatter, "Static data field '{field}' is required")
       }
       Self::StaticDataLengthMismatch {
         field,
@@ -109,7 +121,7 @@ pub enum EntityKind {
   Coreference { source_text: String },
 }
 
-/// Source span with UTF-16 offsets.
+/// Source span with UTF-8 byte offsets.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Entity {
   pub start: u32,
@@ -281,6 +293,7 @@ pub enum SearchEngine {
   Literal,
   Regex,
   Fuzzy,
+  Text,
 }
 
 impl fmt::Display for SearchEngine {
@@ -289,11 +302,12 @@ impl fmt::Display for SearchEngine {
       Self::Literal => formatter.write_str("literal"),
       Self::Regex => formatter.write_str("regex"),
       Self::Fuzzy => formatter.write_str("fuzzy"),
+      Self::Text => formatter.write_str("text-search"),
     }
   }
 }
 
-/// Search match with the caller's pattern index.
+/// Search match with the caller's pattern index and UTF-8 byte offsets.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SearchMatch {
   Literal {
@@ -348,6 +362,30 @@ impl SearchMatch {
       Self::Literal { end, .. }
       | Self::Regex { end, .. }
       | Self::Fuzzy { end, .. } => *end,
+    }
+  }
+
+  #[must_use]
+  pub(crate) const fn with_span(self, start: u32, end: u32) -> Self {
+    match self {
+      Self::Literal { pattern, .. } => Self::Literal {
+        pattern,
+        start,
+        end,
+      },
+      Self::Regex { pattern, .. } => Self::Regex {
+        pattern,
+        start,
+        end,
+      },
+      Self::Fuzzy {
+        pattern, distance, ..
+      } => Self::Fuzzy {
+        pattern,
+        start,
+        end,
+        distance,
+      },
     }
   }
 }

@@ -1,5 +1,7 @@
 import { spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
 import {
+  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -28,6 +30,11 @@ const COMPARE_BASELINE =
   process.env.ANONYMIZE_MIGRATION_COMPARE_BASELINE !== "0";
 const REQUIRE_NATIVE_PIPELINE =
   process.env.ANONYMIZE_MIGRATION_REQUIRE_NATIVE_PIPELINE === "1";
+const CANDIDATE_RUNTIME =
+  process.env.ANONYMIZE_MIGRATION_CANDIDATE_RUNTIME ?? "typescript";
+const FAIL_ON_MISMATCH =
+  process.env.ANONYMIZE_MIGRATION_FAIL_ON_MISMATCH ??
+  (CANDIDATE_RUNTIME === "typescript" ? "1" : "0");
 const WARM_ITERATIONS = positiveIntegerEnv(
   "ANONYMIZE_MIGRATION_WARM_ITERATIONS",
   2,
@@ -66,6 +73,7 @@ async function runCoordinator() {
       sourceRoot: ROOT_DIR,
       fixtures,
       tempRoot,
+      runtime: CANDIDATE_RUNTIME,
     });
     printVariantSummary(candidate);
 
@@ -81,7 +89,7 @@ async function runCoordinator() {
     if (baseline !== null) {
       const comparison = compareSnapshots(baseline, candidate);
       console.log(JSON.stringify(comparison));
-      if (!comparison.equal) {
+      if (!comparison.equal && FAIL_ON_MISMATCH !== "0") {
         throw new Error(
           `Fixture parity failed for ${comparison.mismatches.length} fixture(s)`,
         );
@@ -92,7 +100,18 @@ async function runCoordinator() {
   }
 }
 
-function runVariant({ name, sourceRoot, fixtures, tempRoot }) {
+function runVariant({
+  name,
+  sourceRoot,
+  fixtures,
+  tempRoot,
+  runtime = "typescript",
+}) {
+  validateRuntime(runtime);
+  if (runtime === "native-static") {
+    ensureNativeAdapterBuilt();
+  }
+
   const resultPath = join(
     tempRoot,
     `${name.replaceAll(/[^a-zA-Z0-9_.-]/g, "_")}.json`,
@@ -104,6 +123,7 @@ function runVariant({ name, sourceRoot, fixtures, tempRoot }) {
       ANONYMIZE_MIGRATION_WORKER: "1",
       ANONYMIZE_MIGRATION_SOURCE_ROOT: sourceRoot,
       ANONYMIZE_MIGRATION_VARIANT: name,
+      ANONYMIZE_MIGRATION_RUNTIME: runtime,
       ANONYMIZE_MIGRATION_FIXTURES_DIR: FIXTURES_DIR,
       ANONYMIZE_MIGRATION_FIXTURES: JSON.stringify(fixtures),
       ANONYMIZE_MIGRATION_RESULT_PATH: resultPath,
@@ -131,8 +151,10 @@ function runVariant({ name, sourceRoot, fixtures, tempRoot }) {
 async function runWorker() {
   const sourceRoot = requiredEnv("ANONYMIZE_MIGRATION_SOURCE_ROOT");
   const variant = requiredEnv("ANONYMIZE_MIGRATION_VARIANT");
+  const runtime = requiredEnv("ANONYMIZE_MIGRATION_RUNTIME");
   const resultPath = requiredEnv("ANONYMIZE_MIGRATION_RESULT_PATH");
   const fixtures = JSON.parse(requiredEnv("ANONYMIZE_MIGRATION_FIXTURES"));
+  validateRuntime(runtime);
 
   const importStart = Bun.nanoseconds();
   const [indexModule, configModule, dictionaryModule] = await Promise.all([
@@ -163,24 +185,35 @@ async function runWorker() {
   const prepareStart = Bun.nanoseconds();
   const search = await indexModule.preparePipelineSearch({ config, context });
   const prepareMs = elapsedMs(prepareStart);
-  const nativeRewrite = describeNativeRewrite(config, search);
+  const nativeRewrite = describeNativeRewrite(config, search, runtime);
 
-  const coldRun = await runFixtureSweep({
-    indexModule,
-    config,
-    context,
-    fixtures,
-  });
+  const runtimeRunner =
+    runtime === "native-static"
+      ? createNativeStaticRunner(search.nativeStaticConfig)
+      : null;
+  const nativePrepareMs = runtimeRunner?.prepareMs ?? 0;
+
+  const coldRun =
+    runtimeRunner === null
+      ? await runTypeScriptFixtureSweep({
+          indexModule,
+          config,
+          context,
+          fixtures,
+        })
+      : runNativeStaticFixtureSweep({ runner: runtimeRunner, fixtures });
 
   const warmRuns = [];
   for (let index = 0; index < WARM_ITERATIONS; index += 1) {
     warmRuns.push(
-      await runFixtureSweep({
-        indexModule,
-        config,
-        context,
-        fixtures,
-      }),
+      runtimeRunner === null
+        ? await runTypeScriptFixtureSweep({
+            indexModule,
+            config,
+            context,
+            fixtures,
+          })
+        : runNativeStaticFixtureSweep({ runner: runtimeRunner, fixtures }),
     );
   }
 
@@ -188,6 +221,10 @@ async function runWorker() {
   const warmAvgMs =
     WARM_ITERATIONS === 0 ? 0 : roundMs(warmRunMs / WARM_ITERATIONS);
   const fixtureTimings = summarizeFixtureTimings(coldRun, warmRuns);
+  const nativeDiagnostics =
+    runtimeRunner === null
+      ? null
+      : collectNativeDiagnostics({ runner: runtimeRunner, fixtures });
   const snapshots = Object.fromEntries(
     coldRun.fixtures.map((fixture) => [fixture.fixture, fixture.snapshot]),
   );
@@ -197,7 +234,7 @@ async function runWorker() {
     `${JSON.stringify({
       event: "fixture-migration-variant",
       variant,
-      pipelineRuntime: "typescript",
+      pipelineRuntime: runtime,
       nativeRewrite,
       fixtureCount: fixtures.length,
       warmIterations: WARM_ITERATIONS,
@@ -205,13 +242,19 @@ async function runWorker() {
         importMs,
         dictionaryMs,
         prepareMs,
+        nativePrepareMs,
         coldRunMs: coldRun.ms,
-        coldPipelineMs: roundMs(dictionaryMs + prepareMs + coldRun.ms),
-        coldTotalMs: roundMs(importMs + dictionaryMs + prepareMs + coldRun.ms),
+        coldPipelineMs: roundMs(
+          dictionaryMs + prepareMs + nativePrepareMs + coldRun.ms,
+        ),
+        coldTotalMs: roundMs(
+          importMs + dictionaryMs + prepareMs + nativePrepareMs + coldRun.ms,
+        ),
         warmRunMsByIteration: warmRuns.map((run) => run.ms),
         warmRunMs,
         warmAvgMs,
       },
+      nativeDiagnostics,
       fixtureTimings,
       fixtures: coldRun.fixtures.map(
         ({ fixture, ms, entityCount, redactedTextLength }) => ({
@@ -226,7 +269,12 @@ async function runWorker() {
   );
 }
 
-async function runFixtureSweep({ indexModule, config, context, fixtures }) {
+async function runTypeScriptFixtureSweep({
+  indexModule,
+  config,
+  context,
+  fixtures,
+}) {
   const sweepStart = Bun.nanoseconds();
   const results = [];
 
@@ -256,6 +304,140 @@ async function runFixtureSweep({ indexModule, config, context, fixtures }) {
   };
 }
 
+function runNativeStaticFixtureSweep({ runner, fixtures }) {
+  const sweepStart = Bun.nanoseconds();
+  const results = [];
+
+  for (const fixturePath of fixtures) {
+    const fullText = readFileSync(fixturePath, "utf8").replaceAll("\r\n", "\n");
+    const start = Bun.nanoseconds();
+    const result = runner.prepared.redactStaticEntities(fullText, undefined);
+    const ms = elapsedMs(start);
+    const snapshot = toNativeSnapshot(result);
+    results.push({
+      fixture: relative(FIXTURES_DIR, fixturePath),
+      ms,
+      entityCount: snapshot.entityCount,
+      redactedTextLength: snapshot.redactedText.length,
+      snapshot,
+    });
+  }
+
+  return {
+    ms: elapsedMs(sweepStart),
+    fixtures: results,
+  };
+}
+
+function collectNativeDiagnostics({ runner, fixtures }) {
+  const fixtureDiagnostics = [];
+
+  for (const fixturePath of fixtures) {
+    const fullText = readFileSync(fixturePath, "utf8").replaceAll("\r\n", "\n");
+    const report = JSON.parse(
+      runner.prepared.redactStaticEntitiesDiagnosticsJson(fullText, undefined),
+    );
+    fixtureDiagnostics.push({
+      fixture: relative(FIXTURES_DIR, fixturePath),
+      stages: diagnosticStageSummaries(report.diagnostics.events),
+    });
+  }
+
+  return {
+    prepare: {
+      stages: diagnosticStageSummaries(runner.prepareDiagnostics.events),
+      topStages: topDiagnosticStages(
+        diagnosticStageSummaries(runner.prepareDiagnostics.events),
+      ),
+    },
+    run: summarizeFixtureDiagnostics(fixtureDiagnostics),
+  };
+}
+
+function summarizeFixtureDiagnostics(fixtureDiagnostics) {
+  const stageBuckets = new Map();
+  const byFixture = [];
+
+  for (const fixture of fixtureDiagnostics) {
+    let fixtureElapsedMs = 0;
+    for (const stage of fixture.stages) {
+      fixtureElapsedMs += stage.elapsedMs ?? 0;
+      const bucket = stageBuckets.get(stage.stage) ?? {
+        stage: stage.stage,
+        elapsedMs: [],
+        count: 0,
+      };
+      if (typeof stage.elapsedMs === "number") {
+        bucket.elapsedMs.push(stage.elapsedMs);
+      }
+      bucket.count += stage.count ?? 0;
+      stageBuckets.set(stage.stage, bucket);
+    }
+    byFixture.push({
+      fixture: fixture.fixture,
+      elapsedMs: roundMs(fixtureElapsedMs),
+      topStages: topDiagnosticStages(fixture.stages).slice(0, 5),
+    });
+  }
+
+  const stages = [...stageBuckets.values()]
+    .map((bucket) => ({
+      stage: bucket.stage,
+      calls: bucket.elapsedMs.length,
+      totalMs: roundMs(bucket.elapsedMs.reduce((sum, ms) => sum + ms, 0)),
+      avgMs:
+        bucket.elapsedMs.length === 0
+          ? 0
+          : roundMs(
+              bucket.elapsedMs.reduce((sum, ms) => sum + ms, 0) /
+                bucket.elapsedMs.length,
+            ),
+      p50Ms: percentile(
+        bucket.elapsedMs.toSorted((a, b) => a - b),
+        0.5,
+      ),
+      p95Ms: percentile(
+        bucket.elapsedMs.toSorted((a, b) => a - b),
+        0.95,
+      ),
+      maxMs: percentile(
+        bucket.elapsedMs.toSorted((a, b) => a - b),
+        1,
+      ),
+      count: bucket.count,
+    }))
+    .sort((left, right) => right.totalMs - left.totalMs);
+
+  return {
+    stages,
+    topStages: stages.slice(0, 10),
+    topFixtures: byFixture
+      .toSorted((left, right) => right.elapsedMs - left.elapsedMs)
+      .slice(0, 10),
+    byFixture,
+  };
+}
+
+function diagnosticStageSummaries(events) {
+  return events
+    .filter((event) => event.kind === "stage-summary")
+    .map((event) => ({
+      stage: event.stage,
+      count: event.count ?? 0,
+      elapsedMs:
+        typeof event.elapsed_us === "number"
+          ? roundMs(event.elapsed_us / 1_000)
+          : null,
+      inputBytes: event.input_bytes ?? null,
+    }));
+}
+
+function topDiagnosticStages(stages) {
+  return stages
+    .filter((stage) => typeof stage.elapsedMs === "number")
+    .toSorted((left, right) => right.elapsedMs - left.elapsedMs);
+}
+
 function toSnapshot(indexModule, fullText, entities, context) {
   const sorted = entities.toSorted(
     (left, right) =>
@@ -282,6 +464,33 @@ function toSnapshot(indexModule, fullText, entities, context) {
       source,
     })),
     redactedText: redacted.redactedText,
+  };
+}
+
+function toNativeSnapshot(result) {
+  const entities = result.resolvedEntities.toSorted(
+    (left, right) =>
+      left.start - right.start ||
+      left.end - right.end ||
+      left.label.localeCompare(right.label) ||
+      left.text.localeCompare(right.text),
+  );
+  const counts = {};
+  for (const entity of entities) {
+    counts[entity.label] = (counts[entity.label] ?? 0) + 1;
+  }
+
+  return {
+    entityCount: entities.length,
+    counts,
+    entities: entities.map(({ start, end, label, text, source }) => ({
+      start,
+      end,
+      label,
+      text,
+      source,
+    })),
+    redactedText: result.redaction.redactedText,
   };
 }
 
@@ -384,13 +593,14 @@ function printVariantSummary(result) {
       fixtureCount: result.fixtureCount,
       warmIterations: result.warmIterations,
       timings: result.timings,
+      nativeDiagnostics: result.nativeDiagnostics,
       fixtureTimings: result.fixtureTimings,
       fixtures: result.fixtures,
     }),
   );
 }
 
-function describeNativeRewrite(config, search) {
+function describeNativeRewrite(config, search, runtime) {
   const sliceLengths = Object.fromEntries(
     Object.entries(search.slices).map(([name, slice]) => [
       name,
@@ -399,22 +609,22 @@ function describeNativeRewrite(config, search) {
   );
   const regexValidationSlots = countRegexValidationSlots(search.regexMeta);
   const denyListSourceCounts = countDenyListSources(search.denyListData);
+  const nativeStaticConfig = search.nativeStaticConfig;
   const unsupportedSearchSlots = [
     unsupportedSlot("regex", regexValidationSlots, "regex validators"),
     unsupportedSlot("triggers", sliceLengths.triggers, "trigger extraction"),
     unsupportedSlot("streetTypes", sliceLengths.streetTypes, "address seeds"),
-    unsupportedSlot(
-      "denyList",
-      denyListSourceCounts.curated,
-      "curated deny-list semantics",
-    ),
   ].filter((slot) => slot.count > 0);
-  const supportedSearchSlots =
-    Math.max(0, sliceLengths.regex - regexValidationSlots) +
-    sliceLengths.customRegex +
-    denyListSourceCounts.customOnly +
-    sliceLengths.gazetteer +
-    sliceLengths.countries;
+  const supportedSearchSlots = nativeStaticConfig
+    ? nativeStaticConfig.regex_patterns.length +
+      nativeStaticConfig.custom_regex_patterns.length +
+      nativeStaticConfig.literal_patterns.length
+    : Math.max(0, sliceLengths.regex - regexValidationSlots) +
+      sliceLengths.customRegex +
+      denyListSourceCounts.customOnly +
+      denyListSourceCounts.curated +
+      sliceLengths.gazetteer +
+      sliceLengths.countries;
   const totalSearchSlots = Object.values(sliceLengths).reduce(
     (sum, length) => sum + length,
     0,
@@ -426,8 +636,8 @@ function describeNativeRewrite(config, search) {
   );
 
   return {
-    measuredInPipeline: false,
-    pipelineRuntime: "typescript",
+    measuredInPipeline: runtime === "native-static",
+    pipelineRuntime: runtime,
     fullPipelineNativeEligible:
       unsupportedSearchSlots.length === 0 &&
       unsupportedPipelineStages.length === 0,
@@ -457,11 +667,10 @@ function describeUnsupportedPipelineStages(
   if (config.enableTriggerPhrases) {
     stages.push("triggers");
   }
-  if (config.enableDenyList && denyListSourceCounts.curated > 0) {
-    stages.push("curated-deny-list");
-  }
   if (config.enableNameCorpus) {
-    stages.push("name-corpus");
+    stages.push(
+      config.enableDenyList ? "name-corpus-supplemental" : "name-corpus",
+    );
   }
   if (config.enableHotwordRules) {
     stages.push("hotword-rules");
@@ -635,6 +844,157 @@ function materializeGitRef(ref, tempRoot) {
   return outputDir;
 }
 
+function createNativeStaticRunner(nativeStaticConfig) {
+  if (!nativeStaticConfig) {
+    throw new Error("Native static runtime requires nativeStaticConfig");
+  }
+
+  const native = loadNativeAdapter();
+  const prepareStart = Bun.nanoseconds();
+  const prepared = new native.NativePreparedSearch(
+    toNapiConfig(nativeStaticConfig),
+  );
+  const prepareMs = elapsedMs(prepareStart);
+  const prepareDiagnostics = JSON.parse(prepared.prepareDiagnosticsJson());
+  return {
+    prepared,
+    prepareDiagnostics,
+    prepareMs,
+  };
+}
+
+function loadNativeAdapter() {
+  const tempDir = mkdtempSync(join(tmpdir(), "stella-anonymize-fixture-napi-"));
+  const napiPath = join(tempDir, "stella_anonymize_napi.node");
+  copyFileSync(nativeLibraryPath("stella_anonymize_napi"), napiPath);
+  const loaded = createRequire(import.meta.url)(napiPath);
+  const NativePreparedSearch = Reflect.get(
+    Object(loaded),
+    "NativePreparedSearch",
+  );
+  if (typeof NativePreparedSearch !== "function") {
+    throw new TypeError("Native anonymize adapter exports are incomplete");
+  }
+  return { NativePreparedSearch };
+}
+
+function toNapiConfig(config) {
+  return {
+    regexPatterns: config.regex_patterns.map(toNapiPattern),
+    customRegexPatterns: config.custom_regex_patterns.map(toNapiPattern),
+    literalPatterns: config.literal_patterns.map(toNapiPattern),
+    regexOptions: toNapiOptions(config.regex_options),
+    customRegexOptions: toNapiOptions(config.custom_regex_options),
+    literalOptions: toNapiOptions(config.literal_options),
+    slices: {
+      regex: config.slices.regex,
+      customRegex: config.slices.custom_regex,
+      legalForms: config.slices.legal_forms,
+      triggers: config.slices.triggers,
+      denyList: config.slices.deny_list,
+      streetTypes: config.slices.street_types,
+      gazetteer: config.slices.gazetteer,
+      countries: config.slices.countries,
+    },
+    regexMeta: config.regex_meta.map(toNapiRegexMeta),
+    customRegexMeta: config.custom_regex_meta.map(toNapiRegexMeta),
+    denyListData:
+      config.deny_list_data === undefined
+        ? undefined
+        : {
+            labels: config.deny_list_data.labels,
+            customLabels: config.deny_list_data.custom_labels,
+            originals: config.deny_list_data.originals,
+            sources: config.deny_list_data.sources,
+            filters:
+              config.deny_list_data.filters === undefined
+                ? undefined
+                : toNapiDenyListFilters(config.deny_list_data.filters),
+          },
+    gazetteerData:
+      config.gazetteer_data === undefined
+        ? undefined
+        : {
+            labels: config.gazetteer_data.labels,
+            isFuzzy: config.gazetteer_data.is_fuzzy,
+          },
+    countryData: config.country_data,
+  };
+}
+
+function toNapiPattern(pattern) {
+  return {
+    kind: pattern.kind,
+    pattern: pattern.pattern,
+    distance: pattern.distance,
+    caseInsensitive: pattern.case_insensitive,
+    wholeWords: pattern.whole_words,
+    lazy: pattern.lazy,
+    prefilterAny: pattern.prefilter_any,
+    prefilterCaseInsensitive: pattern.prefilter_case_insensitive,
+    prefilterRegex: pattern.prefilter_regex,
+  };
+}
+
+function toNapiOptions(options) {
+  if (options === undefined) {
+    return undefined;
+  }
+  return {
+    literalCaseInsensitive: options.literal_case_insensitive,
+    literalWholeWords: options.literal_whole_words,
+    regexWholeWords: options.regex_whole_words,
+    fuzzyCaseInsensitive: options.fuzzy_case_insensitive,
+    fuzzyWholeWords: options.fuzzy_whole_words,
+    fuzzyNormalizeDiacritics: options.fuzzy_normalize_diacritics,
+  };
+}
+
+function toNapiRegexMeta(meta) {
+  return {
+    label: meta.label,
+    score: meta.score,
+    sourceDetail: meta.source_detail,
+    requiresValidation: meta.requires_validation,
+    minByteLength: meta.min_byte_length,
+  };
+}
+
+function toNapiDenyListFilters(filters) {
+  return {
+    stopwords: filters.stopwords,
+    allowList: filters.allow_list,
+    personStopwords: filters.person_stopwords,
+    addressStopwords: filters.address_stopwords,
+    streetTypes: filters.street_types,
+    firstNames: filters.first_names,
+    genericRoles: filters.generic_roles,
+    sentenceStarters: filters.sentence_starters,
+    trailingAddressWordExclusions: filters.trailing_address_word_exclusions,
+    definedTermCues: filters.defined_term_cues,
+  };
+}
+
+function nativeLibraryPath(name) {
+  if (process.platform === "darwin") {
+    return join(ROOT_DIR, "target", "release", `lib${name}.dylib`);
+  }
+  if (process.platform === "linux") {
+    return join(ROOT_DIR, "target", "release", `lib${name}.so`);
+  }
+  return join(ROOT_DIR, "target", "release", `${name}.dll`);
+}
+
+function ensureNativeAdapterBuilt() {
+  runCommand("cargo", [
+    "build",
+    "-p",
+    "stella-anonymize-napi",
+    "--release",
+    "--locked",
+  ]);
+}
+
 function runCommand(command, args) {
   const result = spawnSync(command, args, {
     cwd: ROOT_DIR,
@@ -644,6 +1004,15 @@ function runCommand(command, args) {
   if (result.status !== 0) {
     throw new Error(`${command} ${args.join(" ")} failed`);
   }
+}
+
+function validateRuntime(runtime) {
+  if (runtime === "typescript" || runtime === "native-static") {
+    return;
+  }
+  throw new Error(
+    `ANONYMIZE_MIGRATION_CANDIDATE_RUNTIME must be typescript or native-static, got ${runtime}`,
+  );
 }
 
 function importSource(sourceRoot, relativePath, variant) {

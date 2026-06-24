@@ -10,9 +10,7 @@ keywords = ["anonymization", "pii", "redaction", "text"]
 categories = ["text-processing"]
 
 [dependencies]
-stella-aho-corasick-core = { version = "1.0.4", git = "https://github.com/stella/aho-corasick", rev = "ad5dfa06c1be8bffda75e050030fa4e70b93c75f" }
-stella-fuzzy-search-core = { version = "1.1.2", git = "https://github.com/stella/fuzzy-search", rev = "4ccb8ced60d8f2ff7f5d1870d2931556e8247632" }
-stella-regex-set-core = { version = "1.0.5", git = "https://github.com/stella/regex-set", rev = "a50fdc018b40d23ecf732be85b00d495bd6d95cf" }
+stella-text-search-core = { git = "https://github.com/stella/text-search", rev = "e427c5e8f5c13a0edc8503d24c4d4b34cbf46e8e" }
 
 [lints]
 workspace = true

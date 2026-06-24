@@ -57,6 +57,86 @@ type PatternSlice = {
   end: number;
 };
 
+type NativeSearchPatternKind =
+  | "literal"
+  | "literal-with-options"
+  | "regex"
+  | "fuzzy";
+
+export type NativeSearchPattern = {
+  kind: NativeSearchPatternKind;
+  pattern: string;
+  distance?: number;
+  case_insensitive?: boolean;
+  whole_words?: boolean;
+  lazy?: boolean;
+  prefilter_any?: string[];
+  prefilter_case_insensitive?: boolean;
+  prefilter_regex?: string;
+};
+
+export type NativeSearchOptions = {
+  literal_case_insensitive?: boolean;
+  literal_whole_words?: boolean;
+  regex_whole_words?: boolean;
+  fuzzy_case_insensitive?: boolean;
+  fuzzy_whole_words?: boolean;
+  fuzzy_normalize_diacritics?: boolean;
+};
+
+export type NativeRegexMatchMeta = {
+  label: string;
+  score: number;
+  source_detail?: string;
+  requires_validation?: boolean;
+  min_byte_length?: number;
+};
+
+export type NativeDenyListFilterData = {
+  stopwords: string[];
+  allow_list: string[];
+  person_stopwords: string[];
+  address_stopwords: string[];
+  street_types: string[];
+  first_names: string[];
+  generic_roles: string[];
+  sentence_starters: string[];
+  trailing_address_word_exclusions: string[];
+  defined_term_cues: string[];
+};
+
+export type NativeDenyListMatchData = {
+  labels: string[][];
+  custom_labels: string[][];
+  originals: string[];
+  sources: string[][];
+  filters?: NativeDenyListFilterData;
+};
+
+export type NativePreparedSearchConfig = {
+  regex_patterns: NativeSearchPattern[];
+  custom_regex_patterns: NativeSearchPattern[];
+  literal_patterns: NativeSearchPattern[];
+  regex_options: NativeSearchOptions;
+  custom_regex_options: NativeSearchOptions;
+  literal_options: NativeSearchOptions;
+  slices: {
+    regex: PatternSlice;
+    custom_regex: PatternSlice;
+    legal_forms?: PatternSlice;
+    triggers?: PatternSlice;
+    deny_list: PatternSlice;
+    street_types?: PatternSlice;
+    gazetteer: PatternSlice;
+    countries: PatternSlice;
+  };
+  regex_meta: NativeRegexMatchMeta[];
+  custom_regex_meta: NativeRegexMatchMeta[];
+  deny_list_data?: NativeDenyListMatchData;
+  gazetteer_data?: GazetteerData;
+  country_data?: CountryData;
+};
+
 const createAllowedLabelSet = (
   labels: readonly string[],
 ): ReadonlySet<string> | null => (labels.length > 0 ? new Set(labels) : null);
@@ -99,6 +179,7 @@ export type UnifiedSearchInstance = {
   denyListData: DenyListData | null;
   gazetteerData: GazetteerData | null;
   countryData: CountryData | null;
+  nativeStaticConfig: NativePreparedSearchConfig;
 };
 
 export const buildUnifiedSearch = async (
@@ -354,6 +435,19 @@ export const buildUnifiedSearch = async (
         })
       : new (getTextSearch())([]);
 
+  const nativeStaticConfig = buildNativeStaticConfig({
+    regexPatterns: allRegex,
+    regexMeta,
+    customRegexes,
+    customRegexMeta,
+    denyListData,
+    gazetteerPatterns: gazResult?.patterns ?? [],
+    gazetteerData: gazResult?.data ?? null,
+    countryPatterns: countryResult?.patterns ?? [],
+    countryData: countryResult?.data ?? null,
+    customDenyListNeedsWholeWords,
+  });
+
   return {
     tsRegex,
     tsCustomRegex,
@@ -374,5 +468,270 @@ export const buildUnifiedSearch = async (
     denyListData,
     gazetteerData: gazResult?.data ?? null,
     countryData: countryResult?.data ?? null,
+    nativeStaticConfig,
   };
+};
+
+type BuildNativeStaticConfigArgs = {
+  regexPatterns: readonly PatternEntry[];
+  regexMeta: readonly RegexMeta[];
+  customRegexes: readonly { pattern: string }[];
+  customRegexMeta: readonly RegexMeta[];
+  denyListData: DenyListData | null;
+  gazetteerPatterns: readonly PatternEntry[];
+  gazetteerData: GazetteerData | null;
+  countryPatterns: readonly PatternEntry[];
+  countryData: CountryData | null;
+  customDenyListNeedsWholeWords: (pattern: string) => boolean;
+};
+
+const buildNativeStaticConfig = ({
+  regexPatterns,
+  regexMeta,
+  customRegexes,
+  customRegexMeta,
+  denyListData,
+  gazetteerPatterns,
+  gazetteerData,
+  countryPatterns,
+  countryData,
+  customDenyListNeedsWholeWords,
+}: BuildNativeStaticConfigArgs): NativePreparedSearchConfig => {
+  const nativeRegexPatterns: NativeSearchPattern[] = [];
+  const nativeRegexMeta: NativeRegexMatchMeta[] = [];
+  for (const [index, pattern] of regexPatterns.entries()) {
+    const meta = regexMeta[index];
+    if (!meta || meta.validator) {
+      continue;
+    }
+    nativeRegexPatterns.push(toNativeRegexPattern(pattern));
+    nativeRegexMeta.push(toNativeRegexMeta(meta));
+  }
+
+  const nativeCustomRegexPatterns = customRegexes.map((entry) => ({
+    kind: "regex" as const,
+    pattern: entry.pattern,
+  }));
+  const nativeCustomRegexMeta = customRegexMeta.map(toNativeRegexMeta);
+
+  const denyPatterns =
+    denyListData?.originals.map((pattern, index) =>
+      toNativeDenyListPattern(
+        pattern,
+        stringArrayValue(denyListData.sources[index]).includes(
+          "custom-deny-list",
+        )
+          ? customDenyListNeedsWholeWords(pattern)
+          : true,
+      ),
+    ) ?? [];
+  const gazetteerNativePatterns = gazetteerPatterns.map(toNativeLiteralPattern);
+  const countryNativePatterns = countryPatterns.map(toNativeLiteralPattern);
+
+  let literalOffset = 0;
+  const denyListSlice = {
+    start: literalOffset,
+    end: literalOffset + denyPatterns.length,
+  };
+  literalOffset = denyListSlice.end;
+  const gazetteerSlice = {
+    start: literalOffset,
+    end: literalOffset + gazetteerNativePatterns.length,
+  };
+  literalOffset = gazetteerSlice.end;
+  const countriesSlice = {
+    start: literalOffset,
+    end: literalOffset + countryNativePatterns.length,
+  };
+
+  const nativeConfig: NativePreparedSearchConfig = {
+    regex_patterns: nativeRegexPatterns,
+    custom_regex_patterns: nativeCustomRegexPatterns,
+    literal_patterns: [
+      ...denyPatterns,
+      ...gazetteerNativePatterns,
+      ...countryNativePatterns,
+    ],
+    regex_options: { regex_whole_words: false },
+    custom_regex_options: { regex_whole_words: false },
+    literal_options: {
+      literal_case_insensitive: true,
+      literal_whole_words: false,
+      fuzzy_case_insensitive: true,
+      fuzzy_whole_words: true,
+      fuzzy_normalize_diacritics: true,
+    },
+    slices: {
+      regex: { start: 0, end: nativeRegexPatterns.length },
+      custom_regex: { start: 0, end: nativeCustomRegexPatterns.length },
+      legal_forms: { start: 0, end: 0 },
+      triggers: { start: 0, end: 0 },
+      deny_list: denyListSlice,
+      street_types: { start: 0, end: 0 },
+      gazetteer: gazetteerSlice,
+      countries: countriesSlice,
+    },
+    regex_meta: nativeRegexMeta,
+    custom_regex_meta: nativeCustomRegexMeta,
+  };
+  if (denyListData) {
+    nativeConfig.deny_list_data = toNativeDenyListData(denyListData);
+  }
+  if (gazetteerData) {
+    nativeConfig.gazetteer_data = gazetteerData;
+  }
+  if (countryData) {
+    nativeConfig.country_data = countryData;
+  }
+  return nativeConfig;
+};
+
+const toNativeDenyListPattern = (
+  pattern: string,
+  wholeWords: boolean,
+): NativeSearchPattern => ({
+  kind: "literal-with-options",
+  pattern,
+  case_insensitive: true,
+  whole_words: wholeWords,
+});
+
+const toNativeRegexPattern = (entry: PatternEntry): NativeSearchPattern => {
+  const pattern: NativeSearchPattern = {
+    kind: "regex",
+    pattern: patternEntryText(entry),
+  };
+  if (
+    typeof entry === "string" ||
+    entry instanceof RegExp ||
+    entry.pattern instanceof RegExp
+  ) {
+    return pattern;
+  }
+
+  const regexEntry = entry as {
+    lazy?: boolean;
+    prefilterAny?: readonly string[];
+    prefilterCaseInsensitive?: boolean;
+    prefilterRegex?: RegExp;
+  };
+  if (regexEntry.lazy !== undefined) {
+    pattern.lazy = regexEntry.lazy;
+  }
+  if (regexEntry.prefilterAny !== undefined) {
+    pattern.prefilter_any = [...regexEntry.prefilterAny];
+  }
+  if (regexEntry.prefilterCaseInsensitive !== undefined) {
+    pattern.prefilter_case_insensitive = regexEntry.prefilterCaseInsensitive;
+  }
+  if (regexEntry.prefilterRegex !== undefined) {
+    pattern.prefilter_regex = toNativeRegexSource(regexEntry.prefilterRegex);
+  }
+  return pattern;
+};
+
+const toNativeRegexSource = (regex: RegExp): string =>
+  regex.ignoreCase ? `(?i:${regex.source})` : regex.source;
+
+const toNativeLiteralPattern = (entry: PatternEntry): NativeSearchPattern => {
+  if (typeof entry === "string") {
+    return { kind: "literal", pattern: entry };
+  }
+  if (entry instanceof RegExp) {
+    throw new Error("Native static config does not accept RegExp objects");
+  }
+  if (entry.pattern instanceof RegExp) {
+    throw new Error("Native static config does not accept RegExp entries");
+  }
+  if ("distance" in entry) {
+    const pattern: NativeSearchPattern = {
+      kind: "fuzzy",
+      pattern: entry.pattern,
+    };
+    if (entry.distance !== "auto") {
+      pattern.distance = entry.distance;
+    }
+    return pattern;
+  }
+  if (entry.literal === true) {
+    const pattern: NativeSearchPattern = {
+      kind: "literal-with-options",
+      pattern: entry.pattern,
+    };
+    if (entry.caseInsensitive !== undefined) {
+      pattern.case_insensitive = entry.caseInsensitive;
+    }
+    if (entry.wholeWords !== undefined) {
+      pattern.whole_words = entry.wholeWords;
+    }
+    return pattern;
+  }
+  return { kind: "regex", pattern: entry.pattern };
+};
+
+const patternEntryText = (entry: PatternEntry): string => {
+  if (typeof entry === "string") {
+    return entry;
+  }
+  if (entry instanceof RegExp) {
+    return entry.source;
+  }
+  if (entry.pattern instanceof RegExp) {
+    return entry.pattern.source;
+  }
+  return entry.pattern;
+};
+
+const toNativeRegexMeta = (meta: RegexMeta): NativeRegexMatchMeta => {
+  const result: NativeRegexMatchMeta = {
+    label: meta.label,
+    score: meta.score,
+  };
+  if (meta.sourceDetail) {
+    result.source_detail = meta.sourceDetail;
+  }
+  if (meta.validator) {
+    result.requires_validation = true;
+  }
+  if (meta.minByteLength !== undefined) {
+    result.min_byte_length = meta.minByteLength;
+  }
+  return result;
+};
+
+const toNativeDenyListData = (data: DenyListData): NativeDenyListMatchData => ({
+  labels: data.labels.map(stringArrayValue),
+  custom_labels: data.originals.map((_, index) =>
+    stringArrayValue(data.customLabels[index]),
+  ),
+  originals: data.originals,
+  sources: data.sources.map(stringArrayValue),
+  filters: toNativeDenyListFilters(data.filters),
+});
+
+const toNativeDenyListFilters = (
+  filters: DenyListData["filters"],
+): NativeDenyListFilterData => ({
+  stopwords: filters.stopwords,
+  allow_list: filters.allowList,
+  person_stopwords: filters.personStopwords,
+  address_stopwords: filters.addressStopwords,
+  street_types: filters.streetTypes,
+  first_names: filters.firstNames,
+  generic_roles: filters.genericRoles,
+  sentence_starters: filters.sentenceStarters,
+  trailing_address_word_exclusions: filters.trailingAddressWordExclusions,
+  defined_term_cues: filters.definedTermCues,
+});
+
+const stringArrayValue = (
+  value: string | readonly string[] | undefined,
+): string[] => {
+  if (value === undefined) {
+    return [];
+  }
+  if (typeof value === "string") {
+    return [value];
+  }
+  return [...value];
 };

@@ -1,11 +1,13 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 use stella_anonymize_core::{
-  CountryMatchData, DenyListMatchData, DetectionSource, FuzzySearchOptions,
+  CountryMatchData, DenyListFilterData, DenyListMatchData, DetectionSource,
+  DiagnosticEvent, DiagnosticEventKind, DiagnosticStage, FuzzySearchOptions,
   GazetteerMatchData, LiteralSearchOptions, OperatorConfig, OperatorType,
   PatternSlice, PreparedSearchConfig, PreparedSearchSlices, RegexMatchMeta,
-  RegexSearchOptions, SearchOptions, SearchPattern, SourceDetail,
+  RegexSearchOptions, SearchEngine, SearchOptions, SearchPattern, SourceDetail,
+  StaticRedactionDiagnosticResult, StaticRedactionDiagnostics,
   StaticRedactionResult,
 };
 
@@ -47,6 +49,10 @@ pub struct BindingSearchPattern {
   pub distance: Option<u32>,
   pub case_insensitive: Option<bool>,
   pub whole_words: Option<bool>,
+  pub lazy: Option<bool>,
+  pub prefilter_any: Option<Vec<String>>,
+  pub prefilter_case_insensitive: Option<bool>,
+  pub prefilter_regex: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -87,6 +93,7 @@ pub struct BindingRegexMatchMeta {
   pub score: f64,
   pub source_detail: Option<String>,
   pub requires_validation: Option<bool>,
+  pub min_byte_length: Option<u32>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -106,6 +113,21 @@ pub struct BindingDenyListMatchData {
   pub custom_labels: Vec<Vec<String>>,
   pub originals: Vec<String>,
   pub sources: Vec<Vec<String>>,
+  pub filters: Option<BindingDenyListFilterData>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BindingDenyListFilterData {
+  pub stopwords: Vec<String>,
+  pub allow_list: Vec<String>,
+  pub person_stopwords: Vec<String>,
+  pub address_stopwords: Vec<String>,
+  pub street_types: Vec<String>,
+  pub first_names: Vec<String>,
+  pub generic_roles: Vec<String>,
+  pub sentence_starters: Vec<String>,
+  pub trailing_address_word_exclusions: Vec<String>,
+  pub defined_term_cues: Vec<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
@@ -179,6 +201,51 @@ pub struct BindingStaticRedactionResult {
   pub redaction: BindingRedactionResult,
 }
 
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct BindingDiagnosticEvent {
+  pub stage: String,
+  pub kind: String,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub count: Option<usize>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub engine: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub pattern: Option<u32>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub source: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub source_detail: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub label: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub start: Option<u32>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub end: Option<u32>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub text: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub score: Option<f64>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub span_valid: Option<bool>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub elapsed_us: Option<u64>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub input_bytes: Option<usize>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub reason: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct BindingStaticRedactionDiagnostics {
+  pub events: Vec<BindingDiagnosticEvent>,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct BindingStaticRedactionDiagnosticResult {
+  pub result: BindingStaticRedactionResult,
+  pub diagnostics: BindingStaticRedactionDiagnostics,
+}
+
 pub fn prepared_search_config_from_binding(
   config: BindingPreparedSearchConfig,
 ) -> Result<PreparedSearchConfig> {
@@ -201,6 +268,7 @@ pub fn prepared_search_config_from_binding(
       custom_labels: data.custom_labels,
       originals: data.originals,
       sources: data.sources,
+      filters: data.filters.map(deny_list_filters_from_binding),
     }),
     gazetteer_data: config.gazetteer_data.map(|data| GazetteerMatchData {
       labels: data.labels,
@@ -275,6 +343,78 @@ pub fn static_redaction_result_to_binding(
   }
 }
 
+#[must_use]
+pub fn static_redaction_diagnostic_result_to_binding(
+  result: StaticRedactionDiagnosticResult,
+) -> BindingStaticRedactionDiagnosticResult {
+  BindingStaticRedactionDiagnosticResult {
+    result: static_redaction_result_to_binding(result.result),
+    diagnostics: static_redaction_diagnostics_to_binding(result.diagnostics),
+  }
+}
+
+#[must_use]
+pub fn static_redaction_diagnostics_to_binding(
+  diagnostics: StaticRedactionDiagnostics,
+) -> BindingStaticRedactionDiagnostics {
+  BindingStaticRedactionDiagnostics {
+    events: diagnostics
+      .events
+      .into_iter()
+      .map(diagnostic_event_to_binding)
+      .collect(),
+  }
+}
+
+fn diagnostic_event_to_binding(
+  event: DiagnosticEvent,
+) -> BindingDiagnosticEvent {
+  BindingDiagnosticEvent {
+    stage: diagnostic_stage_name(event.stage),
+    kind: diagnostic_event_kind_name(event.kind),
+    count: event.count,
+    engine: event.engine.map(search_engine_name),
+    pattern: event.pattern,
+    source: event.source.map(detection_source_name),
+    source_detail: event.source_detail.map(source_detail_name),
+    label: event.label,
+    start: event.start,
+    end: event.end,
+    text: event.text,
+    score: event.score,
+    span_valid: event.span_valid,
+    elapsed_us: event.elapsed_us,
+    input_bytes: event.input_bytes,
+    reason: event.reason,
+  }
+}
+
+fn deny_list_filters_from_binding(
+  filters: BindingDenyListFilterData,
+) -> DenyListFilterData {
+  DenyListFilterData {
+    stopwords: lower_set(filters.stopwords),
+    allow_list: lower_set(filters.allow_list),
+    person_stopwords: lower_set(filters.person_stopwords),
+    address_stopwords: lower_set(filters.address_stopwords),
+    street_types: lower_set(filters.street_types),
+    first_names: lower_set(filters.first_names),
+    generic_roles: lower_set(filters.generic_roles),
+    sentence_starters: lower_set(filters.sentence_starters),
+    trailing_address_word_exclusions: lower_set(
+      filters.trailing_address_word_exclusions,
+    ),
+    defined_term_cues: lower_set(filters.defined_term_cues),
+  }
+}
+
+fn lower_set(values: Vec<String>) -> BTreeSet<String> {
+  values
+    .into_iter()
+    .map(|value| value.to_lowercase())
+    .collect()
+}
+
 fn search_patterns_from_binding(
   patterns: Vec<BindingSearchPattern>,
 ) -> Result<Vec<SearchPattern>> {
@@ -294,7 +434,22 @@ fn search_pattern_from_binding(
       case_insensitive: pattern.case_insensitive,
       whole_words: pattern.whole_words,
     }),
-    "regex" => Ok(SearchPattern::Regex(pattern.pattern)),
+    "regex" => {
+      if pattern.lazy.is_some()
+        || pattern.prefilter_any.is_some()
+        || pattern.prefilter_case_insensitive.is_some()
+        || pattern.prefilter_regex.is_some()
+      {
+        return Ok(SearchPattern::RegexWithOptions {
+          pattern: pattern.pattern,
+          lazy: pattern.lazy.unwrap_or(false),
+          prefilter_any: pattern.prefilter_any.unwrap_or_default(),
+          prefilter_case_insensitive: pattern.prefilter_case_insensitive,
+          prefilter_regex: pattern.prefilter_regex,
+        });
+      }
+      Ok(SearchPattern::Regex(pattern.pattern))
+    }
     "fuzzy" => Ok(SearchPattern::Fuzzy {
       pattern: pattern.pattern,
       distance: pattern
@@ -370,6 +525,7 @@ fn regex_meta_from_binding(
           .map(|value| source_detail_from_binding(&value))
           .transpose()?,
         requires_validation: entry.requires_validation.unwrap_or(false),
+        min_byte_length: entry.min_byte_length,
       })
     })
     .collect()
@@ -415,6 +571,52 @@ fn source_detail_name(detail: SourceDetail) -> String {
     SourceDetail::CustomDenyList => "custom-deny-list",
     SourceDetail::CustomRegex => "custom-regex",
     SourceDetail::GazetteerExtension => "gazetteer-extension",
+  }
+  .to_owned()
+}
+
+fn search_engine_name(engine: SearchEngine) -> String {
+  match engine {
+    SearchEngine::Literal => "literal",
+    SearchEngine::Regex => "regex",
+    SearchEngine::Fuzzy => "fuzzy",
+    SearchEngine::Text => "text-search",
+  }
+  .to_owned()
+}
+
+fn diagnostic_stage_name(stage: DiagnosticStage) -> String {
+  match stage {
+    DiagnosticStage::PrepareTotal => "prepare.total",
+    DiagnosticStage::PrepareRegex => "prepare.regex",
+    DiagnosticStage::PrepareCustomRegex => "prepare.custom-regex",
+    DiagnosticStage::PrepareLiteral => "prepare.literal",
+    DiagnosticStage::Normalize => "normalize",
+    DiagnosticStage::FindMatches => "find-matches",
+    DiagnosticStage::FindRegex => "find.regex",
+    DiagnosticStage::FindCustomRegex => "find.custom-regex",
+    DiagnosticStage::FindLiteral => "find.literal",
+    DiagnosticStage::SearchRegex => "search.regex",
+    DiagnosticStage::SearchCustomRegex => "search.custom-regex",
+    DiagnosticStage::SearchLiteral => "search.literal",
+    DiagnosticStage::EntityRegex => "entity.regex",
+    DiagnosticStage::EntityCustomRegex => "entity.custom-regex",
+    DiagnosticStage::EntityDenyList => "entity.deny-list",
+    DiagnosticStage::EntityGazetteer => "entity.gazetteer",
+    DiagnosticStage::EntityCountry => "entity.country",
+    DiagnosticStage::Merge => "resolution.merge",
+    DiagnosticStage::Boundary => "resolution.boundary",
+    DiagnosticStage::Sanitize => "resolution.sanitize",
+    DiagnosticStage::Redaction => "redaction",
+  }
+  .to_owned()
+}
+
+fn diagnostic_event_kind_name(kind: DiagnosticEventKind) -> String {
+  match kind {
+    DiagnosticEventKind::StageSummary => "stage-summary",
+    DiagnosticEventKind::SearchMatch => "search-match",
+    DiagnosticEventKind::Entity => "entity",
   }
   .to_owned()
 }
