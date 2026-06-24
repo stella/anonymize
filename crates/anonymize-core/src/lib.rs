@@ -4,6 +4,7 @@
 
 pub(crate) mod normalize;
 mod placeholders;
+mod processors;
 mod redact;
 mod resolution;
 mod search;
@@ -11,6 +12,10 @@ mod types;
 pub(crate) mod utf16;
 
 pub use placeholders::build_placeholder_map;
+pub use processors::{
+  CountryMatchData, GazetteerMatchData, PatternSlice, RegexMatchMeta,
+  process_country_matches, process_gazetteer_matches, process_regex_matches,
+};
 pub use redact::{deanonymise, redact_text};
 pub use resolution::{
   DetectionSource, PipelineEntity, SourceDetail, enforce_boundary_consistency,
