@@ -3,12 +3,13 @@ use std::collections::BTreeMap;
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use stella_anonymize_adapter_contract::{
-  BindingCountryMatchData, BindingGazetteerMatchData, BindingOperatorConfig,
-  BindingOperatorEntry, BindingPatternSlice, BindingPreparedSearchConfig,
-  BindingPreparedSearchSlices, BindingRedactionResult, BindingRegexMatchMeta,
-  BindingSearchOptions, BindingSearchPattern, BindingStaticRedactionResult,
-  ContractError, operator_config_from_binding,
-  prepared_search_config_from_binding, static_redaction_result_to_binding,
+  BindingCountryMatchData, BindingDenyListMatchData, BindingGazetteerMatchData,
+  BindingOperatorConfig, BindingOperatorEntry, BindingPatternSlice,
+  BindingPreparedSearchConfig, BindingPreparedSearchSlices,
+  BindingRedactionResult, BindingRegexMatchMeta, BindingSearchOptions,
+  BindingSearchPattern, BindingStaticRedactionResult, ContractError,
+  operator_config_from_binding, prepared_search_config_from_binding,
+  static_redaction_result_to_binding,
 };
 use stella_anonymize_core::PreparedSearch;
 
@@ -69,6 +70,14 @@ pub struct JsCountryMatchData {
 }
 
 #[napi(object)]
+pub struct JsDenyListMatchData {
+  pub labels: Vec<Vec<String>>,
+  pub custom_labels: Vec<Vec<String>>,
+  pub originals: Vec<String>,
+  pub sources: Vec<Vec<String>>,
+}
+
+#[napi(object)]
 pub struct JsPreparedSearchConfig {
   pub regex_patterns: Vec<JsSearchPattern>,
   pub custom_regex_patterns: Vec<JsSearchPattern>,
@@ -79,6 +88,7 @@ pub struct JsPreparedSearchConfig {
   pub slices: JsPreparedSearchSlices,
   pub regex_meta: Vec<JsRegexMatchMeta>,
   pub custom_regex_meta: Vec<JsRegexMatchMeta>,
+  pub deny_list_data: Option<JsDenyListMatchData>,
   pub gazetteer_data: Option<JsGazetteerMatchData>,
   pub country_data: Option<JsCountryMatchData>,
 }
@@ -216,6 +226,14 @@ fn to_binding_config(
     slices: to_binding_slices(&config.slices),
     regex_meta: to_binding_regex_meta(config.regex_meta),
     custom_regex_meta: to_binding_regex_meta(config.custom_regex_meta),
+    deny_list_data: config.deny_list_data.map(|data| {
+      BindingDenyListMatchData {
+        labels: data.labels,
+        custom_labels: data.custom_labels,
+        originals: data.originals,
+        sources: data.sources,
+      }
+    }),
     gazetteer_data: config.gazetteer_data.map(|data| {
       BindingGazetteerMatchData {
         labels: data.labels,

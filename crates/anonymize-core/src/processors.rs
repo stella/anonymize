@@ -6,7 +6,9 @@ const MIN_PHONE_LENGTH: usize = 7;
 const GAZETTEER_EXACT_SCORE: f64 = 0.9;
 const GAZETTEER_FUZZY_SCORE: f64 = 0.85;
 const COUNTRY_SCORE: f64 = 0.95;
+const DENY_LIST_SCORE: f64 = 0.9;
 const MAX_GAZETTEER_PREFIX_OVERSHOOT: u32 = 7;
+pub(crate) const CUSTOM_DENY_LIST_SOURCE: &str = "custom-deny-list";
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct PatternSlice {
@@ -18,6 +20,11 @@ impl PatternSlice {
   #[must_use]
   pub const fn is_empty(self) -> bool {
     self.start >= self.end
+  }
+
+  #[must_use]
+  pub const fn len(self) -> u32 {
+    self.end.saturating_sub(self.start)
   }
 
   #[must_use]
@@ -64,6 +71,14 @@ pub struct CountryMatchData {
   pub labels: Vec<String>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DenyListMatchData {
+  pub labels: Vec<Vec<String>>,
+  pub custom_labels: Vec<Vec<String>>,
+  pub originals: Vec<String>,
+  pub sources: Vec<Vec<String>>,
+}
+
 pub fn process_regex_matches(
   matches: &[SearchMatch],
   slice: PatternSlice,
@@ -103,6 +118,59 @@ pub fn process_regex_matches(
     );
     entity.source_detail = entry.source_detail;
     results.push(entity);
+  }
+
+  Ok(results)
+}
+
+pub fn process_deny_list_matches(
+  matches: &[SearchMatch],
+  slice: PatternSlice,
+  full_text: &str,
+  data: &DenyListMatchData,
+) -> Result<Vec<PipelineEntity>> {
+  let offsets = Utf16Offsets::new(full_text);
+  let mut results = Vec::new();
+
+  for found in matches {
+    let Some(local_index) = slice.local_index(found.pattern()) else {
+      continue;
+    };
+    ensure_custom_deny_list_source(
+      data.sources.get(local_index).map(Vec::as_slice),
+    )?;
+
+    let Some(custom_labels) = data.custom_labels.get(local_index) else {
+      continue;
+    };
+    if custom_labels.is_empty() {
+      continue;
+    }
+
+    let pattern = data.originals.get(local_index).map_or("", String::as_str);
+    if !custom_match_has_valid_edges(
+      full_text,
+      &offsets,
+      found.start(),
+      found.end(),
+      pattern,
+    )? {
+      continue;
+    }
+
+    let text = offsets.slice(full_text, found.start(), found.end())?;
+    for label in custom_labels {
+      let mut entity = PipelineEntity::detected(
+        found.start(),
+        found.end(),
+        label.clone(),
+        text.clone(),
+        DENY_LIST_SCORE,
+        DetectionSource::DenyList,
+      );
+      entity.source_detail = Some(SourceDetail::CustomDenyList);
+      results.push(entity);
+    }
   }
 
   Ok(results)
@@ -220,6 +288,39 @@ pub fn process_country_matches(
   Ok(results)
 }
 
+pub(crate) fn ensure_custom_deny_list_sources(
+  data: &DenyListMatchData,
+) -> Result<()> {
+  for sources in &data.sources {
+    ensure_custom_deny_list_source(Some(sources))?;
+  }
+
+  Ok(())
+}
+
+fn ensure_custom_deny_list_source(sources: Option<&[String]>) -> Result<()> {
+  let Some(sources) = sources else {
+    return Err(Error::UnsupportedDenyListSource {
+      source: String::from("<missing>"),
+    });
+  };
+  if sources.is_empty() {
+    return Err(Error::UnsupportedDenyListSource {
+      source: String::from("<missing>"),
+    });
+  }
+  if let Some(source) = sources
+    .iter()
+    .find(|source| source.as_str() != CUSTOM_DENY_LIST_SOURCE)
+  {
+    return Err(Error::UnsupportedDenyListSource {
+      source: source.clone(),
+    });
+  }
+
+  Ok(())
+}
+
 fn try_gazetteer_prefix_extension(
   full_text: &str,
   offsets: &Utf16Offsets,
@@ -286,6 +387,36 @@ fn starts_as_proper_noun(
   }
 
   Ok(ch.to_string() == upper)
+}
+
+fn custom_match_has_valid_edges(
+  full_text: &str,
+  offsets: &Utf16Offsets,
+  start: u32,
+  end: u32,
+  pattern: &str,
+) -> Result<bool> {
+  if !pattern.chars().any(char::is_alphanumeric) {
+    return Ok(true);
+  }
+
+  let start_byte = offsets.validate_offset(start)?;
+  let end_byte = offsets.validate_offset(end)?;
+  let previous = full_text
+    .get(..start_byte)
+    .and_then(|prefix| prefix.chars().next_back());
+  if previous.is_some_and(char::is_alphanumeric) {
+    return Ok(false);
+  }
+
+  let next = full_text
+    .get(end_byte..)
+    .and_then(|suffix| suffix.chars().next());
+  if next.is_some_and(char::is_alphanumeric) {
+    return Ok(false);
+  }
+
+  Ok(true)
 }
 
 const fn fuzzy_distance(found: &SearchMatch) -> Option<u32> {
