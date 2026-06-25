@@ -19,7 +19,16 @@ const TITLE_SOURCE: &str = "title";
 const PERSON_LABEL: &str = "person";
 const ADDRESS_LABEL: &str = "address";
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(
+  Clone,
+  Copy,
+  Debug,
+  Default,
+  Eq,
+  PartialEq,
+  serde::Deserialize,
+  serde::Serialize,
+)]
 pub struct PatternSlice {
   pub start: u32,
   pub end: u32,
@@ -49,7 +58,7 @@ impl PatternSlice {
   }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct RegexMatchMeta {
   pub label: String,
   pub score: f64,
@@ -75,18 +84,18 @@ impl RegexMatchMeta {
   }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct GazetteerMatchData {
   pub labels: Vec<String>,
   pub is_fuzzy: Vec<bool>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct CountryMatchData {
   pub labels: Vec<String>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct DenyListMatchData {
   pub labels: StringGroups,
   pub custom_labels: StringGroups,
@@ -95,7 +104,9 @@ pub struct DenyListMatchData {
   pub filters: Option<DenyListFilterData>,
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(
+  Clone, Debug, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize,
+)]
 pub struct StringGroups {
   table: Vec<String>,
   groups: Vec<Vec<u32>>,
@@ -232,7 +243,9 @@ fn string_table_index(
   index
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(
+  Clone, Debug, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize,
+)]
 pub struct DenyListFilterData {
   pub stopwords: BTreeSet<String>,
   pub allow_list: BTreeSet<String>,
@@ -249,7 +262,9 @@ pub struct DenyListFilterData {
   pub signing_place_guards: Vec<SigningPlaceGuardData>,
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(
+  Clone, Debug, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize,
+)]
 pub struct SigningPlaceGuardData {
   pub prefix_phrases: BTreeSet<String>,
   pub suffix_phrases: BTreeSet<String>,

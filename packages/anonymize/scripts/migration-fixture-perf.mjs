@@ -1966,7 +1966,8 @@ function prepareNativePackageBytes(native, configBytes) {
 }
 
 function isCompressedNativePackage(packageBytes) {
-  return packageBytes.subarray(0, 8).toString("ascii") === "ANONPKZ1";
+  const header = packageBytes.subarray(0, 8).toString("ascii");
+  return header === "ANONPKZ1" || header === "ANONCPZ1";
 }
 
 function nativeLibraryPath(name) {

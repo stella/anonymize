@@ -55,7 +55,9 @@ pub struct PreparedSearch {
   monetary_data: Option<PreparedMonetaryData>,
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(
+  Clone, Debug, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize,
+)]
 pub struct PreparedSearchSlices {
   pub regex: PatternSlice,
   pub custom_regex: PatternSlice,
@@ -67,7 +69,7 @@ pub struct PreparedSearchSlices {
   pub countries: PatternSlice,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct PreparedSearchConfig {
   pub regex_patterns: Vec<SearchPattern>,
   pub custom_regex_patterns: Vec<SearchPattern>,
@@ -331,7 +333,6 @@ impl PreparedSearch {
     );
     let legal_form_len = regex_groups.legal_forms.len();
     let trigger_len = regex_groups.triggers.len();
-    let literal_len = config.literal_patterns.len();
 
     let (date_data, monetary_data) = prepare_anchored_data(
       config.date_data.as_ref(),
@@ -368,6 +369,7 @@ impl PreparedSearch {
       indexes.triggers,
       indexes.literals,
     );
+    let literal_len = literals.len();
     record_search_index_prepare_stages(
       &mut diagnostics,
       &SearchIndexPrepareMetrics {

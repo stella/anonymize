@@ -12,7 +12,8 @@ categories = ["text-processing"]
 [dependencies]
 fancy-regex = "0.16"
 regex = "1"
-stella-text-search-core = { path = "/Users/sok0/coding_projects/text-search-rust-core/crates/core" }
+serde = { version = "1", features = ["derive"] }
+stella-text-search-core = { version = "1.0.6", git = "https://github.com/stella/text-search", rev = "8a42c28a8e7c5a32c838ae9dd443c21deab391ed" }
 
 [lints]
 workspace = true
