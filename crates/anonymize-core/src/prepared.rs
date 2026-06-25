@@ -1,5 +1,6 @@
 use std::time::Instant;
 
+use crate::address_context::{AddressContextData, PreparedAddressContextData};
 use crate::address_seeds::{AddressSeedData, PreparedAddressSeedData};
 use crate::artifact_bytes::{ArtifactReader, ArtifactWriter};
 use crate::byte_offsets::ByteOffsets;
@@ -63,6 +64,7 @@ pub struct PreparedSearch {
   trigger_data: Option<PreparedTriggerData>,
   legal_form_data: Option<PreparedLegalFormData>,
   address_seed_data: Option<PreparedAddressSeedData>,
+  address_context_data: Option<PreparedAddressContextData>,
   date_data: Option<PreparedDateData>,
   monetary_data: Option<PreparedMonetaryData>,
 }
@@ -107,6 +109,8 @@ pub struct PreparedSearchConfig {
   pub trigger_data: Option<TriggerData>,
   pub legal_form_data: Option<LegalFormData>,
   pub address_seed_data: Option<AddressSeedData>,
+  #[serde(default)]
+  pub address_context_data: Option<AddressContextData>,
   pub date_data: Option<DateData>,
   pub monetary_data: Option<MonetaryData>,
 }
@@ -367,19 +371,13 @@ impl PreparedSearch {
       diagnostics.as_deref_mut(),
     )?;
 
-    let indexes = build_search_indexes(
-      SearchIndexBuildInputs {
-        regex_patterns: regex_groups.regex,
-        regex_options: config.regex_options,
-        custom_regex_patterns: config.custom_regex_patterns,
-        custom_regex_options: config.custom_regex_options,
-        legal_form_patterns: regex_groups.legal_forms,
-        trigger_patterns: promote_case_insensitive_literals(
-          regex_groups.triggers,
-        ),
-        literal_patterns: config.literal_patterns,
-        literal_options: config.literal_options,
-      },
+    let indexes = build_search_indexes_for_config(
+      regex_groups,
+      config.regex_options,
+      config.custom_regex_patterns,
+      config.custom_regex_options,
+      config.literal_patterns,
+      config.literal_options,
       artifacts,
     )?;
     let (
@@ -441,6 +439,9 @@ impl PreparedSearch {
         .transpose()?,
       legal_form_data: config.legal_form_data.map(PreparedLegalFormData::new),
       address_seed_data: prepare_address_seed_data(config.address_seed_data)?,
+      address_context_data: prepare_address_context_data(
+        config.address_context_data,
+      )?,
       date_data,
       monetary_data,
     })
@@ -840,13 +841,25 @@ impl PreparedSearch {
       full_text,
       &detections.matches.literal,
     )?;
-    let raw_entities = filter_entities_for_redaction(
+    let mut raw_entities = filter_entities_for_redaction(
       pre_threshold_entities,
       full_text,
       self.threshold,
       self.confidence_boost,
       &self.allowed_labels,
     )?;
+    let address_context_start = Instant::now();
+    let address_context_entities =
+      self.process_address_context_entities(full_text, &raw_entities)?;
+    if let Some(diagnostics) = &mut diagnostics {
+      diagnostics.record_entities(
+        DiagnosticStage::EntityAddressContext,
+        &address_context_entities,
+        full_text,
+        Some(elapsed_us(address_context_start)),
+      );
+    }
+    raw_entities.extend(address_context_entities);
     let merge_start = Instant::now();
     let merged = merge_and_dedup(&raw_entities);
     if let Some(diagnostics) = &mut diagnostics {
@@ -929,6 +942,20 @@ impl PreparedSearch {
       &self.allowed_labels,
     )
   }
+
+  fn process_address_context_entities(
+    &self,
+    full_text: &str,
+    existing_entities: &[PipelineEntity],
+  ) -> Result<Vec<PipelineEntity>> {
+    if !label_is_allowed("address", &self.allowed_labels) {
+      return Ok(Vec::new());
+    }
+    let Some(data) = &self.address_context_data else {
+      return Ok(Vec::new());
+    };
+    data.process(full_text, existing_entities)
+  }
 }
 
 fn process_signature_entities(full_text: &str) -> TimedEntities {
@@ -975,6 +1002,11 @@ fn filter_entities_for_labels(
         || allowed_labels.iter().any(|label| label == &entity.label)
     })
     .collect()
+}
+
+fn label_is_allowed(label: &str, allowed_labels: &[String]) -> bool {
+  allowed_labels.is_empty()
+    || allowed_labels.iter().any(|allowed| allowed == label)
 }
 
 fn filter_entities_for_threshold(
@@ -1152,6 +1184,32 @@ fn address_seed_context(layers: &[&[PipelineEntity]]) -> Vec<PipelineEntity> {
 fn elapsed_us(start: Instant) -> u64 {
   let micros = start.elapsed().as_micros();
   u64::try_from(micros).unwrap_or(u64::MAX)
+}
+
+fn build_search_indexes_for_config(
+  regex_groups: RegexPatternGroups,
+  regex_options: SearchOptions,
+  custom_regex_patterns: Vec<SearchPattern>,
+  custom_regex_options: SearchOptions,
+  literal_patterns: Vec<SearchPattern>,
+  literal_options: SearchOptions,
+  artifacts: Option<&PreparedSearchArtifacts>,
+) -> Result<PreparedSearchIndexes> {
+  build_search_indexes(
+    SearchIndexBuildInputs {
+      regex_patterns: regex_groups.regex,
+      regex_options,
+      custom_regex_patterns,
+      custom_regex_options,
+      legal_form_patterns: regex_groups.legal_forms,
+      trigger_patterns: promote_case_insensitive_literals(
+        regex_groups.triggers,
+      ),
+      literal_patterns,
+      literal_options,
+    },
+    artifacts,
+  )
 }
 
 fn build_search_indexes(
@@ -1334,6 +1392,12 @@ fn prepare_address_seed_data(
   data: Option<AddressSeedData>,
 ) -> Result<Option<PreparedAddressSeedData>> {
   data.map(PreparedAddressSeedData::new).transpose()
+}
+
+fn prepare_address_context_data(
+  data: Option<AddressContextData>,
+) -> Result<Option<PreparedAddressContextData>> {
+  data.map(PreparedAddressContextData::new).transpose()
 }
 
 fn split_regex_patterns(

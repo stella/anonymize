@@ -2,6 +2,7 @@
 
 //! Core anonymization contracts shared by host-language bindings.
 
+mod address_context;
 mod address_seeds;
 mod anchored;
 mod artifact_bytes;
@@ -24,6 +25,7 @@ mod triggers;
 mod types;
 mod validators;
 
+pub use address_context::AddressContextData;
 pub use address_seeds::AddressSeedData;
 pub use dates::DateData;
 pub use diagnostics::{
