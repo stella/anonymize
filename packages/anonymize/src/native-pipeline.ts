@@ -19,7 +19,8 @@ export type NativePipelineUnsupportedFeature =
   | "enableNer"
   | "enableNameCorpus"
   | "enableCoreference"
-  | "enableZoneClassification";
+  | "enableZoneClassification"
+  | "addressContextPasses";
 
 export type NativePipelineCompatibility =
   | { status: "supported" }
@@ -84,12 +85,24 @@ export const getNativePipelineCompatibility = (
   if (config.enableZoneClassification === true) {
     unsupportedFeatures.push("enableZoneClassification");
   }
+  if (addressContextPassesCanAffectOutput(config)) {
+    unsupportedFeatures.push("addressContextPasses");
+  }
 
   if (unsupportedFeatures.length === 0) {
     return { status: "supported" };
   }
   return { status: "unsupported", unsupportedFeatures };
 };
+
+const addressContextPassesCanAffectOutput = (config: PipelineConfig): boolean =>
+  labelIsEnabled(config.labels, "address") && config.threshold <= 0.95;
+
+const labelIsEnabled = (
+  labels: readonly string[] | undefined,
+  label: string,
+): boolean =>
+  labels === undefined || labels.length === 0 || labels.includes(label);
 
 export const assertNativePipelineSupported = (config: PipelineConfig): void => {
   const compatibility = getNativePipelineCompatibility(config);

@@ -157,6 +157,29 @@ describe("pipeline config semantics", () => {
     );
   });
 
+  test("native trigger config carries legal suffix data without legal-form search", async () => {
+    const search = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        enableTriggerPhrases: true,
+        enableLegalForms: false,
+        labels: ["organization"],
+      },
+      [],
+      createPipelineContext(),
+    );
+
+    const legalFormsSlice = search.nativeStaticConfig.slices.legal_forms;
+    expect(legalFormsSlice).toBeDefined();
+    expect(legalFormsSlice?.end).toBe(legalFormsSlice?.start);
+    expect(
+      search.nativeStaticConfig.legal_form_data?.suffixes.length,
+    ).toBeGreaterThan(0);
+    expect(
+      search.nativeStaticConfig.trigger_data?.rules.length,
+    ).toBeGreaterThan(0);
+  });
+
   test("native config keeps unsupported validator regexes fail-fast", async () => {
     const search = await buildUnifiedSearch(
       {

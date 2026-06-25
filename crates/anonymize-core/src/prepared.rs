@@ -2,6 +2,7 @@ use std::time::Instant;
 
 use crate::address_seeds::{AddressSeedData, PreparedAddressSeedData};
 use crate::artifact_bytes::{ArtifactReader, ArtifactWriter};
+use crate::byte_offsets::ByteOffsets;
 use crate::dates::{DateData, PreparedDateData};
 use crate::diagnostics::{DiagnosticStage, StaticRedactionDiagnostics};
 use crate::false_positives::filter_entity_false_positives;
@@ -841,10 +842,11 @@ impl PreparedSearch {
     )?;
     let raw_entities = filter_entities_for_redaction(
       pre_threshold_entities,
+      full_text,
       self.threshold,
       self.confidence_boost,
       &self.allowed_labels,
-    );
+    )?;
     let merge_start = Instant::now();
     let merged = merge_and_dedup(&raw_entities);
     if let Some(diagnostics) = &mut diagnostics {
@@ -950,15 +952,16 @@ fn filter_entities_for_config(
 
 fn filter_entities_for_redaction(
   entities: Vec<PipelineEntity>,
+  full_text: &str,
   threshold: f64,
   confidence_boost: bool,
   allowed_labels: &[String],
-) -> Vec<PipelineEntity> {
+) -> Result<Vec<PipelineEntity>> {
   let entities = filter_entities_for_labels(entities, allowed_labels);
   if confidence_boost {
-    return boost_near_miss_entities(entities, threshold);
+    return boost_near_miss_entities(entities, full_text, threshold);
   }
-  filter_entities_for_threshold(entities, threshold)
+  Ok(filter_entities_for_threshold(entities, threshold))
 }
 
 fn filter_entities_for_labels(
@@ -986,45 +989,85 @@ fn filter_entities_for_threshold(
 
 fn boost_near_miss_entities(
   entities: Vec<PipelineEntity>,
+  full_text: &str,
   threshold: f64,
-) -> Vec<PipelineEntity> {
+) -> Result<Vec<PipelineEntity>> {
   let near_miss_floor = f64::max(0.0, threshold - NEAR_MISS_BAND);
+  let byte_offsets = ByteOffsets::new(full_text);
+  let text_offsets = TextOffsetMap::new(full_text);
   let anchors = entities
     .iter()
     .filter(|entity| entity.score >= HIGH_CONFIDENCE_FLOOR)
-    .map(entity_midpoint)
-    .collect::<Vec<_>>();
+    .map(|entity| entity_midpoint(entity, &byte_offsets, &text_offsets))
+    .collect::<Result<Vec<_>>>()?;
 
-  entities
-    .into_iter()
-    .filter_map(|mut entity| {
-      if entity.score >= threshold {
-        return Some(entity);
-      }
-      if entity.score < near_miss_floor {
-        return None;
-      }
+  let mut boosted = Vec::with_capacity(entities.len());
+  for mut entity in entities {
+    if entity.score >= threshold {
+      boosted.push(entity);
+      continue;
+    }
+    if entity.score < near_miss_floor {
+      continue;
+    }
 
-      let midpoint = entity_midpoint(&entity);
-      let neighbours = anchors
-        .iter()
-        .filter(|anchor| (midpoint - **anchor).abs() <= CONTEXT_WINDOW_CHARS)
-        .count();
-      let neighbour_count = u32::try_from(neighbours).unwrap_or(u32::MAX);
-      let boosted_score =
-        f64::from(neighbour_count).mul_add(BOOST_PER_NEIGHBOUR, entity.score);
-      if boosted_score < threshold {
-        return None;
-      }
+    let midpoint = entity_midpoint(&entity, &byte_offsets, &text_offsets)?;
+    let neighbours = anchors
+      .iter()
+      .filter(|anchor| (midpoint - **anchor).abs() <= CONTEXT_WINDOW_CHARS)
+      .count();
+    let neighbour_count = u32::try_from(neighbours).unwrap_or(u32::MAX);
+    let boosted_score =
+      f64::from(neighbour_count).mul_add(BOOST_PER_NEIGHBOUR, entity.score);
+    if boosted_score < threshold {
+      continue;
+    }
 
-      entity.score = f64::min(1.0, boosted_score);
-      Some(entity)
-    })
-    .collect()
+    entity.score = f64::min(1.0, boosted_score);
+    boosted.push(entity);
+  }
+
+  Ok(boosted)
 }
 
-fn entity_midpoint(entity: &PipelineEntity) -> f64 {
-  f64::midpoint(f64::from(entity.start), f64::from(entity.end))
+fn entity_midpoint(
+  entity: &PipelineEntity,
+  byte_offsets: &ByteOffsets<'_>,
+  text_offsets: &TextOffsetMap,
+) -> Result<f64> {
+  let start = text_offsets.offset_for(byte_offsets, entity.start)?;
+  let end = text_offsets.offset_for(byte_offsets, entity.end)?;
+  Ok(f64::midpoint(start, end))
+}
+
+struct TextOffsetMap {
+  byte_offsets: Vec<usize>,
+}
+
+impl TextOffsetMap {
+  fn new(full_text: &str) -> Self {
+    let mut byte_offsets = full_text
+      .char_indices()
+      .map(|(byte_offset, _)| byte_offset)
+      .collect::<Vec<_>>();
+    byte_offsets.push(full_text.len());
+    Self { byte_offsets }
+  }
+
+  fn offset_for(
+    &self,
+    byte_offsets: &ByteOffsets<'_>,
+    offset: u32,
+  ) -> Result<f64> {
+    let byte_offset = byte_offsets.validate_offset(offset)?;
+    let index = self
+      .byte_offsets
+      .binary_search(&byte_offset)
+      .map_err(|_| Error::ByteOffsetInsideCodepoint { offset })?;
+    let index = u32::try_from(index)
+      .map_err(|_| Error::ByteOffsetOutOfBounds { offset: u32::MAX })?;
+    Ok(f64::from(index))
+  }
 }
 
 fn record_static_entity_diagnostics(

@@ -1074,6 +1074,38 @@ fn prepared_search_boosts_near_miss_entities_when_enabled() {
 }
 
 #[test]
+fn prepared_search_boost_counts_text_offsets_not_bytes() {
+  let prepared = PreparedSearch::new(PreparedSearchConfig {
+    regex_patterns: vec![
+      SearchPattern::Regex(String::from(r"\bANCHOR-\d+\b")),
+      SearchPattern::Regex(String::from(r"\bNEAR-\d+\b")),
+    ],
+    threshold: 0.5,
+    confidence_boost: true,
+    slices: PreparedSearchSlices {
+      regex: PatternSlice { start: 0, end: 2 },
+      ..PreparedSearchSlices::default()
+    },
+    regex_meta: vec![
+      RegexMatchMeta::new("registration number", 0.95),
+      RegexMatchMeta::new("matter id", 0.45),
+    ],
+    ..empty_config(PreparedSearchSlices::default())
+  })
+  .unwrap();
+  let full_text = format!("ANCHOR-123 {} NEAR-456.", "á".repeat(120));
+
+  let result = prepared
+    .redact_static_entities(&full_text, &OperatorConfig::default())
+    .unwrap();
+
+  assert_eq!(result.resolved_entities.len(), 2);
+  assert_eq!(result.resolved_entities[0].text, "ANCHOR-123");
+  assert_eq!(result.resolved_entities[1].text, "NEAR-456");
+  assert!((result.resolved_entities[1].score - 0.5).abs() < f64::EPSILON);
+}
+
+#[test]
 fn prepared_search_applies_hotword_reclassification_before_threshold() {
   let prepared = PreparedSearch::new(PreparedSearchConfig {
     regex_patterns: vec![SearchPattern::Regex(String::from(
