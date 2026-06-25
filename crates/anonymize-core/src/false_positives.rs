@@ -29,10 +29,6 @@ pub(crate) fn filter_entity_false_positives(
   full_text: &str,
   filters: Option<&DenyListFilterData>,
 ) -> Result<Vec<PipelineEntity>> {
-  let Some(filters) = filters else {
-    return Ok(entities);
-  };
-
   let offsets = ByteOffsets::new(full_text);
   let mut filtered = Vec::with_capacity(entities.len());
   for entity in entities {
@@ -59,7 +55,7 @@ fn normalize_entity(
   entity: &PipelineEntity,
   full_text: &str,
   offsets: &ByteOffsets<'_>,
-  filters: &DenyListFilterData,
+  filters: Option<&DenyListFilterData>,
 ) -> Result<Option<PipelineEntity>> {
   let raw_text = offsets.slice(full_text, entity.start, entity.end)?;
   let mut start_byte = 0usize;
@@ -68,7 +64,9 @@ fn normalize_entity(
   trim_leading_artifacts(&raw_text, &mut start_byte, end_byte);
   trim_leading_whitespace(&raw_text, &mut start_byte, end_byte);
 
-  if entity.label == ADDRESS_LABEL {
+  if entity.label == ADDRESS_LABEL
+    && let Some(filters) = filters
+  {
     if let Some(trimmed) =
       address_role_prefix_len(slice(&raw_text, start_byte, end_byte)?, filters)
     {
@@ -107,7 +105,7 @@ fn should_reject_entity(
   entity: &PipelineEntity,
   full_text: &str,
   offsets: &ByteOffsets<'_>,
-  filters: &DenyListFilterData,
+  filters: Option<&DenyListFilterData>,
 ) -> Result<bool> {
   let text = entity.text.trim();
   if is_template_placeholder(text) {
@@ -132,16 +130,19 @@ fn should_reject_entity(
   {
     return Ok(true);
   }
-  if entity.label == PERSON_LABEL && is_single_person_stopword(text, filters) {
-    return Ok(true);
-  }
-  if entity.label == PERSON_LABEL
-    && ends_in_person_trailing_noun(entity, filters)
-  {
-    return Ok(true);
-  }
-  if role_exact_match(entity, filters) {
-    return Ok(true);
+  if let Some(filters) = filters {
+    if entity.label == PERSON_LABEL && is_single_person_stopword(text, filters)
+    {
+      return Ok(true);
+    }
+    if entity.label == PERSON_LABEL
+      && ends_in_person_trailing_noun(entity, filters)
+    {
+      return Ok(true);
+    }
+    if role_exact_match(entity, filters) {
+      return Ok(true);
+    }
   }
   if entity.label == ORGANIZATION_LABEL
     && is_all_caps_candidate(text)
@@ -158,16 +159,17 @@ fn should_reject_entity(
 
 fn should_reject_address(
   entity: &PipelineEntity,
-  filters: &DenyListFilterData,
+  filters: Option<&DenyListFilterData>,
 ) -> bool {
   let text = entity.text.trim();
-  if is_signing_place_address(text, filters) {
+  if filters.is_some_and(|filters| is_signing_place_address(text, filters)) {
     return true;
   }
 
   let has_digits = text.chars().any(|ch| ch.is_ascii_digit());
-  let has_component = has_address_component(text, filters);
-  if is_jurisdiction_address(text, filters) {
+  let has_component =
+    filters.is_some_and(|filters| has_address_component(text, filters));
+  if filters.is_some_and(|filters| is_jurisdiction_address(text, filters)) {
     return false;
   }
   if entity.source == DetectionSource::Trigger && !has_digits && !has_component
@@ -701,6 +703,31 @@ mod tests {
       )],
       "[NAME]",
       Some(&DenyListFilterData::default()),
+    )
+    .unwrap();
+
+    assert!(entities.is_empty());
+  }
+
+  #[test]
+  fn rejects_generic_false_positives_without_deny_list_filters() {
+    let text = "[NAME]\n17. NO ASSIGNMENT.\n";
+    let heading_start = text.find("NO ASSIGNMENT").unwrap();
+    let heading_end = heading_start.saturating_add("NO ASSIGNMENT".len());
+    let entities = filter_entity_false_positives(
+      vec![
+        entity("[NAME]", "[NAME]", PERSON_LABEL, DetectionSource::Regex),
+        PipelineEntity::detected(
+          u32::try_from(heading_start).unwrap(),
+          u32::try_from(heading_end).unwrap(),
+          ORGANIZATION_LABEL,
+          "NO ASSIGNMENT",
+          0.8,
+          DetectionSource::Regex,
+        ),
+      ],
+      text,
+      None,
     )
     .unwrap();
 

@@ -525,6 +525,34 @@ describe("native adapter parity", () => {
     ).toEqual(expectedJson);
   });
 
+  test("prepared package cache verifies same-length corrupted bytes", () => {
+    const adapters = getAdapters();
+    const text =
+      "Reference AB1234 for Acme s.r.o. near Fuzztovn, Turkey, " +
+      "Prague, matter MAT-123, code Secret Code.";
+    const configBytes = Buffer.from(CONFIG_JSON);
+    const packageBytes =
+      adapters.native.prepareStaticSearchPackageBytes(configBytes);
+
+    const prepared =
+      adapters.native.NativePreparedSearch.fromPreparedPackageBytes(
+        packageBytes,
+      );
+    expect(prepared.redactStaticEntities(text)).toBeDefined();
+
+    const corrupted = Buffer.from(packageBytes);
+    const lastIndex = corrupted.length - 1;
+    const lastByte = corrupted.at(lastIndex);
+    if (lastByte === undefined) {
+      throw new Error("prepared package unexpectedly empty");
+    }
+    corrupted.writeUInt8(lastByte ^ 0x01, lastIndex);
+
+    expect(() =>
+      adapters.native.NativePreparedSearch.fromPreparedPackageBytes(corrupted),
+    ).toThrow();
+  });
+
   test("prepared search accepts compressed package bytes through TS and Python adapters", () => {
     const adapters = getAdapters();
     const text =
@@ -555,6 +583,26 @@ describe("native adapter parity", () => {
         "prepare_static_search_compressed_package_bytes",
       ),
     ).toEqual(expectedJson);
+  });
+
+  test("JSON operator config accepts camel-case redactString", () => {
+    const adapters = getAdapters();
+    const text =
+      "Reference AB1234 for Acme s.r.o. near Fuzztovn, Turkey, " +
+      "Prague, matter MAT-123, code Secret Code.";
+
+    const result = JSON.parse(
+      adapters.native.redactStaticEntitiesJson(
+        CONFIG_JSON,
+        text,
+        JSON.stringify({
+          operators: { country: "redact" },
+          redactString: "***",
+        }),
+      ),
+    ) as StaticRedactionResult;
+
+    expect(result.redaction.redacted_text).toContain("***");
   });
 
   test("diagnostics JSON is identical through TS and Python adapters", () => {
