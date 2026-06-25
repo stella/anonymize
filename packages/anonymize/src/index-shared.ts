@@ -71,6 +71,22 @@ export type {
   NativeSearchPackageOptions,
   NativeStaticRedactionResult,
 } from "./native";
+export {
+  PreparedNativePipeline,
+  assertNativePipelineSupported,
+  createNativePipelineFromConfig,
+  createNativePipelineFromPackage,
+  getNativePipelineCompatibility,
+  prepareNativePipelineConfig,
+  prepareNativePipelinePackage,
+} from "./native-pipeline";
+export type {
+  NativePipelineBuildOptions,
+  NativePipelineCompatibility,
+  NativePipelineFromPackageOptions,
+  NativePipelinePackageOptions,
+  NativePipelineUnsupportedFeature,
+} from "./native-pipeline";
 
 // ── Redaction ─────────────────────────────────────
 export {

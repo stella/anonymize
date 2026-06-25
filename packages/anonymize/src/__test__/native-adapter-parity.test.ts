@@ -22,7 +22,22 @@ import {
   type NativePreparedSearchBinding,
   type NativeStaticRedactionResult,
 } from "../native";
-import { createPipelineContext, preparePipelineSearch } from "../index";
+import type {
+  Entity,
+  OperatorConfig,
+  PipelineConfig,
+  RedactionResult,
+} from "../types";
+import {
+  createPipelineContext,
+  createNativePipelineFromPackage,
+  DEFAULT_ENTITY_LABELS,
+  getNativePipelineCompatibility,
+  preparePipelineSearch,
+  prepareNativePipelinePackage,
+  redactText,
+  runPipeline,
+} from "../index";
 import { applyPipelineLanguageScope } from "../language-scope";
 import { contractTestConfig } from "./contract-config";
 import { loadTestDictionaries } from "./load-dictionaries";
@@ -813,6 +828,117 @@ describe("native adapter parity", () => {
     expect(result.redaction.redactedText).toContain("***");
   });
 
+  test("native pipeline package matches TS static pipeline redaction", async () => {
+    const adapters = getAdapters();
+    const fullText =
+      "Project Nebula and Blue Harbour signed MAT-123 on 2024-01-02. " +
+      "Acme s.r.o.\n/s/ Jane Doe";
+    const config: PipelineConfig = {
+      threshold: 0.3,
+      enableTriggerPhrases: true,
+      enableRegex: true,
+      enableLegalForms: true,
+      enableNameCorpus: false,
+      enableDenyList: true,
+      customDenyList: [
+        {
+          value: "Project Nebula",
+          label: "organization",
+          variants: ["Nebula Programme"],
+        },
+      ],
+      customRegexes: [
+        { pattern: "\\bMAT-\\d{3}\\b", label: "matter id", score: 1 },
+      ],
+      enableGazetteer: true,
+      enableCountries: false,
+      enableNer: false,
+      enableConfidenceBoost: false,
+      enableCoreference: false,
+      enableHotwordRules: false,
+      enableZoneClassification: false,
+      labels: [...DEFAULT_ENTITY_LABELS, "matter id"],
+      workspaceId: "native-pipeline-static-test",
+    };
+    const gazetteerEntries = [
+      {
+        id: "blue-harbour",
+        canonical: "Blue Harbor Capital",
+        label: "organization",
+        variants: ["Blue Harbour"],
+        workspaceId: "native-pipeline-static-test",
+        createdAt: 0,
+        source: "manual" as const,
+      },
+    ];
+    const operators: NativeOperatorConfig & OperatorConfig = {
+      operators: { "matter id": "redact" },
+      redactString: "***",
+    };
+
+    expect(getNativePipelineCompatibility(config)).toEqual({
+      status: "supported",
+    });
+
+    const packageBytes = await prepareNativePipelinePackage({
+      binding: adapters.native,
+      config,
+      gazetteerEntries,
+      context: createPipelineContext(),
+      compressed: true,
+    });
+    const nativePipeline = createNativePipelineFromPackage({
+      binding: adapters.native,
+      packageBytes,
+    });
+    const tsContext = createPipelineContext();
+    const tsEntities = await runPipeline({
+      fullText,
+      config,
+      gazetteerEntries,
+      context: tsContext,
+    });
+    const tsRedaction = redactText(fullText, tsEntities, operators, tsContext);
+
+    expect(
+      toBindingStaticResult(nativePipeline.redactText(fullText, operators)),
+    ).toEqual({
+      resolved_entities: tsEntities.map(toBindingEntity),
+      redaction: toBindingRedactionResult(tsRedaction),
+    });
+  });
+
+  test("native pipeline compatibility rejects TS-only contextual passes", () => {
+    const config: PipelineConfig = {
+      threshold: 0.3,
+      enableTriggerPhrases: true,
+      enableRegex: true,
+      enableLegalForms: true,
+      enableNameCorpus: true,
+      enableDenyList: true,
+      enableGazetteer: false,
+      enableNer: true,
+      enableConfidenceBoost: true,
+      enableCoreference: true,
+      enableHotwordRules: true,
+      enableZoneClassification: true,
+      labels: [...DEFAULT_ENTITY_LABELS],
+      workspaceId: "native-pipeline-compat-test",
+    };
+
+    expect(getNativePipelineCompatibility(config)).toEqual({
+      status: "unsupported",
+      unsupportedFeatures: [
+        "enableNer",
+        "enableNameCorpus",
+        "enableConfidenceBoost",
+        "enableCoreference",
+        "enableZoneClassification",
+        "enableHotwordRules",
+      ],
+    });
+  });
+
   test("native facade and Python match on contract fixture packages", async () => {
     const adapters = getAdapters();
     for (const language of CONTRACT_FIXTURE_LANGUAGES) {
@@ -1327,6 +1453,31 @@ const toNativeFacadeEntity = ({
 }: StaticRedactionResult["resolved_entities"][number]) => ({
   ...entity,
   ...(sourceDetail ? { sourceDetail } : {}),
+});
+
+const toBindingEntity = (
+  entity: Entity,
+): StaticRedactionResult["resolved_entities"][number] => ({
+  start: entity.start,
+  end: entity.end,
+  label: entity.label,
+  text: entity.text,
+  score: entity.score,
+  source: entity.source,
+  source_detail: entity.sourceDetail ?? null,
+});
+
+const toBindingRedactionResult = (
+  result: RedactionResult,
+): StaticRedactionResult["redaction"] => ({
+  redacted_text: result.redactedText,
+  redaction_map: [...result.redactionMap.entries()].map(
+    ([placeholder, original]) => ({ placeholder, original }),
+  ),
+  operator_map: [...result.operatorMap.entries()].map(
+    ([placeholder, operator]) => ({ placeholder, operator }),
+  ),
+  entity_count: result.entityCount,
 });
 
 const toBindingStaticResult = (
