@@ -229,6 +229,8 @@ export type NativePreparedSearchConfig = {
   custom_regex_options: NativeSearchOptions;
   literal_options: NativeSearchOptions;
   literal_patterns_from_deny_list_data?: boolean;
+  allowed_labels: string[];
+  threshold: number;
   slices: {
     regex: PatternSlice;
     custom_regex: PatternSlice;
@@ -333,6 +335,8 @@ type UnifiedSearchSources = {
   nativeCurrencyPatternRange: PatternSlice;
   nativeDatePatternRange: PatternSlice;
   nativeSigningPatternRange: PatternSlice;
+  nativeAllowedLabels: readonly string[];
+  threshold: number;
   slices: UnifiedSearchInstance["slices"];
   literalAllPatterns: PatternEntry[] | string[];
   canUseGlobalWholeWordLiterals: boolean;
@@ -673,6 +677,8 @@ const buildUnifiedSearchSources = async (
     nativeCurrencyPatternRange,
     nativeDatePatternRange,
     nativeSigningPatternRange,
+    nativeAllowedLabels: config.labels,
+    threshold: config.threshold,
     slices: {
       regex: regexSlice,
       customRegex: customRegexSlice,
@@ -727,6 +733,8 @@ export const buildNativeStaticSearchBundle = async (
       countryData: sources.countryResult?.data ?? null,
       canUseGlobalWholeWordLiterals: sources.canUseGlobalWholeWordLiterals,
       customDenyListNeedsWholeWords: sources.customDenyListNeedsWholeWords,
+      allowedLabels: sources.nativeAllowedLabels,
+      threshold: sources.threshold,
     }),
     slices: sources.slices,
     regexMeta: sources.regexMeta,
@@ -806,6 +814,8 @@ export const buildUnifiedSearch = async (
     countryData: sources.countryResult?.data ?? null,
     canUseGlobalWholeWordLiterals: sources.canUseGlobalWholeWordLiterals,
     customDenyListNeedsWholeWords: sources.customDenyListNeedsWholeWords,
+    allowedLabels: sources.nativeAllowedLabels,
+    threshold: sources.threshold,
   });
 
   return {
@@ -846,6 +856,8 @@ type BuildNativeStaticConfigArgs = {
   countryData: CountryData | null;
   canUseGlobalWholeWordLiterals: boolean;
   customDenyListNeedsWholeWords: (pattern: string) => boolean;
+  allowedLabels: readonly string[];
+  threshold: number;
 };
 
 const buildNativeStaticConfig = ({
@@ -871,6 +883,8 @@ const buildNativeStaticConfig = ({
   countryData,
   canUseGlobalWholeWordLiterals,
   customDenyListNeedsWholeWords,
+  allowedLabels,
+  threshold,
 }: BuildNativeStaticConfigArgs): NativePreparedSearchConfig => {
   const nativeRegexPatterns: NativeSearchPattern[] = [];
   const nativeRegexMeta: NativeRegexMatchMeta[] = [];
@@ -983,6 +997,8 @@ const buildNativeStaticConfig = ({
       fuzzy_normalize_diacritics: true,
     },
     literal_patterns_from_deny_list_data: denyListPatternsFromData,
+    allowed_labels: [...allowedLabels],
+    threshold,
     slices: {
       regex: { start: 0, end: nativeRegexPatterns.length },
       custom_regex: { start: 0, end: nativeCustomRegexPatterns.length },

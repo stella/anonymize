@@ -18,13 +18,13 @@ use stella_anonymize_core::{
 pub type Result<T> = std::result::Result<T, ContractError>;
 
 const PREPARED_SEARCH_PACKAGE_HEADER: [u8; 8] = *b"ANONPKG1";
-const PREPARED_SEARCH_PACKAGE_VERSION: u32 = 3;
+const PREPARED_SEARCH_PACKAGE_VERSION: u32 = 4;
 const PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER: [u8; 8] = *b"ANONPKZ1";
-const PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION: u32 = 1;
+const PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION: u32 = 2;
 const PREPARED_SEARCH_CORE_PACKAGE_HEADER: [u8; 8] = *b"ANONCPK1";
-const PREPARED_SEARCH_CORE_PACKAGE_VERSION: u32 = 2;
+const PREPARED_SEARCH_CORE_PACKAGE_VERSION: u32 = 3;
 const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_HEADER: [u8; 8] = *b"ANONCPZ1";
-const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION: u32 = 2;
+const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION: u32 = 3;
 const PREPARED_SEARCH_PACKAGE_DIGEST_BYTES: usize = 32;
 const PREPARED_SEARCH_PACKAGE_ZSTD_LEVEL: i32 = 3;
 
@@ -386,6 +386,10 @@ pub struct BindingPreparedSearchConfig {
   #[serde(default)]
   pub literal_patterns_from_deny_list_data: bool,
   #[serde(default)]
+  pub allowed_labels: Vec<String>,
+  #[serde(default)]
+  pub threshold: f64,
+  #[serde(default)]
   pub slices: BindingPreparedSearchSlices,
   #[serde(default)]
   pub regex_meta: Vec<BindingRegexMatchMeta>,
@@ -448,6 +452,8 @@ struct BinaryPreparedSearchConfig {
   custom_regex_options: Option<BindingSearchOptions>,
   literal_options: Option<BindingSearchOptions>,
   literal_patterns_from_deny_list_data: bool,
+  allowed_labels: Vec<String>,
+  threshold: f64,
   slices: BindingPreparedSearchSlices,
   regex_meta: Vec<BindingRegexMatchMeta>,
   custom_regex_meta: Vec<BindingRegexMatchMeta>,
@@ -643,6 +649,8 @@ impl From<BindingPreparedSearchConfig> for BinaryPreparedSearchConfig {
       literal_options: config.literal_options,
       literal_patterns_from_deny_list_data: config
         .literal_patterns_from_deny_list_data,
+      allowed_labels: config.allowed_labels,
+      threshold: config.threshold,
       slices: config.slices,
       regex_meta: config.regex_meta,
       custom_regex_meta: config.custom_regex_meta,
@@ -669,6 +677,8 @@ impl From<BinaryPreparedSearchConfig> for BindingPreparedSearchConfig {
       literal_options: config.literal_options,
       literal_patterns_from_deny_list_data: config
         .literal_patterns_from_deny_list_data,
+      allowed_labels: config.allowed_labels,
+      threshold: config.threshold,
       slices: config.slices,
       regex_meta: config.regex_meta,
       custom_regex_meta: config.custom_regex_meta,
@@ -1101,6 +1111,8 @@ pub fn prepared_search_config_from_binding(
       config.custom_regex_options,
     ),
     literal_options: search_options_from_binding(config.literal_options),
+    allowed_labels: config.allowed_labels,
+    threshold: config.threshold,
     slices: slices_from_binding(&config.slices),
     regex_meta: regex_meta_from_binding(config.regex_meta)?,
     custom_regex_meta: regex_meta_from_binding(config.custom_regex_meta)?,

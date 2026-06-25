@@ -112,6 +112,22 @@ describe("pipeline config semantics", () => {
     expect(regexCount).toBe(expected);
   });
 
+  test("native config carries final label and threshold filters", async () => {
+    const search = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        enableRegex: true,
+        labels: ["person"],
+        threshold: 0.93,
+      },
+      [],
+      createPipelineContext(),
+    );
+
+    expect(search.nativeStaticConfig.allowed_labels).toEqual(["person"]);
+    expect(search.nativeStaticConfig.threshold).toBe(0.93);
+  });
+
   test("content language scopes deny-list search build", async () => {
     const testDictionaries = await getDictionaries();
     const config = {
