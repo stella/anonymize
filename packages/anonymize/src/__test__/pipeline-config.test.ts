@@ -117,6 +117,7 @@ describe("pipeline config semantics", () => {
       {
         ...BASE_CONFIG,
         enableRegex: true,
+        enableConfidenceBoost: true,
         labels: ["person"],
         threshold: 0.93,
       },
@@ -126,6 +127,7 @@ describe("pipeline config semantics", () => {
 
     expect(search.nativeStaticConfig.allowed_labels).toEqual(["person"]);
     expect(search.nativeStaticConfig.threshold).toBe(0.93);
+    expect(search.nativeStaticConfig.confidence_boost).toBe(true);
   });
 
   test("native config keeps unsupported validator regexes fail-fast", async () => {

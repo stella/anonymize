@@ -18,6 +18,7 @@ fn empty_config(slices: PreparedSearchSlices) -> PreparedSearchConfig {
     literal_options: SearchOptions::default(),
     allowed_labels: vec![],
     threshold: 0.0,
+    confidence_boost: false,
     slices,
     regex_meta: vec![],
     custom_regex_meta: vec![],

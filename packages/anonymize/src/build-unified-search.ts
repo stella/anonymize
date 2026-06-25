@@ -237,6 +237,7 @@ export type NativePreparedSearchConfig = {
   literal_patterns_from_deny_list_data?: boolean;
   allowed_labels: string[];
   threshold: number;
+  confidence_boost: boolean;
   slices: {
     regex: PatternSlice;
     custom_regex: PatternSlice;
@@ -343,6 +344,7 @@ type UnifiedSearchSources = {
   nativeSigningPatternRange: PatternSlice;
   nativeAllowedLabels: readonly string[];
   threshold: number;
+  confidenceBoost: boolean;
   slices: UnifiedSearchInstance["slices"];
   literalAllPatterns: PatternEntry[] | string[];
   canUseGlobalWholeWordLiterals: boolean;
@@ -686,6 +688,7 @@ const buildUnifiedSearchSources = async (
     nativeSigningPatternRange,
     nativeAllowedLabels: config.labels,
     threshold: config.threshold,
+    confidenceBoost: config.enableConfidenceBoost,
     slices: {
       regex: regexSlice,
       customRegex: customRegexSlice,
@@ -742,6 +745,7 @@ export const buildNativeStaticSearchBundle = async (
       customDenyListNeedsWholeWords: sources.customDenyListNeedsWholeWords,
       allowedLabels: sources.nativeAllowedLabels,
       threshold: sources.threshold,
+      confidenceBoost: sources.confidenceBoost,
     }),
     slices: sources.slices,
     regexMeta: sources.regexMeta,
@@ -823,6 +827,7 @@ export const buildUnifiedSearch = async (
     customDenyListNeedsWholeWords: sources.customDenyListNeedsWholeWords,
     allowedLabels: sources.nativeAllowedLabels,
     threshold: sources.threshold,
+    confidenceBoost: sources.confidenceBoost,
   });
 
   return {
@@ -865,6 +870,7 @@ type BuildNativeStaticConfigArgs = {
   customDenyListNeedsWholeWords: (pattern: string) => boolean;
   allowedLabels: readonly string[];
   threshold: number;
+  confidenceBoost: boolean;
 };
 
 const buildNativeStaticConfig = ({
@@ -892,6 +898,7 @@ const buildNativeStaticConfig = ({
   customDenyListNeedsWholeWords,
   allowedLabels,
   threshold,
+  confidenceBoost,
 }: BuildNativeStaticConfigArgs): NativePreparedSearchConfig => {
   const nativeRegexPatterns: NativeSearchPattern[] = [];
   const nativeRegexMeta: NativeRegexMatchMeta[] = [];
@@ -1006,6 +1013,7 @@ const buildNativeStaticConfig = ({
     literal_patterns_from_deny_list_data: denyListPatternsFromData,
     allowed_labels: [...allowedLabels],
     threshold,
+    confidence_boost: confidenceBoost,
     slices: {
       regex: { start: 0, end: nativeRegexPatterns.length },
       custom_regex: { start: 0, end: nativeCustomRegexPatterns.length },

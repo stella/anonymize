@@ -908,6 +908,72 @@ describe("native adapter parity", () => {
     });
   });
 
+  test("native pipeline package matches TS confidence boost redaction", async () => {
+    const adapters = getAdapters();
+    const fullText = "ANCHOR-123 signed with NEAR-456.";
+    const config: PipelineConfig = {
+      threshold: 0.5,
+      enableTriggerPhrases: false,
+      enableRegex: true,
+      enableLegalForms: false,
+      enableNameCorpus: false,
+      enableDenyList: false,
+      enableGazetteer: false,
+      enableCountries: false,
+      enableNer: false,
+      enableConfidenceBoost: true,
+      enableCoreference: false,
+      enableHotwordRules: false,
+      enableZoneClassification: false,
+      customRegexes: [
+        {
+          pattern: "\\bANCHOR-\\d+\\b",
+          label: "registration number",
+          score: 0.95,
+        },
+        { pattern: "\\bNEAR-\\d+\\b", label: "matter id", score: 0.45 },
+      ],
+      labels: [...DEFAULT_ENTITY_LABELS, "matter id"],
+      workspaceId: "native-pipeline-confidence-boost-test",
+    };
+
+    expect(getNativePipelineCompatibility(config)).toEqual({
+      status: "supported",
+    });
+
+    const context = createPipelineContext();
+    const packageBytes = await prepareNativePipelinePackage({
+      binding: adapters.native,
+      config,
+      context,
+      compressed: true,
+    });
+    const nativePipeline = createNativePipelineFromPackage({
+      binding: adapters.native,
+      packageBytes,
+    });
+    const tsContext = createPipelineContext();
+    const operators: OperatorConfig & NativeOperatorConfig = {
+      operators: {},
+      redactString: "[REDACTED]",
+    };
+    const tsEntities = await runPipeline({
+      fullText,
+      config,
+      gazetteerEntries: [],
+      context: tsContext,
+    });
+    const tsRedaction = redactText(fullText, tsEntities, operators, tsContext);
+
+    expect(tsEntities.some(({ text }) => text === "NEAR-456")).toBe(true);
+    expect(
+      toBindingStaticResult(nativePipeline.redactText(fullText, operators)),
+    ).toEqual({
+      resolved_entities: tsEntities.map(toBindingEntity),
+      redaction: toBindingRedactionResult(tsRedaction),
+    });
+  });
+
   test("native pipeline compatibility rejects TS-only contextual passes", () => {
     const config: PipelineConfig = {
       threshold: 0.3,
@@ -931,7 +997,6 @@ describe("native adapter parity", () => {
       unsupportedFeatures: [
         "enableNer",
         "enableNameCorpus",
-        "enableConfidenceBoost",
         "enableCoreference",
         "enableZoneClassification",
         "enableHotwordRules",

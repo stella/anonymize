@@ -37,6 +37,10 @@ use crate::types::{
 
 const PREPARED_SEARCH_ARTIFACTS_HEADER: [u8; 8] = *b"ANONPSR1";
 const PREPARED_SEARCH_ARTIFACTS_VERSION: u32 = 1;
+const NEAR_MISS_BAND: f64 = 0.15;
+const BOOST_PER_NEIGHBOUR: f64 = 0.05;
+const CONTEXT_WINDOW_CHARS: f64 = 150.0;
+const HIGH_CONFIDENCE_FLOOR: f64 = 0.9;
 
 pub struct PreparedSearch {
   regex: SearchIndex,
@@ -46,6 +50,7 @@ pub struct PreparedSearch {
   literals: SearchIndex,
   allowed_labels: Vec<String>,
   threshold: f64,
+  confidence_boost: bool,
   slices: PreparedSearchSlices,
   regex_meta: Vec<RegexMatchMeta>,
   custom_regex_meta: Vec<RegexMatchMeta>,
@@ -85,6 +90,8 @@ pub struct PreparedSearchConfig {
   pub allowed_labels: Vec<String>,
   #[serde(default)]
   pub threshold: f64,
+  #[serde(default)]
+  pub confidence_boost: bool,
   pub slices: PreparedSearchSlices,
   pub regex_meta: Vec<RegexMatchMeta>,
   pub custom_regex_meta: Vec<RegexMatchMeta>,
@@ -336,6 +343,7 @@ impl PreparedSearch {
     let slices = config.slices.clone();
     let allowed_labels = config.allowed_labels.clone();
     let threshold = config.threshold;
+    let confidence_boost = config.confidence_boost;
     let regex_groups = split_regex_patterns(config.regex_patterns, &slices)?;
     let regex_len = regex_groups.regex.len();
     let custom_regex_len = config.custom_regex_patterns.len();
@@ -413,6 +421,7 @@ impl PreparedSearch {
       literals,
       allowed_labels,
       threshold,
+      confidence_boost,
       slices,
       regex_meta: config.regex_meta,
       custom_regex_meta: config.custom_regex_meta,
@@ -819,9 +828,10 @@ impl PreparedSearch {
   ) -> Result<StaticRedactionResult> {
     let detections = self
       .detect_static_entities_inner(full_text, diagnostics.as_deref_mut())?;
-    let raw_entities = filter_entities_for_config(
+    let raw_entities = filter_entities_for_redaction(
       detections.all_entities(),
       self.threshold,
+      self.confidence_boost,
       &self.allowed_labels,
     );
     let merge_start = Instant::now();
@@ -902,14 +912,89 @@ fn filter_entities_for_config(
   threshold: f64,
   allowed_labels: &[String],
 ) -> Vec<PipelineEntity> {
+  filter_entities_for_threshold(
+    filter_entities_for_labels(entities, allowed_labels),
+    threshold,
+  )
+}
+
+fn filter_entities_for_redaction(
+  entities: Vec<PipelineEntity>,
+  threshold: f64,
+  confidence_boost: bool,
+  allowed_labels: &[String],
+) -> Vec<PipelineEntity> {
+  let entities = filter_entities_for_labels(entities, allowed_labels);
+  if confidence_boost {
+    return boost_near_miss_entities(entities, threshold);
+  }
+  filter_entities_for_threshold(entities, threshold)
+}
+
+fn filter_entities_for_labels(
+  entities: Vec<PipelineEntity>,
+  allowed_labels: &[String],
+) -> Vec<PipelineEntity> {
   entities
     .into_iter()
-    .filter(|entity| entity.score >= threshold)
     .filter(|entity| {
       allowed_labels.is_empty()
         || allowed_labels.iter().any(|label| label == &entity.label)
     })
     .collect()
+}
+
+fn filter_entities_for_threshold(
+  entities: Vec<PipelineEntity>,
+  threshold: f64,
+) -> Vec<PipelineEntity> {
+  entities
+    .into_iter()
+    .filter(|entity| entity.score >= threshold)
+    .collect()
+}
+
+fn boost_near_miss_entities(
+  entities: Vec<PipelineEntity>,
+  threshold: f64,
+) -> Vec<PipelineEntity> {
+  let near_miss_floor = f64::max(0.0, threshold - NEAR_MISS_BAND);
+  let anchors = entities
+    .iter()
+    .filter(|entity| entity.score >= HIGH_CONFIDENCE_FLOOR)
+    .map(entity_midpoint)
+    .collect::<Vec<_>>();
+
+  entities
+    .into_iter()
+    .filter_map(|mut entity| {
+      if entity.score >= threshold {
+        return Some(entity);
+      }
+      if entity.score < near_miss_floor {
+        return None;
+      }
+
+      let midpoint = entity_midpoint(&entity);
+      let neighbours = anchors
+        .iter()
+        .filter(|anchor| (midpoint - **anchor).abs() <= CONTEXT_WINDOW_CHARS)
+        .count();
+      let neighbour_count = u32::try_from(neighbours).unwrap_or(u32::MAX);
+      let boosted_score =
+        f64::from(neighbour_count).mul_add(BOOST_PER_NEIGHBOUR, entity.score);
+      if boosted_score < threshold {
+        return None;
+      }
+
+      entity.score = f64::min(1.0, boosted_score);
+      Some(entity)
+    })
+    .collect()
+}
+
+fn entity_midpoint(entity: &PipelineEntity) -> f64 {
+  f64::midpoint(f64::from(entity.start), f64::from(entity.end))
 }
 
 fn record_static_entity_diagnostics(
