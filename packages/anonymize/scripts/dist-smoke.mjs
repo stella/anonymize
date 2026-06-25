@@ -11,9 +11,13 @@
  */
 import { createPipelineContext, runPipeline } from "../dist/index.mjs";
 import { createNativeAnonymizerFromPackage } from "../dist/native.mjs";
+import { loadNativeAnonymizeBinding } from "../dist/native-node.mjs";
 
 if (typeof createNativeAnonymizerFromPackage !== "function") {
   throw new TypeError("dist native entrypoint is missing its package loader");
+}
+if (typeof loadNativeAnonymizeBinding !== "function") {
+  throw new TypeError("dist native-node entrypoint is missing its loader");
 }
 
 const warnings = [];

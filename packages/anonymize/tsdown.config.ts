@@ -2,7 +2,12 @@ import { defineConfig } from "tsdown";
 
 export default defineConfig([
   {
-    entry: ["src/index.ts", "src/constants.ts", "src/native.ts"],
+    entry: [
+      "src/index.ts",
+      "src/constants.ts",
+      "src/native.ts",
+      "src/native-node.ts",
+    ],
     outDir: "dist",
     format: ["esm"],
     dts: true,

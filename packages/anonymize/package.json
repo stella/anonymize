@@ -18,6 +18,11 @@
       "types": "./dist/native.d.mts",
       "import": "./dist/native.mjs",
       "default": "./dist/native.mjs"
+    },
+    "./native-node": {
+      "types": "./dist/native-node.d.mts",
+      "import": "./dist/native-node.mjs",
+      "default": "./dist/native-node.mjs"
     }
   },
   "types": "dist/index.d.mts",
