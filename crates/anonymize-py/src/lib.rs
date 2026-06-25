@@ -265,6 +265,12 @@ fn normalize_for_search(text: &str) -> String {
   stella_anonymize_core::normalize_for_search(text)
 }
 
+#[pyfunction]
+#[allow(clippy::missing_const_for_fn)]
+fn native_package_version() -> &'static str {
+  env!("CARGO_PKG_VERSION")
+}
+
 fn parse_prepared_search_config(
   config_json: &str,
 ) -> PyResult<BindingPreparedSearchConfig> {
@@ -446,5 +452,6 @@ fn stella_anonymize_core_py(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module
   )?)?;
   module.add_function(wrap_pyfunction!(normalize_for_search, module)?)?;
+  module.add_function(wrap_pyfunction!(native_package_version, module)?)?;
   Ok(())
 }
