@@ -3,6 +3,7 @@ import {
   copyFileSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -20,6 +21,7 @@ import {
   type NativeStaticRedactionResult,
 } from "../native";
 import { createPipelineContext, preparePipelineSearch } from "../index";
+import { applyPipelineLanguageScope } from "../language-scope";
 import { contractTestConfig } from "./contract-config";
 import { loadTestDictionaries } from "./load-dictionaries";
 
@@ -109,8 +111,23 @@ type GeneratedNativeCase = {
   sensitiveValues: string[];
 };
 
+type ContractFixtureCase = {
+  name: string;
+  text: string;
+};
+
 const ROOT_DIR = join(import.meta.dir, "..", "..", "..", "..");
 const TARGET_DIR = join(ROOT_DIR, "target", "debug");
+const CONTRACT_FIXTURES_DIR = join(
+  ROOT_DIR,
+  "packages",
+  "anonymize",
+  "src",
+  "__test__",
+  "fixtures",
+  "contracts",
+);
+const CONTRACT_FIXTURE_LANGUAGES = ["cs", "de", "en"] as const;
 const CONFIG_JSON = JSON.stringify({
   regex_patterns: [{ kind: "regex", pattern: "\\b[A-Z]{2}\\d{4}\\b" }],
   custom_regex_patterns: [{ kind: "regex", pattern: "\\bMAT-\\d{3}\\b" }],
@@ -275,6 +292,42 @@ print(
         payload.get("operators_json"),
     )
 )
+`;
+
+const PYTHON_PREPARED_PACKAGE_CASES_SCRIPT = `
+import importlib.util
+import json
+import os
+import pathlib
+
+module_path = pathlib.Path(os.environ["STELLA_ANONYMIZE_PY_MODULE"])
+payload_path = pathlib.Path(os.environ["STELLA_ANONYMIZE_PAYLOAD"])
+package_path = pathlib.Path(os.environ["STELLA_ANONYMIZE_PACKAGE"])
+spec = importlib.util.spec_from_file_location(
+    "stella_anonymize_core_py",
+    module_path,
+)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+payload = json.loads(payload_path.read_text())
+package_bytes = package_path.read_bytes()
+prepare_fn_name = os.environ.get(
+    "STELLA_ANONYMIZE_PACKAGE_PREPARE_FN",
+    "prepare_static_search_package_bytes",
+)
+if getattr(module, prepare_fn_name)(payload["config_json"]) != package_bytes:
+    raise AssertionError("prepared package bytes differ")
+prepared = module.PreparedSearch.from_prepared_package_bytes(package_bytes)
+results = [
+    json.loads(
+        prepared.redact_static_entities_json(
+            item["text"],
+            item.get("operators_json"),
+        )
+    )
+    for item in payload["cases"]
+]
+print(json.dumps(results))
 `;
 
 let loadedAdapters: {
@@ -634,59 +687,62 @@ describe("native adapter parity", () => {
     expect(result.redaction.redactedText).toContain("***");
   });
 
-  test("native facade and Python match on a contract fixture package", async () => {
+  test("native facade and Python match on contract fixture packages", async () => {
     const adapters = getAdapters();
-    const fixtureText = readFileSync(
-      join(
-        ROOT_DIR,
-        "packages",
-        "anonymize",
-        "src",
-        "__test__",
-        "fixtures",
-        "contracts",
-        "en",
-        "software-license-agreement.txt",
-      ),
-      "utf8",
-    );
-    const dictionaries = await loadTestDictionaries({
-      denyListCountries: ["US"],
-      nameCorpusLanguages: ["en"],
-    });
-    const search = await preparePipelineSearch({
-      config: {
-        ...contractTestConfig("native-facade-fixture-parity"),
-        dictionaries,
-        language: "en",
-      },
-      context: createPipelineContext(),
-    });
-    const configJson = JSON.stringify(search.nativeStaticConfig);
-    const packageBytes = prepareNativeSearchPackage({
-      binding: adapters.native,
-      config: search.nativeStaticConfig,
-      compressed: true,
-    });
-    const anonymizer = createNativeAnonymizerFromPackage({
-      binding: adapters.native,
-      packageBytes,
-    });
+    for (const language of CONTRACT_FIXTURE_LANGUAGES) {
+      const fixtures = loadContractFixtureCases(language);
+      const scopedConfig = applyPipelineLanguageScope({
+        ...contractTestConfig(`native-facade-fixture-parity-${language}`),
+        language,
+      });
+      const dictionaryScope: Parameters<typeof loadTestDictionaries>[0] = {};
+      if (scopedConfig.denyListCountries !== undefined) {
+        dictionaryScope.denyListCountries = scopedConfig.denyListCountries;
+      }
+      if (scopedConfig.nameCorpusLanguages !== undefined) {
+        dictionaryScope.nameCorpusLanguages = scopedConfig.nameCorpusLanguages;
+      }
+      const dictionaries = await loadTestDictionaries(dictionaryScope);
+      const search = await preparePipelineSearch({
+        config: {
+          ...scopedConfig,
+          dictionaries,
+        },
+        context: createPipelineContext(),
+      });
+      const configJson = JSON.stringify(search.nativeStaticConfig);
+      const packageBytes = prepareNativeSearchPackage({
+        binding: adapters.native,
+        config: search.nativeStaticConfig,
+        compressed: true,
+      });
+      const anonymizer = createNativeAnonymizerFromPackage({
+        binding: adapters.native,
+        packageBytes,
+      });
 
-    const tsResult = toBindingStaticResult(
-      anonymizer.redactStaticEntities(fixtureText),
-    );
-    const pyResult = callPythonPreparedWithPackage(
-      adapters.pythonModulePath,
-      adapters.tempDir,
-      Buffer.from(packageBytes),
-      fixtureText,
-      null,
-      "prepare_static_search_compressed_package_bytes",
-      configJson,
-    );
+      const tsResults = fixtures.map(({ text }) =>
+        toBindingStaticResult(anonymizer.redactStaticEntities(text)),
+      );
+      const pyResults = callPythonPreparedPackageCases(
+        adapters.pythonModulePath,
+        adapters.tempDir,
+        Buffer.from(packageBytes),
+        fixtures.map(({ text }) => ({ text, operators: null })),
+        "prepare_static_search_compressed_package_bytes",
+        configJson,
+      );
 
-    expect(tsResult).toEqual(pyResult);
+      for (const [index, fixture] of fixtures.entries()) {
+        expect({
+          fixture: `${language}/${fixture.name}`,
+          result: pyResults.at(index),
+        }).toEqual({
+          fixture: `${language}/${fixture.name}`,
+          result: tsResults.at(index),
+        });
+      }
+    }
   });
 
   test("JSON operator config accepts camel-case redactString", () => {
@@ -991,6 +1047,43 @@ const callPythonPreparedWithPackage = (
   return JSON.parse(output);
 };
 
+const callPythonPreparedPackageCases = (
+  pythonModulePath: string,
+  tempDir: string,
+  packageBytes: Buffer,
+  cases: Array<{
+    text: string;
+    operators: Record<string, string> | null;
+  }>,
+  prepareFn = "prepare_static_search_package_bytes",
+  configJson = CONFIG_JSON,
+): StaticRedactionResult[] => {
+  const payloadPath = join(tempDir, "prepared-package-cases-payload.json");
+  const packagePath = join(tempDir, "prepared-package-cases.bin");
+  writeFileSync(packagePath, packageBytes);
+  writeFileSync(
+    payloadPath,
+    JSON.stringify({
+      config_json: configJson,
+      cases: cases.map(({ text, operators }) => ({
+        text,
+        operators_json: operatorConfigJson(operators),
+      })),
+    }),
+  );
+  const output = runCommand(
+    "python3",
+    ["-c", PYTHON_PREPARED_PACKAGE_CASES_SCRIPT],
+    {
+      STELLA_ANONYMIZE_PACKAGE: packagePath,
+      STELLA_ANONYMIZE_PACKAGE_PREPARE_FN: prepareFn,
+      STELLA_ANONYMIZE_PAYLOAD: payloadPath,
+      STELLA_ANONYMIZE_PY_MODULE: pythonModulePath,
+    },
+  );
+  return JSON.parse(output);
+};
+
 const callPythonDiagnostics = (
   pythonModulePath: string,
   text: string,
@@ -1090,6 +1183,17 @@ const toBindingPipelineEntity = ({
   ...entity,
   source_detail: sourceDetail ?? null,
 });
+
+const loadContractFixtureCases = (
+  language: (typeof CONTRACT_FIXTURE_LANGUAGES)[number],
+): ContractFixtureCase[] =>
+  readdirSync(join(CONTRACT_FIXTURES_DIR, language))
+    .filter((name) => name.endsWith(".txt"))
+    .toSorted()
+    .map((name) => ({
+      name,
+      text: readFileSync(join(CONTRACT_FIXTURES_DIR, language, name), "utf8"),
+    }));
 
 const operatorConfigJson = (
   operators: Record<string, string> | null,
