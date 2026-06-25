@@ -281,14 +281,17 @@ async function runWorker() {
       );
     }
   }
-  const nativeRewrite = usePrebuiltNativePackage
-    ? describeNativeRewriteFromNativePackage(runtime)
-    : usePrebuiltNativeConfig && search.nativeStaticConfig
-      ? describeNativeRewriteFromNativeConfig(
-          search.nativeStaticConfig,
-          runtime,
-        )
-      : describeNativeRewrite(config, search, runtime);
+  let nativeRewrite;
+  if (usePrebuiltNativePackage) {
+    nativeRewrite = describeNativeRewriteFromNativePackage(runtime);
+  } else if (usePrebuiltNativeConfig && search.nativeStaticConfig) {
+    nativeRewrite = describeNativeRewriteFromNativeConfig(
+      search.nativeStaticConfig,
+      runtime,
+    );
+  } else {
+    nativeRewrite = describeNativeRewrite(config, search, runtime);
+  }
 
   let runtimeRunner = null;
   if (runtime === "native-static" && nativePackageBuffer !== null) {
