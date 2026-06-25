@@ -973,6 +973,7 @@ fn write_package_header(
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct BindingOperatorConfig {
   pub operators: Option<BTreeMap<String, String>>,
+  #[serde(default, alias = "redactString")]
   pub redact_string: Option<String>,
 }
 
@@ -2031,7 +2032,8 @@ mod tests {
   #![allow(clippy::unwrap_used)]
 
   use super::{
-    BindingPreparedSearchConfig, BindingSearchPattern, ContractError,
+    BindingOperatorConfig, BindingPreparedSearchConfig, BindingSearchPattern,
+    ContractError, operator_config_from_binding,
     prepared_search_config_from_binding,
     prepared_search_core_package_from_bytes,
     prepared_search_core_package_to_bytes,
@@ -2077,6 +2079,17 @@ mod tests {
       matches!(error, ContractError::InvalidPreparedSearchPackage { .. }),
       "corrupted package payload should fail digest verification"
     );
+  }
+
+  #[test]
+  fn binding_operator_config_accepts_camel_case_redact_string() {
+    let config = serde_json::from_str::<BindingOperatorConfig>(
+      r#"{"operators":{"country":"redact"},"redactString":"***"}"#,
+    )
+    .unwrap();
+    let operators = operator_config_from_binding(Some(config)).unwrap();
+
+    assert_eq!(operators.redact_string, "***");
   }
 
   #[test]
