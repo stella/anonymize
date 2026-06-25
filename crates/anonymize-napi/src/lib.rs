@@ -228,6 +228,12 @@ pub fn normalize_for_search(text: String) -> String {
 }
 
 #[napi]
+#[must_use]
+pub fn native_package_version() -> String {
+  String::from(env!("CARGO_PKG_VERSION"))
+}
+
+#[napi]
 #[allow(clippy::needless_pass_by_value)]
 pub fn redact_static_entities_json(
   config_json: String,
