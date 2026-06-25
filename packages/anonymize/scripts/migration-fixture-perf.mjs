@@ -39,6 +39,36 @@ const WARM_ITERATIONS = positiveIntegerEnv(
   "ANONYMIZE_MIGRATION_WARM_ITERATIONS",
   2,
 );
+const CACHED_PREPARE_ITERATIONS = positiveIntegerEnv(
+  "ANONYMIZE_MIGRATION_CACHED_PREPARE_ITERATIONS",
+  3,
+);
+const PROFILE_REGEX_LABELS =
+  process.env.ANONYMIZE_MIGRATION_PROFILE_REGEX_LABELS === "1";
+const PROFILE_SCOPED_PREPARE =
+  process.env.ANONYMIZE_MIGRATION_PROFILE_SCOPED_PREPARE === "1";
+const NATIVE_PREPARED_PACKAGE =
+  process.env.ANONYMIZE_MIGRATION_NATIVE_PREPARED_PACKAGE === "1";
+const NATIVE_COMPRESSED_PACKAGE =
+  process.env.ANONYMIZE_MIGRATION_NATIVE_COMPRESSED_PACKAGE === "1";
+const NATIVE_PREPARED_ARTIFACTS =
+  !NATIVE_PREPARED_PACKAGE &&
+  process.env.ANONYMIZE_MIGRATION_NATIVE_PREPARED_ARTIFACTS === "1";
+const FIXTURE_LANGUAGE_FILTER = stringListEnv(
+  "ANONYMIZE_MIGRATION_FIXTURE_LANGUAGES",
+);
+const CONTENT_LANGUAGE =
+  process.env.ANONYMIZE_MIGRATION_CONTENT_LANGUAGE?.trim() ?? "";
+const NATIVE_CONFIG_PATH =
+  process.env.ANONYMIZE_MIGRATION_NATIVE_CONFIG_PATH?.trim() ?? "";
+const WRITE_NATIVE_CONFIG_PATH =
+  process.env.ANONYMIZE_MIGRATION_WRITE_NATIVE_CONFIG_PATH?.trim() ?? "";
+const NATIVE_PACKAGE_PATH =
+  process.env.ANONYMIZE_MIGRATION_NATIVE_PACKAGE_PATH?.trim() ?? "";
+const WRITE_NATIVE_PACKAGE_PATH =
+  process.env.ANONYMIZE_MIGRATION_WRITE_NATIVE_PACKAGE_PATH?.trim() ?? "";
+const USER_DATA_SCENARIO =
+  process.env.ANONYMIZE_MIGRATION_USER_DATA_SCENARIO?.trim() ?? "none";
 
 if (process.env.ANONYMIZE_MIGRATION_WORKER === "1") {
   await runWorker();
@@ -47,7 +77,11 @@ if (process.env.ANONYMIZE_MIGRATION_WORKER === "1") {
 }
 
 async function runCoordinator() {
-  const fixtures = discoverFixtures(FIXTURES_DIR);
+  const fixtures = discoverFixtures(FIXTURES_DIR).filter((fixture) =>
+    FIXTURE_LANGUAGE_FILTER.length === 0
+      ? true
+      : FIXTURE_LANGUAGE_FILTER.includes(fixtureLanguage(fixture)),
+  );
   if (fixtures.length === 0) {
     throw new Error(`No contract fixtures found in ${FIXTURES_DIR}`);
   }
@@ -128,6 +162,9 @@ function runVariant({
       ANONYMIZE_MIGRATION_FIXTURES: JSON.stringify(fixtures),
       ANONYMIZE_MIGRATION_RESULT_PATH: resultPath,
       ANONYMIZE_MIGRATION_WARM_ITERATIONS: String(WARM_ITERATIONS),
+      ANONYMIZE_MIGRATION_CACHED_PREPARE_ITERATIONS: String(
+        CACHED_PREPARE_ITERATIONS,
+      ),
     },
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
@@ -155,51 +192,130 @@ async function runWorker() {
   const resultPath = requiredEnv("ANONYMIZE_MIGRATION_RESULT_PATH");
   const fixtures = JSON.parse(requiredEnv("ANONYMIZE_MIGRATION_FIXTURES"));
   validateRuntime(runtime);
+  const usePrebuiltNativePackage =
+    runtime === "native-static" && NATIVE_PACKAGE_PATH.length > 0;
+  const usePrebuiltNativeConfig =
+    !usePrebuiltNativePackage &&
+    runtime === "native-static" &&
+    NATIVE_CONFIG_PATH.length > 0;
 
-  const importStart = Bun.nanoseconds();
-  const [indexModule, configModule, dictionaryModule] = await Promise.all([
-    importSource(sourceRoot, "packages/anonymize/src/index.ts", variant),
-    importSource(
-      sourceRoot,
-      "packages/anonymize/src/__test__/contract-config.ts",
-      variant,
-    ),
-    importSource(
-      sourceRoot,
-      "packages/anonymize/src/__test__/load-dictionaries.ts",
-      variant,
-    ),
-  ]);
-  const importMs = elapsedMs(importStart);
+  let indexModule = null;
+  let config = null;
+  let context = null;
+  let search = null;
+  let nativeConfigBytes = null;
+  let nativePackageBuffer = null;
+  let importMs = 0;
+  let dictionaryMs = 0;
+  let prepareMs = 0;
+  let nativeConfigReadMs = 0;
+  let nativeConfigParseMs = 0;
+  let nativePackageReadMs = 0;
+  let nativePackageCompressed = NATIVE_COMPRESSED_PACKAGE;
 
-  const dictionaryStart = Bun.nanoseconds();
-  const dictionaries = await dictionaryModule.loadTestDictionaries();
-  const dictionaryMs = elapsedMs(dictionaryStart);
-
-  const config = {
-    ...configModule.contractTestConfig(`migration-fixtures-${variant}`),
-    dictionaries,
-  };
-  const context = indexModule.createPipelineContext();
-
-  const prepareStart = Bun.nanoseconds();
-  const search =
-    runtime === "native-static"
-      ? await prepareNativeStaticSearch({
+  if (usePrebuiltNativePackage) {
+    const packageReadStart = Bun.nanoseconds();
+    nativePackageBuffer = readFileSync(NATIVE_PACKAGE_PATH);
+    nativePackageReadMs = elapsedMs(packageReadStart);
+    nativePackageCompressed = isCompressedNativePackage(nativePackageBuffer);
+  } else if (usePrebuiltNativeConfig) {
+    const configReadStart = Bun.nanoseconds();
+    nativeConfigBytes = readFileSync(NATIVE_CONFIG_PATH);
+    nativeConfigReadMs = elapsedMs(configReadStart);
+    const configParseStart = Bun.nanoseconds();
+    search = {
+      nativeStaticConfig: JSON.parse(nativeConfigBytes.toString("utf8")),
+    };
+    nativeConfigParseMs = elapsedMs(configParseStart);
+  } else {
+    const importStart = Bun.nanoseconds();
+    const [loadedIndexModule, configModule, dictionaryModule] =
+      await Promise.all([
+        importSource(sourceRoot, "packages/anonymize/src/index.ts", variant),
+        importSource(
           sourceRoot,
+          "packages/anonymize/src/__test__/contract-config.ts",
           variant,
-          config,
-          context,
-        })
-      : await indexModule.preparePipelineSearch({ config, context });
-  const prepareMs = elapsedMs(prepareStart);
-  const nativeRewrite = describeNativeRewrite(config, search, runtime);
+        ),
+        importSource(
+          sourceRoot,
+          "packages/anonymize/src/__test__/load-dictionaries.ts",
+          variant,
+        ),
+      ]);
+    indexModule = loadedIndexModule;
+    importMs = elapsedMs(importStart);
 
-  const runtimeRunner =
-    runtime === "native-static"
-      ? createNativeStaticRunner(search.nativeStaticConfig)
-      : null;
+    const scope = contentLanguageScope();
+    const dictionaryStart = Bun.nanoseconds();
+    const dictionaries = await dictionaryModule.loadTestDictionaries(scope);
+    dictionaryMs = elapsedMs(dictionaryStart);
+
+    config = {
+      ...configModule.contractTestConfig(`migration-fixtures-${variant}`),
+      ...scope,
+      dictionaries,
+    };
+    config = applyUserDataScenario(config);
+    context = indexModule.createPipelineContext();
+
+    const prepareStart = Bun.nanoseconds();
+    search =
+      runtime === "native-static"
+        ? await prepareNativeStaticSearch({
+            sourceRoot,
+            variant,
+            config,
+            context,
+          })
+        : await indexModule.preparePipelineSearch({ config, context });
+    prepareMs = elapsedMs(prepareStart);
+    if (
+      runtime === "native-static" &&
+      WRITE_NATIVE_CONFIG_PATH.length > 0 &&
+      search.nativeStaticConfig
+    ) {
+      writeFileSync(
+        WRITE_NATIVE_CONFIG_PATH,
+        JSON.stringify(search.nativeStaticConfig),
+      );
+    }
+  }
+  const nativeRewrite = usePrebuiltNativePackage
+    ? describeNativeRewriteFromNativePackage(runtime)
+    : usePrebuiltNativeConfig && search.nativeStaticConfig
+      ? describeNativeRewriteFromNativeConfig(
+          search.nativeStaticConfig,
+          runtime,
+        )
+      : describeNativeRewrite(config, search, runtime);
+
+  let runtimeRunner = null;
+  if (runtime === "native-static" && nativePackageBuffer !== null) {
+    runtimeRunner =
+      createNativeStaticRunnerFromPackageBytes(nativePackageBuffer);
+  } else if (runtime === "native-static" && nativeConfigBytes === null) {
+    runtimeRunner = createNativeStaticRunner(search.nativeStaticConfig);
+  } else if (runtime === "native-static") {
+    runtimeRunner = createNativeStaticRunnerFromJsonBytes(nativeConfigBytes);
+  }
   const nativePrepareMs = runtimeRunner?.prepareMs ?? 0;
+  const nativeStringifyMs = runtimeRunner?.stringifyMs ?? 0;
+  const nativeArtifactPrepareMs = runtimeRunner?.artifactPrepareMs ?? 0;
+  const nativeArtifactBytes = runtimeRunner?.artifactBytes ?? 0;
+  const nativePackagePrepareMs = runtimeRunner?.packagePrepareMs ?? 0;
+  const nativePackageBytes = runtimeRunner?.packageBytes ?? 0;
+  const nativeCachedPrepareMsByIteration =
+    runtimeRunner?.cachedPrepareMsByIteration ?? [];
+  const nativeCachedPrepareAvgMs =
+    nativeCachedPrepareMsByIteration.length === 0
+      ? 0
+      : roundMs(
+          nativeCachedPrepareMsByIteration.reduce(
+            (sum, value) => sum + value,
+            0,
+          ) / nativeCachedPrepareMsByIteration.length,
+        );
 
   const coldRun =
     runtimeRunner === null
@@ -233,6 +349,23 @@ async function runWorker() {
     runtimeRunner === null
       ? null
       : collectNativeDiagnostics({ runner: runtimeRunner, fixtures });
+  if (nativeDiagnostics !== null && PROFILE_REGEX_LABELS) {
+    nativeDiagnostics.regexPrepareByLabel = profileNativeRegexPrepare(
+      search.nativeStaticConfig,
+    );
+  }
+  if (
+    nativeDiagnostics !== null &&
+    PROFILE_SCOPED_PREPARE &&
+    !usePrebuiltNativeConfig
+  ) {
+    nativeDiagnostics.scopedPrepare = await profileScopedNativePrepare({
+      sourceRoot,
+      variant,
+      baseConfig: config,
+      fixtures,
+    });
+  }
   const snapshots = Object.fromEntries(
     coldRun.fixtures.map((fixture) => [fixture.fixture, fixture.snapshot]),
   );
@@ -250,13 +383,35 @@ async function runWorker() {
         importMs,
         dictionaryMs,
         prepareMs,
+        nativeConfigReadMs,
+        nativeConfigParseMs,
+        nativePackageReadMs,
+        nativeStringifyMs,
+        nativeArtifactPrepareMs,
+        nativeArtifactBytes,
+        nativePackageCompressed,
+        nativePackagePrepareMs,
+        nativePackageBytes,
         nativePrepareMs,
+        nativeCachedPrepareMsByIteration,
+        nativeCachedPrepareAvgMs,
         coldRunMs: coldRun.ms,
         coldPipelineMs: roundMs(
-          dictionaryMs + prepareMs + nativePrepareMs + coldRun.ms,
+          dictionaryMs +
+            prepareMs +
+            nativeConfigReadMs +
+            nativeStringifyMs +
+            nativePrepareMs +
+            coldRun.ms,
         ),
         coldTotalMs: roundMs(
-          importMs + dictionaryMs + prepareMs + nativePrepareMs + coldRun.ms,
+          importMs +
+            dictionaryMs +
+            prepareMs +
+            nativeConfigReadMs +
+            nativeStringifyMs +
+            nativePrepareMs +
+            coldRun.ms,
         ),
         warmRunMsByIteration: warmRuns.map((run) => run.ms),
         warmRunMs,
@@ -379,6 +534,17 @@ function collectNativeDiagnostics({ runner, fixtures }) {
         diagnosticStageSummaries(runner.prepareDiagnostics.events),
       ),
     },
+    cachedPrepare:
+      runner.cachedPrepareDiagnostics === null
+        ? null
+        : {
+            stages: diagnosticStageSummaries(
+              runner.cachedPrepareDiagnostics.events,
+            ),
+            topStages: topDiagnosticStages(
+              diagnosticStageSummaries(runner.cachedPrepareDiagnostics.events),
+            ),
+          },
     run: summarizeFixtureDiagnostics(fixtureDiagnostics),
   };
 }
@@ -488,6 +654,8 @@ function toSnapshot(indexModule, fullText, entities, context) {
     entities: sorted.map(({ start, end, label, text, source }) => ({
       start,
       end,
+      byteStart: utf16OffsetToUtf8ByteOffset(fullText, start),
+      byteEnd: utf16OffsetToUtf8ByteOffset(fullText, end),
       label,
       text,
       source,
@@ -515,6 +683,8 @@ function toNativeSnapshot(result) {
     entities: entities.map(({ start, end, label, text, source }) => ({
       start,
       end,
+      byteStart: start,
+      byteEnd: end,
       label,
       text,
       source,
@@ -533,7 +703,7 @@ function compareSnapshots(baseline, candidate) {
   for (const fixture of [...fixtureNames].sort()) {
     const expected = baseline.snapshots[fixture];
     const actual = candidate.snapshots[fixture];
-    if (JSON.stringify(expected) === JSON.stringify(actual)) {
+    if (snapshotsAreEquivalent(expected, actual)) {
       continue;
     }
     mismatches.push(describeMismatch(fixture, expected, actual));
@@ -544,6 +714,7 @@ function compareSnapshots(baseline, candidate) {
     baseline: baseline.variant,
     candidate: candidate.variant,
     equal: mismatches.length === 0,
+    mismatchSummary: mismatchSummary(mismatches),
     fixtureCount: fixtureNames.size,
     mismatches,
     timingComparison: timingComparison(baseline, candidate),
@@ -552,6 +723,54 @@ function compareSnapshots(baseline, candidate) {
       candidate: candidate.nativeRewrite,
     },
   };
+}
+
+function mismatchSummary(mismatches) {
+  const byCategory = {};
+  let materialMismatchCount = 0;
+  let redactionMismatchCount = 0;
+  let sourceOnlyMismatchCount = 0;
+
+  for (const mismatch of mismatches) {
+    const category = mismatch.category ?? mismatch.kind;
+    byCategory[category] = (byCategory[category] ?? 0) + 1;
+    if (mismatch.sourceAgnosticEqual !== true) {
+      materialMismatchCount += 1;
+    }
+    if (mismatch.redactedTextEqual === false) {
+      redactionMismatchCount += 1;
+    }
+    if (
+      mismatch.redactedTextEqual &&
+      mismatch.sourceOnlyCount > 0 &&
+      Object.keys(mismatch.candidateExtraByLabel ?? {}).length === 0 &&
+      Object.keys(mismatch.candidateMissingByLabel ?? {}).length === 0
+    ) {
+      sourceOnlyMismatchCount += 1;
+    }
+  }
+
+  return {
+    strictMismatchCount: mismatches.length,
+    materialMismatchCount,
+    redactionMismatchCount,
+    sourceOnlyMismatchCount,
+    byCategory,
+  };
+}
+
+function snapshotsAreEquivalent(expected, actual) {
+  if (expected === undefined || actual === undefined) {
+    return false;
+  }
+  if (JSON.stringify(expected) === JSON.stringify(actual)) {
+    return true;
+  }
+  return (
+    expected.redactedText === actual.redactedText &&
+    JSON.stringify(byteNormalizedSnapshot(expected)) ===
+      JSON.stringify(byteNormalizedSnapshot(actual))
+  );
 }
 
 function describeMismatch(fixture, expected, actual) {
@@ -566,10 +785,23 @@ function describeMismatch(fixture, expected, actual) {
     expected.entities,
     actual.entities,
   );
+  const expectedByteSnapshot = byteNormalizedSnapshot(expected);
+  const actualByteSnapshot = byteNormalizedSnapshot(actual);
+  const byteNormalizedEqual =
+    JSON.stringify(expectedByteSnapshot) === JSON.stringify(actualByteSnapshot);
+  const sourceAgnosticEqual =
+    JSON.stringify(sourceAgnosticSnapshot(expectedByteSnapshot)) ===
+    JSON.stringify(sourceAgnosticSnapshot(actualByteSnapshot));
+  const firstByteEntityDiff = firstDifferentIndex(
+    expectedByteSnapshot.entities,
+    actualByteSnapshot.entities,
+  );
+  const category = mismatchCategory(expected, actual);
 
   return {
     fixture,
     kind: "snapshot-mismatch",
+    category: category.kind,
     entityCount: {
       baseline: expected.entityCount,
       candidate: actual.entityCount,
@@ -579,6 +811,15 @@ function describeMismatch(fixture, expected, actual) {
       candidate: actual.counts,
     },
     redactedTextEqual: expected.redactedText === actual.redactedText,
+    byteNormalizedEqual,
+    sourceAgnosticEqual,
+    sourceOnlyCount: category.sourceOnlyCount,
+    candidateExtraByLabel: category.candidateExtraByLabel,
+    candidateMissingByLabel: category.candidateMissingByLabel,
+    candidateExtra: category.candidateExtra,
+    candidateMissing: category.candidateMissing,
+    firstCandidateExtra: category.firstCandidateExtra,
+    firstCandidateMissing: category.firstCandidateMissing,
     firstEntityDiff:
       firstEntityDiff === -1
         ? null
@@ -587,6 +828,230 @@ function describeMismatch(fixture, expected, actual) {
             baseline: expected.entities.at(firstEntityDiff) ?? null,
             candidate: actual.entities.at(firstEntityDiff) ?? null,
           },
+    firstByteEntityDiff:
+      firstByteEntityDiff === -1
+        ? null
+        : {
+            index: firstByteEntityDiff,
+            baseline:
+              expectedByteSnapshot.entities.at(firstByteEntityDiff) ?? null,
+            candidate:
+              actualByteSnapshot.entities.at(firstByteEntityDiff) ?? null,
+          },
+  };
+}
+
+function mismatchCategory(expected, actual) {
+  const expectedByteEntities = byteNormalizedSnapshot(expected).entities;
+  const actualByteEntities = byteNormalizedSnapshot(actual).entities;
+  const redactedTextEqual = expected.redactedText === actual.redactedText;
+  const entitySetEqual =
+    JSON.stringify(expectedByteEntities) === JSON.stringify(actualByteEntities);
+  if (redactedTextEqual && entitySetEqual) {
+    return emptyMismatchCategory("metadata-only");
+  }
+
+  const expectedSpanLabel = countEntitiesByKey(
+    expectedByteEntities,
+    entitySpanLabelKey,
+  );
+  const actualSpanLabel = countEntitiesByKey(
+    actualByteEntities,
+    entitySpanLabelKey,
+  );
+  if (mapsEqual(expectedSpanLabel, actualSpanLabel)) {
+    return {
+      ...sourceDriftCategory(expectedByteEntities, actualByteEntities),
+      kind: redactedTextEqual ? "text-or-source" : "span-label-only",
+    };
+  }
+
+  const expectedContent = countEntitiesByKey(
+    expectedByteEntities,
+    entityContentKey,
+  );
+  const actualContent = countEntitiesByKey(
+    actualByteEntities,
+    entityContentKey,
+  );
+  if (mapsEqual(expectedContent, actualContent)) {
+    return {
+      ...sourceDriftCategory(expectedByteEntities, actualByteEntities),
+      kind: redactedTextEqual ? "source-only" : "source-or-order",
+    };
+  }
+
+  const delta = entityDelta(expectedByteEntities, actualByteEntities);
+  return {
+    kind: delta.missing.length === 0 ? "candidate-extra" : "coverage-drift",
+    sourceOnlyCount: sourceDriftCategory(
+      expectedByteEntities,
+      actualByteEntities,
+    ).sourceOnlyCount,
+    candidateExtraByLabel: countByLabel(delta.extra),
+    candidateMissingByLabel: countByLabel(delta.missing),
+    candidateExtra: delta.extra.map(entitySummary),
+    candidateMissing: delta.missing.map(entitySummary),
+    firstCandidateExtra: entitySummary(delta.extra.at(0)),
+    firstCandidateMissing: entitySummary(delta.missing.at(0)),
+  };
+}
+
+function emptyMismatchCategory(kind) {
+  return {
+    kind,
+    sourceOnlyCount: 0,
+    candidateExtraByLabel: {},
+    candidateMissingByLabel: {},
+    candidateExtra: [],
+    candidateMissing: [],
+    firstCandidateExtra: null,
+    firstCandidateMissing: null,
+  };
+}
+
+function sourceDriftCategory(expectedEntities, actualEntities) {
+  const expectedByContent = groupEntitiesByKey(
+    expectedEntities,
+    entityContentKey,
+  );
+  const actualByContent = groupEntitiesByKey(actualEntities, entityContentKey);
+  let sourceOnlyCount = 0;
+  for (const [key, expectedGroup] of expectedByContent) {
+    const actualGroup = actualByContent.get(key) ?? [];
+    const expectedSources = expectedGroup.map((entity) => entity.source).sort();
+    const actualSources = actualGroup.map((entity) => entity.source).sort();
+    if (JSON.stringify(expectedSources) !== JSON.stringify(actualSources)) {
+      sourceOnlyCount += Math.max(expectedGroup.length, actualGroup.length);
+    }
+  }
+  return {
+    ...emptyMismatchCategory("source-only"),
+    sourceOnlyCount,
+  };
+}
+
+function entityDelta(expectedEntities, actualEntities) {
+  const expectedCounts = countEntitiesByKey(expectedEntities, entityContentKey);
+  const actualCounts = countEntitiesByKey(actualEntities, entityContentKey);
+
+  return {
+    missing: takeEntityDelta(expectedEntities, expectedCounts, actualCounts),
+    extra: takeEntityDelta(actualEntities, actualCounts, expectedCounts),
+  };
+}
+
+function takeEntityDelta(entities, ownCounts, otherCounts) {
+  const remaining = new Map();
+  for (const [key, ownCount] of ownCounts) {
+    const diff = ownCount - (otherCounts.get(key) ?? 0);
+    if (diff > 0) {
+      remaining.set(key, diff);
+    }
+  }
+
+  const delta = [];
+  for (const entity of entities) {
+    const key = entityContentKey(entity);
+    const count = remaining.get(key) ?? 0;
+    if (count <= 0) {
+      continue;
+    }
+    delta.push(entity);
+    remaining.set(key, count - 1);
+  }
+  return delta;
+}
+
+function entityContentKey(entity) {
+  return [entity.start, entity.end, entity.label, entity.text].join("\u0000");
+}
+
+function entitySpanLabelKey(entity) {
+  return [entity.start, entity.end, entity.label].join("\u0000");
+}
+
+function countEntitiesByKey(entities, keyFn) {
+  const counts = new Map();
+  for (const entity of entities) {
+    const key = keyFn(entity);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return counts;
+}
+
+function groupEntitiesByKey(entities, keyFn) {
+  const groups = new Map();
+  for (const entity of entities) {
+    const key = keyFn(entity);
+    const group = groups.get(key) ?? [];
+    group.push(entity);
+    groups.set(key, group);
+  }
+  return groups;
+}
+
+function mapsEqual(left, right) {
+  if (left.size !== right.size) {
+    return false;
+  }
+  for (const [key, value] of left) {
+    if (right.get(key) !== value) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function countByLabel(entities) {
+  const counts = {};
+  for (const entity of entities) {
+    counts[entity.label] = (counts[entity.label] ?? 0) + 1;
+  }
+  return counts;
+}
+
+function entitySummary(entity) {
+  if (!entity) {
+    return null;
+  }
+  return {
+    start: entity.start,
+    end: entity.end,
+    label: entity.label,
+    source: entity.source,
+  };
+}
+
+function byteNormalizedSnapshot(snapshot) {
+  const entities = snapshot.entities
+    .map(({ byteStart, byteEnd, label, text, source }) => ({
+      start: byteStart,
+      end: byteEnd,
+      label,
+      text,
+      source,
+    }))
+    .toSorted(
+      (left, right) =>
+        left.start - right.start ||
+        left.end - right.end ||
+        left.label.localeCompare(right.label) ||
+        left.text.localeCompare(right.text),
+    );
+
+  return {
+    entityCount: snapshot.entityCount,
+    counts: snapshot.counts,
+    entities,
+    redactedText: snapshot.redactedText,
+  };
+}
+
+function sourceAgnosticSnapshot(snapshot) {
+  return {
+    ...snapshot,
+    entities: snapshot.entities.map(({ source: _source, ...entity }) => entity),
   };
 }
 
@@ -630,37 +1095,56 @@ function printVariantSummary(result) {
 }
 
 function describeNativeRewrite(config, search, runtime) {
-  const sliceLengths = Object.fromEntries(
+  const tsSliceLengths = Object.fromEntries(
     Object.entries(search.slices).map(([name, slice]) => [
       name,
       sliceLength(slice),
     ]),
   );
-  const regexValidationSlots = countRegexValidationSlots(search.regexMeta);
-  const denyListSourceCounts = countDenyListSources(search.denyListData);
   const nativeStaticConfig = search.nativeStaticConfig;
-  const unsupportedSearchSlots = [
-    unsupportedSlot("regex", regexValidationSlots, "regex validators"),
-    unsupportedSlot("triggers", sliceLengths.triggers, "trigger extraction"),
-    unsupportedSlot("streetTypes", sliceLengths.streetTypes, "address seeds"),
-  ].filter((slot) => slot.count > 0);
-  const supportedSearchSlots = nativeStaticConfig
+  const sliceLengths = nativeStaticConfig
+    ? nativeSliceLengths(nativeStaticConfig, tsSliceLengths)
+    : tsSliceLengths;
+  const regexValidationSlots = countUnsupportedRegexValidationSlots(
+    search.regexMeta,
+    nativeStaticConfig,
+  );
+  const denyListSourceCounts = countDenyListSources(search.denyListData);
+  const nativeSupported = nativeStaticConfig
     ? nativeStaticConfig.regex_patterns.length +
       nativeStaticConfig.custom_regex_patterns.length +
       nativeStaticConfig.literal_patterns.length
-    : Math.max(0, sliceLengths.regex - regexValidationSlots) +
+    : null;
+  const unsupportedSearchSlots = [
+    unsupportedSlot("regex", regexValidationSlots, "regex validators"),
+    unsupportedSlot(
+      "triggers",
+      nativeStaticConfig ? 0 : sliceLengths.triggers,
+      "trigger extraction",
+    ),
+    unsupportedSlot(
+      "streetTypes",
+      nativeStaticConfig ? 0 : tsSliceLengths.streetTypes,
+      "address seeds",
+    ),
+  ].filter((slot) => slot.count > 0);
+  const supportedSearchSlots =
+    nativeSupported ??
+    Math.max(0, sliceLengths.regex - regexValidationSlots) +
       sliceLengths.customRegex +
       denyListSourceCounts.customOnly +
       denyListSourceCounts.curated +
       sliceLengths.gazetteer +
       sliceLengths.countries;
-  const totalSearchSlots = Object.values(sliceLengths).reduce(
-    (sum, length) => sum + length,
-    0,
-  );
+  const totalSearchSlots = nativeSupported
+    ? supportedSearchSlots +
+      unsupportedSearchSlots.reduce((sum, slot) => sum + slot.count, 0)
+    : Object.values(sliceLengths).reduce((sum, length) => sum + length, 0);
   const unsupportedPipelineStages = describeUnsupportedPipelineStages(
     config,
     search,
+    runtime,
+    nativeStaticConfig,
   );
 
   return {
@@ -683,12 +1167,81 @@ function describeNativeRewrite(config, search, runtime) {
   };
 }
 
-function describeUnsupportedPipelineStages(config, search) {
+function describeNativeRewriteFromNativeConfig(nativeStaticConfig, runtime) {
+  const supportedSearchSlots =
+    nativeStaticConfig.regex_patterns.length +
+    nativeStaticConfig.custom_regex_patterns.length +
+    nativeStaticConfig.literal_patterns.length;
+  const sliceLengths = nativeSliceLengths(nativeStaticConfig, {});
+
+  return {
+    measuredInPipeline: runtime === "native-static",
+    pipelineRuntime: runtime,
+    fullPipelineNativeEligible: false,
+    searchSlotCoverage: {
+      supported: supportedSearchSlots,
+      total: supportedSearchSlots,
+      ratio: 1,
+    },
+    sliceLengths,
+    unsupportedSearchSlots: [],
+    unsupportedPipelineStages: ["prebuilt-config-summary-only"],
+  };
+}
+
+function describeNativeRewriteFromNativePackage(runtime) {
+  return {
+    measuredInPipeline: runtime === "native-static",
+    pipelineRuntime: runtime,
+    fullPipelineNativeEligible: false,
+    searchSlotCoverage: {
+      supported: 0,
+      total: 0,
+      ratio: 1,
+    },
+    sliceLengths: {
+      regex: 0,
+      customRegex: 0,
+      legalForms: 0,
+      triggers: 0,
+      denyList: 0,
+      streetTypes: 0,
+      gazetteer: 0,
+      countries: 0,
+    },
+    unsupportedSearchSlots: [],
+    unsupportedPipelineStages: ["prebuilt-package-summary-only"],
+  };
+}
+
+function nativeSliceLengths(nativeStaticConfig, fallbackSliceLengths) {
+  const slices = nativeStaticConfig.slices ?? {};
+  return {
+    regex: sliceLength(slices.regex),
+    customRegex: sliceLength(slices.custom_regex),
+    legalForms: sliceLength(slices.legal_forms),
+    triggers: sliceLength(slices.triggers),
+    denyList: sliceLength(slices.deny_list),
+    streetTypes: nativeStaticConfig
+      ? sliceLength(slices.street_types)
+      : fallbackSliceLengths.streetTypes,
+    gazetteer: sliceLength(slices.gazetteer),
+    countries: sliceLength(slices.countries),
+  };
+}
+
+function describeUnsupportedPipelineStages(
+  config,
+  search,
+  runtime,
+  nativeStaticConfig,
+) {
   const stages = [];
-  if (config.enableLegalForms) {
+  const nativeRuntime = runtime === "native-static" && nativeStaticConfig;
+  if (config.enableLegalForms && !nativeRuntime) {
     stages.push("legal-forms-v2");
   }
-  if (config.enableTriggerPhrases) {
+  if (config.enableTriggerPhrases && !nativeRuntime) {
     stages.push("triggers");
   }
   if (config.enableNameCorpus) {
@@ -708,19 +1261,38 @@ function describeUnsupportedPipelineStages(config, search) {
   if (config.enableCoreference) {
     stages.push("coreference");
   }
-  if (sliceLength(search.slices.streetTypes) > 0) {
+  if (!nativeRuntime && sliceLength(search.slices.streetTypes) > 0) {
     stages.push("address-seeds");
   }
 
-  stages.push("signatures", "false-positive-filters", "final-extensions");
+  if (!nativeRuntime) {
+    stages.push("signatures");
+  }
+  stages.push("false-positive-filters", "final-extensions");
   return stages;
 }
 
-function countRegexValidationSlots(regexMeta) {
-  return regexMeta.reduce(
-    (count, meta) => count + (meta.requiresValidation === true ? 1 : 0),
-    0,
+function countUnsupportedRegexValidationSlots(regexMeta, nativeStaticConfig) {
+  const nativeValidatorIds = new Set(
+    (nativeStaticConfig?.regex_meta ?? [])
+      .map((meta) => meta.validator_id)
+      .filter((validatorId) => typeof validatorId === "string"),
   );
+  let count = 0;
+  for (const meta of regexMeta) {
+    if (!regexMetaRequiresValidation(meta)) {
+      continue;
+    }
+    if (meta.validatorId && nativeValidatorIds.has(meta.validatorId)) {
+      continue;
+    }
+    count += 1;
+  }
+  return count;
+}
+
+function regexMetaRequiresValidation(meta) {
+  return meta?.validator !== undefined || meta?.requiresValidation === true;
 }
 
 function countDenyListSources(denyListData) {
@@ -807,6 +1379,10 @@ function firstDifferentIndex(left, right) {
   return -1;
 }
 
+function utf16OffsetToUtf8ByteOffset(text, offset) {
+  return Buffer.byteLength(text.slice(0, offset), "utf8");
+}
+
 function discoverFixtures(fixturesDir) {
   const paths = [];
   for (const language of readdirSync(fixturesDir)) {
@@ -873,18 +1449,476 @@ function createNativeStaticRunner(nativeStaticConfig) {
     throw new Error("Native static runtime requires nativeStaticConfig");
   }
 
+  const stringifyStart = Bun.nanoseconds();
+  const configJson = JSON.stringify(nativeStaticConfig);
+  const stringifyMs = elapsedMs(stringifyStart);
+  return createNativeStaticRunnerFromJson(configJson, stringifyMs);
+}
+
+function createNativeStaticRunnerFromJson(configJson, stringifyMs = 0) {
   const native = loadNativeAdapter();
+  const configBytes = Buffer.from(configJson);
+  const packageStart = Bun.nanoseconds();
+  const packageBytes = NATIVE_PREPARED_PACKAGE
+    ? prepareNativePackageBytes(native, configBytes)
+    : null;
+  writeNativePackageIfRequested(packageBytes);
+  const packagePrepareMs = packageBytes === null ? 0 : elapsedMs(packageStart);
+  const artifactStart = Bun.nanoseconds();
+  const artifactBytes = NATIVE_PREPARED_ARTIFACTS
+    ? native.prepareStaticSearchArtifactsBytes(configBytes)
+    : null;
+  const artifactPrepareMs =
+    artifactBytes === null ? 0 : elapsedMs(artifactStart);
+  const prepare = () => {
+    if (packageBytes !== null) {
+      return native.NativePreparedSearch.fromPreparedPackageBytes(packageBytes);
+    }
+    if (artifactBytes !== null) {
+      return native.NativePreparedSearch.fromConfigJsonAndArtifactBytes(
+        configBytes,
+        artifactBytes,
+      );
+    }
+    return new native.NativePreparedSearch(configJson);
+  };
   const prepareStart = Bun.nanoseconds();
-  const prepared = new native.NativePreparedSearch(
-    toNapiConfig(nativeStaticConfig),
-  );
+  const prepared = prepare();
   const prepareMs = elapsedMs(prepareStart);
   const prepareDiagnostics = JSON.parse(prepared.prepareDiagnosticsJson());
+  const cachedPrepareMsByIteration = [];
+  let cachedPrepareDiagnostics = null;
+  for (let index = 0; index < CACHED_PREPARE_ITERATIONS; index += 1) {
+    const cachedPrepareStart = Bun.nanoseconds();
+    const cachedPrepared = prepare();
+    cachedPrepareMsByIteration.push(elapsedMs(cachedPrepareStart));
+    cachedPrepareDiagnostics = JSON.parse(
+      cachedPrepared.prepareDiagnosticsJson(),
+    );
+  }
   return {
     prepared,
     prepareDiagnostics,
+    cachedPrepareDiagnostics,
+    cachedPrepareMsByIteration,
+    configBytes: Buffer.byteLength(configJson, "utf8"),
+    artifactBytes: artifactBytes?.byteLength ?? 0,
+    artifactPrepareMs,
+    packageBytes: packageBytes?.byteLength ?? 0,
+    packagePrepareMs,
+    stringifyMs,
     prepareMs,
   };
+}
+
+function createNativeStaticRunnerFromJsonBytes(configBytes) {
+  const native = loadNativeAdapter();
+  const packageStart = Bun.nanoseconds();
+  const packageBytes = NATIVE_PREPARED_PACKAGE
+    ? prepareNativePackageBytes(native, configBytes)
+    : null;
+  writeNativePackageIfRequested(packageBytes);
+  const packagePrepareMs = packageBytes === null ? 0 : elapsedMs(packageStart);
+  const artifactStart = Bun.nanoseconds();
+  const artifactBytes = NATIVE_PREPARED_ARTIFACTS
+    ? native.prepareStaticSearchArtifactsBytes(configBytes)
+    : null;
+  const artifactPrepareMs =
+    artifactBytes === null ? 0 : elapsedMs(artifactStart);
+  const prepare = (bytes) => {
+    if (packageBytes !== null) {
+      return native.NativePreparedSearch.fromPreparedPackageBytes(packageBytes);
+    }
+    if (artifactBytes !== null) {
+      return native.NativePreparedSearch.fromConfigJsonAndArtifactBytes(
+        bytes,
+        artifactBytes,
+      );
+    }
+    const factory = Reflect.get(
+      native.NativePreparedSearch,
+      "fromConfigJsonBytes",
+    );
+    if (typeof factory === "function") {
+      return factory.call(native.NativePreparedSearch, bytes);
+    }
+    return new native.NativePreparedSearch(bytes.toString("utf8"));
+  };
+  const prepareStart = Bun.nanoseconds();
+  const prepared = prepare(configBytes);
+  const prepareMs = elapsedMs(prepareStart);
+  const prepareDiagnostics = JSON.parse(prepared.prepareDiagnosticsJson());
+  const cachedPrepareMsByIteration = [];
+  let cachedPrepareDiagnostics = null;
+  for (let index = 0; index < CACHED_PREPARE_ITERATIONS; index += 1) {
+    const cachedPrepareStart = Bun.nanoseconds();
+    const cachedPrepared = prepare(configBytes);
+    cachedPrepareMsByIteration.push(elapsedMs(cachedPrepareStart));
+    cachedPrepareDiagnostics = JSON.parse(
+      cachedPrepared.prepareDiagnosticsJson(),
+    );
+  }
+  return {
+    prepared,
+    prepareDiagnostics,
+    cachedPrepareDiagnostics,
+    cachedPrepareMsByIteration,
+    configBytes: configBytes.byteLength,
+    artifactBytes: artifactBytes?.byteLength ?? 0,
+    artifactPrepareMs,
+    packageBytes: packageBytes?.byteLength ?? 0,
+    packagePrepareMs,
+    stringifyMs: 0,
+    prepareMs,
+  };
+}
+
+function createNativeStaticRunnerFromPackageBytes(packageBytes) {
+  const native = loadNativeAdapter();
+  const prepare = () =>
+    native.NativePreparedSearch.fromPreparedPackageBytes(packageBytes);
+  const prepareStart = Bun.nanoseconds();
+  const prepared = prepare();
+  const prepareMs = elapsedMs(prepareStart);
+  const prepareDiagnostics = JSON.parse(prepared.prepareDiagnosticsJson());
+  const cachedPrepareMsByIteration = [];
+  let cachedPrepareDiagnostics = null;
+  for (let index = 0; index < CACHED_PREPARE_ITERATIONS; index += 1) {
+    const cachedPrepareStart = Bun.nanoseconds();
+    const cachedPrepared = prepare();
+    cachedPrepareMsByIteration.push(elapsedMs(cachedPrepareStart));
+    cachedPrepareDiagnostics = JSON.parse(
+      cachedPrepared.prepareDiagnosticsJson(),
+    );
+  }
+  return {
+    prepared,
+    prepareDiagnostics,
+    cachedPrepareDiagnostics,
+    cachedPrepareMsByIteration,
+    configBytes: 0,
+    artifactBytes: 0,
+    artifactPrepareMs: 0,
+    packageBytes: packageBytes.byteLength,
+    packagePrepareMs: 0,
+    stringifyMs: 0,
+    prepareMs,
+  };
+}
+
+function writeNativePackageIfRequested(packageBytes) {
+  if (packageBytes !== null && WRITE_NATIVE_PACKAGE_PATH.length > 0) {
+    writeFileSync(WRITE_NATIVE_PACKAGE_PATH, packageBytes);
+  }
+}
+
+function profileNativeRegexPrepare(nativeStaticConfig) {
+  if (!nativeStaticConfig) {
+    return null;
+  }
+
+  const native = loadNativeAdapter();
+  const regexCount = sliceLength(nativeStaticConfig.slices?.regex);
+  const regexMeta = nativeStaticConfig.regex_meta ?? [];
+  const labels = [...new Set(regexMeta.map((meta) => meta.label))].sort(
+    (left, right) => left.localeCompare(right),
+  );
+  const labelCounts = Object.fromEntries(
+    labels.map((label) => [
+      label,
+      regexMeta.filter((meta) => meta.label === label).length,
+    ]),
+  );
+
+  return {
+    regexCount,
+    labelCounts,
+    only: labels.map((label) =>
+      measureNativeConfigPrepare(
+        native.NativePreparedSearch,
+        `only:${label}`,
+        nativeRegexOnlyConfig(nativeStaticConfig, new Set([label])),
+      ),
+    ),
+    without: labels.map((label) =>
+      measureNativeConfigPrepare(
+        native.NativePreparedSearch,
+        `without:${label}`,
+        nativeConfigWithRegexLabels(
+          nativeStaticConfig,
+          new Set([label]),
+          false,
+        ),
+      ),
+    ),
+    withoutHotGroups: measureNativeConfigPrepare(
+      native.NativePreparedSearch,
+      "without:date+monetary amount",
+      nativeConfigWithRegexLabels(
+        nativeStaticConfig,
+        new Set(["date", "monetary amount"]),
+        false,
+      ),
+    ),
+  };
+}
+
+async function profileScopedNativePrepare({
+  sourceRoot,
+  variant,
+  baseConfig,
+  fixtures,
+}) {
+  const module = await importSource(
+    sourceRoot,
+    "packages/anonymize/src/build-unified-search.ts",
+    variant,
+  );
+  const buildNativeStaticSearchBundle = Reflect.get(
+    Object(module),
+    "buildNativeStaticSearchBundle",
+  );
+  if (typeof buildNativeStaticSearchBundle !== "function") {
+    throw new TypeError("Native static search bundle builder is unavailable");
+  }
+  const contextModule = await importSource(
+    sourceRoot,
+    "packages/anonymize/src/context.ts",
+    `${variant}:scoped-prepare`,
+  );
+  const createPipelineContext = Reflect.get(
+    Object(contextModule),
+    "createPipelineContext",
+  );
+  if (typeof createPipelineContext !== "function") {
+    throw new TypeError("Pipeline context factory is unavailable");
+  }
+
+  const native = loadNativeAdapter();
+  const languages = [
+    ...new Set(fixtures.map((fixture) => fixtureLanguage(fixture))),
+  ].sort((left, right) => left.localeCompare(right));
+
+  const scopes = [];
+  for (const language of languages) {
+    const scopedConfig = applyFixtureLanguageScope(baseConfig, language);
+    const buildStart = Bun.nanoseconds();
+    const bundle = await buildNativeStaticSearchBundle(
+      scopedConfig,
+      [],
+      createPipelineContext(),
+    );
+    const buildMs = elapsedMs(buildStart);
+    const prepare = measureNativeConfigPrepare(
+      native.NativePreparedSearch,
+      language,
+      bundle.nativeStaticConfig,
+    );
+    scopes.push({
+      language,
+      scope: fixtureLanguageScope(language),
+      buildMs,
+      ...prepare,
+    });
+  }
+
+  return scopes;
+}
+
+function nativeConfigWithRegexLabels(config, labels, keepMatching) {
+  const regexMeta = config.regex_meta ?? [];
+  const regexPatterns = [];
+  const nextMeta = [];
+  for (const [index, meta] of regexMeta.entries()) {
+    const matches = labels.has(meta.label);
+    if (matches !== keepMatching) {
+      continue;
+    }
+    regexPatterns.push(config.regex_patterns[index]);
+    nextMeta.push(meta);
+  }
+
+  const oldRegexCount = regexMeta.length;
+  const tail = config.regex_patterns.slice(oldRegexCount);
+  const nextRegexCount = regexPatterns.length;
+  const legalFormCount = sliceLength(config.slices?.legal_forms);
+  const triggerCount = sliceLength(config.slices?.triggers);
+
+  return {
+    ...config,
+    regex_patterns: [...regexPatterns, ...tail],
+    regex_meta: nextMeta,
+    slices: {
+      ...config.slices,
+      regex: { start: 0, end: nextRegexCount },
+      legal_forms: {
+        start: nextRegexCount,
+        end: nextRegexCount + legalFormCount,
+      },
+      triggers: {
+        start: nextRegexCount + legalFormCount,
+        end: nextRegexCount + legalFormCount + triggerCount,
+      },
+    },
+  };
+}
+
+function nativeRegexOnlyConfig(config, labels) {
+  const regexMeta = config.regex_meta ?? [];
+  const regexPatterns = [];
+  const nextMeta = [];
+  for (const [index, meta] of regexMeta.entries()) {
+    if (!labels.has(meta.label)) {
+      continue;
+    }
+    regexPatterns.push(config.regex_patterns[index]);
+    nextMeta.push(meta);
+  }
+
+  return {
+    ...config,
+    regex_patterns: regexPatterns,
+    regex_meta: nextMeta,
+    literal_patterns: [],
+    literal_patterns_from_deny_list_data: false,
+    deny_list_data: undefined,
+    gazetteer_data: undefined,
+    country_data: undefined,
+    trigger_data: undefined,
+    legal_form_data: undefined,
+    slices: {
+      regex: { start: 0, end: regexPatterns.length },
+      custom_regex: { start: 0, end: 0 },
+      legal_forms: {
+        start: regexPatterns.length,
+        end: regexPatterns.length,
+      },
+      triggers: {
+        start: regexPatterns.length,
+        end: regexPatterns.length,
+      },
+      deny_list: { start: 0, end: 0 },
+      street_types: { start: 0, end: 0 },
+      gazetteer: { start: 0, end: 0 },
+      countries: { start: 0, end: 0 },
+    },
+  };
+}
+
+function measureNativeConfigPrepare(NativePreparedSearch, name, config) {
+  const stringifyStart = Bun.nanoseconds();
+  const configJson = JSON.stringify(config);
+  const stringifyMs = elapsedMs(stringifyStart);
+  const prepareStart = Bun.nanoseconds();
+  const prepared = new NativePreparedSearch(configJson);
+  const prepareMs = elapsedMs(prepareStart);
+  const diagnostics = JSON.parse(prepared.prepareDiagnosticsJson());
+  const stages = diagnosticStageSummaries(diagnostics.events);
+
+  return {
+    name,
+    configBytes: Buffer.byteLength(configJson, "utf8"),
+    sliceLengths: nativeSliceLengths(config, {}),
+    stringifyMs,
+    prepareMs,
+    topStages: topDiagnosticStages(stages).slice(0, 8),
+  };
+}
+
+function fixtureLanguage(fixturePath) {
+  return relative(FIXTURES_DIR, fixturePath).split(/[\\/]/)[0] ?? "und";
+}
+
+function applyFixtureLanguageScope(config, language) {
+  return {
+    ...config,
+    ...fixtureLanguageScope(language),
+  };
+}
+
+function fixtureLanguageScope(language) {
+  switch (language) {
+    case "cs":
+      return {
+        denyListCountries: ["CZ", "SK"],
+        nameCorpusLanguages: ["cs", "sk"],
+      };
+    case "de":
+      return {
+        denyListCountries: ["DE", "AT", "CH"],
+        nameCorpusLanguages: ["de"],
+      };
+    case "en":
+      return {
+        denyListCountries: ["US", "GB", "CA", "AU", "IE"],
+        nameCorpusLanguages: ["en"],
+      };
+    default:
+      return {};
+  }
+}
+
+function contentLanguageScope() {
+  if (CONTENT_LANGUAGE.length === 0) {
+    return {};
+  }
+
+  return {
+    language: CONTENT_LANGUAGE,
+    ...fixtureLanguageScope(CONTENT_LANGUAGE),
+  };
+}
+
+function applyUserDataScenario(config) {
+  switch (USER_DATA_SCENARIO) {
+    case "none":
+      return config;
+    case "sample":
+      return withUserDataOverlay(config, {
+        denyListCount: 50,
+        regexCount: 5,
+      });
+    case "heavy":
+      return withUserDataOverlay(config, {
+        denyListCount: 5_000,
+        regexCount: 50,
+      });
+    default:
+      throw new Error(
+        `ANONYMIZE_MIGRATION_USER_DATA_SCENARIO must be none, sample, or heavy; got ${USER_DATA_SCENARIO}`,
+      );
+  }
+}
+
+function withUserDataOverlay(config, { denyListCount, regexCount }) {
+  return {
+    ...config,
+    customDenyList: [
+      ...(config.customDenyList ?? []),
+      ...generatedCustomDenyList(denyListCount),
+    ],
+    customRegexes: [
+      ...(config.customRegexes ?? []),
+      ...generatedCustomRegexes(regexCount),
+    ],
+  };
+}
+
+function generatedCustomDenyList(count) {
+  return Array.from({ length: count }, (_, index) => ({
+    value: `CustomerPrivateTerm${index.toString().padStart(5, "0")}`,
+    label: index % 2 === 0 ? "organization" : "person",
+    variants: [`Customer Private Term ${index.toString().padStart(5, "0")}`],
+  }));
+}
+
+function generatedCustomRegexes(count) {
+  return Array.from({ length: count }, (_, index) => ({
+    pattern: `USR-${index.toString().padStart(4, "0")}-[A-Z]{2}\\d{4}`,
+    label:
+      index % 2 === 0 ? "registration number" : "tax identification number",
+    score: 0.92,
+  }));
 }
 
 function loadNativeAdapter() {
@@ -896,107 +1930,43 @@ function loadNativeAdapter() {
     Object(loaded),
     "NativePreparedSearch",
   );
-  if (typeof NativePreparedSearch !== "function") {
+  const prepareStaticSearchArtifactsBytes = Reflect.get(
+    Object(loaded),
+    "prepareStaticSearchArtifactsBytes",
+  );
+  const prepareStaticSearchPackageBytes = Reflect.get(
+    Object(loaded),
+    "prepareStaticSearchPackageBytes",
+  );
+  const prepareStaticSearchCompressedPackageBytes = Reflect.get(
+    Object(loaded),
+    "prepareStaticSearchCompressedPackageBytes",
+  );
+  if (
+    typeof NativePreparedSearch !== "function" ||
+    typeof prepareStaticSearchArtifactsBytes !== "function" ||
+    typeof prepareStaticSearchPackageBytes !== "function" ||
+    typeof prepareStaticSearchCompressedPackageBytes !== "function"
+  ) {
     throw new TypeError("Native anonymize adapter exports are incomplete");
   }
-  return { NativePreparedSearch };
-}
-
-function toNapiConfig(config) {
   return {
-    regexPatterns: config.regex_patterns.map(toNapiPattern),
-    customRegexPatterns: config.custom_regex_patterns.map(toNapiPattern),
-    literalPatterns: config.literal_patterns.map(toNapiPattern),
-    regexOptions: toNapiOptions(config.regex_options),
-    customRegexOptions: toNapiOptions(config.custom_regex_options),
-    literalOptions: toNapiOptions(config.literal_options),
-    slices: {
-      regex: config.slices.regex,
-      customRegex: config.slices.custom_regex,
-      legalForms: config.slices.legal_forms,
-      triggers: config.slices.triggers,
-      denyList: config.slices.deny_list,
-      streetTypes: config.slices.street_types,
-      gazetteer: config.slices.gazetteer,
-      countries: config.slices.countries,
-    },
-    regexMeta: config.regex_meta.map(toNapiRegexMeta),
-    customRegexMeta: config.custom_regex_meta.map(toNapiRegexMeta),
-    denyListData:
-      config.deny_list_data === undefined
-        ? undefined
-        : {
-            labels: config.deny_list_data.labels,
-            customLabels: config.deny_list_data.custom_labels,
-            originals: config.deny_list_data.originals,
-            sources: config.deny_list_data.sources,
-            filters:
-              config.deny_list_data.filters === undefined
-                ? undefined
-                : toNapiDenyListFilters(config.deny_list_data.filters),
-          },
-    gazetteerData:
-      config.gazetteer_data === undefined
-        ? undefined
-        : {
-            labels: config.gazetteer_data.labels,
-            isFuzzy: config.gazetteer_data.is_fuzzy,
-          },
-    countryData: config.country_data,
+    NativePreparedSearch,
+    prepareStaticSearchArtifactsBytes,
+    prepareStaticSearchPackageBytes,
+    prepareStaticSearchCompressedPackageBytes,
   };
 }
 
-function toNapiPattern(pattern) {
-  return {
-    kind: pattern.kind,
-    pattern: pattern.pattern,
-    distance: pattern.distance,
-    caseInsensitive: pattern.case_insensitive,
-    wholeWords: pattern.whole_words,
-    lazy: pattern.lazy,
-    prefilterAny: pattern.prefilter_any,
-    prefilterCaseInsensitive: pattern.prefilter_case_insensitive,
-    prefilterRegex: pattern.prefilter_regex,
-  };
-}
-
-function toNapiOptions(options) {
-  if (options === undefined) {
-    return undefined;
+function prepareNativePackageBytes(native, configBytes) {
+  if (NATIVE_COMPRESSED_PACKAGE) {
+    return native.prepareStaticSearchCompressedPackageBytes(configBytes);
   }
-  return {
-    literalCaseInsensitive: options.literal_case_insensitive,
-    literalWholeWords: options.literal_whole_words,
-    regexWholeWords: options.regex_whole_words,
-    fuzzyCaseInsensitive: options.fuzzy_case_insensitive,
-    fuzzyWholeWords: options.fuzzy_whole_words,
-    fuzzyNormalizeDiacritics: options.fuzzy_normalize_diacritics,
-  };
+  return native.prepareStaticSearchPackageBytes(configBytes);
 }
 
-function toNapiRegexMeta(meta) {
-  return {
-    label: meta.label,
-    score: meta.score,
-    sourceDetail: meta.source_detail,
-    requiresValidation: meta.requires_validation,
-    minByteLength: meta.min_byte_length,
-  };
-}
-
-function toNapiDenyListFilters(filters) {
-  return {
-    stopwords: filters.stopwords,
-    allowList: filters.allow_list,
-    personStopwords: filters.person_stopwords,
-    addressStopwords: filters.address_stopwords,
-    streetTypes: filters.street_types,
-    firstNames: filters.first_names,
-    genericRoles: filters.generic_roles,
-    sentenceStarters: filters.sentence_starters,
-    trailingAddressWordExclusions: filters.trailing_address_word_exclusions,
-    definedTermCues: filters.defined_term_cues,
-  };
+function isCompressedNativePackage(packageBytes) {
+  return packageBytes.subarray(0, 8).toString("ascii") === "ANONPKZ1";
 }
 
 function nativeLibraryPath(name) {
@@ -1060,6 +2030,17 @@ function positiveIntegerEnv(name, fallback) {
     throw new Error(`${name} must be a non-negative integer`);
   }
   return value;
+}
+
+function stringListEnv(name) {
+  const raw = process.env[name]?.trim();
+  if (!raw) {
+    return [];
+  }
+  return raw
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
 }
 
 function requiredEnv(name) {

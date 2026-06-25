@@ -66,6 +66,17 @@
     "triggers": ["VAT number", "VAT ID", "tax identification number", "tax id"]
   },
   {
+    "id": "en-bank-account",
+    "label": "bank account number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": ["account", "account number", "account no.", "account #"],
+    "validations": [
+      { "type": "has-digits" },
+      { "type": "min-length", "min": 5 },
+      { "type": "max-length", "max": 34 }
+    ]
+  },
+  {
     "id": "en-uk-companies-house",
     "label": "registration number",
     "strategy": { "type": "company-id-value" },

@@ -2,7 +2,10 @@ import type { Entity } from "../types";
 import type { PipelineContext } from "../context";
 import { defaultContext } from "../context";
 import { isCallerOwnedEntity } from "../util/entity-source";
-import { getPersonStopwords } from "../detectors/deny-list";
+import {
+  getDefinedTermHeads,
+  getPersonStopwords,
+} from "../detectors/deny-list";
 import { normalizeHomoglyphs } from "../util/homoglyphs";
 
 const TEMPLATE_PLACEHOLDER_RE = /^(?:\.{3,}|_{3,}|\[[\w\s]+\]|\{[\w\s]+\})$/;
@@ -182,11 +185,6 @@ const STANDALONE_YEAR_RE = /^(?:19|20)\d{2}$/;
 // by one of these, it's a reference number, not PII.
 const NUMBER_ABBREV_RE = /(?:^|[\s(])(?:č|čís|nr|no|n)\.\s*$/i;
 const SIGNING_CLAUSE_ADDRESS_RE = /^(?:v|ve)\s+[^\d,\n]{1,40},?\s+dne$/iu;
-const PERSON_TRAILING_NOUNS: ReadonlySet<string> = new Set([
-  "association",
-  "period",
-  "reform",
-]);
 const LEGAL_FORM_HEADING_RE = /\b(?:agreement|amendment|contract|exhibit)\b/iu;
 const LEADING_ARTIFACT_RE = /^(?:\.\s)+/u;
 const ADDRESS_ROLE_PREFIX_RE =
@@ -506,6 +504,7 @@ export const filterFalsePositives = (
 ): Entity[] => {
   const filtered: Entity[] = [];
   const roles = getGenericRoles(ctx);
+  const definedTermHeads = getDefinedTermHeads(ctx);
 
   for (const entity of entities) {
     if (isCallerOwnedEntity(entity)) {
@@ -663,11 +662,7 @@ export const filterFalsePositives = (
       const lastFolded = last
         ? normalizeHomoglyphs(last).toLowerCase()
         : undefined;
-      if (
-        tokens.length > 1 &&
-        lastFolded &&
-        PERSON_TRAILING_NOUNS.has(lastFolded)
-      ) {
+      if (tokens.length > 1 && lastFolded && definedTermHeads.has(lastFolded)) {
         continue;
       }
     }

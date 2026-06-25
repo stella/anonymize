@@ -19,6 +19,7 @@ import {
 } from "./detectors/triggers";
 import {
   ensureDenyListData,
+  loadDefinedTermHeads,
   processDenyListMatches,
 } from "./detectors/deny-list";
 import { processAddressSeeds } from "./detectors/address-seeds";
@@ -69,6 +70,7 @@ import { runUnifiedSearch } from "./unified-search";
 import { maskDetectedSpans, unmaskNerEntities } from "./util/entity-masking";
 import type { PipelineContext } from "./context";
 import { defaultContext } from "./context";
+import { applyPipelineLanguageScope } from "./language-scope";
 
 /**
  * Sources backed by curated literal dictionaries.
@@ -1027,7 +1029,11 @@ export const preparePipelineSearch = ({
   gazetteerEntries = [],
   context,
 }: PipelineSearchOptions): Promise<UnifiedSearchInstance> =>
-  getCachedSearch(config, gazetteerEntries, context ?? defaultContext);
+  getCachedSearch(
+    applyPipelineLanguageScope(config),
+    gazetteerEntries,
+    context ?? defaultContext,
+  );
 
 /**
  * Options for {@link runPipeline}.
@@ -1068,7 +1074,7 @@ export const runPipeline = async (
 ): Promise<Entity[]> => {
   const {
     fullText,
-    config,
+    config: inputConfig,
     gazetteerEntries,
     nerInference = null,
     onProgress,
@@ -1076,6 +1082,7 @@ export const runPipeline = async (
     signal,
     context,
   } = options;
+  const config = applyPipelineLanguageScope(inputConfig);
   const ctx = context ?? defaultContext;
   const allowedLabels = createAllowedLabelSet(config);
   const legalFormsEnabled = isLegalFormsEnabled(config);
@@ -1113,6 +1120,7 @@ export const runPipeline = async (
       });
     await Promise.all([
       loadGenericRoles(ctx),
+      loadDefinedTermHeads(ctx),
       loadDocumentStructureHeadings(),
       initPrepositions(),
       initStreetAbbrevs(),
@@ -1124,6 +1132,7 @@ export const runPipeline = async (
   } else {
     await Promise.all([
       loadGenericRoles(ctx),
+      loadDefinedTermHeads(ctx),
       loadDocumentStructureHeadings(),
       initPrepositions(),
       initStreetAbbrevs(),

@@ -3,7 +3,7 @@
 use stella_anonymize_core::{
   CountryMatchData, DenyListFilterData, DenyListMatchData, DetectionSource,
   Error, GazetteerMatchData, PatternSlice, PipelineEntity, RegexMatchMeta,
-  SearchMatch, SourceDetail, process_country_matches,
+  SearchMatch, SigningPlaceGuardData, SourceDetail, process_country_matches,
   process_deny_list_matches, process_gazetteer_matches, process_regex_matches,
 };
 
@@ -33,6 +33,8 @@ fn regex_processor_filters_slice_and_short_matches_by_meta() {
       score: 0.8,
       source_detail: None,
       requires_validation: false,
+      validator_id: None,
+      validator_input: None,
       min_byte_length: Some(7),
     },
   ];
@@ -70,6 +72,8 @@ fn regex_processor_rejects_unported_validators() {
     score: 0.9,
     source_detail: None,
     requires_validation: true,
+    validator_id: None,
+    validator_input: None,
     min_byte_length: None,
   }];
 
@@ -88,6 +92,71 @@ fn regex_processor_rejects_unported_validators() {
 }
 
 #[test]
+fn regex_processor_applies_native_validator_ids() {
+  let matches = vec![
+    SearchMatch::Regex {
+      pattern: 3,
+      start: 4,
+      end: 14,
+    },
+    SearchMatch::Regex {
+      pattern: 3,
+      start: 19,
+      end: 29,
+    },
+  ];
+  let meta = vec![RegexMatchMeta {
+    label: String::from("tax identification number"),
+    score: 0.9,
+    source_detail: None,
+    requires_validation: true,
+    validator_id: Some(String::from("us.ein")),
+    validator_input: None,
+    min_byte_length: None,
+  }];
+
+  let entities = process_regex_matches(
+    &matches,
+    PatternSlice { start: 3, end: 4 },
+    "EIN 87-2451993 bad 00-2451993",
+    &meta,
+  )
+  .unwrap();
+
+  assert_eq!(entities.len(), 1);
+  assert_eq!(entities[0].text, "87-2451993");
+}
+
+#[test]
+fn regex_processor_applies_validator_input_kind() {
+  let matches = vec![SearchMatch::Regex {
+    pattern: 0,
+    start: 0,
+    end: 24,
+  }];
+  let meta = vec![RegexMatchMeta {
+    label: String::from("national identification number"),
+    score: 0.95,
+    source_detail: None,
+    requires_validation: true,
+    validator_id: Some(String::from("gb.nhs")),
+    validator_input: Some(String::from("digits-only")),
+    min_byte_length: None,
+  }];
+
+  let entities = process_regex_matches(
+    &matches,
+    PatternSlice { start: 0, end: 1 },
+    "NHS number: 401 023 2137",
+    &meta,
+  )
+  .unwrap();
+
+  assert_eq!(entities.len(), 1);
+  assert_eq!(entities[0].text, "NHS number: 401 023 2137");
+}
+
+#[test]
 fn regex_processor_preserves_custom_regex_source_detail() {
   let matches = vec![SearchMatch::Regex {
     pattern: 0,
@@ -99,6 +168,8 @@ fn regex_processor_preserves_custom_regex_source_detail() {
     score: 0.7,
     source_detail: Some(SourceDetail::CustomRegex),
     requires_validation: false,
+    validator_id: None,
+    validator_input: None,
     min_byte_length: None,
   }];
 
@@ -121,10 +192,10 @@ fn deny_list_processor_emits_custom_labels() {
     end: 11,
   }];
   let data = DenyListMatchData {
-    labels: vec![vec![String::from("matter")]],
-    custom_labels: vec![vec![String::from("matter")]],
+    labels: vec![vec![String::from("matter")]].into(),
+    custom_labels: vec![vec![String::from("matter")]].into(),
     originals: vec![String::from("Secret Code")],
-    sources: vec![vec![String::from("custom-deny-list")]],
+    sources: vec![vec![String::from("custom-deny-list")]].into(),
     filters: None,
   };
 
@@ -160,10 +231,10 @@ fn deny_list_processor_rejects_embedded_custom_word_matches() {
     },
   ];
   let data = DenyListMatchData {
-    labels: vec![vec![String::from("matter")]],
-    custom_labels: vec![vec![String::from("matter")]],
+    labels: vec![vec![String::from("matter")]].into(),
+    custom_labels: vec![vec![String::from("matter")]].into(),
     originals: vec![String::from("Secret")],
-    sources: vec![vec![String::from("custom-deny-list")]],
+    sources: vec![vec![String::from("custom-deny-list")]].into(),
     filters: None,
   };
 
@@ -187,10 +258,10 @@ fn deny_list_processor_emits_curated_non_person_labels() {
     end: 6,
   }];
   let data = DenyListMatchData {
-    labels: vec![vec![String::from("address")]],
-    custom_labels: vec![vec![]],
+    labels: vec![vec![String::from("address")]].into(),
+    custom_labels: vec![vec![]].into(),
     originals: vec![String::from("Prague")],
-    sources: vec![vec![String::from("city")]],
+    sources: vec![vec![String::from("city")]].into(),
     filters: Some(DenyListFilterData::default()),
   };
 
@@ -208,6 +279,120 @@ fn deny_list_processor_emits_curated_non_person_labels() {
 }
 
 #[test]
+fn deny_list_processor_suppresses_signing_place_address() {
+  let text = "Podepsano V Brně dne 1. ledna 2026.";
+  let start = u32::try_from(text.find("Brně").unwrap()).unwrap();
+  let end = start.saturating_add(u32::try_from("Brně".len()).unwrap());
+  let matches = vec![SearchMatch::Literal {
+    pattern: 0,
+    start,
+    end,
+  }];
+  let data = DenyListMatchData {
+    labels: vec![vec![String::from("address")]].into(),
+    custom_labels: vec![vec![]].into(),
+    originals: vec![String::from("Brně")],
+    sources: vec![vec![String::from("city")]].into(),
+    filters: Some(DenyListFilterData {
+      signing_place_guards: vec![SigningPlaceGuardData {
+        prefix_phrases: [String::from("v"), String::from("ve")].into(),
+        suffix_phrases: [String::from("dne")].into(),
+      }],
+      ..DenyListFilterData::default()
+    }),
+  };
+
+  let entities = process_deny_list_matches(
+    &matches,
+    PatternSlice { start: 0, end: 1 },
+    text,
+    &data,
+  )
+  .unwrap();
+
+  assert!(entities.is_empty());
+}
+
+#[test]
+fn deny_list_processor_keeps_real_address_city() {
+  let text = "Sidlo: Ulice 12, Brně 602 00.";
+  let start = u32::try_from(text.find("Brně").unwrap()).unwrap();
+  let end = start.saturating_add(u32::try_from("Brně".len()).unwrap());
+  let matches = vec![SearchMatch::Literal {
+    pattern: 0,
+    start,
+    end,
+  }];
+  let data = DenyListMatchData {
+    labels: vec![vec![String::from("address")]].into(),
+    custom_labels: vec![vec![]].into(),
+    originals: vec![String::from("Brně")],
+    sources: vec![vec![String::from("city")]].into(),
+    filters: Some(DenyListFilterData {
+      address_stopwords: [String::from("brně")].into(),
+      signing_place_guards: vec![SigningPlaceGuardData {
+        prefix_phrases: [String::from("v"), String::from("ve")].into(),
+        suffix_phrases: [String::from("dne")].into(),
+      }],
+      ..DenyListFilterData::default()
+    }),
+  };
+
+  let entities = process_deny_list_matches(
+    &matches,
+    PatternSlice { start: 0, end: 1 },
+    text,
+    &data,
+  )
+  .unwrap();
+
+  assert_eq!(entities.len(), 1);
+  assert_eq!(entities[0].text, "Brně");
+}
+
+#[test]
+fn deny_list_processor_keeps_address_when_signing_guards_do_not_pair() {
+  let text = "Company is incorporated in Delaware.";
+  let start = u32::try_from(text.find("Delaware").unwrap()).unwrap();
+  let end = start.saturating_add(u32::try_from("Delaware".len()).unwrap());
+  let matches = vec![SearchMatch::Literal {
+    pattern: 0,
+    start,
+    end,
+  }];
+  let data = DenyListMatchData {
+    labels: vec![vec![String::from("address")]].into(),
+    custom_labels: vec![vec![]].into(),
+    originals: vec![String::from("Delaware")],
+    sources: vec![vec![String::from("city")]].into(),
+    filters: Some(DenyListFilterData {
+      signing_place_guards: vec![
+        SigningPlaceGuardData {
+          prefix_phrases: [String::new()].into(),
+          suffix_phrases: [String::from("den")].into(),
+        },
+        SigningPlaceGuardData {
+          prefix_phrases: [String::from("signed in")].into(),
+          suffix_phrases: [String::new()].into(),
+        },
+      ],
+      ..DenyListFilterData::default()
+    }),
+  };
+
+  let entities = process_deny_list_matches(
+    &matches,
+    PatternSlice { start: 0, end: 1 },
+    text,
+    &data,
+  )
+  .unwrap();
+
+  assert_eq!(entities.len(), 1);
+  assert_eq!(entities[0].text, "Delaware");
+}
+
+#[test]
 fn deny_list_processor_rejects_curated_sources_without_filters() {
   let matches = vec![SearchMatch::Literal {
     pattern: 0,
@@ -215,10 +400,10 @@ fn deny_list_processor_rejects_curated_sources_without_filters() {
     end: 6,
   }];
   let data = DenyListMatchData {
-    labels: vec![vec![String::from("address")]],
-    custom_labels: vec![vec![]],
+    labels: vec![vec![String::from("address")]].into(),
+    custom_labels: vec![vec![]].into(),
     originals: vec![String::from("Prague")],
-    sources: vec![vec![String::from("city")]],
+    sources: vec![vec![String::from("city")]].into(),
     filters: None,
   };
 

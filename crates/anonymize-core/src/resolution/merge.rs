@@ -131,6 +131,28 @@ fn should_replace(
     return candidate_len > existing_len;
   }
 
+  if regex_shape_contains_trigger_fragment(candidate, existing)
+    && candidate_len > existing_len
+  {
+    return true;
+  }
+  if regex_shape_contains_trigger_fragment(existing, candidate)
+    && existing_len > candidate_len
+  {
+    return false;
+  }
+
+  if person_regex_contains_name_fragment(candidate, existing)
+    && candidate_len > existing_len
+  {
+    return true;
+  }
+  if person_regex_contains_name_fragment(existing, candidate)
+    && existing_len > candidate_len
+  {
+    return false;
+  }
+
   if country_inside_person_or_org(candidate, existing)
     && existing_len > candidate_len
   {
@@ -310,6 +332,71 @@ fn same_start_longest_wins(
   candidate.label == existing.label
     && candidate.start == existing.start
     && longest_wins_label(&candidate.label)
+}
+
+fn regex_shape_contains_trigger_fragment(
+  outer: &PipelineEntity,
+  inner: &PipelineEntity,
+) -> bool {
+  outer.label == inner.label
+    && outer.source == DetectionSource::Regex
+    && inner.source == DetectionSource::Trigger
+    && outer.start <= inner.start
+    && outer.end >= comparable_trigger_fragment_end(inner)
+    && regex_shape_preferred_label(&outer.label)
+}
+
+fn comparable_trigger_fragment_end(entity: &PipelineEntity) -> u32 {
+  let mut end = entity.end;
+  let mut text = entity.text.as_str();
+  while let Some((index, ch)) = text.char_indices().next_back() {
+    if !is_trigger_fragment_trailing_trim(ch) {
+      break;
+    }
+    end = end.saturating_sub(u32_char_len(ch));
+    text = text.get(..index).unwrap_or_default();
+  }
+  end
+}
+
+const fn is_trigger_fragment_trailing_trim(ch: char) -> bool {
+  matches!(ch, ',' | ';' | ':' | '!' | '?' | ' ' | '\t' | '\n' | '\r')
+}
+
+fn u32_char_len(ch: char) -> u32 {
+  u32::try_from(ch.len_utf8()).unwrap_or(u32::MAX)
+}
+
+fn regex_shape_preferred_label(label: &str) -> bool {
+  matches!(
+    label,
+    "phone number"
+      | "tax identification number"
+      | "registration number"
+      | "national identification number"
+      | "social security number"
+      | "birth number"
+      | "identity card number"
+      | "passport number"
+      | "credit card number"
+      | "bank account number"
+      | "iban"
+  )
+}
+
+fn person_regex_contains_name_fragment(
+  outer: &PipelineEntity,
+  inner: &PipelineEntity,
+) -> bool {
+  outer.label == "person"
+    && inner.label == "person"
+    && outer.source == DetectionSource::Regex
+    && matches!(
+      inner.source,
+      DetectionSource::Trigger | DetectionSource::DenyList
+    )
+    && outer.start <= inner.start
+    && outer.end >= inner.end
 }
 
 fn country_inside_person_or_org(

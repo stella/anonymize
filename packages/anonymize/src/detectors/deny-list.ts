@@ -19,6 +19,11 @@ import type { PipelineContext } from "../context";
 import { defaultContext } from "../context";
 import { loadGenericRoles } from "../filters/false-positives";
 import { buildStreetTypePatterns } from "./address-seeds";
+import {
+  getClauseNounHeadsSync,
+  getLegalRoleHeadsSync,
+  warmLegalRoleHeads,
+} from "./legal-forms";
 import { normalizeForSearch } from "../util/normalize";
 import { ALL_UPPER_RE, UPPER_START_RE } from "../util/text";
 import { DASH } from "../util/char-groups";
@@ -36,6 +41,33 @@ export type DenyListConfig = Pick<
   | "dictionaries"
   | "enableCountries"
 >;
+
+const lowerSortedUnique = (values: Iterable<string>): string[] =>
+  [...new Set([...values].map((value) => value.toLowerCase()))].toSorted();
+
+const collectLanguageWordValues = (data: Record<string, unknown>): string[] => {
+  const words: string[] = [];
+  const append = (value: unknown): void => {
+    if (!Array.isArray(value)) {
+      return;
+    }
+    for (const word of value) {
+      if (typeof word === "string" && word.length > 0) {
+        words.push(word);
+      }
+    }
+  };
+
+  append(data["words"]);
+  for (const [key, value] of Object.entries(data)) {
+    if (key === "words" || key.startsWith("_")) {
+      continue;
+    }
+    append(value);
+  }
+
+  return lowerSortedUnique(words);
+};
 
 // ── Allow list (lazy-loaded from JSON) ───────────────
 
@@ -270,10 +302,12 @@ const loadPersonStopwords = (
   }
   ctx.personStopwordsPromise = (async () => {
     try {
-      const mod: {
-        default?: { words?: string[] };
-      } = await import("../data/person-stopwords.json");
-      const set: ReadonlySet<string> = new Set(mod.default?.words ?? []);
+      const mod = await import("../data/person-stopwords.json");
+      const parsed =
+        (mod as { default?: Record<string, unknown> }).default ?? mod;
+      const set: ReadonlySet<string> = new Set(
+        collectLanguageWordValues(parsed as Record<string, unknown>),
+      );
       ctx.personStopwords = set;
       return set;
     } catch {
@@ -290,6 +324,37 @@ const EMPTY_PERSON_STOPWORDS: ReadonlySet<string> = new Set();
 /** Sync accessor — returns empty set before init. */
 export const getPersonStopwords = (ctx: PipelineContext): ReadonlySet<string> =>
   ctx.personStopwords ?? EMPTY_PERSON_STOPWORDS;
+
+export const loadDefinedTermHeads = (
+  ctx: PipelineContext,
+): Promise<ReadonlySet<string>> => {
+  if (ctx.definedTermHeadsPromise) {
+    return ctx.definedTermHeadsPromise;
+  }
+  ctx.definedTermHeadsPromise = (async () => {
+    try {
+      const mod = await import("../data/defined-term-heads.json");
+      const parsed =
+        (mod as { default?: Record<string, unknown> }).default ?? mod;
+      const set: ReadonlySet<string> = new Set(
+        collectLanguageWordValues(parsed as Record<string, unknown>),
+      );
+      ctx.definedTermHeads = set;
+      return set;
+    } catch {
+      const empty: ReadonlySet<string> = new Set();
+      ctx.definedTermHeads = empty;
+      return empty;
+    }
+  })();
+  return ctx.definedTermHeadsPromise;
+};
+
+const EMPTY_DEFINED_TERM_HEADS: ReadonlySet<string> = new Set();
+
+export const getDefinedTermHeads = (
+  ctx: PipelineContext,
+): ReadonlySet<string> => ctx.definedTermHeads ?? EMPTY_DEFINED_TERM_HEADS;
 
 // ── Address stopwords (single-token city collisions) ──
 
@@ -424,28 +489,39 @@ const hasAdjacentAddressEvidence = (
 
 type DenyListLanguageFilters = {
   sentenceStarters?: readonly string[];
-  trailingAddressWordExclusions?: readonly string[];
   definedTermCues?: readonly string[];
+};
+
+type SigningClauseData = {
+  patterns: readonly {
+    guardPrefixPhrases?: readonly string[];
+    guardSuffixPhrases?: readonly string[];
+  }[];
 };
 
 export type DenyListFilterData = {
   stopwords: string[];
   allowList: string[];
   personStopwords: string[];
+  personTrailingNouns: string[];
   addressStopwords: string[];
+  addressJurisdictionPrefixes: string[];
   streetTypes: string[];
   firstNames: string[];
   genericRoles: string[];
   sentenceStarters: string[];
   trailingAddressWordExclusions: string[];
   definedTermCues: string[];
+  signingPlaceGuards: DenyListSigningPlaceGuardData[];
+};
+
+export type DenyListSigningPlaceGuardData = {
+  prefixPhrases: string[];
+  suffixPhrases: string[];
 };
 
 const DENY_LIST_FILTER_GROUPS: readonly DenyListLanguageFilters[] =
   Object.values(denyListFiltersByLanguage);
-
-const lowerSortedUnique = (values: Iterable<string>): string[] =>
-  [...new Set([...values].map((value) => value.toLowerCase()))].toSorted();
 
 const escapeRegExp = (value: string): string =>
   value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -464,16 +540,10 @@ const DENY_LIST_STATIC_FILTERS = {
   sentenceStarters: collectLanguageFilterValues(
     (filters) => filters.sentenceStarters,
   ),
-  trailingAddressWordExclusions: collectLanguageFilterValues(
-    (filters) => filters.trailingAddressWordExclusions,
-  ),
 };
 
 const SENTENCE_STARTER_WORDS: ReadonlySet<string> = new Set(
   DENY_LIST_STATIC_FILTERS.sentenceStarters,
-);
-const TRAILING_ADDRESS_WORD_EXCLUSIONS: ReadonlySet<string> = new Set(
-  DENY_LIST_STATIC_FILTERS.trailingAddressWordExclusions,
 );
 
 const buildDefinedTermCueRe = (): RegExp => {
@@ -690,11 +760,14 @@ export const buildDenyList = async (
     loadStopwords(ctx),
     loadAllowList(ctx),
     loadPersonStopwords(ctx),
+    loadDefinedTermHeads(ctx),
     loadAddressStopwords(ctx),
     loadCommonWords(),
     loadMonthNames(),
     loadStreetTypeRe(),
     loadGenericRoles(ctx),
+    warmLegalRoleHeads(),
+    loadTrailingAddressWordExclusions(),
   ]);
   const commonWords = await loadCommonWords();
   const monthNames = await loadMonthNames();
@@ -1016,22 +1089,134 @@ type RawMatch = {
 const buildStreetTypeFilterValues = async (): Promise<string[]> =>
   lowerSortedUnique(await buildStreetTypePatterns());
 
+type SigningPlaceFilters = {
+  guards: DenyListSigningPlaceGuardData[];
+};
+
+let signingPlaceFiltersPromise: Promise<SigningPlaceFilters> | null = null;
+
+const loadSigningPlaceFilters = (): Promise<SigningPlaceFilters> => {
+  if (signingPlaceFiltersPromise) {
+    return signingPlaceFiltersPromise;
+  }
+
+  signingPlaceFiltersPromise = (async () => {
+    const mod = await import("../data/signing-clauses.json");
+    const data: SigningClauseData = mod.default ?? mod;
+    return {
+      guards: data.patterns
+        .map((entry) => ({
+          prefixPhrases: lowerSortedUnique(entry.guardPrefixPhrases ?? []),
+          suffixPhrases: lowerSortedUnique(entry.guardSuffixPhrases ?? []),
+        }))
+        .filter(
+          (entry) =>
+            entry.prefixPhrases.length > 0 && entry.suffixPhrases.length > 0,
+        ),
+    };
+  })().catch((error) => {
+    signingPlaceFiltersPromise = null;
+    throw error;
+  });
+
+  return signingPlaceFiltersPromise;
+};
+
+let trailingAddressWordExclusionsPromise: Promise<ReadonlySet<string>> | null =
+  null;
+let addressJurisdictionPrefixesPromise: Promise<string[]> | null = null;
+
+const loadLanguageWordFile = async (
+  importer: () => Promise<unknown>,
+): Promise<string[]> => {
+  const mod = await importer();
+  const parsed = (mod as { default?: Record<string, unknown> }).default ?? mod;
+  return collectLanguageWordValues(parsed as Record<string, unknown>);
+};
+
+const loadTrailingAddressWordExclusions = async (): Promise<
+  ReadonlySet<string>
+> => {
+  if (trailingAddressWordExclusionsPromise) {
+    return trailingAddressWordExclusionsPromise;
+  }
+
+  trailingAddressWordExclusionsPromise = (async () => {
+    await warmLegalRoleHeads();
+    const [organizationUnits, documentHeadings] = await Promise.all([
+      loadLanguageWordFile(
+        () => import("../data/organization-unit-heads.json"),
+      ),
+      loadLanguageWordFile(
+        () => import("../data/document-structure-headings.json"),
+      ),
+    ]);
+    return new Set(
+      lowerSortedUnique([
+        ...getLegalRoleHeadsSync(),
+        ...getClauseNounHeadsSync(),
+        ...organizationUnits,
+        ...documentHeadings,
+      ]),
+    );
+  })().catch((error) => {
+    trailingAddressWordExclusionsPromise = null;
+    throw error;
+  });
+
+  return trailingAddressWordExclusionsPromise;
+};
+
+const loadAddressJurisdictionPrefixes = (): Promise<string[]> => {
+  if (addressJurisdictionPrefixesPromise) {
+    return addressJurisdictionPrefixesPromise;
+  }
+
+  addressJurisdictionPrefixesPromise = loadLanguageWordFile(
+    () => import("../data/address-jurisdiction-prefixes.json"),
+  ).catch((error) => {
+    addressJurisdictionPrefixesPromise = null;
+    throw error;
+  });
+
+  return addressJurisdictionPrefixesPromise;
+};
+
 const buildDenyListFilterData = async (
   ctx: PipelineContext,
-): Promise<DenyListFilterData> => ({
-  stopwords: [...getStopwords(ctx)],
-  allowList: [...getAllowList(ctx)],
-  personStopwords: [...getPersonStopwords(ctx)],
-  addressStopwords: [...getAddressStopwords(ctx)],
-  streetTypes: await buildStreetTypeFilterValues(),
-  firstNames: [...getNameCorpusFirstNames(ctx)],
-  genericRoles: [...(ctx.genericRoles ?? EMPTY_GENERIC_ROLES)],
-  sentenceStarters: [...DENY_LIST_STATIC_FILTERS.sentenceStarters],
-  trailingAddressWordExclusions: [
-    ...DENY_LIST_STATIC_FILTERS.trailingAddressWordExclusions,
-  ],
-  definedTermCues: [...DENY_LIST_STATIC_FILTERS.definedTermCues],
-});
+): Promise<DenyListFilterData> => {
+  const [
+    signingPlaceFilters,
+    trailingAddressWordExclusions,
+    addressJurisdictionPrefixes,
+  ] = await Promise.all([
+    loadSigningPlaceFilters(),
+    loadTrailingAddressWordExclusions(),
+    loadAddressJurisdictionPrefixes(),
+  ]);
+
+  return {
+    stopwords: [...getStopwords(ctx)],
+    allowList: [...getAllowList(ctx)],
+    personStopwords: [...getPersonStopwords(ctx)],
+    personTrailingNouns: [...getDefinedTermHeads(ctx)],
+    addressStopwords: [...getAddressStopwords(ctx)],
+    addressJurisdictionPrefixes,
+    streetTypes: await buildStreetTypeFilterValues(),
+    firstNames: [...getNameCorpusFirstNames(ctx)],
+    genericRoles: [
+      ...(ctx.genericRoles ?? EMPTY_GENERIC_ROLES),
+      ...getLegalRoleHeadsSync(),
+    ],
+    sentenceStarters: [...DENY_LIST_STATIC_FILTERS.sentenceStarters],
+    trailingAddressWordExclusions: [...trailingAddressWordExclusions],
+    definedTermCues: [...DENY_LIST_STATIC_FILTERS.definedTermCues],
+    signingPlaceGuards: signingPlaceFilters.guards.map((entry) => ({
+      prefixPhrases: [...entry.prefixPhrases],
+      suffixPhrases: [...entry.suffixPhrases],
+    })),
+  };
+};
 
 const customMatchHasValidEdges = (
   fullText: string,
@@ -1074,9 +1259,13 @@ export const ensureDenyListData = async (
     loadStopwords(ctx),
     loadAllowList(ctx),
     loadPersonStopwords(ctx),
+    loadDefinedTermHeads(ctx),
     loadAddressStopwords(ctx),
     loadStreetTypeRe(),
     loadGenericRoles(ctx),
+    warmLegalRoleHeads(),
+    loadTrailingAddressWordExclusions(),
+    loadAddressJurisdictionPrefixes(),
   ]);
 };
 
@@ -1369,7 +1558,11 @@ export const processDenyListMatches = (
   // "Praha 1", "Brno 2"). Czech and Slovak cities
   // commonly have numbered districts that are part of
   // the address.
-  extendCityDistricts(results, fullText);
+  extendCityDistricts(
+    results,
+    fullText,
+    new Set(data.filters.trailingAddressWordExclusions),
+  );
 
   return results;
 };
@@ -1401,7 +1594,11 @@ const POSTAL_PREFIX_RE = new RegExp(
   `(?:\\d{5}|\\d{3}\\s\\d{2})\\s*${DASH}?\\s*$`,
 );
 
-const extendCityDistricts = (entities: Entity[], fullText: string): void => {
+const extendCityDistricts = (
+  entities: Entity[],
+  fullText: string,
+  trailingAddressWordExclusions: ReadonlySet<string>,
+): void => {
   for (const entity of entities) {
     if (entity.label !== "address") {
       continue;
@@ -1451,7 +1648,7 @@ const extendCityDistricts = (entities: Entity[], fullText: string): void => {
     const trailingWordM = /^[\s]{1,4}(\p{Lu}\p{Ll}+)/u.exec(afterExt);
     if (trailingWordM && !trailingWordM[0].includes("\n")) {
       const candidate = (trailingWordM[1] ?? "").toLowerCase();
-      if (!TRAILING_ADDRESS_WORD_EXCLUSIONS.has(candidate)) {
+      if (!trailingAddressWordExclusions.has(candidate)) {
         entity.end += trailingWordM[0].length;
         entity.text = fullText.slice(entity.start, entity.end);
       }

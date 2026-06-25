@@ -6,131 +6,42 @@
  * Only used in tests — production consumers load and pass
  * dictionaries themselves.
  */
-import type { Dictionaries, DictionaryMeta } from "../types";
+import type { Dictionaries } from "../types";
 
-let cached: Dictionaries | null = null;
+type TestDictionaryScope = {
+  denyListCountries?: readonly string[];
+  nameCorpusLanguages?: readonly string[];
+};
 
-export const loadTestDictionaries = async (): Promise<Dictionaries> => {
+const cache = new Map<string, Dictionaries>();
+
+const scopeKey = (scope: TestDictionaryScope): string =>
+  JSON.stringify({
+    denyListCountries: [...(scope.denyListCountries ?? [])].toSorted(),
+    nameCorpusLanguages: [...(scope.nameCorpusLanguages ?? [])].toSorted(),
+  });
+
+export const loadTestDictionaries = async (
+  scope: TestDictionaryScope = {},
+): Promise<Dictionaries> => {
+  const key = scopeKey(scope);
+  const cached = cache.get(key);
   if (cached) return cached;
-
-  const dataModule = await import("@stll/anonymize-data");
-
-  // Load all dictionaries
-  const allIds = [...dataModule.ALL_DICTIONARY_IDS];
-  const denyList: Record<string, readonly string[]> = {};
-  const denyListMeta: Record<string, DictionaryMeta> = {};
-
-  const results = await Promise.all(
-    allIds.map(async (id) => {
-      const entries = await dataModule.loadDictionary(id);
-      return { id, entries };
-    }),
-  );
-
-  for (const { id, entries } of results) {
-    const meta = dataModule.DICTIONARY_META[id];
-    if (!meta) continue;
-    denyList[id] = entries;
-    // SAFETY: anonymize-data categories match DenyListCategory at runtime
-    denyListMeta[id] = meta as DictionaryMeta;
+  const dataModule = await import("../../../data/dictionaries/index");
+  const bundleOptions: Parameters<typeof dataModule.loadDictionaryBundle>[0] =
+    {};
+  if (scope.denyListCountries !== undefined) {
+    bundleOptions.countries = scope.denyListCountries;
+    bundleOptions.cityCountries = scope.denyListCountries;
   }
-
-  // Load per-language first names and surnames
-  const NAME_LANGUAGES = [
-    "cs",
-    "sk",
-    "de",
-    "pl",
-    "hu",
-    "ro",
-    "fr",
-    "es",
-    "it",
-    "en",
-    "sv",
-  ] as const;
-
-  const firstNames: Record<string, readonly string[]> = {};
-  const surnames: Record<string, readonly string[]> = {};
-
-  await Promise.all(
-    NAME_LANGUAGES.map(async (lang) => {
-      try {
-        const mod = await import(
-          `@stll/anonymize-data/dictionaries/names/first/${lang}.json`
-        );
-        firstNames[lang] = mod.default;
-      } catch {
-        // Not available for this language
-      }
-      try {
-        const mod = await import(
-          `@stll/anonymize-data/dictionaries/names/surnames/${lang}.json`
-        );
-        surnames[lang] = mod.default;
-      } catch {
-        // Not available for this language
-      }
-    }),
-  );
-
-  // Load city dictionaries for common countries
-  const CITY_COUNTRIES = [
-    "AT",
-    "AU",
-    "BE",
-    "BG",
-    "BR",
-    "CA",
-    "CH",
-    "CZ",
-    "DE",
-    "DK",
-    "ES",
-    "FI",
-    "FR",
-    "GB",
-    "GR",
-    "HR",
-    "HU",
-    "IE",
-    "IT",
-    "LU",
-    "NL",
-    "NO",
-    "NZ",
-    "PL",
-    "PT",
-    "RO",
-    "SE",
-    "SI",
-    "SK",
-    "US",
-  ];
-  const cityResults = await Promise.all(
-    CITY_COUNTRIES.map(async (country) => ({
-      country,
-      entries: await dataModule.loadCityDictionary(country),
-    })),
-  );
-  const citiesByCountry: Record<string, readonly string[]> = {};
-  const mergedCities: string[] = [];
-  for (const { country, entries } of cityResults) {
-    citiesByCountry[country] = entries;
-    for (const entry of entries) {
-      mergedCities.push(entry);
-    }
+  if (scope.nameCorpusLanguages !== undefined) {
+    bundleOptions.nameLanguages = scope.nameCorpusLanguages;
   }
 
   const result: Dictionaries = {
-    firstNames,
-    surnames,
-    denyList,
-    denyListMeta,
-    cities: mergedCities,
-    citiesByCountry,
+    ...(await dataModule.loadDictionaryBundle(bundleOptions)),
   };
 
-  cached = result;
+  cache.set(key, result);
   return result;
 };

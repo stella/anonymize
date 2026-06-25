@@ -4,6 +4,7 @@ import { DETECTION_SOURCES } from "../constants";
 import type { Entity } from "../types";
 import { normalizeForSearch } from "../util/normalize";
 
+import ambiguousCountrySurfaces from "../data/ambiguous-country-surfaces.json" with { type: "json" };
 import countriesData from "../data/countries.json" with { type: "json" };
 
 const ENTITY_LABEL = "country";
@@ -28,7 +29,7 @@ const INCLUDE_ALPHA2 = false;
  * All would flag every English occurrence as a country.
  */
 const NAME_BLOCKLIST: ReadonlySet<string> = new Set(
-  ["man", "island", "indie"].map((s) => s.toLowerCase()),
+  ambiguousCountrySurfaces.words.map((surface) => surface.toLowerCase()),
 );
 
 /**
