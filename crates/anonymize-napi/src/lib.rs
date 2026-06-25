@@ -83,6 +83,7 @@ pub struct JsSearchOptions {
   pub literal_case_insensitive: Option<bool>,
   pub literal_whole_words: Option<bool>,
   pub regex_whole_words: Option<bool>,
+  pub regex_overlap_all: Option<bool>,
   pub fuzzy_case_insensitive: Option<bool>,
   pub fuzzy_whole_words: Option<bool>,
   pub fuzzy_normalize_diacritics: Option<bool>,

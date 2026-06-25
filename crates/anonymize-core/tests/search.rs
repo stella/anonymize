@@ -21,7 +21,10 @@ fn search_index_routes_literal_regex_and_fuzzy_patterns() {
         case_insensitive: false,
         whole_words: true,
       },
-      regex: RegexSearchOptions { whole_words: false },
+      regex: RegexSearchOptions {
+        whole_words: false,
+        overlap_all: false,
+      },
       fuzzy: FuzzySearchOptions {
         case_insensitive: true,
         whole_words: true,
@@ -119,6 +122,42 @@ fn search_index_returns_overlapping_literal_matches() {
         end: 5,
       },
       SearchMatch::Literal {
+        pattern: 1,
+        start: 0,
+        end: 11,
+      },
+    ]
+  );
+}
+
+#[test]
+fn search_index_can_return_overlapping_regex_matches() {
+  let index = SearchIndex::new(
+    vec![
+      SearchPattern::Regex(String::from("Alice")),
+      SearchPattern::Regex(String::from("Alice Smith")),
+    ],
+    SearchOptions {
+      regex: RegexSearchOptions {
+        whole_words: false,
+        overlap_all: true,
+      },
+      ..SearchOptions::default()
+    },
+  )
+  .unwrap();
+
+  let matches = index.find_iter("Alice Smith signed.").unwrap();
+
+  assert_eq!(
+    matches,
+    vec![
+      SearchMatch::Regex {
+        pattern: 0,
+        start: 0,
+        end: 5,
+      },
+      SearchMatch::Regex {
         pattern: 1,
         start: 0,
         end: 11,
@@ -239,7 +278,10 @@ fn search_index_prepared_artifacts_match_direct_index() {
       case_insensitive: false,
       whole_words: true,
     },
-    regex: RegexSearchOptions { whole_words: false },
+    regex: RegexSearchOptions {
+      whole_words: false,
+      overlap_all: false,
+    },
     fuzzy: FuzzySearchOptions {
       case_insensitive: true,
       whole_words: true,

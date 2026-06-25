@@ -104,6 +104,7 @@ pub struct BindingSearchOptions {
   pub literal_case_insensitive: Option<bool>,
   pub literal_whole_words: Option<bool>,
   pub regex_whole_words: Option<bool>,
+  pub regex_overlap_all: Option<bool>,
   pub fuzzy_case_insensitive: Option<bool>,
   pub fuzzy_whole_words: Option<bool>,
   pub fuzzy_normalize_diacritics: Option<bool>,
@@ -1860,6 +1861,7 @@ fn search_options_from_binding(
     },
     regex: RegexSearchOptions {
       whole_words: options.regex_whole_words.unwrap_or(false),
+      overlap_all: options.regex_overlap_all.unwrap_or(false),
     },
     fuzzy: FuzzySearchOptions {
       case_insensitive: options.fuzzy_case_insensitive.unwrap_or(false),
@@ -2032,8 +2034,8 @@ mod tests {
   #![allow(clippy::unwrap_used)]
 
   use super::{
-    BindingOperatorConfig, BindingPreparedSearchConfig, BindingSearchPattern,
-    ContractError, operator_config_from_binding,
+    BindingOperatorConfig, BindingPreparedSearchConfig, BindingSearchOptions,
+    BindingSearchPattern, ContractError, operator_config_from_binding,
     prepared_search_config_from_binding,
     prepared_search_core_package_from_bytes,
     prepared_search_core_package_to_bytes,
@@ -2090,6 +2092,20 @@ mod tests {
     let operators = operator_config_from_binding(Some(config)).unwrap();
 
     assert_eq!(operators.redact_string, "***");
+  }
+
+  #[test]
+  fn binding_search_options_accept_regex_overlap_all() {
+    let config = BindingPreparedSearchConfig {
+      custom_regex_options: Some(BindingSearchOptions {
+        regex_overlap_all: Some(true),
+        ..BindingSearchOptions::default()
+      }),
+      ..BindingPreparedSearchConfig::default()
+    };
+    let core = prepared_search_config_from_binding(config).unwrap();
+
+    assert!(core.custom_regex_options.regex.overlap_all);
   }
 
   #[test]
