@@ -673,12 +673,13 @@ fn apply_validations(
   text: &str,
   validations: &[PreparedTriggerValidation],
 ) -> bool {
+  let text_len = text.chars().count();
   validations.iter().all(|validation| match validation {
     PreparedTriggerValidation::StartsUppercase => {
       text.chars().next().is_some_and(char::is_uppercase)
     }
-    PreparedTriggerValidation::MinLength(min) => text.len() >= *min,
-    PreparedTriggerValidation::MaxLength(max) => text.len() <= *max,
+    PreparedTriggerValidation::MinLength(min) => text_len >= *min,
+    PreparedTriggerValidation::MaxLength(max) => text_len <= *max,
     PreparedTriggerValidation::NoDigits => {
       !text.chars().any(|ch| ch.is_ascii_digit())
     }

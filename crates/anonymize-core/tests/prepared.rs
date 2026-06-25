@@ -262,11 +262,17 @@ fn prepared_search_emits_static_detector_entities() {
       },
     ],
     regex_options: SearchOptions {
-      regex: RegexSearchOptions { whole_words: false },
+      regex: RegexSearchOptions {
+        whole_words: false,
+        overlap_all: false,
+      },
       ..SearchOptions::default()
     },
     custom_regex_options: SearchOptions {
-      regex: RegexSearchOptions { whole_words: false },
+      regex: RegexSearchOptions {
+        whole_words: false,
+        overlap_all: false,
+      },
       ..SearchOptions::default()
     },
     literal_options: SearchOptions {
@@ -325,13 +331,70 @@ fn prepared_search_emits_static_detector_entities() {
 }
 
 #[test]
+fn prepared_search_preserves_overlapping_custom_regex_matches() {
+  let prepared = PreparedSearch::new(PreparedSearchConfig {
+    custom_regex_patterns: vec![
+      SearchPattern::Regex(String::from("Alice")),
+      SearchPattern::Regex(String::from("Alice Smith")),
+    ],
+    custom_regex_options: SearchOptions {
+      regex: RegexSearchOptions {
+        whole_words: false,
+        overlap_all: true,
+      },
+      ..SearchOptions::default()
+    },
+    slices: PreparedSearchSlices {
+      custom_regex: PatternSlice { start: 0, end: 2 },
+      ..PreparedSearchSlices::default()
+    },
+    custom_regex_meta: vec![
+      RegexMatchMeta {
+        label: String::from("person"),
+        score: 1.0,
+        source_detail: Some(SourceDetail::CustomRegex),
+        requires_validation: false,
+        validator_id: None,
+        validator_input: None,
+        min_byte_length: None,
+      },
+      RegexMatchMeta {
+        label: String::from("person"),
+        score: 1.0,
+        source_detail: Some(SourceDetail::CustomRegex),
+        requires_validation: false,
+        validator_id: None,
+        validator_input: None,
+        min_byte_length: None,
+      },
+    ],
+    ..empty_config(PreparedSearchSlices::default())
+  })
+  .unwrap();
+
+  let result = prepared
+    .detect_static_entities("Alice Smith signed.")
+    .unwrap();
+  let custom_texts = result
+    .custom_regex_entities
+    .iter()
+    .map(|entity| entity.text.as_str())
+    .collect::<Vec<_>>();
+
+  assert_eq!(custom_texts, ["Alice", "Alice Smith"]);
+}
+
+#[test]
 fn prepared_search_drops_person_spans_ending_in_trailing_noun() {
   let prepared = PreparedSearch::new(PreparedSearchConfig {
     regex_patterns: vec![SearchPattern::Regex(String::from(
       r"\bCOBRA Reimbursement Period\b",
     ))],
     regex_options: SearchOptions {
-      regex: RegexSearchOptions { whole_words: false },
+      regex: RegexSearchOptions {
+        whole_words: false,
+        overlap_all: false,
+      },
       ..SearchOptions::default()
     },
     slices: PreparedSearchSlices {
@@ -558,6 +621,49 @@ fn prepared_search_trigger_caps_by_characters_not_bytes() {
 }
 
 #[test]
+fn prepared_search_trigger_validations_count_characters_not_bytes() {
+  let prepared = PreparedSearch::new(PreparedSearchConfig {
+    regex_patterns: vec![SearchPattern::LiteralWithOptions {
+      pattern: String::from("jméno"),
+      case_insensitive: Some(true),
+      whole_words: Some(false),
+    }],
+    slices: PreparedSearchSlices {
+      triggers: PatternSlice { start: 0, end: 1 },
+      ..PreparedSearchSlices::default()
+    },
+    trigger_data: Some(TriggerData {
+      rules: vec![TriggerRule {
+        trigger: String::from("jméno"),
+        label: String::from("person"),
+        strategy: TriggerStrategy::NWords { count: 1 },
+        validations: vec![
+          TriggerValidation::MinLength(5),
+          TriggerValidation::MaxLength(5),
+        ],
+        include_trigger: false,
+      }],
+      address_stop_keywords: Vec::new(),
+      party_position_terms: Vec::new(),
+      legal_form_suffixes: Vec::new(),
+    }),
+    ..empty_config(PreparedSearchSlices::default())
+  })
+  .unwrap();
+
+  let result = prepared
+    .detect_static_entities("Smluvní jméno Áběčď bylo ověřeno.")
+    .unwrap();
+
+  assert!(
+    result
+      .trigger_entities
+      .iter()
+      .any(|entity| entity.label == "person" && entity.text == "Áběčď")
+  );
+}
+
+#[test]
 fn prepared_search_rejects_lowercase_acronym_trigger_collisions() {
   let prepared = PreparedSearch::new(PreparedSearchConfig {
     regex_patterns: vec![SearchPattern::LiteralWithOptions {
@@ -750,7 +856,10 @@ fn prepared_search_redacts_static_entities_end_to_end() {
       },
     ],
     regex_options: SearchOptions {
-      regex: RegexSearchOptions { whole_words: false },
+      regex: RegexSearchOptions {
+        whole_words: false,
+        overlap_all: false,
+      },
       ..SearchOptions::default()
     },
     custom_regex_options: SearchOptions::default(),
@@ -813,7 +922,10 @@ fn prepared_search_reports_static_redaction_diagnostics() {
       whole_words: Some(false),
     }],
     regex_options: SearchOptions {
-      regex: RegexSearchOptions { whole_words: false },
+      regex: RegexSearchOptions {
+        whole_words: false,
+        overlap_all: false,
+      },
       ..SearchOptions::default()
     },
     custom_regex_options: SearchOptions::default(),
@@ -946,6 +1058,45 @@ fn prepared_search_rejects_unsupported_static_slices() {
   .expect("unsupported slice should be rejected");
 
   assert_eq!(error, Error::UnsupportedStaticSlice { slice: "deny_list" });
+}
+
+#[test]
+fn prepared_search_requires_gazetteer_metadata_for_gazetteer_slice() {
+  let error = PreparedSearch::new(empty_config(PreparedSearchSlices {
+    gazetteer: PatternSlice { start: 0, end: 1 },
+    ..PreparedSearchSlices::default()
+  }))
+  .err()
+  .expect("gazetteer slice should require metadata");
+
+  assert_eq!(
+    error,
+    Error::MissingStaticData {
+      field: "gazetteer_data"
+    }
+  );
+}
+
+#[test]
+fn prepared_search_rejects_truncated_country_metadata() {
+  let error = PreparedSearch::new(PreparedSearchConfig {
+    country_data: Some(CountryMatchData { labels: Vec::new() }),
+    ..empty_config(PreparedSearchSlices {
+      countries: PatternSlice { start: 0, end: 1 },
+      ..PreparedSearchSlices::default()
+    })
+  })
+  .err()
+  .expect("truncated country metadata should be rejected");
+
+  assert_eq!(
+    error,
+    Error::StaticDataLengthMismatch {
+      field: "country_data.labels",
+      expected: 1,
+      actual: 0
+    }
+  );
 }
 
 #[test]
@@ -1348,7 +1499,10 @@ fn prepared_search_does_not_cluster_address_seed_inside_register_span() {
     ))],
     regex_meta: vec![RegexMatchMeta::new("registration number", 0.9)],
     regex_options: SearchOptions {
-      regex: RegexSearchOptions { whole_words: false },
+      regex: RegexSearchOptions {
+        whole_words: false,
+        overlap_all: false,
+      },
       ..SearchOptions::default()
     },
     literal_patterns: vec![SearchPattern::LiteralWithOptions {
