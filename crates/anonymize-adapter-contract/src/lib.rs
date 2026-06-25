@@ -161,6 +161,8 @@ pub struct BindingTriggerData {
   pub address_stop_keywords: Vec<String>,
   #[serde(default)]
   pub party_position_terms: Vec<String>,
+  #[serde(default)]
+  pub sentence_terminal_currency_terms: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -352,10 +354,18 @@ pub struct BindingDenyListFilterData {
   #[serde(default)]
   pub address_jurisdiction_prefixes: Vec<String>,
   pub street_types: Vec<String>,
+  #[serde(default)]
+  pub address_component_terms: Vec<String>,
   pub first_names: Vec<String>,
   pub generic_roles: Vec<String>,
+  #[serde(default)]
+  pub number_abbrev_prefixes: Vec<String>,
   pub sentence_starters: Vec<String>,
   pub trailing_address_word_exclusions: Vec<String>,
+  #[serde(default)]
+  pub document_heading_words: Vec<String>,
+  #[serde(default)]
+  pub document_heading_ordinal_markers: Vec<String>,
   pub defined_term_cues: Vec<String>,
   #[serde(default)]
   pub signing_place_guards: Vec<BindingSigningPlaceGuardData>,
@@ -472,6 +482,7 @@ struct BinaryTriggerData {
   rules: Vec<BinaryTriggerRule>,
   address_stop_keywords: Vec<String>,
   party_position_terms: Vec<String>,
+  sentence_terminal_currency_terms: Vec<String>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -704,6 +715,7 @@ impl From<BindingTriggerData> for BinaryTriggerData {
         .collect(),
       address_stop_keywords: data.address_stop_keywords,
       party_position_terms: data.party_position_terms,
+      sentence_terminal_currency_terms: data.sentence_terminal_currency_terms,
     }
   }
 }
@@ -718,6 +730,7 @@ impl From<BinaryTriggerData> for BindingTriggerData {
         .collect(),
       address_stop_keywords: data.address_stop_keywords,
       party_position_terms: data.party_position_terms,
+      sentence_terminal_currency_terms: data.sentence_terminal_currency_terms,
     }
   }
 }
@@ -1683,11 +1696,17 @@ fn deny_list_filters_from_binding(
       filters.address_jurisdiction_prefixes,
     ),
     street_types: lower_set(filters.street_types),
+    address_component_terms: lower_set(filters.address_component_terms),
     first_names: lower_set(filters.first_names),
     generic_roles: lower_set(filters.generic_roles),
+    number_abbrev_prefixes: lower_set(filters.number_abbrev_prefixes),
     sentence_starters: lower_set(filters.sentence_starters),
     trailing_address_word_exclusions: lower_set(
       filters.trailing_address_word_exclusions,
+    ),
+    document_heading_words: lower_set(filters.document_heading_words),
+    document_heading_ordinal_markers: lower_set(
+      filters.document_heading_ordinal_markers,
     ),
     defined_term_cues: lower_set(filters.defined_term_cues),
     signing_place_guards: filters
@@ -1714,6 +1733,7 @@ fn trigger_data_from_binding(
     address_stop_keywords: data.address_stop_keywords,
     party_position_terms: data.party_position_terms,
     legal_form_suffixes,
+    sentence_terminal_currency_terms: data.sentence_terminal_currency_terms,
   }
 }
 

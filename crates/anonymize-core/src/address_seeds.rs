@@ -40,7 +40,7 @@ impl PreparedAddressSeedData {
       boundary_search: literal_search(data.boundary_words)?,
       br_cep_cue_search: literal_search(data.br_cep_cue_words)?,
       postal_code_re: compile_regex(
-        r"(?u)(?:\d{3}\s\d{2}|\d{2}[-‐‑‒–—―]\d{3}|\d{5}|\d{5}[-‐‑‒–—―]\d{3}|\d{5}[-‐‑‒–—―]\d{4})",
+        r"(?u)(?:\d{5}[-‐‑‒–—―]\d{4}|\d{5}[-‐‑‒–—―]\d{3}|\d{3}\s\d{2}|\d{2}[-‐‑‒–—―]\d{3}|\d{5})",
       )?,
       br_cep_shape_re: compile_regex(r"(?u)^\d{5}[-‐‑‒–—―]\d{3}$")?,
       us_zip_plus_four_shape_re: compile_regex(r"(?u)^\d{5}[-‐‑‒–—―]\d{4}$")?,

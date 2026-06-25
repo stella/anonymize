@@ -509,6 +509,7 @@ fn prepared_search_extracts_written_date_of_birth_trigger() {
       address_stop_keywords: Vec::new(),
       party_position_terms: Vec::new(),
       legal_form_suffixes: Vec::new(),
+      sentence_terminal_currency_terms: Vec::new(),
     }),
     ..empty_config(PreparedSearchSlices::default())
   })
@@ -553,6 +554,7 @@ fn prepared_search_extends_single_word_written_date_trigger() {
       address_stop_keywords: Vec::new(),
       party_position_terms: Vec::new(),
       legal_form_suffixes: Vec::new(),
+      sentence_terminal_currency_terms: Vec::new(),
     }),
     ..empty_config(PreparedSearchSlices::default())
   })
@@ -613,6 +615,7 @@ fn prepared_search_extracts_year_after_duplicate_year_word_noise() {
       address_stop_keywords: Vec::new(),
       party_position_terms: Vec::new(),
       legal_form_suffixes: Vec::new(),
+      sentence_terminal_currency_terms: Vec::new(),
     }),
     ..empty_config(PreparedSearchSlices::default())
   })
@@ -655,6 +658,7 @@ fn prepared_search_trigger_caps_by_characters_not_bytes() {
       address_stop_keywords: Vec::new(),
       party_position_terms: Vec::new(),
       legal_form_suffixes: Vec::new(),
+      sentence_terminal_currency_terms: Vec::new(),
     }),
     ..empty_config(PreparedSearchSlices::default())
   })
@@ -698,6 +702,7 @@ fn prepared_search_trigger_validations_count_characters_not_bytes() {
       address_stop_keywords: Vec::new(),
       party_position_terms: Vec::new(),
       legal_form_suffixes: Vec::new(),
+      sentence_terminal_currency_terms: Vec::new(),
     }),
     ..empty_config(PreparedSearchSlices::default())
   })
@@ -738,6 +743,7 @@ fn prepared_search_rejects_lowercase_acronym_trigger_collisions() {
       address_stop_keywords: Vec::new(),
       party_position_terms: Vec::new(),
       legal_form_suffixes: Vec::new(),
+      sentence_terminal_currency_terms: Vec::new(),
     }),
     ..empty_config(PreparedSearchSlices::default())
   })
@@ -785,6 +791,7 @@ fn prepared_search_trims_party_position_before_triggered_address() {
       address_stop_keywords: Vec::new(),
       party_position_terms: vec![String::from("prodávajícího")],
       legal_form_suffixes: Vec::new(),
+      sentence_terminal_currency_terms: Vec::new(),
     }),
     ..empty_config(PreparedSearchSlices::default())
   })
@@ -1047,6 +1054,7 @@ fn prepared_search_keeps_person_name_particles_after_trigger() {
       address_stop_keywords: Vec::new(),
       party_position_terms: Vec::new(),
       legal_form_suffixes: Vec::new(),
+      sentence_terminal_currency_terms: Vec::new(),
     }),
     ..empty_config(PreparedSearchSlices::default())
   })
@@ -1538,6 +1546,7 @@ fn prepared_search_expands_plain_postal_city_addresses() {
       address_stop_keywords: Vec::new(),
       party_position_terms: Vec::new(),
       legal_form_suffixes: Vec::new(),
+      sentence_terminal_currency_terms: Vec::new(),
     }),
     deny_list_data: Some(DenyListMatchData {
       labels: vec![vec![String::from("address")]].into(),

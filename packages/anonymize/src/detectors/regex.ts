@@ -282,18 +282,30 @@ const VALIDATOR_IDS = new Map<Validator, string>([
 
 export const NATIVE_REGEX_VALIDATOR_IDS: ReadonlySet<string> = new Set([
   "au.abn",
+  "au.acn",
+  "at.tin",
   "br.cnpj",
   "br.cpf",
   "cz.dic",
   "cz.rc",
+  "de.idnr",
+  "de.stnr",
+  "dk.cpr",
   "es.cif",
   "es.dni",
   "es.nie",
+  "es.nss",
+  "fi.hetu",
+  "fi.vat",
+  "fi.ytunnus",
+  "fr.siren",
   "gb.nhs",
   "gb.nino",
+  "ie.pps",
   "no.mva",
   "no.orgnr",
   "us.ein",
+  "us.rtn",
 ]);
 
 // ── stdnum validator entries ────────────────────────
