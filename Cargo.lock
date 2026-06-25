@@ -645,7 +645,7 @@ source = "git+https://github.com/stella/stdnum?rev=614ac70ef76161e2bbb6dcbe5ecc3
 [[package]]
 name = "stella-text-search-core"
 version = "1.0.6"
-source = "git+https://github.com/stella/text-search?rev=a5d6e11f5c832be50cba42882d2844394adb9403#a5d6e11f5c832be50cba42882d2844394adb9403"
+source = "git+https://github.com/stella/text-search?rev=f3a3b23adac4e093d8ede69c04e74f6f7a57ea91#f3a3b23adac4e093d8ede69c04e74f6f7a57ea91"
 dependencies = [
  "stella-aho-corasick-core",
  "stella-fuzzy-search-core",

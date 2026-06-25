@@ -1278,6 +1278,8 @@ fn validate_supported_config(config: &PreparedSearchConfig) -> Result<()> {
   validate_legal_form_config(config)?;
   validate_trigger_config(config)?;
   validate_deny_list_config(config)?;
+  validate_gazetteer_config(config)?;
+  validate_country_config(config)?;
   validate_address_seed_config(config)
 }
 
@@ -1329,6 +1331,47 @@ fn validate_deny_list_config(config: &PreparedSearchConfig) -> Result<()> {
     data.sources.len(),
   )?;
   ensure_supported_deny_list_sources(data)
+}
+
+fn validate_gazetteer_config(config: &PreparedSearchConfig) -> Result<()> {
+  if config.slices.gazetteer.is_empty() {
+    return Ok(());
+  }
+
+  let Some(data) = &config.gazetteer_data else {
+    return Err(Error::MissingStaticData {
+      field: "gazetteer_data",
+    });
+  };
+
+  validate_static_data_length(
+    "gazetteer_data.labels",
+    config.slices.gazetteer,
+    data.labels.len(),
+  )?;
+  validate_static_data_length(
+    "gazetteer_data.is_fuzzy",
+    config.slices.gazetteer,
+    data.is_fuzzy.len(),
+  )
+}
+
+fn validate_country_config(config: &PreparedSearchConfig) -> Result<()> {
+  if config.slices.countries.is_empty() {
+    return Ok(());
+  }
+
+  let Some(data) = &config.country_data else {
+    return Err(Error::MissingStaticData {
+      field: "country_data",
+    });
+  };
+
+  validate_static_data_length(
+    "country_data.labels",
+    config.slices.countries,
+    data.labels.len(),
+  )
 }
 
 const fn validate_address_seed_config(

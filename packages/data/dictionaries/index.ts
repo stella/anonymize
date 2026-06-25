@@ -1033,7 +1033,9 @@ export const loadDictionaryBundle = async ({
   const countryScope = normalizeCountryCodes(countries);
   const scopedNameLanguages = normalizeNameLanguages(nameLanguages);
   const hasScopedNames =
-    nameLanguages !== undefined && nameLanguages.length > 0;
+    nameLanguages !== undefined &&
+    nameLanguages.length > 0 &&
+    scopedNameLanguages.length > 0;
   const dictionaryIds = ALL_DICTIONARY_IDS.filter((id) =>
     dictionaryIdIsInScope(id, countryScope, hasScopedNames),
   );
@@ -1050,8 +1052,14 @@ export const loadDictionaryBundle = async ({
     denyListMeta[id] = DICTIONARY_META[id];
   }
 
-  const nameDictionaries = await loadNameDictionaries(scopedNameLanguages);
-  const cityScope = cityCountries ?? countries ?? DEFAULT_CITY_COUNTRIES;
+  const nameDictionaries = await loadNameDictionaries(
+    scopedNameLanguages.length > 0 ? scopedNameLanguages : undefined,
+  );
+  const requestedCityScope = cityCountries ?? countries;
+  const cityScope =
+    requestedCityScope === undefined || requestedCityScope.length === 0
+      ? DEFAULT_CITY_COUNTRIES
+      : requestedCityScope;
   const cityResults = await Promise.all(
     cityScope.map(async (country) => ({
       country: country.toUpperCase(),

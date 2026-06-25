@@ -73,6 +73,7 @@ pub struct LiteralSearchOptions {
 )]
 pub struct RegexSearchOptions {
   pub whole_words: bool,
+  pub overlap_all: bool,
 }
 
 #[derive(
@@ -527,6 +528,11 @@ fn regex_options(
 ) -> text_search::TextSearchOptions {
   text_search::TextSearchOptions {
     whole_words: options.whole_words,
+    overlap_strategy: if options.overlap_all {
+      text_search::OverlapStrategy::All
+    } else {
+      text_search::OverlapStrategy::Longest
+    },
     ..text_search::TextSearchOptions::default()
   }
 }

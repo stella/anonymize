@@ -109,6 +109,7 @@ export type NativeSearchOptions = {
   literal_case_insensitive?: boolean;
   literal_whole_words?: boolean;
   regex_whole_words?: boolean;
+  regex_overlap_all?: boolean;
   fuzzy_case_insensitive?: boolean;
   fuzzy_whole_words?: boolean;
   fuzzy_normalize_diacritics?: boolean;
@@ -970,7 +971,10 @@ const buildNativeStaticConfig = ({
       literal_whole_words: false,
       regex_whole_words: false,
     },
-    custom_regex_options: { regex_whole_words: false },
+    custom_regex_options: {
+      regex_whole_words: false,
+      regex_overlap_all: true,
+    },
     literal_options: {
       literal_case_insensitive: true,
       literal_whole_words: canUseGlobalWholeWordLiterals,
