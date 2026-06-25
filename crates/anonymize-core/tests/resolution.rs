@@ -241,6 +241,32 @@ fn sanitize_trims_punctuation_and_updates_byte_offsets() {
 }
 
 #[test]
+fn sanitize_trims_leading_date_ellipsis() {
+  let mut input = text_entity("...2. 2. 2026", "date", DetectionSource::Regex);
+  input.start = 10;
+  input.end = 10_u32.saturating_add(byte_len(&input.text));
+
+  let result = sanitize_entities(&[input]);
+  assert_eq!(result.len(), 1);
+  let entity = result.first().expect("result");
+  assert_eq!(entity.text, "2. 2. 2026");
+  assert_eq!(entity.start, 13);
+}
+
+#[test]
+fn sanitize_trims_single_dot_date_filler() {
+  let mut input = text_entity(". 2. 2. 2026", "date", DetectionSource::Regex);
+  input.start = 10;
+  input.end = 10_u32.saturating_add(byte_len(&input.text));
+
+  let result = sanitize_entities(&[input]);
+  assert_eq!(result.len(), 1);
+  let entity = result.first().expect("result");
+  assert_eq!(entity.text, "2. 2. 2026");
+  assert_eq!(entity.start, 12);
+}
+
+#[test]
 fn sanitize_preserves_literal_dictionary_punctuation() {
   let result = sanitize_entities(&[
     text_entity("Hello bank!", "organization", DetectionSource::DenyList),
