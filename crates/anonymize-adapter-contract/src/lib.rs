@@ -33,6 +33,7 @@ pub enum ContractError {
   CompactStringIndexOutOfRange { field: &'static str, index: u32 },
   FuzzyDistanceOutOfRange { distance: u32 },
   InvalidCompactStringGroups { field: &'static str, reason: String },
+  InvalidBindingOffset { offset: u32 },
   InvalidPreparedSearchPackage { reason: String },
   MissingDenyListDataForLiteralPatterns,
   UnsupportedOperator { value: String },
@@ -56,6 +57,12 @@ impl std::fmt::Display for ContractError {
         write!(
           formatter,
           "Compact string groups are invalid in {field}: {reason}"
+        )
+      }
+      Self::InvalidBindingOffset { offset } => {
+        write!(
+          formatter,
+          "Byte offset is not on a character boundary: {offset}"
         )
       }
       Self::InvalidPreparedSearchPackage { reason } => {
@@ -1487,6 +1494,16 @@ pub fn static_redaction_result_to_binding(
   }
 }
 
+pub fn static_redaction_result_to_utf16_binding(
+  result: StaticRedactionResult,
+  full_text: &str,
+) -> Result<BindingStaticRedactionResult> {
+  let offsets = Utf16OffsetMap::new(full_text)?;
+  let mut result = static_redaction_result_to_binding(result);
+  convert_pipeline_entity_offsets(&mut result.resolved_entities, &offsets)?;
+  Ok(result)
+}
+
 #[must_use]
 pub fn static_redaction_diagnostic_result_to_binding(
   result: StaticRedactionDiagnosticResult,
@@ -1495,6 +1512,20 @@ pub fn static_redaction_diagnostic_result_to_binding(
     result: static_redaction_result_to_binding(result.result),
     diagnostics: static_redaction_diagnostics_to_binding(result.diagnostics),
   }
+}
+
+pub fn static_redaction_diagnostic_result_to_utf16_binding(
+  result: StaticRedactionDiagnosticResult,
+  full_text: &str,
+) -> Result<BindingStaticRedactionDiagnosticResult> {
+  let offsets = Utf16OffsetMap::new(full_text)?;
+  let mut result = static_redaction_diagnostic_result_to_binding(result);
+  convert_pipeline_entity_offsets(
+    &mut result.result.resolved_entities,
+    &offsets,
+  )?;
+  convert_diagnostic_offsets(&mut result.diagnostics.events, &offsets);
+  Ok(result)
 }
 
 #[must_use]
@@ -1508,6 +1539,16 @@ pub fn static_redaction_diagnostics_to_binding(
       .map(diagnostic_event_to_binding)
       .collect(),
   }
+}
+
+pub fn static_redaction_diagnostics_to_utf16_binding(
+  diagnostics: StaticRedactionDiagnostics,
+  full_text: &str,
+) -> Result<BindingStaticRedactionDiagnostics> {
+  let offsets = Utf16OffsetMap::new(full_text)?;
+  let mut diagnostics = static_redaction_diagnostics_to_binding(diagnostics);
+  convert_diagnostic_offsets(&mut diagnostics.events, &offsets);
+  Ok(diagnostics)
 }
 
 fn diagnostic_event_to_binding(
@@ -1531,6 +1572,88 @@ fn diagnostic_event_to_binding(
     input_bytes: event.input_bytes,
     reason: event.reason,
   }
+}
+
+fn convert_pipeline_entity_offsets(
+  entities: &mut [BindingPipelineEntity],
+  offsets: &Utf16OffsetMap,
+) -> Result<()> {
+  for entity in entities {
+    entity.start = offsets.convert(entity.start)?;
+    entity.end = offsets.convert(entity.end)?;
+  }
+  Ok(())
+}
+
+fn convert_diagnostic_offsets(
+  events: &mut [BindingDiagnosticEvent],
+  offsets: &Utf16OffsetMap,
+) {
+  for event in events {
+    if let Some(start) = event.start
+      && let Some(converted) = offsets.try_convert(start)
+    {
+      event.start = Some(converted);
+    }
+    if let Some(end) = event.end
+      && let Some(converted) = offsets.try_convert(end)
+    {
+      event.end = Some(converted);
+    }
+  }
+}
+
+struct Utf16OffsetMap {
+  boundaries: Vec<(u32, u32)>,
+}
+
+impl Utf16OffsetMap {
+  fn new(text: &str) -> Result<Self> {
+    let mut boundaries = Vec::new();
+    let mut utf16_offset = 0_u32;
+    boundaries.push((0, 0));
+
+    for (byte_start, ch) in text.char_indices() {
+      utf16_offset = utf16_offset
+        .checked_add(char_utf16_width(ch))
+        .ok_or_else(|| ContractError::InvalidPreparedSearchPackage {
+          reason: String::from("UTF-16 offset exceeds u32 range"),
+        })?;
+      let byte_end = byte_start.saturating_add(ch.len_utf8());
+      boundaries.push((u32_from_usize(byte_end)?, utf16_offset));
+    }
+
+    Ok(Self { boundaries })
+  }
+
+  fn convert(&self, offset: u32) -> Result<u32> {
+    self
+      .try_convert(offset)
+      .ok_or(ContractError::InvalidBindingOffset { offset })
+  }
+
+  fn try_convert(&self, offset: u32) -> Option<u32> {
+    let index = self
+      .boundaries
+      .binary_search_by_key(&offset, |(byte_offset, _)| *byte_offset)
+      .ok()?;
+    self
+      .boundaries
+      .get(index)
+      .map(|(_, utf16_offset)| *utf16_offset)
+  }
+}
+
+const fn char_utf16_width(ch: char) -> u32 {
+  if ch.len_utf16() == 1 { 1 } else { 2 }
+}
+
+fn u32_from_usize(value: usize) -> Result<u32> {
+  u32::try_from(value).map_err(|_| {
+    ContractError::InvalidPreparedSearchPackage {
+      reason: format!("Offset exceeds u32 range: {value}"),
+    }
+  })
 }
 
 fn deny_list_filters_from_binding(

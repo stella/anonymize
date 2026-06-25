@@ -413,6 +413,36 @@ describe("native adapter parity", () => {
     );
   });
 
+  test("adapter result offsets slice source text after multibyte prefixes", () => {
+    const adapters = getAdapters();
+    const text =
+      "č Reference AB1234 for Acme s.r.o. near Fuzztovn, Turkey, " +
+      "Prague, matter MAT-123, code Secret Code.";
+
+    const tsResult = runTsAdapter(adapters.native, text, null);
+    const pyResult = runPythonAdapters(
+      adapters.pythonModulePath,
+      [
+        {
+          text,
+          operators: null,
+          sensitiveValues: [],
+        },
+      ],
+      adapters.tempDir,
+    ).at(0);
+
+    expect(pyResult).toEqual(tsResult);
+    const registration = tsResult.resolved_entities.find(
+      (entity) => entity.label === "registration number",
+    );
+    expect(registration).toBeDefined();
+    if (!registration) {
+      return;
+    }
+    expect(text.slice(registration.start, registration.end)).toBe("AB1234");
+  });
+
   test("prepared search accepts config JSON bytes", () => {
     const adapters = getAdapters();
     const text =
@@ -567,6 +597,9 @@ describe("native adapter parity", () => {
           event.kind === "entity" &&
           event.span_valid === true,
       ),
+    ).toBe(true);
+    expect(
+      tsResult.diagnostics.events.every((event) => event.text === undefined),
     ).toBe(true);
   });
 });
