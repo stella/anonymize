@@ -14,8 +14,9 @@ use stella_anonymize_adapter_contract::{
   prepared_search_core_package_to_compressed_bytes,
   prepared_search_core_package_view_from_bytes, prepared_search_package_digest,
   prepared_search_package_from_bytes, prepared_search_package_has_core_payload,
-  static_redaction_diagnostic_result_to_binding,
-  static_redaction_diagnostics_to_binding, static_redaction_result_to_binding,
+  static_redaction_diagnostic_result_to_utf16_binding,
+  static_redaction_diagnostics_to_binding,
+  static_redaction_result_to_utf16_binding,
 };
 use stella_anonymize_core::{
   DiagnosticEvent, DiagnosticEventKind, DiagnosticStage, PreparedSearch,
@@ -251,8 +252,9 @@ pub fn redact_static_entities_json(
       &operator_config_from_binding(operators)
         .map_err(|error| to_napi_contract_error(&error))?,
     )
-    .map(static_redaction_result_to_binding)
     .map_err(|error| to_napi_core_error(&error))?;
+  let result = static_redaction_result_to_utf16_binding(result, &full_text)
+    .map_err(|error| to_napi_contract_error(&error))?;
 
   serde_json::to_string(&result).map_err(|error| to_napi_serde_error(&error))
 }
@@ -288,7 +290,9 @@ pub fn redact_static_entities_diagnostics_json(
     .map_err(|error| to_napi_core_error(&error))?;
   diagnostics.extend(result.diagnostics);
   result.diagnostics = diagnostics;
-  let result = static_redaction_diagnostic_result_to_binding(result);
+  let result =
+    static_redaction_diagnostic_result_to_utf16_binding(result, &full_text)
+      .map_err(|error| to_napi_contract_error(&error))?;
 
   serde_json::to_string(&result).map_err(|error| to_napi_serde_error(&error))
 }
@@ -591,12 +595,13 @@ impl NativePreparedSearch {
     let operators =
       operator_config_from_binding(operators.map(to_binding_operator_config))
         .map_err(|error| to_napi_contract_error(&error))?;
-    self
+    let result = self
       .inner
       .redact_static_entities(&full_text, &operators)
-      .map(static_redaction_result_to_binding)
-      .map(to_js_static_redaction_result)
-      .map_err(|error| to_napi_core_error(&error))?
+      .map_err(|error| to_napi_core_error(&error))?;
+    static_redaction_result_to_utf16_binding(result, &full_text)
+      .map_err(|error| to_napi_contract_error(&error))
+      .and_then(to_js_static_redaction_result)
   }
 
   #[napi]
@@ -612,8 +617,10 @@ impl NativePreparedSearch {
     let result = self
       .inner
       .redact_static_entities_with_diagnostics(&full_text, &operators)
-      .map(static_redaction_diagnostic_result_to_binding)
       .map_err(|error| to_napi_core_error(&error))?;
+    let result =
+      static_redaction_diagnostic_result_to_utf16_binding(result, &full_text)
+        .map_err(|error| to_napi_contract_error(&error))?;
 
     serde_json::to_string(&result).map_err(|error| to_napi_serde_error(&error))
   }

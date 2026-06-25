@@ -215,6 +215,10 @@ export type NativeDateData = {
 
 export type NativeMonetaryData = MonetaryData;
 export type NativeAddressSeedData = AddressSeedData;
+export type NativeGazetteerData = {
+  labels: string[];
+  is_fuzzy: boolean[];
+};
 
 export type NativePreparedSearchConfig = {
   regex_patterns: NativeSearchPattern[];
@@ -237,7 +241,7 @@ export type NativePreparedSearchConfig = {
   regex_meta: NativeRegexMatchMeta[];
   custom_regex_meta: NativeRegexMatchMeta[];
   deny_list_data?: NativeDenyListMatchData;
-  gazetteer_data?: GazetteerData;
+  gazetteer_data?: NativeGazetteerData;
   country_data?: CountryData;
   trigger_data?: NativeTriggerData;
   legal_form_data?: NativeLegalFormData;
@@ -1005,7 +1009,7 @@ const buildNativeStaticConfig = ({
     nativeConfig.deny_list_data = toNativeDenyListData(denyListData);
   }
   if (gazetteerData) {
-    nativeConfig.gazetteer_data = gazetteerData;
+    nativeConfig.gazetteer_data = toNativeGazetteerData(gazetteerData);
   }
   if (countryData) {
     nativeConfig.country_data = countryData;
@@ -1035,6 +1039,11 @@ const buildNativeStaticConfig = ({
 const toNativeLegalFormPattern = (pattern: string): NativeSearchPattern => ({
   kind: "literal",
   pattern,
+});
+
+const toNativeGazetteerData = (data: GazetteerData): NativeGazetteerData => ({
+  labels: [...data.labels],
+  is_fuzzy: [...data.isFuzzy],
 });
 
 const toNativeTriggerPattern = (pattern: string): NativeSearchPattern => ({
