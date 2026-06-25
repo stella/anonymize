@@ -500,7 +500,7 @@ function runNativeStaticFixtureSweep({ runner, fixtures }) {
     const start = Bun.nanoseconds();
     const result = runner.prepared.redactStaticEntities(fullText, undefined);
     const ms = elapsedMs(start);
-    const snapshot = toNativeSnapshot(result);
+    const snapshot = toNativeSnapshot(fullText, result);
     results.push({
       fixture: relative(FIXTURES_DIR, fixturePath),
       ms,
@@ -667,7 +667,7 @@ function toSnapshot(indexModule, fullText, entities, context) {
   };
 }
 
-function toNativeSnapshot(result) {
+function toNativeSnapshot(fullText, result) {
   const entities = result.resolvedEntities.toSorted(
     (left, right) =>
       left.start - right.start ||
@@ -686,8 +686,8 @@ function toNativeSnapshot(result) {
     entities: entities.map(({ start, end, label, text, source }) => ({
       start,
       end,
-      byteStart: start,
-      byteEnd: end,
+      byteStart: utf16OffsetToUtf8ByteOffset(fullText, start),
+      byteEnd: utf16OffsetToUtf8ByteOffset(fullText, end),
       label,
       text,
       source,

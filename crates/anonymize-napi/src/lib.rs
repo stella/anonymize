@@ -12,7 +12,7 @@ use stella_anonymize_adapter_contract::{
   operator_config_from_binding, prepared_search_config_from_binding,
   prepared_search_core_package_to_bytes,
   prepared_search_core_package_to_compressed_bytes,
-  prepared_search_core_package_view_from_bytes, prepared_search_package_digest,
+  prepared_search_core_package_view_from_bytes,
   prepared_search_package_from_bytes, prepared_search_package_has_core_payload,
   static_redaction_diagnostic_result_to_utf16_binding,
   static_redaction_diagnostics_to_binding,
@@ -441,7 +441,7 @@ impl NativePreparedSearch {
 
   fn from_package_bytes(package_bytes: &[u8]) -> Result<Self> {
     let input_bytes_len = package_bytes.len();
-    let cache_key = prepared_search_package_cache_key(package_bytes)?;
+    let cache_key = prepared_search_package_cache_key(package_bytes);
     let cache_start = Instant::now();
     if let Some(inner) = prepared_search_cache_get(&cache_key) {
       return Ok(Self {
@@ -661,20 +661,11 @@ fn prepared_search_cache_key(
   *hasher.finalize().as_bytes()
 }
 
-fn prepared_search_package_cache_key(package_bytes: &[u8]) -> Result<[u8; 32]> {
-  let digest = prepared_search_package_digest(package_bytes)
-    .map_err(|error| to_napi_contract_error(&error))?;
+fn prepared_search_package_cache_key(package_bytes: &[u8]) -> [u8; 32] {
   let mut hasher = blake3::Hasher::new();
   hasher.update(b"prepared-package");
-  hasher.update(&digest);
-  let len = u64::try_from(package_bytes.len()).map_err(|_| {
-    Error::from_reason(format!(
-      "Prepared package byte length exceeds u64 range: {}",
-      package_bytes.len()
-    ))
-  })?;
-  hasher.update(&len.to_le_bytes());
-  Ok(*hasher.finalize().as_bytes())
+  hasher.update(package_bytes);
+  *hasher.finalize().as_bytes()
 }
 
 fn with_prepared_search_cache<T>(
