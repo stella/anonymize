@@ -27,6 +27,7 @@ const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_HEADER: [u8; 8] = *b"ANONCPZ1";
 const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION: u32 = 3;
 const PREPARED_SEARCH_PACKAGE_DIGEST_BYTES: usize = 32;
 const PREPARED_SEARCH_PACKAGE_ZSTD_LEVEL: i32 = 3;
+const MAX_PREPARED_SEARCH_PACKAGE_PAYLOAD_BYTES: usize = 256 * 1024 * 1024;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ContractError {
@@ -1191,9 +1192,16 @@ impl<'a> PreparedSearchPackageParts<'a> {
         uncompressed_len,
         payload,
         ..
-      } => zstd::bulk::decompress(payload, uncompressed_len)
-        .map(Cow::Owned)
-        .map_err(|error| invalid_prepared_search_package(error.to_string())),
+      } => {
+        if uncompressed_len > MAX_PREPARED_SEARCH_PACKAGE_PAYLOAD_BYTES {
+          return Err(invalid_prepared_search_package(
+            "uncompressed payload length exceeds limit",
+          ));
+        }
+        zstd::bulk::decompress(payload, uncompressed_len)
+          .map(Cow::Owned)
+          .map_err(|error| invalid_prepared_search_package(error.to_string()))
+      }
     }
   }
 }
@@ -2070,14 +2078,20 @@ mod tests {
 
   use super::{
     BindingOperatorConfig, BindingPreparedSearchConfig, BindingSearchOptions,
-    BindingSearchPattern, ContractError, operator_config_from_binding,
+    BindingSearchPattern, ContractError,
+    MAX_PREPARED_SEARCH_PACKAGE_PAYLOAD_BYTES,
+    PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER,
+    PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION,
+    PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_HEADER,
+    PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION,
+    PREPARED_SEARCH_PACKAGE_DIGEST_BYTES, operator_config_from_binding,
     prepared_search_config_from_binding,
     prepared_search_core_package_from_bytes,
     prepared_search_core_package_to_bytes,
     prepared_search_core_package_to_compressed_bytes,
     prepared_search_package_from_bytes,
     prepared_search_package_has_core_payload, prepared_search_package_to_bytes,
-    prepared_search_package_to_compressed_bytes,
+    prepared_search_package_to_compressed_bytes, write_package_header,
   };
 
   #[test]
@@ -2174,6 +2188,36 @@ mod tests {
   }
 
   #[test]
+  fn prepared_search_compressed_package_rejects_oversized_payload_len() {
+    let bytes = compressed_package_with_len(
+      PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER,
+      PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION,
+      oversized_payload_len(),
+    );
+    let error = prepared_search_package_from_bytes(&bytes).unwrap_err();
+
+    assert_invalid_package_reason(
+      error,
+      "uncompressed payload length exceeds limit",
+    );
+  }
+
+  #[test]
+  fn prepared_search_core_compressed_package_rejects_oversized_payload_len() {
+    let bytes = compressed_package_with_len(
+      PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_HEADER,
+      PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION,
+      oversized_payload_len(),
+    );
+    let error = prepared_search_core_package_from_bytes(&bytes).unwrap_err();
+
+    assert_invalid_package_reason(
+      error,
+      "uncompressed payload length exceeds limit",
+    );
+  }
+
+  #[test]
   fn prepared_search_core_package_roundtrips_config_and_artifacts() {
     let config =
       prepared_search_config_from_binding(package_test_config()).unwrap();
@@ -2231,5 +2275,35 @@ mod tests {
       }],
       ..BindingPreparedSearchConfig::default()
     }
+  }
+
+  fn compressed_package_with_len(
+    header: [u8; 8],
+    version: u32,
+    uncompressed_len: u64,
+  ) -> Vec<u8> {
+    let digest = [0; PREPARED_SEARCH_PACKAGE_DIGEST_BYTES];
+    let mut bytes = Vec::new();
+    write_package_header(&mut bytes, header, version, &digest);
+    bytes.extend_from_slice(&uncompressed_len.to_le_bytes());
+    bytes
+  }
+
+  fn oversized_payload_len() -> u64 {
+    u64::try_from(MAX_PREPARED_SEARCH_PACKAGE_PAYLOAD_BYTES)
+      .unwrap()
+      .checked_add(1)
+      .unwrap()
+  }
+
+  fn assert_invalid_package_reason(error: ContractError, expected: &str) {
+    assert!(
+      matches!(
+        error,
+        ContractError::InvalidPreparedSearchPackage { reason }
+          if reason == expected
+      ),
+      "expected invalid package reason: {expected}"
+    );
   }
 }
