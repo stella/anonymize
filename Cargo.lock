@@ -134,17 +134,6 @@ checksum = "99251f238b74cd219a86fe6ea9328308ebb223fcbb5b8eb5aa400b847a41dded"
 
 [[package]]
 name = "fancy-regex"
-version = "0.16.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "998b056554fbe42e03ae0e152895cd1a7e1002aec800fdc6635d20270260c46f"
-dependencies = [
- "bit-set",
- "regex-automata",
- "regex-syntax",
-]
-
-[[package]]
-name = "fancy-regex"
 version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e1e1dacd0d2082dfcf1351c4bdd566bbe89a2b263235a2b50058f1e130a47277"
@@ -595,7 +584,7 @@ dependencies = [
 name = "stella-anonymize-core"
 version = "1.5.0"
 dependencies = [
- "fancy-regex 0.16.2",
+ "fancy-regex",
  "regex",
  "serde",
  "stella-text-search-core",
@@ -640,7 +629,7 @@ name = "stella-regex-set-core"
 version = "1.0.5"
 source = "git+https://github.com/stella/regex-set?rev=8b80241a5a54cef8fdc6b6b34119981db0c6f597#8b80241a5a54cef8fdc6b6b34119981db0c6f597"
 dependencies = [
- "fancy-regex 0.18.0",
+ "fancy-regex",
  "regex",
  "regex-automata",
  "regex-syntax",

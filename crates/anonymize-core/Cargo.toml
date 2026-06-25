@@ -10,7 +10,7 @@ keywords = ["anonymization", "pii", "redaction", "text"]
 categories = ["text-processing"]
 
 [dependencies]
-fancy-regex = "0.16"
+fancy-regex = "0.18"
 regex = "1"
 serde = { version = "1", features = ["derive"] }
 stella-text-search-core = { version = "1.0.6", git = "https://github.com/stella/text-search", rev = "a5d6e11f5c832be50cba42882d2844394adb9403" }
