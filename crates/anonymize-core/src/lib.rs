@@ -9,6 +9,7 @@ pub(crate) mod byte_offsets;
 mod dates;
 mod diagnostics;
 mod false_positives;
+mod hotwords;
 mod legal_forms;
 mod money;
 pub(crate) mod normalize;
@@ -29,6 +30,7 @@ pub use diagnostics::{
   DiagnosticEvent, DiagnosticEventKind, DiagnosticStage,
   StaticRedactionDiagnostics,
 };
+pub use hotwords::{HotwordRule, HotwordRuleData};
 pub use legal_forms::LegalFormData;
 pub use money::{
   AmountWordsData, CurrencyData, MagnitudeSuffixData, MonetaryData,

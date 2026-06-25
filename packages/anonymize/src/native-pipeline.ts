@@ -19,8 +19,7 @@ export type NativePipelineUnsupportedFeature =
   | "enableNer"
   | "enableNameCorpus"
   | "enableCoreference"
-  | "enableZoneClassification"
-  | "enableHotwordRules";
+  | "enableZoneClassification";
 
 export type NativePipelineCompatibility =
   | { status: "supported" }
@@ -84,9 +83,6 @@ export const getNativePipelineCompatibility = (
   if (config.enableCoreference) unsupportedFeatures.push("enableCoreference");
   if (config.enableZoneClassification === true) {
     unsupportedFeatures.push("enableZoneClassification");
-  }
-  if (config.enableHotwordRules === true) {
-    unsupportedFeatures.push("enableHotwordRules");
   }
 
   if (unsupportedFeatures.length === 0) {
