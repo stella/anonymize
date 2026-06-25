@@ -5,12 +5,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use stella_anonymize_core::{
   AddressSeedData, AmountWordsData, CountryMatchData, CurrencyData, DateData,
   DenyListFilterData, DenyListMatchData, DetectionSource, DiagnosticEventKind,
-  DiagnosticStage, Error, FuzzySearchOptions, GazetteerMatchData,
-  LegalFormData, LiteralSearchOptions, MagnitudeSuffixData, MonetaryData,
-  OperatorConfig, PatternSlice, PreparedSearch, PreparedSearchArtifacts,
-  PreparedSearchConfig, PreparedSearchSlices, RegexMatchMeta,
-  RegexSearchOptions, SearchOptions, SearchPattern, SourceDetail, TriggerData,
-  TriggerRule, TriggerStrategy, TriggerValidation, WrittenAmountPatternData,
+  DiagnosticStage, Error, FuzzySearchOptions, GazetteerMatchData, HotwordRule,
+  HotwordRuleData, LegalFormData, LiteralSearchOptions, MagnitudeSuffixData,
+  MonetaryData, OperatorConfig, PatternSlice, PreparedSearch,
+  PreparedSearchArtifacts, PreparedSearchConfig, PreparedSearchSlices,
+  RegexMatchMeta, RegexSearchOptions, SearchOptions, SearchPattern,
+  SourceDetail, TriggerData, TriggerRule, TriggerStrategy, TriggerValidation,
+  WrittenAmountPatternData,
 };
 
 fn empty_config(slices: PreparedSearchSlices) -> PreparedSearchConfig {
@@ -30,6 +31,7 @@ fn empty_config(slices: PreparedSearchSlices) -> PreparedSearchConfig {
     deny_list_data: None,
     gazetteer_data: None,
     country_data: None,
+    hotword_data: None,
     trigger_data: None,
     legal_form_data: None,
     address_seed_data: None,
@@ -144,6 +146,7 @@ fn prepared_search_runs_normalized_literal_pass() {
       is_fuzzy: vec![false],
     }),
     country_data: None,
+    hotword_data: None,
     trigger_data: None,
     legal_form_data: None,
     address_seed_data: None,
@@ -189,6 +192,7 @@ fn prepared_search_artifacts_match_direct_prepare() {
       is_fuzzy: vec![false],
     }),
     country_data: None,
+    hotword_data: None,
     trigger_data: None,
     legal_form_data: None,
     address_seed_data: None,
@@ -335,6 +339,7 @@ fn prepared_search_emits_static_detector_entities() {
     country_data: Some(CountryMatchData {
       labels: vec![String::from("country")],
     }),
+    hotword_data: None,
     trigger_data: None,
     legal_form_data: None,
     address_seed_data: None,
@@ -967,6 +972,7 @@ fn prepared_search_redacts_static_entities_end_to_end() {
     country_data: Some(CountryMatchData {
       labels: vec![String::from("country")],
     }),
+    hotword_data: None,
     trigger_data: None,
     legal_form_data: None,
     address_seed_data: None,
@@ -1064,6 +1070,55 @@ fn prepared_search_boosts_near_miss_entities_when_enabled() {
   assert_eq!(
     result.redaction.redacted_text,
     "[REGISTRATION_NUMBER_1] signed with [MATTER_ID_1]."
+  );
+}
+
+#[test]
+fn prepared_search_applies_hotword_reclassification_before_threshold() {
+  let prepared = PreparedSearch::new(PreparedSearchConfig {
+    regex_patterns: vec![SearchPattern::Regex(String::from(
+      r"\b\d{2}\.\d{2}\.\d{4}\b",
+    ))],
+    literal_patterns: vec![SearchPattern::LiteralWithOptions {
+      pattern: String::from("narozen"),
+      case_insensitive: Some(true),
+      whole_words: Some(true),
+    }],
+    allowed_labels: vec![String::from("date of birth")],
+    threshold: 0.8,
+    slices: PreparedSearchSlices {
+      regex: PatternSlice { start: 0, end: 1 },
+      hotwords: PatternSlice { start: 0, end: 1 },
+      ..PreparedSearchSlices::default()
+    },
+    regex_meta: vec![RegexMatchMeta::new("date", 0.7)],
+    hotword_data: Some(HotwordRuleData {
+      rules: vec![HotwordRule {
+        target_labels: vec![String::from("date")],
+        score_adjustment: 0.15,
+        reclassify_to: Some(String::from("date of birth")),
+        proximity_before: 60,
+        proximity_after: 60,
+      }],
+      pattern_rule_indices: vec![0],
+    }),
+    ..empty_config(PreparedSearchSlices::default())
+  })
+  .unwrap();
+
+  let result = prepared
+    .redact_static_entities(
+      "narozen dne 12.03.1990 v Praze",
+      &OperatorConfig::default(),
+    )
+    .unwrap();
+
+  assert_eq!(result.resolved_entities.len(), 1);
+  assert_eq!(result.resolved_entities[0].label, "date of birth");
+  assert_eq!(result.resolved_entities[0].text, "12.03.1990");
+  assert_eq!(
+    result.redaction.redacted_text,
+    "narozen dne [DATE_OF_BIRTH_1] v Praze"
   );
 }
 
@@ -1198,6 +1253,7 @@ fn prepared_search_reports_static_redaction_diagnostics() {
       is_fuzzy: vec![false],
     }),
     country_data: None,
+    hotword_data: None,
     trigger_data: None,
     legal_form_data: None,
     address_seed_data: None,
@@ -1279,6 +1335,7 @@ fn prepared_search_redacts_custom_deny_list_entities() {
     }),
     gazetteer_data: None,
     country_data: None,
+    hotword_data: None,
     trigger_data: None,
     legal_form_data: None,
     address_seed_data: None,

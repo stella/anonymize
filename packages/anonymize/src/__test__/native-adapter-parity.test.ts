@@ -974,6 +974,71 @@ describe("native adapter parity", () => {
     });
   });
 
+  test("native pipeline package matches TS hotword reclassification", async () => {
+    const adapters = getAdapters();
+    const fullText = "narozen dne 12.03.1990 v Praze";
+    const config: PipelineConfig = {
+      threshold: 0.5,
+      enableTriggerPhrases: false,
+      enableRegex: true,
+      enableLegalForms: false,
+      enableNameCorpus: false,
+      enableDenyList: false,
+      enableGazetteer: false,
+      enableCountries: false,
+      enableNer: false,
+      enableConfidenceBoost: false,
+      enableCoreference: false,
+      enableHotwordRules: true,
+      enableZoneClassification: false,
+      labels: ["date of birth"],
+      workspaceId: "native-pipeline-hotword-test",
+    };
+
+    expect(getNativePipelineCompatibility(config)).toEqual({
+      status: "supported",
+    });
+
+    const context = createPipelineContext();
+    const packageBytes = await prepareNativePipelinePackage({
+      binding: adapters.native,
+      config,
+      context,
+      compressed: true,
+    });
+    const nativePipeline = createNativePipelineFromPackage({
+      binding: adapters.native,
+      packageBytes,
+    });
+    const tsContext = createPipelineContext();
+    const operators: OperatorConfig & NativeOperatorConfig = {
+      operators: {},
+      redactString: "[REDACTED]",
+    };
+    const tsEntities = await runPipeline({
+      fullText,
+      config,
+      gazetteerEntries: [],
+      context: tsContext,
+    });
+    const tsRedaction = redactText(fullText, tsEntities, operators, tsContext);
+
+    expect(tsEntities).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "date of birth",
+          text: "12.03.1990",
+        }),
+      ]),
+    );
+    expect(
+      toBindingStaticResult(nativePipeline.redactText(fullText, operators)),
+    ).toEqual({
+      resolved_entities: tsEntities.map(toBindingEntity),
+      redaction: toBindingRedactionResult(tsRedaction),
+    });
+  });
+
   test("native pipeline compatibility rejects TS-only contextual passes", () => {
     const config: PipelineConfig = {
       threshold: 0.3,
@@ -999,7 +1064,6 @@ describe("native adapter parity", () => {
         "enableNameCorpus",
         "enableCoreference",
         "enableZoneClassification",
-        "enableHotwordRules",
       ],
     });
   });

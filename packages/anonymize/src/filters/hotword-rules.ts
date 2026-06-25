@@ -20,7 +20,7 @@ type HotwordRulesConfig = {
 
 // ── Lazy-loaded state ───────────────────────────────
 
-let rules: HotwordRule[] | null = null;
+let rules: readonly HotwordRule[] | null = null;
 let search: { findIter: (text: string) => Match[] } | null = null;
 /**
  * Maps each TextSearch pattern index back to the
@@ -28,14 +28,27 @@ let search: { findIter: (text: string) => Match[] } | null = null;
  * resolves all hotword hits to their rule.
  */
 let patternToRule: number[] | null = null;
+let ruleSetPromise: Promise<readonly HotwordRule[]> | null = null;
 let initPromise: Promise<void> | null = null;
 
 // ── Init ────────────────────────────────────────────
 
+export const loadHotwordRuleSet = (): Promise<readonly HotwordRule[]> => {
+  if (ruleSetPromise !== null) return ruleSetPromise;
+  ruleSetPromise = import("../data/hotword-rules.json")
+    .then((mod) => {
+      const data: HotwordRulesConfig = mod.default ?? mod;
+      return data.rules;
+    })
+    .catch((err) => {
+      ruleSetPromise = null;
+      throw err;
+    });
+  return ruleSetPromise;
+};
+
 const loadRules = async (): Promise<void> => {
-  const mod = await import("../data/hotword-rules.json");
-  const data: HotwordRulesConfig = mod.default ?? mod;
-  const loaded = data.rules;
+  const loaded = await loadHotwordRuleSet();
 
   // Build a flat pattern list and the reverse map.
   const patterns: PatternEntry[] = [];
@@ -102,11 +115,20 @@ export const expandLabelsForHotwordRules = (
   if (rules === null || requestedLabels.length === 0) {
     return requestedLabels;
   }
+  return expandLabelsForHotwordRuleSet(requestedLabels, rules);
+};
 
+export const expandLabelsForHotwordRuleSet = (
+  requestedLabels: readonly string[],
+  ruleSet: readonly HotwordRule[],
+): readonly string[] => {
+  if (requestedLabels.length === 0) {
+    return requestedLabels;
+  }
   const requested = new Set(requestedLabels);
   const expanded = new Set(requestedLabels);
 
-  for (const rule of rules) {
+  for (const rule of ruleSet) {
     if (rule.reclassifyTo === undefined || !requested.has(rule.reclassifyTo)) {
       continue;
     }

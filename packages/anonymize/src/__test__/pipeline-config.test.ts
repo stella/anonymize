@@ -130,6 +130,33 @@ describe("pipeline config semantics", () => {
     expect(search.nativeStaticConfig.confidence_boost).toBe(true);
   });
 
+  test("native config carries hotword rule metadata", async () => {
+    const search = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        enableRegex: true,
+        enableHotwordRules: true,
+        labels: ["date of birth"],
+      },
+      [],
+      createPipelineContext(),
+    );
+
+    expect(search.nativeStaticConfig.allowed_labels).toEqual(["date of birth"]);
+    expect(search.nativeStaticConfig.slices.hotwords?.end).toBeGreaterThan(
+      search.nativeStaticConfig.slices.hotwords?.start ?? 0,
+    );
+    expect(
+      search.nativeStaticConfig.hotword_data?.rules.length,
+    ).toBeGreaterThan(0);
+    expect(
+      search.nativeStaticConfig.hotword_data?.pattern_rule_indices.length,
+    ).toBe(
+      (search.nativeStaticConfig.slices.hotwords?.end ?? 0) -
+        (search.nativeStaticConfig.slices.hotwords?.start ?? 0),
+    );
+  });
+
   test("native config keeps unsupported validator regexes fail-fast", async () => {
     const search = await buildUnifiedSearch(
       {

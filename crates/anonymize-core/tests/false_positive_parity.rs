@@ -25,6 +25,7 @@ fn empty_config(slices: PreparedSearchSlices) -> PreparedSearchConfig {
     deny_list_data: None,
     gazetteer_data: None,
     country_data: None,
+    hotword_data: None,
     trigger_data: None,
     legal_form_data: None,
     address_seed_data: None,
