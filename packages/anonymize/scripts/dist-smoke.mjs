@@ -10,6 +10,11 @@
  * Run after `bun run build`: `bun run smoke:dist`.
  */
 import { createPipelineContext, runPipeline } from "../dist/index.mjs";
+import { createNativeAnonymizerFromPackage } from "../dist/native.mjs";
+
+if (typeof createNativeAnonymizerFromPackage !== "function") {
+  throw new TypeError("dist native entrypoint is missing its package loader");
+}
 
 const warnings = [];
 const originalWarn = console.warn;
