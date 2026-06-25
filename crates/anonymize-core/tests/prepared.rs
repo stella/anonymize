@@ -23,6 +23,7 @@ fn empty_config(slices: PreparedSearchSlices) -> PreparedSearchConfig {
     literal_options: SearchOptions::default(),
     allowed_labels: vec![],
     threshold: 0.0,
+    confidence_boost: false,
     slices,
     regex_meta: vec![],
     custom_regex_meta: vec![],
@@ -130,6 +131,7 @@ fn prepared_search_runs_normalized_literal_pass() {
     literal_options: SearchOptions::default(),
     allowed_labels: vec![],
     threshold: 0.0,
+    confidence_boost: false,
     slices: PreparedSearchSlices {
       gazetteer: PatternSlice { start: 0, end: 1 },
       ..PreparedSearchSlices::default()
@@ -173,6 +175,7 @@ fn prepared_search_artifacts_match_direct_prepare() {
     literal_options: SearchOptions::default(),
     allowed_labels: vec![],
     threshold: 0.0,
+    confidence_boost: false,
     slices: PreparedSearchSlices {
       regex: PatternSlice { start: 0, end: 1 },
       gazetteer: PatternSlice { start: 0, end: 1 },
@@ -306,6 +309,7 @@ fn prepared_search_emits_static_detector_entities() {
     },
     allowed_labels: vec![],
     threshold: 0.0,
+    confidence_boost: false,
     slices: PreparedSearchSlices {
       regex: PatternSlice { start: 0, end: 1 },
       custom_regex: PatternSlice { start: 0, end: 1 },
@@ -946,6 +950,7 @@ fn prepared_search_redacts_static_entities_end_to_end() {
     },
     allowed_labels: vec![],
     threshold: 0.0,
+    confidence_boost: false,
     slices: PreparedSearchSlices {
       regex: PatternSlice { start: 0, end: 1 },
       gazetteer: PatternSlice { start: 0, end: 1 },
@@ -1022,6 +1027,44 @@ fn prepared_search_applies_threshold_before_merge() {
   );
   assert_eq!(result.resolved_entities.len(), 1);
   assert_eq!(result.resolved_entities[0].text, "Acme");
+}
+
+#[test]
+fn prepared_search_boosts_near_miss_entities_when_enabled() {
+  let prepared = PreparedSearch::new(PreparedSearchConfig {
+    regex_patterns: vec![
+      SearchPattern::Regex(String::from(r"\bANCHOR-\d+\b")),
+      SearchPattern::Regex(String::from(r"\bNEAR-\d+\b")),
+    ],
+    threshold: 0.5,
+    confidence_boost: true,
+    slices: PreparedSearchSlices {
+      regex: PatternSlice { start: 0, end: 2 },
+      ..PreparedSearchSlices::default()
+    },
+    regex_meta: vec![
+      RegexMatchMeta::new("registration number", 0.95),
+      RegexMatchMeta::new("matter id", 0.45),
+    ],
+    ..empty_config(PreparedSearchSlices::default())
+  })
+  .unwrap();
+
+  let result = prepared
+    .redact_static_entities(
+      "ANCHOR-123 signed with NEAR-456.",
+      &OperatorConfig::default(),
+    )
+    .unwrap();
+
+  assert_eq!(result.resolved_entities.len(), 2);
+  assert_eq!(result.resolved_entities[0].text, "ANCHOR-123");
+  assert_eq!(result.resolved_entities[1].text, "NEAR-456");
+  assert!((result.resolved_entities[1].score - 0.5).abs() < f64::EPSILON);
+  assert_eq!(
+    result.redaction.redacted_text,
+    "[REGISTRATION_NUMBER_1] signed with [MATTER_ID_1]."
+  );
 }
 
 #[test]
@@ -1141,6 +1184,7 @@ fn prepared_search_reports_static_redaction_diagnostics() {
     },
     allowed_labels: vec![],
     threshold: 0.0,
+    confidence_boost: false,
     slices: PreparedSearchSlices {
       regex: PatternSlice { start: 0, end: 1 },
       gazetteer: PatternSlice { start: 0, end: 1 },
@@ -1219,6 +1263,7 @@ fn prepared_search_redacts_custom_deny_list_entities() {
     },
     allowed_labels: vec![],
     threshold: 0.0,
+    confidence_boost: false,
     slices: PreparedSearchSlices {
       deny_list: PatternSlice { start: 0, end: 1 },
       ..PreparedSearchSlices::default()
