@@ -185,9 +185,14 @@ fn should_reject_address(
   if filters.is_some_and(|filters| is_jurisdiction_address(text, filters)) {
     return false;
   }
-  if entity.source == DetectionSource::Trigger && !has_digits && !has_component
-  {
-    return true;
+  if entity.source == DetectionSource::Trigger && !has_digits {
+    if filters.is_some_and(|filters| is_only_ambiguous_component(text, filters))
+    {
+      return true;
+    }
+    if !has_component {
+      return true;
+    }
   }
 
   text.chars().count() > 40
@@ -591,6 +596,70 @@ fn has_address_component(text: &str, filters: &DenyListFilterData) -> bool {
       .address_component_terms
       .iter()
       .any(|component| contains_component(&lower, component))
+}
+
+fn is_only_ambiguous_component(
+  text: &str,
+  filters: &DenyListFilterData,
+) -> bool {
+  filters
+    .ambiguous_street_type_terms
+    .iter()
+    .any(|term| is_only_ambiguous_component_term(text, filters, term))
+}
+
+fn is_only_ambiguous_component_term(
+  text: &str,
+  filters: &DenyListFilterData,
+  term: &str,
+) -> bool {
+  if term.is_empty() {
+    return false;
+  }
+  let Some((start, end)) = find_ambiguous_component_occurrence(text, term)
+  else {
+    return false;
+  };
+  if text
+    .get(end..)
+    .is_some_and(starts_with_capitalized_token_after_space)
+  {
+    return false;
+  }
+  let mut stripped = String::with_capacity(text.len());
+  stripped.push_str(text.get(..start).unwrap_or_default());
+  stripped.push(' ');
+  stripped.push_str(text.get(end..).unwrap_or_default());
+  !has_address_component(&stripped, filters)
+}
+
+fn find_ambiguous_component_occurrence(
+  text: &str,
+  term: &str,
+) -> Option<(usize, usize)> {
+  text.match_indices(term).find_map(|(start, _)| {
+    let end = start.saturating_add(term.len());
+    let left_ok = text
+      .get(..start)
+      .and_then(|prefix| prefix.chars().next_back())
+      .is_none_or(is_left_component_boundary);
+    let right_ok = text
+      .get(end..)
+      .and_then(|suffix| suffix.chars().next())
+      .is_none_or(is_right_component_boundary);
+    (left_ok && right_ok).then_some((start, end))
+  })
+}
+
+fn starts_with_capitalized_token_after_space(text: &str) -> bool {
+  let leading = leading_whitespace_len(text);
+  if leading == 0 {
+    return false;
+  }
+  text
+    .get(leading..)
+    .and_then(|tail| tail.chars().next())
+    .is_some_and(char::is_uppercase)
 }
 
 fn is_jurisdiction_address(text: &str, filters: &DenyListFilterData) -> bool {

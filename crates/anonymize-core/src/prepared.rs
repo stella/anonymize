@@ -9,7 +9,9 @@ use crate::legal_forms::{
   LegalFormData, PreparedLegalFormData, process_legal_form_matches,
 };
 use crate::money::{MonetaryData, PreparedMonetaryData};
-use crate::normalize::normalize_for_search_with_byte_map;
+use crate::normalize::{
+  NormalizedSearchText, normalize_for_search_with_byte_map,
+};
 use crate::processors::{
   CountryMatchData, DenyListMatchData, GazetteerMatchData, PatternSlice,
   RegexMatchMeta, ensure_supported_deny_list_sources, process_country_matches,
@@ -464,8 +466,9 @@ impl PreparedSearch {
     }
 
     let legal_form_start = Instant::now();
-    let legal_forms = offset_matches(
-      self.legal_forms.find_iter(full_text)?,
+    let legal_forms = normalized_offset_matches(
+      &self.legal_forms,
+      &normalized,
       self.slices.legal_forms.start,
     )?;
     if let Some(diagnostics) = &mut diagnostics {
@@ -1248,6 +1251,19 @@ fn offset_matches(
     .collect()
 }
 
+fn normalized_offset_matches(
+  search: &SearchIndex,
+  normalized: &NormalizedSearchText,
+  offset: u32,
+) -> Result<Vec<SearchMatch>> {
+  search
+    .find_iter(normalized.as_str())?
+    .into_iter()
+    .map(|found| remap_normalized_match(normalized, found))
+    .map(|found| found.and_then(|value| offset_match(value, offset)))
+    .collect()
+}
+
 fn offset_match(found: SearchMatch, offset: u32) -> Result<SearchMatch> {
   let pattern = found.pattern().checked_add(offset).ok_or_else(|| {
     Error::PatternIndexNotAddressable {
@@ -1302,7 +1318,7 @@ fn sort_matches(matches: &mut [SearchMatch]) {
 }
 
 fn remap_normalized_match(
-  normalized: &crate::normalize::NormalizedSearchText,
+  normalized: &NormalizedSearchText,
   found: SearchMatch,
 ) -> Result<SearchMatch> {
   let (start, end) = normalized.map_span(found.start(), found.end())?;

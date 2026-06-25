@@ -494,6 +494,7 @@ type DenyListLanguageFilters = {
 
 type FalsePositiveShapeFilters = {
   addressComponentTerms: string[];
+  ambiguousStreetTypeTerms: string[];
   numberAbbrevPrefixes: string[];
   documentHeadingOrdinalMarkers: string[];
 };
@@ -514,6 +515,7 @@ export type DenyListFilterData = {
   addressJurisdictionPrefixes: string[];
   streetTypes: string[];
   addressComponentTerms: string[];
+  ambiguousStreetTypeTerms: string[];
   firstNames: string[];
   genericRoles: string[];
   numberAbbrevPrefixes: string[];
@@ -1173,6 +1175,9 @@ const loadFalsePositiveShapeFilters =
         addressComponentTerms: languageWordValues(
           data["addressComponentTerms"],
         ),
+        ambiguousStreetTypeTerms: languageWordValues(
+          data["ambiguousStreetTypeTerms"],
+        ),
         numberAbbrevPrefixes: languageWordValues(data["numberAbbrevPrefixes"]),
         documentHeadingOrdinalMarkers: languageWordValues(
           data["documentHeadingOrdinalMarkers"],
@@ -1273,6 +1278,8 @@ const buildDenyListFilterData = async (
     addressJurisdictionPrefixes,
     streetTypes: await buildStreetTypeFilterValues(),
     addressComponentTerms: falsePositiveShapeFilters.addressComponentTerms,
+    ambiguousStreetTypeTerms:
+      falsePositiveShapeFilters.ambiguousStreetTypeTerms,
     firstNames: [...getNameCorpusFirstNames(ctx)],
     genericRoles: [
       ...(ctx.genericRoles ?? EMPTY_GENERIC_ROLES),

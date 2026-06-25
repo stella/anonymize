@@ -146,3 +146,48 @@ fn rejects_document_structure_heading_organizations() {
     [String::from("Acme No. 4")]
   );
 }
+
+#[test]
+fn rejects_only_ambiguous_street_type_trigger_addresses() {
+  let prepared = PreparedSearch::new(PreparedSearchConfig {
+    regex_patterns: vec![SearchPattern::LiteralWithOptions {
+      pattern: String::from("demeurant"),
+      case_insensitive: Some(true),
+      whole_words: Some(true),
+    }],
+    slices: PreparedSearchSlices {
+      triggers: PatternSlice { start: 0, end: 1 },
+      ..PreparedSearchSlices::default()
+    },
+    trigger_data: Some(TriggerData {
+      rules: vec![TriggerRule {
+        trigger: String::from("demeurant"),
+        label: String::from("address"),
+        strategy: TriggerStrategy::Address {
+          max_chars: Some(80),
+        },
+        validations: Vec::new(),
+        include_trigger: false,
+      }],
+      address_stop_keywords: Vec::new(),
+      party_position_terms: Vec::new(),
+      legal_form_suffixes: Vec::new(),
+      sentence_terminal_currency_terms: Vec::new(),
+    }),
+    deny_list_data: Some(empty_deny_list_data(DenyListFilterData {
+      street_types: set(["cours"]),
+      ambiguous_street_type_terms: set(["cours"]),
+      ..DenyListFilterData::default()
+    })),
+    ..empty_config(PreparedSearchSlices::default())
+  })
+  .unwrap();
+
+  assert!(
+    resolved_texts(&prepared, "demeurant au cours du contrat.").is_empty()
+  );
+  assert_eq!(
+    resolved_texts(&prepared, "demeurant Cours Mirabeau."),
+    [String::from("Cours Mirabeau")]
+  );
+}

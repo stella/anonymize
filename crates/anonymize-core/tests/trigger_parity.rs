@@ -150,6 +150,39 @@ fn to_next_comma_stops_after_short_currency_abbreviation_sentence_tail() {
 }
 
 #[test]
+fn to_next_comma_stops_on_unicode_case_stop_words() {
+  let prepared = prepared_for_trigger(
+    "court",
+    "organization",
+    TriggerStrategy::ToNextComma {
+      stop_words: vec![String::from("dňa")],
+      max_length: Some(100),
+    },
+  );
+
+  let result = prepared
+    .detect_static_entities("court Okresný súd DŇA 1.1.2025, other text.")
+    .expect("static detection should succeed");
+
+  assert_eq!(trigger_texts(&result), [String::from("Okresný súd")]);
+}
+
+#[test]
+fn company_id_trigger_rejects_single_digit_dotted_date() {
+  let prepared = prepared_for_trigger(
+    "DNI",
+    "national identification number",
+    TriggerStrategy::CompanyIdValue,
+  );
+
+  let result = prepared
+    .detect_static_entities("DNI 6.11.2025")
+    .expect("static detection should succeed");
+
+  assert!(result.trigger_entities.is_empty());
+}
+
+#[test]
 fn address_trigger_stops_after_short_proper_noun_before_real_sentence() {
   let prepared = prepared_for_trigger(
     "office",

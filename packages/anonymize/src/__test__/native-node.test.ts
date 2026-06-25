@@ -72,6 +72,28 @@ describe("native node loader", () => {
     expect(calls).toEqual(["/tmp/anonymize.node"]);
   });
 
+  test("accepts a napi class constructor on the native binding", () => {
+    const calls: string[] = [];
+    const binding = fakeNativeBinding("1.5.0", {
+      preparedSearchAsConstructor: true,
+    });
+    const loaded = loadNativeAnonymizeBinding({
+      expectedVersion: "1.5.0",
+      platform: "darwin",
+      arch: "arm64",
+      env: {},
+      requireModule: (specifier) => {
+        calls.push(specifier);
+        if (specifier === "@stll/anonymize-darwin-arm64") {
+          return binding;
+        }
+        throw new Error("not found");
+      },
+    });
+
+    expect(loaded).toBe(binding);
+  });
+
   test("rejects mismatched native binding versions", () => {
     expect(() =>
       loadNativeAnonymizeBinding({
@@ -90,15 +112,29 @@ describe("native node loader", () => {
   });
 });
 
-const fakeNativeBinding = (version: string): NativeAnonymizeBinding => ({
-  nativePackageVersion: () => version,
-  NativePreparedSearch: {
+type FakeNativeBindingOptions = {
+  preparedSearchAsConstructor?: boolean;
+};
+
+const fakeNativeBinding = (
+  version: string,
+  options: FakeNativeBindingOptions = {},
+): NativeAnonymizeBinding => {
+  const preparedSearch = {
     fromConfigJsonBytes: () => fakePreparedSearch(),
     fromPreparedPackageBytes: () => fakePreparedSearch(),
-  },
-  prepareStaticSearchPackageBytes: () => new Uint8Array(),
-  prepareStaticSearchCompressedPackageBytes: () => new Uint8Array(),
-});
+  };
+  const NativePreparedSearch = options.preparedSearchAsConstructor
+    ? Object.assign(function NativePreparedSearch() {}, preparedSearch)
+    : preparedSearch;
+
+  return {
+    nativePackageVersion: () => version,
+    NativePreparedSearch,
+    prepareStaticSearchPackageBytes: () => new Uint8Array(),
+    prepareStaticSearchCompressedPackageBytes: () => new Uint8Array(),
+  };
+};
 
 const fakePreparedSearch = () => ({
   redactStaticEntities: () => ({

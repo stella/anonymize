@@ -199,6 +199,7 @@ const CONFIG_JSON = JSON.stringify({
       person_stopwords: [],
       address_stopwords: [],
       street_types: [],
+      ambiguous_street_type_terms: [],
       first_names: [],
       generic_roles: [],
       sentence_starters: [],

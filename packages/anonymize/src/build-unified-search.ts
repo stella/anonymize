@@ -134,6 +134,7 @@ export type NativeDenyListFilterData = {
   address_jurisdiction_prefixes: string[];
   street_types: string[];
   address_component_terms: string[];
+  ambiguous_street_type_terms: string[];
   first_names: string[];
   generic_roles: string[];
   number_abbrev_prefixes: string[];
@@ -1391,6 +1392,7 @@ const toNativeDenyListFilters = (
   address_jurisdiction_prefixes: filters.addressJurisdictionPrefixes,
   street_types: filters.streetTypes,
   address_component_terms: filters.addressComponentTerms,
+  ambiguous_street_type_terms: filters.ambiguousStreetTypeTerms,
   first_names: filters.firstNames,
   generic_roles: filters.genericRoles,
   number_abbrev_prefixes: filters.numberAbbrevPrefixes,

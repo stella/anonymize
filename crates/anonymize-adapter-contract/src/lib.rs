@@ -356,6 +356,8 @@ pub struct BindingDenyListFilterData {
   pub street_types: Vec<String>,
   #[serde(default)]
   pub address_component_terms: Vec<String>,
+  #[serde(default)]
+  pub ambiguous_street_type_terms: Vec<String>,
   pub first_names: Vec<String>,
   pub generic_roles: Vec<String>,
   #[serde(default)]
@@ -1697,6 +1699,7 @@ fn deny_list_filters_from_binding(
     ),
     street_types: lower_set(filters.street_types),
     address_component_terms: lower_set(filters.address_component_terms),
+    ambiguous_street_type_terms: lower_set(filters.ambiguous_street_type_terms),
     first_names: lower_set(filters.first_names),
     generic_roles: lower_set(filters.generic_roles),
     number_abbrev_prefixes: lower_set(filters.number_abbrev_prefixes),
