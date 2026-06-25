@@ -13,7 +13,9 @@ const BR_CEP_CONTEXT_WINDOW: usize = 200;
 const PLAIN_POSTAL_CONTEXT_WINDOW: usize = 120;
 const US_ZIP_CONTEXT_WINDOW: usize = 120;
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(
+  Clone, Debug, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize,
+)]
 pub struct AddressSeedData {
   pub boundary_words: Vec<String>,
   pub br_cep_cue_words: Vec<String>,

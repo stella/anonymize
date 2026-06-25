@@ -9,7 +9,9 @@ use crate::types::Result;
 const DATE_LABEL: &str = "date";
 const DATE_SCORE: f64 = 1.0;
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(
+  Clone, Debug, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize,
+)]
 pub struct DateData {
   pub month_names_by_language: BTreeMap<String, Vec<String>>,
   pub year_words_by_language: BTreeMap<String, Vec<String>>,

@@ -10,7 +10,9 @@ const HEAD_TOKEN_CAP: usize = 20;
 const MAX_LOWER_BRIDGE: usize = 4;
 const MAX_NAME_LOOKBACK: usize = 32;
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(
+  Clone, Debug, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize,
+)]
 pub struct LegalFormData {
   pub suffixes: Vec<String>,
   pub normalized_boundary_suffixes: Vec<String>,

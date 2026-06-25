@@ -6,7 +6,7 @@ use crate::types::{Error, Result, SearchEngine, SearchMatch};
 const SEARCH_INDEX_ARTIFACTS_HEADER: [u8; 8] = *b"ANONIDX1";
 const SEARCH_INDEX_ARTIFACTS_VERSION: u32 = 1;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum SearchPattern {
   Literal(String),
   LiteralWithOptions {
@@ -28,25 +28,56 @@ pub enum SearchPattern {
   },
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(
+  Clone,
+  Copy,
+  Debug,
+  Default,
+  Eq,
+  PartialEq,
+  serde::Deserialize,
+  serde::Serialize,
+)]
 pub struct SearchOptions {
   pub literal: LiteralSearchOptions,
   pub regex: RegexSearchOptions,
   pub fuzzy: FuzzySearchOptions,
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(
+  Clone,
+  Copy,
+  Debug,
+  Default,
+  Eq,
+  Ord,
+  PartialEq,
+  PartialOrd,
+  serde::Deserialize,
+  serde::Serialize,
+)]
 pub struct LiteralSearchOptions {
   pub case_insensitive: bool,
   pub whole_words: bool,
 }
 
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(
+  Clone,
+  Copy,
+  Debug,
+  Default,
+  Eq,
+  PartialEq,
+  serde::Deserialize,
+  serde::Serialize,
+)]
 pub struct RegexSearchOptions {
   pub whole_words: bool,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(
+  Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize,
+)]
 pub struct FuzzySearchOptions {
   pub case_insensitive: bool,
   pub whole_words: bool,
@@ -201,11 +232,39 @@ impl SearchIndex {
     options: SearchOptions,
     artifacts: &SearchIndexArtifacts,
   ) -> Result<Self> {
+    if patterns.is_empty() && !artifacts.slots.is_empty() {
+      return Self::new_all_literal_with_artifacts(options, artifacts);
+    }
+
     let parts = partition_patterns(patterns)?;
     let mut cursor = SearchIndexArtifactCursor::new(&artifacts.slots);
     let search = build_search_index(parts, options, Some(&mut cursor))?;
     cursor.finish()?;
     Ok(search)
+  }
+
+  fn new_all_literal_with_artifacts(
+    options: SearchOptions,
+    artifacts: &SearchIndexArtifacts,
+  ) -> Result<Self> {
+    let mut cursor = SearchIndexArtifactCursor::new(&artifacts.slots);
+    let slot_artifacts = cursor.next()?;
+    let search = text_search::TextSearch::with_prepared_all_literal_artifacts(
+      literal_options(options.literal),
+      slot_artifacts,
+    )
+    .map_err(|error| search_error(&error))?;
+    cursor.finish()?;
+    let pattern_indexes = (0..search.len())
+      .map(pattern_index)
+      .collect::<Result<Vec<_>>>()?;
+    Ok(Self {
+      slots: vec![SearchSlot {
+        engine: SlotEngine::Literal,
+        search,
+        pattern_indexes,
+      }],
+    })
   }
 
   pub fn find_iter(&self, haystack: &str) -> Result<Vec<SearchMatch>> {
@@ -260,6 +319,23 @@ impl SearchIndex {
     }
 
     Ok(false)
+  }
+
+  #[must_use]
+  pub fn len(&self) -> usize {
+    self
+      .slots
+      .iter()
+      .map(|slot| slot.pattern_indexes.len())
+      .fold(0usize, usize::saturating_add)
+  }
+
+  #[must_use]
+  pub fn is_empty(&self) -> bool {
+    self
+      .slots
+      .iter()
+      .all(|slot| slot.pattern_indexes.is_empty())
   }
 }
 

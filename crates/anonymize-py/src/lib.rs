@@ -5,9 +5,10 @@ use stella_anonymize_adapter_contract::{
   BindingOperatorConfig, BindingOperatorEntry, BindingPipelineEntity,
   BindingPreparedSearchConfig, BindingRedactionEntry, BindingRedactionResult,
   BindingStaticRedactionResult, ContractError, operator_config_from_binding,
-  prepared_search_config_from_binding, prepared_search_package_from_bytes,
-  prepared_search_package_to_bytes,
-  prepared_search_package_to_compressed_bytes,
+  prepared_search_config_from_binding, prepared_search_core_package_to_bytes,
+  prepared_search_core_package_to_compressed_bytes,
+  prepared_search_core_package_view_from_bytes,
+  prepared_search_package_from_bytes, prepared_search_package_has_core_payload,
   static_redaction_diagnostic_result_to_binding,
   static_redaction_diagnostics_to_binding, static_redaction_result_to_binding,
 };
@@ -96,6 +97,23 @@ impl PyPreparedSearch {
 
   #[staticmethod]
   fn from_prepared_package_bytes(package_bytes: &[u8]) -> PyResult<Self> {
+    if prepared_search_package_has_core_payload(package_bytes) {
+      let package = prepared_search_core_package_view_from_bytes(package_bytes)
+        .map_err(|error| to_py_contract_error(&error))?;
+      let artifacts =
+        PreparedSearchArtifacts::from_bytes(package.artifacts.as_ref())
+          .map_err(|error| to_py_core_error(&error))?;
+      let result = CorePreparedSearch::new_with_artifacts_diagnostics(
+        package.config,
+        &artifacts,
+      )
+      .map_err(|error| to_py_core_error(&error))?;
+      return Ok(Self {
+        inner: result.prepared,
+        prepare_diagnostics: result.diagnostics,
+      });
+    }
+
     let package = prepared_search_package_from_bytes(package_bytes)
       .map_err(|error| to_py_contract_error(&error))?;
     let config = prepared_search_config_from_binding(package.config)
@@ -214,15 +232,15 @@ fn prepare_static_search_package_bytes_with<'py>(
   compressed: bool,
 ) -> PyResult<Bound<'py, PyBytes>> {
   let binding_config = parse_prepared_search_config(config_json)?;
-  let core_config = prepared_search_config_from_binding(binding_config.clone())
+  let core_config = prepared_search_config_from_binding(binding_config)
     .map_err(|error| to_py_contract_error(&error))?;
-  let artifacts = CorePreparedSearch::prepare_artifacts(core_config)
+  let artifacts = CorePreparedSearch::prepare_artifacts(core_config.clone())
     .and_then(|artifacts| artifacts.to_bytes())
     .map_err(|error| to_py_core_error(&error))?;
   let package = if compressed {
-    prepared_search_package_to_compressed_bytes(&binding_config, &artifacts)
+    prepared_search_core_package_to_compressed_bytes(&core_config, &artifacts)
   } else {
-    prepared_search_package_to_bytes(&binding_config, &artifacts)
+    prepared_search_core_package_to_bytes(&core_config, &artifacts)
   };
   let bytes = package.map_err(|error| to_py_contract_error(&error))?;
   Ok(PyBytes::new(py, &bytes))
