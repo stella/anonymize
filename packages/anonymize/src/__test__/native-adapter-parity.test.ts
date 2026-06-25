@@ -857,7 +857,7 @@ describe("native adapter parity", () => {
       enableCoreference: false,
       enableHotwordRules: false,
       enableZoneClassification: false,
-      labels: [...DEFAULT_ENTITY_LABELS, "matter id"],
+      labels: ["organization", "date", "person", "matter id"],
       workspaceId: "native-pipeline-static-test",
     };
     const gazetteerEntries = [
@@ -933,7 +933,7 @@ describe("native adapter parity", () => {
         },
         { pattern: "\\bNEAR-\\d+\\b", label: "matter id", score: 0.45 },
       ],
-      labels: [...DEFAULT_ENTITY_LABELS, "matter id"],
+      labels: ["registration number", "matter id"],
       workspaceId: "native-pipeline-confidence-boost-test",
     };
 
@@ -966,6 +966,72 @@ describe("native adapter parity", () => {
     const tsRedaction = redactText(fullText, tsEntities, operators, tsContext);
 
     expect(tsEntities.some(({ text }) => text === "NEAR-456")).toBe(true);
+    expect(
+      toBindingStaticResult(nativePipeline.redactText(fullText, operators)),
+    ).toEqual({
+      resolved_entities: tsEntities.map(toBindingEntity),
+      redaction: toBindingRedactionResult(tsRedaction),
+    });
+  });
+
+  test("native pipeline package matches trigger-only legal suffix reclassification", async () => {
+    const adapters = getAdapters();
+    const fullText = "jednatelem Novák Partners s.r.o. na základě plné moci.";
+    const config: PipelineConfig = {
+      threshold: 0.3,
+      enableTriggerPhrases: true,
+      enableRegex: false,
+      enableLegalForms: false,
+      enableNameCorpus: false,
+      enableDenyList: false,
+      enableGazetteer: false,
+      enableCountries: false,
+      enableNer: false,
+      enableConfidenceBoost: false,
+      enableCoreference: false,
+      enableHotwordRules: false,
+      enableZoneClassification: false,
+      labels: ["organization"],
+      workspaceId: "native-pipeline-trigger-suffix-test",
+    };
+
+    expect(getNativePipelineCompatibility(config)).toEqual({
+      status: "supported",
+    });
+
+    const context = createPipelineContext();
+    const packageBytes = await prepareNativePipelinePackage({
+      binding: adapters.native,
+      config,
+      context,
+      compressed: true,
+    });
+    const nativePipeline = createNativePipelineFromPackage({
+      binding: adapters.native,
+      packageBytes,
+    });
+    const tsContext = createPipelineContext();
+    const operators: OperatorConfig & NativeOperatorConfig = {
+      operators: {},
+      redactString: "[REDACTED]",
+    };
+    const tsEntities = await runPipeline({
+      fullText,
+      config,
+      gazetteerEntries: [],
+      context: tsContext,
+    });
+    const tsRedaction = redactText(fullText, tsEntities, operators, tsContext);
+
+    expect(tsEntities).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "organization",
+          text: expect.stringContaining("s.r.o."),
+          source: "trigger",
+        }),
+      ]),
+    );
     expect(
       toBindingStaticResult(nativePipeline.redactText(fullText, operators)),
     ).toEqual({
@@ -1064,7 +1130,32 @@ describe("native adapter parity", () => {
         "enableNameCorpus",
         "enableCoreference",
         "enableZoneClassification",
+        "addressContextPasses",
       ],
+    });
+  });
+
+  test("native pipeline compatibility rejects address context passes", () => {
+    const config: PipelineConfig = {
+      threshold: 0.85,
+      enableTriggerPhrases: false,
+      enableRegex: true,
+      enableLegalForms: false,
+      enableNameCorpus: false,
+      enableDenyList: false,
+      enableGazetteer: false,
+      enableNer: false,
+      enableConfidenceBoost: false,
+      enableCoreference: false,
+      enableHotwordRules: false,
+      enableZoneClassification: false,
+      labels: ["address"],
+      workspaceId: "native-pipeline-address-context-test",
+    };
+
+    expect(getNativePipelineCompatibility(config)).toEqual({
+      status: "unsupported",
+      unsupportedFeatures: ["addressContextPasses"],
     });
   });
 

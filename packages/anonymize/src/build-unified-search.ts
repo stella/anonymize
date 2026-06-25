@@ -464,17 +464,21 @@ const buildUnifiedSearchSources = async (
   const nativeLegalFormPatterns = legalFormsEnabled
     ? [...getKnownLegalSuffixes()]
     : [];
+  const nativeLegalFormSuffixes =
+    legalFormsEnabled || config.enableTriggerPhrases
+      ? [...getKnownLegalSuffixes()]
+      : [];
   const nativeLegalFormData =
-    nativeLegalFormPatterns.length > 0
+    nativeLegalFormSuffixes.length > 0
       ? {
-          suffixes: nativeLegalFormPatterns,
+          suffixes: nativeLegalFormSuffixes,
           normalized_boundary_suffixes: [
             ...getNormalizedLegalBoundarySuffixesSync(),
           ],
           normalized_in_name_words: [
             ...getNormalizedInNameLegalFormWordsSync(),
           ],
-          normalized_suffix_words: nativeLegalFormPatterns
+          normalized_suffix_words: nativeLegalFormSuffixes
             .map((suffix) => suffix.replaceAll(/[.,\s]/g, "").toLowerCase())
             .filter((suffix) => suffix.length > 0),
           role_heads: [...getLegalRoleHeadsSync()],
