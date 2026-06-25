@@ -66,6 +66,16 @@ fn clean_entity_text(
     break;
   }
 
+  trim_leading_date_artifacts(entity, raw_text, &mut start_byte, end_byte);
+
+  while let Some((ch, len)) = first_char(raw_text.get(start_byte..end_byte)?) {
+    if ch.is_whitespace() {
+      start_byte = start_byte.saturating_add(len);
+      continue;
+    }
+    break;
+  }
+
   while let Some((ch, len)) = last_char(raw_text.get(start_byte..end_byte)?) {
     if ch.is_whitespace() || is_trailing_trim(ch, &entity.label) {
       end_byte = end_byte.saturating_sub(len);
@@ -135,6 +145,45 @@ fn is_leading_trim(ch: char, label: &str) -> bool {
       ',' | ';' | ':' | '"' | '\'' | '“' | '”' | '‘' | '’' | '«' | '¿' | '¡'
     )
   }
+}
+
+fn trim_leading_date_artifacts(
+  entity: &PipelineEntity,
+  raw_text: &str,
+  start_byte: &mut usize,
+  end_byte: usize,
+) {
+  if !matches!(entity.label.as_str(), "date" | "date of birth") {
+    return;
+  }
+
+  let Some(text) = raw_text.get(*start_byte..end_byte) else {
+    return;
+  };
+  let dot_len = leading_dot_run_len(text);
+  if dot_len == 0 {
+    return;
+  }
+
+  let should_trim = dot_len >= 2
+    || text
+      .get(dot_len..)
+      .and_then(|suffix| suffix.chars().next())
+      .is_some_and(char::is_whitespace);
+  if should_trim {
+    *start_byte = (*start_byte).saturating_add(dot_len);
+  }
+}
+
+fn leading_dot_run_len(text: &str) -> usize {
+  let mut len = 0usize;
+  for ch in text.chars() {
+    if ch != '.' {
+      break;
+    }
+    len = len.saturating_add(ch.len_utf8());
+  }
+  len
 }
 
 fn is_trailing_trim(ch: char, label: &str) -> bool {
