@@ -13,6 +13,11 @@
       "types": "./dist/constants.d.mts",
       "import": "./dist/constants.mjs",
       "default": "./dist/constants.mjs"
+    },
+    "./native": {
+      "types": "./dist/native.d.mts",
+      "import": "./dist/native.mjs",
+      "default": "./dist/native.mjs"
     }
   },
   "types": "dist/index.d.mts",
