@@ -6,11 +6,12 @@ use stella_anonymize_core::{
   AddressSeedData, AmountWordsData, CountryMatchData, CurrencyData, DateData,
   DenyListFilterData, DenyListMatchData, DetectionSource, DiagnosticEvent,
   DiagnosticEventKind, DiagnosticStage, FuzzySearchOptions, GazetteerMatchData,
-  LegalFormData, LiteralSearchOptions, MagnitudeSuffixData, MonetaryData,
-  OperatorConfig, OperatorType, PatternSlice, PreparedSearchConfig,
-  PreparedSearchSlices, RegexMatchMeta, RegexSearchOptions, SearchEngine,
-  SearchOptions, SearchPattern, ShareQuantityTermData, SigningPlaceGuardData,
-  SourceDetail, StaticRedactionDiagnosticResult, StaticRedactionDiagnostics,
+  HotwordRule, HotwordRuleData, LegalFormData, LiteralSearchOptions,
+  MagnitudeSuffixData, MonetaryData, OperatorConfig, OperatorType,
+  PatternSlice, PreparedSearchConfig, PreparedSearchSlices, RegexMatchMeta,
+  RegexSearchOptions, SearchEngine, SearchOptions, SearchPattern,
+  ShareQuantityTermData, SigningPlaceGuardData, SourceDetail,
+  StaticRedactionDiagnosticResult, StaticRedactionDiagnostics,
   StaticRedactionResult, StringGroups, TriggerData, TriggerRule,
   TriggerStrategy, TriggerValidation, WrittenAmountPatternData,
 };
@@ -18,13 +19,13 @@ use stella_anonymize_core::{
 pub type Result<T> = std::result::Result<T, ContractError>;
 
 const PREPARED_SEARCH_PACKAGE_HEADER: [u8; 8] = *b"ANONPKG1";
-const PREPARED_SEARCH_PACKAGE_VERSION: u32 = 5;
+const PREPARED_SEARCH_PACKAGE_VERSION: u32 = 6;
 const PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER: [u8; 8] = *b"ANONPKZ1";
-const PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION: u32 = 3;
+const PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION: u32 = 4;
 const PREPARED_SEARCH_CORE_PACKAGE_HEADER: [u8; 8] = *b"ANONCPK1";
-const PREPARED_SEARCH_CORE_PACKAGE_VERSION: u32 = 4;
+const PREPARED_SEARCH_CORE_PACKAGE_VERSION: u32 = 5;
 const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_HEADER: [u8; 8] = *b"ANONCPZ1";
-const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION: u32 = 4;
+const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION: u32 = 5;
 const PREPARED_SEARCH_PACKAGE_DIGEST_BYTES: usize = 32;
 const PREPARED_SEARCH_PACKAGE_ZSTD_LEVEL: i32 = 3;
 const MAX_PREPARED_SEARCH_PACKAGE_PAYLOAD_BYTES: usize = 256 * 1024 * 1024;
@@ -131,6 +132,7 @@ pub struct BindingPreparedSearchSlices {
   pub street_types: Option<BindingPatternSlice>,
   pub gazetteer: Option<BindingPatternSlice>,
   pub countries: Option<BindingPatternSlice>,
+  pub hotwords: Option<BindingPatternSlice>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
@@ -153,6 +155,24 @@ pub struct BindingGazetteerMatchData {
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct BindingCountryMatchData {
   pub labels: Vec<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
+pub struct BindingHotwordRuleData {
+  #[serde(default)]
+  pub rules: Vec<BindingHotwordRule>,
+  #[serde(default)]
+  pub pattern_rule_indices: Vec<u32>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
+pub struct BindingHotwordRule {
+  #[serde(default)]
+  pub target_labels: Vec<String>,
+  pub score_adjustment: f64,
+  pub reclassify_to: Option<String>,
+  pub proximity_before: u32,
+  pub proximity_after: u32,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -417,6 +437,8 @@ pub struct BindingPreparedSearchConfig {
   #[serde(default)]
   pub country_data: Option<BindingCountryMatchData>,
   #[serde(default)]
+  pub hotword_data: Option<BindingHotwordRuleData>,
+  #[serde(default)]
   pub trigger_data: Option<BindingTriggerData>,
   #[serde(default)]
   pub legal_form_data: Option<BindingLegalFormData>,
@@ -476,6 +498,7 @@ struct BinaryPreparedSearchConfig {
   deny_list_data: Option<BindingDenyListMatchData>,
   gazetteer_data: Option<BindingGazetteerMatchData>,
   country_data: Option<BindingCountryMatchData>,
+  hotword_data: Option<BindingHotwordRuleData>,
   trigger_data: Option<BinaryTriggerData>,
   legal_form_data: Option<BindingLegalFormData>,
   address_seed_data: Option<BindingAddressSeedData>,
@@ -675,6 +698,7 @@ impl From<BindingPreparedSearchConfig> for BinaryPreparedSearchConfig {
       deny_list_data: config.deny_list_data,
       gazetteer_data: config.gazetteer_data,
       country_data: config.country_data,
+      hotword_data: config.hotword_data,
       trigger_data: config.trigger_data.map(BinaryTriggerData::from),
       legal_form_data: config.legal_form_data,
       address_seed_data: config.address_seed_data,
@@ -704,6 +728,7 @@ impl From<BinaryPreparedSearchConfig> for BindingPreparedSearchConfig {
       deny_list_data: config.deny_list_data,
       gazetteer_data: config.gazetteer_data,
       country_data: config.country_data,
+      hotword_data: config.hotword_data,
       trigger_data: config.trigger_data.map(BindingTriggerData::from),
       legal_form_data: config.legal_form_data,
       address_seed_data: config.address_seed_data,
@@ -1148,6 +1173,7 @@ pub fn prepared_search_config_from_binding(
     country_data: config.country_data.map(|data| CountryMatchData {
       labels: data.labels,
     }),
+    hotword_data: config.hotword_data.map(hotword_data_from_binding),
     trigger_data: config
       .trigger_data
       .map(|data| trigger_data_from_binding(data, legal_form_suffixes)),
@@ -1471,6 +1497,23 @@ fn monetary_data_from_binding(data: BindingMonetaryData) -> MonetaryData {
         })
         .collect(),
     },
+  }
+}
+
+fn hotword_data_from_binding(data: BindingHotwordRuleData) -> HotwordRuleData {
+  HotwordRuleData {
+    rules: data
+      .rules
+      .into_iter()
+      .map(|rule| HotwordRule {
+        target_labels: rule.target_labels,
+        score_adjustment: rule.score_adjustment,
+        reclassify_to: rule.reclassify_to,
+        proximity_before: rule.proximity_before,
+        proximity_after: rule.proximity_after,
+      })
+      .collect(),
+    pattern_rule_indices: data.pattern_rule_indices,
   }
 }
 
@@ -1932,6 +1975,7 @@ fn slices_from_binding(
     street_types: slice_from_binding(slices.street_types),
     gazetteer: slice_from_binding(slices.gazetteer),
     countries: slice_from_binding(slices.countries),
+    hotwords: slice_from_binding(slices.hotwords),
   }
 }
 

@@ -65,7 +65,11 @@ import {
 } from "./detectors/address-seeds";
 import { buildGazetteerPatterns } from "./detectors/gazetteer";
 import { buildCountryPatterns, type CountryData } from "./detectors/countries";
-import { expandLabelsForHotwordRules } from "./filters/hotword-rules";
+import {
+  expandLabelsForHotwordRuleSet,
+  loadHotwordRuleSet,
+  type HotwordRule,
+} from "./filters/hotword-rules";
 import {
   getClauseNounHeadsSync,
   getConnectorProseHeadsSync,
@@ -227,6 +231,19 @@ export type NativeGazetteerData = {
   is_fuzzy: boolean[];
 };
 
+export type NativeHotwordRule = {
+  target_labels: string[];
+  score_adjustment: number;
+  reclassify_to?: string;
+  proximity_before: number;
+  proximity_after: number;
+};
+
+export type NativeHotwordRuleData = {
+  rules: NativeHotwordRule[];
+  pattern_rule_indices: number[];
+};
+
 export type NativePreparedSearchConfig = {
   regex_patterns: NativeSearchPattern[];
   custom_regex_patterns: NativeSearchPattern[];
@@ -247,12 +264,14 @@ export type NativePreparedSearchConfig = {
     street_types?: PatternSlice;
     gazetteer: PatternSlice;
     countries: PatternSlice;
+    hotwords?: PatternSlice;
   };
   regex_meta: NativeRegexMatchMeta[];
   custom_regex_meta: NativeRegexMatchMeta[];
   deny_list_data?: NativeDenyListMatchData;
   gazetteer_data?: NativeGazetteerData;
   country_data?: CountryData;
+  hotword_data?: NativeHotwordRuleData;
   trigger_data?: NativeTriggerData;
   legal_form_data?: NativeLegalFormData;
   address_seed_data?: NativeAddressSeedData;
@@ -339,6 +358,7 @@ type UnifiedSearchSources = {
   nativeAddressSeedData: NativeAddressSeedData | null;
   nativeSigningPatterns: readonly string[];
   partyPositionTerms: string[];
+  hotwordRules: readonly HotwordRule[];
   nativeCurrencyPatternRange: PatternSlice;
   nativeDatePatternRange: PatternSlice;
   nativeSigningPatternRange: PatternSlice;
@@ -366,9 +386,11 @@ const buildUnifiedSearchSources = async (
 ): Promise<UnifiedSearchSources> => {
   config = applyPipelineLanguageScope(config);
   const legalFormsEnabled = isLegalFormsEnabled(config);
+  const hotwordRules =
+    config.enableHotwordRules === true ? await loadHotwordRuleSet() : [];
   const searchLabels =
     config.enableHotwordRules === true
-      ? expandLabelsForHotwordRules(config.labels)
+      ? expandLabelsForHotwordRuleSet(config.labels, hotwordRules)
       : config.labels;
   const allowedLabels = createAllowedLabelSet(searchLabels);
   const customRegexes = config.enableRegex
@@ -683,6 +705,7 @@ const buildUnifiedSearchSources = async (
     nativeAddressSeedData: addressSeedData,
     nativeSigningPatterns,
     partyPositionTerms,
+    hotwordRules,
     nativeCurrencyPatternRange,
     nativeDatePatternRange,
     nativeSigningPatternRange,
@@ -731,6 +754,7 @@ export const buildNativeStaticSearchBundle = async (
       addressSeedData: sources.nativeAddressSeedData,
       nativeSigningPatterns: sources.nativeSigningPatterns,
       partyPositionTerms: sources.partyPositionTerms,
+      hotwordRules: sources.hotwordRules,
       streetTypes: sources.streetTypes,
       omitRegexRanges: [
         sources.nativeCurrencyPatternRange,
@@ -813,6 +837,7 @@ export const buildUnifiedSearch = async (
     addressSeedData: sources.nativeAddressSeedData,
     nativeSigningPatterns: sources.nativeSigningPatterns,
     partyPositionTerms: sources.partyPositionTerms,
+    hotwordRules: sources.hotwordRules,
     streetTypes: sources.streetTypes,
     omitRegexRanges: [
       sources.nativeCurrencyPatternRange,
@@ -860,6 +885,7 @@ type BuildNativeStaticConfigArgs = {
   addressSeedData: NativeAddressSeedData | null;
   nativeSigningPatterns: readonly string[];
   partyPositionTerms: readonly string[];
+  hotwordRules: readonly HotwordRule[];
   omitRegexRanges?: readonly PatternSlice[];
   streetTypes: readonly string[];
   gazetteerPatterns: readonly PatternEntry[];
@@ -888,6 +914,7 @@ const buildNativeStaticConfig = ({
   addressSeedData,
   nativeSigningPatterns,
   partyPositionTerms,
+  hotwordRules,
   omitRegexRanges,
   streetTypes,
   gazetteerPatterns,
@@ -960,6 +987,14 @@ const buildNativeStaticConfig = ({
       ? toNativeGlobalLiteralPattern(patternEntryText(pattern))
       : toNativeLiteralPattern(pattern),
   );
+  const nativeHotwordPatterns: NativeSearchPattern[] = [];
+  const nativeHotwordPatternRuleIndices: number[] = [];
+  for (const [ruleIndex, rule] of hotwordRules.entries()) {
+    for (const hotword of rule.hotwords) {
+      nativeHotwordPatterns.push(toNativeHotwordPattern(hotword));
+      nativeHotwordPatternRuleIndices.push(ruleIndex);
+    }
+  }
 
   let literalOffset = 0;
   const denyListPatternCount = denyListPatternsFromData
@@ -984,6 +1019,11 @@ const buildNativeStaticConfig = ({
     start: literalOffset,
     end: literalOffset + countryNativePatterns.length,
   };
+  literalOffset = countriesSlice.end;
+  const hotwordsSlice = {
+    start: literalOffset,
+    end: literalOffset + nativeHotwordPatterns.length,
+  };
 
   const nativeConfig: NativePreparedSearchConfig = {
     regex_patterns: nativeRegexPatterns,
@@ -993,6 +1033,7 @@ const buildNativeStaticConfig = ({
       ...streetTypeNativePatterns,
       ...gazetteerNativePatterns,
       ...countryNativePatterns,
+      ...nativeHotwordPatterns,
     ],
     regex_options: {
       literal_case_insensitive: true,
@@ -1032,6 +1073,7 @@ const buildNativeStaticConfig = ({
       street_types: streetTypesSlice,
       gazetteer: gazetteerSlice,
       countries: countriesSlice,
+      hotwords: hotwordsSlice,
     },
     regex_meta: nativeRegexMeta,
     custom_regex_meta: nativeCustomRegexMeta,
@@ -1048,6 +1090,12 @@ const buildNativeStaticConfig = ({
   }
   if (countryData) {
     nativeConfig.country_data = countryData;
+  }
+  if (hotwordRules.length > 0) {
+    nativeConfig.hotword_data = {
+      rules: hotwordRules.map(toNativeHotwordRule),
+      pattern_rule_indices: nativeHotwordPatternRuleIndices,
+    };
   }
   if (triggerRules.length > 0) {
     nativeConfig.trigger_data = {
@@ -1088,6 +1136,26 @@ const toNativeTriggerPattern = (pattern: string): NativeSearchPattern => ({
   pattern,
   case_insensitive: true,
 });
+
+const toNativeHotwordPattern = (pattern: string): NativeSearchPattern => ({
+  kind: "literal-with-options",
+  pattern,
+  case_insensitive: true,
+  whole_words: true,
+});
+
+const toNativeHotwordRule = (rule: HotwordRule): NativeHotwordRule => {
+  const result: NativeHotwordRule = {
+    target_labels: [...rule.targetLabels],
+    score_adjustment: rule.scoreAdjustment,
+    proximity_before: rule.proximityBefore,
+    proximity_after: rule.proximityAfter,
+  };
+  if (rule.reclassifyTo !== undefined) {
+    result.reclassify_to = rule.reclassifyTo;
+  }
+  return result;
+};
 
 const toNativeTriggerRule = (rule: TriggerRule): NativeTriggerRule => ({
   trigger: rule.trigger,

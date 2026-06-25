@@ -5,6 +5,7 @@ use crate::artifact_bytes::{ArtifactReader, ArtifactWriter};
 use crate::dates::{DateData, PreparedDateData};
 use crate::diagnostics::{DiagnosticStage, StaticRedactionDiagnostics};
 use crate::false_positives::filter_entity_false_positives;
+use crate::hotwords::{HotwordRuleData, apply_hotword_rules};
 use crate::legal_forms::{
   LegalFormData, PreparedLegalFormData, process_legal_form_matches,
 };
@@ -57,6 +58,7 @@ pub struct PreparedSearch {
   deny_list_data: Option<DenyListMatchData>,
   gazetteer_data: Option<GazetteerMatchData>,
   country_data: Option<CountryMatchData>,
+  hotword_data: Option<HotwordRuleData>,
   trigger_data: Option<PreparedTriggerData>,
   legal_form_data: Option<PreparedLegalFormData>,
   address_seed_data: Option<PreparedAddressSeedData>,
@@ -76,6 +78,7 @@ pub struct PreparedSearchSlices {
   pub street_types: PatternSlice,
   pub gazetteer: PatternSlice,
   pub countries: PatternSlice,
+  pub hotwords: PatternSlice,
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
@@ -98,6 +101,8 @@ pub struct PreparedSearchConfig {
   pub deny_list_data: Option<DenyListMatchData>,
   pub gazetteer_data: Option<GazetteerMatchData>,
   pub country_data: Option<CountryMatchData>,
+  #[serde(default)]
+  pub hotword_data: Option<HotwordRuleData>,
   pub trigger_data: Option<TriggerData>,
   pub legal_form_data: Option<LegalFormData>,
   pub address_seed_data: Option<AddressSeedData>,
@@ -428,6 +433,7 @@ impl PreparedSearch {
       deny_list_data: config.deny_list_data,
       gazetteer_data: config.gazetteer_data,
       country_data: config.country_data,
+      hotword_data: config.hotword_data,
       trigger_data: config
         .trigger_data
         .map(PreparedTriggerData::new)
@@ -828,8 +834,13 @@ impl PreparedSearch {
   ) -> Result<StaticRedactionResult> {
     let detections = self
       .detect_static_entities_inner(full_text, diagnostics.as_deref_mut())?;
-    let raw_entities = filter_entities_for_redaction(
+    let pre_threshold_entities = self.apply_hotword_entities(
       detections.all_entities(),
+      full_text,
+      &detections.matches.literal,
+    )?;
+    let raw_entities = filter_entities_for_redaction(
+      pre_threshold_entities,
       self.threshold,
       self.confidence_boost,
       &self.allowed_labels,
@@ -896,6 +907,25 @@ impl PreparedSearch {
       resolved_entities,
       redaction,
     })
+  }
+
+  fn apply_hotword_entities(
+    &self,
+    entities: Vec<PipelineEntity>,
+    full_text: &str,
+    literal_matches: &[SearchMatch],
+  ) -> Result<Vec<PipelineEntity>> {
+    let Some(data) = &self.hotword_data else {
+      return Ok(entities);
+    };
+    apply_hotword_rules(
+      entities,
+      full_text,
+      literal_matches,
+      self.slices.hotwords,
+      data,
+      &self.allowed_labels,
+    )
   }
 }
 
@@ -1420,6 +1450,7 @@ fn validate_supported_config(
   validate_deny_list_config(config)?;
   validate_gazetteer_config(config)?;
   validate_country_config(config)?;
+  validate_hotword_config(config)?;
   validate_address_seed_config(config)
 }
 
@@ -1466,6 +1497,11 @@ fn validate_search_config(
     validate_slice_bounds(
       "slices.countries",
       config.slices.countries,
+      config.literal_patterns.len(),
+    )?;
+    validate_slice_bounds(
+      "slices.hotwords",
+      config.slices.hotwords,
       config.literal_patterns.len(),
     )?;
   }
@@ -1596,6 +1632,41 @@ fn validate_country_config(config: &PreparedSearchConfig) -> Result<()> {
     config.slices.countries,
     data.labels.len(),
   )
+}
+
+fn validate_hotword_config(config: &PreparedSearchConfig) -> Result<()> {
+  if config.slices.hotwords.is_empty() {
+    return Ok(());
+  }
+
+  let Some(data) = &config.hotword_data else {
+    return Err(Error::MissingStaticData {
+      field: "hotword_data",
+    });
+  };
+
+  validate_static_data_length(
+    "hotword_data.pattern_rule_indices",
+    config.slices.hotwords,
+    data.pattern_rule_indices.len(),
+  )?;
+
+  for rule_index in &data.pattern_rule_indices {
+    let Ok(rule_index) = usize::try_from(*rule_index) else {
+      return Err(Error::InvalidStaticData {
+        field: "hotword_data.pattern_rule_indices",
+        reason: String::from("rule index exceeds usize range"),
+      });
+    };
+    if rule_index >= data.rules.len() {
+      return Err(Error::InvalidStaticData {
+        field: "hotword_data.pattern_rule_indices",
+        reason: String::from("rule index out of range"),
+      });
+    }
+  }
+
+  Ok(())
 }
 
 const fn validate_address_seed_config(
