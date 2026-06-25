@@ -42,6 +42,8 @@ pub struct PreparedSearch {
   legal_forms: SearchIndex,
   triggers: SearchIndex,
   literals: SearchIndex,
+  allowed_labels: Vec<String>,
+  threshold: f64,
   slices: PreparedSearchSlices,
   regex_meta: Vec<RegexMatchMeta>,
   custom_regex_meta: Vec<RegexMatchMeta>,
@@ -77,6 +79,10 @@ pub struct PreparedSearchConfig {
   pub regex_options: SearchOptions,
   pub custom_regex_options: SearchOptions,
   pub literal_options: SearchOptions,
+  #[serde(default)]
+  pub allowed_labels: Vec<String>,
+  #[serde(default)]
+  pub threshold: f64,
   pub slices: PreparedSearchSlices,
   pub regex_meta: Vec<RegexMatchMeta>,
   pub custom_regex_meta: Vec<RegexMatchMeta>,
@@ -256,7 +262,7 @@ impl PreparedSearch {
   pub fn prepare_artifacts(
     config: PreparedSearchConfig,
   ) -> Result<PreparedSearchArtifacts> {
-    validate_supported_config(&config)?;
+    validate_supported_config(&config, false)?;
     let regex_groups =
       split_regex_patterns(config.regex_patterns, &config.slices)?;
     Ok(PreparedSearchArtifacts {
@@ -322,8 +328,12 @@ impl PreparedSearch {
     artifacts: Option<&PreparedSearchArtifacts>,
   ) -> Result<Self> {
     let total_start = Instant::now();
-    validate_supported_config(&config)?;
+    let allow_literal_artifacts =
+      artifacts.is_some_and(|artifacts| !artifacts.literals.slots.is_empty());
+    validate_supported_config(&config, allow_literal_artifacts)?;
     let slices = config.slices.clone();
+    let allowed_labels = config.allowed_labels.clone();
+    let threshold = config.threshold;
     let regex_groups = split_regex_patterns(config.regex_patterns, &slices)?;
     let regex_len = regex_groups.regex.len();
     let custom_regex_len = config.custom_regex_patterns.len();
@@ -399,6 +409,8 @@ impl PreparedSearch {
       legal_forms,
       triggers,
       literals,
+      allowed_labels,
+      threshold,
       slices,
       regex_meta: config.regex_meta,
       custom_regex_meta: config.custom_regex_meta,
@@ -804,7 +816,11 @@ impl PreparedSearch {
   ) -> Result<StaticRedactionResult> {
     let detections = self
       .detect_static_entities_inner(full_text, diagnostics.as_deref_mut())?;
-    let raw_entities = detections.all_entities();
+    let raw_entities = filter_entities_for_config(
+      detections.all_entities(),
+      self.threshold,
+      &self.allowed_labels,
+    );
     let merge_start = Instant::now();
     let merged = merge_and_dedup(&raw_entities);
     if let Some(diagnostics) = &mut diagnostics {
@@ -828,14 +844,18 @@ impl PreparedSearch {
     let sanitize_start = Instant::now();
     let sanitized_entities =
       sanitize_entities_with_source(&consistent, full_text)?;
-    let resolved_entities = filter_entity_false_positives(
-      sanitized_entities,
-      full_text,
-      self
-        .deny_list_data
-        .as_ref()
-        .and_then(|data| data.filters.as_ref()),
-    )?;
+    let resolved_entities = filter_entities_for_config(
+      filter_entity_false_positives(
+        sanitized_entities,
+        full_text,
+        self
+          .deny_list_data
+          .as_ref()
+          .and_then(|data| data.filters.as_ref()),
+      )?,
+      self.threshold,
+      &self.allowed_labels,
+    );
     if let Some(diagnostics) = &mut diagnostics {
       diagnostics.record_entities(
         DiagnosticStage::Sanitize,
@@ -872,6 +892,21 @@ fn process_signature_entities(full_text: &str) -> TimedEntities {
     entities: detect_signatures(full_text),
     elapsed_us: elapsed_us(start),
   }
+}
+
+fn filter_entities_for_config(
+  entities: Vec<PipelineEntity>,
+  threshold: f64,
+  allowed_labels: &[String],
+) -> Vec<PipelineEntity> {
+  entities
+    .into_iter()
+    .filter(|entity| entity.score >= threshold)
+    .filter(|entity| {
+      allowed_labels.is_empty()
+        || allowed_labels.iter().any(|label| label == &entity.label)
+    })
+    .collect()
 }
 
 fn record_static_entity_diagnostics(
@@ -1274,13 +1309,101 @@ fn remap_normalized_match(
   Ok(found.with_span(start, end))
 }
 
-fn validate_supported_config(config: &PreparedSearchConfig) -> Result<()> {
+fn validate_supported_config(
+  config: &PreparedSearchConfig,
+  allow_literal_artifacts: bool,
+) -> Result<()> {
+  validate_search_config(config, allow_literal_artifacts)?;
   validate_legal_form_config(config)?;
   validate_trigger_config(config)?;
   validate_deny_list_config(config)?;
   validate_gazetteer_config(config)?;
   validate_country_config(config)?;
   validate_address_seed_config(config)
+}
+
+fn validate_search_config(
+  config: &PreparedSearchConfig,
+  allow_literal_artifacts: bool,
+) -> Result<()> {
+  validate_slice_bounds(
+    "slices.regex",
+    config.slices.regex,
+    config.regex_patterns.len(),
+  )?;
+  validate_slice_bounds(
+    "slices.legal_forms",
+    config.slices.legal_forms,
+    config.regex_patterns.len(),
+  )?;
+  validate_slice_bounds(
+    "slices.triggers",
+    config.slices.triggers,
+    config.regex_patterns.len(),
+  )?;
+  validate_slice_bounds(
+    "slices.custom_regex",
+    config.slices.custom_regex,
+    config.custom_regex_patterns.len(),
+  )?;
+  if !allow_literal_artifacts || !config.literal_patterns.is_empty() {
+    validate_slice_bounds(
+      "slices.deny_list",
+      config.slices.deny_list,
+      config.literal_patterns.len(),
+    )?;
+    validate_slice_bounds(
+      "slices.street_types",
+      config.slices.street_types,
+      config.literal_patterns.len(),
+    )?;
+    validate_slice_bounds(
+      "slices.gazetteer",
+      config.slices.gazetteer,
+      config.literal_patterns.len(),
+    )?;
+    validate_slice_bounds(
+      "slices.countries",
+      config.slices.countries,
+      config.literal_patterns.len(),
+    )?;
+  }
+  validate_static_data_length(
+    "regex_meta",
+    config.slices.regex,
+    config.regex_meta.len(),
+  )?;
+  validate_static_data_length(
+    "custom_regex_meta",
+    config.slices.custom_regex,
+    config.custom_regex_meta.len(),
+  )
+}
+
+fn validate_slice_bounds(
+  field: &'static str,
+  slice: PatternSlice,
+  pattern_count: usize,
+) -> Result<()> {
+  if slice.start > slice.end {
+    return Err(Error::InvalidStaticData {
+      field,
+      reason: "slice start exceeds slice end".to_owned(),
+    });
+  }
+  let Some(end) = usize::try_from(slice.end).ok() else {
+    return Err(Error::InvalidStaticData {
+      field,
+      reason: "slice end exceeds usize range".to_owned(),
+    });
+  };
+  if end <= pattern_count {
+    return Ok(());
+  }
+  Err(Error::InvalidStaticData {
+    field,
+    reason: format!("slice end {end} exceeds pattern count {pattern_count}"),
+  })
 }
 
 fn validate_legal_form_config(config: &PreparedSearchConfig) -> Result<()> {

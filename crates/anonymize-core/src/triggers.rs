@@ -1171,9 +1171,10 @@ fn has_known_legal_form_suffix(text: &str, suffixes: &[String]) -> bool {
 fn person_name_run_end(text: &str) -> Option<usize> {
   let mut end = 0;
   let mut saw_token = false;
-  for token in text.split_whitespace() {
-    let trimmed = token.trim_matches(',');
-    if trimmed.chars().next().is_some_and(char::is_uppercase) {
+  let tokens = text.split_whitespace().collect::<Vec<_>>();
+  for (index, token) in tokens.iter().enumerate() {
+    let trimmed = trim_name_token(token);
+    if is_person_name_run_token(trimmed, saw_token, &tokens, index) {
       let relative = text.get(end..)?.find(token)?;
       end = end.saturating_add(relative).saturating_add(token.len());
       saw_token = true;
@@ -1182,6 +1183,85 @@ fn person_name_run_end(text: &str) -> Option<usize> {
     break;
   }
   saw_token.then_some(end)
+}
+
+fn is_person_name_run_token(
+  token: &str,
+  saw_token: bool,
+  tokens: &[&str],
+  index: usize,
+) -> bool {
+  if is_capitalized_name_token(token) {
+    return true;
+  }
+  if !saw_token {
+    return false;
+  }
+  if is_apostrophe_name_continuation(token) {
+    return true;
+  }
+  is_name_particle(token) && has_name_after_particle(tokens, index)
+}
+
+fn has_name_after_particle(tokens: &[&str], index: usize) -> bool {
+  for token in tokens.iter().skip(index.saturating_add(1)) {
+    let trimmed = trim_name_token(token);
+    if is_capitalized_name_token(trimmed)
+      || is_apostrophe_name_continuation(trimmed)
+    {
+      return true;
+    }
+    if is_name_particle(trimmed) {
+      continue;
+    }
+    return false;
+  }
+  false
+}
+
+fn is_capitalized_name_token(token: &str) -> bool {
+  token.chars().next().is_some_and(char::is_uppercase)
+}
+
+fn is_apostrophe_name_continuation(token: &str) -> bool {
+  token
+    .strip_prefix("d'")
+    .or_else(|| token.strip_prefix("d’"))
+    .is_some_and(is_capitalized_name_token)
+}
+
+fn is_name_particle(token: &str) -> bool {
+  matches!(
+    token,
+    "de"
+      | "del"
+      | "della"
+      | "der"
+      | "den"
+      | "di"
+      | "du"
+      | "da"
+      | "das"
+      | "do"
+      | "dos"
+      | "el"
+      | "la"
+      | "le"
+      | "van"
+      | "von"
+      | "y"
+      | "zu"
+      | "af"
+      | "ben"
+      | "bin"
+      | "al"
+      | "d'"
+      | "d’"
+  )
+}
+
+fn trim_name_token(token: &str) -> &str {
+  token.trim_matches(',')
 }
 
 fn u32_len(text: &str) -> u32 {
