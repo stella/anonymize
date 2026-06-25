@@ -71,6 +71,10 @@ import {
   type HotwordRule,
 } from "./filters/hotword-rules";
 import {
+  getAddressContextData,
+  type AddressContextData,
+} from "./filters/confidence-boost";
+import {
   getClauseNounHeadsSync,
   getConnectorProseHeadsSync,
   getKnownLegalSuffixes,
@@ -226,6 +230,7 @@ export type NativeDateData = {
 
 export type NativeMonetaryData = MonetaryData;
 export type NativeAddressSeedData = AddressSeedData;
+export type NativeAddressContextData = AddressContextData;
 export type NativeGazetteerData = {
   labels: string[];
   is_fuzzy: boolean[];
@@ -275,6 +280,7 @@ export type NativePreparedSearchConfig = {
   trigger_data?: NativeTriggerData;
   legal_form_data?: NativeLegalFormData;
   address_seed_data?: NativeAddressSeedData;
+  address_context_data?: NativeAddressContextData;
   date_data?: NativeDateData;
   monetary_data?: NativeMonetaryData;
 };
@@ -356,6 +362,7 @@ type UnifiedSearchSources = {
   nativeDateData: NativeDateData | null;
   nativeMonetaryData: NativeMonetaryData | null;
   nativeAddressSeedData: NativeAddressSeedData | null;
+  nativeAddressContextData: NativeAddressContextData | null;
   nativeSigningPatterns: readonly string[];
   partyPositionTerms: string[];
   hotwordRules: readonly HotwordRule[];
@@ -416,6 +423,7 @@ const buildUnifiedSearchSources = async (
     yearWordData,
     monetaryData,
     addressSeedData,
+    addressContextData,
   ] = await Promise.all([
     legalFormsEnabled || config.enableTriggerPhrases
       ? warmLegalRoleHeads()
@@ -452,6 +460,9 @@ const buildUnifiedSearchSources = async (
       : Promise.resolve(null),
     labelIsAllowed("address", allowedLabels)
       ? getAddressSeedData()
+      : Promise.resolve(null),
+    labelIsAllowed("address", allowedLabels)
+      ? Promise.resolve(getAddressContextData())
       : Promise.resolve(null),
   ]);
   // Read but never populated: the legal-form slice in the unified
@@ -707,6 +718,7 @@ const buildUnifiedSearchSources = async (
     nativeDateData,
     nativeMonetaryData,
     nativeAddressSeedData: addressSeedData,
+    nativeAddressContextData: addressContextData,
     nativeSigningPatterns,
     partyPositionTerms,
     hotwordRules,
@@ -756,6 +768,7 @@ export const buildNativeStaticSearchBundle = async (
       dateData: sources.nativeDateData,
       monetaryData: sources.nativeMonetaryData,
       addressSeedData: sources.nativeAddressSeedData,
+      addressContextData: sources.nativeAddressContextData,
       nativeSigningPatterns: sources.nativeSigningPatterns,
       partyPositionTerms: sources.partyPositionTerms,
       hotwordRules: sources.hotwordRules,
@@ -839,6 +852,7 @@ export const buildUnifiedSearch = async (
     dateData: sources.nativeDateData,
     monetaryData: sources.nativeMonetaryData,
     addressSeedData: sources.nativeAddressSeedData,
+    addressContextData: sources.nativeAddressContextData,
     nativeSigningPatterns: sources.nativeSigningPatterns,
     partyPositionTerms: sources.partyPositionTerms,
     hotwordRules: sources.hotwordRules,
@@ -887,6 +901,7 @@ type BuildNativeStaticConfigArgs = {
   dateData: NativeDateData | null;
   monetaryData: NativeMonetaryData | null;
   addressSeedData: NativeAddressSeedData | null;
+  addressContextData: NativeAddressContextData | null;
   nativeSigningPatterns: readonly string[];
   partyPositionTerms: readonly string[];
   hotwordRules: readonly HotwordRule[];
@@ -916,6 +931,7 @@ const buildNativeStaticConfig = ({
   dateData,
   monetaryData,
   addressSeedData,
+  addressContextData,
   nativeSigningPatterns,
   partyPositionTerms,
   hotwordRules,
@@ -1115,6 +1131,9 @@ const buildNativeStaticConfig = ({
   }
   if (addressSeedData) {
     nativeConfig.address_seed_data = addressSeedData;
+  }
+  if (addressContextData) {
+    nativeConfig.address_context_data = addressContextData;
   }
   if (dateData) {
     nativeConfig.date_data = dateData;

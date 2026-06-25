@@ -27,6 +27,7 @@ fn empty_config(slices: PreparedSearchSlices) -> PreparedSearchConfig {
     trigger_data: None,
     legal_form_data: None,
     address_seed_data: None,
+    address_context_data: None,
     date_data: None,
     monetary_data: None,
   }
