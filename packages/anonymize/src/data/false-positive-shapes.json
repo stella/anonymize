@@ -3,6 +3,9 @@
   "addressComponentTerms": {
     "cs": ["č.p.", "č.ev.", "č.", "sídliště"]
   },
+  "ambiguousStreetTypeTerms": {
+    "fr": ["cours"]
+  },
   "numberAbbrevPrefixes": {
     "cs": ["čís.", "č."],
     "de": ["nr."],

@@ -904,14 +904,34 @@ fn hits_stop_word(text: &str, byte: usize, stop_words: &[String]) -> bool {
     return false;
   };
   stop_words.iter().any(|word| {
-    tail
-      .get(..word.len())
-      .is_some_and(|head| head.eq_ignore_ascii_case(word))
-      && tail
-        .get(word.len()..)
+    unicode_case_prefix_len(tail, word).is_some_and(|word_len| {
+      tail
+        .get(word_len..)
         .and_then(|after| after.chars().next())
         .is_none_or(|ch| !ch.is_alphanumeric())
+    })
   })
+}
+
+fn unicode_case_prefix_len(text: &str, prefix: &str) -> Option<usize> {
+  if prefix.is_empty() {
+    return None;
+  }
+  let prefix_chars = prefix.chars().count();
+  let mut end = 0usize;
+  let mut count = 0usize;
+  for (index, ch) in text.char_indices() {
+    if count == prefix_chars {
+      break;
+    }
+    count = count.saturating_add(1);
+    end = index.saturating_add(ch.len_utf8());
+  }
+  if count != prefix_chars {
+    return None;
+  }
+  let candidate = text.get(..end)?;
+  (candidate.to_lowercase() == prefix.to_lowercase()).then_some(end)
 }
 
 fn is_decimal_comma(text: &str) -> bool {

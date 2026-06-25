@@ -69,7 +69,9 @@ fn legal_form_prepared_search(suffixes: Vec<&str>) -> PreparedSearch {
         String::from("as"),
         String::from("co"),
         String::from("inc"),
+        String::from("ltd"),
         String::from("llc"),
+        String::from("pty"),
         String::from("sro"),
       ],
       normalized_in_name_words: vec![String::from("co")],
@@ -77,7 +79,9 @@ fn legal_form_prepared_search(suffixes: Vec<&str>) -> PreparedSearch {
         String::from("as"),
         String::from("co"),
         String::from("inc"),
+        String::from("ltd"),
         String::from("llc"),
+        String::from("pty"),
         String::from("sro"),
       ],
       connector_words: vec![
@@ -98,6 +102,17 @@ fn legal_form_prepared_search(suffixes: Vec<&str>) -> PreparedSearch {
     ..empty_config(PreparedSearchSlices::default())
   })
   .unwrap()
+}
+
+#[test]
+fn prepared_search_runs_legal_form_pass_on_normalized_text() {
+  let prepared = legal_form_prepared_search(vec!["Pty Ltd"]);
+  let result = prepared
+    .detect_static_entities("Acme Pty\u{00a0}Ltd signed the agreement.")
+    .unwrap();
+
+  assert_eq!(result.legal_form_entities.len(), 1);
+  assert_eq!(result.legal_form_entities[0].text, "Acme Pty\u{00a0}Ltd");
 }
 
 #[test]
