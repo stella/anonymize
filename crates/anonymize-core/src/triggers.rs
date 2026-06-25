@@ -339,7 +339,7 @@ fn extract_value(
       extract_to_end_of_line(remaining, stripped, value_start_byte, label)
     }
     PreparedTriggerStrategy::NWords { count } => {
-      extract_n_words(stripped, value_start_byte, *count)
+      extract_n_words(stripped, value_start_byte, *count, label)
     }
     PreparedTriggerStrategy::CompanyIdValue => {
       extract_company_id_value(text, trigger_end_byte)
@@ -438,34 +438,70 @@ fn extract_n_words(
   value_text: &str,
   value_start_byte: usize,
   count: usize,
+  label: &str,
 ) -> Option<ByteValue> {
   let cell_end = value_text.find('\t').unwrap_or(value_text.len());
   let cell = value_text.get(..cell_end)?;
-  let mut words = Vec::<&str>::new();
+  let mut words = Vec::<WordToken<'_>>::new();
   for word in cell.split_whitespace() {
     if punctuation_only(word) || number_marker(word) {
       continue;
     }
-    words.push(word);
-    if words.len() >= count {
+    let search_pos =
+      words.last().map_or(0, |entry| entry.end.saturating_add(1));
+    let relative = cell.get(search_pos..)?.find(word)?;
+    let start = search_pos.saturating_add(relative);
+    words.push(WordToken {
+      text: word,
+      start,
+      end: start.saturating_add(word.len()),
+    });
+    if words.len() >= date_aware_word_count(label, count, &words) {
       break;
     }
   }
   let first = words.first().copied()?;
-  let first_index = cell.find(first)?;
-  let mut actual_end = first_index.saturating_add(first.len());
-  let mut search_pos = actual_end;
-  for word in words.iter().skip(1) {
-    let relative = cell.get(search_pos..)?.find(word)?;
-    let index = search_pos.saturating_add(relative);
-    actual_end = index.saturating_add(word.len());
-    search_pos = actual_end;
-  }
+  let last = words.last().copied()?;
   byte_value(
-    cell.get(first_index..actual_end)?,
-    value_start_byte.saturating_add(first_index),
-    actual_end.saturating_sub(first_index),
+    cell.get(first.start..last.end)?,
+    value_start_byte.saturating_add(first.start),
+    last.end.saturating_sub(first.start),
   )
+}
+
+#[derive(Clone, Copy)]
+struct WordToken<'a> {
+  text: &'a str,
+  start: usize,
+  end: usize,
+}
+
+fn date_aware_word_count(
+  label: &str,
+  configured_count: usize,
+  words: &[WordToken<'_>],
+) -> usize {
+  if configured_count != 1 || !matches!(label, "date" | "date of birth") {
+    return configured_count;
+  }
+  if words
+    .first()
+    .is_some_and(|word| starts_written_day_token(word.text))
+  {
+    return 3;
+  }
+  configured_count
+}
+
+fn starts_written_day_token(text: &str) -> bool {
+  let token = text.trim_end_matches(|ch: char| {
+    matches!(ch, ',' | ';' | ':' | ')' | ']' | '"' | '\'' | '”' | '’')
+  });
+  let Some(day) = token.strip_suffix('.') else {
+    return false;
+  };
+  let digit_count = day.chars().filter(char::is_ascii_digit).count();
+  (1..=2).contains(&digit_count) && day.chars().all(|ch| ch.is_ascii_digit())
 }
 
 fn extract_company_id_value(

@@ -531,6 +531,50 @@ fn prepared_search_extracts_written_date_of_birth_trigger() {
 }
 
 #[test]
+fn prepared_search_extends_single_word_written_date_trigger() {
+  let prepared = PreparedSearch::new(PreparedSearchConfig {
+    regex_patterns: vec![SearchPattern::LiteralWithOptions {
+      pattern: String::from("geboren am"),
+      case_insensitive: Some(true),
+      whole_words: Some(false),
+    }],
+    slices: PreparedSearchSlices {
+      triggers: PatternSlice { start: 0, end: 1 },
+      ..PreparedSearchSlices::default()
+    },
+    trigger_data: Some(TriggerData {
+      rules: vec![TriggerRule {
+        trigger: String::from("geboren am"),
+        label: String::from("date of birth"),
+        strategy: TriggerStrategy::NWords { count: 1 },
+        validations: Vec::new(),
+        include_trigger: false,
+      }],
+      address_stop_keywords: Vec::new(),
+      party_position_terms: Vec::new(),
+      legal_form_suffixes: Vec::new(),
+    }),
+    ..empty_config(PreparedSearchSlices::default())
+  })
+  .unwrap();
+
+  let result = prepared
+    .redact_static_entities(
+      "Herr Müller, geboren am 21. März 1968, ist Geschäftsführer.",
+      &OperatorConfig::default(),
+    )
+    .unwrap();
+
+  assert!(
+    result
+      .resolved_entities
+      .iter()
+      .any(|entity| entity.label == "date of birth"
+        && entity.text == "21. März 1968")
+  );
+}
+
+#[test]
 fn prepared_search_extracts_year_after_duplicate_year_word_noise() {
   let prepared = PreparedSearch::new(PreparedSearchConfig {
     regex_patterns: ["rok", "an", "roce"]

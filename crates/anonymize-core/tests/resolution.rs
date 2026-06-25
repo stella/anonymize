@@ -141,6 +141,35 @@ fn structured_regex_span_beats_trigger_fragment_with_trailing_punctuation() {
 }
 
 #[test]
+fn structured_date_regex_span_beats_trigger_fragment() {
+  let regex_text = "21. März 1968";
+  let trigger_text = "21.";
+  let result = merge_and_dedup(&[
+    PipelineEntity::detected(
+      0,
+      byte_len(regex_text),
+      "date of birth",
+      regex_text,
+      0.9,
+      DetectionSource::Regex,
+    ),
+    PipelineEntity::detected(
+      0,
+      byte_len(trigger_text),
+      "date of birth",
+      trigger_text,
+      0.95,
+      DetectionSource::Trigger,
+    ),
+  ]);
+
+  assert_eq!(result.len(), 1);
+  let kept = result.first().expect("result");
+  assert_eq!(kept.source, DetectionSource::Regex);
+  assert_eq!(kept.text, regex_text);
+}
+
+#[test]
 fn person_regex_span_beats_inner_name_fragment() {
   let result = merge_and_dedup(&[
     entity(DetectionSource::Regex, 0.9, 0, 21, "person"),
