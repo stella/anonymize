@@ -3,15 +3,15 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use stella_anonymize_core::{
-  AddressSeedData, AmountWordsData, CountryMatchData, CurrencyData, DateData,
-  DenyListFilterData, DenyListMatchData, DetectionSource, DiagnosticEventKind,
-  DiagnosticStage, Error, FuzzySearchOptions, GazetteerMatchData, HotwordRule,
-  HotwordRuleData, LegalFormData, LiteralSearchOptions, MagnitudeSuffixData,
-  MonetaryData, OperatorConfig, PatternSlice, PreparedSearch,
-  PreparedSearchArtifacts, PreparedSearchConfig, PreparedSearchSlices,
-  RegexMatchMeta, RegexSearchOptions, SearchOptions, SearchPattern,
-  SourceDetail, TriggerData, TriggerRule, TriggerStrategy, TriggerValidation,
-  WrittenAmountPatternData,
+  AddressContextData, AddressSeedData, AmountWordsData, CountryMatchData,
+  CurrencyData, DateData, DenyListFilterData, DenyListMatchData,
+  DetectionSource, DiagnosticEventKind, DiagnosticStage, Error,
+  FuzzySearchOptions, GazetteerMatchData, HotwordRule, HotwordRuleData,
+  LegalFormData, LiteralSearchOptions, MagnitudeSuffixData, MonetaryData,
+  OperatorConfig, PatternSlice, PreparedSearch, PreparedSearchArtifacts,
+  PreparedSearchConfig, PreparedSearchSlices, RegexMatchMeta,
+  RegexSearchOptions, SearchOptions, SearchPattern, SourceDetail, TriggerData,
+  TriggerRule, TriggerStrategy, TriggerValidation, WrittenAmountPatternData,
 };
 
 fn empty_config(slices: PreparedSearchSlices) -> PreparedSearchConfig {
@@ -35,6 +35,7 @@ fn empty_config(slices: PreparedSearchSlices) -> PreparedSearchConfig {
     trigger_data: None,
     legal_form_data: None,
     address_seed_data: None,
+    address_context_data: None,
     date_data: None,
     monetary_data: None,
   }
@@ -107,6 +108,15 @@ fn legal_form_prepared_search(suffixes: Vec<&str>) -> PreparedSearch {
   .unwrap()
 }
 
+fn address_context_data() -> AddressContextData {
+  AddressContextData {
+    address_prepositions: vec![String::from("na"), String::from("mezi")],
+    temporal_prepositions: vec![String::from("od"), String::from("do")],
+    street_abbreviations: vec![String::from("ul.")],
+    bare_house_stopwords: vec![String::from("Section")],
+  }
+}
+
 #[test]
 fn prepared_search_runs_legal_form_pass_on_normalized_text() {
   let prepared = legal_form_prepared_search(vec!["Pty Ltd"]);
@@ -150,6 +160,7 @@ fn prepared_search_runs_normalized_literal_pass() {
     trigger_data: None,
     legal_form_data: None,
     address_seed_data: None,
+    address_context_data: None,
     date_data: None,
     monetary_data: None,
   })
@@ -161,6 +172,73 @@ fn prepared_search_runs_normalized_literal_pass() {
 
   assert_eq!(result.gazetteer_entities.len(), 1);
   assert_eq!(result.gazetteer_entities[0].text, "Acme\u{00a0}Corp");
+}
+
+#[test]
+fn prepared_search_adds_slash_house_number_address_context() {
+  let prepared = PreparedSearch::new(PreparedSearchConfig {
+    regex_patterns: vec![SearchPattern::Regex(String::from(r"\bPraha 2\b"))],
+    regex_meta: vec![RegexMatchMeta::new("address", 1.0)],
+    slices: PreparedSearchSlices {
+      regex: PatternSlice { start: 0, end: 1 },
+      ..PreparedSearchSlices::default()
+    },
+    threshold: 0.5,
+    allowed_labels: vec![String::from("address")],
+    address_context_data: Some(address_context_data()),
+    ..empty_config(PreparedSearchSlices::default())
+  })
+  .unwrap();
+
+  let result = prepared
+    .redact_static_entities(
+      "Sídlo: Praha 2, Vinohradská 2512/2a",
+      &OperatorConfig::default(),
+    )
+    .unwrap();
+
+  assert!(result.resolved_entities.iter().any(|entity| {
+    entity.label == "address" && entity.text.contains("Vinohradská 2512/2a")
+  }));
+}
+
+#[test]
+fn prepared_search_adds_orphan_header_street_line_context() {
+  let full_text = format!(
+    "ACME s.r.o.\nEvropská 710\n160 00 Praha\n{}",
+    "body ".repeat(200)
+  );
+  let prepared = PreparedSearch::new(PreparedSearchConfig {
+    custom_regex_patterns: vec![SearchPattern::Regex(String::from(
+      r"ACME s\.r\.o\.",
+    ))],
+    custom_regex_meta: vec![RegexMatchMeta::new("organization", 1.0)],
+    slices: PreparedSearchSlices {
+      custom_regex: PatternSlice { start: 0, end: 1 },
+      ..PreparedSearchSlices::default()
+    },
+    threshold: 0.5,
+    allowed_labels: vec![String::from("organization"), String::from("address")],
+    address_context_data: Some(address_context_data()),
+    ..empty_config(PreparedSearchSlices::default())
+  })
+  .unwrap();
+
+  let result = prepared
+    .redact_static_entities_with_diagnostics(
+      &full_text,
+      &OperatorConfig::default(),
+    )
+    .unwrap();
+
+  assert!(result.result.resolved_entities.iter().any(|entity| {
+    entity.label == "address" && entity.text == "Evropská 710"
+  }));
+  assert!(result.diagnostics.events.iter().any(|event| {
+    event.stage == DiagnosticStage::EntityAddressContext
+      && event.kind == DiagnosticEventKind::StageSummary
+      && event.count == Some(1)
+  }));
 }
 
 #[test]
@@ -196,6 +274,7 @@ fn prepared_search_artifacts_match_direct_prepare() {
     trigger_data: None,
     legal_form_data: None,
     address_seed_data: None,
+    address_context_data: None,
     date_data: None,
     monetary_data: None,
   };
@@ -343,6 +422,7 @@ fn prepared_search_emits_static_detector_entities() {
     trigger_data: None,
     legal_form_data: None,
     address_seed_data: None,
+    address_context_data: None,
     date_data: None,
     monetary_data: None,
   })
@@ -976,6 +1056,7 @@ fn prepared_search_redacts_static_entities_end_to_end() {
     trigger_data: None,
     legal_form_data: None,
     address_seed_data: None,
+    address_context_data: None,
     date_data: None,
     monetary_data: None,
   })
@@ -1289,6 +1370,7 @@ fn prepared_search_reports_static_redaction_diagnostics() {
     trigger_data: None,
     legal_form_data: None,
     address_seed_data: None,
+    address_context_data: None,
     date_data: None,
     monetary_data: None,
   })
@@ -1371,6 +1453,7 @@ fn prepared_search_redacts_custom_deny_list_entities() {
     trigger_data: None,
     legal_form_data: None,
     address_seed_data: None,
+    address_context_data: None,
     date_data: None,
     monetary_data: None,
   })

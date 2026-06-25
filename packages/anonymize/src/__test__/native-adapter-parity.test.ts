@@ -908,6 +908,71 @@ describe("native adapter parity", () => {
     });
   });
 
+  test("native pipeline package matches TS address context redaction", async () => {
+    const adapters = getAdapters();
+    const fullText =
+      "ACME s.r.o.\nEvropska 710\n160 00 Praha\n" + "body ".repeat(200);
+    const config: PipelineConfig = {
+      threshold: 0.5,
+      enableTriggerPhrases: false,
+      enableRegex: true,
+      enableLegalForms: false,
+      enableNameCorpus: false,
+      enableDenyList: false,
+      enableGazetteer: false,
+      enableCountries: false,
+      enableNer: false,
+      enableConfidenceBoost: false,
+      enableCoreference: false,
+      enableHotwordRules: false,
+      enableZoneClassification: false,
+      customRegexes: [
+        { pattern: "ACME s\\.r\\.o\\.", label: "organization", score: 1 },
+      ],
+      labels: ["organization", "address"],
+      workspaceId: "native-pipeline-address-context-test",
+    };
+
+    expect(getNativePipelineCompatibility(config)).toEqual({
+      status: "supported",
+    });
+
+    const packageBytes = await prepareNativePipelinePackage({
+      binding: adapters.native,
+      config,
+      context: createPipelineContext(),
+      compressed: true,
+    });
+    const nativePipeline = createNativePipelineFromPackage({
+      binding: adapters.native,
+      packageBytes,
+    });
+    const operators: OperatorConfig & NativeOperatorConfig = {
+      operators: {},
+      redactString: "[REDACTED]",
+    };
+    const tsContext = createPipelineContext();
+    const tsEntities = await runPipeline({
+      fullText,
+      config,
+      gazetteerEntries: [],
+      context: tsContext,
+    });
+    const tsRedaction = redactText(fullText, tsEntities, operators, tsContext);
+
+    expect(tsEntities).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: "address", text: "Evropska 710" }),
+      ]),
+    );
+    expect(
+      toBindingStaticResult(nativePipeline.redactText(fullText, operators)),
+    ).toEqual({
+      resolved_entities: tsEntities.map(toBindingEntity),
+      redaction: toBindingRedactionResult(tsRedaction),
+    });
+  });
+
   test("native pipeline package matches TS confidence boost redaction", async () => {
     const adapters = getAdapters();
     const fullText = "ANCHOR-123 signed with NEAR-456.";
@@ -1130,12 +1195,11 @@ describe("native adapter parity", () => {
         "enableNameCorpus",
         "enableCoreference",
         "enableZoneClassification",
-        "addressContextPasses",
       ],
     });
   });
 
-  test("native pipeline compatibility rejects address context passes", () => {
+  test("native pipeline compatibility accepts address context passes", () => {
     const config: PipelineConfig = {
       threshold: 0.85,
       enableTriggerPhrases: false,
@@ -1154,8 +1218,7 @@ describe("native adapter parity", () => {
     };
 
     expect(getNativePipelineCompatibility(config)).toEqual({
-      status: "unsupported",
-      unsupportedFeatures: ["addressContextPasses"],
+      status: "supported",
     });
   });
 

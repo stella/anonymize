@@ -3,15 +3,15 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 use stella_anonymize_core::{
-  AddressSeedData, AmountWordsData, CountryMatchData, CurrencyData, DateData,
-  DenyListFilterData, DenyListMatchData, DetectionSource, DiagnosticEvent,
-  DiagnosticEventKind, DiagnosticStage, FuzzySearchOptions, GazetteerMatchData,
-  HotwordRule, HotwordRuleData, LegalFormData, LiteralSearchOptions,
-  MagnitudeSuffixData, MonetaryData, OperatorConfig, OperatorType,
-  PatternSlice, PreparedSearchConfig, PreparedSearchSlices, RegexMatchMeta,
-  RegexSearchOptions, SearchEngine, SearchOptions, SearchPattern,
-  ShareQuantityTermData, SigningPlaceGuardData, SourceDetail,
-  StaticRedactionDiagnosticResult, StaticRedactionDiagnostics,
+  AddressContextData, AddressSeedData, AmountWordsData, CountryMatchData,
+  CurrencyData, DateData, DenyListFilterData, DenyListMatchData,
+  DetectionSource, DiagnosticEvent, DiagnosticEventKind, DiagnosticStage,
+  FuzzySearchOptions, GazetteerMatchData, HotwordRule, HotwordRuleData,
+  LegalFormData, LiteralSearchOptions, MagnitudeSuffixData, MonetaryData,
+  OperatorConfig, OperatorType, PatternSlice, PreparedSearchConfig,
+  PreparedSearchSlices, RegexMatchMeta, RegexSearchOptions, SearchEngine,
+  SearchOptions, SearchPattern, ShareQuantityTermData, SigningPlaceGuardData,
+  SourceDetail, StaticRedactionDiagnosticResult, StaticRedactionDiagnostics,
   StaticRedactionResult, StringGroups, TriggerData, TriggerRule,
   TriggerStrategy, TriggerValidation, WrittenAmountPatternData,
 };
@@ -19,13 +19,13 @@ use stella_anonymize_core::{
 pub type Result<T> = std::result::Result<T, ContractError>;
 
 const PREPARED_SEARCH_PACKAGE_HEADER: [u8; 8] = *b"ANONPKG1";
-const PREPARED_SEARCH_PACKAGE_VERSION: u32 = 6;
+const PREPARED_SEARCH_PACKAGE_VERSION: u32 = 7;
 const PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER: [u8; 8] = *b"ANONPKZ1";
-const PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION: u32 = 4;
+const PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION: u32 = 5;
 const PREPARED_SEARCH_CORE_PACKAGE_HEADER: [u8; 8] = *b"ANONCPK1";
-const PREPARED_SEARCH_CORE_PACKAGE_VERSION: u32 = 5;
+const PREPARED_SEARCH_CORE_PACKAGE_VERSION: u32 = 6;
 const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_HEADER: [u8; 8] = *b"ANONCPZ1";
-const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION: u32 = 5;
+const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION: u32 = 6;
 const PREPARED_SEARCH_PACKAGE_DIGEST_BYTES: usize = 32;
 const PREPARED_SEARCH_PACKAGE_ZSTD_LEVEL: i32 = 3;
 const MAX_PREPARED_SEARCH_PACKAGE_PAYLOAD_BYTES: usize = 256 * 1024 * 1024;
@@ -343,6 +343,18 @@ pub struct BindingAddressSeedData {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BindingAddressContextData {
+  #[serde(default)]
+  pub address_prepositions: Vec<String>,
+  #[serde(default)]
+  pub temporal_prepositions: Vec<String>,
+  #[serde(default)]
+  pub street_abbreviations: Vec<String>,
+  #[serde(default)]
+  pub bare_house_stopwords: Vec<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct BindingDenyListMatchData {
   #[serde(default)]
   pub labels: Vec<Vec<String>>,
@@ -445,6 +457,8 @@ pub struct BindingPreparedSearchConfig {
   #[serde(default)]
   pub address_seed_data: Option<BindingAddressSeedData>,
   #[serde(default)]
+  pub address_context_data: Option<BindingAddressContextData>,
+  #[serde(default)]
   pub date_data: Option<BindingDateData>,
   #[serde(default)]
   pub monetary_data: Option<BindingMonetaryData>,
@@ -502,6 +516,7 @@ struct BinaryPreparedSearchConfig {
   trigger_data: Option<BinaryTriggerData>,
   legal_form_data: Option<BindingLegalFormData>,
   address_seed_data: Option<BindingAddressSeedData>,
+  address_context_data: Option<BindingAddressContextData>,
   date_data: Option<BindingDateData>,
   monetary_data: Option<BindingMonetaryData>,
 }
@@ -702,6 +717,7 @@ impl From<BindingPreparedSearchConfig> for BinaryPreparedSearchConfig {
       trigger_data: config.trigger_data.map(BinaryTriggerData::from),
       legal_form_data: config.legal_form_data,
       address_seed_data: config.address_seed_data,
+      address_context_data: config.address_context_data,
       date_data: config.date_data,
       monetary_data: config.monetary_data,
     }
@@ -732,6 +748,7 @@ impl From<BinaryPreparedSearchConfig> for BindingPreparedSearchConfig {
       trigger_data: config.trigger_data.map(BindingTriggerData::from),
       legal_form_data: config.legal_form_data,
       address_seed_data: config.address_seed_data,
+      address_context_data: config.address_context_data,
       date_data: config.date_data,
       monetary_data: config.monetary_data,
     }
@@ -1181,6 +1198,14 @@ pub fn prepared_search_config_from_binding(
     address_seed_data: config.address_seed_data.map(|data| AddressSeedData {
       boundary_words: data.boundary_words,
       br_cep_cue_words: data.br_cep_cue_words,
+    }),
+    address_context_data: config.address_context_data.map(|data| {
+      AddressContextData {
+        address_prepositions: data.address_prepositions,
+        temporal_prepositions: data.temporal_prepositions,
+        street_abbreviations: data.street_abbreviations,
+        bare_house_stopwords: data.bare_house_stopwords,
+      }
     }),
     date_data: config.date_data.map(|data| DateData {
       month_names_by_language: data.month_names_by_language,
@@ -2097,6 +2122,7 @@ fn diagnostic_stage_name(stage: DiagnosticStage) -> String {
     DiagnosticStage::EntitySignature => "entity.signature",
     DiagnosticStage::EntityLegalForm => "entity.legal-form",
     DiagnosticStage::EntityAddressSeed => "entity.address-seed",
+    DiagnosticStage::EntityAddressContext => "entity.address-context",
     DiagnosticStage::Merge => "resolution.merge",
     DiagnosticStage::Boundary => "resolution.boundary",
     DiagnosticStage::Sanitize => "resolution.sanitize",

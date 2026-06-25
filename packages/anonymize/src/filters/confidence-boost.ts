@@ -1,81 +1,8 @@
+import addressContextJson from "../data/address-context.json";
+import addressPrepositionsJson from "../data/address-prepositions.json";
 import addressStreetTypesJson from "../data/address-street-types.json";
 import type { Entity } from "../types";
 import { isCallerOwnedEntity } from "../util/entity-source";
-
-// Capitalised words that look like the start of an
-// `[Uppercase] [number]` address (Czech: "Vinohradská 12")
-// but in contract prose introduce a section, clause, or
-// document reference instead ("Section 6", "Article 9").
-// Listed here so the `bareHouseRe` near-address scan does
-// not promote them to address spans. Module-level to avoid
-// allocation in a hot loop.
-const BARE_STOPWORDS = new Set([
-  // ── Czech ────────────────────────────────────────
-  "Příloha",
-  "Smlouva",
-  "Článek",
-  "Dodatek",
-  "Celkem",
-  "Strana",
-  "Faktura",
-  "Částka",
-  "Položka",
-  "Kapitola",
-  "Zákon",
-  "Vyhláška",
-  "Nařízení",
-  "Usnesení",
-  "Rozsudek",
-  "Bod",
-  "Odstavec",
-  "Záloha",
-  "Zbývá",
-  "Dne",
-  "Platba",
-  "Datum",
-  "Splatnost",
-  "Variabilní",
-  "Konstantní",
-  "Specifický",
-  // ── English ──────────────────────────────────────
-  "Section",
-  "Sections",
-  "Article",
-  "Articles",
-  "Schedule",
-  "Schedules",
-  "Exhibit",
-  "Exhibits",
-  "Annex",
-  "Annexes",
-  "Appendix",
-  "Appendices",
-  "Clause",
-  "Clauses",
-  "Chapter",
-  "Chapters",
-  "Paragraph",
-  "Paragraphs",
-  "Subsection",
-  "Subsections",
-  "Form",
-  "Page",
-  "Pages",
-  "Item",
-  "Items",
-  "Note",
-  "Notes",
-  "Rule",
-  "Rules",
-  "Attachment",
-  "Attachments",
-  "Volume",
-  "Volumes",
-  "Book",
-  "Books",
-  "Part",
-  "Parts",
-]);
 
 const NEAR_MISS_BAND = 0.15;
 const BOOST_PER_NEIGHBOUR = 0.05;
@@ -155,29 +82,61 @@ type PrepositionData = {
   temporal: Record<string, string[] | string>;
 };
 
+type AddressContextJson = {
+  bareHouseStopwords: Record<string, string[] | string>;
+};
+
+export type AddressContextData = {
+  address_prepositions: string[];
+  temporal_prepositions: string[];
+  street_abbreviations: string[];
+  bare_house_stopwords: string[];
+};
+
+const languageRecordValues = (
+  record: Record<string, string[] | string>,
+  transform: (value: string) => string = (value) => value,
+): string[] => {
+  const values: string[] = [];
+  for (const [language, words] of Object.entries(record)) {
+    if (language.startsWith("_") || !Array.isArray(words)) {
+      continue;
+    }
+    for (const word of words) {
+      values.push(transform(word));
+    }
+  }
+  return values;
+};
+
+const buildPrepositionSets = (
+  data: PrepositionData,
+): {
+  address: ReadonlySet<string>;
+  temporal: ReadonlySet<string>;
+} => ({
+  address: new Set(
+    languageRecordValues(data.address, (word) => word.toLowerCase()),
+  ),
+  temporal: new Set(
+    languageRecordValues(data.temporal, (word) => word.toLowerCase()),
+  ),
+});
+
+const buildBareStopwords = (data: AddressContextJson): ReadonlySet<string> =>
+  new Set(languageRecordValues(data.bareHouseStopwords));
+
+const BARE_STOPWORDS = buildBareStopwords(addressContextJson);
+
 let _addressPreps: ReadonlySet<string> | null = null;
 let _temporalPreps: ReadonlySet<string> | null = null;
 let _prepsPromise: Promise<void> | null = null;
 
 const loadPrepositions = async (): Promise<void> => {
   try {
-    const mod = await import("../data/address-prepositions.json");
-    const data: PrepositionData = mod.default ?? mod;
-    // Merge all languages into flat sets
-    const addr = new Set<string>();
-    const temp = new Set<string>();
-    for (const words of Object.values(data.address)) {
-      if (Array.isArray(words)) {
-        for (const w of words) addr.add(w.toLowerCase());
-      }
-    }
-    for (const words of Object.values(data.temporal)) {
-      if (Array.isArray(words)) {
-        for (const w of words) temp.add(w.toLowerCase());
-      }
-    }
-    _addressPreps = addr;
-    _temporalPreps = temp;
+    const prepositions = buildPrepositionSets(addressPrepositionsJson);
+    _addressPreps = prepositions.address;
+    _temporalPreps = prepositions.temporal;
   } catch {
     _addressPreps = new Set();
     _temporalPreps = new Set();
@@ -239,6 +198,16 @@ export const initStreetAbbrevs = (): Promise<void> => {
 
 export const getStreetAbbrevs = (): ReadonlySet<string> =>
   _streetAbbrevs ?? new Set();
+
+export const getAddressContextData = (): AddressContextData => {
+  const prepositions = buildPrepositionSets(addressPrepositionsJson);
+  return {
+    address_prepositions: [...prepositions.address],
+    temporal_prepositions: [...prepositions.temporal],
+    street_abbreviations: [...buildStreetAbbrevs(addressStreetTypesJson)],
+    bare_house_stopwords: [...buildBareStopwords(addressContextJson)],
+  };
+};
 
 /**
  * Scan backwards from known address entities and
