@@ -1,19 +1,67 @@
-use std::collections::BTreeMap;
+use std::{
+  collections::{BTreeMap, VecDeque},
+  sync::{Arc, LazyLock, Mutex},
+  time::Instant,
+};
 
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use stella_anonymize_adapter_contract::{
-  BindingCountryMatchData, BindingDenyListFilterData, BindingDenyListMatchData,
-  BindingGazetteerMatchData, BindingOperatorConfig, BindingOperatorEntry,
-  BindingPatternSlice, BindingPreparedSearchConfig,
-  BindingPreparedSearchSlices, BindingRedactionResult, BindingRegexMatchMeta,
-  BindingSearchOptions, BindingSearchPattern, BindingStaticRedactionResult,
-  ContractError, operator_config_from_binding,
-  prepared_search_config_from_binding,
+  BindingOperatorConfig, BindingOperatorEntry, BindingPreparedSearchConfig,
+  BindingRedactionResult, BindingStaticRedactionResult, ContractError,
+  operator_config_from_binding, prepared_search_config_from_binding,
+  prepared_search_package_digest, prepared_search_package_from_bytes,
+  prepared_search_package_to_bytes,
+  prepared_search_package_to_compressed_bytes,
   static_redaction_diagnostic_result_to_binding,
   static_redaction_diagnostics_to_binding, static_redaction_result_to_binding,
 };
-use stella_anonymize_core::{PreparedSearch, StaticRedactionDiagnostics};
+use stella_anonymize_core::{
+  DiagnosticEvent, DiagnosticEventKind, DiagnosticStage, PreparedSearch,
+  PreparedSearchArtifacts, StaticRedactionDiagnostics,
+};
+
+const PREPARED_SEARCH_CACHE_LIMIT: usize = 8;
+
+static PREPARED_SEARCH_CACHE: LazyLock<Mutex<PreparedSearchCache>> =
+  LazyLock::new(|| Mutex::new(PreparedSearchCache::new()));
+
+struct PreparedSearchCache {
+  entries: BTreeMap<[u8; 32], Arc<PreparedSearch>>,
+  order: VecDeque<[u8; 32]>,
+}
+
+impl PreparedSearchCache {
+  const fn new() -> Self {
+    Self {
+      entries: BTreeMap::new(),
+      order: VecDeque::new(),
+    }
+  }
+
+  fn get(&mut self, key: &[u8; 32]) -> Option<Arc<PreparedSearch>> {
+    let entry = self.entries.get(key).cloned()?;
+    self.retain_order_without(key);
+    self.order.push_back(*key);
+    Some(entry)
+  }
+
+  fn insert(&mut self, key: [u8; 32], value: Arc<PreparedSearch>) {
+    self.entries.insert(key, value);
+    self.retain_order_without(&key);
+    self.order.push_back(key);
+
+    while self.order.len() > PREPARED_SEARCH_CACHE_LIMIT {
+      if let Some(evicted) = self.order.pop_front() {
+        self.entries.remove(&evicted);
+      }
+    }
+  }
+
+  fn retain_order_without(&mut self, key: &[u8; 32]) {
+    self.order.retain(|entry| entry != key);
+  }
+}
 
 #[napi(object)]
 pub struct JsSearchPattern {
@@ -62,6 +110,8 @@ pub struct JsRegexMatchMeta {
   pub score: f64,
   pub source_detail: Option<String>,
   pub requires_validation: Option<bool>,
+  pub validator_id: Option<String>,
+  pub validator_input: Option<String>,
   pub min_byte_length: Option<u32>,
 }
 
@@ -90,13 +140,22 @@ pub struct JsDenyListFilterData {
   pub stopwords: Vec<String>,
   pub allow_list: Vec<String>,
   pub person_stopwords: Vec<String>,
+  pub person_trailing_nouns: Vec<String>,
   pub address_stopwords: Vec<String>,
+  pub address_jurisdiction_prefixes: Vec<String>,
   pub street_types: Vec<String>,
   pub first_names: Vec<String>,
   pub generic_roles: Vec<String>,
   pub sentence_starters: Vec<String>,
   pub trailing_address_word_exclusions: Vec<String>,
   pub defined_term_cues: Vec<String>,
+  pub signing_place_guards: Vec<JsSigningPlaceGuardData>,
+}
+
+#[napi(object)]
+pub struct JsSigningPlaceGuardData {
+  pub prefix_phrases: Vec<String>,
+  pub suffix_phrases: Vec<String>,
 }
 
 #[napi(object)]
@@ -233,23 +292,237 @@ pub fn redact_static_entities_diagnostics_json(
   serde_json::to_string(&result).map_err(|error| to_napi_serde_error(&error))
 }
 
+#[napi(js_name = "prepareStaticSearchArtifactsBytes")]
+#[allow(clippy::needless_pass_by_value)]
+pub fn prepare_static_search_artifacts_bytes(
+  config_json: BufferSlice<'_>,
+) -> Result<Buffer> {
+  let config =
+    serde_json::from_slice::<BindingPreparedSearchConfig>(config_json.as_ref())
+      .map_err(|error| to_napi_serde_error(&error))?;
+  let config = prepared_search_config_from_binding(config)
+    .map_err(|error| to_napi_contract_error(&error))?;
+  PreparedSearch::prepare_artifacts(config)
+    .and_then(|artifacts| artifacts.to_bytes())
+    .map(Buffer::from)
+    .map_err(|error| to_napi_core_error(&error))
+}
+
+#[napi(js_name = "prepareStaticSearchPackageBytes")]
+#[allow(clippy::needless_pass_by_value)]
+pub fn prepare_static_search_package_bytes(
+  config_json: BufferSlice<'_>,
+) -> Result<Buffer> {
+  prepare_static_search_package_bytes_with(config_json.as_ref(), false)
+}
+
+#[napi(js_name = "prepareStaticSearchCompressedPackageBytes")]
+#[allow(clippy::needless_pass_by_value)]
+pub fn prepare_static_search_compressed_package_bytes(
+  config_json: BufferSlice<'_>,
+) -> Result<Buffer> {
+  prepare_static_search_package_bytes_with(config_json.as_ref(), true)
+}
+
+fn prepare_static_search_package_bytes_with(
+  config_json: &[u8],
+  compressed: bool,
+) -> Result<Buffer> {
+  let binding_config =
+    serde_json::from_slice::<BindingPreparedSearchConfig>(config_json)
+      .map_err(|error| to_napi_serde_error(&error))?;
+  let core_config = prepared_search_config_from_binding(binding_config.clone())
+    .map_err(|error| to_napi_contract_error(&error))?;
+  let artifacts = PreparedSearch::prepare_artifacts(core_config)
+    .and_then(|artifacts| artifacts.to_bytes())
+    .map_err(|error| to_napi_core_error(&error))?;
+  let package = if compressed {
+    prepared_search_package_to_compressed_bytes(&binding_config, &artifacts)
+  } else {
+    prepared_search_package_to_bytes(&binding_config, &artifacts)
+  };
+  package
+    .map(Buffer::from)
+    .map_err(|error| to_napi_contract_error(&error))
+}
+
 #[napi]
 pub struct NativePreparedSearch {
-  inner: PreparedSearch,
+  inner: Arc<PreparedSearch>,
   prepare_diagnostics: StaticRedactionDiagnostics,
 }
 
 #[napi]
 impl NativePreparedSearch {
   #[napi(constructor)]
-  pub fn new(config: JsPreparedSearchConfig) -> Result<Self> {
-    let config = prepared_search_config_from_binding(to_binding_config(config))
+  pub fn new(config_json: String) -> Result<Self> {
+    let config_bytes = config_json.into_bytes();
+    Self::from_config_bytes(&config_bytes, None)
+  }
+
+  #[napi(factory)]
+  #[allow(clippy::needless_pass_by_value)]
+  pub fn from_config_json_bytes(config_json: BufferSlice<'_>) -> Result<Self> {
+    Self::from_config_bytes(config_json.as_ref(), None)
+  }
+
+  #[napi(factory)]
+  #[allow(clippy::needless_pass_by_value)]
+  pub fn from_config_json_and_artifact_bytes(
+    config_json: BufferSlice<'_>,
+    artifact_bytes: BufferSlice<'_>,
+  ) -> Result<Self> {
+    Self::from_config_bytes(config_json.as_ref(), Some(artifact_bytes.as_ref()))
+  }
+
+  #[napi(factory)]
+  #[allow(clippy::needless_pass_by_value)]
+  pub fn from_prepared_package_bytes(
+    package_bytes: BufferSlice<'_>,
+  ) -> Result<Self> {
+    Self::from_package_bytes(package_bytes.as_ref())
+  }
+
+  fn from_config_bytes(
+    config_bytes: &[u8],
+    artifact_bytes: Option<&[u8]>,
+  ) -> Result<Self> {
+    let input_bytes_len = config_bytes
+      .len()
+      .saturating_add(artifact_bytes.map_or(0, <[u8]>::len));
+    let cache_key = prepared_search_cache_key(config_bytes, artifact_bytes);
+    let cache_start = Instant::now();
+    if let Some(inner) = prepared_search_cache_get(&cache_key) {
+      return Ok(Self {
+        inner,
+        prepare_diagnostics: StaticRedactionDiagnostics {
+          events: vec![stage_event(
+            DiagnosticStage::PrepareCacheHit,
+            Some(1),
+            Some(elapsed_us(cache_start)),
+            Some(input_bytes_len),
+          )],
+        },
+      });
+    }
+
+    let cache_elapsed = elapsed_us(cache_start);
+    let parse_start = Instant::now();
+    let config =
+      serde_json::from_slice::<BindingPreparedSearchConfig>(config_bytes)
+        .map_err(|error| to_napi_serde_error(&error))?;
+    let parse_elapsed = elapsed_us(parse_start);
+    Self::from_binding_config(
+      config,
+      artifact_bytes,
+      input_bytes_len,
+      cache_key,
+      cache_elapsed,
+      parse_elapsed,
+    )
+  }
+
+  fn from_package_bytes(package_bytes: &[u8]) -> Result<Self> {
+    let input_bytes_len = package_bytes.len();
+    let cache_key = prepared_search_package_cache_key(package_bytes)?;
+    let cache_start = Instant::now();
+    if let Some(inner) = prepared_search_cache_get(&cache_key) {
+      return Ok(Self {
+        inner,
+        prepare_diagnostics: StaticRedactionDiagnostics {
+          events: vec![stage_event(
+            DiagnosticStage::PrepareCacheHit,
+            Some(1),
+            Some(elapsed_us(cache_start)),
+            Some(input_bytes_len),
+          )],
+        },
+      });
+    }
+
+    let cache_elapsed = elapsed_us(cache_start);
+    let parse_start = Instant::now();
+    let package = prepared_search_package_from_bytes(package_bytes)
       .map_err(|error| to_napi_contract_error(&error))?;
-    let result = PreparedSearch::new_with_diagnostics(config)
+    let parse_elapsed = elapsed_us(parse_start);
+    Self::from_binding_config(
+      package.config,
+      Some(&package.artifacts),
+      input_bytes_len,
+      cache_key,
+      cache_elapsed,
+      parse_elapsed,
+    )
+  }
+
+  fn from_binding_config(
+    config: BindingPreparedSearchConfig,
+    artifact_bytes: Option<&[u8]>,
+    input_bytes_len: usize,
+    cache_key: [u8; 32],
+    cache_elapsed: u64,
+    parse_elapsed: u64,
+  ) -> Result<Self> {
+    let convert_start = Instant::now();
+    let config = prepared_search_config_from_binding(config)
+      .map_err(|error| to_napi_contract_error(&error))?;
+    let pattern_count = config
+      .regex_patterns
+      .len()
+      .saturating_add(config.custom_regex_patterns.len())
+      .saturating_add(config.literal_patterns.len());
+    let convert_elapsed = elapsed_us(convert_start);
+    let artifact_decode_start = Instant::now();
+    let artifacts = artifact_bytes
+      .map(PreparedSearchArtifacts::from_bytes)
+      .transpose()
       .map_err(|error| to_napi_core_error(&error))?;
+    let artifact_decode_elapsed =
+      artifact_bytes.map(|_| elapsed_us(artifact_decode_start));
+    let result = if let Some(artifacts) = artifacts.as_ref() {
+      PreparedSearch::new_with_artifacts_diagnostics(config, artifacts)
+    } else {
+      PreparedSearch::new_with_diagnostics(config)
+    }
+    .map_err(|error| to_napi_core_error(&error))?;
+    let inner = Arc::new(result.prepared);
+    let mut diagnostics = StaticRedactionDiagnostics {
+      events: vec![
+        stage_event(
+          DiagnosticStage::PrepareCacheMiss,
+          Some(0),
+          Some(cache_elapsed),
+          Some(input_bytes_len),
+        ),
+        stage_event(
+          DiagnosticStage::PrepareBindingParse,
+          None,
+          Some(parse_elapsed),
+          Some(input_bytes_len),
+        ),
+        stage_event(
+          DiagnosticStage::PrepareBindingConvert,
+          Some(pattern_count),
+          Some(convert_elapsed),
+          None,
+        ),
+      ],
+    };
+    if let (Some(elapsed), Some(bytes)) =
+      (artifact_decode_elapsed, artifact_bytes.map(<[u8]>::len))
+    {
+      diagnostics.events.push(stage_event(
+        DiagnosticStage::PrepareArtifactsDecode,
+        None,
+        Some(elapsed),
+        Some(bytes),
+      ));
+    }
+    diagnostics.extend(result.diagnostics);
+    prepared_search_cache_insert(cache_key, Arc::clone(&inner));
     Ok(Self {
-      inner: result.prepared,
-      prepare_diagnostics: result.diagnostics,
+      inner,
+      prepare_diagnostics: diagnostics,
     })
   }
 
@@ -300,125 +573,57 @@ impl NativePreparedSearch {
   }
 }
 
-fn to_binding_config(
-  config: JsPreparedSearchConfig,
-) -> BindingPreparedSearchConfig {
-  BindingPreparedSearchConfig {
-    regex_patterns: to_binding_patterns(config.regex_patterns),
-    custom_regex_patterns: to_binding_patterns(config.custom_regex_patterns),
-    literal_patterns: to_binding_patterns(config.literal_patterns),
-    regex_options: config.regex_options.as_ref().map(to_binding_options),
-    custom_regex_options: config
-      .custom_regex_options
-      .as_ref()
-      .map(to_binding_options),
-    literal_options: config.literal_options.as_ref().map(to_binding_options),
-    slices: to_binding_slices(&config.slices),
-    regex_meta: to_binding_regex_meta(config.regex_meta),
-    custom_regex_meta: to_binding_regex_meta(config.custom_regex_meta),
-    deny_list_data: config.deny_list_data.map(|data| {
-      BindingDenyListMatchData {
-        labels: data.labels,
-        custom_labels: data.custom_labels,
-        originals: data.originals,
-        sources: data.sources,
-        filters: data.filters.map(to_binding_deny_list_filters),
-      }
-    }),
-    gazetteer_data: config.gazetteer_data.map(|data| {
-      BindingGazetteerMatchData {
-        labels: data.labels,
-        is_fuzzy: data.is_fuzzy,
-      }
-    }),
-    country_data: config.country_data.map(|data| BindingCountryMatchData {
-      labels: data.labels,
-    }),
+fn prepared_search_cache_get(key: &[u8; 32]) -> Option<Arc<PreparedSearch>> {
+  with_prepared_search_cache(|cache| cache.get(key))
+}
+
+fn prepared_search_cache_insert(key: [u8; 32], value: Arc<PreparedSearch>) {
+  with_prepared_search_cache(|cache| cache.insert(key, value));
+}
+
+fn prepared_search_cache_key(
+  config_bytes: &[u8],
+  artifact_bytes: Option<&[u8]>,
+) -> [u8; 32] {
+  let mut hasher = blake3::Hasher::new();
+  hasher.update(b"config");
+  hasher.update(config_bytes);
+  match artifact_bytes {
+    Some(bytes) => {
+      hasher.update(b"artifacts");
+      hasher.update(bytes);
+    }
+    None => {
+      hasher.update(b"no-artifacts");
+    }
   }
+  *hasher.finalize().as_bytes()
 }
 
-fn to_binding_deny_list_filters(
-  filters: JsDenyListFilterData,
-) -> BindingDenyListFilterData {
-  BindingDenyListFilterData {
-    stopwords: filters.stopwords,
-    allow_list: filters.allow_list,
-    person_stopwords: filters.person_stopwords,
-    address_stopwords: filters.address_stopwords,
-    street_types: filters.street_types,
-    first_names: filters.first_names,
-    generic_roles: filters.generic_roles,
-    sentence_starters: filters.sentence_starters,
-    trailing_address_word_exclusions: filters.trailing_address_word_exclusions,
-    defined_term_cues: filters.defined_term_cues,
-  }
+fn prepared_search_package_cache_key(package_bytes: &[u8]) -> Result<[u8; 32]> {
+  let digest = prepared_search_package_digest(package_bytes)
+    .map_err(|error| to_napi_contract_error(&error))?;
+  let mut hasher = blake3::Hasher::new();
+  hasher.update(b"prepared-package");
+  hasher.update(&digest);
+  let len = u64::try_from(package_bytes.len()).map_err(|_| {
+    Error::from_reason(format!(
+      "Prepared package byte length exceeds u64 range: {}",
+      package_bytes.len()
+    ))
+  })?;
+  hasher.update(&len.to_le_bytes());
+  Ok(*hasher.finalize().as_bytes())
 }
 
-fn to_binding_patterns(
-  patterns: Vec<JsSearchPattern>,
-) -> Vec<BindingSearchPattern> {
-  patterns
-    .into_iter()
-    .map(|pattern| BindingSearchPattern {
-      kind: pattern.kind,
-      pattern: pattern.pattern,
-      distance: pattern.distance,
-      case_insensitive: pattern.case_insensitive,
-      whole_words: pattern.whole_words,
-      lazy: pattern.lazy,
-      prefilter_any: pattern.prefilter_any,
-      prefilter_case_insensitive: pattern.prefilter_case_insensitive,
-      prefilter_regex: pattern.prefilter_regex,
-    })
-    .collect()
-}
-
-const fn to_binding_options(options: &JsSearchOptions) -> BindingSearchOptions {
-  BindingSearchOptions {
-    literal_case_insensitive: options.literal_case_insensitive,
-    literal_whole_words: options.literal_whole_words,
-    regex_whole_words: options.regex_whole_words,
-    fuzzy_case_insensitive: options.fuzzy_case_insensitive,
-    fuzzy_whole_words: options.fuzzy_whole_words,
-    fuzzy_normalize_diacritics: options.fuzzy_normalize_diacritics,
-  }
-}
-
-fn to_binding_slices(
-  slices: &JsPreparedSearchSlices,
-) -> BindingPreparedSearchSlices {
-  BindingPreparedSearchSlices {
-    regex: slices.regex.as_ref().map(to_binding_slice),
-    custom_regex: slices.custom_regex.as_ref().map(to_binding_slice),
-    legal_forms: slices.legal_forms.as_ref().map(to_binding_slice),
-    triggers: slices.triggers.as_ref().map(to_binding_slice),
-    deny_list: slices.deny_list.as_ref().map(to_binding_slice),
-    street_types: slices.street_types.as_ref().map(to_binding_slice),
-    gazetteer: slices.gazetteer.as_ref().map(to_binding_slice),
-    countries: slices.countries.as_ref().map(to_binding_slice),
-  }
-}
-
-const fn to_binding_slice(slice: &JsPatternSlice) -> BindingPatternSlice {
-  BindingPatternSlice {
-    start: slice.start,
-    end: slice.end,
-  }
-}
-
-fn to_binding_regex_meta(
-  meta: Vec<JsRegexMatchMeta>,
-) -> Vec<BindingRegexMatchMeta> {
-  meta
-    .into_iter()
-    .map(|entry| BindingRegexMatchMeta {
-      label: entry.label,
-      score: entry.score,
-      source_detail: entry.source_detail,
-      requires_validation: entry.requires_validation,
-      min_byte_length: entry.min_byte_length,
-    })
-    .collect()
+fn with_prepared_search_cache<T>(
+  action: impl FnOnce(&mut PreparedSearchCache) -> T,
+) -> T {
+  let mut cache = match PREPARED_SEARCH_CACHE.lock() {
+    Ok(cache) => cache,
+    Err(poisoned) => poisoned.into_inner(),
+  };
+  action(&mut cache)
 }
 
 fn to_binding_operator_config(
@@ -484,6 +689,37 @@ fn to_js_operator_entries(
       operator: entry.operator,
     })
     .collect()
+}
+
+const fn stage_event(
+  stage: DiagnosticStage,
+  count: Option<usize>,
+  elapsed_us: Option<u64>,
+  input_bytes: Option<usize>,
+) -> DiagnosticEvent {
+  DiagnosticEvent {
+    stage,
+    kind: DiagnosticEventKind::StageSummary,
+    count,
+    engine: None,
+    pattern: None,
+    source: None,
+    source_detail: None,
+    label: None,
+    start: None,
+    end: None,
+    text: None,
+    score: None,
+    span_valid: None,
+    elapsed_us,
+    input_bytes,
+    reason: None,
+  }
+}
+
+fn elapsed_us(start: Instant) -> u64 {
+  let micros = start.elapsed().as_micros();
+  u64::try_from(micros).unwrap_or(u64::MAX)
 }
 
 fn to_napi_core_error(error: &stella_anonymize_core::Error) -> Error {

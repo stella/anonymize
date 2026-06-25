@@ -2,8 +2,15 @@
 
 //! Core anonymization contracts shared by host-language bindings.
 
+mod address_seeds;
+mod anchored;
+mod artifact_bytes;
 pub(crate) mod byte_offsets;
+mod dates;
 mod diagnostics;
+mod false_positives;
+mod legal_forms;
+mod money;
 pub(crate) mod normalize;
 mod placeholders;
 mod prepared;
@@ -11,23 +18,35 @@ mod processors;
 mod redact;
 mod resolution;
 mod search;
+mod signatures;
+mod triggers;
 mod types;
+mod validators;
 
+pub use address_seeds::AddressSeedData;
+pub use dates::DateData;
 pub use diagnostics::{
   DiagnosticEvent, DiagnosticEventKind, DiagnosticStage,
   StaticRedactionDiagnostics,
 };
+pub use legal_forms::LegalFormData;
+pub use money::{
+  AmountWordsData, CurrencyData, MagnitudeSuffixData, MonetaryData,
+  ShareQuantityTermData, WrittenAmountPatternData,
+};
 pub use normalize::normalize_for_search;
 pub use placeholders::build_placeholder_map;
 pub use prepared::{
-  PreparedSearch, PreparedSearchBuildResult, PreparedSearchConfig,
-  PreparedSearchMatches, PreparedSearchSlices, StaticDetectionResult,
-  StaticRedactionDiagnosticResult, StaticRedactionResult,
+  PreparedSearch, PreparedSearchArtifacts, PreparedSearchBuildResult,
+  PreparedSearchConfig, PreparedSearchMatches, PreparedSearchSlices,
+  StaticDetectionResult, StaticRedactionDiagnosticResult,
+  StaticRedactionResult,
 };
 pub use processors::{
   CountryMatchData, DenyListFilterData, DenyListMatchData, GazetteerMatchData,
-  PatternSlice, RegexMatchMeta, process_country_matches,
-  process_deny_list_matches, process_gazetteer_matches, process_regex_matches,
+  PatternSlice, RegexMatchMeta, SigningPlaceGuardData, StringGroups,
+  process_country_matches, process_deny_list_matches,
+  process_gazetteer_matches, process_regex_matches,
 };
 pub use redact::{deanonymise, redact_text};
 pub use resolution::{
@@ -36,7 +55,10 @@ pub use resolution::{
 };
 pub use search::{
   FuzzySearchOptions, LiteralSearchOptions, RegexSearchOptions, SearchIndex,
-  SearchOptions, SearchPattern,
+  SearchIndexArtifacts, SearchOptions, SearchPattern,
+};
+pub use triggers::{
+  TriggerData, TriggerRule, TriggerStrategy, TriggerValidation,
 };
 pub use types::{
   Entity, EntityKind, Error, OperatorConfig, OperatorEntry, OperatorType,

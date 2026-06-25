@@ -18,6 +18,7 @@
  */
 
 import type { PatternEntry, TextSearch } from "@stll/text-search";
+import legalFormRuleWords from "./data/legal-form-rule-words.json";
 
 import { getTextSearch } from "./search-engine";
 
@@ -27,6 +28,7 @@ import {
   type GazetteerEntry,
   type PipelineConfig,
 } from "./types";
+import { applyPipelineLanguageScope } from "./language-scope";
 import type { RegexMeta } from "./detectors/regex";
 import type { TriggerRule } from "./types";
 import type { DenyListData } from "./detectors/deny-list";
@@ -36,19 +38,46 @@ import { defaultContext } from "./context";
 import {
   REGEX_PATTERNS,
   REGEX_META,
+  NATIVE_REGEX_VALIDATOR_IDS,
   getCurrencyPatternEntries,
   CURRENCY_PATTERN_META,
+  getDateMonthData,
   getDatePatterns,
+  getYearWordData,
+  getMonetaryData,
   DATE_PATTERN_META,
   getSigningClausePatterns,
+  getNativeSigningClausePatterns,
   SIGNING_CLAUSE_META,
+  type DateMonthData,
+  type YearWordData,
+  type MonetaryData,
 } from "./detectors/regex";
-import { buildTriggerPatterns } from "./detectors/triggers";
+import {
+  buildTriggerPatterns,
+  getAddressStopKeywordsSync,
+} from "./detectors/triggers";
 import { buildDenyList } from "./detectors/deny-list";
-import { buildStreetTypePatterns } from "./detectors/address-seeds";
+import {
+  buildStreetTypePatterns,
+  getAddressSeedData,
+  type AddressSeedData,
+} from "./detectors/address-seeds";
 import { buildGazetteerPatterns } from "./detectors/gazetteer";
 import { buildCountryPatterns, type CountryData } from "./detectors/countries";
 import { expandLabelsForHotwordRules } from "./filters/hotword-rules";
+import {
+  getClauseNounHeadsSync,
+  getConnectorProseHeadsSync,
+  getKnownLegalSuffixes,
+  getLeadingClauseTrimsSync,
+  getLegalRoleHeadsSync,
+  getNormalizedInNameLegalFormWordsSync,
+  getNormalizedLegalBoundarySuffixesSync,
+  getSentenceVerbIndicatorsSync,
+  getStructuralSingleCapPrefixesSync,
+  warmLegalRoleHeads,
+} from "./detectors/legal-forms";
 
 const DEFAULT_CUSTOM_REGEX_SCORE = 0.9;
 const ALNUM_RE = /[\p{L}\p{N}]/u;
@@ -90,6 +119,8 @@ export type NativeRegexMatchMeta = {
   score: number;
   source_detail?: string;
   requires_validation?: boolean;
+  validator_id?: string;
+  validator_input?: string;
   min_byte_length?: number;
 };
 
@@ -97,22 +128,93 @@ export type NativeDenyListFilterData = {
   stopwords: string[];
   allow_list: string[];
   person_stopwords: string[];
+  person_trailing_nouns: string[];
   address_stopwords: string[];
+  address_jurisdiction_prefixes: string[];
   street_types: string[];
   first_names: string[];
   generic_roles: string[];
   sentence_starters: string[];
   trailing_address_word_exclusions: string[];
   defined_term_cues: string[];
+  signing_place_guards: NativeSigningPlaceGuardData[];
+};
+
+export type NativeSigningPlaceGuardData = {
+  prefix_phrases: string[];
+  suffix_phrases: string[];
 };
 
 export type NativeDenyListMatchData = {
-  labels: string[][];
-  custom_labels: string[][];
+  labels?: string[][];
+  label_table?: string[];
+  label_indices?: number[][];
+  custom_labels?: string[][];
+  custom_label_indices?: number[][];
   originals: string[];
-  sources: string[][];
+  sources?: string[][];
+  source_table?: string[];
+  source_indices?: number[][];
   filters?: NativeDenyListFilterData;
 };
+
+export type NativeTriggerStrategy =
+  | { type: "to-next-comma"; stop_words?: string[]; max_length?: number }
+  | { type: "to-end-of-line" }
+  | { type: "n-words"; count: number }
+  | { type: "company-id-value" }
+  | { type: "address"; max_chars?: number }
+  | { type: "match-pattern"; pattern: string; flags?: string };
+
+export type NativeTriggerValidation =
+  | { type: "starts-uppercase" }
+  | { type: "min-length"; min: number }
+  | { type: "max-length"; max: number }
+  | { type: "no-digits" }
+  | { type: "has-digits" }
+  | { type: "matches-pattern"; pattern: string; flags?: string }
+  | { type: "valid-id"; validator: string };
+
+export type NativeTriggerRule = {
+  trigger: string;
+  label: string;
+  strategy: NativeTriggerStrategy;
+  validations: NativeTriggerValidation[];
+  include_trigger: boolean;
+};
+
+export type NativeTriggerData = {
+  rules: NativeTriggerRule[];
+  address_stop_keywords: string[];
+  party_position_terms: string[];
+};
+
+export type NativeLegalFormData = {
+  suffixes: string[];
+  normalized_boundary_suffixes: string[];
+  normalized_in_name_words: string[];
+  normalized_suffix_words: string[];
+  role_heads: string[];
+  sentence_verb_indicators: string[];
+  clause_noun_heads: string[];
+  connector_prose_heads: string[];
+  structural_single_cap_prefixes: string[];
+  leading_clause_phrases: string[];
+  leading_clause_direct_prefixes: string[];
+  connector_words: string[];
+  and_connector_words: string[];
+  in_name_prepositions: string[];
+  company_suffix_words: string[];
+  comma_gated_direct_prefixes: string[];
+};
+
+export type NativeDateData = {
+  month_names_by_language: DateMonthData;
+  year_words_by_language: YearWordData;
+};
+
+export type NativeMonetaryData = MonetaryData;
+export type NativeAddressSeedData = AddressSeedData;
 
 export type NativePreparedSearchConfig = {
   regex_patterns: NativeSearchPattern[];
@@ -121,6 +223,7 @@ export type NativePreparedSearchConfig = {
   regex_options: NativeSearchOptions;
   custom_regex_options: NativeSearchOptions;
   literal_options: NativeSearchOptions;
+  literal_patterns_from_deny_list_data?: boolean;
   slices: {
     regex: PatternSlice;
     custom_regex: PatternSlice;
@@ -136,6 +239,11 @@ export type NativePreparedSearchConfig = {
   deny_list_data?: NativeDenyListMatchData;
   gazetteer_data?: GazetteerData;
   country_data?: CountryData;
+  trigger_data?: NativeTriggerData;
+  legal_form_data?: NativeLegalFormData;
+  address_seed_data?: NativeAddressSeedData;
+  date_data?: NativeDateData;
+  monetary_data?: NativeMonetaryData;
 };
 
 const createAllowedLabelSet = (
@@ -146,6 +254,9 @@ const labelIsAllowed = (
   label: string,
   allowedLabels: ReadonlySet<string> | null,
 ): boolean => allowedLabels === null || allowedLabels.has(label);
+
+const sliceContains = (slice: PatternSlice, index: number): boolean =>
+  index >= slice.start && index < slice.end;
 
 export type GazetteerData = {
   /** Maps local pattern index to entry label. */
@@ -207,6 +318,16 @@ type UnifiedSearchSources = {
   streetTypes: string[];
   gazResult: GazetteerPatternResult | null;
   countryResult: CountryPatternResult | null;
+  nativeLegalFormPatterns: string[];
+  nativeLegalFormData: NativeLegalFormData | null;
+  nativeDateData: NativeDateData | null;
+  nativeMonetaryData: NativeMonetaryData | null;
+  nativeAddressSeedData: NativeAddressSeedData | null;
+  nativeSigningPatterns: readonly string[];
+  partyPositionTerms: string[];
+  nativeCurrencyPatternRange: PatternSlice;
+  nativeDatePatternRange: PatternSlice;
+  nativeSigningPatternRange: PatternSlice;
   slices: UnifiedSearchInstance["slices"];
   literalAllPatterns: PatternEntry[] | string[];
   canUseGlobalWholeWordLiterals: boolean;
@@ -226,6 +347,7 @@ const buildUnifiedSearchSources = async (
   gazetteerEntries: GazetteerEntry[] = [],
   ctx: PipelineContext = defaultContext,
 ): Promise<UnifiedSearchSources> => {
+  config = applyPipelineLanguageScope(config);
   const legalFormsEnabled = isLegalFormsEnabled(config);
   const searchLabels =
     config.enableHotwordRules === true
@@ -243,13 +365,22 @@ const buildUnifiedSearchSources = async (
   // still gates whether the v2 detector runs in the pipeline, but
   // its pattern slice is always empty.
   const [
+    _legalFormWarmup,
     triggers,
     denyListData,
     streetTypes,
     currencyPatterns,
     datePatterns,
     signingPatterns,
+    nativeSigningPatterns,
+    dateMonthData,
+    yearWordData,
+    monetaryData,
+    addressSeedData,
   ] = await Promise.all([
+    legalFormsEnabled || config.enableTriggerPhrases
+      ? warmLegalRoleHeads()
+      : Promise.resolve(),
     config.enableTriggerPhrases
       ? buildTriggerPatterns()
       : Promise.resolve({
@@ -267,6 +398,21 @@ const buildUnifiedSearchSources = async (
     config.enableRegex && labelIsAllowed("address", allowedLabels)
       ? getSigningClausePatterns()
       : Promise.resolve([] as string[]),
+    config.enableRegex && labelIsAllowed("address", allowedLabels)
+      ? getNativeSigningClausePatterns()
+      : Promise.resolve([] as string[]),
+    config.enableRegex && labelIsAllowed("date", allowedLabels)
+      ? getDateMonthData()
+      : Promise.resolve(null),
+    config.enableRegex && labelIsAllowed("date", allowedLabels)
+      ? getYearWordData()
+      : Promise.resolve(null),
+    config.enableRegex && labelIsAllowed("monetary amount", allowedLabels)
+      ? getMonetaryData()
+      : Promise.resolve(null),
+    labelIsAllowed("address", allowedLabels)
+      ? getAddressSeedData()
+      : Promise.resolve(null),
   ]);
   // Read but never populated: the legal-form slice in the unified
   // search is permanently empty after the v2 rewrite. Tracking it
@@ -275,6 +421,44 @@ const buildUnifiedSearchSources = async (
   // that hasn't migrated to v2-aware indexing yet.
   const legalForms: readonly string[] = [];
   void legalFormsEnabled;
+  const nativeLegalFormPatterns = legalFormsEnabled
+    ? [...getKnownLegalSuffixes()]
+    : [];
+  const nativeLegalFormData =
+    nativeLegalFormPatterns.length > 0
+      ? {
+          suffixes: nativeLegalFormPatterns,
+          normalized_boundary_suffixes: [
+            ...getNormalizedLegalBoundarySuffixesSync(),
+          ],
+          normalized_in_name_words: [
+            ...getNormalizedInNameLegalFormWordsSync(),
+          ],
+          normalized_suffix_words: nativeLegalFormPatterns
+            .map((suffix) => suffix.replaceAll(/[.,\s]/g, "").toLowerCase())
+            .filter((suffix) => suffix.length > 0),
+          role_heads: [...getLegalRoleHeadsSync()],
+          sentence_verb_indicators: [...getSentenceVerbIndicatorsSync()],
+          clause_noun_heads: [...getClauseNounHeadsSync()],
+          connector_prose_heads: [...getConnectorProseHeadsSync()],
+          structural_single_cap_prefixes: [
+            ...getStructuralSingleCapPrefixesSync(),
+          ],
+          leading_clause_phrases: [...getLeadingClauseTrimsSync().phrases],
+          leading_clause_direct_prefixes: [
+            ...getLeadingClauseTrimsSync().directPrefixes,
+          ],
+          connector_words: legalFormRuleWords.connectorWords,
+          and_connector_words: legalFormRuleWords.andConnectorWords,
+          in_name_prepositions: legalFormRuleWords.inNamePrepositions,
+          company_suffix_words: legalFormRuleWords.companySuffixWords,
+          comma_gated_direct_prefixes:
+            legalFormRuleWords.commaGatedDirectPrefixes,
+        }
+      : null;
+  const partyPositionTerms = config.enableTriggerPhrases
+    ? [...getLegalRoleHeadsSync()]
+    : [];
 
   // ── Instance 1: regex + triggers + legal-forms ──
   // Trigger patterns are lowercased strings with
@@ -298,14 +482,26 @@ const buildUnifiedSearchSources = async (
       regexMeta.push(meta);
     }
   }
+  const nativeCurrencyPatternRange = {
+    start: allRegex.length,
+    end: allRegex.length + currencyPatterns.length,
+  };
   for (const pattern of currencyPatterns) {
     allRegex.push(pattern);
     regexMeta.push(CURRENCY_PATTERN_META);
   }
+  const nativeDatePatternRange = {
+    start: allRegex.length,
+    end: allRegex.length + datePatterns.length,
+  };
   for (const pattern of datePatterns) {
     allRegex.push(pattern);
     regexMeta.push(DATE_PATTERN_META);
   }
+  const nativeSigningPatternRange = {
+    start: allRegex.length,
+    end: allRegex.length + signingPatterns.length,
+  };
   for (const pattern of signingPatterns) {
     allRegex.push(pattern);
     regexMeta.push(SIGNING_CLAUSE_META);
@@ -315,6 +511,14 @@ const buildUnifiedSearchSources = async (
     score: entry.score ?? DEFAULT_CUSTOM_REGEX_SCORE,
     sourceDetail: "custom-regex" as const,
   }));
+  const nativeDateData =
+    dateMonthData === null
+      ? null
+      : {
+          month_names_by_language: dateMonthData,
+          year_words_by_language: yearWordData ?? {},
+        };
+  const nativeMonetaryData = monetaryData;
 
   let offset = 0;
 
@@ -414,12 +618,14 @@ const buildUnifiedSearchSources = async (
     }
     return entry.pattern;
   };
-  const hasCustomDenyListPatterns =
-    denyListData?.sources.some((sources) =>
-      sources.includes("custom-deny-list"),
+  const hasCustomLiteralBoundaryOverride =
+    denyListData?.originals.some(
+      (pattern, index) =>
+        (denyListData.sources[index] ?? []).includes("custom-deny-list") &&
+        !customDenyListNeedsWholeWords(pattern),
     ) ?? false;
   const canUseGlobalWholeWordLiterals =
-    !hasCustomDenyListPatterns && gazResult === null;
+    !hasCustomLiteralBoundaryOverride && gazResult === null;
   const literalAllPatterns: PatternEntry[] | string[] =
     canUseGlobalWholeWordLiterals
       ? [
@@ -452,6 +658,16 @@ const buildUnifiedSearchSources = async (
     streetTypes,
     gazResult,
     countryResult,
+    nativeLegalFormPatterns,
+    nativeLegalFormData,
+    nativeDateData,
+    nativeMonetaryData,
+    nativeAddressSeedData: addressSeedData,
+    nativeSigningPatterns,
+    partyPositionTerms,
+    nativeCurrencyPatternRange,
+    nativeDatePatternRange,
+    nativeSigningPatternRange,
     slices: {
       regex: regexSlice,
       customRegex: customRegexSlice,
@@ -485,10 +701,26 @@ export const buildNativeStaticSearchBundle = async (
       customRegexes: sources.customRegexes,
       customRegexMeta: sources.customRegexMeta,
       denyListData: sources.denyListData,
+      triggerPatterns: sources.triggers.patterns,
+      triggerRules: sources.triggers.rules,
+      legalFormPatterns: sources.nativeLegalFormPatterns,
+      legalFormData: sources.nativeLegalFormData,
+      dateData: sources.nativeDateData,
+      monetaryData: sources.nativeMonetaryData,
+      addressSeedData: sources.nativeAddressSeedData,
+      nativeSigningPatterns: sources.nativeSigningPatterns,
+      partyPositionTerms: sources.partyPositionTerms,
+      streetTypes: sources.streetTypes,
+      omitRegexRanges: [
+        sources.nativeCurrencyPatternRange,
+        sources.nativeDatePatternRange,
+        sources.nativeSigningPatternRange,
+      ],
       gazetteerPatterns: sources.gazResult?.patterns ?? [],
       gazetteerData: sources.gazResult?.data ?? null,
       countryPatterns: sources.countryResult?.patterns ?? [],
       countryData: sources.countryResult?.data ?? null,
+      canUseGlobalWholeWordLiterals: sources.canUseGlobalWholeWordLiterals,
       customDenyListNeedsWholeWords: sources.customDenyListNeedsWholeWords,
     }),
     slices: sources.slices,
@@ -548,10 +780,26 @@ export const buildUnifiedSearch = async (
     customRegexes: sources.customRegexes,
     customRegexMeta: sources.customRegexMeta,
     denyListData: sources.denyListData,
+    triggerPatterns: sources.triggers.patterns,
+    triggerRules: sources.triggers.rules,
+    legalFormPatterns: sources.nativeLegalFormPatterns,
+    legalFormData: sources.nativeLegalFormData,
+    dateData: sources.nativeDateData,
+    monetaryData: sources.nativeMonetaryData,
+    addressSeedData: sources.nativeAddressSeedData,
+    nativeSigningPatterns: sources.nativeSigningPatterns,
+    partyPositionTerms: sources.partyPositionTerms,
+    streetTypes: sources.streetTypes,
+    omitRegexRanges: [
+      sources.nativeCurrencyPatternRange,
+      sources.nativeDatePatternRange,
+      sources.nativeSigningPatternRange,
+    ],
     gazetteerPatterns: sources.gazResult?.patterns ?? [],
     gazetteerData: sources.gazResult?.data ?? null,
     countryPatterns: sources.countryResult?.patterns ?? [],
     countryData: sources.countryResult?.data ?? null,
+    canUseGlobalWholeWordLiterals: sources.canUseGlobalWholeWordLiterals,
     customDenyListNeedsWholeWords: sources.customDenyListNeedsWholeWords,
   });
 
@@ -576,10 +824,22 @@ type BuildNativeStaticConfigArgs = {
   customRegexes: readonly { pattern: string }[];
   customRegexMeta: readonly RegexMeta[];
   denyListData: DenyListData | null;
+  triggerPatterns: readonly string[];
+  triggerRules: readonly TriggerRule[];
+  legalFormPatterns: readonly string[];
+  legalFormData: NativeLegalFormData | null;
+  dateData: NativeDateData | null;
+  monetaryData: NativeMonetaryData | null;
+  addressSeedData: NativeAddressSeedData | null;
+  nativeSigningPatterns: readonly string[];
+  partyPositionTerms: readonly string[];
+  omitRegexRanges?: readonly PatternSlice[];
+  streetTypes: readonly string[];
   gazetteerPatterns: readonly PatternEntry[];
   gazetteerData: GazetteerData | null;
   countryPatterns: readonly PatternEntry[];
   countryData: CountryData | null;
+  canUseGlobalWholeWordLiterals: boolean;
   customDenyListNeedsWholeWords: (pattern: string) => boolean;
 };
 
@@ -589,21 +849,40 @@ const buildNativeStaticConfig = ({
   customRegexes,
   customRegexMeta,
   denyListData,
+  triggerPatterns,
+  triggerRules,
+  legalFormPatterns,
+  legalFormData,
+  dateData,
+  monetaryData,
+  addressSeedData,
+  nativeSigningPatterns,
+  partyPositionTerms,
+  omitRegexRanges,
+  streetTypes,
   gazetteerPatterns,
   gazetteerData,
   countryPatterns,
   countryData,
+  canUseGlobalWholeWordLiterals,
   customDenyListNeedsWholeWords,
 }: BuildNativeStaticConfigArgs): NativePreparedSearchConfig => {
   const nativeRegexPatterns: NativeSearchPattern[] = [];
   const nativeRegexMeta: NativeRegexMatchMeta[] = [];
   for (const [index, pattern] of regexPatterns.entries()) {
+    if (omitRegexRanges?.some((range) => sliceContains(range, index))) {
+      continue;
+    }
     const meta = regexMeta[index];
-    if (!meta || meta.validator) {
+    if (!meta || !nativeSupportsRegexMeta(meta)) {
       continue;
     }
     nativeRegexPatterns.push(toNativeRegexPattern(pattern));
     nativeRegexMeta.push(toNativeRegexMeta(meta));
+  }
+  for (const pattern of nativeSigningPatterns) {
+    nativeRegexPatterns.push(toNativeRegexPattern(pattern));
+    nativeRegexMeta.push(toNativeRegexMeta(SIGNING_CLAUSE_META));
   }
 
   const nativeCustomRegexPatterns = customRegexes.map((entry) => ({
@@ -611,27 +890,58 @@ const buildNativeStaticConfig = ({
     pattern: entry.pattern,
   }));
   const nativeCustomRegexMeta = customRegexMeta.map(toNativeRegexMeta);
+  const legalFormNativePatterns = legalFormPatterns.map(
+    toNativeLegalFormPattern,
+  );
+  const triggerNativePatterns = triggerPatterns.map(toNativeTriggerPattern);
+  const streetTypeNativePatterns = addressSeedData
+    ? streetTypes.map((pattern) =>
+        canUseGlobalWholeWordLiterals
+          ? toNativeGlobalLiteralPattern(pattern)
+          : toNativeDenyListPattern(pattern, true),
+      )
+    : [];
+  const denyListPatternsFromData =
+    canUseGlobalWholeWordLiterals && denyListData !== null;
 
   const denyPatterns =
-    denyListData?.originals.map((pattern, index) =>
-      toNativeDenyListPattern(
-        pattern,
-        stringArrayValue(denyListData.sources[index]).includes(
-          "custom-deny-list",
-        )
-          ? customDenyListNeedsWholeWords(pattern)
-          : true,
-      ),
-    ) ?? [];
+    denyListData?.originals
+      .map((pattern, index) => {
+        if (denyListPatternsFromData) {
+          return null;
+        }
+        return toNativeDenyListPattern(
+          pattern,
+          stringArrayValue(denyListData.sources[index]).includes(
+            "custom-deny-list",
+          )
+            ? customDenyListNeedsWholeWords(pattern)
+            : true,
+        );
+      })
+      .filter((pattern): pattern is NativeSearchPattern => pattern !== null) ??
+    [];
   const gazetteerNativePatterns = gazetteerPatterns.map(toNativeLiteralPattern);
-  const countryNativePatterns = countryPatterns.map(toNativeLiteralPattern);
+  const countryNativePatterns = countryPatterns.map((pattern) =>
+    canUseGlobalWholeWordLiterals
+      ? toNativeGlobalLiteralPattern(patternEntryText(pattern))
+      : toNativeLiteralPattern(pattern),
+  );
 
   let literalOffset = 0;
+  const denyListPatternCount = denyListPatternsFromData
+    ? (denyListData?.originals.length ?? 0)
+    : denyPatterns.length;
   const denyListSlice = {
     start: literalOffset,
-    end: literalOffset + denyPatterns.length,
+    end: literalOffset + denyListPatternCount,
   };
   literalOffset = denyListSlice.end;
+  const streetTypesSlice = {
+    start: literalOffset,
+    end: literalOffset + streetTypeNativePatterns.length,
+  };
+  literalOffset = streetTypesSlice.end;
   const gazetteerSlice = {
     start: literalOffset,
     end: literalOffset + gazetteerNativePatterns.length,
@@ -647,31 +957,50 @@ const buildNativeStaticConfig = ({
     custom_regex_patterns: nativeCustomRegexPatterns,
     literal_patterns: [
       ...denyPatterns,
+      ...streetTypeNativePatterns,
       ...gazetteerNativePatterns,
       ...countryNativePatterns,
     ],
-    regex_options: { regex_whole_words: false },
+    regex_options: {
+      literal_case_insensitive: true,
+      literal_whole_words: false,
+      regex_whole_words: false,
+    },
     custom_regex_options: { regex_whole_words: false },
     literal_options: {
       literal_case_insensitive: true,
-      literal_whole_words: false,
+      literal_whole_words: canUseGlobalWholeWordLiterals,
       fuzzy_case_insensitive: true,
       fuzzy_whole_words: true,
       fuzzy_normalize_diacritics: true,
     },
+    literal_patterns_from_deny_list_data: denyListPatternsFromData,
     slices: {
       regex: { start: 0, end: nativeRegexPatterns.length },
       custom_regex: { start: 0, end: nativeCustomRegexPatterns.length },
-      legal_forms: { start: 0, end: 0 },
-      triggers: { start: 0, end: 0 },
+      legal_forms: {
+        start: nativeRegexPatterns.length,
+        end: nativeRegexPatterns.length + legalFormNativePatterns.length,
+      },
+      triggers: {
+        start: nativeRegexPatterns.length + legalFormNativePatterns.length,
+        end:
+          nativeRegexPatterns.length +
+          legalFormNativePatterns.length +
+          triggerNativePatterns.length,
+      },
       deny_list: denyListSlice,
-      street_types: { start: 0, end: 0 },
+      street_types: streetTypesSlice,
       gazetteer: gazetteerSlice,
       countries: countriesSlice,
     },
     regex_meta: nativeRegexMeta,
     custom_regex_meta: nativeCustomRegexMeta,
   };
+  nativeConfig.regex_patterns.push(
+    ...legalFormNativePatterns,
+    ...triggerNativePatterns,
+  );
   if (denyListData) {
     nativeConfig.deny_list_data = toNativeDenyListData(denyListData);
   }
@@ -681,7 +1010,125 @@ const buildNativeStaticConfig = ({
   if (countryData) {
     nativeConfig.country_data = countryData;
   }
+  if (triggerRules.length > 0) {
+    nativeConfig.trigger_data = {
+      rules: triggerRules.map(toNativeTriggerRule),
+      address_stop_keywords: [...getAddressStopKeywordsSync()],
+      party_position_terms: [...partyPositionTerms],
+    };
+  }
+  if (legalFormData) {
+    nativeConfig.legal_form_data = legalFormData;
+  }
+  if (addressSeedData) {
+    nativeConfig.address_seed_data = addressSeedData;
+  }
+  if (dateData) {
+    nativeConfig.date_data = dateData;
+  }
+  if (monetaryData) {
+    nativeConfig.monetary_data = monetaryData;
+  }
   return nativeConfig;
+};
+
+const toNativeLegalFormPattern = (pattern: string): NativeSearchPattern => ({
+  kind: "literal",
+  pattern,
+});
+
+const toNativeTriggerPattern = (pattern: string): NativeSearchPattern => ({
+  kind: "literal-with-options",
+  pattern,
+  case_insensitive: true,
+});
+
+const toNativeTriggerRule = (rule: TriggerRule): NativeTriggerRule => ({
+  trigger: rule.trigger,
+  label: rule.label,
+  strategy: toNativeTriggerStrategy(rule.strategy),
+  validations: rule.validations.map(toNativeTriggerValidation),
+  include_trigger: rule.includeTrigger,
+});
+
+const toNativeTriggerStrategy = (
+  strategy: TriggerRule["strategy"],
+): NativeTriggerStrategy => {
+  switch (strategy.type) {
+    case "to-next-comma": {
+      const result: NativeTriggerStrategy = { type: "to-next-comma" };
+      if (strategy.stopWords !== undefined) {
+        result.stop_words = [...strategy.stopWords];
+      }
+      if (strategy.maxLength !== undefined) {
+        result.max_length = strategy.maxLength;
+      }
+      return result;
+    }
+    case "to-end-of-line":
+      return { type: "to-end-of-line" };
+    case "n-words":
+      return { type: "n-words", count: strategy.count };
+    case "company-id-value":
+      return { type: "company-id-value" };
+    case "address": {
+      const result: NativeTriggerStrategy = { type: "address" };
+      if (strategy.maxChars !== undefined) {
+        result.max_chars = strategy.maxChars;
+      }
+      return result;
+    }
+    case "match-pattern": {
+      const result: NativeTriggerStrategy = {
+        type: "match-pattern",
+        pattern: strategy.pattern,
+      };
+      if (strategy.flags !== undefined) {
+        result.flags = strategy.flags;
+      }
+      return result;
+    }
+    default: {
+      const _exhaustive: never = strategy;
+      throw new Error(`Unknown trigger strategy: ${String(_exhaustive)}`);
+    }
+  }
+};
+
+const toNativeTriggerValidation = (
+  validation: TriggerRule["validations"][number],
+): NativeTriggerValidation => {
+  switch (validation.type) {
+    case "starts-uppercase":
+      return { type: "starts-uppercase" };
+    case "min-length":
+      return { type: "min-length", min: validation.min };
+    case "max-length":
+      return { type: "max-length", max: validation.max };
+    case "no-digits":
+      return { type: "no-digits" };
+    case "has-digits":
+      return { type: "has-digits" };
+    case "matches-pattern": {
+      const result: NativeTriggerValidation = {
+        type: "matches-pattern",
+        pattern: validation.re.source,
+      };
+      if (validation.re.flags.length > 0) {
+        result.flags = validation.re.flags;
+      }
+      return result;
+    }
+    case "valid-id":
+      return {
+        type: "valid-id",
+        validator: validation.validator,
+      };
+    default: {
+      const _exhaustive: never = validation;
+      throw new Error(`Unknown trigger validation: ${String(_exhaustive)}`);
+    }
+  }
 };
 
 const toNativeDenyListPattern = (
@@ -692,6 +1139,13 @@ const toNativeDenyListPattern = (
   pattern,
   case_insensitive: true,
   whole_words: wholeWords,
+});
+
+const toNativeGlobalLiteralPattern = (
+  pattern: string,
+): NativeSearchPattern => ({
+  kind: "literal",
+  pattern,
 });
 
 const toNativeRegexPattern = (entry: PatternEntry): NativeSearchPattern => {
@@ -790,6 +1244,12 @@ const toNativeRegexMeta = (meta: RegexMeta): NativeRegexMatchMeta => {
   }
   if (meta.validator) {
     result.requires_validation = true;
+    if (meta.validatorId) {
+      result.validator_id = meta.validatorId;
+    }
+    if (meta.validatorInputKind) {
+      result.validator_input = meta.validatorInputKind;
+    }
   }
   if (meta.minByteLength !== undefined) {
     result.min_byte_length = meta.minByteLength;
@@ -797,15 +1257,73 @@ const toNativeRegexMeta = (meta: RegexMeta): NativeRegexMatchMeta => {
   return result;
 };
 
-const toNativeDenyListData = (data: DenyListData): NativeDenyListMatchData => ({
-  labels: data.labels.map(stringArrayValue),
-  custom_labels: data.originals.map((_, index) =>
-    stringArrayValue(data.customLabels[index]),
-  ),
-  originals: data.originals,
-  sources: data.sources.map(stringArrayValue),
-  filters: toNativeDenyListFilters(data.filters),
-});
+const nativeSupportsRegexMeta = (meta: RegexMeta): boolean => {
+  if (!meta.validator) {
+    return true;
+  }
+  return (
+    meta.validatorId !== undefined &&
+    NATIVE_REGEX_VALIDATOR_IDS.has(meta.validatorId) &&
+    (meta.validatorInputKind === undefined ||
+      meta.validatorInputKind === "digits-only")
+  );
+};
+
+const toNativeDenyListData = (data: DenyListData): NativeDenyListMatchData => {
+  const labelEncoder = createStringGroupEncoder();
+  const sourceEncoder = createStringGroupEncoder();
+  const result: NativeDenyListMatchData = {
+    label_table: labelEncoder.table,
+    label_indices: data.labels.map(labelEncoder.encode),
+    originals: data.originals,
+    source_table: sourceEncoder.table,
+    source_indices: data.sources.map(sourceEncoder.encode),
+    filters: toNativeDenyListFilters(data.filters),
+  };
+  if (data.customLabels.length > 0) {
+    const customLabelIndices = data.originals.map((_, index) =>
+      labelEncoder.encode(data.customLabels[index]),
+    );
+    if (customLabelIndices.some((indices) => indices.length > 0)) {
+      result.custom_label_indices = customLabelIndices;
+    }
+  }
+  return result;
+};
+
+const createStringGroupEncoder = (): {
+  table: string[];
+  encode: (values: string | readonly string[] | undefined) => number[];
+} => {
+  const table: string[] = [];
+  const indexes = new Map<string, number>();
+  const encodeValue = (value: string): number => {
+    const existing = indexes.get(value);
+    if (existing !== undefined) {
+      return existing;
+    }
+    const index = table.length;
+    table.push(value);
+    indexes.set(value, index);
+    return index;
+  };
+  return {
+    table,
+    encode: (values) => {
+      if (values === undefined) {
+        return [];
+      }
+      if (typeof values === "string") {
+        return [encodeValue(values)];
+      }
+      const encoded: number[] = [];
+      for (const value of values) {
+        encoded.push(encodeValue(value));
+      }
+      return encoded;
+    },
+  };
+};
 
 const toNativeDenyListFilters = (
   filters: DenyListData["filters"],
@@ -813,13 +1331,19 @@ const toNativeDenyListFilters = (
   stopwords: filters.stopwords,
   allow_list: filters.allowList,
   person_stopwords: filters.personStopwords,
+  person_trailing_nouns: filters.personTrailingNouns,
   address_stopwords: filters.addressStopwords,
+  address_jurisdiction_prefixes: filters.addressJurisdictionPrefixes,
   street_types: filters.streetTypes,
   first_names: filters.firstNames,
   generic_roles: filters.genericRoles,
   sentence_starters: filters.sentenceStarters,
   trailing_address_word_exclusions: filters.trailingAddressWordExclusions,
   defined_term_cues: filters.definedTermCues,
+  signing_place_guards: filters.signingPlaceGuards.map((entry) => ({
+    prefix_phrases: entry.prefixPhrases,
+    suffix_phrases: entry.suffixPhrases,
+  })),
 });
 
 const stringArrayValue = (

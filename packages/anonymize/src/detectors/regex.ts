@@ -164,8 +164,10 @@ export type RegexMeta = {
   minByteLength?: number;
   /** Post-match stdnum validator for confirmation. */
   validator?: Validator;
+  validatorId?: string;
   /** Extract the identifier portion when context is part of the regex span. */
   validatorInput?: (text: string) => string;
+  validatorInputKind?: "digits-only" | "crypto-wallet-candidate";
 };
 
 type RegexDef = {
@@ -174,10 +176,16 @@ type RegexDef = {
   score: number;
   minByteLength?: number;
   validator?: Validator;
+  validatorId?: string;
   validatorInput?: (text: string) => string;
+  validatorInputKind?: "digits-only" | "crypto-wallet-candidate";
 };
 
 type AmountWordsConfig = {
+  patterns?: Array<{
+    lang: string;
+    keywords: string[];
+  }>;
   percentages?: Array<{
     lang: string;
     keywords: string[];
@@ -201,6 +209,92 @@ type AmountWordsConfig = {
 };
 
 const AMOUNT_WORDS = amountWordsConfig as AmountWordsConfig;
+
+const DIGITS_ONLY_VALIDATOR_INPUT = (text: string): string =>
+  text.replace(/\D/g, "");
+
+const VALIDATOR_IDS = new Map<Validator, string>([
+  [at.businessid, "at.businessid"],
+  [at.tin, "at.tin"],
+  [at.uid, "at.uid"],
+  [au.abn, "au.abn"],
+  [au.acn, "au.acn"],
+  [be.nn, "be.nn"],
+  [be.vat, "be.vat"],
+  [bg.vat, "bg.vat"],
+  [br.cnpj, "br.cnpj"],
+  [br.cpf, "br.cpf"],
+  [ch.uid, "ch.uid"],
+  [cn.ric, "cn.ric"],
+  [crypto.wallet, "crypto.wallet"],
+  [cy.vat, "cy.vat"],
+  [cz.dic, "cz.dic"],
+  [cz.rc, "cz.rc"],
+  [de.idnr, "de.idnr"],
+  [de.stnr, "de.stnr"],
+  [de.svnr, "de.svnr"],
+  [de.vat, "de.vat"],
+  [dk.cpr, "dk.cpr"],
+  [dk.vat, "dk.vat"],
+  [ee.ik, "ee.ik"],
+  [ee.vat, "ee.vat"],
+  [es.cif, "es.cif"],
+  [es.dni, "es.dni"],
+  [es.nie, "es.nie"],
+  [es.nss, "es.nss"],
+  [es.vat, "es.vat"],
+  [fi.hetu, "fi.hetu"],
+  [fi.vat, "fi.vat"],
+  [fi.ytunnus, "fi.ytunnus"],
+  [fr.nir, "fr.nir"],
+  [fr.siren, "fr.siren"],
+  [fr.siret, "fr.siret"],
+  [fr.tva, "fr.tva"],
+  [gb.nhs, "gb.nhs"],
+  [gb.nino, "gb.nino"],
+  [gb.vat, "gb.vat"],
+  [gr.vat, "gr.vat"],
+  [hr.vat, "hr.vat"],
+  [hu.vat, "hu.vat"],
+  [ie.pps, "ie.pps"],
+  [ie.vat, "ie.vat"],
+  [it.codiceFiscale, "it.codiceFiscale"],
+  [it.iva, "it.iva"],
+  [lt.asmens, "lt.asmens"],
+  [lt.vat, "lt.vat"],
+  [lu.vat, "lu.vat"],
+  [lv.vat, "lv.vat"],
+  [mt.vat, "mt.vat"],
+  [nl.vat, "nl.vat"],
+  [no.mva, "no.mva"],
+  [no.orgnr, "no.orgnr"],
+  [pl.nip, "pl.nip"],
+  [pl.pesel, "pl.pesel"],
+  [pt.cc, "pt.cc"],
+  [pt.vat, "pt.vat"],
+  [ro.cnp, "ro.cnp"],
+  [ro.vat, "ro.vat"],
+  [se.personnummer, "se.personnummer"],
+  [si.vat, "si.vat"],
+  [sk.dic, "sk.dic"],
+  [us.ein, "us.ein"],
+]);
+
+export const NATIVE_REGEX_VALIDATOR_IDS: ReadonlySet<string> = new Set([
+  "au.abn",
+  "br.cnpj",
+  "br.cpf",
+  "cz.dic",
+  "cz.rc",
+  "es.cif",
+  "es.dni",
+  "es.nie",
+  "gb.nhs",
+  "gb.nino",
+  "no.mva",
+  "no.orgnr",
+  "us.ein",
+]);
 
 // ── stdnum validator entries ────────────────────────
 // Each entry pairs a @stll/stdnum validator with a
@@ -564,7 +658,7 @@ const CZ_BIRTH_NUMBER: RegexDef = {
 
 // Czech commercial-register reference. Every Czech
 // legal entity in the public registry is uniquely
-// identified by a registry section letter ("oddíl X")
+// identified by a registry section code ("oddíl X")
 // plus an insert number ("vložka NNN"). The full phrase
 // uniquely identifies the company, so we emit it as a
 // single registration-number entity rather than only
@@ -575,11 +669,11 @@ const CZ_BIRTH_NUMBER: RegexDef = {
 //   - optional whitespace around comma and after each
 //     keyword (DOCX exports add NBSPs and double
 //     spaces);
-//   - section letter is a single A-Z; insert number is
-//     a 1-6 digit integer.
+//   - section code is a short letter code; insert number
+//     is a 1-6 digit integer.
 const CZ_COMMERCIAL_REGISTER: RegexDef = {
   pattern:
-    `(?i)\\boddíl[^\\S\\n]+[A-Z]` +
+    `(?i)\\boddíl[^\\S\\n]+\\p{L}{1,3}` +
     `[^\\S\\n]*,[^\\S\\n]*` +
     `vložka[^\\S\\n]+\\d{1,6}\\b`,
   label: "registration number",
@@ -695,7 +789,8 @@ const NHS_NUMBER_CONTEXT: RegexDef = {
   label: "national identification number",
   score: 0.95,
   validator: gb.nhs,
-  validatorInput: (text) => text.replace(/\D/g, ""),
+  validatorInput: DIGITS_ONLY_VALIDATOR_INPUT,
+  validatorInputKind: "digits-only",
 };
 
 const PASSPORT_CONTEXT: RegexDef = {
@@ -802,6 +897,7 @@ const CRYPTO_WALLET_ADDRESS: RegexDef = {
   score: 0.85,
   validator: crypto.wallet,
   validatorInput: getCryptoWalletCandidate,
+  validatorInputKind: "crypto-wallet-candidate",
 };
 
 const AU_ABN_FORMATTED: RegexDef = {
@@ -1165,12 +1261,21 @@ export const REGEX_META: readonly RegexMeta[] = ALL_REGEX_DEFS.map(
     };
     if (d.validator) {
       meta.validator = d.validator;
+      const validatorId = d.validatorId ?? VALIDATOR_IDS.get(d.validator);
+      if (!validatorId) {
+        throw new Error(`Missing regex validator id for ${d.label}`);
+      }
+      meta.validatorId = validatorId;
     }
     if (d.minByteLength) {
       meta.minByteLength = d.minByteLength;
     }
     if (d.validatorInput) {
       meta.validatorInput = d.validatorInput;
+      if (!d.validatorInputKind) {
+        throw new Error(`Missing regex validator input kind for ${d.label}`);
+      }
+      meta.validatorInputKind = d.validatorInputKind;
     }
     return meta;
   },
@@ -1184,6 +1289,9 @@ export const REGEX_META: readonly RegexMeta[] = ALL_REGEX_DEFS.map(
  * The `_` keys are skipped by `buildMonthAlternation`.
  */
 type DateMonths = Record<string, string[] | string>;
+
+export type DateMonthData = Record<string, string[]>;
+export type YearWordData = Record<string, string[]>;
 
 /**
  * Build month-name alternation from date-months.json.
@@ -1211,6 +1319,18 @@ const buildMonthAlternation = (months: DateMonths): string => {
     .toSorted((a, b) => b.length - a.length)
     .map(escapeRegex)
     .join("|");
+};
+
+const buildDateMonthData = (months: DateMonths): DateMonthData => {
+  const result: DateMonthData = {};
+  for (const [key, value] of Object.entries(months)) {
+    if (key.startsWith("_")) continue;
+    const names = Array.isArray(value) ? value : [value];
+    result[key] = names.filter(
+      (name) => name.replace(/\.$/, "").length >= MIN_MONTH_NAME_LENGTH,
+    );
+  }
+  return result;
 };
 
 /**
@@ -1248,13 +1368,19 @@ const buildDatePatternsFromMonths = (alt: string): string[] => {
 
 /** Cached promise for date patterns. Loaded once. */
 let datePatternPromise: Promise<string[]> | null = null;
+let dateMonthDataPromise: Promise<DateMonthData> | null = null;
+let yearWordDataPromise: Promise<YearWordData> | null = null;
 
-const loadDatePatterns = async (): Promise<string[]> => {
+const loadDateMonths = async (): Promise<DateMonths> => {
   const mod = await import("../data/date-months.json");
   // Dynamic import of JSON returns { default, ...keys }.
   // Use `default` if present (ESM wrapper), else the
   // module itself.
-  const months: DateMonths = mod.default ?? mod;
+  return mod.default ?? mod;
+};
+
+const loadDatePatterns = async (): Promise<string[]> => {
+  const months = await loadDateMonths();
   const alt = buildMonthAlternation(months);
   return buildDatePatternsFromMonths(alt);
 };
@@ -1274,6 +1400,35 @@ export const getDatePatterns = (): Promise<string[]> => {
   return datePatternPromise;
 };
 
+export const getDateMonthData = (): Promise<DateMonthData> => {
+  if (!dateMonthDataPromise) {
+    dateMonthDataPromise = loadDateMonths()
+      .then(buildDateMonthData)
+      .catch((err) => {
+        dateMonthDataPromise = null;
+        throw err;
+      });
+  }
+  return dateMonthDataPromise;
+};
+
+export const getYearWordData = (): Promise<YearWordData> => {
+  yearWordDataPromise ??= import("../data/year-words.json").then((mod) => {
+    const data = (mod.default ?? mod) as Record<string, unknown>;
+    const result: YearWordData = {};
+    for (const [key, words] of Object.entries(data)) {
+      if (key.startsWith("_") || !Array.isArray(words)) {
+        continue;
+      }
+      result[key] = words.filter(
+        (word): word is string => typeof word === "string" && word.length > 0,
+      );
+    }
+    return result;
+  });
+  return yearWordDataPromise;
+};
+
 /** Date pattern metadata (all are score 1 dates). */
 export const DATE_PATTERN_META: Readonly<RegexMeta> = Object.freeze({
   label: "date",
@@ -1290,6 +1445,28 @@ type CurrenciesData = {
   codes: string[];
   symbols: string[];
   localNames?: string[];
+};
+
+export type MonetaryData = {
+  currencies: {
+    codes: string[];
+    symbols: string[];
+    local_names: string[];
+  };
+  amount_words: {
+    written_amount_patterns: Array<{
+      keywords: string[];
+    }>;
+    magnitude_suffixes: Array<{
+      words: string[];
+      abbreviations_case_insensitive: string[];
+      abbreviations_case_sensitive: string[];
+    }>;
+    share_quantity_terms: Array<{
+      modifiers: string[];
+      nouns: string[];
+    }>;
+  };
 };
 
 type FinancialLexicons = {
@@ -1728,6 +1905,7 @@ const buildCurrencyPatternEntries = (
 /** Cached promise for currency patterns. Loaded once. */
 let currencyPatternPromise: Promise<string[]> | null = null;
 let currencyPatternEntryPromise: Promise<CurrencyPatternEntry[]> | null = null;
+let monetaryDataPromise: Promise<MonetaryData> | null = null;
 
 const loadCurrencyPatternEntries = async (): Promise<
   CurrencyPatternEntry[]
@@ -1739,6 +1917,37 @@ const loadCurrencyPatternEntries = async (): Promise<
 
 const loadCurrencyPatterns = async (): Promise<string[]> =>
   (await loadCurrencyPatternEntries()).map((entry) => entry.pattern);
+
+const loadMonetaryData = async (): Promise<MonetaryData> => {
+  const mod = await import("../data/currencies.json");
+  const currencies: CurrenciesData = mod.default ?? mod;
+  return {
+    currencies: {
+      codes: currencies.codes,
+      symbols: currencies.symbols,
+      local_names: currencies.localNames ?? [],
+    },
+    amount_words: {
+      written_amount_patterns: (AMOUNT_WORDS.patterns ?? []).map((entry) => ({
+        keywords: entry.keywords,
+      })),
+      magnitude_suffixes: (AMOUNT_WORDS.magnitudeSuffixes ?? []).map(
+        (entry) => ({
+          words: entry.words ?? [],
+          abbreviations_case_insensitive:
+            entry.abbreviationsCaseInsensitive ?? [],
+          abbreviations_case_sensitive: entry.abbreviationsCaseSensitive ?? [],
+        }),
+      ),
+      share_quantity_terms: (AMOUNT_WORDS.shareQuantityTerms ?? []).map(
+        (entry) => ({
+          modifiers: entry.modifiers ?? [],
+          nouns: entry.nouns,
+        }),
+      ),
+    },
+  };
+};
 
 /**
  * Get dynamically built monetary amount patterns from
@@ -1765,6 +1974,16 @@ export const getCurrencyPatternEntries = (): Promise<
     });
   }
   return currencyPatternEntryPromise;
+};
+
+export const getMonetaryData = (): Promise<MonetaryData> => {
+  if (!monetaryDataPromise) {
+    monetaryDataPromise = loadMonetaryData().catch((err) => {
+      monetaryDataPromise = null;
+      throw err;
+    });
+  }
+  return monetaryDataPromise;
 };
 
 /** Currency pattern metadata (score 0.9). */
@@ -1854,6 +2073,8 @@ type SigningClauseConfig = {
     prefix: string;
     suffix: string;
     prepositions: string[];
+    guardPrefixPhrases?: string[];
+    guardSuffixPhrases?: string[];
   }>;
 };
 
@@ -1902,11 +2123,20 @@ export const SIGNING_CLAUSE_META: Readonly<RegexMeta> = {
 };
 
 let signingPatternPromise: Promise<string[]> | null = null;
+let nativeSigningPatternPromise: Promise<string[]> | null = null;
 
 const loadSigningPatterns = async (): Promise<string[]> => {
   const mod = await import("../data/signing-clauses.json");
   const data: SigningClauseConfig = mod.default ?? mod;
   return buildSigningClausePatterns(data);
+};
+
+const loadNativeSigningPatterns = async (): Promise<string[]> => {
+  const mod = await import("../data/signing-clauses.json");
+  const data: SigningClauseConfig = mod.default ?? mod;
+  return buildSigningClausePatterns({
+    patterns: data.patterns.filter((entry) => entry.lang === "de"),
+  });
 };
 
 export const getSigningClausePatterns = (): Promise<string[]> => {
@@ -1917,4 +2147,14 @@ export const getSigningClausePatterns = (): Promise<string[]> => {
     });
   }
   return signingPatternPromise;
+};
+
+export const getNativeSigningClausePatterns = (): Promise<string[]> => {
+  if (!nativeSigningPatternPromise) {
+    nativeSigningPatternPromise = loadNativeSigningPatterns().catch((err) => {
+      nativeSigningPatternPromise = null;
+      throw err;
+    });
+  }
+  return nativeSigningPatternPromise;
 };

@@ -3,6 +3,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::byte_offsets::ByteOffsets;
 use crate::resolution::{DetectionSource, PipelineEntity, SourceDetail};
 use crate::types::{Error, Result, SearchMatch};
+use crate::validators::validate_id;
 
 const GAZETTEER_EXACT_SCORE: f64 = 0.9;
 const GAZETTEER_FUZZY_SCORE: f64 = 0.85;
@@ -40,7 +41,7 @@ impl PatternSlice {
     pattern >= self.start && pattern < self.end
   }
 
-  fn local_index(self, pattern: u32) -> Option<usize> {
+  pub(crate) fn local_index(self, pattern: u32) -> Option<usize> {
     if !self.contains(pattern) {
       return None;
     }
@@ -54,6 +55,8 @@ pub struct RegexMatchMeta {
   pub score: f64,
   pub source_detail: Option<SourceDetail>,
   pub requires_validation: bool,
+  pub validator_id: Option<String>,
+  pub validator_input: Option<String>,
   pub min_byte_length: Option<u32>,
 }
 
@@ -65,6 +68,8 @@ impl RegexMatchMeta {
       score,
       source_detail: None,
       requires_validation: false,
+      validator_id: None,
+      validator_input: None,
       min_byte_length: None,
     }
   }
@@ -83,11 +88,148 @@ pub struct CountryMatchData {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DenyListMatchData {
-  pub labels: Vec<Vec<String>>,
-  pub custom_labels: Vec<Vec<String>>,
+  pub labels: StringGroups,
+  pub custom_labels: StringGroups,
   pub originals: Vec<String>,
-  pub sources: Vec<Vec<String>>,
+  pub sources: StringGroups,
   pub filters: Option<DenyListFilterData>,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct StringGroups {
+  table: Vec<String>,
+  groups: Vec<Vec<u32>>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct StringGroup<'a> {
+  table: &'a [String],
+  indexes: &'a [u32],
+}
+
+impl StringGroups {
+  #[must_use]
+  pub fn from_groups(groups: Vec<Vec<String>>) -> Self {
+    let mut table = Vec::new();
+    let mut table_indexes = BTreeMap::<String, u32>::new();
+    let groups = groups
+      .into_iter()
+      .map(|group| {
+        group
+          .into_iter()
+          .map(|value| {
+            string_table_index(value, &mut table, &mut table_indexes)
+          })
+          .collect()
+      })
+      .collect();
+
+    Self { table, groups }
+  }
+
+  pub fn from_table_indices(
+    table: Vec<String>,
+    groups: Vec<Vec<u32>>,
+    field: &'static str,
+  ) -> Result<Self> {
+    for group in &groups {
+      for &index in group {
+        let Ok(index) = usize::try_from(index) else {
+          return Err(Error::InvalidStaticData {
+            field,
+            reason: String::from("string table index exceeds usize range"),
+          });
+        };
+        if index >= table.len() {
+          return Err(Error::InvalidStaticData {
+            field,
+            reason: String::from("string table index out of range"),
+          });
+        }
+      }
+    }
+
+    Ok(Self { table, groups })
+  }
+
+  #[must_use]
+  pub fn empty_groups(len: usize) -> Self {
+    Self {
+      table: Vec::new(),
+      groups: vec![Vec::new(); len],
+    }
+  }
+
+  #[must_use]
+  pub const fn len(&self) -> usize {
+    self.groups.len()
+  }
+
+  #[must_use]
+  pub const fn is_empty(&self) -> bool {
+    self.groups.is_empty()
+  }
+
+  #[must_use]
+  pub fn get(&self, index: usize) -> Option<StringGroup<'_>> {
+    Some(StringGroup {
+      table: &self.table,
+      indexes: self.groups.get(index)?,
+    })
+  }
+
+  pub fn iter(&self) -> impl Iterator<Item = StringGroup<'_>> {
+    self.groups.iter().map(|indexes| StringGroup {
+      table: &self.table,
+      indexes,
+    })
+  }
+}
+
+impl From<Vec<Vec<String>>> for StringGroups {
+  fn from(groups: Vec<Vec<String>>) -> Self {
+    Self::from_groups(groups)
+  }
+}
+
+impl<'a> StringGroup<'a> {
+  #[must_use]
+  pub const fn is_empty(self) -> bool {
+    self.indexes.is_empty()
+  }
+
+  pub fn iter(self) -> impl Iterator<Item = &'a str> + 'a {
+    self
+      .indexes
+      .iter()
+      .filter_map(|index| usize::try_from(*index).ok())
+      .filter_map(|index| self.table.get(index))
+      .map(String::as_str)
+  }
+
+  #[must_use]
+  pub fn contains(self, value: &str) -> bool {
+    self.iter().any(|entry| entry == value)
+  }
+
+  #[must_use]
+  pub fn to_strings(self) -> Vec<String> {
+    self.iter().map(String::from).collect()
+  }
+}
+
+fn string_table_index(
+  value: String,
+  table: &mut Vec<String>,
+  table_indexes: &mut BTreeMap<String, u32>,
+) -> u32 {
+  if let Some(index) = table_indexes.get(&value) {
+    return *index;
+  }
+  let index = u32::try_from(table.len()).unwrap_or(u32::MAX);
+  table_indexes.insert(value.clone(), index);
+  table.push(value);
+  index
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -95,13 +237,22 @@ pub struct DenyListFilterData {
   pub stopwords: BTreeSet<String>,
   pub allow_list: BTreeSet<String>,
   pub person_stopwords: BTreeSet<String>,
+  pub person_trailing_nouns: BTreeSet<String>,
   pub address_stopwords: BTreeSet<String>,
+  pub address_jurisdiction_prefixes: BTreeSet<String>,
   pub street_types: BTreeSet<String>,
   pub first_names: BTreeSet<String>,
   pub generic_roles: BTreeSet<String>,
   pub sentence_starters: BTreeSet<String>,
   pub trailing_address_word_exclusions: BTreeSet<String>,
   pub defined_term_cues: BTreeSet<String>,
+  pub signing_place_guards: Vec<SigningPlaceGuardData>,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct SigningPlaceGuardData {
+  pub prefix_phrases: BTreeSet<String>,
+  pub suffix_phrases: BTreeSet<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -132,7 +283,11 @@ pub fn process_regex_matches(
       continue;
     };
     let text = offsets.slice(full_text, found.start(), found.end())?;
-    if entry.requires_validation {
+    if let Some(validator_id) = &entry.validator_id {
+      if !validate_id(validator_id, &text, entry.validator_input.as_deref()) {
+        continue;
+      }
+    } else if entry.requires_validation {
       return Err(Error::UnsupportedRegexValidation { pattern });
     }
     if entry
@@ -260,7 +415,7 @@ fn collect_deny_list_matches(
     let custom_pattern_labels = data
       .custom_labels
       .get(local_index)
-      .cloned()
+      .map(StringGroup::to_strings)
       .unwrap_or_default();
     let custom_edges_are_valid = custom_match_has_valid_edges(
       full_text,
@@ -311,7 +466,7 @@ fn collect_deny_list_matches(
         end: found.end(),
         labels: curated_labels,
         custom_labels,
-        sources: sources.clone(),
+        sources: sources.to_strings(),
         text: match_text,
       });
   }
@@ -326,7 +481,7 @@ struct CuratedDenyListMatch<'a> {
   match_text: &'a str,
   keyword: &'a str,
   pattern: &'a str,
-  labels: &'a [String],
+  labels: StringGroup<'a>,
   custom_pattern_labels: &'a [String],
   custom_edges_are_valid: bool,
   filters: &'a DenyListFilterData,
@@ -364,8 +519,13 @@ fn curated_labels_for_match(
     args
       .labels
       .iter()
-      .filter(|label| !args.custom_pattern_labels.contains(label))
-      .cloned()
+      .filter(|label| {
+        !args
+          .custom_pattern_labels
+          .iter()
+          .any(|custom| custom == label)
+      })
+      .map(String::from)
       .collect(),
   )
 }
@@ -381,6 +541,9 @@ fn should_suppress_address(
   let Some(filters) = &data.filters else {
     return Ok(false);
   };
+  if is_signing_place_context(full_text, found.start, found.end, filters)? {
+    return Ok(true);
+  }
   let lower = found.text.to_lowercase();
   if !filters.address_stopwords.contains(&lower) {
     return Ok(false);
@@ -392,6 +555,76 @@ fn should_suppress_address(
     found.end,
     filters,
   )?)
+}
+
+fn is_signing_place_context(
+  full_text: &str,
+  start: u32,
+  end: u32,
+  filters: &DenyListFilterData,
+) -> Result<bool> {
+  if filters.signing_place_guards.is_empty() {
+    return Ok(false);
+  }
+
+  let offsets = ByteOffsets::new(full_text);
+  let start_byte = offsets.validate_offset(start)?;
+  let end_byte = offsets.validate_offset(end)?;
+  let before = full_text.get(..start_byte).unwrap_or_default();
+  let after = full_text.get(end_byte..).unwrap_or_default();
+
+  Ok(filters.signing_place_guards.iter().any(|guard| {
+    !guard.prefix_phrases.is_empty()
+      && !guard.suffix_phrases.is_empty()
+      && context_before_matches_any_phrase(before, &guard.prefix_phrases)
+      && context_after_matches_any_phrase(after, &guard.suffix_phrases)
+  }))
+}
+
+fn context_before_matches_any_phrase(
+  before: &str,
+  phrases: &BTreeSet<String>,
+) -> bool {
+  phrases.iter().any(|phrase| {
+    phrase.is_empty() || context_before_matches_phrase(before, phrase)
+  })
+}
+
+fn context_after_matches_any_phrase(
+  after: &str,
+  phrases: &BTreeSet<String>,
+) -> bool {
+  phrases.iter().any(|phrase| {
+    phrase.is_empty() || context_after_matches_phrase(after, phrase)
+  })
+}
+
+fn context_before_matches_phrase(before: &str, phrase: &str) -> bool {
+  let trimmed = before.trim_end_matches(char::is_whitespace);
+  if trimmed.len() < phrase.len() {
+    return false;
+  }
+  let lower = trimmed.to_lowercase();
+  if !lower.ends_with(phrase) {
+    return false;
+  }
+  let phrase_start = trimmed.len().saturating_sub(phrase.len());
+  char_before_byte(trimmed, phrase_start).is_none_or(|ch| !ch.is_alphanumeric())
+}
+
+fn context_after_matches_phrase(after: &str, phrase: &str) -> bool {
+  let trimmed = after.trim_start_matches(char::is_whitespace);
+  let trimmed = trimmed.strip_prefix(',').map_or(trimmed, |value| {
+    value.trim_start_matches(char::is_whitespace)
+  });
+  if trimmed.len() < phrase.len() {
+    return false;
+  }
+  let lower = trimmed.to_lowercase();
+  if !lower.starts_with(phrase) {
+    return false;
+  }
+  char_after_byte(trimmed, phrase.len()).is_none_or(|ch| !ch.is_alphanumeric())
 }
 
 fn append_person_name_hits(
@@ -596,7 +829,7 @@ pub(crate) fn ensure_supported_deny_list_sources(
   data: &DenyListMatchData,
 ) -> Result<()> {
   let mut needs_filters = false;
-  for sources in &data.sources {
+  for sources in data.sources.iter() {
     validate_deny_list_sources(sources)?;
     needs_filters |= has_curated_source(sources);
   }
@@ -610,15 +843,15 @@ pub(crate) fn ensure_supported_deny_list_sources(
   Ok(())
 }
 
-fn validate_deny_list_sources(sources: &[String]) -> Result<()> {
+fn validate_deny_list_sources(sources: StringGroup<'_>) -> Result<()> {
   if sources.is_empty() {
     return Err(Error::UnsupportedDenyListSource {
       source: String::from("<missing>"),
     });
   }
 
-  for source in sources {
-    match source.as_str() {
+  for source in sources.iter() {
+    match source {
       DENY_LIST_SOURCE
       | CITY_SOURCE
       | CUSTOM_DENY_LIST_SOURCE
@@ -627,7 +860,7 @@ fn validate_deny_list_sources(sources: &[String]) -> Result<()> {
       | TITLE_SOURCE => {}
       _ => {
         return Err(Error::UnsupportedDenyListSource {
-          source: source.clone(),
+          source: String::from(source),
         });
       }
     }
@@ -636,10 +869,10 @@ fn validate_deny_list_sources(sources: &[String]) -> Result<()> {
   Ok(())
 }
 
-fn has_curated_source(sources: &[String]) -> bool {
+fn has_curated_source(sources: StringGroup<'_>) -> bool {
   sources
     .iter()
-    .any(|source| source.as_str() != CUSTOM_DENY_LIST_SOURCE)
+    .any(|source| source != CUSTOM_DENY_LIST_SOURCE)
 }
 
 fn has_person_name_source(found: &RawDenyListMatch) -> bool {

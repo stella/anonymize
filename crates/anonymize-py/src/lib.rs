@@ -1,15 +1,19 @@
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
+use pyo3::types::PyBytes;
 use stella_anonymize_adapter_contract::{
   BindingOperatorConfig, BindingOperatorEntry, BindingPipelineEntity,
   BindingPreparedSearchConfig, BindingRedactionEntry, BindingRedactionResult,
   BindingStaticRedactionResult, ContractError, operator_config_from_binding,
-  prepared_search_config_from_binding,
+  prepared_search_config_from_binding, prepared_search_package_from_bytes,
+  prepared_search_package_to_bytes,
+  prepared_search_package_to_compressed_bytes,
   static_redaction_diagnostic_result_to_binding,
   static_redaction_diagnostics_to_binding, static_redaction_result_to_binding,
 };
 use stella_anonymize_core::{
-  PreparedSearch as CorePreparedSearch, StaticRedactionDiagnostics,
+  PreparedSearch as CorePreparedSearch, PreparedSearchArtifacts,
+  StaticRedactionDiagnostics,
 };
 
 #[pyclass(name = "RedactionEntry", get_all, skip_from_py_object)]
@@ -64,12 +68,43 @@ pub struct PyPreparedSearch {
 impl PyPreparedSearch {
   #[new]
   fn new(config_json: &str) -> PyResult<Self> {
-    let config = parse_prepared_search_config(config_json)?;
-    let result = CorePreparedSearch::new_with_diagnostics(
-      prepared_search_config_from_binding(config)
-        .map_err(|error| to_py_contract_error(&error))?,
-    )
-    .map_err(|error| to_py_core_error(&error))?;
+    let config = parse_core_prepared_search_config(config_json)?;
+    let result = CorePreparedSearch::new_with_diagnostics(config)
+      .map_err(|error| to_py_core_error(&error))?;
+    Ok(Self {
+      inner: result.prepared,
+      prepare_diagnostics: result.diagnostics,
+    })
+  }
+
+  #[staticmethod]
+  fn from_config_json_and_artifact_bytes(
+    config_json: &str,
+    artifact_bytes: &[u8],
+  ) -> PyResult<Self> {
+    let config = parse_core_prepared_search_config(config_json)?;
+    let artifacts = PreparedSearchArtifacts::from_bytes(artifact_bytes)
+      .map_err(|error| to_py_core_error(&error))?;
+    let result =
+      CorePreparedSearch::new_with_artifacts_diagnostics(config, &artifacts)
+        .map_err(|error| to_py_core_error(&error))?;
+    Ok(Self {
+      inner: result.prepared,
+      prepare_diagnostics: result.diagnostics,
+    })
+  }
+
+  #[staticmethod]
+  fn from_prepared_package_bytes(package_bytes: &[u8]) -> PyResult<Self> {
+    let package = prepared_search_package_from_bytes(package_bytes)
+      .map_err(|error| to_py_contract_error(&error))?;
+    let config = prepared_search_config_from_binding(package.config)
+      .map_err(|error| to_py_contract_error(&error))?;
+    let artifacts = PreparedSearchArtifacts::from_bytes(&package.artifacts)
+      .map_err(|error| to_py_core_error(&error))?;
+    let result =
+      CorePreparedSearch::new_with_artifacts_diagnostics(config, &artifacts)
+        .map_err(|error| to_py_core_error(&error))?;
     Ok(Self {
       inner: result.prepared,
       prepare_diagnostics: result.diagnostics,
@@ -146,6 +181,54 @@ fn redact_static_entities_json(
 }
 
 #[pyfunction]
+fn prepare_static_search_artifacts_bytes<'py>(
+  py: Python<'py>,
+  config_json: &str,
+) -> PyResult<Bound<'py, PyBytes>> {
+  let config = parse_core_prepared_search_config(config_json)?;
+  let bytes = CorePreparedSearch::prepare_artifacts(config)
+    .and_then(|artifacts| artifacts.to_bytes())
+    .map_err(|error| to_py_core_error(&error))?;
+  Ok(PyBytes::new(py, &bytes))
+}
+
+#[pyfunction]
+fn prepare_static_search_package_bytes<'py>(
+  py: Python<'py>,
+  config_json: &str,
+) -> PyResult<Bound<'py, PyBytes>> {
+  prepare_static_search_package_bytes_with(py, config_json, false)
+}
+
+#[pyfunction]
+fn prepare_static_search_compressed_package_bytes<'py>(
+  py: Python<'py>,
+  config_json: &str,
+) -> PyResult<Bound<'py, PyBytes>> {
+  prepare_static_search_package_bytes_with(py, config_json, true)
+}
+
+fn prepare_static_search_package_bytes_with<'py>(
+  py: Python<'py>,
+  config_json: &str,
+  compressed: bool,
+) -> PyResult<Bound<'py, PyBytes>> {
+  let binding_config = parse_prepared_search_config(config_json)?;
+  let core_config = prepared_search_config_from_binding(binding_config.clone())
+    .map_err(|error| to_py_contract_error(&error))?;
+  let artifacts = CorePreparedSearch::prepare_artifacts(core_config)
+    .and_then(|artifacts| artifacts.to_bytes())
+    .map_err(|error| to_py_core_error(&error))?;
+  let package = if compressed {
+    prepared_search_package_to_compressed_bytes(&binding_config, &artifacts)
+  } else {
+    prepared_search_package_to_bytes(&binding_config, &artifacts)
+  };
+  let bytes = package.map_err(|error| to_py_contract_error(&error))?;
+  Ok(PyBytes::new(py, &bytes))
+}
+
+#[pyfunction]
 fn redact_static_entities_diagnostics_json(
   config_json: &str,
   full_text: &str,
@@ -164,6 +247,15 @@ fn parse_prepared_search_config(
   config_json: &str,
 ) -> PyResult<BindingPreparedSearchConfig> {
   serde_json::from_str(config_json).map_err(|error| to_py_serde_error(&error))
+}
+
+fn parse_core_prepared_search_config(
+  config_json: &str,
+) -> PyResult<stella_anonymize_core::PreparedSearchConfig> {
+  prepared_search_config_from_binding(parse_prepared_search_config(
+    config_json,
+  )?)
+  .map_err(|error| to_py_contract_error(&error))
 }
 
 fn parse_operator_config(
@@ -315,6 +407,18 @@ fn stella_anonymize_core_py(module: &Bound<'_, PyModule>) -> PyResult<()> {
   module.add_class::<PyPipelineEntity>()?;
   module
     .add_function(wrap_pyfunction!(redact_static_entities_json, module)?)?;
+  module.add_function(wrap_pyfunction!(
+    prepare_static_search_artifacts_bytes,
+    module
+  )?)?;
+  module.add_function(wrap_pyfunction!(
+    prepare_static_search_package_bytes,
+    module
+  )?)?;
+  module.add_function(wrap_pyfunction!(
+    prepare_static_search_compressed_package_bytes,
+    module
+  )?)?;
   module.add_function(wrap_pyfunction!(
     redact_static_entities_diagnostics_json,
     module

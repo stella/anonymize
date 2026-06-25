@@ -10,7 +10,9 @@ keywords = ["anonymization", "pii", "redaction", "text"]
 categories = ["text-processing"]
 
 [dependencies]
-stella-text-search-core = { git = "https://github.com/stella/text-search", rev = "e427c5e8f5c13a0edc8503d24c4d4b34cbf46e8e" }
+fancy-regex = "0.16"
+regex = "1"
+stella-text-search-core = { path = "/Users/sok0/coding_projects/text-search-rust-core/crates/core" }
 
 [lints]
 workspace = true

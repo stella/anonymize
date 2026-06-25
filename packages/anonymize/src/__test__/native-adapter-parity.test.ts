@@ -9,7 +9,39 @@ import fc from "fast-check";
 setDefaultTimeout(120_000);
 
 type NativeAdapter = {
+  NativePreparedSearch: {
+    new (configJson: string): {
+      redactStaticEntities: (
+        fullText: string,
+        operators?: Record<string, string>,
+      ) => StaticRedactionResult;
+    };
+    fromConfigJsonBytes: (configJson: Buffer) => {
+      redactStaticEntities: (
+        fullText: string,
+        operators?: Record<string, string>,
+      ) => StaticRedactionResult;
+    };
+    fromConfigJsonAndArtifactBytes: (
+      configJson: Buffer,
+      artifactBytes: Buffer,
+    ) => {
+      redactStaticEntities: (
+        fullText: string,
+        operators?: Record<string, string>,
+      ) => StaticRedactionResult;
+    };
+    fromPreparedPackageBytes: (packageBytes: Buffer) => {
+      redactStaticEntities: (
+        fullText: string,
+        operators?: Record<string, string>,
+      ) => StaticRedactionResult;
+    };
+  };
   normalizeForSearch: (text: string) => string;
+  prepareStaticSearchArtifactsBytes: (configJson: Buffer) => Buffer;
+  prepareStaticSearchPackageBytes: (configJson: Buffer) => Buffer;
+  prepareStaticSearchCompressedPackageBytes: (configJson: Buffer) => Buffer;
   redactStaticEntitiesJson: (
     configJson: string,
     fullText: string,
@@ -183,6 +215,69 @@ results = [
 print(json.dumps(results))
 `;
 
+const PYTHON_PREPARED_ARTIFACT_SCRIPT = `
+import importlib.util
+import json
+import os
+import pathlib
+
+module_path = pathlib.Path(os.environ["STELLA_ANONYMIZE_PY_MODULE"])
+payload_path = pathlib.Path(os.environ["STELLA_ANONYMIZE_PAYLOAD"])
+artifact_path = pathlib.Path(os.environ["STELLA_ANONYMIZE_ARTIFACTS"])
+spec = importlib.util.spec_from_file_location(
+    "stella_anonymize_core_py",
+    module_path,
+)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+payload = json.loads(payload_path.read_text())
+artifact_bytes = artifact_path.read_bytes()
+if module.prepare_static_search_artifacts_bytes(payload["config_json"]) != artifact_bytes:
+    raise AssertionError("prepared artifact bytes differ")
+prepared = module.PreparedSearch.from_config_json_and_artifact_bytes(
+    payload["config_json"],
+    artifact_bytes,
+)
+print(
+    prepared.redact_static_entities_json(
+        payload["text"],
+        payload.get("operators_json"),
+    )
+)
+`;
+
+const PYTHON_PREPARED_PACKAGE_SCRIPT = `
+import importlib.util
+import json
+import os
+import pathlib
+
+module_path = pathlib.Path(os.environ["STELLA_ANONYMIZE_PY_MODULE"])
+payload_path = pathlib.Path(os.environ["STELLA_ANONYMIZE_PAYLOAD"])
+package_path = pathlib.Path(os.environ["STELLA_ANONYMIZE_PACKAGE"])
+spec = importlib.util.spec_from_file_location(
+    "stella_anonymize_core_py",
+    module_path,
+)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+payload = json.loads(payload_path.read_text())
+package_bytes = package_path.read_bytes()
+prepare_fn_name = os.environ.get(
+    "STELLA_ANONYMIZE_PACKAGE_PREPARE_FN",
+    "prepare_static_search_package_bytes",
+)
+if getattr(module, prepare_fn_name)(payload["config_json"]) != package_bytes:
+    raise AssertionError("prepared package bytes differ")
+prepared = module.PreparedSearch.from_prepared_package_bytes(package_bytes)
+print(
+    prepared.redact_static_entities_json(
+        payload["text"],
+        payload.get("operators_json"),
+    )
+)
+`;
+
 let loadedAdapters: {
   native: NativeAdapter;
   pythonModulePath: string;
@@ -318,6 +413,120 @@ describe("native adapter parity", () => {
     );
   });
 
+  test("prepared search accepts config JSON bytes", () => {
+    const adapters = getAdapters();
+    const text =
+      "Reference AB1234 for Acme s.r.o. near Fuzztovn, Turkey, " +
+      "Prague, matter MAT-123, code Secret Code.";
+
+    const stringPrepared = new adapters.native.NativePreparedSearch(
+      CONFIG_JSON,
+    );
+    const bytesPrepared =
+      adapters.native.NativePreparedSearch.fromConfigJsonBytes(
+        Buffer.from(CONFIG_JSON),
+      );
+
+    expect(bytesPrepared.redactStaticEntities(text)).toEqual(
+      stringPrepared.redactStaticEntities(text),
+    );
+  });
+
+  test("prepared search accepts artifact bytes through TS and Python adapters", () => {
+    const adapters = getAdapters();
+    const text =
+      "Reference AB1234 for Acme s.r.o. near Fuzztovn, Turkey, " +
+      "Prague, matter MAT-123, code Secret Code.";
+    const configBytes = Buffer.from(CONFIG_JSON);
+    const artifactBytes =
+      adapters.native.prepareStaticSearchArtifactsBytes(configBytes);
+    const direct = new adapters.native.NativePreparedSearch(CONFIG_JSON);
+    const prepared =
+      adapters.native.NativePreparedSearch.fromConfigJsonAndArtifactBytes(
+        configBytes,
+        artifactBytes,
+      );
+
+    expect(prepared.redactStaticEntities(text)).toEqual(
+      direct.redactStaticEntities(text),
+    );
+    const expectedJson = JSON.parse(
+      adapters.native.redactStaticEntitiesJson(CONFIG_JSON, text),
+    );
+    expect(
+      callPythonPreparedWithArtifacts(
+        adapters.pythonModulePath,
+        adapters.tempDir,
+        artifactBytes,
+        text,
+        null,
+      ),
+    ).toEqual(expectedJson);
+  });
+
+  test("prepared search accepts package bytes through TS and Python adapters", () => {
+    const adapters = getAdapters();
+    const text =
+      "Reference AB1234 for Acme s.r.o. near Fuzztovn, Turkey, " +
+      "Prague, matter MAT-123, code Secret Code.";
+    const configBytes = Buffer.from(CONFIG_JSON);
+    const packageBytes =
+      adapters.native.prepareStaticSearchPackageBytes(configBytes);
+    const direct = new adapters.native.NativePreparedSearch(CONFIG_JSON);
+    const prepared =
+      adapters.native.NativePreparedSearch.fromPreparedPackageBytes(
+        packageBytes,
+      );
+
+    expect(prepared.redactStaticEntities(text)).toEqual(
+      direct.redactStaticEntities(text),
+    );
+    const expectedJson = JSON.parse(
+      adapters.native.redactStaticEntitiesJson(CONFIG_JSON, text),
+    );
+    expect(
+      callPythonPreparedWithPackage(
+        adapters.pythonModulePath,
+        adapters.tempDir,
+        packageBytes,
+        text,
+        null,
+      ),
+    ).toEqual(expectedJson);
+  });
+
+  test("prepared search accepts compressed package bytes through TS and Python adapters", () => {
+    const adapters = getAdapters();
+    const text =
+      "Reference AB1234 for Acme s.r.o. near Fuzztovn, Turkey, " +
+      "Prague, matter MAT-123, code Secret Code.";
+    const configBytes = Buffer.from(CONFIG_JSON);
+    const packageBytes =
+      adapters.native.prepareStaticSearchCompressedPackageBytes(configBytes);
+    const direct = new adapters.native.NativePreparedSearch(CONFIG_JSON);
+    const prepared =
+      adapters.native.NativePreparedSearch.fromPreparedPackageBytes(
+        packageBytes,
+      );
+
+    expect(prepared.redactStaticEntities(text)).toEqual(
+      direct.redactStaticEntities(text),
+    );
+    const expectedJson = JSON.parse(
+      adapters.native.redactStaticEntitiesJson(CONFIG_JSON, text),
+    );
+    expect(
+      callPythonPreparedWithPackage(
+        adapters.pythonModulePath,
+        adapters.tempDir,
+        packageBytes,
+        text,
+        null,
+        "prepare_static_search_compressed_package_bytes",
+      ),
+    ).toEqual(expectedJson);
+  });
+
   test("diagnostics JSON is identical through TS and Python adapters", () => {
     const adapters = getAdapters();
     const text =
@@ -401,6 +610,10 @@ const loadNativeAdapter = (nativePath: string): NativeAdapter => {
   const nativeRequire = createRequire(import.meta.url);
   const loaded: unknown = nativeRequire(nativePath);
   const normalizeForSearch = Reflect.get(Object(loaded), "normalizeForSearch");
+  const NativePreparedSearch = Reflect.get(
+    Object(loaded),
+    "NativePreparedSearch",
+  );
   const redactStaticEntitiesJson = Reflect.get(
     Object(loaded),
     "redactStaticEntitiesJson",
@@ -409,15 +622,36 @@ const loadNativeAdapter = (nativePath: string): NativeAdapter => {
     Object(loaded),
     "redactStaticEntitiesDiagnosticsJson",
   );
+  const prepareStaticSearchArtifactsBytes = Reflect.get(
+    Object(loaded),
+    "prepareStaticSearchArtifactsBytes",
+  );
+  const prepareStaticSearchPackageBytes = Reflect.get(
+    Object(loaded),
+    "prepareStaticSearchPackageBytes",
+  );
+  const prepareStaticSearchCompressedPackageBytes = Reflect.get(
+    Object(loaded),
+    "prepareStaticSearchCompressedPackageBytes",
+  );
   if (
+    typeof NativePreparedSearch !== "function" ||
     typeof normalizeForSearch !== "function" ||
+    typeof prepareStaticSearchArtifactsBytes !== "function" ||
+    typeof prepareStaticSearchPackageBytes !== "function" ||
+    typeof prepareStaticSearchCompressedPackageBytes !== "function" ||
     typeof redactStaticEntitiesJson !== "function" ||
     typeof redactStaticEntitiesDiagnosticsJson !== "function"
   ) {
     throw new TypeError("Native anonymize adapter exports are incomplete");
   }
   return {
+    NativePreparedSearch:
+      NativePreparedSearch as NativeAdapter["NativePreparedSearch"],
     normalizeForSearch,
+    prepareStaticSearchArtifactsBytes,
+    prepareStaticSearchPackageBytes,
+    prepareStaticSearchCompressedPackageBytes,
     redactStaticEntitiesJson,
     redactStaticEntitiesDiagnosticsJson,
   };
@@ -511,6 +745,64 @@ print(module.normalize_for_search(payload["text"]))
   } finally {
     rmSync(payloadDir, { recursive: true, force: true });
   }
+};
+
+const callPythonPreparedWithArtifacts = (
+  pythonModulePath: string,
+  tempDir: string,
+  artifactBytes: Buffer,
+  text: string,
+  operators: Record<string, string> | null,
+): StaticRedactionResult => {
+  const payloadPath = join(tempDir, "prepared-artifacts-payload.json");
+  const artifactPath = join(tempDir, "prepared-artifacts.bin");
+  writeFileSync(artifactPath, artifactBytes);
+  writeFileSync(
+    payloadPath,
+    JSON.stringify({
+      config_json: CONFIG_JSON,
+      text,
+      operators_json: operatorConfigJson(operators),
+    }),
+  );
+  const output = runCommand(
+    "python3",
+    ["-c", PYTHON_PREPARED_ARTIFACT_SCRIPT],
+    {
+      STELLA_ANONYMIZE_ARTIFACTS: artifactPath,
+      STELLA_ANONYMIZE_PAYLOAD: payloadPath,
+      STELLA_ANONYMIZE_PY_MODULE: pythonModulePath,
+    },
+  );
+  return JSON.parse(output);
+};
+
+const callPythonPreparedWithPackage = (
+  pythonModulePath: string,
+  tempDir: string,
+  packageBytes: Buffer,
+  text: string,
+  operators: Record<string, string> | null,
+  prepareFn = "prepare_static_search_package_bytes",
+): StaticRedactionResult => {
+  const payloadPath = join(tempDir, "prepared-package-payload.json");
+  const packagePath = join(tempDir, "prepared-package.bin");
+  writeFileSync(packagePath, packageBytes);
+  writeFileSync(
+    payloadPath,
+    JSON.stringify({
+      config_json: CONFIG_JSON,
+      text,
+      operators_json: operatorConfigJson(operators),
+    }),
+  );
+  const output = runCommand("python3", ["-c", PYTHON_PREPARED_PACKAGE_SCRIPT], {
+    STELLA_ANONYMIZE_PACKAGE: packagePath,
+    STELLA_ANONYMIZE_PACKAGE_PREPARE_FN: prepareFn,
+    STELLA_ANONYMIZE_PAYLOAD: payloadPath,
+    STELLA_ANONYMIZE_PY_MODULE: pythonModulePath,
+  });
+  return JSON.parse(output);
 };
 
 const callPythonDiagnostics = (

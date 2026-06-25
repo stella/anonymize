@@ -1,5 +1,7 @@
 {
   "_comment": "Words that are valid in other labels (address, org) but should never be classified as person. Checked only in person chain scoring.",
+  "cs": ["cena"],
+  "en": ["dodd-frank"],
   "words": [
     "addendum",
     "agent",
