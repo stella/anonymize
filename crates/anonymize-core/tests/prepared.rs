@@ -21,6 +21,8 @@ fn empty_config(slices: PreparedSearchSlices) -> PreparedSearchConfig {
     regex_options: SearchOptions::default(),
     custom_regex_options: SearchOptions::default(),
     literal_options: SearchOptions::default(),
+    allowed_labels: vec![],
+    threshold: 0.0,
     slices,
     regex_meta: vec![],
     custom_regex_meta: vec![],
@@ -111,6 +113,8 @@ fn prepared_search_runs_normalized_literal_pass() {
     regex_options: SearchOptions::default(),
     custom_regex_options: SearchOptions::default(),
     literal_options: SearchOptions::default(),
+    allowed_labels: vec![],
+    threshold: 0.0,
     slices: PreparedSearchSlices {
       gazetteer: PatternSlice { start: 0, end: 1 },
       ..PreparedSearchSlices::default()
@@ -152,6 +156,8 @@ fn prepared_search_artifacts_match_direct_prepare() {
     regex_options: SearchOptions::default(),
     custom_regex_options: SearchOptions::default(),
     literal_options: SearchOptions::default(),
+    allowed_labels: vec![],
+    threshold: 0.0,
     slices: PreparedSearchSlices {
       regex: PatternSlice { start: 0, end: 1 },
       gazetteer: PatternSlice { start: 0, end: 1 },
@@ -283,6 +289,8 @@ fn prepared_search_emits_static_detector_entities() {
       fuzzy: FuzzySearchOptions::default(),
       ..SearchOptions::default()
     },
+    allowed_labels: vec![],
+    threshold: 0.0,
     slices: PreparedSearchSlices {
       regex: PatternSlice { start: 0, end: 1 },
       custom_regex: PatternSlice { start: 0, end: 1 },
@@ -870,6 +878,8 @@ fn prepared_search_redacts_static_entities_end_to_end() {
       },
       ..SearchOptions::default()
     },
+    allowed_labels: vec![],
+    threshold: 0.0,
     slices: PreparedSearchSlices {
       regex: PatternSlice { start: 0, end: 1 },
       gazetteer: PatternSlice { start: 0, end: 1 },
@@ -910,6 +920,132 @@ fn prepared_search_redacts_static_entities_end_to_end() {
 }
 
 #[test]
+fn prepared_search_applies_threshold_before_merge() {
+  let prepared = PreparedSearch::new(PreparedSearchConfig {
+    regex_patterns: vec![
+      SearchPattern::Regex(String::from("Acme")),
+      SearchPattern::Regex(String::from(r"Acme s\.r\.o\.")),
+    ],
+    regex_options: SearchOptions {
+      regex: RegexSearchOptions {
+        whole_words: false,
+        overlap_all: true,
+      },
+      ..SearchOptions::default()
+    },
+    threshold: 0.5,
+    slices: PreparedSearchSlices {
+      regex: PatternSlice { start: 0, end: 2 },
+      ..PreparedSearchSlices::default()
+    },
+    regex_meta: vec![
+      RegexMatchMeta::new("organization", 0.9),
+      RegexMatchMeta::new("organization", 0.4),
+    ],
+    ..empty_config(PreparedSearchSlices::default())
+  })
+  .unwrap();
+
+  let result = prepared
+    .redact_static_entities("Acme s.r.o. signed.", &OperatorConfig::default())
+    .unwrap();
+
+  assert_eq!(
+    result.redaction.redacted_text,
+    "[ORGANIZATION_1] s.r.o. signed."
+  );
+  assert_eq!(result.resolved_entities.len(), 1);
+  assert_eq!(result.resolved_entities[0].text, "Acme");
+}
+
+#[test]
+fn prepared_search_applies_allowed_labels_before_redaction() {
+  let prepared = PreparedSearch::new(PreparedSearchConfig {
+    regex_patterns: vec![SearchPattern::Regex(String::from("Alice"))],
+    allowed_labels: vec![String::from("date")],
+    slices: PreparedSearchSlices {
+      regex: PatternSlice { start: 0, end: 1 },
+      ..PreparedSearchSlices::default()
+    },
+    regex_meta: vec![RegexMatchMeta::new("person", 1.0)],
+    ..empty_config(PreparedSearchSlices::default())
+  })
+  .unwrap();
+
+  let result = prepared
+    .redact_static_entities("Alice signed.", &OperatorConfig::default())
+    .unwrap();
+
+  assert_eq!(result.redaction.redacted_text, "Alice signed.");
+  assert!(result.resolved_entities.is_empty());
+}
+
+#[test]
+fn prepared_search_keeps_person_name_particles_after_trigger() {
+  let prepared = PreparedSearch::new(PreparedSearchConfig {
+    regex_patterns: vec![SearchPattern::LiteralWithOptions {
+      pattern: String::from("Pan"),
+      case_insensitive: Some(true),
+      whole_words: Some(false),
+    }],
+    slices: PreparedSearchSlices {
+      triggers: PatternSlice { start: 0, end: 1 },
+      ..PreparedSearchSlices::default()
+    },
+    trigger_data: Some(TriggerData {
+      rules: vec![TriggerRule {
+        trigger: String::from("Pan"),
+        label: String::from("person"),
+        strategy: TriggerStrategy::ToEndOfLine,
+        validations: vec![TriggerValidation::StartsUppercase],
+        include_trigger: false,
+      }],
+      address_stop_keywords: Vec::new(),
+      party_position_terms: Vec::new(),
+      legal_form_suffixes: Vec::new(),
+    }),
+    ..empty_config(PreparedSearchSlices::default())
+  })
+  .unwrap();
+
+  let with_apostrophe = prepared
+    .detect_static_entities("Pan Jean d'Arc přijel pozdě.")
+    .unwrap();
+  assert!(
+    with_apostrophe
+      .trigger_entities
+      .iter()
+      .any(|entity| entity.text == "Jean d'Arc")
+  );
+
+  let with_particle = prepared
+    .detect_static_entities("Pan João dos Santos přijel pozdě.")
+    .unwrap();
+  assert!(
+    with_particle
+      .trigger_entities
+      .iter()
+      .any(|entity| entity.text == "João dos Santos")
+  );
+
+  let trailing_particle = prepared
+    .detect_static_entities("Pan Novák von tady odešel.")
+    .unwrap();
+  assert!(
+    trailing_particle
+      .trigger_entities
+      .iter()
+      .any(|entity| entity.text == "Novák")
+  );
+  assert!(
+    trailing_particle
+      .trigger_entities
+      .iter()
+      .all(|entity| !entity.text.contains("von"))
+  );
+}
+
+#[test]
 fn prepared_search_reports_static_redaction_diagnostics() {
   let prepared = PreparedSearch::new(PreparedSearchConfig {
     regex_patterns: vec![SearchPattern::Regex(String::from(
@@ -936,6 +1072,8 @@ fn prepared_search_reports_static_redaction_diagnostics() {
       },
       ..SearchOptions::default()
     },
+    allowed_labels: vec![],
+    threshold: 0.0,
     slices: PreparedSearchSlices {
       regex: PatternSlice { start: 0, end: 1 },
       gazetteer: PatternSlice { start: 0, end: 1 },
@@ -1012,6 +1150,8 @@ fn prepared_search_redacts_custom_deny_list_entities() {
       },
       ..SearchOptions::default()
     },
+    allowed_labels: vec![],
+    threshold: 0.0,
     slices: PreparedSearchSlices {
       deny_list: PatternSlice { start: 0, end: 1 },
       ..PreparedSearchSlices::default()
@@ -1050,10 +1190,13 @@ fn prepared_search_redacts_custom_deny_list_entities() {
 #[test]
 fn prepared_search_rejects_unsupported_static_slices() {
   let unsupported = PatternSlice { start: 0, end: 1 };
-  let error = PreparedSearch::new(empty_config(PreparedSearchSlices {
-    deny_list: unsupported,
-    ..PreparedSearchSlices::default()
-  }))
+  let error = PreparedSearch::new(PreparedSearchConfig {
+    literal_patterns: vec![SearchPattern::Literal(String::from("Secret"))],
+    ..empty_config(PreparedSearchSlices {
+      deny_list: unsupported,
+      ..PreparedSearchSlices::default()
+    })
+  })
   .err()
   .expect("unsupported slice should be rejected");
 
@@ -1062,10 +1205,13 @@ fn prepared_search_rejects_unsupported_static_slices() {
 
 #[test]
 fn prepared_search_requires_gazetteer_metadata_for_gazetteer_slice() {
-  let error = PreparedSearch::new(empty_config(PreparedSearchSlices {
-    gazetteer: PatternSlice { start: 0, end: 1 },
-    ..PreparedSearchSlices::default()
-  }))
+  let error = PreparedSearch::new(PreparedSearchConfig {
+    literal_patterns: vec![SearchPattern::Literal(String::from("Acme"))],
+    ..empty_config(PreparedSearchSlices {
+      gazetteer: PatternSlice { start: 0, end: 1 },
+      ..PreparedSearchSlices::default()
+    })
+  })
   .err()
   .expect("gazetteer slice should require metadata");
 
@@ -1080,6 +1226,7 @@ fn prepared_search_requires_gazetteer_metadata_for_gazetteer_slice() {
 #[test]
 fn prepared_search_rejects_truncated_country_metadata() {
   let error = PreparedSearch::new(PreparedSearchConfig {
+    literal_patterns: vec![SearchPattern::Literal(String::from("Turkey"))],
     country_data: Some(CountryMatchData { labels: Vec::new() }),
     ..empty_config(PreparedSearchSlices {
       countries: PatternSlice { start: 0, end: 1 },
@@ -1100,11 +1247,58 @@ fn prepared_search_rejects_truncated_country_metadata() {
 }
 
 #[test]
-fn prepared_search_requires_address_seed_data_for_street_types() {
+fn prepared_search_rejects_missing_regex_metadata() {
+  let error = PreparedSearch::new(PreparedSearchConfig {
+    regex_patterns: vec![SearchPattern::Regex(String::from(r"\bID\d+\b"))],
+    slices: PreparedSearchSlices {
+      regex: PatternSlice { start: 0, end: 1 },
+      ..PreparedSearchSlices::default()
+    },
+    ..empty_config(PreparedSearchSlices::default())
+  })
+  .err()
+  .expect("regex slice should require parallel metadata");
+
+  assert_eq!(
+    error,
+    Error::StaticDataLengthMismatch {
+      field: "regex_meta",
+      expected: 1,
+      actual: 0
+    }
+  );
+}
+
+#[test]
+fn prepared_search_rejects_literal_slices_outside_patterns() {
   let error = PreparedSearch::new(empty_config(PreparedSearchSlices {
-    street_types: PatternSlice { start: 0, end: 1 },
+    gazetteer: PatternSlice { start: 0, end: 1 },
     ..PreparedSearchSlices::default()
   }))
+  .err()
+  .expect("slice outside the literal pattern table should be rejected");
+
+  assert!(
+    matches!(
+      error,
+      Error::InvalidStaticData {
+        field: "slices.gazetteer",
+        ..
+      }
+    ),
+    "unexpected error: {error}"
+  );
+}
+
+#[test]
+fn prepared_search_requires_address_seed_data_for_street_types() {
+  let error = PreparedSearch::new(PreparedSearchConfig {
+    literal_patterns: vec![SearchPattern::Literal(String::from("Street"))],
+    ..empty_config(PreparedSearchSlices {
+      street_types: PatternSlice { start: 0, end: 1 },
+      ..PreparedSearchSlices::default()
+    })
+  })
   .err()
   .expect("street types should require address seed data");
 
@@ -1598,6 +1792,7 @@ fn prepared_search_redacts_curated_deny_list_entities() {
 #[test]
 fn prepared_search_rejects_curated_deny_list_without_filters() {
   let error = PreparedSearch::new(PreparedSearchConfig {
+    literal_patterns: vec![SearchPattern::Literal(String::from("Prague"))],
     deny_list_data: Some(DenyListMatchData {
       labels: vec![vec![String::from("address")]].into(),
       custom_labels: vec![vec![]].into(),
@@ -1624,6 +1819,7 @@ fn prepared_search_rejects_curated_deny_list_without_filters() {
 #[test]
 fn prepared_search_rejects_truncated_deny_list_data() {
   let error = PreparedSearch::new(PreparedSearchConfig {
+    literal_patterns: vec![SearchPattern::Literal(String::from("Secret Code"))],
     deny_list_data: Some(DenyListMatchData {
       labels: vec![vec![String::from("matter")]].into(),
       custom_labels: vec![].into(),
