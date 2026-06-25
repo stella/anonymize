@@ -7,6 +7,8 @@ const PACKAGES = [
     expected: [
       "dist/index.d.mts",
       "dist/index.mjs",
+      "dist/native.d.mts",
+      "dist/native.mjs",
       // Dynamically imported corpus chunk; missing means the
       // bundler stopped resolving the non-Western name imports.
       "dist/names-nw-in.mjs",
