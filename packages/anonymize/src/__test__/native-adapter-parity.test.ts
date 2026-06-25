@@ -5,43 +5,32 @@ import { join } from "node:path";
 import { createRequire } from "node:module";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import fc from "fast-check";
+import {
+  createNativeAnonymizerFromPackage,
+  prepareNativeSearchPackage,
+  type NativeAnonymizeBinding,
+  type NativeOperatorConfig,
+  type NativePreparedSearchBinding,
+} from "../native";
 
 setDefaultTimeout(120_000);
 
-type NativeAdapter = {
-  NativePreparedSearch: {
-    new (configJson: string): {
-      redactStaticEntities: (
-        fullText: string,
-        operators?: Record<string, string>,
-      ) => StaticRedactionResult;
-    };
-    fromConfigJsonBytes: (configJson: Buffer) => {
-      redactStaticEntities: (
-        fullText: string,
-        operators?: Record<string, string>,
-      ) => StaticRedactionResult;
-    };
+type NativeAdapter = Omit<
+  NativeAnonymizeBinding,
+  | "prepareStaticSearchPackageBytes"
+  | "prepareStaticSearchCompressedPackageBytes"
+> & {
+  normalizeForSearch: (text: string) => string;
+  NativePreparedSearch: NativeAnonymizeBinding["NativePreparedSearch"] & {
+    new (configJson: string): NativePreparedSearchBinding;
     fromConfigJsonAndArtifactBytes: (
       configJson: Buffer,
       artifactBytes: Buffer,
-    ) => {
-      redactStaticEntities: (
-        fullText: string,
-        operators?: Record<string, string>,
-      ) => StaticRedactionResult;
-    };
-    fromPreparedPackageBytes: (packageBytes: Buffer) => {
-      redactStaticEntities: (
-        fullText: string,
-        operators?: Record<string, string>,
-      ) => StaticRedactionResult;
-    };
+    ) => NativePreparedSearchBinding;
   };
-  normalizeForSearch: (text: string) => string;
   prepareStaticSearchArtifactsBytes: (configJson: Buffer) => Buffer;
-  prepareStaticSearchPackageBytes: (configJson: Buffer) => Buffer;
-  prepareStaticSearchCompressedPackageBytes: (configJson: Buffer) => Buffer;
+  prepareStaticSearchPackageBytes: (configJson: Uint8Array) => Buffer;
+  prepareStaticSearchCompressedPackageBytes: (configJson: Uint8Array) => Buffer;
   redactStaticEntitiesJson: (
     configJson: string,
     fullText: string,
@@ -74,7 +63,7 @@ type StaticRedactionResult = {
     redaction_map: RedactionEntry[];
     operator_map: Array<{
       placeholder: string;
-      operator: string;
+      operator: "replace" | "redact";
     }>;
     entity_count: number;
   };
@@ -585,6 +574,56 @@ describe("native adapter parity", () => {
     ).toEqual(expectedJson);
   });
 
+  test("native facade redacts from compressed package bytes", () => {
+    const adapters = getAdapters();
+    const text =
+      "Reference AB1234 for Acme s.r.o. near Fuzztovn, Turkey, " +
+      "Prague, matter MAT-123, code Secret Code.";
+    const operators: NativeOperatorConfig = {
+      operators: { country: "redact" },
+      redactString: "***",
+    };
+    const packageBytes = prepareNativeSearchPackage({
+      binding: adapters.native,
+      config: JSON.parse(CONFIG_JSON),
+      compressed: true,
+    });
+    const anonymizer = createNativeAnonymizerFromPackage({
+      binding: adapters.native,
+      packageBytes,
+    });
+    const expected: StaticRedactionResult = JSON.parse(
+      adapters.native.redactStaticEntitiesJson(
+        CONFIG_JSON,
+        text,
+        JSON.stringify(operators),
+      ),
+    );
+
+    const result = anonymizer.redactStaticEntities(text, operators);
+
+    expect(result.resolvedEntities).toEqual(
+      expected.resolved_entities.map(toNativeFacadeEntity),
+    );
+    expect(result.redaction.redactedText).toBe(
+      expected.redaction.redacted_text,
+    );
+    expect(result.redaction.entityCount).toBe(expected.redaction.entity_count);
+    expect([...result.redaction.redactionMap.entries()]).toEqual(
+      expected.redaction.redaction_map.map(({ placeholder, original }) => [
+        placeholder,
+        original,
+      ]),
+    );
+    expect([...result.redaction.operatorMap.entries()]).toEqual(
+      expected.redaction.operator_map.map(({ placeholder, operator }) => [
+        placeholder,
+        operator,
+      ]),
+    );
+    expect(result.redaction.redactedText).toContain("***");
+  });
+
   test("JSON operator config accepts camel-case redactString", () => {
     const adapters = getAdapters();
     const text =
@@ -952,6 +991,14 @@ const stripDiagnosticTimings = (
       ({ elapsed_us: _elapsedUs, ...event }) => event,
     ),
   },
+});
+
+const toNativeFacadeEntity = ({
+  source_detail: sourceDetail,
+  ...entity
+}: StaticRedactionResult["resolved_entities"][number]) => ({
+  ...entity,
+  ...(sourceDetail ? { sourceDetail } : {}),
 });
 
 const operatorConfigJson = (

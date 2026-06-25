@@ -49,6 +49,26 @@ export type {
   PipelineSearchOptions,
 } from "./pipeline";
 
+// ── Native Adapter ───────────────────────────────
+export {
+  PreparedNativeAnonymizer,
+  createNativeAnonymizerFromConfig,
+  createNativeAnonymizerFromPackage,
+  encodeNativeSearchConfig,
+  prepareNativeSearchPackage,
+} from "./native";
+export type {
+  NativeAnonymizeBinding,
+  NativeAnonymizerFromConfigOptions,
+  NativeAnonymizerFromPackageOptions,
+  NativeOperatorConfig,
+  NativePipelineEntity,
+  NativePreparedSearchBinding,
+  NativeRedactionResult,
+  NativeSearchPackageOptions,
+  NativeStaticRedactionResult,
+} from "./native";
+
 // ── Redaction ─────────────────────────────────────
 export {
   redactText,
