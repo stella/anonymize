@@ -640,7 +640,7 @@ dependencies = [
 [[package]]
 name = "stella-stdnum-core"
 version = "2.1.1"
-source = "git+https://github.com/stella/stdnum?rev=9704bdeac1d7e58407a8b50bb7e95e23953175ca#9704bdeac1d7e58407a8b50bb7e95e23953175ca"
+source = "git+https://github.com/stella/stdnum?rev=614ac70ef76161e2bbb6dcbe5ecc3923bbe8c33f#614ac70ef76161e2bbb6dcbe5ecc3923bbe8c33f"
 
 [[package]]
 name = "stella-text-search-core"
