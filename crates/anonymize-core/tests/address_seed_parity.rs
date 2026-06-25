@@ -1,9 +1,9 @@
 #![allow(clippy::expect_used)]
 
 use stella_anonymize_core::{
-  AddressSeedData, LiteralSearchOptions, OperatorConfig, PatternSlice,
-  PreparedSearch, PreparedSearchConfig, PreparedSearchSlices, SearchOptions,
-  SearchPattern,
+  AddressSeedData, DenyListFilterData, DenyListMatchData, LiteralSearchOptions,
+  OperatorConfig, PatternSlice, PreparedSearch, PreparedSearchConfig,
+  PreparedSearchSlices, RegexMatchMeta, SearchOptions, SearchPattern,
 };
 
 fn empty_config(slices: PreparedSearchSlices) -> PreparedSearchConfig {
@@ -106,4 +106,62 @@ fn detects_cue_gated_br_cep_address_seed() {
     result.resolved_entities,
   );
   assert!(!result.redaction.redacted_text.contains("01001-000"));
+}
+
+#[test]
+fn keeps_date_like_street_name_in_address_seed_span() {
+  let prepared = PreparedSearch::new(PreparedSearchConfig {
+    regex_patterns: vec![SearchPattern::Regex(String::from("May 15"))],
+    regex_meta: vec![RegexMatchMeta::new("date", 0.9)],
+    literal_patterns: vec![
+      SearchPattern::LiteralWithOptions {
+        pattern: String::from("London"),
+        case_insensitive: Some(true),
+        whole_words: Some(true),
+      },
+      SearchPattern::LiteralWithOptions {
+        pattern: String::from("Street"),
+        case_insensitive: Some(true),
+        whole_words: Some(true),
+      },
+    ],
+    literal_options: SearchOptions {
+      literal: LiteralSearchOptions {
+        case_insensitive: true,
+        whole_words: false,
+      },
+      ..SearchOptions::default()
+    },
+    slices: PreparedSearchSlices {
+      regex: PatternSlice { start: 0, end: 1 },
+      deny_list: PatternSlice { start: 0, end: 1 },
+      street_types: PatternSlice { start: 1, end: 2 },
+      ..PreparedSearchSlices::default()
+    },
+    deny_list_data: Some(DenyListMatchData {
+      labels: vec![vec![String::from("address")]].into(),
+      custom_labels: vec![vec![]].into(),
+      originals: vec![String::from("London")],
+      sources: vec![vec![String::from("city")]].into(),
+      filters: Some(DenyListFilterData::default()),
+    }),
+    address_seed_data: Some(AddressSeedData::default()),
+    ..empty_config(PreparedSearchSlices::default())
+  })
+  .expect("address seed data should prepare");
+
+  let result = prepared
+    .redact_static_entities(
+      "Notices go to May 15 Street, London 12345.",
+      &OperatorConfig::default(),
+    )
+    .expect("static redaction should succeed");
+
+  assert!(
+    address_texts(&result).contains(&"May 15 Street, London 12345"),
+    "resolved address entities: {:?}; address seed entities: {:?}",
+    result.resolved_entities,
+    result.detections.address_seed_entities,
+  );
+  assert!(!result.redaction.redacted_text.contains("May 15 Street"));
 }
