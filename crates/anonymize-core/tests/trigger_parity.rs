@@ -1,0 +1,171 @@
+#![allow(clippy::expect_used)]
+
+use stella_anonymize_core::{
+  PatternSlice, PreparedSearch, PreparedSearchConfig, PreparedSearchSlices,
+  SearchOptions, SearchPattern, StaticDetectionResult, TriggerData,
+  TriggerRule, TriggerStrategy, TriggerValidation,
+};
+
+fn empty_config(slices: PreparedSearchSlices) -> PreparedSearchConfig {
+  PreparedSearchConfig {
+    regex_patterns: vec![],
+    custom_regex_patterns: vec![],
+    literal_patterns: vec![],
+    regex_options: SearchOptions::default(),
+    custom_regex_options: SearchOptions::default(),
+    literal_options: SearchOptions::default(),
+    allowed_labels: vec![],
+    threshold: 0.0,
+    slices,
+    regex_meta: vec![],
+    custom_regex_meta: vec![],
+    deny_list_data: None,
+    gazetteer_data: None,
+    country_data: None,
+    trigger_data: None,
+    legal_form_data: None,
+    address_seed_data: None,
+    date_data: None,
+    monetary_data: None,
+  }
+}
+
+fn prepared_for_trigger(
+  trigger: &str,
+  label: &str,
+  strategy: TriggerStrategy,
+) -> PreparedSearch {
+  PreparedSearch::new(PreparedSearchConfig {
+    regex_patterns: vec![SearchPattern::LiteralWithOptions {
+      pattern: trigger.to_lowercase(),
+      case_insensitive: Some(true),
+      whole_words: Some(false),
+    }],
+    slices: PreparedSearchSlices {
+      triggers: PatternSlice { start: 0, end: 1 },
+      ..PreparedSearchSlices::default()
+    },
+    trigger_data: Some(TriggerData {
+      rules: vec![TriggerRule {
+        trigger: trigger.to_owned(),
+        label: label.to_owned(),
+        strategy,
+        validations: Vec::<TriggerValidation>::new(),
+        include_trigger: false,
+      }],
+      address_stop_keywords: Vec::new(),
+      party_position_terms: Vec::new(),
+      legal_form_suffixes: Vec::new(),
+      sentence_terminal_currency_terms: vec![String::from("Kč")],
+    }),
+    ..empty_config(PreparedSearchSlices::default())
+  })
+  .expect("trigger config should prepare")
+}
+
+fn trigger_texts(result: &StaticDetectionResult) -> Vec<&str> {
+  result
+    .trigger_entities
+    .iter()
+    .map(|entity| entity.text.as_str())
+    .collect()
+}
+
+#[test]
+fn uppercase_configured_id_triggers_accept_lowercase_source_forms() {
+  for (trigger, text, expected) in [
+    ("CPF", "cpf: 123.456.789-00", "123.456.789-00"),
+    ("CNPJ", "cnpj: 12.345.678/0001-95", "12.345.678/0001-95"),
+    ("DNI", "dni 12345678Z", "12345678Z"),
+    ("CP", "cp: 08001", "08001"),
+  ] {
+    let prepared = prepared_for_trigger(
+      trigger,
+      "tax identification number",
+      TriggerStrategy::CompanyIdValue,
+    );
+    let result = prepared
+      .detect_static_entities(text)
+      .expect("static detection should succeed");
+
+    assert!(
+      trigger_texts(&result).contains(&expected),
+      "trigger {trigger} should extract {expected:?}; entities: {:?}",
+      result.trigger_entities,
+    );
+  }
+}
+
+#[test]
+fn labelled_phone_trigger_keeps_extension_suffixes() {
+  let prepared =
+    prepared_for_trigger("PHONE", "phone number", TriggerStrategy::ToEndOfLine);
+
+  for (text, expected) in [
+    (
+      "PHONE: +1 555 123 4567 ext. 89\nNext line.",
+      "+1 555 123 4567 ext. 89",
+    ),
+    (
+      "PHONE: +1 555 123 4567 extension 42\nNext line.",
+      "+1 555 123 4567 extension 42",
+    ),
+    (
+      "PHONE: +1 555 123 4567 x42\nNext line.",
+      "+1 555 123 4567 x42",
+    ),
+  ] {
+    let result = prepared
+      .detect_static_entities(text)
+      .expect("static detection should succeed");
+
+    assert!(
+      trigger_texts(&result).contains(&expected),
+      "phone trigger should keep extension in {expected:?}; entities: {:?}",
+      result.trigger_entities,
+    );
+  }
+}
+
+#[test]
+fn to_next_comma_stops_after_short_currency_abbreviation_sentence_tail() {
+  let prepared = prepared_for_trigger(
+    "fee",
+    "monetary amount",
+    TriggerStrategy::ToNextComma {
+      stop_words: Vec::new(),
+      max_length: Some(100),
+    },
+  );
+
+  let result = prepared
+    .detect_static_entities("fee 100 Kč. Termin splatnosti je zítra.")
+    .expect("static detection should succeed");
+
+  assert!(
+    trigger_texts(&result).contains(&"100 Kč"),
+    "currency sentence tail should stop the capture; entities: {:?}",
+    result.trigger_entities,
+  );
+}
+
+#[test]
+fn address_trigger_stops_after_short_proper_noun_before_real_sentence() {
+  let prepared = prepared_for_trigger(
+    "office",
+    "address",
+    TriggerStrategy::Address {
+      max_chars: Some(120),
+    },
+  );
+
+  let result = prepared
+    .detect_static_entities("office Brno. Section begins here.")
+    .expect("static detection should succeed");
+
+  assert!(
+    trigger_texts(&result).contains(&"Brno"),
+    "proper-noun sentence tail should stop the address; entities: {:?}",
+    result.trigger_entities,
+  );
+}

@@ -119,6 +119,13 @@ type ContractFixtureCase = {
   text: string;
 };
 
+type PythonNativeOffsetSlice = {
+  start: number;
+  end: number;
+  slice: string;
+  text: string;
+};
+
 const ROOT_DIR = join(import.meta.dir, "..", "..", "..", "..");
 const TARGET_DIR = join(ROOT_DIR, "target", "debug");
 const CONTRACT_FIXTURES_DIR = join(
@@ -196,6 +203,7 @@ const CONFIG_JSON = JSON.stringify({
       generic_roles: [],
       sentence_starters: [],
       trailing_address_word_exclusions: [],
+      document_heading_words: [],
       defined_term_cues: [],
     },
   },
@@ -232,6 +240,53 @@ results = [
     for item in payload["cases"]
 ]
 print(json.dumps(results))
+`;
+
+const PYTHON_NATIVE_OFFSET_SCRIPT = `
+import importlib.util
+import json
+import os
+import pathlib
+
+module_path = pathlib.Path(os.environ["STELLA_ANONYMIZE_PY_MODULE"])
+payload_path = pathlib.Path(os.environ["STELLA_ANONYMIZE_PAYLOAD"])
+spec = importlib.util.spec_from_file_location(
+    "stella_anonymize_core_py",
+    module_path,
+)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+payload = json.loads(payload_path.read_text())
+prepared = module.PreparedSearch(payload["config_json"])
+result = prepared.redact_static_entities(
+    payload["text"],
+    payload.get("operators_json"),
+)
+entity = next(
+    (
+        item
+        for item in result.resolved_entities
+        if item.label == payload["label"]
+    ),
+    None,
+)
+if entity is None:
+    raise AssertionError(f"entity not found: {payload['label']}")
+sliced = payload["text"][entity.start:entity.end]
+if sliced != payload["expected"]:
+    raise AssertionError(
+        f"slice mismatch: {sliced!r} at {entity.start}:{entity.end}"
+    )
+print(
+    json.dumps(
+        {
+            "start": entity.start,
+            "end": entity.end,
+            "slice": sliced,
+            "text": entity.text,
+        }
+    )
+)
 `;
 
 const PYTHON_VERSION_SCRIPT = `
@@ -531,6 +586,38 @@ describe("native adapter parity", () => {
       return;
     }
     expect(text.slice(registration.start, registration.end)).toBe("AB1234");
+  });
+
+  test("Python-native offsets slice source text after astral prefixes", () => {
+    const adapters = getAdapters();
+    const text = "🙂 Reference AB1234 for Acme s.r.o.";
+
+    const tsResult = runTsAdapter(adapters.native, text, null);
+    const registration = tsResult.resolved_entities.find(
+      (entity) => entity.label === "registration number",
+    );
+    expect(registration).toBeDefined();
+    if (!registration) {
+      return;
+    }
+    expect(text.slice(registration.start, registration.end)).toBe("AB1234");
+
+    const pythonSlice = callPythonNativeOffsetSlice(
+      adapters.pythonModulePath,
+      text,
+      "registration number",
+      "AB1234",
+      null,
+    );
+
+    expect(pythonSlice).toEqual({
+      start: 12,
+      end: 18,
+      slice: "AB1234",
+      text: "AB1234",
+    });
+    expect(pythonSlice.start).toBe(registration.start - 1);
+    expect(pythonSlice.end).toBe(registration.end - 1);
   });
 
   test("prepared search accepts config JSON bytes", () => {
@@ -990,6 +1077,38 @@ const runPythonAdapters = (
     STELLA_ANONYMIZE_PY_MODULE: pythonModulePath,
   });
   return JSON.parse(output);
+};
+
+const callPythonNativeOffsetSlice = (
+  pythonModulePath: string,
+  text: string,
+  label: string,
+  expected: string,
+  operators: Record<string, string> | null,
+): PythonNativeOffsetSlice => {
+  const payloadDir = mkdtempSync(
+    join(tmpdir(), "stella-anonymize-py-offsets-"),
+  );
+  const payloadPath = join(payloadDir, "payload.json");
+  writeFileSync(
+    payloadPath,
+    JSON.stringify({
+      config_json: CONFIG_JSON,
+      text,
+      label,
+      expected,
+      operators_json: operatorConfigJson(operators),
+    }),
+  );
+  try {
+    const output = runCommand("python3", ["-c", PYTHON_NATIVE_OFFSET_SCRIPT], {
+      STELLA_ANONYMIZE_PAYLOAD: payloadPath,
+      STELLA_ANONYMIZE_PY_MODULE: pythonModulePath,
+    });
+    return JSON.parse(output);
+  } finally {
+    rmSync(payloadDir, { recursive: true, force: true });
+  }
 };
 
 const callPythonNormalize = (

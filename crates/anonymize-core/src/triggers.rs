@@ -21,6 +21,7 @@ pub struct TriggerData {
   pub address_stop_keywords: Vec<String>,
   pub party_position_terms: Vec<String>,
   pub legal_form_suffixes: Vec<String>,
+  pub sentence_terminal_currency_terms: Vec<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
@@ -73,6 +74,7 @@ pub(crate) struct PreparedTriggerData {
   address_stop_keywords: Vec<String>,
   party_position_terms: Vec<String>,
   legal_form_suffixes: Vec<String>,
+  sentence_terminal_currency_terms: Vec<String>,
 }
 
 struct PreparedTriggerRule {
@@ -81,7 +83,6 @@ struct PreparedTriggerRule {
   strategy: PreparedTriggerStrategy,
   validations: Vec<PreparedTriggerValidation>,
   include_trigger: bool,
-  requires_exact_case: bool,
 }
 
 enum PreparedTriggerStrategy {
@@ -119,6 +120,12 @@ struct ExtractedValue {
   text: String,
 }
 
+struct TriggerExtractionData<'a> {
+  address_stop_keywords: &'a [String],
+  party_position_terms: &'a [String],
+  sentence_terminal_currency_terms: &'a [String],
+}
+
 impl PreparedTriggerData {
   pub(crate) fn new(data: TriggerData) -> Result<Self> {
     let rules = data
@@ -131,13 +138,17 @@ impl PreparedTriggerData {
       address_stop_keywords: data.address_stop_keywords,
       party_position_terms: data.party_position_terms,
       legal_form_suffixes: data.legal_form_suffixes,
+      sentence_terminal_currency_terms: data
+        .sentence_terminal_currency_terms
+        .into_iter()
+        .filter(|term| !term.is_empty())
+        .collect(),
     })
   }
 }
 
 impl PreparedTriggerRule {
   fn new(rule: TriggerRule) -> Result<Self> {
-    let requires_exact_case = requires_exact_case_trigger(&rule.trigger);
     Ok(Self {
       trigger: rule.trigger,
       label: rule.label,
@@ -148,7 +159,6 @@ impl PreparedTriggerRule {
         .map(PreparedTriggerValidation::new)
         .collect::<Result<Vec<_>>>()?,
       include_trigger: rule.include_trigger,
-      requires_exact_case,
     })
   }
 }
@@ -208,6 +218,11 @@ pub(crate) fn process_trigger_matches(
 ) -> Result<Vec<PipelineEntity>> {
   let offsets = ByteOffsets::new(full_text);
   let mut results = Vec::new();
+  let extraction_data = TriggerExtractionData {
+    address_stop_keywords: &data.address_stop_keywords,
+    party_position_terms: &data.party_position_terms,
+    sentence_terminal_currency_terms: &data.sentence_terminal_currency_terms,
+  };
 
   for found in matches {
     let Some(local_index) = slice.local_index(found.pattern()) else {
@@ -222,20 +237,13 @@ pub(crate) fn process_trigger_matches(
     if !has_right_boundary(full_text, &offsets, found.end(), &rule.trigger)? {
       continue;
     }
-    if rule.requires_exact_case
-      && !matches_trigger_case(full_text, &offsets, found, rule)?
-    {
-      continue;
-    }
-
     let Some(raw_value) = extract_value(
       full_text,
       &offsets,
       found.end(),
       &rule.strategy,
       &rule.label,
-      &data.address_stop_keywords,
-      &data.party_position_terms,
+      &extraction_data,
     )?
     else {
       continue;
@@ -305,8 +313,7 @@ fn extract_value(
   trigger_end: u32,
   strategy: &PreparedTriggerStrategy,
   label: &str,
-  address_stop_keywords: &[String],
-  party_position_terms: &[String],
+  data: &TriggerExtractionData<'_>,
 ) -> Result<Option<ExtractedValue>> {
   let trigger_end_byte = offsets.validate_offset(trigger_end)?;
   let lookahead = get_trigger_lookahead(strategy);
@@ -334,6 +341,7 @@ fn extract_value(
       label,
       stop_words,
       max_length.unwrap_or(MAX_TRIGGER_VALUE_LEN),
+      data.sentence_terminal_currency_terms,
     ),
     PreparedTriggerStrategy::ToEndOfLine => {
       extract_to_end_of_line(remaining, stripped, value_start_byte, label)
@@ -348,8 +356,9 @@ fn extract_value(
       stripped,
       value_start_byte,
       max_chars.unwrap_or(120),
-      address_stop_keywords,
-      party_position_terms,
+      data.address_stop_keywords,
+      data.party_position_terms,
+      data.sentence_terminal_currency_terms,
     ),
     PreparedTriggerStrategy::MatchPattern { regex } => {
       extract_match_pattern(stripped, value_start_byte, regex)
@@ -364,6 +373,7 @@ fn extract_to_next_comma(
   label: &str,
   stop_words: &[String],
   length_cap: usize,
+  sentence_terminal_currency_terms: &[String],
 ) -> Option<ByteValue> {
   let mut end = 0;
   while end < value_text.len() {
@@ -373,7 +383,13 @@ fn extract_to_next_comma(
     if matches!(ch, '\n' | '(' | ')' | '[' | ']' | '\t' | ';') {
       break;
     }
-    if ch == '.' && is_sentence_terminator(value_text, end) {
+    if ch == '.'
+      && is_sentence_terminator(
+        value_text,
+        end,
+        sentence_terminal_currency_terms,
+      )
+    {
       break;
     }
     if hits_stop_word(value_text, end, stop_words) {
@@ -545,6 +561,7 @@ fn extract_address(
   max_len: usize,
   stop_keywords: &[String],
   party_position_terms: &[String],
+  sentence_terminal_currency_terms: &[String],
 ) -> Option<ByteValue> {
   if let Some(trimmed) =
     trim_leading_party_position(value_text, party_position_terms)
@@ -585,7 +602,11 @@ fn extract_address(
               next_ch.is_alphabetic() || next_ch.is_ascii_digit()
             })
         })
-        && !is_sentence_terminator(value_text, end)
+        && !is_sentence_terminator(
+          value_text,
+          end,
+          sentence_terminal_currency_terms,
+        )
       {
         end = end.saturating_add(len);
         continue;
@@ -807,32 +828,6 @@ fn has_right_boundary(
   )
 }
 
-fn matches_trigger_case(
-  text: &str,
-  offsets: &ByteOffsets<'_>,
-  found: &SearchMatch,
-  rule: &PreparedTriggerRule,
-) -> Result<bool> {
-  Ok(offsets.slice(text, found.start(), found.end())? == rule.trigger)
-}
-
-fn requires_exact_case_trigger(trigger: &str) -> bool {
-  let mut letters = 0usize;
-  for ch in trigger.chars() {
-    if ch.is_whitespace() {
-      return false;
-    }
-    if !ch.is_alphabetic() {
-      continue;
-    }
-    letters = letters.saturating_add(1);
-    if !ch.is_uppercase() {
-      return false;
-    }
-  }
-  letters >= 2
-}
-
 fn char_at(
   text: &str,
   offsets: &ByteOffsets<'_>,
@@ -943,28 +938,112 @@ fn post_nominal_len(text: &str) -> Option<usize> {
   (token_end > 0).then_some(len_before.saturating_add(token_end))
 }
 
-fn is_sentence_terminator(text: &str, period_byte: usize) -> bool {
+fn is_sentence_terminator(
+  text: &str,
+  period_byte: usize,
+  sentence_terminal_currency_terms: &[String],
+) -> bool {
   let Some(tail) = text.get(period_byte..) else {
     return false;
   };
-  let starts_next = tail.strip_prefix('.').is_some_and(|after| {
-    after.trim_start().is_empty() || after.starts_with(char::is_whitespace)
-  });
-  if !starts_next {
+  if !next_is_sentence_start(tail) {
     return false;
   }
   let head = text.get(..period_byte).unwrap_or_default();
-  head
-    .chars()
-    .rev()
-    .take_while(|ch| ch.is_alphabetic())
-    .filter(|ch| ch.is_lowercase())
-    .count()
-    >= 5
+  lowercase_tail_len(head) >= 5
+    || currency_tail(head, sentence_terminal_currency_terms)
     || head
       .chars()
       .next_back()
       .is_some_and(|ch| ch.is_ascii_digit())
+    || (proper_noun_tail(head) && next_is_real_sentence(tail))
+}
+
+fn next_is_sentence_start(tail: &str) -> bool {
+  let Some(after_period) = tail.strip_prefix('.') else {
+    return false;
+  };
+  if after_period.trim_start().is_empty() {
+    return true;
+  }
+  if !after_period.starts_with(char::is_whitespace) {
+    return false;
+  }
+  after_period
+    .trim_start()
+    .chars()
+    .next()
+    .is_some_and(char::is_uppercase)
+}
+
+fn next_is_real_sentence(tail: &str) -> bool {
+  let Some(after_period) = tail.strip_prefix('.') else {
+    return false;
+  };
+  if !after_period.starts_with(char::is_whitespace) {
+    return false;
+  }
+  let mut chars = after_period.trim_start().chars();
+  chars.next().is_some_and(char::is_uppercase)
+    && chars.next().is_some_and(char::is_lowercase)
+    && chars.next().is_some_and(char::is_lowercase)
+}
+
+fn lowercase_tail_len(text: &str) -> usize {
+  text
+    .chars()
+    .rev()
+    .take_while(|ch| ch.is_lowercase())
+    .count()
+}
+
+fn currency_tail(
+  text: &str,
+  sentence_terminal_currency_terms: &[String],
+) -> bool {
+  sentence_terminal_currency_terms
+    .iter()
+    .any(|term| has_currency_code_tail(text, term))
+}
+
+fn has_currency_code_tail(text: &str, code: &str) -> bool {
+  let Some(start) = text.len().checked_sub(code.len()) else {
+    return false;
+  };
+  let Some(tail) = text.get(start..) else {
+    return false;
+  };
+  if tail.to_lowercase() != code.to_lowercase() {
+    return false;
+  }
+  text
+    .get(..start)
+    .and_then(|prefix| prefix.chars().next_back())
+    .is_none_or(|ch| !ch.is_alphabetic())
+}
+
+fn proper_noun_tail(text: &str) -> bool {
+  let mut start = text.len();
+  for (index, ch) in text.char_indices().rev() {
+    if !ch.is_alphabetic() {
+      break;
+    }
+    start = index;
+  }
+  let Some(word) = text.get(start..) else {
+    return false;
+  };
+  let mut chars = word.chars();
+  if !chars.next().is_some_and(char::is_uppercase) {
+    return false;
+  }
+  if chars.clone().count() < 3 || !chars.all(char::is_lowercase) {
+    return false;
+  }
+  text
+    .get(..start)
+    .and_then(|prefix| prefix.chars().next_back())
+    .is_none_or(|ch| !ch.is_alphabetic() && ch != '.')
 }
 
 fn punctuation_only(text: &str) -> bool {
@@ -1003,7 +1082,58 @@ fn phone_shape_end(text: &str) -> Option<usize> {
   {
     end = end.saturating_sub(next_len_backward(text, end));
   }
+  if let Some(extension_len) =
+    text.get(end..).and_then(phone_extension_suffix_len)
+  {
+    end = end.saturating_add(extension_len);
+  }
   (end > 0).then_some(end)
+}
+
+fn phone_extension_suffix_len(text: &str) -> Option<usize> {
+  let leading = text.len().saturating_sub(text.trim_start().len());
+  let trimmed = text.get(leading..)?;
+  for label in ["extension", "ext", "x"] {
+    let Some(rest) = ascii_case_prefix_rest(trimmed, label) else {
+      continue;
+    };
+    let (rest, dot_len) = if label == "ext" {
+      rest
+        .strip_prefix('.')
+        .map_or((rest, 0_usize), |after_dot| (after_dot, 1_usize))
+    } else {
+      (rest, 0_usize)
+    };
+    let whitespace = rest.len().saturating_sub(rest.trim_start().len());
+    let digits = rest.get(whitespace..)?;
+    let mut digit_end = 0;
+    let mut digit_count = 0_usize;
+    for (index, ch) in digits.char_indices() {
+      if !ch.is_ascii_digit() || digit_count >= 6 {
+        break;
+      }
+      digit_count = digit_count.saturating_add(1);
+      digit_end = index.saturating_add(ch.len_utf8());
+    }
+    if digit_count > 0 {
+      return Some(
+        leading
+          .saturating_add(label.len())
+          .saturating_add(dot_len)
+          .saturating_add(whitespace)
+          .saturating_add(digit_end),
+      );
+    }
+  }
+  None
+}
+
+fn ascii_case_prefix_rest<'a>(text: &'a str, prefix: &str) -> Option<&'a str> {
+  let head = text.get(..prefix.len())?;
+  if !head.eq_ignore_ascii_case(prefix) {
+    return None;
+  }
+  text.get(prefix.len()..)
 }
 
 fn next_len_backward(text: &str, byte: usize) -> usize {
@@ -1173,7 +1303,19 @@ fn id_value_prefix(text: &str) -> Option<&str> {
     }
     end = index.saturating_add(ch.len_utf8());
   }
-  (digits >= 2 && end >= 5).then(|| text.get(..end)).flatten()
+  let candidate = text.get(..end)?;
+  (digits >= 2 && end >= 5 && !single_digit_dotted_prefix(candidate))
+    .then_some(candidate)
+}
+
+fn single_digit_dotted_prefix(text: &str) -> bool {
+  let mut chars = text.trim_start().chars();
+  let Some(first) = chars.next() else {
+    return false;
+  };
+  first.is_ascii_digit()
+    && chars.next() == Some('.')
+    && chars.next().is_some_and(|ch| ch.is_ascii_digit())
 }
 
 fn has_known_legal_form_suffix(text: &str, suffixes: &[String]) -> bool {

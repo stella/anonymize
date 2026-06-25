@@ -123,6 +123,13 @@ fn should_reject_entity(
   if is_standalone_year(text) && entity.source != DetectionSource::Trigger {
     return Ok(true);
   }
+  if entity.source != DetectionSource::Trigger
+    && text.chars().next().is_some_and(|ch| ch.is_ascii_digit())
+    && let Some(filters) = filters
+    && has_number_abbrev_prefix(full_text, offsets, entity, filters)?
+  {
+    return Ok(true);
+  }
   if entity.label == REGISTRATION_NUMBER_LABEL && is_short_letter_run(text) {
     return Ok(true);
   }
@@ -147,6 +154,12 @@ fn should_reject_entity(
   if entity.label == ORGANIZATION_LABEL
     && is_all_caps_candidate(text)
     && is_all_caps_boilerplate_line(full_text, offsets, entity)?
+  {
+    return Ok(true);
+  }
+  if entity.label == ORGANIZATION_LABEL
+    && filters
+      .is_some_and(|filters| is_document_structure_heading(text, filters))
   {
     return Ok(true);
   }
@@ -239,6 +252,79 @@ fn is_standalone_year(text: &str) -> bool {
   trimmed.len() == 4
     && trimmed.chars().all(|ch| ch.is_ascii_digit())
     && (trimmed.starts_with("19") || trimmed.starts_with("20"))
+}
+
+fn has_number_abbrev_prefix(
+  full_text: &str,
+  offsets: &ByteOffsets<'_>,
+  entity: &PipelineEntity,
+  filters: &DenyListFilterData,
+) -> Result<bool> {
+  let start = offsets.validate_offset(entity.start)?;
+  let before = full_text.get(..start).ok_or(Error::InvalidSpan {
+    start: entity.start,
+    end: entity.end,
+  })?;
+  Ok(ends_with_number_abbrev(before, filters))
+}
+
+fn ends_with_number_abbrev(text: &str, filters: &DenyListFilterData) -> bool {
+  let lower = text.trim_end().to_lowercase();
+  filters.number_abbrev_prefixes.iter().any(|prefix| {
+    let Some(before_prefix) = lower.strip_suffix(prefix) else {
+      return false;
+    };
+    before_prefix
+      .chars()
+      .next_back()
+      .is_none_or(|ch| ch.is_whitespace() || ch == '(')
+  })
+}
+
+fn is_document_structure_heading(
+  text: &str,
+  filters: &DenyListFilterData,
+) -> bool {
+  let Some((word_end, word)) = first_word(text.trim_start()) else {
+    return false;
+  };
+  if !filters
+    .document_heading_words
+    .contains(&word.to_lowercase())
+  {
+    return false;
+  }
+  let Some(rest) = text.trim_start().get(word_end..) else {
+    return false;
+  };
+  starts_with_ordinal_marker_digit(rest, filters)
+}
+
+fn starts_with_ordinal_marker_digit(
+  text: &str,
+  filters: &DenyListFilterData,
+) -> bool {
+  let trimmed = text.trim_start();
+  let lower = trimmed.to_lowercase();
+  filters
+    .document_heading_ordinal_markers
+    .iter()
+    .any(|marker| {
+      if marker.is_empty() {
+        return false;
+      }
+      if !lower.starts_with(marker) {
+        return false;
+      }
+      let Some(rest) = trimmed.get(marker.len()..) else {
+        return false;
+      };
+      rest
+        .trim_start()
+        .chars()
+        .next()
+        .is_some_and(|ch| ch.is_ascii_digit())
+    })
 }
 
 fn is_short_letter_run(text: &str) -> bool {
@@ -501,6 +587,10 @@ fn has_address_component(text: &str, filters: &DenyListFilterData) -> bool {
     .street_types
     .iter()
     .any(|component| contains_component(&lower, component))
+    || filters
+      .address_component_terms
+      .iter()
+      .any(|component| contains_component(&lower, component))
 }
 
 fn is_jurisdiction_address(text: &str, filters: &DenyListFilterData) -> bool {

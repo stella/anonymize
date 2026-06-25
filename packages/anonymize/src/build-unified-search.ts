@@ -133,10 +133,14 @@ export type NativeDenyListFilterData = {
   address_stopwords: string[];
   address_jurisdiction_prefixes: string[];
   street_types: string[];
+  address_component_terms: string[];
   first_names: string[];
   generic_roles: string[];
+  number_abbrev_prefixes: string[];
   sentence_starters: string[];
   trailing_address_word_exclusions: string[];
+  document_heading_words: string[];
+  document_heading_ordinal_markers: string[];
   defined_term_cues: string[];
   signing_place_guards: NativeSigningPlaceGuardData[];
 };
@@ -188,6 +192,7 @@ export type NativeTriggerData = {
   rules: NativeTriggerRule[];
   address_stop_keywords: string[];
   party_position_terms: string[];
+  sentence_terminal_currency_terms: string[];
 };
 
 export type NativeLegalFormData = {
@@ -416,7 +421,8 @@ const buildUnifiedSearchSources = async (
     config.enableRegex && labelIsAllowed("date", allowedLabels)
       ? getYearWordData()
       : Promise.resolve(null),
-    config.enableRegex && labelIsAllowed("monetary amount", allowedLabels)
+    config.enableTriggerPhrases ||
+    (config.enableRegex && labelIsAllowed("monetary amount", allowedLabels))
       ? getMonetaryData()
       : Promise.resolve(null),
     labelIsAllowed("address", allowedLabels)
@@ -893,7 +899,7 @@ const buildNativeStaticConfig = ({
       continue;
     }
     const meta = regexMeta[index];
-    if (!meta || !nativeSupportsRegexMeta(meta)) {
+    if (!meta) {
       continue;
     }
     nativeRegexPatterns.push(toNativeRegexPattern(pattern));
@@ -1039,6 +1045,8 @@ const buildNativeStaticConfig = ({
       rules: triggerRules.map(toNativeTriggerRule),
       address_stop_keywords: [...getAddressStopKeywordsSync()],
       party_position_terms: [...partyPositionTerms],
+      sentence_terminal_currency_terms:
+        sentenceTerminalCurrencyTerms(monetaryData),
     };
   }
   if (legalFormData) {
@@ -1272,11 +1280,12 @@ const toNativeRegexMeta = (meta: RegexMeta): NativeRegexMatchMeta => {
     result.source_detail = meta.sourceDetail;
   }
   if (meta.validator) {
+    const isSupportedValidator = nativeSupportsRegexMeta(meta);
     result.requires_validation = true;
-    if (meta.validatorId) {
+    if (isSupportedValidator && meta.validatorId) {
       result.validator_id = meta.validatorId;
     }
-    if (meta.validatorInputKind) {
+    if (isSupportedValidator && meta.validatorInputKind) {
       result.validator_input = meta.validatorInputKind;
     }
   }
@@ -1318,6 +1327,23 @@ const toNativeDenyListData = (data: DenyListData): NativeDenyListMatchData => {
     }
   }
   return result;
+};
+
+const sentenceTerminalCurrencyTerms = (
+  monetaryData: NativeMonetaryData | null,
+): string[] => {
+  if (monetaryData === null) {
+    return [];
+  }
+  return [
+    ...new Set(
+      [
+        ...monetaryData.currencies.codes,
+        ...monetaryData.currencies.symbols,
+        ...monetaryData.currencies.local_names,
+      ].filter((term) => term.length > 0),
+    ),
+  ].toSorted();
 };
 
 const createStringGroupEncoder = (): {
@@ -1364,10 +1390,14 @@ const toNativeDenyListFilters = (
   address_stopwords: filters.addressStopwords,
   address_jurisdiction_prefixes: filters.addressJurisdictionPrefixes,
   street_types: filters.streetTypes,
+  address_component_terms: filters.addressComponentTerms,
   first_names: filters.firstNames,
   generic_roles: filters.genericRoles,
+  number_abbrev_prefixes: filters.numberAbbrevPrefixes,
   sentence_starters: filters.sentenceStarters,
   trailing_address_word_exclusions: filters.trailingAddressWordExclusions,
+  document_heading_words: filters.documentHeadingWords,
+  document_heading_ordinal_markers: filters.documentHeadingOrdinalMarkers,
   defined_term_cues: filters.definedTermCues,
   signing_place_guards: filters.signingPlaceGuards.map((entry) => ({
     prefix_phrases: entry.prefixPhrases,

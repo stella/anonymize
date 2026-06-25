@@ -1,0 +1,17 @@
+{
+  "_comment": "Language-keyed lexical markers used by false-positive shape guards.",
+  "addressComponentTerms": {
+    "cs": ["č.p.", "č.ev.", "č.", "sídliště"]
+  },
+  "numberAbbrevPrefixes": {
+    "cs": ["čís.", "č."],
+    "de": ["nr."],
+    "en": ["no.", "n."]
+  },
+  "documentHeadingOrdinalMarkers": {
+    "cs": ["č.", "č"],
+    "de": ["nr.", "nr"],
+    "en": ["no.", "no", "n.", "n"],
+    "global": ["#"]
+  }
+}
