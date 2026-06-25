@@ -10,12 +10,12 @@ use stella_anonymize_adapter_contract::{
   prepared_search_core_package_view_from_bytes,
   prepared_search_package_from_bytes, prepared_search_package_has_core_payload,
   static_redaction_diagnostic_result_to_utf16_binding,
-  static_redaction_diagnostics_to_binding,
+  static_redaction_diagnostics_to_binding, static_redaction_result_to_binding,
   static_redaction_result_to_utf16_binding,
 };
 use stella_anonymize_core::{
   PreparedSearch as CorePreparedSearch, PreparedSearchArtifacts,
-  StaticRedactionDiagnostics,
+  StaticRedactionDiagnostics, StaticRedactionResult,
 };
 
 #[pyclass(name = "RedactionEntry", get_all, skip_from_py_object)]
@@ -143,16 +143,8 @@ impl PyPreparedSearch {
     full_text: &str,
     operators_json: Option<&str>,
   ) -> PyResult<PyStaticRedactionResult> {
-    let operators = parse_operator_config(operators_json)?;
-    let result = self
-      .inner
-      .redact_static_entities(
-        full_text,
-        &operator_config_from_binding(operators)
-          .map_err(|error| to_py_contract_error(&error))?,
-      )
-      .map_err(|error| to_py_core_error(&error))?;
-    static_redaction_result_to_utf16_binding(result, full_text)
+    let result = self.redact_static_entities_core(full_text, operators_json)?;
+    static_redaction_result_to_python_binding(result, full_text)
       .map_err(|error| to_py_contract_error(&error))
       .map(to_py_static_redaction_result)
   }
@@ -162,9 +154,10 @@ impl PyPreparedSearch {
     full_text: &str,
     operators_json: Option<&str>,
   ) -> PyResult<String> {
-    let result = self.redact_static_entities(full_text, operators_json)?;
-    serde_json::to_string(&to_binding_static_redaction_result(result))
-      .map_err(|error| to_py_serde_error(&error))
+    let result = self.redact_static_entities_core(full_text, operators_json)?;
+    let result = static_redaction_result_to_utf16_binding(result, full_text)
+      .map_err(|error| to_py_contract_error(&error))?;
+    serde_json::to_string(&result).map_err(|error| to_py_serde_error(&error))
   }
 
   fn redact_static_entities_diagnostics_json(
@@ -189,6 +182,24 @@ impl PyPreparedSearch {
         .map_err(|error| to_py_contract_error(&error))?;
 
     serde_json::to_string(&result).map_err(|error| to_py_serde_error(&error))
+  }
+}
+
+impl PyPreparedSearch {
+  fn redact_static_entities_core(
+    &self,
+    full_text: &str,
+    operators_json: Option<&str>,
+  ) -> PyResult<StaticRedactionResult> {
+    let operators = parse_operator_config(operators_json)?;
+    self
+      .inner
+      .redact_static_entities(
+        full_text,
+        &operator_config_from_binding(operators)
+          .map_err(|error| to_py_contract_error(&error))?,
+      )
+      .map_err(|error| to_py_core_error(&error))
   }
 }
 
@@ -295,6 +306,80 @@ fn parse_operator_config(
     .map_err(|error| to_py_serde_error(&error))
 }
 
+fn static_redaction_result_to_python_binding(
+  result: StaticRedactionResult,
+  full_text: &str,
+) -> std::result::Result<BindingStaticRedactionResult, ContractError> {
+  let offsets = PythonOffsetMap::new(full_text)?;
+  let mut result = static_redaction_result_to_binding(result);
+  convert_pipeline_entity_offsets_to_python(
+    &mut result.resolved_entities,
+    &offsets,
+  )?;
+  Ok(result)
+}
+
+fn convert_pipeline_entity_offsets_to_python(
+  entities: &mut [BindingPipelineEntity],
+  offsets: &PythonOffsetMap,
+) -> std::result::Result<(), ContractError> {
+  for entity in entities {
+    entity.start = offsets.convert(entity.start)?;
+    entity.end = offsets.convert(entity.end)?;
+  }
+  Ok(())
+}
+
+struct PythonOffsetMap {
+  boundaries: Vec<(u32, u32)>,
+}
+
+impl PythonOffsetMap {
+  fn new(text: &str) -> std::result::Result<Self, ContractError> {
+    let mut boundaries = Vec::new();
+    let mut code_point_offset = 0_u32;
+    boundaries.push((0, 0));
+
+    for (byte_start, ch) in text.char_indices() {
+      code_point_offset =
+        code_point_offset.checked_add(1).ok_or_else(|| {
+          ContractError::InvalidPreparedSearchPackage {
+            reason: String::from("Python offset exceeds u32 range"),
+          }
+        })?;
+      let byte_end = byte_start.saturating_add(ch.len_utf8());
+      boundaries.push((u32_from_usize(byte_end)?, code_point_offset));
+    }
+
+    Ok(Self { boundaries })
+  }
+
+  fn convert(&self, offset: u32) -> std::result::Result<u32, ContractError> {
+    self
+      .try_convert(offset)
+      .ok_or(ContractError::InvalidBindingOffset { offset })
+  }
+
+  fn try_convert(&self, offset: u32) -> Option<u32> {
+    let index = self
+      .boundaries
+      .binary_search_by_key(&offset, |(byte_offset, _)| *byte_offset)
+      .ok()?;
+    self
+      .boundaries
+      .get(index)
+      .map(|(_, code_point_offset)| *code_point_offset)
+  }
+}
+
+fn u32_from_usize(value: usize) -> std::result::Result<u32, ContractError> {
+  u32::try_from(value).map_err(|_| {
+    ContractError::InvalidPreparedSearchPackage {
+      reason: format!("Offset exceeds u32 range: {value}"),
+    }
+  })
+}
+
 fn to_py_static_redaction_result(
   result: BindingStaticRedactionResult,
 ) -> PyStaticRedactionResult {
@@ -346,68 +431,6 @@ fn to_py_redaction_entry(entry: BindingRedactionEntry) -> PyRedactionEntry {
 
 fn to_py_operator_entry(entry: BindingOperatorEntry) -> PyOperatorEntry {
   PyOperatorEntry {
-    placeholder: entry.placeholder,
-    operator: entry.operator,
-  }
-}
-
-fn to_binding_static_redaction_result(
-  result: PyStaticRedactionResult,
-) -> BindingStaticRedactionResult {
-  BindingStaticRedactionResult {
-    resolved_entities: result
-      .resolved_entities
-      .into_iter()
-      .map(to_binding_pipeline_entity)
-      .collect(),
-    redaction: to_binding_redaction_result(result.redaction),
-  }
-}
-
-fn to_binding_pipeline_entity(
-  entity: PyPipelineEntity,
-) -> BindingPipelineEntity {
-  BindingPipelineEntity {
-    start: entity.start,
-    end: entity.end,
-    label: entity.label,
-    text: entity.text,
-    score: entity.score,
-    source: entity.source,
-    source_detail: entity.source_detail,
-  }
-}
-
-fn to_binding_redaction_result(
-  result: PyRedactionResult,
-) -> BindingRedactionResult {
-  BindingRedactionResult {
-    redacted_text: result.redacted_text,
-    redaction_map: result
-      .redaction_map
-      .into_iter()
-      .map(to_binding_redaction_entry)
-      .collect(),
-    operator_map: result
-      .operator_map
-      .into_iter()
-      .map(to_binding_operator_entry)
-      .collect(),
-    entity_count: result.entity_count,
-  }
-}
-
-fn to_binding_redaction_entry(
-  entry: PyRedactionEntry,
-) -> BindingRedactionEntry {
-  BindingRedactionEntry {
-    placeholder: entry.placeholder,
-    original: entry.original,
-  }
-}
-
-fn to_binding_operator_entry(entry: PyOperatorEntry) -> BindingOperatorEntry {
-  BindingOperatorEntry {
     placeholder: entry.placeholder,
     operator: entry.operator,
   }

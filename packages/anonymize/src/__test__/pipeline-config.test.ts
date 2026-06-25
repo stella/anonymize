@@ -128,6 +128,30 @@ describe("pipeline config semantics", () => {
     expect(search.nativeStaticConfig.threshold).toBe(0.93);
   });
 
+  test("native config keeps unsupported validator regexes fail-fast", async () => {
+    const search = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        enableRegex: true,
+        labels: ["national identification number"],
+      },
+      [],
+      createPipelineContext(),
+    );
+
+    const patternIndex = search.nativeStaticConfig.regex_patterns.findIndex(
+      (pattern) =>
+        pattern.kind === "regex" && pattern.pattern.includes("\\d{17}"),
+    );
+    expect(patternIndex).toBeGreaterThanOrEqual(0);
+    const meta = search.nativeStaticConfig.regex_meta.at(patternIndex);
+    expect(meta).toMatchObject({
+      label: "national identification number",
+      requires_validation: true,
+    });
+    expect(meta?.validator_id).toBeUndefined();
+  });
+
   test("content language scopes deny-list search build", async () => {
     const testDictionaries = await getDictionaries();
     const config = {

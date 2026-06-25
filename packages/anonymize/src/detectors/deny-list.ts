@@ -492,6 +492,12 @@ type DenyListLanguageFilters = {
   definedTermCues?: readonly string[];
 };
 
+type FalsePositiveShapeFilters = {
+  addressComponentTerms: string[];
+  numberAbbrevPrefixes: string[];
+  documentHeadingOrdinalMarkers: string[];
+};
+
 type SigningClauseData = {
   patterns: readonly {
     guardPrefixPhrases?: readonly string[];
@@ -507,10 +513,14 @@ export type DenyListFilterData = {
   addressStopwords: string[];
   addressJurisdictionPrefixes: string[];
   streetTypes: string[];
+  addressComponentTerms: string[];
   firstNames: string[];
   genericRoles: string[];
+  numberAbbrevPrefixes: string[];
   sentenceStarters: string[];
   trailingAddressWordExclusions: string[];
+  documentHeadingWords: string[];
+  documentHeadingOrdinalMarkers: string[];
   definedTermCues: string[];
   signingPlaceGuards: DenyListSigningPlaceGuardData[];
 };
@@ -1124,6 +1134,7 @@ const loadSigningPlaceFilters = (): Promise<SigningPlaceFilters> => {
 
 let trailingAddressWordExclusionsPromise: Promise<ReadonlySet<string>> | null =
   null;
+let documentHeadingWordsPromise: Promise<string[]> | null = null;
 let addressJurisdictionPrefixesPromise: Promise<string[]> | null = null;
 
 const loadLanguageWordFile = async (
@@ -1132,6 +1143,62 @@ const loadLanguageWordFile = async (
   const mod = await importer();
   const parsed = (mod as { default?: Record<string, unknown> }).default ?? mod;
   return collectLanguageWordValues(parsed as Record<string, unknown>);
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const languageWordValues = (value: unknown): string[] =>
+  isRecord(value) ? collectLanguageWordValues(value) : [];
+
+let falsePositiveShapeFiltersPromise: Promise<FalsePositiveShapeFilters> | null =
+  null;
+
+const loadFalsePositiveShapeFilters =
+  (): Promise<FalsePositiveShapeFilters> => {
+    if (falsePositiveShapeFiltersPromise) {
+      return falsePositiveShapeFiltersPromise;
+    }
+
+    falsePositiveShapeFiltersPromise = (async () => {
+      const mod = await import("../data/false-positive-shapes.json");
+      const defaultValue = isRecord(mod) ? mod.default : undefined;
+      let data: Record<string, unknown> = {};
+      if (isRecord(defaultValue)) {
+        data = defaultValue;
+      } else if (isRecord(mod)) {
+        data = mod;
+      }
+      return {
+        addressComponentTerms: languageWordValues(
+          data["addressComponentTerms"],
+        ),
+        numberAbbrevPrefixes: languageWordValues(data["numberAbbrevPrefixes"]),
+        documentHeadingOrdinalMarkers: languageWordValues(
+          data["documentHeadingOrdinalMarkers"],
+        ),
+      };
+    })().catch((error) => {
+      falsePositiveShapeFiltersPromise = null;
+      throw error;
+    });
+
+    return falsePositiveShapeFiltersPromise;
+  };
+
+const loadDocumentHeadingWords = (): Promise<string[]> => {
+  if (documentHeadingWordsPromise) {
+    return documentHeadingWordsPromise;
+  }
+
+  documentHeadingWordsPromise = loadLanguageWordFile(
+    () => import("../data/document-structure-headings.json"),
+  ).catch((error) => {
+    documentHeadingWordsPromise = null;
+    throw error;
+  });
+
+  return documentHeadingWordsPromise;
 };
 
 const loadTrailingAddressWordExclusions = async (): Promise<
@@ -1147,9 +1214,7 @@ const loadTrailingAddressWordExclusions = async (): Promise<
       loadLanguageWordFile(
         () => import("../data/organization-unit-heads.json"),
       ),
-      loadLanguageWordFile(
-        () => import("../data/document-structure-headings.json"),
-      ),
+      loadDocumentHeadingWords(),
     ]);
     return new Set(
       lowerSortedUnique([
@@ -1189,10 +1254,14 @@ const buildDenyListFilterData = async (
     signingPlaceFilters,
     trailingAddressWordExclusions,
     addressJurisdictionPrefixes,
+    falsePositiveShapeFilters,
+    documentHeadingWords,
   ] = await Promise.all([
     loadSigningPlaceFilters(),
     loadTrailingAddressWordExclusions(),
     loadAddressJurisdictionPrefixes(),
+    loadFalsePositiveShapeFilters(),
+    loadDocumentHeadingWords(),
   ]);
 
   return {
@@ -1203,13 +1272,18 @@ const buildDenyListFilterData = async (
     addressStopwords: [...getAddressStopwords(ctx)],
     addressJurisdictionPrefixes,
     streetTypes: await buildStreetTypeFilterValues(),
+    addressComponentTerms: falsePositiveShapeFilters.addressComponentTerms,
     firstNames: [...getNameCorpusFirstNames(ctx)],
     genericRoles: [
       ...(ctx.genericRoles ?? EMPTY_GENERIC_ROLES),
       ...getLegalRoleHeadsSync(),
     ],
+    numberAbbrevPrefixes: falsePositiveShapeFilters.numberAbbrevPrefixes,
     sentenceStarters: [...DENY_LIST_STATIC_FILTERS.sentenceStarters],
     trailingAddressWordExclusions: [...trailingAddressWordExclusions],
+    documentHeadingWords,
+    documentHeadingOrdinalMarkers:
+      falsePositiveShapeFilters.documentHeadingOrdinalMarkers,
     definedTermCues: [...DENY_LIST_STATIC_FILTERS.definedTermCues],
     signingPlaceGuards: signingPlaceFilters.guards.map((entry) => ({
       prefixPhrases: [...entry.prefixPhrases],
