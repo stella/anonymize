@@ -96,6 +96,79 @@ fn same_priority_uses_score_then_length() {
 }
 
 #[test]
+fn structured_regex_span_beats_inner_trigger_fragment() {
+  let result = merge_and_dedup(&[
+    entity(DetectionSource::Regex, 0.95, 0, 22, "registration number"),
+    entity(DetectionSource::Trigger, 0.95, 7, 8, "registration number"),
+  ]);
+
+  assert_eq!(result.len(), 1);
+  let kept = result.first().expect("result");
+  assert_eq!(kept.source, DetectionSource::Regex);
+  assert_eq!(kept.start, 0);
+  assert_eq!(kept.end, 22);
+}
+
+#[test]
+fn structured_regex_span_beats_trigger_fragment_with_trailing_punctuation() {
+  let regex_text = "oddíl C, vložka 240118";
+  let trigger_start = byte_len("oddíl C, vložka ");
+  let trigger_text = "240118,";
+  let result = merge_and_dedup(&[
+    PipelineEntity::detected(
+      0,
+      byte_len(regex_text),
+      "registration number",
+      regex_text,
+      0.95,
+      DetectionSource::Regex,
+    ),
+    PipelineEntity::detected(
+      trigger_start,
+      trigger_start + byte_len(trigger_text),
+      "registration number",
+      trigger_text,
+      0.95,
+      DetectionSource::Trigger,
+    ),
+  ]);
+
+  assert_eq!(result.len(), 1);
+  let kept = result.first().expect("result");
+  assert_eq!(kept.source, DetectionSource::Regex);
+  assert_eq!(kept.start, 0);
+  assert_eq!(kept.end, byte_len(regex_text));
+}
+
+#[test]
+fn person_regex_span_beats_inner_name_fragment() {
+  let result = merge_and_dedup(&[
+    entity(DetectionSource::Regex, 0.9, 0, 21, "person"),
+    entity(DetectionSource::Trigger, 0.95, 5, 21, "person"),
+  ]);
+
+  assert_eq!(result.len(), 1);
+  let kept = result.first().expect("result");
+  assert_eq!(kept.source, DetectionSource::Regex);
+  assert_eq!(kept.start, 0);
+  assert_eq!(kept.end, 21);
+}
+
+#[test]
+fn address_trigger_still_beats_inner_address_regex() {
+  let result = merge_and_dedup(&[
+    entity(DetectionSource::Trigger, 0.95, 0, 30, "address"),
+    entity(DetectionSource::Regex, 0.9, 10, 20, "address"),
+  ]);
+
+  assert_eq!(result.len(), 1);
+  let kept = result.first().expect("result");
+  assert_eq!(kept.source, DetectionSource::Trigger);
+  assert_eq!(kept.start, 0);
+  assert_eq!(kept.end, 30);
+}
+
+#[test]
 fn identical_spans_with_different_labels_are_kept() {
   let result = merge_and_dedup(&[
     entity(DetectionSource::Regex, 0.9, 0, 5, "person"),
@@ -201,6 +274,47 @@ fn sanitize_keeps_known_period_suffixes_from_data() {
       .map(|entry| entry.text.as_str())
       .collect::<Vec<_>>(),
     vec!["Acme Inc.", "123 Main St.", "Washington, D.C."]
+  );
+}
+
+#[test]
+fn sanitize_preserves_single_non_breaking_space() {
+  let result = sanitize_entities(&[
+    text_entity(
+      "Městským soudem v\u{00a0}Praze",
+      "organization",
+      DetectionSource::Trigger,
+    ),
+    text_entity("Acme\n  Corp", "organization", DetectionSource::Trigger),
+  ]);
+
+  assert_eq!(
+    result
+      .iter()
+      .map(|entry| entry.text.as_str())
+      .collect::<Vec<_>>(),
+    vec!["Městským soudem v\u{00a0}Praze", "Acme Corp"]
+  );
+}
+
+#[test]
+fn sanitize_keeps_legal_form_periods_from_legal_form_source() {
+  let result = sanitize_entities(&[
+    text_entity("Acme INC.", "organization", DetectionSource::LegalForm),
+    text_entity("Eagles z.s.", "organization", DetectionSource::LegalForm),
+    text_entity(
+      "Národní agentura s. p.",
+      "organization",
+      DetectionSource::LegalForm,
+    ),
+  ]);
+
+  assert_eq!(
+    result
+      .iter()
+      .map(|entry| entry.text.as_str())
+      .collect::<Vec<_>>(),
+    vec!["Acme INC.", "Eagles z.s.", "Národní agentura s. p."]
   );
 }
 

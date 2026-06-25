@@ -41,6 +41,10 @@ pub enum Error {
   MissingStaticData {
     field: &'static str,
   },
+  InvalidStaticData {
+    field: &'static str,
+    reason: String,
+  },
   StaticDataLengthMismatch {
     field: &'static str,
     expected: usize,
@@ -98,6 +102,12 @@ impl fmt::Display for Error {
       }
       Self::MissingStaticData { field } => {
         write!(formatter, "Static data field '{field}' is required")
+      }
+      Self::InvalidStaticData { field, reason } => {
+        write!(
+          formatter,
+          "Static data field '{field}' is invalid: {reason}"
+        )
       }
       Self::StaticDataLengthMismatch {
         field,

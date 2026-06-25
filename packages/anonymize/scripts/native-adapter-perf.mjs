@@ -157,9 +157,7 @@ const rustSummary = JSON.parse(rustOutput);
 printSummary("rust-core", rustSummary, cases.length, ITERATIONS);
 
 const tsPrepareStart = Bun.nanoseconds();
-const prepared = new native.NativePreparedSearch(
-  toNapiConfig(JSON.parse(configJson)),
-);
+const prepared = new native.NativePreparedSearch(configJson);
 const tsPrepareMs = elapsedMs(tsPrepareStart);
 const tsStart = Bun.nanoseconds();
 for (let iteration = 0; iteration < ITERATIONS; iteration += 1) {
@@ -210,103 +208,6 @@ function buildCases() {
   }
 
   return fixtureCases;
-}
-
-function toNapiConfig(config) {
-  return {
-    regexPatterns: config.regex_patterns.map(toNapiPattern),
-    customRegexPatterns: config.custom_regex_patterns.map(toNapiPattern),
-    literalPatterns: config.literal_patterns.map(toNapiPattern),
-    regexOptions: toNapiOptions(config.regex_options),
-    customRegexOptions: toNapiOptions(config.custom_regex_options),
-    literalOptions: toNapiOptions(config.literal_options),
-    slices: {
-      regex: config.slices.regex,
-      customRegex: config.slices.custom_regex,
-      legalForms: config.slices.legal_forms,
-      triggers: config.slices.triggers,
-      denyList: config.slices.deny_list,
-      streetTypes: config.slices.street_types,
-      gazetteer: config.slices.gazetteer,
-      countries: config.slices.countries,
-    },
-    regexMeta: config.regex_meta.map(toNapiRegexMeta),
-    customRegexMeta: config.custom_regex_meta.map(toNapiRegexMeta),
-    denyListData:
-      config.deny_list_data === undefined
-        ? undefined
-        : {
-            labels: config.deny_list_data.labels,
-            customLabels: config.deny_list_data.custom_labels,
-            originals: config.deny_list_data.originals,
-            sources: config.deny_list_data.sources,
-            filters:
-              config.deny_list_data.filters === undefined
-                ? undefined
-                : toNapiDenyListFilters(config.deny_list_data.filters),
-          },
-    gazetteerData:
-      config.gazetteer_data === undefined
-        ? undefined
-        : {
-            labels: config.gazetteer_data.labels,
-            isFuzzy: config.gazetteer_data.is_fuzzy,
-          },
-    countryData: config.country_data,
-  };
-}
-
-function toNapiPattern(pattern) {
-  return {
-    kind: pattern.kind,
-    pattern: pattern.pattern,
-    distance: pattern.distance,
-    caseInsensitive: pattern.case_insensitive,
-    wholeWords: pattern.whole_words,
-    lazy: pattern.lazy,
-    prefilterAny: pattern.prefilter_any,
-    prefilterCaseInsensitive: pattern.prefilter_case_insensitive,
-    prefilterRegex: pattern.prefilter_regex,
-  };
-}
-
-function toNapiOptions(options) {
-  if (options === undefined) {
-    return undefined;
-  }
-  return {
-    literalCaseInsensitive: options.literal_case_insensitive,
-    literalWholeWords: options.literal_whole_words,
-    regexWholeWords: options.regex_whole_words,
-    fuzzyCaseInsensitive: options.fuzzy_case_insensitive,
-    fuzzyWholeWords: options.fuzzy_whole_words,
-    fuzzyNormalizeDiacritics: options.fuzzy_normalize_diacritics,
-  };
-}
-
-function toNapiRegexMeta(meta) {
-  return {
-    label: meta.label,
-    score: meta.score,
-    sourceDetail: meta.source_detail,
-    requiresValidation: meta.requires_validation,
-    minByteLength: meta.min_byte_length,
-  };
-}
-
-function toNapiDenyListFilters(filters) {
-  return {
-    stopwords: filters.stopwords,
-    allowList: filters.allow_list,
-    personStopwords: filters.person_stopwords,
-    addressStopwords: filters.address_stopwords,
-    streetTypes: filters.street_types,
-    firstNames: filters.first_names,
-    genericRoles: filters.generic_roles,
-    sentenceStarters: filters.sentence_starters,
-    trailingAddressWordExclusions: filters.trailing_address_word_exclusions,
-    definedTermCues: filters.defined_term_cues,
-  };
 }
 
 function nativeLibraryPath(name) {

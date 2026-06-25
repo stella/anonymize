@@ -1,21 +1,36 @@
+use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 use stella_anonymize_core::{
-  CountryMatchData, DenyListFilterData, DenyListMatchData, DetectionSource,
-  DiagnosticEvent, DiagnosticEventKind, DiagnosticStage, FuzzySearchOptions,
-  GazetteerMatchData, LiteralSearchOptions, OperatorConfig, OperatorType,
-  PatternSlice, PreparedSearchConfig, PreparedSearchSlices, RegexMatchMeta,
-  RegexSearchOptions, SearchEngine, SearchOptions, SearchPattern, SourceDetail,
-  StaticRedactionDiagnosticResult, StaticRedactionDiagnostics,
-  StaticRedactionResult,
+  AddressSeedData, AmountWordsData, CountryMatchData, CurrencyData, DateData,
+  DenyListFilterData, DenyListMatchData, DetectionSource, DiagnosticEvent,
+  DiagnosticEventKind, DiagnosticStage, FuzzySearchOptions, GazetteerMatchData,
+  LegalFormData, LiteralSearchOptions, MagnitudeSuffixData, MonetaryData,
+  OperatorConfig, OperatorType, PatternSlice, PreparedSearchConfig,
+  PreparedSearchSlices, RegexMatchMeta, RegexSearchOptions, SearchEngine,
+  SearchOptions, SearchPattern, ShareQuantityTermData, SigningPlaceGuardData,
+  SourceDetail, StaticRedactionDiagnosticResult, StaticRedactionDiagnostics,
+  StaticRedactionResult, StringGroups, TriggerData, TriggerRule,
+  TriggerStrategy, TriggerValidation, WrittenAmountPatternData,
 };
 
 pub type Result<T> = std::result::Result<T, ContractError>;
 
+const PREPARED_SEARCH_PACKAGE_HEADER: [u8; 8] = *b"ANONPKG1";
+const PREPARED_SEARCH_PACKAGE_VERSION: u32 = 3;
+const PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER: [u8; 8] = *b"ANONPKZ1";
+const PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION: u32 = 1;
+const PREPARED_SEARCH_PACKAGE_DIGEST_BYTES: usize = 32;
+const PREPARED_SEARCH_PACKAGE_ZSTD_LEVEL: i32 = 3;
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ContractError {
+  CompactStringIndexOutOfRange { field: &'static str, index: u32 },
   FuzzyDistanceOutOfRange { distance: u32 },
+  InvalidCompactStringGroups { field: &'static str, reason: String },
+  InvalidPreparedSearchPackage { reason: String },
+  MissingDenyListDataForLiteralPatterns,
   UnsupportedOperator { value: String },
   UnsupportedSearchPatternKind { kind: String },
   UnsupportedSourceDetail { value: String },
@@ -24,9 +39,27 @@ pub enum ContractError {
 impl std::fmt::Display for ContractError {
   fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
+      Self::CompactStringIndexOutOfRange { field, index } => {
+        write!(
+          formatter,
+          "Compact string index out of range in {field}: {index}"
+        )
+      }
       Self::FuzzyDistanceOutOfRange { distance } => {
         write!(formatter, "Fuzzy distance exceeds u8 range: {distance}")
       }
+      Self::InvalidCompactStringGroups { field, reason } => {
+        write!(
+          formatter,
+          "Compact string groups are invalid in {field}: {reason}"
+        )
+      }
+      Self::InvalidPreparedSearchPackage { reason } => {
+        write!(formatter, "Prepared search package is invalid: {reason}")
+      }
+      Self::MissingDenyListDataForLiteralPatterns => formatter.write_str(
+        "Deny-list data is required when literal patterns are derived from it",
+      ),
       Self::UnsupportedOperator { value } => {
         write!(formatter, "Unsupported anonymization operator: {value}")
       }
@@ -93,6 +126,8 @@ pub struct BindingRegexMatchMeta {
   pub score: f64,
   pub source_detail: Option<String>,
   pub requires_validation: Option<bool>,
+  pub validator_id: Option<String>,
+  pub validator_input: Option<String>,
   pub min_byte_length: Option<u32>,
 }
 
@@ -108,11 +143,189 @@ pub struct BindingCountryMatchData {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BindingTriggerData {
+  pub rules: Vec<BindingTriggerRule>,
+  #[serde(default)]
+  pub address_stop_keywords: Vec<String>,
+  #[serde(default)]
+  pub party_position_terms: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BindingTriggerRule {
+  pub trigger: String,
+  pub label: String,
+  pub strategy: BindingTriggerStrategy,
+  pub validations: Vec<BindingTriggerValidation>,
+  pub include_trigger: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+pub enum BindingTriggerStrategy {
+  ToNextComma {
+    #[serde(default)]
+    stop_words: Vec<String>,
+    max_length: Option<u32>,
+  },
+  ToEndOfLine,
+  NWords {
+    count: u32,
+  },
+  CompanyIdValue,
+  Address {
+    max_chars: Option<u32>,
+  },
+  MatchPattern {
+    pattern: String,
+    flags: Option<String>,
+  },
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+pub enum BindingTriggerValidation {
+  StartsUppercase,
+  MinLength {
+    min: u32,
+  },
+  MaxLength {
+    max: u32,
+  },
+  NoDigits,
+  HasDigits,
+  MatchesPattern {
+    pattern: String,
+    flags: Option<String>,
+  },
+  ValidId {
+    validator: String,
+  },
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BindingLegalFormData {
+  #[serde(default)]
+  pub suffixes: Vec<String>,
+  #[serde(default)]
+  pub normalized_boundary_suffixes: Vec<String>,
+  #[serde(default)]
+  pub normalized_in_name_words: Vec<String>,
+  #[serde(default)]
+  pub normalized_suffix_words: Vec<String>,
+  #[serde(default)]
+  pub role_heads: Vec<String>,
+  #[serde(default)]
+  pub sentence_verb_indicators: Vec<String>,
+  #[serde(default)]
+  pub clause_noun_heads: Vec<String>,
+  #[serde(default)]
+  pub connector_prose_heads: Vec<String>,
+  #[serde(default)]
+  pub structural_single_cap_prefixes: Vec<String>,
+  #[serde(default)]
+  pub leading_clause_phrases: Vec<String>,
+  #[serde(default)]
+  pub leading_clause_direct_prefixes: Vec<String>,
+  #[serde(default)]
+  pub connector_words: Vec<String>,
+  #[serde(default)]
+  pub and_connector_words: Vec<String>,
+  #[serde(default)]
+  pub in_name_prepositions: Vec<String>,
+  #[serde(default)]
+  pub company_suffix_words: Vec<String>,
+  #[serde(default)]
+  pub comma_gated_direct_prefixes: Vec<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BindingDateData {
+  #[serde(default)]
+  pub month_names_by_language: BTreeMap<String, Vec<String>>,
+  #[serde(default)]
+  pub year_words_by_language: BTreeMap<String, Vec<String>>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BindingMonetaryData {
+  #[serde(default)]
+  pub currencies: BindingCurrencyData,
+  #[serde(default)]
+  pub amount_words: BindingAmountWordsData,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BindingCurrencyData {
+  #[serde(default)]
+  pub codes: Vec<String>,
+  #[serde(default)]
+  pub symbols: Vec<String>,
+  #[serde(default)]
+  pub local_names: Vec<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BindingAmountWordsData {
+  #[serde(default)]
+  pub written_amount_patterns: Vec<BindingWrittenAmountPatternData>,
+  #[serde(default)]
+  pub magnitude_suffixes: Vec<BindingMagnitudeSuffixData>,
+  #[serde(default)]
+  pub share_quantity_terms: Vec<BindingShareQuantityTermData>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BindingWrittenAmountPatternData {
+  #[serde(default)]
+  pub keywords: Vec<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BindingMagnitudeSuffixData {
+  #[serde(default)]
+  pub words: Vec<String>,
+  #[serde(default)]
+  pub abbreviations_case_insensitive: Vec<String>,
+  #[serde(default)]
+  pub abbreviations_case_sensitive: Vec<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BindingShareQuantityTermData {
+  #[serde(default)]
+  pub modifiers: Vec<String>,
+  #[serde(default)]
+  pub nouns: Vec<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BindingAddressSeedData {
+  #[serde(default)]
+  pub boundary_words: Vec<String>,
+  #[serde(default)]
+  pub br_cep_cue_words: Vec<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct BindingDenyListMatchData {
+  #[serde(default)]
   pub labels: Vec<Vec<String>>,
+  #[serde(default)]
+  pub label_table: Vec<String>,
+  #[serde(default)]
+  pub label_indices: Vec<Vec<u32>>,
+  #[serde(default)]
   pub custom_labels: Vec<Vec<String>>,
+  #[serde(default)]
+  pub custom_label_indices: Vec<Vec<u32>>,
   pub originals: Vec<String>,
+  #[serde(default)]
   pub sources: Vec<Vec<String>>,
+  #[serde(default)]
+  pub source_table: Vec<String>,
+  #[serde(default)]
+  pub source_indices: Vec<Vec<u32>>,
   pub filters: Option<BindingDenyListFilterData>,
 }
 
@@ -121,13 +334,27 @@ pub struct BindingDenyListFilterData {
   pub stopwords: Vec<String>,
   pub allow_list: Vec<String>,
   pub person_stopwords: Vec<String>,
+  #[serde(default)]
+  pub person_trailing_nouns: Vec<String>,
   pub address_stopwords: Vec<String>,
+  #[serde(default)]
+  pub address_jurisdiction_prefixes: Vec<String>,
   pub street_types: Vec<String>,
   pub first_names: Vec<String>,
   pub generic_roles: Vec<String>,
   pub sentence_starters: Vec<String>,
   pub trailing_address_word_exclusions: Vec<String>,
   pub defined_term_cues: Vec<String>,
+  #[serde(default)]
+  pub signing_place_guards: Vec<BindingSigningPlaceGuardData>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BindingSigningPlaceGuardData {
+  #[serde(default)]
+  pub prefix_phrases: Vec<String>,
+  #[serde(default)]
+  pub suffix_phrases: Vec<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
@@ -145,6 +372,8 @@ pub struct BindingPreparedSearchConfig {
   #[serde(default)]
   pub literal_options: Option<BindingSearchOptions>,
   #[serde(default)]
+  pub literal_patterns_from_deny_list_data: bool,
+  #[serde(default)]
   pub slices: BindingPreparedSearchSlices,
   #[serde(default)]
   pub regex_meta: Vec<BindingRegexMatchMeta>,
@@ -156,6 +385,410 @@ pub struct BindingPreparedSearchConfig {
   pub gazetteer_data: Option<BindingGazetteerMatchData>,
   #[serde(default)]
   pub country_data: Option<BindingCountryMatchData>,
+  #[serde(default)]
+  pub trigger_data: Option<BindingTriggerData>,
+  #[serde(default)]
+  pub legal_form_data: Option<BindingLegalFormData>,
+  #[serde(default)]
+  pub address_seed_data: Option<BindingAddressSeedData>,
+  #[serde(default)]
+  pub date_data: Option<BindingDateData>,
+  #[serde(default)]
+  pub monetary_data: Option<BindingMonetaryData>,
+}
+
+#[derive(Deserialize)]
+struct BinaryPreparedSearchPackageOwned {
+  config: BinaryPreparedSearchConfig,
+  artifacts: Vec<u8>,
+}
+
+#[derive(Serialize)]
+struct BinaryPreparedSearchPackageRef<'a> {
+  config: BinaryPreparedSearchConfig,
+  artifacts: &'a [u8],
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct BindingPreparedSearchPackage {
+  pub config: BindingPreparedSearchConfig,
+  pub artifacts: Vec<u8>,
+}
+
+#[derive(Deserialize, Serialize)]
+struct BinaryPreparedSearchConfig {
+  regex_patterns: Vec<BindingSearchPattern>,
+  custom_regex_patterns: Vec<BindingSearchPattern>,
+  literal_patterns: Vec<BindingSearchPattern>,
+  regex_options: Option<BindingSearchOptions>,
+  custom_regex_options: Option<BindingSearchOptions>,
+  literal_options: Option<BindingSearchOptions>,
+  literal_patterns_from_deny_list_data: bool,
+  slices: BindingPreparedSearchSlices,
+  regex_meta: Vec<BindingRegexMatchMeta>,
+  custom_regex_meta: Vec<BindingRegexMatchMeta>,
+  deny_list_data: Option<BindingDenyListMatchData>,
+  gazetteer_data: Option<BindingGazetteerMatchData>,
+  country_data: Option<BindingCountryMatchData>,
+  trigger_data: Option<BinaryTriggerData>,
+  legal_form_data: Option<BindingLegalFormData>,
+  address_seed_data: Option<BindingAddressSeedData>,
+  date_data: Option<BindingDateData>,
+  monetary_data: Option<BindingMonetaryData>,
+}
+
+#[derive(Deserialize, Serialize)]
+struct BinaryTriggerData {
+  rules: Vec<BinaryTriggerRule>,
+  address_stop_keywords: Vec<String>,
+  party_position_terms: Vec<String>,
+}
+
+#[derive(Deserialize, Serialize)]
+struct BinaryTriggerRule {
+  trigger: String,
+  label: String,
+  strategy: BinaryTriggerStrategy,
+  validations: Vec<BinaryTriggerValidation>,
+  include_trigger: bool,
+}
+
+#[derive(Deserialize, Serialize)]
+enum BinaryTriggerStrategy {
+  ToNextComma {
+    stop_words: Vec<String>,
+    max_length: Option<u32>,
+  },
+  ToEndOfLine,
+  NWords {
+    count: u32,
+  },
+  CompanyIdValue,
+  Address {
+    max_chars: Option<u32>,
+  },
+  MatchPattern {
+    pattern: String,
+    flags: Option<String>,
+  },
+}
+
+#[derive(Deserialize, Serialize)]
+enum BinaryTriggerValidation {
+  StartsUppercase,
+  MinLength {
+    min: u32,
+  },
+  MaxLength {
+    max: u32,
+  },
+  NoDigits,
+  HasDigits,
+  MatchesPattern {
+    pattern: String,
+    flags: Option<String>,
+  },
+  ValidId {
+    validator: String,
+  },
+}
+
+pub fn prepared_search_package_to_bytes(
+  config: &BindingPreparedSearchConfig,
+  artifacts: &[u8],
+) -> Result<Vec<u8>> {
+  let payload = prepared_search_package_payload_to_bytes(config, artifacts)?;
+  let digest = blake3::hash(&payload);
+  let mut bytes = Vec::with_capacity(raw_package_header_len(&payload));
+  write_package_header(
+    &mut bytes,
+    PREPARED_SEARCH_PACKAGE_HEADER,
+    PREPARED_SEARCH_PACKAGE_VERSION,
+    digest.as_bytes(),
+  );
+  bytes.extend_from_slice(&payload);
+  Ok(bytes)
+}
+
+pub fn prepared_search_package_to_compressed_bytes(
+  config: &BindingPreparedSearchConfig,
+  artifacts: &[u8],
+) -> Result<Vec<u8>> {
+  let payload = prepared_search_package_payload_to_bytes(config, artifacts)?;
+  prepared_search_package_compress_payload(&payload)
+}
+
+pub fn prepared_search_package_digest(bytes: &[u8]) -> Result<[u8; 32]> {
+  Ok(prepared_search_package_parts(bytes)?.digest())
+}
+
+pub fn prepared_search_package_from_bytes(
+  bytes: &[u8],
+) -> Result<BindingPreparedSearchPackage> {
+  let parts = prepared_search_package_parts(bytes)?;
+  let payload = parts.payload()?;
+  verify_prepared_search_package_digest(parts.digest(), payload.as_ref())?;
+  let (package, read) = bincode::serde::decode_from_slice::<
+    BinaryPreparedSearchPackageOwned,
+    _,
+  >(payload.as_ref(), package_bincode_config())
+  .map_err(|error| invalid_prepared_search_package(error.to_string()))?;
+  if read != payload.as_ref().len() {
+    return Err(invalid_prepared_search_package("trailing payload data"));
+  }
+  Ok(BindingPreparedSearchPackage {
+    config: BindingPreparedSearchConfig::from(package.config),
+    artifacts: package.artifacts,
+  })
+}
+
+impl From<BindingPreparedSearchConfig> for BinaryPreparedSearchConfig {
+  fn from(config: BindingPreparedSearchConfig) -> Self {
+    Self {
+      regex_patterns: config.regex_patterns,
+      custom_regex_patterns: config.custom_regex_patterns,
+      literal_patterns: config.literal_patterns,
+      regex_options: config.regex_options,
+      custom_regex_options: config.custom_regex_options,
+      literal_options: config.literal_options,
+      literal_patterns_from_deny_list_data: config
+        .literal_patterns_from_deny_list_data,
+      slices: config.slices,
+      regex_meta: config.regex_meta,
+      custom_regex_meta: config.custom_regex_meta,
+      deny_list_data: config.deny_list_data,
+      gazetteer_data: config.gazetteer_data,
+      country_data: config.country_data,
+      trigger_data: config.trigger_data.map(BinaryTriggerData::from),
+      legal_form_data: config.legal_form_data,
+      address_seed_data: config.address_seed_data,
+      date_data: config.date_data,
+      monetary_data: config.monetary_data,
+    }
+  }
+}
+
+impl From<BinaryPreparedSearchConfig> for BindingPreparedSearchConfig {
+  fn from(config: BinaryPreparedSearchConfig) -> Self {
+    Self {
+      regex_patterns: config.regex_patterns,
+      custom_regex_patterns: config.custom_regex_patterns,
+      literal_patterns: config.literal_patterns,
+      regex_options: config.regex_options,
+      custom_regex_options: config.custom_regex_options,
+      literal_options: config.literal_options,
+      literal_patterns_from_deny_list_data: config
+        .literal_patterns_from_deny_list_data,
+      slices: config.slices,
+      regex_meta: config.regex_meta,
+      custom_regex_meta: config.custom_regex_meta,
+      deny_list_data: config.deny_list_data,
+      gazetteer_data: config.gazetteer_data,
+      country_data: config.country_data,
+      trigger_data: config.trigger_data.map(BindingTriggerData::from),
+      legal_form_data: config.legal_form_data,
+      address_seed_data: config.address_seed_data,
+      date_data: config.date_data,
+      monetary_data: config.monetary_data,
+    }
+  }
+}
+
+impl From<BindingTriggerData> for BinaryTriggerData {
+  fn from(data: BindingTriggerData) -> Self {
+    Self {
+      rules: data
+        .rules
+        .into_iter()
+        .map(BinaryTriggerRule::from)
+        .collect(),
+      address_stop_keywords: data.address_stop_keywords,
+      party_position_terms: data.party_position_terms,
+    }
+  }
+}
+
+impl From<BinaryTriggerData> for BindingTriggerData {
+  fn from(data: BinaryTriggerData) -> Self {
+    Self {
+      rules: data
+        .rules
+        .into_iter()
+        .map(BindingTriggerRule::from)
+        .collect(),
+      address_stop_keywords: data.address_stop_keywords,
+      party_position_terms: data.party_position_terms,
+    }
+  }
+}
+
+impl From<BindingTriggerRule> for BinaryTriggerRule {
+  fn from(rule: BindingTriggerRule) -> Self {
+    Self {
+      trigger: rule.trigger,
+      label: rule.label,
+      strategy: BinaryTriggerStrategy::from(rule.strategy),
+      validations: rule
+        .validations
+        .into_iter()
+        .map(BinaryTriggerValidation::from)
+        .collect(),
+      include_trigger: rule.include_trigger,
+    }
+  }
+}
+
+impl From<BinaryTriggerRule> for BindingTriggerRule {
+  fn from(rule: BinaryTriggerRule) -> Self {
+    Self {
+      trigger: rule.trigger,
+      label: rule.label,
+      strategy: BindingTriggerStrategy::from(rule.strategy),
+      validations: rule
+        .validations
+        .into_iter()
+        .map(BindingTriggerValidation::from)
+        .collect(),
+      include_trigger: rule.include_trigger,
+    }
+  }
+}
+
+impl From<BindingTriggerStrategy> for BinaryTriggerStrategy {
+  fn from(strategy: BindingTriggerStrategy) -> Self {
+    match strategy {
+      BindingTriggerStrategy::ToNextComma {
+        stop_words,
+        max_length,
+      } => Self::ToNextComma {
+        stop_words,
+        max_length,
+      },
+      BindingTriggerStrategy::ToEndOfLine => Self::ToEndOfLine,
+      BindingTriggerStrategy::NWords { count } => Self::NWords { count },
+      BindingTriggerStrategy::CompanyIdValue => Self::CompanyIdValue,
+      BindingTriggerStrategy::Address { max_chars } => {
+        Self::Address { max_chars }
+      }
+      BindingTriggerStrategy::MatchPattern { pattern, flags } => {
+        Self::MatchPattern { pattern, flags }
+      }
+    }
+  }
+}
+
+impl From<BinaryTriggerStrategy> for BindingTriggerStrategy {
+  fn from(strategy: BinaryTriggerStrategy) -> Self {
+    match strategy {
+      BinaryTriggerStrategy::ToNextComma {
+        stop_words,
+        max_length,
+      } => Self::ToNextComma {
+        stop_words,
+        max_length,
+      },
+      BinaryTriggerStrategy::ToEndOfLine => Self::ToEndOfLine,
+      BinaryTriggerStrategy::NWords { count } => Self::NWords { count },
+      BinaryTriggerStrategy::CompanyIdValue => Self::CompanyIdValue,
+      BinaryTriggerStrategy::Address { max_chars } => {
+        Self::Address { max_chars }
+      }
+      BinaryTriggerStrategy::MatchPattern { pattern, flags } => {
+        Self::MatchPattern { pattern, flags }
+      }
+    }
+  }
+}
+
+impl From<BindingTriggerValidation> for BinaryTriggerValidation {
+  fn from(validation: BindingTriggerValidation) -> Self {
+    match validation {
+      BindingTriggerValidation::StartsUppercase => Self::StartsUppercase,
+      BindingTriggerValidation::MinLength { min } => Self::MinLength { min },
+      BindingTriggerValidation::MaxLength { max } => Self::MaxLength { max },
+      BindingTriggerValidation::NoDigits => Self::NoDigits,
+      BindingTriggerValidation::HasDigits => Self::HasDigits,
+      BindingTriggerValidation::MatchesPattern { pattern, flags } => {
+        Self::MatchesPattern { pattern, flags }
+      }
+      BindingTriggerValidation::ValidId { validator } => {
+        Self::ValidId { validator }
+      }
+    }
+  }
+}
+
+impl From<BinaryTriggerValidation> for BindingTriggerValidation {
+  fn from(validation: BinaryTriggerValidation) -> Self {
+    match validation {
+      BinaryTriggerValidation::StartsUppercase => Self::StartsUppercase,
+      BinaryTriggerValidation::MinLength { min } => Self::MinLength { min },
+      BinaryTriggerValidation::MaxLength { max } => Self::MaxLength { max },
+      BinaryTriggerValidation::NoDigits => Self::NoDigits,
+      BinaryTriggerValidation::HasDigits => Self::HasDigits,
+      BinaryTriggerValidation::MatchesPattern { pattern, flags } => {
+        Self::MatchesPattern { pattern, flags }
+      }
+      BinaryTriggerValidation::ValidId { validator } => {
+        Self::ValidId { validator }
+      }
+    }
+  }
+}
+
+fn prepared_search_package_payload_to_bytes(
+  config: &BindingPreparedSearchConfig,
+  artifacts: &[u8],
+) -> Result<Vec<u8>> {
+  bincode::serde::encode_to_vec(
+    BinaryPreparedSearchPackageRef {
+      config: BinaryPreparedSearchConfig::from(config.clone()),
+      artifacts,
+    },
+    package_bincode_config(),
+  )
+  .map_err(|error| invalid_prepared_search_package(error.to_string()))
+}
+
+fn prepared_search_package_compress_payload(payload: &[u8]) -> Result<Vec<u8>> {
+  let compressed =
+    zstd::bulk::compress(payload, PREPARED_SEARCH_PACKAGE_ZSTD_LEVEL)
+      .map_err(|error| invalid_prepared_search_package(error.to_string()))?;
+  let digest = blake3::hash(payload);
+  let mut bytes = Vec::with_capacity(
+    raw_package_header_len(&compressed)
+      .saturating_add(std::mem::size_of::<u64>()),
+  );
+  write_package_header(
+    &mut bytes,
+    PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER,
+    PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION,
+    digest.as_bytes(),
+  );
+  let payload_len = u64::try_from(payload.len())
+    .map_err(|_| invalid_prepared_search_package("payload length overflow"))?;
+  bytes.extend_from_slice(&payload_len.to_le_bytes());
+  bytes.extend_from_slice(&compressed);
+  Ok(bytes)
+}
+
+const fn raw_package_header_len(payload: &[u8]) -> usize {
+  PREPARED_SEARCH_PACKAGE_HEADER
+    .len()
+    .saturating_add(std::mem::size_of::<u32>())
+    .saturating_add(PREPARED_SEARCH_PACKAGE_DIGEST_BYTES)
+    .saturating_add(payload.len())
+}
+
+fn write_package_header(
+  bytes: &mut Vec<u8>,
+  header: [u8; 8],
+  version: u32,
+  digest: &[u8; PREPARED_SEARCH_PACKAGE_DIGEST_BYTES],
+) {
+  bytes.extend_from_slice(&header);
+  bytes.extend_from_slice(&version.to_le_bytes());
+  bytes.extend_from_slice(digest);
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -249,12 +882,39 @@ pub struct BindingStaticRedactionDiagnosticResult {
 pub fn prepared_search_config_from_binding(
   config: BindingPreparedSearchConfig,
 ) -> Result<PreparedSearchConfig> {
+  let deny_list_data = config.deny_list_data;
+  let literal_patterns = literal_patterns_from_binding(
+    config.literal_patterns,
+    config.literal_patterns_from_deny_list_data,
+    deny_list_data.as_ref(),
+  )?;
+  let legal_form_data = config.legal_form_data.map(|data| LegalFormData {
+    suffixes: data.suffixes,
+    normalized_boundary_suffixes: data.normalized_boundary_suffixes,
+    normalized_in_name_words: data.normalized_in_name_words,
+    normalized_suffix_words: data.normalized_suffix_words,
+    role_heads: data.role_heads,
+    sentence_verb_indicators: data.sentence_verb_indicators,
+    clause_noun_heads: data.clause_noun_heads,
+    connector_prose_heads: data.connector_prose_heads,
+    structural_single_cap_prefixes: data.structural_single_cap_prefixes,
+    leading_clause_phrases: data.leading_clause_phrases,
+    leading_clause_direct_prefixes: data.leading_clause_direct_prefixes,
+    connector_words: data.connector_words,
+    and_connector_words: data.and_connector_words,
+    in_name_prepositions: data.in_name_prepositions,
+    company_suffix_words: data.company_suffix_words,
+    comma_gated_direct_prefixes: data.comma_gated_direct_prefixes,
+  });
+  let legal_form_suffixes = legal_form_data
+    .as_ref()
+    .map_or_else(Vec::new, |data| data.suffixes.clone());
   Ok(PreparedSearchConfig {
     regex_patterns: search_patterns_from_binding(config.regex_patterns)?,
     custom_regex_patterns: search_patterns_from_binding(
       config.custom_regex_patterns,
     )?,
-    literal_patterns: search_patterns_from_binding(config.literal_patterns)?,
+    literal_patterns,
     regex_options: search_options_from_binding(config.regex_options),
     custom_regex_options: search_options_from_binding(
       config.custom_regex_options,
@@ -263,13 +923,9 @@ pub fn prepared_search_config_from_binding(
     slices: slices_from_binding(&config.slices),
     regex_meta: regex_meta_from_binding(config.regex_meta)?,
     custom_regex_meta: regex_meta_from_binding(config.custom_regex_meta)?,
-    deny_list_data: config.deny_list_data.map(|data| DenyListMatchData {
-      labels: data.labels,
-      custom_labels: data.custom_labels,
-      originals: data.originals,
-      sources: data.sources,
-      filters: data.filters.map(deny_list_filters_from_binding),
-    }),
+    deny_list_data: deny_list_data
+      .map(deny_list_data_from_binding)
+      .transpose()?,
     gazetteer_data: config.gazetteer_data.map(|data| GazetteerMatchData {
       labels: data.labels,
       is_fuzzy: data.is_fuzzy,
@@ -277,7 +933,275 @@ pub fn prepared_search_config_from_binding(
     country_data: config.country_data.map(|data| CountryMatchData {
       labels: data.labels,
     }),
+    trigger_data: config
+      .trigger_data
+      .map(|data| trigger_data_from_binding(data, legal_form_suffixes)),
+    legal_form_data,
+    address_seed_data: config.address_seed_data.map(|data| AddressSeedData {
+      boundary_words: data.boundary_words,
+      br_cep_cue_words: data.br_cep_cue_words,
+    }),
+    date_data: config.date_data.map(|data| DateData {
+      month_names_by_language: data.month_names_by_language,
+      year_words_by_language: data.year_words_by_language,
+    }),
+    monetary_data: config.monetary_data.map(monetary_data_from_binding),
   })
+}
+
+enum PreparedSearchPackageParts<'a> {
+  Raw {
+    digest: [u8; 32],
+    payload: &'a [u8],
+  },
+  Compressed {
+    digest: [u8; 32],
+    uncompressed_len: usize,
+    payload: &'a [u8],
+  },
+}
+
+impl PreparedSearchPackageParts<'_> {
+  const fn digest(&self) -> [u8; 32] {
+    match self {
+      Self::Raw { digest, .. } | Self::Compressed { digest, .. } => *digest,
+    }
+  }
+
+  fn payload(&self) -> Result<Cow<'_, [u8]>> {
+    match self {
+      Self::Raw { payload, .. } => Ok(Cow::Borrowed(payload)),
+      Self::Compressed {
+        uncompressed_len,
+        payload,
+        ..
+      } => zstd::bulk::decompress(payload, *uncompressed_len)
+        .map(Cow::Owned)
+        .map_err(|error| invalid_prepared_search_package(error.to_string())),
+    }
+  }
+}
+
+struct RawPackageHeader<'a> {
+  digest: [u8; 32],
+  payload: &'a [u8],
+}
+
+fn prepared_search_package_parts(
+  bytes: &[u8],
+) -> Result<PreparedSearchPackageParts<'_>> {
+  let header = bytes
+    .get(..PREPARED_SEARCH_PACKAGE_HEADER.len())
+    .ok_or_else(|| invalid_prepared_search_package("truncated header"))?;
+  if header == PREPARED_SEARCH_PACKAGE_HEADER {
+    let raw = raw_package_header(
+      bytes,
+      PREPARED_SEARCH_PACKAGE_VERSION,
+      PREPARED_SEARCH_PACKAGE_HEADER.len(),
+    )?;
+    return Ok(PreparedSearchPackageParts::Raw {
+      digest: raw.digest,
+      payload: raw.payload,
+    });
+  }
+  if header == PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER {
+    let raw = raw_package_header(
+      bytes,
+      PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION,
+      PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER.len(),
+    )?;
+    let len_end = std::mem::size_of::<u64>();
+    let len_bytes = raw
+      .payload
+      .get(..len_end)
+      .ok_or_else(|| invalid_prepared_search_package("truncated length"))?;
+    let len_array = <[u8; 8]>::try_from(len_bytes)
+      .map_err(|_| invalid_prepared_search_package("malformed length"))?;
+    let uncompressed_len = usize::try_from(u64::from_le_bytes(len_array))
+      .map_err(|_| invalid_prepared_search_package("length overflow"))?;
+    let payload = raw
+      .payload
+      .get(len_end..)
+      .ok_or_else(|| invalid_prepared_search_package("missing payload"))?;
+    return Ok(PreparedSearchPackageParts::Compressed {
+      digest: raw.digest,
+      uncompressed_len,
+      payload,
+    });
+  }
+  Err(invalid_prepared_search_package("unexpected header"))
+}
+
+fn raw_package_header(
+  bytes: &[u8],
+  expected_version: u32,
+  header_len: usize,
+) -> Result<RawPackageHeader<'_>> {
+  let version_start = header_len;
+  let version_end = version_start.saturating_add(std::mem::size_of::<u32>());
+  let version_bytes = bytes
+    .get(version_start..version_end)
+    .ok_or_else(|| invalid_prepared_search_package("truncated version"))?;
+  let version_array = <[u8; 4]>::try_from(version_bytes)
+    .map_err(|_| invalid_prepared_search_package("malformed version"))?;
+  let version = u32::from_le_bytes(version_array);
+  if version != expected_version {
+    return Err(invalid_prepared_search_package("unsupported version"));
+  }
+  let digest_end =
+    version_end.saturating_add(PREPARED_SEARCH_PACKAGE_DIGEST_BYTES);
+  let digest_bytes = bytes
+    .get(version_end..digest_end)
+    .ok_or_else(|| invalid_prepared_search_package("truncated digest"))?;
+  let digest =
+    <[u8; PREPARED_SEARCH_PACKAGE_DIGEST_BYTES]>::try_from(digest_bytes)
+      .map_err(|_| invalid_prepared_search_package("malformed digest"))?;
+  let payload = bytes
+    .get(digest_end..)
+    .ok_or_else(|| invalid_prepared_search_package("missing payload"))?;
+  Ok(RawPackageHeader { digest, payload })
+}
+
+fn verify_prepared_search_package_digest(
+  expected: [u8; 32],
+  payload: &[u8],
+) -> Result<()> {
+  let actual = blake3::hash(payload);
+  if actual.as_bytes() != &expected {
+    return Err(invalid_prepared_search_package("digest mismatch"));
+  }
+  Ok(())
+}
+
+fn package_bincode_config() -> impl bincode::config::Config {
+  bincode::config::standard()
+    .with_little_endian()
+    .with_variable_int_encoding()
+}
+
+fn invalid_prepared_search_package(reason: impl Into<String>) -> ContractError {
+  ContractError::InvalidPreparedSearchPackage {
+    reason: reason.into(),
+  }
+}
+
+fn deny_list_data_from_binding(
+  data: BindingDenyListMatchData,
+) -> Result<DenyListMatchData> {
+  let pattern_count = data.originals.len();
+  Ok(DenyListMatchData {
+    labels: string_groups_from_binding(
+      data.labels,
+      data.label_indices,
+      data.label_table.clone(),
+      pattern_count,
+      "deny_list.label_indices",
+    )?,
+    custom_labels: string_groups_from_binding(
+      data.custom_labels,
+      data.custom_label_indices,
+      data.label_table,
+      pattern_count,
+      "deny_list.custom_label_indices",
+    )?,
+    originals: data.originals,
+    sources: string_groups_from_binding(
+      data.sources,
+      data.source_indices,
+      data.source_table,
+      pattern_count,
+      "deny_list.source_indices",
+    )?,
+    filters: data.filters.map(deny_list_filters_from_binding),
+  })
+}
+
+fn string_groups_from_binding(
+  groups: Vec<Vec<String>>,
+  indices: Vec<Vec<u32>>,
+  table: Vec<String>,
+  pattern_count: usize,
+  field: &'static str,
+) -> Result<StringGroups> {
+  if !indices.is_empty() {
+    validate_compact_string_indices(&indices, &table, field)?;
+    return StringGroups::from_table_indices(table, indices, field).map_err(
+      |error| ContractError::InvalidCompactStringGroups {
+        field,
+        reason: error.to_string(),
+      },
+    );
+  }
+
+  if !groups.is_empty() {
+    return Ok(StringGroups::from_groups(groups));
+  }
+
+  Ok(StringGroups::empty_groups(pattern_count))
+}
+
+fn validate_compact_string_indices(
+  groups: &[Vec<u32>],
+  table: &[String],
+  field: &'static str,
+) -> Result<()> {
+  for group in groups {
+    for &index in group {
+      let Ok(index_usize) = usize::try_from(index) else {
+        return Err(ContractError::CompactStringIndexOutOfRange {
+          field,
+          index,
+        });
+      };
+      if index_usize >= table.len() {
+        return Err(ContractError::CompactStringIndexOutOfRange {
+          field,
+          index,
+        });
+      }
+    }
+  }
+
+  Ok(())
+}
+
+fn monetary_data_from_binding(data: BindingMonetaryData) -> MonetaryData {
+  MonetaryData {
+    currencies: CurrencyData {
+      codes: data.currencies.codes,
+      symbols: data.currencies.symbols,
+      local_names: data.currencies.local_names,
+    },
+    amount_words: AmountWordsData {
+      written_amount_patterns: data
+        .amount_words
+        .written_amount_patterns
+        .into_iter()
+        .map(|entry| WrittenAmountPatternData {
+          keywords: entry.keywords,
+        })
+        .collect(),
+      magnitude_suffixes: data
+        .amount_words
+        .magnitude_suffixes
+        .into_iter()
+        .map(|entry| MagnitudeSuffixData {
+          words: entry.words,
+          abbreviations_case_insensitive: entry.abbreviations_case_insensitive,
+          abbreviations_case_sensitive: entry.abbreviations_case_sensitive,
+        })
+        .collect(),
+      share_quantity_terms: data
+        .amount_words
+        .share_quantity_terms
+        .into_iter()
+        .map(|entry| ShareQuantityTermData {
+          modifiers: entry.modifiers,
+          nouns: entry.nouns,
+        })
+        .collect(),
+    },
+  }
 }
 
 pub fn operator_config_from_binding(
@@ -396,7 +1320,11 @@ fn deny_list_filters_from_binding(
     stopwords: lower_set(filters.stopwords),
     allow_list: lower_set(filters.allow_list),
     person_stopwords: lower_set(filters.person_stopwords),
+    person_trailing_nouns: lower_set(filters.person_trailing_nouns),
     address_stopwords: lower_set(filters.address_stopwords),
+    address_jurisdiction_prefixes: lower_set(
+      filters.address_jurisdiction_prefixes,
+    ),
     street_types: lower_set(filters.street_types),
     first_names: lower_set(filters.first_names),
     generic_roles: lower_set(filters.generic_roles),
@@ -405,6 +1333,93 @@ fn deny_list_filters_from_binding(
       filters.trailing_address_word_exclusions,
     ),
     defined_term_cues: lower_set(filters.defined_term_cues),
+    signing_place_guards: filters
+      .signing_place_guards
+      .into_iter()
+      .map(|guard| SigningPlaceGuardData {
+        prefix_phrases: lower_set(guard.prefix_phrases),
+        suffix_phrases: lower_set(guard.suffix_phrases),
+      })
+      .collect(),
+  }
+}
+
+fn trigger_data_from_binding(
+  data: BindingTriggerData,
+  legal_form_suffixes: Vec<String>,
+) -> TriggerData {
+  TriggerData {
+    rules: data
+      .rules
+      .into_iter()
+      .map(trigger_rule_from_binding)
+      .collect(),
+    address_stop_keywords: data.address_stop_keywords,
+    party_position_terms: data.party_position_terms,
+    legal_form_suffixes,
+  }
+}
+
+fn trigger_rule_from_binding(rule: BindingTriggerRule) -> TriggerRule {
+  TriggerRule {
+    trigger: rule.trigger,
+    label: rule.label,
+    strategy: trigger_strategy_from_binding(rule.strategy),
+    validations: rule
+      .validations
+      .into_iter()
+      .map(trigger_validation_from_binding)
+      .collect(),
+    include_trigger: rule.include_trigger,
+  }
+}
+
+fn trigger_strategy_from_binding(
+  strategy: BindingTriggerStrategy,
+) -> TriggerStrategy {
+  match strategy {
+    BindingTriggerStrategy::ToNextComma {
+      stop_words,
+      max_length,
+    } => TriggerStrategy::ToNextComma {
+      stop_words,
+      max_length,
+    },
+    BindingTriggerStrategy::ToEndOfLine => TriggerStrategy::ToEndOfLine,
+    BindingTriggerStrategy::NWords { count } => {
+      TriggerStrategy::NWords { count }
+    }
+    BindingTriggerStrategy::CompanyIdValue => TriggerStrategy::CompanyIdValue,
+    BindingTriggerStrategy::Address { max_chars } => {
+      TriggerStrategy::Address { max_chars }
+    }
+    BindingTriggerStrategy::MatchPattern { pattern, flags } => {
+      TriggerStrategy::MatchPattern { pattern, flags }
+    }
+  }
+}
+
+fn trigger_validation_from_binding(
+  validation: BindingTriggerValidation,
+) -> TriggerValidation {
+  match validation {
+    BindingTriggerValidation::StartsUppercase => {
+      TriggerValidation::StartsUppercase
+    }
+    BindingTriggerValidation::MinLength { min } => {
+      TriggerValidation::MinLength(min)
+    }
+    BindingTriggerValidation::MaxLength { max } => {
+      TriggerValidation::MaxLength(max)
+    }
+    BindingTriggerValidation::NoDigits => TriggerValidation::NoDigits,
+    BindingTriggerValidation::HasDigits => TriggerValidation::HasDigits,
+    BindingTriggerValidation::MatchesPattern { pattern, flags } => {
+      TriggerValidation::MatchesPattern { pattern, flags }
+    }
+    BindingTriggerValidation::ValidId { validator } => {
+      TriggerValidation::ValidId { validator }
+    }
   }
 }
 
@@ -422,6 +1437,27 @@ fn search_patterns_from_binding(
     .into_iter()
     .map(search_pattern_from_binding)
     .collect()
+}
+
+fn literal_patterns_from_binding(
+  patterns: Vec<BindingSearchPattern>,
+  from_deny_list_data: bool,
+  deny_list_data: Option<&BindingDenyListMatchData>,
+) -> Result<Vec<SearchPattern>> {
+  let mut literal_patterns = search_patterns_from_binding(patterns)?;
+  if !from_deny_list_data {
+    return Ok(literal_patterns);
+  }
+
+  let Some(data) = deny_list_data else {
+    return Err(ContractError::MissingDenyListDataForLiteralPatterns);
+  };
+  let mut from_data = Vec::with_capacity(
+    data.originals.len().saturating_add(literal_patterns.len()),
+  );
+  from_data.extend(data.originals.iter().cloned().map(SearchPattern::Literal));
+  from_data.append(&mut literal_patterns);
+  Ok(from_data)
 }
 
 fn search_pattern_from_binding(
@@ -525,6 +1561,8 @@ fn regex_meta_from_binding(
           .map(|value| source_detail_from_binding(&value))
           .transpose()?,
         requires_validation: entry.requires_validation.unwrap_or(false),
+        validator_id: entry.validator_id,
+        validator_input: entry.validator_input,
         min_byte_length: entry.min_byte_length,
       })
     })
@@ -587,9 +1625,17 @@ fn search_engine_name(engine: SearchEngine) -> String {
 
 fn diagnostic_stage_name(stage: DiagnosticStage) -> String {
   match stage {
+    DiagnosticStage::PrepareCacheHit => "prepare.cache.hit",
+    DiagnosticStage::PrepareCacheMiss => "prepare.cache.miss",
+    DiagnosticStage::PrepareBindingParse => "prepare.binding.parse",
+    DiagnosticStage::PrepareBindingConvert => "prepare.binding.convert",
+    DiagnosticStage::PrepareArtifactsDecode => "prepare.artifacts.decode",
     DiagnosticStage::PrepareTotal => "prepare.total",
     DiagnosticStage::PrepareRegex => "prepare.regex",
     DiagnosticStage::PrepareCustomRegex => "prepare.custom-regex",
+    DiagnosticStage::PrepareAnchored => "prepare.anchored",
+    DiagnosticStage::PrepareLegalFormSearch => "prepare.legal-form-search",
+    DiagnosticStage::PrepareTriggerSearch => "prepare.trigger-search",
     DiagnosticStage::PrepareLiteral => "prepare.literal",
     DiagnosticStage::Normalize => "normalize",
     DiagnosticStage::FindMatches => "find-matches",
@@ -598,12 +1644,19 @@ fn diagnostic_stage_name(stage: DiagnosticStage) -> String {
     DiagnosticStage::FindLiteral => "find.literal",
     DiagnosticStage::SearchRegex => "search.regex",
     DiagnosticStage::SearchCustomRegex => "search.custom-regex",
+    DiagnosticStage::SearchLegalForm => "search.legal-form",
+    DiagnosticStage::SearchTrigger => "search.trigger",
     DiagnosticStage::SearchLiteral => "search.literal",
     DiagnosticStage::EntityRegex => "entity.regex",
     DiagnosticStage::EntityCustomRegex => "entity.custom-regex",
+    DiagnosticStage::EntityAnchored => "entity.anchored",
     DiagnosticStage::EntityDenyList => "entity.deny-list",
     DiagnosticStage::EntityGazetteer => "entity.gazetteer",
     DiagnosticStage::EntityCountry => "entity.country",
+    DiagnosticStage::EntityTrigger => "entity.trigger",
+    DiagnosticStage::EntitySignature => "entity.signature",
+    DiagnosticStage::EntityLegalForm => "entity.legal-form",
+    DiagnosticStage::EntityAddressSeed => "entity.address-seed",
     DiagnosticStage::Merge => "resolution.merge",
     DiagnosticStage::Boundary => "resolution.boundary",
     DiagnosticStage::Sanitize => "resolution.sanitize",
@@ -627,4 +1680,109 @@ fn operator_name(operator: OperatorType) -> String {
     OperatorType::Redact => "redact",
   }
   .to_owned()
+}
+
+#[cfg(test)]
+mod tests {
+  #![allow(clippy::unwrap_used)]
+
+  use super::{
+    BindingPreparedSearchConfig, BindingSearchPattern, ContractError,
+    prepared_search_package_from_bytes, prepared_search_package_to_bytes,
+    prepared_search_package_to_compressed_bytes,
+  };
+
+  #[test]
+  fn prepared_search_package_roundtrips_config_and_artifacts() {
+    let config = BindingPreparedSearchConfig {
+      literal_patterns: vec![BindingSearchPattern {
+        kind: String::from("literal"),
+        pattern: String::from("Acme"),
+        distance: None,
+        case_insensitive: None,
+        whole_words: None,
+        lazy: None,
+        prefilter_any: None,
+        prefilter_case_insensitive: None,
+        prefilter_regex: None,
+      }],
+      ..BindingPreparedSearchConfig::default()
+    };
+    let artifacts = b"prepared-artifacts";
+
+    let bytes = prepared_search_package_to_bytes(&config, artifacts).unwrap();
+    let package = prepared_search_package_from_bytes(&bytes).unwrap();
+
+    assert_eq!(package.config, config);
+    assert_eq!(package.artifacts, artifacts);
+  }
+
+  #[test]
+  fn prepared_search_package_rejects_invalid_bytes() {
+    let error = prepared_search_package_from_bytes(b"not-valid").unwrap_err();
+
+    assert!(
+      matches!(error, ContractError::InvalidPreparedSearchPackage { .. }),
+      "invalid package bytes should fail before config construction"
+    );
+  }
+
+  #[test]
+  fn prepared_search_package_rejects_digest_mismatch() {
+    let config = BindingPreparedSearchConfig::default();
+    let mut bytes =
+      prepared_search_package_to_bytes(&config, b"artifact").unwrap();
+    let last = bytes.last_mut().unwrap();
+    *last ^= 0x01;
+
+    let error = prepared_search_package_from_bytes(&bytes).unwrap_err();
+
+    assert!(
+      matches!(error, ContractError::InvalidPreparedSearchPackage { .. }),
+      "corrupted package payload should fail digest verification"
+    );
+  }
+
+  #[test]
+  fn prepared_search_compressed_package_roundtrips_config_and_artifacts() {
+    let config = BindingPreparedSearchConfig {
+      literal_patterns: vec![BindingSearchPattern {
+        kind: String::from("literal"),
+        pattern: String::from("Acme"),
+        distance: None,
+        case_insensitive: None,
+        whole_words: None,
+        lazy: None,
+        prefilter_any: None,
+        prefilter_case_insensitive: None,
+        prefilter_regex: None,
+      }],
+      ..BindingPreparedSearchConfig::default()
+    };
+    let artifacts = b"prepared-artifacts";
+
+    let bytes =
+      prepared_search_package_to_compressed_bytes(&config, artifacts).unwrap();
+    let package = prepared_search_package_from_bytes(&bytes).unwrap();
+
+    assert_eq!(package.config, config);
+    assert_eq!(package.artifacts, artifacts);
+  }
+
+  #[test]
+  fn prepared_search_compressed_package_rejects_digest_mismatch() {
+    let config = BindingPreparedSearchConfig::default();
+    let mut bytes =
+      prepared_search_package_to_compressed_bytes(&config, b"artifact")
+        .unwrap();
+    let last = bytes.last_mut().unwrap();
+    *last ^= 0x01;
+
+    let error = prepared_search_package_from_bytes(&bytes).unwrap_err();
+
+    assert!(
+      matches!(error, ContractError::InvalidPreparedSearchPackage { .. }),
+      "corrupted compressed package should fail digest verification"
+    );
+  }
 }

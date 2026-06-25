@@ -188,6 +188,9 @@ fn should_strip_period(
   if !text.ends_with('.') || known_period_suffix(text) {
     return false;
   }
+  if entity.source == DetectionSource::LegalForm {
+    return false;
+  }
   if entity.label == "address" && known_address_final_abbrev(text) {
     return false;
   }
@@ -222,22 +225,36 @@ fn label_allows_colon(label: &str) -> bool {
 
 fn collapse_display_whitespace(text: &str) -> String {
   let mut output = String::new();
-  let mut in_whitespace = false;
+  let mut whitespace = String::new();
 
   for ch in text.chars() {
     if ch.is_whitespace() {
-      if !in_whitespace {
-        output.push(' ');
-        in_whitespace = true;
-      }
+      whitespace.push(ch);
       continue;
     }
 
+    flush_whitespace(&mut output, &mut whitespace);
     output.push(ch);
-    in_whitespace = false;
   }
 
+  flush_whitespace(&mut output, &mut whitespace);
   output
+}
+
+fn flush_whitespace(output: &mut String, whitespace: &mut String) {
+  if whitespace.is_empty() {
+    return;
+  }
+
+  if whitespace.chars().any(|ch| matches!(ch, '\n' | '\r'))
+    || whitespace.chars().count() >= 2
+  {
+    output.push(' ');
+  } else if let Some(ch) = whitespace.chars().next() {
+    output.push(ch);
+  }
+
+  whitespace.clear();
 }
 
 fn first_char(text: &str) -> Option<(char, usize)> {

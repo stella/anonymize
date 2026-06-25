@@ -157,7 +157,7 @@ const loadLeadingClauseTrims = async (): Promise<LeadingClauseTrims> => {
   return leadingClauseTrimsPromise;
 };
 
-const getLeadingClauseTrimsSync = (): LeadingClauseTrims =>
+export const getLeadingClauseTrimsSync = (): LeadingClauseTrims =>
   leadingClauseTrimsCache ?? EMPTY_LEADING_CLAUSE_TRIMS;
 
 // Generic legal/contract role words that should never appear
@@ -301,7 +301,7 @@ const loadAllLegalSuffixes = async (): Promise<readonly string[]> => {
 const getAllLegalSuffixesSync = (): readonly string[] =>
   allLegalSuffixesCache ?? LEGAL_SUFFIXES;
 
-const getNormalizedLegalBoundarySuffixesSync = (): ReadonlySet<string> =>
+export const getNormalizedLegalBoundarySuffixesSync = (): ReadonlySet<string> =>
   normalizedLegalBoundarySuffixesCache ??
   new Set(
     LEGAL_SUFFIXES.map(normalizeLegalSuffixToken).filter(
@@ -309,7 +309,7 @@ const getNormalizedLegalBoundarySuffixesSync = (): ReadonlySet<string> =>
     ),
   );
 
-const getNormalizedInNameLegalFormWordsSync = (): ReadonlySet<string> =>
+export const getNormalizedInNameLegalFormWordsSync = (): ReadonlySet<string> =>
   normalizedInNameLegalFormWordsCache ?? new Set<string>();
 
 /**
@@ -418,7 +418,7 @@ const loadConnectorProseHeads = async (): Promise<ReadonlySet<string>> => {
   return connectorProseHeadsPromise;
 };
 
-const getConnectorProseHeadsSync = (): ReadonlySet<string> =>
+export const getConnectorProseHeadsSync = (): ReadonlySet<string> =>
   connectorProseHeadsCache ?? new Set<string>();
 
 let structuralSingleCapPrefixesCache: ReadonlySet<string> | null = null;
@@ -473,7 +473,7 @@ const loadStructuralSingleCapPrefixes = async (): Promise<
   return structuralSingleCapPrefixesPromise;
 };
 
-const getStructuralSingleCapPrefixesSync = (): ReadonlySet<string> =>
+export const getStructuralSingleCapPrefixesSync = (): ReadonlySet<string> =>
   structuralSingleCapPrefixesCache ?? new Set<string>();
 
 // Used by the trim helpers below to escape literal suffix tokens

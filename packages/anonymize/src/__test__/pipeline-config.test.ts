@@ -9,6 +9,7 @@ import {
 } from "../index";
 import { buildUnifiedSearch } from "../build-unified-search";
 import { REGEX_META } from "../detectors/regex";
+import { applyPipelineLanguageScope } from "../language-scope";
 import type { Dictionaries, PipelineConfig } from "../types";
 import { loadTestDictionaries } from "./load-dictionaries";
 
@@ -51,6 +52,32 @@ const detect = async (fullText: string, config: Partial<PipelineConfig>) =>
   });
 
 describe("pipeline config semantics", () => {
+  test("content language derives dictionary scopes", () => {
+    expect(
+      applyPipelineLanguageScope({
+        ...BASE_CONFIG,
+        language: "en-US",
+      }),
+    ).toMatchObject({
+      nameCorpusLanguages: ["en"],
+      denyListCountries: ["US", "GB", "CA", "AU", "IE"],
+    });
+  });
+
+  test("explicit dictionary scopes override content language", () => {
+    expect(
+      applyPipelineLanguageScope({
+        ...BASE_CONFIG,
+        language: "en",
+        denyListCountries: ["CZ"],
+        nameCorpusLanguages: ["cs"],
+      }),
+    ).toMatchObject({
+      nameCorpusLanguages: ["cs"],
+      denyListCountries: ["CZ"],
+    });
+  });
+
   test("empty labels do not suppress deterministic detectors", async () => {
     const entities = await detect("Datum narození: 2024-01-02", {
       enableRegex: true,
@@ -83,6 +110,94 @@ describe("pipeline config semantics", () => {
     ).length;
 
     expect(regexCount).toBe(expected);
+  });
+
+  test("content language scopes deny-list search build", async () => {
+    const testDictionaries = await getDictionaries();
+    const config = {
+      ...BASE_CONFIG,
+      dictionaries: testDictionaries,
+      enableDenyList: true,
+      enableNameCorpus: true,
+      labels: ["address", "person"],
+    };
+
+    const unscoped = await buildUnifiedSearch(
+      config,
+      [],
+      createPipelineContext(),
+    );
+    const scoped = await buildUnifiedSearch(
+      { ...config, language: "en" },
+      [],
+      createPipelineContext(),
+    );
+
+    expect(
+      scoped.slices.denyList.end - scoped.slices.denyList.start,
+    ).toBeLessThan(
+      unscoped.slices.denyList.end - unscoped.slices.denyList.start,
+    );
+  });
+
+  test("native config keeps alphanumeric custom deny-list overlays compact", async () => {
+    const testDictionaries = await getDictionaries();
+    const search = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        dictionaries: testDictionaries,
+        enableDenyList: true,
+        customDenyList: [
+          {
+            value: "Widget X",
+            label: "organization",
+          },
+        ],
+        labels: ["organization"],
+      },
+      [],
+      createPipelineContext(),
+    );
+
+    expect(search.nativeStaticConfig.literal_patterns_from_deny_list_data).toBe(
+      true,
+    );
+    expect(search.nativeStaticConfig.literal_patterns).toHaveLength(0);
+    expect(search.nativeStaticConfig.deny_list_data?.originals).toContain(
+      "Widget X",
+    );
+    expect(
+      search.nativeStaticConfig.deny_list_data?.originals.length ?? 0,
+    ).toBeGreaterThan(1);
+  });
+
+  test("native config inlines punctuation-edged custom deny-list overlays", async () => {
+    const search = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        enableDenyList: true,
+        customDenyList: [
+          {
+            value: ".env",
+            label: "file",
+          },
+        ],
+        labels: ["file"],
+      },
+      [],
+      createPipelineContext(),
+    );
+
+    expect(search.nativeStaticConfig.literal_patterns_from_deny_list_data).toBe(
+      false,
+    );
+    expect(search.nativeStaticConfig.literal_patterns).toEqual([
+      expect.objectContaining({
+        kind: "literal-with-options",
+        pattern: ".env",
+        whole_words: false,
+      }),
+    ]);
   });
 
   test("preparePipelineSearch reuses the context search cache", async () => {

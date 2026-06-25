@@ -1,8 +1,8 @@
 #![allow(clippy::expect_used, clippy::indexing_slicing, clippy::unwrap_used)]
 
 use stella_anonymize_core::{
-  FuzzySearchOptions, LiteralSearchOptions, RegexSearchOptions, SearchIndex,
-  SearchMatch, SearchOptions, SearchPattern,
+  Error, FuzzySearchOptions, LiteralSearchOptions, RegexSearchOptions,
+  SearchIndex, SearchIndexArtifacts, SearchMatch, SearchOptions, SearchPattern,
 };
 
 #[test]
@@ -222,4 +222,97 @@ fn search_index_reports_match_presence_across_engines() {
 
   assert!(index.is_match("Case 2026").unwrap());
   assert!(!index.is_match("No hit").unwrap());
+}
+
+#[test]
+fn search_index_prepared_artifacts_match_direct_index() {
+  let patterns = vec![
+    SearchPattern::Literal(String::from("Alice")),
+    SearchPattern::Regex(String::from(r"\b[A-Z]{2}\d{4}\b")),
+    SearchPattern::Fuzzy {
+      pattern: String::from("Muller"),
+      distance: Some(1),
+    },
+  ];
+  let options = SearchOptions {
+    literal: LiteralSearchOptions {
+      case_insensitive: false,
+      whole_words: true,
+    },
+    regex: RegexSearchOptions { whole_words: false },
+    fuzzy: FuzzySearchOptions {
+      case_insensitive: true,
+      whole_words: true,
+      normalize_diacritics: false,
+    },
+  };
+  let artifacts =
+    SearchIndex::prepare_artifacts(patterns.clone(), options).unwrap();
+  assert!(
+    !artifacts.slots.is_empty(),
+    "prepared search index should record text-search slot artifacts"
+  );
+  let direct = SearchIndex::new(patterns.clone(), options).unwrap();
+  let prepared =
+    SearchIndex::new_with_artifacts(patterns, options, &artifacts).unwrap();
+  let haystack = "Alice signed AB1234. Later, Muler countersigned.";
+
+  assert_eq!(
+    prepared.find_iter(haystack).unwrap(),
+    direct.find_iter(haystack).unwrap()
+  );
+  assert_eq!(prepared.is_match(haystack), direct.is_match(haystack));
+}
+
+#[test]
+fn search_index_prepared_artifacts_roundtrip_bytes() {
+  let patterns = vec![
+    SearchPattern::Literal(String::from("Alice")),
+    SearchPattern::Literal(String::from("Bob")),
+  ];
+  let options = SearchOptions {
+    literal: LiteralSearchOptions {
+      case_insensitive: true,
+      whole_words: true,
+    },
+    ..SearchOptions::default()
+  };
+  let artifacts =
+    SearchIndex::prepare_artifacts(patterns.clone(), options).unwrap();
+  let bytes = artifacts.to_bytes().unwrap();
+  let decoded = SearchIndexArtifacts::from_bytes(&bytes).unwrap();
+
+  assert_eq!(decoded, artifacts);
+
+  let direct = SearchIndex::new(patterns.clone(), options).unwrap();
+  let prepared =
+    SearchIndex::new_with_artifacts(patterns, options, &decoded).unwrap();
+  assert_eq!(
+    prepared.find_iter("Alice and Bob").unwrap(),
+    direct.find_iter("Alice and Bob").unwrap()
+  );
+}
+
+#[test]
+fn search_index_prepared_artifacts_reject_invalid_bytes() {
+  let error = SearchIndexArtifacts::from_bytes(b"not-valid").unwrap_err();
+
+  assert!(
+    matches!(error, Error::InvalidStaticData { .. }),
+    "invalid artifact bytes should fail at the format boundary"
+  );
+}
+
+#[test]
+fn search_index_prepared_artifacts_reject_wrong_slot_count() {
+  let patterns = vec![SearchPattern::Literal(String::from("Alice"))];
+  let options = SearchOptions::default();
+  let mut artifacts =
+    SearchIndex::prepare_artifacts(patterns.clone(), options).unwrap();
+  artifacts.slots.clear();
+
+  assert!(
+    SearchIndex::new_with_artifacts(patterns, options, &artifacts).is_err(),
+    "missing prepared slot artifacts should fail"
+  );
 }
