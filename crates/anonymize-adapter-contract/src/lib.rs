@@ -21,6 +21,10 @@ const PREPARED_SEARCH_PACKAGE_HEADER: [u8; 8] = *b"ANONPKG1";
 const PREPARED_SEARCH_PACKAGE_VERSION: u32 = 3;
 const PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER: [u8; 8] = *b"ANONPKZ1";
 const PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION: u32 = 1;
+const PREPARED_SEARCH_CORE_PACKAGE_HEADER: [u8; 8] = *b"ANONCPK1";
+const PREPARED_SEARCH_CORE_PACKAGE_VERSION: u32 = 2;
+const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_HEADER: [u8; 8] = *b"ANONCPZ1";
+const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION: u32 = 2;
 const PREPARED_SEARCH_PACKAGE_DIGEST_BYTES: usize = 32;
 const PREPARED_SEARCH_PACKAGE_ZSTD_LEVEL: i32 = 3;
 
@@ -415,6 +419,18 @@ pub struct BindingPreparedSearchPackage {
   pub artifacts: Vec<u8>,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct CorePreparedSearchPackage {
+  pub config: PreparedSearchConfig,
+  pub artifacts: Vec<u8>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CorePreparedSearchPackageView<'a> {
+  pub config: PreparedSearchConfig,
+  pub artifacts: Cow<'a, [u8]>,
+}
+
 #[derive(Deserialize, Serialize)]
 struct BinaryPreparedSearchConfig {
   regex_patterns: Vec<BindingSearchPattern>,
@@ -498,16 +514,11 @@ pub fn prepared_search_package_to_bytes(
   artifacts: &[u8],
 ) -> Result<Vec<u8>> {
   let payload = prepared_search_package_payload_to_bytes(config, artifacts)?;
-  let digest = blake3::hash(&payload);
-  let mut bytes = Vec::with_capacity(raw_package_header_len(&payload));
-  write_package_header(
-    &mut bytes,
+  Ok(prepared_search_package_raw_payload_to_bytes(
     PREPARED_SEARCH_PACKAGE_HEADER,
     PREPARED_SEARCH_PACKAGE_VERSION,
-    digest.as_bytes(),
-  );
-  bytes.extend_from_slice(&payload);
-  Ok(bytes)
+    &payload,
+  ))
 }
 
 pub fn prepared_search_package_to_compressed_bytes(
@@ -515,7 +526,47 @@ pub fn prepared_search_package_to_compressed_bytes(
   artifacts: &[u8],
 ) -> Result<Vec<u8>> {
   let payload = prepared_search_package_payload_to_bytes(config, artifacts)?;
-  prepared_search_package_compress_payload(&payload)
+  prepared_search_package_compress_payload(
+    PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER,
+    PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION,
+    &payload,
+  )
+}
+
+pub fn prepared_search_core_package_to_bytes(
+  config: &PreparedSearchConfig,
+  artifacts: &[u8],
+) -> Result<Vec<u8>> {
+  let payload =
+    prepared_search_core_package_payload_to_bytes(config, artifacts)?;
+  Ok(prepared_search_package_raw_payload_to_bytes(
+    PREPARED_SEARCH_CORE_PACKAGE_HEADER,
+    PREPARED_SEARCH_CORE_PACKAGE_VERSION,
+    &payload,
+  ))
+}
+
+pub fn prepared_search_core_package_to_compressed_bytes(
+  config: &PreparedSearchConfig,
+  artifacts: &[u8],
+) -> Result<Vec<u8>> {
+  let payload =
+    prepared_search_core_package_payload_to_bytes(config, artifacts)?;
+  prepared_search_package_compress_payload(
+    PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_HEADER,
+    PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION,
+    &payload,
+  )
+}
+
+#[must_use]
+pub fn prepared_search_package_has_core_payload(bytes: &[u8]) -> bool {
+  bytes
+    .get(..PREPARED_SEARCH_CORE_PACKAGE_HEADER.len())
+    .is_some_and(|header| {
+      header == PREPARED_SEARCH_CORE_PACKAGE_HEADER
+        || header == PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_HEADER
+    })
 }
 
 pub fn prepared_search_package_digest(bytes: &[u8]) -> Result<[u8; 32]> {
@@ -526,8 +577,14 @@ pub fn prepared_search_package_from_bytes(
   bytes: &[u8],
 ) -> Result<BindingPreparedSearchPackage> {
   let parts = prepared_search_package_parts(bytes)?;
-  let payload = parts.payload()?;
-  verify_prepared_search_package_digest(parts.digest(), payload.as_ref())?;
+  if parts.is_core() {
+    return Err(invalid_prepared_search_package(
+      "package does not contain a binding payload",
+    ));
+  }
+  let digest = parts.digest();
+  let payload = parts.into_payload()?;
+  verify_prepared_search_package_digest(digest, payload.as_ref())?;
   let (package, read) = bincode::serde::decode_from_slice::<
     BinaryPreparedSearchPackageOwned,
     _,
@@ -540,6 +597,31 @@ pub fn prepared_search_package_from_bytes(
     config: BindingPreparedSearchConfig::from(package.config),
     artifacts: package.artifacts,
   })
+}
+
+pub fn prepared_search_core_package_from_bytes(
+  bytes: &[u8],
+) -> Result<CorePreparedSearchPackage> {
+  let package = prepared_search_core_package_view_from_bytes(bytes)?;
+  Ok(CorePreparedSearchPackage {
+    config: package.config,
+    artifacts: package.artifacts.into_owned(),
+  })
+}
+
+pub fn prepared_search_core_package_view_from_bytes(
+  bytes: &[u8],
+) -> Result<CorePreparedSearchPackageView<'_>> {
+  let parts = prepared_search_package_parts(bytes)?;
+  if !parts.is_core() {
+    return Err(invalid_prepared_search_package(
+      "package does not contain a core payload",
+    ));
+  }
+  let digest = parts.digest();
+  let payload = parts.into_payload()?;
+  verify_prepared_search_package_digest(digest, payload.as_ref())?;
+  core_package_view_from_payload(payload)
 }
 
 impl From<BindingPreparedSearchConfig> for BinaryPreparedSearchConfig {
@@ -750,7 +832,102 @@ fn prepared_search_package_payload_to_bytes(
   .map_err(|error| invalid_prepared_search_package(error.to_string()))
 }
 
-fn prepared_search_package_compress_payload(payload: &[u8]) -> Result<Vec<u8>> {
+fn prepared_search_core_package_payload_to_bytes(
+  config: &PreparedSearchConfig,
+  artifacts: &[u8],
+) -> Result<Vec<u8>> {
+  let mut config = config.clone();
+  if core_literal_patterns_are_identity_mapped(&config) {
+    config.literal_patterns.clear();
+  }
+  let config_bytes =
+    bincode::serde::encode_to_vec(config, package_bincode_config())
+      .map_err(|error| invalid_prepared_search_package(error.to_string()))?;
+  let config_len = u64::try_from(config_bytes.len()).map_err(|_| {
+    invalid_prepared_search_package("core config length overflow")
+  })?;
+  let mut bytes = Vec::with_capacity(
+    std::mem::size_of::<u64>()
+      .saturating_add(config_bytes.len())
+      .saturating_add(artifacts.len()),
+  );
+  bytes.extend_from_slice(&config_len.to_le_bytes());
+  bytes.extend_from_slice(&config_bytes);
+  bytes.extend_from_slice(artifacts);
+  Ok(bytes)
+}
+
+fn core_package_view_from_payload(
+  payload: Cow<'_, [u8]>,
+) -> Result<CorePreparedSearchPackageView<'_>> {
+  let len_end = std::mem::size_of::<u64>();
+  let len_bytes = payload.as_ref().get(..len_end).ok_or_else(|| {
+    invalid_prepared_search_package("truncated config length")
+  })?;
+  let len_array = <[u8; 8]>::try_from(len_bytes)
+    .map_err(|_| invalid_prepared_search_package("malformed config length"))?;
+  let config_len = usize::try_from(u64::from_le_bytes(len_array))
+    .map_err(|_| invalid_prepared_search_package("config length overflow"))?;
+  let config_end = len_end
+    .checked_add(config_len)
+    .ok_or_else(|| invalid_prepared_search_package("config length overflow"))?;
+  let config_bytes = payload
+    .as_ref()
+    .get(len_end..config_end)
+    .ok_or_else(|| invalid_prepared_search_package("truncated config"))?;
+  let (config, read) = bincode::serde::decode_from_slice::<
+    PreparedSearchConfig,
+    _,
+  >(config_bytes, package_bincode_config())
+  .map_err(|error| invalid_prepared_search_package(error.to_string()))?;
+  if read != config_bytes.len() {
+    return Err(invalid_prepared_search_package("trailing config data"));
+  }
+
+  let artifacts = match payload {
+    Cow::Borrowed(bytes) => Cow::Borrowed(
+      bytes
+        .get(config_end..)
+        .ok_or_else(|| invalid_prepared_search_package("missing artifacts"))?,
+    ),
+    Cow::Owned(bytes) => Cow::Owned(
+      bytes
+        .get(config_end..)
+        .ok_or_else(|| invalid_prepared_search_package("missing artifacts"))?
+        .to_vec(),
+    ),
+  };
+
+  Ok(CorePreparedSearchPackageView { config, artifacts })
+}
+
+fn core_literal_patterns_are_identity_mapped(
+  config: &PreparedSearchConfig,
+) -> bool {
+  !config.literal_patterns.is_empty()
+    && config
+      .literal_patterns
+      .iter()
+      .all(|pattern| matches!(pattern, SearchPattern::Literal(_)))
+}
+
+fn prepared_search_package_raw_payload_to_bytes(
+  header: [u8; 8],
+  version: u32,
+  payload: &[u8],
+) -> Vec<u8> {
+  let digest = blake3::hash(payload);
+  let mut bytes = Vec::with_capacity(raw_package_header_len(payload));
+  write_package_header(&mut bytes, header, version, digest.as_bytes());
+  bytes.extend_from_slice(payload);
+  bytes
+}
+
+fn prepared_search_package_compress_payload(
+  header: [u8; 8],
+  version: u32,
+  payload: &[u8],
+) -> Result<Vec<u8>> {
   let compressed =
     zstd::bulk::compress(payload, PREPARED_SEARCH_PACKAGE_ZSTD_LEVEL)
       .map_err(|error| invalid_prepared_search_package(error.to_string()))?;
@@ -759,12 +936,7 @@ fn prepared_search_package_compress_payload(payload: &[u8]) -> Result<Vec<u8>> {
     raw_package_header_len(&compressed)
       .saturating_add(std::mem::size_of::<u64>()),
   );
-  write_package_header(
-    &mut bytes,
-    PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER,
-    PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION,
-    digest.as_bytes(),
-  );
+  write_package_header(&mut bytes, header, version, digest.as_bytes());
   let payload_len = u64::try_from(payload.len())
     .map_err(|_| invalid_prepared_search_package("payload length overflow"))?;
   bytes.extend_from_slice(&payload_len.to_le_bytes());
@@ -951,31 +1123,39 @@ pub fn prepared_search_config_from_binding(
 
 enum PreparedSearchPackageParts<'a> {
   Raw {
+    core: bool,
     digest: [u8; 32],
     payload: &'a [u8],
   },
   Compressed {
+    core: bool,
     digest: [u8; 32],
     uncompressed_len: usize,
     payload: &'a [u8],
   },
 }
 
-impl PreparedSearchPackageParts<'_> {
+impl<'a> PreparedSearchPackageParts<'a> {
   const fn digest(&self) -> [u8; 32] {
     match self {
       Self::Raw { digest, .. } | Self::Compressed { digest, .. } => *digest,
     }
   }
 
-  fn payload(&self) -> Result<Cow<'_, [u8]>> {
+  const fn is_core(&self) -> bool {
+    match self {
+      Self::Raw { core, .. } | Self::Compressed { core, .. } => *core,
+    }
+  }
+
+  fn into_payload(self) -> Result<Cow<'a, [u8]>> {
     match self {
       Self::Raw { payload, .. } => Ok(Cow::Borrowed(payload)),
       Self::Compressed {
         uncompressed_len,
         payload,
         ..
-      } => zstd::bulk::decompress(payload, *uncompressed_len)
+      } => zstd::bulk::decompress(payload, uncompressed_len)
         .map(Cow::Owned)
         .map_err(|error| invalid_prepared_search_package(error.to_string())),
     }
@@ -1000,6 +1180,19 @@ fn prepared_search_package_parts(
       PREPARED_SEARCH_PACKAGE_HEADER.len(),
     )?;
     return Ok(PreparedSearchPackageParts::Raw {
+      core: false,
+      digest: raw.digest,
+      payload: raw.payload,
+    });
+  }
+  if header == PREPARED_SEARCH_CORE_PACKAGE_HEADER {
+    let raw = raw_package_header(
+      bytes,
+      PREPARED_SEARCH_CORE_PACKAGE_VERSION,
+      PREPARED_SEARCH_CORE_PACKAGE_HEADER.len(),
+    )?;
+    return Ok(PreparedSearchPackageParts::Raw {
+      core: true,
       digest: raw.digest,
       payload: raw.payload,
     });
@@ -1024,6 +1217,33 @@ fn prepared_search_package_parts(
       .get(len_end..)
       .ok_or_else(|| invalid_prepared_search_package("missing payload"))?;
     return Ok(PreparedSearchPackageParts::Compressed {
+      core: false,
+      digest: raw.digest,
+      uncompressed_len,
+      payload,
+    });
+  }
+  if header == PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_HEADER {
+    let raw = raw_package_header(
+      bytes,
+      PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION,
+      PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_HEADER.len(),
+    )?;
+    let len_end = std::mem::size_of::<u64>();
+    let len_bytes = raw
+      .payload
+      .get(..len_end)
+      .ok_or_else(|| invalid_prepared_search_package("truncated length"))?;
+    let len_array = <[u8; 8]>::try_from(len_bytes)
+      .map_err(|_| invalid_prepared_search_package("malformed length"))?;
+    let uncompressed_len = usize::try_from(u64::from_le_bytes(len_array))
+      .map_err(|_| invalid_prepared_search_package("length overflow"))?;
+    let payload = raw
+      .payload
+      .get(len_end..)
+      .ok_or_else(|| invalid_prepared_search_package("missing payload"))?;
+    return Ok(PreparedSearchPackageParts::Compressed {
+      core: true,
       digest: raw.digest,
       uncompressed_len,
       payload,
@@ -1628,6 +1848,7 @@ fn diagnostic_stage_name(stage: DiagnosticStage) -> String {
     DiagnosticStage::PrepareCacheHit => "prepare.cache.hit",
     DiagnosticStage::PrepareCacheMiss => "prepare.cache.miss",
     DiagnosticStage::PrepareBindingParse => "prepare.binding.parse",
+    DiagnosticStage::PreparePackageDecode => "prepare.package.decode",
     DiagnosticStage::PrepareBindingConvert => "prepare.binding.convert",
     DiagnosticStage::PrepareArtifactsDecode => "prepare.artifacts.decode",
     DiagnosticStage::PrepareTotal => "prepare.total",
@@ -1688,26 +1909,18 @@ mod tests {
 
   use super::{
     BindingPreparedSearchConfig, BindingSearchPattern, ContractError,
-    prepared_search_package_from_bytes, prepared_search_package_to_bytes,
+    prepared_search_config_from_binding,
+    prepared_search_core_package_from_bytes,
+    prepared_search_core_package_to_bytes,
+    prepared_search_core_package_to_compressed_bytes,
+    prepared_search_package_from_bytes,
+    prepared_search_package_has_core_payload, prepared_search_package_to_bytes,
     prepared_search_package_to_compressed_bytes,
   };
 
   #[test]
   fn prepared_search_package_roundtrips_config_and_artifacts() {
-    let config = BindingPreparedSearchConfig {
-      literal_patterns: vec![BindingSearchPattern {
-        kind: String::from("literal"),
-        pattern: String::from("Acme"),
-        distance: None,
-        case_insensitive: None,
-        whole_words: None,
-        lazy: None,
-        prefilter_any: None,
-        prefilter_case_insensitive: None,
-        prefilter_regex: None,
-      }],
-      ..BindingPreparedSearchConfig::default()
-    };
+    let config = package_test_config();
     let artifacts = b"prepared-artifacts";
 
     let bytes = prepared_search_package_to_bytes(&config, artifacts).unwrap();
@@ -1745,20 +1958,7 @@ mod tests {
 
   #[test]
   fn prepared_search_compressed_package_roundtrips_config_and_artifacts() {
-    let config = BindingPreparedSearchConfig {
-      literal_patterns: vec![BindingSearchPattern {
-        kind: String::from("literal"),
-        pattern: String::from("Acme"),
-        distance: None,
-        case_insensitive: None,
-        whole_words: None,
-        lazy: None,
-        prefilter_any: None,
-        prefilter_case_insensitive: None,
-        prefilter_regex: None,
-      }],
-      ..BindingPreparedSearchConfig::default()
-    };
+    let config = package_test_config();
     let artifacts = b"prepared-artifacts";
 
     let bytes =
@@ -1784,5 +1984,65 @@ mod tests {
       matches!(error, ContractError::InvalidPreparedSearchPackage { .. }),
       "corrupted compressed package should fail digest verification"
     );
+  }
+
+  #[test]
+  fn prepared_search_core_package_roundtrips_config_and_artifacts() {
+    let config =
+      prepared_search_config_from_binding(package_test_config()).unwrap();
+    let mut compact_config = config.clone();
+    compact_config.literal_patterns.clear();
+    let artifacts = b"prepared-artifacts";
+
+    let bytes =
+      prepared_search_core_package_to_bytes(&config, artifacts).unwrap();
+    let package = prepared_search_core_package_from_bytes(&bytes).unwrap();
+    let binding_error = prepared_search_package_from_bytes(&bytes).unwrap_err();
+
+    assert!(prepared_search_package_has_core_payload(&bytes));
+    assert_eq!(package.config, compact_config);
+    assert_eq!(package.artifacts, artifacts);
+    assert!(
+      matches!(
+        binding_error,
+        ContractError::InvalidPreparedSearchPackage { .. }
+      ),
+      "binding package loader should reject core payloads"
+    );
+  }
+
+  #[test]
+  fn prepared_search_core_compressed_package_roundtrips_config_and_artifacts() {
+    let config =
+      prepared_search_config_from_binding(package_test_config()).unwrap();
+    let mut compact_config = config.clone();
+    compact_config.literal_patterns.clear();
+    let artifacts = b"prepared-artifacts";
+
+    let bytes =
+      prepared_search_core_package_to_compressed_bytes(&config, artifacts)
+        .unwrap();
+    let package = prepared_search_core_package_from_bytes(&bytes).unwrap();
+
+    assert!(prepared_search_package_has_core_payload(&bytes));
+    assert_eq!(package.config, compact_config);
+    assert_eq!(package.artifacts, artifacts);
+  }
+
+  fn package_test_config() -> BindingPreparedSearchConfig {
+    BindingPreparedSearchConfig {
+      literal_patterns: vec![BindingSearchPattern {
+        kind: String::from("literal"),
+        pattern: String::from("Acme"),
+        distance: None,
+        case_insensitive: None,
+        whole_words: None,
+        lazy: None,
+        prefilter_any: None,
+        prefilter_case_insensitive: None,
+        prefilter_regex: None,
+      }],
+      ..BindingPreparedSearchConfig::default()
+    }
   }
 }

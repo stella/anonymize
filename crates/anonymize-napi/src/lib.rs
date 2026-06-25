@@ -10,15 +10,16 @@ use stella_anonymize_adapter_contract::{
   BindingOperatorConfig, BindingOperatorEntry, BindingPreparedSearchConfig,
   BindingRedactionResult, BindingStaticRedactionResult, ContractError,
   operator_config_from_binding, prepared_search_config_from_binding,
-  prepared_search_package_digest, prepared_search_package_from_bytes,
-  prepared_search_package_to_bytes,
-  prepared_search_package_to_compressed_bytes,
+  prepared_search_core_package_to_bytes,
+  prepared_search_core_package_to_compressed_bytes,
+  prepared_search_core_package_view_from_bytes, prepared_search_package_digest,
+  prepared_search_package_from_bytes, prepared_search_package_has_core_payload,
   static_redaction_diagnostic_result_to_binding,
   static_redaction_diagnostics_to_binding, static_redaction_result_to_binding,
 };
 use stella_anonymize_core::{
   DiagnosticEvent, DiagnosticEventKind, DiagnosticStage, PreparedSearch,
-  PreparedSearchArtifacts, StaticRedactionDiagnostics,
+  PreparedSearchArtifacts, PreparedSearchConfig, StaticRedactionDiagnostics,
 };
 
 const PREPARED_SEARCH_CACHE_LIMIT: usize = 8;
@@ -331,15 +332,15 @@ fn prepare_static_search_package_bytes_with(
   let binding_config =
     serde_json::from_slice::<BindingPreparedSearchConfig>(config_json)
       .map_err(|error| to_napi_serde_error(&error))?;
-  let core_config = prepared_search_config_from_binding(binding_config.clone())
+  let core_config = prepared_search_config_from_binding(binding_config)
     .map_err(|error| to_napi_contract_error(&error))?;
-  let artifacts = PreparedSearch::prepare_artifacts(core_config)
+  let artifacts = PreparedSearch::prepare_artifacts(core_config.clone())
     .and_then(|artifacts| artifacts.to_bytes())
     .map_err(|error| to_napi_core_error(&error))?;
   let package = if compressed {
-    prepared_search_package_to_compressed_bytes(&binding_config, &artifacts)
+    prepared_search_core_package_to_compressed_bytes(&core_config, &artifacts)
   } else {
-    prepared_search_package_to_bytes(&binding_config, &artifacts)
+    prepared_search_core_package_to_bytes(&core_config, &artifacts)
   };
   package
     .map(Buffer::from)
@@ -350,6 +351,15 @@ fn prepare_static_search_package_bytes_with(
 pub struct NativePreparedSearch {
   inner: Arc<PreparedSearch>,
   prepare_diagnostics: StaticRedactionDiagnostics,
+}
+
+#[derive(Clone, Copy)]
+struct PrepareContext {
+  input_bytes_len: usize,
+  cache_key: [u8; 32],
+  cache_elapsed: u64,
+  parse_elapsed: u64,
+  parse_stage: DiagnosticStage,
 }
 
 #[napi]
@@ -415,10 +425,13 @@ impl NativePreparedSearch {
     Self::from_binding_config(
       config,
       artifact_bytes,
-      input_bytes_len,
-      cache_key,
-      cache_elapsed,
-      parse_elapsed,
+      PrepareContext {
+        input_bytes_len,
+        cache_key,
+        cache_elapsed,
+        parse_elapsed,
+        parse_stage: DiagnosticStage::PrepareBindingParse,
+      },
     )
   }
 
@@ -442,36 +455,67 @@ impl NativePreparedSearch {
 
     let cache_elapsed = elapsed_us(cache_start);
     let parse_start = Instant::now();
+    if prepared_search_package_has_core_payload(package_bytes) {
+      let package = prepared_search_core_package_view_from_bytes(package_bytes)
+        .map_err(|error| to_napi_contract_error(&error))?;
+      let parse_elapsed = elapsed_us(parse_start);
+      let config = package.config;
+      return Self::from_core_config(
+        config,
+        Some(package.artifacts.as_ref()),
+        PrepareContext {
+          input_bytes_len,
+          cache_key,
+          cache_elapsed,
+          parse_elapsed,
+          parse_stage: DiagnosticStage::PreparePackageDecode,
+        },
+        None,
+      );
+    }
+
     let package = prepared_search_package_from_bytes(package_bytes)
       .map_err(|error| to_napi_contract_error(&error))?;
     let parse_elapsed = elapsed_us(parse_start);
+    let config = package.config;
+    let artifacts = package.artifacts;
     Self::from_binding_config(
-      package.config,
-      Some(&package.artifacts),
-      input_bytes_len,
-      cache_key,
-      cache_elapsed,
-      parse_elapsed,
+      config,
+      Some(&artifacts),
+      PrepareContext {
+        input_bytes_len,
+        cache_key,
+        cache_elapsed,
+        parse_elapsed,
+        parse_stage: DiagnosticStage::PreparePackageDecode,
+      },
     )
   }
 
   fn from_binding_config(
     config: BindingPreparedSearchConfig,
     artifact_bytes: Option<&[u8]>,
-    input_bytes_len: usize,
-    cache_key: [u8; 32],
-    cache_elapsed: u64,
-    parse_elapsed: u64,
+    context: PrepareContext,
   ) -> Result<Self> {
     let convert_start = Instant::now();
     let config = prepared_search_config_from_binding(config)
       .map_err(|error| to_napi_contract_error(&error))?;
-    let pattern_count = config
-      .regex_patterns
-      .len()
-      .saturating_add(config.custom_regex_patterns.len())
-      .saturating_add(config.literal_patterns.len());
+    let pattern_count = prepared_search_pattern_count(&config);
     let convert_elapsed = elapsed_us(convert_start);
+    Self::from_core_config(
+      config,
+      artifact_bytes,
+      context,
+      Some((pattern_count, convert_elapsed)),
+    )
+  }
+
+  fn from_core_config(
+    config: PreparedSearchConfig,
+    artifact_bytes: Option<&[u8]>,
+    context: PrepareContext,
+    binding_convert: Option<(usize, u64)>,
+  ) -> Result<Self> {
     let artifact_decode_start = Instant::now();
     let artifacts = artifact_bytes
       .map(PreparedSearchArtifacts::from_bytes)
@@ -491,23 +535,25 @@ impl NativePreparedSearch {
         stage_event(
           DiagnosticStage::PrepareCacheMiss,
           Some(0),
-          Some(cache_elapsed),
-          Some(input_bytes_len),
+          Some(context.cache_elapsed),
+          Some(context.input_bytes_len),
         ),
         stage_event(
-          DiagnosticStage::PrepareBindingParse,
+          context.parse_stage,
           None,
-          Some(parse_elapsed),
-          Some(input_bytes_len),
-        ),
-        stage_event(
-          DiagnosticStage::PrepareBindingConvert,
-          Some(pattern_count),
-          Some(convert_elapsed),
-          None,
+          Some(context.parse_elapsed),
+          Some(context.input_bytes_len),
         ),
       ],
     };
+    if let Some((pattern_count, convert_elapsed)) = binding_convert {
+      diagnostics.events.push(stage_event(
+        DiagnosticStage::PrepareBindingConvert,
+        Some(pattern_count),
+        Some(convert_elapsed),
+        None,
+      ));
+    }
     if let (Some(elapsed), Some(bytes)) =
       (artifact_decode_elapsed, artifact_bytes.map(<[u8]>::len))
     {
@@ -519,7 +565,7 @@ impl NativePreparedSearch {
       ));
     }
     diagnostics.extend(result.diagnostics);
-    prepared_search_cache_insert(cache_key, Arc::clone(&inner));
+    prepared_search_cache_insert(context.cache_key, Arc::clone(&inner));
     Ok(Self {
       inner,
       prepare_diagnostics: diagnostics,
@@ -571,6 +617,14 @@ impl NativePreparedSearch {
 
     serde_json::to_string(&result).map_err(|error| to_napi_serde_error(&error))
   }
+}
+
+const fn prepared_search_pattern_count(config: &PreparedSearchConfig) -> usize {
+  config
+    .regex_patterns
+    .len()
+    .saturating_add(config.custom_regex_patterns.len())
+    .saturating_add(config.literal_patterns.len())
 }
 
 fn prepared_search_cache_get(key: &[u8; 32]) -> Option<Arc<PreparedSearch>> {

@@ -10,39 +10,51 @@ const MONEY_LABEL: &str = "monetary amount";
 const MONEY_SCORE: f64 = 0.9;
 const MAX_LEFT_SCAN_BYTES: usize = 96;
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(
+  Clone, Debug, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize,
+)]
 pub struct MonetaryData {
   pub currencies: CurrencyData,
   pub amount_words: AmountWordsData,
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(
+  Clone, Debug, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize,
+)]
 pub struct CurrencyData {
   pub codes: Vec<String>,
   pub symbols: Vec<String>,
   pub local_names: Vec<String>,
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(
+  Clone, Debug, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize,
+)]
 pub struct AmountWordsData {
   pub written_amount_patterns: Vec<WrittenAmountPatternData>,
   pub magnitude_suffixes: Vec<MagnitudeSuffixData>,
   pub share_quantity_terms: Vec<ShareQuantityTermData>,
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(
+  Clone, Debug, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize,
+)]
 pub struct WrittenAmountPatternData {
   pub keywords: Vec<String>,
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(
+  Clone, Debug, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize,
+)]
 pub struct MagnitudeSuffixData {
   pub words: Vec<String>,
   pub abbreviations_case_insensitive: Vec<String>,
   pub abbreviations_case_sensitive: Vec<String>,
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(
+  Clone, Debug, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize,
+)]
 pub struct ShareQuantityTermData {
   pub modifiers: Vec<String>,
   pub nouns: Vec<String>,

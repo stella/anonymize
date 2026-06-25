@@ -573,6 +573,7 @@ checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 [[package]]
 name = "stella-aho-corasick-core"
 version = "1.0.4"
+source = "git+https://github.com/stella/aho-corasick?rev=28226295ca5df514cd915e7c26af6fd605348b81#28226295ca5df514cd915e7c26af6fd605348b81"
 dependencies = [
  "daachorse",
  "unicode-case-mapping",
@@ -596,6 +597,7 @@ version = "1.5.0"
 dependencies = [
  "fancy-regex 0.16.2",
  "regex",
+ "serde",
  "stella-text-search-core",
 ]
 
@@ -648,6 +650,7 @@ dependencies = [
 [[package]]
 name = "stella-text-search-core"
 version = "1.0.6"
+source = "git+https://github.com/stella/text-search?rev=8a42c28a8e7c5a32c838ae9dd443c21deab391ed#8a42c28a8e7c5a32c838ae9dd443c21deab391ed"
 dependencies = [
  "stella-aho-corasick-core",
  "stella-fuzzy-search-core",

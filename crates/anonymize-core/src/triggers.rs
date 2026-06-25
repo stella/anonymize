@@ -15,7 +15,7 @@ const TRIGGER_LOOKAHEAD_MARGIN: usize = 128;
 const LINE_TRIGGER_LOOKAHEAD: usize = 2_048;
 const MATCH_PATTERN_LOOKAHEAD: usize = 512;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct TriggerData {
   pub rules: Vec<TriggerRule>,
   pub address_stop_keywords: Vec<String>,
@@ -23,7 +23,7 @@ pub struct TriggerData {
   pub legal_form_suffixes: Vec<String>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct TriggerRule {
   pub trigger: String,
   pub label: String,
@@ -32,7 +32,7 @@ pub struct TriggerRule {
   pub include_trigger: bool,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum TriggerStrategy {
   ToNextComma {
     stop_words: Vec<String>,
@@ -52,7 +52,7 @@ pub enum TriggerStrategy {
   },
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum TriggerValidation {
   StartsUppercase,
   MinLength(u32),

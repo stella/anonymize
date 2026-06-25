@@ -7,6 +7,7 @@ pub enum DiagnosticStage {
   PrepareCacheHit,
   PrepareCacheMiss,
   PrepareBindingParse,
+  PreparePackageDecode,
   PrepareBindingConvert,
   PrepareArtifactsDecode,
   PrepareTotal,
