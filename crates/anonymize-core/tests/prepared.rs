@@ -867,6 +867,13 @@ fn prepared_search_reports_static_redaction_diagnostics() {
       && event.label.as_deref() == Some("organization")
       && event.span_valid == Some(true)
   }));
+  assert!(
+    result
+      .diagnostics
+      .events
+      .iter()
+      .all(|event| event.text.is_none())
+  );
   assert!(result.diagnostics.events.iter().any(|event| {
     event.stage == DiagnosticStage::Redaction
       && event.kind == DiagnosticEventKind::StageSummary

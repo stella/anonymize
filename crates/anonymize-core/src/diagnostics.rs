@@ -93,9 +93,6 @@ impl StaticRedactionDiagnostics {
     let offsets = ByteOffsets::new(full_text);
     for found in matches {
       let span_valid = span_slices(&offsets, found.start(), found.end());
-      let text = span_valid
-        .then(|| offsets.slice(full_text, found.start(), found.end()).ok())
-        .flatten();
       self.events.push(DiagnosticEvent {
         stage,
         kind: DiagnosticEventKind::SearchMatch,
@@ -107,7 +104,7 @@ impl StaticRedactionDiagnostics {
         label: None,
         start: Some(found.start()),
         end: Some(found.end()),
-        text,
+        text: None,
         score: None,
         span_valid: Some(span_valid),
         elapsed_us: None,
@@ -144,7 +141,7 @@ impl StaticRedactionDiagnostics {
         label: Some(entity.label.clone()),
         start: Some(entity.start),
         end: Some(entity.end),
-        text: Some(entity.text.clone()),
+        text: None,
         score: Some(entity.score),
         span_valid: Some(span_slices(&offsets, entity.start, entity.end)),
         elapsed_us: None,

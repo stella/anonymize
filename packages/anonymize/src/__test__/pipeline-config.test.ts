@@ -200,6 +200,36 @@ describe("pipeline config semantics", () => {
     ]);
   });
 
+  test("native config serializes gazetteer metadata with Rust field names", async () => {
+    const search = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        enableGazetteer: true,
+        labels: ["organization"],
+      },
+      [
+        {
+          id: "gazetteer-acme",
+          canonical: "Acme",
+          label: "organization",
+          variants: [],
+          workspaceId: "test",
+          createdAt: 0,
+          source: "manual",
+        },
+      ],
+      createPipelineContext(),
+    );
+
+    expect(search.nativeStaticConfig.gazetteer_data).toEqual({
+      labels: ["organization", "organization"],
+      is_fuzzy: [false, true],
+    });
+    expect(
+      Object.hasOwn(search.nativeStaticConfig.gazetteer_data ?? {}, "isFuzzy"),
+    ).toBe(false);
+  });
+
   test("preparePipelineSearch reuses the context search cache", async () => {
     const context = createPipelineContext();
     const config = {
