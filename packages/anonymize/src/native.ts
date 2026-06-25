@@ -51,6 +51,7 @@ export type NativePreparedSearchBinding = {
 };
 
 export type NativeAnonymizeBinding = {
+  nativePackageVersion: () => string;
   NativePreparedSearch: {
     fromConfigJsonBytes: (
       configJson: Uint8Array,
@@ -108,6 +109,11 @@ export type NativeAnonymizerFromPackageOptions = {
   packageBytes: Uint8Array;
 };
 
+export type NativeBindingVersionOptions = {
+  binding: NativeAnonymizeBinding;
+  expectedVersion: string;
+};
+
 export class PreparedNativeAnonymizer {
   readonly #prepared: NativePreparedSearchBinding;
 
@@ -146,6 +152,22 @@ export class PreparedNativeAnonymizer {
 export const encodeNativeSearchConfig = (
   config: NativePreparedSearchConfig,
 ): Uint8Array => new TextEncoder().encode(JSON.stringify(config));
+
+export const getNativeBindingVersion = (
+  binding: NativeAnonymizeBinding,
+): string => binding.nativePackageVersion();
+
+export const assertNativeBindingVersion = ({
+  binding,
+  expectedVersion,
+}: NativeBindingVersionOptions): void => {
+  const actualVersion = getNativeBindingVersion(binding);
+  if (actualVersion !== expectedVersion) {
+    throw new Error(
+      `Native anonymize binding version ${actualVersion} does not match ${expectedVersion}`,
+    );
+  }
+};
 
 export const prepareNativeSearchPackage = ({
   binding,

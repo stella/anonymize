@@ -52,15 +52,18 @@ export type {
 // ── Native Adapter ───────────────────────────────
 export {
   PreparedNativeAnonymizer,
+  assertNativeBindingVersion,
   createNativeAnonymizerFromConfig,
   createNativeAnonymizerFromPackage,
   encodeNativeSearchConfig,
+  getNativeBindingVersion,
   prepareNativeSearchPackage,
 } from "./native";
 export type {
   NativeAnonymizeBinding,
   NativeAnonymizerFromConfigOptions,
   NativeAnonymizerFromPackageOptions,
+  NativeBindingVersionOptions,
   NativeOperatorConfig,
   NativePipelineEntity,
   NativePreparedSearchBinding,

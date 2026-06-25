@@ -13,7 +13,9 @@ import { createRequire } from "node:module";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import fc from "fast-check";
 import {
+  assertNativeBindingVersion,
   createNativeAnonymizerFromPackage,
+  getNativeBindingVersion,
   prepareNativeSearchPackage,
   type NativeAnonymizeBinding,
   type NativeOperatorConfig,
@@ -33,6 +35,7 @@ type NativeAdapter = Omit<
   | "prepareStaticSearchCompressedPackageBytes"
 > & {
   normalizeForSearch: (text: string) => string;
+  nativePackageVersion: () => string;
   NativePreparedSearch: NativeAnonymizeBinding["NativePreparedSearch"] & {
     new (configJson: string): NativePreparedSearchBinding;
     fromConfigJsonAndArtifactBytes: (
@@ -231,6 +234,21 @@ results = [
 print(json.dumps(results))
 `;
 
+const PYTHON_VERSION_SCRIPT = `
+import importlib.util
+import os
+import pathlib
+
+module_path = pathlib.Path(os.environ["STELLA_ANONYMIZE_PY_MODULE"])
+spec = importlib.util.spec_from_file_location(
+    "stella_anonymize_core_py",
+    module_path,
+)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+print(module.native_package_version())
+`;
+
 const PYTHON_PREPARED_ARTIFACT_SCRIPT = `
 import importlib.util
 import json
@@ -425,6 +443,26 @@ const generatedCaseArb: fc.Arbitrary<GeneratedNativeCase> = fc
   );
 
 describe("native adapter parity", () => {
+  test("native adapter versions match package metadata", () => {
+    const adapters = getAdapters();
+    const packageVersion = packageJsonVersion();
+
+    expect(getNativeBindingVersion(adapters.native)).toBe(packageVersion);
+    expect(callPythonVersion(adapters.pythonModulePath)).toBe(packageVersion);
+    expect(() =>
+      assertNativeBindingVersion({
+        binding: adapters.native,
+        expectedVersion: packageVersion,
+      }),
+    ).not.toThrow();
+    expect(() =>
+      assertNativeBindingVersion({
+        binding: adapters.native,
+        expectedVersion: "0.0.0",
+      }),
+    ).toThrow();
+  });
+
   test("normalization is identical through TS and Python adapters", () => {
     const adapters = getAdapters();
     const text = "Číslo\u00a0PAS - 1234 / Fuzztovn";
@@ -855,6 +893,10 @@ const loadNativeAdapter = (nativePath: string): NativeAdapter => {
     Object(loaded),
     "NativePreparedSearch",
   );
+  const nativePackageVersion = Reflect.get(
+    Object(loaded),
+    "nativePackageVersion",
+  );
   const redactStaticEntitiesJson = Reflect.get(
     Object(loaded),
     "redactStaticEntitiesJson",
@@ -878,6 +920,7 @@ const loadNativeAdapter = (nativePath: string): NativeAdapter => {
   if (
     typeof NativePreparedSearch !== "function" ||
     typeof normalizeForSearch !== "function" ||
+    typeof nativePackageVersion !== "function" ||
     typeof prepareStaticSearchArtifactsBytes !== "function" ||
     typeof prepareStaticSearchPackageBytes !== "function" ||
     typeof prepareStaticSearchCompressedPackageBytes !== "function" ||
@@ -890,6 +933,7 @@ const loadNativeAdapter = (nativePath: string): NativeAdapter => {
     NativePreparedSearch:
       NativePreparedSearch as NativeAdapter["NativePreparedSearch"],
     normalizeForSearch,
+    nativePackageVersion,
     prepareStaticSearchArtifactsBytes,
     prepareStaticSearchPackageBytes,
     prepareStaticSearchCompressedPackageBytes,
@@ -987,6 +1031,11 @@ print(module.normalize_for_search(payload["text"]))
     rmSync(payloadDir, { recursive: true, force: true });
   }
 };
+
+const callPythonVersion = (pythonModulePath: string): string =>
+  runCommand("python3", ["-c", PYTHON_VERSION_SCRIPT], {
+    STELLA_ANONYMIZE_PY_MODULE: pythonModulePath,
+  }).trimEnd();
 
 const callPythonPreparedWithArtifacts = (
   pythonModulePath: string,
@@ -1194,6 +1243,18 @@ const loadContractFixtureCases = (
       name,
       text: readFileSync(join(CONTRACT_FIXTURES_DIR, language, name), "utf8"),
     }));
+
+const packageJsonVersion = (): string => {
+  const packageJson = JSON.parse(
+    readFileSync(join(ROOT_DIR, "packages", "anonymize", "package.json"), {
+      encoding: "utf8",
+    }),
+  ) as { version?: unknown };
+  if (typeof packageJson.version !== "string") {
+    throw new TypeError("Package version is missing");
+  }
+  return packageJson.version;
+};
 
 const operatorConfigJson = (
   operators: Record<string, string> | null,
