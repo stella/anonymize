@@ -370,7 +370,9 @@ fn u32_char_len(ch: char) -> u32 {
 fn regex_shape_preferred_label(label: &str) -> bool {
   matches!(
     label,
-    "phone number"
+    "date"
+      | "date of birth"
+      | "phone number"
       | "tax identification number"
       | "registration number"
       | "national identification number"
