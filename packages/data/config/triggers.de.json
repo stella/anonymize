@@ -10,7 +10,7 @@
     "label": "date of birth",
     "strategy": {
       "type": "n-words",
-      "count": 3
+      "count": 1
     },
     "triggers": ["geboren am", "geb."],
     "extensions": ["add-colon"]

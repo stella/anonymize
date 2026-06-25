@@ -658,7 +658,7 @@ const CZ_BIRTH_NUMBER: RegexDef = {
 
 // Czech commercial-register reference. Every Czech
 // legal entity in the public registry is uniquely
-// identified by a registry section code ("oddíl X")
+// identified by a registry section letter ("oddíl X")
 // plus an insert number ("vložka NNN"). The full phrase
 // uniquely identifies the company, so we emit it as a
 // single registration-number entity rather than only
@@ -669,11 +669,11 @@ const CZ_BIRTH_NUMBER: RegexDef = {
 //   - optional whitespace around comma and after each
 //     keyword (DOCX exports add NBSPs and double
 //     spaces);
-//   - section code is a short letter code; insert number
-//     is a 1-6 digit integer.
+//   - section letter is a single A-Z; insert number is
+//     a 1-6 digit integer.
 const CZ_COMMERCIAL_REGISTER: RegexDef = {
   pattern:
-    `(?i)\\boddíl[^\\S\\n]+\\p{L}{1,3}` +
+    `(?i)\\boddíl[^\\S\\n]+[A-Z]` +
     `[^\\S\\n]*,[^\\S\\n]*` +
     `vložka[^\\S\\n]+\\d{1,6}\\b`,
   label: "registration number",

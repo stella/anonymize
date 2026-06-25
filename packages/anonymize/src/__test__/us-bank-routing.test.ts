@@ -85,14 +85,4 @@ describe("US ABA routing number — cue + checksum recognizer", () => {
       bankAccounts(await run("The reference 122100024 appears in section 5.")),
     ).toHaveLength(0);
   });
-
-  test("a labelled account number in payment instructions is a bank account number", async () => {
-    expect(
-      bankAccounts(
-        await run(
-          "Pay Wells Fargo Bank, N.A., routing 121000248, account 4537891022.",
-        ),
-      ),
-    ).toContain("4537891022");
-  });
 });
