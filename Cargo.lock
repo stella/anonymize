@@ -587,6 +587,7 @@ dependencies = [
  "fancy-regex",
  "regex",
  "serde",
+ "stella-stdnum-core",
  "stella-text-search-core",
 ]
 
@@ -635,6 +636,11 @@ dependencies = [
  "regex-syntax",
  "unicode-segmentation",
 ]
+
+[[package]]
+name = "stella-stdnum-core"
+version = "2.1.1"
+source = "git+https://github.com/stella/stdnum?rev=7c602fde6a6043e5c2efd2f6b73917c100b7e450#7c602fde6a6043e5c2efd2f6b73917c100b7e450"
 
 [[package]]
 name = "stella-text-search-core"
