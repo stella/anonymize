@@ -255,6 +255,7 @@ pub struct DenyListFilterData {
   pub address_jurisdiction_prefixes: BTreeSet<String>,
   pub street_types: BTreeSet<String>,
   pub address_component_terms: BTreeSet<String>,
+  pub ambiguous_street_type_terms: BTreeSet<String>,
   pub first_names: BTreeSet<String>,
   pub generic_roles: BTreeSet<String>,
   pub number_abbrev_prefixes: BTreeSet<String>,

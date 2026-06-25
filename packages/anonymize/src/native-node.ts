@@ -151,14 +151,16 @@ const toNativeAnonymizeBinding = (
   value: unknown,
 ): NativeAnonymizeBinding | null => {
   const candidate =
-    isRecord(value) && isRecord(value["default"]) ? value["default"] : value;
+    isPropertyBag(value) && isPropertyBag(value["default"])
+      ? value["default"]
+      : value;
   return isNativeAnonymizeBinding(candidate) ? candidate : null;
 };
 
 const isNativeAnonymizeBinding = (
   candidate: unknown,
 ): candidate is NativeAnonymizeBinding => {
-  if (!isRecord(candidate)) {
+  if (!isPropertyBag(candidate)) {
     return false;
   }
   if (typeof candidate["nativePackageVersion"] !== "function") {
@@ -173,7 +175,7 @@ const isNativeAnonymizeBinding = (
     return false;
   }
   const preparedSearch = candidate["NativePreparedSearch"];
-  if (!isRecord(preparedSearch)) {
+  if (!isPropertyBag(preparedSearch)) {
     return false;
   }
   if (typeof preparedSearch["fromConfigJsonBytes"] !== "function") {
@@ -185,8 +187,8 @@ const isNativeAnonymizeBinding = (
   return true;
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
+const isPropertyBag = (value: unknown): value is Record<string, unknown> =>
+  (typeof value === "object" && value !== null) || typeof value === "function";
 
 const formatLoadError = (error: unknown): string => {
   if (error instanceof Error) {
