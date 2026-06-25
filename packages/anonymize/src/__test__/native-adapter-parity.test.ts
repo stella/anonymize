@@ -1,5 +1,11 @@
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createRequire } from "node:module";
@@ -11,7 +17,11 @@ import {
   type NativeAnonymizeBinding,
   type NativeOperatorConfig,
   type NativePreparedSearchBinding,
+  type NativeStaticRedactionResult,
 } from "../native";
+import { createPipelineContext, preparePipelineSearch } from "../index";
+import { contractTestConfig } from "./contract-config";
+import { loadTestDictionaries } from "./load-dictionaries";
 
 setDefaultTimeout(120_000);
 
@@ -624,6 +634,61 @@ describe("native adapter parity", () => {
     expect(result.redaction.redactedText).toContain("***");
   });
 
+  test("native facade and Python match on a contract fixture package", async () => {
+    const adapters = getAdapters();
+    const fixtureText = readFileSync(
+      join(
+        ROOT_DIR,
+        "packages",
+        "anonymize",
+        "src",
+        "__test__",
+        "fixtures",
+        "contracts",
+        "en",
+        "software-license-agreement.txt",
+      ),
+      "utf8",
+    );
+    const dictionaries = await loadTestDictionaries({
+      denyListCountries: ["US"],
+      nameCorpusLanguages: ["en"],
+    });
+    const search = await preparePipelineSearch({
+      config: {
+        ...contractTestConfig("native-facade-fixture-parity"),
+        dictionaries,
+        language: "en",
+      },
+      context: createPipelineContext(),
+    });
+    const configJson = JSON.stringify(search.nativeStaticConfig);
+    const packageBytes = prepareNativeSearchPackage({
+      binding: adapters.native,
+      config: search.nativeStaticConfig,
+      compressed: true,
+    });
+    const anonymizer = createNativeAnonymizerFromPackage({
+      binding: adapters.native,
+      packageBytes,
+    });
+
+    const tsResult = toBindingStaticResult(
+      anonymizer.redactStaticEntities(fixtureText),
+    );
+    const pyResult = callPythonPreparedWithPackage(
+      adapters.pythonModulePath,
+      adapters.tempDir,
+      Buffer.from(packageBytes),
+      fixtureText,
+      null,
+      "prepare_static_search_compressed_package_bytes",
+      configJson,
+    );
+
+    expect(tsResult).toEqual(pyResult);
+  });
+
   test("JSON operator config accepts camel-case redactString", () => {
     const adapters = getAdapters();
     const text =
@@ -904,6 +969,7 @@ const callPythonPreparedWithPackage = (
   text: string,
   operators: Record<string, string> | null,
   prepareFn = "prepare_static_search_package_bytes",
+  configJson = CONFIG_JSON,
 ): StaticRedactionResult => {
   const payloadPath = join(tempDir, "prepared-package-payload.json");
   const packagePath = join(tempDir, "prepared-package.bin");
@@ -911,7 +977,7 @@ const callPythonPreparedWithPackage = (
   writeFileSync(
     payloadPath,
     JSON.stringify({
-      config_json: CONFIG_JSON,
+      config_json: configJson,
       text,
       operators_json: operatorConfigJson(operators),
     }),
@@ -999,6 +1065,30 @@ const toNativeFacadeEntity = ({
 }: StaticRedactionResult["resolved_entities"][number]) => ({
   ...entity,
   ...(sourceDetail ? { sourceDetail } : {}),
+});
+
+const toBindingStaticResult = (
+  result: NativeStaticRedactionResult,
+): StaticRedactionResult => ({
+  resolved_entities: result.resolvedEntities.map(toBindingPipelineEntity),
+  redaction: {
+    redacted_text: result.redaction.redactedText,
+    redaction_map: [...result.redaction.redactionMap.entries()].map(
+      ([placeholder, original]) => ({ placeholder, original }),
+    ),
+    operator_map: [...result.redaction.operatorMap.entries()].map(
+      ([placeholder, operator]) => ({ placeholder, operator }),
+    ),
+    entity_count: result.redaction.entityCount,
+  },
+});
+
+const toBindingPipelineEntity = ({
+  sourceDetail,
+  ...entity
+}: NativeStaticRedactionResult["resolvedEntities"][number]) => ({
+  ...entity,
+  source_detail: sourceDetail ?? null,
 });
 
 const operatorConfigJson = (
