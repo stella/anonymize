@@ -895,6 +895,9 @@ const configKey = (
     `${config.enableNameCorpus}:` +
     `${config.nameCorpusLanguages?.toSorted().join(",") ?? ""}:` +
     `${config.enableRegex}:` +
+    `${config.threshold}:` +
+    `${config.enableConfidenceBoost}:` +
+    `${config.enableHotwordRules === true}:` +
     `${config.labels.toSorted().join(",")}:` +
     `${config.denyListCountries?.toSorted().join(",") ?? ""}:` +
     `${config.denyListRegions?.toSorted().join(",") ?? ""}:` +

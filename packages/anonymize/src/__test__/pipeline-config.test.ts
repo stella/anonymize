@@ -386,6 +386,41 @@ describe("pipeline config semantics", () => {
     expect(second).not.toBe(first);
   });
 
+  test("preparePipelineSearch cache keys native redaction options", async () => {
+    const context = createPipelineContext();
+    const baseConfig = {
+      ...BASE_CONFIG,
+      enableRegex: true,
+      labels: ["date of birth"],
+    };
+
+    const first = await preparePipelineSearch({
+      config: {
+        ...baseConfig,
+        threshold: 0.5,
+        enableConfidenceBoost: false,
+        enableHotwordRules: false,
+      },
+      context,
+    });
+    const second = await preparePipelineSearch({
+      config: {
+        ...baseConfig,
+        threshold: 0.93,
+        enableConfidenceBoost: true,
+        enableHotwordRules: true,
+      },
+      context,
+    });
+
+    expect(second).not.toBe(first);
+    expect(second.nativeStaticConfig.threshold).toBe(0.93);
+    expect(second.nativeStaticConfig.confidence_boost).toBe(true);
+    expect(
+      second.nativeStaticConfig.hotword_data?.rules.length,
+    ).toBeGreaterThan(0);
+  });
+
   test("enableLegalForms flag gates legal-form detection", async () => {
     const withFlag = await detect("Acme s.r.o.", {
       enableLegalForms: true,

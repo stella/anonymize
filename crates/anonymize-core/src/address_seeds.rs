@@ -366,7 +366,12 @@ impl PreparedAddressSeedData {
     cluster: &SeedCluster,
     existing_entities: &[PipelineEntity],
   ) -> Span {
-    let left_bound = nearest_left_non_address(cluster.start, existing_entities);
+    let left_bound = nearest_left_non_address(
+      full_text,
+      cluster.start,
+      existing_entities,
+      cluster_starts_with_street_type_word(cluster),
+    );
     let left_pos = expand_left(full_text, cluster.start, left_bound);
     if !cluster.has_expandable_address_context() {
       return Span {
@@ -861,14 +866,24 @@ fn score_cluster(cluster: &SeedCluster) -> f64 {
 }
 
 fn nearest_left_non_address(
+  full_text: &str,
   start: usize,
   existing_entities: &[PipelineEntity],
+  ignore_date_prefix: bool,
 ) -> usize {
   existing_entities
     .iter()
-    .filter(|entity| non_address_label(&entity.label))
     .filter_map(|entity| {
+      if !non_address_label(&entity.label) {
+        return None;
+      }
       let end = usize::try_from(entity.end).ok()?;
+      if ignore_date_prefix
+        && date_label(&entity.label)
+        && date_can_prefix_street_name(full_text, end, start)
+      {
+        return None;
+      }
       (end <= start).then_some(end)
     })
     .max()
@@ -908,6 +923,31 @@ fn non_address_label(label: &str) -> bool {
       | "organization"
       | "iban"
   )
+}
+
+fn date_label(label: &str) -> bool {
+  matches!(label, "date" | "date of birth")
+}
+
+fn cluster_starts_with_street_type_word(cluster: &SeedCluster) -> bool {
+  cluster.seeds.iter().any(|seed| {
+    seed.start == cluster.start
+      && seed.kind == SeedType::StreetWord
+      && !seed.text.chars().any(|ch| ch.is_ascii_digit())
+  })
+}
+
+fn date_can_prefix_street_name(
+  full_text: &str,
+  date_end: usize,
+  street_start: usize,
+) -> bool {
+  if date_end > street_start {
+    return false;
+  }
+  full_text.get(date_end..street_start).is_some_and(|gap| {
+    !gap.contains('\n') && gap.chars().all(char::is_whitespace)
+  })
 }
 
 fn expand_left(full_text: &str, start: usize, left_bound: usize) -> usize {
