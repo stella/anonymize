@@ -210,6 +210,13 @@ const getCachedNativePipelinePackage = async ({
     if (sharedCache.get(key) === promise) {
       sharedCache.delete(key);
     }
+    if (
+      ctx.nativePipelinePackageKey === key &&
+      ctx.nativePipelinePackagePromise === promise
+    ) {
+      ctx.nativePipelinePackage = null;
+      ctx.nativePipelinePackagePromise = null;
+    }
     throw error;
   }
   if (sharedCache.get(key) === promise) {

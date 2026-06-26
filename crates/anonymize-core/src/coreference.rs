@@ -21,6 +21,8 @@ pub struct CoreferenceData {
   #[serde(default)]
   pub legal_form_aliases: Vec<String>,
   #[serde(default)]
+  pub organization_suffixes: Vec<String>,
+  #[serde(default)]
   pub organization_determiners: Vec<String>,
 }
 
@@ -60,7 +62,11 @@ impl PreparedCoreferenceData {
       definition_patterns.push(compile_definition_pattern(pattern)?);
     }
 
-    let mut legal_form_suffixes = data.legal_form_aliases.clone();
+    let mut legal_form_suffixes = if data.organization_suffixes.is_empty() {
+      data.legal_form_aliases.clone()
+    } else {
+      data.organization_suffixes.clone()
+    };
     legal_form_suffixes.sort_by_key(|suffix| std::cmp::Reverse(suffix.len()));
 
     Ok(Self {
@@ -89,7 +95,13 @@ impl PreparedCoreferenceData {
     )?;
 
     if !self.definition_patterns.is_empty() {
-      let terms = self.extract_defined_terms(full_text, existing_entities)?;
+      let terms = if results.is_empty() {
+        self.extract_defined_terms(full_text, existing_entities)?
+      } else {
+        let mut definition_entities = existing_entities.to_vec();
+        definition_entities.extend(results.iter().cloned());
+        self.extract_defined_terms(full_text, &definition_entities)?
+      };
       results.extend(Self::find_alias_spans(full_text, &terms)?);
     }
 

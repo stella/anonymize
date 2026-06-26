@@ -79,6 +79,7 @@ pub struct PreparedSearch {
   name_corpus_data: Option<PreparedNames>,
   date_data: Option<PreparedDateData>,
   monetary_data: Option<PreparedMonetaryData>,
+  monetary_extraction: bool,
 }
 
 #[derive(
@@ -376,6 +377,7 @@ impl PreparedSearch {
     let allowed_labels = config.allowed_labels.clone();
     let threshold = config.threshold;
     let confidence_boost = config.confidence_boost;
+    let monetary_extraction = should_extract_monetary_data(&config);
     let regex_groups = split_regex_patterns(config.regex_patterns, &slices)?;
     let regex_len = regex_groups.regex.len();
     let custom_regex_len = config.custom_regex_patterns.len();
@@ -467,6 +469,7 @@ impl PreparedSearch {
       name_corpus_data: config.name_corpus_data.map(PreparedNames::new),
       date_data,
       monetary_data,
+      monetary_extraction,
     })
   }
 
@@ -735,7 +738,9 @@ impl PreparedSearch {
     if let Some(data) = &self.date_data {
       entities.extend(data.process(full_text)?);
     }
-    if let Some(data) = &self.monetary_data {
+    if self.monetary_extraction
+      && let Some(data) = &self.monetary_data
+    {
       entities.extend(data.process(full_text)?);
     }
 
@@ -917,6 +922,7 @@ impl PreparedSearch {
     raw_entities.extend(address_context_entities);
     let merge_start = Instant::now();
     let merged = merge_and_dedup(&raw_entities);
+    let merged = self.extend_monetary_entities(full_text, &merged);
     if let Some(diagnostics) = &mut diagnostics {
       diagnostics.record_entities(
         DiagnosticStage::Merge,
@@ -1094,6 +1100,25 @@ impl PreparedSearch {
     )?;
     Ok(filter_entities_for_labels(filtered, &self.allowed_labels))
   }
+
+  fn extend_monetary_entities(
+    &self,
+    full_text: &str,
+    entities: &[PipelineEntity],
+  ) -> Vec<PipelineEntity> {
+    let Some(data) = &self.monetary_data else {
+      return entities.to_vec();
+    };
+    data.extend_entities(full_text, entities)
+  }
+}
+
+fn should_extract_monetary_data(config: &PreparedSearchConfig) -> bool {
+  config.regex_patterns.is_empty()
+    || config
+      .regex_meta
+      .iter()
+      .any(|meta| meta.label == "monetary amount")
 }
 
 fn process_signature_entities(full_text: &str) -> TimedEntities {

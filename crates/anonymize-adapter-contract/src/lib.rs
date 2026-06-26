@@ -396,6 +396,8 @@ pub struct BindingCoreferenceData {
   #[serde(default)]
   pub legal_form_aliases: Vec<String>,
   #[serde(default)]
+  pub organization_suffixes: Vec<String>,
+  #[serde(default)]
   pub organization_determiners: Vec<String>,
 }
 
@@ -1678,6 +1680,7 @@ fn coreference_data_from_binding(
       .collect(),
     role_stop_terms: data.role_stop_terms,
     legal_form_aliases: data.legal_form_aliases,
+    organization_suffixes: data.organization_suffixes,
     organization_determiners: data.organization_determiners,
   }
 }

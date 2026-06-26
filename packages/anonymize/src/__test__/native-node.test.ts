@@ -20,6 +20,16 @@ import {
   redact_text_json,
 } from "../native-node";
 
+const SHARED_NODE_SDK_FUNCTIONS = [
+  "diagnostics_json",
+  "load_prepared_package",
+  "load_prepared_package_file",
+  "native_package_version",
+  "normalize_for_search",
+  "prepare_search_package",
+  "redact_text_json",
+] as const;
+
 describe("native node loader", () => {
   test("loads the bundled native loader", () => {
     const calls: string[] = [];
@@ -201,6 +211,22 @@ describe("native node loader", () => {
   });
 
   test("shared SDK helpers delegate through the native binding", () => {
+    const sharedSdkFunctions: Record<
+      (typeof SHARED_NODE_SDK_FUNCTIONS)[number],
+      unknown
+    > = {
+      diagnostics_json,
+      load_prepared_package,
+      load_prepared_package_file,
+      native_package_version,
+      normalize_for_search,
+      prepare_search_package,
+      redact_text_json,
+    };
+    for (const name of SHARED_NODE_SDK_FUNCTIONS) {
+      expect(typeof sharedSdkFunctions[name]).toBe("function");
+    }
+
     const capturedBytes: number[][] = [];
     const binding = fakeNativeBinding("1.5.0", {
       compressedPackageBytes: Uint8Array.of(21, 22, 23),

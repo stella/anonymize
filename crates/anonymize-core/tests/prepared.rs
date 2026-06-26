@@ -6,13 +6,14 @@ use stella_anonymize_core::{
   AddressContextData, AddressSeedData, AmountWordsData, CoreferenceData,
   CoreferencePatternData, CountryMatchData, CurrencyData, DateData,
   DenyListFilterData, DenyListMatchData, DetectionSource, DiagnosticEventKind,
-  DiagnosticStage, Error, FuzzySearchOptions, GazetteerMatchData, HotwordRule,
-  HotwordRuleData, LegalFormData, LiteralSearchOptions, MagnitudeSuffixData,
-  MonetaryData, OperatorConfig, PatternSlice, PreparedSearch,
-  PreparedSearchArtifacts, PreparedSearchConfig, PreparedSearchSlices,
-  RegexMatchMeta, RegexSearchOptions, SearchOptions, SearchPattern,
-  SourceDetail, TriggerData, TriggerRule, TriggerStrategy, TriggerValidation,
-  WrittenAmountPatternData, ZoneData, ZonePatternData, ZoneSigningClauseData,
+  DiagnosticStage, EntityKind, Error, FuzzySearchOptions, GazetteerMatchData,
+  HotwordRule, HotwordRuleData, LegalFormData, LiteralSearchOptions,
+  MagnitudeSuffixData, MonetaryData, OperatorConfig, PatternSlice,
+  PreparedSearch, PreparedSearchArtifacts, PreparedSearchConfig,
+  PreparedSearchSlices, RegexMatchMeta, RegexSearchOptions, SearchOptions,
+  SearchPattern, SourceDetail, TriggerData, TriggerRule, TriggerStrategy,
+  TriggerValidation, WrittenAmountPatternData, ZoneData, ZonePatternData,
+  ZoneSigningClauseData,
 };
 
 fn empty_config(slices: PreparedSearchSlices) -> PreparedSearchConfig {
@@ -144,6 +145,7 @@ fn coreference_data() -> CoreferenceData {
     }],
     role_stop_terms: vec![String::from("seller")],
     legal_form_aliases: vec![String::from("LLC")],
+    organization_suffixes: vec![String::from("LLC")],
     organization_determiners: vec![String::from(
       r"the\s+(?:company|corporation|firm)",
     )],
@@ -188,11 +190,16 @@ fn legal_form_coreference_prepared_search(
       ..LegalFormData::default()
     }),
     coreference_data: Some(CoreferenceData {
-      legal_form_aliases: suffix_strings,
+      definition_patterns: vec![CoreferencePatternData {
+        pattern: String::from(r#"\((?:hereinafter|the)\s+["']([^"']+)["']\)"#),
+        flags: String::from("gi"),
+      }],
+      role_stop_terms: vec![String::from("seller")],
+      legal_form_aliases: suffix_strings.clone(),
+      organization_suffixes: suffix_strings,
       organization_determiners: vec![String::from(
         r"the\s+(?:company|corporation|firm)",
       )],
-      ..CoreferenceData::default()
     }),
     ..empty_config(PreparedSearchSlices::default())
   })
@@ -593,6 +600,28 @@ fn prepared_search_extends_propagated_organization_determiners() {
     result.redaction.redacted_text,
     "[ORGANIZATION_1] signed. [ORGANIZATION_1] paid.",
   );
+}
+
+#[test]
+fn prepared_search_uses_propagated_orgs_as_defined_term_sources() {
+  let prepared = legal_form_coreference_prepared_search(vec!["LLC"]);
+  let full_text = format!(
+    "Acme LLC signed. {} Acme (the \"Acme Platform\") paid. Acme Platform renewed.",
+    "body ".repeat(50),
+  );
+
+  let result = prepared
+    .redact_static_entities(&full_text, &OperatorConfig::default())
+    .unwrap();
+
+  assert!(result.resolved_entities.iter().any(|entity| {
+    let EntityKind::Coreference { source_text } = &entity.kind else {
+      return false;
+    };
+    entity.source == DetectionSource::Coreference
+      && entity.text == "Acme Platform"
+      && source_text == "Acme"
+  }));
 }
 
 #[test]

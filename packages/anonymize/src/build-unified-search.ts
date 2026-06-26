@@ -38,6 +38,7 @@ import type { DenyListData, DenyListFilterData } from "./detectors/deny-list";
 import type { PipelineContext } from "./context";
 import { defaultContext } from "./context";
 import { POST_NOMINALS } from "./config/titles";
+import { LEGAL_SUFFIXES } from "./config/legal-forms";
 import { loadLanguageConfigs } from "./util/lang-loader";
 
 import {
@@ -249,6 +250,7 @@ export type NativeCoreferenceData = {
   definition_patterns: NativeCoreferencePatternData[];
   role_stop_terms: string[];
   legal_form_aliases: string[];
+  organization_suffixes: string[];
   organization_determiners: string[];
 };
 export type NativeNameCorpusData = {
@@ -715,6 +717,9 @@ const buildUnifiedSearchSources = async (
     legalFormsEnabled || config.enableTriggerPhrases || config.enableCoreference
       ? [...getKnownLegalSuffixes()]
       : [];
+  const nativeOrganizationSuffixes = config.enableCoreference
+    ? [...LEGAL_SUFFIXES]
+    : [];
   const nativeLegalFormData =
     nativeLegalFormSuffixes.length > 0
       ? {
@@ -810,7 +815,8 @@ const buildUnifiedSearchSources = async (
           year_words_by_language:
             config.enableTriggerPhrases === true ? (yearWordData ?? {}) : {},
         };
-  const nativeMonetaryData = regexMonetaryEnabled ? monetaryData : null;
+  const nativeMonetaryData =
+    config.enableTriggerPhrases || regexMonetaryEnabled ? monetaryData : null;
   const nativeSentenceTerminalCurrencyTerms =
     sentenceTerminalCurrencyTerms(monetaryData);
   const nativeNameCorpusData = buildNativeNameCorpusData(config, ctx);
@@ -968,6 +974,7 @@ const buildUnifiedSearchSources = async (
         : {
             ...coreferenceData,
             legal_form_aliases: nativeLegalFormSuffixes,
+            organization_suffixes: nativeOrganizationSuffixes,
           },
     nativeNameCorpusData,
     nativeSigningPatterns,
@@ -1751,6 +1758,7 @@ const buildNativeCoreferenceData = async (): Promise<NativeCoreferenceData> => {
     definition_patterns: definitionPatterns,
     role_stop_terms: roleData.roles,
     legal_form_aliases: [],
+    organization_suffixes: [],
     organization_determiners: Object.entries(determinerData)
       .flatMap(([language, values]) => {
         if (language === "_comment" || !Array.isArray(values)) {
