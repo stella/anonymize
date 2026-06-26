@@ -10,6 +10,7 @@ keywords = ["anonymization", "pii", "redaction", "text"]
 categories = ["text-processing"]
 
 [dependencies]
+bon = "3.9.3"
 fancy-regex = "0.18"
 regex = "1"
 serde = { version = "1", features = ["derive"] }
