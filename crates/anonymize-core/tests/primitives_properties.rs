@@ -6,12 +6,15 @@
   clippy::unwrap_used
 )]
 
-use proptest::prelude::{ProptestConfig, Strategy, any};
-use proptest::{collection, prop_assert, prop_assert_eq, proptest, sample};
+use proptest::prelude::{Just, ProptestConfig, Strategy, any};
+use proptest::{
+  collection, prop_assert, prop_assert_eq, prop_assume, proptest, sample,
+};
 use stella_anonymize_core::{
   DetectionSource, Entity, Error, LiteralSearchOptions, OperatorConfig,
-  PipelineEntity, SearchIndex, SearchMatch, SearchOptions, SearchPattern,
-  deanonymise, merge_and_dedup, redact_text, sanitize_entities,
+  PipelineEntity, RegexSearchOptions, SearchIndex, SearchIndexArtifacts,
+  SearchMatch, SearchOptions, SearchPattern, deanonymise, merge_and_dedup,
+  redact_text, sanitize_entities,
 };
 
 const PROPERTY_CASES: u32 = 128;
@@ -38,6 +41,11 @@ fn text_fragment(max_len: usize) -> impl Strategy<Value = String> {
 
 fn entity_text() -> impl Strategy<Value = String> {
   collection::vec(search_char(), 1..8)
+    .prop_map(|chars| chars.into_iter().collect())
+}
+
+fn fuzzy_text() -> impl Strategy<Value = String> {
+  collection::vec(search_char(), 2..8)
     .prop_map(|chars| chars.into_iter().collect())
 }
 
@@ -121,6 +129,167 @@ fn pipeline_entity_strategy() -> impl Strategy<Value = PipelineEntity> {
     })
 }
 
+fn literal_search_case()
+-> impl Strategy<Value = (Vec<SearchPattern>, SearchOptions, String)> {
+  collection::vec(entity_text(), 1..6)
+    .prop_flat_map(|needles| {
+      let patterns = needles
+        .iter()
+        .map(|needle| SearchPattern::LiteralWithOptions {
+          pattern: needle.clone(),
+          case_insensitive: Some(false),
+          whole_words: Some(false),
+        })
+        .collect::<Vec<_>>();
+      (
+        Just(patterns),
+        collection::vec((text_fragment(8), sample::select(needles)), 1..10),
+        text_fragment(8),
+      )
+    })
+    .prop_map(|(patterns, segments, suffix)| {
+      let mut haystack = String::new();
+      for (prefix, needle) in segments {
+        haystack.push_str(&prefix);
+        haystack.push_str(&needle);
+      }
+      haystack.push_str(&suffix);
+
+      (
+        patterns,
+        SearchOptions {
+          literal: LiteralSearchOptions {
+            case_insensitive: false,
+            whole_words: false,
+          },
+          ..SearchOptions::default()
+        },
+        haystack,
+      )
+    })
+}
+
+fn mixed_search_case()
+-> impl Strategy<Value = (Vec<SearchPattern>, SearchOptions, String)> {
+  (
+    entity_text(),
+    entity_text(),
+    fuzzy_text(),
+    text_fragment(8),
+    text_fragment(8),
+    text_fragment(8),
+  )
+    .prop_map(|(literal, regex_literal, fuzzy, prefix, middle, suffix)| {
+      let patterns = vec![
+        SearchPattern::LiteralWithOptions {
+          pattern: literal.clone(),
+          case_insensitive: Some(false),
+          whole_words: Some(false),
+        },
+        SearchPattern::Regex(regex::escape(&regex_literal)),
+        SearchPattern::Fuzzy {
+          pattern: fuzzy.clone(),
+          distance: Some(1),
+        },
+      ];
+      let haystack =
+        format!("{prefix}{literal} {middle}{regex_literal} {fuzzy}{suffix}");
+
+      (
+        patterns,
+        SearchOptions {
+          literal: LiteralSearchOptions {
+            case_insensitive: false,
+            whole_words: false,
+          },
+          regex: RegexSearchOptions {
+            whole_words: false,
+            overlap_all: true,
+          },
+          ..SearchOptions::default()
+        },
+        haystack,
+      )
+    })
+}
+
+#[derive(Clone, Copy, Debug)]
+enum ArtifactCorruption {
+  Header,
+  Version,
+  TrailingData,
+  Truncated,
+}
+
+fn artifact_corruption() -> impl Strategy<Value = ArtifactCorruption> {
+  sample::select(vec![
+    ArtifactCorruption::Header,
+    ArtifactCorruption::Version,
+    ArtifactCorruption::TrailingData,
+    ArtifactCorruption::Truncated,
+  ])
+}
+
+fn corrupt_artifact(
+  mut bytes: Vec<u8>,
+  corruption: ArtifactCorruption,
+) -> Vec<u8> {
+  match corruption {
+    ArtifactCorruption::Header => {
+      let first = bytes.first_mut().expect("artifact header byte");
+      *first ^= 0xff;
+    }
+    ArtifactCorruption::Version => {
+      let version_byte = bytes.get_mut(8).expect("artifact version byte");
+      *version_byte ^= 0xff;
+    }
+    ArtifactCorruption::TrailingData => bytes.push(0),
+    ArtifactCorruption::Truncated => {
+      bytes.pop();
+    }
+  }
+  bytes
+}
+
+fn search_output_is_valid(
+  haystack: &str,
+  pattern_count: usize,
+  matches: &[SearchMatch],
+) -> bool {
+  let mut previous: Option<(u32, u32, u32)> = None;
+
+  for found in matches {
+    if found.start() >= found.end() {
+      return false;
+    }
+
+    let Ok(pattern) = usize::try_from(found.pattern()) else {
+      return false;
+    };
+    if pattern >= pattern_count {
+      return false;
+    }
+
+    let Ok(start) = usize::try_from(found.start()) else {
+      return false;
+    };
+    let Ok(end) = usize::try_from(found.end()) else {
+      return false;
+    };
+    if haystack.get(start..end).is_none() {
+      return false;
+    }
+
+    let current = (found.start(), found.end(), found.pattern());
+    if previous.is_some_and(|last| last > current) {
+      return false;
+    }
+    previous = Some(current);
+  }
+
+  true
+}
+
 proptest! {
   #![proptest_config(ProptestConfig {
     cases: PROPERTY_CASES,
@@ -139,6 +308,29 @@ proptest! {
     prop_assert_eq!(restored.as_str(), text.as_str());
     for entry in &result.redaction_map {
       prop_assert!(!text.contains(&entry.placeholder));
+    }
+  }
+
+  #[test]
+  fn generated_entity_spans_fail_or_round_trip(
+    text in text_fragment(32),
+    spans in collection::vec((0_u32..80, 0_u32..80, label_strategy()), 0..16),
+  ) {
+    let entities = spans
+      .into_iter()
+      .map(|(start, end, label)| {
+        Entity::detected(start, end, label, String::from("generated"))
+      })
+      .collect::<Vec<_>>();
+
+    let result = redact_text(&text, &entities, &OperatorConfig::default());
+    if let Ok(redacted) = result {
+      let restored =
+        deanonymise(&redacted.redacted_text, &redacted.redaction_map);
+      prop_assert_eq!(restored.as_str(), text.as_str());
+      for entry in &redacted.redaction_map {
+        prop_assert!(!text.contains(&entry.placeholder));
+      }
     }
   }
 
@@ -166,6 +358,8 @@ proptest! {
     entities in collection::vec(pipeline_entity_strategy(), 0..32),
   ) {
     let result = merge_and_dedup(&entities);
+    let second_pass = merge_and_dedup(&result);
+    prop_assert_eq!(&second_pass, &result);
 
     for entity in &result {
       prop_assert!(entity.start < entity.end);
@@ -213,6 +407,7 @@ proptest! {
       prop_assert!(entity.start >= original.start);
       prop_assert!(entity.end <= original.end);
       prop_assert!(entity.start < entity.end);
+      prop_assert!(byte_len(&entity.text) <= entity.end.saturating_sub(entity.start));
       prop_assert!(entity.text.chars().any(char::is_alphanumeric));
       prop_assert_eq!(entity.text.trim(), entity.text.as_str());
     }
@@ -259,5 +454,90 @@ proptest! {
       };
       prop_assert_eq!(slice, needle.as_str());
     }
+  }
+
+  #[test]
+  fn prepared_literal_search_artifacts_match_direct_search(
+    (patterns, options, haystack) in literal_search_case(),
+  ) {
+    let artifacts =
+      SearchIndex::prepare_artifacts(patterns.clone(), options).unwrap();
+    prop_assume!(!artifacts.slots.is_empty());
+    let encoded = artifacts.to_bytes().unwrap();
+    let decoded = SearchIndexArtifacts::from_bytes(&encoded).unwrap();
+    prop_assert_eq!(&decoded, &artifacts);
+
+    let direct = SearchIndex::new(patterns.clone(), options).unwrap();
+    let prepared =
+      SearchIndex::new_with_artifacts(patterns.clone(), options, &decoded)
+        .unwrap();
+    let direct_matches = direct.find_iter(&haystack).unwrap();
+    let prepared_matches = prepared.find_iter(&haystack).unwrap();
+
+    prop_assert_eq!(&prepared_matches, &direct_matches);
+    prop_assert!(search_output_is_valid(
+      &haystack,
+      patterns.len(),
+      &prepared_matches,
+    ));
+  }
+
+  #[test]
+  fn prepared_mixed_search_artifacts_match_direct_search(
+    (patterns, options, haystack) in mixed_search_case(),
+  ) {
+    let artifacts =
+      SearchIndex::prepare_artifacts(patterns.clone(), options).unwrap();
+    let encoded = artifacts.to_bytes().unwrap();
+    let decoded = SearchIndexArtifacts::from_bytes(&encoded).unwrap();
+
+    let direct = SearchIndex::new(patterns.clone(), options).unwrap();
+    let prepared =
+      SearchIndex::new_with_artifacts(patterns.clone(), options, &decoded)
+        .unwrap();
+    let direct_matches = direct.find_iter(&haystack).unwrap();
+    let prepared_matches = prepared.find_iter(&haystack).unwrap();
+
+    prop_assert_eq!(&prepared_matches, &direct_matches);
+    prop_assert!(search_output_is_valid(
+      &haystack,
+      patterns.len(),
+      &prepared_matches,
+    ));
+  }
+
+  #[test]
+  fn malformed_search_artifacts_fail_closed(
+    (patterns, options, _haystack) in literal_search_case(),
+    corruption in artifact_corruption(),
+  ) {
+    let artifacts =
+      SearchIndex::prepare_artifacts(patterns, options).unwrap();
+    let encoded = artifacts.to_bytes().unwrap();
+    let corrupted = corrupt_artifact(encoded, corruption);
+
+    prop_assert!(SearchIndexArtifacts::from_bytes(&corrupted).is_err());
+  }
+
+  #[test]
+  fn search_artifacts_reject_missing_and_extra_slots(
+    (patterns, options, _haystack) in literal_search_case(),
+  ) {
+    let artifacts =
+      SearchIndex::prepare_artifacts(patterns.clone(), options).unwrap();
+    prop_assume!(!artifacts.slots.is_empty());
+
+    let missing = SearchIndexArtifacts::default();
+    prop_assert!(
+      SearchIndex::new_with_artifacts(patterns.clone(), options, &missing)
+        .is_err()
+    );
+
+    let mut extra = artifacts;
+    let first = extra.slots.first().expect("prepared slot").clone();
+    extra.slots.push(first);
+    prop_assert!(
+      SearchIndex::new_with_artifacts(patterns, options, &extra).is_err()
+    );
   }
 }
