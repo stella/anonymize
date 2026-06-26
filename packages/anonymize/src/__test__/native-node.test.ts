@@ -17,6 +17,7 @@ import {
   preloadDefaultNativePipeline,
   prepare_search_package,
   readNativePipelinePackageFile,
+  redact_text,
   redact_text_json,
 } from "../native-node";
 import { SHARED_NATIVE_SDK_TOP_LEVEL_FUNCTIONS } from "../native-sdk-contract";
@@ -212,6 +213,7 @@ describe("native node loader", () => {
       native_package_version,
       normalize_for_search,
       prepare_search_package,
+      redact_text,
       redact_text_json,
     };
     for (const name of SHARED_NATIVE_SDK_TOP_LEVEL_FUNCTIONS) {
@@ -235,6 +237,12 @@ describe("native node loader", () => {
     const prepared = load_prepared_package(packageBytes, { binding });
     expect(capturedBytes).toEqual([[21, 22, 23]]);
     expect(prepared.redact_text("x").redaction.redactedText).toBe("");
+    expect(redact_text("{}", "x", undefined, { binding }).redaction).toEqual({
+      entityCount: 0,
+      operatorMap: new Map(),
+      redactedText: "",
+      redactionMap: new Map(),
+    });
     const expectedJson = {
       redaction: {
         entity_count: 0,

@@ -92,6 +92,13 @@ def load_prepared_package(package_bytes: BytesLike) -> PreparedAnonymizer: ...
 def load_prepared_package_file(
     package_path: PathLikeString,
 ) -> PreparedAnonymizer: ...
+def redact_text(
+    config_json: str,
+    full_text: str,
+    operators: OperatorConfig = None,
+    *,
+    redact_string: str | None = None,
+) -> StaticRedactionResult: ...
 def redact_text_json(
     config_json: str,
     full_text: str,

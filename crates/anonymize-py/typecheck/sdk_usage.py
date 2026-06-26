@@ -27,3 +27,13 @@ def redact_json(config_json: str, text: str) -> str:
         {"country": "redact"},
         redact_string="***",
     )
+
+
+def redact_object(config_json: str, text: str) -> int:
+    result = anonymize.redact_text(
+        config_json,
+        text,
+        {"country": "redact"},
+        redact_string="***",
+    )
+    return result.redaction.entity_count

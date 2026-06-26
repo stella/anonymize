@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="../../.github/assets/banner.png" alt="Stella anonymize" width="100%" />
+  <img src="../../.github/assets/banner.png" alt="stella anonymize" width="100%" />
 </p>
 
 # @stll/anonymize
@@ -18,39 +18,51 @@ bun add @stll/anonymize-data
 
 For browser targets, install `@stll/anonymize-wasm` instead. It exposes the same runtime API through WebAssembly and is the supported entrypoint for Vite-based bundles.
 
-## Usage
+## Usage: Node.js native SDK
 
 ```ts
-import { runPipeline } from "@stll/anonymize";
+import { getDefaultNativePipeline } from "@stll/anonymize/native-node";
 
-const entities = await runPipeline({
-  fullText: text,
-  config: {
-    labels: [
-      "person",
-      "organization",
-      "address",
-      "date",
-      "iban",
-      "phone number",
-    ],
-    threshold: 0.5,
-    enableRegex: true,
-    enableTriggerPhrases: true,
-    enableLegalForms: true,
-    enableNameCorpus: true,
-    enableDenyList: false,
-    enableGazetteer: false,
-    enableNer: false,
-    enableConfidenceBoost: true,
-    enableCoreference: true,
-    workspaceId: "default",
-  },
-  gazetteerEntries: [],
-});
+const anonymizer = getDefaultNativePipeline();
+const result = anonymizer.redact_text(text);
+
+console.log(result.redaction.redactedText);
 ```
 
-## Caller-owned deny lists and regexes
+Call `getDefaultNativePipeline()` once during service startup and reuse the returned anonymizer. The package ships with a prepared native package, so the normal request path avoids rebuilding search automata.
+
+For build-time generated packages or caller-owned data, prepare the package before runtime and load the bytes in the process that handles documents.
+
+```bash
+bunx stella-anonymize-build-native-package \
+  --config ./anonymize-native-config.mjs \
+  --out ./dist/anonymize.stlanonpkg
+```
+
+```ts
+import { load_prepared_package_file } from "@stll/anonymize/native-node";
+
+const anonymizer = load_prepared_package_file("./dist/anonymize.stlanonpkg");
+const result = anonymizer.redact_text(text, { redactString: "***" });
+```
+
+The config module may export a `PipelineConfig` directly or `{ config, gazetteerEntries }`. Include `@stll/anonymize-data` dictionaries there if your runtime config uses the deny-list or name-corpus layers; keep the corresponding layers enabled for caller-owned `customDenyList`, `customRegexes`, and gazetteers. Those inputs are part of the prepared package and should be regenerated when they change.
+
+## Python SDK
+
+```py
+import stella_anonymize as anonymize
+
+package_bytes = anonymize.prepare_search_package(config_json)
+prepared = anonymize.load_prepared_package(package_bytes)
+result = prepared.redact_text(text, redact_string="***")
+
+print(result.redaction.redacted_text)
+```
+
+The Python SDK uses the same Rust core and prepared-package contract as the Node SDK. Prefer `load_prepared_package()` or `load_prepared_package_file()` for repeated calls; top-level `redact_text()` and `redact_text_json()` prepare from config on each call.
+
+## Caller-Owned Deny Lists and Regexes
 
 Use `customDenyList` for exact terms and variants that you control. These are matched by the deny-list layer, so keep `enableDenyList: true`.
 
@@ -92,32 +104,19 @@ const entities = await runPipeline({
 });
 ```
 
-## Native prepared packages
+## TypeScript Pipeline Compatibility
 
-For Node.js deployments that need low click-time latency, prepare the native pipeline package during your build and load the bytes at runtime.
-
-```bash
-bunx stella-anonymize-build-native-package \
-  --config ./anonymize-native-config.mjs \
-  --out ./dist/anonymize.stlanonpkg
-```
+The async TypeScript pipeline remains available for compatibility and for browser/WASM builds.
 
 ```ts
-import {
-  createNativePipelineFromPackageFile,
-  loadNativeAnonymizeBinding,
-} from "@stll/anonymize/native-node";
+import { runPipeline } from "@stll/anonymize";
 
-const native = loadNativeAnonymizeBinding();
-const pipeline = createNativePipelineFromPackageFile({
-  binding: native,
-  packagePath: "./dist/anonymize.stlanonpkg",
+const entities = await runPipeline({
+  fullText: text,
+  config,
+  gazetteerEntries: [],
 });
-
-const result = pipeline.redactText(text);
 ```
-
-The config module may export a `PipelineConfig` directly or `{ config, gazetteerEntries }`. Include `@stll/anonymize-data` dictionaries there if your runtime config uses the deny-list or name-corpus layers; keep the corresponding layers enabled for caller-owned `customDenyList`, `customRegexes`, and gazetteers. Those inputs are part of the prepared package and should be regenerated when they change.
 
 ## Browser setup
 

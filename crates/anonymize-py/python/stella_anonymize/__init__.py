@@ -40,6 +40,7 @@ __all__ = [
     "prepare_static_search_artifacts_bytes",
     "prepare_static_search_compressed_package_bytes",
     "prepare_static_search_package_bytes",
+    "redact_text",
     "redact_text_json",
     "redact_static_entities_diagnostics_json",
     "redact_static_entities_json",
@@ -180,6 +181,20 @@ def load_prepared_package_file(package_path: PathLikeString) -> PreparedAnonymiz
 @lru_cache(maxsize=8)
 def _load_prepared_package(package_bytes: bytes) -> PreparedAnonymizer:
     return PreparedAnonymizer.from_prepared_package_bytes(package_bytes)
+
+
+def redact_text(
+    config_json: str,
+    full_text: str,
+    operators: OperatorConfig = None,
+    *,
+    redact_string: str | None = None,
+) -> StaticRedactionResult:
+    return PreparedAnonymizer.from_config_json(config_json).redact_text(
+        full_text,
+        operators,
+        redact_string=redact_string,
+    )
 
 
 def redact_text_json(

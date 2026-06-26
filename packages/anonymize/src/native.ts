@@ -147,6 +147,8 @@ export type SharedNativeRedactTextJsonOptions = {
   operators?: NativeOperatorConfig;
 };
 
+export type SharedNativeRedactTextOptions = SharedNativeRedactTextJsonOptions;
+
 export type SharedNativeDiagnosticsJsonOptions =
   SharedNativeRedactTextJsonOptions;
 
@@ -395,6 +397,18 @@ export const redact_text_json = ({
     ),
   ).redact_text_json(fullText, operators);
 
+export const redact_text = ({
+  binding,
+  config,
+  fullText,
+  operators,
+}: SharedNativeRedactTextOptions): NativeStaticRedactionResult =>
+  new PreparedNativeAnonymizer(
+    binding.NativePreparedSearch.fromConfigJsonBytes(
+      encodeNativeSearchConfigInput(config),
+    ),
+  ).redact_text(fullText, operators);
+
 export const diagnostics_json = ({
   binding,
   config,
@@ -417,6 +431,8 @@ export const createNativePipelineFromPackage = ({
 
 export const PreparedSearch = PreparedNativeAnonymizer;
 export type PreparedSearch = PreparedNativeAnonymizer;
+export const PreparedAnonymizer = PreparedNativeAnonymizer;
+export type PreparedAnonymizer = PreparedNativeAnonymizer;
 
 const toBindingOperatorConfig = (
   config: NativeOperatorConfig | undefined,

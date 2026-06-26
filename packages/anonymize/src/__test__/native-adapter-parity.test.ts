@@ -23,7 +23,9 @@ import {
   normalize_for_search,
   prepareNativeSearchPackage,
   prepare_search_package,
+  PreparedAnonymizer,
   PreparedSearch,
+  redact_text,
   redact_text_json,
   type NativeAnonymizeBinding,
   type NativeOperatorConfig,
@@ -37,6 +39,7 @@ import type {
   RedactionResult,
 } from "../types";
 import {
+  SHARED_NATIVE_SDK_CLASS_NAMES,
   SHARED_NATIVE_SDK_CORE_TOP_LEVEL_FUNCTIONS,
   SHARED_NATIVE_SDK_PREPARED_METHODS,
   SHARED_NATIVE_SDK_TOP_LEVEL_FUNCTIONS,
@@ -110,6 +113,13 @@ type StaticRedactionResult = {
     }>;
     entity_count: number;
   };
+};
+
+type OffsetFreeStaticRedactionResult = {
+  resolved_entities: Array<
+    Omit<StaticRedactionResult["resolved_entities"][number], "start" | "end">
+  >;
+  redaction: StaticRedactionResult["redaction"];
 };
 
 type StaticRedactionDiagnosticResult = {
@@ -500,20 +510,22 @@ payload = json.loads(payload_path.read_text())
 package_bytes = package_path.read_bytes()
 top_level = payload["top_level_functions"]
 prepared_methods = payload["prepared_methods"]
+class_names = payload["class_names"]
 missing_top_level = [
     name for name in top_level if not callable(getattr(anonymize, name, None))
 ]
 if missing_top_level:
     raise AssertionError(f"missing Python SDK functions: {missing_top_level}")
 missing_public_names = [
-    name for name in top_level if name not in anonymize.__all__
+    name for name in [*top_level, *class_names] if name not in anonymize.__all__
 ]
 if missing_public_names:
     raise AssertionError(f"missing Python SDK public names: {missing_public_names}")
-if not callable(getattr(anonymize, "PreparedSearch", None)):
-    raise AssertionError("missing Python PreparedSearch facade")
-if "PreparedSearch" not in anonymize.__all__:
-    raise AssertionError("missing Python PreparedSearch public name")
+missing_classes = [
+    name for name in class_names if not callable(getattr(anonymize, name, None))
+]
+if missing_classes:
+    raise AssertionError(f"missing Python SDK classes: {missing_classes}")
 prepared = anonymize.load_prepared_package(package_bytes)
 if prepared is not anonymize.load_prepared_package(package_bytes):
     raise AssertionError("facade package cache did not reuse prepared search")
@@ -538,6 +550,44 @@ def redact_with(instance, item):
         )
     )
 
+def redact_object_with_top_level(item):
+    result = anonymize.redact_text(
+        payload["config_json"],
+        item["text"],
+        item.get("operators"),
+        redact_string=item.get("redact_string"),
+    )
+    return {
+        "resolved_entities": [
+            {
+                "label": entity.label,
+                "text": entity.text,
+                "score": entity.score,
+                "source": entity.source,
+                "source_detail": entity.source_detail,
+            }
+            for entity in result.resolved_entities
+        ],
+        "redaction": {
+            "redacted_text": result.redaction.redacted_text,
+            "redaction_map": [
+                {
+                    "placeholder": entry.placeholder,
+                    "original": entry.original,
+                }
+                for entry in result.redaction.redaction_map
+            ],
+            "operator_map": [
+                {
+                    "placeholder": entry.placeholder,
+                    "operator": entry.operator,
+                }
+                for entry in result.redaction.operator_map
+            ],
+            "entity_count": result.redaction.entity_count,
+        },
+    }
+
 print(
     json.dumps(
         {
@@ -557,6 +607,9 @@ print(
                     )
                 )
                 for item in payload["cases"]
+            ],
+            "top_level_object": [
+                redact_object_with_top_level(item) for item in payload["cases"]
             ],
             "normalized": anonymize.normalize_for_search(payload["normalize_text"]),
             "version": anonymize.native_package_version(),
@@ -1021,12 +1074,22 @@ describe("native adapter parity", () => {
       native_package_version,
       normalize_for_search,
       prepare_search_package,
+      redact_text,
       redact_text_json,
     };
     for (const name of SHARED_NATIVE_SDK_CORE_TOP_LEVEL_FUNCTIONS) {
       expect(typeof tsSdkFunctions[name]).toBe("function");
     }
-    expect(typeof PreparedSearch).toBe("function");
+    const tsSdkClasses: Record<
+      (typeof SHARED_NATIVE_SDK_CLASS_NAMES)[number],
+      unknown
+    > = {
+      PreparedAnonymizer,
+      PreparedSearch,
+    };
+    for (const name of SHARED_NATIVE_SDK_CLASS_NAMES) {
+      expect(typeof tsSdkClasses[name]).toBe("function");
+    }
     const preparedApi = prepared as unknown as Record<string, unknown>;
     for (const name of SHARED_NATIVE_SDK_PREPARED_METHODS) {
       expect(typeof preparedApi[name]).toBe("function");
@@ -1049,6 +1112,18 @@ describe("native adapter parity", () => {
     );
 
     expect(tsSdkJson).toEqual(rustCoreJson);
+    expect(
+      cases.map(({ text, operators }) =>
+        toBindingStaticResult(
+          redact_text({
+            binding: adapters.native,
+            config: CONFIG_JSON,
+            fullText: text,
+            ...(operators !== null ? { operators } : {}),
+          }),
+        ),
+      ),
+    ).toEqual(rustCoreJson);
     expect(
       cases.map(({ text, operators }) =>
         JSON.parse(
@@ -1087,6 +1162,9 @@ describe("native adapter parity", () => {
     expect(python.from_bytes).toEqual(rustCoreJson);
     expect(python.from_file).toEqual(rustCoreJson);
     expect(python.top_level).toEqual(rustCoreJson);
+    expect(python.top_level_object).toEqual(
+      rustCoreJson.map(withoutEntityOffsets),
+    );
     expect(python.normalized).toBe(
       adapters.native.normalizeForSearch("Číslo\u00a0PAS - 1234"),
     );
@@ -2454,6 +2532,7 @@ const callPythonSharedSdkParity = ({
   from_bytes: StaticRedactionResult[];
   from_file: StaticRedactionResult[];
   top_level: StaticRedactionResult[];
+  top_level_object: OffsetFreeStaticRedactionResult[];
   normalized: string;
   version: string;
 } => {
@@ -2468,6 +2547,7 @@ const callPythonSharedSdkParity = ({
         operators: operators?.operators ?? null,
         redact_string: operators?.redactString,
       })),
+      class_names: SHARED_NATIVE_SDK_CLASS_NAMES,
       compressed: true,
       config_json: CONFIG_JSON,
       normalize_text: normalizeText,
@@ -2602,6 +2682,16 @@ const toBindingStaticResult = (
     ),
     entity_count: result.redaction.entityCount,
   },
+});
+
+const withoutEntityOffsets = ({
+  resolved_entities,
+  redaction,
+}: StaticRedactionResult): OffsetFreeStaticRedactionResult => ({
+  resolved_entities: resolved_entities.map(
+    ({ start: _start, end: _end, ...entity }) => entity,
+  ),
+  redaction,
 });
 
 const toBindingPipelineEntity = ({
