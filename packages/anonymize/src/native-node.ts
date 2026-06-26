@@ -35,8 +35,19 @@ export type NativePipelinePackageFileOptions = LoadNativeBindingOptions & {
   packagePath: string;
 };
 
+export type DefaultNativePipelinePackageOptions = LoadNativeBindingOptions & {
+  binding?: NativeAnonymizeBinding;
+  packagePath?: string;
+};
+
 const LOCAL_NATIVE_LOADER = "../index.cjs";
 const PACKAGE_SPECIFIC_NATIVE_PATH = "STELLA_ANONYMIZE_NATIVE_LIBRARY_PATH";
+const DEFAULT_NATIVE_PIPELINE_PACKAGE_URL = new URL(
+  "../native-pipeline.stlanonpkg",
+  import.meta.url,
+);
+
+export { DEFAULT_NATIVE_PIPELINE_CONFIG } from "./native-default-config";
 
 export const nativePlatformPackageName = ({
   platform,
@@ -99,6 +110,16 @@ export const readNativePipelinePackageFile = (
   packagePath: string,
 ): Uint8Array => new Uint8Array(readFileSync(packagePath));
 
+export const readDefaultNativePipelinePackageFile = (): Uint8Array => {
+  try {
+    return new Uint8Array(readFileSync(DEFAULT_NATIVE_PIPELINE_PACKAGE_URL));
+  } catch (error) {
+    throw new Error(
+      `Default native pipeline package is unavailable: ${formatLoadError(error)}`,
+    );
+  }
+};
+
 export const createNativePipelineFromPackageFile = ({
   binding,
   packagePath,
@@ -117,6 +138,31 @@ export const createNativePipelineFromPackageFile = ({
   return createNativePipelineFromPackage({
     binding: resolvedBinding,
     packageBytes: readNativePipelinePackageFile(packagePath),
+  });
+};
+
+export const createNativePipelineFromDefaultPackage = ({
+  binding,
+  packagePath,
+  expectedVersion,
+  ...loadOptions
+}: DefaultNativePipelinePackageOptions = {}): PreparedNativePipeline => {
+  const resolvedBinding =
+    binding ??
+    loadNativeAnonymizeBinding({
+      ...loadOptions,
+      ...(expectedVersion !== undefined ? { expectedVersion } : {}),
+    });
+  if (binding && expectedVersion !== undefined) {
+    assertNativeBindingVersion({ binding, expectedVersion });
+  }
+  const packageBytes =
+    packagePath === undefined
+      ? readDefaultNativePipelinePackageFile()
+      : readNativePipelinePackageFile(packagePath);
+  return createNativePipelineFromPackage({
+    binding: resolvedBinding,
+    packageBytes,
   });
 };
 
