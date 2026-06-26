@@ -1862,10 +1862,7 @@ fn try_gazetteer_prefix_extension(
     return Ok(None);
   }
 
-  let suffix = after
-    .get(1..suffix_end as usize)
-    .unwrap_or_default()
-    .trim();
+  let suffix = after.get(1..suffix_end as usize).unwrap_or_default().trim();
   let is_valid_suffix = !suffix.is_empty()
     && (suffix.chars().next().is_some_and(char::is_uppercase)
       || suffix.len() >= 6);

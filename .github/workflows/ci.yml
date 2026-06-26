@@ -112,7 +112,7 @@ jobs:
         run: bun run --cwd packages/anonymize perf:native-adapters
 
   gemini-code-review:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && secrets.GEMINI_API_KEY != ''
     runs-on: ubuntu-latest
     permissions:
       contents: read

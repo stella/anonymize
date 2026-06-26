@@ -1604,7 +1604,9 @@ fn split_regex_patterns(
     }
     return Err(Error::InvalidStaticData {
       field: "slices.regex",
-      reason: format!("pattern index {index} does not belong to any declared slice"),
+      reason: format!(
+        "pattern index {index} does not belong to any declared slice"
+      ),
     });
   }
 
