@@ -1,0 +1,8 @@
+{
+  "_comment": "Organization reference determiners used before propagated bare organization names. Values are regex fragments grouped by language.",
+  "cs": ["společnost(?:i|í|em|u)?", "spolecnost(?:i|em|u)?"],
+  "de": ["die\\s+(?:gesellschaft|firma)"],
+  "en": ["the\\s+(?:company|corporation|firm)"],
+  "es": ["la\\s+(?:empresa|sociedad)", "el\\s+(?:empresa|sociedad)"],
+  "fr": ["la\\s+société"]
+}
