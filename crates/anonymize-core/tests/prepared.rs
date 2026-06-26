@@ -1430,6 +1430,43 @@ fn prepared_search_extracts_money_from_anchored_data() {
 }
 
 #[test]
+fn prepared_search_rejects_long_ungrouped_money_numbers() {
+  let prepared = PreparedSearch::new(PreparedSearchConfig {
+    monetary_data: Some(MonetaryData {
+      currencies: CurrencyData {
+        codes: vec![String::from("USD")],
+        symbols: vec![String::from("$")],
+        local_names: vec![],
+      },
+      amount_words: AmountWordsData {
+        written_amount_patterns: vec![],
+        magnitude_suffixes: vec![],
+        share_quantity_terms: vec![],
+      },
+    }),
+    ..empty_config(PreparedSearchSlices::default())
+  })
+  .unwrap();
+
+  let result = prepared
+    .detect_static_entities(
+      "Reject USD 123456789012345 and $123456789012345. Keep USD 123456789, $123456789.00 and USD 1,234,567,890.",
+    )
+    .unwrap();
+  let entities = result
+    .anchored_entities
+    .iter()
+    .map(|entity| entity.text.as_str())
+    .collect::<Vec<_>>();
+
+  assert!(!entities.contains(&"USD 123456789012345"));
+  assert!(!entities.contains(&"$123456789012345"));
+  assert!(entities.contains(&"USD 123456789"));
+  assert!(entities.contains(&"$123456789.00"));
+  assert!(entities.contains(&"USD 1,234,567,890"));
+}
+
+#[test]
 fn prepared_search_extends_money_to_written_amount_parenthetical() {
   let prepared = PreparedSearch::new(PreparedSearchConfig {
     monetary_data: Some(MonetaryData {

@@ -62,12 +62,7 @@ export const loadNativeAnonymizeBinding = (
   const platform = options.platform ?? process.platform;
   const arch = options.arch ?? process.arch;
   const env = options.env ?? process.env;
-  const specifiers = nativeBindingSpecifiers({
-    platform,
-    arch,
-    env,
-    ...(options.libc !== undefined ? { libc: options.libc } : {}),
-  });
+  const specifiers = nativeBindingSpecifiers({ env });
   const errors: string[] = [];
 
   for (const specifier of specifiers) {
@@ -126,16 +121,10 @@ export const createNativePipelineFromPackageFile = ({
 };
 
 type NativeBindingSpecifiersOptions = {
-  platform: string;
-  arch: string;
-  libc?: NativeLibc;
   env: Record<string, string | undefined>;
 };
 
 const nativeBindingSpecifiers = ({
-  platform,
-  arch,
-  libc,
   env,
 }: NativeBindingSpecifiersOptions): string[] => {
   const specifiers: string[] = [];
@@ -144,15 +133,6 @@ const nativeBindingSpecifiers = ({
     specifiers.push(overridePath);
   }
   specifiers.push(LOCAL_NATIVE_LOADER);
-
-  const packageName = nativePlatformPackageName({
-    platform,
-    arch,
-    ...(libc !== undefined ? { libc } : {}),
-  });
-  if (packageName) {
-    specifiers.push(packageName);
-  }
   return specifiers;
 };
 

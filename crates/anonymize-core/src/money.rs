@@ -9,6 +9,8 @@ use crate::types::Result;
 const MONEY_LABEL: &str = "monetary amount";
 const MONEY_SCORE: f64 = 0.9;
 const MAX_LEFT_SCAN_BYTES: usize = 96;
+const MAX_MONEY_NUMBER_SCAN_BYTES: usize = 48;
+const MAX_UNGROUPED_MONEY_DIGITS: usize = 9;
 
 #[derive(
   Clone, Debug, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize,
@@ -433,15 +435,20 @@ fn parse_number_forward(text: &str, index: usize) -> Option<NumberSpan> {
   let mut digits = 0usize;
   let mut end = index;
   let mut value_end = index;
+  let mut current_group_digits = 0usize;
+  let mut first_component_digits = 0usize;
+  let mut has_separator = false;
+  let mut has_grouping_separator = false;
 
   for (offset, ch) in str_tail(text, index)?.char_indices() {
     let char_start = index.saturating_add(offset);
-    if char_start.saturating_sub(index) > 48 {
+    if char_start.saturating_sub(index) > MAX_MONEY_NUMBER_SCAN_BYTES {
       break;
     }
 
     if ch.is_ascii_digit() {
       digits = digits.saturating_add(1);
+      current_group_digits = current_group_digits.saturating_add(1);
       end = char_start.saturating_add(ch.len_utf8());
       value_end = end;
       continue;
@@ -459,6 +466,19 @@ fn parse_number_forward(text: &str, index: usize) -> Option<NumberSpan> {
         ch,
       )
     {
+      if !has_separator {
+        first_component_digits = current_group_digits;
+      }
+      let next_index = char_start.saturating_add(ch.len_utf8());
+      let next_group_digits = digit_run_after_separator(text, next_index, ch);
+      if current_group_digits > 0
+        && current_group_digits <= 3
+        && next_group_digits == 3
+      {
+        has_grouping_separator = true;
+      }
+      has_separator = true;
+      current_group_digits = 0;
       end = char_start.saturating_add(ch.len_utf8());
       continue;
     }
@@ -469,11 +489,39 @@ fn parse_number_forward(text: &str, index: usize) -> Option<NumberSpan> {
   if digits == 0 {
     return None;
   }
+  let leading_digits = if has_separator {
+    first_component_digits
+  } else {
+    digits
+  };
+  if !has_grouping_separator && leading_digits > MAX_UNGROUPED_MONEY_DIGITS {
+    return None;
+  }
 
   Some(NumberSpan {
     start: index,
     end: value_end.max(end),
   })
+}
+
+fn digit_run_after_separator(
+  text: &str,
+  index: usize,
+  separator: char,
+) -> usize {
+  let mut count = 0usize;
+  let mut skipping_spaces = separator.is_whitespace();
+  for ch in str_tail(text, index).into_iter().flat_map(str::chars) {
+    if skipping_spaces && ch.is_whitespace() && ch != '\n' && ch != '\r' {
+      continue;
+    }
+    skipping_spaces = false;
+    if !ch.is_ascii_digit() {
+      break;
+    }
+    count = count.saturating_add(1);
+  }
+  count
 }
 
 fn number_separator_continues(

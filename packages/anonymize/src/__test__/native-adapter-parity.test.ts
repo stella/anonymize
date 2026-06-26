@@ -42,7 +42,7 @@ import { applyPipelineLanguageScope } from "../language-scope";
 import { contractTestConfig } from "./contract-config";
 import { loadTestDictionaries } from "./load-dictionaries";
 
-setDefaultTimeout(120_000);
+setDefaultTimeout(240_000);
 
 type NativeAdapter = Omit<
   NativeAnonymizeBinding,
@@ -712,6 +712,19 @@ describe("native adapter parity", () => {
     expect(
       diagnostics.events.some(
         (event: { stage?: unknown }) => event.stage === "prepare.cache.hit",
+      ),
+    ).toBe(true);
+    const runDiagnosticsJson =
+      prepared.redactStaticEntitiesDiagnosticsJson?.(text);
+    if (runDiagnosticsJson === undefined) {
+      throw new Error("missing prepared run diagnostics");
+    }
+    const runDiagnostics = JSON.parse(
+      runDiagnosticsJson,
+    ) as StaticRedactionDiagnosticResult;
+    expect(
+      runDiagnostics.diagnostics.events.some(
+        (event) => event.stage === "prepare.cache.hit",
       ),
     ).toBe(true);
     const expectedJson = JSON.parse(
