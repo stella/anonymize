@@ -1,0 +1,394 @@
+use regex::{Regex, RegexBuilder};
+use std::collections::BTreeSet;
+
+use crate::byte_offsets::ByteOffsets;
+use crate::resolution::{PipelineEntity, SourceDetail};
+use crate::types::{Error, Result};
+
+const SEARCH_WINDOW: u32 = 200;
+const COREFERENCE_SCORE: f64 = 0.95;
+
+#[derive(
+  Clone, Debug, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize,
+)]
+pub struct CoreferenceData {
+  #[serde(default)]
+  pub definition_patterns: Vec<CoreferencePatternData>,
+  #[serde(default)]
+  pub role_stop_terms: Vec<String>,
+  #[serde(default)]
+  pub legal_form_aliases: Vec<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct CoreferencePatternData {
+  pub pattern: String,
+  #[serde(default)]
+  pub flags: String,
+}
+
+pub(crate) struct PreparedCoreferenceData {
+  definition_patterns: Vec<Regex>,
+  role_stop_terms: BTreeSet<String>,
+  legal_form_aliases: BTreeSet<String>,
+}
+
+struct DefinedTerm {
+  alias: String,
+  label: String,
+  source_text: String,
+}
+
+impl PreparedCoreferenceData {
+  pub(crate) fn new(data: CoreferenceData) -> Result<Self> {
+    let mut definition_patterns =
+      Vec::with_capacity(data.definition_patterns.len());
+    for pattern in &data.definition_patterns {
+      definition_patterns.push(compile_definition_pattern(pattern)?);
+    }
+
+    Ok(Self {
+      definition_patterns,
+      role_stop_terms: lower_set(data.role_stop_terms),
+      legal_form_aliases: data
+        .legal_form_aliases
+        .into_iter()
+        .filter_map(|alias| normalized_legal_form_alias(&alias))
+        .collect(),
+    })
+  }
+
+  pub(crate) fn process(
+    &self,
+    full_text: &str,
+    existing_entities: &[PipelineEntity],
+  ) -> Result<Vec<PipelineEntity>> {
+    if self.definition_patterns.is_empty() {
+      return Ok(Vec::new());
+    }
+
+    let terms = self.extract_defined_terms(full_text, existing_entities)?;
+    Self::find_alias_spans(full_text, &terms)
+  }
+
+  fn extract_defined_terms(
+    &self,
+    full_text: &str,
+    entities: &[PipelineEntity],
+  ) -> Result<Vec<DefinedTerm>> {
+    let offsets = ByteOffsets::new(full_text);
+    let mut sorted = entities
+      .iter()
+      .filter(|entity| !caller_owned(entity))
+      .collect::<Vec<_>>();
+    sorted.sort_by_key(|entity| entity.start);
+
+    let mut terms = Vec::new();
+    let mut seen = BTreeSet::new();
+
+    for pattern in &self.definition_patterns {
+      for captures in pattern.captures_iter(full_text) {
+        let Some(alias_match) = captures.get(1) else {
+          continue;
+        };
+        let alias = alias_match.as_str().trim();
+        if alias.chars().count() < 2 {
+          continue;
+        }
+        if self.role_stop_terms.contains(&alias.to_lowercase()) {
+          continue;
+        }
+        if normalized_legal_form_alias(alias).is_some_and(|normalized| {
+          self.legal_form_aliases.contains(&normalized)
+        }) {
+          continue;
+        }
+
+        let Some(full_match) = captures.get(0) else {
+          continue;
+        };
+        let definition_start =
+          usize_to_u32("coreference.definition_start", full_match.start())?;
+        let Some(source) =
+          nearest_preceding_source(&sorted, &offsets, definition_start)?
+        else {
+          continue;
+        };
+        let gap = offsets.slice(full_text, source.end, definition_start)?;
+        if has_clause_boundary(&gap) {
+          continue;
+        }
+        if !has_entity_similarity(alias, &source.text) {
+          continue;
+        }
+
+        let key = format!("{}::{}", alias.to_lowercase(), source.label);
+        if !seen.insert(key) {
+          continue;
+        }
+
+        terms.push(DefinedTerm {
+          alias: alias.to_owned(),
+          label: source.label.clone(),
+          source_text: source.text.clone(),
+        });
+      }
+    }
+
+    Ok(terms)
+  }
+
+  fn find_alias_spans(
+    full_text: &str,
+    terms: &[DefinedTerm],
+  ) -> Result<Vec<PipelineEntity>> {
+    let mut results = Vec::new();
+
+    for term in terms {
+      let mut search_from = 0;
+      while search_from < full_text.len() {
+        let Some(relative) = full_text
+          .get(search_from..)
+          .and_then(|tail| tail.find(&term.alias))
+        else {
+          break;
+        };
+        let start = search_from.saturating_add(relative);
+        let end = start.saturating_add(term.alias.len());
+        if !is_word_boundary(full_text, start, end) {
+          search_from = next_char_boundary(full_text, start);
+          continue;
+        }
+
+        let start_u32 = usize_to_u32("coreference.alias_start", start)?;
+        let end_u32 = usize_to_u32("coreference.alias_end", end)?;
+        results.push(PipelineEntity::coreference(
+          start_u32,
+          end_u32,
+          term.label.clone(),
+          term.alias.clone(),
+          COREFERENCE_SCORE,
+          term.source_text.clone(),
+        ));
+        search_from = end;
+      }
+    }
+
+    Ok(results)
+  }
+}
+
+fn compile_definition_pattern(data: &CoreferencePatternData) -> Result<Regex> {
+  let mut builder = RegexBuilder::new(&data.pattern);
+  for flag in data.flags.chars() {
+    match flag {
+      'g' | 'u' => {}
+      'i' => {
+        builder.case_insensitive(true);
+      }
+      'm' => {
+        builder.multi_line(true);
+      }
+      's' => {
+        builder.dot_matches_new_line(true);
+      }
+      _ => {
+        return Err(Error::InvalidStaticData {
+          field: "coreference_data.definition_patterns",
+          reason: format!("unsupported regex flag '{flag}'"),
+        });
+      }
+    }
+  }
+  builder.build().map_err(|error| Error::InvalidStaticData {
+    field: "coreference_data.definition_patterns",
+    reason: error.to_string(),
+  })
+}
+
+fn nearest_preceding_source<'a>(
+  sorted: &[&'a PipelineEntity],
+  offsets: &ByteOffsets<'_>,
+  definition_start: u32,
+) -> Result<Option<&'a PipelineEntity>> {
+  for entity in sorted.iter().rev() {
+    if entity.end > definition_start {
+      continue;
+    }
+    if offsets.utf16_units_between(entity.end, definition_start)?
+      > SEARCH_WINDOW
+    {
+      break;
+    }
+    if matches!(entity.label.as_str(), "person" | "organization") {
+      return Ok(Some(*entity));
+    }
+  }
+  Ok(None)
+}
+
+fn has_clause_boundary(gap: &str) -> bool {
+  if gap.contains(';') {
+    return true;
+  }
+
+  for (index, ch) in gap.char_indices() {
+    if ch != '.' {
+      continue;
+    }
+    let Some(after_dot) = gap.get(index.saturating_add(ch.len_utf8())..) else {
+      return true;
+    };
+    let mut tail = after_dot.chars();
+    let next = loop {
+      let Some(candidate) = tail.next() else {
+        return true;
+      };
+      if candidate.is_whitespace()
+        || matches!(candidate, '"' | '\'' | '„' | '‚' | '(')
+      {
+        continue;
+      }
+      break candidate;
+    };
+    if next.is_uppercase() {
+      return true;
+    }
+  }
+
+  false
+}
+
+fn has_entity_similarity(alias: &str, entity_text: &str) -> bool {
+  let alias_lower = alias.to_lowercase();
+  let entity_lower = entity_text.to_lowercase();
+
+  if alias_lower.chars().count() >= 3 && entity_lower.contains(&alias_lower) {
+    return true;
+  }
+  if entity_lower.chars().count() >= 3 && alias_lower.contains(&entity_lower) {
+    return true;
+  }
+
+  let alias_words = split_similarity_words(&alias_lower);
+  let entity_words = split_similarity_words(&entity_lower);
+  let entity_word_set = entity_words.iter().collect::<BTreeSet<_>>();
+  if alias_words
+    .iter()
+    .any(|word| entity_word_set.contains(word))
+  {
+    return true;
+  }
+
+  if !is_all_uppercase(alias) || alias.chars().count() < 2 {
+    return false;
+  }
+  let alias_len = alias.chars().count();
+  if alias_len > entity_words.len() {
+    return false;
+  }
+  for start in 0..=entity_words.len().saturating_sub(alias_len) {
+    let initials = entity_words
+      .iter()
+      .skip(start)
+      .take(alias_len)
+      .filter_map(|word| word.chars().next())
+      .collect::<String>();
+    if initials == alias_lower {
+      return true;
+    }
+  }
+
+  false
+}
+
+fn split_similarity_words(text: &str) -> Vec<String> {
+  text
+    .split(|ch: char| {
+      matches!(
+        ch,
+        ' '
+          | '\t'
+          | '\n'
+          | '\r'
+          | '.'
+          | ','
+          | ';'
+          | ':'
+          | '\''
+          | '"'
+          | '('
+          | ')'
+          | '/'
+          | '-'
+      )
+    })
+    .filter(|word| word.chars().count() >= 2)
+    .map(ToOwned::to_owned)
+    .collect()
+}
+
+fn is_all_uppercase(text: &str) -> bool {
+  text.chars().all(char::is_uppercase)
+}
+
+fn normalized_legal_form_alias(alias: &str) -> Option<String> {
+  let normalized = alias.split_whitespace().collect::<String>().to_lowercase();
+  (!normalized.is_empty()).then_some(normalized)
+}
+
+fn is_word_boundary(full_text: &str, start: usize, end: usize) -> bool {
+  previous_char(full_text, start).is_none_or(|ch| !is_word_char(ch))
+    && next_char(full_text, end).is_none_or(|ch| !is_word_char(ch))
+}
+
+fn previous_char(full_text: &str, index: usize) -> Option<char> {
+  full_text.get(..index)?.chars().next_back()
+}
+
+fn next_char(full_text: &str, index: usize) -> Option<char> {
+  full_text.get(index..)?.chars().next()
+}
+
+fn next_char_boundary(full_text: &str, index: usize) -> usize {
+  let Some(ch) = next_char(full_text, index) else {
+    return full_text.len();
+  };
+  index.saturating_add(ch.len_utf8())
+}
+
+fn is_word_char(ch: char) -> bool {
+  ch.is_alphanumeric() || is_combining_mark(ch)
+}
+
+const fn is_combining_mark(ch: char) -> bool {
+  matches!(
+    ch,
+    '\u{0300}'..='\u{036f}'
+      | '\u{1ab0}'..='\u{1aff}'
+      | '\u{1dc0}'..='\u{1dff}'
+      | '\u{20d0}'..='\u{20ff}'
+      | '\u{fe20}'..='\u{fe2f}'
+  )
+}
+
+const fn caller_owned(entity: &PipelineEntity) -> bool {
+  matches!(
+    entity.source_detail,
+    Some(SourceDetail::CustomDenyList | SourceDetail::CustomRegex)
+  )
+}
+
+fn lower_set(values: Vec<String>) -> BTreeSet<String> {
+  values
+    .into_iter()
+    .map(|value| value.to_lowercase())
+    .collect()
+}
+
+fn usize_to_u32(field: &'static str, value: usize) -> Result<u32> {
+  u32::try_from(value).map_err(|_| Error::InvalidStaticData {
+    field,
+    reason: String::from("offset exceeds u32 range"),
+  })
+}
