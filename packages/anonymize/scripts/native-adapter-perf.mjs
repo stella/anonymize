@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdtempSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createRequire } from "node:module";
@@ -91,7 +91,7 @@ import time
 
 module_path = pathlib.Path(os.environ["STELLA_ANONYMIZE_PY_MODULE"])
 spec = importlib.util.spec_from_file_location(
-    "stella_anonymize_core_py",
+    "_native",
     module_path,
 )
 module = importlib.util.module_from_spec(spec)
@@ -123,7 +123,9 @@ runCommand("cargo", [
 
 const tempDir = mkdtempSync(join(tmpdir(), "stella-anonymize-perf-"));
 const napiPath = join(tempDir, "stella_anonymize_napi.node");
-const pythonModulePath = join(tempDir, "stella_anonymize_core_py.so");
+const pythonPackageDir = join(tempDir, "stella_anonymize");
+mkdirSync(pythonPackageDir);
+const pythonModulePath = join(pythonPackageDir, "_native.so");
 copyFileSync(nativeLibraryPath("stella_anonymize_napi"), napiPath);
 copyFileSync(nativeLibraryPath("stella_anonymize_core_py"), pythonModulePath);
 

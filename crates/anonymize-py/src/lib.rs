@@ -449,7 +449,7 @@ fn to_py_serde_error(error: &serde_json::Error) -> PyErr {
 }
 
 #[pymodule(gil_used = false)]
-fn stella_anonymize_core_py(module: &Bound<'_, PyModule>) -> PyResult<()> {
+fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
   module.add_class::<PyPreparedSearch>()?;
   module.add_class::<PyStaticRedactionResult>()?;
   module.add_class::<PyRedactionResult>()?;

@@ -1,5 +1,8 @@
 name: CI
 
+env:
+  UV_VERSION: "0.10.1"
+
 on:
   push:
     branches: [main]
@@ -71,6 +74,14 @@ jobs:
 
       - name: Typecheck
         run: bun run typecheck
+
+      - name: Install uv
+        run: |
+          python3 -m pip install --user "uv==${{ env.UV_VERSION }}"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Python typecheck
+        run: bun run python:typecheck
 
       - name: Test
         run: bun run test

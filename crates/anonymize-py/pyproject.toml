@@ -17,4 +17,5 @@ classifiers = [
 
 [tool.maturin]
 manifest-path = "Cargo.toml"
-module-name = "stella_anonymize_core_py"
+module-name = "stella_anonymize._native"
+python-source = "python"

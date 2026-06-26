@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import {
   copyFileSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
@@ -143,6 +144,7 @@ type PythonNativeOffsetSlice = {
 
 const ROOT_DIR = join(import.meta.dir, "..", "..", "..", "..");
 const TARGET_DIR = join(ROOT_DIR, "target", "debug");
+const PYTHON_SOURCE_DIR = join(ROOT_DIR, "crates", "anonymize-py", "python");
 const CONTRACT_FIXTURES_DIR = join(
   ROOT_DIR,
   "packages",
@@ -239,7 +241,7 @@ import pathlib
 module_path = pathlib.Path(os.environ["STELLA_ANONYMIZE_PY_MODULE"])
 payload_path = pathlib.Path(os.environ["STELLA_ANONYMIZE_PAYLOAD"])
 spec = importlib.util.spec_from_file_location(
-    "stella_anonymize_core_py",
+    "_native",
     module_path,
 )
 module = importlib.util.module_from_spec(spec)
@@ -267,7 +269,7 @@ import pathlib
 module_path = pathlib.Path(os.environ["STELLA_ANONYMIZE_PY_MODULE"])
 payload_path = pathlib.Path(os.environ["STELLA_ANONYMIZE_PAYLOAD"])
 spec = importlib.util.spec_from_file_location(
-    "stella_anonymize_core_py",
+    "_native",
     module_path,
 )
 module = importlib.util.module_from_spec(spec)
@@ -312,7 +314,7 @@ import pathlib
 
 module_path = pathlib.Path(os.environ["STELLA_ANONYMIZE_PY_MODULE"])
 spec = importlib.util.spec_from_file_location(
-    "stella_anonymize_core_py",
+    "_native",
     module_path,
 )
 module = importlib.util.module_from_spec(spec)
@@ -330,7 +332,7 @@ module_path = pathlib.Path(os.environ["STELLA_ANONYMIZE_PY_MODULE"])
 payload_path = pathlib.Path(os.environ["STELLA_ANONYMIZE_PAYLOAD"])
 artifact_path = pathlib.Path(os.environ["STELLA_ANONYMIZE_ARTIFACTS"])
 spec = importlib.util.spec_from_file_location(
-    "stella_anonymize_core_py",
+    "_native",
     module_path,
 )
 module = importlib.util.module_from_spec(spec)
@@ -361,7 +363,7 @@ module_path = pathlib.Path(os.environ["STELLA_ANONYMIZE_PY_MODULE"])
 payload_path = pathlib.Path(os.environ["STELLA_ANONYMIZE_PAYLOAD"])
 package_path = pathlib.Path(os.environ["STELLA_ANONYMIZE_PACKAGE"])
 spec = importlib.util.spec_from_file_location(
-    "stella_anonymize_core_py",
+    "_native",
     module_path,
 )
 module = importlib.util.module_from_spec(spec)
@@ -393,7 +395,7 @@ module_path = pathlib.Path(os.environ["STELLA_ANONYMIZE_PY_MODULE"])
 payload_path = pathlib.Path(os.environ["STELLA_ANONYMIZE_PAYLOAD"])
 package_path = pathlib.Path(os.environ["STELLA_ANONYMIZE_PACKAGE"])
 spec = importlib.util.spec_from_file_location(
-    "stella_anonymize_core_py",
+    "_native",
     module_path,
 )
 module = importlib.util.module_from_spec(spec)
@@ -417,6 +419,51 @@ results = [
     for item in payload["cases"]
 ]
 print(json.dumps(results))
+`;
+
+const PYTHON_PACKAGE_FACADE_SCRIPT = `
+import json
+import os
+import pathlib
+import sys
+
+module_root = pathlib.Path(os.environ["STELLA_ANONYMIZE_PY_MODULE"]).parent.parent
+payload_path = pathlib.Path(os.environ["STELLA_ANONYMIZE_PAYLOAD"])
+package_path = pathlib.Path(os.environ["STELLA_ANONYMIZE_PACKAGE"])
+sys.path.insert(0, str(module_root))
+
+import stella_anonymize as anonymize
+
+payload = json.loads(payload_path.read_text())
+package_bytes = package_path.read_bytes()
+if anonymize.prepare_search_package(
+    payload["config_json"],
+    compressed=payload["compressed"],
+) != package_bytes:
+    raise AssertionError("facade package bytes differ")
+prepared = anonymize.load_prepared_package(package_bytes)
+if prepared is not anonymize.load_prepared_package(package_bytes):
+    raise AssertionError("facade package cache did not reuse prepared search")
+from_file = anonymize.load_prepared_package_file(package_path)
+print(
+    json.dumps(
+        {
+            "from_bytes": json.loads(
+                prepared.redact_static_entities_json(
+                    payload["text"],
+                    payload.get("operators_json"),
+                )
+            ),
+            "from_file": json.loads(
+                from_file.redact_static_entities_json(
+                    payload["text"],
+                    payload.get("operators_json"),
+                )
+            ),
+            "version": anonymize.native_package_version(),
+        }
+    )
+)
 `;
 
 let loadedAdapters: {
@@ -809,6 +856,31 @@ describe("native adapter parity", () => {
         "prepare_static_search_compressed_package_bytes",
       ),
     ).toEqual(expectedJson);
+  });
+
+  test("Python package facade loads compressed package bytes", () => {
+    const adapters = getAdapters();
+    const text =
+      "Reference AB1234 for Acme s.r.o. near Fuzztovn, Turkey, " +
+      "Prague, matter MAT-123, code Secret Code.";
+    const configBytes = Buffer.from(CONFIG_JSON);
+    const packageBytes =
+      adapters.native.prepareStaticSearchCompressedPackageBytes(configBytes);
+    const expectedJson = JSON.parse(
+      adapters.native.redactStaticEntitiesJson(CONFIG_JSON, text),
+    );
+    const result = callPythonPackageFacade({
+      pythonModulePath: adapters.pythonModulePath,
+      tempDir: adapters.tempDir,
+      packageBytes,
+      text,
+      operators: null,
+      compressed: true,
+    });
+
+    expect(result.from_bytes).toEqual(expectedJson);
+    expect(result.from_file).toEqual(expectedJson);
+    expect(result.version).toBe(packageJsonVersion());
   });
 
   test("native facade redacts from compressed package bytes", () => {
@@ -1649,9 +1721,15 @@ const getAdapters = () => {
 
   const tempDir = mkdtempSync(join(tmpdir(), "stella-anonymize-native-"));
   const napiPath = join(tempDir, "stella_anonymize_napi.node");
-  const pythonModulePath = join(tempDir, "stella_anonymize_core_py.so");
+  const pythonPackageDir = join(tempDir, "stella_anonymize");
+  mkdirSync(pythonPackageDir);
+  const pythonModulePath = join(pythonPackageDir, "_native.so");
   copyFileSync(nativeLibraryPath("stella_anonymize_napi"), napiPath);
   copyFileSync(nativeLibraryPath("stella_anonymize_core_py"), pythonModulePath);
+  copyFileSync(
+    join(PYTHON_SOURCE_DIR, "stella_anonymize", "__init__.py"),
+    join(pythonPackageDir, "__init__.py"),
+  );
 
   const native = loadNativeAdapter(napiPath);
   loadedAdapters = { native, pythonModulePath, tempDir };
@@ -1828,7 +1906,7 @@ import pathlib
 module_path = pathlib.Path(os.environ["STELLA_ANONYMIZE_PY_MODULE"])
 payload_path = pathlib.Path(os.environ["STELLA_ANONYMIZE_PAYLOAD"])
 spec = importlib.util.spec_from_file_location(
-    "stella_anonymize_core_py",
+    "_native",
     module_path,
 )
 module = importlib.util.module_from_spec(spec)
@@ -1948,6 +2026,47 @@ const callPythonPreparedPackageCases = (
   return JSON.parse(output);
 };
 
+type PythonPackageFacadeOptions = {
+  pythonModulePath: string;
+  tempDir: string;
+  packageBytes: Buffer;
+  text: string;
+  operators: Record<string, string> | null;
+  compressed: boolean;
+};
+
+const callPythonPackageFacade = ({
+  pythonModulePath,
+  tempDir,
+  packageBytes,
+  text,
+  operators,
+  compressed,
+}: PythonPackageFacadeOptions): {
+  from_bytes: StaticRedactionResult;
+  from_file: StaticRedactionResult;
+  version: string;
+} => {
+  const payloadPath = join(tempDir, "package-facade-payload.json");
+  const packagePath = join(tempDir, "package-facade.bin");
+  writeFileSync(packagePath, packageBytes);
+  writeFileSync(
+    payloadPath,
+    JSON.stringify({
+      config_json: CONFIG_JSON,
+      text,
+      operators_json: operatorConfigJson(operators),
+      compressed,
+    }),
+  );
+  const output = runCommand("python3", ["-c", PYTHON_PACKAGE_FACADE_SCRIPT], {
+    STELLA_ANONYMIZE_PACKAGE: packagePath,
+    STELLA_ANONYMIZE_PAYLOAD: payloadPath,
+    STELLA_ANONYMIZE_PY_MODULE: pythonModulePath,
+  });
+  return JSON.parse(output);
+};
+
 const callPythonDiagnostics = (
   pythonModulePath: string,
   text: string,
@@ -1979,7 +2098,7 @@ import pathlib
 module_path = pathlib.Path(os.environ["STELLA_ANONYMIZE_PY_MODULE"])
 payload_path = pathlib.Path(os.environ["STELLA_ANONYMIZE_PAYLOAD"])
 spec = importlib.util.spec_from_file_location(
-    "stella_anonymize_core_py",
+    "_native",
     module_path,
 )
 module = importlib.util.module_from_spec(spec)
