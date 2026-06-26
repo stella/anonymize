@@ -3,6 +3,7 @@
   "globalDependencies": [".oxfmtrc.json"],
   "tasks": {
     "build": {
+      "dependsOn": ["^build"],
       "outputs": [
         "dist/**",
         "wasm/dist/**",
