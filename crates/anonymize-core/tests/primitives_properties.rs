@@ -213,6 +213,23 @@ fn mixed_search_case()
     })
 }
 
+fn mutated_search_patterns(patterns: &[SearchPattern]) -> Vec<SearchPattern> {
+  let mut result = patterns.to_vec();
+  let Some(first) = result.first_mut() else {
+    return result;
+  };
+
+  match first {
+    SearchPattern::Literal(pattern)
+    | SearchPattern::Regex(pattern)
+    | SearchPattern::Fuzzy { pattern, .. }
+    | SearchPattern::LiteralWithOptions { pattern, .. }
+    | SearchPattern::RegexWithOptions { pattern, .. } => pattern.push('x'),
+  }
+
+  result
+}
+
 #[derive(Clone, Copy, Debug)]
 enum ArtifactCorruption {
   Header,
@@ -504,6 +521,36 @@ proptest! {
       patterns.len(),
       &prepared_matches,
     ));
+  }
+
+  #[test]
+  fn direct_mixed_search_match_presence_matches_find_iter(
+    (patterns, options, haystack) in mixed_search_case(),
+  ) {
+    let index = SearchIndex::new(patterns.clone(), options).unwrap();
+    let matches = index.find_iter(&haystack).unwrap();
+
+    prop_assert_eq!(index.is_match(&haystack).unwrap(), !matches.is_empty());
+    prop_assert!(search_output_is_valid(
+      &haystack,
+      patterns.len(),
+      &matches,
+    ));
+  }
+
+  #[test]
+  fn prepared_mixed_search_artifacts_reject_same_shape_stale_patterns(
+    (patterns, options, _haystack) in mixed_search_case(),
+  ) {
+    let artifacts =
+      SearchIndex::prepare_artifacts(patterns.clone(), options).unwrap();
+    let stale_patterns = mutated_search_patterns(&patterns);
+    prop_assume!(stale_patterns != patterns);
+
+    prop_assert!(
+      SearchIndex::new_with_artifacts(stale_patterns, options, &artifacts)
+        .is_err()
+    );
   }
 
   #[test]
