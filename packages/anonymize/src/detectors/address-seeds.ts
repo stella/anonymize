@@ -83,6 +83,7 @@ type DictionaryConfig = Record<string, string[] | string>;
 export type AddressSeedData = {
   boundary_words: string[];
   br_cep_cue_words: string[];
+  unit_abbreviations: string[];
 };
 
 let cachedBoundaryRe: RegExp | null = null;
@@ -100,6 +101,15 @@ const loadBoundaryWords = async (): Promise<DictionaryConfig> => {
 const loadFieldStopWords = async (): Promise<DictionaryConfig> => {
   try {
     const mod = await import("../data/address-stop-keywords.json");
+    return mod.default as DictionaryConfig;
+  } catch {
+    return {};
+  }
+};
+
+const loadUnitAbbreviations = async (): Promise<DictionaryConfig> => {
+  try {
+    const mod = await import("../data/address-unit-abbreviations.json");
     return mod.default as DictionaryConfig;
   } catch {
     return {};
@@ -356,14 +366,17 @@ export const buildStreetTypePatterns = async (): Promise<string[]> => {
 
 export const getAddressSeedData = async (): Promise<AddressSeedData> => {
   addressSeedDataPromise ??= (async () => {
-    const [boundaryWords, fieldStopWords, brCueWords] = await Promise.all([
-      loadBoundaryWords(),
-      loadFieldStopWords(),
-      loadBrCueWords(),
-    ]);
+    const [boundaryWords, fieldStopWords, unitAbbreviations, brCueWords] =
+      await Promise.all([
+        loadBoundaryWords(),
+        loadFieldStopWords(),
+        loadUnitAbbreviations(),
+        loadBrCueWords(),
+      ]);
     return {
       boundary_words: flattenDictionaries([boundaryWords, fieldStopWords]),
       br_cep_cue_words: [...brCueWords],
+      unit_abbreviations: flattenDictionaries([unitAbbreviations]),
     };
   })();
   return addressSeedDataPromise;

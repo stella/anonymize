@@ -5,7 +5,7 @@ use regex::Regex;
 use crate::resolution::{DetectionSource, PipelineEntity, SourceDetail};
 use crate::types::{Error, Result};
 
-const HEADER_ZONE_PERCENT: u32 = 15;
+const HEADER_ZONE_PERCENT: usize = 15;
 const STREET_CONTEXT_WINDOW: u32 = 200;
 const BARE_HOUSE_CONTEXT_WINDOW: u32 = 50;
 const MAX_BACKWARD_WORDS: usize = 5;
@@ -131,7 +131,7 @@ impl PreparedAddressContextData {
         continue;
       }
       let score = address_context_score(full_text, street_start, in_header);
-      results.push(PipelineEntity::detected(
+      results.push(address_context_entity(
         street_start_u32,
         num_end,
         "address",
@@ -237,7 +237,7 @@ impl PreparedAddressContextData {
         continue;
       }
 
-      results.push(PipelineEntity::detected(
+      results.push(address_context_entity(
         start,
         end,
         "address",
@@ -281,7 +281,7 @@ impl PreparedAddressContextData {
         continue;
       }
 
-      results.push(PipelineEntity::detected(
+      results.push(address_context_entity(
         start,
         end,
         "address",
@@ -309,8 +309,16 @@ fn compile_regex(field: &'static str, pattern: &str) -> Result<Regex> {
 }
 
 fn header_end(full_text: &str) -> u32 {
-  let len = u32::try_from(full_text.len()).unwrap_or(u32::MAX);
-  len.saturating_mul(HEADER_ZONE_PERCENT).div_euclid(100)
+  let text_len = full_text.chars().map(char::len_utf16).sum::<usize>();
+  let cutoff = text_len.saturating_mul(HEADER_ZONE_PERCENT).div_euclid(100);
+  let mut units = 0usize;
+  for (byte, ch) in full_text.char_indices() {
+    if units >= cutoff {
+      return u32::try_from(byte).unwrap_or(u32::MAX);
+    }
+    units = units.saturating_add(ch.len_utf16());
+  }
+  u32::try_from(full_text.len()).unwrap_or(u32::MAX)
 }
 
 const fn is_caller_owned_entity(entity: &PipelineEntity) -> bool {
@@ -330,6 +338,20 @@ fn overlaps_any(entities: &[PipelineEntity], start: u32, end: u32) -> bool {
   entities
     .iter()
     .any(|entity| entity.start < end && entity.end > start)
+}
+
+fn address_context_entity(
+  start: u32,
+  end: u32,
+  label: impl Into<String>,
+  text: impl Into<String>,
+  score: f64,
+  source: DetectionSource,
+) -> PipelineEntity {
+  let mut entity =
+    PipelineEntity::detected(start, end, label, text, score, source);
+  entity.source_detail = Some(SourceDetail::AddressContext);
+  entity
 }
 
 fn skip_whitespace_back(full_text: &str, mut pos: usize) -> Option<usize> {
@@ -415,7 +437,7 @@ fn near_confirmed_address_same_line(
   end: u32,
 ) -> Result<bool> {
   for entity in existing_entities.iter().chain(results.iter()) {
-    if entity.label != "address" {
+    if entity.label != "address" || is_caller_owned_entity(entity) {
       continue;
     }
     let dist = entity.start.abs_diff(end).min(entity.end.abs_diff(start));

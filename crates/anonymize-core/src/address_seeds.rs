@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use regex::Regex;
 
 use crate::processors::PatternSlice;
@@ -19,11 +21,13 @@ const US_ZIP_CONTEXT_WINDOW: usize = 120;
 pub struct AddressSeedData {
   pub boundary_words: Vec<String>,
   pub br_cep_cue_words: Vec<String>,
+  pub unit_abbreviations: Vec<String>,
 }
 
 pub(crate) struct PreparedAddressSeedData {
   boundary_search: Option<SearchIndex>,
   br_cep_cue_search: Option<SearchIndex>,
+  unit_abbreviations: BTreeSet<String>,
   postal_code_re: Regex,
   br_cep_shape_re: Regex,
   us_zip_plus_four_shape_re: Regex,
@@ -39,6 +43,7 @@ impl PreparedAddressSeedData {
     Ok(Self {
       boundary_search: literal_search(data.boundary_words)?,
       br_cep_cue_search: literal_search(data.br_cep_cue_words)?,
+      unit_abbreviations: lowercased_set(data.unit_abbreviations),
       postal_code_re: compile_regex(
         r"(?u)(?:\d{5}[-‐‑‒–—―]\d{4}|\d{5}[-‐‑‒–—―]\d{3}|\d{3}\s\d{2}|\d{2}[-‐‑‒–—―]\d{3}|\d{5})",
       )?,
@@ -409,7 +414,9 @@ impl PreparedAddressSeedData {
     if let Some(double_newline) = remaining.find("\n\n") {
       nearest_boundary = nearest_boundary.min(double_newline);
     }
-    if let Some(sentence_boundary) = sentence_boundary(remaining) {
+    if let Some(sentence_boundary) =
+      sentence_boundary(remaining, &self.unit_abbreviations)
+    {
       nearest_boundary = nearest_boundary.min(sentence_boundary);
     }
 
@@ -503,6 +510,13 @@ fn literal_search(patterns: Vec<String>) -> Result<Option<SearchIndex>> {
     return Ok(None);
   }
   Ok(Some(SearchIndex::new(patterns, SearchOptions::default())?))
+}
+
+fn lowercased_set(values: Vec<String>) -> BTreeSet<String> {
+  values
+    .into_iter()
+    .map(|value| value.to_lowercase())
+    .collect()
 }
 
 fn compile_regex(pattern: &str) -> Result<Regex> {
@@ -1037,10 +1051,16 @@ fn trim_address_tail(full_text: &str, start: usize, mut end: usize) -> usize {
   end
 }
 
-fn sentence_boundary(text: &str) -> Option<usize> {
+fn sentence_boundary(
+  text: &str,
+  unit_abbreviations: &BTreeSet<String>,
+) -> Option<usize> {
   let mut iter = text.char_indices().peekable();
   while let Some((index, ch)) = iter.next() {
     if !matches!(ch, '.' | '!' | '?') {
+      continue;
+    }
+    if ch == '.' && is_unit_abbreviation(text, index, unit_abbreviations) {
       continue;
     }
     let mut saw_whitespace = false;
@@ -1059,6 +1079,27 @@ fn sentence_boundary(text: &str) -> Option<usize> {
     }
   }
   None
+}
+
+fn is_unit_abbreviation(
+  text: &str,
+  dot_index: usize,
+  unit_abbreviations: &BTreeSet<String>,
+) -> bool {
+  let mut start = dot_index;
+  while let Some((previous_start, ch)) = previous_char(text, start) {
+    if ch.is_alphanumeric() || ch == '.' {
+      start = previous_start;
+      continue;
+    }
+    break;
+  }
+  if start == dot_index {
+    return false;
+  }
+  text
+    .get(start..dot_index.saturating_add(1))
+    .is_some_and(|token| unit_abbreviations.contains(&token.to_lowercase()))
 }
 
 const fn is_address_trailing_trim(ch: char) -> bool {
@@ -1202,6 +1243,7 @@ mod tests {
     let data = PreparedAddressSeedData::new(AddressSeedData {
       boundary_words: vec![String::from("steuer-id")],
       br_cep_cue_words: Vec::new(),
+      unit_abbreviations: Vec::new(),
     })?;
     let full_text = concat!(
       "(2) Frau Karoline M. Brentano,\n",

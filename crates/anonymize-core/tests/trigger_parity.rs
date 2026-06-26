@@ -21,6 +21,7 @@ fn empty_config(slices: PreparedSearchSlices) -> PreparedSearchConfig {
     regex_meta: vec![],
     custom_regex_meta: vec![],
     deny_list_data: None,
+    false_positive_filters: None,
     gazetteer_data: None,
     country_data: None,
     hotword_data: None,
