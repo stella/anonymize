@@ -179,6 +179,24 @@ describe("pipeline config semantics", () => {
     expect(search.nativeStaticConfig.confidence_boost).toBe(true);
   });
 
+  test("native config carries false-positive filters without deny-list matching", async () => {
+    const search = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        enableDenyList: false,
+        enableRegex: true,
+        labels: ["organization"],
+      },
+      [],
+      createPipelineContext(),
+    );
+
+    expect(search.nativeStaticConfig.deny_list_data).toBeUndefined();
+    expect(
+      search.nativeStaticConfig.false_positive_filters?.document_heading_words,
+    ).toContain("schedule");
+  });
+
   test("native config carries hotword rule metadata", async () => {
     const search = await buildUnifiedSearch(
       {

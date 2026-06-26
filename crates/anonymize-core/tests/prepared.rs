@@ -29,6 +29,7 @@ fn empty_config(slices: PreparedSearchSlices) -> PreparedSearchConfig {
     regex_meta: vec![],
     custom_regex_meta: vec![],
     deny_list_data: None,
+    false_positive_filters: None,
     gazetteer_data: None,
     country_data: None,
     hotword_data: None,
@@ -151,6 +152,7 @@ fn prepared_search_runs_normalized_literal_pass() {
     regex_meta: vec![],
     custom_regex_meta: vec![],
     deny_list_data: None,
+    false_positive_filters: None,
     gazetteer_data: Some(GazetteerMatchData {
       labels: vec![String::from("organization")],
       is_fuzzy: vec![false],
@@ -242,6 +244,109 @@ fn prepared_search_adds_orphan_header_street_line_context() {
 }
 
 #[test]
+fn prepared_search_keeps_address_context_above_threshold() {
+  let full_text = format!(
+    "ACME s.r.o.\nEvropská 710\n160 00 Praha\n{}",
+    "body ".repeat(200)
+  );
+  let prepared = PreparedSearch::new(PreparedSearchConfig {
+    custom_regex_patterns: vec![SearchPattern::Regex(String::from(
+      r"ACME s\.r\.o\.",
+    ))],
+    custom_regex_meta: vec![RegexMatchMeta::new("organization", 1.0)],
+    slices: PreparedSearchSlices {
+      custom_regex: PatternSlice { start: 0, end: 1 },
+      ..PreparedSearchSlices::default()
+    },
+    threshold: 0.9,
+    allowed_labels: vec![String::from("organization"), String::from("address")],
+    address_context_data: Some(address_context_data()),
+    ..empty_config(PreparedSearchSlices::default())
+  })
+  .unwrap();
+
+  let result = prepared
+    .redact_static_entities(&full_text, &OperatorConfig::default())
+    .unwrap();
+
+  assert!(result.resolved_entities.iter().any(|entity| {
+    entity.label == "address"
+      && entity.text == "Evropská 710"
+      && entity.source_detail.is_none()
+  }));
+}
+
+#[test]
+fn prepared_search_ignores_caller_owned_addresses_for_bare_house_context() {
+  let mut meta = RegexMatchMeta::new("address", 1.0);
+  meta.source_detail = Some(SourceDetail::CustomRegex);
+  let prepared = PreparedSearch::new(PreparedSearchConfig {
+    custom_regex_patterns: vec![SearchPattern::Regex(String::from(
+      r"\bPraha 2\b",
+    ))],
+    custom_regex_meta: vec![meta],
+    slices: PreparedSearchSlices {
+      custom_regex: PatternSlice { start: 0, end: 1 },
+      ..PreparedSearchSlices::default()
+    },
+    threshold: 0.5,
+    allowed_labels: vec![String::from("address")],
+    address_context_data: Some(address_context_data()),
+    ..empty_config(PreparedSearchSlices::default())
+  })
+  .unwrap();
+
+  let result = prepared
+    .redact_static_entities(
+      "Delivery area Praha 2, Evropská 710.",
+      &OperatorConfig::default(),
+    )
+    .unwrap();
+
+  assert!(
+    !result
+      .resolved_entities
+      .iter()
+      .any(|entity| entity.text == "Evropská 710")
+  );
+}
+
+#[test]
+fn prepared_search_measures_header_zone_in_text_offsets() {
+  let full_text = format!(
+    "{}\nACME s.r.o.\nEvropská 710\n{}",
+    "body ".repeat(80),
+    "é".repeat(2_000)
+  );
+  let prepared = PreparedSearch::new(PreparedSearchConfig {
+    custom_regex_patterns: vec![SearchPattern::Regex(String::from(
+      r"ACME s\.r\.o\.",
+    ))],
+    custom_regex_meta: vec![RegexMatchMeta::new("organization", 1.0)],
+    slices: PreparedSearchSlices {
+      custom_regex: PatternSlice { start: 0, end: 1 },
+      ..PreparedSearchSlices::default()
+    },
+    threshold: 0.5,
+    allowed_labels: vec![String::from("organization"), String::from("address")],
+    address_context_data: Some(address_context_data()),
+    ..empty_config(PreparedSearchSlices::default())
+  })
+  .unwrap();
+
+  let result = prepared
+    .redact_static_entities(&full_text, &OperatorConfig::default())
+    .unwrap();
+
+  assert!(
+    !result
+      .resolved_entities
+      .iter()
+      .any(|entity| entity.text == "Evropská 710")
+  );
+}
+
+#[test]
 fn prepared_search_artifacts_match_direct_prepare() {
   let config = PreparedSearchConfig {
     regex_patterns: vec![SearchPattern::Regex(String::from(r"\bID\d{3}\b"))],
@@ -265,6 +370,7 @@ fn prepared_search_artifacts_match_direct_prepare() {
     regex_meta: vec![RegexMatchMeta::new("identifier", 1.0)],
     custom_regex_meta: vec![],
     deny_list_data: None,
+    false_positive_filters: None,
     gazetteer_data: Some(GazetteerMatchData {
       labels: vec![String::from("organization")],
       is_fuzzy: vec![false],
@@ -411,6 +517,7 @@ fn prepared_search_emits_static_detector_entities() {
       min_byte_length: None,
     }],
     deny_list_data: None,
+    false_positive_filters: None,
     gazetteer_data: Some(GazetteerMatchData {
       labels: vec![String::from("organization")],
       is_fuzzy: vec![false],
@@ -1045,6 +1152,7 @@ fn prepared_search_redacts_static_entities_end_to_end() {
     regex_meta: vec![RegexMatchMeta::new("registration number", 0.9)],
     custom_regex_meta: vec![],
     deny_list_data: None,
+    false_positive_filters: None,
     gazetteer_data: Some(GazetteerMatchData {
       labels: vec![String::from("organization")],
       is_fuzzy: vec![false],
@@ -1361,6 +1469,7 @@ fn prepared_search_reports_static_redaction_diagnostics() {
     regex_meta: vec![RegexMatchMeta::new("registration number", 0.9)],
     custom_regex_meta: vec![],
     deny_list_data: None,
+    false_positive_filters: None,
     gazetteer_data: Some(GazetteerMatchData {
       labels: vec![String::from("organization")],
       is_fuzzy: vec![false],
@@ -1447,6 +1556,7 @@ fn prepared_search_redacts_custom_deny_list_entities() {
       sources: vec![vec![String::from("custom-deny-list")]].into(),
       filters: None,
     }),
+    false_positive_filters: None,
     gazetteer_data: None,
     country_data: None,
     hotword_data: None,
@@ -1844,6 +1954,7 @@ fn prepared_search_stops_address_before_notice_copy_instruction() {
     address_seed_data: Some(AddressSeedData {
       boundary_words: vec![String::from("with a copy")],
       br_cep_cue_words: Vec::new(),
+      unit_abbreviations: Vec::new(),
     }),
     ..empty_config(PreparedSearchSlices::default())
   })
@@ -1947,6 +2058,7 @@ fn prepared_search_stops_address_seed_expansion_at_legal_prose() {
     address_seed_data: Some(AddressSeedData {
       boundary_words: vec![String::from("pokud")],
       br_cep_cue_words: Vec::new(),
+      unit_abbreviations: Vec::new(),
     }),
     ..empty_config(PreparedSearchSlices::default())
   })
@@ -2011,6 +2123,7 @@ fn prepared_search_does_not_cluster_address_seed_inside_register_span() {
     address_seed_data: Some(AddressSeedData {
       boundary_words: vec![String::from("eingetragen")],
       br_cep_cue_words: Vec::new(),
+      unit_abbreviations: Vec::new(),
     }),
     ..empty_config(PreparedSearchSlices::default())
   })

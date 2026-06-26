@@ -16,13 +16,14 @@ use crate::normalize::{
   NormalizedSearchText, normalize_for_search_with_byte_map,
 };
 use crate::processors::{
-  CountryMatchData, DenyListMatchData, GazetteerMatchData, PatternSlice,
-  RegexMatchMeta, ensure_supported_deny_list_sources, process_country_matches,
-  process_deny_list_matches, process_gazetteer_matches, process_regex_matches,
+  CountryMatchData, DenyListFilterData, DenyListMatchData, GazetteerMatchData,
+  PatternSlice, RegexMatchMeta, ensure_supported_deny_list_sources,
+  process_country_matches, process_deny_list_matches,
+  process_gazetteer_matches, process_regex_matches,
 };
 use crate::redact::redact_text;
 use crate::resolution::{
-  PipelineEntity, enforce_boundary_consistency, merge_and_dedup,
+  PipelineEntity, SourceDetail, enforce_boundary_consistency, merge_and_dedup,
   sanitize_entities_with_source,
 };
 use crate::search::{
@@ -58,6 +59,7 @@ pub struct PreparedSearch {
   regex_meta: Vec<RegexMatchMeta>,
   custom_regex_meta: Vec<RegexMatchMeta>,
   deny_list_data: Option<DenyListMatchData>,
+  false_positive_filters: Option<DenyListFilterData>,
   gazetteer_data: Option<GazetteerMatchData>,
   country_data: Option<CountryMatchData>,
   hotword_data: Option<HotwordRuleData>,
@@ -102,6 +104,8 @@ pub struct PreparedSearchConfig {
   pub regex_meta: Vec<RegexMatchMeta>,
   pub custom_regex_meta: Vec<RegexMatchMeta>,
   pub deny_list_data: Option<DenyListMatchData>,
+  #[serde(default)]
+  pub false_positive_filters: Option<DenyListFilterData>,
   pub gazetteer_data: Option<GazetteerMatchData>,
   pub country_data: Option<CountryMatchData>,
   #[serde(default)]
@@ -430,6 +434,7 @@ impl PreparedSearch {
       regex_meta: config.regex_meta,
       custom_regex_meta: config.custom_regex_meta,
       deny_list_data: config.deny_list_data,
+      false_positive_filters: config.false_positive_filters,
       gazetteer_data: config.gazetteer_data,
       country_data: config.country_data,
       hotword_data: config.hotword_data,
@@ -891,18 +896,23 @@ impl PreparedSearch {
     let sanitize_start = Instant::now();
     let sanitized_entities =
       sanitize_entities_with_source(&consistent, full_text)?;
-    let resolved_entities = filter_entities_for_config(
-      filter_entity_false_positives(
-        sanitized_entities,
-        full_text,
+    let false_positive_filters =
+      self.false_positive_filters.as_ref().or_else(|| {
         self
           .deny_list_data
           .as_ref()
-          .and_then(|data| data.filters.as_ref()),
+          .and_then(|data| data.filters.as_ref())
+      });
+    let mut resolved_entities = filter_entities_for_config(
+      filter_entity_false_positives(
+        sanitized_entities,
+        full_text,
+        false_positive_filters,
       )?,
       self.threshold,
       &self.allowed_labels,
     );
+    clear_internal_source_details(&mut resolved_entities);
     if let Some(diagnostics) = &mut diagnostics {
       diagnostics.record_entities(
         DiagnosticStage::Sanitize,
@@ -1023,8 +1033,19 @@ fn filter_entities_for_threshold(
 ) -> Vec<PipelineEntity> {
   entities
     .into_iter()
-    .filter(|entity| entity.score >= threshold)
+    .filter(|entity| {
+      entity.score >= threshold
+        || entity.source_detail == Some(SourceDetail::AddressContext)
+    })
     .collect()
+}
+
+fn clear_internal_source_details(entities: &mut [PipelineEntity]) {
+  for entity in entities {
+    if entity.source_detail == Some(SourceDetail::AddressContext) {
+      entity.source_detail = None;
+    }
+  }
 }
 
 fn boost_near_miss_entities(

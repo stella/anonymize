@@ -1252,7 +1252,7 @@ const loadAddressJurisdictionPrefixes = (): Promise<string[]> => {
   return addressJurisdictionPrefixesPromise;
 };
 
-const buildDenyListFilterData = async (
+export const buildDenyListFilterData = async (
   ctx: PipelineContext,
 ): Promise<DenyListFilterData> => {
   const [

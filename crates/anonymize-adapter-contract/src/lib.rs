@@ -19,13 +19,13 @@ use stella_anonymize_core::{
 pub type Result<T> = std::result::Result<T, ContractError>;
 
 const PREPARED_SEARCH_PACKAGE_HEADER: [u8; 8] = *b"ANONPKG1";
-const PREPARED_SEARCH_PACKAGE_VERSION: u32 = 7;
+const PREPARED_SEARCH_PACKAGE_VERSION: u32 = 8;
 const PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER: [u8; 8] = *b"ANONPKZ1";
-const PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION: u32 = 5;
+const PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION: u32 = 6;
 const PREPARED_SEARCH_CORE_PACKAGE_HEADER: [u8; 8] = *b"ANONCPK1";
-const PREPARED_SEARCH_CORE_PACKAGE_VERSION: u32 = 6;
+const PREPARED_SEARCH_CORE_PACKAGE_VERSION: u32 = 7;
 const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_HEADER: [u8; 8] = *b"ANONCPZ1";
-const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION: u32 = 6;
+const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION: u32 = 7;
 const PREPARED_SEARCH_PACKAGE_DIGEST_BYTES: usize = 32;
 const PREPARED_SEARCH_PACKAGE_ZSTD_LEVEL: i32 = 3;
 const MAX_PREPARED_SEARCH_PACKAGE_PAYLOAD_BYTES: usize = 256 * 1024 * 1024;
@@ -340,6 +340,8 @@ pub struct BindingAddressSeedData {
   pub boundary_words: Vec<String>,
   #[serde(default)]
   pub br_cep_cue_words: Vec<String>,
+  #[serde(default)]
+  pub unit_abbreviations: Vec<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -445,6 +447,8 @@ pub struct BindingPreparedSearchConfig {
   #[serde(default)]
   pub deny_list_data: Option<BindingDenyListMatchData>,
   #[serde(default)]
+  pub false_positive_filters: Option<BindingDenyListFilterData>,
+  #[serde(default)]
   pub gazetteer_data: Option<BindingGazetteerMatchData>,
   #[serde(default)]
   pub country_data: Option<BindingCountryMatchData>,
@@ -510,6 +514,7 @@ struct BinaryPreparedSearchConfig {
   regex_meta: Vec<BindingRegexMatchMeta>,
   custom_regex_meta: Vec<BindingRegexMatchMeta>,
   deny_list_data: Option<BindingDenyListMatchData>,
+  false_positive_filters: Option<BindingDenyListFilterData>,
   gazetteer_data: Option<BindingGazetteerMatchData>,
   country_data: Option<BindingCountryMatchData>,
   hotword_data: Option<BindingHotwordRuleData>,
@@ -711,6 +716,7 @@ impl From<BindingPreparedSearchConfig> for BinaryPreparedSearchConfig {
       regex_meta: config.regex_meta,
       custom_regex_meta: config.custom_regex_meta,
       deny_list_data: config.deny_list_data,
+      false_positive_filters: config.false_positive_filters,
       gazetteer_data: config.gazetteer_data,
       country_data: config.country_data,
       hotword_data: config.hotword_data,
@@ -742,6 +748,7 @@ impl From<BinaryPreparedSearchConfig> for BindingPreparedSearchConfig {
       regex_meta: config.regex_meta,
       custom_regex_meta: config.custom_regex_meta,
       deny_list_data: config.deny_list_data,
+      false_positive_filters: config.false_positive_filters,
       gazetteer_data: config.gazetteer_data,
       country_data: config.country_data,
       hotword_data: config.hotword_data,
@@ -1183,6 +1190,9 @@ pub fn prepared_search_config_from_binding(
     deny_list_data: deny_list_data
       .map(deny_list_data_from_binding)
       .transpose()?,
+    false_positive_filters: config
+      .false_positive_filters
+      .map(deny_list_filters_from_binding),
     gazetteer_data: config.gazetteer_data.map(|data| GazetteerMatchData {
       labels: data.labels,
       is_fuzzy: data.is_fuzzy,
@@ -1198,6 +1208,7 @@ pub fn prepared_search_config_from_binding(
     address_seed_data: config.address_seed_data.map(|data| AddressSeedData {
       boundary_words: data.boundary_words,
       br_cep_cue_words: data.br_cep_cue_words,
+      unit_abbreviations: data.unit_abbreviations,
     }),
     address_context_data: config.address_context_data.map(|data| {
       AddressContextData {
@@ -2038,6 +2049,7 @@ fn source_detail_from_binding(value: &str) -> Result<SourceDetail> {
     "custom-deny-list" => Ok(SourceDetail::CustomDenyList),
     "custom-regex" => Ok(SourceDetail::CustomRegex),
     "gazetteer-extension" => Ok(SourceDetail::GazetteerExtension),
+    "address-context" => Ok(SourceDetail::AddressContext),
     _ => Err(ContractError::UnsupportedSourceDetail {
       value: value.to_owned(),
     }),
@@ -2073,6 +2085,7 @@ fn source_detail_name(detail: SourceDetail) -> String {
     SourceDetail::CustomDenyList => "custom-deny-list",
     SourceDetail::CustomRegex => "custom-regex",
     SourceDetail::GazetteerExtension => "gazetteer-extension",
+    SourceDetail::AddressContext => "address-context",
   }
   .to_owned()
 }
