@@ -110,3 +110,17 @@ jobs:
         # Rust-backed static adapter contract.
         continue-on-error: true
         run: bun run --cwd packages/anonymize perf:native-adapters
+
+  gemini-code-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Gemini AI Code Review
+        uses: petarzarkov/gemini-code-review-action@v1.1.3
+        with:
+          gemini-api-key: ${{ secrets.GEMINI_API_KEY }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          model: "gemini-2.5-pro"
