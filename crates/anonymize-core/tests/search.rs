@@ -95,6 +95,63 @@ fn search_index_preserves_byte_offsets_from_primitive_engines() {
 }
 
 #[test]
+fn search_index_preserves_case_insensitive_literal_byte_offsets() {
+  let index = SearchIndex::new(
+    vec![SearchPattern::LiteralWithOptions {
+      pattern: String::from("krajským soudem"),
+      case_insensitive: Some(true),
+      whole_words: Some(false),
+    }],
+    SearchOptions::default(),
+  )
+  .unwrap();
+
+  let haystack = "zapsaná v obchodním rejstříku vedeném Krajským soudem";
+  let start = haystack.find("Krajským").unwrap();
+  let end = haystack.len();
+
+  assert_eq!(
+    index.find_iter(haystack).unwrap(),
+    vec![SearchMatch::Literal {
+      pattern: 0,
+      start: u32::try_from(start).unwrap(),
+      end: u32::try_from(end).unwrap(),
+    }]
+  );
+}
+
+#[test]
+fn search_index_preserves_large_case_insensitive_literal_byte_offsets() {
+  let mut patterns = Vec::new();
+  for index in 0..300 {
+    let pattern = if index == 216 {
+      String::from("krajským soudem")
+    } else {
+      format!("needle-{index}")
+    };
+    patterns.push(SearchPattern::LiteralWithOptions {
+      pattern,
+      case_insensitive: Some(true),
+      whole_words: Some(false),
+    });
+  }
+  let index = SearchIndex::new(patterns, SearchOptions::default()).unwrap();
+
+  let haystack = "zapsaná v obchodním rejstříku vedeném Krajským soudem v Ústí";
+  let start = haystack.find("Krajským").unwrap();
+  let end = start.saturating_add("Krajským soudem".len());
+
+  assert_eq!(
+    index.find_iter(haystack).unwrap(),
+    vec![SearchMatch::Literal {
+      pattern: 216,
+      start: u32::try_from(start).unwrap(),
+      end: u32::try_from(end).unwrap(),
+    }]
+  );
+}
+
+#[test]
 fn search_index_returns_overlapping_literal_matches() {
   let index = SearchIndex::new(
     vec![

@@ -2,6 +2,7 @@ use fancy_regex::Regex as FancyRegex;
 use regex::{Regex, RegexBuilder};
 
 use crate::byte_offsets::ByteOffsets;
+use crate::diagnostics::{DiagnosticStage, StaticRedactionDiagnostics};
 use crate::resolution::{DetectionSource, PipelineEntity};
 use crate::types::{Error, Result, SearchMatch};
 use crate::validators::validate_named_id;
@@ -215,6 +216,7 @@ pub(crate) fn process_trigger_matches(
   slice: PatternSlice,
   full_text: &str,
   data: &PreparedTriggerData,
+  mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
 ) -> Result<Vec<PipelineEntity>> {
   let offsets = ByteOffsets::new(full_text);
   let mut results = Vec::new();
@@ -232,9 +234,11 @@ pub(crate) fn process_trigger_matches(
       continue;
     };
     if !has_left_boundary(full_text, &offsets, found.start())? {
+      record_trigger_rejection(&mut diagnostics, found, rule, "left-boundary");
       continue;
     }
     if !has_right_boundary(full_text, &offsets, found.end(), &rule.trigger)? {
+      record_trigger_rejection(&mut diagnostics, found, rule, "right-boundary");
       continue;
     }
     let Some(raw_value) = extract_value(
@@ -246,17 +250,26 @@ pub(crate) fn process_trigger_matches(
       &extraction_data,
     )?
     else {
+      record_trigger_rejection(&mut diagnostics, found, rule, "empty-value");
       continue;
     };
     let Some(mut value) = strip_quotes(&raw_value) else {
+      record_trigger_rejection(
+        &mut diagnostics,
+        found,
+        rule,
+        "empty-quoted-value",
+      );
       continue;
     };
     if !apply_validations(&value.text, &rule.validations) {
+      record_trigger_rejection(&mut diagnostics, found, rule, "validation");
       continue;
     }
     if rule.label == "phone number"
       && !is_plausible_phone_trigger_value(&value.text)
     {
+      record_trigger_rejection(&mut diagnostics, found, rule, "phone-shape");
       continue;
     }
     if rule.label == "phone number"
@@ -307,6 +320,25 @@ pub(crate) fn process_trigger_matches(
   Ok(results)
 }
 
+fn record_trigger_rejection(
+  diagnostics: &mut Option<&mut StaticRedactionDiagnostics>,
+  found: &SearchMatch,
+  rule: &PreparedTriggerRule,
+  reason: &'static str,
+) {
+  let Some(diagnostics) = diagnostics.as_deref_mut() else {
+    return;
+  };
+  diagnostics.record_rejection(
+    DiagnosticStage::EntityTrigger,
+    Some(found.pattern()),
+    Some(&rule.label),
+    Some(found.start()),
+    Some(found.end()),
+    reason,
+  );
+}
+
 fn extract_value(
   text: &str,
   offsets: &ByteOffsets<'_>,
@@ -317,8 +349,10 @@ fn extract_value(
 ) -> Result<Option<ExtractedValue>> {
   let trigger_end_byte = offsets.validate_offset(trigger_end)?;
   let lookahead = get_trigger_lookahead(strategy);
-  let lookahead_end =
-    text.len().min(trigger_end_byte.saturating_add(lookahead));
+  let lookahead_end = floor_char_boundary(
+    text,
+    text.len().min(trigger_end_byte.saturating_add(lookahead)),
+  );
   let remaining = text
     .get(trigger_end_byte..lookahead_end)
     .unwrap_or_default();
@@ -884,6 +918,13 @@ fn previous_char_boundary(text: &str, byte: usize) -> usize {
     .get(..byte)
     .and_then(|prefix| prefix.char_indices().next_back())
     .map_or(0, |(index, _)| index)
+}
+
+const fn floor_char_boundary(text: &str, mut byte: usize) -> usize {
+  while byte > 0 && !text.is_char_boundary(byte) {
+    byte = byte.saturating_sub(1);
+  }
+  byte
 }
 
 fn is_word_byte(text: &str, byte: usize) -> bool {
@@ -1468,4 +1509,163 @@ fn u32_len(text: &str) -> u32 {
 
 fn byte_to_offset(byte: usize) -> Option<u32> {
   u32::try_from(byte).ok()
+}
+
+#[cfg(test)]
+#[allow(clippy::indexing_slicing, clippy::unwrap_used)]
+mod tests {
+  use crate::search::{SearchIndex, SearchOptions, SearchPattern};
+
+  use super::*;
+
+  #[test]
+  fn court_trigger_includes_trigger_span() {
+    let text = "zapsaná v obchodním rejstříku vedeném Krajským soudem v Ústí nad Labem, oddíl B";
+    let start = text.find("Krajským soudem").unwrap();
+    let end = start.saturating_add("Krajským soudem".len());
+    let data = PreparedTriggerData::new(TriggerData {
+      rules: vec![TriggerRule {
+        trigger: String::from("krajským soudem"),
+        label: String::from("organization"),
+        strategy: TriggerStrategy::ToNextComma {
+          stop_words: vec![String::from("oddíl")],
+          max_length: None,
+        },
+        validations: vec![TriggerValidation::MinLength(3)],
+        include_trigger: true,
+      }],
+      address_stop_keywords: Vec::new(),
+      party_position_terms: Vec::new(),
+      legal_form_suffixes: Vec::new(),
+      sentence_terminal_currency_terms: Vec::new(),
+    })
+    .unwrap();
+
+    let entities = process_trigger_matches(
+      &[SearchMatch::Literal {
+        pattern: 0,
+        start: u32::try_from(start).unwrap(),
+        end: u32::try_from(end).unwrap(),
+      }],
+      PatternSlice { start: 0, end: 1 },
+      text,
+      &data,
+      None,
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].label, "organization");
+    assert_eq!(entities[0].source, DetectionSource::Trigger);
+    assert_eq!(entities[0].text, "Krajským soudem v Ústí nad Labem");
+  }
+
+  #[test]
+  fn court_trigger_survives_generated_slice_shape() {
+    let text = "zapsaná v obchodním rejstříku vedeném Krajským soudem v Ústí nad Labem, oddíl B";
+    let slice = PatternSlice {
+      start: 1372,
+      end: 2791,
+    };
+    let mut patterns = Vec::new();
+    for index in 0..slice.end {
+      let pattern = if index == slice.start.saturating_add(216) {
+        String::from("krajským soudem")
+      } else {
+        format!("needle-{index}")
+      };
+      patterns.push(SearchPattern::LiteralWithOptions {
+        pattern,
+        case_insensitive: Some(true),
+        whole_words: Some(false),
+      });
+    }
+    let search = SearchIndex::new(patterns, SearchOptions::default()).unwrap();
+    let mut rules = Vec::new();
+    for index in slice.start..slice.end {
+      let trigger = if index == slice.start.saturating_add(216) {
+        String::from("krajským soudem")
+      } else {
+        format!("needle-{index}")
+      };
+      rules.push(TriggerRule {
+        trigger,
+        label: String::from("organization"),
+        strategy: TriggerStrategy::ToNextComma {
+          stop_words: vec![
+            String::from("dne"),
+            String::from("v oddíle"),
+            String::from("oddíl"),
+            String::from("vložka"),
+          ],
+          max_length: None,
+        },
+        validations: vec![TriggerValidation::MinLength(3)],
+        include_trigger: true,
+      });
+    }
+    let data = PreparedTriggerData::new(TriggerData {
+      rules,
+      address_stop_keywords: Vec::new(),
+      party_position_terms: Vec::new(),
+      legal_form_suffixes: Vec::new(),
+      sentence_terminal_currency_terms: Vec::new(),
+    })
+    .unwrap();
+
+    let matches = search.find_iter(text).unwrap();
+    let entities =
+      process_trigger_matches(&matches, slice, text, &data, None).unwrap();
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].label, "organization");
+    assert_eq!(entities[0].source, DetectionSource::Trigger);
+    assert_eq!(entities[0].text, "Krajským soudem v Ústí nad Labem");
+  }
+
+  #[test]
+  fn court_trigger_lookahead_can_end_inside_later_utf8_scalar() {
+    let prefix = "zapsaná v obchodním rejstříku vedeném Krajským soudem v Ústí nad Labem, oddíl B";
+    let trigger_start = prefix.find("Krajským soudem").unwrap();
+    let trigger_end = trigger_start.saturating_add("Krajským soudem".len());
+    let lookahead_end = trigger_end
+      .saturating_add(MAX_TRIGGER_VALUE_LEN)
+      .saturating_add(TRIGGER_LOOKAHEAD_MARGIN);
+    let padding_len =
+      lookahead_end.saturating_sub(prefix.len()).saturating_sub(1);
+    let text = format!("{prefix}{}é trailing", "x".repeat(padding_len));
+    let data = PreparedTriggerData::new(TriggerData {
+      rules: vec![TriggerRule {
+        trigger: String::from("krajským soudem"),
+        label: String::from("organization"),
+        strategy: TriggerStrategy::ToNextComma {
+          stop_words: vec![String::from("oddíl")],
+          max_length: None,
+        },
+        validations: vec![TriggerValidation::MinLength(3)],
+        include_trigger: true,
+      }],
+      address_stop_keywords: Vec::new(),
+      party_position_terms: Vec::new(),
+      legal_form_suffixes: Vec::new(),
+      sentence_terminal_currency_terms: Vec::new(),
+    })
+    .unwrap();
+
+    let entities = process_trigger_matches(
+      &[SearchMatch::Literal {
+        pattern: 0,
+        start: u32::try_from(trigger_start).unwrap(),
+        end: u32::try_from(trigger_end).unwrap(),
+      }],
+      PatternSlice { start: 0, end: 1 },
+      &text,
+      &data,
+      None,
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].text, "Krajským soudem v Ústí nad Labem");
+  }
 }

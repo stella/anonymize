@@ -107,6 +107,17 @@ fn should_replace(
     return false;
   }
 
+  if curated_organization_contains_fragment(candidate, existing)
+    && candidate_len > existing_len
+  {
+    return true;
+  }
+  if curated_organization_contains_fragment(existing, candidate)
+    && existing_len > candidate_len
+  {
+    return false;
+  }
+
   if address_contains_bare_postal(candidate, existing)
     && candidate_len > existing_len
   {
@@ -303,6 +314,20 @@ fn literal_contains(outer: &PipelineEntity, inner: &PipelineEntity) -> bool {
       outer.source,
       DetectionSource::DenyList | DetectionSource::Gazetteer
     )
+    && outer.start <= inner.start
+    && outer.end >= inner.end
+}
+
+fn curated_organization_contains_fragment(
+  outer: &PipelineEntity,
+  inner: &PipelineEntity,
+) -> bool {
+  matches!(
+    outer.source,
+    DetectionSource::DenyList | DetectionSource::Gazetteer
+  ) && outer.label == "organization"
+    && matches!(inner.label.as_str(), "address" | "country")
+    && !is_caller_owned(inner)
     && outer.start <= inner.start
     && outer.end >= inner.end
 }

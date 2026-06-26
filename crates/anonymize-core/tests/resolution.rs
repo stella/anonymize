@@ -228,6 +228,63 @@ fn literal_container_beats_shorter_same_label_match() {
 }
 
 #[test]
+fn literal_container_survives_overlapping_shorter_fragment() {
+  let result = merge_and_dedup(&[
+    entity(DetectionSource::Regex, 0.7, 551, 557, "address"),
+    entity(DetectionSource::DenyList, 0.9, 501, 518, "organization"),
+    entity(DetectionSource::DenyList, 1.0, 511, 518, "address"),
+    entity(DetectionSource::DenyList, 1.0, 543, 550, "address"),
+    entity(DetectionSource::DenyList, 1.0, 527, 533, "address"),
+    entity(DetectionSource::Trigger, 0.95, 511, 518, "organization"),
+    entity(DetectionSource::Trigger, 0.95, 511, 518, "organization"),
+    entity(DetectionSource::Trigger, 1.0, 527, 557, "address"),
+    entity(DetectionSource::Trigger, 1.0, 527, 557, "address"),
+    entity(DetectionSource::Regex, 0.9, 527, 557, "address"),
+  ]);
+
+  assert!(
+    result
+      .iter()
+      .any(|entry| entry.source == DetectionSource::DenyList
+        && entry.label == "organization"
+        && entry.start == 501
+        && entry.end == 518),
+    "merged entities: {result:?}",
+  );
+  assert!(
+    result
+      .iter()
+      .all(|entry| !(entry.source == DetectionSource::Trigger
+        && entry.label == "organization"
+        && entry.start == 511
+        && entry.end == 518)),
+    "merged entities: {result:?}",
+  );
+}
+
+#[test]
+fn address_component_beats_low_confidence_name_collision() {
+  let result = merge_and_dedup(&[
+    entity(DetectionSource::DenyList, 0.5, 510, 521, "person"),
+    entity(DetectionSource::DenyList, 0.9, 515, 521, "address"),
+    entity(DetectionSource::DenyList, 0.9, 523, 531, "address"),
+  ]);
+
+  assert!(
+    result.iter().any(|entry| entry.label == "address"
+      && entry.start == 515
+      && entry.end == 521),
+    "merged entities: {result:?}",
+  );
+  assert!(
+    result.iter().all(|entry| !(entry.label == "person"
+      && entry.start == 510
+      && entry.end == 521)),
+    "merged entities: {result:?}",
+  );
+}
+
+#[test]
 fn caller_owned_boundaries_win_overlap_resolution() {
   let mut custom = entity(DetectionSource::Regex, 0.5, 0, 8, "person");
   custom.source_detail = Some(SourceDetail::CustomRegex);

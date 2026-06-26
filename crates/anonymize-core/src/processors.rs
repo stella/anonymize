@@ -339,8 +339,9 @@ pub fn process_deny_list_matches(
   data: &DenyListMatchData,
 ) -> Result<Vec<PipelineEntity>> {
   let offsets = ByteOffsets::new(full_text);
-  let matches_by_pattern =
+  let mut matches_by_pattern =
     collect_deny_list_matches(matches, slice, full_text, data, &offsets)?;
+  suppress_shorter_curated_contained_matches(&mut matches_by_pattern);
 
   let mut results = Vec::new();
   let mut name_hits = Vec::new();
@@ -406,6 +407,60 @@ pub fn process_deny_list_matches(
   )?;
 
   Ok(results)
+}
+
+fn suppress_shorter_curated_contained_matches(
+  matches_by_pattern: &mut BTreeMap<usize, Vec<RawDenyListMatch>>,
+) {
+  let mut ranges = Vec::<(u32, u32)>::new();
+  for matches in matches_by_pattern.values() {
+    for found in matches {
+      if found.labels.is_empty() {
+        continue;
+      }
+      ranges.push((found.start, found.end));
+    }
+  }
+
+  ranges.sort_by(|left, right| {
+    left.0.cmp(&right.0).then_with(|| right.1.cmp(&left.1))
+  });
+
+  let mut suppress = BTreeSet::<(u32, u32)>::new();
+  let mut max_end = None::<u32>;
+  let mut max_end_start = None::<u32>;
+  for (start, end) in ranges {
+    if max_end.is_some_and(|container_end| {
+      container_end > end
+        || (container_end == end
+          && max_end_start
+            .is_some_and(|container_start| container_start < start))
+    }) {
+      suppress.insert((start, end));
+    }
+    if max_end.is_none_or(|current| end > current) {
+      max_end = Some(end);
+      max_end_start = Some(start);
+    }
+  }
+
+  if suppress.is_empty() {
+    return;
+  }
+
+  for matches in matches_by_pattern.values_mut() {
+    for found in matches.iter_mut() {
+      if found.labels.is_empty() {
+        continue;
+      }
+      if suppress.contains(&(found.start, found.end)) {
+        found.labels.clear();
+      }
+    }
+    matches.retain(|found| {
+      !found.labels.is_empty() || !found.custom_labels.is_empty()
+    });
+  }
 }
 
 fn collect_deny_list_matches(
