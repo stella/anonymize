@@ -955,7 +955,7 @@ fn has_curated_source(sources: StringGroup<'_>) -> bool {
     .any(|source| source != CUSTOM_DENY_LIST_SOURCE)
 }
 
-fn has_person_name_source(found: &RawDenyListMatch) -> bool {
+const fn has_person_name_source(found: &RawDenyListMatch) -> bool {
   found.has_person_name_source
 }
 
