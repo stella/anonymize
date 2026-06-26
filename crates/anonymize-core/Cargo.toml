@@ -13,7 +13,7 @@ categories = ["text-processing"]
 fancy-regex = "0.18"
 regex = "1"
 serde = { version = "1", features = ["derive"] }
-stella-stdnum-core = { version = "2.1.1", git = "https://github.com/stella/stdnum", rev = "b4949ece8981b84c53a21c26f7a5068dba553142" }
+stella-stdnum-core = { version = "2.1.1", git = "https://github.com/stella/stdnum", rev = "2f3c3f107e3976ac059cc438d77916a592595d59" }
 stella-text-search-core = { version = "1.0.6", git = "https://github.com/stella/text-search", rev = "8a42c28a8e7c5a32c838ae9dd443c21deab391ed" }
 
 [lints]

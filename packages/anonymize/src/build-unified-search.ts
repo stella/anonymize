@@ -1675,7 +1675,8 @@ const nativeSupportsRegexMeta = (meta: RegexMeta): boolean => {
     meta.validatorId !== undefined &&
     NATIVE_REGEX_VALIDATOR_IDS.has(meta.validatorId) &&
     (meta.validatorInputKind === undefined ||
-      meta.validatorInputKind === "digits-only")
+      meta.validatorInputKind === "digits-only" ||
+      meta.validatorInputKind === "crypto-wallet-candidate")
   );
 };
 

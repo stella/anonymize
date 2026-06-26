@@ -297,7 +297,7 @@ describe("pipeline config semantics", () => {
     ).toBeGreaterThan(0);
   });
 
-  test("native config keeps unsupported validator regexes fail-fast", async () => {
+  test("native config carries stdnum validator metadata", async () => {
     const search = await buildUnifiedSearch(
       {
         ...BASE_CONFIG,
@@ -317,8 +317,8 @@ describe("pipeline config semantics", () => {
     expect(meta).toMatchObject({
       label: "national identification number",
       requires_validation: true,
+      validator_id: "cn.ric",
     });
-    expect(meta?.validator_id).toBeUndefined();
   });
 
   test("content language scopes deny-list search build", async () => {
