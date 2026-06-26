@@ -159,7 +159,7 @@ resolve correctly.
 ### Server lifecycle (`Gliner2Client`)
 
 - `start()`: Find a free port via OS allocation (bind to `:0`, read assigned port),
-  spawn `uvicorn gliner2_server.main --port N --host 127.0.0.1`,
+  spawn `uvicorn main:app --port N --host 127.0.0.1`,
   poll `/v1/health` every 500ms until ready (max 30s, throw on timeout)
 - `infer()`: POST to `/v1/infer`, stream response, apply `AbortSignal`
 - `stop()`: `SIGTERM` to Python process, wait for graceful exit (5s timeout → `SIGKILL`)
