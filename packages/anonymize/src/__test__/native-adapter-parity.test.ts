@@ -17,7 +17,11 @@ import {
   assertNativeBindingVersion,
   createNativeAnonymizerFromPackage,
   getNativeBindingVersion,
+  load_prepared_package,
+  native_package_version,
+  normalize_for_search,
   prepareNativeSearchPackage,
+  prepare_search_package,
   type NativeAnonymizeBinding,
   type NativeOperatorConfig,
   type NativePreparedSearchBinding,
@@ -128,6 +132,11 @@ type GeneratedNativeCase = {
   text: string;
   operators: Record<string, string> | null;
   sensitiveValues: string[];
+};
+
+type SharedSdkParityCase = {
+  text: string;
+  operators: NativeOperatorConfig | null;
 };
 
 type ContractFixtureCase = {
@@ -460,6 +469,92 @@ print(
                     payload.get("operators_json"),
                 )
             ),
+            "version": anonymize.native_package_version(),
+        }
+    )
+)
+`;
+
+const PYTHON_SHARED_SDK_PARITY_SCRIPT = `
+import json
+import os
+import pathlib
+import sys
+
+module_root = pathlib.Path(os.environ["STELLA_ANONYMIZE_PY_MODULE"]).parent.parent
+payload_path = pathlib.Path(os.environ["STELLA_ANONYMIZE_PAYLOAD"])
+package_path = pathlib.Path(os.environ["STELLA_ANONYMIZE_PACKAGE"])
+sys.path.insert(0, str(module_root))
+
+import stella_anonymize as anonymize
+
+payload = json.loads(payload_path.read_text())
+package_bytes = package_path.read_bytes()
+top_level = [
+    "prepare_search_package",
+    "load_prepared_package",
+    "load_prepared_package_file",
+    "native_package_version",
+    "normalize_for_search",
+    "redact_text_json",
+    "diagnostics_json",
+]
+prepared_methods = [
+    "redact_text",
+    "redact_text_json",
+    "diagnostics_json",
+    "prepare_diagnostics_json",
+]
+missing_top_level = [
+    name for name in top_level if not callable(getattr(anonymize, name, None))
+]
+if missing_top_level:
+    raise AssertionError(f"missing Python SDK functions: {missing_top_level}")
+prepared = anonymize.load_prepared_package(package_bytes)
+if prepared is not anonymize.load_prepared_package(package_bytes):
+    raise AssertionError("facade package cache did not reuse prepared search")
+missing_prepared = [
+    name for name in prepared_methods if not callable(getattr(prepared, name, None))
+]
+if missing_prepared:
+    raise AssertionError(f"missing Python prepared methods: {missing_prepared}")
+from_file = anonymize.load_prepared_package_file(package_path)
+if anonymize.prepare_search_package(
+    payload["config_json"],
+    compressed=payload["compressed"],
+) != package_bytes:
+    raise AssertionError("facade package bytes differ")
+
+def redact_with(instance, item):
+    return json.loads(
+        instance.redact_text_json(
+            item["text"],
+            item.get("operators"),
+            redact_string=item.get("redact_string"),
+        )
+    )
+
+print(
+    json.dumps(
+        {
+            "from_bytes": [
+                redact_with(prepared, item) for item in payload["cases"]
+            ],
+            "from_file": [
+                redact_with(from_file, item) for item in payload["cases"]
+            ],
+            "top_level": [
+                json.loads(
+                    anonymize.redact_text_json(
+                        payload["config_json"],
+                        item["text"],
+                        item.get("operators"),
+                        redact_string=item.get("redact_string"),
+                    )
+                )
+                for item in payload["cases"]
+            ],
+            "normalized": anonymize.normalize_for_search(payload["normalize_text"]),
             "version": anonymize.native_package_version(),
         }
     )
@@ -881,6 +976,84 @@ describe("native adapter parity", () => {
     expect(result.from_bytes).toEqual(expectedJson);
     expect(result.from_file).toEqual(expectedJson);
     expect(result.version).toBe(packageJsonVersion());
+  });
+
+  test("shared TS and Python SDK facades match Rust core JSON", () => {
+    const adapters = getAdapters();
+    const config = JSON.parse(CONFIG_JSON);
+    const packageBytes = prepare_search_package({
+      binding: adapters.native,
+      config: CONFIG_JSON,
+      compressed: true,
+    });
+    const prepared = load_prepared_package({
+      binding: adapters.native,
+      packageBytes,
+    });
+    const cases: SharedSdkParityCase[] = [
+      {
+        text:
+          "č Reference AB1234 for Acme s.r.o. near Fuzztovn, Turkey, " +
+          "Prague, matter MAT-123, code Secret Code.",
+        operators: null,
+      },
+      {
+        text:
+          "🙂 Reference CD9876 for Acme s.r.o. near Fuzztovn, Turkey, " +
+          "Prague, matter MAT-456, code Secret Code.",
+        operators: {
+          operators: { country: "redact", "matter id": "redact" },
+          redactString: "***",
+        },
+      },
+    ];
+
+    expect(native_package_version(adapters.native)).toBe(packageJsonVersion());
+    expect(
+      normalize_for_search({
+        binding: adapters.native,
+        text: "Číslo\u00a0PAS - 1234",
+      }),
+    ).toBe(adapters.native.normalizeForSearch("Číslo\u00a0PAS - 1234"));
+    expect([
+      ...prepare_search_package({ binding: adapters.native, config }),
+    ]).toEqual([...packageBytes]);
+
+    const rustCoreJson = cases.map(({ text, operators }) =>
+      JSON.parse(
+        adapters.native.redactStaticEntitiesJson(
+          CONFIG_JSON,
+          text,
+          nativeOperatorConfigJson(operators),
+        ),
+      ),
+    );
+    const tsSdkJson = cases.map(({ text, operators }) =>
+      JSON.parse(prepared.redact_text_json(text, operators ?? undefined)),
+    );
+
+    expect(tsSdkJson).toEqual(rustCoreJson);
+    const diagnosticsJson = prepared.diagnostics_json(cases[0].text);
+    if (diagnosticsJson === null) {
+      throw new Error("missing shared SDK diagnostics");
+    }
+    expect(diagnosticsJson).toContain('"diagnostics"');
+
+    const python = callPythonSharedSdkParity({
+      pythonModulePath: adapters.pythonModulePath,
+      tempDir: adapters.tempDir,
+      packageBytes: Buffer.from(packageBytes),
+      cases,
+      normalizeText: "Číslo\u00a0PAS - 1234",
+    });
+
+    expect(python.from_bytes).toEqual(rustCoreJson);
+    expect(python.from_file).toEqual(rustCoreJson);
+    expect(python.top_level).toEqual(rustCoreJson);
+    expect(python.normalized).toBe(
+      adapters.native.normalizeForSearch("Číslo\u00a0PAS - 1234"),
+    );
+    expect(python.version).toBe(packageJsonVersion());
   });
 
   test("native facade redacts from compressed package bytes", () => {
@@ -2067,6 +2240,55 @@ const callPythonPackageFacade = ({
   return JSON.parse(output);
 };
 
+type PythonSharedSdkParityOptions = {
+  pythonModulePath: string;
+  tempDir: string;
+  packageBytes: Buffer;
+  cases: SharedSdkParityCase[];
+  normalizeText: string;
+};
+
+const callPythonSharedSdkParity = ({
+  pythonModulePath,
+  tempDir,
+  packageBytes,
+  cases,
+  normalizeText,
+}: PythonSharedSdkParityOptions): {
+  from_bytes: StaticRedactionResult[];
+  from_file: StaticRedactionResult[];
+  top_level: StaticRedactionResult[];
+  normalized: string;
+  version: string;
+} => {
+  const payloadPath = join(tempDir, "shared-sdk-payload.json");
+  const packagePath = join(tempDir, "shared-sdk-package.bin");
+  writeFileSync(packagePath, packageBytes);
+  writeFileSync(
+    payloadPath,
+    JSON.stringify({
+      cases: cases.map(({ text, operators }) => ({
+        text,
+        operators: operators?.operators ?? null,
+        redact_string: operators?.redactString,
+      })),
+      compressed: true,
+      config_json: CONFIG_JSON,
+      normalize_text: normalizeText,
+    }),
+  );
+  const output = runCommand(
+    "python3",
+    ["-c", PYTHON_SHARED_SDK_PARITY_SCRIPT],
+    {
+      STELLA_ANONYMIZE_PACKAGE: packagePath,
+      STELLA_ANONYMIZE_PAYLOAD: payloadPath,
+      STELLA_ANONYMIZE_PY_MODULE: pythonModulePath,
+    },
+  );
+  return JSON.parse(output);
+};
+
 const callPythonDiagnostics = (
   pythonModulePath: string,
   text: string,
@@ -2222,6 +2444,15 @@ const operatorConfigJson = (
     return undefined;
   }
   return JSON.stringify({ operators });
+};
+
+const nativeOperatorConfigJson = (
+  operators: NativeOperatorConfig | null,
+): string | undefined => {
+  if (operators === null) {
+    return undefined;
+  }
+  return JSON.stringify(operators);
 };
 
 const runCommand = (

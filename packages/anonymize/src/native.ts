@@ -38,6 +38,26 @@ type NativeBindingStaticRedactionResult = {
   redaction: NativeBindingRedactionResult;
 };
 
+type CanonicalPipelineEntity = {
+  start: number;
+  end: number;
+  label: string;
+  text: string;
+  score: number;
+  source: string;
+  source_detail?: string | null;
+};
+
+type CanonicalStaticRedactionResult = {
+  resolved_entities: CanonicalPipelineEntity[];
+  redaction: {
+    redacted_text: string;
+    redaction_map: NativeBindingRedactionEntry[];
+    operator_map: NativeBindingOperatorEntry[];
+    entity_count: number;
+  };
+};
+
 export type NativePreparedSearchBinding = {
   prepareDiagnosticsJson?: () => string;
   redactStaticEntities: (
@@ -51,6 +71,7 @@ export type NativePreparedSearchBinding = {
 };
 
 export type NativeAnonymizeBinding = {
+  normalizeForSearch: (text: string) => string;
   nativePackageVersion: () => string;
   NativePreparedSearch: {
     fromConfigJsonBytes: (
@@ -99,6 +120,27 @@ export type NativeSearchPackageOptions = {
   compressed?: boolean;
 };
 
+export type NativeSearchPackageInput =
+  | NativePreparedSearchConfig
+  | string
+  | Uint8Array;
+
+export type SharedNativeSearchPackageOptions = {
+  binding: NativeAnonymizeBinding;
+  config: NativeSearchPackageInput;
+  compressed?: boolean;
+};
+
+export type SharedNativePreparedPackageOptions = {
+  binding: NativeAnonymizeBinding;
+  packageBytes: Uint8Array;
+};
+
+export type NativeNormalizeOptions = {
+  binding: NativeAnonymizeBinding;
+  text: string;
+};
+
 export type NativeAnonymizerFromConfigOptions = {
   binding: NativeAnonymizeBinding;
   config: NativePreparedSearchConfig;
@@ -140,15 +182,39 @@ export class PreparedNativeAnonymizer {
     );
   }
 
+  redact_text(
+    fullText: string,
+    operators?: NativeOperatorConfig,
+  ): NativeStaticRedactionResult {
+    return this.redactStaticEntities(fullText, operators);
+  }
+
+  redact_text_json(fullText: string, operators?: NativeOperatorConfig): string {
+    return JSON.stringify(
+      toBindingStaticRedactionResult(
+        this.redactStaticEntities(fullText, operators),
+      ),
+    );
+  }
+
   redactStaticEntitiesDiagnosticsJson(
     fullText: string,
     operators?: NativeOperatorConfig,
   ): string | null {
-    const run = this.#prepared.redactStaticEntitiesDiagnosticsJson;
-    if (!run) {
+    if (!this.#prepared.redactStaticEntitiesDiagnosticsJson) {
       return null;
     }
-    return run(fullText, toBindingOperatorConfig(operators));
+    return this.#prepared.redactStaticEntitiesDiagnosticsJson(
+      fullText,
+      toBindingOperatorConfig(operators),
+    );
+  }
+
+  diagnostics_json(
+    fullText: string,
+    operators?: NativeOperatorConfig,
+  ): string | null {
+    return this.redactStaticEntitiesDiagnosticsJson(fullText, operators);
   }
 }
 
@@ -170,6 +236,19 @@ export class PreparedNativePipeline {
     return this.#anonymizer.redactStaticEntities(fullText, operators);
   }
 
+  redact_text(
+    fullText: string,
+    operators?: NativeOperatorConfig,
+  ): NativeStaticRedactionResult {
+    return this.redactText(fullText, operators);
+  }
+
+  redact_text_json(fullText: string, operators?: NativeOperatorConfig): string {
+    return JSON.stringify(
+      toBindingStaticRedactionResult(this.redactText(fullText, operators)),
+    );
+  }
+
   redactTextDiagnosticsJson(
     fullText: string,
     operators?: NativeOperatorConfig,
@@ -179,15 +258,41 @@ export class PreparedNativePipeline {
       operators,
     );
   }
+
+  diagnostics_json(
+    fullText: string,
+    operators?: NativeOperatorConfig,
+  ): string | null {
+    return this.redactTextDiagnosticsJson(fullText, operators);
+  }
 }
 
 export const encodeNativeSearchConfig = (
   config: NativePreparedSearchConfig,
 ): Uint8Array => new TextEncoder().encode(JSON.stringify(config));
 
+export const encodeNativeSearchConfigInput = (
+  config: NativeSearchPackageInput,
+): Uint8Array => {
+  if (typeof config === "string") {
+    return new TextEncoder().encode(config);
+  }
+  if (config instanceof Uint8Array) {
+    return config;
+  }
+  return encodeNativeSearchConfig(config);
+};
+
 export const getNativeBindingVersion = (
   binding: NativeAnonymizeBinding,
 ): string => binding.nativePackageVersion();
+
+export const native_package_version = getNativeBindingVersion;
+
+export const normalize_for_search = ({
+  binding,
+  text,
+}: NativeNormalizeOptions): string => binding.normalizeForSearch(text);
 
 export const assertNativeBindingVersion = ({
   binding,
@@ -212,6 +317,17 @@ export const prepareNativeSearchPackage = ({
     : binding.prepareStaticSearchPackageBytes(configBytes);
 };
 
+export const prepare_search_package = ({
+  binding,
+  config,
+  compressed = true,
+}: SharedNativeSearchPackageOptions): Uint8Array => {
+  const configBytes = encodeNativeSearchConfigInput(config);
+  return compressed
+    ? binding.prepareStaticSearchCompressedPackageBytes(configBytes)
+    : binding.prepareStaticSearchPackageBytes(configBytes);
+};
+
 export const createNativeAnonymizerFromConfig = ({
   binding,
   config,
@@ -230,6 +346,12 @@ export const createNativeAnonymizerFromPackage = ({
     binding.NativePreparedSearch.fromPreparedPackageBytes(packageBytes),
   );
 
+export const load_prepared_package = ({
+  binding,
+  packageBytes,
+}: SharedNativePreparedPackageOptions): PreparedNativeAnonymizer =>
+  createNativeAnonymizerFromPackage({ binding, packageBytes });
+
 export const createNativePipelineFromPackage = ({
   binding,
   packageBytes,
@@ -237,6 +359,9 @@ export const createNativePipelineFromPackage = ({
   new PreparedNativePipeline(
     createNativeAnonymizerFromPackage({ binding, packageBytes }),
   );
+
+export const PreparedSearch = PreparedNativeAnonymizer;
+export type PreparedSearch = PreparedNativeAnonymizer;
 
 const toBindingOperatorConfig = (
   config: NativeOperatorConfig | undefined,
@@ -261,6 +386,22 @@ const toNativeStaticRedactionResult = (
   redaction: toNativeRedactionResult(result.redaction),
 });
 
+const toBindingStaticRedactionResult = (
+  result: NativeStaticRedactionResult,
+): CanonicalStaticRedactionResult => ({
+  resolved_entities: result.resolvedEntities.map(toBindingPipelineEntity),
+  redaction: {
+    redacted_text: result.redaction.redactedText,
+    redaction_map: [...result.redaction.redactionMap.entries()].map(
+      ([placeholder, original]) => ({ placeholder, original }),
+    ),
+    operator_map: [...result.redaction.operatorMap.entries()].map(
+      ([placeholder, operator]) => ({ placeholder, operator }),
+    ),
+    entity_count: result.redaction.entityCount,
+  },
+});
+
 const toNativePipelineEntity = (
   entity: NativeBindingPipelineEntity,
 ): NativePipelineEntity => ({
@@ -271,6 +412,14 @@ const toNativePipelineEntity = (
   score: entity.score,
   source: entity.source,
   ...(entity.sourceDetail ? { sourceDetail: entity.sourceDetail } : {}),
+});
+
+const toBindingPipelineEntity = ({
+  sourceDetail,
+  ...entity
+}: NativePipelineEntity): CanonicalPipelineEntity => ({
+  ...entity,
+  source_detail: sourceDetail ?? null,
 });
 
 const toNativeRedactionResult = (

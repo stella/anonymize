@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from os import PathLike
 from typing import TypeAlias
 
 from ._native import (
+    PreparedSearch as NativePreparedSearch,
     OperatorEntry as OperatorEntry,
     PipelineEntity as PipelineEntity,
-    PreparedSearch as PreparedSearch,
     RedactionEntry as RedactionEntry,
     RedactionResult as RedactionResult,
     StaticRedactionResult as StaticRedactionResult,
@@ -21,13 +22,89 @@ from ._native import (
 
 BytesLike: TypeAlias = bytes | bytearray | memoryview
 PathLikeString: TypeAlias = str | PathLike[str]
+OperatorConfig: TypeAlias = Mapping[str, str] | str | None
+
+class PreparedAnonymizer:
+    def __init__(self, prepared: NativePreparedSearch) -> None: ...
+    @classmethod
+    def from_config_json(cls, config_json: str) -> PreparedAnonymizer: ...
+    @classmethod
+    def from_config_json_and_artifact_bytes(
+        cls,
+        config_json: str,
+        artifact_bytes: BytesLike,
+    ) -> PreparedAnonymizer: ...
+    @classmethod
+    def from_prepared_package_bytes(
+        cls,
+        package_bytes: BytesLike,
+    ) -> PreparedAnonymizer: ...
+    def prepare_diagnostics_json(self) -> str: ...
+    def redact_text(
+        self,
+        full_text: str,
+        operators: OperatorConfig = None,
+        *,
+        redact_string: str | None = None,
+    ) -> StaticRedactionResult: ...
+    def redact_text_json(
+        self,
+        full_text: str,
+        operators: OperatorConfig = None,
+        *,
+        redact_string: str | None = None,
+    ) -> str: ...
+    def diagnostics_json(
+        self,
+        full_text: str,
+        operators: OperatorConfig = None,
+        *,
+        redact_string: str | None = None,
+    ) -> str: ...
+    def redact_static_entities(
+        self,
+        full_text: str,
+        operators: OperatorConfig = None,
+        *,
+        redact_string: str | None = None,
+    ) -> StaticRedactionResult: ...
+    def redact_static_entities_json(
+        self,
+        full_text: str,
+        operators: OperatorConfig = None,
+        *,
+        redact_string: str | None = None,
+    ) -> str: ...
+    def redact_static_entities_diagnostics_json(
+        self,
+        full_text: str,
+        operators: OperatorConfig = None,
+        *,
+        redact_string: str | None = None,
+    ) -> str: ...
+
+PreparedSearch: TypeAlias = PreparedAnonymizer
 
 def prepare_search_package(
     config_json: str, *, compressed: bool = True
 ) -> bytes: ...
-def load_prepared_package(package_bytes: BytesLike) -> PreparedSearch: ...
+def load_prepared_package(package_bytes: BytesLike) -> PreparedAnonymizer: ...
 def load_prepared_package_file(
     package_path: PathLikeString,
-) -> PreparedSearch: ...
+) -> PreparedAnonymizer: ...
+def redact_text_json(
+    config_json: str,
+    full_text: str,
+    operators: OperatorConfig = None,
+    *,
+    redact_string: str | None = None,
+) -> str: ...
+def diagnostics_json(
+    config_json: str,
+    full_text: str,
+    operators: OperatorConfig = None,
+    *,
+    redact_string: str | None = None,
+) -> str: ...
 
 __all__: list[str]

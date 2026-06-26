@@ -63,6 +63,7 @@ const createCountingNativeBinding = (version: string) => {
   let rawPrepare = 0;
   let fromPackage = 0;
   const binding = {
+    normalizeForSearch: (text: string) => text,
     nativePackageVersion: () => version,
     NativePreparedSearch: {
       fromConfigJsonBytes: () => {

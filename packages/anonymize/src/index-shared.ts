@@ -51,26 +51,37 @@ export type {
 
 // ── Native Adapter ───────────────────────────────
 export {
+  PreparedSearch,
   PreparedNativeAnonymizer,
   assertNativeBindingVersion,
   createNativeAnonymizerFromConfig,
   createNativeAnonymizerFromPackage,
   encodeNativeSearchConfig,
+  encodeNativeSearchConfigInput,
   getNativeBindingVersion,
+  load_prepared_package,
+  native_package_version,
+  normalize_for_search,
   prepareNativeSearchPackage,
+  prepare_search_package,
 } from "./native";
 export type {
   NativeAnonymizeBinding,
   NativeAnonymizerFromConfigOptions,
   NativeAnonymizerFromPackageOptions,
   NativeBindingVersionOptions,
+  NativeNormalizeOptions,
   NativeOperatorConfig,
   NativePipelineEntity,
   NativePipelineFromPackageOptions,
   NativePreparedSearchBinding,
   NativeRedactionResult,
+  NativeSearchPackageInput,
   NativeSearchPackageOptions,
   NativeStaticRedactionResult,
+  PreparedSearch as PreparedSearchInstance,
+  SharedNativePreparedPackageOptions,
+  SharedNativeSearchPackageOptions,
 } from "./native";
 export { DEFAULT_NATIVE_PIPELINE_CONFIG } from "./native-default-config";
 export {
