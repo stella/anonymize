@@ -62,6 +62,8 @@ export const pipelineConfigKey = (
     `${config.threshold}:` +
     `${config.enableConfidenceBoost}:` +
     `${config.enableHotwordRules === true}:` +
+    `${config.enableCoreference === true}:` +
+    `${config.enableZoneClassification === true}:` +
     `${config.labels.toSorted().join(",")}:` +
     `${config.denyListCountries?.toSorted().join(",") ?? ""}:` +
     `${config.denyListRegions?.toSorted().join(",") ?? ""}:` +

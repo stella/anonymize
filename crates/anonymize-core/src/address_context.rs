@@ -92,6 +92,7 @@ impl PreparedAddressContextData {
       .filter(|entity| !is_caller_owned_entity(entity))
       .collect::<Vec<_>>();
     let header_end = header_end(full_text);
+    let offsets = ByteOffsets::new(full_text);
 
     for found in self.slash_house_number.find_iter(full_text) {
       let num_start = usize_to_u32("address_context.num_start", found.start())?;
@@ -102,8 +103,7 @@ impl PreparedAddressContextData {
 
       let in_header = num_start < header_end;
       let near_address = address_entities.iter().any(|entity| {
-        entity.start.abs_diff(num_end) < STREET_CONTEXT_WINDOW
-          || entity.end.abs_diff(num_start) < STREET_CONTEXT_WINDOW
+        within_context_window(&offsets, entity, num_start, num_end)
       });
       if !in_header && !near_address {
         continue;
@@ -256,6 +256,7 @@ impl PreparedAddressContextData {
     existing_entities: &[PipelineEntity],
   ) -> Result<Vec<PipelineEntity>> {
     let header_end = header_end(full_text);
+    let offsets = ByteOffsets::new(full_text);
     let context_entities = existing_entities
       .iter()
       .filter(|entity| {
@@ -274,10 +275,9 @@ impl PreparedAddressContextData {
       if start >= header_end || covered_by(existing_entities, start, end) {
         continue;
       }
-      let has_context = context_entities.iter().any(|entity| {
-        entity.start.abs_diff(end) < STREET_CONTEXT_WINDOW
-          || entity.end.abs_diff(start) < STREET_CONTEXT_WINDOW
-      });
+      let has_context = context_entities
+        .iter()
+        .any(|entity| within_context_window(&offsets, entity, start, end));
       if !has_context {
         continue;
       }
@@ -468,6 +468,16 @@ fn span_gap_utf16_units(
     return offsets.utf16_units_between(end, entity.start);
   }
   Ok(0)
+}
+
+fn within_context_window(
+  offsets: &ByteOffsets<'_>,
+  entity: &PipelineEntity,
+  start: u32,
+  end: u32,
+) -> bool {
+  span_gap_utf16_units(offsets, entity, start, end)
+    .is_ok_and(|distance| distance < STREET_CONTEXT_WINDOW)
 }
 
 fn is_short_ascii_digit_token(value: &str) -> bool {

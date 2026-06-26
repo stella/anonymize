@@ -143,7 +143,59 @@ fn coreference_data() -> CoreferenceData {
     }],
     role_stop_terms: vec![String::from("seller")],
     legal_form_aliases: vec![String::from("LLC")],
+    organization_determiners: vec![String::from(
+      r"the\s+(?:company|corporation|firm)",
+    )],
   }
+}
+
+fn legal_form_coreference_prepared_search(
+  suffixes: Vec<&str>,
+) -> PreparedSearch {
+  let suffix_strings = suffixes
+    .iter()
+    .map(|suffix| (*suffix).to_owned())
+    .collect::<Vec<_>>();
+  let regex_patterns = suffixes
+    .into_iter()
+    .map(|suffix| SearchPattern::Literal(suffix.to_owned()))
+    .collect::<Vec<_>>();
+
+  PreparedSearch::new(PreparedSearchConfig {
+    regex_patterns,
+    regex_options: SearchOptions {
+      literal: LiteralSearchOptions {
+        case_insensitive: false,
+        whole_words: false,
+      },
+      ..SearchOptions::default()
+    },
+    slices: PreparedSearchSlices {
+      legal_forms: PatternSlice {
+        start: 0,
+        end: u32::try_from(suffix_strings.len()).unwrap(),
+      },
+      ..PreparedSearchSlices::default()
+    },
+    threshold: 0.5,
+    allowed_labels: vec![String::from("organization")],
+    legal_form_data: Some(LegalFormData {
+      suffixes: suffix_strings.clone(),
+      normalized_boundary_suffixes: vec![String::from("llc")],
+      normalized_suffix_words: vec![String::from("llc")],
+      company_suffix_words: vec![String::from("Company")],
+      ..LegalFormData::default()
+    }),
+    coreference_data: Some(CoreferenceData {
+      legal_form_aliases: suffix_strings,
+      organization_determiners: vec![String::from(
+        r"the\s+(?:company|corporation|firm)",
+      )],
+      ..CoreferenceData::default()
+    }),
+    ..empty_config(PreparedSearchSlices::default())
+  })
+  .unwrap()
 }
 
 #[test]
@@ -336,6 +388,35 @@ fn prepared_search_measures_bare_house_context_in_text_offsets() {
 }
 
 #[test]
+fn prepared_search_measures_slash_address_context_in_text_offsets() {
+  let prepared = PreparedSearch::new(PreparedSearchConfig {
+    regex_patterns: vec![SearchPattern::Regex(String::from(r"\bPraha 10\b"))],
+    regex_meta: vec![RegexMatchMeta::new("address", 1.0)],
+    slices: PreparedSearchSlices {
+      regex: PatternSlice { start: 0, end: 1 },
+      ..PreparedSearchSlices::default()
+    },
+    threshold: 0.5,
+    allowed_labels: vec![String::from("address")],
+    address_context_data: Some(address_context_data()),
+    ..empty_config(PreparedSearchSlices::default())
+  })
+  .unwrap();
+  let full_text = format!("Praha 10 {} Vinohradská 2512/2a.", "á".repeat(145));
+
+  let result = prepared
+    .redact_static_entities(&full_text, &OperatorConfig::default())
+    .unwrap();
+
+  assert!(
+    result
+      .resolved_entities
+      .iter()
+      .any(|entity| entity.text == "Vinohradská 2512/2a")
+  );
+}
+
+#[test]
 fn prepared_search_ignores_caller_owned_addresses_for_bare_house_context() {
   let mut meta = RegexMatchMeta::new("address", 1.0);
   meta.source_detail = Some(SourceDetail::CustomRegex);
@@ -436,6 +517,47 @@ fn prepared_search_adds_coreference_aliases_with_source_placeholder() {
   assert_eq!(
     result.redaction.redacted_text,
     r#"[ORGANIZATION_1] (the "[ORGANIZATION_1]") signed. [ORGANIZATION_1] later paid."#,
+  );
+}
+
+#[test]
+fn prepared_search_propagates_bare_organization_names() {
+  let prepared = legal_form_coreference_prepared_search(vec!["LLC"]);
+
+  let result = prepared
+    .redact_static_entities(
+      "Acme LLC signed. Acme paid.",
+      &OperatorConfig::default(),
+    )
+    .unwrap();
+
+  assert!(result.resolved_entities.iter().any(|entity| {
+    entity.source == DetectionSource::Coreference && entity.text == "Acme"
+  }));
+  assert_eq!(
+    result.redaction.redacted_text,
+    "[ORGANIZATION_1] signed. [ORGANIZATION_1] paid.",
+  );
+}
+
+#[test]
+fn prepared_search_extends_propagated_organization_determiners() {
+  let prepared = legal_form_coreference_prepared_search(vec!["LLC"]);
+
+  let result = prepared
+    .redact_static_entities(
+      "Acme LLC signed. The Company Acme paid.",
+      &OperatorConfig::default(),
+    )
+    .unwrap();
+
+  assert!(result.resolved_entities.iter().any(|entity| {
+    entity.source == DetectionSource::Coreference
+      && entity.text == "The Company Acme"
+  }));
+  assert_eq!(
+    result.redaction.redacted_text,
+    "[ORGANIZATION_1] signed. [ORGANIZATION_1] paid.",
   );
 }
 

@@ -172,6 +172,64 @@ fn keeps_date_like_street_name_in_address_seed_span() {
 }
 
 #[test]
+fn clusters_address_seeds_across_multibyte_text_gap() {
+  let prepared = PreparedSearch::new(PreparedSearchConfig {
+    literal_patterns: vec![
+      SearchPattern::LiteralWithOptions {
+        pattern: String::from("Springfield"),
+        case_insensitive: Some(true),
+        whole_words: Some(true),
+      },
+      SearchPattern::LiteralWithOptions {
+        pattern: String::from("Street"),
+        case_insensitive: Some(true),
+        whole_words: Some(true),
+      },
+    ],
+    literal_options: SearchOptions {
+      literal: LiteralSearchOptions {
+        case_insensitive: true,
+        whole_words: false,
+      },
+      ..SearchOptions::default()
+    },
+    slices: PreparedSearchSlices {
+      deny_list: PatternSlice { start: 0, end: 1 },
+      street_types: PatternSlice { start: 1, end: 2 },
+      ..PreparedSearchSlices::default()
+    },
+    deny_list_data: Some(DenyListMatchData {
+      labels: vec![vec![String::from("address")]].into(),
+      custom_labels: vec![vec![]].into(),
+      originals: vec![String::from("Springfield")],
+      sources: vec![vec![String::from("city")]].into(),
+      filters: Some(DenyListFilterData::default()),
+    }),
+    address_seed_data: Some(AddressSeedData::default()),
+    ..empty_config(PreparedSearchSlices::default())
+  })
+  .expect("address seed data should prepare");
+  let gap = "á".repeat(140);
+  let full_text =
+    format!("Send notices to Main Street, {gap} Springfield 12345.");
+
+  let result = prepared
+    .redact_static_entities(&full_text, &OperatorConfig::default())
+    .expect("static redaction should succeed");
+
+  assert!(
+    result
+      .resolved_entities
+      .iter()
+      .any(|entity| entity.text.contains("Main Street")
+        && entity.text.contains("Springfield 12345")),
+    "resolved address entities: {:?}; address seed entities: {:?}",
+    result.resolved_entities,
+    result.detections.address_seed_entities,
+  );
+}
+
+#[test]
 fn preserves_unit_abbreviation_inside_address_seed_span() {
   let prepared = PreparedSearch::new(PreparedSearchConfig {
     literal_patterns: vec![

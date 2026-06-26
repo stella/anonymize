@@ -391,6 +391,8 @@ pub struct BindingCoreferenceData {
   pub role_stop_terms: Vec<String>,
   #[serde(default)]
   pub legal_form_aliases: Vec<String>,
+  #[serde(default)]
+  pub organization_determiners: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -1625,6 +1627,7 @@ fn coreference_data_from_binding(
       .collect(),
     role_stop_terms: data.role_stop_terms,
     legal_form_aliases: data.legal_form_aliases,
+    organization_determiners: data.organization_determiners,
   }
 }
 
