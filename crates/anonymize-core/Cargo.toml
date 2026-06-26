@@ -14,7 +14,7 @@ fancy-regex = "0.18"
 regex = "1"
 serde = { version = "1", features = ["derive"] }
 stella-stdnum-core = { version = "2.1.1", git = "https://github.com/stella/stdnum", rev = "2f3c3f107e3976ac059cc438d77916a592595d59" }
-stella-text-search-core = { version = "1.0.6", git = "https://github.com/stella/text-search", rev = "0cfaad48a3df24f918cf52a2d5aaf32f5a031148" }
+stella-text-search-core = { version = "1.0.6", git = "https://github.com/stella/text-search", rev = "aaeded107370c8ac7479536432975c750af0c426" }
 
 [dev-dependencies]
 proptest = "1"
