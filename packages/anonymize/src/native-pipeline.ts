@@ -8,12 +8,15 @@ import { applyPipelineLanguageScope } from "./language-scope";
 import { pipelineConfigKey } from "./pipeline-cache-key";
 import type { Dictionaries, GazetteerEntry, PipelineConfig } from "./types";
 import {
-  createNativeAnonymizerFromPackage,
+  createNativePipelineFromPackage,
   prepareNativeSearchPackage,
-  PreparedNativeAnonymizer,
+  PreparedNativePipeline,
   type NativeAnonymizeBinding,
-  type NativeOperatorConfig,
-  type NativeStaticRedactionResult,
+} from "./native";
+
+export {
+  PreparedNativePipeline,
+  createNativePipelineFromPackage,
 } from "./native";
 
 export type NativePipelineUnsupportedFeature = "enableNer" | "enableNameCorpus";
@@ -36,10 +39,7 @@ export type NativePipelinePackageOptions = NativePipelineBuildOptions & {
   compressed?: boolean;
 };
 
-export type NativePipelineFromPackageOptions = {
-  binding: NativeAnonymizeBinding;
-  packageBytes: Uint8Array;
-};
+export type { NativePipelineFromPackageOptions } from "./native";
 
 type NativePipelinePackageCacheValue = Promise<Uint8Array> | Uint8Array;
 
@@ -66,35 +66,6 @@ const sharedPackageCacheFor = (
   sharedPackageByDictionaries.set(dictionaries, created);
   return created;
 };
-
-export class PreparedNativePipeline {
-  readonly #anonymizer: PreparedNativeAnonymizer;
-
-  constructor(anonymizer: PreparedNativeAnonymizer) {
-    this.#anonymizer = anonymizer;
-  }
-
-  prepareDiagnosticsJson(): string | null {
-    return this.#anonymizer.prepareDiagnosticsJson();
-  }
-
-  redactText(
-    fullText: string,
-    operators?: NativeOperatorConfig,
-  ): NativeStaticRedactionResult {
-    return this.#anonymizer.redactStaticEntities(fullText, operators);
-  }
-
-  redactTextDiagnosticsJson(
-    fullText: string,
-    operators?: NativeOperatorConfig,
-  ): string | null {
-    return this.#anonymizer.redactStaticEntitiesDiagnosticsJson(
-      fullText,
-      operators,
-    );
-  }
-}
 
 export const getNativePipelineCompatibility = (
   config: PipelineConfig,
@@ -169,14 +140,6 @@ export const createNativePipelineFromConfig = async ({
   });
   return createNativePipelineFromPackage({ binding, packageBytes });
 };
-
-export const createNativePipelineFromPackage = ({
-  binding,
-  packageBytes,
-}: NativePipelineFromPackageOptions): PreparedNativePipeline =>
-  new PreparedNativePipeline(
-    createNativeAnonymizerFromPackage({ binding, packageBytes }),
-  );
 
 const getCachedNativePipelinePackage = async ({
   binding,
