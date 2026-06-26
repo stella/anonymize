@@ -1350,7 +1350,7 @@ function describeUnsupportedPipelineStages(
   if (config.enableZoneClassification) {
     stages.push("zone-classification");
   }
-  if (config.enableCoreference) {
+  if (config.enableCoreference && !nativeRuntime) {
     stages.push("coreference");
   }
   if (!nativeRuntime && sliceLength(search.slices.streetTypes) > 0) {

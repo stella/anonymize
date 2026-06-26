@@ -38,6 +38,7 @@ pub enum DiagnosticStage {
   EntityLegalForm,
   EntityAddressSeed,
   EntityAddressContext,
+  EntityCoreference,
   Merge,
   Boundary,
   Sanitize,

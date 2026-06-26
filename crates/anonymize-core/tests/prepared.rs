@@ -3,15 +3,16 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use stella_anonymize_core::{
-  AddressContextData, AddressSeedData, AmountWordsData, CountryMatchData,
-  CurrencyData, DateData, DenyListFilterData, DenyListMatchData,
-  DetectionSource, DiagnosticEventKind, DiagnosticStage, Error,
-  FuzzySearchOptions, GazetteerMatchData, HotwordRule, HotwordRuleData,
-  LegalFormData, LiteralSearchOptions, MagnitudeSuffixData, MonetaryData,
-  OperatorConfig, PatternSlice, PreparedSearch, PreparedSearchArtifacts,
-  PreparedSearchConfig, PreparedSearchSlices, RegexMatchMeta,
-  RegexSearchOptions, SearchOptions, SearchPattern, SourceDetail, TriggerData,
-  TriggerRule, TriggerStrategy, TriggerValidation, WrittenAmountPatternData,
+  AddressContextData, AddressSeedData, AmountWordsData, CoreferenceData,
+  CoreferencePatternData, CountryMatchData, CurrencyData, DateData,
+  DenyListFilterData, DenyListMatchData, DetectionSource, DiagnosticEventKind,
+  DiagnosticStage, Error, FuzzySearchOptions, GazetteerMatchData, HotwordRule,
+  HotwordRuleData, LegalFormData, LiteralSearchOptions, MagnitudeSuffixData,
+  MonetaryData, OperatorConfig, PatternSlice, PreparedSearch,
+  PreparedSearchArtifacts, PreparedSearchConfig, PreparedSearchSlices,
+  RegexMatchMeta, RegexSearchOptions, SearchOptions, SearchPattern,
+  SourceDetail, TriggerData, TriggerRule, TriggerStrategy, TriggerValidation,
+  WrittenAmountPatternData,
 };
 
 fn empty_config(slices: PreparedSearchSlices) -> PreparedSearchConfig {
@@ -37,6 +38,7 @@ fn empty_config(slices: PreparedSearchSlices) -> PreparedSearchConfig {
     legal_form_data: None,
     address_seed_data: None,
     address_context_data: None,
+    coreference_data: None,
     date_data: None,
     monetary_data: None,
   }
@@ -118,6 +120,17 @@ fn address_context_data() -> AddressContextData {
   }
 }
 
+fn coreference_data() -> CoreferenceData {
+  CoreferenceData {
+    definition_patterns: vec![CoreferencePatternData {
+      pattern: String::from(r#"\((?:hereinafter|the)\s+["']([^"']+)["']\)"#),
+      flags: String::from("gi"),
+    }],
+    role_stop_terms: vec![String::from("seller")],
+    legal_form_aliases: vec![String::from("LLC")],
+  }
+}
+
 #[test]
 fn prepared_search_runs_legal_form_pass_on_normalized_text() {
   let prepared = legal_form_prepared_search(vec!["Pty Ltd"]);
@@ -163,6 +176,7 @@ fn prepared_search_runs_normalized_literal_pass() {
     legal_form_data: None,
     address_seed_data: None,
     address_context_data: None,
+    coreference_data: None,
     date_data: None,
     monetary_data: None,
   })
@@ -376,6 +390,112 @@ fn prepared_search_measures_header_zone_in_text_offsets() {
 }
 
 #[test]
+fn prepared_search_adds_coreference_aliases_with_source_placeholder() {
+  let prepared = PreparedSearch::new(PreparedSearchConfig {
+    regex_patterns: vec![SearchPattern::Regex(String::from(
+      r"Acme Corporation",
+    ))],
+    regex_meta: vec![RegexMatchMeta::new("organization", 1.0)],
+    slices: PreparedSearchSlices {
+      regex: PatternSlice { start: 0, end: 1 },
+      ..PreparedSearchSlices::default()
+    },
+    threshold: 0.5,
+    allowed_labels: vec![String::from("organization")],
+    coreference_data: Some(coreference_data()),
+    ..empty_config(PreparedSearchSlices::default())
+  })
+  .unwrap();
+
+  let result = prepared
+    .redact_static_entities(
+      r#"Acme Corporation (the "Acme") signed. Acme later paid."#,
+      &OperatorConfig::default(),
+    )
+    .unwrap();
+
+  assert!(result.resolved_entities.iter().any(|entity| {
+    entity.source == DetectionSource::Coreference && entity.text == "Acme"
+  }));
+  assert_eq!(
+    result.redaction.redacted_text,
+    r#"[ORGANIZATION_1] (the "[ORGANIZATION_1]") signed. [ORGANIZATION_1] later paid."#,
+  );
+}
+
+#[test]
+fn prepared_search_does_not_seed_coreference_from_caller_owned_entities() {
+  let mut meta = RegexMatchMeta::new("organization", 1.0);
+  meta.source_detail = Some(SourceDetail::CustomRegex);
+  let prepared = PreparedSearch::new(PreparedSearchConfig {
+    custom_regex_patterns: vec![SearchPattern::Regex(String::from(
+      r"Acme Corporation",
+    ))],
+    custom_regex_meta: vec![meta],
+    slices: PreparedSearchSlices {
+      custom_regex: PatternSlice { start: 0, end: 1 },
+      ..PreparedSearchSlices::default()
+    },
+    threshold: 0.5,
+    allowed_labels: vec![String::from("organization")],
+    coreference_data: Some(coreference_data()),
+    ..empty_config(PreparedSearchSlices::default())
+  })
+  .unwrap();
+
+  let result = prepared
+    .redact_static_entities(
+      r#"Acme Corporation (the "Acme") signed. Acme later paid."#,
+      &OperatorConfig::default(),
+    )
+    .unwrap();
+
+  assert!(
+    !result
+      .resolved_entities
+      .iter()
+      .any(|entity| { entity.source == DetectionSource::Coreference })
+  );
+}
+
+#[test]
+fn prepared_search_rejects_role_and_legal_form_coreference_aliases() {
+  let prepared = PreparedSearch::new(PreparedSearchConfig {
+    regex_patterns: vec![
+      SearchPattern::Regex(String::from(r"Acme Corporation")),
+      SearchPattern::Regex(String::from(r"Beta LLC")),
+    ],
+    regex_meta: vec![
+      RegexMatchMeta::new("organization", 1.0),
+      RegexMatchMeta::new("organization", 1.0),
+    ],
+    slices: PreparedSearchSlices {
+      regex: PatternSlice { start: 0, end: 2 },
+      ..PreparedSearchSlices::default()
+    },
+    threshold: 0.5,
+    allowed_labels: vec![String::from("organization")],
+    coreference_data: Some(coreference_data()),
+    ..empty_config(PreparedSearchSlices::default())
+  })
+  .unwrap();
+
+  let result = prepared
+    .redact_static_entities(
+      r#"Acme Corporation (the "Seller") signed. Seller paid. Beta LLC (the "LLC") joined. LLC remained."#,
+      &OperatorConfig::default(),
+    )
+    .unwrap();
+
+  assert!(
+    !result
+      .resolved_entities
+      .iter()
+      .any(|entity| { entity.source == DetectionSource::Coreference })
+  );
+}
+
+#[test]
 fn prepared_search_artifacts_match_direct_prepare() {
   let config = PreparedSearchConfig {
     regex_patterns: vec![SearchPattern::Regex(String::from(r"\bID\d{3}\b"))],
@@ -410,6 +530,7 @@ fn prepared_search_artifacts_match_direct_prepare() {
     legal_form_data: None,
     address_seed_data: None,
     address_context_data: None,
+    coreference_data: None,
     date_data: None,
     monetary_data: None,
   };
@@ -559,6 +680,7 @@ fn prepared_search_emits_static_detector_entities() {
     legal_form_data: None,
     address_seed_data: None,
     address_context_data: None,
+    coreference_data: None,
     date_data: None,
     monetary_data: None,
   })
@@ -1257,6 +1379,7 @@ fn prepared_search_redacts_static_entities_end_to_end() {
     legal_form_data: None,
     address_seed_data: None,
     address_context_data: None,
+    coreference_data: None,
     date_data: None,
     monetary_data: None,
   })
@@ -1613,6 +1736,7 @@ fn prepared_search_reports_static_redaction_diagnostics() {
     legal_form_data: None,
     address_seed_data: None,
     address_context_data: None,
+    coreference_data: None,
     date_data: None,
     monetary_data: None,
   })
@@ -1697,6 +1821,7 @@ fn prepared_search_redacts_custom_deny_list_entities() {
     legal_form_data: None,
     address_seed_data: None,
     address_context_data: None,
+    coreference_data: None,
     date_data: None,
     monetary_data: None,
   })

@@ -4,6 +4,7 @@ use crate::address_context::{AddressContextData, PreparedAddressContextData};
 use crate::address_seeds::{AddressSeedData, PreparedAddressSeedData};
 use crate::artifact_bytes::{ArtifactReader, ArtifactWriter};
 use crate::byte_offsets::ByteOffsets;
+use crate::coreference::{CoreferenceData, PreparedCoreferenceData};
 use crate::dates::{DateData, PreparedDateData};
 use crate::diagnostics::{DiagnosticStage, StaticRedactionDiagnostics};
 use crate::false_positives::filter_entity_false_positives;
@@ -67,6 +68,7 @@ pub struct PreparedSearch {
   legal_form_data: Option<PreparedLegalFormData>,
   address_seed_data: Option<PreparedAddressSeedData>,
   address_context_data: Option<PreparedAddressContextData>,
+  coreference_data: Option<PreparedCoreferenceData>,
   date_data: Option<PreparedDateData>,
   monetary_data: Option<PreparedMonetaryData>,
 }
@@ -115,6 +117,8 @@ pub struct PreparedSearchConfig {
   pub address_seed_data: Option<AddressSeedData>,
   #[serde(default)]
   pub address_context_data: Option<AddressContextData>,
+  #[serde(default)]
+  pub coreference_data: Option<CoreferenceData>,
   pub date_data: Option<DateData>,
   pub monetary_data: Option<MonetaryData>,
 }
@@ -447,6 +451,7 @@ impl PreparedSearch {
       address_context_data: prepare_address_context_data(
         config.address_context_data,
       )?,
+      coreference_data: prepare_coreference_data(config.coreference_data)?,
       date_data,
       monetary_data,
     })
@@ -912,6 +917,12 @@ impl PreparedSearch {
       self.threshold,
       &self.allowed_labels,
     );
+    resolved_entities = self.process_coreference_entities(
+      full_text,
+      resolved_entities,
+      false_positive_filters,
+      diagnostics.as_deref_mut(),
+    )?;
     clear_internal_source_details(&mut resolved_entities);
     if let Some(diagnostics) = &mut diagnostics {
       diagnostics.record_entities(
@@ -973,6 +984,43 @@ impl PreparedSearch {
       return Ok(Vec::new());
     };
     data.process(full_text, existing_entities)
+  }
+
+  fn process_coreference_entities(
+    &self,
+    full_text: &str,
+    existing_entities: Vec<PipelineEntity>,
+    false_positive_filters: Option<&DenyListFilterData>,
+    mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
+  ) -> Result<Vec<PipelineEntity>> {
+    let Some(data) = &self.coreference_data else {
+      return Ok(existing_entities);
+    };
+
+    let start = Instant::now();
+    let coreference_entities = data.process(full_text, &existing_entities)?;
+    if let Some(diagnostics) = &mut diagnostics {
+      diagnostics.record_entities(
+        DiagnosticStage::EntityCoreference,
+        &coreference_entities,
+        full_text,
+        Some(elapsed_us(start)),
+      );
+    }
+    if coreference_entities.is_empty() {
+      return Ok(existing_entities);
+    }
+
+    let merged =
+      merge_and_dedup(&[existing_entities, coreference_entities].concat());
+    let consistent = enforce_boundary_consistency(&merged, full_text)?;
+    let sanitized = sanitize_entities_with_source(&consistent, full_text)?;
+    let filtered = filter_entity_false_positives(
+      sanitized,
+      full_text,
+      false_positive_filters,
+    )?;
+    Ok(filter_entities_for_labels(filtered, &self.allowed_labels))
   }
 }
 
@@ -1427,6 +1475,12 @@ fn prepare_address_context_data(
   data: Option<AddressContextData>,
 ) -> Result<Option<PreparedAddressContextData>> {
   data.map(PreparedAddressContextData::new).transpose()
+}
+
+fn prepare_coreference_data(
+  data: Option<CoreferenceData>,
+) -> Result<Option<PreparedCoreferenceData>> {
+  data.map(PreparedCoreferenceData::new).transpose()
 }
 
 fn split_regex_patterns(
