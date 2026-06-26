@@ -415,3 +415,53 @@ fn search_index_prepared_artifacts_reject_wrong_slot_count() {
     "missing prepared slot artifacts should fail"
   );
 }
+
+#[test]
+fn search_index_prepared_artifacts_reject_stale_patterns() {
+  let options = SearchOptions {
+    literal: LiteralSearchOptions {
+      case_insensitive: false,
+      whole_words: false,
+    },
+    ..SearchOptions::default()
+  };
+  let artifacts = SearchIndex::prepare_artifacts(
+    vec![SearchPattern::Literal(String::from("Alice"))],
+    options,
+  )
+  .unwrap();
+  let stale_patterns = vec![SearchPattern::Literal(String::from("Bob"))];
+
+  assert!(
+    SearchIndex::new_with_artifacts(stale_patterns, options, &artifacts)
+      .is_err(),
+    "same-count stale prepared artifacts should fail"
+  );
+}
+
+#[test]
+fn search_index_prepared_artifacts_reject_stale_literal_options() {
+  let prepare_options = SearchOptions {
+    literal: LiteralSearchOptions {
+      case_insensitive: false,
+      whole_words: false,
+    },
+    ..SearchOptions::default()
+  };
+  let load_options = SearchOptions {
+    literal: LiteralSearchOptions {
+      case_insensitive: true,
+      whole_words: false,
+    },
+    ..SearchOptions::default()
+  };
+  let patterns = vec![SearchPattern::Literal(String::from("Alice"))];
+  let artifacts =
+    SearchIndex::prepare_artifacts(patterns.clone(), prepare_options).unwrap();
+
+  assert!(
+    SearchIndex::new_with_artifacts(patterns, load_options, &artifacts)
+      .is_err(),
+    "prepared artifacts should be bound to literal search options"
+  );
+}
