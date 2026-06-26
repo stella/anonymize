@@ -16,12 +16,15 @@ import fc from "fast-check";
 import {
   assertNativeBindingVersion,
   createNativeAnonymizerFromPackage,
+  diagnostics_json,
   getNativeBindingVersion,
   load_prepared_package,
   native_package_version,
   normalize_for_search,
   prepareNativeSearchPackage,
   prepare_search_package,
+  PreparedSearch,
+  redact_text_json,
   type NativeAnonymizeBinding,
   type NativeOperatorConfig,
   type NativePreparedSearchBinding,
@@ -138,6 +141,27 @@ type SharedSdkParityCase = {
   text: string;
   operators: NativeOperatorConfig | null;
 };
+
+const SHARED_SDK_CORE_TOP_LEVEL_FUNCTIONS = [
+  "prepare_search_package",
+  "load_prepared_package",
+  "native_package_version",
+  "normalize_for_search",
+  "redact_text_json",
+  "diagnostics_json",
+] as const;
+
+const SHARED_SDK_TOP_LEVEL_FUNCTIONS = [
+  ...SHARED_SDK_CORE_TOP_LEVEL_FUNCTIONS,
+  "load_prepared_package_file",
+] as const;
+
+const SHARED_SDK_PREPARED_METHODS = [
+  "redact_text",
+  "redact_text_json",
+  "diagnostics_json",
+  "prepare_diagnostics_json",
+] as const;
 
 type ContractFixtureCase = {
   name: string;
@@ -490,26 +514,15 @@ import stella_anonymize as anonymize
 
 payload = json.loads(payload_path.read_text())
 package_bytes = package_path.read_bytes()
-top_level = [
-    "prepare_search_package",
-    "load_prepared_package",
-    "load_prepared_package_file",
-    "native_package_version",
-    "normalize_for_search",
-    "redact_text_json",
-    "diagnostics_json",
-]
-prepared_methods = [
-    "redact_text",
-    "redact_text_json",
-    "diagnostics_json",
-    "prepare_diagnostics_json",
-]
+top_level = payload["top_level_functions"]
+prepared_methods = payload["prepared_methods"]
 missing_top_level = [
     name for name in top_level if not callable(getattr(anonymize, name, None))
 ]
 if missing_top_level:
     raise AssertionError(f"missing Python SDK functions: {missing_top_level}")
+if not callable(getattr(anonymize, "PreparedSearch", None)):
+    raise AssertionError("missing Python PreparedSearch facade")
 prepared = anonymize.load_prepared_package(package_bytes)
 if prepared is not anonymize.load_prepared_package(package_bytes):
     raise AssertionError("facade package cache did not reuse prepared search")
@@ -1008,6 +1021,26 @@ describe("native adapter parity", () => {
       },
     ];
 
+    const tsSdkFunctions: Record<
+      (typeof SHARED_SDK_CORE_TOP_LEVEL_FUNCTIONS)[number],
+      unknown
+    > = {
+      diagnostics_json,
+      load_prepared_package,
+      native_package_version,
+      normalize_for_search,
+      prepare_search_package,
+      redact_text_json,
+    };
+    for (const name of SHARED_SDK_CORE_TOP_LEVEL_FUNCTIONS) {
+      expect(typeof tsSdkFunctions[name]).toBe("function");
+    }
+    expect(typeof PreparedSearch).toBe("function");
+    const preparedApi = prepared as unknown as Record<string, unknown>;
+    for (const name of SHARED_SDK_PREPARED_METHODS) {
+      expect(typeof preparedApi[name]).toBe("function");
+    }
+
     expect(native_package_version(adapters.native)).toBe(packageJsonVersion());
     expect(
       normalize_for_search({
@@ -1033,11 +1066,32 @@ describe("native adapter parity", () => {
     );
 
     expect(tsSdkJson).toEqual(rustCoreJson);
+    expect(
+      cases.map(({ text, operators }) =>
+        JSON.parse(
+          redact_text_json({
+            binding: adapters.native,
+            config: CONFIG_JSON,
+            fullText: text,
+            ...(operators !== null ? { operators } : {}),
+          }),
+        ),
+      ),
+    ).toEqual(rustCoreJson);
     const diagnosticsJson = prepared.diagnostics_json(cases[0].text);
     if (diagnosticsJson === null) {
       throw new Error("missing shared SDK diagnostics");
     }
     expect(diagnosticsJson).toContain('"diagnostics"');
+    const topLevelDiagnosticsJson = diagnostics_json({
+      binding: adapters.native,
+      config: CONFIG_JSON,
+      fullText: cases[0].text,
+    });
+    if (topLevelDiagnosticsJson === null) {
+      throw new Error("missing top-level shared SDK diagnostics");
+    }
+    expect(topLevelDiagnosticsJson).toContain('"diagnostics"');
 
     const python = callPythonSharedSdkParity({
       pythonModulePath: adapters.pythonModulePath,
@@ -2275,6 +2329,8 @@ const callPythonSharedSdkParity = ({
       compressed: true,
       config_json: CONFIG_JSON,
       normalize_text: normalizeText,
+      prepared_methods: SHARED_SDK_PREPARED_METHODS,
+      top_level_functions: SHARED_SDK_TOP_LEVEL_FUNCTIONS,
     }),
   );
   const output = runCommand(

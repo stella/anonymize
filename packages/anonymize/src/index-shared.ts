@@ -59,11 +59,13 @@ export {
   encodeNativeSearchConfig,
   encodeNativeSearchConfigInput,
   getNativeBindingVersion,
+  diagnostics_json,
   load_prepared_package,
   native_package_version,
   normalize_for_search,
   prepareNativeSearchPackage,
   prepare_search_package,
+  redact_text_json,
 } from "./native";
 export type {
   NativeAnonymizeBinding,
@@ -81,6 +83,8 @@ export type {
   NativeStaticRedactionResult,
   PreparedSearch as PreparedSearchInstance,
   SharedNativePreparedPackageOptions,
+  SharedNativeDiagnosticsJsonOptions,
+  SharedNativeRedactTextJsonOptions,
   SharedNativeSearchPackageOptions,
 } from "./native";
 export { DEFAULT_NATIVE_PIPELINE_CONFIG } from "./native-default-config";

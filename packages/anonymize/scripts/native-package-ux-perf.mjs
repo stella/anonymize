@@ -42,6 +42,7 @@ function runScenario({ name, compressed }) {
   const load = runMigration({
     ANONYMIZE_MIGRATION_NATIVE_PACKAGE_PATH: packagePath,
   });
+  const nativeDiagnostics = load.nativeDiagnostics ?? null;
 
   return {
     name,
@@ -55,6 +56,10 @@ function runScenario({ name, compressed }) {
     firstRunMs: load.timings.coldRunMs,
     firstTouchMs: load.timings.nativeFirstTouchMs,
     warmClickMs: load.timings.nativeWarmClickMs,
+    prepareTopStages: nativeDiagnostics?.prepare?.topStages ?? [],
+    cachedPrepareTopStages: nativeDiagnostics?.cachedPrepare?.topStages ?? [],
+    runTopStages: nativeDiagnostics?.run?.topStages ?? [],
+    runTopFixtures: nativeDiagnostics?.run?.topFixtures ?? [],
     fixtureTimings: load.fixtureTimings,
     topColdFixtures: load.fixtureTimings.byFixture
       .toSorted((left, right) => right.coldMs - left.coldMs)
