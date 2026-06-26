@@ -141,6 +141,8 @@ oxlint (ultracite preset) + oxfmt. To suppress a rule:
 
 This is a Bun-first TypeScript monorepo for text anonymization. The library handles sensitive text, so privacy, deterministic behavior, and clear data boundaries matter.
 
+> Cargo build artifacts go to `E:\cargo-target\anonymize` (configured in `.cargo/config.toml`).
+
 ### Commands
 
 - `bun install`

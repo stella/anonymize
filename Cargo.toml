@@ -4,6 +4,7 @@ members = [
   "crates/anonymize-core",
   "crates/anonymize-napi",
   "crates/anonymize-py",
+  "crates/gliner2-server",
 ]
 resolver = "3"
 

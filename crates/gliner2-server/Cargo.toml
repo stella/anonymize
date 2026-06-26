@@ -1,0 +1,23 @@
+[package]
+name = "gliner2-server"
+version.workspace = true
+edition.workspace = true
+description = "HTTP sidecar for GLiNER2 PII inference"
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+
+[dependencies]
+anyhow = "1"
+axum = "0.8"
+clap = { version = "4", features = ["derive"] }
+gliner2_inference = { git = "https://github.com/SemplificaAI/gliner2-rs", tag = "v0.5.1" }
+ort = { version = "=2.0.0-rc.9", default-features = false, features = ["load-dynamic", "ndarray", "half"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[lints]
+workspace = true

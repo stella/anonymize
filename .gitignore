@@ -20,3 +20,4 @@ package-lock.json
 
 # Local-only scratch workspace.
 packages/anonymize/hunt/
+.gitnexus
