@@ -40,7 +40,7 @@
   },
   "license": "MIT",
   "scripts": {
-    "build": "tsdown",
+    "build": "tsdown && bun scripts/build-native-node.mjs",
     "prepublishOnly": "bun run build",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json && tsc --noEmit -p tsconfig.wasm.json",
     "test": "bun test --preload ./src/__test__/setup.ts --timeout 15000",
