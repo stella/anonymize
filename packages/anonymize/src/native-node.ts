@@ -15,12 +15,6 @@ export type NativeRequire = (specifier: string) => unknown;
 
 export type NativeLibc = "gnu" | "musl";
 
-export type NativePlatformPackageOptions = {
-  platform: string;
-  arch: string;
-  libc?: NativeLibc;
-};
-
 export type LoadNativeBindingOptions = {
   expectedVersion?: string;
   platform?: string;
@@ -59,23 +53,6 @@ const defaultNativePipelineCache = new WeakMap<
 
 export { DEFAULT_NATIVE_PIPELINE_CONFIG } from "./native-default-config";
 
-export const nativePlatformPackageName = ({
-  platform,
-  arch,
-  libc = "gnu",
-}: NativePlatformPackageOptions): string | null => {
-  if (platform === "darwin" && (arch === "arm64" || arch === "x64")) {
-    return `@stll/anonymize-darwin-${arch}`;
-  }
-  if (platform === "linux" && (arch === "arm64" || arch === "x64")) {
-    return libc === "gnu" ? `@stll/anonymize-linux-${arch}-gnu` : null;
-  }
-  if (platform === "win32" && arch === "x64") {
-    return "@stll/anonymize-win32-x64-msvc";
-  }
-  return null;
-};
-
 export const loadNativeAnonymizeBinding = (
   options: LoadNativeBindingOptions = {},
 ): NativeAnonymizeBinding => {
@@ -104,16 +81,9 @@ export const loadNativeAnonymizeBinding = (
     return binding;
   }
 
-  const packageName = nativePlatformPackageName({
-    platform,
-    arch,
-    ...(options.libc !== undefined ? { libc: options.libc } : {}),
-  });
-  const platformMessage =
-    packageName === null
-      ? `Unsupported native anonymize platform ${platform}/${arch}`
-      : `Unable to load native anonymize binding for ${platform}/${arch}`;
-  throw new Error(`${platformMessage}:\n${errors.join("\n")}`);
+  throw new Error(
+    `Unable to load native anonymize binding for ${platform}/${arch}:\n${errors.join("\n")}`,
+  );
 };
 
 export const readNativePipelinePackageFile = (
