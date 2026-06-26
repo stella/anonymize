@@ -36,6 +36,8 @@ const CANDIDATE_RUNTIME =
 const FAIL_ON_MISMATCH =
   process.env.ANONYMIZE_MIGRATION_FAIL_ON_MISMATCH ??
   (CANDIDATE_RUNTIME === "typescript" ? "1" : "0");
+const ALLOW_ACCEPTED_MISMATCHES =
+  process.env.ANONYMIZE_MIGRATION_ALLOW_ACCEPTED_MISMATCHES === "1";
 const WARM_ITERATIONS = positiveIntegerEnv(
   "ANONYMIZE_MIGRATION_WARM_ITERATIONS",
   2,
@@ -179,7 +181,9 @@ async function runCoordinator() {
     if (baseline !== null) {
       const comparison = compareSnapshots(baseline, candidate);
       console.log(JSON.stringify(comparison));
-      if (!comparison.equal && FAIL_ON_MISMATCH !== "0") {
+      const acceptedByPolicy =
+        ALLOW_ACCEPTED_MISMATCHES && comparison.acceptedEqual;
+      if (!comparison.equal && !acceptedByPolicy && FAIL_ON_MISMATCH !== "0") {
         throw new Error(
           `Fixture parity failed for ${comparison.mismatches.length} fixture(s)`,
         );
