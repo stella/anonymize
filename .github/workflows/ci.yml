@@ -49,7 +49,12 @@ jobs:
       - name: Setup Rust
         run: |
           rustup toolchain install 1.96.0 --profile minimal --component rustfmt,clippy
+          rustup toolchain install nightly-2026-04-16 --profile minimal \
+            --component rustc-dev \
+            --component llvm-tools-preview
           rustup default 1.96.0
+          cargo install cargo-dylint --version 6.0.1 --locked
+          cargo install dylint-link --version 6.0.1 --locked
 
       - name: Rust checks
         run: bun run rust:check
