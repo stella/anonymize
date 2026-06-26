@@ -279,6 +279,83 @@ fn deny_list_processor_emits_curated_non_person_labels() {
 }
 
 #[test]
+fn deny_list_processor_suppresses_shorter_curated_same_start_matches() {
+  let matches = vec![
+    SearchMatch::Literal {
+      pattern: 0,
+      start: 0,
+      end: 7,
+    },
+    SearchMatch::Literal {
+      pattern: 1,
+      start: 0,
+      end: 17,
+    },
+  ];
+  let data = DenyListMatchData {
+    labels: vec![vec![String::from("address")], vec![String::from("country")]]
+      .into(),
+    custom_labels: vec![vec![], vec![]].into(),
+    originals: vec![String::from("Česká"), String::from("Česká republika")],
+    sources: vec![vec![String::from("city")], vec![String::from("deny-list")]]
+      .into(),
+    filters: Some(DenyListFilterData::default()),
+  };
+
+  let entities = process_deny_list_matches(
+    &matches,
+    PatternSlice { start: 0, end: 2 },
+    "Česká republika",
+    &data,
+  )
+  .unwrap();
+
+  assert_eq!(entities.len(), 1);
+  assert_eq!(entities[0].label, "country");
+  assert_eq!(entities[0].text, "Česká republika");
+}
+
+#[test]
+fn deny_list_processor_suppresses_shorter_contained_curated_matches() {
+  let matches = vec![
+    SearchMatch::Literal {
+      pattern: 0,
+      start: 0,
+      end: 17,
+    },
+    SearchMatch::Literal {
+      pattern: 1,
+      start: 10,
+      end: 17,
+    },
+  ];
+  let data = DenyListMatchData {
+    labels: vec![
+      vec![String::from("organization")],
+      vec![String::from("address")],
+    ]
+    .into(),
+    custom_labels: vec![vec![], vec![]].into(),
+    originals: vec![String::from("Nemocnice Blansko"), String::from("Blansko")],
+    sources: vec![vec![String::from("deny-list")], vec![String::from("city")]]
+      .into(),
+    filters: Some(DenyListFilterData::default()),
+  };
+
+  let entities = process_deny_list_matches(
+    &matches,
+    PatternSlice { start: 0, end: 2 },
+    "Nemocnice Blansko",
+    &data,
+  )
+  .unwrap();
+
+  assert_eq!(entities.len(), 1);
+  assert_eq!(entities[0].label, "organization");
+  assert_eq!(entities[0].text, "Nemocnice Blansko");
+}
+
+#[test]
 fn deny_list_processor_suppresses_signing_place_address() {
   let text = "Podepsano V Brně dne 1. ledna 2026.";
   let start = u32::try_from(text.find("Brně").unwrap()).unwrap();

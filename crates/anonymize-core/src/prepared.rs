@@ -574,7 +574,11 @@ impl PreparedSearch {
   ) -> Result<StaticDetectionResult> {
     let matches =
       self.find_matches_inner(full_text, diagnostics.as_deref_mut())?;
-    let passes = self.process_static_entity_passes(&matches, full_text)?;
+    let passes = self.process_static_entity_passes(
+      &matches,
+      full_text,
+      diagnostics.as_deref_mut(),
+    )?;
 
     if let Some(diagnostics) = &mut diagnostics {
       record_static_entity_diagnostics(diagnostics, full_text, &passes);
@@ -599,6 +603,7 @@ impl PreparedSearch {
     &self,
     matches: &PreparedSearchMatches,
     full_text: &str,
+    diagnostics: Option<&mut StaticRedactionDiagnostics>,
   ) -> Result<StaticEntityPasses> {
     let regex_start = Instant::now();
     let regex = TimedEntities {
@@ -656,7 +661,8 @@ impl PreparedSearch {
 
     let anchored = self.process_anchored_entities(full_text)?;
 
-    let trigger = self.process_trigger_entities(matches, full_text)?;
+    let trigger =
+      self.process_trigger_entities(matches, full_text, diagnostics)?;
 
     let signature = process_signature_entities(full_text);
 
@@ -714,6 +720,7 @@ impl PreparedSearch {
     &self,
     matches: &PreparedSearchMatches,
     full_text: &str,
+    diagnostics: Option<&mut StaticRedactionDiagnostics>,
   ) -> Result<TimedEntities> {
     let start = Instant::now();
     let entities = if let Some(data) = &self.trigger_data {
@@ -722,6 +729,7 @@ impl PreparedSearch {
         self.slices.triggers,
         full_text,
         data,
+        diagnostics,
       )?
     } else {
       Vec::new()
