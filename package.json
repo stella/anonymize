@@ -21,7 +21,7 @@
     "rust:lint": "cargo ci-clippy",
     "rust:test": "cargo ci-test",
     "rust:check": "bun run rust:fmt && bun run rust:lint && bun run rust:test",
-    "python:typecheck": "uvx ty check --extra-search-path crates/anonymize-py/python crates/anonymize-py/typecheck",
+    "python:typecheck": "uvx --from ty==0.0.29 ty check --extra-search-path crates/anonymize-py/python crates/anonymize-py/typecheck",
     "sync:version": "node .github/tools/sync-runtime-version.mjs",
     "check:version": "node .github/tools/sync-runtime-version.mjs --check",
     "check:bun": "node .github/tools/check-bun-workflows.mjs",
