@@ -8,10 +8,10 @@ use stella_anonymize_core::{
   DenyListFilterData, DenyListMatchData, DetectionSource, DiagnosticEvent,
   DiagnosticEventKind, DiagnosticStage, FuzzySearchOptions, GazetteerMatchData,
   HotwordRule, HotwordRuleData, LegalFormData, LiteralSearchOptions,
-  MagnitudeSuffixData, MonetaryData, OperatorConfig, OperatorType,
-  PatternSlice, PreparedSearchConfig, PreparedSearchSlices, RegexMatchMeta,
-  RegexSearchOptions, SearchEngine, SearchOptions, SearchPattern,
-  ShareQuantityTermData, SigningPlaceGuardData, SourceDetail,
+  MagnitudeSuffixData, MonetaryData, NameCorpusData, OperatorConfig,
+  OperatorType, PatternSlice, PreparedSearchConfig, PreparedSearchSlices,
+  RegexMatchMeta, RegexSearchOptions, SearchEngine, SearchOptions,
+  SearchPattern, ShareQuantityTermData, SigningPlaceGuardData, SourceDetail,
   StaticRedactionDiagnosticResult, StaticRedactionDiagnostics,
   StaticRedactionResult, StringGroups, TriggerData, TriggerRule,
   TriggerStrategy, TriggerValidation, WrittenAmountPatternData, ZoneData,
@@ -21,13 +21,13 @@ use stella_anonymize_core::{
 pub type Result<T> = std::result::Result<T, ContractError>;
 
 const PREPARED_SEARCH_PACKAGE_HEADER: [u8; 8] = *b"ANONPKG1";
-const PREPARED_SEARCH_PACKAGE_VERSION: u32 = 10;
+const PREPARED_SEARCH_PACKAGE_VERSION: u32 = 11;
 const PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER: [u8; 8] = *b"ANONPKZ1";
-const PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION: u32 = 8;
+const PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION: u32 = 9;
 const PREPARED_SEARCH_CORE_PACKAGE_HEADER: [u8; 8] = *b"ANONCPK1";
-const PREPARED_SEARCH_CORE_PACKAGE_VERSION: u32 = 9;
+const PREPARED_SEARCH_CORE_PACKAGE_VERSION: u32 = 10;
 const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_HEADER: [u8; 8] = *b"ANONCPZ1";
-const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION: u32 = 9;
+const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION: u32 = 10;
 const PREPARED_SEARCH_PACKAGE_DIGEST_BYTES: usize = 32;
 const PREPARED_SEARCH_PACKAGE_ZSTD_LEVEL: i32 = 3;
 const MAX_PREPARED_SEARCH_PACKAGE_PAYLOAD_BYTES: usize = 256 * 1024 * 1024;
@@ -403,6 +403,40 @@ pub struct BindingCoreferencePatternData {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BindingNameCorpusData {
+  #[serde(default)]
+  pub first_names: Vec<String>,
+  #[serde(default)]
+  pub surnames: Vec<String>,
+  #[serde(default)]
+  pub title_tokens: Vec<String>,
+  #[serde(default)]
+  pub title_abbreviations: Vec<String>,
+  #[serde(default)]
+  pub excluded_words: Vec<String>,
+  #[serde(default)]
+  pub common_words: Vec<String>,
+  #[serde(default)]
+  pub non_western_names: Vec<String>,
+  #[serde(default)]
+  pub excluded_all_caps: Vec<String>,
+  #[serde(default)]
+  pub ja_suffixes: Vec<String>,
+  #[serde(default)]
+  pub arabic_connectors: Vec<String>,
+  #[serde(default)]
+  pub relation_connectors: Vec<String>,
+  #[serde(default)]
+  pub hyphenated_prefixes: Vec<String>,
+  #[serde(default)]
+  pub cjk_non_person_terms: Vec<String>,
+  #[serde(default)]
+  pub cjk_surname_starters: Vec<String>,
+  #[serde(default)]
+  pub organization_terms: Vec<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct BindingDenyListMatchData {
   #[serde(default)]
   pub labels: Vec<Vec<String>>,
@@ -513,6 +547,8 @@ pub struct BindingPreparedSearchConfig {
   #[serde(default)]
   pub coreference_data: Option<BindingCoreferenceData>,
   #[serde(default)]
+  pub name_corpus_data: Option<BindingNameCorpusData>,
+  #[serde(default)]
   pub date_data: Option<BindingDateData>,
   #[serde(default)]
   pub monetary_data: Option<BindingMonetaryData>,
@@ -574,6 +610,7 @@ struct BinaryPreparedSearchConfig {
   zone_data: Option<BindingZoneData>,
   address_context_data: Option<BindingAddressContextData>,
   coreference_data: Option<BindingCoreferenceData>,
+  name_corpus_data: Option<BindingNameCorpusData>,
   date_data: Option<BindingDateData>,
   monetary_data: Option<BindingMonetaryData>,
 }
@@ -778,6 +815,7 @@ impl From<BindingPreparedSearchConfig> for BinaryPreparedSearchConfig {
       zone_data: config.zone_data,
       address_context_data: config.address_context_data,
       coreference_data: config.coreference_data,
+      name_corpus_data: config.name_corpus_data,
       date_data: config.date_data,
       monetary_data: config.monetary_data,
     }
@@ -812,6 +850,7 @@ impl From<BinaryPreparedSearchConfig> for BindingPreparedSearchConfig {
       zone_data: config.zone_data,
       address_context_data: config.address_context_data,
       coreference_data: config.coreference_data,
+      name_corpus_data: config.name_corpus_data,
       date_data: config.date_data,
       monetary_data: config.monetary_data,
     }
@@ -1278,6 +1317,9 @@ pub fn prepared_search_config_from_binding(
     coreference_data: config
       .coreference_data
       .map(coreference_data_from_binding),
+    name_corpus_data: config
+      .name_corpus_data
+      .map(name_corpus_data_from_binding),
     date_data: config.date_data.map(|data| DateData {
       month_names_by_language: data.month_names_by_language,
       year_words_by_language: data.year_words_by_language,
@@ -1628,6 +1670,28 @@ fn coreference_data_from_binding(
     role_stop_terms: data.role_stop_terms,
     legal_form_aliases: data.legal_form_aliases,
     organization_determiners: data.organization_determiners,
+  }
+}
+
+fn name_corpus_data_from_binding(
+  data: BindingNameCorpusData,
+) -> NameCorpusData {
+  NameCorpusData {
+    first_names: data.first_names,
+    surnames: data.surnames,
+    title_tokens: data.title_tokens,
+    title_abbreviations: data.title_abbreviations,
+    excluded_words: data.excluded_words,
+    common_words: data.common_words,
+    non_western_names: data.non_western_names,
+    excluded_all_caps: data.excluded_all_caps,
+    ja_suffixes: data.ja_suffixes,
+    arabic_connectors: data.arabic_connectors,
+    relation_connectors: data.relation_connectors,
+    hyphenated_prefixes: data.hyphenated_prefixes,
+    cjk_non_person_terms: data.cjk_non_person_terms,
+    cjk_surname_starters: data.cjk_surname_starters,
+    organization_terms: data.organization_terms,
   }
 }
 
@@ -2235,6 +2299,7 @@ fn diagnostic_stage_name(stage: DiagnosticStage) -> String {
     DiagnosticStage::EntitySignature => "entity.signature",
     DiagnosticStage::EntityLegalForm => "entity.legal-form",
     DiagnosticStage::EntityAddressSeed => "entity.address-seed",
+    DiagnosticStage::EntityNameCorpus => "entity.name-corpus",
     DiagnosticStage::EntityZoneAdjustment => "entity.zone-adjustment",
     DiagnosticStage::EntityAddressContext => "entity.address-context",
     DiagnosticStage::EntityCoreference => "entity.coreference",
