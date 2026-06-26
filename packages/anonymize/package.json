@@ -26,10 +26,14 @@
     }
   },
   "types": "dist/index.d.mts",
+  "bin": {
+    "stella-anonymize-build-native-package": "./scripts/build-native-pipeline-package.mjs"
+  },
   "files": [
     "dist",
     "index.cjs",
-    "*.node"
+    "*.node",
+    "scripts/build-native-pipeline-package.mjs"
   ],
   "publishConfig": {
     "access": "public"
