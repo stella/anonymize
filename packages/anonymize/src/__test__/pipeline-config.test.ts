@@ -10,7 +10,11 @@ import {
   runPipeline,
 } from "../index";
 import { buildUnifiedSearch } from "../build-unified-search";
-import { REGEX_META } from "../detectors/regex";
+import {
+  REGEX_META,
+  getNativeSigningClausePatterns,
+  getSigningClausePatterns,
+} from "../detectors/regex";
 import { applyPipelineLanguageScope } from "../language-scope";
 import type { NativeAnonymizeBinding } from "../native";
 import type { Dictionaries, PipelineConfig } from "../types";
@@ -210,18 +214,66 @@ describe("pipeline config semantics", () => {
     );
 
     expect(search.nativeStaticConfig.allowed_labels).toEqual(["date of birth"]);
-    expect(search.nativeStaticConfig.slices.hotwords?.end).toBeGreaterThan(
-      search.nativeStaticConfig.slices.hotwords?.start ?? 0,
-    );
+    expect(search.nativeStaticConfig.slices.hotwords).toEqual({
+      start: search.nativeStaticConfig.slices.hotwords?.start ?? 0,
+      end: search.nativeStaticConfig.slices.hotwords?.start ?? 0,
+    });
     expect(
-      search.nativeStaticConfig.hotword_data?.rules.length,
-    ).toBeGreaterThan(0);
+      search.nativeStaticConfig.hotword_data?.rules.some((rule) =>
+        rule.hotwords.includes("born"),
+      ),
+    ).toBe(true);
     expect(
-      search.nativeStaticConfig.hotword_data?.pattern_rule_indices.length,
-    ).toBe(
-      (search.nativeStaticConfig.slices.hotwords?.end ?? 0) -
-        (search.nativeStaticConfig.slices.hotwords?.start ?? 0),
+      search.nativeStaticConfig.literal_patterns.some(
+        (pattern) => pattern.pattern === "born",
+      ),
+    ).toBe(false);
+    expect(
+      search.nativeStaticConfig.hotword_data?.pattern_rule_indices,
+    ).toEqual([]);
+  });
+
+  test("native signing-place patterns match TypeScript signing patterns", async () => {
+    const [tsPatterns, nativePatterns] = await Promise.all([
+      getSigningClausePatterns(),
+      getNativeSigningClausePatterns(),
+    ]);
+
+    expect(nativePatterns).toEqual(tsPatterns);
+    expect(nativePatterns.some((pattern) => pattern.includes("Signed"))).toBe(
+      true,
     );
+    expect(nativePatterns.some((pattern) => pattern.includes("À"))).toBe(true);
+  });
+
+  test("native pipeline package context cache is scoped by dictionary identity", async () => {
+    const { binding, counts } = createCountingNativeBinding(
+      "native-cache-context-dictionaries",
+    );
+    const context = createPipelineContext();
+    const cacheDictionaries = {
+      firstNames: {
+        en: ["Ada"],
+      },
+    } satisfies Dictionaries;
+    const config = {
+      ...BASE_CONFIG,
+      dictionaries: cacheDictionaries,
+      enableCountries: false,
+      labels: ["person"],
+    };
+
+    await prepareNativePipelinePackage({ binding, config, context });
+    await prepareNativePipelinePackage({
+      binding,
+      config: {
+        ...config,
+        dictionaries: { ...cacheDictionaries },
+      },
+      context,
+    });
+
+    expect(counts().compressedPrepare).toBe(2);
   });
 
   test("native config carries coreference definition data", async () => {

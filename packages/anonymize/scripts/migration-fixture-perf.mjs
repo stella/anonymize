@@ -107,11 +107,17 @@ const ACCEPTED_NATIVE_STATIC_DELTAS = new Map(
     },
     {
       fixture: "en/software-license-agreement.txt",
-      reason: "phone-leading-parenthesis",
+      reason: "wider-notice-address-spans",
       candidateExtra: [
+        { start: 506, end: 541, label: "address", source: "regex" },
+        { start: 1624, end: 1664, label: "address", source: "regex" },
+        { start: 1813, end: 1848, label: "address", source: "regex" },
         { start: 1857, end: 1871, label: "phone number", source: "regex" },
       ],
       candidateMissing: [
+        { start: 515, end: 531, label: "address", source: "deny-list" },
+        { start: 1629, end: 1654, label: "address", source: "deny-list" },
+        { start: 1822, end: 1838, label: "address", source: "deny-list" },
         { start: 1858, end: 1871, label: "phone number", source: "trigger" },
       ],
     },

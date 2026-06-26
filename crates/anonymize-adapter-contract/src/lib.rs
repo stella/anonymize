@@ -170,6 +170,8 @@ pub struct BindingHotwordRuleData {
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
 pub struct BindingHotwordRule {
   #[serde(default)]
+  pub hotwords: Vec<String>,
+  #[serde(default)]
   pub target_labels: Vec<String>,
   pub score_adjustment: f64,
   pub reclassify_to: Option<String>,
@@ -1644,6 +1646,7 @@ fn hotword_data_from_binding(data: BindingHotwordRuleData) -> HotwordRuleData {
       .rules
       .into_iter()
       .map(|rule| HotwordRule {
+        hotwords: rule.hotwords,
         target_labels: rule.target_labels,
         score_adjustment: rule.score_adjustment,
         reclassify_to: rule.reclassify_to,
