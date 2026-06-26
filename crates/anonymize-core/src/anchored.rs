@@ -98,6 +98,10 @@ impl<R: AnchoredRule> AnchoredExtractor<R> {
     }
     Ok(select_anchored_entities(entities))
   }
+
+  pub(crate) const fn rule(&self) -> &R {
+    &self.rule
+  }
 }
 
 fn anchor_span(found: &SearchMatch) -> AnchorSpan {

@@ -299,6 +299,15 @@ describe("pipeline config semantics", () => {
       search.nativeStaticConfig.coreference_data?.legal_form_aliases,
     ).toContain("LLC");
     expect(
+      search.nativeStaticConfig.coreference_data?.legal_form_aliases,
+    ).toContain("Kft.");
+    expect(
+      search.nativeStaticConfig.coreference_data?.organization_suffixes,
+    ).toContain("LLC");
+    expect(
+      search.nativeStaticConfig.coreference_data?.organization_suffixes,
+    ).not.toContain("Kft.");
+    expect(
       search.nativeStaticConfig.coreference_data?.organization_determiners,
     ).toContain("the\\s+(?:company|corporation|firm)");
   });
@@ -379,7 +388,7 @@ describe("pipeline config semantics", () => {
     ).toEqual([]);
   });
 
-  test("native config keeps trigger currency terms separate from monetary detection", async () => {
+  test("native trigger config carries currency terms and monetary extension data", async () => {
     const search = await buildUnifiedSearch(
       {
         ...BASE_CONFIG,
@@ -395,7 +404,7 @@ describe("pipeline config semantics", () => {
       search.nativeStaticConfig.trigger_data?.sentence_terminal_currency_terms
         .length,
     ).toBeGreaterThan(0);
-    expect(search.nativeStaticConfig.monetary_data).toBeUndefined();
+    expect(search.nativeStaticConfig.monetary_data).toBeDefined();
   });
 
   test("native date data gates year words on trigger phrases", async () => {
@@ -786,6 +795,83 @@ describe("pipeline config semantics", () => {
     });
 
     expect(counts().compressedPrepare).toBe(3);
+  });
+
+  test("native pipeline package cache retries after failed build", async () => {
+    let attempts = 0;
+    const binding = {
+      normalizeForSearch: (text: string) => text,
+      nativePackageVersion: () => "native-cache-retry",
+      NativePreparedSearch: {
+        fromConfigJsonBytes: () => {
+          throw new Error(
+            "native package cache retry should use package bytes",
+          );
+        },
+        fromPreparedPackageBytes: () => ({
+          prepareDiagnosticsJson: () => JSON.stringify({ events: [] }),
+          redactStaticEntities: (fullText: string) => ({
+            resolvedEntities: [],
+            redaction: {
+              redactedText: fullText,
+              redactionMap: [],
+              operatorMap: [],
+              entityCount: 0,
+            },
+          }),
+        }),
+      },
+      prepareStaticSearchPackageBytes: () => new Uint8Array([9]),
+      prepareStaticSearchCompressedPackageBytes: () => {
+        attempts += 1;
+        if (attempts === 1) {
+          throw new Error("build failed");
+        }
+        return new Uint8Array([attempts]);
+      },
+    } satisfies NativeAnonymizeBinding;
+    const context = createPipelineContext();
+    const config = {
+      ...BASE_CONFIG,
+      enableCountries: false,
+      labels: ["person"],
+    };
+
+    try {
+      await prepareNativePipelinePackage({ binding, config, context });
+      throw new Error("expected first native package build to fail");
+    } catch (error) {
+      expect(error).toBeInstanceOf(Error);
+      const message = error instanceof Error ? error.message : "";
+      expect(message).toBe("build failed");
+    }
+
+    const retry = await prepareNativePipelinePackage({
+      binding,
+      config,
+      context,
+    });
+
+    expect([...retry]).toEqual([2]);
+    expect(attempts).toBe(2);
+  });
+
+  test("native trigger configs carry monetary extension data", async () => {
+    const search = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        enableTriggerPhrases: true,
+        labels: ["monetary amount"],
+      },
+      [],
+      createPipelineContext(),
+    );
+
+    expect(search.nativeStaticConfig.monetary_data).toBeDefined();
+    expect(
+      search.nativeStaticConfig.monetary_data?.amount_words
+        .written_amount_patterns.length,
+    ).toBeGreaterThan(0);
   });
 
   test("enableLegalForms flag gates legal-form detection", async () => {

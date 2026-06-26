@@ -1569,6 +1569,132 @@ describe("native adapter parity", () => {
     });
   });
 
+  test("native pipeline package keeps org propagation suffixes in TS parity", async () => {
+    const adapters = getAdapters();
+    const fullText = "Acme Kft. signed. Acme paid.";
+    const config: PipelineConfig = {
+      threshold: 0.5,
+      enableTriggerPhrases: false,
+      enableRegex: true,
+      enableLegalForms: true,
+      enableNameCorpus: false,
+      enableDenyList: false,
+      enableGazetteer: false,
+      enableCountries: false,
+      enableNer: false,
+      enableConfidenceBoost: false,
+      enableCoreference: true,
+      enableHotwordRules: false,
+      enableZoneClassification: false,
+      labels: ["organization"],
+      workspaceId: "native-pipeline-coreference-suffix-test",
+    };
+
+    expect(getNativePipelineCompatibility(config)).toEqual({
+      status: "supported",
+    });
+
+    const packageBytes = await prepareNativePipelinePackage({
+      binding: adapters.native,
+      config,
+      context: createPipelineContext(),
+      compressed: true,
+    });
+    const nativePipeline = createNativePipelineFromPackage({
+      binding: adapters.native,
+      packageBytes,
+    });
+    const tsContext = createPipelineContext();
+    const operators: OperatorConfig & NativeOperatorConfig = {
+      operators: {},
+      redactString: "[REDACTED]",
+    };
+    const tsEntities = await runPipeline({
+      fullText,
+      config,
+      gazetteerEntries: [],
+      context: tsContext,
+    });
+    const tsRedaction = redactText(fullText, tsEntities, operators, tsContext);
+
+    expect(
+      tsEntities.some(
+        (entity) => entity.source === "coreference" && entity.text === "Acme",
+      ),
+    ).toBe(false);
+    expect(
+      toBindingStaticResult(nativePipeline.redactText(fullText, operators)),
+    ).toEqual({
+      resolved_entities: tsEntities.map(toBindingEntity),
+      redaction: toBindingRedactionResult(tsRedaction),
+    });
+  });
+
+  test("native pipeline package matches TS trigger monetary widening", async () => {
+    const adapters = getAdapters();
+    const fullText =
+      "Smluvní pokuta je sjednána ve výši 50.000,- Kč (slovy: padesát tisíc korun českých).";
+    const config: PipelineConfig = {
+      threshold: 0.5,
+      enableTriggerPhrases: true,
+      enableRegex: false,
+      enableLegalForms: false,
+      enableNameCorpus: false,
+      enableDenyList: false,
+      enableGazetteer: false,
+      enableCountries: false,
+      enableNer: false,
+      enableConfidenceBoost: false,
+      enableCoreference: false,
+      enableHotwordRules: false,
+      enableZoneClassification: false,
+      labels: ["monetary amount"],
+      workspaceId: "native-pipeline-trigger-money-test",
+    };
+
+    expect(getNativePipelineCompatibility(config)).toEqual({
+      status: "supported",
+    });
+
+    const packageBytes = await prepareNativePipelinePackage({
+      binding: adapters.native,
+      config,
+      context: createPipelineContext(),
+      compressed: true,
+    });
+    const nativePipeline = createNativePipelineFromPackage({
+      binding: adapters.native,
+      packageBytes,
+    });
+    const tsContext = createPipelineContext();
+    const operators: OperatorConfig & NativeOperatorConfig = {
+      operators: {},
+      redactString: "[REDACTED]",
+    };
+    const tsEntities = await runPipeline({
+      fullText,
+      config,
+      gazetteerEntries: [],
+      context: tsContext,
+    });
+    const tsRedaction = redactText(fullText, tsEntities, operators, tsContext);
+
+    expect(tsEntities).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "monetary amount",
+          text: "50.000,- Kč (slovy: padesát tisíc korun českých)",
+        }),
+      ]),
+    );
+    expect(
+      toBindingStaticResult(nativePipeline.redactText(fullText, operators)),
+    ).toEqual({
+      resolved_entities: tsEntities.map(toBindingEntity),
+      redaction: toBindingRedactionResult(tsRedaction),
+    });
+  });
+
   test("native pipeline package matches TS zone score adjustments", async () => {
     const adapters = getAdapters();
     const fullText = ["Parties", "Alice", "Article 1", "Body"].join("\n");

@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use crate::anchored::{
   AnchorSpan, AnchorTerm, AnchoredExtractor, AnchoredRule,
 };
-use crate::resolution::{DetectionSource, PipelineEntity};
+use crate::resolution::{DetectionSource, PipelineEntity, SourceDetail};
 use crate::types::Result;
 
 const MONEY_LABEL: &str = "monetary amount";
@@ -75,6 +75,14 @@ impl PreparedMonetaryData {
   pub(crate) fn process(&self, full_text: &str) -> Result<Vec<PipelineEntity>> {
     self.extractor.extract(full_text)
   }
+
+  pub(crate) fn extend_entities(
+    &self,
+    full_text: &str,
+    entities: &[PipelineEntity],
+  ) -> Vec<PipelineEntity> {
+    self.extractor.rule().extend_entities(full_text, entities)
+  }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -116,10 +124,11 @@ impl MonetaryRule {
     let symbols = clean_terms(data.currencies.symbols)
       .into_iter()
       .collect::<BTreeSet<_>>();
-    let local_names = clean_terms(data.currencies.local_names)
+    let mut local_names = clean_terms(data.currencies.local_names)
       .into_iter()
       .map(currency_name)
       .collect::<Vec<_>>();
+    local_names.sort_by_key(|name| std::cmp::Reverse(name.text.len()));
     let mut magnitudes = Vec::new();
     for entry in data.amount_words.magnitude_suffixes {
       magnitudes.extend(
@@ -239,6 +248,85 @@ impl AnchoredRule for MonetaryRule {
 }
 
 impl MonetaryRule {
+  fn extend_entities(
+    &self,
+    full_text: &str,
+    entities: &[PipelineEntity],
+  ) -> Vec<PipelineEntity> {
+    let mut extended = Vec::with_capacity(entities.len());
+    for entity in entities {
+      extended.push(self.extend_entity(full_text, entity));
+    }
+    extended
+  }
+
+  fn extend_entity(
+    &self,
+    full_text: &str,
+    entity: &PipelineEntity,
+  ) -> PipelineEntity {
+    if entity.label != MONEY_LABEL || caller_owned(entity) {
+      return entity.clone();
+    }
+
+    let mut next = entity.clone();
+    let mut end = usize::try_from(next.end).unwrap_or(usize::MAX);
+    if !ends_with_letter(&next.text)
+      && let Some(currency_end) = self.trailing_currency_end(full_text, end)
+    {
+      end = currency_end;
+    }
+    end = self.extend_written_amount(full_text, end);
+
+    let Ok(end_u32) = u32::try_from(end) else {
+      return next;
+    };
+    if end_u32 == next.end {
+      return next;
+    }
+
+    let Ok(start) = usize::try_from(next.start) else {
+      return next;
+    };
+    let Some(text) = str_slice(full_text, start, end) else {
+      return next;
+    };
+    next.end = end_u32;
+    text.clone_into(&mut next.text);
+    next
+  }
+
+  fn trailing_currency_end(&self, text: &str, index: usize) -> Option<usize> {
+    let start = skip_trailing_currency_gap(text, index, 4);
+
+    for name in &self.local_names {
+      let end = start.saturating_add(name.text.len());
+      let Some(candidate) = str_slice(text, start, end) else {
+        continue;
+      };
+      let matches = if name.case_insensitive {
+        candidate.to_lowercase() == name.folded
+      } else {
+        candidate == name.text
+      };
+      if matches && right_alnum_boundary(text, end) {
+        return Some(end);
+      }
+    }
+
+    for code in &self.codes {
+      let end = start.saturating_add(code.len());
+      let Some(candidate) = str_slice(text, start, end) else {
+        continue;
+      };
+      if candidate == code && right_alnum_boundary(text, end) {
+        return Some(end);
+      }
+    }
+
+    None
+  }
+
   fn leading_amount_span(
     &self,
     text: &str,
@@ -631,6 +719,23 @@ fn is_identifier_char(ch: char) -> bool {
   ch == '_' || ch.is_alphanumeric()
 }
 
+fn right_alnum_boundary(text: &str, index: usize) -> bool {
+  str_tail(text, index)
+    .and_then(|value| value.chars().next())
+    .is_none_or(|ch| !ch.is_alphanumeric())
+}
+
+fn ends_with_letter(text: &str) -> bool {
+  text.chars().next_back().is_some_and(char::is_alphabetic)
+}
+
+const fn caller_owned(entity: &PipelineEntity) -> bool {
+  matches!(
+    entity.source_detail,
+    Some(SourceDetail::CustomDenyList | SourceDetail::CustomRegex)
+  )
+}
+
 const fn is_number_separator(ch: char) -> bool {
   ch == ','
     || ch == '.'
@@ -696,6 +801,26 @@ fn skip_horizontal_ws_limit(
       break;
     };
     if ch == '\n' || ch == '\r' || !ch.is_whitespace() {
+      break;
+    }
+    index = index.saturating_add(ch.len_utf8());
+    skipped = skipped.saturating_add(1);
+  }
+  index
+}
+
+fn skip_trailing_currency_gap(
+  text: &str,
+  mut index: usize,
+  max_chars: usize,
+) -> usize {
+  let mut skipped = 0usize;
+  while skipped < max_chars {
+    let Some(ch) = str_tail(text, index).and_then(|value| value.chars().next())
+    else {
+      break;
+    };
+    if ch == '\n' || ch == '\t' || !ch.is_whitespace() {
       break;
     }
     index = index.saturating_add(ch.len_utf8());

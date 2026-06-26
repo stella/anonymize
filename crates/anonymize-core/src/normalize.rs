@@ -1,6 +1,5 @@
 const PHONE_NOISE: [char; 3] = ['(', ')', '-'];
 const ID_SEPARATORS: [char; 3] = ['-', '/', '.'];
-const IDENTIFIER_CUES: &str = include_str!("../data/identifier-cues.txt");
 
 use crate::types::{Error, Result};
 
@@ -203,49 +202,7 @@ fn strip_id_separators(text: &str) -> String {
 }
 
 fn normalize_identifier_text(text: &str) -> String {
-  // Strip contextual cues before comparing identifiers.
-  if let Some(after_cue) = strip_leading_identifier_cue(text)
-    && let Some(identifier) =
-      find_compact_ascii_identifier(after_cue, true, is_generic_identifier)
-  {
-    return identifier;
-  }
-
-  find_compact_ascii_identifier(text, true, is_generic_identifier)
-    .unwrap_or_else(|| strip_id_separators(text).to_uppercase())
-}
-
-fn strip_leading_identifier_cue(text: &str) -> Option<&str> {
-  let trimmed = text.trim_start();
-  let mut cue_end = 0;
-
-  for (index, ch) in trimmed.char_indices() {
-    if !ch.is_alphabetic() {
-      break;
-    }
-    cue_end = index.saturating_add(ch.len_utf8());
-  }
-
-  if cue_end == 0 {
-    return None;
-  }
-
-  let cue = trimmed.get(..cue_end)?;
-  if !is_identifier_cue(cue) {
-    return None;
-  }
-
-  let after_cue = trimmed.get(cue_end..)?;
-  after_cue
-    .chars()
-    .next()
-    .is_some_and(char::is_whitespace)
-    .then(|| after_cue.trim_start())
-}
-
-fn is_identifier_cue(cue: &str) -> bool {
-  let upper = uppercase(cue);
-  IDENTIFIER_CUES.lines().any(|line| line == upper)
+  strip_id_separators(text).to_uppercase()
 }
 
 fn is_identifier_label(upper: &str) -> bool {
@@ -430,12 +387,6 @@ fn is_identifier_start(text: &str, index: usize, ch: char) -> bool {
 
 fn is_identifier_separator(ch: char, allow_whitespace: bool) -> bool {
   ID_SEPARATORS.contains(&ch) || (allow_whitespace && ch.is_whitespace())
-}
-
-fn is_generic_identifier(candidate: &str) -> bool {
-  (5..=64).contains(&candidate.len())
-    && candidate.chars().any(|ch| ch.is_ascii_digit())
-    && candidate.chars().all(|ch| ch.is_ascii_alphanumeric())
 }
 
 const fn is_base58_char(ch: char) -> bool {
