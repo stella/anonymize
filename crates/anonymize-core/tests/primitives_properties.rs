@@ -108,6 +108,80 @@ fn redaction_case() -> impl Strategy<Value = (String, Vec<Entity>)> {
   )
 }
 
+fn reserved_person_redaction_case()
+-> impl Strategy<Value = (String, Vec<Entity>, u32)> {
+  (
+    1_u32..8,
+    collection::vec((text_fragment(8), entity_text()), 1..8),
+  )
+    .prop_map(|(reserved_count, segments)| {
+      let mut text = (1..=reserved_count)
+        .map(|index| format!("[PERSON_{index}]"))
+        .collect::<Vec<_>>()
+        .join(" ");
+      text.push(' ');
+
+      let mut entities = Vec::new();
+      for (prefix, value) in segments {
+        text.push_str(&prefix);
+        let start = byte_len(&text);
+        text.push_str(&value);
+        let end = byte_len(&text);
+        entities.push(Entity::detected(start, end, "person", value));
+      }
+
+      (text, entities, reserved_count)
+    })
+}
+
+fn displayed_entity_case() -> impl Strategy<Value = (String, Entity, String)> {
+  (
+    text_fragment(8),
+    entity_text(),
+    text_fragment(8),
+    entity_text(),
+  )
+    .prop_map(|(prefix, value, suffix, display_text)| {
+      let start = byte_len(&prefix);
+      let end = start.saturating_add(byte_len(&value));
+      let text = format!("{prefix}{value}{suffix}");
+      let entity = Entity::detected(start, end, "person", display_text);
+      (text, entity, value)
+    })
+}
+
+fn same_alias_coreference_case()
+-> impl Strategy<Value = (String, Vec<Entity>, String, String)> {
+  (entity_text(), entity_text(), entity_text()).prop_map(
+    |(alias, first_source_seed, second_source_seed)| {
+      let source_a = format!("{first_source_seed} source A");
+      let source_b = format!("{second_source_seed} source B");
+      let text = format!("{alias} met {alias}.");
+      let first_start = 0;
+      let first_end = byte_len(&alias);
+      let second_start = byte_len(&format!("{alias} met "));
+      let second_end = second_start.saturating_add(byte_len(&alias));
+      let entities = vec![
+        Entity::coreference(
+          first_start,
+          first_end,
+          "person",
+          alias.clone(),
+          source_a.clone(),
+        ),
+        Entity::coreference(
+          second_start,
+          second_end,
+          "person",
+          alias,
+          source_b.clone(),
+        ),
+      ];
+      (text, entities, source_a, source_b)
+    },
+  )
+}
+
 fn pipeline_entity_strategy() -> impl Strategy<Value = PipelineEntity> {
   (
     0_u32..80,
@@ -140,6 +214,42 @@ fn literal_search_case()
           case_insensitive: Some(false),
           whole_words: Some(false),
         })
+        .collect::<Vec<_>>();
+      (
+        Just(patterns),
+        collection::vec((text_fragment(8), sample::select(needles)), 1..10),
+        text_fragment(8),
+      )
+    })
+    .prop_map(|(patterns, segments, suffix)| {
+      let mut haystack = String::new();
+      for (prefix, needle) in segments {
+        haystack.push_str(&prefix);
+        haystack.push_str(&needle);
+      }
+      haystack.push_str(&suffix);
+
+      (
+        patterns,
+        SearchOptions {
+          literal: LiteralSearchOptions {
+            case_insensitive: false,
+            whole_words: false,
+          },
+          ..SearchOptions::default()
+        },
+        haystack,
+      )
+    })
+}
+
+fn all_literal_identity_search_case()
+-> impl Strategy<Value = (Vec<SearchPattern>, SearchOptions, String)> {
+  collection::vec(entity_text(), 1..6)
+    .prop_flat_map(|needles| {
+      let patterns = needles
+        .iter()
+        .map(|needle| SearchPattern::Literal(needle.clone()))
         .collect::<Vec<_>>();
       (
         Just(patterns),
@@ -307,6 +417,14 @@ fn search_output_is_valid(
   true
 }
 
+fn person_placeholder_number(placeholder: &str) -> Option<u32> {
+  placeholder
+    .strip_prefix("[PERSON_")?
+    .strip_suffix(']')?
+    .parse::<u32>()
+    .ok()
+}
+
 proptest! {
   #![proptest_config(ProptestConfig {
     cases: PROPERTY_CASES,
@@ -326,6 +444,63 @@ proptest! {
     for entry in &result.redaction_map {
       prop_assert!(!text.contains(&entry.placeholder));
     }
+  }
+
+  #[test]
+  fn generated_redactions_skip_reserved_person_placeholders(
+    (text, entities, reserved_count) in reserved_person_redaction_case(),
+  ) {
+    let result = redact_text(&text, &entities, &OperatorConfig::default())
+      .unwrap();
+
+    prop_assert_eq!(result.entity_count, entities.len());
+    let restored = deanonymise(&result.redacted_text, &result.redaction_map);
+    prop_assert_eq!(restored.as_str(), text.as_str());
+
+    for entry in &result.redaction_map {
+      prop_assert!(!text.contains(&entry.placeholder));
+      let Some(index) = person_placeholder_number(&entry.placeholder) else {
+        prop_assert!(false, "unexpected placeholder {}", entry.placeholder);
+        continue;
+      };
+      prop_assert!(index > reserved_count);
+    }
+  }
+
+  #[test]
+  fn generated_detected_originals_use_source_slice_not_display_text(
+    (text, entity, source_slice) in displayed_entity_case(),
+  ) {
+    let result = redact_text(
+      &text,
+      std::slice::from_ref(&entity),
+      &OperatorConfig::default(),
+    )
+    .unwrap();
+
+    prop_assert_eq!(result.redaction_map.len(), 1);
+    prop_assert_eq!(result.redaction_map[0].original.as_str(), source_slice.as_str());
+    let restored = deanonymise(&result.redacted_text, &result.redaction_map);
+    prop_assert_eq!(restored.as_str(), text.as_str());
+  }
+
+  #[test]
+  fn generated_same_alias_coreferences_keep_distinct_source_identity(
+    (text, entities, source_a, source_b) in same_alias_coreference_case(),
+  ) {
+    let result = redact_text(&text, &entities, &OperatorConfig::default())
+      .unwrap();
+
+    prop_assert_eq!(result.entity_count, 2);
+    prop_assert_eq!(result.redaction_map.len(), 2);
+    prop_assert!(
+      result.redaction_map[0].placeholder
+        != result.redaction_map[1].placeholder,
+    );
+    prop_assert_eq!(result.redaction_map[0].original.as_str(), source_a.as_str());
+    prop_assert_eq!(result.redaction_map[1].original.as_str(), source_b.as_str());
+    prop_assert!(result.redacted_text.contains(&result.redaction_map[0].placeholder));
+    prop_assert!(result.redacted_text.contains(&result.redaction_map[1].placeholder));
   }
 
   #[test]
@@ -497,6 +672,45 @@ proptest! {
       patterns.len(),
       &prepared_matches,
     ));
+  }
+
+  #[test]
+  fn prepared_all_literal_artifacts_load_without_original_patterns(
+    (patterns, options, haystack) in all_literal_identity_search_case(),
+  ) {
+    let artifacts =
+      SearchIndex::prepare_artifacts(patterns.clone(), options).unwrap();
+    let encoded = artifacts.to_bytes().unwrap();
+    let decoded = SearchIndexArtifacts::from_bytes(&encoded).unwrap();
+
+    let direct = SearchIndex::new(patterns.clone(), options).unwrap();
+    let prepared =
+      SearchIndex::new_with_artifacts(Vec::new(), options, &decoded)
+        .unwrap();
+    let direct_matches = direct.find_iter(&haystack).unwrap();
+    let prepared_matches = prepared.find_iter(&haystack).unwrap();
+
+    prop_assert_eq!(prepared.len(), patterns.len());
+    prop_assert_eq!(&prepared_matches, &direct_matches);
+    prop_assert!(search_output_is_valid(
+      &haystack,
+      patterns.len(),
+      &prepared_matches,
+    ));
+  }
+
+  #[test]
+  fn artifact_only_literal_loader_rejects_per_pattern_literal_options(
+    (patterns, options, _haystack) in literal_search_case(),
+  ) {
+    let artifacts =
+      SearchIndex::prepare_artifacts(patterns, options).unwrap();
+    let encoded = artifacts.to_bytes().unwrap();
+    let decoded = SearchIndexArtifacts::from_bytes(&encoded).unwrap();
+
+    prop_assert!(
+      SearchIndex::new_with_artifacts(Vec::new(), options, &decoded).is_err()
+    );
   }
 
   #[test]
