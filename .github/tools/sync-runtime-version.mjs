@@ -96,7 +96,7 @@ for (const file of PACKAGE_FILES) {
 syncTextVersion({
   file: CARGO_WORKSPACE_MANIFEST,
   label: "Cargo workspace",
-  re: /(\[workspace\.package\][\s\S]*?\nversion\s*=\s*")([^"]+)(")/,
+  re: /(\[workspace\.package\][\s\S]*?\r?\nversion\s*=\s*")([^"]+)(")/,
 });
 
 for (const file of PYPROJECT_FILES) {
@@ -144,7 +144,7 @@ let syncedLockText = lockText.replaceAll(
 for (const file of PACKAGE_FILES) {
   const workspace = dirname(file);
   const workspaceVersionRe = new RegExp(
-    `("${escapeRegExp(workspace)}": \\{\\n\\s+"name": "[^"]+",\\n\\s+"version": ")([^"]+)(")`,
+    `("${escapeRegExp(workspace)}": \\{\\r?\\n\\s+"name": "[^"]+",\\r?\\n\\s+"version": ")([^"]+)(")`,
   );
   const match = syncedLockText.match(workspaceVersionRe);
   if (!match) {
@@ -182,7 +182,7 @@ let syncedCargoLockText = cargoLockText;
 
 for (const packageName of CARGO_LOCKED_PACKAGES) {
   const packageVersionRe = new RegExp(
-    `(\\[\\[package\\]\\]\\nname = "${escapeRegExp(packageName)}"\\nversion = ")([^"]+)(")`,
+    `(\\[\\[package\\]\\]\\r?\\nname = "${escapeRegExp(packageName)}"\\r?\\nversion = ")([^"]+)(")`,
   );
   const match = syncedCargoLockText.match(packageVersionRe);
   if (!match) {
