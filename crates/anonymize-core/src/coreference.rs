@@ -1,5 +1,5 @@
 use regex::{Regex, RegexBuilder};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::byte_offsets::ByteOffsets;
 use crate::resolution::{PipelineEntity, SourceDetail};
@@ -7,6 +7,8 @@ use crate::types::{Error, Result};
 
 const SEARCH_WINDOW: u32 = 200;
 const COREFERENCE_SCORE: f64 = 0.95;
+const ORG_PROPAGATION_SCORE: f64 = 0.9;
+const ORG_DETERMINER_LOOKBACK: usize = 40;
 
 #[derive(
   Clone, Debug, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize,
@@ -18,6 +20,8 @@ pub struct CoreferenceData {
   pub role_stop_terms: Vec<String>,
   #[serde(default)]
   pub legal_form_aliases: Vec<String>,
+  #[serde(default)]
+  pub organization_determiners: Vec<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
@@ -31,10 +35,19 @@ pub(crate) struct PreparedCoreferenceData {
   definition_patterns: Vec<Regex>,
   role_stop_terms: BTreeSet<String>,
   legal_form_aliases: BTreeSet<String>,
+  legal_form_suffixes: Vec<String>,
+  org_determiner: Option<Regex>,
 }
 
 struct DefinedTerm {
   alias: String,
+  label: String,
+  source_text: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct OrgSeed {
+  base_name: String,
   label: String,
   source_text: String,
 }
@@ -47,6 +60,9 @@ impl PreparedCoreferenceData {
       definition_patterns.push(compile_definition_pattern(pattern)?);
     }
 
+    let mut legal_form_suffixes = data.legal_form_aliases.clone();
+    legal_form_suffixes.sort_by_key(|suffix| std::cmp::Reverse(suffix.len()));
+
     Ok(Self {
       definition_patterns,
       role_stop_terms: lower_set(data.role_stop_terms),
@@ -55,6 +71,8 @@ impl PreparedCoreferenceData {
         .into_iter()
         .filter_map(|alias| normalized_legal_form_alias(&alias))
         .collect(),
+      legal_form_suffixes,
+      org_determiner: compile_org_determiner(&data.organization_determiners)?,
     })
   }
 
@@ -62,13 +80,20 @@ impl PreparedCoreferenceData {
     &self,
     full_text: &str,
     existing_entities: &[PipelineEntity],
+    threshold: f64,
   ) -> Result<Vec<PipelineEntity>> {
-    if self.definition_patterns.is_empty() {
-      return Ok(Vec::new());
+    let mut results = self.propagate_organization_names(
+      full_text,
+      existing_entities,
+      threshold,
+    )?;
+
+    if !self.definition_patterns.is_empty() {
+      let terms = self.extract_defined_terms(full_text, existing_entities)?;
+      results.extend(Self::find_alias_spans(full_text, &terms)?);
     }
 
-    let terms = self.extract_defined_terms(full_text, existing_entities)?;
-    Self::find_alias_spans(full_text, &terms)
+    Ok(results)
   }
 
   fn extract_defined_terms(
@@ -176,6 +201,141 @@ impl PreparedCoreferenceData {
 
     Ok(results)
   }
+
+  fn propagate_organization_names(
+    &self,
+    full_text: &str,
+    existing_entities: &[PipelineEntity],
+    threshold: f64,
+  ) -> Result<Vec<PipelineEntity>> {
+    if threshold > ORG_PROPAGATION_SCORE || self.legal_form_suffixes.is_empty()
+    {
+      return Ok(Vec::new());
+    }
+
+    let seeds = self.organization_seeds(existing_entities);
+    if seeds.is_empty() {
+      return Ok(Vec::new());
+    }
+
+    let mut covered = existing_entities
+      .iter()
+      .map(|entity| (entity.start, entity.end))
+      .collect::<Vec<_>>();
+    let mut results = Vec::new();
+
+    for seed in seeds {
+      let mut search_from = 0usize;
+      while search_from < full_text.len() {
+        let Some(relative) = full_text
+          .get(search_from..)
+          .and_then(|tail| tail.find(&seed.base_name))
+        else {
+          break;
+        };
+        let start = search_from.saturating_add(relative);
+        let end = start.saturating_add(seed.base_name.len());
+        if !is_word_boundary(full_text, start, end) {
+          search_from = next_char_boundary(full_text, start);
+          continue;
+        }
+
+        let span_start =
+          self.determiner_start(full_text, start).unwrap_or(start);
+        let start_u32 = usize_to_u32("coreference.org_start", span_start)?;
+        let end_u32 = usize_to_u32("coreference.org_end", end)?;
+        if !span_overlaps(&covered, start_u32, end_u32) {
+          results.push(PipelineEntity::coreference(
+            start_u32,
+            end_u32,
+            seed.label.clone(),
+            full_text.get(span_start..end).unwrap_or_default(),
+            ORG_PROPAGATION_SCORE,
+            seed.source_text.clone(),
+          ));
+          covered.push((start_u32, end_u32));
+        }
+
+        search_from = end;
+      }
+    }
+
+    Ok(results)
+  }
+
+  fn organization_seeds(
+    &self,
+    existing_entities: &[PipelineEntity],
+  ) -> Vec<OrgSeed> {
+    let mut seed_by_base = BTreeMap::<String, OrgSeed>::new();
+
+    for entity in existing_entities {
+      if entity.label != "organization" || caller_owned(entity) {
+        continue;
+      }
+      let Some(base) = self.organization_base_name(&entity.text) else {
+        continue;
+      };
+      let entry = seed_by_base.entry(base.clone()).or_insert_with(|| OrgSeed {
+        base_name: base.clone(),
+        label: entity.label.clone(),
+        source_text: entity.text.clone(),
+      });
+      if entry.source_text != entity.text {
+        entry.source_text = base;
+      }
+    }
+
+    seed_by_base.into_values().collect()
+  }
+
+  fn organization_base_name(&self, text: &str) -> Option<String> {
+    for suffix in &self.legal_form_suffixes {
+      let Some(base) = text.strip_suffix(suffix) else {
+        continue;
+      };
+      let base =
+        base.trim_end_matches(|ch: char| ch == ',' || ch.is_whitespace());
+      let base = base.trim();
+      if text_units(base) >= 3 {
+        return Some(base.to_owned());
+      }
+    }
+    None
+  }
+
+  fn determiner_start(
+    &self,
+    full_text: &str,
+    match_start: usize,
+  ) -> Option<usize> {
+    let lookback_start =
+      offset_before_text_units(full_text, match_start, ORG_DETERMINER_LOOKBACK);
+    let lookback = full_text.get(lookback_start..match_start)?;
+    let captures = self.org_determiner.as_ref()?.captures(lookback)?;
+    let determiner = captures.get(1)?;
+    let start = lookback_start.saturating_add(determiner.start());
+    previous_char(full_text, start)
+      .is_none_or(|ch| !is_word_char(ch))
+      .then_some(start)
+  }
+}
+
+fn compile_org_determiner(patterns: &[String]) -> Result<Option<Regex>> {
+  if patterns.is_empty() {
+    return Ok(None);
+  }
+
+  let pattern = format!("({})\\s+$", patterns.join("|"));
+  RegexBuilder::new(&pattern)
+    .case_insensitive(true)
+    .unicode(true)
+    .build()
+    .map(Some)
+    .map_err(|error| Error::InvalidStaticData {
+      field: "coreference_data.org_determiner",
+      reason: error.to_string(),
+    })
 }
 
 fn compile_definition_pattern(data: &CoreferencePatternData) -> Result<Regex> {
@@ -359,6 +519,35 @@ fn next_char_boundary(full_text: &str, index: usize) -> usize {
 
 fn is_word_char(ch: char) -> bool {
   ch.is_alphanumeric() || is_combining_mark(ch)
+}
+
+fn span_overlaps(covered: &[(u32, u32)], start: u32, end: u32) -> bool {
+  covered.iter().any(|(covered_start, covered_end)| {
+    start < *covered_end && end > *covered_start
+  })
+}
+
+fn text_units(text: &str) -> usize {
+  text.chars().map(char::len_utf16).sum()
+}
+
+fn offset_before_text_units(
+  full_text: &str,
+  end: usize,
+  max_units: usize,
+) -> usize {
+  let Some(prefix) = full_text.get(..end) else {
+    return 0;
+  };
+  let mut units = 0usize;
+  for (index, ch) in prefix.char_indices().rev() {
+    let width = ch.len_utf16();
+    if units.saturating_add(width) > max_units {
+      return index.saturating_add(ch.len_utf8());
+    }
+    units = units.saturating_add(width);
+  }
+  0
 }
 
 const fn is_combining_mark(ch: char) -> bool {

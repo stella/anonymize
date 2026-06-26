@@ -1170,9 +1170,9 @@ describe("native adapter parity", () => {
     });
   });
 
-  test("native pipeline package matches TS coreference aliases", async () => {
+  test("native pipeline package matches TS organization propagation", async () => {
     const adapters = getAdapters();
-    const fullText = 'Acme LLC (the "Acme") signed. Acme paid.';
+    const fullText = "Acme LLC signed. Acme paid.";
     const config: PipelineConfig = {
       threshold: 0.5,
       enableTriggerPhrases: false,
