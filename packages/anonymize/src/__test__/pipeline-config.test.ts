@@ -319,6 +319,30 @@ describe("pipeline config semantics", () => {
       requires_validation: true,
       validator_id: "cn.ric",
     });
+    expect(
+      search.nativeStaticConfig.regex_meta.filter(
+        (entry) => entry.requires_validation === true && !entry.validator_id,
+      ),
+    ).toEqual([]);
+  });
+
+  test("native config keeps trigger currency terms separate from monetary detection", async () => {
+    const search = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        enableRegex: false,
+        enableTriggerPhrases: true,
+        labels: [],
+      },
+      [],
+      createPipelineContext(),
+    );
+
+    expect(
+      search.nativeStaticConfig.trigger_data?.sentence_terminal_currency_terms
+        .length,
+    ).toBeGreaterThan(0);
+    expect(search.nativeStaticConfig.monetary_data).toBeUndefined();
   });
 
   test("content language scopes deny-list search build", async () => {

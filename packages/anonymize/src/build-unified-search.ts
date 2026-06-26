@@ -459,6 +459,7 @@ type UnifiedSearchSources = {
   nativeLegalFormData: NativeLegalFormData | null;
   nativeDateData: NativeDateData | null;
   nativeMonetaryData: NativeMonetaryData | null;
+  nativeSentenceTerminalCurrencyTerms: string[];
   nativeAddressSeedData: NativeAddressSeedData | null;
   nativeZoneData: NativeZoneData | null;
   nativeAddressContextData: NativeAddressContextData | null;
@@ -614,6 +615,8 @@ const buildUnifiedSearchSources = async (
       ? expandLabelsForHotwordRuleSet(config.labels, hotwordRules)
       : config.labels;
   const allowedLabels = createAllowedLabelSet(searchLabels);
+  const regexMonetaryEnabled =
+    config.enableRegex && labelIsAllowed("monetary amount", allowedLabels);
   const customRegexes = config.enableRegex
     ? (config.customRegexes ?? []).filter((entry) =>
         labelIsAllowed(entry.label, allowedLabels),
@@ -661,7 +664,7 @@ const buildUnifiedSearchSources = async (
       return buildDenyListFilterData(ctx);
     })(),
     buildStreetTypePatterns(),
-    config.enableRegex && labelIsAllowed("monetary amount", allowedLabels)
+    regexMonetaryEnabled
       ? getCurrencyPatternEntries()
       : Promise.resolve([] as PatternEntry[]),
     config.enableRegex && labelIsAllowed("date", allowedLabels)
@@ -679,8 +682,7 @@ const buildUnifiedSearchSources = async (
     config.enableRegex && labelIsAllowed("date", allowedLabels)
       ? getYearWordData()
       : Promise.resolve(null),
-    config.enableTriggerPhrases ||
-    (config.enableRegex && labelIsAllowed("monetary amount", allowedLabels))
+    config.enableTriggerPhrases || regexMonetaryEnabled
       ? getMonetaryData()
       : Promise.resolve(null),
     labelIsAllowed("address", allowedLabels)
@@ -804,7 +806,9 @@ const buildUnifiedSearchSources = async (
           month_names_by_language: dateMonthData,
           year_words_by_language: yearWordData ?? {},
         };
-  const nativeMonetaryData = monetaryData;
+  const nativeMonetaryData = regexMonetaryEnabled ? monetaryData : null;
+  const nativeSentenceTerminalCurrencyTerms =
+    sentenceTerminalCurrencyTerms(monetaryData);
   const nativeNameCorpusData = buildNativeNameCorpusData(config, ctx);
 
   let offset = 0;
@@ -950,6 +954,7 @@ const buildUnifiedSearchSources = async (
     nativeLegalFormData,
     nativeDateData,
     nativeMonetaryData,
+    nativeSentenceTerminalCurrencyTerms,
     nativeAddressSeedData: addressSeedData,
     nativeZoneData: zoneData,
     nativeAddressContextData: addressContextData,
@@ -1010,6 +1015,8 @@ export const buildNativeStaticSearchBundle = async (
       legalFormData: sources.nativeLegalFormData,
       dateData: sources.nativeDateData,
       monetaryData: sources.nativeMonetaryData,
+      sentenceTerminalCurrencyTerms:
+        sources.nativeSentenceTerminalCurrencyTerms,
       addressSeedData: sources.nativeAddressSeedData,
       zoneData: sources.nativeZoneData,
       addressContextData: sources.nativeAddressContextData,
@@ -1099,6 +1106,7 @@ export const buildUnifiedSearch = async (
     legalFormData: sources.nativeLegalFormData,
     dateData: sources.nativeDateData,
     monetaryData: sources.nativeMonetaryData,
+    sentenceTerminalCurrencyTerms: sources.nativeSentenceTerminalCurrencyTerms,
     addressSeedData: sources.nativeAddressSeedData,
     zoneData: sources.nativeZoneData,
     addressContextData: sources.nativeAddressContextData,
@@ -1152,6 +1160,7 @@ type BuildNativeStaticConfigArgs = {
   legalFormData: NativeLegalFormData | null;
   dateData: NativeDateData | null;
   monetaryData: NativeMonetaryData | null;
+  sentenceTerminalCurrencyTerms: readonly string[];
   addressSeedData: NativeAddressSeedData | null;
   zoneData: NativeZoneData | null;
   addressContextData: NativeAddressContextData | null;
@@ -1186,6 +1195,7 @@ const buildNativeStaticConfig = ({
   legalFormData,
   dateData,
   monetaryData,
+  sentenceTerminalCurrencyTerms,
   addressSeedData,
   zoneData,
   addressContextData,
@@ -1385,8 +1395,7 @@ const buildNativeStaticConfig = ({
       rules: triggerRules.map(toNativeTriggerRule),
       address_stop_keywords: [...getAddressStopKeywordsSync()],
       party_position_terms: [...partyPositionTerms],
-      sentence_terminal_currency_terms:
-        sentenceTerminalCurrencyTerms(monetaryData),
+      sentence_terminal_currency_terms: [...sentenceTerminalCurrencyTerms],
     };
   }
   if (legalFormData) {
@@ -1653,11 +1662,14 @@ const toNativeRegexMeta = (meta: RegexMeta): NativeRegexMatchMeta => {
   }
   if (meta.validator) {
     const isSupportedValidator = nativeSupportsRegexMeta(meta);
-    result.requires_validation = true;
-    if (isSupportedValidator && meta.validatorId) {
-      result.validator_id = meta.validatorId;
+    if (!isSupportedValidator || !meta.validatorId) {
+      throw new Error(
+        `Native static config does not support regex validator ${meta.validatorId ?? "unknown"}`,
+      );
     }
-    if (isSupportedValidator && meta.validatorInputKind) {
+    result.requires_validation = true;
+    result.validator_id = meta.validatorId;
+    if (meta.validatorInputKind) {
       result.validator_input = meta.validatorInputKind;
     }
   }
