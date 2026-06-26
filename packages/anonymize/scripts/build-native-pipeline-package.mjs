@@ -5,7 +5,7 @@ import { pathToFileURL } from "node:url";
 
 import {
   createPipelineContext,
-  DEFAULT_ENTITY_LABELS,
+  DEFAULT_NATIVE_PIPELINE_CONFIG,
   prepareNativePipelinePackage,
 } from "../dist/index.mjs";
 import { loadNativeAnonymizeBinding } from "../dist/native-node.mjs";
@@ -60,6 +60,10 @@ function parseArgs(values) {
         result.raw = true;
         break;
       }
+      case "--default-dictionaries": {
+        result.defaultDictionaries = true;
+        break;
+      }
       case "--help": {
         printHelp();
         process.exit(0);
@@ -80,6 +84,20 @@ function requiredValue(values, index, option) {
 }
 
 async function loadPackageInput(options) {
+  const input = await loadBasePackageInput(options);
+  if (!options.defaultDictionaries || input.config.dictionaries !== undefined) {
+    return input;
+  }
+  return {
+    ...input,
+    config: {
+      ...input.config,
+      dictionaries: await loadDefaultDictionaries(),
+    },
+  };
+}
+
+async function loadBasePackageInput(options) {
   if (!options.config) {
     return { config: defaultNativePipelineConfig(), gazetteerEntries: [] };
   }
@@ -108,30 +126,44 @@ async function loadPackageInput(options) {
 
 function defaultNativePipelineConfig() {
   return {
-    threshold: 0.3,
-    enableTriggerPhrases: true,
-    enableRegex: true,
-    enableLegalForms: true,
-    enableNameCorpus: false,
-    enableDenyList: false,
-    enableGazetteer: false,
-    enableNer: false,
-    enableConfidenceBoost: true,
-    enableCoreference: true,
-    enableHotwordRules: true,
-    enableZoneClassification: true,
-    labels: [...DEFAULT_ENTITY_LABELS],
+    ...DEFAULT_NATIVE_PIPELINE_CONFIG,
+    labels: [...DEFAULT_NATIVE_PIPELINE_CONFIG.labels],
     workspaceId: "native-pipeline-package",
   };
+}
+
+async function loadDefaultDictionaries() {
+  let loaded;
+  try {
+    loaded = await import("@stll/anonymize-data/dictionaries");
+  } catch (error) {
+    throw new Error(
+      `--default-dictionaries requires @stll/anonymize-data: ${formatError(error)}`,
+    );
+  }
+  if (typeof loaded.loadDictionaryBundle !== "function") {
+    throw new TypeError(
+      "@stll/anonymize-data/dictionaries does not export loadDictionaryBundle",
+    );
+  }
+  return loaded.loadDictionaryBundle();
+}
+
+function formatError(error) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
 }
 
 function printHelp() {
   console.log(`Usage: build-native-pipeline-package [options]
 
 Options:
-  --out <path>       Output package path. Defaults to native-pipeline.stlanonpkg.
-  --config <path>    ESM module exporting a PipelineConfig or { config, gazetteerEntries }.
-  --export <name>    Export name to read from the config module. Defaults to default.
-  --raw              Write an uncompressed package.
+  --out <path>              Output package path. Defaults to native-pipeline.stlanonpkg.
+  --config <path>           ESM module exporting a PipelineConfig or { config, gazetteerEntries }.
+  --export <name>           Export name to read from the config module. Defaults to default.
+  --default-dictionaries    Load @stll/anonymize-data into configs that do not provide dictionaries.
+  --raw                     Write an uncompressed package.
 `);
 }
