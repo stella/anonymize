@@ -40,12 +40,22 @@ export type DefaultNativePipelinePackageOptions = LoadNativeBindingOptions & {
   packagePath?: string;
 };
 
+type ResolvedDefaultNativePipelineOptions = {
+  binding: NativeAnonymizeBinding;
+  packagePath?: string;
+};
+
 const LOCAL_NATIVE_LOADER = "../index.cjs";
 const PACKAGE_SPECIFIC_NATIVE_PATH = "STELLA_ANONYMIZE_NATIVE_LIBRARY_PATH";
 const DEFAULT_NATIVE_PIPELINE_PACKAGE_URL = new URL(
   "../native-pipeline.stlanonpkg",
   import.meta.url,
 );
+const DEFAULT_NATIVE_PIPELINE_PACKAGE_CACHE_KEY = "<default>";
+const defaultNativePipelineCache = new WeakMap<
+  NativeAnonymizeBinding,
+  Map<string, PreparedNativePipeline>
+>();
 
 export { DEFAULT_NATIVE_PIPELINE_CONFIG } from "./native-default-config";
 
@@ -156,15 +166,80 @@ export const createNativePipelineFromDefaultPackage = ({
   if (binding && expectedVersion !== undefined) {
     assertNativeBindingVersion({ binding, expectedVersion });
   }
+  return createNativePipelineFromResolvedDefaultPackage({
+    binding: resolvedBinding,
+    ...(packagePath !== undefined ? { packagePath } : {}),
+  });
+};
+
+export const getDefaultNativePipeline = ({
+  binding,
+  packagePath,
+  expectedVersion,
+  ...loadOptions
+}: DefaultNativePipelinePackageOptions = {}): PreparedNativePipeline => {
+  const resolvedBinding =
+    binding ??
+    loadNativeAnonymizeBinding({
+      ...loadOptions,
+      ...(expectedVersion !== undefined ? { expectedVersion } : {}),
+    });
+  if (binding && expectedVersion !== undefined) {
+    assertNativeBindingVersion({ binding, expectedVersion });
+  }
+  const cache = defaultPipelineCacheFor(resolvedBinding);
+  const key = defaultPipelineCacheKey({
+    binding: resolvedBinding,
+    ...(packagePath !== undefined ? { packagePath } : {}),
+  });
+  const cached = cache.get(key);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const pipeline = createNativePipelineFromResolvedDefaultPackage({
+    binding: resolvedBinding,
+    ...(packagePath !== undefined ? { packagePath } : {}),
+  });
+  cache.set(key, pipeline);
+  return pipeline;
+};
+
+export const preloadDefaultNativePipeline = getDefaultNativePipeline;
+
+const createNativePipelineFromResolvedDefaultPackage = ({
+  binding,
+  packagePath,
+}: ResolvedDefaultNativePipelineOptions): PreparedNativePipeline => {
   const packageBytes =
     packagePath === undefined
       ? readDefaultNativePipelinePackageFile()
       : readNativePipelinePackageFile(packagePath);
   return createNativePipelineFromPackage({
-    binding: resolvedBinding,
+    binding,
     packageBytes,
   });
 };
+
+const defaultPipelineCacheFor = (
+  binding: NativeAnonymizeBinding,
+): Map<string, PreparedNativePipeline> => {
+  const cached = defaultNativePipelineCache.get(binding);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const created = new Map<string, PreparedNativePipeline>();
+  defaultNativePipelineCache.set(binding, created);
+  return created;
+};
+
+const defaultPipelineCacheKey = ({
+  binding,
+  packagePath,
+}: ResolvedDefaultNativePipelineOptions): string =>
+  [
+    binding.nativePackageVersion(),
+    packagePath ?? DEFAULT_NATIVE_PIPELINE_PACKAGE_CACHE_KEY,
+  ].join("\0");
 
 type NativeBindingSpecifiersOptions = {
   env: Record<string, string | undefined>;
