@@ -39,6 +39,7 @@ use crate::types::{
   Entity, EntityKind, Error, OperatorConfig, RedactionResult, Result,
   SearchMatch,
 };
+use crate::zones::{PreparedZoneData, ZoneData};
 
 const PREPARED_SEARCH_ARTIFACTS_HEADER: [u8; 8] = *b"ANONPSR1";
 const PREPARED_SEARCH_ARTIFACTS_VERSION: u32 = 1;
@@ -67,6 +68,7 @@ pub struct PreparedSearch {
   trigger_data: Option<PreparedTriggerData>,
   legal_form_data: Option<PreparedLegalFormData>,
   address_seed_data: Option<PreparedAddressSeedData>,
+  zone_data: Option<PreparedZoneData>,
   address_context_data: Option<PreparedAddressContextData>,
   coreference_data: Option<PreparedCoreferenceData>,
   date_data: Option<PreparedDateData>,
@@ -115,6 +117,8 @@ pub struct PreparedSearchConfig {
   pub trigger_data: Option<TriggerData>,
   pub legal_form_data: Option<LegalFormData>,
   pub address_seed_data: Option<AddressSeedData>,
+  #[serde(default)]
+  pub zone_data: Option<ZoneData>,
   #[serde(default)]
   pub address_context_data: Option<AddressContextData>,
   #[serde(default)]
@@ -448,6 +452,7 @@ impl PreparedSearch {
         .transpose()?,
       legal_form_data: config.legal_form_data.map(PreparedLegalFormData::new),
       address_seed_data: prepare_address_seed_data(config.address_seed_data)?,
+      zone_data: prepare_zone_data(config.zone_data.as_ref())?,
       address_context_data: prepare_address_context_data(
         config.address_context_data,
       )?,
@@ -854,10 +859,10 @@ impl PreparedSearch {
   ) -> Result<StaticRedactionResult> {
     let detections = self
       .detect_static_entities_inner(full_text, diagnostics.as_deref_mut())?;
-    let pre_threshold_entities = self.apply_hotword_entities(
-      detections.all_entities(),
+    let pre_threshold_entities = self.prepare_pre_threshold_entities(
+      &detections,
       full_text,
-      &detections.matches.literal,
+      diagnostics.as_deref_mut(),
     )?;
     let mut raw_entities = filter_entities_for_redaction(
       pre_threshold_entities,
@@ -953,6 +958,24 @@ impl PreparedSearch {
     })
   }
 
+  fn prepare_pre_threshold_entities(
+    &self,
+    detections: &StaticDetectionResult,
+    full_text: &str,
+    diagnostics: Option<&mut StaticRedactionDiagnostics>,
+  ) -> Result<Vec<PipelineEntity>> {
+    let zone_adjusted_entities = self.apply_zone_adjustments(
+      detections.all_entities(),
+      full_text,
+      diagnostics,
+    )?;
+    self.apply_hotword_entities(
+      zone_adjusted_entities,
+      full_text,
+      &detections.matches.literal,
+    )
+  }
+
   fn apply_hotword_entities(
     &self,
     entities: Vec<PipelineEntity>,
@@ -970,6 +993,29 @@ impl PreparedSearch {
       data,
       &self.allowed_labels,
     )
+  }
+
+  fn apply_zone_adjustments(
+    &self,
+    entities: Vec<PipelineEntity>,
+    full_text: &str,
+    mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
+  ) -> Result<Vec<PipelineEntity>> {
+    let Some(data) = &self.zone_data else {
+      return Ok(entities);
+    };
+
+    let start = Instant::now();
+    let adjusted = data.adjust_entities(full_text, entities)?;
+    if let Some(diagnostics) = &mut diagnostics {
+      diagnostics.record_stage(
+        DiagnosticStage::EntityZoneAdjustment,
+        Some(adjusted.boosted),
+        Some(elapsed_us(start)),
+        Some(full_text.len()),
+      );
+    }
+    Ok(adjusted.entities)
   }
 
   fn process_address_context_entities(
@@ -1475,6 +1521,12 @@ fn prepare_address_context_data(
   data: Option<AddressContextData>,
 ) -> Result<Option<PreparedAddressContextData>> {
   data.map(PreparedAddressContextData::new).transpose()
+}
+
+fn prepare_zone_data(
+  data: Option<&ZoneData>,
+) -> Result<Option<PreparedZoneData>> {
+  data.map(PreparedZoneData::new).transpose()
 }
 
 fn prepare_coreference_data(

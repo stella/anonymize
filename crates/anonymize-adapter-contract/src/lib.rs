@@ -14,19 +14,20 @@ use stella_anonymize_core::{
   ShareQuantityTermData, SigningPlaceGuardData, SourceDetail,
   StaticRedactionDiagnosticResult, StaticRedactionDiagnostics,
   StaticRedactionResult, StringGroups, TriggerData, TriggerRule,
-  TriggerStrategy, TriggerValidation, WrittenAmountPatternData,
+  TriggerStrategy, TriggerValidation, WrittenAmountPatternData, ZoneData,
+  ZonePatternData, ZoneSigningClauseData,
 };
 
 pub type Result<T> = std::result::Result<T, ContractError>;
 
 const PREPARED_SEARCH_PACKAGE_HEADER: [u8; 8] = *b"ANONPKG1";
-const PREPARED_SEARCH_PACKAGE_VERSION: u32 = 9;
+const PREPARED_SEARCH_PACKAGE_VERSION: u32 = 10;
 const PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER: [u8; 8] = *b"ANONPKZ1";
-const PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION: u32 = 7;
+const PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION: u32 = 8;
 const PREPARED_SEARCH_CORE_PACKAGE_HEADER: [u8; 8] = *b"ANONCPK1";
-const PREPARED_SEARCH_CORE_PACKAGE_VERSION: u32 = 8;
+const PREPARED_SEARCH_CORE_PACKAGE_VERSION: u32 = 9;
 const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_HEADER: [u8; 8] = *b"ANONCPZ1";
-const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION: u32 = 8;
+const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION: u32 = 9;
 const PREPARED_SEARCH_PACKAGE_DIGEST_BYTES: usize = 32;
 const PREPARED_SEARCH_PACKAGE_ZSTD_LEVEL: i32 = 3;
 const MAX_PREPARED_SEARCH_PACKAGE_PAYLOAD_BYTES: usize = 256 * 1024 * 1024;
@@ -358,6 +359,31 @@ pub struct BindingAddressContextData {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BindingZoneData {
+  #[serde(default)]
+  pub section_heading_patterns: Vec<BindingZonePatternData>,
+  #[serde(default)]
+  pub signing_clauses: Vec<BindingZoneSigningClauseData>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BindingZonePatternData {
+  pub pattern: String,
+  #[serde(default)]
+  pub flags: String,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BindingZoneSigningClauseData {
+  #[serde(default)]
+  pub prefix: String,
+  #[serde(default)]
+  pub suffix: String,
+  #[serde(default)]
+  pub prepositions: Vec<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct BindingCoreferenceData {
   #[serde(default)]
   pub definition_patterns: Vec<BindingCoreferencePatternData>,
@@ -479,6 +505,8 @@ pub struct BindingPreparedSearchConfig {
   #[serde(default)]
   pub address_seed_data: Option<BindingAddressSeedData>,
   #[serde(default)]
+  pub zone_data: Option<BindingZoneData>,
+  #[serde(default)]
   pub address_context_data: Option<BindingAddressContextData>,
   #[serde(default)]
   pub coreference_data: Option<BindingCoreferenceData>,
@@ -541,6 +569,7 @@ struct BinaryPreparedSearchConfig {
   trigger_data: Option<BinaryTriggerData>,
   legal_form_data: Option<BindingLegalFormData>,
   address_seed_data: Option<BindingAddressSeedData>,
+  zone_data: Option<BindingZoneData>,
   address_context_data: Option<BindingAddressContextData>,
   coreference_data: Option<BindingCoreferenceData>,
   date_data: Option<BindingDateData>,
@@ -744,6 +773,7 @@ impl From<BindingPreparedSearchConfig> for BinaryPreparedSearchConfig {
       trigger_data: config.trigger_data.map(BinaryTriggerData::from),
       legal_form_data: config.legal_form_data,
       address_seed_data: config.address_seed_data,
+      zone_data: config.zone_data,
       address_context_data: config.address_context_data,
       coreference_data: config.coreference_data,
       date_data: config.date_data,
@@ -777,6 +807,7 @@ impl From<BinaryPreparedSearchConfig> for BindingPreparedSearchConfig {
       trigger_data: config.trigger_data.map(BindingTriggerData::from),
       legal_form_data: config.legal_form_data,
       address_seed_data: config.address_seed_data,
+      zone_data: config.zone_data,
       address_context_data: config.address_context_data,
       coreference_data: config.coreference_data,
       date_data: config.date_data,
@@ -1233,6 +1264,7 @@ pub fn prepared_search_config_from_binding(
       br_cep_cue_words: data.br_cep_cue_words,
       unit_abbreviations: data.unit_abbreviations,
     }),
+    zone_data: config.zone_data.map(zone_data_from_binding),
     address_context_data: config.address_context_data.map(|data| {
       AddressContextData {
         address_prepositions: data.address_prepositions,
@@ -1593,6 +1625,28 @@ fn coreference_data_from_binding(
       .collect(),
     role_stop_terms: data.role_stop_terms,
     legal_form_aliases: data.legal_form_aliases,
+  }
+}
+
+fn zone_data_from_binding(data: BindingZoneData) -> ZoneData {
+  ZoneData {
+    section_heading_patterns: data
+      .section_heading_patterns
+      .into_iter()
+      .map(|pattern| ZonePatternData {
+        pattern: pattern.pattern,
+        flags: pattern.flags,
+      })
+      .collect(),
+    signing_clauses: data
+      .signing_clauses
+      .into_iter()
+      .map(|clause| ZoneSigningClauseData {
+        prefix: clause.prefix,
+        suffix: clause.suffix,
+        prepositions: clause.prepositions,
+      })
+      .collect(),
   }
 }
 
@@ -2178,6 +2232,7 @@ fn diagnostic_stage_name(stage: DiagnosticStage) -> String {
     DiagnosticStage::EntitySignature => "entity.signature",
     DiagnosticStage::EntityLegalForm => "entity.legal-form",
     DiagnosticStage::EntityAddressSeed => "entity.address-seed",
+    DiagnosticStage::EntityZoneAdjustment => "entity.zone-adjustment",
     DiagnosticStage::EntityAddressContext => "entity.address-context",
     DiagnosticStage::EntityCoreference => "entity.coreference",
     DiagnosticStage::Merge => "resolution.merge",
