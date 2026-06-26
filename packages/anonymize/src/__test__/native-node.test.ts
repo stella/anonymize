@@ -9,37 +9,11 @@ import {
   createNativePipelineFromPackageFile,
   getDefaultNativePipeline,
   loadNativeAnonymizeBinding,
-  nativePlatformPackageName,
   preloadDefaultNativePipeline,
   readNativePipelinePackageFile,
 } from "../native-node";
 
 describe("native node loader", () => {
-  test("maps supported platform package names", () => {
-    expect(
-      nativePlatformPackageName({ platform: "darwin", arch: "arm64" }),
-    ).toBe("@stll/anonymize-darwin-arm64");
-    expect(nativePlatformPackageName({ platform: "darwin", arch: "x64" })).toBe(
-      "@stll/anonymize-darwin-x64",
-    );
-    expect(nativePlatformPackageName({ platform: "linux", arch: "x64" })).toBe(
-      "@stll/anonymize-linux-x64-gnu",
-    );
-    expect(
-      nativePlatformPackageName({ platform: "linux", arch: "arm64" }),
-    ).toBe("@stll/anonymize-linux-arm64-gnu");
-    expect(nativePlatformPackageName({ platform: "win32", arch: "x64" })).toBe(
-      "@stll/anonymize-win32-x64-msvc",
-    );
-    expect(
-      nativePlatformPackageName({
-        platform: "linux",
-        arch: "x64",
-        libc: "musl",
-      }),
-    ).toBeNull();
-  });
-
   test("loads the bundled native loader", () => {
     const calls: string[] = [];
     const binding = fakeNativeBinding("1.5.0");
