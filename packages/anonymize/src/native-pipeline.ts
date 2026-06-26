@@ -4,9 +4,10 @@ import {
 } from "./build-unified-search";
 import type { PipelineContext } from "./context";
 import { defaultContext } from "./context";
-import type { GazetteerEntry, PipelineConfig } from "./types";
+import { applyPipelineLanguageScope } from "./language-scope";
+import { pipelineConfigKey } from "./pipeline-cache-key";
+import type { Dictionaries, GazetteerEntry, PipelineConfig } from "./types";
 import {
-  createNativeAnonymizerFromConfig,
   createNativeAnonymizerFromPackage,
   prepareNativeSearchPackage,
   PreparedNativeAnonymizer,
@@ -42,6 +43,32 @@ export type NativePipelinePackageOptions = NativePipelineBuildOptions & {
 export type NativePipelineFromPackageOptions = {
   binding: NativeAnonymizeBinding;
   packageBytes: Uint8Array;
+};
+
+type NativePipelinePackageCacheValue = Promise<Uint8Array> | Uint8Array;
+
+const sharedPackageByDictionaries = new WeakMap<
+  Dictionaries,
+  Map<string, NativePipelinePackageCacheValue>
+>();
+const sharedPackageWithoutDictionaries = new Map<
+  string,
+  NativePipelinePackageCacheValue
+>();
+
+const sharedPackageCacheFor = (
+  dictionaries: Dictionaries | undefined,
+): Map<string, NativePipelinePackageCacheValue> => {
+  if (dictionaries === undefined) {
+    return sharedPackageWithoutDictionaries;
+  }
+  const cached = sharedPackageByDictionaries.get(dictionaries);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const created = new Map<string, NativePipelinePackageCacheValue>();
+  sharedPackageByDictionaries.set(dictionaries, created);
+  return created;
 };
 
 export class PreparedNativePipeline {
@@ -124,16 +151,14 @@ export const prepareNativePipelinePackage = async ({
   context,
   compressed = true,
 }: NativePipelinePackageOptions): Promise<Uint8Array> => {
-  const nativeConfig = await prepareNativePipelineConfig({
+  const packageBytes = await getCachedNativePipelinePackage({
     config,
+    binding,
     gazetteerEntries,
     ...(context ? { context } : {}),
-  });
-  return prepareNativeSearchPackage({
-    binding,
-    config: nativeConfig,
     compressed,
   });
+  return packageBytes.slice();
 };
 
 export const createNativePipelineFromConfig = async ({
@@ -142,17 +167,13 @@ export const createNativePipelineFromConfig = async ({
   gazetteerEntries = [],
   context,
 }: NativePipelineBuildOptions): Promise<PreparedNativePipeline> => {
-  const nativeConfig = await prepareNativePipelineConfig({
+  const packageBytes = await getCachedNativePipelinePackage({
+    binding,
     config,
     gazetteerEntries,
     ...(context ? { context } : {}),
   });
-  return new PreparedNativePipeline(
-    createNativeAnonymizerFromConfig({
-      binding,
-      config: nativeConfig,
-    }),
-  );
+  return createNativePipelineFromPackage({ binding, packageBytes });
 };
 
 export const createNativePipelineFromPackage = ({
@@ -162,3 +183,107 @@ export const createNativePipelineFromPackage = ({
   new PreparedNativePipeline(
     createNativeAnonymizerFromPackage({ binding, packageBytes }),
   );
+
+const getCachedNativePipelinePackage = async ({
+  binding,
+  config,
+  gazetteerEntries = [],
+  context,
+  compressed = true,
+}: NativePipelinePackageOptions): Promise<Uint8Array> => {
+  const scopedConfig = applyPipelineLanguageScope(config);
+  assertNativePipelineSupported(scopedConfig);
+  const ctx = context ?? defaultContext;
+  const key = nativePackageCacheKey({
+    binding,
+    config: scopedConfig,
+    gazetteerEntries,
+    compressed,
+  });
+  if (ctx.nativePipelinePackage && ctx.nativePipelinePackageKey === key) {
+    return ctx.nativePipelinePackage;
+  }
+  if (
+    ctx.nativePipelinePackagePromise &&
+    ctx.nativePipelinePackageKey === key
+  ) {
+    return ctx.nativePipelinePackagePromise;
+  }
+
+  const sharedCache = sharedPackageCacheFor(scopedConfig.dictionaries);
+  const shared = sharedCache.get(key);
+  if (shared !== undefined) {
+    const packageBytes = await shared;
+    ctx.nativePipelinePackage = packageBytes;
+    ctx.nativePipelinePackageKey = key;
+    ctx.nativePipelinePackagePromise = null;
+    return packageBytes;
+  }
+
+  ctx.nativePipelinePackage = null;
+  ctx.nativePipelinePackageKey = key;
+  const promise = buildNativePipelinePackage({
+    binding,
+    config: scopedConfig,
+    gazetteerEntries,
+    context: ctx,
+    compressed,
+  });
+  ctx.nativePipelinePackagePromise = promise;
+  sharedCache.set(key, promise);
+  let packageBytes: Uint8Array;
+  try {
+    packageBytes = await promise;
+  } catch (error) {
+    if (sharedCache.get(key) === promise) {
+      sharedCache.delete(key);
+    }
+    throw error;
+  }
+  if (sharedCache.get(key) === promise) {
+    sharedCache.set(key, packageBytes);
+  }
+  if (ctx.nativePipelinePackageKey === key) {
+    ctx.nativePipelinePackage = packageBytes;
+    ctx.nativePipelinePackagePromise = null;
+  }
+  return packageBytes;
+};
+
+const buildNativePipelinePackage = async ({
+  binding,
+  config,
+  gazetteerEntries,
+  context,
+  compressed,
+}: Required<NativePipelinePackageOptions>): Promise<Uint8Array> => {
+  const bundle = await buildNativeStaticSearchBundle(
+    config,
+    gazetteerEntries,
+    context,
+  );
+  return prepareNativeSearchPackage({
+    binding,
+    config: bundle.nativeStaticConfig,
+    compressed,
+  });
+};
+
+type NativePackageCacheKeyOptions = {
+  binding: NativeAnonymizeBinding;
+  config: PipelineConfig;
+  gazetteerEntries: readonly GazetteerEntry[];
+  compressed: boolean;
+};
+
+const nativePackageCacheKey = ({
+  binding,
+  config,
+  gazetteerEntries,
+  compressed,
+}: NativePackageCacheKeyOptions): string =>
+  [
+    binding.nativePackageVersion(),
+    compressed ? "compressed" : "raw",
+    pipelineConfigKey(config, gazetteerEntries),
+  ].join(":");
