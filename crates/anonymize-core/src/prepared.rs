@@ -693,6 +693,9 @@ impl PreparedSearch {
 
     let legal_form = self.process_legal_form_entities(matches, full_text)?;
 
+    let name_corpus =
+      self.process_name_corpus_entities(full_text, &deny_list.entities)?;
+
     let address_seed = self.process_address_seed_entities(
       matches,
       full_text,
@@ -705,11 +708,9 @@ impl PreparedSearch {
         &legal_form.entities,
         &deny_list.entities,
         &gazetteer.entities,
+        &name_corpus.entities,
       ],
     )?;
-
-    let name_corpus =
-      self.process_name_corpus_entities(full_text, &deny_list.entities)?;
 
     Ok(StaticEntityPasses {
       regex,
@@ -1318,16 +1319,16 @@ fn record_static_entity_diagnostics(
     Some(passes.legal_form.elapsed_us),
   );
   diagnostics.record_entities(
-    DiagnosticStage::EntityAddressSeed,
-    &passes.address_seed.entities,
-    full_text,
-    Some(passes.address_seed.elapsed_us),
-  );
-  diagnostics.record_entities(
     DiagnosticStage::EntityNameCorpus,
     &passes.name_corpus.entities,
     full_text,
     Some(passes.name_corpus.elapsed_us),
+  );
+  diagnostics.record_entities(
+    DiagnosticStage::EntityAddressSeed,
+    &passes.address_seed.entities,
+    full_text,
+    Some(passes.address_seed.elapsed_us),
   );
 }
 

@@ -1382,6 +1382,72 @@ describe("native adapter parity", () => {
     });
   });
 
+  test("native pipeline keeps supplemental names outside address seeds", async () => {
+    const adapters = getAdapters();
+    const fullText =
+      "Sato Kenji, address: 100 Main Street, Boston, MA 02101-1234.";
+    const config: PipelineConfig = {
+      threshold: 0.85,
+      enableTriggerPhrases: false,
+      enableRegex: false,
+      enableLegalForms: false,
+      enableNameCorpus: true,
+      enableDenyList: true,
+      enableGazetteer: false,
+      enableCountries: false,
+      enableNer: false,
+      enableConfidenceBoost: false,
+      enableCoreference: false,
+      enableHotwordRules: false,
+      enableZoneClassification: false,
+      labels: ["person", "address"],
+      workspaceId: "native-pipeline-name-address-boundary-test",
+    };
+
+    expect(getNativePipelineCompatibility(config)).toEqual({
+      status: "supported",
+    });
+
+    const context = createPipelineContext();
+    const packageBytes = await prepareNativePipelinePackage({
+      binding: adapters.native,
+      config,
+      context,
+      compressed: true,
+    });
+    const nativePipeline = createNativePipelineFromPackage({
+      binding: adapters.native,
+      packageBytes,
+    });
+    const tsContext = createPipelineContext();
+    const operators: OperatorConfig & NativeOperatorConfig = {
+      operators: {},
+      redactString: "[REDACTED]",
+    };
+    const tsEntities = await runPipeline({
+      fullText,
+      config,
+      gazetteerEntries: [],
+      context: tsContext,
+    });
+    const tsRedaction = redactText(fullText, tsEntities, operators, tsContext);
+    const address = tsEntities.find((entity) => entity.label === "address");
+
+    expect(tsEntities).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: "person", text: "Sato Kenji" }),
+      ]),
+    );
+    expect(address?.text).toContain("100 Main Street");
+    expect(address?.text).not.toContain("Sato Kenji");
+    expect(
+      toBindingStaticResult(nativePipeline.redactText(fullText, operators)),
+    ).toEqual({
+      resolved_entities: tsEntities.map(toBindingEntity),
+      redaction: toBindingRedactionResult(tsRedaction),
+    });
+  });
+
   test("native pipeline compatibility rejects TS-only contextual passes", () => {
     const config: PipelineConfig = {
       threshold: 0.3,
