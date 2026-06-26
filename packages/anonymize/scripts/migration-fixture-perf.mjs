@@ -582,7 +582,9 @@ function collectNativeDiagnostics({ runner, fixtures }) {
     );
     fixtureDiagnostics.push({
       fixture: relative(FIXTURES_DIR, fixturePath),
-      stages: diagnosticStageSummaries(report.diagnostics.events),
+      stages: diagnosticStageSummaries(report.diagnostics.events).filter(
+        isRunStage,
+      ),
     });
   }
 
@@ -606,6 +608,10 @@ function collectNativeDiagnostics({ runner, fixtures }) {
           },
     run: summarizeFixtureDiagnostics(fixtureDiagnostics),
   };
+}
+
+function isRunStage(stage) {
+  return !stage.stage.startsWith("prepare.");
 }
 
 function summarizeFixtureDiagnostics(fixtureDiagnostics) {
