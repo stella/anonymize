@@ -46,6 +46,7 @@ try {
   if (![...files].some(isNativeExtension)) {
     throw new Error("wheel is missing the native _native extension");
   }
+  smokeInstalledWheel(wheelPath);
 
   console.log(
     JSON.stringify({
@@ -71,6 +72,55 @@ function readWheelFiles(wheelPath) {
       wheelPath,
     ],
     { encoding: "utf8" },
+  );
+}
+
+function smokeInstalledWheel(wheelPath) {
+  execFileSync(
+    "uv",
+    [
+      "run",
+      "--isolated",
+      "--no-project",
+      "--python",
+      "3.11",
+      "--with",
+      wheelPath,
+      "python",
+      "-c",
+      [
+        "import json",
+        "import stella_anonymize as anonymize",
+        "required = [",
+        "    'PreparedAnonymizer',",
+        "    'PreparedSearch',",
+        "    'load_prepared_package',",
+        "    'prepare_search_package',",
+        "    'redact_text',",
+        "]",
+        "missing = [name for name in required if not hasattr(anonymize, name)]",
+        "if missing:",
+        "    raise SystemExit(f'missing exports: {missing}')",
+        "config_json = json.dumps({",
+        "    'regex_patterns': [{'kind': 'regex', 'pattern': r'\\b[A-Z]{2}\\d{4}\\b'}],",
+        "    'slices': {'regex': {'start': 0, 'end': 1}},",
+        "    'regex_meta': [{'label': 'registration number', 'score': 1.0}],",
+        "})",
+        "package_bytes = anonymize.prepare_search_package(config_json)",
+        "prepared = anonymize.load_prepared_package(package_bytes)",
+        "result = prepared.redact_text('Reference AB1234')",
+        "if result.redaction.entity_count != 1:",
+        "    raise SystemExit(f'unexpected entity count: {result.redaction.entity_count}')",
+        "if result.redaction.redacted_text == 'Reference AB1234':",
+        "    raise SystemExit('redaction did not change text')",
+        "print(json.dumps({",
+        "    'event': 'python-wheel-import-smoke',",
+        "    'version': anonymize.native_package_version(),",
+        "    'entity_count': result.redaction.entity_count,",
+        "}))",
+      ].join("\n"),
+    ],
+    { stdio: "inherit" },
   );
 }
 
