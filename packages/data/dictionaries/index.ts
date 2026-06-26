@@ -847,9 +847,9 @@ export const loadCityDictionary = async (
     if (!/^[A-Z]{2}$/.test(cc)) {
       return [];
     }
-    const mod = (await import(
-      `../dictionaries/cities/${cc}.json`
-    )) as JsonModule;
+    const mod = (await import(`../dictionaries/cities/${cc}.json`, {
+      with: { type: "json" },
+    })) as JsonModule;
     const entries = mod.default;
     cityCache.set(cc, entries);
     return entries;
