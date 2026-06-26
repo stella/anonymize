@@ -224,6 +224,29 @@ describe("pipeline config semantics", () => {
     );
   });
 
+  test("native config carries coreference definition data", async () => {
+    const search = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        enableCoreference: true,
+        enableRegex: true,
+        labels: ["organization"],
+      },
+      [],
+      createPipelineContext(),
+    );
+
+    expect(
+      search.nativeStaticConfig.coreference_data?.definition_patterns.length,
+    ).toBeGreaterThan(0);
+    expect(
+      search.nativeStaticConfig.coreference_data?.role_stop_terms,
+    ).toContain("seller");
+    expect(
+      search.nativeStaticConfig.coreference_data?.legal_form_aliases,
+    ).toContain("LLC");
+  });
+
   test("native trigger config carries legal suffix data without legal-form search", async () => {
     const search = await buildUnifiedSearch(
       {

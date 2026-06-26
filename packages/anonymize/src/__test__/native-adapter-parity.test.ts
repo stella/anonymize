@@ -1170,6 +1170,73 @@ describe("native adapter parity", () => {
     });
   });
 
+  test("native pipeline package matches TS coreference aliases", async () => {
+    const adapters = getAdapters();
+    const fullText = 'Acme LLC (the "Acme") signed. Acme paid.';
+    const config: PipelineConfig = {
+      threshold: 0.5,
+      enableTriggerPhrases: false,
+      enableRegex: true,
+      enableLegalForms: true,
+      enableNameCorpus: false,
+      enableDenyList: false,
+      enableGazetteer: false,
+      enableCountries: false,
+      enableNer: false,
+      enableConfidenceBoost: false,
+      enableCoreference: true,
+      enableHotwordRules: false,
+      enableZoneClassification: false,
+      labels: ["organization"],
+      workspaceId: "native-pipeline-coreference-test",
+    };
+
+    expect(getNativePipelineCompatibility(config)).toEqual({
+      status: "supported",
+    });
+
+    const context = createPipelineContext();
+    const packageBytes = await prepareNativePipelinePackage({
+      binding: adapters.native,
+      config,
+      context,
+      compressed: true,
+    });
+    const nativePipeline = createNativePipelineFromPackage({
+      binding: adapters.native,
+      packageBytes,
+    });
+    const tsContext = createPipelineContext();
+    const operators: OperatorConfig & NativeOperatorConfig = {
+      operators: {},
+      redactString: "[REDACTED]",
+    };
+    const tsEntities = await runPipeline({
+      fullText,
+      config,
+      gazetteerEntries: [],
+      context: tsContext,
+    });
+    const tsRedaction = redactText(fullText, tsEntities, operators, tsContext);
+
+    expect(tsEntities).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "organization",
+          text: "Acme",
+          source: "coreference",
+          corefSourceText: "Acme LLC",
+        }),
+      ]),
+    );
+    expect(
+      toBindingStaticResult(nativePipeline.redactText(fullText, operators)),
+    ).toEqual({
+      resolved_entities: tsEntities.map(toBindingEntity),
+      redaction: toBindingRedactionResult(tsRedaction),
+    });
+  });
+
   test("native pipeline compatibility rejects TS-only contextual passes", () => {
     const config: PipelineConfig = {
       threshold: 0.3,
@@ -1193,7 +1260,6 @@ describe("native adapter parity", () => {
       unsupportedFeatures: [
         "enableNer",
         "enableNameCorpus",
-        "enableCoreference",
         "enableZoneClassification",
       ],
     });

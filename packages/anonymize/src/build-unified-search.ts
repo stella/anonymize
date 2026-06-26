@@ -34,6 +34,7 @@ import type { TriggerRule } from "./types";
 import type { DenyListData, DenyListFilterData } from "./detectors/deny-list";
 import type { PipelineContext } from "./context";
 import { defaultContext } from "./context";
+import { loadLanguageConfigs } from "./util/lang-loader";
 
 import {
   REGEX_PATTERNS,
@@ -235,6 +236,18 @@ export type NativeDateData = {
 export type NativeMonetaryData = MonetaryData;
 export type NativeAddressSeedData = AddressSeedData;
 export type NativeAddressContextData = AddressContextData;
+export type NativeCoreferencePatternData = {
+  pattern: string;
+  flags: string;
+};
+export type NativeCoreferenceData = {
+  definition_patterns: NativeCoreferencePatternData[];
+  role_stop_terms: string[];
+  legal_form_aliases: string[];
+};
+type GenericRolesData = {
+  roles: string[];
+};
 export type NativeGazetteerData = {
   labels: string[];
   is_fuzzy: boolean[];
@@ -286,6 +299,7 @@ export type NativePreparedSearchConfig = {
   legal_form_data?: NativeLegalFormData;
   address_seed_data?: NativeAddressSeedData;
   address_context_data?: NativeAddressContextData;
+  coreference_data?: NativeCoreferenceData;
   date_data?: NativeDateData;
   monetary_data?: NativeMonetaryData;
 };
@@ -348,6 +362,11 @@ type CountryPatternResult = {
   data: CountryData;
 };
 
+type CoreferenceConfigRow = {
+  pattern: string;
+  flags: string;
+};
+
 type UnifiedSearchSources = {
   allRegex: PatternEntry[];
   regexMeta: RegexMeta[];
@@ -369,6 +388,7 @@ type UnifiedSearchSources = {
   nativeMonetaryData: NativeMonetaryData | null;
   nativeAddressSeedData: NativeAddressSeedData | null;
   nativeAddressContextData: NativeAddressContextData | null;
+  nativeCoreferenceData: NativeCoreferenceData | null;
   nativeSigningPatterns: readonly string[];
   partyPositionTerms: string[];
   hotwordRules: readonly HotwordRule[];
@@ -432,8 +452,9 @@ const buildUnifiedSearchSources = async (
     monetaryData,
     addressSeedData,
     addressContextData,
+    coreferenceData,
   ] = await Promise.all([
-    legalFormsEnabled || config.enableTriggerPhrases
+    legalFormsEnabled || config.enableTriggerPhrases || config.enableCoreference
       ? warmLegalRoleHeads()
       : Promise.resolve(),
     config.enableTriggerPhrases
@@ -480,6 +501,9 @@ const buildUnifiedSearchSources = async (
     labelIsAllowed("address", allowedLabels)
       ? Promise.resolve(getAddressContextData())
       : Promise.resolve(null),
+    config.enableCoreference
+      ? buildNativeCoreferenceData()
+      : Promise.resolve(null),
   ]);
   // Read but never populated: the legal-form slice in the unified
   // search is permanently empty after the v2 rewrite. Tracking it
@@ -492,7 +516,7 @@ const buildUnifiedSearchSources = async (
     ? [...getKnownLegalSuffixes()]
     : [];
   const nativeLegalFormSuffixes =
-    legalFormsEnabled || config.enableTriggerPhrases
+    legalFormsEnabled || config.enableTriggerPhrases || config.enableCoreference
       ? [...getKnownLegalSuffixes()]
       : [];
   const nativeLegalFormData =
@@ -736,6 +760,13 @@ const buildUnifiedSearchSources = async (
     nativeMonetaryData,
     nativeAddressSeedData: addressSeedData,
     nativeAddressContextData: addressContextData,
+    nativeCoreferenceData:
+      coreferenceData === null
+        ? null
+        : {
+            ...coreferenceData,
+            legal_form_aliases: nativeLegalFormSuffixes,
+          },
     nativeSigningPatterns,
     partyPositionTerms,
     hotwordRules,
@@ -787,6 +818,7 @@ export const buildNativeStaticSearchBundle = async (
       monetaryData: sources.nativeMonetaryData,
       addressSeedData: sources.nativeAddressSeedData,
       addressContextData: sources.nativeAddressContextData,
+      coreferenceData: sources.nativeCoreferenceData,
       nativeSigningPatterns: sources.nativeSigningPatterns,
       partyPositionTerms: sources.partyPositionTerms,
       hotwordRules: sources.hotwordRules,
@@ -873,6 +905,7 @@ export const buildUnifiedSearch = async (
     monetaryData: sources.nativeMonetaryData,
     addressSeedData: sources.nativeAddressSeedData,
     addressContextData: sources.nativeAddressContextData,
+    coreferenceData: sources.nativeCoreferenceData,
     nativeSigningPatterns: sources.nativeSigningPatterns,
     partyPositionTerms: sources.partyPositionTerms,
     hotwordRules: sources.hotwordRules,
@@ -923,6 +956,7 @@ type BuildNativeStaticConfigArgs = {
   monetaryData: NativeMonetaryData | null;
   addressSeedData: NativeAddressSeedData | null;
   addressContextData: NativeAddressContextData | null;
+  coreferenceData: NativeCoreferenceData | null;
   nativeSigningPatterns: readonly string[];
   partyPositionTerms: readonly string[];
   hotwordRules: readonly HotwordRule[];
@@ -954,6 +988,7 @@ const buildNativeStaticConfig = ({
   monetaryData,
   addressSeedData,
   addressContextData,
+  coreferenceData,
   nativeSigningPatterns,
   partyPositionTerms,
   hotwordRules,
@@ -1160,6 +1195,9 @@ const buildNativeStaticConfig = ({
   }
   if (addressContextData) {
     nativeConfig.address_context_data = addressContextData;
+  }
+  if (coreferenceData) {
+    nativeConfig.coreference_data = coreferenceData;
   }
   if (dateData) {
     nativeConfig.date_data = dateData;
@@ -1470,6 +1508,35 @@ const sentenceTerminalCurrencyTerms = (
       ].filter((term) => term.length > 0),
     ),
   ].toSorted();
+};
+
+const buildNativeCoreferenceData = async (): Promise<NativeCoreferenceData> => {
+  const roleModule = await import("./data/generic-roles.json");
+  const roleData = (roleModule.default ?? roleModule) as GenericRolesData;
+  const configs = await loadLanguageConfigs<readonly CoreferenceConfigRow[]>(
+    "coreference",
+    (mod) => {
+      const moduleValue = mod as {
+        default?: readonly CoreferenceConfigRow[];
+      };
+      return moduleValue.default ?? (mod as readonly CoreferenceConfigRow[]);
+    },
+  );
+  const definitionPatterns: NativeCoreferencePatternData[] = [];
+  for (const rows of configs) {
+    for (const row of rows) {
+      definitionPatterns.push({
+        pattern: row.pattern,
+        flags: row.flags,
+      });
+    }
+  }
+
+  return {
+    definition_patterns: definitionPatterns,
+    role_stop_terms: roleData.roles,
+    legal_form_aliases: [],
+  };
 };
 
 const createStringGroupEncoder = (): {

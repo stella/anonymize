@@ -7,6 +7,7 @@ mod address_seeds;
 mod anchored;
 mod artifact_bytes;
 pub(crate) mod byte_offsets;
+mod coreference;
 mod dates;
 mod diagnostics;
 mod false_positives;
@@ -27,6 +28,7 @@ mod validators;
 
 pub use address_context::AddressContextData;
 pub use address_seeds::AddressSeedData;
+pub use coreference::{CoreferenceData, CoreferencePatternData};
 pub use dates::DateData;
 pub use diagnostics::{
   DiagnosticEvent, DiagnosticEventKind, DiagnosticStage,

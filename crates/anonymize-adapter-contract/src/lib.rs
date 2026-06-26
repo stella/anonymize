@@ -3,15 +3,16 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 use stella_anonymize_core::{
-  AddressContextData, AddressSeedData, AmountWordsData, CountryMatchData,
-  CurrencyData, DateData, DenyListFilterData, DenyListMatchData,
-  DetectionSource, DiagnosticEvent, DiagnosticEventKind, DiagnosticStage,
-  FuzzySearchOptions, GazetteerMatchData, HotwordRule, HotwordRuleData,
-  LegalFormData, LiteralSearchOptions, MagnitudeSuffixData, MonetaryData,
-  OperatorConfig, OperatorType, PatternSlice, PreparedSearchConfig,
-  PreparedSearchSlices, RegexMatchMeta, RegexSearchOptions, SearchEngine,
-  SearchOptions, SearchPattern, ShareQuantityTermData, SigningPlaceGuardData,
-  SourceDetail, StaticRedactionDiagnosticResult, StaticRedactionDiagnostics,
+  AddressContextData, AddressSeedData, AmountWordsData, CoreferenceData,
+  CoreferencePatternData, CountryMatchData, CurrencyData, DateData,
+  DenyListFilterData, DenyListMatchData, DetectionSource, DiagnosticEvent,
+  DiagnosticEventKind, DiagnosticStage, FuzzySearchOptions, GazetteerMatchData,
+  HotwordRule, HotwordRuleData, LegalFormData, LiteralSearchOptions,
+  MagnitudeSuffixData, MonetaryData, OperatorConfig, OperatorType,
+  PatternSlice, PreparedSearchConfig, PreparedSearchSlices, RegexMatchMeta,
+  RegexSearchOptions, SearchEngine, SearchOptions, SearchPattern,
+  ShareQuantityTermData, SigningPlaceGuardData, SourceDetail,
+  StaticRedactionDiagnosticResult, StaticRedactionDiagnostics,
   StaticRedactionResult, StringGroups, TriggerData, TriggerRule,
   TriggerStrategy, TriggerValidation, WrittenAmountPatternData,
 };
@@ -19,13 +20,13 @@ use stella_anonymize_core::{
 pub type Result<T> = std::result::Result<T, ContractError>;
 
 const PREPARED_SEARCH_PACKAGE_HEADER: [u8; 8] = *b"ANONPKG1";
-const PREPARED_SEARCH_PACKAGE_VERSION: u32 = 8;
+const PREPARED_SEARCH_PACKAGE_VERSION: u32 = 9;
 const PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER: [u8; 8] = *b"ANONPKZ1";
-const PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION: u32 = 6;
+const PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION: u32 = 7;
 const PREPARED_SEARCH_CORE_PACKAGE_HEADER: [u8; 8] = *b"ANONCPK1";
-const PREPARED_SEARCH_CORE_PACKAGE_VERSION: u32 = 7;
+const PREPARED_SEARCH_CORE_PACKAGE_VERSION: u32 = 8;
 const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_HEADER: [u8; 8] = *b"ANONCPZ1";
-const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION: u32 = 7;
+const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION: u32 = 8;
 const PREPARED_SEARCH_PACKAGE_DIGEST_BYTES: usize = 32;
 const PREPARED_SEARCH_PACKAGE_ZSTD_LEVEL: i32 = 3;
 const MAX_PREPARED_SEARCH_PACKAGE_PAYLOAD_BYTES: usize = 256 * 1024 * 1024;
@@ -357,6 +358,23 @@ pub struct BindingAddressContextData {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BindingCoreferenceData {
+  #[serde(default)]
+  pub definition_patterns: Vec<BindingCoreferencePatternData>,
+  #[serde(default)]
+  pub role_stop_terms: Vec<String>,
+  #[serde(default)]
+  pub legal_form_aliases: Vec<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BindingCoreferencePatternData {
+  pub pattern: String,
+  #[serde(default)]
+  pub flags: String,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct BindingDenyListMatchData {
   #[serde(default)]
   pub labels: Vec<Vec<String>>,
@@ -463,6 +481,8 @@ pub struct BindingPreparedSearchConfig {
   #[serde(default)]
   pub address_context_data: Option<BindingAddressContextData>,
   #[serde(default)]
+  pub coreference_data: Option<BindingCoreferenceData>,
+  #[serde(default)]
   pub date_data: Option<BindingDateData>,
   #[serde(default)]
   pub monetary_data: Option<BindingMonetaryData>,
@@ -522,6 +542,7 @@ struct BinaryPreparedSearchConfig {
   legal_form_data: Option<BindingLegalFormData>,
   address_seed_data: Option<BindingAddressSeedData>,
   address_context_data: Option<BindingAddressContextData>,
+  coreference_data: Option<BindingCoreferenceData>,
   date_data: Option<BindingDateData>,
   monetary_data: Option<BindingMonetaryData>,
 }
@@ -724,6 +745,7 @@ impl From<BindingPreparedSearchConfig> for BinaryPreparedSearchConfig {
       legal_form_data: config.legal_form_data,
       address_seed_data: config.address_seed_data,
       address_context_data: config.address_context_data,
+      coreference_data: config.coreference_data,
       date_data: config.date_data,
       monetary_data: config.monetary_data,
     }
@@ -756,6 +778,7 @@ impl From<BinaryPreparedSearchConfig> for BindingPreparedSearchConfig {
       legal_form_data: config.legal_form_data,
       address_seed_data: config.address_seed_data,
       address_context_data: config.address_context_data,
+      coreference_data: config.coreference_data,
       date_data: config.date_data,
       monetary_data: config.monetary_data,
     }
@@ -1218,6 +1241,9 @@ pub fn prepared_search_config_from_binding(
         bare_house_stopwords: data.bare_house_stopwords,
       }
     }),
+    coreference_data: config
+      .coreference_data
+      .map(coreference_data_from_binding),
     date_data: config.date_data.map(|data| DateData {
       month_names_by_language: data.month_names_by_language,
       year_words_by_language: data.year_words_by_language,
@@ -1550,6 +1576,23 @@ fn hotword_data_from_binding(data: BindingHotwordRuleData) -> HotwordRuleData {
       })
       .collect(),
     pattern_rule_indices: data.pattern_rule_indices,
+  }
+}
+
+fn coreference_data_from_binding(
+  data: BindingCoreferenceData,
+) -> CoreferenceData {
+  CoreferenceData {
+    definition_patterns: data
+      .definition_patterns
+      .into_iter()
+      .map(|pattern| CoreferencePatternData {
+        pattern: pattern.pattern,
+        flags: pattern.flags,
+      })
+      .collect(),
+    role_stop_terms: data.role_stop_terms,
+    legal_form_aliases: data.legal_form_aliases,
   }
 }
 
@@ -2136,6 +2179,7 @@ fn diagnostic_stage_name(stage: DiagnosticStage) -> String {
     DiagnosticStage::EntityLegalForm => "entity.legal-form",
     DiagnosticStage::EntityAddressSeed => "entity.address-seed",
     DiagnosticStage::EntityAddressContext => "entity.address-context",
+    DiagnosticStage::EntityCoreference => "entity.coreference",
     DiagnosticStage::Merge => "resolution.merge",
     DiagnosticStage::Boundary => "resolution.boundary",
     DiagnosticStage::Sanitize => "resolution.sanitize",
