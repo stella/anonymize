@@ -109,6 +109,9 @@ export type NativeAnonymizerFromPackageOptions = {
   packageBytes: Uint8Array;
 };
 
+export type NativePipelineFromPackageOptions =
+  NativeAnonymizerFromPackageOptions;
+
 export type NativeBindingVersionOptions = {
   binding: NativeAnonymizeBinding;
   expectedVersion: string;
@@ -146,6 +149,35 @@ export class PreparedNativeAnonymizer {
       return null;
     }
     return run(fullText, toBindingOperatorConfig(operators));
+  }
+}
+
+export class PreparedNativePipeline {
+  readonly #anonymizer: PreparedNativeAnonymizer;
+
+  constructor(anonymizer: PreparedNativeAnonymizer) {
+    this.#anonymizer = anonymizer;
+  }
+
+  prepareDiagnosticsJson(): string | null {
+    return this.#anonymizer.prepareDiagnosticsJson();
+  }
+
+  redactText(
+    fullText: string,
+    operators?: NativeOperatorConfig,
+  ): NativeStaticRedactionResult {
+    return this.#anonymizer.redactStaticEntities(fullText, operators);
+  }
+
+  redactTextDiagnosticsJson(
+    fullText: string,
+    operators?: NativeOperatorConfig,
+  ): string | null {
+    return this.#anonymizer.redactStaticEntitiesDiagnosticsJson(
+      fullText,
+      operators,
+    );
   }
 }
 
@@ -196,6 +228,14 @@ export const createNativeAnonymizerFromPackage = ({
 }: NativeAnonymizerFromPackageOptions): PreparedNativeAnonymizer =>
   new PreparedNativeAnonymizer(
     binding.NativePreparedSearch.fromPreparedPackageBytes(packageBytes),
+  );
+
+export const createNativePipelineFromPackage = ({
+  binding,
+  packageBytes,
+}: NativePipelineFromPackageOptions): PreparedNativePipeline =>
+  new PreparedNativePipeline(
+    createNativeAnonymizerFromPackage({ binding, packageBytes }),
   );
 
 const toBindingOperatorConfig = (

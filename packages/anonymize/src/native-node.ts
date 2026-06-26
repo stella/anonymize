@@ -1,9 +1,12 @@
 import { createRequire } from "node:module";
+import { readFileSync } from "node:fs";
 import process from "node:process";
 
 import {
   assertNativeBindingVersion,
+  createNativePipelineFromPackage,
   type NativeAnonymizeBinding,
+  type PreparedNativePipeline,
 } from "./native";
 
 export * from "./native";
@@ -25,6 +28,11 @@ export type LoadNativeBindingOptions = {
   libc?: NativeLibc;
   env?: Record<string, string | undefined>;
   requireModule?: NativeRequire;
+};
+
+export type NativePipelinePackageFileOptions = LoadNativeBindingOptions & {
+  binding?: NativeAnonymizeBinding;
+  packagePath: string;
 };
 
 const LOCAL_NATIVE_LOADER = "../index.cjs";
@@ -90,6 +98,31 @@ export const loadNativeAnonymizeBinding = (
       ? `Unsupported native anonymize platform ${platform}/${arch}`
       : `Unable to load native anonymize binding for ${platform}/${arch}`;
   throw new Error(`${platformMessage}:\n${errors.join("\n")}`);
+};
+
+export const readNativePipelinePackageFile = (
+  packagePath: string,
+): Uint8Array => new Uint8Array(readFileSync(packagePath));
+
+export const createNativePipelineFromPackageFile = ({
+  binding,
+  packagePath,
+  expectedVersion,
+  ...loadOptions
+}: NativePipelinePackageFileOptions): PreparedNativePipeline => {
+  const resolvedBinding =
+    binding ??
+    loadNativeAnonymizeBinding({
+      ...loadOptions,
+      ...(expectedVersion !== undefined ? { expectedVersion } : {}),
+    });
+  if (binding && expectedVersion !== undefined) {
+    assertNativeBindingVersion({ binding, expectedVersion });
+  }
+  return createNativePipelineFromPackage({
+    binding: resolvedBinding,
+    packageBytes: readNativePipelinePackageFile(packagePath),
+  });
 };
 
 type NativeBindingSpecifiersOptions = {

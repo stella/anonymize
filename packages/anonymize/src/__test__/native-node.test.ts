@@ -1,9 +1,14 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import type { NativeAnonymizeBinding } from "../native";
 import {
+  createNativePipelineFromPackageFile,
   loadNativeAnonymizeBinding,
   nativePlatformPackageName,
+  readNativePipelinePackageFile,
 } from "../native-node";
 
 describe("native node loader", () => {
@@ -110,10 +115,50 @@ describe("native node loader", () => {
       }),
     ).toThrow("does not match 1.5.0");
   });
+
+  test("loads native pipeline package bytes from a file", () => {
+    const dir = mkdtempSync(join(tmpdir(), "anonymize-native-package-"));
+    const packagePath = join(dir, "pipeline.stlanonpkg");
+    try {
+      writeFileSync(packagePath, Uint8Array.of(1, 2, 3, 4));
+
+      expect([...readNativePipelinePackageFile(packagePath)]).toEqual([
+        1, 2, 3, 4,
+      ]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("creates a native pipeline from a package file", () => {
+    const dir = mkdtempSync(join(tmpdir(), "anonymize-native-pipeline-"));
+    const packagePath = join(dir, "pipeline.stlanonpkg");
+    const capturedBytes: number[][] = [];
+    try {
+      writeFileSync(packagePath, Uint8Array.of(7, 8, 9));
+      const binding = fakeNativeBinding("1.5.0", {
+        onPreparedPackageBytes: (bytes) => {
+          capturedBytes.push([...bytes]);
+        },
+      });
+
+      const pipeline = createNativePipelineFromPackageFile({
+        binding,
+        expectedVersion: "1.5.0",
+        packagePath,
+      });
+
+      expect(capturedBytes).toEqual([[7, 8, 9]]);
+      expect(pipeline.redactText("x").redaction.redactedText).toBe("");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 type FakeNativeBindingOptions = {
   preparedSearchAsConstructor?: boolean;
+  onPreparedPackageBytes?: (bytes: Uint8Array) => void;
 };
 
 const fakeNativeBinding = (
@@ -122,7 +167,10 @@ const fakeNativeBinding = (
 ): NativeAnonymizeBinding => {
   const preparedSearch = {
     fromConfigJsonBytes: () => fakePreparedSearch(),
-    fromPreparedPackageBytes: () => fakePreparedSearch(),
+    fromPreparedPackageBytes: (bytes: Uint8Array) => {
+      options.onPreparedPackageBytes?.(bytes);
+      return fakePreparedSearch();
+    },
   };
   const NativePreparedSearch = options.preparedSearchAsConstructor
     ? Object.assign(function NativePreparedSearch() {}, preparedSearch)

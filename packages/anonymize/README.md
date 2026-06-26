@@ -92,6 +92,33 @@ const entities = await runPipeline({
 });
 ```
 
+## Native prepared packages
+
+For Node.js deployments that need low click-time latency, prepare the native pipeline package during your build and load the bytes at runtime.
+
+```bash
+bunx stella-anonymize-build-native-package \
+  --config ./anonymize-native-config.mjs \
+  --out ./dist/anonymize.stlanonpkg
+```
+
+```ts
+import {
+  createNativePipelineFromPackageFile,
+  loadNativeAnonymizeBinding,
+} from "@stll/anonymize/native-node";
+
+const native = loadNativeAnonymizeBinding();
+const pipeline = createNativePipelineFromPackageFile({
+  binding: native,
+  packagePath: "./dist/anonymize.stlanonpkg",
+});
+
+const result = pipeline.redactText(text);
+```
+
+The config module may export a `PipelineConfig` directly or `{ config, gazetteerEntries }`. Include `@stll/anonymize-data` dictionaries there if your runtime config uses the deny-list or name-corpus layers; keep the corresponding layers enabled for caller-owned `customDenyList`, `customRegexes`, and gazetteers. Those inputs are part of the prepared package and should be regenerated when they change.
+
 ## Browser setup
 
 If you use Vite with the WASM build, exclude the bundle from dependency pre-bundling:

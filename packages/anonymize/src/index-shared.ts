@@ -66,6 +66,7 @@ export type {
   NativeBindingVersionOptions,
   NativeOperatorConfig,
   NativePipelineEntity,
+  NativePipelineFromPackageOptions,
   NativePreparedSearchBinding,
   NativeRedactionResult,
   NativeSearchPackageOptions,
@@ -83,7 +84,6 @@ export {
 export type {
   NativePipelineBuildOptions,
   NativePipelineCompatibility,
-  NativePipelineFromPackageOptions,
   NativePipelinePackageOptions,
   NativePipelineUnsupportedFeature,
 } from "./native-pipeline";
