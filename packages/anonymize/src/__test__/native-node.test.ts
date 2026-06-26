@@ -215,6 +215,7 @@ const fakeNativeBinding = (
     : preparedSearch;
 
   return {
+    normalizeForSearch: (text: string) => text,
     nativePackageVersion: () => version,
     NativePreparedSearch,
     prepareStaticSearchPackageBytes: () => new Uint8Array(),

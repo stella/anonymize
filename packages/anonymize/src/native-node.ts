@@ -6,7 +6,13 @@ import {
   assertNativeBindingVersion,
   createNativePipelineFromPackage,
   type NativeAnonymizeBinding,
+  type NativeNormalizeOptions,
+  type NativeSearchPackageInput,
   type PreparedNativePipeline,
+  load_prepared_package as loadPreparedPackageWithBinding,
+  native_package_version as nativePackageVersionWithBinding,
+  normalize_for_search as normalizeForSearchWithBinding,
+  prepare_search_package as prepareSearchPackageWithBinding,
 } from "./native";
 
 export * from "./native";
@@ -27,6 +33,14 @@ export type LoadNativeBindingOptions = {
 export type NativePipelinePackageFileOptions = LoadNativeBindingOptions & {
   binding?: NativeAnonymizeBinding;
   packagePath: string;
+};
+
+export type NativeSdkOptions = LoadNativeBindingOptions & {
+  binding?: NativeAnonymizeBinding;
+};
+
+export type NativeSdkPackageOptions = NativeSdkOptions & {
+  compressed?: boolean;
 };
 
 export type DefaultNativePipelinePackageOptions = LoadNativeBindingOptions & {
@@ -89,6 +103,45 @@ export const loadNativeAnonymizeBinding = (
 export const readNativePipelinePackageFile = (
   packagePath: string,
 ): Uint8Array => new Uint8Array(readFileSync(packagePath));
+
+export const native_package_version = (
+  options: NativeSdkOptions = {},
+): string => nativePackageVersionWithBinding(resolveNativeSdkBinding(options));
+
+export const normalize_for_search = (
+  text: string,
+  options: NativeSdkOptions = {},
+): string => {
+  const args: NativeNormalizeOptions = {
+    binding: resolveNativeSdkBinding(options),
+    text,
+  };
+  return normalizeForSearchWithBinding(args);
+};
+
+export const prepare_search_package = (
+  config: NativeSearchPackageInput,
+  { compressed = true, ...options }: NativeSdkPackageOptions = {},
+): Uint8Array =>
+  prepareSearchPackageWithBinding({
+    binding: resolveNativeSdkBinding(options),
+    config,
+    compressed,
+  });
+
+export const load_prepared_package = (
+  packageBytes: Uint8Array,
+  options: NativeSdkOptions = {},
+) =>
+  loadPreparedPackageWithBinding({
+    binding: resolveNativeSdkBinding(options),
+    packageBytes,
+  });
+
+export const load_prepared_package_file = (
+  packagePath: string,
+  options: NativeSdkOptions = {},
+) => load_prepared_package(readNativePipelinePackageFile(packagePath), options);
 
 export const readDefaultNativePipelinePackageFile = (): Uint8Array => {
   try {
@@ -190,6 +243,23 @@ const createNativePipelineFromResolvedDefaultPackage = ({
   });
 };
 
+const resolveNativeSdkBinding = ({
+  binding,
+  expectedVersion,
+  ...loadOptions
+}: NativeSdkOptions): NativeAnonymizeBinding => {
+  const resolvedBinding =
+    binding ??
+    loadNativeAnonymizeBinding({
+      ...loadOptions,
+      ...(expectedVersion !== undefined ? { expectedVersion } : {}),
+    });
+  if (binding && expectedVersion !== undefined) {
+    assertNativeBindingVersion({ binding, expectedVersion });
+  }
+  return resolvedBinding;
+};
+
 const defaultPipelineCacheFor = (
   binding: NativeAnonymizeBinding,
 ): Map<string, PreparedNativePipeline> => {
@@ -268,6 +338,9 @@ const isNativeAnonymizeBinding = (
     return false;
   }
   if (typeof candidate["nativePackageVersion"] !== "function") {
+    return false;
+  }
+  if (typeof candidate["normalizeForSearch"] !== "function") {
     return false;
   }
   if (typeof candidate["prepareStaticSearchPackageBytes"] !== "function") {
