@@ -19,7 +19,7 @@ pub fn sanitize_entities(entities: &[PipelineEntity]) -> Vec<PipelineEntity> {
       continue;
     }
 
-    let Some(cleaned) = clean_entity_text(entity, &entity.text) else {
+    let Some(cleaned) = clean_entity_text_only(entity, &entity.text) else {
       continue;
     };
     sanitized.push(cleaned);
@@ -49,6 +49,66 @@ pub(crate) fn sanitize_entities_with_source(
   }
 
   Ok(sanitized)
+}
+
+fn clean_entity_text_only(
+  entity: &PipelineEntity,
+  raw_text: &str,
+) -> Option<PipelineEntity> {
+  let mut start_byte = 0;
+  let mut end_byte = raw_text.len();
+
+  while let Some((ch, len)) = first_char(raw_text.get(start_byte..end_byte)?) {
+    if ch.is_whitespace() || is_leading_trim(ch, &entity.label) {
+      start_byte = start_byte.saturating_add(len);
+      continue;
+    }
+    break;
+  }
+
+  trim_leading_date_artifacts(entity, raw_text, &mut start_byte, end_byte);
+
+  while let Some((ch, len)) = first_char(raw_text.get(start_byte..end_byte)?) {
+    if ch.is_whitespace() {
+      start_byte = start_byte.saturating_add(len);
+      continue;
+    }
+    break;
+  }
+
+  while let Some((ch, len)) = last_char(raw_text.get(start_byte..end_byte)?) {
+    if ch.is_whitespace() || is_trailing_trim(ch, &entity.label) {
+      end_byte = end_byte.saturating_sub(len);
+      continue;
+    }
+    break;
+  }
+
+  if should_strip_period(entity, raw_text, start_byte, end_byte) {
+    end_byte = end_byte.saturating_sub('.'.len_utf8());
+  }
+
+  while let Some((ch, len)) = last_char(raw_text.get(start_byte..end_byte)?) {
+    if ch.is_whitespace() || is_trailing_trim(ch, &entity.label) {
+      end_byte = end_byte.saturating_sub(len);
+      continue;
+    }
+    break;
+  }
+
+  if start_byte >= end_byte {
+    return None;
+  }
+
+  let cleaned_raw = raw_text.get(start_byte..end_byte)?;
+  if !cleaned_raw.chars().any(char::is_alphanumeric) {
+    return None;
+  }
+
+  let display_text = collapse_display_whitespace(cleaned_raw);
+  let mut cleaned = entity.clone();
+  cleaned.text = display_text;
+  Some(cleaned)
 }
 
 fn clean_entity_text(

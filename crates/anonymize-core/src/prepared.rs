@@ -1598,7 +1598,14 @@ fn split_regex_patterns(
       triggers.push(pattern);
       continue;
     }
-    regex.push(pattern);
+    if slices.regex.contains(pattern_index) {
+      regex.push(pattern);
+      continue;
+    }
+    return Err(Error::InvalidStaticData {
+      field: "slices.regex",
+      reason: format!("pattern index {index} does not belong to any declared slice"),
+    });
   }
 
   Ok(RegexPatternGroups {
@@ -1742,7 +1749,7 @@ fn validate_supported_config(
 
 fn validate_search_config(
   config: &PreparedSearchConfig,
-  allow_literal_artifacts: bool,
+  _allow_literal_artifacts: bool,
 ) -> Result<()> {
   validate_slice_bounds(
     "slices.regex",
@@ -1764,33 +1771,31 @@ fn validate_search_config(
     config.slices.custom_regex,
     config.custom_regex_patterns.len(),
   )?;
-  if !allow_literal_artifacts || !config.literal_patterns.is_empty() {
-    validate_slice_bounds(
-      "slices.deny_list",
-      config.slices.deny_list,
-      config.literal_patterns.len(),
-    )?;
-    validate_slice_bounds(
-      "slices.street_types",
-      config.slices.street_types,
-      config.literal_patterns.len(),
-    )?;
-    validate_slice_bounds(
-      "slices.gazetteer",
-      config.slices.gazetteer,
-      config.literal_patterns.len(),
-    )?;
-    validate_slice_bounds(
-      "slices.countries",
-      config.slices.countries,
-      config.literal_patterns.len(),
-    )?;
-    validate_slice_bounds(
-      "slices.hotwords",
-      config.slices.hotwords,
-      config.literal_patterns.len(),
-    )?;
-  }
+  validate_slice_bounds(
+    "slices.deny_list",
+    config.slices.deny_list,
+    config.literal_patterns.len(),
+  )?;
+  validate_slice_bounds(
+    "slices.street_types",
+    config.slices.street_types,
+    config.literal_patterns.len(),
+  )?;
+  validate_slice_bounds(
+    "slices.gazetteer",
+    config.slices.gazetteer,
+    config.literal_patterns.len(),
+  )?;
+  validate_slice_bounds(
+    "slices.countries",
+    config.slices.countries,
+    config.literal_patterns.len(),
+  )?;
+  validate_slice_bounds(
+    "slices.hotwords",
+    config.slices.hotwords,
+    config.literal_patterns.len(),
+  )?;
   validate_static_data_length(
     "regex_meta",
     config.slices.regex,

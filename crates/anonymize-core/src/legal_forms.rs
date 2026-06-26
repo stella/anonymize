@@ -1356,7 +1356,7 @@ fn trim_leading_clause(
       let end = start.saturating_add(prefix.len());
       search_from = end;
       let after_ws = lower.get(end..).map(leading_ws_len).unwrap_or_default();
-      let after = lower
+      let after = text
         .get(end.saturating_add(after_ws)..)
         .and_then(|suffix| suffix.chars().next());
       if after_ws == 0 || !after.is_some_and(char::is_uppercase) {

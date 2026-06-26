@@ -739,7 +739,11 @@ pub fn prepared_search_package_has_core_payload(bytes: &[u8]) -> bool {
 }
 
 pub fn prepared_search_package_digest(bytes: &[u8]) -> Result<[u8; 32]> {
-  Ok(prepared_search_package_parts(bytes)?.digest())
+  let parts = prepared_search_package_parts(bytes)?;
+  let digest = parts.digest();
+  let payload = parts.into_payload()?;
+  verify_prepared_search_package_digest(digest, payload.as_ref())?;
+  Ok(digest)
 }
 
 pub fn prepared_search_package_from_bytes(

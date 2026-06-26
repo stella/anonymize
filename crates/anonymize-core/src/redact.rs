@@ -90,10 +90,27 @@ pub fn deanonymise(
   redacted_text: &str,
   redaction_map: &[RedactionEntry],
 ) -> String {
-  let mut result = redacted_text.to_owned();
+  let mut result = String::with_capacity(redacted_text.len());
+  let mut pos = 0;
 
-  for entry in redaction_map {
-    result = result.replace(&entry.placeholder, &entry.original);
+  while pos < redacted_text.len() {
+    let remaining = &redacted_text[pos..];
+    let matched = redaction_map.iter().find_map(|entry| {
+      remaining
+        .starts_with(&entry.placeholder)
+        .then_some((entry, &entry.original as &str))
+    });
+    match matched {
+      Some((entry, original)) => {
+        result.push_str(original);
+        pos = pos.saturating_add(entry.placeholder.len());
+      }
+      None => {
+        let ch = redacted_text[pos..].chars().next().unwrap_or('\0');
+        result.push(ch);
+        pos = pos.saturating_add(ch.len_utf8());
+      }
+    }
   }
 
   result

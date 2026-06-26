@@ -562,7 +562,7 @@ fn supplemental_chain_score(
   } else {
     return None;
   };
-  (score >= HIGH_CONFIDENCE_NAME_SCORE).then_some(score)
+  (score >= LOW_CONFIDENCE_NAME_SCORE).then_some(score)
 }
 
 fn segment_words(full_text: &str) -> Vec<WordSegment<'_>> {

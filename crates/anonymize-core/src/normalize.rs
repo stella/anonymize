@@ -294,17 +294,11 @@ fn normalize_crypto_text(text: &str) -> String {
 }
 
 fn find_ethereum_address(text: &str) -> Option<&str> {
-  for (start, _) in text.match_indices("0x") {
-    let end = start.saturating_add(42);
-    let Some(candidate) = text.get(start..end) else {
-      continue;
-    };
-    if candidate.chars().skip(2).all(|ch| ch.is_ascii_hexdigit()) {
-      return Some(candidate);
-    }
-  }
-
-  None
+  find_ascii_token(text, |token| {
+    token.len() == 42
+      && token.starts_with("0x")
+      && token.chars().skip(2).all(|ch| ch.is_ascii_hexdigit())
+  })
 }
 
 fn find_bech32_address(text: &str) -> Option<&str> {

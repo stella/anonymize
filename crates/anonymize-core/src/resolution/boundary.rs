@@ -86,7 +86,7 @@ fn resolve_cross_label_overlaps(
   sorted.sort_by_key(|entity| entity.start);
 
   let mut left_index = 0;
-  while left_index < sorted.len() {
+  'outer: while left_index < sorted.len() {
     let mut right_index = left_index.saturating_add(1);
     while right_index < sorted.len() {
       let Some(left) = sorted.get(left_index) else {
@@ -135,7 +135,9 @@ fn resolve_cross_label_overlaps(
         left_mut.end = new_end;
         left_mut.text = offsets.slice(left_mut.start, new_end)?;
       }
-      break;
+      sorted.sort_by_key(|entity| entity.start);
+      left_index = 0;
+      continue 'outer;
     }
 
     left_index = left_index.saturating_add(1);
@@ -176,7 +178,9 @@ fn merge_adjacent(
 
   for entity in &sorted {
     if has_locked_boundary(entity) {
+      let index = result.len();
       result.push(entity.clone());
+      last_by_label.insert(entity.label.clone(), index);
       continue;
     }
 

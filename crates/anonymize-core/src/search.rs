@@ -230,7 +230,15 @@ impl SearchIndex {
     artifacts: &SearchIndexArtifacts,
   ) -> Result<Self> {
     if patterns.is_empty() && !artifacts.slots.is_empty() {
-      return Self::new_all_literal_with_artifacts(options, artifacts);
+      if artifacts.slots.len() == 1 {
+        return Self::new_all_literal_with_artifacts(options, artifacts);
+      }
+      return Err(Error::Search {
+        engine: SearchEngine::Literal,
+        reason:
+          "parity mismatch: empty patterns with stale non-literal artifacts"
+            .into(),
+      });
     }
 
     let parts = partition_patterns(patterns)?;

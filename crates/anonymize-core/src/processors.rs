@@ -104,12 +104,25 @@ pub struct DenyListMatchData {
   pub filters: Option<DenyListFilterData>,
 }
 
-#[derive(
-  Clone, Debug, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize,
-)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, serde::Serialize)]
 pub struct StringGroups {
   table: Vec<String>,
   groups: Vec<Vec<u32>>,
+}
+
+impl<'de> serde::Deserialize<'de> for StringGroups {
+  fn deserialize<D: serde::Deserializer<'de>>(
+    deserializer: D,
+  ) -> std::result::Result<Self, D::Error> {
+    #[derive(serde::Deserialize)]
+    struct RawStringGroups {
+      table: Vec<String>,
+      groups: Vec<Vec<u32>>,
+    }
+    let raw = RawStringGroups::deserialize(deserializer)?;
+    StringGroups::from_table_indices(raw.table, raw.groups, "string_groups")
+      .map_err(|e| serde::de::Error::custom(e.to_string()))
+  }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1846,6 +1859,17 @@ fn try_gazetteer_prefix_extension(
 
   let suffix_end = next_space_offset_after_initial(&after);
   if suffix_end <= 1 {
+    return Ok(None);
+  }
+
+  let suffix = after
+    .get(1..suffix_end as usize)
+    .unwrap_or_default()
+    .trim();
+  let is_valid_suffix = !suffix.is_empty()
+    && (suffix.chars().next().is_some_and(char::is_uppercase)
+      || suffix.len() >= 6);
+  if !is_valid_suffix {
     return Ok(None);
   }
 
