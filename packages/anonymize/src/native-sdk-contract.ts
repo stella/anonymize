@@ -3,6 +3,7 @@ export const SHARED_NATIVE_SDK_CORE_TOP_LEVEL_FUNCTIONS = [
   "load_prepared_package",
   "native_package_version",
   "normalize_for_search",
+  "redact_text",
   "redact_text_json",
   "diagnostics_json",
 ] as const;
@@ -17,4 +18,9 @@ export const SHARED_NATIVE_SDK_PREPARED_METHODS = [
   "redact_text_json",
   "diagnostics_json",
   "prepare_diagnostics_json",
+] as const;
+
+export const SHARED_NATIVE_SDK_CLASS_NAMES = [
+  "PreparedAnonymizer",
+  "PreparedSearch",
 ] as const;

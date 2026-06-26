@@ -10,11 +10,13 @@ import {
   type NativeNormalizeOptions,
   type NativeSearchPackageInput,
   type PreparedNativePipeline,
+  type NativeStaticRedactionResult,
   diagnostics_json as diagnosticsJsonWithBinding,
   load_prepared_package as loadPreparedPackageWithBinding,
   native_package_version as nativePackageVersionWithBinding,
   normalize_for_search as normalizeForSearchWithBinding,
   prepare_search_package as prepareSearchPackageWithBinding,
+  redact_text as redactTextWithBinding,
   redact_text_json as redactTextJsonWithBinding,
 } from "./native";
 
@@ -145,6 +147,19 @@ export const load_prepared_package_file = (
   packagePath: string,
   options: NativeSdkOptions = {},
 ) => load_prepared_package(readNativePipelinePackageFile(packagePath), options);
+
+export const redact_text = (
+  config: NativeSearchPackageInput,
+  fullText: string,
+  operators?: NativeOperatorConfig,
+  options: NativeSdkOptions = {},
+): NativeStaticRedactionResult =>
+  redactTextWithBinding({
+    binding: resolveNativeSdkBinding(options),
+    config,
+    fullText,
+    ...(operators !== undefined ? { operators } : {}),
+  });
 
 export const redact_text_json = (
   config: NativeSearchPackageInput,
