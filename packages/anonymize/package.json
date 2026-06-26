@@ -53,6 +53,7 @@
     "perf:contracts": "bun scripts/contract-perf.mjs",
     "perf:migration-fixtures": "bun scripts/migration-fixture-perf.mjs",
     "perf:native-adapters": "bun scripts/native-adapter-perf.mjs",
+    "perf:native-package": "bun scripts/native-package-ux-perf.mjs",
     "smoke:dist": "bun scripts/dist-smoke.mjs",
     "format": "oxfmt ."
   },

@@ -432,6 +432,19 @@ async function runWorker() {
   const snapshots = Object.fromEntries(
     coldRun.fixtures.map((fixture) => [fixture.fixture, fixture.snapshot]),
   );
+  const nativeTimingScenario = describeNativeTimingScenario({
+    runtime,
+    usePrebuiltNativePackage,
+    usePrebuiltNativeConfig,
+    nativePackageCompressed,
+    nativePackageBytes,
+    nativePackageReadMs,
+    nativePackagePrepareMs,
+    nativePrepareMs,
+    nativeCachedPrepareAvgMs,
+    coldRunMs: coldRun.ms,
+    warmAvgMs,
+  });
 
   writeFileSync(
     resultPath,
@@ -458,11 +471,15 @@ async function runWorker() {
         nativePrepareMs,
         nativeCachedPrepareMsByIteration,
         nativeCachedPrepareAvgMs,
+        nativeFirstTouchMs: nativeTimingScenario.firstTouchMs,
+        nativeWarmClickMs: nativeTimingScenario.warmClickMs,
         coldRunMs: coldRun.ms,
         coldPipelineMs: roundMs(
           dictionaryMs +
             prepareMs +
             nativeConfigReadMs +
+            nativeConfigParseMs +
+            nativePackageReadMs +
             nativeStringifyMs +
             nativePrepareMs +
             coldRun.ms,
@@ -472,6 +489,8 @@ async function runWorker() {
             dictionaryMs +
             prepareMs +
             nativeConfigReadMs +
+            nativeConfigParseMs +
+            nativePackageReadMs +
             nativeStringifyMs +
             nativePrepareMs +
             coldRun.ms,
@@ -480,6 +499,7 @@ async function runWorker() {
         warmRunMs,
         warmAvgMs,
       },
+      nativeTimingScenario,
       nativeDiagnostics,
       fixtureTimings,
       fixtures: coldRun.fixtures.map(
@@ -493,6 +513,49 @@ async function runWorker() {
       snapshots,
     })}\n`,
   );
+}
+
+function describeNativeTimingScenario({
+  runtime,
+  usePrebuiltNativePackage,
+  usePrebuiltNativeConfig,
+  nativePackageCompressed,
+  nativePackageBytes,
+  nativePackageReadMs,
+  nativePackagePrepareMs,
+  nativePrepareMs,
+  nativeCachedPrepareAvgMs,
+  coldRunMs,
+  warmAvgMs,
+}) {
+  if (runtime !== "native-static") {
+    return {
+      mode: "typescript",
+      firstTouchMs: 0,
+      warmClickMs: 0,
+    };
+  }
+
+  const mode = usePrebuiltNativePackage
+    ? "prebuilt-package"
+    : usePrebuiltNativeConfig
+      ? "prebuilt-config"
+      : nativePackagePrepareMs > 0
+        ? "build-package-in-process"
+        : "build-config-in-process";
+
+  return {
+    mode,
+    packageCompressed: nativePackageCompressed,
+    packageBytes: nativePackageBytes,
+    packageReadMs: nativePackageReadMs,
+    offlinePackageBuildMs: nativePackagePrepareMs,
+    firstPrepareMs: nativePrepareMs,
+    cachedPrepareMs: nativeCachedPrepareAvgMs,
+    firstRunMs: coldRunMs,
+    firstTouchMs: roundMs(nativePackageReadMs + nativePrepareMs + coldRunMs),
+    warmClickMs: warmAvgMs,
+  };
 }
 
 async function prepareNativeStaticSearch({
