@@ -1345,7 +1345,7 @@ function describeUnsupportedPipelineStages(
   if (config.enableTriggerPhrases && !nativeRuntime) {
     stages.push("triggers");
   }
-  if (config.enableNameCorpus) {
+  if (config.enableNameCorpus && (!nativeRuntime || !config.enableDenyList)) {
     stages.push(
       config.enableDenyList ? "name-corpus-supplemental" : "name-corpus",
     );

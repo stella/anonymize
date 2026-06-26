@@ -40,6 +40,7 @@ fn empty_config(slices: PreparedSearchSlices) -> PreparedSearchConfig {
     zone_data: None,
     address_context_data: None,
     coreference_data: None,
+    name_corpus_data: None,
     date_data: None,
     monetary_data: None,
   }
@@ -245,6 +246,7 @@ fn prepared_search_runs_normalized_literal_pass() {
     zone_data: None,
     address_context_data: None,
     coreference_data: None,
+    name_corpus_data: None,
     date_data: None,
     monetary_data: None,
   })
@@ -500,6 +502,7 @@ fn prepared_search_adds_coreference_aliases_with_source_placeholder() {
     threshold: 0.5,
     allowed_labels: vec![String::from("organization")],
     coreference_data: Some(coreference_data()),
+    name_corpus_data: None,
     ..empty_config(PreparedSearchSlices::default())
   })
   .unwrap();
@@ -577,6 +580,7 @@ fn prepared_search_does_not_seed_coreference_from_caller_owned_entities() {
     threshold: 0.5,
     allowed_labels: vec![String::from("organization")],
     coreference_data: Some(coreference_data()),
+    name_corpus_data: None,
     ..empty_config(PreparedSearchSlices::default())
   })
   .unwrap();
@@ -614,6 +618,7 @@ fn prepared_search_rejects_role_and_legal_form_coreference_aliases() {
     threshold: 0.5,
     allowed_labels: vec![String::from("organization")],
     coreference_data: Some(coreference_data()),
+    name_corpus_data: None,
     ..empty_config(PreparedSearchSlices::default())
   })
   .unwrap();
@@ -670,6 +675,7 @@ fn prepared_search_artifacts_match_direct_prepare() {
     zone_data: None,
     address_context_data: None,
     coreference_data: None,
+    name_corpus_data: None,
     date_data: None,
     monetary_data: None,
   };
@@ -821,6 +827,7 @@ fn prepared_search_emits_static_detector_entities() {
     zone_data: None,
     address_context_data: None,
     coreference_data: None,
+    name_corpus_data: None,
     date_data: None,
     monetary_data: None,
   })
@@ -1521,6 +1528,7 @@ fn prepared_search_redacts_static_entities_end_to_end() {
     zone_data: None,
     address_context_data: None,
     coreference_data: None,
+    name_corpus_data: None,
     date_data: None,
     monetary_data: None,
   })
@@ -1966,6 +1974,7 @@ fn prepared_search_reports_static_redaction_diagnostics() {
     zone_data: None,
     address_context_data: None,
     coreference_data: None,
+    name_corpus_data: None,
     date_data: None,
     monetary_data: None,
   })
@@ -2052,6 +2061,7 @@ fn prepared_search_redacts_custom_deny_list_entities() {
     zone_data: None,
     address_context_data: None,
     coreference_data: None,
+    name_corpus_data: None,
     date_data: None,
     monetary_data: None,
   })

@@ -33,6 +33,7 @@ fn empty_config(slices: PreparedSearchSlices) -> PreparedSearchConfig {
     zone_data: None,
     address_context_data: None,
     coreference_data: None,
+    name_corpus_data: None,
     date_data: None,
     monetary_data: None,
   }
