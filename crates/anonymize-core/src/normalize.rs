@@ -384,12 +384,14 @@ fn compact_ascii_identifier_from(
   predicate: &impl Fn(&str) -> bool,
 ) -> Option<String> {
   let mut compact = String::new();
+  let mut token = String::new();
   let mut last_valid = None;
   let tail = text.get(start..)?;
 
   for ch in tail.chars() {
     if ch.is_ascii_alphanumeric() {
       compact.push(ch.to_ascii_uppercase());
+      token.push(ch.to_ascii_uppercase());
       continue;
     }
 
@@ -397,16 +399,25 @@ fn compact_ascii_identifier_from(
       if predicate(&compact) {
         last_valid = Some(compact.clone());
       }
+      token.clear();
       continue;
     }
 
     break;
   }
 
+  if allow_whitespace && token_is_trailing_prose(&token) && last_valid.is_some()
+  {
+    return last_valid;
+  }
   if predicate(&compact) {
     return Some(compact);
   }
   last_valid
+}
+
+fn token_is_trailing_prose(token: &str) -> bool {
+  token.len() >= 3 && token.chars().all(|ch| ch.is_ascii_alphabetic())
 }
 
 fn is_identifier_start(text: &str, index: usize, ch: char) -> bool {

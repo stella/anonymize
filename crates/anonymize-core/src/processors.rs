@@ -302,7 +302,7 @@ pub fn process_regex_matches(
     let Some(entry) = meta.get(local_index) else {
       continue;
     };
-    let text = offsets.slice(full_text, found.start(), found.end())?;
+    let text = offsets.slice(found.start(), found.end())?;
     if let Some(validator_id) = &entry.validator_id {
       if !validate_id(validator_id, &text, entry.validator_input.as_deref()) {
         continue;
@@ -484,7 +484,7 @@ fn collect_deny_list_matches(
     };
     validate_deny_list_sources(sources)?;
 
-    let match_text = offsets.slice(full_text, found.start(), found.end())?;
+    let match_text = offsets.slice(found.start(), found.end())?;
     let keyword = match_text.to_lowercase();
     let pattern = data.originals.get(local_index).map_or("", String::as_str);
     let custom_pattern_labels = data
@@ -730,7 +730,7 @@ fn append_person_name_hits(
       let Some(prev) = chain.last() else {
         break;
       };
-      let gap = offsets.slice(full_text, prev.end, next.start)?;
+      let gap = offsets.slice(prev.end, next.start)?;
       if person_chain_breaks(prev.text.as_str(), gap.as_str()) {
         break;
       }
@@ -809,13 +809,13 @@ pub fn process_gazetteer_matches(
     let Some(label) = data.labels.get(local_index) else {
       continue;
     };
-    let extended = try_gazetteer_prefix_extension(full_text, &offsets, found)?;
+    let extended = try_gazetteer_prefix_extension(&offsets, found)?;
     let (end, text, source_detail) = if let Some(extension) = extended {
       extension
     } else {
       (
         found.end(),
-        offsets.slice(full_text, found.start(), found.end())?,
+        offsets.slice(found.start(), found.end())?,
         None,
       )
     };
@@ -858,7 +858,7 @@ pub fn process_gazetteer_matches(
       found.start(),
       found.end(),
       label.clone(),
-      offsets.slice(full_text, found.start(), found.end())?,
+      offsets.slice(found.start(), found.end())?,
       GAZETTEER_FUZZY_SCORE,
       DetectionSource::Gazetteer,
     ));
@@ -891,7 +891,7 @@ pub fn process_country_matches(
       found.start(),
       found.end(),
       label.clone(),
-      offsets.slice(full_text, found.start(), found.end())?,
+      offsets.slice(found.start(), found.end())?,
       COUNTRY_SCORE,
       DetectionSource::Country,
     ));
@@ -1074,7 +1074,7 @@ fn has_adjacent_address_evidence(
   let window_start = offsets.floor_offset(start.saturating_sub(40))?;
   let window_end =
     offsets.floor_offset(end.saturating_add(40).min(full_len))?;
-  let window = offsets.slice(full_text, window_start, window_end)?;
+  let window = offsets.slice(window_start, window_end)?;
 
   Ok(has_address_format(&window) || has_street_type(&window, filters))
 }
@@ -1369,7 +1369,7 @@ fn extend_person_name(
 
   Ok(ExtendedName {
     end: new_end,
-    text: offsets.slice(full_text, start, new_end)?,
+    text: offsets.slice(start, new_end)?,
   })
 }
 
@@ -1605,24 +1605,23 @@ fn extend_city_districts(
       match_district_suffix(slice_from(full_text, offsets, entity.end)?)
     {
       entity.end = entity.end.saturating_add(byte_len(suffix));
-      entity.text = offsets.slice(full_text, entity.start, entity.end)?;
+      entity.text = offsets.slice(entity.start, entity.end)?;
     }
 
     if let Some(suffix) =
       match_dash_district(slice_from(full_text, offsets, entity.end)?)
     {
       entity.end = entity.end.saturating_add(byte_len(suffix));
-      entity.text = offsets.slice(full_text, entity.start, entity.end)?;
+      entity.text = offsets.slice(entity.start, entity.end)?;
     }
 
     let before = offsets.slice(
-      full_text,
       offsets.floor_offset(entity.start.saturating_sub(10))?,
       entity.start,
     )?;
     if let Some(prefix) = postal_prefix(&before) {
       entity.start = entity.start.saturating_sub(byte_len(prefix));
-      entity.text = offsets.slice(full_text, entity.start, entity.end)?;
+      entity.text = offsets.slice(entity.start, entity.end)?;
     }
 
     if let Some(filters) = filters
@@ -1632,7 +1631,7 @@ fn extend_city_districts(
       )
     {
       entity.end = entity.end.saturating_add(byte_len(suffix));
-      entity.text = offsets.slice(full_text, entity.start, entity.end)?;
+      entity.text = offsets.slice(entity.start, entity.end)?;
     }
   }
 
@@ -1828,7 +1827,6 @@ fn consume_whitespace_no_newline(
 }
 
 fn try_gazetteer_prefix_extension(
-  full_text: &str,
   offsets: &ByteOffsets<'_>,
   found: &SearchMatch,
 ) -> Result<Option<(u32, String, Option<SourceDetail>)>> {
@@ -1838,7 +1836,7 @@ fn try_gazetteer_prefix_extension(
     return Ok(None);
   }
 
-  let after = offsets.slice(full_text, found.end(), max_end)?;
+  let after = offsets.slice(found.end(), max_end)?;
   if !after.starts_with(' ') {
     return Ok(None);
   }
@@ -1851,7 +1849,7 @@ fn try_gazetteer_prefix_extension(
   let new_end = found.end().saturating_add(suffix_end);
   Ok(Some((
     new_end,
-    offsets.slice(full_text, found.start(), new_end)?,
+    offsets.slice(found.start(), new_end)?,
     Some(SourceDetail::GazetteerExtension),
   )))
 }

@@ -296,7 +296,7 @@ pub(crate) fn process_trigger_matches(
       value.start
     };
     let mut entity_end = value.end;
-    let mut entity_text = offsets.slice(full_text, entity_start, entity_end)?;
+    let mut entity_text = offsets.slice(entity_start, entity_end)?;
     let mut label = if rule.label == "person"
       && has_known_legal_form_suffix(&entity_text, &data.legal_form_suffixes)
     {
@@ -311,7 +311,7 @@ pub(crate) fn process_trigger_matches(
       && let Some(head) = value.text.get(..end)
     {
       entity_end = value.start.saturating_add(u32_len(head));
-      entity_text = offsets.slice(full_text, entity_start, entity_end)?;
+      entity_text = offsets.slice(entity_start, entity_end)?;
     }
 
     if label.is_empty() {

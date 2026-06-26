@@ -37,9 +37,7 @@ pub(crate) fn filter_entity_false_positives(
       continue;
     }
 
-    let Some(normalized) =
-      normalize_entity(&entity, full_text, &offsets, filters)?
-    else {
+    let Some(normalized) = normalize_entity(&entity, &offsets, filters)? else {
       continue;
     };
     if should_reject_entity(&normalized, full_text, &offsets, filters)? {
@@ -53,11 +51,10 @@ pub(crate) fn filter_entity_false_positives(
 
 fn normalize_entity(
   entity: &PipelineEntity,
-  full_text: &str,
   offsets: &ByteOffsets<'_>,
   filters: Option<&DenyListFilterData>,
 ) -> Result<Option<PipelineEntity>> {
-  let raw_text = offsets.slice(full_text, entity.start, entity.end)?;
+  let raw_text = offsets.slice(entity.start, entity.end)?;
   let mut start_byte = 0usize;
   let mut end_byte = raw_text.len();
 
@@ -637,8 +634,9 @@ fn find_ambiguous_component_occurrence(
   text: &str,
   term: &str,
 ) -> Option<(usize, usize)> {
-  text.match_indices(term).find_map(|(start, _)| {
-    let end = start.saturating_add(term.len());
+  text.char_indices().find_map(|(start, _)| {
+    let match_len = case_insensitive_prefix_len(text.get(start..)?, term)?;
+    let end = start.saturating_add(match_len);
     let left_ok = text
       .get(..start)
       .and_then(|prefix| prefix.chars().next_back())
@@ -649,6 +647,18 @@ fn find_ambiguous_component_occurrence(
       .is_none_or(is_right_component_boundary);
     (left_ok && right_ok).then_some((start, end))
   })
+}
+
+fn case_insensitive_prefix_len(text: &str, prefix: &str) -> Option<usize> {
+  let mut consumed = 0usize;
+  for expected in prefix.chars() {
+    let actual = text.get(consumed..)?.chars().next()?;
+    if !actual.eq_ignore_ascii_case(&expected) {
+      return None;
+    }
+    consumed = consumed.saturating_add(actual.len_utf8());
+  }
+  Some(consumed)
 }
 
 fn starts_with_capitalized_token_after_space(text: &str) -> bool {

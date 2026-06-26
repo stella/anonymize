@@ -1819,7 +1819,7 @@ pub fn static_redaction_diagnostic_result_to_utf16_binding(
     &mut result.result.resolved_entities,
     &offsets,
   )?;
-  convert_diagnostic_offsets(&mut result.diagnostics.events, &offsets);
+  convert_diagnostic_offsets(&mut result.diagnostics.events, &offsets)?;
   Ok(result)
 }
 
@@ -1842,7 +1842,7 @@ pub fn static_redaction_diagnostics_to_utf16_binding(
 ) -> Result<BindingStaticRedactionDiagnostics> {
   let offsets = Utf16OffsetMap::new(full_text)?;
   let mut diagnostics = static_redaction_diagnostics_to_binding(diagnostics);
-  convert_diagnostic_offsets(&mut diagnostics.events, &offsets);
+  convert_diagnostic_offsets(&mut diagnostics.events, &offsets)?;
   Ok(diagnostics)
 }
 
@@ -1883,19 +1883,16 @@ fn convert_pipeline_entity_offsets(
 fn convert_diagnostic_offsets(
   events: &mut [BindingDiagnosticEvent],
   offsets: &Utf16OffsetMap,
-) {
+) -> Result<()> {
   for event in events {
-    if let Some(start) = event.start
-      && let Some(converted) = offsets.try_convert(start)
-    {
-      event.start = Some(converted);
+    if let Some(start) = event.start {
+      event.start = Some(offsets.convert(start)?);
     }
-    if let Some(end) = event.end
-      && let Some(converted) = offsets.try_convert(end)
-    {
-      event.end = Some(converted);
+    if let Some(end) = event.end {
+      event.end = Some(offsets.convert(end)?);
     }
   }
+  Ok(())
 }
 
 struct Utf16OffsetMap {
@@ -2358,7 +2355,12 @@ mod tests {
     prepared_search_core_package_to_compressed_bytes,
     prepared_search_package_from_bytes,
     prepared_search_package_has_core_payload, prepared_search_package_to_bytes,
-    prepared_search_package_to_compressed_bytes, write_package_header,
+    prepared_search_package_to_compressed_bytes,
+    static_redaction_diagnostics_to_utf16_binding, write_package_header,
+  };
+  use stella_anonymize_core::{
+    DiagnosticEvent, DiagnosticEventKind, DiagnosticStage,
+    StaticRedactionDiagnostics,
   };
 
   #[test]
@@ -2422,6 +2424,38 @@ mod tests {
     let core = prepared_search_config_from_binding(config).unwrap();
 
     assert!(core.custom_regex_options.regex.overlap_all);
+  }
+
+  #[test]
+  fn utf16_diagnostics_reject_invalid_byte_offsets() {
+    let diagnostics = StaticRedactionDiagnostics {
+      events: vec![DiagnosticEvent {
+        stage: DiagnosticStage::EntityRegex,
+        kind: DiagnosticEventKind::Entity,
+        count: None,
+        engine: None,
+        pattern: None,
+        source: None,
+        source_detail: None,
+        label: None,
+        start: Some(1),
+        end: Some(2),
+        text: None,
+        score: None,
+        span_valid: None,
+        elapsed_us: None,
+        input_bytes: None,
+        reason: None,
+      }],
+    };
+
+    let error = static_redaction_diagnostics_to_utf16_binding(diagnostics, "á")
+      .unwrap_err();
+
+    assert!(matches!(
+      error,
+      ContractError::InvalidBindingOffset { offset: 1 }
+    ));
   }
 
   #[test]
