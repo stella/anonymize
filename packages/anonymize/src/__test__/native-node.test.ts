@@ -7,8 +7,10 @@ import type { NativeAnonymizeBinding } from "../native";
 import {
   createNativePipelineFromDefaultPackage,
   createNativePipelineFromPackageFile,
+  getDefaultNativePipeline,
   loadNativeAnonymizeBinding,
   nativePlatformPackageName,
+  preloadDefaultNativePipeline,
   readNativePipelinePackageFile,
 } from "../native-node";
 
@@ -176,6 +178,42 @@ describe("native node loader", () => {
 
       expect(capturedBytes).toEqual([[10, 11, 12]]);
       expect(pipeline.redactText("x").redaction.redactedText).toBe("");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("caches the default native pipeline per binding and package path", () => {
+    const dir = mkdtempSync(join(tmpdir(), "anonymize-default-cache-"));
+    const packagePath = join(dir, "native-pipeline.stlanonpkg");
+    const capturedBytes: number[][] = [];
+    try {
+      writeFileSync(packagePath, Uint8Array.of(13, 14, 15));
+      const binding = fakeNativeBinding("1.5.0", {
+        onPreparedPackageBytes: (bytes) => {
+          capturedBytes.push([...bytes]);
+        },
+      });
+
+      const first = getDefaultNativePipeline({
+        binding,
+        packagePath,
+        expectedVersion: "1.5.0",
+      });
+      const second = getDefaultNativePipeline({
+        binding,
+        packagePath,
+        expectedVersion: "1.5.0",
+      });
+      const preloaded = preloadDefaultNativePipeline({
+        binding,
+        packagePath,
+        expectedVersion: "1.5.0",
+      });
+
+      expect(second).toBe(first);
+      expect(preloaded).toBe(first);
+      expect(capturedBytes).toEqual([[13, 14, 15]]);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
