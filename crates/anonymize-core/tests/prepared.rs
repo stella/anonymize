@@ -12,7 +12,7 @@ use stella_anonymize_core::{
   PreparedSearchArtifacts, PreparedSearchConfig, PreparedSearchSlices,
   RegexMatchMeta, RegexSearchOptions, SearchOptions, SearchPattern,
   SourceDetail, TriggerData, TriggerRule, TriggerStrategy, TriggerValidation,
-  WrittenAmountPatternData,
+  WrittenAmountPatternData, ZoneData, ZonePatternData, ZoneSigningClauseData,
 };
 
 fn empty_config(slices: PreparedSearchSlices) -> PreparedSearchConfig {
@@ -37,6 +37,7 @@ fn empty_config(slices: PreparedSearchSlices) -> PreparedSearchConfig {
     trigger_data: None,
     legal_form_data: None,
     address_seed_data: None,
+    zone_data: None,
     address_context_data: None,
     coreference_data: None,
     date_data: None,
@@ -120,6 +121,20 @@ fn address_context_data() -> AddressContextData {
   }
 }
 
+fn zone_data() -> ZoneData {
+  ZoneData {
+    section_heading_patterns: vec![ZonePatternData {
+      pattern: String::from(r"^\s*(?:Article|Článek)\s*1"),
+      flags: String::from("iu"),
+    }],
+    signing_clauses: vec![ZoneSigningClauseData {
+      prefix: String::from(r"(?:V|Ve)\s+"),
+      suffix: String::from(r"\s*,?\s*dne"),
+      prepositions: vec![String::from("nad")],
+    }],
+  }
+}
+
 fn coreference_data() -> CoreferenceData {
   CoreferenceData {
     definition_patterns: vec![CoreferencePatternData {
@@ -175,6 +190,7 @@ fn prepared_search_runs_normalized_literal_pass() {
     trigger_data: None,
     legal_form_data: None,
     address_seed_data: None,
+    zone_data: None,
     address_context_data: None,
     coreference_data: None,
     date_data: None,
@@ -529,6 +545,7 @@ fn prepared_search_artifacts_match_direct_prepare() {
     trigger_data: None,
     legal_form_data: None,
     address_seed_data: None,
+    zone_data: None,
     address_context_data: None,
     coreference_data: None,
     date_data: None,
@@ -679,6 +696,7 @@ fn prepared_search_emits_static_detector_entities() {
     trigger_data: None,
     legal_form_data: None,
     address_seed_data: None,
+    zone_data: None,
     address_context_data: None,
     coreference_data: None,
     date_data: None,
@@ -1378,6 +1396,7 @@ fn prepared_search_redacts_static_entities_end_to_end() {
     trigger_data: None,
     legal_form_data: None,
     address_seed_data: None,
+    zone_data: None,
     address_context_data: None,
     coreference_data: None,
     date_data: None,
@@ -1437,6 +1456,93 @@ fn prepared_search_applies_threshold_before_merge() {
   );
   assert_eq!(result.resolved_entities.len(), 1);
   assert_eq!(result.resolved_entities[0].text, "Acme");
+}
+
+#[test]
+fn prepared_search_applies_header_zone_boost_before_threshold() {
+  let prepared = PreparedSearch::new(PreparedSearchConfig {
+    regex_patterns: vec![SearchPattern::Regex(String::from("Alice"))],
+    regex_meta: vec![RegexMatchMeta::new("person", 0.45)],
+    threshold: 0.5,
+    allowed_labels: vec![String::from("person")],
+    slices: PreparedSearchSlices {
+      regex: PatternSlice { start: 0, end: 1 },
+      ..PreparedSearchSlices::default()
+    },
+    zone_data: Some(zone_data()),
+    ..empty_config(PreparedSearchSlices::default())
+  })
+  .unwrap();
+
+  let result = prepared
+    .redact_static_entities_with_diagnostics(
+      "Parties\nAlice\nArticle 1\nBody",
+      &OperatorConfig::default(),
+    )
+    .unwrap();
+
+  assert_eq!(result.result.resolved_entities.len(), 1);
+  assert_eq!(result.result.resolved_entities[0].text, "Alice");
+  assert!((result.result.resolved_entities[0].score - 0.55).abs() < 1e-12);
+  assert!(result.diagnostics.events.iter().any(|event| {
+    event.stage == DiagnosticStage::EntityZoneAdjustment
+      && event.kind == DiagnosticEventKind::StageSummary
+      && event.count == Some(1)
+  }));
+}
+
+#[test]
+fn prepared_search_applies_table_zone_boost_before_threshold() {
+  let prepared = PreparedSearch::new(PreparedSearchConfig {
+    regex_patterns: vec![SearchPattern::Regex(String::from("Alice"))],
+    regex_meta: vec![RegexMatchMeta::new("person", 0.46)],
+    threshold: 0.5,
+    allowed_labels: vec![String::from("person")],
+    slices: PreparedSearchSlices {
+      regex: PatternSlice { start: 0, end: 1 },
+      ..PreparedSearchSlices::default()
+    },
+    zone_data: Some(zone_data()),
+    ..empty_config(PreparedSearchSlices::default())
+  })
+  .unwrap();
+
+  let result = prepared
+    .redact_static_entities(
+      "Article 1\nName\tAddress\tId\nAlice\tPrague\t123",
+      &OperatorConfig::default(),
+    )
+    .unwrap();
+
+  assert_eq!(result.resolved_entities.len(), 1);
+  assert!((result.resolved_entities[0].score - 0.51).abs() < 1e-12);
+}
+
+#[test]
+fn prepared_search_applies_signature_zone_boost_before_threshold() {
+  let prepared = PreparedSearch::new(PreparedSearchConfig {
+    regex_patterns: vec![SearchPattern::Regex(String::from("Alice"))],
+    regex_meta: vec![RegexMatchMeta::new("person", 0.36)],
+    threshold: 0.5,
+    allowed_labels: vec![String::from("person")],
+    slices: PreparedSearchSlices {
+      regex: PatternSlice { start: 0, end: 1 },
+      ..PreparedSearchSlices::default()
+    },
+    zone_data: Some(zone_data()),
+    ..empty_config(PreparedSearchSlices::default())
+  })
+  .unwrap();
+
+  let result = prepared
+    .redact_static_entities(
+      "Article 1\nBody\nV Praze dne 1.1.2024\nAlice",
+      &OperatorConfig::default(),
+    )
+    .unwrap();
+
+  assert_eq!(result.resolved_entities.len(), 1);
+  assert!((result.resolved_entities[0].score - 0.51).abs() < 1e-12);
 }
 
 #[test]
@@ -1735,6 +1841,7 @@ fn prepared_search_reports_static_redaction_diagnostics() {
     trigger_data: None,
     legal_form_data: None,
     address_seed_data: None,
+    zone_data: None,
     address_context_data: None,
     coreference_data: None,
     date_data: None,
@@ -1820,6 +1927,7 @@ fn prepared_search_redacts_custom_deny_list_entities() {
     trigger_data: None,
     legal_form_data: None,
     address_seed_data: None,
+    zone_data: None,
     address_context_data: None,
     coreference_data: None,
     date_data: None,

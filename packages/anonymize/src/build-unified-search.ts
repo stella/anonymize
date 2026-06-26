@@ -245,6 +245,19 @@ export type NativeCoreferenceData = {
   role_stop_terms: string[];
   legal_form_aliases: string[];
 };
+export type NativeZonePatternData = {
+  pattern: string;
+  flags: string;
+};
+export type NativeZoneSigningClauseData = {
+  prefix: string;
+  suffix: string;
+  prepositions: string[];
+};
+export type NativeZoneData = {
+  section_heading_patterns: NativeZonePatternData[];
+  signing_clauses: NativeZoneSigningClauseData[];
+};
 type GenericRolesData = {
   roles: string[];
 };
@@ -298,6 +311,7 @@ export type NativePreparedSearchConfig = {
   trigger_data?: NativeTriggerData;
   legal_form_data?: NativeLegalFormData;
   address_seed_data?: NativeAddressSeedData;
+  zone_data?: NativeZoneData;
   address_context_data?: NativeAddressContextData;
   coreference_data?: NativeCoreferenceData;
   date_data?: NativeDateData;
@@ -367,6 +381,18 @@ type CoreferenceConfigRow = {
   flags: string;
 };
 
+type SectionHeadingsConfig = {
+  patterns: Array<{ re: string; flags: string }>;
+};
+
+type SigningClauseConfig = {
+  patterns: Array<{
+    prefix?: string;
+    suffix?: string;
+    prepositions?: string[];
+  }>;
+};
+
 type UnifiedSearchSources = {
   allRegex: PatternEntry[];
   regexMeta: RegexMeta[];
@@ -387,6 +413,7 @@ type UnifiedSearchSources = {
   nativeDateData: NativeDateData | null;
   nativeMonetaryData: NativeMonetaryData | null;
   nativeAddressSeedData: NativeAddressSeedData | null;
+  nativeZoneData: NativeZoneData | null;
   nativeAddressContextData: NativeAddressContextData | null;
   nativeCoreferenceData: NativeCoreferenceData | null;
   nativeSigningPatterns: readonly string[];
@@ -451,6 +478,7 @@ const buildUnifiedSearchSources = async (
     yearWordData,
     monetaryData,
     addressSeedData,
+    zoneData,
     addressContextData,
     coreferenceData,
   ] = await Promise.all([
@@ -497,6 +525,9 @@ const buildUnifiedSearchSources = async (
       : Promise.resolve(null),
     labelIsAllowed("address", allowedLabels)
       ? getAddressSeedData()
+      : Promise.resolve(null),
+    config.enableZoneClassification
+      ? buildNativeZoneData()
       : Promise.resolve(null),
     labelIsAllowed("address", allowedLabels)
       ? Promise.resolve(getAddressContextData())
@@ -759,6 +790,7 @@ const buildUnifiedSearchSources = async (
     nativeDateData,
     nativeMonetaryData,
     nativeAddressSeedData: addressSeedData,
+    nativeZoneData: zoneData,
     nativeAddressContextData: addressContextData,
     nativeCoreferenceData:
       coreferenceData === null
@@ -817,6 +849,7 @@ export const buildNativeStaticSearchBundle = async (
       dateData: sources.nativeDateData,
       monetaryData: sources.nativeMonetaryData,
       addressSeedData: sources.nativeAddressSeedData,
+      zoneData: sources.nativeZoneData,
       addressContextData: sources.nativeAddressContextData,
       coreferenceData: sources.nativeCoreferenceData,
       nativeSigningPatterns: sources.nativeSigningPatterns,
@@ -904,6 +937,7 @@ export const buildUnifiedSearch = async (
     dateData: sources.nativeDateData,
     monetaryData: sources.nativeMonetaryData,
     addressSeedData: sources.nativeAddressSeedData,
+    zoneData: sources.nativeZoneData,
     addressContextData: sources.nativeAddressContextData,
     coreferenceData: sources.nativeCoreferenceData,
     nativeSigningPatterns: sources.nativeSigningPatterns,
@@ -955,6 +989,7 @@ type BuildNativeStaticConfigArgs = {
   dateData: NativeDateData | null;
   monetaryData: NativeMonetaryData | null;
   addressSeedData: NativeAddressSeedData | null;
+  zoneData: NativeZoneData | null;
   addressContextData: NativeAddressContextData | null;
   coreferenceData: NativeCoreferenceData | null;
   nativeSigningPatterns: readonly string[];
@@ -987,6 +1022,7 @@ const buildNativeStaticConfig = ({
   dateData,
   monetaryData,
   addressSeedData,
+  zoneData,
   addressContextData,
   coreferenceData,
   nativeSigningPatterns,
@@ -1192,6 +1228,9 @@ const buildNativeStaticConfig = ({
   }
   if (addressSeedData) {
     nativeConfig.address_seed_data = addressSeedData;
+  }
+  if (zoneData) {
+    nativeConfig.zone_data = zoneData;
   }
   if (addressContextData) {
     nativeConfig.address_context_data = addressContextData;
@@ -1536,6 +1575,29 @@ const buildNativeCoreferenceData = async (): Promise<NativeCoreferenceData> => {
     definition_patterns: definitionPatterns,
     role_stop_terms: roleData.roles,
     legal_form_aliases: [],
+  };
+};
+
+const buildNativeZoneData = async (): Promise<NativeZoneData> => {
+  const [headingModule, signingModule] = await Promise.all([
+    import("./data/section-headings.json"),
+    import("./data/signing-clauses.json"),
+  ]);
+  const headingData = (headingModule.default ??
+    headingModule) as SectionHeadingsConfig;
+  const signingData = (signingModule.default ??
+    signingModule) as SigningClauseConfig;
+
+  return {
+    section_heading_patterns: headingData.patterns.map((pattern) => ({
+      pattern: pattern.re,
+      flags: pattern.flags,
+    })),
+    signing_clauses: signingData.patterns.map((pattern) => ({
+      prefix: pattern.prefix ?? "",
+      suffix: pattern.suffix ?? "",
+      prepositions: pattern.prepositions ?? [],
+    })),
   };
 };
 

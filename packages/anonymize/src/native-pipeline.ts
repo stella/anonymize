@@ -16,10 +16,7 @@ import {
   type NativeStaticRedactionResult,
 } from "./native";
 
-export type NativePipelineUnsupportedFeature =
-  | "enableNer"
-  | "enableNameCorpus"
-  | "enableZoneClassification";
+export type NativePipelineUnsupportedFeature = "enableNer" | "enableNameCorpus";
 
 export type NativePipelineCompatibility =
   | { status: "supported" }
@@ -106,9 +103,6 @@ export const getNativePipelineCompatibility = (
 
   if (config.enableNer) unsupportedFeatures.push("enableNer");
   if (config.enableNameCorpus) unsupportedFeatures.push("enableNameCorpus");
-  if (config.enableZoneClassification === true) {
-    unsupportedFeatures.push("enableZoneClassification");
-  }
   if (unsupportedFeatures.length === 0) {
     return { status: "supported" };
   }
