@@ -57,11 +57,12 @@ from the pipeline — this integration provides a concrete implementation via a
 ## Data Flow
 
 1. Pipeline calls `nerInference(text, labels, threshold, signal?)`
-2. `Gliner2Client` maps pipeline labels → model label set via static table
-3. Client POSTs JSON to `http://127.0.0.1:{port}/v1/infer`
+2. `Gliner2Client` maps pipeline labels → model label set via static table (TS-only)
+3. Client POSTs model-native labels to `http://127.0.0.1:{port}/v1/infer`
 4. Rust server calls `Gliner2Engine::extract(text, &tasks)` with `InferenceParams`
-5. Rust maps model results back to pipeline canonical labels
-6. Client returns `Entity[]` to the pipeline
+5. Rust returns model-native labels in response
+6. `Gliner2Client` maps model labels → pipeline canonical labels (reverse map)
+7. Client returns `Entity[]` to the pipeline
 
 ## HTTP API
 
@@ -80,9 +81,16 @@ Response:
 {
   "entities": [
     {"text": "Maria Jensen", "start": 9, "end": 21,
-     "label": "person", "score": 0.92}
+     "label": "person", "score": 0.92},
+    {"text": "maria@example.com", "start": 25, "end": 42,
+     "label": "email", "score": 0.98}
   ]
 }
+
+Note: "labels" in the request and "label" in the response use model-native
+label names (underscore-separated, matching the GLiNER2 42-label schema).
+The TS client maps pipeline labels to model labels before sending, and
+maps model labels back to pipeline canonical labels after receiving.
 ```
 
 ```
@@ -205,18 +213,16 @@ Output on startup (machine-parseable):
 
 ### Label mapping
 
-The Rust server accepts pipeline-style labels and maps them to model labels
-before calling `engine.extract()`. The mapping table is the same static table.
-Results from the model are returned with model-native labels; the TS client
-remaps them on the response side.
+The Rust server is model-agnostic: it receives whatever labels the client
+sends and returns model-native labels. All label mapping (pipeline ↔ model)
+lives on the **TS client side only**:
 
-Alternatively, the mapping can be done entirely on the TS side: the TS client
-expands pipeline labels to model labels before sending, and the Rust server
-returns model-native labels. The Rust server doesn't need to know about the
-pipeline's canonical label set.
+- **Outbound**: TS client expands pipeline labels to model labels via the
+  1:N forward map (e.g., `"person"` → `["person", "full_name", "first_name"]`)
+- **Inbound**: TS client collapses model labels back to pipeline canonical
+  labels via the reverse map (e.g., `"phone_number"` → `"phone number"`)
 
-This design puts the label map on the **TS side only**, keeping the Rust server
-simple and model-agnostic.
+The Rust server has no knowledge of the pipeline's canonical label set.
 
 ## TypeScript Integration
 
@@ -240,7 +246,7 @@ simple and model-agnostic.
 
 ### Binary path resolution
 
-1. `GLINER2_SERVER_PATH` env var (explicit override)
+1. `ANONYMIZE_GLINER2_SERVER_PATH` env var (explicit override)
 2. Check `node_modules/@stll/gliner2-server/bin/{platform}-{arch}/` (bundled binary)
 3. Download from GitHub Releases on first call (lazy download)
 
@@ -279,7 +285,7 @@ helper that fetches the appropriate binary on first use:
 
 ```typescript
 const binaryPath = await downloadBinary({
-  repo: "stella/gliner2-server",
+  repo: "stella/anonymize", // binary release asset path
   version: "v0.1.0",
   platform: process.platform,
   arch: process.arch,
@@ -303,7 +309,7 @@ Model ONNX files (~530MB) are cached by `gliner2-rs` via the `hf-hub` crate in
 | Model not cached (first run) | First `/v1/infer` blocks until download completes (~530MB) |
 | AbortSignal | HTTP request cancelled; server-side inference continues (no server-side abort in `gliner2-inference` yet) |
 | GPU OOM | Model fails to load; health endpoint returns error |
-| Port conflict | Server exits; client retries with different port |
+| Port conflict | Server exits immediately (exit code != 0). Client detects missing process, picks a different port, re-spawns. Max 3 retries. |
 
 ## Security
 
