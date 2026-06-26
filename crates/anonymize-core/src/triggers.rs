@@ -22,6 +22,8 @@ pub struct TriggerData {
   pub address_stop_keywords: Vec<String>,
   pub party_position_terms: Vec<String>,
   pub legal_form_suffixes: Vec<String>,
+  #[serde(default)]
+  pub post_nominals: Vec<String>,
   pub sentence_terminal_currency_terms: Vec<String>,
 }
 
@@ -75,6 +77,7 @@ pub(crate) struct PreparedTriggerData {
   address_stop_keywords: Vec<String>,
   party_position_terms: Vec<String>,
   legal_form_suffixes: Vec<String>,
+  post_nominals: Vec<String>,
   sentence_terminal_currency_terms: Vec<String>,
 }
 
@@ -124,6 +127,7 @@ struct ExtractedValue {
 struct TriggerExtractionData<'a> {
   address_stop_keywords: &'a [String],
   party_position_terms: &'a [String],
+  post_nominals: &'a [String],
   sentence_terminal_currency_terms: &'a [String],
 }
 
@@ -139,6 +143,11 @@ impl PreparedTriggerData {
       address_stop_keywords: data.address_stop_keywords,
       party_position_terms: data.party_position_terms,
       legal_form_suffixes: data.legal_form_suffixes,
+      post_nominals: data
+        .post_nominals
+        .into_iter()
+        .filter(|term| !term.trim().is_empty())
+        .collect(),
       sentence_terminal_currency_terms: data
         .sentence_terminal_currency_terms
         .into_iter()
@@ -223,6 +232,7 @@ pub(crate) fn process_trigger_matches(
   let extraction_data = TriggerExtractionData {
     address_stop_keywords: &data.address_stop_keywords,
     party_position_terms: &data.party_position_terms,
+    post_nominals: &data.post_nominals,
     sentence_terminal_currency_terms: &data.sentence_terminal_currency_terms,
   };
 
@@ -349,10 +359,11 @@ fn extract_value(
 ) -> Result<Option<ExtractedValue>> {
   let trigger_end_byte = offsets.validate_offset(trigger_end)?;
   let lookahead = get_trigger_lookahead(strategy);
-  let lookahead_end = floor_char_boundary(
-    text,
-    text.len().min(trigger_end_byte.saturating_add(lookahead)),
-  );
+  let lookahead_end_offset = offsets.offset_after_utf16_units(
+    trigger_end,
+    u32::try_from(lookahead).unwrap_or(u32::MAX),
+  )?;
+  let lookahead_end = offsets.validate_offset(lookahead_end_offset)?;
   let remaining = text
     .get(trigger_end_byte..lookahead_end)
     .unwrap_or_default();
@@ -375,6 +386,7 @@ fn extract_value(
       label,
       stop_words,
       max_length.unwrap_or(MAX_TRIGGER_VALUE_LEN),
+      data.post_nominals,
       data.sentence_terminal_currency_terms,
     ),
     PreparedTriggerStrategy::ToEndOfLine => {
@@ -407,6 +419,7 @@ fn extract_to_next_comma(
   label: &str,
   stop_words: &[String],
   length_cap: usize,
+  post_nominals: &[String],
   sentence_terminal_currency_terms: &[String],
 ) -> Option<ByteValue> {
   let mut end = 0;
@@ -436,7 +449,7 @@ fn extract_to_next_comma(
         continue;
       }
       if label == "person"
-        && let Some(skip) = post_nominal_len(after)
+        && let Some(skip) = post_nominal_len(after, post_nominals)
       {
         end = end.saturating_add(skip);
         continue;
@@ -488,7 +501,7 @@ fn extract_n_words(
   value_text: &str,
   value_start_byte: usize,
   count: usize,
-  label: &str,
+  _label: &str,
 ) -> Option<ByteValue> {
   let cell_end = value_text.find('\t').unwrap_or(value_text.len());
   let cell = value_text.get(..cell_end)?;
@@ -502,11 +515,11 @@ fn extract_n_words(
     let relative = cell.get(search_pos..)?.find(word)?;
     let start = search_pos.saturating_add(relative);
     words.push(WordToken {
-      text: word,
+      _text: word,
       start,
       end: start.saturating_add(word.len()),
     });
-    if words.len() >= date_aware_word_count(label, count, &words) {
+    if words.len() >= count {
       break;
     }
   }
@@ -521,37 +534,9 @@ fn extract_n_words(
 
 #[derive(Clone, Copy)]
 struct WordToken<'a> {
-  text: &'a str,
+  _text: &'a str,
   start: usize,
   end: usize,
-}
-
-fn date_aware_word_count(
-  label: &str,
-  configured_count: usize,
-  words: &[WordToken<'_>],
-) -> usize {
-  if configured_count != 1 || !matches!(label, "date" | "date of birth") {
-    return configured_count;
-  }
-  if words
-    .first()
-    .is_some_and(|word| starts_written_day_token(word.text))
-  {
-    return 3;
-  }
-  configured_count
-}
-
-fn starts_written_day_token(text: &str) -> bool {
-  let token = text.trim_end_matches(|ch: char| {
-    matches!(ch, ',' | ';' | ':' | ')' | ']' | '"' | '\'' | '”' | '’')
-  });
-  let Some(day) = token.strip_suffix('.') else {
-    return false;
-  };
-  let digit_count = day.chars().filter(char::is_ascii_digit).count();
-  (1..=2).contains(&digit_count) && day.chars().all(|ch| ch.is_ascii_digit())
 }
 
 fn extract_company_id_value(
@@ -680,7 +665,7 @@ fn extract_match_pattern(
     .split_once('\n')
     .map_or(value_text, |(head, _)| head);
   let found = regex.find(line).ok().flatten()?;
-  if found.start() == found.end() {
+  if found.start() != 0 || found.start() == found.end() {
     return None;
   }
   Some(ByteValue {
@@ -920,13 +905,6 @@ fn previous_char_boundary(text: &str, byte: usize) -> usize {
     .map_or(0, |(index, _)| index)
 }
 
-const fn floor_char_boundary(text: &str, mut byte: usize) -> usize {
-  while byte > 0 && !text.is_char_boundary(byte) {
-    byte = byte.saturating_sub(1);
-  }
-  byte
-}
-
 fn is_word_byte(text: &str, byte: usize) -> bool {
   text
     .get(byte..)
@@ -985,18 +963,45 @@ fn is_decimal_comma(text: &str) -> bool {
     .is_some_and(|ch| ch.is_ascii_digit() || matches!(ch, '-' | '–' | '—'))
 }
 
-fn post_nominal_len(text: &str) -> Option<usize> {
+fn post_nominal_len(text: &str, post_nominals: &[String]) -> Option<usize> {
   let trimmed = text.strip_prefix(',')?.trim_start();
   let len_before = text.len().saturating_sub(trimmed.len());
-  let mut token_end = 0;
-  for (index, ch) in trimmed.char_indices() {
-    if ch.is_alphabetic() || ch == '.' {
-      token_end = index.saturating_add(ch.len_utf8());
+  post_nominals
+    .iter()
+    .filter_map(|term| post_nominal_prefix_len(trimmed, term))
+    .max()
+    .map(|term_len| len_before.saturating_add(term_len))
+}
+
+fn post_nominal_prefix_len(text: &str, term: &str) -> Option<usize> {
+  let mut text_index = 0usize;
+  for expected in term.chars() {
+    if expected == '.' {
+      let next = text.get(text_index..)?.chars().next()?;
+      if next != '.' {
+        return None;
+      }
+      text_index = text_index.saturating_add(next.len_utf8());
+      let rest = text.get(text_index..)?;
+      text_index = text_index
+        .saturating_add(rest.len().saturating_sub(rest.trim_start().len()));
       continue;
     }
-    break;
+
+    let next = text.get(text_index..)?.chars().next()?;
+    if !next.eq_ignore_ascii_case(&expected) {
+      return None;
+    }
+    text_index = text_index.saturating_add(next.len_utf8());
   }
-  (token_end > 0).then_some(len_before.saturating_add(token_end))
+
+  if text
+    .get(text_index..)
+    .is_some_and(|tail| tail.starts_with('.'))
+  {
+    text_index = text_index.saturating_add(1);
+  }
+  Some(text_index)
 }
 
 fn is_sentence_terminator(
@@ -1126,6 +1131,13 @@ fn phone_shape_end(text: &str) -> Option<usize> {
   }
   let mut end = first.len_utf8();
   for (index, ch) in chars {
+    if ch == '.'
+      && text
+        .get(index.saturating_add(ch.len_utf8())..)
+        .is_some_and(|tail| tail.starts_with(char::is_whitespace))
+    {
+      break;
+    }
     if ch.is_ascii_digit()
       || ch.is_whitespace()
       || matches!(ch, '(' | ')' | '.' | '/' | '-' | '–' | '—' | '‑')
@@ -1343,6 +1355,7 @@ fn number_label_len(text: &str) -> Option<usize> {
 fn id_value_prefix(text: &str) -> Option<&str> {
   let mut end = 0;
   let mut digits = 0_usize;
+  let mut leading_alpha = 0_usize;
   let mut previous_was_digit = false;
   for (index, ch) in text.char_indices() {
     let allowed = if ch.is_ascii_digit() {
@@ -1351,6 +1364,9 @@ fn id_value_prefix(text: &str) -> Option<&str> {
       true
     } else if ch.is_ascii_alphabetic() {
       let allow = digits == 0 || previous_was_digit;
+      if digits == 0 {
+        leading_alpha = leading_alpha.saturating_add(1);
+      }
       previous_was_digit = false;
       allow
     } else if matches!(ch, ' ' | '.' | '-' | '/' | '\t') {
@@ -1365,8 +1381,11 @@ fn id_value_prefix(text: &str) -> Option<&str> {
     end = index.saturating_add(ch.len_utf8());
   }
   let candidate = text.get(..end)?;
-  (digits >= 2 && end >= 5 && !single_digit_dotted_prefix(candidate))
-    .then_some(candidate)
+  (digits >= 2
+    && end >= 5
+    && leading_alpha <= 3
+    && !single_digit_dotted_prefix(candidate))
+  .then_some(candidate)
 }
 
 fn single_digit_dotted_prefix(text: &str) -> bool {
@@ -1537,6 +1556,7 @@ mod tests {
       address_stop_keywords: Vec::new(),
       party_position_terms: Vec::new(),
       legal_form_suffixes: Vec::new(),
+      post_nominals: Vec::new(),
       sentence_terminal_currency_terms: Vec::new(),
     })
     .unwrap();
@@ -1609,6 +1629,7 @@ mod tests {
       address_stop_keywords: Vec::new(),
       party_position_terms: Vec::new(),
       legal_form_suffixes: Vec::new(),
+      post_nominals: Vec::new(),
       sentence_terminal_currency_terms: Vec::new(),
     })
     .unwrap();
@@ -1648,6 +1669,7 @@ mod tests {
       address_stop_keywords: Vec::new(),
       party_position_terms: Vec::new(),
       legal_form_suffixes: Vec::new(),
+      post_nominals: Vec::new(),
       sentence_terminal_currency_terms: Vec::new(),
     })
     .unwrap();

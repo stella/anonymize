@@ -37,6 +37,7 @@ import type { TriggerRule } from "./types";
 import type { DenyListData, DenyListFilterData } from "./detectors/deny-list";
 import type { PipelineContext } from "./context";
 import { defaultContext } from "./context";
+import { POST_NOMINALS } from "./config/titles";
 import { loadLanguageConfigs } from "./util/lang-loader";
 
 import {
@@ -209,6 +210,7 @@ export type NativeTriggerData = {
   rules: NativeTriggerRule[];
   address_stop_keywords: string[];
   party_position_terms: string[];
+  post_nominals: string[];
   sentence_terminal_currency_terms: string[];
 };
 
@@ -805,7 +807,8 @@ const buildUnifiedSearchSources = async (
       ? null
       : {
           month_names_by_language: dateMonthData,
-          year_words_by_language: yearWordData ?? {},
+          year_words_by_language:
+            config.enableTriggerPhrases === true ? (yearWordData ?? {}) : {},
         };
   const nativeMonetaryData = regexMonetaryEnabled ? monetaryData : null;
   const nativeSentenceTerminalCurrencyTerms =
@@ -1386,6 +1389,7 @@ const buildNativeStaticConfig = ({
       rules: triggerRules.map(toNativeTriggerRule),
       address_stop_keywords: [...getAddressStopKeywordsSync()],
       party_position_terms: [...partyPositionTerms],
+      post_nominals: [...POST_NOMINALS],
       sentence_terminal_currency_terms: [...sentenceTerminalCurrencyTerms],
     };
   }
