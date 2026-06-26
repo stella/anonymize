@@ -13,6 +13,9 @@ use crate::legal_forms::{
   LegalFormData, PreparedLegalFormData, process_legal_form_matches,
 };
 use crate::money::{MonetaryData, PreparedMonetaryData};
+use crate::name_corpus::{
+  NameCorpusData, PreparedNameCorpusData as PreparedNames,
+};
 use crate::normalize::{
   NormalizedSearchText, normalize_for_search_with_byte_map,
 };
@@ -71,6 +74,7 @@ pub struct PreparedSearch {
   zone_data: Option<PreparedZoneData>,
   address_context_data: Option<PreparedAddressContextData>,
   coreference_data: Option<PreparedCoreferenceData>,
+  name_corpus_data: Option<PreparedNames>,
   date_data: Option<PreparedDateData>,
   monetary_data: Option<PreparedMonetaryData>,
 }
@@ -123,6 +127,8 @@ pub struct PreparedSearchConfig {
   pub address_context_data: Option<AddressContextData>,
   #[serde(default)]
   pub coreference_data: Option<CoreferenceData>,
+  #[serde(default)]
+  pub name_corpus_data: Option<NameCorpusData>,
   pub date_data: Option<DateData>,
   pub monetary_data: Option<MonetaryData>,
 }
@@ -211,6 +217,7 @@ pub struct StaticDetectionResult {
   pub signature_entities: Vec<PipelineEntity>,
   pub legal_form_entities: Vec<PipelineEntity>,
   pub address_seed_entities: Vec<PipelineEntity>,
+  pub name_corpus_entities: Vec<PipelineEntity>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -242,6 +249,7 @@ struct StaticEntityPasses {
   signature: TimedEntities,
   legal_form: TimedEntities,
   address_seed: TimedEntities,
+  name_corpus: TimedEntities,
 }
 
 pub struct PreparedSearchBuildResult {
@@ -457,6 +465,7 @@ impl PreparedSearch {
         config.address_context_data,
       )?,
       coreference_data: prepare_coreference_data(config.coreference_data)?,
+      name_corpus_data: config.name_corpus_data.map(PreparedNames::new),
       date_data,
       monetary_data,
     })
@@ -611,6 +620,7 @@ impl PreparedSearch {
       signature_entities: passes.signature.entities,
       legal_form_entities: passes.legal_form.entities,
       address_seed_entities: passes.address_seed.entities,
+      name_corpus_entities: passes.name_corpus.entities,
     })
   }
 
@@ -698,6 +708,9 @@ impl PreparedSearch {
       ],
     )?;
 
+    let name_corpus =
+      self.process_name_corpus_entities(full_text, &deny_list.entities)?;
+
     Ok(StaticEntityPasses {
       regex,
       custom_regex,
@@ -709,6 +722,7 @@ impl PreparedSearch {
       signature,
       legal_form,
       address_seed,
+      name_corpus,
     })
   }
 
@@ -822,6 +836,24 @@ impl PreparedSearch {
         Vec::new()
       },
       elapsed_us: elapsed_us(country_start),
+    })
+  }
+
+  fn process_name_corpus_entities(
+    &self,
+    full_text: &str,
+    deny_list_entities: &[PipelineEntity],
+  ) -> Result<TimedEntities> {
+    let start = Instant::now();
+    let entities = if let Some(data) = &self.name_corpus_data {
+      data.detect_supplemental(full_text, deny_list_entities)?
+    } else {
+      Vec::new()
+    };
+
+    Ok(TimedEntities {
+      entities,
+      elapsed_us: elapsed_us(start),
     })
   }
 
@@ -1290,6 +1322,12 @@ fn record_static_entity_diagnostics(
     &passes.address_seed.entities,
     full_text,
     Some(passes.address_seed.elapsed_us),
+  );
+  diagnostics.record_entities(
+    DiagnosticStage::EntityNameCorpus,
+    &passes.name_corpus.entities,
+    full_text,
+    Some(passes.name_corpus.elapsed_us),
   );
 }
 
@@ -1983,7 +2021,8 @@ impl StaticDetectionResult {
       .saturating_add(self.trigger_entities.len())
       .saturating_add(self.signature_entities.len())
       .saturating_add(self.legal_form_entities.len())
-      .saturating_add(self.address_seed_entities.len());
+      .saturating_add(self.address_seed_entities.len())
+      .saturating_add(self.name_corpus_entities.len());
     let mut entities = Vec::with_capacity(capacity);
     entities.extend(self.regex_entities.iter().cloned());
     entities.extend(self.custom_regex_entities.iter().cloned());
@@ -1995,6 +2034,7 @@ impl StaticDetectionResult {
     entities.extend(self.signature_entities.iter().cloned());
     entities.extend(self.legal_form_entities.iter().cloned());
     entities.extend(self.address_seed_entities.iter().cloned());
+    entities.extend(self.name_corpus_entities.iter().cloned());
     entities
   }
 }

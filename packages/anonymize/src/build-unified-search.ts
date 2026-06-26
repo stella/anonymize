@@ -19,6 +19,9 @@
 
 import type { PatternEntry, TextSearch } from "@stll/text-search";
 import legalFormRuleWords from "./data/legal-form-rule-words.json";
+import nameCorpusCjk from "./data/name-corpus-cjk.json";
+import nameCorpusParticles from "./data/name-corpus-particles.json";
+import organizationIndicators from "./data/organization-indicators.json";
 
 import { getTextSearch } from "./search-engine";
 
@@ -246,6 +249,23 @@ export type NativeCoreferenceData = {
   legal_form_aliases: string[];
   organization_determiners: string[];
 };
+export type NativeNameCorpusData = {
+  first_names: string[];
+  surnames: string[];
+  title_tokens: string[];
+  title_abbreviations: string[];
+  excluded_words: string[];
+  common_words: string[];
+  non_western_names: string[];
+  excluded_all_caps: string[];
+  ja_suffixes: string[];
+  arabic_connectors: string[];
+  relation_connectors: string[];
+  hyphenated_prefixes: string[];
+  cjk_non_person_terms: string[];
+  cjk_surname_starters: string[];
+  organization_terms: string[];
+};
 export type NativeZonePatternData = {
   pattern: string;
   flags: string;
@@ -316,6 +336,7 @@ export type NativePreparedSearchConfig = {
   zone_data?: NativeZoneData;
   address_context_data?: NativeAddressContextData;
   coreference_data?: NativeCoreferenceData;
+  name_corpus_data?: NativeNameCorpusData;
   date_data?: NativeDateData;
   monetary_data?: NativeMonetaryData;
 };
@@ -383,6 +404,30 @@ type CoreferenceConfigRow = {
   flags: string;
 };
 
+type NameCorpusCjkLanguageData = {
+  nonPersonTerms: string[];
+  surnameStarters: string[];
+};
+
+type NameCorpusCjkData = Record<
+  string,
+  NameCorpusCjkLanguageData | string | undefined
+>;
+
+type NameCorpusParticleLanguageData = {
+  connectors?: string[];
+  relationConnectors?: string[];
+  suffixes?: string[];
+  hyphenatedPrefixes?: string[];
+};
+
+type NameCorpusParticleData = Record<
+  string,
+  NameCorpusParticleLanguageData | string | undefined
+>;
+
+type OrganizationIndicatorData = Record<string, string[] | string | undefined>;
+
 type SectionHeadingsConfig = {
   patterns: Array<{ re: string; flags: string }>;
 };
@@ -418,6 +463,7 @@ type UnifiedSearchSources = {
   nativeZoneData: NativeZoneData | null;
   nativeAddressContextData: NativeAddressContextData | null;
   nativeCoreferenceData: NativeCoreferenceData | null;
+  nativeNameCorpusData: NativeNameCorpusData | null;
   nativeSigningPatterns: readonly string[];
   partyPositionTerms: string[];
   hotwordRules: readonly HotwordRule[];
@@ -440,6 +486,118 @@ export type NativeStaticSearchBundle = {
   customRegexMeta: readonly RegexMeta[];
   denyListData: DenyListData | null;
   falsePositiveFilters: DenyListFilterData;
+};
+
+// eslint-disable-next-line no-unsafe-type-assertion -- JSON config module shape.
+const NAME_CORPUS_CJK = nameCorpusCjk as NameCorpusCjkData;
+// eslint-disable-next-line no-unsafe-type-assertion -- JSON config module shape.
+const NAME_CORPUS_PARTICLES = nameCorpusParticles as NameCorpusParticleData;
+// eslint-disable-next-line no-unsafe-type-assertion -- JSON config module shape.
+const ORGANIZATION_INDICATORS =
+  organizationIndicators as OrganizationIndicatorData;
+
+const CJK_LANGUAGE_ALIASES: Record<string, readonly string[]> = {
+  zh: ["zh", "zh-latn", "zh-hans", "zh-hant"],
+  ja: ["ja", "ja-latn"],
+  ko: ["ko", "ko-latn"],
+};
+
+const buildNativeNameCorpusData = (
+  config: PipelineConfig,
+  ctx: PipelineContext,
+): NativeNameCorpusData | null => {
+  if (!config.enableNameCorpus || !config.enableDenyList || !ctx.nameCorpus) {
+    return null;
+  }
+
+  const languages = config.nameCorpusLanguages?.map((language) =>
+    language.toLowerCase(),
+  );
+  const cjkNonPersonTerms: string[] = [];
+  const cjkSurnameStarters: string[] = [];
+  for (const [language, value] of Object.entries(NAME_CORPUS_CJK)) {
+    if (!isNameCorpusCjkLanguageData(value)) continue;
+    if (!languageIsSelected(language, languages, CJK_LANGUAGE_ALIASES)) {
+      continue;
+    }
+    cjkNonPersonTerms.push(...value.nonPersonTerms);
+    cjkSurnameStarters.push(...value.surnameStarters);
+  }
+
+  const jaSuffixes: string[] = [];
+  const arabicConnectors: string[] = [];
+  const relationConnectors: string[] = [];
+  const hyphenatedPrefixes: string[] = [];
+  for (const [language, value] of Object.entries(NAME_CORPUS_PARTICLES)) {
+    if (!isNameCorpusParticleLanguageData(value)) continue;
+    if (!languageIsSelected(language, languages)) continue;
+    jaSuffixes.push(...(value.suffixes ?? []));
+    arabicConnectors.push(...(value.connectors ?? []));
+    relationConnectors.push(...(value.relationConnectors ?? []));
+    hyphenatedPrefixes.push(...(value.hyphenatedPrefixes ?? []));
+  }
+
+  const organizationTerms: string[] = [];
+  for (const value of Object.values(ORGANIZATION_INDICATORS)) {
+    if (Array.isArray(value)) {
+      organizationTerms.push(...value);
+    }
+  }
+
+  return {
+    first_names: [...ctx.nameCorpus.firstNamesList],
+    surnames: [...ctx.nameCorpus.surnamesList],
+    title_tokens: [...ctx.nameCorpus.titlesList],
+    title_abbreviations: [...ctx.nameCorpus.titleAbbreviations],
+    excluded_words: [...ctx.nameCorpus.excludedList],
+    common_words: [...ctx.nameCorpus.commonWords],
+    non_western_names: [...ctx.nameCorpus.nonWesternNamesList],
+    excluded_all_caps: [...ctx.nameCorpus.excludedAllCapsList],
+    ja_suffixes: uniqueStrings(jaSuffixes),
+    arabic_connectors: uniqueStrings(arabicConnectors),
+    relation_connectors: uniqueStrings(relationConnectors),
+    hyphenated_prefixes: uniqueStrings(hyphenatedPrefixes),
+    cjk_non_person_terms: uniqueStrings(cjkNonPersonTerms),
+    cjk_surname_starters: uniqueStrings(cjkSurnameStarters),
+    organization_terms: uniqueStrings(organizationTerms),
+  };
+};
+
+const isNameCorpusCjkLanguageData = (
+  value: NameCorpusCjkData[string],
+): value is NameCorpusCjkLanguageData =>
+  typeof value === "object" &&
+  value !== null &&
+  Array.isArray(value.nonPersonTerms) &&
+  Array.isArray(value.surnameStarters);
+
+const isNameCorpusParticleLanguageData = (
+  value: NameCorpusParticleData[string],
+): value is NameCorpusParticleLanguageData =>
+  typeof value === "object" && value !== null;
+
+const languageIsSelected = (
+  language: string,
+  selectedLanguages: readonly string[] | undefined,
+  aliases: Record<string, readonly string[]> = {},
+): boolean => {
+  if (selectedLanguages === undefined) {
+    return true;
+  }
+  const normalized = language.toLowerCase();
+  const accepted = aliases[normalized] ?? [normalized];
+  return accepted.some((entry) => selectedLanguages.includes(entry));
+};
+
+const uniqueStrings = (values: readonly string[]): string[] => {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values) {
+    if (seen.has(value)) continue;
+    seen.add(value);
+    result.push(value);
+  }
+  return result;
 };
 
 const buildUnifiedSearchSources = async (
@@ -647,6 +805,7 @@ const buildUnifiedSearchSources = async (
           year_words_by_language: yearWordData ?? {},
         };
   const nativeMonetaryData = monetaryData;
+  const nativeNameCorpusData = buildNativeNameCorpusData(config, ctx);
 
   let offset = 0;
 
@@ -801,6 +960,7 @@ const buildUnifiedSearchSources = async (
             ...coreferenceData,
             legal_form_aliases: nativeLegalFormSuffixes,
           },
+    nativeNameCorpusData,
     nativeSigningPatterns,
     partyPositionTerms,
     hotwordRules,
@@ -854,6 +1014,7 @@ export const buildNativeStaticSearchBundle = async (
       zoneData: sources.nativeZoneData,
       addressContextData: sources.nativeAddressContextData,
       coreferenceData: sources.nativeCoreferenceData,
+      nameCorpusData: sources.nativeNameCorpusData,
       nativeSigningPatterns: sources.nativeSigningPatterns,
       partyPositionTerms: sources.partyPositionTerms,
       hotwordRules: sources.hotwordRules,
@@ -942,6 +1103,7 @@ export const buildUnifiedSearch = async (
     zoneData: sources.nativeZoneData,
     addressContextData: sources.nativeAddressContextData,
     coreferenceData: sources.nativeCoreferenceData,
+    nameCorpusData: sources.nativeNameCorpusData,
     nativeSigningPatterns: sources.nativeSigningPatterns,
     partyPositionTerms: sources.partyPositionTerms,
     hotwordRules: sources.hotwordRules,
@@ -994,6 +1156,7 @@ type BuildNativeStaticConfigArgs = {
   zoneData: NativeZoneData | null;
   addressContextData: NativeAddressContextData | null;
   coreferenceData: NativeCoreferenceData | null;
+  nameCorpusData: NativeNameCorpusData | null;
   nativeSigningPatterns: readonly string[];
   partyPositionTerms: readonly string[];
   hotwordRules: readonly HotwordRule[];
@@ -1027,6 +1190,7 @@ const buildNativeStaticConfig = ({
   zoneData,
   addressContextData,
   coreferenceData,
+  nameCorpusData,
   nativeSigningPatterns,
   partyPositionTerms,
   hotwordRules,
@@ -1239,6 +1403,9 @@ const buildNativeStaticConfig = ({
   }
   if (coreferenceData) {
     nativeConfig.coreference_data = coreferenceData;
+  }
+  if (nameCorpusData) {
+    nativeConfig.name_corpus_data = nameCorpusData;
   }
   if (dateData) {
     nativeConfig.date_data = dateData;
