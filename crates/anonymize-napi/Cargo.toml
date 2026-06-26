@@ -2,7 +2,7 @@
 name = "stella-anonymize-napi"
 version.workspace = true
 edition.workspace = true
-description = "Native bindings for Stella anonymization core"
+description = "Native bindings for stella anonymization core"
 license.workspace = true
 publish.workspace = true
 repository.workspace = true
