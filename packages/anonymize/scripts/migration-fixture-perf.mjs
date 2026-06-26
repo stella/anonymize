@@ -1347,7 +1347,7 @@ function describeUnsupportedPipelineStages(
   if (config.enableNer) {
     stages.push("ner");
   }
-  if (config.enableZoneClassification) {
+  if (config.enableZoneClassification && !nativeRuntime) {
     stages.push("zone-classification");
   }
   if (config.enableCoreference && !nativeRuntime) {

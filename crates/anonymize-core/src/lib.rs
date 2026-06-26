@@ -25,6 +25,7 @@ mod signatures;
 mod triggers;
 mod types;
 mod validators;
+mod zones;
 
 pub use address_context::AddressContextData;
 pub use address_seeds::AddressSeedData;
@@ -71,3 +72,4 @@ pub use types::{
   PlaceholderEntry, PlaceholderMap, RedactionEntry, RedactionResult, Result,
   SearchEngine, SearchMatch,
 };
+pub use zones::{ZoneData, ZonePatternData, ZoneSigningClauseData};

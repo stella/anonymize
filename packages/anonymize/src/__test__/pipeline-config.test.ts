@@ -247,6 +247,30 @@ describe("pipeline config semantics", () => {
     ).toContain("LLC");
   });
 
+  test("native config carries zone classifier data", async () => {
+    const search = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        enableZoneClassification: true,
+        labels: ["person"],
+      },
+      [],
+      createPipelineContext(),
+    );
+
+    expect(
+      search.nativeStaticConfig.zone_data?.section_heading_patterns.length,
+    ).toBeGreaterThan(0);
+    expect(
+      search.nativeStaticConfig.zone_data?.section_heading_patterns.some(
+        ({ pattern }) => pattern.includes("Article"),
+      ),
+    ).toBe(true);
+    expect(
+      search.nativeStaticConfig.zone_data?.signing_clauses.length,
+    ).toBeGreaterThan(0);
+  });
+
   test("native trigger config carries legal suffix data without legal-form search", async () => {
     const search = await buildUnifiedSearch(
       {
