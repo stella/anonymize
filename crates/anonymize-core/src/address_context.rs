@@ -329,10 +329,12 @@ impl PreparedAddressContextData {
     let offsets = ByteOffsets::new(full_text);
     let header_scan_end = header_scan_end(full_text, &offsets, header_end)?;
     let header =
-      full_text.get(..header_scan_end).ok_or(Error::InvalidSpan {
-        start: 0,
-        end: u32::try_from(header_scan_end).unwrap_or(u32::MAX),
-      })?;
+      full_text
+        .get(..header_scan_end)
+        .ok_or_else(|| Error::InvalidSpan {
+          start: 0,
+          end: u32::try_from(header_scan_end).unwrap_or(u32::MAX),
+        })?;
     let context_entities = existing_entities
       .iter()
       .filter(|entity| {
