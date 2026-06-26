@@ -700,10 +700,20 @@ describe("native adapter parity", () => {
       adapters.native.NativePreparedSearch.fromPreparedPackageBytes(
         packageBytes,
       );
+    const diagnosticsJson = prepared.prepareDiagnosticsJson?.();
+    if (diagnosticsJson === undefined) {
+      throw new Error("missing prepare diagnostics");
+    }
+    const diagnostics = JSON.parse(diagnosticsJson);
 
     expect(prepared.redactStaticEntities(text)).toEqual(
       direct.redactStaticEntities(text),
     );
+    expect(
+      diagnostics.events.some(
+        (event: { stage?: unknown }) => event.stage === "prepare.cache.hit",
+      ),
+    ).toBe(true);
     const expectedJson = JSON.parse(
       adapters.native.redactStaticEntitiesJson(CONFIG_JSON, text),
     );
@@ -759,10 +769,20 @@ describe("native adapter parity", () => {
       adapters.native.NativePreparedSearch.fromPreparedPackageBytes(
         packageBytes,
       );
+    const diagnosticsJson = prepared.prepareDiagnosticsJson?.();
+    if (diagnosticsJson === undefined) {
+      throw new Error("missing prepare diagnostics");
+    }
+    const diagnostics = JSON.parse(diagnosticsJson);
 
     expect(prepared.redactStaticEntities(text)).toEqual(
       direct.redactStaticEntities(text),
     );
+    expect(
+      diagnostics.events.some(
+        (event: { stage?: unknown }) => event.stage === "prepare.cache.hit",
+      ),
+    ).toBe(true);
     const expectedJson = JSON.parse(
       adapters.native.redactStaticEntitiesJson(CONFIG_JSON, text),
     );
