@@ -1832,12 +1832,8 @@ fn try_gazetteer_prefix_extension(
   offsets: &ByteOffsets<'_>,
   found: &SearchMatch,
 ) -> Result<Option<(u32, String, Option<SourceDetail>)>> {
-  let full_len = offsets.len()?;
-  let max_end = found
-    .end()
-    .saturating_add(MAX_GAZETTEER_PREFIX_OVERSHOOT)
-    .min(full_len);
-  let max_end = offsets.floor_offset(max_end)?;
+  let max_end = offsets
+    .offset_after_utf16_units(found.end(), MAX_GAZETTEER_PREFIX_OVERSHOOT)?;
   if max_end <= found.end().saturating_add(1) {
     return Ok(None);
   }

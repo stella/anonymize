@@ -384,6 +384,9 @@ describe("pipeline config semantics", () => {
       labels: ["organization", "organization"],
       is_fuzzy: [false, true],
     });
+    expect(search.nativeStaticConfig.literal_options.fuzzy_whole_words).toBe(
+      false,
+    );
     expect(
       Object.hasOwn(search.nativeStaticConfig.gazetteer_data ?? {}, "isFuzzy"),
     ).toBe(false);

@@ -2,6 +2,7 @@ use std::collections::BTreeSet;
 
 use regex::Regex;
 
+use crate::byte_offsets::ByteOffsets;
 use crate::resolution::{DetectionSource, PipelineEntity, SourceDetail};
 use crate::types::{Error, Result};
 
@@ -436,11 +437,12 @@ fn near_confirmed_address_same_line(
   start: u32,
   end: u32,
 ) -> Result<bool> {
+  let offsets = ByteOffsets::new(full_text);
   for entity in existing_entities.iter().chain(results.iter()) {
     if entity.label != "address" || is_caller_owned_entity(entity) {
       continue;
     }
-    let dist = entity.start.abs_diff(end).min(entity.end.abs_diff(start));
+    let dist = span_gap_utf16_units(&offsets, entity, start, end)?;
     if dist > BARE_HOUSE_CONTEXT_WINDOW {
       continue;
     }
@@ -451,6 +453,21 @@ fn near_confirmed_address_same_line(
     }
   }
   Ok(false)
+}
+
+fn span_gap_utf16_units(
+  offsets: &ByteOffsets<'_>,
+  entity: &PipelineEntity,
+  start: u32,
+  end: u32,
+) -> Result<u32> {
+  if entity.end <= start {
+    return offsets.utf16_units_between(entity.end, start);
+  }
+  if end <= entity.start {
+    return offsets.utf16_units_between(end, entity.start);
+  }
+  Ok(0)
 }
 
 fn is_short_ascii_digit_token(value: &str) -> bool {
