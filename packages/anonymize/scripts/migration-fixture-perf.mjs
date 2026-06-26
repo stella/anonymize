@@ -26,6 +26,7 @@ const FIXTURES_DIR = join(
 );
 const BASELINE_REF =
   process.env.ANONYMIZE_MIGRATION_BASELINE_REF ?? "origin/main";
+const WORKING_TREE_BASELINE_REF = "working-tree";
 const COMPARE_BASELINE =
   process.env.ANONYMIZE_MIGRATION_COMPARE_BASELINE !== "0";
 const REQUIRE_NATIVE_PIPELINE =
@@ -70,6 +71,47 @@ const WRITE_NATIVE_PACKAGE_PATH =
 const USER_DATA_SCENARIO =
   process.env.ANONYMIZE_MIGRATION_USER_DATA_SCENARIO?.trim() ?? "none";
 
+const ACCEPTED_NATIVE_STATIC_DELTAS = new Map(
+  [
+    {
+      fixture: "cs/asset-transfer-court-declensions.txt",
+      reason: "wider-address-span",
+      candidateExtra: [
+        { start: 445, end: 485, label: "address", source: "regex" },
+      ],
+      candidateMissing: [
+        { start: 471, end: 485, label: "address", source: "deny-list" },
+      ],
+    },
+    {
+      fixture: "cs/nakit-legal-services-framework.txt",
+      reason: "role-heading-not-person",
+      candidateExtra: [],
+      candidateMissing: [
+        { start: 49384, end: 49395, label: "person", source: "trigger" },
+      ],
+    },
+    {
+      fixture: "cs/vinci-donation-agreement.txt",
+      reason: "party-organization-retained",
+      candidateExtra: [
+        { start: 542, end: 585, label: "organization", source: "deny-list" },
+      ],
+      candidateMissing: [],
+    },
+    {
+      fixture: "en/software-license-agreement.txt",
+      reason: "phone-leading-parenthesis",
+      candidateExtra: [
+        { start: 1857, end: 1871, label: "phone number", source: "regex" },
+      ],
+      candidateMissing: [
+        { start: 1858, end: 1871, label: "phone number", source: "trigger" },
+      ],
+    },
+  ].map((entry) => [entry.fixture, entry]),
+);
+
 if (process.env.ANONYMIZE_MIGRATION_WORKER === "1") {
   await runWorker();
 } else {
@@ -91,8 +133,10 @@ async function runCoordinator() {
   try {
     let baseline = null;
     if (COMPARE_BASELINE) {
-      ensureGitRef(BASELINE_REF);
-      const baselineRoot = materializeGitRef(BASELINE_REF, tempRoot);
+      const baselineRoot =
+        BASELINE_REF === WORKING_TREE_BASELINE_REF
+          ? ROOT_DIR
+          : materializeBaselineRef(BASELINE_REF, tempRoot);
       baseline = runVariant({
         name: `baseline:${BASELINE_REF}`,
         sourceRoot: baselineRoot,
@@ -717,6 +761,9 @@ function compareSnapshots(baseline, candidate) {
     baseline: baseline.variant,
     candidate: candidate.variant,
     equal: mismatches.length === 0,
+    acceptedEqual: mismatches.every(
+      (mismatch) => mismatch.acceptedReason !== null,
+    ),
     mismatchSummary: mismatchSummary(mismatches),
     fixtureCount: fixtureNames.size,
     mismatches,
@@ -733,15 +780,31 @@ function mismatchSummary(mismatches) {
   let materialMismatchCount = 0;
   let redactionMismatchCount = 0;
   let sourceOnlyMismatchCount = 0;
+  let acceptedMismatchCount = 0;
+  let unexplainedMismatchCount = 0;
+  let unexplainedMaterialMismatchCount = 0;
+  let unexplainedRedactionMismatchCount = 0;
 
   for (const mismatch of mismatches) {
     const category = mismatch.category ?? mismatch.kind;
     byCategory[category] = (byCategory[category] ?? 0) + 1;
+    const accepted = mismatch.acceptedReason !== null;
+    if (accepted) {
+      acceptedMismatchCount += 1;
+    } else {
+      unexplainedMismatchCount += 1;
+    }
     if (mismatch.sourceAgnosticEqual !== true) {
       materialMismatchCount += 1;
+      if (!accepted) {
+        unexplainedMaterialMismatchCount += 1;
+      }
     }
     if (mismatch.redactedTextEqual === false) {
       redactionMismatchCount += 1;
+      if (!accepted) {
+        unexplainedRedactionMismatchCount += 1;
+      }
     }
     if (
       mismatch.redactedTextEqual &&
@@ -758,6 +821,10 @@ function mismatchSummary(mismatches) {
     materialMismatchCount,
     redactionMismatchCount,
     sourceOnlyMismatchCount,
+    acceptedMismatchCount,
+    unexplainedMismatchCount,
+    unexplainedMaterialMismatchCount,
+    unexplainedRedactionMismatchCount,
     byCategory,
   };
 }
@@ -801,7 +868,7 @@ function describeMismatch(fixture, expected, actual) {
   );
   const category = mismatchCategory(expected, actual);
 
-  return {
+  const mismatch = {
     fixture,
     kind: "snapshot-mismatch",
     category: category.kind,
@@ -842,6 +909,31 @@ function describeMismatch(fixture, expected, actual) {
               actualByteSnapshot.entities.at(firstByteEntityDiff) ?? null,
           },
   };
+  return {
+    ...mismatch,
+    acceptedReason: acceptedMismatchReason(mismatch),
+  };
+}
+
+function acceptedMismatchReason(mismatch) {
+  if (mismatch.sourceAgnosticEqual === true) {
+    return "source-only";
+  }
+  const accepted = ACCEPTED_NATIVE_STATIC_DELTAS.get(mismatch.fixture);
+  if (accepted === undefined) {
+    return null;
+  }
+  if (
+    entitySummariesEqual(mismatch.candidateExtra, accepted.candidateExtra) &&
+    entitySummariesEqual(mismatch.candidateMissing, accepted.candidateMissing)
+  ) {
+    return accepted.reason;
+  }
+  return null;
+}
+
+function entitySummariesEqual(left, right) {
+  return JSON.stringify(left ?? []) === JSON.stringify(right ?? []);
 }
 
 function mismatchCategory(expected, actual) {
@@ -1252,14 +1344,11 @@ function describeUnsupportedPipelineStages(
       config.enableDenyList ? "name-corpus-supplemental" : "name-corpus",
     );
   }
-  if (config.enableHotwordRules) {
-    stages.push("hotword-rules");
+  if (config.enableNer) {
+    stages.push("ner");
   }
   if (config.enableZoneClassification) {
     stages.push("zone-classification");
-  }
-  if (config.enableConfidenceBoost) {
-    stages.push("confidence-boost");
   }
   if (config.enableCoreference) {
     stages.push("coreference");
@@ -1271,7 +1360,6 @@ function describeUnsupportedPipelineStages(
   if (!nativeRuntime) {
     stages.push("signatures");
   }
-  stages.push("false-positive-filters", "final-extensions");
   return stages;
 }
 
@@ -1420,6 +1508,11 @@ function ensureGitRef(ref) {
   }
 
   throw new Error(`Cannot resolve baseline ref: ${ref}`);
+}
+
+function materializeBaselineRef(ref, tempRoot) {
+  ensureGitRef(ref);
+  return materializeGitRef(ref, tempRoot);
 }
 
 function materializeGitRef(ref, tempRoot) {
