@@ -631,10 +631,13 @@ impl NativePreparedSearch {
     let operators =
       operator_config_from_binding(operators.map(to_binding_operator_config))
         .map_err(|error| to_napi_contract_error(&error))?;
-    let result = self
+    let mut result = self
       .inner
       .redact_static_entities_with_diagnostics(&full_text, &operators)
       .map_err(|error| to_napi_core_error(&error))?;
+    let mut diagnostics = self.prepare_diagnostics.clone();
+    diagnostics.extend(result.diagnostics);
+    result.diagnostics = diagnostics;
     let result =
       static_redaction_diagnostic_result_to_utf16_binding(result, &full_text)
         .map_err(|error| to_napi_contract_error(&error))?;

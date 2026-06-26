@@ -37,7 +37,7 @@ describe("native node loader", () => {
     ).toBeNull();
   });
 
-  test("loads the platform package after the local loader", () => {
+  test("loads the bundled native loader", () => {
     const calls: string[] = [];
     const binding = fakeNativeBinding("1.5.0");
     const loaded = loadNativeAnonymizeBinding({
@@ -47,7 +47,7 @@ describe("native node loader", () => {
       env: {},
       requireModule: (specifier) => {
         calls.push(specifier);
-        if (specifier === "@stll/anonymize-darwin-arm64") {
+        if (specifier === "../index.cjs") {
           return binding;
         }
         throw new Error("not found");
@@ -55,7 +55,7 @@ describe("native node loader", () => {
     });
 
     expect(loaded).toBe(binding);
-    expect(calls).toEqual(["../index.cjs", "@stll/anonymize-darwin-arm64"]);
+    expect(calls).toEqual(["../index.cjs"]);
   });
 
   test("loads an explicit native library path first", () => {
@@ -89,7 +89,7 @@ describe("native node loader", () => {
       env: {},
       requireModule: (specifier) => {
         calls.push(specifier);
-        if (specifier === "@stll/anonymize-darwin-arm64") {
+        if (specifier === "../index.cjs") {
           return binding;
         }
         throw new Error("not found");
@@ -107,7 +107,7 @@ describe("native node loader", () => {
         arch: "arm64",
         env: {},
         requireModule: (specifier) => {
-          if (specifier === "@stll/anonymize-darwin-arm64") {
+          if (specifier === "../index.cjs") {
             return fakeNativeBinding("1.4.0");
           }
           throw new Error("not found");
