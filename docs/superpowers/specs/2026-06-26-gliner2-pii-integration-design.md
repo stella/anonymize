@@ -79,6 +79,23 @@ GET /v1/health
 Response: { "status": "ok", "model_loaded": true }
 ```
 
+## Pipeline Canonical Labels
+
+The pipeline defines 22 canonical entity labels in `src/constants.ts:DEFAULT_ENTITY_LABELS`:
+
+```
+person, organization, phone number, address, country,
+email address, date, date of birth, bank account number,
+iban, tax identification number, identity card number,
+birth number, national identification number,
+social security number, registration number,
+credit card number, passport number, crypto,
+monetary amount, land parcel, misc
+```
+
+GLiNER2 NER is configured to handle a subset of these; the rest are covered by
+rule-based detectors (regex, trigger phrases, legal forms, gazetteer, deny-list).
+
 ## Label Mapping
 
 ### Pipeline → Model (1:N)
@@ -126,14 +143,33 @@ date_of_birth → "date of birth"
 | `label-map.ts` | TypeScript copy of the label mapping tables |
 | `types.ts` | Request/response types for the HTTP API |
 
+### Python interpreter discovery
+
+`Gliner2Client` resolves the Python interpreter by checking, in order:
+
+1. `GLINER2_PYTHON` environment variable (explicit override)
+2. `python3` (Unix) or `python` (Windows, fallback)
+3. If the enclosing npm package has a `.venv` or `venv` sibling directory, use
+   that virtual environment's interpreter preferentially
+
+The resolved path is logged on `start()` for debuggability. The server's
+working directory is set to the `gliner2_server/` directory so relative imports
+resolve correctly.
+
 ### Server lifecycle (`Gliner2Client`)
 
-- `start()`: Find a free port, spawn `uvicorn gliner2_server.main --port N`,
-  poll `/v1/health` until ready (max 30s)
+- `start()`: Find a free port via OS allocation (bind to `:0`, read assigned port),
+  spawn `uvicorn gliner2_server.main --port N --host 127.0.0.1`,
+  poll `/v1/health` every 500ms until ready (max 30s, throw on timeout)
 - `infer()`: POST to `/v1/infer`, stream response, apply `AbortSignal`
 - `stop()`: `SIGTERM` to Python process, wait for graceful exit (5s timeout → `SIGKILL`)
 - Auto-start on first `infer()` call if not running
 - Process crash → retry spawn once, then throw
+- **Cleanup**: `Gliner2Client` implements a `dispose()` method. The consumer
+  calls it on process shutdown (e.g., `process.on('SIGTERM', () => client.dispose())`,
+  `afterAll()` in tests). If the consumer does not call `dispose()` and the parent
+  exits, the detached child process becomes an orphan — the spec considers this
+  acceptable for CLI usage (short-lived) but not for server/daemon mode.
 
 ### Integration point
 
