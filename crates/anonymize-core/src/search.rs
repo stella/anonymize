@@ -215,11 +215,7 @@ impl SearchIndex {
       parts.literals,
       literal_options(options.literal),
     )?;
-    capture_slot_artifacts(
-      &mut slots,
-      parts.regex,
-      regex_options(options.regex),
-    )?;
+    capture_regex_slot_artifacts(&mut slots, parts.regex, options.regex)?;
     capture_slot_artifacts(
       &mut slots,
       parts.fuzzy,
@@ -433,14 +429,12 @@ fn build_search_index(
     literal_options(options.literal),
     literal_artifacts,
   )?;
-  let regex_artifacts = slot_artifacts(&parts.regex, &mut artifacts)?;
-  push_slot(
+  push_regex_slots(
     &mut slots,
-    SlotEngine::Regex,
     parts.regex,
     parts.regex_indexes,
-    regex_options(options.regex),
-    regex_artifacts,
+    options.regex,
+    &mut artifacts,
   )?;
   let fuzzy_artifacts = slot_artifacts(&parts.fuzzy, &mut artifacts)?;
   push_slot(
@@ -466,6 +460,55 @@ fn slot_artifacts<'a>(
     return Ok(None);
   };
   cursor.next().map(Some)
+}
+
+fn capture_regex_slot_artifacts(
+  slots: &mut Vec<text_search::PreparedTextSearchArtifacts>,
+  patterns: Vec<text_search::PatternEntry>,
+  options: RegexSearchOptions,
+) -> Result<()> {
+  if !options.overlap_all {
+    return capture_slot_artifacts(slots, patterns, regex_options(options));
+  }
+
+  for pattern in patterns {
+    capture_slot_artifacts(slots, vec![pattern], regex_options(options))?;
+  }
+  Ok(())
+}
+
+fn push_regex_slots(
+  slots: &mut Vec<SearchSlot>,
+  patterns: Vec<text_search::PatternEntry>,
+  pattern_indexes: Vec<u32>,
+  options: RegexSearchOptions,
+  artifacts: &mut Option<&mut SearchIndexArtifactCursor<'_>>,
+) -> Result<()> {
+  if !options.overlap_all {
+    let regex_artifacts = slot_artifacts(&patterns, artifacts)?;
+    return push_slot(
+      slots,
+      SlotEngine::Regex,
+      patterns,
+      pattern_indexes,
+      regex_options(options),
+      regex_artifacts,
+    );
+  }
+
+  for (pattern, pattern_index) in patterns.into_iter().zip(pattern_indexes) {
+    let regex_artifacts =
+      slot_artifacts(std::slice::from_ref(&pattern), artifacts)?;
+    push_slot(
+      slots,
+      SlotEngine::Regex,
+      vec![pattern],
+      vec![pattern_index],
+      regex_options(options),
+      regex_artifacts,
+    )?;
+  }
+  Ok(())
 }
 
 fn push_slot(

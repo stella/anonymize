@@ -49,6 +49,7 @@ pub enum DiagnosticEventKind {
   StageSummary,
   SearchMatch,
   Entity,
+  Rejection,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -175,6 +176,35 @@ impl StaticRedactionDiagnostics {
       elapsed_us,
       input_bytes: Some(input_bytes),
       reason: None,
+    });
+  }
+
+  pub(crate) fn record_rejection(
+    &mut self,
+    stage: DiagnosticStage,
+    pattern: Option<u32>,
+    label: Option<&str>,
+    start: Option<u32>,
+    end: Option<u32>,
+    reason: &'static str,
+  ) {
+    self.events.push(DiagnosticEvent {
+      stage,
+      kind: DiagnosticEventKind::Rejection,
+      count: None,
+      engine: None,
+      pattern,
+      source: None,
+      source_detail: None,
+      label: label.map(str::to_owned),
+      start,
+      end,
+      text: None,
+      score: None,
+      span_valid: None,
+      elapsed_us: None,
+      input_bytes: None,
+      reason: Some(String::from(reason)),
     });
   }
 

@@ -2136,6 +2136,7 @@ fn diagnostic_event_kind_name(kind: DiagnosticEventKind) -> String {
     DiagnosticEventKind::StageSummary => "stage-summary",
     DiagnosticEventKind::SearchMatch => "search-match",
     DiagnosticEventKind::Entity => "entity",
+    DiagnosticEventKind::Rejection => "rejection",
   }
   .to_owned()
 }
