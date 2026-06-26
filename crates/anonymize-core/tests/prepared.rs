@@ -1751,28 +1751,23 @@ fn prepared_search_hotword_distance_uses_utf16_offsets() {
     regex_patterns: vec![SearchPattern::Regex(String::from(
       r"\b\d{2}\.\d{2}\.\d{4}\b",
     ))],
-    literal_patterns: vec![SearchPattern::LiteralWithOptions {
-      pattern: String::from("born"),
-      case_insensitive: Some(true),
-      whole_words: Some(true),
-    }],
     allowed_labels: vec![String::from("date of birth")],
     threshold: 0.8,
     slices: PreparedSearchSlices {
       regex: PatternSlice { start: 0, end: 1 },
-      hotwords: PatternSlice { start: 0, end: 1 },
       ..PreparedSearchSlices::default()
     },
     regex_meta: vec![RegexMatchMeta::new("date", 0.7)],
     hotword_data: Some(HotwordRuleData {
       rules: vec![HotwordRule {
+        hotwords: vec![String::from("born")],
         target_labels: vec![String::from("date")],
         score_adjustment: 1.0,
         reclassify_to: Some(String::from("date of birth")),
         proximity_before: 40,
         proximity_after: 40,
       }],
-      pattern_rule_indices: vec![0],
+      pattern_rule_indices: vec![],
     }),
     ..empty_config(PreparedSearchSlices::default())
   })
@@ -1787,33 +1782,94 @@ fn prepared_search_hotword_distance_uses_utf16_offsets() {
 }
 
 #[test]
+fn prepared_search_hotword_searches_original_text() {
+  let prepared = PreparedSearch::new(PreparedSearchConfig {
+    regex_patterns: vec![SearchPattern::Regex(String::from(
+      r"\b\d{2}\.\d{2}\.\d{4}\b",
+    ))],
+    allowed_labels: vec![String::from("date")],
+    threshold: 0.96,
+    slices: PreparedSearchSlices {
+      regex: PatternSlice { start: 0, end: 1 },
+      ..PreparedSearchSlices::default()
+    },
+    regex_meta: vec![RegexMatchMeta::new("date", 0.95)],
+    hotword_data: Some(HotwordRuleData {
+      rules: vec![HotwordRule {
+        hotwords: vec![String::from("tax ID")],
+        target_labels: vec![String::from("date")],
+        score_adjustment: 0.1,
+        reclassify_to: None,
+        proximity_before: 60,
+        proximity_after: 60,
+      }],
+      pattern_rule_indices: vec![],
+    }),
+    ..empty_config(PreparedSearchSlices::default())
+  })
+  .unwrap();
+
+  let result = prepared
+    .redact_static_entities(
+      "tax\u{00a0}ID 12.03.1990",
+      &OperatorConfig::default(),
+    )
+    .unwrap();
+
+  assert!(result.resolved_entities.is_empty());
+}
+
+#[test]
+fn prepared_search_rejects_legacy_hotword_slice() {
+  let result = PreparedSearch::new(PreparedSearchConfig {
+    literal_patterns: vec![SearchPattern::Literal(String::from("born"))],
+    slices: PreparedSearchSlices {
+      hotwords: PatternSlice { start: 0, end: 1 },
+      ..PreparedSearchSlices::default()
+    },
+    hotword_data: Some(HotwordRuleData {
+      rules: vec![HotwordRule {
+        hotwords: vec![String::from("born")],
+        target_labels: vec![String::from("date")],
+        score_adjustment: 0.1,
+        reclassify_to: None,
+        proximity_before: 60,
+        proximity_after: 60,
+      }],
+      pattern_rule_indices: vec![0],
+    }),
+    ..empty_config(PreparedSearchSlices::default())
+  });
+
+  assert!(matches!(
+    result,
+    Err(Error::UnsupportedStaticSlice { slice: "hotwords" })
+  ));
+}
+
+#[test]
 fn prepared_search_applies_hotword_reclassification_before_threshold() {
   let prepared = PreparedSearch::new(PreparedSearchConfig {
     regex_patterns: vec![SearchPattern::Regex(String::from(
       r"\b\d{2}\.\d{2}\.\d{4}\b",
     ))],
-    literal_patterns: vec![SearchPattern::LiteralWithOptions {
-      pattern: String::from("narozen"),
-      case_insensitive: Some(true),
-      whole_words: Some(true),
-    }],
     allowed_labels: vec![String::from("date of birth")],
     threshold: 0.8,
     slices: PreparedSearchSlices {
       regex: PatternSlice { start: 0, end: 1 },
-      hotwords: PatternSlice { start: 0, end: 1 },
       ..PreparedSearchSlices::default()
     },
     regex_meta: vec![RegexMatchMeta::new("date", 0.7)],
     hotword_data: Some(HotwordRuleData {
       rules: vec![HotwordRule {
+        hotwords: vec![String::from("narozen")],
         target_labels: vec![String::from("date")],
         score_adjustment: 0.15,
         reclassify_to: Some(String::from("date of birth")),
         proximity_before: 60,
         proximity_after: 60,
       }],
-      pattern_rule_indices: vec![0],
+      pattern_rule_indices: vec![],
     }),
     ..empty_config(PreparedSearchSlices::default())
   })

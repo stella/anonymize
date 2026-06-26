@@ -1,16 +1,21 @@
 use crate::byte_offsets::ByteOffsets;
-use crate::processors::PatternSlice;
 use crate::resolution::{PipelineEntity, SourceDetail};
+use crate::search::{
+  LiteralSearchOptions, SearchIndex, SearchOptions, SearchPattern,
+};
 use crate::types::{Error, Result, SearchMatch};
 
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct HotwordRuleData {
   pub rules: Vec<HotwordRule>,
+  #[serde(default)]
   pub pattern_rule_indices: Vec<u32>,
 }
 
 #[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct HotwordRule {
+  #[serde(default)]
+  pub hotwords: Vec<String>,
   pub target_labels: Vec<String>,
   pub score_adjustment: f64,
   pub reclassify_to: Option<String>,
@@ -18,15 +23,65 @@ pub struct HotwordRule {
   pub proximity_after: u32,
 }
 
+pub(crate) struct PreparedHotwordData {
+  rules: Vec<HotwordRule>,
+  pattern_rule_indices: Vec<u32>,
+  search: SearchIndex,
+}
+
+impl PreparedHotwordData {
+  pub(crate) fn new(data: HotwordRuleData) -> Result<Self> {
+    let mut patterns = Vec::new();
+    let mut pattern_rule_indices = Vec::new();
+
+    for (rule_index, rule) in data.rules.iter().enumerate() {
+      let rule_index =
+        u32::try_from(rule_index).map_err(|_| Error::InvalidStaticData {
+          field: "hotword_data.rules",
+          reason: String::from("rule index exceeds u32 range"),
+        })?;
+      for hotword in &rule.hotwords {
+        if hotword.is_empty() {
+          return Err(Error::InvalidStaticData {
+            field: "hotword_data.rules.hotwords",
+            reason: String::from("hotword must not be empty"),
+          });
+        }
+        patterns.push(SearchPattern::LiteralWithOptions {
+          pattern: hotword.clone(),
+          case_insensitive: Some(true),
+          whole_words: Some(true),
+        });
+        pattern_rule_indices.push(rule_index);
+      }
+    }
+
+    let search = SearchIndex::new(
+      patterns,
+      SearchOptions {
+        literal: LiteralSearchOptions {
+          case_insensitive: true,
+          whole_words: true,
+        },
+        ..SearchOptions::default()
+      },
+    )?;
+
+    Ok(Self {
+      rules: data.rules,
+      pattern_rule_indices,
+      search,
+    })
+  }
+}
+
 pub(crate) fn apply_hotword_rules(
   entities: Vec<PipelineEntity>,
   full_text: &str,
-  matches: &[SearchMatch],
-  slice: PatternSlice,
-  data: &HotwordRuleData,
+  data: &PreparedHotwordData,
   allowed_labels: &[String],
 ) -> Result<Vec<PipelineEntity>> {
-  let hits_by_rule = collect_hits_by_rule(matches, slice, data)?;
+  let hits_by_rule = collect_hits_by_rule(full_text, data)?;
   let offsets = ByteOffsets::new(full_text);
   let mut result = Vec::with_capacity(entities.len());
 
@@ -46,15 +101,17 @@ pub(crate) fn apply_hotword_rules(
 }
 
 fn collect_hits_by_rule(
-  matches: &[SearchMatch],
-  slice: PatternSlice,
-  data: &HotwordRuleData,
+  full_text: &str,
+  data: &PreparedHotwordData,
 ) -> Result<Vec<Vec<SearchMatch>>> {
   let mut hits_by_rule = vec![Vec::new(); data.rules.len()];
 
-  for found in matches {
-    let Some(local_index) = slice.local_index(found.pattern()) else {
-      continue;
+  for found in data.search.find_iter(full_text)? {
+    let Ok(local_index) = usize::try_from(found.pattern()) else {
+      return Err(Error::InvalidStaticData {
+        field: "hotword_data.pattern_rule_indices",
+        reason: String::from("pattern index exceeds usize range"),
+      });
     };
     let Some(rule_index) = data.pattern_rule_indices.get(local_index) else {
       continue;
@@ -71,7 +128,7 @@ fn collect_hits_by_rule(
         reason: String::from("rule index out of range"),
       });
     };
-    bucket.push(*found);
+    bucket.push(found);
   }
 
   Ok(hits_by_rule)
@@ -80,7 +137,7 @@ fn collect_hits_by_rule(
 fn apply_entity_rules(
   mut entity: PipelineEntity,
   offsets: &ByteOffsets<'_>,
-  data: &HotwordRuleData,
+  data: &PreparedHotwordData,
   hits_by_rule: &[Vec<SearchMatch>],
 ) -> Result<PipelineEntity> {
   let mut best = None::<HotwordAdjustment>;

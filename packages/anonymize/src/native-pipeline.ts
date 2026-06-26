@@ -51,6 +51,21 @@ const sharedPackageWithoutDictionaries = new Map<
   string,
   NativePipelinePackageCacheValue
 >();
+const dictionaryCacheIds = new WeakMap<Dictionaries, number>();
+let nextDictionaryCacheId = 0;
+
+const dictionaryCacheKey = (dictionaries: Dictionaries | undefined): string => {
+  if (dictionaries === undefined) {
+    return "none";
+  }
+  const existing = dictionaryCacheIds.get(dictionaries);
+  if (existing !== undefined) {
+    return `dict:${existing}`;
+  }
+  nextDictionaryCacheId += 1;
+  dictionaryCacheIds.set(dictionaries, nextDictionaryCacheId);
+  return `dict:${nextDictionaryCacheId}`;
+};
 
 const sharedPackageCacheFor = (
   dictionaries: Dictionaries | undefined,
@@ -242,5 +257,6 @@ const nativePackageCacheKey = ({
   [
     binding.nativePackageVersion(),
     compressed ? "compressed" : "raw",
+    dictionaryCacheKey(config.dictionaries),
     pipelineConfigKey(config, gazetteerEntries),
   ].join(":");

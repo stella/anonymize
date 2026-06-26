@@ -2186,9 +2186,7 @@ const loadSigningPatterns = async (): Promise<string[]> => {
 const loadNativeSigningPatterns = async (): Promise<string[]> => {
   const mod = await import("../data/signing-clauses.json");
   const data: SigningClauseConfig = mod.default ?? mod;
-  return buildSigningClausePatterns({
-    patterns: data.patterns.filter((entry) => entry.lang === "de"),
-  });
+  return buildSigningClausePatterns(data);
 };
 
 export const getSigningClausePatterns = (): Promise<string[]> => {
