@@ -64,6 +64,16 @@ function parseArgs(values) {
         result.defaultDictionaries = true;
         break;
       }
+      case "--language": {
+        result.language = requiredValue(values, index, value);
+        index += 1;
+        break;
+      }
+      case "--languages": {
+        result.languages = requiredValue(values, index, value);
+        index += 1;
+        break;
+      }
       case "--help": {
         printHelp();
         process.exit(0);
@@ -85,15 +95,19 @@ function requiredValue(values, index, option) {
 
 async function loadPackageInput(options) {
   const input = await loadBasePackageInput(options);
-  if (!options.defaultDictionaries || input.config.dictionaries !== undefined) {
-    return input;
-  }
+  const withDictionaries =
+    !options.defaultDictionaries || input.config.dictionaries !== undefined
+      ? input
+      : {
+          ...input,
+          config: {
+            ...input.config,
+            dictionaries: await loadDefaultDictionaries(),
+          },
+        };
   return {
-    ...input,
-    config: {
-      ...input.config,
-      dictionaries: await loadDefaultDictionaries(),
-    },
+    ...withDictionaries,
+    config: applyCliLanguageScope(withDictionaries.config, options),
   };
 }
 
@@ -132,6 +146,40 @@ function defaultNativePipelineConfig() {
   };
 }
 
+function applyCliLanguageScope(config, options) {
+  if (options.language !== undefined && options.languages !== undefined) {
+    throw new Error("Use either --language or --languages, not both");
+  }
+  if (options.language !== undefined) {
+    const language = normalizeLanguageOption(options.language, "--language");
+    return { ...config, language, languages: undefined };
+  }
+  if (options.languages === undefined) {
+    return config;
+  }
+  const languages = normalizeLanguageList(options.languages);
+  return { ...config, language: undefined, languages };
+}
+
+function normalizeLanguageOption(value, option) {
+  const language = value.trim().toLowerCase();
+  if (language.length === 0) {
+    throw new Error(`${option} requires a non-empty language code`);
+  }
+  return language;
+}
+
+function normalizeLanguageList(value) {
+  const languages = value
+    .split(",")
+    .map((entry) => normalizeLanguageOption(entry, "--languages"))
+    .filter((entry, index, entries) => entries.indexOf(entry) === index);
+  if (languages.length === 0) {
+    throw new Error("--languages requires at least one language code");
+  }
+  return languages;
+}
+
 async function loadDefaultDictionaries() {
   let loaded;
   try {
@@ -163,6 +211,8 @@ Options:
   --out <path>              Output package path. Defaults to native-pipeline.stlanonpkg.
   --config <path>           ESM module exporting a PipelineConfig or { config, gazetteerEntries }.
   --export <name>           Export name to read from the config module. Defaults to default.
+  --language <code>         Build a package scoped to one content language.
+  --languages <codes>       Build a package scoped to comma-separated content languages.
   --default-dictionaries    Load @stll/anonymize-data into configs that do not provide dictionaries.
   --raw                     Write an uncompressed package.
 `);
