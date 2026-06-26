@@ -29,6 +29,7 @@ pub enum SearchPattern {
 }
 
 #[derive(
+  bon::Builder,
   Clone,
   Copy,
   Debug,
@@ -39,12 +40,16 @@ pub enum SearchPattern {
   serde::Serialize,
 )]
 pub struct SearchOptions {
+  #[builder(default)]
   pub literal: LiteralSearchOptions,
+  #[builder(default)]
   pub regex: RegexSearchOptions,
+  #[builder(default)]
   pub fuzzy: FuzzySearchOptions,
 }
 
 #[derive(
+  bon::Builder,
   Clone,
   Copy,
   Debug,
@@ -57,11 +62,14 @@ pub struct SearchOptions {
   serde::Serialize,
 )]
 pub struct LiteralSearchOptions {
+  #[builder(default)]
   pub case_insensitive: bool,
+  #[builder(default)]
   pub whole_words: bool,
 }
 
 #[derive(
+  bon::Builder,
   Clone,
   Copy,
   Debug,
@@ -72,16 +80,28 @@ pub struct LiteralSearchOptions {
   serde::Serialize,
 )]
 pub struct RegexSearchOptions {
+  #[builder(default)]
   pub whole_words: bool,
+  #[builder(default)]
   pub overlap_all: bool,
 }
 
 #[derive(
-  Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize,
+  bon::Builder,
+  Clone,
+  Copy,
+  Debug,
+  Eq,
+  PartialEq,
+  serde::Deserialize,
+  serde::Serialize,
 )]
 pub struct FuzzySearchOptions {
+  #[builder(default)]
   pub case_insensitive: bool,
+  #[builder(default = true)]
   pub whole_words: bool,
+  #[builder(default)]
   pub normalize_diacritics: bool,
 }
 

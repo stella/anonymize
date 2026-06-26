@@ -185,9 +185,11 @@ pub enum OperatorType {
   Redact,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(bon::Builder, Clone, Debug, Eq, PartialEq)]
 pub struct OperatorConfig {
+  #[builder(default)]
   pub operators: BTreeMap<String, OperatorType>,
+  #[builder(default = String::from("[REDACTED]"))]
   pub redact_string: String,
 }
 
