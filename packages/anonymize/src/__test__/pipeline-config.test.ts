@@ -397,6 +397,40 @@ describe("pipeline config semantics", () => {
     expect(search.nativeStaticConfig.monetary_data).toBeUndefined();
   });
 
+  test("native date data gates year words on trigger phrases", async () => {
+    const regexOnly = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        enableRegex: true,
+        enableTriggerPhrases: false,
+        labels: ["date"],
+      },
+      [],
+      createPipelineContext(),
+    );
+    const withTriggers = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        enableRegex: true,
+        enableTriggerPhrases: true,
+        labels: ["date"],
+      },
+      [],
+      createPipelineContext(),
+    );
+
+    expect(
+      Object.values(
+        regexOnly.nativeStaticConfig.date_data?.year_words_by_language ?? {},
+      ).flat(),
+    ).toEqual([]);
+    expect(
+      Object.values(
+        withTriggers.nativeStaticConfig.date_data?.year_words_by_language ?? {},
+      ).flat().length,
+    ).toBeGreaterThan(0);
+  });
+
   test("content language scopes deny-list search build", async () => {
     const testDictionaries = await getDictionaries();
     const config = {

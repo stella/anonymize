@@ -187,6 +187,8 @@ pub struct BindingTriggerData {
   #[serde(default)]
   pub party_position_terms: Vec<String>,
   #[serde(default)]
+  pub post_nominals: Vec<String>,
+  #[serde(default)]
   pub sentence_terminal_currency_terms: Vec<String>,
 }
 
@@ -622,6 +624,8 @@ struct BinaryTriggerData {
   rules: Vec<BinaryTriggerRule>,
   address_stop_keywords: Vec<String>,
   party_position_terms: Vec<String>,
+  #[serde(default)]
+  post_nominals: Vec<String>,
   sentence_terminal_currency_terms: Vec<String>,
 }
 
@@ -869,6 +873,7 @@ impl From<BindingTriggerData> for BinaryTriggerData {
         .collect(),
       address_stop_keywords: data.address_stop_keywords,
       party_position_terms: data.party_position_terms,
+      post_nominals: data.post_nominals,
       sentence_terminal_currency_terms: data.sentence_terminal_currency_terms,
     }
   }
@@ -884,6 +889,7 @@ impl From<BinaryTriggerData> for BindingTriggerData {
         .collect(),
       address_stop_keywords: data.address_stop_keywords,
       party_position_terms: data.party_position_terms,
+      post_nominals: data.post_nominals,
       sentence_terminal_currency_terms: data.sentence_terminal_currency_terms,
     }
   }
@@ -1996,6 +2002,7 @@ fn trigger_data_from_binding(
     address_stop_keywords: data.address_stop_keywords,
     party_position_terms: data.party_position_terms,
     legal_form_suffixes,
+    post_nominals: data.post_nominals,
     sentence_terminal_currency_terms: data.sentence_terminal_currency_terms,
   }
 }

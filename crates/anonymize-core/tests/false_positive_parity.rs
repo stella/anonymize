@@ -88,6 +88,7 @@ fn keeps_trigger_address_with_extra_component_anchor() {
       address_stop_keywords: Vec::new(),
       party_position_terms: Vec::new(),
       legal_form_suffixes: Vec::new(),
+      post_nominals: Vec::new(),
       sentence_terminal_currency_terms: Vec::new(),
     }),
     deny_list_data: Some(empty_deny_list_data(DenyListFilterData {
@@ -205,6 +206,7 @@ fn rejects_only_ambiguous_street_type_trigger_addresses() {
       address_stop_keywords: Vec::new(),
       party_position_terms: Vec::new(),
       legal_form_suffixes: Vec::new(),
+      post_nominals: Vec::new(),
       sentence_terminal_currency_terms: Vec::new(),
     }),
     deny_list_data: Some(empty_deny_list_data(DenyListFilterData {
