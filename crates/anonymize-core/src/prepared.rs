@@ -1044,7 +1044,8 @@ impl PreparedSearch {
     };
 
     let start = Instant::now();
-    let coreference_entities = data.process(full_text, &existing_entities)?;
+    let coreference_entities =
+      data.process(full_text, &existing_entities, self.threshold)?;
     if let Some(diagnostics) = &mut diagnostics {
       diagnostics.record_entities(
         DiagnosticStage::EntityCoreference,

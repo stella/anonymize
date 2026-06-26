@@ -244,6 +244,7 @@ export type NativeCoreferenceData = {
   definition_patterns: NativeCoreferencePatternData[];
   role_stop_terms: string[];
   legal_form_aliases: string[];
+  organization_determiners: string[];
 };
 export type NativeZonePatternData = {
   pattern: string;
@@ -261,6 +262,7 @@ export type NativeZoneData = {
 type GenericRolesData = {
   roles: string[];
 };
+type CoreferenceDeterminersData = Record<string, readonly string[] | string>;
 export type NativeGazetteerData = {
   labels: string[];
   is_fuzzy: boolean[];
@@ -1550,8 +1552,13 @@ const sentenceTerminalCurrencyTerms = (
 };
 
 const buildNativeCoreferenceData = async (): Promise<NativeCoreferenceData> => {
-  const roleModule = await import("./data/generic-roles.json");
+  const [roleModule, determinerModule] = await Promise.all([
+    import("./data/generic-roles.json"),
+    import("./data/coreference-org-determiners.json"),
+  ]);
   const roleData = (roleModule.default ?? roleModule) as GenericRolesData;
+  const determinerData = (determinerModule.default ??
+    determinerModule) as CoreferenceDeterminersData;
   const configs = await loadLanguageConfigs<readonly CoreferenceConfigRow[]>(
     "coreference",
     (mod) => {
@@ -1575,6 +1582,14 @@ const buildNativeCoreferenceData = async (): Promise<NativeCoreferenceData> => {
     definition_patterns: definitionPatterns,
     role_stop_terms: roleData.roles,
     legal_form_aliases: [],
+    organization_determiners: Object.entries(determinerData)
+      .flatMap(([language, values]) => {
+        if (language === "_comment" || !Array.isArray(values)) {
+          return [];
+        }
+        return values;
+      })
+      .toSorted((left, right) => left.localeCompare(right)),
   };
 };
 

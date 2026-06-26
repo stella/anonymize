@@ -303,7 +303,8 @@ fn strip_post_nominal_suffix(text: &str) -> &str {
 }
 
 fn is_name_shape(text: &str) -> bool {
-  if text.len() < 3 || text.len() > MAX_NAME_LEN {
+  let text_len = text.chars().map(char::len_utf16).sum::<usize>();
+  if !(3..=MAX_NAME_LEN).contains(&text_len) {
     return false;
   }
   let tokens = text.split([' ', '\t']).filter(|token| !token.is_empty());
@@ -611,6 +612,23 @@ mod tests {
     assert_eq!(
       entities.first().map(|entity| entity.text.as_str()),
       Some("Jane Doe")
+    );
+  }
+
+  #[test]
+  fn counts_signature_name_length_in_text_units() {
+    let name = "Élodie ŽluťoučkýKůňÚpělĎábelskéÓdyÁÉÍÓÚÝČĎĚŇŘŠŤŽ";
+    assert!(name.len() > super::MAX_NAME_LEN);
+    assert!(
+      name.chars().map(char::len_utf16).sum::<usize>() <= super::MAX_NAME_LEN
+    );
+
+    let entities = detect_signatures(&format!("/s/ {name}"));
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(
+      entities.first().map(|entity| entity.text.as_str()),
+      Some(name)
     );
   }
 

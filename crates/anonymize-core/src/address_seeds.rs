@@ -110,7 +110,8 @@ impl PreparedAddressSeedData {
         span.start.saturating_add(effective_raw.len()),
       );
       let effective_text = full_text.get(start..end).unwrap_or_default();
-      if effective_text.len() < 5 || effective_text.len() > 300 {
+      let effective_len = text_units(effective_text);
+      if !(5..=300).contains(&effective_len) {
         continue;
       }
       results.push(PipelineEntity::detected(
@@ -222,19 +223,23 @@ impl PreparedAddressSeedData {
     seeds: &[Seed],
   ) -> bool {
     seeds.iter().any(|seed| {
-      seed.start.abs_diff(start) <= PLAIN_POSTAL_CONTEXT_WINDOW
-        && match seed.kind {
-          SeedType::AddressTrigger => true,
-          SeedType::City | SeedType::State => {
-            seed.end >= start && seed.start <= end.saturating_add(4)
-              || seed.end <= start
-                && full_text.get(seed.end..start).is_some_and(is_city_zip_gap)
-          }
-          SeedType::StreetWord => {
-            has_house_number_near_street_word(full_text, seed, self)
-          }
-          SeedType::PostalCode => false,
+      within_text_window(
+        full_text,
+        seed.start,
+        start,
+        PLAIN_POSTAL_CONTEXT_WINDOW,
+      ) && match seed.kind {
+        SeedType::AddressTrigger => true,
+        SeedType::City | SeedType::State => {
+          seed.end >= start && seed.start <= end.saturating_add(4)
+            || seed.end <= start
+              && full_text.get(seed.end..start).is_some_and(is_city_zip_gap)
         }
+        SeedType::StreetWord => {
+          has_house_number_near_street_word(full_text, seed, self)
+        }
+        SeedType::PostalCode => false,
+      }
     })
   }
 
@@ -248,7 +253,7 @@ impl PreparedAddressSeedData {
       if seed_covered(seeds, start, end) {
         continue;
       }
-      if !has_nearby_italian_cap_evidence(seeds, start) {
+      if !has_nearby_italian_cap_evidence(full_text, seeds, start) {
         continue;
       }
       seeds.push(Seed {
@@ -299,16 +304,10 @@ impl PreparedAddressSeedData {
     let Some(search) = &self.br_cep_cue_search else {
       return false;
     };
-    let window_start = floor_char_boundary(
-      full_text,
-      start.saturating_sub(BR_CEP_CONTEXT_WINDOW),
-    );
-    let window_end = ceil_char_boundary(
-      full_text,
-      end
-        .saturating_add(BR_CEP_CONTEXT_WINDOW)
-        .min(full_text.len()),
-    );
+    let window_start =
+      offset_before_text_units(full_text, start, BR_CEP_CONTEXT_WINDOW);
+    let window_end =
+      offset_after_text_units(full_text, end, BR_CEP_CONTEXT_WINDOW);
     full_text
       .get(window_start..window_end)
       .is_some_and(|window| search.is_match(window).unwrap_or(false))
@@ -328,7 +327,7 @@ impl PreparedAddressSeedData {
     }
 
     let has_context = seeds.iter().any(|seed| {
-      seed.start.abs_diff(start) <= US_ZIP_CONTEXT_WINDOW
+      within_text_window(full_text, seed.start, start, US_ZIP_CONTEXT_WINDOW)
         && match seed.kind {
           SeedType::AddressTrigger => true,
           SeedType::City => {
@@ -713,9 +712,13 @@ fn seed_covered(seeds: &[Seed], start: usize, end: usize) -> bool {
     .any(|seed| seed.start <= start && seed.end >= end)
 }
 
-fn has_nearby_italian_cap_evidence(seeds: &[Seed], start: usize) -> bool {
+fn has_nearby_italian_cap_evidence(
+  full_text: &str,
+  seeds: &[Seed],
+  start: usize,
+) -> bool {
   seeds.iter().any(|seed| {
-    seed.start.abs_diff(start) <= 80
+    within_text_window(full_text, seed.start, start, 80)
       && match seed.kind {
         SeedType::AddressTrigger | SeedType::City | SeedType::PostalCode => {
           true
@@ -747,14 +750,17 @@ fn cluster_seeds(
   };
 
   for seed in seeds.iter().skip(1) {
-    let gap_ok = seed.start.saturating_sub(current.end)
-      <= ADDRESS_CLUSTER_MAX_GAP
-      && !has_cluster_barrier(
-        full_text,
-        current.end,
-        seed.start,
-        existing_entities,
-      );
+    let gap_ok = within_text_window(
+      full_text,
+      current.end,
+      seed.start,
+      ADDRESS_CLUSTER_MAX_GAP,
+    ) && !has_cluster_barrier(
+      full_text,
+      current.end,
+      seed.start,
+      existing_entities,
+    );
     if gap_ok {
       current.seeds.push(seed.clone());
       current.end = current.end.max(seed.end);
@@ -769,6 +775,61 @@ fn cluster_seeds(
   }
   clusters.push(current);
   clusters
+}
+
+fn within_text_window(
+  full_text: &str,
+  left: usize,
+  right: usize,
+  max_units: usize,
+) -> bool {
+  let start = left.min(right);
+  let end = left.max(right);
+  full_text
+    .get(start..end)
+    .is_some_and(|gap| text_units(gap) <= max_units)
+}
+
+fn text_units(text: &str) -> usize {
+  text.chars().map(char::len_utf16).sum()
+}
+
+fn offset_before_text_units(
+  full_text: &str,
+  end: usize,
+  max_units: usize,
+) -> usize {
+  let Some(prefix) = full_text.get(..end) else {
+    return 0;
+  };
+  let mut units = 0usize;
+  for (index, ch) in prefix.char_indices().rev() {
+    let width = ch.len_utf16();
+    if units.saturating_add(width) > max_units {
+      return index.saturating_add(ch.len_utf8());
+    }
+    units = units.saturating_add(width);
+  }
+  0
+}
+
+fn offset_after_text_units(
+  full_text: &str,
+  start: usize,
+  max_units: usize,
+) -> usize {
+  let Some(tail) = full_text.get(start..) else {
+    return full_text.len();
+  };
+  let mut units = 0usize;
+  for (relative, ch) in tail.char_indices() {
+    let width = ch.len_utf16();
+    if units.saturating_add(width) > max_units {
+      return start.saturating_add(relative);
+    }
+    units = units.saturating_add(width);
+  }
+  full_text.len()
 }
 
 fn has_cluster_barrier(

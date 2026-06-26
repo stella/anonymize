@@ -245,6 +245,9 @@ describe("pipeline config semantics", () => {
     expect(
       search.nativeStaticConfig.coreference_data?.legal_form_aliases,
     ).toContain("LLC");
+    expect(
+      search.nativeStaticConfig.coreference_data?.organization_determiners,
+    ).toContain("the\\s+(?:company|corporation|firm)");
   });
 
   test("native config carries zone classifier data", async () => {
@@ -638,6 +641,40 @@ describe("pipeline config semantics", () => {
     });
 
     expect(counts().compressedPrepare).toBe(2);
+  });
+
+  test("native pipeline package cache keys contextual native passes", async () => {
+    const { binding, counts } = createCountingNativeBinding(
+      "native-cache-contextual-passes",
+    );
+    const context = createPipelineContext();
+    const config = {
+      ...BASE_CONFIG,
+      enableCountries: false,
+      enableCoreference: false,
+      enableZoneClassification: false,
+      labels: ["organization"],
+    };
+
+    await prepareNativePipelinePackage({ binding, config, context });
+    await prepareNativePipelinePackage({
+      binding,
+      config: {
+        ...config,
+        enableCoreference: true,
+      },
+      context,
+    });
+    await prepareNativePipelinePackage({
+      binding,
+      config: {
+        ...config,
+        enableZoneClassification: true,
+      },
+      context,
+    });
+
+    expect(counts().compressedPrepare).toBe(3);
   });
 
   test("enableLegalForms flag gates legal-form detection", async () => {

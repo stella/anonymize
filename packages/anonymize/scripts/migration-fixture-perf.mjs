@@ -96,6 +96,12 @@ const ACCEPTED_NATIVE_STATIC_DELTAS = new Map(
       reason: "party-organization-retained",
       candidateExtra: [
         { start: 542, end: 585, label: "organization", source: "deny-list" },
+        {
+          start: 3226,
+          end: 3247,
+          label: "organization",
+          source: "coreference",
+        },
       ],
       candidateMissing: [],
     },
