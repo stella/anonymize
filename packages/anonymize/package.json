@@ -30,6 +30,7 @@
     "stella-anonymize-build-native-package": "./scripts/build-native-pipeline-package.mjs"
   },
   "files": [
+    "ATTRIBUTION.md",
     "dist",
     "index.cjs",
     "*.node",

@@ -19,16 +19,7 @@ import {
   readNativePipelinePackageFile,
   redact_text_json,
 } from "../native-node";
-
-const SHARED_NODE_SDK_FUNCTIONS = [
-  "diagnostics_json",
-  "load_prepared_package",
-  "load_prepared_package_file",
-  "native_package_version",
-  "normalize_for_search",
-  "prepare_search_package",
-  "redact_text_json",
-] as const;
+import { SHARED_NATIVE_SDK_TOP_LEVEL_FUNCTIONS } from "../native-sdk-contract";
 
 describe("native node loader", () => {
   test("loads the bundled native loader", () => {
@@ -212,7 +203,7 @@ describe("native node loader", () => {
 
   test("shared SDK helpers delegate through the native binding", () => {
     const sharedSdkFunctions: Record<
-      (typeof SHARED_NODE_SDK_FUNCTIONS)[number],
+      (typeof SHARED_NATIVE_SDK_TOP_LEVEL_FUNCTIONS)[number],
       unknown
     > = {
       diagnostics_json,
@@ -223,7 +214,7 @@ describe("native node loader", () => {
       prepare_search_package,
       redact_text_json,
     };
-    for (const name of SHARED_NODE_SDK_FUNCTIONS) {
+    for (const name of SHARED_NATIVE_SDK_TOP_LEVEL_FUNCTIONS) {
       expect(typeof sharedSdkFunctions[name]).toBe("function");
     }
 

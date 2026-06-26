@@ -37,6 +37,11 @@ import type {
   RedactionResult,
 } from "../types";
 import {
+  SHARED_NATIVE_SDK_CORE_TOP_LEVEL_FUNCTIONS,
+  SHARED_NATIVE_SDK_PREPARED_METHODS,
+  SHARED_NATIVE_SDK_TOP_LEVEL_FUNCTIONS,
+} from "../native-sdk-contract";
+import {
   createPipelineContext,
   createNativePipelineFromPackage,
   DEFAULT_ENTITY_LABELS,
@@ -141,27 +146,6 @@ type SharedSdkParityCase = {
   text: string;
   operators: NativeOperatorConfig | null;
 };
-
-const SHARED_SDK_CORE_TOP_LEVEL_FUNCTIONS = [
-  "prepare_search_package",
-  "load_prepared_package",
-  "native_package_version",
-  "normalize_for_search",
-  "redact_text_json",
-  "diagnostics_json",
-] as const;
-
-const SHARED_SDK_TOP_LEVEL_FUNCTIONS = [
-  ...SHARED_SDK_CORE_TOP_LEVEL_FUNCTIONS,
-  "load_prepared_package_file",
-] as const;
-
-const SHARED_SDK_PREPARED_METHODS = [
-  "redact_text",
-  "redact_text_json",
-  "diagnostics_json",
-  "prepare_diagnostics_json",
-] as const;
 
 type ContractFixtureCase = {
   name: string;
@@ -521,8 +505,15 @@ missing_top_level = [
 ]
 if missing_top_level:
     raise AssertionError(f"missing Python SDK functions: {missing_top_level}")
+missing_public_names = [
+    name for name in top_level if name not in anonymize.__all__
+]
+if missing_public_names:
+    raise AssertionError(f"missing Python SDK public names: {missing_public_names}")
 if not callable(getattr(anonymize, "PreparedSearch", None)):
     raise AssertionError("missing Python PreparedSearch facade")
+if "PreparedSearch" not in anonymize.__all__:
+    raise AssertionError("missing Python PreparedSearch public name")
 prepared = anonymize.load_prepared_package(package_bytes)
 if prepared is not anonymize.load_prepared_package(package_bytes):
     raise AssertionError("facade package cache did not reuse prepared search")
@@ -1022,7 +1013,7 @@ describe("native adapter parity", () => {
     ];
 
     const tsSdkFunctions: Record<
-      (typeof SHARED_SDK_CORE_TOP_LEVEL_FUNCTIONS)[number],
+      (typeof SHARED_NATIVE_SDK_CORE_TOP_LEVEL_FUNCTIONS)[number],
       unknown
     > = {
       diagnostics_json,
@@ -1032,12 +1023,12 @@ describe("native adapter parity", () => {
       prepare_search_package,
       redact_text_json,
     };
-    for (const name of SHARED_SDK_CORE_TOP_LEVEL_FUNCTIONS) {
+    for (const name of SHARED_NATIVE_SDK_CORE_TOP_LEVEL_FUNCTIONS) {
       expect(typeof tsSdkFunctions[name]).toBe("function");
     }
     expect(typeof PreparedSearch).toBe("function");
     const preparedApi = prepared as unknown as Record<string, unknown>;
-    for (const name of SHARED_SDK_PREPARED_METHODS) {
+    for (const name of SHARED_NATIVE_SDK_PREPARED_METHODS) {
       expect(typeof preparedApi[name]).toBe("function");
     }
 
@@ -1052,15 +1043,7 @@ describe("native adapter parity", () => {
       ...prepare_search_package({ binding: adapters.native, config }),
     ]).toEqual([...packageBytes]);
 
-    const rustCoreJson = cases.map(({ text, operators }) =>
-      JSON.parse(
-        adapters.native.redactStaticEntitiesJson(
-          CONFIG_JSON,
-          text,
-          nativeOperatorConfigJson(operators),
-        ),
-      ),
-    );
+    const rustCoreJson = callRustCoreSharedSdkParity(adapters.tempDir, cases);
     const tsSdkJson = cases.map(({ text, operators }) =>
       JSON.parse(prepared.redact_text_json(text, operators ?? undefined)),
     );
@@ -2420,6 +2403,39 @@ const callPythonPackageFacade = ({
   return JSON.parse(output);
 };
 
+const callRustCoreSharedSdkParity = (
+  tempDir: string,
+  cases: SharedSdkParityCase[],
+): StaticRedactionResult[] => {
+  const payloadPath = join(tempDir, "rust-core-shared-sdk-payload.json");
+  writeFileSync(
+    payloadPath,
+    JSON.stringify({
+      config_json: CONFIG_JSON,
+      cases: cases.map(({ text, operators }) => ({
+        text,
+        operators_json: nativeOperatorConfigJson(operators),
+      })),
+    }),
+  );
+  const output = runCommand(
+    "cargo",
+    [
+      "run",
+      "-p",
+      "stella-anonymize-adapter-contract",
+      "--example",
+      "native_adapter_parity",
+      "--locked",
+      "--quiet",
+    ],
+    {
+      STELLA_ANONYMIZE_PARITY_PAYLOAD: payloadPath,
+    },
+  );
+  return JSON.parse(output);
+};
+
 type PythonSharedSdkParityOptions = {
   pythonModulePath: string;
   tempDir: string;
@@ -2455,8 +2471,8 @@ const callPythonSharedSdkParity = ({
       compressed: true,
       config_json: CONFIG_JSON,
       normalize_text: normalizeText,
-      prepared_methods: SHARED_SDK_PREPARED_METHODS,
-      top_level_functions: SHARED_SDK_TOP_LEVEL_FUNCTIONS,
+      prepared_methods: SHARED_NATIVE_SDK_PREPARED_METHODS,
+      top_level_functions: SHARED_NATIVE_SDK_TOP_LEVEL_FUNCTIONS,
     }),
   );
   const output = runCommand(

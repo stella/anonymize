@@ -8,6 +8,7 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -180,7 +181,7 @@ async function runCoordinator() {
 
     if (baseline !== null) {
       const comparison = compareSnapshots(baseline, candidate);
-      console.log(JSON.stringify(comparison));
+      console.log(JSON.stringify(comparisonForLog(comparison)));
       const acceptedByPolicy =
         ALLOW_ACCEPTED_MISMATCHES && comparison.acceptedEqual;
       if (!comparison.equal && !acceptedByPolicy && FAIL_ON_MISMATCH !== "0") {
@@ -871,6 +872,40 @@ function compareSnapshots(baseline, candidate) {
       candidate: candidate.nativeRewrite,
     },
   };
+}
+
+function comparisonForLog(comparison) {
+  return {
+    ...comparison,
+    mismatches: comparison.mismatches.map(mismatchForLog),
+  };
+}
+
+function mismatchForLog(mismatch) {
+  return {
+    ...mismatch,
+    firstEntityDiff: entityDiffForLog(mismatch.firstEntityDiff),
+    firstByteEntityDiff: entityDiffForLog(mismatch.firstByteEntityDiff),
+  };
+}
+
+function entityDiffForLog(diff) {
+  if (diff === null || diff === undefined) {
+    return diff ?? null;
+  }
+  return {
+    ...diff,
+    baseline: entityForLog(diff.baseline),
+    candidate: entityForLog(diff.candidate),
+  };
+}
+
+function entityForLog(entity) {
+  if (entity === null || entity === undefined) {
+    return entity ?? null;
+  }
+  const { text: _text, ...safeEntity } = entity;
+  return safeEntity;
 }
 
 function mismatchSummary(mismatches) {
@@ -1635,7 +1670,17 @@ function materializeGitRef(ref, tempRoot) {
     throw new Error(`tar extraction failed: ${extract.stderr.toString()}`);
   }
 
+  linkWorkspaceNodeModules(outputDir);
   return outputDir;
+}
+
+function linkWorkspaceNodeModules(outputDir) {
+  const source = join(ROOT_DIR, "node_modules");
+  const target = join(outputDir, "node_modules");
+  if (!existsSync(source) || existsSync(target)) {
+    return;
+  }
+  symlinkSync(source, target, "dir");
 }
 
 function createNativeStaticRunner(nativeStaticConfig) {
