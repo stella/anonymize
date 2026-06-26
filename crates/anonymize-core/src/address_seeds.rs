@@ -19,8 +19,11 @@ const US_ZIP_CONTEXT_WINDOW: usize = 120;
   Clone, Debug, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize,
 )]
 pub struct AddressSeedData {
+  #[serde(default)]
   pub boundary_words: Vec<String>,
+  #[serde(default)]
   pub br_cep_cue_words: Vec<String>,
+  #[serde(default)]
   pub unit_abbreviations: Vec<String>,
 }
 

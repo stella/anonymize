@@ -36,17 +36,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     PreparedSearch::new(prepared_search_config_from_binding(config)?)?;
   let prepare_ms = elapsed_ms(prepare_start);
 
-  let run_start = Instant::now();
-  let mut entity_count = 0_usize;
-  for _ in 0..payload.iterations {
-    for item in &payload.cases {
+  let run_cases = payload
+    .cases
+    .iter()
+    .map(|item| -> Result<_, Box<dyn std::error::Error>> {
       let operators = item
         .operators_json
         .as_deref()
         .map(serde_json::from_str::<BindingOperatorConfig>)
         .transpose()?;
       let operators = operator_config_from_binding(operators)?;
-      let result = prepared.redact_static_entities(&item.text, &operators)?;
+      Ok((item.text.as_str(), operators))
+    })
+    .collect::<Result<Vec<_>, _>>()?;
+
+  let run_start = Instant::now();
+  let mut entity_count = 0_usize;
+  for _ in 0..payload.iterations {
+    for (text, operators) in &run_cases {
+      let result = prepared.redact_static_entities(text, operators)?;
       entity_count = entity_count.saturating_add(result.redaction.entity_count);
     }
   }

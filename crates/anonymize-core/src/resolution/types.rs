@@ -34,6 +34,7 @@ pub enum SourceDetail {
   AddressContext,
 }
 
+/// Internal pipeline entity span. `start` and `end` are UTF-8 byte offsets.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PipelineEntity {
   pub start: u32,

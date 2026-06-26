@@ -139,7 +139,7 @@ impl PreparedCoreferenceData {
         else {
           continue;
         };
-        let gap = offsets.slice(full_text, source.end, definition_start)?;
+        let gap = offsets.slice(source.end, definition_start)?;
         if has_clause_boundary(&gap) {
           continue;
         }
