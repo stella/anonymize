@@ -82,8 +82,10 @@ jobs:
         run: bun run --cwd packages/anonymize smoke:dist
 
       - name: Migration fixture parity and performance
+        env:
+          PARITY_BASE_BRANCH: ${{ github.base_ref || 'main' }}
         run: |
-          git fetch origin main --depth=1
+          git fetch origin "$PARITY_BASE_BRANCH" --depth=1
           bun run --cwd packages/anonymize perf:migration-fixtures
 
       - name: Native fixture parity and performance
@@ -94,8 +96,9 @@ jobs:
           ANONYMIZE_MIGRATION_NATIVE_COMPRESSED_PACKAGE: "1"
           ANONYMIZE_MIGRATION_NATIVE_PREPARED_PACKAGE: "1"
           ANONYMIZE_MIGRATION_REQUIRE_NATIVE_PIPELINE: "1"
+          PARITY_BASE_BRANCH: ${{ github.base_ref || 'main' }}
         run: |
-          git fetch origin main --depth=1
+          git fetch origin "$PARITY_BASE_BRANCH" --depth=1
           bun run --cwd packages/anonymize perf:migration-fixtures
 
       - name: Contract performance (informational)

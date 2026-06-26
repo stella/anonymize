@@ -43,7 +43,7 @@ jobs:
             Zlib,
             Unicode-3.0
           allow-dependencies-licenses: >-
-            pkg:cargo/stella-aho-corasick-core,
-            pkg:cargo/stella-fuzzy-search-core,
-            pkg:cargo/stella-regex-set-core
+            pkg:cargo/stella-aho-corasick-core?license=MIT OR Apache-2.0 OR Apache-2.0 WITH LLVM-exception,
+            pkg:cargo/stella-fuzzy-search-core?license=MIT OR Apache-2.0 OR Apache-2.0 WITH LLVM-exception,
+            pkg:cargo/stella-regex-set-core?license=MIT OR Apache-2.0 OR Apache-2.0 WITH LLVM-exception
           comment-summary-in-pr: always
