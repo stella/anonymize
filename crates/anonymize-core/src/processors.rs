@@ -730,6 +730,9 @@ fn append_person_name_hits(
       let Some(prev) = chain.last() else {
         break;
       };
+      if next.start < prev.end {
+        break;
+      }
       let gap = offsets.slice(prev.end, next.start)?;
       if person_chain_breaks(prev.text.as_str(), gap.as_str()) {
         break;
