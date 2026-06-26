@@ -1,6 +1,6 @@
 # stella-anonymize-core
 
-Python bindings for the Stella anonymization Rust core.
+Python bindings for the stella anonymization Rust core.
 
 ## Install
 
