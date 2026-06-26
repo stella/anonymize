@@ -63,6 +63,11 @@ fn prepared_for_trigger(
       address_stop_keywords: Vec::new(),
       party_position_terms: Vec::new(),
       legal_form_suffixes: Vec::new(),
+      post_nominals: vec![
+        String::from("Ph.D."),
+        String::from("CSc."),
+        String::from("MBA"),
+      ],
       sentence_terminal_currency_terms: vec![String::from("Kč")],
     }),
     ..empty_config(PreparedSearchSlices::default())
@@ -135,6 +140,64 @@ fn labelled_phone_trigger_keeps_extension_suffixes() {
 }
 
 #[test]
+fn labelled_phone_trigger_stops_before_numbered_sentences() {
+  let prepared =
+    prepared_for_trigger("PHONE", "phone number", TriggerStrategy::ToEndOfLine);
+
+  let result = prepared
+    .detect_static_entities("PHONE: +36 1 234 5678. 1. Definitions")
+    .expect("static detection should succeed");
+
+  assert_eq!(trigger_texts(&result), ["+36 1 234 5678"]);
+}
+
+#[test]
+fn person_trigger_only_skips_known_post_nominals_after_comma() {
+  let prepared = prepared_for_trigger(
+    "represented by",
+    "person",
+    TriggerStrategy::ToNextComma {
+      stop_words: Vec::new(),
+      max_length: Some(100),
+    },
+  );
+
+  let prose = prepared
+    .detect_static_entities("represented by John Smith, and shall continue.")
+    .expect("static detection should succeed");
+  let degree = prepared
+    .detect_static_entities(
+      "represented by John Smith, Ph.D., and shall continue.",
+    )
+    .expect("static detection should succeed");
+
+  assert_eq!(trigger_texts(&prose), ["John Smith"]);
+  assert_eq!(trigger_texts(&degree), ["John Smith, Ph.D."]);
+}
+
+#[test]
+fn match_pattern_trigger_requires_match_at_value_start() {
+  let prepared = prepared_for_trigger(
+    "Telephone",
+    "phone number",
+    TriggerStrategy::MatchPattern {
+      pattern: String::from(r"\d+"),
+      flags: None,
+    },
+  );
+
+  let rejected = prepared
+    .detect_static_entities("Telephone : non communique SIREN : 123456789")
+    .expect("static detection should succeed");
+  let accepted = prepared
+    .detect_static_entities("Telephone : 123456789 SIREN")
+    .expect("static detection should succeed");
+
+  assert!(rejected.trigger_entities.is_empty());
+  assert_eq!(trigger_texts(&accepted), ["123456789"]);
+}
+
+#[test]
 fn to_next_comma_stops_after_short_currency_abbreviation_sentence_tail() {
   let prepared = prepared_for_trigger(
     "fee",
@@ -190,6 +253,25 @@ fn company_id_trigger_rejects_single_digit_dotted_date() {
 }
 
 #[test]
+fn company_id_trigger_caps_leading_alpha_prefixes() {
+  let prepared = prepared_for_trigger(
+    "Company No.",
+    "registration number",
+    TriggerStrategy::CompanyIdValue,
+  );
+
+  let rejected = prepared
+    .detect_static_entities("Company No. ReferenceCode12345")
+    .expect("static detection should succeed");
+  let accepted = prepared
+    .detect_static_entities("Company No. AB12345")
+    .expect("static detection should succeed");
+
+  assert!(rejected.trigger_entities.is_empty());
+  assert_eq!(trigger_texts(&accepted), ["AB12345"]);
+}
+
+#[test]
 fn address_trigger_stops_after_short_proper_noun_before_real_sentence() {
   let prepared = prepared_for_trigger(
     "office",
@@ -208,4 +290,24 @@ fn address_trigger_stops_after_short_proper_noun_before_real_sentence() {
     "proper-noun sentence tail should stop the address; entities: {:?}",
     result.trigger_entities,
   );
+}
+
+#[test]
+fn trigger_lookahead_counts_text_units_not_utf8_bytes() {
+  let prepared = prepared_for_trigger(
+    "residing at",
+    "address",
+    TriggerStrategy::Address {
+      max_chars: Some(120),
+    },
+  );
+  let dense_prefix = "京".repeat(90);
+  let expected = format!("{dense_prefix} Main Street 1");
+  let text = format!("residing at {expected}\nNext line.");
+
+  let result = prepared
+    .detect_static_entities(&text)
+    .expect("static detection should succeed");
+
+  assert_eq!(trigger_texts(&result), [expected]);
 }
