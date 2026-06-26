@@ -277,6 +277,35 @@ fn prepared_search_keeps_address_context_above_threshold() {
 }
 
 #[test]
+fn prepared_search_measures_bare_house_context_in_text_offsets() {
+  let prepared = PreparedSearch::new(PreparedSearchConfig {
+    regex_patterns: vec![SearchPattern::Regex(String::from(r"\bPraha 10\b"))],
+    regex_meta: vec![RegexMatchMeta::new("address", 1.0)],
+    slices: PreparedSearchSlices {
+      regex: PatternSlice { start: 0, end: 1 },
+      ..PreparedSearchSlices::default()
+    },
+    threshold: 0.5,
+    allowed_labels: vec![String::from("address")],
+    address_context_data: Some(address_context_data()),
+    ..empty_config(PreparedSearchSlices::default())
+  })
+  .unwrap();
+  let full_text = format!("Praha 10 {} Evropská 710.", "á".repeat(40));
+
+  let result = prepared
+    .redact_static_entities(&full_text, &OperatorConfig::default())
+    .unwrap();
+
+  assert!(
+    result
+      .resolved_entities
+      .iter()
+      .any(|entity| entity.text == "Evropská 710")
+  );
+}
+
+#[test]
 fn prepared_search_ignores_caller_owned_addresses_for_bare_house_context() {
   let mut meta = RegexMatchMeta::new("address", 1.0);
   meta.source_detail = Some(SourceDetail::CustomRegex);
@@ -550,6 +579,43 @@ fn prepared_search_emits_static_detector_entities() {
 }
 
 #[test]
+fn prepared_search_extends_gazetteer_suffix_in_text_offsets() {
+  let prepared = PreparedSearch::new(PreparedSearchConfig {
+    literal_patterns: vec![SearchPattern::LiteralWithOptions {
+      pattern: String::from("Acme"),
+      case_insensitive: Some(true),
+      whole_words: Some(false),
+    }],
+    literal_options: SearchOptions {
+      literal: LiteralSearchOptions {
+        case_insensitive: true,
+        whole_words: false,
+      },
+      ..SearchOptions::default()
+    },
+    slices: PreparedSearchSlices {
+      gazetteer: PatternSlice { start: 0, end: 1 },
+      ..PreparedSearchSlices::default()
+    },
+    gazetteer_data: Some(GazetteerMatchData {
+      labels: vec![String::from("organization")],
+      is_fuzzy: vec![false],
+    }),
+    ..empty_config(PreparedSearchSlices::default())
+  })
+  .unwrap();
+
+  let result = prepared
+    .redact_static_entities("Acme spółka signed.", &OperatorConfig::default())
+    .unwrap();
+
+  assert!(result.resolved_entities.iter().any(|entity| {
+    entity.label == "organization" && entity.text == "Acme spółka"
+  }));
+  assert_eq!(result.redaction.redacted_text, "[ORGANIZATION_1] signed.");
+}
+
+#[test]
 fn prepared_search_preserves_overlapping_custom_regex_matches() {
   let prepared = PreparedSearch::new(PreparedSearchConfig {
     custom_regex_patterns: vec![
@@ -694,6 +760,32 @@ fn prepared_search_extracts_dates_from_anchored_data() {
       ("December 31, \n\n2025", "date", DetectionSource::Regex),
       ("2026", "date", DetectionSource::Trigger),
     ],
+  );
+}
+
+#[test]
+fn prepared_search_extracts_uppercase_ordinal_dates() {
+  let prepared = PreparedSearch::new(PreparedSearchConfig {
+    date_data: Some(DateData {
+      month_names_by_language: BTreeMap::from([(
+        String::from("en"),
+        vec![String::from("January")],
+      )]),
+      year_words_by_language: BTreeMap::new(),
+    }),
+    ..empty_config(PreparedSearchSlices::default())
+  })
+  .unwrap();
+
+  let result = prepared
+    .detect_static_entities("Filed on 1ST January 2025.")
+    .unwrap();
+
+  assert!(
+    result
+      .anchored_entities
+      .iter()
+      .any(|entity| entity.text == "1ST January 2025")
   );
 }
 
@@ -1292,6 +1384,47 @@ fn prepared_search_boost_counts_text_offsets_not_bytes() {
   assert_eq!(result.resolved_entities[0].text, "ANCHOR-123");
   assert_eq!(result.resolved_entities[1].text, "NEAR-456");
   assert!((result.resolved_entities[1].score - 0.5).abs() < f64::EPSILON);
+}
+
+#[test]
+fn prepared_search_hotword_distance_uses_utf16_offsets() {
+  let prepared = PreparedSearch::new(PreparedSearchConfig {
+    regex_patterns: vec![SearchPattern::Regex(String::from(
+      r"\b\d{2}\.\d{2}\.\d{4}\b",
+    ))],
+    literal_patterns: vec![SearchPattern::LiteralWithOptions {
+      pattern: String::from("born"),
+      case_insensitive: Some(true),
+      whole_words: Some(true),
+    }],
+    allowed_labels: vec![String::from("date of birth")],
+    threshold: 0.8,
+    slices: PreparedSearchSlices {
+      regex: PatternSlice { start: 0, end: 1 },
+      hotwords: PatternSlice { start: 0, end: 1 },
+      ..PreparedSearchSlices::default()
+    },
+    regex_meta: vec![RegexMatchMeta::new("date", 0.7)],
+    hotword_data: Some(HotwordRuleData {
+      rules: vec![HotwordRule {
+        target_labels: vec![String::from("date")],
+        score_adjustment: 1.0,
+        reclassify_to: Some(String::from("date of birth")),
+        proximity_before: 40,
+        proximity_after: 40,
+      }],
+      pattern_rule_indices: vec![0],
+    }),
+    ..empty_config(PreparedSearchSlices::default())
+  })
+  .unwrap();
+  let full_text = format!("born {} 12.03.1990", "😀".repeat(30));
+
+  let result = prepared
+    .redact_static_entities(&full_text, &OperatorConfig::default())
+    .unwrap();
+
+  assert!(result.resolved_entities.is_empty());
 }
 
 #[test]

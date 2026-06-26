@@ -59,4 +59,49 @@ impl<'a> ByteOffsets<'a> {
         .to_owned(),
     )
   }
+
+  pub(crate) fn utf16_units_between(
+    &self,
+    start: u32,
+    end: u32,
+  ) -> Result<u32> {
+    if start > end {
+      return Err(Error::InvalidSpan { start, end });
+    }
+
+    let start_byte = self.validate_offset(start)?;
+    let end_byte = self.validate_offset(end)?;
+    let units = self
+      .text
+      .get(start_byte..end_byte)
+      .ok_or(Error::InvalidSpan { start, end })?
+      .chars()
+      .map(char::len_utf16)
+      .sum::<usize>();
+    u32::try_from(units)
+      .map_err(|_| Error::ByteOffsetOutOfBounds { offset: u32::MAX })
+  }
+
+  pub(crate) fn offset_after_utf16_units(
+    &self,
+    start: u32,
+    max_units: u32,
+  ) -> Result<u32> {
+    let start_byte = self.validate_offset(start)?;
+    let mut units = 0_u32;
+    let tail = self.text.get(start_byte..).ok_or(Error::InvalidSpan {
+      start,
+      end: self.len()?,
+    })?;
+    for (relative, ch) in tail.char_indices() {
+      let width = u32::try_from(ch.len_utf16()).unwrap_or(u32::MAX);
+      if units.saturating_add(width) > max_units {
+        let offset = start_byte.saturating_add(relative);
+        return u32::try_from(offset)
+          .map_err(|_| Error::ByteOffsetOutOfBounds { offset: u32::MAX });
+      }
+      units = units.saturating_add(width);
+    }
+    self.len()
+  }
 }

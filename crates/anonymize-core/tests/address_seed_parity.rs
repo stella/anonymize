@@ -212,19 +212,21 @@ fn preserves_unit_abbreviation_inside_address_seed_span() {
   })
   .expect("address seed data should prepare");
 
+  let suffix = "á".repeat(97);
+  let full_text = format!(
+    "Notices go to 10 Main Street, Springfield 12345 Apt. 5 {suffix}. Thank you."
+  );
   let result = prepared
-    .redact_static_entities(
-      "Notices go to 10 Main Street, Springfield 12345 Apt. 5. Thank you.",
-      &OperatorConfig::default(),
-    )
+    .redact_static_entities(&full_text, &OperatorConfig::default())
     .expect("static redaction should succeed");
+  let expected = format!("10 Main Street, Springfield 12345 Apt. 5 {suffix}");
 
   assert!(
-    address_texts(&result)
-      .contains(&"10 Main Street, Springfield 12345 Apt. 5"),
+    address_texts(&result).contains(&expected.as_str()),
     "resolved address entities: {:?}; address seed entities: {:?}",
     result.resolved_entities,
     result.detections.address_seed_entities,
   );
   assert!(!result.redaction.redacted_text.contains("Apt. 5"));
+  assert!(!result.redaction.redacted_text.contains(&suffix));
 }
