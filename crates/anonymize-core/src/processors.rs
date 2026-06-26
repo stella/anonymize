@@ -277,11 +277,12 @@ pub struct SigningPlaceGuardData {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct RawDenyListMatch {
+  pattern: usize,
   start: u32,
   end: u32,
   labels: Vec<String>,
   custom_labels: Vec<String>,
-  sources: Vec<String>,
+  has_person_name_source: bool,
   text: String,
 }
 
@@ -339,56 +340,57 @@ pub fn process_deny_list_matches(
   data: &DenyListMatchData,
 ) -> Result<Vec<PipelineEntity>> {
   let offsets = ByteOffsets::new(full_text);
-  let mut matches_by_pattern =
+  let mut matches =
     collect_deny_list_matches(matches, slice, full_text, data, &offsets)?;
-  suppress_shorter_curated_contained_matches(&mut matches_by_pattern);
+  suppress_shorter_curated_contained_matches(&mut matches);
 
   let mut results = Vec::new();
   let mut name_hits = Vec::new();
 
-  for pattern_matches in matches_by_pattern.values() {
-    for found in pattern_matches {
-      for label in &found.custom_labels {
-        let mut entity = PipelineEntity::detected(
-          found.start,
-          found.end,
-          label.clone(),
-          found.text.clone(),
-          DENY_LIST_SCORE,
-          DetectionSource::DenyList,
-        );
-        entity.source_detail = Some(SourceDetail::CustomDenyList);
-        results.push(entity);
-      }
+  for found in &matches {
+    for label in &found.custom_labels {
+      let mut entity = PipelineEntity::detected(
+        found.start,
+        found.end,
+        label.clone(),
+        found.text.clone(),
+        DENY_LIST_SCORE,
+        DetectionSource::DenyList,
+      );
+      entity.source_detail = Some(SourceDetail::CustomDenyList);
+      results.push(entity);
+    }
+  }
+
+  for found in &matches {
+    if found.labels.is_empty() {
+      continue;
+    }
+    if found.labels.iter().any(|label| label == PERSON_LABEL)
+      && !filter_contains(
+        data
+          .filters
+          .as_ref()
+          .map(|filters| &filters.person_stopwords),
+        &found.text.to_lowercase(),
+      )
+    {
+      name_hits.push(found.clone());
     }
 
-    for found in pattern_matches {
-      if found.labels.iter().any(|label| label == PERSON_LABEL)
-        && !filter_contains(
-          data
-            .filters
-            .as_ref()
-            .map(|filters| &filters.person_stopwords),
-          &found.text.to_lowercase(),
-        )
-      {
-        name_hits.push(found.clone());
+    let suppress_address = should_suppress_address(full_text, data, found)?;
+    for label in found.labels.iter().filter(|label| *label != PERSON_LABEL) {
+      if label == ADDRESS_LABEL && suppress_address {
+        continue;
       }
-
-      let suppress_address = should_suppress_address(full_text, data, found)?;
-      for label in found.labels.iter().filter(|label| *label != PERSON_LABEL) {
-        if label == ADDRESS_LABEL && suppress_address {
-          continue;
-        }
-        results.push(PipelineEntity::detected(
-          found.start,
-          found.end,
-          label.clone(),
-          found.text.clone(),
-          DENY_LIST_SCORE,
-          DetectionSource::DenyList,
-        ));
-      }
+      results.push(PipelineEntity::detected(
+        found.start,
+        found.end,
+        label.clone(),
+        found.text.clone(),
+        DENY_LIST_SCORE,
+        DetectionSource::DenyList,
+      ));
     }
   }
 
@@ -410,16 +412,14 @@ pub fn process_deny_list_matches(
 }
 
 fn suppress_shorter_curated_contained_matches(
-  matches_by_pattern: &mut BTreeMap<usize, Vec<RawDenyListMatch>>,
+  matches: &mut [RawDenyListMatch],
 ) {
   let mut ranges = Vec::<(u32, u32)>::new();
-  for matches in matches_by_pattern.values() {
-    for found in matches {
-      if found.labels.is_empty() {
-        continue;
-      }
-      ranges.push((found.start, found.end));
+  for found in matches.iter() {
+    if found.labels.is_empty() {
+      continue;
     }
+    ranges.push((found.start, found.end));
   }
 
   ranges.sort_by(|left, right| {
@@ -448,18 +448,13 @@ fn suppress_shorter_curated_contained_matches(
     return;
   }
 
-  for matches in matches_by_pattern.values_mut() {
-    for found in matches.iter_mut() {
-      if found.labels.is_empty() {
-        continue;
-      }
-      if suppress.contains(&(found.start, found.end)) {
-        found.labels.clear();
-      }
+  for found in matches.iter_mut() {
+    if found.labels.is_empty() {
+      continue;
     }
-    matches.retain(|found| {
-      !found.labels.is_empty() || !found.custom_labels.is_empty()
-    });
+    if suppress.contains(&(found.start, found.end)) {
+      found.labels.clear();
+    }
   }
 }
 
@@ -469,8 +464,8 @@ fn collect_deny_list_matches(
   full_text: &str,
   data: &DenyListMatchData,
   offsets: &ByteOffsets<'_>,
-) -> Result<BTreeMap<usize, Vec<RawDenyListMatch>>> {
-  let mut matches_by_pattern = BTreeMap::<usize, Vec<RawDenyListMatch>>::new();
+) -> Result<Vec<RawDenyListMatch>> {
+  let mut results = Vec::new();
 
   for found in matches {
     let Some(local_index) = slice.local_index(found.pattern()) else {
@@ -533,20 +528,27 @@ fn collect_deny_list_matches(
       continue;
     }
 
-    matches_by_pattern
-      .entry(local_index)
-      .or_default()
-      .push(RawDenyListMatch {
-        start: found.start(),
-        end: found.end(),
-        labels: curated_labels,
-        custom_labels,
-        sources: sources.to_strings(),
-        text: match_text,
-      });
+    results.push(RawDenyListMatch {
+      pattern: local_index,
+      start: found.start(),
+      end: found.end(),
+      labels: curated_labels,
+      custom_labels,
+      has_person_name_source: sources
+        .iter()
+        .any(|source| source == FIRST_NAME_SOURCE || source == SURNAME_SOURCE),
+      text: match_text,
+    });
   }
 
-  Ok(matches_by_pattern)
+  results.sort_by(|left, right| {
+    left
+      .pattern
+      .cmp(&right.pattern)
+      .then_with(|| left.start.cmp(&right.start))
+      .then_with(|| left.end.cmp(&right.end))
+  });
+  Ok(results)
 }
 
 struct CuratedDenyListMatch<'a> {
@@ -954,10 +956,7 @@ fn has_curated_source(sources: StringGroup<'_>) -> bool {
 }
 
 fn has_person_name_source(found: &RawDenyListMatch) -> bool {
-  found
-    .sources
-    .iter()
-    .any(|source| source == FIRST_NAME_SOURCE || source == SURNAME_SOURCE)
+  found.has_person_name_source
 }
 
 fn filter_contains(set: Option<&BTreeSet<String>>, value: &str) -> bool {
