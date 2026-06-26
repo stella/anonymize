@@ -125,6 +125,42 @@ fn contextual_identifier_cues_share_identifier_placeholder() {
 }
 
 #[test]
+fn identifier_normalization_stops_before_trailing_prose() {
+  let text = "Reg AB12345 expires. Reg AB12345 repeats.";
+  let second_start = text
+    .rfind("AB12345")
+    .expect("fixture should contain repeated identifier");
+  let second_start = byte_len(
+    text
+      .get(..second_start)
+      .expect("fixture boundary should be valid"),
+  );
+  let entities = vec![
+    entity_with_display_text(
+      text,
+      "registration number",
+      "AB12345 expires",
+      "AB12345 expires",
+    ),
+    Entity::detected(
+      second_start,
+      second_start.saturating_add(byte_len("AB12345")),
+      "registration number",
+      "AB12345",
+    ),
+  ];
+
+  let result =
+    redact_text(text, &entities, &OperatorConfig::default()).unwrap();
+
+  assert_eq!(result.redaction_map.len(), 1);
+  assert_eq!(
+    result.redaction_map[0].placeholder,
+    "[REGISTRATION_NUMBER_1]"
+  );
+}
+
+#[test]
 fn spaced_identifier_values_still_share_placeholder() {
   let text =
     "Card 4242 4242 4242 4242 was present. Card 4242424242424242 repeated.";

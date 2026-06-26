@@ -13,11 +13,10 @@ pub fn enforce_boundary_consistency(
   let offsets = ByteOffsets::new(full_text);
   let spans = char_spans(full_text);
   let boundaries = word_boundaries(&spans);
-  let fixed =
-    fix_partial_words(entities, full_text, &offsets, &spans, &boundaries)?;
-  let resolved = resolve_cross_label_overlaps(&fixed, full_text, &offsets)?;
+  let fixed = fix_partial_words(entities, &offsets, &spans, &boundaries)?;
+  let resolved = resolve_cross_label_overlaps(&fixed, &offsets)?;
   let deduped = deduplicate_spans(&resolved);
-  let merged = merge_adjacent(&deduped, full_text, &offsets)?;
+  let merged = merge_adjacent(&deduped, &offsets)?;
   Ok(remove_nested_same_label(&merged))
 }
 
@@ -30,7 +29,6 @@ struct CharSpan {
 
 fn fix_partial_words(
   entities: &[PipelineEntity],
-  full_text: &str,
   offsets: &ByteOffsets<'_>,
   spans: &[CharSpan],
   boundaries: &BTreeSet<u32>,
@@ -45,7 +43,7 @@ fn fix_partial_words(
       continue;
     }
 
-    if entity.text != offsets.slice(full_text, entity.start, entity.end)? {
+    if entity.text != offsets.slice(entity.start, entity.end)? {
       fixed.push(entity.clone());
       continue;
     }
@@ -73,7 +71,7 @@ fn fix_partial_words(
     let mut adjusted = entity.clone();
     adjusted.start = new_start;
     adjusted.end = new_end;
-    adjusted.text = offsets.slice(full_text, new_start, new_end)?;
+    adjusted.text = offsets.slice(new_start, new_end)?;
     fixed.push(adjusted);
   }
 
@@ -82,7 +80,6 @@ fn fix_partial_words(
 
 fn resolve_cross_label_overlaps(
   entities: &[PipelineEntity],
-  full_text: &str,
   offsets: &ByteOffsets<'_>,
 ) -> Result<Vec<PipelineEntity>> {
   let mut sorted = entities.to_vec();
@@ -127,8 +124,7 @@ fn resolve_cross_label_overlaps(
         let new_start = left.end;
         if let Some(right_mut) = sorted.get_mut(right_index) {
           right_mut.start = new_start;
-          right_mut.text =
-            offsets.slice(full_text, new_start, right_mut.end)?;
+          right_mut.text = offsets.slice(new_start, right_mut.end)?;
         }
         right_index = right_index.saturating_add(1);
         continue;
@@ -137,7 +133,7 @@ fn resolve_cross_label_overlaps(
       let new_end = right.start;
       if let Some(left_mut) = sorted.get_mut(left_index) {
         left_mut.end = new_end;
-        left_mut.text = offsets.slice(full_text, left_mut.start, new_end)?;
+        left_mut.text = offsets.slice(left_mut.start, new_end)?;
       }
       break;
     }
@@ -171,7 +167,6 @@ fn deduplicate_spans(entities: &[PipelineEntity]) -> Vec<PipelineEntity> {
 
 fn merge_adjacent(
   entities: &[PipelineEntity],
-  full_text: &str,
   offsets: &ByteOffsets<'_>,
 ) -> Result<Vec<PipelineEntity>> {
   let mut sorted = entities.to_vec();
@@ -200,17 +195,11 @@ fn merge_adjacent(
     };
 
     if !has_locked_boundary(previous) && entity.start < previous.end {
-      merge_into_previous(
-        &mut result,
-        previous_index,
-        entity,
-        full_text,
-        offsets,
-      )?;
+      merge_into_previous(&mut result, previous_index, entity, offsets)?;
       continue;
     }
 
-    let gap = offsets.slice(full_text, previous.end, entity.start)?;
+    let gap = offsets.slice(previous.end, entity.start)?;
     let gap_start = previous.end;
     let gap_end = entity.start;
     let gap_occupied = sorted.iter().any(|other| {
@@ -228,13 +217,7 @@ fn merge_adjacent(
       && !gap_occupied
       && is_mergeable_gap(&gap)
     {
-      merge_into_previous(
-        &mut result,
-        previous_index,
-        entity,
-        full_text,
-        offsets,
-      )?;
+      merge_into_previous(&mut result, previous_index, entity, offsets)?;
       continue;
     }
 
@@ -365,8 +348,11 @@ fn word_start_at(
 ) -> u32 {
   let mut cursor = position;
   while cursor > 0 && !boundaries.contains(&cursor) {
-    let Some(previous) = spans.iter().rev().find(|span| span.end <= cursor)
-    else {
+    let index = spans.partition_point(|span| span.end <= cursor);
+    if index == 0 {
+      return cursor;
+    }
+    let Some(previous) = spans.get(index.saturating_sub(1)) else {
       return cursor;
     };
     if is_word_start_stop(previous.ch) {
@@ -385,7 +371,8 @@ fn word_end_at(
   let mut cursor = position;
   let text_end = spans.last().map_or(0, |span| span.end);
   while cursor < text_end && !boundaries.contains(&cursor) {
-    let Some(next) = spans.iter().find(|span| span.start >= cursor) else {
+    let index = spans.partition_point(|span| span.start < cursor);
+    let Some(next) = spans.get(index) else {
       return cursor;
     };
     if is_word_end_stop(next.ch) {
@@ -400,12 +387,11 @@ fn merge_into_previous(
   entities: &mut [PipelineEntity],
   previous_index: usize,
   entity: &PipelineEntity,
-  full_text: &str,
   offsets: &ByteOffsets<'_>,
 ) -> Result<()> {
   if let Some(previous) = entities.get_mut(previous_index) {
     previous.end = previous.end.max(entity.end);
-    previous.text = offsets.slice(full_text, previous.start, previous.end)?;
+    previous.text = offsets.slice(previous.start, previous.end)?;
     if entity.score.total_cmp(&previous.score).is_gt() {
       previous.score = entity.score;
     }

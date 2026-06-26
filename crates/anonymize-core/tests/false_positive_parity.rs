@@ -221,6 +221,7 @@ fn rejects_only_ambiguous_street_type_trigger_addresses() {
   assert!(
     resolved_texts(&prepared, "demeurant au cours du contrat.").is_empty()
   );
+  assert!(resolved_texts(&prepared, "demeurant Cours.").is_empty());
   assert_eq!(
     resolved_texts(&prepared, "demeurant Cours Mirabeau."),
     [String::from("Cours Mirabeau")]

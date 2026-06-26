@@ -118,7 +118,7 @@ fn address_context_data() -> AddressContextData {
     address_prepositions: vec![String::from("na"), String::from("mezi")],
     temporal_prepositions: vec![String::from("od"), String::from("do")],
     street_abbreviations: vec![String::from("ul.")],
-    bare_house_stopwords: vec![String::from("Section")],
+    bare_house_stopwords: vec![String::from("section")],
   }
 }
 
@@ -386,6 +386,37 @@ fn prepared_search_measures_bare_house_context_in_text_offsets() {
       .resolved_entities
       .iter()
       .any(|entity| entity.text == "Evropská 710")
+  );
+}
+
+#[test]
+fn prepared_search_filters_capitalized_bare_house_stopwords() {
+  let prepared = PreparedSearch::new(PreparedSearchConfig {
+    regex_patterns: vec![SearchPattern::Regex(String::from(r"\bPraha 10\b"))],
+    regex_meta: vec![RegexMatchMeta::new("address", 1.0)],
+    slices: PreparedSearchSlices {
+      regex: PatternSlice { start: 0, end: 1 },
+      ..PreparedSearchSlices::default()
+    },
+    threshold: 0.5,
+    allowed_labels: vec![String::from("address")],
+    address_context_data: Some(address_context_data()),
+    ..empty_config(PreparedSearchSlices::default())
+  })
+  .unwrap();
+
+  let result = prepared
+    .redact_static_entities(
+      "Praha 10 Section 183 follows.",
+      &OperatorConfig::default(),
+    )
+    .unwrap();
+
+  assert!(
+    !result
+      .resolved_entities
+      .iter()
+      .any(|entity| entity.text == "Section 183")
   );
 }
 

@@ -1925,14 +1925,8 @@ fn validate_hotword_config(config: &PreparedSearchConfig) -> Result<()> {
     return Err(Error::UnsupportedStaticSlice { slice: "hotwords" });
   }
 
-  if config.hotword_data.is_none() {
-    return Ok(());
-  }
-
   let Some(data) = &config.hotword_data else {
-    return Err(Error::MissingStaticData {
-      field: "hotword_data",
-    });
+    return Ok(());
   };
 
   for rule in &data.rules {

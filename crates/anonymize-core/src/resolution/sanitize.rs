@@ -41,7 +41,7 @@ pub(crate) fn sanitize_entities_with_source(
       continue;
     }
 
-    let raw_text = offsets.slice(full_text, entity.start, entity.end)?;
+    let raw_text = offsets.slice(entity.start, entity.end)?;
     let Some(cleaned) = clean_entity_text(entity, &raw_text) else {
       continue;
     };

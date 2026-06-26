@@ -24,7 +24,7 @@ pub fn redact_text(
   validate_spans(entities, &offsets)?;
 
   let placeholder_map = build_placeholder_map(entities, full_text);
-  let mut sorted = redaction_spans(full_text, entities, &offsets)?;
+  let mut sorted = redaction_spans(entities, &offsets)?;
   sorted.sort_by_key(|span| span.entity.start);
 
   // Existing contract: first accepted span wins overlaps.
@@ -45,7 +45,7 @@ pub fn redact_text(
   for span in &non_overlapping {
     let entity = &span.entity;
     if entity.start > cursor {
-      parts.push(offsets.slice(full_text, cursor, entity.start)?);
+      parts.push(offsets.slice(cursor, entity.start)?);
     }
 
     let placeholder = placeholder_map
@@ -74,7 +74,7 @@ pub fn redact_text(
 
   let full_text_len = offsets.len()?;
   if cursor < full_text_len {
-    parts.push(offsets.slice(full_text, cursor, full_text_len)?);
+    parts.push(offsets.slice(cursor, full_text_len)?);
   }
 
   Ok(RedactionResult {
@@ -125,7 +125,6 @@ struct RedactionSpan {
 }
 
 fn redaction_spans(
-  full_text: &str,
   entities: &[Entity],
   offsets: &ByteOffsets<'_>,
 ) -> Result<Vec<RedactionSpan>> {
@@ -134,7 +133,7 @@ fn redaction_spans(
   for entity in entities {
     resolved.push(RedactionSpan {
       entity: entity.clone(),
-      source_text: offsets.slice(full_text, entity.start, entity.end)?,
+      source_text: offsets.slice(entity.start, entity.end)?,
     });
   }
 

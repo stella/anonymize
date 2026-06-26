@@ -126,7 +126,7 @@ impl SearchIndexArtifacts {
       "search_index_artifacts",
     )?;
     let count = reader.read_usize()?;
-    let mut slots = Vec::with_capacity(count);
+    let mut slots = Vec::new();
     for _ in 0..count {
       slots.push(
         text_search::PreparedTextSearchArtifacts::from_bytes(

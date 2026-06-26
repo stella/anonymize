@@ -48,7 +48,7 @@ impl PreparedAddressContextData {
       address_prepositions: lowercased_set(data.address_prepositions),
       temporal_prepositions: lowercased_set(data.temporal_prepositions),
       street_abbreviations: lowercased_set(data.street_abbreviations),
-      bare_house_stopwords: data.bare_house_stopwords.into_iter().collect(),
+      bare_house_stopwords: lowercased_set(data.bare_house_stopwords),
       slash_house_number: compile_regex(
         "address_context.slash_house_number",
         r"(?u)\b(?:\d{1,4}/\d+[A-Za-z]\b|\d{3,4}/\d+\b|(?:1[3-9]|[2-9]\d)/\d{3,}\b)",
@@ -228,8 +228,13 @@ impl PreparedAddressContextData {
         continue;
       }
 
-      let word = captured.as_str().split_whitespace().next().unwrap_or("");
-      if self.bare_house_stopwords.contains(word) {
+      let word = captured
+        .as_str()
+        .split_whitespace()
+        .next()
+        .unwrap_or("")
+        .to_lowercase();
+      if self.bare_house_stopwords.contains(&word) {
         continue;
       }
       if overlaps_any(existing_entities, start, end)

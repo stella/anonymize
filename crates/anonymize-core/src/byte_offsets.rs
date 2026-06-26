@@ -39,12 +39,7 @@ impl<'a> ByteOffsets<'a> {
       .map_err(|_| Error::ByteOffsetOutOfBounds { offset: u32::MAX })
   }
 
-  pub(crate) fn slice(
-    &self,
-    full_text: &str,
-    start: u32,
-    end: u32,
-  ) -> Result<String> {
+  pub(crate) fn slice(&self, start: u32, end: u32) -> Result<String> {
     if start > end {
       return Err(Error::InvalidSpan { start, end });
     }
@@ -53,7 +48,8 @@ impl<'a> ByteOffsets<'a> {
     let end_byte = self.validate_offset(end)?;
 
     Ok(
-      full_text
+      self
+        .text
         .get(start_byte..end_byte)
         .ok_or(Error::InvalidSpan { start, end })?
         .to_owned(),
