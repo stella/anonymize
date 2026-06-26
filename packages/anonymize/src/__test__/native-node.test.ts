@@ -5,6 +5,7 @@ import { join } from "node:path";
 
 import type { NativeAnonymizeBinding } from "../native";
 import {
+  createNativePipelineFromDefaultPackage,
   createNativePipelineFromPackageFile,
   loadNativeAnonymizeBinding,
   nativePlatformPackageName,
@@ -149,6 +150,31 @@ describe("native node loader", () => {
       });
 
       expect(capturedBytes).toEqual([[7, 8, 9]]);
+      expect(pipeline.redactText("x").redaction.redactedText).toBe("");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("creates a native pipeline from the default package path override", () => {
+    const dir = mkdtempSync(join(tmpdir(), "anonymize-default-pipeline-"));
+    const packagePath = join(dir, "native-pipeline.stlanonpkg");
+    const capturedBytes: number[][] = [];
+    try {
+      writeFileSync(packagePath, Uint8Array.of(10, 11, 12));
+      const binding = fakeNativeBinding("1.5.0", {
+        onPreparedPackageBytes: (bytes) => {
+          capturedBytes.push([...bytes]);
+        },
+      });
+
+      const pipeline = createNativePipelineFromDefaultPackage({
+        binding,
+        packagePath,
+        expectedVersion: "1.5.0",
+      });
+
+      expect(capturedBytes).toEqual([[10, 11, 12]]);
       expect(pipeline.redactText("x").redaction.redactedText).toBe("");
     } finally {
       rmSync(dir, { recursive: true, force: true });

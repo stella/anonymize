@@ -33,6 +33,7 @@
     "dist",
     "index.cjs",
     "*.node",
+    "native-pipeline.stlanonpkg",
     "scripts/build-native-pipeline-package.mjs"
   ],
   "publishConfig": {

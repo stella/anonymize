@@ -72,6 +72,7 @@ export type {
   NativeSearchPackageOptions,
   NativeStaticRedactionResult,
 } from "./native";
+export { DEFAULT_NATIVE_PIPELINE_CONFIG } from "./native-default-config";
 export {
   PreparedNativePipeline,
   assertNativePipelineSupported,

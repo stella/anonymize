@@ -4,6 +4,7 @@ node_modules
 dist
 .turbo
 target/
+*.stlanonpkg
 
 # Claude Code local worktrees.
 .claude/worktrees/

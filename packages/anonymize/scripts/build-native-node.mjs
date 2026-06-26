@@ -32,3 +32,17 @@ if (!existsSync(source)) {
 }
 
 copyFileSync(source, join(packageRoot, "stella_anonymize_napi.node"));
+
+execFileSync(
+  process.execPath,
+  [
+    join(packageRoot, "scripts", "build-native-pipeline-package.mjs"),
+    "--out",
+    join(packageRoot, "native-pipeline.stlanonpkg"),
+    "--default-dictionaries",
+  ],
+  {
+    cwd: packageRoot,
+    stdio: "inherit",
+  },
+);
