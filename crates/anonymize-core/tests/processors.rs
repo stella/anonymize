@@ -356,6 +356,46 @@ fn deny_list_processor_suppresses_shorter_contained_curated_matches() {
 }
 
 #[test]
+fn deny_list_processor_handles_overlapping_person_name_hits() {
+  let text = "John Smith Jr arrived.";
+  let matches = vec![
+    SearchMatch::Literal {
+      pattern: 0,
+      start: 0,
+      end: 10,
+    },
+    SearchMatch::Literal {
+      pattern: 1,
+      start: 5,
+      end: 13,
+    },
+  ];
+  let data = DenyListMatchData {
+    labels: vec![vec![String::from("person")], vec![String::from("person")]]
+      .into(),
+    custom_labels: vec![vec![], vec![]].into(),
+    originals: vec![String::from("John Smith"), String::from("Smith Jr")],
+    sources: vec![
+      vec![String::from("first-name")],
+      vec![String::from("surname")],
+    ]
+    .into(),
+    filters: Some(DenyListFilterData::default()),
+  };
+
+  let entities = process_deny_list_matches(
+    &matches,
+    PatternSlice { start: 0, end: 2 },
+    text,
+    &data,
+  )
+  .unwrap();
+
+  assert_eq!(entities.len(), 1);
+  assert_eq!(entities[0].text, "John Smith Jr");
+}
+
+#[test]
 fn deny_list_processor_suppresses_signing_place_address() {
   let text = "Podepsano V Brně dne 1. ledna 2026.";
   let start = u32::try_from(text.find("Brně").unwrap()).unwrap();
