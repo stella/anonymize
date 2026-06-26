@@ -31,7 +31,7 @@ import {
 import { applyPipelineLanguageScope } from "./language-scope";
 import type { RegexMeta } from "./detectors/regex";
 import type { TriggerRule } from "./types";
-import type { DenyListData } from "./detectors/deny-list";
+import type { DenyListData, DenyListFilterData } from "./detectors/deny-list";
 import type { PipelineContext } from "./context";
 import { defaultContext } from "./context";
 
@@ -57,7 +57,11 @@ import {
   buildTriggerPatterns,
   getAddressStopKeywordsSync,
 } from "./detectors/triggers";
-import { buildDenyList } from "./detectors/deny-list";
+import {
+  buildDenyList,
+  buildDenyListFilterData,
+  ensureDenyListData,
+} from "./detectors/deny-list";
 import {
   buildStreetTypePatterns,
   getAddressSeedData,
@@ -274,6 +278,7 @@ export type NativePreparedSearchConfig = {
   regex_meta: NativeRegexMatchMeta[];
   custom_regex_meta: NativeRegexMatchMeta[];
   deny_list_data?: NativeDenyListMatchData;
+  false_positive_filters?: NativeDenyListFilterData;
   gazetteer_data?: NativeGazetteerData;
   country_data?: CountryData;
   hotword_data?: NativeHotwordRuleData;
@@ -354,6 +359,7 @@ type UnifiedSearchSources = {
     rules: TriggerRule[];
   };
   denyListData: DenyListData | null;
+  falsePositiveFilters: DenyListFilterData;
   streetTypes: string[];
   gazResult: GazetteerPatternResult | null;
   countryResult: CountryPatternResult | null;
@@ -384,6 +390,7 @@ export type NativeStaticSearchBundle = {
   regexMeta: readonly RegexMeta[];
   customRegexMeta: readonly RegexMeta[];
   denyListData: DenyListData | null;
+  falsePositiveFilters: DenyListFilterData;
 };
 
 const buildUnifiedSearchSources = async (
@@ -414,6 +421,7 @@ const buildUnifiedSearchSources = async (
     _legalFormWarmup,
     triggers,
     denyListData,
+    falsePositiveFilters,
     streetTypes,
     currencyPatterns,
     datePatterns,
@@ -435,6 +443,14 @@ const buildUnifiedSearchSources = async (
           rules: [] as TriggerRule[],
         }),
     config.enableDenyList ? buildDenyList(config, ctx) : Promise.resolve(null),
+    (async () => {
+      await ensureDenyListData(
+        ctx,
+        config.dictionaries,
+        config.nameCorpusLanguages,
+      );
+      return buildDenyListFilterData(ctx);
+    })(),
     buildStreetTypePatterns(),
     config.enableRegex && labelIsAllowed("monetary amount", allowedLabels)
       ? getCurrencyPatternEntries()
@@ -710,6 +726,7 @@ const buildUnifiedSearchSources = async (
     legalForms,
     triggers,
     denyListData,
+    falsePositiveFilters,
     streetTypes,
     gazResult,
     countryResult,
@@ -761,6 +778,7 @@ export const buildNativeStaticSearchBundle = async (
       customRegexes: sources.customRegexes,
       customRegexMeta: sources.customRegexMeta,
       denyListData: sources.denyListData,
+      falsePositiveFilters: sources.falsePositiveFilters,
       triggerPatterns: sources.triggers.patterns,
       triggerRules: sources.triggers.rules,
       legalFormPatterns: sources.nativeLegalFormPatterns,
@@ -792,6 +810,7 @@ export const buildNativeStaticSearchBundle = async (
     regexMeta: sources.regexMeta,
     customRegexMeta: sources.customRegexMeta,
     denyListData: sources.denyListData,
+    falsePositiveFilters: sources.falsePositiveFilters,
   };
 };
 
@@ -845,6 +864,7 @@ export const buildUnifiedSearch = async (
     customRegexes: sources.customRegexes,
     customRegexMeta: sources.customRegexMeta,
     denyListData: sources.denyListData,
+    falsePositiveFilters: sources.falsePositiveFilters,
     triggerPatterns: sources.triggers.patterns,
     triggerRules: sources.triggers.rules,
     legalFormPatterns: sources.nativeLegalFormPatterns,
@@ -894,6 +914,7 @@ type BuildNativeStaticConfigArgs = {
   customRegexes: readonly { pattern: string }[];
   customRegexMeta: readonly RegexMeta[];
   denyListData: DenyListData | null;
+  falsePositiveFilters: DenyListFilterData;
   triggerPatterns: readonly string[];
   triggerRules: readonly TriggerRule[];
   legalFormPatterns: readonly string[];
@@ -924,6 +945,7 @@ const buildNativeStaticConfig = ({
   customRegexes,
   customRegexMeta,
   denyListData,
+  falsePositiveFilters,
   triggerPatterns,
   triggerRules,
   legalFormPatterns,
@@ -1105,6 +1127,8 @@ const buildNativeStaticConfig = ({
   if (denyListData) {
     nativeConfig.deny_list_data = toNativeDenyListData(denyListData);
   }
+  nativeConfig.false_positive_filters =
+    toNativeDenyListFilters(falsePositiveFilters);
   if (gazetteerData) {
     nativeConfig.gazetteer_data = toNativeGazetteerData(gazetteerData);
   }

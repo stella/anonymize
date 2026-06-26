@@ -21,6 +21,7 @@ fn empty_config(slices: PreparedSearchSlices) -> PreparedSearchConfig {
     regex_meta: vec![],
     custom_regex_meta: vec![],
     deny_list_data: None,
+    false_positive_filters: None,
     gazetteer_data: None,
     country_data: None,
     hotword_data: None,
@@ -89,6 +90,7 @@ fn detects_cue_gated_br_cep_address_seed() {
     address_seed_data: Some(AddressSeedData {
       boundary_words: Vec::new(),
       br_cep_cue_words: vec![String::from("CEP")],
+      unit_abbreviations: Vec::new(),
     }),
     ..empty_config(PreparedSearchSlices::default())
   })
@@ -165,4 +167,64 @@ fn keeps_date_like_street_name_in_address_seed_span() {
     result.detections.address_seed_entities,
   );
   assert!(!result.redaction.redacted_text.contains("May 15 Street"));
+}
+
+#[test]
+fn preserves_unit_abbreviation_inside_address_seed_span() {
+  let prepared = PreparedSearch::new(PreparedSearchConfig {
+    literal_patterns: vec![
+      SearchPattern::LiteralWithOptions {
+        pattern: String::from("Springfield"),
+        case_insensitive: Some(true),
+        whole_words: Some(true),
+      },
+      SearchPattern::LiteralWithOptions {
+        pattern: String::from("Street"),
+        case_insensitive: Some(true),
+        whole_words: Some(true),
+      },
+    ],
+    literal_options: SearchOptions {
+      literal: LiteralSearchOptions {
+        case_insensitive: true,
+        whole_words: false,
+      },
+      ..SearchOptions::default()
+    },
+    slices: PreparedSearchSlices {
+      deny_list: PatternSlice { start: 0, end: 1 },
+      street_types: PatternSlice { start: 1, end: 2 },
+      ..PreparedSearchSlices::default()
+    },
+    deny_list_data: Some(DenyListMatchData {
+      labels: vec![vec![String::from("address")]].into(),
+      custom_labels: vec![vec![]].into(),
+      originals: vec![String::from("Springfield")],
+      sources: vec![vec![String::from("city")]].into(),
+      filters: Some(DenyListFilterData::default()),
+    }),
+    address_seed_data: Some(AddressSeedData {
+      boundary_words: Vec::new(),
+      br_cep_cue_words: Vec::new(),
+      unit_abbreviations: vec![String::from("apt.")],
+    }),
+    ..empty_config(PreparedSearchSlices::default())
+  })
+  .expect("address seed data should prepare");
+
+  let result = prepared
+    .redact_static_entities(
+      "Notices go to 10 Main Street, Springfield 12345 Apt. 5. Thank you.",
+      &OperatorConfig::default(),
+    )
+    .expect("static redaction should succeed");
+
+  assert!(
+    address_texts(&result)
+      .contains(&"10 Main Street, Springfield 12345 Apt. 5"),
+    "resolved address entities: {:?}; address seed entities: {:?}",
+    result.resolved_entities,
+    result.detections.address_seed_entities,
+  );
+  assert!(!result.redaction.redacted_text.contains("Apt. 5"));
 }

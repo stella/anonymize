@@ -31,6 +31,7 @@ pub enum SourceDetail {
   CustomDenyList,
   CustomRegex,
   GazetteerExtension,
+  AddressContext,
 }
 
 #[derive(Clone, Debug, PartialEq)]

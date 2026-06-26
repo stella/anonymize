@@ -23,6 +23,7 @@ fn empty_config(slices: PreparedSearchSlices) -> PreparedSearchConfig {
     regex_meta: vec![],
     custom_regex_meta: vec![],
     deny_list_data: None,
+    false_positive_filters: None,
     gazetteer_data: None,
     country_data: None,
     hotword_data: None,
@@ -146,6 +147,32 @@ fn rejects_document_structure_heading_organizations() {
 
   assert_eq!(
     resolved_texts(&prepared, text),
+    [String::from("Acme No. 4")]
+  );
+}
+
+#[test]
+fn rejects_document_headings_without_deny_list_matching() {
+  let prepared = PreparedSearch::new(PreparedSearchConfig {
+    regex_patterns: vec![SearchPattern::Regex(String::from(
+      r"Schedule No\. 4|Acme No\. 4",
+    ))],
+    slices: PreparedSearchSlices {
+      regex: PatternSlice { start: 0, end: 1 },
+      ..PreparedSearchSlices::default()
+    },
+    regex_meta: vec![RegexMatchMeta::new("organization", 0.9)],
+    false_positive_filters: Some(DenyListFilterData {
+      document_heading_words: set(["schedule"]),
+      document_heading_ordinal_markers: set(["no."]),
+      ..DenyListFilterData::default()
+    }),
+    ..empty_config(PreparedSearchSlices::default())
+  })
+  .unwrap();
+
+  assert_eq!(
+    resolved_texts(&prepared, "Schedule No. 4\nAcme No. 4 signed."),
     [String::from("Acme No. 4")]
   );
 }
