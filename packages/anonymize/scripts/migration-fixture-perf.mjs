@@ -536,16 +536,12 @@ function describeNativeTimingScenario({
     };
   }
 
-  const mode = usePrebuiltNativePackage
-    ? "prebuilt-package"
-    : usePrebuiltNativeConfig
-      ? "prebuilt-config"
-      : nativePackagePrepareMs > 0
-        ? "build-package-in-process"
-        : "build-config-in-process";
-
   return {
-    mode,
+    mode: nativeTimingMode({
+      usePrebuiltNativePackage,
+      usePrebuiltNativeConfig,
+      nativePackagePrepareMs,
+    }),
     packageCompressed: nativePackageCompressed,
     packageBytes: nativePackageBytes,
     packageReadMs: nativePackageReadMs,
@@ -556,6 +552,23 @@ function describeNativeTimingScenario({
     firstTouchMs: roundMs(nativePackageReadMs + nativePrepareMs + coldRunMs),
     warmClickMs: warmAvgMs,
   };
+}
+
+function nativeTimingMode({
+  usePrebuiltNativePackage,
+  usePrebuiltNativeConfig,
+  nativePackagePrepareMs,
+}) {
+  if (usePrebuiltNativePackage) {
+    return "prebuilt-package";
+  }
+  if (usePrebuiltNativeConfig) {
+    return "prebuilt-config";
+  }
+  if (nativePackagePrepareMs > 0) {
+    return "build-package-in-process";
+  }
+  return "build-config-in-process";
 }
 
 async function prepareNativeStaticSearch({
