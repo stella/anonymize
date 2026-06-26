@@ -83,6 +83,9 @@ jobs:
       - name: Python typecheck
         run: bun run python:typecheck
 
+      - name: Python wheel
+        run: bun run python:wheel
+
       - name: Test
         run: bun run test
 
