@@ -289,6 +289,7 @@ export type NativeGazetteerData = {
 };
 
 export type NativeHotwordRule = {
+  hotwords: string[];
   target_labels: string[];
   score_adjustment: number;
   reclassify_to?: string;
@@ -1276,15 +1277,6 @@ const buildNativeStaticConfig = ({
       ? toNativeGlobalLiteralPattern(patternEntryText(pattern))
       : toNativeLiteralPattern(pattern),
   );
-  const nativeHotwordPatterns: NativeSearchPattern[] = [];
-  const nativeHotwordPatternRuleIndices: number[] = [];
-  for (const [ruleIndex, rule] of hotwordRules.entries()) {
-    for (const hotword of rule.hotwords) {
-      nativeHotwordPatterns.push(toNativeHotwordPattern(hotword));
-      nativeHotwordPatternRuleIndices.push(ruleIndex);
-    }
-  }
-
   let literalOffset = 0;
   const denyListPatternCount = denyListPatternsFromData
     ? (denyListData?.originals.length ?? 0)
@@ -1311,7 +1303,7 @@ const buildNativeStaticConfig = ({
   literalOffset = countriesSlice.end;
   const hotwordsSlice = {
     start: literalOffset,
-    end: literalOffset + nativeHotwordPatterns.length,
+    end: literalOffset,
   };
   const hasGazetteerFuzzyPatterns =
     gazetteerData?.isFuzzy.some((isFuzzy) => isFuzzy) ?? false;
@@ -1324,7 +1316,6 @@ const buildNativeStaticConfig = ({
       ...streetTypeNativePatterns,
       ...gazetteerNativePatterns,
       ...countryNativePatterns,
-      ...nativeHotwordPatterns,
     ],
     regex_options: {
       literal_case_insensitive: true,
@@ -1387,7 +1378,7 @@ const buildNativeStaticConfig = ({
   if (hotwordRules.length > 0) {
     nativeConfig.hotword_data = {
       rules: hotwordRules.map(toNativeHotwordRule),
-      pattern_rule_indices: nativeHotwordPatternRuleIndices,
+      pattern_rule_indices: [],
     };
   }
   if (triggerRules.length > 0) {
@@ -1441,15 +1432,9 @@ const toNativeTriggerPattern = (pattern: string): NativeSearchPattern => ({
   case_insensitive: true,
 });
 
-const toNativeHotwordPattern = (pattern: string): NativeSearchPattern => ({
-  kind: "literal-with-options",
-  pattern,
-  case_insensitive: true,
-  whole_words: true,
-});
-
 const toNativeHotwordRule = (rule: HotwordRule): NativeHotwordRule => {
   const result: NativeHotwordRule = {
+    hotwords: [...rule.hotwords],
     target_labels: [...rule.targetLabels],
     score_adjustment: rule.scoreAdjustment,
     proximity_before: rule.proximityBefore,

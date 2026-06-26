@@ -8,7 +8,9 @@ use crate::coreference::{CoreferenceData, PreparedCoreferenceData};
 use crate::dates::{DateData, PreparedDateData};
 use crate::diagnostics::{DiagnosticStage, StaticRedactionDiagnostics};
 use crate::false_positives::filter_entity_false_positives;
-use crate::hotwords::{HotwordRuleData, apply_hotword_rules};
+use crate::hotwords::{
+  HotwordRuleData, PreparedHotwordData, apply_hotword_rules,
+};
 use crate::legal_forms::{
   LegalFormData, PreparedLegalFormData, process_legal_form_matches,
 };
@@ -67,7 +69,7 @@ pub struct PreparedSearch {
   false_positive_filters: Option<DenyListFilterData>,
   gazetteer_data: Option<GazetteerMatchData>,
   country_data: Option<CountryMatchData>,
-  hotword_data: Option<HotwordRuleData>,
+  hotword_data: Option<PreparedHotwordData>,
   trigger_data: Option<PreparedTriggerData>,
   legal_form_data: Option<PreparedLegalFormData>,
   address_seed_data: Option<PreparedAddressSeedData>,
@@ -453,11 +455,8 @@ impl PreparedSearch {
       false_positive_filters: config.false_positive_filters,
       gazetteer_data: config.gazetteer_data,
       country_data: config.country_data,
-      hotword_data: config.hotword_data,
-      trigger_data: config
-        .trigger_data
-        .map(PreparedTriggerData::new)
-        .transpose()?,
+      hotword_data: prepare_hotword_data(config.hotword_data)?,
+      trigger_data: prepare_trigger_data(config.trigger_data)?,
       legal_form_data: config.legal_form_data.map(PreparedLegalFormData::new),
       address_seed_data: prepare_address_seed_data(config.address_seed_data)?,
       zone_data: prepare_zone_data(config.zone_data.as_ref())?,
@@ -1013,19 +1012,12 @@ impl PreparedSearch {
     &self,
     entities: Vec<PipelineEntity>,
     full_text: &str,
-    literal_matches: &[SearchMatch],
+    _literal_matches: &[SearchMatch],
   ) -> Result<Vec<PipelineEntity>> {
     let Some(data) = &self.hotword_data else {
       return Ok(entities);
     };
-    apply_hotword_rules(
-      entities,
-      full_text,
-      literal_matches,
-      self.slices.hotwords,
-      data,
-      &self.allowed_labels,
-    )
+    apply_hotword_rules(entities, full_text, data, &self.allowed_labels)
   }
 
   fn apply_zone_adjustments(
@@ -1557,6 +1549,18 @@ fn prepare_address_seed_data(
   data.map(PreparedAddressSeedData::new).transpose()
 }
 
+fn prepare_hotword_data(
+  data: Option<HotwordRuleData>,
+) -> Result<Option<PreparedHotwordData>> {
+  data.map(PreparedHotwordData::new).transpose()
+}
+
+fn prepare_trigger_data(
+  data: Option<TriggerData>,
+) -> Result<Option<PreparedTriggerData>> {
+  data.map(PreparedTriggerData::new).transpose()
+}
+
 fn prepare_address_context_data(
   data: Option<AddressContextData>,
 ) -> Result<Option<PreparedAddressContextData>> {
@@ -1917,7 +1921,11 @@ fn validate_country_config(config: &PreparedSearchConfig) -> Result<()> {
 }
 
 fn validate_hotword_config(config: &PreparedSearchConfig) -> Result<()> {
-  if config.slices.hotwords.is_empty() {
+  if !config.slices.hotwords.is_empty() {
+    return Err(Error::UnsupportedStaticSlice { slice: "hotwords" });
+  }
+
+  if config.hotword_data.is_none() {
     return Ok(());
   }
 
@@ -1927,24 +1935,20 @@ fn validate_hotword_config(config: &PreparedSearchConfig) -> Result<()> {
     });
   };
 
-  validate_static_data_length(
-    "hotword_data.pattern_rule_indices",
-    config.slices.hotwords,
-    data.pattern_rule_indices.len(),
-  )?;
-
-  for rule_index in &data.pattern_rule_indices {
-    let Ok(rule_index) = usize::try_from(*rule_index) else {
+  for rule in &data.rules {
+    if rule.hotwords.is_empty() {
       return Err(Error::InvalidStaticData {
-        field: "hotword_data.pattern_rule_indices",
-        reason: String::from("rule index exceeds usize range"),
+        field: "hotword_data.rules.hotwords",
+        reason: String::from("native hotword rules require hotword strings"),
       });
-    };
-    if rule_index >= data.rules.len() {
-      return Err(Error::InvalidStaticData {
-        field: "hotword_data.pattern_rule_indices",
-        reason: String::from("rule index out of range"),
-      });
+    }
+    for hotword in &rule.hotwords {
+      if hotword.is_empty() {
+        return Err(Error::InvalidStaticData {
+          field: "hotword_data.rules.hotwords",
+          reason: String::from("hotword must not be empty"),
+        });
+      }
     }
   }
 
