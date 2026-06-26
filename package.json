@@ -11,7 +11,7 @@
   "scripts": {
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
-    "lint": "turbo run lint && bun run lint:oxlint",
+    "lint": "turbo run lint && bun run lint:oxlint && bun run check:brand-case",
     "lint:oxlint": "bun --bun oxlint -c oxlint.config.ts --deny-warnings --type-aware .",
     "lint:fix": "bun --bun oxlint -c oxlint.config.ts --type-aware --fix .",
     "format": "turbo run format && oxfmt . \"!packages/**\" \"!.ai/**\" \"!.agents/**\" \"!.claude/**\" \"!AGENTS.md\" \"!CLAUDE.md\" \"!GEMINI.md\"",
@@ -25,6 +25,7 @@
     "sync:version": "node .github/tools/sync-runtime-version.mjs",
     "check:version": "node .github/tools/sync-runtime-version.mjs --check",
     "check:bun": "node .github/tools/check-bun-workflows.mjs",
+    "check:brand-case": "node .github/tools/check-brand-case.mjs",
     "secrets:check:staged": "bash scripts/check-staged-secrets.sh",
     "hooks:install": "lefthook install",
     "hooks:uninstall": "lefthook uninstall",

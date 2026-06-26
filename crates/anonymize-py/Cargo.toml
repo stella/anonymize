@@ -2,7 +2,7 @@
 name = "stella-anonymize-py"
 version.workspace = true
 edition.workspace = true
-description = "Python bindings for Stella anonymization core"
+description = "Python bindings for stella anonymization core"
 license.workspace = true
 publish.workspace = true
 repository.workspace = true
