@@ -346,16 +346,26 @@ fn prepare_static_search_package_bytes_with(
   let core_config = prepared_search_config_from_binding(binding_config)
     .map_err(|error| to_napi_contract_error(&error))?;
   let artifacts = PreparedSearch::prepare_artifacts(core_config.clone())
-    .and_then(|artifacts| artifacts.to_bytes())
+    .map_err(|error| to_napi_core_error(&error))?;
+  let artifact_bytes = artifacts
+    .to_bytes()
     .map_err(|error| to_napi_core_error(&error))?;
   let package = if compressed {
-    prepared_search_core_package_to_compressed_bytes(&core_config, &artifacts)
+    prepared_search_core_package_to_compressed_bytes(
+      &core_config,
+      &artifact_bytes,
+    )
   } else {
-    prepared_search_core_package_to_bytes(&core_config, &artifacts)
+    prepared_search_core_package_to_bytes(&core_config, &artifact_bytes)
   };
-  package
-    .map(Buffer::from)
-    .map_err(|error| to_napi_contract_error(&error))
+  let package = package.map_err(|error| to_napi_contract_error(&error))?;
+  let prepared = PreparedSearch::new_with_artifacts(core_config, &artifacts)
+    .map_err(|error| to_napi_core_error(&error))?;
+  prepared_search_cache_insert(
+    prepared_search_package_cache_key(&package),
+    Arc::new(prepared),
+  );
+  Ok(Buffer::from(package))
 }
 
 #[napi]
