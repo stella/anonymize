@@ -1066,6 +1066,8 @@ const buildNativeStaticConfig = ({
     start: literalOffset,
     end: literalOffset + nativeHotwordPatterns.length,
   };
+  const hasGazetteerFuzzyPatterns =
+    gazetteerData?.isFuzzy.some((isFuzzy) => isFuzzy) ?? false;
 
   const nativeConfig: NativePreparedSearchConfig = {
     regex_patterns: nativeRegexPatterns,
@@ -1090,7 +1092,7 @@ const buildNativeStaticConfig = ({
       literal_case_insensitive: true,
       literal_whole_words: canUseGlobalWholeWordLiterals,
       fuzzy_case_insensitive: true,
-      fuzzy_whole_words: true,
+      fuzzy_whole_words: !hasGazetteerFuzzyPatterns,
       fuzzy_normalize_diacritics: true,
     },
     literal_patterns_from_deny_list_data: denyListPatternsFromData,

@@ -292,7 +292,7 @@ fn ordinal_day_before_month(
     return None;
   }
   for suffix in ["st", "nd", "rd", "th"] {
-    if !ends_with_before(text, end, suffix) {
+    if !ends_with_before_ascii_case_insensitive(text, end, suffix) {
       continue;
     }
     let day_end = end.saturating_sub(suffix.len());
@@ -446,6 +446,18 @@ fn starts_with_at(text: &str, index: usize, needle: &str) -> bool {
 
 fn ends_with_before(text: &str, index: usize, needle: &str) -> bool {
   str_head(text, index).is_some_and(|value| value.ends_with(needle))
+}
+
+fn ends_with_before_ascii_case_insensitive(
+  text: &str,
+  index: usize,
+  needle: &str,
+) -> bool {
+  let Some(start) = index.checked_sub(needle.len()) else {
+    return false;
+  };
+  str_slice(text, start, index)
+    .is_some_and(|value| value.eq_ignore_ascii_case(needle))
 }
 
 fn str_head(text: &str, index: usize) -> Option<&str> {

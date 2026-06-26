@@ -401,7 +401,7 @@ impl PreparedAddressSeedData {
     let right_pos = cluster.end;
     let remaining = full_text.get(right_pos..).unwrap_or_default();
     let mut nearest_boundary =
-      byte_cap_at_char_boundary(remaining, ADDRESS_RIGHT_EXPAND_LIMIT);
+      utf16_cap_at_char_boundary(remaining, ADDRESS_RIGHT_EXPAND_LIMIT);
 
     if let Some(boundary) = self.nearest_boundary_word(full_text, right_pos) {
       nearest_boundary = nearest_boundary.min(boundary);
@@ -1172,11 +1172,16 @@ fn resolve_newline_boundary(
   NewlineBoundaryResolution::Drop
 }
 
-fn byte_cap_at_char_boundary(text: &str, cap: usize) -> usize {
-  if cap >= text.len() {
-    return text.len();
+fn utf16_cap_at_char_boundary(text: &str, cap: usize) -> usize {
+  let mut units = 0usize;
+  for (index, ch) in text.char_indices() {
+    let width = ch.len_utf16();
+    if units.saturating_add(width) > cap {
+      return index;
+    }
+    units = units.saturating_add(width);
   }
-  floor_char_boundary(text, cap)
+  text.len()
 }
 
 fn floor_char_boundary(text: &str, mut byte: usize) -> usize {

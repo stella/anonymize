@@ -36,8 +36,7 @@ pub(crate) fn apply_hotword_rules(
       continue;
     }
 
-    let adjusted =
-      apply_entity_rules(entity, full_text, &offsets, data, &hits_by_rule)?;
+    let adjusted = apply_entity_rules(entity, &offsets, data, &hits_by_rule)?;
     if label_allowed(&adjusted.label, allowed_labels) {
       result.push(adjusted);
     }
@@ -80,7 +79,6 @@ fn collect_hits_by_rule(
 
 fn apply_entity_rules(
   mut entity: PipelineEntity,
-  full_text: &str,
   offsets: &ByteOffsets<'_>,
   data: &HotwordRuleData,
   hits_by_rule: &[Vec<SearchMatch>],
@@ -100,7 +98,7 @@ fn apply_entity_rules(
     };
     for hit in rule_hits {
       let Some((distance, max_distance)) =
-        hotword_distance(full_text, offsets, &entity, hit, rule)?
+        hotword_distance(offsets, &entity, hit, rule)?
       else {
         continue;
       };
@@ -143,7 +141,6 @@ fn apply_entity_rules(
 }
 
 fn hotword_distance(
-  full_text: &str,
   offsets: &ByteOffsets<'_>,
   entity: &PipelineEntity,
   hit: &SearchMatch,
@@ -151,12 +148,12 @@ fn hotword_distance(
 ) -> Result<Option<(u32, u32)>> {
   let (distance, max_distance) = if hit.end() <= entity.start {
     (
-      char_distance(full_text, offsets, hit.end(), entity.start)?,
+      text_distance(offsets, hit.end(), entity.start)?,
       rule.proximity_before,
     )
   } else if hit.start() >= entity.end {
     (
-      char_distance(full_text, offsets, entity.end, hit.start())?,
+      text_distance(offsets, entity.end, hit.start())?,
       rule.proximity_after,
     )
   } else {
@@ -169,27 +166,12 @@ fn hotword_distance(
   Ok(Some((distance, max_distance)))
 }
 
-fn char_distance(
-  full_text: &str,
+fn text_distance(
   offsets: &ByteOffsets<'_>,
   start: u32,
   end: u32,
 ) -> Result<u32> {
-  if start > end {
-    return Err(Error::InvalidSpan { start, end });
-  }
-  let start = offsets.validate_offset(start)?;
-  let end = offsets.validate_offset(end)?;
-  let distance = full_text
-    .get(start..end)
-    .ok_or_else(|| Error::InvalidSpan {
-      start: u32::try_from(start).unwrap_or(u32::MAX),
-      end: u32::try_from(end).unwrap_or(u32::MAX),
-    })?
-    .chars()
-    .count();
-  u32::try_from(distance)
-    .map_err(|_| Error::ByteOffsetOutOfBounds { offset: u32::MAX })
+  offsets.utf16_units_between(start, end)
 }
 
 const fn caller_owned(entity: &PipelineEntity) -> bool {
