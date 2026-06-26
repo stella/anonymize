@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { copyFileSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createRequire } from "node:module";
@@ -117,7 +118,16 @@ for _ in range(payload["iterations"]):
             item.get("operators_json"),
         )
 elapsed_ms = (time.perf_counter_ns() - start) / 1_000_000
-print(json.dumps({"prepareMs": prepare_ms, "runMs": elapsed_ms}))
+case_results = [
+    json.loads(
+        prepared.redact_static_entities_json(
+            item["text"],
+            item.get("operators_json"),
+        )
+    )
+    for item in payload["cases"]
+]
+print(json.dumps({"prepareMs": prepare_ms, "runMs": elapsed_ms, "caseResults": case_results}))
 `;
 
 const pythonSdkScript = `
@@ -139,6 +149,42 @@ package_prepare_ms = (time.perf_counter_ns() - package_start) / 1_000_000
 load_start = time.perf_counter_ns()
 prepared = anonymize.load_prepared_package(package_bytes)
 load_ms = (time.perf_counter_ns() - load_start) / 1_000_000
+def entity_to_dict(entity):
+    return {
+        "start": entity.start,
+        "end": entity.end,
+        "label": entity.label,
+        "text": entity.text,
+        "score": entity.score,
+        "source": entity.source,
+        "source_detail": entity.source_detail,
+    }
+
+def redaction_entry_to_dict(entry):
+    return {"placeholder": entry.placeholder, "original": entry.original}
+
+def operator_entry_to_dict(entry):
+    return {"placeholder": entry.placeholder, "operator": entry.operator}
+
+def result_to_dict(result):
+    return {
+        "resolved_entities": [
+            entity_to_dict(entity)
+            for entity in result.resolved_entities
+        ],
+        "redaction": {
+            "redacted_text": result.redaction.redacted_text,
+            "redaction_map": [
+                redaction_entry_to_dict(entry)
+                for entry in result.redaction.redaction_map
+            ],
+            "operator_map": [
+                operator_entry_to_dict(entry)
+                for entry in result.redaction.operator_map
+            ],
+            "entity_count": result.redaction.entity_count,
+        },
+    }
 start = time.perf_counter_ns()
 for _ in range(payload["iterations"]):
     for item in payload["cases"]:
@@ -156,6 +202,25 @@ for _ in range(payload["top_level_iterations"]):
             item.get("operators"),
         )
 one_shot_ms = (time.perf_counter_ns() - one_shot_start) / 1_000_000
+package_case_results = [
+    result_to_dict(
+        prepared.redact_text(
+            item["text"],
+            item.get("operators"),
+        )
+    )
+    for item in payload["cases"]
+]
+one_shot_case_results = [
+    result_to_dict(
+        anonymize.redact_text(
+            payload["config_json"],
+            item["text"],
+            item.get("operators"),
+        )
+    )
+    for item in payload["cases"]
+]
 print(
     json.dumps(
         {
@@ -163,6 +228,8 @@ print(
             "loadMs": load_ms,
             "runMs": run_ms,
             "oneShotMs": one_shot_ms,
+            "packageCaseResults": package_case_results,
+            "oneShotCaseResults": one_shot_case_results,
         }
     )
 )
@@ -242,6 +309,7 @@ const payload = {
     operators_json: operatorsJson,
   })),
 };
+const rustCoreResults = callRustCoreResults(payload, tempDir);
 
 const rustOutput = runCommand(
   "cargo",
@@ -276,6 +344,20 @@ for (let iteration = 0; iteration < ITERATIONS; iteration += 1) {
   }
 }
 const tsRunMs = elapsedMs(tsStart);
+assertAdapterResults(
+  "ts-napi",
+  cases.map((item) =>
+    canonicalResult(
+      prepared.redactStaticEntities(
+        item.text,
+        item.operatorsJson === undefined
+          ? undefined
+          : JSON.parse(item.operatorsJson),
+      ),
+    ),
+  ),
+  rustCoreResults,
+);
 printSummary(
   "ts-napi",
   { prepareMs: tsPrepareMs, runMs: tsRunMs },
@@ -302,6 +384,13 @@ for (let iteration = 0; iteration < ITERATIONS; iteration += 1) {
   }
 }
 const sdkRunMs = elapsedMs(sdkRunStart);
+assertAdapterResults(
+  "ts-sdk-prepared-package",
+  cases.map((item) =>
+    canonicalResult(preparedSdk.redact_text(item.text, item.operatorsConfig)),
+  ),
+  rustCoreResults,
+);
 printSummary(
   "ts-sdk-prepared-package",
   {
@@ -328,6 +417,22 @@ for (let iteration = 0; iteration < TOP_LEVEL_ITERATIONS; iteration += 1) {
   }
 }
 const topLevelRunMs = elapsedMs(topLevelRunStart);
+assertAdapterResults(
+  "ts-sdk-one-shot",
+  cases.map((item) =>
+    canonicalResult(
+      redactTextWithSdk({
+        binding: native,
+        config: configJson,
+        fullText: item.text,
+        ...(item.operatorsConfig !== undefined
+          ? { operators: item.operatorsConfig }
+          : {}),
+      }),
+    ),
+  ),
+  rustCoreResults,
+);
 printSummary(
   "ts-sdk-one-shot",
   { prepareMs: 0, runMs: topLevelRunMs },
@@ -340,6 +445,7 @@ const pyOutput = runCommand("python3", ["-c", pythonScript], {
   STELLA_ANONYMIZE_PY_MODULE: pythonModulePath,
 });
 const pySummary = JSON.parse(pyOutput);
+assertAdapterResults("python-pyo3", pySummary.caseResults, rustCoreResults);
 printSummary("python-pyo3", pySummary, cases.length, ITERATIONS);
 
 const pySdkOutput = runCommand("python3", ["-c", pythonSdkScript], {
@@ -347,6 +453,11 @@ const pySdkOutput = runCommand("python3", ["-c", pythonSdkScript], {
   STELLA_ANONYMIZE_PY_MODULE: pythonModulePath,
 });
 const pySdkSummary = JSON.parse(pySdkOutput);
+assertAdapterResults(
+  "python-sdk-prepared-package",
+  pySdkSummary.packageCaseResults,
+  rustCoreResults,
+);
 printSummary(
   "python-sdk-prepared-package",
   {
@@ -357,6 +468,11 @@ printSummary(
   },
   cases.length,
   ITERATIONS,
+);
+assertAdapterResults(
+  "python-sdk-one-shot",
+  pySdkSummary.oneShotCaseResults,
+  rustCoreResults,
 );
 printSummary(
   "python-sdk-one-shot",
@@ -391,6 +507,158 @@ function buildCases() {
   }
 
   return fixtureCases;
+}
+
+function callRustCoreResults(perfPayload, tempDirectory) {
+  const parityPayloadPath = join(tempDirectory, "native-adapter-parity.json");
+  writeFileSync(
+    parityPayloadPath,
+    JSON.stringify({
+      config_json: perfPayload.config_json,
+      cases: perfPayload.cases.map(({ text, operators_json }) => ({
+        text,
+        operators_json,
+      })),
+    }),
+  );
+  const output = runCommand(
+    "cargo",
+    [
+      "run",
+      "-p",
+      "stella-anonymize-adapter-contract",
+      "--example",
+      "native_adapter_parity",
+      "--release",
+      "--locked",
+      "--quiet",
+    ],
+    {
+      STELLA_ANONYMIZE_PARITY_PAYLOAD: parityPayloadPath,
+    },
+  );
+  return JSON.parse(output).map(canonicalResult);
+}
+
+function assertAdapterResults(adapter, actualResults, expectedResults) {
+  if (actualResults.length !== expectedResults.length) {
+    throw new Error(
+      `${adapter} returned ${actualResults.length} parity results, expected ${expectedResults.length}`,
+    );
+  }
+
+  for (let index = 0; index < expectedResults.length; index += 1) {
+    const actual = canonicalResult(actualResults[index]);
+    const expected = expectedResults[index];
+    const actualSignature = resultSignature(actual);
+    const expectedSignature = resultSignature(expected);
+    if (actualSignature === expectedSignature) {
+      continue;
+    }
+    throw new Error(
+      [
+        `${adapter} parity mismatch at case ${index}`,
+        `expected=${hashSignature(expectedSignature)}`,
+        `actual=${hashSignature(actualSignature)}`,
+      ].join(" "),
+    );
+  }
+}
+
+function canonicalResult(result) {
+  const redaction = result.redaction;
+  return {
+    resolved_entities: readArray(
+      result,
+      "resolvedEntities",
+      "resolved_entities",
+    ).map(canonicalEntity),
+    redaction: {
+      redacted_text: readValue(redaction, "redactedText", "redacted_text"),
+      redaction_map: canonicalRedactionEntries(
+        readValue(redaction, "redactionMap", "redaction_map"),
+      ),
+      operator_map: canonicalOperatorEntries(
+        readValue(redaction, "operatorMap", "operator_map"),
+      ),
+      entity_count: readValue(redaction, "entityCount", "entity_count"),
+    },
+  };
+}
+
+function canonicalEntity(entity) {
+  return {
+    start: entity.start,
+    end: entity.end,
+    label: entity.label,
+    text: entity.text,
+    score: entity.score,
+    source: entity.source,
+    source_detail:
+      readOptionalValue(entity, "sourceDetail", "source_detail") ?? null,
+  };
+}
+
+function canonicalRedactionEntries(entries) {
+  if (entries instanceof Map) {
+    return [...entries.entries()].map(([placeholder, original]) => ({
+      placeholder,
+      original,
+    }));
+  }
+  return entries.map(({ placeholder, original }) => ({
+    placeholder,
+    original,
+  }));
+}
+
+function canonicalOperatorEntries(entries) {
+  if (entries instanceof Map) {
+    return [...entries.entries()].map(([placeholder, operator]) => ({
+      placeholder,
+      operator,
+    }));
+  }
+  return entries.map(({ placeholder, operator }) => ({
+    placeholder,
+    operator,
+  }));
+}
+
+function readArray(value, camelKey, snakeKey) {
+  const result = readValue(value, camelKey, snakeKey);
+  if (!Array.isArray(result)) {
+    throw new TypeError(`Expected array field ${camelKey}/${snakeKey}`);
+  }
+  return result;
+}
+
+function readValue(value, camelKey, snakeKey) {
+  if (Object.hasOwn(value, camelKey)) {
+    return value[camelKey];
+  }
+  if (Object.hasOwn(value, snakeKey)) {
+    return value[snakeKey];
+  }
+  throw new TypeError(`Missing field ${camelKey}/${snakeKey}`);
+}
+
+function readOptionalValue(value, camelKey, snakeKey) {
+  if (Object.hasOwn(value, camelKey)) {
+    return value[camelKey];
+  }
+  if (Object.hasOwn(value, snakeKey)) {
+    return value[snakeKey];
+  }
+  return undefined;
+}
+
+function resultSignature(result) {
+  return JSON.stringify(result);
+}
+
+function hashSignature(signature) {
+  return createHash("sha256").update(signature).digest("hex").slice(0, 16);
 }
 
 function nativeLibraryPath(name) {
