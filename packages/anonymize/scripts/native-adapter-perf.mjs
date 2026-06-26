@@ -3,9 +3,18 @@ import { copyFileSync, mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createRequire } from "node:module";
+import {
+  load_prepared_package,
+  prepare_search_package,
+  redact_text as redactTextWithSdk,
+} from "../src/native.ts";
 
 const ROOT_DIR = join(import.meta.dir, "..", "..", "..");
 const ITERATIONS = Number(process.env.ANONYMIZE_NATIVE_PERF_ITERATIONS ?? 100);
+const TOP_LEVEL_ITERATIONS = Number(
+  process.env.ANONYMIZE_NATIVE_PERF_TOP_LEVEL_ITERATIONS ??
+    Math.min(ITERATIONS, 10),
+);
 
 const configJson = JSON.stringify({
   regex_patterns: [{ kind: "regex", pattern: "\\b[A-Z]{2}\\d{4}\\b" }],
@@ -111,6 +120,54 @@ elapsed_ms = (time.perf_counter_ns() - start) / 1_000_000
 print(json.dumps({"prepareMs": prepare_ms, "runMs": elapsed_ms}))
 `;
 
+const pythonSdkScript = `
+import json
+import os
+import pathlib
+import sys
+import time
+
+module_root = pathlib.Path(os.environ["STELLA_ANONYMIZE_PY_MODULE"]).parent.parent
+sys.path.insert(0, str(module_root))
+
+import stella_anonymize as anonymize
+
+payload = json.loads(os.environ["STELLA_ANONYMIZE_PERF_PAYLOAD"])
+package_start = time.perf_counter_ns()
+package_bytes = anonymize.prepare_search_package(payload["config_json"])
+package_prepare_ms = (time.perf_counter_ns() - package_start) / 1_000_000
+load_start = time.perf_counter_ns()
+prepared = anonymize.load_prepared_package(package_bytes)
+load_ms = (time.perf_counter_ns() - load_start) / 1_000_000
+start = time.perf_counter_ns()
+for _ in range(payload["iterations"]):
+    for item in payload["cases"]:
+        prepared.redact_text(
+            item["text"],
+            item.get("operators"),
+        )
+run_ms = (time.perf_counter_ns() - start) / 1_000_000
+one_shot_start = time.perf_counter_ns()
+for _ in range(payload["top_level_iterations"]):
+    for item in payload["cases"]:
+        anonymize.redact_text(
+            payload["config_json"],
+            item["text"],
+            item.get("operators"),
+        )
+one_shot_ms = (time.perf_counter_ns() - one_shot_start) / 1_000_000
+print(
+    json.dumps(
+        {
+            "packagePrepareMs": package_prepare_ms,
+            "loadMs": load_ms,
+            "runMs": run_ms,
+            "oneShotMs": one_shot_ms,
+        }
+    )
+)
+`;
+
 runCommand("cargo", [
   "build",
   "-p",
@@ -128,14 +185,60 @@ mkdirSync(pythonPackageDir);
 const pythonModulePath = join(pythonPackageDir, "_native.so");
 copyFileSync(nativeLibraryPath("stella_anonymize_napi"), napiPath);
 copyFileSync(nativeLibraryPath("stella_anonymize_core_py"), pythonModulePath);
+copyFileSync(
+  join(
+    ROOT_DIR,
+    "crates",
+    "anonymize-py",
+    "python",
+    "stella_anonymize",
+    "__init__.py",
+  ),
+  join(pythonPackageDir, "__init__.py"),
+);
+copyFileSync(
+  join(
+    ROOT_DIR,
+    "crates",
+    "anonymize-py",
+    "python",
+    "stella_anonymize",
+    "__init__.pyi",
+  ),
+  join(pythonPackageDir, "__init__.pyi"),
+);
+copyFileSync(
+  join(
+    ROOT_DIR,
+    "crates",
+    "anonymize-py",
+    "python",
+    "stella_anonymize",
+    "_native.pyi",
+  ),
+  join(pythonPackageDir, "_native.pyi"),
+);
+copyFileSync(
+  join(
+    ROOT_DIR,
+    "crates",
+    "anonymize-py",
+    "python",
+    "stella_anonymize",
+    "py.typed",
+  ),
+  join(pythonPackageDir, "py.typed"),
+);
 
 const native = createRequire(import.meta.url)(napiPath);
 const cases = buildCases();
 const payload = {
   config_json: configJson,
   iterations: ITERATIONS,
-  cases: cases.map(({ text, operatorsJson }) => ({
+  top_level_iterations: TOP_LEVEL_ITERATIONS,
+  cases: cases.map(({ text, operatorsConfig, operatorsJson }) => ({
     text,
+    operators: operatorsConfig?.operators ?? null,
     operators_json: operatorsJson,
   })),
 };
@@ -180,12 +283,87 @@ printSummary(
   ITERATIONS,
 );
 
+const packageStart = Bun.nanoseconds();
+const packageBytes = prepare_search_package({
+  binding: native,
+  config: configJson,
+});
+const packagePrepareMs = elapsedMs(packageStart);
+const loadStart = Bun.nanoseconds();
+const preparedSdk = load_prepared_package({
+  binding: native,
+  packageBytes,
+});
+const loadMs = elapsedMs(loadStart);
+const sdkRunStart = Bun.nanoseconds();
+for (let iteration = 0; iteration < ITERATIONS; iteration += 1) {
+  for (const item of cases) {
+    preparedSdk.redact_text(item.text, item.operatorsConfig);
+  }
+}
+const sdkRunMs = elapsedMs(sdkRunStart);
+printSummary(
+  "ts-sdk-prepared-package",
+  {
+    prepareMs: packagePrepareMs + loadMs,
+    packagePrepareMs,
+    loadMs,
+    runMs: sdkRunMs,
+  },
+  cases.length,
+  ITERATIONS,
+);
+
+const topLevelRunStart = Bun.nanoseconds();
+for (let iteration = 0; iteration < TOP_LEVEL_ITERATIONS; iteration += 1) {
+  for (const item of cases) {
+    redactTextWithSdk({
+      binding: native,
+      config: configJson,
+      fullText: item.text,
+      ...(item.operatorsConfig !== undefined
+        ? { operators: item.operatorsConfig }
+        : {}),
+    });
+  }
+}
+const topLevelRunMs = elapsedMs(topLevelRunStart);
+printSummary(
+  "ts-sdk-one-shot",
+  { prepareMs: 0, runMs: topLevelRunMs },
+  cases.length,
+  TOP_LEVEL_ITERATIONS,
+);
+
 const pyOutput = runCommand("python3", ["-c", pythonScript], {
   STELLA_ANONYMIZE_PERF_PAYLOAD: JSON.stringify(payload),
   STELLA_ANONYMIZE_PY_MODULE: pythonModulePath,
 });
 const pySummary = JSON.parse(pyOutput);
 printSummary("python-pyo3", pySummary, cases.length, ITERATIONS);
+
+const pySdkOutput = runCommand("python3", ["-c", pythonSdkScript], {
+  STELLA_ANONYMIZE_PERF_PAYLOAD: JSON.stringify(payload),
+  STELLA_ANONYMIZE_PY_MODULE: pythonModulePath,
+});
+const pySdkSummary = JSON.parse(pySdkOutput);
+printSummary(
+  "python-sdk-prepared-package",
+  {
+    prepareMs: pySdkSummary.packagePrepareMs + pySdkSummary.loadMs,
+    packagePrepareMs: pySdkSummary.packagePrepareMs,
+    loadMs: pySdkSummary.loadMs,
+    runMs: pySdkSummary.runMs,
+  },
+  cases.length,
+  ITERATIONS,
+);
+printSummary(
+  "python-sdk-one-shot",
+  { prepareMs: 0, runMs: pySdkSummary.oneShotMs },
+  cases.length,
+  TOP_LEVEL_ITERATIONS,
+);
 
 function buildCases() {
   const places = ["Fuzztovn", "Fuzztawn", "Fuzztowm"];
@@ -201,11 +379,14 @@ function buildCases() {
     const registration = `AB${String(index).padStart(4, "0")}`;
     const matter = `MAT-${String(index % 1_000).padStart(3, "0")}`;
     const place = places[index % places.length];
+    const operatorsJson = operators[index % operators.length];
     fixtureCases.push({
       text:
         `Reference ${registration} for Acme s.r.o. near ` +
         `${place}, Turkey, Prague, matter ${matter}, code Secret Code.`,
-      operatorsJson: operators[index % operators.length],
+      operatorsConfig:
+        operatorsJson === undefined ? undefined : JSON.parse(operatorsJson),
+      operatorsJson,
     });
   }
 
@@ -237,6 +418,7 @@ function printSummary(adapter, summary, fixtureCount, iterations) {
       runMs: roundMs(runMs),
       totalMs: roundMs(prepareMs + runMs),
       avgCallMs: roundMs(runMs / calls),
+      ...extraSummaryFields(summary),
     }),
   );
 }
@@ -247,6 +429,16 @@ function elapsedMs(start) {
 
 function roundMs(ms) {
   return Math.round(ms * 1_000) / 1_000;
+}
+
+function extraSummaryFields(summary) {
+  const fields = {};
+  for (const key of ["packagePrepareMs", "loadMs"]) {
+    if (summary[key] !== undefined) {
+      fields[key] = roundMs(Number(summary[key]));
+    }
+  }
+  return fields;
 }
 
 function runCommand(command, args, env = {}) {
