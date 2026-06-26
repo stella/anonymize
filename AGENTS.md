@@ -160,8 +160,10 @@ details unless they are already public in the repository.
   offsets, language codes, entity labels, versions, and artifact formats.
 - Keep struct fields private unless direct construction is part of the public
   contract. Use smart constructors for values that must satisfy invariants.
-- Use enums for real closed domain states. Do not create enums just to simulate
-  named arguments or boolean options.
+- Use enums for real closed domain states and boolean-blind choices where
+  variants carry domain meaning. For callsite ergonomics alone, prefer an
+  options struct or `bon` builder over an enum that only simulates named
+  arguments.
 - For functions, use positional parameters for one or two obvious arguments.
   Use a named `SomethingOptions`, `SomethingArgs`, or `SomethingParams` struct
   for 3+ arguments or same-type arguments that are easy to swap.
