@@ -3,13 +3,16 @@ import { describe, expect, test } from "bun:test";
 import {
   createPipelineContext,
   DEFAULT_ENTITY_LABELS,
+  createNativePipelineFromConfig,
   preparePipelineSearch,
+  prepareNativePipelinePackage,
   redactText,
   runPipeline,
 } from "../index";
 import { buildUnifiedSearch } from "../build-unified-search";
 import { REGEX_META } from "../detectors/regex";
 import { applyPipelineLanguageScope } from "../language-scope";
+import type { NativeAnonymizeBinding } from "../native";
 import type { Dictionaries, PipelineConfig } from "../types";
 import { loadTestDictionaries } from "./load-dictionaries";
 
@@ -50,6 +53,52 @@ const detect = async (fullText: string, config: Partial<PipelineConfig>) =>
     gazetteerEntries: [],
     context: getCtx(),
   });
+
+const createCountingNativeBinding = (version: string) => {
+  let compressedPrepare = 0;
+  let rawPrepare = 0;
+  let fromPackage = 0;
+  const binding = {
+    nativePackageVersion: () => version,
+    NativePreparedSearch: {
+      fromConfigJsonBytes: () => {
+        throw new Error("native package cache test should use package bytes");
+      },
+      fromPreparedPackageBytes: () => {
+        fromPackage += 1;
+        return {
+          prepareDiagnosticsJson: () => JSON.stringify({ events: [] }),
+          redactStaticEntities: (fullText: string) => ({
+            resolvedEntities: [],
+            redaction: {
+              redactedText: fullText,
+              redactionMap: [],
+              operatorMap: [],
+              entityCount: 0,
+            },
+          }),
+        };
+      },
+    },
+    prepareStaticSearchPackageBytes: (configJson: Uint8Array) => {
+      rawPrepare += 1;
+      return new Uint8Array([rawPrepare, configJson.byteLength % 256]);
+    },
+    prepareStaticSearchCompressedPackageBytes: (configJson: Uint8Array) => {
+      compressedPrepare += 1;
+      return new Uint8Array([compressedPrepare, configJson.byteLength % 256]);
+    },
+  } satisfies NativeAnonymizeBinding;
+
+  return {
+    binding,
+    counts: () => ({
+      compressedPrepare,
+      fromPackage,
+      rawPrepare,
+    }),
+  };
+};
 
 describe("pipeline config semantics", () => {
   test("content language derives dictionary scopes", () => {
@@ -419,6 +468,108 @@ describe("pipeline config semantics", () => {
     expect(
       second.nativeStaticConfig.hotword_data?.rules.length,
     ).toBeGreaterThan(0);
+  });
+
+  test("native pipeline package cache reuses exact configs", async () => {
+    const { binding, counts } = createCountingNativeBinding(
+      "native-cache-context",
+    );
+    const context = createPipelineContext();
+    const config = {
+      ...BASE_CONFIG,
+      enableCountries: false,
+      labels: ["person"],
+    };
+
+    const first = await prepareNativePipelinePackage({
+      binding,
+      config,
+      context,
+    });
+    first[0] = 99;
+    const second = await prepareNativePipelinePackage({
+      binding,
+      config,
+      context,
+    });
+    await createNativePipelineFromConfig({ binding, config, context });
+
+    expect(counts().compressedPrepare).toBe(1);
+    expect(second[0]).toBe(1);
+  });
+
+  test("native pipeline package cache is scoped by dictionary identity", async () => {
+    const { binding, counts } = createCountingNativeBinding(
+      "native-cache-dictionaries",
+    );
+    const cacheDictionaries = {
+      firstNames: {
+        en: ["Ada"],
+      },
+    } satisfies Dictionaries;
+    const config = {
+      ...BASE_CONFIG,
+      dictionaries: cacheDictionaries,
+      enableCountries: false,
+      labels: ["person"],
+    };
+
+    await prepareNativePipelinePackage({
+      binding,
+      config,
+      context: createPipelineContext(),
+    });
+    await prepareNativePipelinePackage({
+      binding,
+      config,
+      context: createPipelineContext(),
+    });
+    await prepareNativePipelinePackage({
+      binding,
+      config: {
+        ...config,
+        dictionaries: { ...cacheDictionaries },
+      },
+      context: createPipelineContext(),
+    });
+
+    expect(counts().compressedPrepare).toBe(2);
+  });
+
+  test("native pipeline package cache keys caller data", async () => {
+    const { binding, counts } = createCountingNativeBinding(
+      "native-cache-caller-data",
+    );
+    const context = createPipelineContext();
+    const config = {
+      ...BASE_CONFIG,
+      customRegexes: [
+        {
+          label: "matter id",
+          pattern: "MAT-[0-9]+",
+        },
+      ],
+      enableCountries: false,
+      enableRegex: true,
+      labels: ["matter id"],
+    };
+
+    await prepareNativePipelinePackage({ binding, config, context });
+    await prepareNativePipelinePackage({
+      binding,
+      config: {
+        ...config,
+        customRegexes: [
+          {
+            label: "matter id",
+            pattern: "REF-[0-9]+",
+          },
+        ],
+      },
+      context,
+    });
+
+    expect(counts().compressedPrepare).toBe(2);
   });
 
   test("enableLegalForms flag gates legal-form detection", async () => {

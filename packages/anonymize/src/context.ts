@@ -69,6 +69,9 @@ export type PipelineContext = {
   search: UnifiedSearchInstance | null;
   searchKey: string;
   searchPromise: Promise<UnifiedSearchInstance> | null;
+  nativePipelinePackage: Uint8Array | null;
+  nativePipelinePackageKey: string;
+  nativePipelinePackagePromise: Promise<Uint8Array> | null;
 
   // ── Name corpus ───────────────────────────────
   nameCorpus: NameCorpusData | null;
@@ -112,6 +115,9 @@ export const createPipelineContext = (): PipelineContext => ({
   search: null,
   searchKey: "",
   searchPromise: null,
+  nativePipelinePackage: null,
+  nativePipelinePackageKey: "",
+  nativePipelinePackagePromise: null,
 
   nameCorpus: null,
   nameCorpusKey: "",
