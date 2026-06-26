@@ -5,14 +5,17 @@ import process from "node:process";
 import {
   assertNativeBindingVersion,
   createNativePipelineFromPackage,
+  type NativeOperatorConfig,
   type NativeAnonymizeBinding,
   type NativeNormalizeOptions,
   type NativeSearchPackageInput,
   type PreparedNativePipeline,
+  diagnostics_json as diagnosticsJsonWithBinding,
   load_prepared_package as loadPreparedPackageWithBinding,
   native_package_version as nativePackageVersionWithBinding,
   normalize_for_search as normalizeForSearchWithBinding,
   prepare_search_package as prepareSearchPackageWithBinding,
+  redact_text_json as redactTextJsonWithBinding,
 } from "./native";
 
 export * from "./native";
@@ -142,6 +145,32 @@ export const load_prepared_package_file = (
   packagePath: string,
   options: NativeSdkOptions = {},
 ) => load_prepared_package(readNativePipelinePackageFile(packagePath), options);
+
+export const redact_text_json = (
+  config: NativeSearchPackageInput,
+  fullText: string,
+  operators?: NativeOperatorConfig,
+  options: NativeSdkOptions = {},
+): string =>
+  redactTextJsonWithBinding({
+    binding: resolveNativeSdkBinding(options),
+    config,
+    fullText,
+    ...(operators !== undefined ? { operators } : {}),
+  });
+
+export const diagnostics_json = (
+  config: NativeSearchPackageInput,
+  fullText: string,
+  operators?: NativeOperatorConfig,
+  options: NativeSdkOptions = {},
+): string | null =>
+  diagnosticsJsonWithBinding({
+    binding: resolveNativeSdkBinding(options),
+    config,
+    fullText,
+    ...(operators !== undefined ? { operators } : {}),
+  });
 
 export const readDefaultNativePipelinePackageFile = (): Uint8Array => {
   try {

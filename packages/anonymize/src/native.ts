@@ -64,6 +64,10 @@ export type NativePreparedSearchBinding = {
     fullText: string,
     operators?: NativeBindingOperatorConfig,
   ) => NativeBindingStaticRedactionResult;
+  redactStaticEntitiesJson?: (
+    fullText: string,
+    operators?: NativeBindingOperatorConfig,
+  ) => string;
   redactStaticEntitiesDiagnosticsJson?: (
     fullText: string,
     operators?: NativeBindingOperatorConfig,
@@ -136,6 +140,16 @@ export type SharedNativePreparedPackageOptions = {
   packageBytes: Uint8Array;
 };
 
+export type SharedNativeRedactTextJsonOptions = {
+  binding: NativeAnonymizeBinding;
+  config: NativeSearchPackageInput;
+  fullText: string;
+  operators?: NativeOperatorConfig;
+};
+
+export type SharedNativeDiagnosticsJsonOptions =
+  SharedNativeRedactTextJsonOptions;
+
 export type NativeNormalizeOptions = {
   binding: NativeAnonymizeBinding;
   text: string;
@@ -170,6 +184,10 @@ export class PreparedNativeAnonymizer {
     return this.#prepared.prepareDiagnosticsJson?.() ?? null;
   }
 
+  prepare_diagnostics_json(): string | null {
+    return this.prepareDiagnosticsJson();
+  }
+
   redactStaticEntities(
     fullText: string,
     operators?: NativeOperatorConfig,
@@ -190,9 +208,18 @@ export class PreparedNativeAnonymizer {
   }
 
   redact_text_json(fullText: string, operators?: NativeOperatorConfig): string {
+    const bindingOperators = toBindingOperatorConfig(operators);
+    if (this.#prepared.redactStaticEntitiesJson) {
+      return this.#prepared.redactStaticEntitiesJson(
+        fullText,
+        bindingOperators,
+      );
+    }
     return JSON.stringify(
       toBindingStaticRedactionResult(
-        this.redactStaticEntities(fullText, operators),
+        toNativeStaticRedactionResult(
+          this.#prepared.redactStaticEntities(fullText, bindingOperators),
+        ),
       ),
     );
   }
@@ -227,6 +254,10 @@ export class PreparedNativePipeline {
 
   prepareDiagnosticsJson(): string | null {
     return this.#anonymizer.prepareDiagnosticsJson();
+  }
+
+  prepare_diagnostics_json(): string | null {
+    return this.prepareDiagnosticsJson();
   }
 
   redactText(
@@ -351,6 +382,30 @@ export const load_prepared_package = ({
   packageBytes,
 }: SharedNativePreparedPackageOptions): PreparedNativeAnonymizer =>
   createNativeAnonymizerFromPackage({ binding, packageBytes });
+
+export const redact_text_json = ({
+  binding,
+  config,
+  fullText,
+  operators,
+}: SharedNativeRedactTextJsonOptions): string =>
+  new PreparedNativeAnonymizer(
+    binding.NativePreparedSearch.fromConfigJsonBytes(
+      encodeNativeSearchConfigInput(config),
+    ),
+  ).redact_text_json(fullText, operators);
+
+export const diagnostics_json = ({
+  binding,
+  config,
+  fullText,
+  operators,
+}: SharedNativeDiagnosticsJsonOptions): string | null =>
+  new PreparedNativeAnonymizer(
+    binding.NativePreparedSearch.fromConfigJsonBytes(
+      encodeNativeSearchConfigInput(config),
+    ),
+  ).diagnostics_json(fullText, operators);
 
 export const createNativePipelineFromPackage = ({
   binding,

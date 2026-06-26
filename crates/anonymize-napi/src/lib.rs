@@ -623,6 +623,26 @@ impl NativePreparedSearch {
 
   #[napi]
   #[allow(clippy::needless_pass_by_value)]
+  pub fn redact_static_entities_json(
+    &self,
+    full_text: String,
+    operators: Option<JsOperatorConfig>,
+  ) -> Result<String> {
+    let operators =
+      operator_config_from_binding(operators.map(to_binding_operator_config))
+        .map_err(|error| to_napi_contract_error(&error))?;
+    let result = self
+      .inner
+      .redact_static_entities(&full_text, &operators)
+      .map_err(|error| to_napi_core_error(&error))?;
+    let result = static_redaction_result_to_utf16_binding(result, &full_text)
+      .map_err(|error| to_napi_contract_error(&error))?;
+
+    serde_json::to_string(&result).map_err(|error| to_napi_serde_error(&error))
+  }
+
+  #[napi]
+  #[allow(clippy::needless_pass_by_value)]
   pub fn redact_static_entities_diagnostics_json(
     &self,
     full_text: String,
