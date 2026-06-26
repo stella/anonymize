@@ -42,6 +42,12 @@ struct WordBefore {
   has_dot: bool,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct ScanRange {
+  start: usize,
+  end: usize,
+}
+
 impl PreparedAddressContextData {
   pub(crate) fn new(data: AddressContextData) -> Result<Self> {
     Ok(Self {
@@ -93,53 +99,74 @@ impl PreparedAddressContextData {
       .collect::<Vec<_>>();
     let header_end = header_end(full_text);
     let offsets = ByteOffsets::new(full_text);
+    let scan_ranges = address_context_scan_ranges(
+      full_text,
+      &offsets,
+      header_end,
+      &address_entities,
+    )?;
 
-    for found in self.slash_house_number.find_iter(full_text) {
-      let num_start = usize_to_u32("address_context.num_start", found.start())?;
-      let num_end = usize_to_u32("address_context.num_end", found.end())?;
-      if covered_by(existing_entities, num_start, num_end) {
-        continue;
-      }
-
-      let in_header = num_start < header_end;
-      let near_address = address_entities.iter().any(|entity| {
-        within_context_window(&offsets, entity, num_start, num_end)
-      });
-      if !in_header && !near_address {
-        continue;
-      }
-
-      let Some(scan_start) = skip_whitespace_back(full_text, found.start())
-      else {
+    for range in scan_ranges {
+      let Some(segment) = full_text.get(range.start..range.end) else {
         continue;
       };
-      let Some((street_start, has_temporal_prep)) =
-        self.scan_street_start(full_text, scan_start)?
-      else {
-        continue;
-      };
-      let street_start_u32 =
-        usize_to_u32("address_context.street_start", street_start)?;
-      if has_temporal_prep {
-        continue;
-      }
-      if covered_by(existing_entities, street_start_u32, num_end) {
-        continue;
-      }
+      for found in self.slash_house_number.find_iter(segment) {
+        let num_start_byte = range.start.saturating_add(found.start());
+        let num_end_byte = range.start.saturating_add(found.end());
+        if !self.full_slash_house_match_is_identical(
+          full_text,
+          num_start_byte,
+          num_end_byte,
+        ) {
+          continue;
+        }
+        let num_start =
+          usize_to_u32("address_context.num_start", num_start_byte)?;
+        let num_end = usize_to_u32("address_context.num_end", num_end_byte)?;
+        if covered_by(existing_entities, num_start, num_end) {
+          continue;
+        }
 
-      let street_text = text_slice(full_text, street_start_u32, num_end)?;
-      if street_text.len() < 4 {
-        continue;
+        let in_header = num_start < header_end;
+        let near_address = address_entities.iter().any(|entity| {
+          within_context_window(&offsets, entity, num_start, num_end)
+        });
+        if !in_header && !near_address {
+          continue;
+        }
+
+        let Some(scan_start) = skip_whitespace_back(full_text, num_start_byte)
+        else {
+          continue;
+        };
+        let Some((street_start, has_temporal_prep)) =
+          self.scan_street_start(full_text, scan_start)?
+        else {
+          continue;
+        };
+        let street_start_u32 =
+          usize_to_u32("address_context.street_start", street_start)?;
+        if has_temporal_prep {
+          continue;
+        }
+        if covered_by(existing_entities, street_start_u32, num_end) {
+          continue;
+        }
+
+        let street_text = text_slice(full_text, street_start_u32, num_end)?;
+        if street_text.len() < 4 {
+          continue;
+        }
+        let score = address_context_score(full_text, street_start, in_header);
+        results.push(address_context_entity(
+          street_start_u32,
+          num_end,
+          "address",
+          street_text,
+          score,
+          DetectionSource::Regex,
+        ));
       }
-      let score = address_context_score(full_text, street_start, in_header);
-      results.push(address_context_entity(
-        street_start_u32,
-        num_end,
-        "address",
-        street_text,
-        score,
-        DetectionSource::Regex,
-      ));
     }
 
     self.detect_bare_house_numbers(
@@ -148,6 +175,18 @@ impl PreparedAddressContextData {
       &mut results,
     )?;
     Ok(results)
+  }
+
+  fn full_slash_house_match_is_identical(
+    &self,
+    full_text: &str,
+    start: usize,
+    end: usize,
+  ) -> bool {
+    self
+      .slash_house_number
+      .find_at(full_text, start)
+      .is_some_and(|found| found.start() == start && found.end() == end)
   }
 
   fn scan_street_start(
@@ -212,45 +251,71 @@ impl PreparedAddressContextData {
     existing_entities: &[PipelineEntity],
     results: &mut Vec<PipelineEntity>,
   ) -> Result<()> {
-    for captures in self.bare_house_number.captures_iter(full_text) {
-      let Some(captured) = captures.name("value") else {
+    let offsets = ByteOffsets::new(full_text);
+    let ranges =
+      bare_house_scan_ranges(full_text, &offsets, existing_entities, results)?;
+    for range in ranges {
+      let Some(segment) = full_text.get(range.start..range.end) else {
         continue;
       };
-      let start = usize_to_u32("address_context.bare_start", captured.start())?;
-      let end = usize_to_u32("address_context.bare_end", captured.end())?;
-      if !near_confirmed_address_same_line(
-        full_text,
-        existing_entities,
-        results,
-        start,
-        end,
-      )? {
-        continue;
-      }
+      for captures in self.bare_house_number.captures_iter(segment) {
+        let Some(full_match) = captures.get(0) else {
+          continue;
+        };
+        let match_start = range.start.saturating_add(full_match.start());
+        let match_end = range.start.saturating_add(full_match.end());
+        if !self.full_bare_house_match_is_identical(
+          full_text,
+          match_start,
+          match_end,
+        ) {
+          continue;
+        }
+        let Some(captured) = captures.name("value") else {
+          continue;
+        };
+        let start = usize_to_u32(
+          "address_context.bare_start",
+          range.start.saturating_add(captured.start()),
+        )?;
+        let end = usize_to_u32(
+          "address_context.bare_end",
+          range.start.saturating_add(captured.end()),
+        )?;
+        if !near_confirmed_address_same_line(
+          full_text,
+          existing_entities,
+          results,
+          start,
+          end,
+        )? {
+          continue;
+        }
 
-      let word = captured
-        .as_str()
-        .split_whitespace()
-        .next()
-        .unwrap_or("")
-        .to_lowercase();
-      if self.bare_house_stopwords.contains(&word) {
-        continue;
-      }
-      if overlaps_any(existing_entities, start, end)
-        || overlaps_any(results, start, end)
-      {
-        continue;
-      }
+        let word = captured
+          .as_str()
+          .split_whitespace()
+          .next()
+          .unwrap_or("")
+          .to_lowercase();
+        if self.bare_house_stopwords.contains(&word) {
+          continue;
+        }
+        if overlaps_any(existing_entities, start, end)
+          || overlaps_any(results, start, end)
+        {
+          continue;
+        }
 
-      results.push(address_context_entity(
-        start,
-        end,
-        "address",
-        captured.as_str(),
-        0.75,
-        DetectionSource::Regex,
-      ));
+        results.push(address_context_entity(
+          start,
+          end,
+          "address",
+          captured.as_str(),
+          0.75,
+          DetectionSource::Regex,
+        ));
+      }
     }
     Ok(())
   }
@@ -262,6 +327,12 @@ impl PreparedAddressContextData {
   ) -> Result<Vec<PipelineEntity>> {
     let header_end = header_end(full_text);
     let offsets = ByteOffsets::new(full_text);
+    let header_scan_end = header_scan_end(full_text, &offsets, header_end)?;
+    let header =
+      full_text.get(..header_scan_end).ok_or(Error::InvalidSpan {
+        start: 0,
+        end: u32::try_from(header_scan_end).unwrap_or(u32::MAX),
+      })?;
     let context_entities = existing_entities
       .iter()
       .filter(|entity| {
@@ -270,7 +341,7 @@ impl PreparedAddressContextData {
       .collect::<Vec<_>>();
     let mut results = Vec::new();
 
-    for captures in self.orphan_street_line.captures_iter(full_text) {
+    for captures in self.orphan_street_line.captures_iter(header) {
       let Some(captured) = captures.name("value") else {
         continue;
       };
@@ -298,6 +369,18 @@ impl PreparedAddressContextData {
     }
     Ok(results)
   }
+
+  fn full_bare_house_match_is_identical(
+    &self,
+    full_text: &str,
+    start: usize,
+    end: usize,
+  ) -> bool {
+    self
+      .bare_house_number
+      .find_at(full_text, start)
+      .is_some_and(|found| found.start() == start && found.end() == end)
+  }
 }
 
 fn lowercased_set(values: Vec<String>) -> BTreeSet<String> {
@@ -305,6 +388,127 @@ fn lowercased_set(values: Vec<String>) -> BTreeSet<String> {
     .into_iter()
     .map(|value| value.to_lowercase())
     .collect()
+}
+
+fn address_context_scan_ranges(
+  full_text: &str,
+  offsets: &ByteOffsets<'_>,
+  header_end: u32,
+  address_entities: &[&PipelineEntity],
+) -> Result<Vec<ScanRange>> {
+  let mut ranges = Vec::new();
+  let header_end = offsets.validate_offset(header_end)?;
+  if header_end > 0 {
+    ranges.push(ScanRange {
+      start: 0,
+      end: header_end,
+    });
+  }
+
+  for entity in address_entities {
+    let start =
+      offsets.offset_before_utf16_units(entity.start, STREET_CONTEXT_WINDOW)?;
+    let end =
+      offsets.offset_after_utf16_units(entity.end, STREET_CONTEXT_WINDOW)?;
+    push_scan_range(full_text, &mut ranges, start, end)?;
+  }
+
+  Ok(merge_scan_ranges(ranges))
+}
+
+fn bare_house_scan_ranges(
+  full_text: &str,
+  offsets: &ByteOffsets<'_>,
+  existing_entities: &[PipelineEntity],
+  new_entities: &[PipelineEntity],
+) -> Result<Vec<ScanRange>> {
+  let mut ranges = Vec::new();
+  for entity in existing_entities.iter().chain(new_entities.iter()) {
+    if entity.label != "address" || is_caller_owned_entity(entity) {
+      continue;
+    }
+    let start = offsets
+      .offset_before_utf16_units(entity.start, BARE_HOUSE_CONTEXT_WINDOW)?;
+    let end = offsets
+      .offset_after_utf16_units(entity.end, BARE_HOUSE_CONTEXT_WINDOW)?;
+    ranges.push(line_expanded_scan_range(full_text, offsets, start, end)?);
+  }
+  Ok(merge_scan_ranges(ranges))
+}
+
+fn push_scan_range(
+  full_text: &str,
+  ranges: &mut Vec<ScanRange>,
+  start: u32,
+  end: u32,
+) -> Result<()> {
+  if start >= end {
+    return Ok(());
+  }
+  let start = usize::try_from(start)
+    .map_err(|_| Error::ByteOffsetOutOfBounds { offset: start })?;
+  let end = usize::try_from(end)
+    .map_err(|_| Error::ByteOffsetOutOfBounds { offset: end })?;
+  if start > full_text.len() || end > full_text.len() {
+    return Err(Error::ByteOffsetOutOfBounds { offset: u32::MAX });
+  }
+  ranges.push(ScanRange { start, end });
+  Ok(())
+}
+
+fn merge_scan_ranges(mut ranges: Vec<ScanRange>) -> Vec<ScanRange> {
+  ranges.sort_by_key(|range| (range.start, range.end));
+  let mut merged = Vec::<ScanRange>::new();
+  for range in ranges {
+    let Some(last) = merged.last_mut() else {
+      merged.push(range);
+      continue;
+    };
+    if range.start <= last.end {
+      last.end = last.end.max(range.end);
+      continue;
+    }
+    merged.push(range);
+  }
+  merged
+}
+
+fn line_expanded_scan_range(
+  full_text: &str,
+  offsets: &ByteOffsets<'_>,
+  start: u32,
+  end: u32,
+) -> Result<ScanRange> {
+  let start = offsets.validate_offset(start)?;
+  let end = offsets.validate_offset(end)?;
+  let line_start = full_text
+    .get(..start)
+    .and_then(|prefix| prefix.rfind('\n').map(|index| index.saturating_add(1)))
+    .unwrap_or(0);
+  let line_end = full_text
+    .get(end..)
+    .and_then(|suffix| suffix.find('\n').map(|index| end.saturating_add(index)))
+    .unwrap_or(full_text.len());
+  Ok(ScanRange {
+    start: line_start,
+    end: line_end,
+  })
+}
+
+fn header_scan_end(
+  full_text: &str,
+  offsets: &ByteOffsets<'_>,
+  header_end: u32,
+) -> Result<usize> {
+  let header_end = offsets.validate_offset(header_end)?;
+  let tail = full_text.get(header_end..).ok_or(Error::InvalidSpan {
+    start: u32::try_from(header_end).unwrap_or(u32::MAX),
+    end: offsets.len()?,
+  })?;
+  let Some(relative_newline) = tail.find('\n') else {
+    return Ok(full_text.len());
+  };
+  Ok(header_end.saturating_add(relative_newline))
 }
 
 fn compile_regex(field: &'static str, pattern: &str) -> Result<Regex> {

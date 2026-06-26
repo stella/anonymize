@@ -457,6 +457,39 @@ fn prepared_search_measures_slash_address_context_in_text_offsets() {
 }
 
 #[test]
+fn prepared_search_finds_slash_address_context_after_long_multibyte_prefix() {
+  let prepared = PreparedSearch::new(PreparedSearchConfig {
+    regex_patterns: vec![SearchPattern::Regex(String::from(r"\bPraha 10\b"))],
+    regex_meta: vec![RegexMatchMeta::new("address", 1.0)],
+    slices: PreparedSearchSlices {
+      regex: PatternSlice { start: 0, end: 1 },
+      ..PreparedSearchSlices::default()
+    },
+    threshold: 0.5,
+    allowed_labels: vec![String::from("address")],
+    address_context_data: Some(address_context_data()),
+    ..empty_config(PreparedSearchSlices::default())
+  })
+  .unwrap();
+  let full_text = format!(
+    "{}\nPraha 10 {} Vinohradská 2512/2a.",
+    "č".repeat(4_000),
+    "á".repeat(145)
+  );
+
+  let result = prepared
+    .redact_static_entities(&full_text, &OperatorConfig::default())
+    .unwrap();
+
+  assert!(
+    result
+      .resolved_entities
+      .iter()
+      .any(|entity| entity.text == "Vinohradská 2512/2a")
+  );
+}
+
+#[test]
 fn prepared_search_ignores_caller_owned_addresses_for_bare_house_context() {
   let mut meta = RegexMatchMeta::new("address", 1.0);
   meta.source_detail = Some(SourceDetail::CustomRegex);

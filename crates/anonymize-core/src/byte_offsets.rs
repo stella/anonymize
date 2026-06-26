@@ -100,4 +100,27 @@ impl<'a> ByteOffsets<'a> {
     }
     self.len()
   }
+
+  pub(crate) fn offset_before_utf16_units(
+    &self,
+    end: u32,
+    max_units: u32,
+  ) -> Result<u32> {
+    let end_byte = self.validate_offset(end)?;
+    let prefix = self
+      .text
+      .get(..end_byte)
+      .ok_or(Error::InvalidSpan { start: 0, end })?;
+    let mut units = 0_u32;
+    for (byte, ch) in prefix.char_indices().rev() {
+      let width = u32::try_from(ch.len_utf16()).unwrap_or(u32::MAX);
+      if units.saturating_add(width) > max_units {
+        let offset = byte.saturating_add(ch.len_utf8());
+        return u32::try_from(offset)
+          .map_err(|_| Error::ByteOffsetOutOfBounds { offset: u32::MAX });
+      }
+      units = units.saturating_add(width);
+    }
+    Ok(0)
+  }
 }
