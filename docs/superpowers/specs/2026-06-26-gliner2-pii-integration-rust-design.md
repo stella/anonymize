@@ -152,16 +152,22 @@ date_of_birth → "date of birth"
 ...
 ```
 
-The reverse map is maintained as a static `HashMap<&str, &str>` in the TS
-`label-map.ts`. The Rust server returns model-native labels; the TS client
-remaps them to canonical pipeline labels before returning to the pipeline.
+The reverse map is maintained in the TS `label-map.ts`. When multiple pipeline
+labels map to the same model label (e.g., `identity card number`, `birth number`,
+`national identification number`, `social security number` → `national_id_number`),
+the TS client disambiguates by preferring the **original pipeline label that was
+requested** in the infer call. If the caller asked for `"social security number"`
+and the model returns `"national_id_number"`, it maps back to
+`"social security number"`. If the caller asked for `"birth number"`, it maps back
+to `"birth number"`. If the model returns a label that wasn't in the original
+request (unlikely but defensive), fall back to a hardcoded preference order.
 
 ## Rust Server
 
 ### Crate structure
 
 ```
-gliner2-server/
+packages/gliner2-server/
   Cargo.toml
   src/
     main.rs       — axum HTTP server, CLI arg parsing, startup
@@ -271,21 +277,23 @@ No changes to `pipeline.ts`.
 
 ### Platform matrix
 
+Built via CI from this monorepo and published as GitHub Release assets.
+
 | Target | Binary name |
 |---|---|
-| `x86_64-pc-windows-msvc` | `gliner2-server.exe` |
-| `x86_64-unknown-linux-gnu` | `gliner2-server` |
-| `x86_64-apple-darwin` | `gliner2-server` |
-| `aarch64-apple-darwin` | `gliner2-server` |
+| `x86_64-pc-windows-msvc` | `gliner2-server-x86_64-windows.exe` |
+| `x86_64-unknown-linux-gnu` | `gliner2-server-x86_64-linux` |
+| `x86_64-apple-darwin` | `gliner2-server-x86_64-darwin` |
+| `aarch64-apple-darwin` | `gliner2-server-aarch64-darwin` |
 
 ### Download
 
-Binaries published as GitHub Release assets. The TS client includes a download
-helper that fetches the appropriate binary on first use:
+The TS client includes a download helper that fetches the appropriate binary
+on first use from the repo's GitHub Releases:
 
 ```typescript
 const binaryPath = await downloadBinary({
-  repo: "stella/anonymize", // binary release asset path
+  repo: "stella/anonymize",
   version: "v0.1.0",
   platform: process.platform,
   arch: process.arch,
