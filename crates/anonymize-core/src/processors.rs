@@ -378,7 +378,8 @@ pub fn process_deny_list_matches(
       name_hits.push(found.clone());
     }
 
-    let suppress_address = should_suppress_address(full_text, data, found)?;
+    let suppress_address =
+      should_suppress_address(full_text, &offsets, data, found)?;
     for label in found.labels.iter().filter(|label| *label != PERSON_LABEL) {
       if label == ADDRESS_LABEL && suppress_address {
         continue;
@@ -609,6 +610,7 @@ fn curated_labels_for_match(
 
 fn should_suppress_address(
   full_text: &str,
+  offsets: &ByteOffsets<'_>,
   data: &DenyListMatchData,
   found: &RawDenyListMatch,
 ) -> Result<bool> {
@@ -618,7 +620,13 @@ fn should_suppress_address(
   let Some(filters) = &data.filters else {
     return Ok(false);
   };
-  if is_signing_place_context(full_text, found.start, found.end, filters)? {
+  if is_signing_place_context(
+    full_text,
+    offsets,
+    found.start,
+    found.end,
+    filters,
+  )? {
     return Ok(true);
   }
   let lower = found.text.to_lowercase();
@@ -636,6 +644,7 @@ fn should_suppress_address(
 
 fn is_signing_place_context(
   full_text: &str,
+  offsets: &ByteOffsets<'_>,
   start: u32,
   end: u32,
   filters: &DenyListFilterData,
@@ -644,7 +653,6 @@ fn is_signing_place_context(
     return Ok(false);
   }
 
-  let offsets = ByteOffsets::new(full_text);
   let start_byte = offsets.validate_offset(start)?;
   let end_byte = offsets.validate_offset(end)?;
   let before = full_text.get(..start_byte).unwrap_or_default();
@@ -678,14 +686,14 @@ fn context_after_matches_any_phrase(
 
 fn context_before_matches_phrase(before: &str, phrase: &str) -> bool {
   let trimmed = before.trim_end_matches(char::is_whitespace);
-  if trimmed.len() < phrase.len() {
+  let Some((phrase_start, suffix)) =
+    trailing_char_slice(trimmed, phrase.chars().count())
+  else {
+    return false;
+  };
+  if !casefolds_to(suffix, phrase) {
     return false;
   }
-  let lower = trimmed.to_lowercase();
-  if !lower.ends_with(phrase) {
-    return false;
-  }
-  let phrase_start = trimmed.len().saturating_sub(phrase.len());
   char_before_byte(trimmed, phrase_start).is_none_or(|ch| !ch.is_alphanumeric())
 }
 
@@ -694,14 +702,35 @@ fn context_after_matches_phrase(after: &str, phrase: &str) -> bool {
   let trimmed = trimmed.strip_prefix(',').map_or(trimmed, |value| {
     value.trim_start_matches(char::is_whitespace)
   });
-  if trimmed.len() < phrase.len() {
+  let Some(prefix) = leading_char_slice(trimmed, phrase.chars().count()) else {
+    return false;
+  };
+  if !casefolds_to(prefix, phrase) {
     return false;
   }
-  let lower = trimmed.to_lowercase();
-  if !lower.starts_with(phrase) {
-    return false;
+  char_after_byte(trimmed, prefix.len()).is_none_or(|ch| !ch.is_alphanumeric())
+}
+
+fn trailing_char_slice(text: &str, char_count: usize) -> Option<(usize, &str)> {
+  let mut start = text.len();
+  for _ in 0..char_count {
+    let (previous_start, _) = text.get(..start)?.char_indices().next_back()?;
+    start = previous_start;
   }
-  char_after_byte(trimmed, phrase.len()).is_none_or(|ch| !ch.is_alphanumeric())
+  Some((start, text.get(start..)?))
+}
+
+fn leading_char_slice(text: &str, char_count: usize) -> Option<&str> {
+  let mut end = 0_usize;
+  for _ in 0..char_count {
+    let (index, ch) = text.get(end..)?.char_indices().next()?;
+    end = end.saturating_add(index).saturating_add(ch.len_utf8());
+  }
+  text.get(..end)
+}
+
+fn casefolds_to(value: &str, lower: &str) -> bool {
+  value.to_lowercase() == lower
 }
 
 fn append_person_name_hits(
@@ -712,24 +741,24 @@ fn append_person_name_hits(
   name_hits: &mut [RawDenyListMatch],
 ) -> Result<()> {
   name_hits.sort_by_key(|hit| hit.start);
-  let mut consumed = BTreeSet::<usize>::new();
+  let mut consumed = vec![false; name_hits.len()];
 
   for index in 0..name_hits.len() {
-    if consumed.contains(&index) {
+    if consumed.get(index).copied().unwrap_or(false) {
       continue;
     }
     let Some(hit) = name_hits.get(index) else {
       continue;
     };
 
-    let mut chain = vec![hit.clone()];
+    let mut chain = vec![hit];
     let mut cursor = index.saturating_add(1);
 
     while cursor < name_hits.len() && chain.len() < 5 {
       let Some(next) = name_hits.get(cursor) else {
         break;
       };
-      let Some(prev) = chain.last() else {
+      let Some(prev) = chain.last().copied() else {
         break;
       };
       if next.start < prev.end {
@@ -740,15 +769,17 @@ fn append_person_name_hits(
         break;
       }
 
-      chain.push(next.clone());
+      chain.push(next);
       cursor = cursor.saturating_add(1);
     }
 
     for consumed_index in index..index.saturating_add(chain.len()) {
-      consumed.insert(consumed_index);
+      if let Some(entry) = consumed.get_mut(consumed_index) {
+        *entry = true;
+      }
     }
 
-    if !chain.iter().any(has_person_name_source) {
+    if !chain.iter().copied().any(has_person_name_source) {
       continue;
     }
 
