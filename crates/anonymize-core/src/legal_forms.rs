@@ -591,9 +591,13 @@ fn process_candidate(
     return;
   }
 
-  let role_trimmed = if let Some(trimmed) =
-    trim_role_head(full_text, processed_start, processed_text, data)
-  {
+  let role_trimmed = if let Some(trimmed) = trim_role_head(
+    full_text,
+    processed_start,
+    processed_text,
+    candidate.suffix_start,
+    data,
+  ) {
     let Some(next_text) = full_text.get(trimmed.start..processed_end) else {
       return;
     };
@@ -728,6 +732,7 @@ fn trim_role_head(
   full_text: &str,
   match_start: usize,
   text: &str,
+  suffix_start: usize,
   data: &PreparedLegalFormData,
 ) -> Option<TrimmedStart> {
   let first = first_role_word(text)?;
@@ -744,7 +749,10 @@ fn trim_role_head(
     return None;
   }
 
-  let suffix_offset = suffix_offset_in_text(text, data)?;
+  let suffix_offset = suffix_start.checked_sub(match_start)?;
+  if suffix_offset >= text.len() {
+    return None;
+  }
   let mid_start = first.end;
   if mid_start >= suffix_offset {
     return None;
@@ -819,21 +827,6 @@ fn first_role_word(text: &str) -> Option<Token<'_>> {
     end,
     text: text.get(..end).unwrap_or_default(),
   })
-}
-
-fn suffix_offset_in_text(
-  text: &str,
-  data: &PreparedLegalFormData,
-) -> Option<usize> {
-  for suffix in &data.suffixes {
-    let Some(offset) = text.rfind(suffix) else {
-      continue;
-    };
-    if offset.saturating_add(suffix.len()) >= text.len().saturating_sub(1) {
-      return Some(offset);
-    }
-  }
-  None
 }
 
 fn preceding_word_is_sentence_verb(
