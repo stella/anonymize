@@ -47,6 +47,11 @@ const CACHED_PREPARE_ITERATIONS = positiveIntegerEnv(
   "ANONYMIZE_MIGRATION_CACHED_PREPARE_ITERATIONS",
   3,
 );
+const NATIVE_PREPARE_WARMUP = enumEnv(
+  "ANONYMIZE_MIGRATION_NATIVE_PREPARE_WARMUP",
+  "diagnostics",
+  ["diagnostics", "plain", "none"],
+);
 const PROFILE_REGEX_LABELS =
   process.env.ANONYMIZE_MIGRATION_PROFILE_REGEX_LABELS === "1";
 const PROFILE_SCOPED_PREPARE =
@@ -230,6 +235,7 @@ function runVariant({
       ANONYMIZE_MIGRATION_CACHED_PREPARE_ITERATIONS: String(
         CACHED_PREPARE_ITERATIONS,
       ),
+      ANONYMIZE_MIGRATION_NATIVE_PREPARE_WARMUP: NATIVE_PREPARE_WARMUP,
     },
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
@@ -487,6 +493,7 @@ async function runWorker() {
         nativePackageCompressed,
         nativePackagePrepareMs,
         nativePackageBytes,
+        nativePrepareWarmupMode: NATIVE_PREPARE_WARMUP,
         nativePrepareMs,
         nativeWarmPrepareMs,
         nativeCachedPrepareMsByIteration,
@@ -1983,11 +1990,18 @@ function createNativeStaticRunnerFromPackageBytes(packageBytes) {
 }
 
 function warmNativePreparedSearch(prepared) {
+  if (NATIVE_PREPARE_WARMUP === "none") {
+    return { diagnostics: null, ms: 0 };
+  }
+
   const warmLazyRegexDiagnostics =
     typeof prepared.warmLazyRegexDiagnosticsJson === "function"
       ? prepared.warmLazyRegexDiagnosticsJson
       : prepared.warm_lazy_regex_diagnostics_json;
-  if (typeof warmLazyRegexDiagnostics === "function") {
+  if (
+    NATIVE_PREPARE_WARMUP === "diagnostics" &&
+    typeof warmLazyRegexDiagnostics === "function"
+  ) {
     const warmStart = Bun.nanoseconds();
     const diagnostics = JSON.parse(warmLazyRegexDiagnostics.call(prepared));
     return { diagnostics, ms: elapsedMs(warmStart) };
@@ -2441,6 +2455,17 @@ function stringListEnv(name) {
     .split(",")
     .map((part) => part.trim())
     .filter((part) => part.length > 0);
+}
+
+function enumEnv(name, fallback, values) {
+  const raw = process.env[name]?.trim();
+  if (!raw) {
+    return fallback;
+  }
+  if (values.includes(raw)) {
+    return raw;
+  }
+  throw new Error(`${name} must be one of ${values.join(", ")}`);
 }
 
 function requiredEnv(name) {

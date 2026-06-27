@@ -56,44 +56,54 @@ function runScenario({ name, compressed, language, userDataScenario }) {
     ANONYMIZE_MIGRATION_NATIVE_PREPARED_PACKAGE: "1",
     ANONYMIZE_MIGRATION_WRITE_NATIVE_PACKAGE_PATH: packagePath,
   });
-  const load = runMigration({
+  const noWarmLoad = runMigration({
     ...languageEnv,
     ...userDataEnv,
     ANONYMIZE_MIGRATION_NATIVE_PACKAGE_PATH: packagePath,
+    ANONYMIZE_MIGRATION_NATIVE_PREPARE_WARMUP: "none",
   });
-  const nativeDiagnostics = load.nativeDiagnostics ?? null;
+  const preloadedLoad = runMigration({
+    ...languageEnv,
+    ...userDataEnv,
+    ANONYMIZE_MIGRATION_NATIVE_PACKAGE_PATH: packagePath,
+    ANONYMIZE_MIGRATION_NATIVE_PREPARE_WARMUP: "diagnostics",
+  });
+  const noWarmDiagnostics = noWarmLoad.nativeDiagnostics ?? null;
+  const preloadedDiagnostics = preloadedLoad.nativeDiagnostics ?? null;
 
   return {
     name,
     compressed,
     language: language ?? null,
     userDataScenario: userDataScenario ?? "none",
-    fixtureCount: load.fixtureCount,
+    fixtureCount: noWarmLoad.fixtureCount,
     packageBytes: build.timings.nativePackageBytes,
     offlinePackageBuildMs: build.timings.nativePackagePrepareMs,
-    firstPackageReadMs: load.timings.nativePackageReadMs,
-    firstPrepareMs: load.timings.nativePrepareMs,
-    firstWarmPrepareMs: load.timings.nativeWarmPrepareMs,
+    firstPackageReadMs: noWarmLoad.timings.nativePackageReadMs,
+    firstPrepareMs: noWarmLoad.timings.nativePrepareMs,
+    firstWarmPrepareMs: preloadedLoad.timings.nativeWarmPrepareMs,
     loadPrepareMs:
-      load.timings.nativePackageReadMs + load.timings.nativePrepareMs,
+      noWarmLoad.timings.nativePackageReadMs +
+      noWarmLoad.timings.nativePrepareMs,
     setupBeforeClickMs:
-      load.timings.nativePackageReadMs +
-      load.timings.nativePrepareMs +
-      load.timings.nativeWarmPrepareMs,
-    cachedPrepareMs: load.timings.nativeCachedPrepareAvgMs,
-    cachedWarmPrepareMs: load.timings.nativeCachedWarmPrepareAvgMs,
-    firstRunMs: load.timings.coldRunMs,
-    preloadedClickMs: load.timings.coldRunMs,
-    firstTouchMs: load.timings.nativeFirstTouchMs,
-    warmClickMs: load.timings.nativeWarmClickMs,
-    prepareTopStages: nativeDiagnostics?.prepare?.topStages ?? [],
-    warmTopStages: nativeDiagnostics?.warm?.topStages ?? [],
-    cachedPrepareTopStages: nativeDiagnostics?.cachedPrepare?.topStages ?? [],
-    runTopStages: nativeDiagnostics?.run?.topStages ?? [],
-    runTopSlots: nativeDiagnostics?.run?.topSlots ?? [],
-    runTopFixtures: nativeDiagnostics?.run?.topFixtures ?? [],
-    fixtureTimings: load.fixtureTimings,
-    topColdFixtures: load.fixtureTimings.byFixture
+      preloadedLoad.timings.nativePackageReadMs +
+      preloadedLoad.timings.nativePrepareMs +
+      preloadedLoad.timings.nativeWarmPrepareMs,
+    cachedPrepareMs: noWarmLoad.timings.nativeCachedPrepareAvgMs,
+    cachedWarmPrepareMs: preloadedLoad.timings.nativeCachedWarmPrepareAvgMs,
+    firstRunMs: noWarmLoad.timings.coldRunMs,
+    preloadedClickMs: preloadedLoad.timings.coldRunMs,
+    firstTouchMs: noWarmLoad.timings.nativeFirstTouchMs,
+    warmClickMs: noWarmLoad.timings.nativeWarmClickMs,
+    prepareTopStages: noWarmDiagnostics?.prepare?.topStages ?? [],
+    warmTopStages: preloadedDiagnostics?.warm?.topStages ?? [],
+    cachedPrepareTopStages: noWarmDiagnostics?.cachedPrepare?.topStages ?? [],
+    runTopStages: noWarmDiagnostics?.run?.topStages ?? [],
+    runTopSlots: noWarmDiagnostics?.run?.topSlots ?? [],
+    runTopFixtures: noWarmDiagnostics?.run?.topFixtures ?? [],
+    fixtureTimings: noWarmLoad.fixtureTimings,
+    preloadedFixtureTimings: preloadedLoad.fixtureTimings,
+    topColdFixtures: noWarmLoad.fixtureTimings.byFixture
       .toSorted((left, right) => right.coldMs - left.coldMs)
       .slice(0, 5),
   };
