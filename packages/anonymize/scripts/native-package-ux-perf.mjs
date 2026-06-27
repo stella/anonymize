@@ -74,8 +74,12 @@ function runScenario({ name, compressed, language, userDataScenario }) {
     firstPackageReadMs: load.timings.nativePackageReadMs,
     firstPrepareMs: load.timings.nativePrepareMs,
     firstWarmPrepareMs: load.timings.nativeWarmPrepareMs,
-    setupBeforeClickMs:
+    loadPrepareMs:
       load.timings.nativePackageReadMs + load.timings.nativePrepareMs,
+    setupBeforeClickMs:
+      load.timings.nativePackageReadMs +
+      load.timings.nativePrepareMs +
+      load.timings.nativeWarmPrepareMs,
     cachedPrepareMs: load.timings.nativeCachedPrepareAvgMs,
     cachedWarmPrepareMs: load.timings.nativeCachedWarmPrepareAvgMs,
     firstRunMs: load.timings.coldRunMs,
