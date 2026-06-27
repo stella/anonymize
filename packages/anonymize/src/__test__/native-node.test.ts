@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import type { NativeAnonymizeBinding } from "../native";
 import {
@@ -17,6 +18,7 @@ import {
   preloadDefaultNativePipeline,
   preloadDefaultNativePipelineAsync,
   prepare_search_package,
+  readDefaultNativePipelinePackageFile,
   readNativePipelinePackageFile,
   readNativePipelinePackageFileAsync,
   redact_text,
@@ -254,6 +256,51 @@ describe("native node loader", () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  test("loads language-scoped default native pipeline packages", () => {
+    const language = "zz-test";
+    const packagePath = fileURLToPath(
+      new URL(`../../native-pipeline.${language}.stlanonpkg`, import.meta.url),
+    );
+    const capturedBytes: number[][] = [];
+    try {
+      writeFileSync(packagePath, Uint8Array.of(31, 32, 33));
+      const binding = fakeNativeBinding("1.5.0", {
+        onPreparedPackageBytes: (bytes) => {
+          capturedBytes.push([...bytes]);
+        },
+      });
+
+      const first = getDefaultNativePipeline({
+        binding,
+        language: "ZZ-Test",
+        expectedVersion: "1.5.0",
+      });
+      const second = getDefaultNativePipeline({
+        binding,
+        language,
+        expectedVersion: "1.5.0",
+      });
+
+      expect(second).toBe(first);
+      expect(capturedBytes).toEqual([[31, 32, 33]]);
+    } finally {
+      rmSync(packagePath, { force: true });
+    }
+  });
+
+  test("rejects unsafe default native package language selectors", () => {
+    expect(() =>
+      readDefaultNativePipelinePackageFile({ language: "../en" }),
+    ).toThrow("Default native pipeline language must match");
+    expect(() =>
+      getDefaultNativePipeline({
+        binding: fakeNativeBinding("1.5.0"),
+        language: "en",
+        packagePath: "/tmp/native-pipeline.stlanonpkg",
+      }),
+    ).toThrow("Use either language or packagePath");
   });
 
   test("shared SDK helpers delegate through the native binding", () => {

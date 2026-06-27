@@ -16,6 +16,7 @@ const MIGRATION_SCRIPT = join(
 const SCENARIOS = [
   { name: "compressed", compressed: true },
   { name: "raw", compressed: false },
+  ...languageScenarios(),
 ];
 
 const tempRoot = mkdtempSync(join(tmpdir(), "stella-anonymize-package-ux-"));
@@ -32,14 +33,23 @@ try {
   rmSync(tempRoot, { force: true, recursive: true });
 }
 
-function runScenario({ name, compressed }) {
+function runScenario({ name, compressed, language }) {
   const packagePath = join(tempRoot, `${name}.stlanonpkg`);
+  const languageEnv =
+    language === undefined
+      ? {}
+      : {
+          ANONYMIZE_MIGRATION_CONTENT_LANGUAGE: language,
+          ANONYMIZE_MIGRATION_FIXTURE_LANGUAGES: language,
+        };
   const build = runMigration({
+    ...languageEnv,
     ANONYMIZE_MIGRATION_NATIVE_COMPRESSED_PACKAGE: compressed ? "1" : "0",
     ANONYMIZE_MIGRATION_NATIVE_PREPARED_PACKAGE: "1",
     ANONYMIZE_MIGRATION_WRITE_NATIVE_PACKAGE_PATH: packagePath,
   });
   const load = runMigration({
+    ...languageEnv,
     ANONYMIZE_MIGRATION_NATIVE_PACKAGE_PATH: packagePath,
   });
   const nativeDiagnostics = load.nativeDiagnostics ?? null;
@@ -47,6 +57,7 @@ function runScenario({ name, compressed }) {
   return {
     name,
     compressed,
+    language: language ?? null,
     fixtureCount: load.fixtureCount,
     packageBytes: build.timings.nativePackageBytes,
     offlinePackageBuildMs: build.timings.nativePackagePrepareMs,
@@ -68,6 +79,32 @@ function runScenario({ name, compressed }) {
       .toSorted((left, right) => right.coldMs - left.coldMs)
       .slice(0, 5),
   };
+}
+
+function languageScenarios() {
+  const value = process.env.ANONYMIZE_NATIVE_PACKAGE_UX_LANGUAGES ?? "en,cs,de";
+  if (value.trim().length === 0) {
+    return [];
+  }
+  return value
+    .split(",")
+    .map((entry) => normalizeLanguage(entry))
+    .filter((entry, index, entries) => entries.indexOf(entry) === index)
+    .map((language) => ({
+      name: `compressed-${language}`,
+      compressed: true,
+      language,
+    }));
+}
+
+function normalizeLanguage(value) {
+  const language = value.trim().toLowerCase();
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(language)) {
+    throw new Error(
+      `Invalid ANONYMIZE_NATIVE_PACKAGE_UX_LANGUAGES entry: ${value}`,
+    );
+  }
+  return language;
 }
 
 function runMigration(extraEnv) {
