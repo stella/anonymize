@@ -190,9 +190,13 @@ describe("native node loader", () => {
     const capturedBytes: number[][] = [];
     try {
       writeFileSync(packagePath, Uint8Array.of(13, 14, 15));
+      let warmCount = 0;
       const binding = fakeNativeBinding("1.5.0", {
         onPreparedPackageBytes: (bytes) => {
           capturedBytes.push([...bytes]);
+        },
+        onWarmLazyRegex: () => {
+          warmCount += 1;
         },
       });
 
@@ -215,6 +219,7 @@ describe("native node loader", () => {
       expect(second).toBe(first);
       expect(preloaded).toBe(first);
       expect(capturedBytes).toEqual([[13, 14, 15]]);
+      expect(warmCount).toBe(1);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -226,9 +231,13 @@ describe("native node loader", () => {
     const capturedBytes: number[][] = [];
     try {
       writeFileSync(packagePath, Uint8Array.of(16, 17, 18));
+      let warmCount = 0;
       const binding = fakeNativeBinding("1.5.0", {
         onPreparedPackageBytes: (bytes) => {
           capturedBytes.push([...bytes]);
+        },
+        onWarmLazyRegex: () => {
+          warmCount += 1;
         },
       });
 
@@ -253,6 +262,7 @@ describe("native node loader", () => {
       expect(second).toBe(first);
       expect(syncCached).toBe(first);
       expect(capturedBytes).toEqual([[16, 17, 18]]);
+      expect(warmCount).toBe(1);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -404,6 +414,7 @@ type FakeNativeBindingOptions = {
   preparedSearchAsConstructor?: boolean;
   compressedPackageBytes?: Uint8Array;
   onPreparedPackageBytes?: (bytes: Uint8Array) => void;
+  onWarmLazyRegex?: () => void;
 };
 
 const fakeNativeBinding = (
@@ -411,10 +422,10 @@ const fakeNativeBinding = (
   options: FakeNativeBindingOptions = {},
 ): NativeAnonymizeBinding => {
   const preparedSearch = {
-    fromConfigJsonBytes: () => fakePreparedSearch(),
+    fromConfigJsonBytes: () => fakePreparedSearch(options.onWarmLazyRegex),
     fromPreparedPackageBytes: (bytes: Uint8Array) => {
       options.onPreparedPackageBytes?.(bytes);
-      return fakePreparedSearch();
+      return fakePreparedSearch(options.onWarmLazyRegex);
     },
   };
   const NativePreparedSearch = options.preparedSearchAsConstructor
@@ -431,8 +442,11 @@ const fakeNativeBinding = (
   };
 };
 
-const fakePreparedSearch = () => ({
+const fakePreparedSearch = (onWarmLazyRegex?: () => void) => ({
   prepareDiagnosticsJson: () => JSON.stringify({ events: [] }),
+  warmLazyRegex: () => {
+    onWarmLazyRegex?.();
+  },
   redactStaticEntities: emptyStaticRedactionBindingResult,
   redactStaticEntitiesDiagnosticsJson: emptyStaticRedactionDiagnosticJson,
 });

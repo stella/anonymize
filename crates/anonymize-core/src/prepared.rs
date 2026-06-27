@@ -301,6 +301,14 @@ impl PreparedSearch {
     Self::new_inner(config, None, None)
   }
 
+  pub fn warm_lazy_regex(&self) -> Result<()> {
+    self.regex.warm_lazy_regex()?;
+    self.custom_regex.warm_lazy_regex()?;
+    self.legal_forms.warm_lazy_regex()?;
+    self.triggers.warm_lazy_regex()?;
+    self.literals.warm_lazy_regex()
+  }
+
   pub fn prepare_artifacts(
     config: PreparedSearchConfig,
   ) -> Result<PreparedSearchArtifacts> {

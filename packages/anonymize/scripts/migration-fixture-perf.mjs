@@ -1739,6 +1739,7 @@ function createNativeStaticRunnerFromJson(configJson, stringifyMs = 0) {
   };
   const prepareStart = Bun.nanoseconds();
   const prepared = prepare();
+  warmNativePreparedSearch(prepared);
   const prepareMs = elapsedMs(prepareStart);
   const prepareDiagnostics = JSON.parse(prepared.prepareDiagnosticsJson());
   const cachedPrepareMsByIteration = [];
@@ -1746,6 +1747,7 @@ function createNativeStaticRunnerFromJson(configJson, stringifyMs = 0) {
   for (let index = 0; index < CACHED_PREPARE_ITERATIONS; index += 1) {
     const cachedPrepareStart = Bun.nanoseconds();
     const cachedPrepared = prepare();
+    warmNativePreparedSearch(cachedPrepared);
     cachedPrepareMsByIteration.push(elapsedMs(cachedPrepareStart));
     cachedPrepareDiagnostics = JSON.parse(
       cachedPrepared.prepareDiagnosticsJson(),
@@ -1801,6 +1803,7 @@ function createNativeStaticRunnerFromJsonBytes(configBytes) {
   };
   const prepareStart = Bun.nanoseconds();
   const prepared = prepare(configBytes);
+  warmNativePreparedSearch(prepared);
   const prepareMs = elapsedMs(prepareStart);
   const prepareDiagnostics = JSON.parse(prepared.prepareDiagnosticsJson());
   const cachedPrepareMsByIteration = [];
@@ -1808,6 +1811,7 @@ function createNativeStaticRunnerFromJsonBytes(configBytes) {
   for (let index = 0; index < CACHED_PREPARE_ITERATIONS; index += 1) {
     const cachedPrepareStart = Bun.nanoseconds();
     const cachedPrepared = prepare(configBytes);
+    warmNativePreparedSearch(cachedPrepared);
     cachedPrepareMsByIteration.push(elapsedMs(cachedPrepareStart));
     cachedPrepareDiagnostics = JSON.parse(
       cachedPrepared.prepareDiagnosticsJson(),
@@ -1834,6 +1838,7 @@ function createNativeStaticRunnerFromPackageBytes(packageBytes) {
     native.NativePreparedSearch.fromPreparedPackageBytes(packageBytes);
   const prepareStart = Bun.nanoseconds();
   const prepared = prepare();
+  warmNativePreparedSearch(prepared);
   const prepareMs = elapsedMs(prepareStart);
   const prepareDiagnostics = JSON.parse(prepared.prepareDiagnosticsJson());
   const cachedPrepareMsByIteration = [];
@@ -1841,6 +1846,7 @@ function createNativeStaticRunnerFromPackageBytes(packageBytes) {
   for (let index = 0; index < CACHED_PREPARE_ITERATIONS; index += 1) {
     const cachedPrepareStart = Bun.nanoseconds();
     const cachedPrepared = prepare();
+    warmNativePreparedSearch(cachedPrepared);
     cachedPrepareMsByIteration.push(elapsedMs(cachedPrepareStart));
     cachedPrepareDiagnostics = JSON.parse(
       cachedPrepared.prepareDiagnosticsJson(),
@@ -1859,6 +1865,16 @@ function createNativeStaticRunnerFromPackageBytes(packageBytes) {
     stringifyMs: 0,
     prepareMs,
   };
+}
+
+function warmNativePreparedSearch(prepared) {
+  const warmLazyRegex =
+    typeof prepared.warmLazyRegex === "function"
+      ? prepared.warmLazyRegex
+      : prepared.warm_lazy_regex;
+  if (typeof warmLazyRegex === "function") {
+    warmLazyRegex.call(prepared);
+  }
 }
 
 function writeNativePackageIfRequested(packageBytes) {

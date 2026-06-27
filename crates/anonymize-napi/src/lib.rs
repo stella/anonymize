@@ -603,6 +603,14 @@ impl NativePreparedSearch {
   }
 
   #[napi]
+  pub fn warm_lazy_regex(&self) -> Result<()> {
+    self
+      .inner
+      .warm_lazy_regex()
+      .map_err(|error| to_napi_core_error(&error))
+  }
+
+  #[napi]
   #[allow(clippy::needless_pass_by_value)]
   pub fn redact_static_entities(
     &self,

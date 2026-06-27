@@ -84,6 +84,9 @@ class PreparedAnonymizer:
     def prepare_diagnostics_json(self) -> str:
         return self._prepared.prepare_diagnostics_json()
 
+    def warm_lazy_regex(self) -> None:
+        self._prepared.warm_lazy_regex()
+
     def redact_text(
         self,
         full_text: str,
