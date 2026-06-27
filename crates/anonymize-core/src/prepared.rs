@@ -277,6 +277,70 @@ struct PreparedSearchIndexes {
   literals: TimedSearchIndex,
 }
 
+struct SearchIndexConfigInput {
+  regex_patterns: Vec<SearchPattern>,
+  custom_regex_patterns: Vec<SearchPattern>,
+  literal_patterns: Vec<SearchPattern>,
+  regex_options: SearchOptions,
+  custom_regex_options: SearchOptions,
+  literal_options: SearchOptions,
+  anchored_len: usize,
+}
+
+#[derive(Clone, Copy)]
+struct SearchPrepareCounts {
+  regex: usize,
+  custom_regex: usize,
+  anchored: usize,
+  legal_forms: usize,
+  triggers: usize,
+  literals: usize,
+}
+
+impl SearchPrepareCounts {
+  const fn total(self) -> usize {
+    self
+      .regex
+      .saturating_add(self.custom_regex)
+      .saturating_add(self.anchored)
+      .saturating_add(self.legal_forms)
+      .saturating_add(self.triggers)
+      .saturating_add(self.literals)
+  }
+}
+
+struct PreparedSearchIndexBundle {
+  regex: SearchIndex,
+  custom_regex: SearchIndex,
+  legal_forms: SearchIndex,
+  triggers: SearchIndex,
+  literals: SearchIndex,
+  counts: SearchPrepareCounts,
+}
+
+struct SupportDataInput {
+  hotwords: Option<HotwordRuleData>,
+  triggers: Option<TriggerData>,
+  legal_forms: Option<LegalFormData>,
+  address_seed: Option<AddressSeedData>,
+  zones: Option<ZoneData>,
+  address_context: Option<AddressContextData>,
+  coreference: Option<CoreferenceData>,
+  name_corpus: Option<NameCorpusData>,
+}
+
+struct PreparedSupportData {
+  hotwords: Option<PreparedHotwordData>,
+  triggers: Option<PreparedTriggerData>,
+  legal_forms: Option<PreparedLegalFormData>,
+  address_seed: Option<PreparedAddressSeedData>,
+  zones: Option<PreparedZoneData>,
+  address_context: Option<PreparedAddressContextData>,
+  coreference: Option<PreparedCoreferenceData>,
+  names: Option<PreparedNames>,
+  count: usize,
+}
+
 struct SearchIndexBuildInputs {
   regex_patterns: Vec<SearchPattern>,
   regex_options: SearchOptions,
@@ -374,82 +438,67 @@ impl PreparedSearch {
   }
 
   fn new_inner(
-    config: PreparedSearchConfig,
+    mut config: PreparedSearchConfig,
     mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
     artifacts: Option<&PreparedSearchArtifacts>,
   ) -> Result<Self> {
     let total_start = Instant::now();
-    let allow_literal_artifacts =
-      artifacts.is_some_and(|artifacts| !artifacts.literals.slots.is_empty());
-    validate_supported_config(&config, allow_literal_artifacts)?;
-    let slices = config.slices.clone();
-    let allowed_labels = config.allowed_labels.clone();
-    let threshold = config.threshold;
-    let confidence_boost = config.confidence_boost;
+    validate_supported_config_for_artifacts(&config, artifacts)?;
     let monetary_extraction = should_extract_monetary_data(&config);
-    let regex_groups = split_regex_patterns(config.regex_patterns, &slices)?;
-    let regex_len = regex_groups.regex.len();
-    let custom_regex_len = config.custom_regex_patterns.len();
-    let anchored_len = anchored_config_len(
-      config.date_data.as_ref(),
-      config.monetary_data.as_ref(),
-    );
-    let legal_form_len = regex_groups.legal_forms.len();
-    let trigger_len = regex_groups.triggers.len();
-
+    let support_input = take_support_input(&mut config);
+    let PreparedSearchConfig {
+      regex_patterns,
+      custom_regex_patterns,
+      literal_patterns,
+      regex_options,
+      custom_regex_options,
+      literal_options,
+      allowed_labels,
+      threshold,
+      confidence_boost,
+      slices,
+      regex_meta,
+      custom_regex_meta,
+      deny_list_data,
+      false_positive_filters,
+      gazetteer_data,
+      country_data,
+      date_data,
+      monetary_data,
+      ..
+    } = config;
+    let anchored_len =
+      anchored_config_len(date_data.as_ref(), monetary_data.as_ref());
     let (date_data, monetary_data) = prepare_anchored_data(
-      config.date_data.as_ref(),
-      config.monetary_data,
+      date_data.as_ref(),
+      monetary_data,
       anchored_len,
       diagnostics.as_deref_mut(),
     )?;
-
-    let indexes = build_search_indexes_for_config(
-      regex_groups,
-      config.regex_options,
-      config.custom_regex_patterns,
-      config.custom_regex_options,
-      config.literal_patterns,
-      config.literal_options,
-      artifacts,
-    )?;
-    let (
-      (regex, regex_elapsed),
-      (custom_regex, custom_regex_elapsed),
-      (legal_forms, legal_forms_elapsed),
-      (triggers, triggers_elapsed),
-      (literals, literals_elapsed),
-    ) = (
-      indexes.regex,
-      indexes.custom_regex,
-      indexes.legal_forms,
-      indexes.triggers,
-      indexes.literals,
-    );
-    let literal_len = literals.len();
-    record_search_index_prepare_stages(
-      &mut diagnostics,
-      &SearchIndexPrepareMetrics {
-        regex: (regex_len, regex_elapsed),
-        custom_regex: (custom_regex_len, custom_regex_elapsed),
-        legal_forms: (legal_form_len, legal_forms_elapsed),
-        triggers: (trigger_len, triggers_elapsed),
-        literals: (literal_len, literals_elapsed),
-      },
-    );
-    record_prepare_total(
-      &mut diagnostics,
-      [
-        regex_len,
-        custom_regex_len,
+    let PreparedSearchIndexBundle {
+      regex,
+      custom_regex,
+      legal_forms,
+      triggers,
+      literals,
+      counts,
+    } = prepare_search_index_bundle(
+      SearchIndexConfigInput {
+        regex_patterns,
+        custom_regex_patterns,
+        literal_patterns,
+        regex_options,
+        custom_regex_options,
+        literal_options,
         anchored_len,
-        legal_form_len,
-        trigger_len,
-        literal_len,
-      ],
-      total_start,
-    );
-
+      },
+      &slices,
+      artifacts,
+      &mut diagnostics,
+    )?;
+    let support_data = prepare_support_data(support_input, &mut diagnostics)?;
+    let prepare_count = counts.total().saturating_add(support_data.count);
+    record_prepare_total(&mut diagnostics, prepare_count, total_start);
     Ok(Self {
       regex,
       custom_regex,
@@ -460,22 +509,20 @@ impl PreparedSearch {
       threshold,
       confidence_boost,
       slices,
-      regex_meta: config.regex_meta,
-      custom_regex_meta: config.custom_regex_meta,
-      deny_list_data: config.deny_list_data,
-      false_positive_filters: config.false_positive_filters,
-      gazetteer_data: config.gazetteer_data,
-      country_data: config.country_data,
-      hotword_data: prepare_hotword_data(config.hotword_data)?,
-      trigger_data: prepare_trigger_data(config.trigger_data)?,
-      legal_form_data: config.legal_form_data.map(PreparedLegalFormData::new),
-      address_seed_data: prepare_address_seed_data(config.address_seed_data)?,
-      zone_data: prepare_zone_data(config.zone_data.as_ref())?,
-      address_context_data: prepare_address_context_data(
-        config.address_context_data,
-      )?,
-      coreference_data: prepare_coreference_data(config.coreference_data)?,
-      name_corpus_data: config.name_corpus_data.map(PreparedNames::new),
+      regex_meta,
+      custom_regex_meta,
+      deny_list_data,
+      false_positive_filters,
+      gazetteer_data,
+      country_data,
+      hotword_data: support_data.hotwords,
+      trigger_data: support_data.triggers,
+      legal_form_data: support_data.legal_forms,
+      address_seed_data: support_data.address_seed,
+      zone_data: support_data.zones,
+      address_context_data: support_data.address_context,
+      coreference_data: support_data.coreference,
+      name_corpus_data: support_data.names,
       date_data,
       monetary_data,
       monetary_extraction,
@@ -1532,6 +1579,74 @@ fn build_search_indexes_for_config(
   )
 }
 
+fn prepare_search_index_bundle(
+  input: SearchIndexConfigInput,
+  slices: &PreparedSearchSlices,
+  artifacts: Option<&PreparedSearchArtifacts>,
+  diagnostics: &mut Option<&mut StaticRedactionDiagnostics>,
+) -> Result<PreparedSearchIndexBundle> {
+  let SearchIndexConfigInput {
+    regex_patterns,
+    custom_regex_patterns,
+    literal_patterns,
+    regex_options,
+    custom_regex_options,
+    literal_options,
+    anchored_len,
+  } = input;
+  let regex_groups = split_regex_patterns(regex_patterns, slices)?;
+  let mut counts = SearchPrepareCounts {
+    regex: regex_groups.regex.len(),
+    custom_regex: custom_regex_patterns.len(),
+    anchored: anchored_len,
+    legal_forms: regex_groups.legal_forms.len(),
+    triggers: regex_groups.triggers.len(),
+    literals: 0,
+  };
+  let indexes = build_search_indexes_for_config(
+    regex_groups,
+    regex_options,
+    custom_regex_patterns,
+    custom_regex_options,
+    literal_patterns,
+    literal_options,
+    artifacts,
+  )?;
+  let (
+    (regex, regex_elapsed),
+    (custom_regex, custom_regex_elapsed),
+    (legal_forms, legal_forms_elapsed),
+    (triggers, triggers_elapsed),
+    (literals, literals_elapsed),
+  ) = (
+    indexes.regex,
+    indexes.custom_regex,
+    indexes.legal_forms,
+    indexes.triggers,
+    indexes.literals,
+  );
+  counts.literals = literals.len();
+  record_search_index_prepare_stages(
+    diagnostics,
+    &SearchIndexPrepareMetrics {
+      regex: (counts.regex, regex_elapsed),
+      custom_regex: (counts.custom_regex, custom_regex_elapsed),
+      legal_forms: (counts.legal_forms, legal_forms_elapsed),
+      triggers: (counts.triggers, triggers_elapsed),
+      literals: (counts.literals, literals_elapsed),
+    },
+  );
+
+  Ok(PreparedSearchIndexBundle {
+    regex,
+    custom_regex,
+    legal_forms,
+    triggers,
+    literals,
+    counts,
+  })
+}
+
 fn build_search_indexes(
   inputs: SearchIndexBuildInputs,
   artifacts: Option<&PreparedSearchArtifacts>,
@@ -1655,13 +1770,12 @@ fn record_search_index_prepare_stages(
 
 fn record_prepare_total(
   diagnostics: &mut Option<&mut StaticRedactionDiagnostics>,
-  counts: [usize; 6],
+  count: usize,
   start: Instant,
 ) {
   let Some(diagnostics) = diagnostics else {
     return;
   };
-  let count = counts.into_iter().fold(0usize, usize::saturating_add);
   diagnostics.record_stage(
     DiagnosticStage::PrepareTotal,
     Some(count),
@@ -1716,6 +1830,232 @@ fn prepare_anchored_data(
   }
 
   Ok((prepared_date, prepared_monetary))
+}
+
+const fn take_support_input(
+  config: &mut PreparedSearchConfig,
+) -> SupportDataInput {
+  SupportDataInput {
+    hotwords: config.hotword_data.take(),
+    triggers: config.trigger_data.take(),
+    legal_forms: config.legal_form_data.take(),
+    address_seed: config.address_seed_data.take(),
+    zones: config.zone_data.take(),
+    address_context: config.address_context_data.take(),
+    coreference: config.coreference_data.take(),
+    name_corpus: config.name_corpus_data.take(),
+  }
+}
+
+fn prepare_support_data(
+  input: SupportDataInput,
+  diagnostics: &mut Option<&mut StaticRedactionDiagnostics>,
+) -> Result<PreparedSupportData> {
+  let hotword_data_len = hotword_data_len(input.hotwords.as_ref());
+  let hotword_data_start = Instant::now();
+  let hotword_data = prepare_hotword_data(input.hotwords)?;
+  record_prepare_stage_elapsed(
+    diagnostics,
+    DiagnosticStage::PrepareHotwordData,
+    hotword_data_len,
+    elapsed_us(hotword_data_start),
+  );
+
+  let trigger_data_len = trigger_data_len(input.triggers.as_ref());
+  let trigger_data_start = Instant::now();
+  let trigger_data = prepare_trigger_data(input.triggers)?;
+  record_prepare_stage_elapsed(
+    diagnostics,
+    DiagnosticStage::PrepareTriggerData,
+    trigger_data_len,
+    elapsed_us(trigger_data_start),
+  );
+
+  let legal_form_data_len = legal_form_data_len(input.legal_forms.as_ref());
+  let legal_form_data_start = Instant::now();
+  let legal_form_data = input.legal_forms.map(PreparedLegalFormData::new);
+  record_prepare_stage_elapsed(
+    diagnostics,
+    DiagnosticStage::PrepareLegalFormData,
+    legal_form_data_len,
+    elapsed_us(legal_form_data_start),
+  );
+
+  let address_seed_data_len =
+    address_seed_data_len(input.address_seed.as_ref());
+  let address_seed_data_start = Instant::now();
+  let address_seed_data = prepare_address_seed_data(input.address_seed)?;
+  record_prepare_stage_elapsed(
+    diagnostics,
+    DiagnosticStage::PrepareAddressSeedData,
+    address_seed_data_len,
+    elapsed_us(address_seed_data_start),
+  );
+
+  let zone_data_len = zone_data_len(input.zones.as_ref());
+  let zone_data_start = Instant::now();
+  let zone_data = prepare_zone_data(input.zones.as_ref())?;
+  record_prepare_stage_elapsed(
+    diagnostics,
+    DiagnosticStage::PrepareZoneData,
+    zone_data_len,
+    elapsed_us(zone_data_start),
+  );
+
+  let address_context_data_len =
+    address_context_data_len(input.address_context.as_ref());
+  let address_context_data_start = Instant::now();
+  let address_context_data =
+    prepare_address_context_data(input.address_context)?;
+  record_prepare_stage_elapsed(
+    diagnostics,
+    DiagnosticStage::PrepareAddressContextData,
+    address_context_data_len,
+    elapsed_us(address_context_data_start),
+  );
+
+  let coreference_data_len = coreference_data_len(input.coreference.as_ref());
+  let coreference_data_start = Instant::now();
+  let coreference_data = prepare_coreference_data(input.coreference)?;
+  record_prepare_stage_elapsed(
+    diagnostics,
+    DiagnosticStage::PrepareCoreferenceData,
+    coreference_data_len,
+    elapsed_us(coreference_data_start),
+  );
+
+  let name_corpus_data_len = name_corpus_data_len(input.name_corpus.as_ref());
+  let name_corpus_data_start = Instant::now();
+  let name_corpus_data = input.name_corpus.map(PreparedNames::new);
+  record_prepare_stage_elapsed(
+    diagnostics,
+    DiagnosticStage::PrepareNameCorpusData,
+    name_corpus_data_len,
+    elapsed_us(name_corpus_data_start),
+  );
+  let count = [
+    hotword_data_len,
+    trigger_data_len,
+    legal_form_data_len,
+    address_seed_data_len,
+    zone_data_len,
+    address_context_data_len,
+    coreference_data_len,
+    name_corpus_data_len,
+  ]
+  .into_iter()
+  .fold(0usize, usize::saturating_add);
+
+  Ok(PreparedSupportData {
+    hotwords: hotword_data,
+    triggers: trigger_data,
+    legal_forms: legal_form_data,
+    address_seed: address_seed_data,
+    zones: zone_data,
+    address_context: address_context_data,
+    coreference: coreference_data,
+    names: name_corpus_data,
+    count,
+  })
+}
+
+fn hotword_data_len(data: Option<&HotwordRuleData>) -> usize {
+  data.map_or(0, |data| data.rules.len())
+}
+
+fn trigger_data_len(data: Option<&TriggerData>) -> usize {
+  data.map_or(0, |data| data.rules.len())
+}
+
+fn legal_form_data_len(data: Option<&LegalFormData>) -> usize {
+  data.map_or(0, |data| {
+    [
+      data.suffixes.len(),
+      data.normalized_boundary_suffixes.len(),
+      data.normalized_in_name_words.len(),
+      data.normalized_suffix_words.len(),
+      data.role_heads.len(),
+      data.sentence_verb_indicators.len(),
+      data.clause_noun_heads.len(),
+      data.connector_prose_heads.len(),
+      data.structural_single_cap_prefixes.len(),
+      data.leading_clause_phrases.len(),
+      data.leading_clause_direct_prefixes.len(),
+      data.connector_words.len(),
+      data.and_connector_words.len(),
+      data.in_name_prepositions.len(),
+      data.company_suffix_words.len(),
+      data.comma_gated_direct_prefixes.len(),
+    ]
+    .into_iter()
+    .fold(0usize, usize::saturating_add)
+  })
+}
+
+fn address_seed_data_len(data: Option<&AddressSeedData>) -> usize {
+  data.map_or(0, |data| {
+    data
+      .boundary_words
+      .len()
+      .saturating_add(data.br_cep_cue_words.len())
+      .saturating_add(data.unit_abbreviations.len())
+  })
+}
+
+fn zone_data_len(data: Option<&ZoneData>) -> usize {
+  data.map_or(0, |data| {
+    data
+      .section_heading_patterns
+      .len()
+      .saturating_add(data.signing_clauses.len())
+  })
+}
+
+fn address_context_data_len(data: Option<&AddressContextData>) -> usize {
+  data.map_or(0, |data| {
+    data
+      .address_prepositions
+      .len()
+      .saturating_add(data.temporal_prepositions.len())
+      .saturating_add(data.street_abbreviations.len())
+      .saturating_add(data.bare_house_stopwords.len())
+  })
+}
+
+fn coreference_data_len(data: Option<&CoreferenceData>) -> usize {
+  data.map_or(0, |data| {
+    data
+      .definition_patterns
+      .len()
+      .saturating_add(data.role_stop_terms.len())
+      .saturating_add(data.legal_form_aliases.len())
+      .saturating_add(data.organization_suffixes.len())
+      .saturating_add(data.organization_determiners.len())
+  })
+}
+
+fn name_corpus_data_len(data: Option<&NameCorpusData>) -> usize {
+  data.map_or(0, |data| {
+    [
+      data.first_names.len(),
+      data.surnames.len(),
+      data.title_tokens.len(),
+      data.title_abbreviations.len(),
+      data.excluded_words.len(),
+      data.common_words.len(),
+      data.non_western_names.len(),
+      data.excluded_all_caps.len(),
+      data.ja_suffixes.len(),
+      data.arabic_connectors.len(),
+      data.relation_connectors.len(),
+      data.hyphenated_prefixes.len(),
+      data.cjk_non_person_terms.len(),
+      data.cjk_surname_starters.len(),
+      data.organization_terms.len(),
+    ]
+    .into_iter()
+    .fold(0usize, usize::saturating_add)
+  })
 }
 
 fn prepare_address_seed_data(
@@ -1955,6 +2295,15 @@ fn validate_supported_config(
   validate_country_config(config)?;
   validate_hotword_config(config)?;
   validate_address_seed_config(config)
+}
+
+fn validate_supported_config_for_artifacts(
+  config: &PreparedSearchConfig,
+  artifacts: Option<&PreparedSearchArtifacts>,
+) -> Result<()> {
+  let allow_literal_artifacts =
+    artifacts.is_some_and(|artifacts| !artifacts.literals.slots.is_empty());
+  validate_supported_config(config, allow_literal_artifacts)
 }
 
 fn validate_search_config(

@@ -2354,6 +2354,16 @@ fn diagnostic_stage_name(stage: DiagnosticStage) -> String {
     DiagnosticStage::PrepareLegalFormSearch => "prepare.legal-form-search",
     DiagnosticStage::PrepareTriggerSearch => "prepare.trigger-search",
     DiagnosticStage::PrepareLiteral => "prepare.literal",
+    DiagnosticStage::PrepareHotwordData => "prepare.hotword-data",
+    DiagnosticStage::PrepareTriggerData => "prepare.trigger-data",
+    DiagnosticStage::PrepareLegalFormData => "prepare.legal-form-data",
+    DiagnosticStage::PrepareAddressSeedData => "prepare.address-seed-data",
+    DiagnosticStage::PrepareZoneData => "prepare.zone-data",
+    DiagnosticStage::PrepareAddressContextData => {
+      "prepare.address-context-data"
+    }
+    DiagnosticStage::PrepareCoreferenceData => "prepare.coreference-data",
+    DiagnosticStage::PrepareNameCorpusData => "prepare.name-corpus-data",
     DiagnosticStage::Normalize => "normalize",
     DiagnosticStage::FindMatches => "find-matches",
     DiagnosticStage::FindRegex => "find.regex",

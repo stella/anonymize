@@ -1,3 +1,5 @@
+use std::collections::BTreeMap;
+
 use fancy_regex::Regex as FancyRegex;
 use regex::{Regex, RegexBuilder};
 
@@ -81,6 +83,18 @@ pub(crate) struct PreparedTriggerData {
   sentence_terminal_currency_terms: Vec<String>,
 }
 
+#[derive(Default)]
+struct TriggerRegexCache {
+  regex: BTreeMap<TriggerPatternKey, Regex>,
+  fancy_regex: BTreeMap<TriggerPatternKey, FancyRegex>,
+}
+
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+struct TriggerPatternKey {
+  pattern: String,
+  flags: Option<String>,
+}
+
 struct PreparedTriggerRule {
   trigger: String,
   label: String,
@@ -133,10 +147,11 @@ struct TriggerExtractionData<'a> {
 
 impl PreparedTriggerData {
   pub(crate) fn new(data: TriggerData) -> Result<Self> {
+    let mut regex_cache = TriggerRegexCache::default();
     let rules = data
       .rules
       .into_iter()
-      .map(PreparedTriggerRule::new)
+      .map(|rule| PreparedTriggerRule::new(rule, &mut regex_cache))
       .collect::<Result<Vec<_>>>()?;
     Ok(Self {
       rules,
@@ -158,15 +173,20 @@ impl PreparedTriggerData {
 }
 
 impl PreparedTriggerRule {
-  fn new(rule: TriggerRule) -> Result<Self> {
+  fn new(
+    rule: TriggerRule,
+    regex_cache: &mut TriggerRegexCache,
+  ) -> Result<Self> {
     Ok(Self {
       trigger: rule.trigger,
       label: rule.label,
-      strategy: PreparedTriggerStrategy::new(rule.strategy)?,
+      strategy: PreparedTriggerStrategy::new(rule.strategy, regex_cache)?,
       validations: rule
         .validations
         .into_iter()
-        .map(PreparedTriggerValidation::new)
+        .map(|validation| {
+          PreparedTriggerValidation::new(validation, regex_cache)
+        })
         .collect::<Result<Vec<_>>>()?,
       include_trigger: rule.include_trigger,
     })
@@ -174,7 +194,10 @@ impl PreparedTriggerRule {
 }
 
 impl PreparedTriggerStrategy {
-  fn new(strategy: TriggerStrategy) -> Result<Self> {
+  fn new(
+    strategy: TriggerStrategy,
+    regex_cache: &mut TriggerRegexCache,
+  ) -> Result<Self> {
     Ok(match strategy {
       TriggerStrategy::ToNextComma {
         stop_words,
@@ -192,14 +215,17 @@ impl PreparedTriggerStrategy {
         max_chars: max_chars.and_then(|value| usize::try_from(value).ok()),
       },
       TriggerStrategy::MatchPattern { pattern, flags } => Self::MatchPattern {
-        regex: build_fancy_regex(&format!("^(?:{pattern})"), flags.as_deref())?,
+        regex: regex_cache.fancy_regex(format!("^(?:{pattern})"), flags)?,
       },
     })
   }
 }
 
 impl PreparedTriggerValidation {
-  fn new(validation: TriggerValidation) -> Result<Self> {
+  fn new(
+    validation: TriggerValidation,
+    regex_cache: &mut TriggerRegexCache,
+  ) -> Result<Self> {
     Ok(match validation {
       TriggerValidation::StartsUppercase => Self::StartsUppercase,
       TriggerValidation::MinLength(min) => {
@@ -212,11 +238,39 @@ impl PreparedTriggerValidation {
       TriggerValidation::HasDigits => Self::HasDigits,
       TriggerValidation::MatchesPattern { pattern, flags } => {
         Self::MatchesPattern {
-          regex: build_regex(&pattern, flags.as_deref())?,
+          regex: regex_cache.regex(pattern, flags)?,
         }
       }
       TriggerValidation::ValidId { validator } => Self::ValidId { validator },
     })
+  }
+}
+
+impl TriggerRegexCache {
+  fn regex(&mut self, pattern: String, flags: Option<String>) -> Result<Regex> {
+    let key = TriggerPatternKey { pattern, flags };
+    if let Some(regex) = self.regex.get(&key) {
+      return Ok(regex.clone());
+    }
+
+    let regex = build_regex(&key.pattern, key.flags.as_deref())?;
+    self.regex.insert(key, regex.clone());
+    Ok(regex)
+  }
+
+  fn fancy_regex(
+    &mut self,
+    pattern: String,
+    flags: Option<String>,
+  ) -> Result<FancyRegex> {
+    let key = TriggerPatternKey { pattern, flags };
+    if let Some(regex) = self.fancy_regex.get(&key) {
+      return Ok(regex.clone());
+    }
+
+    let regex = build_fancy_regex(&key.pattern, key.flags.as_deref())?;
+    self.fancy_regex.insert(key, regex.clone());
+    Ok(regex)
   }
 }
 

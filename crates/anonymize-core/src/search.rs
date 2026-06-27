@@ -294,14 +294,11 @@ impl SearchIndex {
     )
     .map_err(|error| search_error(&error))?;
     cursor.finish()?;
-    let pattern_indexes = (0..search.len())
-      .map(pattern_index)
-      .collect::<Result<Vec<_>>>()?;
     Ok(Self {
       slots: vec![SearchSlot {
         engine: SlotEngine::Literal,
+        pattern_remap: PatternRemap::identity(search.len()),
         search,
-        pattern_remap: PatternRemap::from_indexes(pattern_indexes),
       }],
     })
   }
@@ -711,6 +708,10 @@ fn pattern_index(index: usize) -> Result<u32> {
 }
 
 impl PatternRemap {
+  const fn identity(len: usize) -> Self {
+    Self::Identity { len }
+  }
+
   fn from_indexes(indexes: Vec<u32>) -> Self {
     if indexes
       .iter()
