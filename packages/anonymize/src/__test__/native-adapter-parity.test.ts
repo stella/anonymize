@@ -162,6 +162,19 @@ type ContractFixtureCase = {
   text: string;
 };
 
+type ExpectedNativeFixtureEntity = {
+  label: string;
+  source?: string;
+  text: string;
+};
+
+type NativeFixtureImprovementCase = {
+  language: (typeof CONTRACT_FIXTURE_LANGUAGES)[number];
+  fixture: string;
+  includes?: ExpectedNativeFixtureEntity[];
+  excludes?: ExpectedNativeFixtureEntity[];
+};
+
 type PythonNativeOffsetSlice = {
   start: number;
   end: number;
@@ -182,6 +195,61 @@ const CONTRACT_FIXTURES_DIR = join(
   "contracts",
 );
 const CONTRACT_FIXTURE_LANGUAGES = ["cs", "de", "en"] as const;
+const NATIVE_FIXTURE_IMPROVEMENTS: NativeFixtureImprovementCase[] = [
+  {
+    language: "cs",
+    fixture: "asset-transfer-court-declensions.txt",
+    includes: [
+      {
+        label: "address",
+        source: "regex",
+        text: "Václavské náměstí 9, 110 00 Praha 1",
+      },
+    ],
+  },
+  {
+    language: "cs",
+    fixture: "nakit-legal-services-framework.txt",
+    excludes: [{ label: "person", text: "Objednatele" }],
+  },
+  {
+    language: "cs",
+    fixture: "vinci-donation-agreement.txt",
+    includes: [
+      {
+        label: "organization",
+        source: "deny-list",
+        text: "České vysoké učení technické v Praze",
+      },
+      {
+        label: "organization",
+        source: "coreference",
+        text: "VINCI Construction CS",
+      },
+    ],
+  },
+  {
+    language: "en",
+    fixture: "software-license-agreement.txt",
+    includes: [
+      {
+        label: "address",
+        source: "regex",
+        text: "200 West Street, New York, NY 10282",
+      },
+      {
+        label: "address",
+        source: "regex",
+        text: "1209 Orange Street, Wilmington, DE 19801",
+      },
+      {
+        label: "phone number",
+        source: "regex",
+        text: "(212) 555-0142",
+      },
+    ],
+  },
+];
 const CONFIG_JSON = JSON.stringify({
   regex_patterns: [{ kind: "regex", pattern: "\\b[A-Z]{2}\\d{4}\\b" }],
   custom_regex_patterns: [{ kind: "regex", pattern: "\\bMAT-\\d{3}\\b" }],
@@ -2052,6 +2120,70 @@ describe("native adapter parity", () => {
     }
   });
 
+  test("native fixture improvements are explicit", async () => {
+    const adapters = getAdapters();
+    const languages = [
+      ...new Set(NATIVE_FIXTURE_IMPROVEMENTS.map(({ language }) => language)),
+    ];
+
+    for (const language of languages) {
+      const fixtures = new Map(
+        loadContractFixtureCases(language).map(({ name, text }) => [
+          name,
+          text,
+        ]),
+      );
+      const scopedConfig = applyPipelineLanguageScope({
+        ...contractTestConfig(`native-fixture-improvements-${language}`),
+        language,
+      });
+      const dictionaryScope: Parameters<typeof loadTestDictionaries>[0] = {};
+      if (scopedConfig.denyListCountries !== undefined) {
+        dictionaryScope.denyListCountries = scopedConfig.denyListCountries;
+      }
+      if (scopedConfig.nameCorpusLanguages !== undefined) {
+        dictionaryScope.nameCorpusLanguages = scopedConfig.nameCorpusLanguages;
+      }
+      const dictionaries = await loadTestDictionaries(dictionaryScope);
+      const search = await preparePipelineSearch({
+        config: {
+          ...scopedConfig,
+          dictionaries,
+        },
+        context: createPipelineContext(),
+      });
+      const packageBytes = prepareNativeSearchPackage({
+        binding: adapters.native,
+        config: search.nativeStaticConfig,
+        compressed: true,
+      });
+      const anonymizer = createNativeAnonymizerFromPackage({
+        binding: adapters.native,
+        packageBytes,
+      });
+
+      for (const improvement of NATIVE_FIXTURE_IMPROVEMENTS.filter(
+        (item) => item.language === language,
+      )) {
+        const text = fixtures.get(improvement.fixture);
+        expect(text).toBeDefined();
+        if (text === undefined) {
+          continue;
+        }
+
+        const result = toBindingStaticResult(
+          anonymizer.redactStaticEntities(text),
+        );
+        for (const entity of improvement.includes ?? []) {
+          expectNativeFixtureEntity(result, entity);
+        }
+        for (const entity of improvement.excludes ?? []) {
+          expectNativeFixtureEntityAbsent(result, entity);
+        }
+      }
+    }
+  });
+
   test("JSON operator config accepts camel-case redactString", () => {
     const adapters = getAdapters();
     const text =
@@ -2712,6 +2844,31 @@ const loadContractFixtureCases = (
       name,
       text: readFileSync(join(CONTRACT_FIXTURES_DIR, language, name), "utf8"),
     }));
+
+const findNativeFixtureEntity = (
+  result: StaticRedactionResult,
+  expected: ExpectedNativeFixtureEntity,
+) =>
+  result.resolved_entities.find(
+    (entity) =>
+      entity.label === expected.label &&
+      entity.text === expected.text &&
+      (expected.source === undefined || entity.source === expected.source),
+  );
+
+const expectNativeFixtureEntity = (
+  result: StaticRedactionResult,
+  expected: ExpectedNativeFixtureEntity,
+) => {
+  expect(findNativeFixtureEntity(result, expected)).toMatchObject(expected);
+};
+
+const expectNativeFixtureEntityAbsent = (
+  result: StaticRedactionResult,
+  expected: ExpectedNativeFixtureEntity,
+) => {
+  expect(findNativeFixtureEntity(result, expected)).toBeUndefined();
+};
 
 const packageJsonVersion = (): string => {
   const packageJson = JSON.parse(

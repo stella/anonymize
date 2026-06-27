@@ -74,7 +74,7 @@ const WRITE_NATIVE_PACKAGE_PATH =
 const USER_DATA_SCENARIO =
   process.env.ANONYMIZE_MIGRATION_USER_DATA_SCENARIO?.trim() ?? "none";
 
-const ACCEPTED_NATIVE_STATIC_DELTAS = new Map(
+const INTENTIONAL_NATIVE_STATIC_IMPROVEMENTS = new Map(
   [
     {
       fixture: "cs/asset-transfer-court-declensions.txt",
@@ -182,9 +182,13 @@ async function runCoordinator() {
     if (baseline !== null) {
       const comparison = compareSnapshots(baseline, candidate);
       console.log(JSON.stringify(comparisonForLog(comparison)));
-      const acceptedByPolicy =
-        ALLOW_ACCEPTED_MISMATCHES && comparison.acceptedEqual;
-      if (!comparison.equal && !acceptedByPolicy && FAIL_ON_MISMATCH !== "0") {
+      const intentionalByPolicy =
+        ALLOW_ACCEPTED_MISMATCHES && comparison.intentionalEqual;
+      if (
+        !comparison.equal &&
+        !intentionalByPolicy &&
+        FAIL_ON_MISMATCH !== "0"
+      ) {
         throw new Error(
           `Fixture parity failed for ${comparison.mismatches.length} fixture(s)`,
         );
@@ -860,8 +864,11 @@ function compareSnapshots(baseline, candidate) {
     baseline: baseline.variant,
     candidate: candidate.variant,
     equal: mismatches.length === 0,
+    intentionalEqual: mismatches.every(
+      (mismatch) => mismatch.intentionalImprovementReason !== null,
+    ),
     acceptedEqual: mismatches.every(
-      (mismatch) => mismatch.acceptedReason !== null,
+      (mismatch) => mismatch.intentionalImprovementReason !== null,
     ),
     mismatchSummary: mismatchSummary(mismatches),
     fixtureCount: fixtureNames.size,
@@ -913,7 +920,7 @@ function mismatchSummary(mismatches) {
   let materialMismatchCount = 0;
   let redactionMismatchCount = 0;
   let sourceOnlyMismatchCount = 0;
-  let acceptedMismatchCount = 0;
+  let intentionalImprovementCount = 0;
   let unexplainedMismatchCount = 0;
   let unexplainedMaterialMismatchCount = 0;
   let unexplainedRedactionMismatchCount = 0;
@@ -921,21 +928,21 @@ function mismatchSummary(mismatches) {
   for (const mismatch of mismatches) {
     const category = mismatch.category ?? mismatch.kind;
     byCategory[category] = (byCategory[category] ?? 0) + 1;
-    const accepted = mismatch.acceptedReason !== null;
-    if (accepted) {
-      acceptedMismatchCount += 1;
+    const intentional = mismatch.intentionalImprovementReason !== null;
+    if (intentional) {
+      intentionalImprovementCount += 1;
     } else {
       unexplainedMismatchCount += 1;
     }
     if (mismatch.sourceAgnosticEqual !== true) {
       materialMismatchCount += 1;
-      if (!accepted) {
+      if (!intentional) {
         unexplainedMaterialMismatchCount += 1;
       }
     }
     if (mismatch.redactedTextEqual === false) {
       redactionMismatchCount += 1;
-      if (!accepted) {
+      if (!intentional) {
         unexplainedRedactionMismatchCount += 1;
       }
     }
@@ -954,7 +961,8 @@ function mismatchSummary(mismatches) {
     materialMismatchCount,
     redactionMismatchCount,
     sourceOnlyMismatchCount,
-    acceptedMismatchCount,
+    intentionalImprovementCount,
+    acceptedMismatchCount: intentionalImprovementCount,
     unexplainedMismatchCount,
     unexplainedMaterialMismatchCount,
     unexplainedRedactionMismatchCount,
@@ -1044,23 +1052,29 @@ function describeMismatch(fixture, expected, actual) {
   };
   return {
     ...mismatch,
-    acceptedReason: acceptedMismatchReason(mismatch),
+    intentionalImprovementReason: intentionalImprovementReason(mismatch),
+    acceptedReason: intentionalImprovementReason(mismatch),
   };
 }
 
-function acceptedMismatchReason(mismatch) {
+function intentionalImprovementReason(mismatch) {
   if (mismatch.sourceAgnosticEqual === true) {
     return "source-only";
   }
-  const accepted = ACCEPTED_NATIVE_STATIC_DELTAS.get(mismatch.fixture);
-  if (accepted === undefined) {
+  const improvement = INTENTIONAL_NATIVE_STATIC_IMPROVEMENTS.get(
+    mismatch.fixture,
+  );
+  if (improvement === undefined) {
     return null;
   }
   if (
-    entitySummariesEqual(mismatch.candidateExtra, accepted.candidateExtra) &&
-    entitySummariesEqual(mismatch.candidateMissing, accepted.candidateMissing)
+    entitySummariesEqual(mismatch.candidateExtra, improvement.candidateExtra) &&
+    entitySummariesEqual(
+      mismatch.candidateMissing,
+      improvement.candidateMissing,
+    )
   ) {
-    return accepted.reason;
+    return improvement.reason;
   }
   return null;
 }
