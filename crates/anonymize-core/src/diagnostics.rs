@@ -1,6 +1,6 @@
 use crate::byte_offsets::ByteOffsets;
 use crate::resolution::{DetectionSource, PipelineEntity, SourceDetail};
-use crate::search::SearchIndexFindStats;
+use crate::search::{SearchIndexBuildStats, SearchIndexFindStats};
 use crate::types::{RedactionResult, SearchEngine, SearchMatch};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -96,6 +96,8 @@ pub struct DiagnosticEvent {
   pub span_valid: Option<bool>,
   pub elapsed_us: Option<u64>,
   pub input_bytes: Option<usize>,
+  pub artifact_count: Option<usize>,
+  pub artifact_bytes: Option<usize>,
   pub reason: Option<String>,
 }
 
@@ -140,6 +142,8 @@ impl StaticRedactionDiagnostics {
         span_valid: Some(span_valid),
         elapsed_us: None,
         input_bytes: None,
+        artifact_count: None,
+        artifact_bytes: None,
         reason: None,
       });
     }
@@ -170,6 +174,39 @@ impl StaticRedactionDiagnostics {
         span_valid: None,
         elapsed_us: Some(stat.elapsed_us),
         input_bytes: Some(input_bytes),
+        artifact_count: None,
+        artifact_bytes: None,
+        reason: None,
+      });
+    }
+  }
+
+  pub(crate) fn record_search_build_slot_summaries(
+    &mut self,
+    stage: DiagnosticStage,
+    stats: &[SearchIndexBuildStats],
+  ) {
+    for stat in stats {
+      self.events.push(DiagnosticEvent {
+        stage,
+        kind: DiagnosticEventKind::StageSummary,
+        count: None,
+        slot: Some(stat.slot),
+        pattern_count: Some(stat.pattern_count),
+        engine: Some(stat.engine),
+        pattern: None,
+        source: None,
+        source_detail: None,
+        label: None,
+        start: None,
+        end: None,
+        text: None,
+        score: None,
+        span_valid: None,
+        elapsed_us: Some(stat.elapsed_us),
+        input_bytes: None,
+        artifact_count: Some(stat.artifact_count),
+        artifact_bytes: Some(stat.artifact_bytes),
         reason: None,
       });
     }
@@ -209,6 +246,8 @@ impl StaticRedactionDiagnostics {
         span_valid: Some(span_slices(&offsets, entity.start, entity.end)),
         elapsed_us: None,
         input_bytes: None,
+        artifact_count: None,
+        artifact_bytes: None,
         reason: None,
       });
     }
@@ -238,6 +277,8 @@ impl StaticRedactionDiagnostics {
       span_valid: None,
       elapsed_us,
       input_bytes: Some(input_bytes),
+      artifact_count: None,
+      artifact_bytes: None,
       reason: None,
     });
   }
@@ -269,6 +310,8 @@ impl StaticRedactionDiagnostics {
       span_valid: None,
       elapsed_us: None,
       input_bytes: None,
+      artifact_count: None,
+      artifact_bytes: None,
       reason: Some(String::from(reason)),
     });
   }
@@ -298,6 +341,8 @@ impl StaticRedactionDiagnostics {
       span_valid: None,
       elapsed_us,
       input_bytes,
+      artifact_count: None,
+      artifact_bytes: None,
       reason: None,
     });
   }

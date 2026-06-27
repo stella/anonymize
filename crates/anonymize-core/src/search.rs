@@ -136,6 +136,21 @@ pub(crate) struct SearchIndexFindStats {
   pub elapsed_us: u64,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct SearchIndexBuildStats {
+  pub slot: usize,
+  pub engine: SearchEngine,
+  pub pattern_count: usize,
+  pub artifact_count: usize,
+  pub artifact_bytes: usize,
+  pub elapsed_us: u64,
+}
+
+pub(crate) struct SearchIndexBuildResult {
+  pub index: SearchIndex,
+  pub stats: Vec<SearchIndexBuildStats>,
+}
+
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct SearchIndexArtifacts {
   pub slots: Vec<text_search::PreparedTextSearchArtifacts>,
@@ -243,7 +258,15 @@ impl SearchIndex {
     options: SearchOptions,
   ) -> Result<Self> {
     let parts = partition_patterns(patterns)?;
-    build_search_index(parts, options, None)
+    Ok(build_search_index_inner(parts, options, None, false)?.index)
+  }
+
+  pub(crate) fn new_with_build_stats(
+    patterns: Vec<SearchPattern>,
+    options: SearchOptions,
+  ) -> Result<SearchIndexBuildResult> {
+    let parts = partition_patterns(patterns)?;
+    build_search_index_inner(parts, options, None, true)
   }
 
   pub fn prepare_artifacts(
@@ -272,12 +295,32 @@ impl SearchIndex {
     artifacts: &SearchIndexArtifacts,
   ) -> Result<Self> {
     if patterns.is_empty() && !artifacts.slots.is_empty() {
-      return Self::new_all_literal_with_artifacts(options, artifacts);
+      return Ok(
+        Self::new_all_literal_with_artifacts(options, artifacts, false)?.index,
+      );
     }
 
     let parts = partition_patterns(patterns)?;
     let mut cursor = SearchIndexArtifactCursor::new(&artifacts.slots);
-    let search = build_search_index(parts, options, Some(&mut cursor))?;
+    let search =
+      build_search_index_inner(parts, options, Some(&mut cursor), false)?;
+    cursor.finish()?;
+    Ok(search.index)
+  }
+
+  pub(crate) fn new_with_artifacts_build_stats(
+    patterns: Vec<SearchPattern>,
+    options: SearchOptions,
+    artifacts: &SearchIndexArtifacts,
+  ) -> Result<SearchIndexBuildResult> {
+    if patterns.is_empty() && !artifacts.slots.is_empty() {
+      return Self::new_all_literal_with_artifacts(options, artifacts, true);
+    }
+
+    let parts = partition_patterns(patterns)?;
+    let mut cursor = SearchIndexArtifactCursor::new(&artifacts.slots);
+    let search =
+      build_search_index_inner(parts, options, Some(&mut cursor), true)?;
     cursor.finish()?;
     Ok(search)
   }
@@ -285,21 +328,37 @@ impl SearchIndex {
   fn new_all_literal_with_artifacts(
     options: SearchOptions,
     artifacts: &SearchIndexArtifacts,
-  ) -> Result<Self> {
+    collect_stats: bool,
+  ) -> Result<SearchIndexBuildResult> {
     let mut cursor = SearchIndexArtifactCursor::new(&artifacts.slots);
     let slot_artifacts = cursor.next()?;
+    let start = collect_stats.then(Instant::now);
     let search = text_search::TextSearch::with_prepared_all_literal_artifacts(
       literal_options(options.literal),
       slot_artifacts,
     )
     .map_err(|error| search_error(&error))?;
+    let pattern_count = search.len();
+    let stats = start.map_or_else(Vec::new, |start| {
+      vec![SearchIndexBuildStats {
+        slot: 0,
+        engine: SearchEngine::Literal,
+        pattern_count,
+        artifact_count: prepared_artifact_count(slot_artifacts),
+        artifact_bytes: prepared_artifact_bytes(slot_artifacts),
+        elapsed_us: elapsed_us(start),
+      }]
+    });
     cursor.finish()?;
-    Ok(Self {
-      slots: vec![SearchSlot {
-        engine: SlotEngine::Literal,
-        pattern_remap: PatternRemap::identity(search.len()),
-        search,
-      }],
+    Ok(SearchIndexBuildResult {
+      index: Self {
+        slots: vec![SearchSlot {
+          engine: SlotEngine::Literal,
+          pattern_remap: PatternRemap::identity(pattern_count),
+          search,
+        }],
+      },
+      stats,
     })
   }
 
@@ -490,39 +549,49 @@ fn partition_patterns(
   })
 }
 
-fn build_search_index(
+fn build_search_index_inner(
   parts: SearchIndexParts,
   options: SearchOptions,
   mut artifacts: Option<&mut SearchIndexArtifactCursor<'_>>,
-) -> Result<SearchIndex> {
+  collect_stats: bool,
+) -> Result<SearchIndexBuildResult> {
   let mut slots = Vec::new();
-  let literal_artifacts = slot_artifacts(&parts.literals, &mut artifacts)?;
-  push_slot(
-    &mut slots,
-    SlotEngine::Literal,
-    parts.literals,
-    parts.literal_indexes,
-    literal_options(options.literal),
-    literal_artifacts,
-  )?;
-  push_regex_slots(
-    &mut slots,
-    parts.regex,
-    parts.regex_indexes,
-    options.regex,
-    &mut artifacts,
-  )?;
-  let fuzzy_artifacts = slot_artifacts(&parts.fuzzy, &mut artifacts)?;
-  push_slot(
-    &mut slots,
-    SlotEngine::Fuzzy,
-    parts.fuzzy,
-    parts.fuzzy_indexes,
-    fuzzy_options(options.fuzzy),
-    fuzzy_artifacts,
-  )?;
-
-  Ok(SearchIndex { slots })
+  let mut collected_stats = Vec::new();
+  {
+    let mut stats = collect_stats.then_some(&mut collected_stats);
+    let literal_artifacts = slot_artifacts(&parts.literals, &mut artifacts)?;
+    push_slot(
+      &mut slots,
+      SlotEngine::Literal,
+      parts.literals,
+      parts.literal_indexes,
+      literal_options(options.literal),
+      literal_artifacts,
+      stats.as_deref_mut(),
+    )?;
+    push_regex_slots(
+      &mut slots,
+      parts.regex,
+      parts.regex_indexes,
+      options.regex,
+      &mut artifacts,
+      stats.as_deref_mut(),
+    )?;
+    let fuzzy_artifacts = slot_artifacts(&parts.fuzzy, &mut artifacts)?;
+    push_slot(
+      &mut slots,
+      SlotEngine::Fuzzy,
+      parts.fuzzy,
+      parts.fuzzy_indexes,
+      fuzzy_options(options.fuzzy),
+      fuzzy_artifacts,
+      stats,
+    )?;
+  }
+  Ok(SearchIndexBuildResult {
+    index: SearchIndex { slots },
+    stats: collected_stats,
+  })
 }
 
 fn slot_artifacts<'a>(
@@ -559,6 +628,7 @@ fn push_regex_slots(
   pattern_indexes: Vec<u32>,
   options: RegexSearchOptions,
   artifacts: &mut Option<&mut SearchIndexArtifactCursor<'_>>,
+  mut stats: Option<&mut Vec<SearchIndexBuildStats>>,
 ) -> Result<()> {
   if !options.overlap_all {
     let regex_artifacts = slot_artifacts(&patterns, artifacts)?;
@@ -569,6 +639,7 @@ fn push_regex_slots(
       pattern_indexes,
       regex_options(options),
       regex_artifacts,
+      stats,
     );
   }
 
@@ -582,6 +653,7 @@ fn push_regex_slots(
       vec![pattern_index],
       regex_options(options),
       regex_artifacts,
+      stats.as_deref_mut(),
     )?;
   }
   Ok(())
@@ -594,11 +666,17 @@ fn push_slot(
   pattern_indexes: Vec<u32>,
   options: text_search::TextSearchOptions,
   artifacts: Option<&text_search::PreparedTextSearchArtifacts>,
+  stats: Option<&mut Vec<SearchIndexBuildStats>>,
 ) -> Result<()> {
   if patterns.is_empty() {
     return Ok(());
   }
 
+  let slot = slots.len();
+  let pattern_count = pattern_indexes.len();
+  let artifact_count = artifacts.map_or(0, prepared_artifact_count);
+  let artifact_bytes = artifacts.map_or(0, prepared_artifact_bytes);
+  let start = stats.as_ref().map(|_| Instant::now());
   let search = if let Some(artifacts) = artifacts {
     text_search::TextSearch::with_prepared_artifacts(
       patterns, options, artifacts,
@@ -612,7 +690,42 @@ fn push_slot(
     search,
     pattern_remap: PatternRemap::from_indexes(pattern_indexes),
   });
+  if let (Some(stats), Some(start)) = (stats, start) {
+    stats.push(SearchIndexBuildStats {
+      slot,
+      engine: SearchEngine::from(engine),
+      pattern_count,
+      artifact_count,
+      artifact_bytes,
+      elapsed_us: elapsed_us(start),
+    });
+  }
   Ok(())
+}
+
+const fn prepared_artifact_count(
+  artifacts: &text_search::PreparedTextSearchArtifacts,
+) -> usize {
+  artifacts
+    .aho_automata
+    .len()
+    .saturating_add(artifacts.regex_sets.len())
+}
+
+fn prepared_artifact_bytes(
+  artifacts: &text_search::PreparedTextSearchArtifacts,
+) -> usize {
+  artifacts
+    .aho_automata
+    .iter()
+    .map(|artifact| artifact.bytes.len())
+    .chain(
+      artifacts
+        .regex_sets
+        .iter()
+        .map(|artifact| artifact.bytes.len()),
+    )
+    .fold(0usize, usize::saturating_add)
 }
 
 fn capture_slot_artifacts(

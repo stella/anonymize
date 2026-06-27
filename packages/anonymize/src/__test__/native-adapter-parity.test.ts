@@ -146,6 +146,8 @@ type StaticRedactionDiagnosticResult = {
       span_valid?: boolean;
       elapsed_us?: number;
       input_bytes?: number;
+      artifact_count?: number;
+      artifact_bytes?: number;
       reason?: string;
     }>;
   };
@@ -2276,6 +2278,17 @@ describe("native adapter parity", () => {
           typeof event.slot === "number" &&
           typeof event.pattern_count === "number" &&
           event.pattern_count > 0,
+      ),
+    ).toBe(true);
+    expect(
+      tsResult.diagnostics.events.some(
+        (event) =>
+          event.stage === "prepare.regex" &&
+          event.kind === "stage-summary" &&
+          typeof event.slot === "number" &&
+          typeof event.pattern_count === "number" &&
+          typeof event.artifact_count === "number" &&
+          typeof event.artifact_bytes === "number",
       ),
     ).toBe(true);
     expect(

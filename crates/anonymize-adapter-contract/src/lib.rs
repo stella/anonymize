@@ -1368,6 +1368,10 @@ pub struct BindingDiagnosticEvent {
   #[serde(skip_serializing_if = "Option::is_none")]
   pub input_bytes: Option<usize>,
   #[serde(skip_serializing_if = "Option::is_none")]
+  pub artifact_count: Option<usize>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub artifact_bytes: Option<usize>,
+  #[serde(skip_serializing_if = "Option::is_none")]
   pub reason: Option<String>,
 }
 
@@ -2126,6 +2130,8 @@ fn diagnostic_event_to_binding(
     span_valid: event.span_valid,
     elapsed_us: event.elapsed_us,
     input_bytes: event.input_bytes,
+    artifact_count: event.artifact_count,
+    artifact_bytes: event.artifact_bytes,
     reason: event.reason,
   }
 }
@@ -2773,6 +2779,8 @@ mod tests {
         span_valid: None,
         elapsed_us: None,
         input_bytes: None,
+        artifact_count: None,
+        artifact_bytes: None,
         reason: None,
       }],
     };

@@ -2219,6 +2219,52 @@ fn prepared_search_reports_static_redaction_diagnostics() {
 }
 
 #[test]
+fn prepared_search_reports_prepare_slot_diagnostics() {
+  let config = PreparedSearchConfig {
+    regex_patterns: vec![SearchPattern::Regex(String::from(
+      r"\b[A-Z]{2}\d{4}\b",
+    ))],
+    literal_patterns: vec![SearchPattern::LiteralWithOptions {
+      pattern: String::from("Acme"),
+      case_insensitive: Some(true),
+      whole_words: Some(false),
+    }],
+    slices: PreparedSearchSlices {
+      regex: PatternSlice { start: 0, end: 1 },
+      gazetteer: PatternSlice { start: 0, end: 1 },
+      ..PreparedSearchSlices::default()
+    },
+    regex_meta: vec![RegexMatchMeta::new("registration number", 0.9)],
+    gazetteer_data: Some(GazetteerMatchData {
+      labels: vec![String::from("organization")],
+      is_fuzzy: vec![false],
+    }),
+    ..empty_config(PreparedSearchSlices::default())
+  };
+  let artifacts = PreparedSearch::prepare_artifacts(config.clone()).unwrap();
+
+  let result =
+    PreparedSearch::new_with_artifacts_diagnostics(config, &artifacts).unwrap();
+
+  assert!(result.diagnostics.events.iter().any(|event| {
+    event.stage == DiagnosticStage::PrepareRegex
+      && event.kind == DiagnosticEventKind::StageSummary
+      && event.slot.is_none()
+      && event.count == Some(1)
+  }));
+  assert!(result.diagnostics.events.iter().any(|event| {
+    event.stage == DiagnosticStage::PrepareRegex
+      && event.kind == DiagnosticEventKind::StageSummary
+      && event.slot == Some(0)
+      && event.engine == Some(SearchEngine::Regex)
+      && event.pattern_count == Some(1)
+      && event.artifact_count.is_some_and(|count| count > 0)
+      && event.artifact_bytes.is_some_and(|bytes| bytes > 0)
+      && event.elapsed_us.is_some()
+  }));
+}
+
+#[test]
 fn prepared_search_redacts_custom_deny_list_entities() {
   let prepared = PreparedSearch::new(PreparedSearchConfig {
     regex_patterns: vec![],

@@ -33,8 +33,8 @@ use crate::resolution::{
   sanitize_entities_with_source,
 };
 use crate::search::{
-  LiteralSearchOptions, SearchIndex, SearchIndexArtifacts, SearchOptions,
-  SearchPattern,
+  LiteralSearchOptions, SearchIndex, SearchIndexArtifacts,
+  SearchIndexBuildStats, SearchOptions, SearchPattern,
 };
 use crate::signatures::detect_signatures;
 use crate::triggers::{
@@ -267,7 +267,11 @@ struct RegexPatternGroups {
   triggers: Vec<SearchPattern>,
 }
 
-type TimedSearchIndex = (SearchIndex, u64);
+struct TimedSearchIndex {
+  index: SearchIndex,
+  elapsed_us: u64,
+  stats: Vec<SearchIndexBuildStats>,
+}
 
 struct PreparedSearchIndexes {
   regex: TimedSearchIndex,
@@ -352,13 +356,18 @@ struct SearchIndexBuildInputs {
   literal_options: SearchOptions,
 }
 
-#[derive(Clone, Copy)]
 struct SearchIndexPrepareMetrics {
-  regex: (usize, u64),
-  custom_regex: (usize, u64),
-  legal_forms: (usize, u64),
-  triggers: (usize, u64),
-  literals: (usize, u64),
+  regex: SearchIndexPrepareMetric,
+  custom_regex: SearchIndexPrepareMetric,
+  legal_forms: SearchIndexPrepareMetric,
+  triggers: SearchIndexPrepareMetric,
+  literals: SearchIndexPrepareMetric,
+}
+
+struct SearchIndexPrepareMetric {
+  pattern_count: usize,
+  elapsed_us: u64,
+  stats: Vec<SearchIndexBuildStats>,
 }
 
 impl PreparedSearch {
@@ -1594,32 +1603,6 @@ fn elapsed_us(start: Instant) -> u64 {
   u64::try_from(micros).unwrap_or(u64::MAX)
 }
 
-fn build_search_indexes_for_config(
-  regex_groups: RegexPatternGroups,
-  regex_options: SearchOptions,
-  custom_regex_patterns: Vec<SearchPattern>,
-  custom_regex_options: SearchOptions,
-  literal_patterns: Vec<SearchPattern>,
-  literal_options: SearchOptions,
-  artifacts: Option<&PreparedSearchArtifacts>,
-) -> Result<PreparedSearchIndexes> {
-  build_search_indexes(
-    SearchIndexBuildInputs {
-      regex_patterns: regex_groups.regex,
-      regex_options,
-      custom_regex_patterns,
-      custom_regex_options,
-      legal_form_patterns: regex_groups.legal_forms,
-      trigger_patterns: promote_case_insensitive_literals(
-        regex_groups.triggers,
-      ),
-      literal_patterns,
-      literal_options,
-    },
-    artifacts,
-  )
-}
-
 fn prepare_search_index_bundle(
   input: SearchIndexConfigInput,
   slices: &PreparedSearchSlices,
@@ -1644,21 +1627,28 @@ fn prepare_search_index_bundle(
     triggers: regex_groups.triggers.len(),
     literals: 0,
   };
-  let indexes = build_search_indexes_for_config(
-    regex_groups,
-    regex_options,
-    custom_regex_patterns,
-    custom_regex_options,
-    literal_patterns,
-    literal_options,
+  let indexes = build_search_indexes(
+    SearchIndexBuildInputs {
+      regex_patterns: regex_groups.regex,
+      regex_options,
+      custom_regex_patterns,
+      custom_regex_options,
+      legal_form_patterns: regex_groups.legal_forms,
+      trigger_patterns: promote_case_insensitive_literals(
+        regex_groups.triggers,
+      ),
+      literal_patterns,
+      literal_options,
+    },
     artifacts,
+    diagnostics.is_some(),
   )?;
   let (
-    (regex, regex_elapsed),
-    (custom_regex, custom_regex_elapsed),
-    (legal_forms, legal_forms_elapsed),
-    (triggers, triggers_elapsed),
-    (literals, literals_elapsed),
+    regex_index,
+    custom_regex_index,
+    legal_forms_index,
+    triggers_index,
+    literals_index,
   ) = (
     indexes.regex,
     indexes.custom_regex,
@@ -1666,15 +1656,40 @@ fn prepare_search_index_bundle(
     indexes.triggers,
     indexes.literals,
   );
+  let regex = regex_index.index;
+  let custom_regex = custom_regex_index.index;
+  let legal_forms = legal_forms_index.index;
+  let triggers = triggers_index.index;
+  let literals = literals_index.index;
   counts.literals = literals.len();
   record_search_index_prepare_stages(
     diagnostics,
     &SearchIndexPrepareMetrics {
-      regex: (counts.regex, regex_elapsed),
-      custom_regex: (counts.custom_regex, custom_regex_elapsed),
-      legal_forms: (counts.legal_forms, legal_forms_elapsed),
-      triggers: (counts.triggers, triggers_elapsed),
-      literals: (counts.literals, literals_elapsed),
+      regex: SearchIndexPrepareMetric {
+        pattern_count: counts.regex,
+        elapsed_us: regex_index.elapsed_us,
+        stats: regex_index.stats,
+      },
+      custom_regex: SearchIndexPrepareMetric {
+        pattern_count: counts.custom_regex,
+        elapsed_us: custom_regex_index.elapsed_us,
+        stats: custom_regex_index.stats,
+      },
+      legal_forms: SearchIndexPrepareMetric {
+        pattern_count: counts.legal_forms,
+        elapsed_us: legal_forms_index.elapsed_us,
+        stats: legal_forms_index.stats,
+      },
+      triggers: SearchIndexPrepareMetric {
+        pattern_count: counts.triggers,
+        elapsed_us: triggers_index.elapsed_us,
+        stats: triggers_index.stats,
+      },
+      literals: SearchIndexPrepareMetric {
+        pattern_count: counts.literals,
+        elapsed_us: literals_index.elapsed_us,
+        stats: literals_index.stats,
+      },
     },
   );
 
@@ -1691,6 +1706,7 @@ fn prepare_search_index_bundle(
 fn build_search_indexes(
   inputs: SearchIndexBuildInputs,
   artifacts: Option<&PreparedSearchArtifacts>,
+  collect_stats: bool,
 ) -> Result<PreparedSearchIndexes> {
   let SearchIndexBuildInputs {
     regex_patterns,
@@ -1711,13 +1727,19 @@ fn build_search_indexes(
 
   std::thread::scope(|scope| {
     let regex = scope.spawn(move || {
-      build_search_index(regex_patterns, regex_options, regex_artifacts)
+      build_search_index(
+        regex_patterns,
+        regex_options,
+        regex_artifacts,
+        collect_stats,
+      )
     });
     let custom_regex = scope.spawn(move || {
       build_search_index(
         custom_regex_patterns,
         custom_regex_options,
         custom_regex_artifacts,
+        collect_stats,
       )
     });
     let legal_forms = scope.spawn(move || {
@@ -1725,6 +1747,7 @@ fn build_search_indexes(
         legal_form_patterns,
         legal_form_search_options(),
         legal_form_artifacts,
+        collect_stats,
       )
     });
     let triggers = scope.spawn(move || {
@@ -1732,10 +1755,16 @@ fn build_search_indexes(
         trigger_patterns,
         trigger_search_options(),
         trigger_artifacts,
+        collect_stats,
       )
     });
     let literals = scope.spawn(move || {
-      build_search_index(literal_patterns, literal_options, literal_artifacts)
+      build_search_index(
+        literal_patterns,
+        literal_options,
+        literal_artifacts,
+        collect_stats,
+      )
     });
 
     Ok(PreparedSearchIndexes {
@@ -1752,14 +1781,29 @@ fn build_search_index(
   patterns: Vec<SearchPattern>,
   options: SearchOptions,
   artifacts: Option<&SearchIndexArtifacts>,
+  collect_stats: bool,
 ) -> Result<TimedSearchIndex> {
   let start = Instant::now();
-  let search = if let Some(artifacts) = artifacts {
-    SearchIndex::new_with_artifacts(patterns, options, artifacts)?
+  let (index, stats) = if collect_stats {
+    let result = if let Some(artifacts) = artifacts {
+      SearchIndex::new_with_artifacts_build_stats(patterns, options, artifacts)?
+    } else {
+      SearchIndex::new_with_build_stats(patterns, options)?
+    };
+    (result.index, result.stats)
+  } else if let Some(artifacts) = artifacts {
+    (
+      SearchIndex::new_with_artifacts(patterns, options, artifacts)?,
+      Vec::new(),
+    )
   } else {
-    SearchIndex::new(patterns, options)?
+    (SearchIndex::new(patterns, options)?, Vec::new())
   };
-  Ok((search, elapsed_us(start)))
+  Ok(TimedSearchIndex {
+    index,
+    elapsed_us: elapsed_us(start),
+    stats,
+  })
 }
 
 fn join_search_index(
@@ -1798,14 +1842,25 @@ fn record_search_index_prepare_stages(
   metrics: &SearchIndexPrepareMetrics,
 ) {
   let stages = [
-    (DiagnosticStage::PrepareRegex, metrics.regex),
-    (DiagnosticStage::PrepareCustomRegex, metrics.custom_regex),
-    (DiagnosticStage::PrepareLegalFormSearch, metrics.legal_forms),
-    (DiagnosticStage::PrepareTriggerSearch, metrics.triggers),
-    (DiagnosticStage::PrepareLiteral, metrics.literals),
+    (DiagnosticStage::PrepareRegex, &metrics.regex),
+    (DiagnosticStage::PrepareCustomRegex, &metrics.custom_regex),
+    (
+      DiagnosticStage::PrepareLegalFormSearch,
+      &metrics.legal_forms,
+    ),
+    (DiagnosticStage::PrepareTriggerSearch, &metrics.triggers),
+    (DiagnosticStage::PrepareLiteral, &metrics.literals),
   ];
-  for (stage, (count, elapsed)) in stages {
-    record_prepare_stage_elapsed(diagnostics, stage, count, elapsed);
+  for (stage, metric) in stages {
+    record_prepare_stage_elapsed(
+      diagnostics,
+      stage,
+      metric.pattern_count,
+      metric.elapsed_us,
+    );
+    if let Some(diagnostics) = diagnostics.as_deref_mut() {
+      diagnostics.record_search_build_slot_summaries(stage, &metric.stats);
+    }
   }
 }
 

@@ -996,6 +996,8 @@ const fn stage_event(
     span_valid: None,
     elapsed_us,
     input_bytes,
+    artifact_count: None,
+    artifact_bytes: None,
     reason: None,
   }
 }
