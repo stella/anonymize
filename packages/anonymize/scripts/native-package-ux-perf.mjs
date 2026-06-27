@@ -17,6 +17,7 @@ const SCENARIOS = [
   { name: "compressed", compressed: true },
   { name: "raw", compressed: false },
   ...languageScenarios(),
+  ...userDataScenarios(),
 ];
 
 const tempRoot = mkdtempSync(join(tmpdir(), "stella-anonymize-package-ux-"));
@@ -33,7 +34,7 @@ try {
   rmSync(tempRoot, { force: true, recursive: true });
 }
 
-function runScenario({ name, compressed, language }) {
+function runScenario({ name, compressed, language, userDataScenario }) {
   const packagePath = join(tempRoot, `${name}.stlanonpkg`);
   const languageEnv =
     language === undefined
@@ -42,14 +43,22 @@ function runScenario({ name, compressed, language }) {
           ANONYMIZE_MIGRATION_CONTENT_LANGUAGE: language,
           ANONYMIZE_MIGRATION_FIXTURE_LANGUAGES: language,
         };
+  const userDataEnv =
+    userDataScenario === undefined || userDataScenario === "none"
+      ? {}
+      : {
+          ANONYMIZE_MIGRATION_USER_DATA_SCENARIO: userDataScenario,
+        };
   const build = runMigration({
     ...languageEnv,
+    ...userDataEnv,
     ANONYMIZE_MIGRATION_NATIVE_COMPRESSED_PACKAGE: compressed ? "1" : "0",
     ANONYMIZE_MIGRATION_NATIVE_PREPARED_PACKAGE: "1",
     ANONYMIZE_MIGRATION_WRITE_NATIVE_PACKAGE_PATH: packagePath,
   });
   const load = runMigration({
     ...languageEnv,
+    ...userDataEnv,
     ANONYMIZE_MIGRATION_NATIVE_PACKAGE_PATH: packagePath,
   });
   const nativeDiagnostics = load.nativeDiagnostics ?? null;
@@ -58,14 +67,17 @@ function runScenario({ name, compressed, language }) {
     name,
     compressed,
     language: language ?? null,
+    userDataScenario: userDataScenario ?? "none",
     fixtureCount: load.fixtureCount,
     packageBytes: build.timings.nativePackageBytes,
     offlinePackageBuildMs: build.timings.nativePackagePrepareMs,
     firstPackageReadMs: load.timings.nativePackageReadMs,
     firstPrepareMs: load.timings.nativePrepareMs,
+    firstWarmPrepareMs: load.timings.nativeWarmPrepareMs,
     setupBeforeClickMs:
       load.timings.nativePackageReadMs + load.timings.nativePrepareMs,
     cachedPrepareMs: load.timings.nativeCachedPrepareAvgMs,
+    cachedWarmPrepareMs: load.timings.nativeCachedWarmPrepareAvgMs,
     firstRunMs: load.timings.coldRunMs,
     preloadedClickMs: load.timings.coldRunMs,
     firstTouchMs: load.timings.nativeFirstTouchMs,
@@ -105,6 +117,35 @@ function normalizeLanguage(value) {
     );
   }
   return language;
+}
+
+function userDataScenarios() {
+  const value =
+    process.env.ANONYMIZE_NATIVE_PACKAGE_UX_USER_DATA_SCENARIOS ??
+    "sample,heavy";
+  if (value.trim().length === 0) {
+    return [];
+  }
+  return value
+    .split(",")
+    .map((entry) => normalizeUserDataScenario(entry))
+    .filter((entry) => entry !== "none")
+    .filter((entry, index, entries) => entries.indexOf(entry) === index)
+    .map((userDataScenario) => ({
+      name: `compressed-user-${userDataScenario}`,
+      compressed: true,
+      userDataScenario,
+    }));
+}
+
+function normalizeUserDataScenario(value) {
+  const scenario = value.trim().toLowerCase();
+  if (scenario === "none" || scenario === "sample" || scenario === "heavy") {
+    return scenario;
+  }
+  throw new Error(
+    `ANONYMIZE_NATIVE_PACKAGE_UX_USER_DATA_SCENARIOS must contain none, sample, or heavy; got ${value}`,
+  );
 }
 
 function runMigration(extraEnv) {

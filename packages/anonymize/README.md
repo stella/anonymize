@@ -29,7 +29,7 @@ const result = anonymizer.redact_text(text);
 console.log(result.redaction.redactedText);
 ```
 
-Call `getDefaultNativePipeline()` once during service startup and reuse the returned anonymizer. The package ships with a prepared native package, so the normal request path avoids rebuilding search automata.
+Call `getDefaultNativePipeline()` once during service startup and reuse the returned anonymizer. The package ships with a prepared native package, so the normal request path avoids rebuilding search automata. Use `preloadDefaultNativePipeline()` or `preloadDefaultNativePipelineAsync()` when the first document should not pay lazy regex warm-up.
 
 If your deployment knows the document language up front, build scoped package artifacts and select them at startup:
 
@@ -53,6 +53,7 @@ bunx stella-anonymize-build-native-package \
 import { load_prepared_package_file } from "@stll/anonymize/native-node";
 
 const anonymizer = load_prepared_package_file("./dist/anonymize.stlanonpkg");
+anonymizer.warmLazyRegex();
 const result = anonymizer.redact_text(text, { redactString: "***" });
 ```
 
@@ -65,6 +66,7 @@ import stella_anonymize as anonymize
 
 package_bytes = anonymize.prepare_search_package(config_json)
 prepared = anonymize.load_prepared_package(package_bytes)
+prepared.warm_lazy_regex()
 result = prepared.redact_text(text, redact_string="***")
 
 print(result.redaction.redacted_text)
