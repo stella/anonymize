@@ -378,6 +378,7 @@ pub struct NativePreparedSearch {
 struct PrepareContext {
   input_bytes_len: usize,
   cache_key: [u8; 32],
+  cache_key_elapsed: u64,
   cache_elapsed: u64,
   parse_elapsed: u64,
   parse_stage: DiagnosticStage,
@@ -421,18 +422,28 @@ impl NativePreparedSearch {
     let input_bytes_len = config_bytes
       .len()
       .saturating_add(artifact_bytes.map_or(0, <[u8]>::len));
+    let cache_key_start = Instant::now();
     let cache_key = prepared_search_cache_key(config_bytes, artifact_bytes);
+    let cache_key_elapsed = elapsed_us(cache_key_start);
     let cache_start = Instant::now();
     if let Some(inner) = prepared_search_cache_get(&cache_key) {
       return Ok(Self {
         inner,
         prepare_diagnostics: StaticRedactionDiagnostics {
-          events: vec![stage_event(
-            DiagnosticStage::PrepareCacheHit,
-            Some(1),
-            Some(elapsed_us(cache_start)),
-            Some(input_bytes_len),
-          )],
+          events: vec![
+            stage_event(
+              DiagnosticStage::PrepareCacheKey,
+              None,
+              Some(cache_key_elapsed),
+              Some(input_bytes_len),
+            ),
+            stage_event(
+              DiagnosticStage::PrepareCacheHit,
+              Some(1),
+              Some(elapsed_us(cache_start)),
+              Some(input_bytes_len),
+            ),
+          ],
         },
       });
     }
@@ -443,33 +454,41 @@ impl NativePreparedSearch {
       serde_json::from_slice::<BindingPreparedSearchConfig>(config_bytes)
         .map_err(|error| to_napi_serde_error(&error))?;
     let parse_elapsed = elapsed_us(parse_start);
-    Self::from_binding_config(
-      config,
-      artifact_bytes,
-      PrepareContext {
-        input_bytes_len,
-        cache_key,
-        cache_elapsed,
-        parse_elapsed,
-        parse_stage: DiagnosticStage::PrepareBindingParse,
-      },
-    )
+    let context = PrepareContext {
+      input_bytes_len,
+      cache_key,
+      cache_key_elapsed,
+      cache_elapsed,
+      parse_elapsed,
+      parse_stage: DiagnosticStage::PrepareBindingParse,
+    };
+    Self::from_binding_config(config, artifact_bytes, &context)
   }
 
   fn from_package_bytes(package_bytes: &[u8]) -> Result<Self> {
     let input_bytes_len = package_bytes.len();
+    let cache_key_start = Instant::now();
     let cache_key = prepared_search_package_cache_key(package_bytes);
+    let cache_key_elapsed = elapsed_us(cache_key_start);
     let cache_start = Instant::now();
     if let Some(inner) = prepared_search_cache_get(&cache_key) {
       return Ok(Self {
         inner,
         prepare_diagnostics: StaticRedactionDiagnostics {
-          events: vec![stage_event(
-            DiagnosticStage::PrepareCacheHit,
-            Some(1),
-            Some(elapsed_us(cache_start)),
-            Some(input_bytes_len),
-          )],
+          events: vec![
+            stage_event(
+              DiagnosticStage::PrepareCacheKey,
+              None,
+              Some(cache_key_elapsed),
+              Some(input_bytes_len),
+            ),
+            stage_event(
+              DiagnosticStage::PrepareCacheHit,
+              Some(1),
+              Some(elapsed_us(cache_start)),
+              Some(input_bytes_len),
+            ),
+          ],
         },
       });
     }
@@ -481,16 +500,18 @@ impl NativePreparedSearch {
         .map_err(|error| to_napi_contract_error(&error))?;
       let parse_elapsed = elapsed_us(parse_start);
       let config = package.config;
+      let context = PrepareContext {
+        input_bytes_len,
+        cache_key,
+        cache_key_elapsed,
+        cache_elapsed,
+        parse_elapsed,
+        parse_stage: DiagnosticStage::PreparePackageDecode,
+      };
       return Self::from_core_config(
         config,
         Some(package.artifacts.as_ref()),
-        PrepareContext {
-          input_bytes_len,
-          cache_key,
-          cache_elapsed,
-          parse_elapsed,
-          parse_stage: DiagnosticStage::PreparePackageDecode,
-        },
+        &context,
         None,
       );
     }
@@ -500,23 +521,21 @@ impl NativePreparedSearch {
     let parse_elapsed = elapsed_us(parse_start);
     let config = package.config;
     let artifacts = package.artifacts;
-    Self::from_binding_config(
-      config,
-      Some(&artifacts),
-      PrepareContext {
-        input_bytes_len,
-        cache_key,
-        cache_elapsed,
-        parse_elapsed,
-        parse_stage: DiagnosticStage::PreparePackageDecode,
-      },
-    )
+    let context = PrepareContext {
+      input_bytes_len,
+      cache_key,
+      cache_key_elapsed,
+      cache_elapsed,
+      parse_elapsed,
+      parse_stage: DiagnosticStage::PreparePackageDecode,
+    };
+    Self::from_binding_config(config, Some(&artifacts), &context)
   }
 
   fn from_binding_config(
     config: BindingPreparedSearchConfig,
     artifact_bytes: Option<&[u8]>,
-    context: PrepareContext,
+    context: &PrepareContext,
   ) -> Result<Self> {
     let convert_start = Instant::now();
     let config = prepared_search_config_from_binding(config)
@@ -534,7 +553,7 @@ impl NativePreparedSearch {
   fn from_core_config(
     config: PreparedSearchConfig,
     artifact_bytes: Option<&[u8]>,
-    context: PrepareContext,
+    context: &PrepareContext,
     binding_convert: Option<(usize, u64)>,
   ) -> Result<Self> {
     let artifact_decode_start = Instant::now();
@@ -553,6 +572,12 @@ impl NativePreparedSearch {
     let inner = Arc::new(result.prepared);
     let mut diagnostics = StaticRedactionDiagnostics {
       events: vec![
+        stage_event(
+          DiagnosticStage::PrepareCacheKey,
+          None,
+          Some(context.cache_key_elapsed),
+          Some(context.input_bytes_len),
+        ),
         stage_event(
           DiagnosticStage::PrepareCacheMiss,
           Some(0),

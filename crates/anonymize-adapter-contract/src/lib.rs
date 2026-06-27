@@ -2341,6 +2341,7 @@ fn search_engine_name(engine: SearchEngine) -> String {
 
 fn diagnostic_stage_name(stage: DiagnosticStage) -> String {
   match stage {
+    DiagnosticStage::PrepareCacheKey => "prepare.cache-key",
     DiagnosticStage::PrepareCacheHit => "prepare.cache.hit",
     DiagnosticStage::PrepareCacheMiss => "prepare.cache.miss",
     DiagnosticStage::PrepareBindingParse => "prepare.binding.parse",
