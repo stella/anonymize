@@ -23,11 +23,13 @@ pub type Result<T> = std::result::Result<T, ContractError>;
 const PREPARED_SEARCH_PACKAGE_HEADER: [u8; 8] = *b"ANONPKG1";
 const PREPARED_SEARCH_PACKAGE_VERSION: u32 = 11;
 const PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER: [u8; 8] = *b"ANONPKZ1";
-const PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION: u32 = 9;
+const PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION: u32 = 10;
+const PREPARED_SEARCH_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION: u32 = 9;
 const PREPARED_SEARCH_CORE_PACKAGE_HEADER: [u8; 8] = *b"ANONCPK1";
 const PREPARED_SEARCH_CORE_PACKAGE_VERSION: u32 = 10;
 const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_HEADER: [u8; 8] = *b"ANONCPZ1";
-const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION: u32 = 10;
+const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION: u32 = 11;
+const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION: u32 = 10;
 const PREPARED_SEARCH_PACKAGE_DIGEST_BYTES: usize = 32;
 const PREPARED_SEARCH_PACKAGE_ZSTD_LEVEL: i32 = 3;
 const MAX_PREPARED_SEARCH_PACKAGE_PAYLOAD_BYTES: usize = 256 * 1024 * 1024;
@@ -753,9 +755,7 @@ pub fn prepared_search_package_from_bytes(
       "package does not contain a binding payload",
     ));
   }
-  let digest = parts.digest();
-  let payload = parts.into_payload()?;
-  verify_prepared_search_package_digest(digest, payload.as_ref())?;
+  let payload = parts.into_verified_payload()?;
   let (package, read) = bincode::serde::decode_from_slice::<
     BinaryPreparedSearchPackageOwned,
     _,
@@ -789,9 +789,7 @@ pub fn prepared_search_core_package_view_from_bytes(
       "package does not contain a core payload",
     ));
   }
-  let digest = parts.digest();
-  let payload = parts.into_payload()?;
-  verify_prepared_search_package_digest(digest, payload.as_ref())?;
+  let payload = parts.into_verified_payload()?;
   core_package_view_from_payload(payload)
 }
 
@@ -1124,7 +1122,7 @@ fn prepared_search_package_compress_payload(
   let compressed =
     zstd::bulk::compress(payload, PREPARED_SEARCH_PACKAGE_ZSTD_LEVEL)
       .map_err(|error| invalid_prepared_search_package(error.to_string()))?;
-  let digest = blake3::hash(payload);
+  let digest = blake3::hash(&compressed);
   let mut bytes = Vec::with_capacity(
     raw_package_header_len(&compressed)
       .saturating_add(std::mem::size_of::<u64>()),
@@ -1350,10 +1348,17 @@ enum PreparedSearchPackageParts<'a> {
   },
   Compressed {
     core: bool,
+    compression: PackageCompression,
     digest: [u8; 32],
     uncompressed_len: usize,
     payload: &'a [u8],
   },
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PackageCompression {
+  ZstdCompressedDigest,
+  ZstdPayloadDigest,
 }
 
 impl<'a> PreparedSearchPackageParts<'a> {
@@ -1369,10 +1374,17 @@ impl<'a> PreparedSearchPackageParts<'a> {
     }
   }
 
-  fn into_payload(self) -> Result<Cow<'a, [u8]>> {
+  fn into_verified_payload(self) -> Result<Cow<'a, [u8]>> {
     match self {
-      Self::Raw { payload, .. } => Ok(Cow::Borrowed(payload)),
+      Self::Raw {
+        digest, payload, ..
+      } => {
+        verify_prepared_search_package_digest(digest, payload)?;
+        Ok(Cow::Borrowed(payload))
+      }
       Self::Compressed {
+        compression,
+        digest,
         uncompressed_len,
         payload,
         ..
@@ -1382,15 +1394,31 @@ impl<'a> PreparedSearchPackageParts<'a> {
             "uncompressed payload length exceeds limit",
           ));
         }
-        zstd::bulk::decompress(payload, uncompressed_len)
-          .map(Cow::Owned)
-          .map_err(|error| invalid_prepared_search_package(error.to_string()))
+        match compression {
+          PackageCompression::ZstdCompressedDigest => {
+            verify_prepared_search_package_digest(digest, payload)?;
+            zstd::bulk::decompress(payload, uncompressed_len)
+              .map(Cow::Owned)
+              .map_err(|error| {
+                invalid_prepared_search_package(error.to_string())
+              })
+          }
+          PackageCompression::ZstdPayloadDigest => {
+            let payload = zstd::bulk::decompress(payload, uncompressed_len)
+              .map_err(|error| {
+                invalid_prepared_search_package(error.to_string())
+              })?;
+            verify_prepared_search_package_digest(digest, &payload)?;
+            Ok(Cow::Owned(payload))
+          }
+        }
       }
     }
   }
 }
 
 struct RawPackageHeader<'a> {
+  version: u32,
   digest: [u8; 32],
   payload: &'a [u8],
 }
@@ -1426,63 +1454,84 @@ fn prepared_search_package_parts(
     });
   }
   if header == PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER {
-    let raw = raw_package_header(
+    let (raw, compression) = compressed_package_header(
       bytes,
       PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION,
+      PREPARED_SEARCH_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION,
       PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER.len(),
     )?;
-    let len_end = std::mem::size_of::<u64>();
-    let len_bytes = raw
-      .payload
-      .get(..len_end)
-      .ok_or_else(|| invalid_prepared_search_package("truncated length"))?;
-    let len_array = <[u8; 8]>::try_from(len_bytes)
-      .map_err(|_| invalid_prepared_search_package("malformed length"))?;
-    let uncompressed_len = usize::try_from(u64::from_le_bytes(len_array))
-      .map_err(|_| invalid_prepared_search_package("length overflow"))?;
-    let payload = raw
-      .payload
-      .get(len_end..)
-      .ok_or_else(|| invalid_prepared_search_package("missing payload"))?;
-    return Ok(PreparedSearchPackageParts::Compressed {
-      core: false,
-      digest: raw.digest,
-      uncompressed_len,
-      payload,
-    });
+    return compressed_package_parts(false, raw, compression);
   }
   if header == PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_HEADER {
-    let raw = raw_package_header(
+    let (raw, compression) = compressed_package_header(
       bytes,
       PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION,
+      PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION,
       PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_HEADER.len(),
     )?;
-    let len_end = std::mem::size_of::<u64>();
-    let len_bytes = raw
-      .payload
-      .get(..len_end)
-      .ok_or_else(|| invalid_prepared_search_package("truncated length"))?;
-    let len_array = <[u8; 8]>::try_from(len_bytes)
-      .map_err(|_| invalid_prepared_search_package("malformed length"))?;
-    let uncompressed_len = usize::try_from(u64::from_le_bytes(len_array))
-      .map_err(|_| invalid_prepared_search_package("length overflow"))?;
-    let payload = raw
-      .payload
-      .get(len_end..)
-      .ok_or_else(|| invalid_prepared_search_package("missing payload"))?;
-    return Ok(PreparedSearchPackageParts::Compressed {
-      core: true,
-      digest: raw.digest,
-      uncompressed_len,
-      payload,
-    });
+    return compressed_package_parts(true, raw, compression);
   }
   Err(invalid_prepared_search_package("unexpected header"))
+}
+
+fn compressed_package_parts<'a>(
+  core: bool,
+  raw: RawPackageHeader<'a>,
+  compression: PackageCompression,
+) -> Result<PreparedSearchPackageParts<'a>> {
+  let len_end = std::mem::size_of::<u64>();
+  let len_bytes = raw
+    .payload
+    .get(..len_end)
+    .ok_or_else(|| invalid_prepared_search_package("truncated length"))?;
+  let len_array = <[u8; 8]>::try_from(len_bytes)
+    .map_err(|_| invalid_prepared_search_package("malformed length"))?;
+  let uncompressed_len = usize::try_from(u64::from_le_bytes(len_array))
+    .map_err(|_| invalid_prepared_search_package("length overflow"))?;
+  let payload = raw
+    .payload
+    .get(len_end..)
+    .ok_or_else(|| invalid_prepared_search_package("missing payload"))?;
+  Ok(PreparedSearchPackageParts::Compressed {
+    core,
+    compression,
+    digest: raw.digest,
+    uncompressed_len,
+    payload,
+  })
+}
+
+fn compressed_package_header(
+  bytes: &[u8],
+  compressed_digest_version: u32,
+  payload_digest_version: u32,
+  header_len: usize,
+) -> Result<(RawPackageHeader<'_>, PackageCompression)> {
+  let raw = raw_package_header_any_version(bytes, header_len)?;
+  let compression = if raw.version == compressed_digest_version {
+    PackageCompression::ZstdCompressedDigest
+  } else if raw.version == payload_digest_version {
+    PackageCompression::ZstdPayloadDigest
+  } else {
+    return Err(invalid_prepared_search_package("unsupported version"));
+  };
+  Ok((raw, compression))
 }
 
 fn raw_package_header(
   bytes: &[u8],
   expected_version: u32,
+  header_len: usize,
+) -> Result<RawPackageHeader<'_>> {
+  let raw = raw_package_header_any_version(bytes, header_len)?;
+  if raw.version != expected_version {
+    return Err(invalid_prepared_search_package("unsupported version"));
+  }
+  Ok(raw)
+}
+
+fn raw_package_header_any_version(
+  bytes: &[u8],
   header_len: usize,
 ) -> Result<RawPackageHeader<'_>> {
   let version_start = header_len;
@@ -1493,9 +1542,6 @@ fn raw_package_header(
   let version_array = <[u8; 4]>::try_from(version_bytes)
     .map_err(|_| invalid_prepared_search_package("malformed version"))?;
   let version = u32::from_le_bytes(version_array);
-  if version != expected_version {
-    return Err(invalid_prepared_search_package("unsupported version"));
-  }
   let digest_end =
     version_end.saturating_add(PREPARED_SEARCH_PACKAGE_DIGEST_BYTES);
   let digest_bytes = bytes
@@ -1507,7 +1553,11 @@ fn raw_package_header(
   let payload = bytes
     .get(digest_end..)
     .ok_or_else(|| invalid_prepared_search_package("missing payload"))?;
-  Ok(RawPackageHeader { digest, payload })
+  Ok(RawPackageHeader {
+    version,
+    digest,
+    payload,
+  })
 }
 
 fn verify_prepared_search_package_digest(
@@ -2356,16 +2406,20 @@ mod tests {
     BindingSearchPattern, ContractError,
     MAX_PREPARED_SEARCH_PACKAGE_PAYLOAD_BYTES,
     PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER,
+    PREPARED_SEARCH_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION,
     PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION,
     PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_HEADER,
+    PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION,
     PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION,
-    PREPARED_SEARCH_PACKAGE_DIGEST_BYTES, operator_config_from_binding,
-    prepared_search_config_from_binding,
+    PREPARED_SEARCH_PACKAGE_DIGEST_BYTES, PREPARED_SEARCH_PACKAGE_ZSTD_LEVEL,
+    operator_config_from_binding, prepared_search_config_from_binding,
     prepared_search_core_package_from_bytes,
+    prepared_search_core_package_payload_to_bytes,
     prepared_search_core_package_to_bytes,
     prepared_search_core_package_to_compressed_bytes,
     prepared_search_package_from_bytes,
-    prepared_search_package_has_core_payload, prepared_search_package_to_bytes,
+    prepared_search_package_has_core_payload,
+    prepared_search_package_payload_to_bytes, prepared_search_package_to_bytes,
     prepared_search_package_to_compressed_bytes,
     static_redaction_diagnostics_to_utf16_binding, write_package_header,
   };
@@ -2485,6 +2539,24 @@ mod tests {
   }
 
   #[test]
+  fn prepared_search_compressed_package_reads_legacy_payload_digest() {
+    let config = package_test_config();
+    let artifacts = b"prepared-artifacts";
+    let payload =
+      prepared_search_package_payload_to_bytes(&config, artifacts).unwrap();
+    let bytes = zstd_compressed_package(
+      PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER,
+      PREPARED_SEARCH_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION,
+      &payload,
+    );
+
+    let package = prepared_search_package_from_bytes(&bytes).unwrap();
+
+    assert_eq!(package.config, config);
+    assert_eq!(package.artifacts, artifacts);
+  }
+
+  #[test]
   fn prepared_search_compressed_package_rejects_digest_mismatch() {
     let config = BindingPreparedSearchConfig::default();
     let mut bytes =
@@ -2574,6 +2646,29 @@ mod tests {
     assert_eq!(package.artifacts, artifacts);
   }
 
+  #[test]
+  fn prepared_search_core_compressed_package_reads_legacy_payload_digest() {
+    let config =
+      prepared_search_config_from_binding(package_test_config()).unwrap();
+    let mut compact_config = config.clone();
+    compact_config.literal_patterns.clear();
+    let artifacts = b"prepared-artifacts";
+    let payload =
+      prepared_search_core_package_payload_to_bytes(&config, artifacts)
+        .unwrap();
+    let bytes = zstd_compressed_package(
+      PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_HEADER,
+      PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION,
+      &payload,
+    );
+
+    let package = prepared_search_core_package_from_bytes(&bytes).unwrap();
+
+    assert!(prepared_search_package_has_core_payload(&bytes));
+    assert_eq!(package.config, compact_config);
+    assert_eq!(package.artifacts, artifacts);
+  }
+
   fn package_test_config() -> BindingPreparedSearchConfig {
     BindingPreparedSearchConfig {
       literal_patterns: vec![BindingSearchPattern {
@@ -2589,6 +2684,23 @@ mod tests {
       }],
       ..BindingPreparedSearchConfig::default()
     }
+  }
+
+  fn zstd_compressed_package(
+    header: [u8; 8],
+    version: u32,
+    payload: &[u8],
+  ) -> Vec<u8> {
+    let compressed =
+      zstd::bulk::compress(payload, PREPARED_SEARCH_PACKAGE_ZSTD_LEVEL)
+        .unwrap();
+    let digest = blake3::hash(payload);
+    let mut bytes = Vec::new();
+    write_package_header(&mut bytes, header, version, digest.as_bytes());
+    let payload_len = u64::try_from(payload.len()).unwrap();
+    bytes.extend_from_slice(&payload_len.to_le_bytes());
+    bytes.extend_from_slice(&compressed);
+    bytes
   }
 
   fn compressed_package_with_len(
