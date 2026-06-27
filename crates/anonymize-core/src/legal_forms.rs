@@ -1155,6 +1155,13 @@ fn split_embedded_legal_form_list<'a>(
   entity_text: &'a str,
   data: &PreparedLegalFormData,
 ) -> Vec<Segment<'a>> {
+  if !entity_text.contains([',', ';']) {
+    return vec![Segment {
+      start: entity_start,
+      text: entity_text,
+    }];
+  }
+
   let mut cuts = vec![0_usize];
   for suffix in &data.suffixes {
     if is_roman_numeral(&clean_suffix(suffix)) {
@@ -1250,6 +1257,10 @@ fn trim_embedded_legal_form_list_prefix<'a>(
   entity_text: &'a str,
   data: &PreparedLegalFormData,
 ) -> (usize, &'a str) {
+  if !entity_text.contains(',') {
+    return (entity_start, entity_text);
+  }
+
   let mut cut = 0_usize;
   for suffix in &data.suffixes {
     if is_roman_numeral(&clean_suffix(suffix)) {
