@@ -124,15 +124,17 @@ export class Gliner2Client {
   async stop(): Promise<void> {
     if (!this.process) return;
 
-    this.process.kill("SIGTERM");
+    const proc = this.process;
+
+    proc.kill("SIGTERM");
 
     const exited = new Promise<void>((resolve) => {
       const timeout = setTimeout(() => {
-        this.process?.kill("SIGKILL");
+        proc.kill("SIGKILL");
         resolve();
       }, 5000);
 
-      this.process.once("exit", () => {
+      proc.once("exit", () => {
         clearTimeout(timeout);
         resolve();
       });
