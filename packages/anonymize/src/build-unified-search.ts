@@ -355,6 +355,15 @@ const labelIsAllowed = (
   allowedLabels: ReadonlySet<string> | null,
 ): boolean => allowedLabels === null || allowedLabels.has(label);
 
+const configuredContentLanguages = (
+  config: Pick<PipelineConfig, "language" | "languages">,
+): readonly string[] | undefined => {
+  if (config.languages !== undefined) {
+    return config.languages;
+  }
+  return config.language === undefined ? undefined : [config.language];
+};
+
 const sliceContains = (slice: PatternSlice, index: number): boolean =>
   index >= slice.start && index < slice.end;
 
@@ -612,6 +621,7 @@ const buildUnifiedSearchSources = async (
   ctx: PipelineContext = defaultContext,
 ): Promise<UnifiedSearchSources> => {
   config = applyPipelineLanguageScope(config);
+  const contentLanguages = configuredContentLanguages(config);
   const legalFormsEnabled = isLegalFormsEnabled(config);
   const hotwordRules =
     config.enableHotwordRules === true ? await loadHotwordRuleSet() : [];
@@ -673,7 +683,7 @@ const buildUnifiedSearchSources = async (
       ? getCurrencyPatternEntries()
       : Promise.resolve([] as PatternEntry[]),
     config.enableRegex && labelIsAllowed("date", allowedLabels)
-      ? getDatePatterns()
+      ? getDatePatterns(contentLanguages)
       : Promise.resolve([] as string[]),
     config.enableRegex && labelIsAllowed("address", allowedLabels)
       ? getSigningClausePatterns()
@@ -682,10 +692,10 @@ const buildUnifiedSearchSources = async (
       ? getNativeSigningClausePatterns()
       : Promise.resolve([] as string[]),
     config.enableRegex && labelIsAllowed("date", allowedLabels)
-      ? getDateMonthData()
+      ? getDateMonthData(contentLanguages)
       : Promise.resolve(null),
     config.enableRegex && labelIsAllowed("date", allowedLabels)
-      ? getYearWordData()
+      ? getYearWordData(contentLanguages)
       : Promise.resolve(null),
     config.enableTriggerPhrases || regexMonetaryEnabled
       ? getMonetaryData()

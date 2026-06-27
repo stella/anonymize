@@ -1462,6 +1462,77 @@ type DateMonths = Record<string, string[] | string>;
 export type DateMonthData = Record<string, string[]>;
 export type YearWordData = Record<string, string[]>;
 
+const languageCacheKey = (languages: readonly string[] | undefined): string => {
+  if (languages === undefined || languages.length === 0) {
+    return "*";
+  }
+  return [...new Set(languages.map(normalizeLanguageKey).filter(Boolean))]
+    .toSorted()
+    .join(",");
+};
+
+const normalizeLanguageKey = (language: string): string =>
+  language.trim().toLowerCase();
+
+const selectedLanguageKeys = (
+  languages: readonly string[] | undefined,
+): ReadonlySet<string> | null => {
+  if (languages === undefined || languages.length === 0) {
+    return null;
+  }
+  const selected = new Set<string>();
+  for (const language of languages) {
+    const normalized = normalizeLanguageKey(language);
+    if (normalized.length === 0) {
+      continue;
+    }
+    selected.add(normalized);
+    const separator = normalized.indexOf("-");
+    if (separator !== -1) {
+      selected.add(normalized.slice(0, separator));
+    }
+  }
+  return selected.size === 0 ? null : selected;
+};
+
+const filterDateMonthsByLanguage = (
+  months: DateMonths,
+  languages: readonly string[] | undefined,
+): DateMonths => {
+  const selected = selectedLanguageKeys(languages);
+  if (selected === null) {
+    return months;
+  }
+
+  const filtered: DateMonths = {};
+  for (const [key, value] of Object.entries(months)) {
+    if (key.startsWith("_") || !selected.has(normalizeLanguageKey(key))) {
+      continue;
+    }
+    filtered[key] = value;
+  }
+  return Object.keys(filtered).length === 0 ? months : filtered;
+};
+
+const filterYearWordsByLanguage = (
+  data: Record<string, unknown>,
+  languages: readonly string[] | undefined,
+): Record<string, unknown> => {
+  const selected = selectedLanguageKeys(languages);
+  if (selected === null) {
+    return data;
+  }
+
+  const filtered: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (key.startsWith("_") || !selected.has(normalizeLanguageKey(key))) {
+      continue;
+    }
+    filtered[key] = value;
+  }
+  return Object.keys(filtered).length === 0 ? data : filtered;
+};
+
 /**
  * Build month-name alternation from date-months.json.
  * Deduplicates across all 22 languages, filters names
@@ -1536,9 +1607,9 @@ const buildDatePatternsFromMonths = (alt: string): string[] => {
 };
 
 /** Cached promise for date patterns. Loaded once. */
-let datePatternPromise: Promise<string[]> | null = null;
-let dateMonthDataPromise: Promise<DateMonthData> | null = null;
-let yearWordDataPromise: Promise<YearWordData> | null = null;
+const datePatternPromises = new Map<string, Promise<string[]>>();
+const dateMonthDataPromises = new Map<string, Promise<DateMonthData>>();
+const yearWordDataPromises = new Map<string, Promise<YearWordData>>();
 
 const loadDateMonths = async (): Promise<DateMonths> => {
   const mod = await import("../data/date-months.json");
@@ -1548,9 +1619,13 @@ const loadDateMonths = async (): Promise<DateMonths> => {
   return mod.default ?? mod;
 };
 
-const loadDatePatterns = async (): Promise<string[]> => {
+const loadDatePatterns = async (
+  languages?: readonly string[],
+): Promise<string[]> => {
   const months = await loadDateMonths();
-  const alt = buildMonthAlternation(months);
+  const alt = buildMonthAlternation(
+    filterDateMonthsByLanguage(months, languages),
+  );
   return buildDatePatternsFromMonths(alt);
 };
 
@@ -1559,43 +1634,69 @@ const loadDatePatterns = async (): Promise<string[]> => {
  * date-months.json. Returns a cached promise; the JSON
  * is loaded only once.
  */
-export const getDatePatterns = (): Promise<string[]> => {
-  if (!datePatternPromise) {
-    datePatternPromise = loadDatePatterns().catch((err) => {
-      datePatternPromise = null;
+export const getDatePatterns = (
+  languages?: readonly string[],
+): Promise<string[]> => {
+  const key = languageCacheKey(languages);
+  let promise = datePatternPromises.get(key);
+  if (promise === undefined) {
+    promise = loadDatePatterns(languages).catch((err) => {
+      datePatternPromises.delete(key);
       throw err;
     });
+    datePatternPromises.set(key, promise);
   }
-  return datePatternPromise;
+  return promise;
 };
 
-export const getDateMonthData = (): Promise<DateMonthData> => {
-  if (!dateMonthDataPromise) {
-    dateMonthDataPromise = loadDateMonths()
-      .then(buildDateMonthData)
+export const getDateMonthData = (
+  languages?: readonly string[],
+): Promise<DateMonthData> => {
+  const key = languageCacheKey(languages);
+  let promise = dateMonthDataPromises.get(key);
+  if (promise === undefined) {
+    promise = loadDateMonths()
+      .then((months) =>
+        buildDateMonthData(filterDateMonthsByLanguage(months, languages)),
+      )
       .catch((err) => {
-        dateMonthDataPromise = null;
+        dateMonthDataPromises.delete(key);
         throw err;
       });
+    dateMonthDataPromises.set(key, promise);
   }
-  return dateMonthDataPromise;
+  return promise;
 };
 
-export const getYearWordData = (): Promise<YearWordData> => {
-  yearWordDataPromise ??= import("../data/year-words.json").then((mod) => {
-    const data = (mod.default ?? mod) as Record<string, unknown>;
-    const result: YearWordData = {};
-    for (const [key, words] of Object.entries(data)) {
-      if (key.startsWith("_") || !Array.isArray(words)) {
-        continue;
+export const getYearWordData = (
+  languages?: readonly string[],
+): Promise<YearWordData> => {
+  const key = languageCacheKey(languages);
+  let promise = yearWordDataPromises.get(key);
+  if (promise !== undefined) {
+    return promise;
+  }
+  promise = import("../data/year-words.json")
+    .then((mod) => {
+      const data = (mod.default ?? mod) as Record<string, unknown>;
+      const scopedData = filterYearWordsByLanguage(data, languages);
+      const result: YearWordData = {};
+      for (const [language, words] of Object.entries(scopedData)) {
+        if (language.startsWith("_") || !Array.isArray(words)) {
+          continue;
+        }
+        result[language] = words.filter(
+          (word): word is string => typeof word === "string" && word.length > 0,
+        );
       }
-      result[key] = words.filter(
-        (word): word is string => typeof word === "string" && word.length > 0,
-      );
-    }
-    return result;
-  });
-  return yearWordDataPromise;
+      return result;
+    })
+    .catch((err) => {
+      yearWordDataPromises.delete(key);
+      throw err;
+    });
+  yearWordDataPromises.set(key, promise);
+  return promise;
 };
 
 /** Date pattern metadata (all are score 1 dates). */

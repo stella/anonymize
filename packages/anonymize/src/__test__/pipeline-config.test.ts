@@ -9,7 +9,10 @@ import {
   redactText,
   runPipeline,
 } from "../index";
-import { buildUnifiedSearch } from "../build-unified-search";
+import {
+  buildNativeStaticSearchBundle,
+  buildUnifiedSearch,
+} from "../build-unified-search";
 import {
   REGEX_META,
   REGEX_PATTERNS,
@@ -467,6 +470,41 @@ describe("pipeline config semantics", () => {
         withTriggers.nativeStaticConfig.date_data?.year_words_by_language ?? {},
       ).flat().length,
     ).toBeGreaterThan(0);
+  });
+
+  test("content language scopes native date data", async () => {
+    const base = {
+      ...BASE_CONFIG,
+      enableRegex: true,
+      enableTriggerPhrases: true,
+      labels: ["date"],
+    };
+    const unscoped = await buildNativeStaticSearchBundle(
+      base,
+      [],
+      createPipelineContext(),
+    );
+    const scoped = await buildNativeStaticSearchBundle(
+      { ...base, language: "en-US" },
+      [],
+      createPipelineContext(),
+    );
+
+    const unscopedMonthLanguages = Object.keys(
+      unscoped.nativeStaticConfig.date_data?.month_names_by_language ?? {},
+    );
+    const scopedMonthLanguages = Object.keys(
+      scoped.nativeStaticConfig.date_data?.month_names_by_language ?? {},
+    );
+    const scopedYearLanguages = Object.keys(
+      scoped.nativeStaticConfig.date_data?.year_words_by_language ?? {},
+    );
+
+    expect(unscopedMonthLanguages.length).toBeGreaterThan(
+      scopedMonthLanguages.length,
+    );
+    expect(scopedMonthLanguages).toEqual(["en"]);
+    expect(scopedYearLanguages).toEqual(["en"]);
   });
 
   test("content language scopes deny-list search build", async () => {
