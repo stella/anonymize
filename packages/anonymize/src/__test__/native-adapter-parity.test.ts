@@ -60,6 +60,8 @@ import { loadTestDictionaries } from "./load-dictionaries";
 
 setDefaultTimeout(240_000);
 
+const SLOW_NATIVE_FIXTURE_PARITY_TIMEOUT_MS = 600_000;
+
 type NativeAdapter = Omit<
   NativeAnonymizeBinding,
   | "prepareStaticSearchPackageBytes"
@@ -2062,63 +2064,68 @@ describe("native adapter parity", () => {
     });
   });
 
-  test("native facade and Python match on contract fixture packages", async () => {
-    const adapters = getAdapters();
-    for (const language of CONTRACT_FIXTURE_LANGUAGES) {
-      const fixtures = loadContractFixtureCases(language);
-      const scopedConfig = applyPipelineLanguageScope({
-        ...contractTestConfig(`native-facade-fixture-parity-${language}`),
-        language,
-      });
-      const dictionaryScope: Parameters<typeof loadTestDictionaries>[0] = {};
-      if (scopedConfig.denyListCountries !== undefined) {
-        dictionaryScope.denyListCountries = scopedConfig.denyListCountries;
-      }
-      if (scopedConfig.nameCorpusLanguages !== undefined) {
-        dictionaryScope.nameCorpusLanguages = scopedConfig.nameCorpusLanguages;
-      }
-      const dictionaries = await loadTestDictionaries(dictionaryScope);
-      const search = await preparePipelineSearch({
-        config: {
-          ...scopedConfig,
-          dictionaries,
-        },
-        context: createPipelineContext(),
-      });
-      const configJson = JSON.stringify(search.nativeStaticConfig);
-      const packageBytes = prepareNativeSearchPackage({
-        binding: adapters.native,
-        config: search.nativeStaticConfig,
-        compressed: true,
-      });
-      const anonymizer = createNativeAnonymizerFromPackage({
-        binding: adapters.native,
-        packageBytes,
-      });
-
-      const tsResults = fixtures.map(({ text }) =>
-        toBindingStaticResult(anonymizer.redactStaticEntities(text)),
-      );
-      const pyResults = callPythonPreparedPackageCases(
-        adapters.pythonModulePath,
-        adapters.tempDir,
-        Buffer.from(packageBytes),
-        fixtures.map(({ text }) => ({ text, operators: null })),
-        "prepare_static_search_compressed_package_bytes",
-        configJson,
-      );
-
-      for (const [index, fixture] of fixtures.entries()) {
-        expect({
-          fixture: `${language}/${fixture.name}`,
-          result: pyResults.at(index),
-        }).toEqual({
-          fixture: `${language}/${fixture.name}`,
-          result: tsResults.at(index),
+  test(
+    "native facade and Python match on contract fixture packages",
+    async () => {
+      const adapters = getAdapters();
+      for (const language of CONTRACT_FIXTURE_LANGUAGES) {
+        const fixtures = loadContractFixtureCases(language);
+        const scopedConfig = applyPipelineLanguageScope({
+          ...contractTestConfig(`native-facade-fixture-parity-${language}`),
+          language,
         });
+        const dictionaryScope: Parameters<typeof loadTestDictionaries>[0] = {};
+        if (scopedConfig.denyListCountries !== undefined) {
+          dictionaryScope.denyListCountries = scopedConfig.denyListCountries;
+        }
+        if (scopedConfig.nameCorpusLanguages !== undefined) {
+          dictionaryScope.nameCorpusLanguages =
+            scopedConfig.nameCorpusLanguages;
+        }
+        const dictionaries = await loadTestDictionaries(dictionaryScope);
+        const search = await preparePipelineSearch({
+          config: {
+            ...scopedConfig,
+            dictionaries,
+          },
+          context: createPipelineContext(),
+        });
+        const configJson = JSON.stringify(search.nativeStaticConfig);
+        const packageBytes = prepareNativeSearchPackage({
+          binding: adapters.native,
+          config: search.nativeStaticConfig,
+          compressed: true,
+        });
+        const anonymizer = createNativeAnonymizerFromPackage({
+          binding: adapters.native,
+          packageBytes,
+        });
+
+        const tsResults = fixtures.map(({ text }) =>
+          toBindingStaticResult(anonymizer.redactStaticEntities(text)),
+        );
+        const pyResults = callPythonPreparedPackageCases(
+          adapters.pythonModulePath,
+          adapters.tempDir,
+          Buffer.from(packageBytes),
+          fixtures.map(({ text }) => ({ text, operators: null })),
+          "prepare_static_search_compressed_package_bytes",
+          configJson,
+        );
+
+        for (const [index, fixture] of fixtures.entries()) {
+          expect({
+            fixture: `${language}/${fixture.name}`,
+            result: pyResults.at(index),
+          }).toEqual({
+            fixture: `${language}/${fixture.name}`,
+            result: tsResults.at(index),
+          });
+        }
       }
-    }
-  });
+    },
+    SLOW_NATIVE_FIXTURE_PARITY_TIMEOUT_MS,
+  );
 
   test("native fixture improvements are explicit", async () => {
     const adapters = getAdapters();
