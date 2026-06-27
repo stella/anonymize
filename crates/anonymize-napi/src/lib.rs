@@ -14,7 +14,9 @@ use stella_anonymize_adapter_contract::{
   prepared_search_core_package_decode_from_bytes_with_timings,
   prepared_search_core_package_to_bytes,
   prepared_search_core_package_to_compressed_bytes,
-  prepared_search_package_from_bytes, prepared_search_package_has_core_payload,
+  prepared_search_package_digest, prepared_search_package_from_bytes,
+  prepared_search_package_has_core_payload,
+  prepared_search_package_verify_digest_with_timings,
   static_redaction_diagnostic_result_to_utf16_binding,
   static_redaction_diagnostics_to_binding,
   static_redaction_result_to_utf16_binding,
@@ -362,10 +364,9 @@ fn prepare_static_search_package_bytes_with(
   let package = package.map_err(|error| to_napi_contract_error(&error))?;
   let prepared = PreparedSearch::new_with_artifacts(core_config, &artifacts)
     .map_err(|error| to_napi_core_error(&error))?;
-  prepared_search_cache_insert(
-    prepared_search_package_cache_key(&package),
-    Arc::new(prepared),
-  );
+  let cache_key = prepared_search_package_digest(&package)
+    .map_err(|error| to_napi_contract_error(&error))?;
+  prepared_search_cache_insert(cache_key, Arc::new(prepared));
   Ok(Buffer::from(package))
 }
 
@@ -503,20 +504,28 @@ impl NativePreparedSearch {
     let cache = match cache_mode {
       PackageCacheMode::Reuse => {
         let cache_key_start = Instant::now();
-        let cache_key = prepared_search_package_cache_key(package_bytes);
+        let cache_key = prepared_search_package_digest(package_bytes)
+          .map_err(|error| to_napi_contract_error(&error))?;
         let cache_key_elapsed = elapsed_us(cache_key_start);
         let cache_start = Instant::now();
         if let Some(inner) = prepared_search_cache_get(&cache_key) {
+          let verify_timings =
+            prepared_search_package_verify_digest_with_timings(package_bytes)
+              .map_err(|error| to_napi_contract_error(&error))?;
           let cache = CacheLookup {
             key: cache_key,
             key_elapsed: cache_key_elapsed,
             lookup_elapsed: elapsed_us(cache_start),
           };
+          let mut events = cache_hit_events(&cache, input_bytes_len);
+          append_package_decode_timing_events_for_input(
+            &mut events,
+            verify_timings,
+            input_bytes_len,
+          );
           return Ok(Self {
             inner,
-            prepare_diagnostics: StaticRedactionDiagnostics {
-              events: cache_hit_events(&cache, input_bytes_len),
-            },
+            prepare_diagnostics: StaticRedactionDiagnostics { events },
           });
         }
         let cache = CacheLookup {
@@ -831,12 +840,24 @@ fn append_package_decode_timing_events(
   let Some(timings) = context.package_decode_timings else {
     return;
   };
+  append_package_decode_timing_events_for_input(
+    events,
+    timings,
+    context.input_bytes_len,
+  );
+}
+
+fn append_package_decode_timing_events_for_input(
+  events: &mut Vec<DiagnosticEvent>,
+  timings: PreparedSearchPackageDecodeTimings,
+  input_bytes_len: usize,
+) {
   if let Some(elapsed) = timings.verify {
     events.push(stage_event(
       DiagnosticStage::PreparePackageVerify,
       None,
       Some(elapsed),
-      Some(context.input_bytes_len),
+      Some(input_bytes_len),
     ));
   }
   if let Some(elapsed) = timings.decompress {
@@ -844,7 +865,7 @@ fn append_package_decode_timing_events(
       DiagnosticStage::PreparePackageDecompress,
       None,
       Some(elapsed),
-      Some(context.input_bytes_len),
+      Some(input_bytes_len),
     ));
   }
   if let Some(elapsed) = timings.config_decode {
@@ -852,7 +873,7 @@ fn append_package_decode_timing_events(
       DiagnosticStage::PreparePackageConfigDecode,
       None,
       Some(elapsed),
-      Some(context.input_bytes_len),
+      Some(input_bytes_len),
     ));
   }
 }
@@ -873,13 +894,6 @@ fn prepared_search_cache_key(
       hasher.update(b"no-artifacts");
     }
   }
-  *hasher.finalize().as_bytes()
-}
-
-fn prepared_search_package_cache_key(package_bytes: &[u8]) -> [u8; 32] {
-  let mut hasher = blake3::Hasher::new();
-  hasher.update(b"prepared-package");
-  hasher.update(package_bytes);
   *hasher.finalize().as_bytes()
 }
 

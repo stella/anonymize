@@ -762,6 +762,14 @@ pub fn prepared_search_package_digest(bytes: &[u8]) -> Result<[u8; 32]> {
   Ok(prepared_search_package_parts(bytes)?.digest())
 }
 
+pub fn prepared_search_package_verify_digest_with_timings(
+  bytes: &[u8],
+) -> Result<PreparedSearchPackageDecodeTimings> {
+  let mut timings = PreparedSearchPackageDecodeTimings::default();
+  prepared_search_package_parts(bytes)?.verify_digest(&mut timings)?;
+  Ok(timings)
+}
+
 pub fn prepared_search_package_from_bytes(
   bytes: &[u8],
 ) -> Result<BindingPreparedSearchPackage> {
@@ -1554,6 +1562,51 @@ impl<'a> PreparedSearchPackageParts<'a> {
             Ok(Cow::Owned(payload))
           }
         }
+      }
+    }
+  }
+
+  fn verify_digest(
+    self,
+    timings: &mut PreparedSearchPackageDecodeTimings,
+  ) -> Result<()> {
+    match self {
+      Self::Raw {
+        digest, payload, ..
+      }
+      | Self::Compressed {
+        compression: PackageCompression::ZstdCompressedDigest,
+        digest,
+        payload,
+        ..
+      } => {
+        let verify_start = std::time::Instant::now();
+        verify_prepared_search_package_digest(digest, payload)?;
+        timings.verify = Some(elapsed_us(verify_start));
+        Ok(())
+      }
+      Self::Compressed {
+        compression: PackageCompression::ZstdPayloadDigest,
+        digest,
+        uncompressed_len,
+        payload,
+        ..
+      } => {
+        if uncompressed_len > MAX_PREPARED_SEARCH_PACKAGE_PAYLOAD_BYTES {
+          return Err(invalid_prepared_search_package(
+            "uncompressed payload length exceeds limit",
+          ));
+        }
+        let decompress_start = std::time::Instant::now();
+        let payload = zstd::bulk::decompress(payload, uncompressed_len)
+          .map_err(|error| {
+            invalid_prepared_search_package(error.to_string())
+          })?;
+        timings.decompress = Some(elapsed_us(decompress_start));
+        let verify_start = std::time::Instant::now();
+        verify_prepared_search_package_digest(digest, &payload)?;
+        timings.verify = Some(elapsed_us(verify_start));
+        Ok(())
       }
     }
   }
@@ -2591,10 +2644,11 @@ mod tests {
     prepared_search_core_package_to_bytes,
     prepared_search_core_package_to_compressed_bytes,
     prepared_search_core_package_view_from_bytes_with_timings,
-    prepared_search_package_from_bytes,
+    prepared_search_package_digest, prepared_search_package_from_bytes,
     prepared_search_package_has_core_payload,
     prepared_search_package_payload_to_bytes, prepared_search_package_to_bytes,
     prepared_search_package_to_compressed_bytes,
+    prepared_search_package_verify_digest_with_timings,
     static_redaction_diagnostics_to_utf16_binding, write_package_header,
   };
   use stella_anonymize_core::{
@@ -2637,6 +2691,39 @@ mod tests {
     assert!(
       matches!(error, ContractError::InvalidPreparedSearchPackage { .. }),
       "corrupted package payload should fail digest verification"
+    );
+  }
+
+  #[test]
+  fn prepared_search_package_digest_reads_header_without_verifying_payload() {
+    let config = BindingPreparedSearchConfig::default();
+    let mut bytes =
+      prepared_search_package_to_bytes(&config, b"artifact").unwrap();
+    let digest = prepared_search_package_digest(&bytes).unwrap();
+
+    let last = bytes.last_mut().unwrap();
+    *last ^= 0x01;
+
+    assert_eq!(prepared_search_package_digest(&bytes).unwrap(), digest);
+    assert!(
+      prepared_search_package_verify_digest_with_timings(&bytes).is_err(),
+      "header digest identity must not replace payload verification"
+    );
+  }
+
+  #[test]
+  fn prepared_search_package_verify_digest_reports_timing() {
+    let config = BindingPreparedSearchConfig::default();
+    let bytes =
+      prepared_search_package_to_compressed_bytes(&config, b"artifact")
+        .unwrap();
+
+    let timings =
+      prepared_search_package_verify_digest_with_timings(&bytes).unwrap();
+
+    assert!(
+      timings.verify.is_some(),
+      "digest verification timing should be reported"
     );
   }
 
