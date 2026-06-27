@@ -42,7 +42,7 @@ import { LEGAL_SUFFIXES } from "./config/legal-forms";
 import { loadLanguageConfigs } from "./util/lang-loader";
 
 import {
-  REGEX_PATTERNS,
+  REGEX_PATTERN_ENTRIES,
   REGEX_META,
   NATIVE_REGEX_VALIDATOR_IDS,
   getCurrencyPatternEntries,
@@ -769,7 +769,7 @@ const buildUnifiedSearchSources = async (
   const allRegex: PatternEntry[] = [];
   const regexMeta: RegexMeta[] = [];
   if (config.enableRegex) {
-    for (const [index, pattern] of REGEX_PATTERNS.entries()) {
+    for (const [index, pattern] of REGEX_PATTERN_ENTRIES.entries()) {
       const meta = REGEX_META[index];
       if (!meta || !labelIsAllowed(meta.label, allowedLabels)) {
         continue;

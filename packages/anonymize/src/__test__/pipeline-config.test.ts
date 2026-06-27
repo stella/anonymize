@@ -12,6 +12,7 @@ import {
 import { buildUnifiedSearch } from "../build-unified-search";
 import {
   REGEX_META,
+  REGEX_PATTERNS,
   getNativeSigningClausePatterns,
   getSigningClausePatterns,
 } from "../detectors/regex";
@@ -386,6 +387,33 @@ describe("pipeline config semantics", () => {
         (entry) => entry.requires_validation === true && !entry.validator_id,
       ),
     ).toEqual([]);
+  });
+
+  test("native config carries static regex prefilter metadata", async () => {
+    const search = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        enableRegex: true,
+        labels: ["email address"],
+      },
+      [],
+      createPipelineContext(),
+    );
+
+    expect(REGEX_PATTERNS.every((pattern) => typeof pattern === "string")).toBe(
+      true,
+    );
+    const emailPattern = search.nativeStaticConfig.regex_patterns.find(
+      (pattern) =>
+        pattern.kind === "regex" &&
+        pattern.pattern === "\\b[\\w.+\\-]+@[\\w\\-]+(?:\\.[\\w\\-]+)+\\b",
+    );
+
+    expect(emailPattern).toMatchObject({
+      lazy: true,
+      prefilter_any: ["@"],
+      prefilter_case_insensitive: false,
+    });
   });
 
   test("native trigger config carries currency terms and monetary extension data", async () => {
