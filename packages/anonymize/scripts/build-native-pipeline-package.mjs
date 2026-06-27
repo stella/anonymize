@@ -146,19 +146,19 @@ function defaultNativePipelineConfig() {
   };
 }
 
-function applyCliLanguageScope(config, options) {
+function applyCliLanguageScope(pipelineConfig, options) {
   if (options.language !== undefined && options.languages !== undefined) {
     throw new Error("Use either --language or --languages, not both");
   }
   if (options.language !== undefined) {
     const language = normalizeLanguageOption(options.language, "--language");
-    return { ...config, language, languages: undefined };
+    return { ...pipelineConfig, language, languages: undefined };
   }
   if (options.languages === undefined) {
-    return config;
+    return pipelineConfig;
   }
   const languages = normalizeLanguageList(options.languages);
-  return { ...config, language: undefined, languages };
+  return { ...pipelineConfig, language: undefined, languages };
 }
 
 function normalizeLanguageOption(value, option) {
