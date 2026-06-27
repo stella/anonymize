@@ -1,5 +1,6 @@
 use crate::byte_offsets::ByteOffsets;
 use crate::resolution::{DetectionSource, PipelineEntity, SourceDetail};
+use crate::search::SearchIndexFindStats;
 use crate::types::{RedactionResult, SearchEngine, SearchMatch};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -21,6 +22,8 @@ pub enum DiagnosticStage {
   FindMatches,
   FindRegex,
   FindCustomRegex,
+  FindLegalForm,
+  FindTrigger,
   FindLiteral,
   SearchRegex,
   SearchCustomRegex,
@@ -60,6 +63,8 @@ pub struct DiagnosticEvent {
   pub stage: DiagnosticStage,
   pub kind: DiagnosticEventKind,
   pub count: Option<usize>,
+  pub slot: Option<usize>,
+  pub pattern_count: Option<usize>,
   pub engine: Option<SearchEngine>,
   pub pattern: Option<u32>,
   pub source: Option<DetectionSource>,
@@ -102,6 +107,8 @@ impl StaticRedactionDiagnostics {
         stage,
         kind: DiagnosticEventKind::SearchMatch,
         count: None,
+        slot: None,
+        pattern_count: None,
         engine: Some(found.engine()),
         pattern: Some(found.pattern()),
         source: None,
@@ -114,6 +121,36 @@ impl StaticRedactionDiagnostics {
         span_valid: Some(span_valid),
         elapsed_us: None,
         input_bytes: None,
+        reason: None,
+      });
+    }
+  }
+
+  pub(crate) fn record_search_slot_summaries(
+    &mut self,
+    stage: DiagnosticStage,
+    stats: &[SearchIndexFindStats],
+    input_bytes: usize,
+  ) {
+    for stat in stats {
+      self.events.push(DiagnosticEvent {
+        stage,
+        kind: DiagnosticEventKind::StageSummary,
+        count: Some(stat.match_count),
+        slot: Some(stat.slot),
+        pattern_count: Some(stat.pattern_count),
+        engine: Some(stat.engine),
+        pattern: None,
+        source: None,
+        source_detail: None,
+        label: None,
+        start: None,
+        end: None,
+        text: None,
+        score: None,
+        span_valid: None,
+        elapsed_us: Some(stat.elapsed_us),
+        input_bytes: Some(input_bytes),
         reason: None,
       });
     }
@@ -139,6 +176,8 @@ impl StaticRedactionDiagnostics {
         stage,
         kind: DiagnosticEventKind::Entity,
         count: None,
+        slot: None,
+        pattern_count: None,
         engine: None,
         pattern: None,
         source: Some(entity.source),
@@ -166,6 +205,8 @@ impl StaticRedactionDiagnostics {
       stage: DiagnosticStage::Redaction,
       kind: DiagnosticEventKind::StageSummary,
       count: Some(result.entity_count),
+      slot: None,
+      pattern_count: None,
       engine: None,
       pattern: None,
       source: None,
@@ -195,6 +236,8 @@ impl StaticRedactionDiagnostics {
       stage,
       kind: DiagnosticEventKind::Rejection,
       count: None,
+      slot: None,
+      pattern_count: None,
       engine: None,
       pattern,
       source: None,
@@ -222,6 +265,8 @@ impl StaticRedactionDiagnostics {
       stage,
       kind: DiagnosticEventKind::StageSummary,
       count,
+      slot: None,
+      pattern_count: None,
       engine: None,
       pattern: None,
       source: None,

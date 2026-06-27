@@ -1207,6 +1207,10 @@ pub struct BindingDiagnosticEvent {
   #[serde(skip_serializing_if = "Option::is_none")]
   pub count: Option<usize>,
   #[serde(skip_serializing_if = "Option::is_none")]
+  pub slot: Option<usize>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub pattern_count: Option<usize>,
+  #[serde(skip_serializing_if = "Option::is_none")]
   pub engine: Option<String>,
   #[serde(skip_serializing_if = "Option::is_none")]
   pub pattern: Option<u32>,
@@ -1856,6 +1860,8 @@ fn diagnostic_event_to_binding(
     stage: diagnostic_stage_name(event.stage),
     kind: diagnostic_event_kind_name(event.kind),
     count: event.count,
+    slot: event.slot,
+    pattern_count: event.pattern_count,
     engine: event.engine.map(search_engine_name),
     pattern: event.pattern,
     source: event.source.map(detection_source_name),
@@ -2293,6 +2299,8 @@ fn diagnostic_stage_name(stage: DiagnosticStage) -> String {
     DiagnosticStage::FindMatches => "find-matches",
     DiagnosticStage::FindRegex => "find.regex",
     DiagnosticStage::FindCustomRegex => "find.custom-regex",
+    DiagnosticStage::FindLegalForm => "find.legal-form",
+    DiagnosticStage::FindTrigger => "find.trigger",
     DiagnosticStage::FindLiteral => "find.literal",
     DiagnosticStage::SearchRegex => "search.regex",
     DiagnosticStage::SearchCustomRegex => "search.custom-regex",
@@ -2436,6 +2444,8 @@ mod tests {
         stage: DiagnosticStage::EntityRegex,
         kind: DiagnosticEventKind::Entity,
         count: None,
+        slot: None,
+        pattern_count: None,
         engine: None,
         pattern: None,
         source: None,

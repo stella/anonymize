@@ -1,3 +1,5 @@
+use std::time::Instant;
+
 use stella_text_search_core as text_search;
 
 use crate::artifact_bytes::{ArtifactReader, ArtifactWriter};
@@ -117,6 +119,21 @@ impl Default for FuzzySearchOptions {
 
 pub struct SearchIndex {
   slots: Vec<SearchSlot>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct SearchIndexFindResult {
+  pub matches: Vec<SearchMatch>,
+  pub stats: Vec<SearchIndexFindStats>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct SearchIndexFindStats {
+  pub slot: usize,
+  pub engine: SearchEngine,
+  pub pattern_count: usize,
+  pub match_count: usize,
+  pub elapsed_us: u64,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -285,13 +302,43 @@ impl SearchIndex {
   }
 
   pub fn find_iter(&self, haystack: &str) -> Result<Vec<SearchMatch>> {
+    Ok(self.find_iter_inner(haystack, false)?.matches)
+  }
+
+  pub(crate) fn find_iter_with_stats(
+    &self,
+    haystack: &str,
+  ) -> Result<SearchIndexFindResult> {
+    self.find_iter_inner(haystack, true)
+  }
+
+  fn find_iter_inner(
+    &self,
+    haystack: &str,
+    collect_stats: bool,
+  ) -> Result<SearchIndexFindResult> {
     let mut matches = Vec::new();
-    for slot in &self.slots {
-      for found in slot
+    let mut stats = if collect_stats {
+      Vec::with_capacity(self.slots.len())
+    } else {
+      Vec::new()
+    };
+    for (slot_index, slot) in self.slots.iter().enumerate() {
+      let start = collect_stats.then(Instant::now);
+      let slot_matches = slot
         .search
         .find_iter(haystack)
-        .map_err(|error| search_error(&error))?
-      {
+        .map_err(|error| search_error(&error))?;
+      if let Some(start) = start {
+        stats.push(SearchIndexFindStats {
+          slot: slot_index,
+          engine: SearchEngine::from(slot.engine),
+          pattern_count: slot.pattern_indexes.len(),
+          match_count: slot_matches.len(),
+          elapsed_us: elapsed_us(start),
+        });
+      }
+      for found in slot_matches {
         let pattern = remap_pattern(slot, found.pattern)?;
         matches.push(match slot.engine {
           SlotEngine::Literal => SearchMatch::Literal {
@@ -321,7 +368,7 @@ impl SearchIndex {
         .then_with(|| left.end().cmp(&right.end()))
         .then_with(|| left.pattern().cmp(&right.pattern()))
     });
-    Ok(matches)
+    Ok(SearchIndexFindResult { matches, stats })
   }
 
   pub fn is_match(&self, haystack: &str) -> Result<bool> {
@@ -646,6 +693,11 @@ const fn search_message(reason: String) -> Error {
     engine: SearchEngine::Text,
     reason,
   }
+}
+
+fn elapsed_us(start: Instant) -> u64 {
+  let micros = start.elapsed().as_micros();
+  u64::try_from(micros).unwrap_or(u64::MAX)
 }
 
 impl From<SlotEngine> for SearchEngine {

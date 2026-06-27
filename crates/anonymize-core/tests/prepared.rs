@@ -10,10 +10,10 @@ use stella_anonymize_core::{
   HotwordRule, HotwordRuleData, LegalFormData, LiteralSearchOptions,
   MagnitudeSuffixData, MonetaryData, OperatorConfig, PatternSlice,
   PreparedSearch, PreparedSearchArtifacts, PreparedSearchConfig,
-  PreparedSearchSlices, RegexMatchMeta, RegexSearchOptions, SearchOptions,
-  SearchPattern, SourceDetail, TriggerData, TriggerRule, TriggerStrategy,
-  TriggerValidation, WrittenAmountPatternData, ZoneData, ZonePatternData,
-  ZoneSigningClauseData,
+  PreparedSearchSlices, RegexMatchMeta, RegexSearchOptions, SearchEngine,
+  SearchOptions, SearchPattern, SourceDetail, TriggerData, TriggerRule,
+  TriggerStrategy, TriggerValidation, WrittenAmountPatternData, ZoneData,
+  ZonePatternData, ZoneSigningClauseData,
 };
 
 fn empty_config(slices: PreparedSearchSlices) -> PreparedSearchConfig {
@@ -2187,6 +2187,14 @@ fn prepared_search_reports_static_redaction_diagnostics() {
   assert!(result.diagnostics.events.iter().any(|event| {
     event.stage == DiagnosticStage::SearchRegex
       && event.kind == DiagnosticEventKind::StageSummary
+      && event.count == Some(1)
+  }));
+  assert!(result.diagnostics.events.iter().any(|event| {
+    event.stage == DiagnosticStage::FindLiteral
+      && event.kind == DiagnosticEventKind::StageSummary
+      && event.engine == Some(SearchEngine::Literal)
+      && event.slot == Some(0)
+      && event.pattern_count == Some(1)
       && event.count == Some(1)
   }));
   assert!(result.diagnostics.events.iter().any(|event| {

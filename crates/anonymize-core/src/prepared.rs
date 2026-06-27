@@ -491,101 +491,101 @@ impl PreparedSearch {
     mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
   ) -> Result<PreparedSearchMatches> {
     let total_start = Instant::now();
-    let normalize_start = Instant::now();
-    let normalized = normalize_for_search_with_byte_map(full_text)?;
-    if let Some(diagnostics) = &mut diagnostics {
-      diagnostics.record_stage(
-        DiagnosticStage::Normalize,
-        None,
-        Some(elapsed_us(normalize_start)),
-        Some(full_text.len()),
-      );
-    }
+    let normalized = normalize_search_text(full_text, &mut diagnostics)?;
 
     let regex_start = Instant::now();
-    let regex = offset_matches(
-      self.regex.find_iter(full_text)?,
+    let regex = offset_index_matches(
+      &self.regex,
+      full_text,
+      diagnostics.as_deref_mut(),
+      DiagnosticStage::FindRegex,
+      full_text.len(),
       self.slices.regex.start,
     )?;
-    if let Some(diagnostics) = &mut diagnostics {
-      diagnostics.record_search_matches(
-        DiagnosticStage::SearchRegex,
-        &regex,
-        full_text,
-        Some(elapsed_us(regex_start)),
-      );
-    }
+    record_search_matches(
+      &mut diagnostics,
+      DiagnosticStage::SearchRegex,
+      &regex,
+      full_text,
+      regex_start,
+    );
 
     let legal_form_start = Instant::now();
-    let legal_forms = normalized_offset_matches(
+    let legal_forms = normalized_index_matches(
       &self.legal_forms,
       &normalized,
+      diagnostics.as_deref_mut(),
+      DiagnosticStage::FindLegalForm,
+      full_text.len(),
       self.slices.legal_forms.start,
     )?;
-    if let Some(diagnostics) = &mut diagnostics {
-      diagnostics.record_search_matches(
-        DiagnosticStage::SearchLegalForm,
-        &legal_forms,
-        full_text,
-        Some(elapsed_us(legal_form_start)),
-      );
-    }
+    record_search_matches(
+      &mut diagnostics,
+      DiagnosticStage::SearchLegalForm,
+      &legal_forms,
+      full_text,
+      legal_form_start,
+    );
 
     let trigger_start = Instant::now();
-    let triggers = offset_matches(
-      self.triggers.find_iter(full_text)?,
+    let triggers = offset_index_matches(
+      &self.triggers,
+      full_text,
+      diagnostics.as_deref_mut(),
+      DiagnosticStage::FindTrigger,
+      full_text.len(),
       self.slices.triggers.start,
     )?;
-    if let Some(diagnostics) = &mut diagnostics {
-      diagnostics.record_search_matches(
-        DiagnosticStage::SearchTrigger,
-        &triggers,
-        full_text,
-        Some(elapsed_us(trigger_start)),
-      );
-    }
+    record_search_matches(
+      &mut diagnostics,
+      DiagnosticStage::SearchTrigger,
+      &triggers,
+      full_text,
+      trigger_start,
+    );
 
     let custom_regex_start = Instant::now();
-    let custom_regex = offset_matches(
-      self.custom_regex.find_iter(full_text)?,
+    let custom_regex = offset_index_matches(
+      &self.custom_regex,
+      full_text,
+      diagnostics.as_deref_mut(),
+      DiagnosticStage::FindCustomRegex,
+      full_text.len(),
       self.slices.custom_regex.start,
     )?;
-    if let Some(diagnostics) = &mut diagnostics {
-      diagnostics.record_search_matches(
-        DiagnosticStage::SearchCustomRegex,
-        &custom_regex,
-        full_text,
-        Some(elapsed_us(custom_regex_start)),
-      );
-    }
+    record_search_matches(
+      &mut diagnostics,
+      DiagnosticStage::SearchCustomRegex,
+      &custom_regex,
+      full_text,
+      custom_regex_start,
+    );
 
     let literal_start = Instant::now();
-    let literal = self
-      .literals
-      .find_iter(normalized.as_str())?
-      .into_iter()
-      .map(|found| remap_normalized_match(&normalized, found))
-      .collect::<Result<Vec<_>>>()?;
+    let literal = normalized_index_matches(
+      &self.literals,
+      &normalized,
+      diagnostics.as_deref_mut(),
+      DiagnosticStage::FindLiteral,
+      full_text.len(),
+      0,
+    )?;
     let regex = combine_regex_matches(regex, legal_forms, triggers);
-    if let Some(diagnostics) = &mut diagnostics {
-      diagnostics.record_search_matches(
-        DiagnosticStage::SearchLiteral,
-        &literal,
-        full_text,
-        Some(elapsed_us(literal_start)),
-      );
-      diagnostics.record_stage(
-        DiagnosticStage::FindMatches,
-        Some(
-          regex
-            .len()
-            .saturating_add(custom_regex.len())
-            .saturating_add(literal.len()),
-        ),
-        Some(elapsed_us(total_start)),
-        Some(full_text.len()),
-      );
-    }
+    record_search_matches(
+      &mut diagnostics,
+      DiagnosticStage::SearchLiteral,
+      &literal,
+      full_text,
+      literal_start,
+    );
+    record_find_matches_summary(
+      &mut diagnostics,
+      &regex,
+      &custom_regex,
+      &literal,
+      full_text,
+      total_start,
+    );
 
     Ok(PreparedSearchMatches {
       regex,
@@ -1357,6 +1357,64 @@ fn record_static_entity_diagnostics(
   );
 }
 
+fn normalize_search_text(
+  full_text: &str,
+  diagnostics: &mut Option<&mut StaticRedactionDiagnostics>,
+) -> Result<NormalizedSearchText> {
+  let start = Instant::now();
+  let normalized = normalize_for_search_with_byte_map(full_text)?;
+  if let Some(diagnostics) = diagnostics {
+    diagnostics.record_stage(
+      DiagnosticStage::Normalize,
+      None,
+      Some(elapsed_us(start)),
+      Some(full_text.len()),
+    );
+  }
+  Ok(normalized)
+}
+
+fn record_search_matches(
+  diagnostics: &mut Option<&mut StaticRedactionDiagnostics>,
+  stage: DiagnosticStage,
+  matches: &[SearchMatch],
+  full_text: &str,
+  start: Instant,
+) {
+  if let Some(diagnostics) = diagnostics {
+    diagnostics.record_search_matches(
+      stage,
+      matches,
+      full_text,
+      Some(elapsed_us(start)),
+    );
+  }
+}
+
+fn record_find_matches_summary(
+  diagnostics: &mut Option<&mut StaticRedactionDiagnostics>,
+  regex: &[SearchMatch],
+  custom_regex: &[SearchMatch],
+  literal: &[SearchMatch],
+  full_text: &str,
+  start: Instant,
+) {
+  let Some(diagnostics) = diagnostics else {
+    return;
+  };
+  diagnostics.record_stage(
+    DiagnosticStage::FindMatches,
+    Some(
+      regex
+        .len()
+        .saturating_add(custom_regex.len())
+        .saturating_add(literal.len()),
+    ),
+    Some(elapsed_us(start)),
+    Some(full_text.len()),
+  );
+}
+
 fn address_seed_context(layers: &[&[PipelineEntity]]) -> Vec<PipelineEntity> {
   let capacity = layers
     .iter()
@@ -1671,6 +1729,61 @@ fn promote_case_insensitive_literals(
     .collect()
 }
 
+fn find_index_matches(
+  search: &SearchIndex,
+  haystack: &str,
+  diagnostics: Option<&mut StaticRedactionDiagnostics>,
+  slot_stage: DiagnosticStage,
+  input_bytes: usize,
+) -> Result<Vec<SearchMatch>> {
+  let Some(diagnostics) = diagnostics else {
+    return search.find_iter(haystack);
+  };
+
+  let result = search.find_iter_with_stats(haystack)?;
+  diagnostics.record_search_slot_summaries(
+    slot_stage,
+    &result.stats,
+    input_bytes,
+  );
+  Ok(result.matches)
+}
+
+fn offset_index_matches(
+  search: &SearchIndex,
+  haystack: &str,
+  diagnostics: Option<&mut StaticRedactionDiagnostics>,
+  slot_stage: DiagnosticStage,
+  input_bytes: usize,
+  offset: u32,
+) -> Result<Vec<SearchMatch>> {
+  offset_matches(
+    find_index_matches(search, haystack, diagnostics, slot_stage, input_bytes)?,
+    offset,
+  )
+}
+
+fn normalized_index_matches(
+  search: &SearchIndex,
+  normalized: &NormalizedSearchText,
+  diagnostics: Option<&mut StaticRedactionDiagnostics>,
+  slot_stage: DiagnosticStage,
+  input_bytes: usize,
+  offset: u32,
+) -> Result<Vec<SearchMatch>> {
+  find_index_matches(
+    search,
+    normalized.as_str(),
+    diagnostics,
+    slot_stage,
+    input_bytes,
+  )?
+  .into_iter()
+  .map(|found| remap_normalized_match(normalized, found))
+  .map(|found| found.and_then(|value| offset_match(value, offset)))
+  .collect()
+}
+
 fn offset_matches(
   matches: Vec<SearchMatch>,
   offset: u32,
@@ -1682,19 +1795,6 @@ fn offset_matches(
   matches
     .into_iter()
     .map(|found| offset_match(found, offset))
-    .collect()
-}
-
-fn normalized_offset_matches(
-  search: &SearchIndex,
-  normalized: &NormalizedSearchText,
-  offset: u32,
-) -> Result<Vec<SearchMatch>> {
-  search
-    .find_iter(normalized.as_str())?
-    .into_iter()
-    .map(|found| remap_normalized_match(normalized, found))
-    .map(|found| found.and_then(|value| offset_match(value, offset)))
     .collect()
 }
 

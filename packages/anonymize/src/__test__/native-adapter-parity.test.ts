@@ -131,6 +131,8 @@ type StaticRedactionDiagnosticResult = {
       stage: string;
       kind: string;
       count?: number;
+      slot?: number;
+      pattern_count?: number;
       engine?: string;
       pattern?: number;
       source?: string;
@@ -2242,6 +2244,16 @@ describe("native adapter parity", () => {
           event.kind === "stage-summary" &&
           typeof event.count === "number" &&
           event.count > 0,
+      ),
+    ).toBe(true);
+    expect(
+      tsResult.diagnostics.events.some(
+        (event) =>
+          event.stage === "find.literal" &&
+          event.kind === "stage-summary" &&
+          typeof event.slot === "number" &&
+          typeof event.pattern_count === "number" &&
+          event.pattern_count > 0,
       ),
     ).toBe(true);
     expect(

@@ -801,6 +801,8 @@ const fn stage_event(
     stage,
     kind: DiagnosticEventKind::StageSummary,
     count,
+    slot: None,
+    pattern_count: None,
     engine: None,
     pattern: None,
     source: None,
