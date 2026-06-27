@@ -15,8 +15,10 @@ import {
   native_package_version,
   normalize_for_search,
   preloadDefaultNativePipeline,
+  preloadDefaultNativePipelineAsync,
   prepare_search_package,
   readNativePipelinePackageFile,
+  readNativePipelinePackageFileAsync,
   redact_text,
   redact_text_json,
 } from "../native-node";
@@ -116,6 +118,20 @@ describe("native node loader", () => {
     }
   });
 
+  test("loads native pipeline package bytes from a file asynchronously", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "anonymize-native-package-"));
+    const packagePath = join(dir, "pipeline.stlanonpkg");
+    try {
+      writeFileSync(packagePath, Uint8Array.of(4, 3, 2, 1));
+
+      expect([
+        ...(await readNativePipelinePackageFileAsync(packagePath)),
+      ]).toEqual([4, 3, 2, 1]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("creates a native pipeline from a package file", () => {
     const dir = mkdtempSync(join(tmpdir(), "anonymize-native-pipeline-"));
     const packagePath = join(dir, "pipeline.stlanonpkg");
@@ -197,6 +213,44 @@ describe("native node loader", () => {
       expect(second).toBe(first);
       expect(preloaded).toBe(first);
       expect(capturedBytes).toEqual([[13, 14, 15]]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("preloads the default native pipeline asynchronously", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "anonymize-default-async-cache-"));
+    const packagePath = join(dir, "native-pipeline.stlanonpkg");
+    const capturedBytes: number[][] = [];
+    try {
+      writeFileSync(packagePath, Uint8Array.of(16, 17, 18));
+      const binding = fakeNativeBinding("1.5.0", {
+        onPreparedPackageBytes: (bytes) => {
+          capturedBytes.push([...bytes]);
+        },
+      });
+
+      const [first, second] = await Promise.all([
+        preloadDefaultNativePipelineAsync({
+          binding,
+          packagePath,
+          expectedVersion: "1.5.0",
+        }),
+        preloadDefaultNativePipelineAsync({
+          binding,
+          packagePath,
+          expectedVersion: "1.5.0",
+        }),
+      ]);
+      const syncCached = getDefaultNativePipeline({
+        binding,
+        packagePath,
+        expectedVersion: "1.5.0",
+      });
+
+      expect(second).toBe(first);
+      expect(syncCached).toBe(first);
+      expect(capturedBytes).toEqual([[16, 17, 18]]);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

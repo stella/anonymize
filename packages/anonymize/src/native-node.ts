@@ -1,5 +1,6 @@
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import process from "node:process";
 
 import {
@@ -69,6 +70,10 @@ const defaultNativePipelineCache = new WeakMap<
   NativeAnonymizeBinding,
   Map<string, PreparedNativePipeline>
 >();
+const defaultNativePipelineInflightCache = new WeakMap<
+  NativeAnonymizeBinding,
+  Map<string, Promise<PreparedNativePipeline>>
+>();
 
 export { DEFAULT_NATIVE_PIPELINE_CONFIG } from "./native-default-config";
 
@@ -108,6 +113,10 @@ export const loadNativeAnonymizeBinding = (
 export const readNativePipelinePackageFile = (
   packagePath: string,
 ): Uint8Array => new Uint8Array(readFileSync(packagePath));
+
+export const readNativePipelinePackageFileAsync = async (
+  packagePath: string,
+): Promise<Uint8Array> => new Uint8Array(await readFile(packagePath));
 
 export const native_package_version = (
   options: NativeSdkOptions = {},
@@ -197,6 +206,19 @@ export const readDefaultNativePipelinePackageFile = (): Uint8Array => {
   }
 };
 
+export const readDefaultNativePipelinePackageFileAsync =
+  async (): Promise<Uint8Array> => {
+    try {
+      return new Uint8Array(
+        await readFile(DEFAULT_NATIVE_PIPELINE_PACKAGE_URL),
+      );
+    } catch (error) {
+      throw new Error(
+        `Default native pipeline package is unavailable: ${formatLoadError(error)}`,
+      );
+    }
+  };
+
 export const createNativePipelineFromPackageFile = ({
   binding,
   packagePath,
@@ -218,60 +240,84 @@ export const createNativePipelineFromPackageFile = ({
   });
 };
 
-export const createNativePipelineFromDefaultPackage = ({
-  binding,
-  packagePath,
-  expectedVersion,
-  ...loadOptions
-}: DefaultNativePipelinePackageOptions = {}): PreparedNativePipeline => {
-  const resolvedBinding =
-    binding ??
-    loadNativeAnonymizeBinding({
-      ...loadOptions,
-      ...(expectedVersion !== undefined ? { expectedVersion } : {}),
-    });
-  if (binding && expectedVersion !== undefined) {
-    assertNativeBindingVersion({ binding, expectedVersion });
-  }
-  return createNativePipelineFromResolvedDefaultPackage({
-    binding: resolvedBinding,
-    ...(packagePath !== undefined ? { packagePath } : {}),
-  });
-};
+export const createNativePipelineFromDefaultPackage = (
+  options: DefaultNativePipelinePackageOptions = {},
+): PreparedNativePipeline =>
+  createNativePipelineFromResolvedDefaultPackage(
+    resolveDefaultNativePipelineOptions(options),
+  );
 
-export const getDefaultNativePipeline = ({
-  binding,
-  packagePath,
-  expectedVersion,
-  ...loadOptions
-}: DefaultNativePipelinePackageOptions = {}): PreparedNativePipeline => {
-  const resolvedBinding =
-    binding ??
-    loadNativeAnonymizeBinding({
-      ...loadOptions,
-      ...(expectedVersion !== undefined ? { expectedVersion } : {}),
-    });
-  if (binding && expectedVersion !== undefined) {
-    assertNativeBindingVersion({ binding, expectedVersion });
-  }
-  const cache = defaultPipelineCacheFor(resolvedBinding);
-  const key = defaultPipelineCacheKey({
-    binding: resolvedBinding,
-    ...(packagePath !== undefined ? { packagePath } : {}),
-  });
+export const getDefaultNativePipeline = (
+  options: DefaultNativePipelinePackageOptions = {},
+): PreparedNativePipeline => {
+  const resolvedOptions = resolveDefaultNativePipelineOptions(options);
+  const cache = defaultPipelineCacheFor(resolvedOptions.binding);
+  const key = defaultPipelineCacheKey(resolvedOptions);
   const cached = cache.get(key);
   if (cached !== undefined) {
     return cached;
   }
-  const pipeline = createNativePipelineFromResolvedDefaultPackage({
-    binding: resolvedBinding,
-    ...(packagePath !== undefined ? { packagePath } : {}),
-  });
+  const pipeline =
+    createNativePipelineFromResolvedDefaultPackage(resolvedOptions);
   cache.set(key, pipeline);
   return pipeline;
 };
 
 export const preloadDefaultNativePipeline = getDefaultNativePipeline;
+
+export const preloadDefaultNativePipelineAsync = (
+  options: DefaultNativePipelinePackageOptions = {},
+): Promise<PreparedNativePipeline> => {
+  const resolvedOptions = resolveDefaultNativePipelineOptions(options);
+  const cache = defaultPipelineCacheFor(resolvedOptions.binding);
+  const key = defaultPipelineCacheKey(resolvedOptions);
+  const cached = cache.get(key);
+  if (cached !== undefined) {
+    return Promise.resolve(cached);
+  }
+
+  const inflightCache = defaultPipelineInflightCacheFor(
+    resolvedOptions.binding,
+  );
+  const inflight = inflightCache.get(key);
+  if (inflight !== undefined) {
+    return inflight;
+  }
+
+  const promise = createNativePipelineFromResolvedDefaultPackageAsync(
+    resolvedOptions,
+  )
+    .then((pipeline) => {
+      cache.set(key, pipeline);
+      return pipeline;
+    })
+    .finally(() => {
+      inflightCache.delete(key);
+    });
+  inflightCache.set(key, promise);
+  return promise;
+};
+
+const resolveDefaultNativePipelineOptions = ({
+  binding,
+  packagePath,
+  expectedVersion,
+  ...loadOptions
+}: DefaultNativePipelinePackageOptions = {}): ResolvedDefaultNativePipelineOptions => {
+  const resolvedBinding =
+    binding ??
+    loadNativeAnonymizeBinding({
+      ...loadOptions,
+      ...(expectedVersion !== undefined ? { expectedVersion } : {}),
+    });
+  if (binding && expectedVersion !== undefined) {
+    assertNativeBindingVersion({ binding, expectedVersion });
+  }
+  return {
+    binding: resolvedBinding,
+    ...(packagePath !== undefined ? { packagePath } : {}),
+  };
+};
 
 const createNativePipelineFromResolvedDefaultPackage = ({
   binding,
@@ -281,6 +327,20 @@ const createNativePipelineFromResolvedDefaultPackage = ({
     packagePath === undefined
       ? readDefaultNativePipelinePackageFile()
       : readNativePipelinePackageFile(packagePath);
+  return createNativePipelineFromPackage({
+    binding,
+    packageBytes,
+  });
+};
+
+const createNativePipelineFromResolvedDefaultPackageAsync = async ({
+  binding,
+  packagePath,
+}: ResolvedDefaultNativePipelineOptions): Promise<PreparedNativePipeline> => {
+  const packageBytes =
+    packagePath === undefined
+      ? await readDefaultNativePipelinePackageFileAsync()
+      : await readNativePipelinePackageFileAsync(packagePath);
   return createNativePipelineFromPackage({
     binding,
     packageBytes,
@@ -313,6 +373,18 @@ const defaultPipelineCacheFor = (
   }
   const created = new Map<string, PreparedNativePipeline>();
   defaultNativePipelineCache.set(binding, created);
+  return created;
+};
+
+const defaultPipelineInflightCacheFor = (
+  binding: NativeAnonymizeBinding,
+): Map<string, Promise<PreparedNativePipeline>> => {
+  const cached = defaultNativePipelineInflightCache.get(binding);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const created = new Map<string, Promise<PreparedNativePipeline>>();
+  defaultNativePipelineInflightCache.set(binding, created);
   return created;
 };
 
