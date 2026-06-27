@@ -1,4 +1,4 @@
-import type { Match } from "@stll/text-search";
+import type { Match, PatternEntry } from "@stll/text-search";
 import type { Validator } from "@stll/stdnum";
 import {
   at,
@@ -175,10 +175,23 @@ type RegexDef = {
   label: string;
   score: number;
   minByteLength?: number;
+  lazy?: true;
+  prefilterAny?: readonly string[];
+  prefilterCaseInsensitive?: boolean;
+  prefilterRegex?: RegExp;
   validator?: Validator;
   validatorId?: string;
   validatorInput?: (text: string) => string;
   validatorInputKind?: "digits-only" | "crypto-wallet-candidate";
+};
+
+type RegexPatternEntry = {
+  pattern: string;
+  literal?: false;
+  lazy?: true;
+  prefilterAny?: readonly string[];
+  prefilterCaseInsensitive?: boolean;
+  prefilterRegex?: RegExp;
 };
 
 type AmountWordsConfig = {
@@ -625,6 +638,9 @@ const EMAIL: RegexDef = {
   pattern: `\\b[\\w.+\\-]+@[\\w\\-]+(?:\\.[\\w\\-]+)+\\b`,
   label: "email address",
   score: 1,
+  lazy: true,
+  prefilterAny: ["@"],
+  prefilterCaseInsensitive: false,
 };
 
 // [^\S\n] instead of \s: separators must not
@@ -669,6 +685,9 @@ const TEL_PREFIX_PHONE: RegexDef = {
   label: "phone number",
   score: 0.95,
   minByteLength: MIN_PHONE_LENGTH,
+  lazy: true,
+  prefilterAny: ["tel", "telefon"],
+  prefilterCaseInsensitive: true,
 };
 
 /**
@@ -800,6 +819,9 @@ const ES_POSTAL: RegexDef = {
     `[^\\S\\n]{0,3}:?[^\\S\\n]{0,3}\\d{5}\\b`,
   label: "address",
   score: 0.7,
+  lazy: true,
+  prefilterAny: ["C.P", "CP", "código postal", "codigo postal"],
+  prefilterCaseInsensitive: true,
 };
 
 // Spanish DNI: 8 digits + 1 letter. Letter is a
@@ -843,6 +865,9 @@ const NHS_NUMBER_CONTEXT: RegexDef = {
   validator: gb.nhs,
   validatorInput: DIGITS_ONLY_VALIDATOR_INPUT,
   validatorInputKind: "digits-only",
+  lazy: true,
+  prefilterAny: ["NHS", "National Health Service"],
+  prefilterCaseInsensitive: true,
 };
 
 const PASSPORT_CONTEXT: RegexDef = {
@@ -856,6 +881,9 @@ const PASSPORT_CONTEXT: RegexDef = {
     `(?:[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b`,
   label: "passport number",
   score: 0.96,
+  lazy: true,
+  prefilterAny: ["passport"],
+  prefilterCaseInsensitive: true,
 };
 
 const FR_CNI_CONTEXT: RegexDef = {
@@ -870,6 +898,9 @@ const FR_CNI_CONTEXT: RegexDef = {
     `)\\b`,
   label: "identity card number",
   score: 0.96,
+  lazy: true,
+  prefilterAny: ["CNI", "carte nationale", "French national identity card"],
+  prefilterCaseInsensitive: true,
 };
 
 const CY_TIC_CONTEXT: RegexDef = {
@@ -881,6 +912,9 @@ const CY_TIC_CONTEXT: RegexDef = {
     `\\d{8}[A-Za-z]\\b`,
   label: "tax identification number",
   score: 0.96,
+  lazy: true,
+  prefilterAny: ["TIC", "tax identification code"],
+  prefilterCaseInsensitive: true,
 };
 
 const CY_ID_CARD_CONTEXT: RegexDef = {
@@ -892,6 +926,9 @@ const CY_ID_CARD_CONTEXT: RegexDef = {
     `\\d{6,8}\\b`,
   label: "identity card number",
   score: 0.96,
+  lazy: true,
+  prefilterAny: ["Cyprus", "Cypriot", "identity card", "ID card"],
+  prefilterCaseInsensitive: true,
 };
 
 const UK_DRIVING_LICENCE_CONTEXT: RegexDef = {
@@ -903,6 +940,9 @@ const UK_DRIVING_LICENCE_CONTEXT: RegexDef = {
     `[A-Za-z9]{5}\\d{6}[A-Za-z0-9]{2}\\d[A-Za-z]{2}\\b`,
   label: "identity card number",
   score: 0.96,
+  lazy: true,
+  prefilterAny: ["driving licence", "driving license"],
+  prefilterCaseInsensitive: true,
 };
 
 const US_DRIVER_LICENSE_CONTEXT: RegexDef = {
@@ -917,6 +957,20 @@ const US_DRIVER_LICENSE_CONTEXT: RegexDef = {
     `)\\b`,
   label: "identity card number",
   score: 0.8,
+  lazy: true,
+  prefilterAny: [
+    "driver license",
+    "driver licence",
+    "drivers license",
+    "drivers licence",
+    "driver's license",
+    "driver's licence",
+    "driver’s license",
+    "driver’s licence",
+    "driving license",
+    "driving licence",
+  ],
+  prefilterCaseInsensitive: true,
 };
 
 const MEDICAL_LICENSE_CONTEXT: RegexDef = {
@@ -931,6 +985,18 @@ const MEDICAL_LICENSE_CONTEXT: RegexDef = {
     `(?:[A-Za-z]{0,3}\\d{5,8}|\\d{2}[A-Za-z]\\d{4}[A-Za-z])\\b`,
   label: "registration number",
   score: 0.85,
+  lazy: true,
+  prefilterAny: [
+    "GMC",
+    "NMC",
+    "medical",
+    "physician",
+    "doctor",
+    "surgeon",
+    "nursing",
+    "nurse",
+  ],
+  prefilterCaseInsensitive: true,
 };
 
 const CRYPTO_WALLET_CANDIDATE = crypto.wallet.candidatePattern ?? "(?!)";
@@ -950,6 +1016,9 @@ const CRYPTO_WALLET_ADDRESS: RegexDef = {
   validator: crypto.wallet,
   validatorInput: getCryptoWalletCandidate,
   validatorInputKind: "crypto-wallet-candidate",
+  lazy: true,
+  prefilterAny: ["0x", "bc1", "BTC", "Bitcoin", "crypto", "wallet", "address"],
+  prefilterCaseInsensitive: true,
 };
 
 const AU_ABN_FORMATTED: RegexDef = {
@@ -973,6 +1042,9 @@ const NO_MVA_FORMATTED: RegexDef = {
   label: "tax identification number",
   score: 0.95,
   validator: no.mva,
+  lazy: true,
+  prefilterAny: ["MVA"],
+  prefilterCaseInsensitive: false,
 };
 
 const US_EIN_FORMATTED: RegexDef = {
@@ -1035,6 +1107,9 @@ const BR_RG_WITH_SSP: RegexDef = {
     `[^\\S\\n]+SSP(?:/[A-Z]{2})?\\b`,
   label: "national identification number",
   score: 0.95,
+  lazy: true,
+  prefilterAny: ["SSP"],
+  prefilterCaseInsensitive: false,
 };
 
 // Brazilian OAB (lawyer registration). Format:
@@ -1047,6 +1122,9 @@ const BR_OAB: RegexDef = {
     `(?:\\d{1,3}(?:\\.\\d{3})+|\\d{4,6})\\b`,
   label: "registration number",
   score: 0.95,
+  lazy: true,
+  prefilterAny: ["OAB/"],
+  prefilterCaseInsensitive: false,
 };
 
 // URL: scheme + host + optional port + path + query +
@@ -1064,6 +1142,9 @@ const URL: RegexDef = {
     `(?:[/?#][^\\s)\\]>]*[^\\s.,;:!?)\\]>])?`,
   label: "url",
   score: 1,
+  lazy: true,
+  prefilterAny: ["http://", "https://", "http:", "https:", "www."],
+  prefilterCaseInsensitive: false,
 };
 
 // Bare domain: no protocol/www prefix, ends with a
@@ -1177,6 +1258,9 @@ const TIME_12H: RegexDef = {
     `(?=[\\s,;!?)]|$)`,
   label: "date",
   score: 0.9,
+  lazy: true,
+  prefilterAny: ["am", "pm", "a.m", "p.m"],
+  prefilterCaseInsensitive: true,
 };
 
 const PERCENT_NUMBER_BODY = `(?:\\d{1,3}(?:[.,]\\d{3})+(?:[.,]\\d{1,4})?|\\d+(?:[.,]\\d{1,4})?)`;
@@ -1229,6 +1313,9 @@ const PERCENT_RATE: RegexDef = {
     `)(?![\\p{L}\\p{N}_])`,
   label: "monetary amount",
   score: 0.85,
+  lazy: true,
+  prefilterAny: ["%"],
+  prefilterCaseInsensitive: false,
 };
 
 // ── Collected definitions ────────────────────────────
@@ -1303,6 +1390,36 @@ const ALL_REGEX_DEFS: readonly RegexDef[] = [
 export const REGEX_PATTERNS: readonly string[] = ALL_REGEX_DEFS.map(
   (d) => d.pattern,
 );
+
+const toRegexPatternEntry = (definition: RegexDef): PatternEntry => {
+  if (
+    definition.lazy === undefined &&
+    definition.prefilterAny === undefined &&
+    definition.prefilterCaseInsensitive === undefined &&
+    definition.prefilterRegex === undefined
+  ) {
+    return definition.pattern;
+  }
+
+  const entry: RegexPatternEntry = { pattern: definition.pattern };
+  if (definition.lazy !== undefined) {
+    entry.lazy = definition.lazy;
+  }
+  if (definition.prefilterAny !== undefined) {
+    entry.prefilterAny = definition.prefilterAny;
+  }
+  if (definition.prefilterCaseInsensitive !== undefined) {
+    entry.prefilterCaseInsensitive = definition.prefilterCaseInsensitive;
+  }
+  if (definition.prefilterRegex !== undefined) {
+    entry.prefilterRegex = definition.prefilterRegex;
+  }
+  return entry;
+};
+
+/** Static regex entries with compile-time prefilter hints. */
+export const REGEX_PATTERN_ENTRIES: readonly PatternEntry[] =
+  ALL_REGEX_DEFS.map(toRegexPatternEntry);
 
 /** Parallel metadata. Index = pattern index. */
 export const REGEX_META: readonly RegexMeta[] = ALL_REGEX_DEFS.map(
