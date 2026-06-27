@@ -1,5 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
+use smallvec::SmallVec;
+
 use crate::byte_offsets::ByteOffsets;
 use crate::resolution::{DetectionSource, PipelineEntity, SourceDetail};
 use crate::types::{Error, Result, SearchMatch};
@@ -109,8 +111,10 @@ pub struct DenyListMatchData {
 )]
 pub struct StringGroups {
   table: Vec<String>,
-  groups: Vec<Vec<u32>>,
+  groups: Vec<StringGroupIndexes>,
 }
+
+type StringGroupIndexes = SmallVec<[u32; 2]>;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct StringGroup<'a> {
@@ -131,7 +135,7 @@ impl StringGroups {
           .map(|value| {
             string_table_index(value, &mut table, &mut table_indexes)
           })
-          .collect()
+          .collect::<StringGroupIndexes>()
       })
       .collect();
 
@@ -160,6 +164,11 @@ impl StringGroups {
       }
     }
 
+    let groups = groups
+      .into_iter()
+      .map(StringGroupIndexes::from_vec)
+      .collect();
+
     Ok(Self { table, groups })
   }
 
@@ -167,7 +176,7 @@ impl StringGroups {
   pub fn empty_groups(len: usize) -> Self {
     Self {
       table: Vec::new(),
-      groups: vec![Vec::new(); len],
+      groups: vec![StringGroupIndexes::new(); len],
     }
   }
 
