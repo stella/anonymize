@@ -12,10 +12,13 @@ describe("dictionary bundle scoping", () => {
     expect(Object.keys(bundle.citiesByCountry)).toContain("CZ");
   });
 
-  test("unsupported name language scope falls back to packaged names", async () => {
+  test("unsupported non-empty name language scope keeps names empty", async () => {
     const bundle = await loadDictionaryBundle({ nameLanguages: ["pt-br"] });
 
-    expect(Object.keys(bundle.firstNames).length).toBeGreaterThan(0);
-    expect(Object.keys(bundle.surnames).length).toBeGreaterThan(0);
+    expect(bundle.firstNames).toEqual({});
+    expect(bundle.surnames).toEqual({});
+    expect(Object.values(bundle.denyListMeta)).not.toContainEqual(
+      expect.objectContaining({ category: "Names" }),
+    );
   });
 });
