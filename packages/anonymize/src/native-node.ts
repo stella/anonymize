@@ -120,11 +120,11 @@ export const loadNativeAnonymizeBinding = (
 
 export const readNativePipelinePackageFile = (
   packagePath: string,
-): Uint8Array => new Uint8Array(readFileSync(packagePath));
+): Uint8Array => readFileSync(packagePath);
 
 export const readNativePipelinePackageFileAsync = async (
   packagePath: string,
-): Promise<Uint8Array> => new Uint8Array(await readFile(packagePath));
+): Promise<Uint8Array> => readFile(packagePath);
 
 export const native_package_version = (
   options: NativeSdkOptions = {},
@@ -209,7 +209,7 @@ export const readDefaultNativePipelinePackageFile = ({
 }: DefaultNativePipelinePackageFileOptions = {}): Uint8Array => {
   const packageUrl = defaultNativePipelinePackageUrl(language);
   try {
-    return new Uint8Array(readFileSync(packageUrl));
+    return readFileSync(packageUrl);
   } catch (error) {
     throw new Error(
       `${defaultNativePipelinePackageDescription(language)} is unavailable: ${formatLoadError(error)}`,
@@ -222,7 +222,7 @@ export const readDefaultNativePipelinePackageFileAsync = async ({
 }: DefaultNativePipelinePackageFileOptions = {}): Promise<Uint8Array> => {
   const packageUrl = defaultNativePipelinePackageUrl(language);
   try {
-    return new Uint8Array(await readFile(packageUrl));
+    return await readFile(packageUrl);
   } catch (error) {
     throw new Error(
       `${defaultNativePipelinePackageDescription(language)} is unavailable: ${formatLoadError(error)}`,
