@@ -52,8 +52,11 @@ function runScenario({ name, compressed }) {
     offlinePackageBuildMs: build.timings.nativePackagePrepareMs,
     firstPackageReadMs: load.timings.nativePackageReadMs,
     firstPrepareMs: load.timings.nativePrepareMs,
+    setupBeforeClickMs:
+      load.timings.nativePackageReadMs + load.timings.nativePrepareMs,
     cachedPrepareMs: load.timings.nativeCachedPrepareAvgMs,
     firstRunMs: load.timings.coldRunMs,
+    preloadedClickMs: load.timings.coldRunMs,
     firstTouchMs: load.timings.nativeFirstTouchMs,
     warmClickMs: load.timings.nativeWarmClickMs,
     prepareTopStages: nativeDiagnostics?.prepare?.topStages ?? [],

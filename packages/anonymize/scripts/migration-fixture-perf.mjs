@@ -554,6 +554,8 @@ function describeNativeTimingScenario({
     firstPrepareMs: nativePrepareMs,
     cachedPrepareMs: nativeCachedPrepareAvgMs,
     firstRunMs: coldRunMs,
+    setupBeforeClickMs: roundMs(nativePackageReadMs + nativePrepareMs),
+    preloadedClickMs: coldRunMs,
     firstTouchMs: roundMs(nativePackageReadMs + nativePrepareMs + coldRunMs),
     warmClickMs: warmAvgMs,
   };
