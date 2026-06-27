@@ -31,10 +31,10 @@ console.log(result.redaction.redactedText);
 
 Call `getDefaultNativePipeline()` once during service startup and reuse the returned anonymizer. The package ships with a prepared native package, so the normal request path avoids rebuilding search automata. Use `preloadDefaultNativePipeline()` or `preloadDefaultNativePipelineAsync()` when the first document should not pay lazy regex warm-up.
 
-If your deployment knows the document language up front, build scoped package artifacts and select them at startup:
+If your deployment knows the document language up front, select a scoped package at startup. The build emits `en`, `cs`, and `de` scoped packages by default, and `STELLA_ANONYMIZE_NATIVE_PACKAGE_LANGUAGES` can replace that list or be set to an empty value to build only the all-language package:
 
 ```bash
-STELLA_ANONYMIZE_NATIVE_PACKAGE_LANGUAGES=en,cs bun run build
+STELLA_ANONYMIZE_NATIVE_PACKAGE_LANGUAGES=en,cs,fr bun run build
 ```
 
 ```ts

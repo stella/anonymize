@@ -1,12 +1,16 @@
 import { execFileSync } from "node:child_process";
-import { copyFileSync, existsSync } from "node:fs";
+import { copyFileSync, existsSync, readdirSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const repoRoot = dirname(dirname(packageRoot));
+const DEFAULT_SCOPED_PACKAGE_LANGUAGES = ["cs", "de", "en"];
+const SCOPED_PACKAGE_PATTERN =
+  /^native-pipeline\.[a-z0-9]+(?:-[a-z0-9]+)*\.stlanonpkg$/u;
 const scopedPackageLanguages = languageListFromEnv(
   process.env.STELLA_ANONYMIZE_NATIVE_PACKAGE_LANGUAGES,
+  DEFAULT_SCOPED_PACKAGE_LANGUAGES,
 );
 
 const sourceByPlatform = {
@@ -35,6 +39,7 @@ if (!existsSync(source)) {
 }
 
 copyFileSync(source, join(packageRoot, "stella_anonymize_napi.node"));
+removeScopedNativePipelinePackages();
 
 buildNativePipelinePackage([
   "--out",
@@ -66,8 +71,20 @@ function buildNativePipelinePackage(args) {
   );
 }
 
-function languageListFromEnv(value) {
-  if (value === undefined || value.trim().length === 0) {
+function removeScopedNativePipelinePackages() {
+  for (const entry of readdirSync(packageRoot)) {
+    if (!SCOPED_PACKAGE_PATTERN.test(entry)) {
+      continue;
+    }
+    rmSync(join(packageRoot, entry), { force: true });
+  }
+}
+
+function languageListFromEnv(value, defaultLanguages) {
+  if (value === undefined) {
+    return defaultLanguages;
+  }
+  if (value.trim().length === 0) {
     return [];
   }
   const languages = value
