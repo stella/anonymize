@@ -9,10 +9,10 @@ use stella_anonymize_core::{
   DiagnosticEventKind, DiagnosticStage, FuzzySearchOptions, GazetteerMatchData,
   HotwordRule, HotwordRuleData, LegalFormData, LiteralSearchOptions,
   MagnitudeSuffixData, MonetaryData, NameCorpusData, OperatorConfig,
-  OperatorType, PatternSlice, PreparedSearchConfig, PreparedSearchSlices,
-  RegexMatchMeta, RegexSearchOptions, SearchEngine, SearchOptions,
-  SearchPattern, ShareQuantityTermData, SigningPlaceGuardData, SourceDetail,
-  StaticRedactionDiagnosticResult, StaticRedactionDiagnostics,
+  OperatorType, PatternSlice, PreparedSearchArtifacts, PreparedSearchConfig,
+  PreparedSearchSlices, RegexMatchMeta, RegexSearchOptions, SearchEngine,
+  SearchOptions, SearchPattern, ShareQuantityTermData, SigningPlaceGuardData,
+  SourceDetail, StaticRedactionDiagnosticResult, StaticRedactionDiagnostics,
   StaticRedactionResult, StringGroups, TriggerData, TriggerRule,
   TriggerStrategy, TriggerValidation, WrittenAmountPatternData, ZoneData,
   ZonePatternData, ZoneSigningClauseData,
@@ -592,6 +592,15 @@ pub struct CorePreparedSearchPackageView<'a> {
   pub artifacts: Cow<'a, [u8]>,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct DecodedCorePreparedSearchPackage {
+  pub config: PreparedSearchConfig,
+  pub artifacts: PreparedSearchArtifacts,
+  pub package_decode_timings: PreparedSearchPackageDecodeTimings,
+  pub artifacts_decode: u64,
+  pub artifacts_bytes: usize,
+}
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct PreparedSearchPackageDecodeTimings {
   pub verify: Option<u64>,
@@ -810,6 +819,31 @@ pub fn prepared_search_core_package_view_from_bytes_with_timings(
   let payload = parts.into_verified_payload(&mut timings)?;
   let package = core_package_view_from_payload(payload, &mut timings)?;
   Ok((package, timings))
+}
+
+pub fn prepared_search_core_package_decode_from_bytes_with_timings(
+  bytes: &[u8],
+) -> Result<DecodedCorePreparedSearchPackage> {
+  let mut package_decode_timings =
+    PreparedSearchPackageDecodeTimings::default();
+  let parts = prepared_search_package_parts(bytes)?;
+  if !parts.is_core() {
+    return Err(invalid_prepared_search_package(
+      "package does not contain a core payload",
+    ));
+  }
+  let payload = parts.into_verified_payload(&mut package_decode_timings)?;
+  let slices = core_package_payload_slices(payload.as_ref())?;
+  let (config, config_decode, artifacts, artifacts_decode) =
+    decode_core_package_parts(slices.config, slices.artifacts)?;
+  package_decode_timings.config_decode = Some(config_decode);
+  Ok(DecodedCorePreparedSearchPackage {
+    config,
+    artifacts,
+    package_decode_timings,
+    artifacts_decode,
+    artifacts_bytes: slices.artifacts.len(),
+  })
 }
 
 impl From<BindingPreparedSearchConfig> for BinaryPreparedSearchConfig {
@@ -1078,8 +1112,42 @@ fn core_package_view_from_payload<'a>(
   payload: Cow<'a, [u8]>,
   timings: &mut PreparedSearchPackageDecodeTimings,
 ) -> Result<CorePreparedSearchPackageView<'a>> {
+  let (config, config_decode, artifacts_start) = {
+    let payload_slices = core_package_payload_slices(payload.as_ref())?;
+    let (config, config_decode) =
+      decode_core_package_config(payload_slices.config)?;
+    (config, config_decode, payload_slices.artifacts_start)
+  };
+  timings.config_decode = Some(config_decode);
+
+  let artifacts = match payload {
+    Cow::Borrowed(bytes) => Cow::Borrowed(
+      bytes
+        .get(artifacts_start..)
+        .ok_or_else(|| invalid_prepared_search_package("missing artifacts"))?,
+    ),
+    Cow::Owned(bytes) => Cow::Owned(
+      bytes
+        .get(artifacts_start..)
+        .ok_or_else(|| invalid_prepared_search_package("missing artifacts"))?
+        .to_vec(),
+    ),
+  };
+
+  Ok(CorePreparedSearchPackageView { config, artifacts })
+}
+
+struct CorePackagePayloadSlices<'a> {
+  config: &'a [u8],
+  artifacts: &'a [u8],
+  artifacts_start: usize,
+}
+
+fn core_package_payload_slices(
+  payload: &[u8],
+) -> Result<CorePackagePayloadSlices<'_>> {
   let len_end = std::mem::size_of::<u64>();
-  let len_bytes = payload.as_ref().get(..len_end).ok_or_else(|| {
+  let len_bytes = payload.get(..len_end).ok_or_else(|| {
     invalid_prepared_search_package("truncated config length")
   })?;
   let len_array = <[u8; 8]>::try_from(len_bytes)
@@ -1089,36 +1157,66 @@ fn core_package_view_from_payload<'a>(
   let config_end = len_end
     .checked_add(config_len)
     .ok_or_else(|| invalid_prepared_search_package("config length overflow"))?;
-  let config_bytes = payload
-    .as_ref()
+  let config = payload
     .get(len_end..config_end)
     .ok_or_else(|| invalid_prepared_search_package("truncated config"))?;
+  let artifacts = payload
+    .get(config_end..)
+    .ok_or_else(|| invalid_prepared_search_package("missing artifacts"))?;
+  Ok(CorePackagePayloadSlices {
+    config,
+    artifacts,
+    artifacts_start: config_end,
+  })
+}
+
+fn decode_core_package_parts(
+  config_bytes: &[u8],
+  artifacts_bytes: &[u8],
+) -> Result<(PreparedSearchConfig, u64, PreparedSearchArtifacts, u64)> {
+  std::thread::scope(|scope| {
+    let config_handle =
+      scope.spawn(|| decode_core_package_config(config_bytes));
+    let artifacts_handle =
+      scope.spawn(|| decode_core_package_artifacts(artifacts_bytes));
+    let (config, config_decode) = join_core_package_decode(config_handle)?;
+    let (artifacts, artifacts_decode) =
+      join_core_package_decode(artifacts_handle)?;
+    Ok((config, config_decode, artifacts, artifacts_decode))
+  })
+}
+
+fn decode_core_package_config(
+  config_bytes: &[u8],
+) -> Result<(PreparedSearchConfig, u64)> {
   let config_decode_start = std::time::Instant::now();
   let (config, read) = bincode::serde::decode_from_slice::<
     PreparedSearchConfig,
     _,
   >(config_bytes, package_bincode_config())
   .map_err(|error| invalid_prepared_search_package(error.to_string()))?;
-  timings.config_decode = Some(elapsed_us(config_decode_start));
+  let elapsed = elapsed_us(config_decode_start);
   if read != config_bytes.len() {
     return Err(invalid_prepared_search_package("trailing config data"));
   }
+  Ok((config, elapsed))
+}
 
-  let artifacts = match payload {
-    Cow::Borrowed(bytes) => Cow::Borrowed(
-      bytes
-        .get(config_end..)
-        .ok_or_else(|| invalid_prepared_search_package("missing artifacts"))?,
-    ),
-    Cow::Owned(bytes) => Cow::Owned(
-      bytes
-        .get(config_end..)
-        .ok_or_else(|| invalid_prepared_search_package("missing artifacts"))?
-        .to_vec(),
-    ),
-  };
+fn decode_core_package_artifacts(
+  artifacts_bytes: &[u8],
+) -> Result<(PreparedSearchArtifacts, u64)> {
+  let artifacts_decode_start = std::time::Instant::now();
+  let artifacts = PreparedSearchArtifacts::from_bytes(artifacts_bytes)
+    .map_err(|error| invalid_prepared_search_package(error.to_string()))?;
+  Ok((artifacts, elapsed_us(artifacts_decode_start)))
+}
 
-  Ok(CorePreparedSearchPackageView { config, artifacts })
+fn join_core_package_decode<T>(
+  handle: std::thread::ScopedJoinHandle<'_, Result<T>>,
+) -> Result<T> {
+  handle.join().map_err(|_| {
+    invalid_prepared_search_package("core package decode panicked")
+  })?
 }
 
 fn core_literal_patterns_are_identity_mapped(
@@ -2487,6 +2585,7 @@ mod tests {
     PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION,
     PREPARED_SEARCH_PACKAGE_DIGEST_BYTES, PREPARED_SEARCH_PACKAGE_ZSTD_LEVEL,
     operator_config_from_binding, prepared_search_config_from_binding,
+    prepared_search_core_package_decode_from_bytes_with_timings,
     prepared_search_core_package_from_bytes,
     prepared_search_core_package_payload_to_bytes,
     prepared_search_core_package_to_bytes,
@@ -2500,7 +2599,7 @@ mod tests {
   };
   use stella_anonymize_core::{
     DiagnosticEvent, DiagnosticEventKind, DiagnosticStage,
-    StaticRedactionDiagnostics,
+    PreparedSearchArtifacts, StaticRedactionDiagnostics,
   };
 
   #[test]
@@ -2744,6 +2843,39 @@ mod tests {
     );
     assert!(
       timings.config_decode.is_some(),
+      "core config decode timing should be reported"
+    );
+  }
+
+  #[test]
+  fn prepared_search_core_compressed_package_decodes_config_and_artifacts() {
+    let config =
+      prepared_search_config_from_binding(package_test_config()).unwrap();
+    let artifact_set = PreparedSearchArtifacts::default();
+    let artifact_bytes = artifact_set.to_bytes().unwrap();
+
+    let bytes = prepared_search_core_package_to_compressed_bytes(
+      &config,
+      &artifact_bytes,
+    )
+    .unwrap();
+    let decoded =
+      prepared_search_core_package_decode_from_bytes_with_timings(&bytes)
+        .unwrap();
+
+    assert_eq!(decoded.config.literal_patterns, Vec::new());
+    assert_eq!(decoded.artifacts, artifact_set);
+    assert_eq!(decoded.artifacts_bytes, artifact_bytes.len());
+    assert!(
+      decoded.package_decode_timings.verify.is_some(),
+      "compressed package digest timing should be reported"
+    );
+    assert!(
+      decoded.package_decode_timings.decompress.is_some(),
+      "compressed package decompression timing should be reported"
+    );
+    assert!(
+      decoded.package_decode_timings.config_decode.is_some(),
       "core config decode timing should be reported"
     );
   }

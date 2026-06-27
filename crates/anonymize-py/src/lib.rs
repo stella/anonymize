@@ -5,9 +5,10 @@ use stella_anonymize_adapter_contract::{
   BindingOperatorConfig, BindingOperatorEntry, BindingPipelineEntity,
   BindingPreparedSearchConfig, BindingRedactionEntry, BindingRedactionResult,
   BindingStaticRedactionResult, ContractError, operator_config_from_binding,
-  prepared_search_config_from_binding, prepared_search_core_package_to_bytes,
+  prepared_search_config_from_binding,
+  prepared_search_core_package_decode_from_bytes_with_timings,
+  prepared_search_core_package_to_bytes,
   prepared_search_core_package_to_compressed_bytes,
-  prepared_search_core_package_view_from_bytes,
   prepared_search_package_from_bytes, prepared_search_package_has_core_payload,
   static_redaction_diagnostic_result_to_utf16_binding,
   static_redaction_diagnostics_to_binding, static_redaction_result_to_binding,
@@ -99,14 +100,14 @@ impl PyPreparedSearch {
   #[staticmethod]
   fn from_prepared_package_bytes(package_bytes: &[u8]) -> PyResult<Self> {
     if prepared_search_package_has_core_payload(package_bytes) {
-      let package = prepared_search_core_package_view_from_bytes(package_bytes)
+      let package =
+        prepared_search_core_package_decode_from_bytes_with_timings(
+          package_bytes,
+        )
         .map_err(|error| to_py_contract_error(&error))?;
-      let artifacts =
-        PreparedSearchArtifacts::from_bytes(package.artifacts.as_ref())
-          .map_err(|error| to_py_core_error(&error))?;
       let result = CorePreparedSearch::new_with_artifacts_diagnostics(
         package.config,
-        &artifacts,
+        &package.artifacts,
       )
       .map_err(|error| to_py_core_error(&error))?;
       return Ok(Self {
