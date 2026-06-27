@@ -1,4 +1,5 @@
-import type { NerInferenceFn, Entity } from "../pipeline";
+import type { NerInferenceFn } from "../pipeline";
+import type { Entity } from "../types";
 import { Gliner2Client, type Gliner2ClientOptions } from "./client";
 import { expandLabels, collapseLabel } from "./label-map";
 import { DETECTION_SOURCES } from "../constants";
@@ -13,7 +14,12 @@ export const buildGliner2Inference = (
     if (modelLabels.length === 0) return [];
 
     const pipelineLabelSet = new Set(labels);
-    const response = await client.infer(fullText, modelLabels, threshold, signal);
+    const response = await client.infer(
+      fullText,
+      modelLabels,
+      threshold,
+      signal,
+    );
 
     return response.entities.map(
       (e): Entity => ({

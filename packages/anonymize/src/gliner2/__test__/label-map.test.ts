@@ -32,7 +32,10 @@ describe("expandLabels", () => {
 
 describe("collapseLabel", () => {
   it("prefers requested pipeline label on collision", () => {
-    const result = collapseLabel("national_id_number", new Set(["social security number"]));
+    const result = collapseLabel(
+      "national_id_number",
+      new Set(["social security number"]),
+    );
     expect(result).toBe("social security number");
   });
 

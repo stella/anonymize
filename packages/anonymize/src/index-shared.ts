@@ -195,7 +195,12 @@ export type { EntityResult, RawInferenceResult } from "./gliner/types";
 export { buildGliner2Inference } from "./gliner2/inference";
 export { Gliner2Client } from "./gliner2/client";
 export type { Gliner2ClientOptions } from "./gliner2/client";
-export type { InferRequest, InferResponse, EntityOutput, HealthResponse } from "./gliner2/types";
+export type {
+  InferRequest,
+  InferResponse,
+  EntityOutput,
+  HealthResponse,
+} from "./gliner2/types";
 
 // ── Utilities ─────────────────────────────────────
 export {

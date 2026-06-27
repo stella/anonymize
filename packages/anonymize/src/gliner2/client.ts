@@ -1,4 +1,5 @@
 import type { InferRequest, InferResponse, HealthResponse } from "./types";
+import { spawn, type ChildProcess } from "node:child_process";
 
 export type Gliner2ClientOptions = {
   binaryPath?: string;
@@ -9,7 +10,7 @@ export type Gliner2ClientOptions = {
 };
 
 export class Gliner2Client {
-  private process: Bun.Process | null = null;
+  private process: ChildProcess | null = null;
   private port: number | null = null;
   private baseUrl: string | null = null;
   private opts: Required<Gliner2ClientOptions>;
@@ -36,20 +37,20 @@ export class Gliner2Client {
     if (this.opts.variant) args.push("--variant", this.opts.variant);
     args.push("--model", this.opts.modelId);
 
-    this.process = Bun.spawn([binPath, ...args], {
-      stdout: "pipe",
-      stderr: "inherit",
+    this.process = spawn(binPath, args, {
+      stdio: ["ignore", "pipe", "inherit"],
     });
 
-    const reader = this.process.stdout.getReader();
+    const stdout = this.process.stdout;
+    if (!stdout) {
+      throw new Error("Failed to start gliner2-server: no stdout");
+    }
+
     const decoder = new TextDecoder();
     let buffer = "";
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
+    for await (const chunk of stdout) {
+      buffer += decoder.decode(chunk, { stream: true });
       const lines = buffer.split("\n");
 
       for (const line of lines) {
@@ -67,7 +68,7 @@ export class Gliner2Client {
       }
 
       if (this.baseUrl) break;
-      buffer = lines[lines.length - 1] ?? "";
+      buffer = lines.at(-1) ?? "";
     }
 
     if (!this.baseUrl) {
@@ -88,10 +89,12 @@ export class Gliner2Client {
       } catch {
         // Server not ready yet
       }
-      await Bun.sleep(500);
+      await new Promise((resolve) => setTimeout(resolve, 500));
     }
 
-    throw new Error("Model load timeout — check network and HuggingFace access");
+    throw new Error(
+      "Model load timeout — check network and HuggingFace access",
+    );
   }
 
   async infer(
@@ -107,7 +110,7 @@ export class Gliner2Client {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
-      signal,
+      signal: signal ?? null,
     });
 
     if (!res.ok) {
@@ -123,11 +126,19 @@ export class Gliner2Client {
 
     this.process.kill("SIGTERM");
 
-    const exited = Bun.sleep(5000).then(() => {
-      this.process?.kill("SIGKILL");
+    const exited = new Promise<void>((resolve) => {
+      const timeout = setTimeout(() => {
+        this.process?.kill("SIGKILL");
+        resolve();
+      }, 5000);
+
+      this.process.once("exit", () => {
+        clearTimeout(timeout);
+        resolve();
+      });
     });
 
-    await Promise.race([this.process.exited, exited]);
+    await exited;
 
     this.process = null;
     this.port = null;
@@ -139,7 +150,7 @@ export class Gliner2Client {
   }
 
   private async resolveBinary(): Promise<string> {
-    const envPath = process.env.ANONYMIZE_GLINER2_SERVER_PATH;
+    const envPath = process.env["ANONYMIZE_GLINER2_SERVER_PATH"];
     if (envPath) return envPath;
 
     throw new Error(
