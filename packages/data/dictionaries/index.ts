@@ -1033,9 +1033,7 @@ export const loadDictionaryBundle = async ({
   const countryScope = normalizeCountryCodes(countries);
   const scopedNameLanguages = normalizeNameLanguages(nameLanguages);
   const hasScopedNames =
-    nameLanguages !== undefined &&
-    nameLanguages.length > 0 &&
-    scopedNameLanguages.length > 0;
+    nameLanguages !== undefined && nameLanguages.length > 0;
   const dictionaryIds = ALL_DICTIONARY_IDS.filter((id) =>
     dictionaryIdIsInScope(id, countryScope, hasScopedNames),
   );
@@ -1053,7 +1051,7 @@ export const loadDictionaryBundle = async ({
   }
 
   const nameDictionaries = await loadNameDictionaries(
-    scopedNameLanguages.length > 0 ? scopedNameLanguages : undefined,
+    hasScopedNames ? scopedNameLanguages : undefined,
   );
   const requestedCityScope = cityCountries ?? countries;
   const cityScope =

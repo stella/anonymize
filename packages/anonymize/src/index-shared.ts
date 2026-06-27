@@ -65,6 +65,7 @@ export {
   normalize_for_search,
   prepareNativeSearchPackage,
   prepare_search_package,
+  redact_text,
   redact_text_json,
 } from "./native";
 export type {
@@ -84,6 +85,7 @@ export type {
   PreparedSearch as PreparedSearchInstance,
   SharedNativePreparedPackageOptions,
   SharedNativeDiagnosticsJsonOptions,
+  SharedNativeRedactTextOptions,
   SharedNativeRedactTextJsonOptions,
   SharedNativeSearchPackageOptions,
 } from "./native";
