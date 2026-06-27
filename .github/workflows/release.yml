@@ -2,6 +2,7 @@ name: Release
 
 env:
   NPM_VERSION: "11.11.1"
+  UV_VERSION: "0.10.1"
 
 on:
   push:
@@ -53,6 +54,19 @@ jobs:
 
       - name: Typecheck
         run: bun run typecheck
+
+      - name: Install uv
+        run: |
+          python3 -m pip install --user "uv==${{ env.UV_VERSION }}"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Python typecheck
+        run: bun run python:typecheck
+
+      - name: Python wheel
+        run: bun run python:wheel
+        env:
+          ANONYMIZE_PYTHON_WHEEL_PROFILE: release
 
       - name: Test
         run: bun run test

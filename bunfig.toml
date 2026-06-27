@@ -3,7 +3,7 @@ linker = "hoisted"
 # 5-day quarantine: reject package versions published
 # less than 5 days ago to mitigate supply chain attacks.
 minimumReleaseAge = 432_000
-# First-party Stella packages ship in coordinated release
+# First-party stella packages ship in coordinated release
 # waves, so allow fresh internal versions immediately.
 minimumReleaseAgeExcludes = [
   "@stll/typescript-config",

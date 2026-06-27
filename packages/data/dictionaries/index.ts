@@ -4,7 +4,7 @@
  * via dynamic imports and cached after first load.
  */
 
-type DenyListCategory =
+export type DenyListCategory =
   | "Names"
   | "Places"
   | "Addresses"
@@ -17,7 +17,7 @@ type DenyListCategory =
   | "Organizations"
   | "International";
 
-type DictionaryMeta = {
+export type DictionaryMeta = {
   label: string;
   category: DenyListCategory;
   country: string | null;
@@ -847,9 +847,9 @@ export const loadCityDictionary = async (
     if (!/^[A-Z]{2}$/.test(cc)) {
       return [];
     }
-    const mod = (await import(
-      `../dictionaries/cities/${cc}.json`
-    )) as JsonModule;
+    const mod = (await import(`../dictionaries/cities/${cc}.json`, {
+      with: { type: "json" },
+    })) as JsonModule;
     const entries = mod.default;
     cityCache.set(cc, entries);
     return entries;
@@ -886,7 +886,7 @@ export const CITY_DICTIONARY_META: DictionaryMeta = {
 
 // ── Name dictionaries (first + surnames by language) ─
 
-const NAME_LANGUAGES = [
+export const NAME_LANGUAGES = [
   "cs",
   "sk",
   "de",
@@ -901,6 +901,96 @@ const NAME_LANGUAGES = [
 ] as const;
 
 export type NameLanguage = (typeof NAME_LANGUAGES)[number];
+
+export type DictionaryBundle = {
+  firstNames: Record<string, readonly string[]>;
+  surnames: Record<string, readonly string[]>;
+  denyList: Record<string, readonly string[]>;
+  denyListMeta: Record<string, DictionaryMeta>;
+  cities: readonly string[];
+  citiesByCountry: Record<string, readonly string[]>;
+};
+
+export type LoadDictionaryBundleOptions = {
+  countries?: readonly string[];
+  cityCountries?: readonly string[];
+  nameLanguages?: readonly string[];
+};
+
+const DEFAULT_CITY_COUNTRIES = [
+  "AT",
+  "AU",
+  "BE",
+  "BG",
+  "BR",
+  "CA",
+  "CH",
+  "CZ",
+  "DE",
+  "DK",
+  "ES",
+  "FI",
+  "FR",
+  "GB",
+  "GR",
+  "HR",
+  "HU",
+  "IE",
+  "IT",
+  "LU",
+  "NL",
+  "NO",
+  "NZ",
+  "PL",
+  "PT",
+  "RO",
+  "SE",
+  "SI",
+  "SK",
+  "US",
+] as const;
+
+const normalizeCountryCodes = (
+  countries: readonly string[] | undefined,
+): Set<string> | null => {
+  if (countries === undefined || countries.length === 0) {
+    return null;
+  }
+  return new Set(countries.map((country) => country.toUpperCase()));
+};
+
+const isNameLanguage = (language: string): language is NameLanguage =>
+  NAME_LANGUAGES.some((supported) => supported === language);
+
+const normalizeNameLanguages = (
+  languages: readonly string[] | undefined,
+): NameLanguage[] => {
+  if (languages === undefined || languages.length === 0) {
+    return [...NAME_LANGUAGES];
+  }
+  const result: NameLanguage[] = [];
+  for (const language of languages) {
+    const normalized = language.toLowerCase();
+    if (isNameLanguage(normalized)) {
+      result.push(normalized);
+    }
+  }
+  return result;
+};
+
+const dictionaryIdIsInScope = (
+  id: DictionaryId,
+  countries: Set<string> | null,
+  hasScopedNames: boolean,
+): boolean => {
+  const meta = DICTIONARY_META[id];
+  if (hasScopedNames && meta.category === "Names") {
+    return false;
+  }
+  return (
+    countries === null || meta.country === null || countries.has(meta.country)
+  );
+};
 
 /**
  * Load first-name and surname dictionaries for the
@@ -933,4 +1023,61 @@ export const loadNameDictionaries = async (
   );
 
   return { firstNames, surnames };
+};
+
+export const loadDictionaryBundle = async ({
+  countries,
+  cityCountries,
+  nameLanguages,
+}: LoadDictionaryBundleOptions = {}): Promise<DictionaryBundle> => {
+  const countryScope = normalizeCountryCodes(countries);
+  const scopedNameLanguages = normalizeNameLanguages(nameLanguages);
+  const hasScopedNames =
+    nameLanguages !== undefined && nameLanguages.length > 0;
+  const dictionaryIds = ALL_DICTIONARY_IDS.filter((id) =>
+    dictionaryIdIsInScope(id, countryScope, hasScopedNames),
+  );
+  const dictionaryResults = await Promise.all(
+    dictionaryIds.map(async (id) => ({
+      id,
+      entries: await loadDictionary(id),
+    })),
+  );
+  const denyList: Record<string, readonly string[]> = {};
+  const denyListMeta: Record<string, DictionaryMeta> = {};
+  for (const { id, entries } of dictionaryResults) {
+    denyList[id] = entries;
+    denyListMeta[id] = DICTIONARY_META[id];
+  }
+
+  const nameDictionaries = await loadNameDictionaries(
+    hasScopedNames ? scopedNameLanguages : undefined,
+  );
+  const requestedCityScope = cityCountries ?? countries;
+  const cityScope =
+    requestedCityScope === undefined || requestedCityScope.length === 0
+      ? DEFAULT_CITY_COUNTRIES
+      : requestedCityScope;
+  const cityResults = await Promise.all(
+    cityScope.map(async (country) => ({
+      country: country.toUpperCase(),
+      entries: await loadCityDictionary(country),
+    })),
+  );
+  const citiesByCountry: Record<string, readonly string[]> = {};
+  const cities: string[] = [];
+  for (const { country, entries } of cityResults) {
+    citiesByCountry[country] = entries;
+    for (const entry of entries) {
+      cities.push(entry);
+    }
+  }
+
+  return {
+    ...nameDictionaries,
+    denyList,
+    denyListMeta,
+    cities,
+    citiesByCountry,
+  };
 };

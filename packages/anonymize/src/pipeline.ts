@@ -19,6 +19,7 @@ import {
 } from "./detectors/triggers";
 import {
   ensureDenyListData,
+  loadDefinedTermHeads,
   processDenyListMatches,
 } from "./detectors/deny-list";
 import { processAddressSeeds } from "./detectors/address-seeds";
@@ -69,6 +70,8 @@ import { runUnifiedSearch } from "./unified-search";
 import { maskDetectedSpans, unmaskNerEntities } from "./util/entity-masking";
 import type { PipelineContext } from "./context";
 import { defaultContext } from "./context";
+import { applyPipelineLanguageScope } from "./language-scope";
+import { pipelineConfigKey } from "./pipeline-cache-key";
 
 /**
  * Sources backed by curated literal dictionaries.
@@ -801,8 +804,6 @@ const createAllowedLabelSetFromLabels = (
 const createAllowedLabelSet = (config: PipelineConfig): AllowedLabelSet =>
   createAllowedLabelSetFromLabels(config.labels);
 
-const DEFAULT_CUSTOM_REGEX_SCORE = 0.9;
-
 const filterAllowedLabels = (
   entities: Entity[],
   allowedLabels: AllowedLabelSet,
@@ -839,69 +840,6 @@ const checkAbort = (signal?: AbortSignal): void => {
   if (signal?.aborted) {
     throw new DOMException("Pipeline aborted", "AbortError");
   }
-};
-
-const configKey = (
-  config: PipelineConfig,
-  gazetteerEntries: GazetteerEntry[],
-): string => {
-  const legalFormsEnabled = isLegalFormsEnabled(config);
-  const customDenyFingerprint =
-    config.enableDenyList && config.customDenyList
-      ? config.customDenyList
-          .map((entry) =>
-            JSON.stringify({
-              label: entry.label,
-              value: entry.value,
-              variants: [...(entry.variants ?? [])].sort(),
-            }),
-          )
-          .sort()
-          .join("\n")
-      : "";
-  const customRegexFingerprint =
-    config.enableRegex && config.customRegexes
-      ? config.customRegexes
-          .map((entry) =>
-            JSON.stringify({
-              label: entry.label,
-              pattern: entry.pattern,
-              score: entry.score ?? DEFAULT_CUSTOM_REGEX_SCORE,
-            }),
-          )
-          .sort()
-          .join("\n")
-      : "";
-  // Gazetteer fingerprint: sorted entry IDs,
-  // canonical forms, labels, and variants.
-  // Skip when gazetteer is disabled to avoid
-  // unnecessary cache misses.
-  const gazFingerprint =
-    config.enableGazetteer && gazetteerEntries.length > 0
-      ? gazetteerEntries
-          .map(
-            (e) =>
-              `${e.id}:${e.canonical}:${e.label}:${[...e.variants].sort().join(",")}`,
-          )
-          .toSorted()
-          .join(";")
-      : "";
-  return (
-    `${config.enableDenyList}:` +
-    `${config.enableTriggerPhrases}:` +
-    `${legalFormsEnabled}:` +
-    `${config.enableNameCorpus}:` +
-    `${config.nameCorpusLanguages?.toSorted().join(",") ?? ""}:` +
-    `${config.enableRegex}:` +
-    `${config.labels.toSorted().join(",")}:` +
-    `${config.denyListCountries?.toSorted().join(",") ?? ""}:` +
-    `${config.denyListRegions?.toSorted().join(",") ?? ""}:` +
-    `${config.denyListExcludeCategories?.toSorted().join(",") ?? ""}:` +
-    `${customDenyFingerprint}:` +
-    `${customRegexFingerprint}:` +
-    `${config.enableGazetteer}:${gazFingerprint}:` +
-    `${config.enableCountries !== false}`
-  );
 };
 
 type SharedSearchCacheValue =
@@ -963,7 +901,7 @@ const getCachedSearch = async (
   gazetteerEntries: GazetteerEntry[],
   ctx: PipelineContext,
 ): Promise<UnifiedSearchInstance> => {
-  const key = configKey(config, gazetteerEntries);
+  const key = pipelineConfigKey(config, gazetteerEntries);
   if (ctx.search && ctx.searchKey === key) {
     return ctx.search;
   }
@@ -1027,7 +965,11 @@ export const preparePipelineSearch = ({
   gazetteerEntries = [],
   context,
 }: PipelineSearchOptions): Promise<UnifiedSearchInstance> =>
-  getCachedSearch(config, gazetteerEntries, context ?? defaultContext);
+  getCachedSearch(
+    applyPipelineLanguageScope(config),
+    gazetteerEntries,
+    context ?? defaultContext,
+  );
 
 /**
  * Options for {@link runPipeline}.
@@ -1068,7 +1010,7 @@ export const runPipeline = async (
 ): Promise<Entity[]> => {
   const {
     fullText,
-    config,
+    config: inputConfig,
     gazetteerEntries,
     nerInference = null,
     onProgress,
@@ -1076,6 +1018,7 @@ export const runPipeline = async (
     signal,
     context,
   } = options;
+  const config = applyPipelineLanguageScope(inputConfig);
   const ctx = context ?? defaultContext;
   const allowedLabels = createAllowedLabelSet(config);
   const legalFormsEnabled = isLegalFormsEnabled(config);
@@ -1113,6 +1056,7 @@ export const runPipeline = async (
       });
     await Promise.all([
       loadGenericRoles(ctx),
+      loadDefinedTermHeads(ctx),
       loadDocumentStructureHeadings(),
       initPrepositions(),
       initStreetAbbrevs(),
@@ -1124,6 +1068,7 @@ export const runPipeline = async (
   } else {
     await Promise.all([
       loadGenericRoles(ctx),
+      loadDefinedTermHeads(ctx),
       loadDocumentStructureHeadings(),
       initPrepositions(),
       initStreetAbbrevs(),

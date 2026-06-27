@@ -1,21 +1,22 @@
 <p align="center">
-  <img src=".github/assets/banner.png" alt="Stella anonymize" width="100%" />
+  <img src=".github/assets/banner.png" alt="stella anonymize" width="100%" />
 </p>
 
 # anonymize
 
-Monorepo for the Stella anonymization stack.
+Monorepo for the stella anonymization stack.
 
 It contains the runtime package, the published data package, and the browser/WASM entrypoint used by downstream apps.
 
 ## Packages
 
-| Package                | Purpose                                                        |
-| ---------------------- | -------------------------------------------------------------- |
-| `@stll/anonymize`      | Native runtime for multi-layer PII detection and anonymization |
-| `@stll/anonymize-data` | Published deny-list dictionaries and trigger/config data       |
-| `@stll/anonymize-wasm` | Browser/WASM build of the runtime                              |
-| `@stll/anonymize-cli`  | Command-line anonymization (`anonymize` binary)                |
+| Package                 | Purpose                                                        |
+| ----------------------- | -------------------------------------------------------------- |
+| `@stll/anonymize`       | Native runtime for multi-layer PII detection and anonymization |
+| `@stll/anonymize-data`  | Published deny-list dictionaries and trigger/config data       |
+| `@stll/anonymize-wasm`  | Browser/WASM build of the runtime                              |
+| `@stll/anonymize-cli`   | Command-line anonymization (`anonymize` binary)                |
+| `stella-anonymize-core` | Python bindings for the Rust anonymization core                |
 
 ## Install
 
@@ -25,6 +26,8 @@ bun add @stll/anonymize
 bun add @stll/anonymize-data
 # Browser / Vite usage
 bun add @stll/anonymize-wasm
+# Python SDK source build
+uv add ./crates/anonymize-py
 ```
 
 Or anonymize from the terminal without installing:
@@ -70,3 +73,4 @@ bun run hooks:install
 - [`packages/anonymize`](packages/anonymize)
 - [`packages/data`](packages/data)
 - [`packages/anonymize/wasm`](packages/anonymize/wasm)
+- [`crates/anonymize-py`](crates/anonymize-py)

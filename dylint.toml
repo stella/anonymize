@@ -1,0 +1,4 @@
+[workspace.metadata.dylint]
+libraries = [
+  { git = "https://github.com/stella/tooling", rev = "fe7012b863ad2fcdd788a3fab759b31181bbf9c8", pattern = "rust-lints/*" },
+]

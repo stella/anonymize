@@ -34,7 +34,7 @@ const pickKeys = <T>(
 };
 
 /** Dictionaries with every section present (possibly empty). */
-export type ScopedDictionaries = Dictionaries & {
+export type ScopedDictionaries = {
   firstNames: Record<string, readonly string[]>;
   surnames: Record<string, readonly string[]>;
   denyList: Record<string, readonly string[]>;

@@ -168,6 +168,7 @@ const compileValidations = (
         }
         return {
           type: "valid-id",
+          validator: v.validator,
           check: (value) => {
             // stdnum validators expect compact digits only;
             // strip formatting (spaces, dots, dashes,
@@ -637,14 +638,13 @@ const loadAddressStopKeywords = async (): Promise<readonly string[]> => {
   return addressStopKeywordsPromise;
 };
 
-const getAddressStopKeywordsSync = (): readonly string[] =>
+export const getAddressStopKeywordsSync = (): readonly string[] =>
   addressStopKeywordsCache ?? ADDRESS_STOP_KEYWORDS_SEED;
 
 /**
- * Warm the address-stop-keywords cache. Pipeline callers
+ * Warm address support data. Pipeline callers
  * await this before invoking trigger detection so the
- * synchronous `extractValue` path uses the merged list
- * instead of the seed fallback.
+ * synchronous `extractValue` path uses merged data.
  */
 export const warmAddressStopKeywords = async (): Promise<void> => {
   await loadAddressStopKeywords();
@@ -1128,7 +1128,10 @@ const extractValue = (
       const idRaw = trailingLetterMatch
         ? idMatch[0] + trailingLetterMatch[0]
         : idMatch[0];
-      const idText = idRaw.trim();
+      const idText = idRaw.trim().replace(/[.,;:!?]+$/u, "");
+      if (idText.length === 0) {
+        return null;
+      }
       const leadingSpaces = idMatch[0].length - idMatch[0].trimStart().length;
       const idStart =
         triggerEnd +

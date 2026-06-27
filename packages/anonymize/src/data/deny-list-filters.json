@@ -1,0 +1,48 @@
+{
+  "en": {
+    "definedTermCues": [
+      "mean",
+      "means",
+      "shall mean",
+      "shall means",
+      "shall have the meaning",
+      "shall have the meanings",
+      "refer to",
+      "refers to",
+      "has the meaning",
+      "has the meanings",
+      "is defined"
+    ],
+    "sentenceStarters": [
+      "the",
+      "this",
+      "these",
+      "those",
+      "an",
+      "any",
+      "all",
+      "each",
+      "every",
+      "no",
+      "now",
+      "whereas",
+      "whereby",
+      "wherein",
+      "whereof",
+      "notwithstanding",
+      "subject",
+      "in",
+      "on",
+      "at",
+      "by",
+      "for",
+      "if",
+      "upon",
+      "unless",
+      "until",
+      "provided",
+      "pursuant",
+      "such"
+    ]
+  }
+}

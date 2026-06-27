@@ -10,6 +10,27 @@
  * Run after `bun run build`: `bun run smoke:dist`.
  */
 import { createPipelineContext, runPipeline } from "../dist/index.mjs";
+import { createNativeAnonymizerFromPackage } from "../dist/native.mjs";
+import {
+  createNativePipelineFromDefaultPackage,
+  createNativePipelineFromPackageFile,
+  loadNativeAnonymizeBinding,
+} from "../dist/native-node.mjs";
+
+if (typeof createNativeAnonymizerFromPackage !== "function") {
+  throw new TypeError("dist native entrypoint is missing its package loader");
+}
+if (typeof loadNativeAnonymizeBinding !== "function") {
+  throw new TypeError("dist native-node entrypoint is missing its loader");
+}
+if (typeof createNativePipelineFromPackageFile !== "function") {
+  throw new TypeError("dist native-node entrypoint is missing file loading");
+}
+if (typeof createNativePipelineFromDefaultPackage !== "function") {
+  throw new TypeError(
+    "dist native-node entrypoint is missing default package loading",
+  );
+}
 
 const warnings = [];
 const originalWarn = console.warn;
@@ -62,6 +83,19 @@ if (!person) {
   );
 }
 
+const nativePipeline = createNativePipelineFromDefaultPackage();
+const nativeResult = nativePipeline.redactText(
+  "A contract was signed by Jan Novak at Praha on 1. 1. 2025.",
+);
+if (nativeResult.resolvedEntities.length === 0) {
+  throw new Error("default native pipeline package did not detect any entity");
+}
+
 console.log(
-  JSON.stringify({ event: "dist-smoke", ok: true, detected: person.text }),
+  JSON.stringify({
+    event: "dist-smoke",
+    ok: true,
+    detected: person.text,
+    nativeEntityCount: nativeResult.resolvedEntities.length,
+  }),
 );
