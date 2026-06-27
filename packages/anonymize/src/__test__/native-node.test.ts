@@ -166,7 +166,7 @@ describe("native node loader", () => {
     try {
       writeFileSync(packagePath, Uint8Array.of(10, 11, 12));
       const binding = fakeNativeBinding("1.5.0", {
-        onPreparedPackageBytes: (bytes) => {
+        onPreparedPackageBytesWithoutCache: (bytes) => {
           capturedBytes.push([...bytes]);
         },
       });
@@ -192,7 +192,7 @@ describe("native node loader", () => {
       writeFileSync(packagePath, Uint8Array.of(13, 14, 15));
       let warmCount = 0;
       const binding = fakeNativeBinding("1.5.0", {
-        onPreparedPackageBytes: (bytes) => {
+        onPreparedPackageBytesWithoutCache: (bytes) => {
           capturedBytes.push([...bytes]);
         },
         onWarmLazyRegex: () => {
@@ -233,7 +233,7 @@ describe("native node loader", () => {
       writeFileSync(packagePath, Uint8Array.of(16, 17, 18));
       let warmCount = 0;
       const binding = fakeNativeBinding("1.5.0", {
-        onPreparedPackageBytes: (bytes) => {
+        onPreparedPackageBytesWithoutCache: (bytes) => {
           capturedBytes.push([...bytes]);
         },
         onWarmLazyRegex: () => {
@@ -277,7 +277,7 @@ describe("native node loader", () => {
     try {
       writeFileSync(packagePath, Uint8Array.of(31, 32, 33));
       const binding = fakeNativeBinding("1.5.0", {
-        onPreparedPackageBytes: (bytes) => {
+        onPreparedPackageBytesWithoutCache: (bytes) => {
           capturedBytes.push([...bytes]);
         },
       });
@@ -419,6 +419,7 @@ type FakeNativeBindingOptions = {
   preparedSearchAsConstructor?: boolean;
   compressedPackageBytes?: Uint8Array;
   onPreparedPackageBytes?: (bytes: Uint8Array) => void;
+  onPreparedPackageBytesWithoutCache?: (bytes: Uint8Array) => void;
   onWarmLazyRegex?: () => void;
 };
 
@@ -430,6 +431,10 @@ const fakeNativeBinding = (
     fromConfigJsonBytes: () => fakePreparedSearch(options.onWarmLazyRegex),
     fromPreparedPackageBytes: (bytes: Uint8Array) => {
       options.onPreparedPackageBytes?.(bytes);
+      return fakePreparedSearch(options.onWarmLazyRegex);
+    },
+    fromPreparedPackageBytesWithoutCache: (bytes: Uint8Array) => {
+      options.onPreparedPackageBytesWithoutCache?.(bytes);
       return fakePreparedSearch(options.onWarmLazyRegex);
     },
   };

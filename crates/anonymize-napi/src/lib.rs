@@ -377,11 +377,32 @@ pub struct NativePreparedSearch {
 #[derive(Clone, Copy)]
 struct PrepareContext {
   input_bytes_len: usize,
-  cache_key: [u8; 32],
-  cache_key_elapsed: u64,
-  cache_elapsed: u64,
+  cache: PrepareCache,
   parse_elapsed: u64,
   parse_stage: DiagnosticStage,
+}
+
+#[derive(Clone, Copy)]
+enum PrepareCache {
+  Reuse {
+    key: [u8; 32],
+    key_elapsed: u64,
+    lookup_elapsed: u64,
+  },
+  Bypass,
+}
+
+#[derive(Clone, Copy)]
+enum PackageCacheMode {
+  Reuse,
+  Bypass,
+}
+
+#[derive(Clone, Copy)]
+struct CacheLookup {
+  key: [u8; 32],
+  key_elapsed: u64,
+  lookup_elapsed: u64,
 }
 
 #[napi]
@@ -412,7 +433,15 @@ impl NativePreparedSearch {
   pub fn from_prepared_package_bytes(
     package_bytes: BufferSlice<'_>,
   ) -> Result<Self> {
-    Self::from_package_bytes(package_bytes.as_ref())
+    Self::from_package_bytes(package_bytes.as_ref(), PackageCacheMode::Reuse)
+  }
+
+  #[napi(factory)]
+  #[allow(clippy::needless_pass_by_value)]
+  pub fn from_prepared_package_bytes_without_cache(
+    package_bytes: BufferSlice<'_>,
+  ) -> Result<Self> {
+    Self::from_package_bytes(package_bytes.as_ref(), PackageCacheMode::Bypass)
   }
 
   fn from_config_bytes(
@@ -427,28 +456,24 @@ impl NativePreparedSearch {
     let cache_key_elapsed = elapsed_us(cache_key_start);
     let cache_start = Instant::now();
     if let Some(inner) = prepared_search_cache_get(&cache_key) {
+      let cache = CacheLookup {
+        key: cache_key,
+        key_elapsed: cache_key_elapsed,
+        lookup_elapsed: elapsed_us(cache_start),
+      };
       return Ok(Self {
         inner,
         prepare_diagnostics: StaticRedactionDiagnostics {
-          events: vec![
-            stage_event(
-              DiagnosticStage::PrepareCacheKey,
-              None,
-              Some(cache_key_elapsed),
-              Some(input_bytes_len),
-            ),
-            stage_event(
-              DiagnosticStage::PrepareCacheHit,
-              Some(1),
-              Some(elapsed_us(cache_start)),
-              Some(input_bytes_len),
-            ),
-          ],
+          events: cache_hit_events(&cache, input_bytes_len),
         },
       });
     }
+    let cache = CacheLookup {
+      key: cache_key,
+      key_elapsed: cache_key_elapsed,
+      lookup_elapsed: elapsed_us(cache_start),
+    };
 
-    let cache_elapsed = elapsed_us(cache_start);
     let parse_start = Instant::now();
     let config =
       serde_json::from_slice::<BindingPreparedSearchConfig>(config_bytes)
@@ -456,44 +481,54 @@ impl NativePreparedSearch {
     let parse_elapsed = elapsed_us(parse_start);
     let context = PrepareContext {
       input_bytes_len,
-      cache_key,
-      cache_key_elapsed,
-      cache_elapsed,
+      cache: PrepareCache::Reuse {
+        key: cache.key,
+        key_elapsed: cache.key_elapsed,
+        lookup_elapsed: cache.lookup_elapsed,
+      },
       parse_elapsed,
       parse_stage: DiagnosticStage::PrepareBindingParse,
     };
     Self::from_binding_config(config, artifact_bytes, &context)
   }
 
-  fn from_package_bytes(package_bytes: &[u8]) -> Result<Self> {
+  fn from_package_bytes(
+    package_bytes: &[u8],
+    cache_mode: PackageCacheMode,
+  ) -> Result<Self> {
     let input_bytes_len = package_bytes.len();
-    let cache_key_start = Instant::now();
-    let cache_key = prepared_search_package_cache_key(package_bytes);
-    let cache_key_elapsed = elapsed_us(cache_key_start);
-    let cache_start = Instant::now();
-    if let Some(inner) = prepared_search_cache_get(&cache_key) {
-      return Ok(Self {
-        inner,
-        prepare_diagnostics: StaticRedactionDiagnostics {
-          events: vec![
-            stage_event(
-              DiagnosticStage::PrepareCacheKey,
-              None,
-              Some(cache_key_elapsed),
-              Some(input_bytes_len),
-            ),
-            stage_event(
-              DiagnosticStage::PrepareCacheHit,
-              Some(1),
-              Some(elapsed_us(cache_start)),
-              Some(input_bytes_len),
-            ),
-          ],
-        },
-      });
-    }
-
-    let cache_elapsed = elapsed_us(cache_start);
+    let cache = match cache_mode {
+      PackageCacheMode::Reuse => {
+        let cache_key_start = Instant::now();
+        let cache_key = prepared_search_package_cache_key(package_bytes);
+        let cache_key_elapsed = elapsed_us(cache_key_start);
+        let cache_start = Instant::now();
+        if let Some(inner) = prepared_search_cache_get(&cache_key) {
+          let cache = CacheLookup {
+            key: cache_key,
+            key_elapsed: cache_key_elapsed,
+            lookup_elapsed: elapsed_us(cache_start),
+          };
+          return Ok(Self {
+            inner,
+            prepare_diagnostics: StaticRedactionDiagnostics {
+              events: cache_hit_events(&cache, input_bytes_len),
+            },
+          });
+        }
+        let cache = CacheLookup {
+          key: cache_key,
+          key_elapsed: cache_key_elapsed,
+          lookup_elapsed: elapsed_us(cache_start),
+        };
+        PrepareCache::Reuse {
+          key: cache.key,
+          key_elapsed: cache.key_elapsed,
+          lookup_elapsed: cache.lookup_elapsed,
+        }
+      }
+      PackageCacheMode::Bypass => PrepareCache::Bypass,
+    };
     let parse_start = Instant::now();
     if prepared_search_package_has_core_payload(package_bytes) {
       let package = prepared_search_core_package_view_from_bytes(package_bytes)
@@ -502,9 +537,7 @@ impl NativePreparedSearch {
       let config = package.config;
       let context = PrepareContext {
         input_bytes_len,
-        cache_key,
-        cache_key_elapsed,
-        cache_elapsed,
+        cache,
         parse_elapsed,
         parse_stage: DiagnosticStage::PreparePackageDecode,
       };
@@ -523,9 +556,7 @@ impl NativePreparedSearch {
     let artifacts = package.artifacts;
     let context = PrepareContext {
       input_bytes_len,
-      cache_key,
-      cache_key_elapsed,
-      cache_elapsed,
+      cache,
       parse_elapsed,
       parse_stage: DiagnosticStage::PreparePackageDecode,
     };
@@ -570,28 +601,14 @@ impl NativePreparedSearch {
     }
     .map_err(|error| to_napi_core_error(&error))?;
     let inner = Arc::new(result.prepared);
-    let mut diagnostics = StaticRedactionDiagnostics {
-      events: vec![
-        stage_event(
-          DiagnosticStage::PrepareCacheKey,
-          None,
-          Some(context.cache_key_elapsed),
-          Some(context.input_bytes_len),
-        ),
-        stage_event(
-          DiagnosticStage::PrepareCacheMiss,
-          Some(0),
-          Some(context.cache_elapsed),
-          Some(context.input_bytes_len),
-        ),
-        stage_event(
-          context.parse_stage,
-          None,
-          Some(context.parse_elapsed),
-          Some(context.input_bytes_len),
-        ),
-      ],
-    };
+    let mut events = cache_miss_events(context);
+    events.push(stage_event(
+      context.parse_stage,
+      None,
+      Some(context.parse_elapsed),
+      Some(context.input_bytes_len),
+    ));
+    let mut diagnostics = StaticRedactionDiagnostics { events };
     if let Some((pattern_count, convert_elapsed)) = binding_convert {
       diagnostics.events.push(stage_event(
         DiagnosticStage::PrepareBindingConvert,
@@ -611,7 +628,9 @@ impl NativePreparedSearch {
       ));
     }
     diagnostics.extend(result.diagnostics);
-    prepared_search_cache_insert(context.cache_key, Arc::clone(&inner));
+    if let PrepareCache::Reuse { key, .. } = context.cache {
+      prepared_search_cache_insert(key, Arc::clone(&inner));
+    }
     Ok(Self {
       inner,
       prepare_diagnostics: diagnostics,
@@ -725,6 +744,55 @@ fn prepared_search_cache_get(key: &[u8; 32]) -> Option<Arc<PreparedSearch>> {
 
 fn prepared_search_cache_insert(key: [u8; 32], value: Arc<PreparedSearch>) {
   with_prepared_search_cache(|cache| cache.insert(key, value));
+}
+
+fn cache_hit_events(
+  cache: &CacheLookup,
+  input_bytes_len: usize,
+) -> Vec<DiagnosticEvent> {
+  vec![
+    stage_event(
+      DiagnosticStage::PrepareCacheKey,
+      None,
+      Some(cache.key_elapsed),
+      Some(input_bytes_len),
+    ),
+    stage_event(
+      DiagnosticStage::PrepareCacheHit,
+      Some(1),
+      Some(cache.lookup_elapsed),
+      Some(input_bytes_len),
+    ),
+  ]
+}
+
+fn cache_miss_events(context: &PrepareContext) -> Vec<DiagnosticEvent> {
+  match context.cache {
+    PrepareCache::Reuse {
+      key_elapsed,
+      lookup_elapsed,
+      ..
+    } => vec![
+      stage_event(
+        DiagnosticStage::PrepareCacheKey,
+        None,
+        Some(key_elapsed),
+        Some(context.input_bytes_len),
+      ),
+      stage_event(
+        DiagnosticStage::PrepareCacheMiss,
+        Some(0),
+        Some(lookup_elapsed),
+        Some(context.input_bytes_len),
+      ),
+    ],
+    PrepareCache::Bypass => vec![stage_event(
+      DiagnosticStage::PrepareCacheBypass,
+      Some(0),
+      Some(0),
+      Some(context.input_bytes_len),
+    )],
+  }
 }
 
 fn prepared_search_cache_key(

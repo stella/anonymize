@@ -6,6 +6,7 @@ use crate::types::{RedactionResult, SearchEngine, SearchMatch};
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DiagnosticStage {
   PrepareCacheKey,
+  PrepareCacheBypass,
   PrepareCacheHit,
   PrepareCacheMiss,
   PrepareBindingParse,

@@ -10,7 +10,8 @@ import {
   type NativeAnonymizeBinding,
   type NativeNormalizeOptions,
   type NativeSearchPackageInput,
-  type PreparedNativePipeline,
+  PreparedNativeAnonymizer,
+  PreparedNativePipeline,
   type NativeStaticRedactionResult,
   diagnostics_json as diagnosticsJsonWithBinding,
   load_prepared_package as loadPreparedPackageWithBinding,
@@ -354,10 +355,7 @@ const createNativePipelineFromResolvedDefaultPackage = ({
           defaultPackageFileOptions(language),
         )
       : readNativePipelinePackageFile(packagePath);
-  return createNativePipelineFromPackage({
-    binding,
-    packageBytes,
-  });
+  return createNativePipelineFromTrustedDefaultPackage(binding, packageBytes);
 };
 
 const createNativePipelineFromResolvedDefaultPackageAsync = async ({
@@ -371,11 +369,20 @@ const createNativePipelineFromResolvedDefaultPackageAsync = async ({
           defaultPackageFileOptions(language),
         )
       : await readNativePipelinePackageFileAsync(packagePath);
-  return createNativePipelineFromPackage({
-    binding,
-    packageBytes,
-  });
+  return createNativePipelineFromTrustedDefaultPackage(binding, packageBytes);
 };
+
+const createNativePipelineFromTrustedDefaultPackage = (
+  binding: NativeAnonymizeBinding,
+  packageBytes: Uint8Array,
+): PreparedNativePipeline =>
+  new PreparedNativePipeline(
+    new PreparedNativeAnonymizer(
+      binding.NativePreparedSearch.fromPreparedPackageBytesWithoutCache?.(
+        packageBytes,
+      ) ?? binding.NativePreparedSearch.fromPreparedPackageBytes(packageBytes),
+    ),
+  );
 
 const defaultPackageFileOptions = (
   language: string | undefined,
