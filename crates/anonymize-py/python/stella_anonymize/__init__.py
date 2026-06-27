@@ -183,6 +183,11 @@ def _load_prepared_package(package_bytes: bytes) -> PreparedAnonymizer:
     return PreparedAnonymizer.from_prepared_package_bytes(package_bytes)
 
 
+@lru_cache(maxsize=8)
+def _prepare_from_config_json(config_json: str) -> PreparedAnonymizer:
+    return PreparedAnonymizer.from_config_json(config_json)
+
+
 def redact_text(
     config_json: str,
     full_text: str,
@@ -190,7 +195,7 @@ def redact_text(
     *,
     redact_string: str | None = None,
 ) -> StaticRedactionResult:
-    return PreparedAnonymizer.from_config_json(config_json).redact_text(
+    return _prepare_from_config_json(config_json).redact_text(
         full_text,
         operators,
         redact_string=redact_string,
@@ -204,7 +209,7 @@ def redact_text_json(
     *,
     redact_string: str | None = None,
 ) -> str:
-    return PreparedAnonymizer.from_config_json(config_json).redact_text_json(
+    return _prepare_from_config_json(config_json).redact_text_json(
         full_text,
         operators,
         redact_string=redact_string,
@@ -218,7 +223,7 @@ def diagnostics_json(
     *,
     redact_string: str | None = None,
 ) -> str:
-    return PreparedAnonymizer.from_config_json(config_json).diagnostics_json(
+    return _prepare_from_config_json(config_json).diagnostics_json(
         full_text,
         operators,
         redact_string=redact_string,
