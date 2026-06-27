@@ -9,10 +9,10 @@ use napi_derive::napi;
 use stella_anonymize_adapter_contract::{
   BindingOperatorConfig, BindingOperatorEntry, BindingPreparedSearchConfig,
   BindingRedactionResult, BindingStaticRedactionResult, ContractError,
-  operator_config_from_binding, prepared_search_config_from_binding,
-  prepared_search_core_package_to_bytes,
+  PreparedSearchPackageDecodeTimings, operator_config_from_binding,
+  prepared_search_config_from_binding, prepared_search_core_package_to_bytes,
   prepared_search_core_package_to_compressed_bytes,
-  prepared_search_core_package_view_from_bytes,
+  prepared_search_core_package_view_from_bytes_with_timings,
   prepared_search_package_from_bytes, prepared_search_package_has_core_payload,
   static_redaction_diagnostic_result_to_utf16_binding,
   static_redaction_diagnostics_to_binding,
@@ -380,6 +380,7 @@ struct PrepareContext {
   cache: PrepareCache,
   parse_elapsed: u64,
   parse_stage: DiagnosticStage,
+  package_decode_timings: Option<PreparedSearchPackageDecodeTimings>,
 }
 
 #[derive(Clone, Copy)]
@@ -488,6 +489,7 @@ impl NativePreparedSearch {
       },
       parse_elapsed,
       parse_stage: DiagnosticStage::PrepareBindingParse,
+      package_decode_timings: None,
     };
     Self::from_binding_config(config, artifact_bytes, &context)
   }
@@ -531,7 +533,10 @@ impl NativePreparedSearch {
     };
     let parse_start = Instant::now();
     if prepared_search_package_has_core_payload(package_bytes) {
-      let package = prepared_search_core_package_view_from_bytes(package_bytes)
+      let (package, package_decode_timings) =
+        prepared_search_core_package_view_from_bytes_with_timings(
+          package_bytes,
+        )
         .map_err(|error| to_napi_contract_error(&error))?;
       let parse_elapsed = elapsed_us(parse_start);
       let config = package.config;
@@ -540,6 +545,7 @@ impl NativePreparedSearch {
         cache,
         parse_elapsed,
         parse_stage: DiagnosticStage::PreparePackageDecode,
+        package_decode_timings: Some(package_decode_timings),
       };
       return Self::from_core_config(
         config,
@@ -559,6 +565,7 @@ impl NativePreparedSearch {
       cache,
       parse_elapsed,
       parse_stage: DiagnosticStage::PreparePackageDecode,
+      package_decode_timings: None,
     };
     Self::from_binding_config(config, Some(&artifacts), &context)
   }
@@ -608,6 +615,7 @@ impl NativePreparedSearch {
       Some(context.parse_elapsed),
       Some(context.input_bytes_len),
     ));
+    append_package_decode_timing_events(&mut events, context);
     let mut diagnostics = StaticRedactionDiagnostics { events };
     if let Some((pattern_count, convert_elapsed)) = binding_convert {
       diagnostics.events.push(stage_event(
@@ -792,6 +800,39 @@ fn cache_miss_events(context: &PrepareContext) -> Vec<DiagnosticEvent> {
       Some(0),
       Some(context.input_bytes_len),
     )],
+  }
+}
+
+fn append_package_decode_timing_events(
+  events: &mut Vec<DiagnosticEvent>,
+  context: &PrepareContext,
+) {
+  let Some(timings) = context.package_decode_timings else {
+    return;
+  };
+  if let Some(elapsed) = timings.verify {
+    events.push(stage_event(
+      DiagnosticStage::PreparePackageVerify,
+      None,
+      Some(elapsed),
+      Some(context.input_bytes_len),
+    ));
+  }
+  if let Some(elapsed) = timings.decompress {
+    events.push(stage_event(
+      DiagnosticStage::PreparePackageDecompress,
+      None,
+      Some(elapsed),
+      Some(context.input_bytes_len),
+    ));
+  }
+  if let Some(elapsed) = timings.config_decode {
+    events.push(stage_event(
+      DiagnosticStage::PreparePackageConfigDecode,
+      None,
+      Some(elapsed),
+      Some(context.input_bytes_len),
+    ));
   }
 }
 

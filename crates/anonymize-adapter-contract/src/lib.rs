@@ -592,6 +592,13 @@ pub struct CorePreparedSearchPackageView<'a> {
   pub artifacts: Cow<'a, [u8]>,
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct PreparedSearchPackageDecodeTimings {
+  pub verify: Option<u64>,
+  pub decompress: Option<u64>,
+  pub config_decode: Option<u64>,
+}
+
 #[derive(Deserialize, Serialize)]
 struct BinaryPreparedSearchConfig {
   regex_patterns: Vec<BindingSearchPattern>,
@@ -755,7 +762,8 @@ pub fn prepared_search_package_from_bytes(
       "package does not contain a binding payload",
     ));
   }
-  let payload = parts.into_verified_payload()?;
+  let mut timings = PreparedSearchPackageDecodeTimings::default();
+  let payload = parts.into_verified_payload(&mut timings)?;
   let (package, read) = bincode::serde::decode_from_slice::<
     BinaryPreparedSearchPackageOwned,
     _,
@@ -783,14 +791,25 @@ pub fn prepared_search_core_package_from_bytes(
 pub fn prepared_search_core_package_view_from_bytes(
   bytes: &[u8],
 ) -> Result<CorePreparedSearchPackageView<'_>> {
+  Ok(prepared_search_core_package_view_from_bytes_with_timings(bytes)?.0)
+}
+
+pub fn prepared_search_core_package_view_from_bytes_with_timings(
+  bytes: &[u8],
+) -> Result<(
+  CorePreparedSearchPackageView<'_>,
+  PreparedSearchPackageDecodeTimings,
+)> {
+  let mut timings = PreparedSearchPackageDecodeTimings::default();
   let parts = prepared_search_package_parts(bytes)?;
   if !parts.is_core() {
     return Err(invalid_prepared_search_package(
       "package does not contain a core payload",
     ));
   }
-  let payload = parts.into_verified_payload()?;
-  core_package_view_from_payload(payload)
+  let payload = parts.into_verified_payload(&mut timings)?;
+  let package = core_package_view_from_payload(payload, &mut timings)?;
+  Ok((package, timings))
 }
 
 impl From<BindingPreparedSearchConfig> for BinaryPreparedSearchConfig {
@@ -1055,9 +1074,10 @@ fn compact_core_package_config(config: &mut PreparedSearchConfig) {
   }
 }
 
-fn core_package_view_from_payload(
-  payload: Cow<'_, [u8]>,
-) -> Result<CorePreparedSearchPackageView<'_>> {
+fn core_package_view_from_payload<'a>(
+  payload: Cow<'a, [u8]>,
+  timings: &mut PreparedSearchPackageDecodeTimings,
+) -> Result<CorePreparedSearchPackageView<'a>> {
   let len_end = std::mem::size_of::<u64>();
   let len_bytes = payload.as_ref().get(..len_end).ok_or_else(|| {
     invalid_prepared_search_package("truncated config length")
@@ -1073,11 +1093,13 @@ fn core_package_view_from_payload(
     .as_ref()
     .get(len_end..config_end)
     .ok_or_else(|| invalid_prepared_search_package("truncated config"))?;
+  let config_decode_start = std::time::Instant::now();
   let (config, read) = bincode::serde::decode_from_slice::<
     PreparedSearchConfig,
     _,
   >(config_bytes, package_bincode_config())
   .map_err(|error| invalid_prepared_search_package(error.to_string()))?;
+  timings.config_decode = Some(elapsed_us(config_decode_start));
   if read != config_bytes.len() {
     return Err(invalid_prepared_search_package("trailing config data"));
   }
@@ -1381,12 +1403,17 @@ impl<'a> PreparedSearchPackageParts<'a> {
     }
   }
 
-  fn into_verified_payload(self) -> Result<Cow<'a, [u8]>> {
+  fn into_verified_payload(
+    self,
+    timings: &mut PreparedSearchPackageDecodeTimings,
+  ) -> Result<Cow<'a, [u8]>> {
     match self {
       Self::Raw {
         digest, payload, ..
       } => {
+        let verify_start = std::time::Instant::now();
         verify_prepared_search_package_digest(digest, payload)?;
+        timings.verify = Some(elapsed_us(verify_start));
         Ok(Cow::Borrowed(payload))
       }
       Self::Compressed {
@@ -1403,19 +1430,29 @@ impl<'a> PreparedSearchPackageParts<'a> {
         }
         match compression {
           PackageCompression::ZstdCompressedDigest => {
+            let verify_start = std::time::Instant::now();
             verify_prepared_search_package_digest(digest, payload)?;
-            zstd::bulk::decompress(payload, uncompressed_len)
-              .map(Cow::Owned)
-              .map_err(|error| {
-                invalid_prepared_search_package(error.to_string())
-              })
+            timings.verify = Some(elapsed_us(verify_start));
+            let decompress_start = std::time::Instant::now();
+            let decompressed =
+              zstd::bulk::decompress(payload, uncompressed_len)
+                .map(Cow::Owned)
+                .map_err(|error| {
+                  invalid_prepared_search_package(error.to_string())
+                })?;
+            timings.decompress = Some(elapsed_us(decompress_start));
+            Ok(decompressed)
           }
           PackageCompression::ZstdPayloadDigest => {
+            let decompress_start = std::time::Instant::now();
             let payload = zstd::bulk::decompress(payload, uncompressed_len)
               .map_err(|error| {
                 invalid_prepared_search_package(error.to_string())
               })?;
+            timings.decompress = Some(elapsed_us(decompress_start));
+            let verify_start = std::time::Instant::now();
             verify_prepared_search_package_digest(digest, &payload)?;
+            timings.verify = Some(elapsed_us(verify_start));
             Ok(Cow::Owned(payload))
           }
         }
@@ -1577,6 +1614,11 @@ fn verify_prepared_search_package_digest(
     return Err(invalid_prepared_search_package("digest mismatch"));
   }
   Ok(())
+}
+
+fn elapsed_us(start: std::time::Instant) -> u64 {
+  let micros = start.elapsed().as_micros();
+  u64::try_from(micros).unwrap_or(u64::MAX)
 }
 
 fn package_bincode_config() -> impl bincode::config::Config {
@@ -2347,6 +2389,11 @@ fn diagnostic_stage_name(stage: DiagnosticStage) -> String {
     DiagnosticStage::PrepareCacheMiss => "prepare.cache.miss",
     DiagnosticStage::PrepareBindingParse => "prepare.binding.parse",
     DiagnosticStage::PreparePackageDecode => "prepare.package.decode",
+    DiagnosticStage::PreparePackageVerify => "prepare.package.verify",
+    DiagnosticStage::PreparePackageDecompress => "prepare.package.decompress",
+    DiagnosticStage::PreparePackageConfigDecode => {
+      "prepare.package.config-decode"
+    }
     DiagnosticStage::PrepareBindingConvert => "prepare.binding.convert",
     DiagnosticStage::PrepareArtifactsDecode => "prepare.artifacts.decode",
     DiagnosticStage::PrepareTotal => "prepare.total",
@@ -2444,6 +2491,7 @@ mod tests {
     prepared_search_core_package_payload_to_bytes,
     prepared_search_core_package_to_bytes,
     prepared_search_core_package_to_compressed_bytes,
+    prepared_search_core_package_view_from_bytes_with_timings,
     prepared_search_package_from_bytes,
     prepared_search_package_has_core_payload,
     prepared_search_package_payload_to_bytes, prepared_search_package_to_bytes,
@@ -2671,6 +2719,33 @@ mod tests {
     assert!(prepared_search_package_has_core_payload(&bytes));
     assert_eq!(package.config, compact_config);
     assert_eq!(package.artifacts, artifacts);
+  }
+
+  #[test]
+  fn prepared_search_core_compressed_package_reports_decode_timings() {
+    let config =
+      prepared_search_config_from_binding(package_test_config()).unwrap();
+    let artifacts = b"prepared-artifacts";
+
+    let bytes =
+      prepared_search_core_package_to_compressed_bytes(&config, artifacts)
+        .unwrap();
+    let (_package, timings) =
+      prepared_search_core_package_view_from_bytes_with_timings(&bytes)
+        .unwrap();
+
+    assert!(
+      timings.verify.is_some(),
+      "compressed package digest timing should be reported"
+    );
+    assert!(
+      timings.decompress.is_some(),
+      "compressed package decompression timing should be reported"
+    );
+    assert!(
+      timings.config_decode.is_some(),
+      "core config decode timing should be reported"
+    );
   }
 
   #[test]
