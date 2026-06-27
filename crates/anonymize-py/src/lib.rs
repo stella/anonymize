@@ -145,6 +145,17 @@ impl PyPreparedSearch {
       .map_err(|error| to_py_core_error(&error))
   }
 
+  fn warm_lazy_regex_diagnostics_json(&self) -> PyResult<String> {
+    let diagnostics = self
+      .inner
+      .warm_lazy_regex_diagnostics()
+      .map_err(|error| to_py_core_error(&error))?;
+    let diagnostics = static_redaction_diagnostics_to_binding(diagnostics);
+
+    serde_json::to_string(&diagnostics)
+      .map_err(|error| to_py_serde_error(&error))
+  }
+
   fn redact_static_entities(
     &self,
     full_text: &str,

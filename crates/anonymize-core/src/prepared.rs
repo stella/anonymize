@@ -367,11 +367,52 @@ impl PreparedSearch {
   }
 
   pub fn warm_lazy_regex(&self) -> Result<()> {
-    self.regex.warm_lazy_regex()?;
-    self.custom_regex.warm_lazy_regex()?;
-    self.legal_forms.warm_lazy_regex()?;
-    self.triggers.warm_lazy_regex()?;
-    self.literals.warm_lazy_regex()
+    self.warm_lazy_regex_inner(None)
+  }
+
+  pub fn warm_lazy_regex_diagnostics(
+    &self,
+  ) -> Result<StaticRedactionDiagnostics> {
+    let mut diagnostics = StaticRedactionDiagnostics::default();
+    self.warm_lazy_regex_inner(Some(&mut diagnostics))?;
+    Ok(diagnostics)
+  }
+
+  fn warm_lazy_regex_inner(
+    &self,
+    mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
+  ) -> Result<()> {
+    let total_start = Instant::now();
+    let stages = [
+      (DiagnosticStage::WarmRegex, &self.regex),
+      (DiagnosticStage::WarmCustomRegex, &self.custom_regex),
+      (DiagnosticStage::WarmLegalFormSearch, &self.legal_forms),
+      (DiagnosticStage::WarmTriggerSearch, &self.triggers),
+      (DiagnosticStage::WarmLiteral, &self.literals),
+    ];
+    let mut count = 0usize;
+    for (stage, index) in stages {
+      let start = Instant::now();
+      index.warm_lazy_regex()?;
+      count = count.saturating_add(index.len());
+      if let Some(diagnostics) = &mut diagnostics {
+        diagnostics.record_stage(
+          stage,
+          Some(index.len()),
+          Some(elapsed_us(start)),
+          None,
+        );
+      }
+    }
+    if let Some(diagnostics) = &mut diagnostics {
+      diagnostics.record_stage(
+        DiagnosticStage::WarmTotal,
+        Some(count),
+        Some(elapsed_us(total_start)),
+        None,
+      );
+    }
+    Ok(())
   }
 
   pub fn prepare_artifacts(

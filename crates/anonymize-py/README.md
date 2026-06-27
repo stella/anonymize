@@ -41,6 +41,7 @@ Top-level `redact_text()` and `redact_text_json()` are available for one-off cal
 - `load_prepared_package(package_bytes) -> PreparedAnonymizer`
 - `load_prepared_package_file(package_path) -> PreparedAnonymizer`
 - `PreparedAnonymizer.warm_lazy_regex()`
+- `PreparedAnonymizer.warm_lazy_regex_diagnostics_json()`
 - `PreparedAnonymizer.redact_text(text, operators=None, redact_string=None)`
 - `PreparedAnonymizer.redact_text_json(text, operators=None, redact_string=None)`
 - `PreparedAnonymizer.diagnostics_json(text, operators=None, redact_string=None)`

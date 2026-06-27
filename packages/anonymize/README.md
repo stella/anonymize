@@ -54,6 +54,7 @@ import { load_prepared_package_file } from "@stll/anonymize/native-node";
 
 const anonymizer = load_prepared_package_file("./dist/anonymize.stlanonpkg");
 anonymizer.warmLazyRegex();
+const warmDiagnosticsJson = anonymizer.warmLazyRegexDiagnosticsJson();
 const result = anonymizer.redact_text(text, { redactString: "***" });
 ```
 

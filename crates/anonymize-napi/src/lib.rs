@@ -611,6 +611,18 @@ impl NativePreparedSearch {
   }
 
   #[napi]
+  pub fn warm_lazy_regex_diagnostics_json(&self) -> Result<String> {
+    let diagnostics = self
+      .inner
+      .warm_lazy_regex_diagnostics()
+      .map_err(|error| to_napi_core_error(&error))?;
+    let diagnostics = static_redaction_diagnostics_to_binding(diagnostics);
+
+    serde_json::to_string(&diagnostics)
+      .map_err(|error| to_napi_serde_error(&error))
+  }
+
+  #[napi]
   #[allow(clippy::needless_pass_by_value)]
   pub fn redact_static_entities(
     &self,

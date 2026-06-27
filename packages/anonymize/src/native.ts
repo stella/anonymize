@@ -62,6 +62,8 @@ export type NativePreparedSearchBinding = {
   prepareDiagnosticsJson?: () => string;
   warmLazyRegex?: () => void;
   warm_lazy_regex?: () => void;
+  warmLazyRegexDiagnosticsJson?: () => string;
+  warm_lazy_regex_diagnostics_json?: () => string;
   redactStaticEntities: (
     fullText: string,
     operators?: NativeBindingOperatorConfig,
@@ -204,6 +206,17 @@ export class PreparedNativeAnonymizer {
     this.warmLazyRegex();
   }
 
+  warmLazyRegexDiagnosticsJson(): string | null {
+    if (this.#prepared.warmLazyRegexDiagnosticsJson) {
+      return this.#prepared.warmLazyRegexDiagnosticsJson();
+    }
+    return this.#prepared.warm_lazy_regex_diagnostics_json?.() ?? null;
+  }
+
+  warm_lazy_regex_diagnostics_json(): string | null {
+    return this.warmLazyRegexDiagnosticsJson();
+  }
+
   redactStaticEntities(
     fullText: string,
     operators?: NativeOperatorConfig,
@@ -282,6 +295,14 @@ export class PreparedNativePipeline {
 
   warm_lazy_regex(): void {
     this.warmLazyRegex();
+  }
+
+  warmLazyRegexDiagnosticsJson(): string | null {
+    return this.#anonymizer.warmLazyRegexDiagnosticsJson();
+  }
+
+  warm_lazy_regex_diagnostics_json(): string | null {
+    return this.warmLazyRegexDiagnosticsJson();
   }
 
   redactText(

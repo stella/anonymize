@@ -2364,6 +2364,12 @@ fn diagnostic_stage_name(stage: DiagnosticStage) -> String {
     }
     DiagnosticStage::PrepareCoreferenceData => "prepare.coreference-data",
     DiagnosticStage::PrepareNameCorpusData => "prepare.name-corpus-data",
+    DiagnosticStage::WarmRegex => "warm.regex",
+    DiagnosticStage::WarmCustomRegex => "warm.custom-regex",
+    DiagnosticStage::WarmLegalFormSearch => "warm.legal-form-search",
+    DiagnosticStage::WarmTriggerSearch => "warm.trigger-search",
+    DiagnosticStage::WarmLiteral => "warm.literal",
+    DiagnosticStage::WarmTotal => "warm.total",
     DiagnosticStage::Normalize => "normalize",
     DiagnosticStage::FindMatches => "find-matches",
     DiagnosticStage::FindRegex => "find.regex",

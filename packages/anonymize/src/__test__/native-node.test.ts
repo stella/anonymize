@@ -348,6 +348,11 @@ describe("native node loader", () => {
     const prepared = load_prepared_package(packageBytes, { binding });
     expect(capturedBytes).toEqual([[21, 22, 23]]);
     expect(prepared.redact_text("x").redaction.redactedText).toBe("");
+    expect(
+      JSON.parse(prepared.warm_lazy_regex_diagnostics_json() ?? "{}"),
+    ).toEqual({
+      events: [],
+    });
     expect(redact_text("{}", "x", undefined, { binding }).redaction).toEqual({
       entityCount: 0,
       operatorMap: new Map(),
@@ -447,6 +452,7 @@ const fakePreparedSearch = (onWarmLazyRegex?: () => void) => ({
   warmLazyRegex: () => {
     onWarmLazyRegex?.();
   },
+  warmLazyRegexDiagnosticsJson: () => JSON.stringify({ events: [] }),
   redactStaticEntities: emptyStaticRedactionBindingResult,
   redactStaticEntitiesDiagnosticsJson: emptyStaticRedactionDiagnosticJson,
 });

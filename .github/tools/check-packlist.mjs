@@ -14,6 +14,9 @@ const PACKAGES = [
       "index.cjs",
       "stella_anonymize_napi.node",
       "native-pipeline.stlanonpkg",
+      "native-pipeline.cs.stlanonpkg",
+      "native-pipeline.de.stlanonpkg",
+      "native-pipeline.en.stlanonpkg",
       // Dynamically imported corpus chunk; missing means the
       // bundler stopped resolving the non-Western name imports.
       "dist/names-nw-in.mjs",

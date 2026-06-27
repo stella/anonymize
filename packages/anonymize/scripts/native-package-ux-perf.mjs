@@ -83,6 +83,7 @@ function runScenario({ name, compressed, language, userDataScenario }) {
     firstTouchMs: load.timings.nativeFirstTouchMs,
     warmClickMs: load.timings.nativeWarmClickMs,
     prepareTopStages: nativeDiagnostics?.prepare?.topStages ?? [],
+    warmTopStages: nativeDiagnostics?.warm?.topStages ?? [],
     cachedPrepareTopStages: nativeDiagnostics?.cachedPrepare?.topStages ?? [],
     runTopStages: nativeDiagnostics?.run?.topStages ?? [],
     runTopSlots: nativeDiagnostics?.run?.topSlots ?? [],
