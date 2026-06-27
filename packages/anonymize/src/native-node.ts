@@ -273,7 +273,13 @@ export const getDefaultNativePipeline = (
   return pipeline;
 };
 
-export const preloadDefaultNativePipeline = getDefaultNativePipeline;
+export const preloadDefaultNativePipeline = (
+  options: DefaultNativePipelinePackageOptions = {},
+): PreparedNativePipeline => {
+  const pipeline = getDefaultNativePipeline(options);
+  pipeline.warmLazyRegex();
+  return pipeline;
+};
 
 export const preloadDefaultNativePipelineAsync = (
   options: DefaultNativePipelinePackageOptions = {},
@@ -298,6 +304,7 @@ export const preloadDefaultNativePipelineAsync = (
     resolvedOptions,
   )
     .then((pipeline) => {
+      pipeline.warmLazyRegex();
       cache.set(key, pipeline);
       return pipeline;
     })

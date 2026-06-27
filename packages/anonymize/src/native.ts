@@ -60,6 +60,8 @@ type CanonicalStaticRedactionResult = {
 
 export type NativePreparedSearchBinding = {
   prepareDiagnosticsJson?: () => string;
+  warmLazyRegex?: () => void;
+  warm_lazy_regex?: () => void;
   redactStaticEntities: (
     fullText: string,
     operators?: NativeBindingOperatorConfig,
@@ -190,6 +192,18 @@ export class PreparedNativeAnonymizer {
     return this.prepareDiagnosticsJson();
   }
 
+  warmLazyRegex(): void {
+    if (this.#prepared.warmLazyRegex) {
+      this.#prepared.warmLazyRegex();
+      return;
+    }
+    this.#prepared.warm_lazy_regex?.();
+  }
+
+  warm_lazy_regex(): void {
+    this.warmLazyRegex();
+  }
+
   redactStaticEntities(
     fullText: string,
     operators?: NativeOperatorConfig,
@@ -260,6 +274,14 @@ export class PreparedNativePipeline {
 
   prepare_diagnostics_json(): string | null {
     return this.prepareDiagnosticsJson();
+  }
+
+  warmLazyRegex(): void {
+    this.#anonymizer.warmLazyRegex();
+  }
+
+  warm_lazy_regex(): void {
+    this.warmLazyRegex();
   }
 
   redactText(

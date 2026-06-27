@@ -138,6 +138,13 @@ impl PyPreparedSearch {
       .map_err(|error| to_py_serde_error(&error))
   }
 
+  fn warm_lazy_regex(&self) -> PyResult<()> {
+    self
+      .inner
+      .warm_lazy_regex()
+      .map_err(|error| to_py_core_error(&error))
+  }
+
   fn redact_static_entities(
     &self,
     full_text: &str,

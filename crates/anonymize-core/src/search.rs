@@ -338,6 +338,16 @@ impl SearchIndex {
     Ok(false)
   }
 
+  pub fn warm_lazy_regex(&self) -> Result<()> {
+    for slot in &self.slots {
+      slot
+        .search
+        .warm_lazy_regex()
+        .map_err(|error| search_error(&error))?;
+    }
+    Ok(())
+  }
+
   #[must_use]
   pub fn len(&self) -> usize {
     self

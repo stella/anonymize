@@ -18,6 +18,7 @@ export const SHARED_NATIVE_SDK_PREPARED_METHODS = [
   "redact_text_json",
   "diagnostics_json",
   "prepare_diagnostics_json",
+  "warm_lazy_regex",
 ] as const;
 
 export const SHARED_NATIVE_SDK_CLASS_NAMES = [
