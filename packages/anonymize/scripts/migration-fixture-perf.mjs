@@ -724,6 +724,7 @@ function isRunStage(stage) {
 
 function summarizeFixtureDiagnostics(fixtureDiagnostics) {
   const stageBuckets = new Map();
+  const slotBuckets = new Map();
   const byFixture = [];
 
   for (const fixture of fixtureDiagnostics) {
@@ -740,6 +741,24 @@ function summarizeFixtureDiagnostics(fixtureDiagnostics) {
       }
       bucket.count += stage.count ?? 0;
       stageBuckets.set(stage.stage, bucket);
+      if (stage.slot !== null) {
+        const slotKey = [stage.stage, stage.engine ?? "", stage.slot].join(
+          "\0",
+        );
+        const slotBucket = slotBuckets.get(slotKey) ?? {
+          stage: stage.stage,
+          engine: stage.engine,
+          slot: stage.slot,
+          patternCount: stage.patternCount,
+          elapsedMs: [],
+          count: 0,
+        };
+        if (typeof stage.elapsedMs === "number") {
+          slotBucket.elapsedMs.push(stage.elapsedMs);
+        }
+        slotBucket.count += stage.count ?? 0;
+        slotBuckets.set(slotKey, slotBucket);
+      }
     }
     byFixture.push({
       fixture: fixture.fixture,
@@ -779,11 +798,45 @@ function summarizeFixtureDiagnostics(fixtureDiagnostics) {
   return {
     stages,
     topStages: stages.slice(0, 10),
+    topSlots: summarizeDiagnosticSlotBuckets(slotBuckets).slice(0, 20),
     topFixtures: byFixture
       .toSorted((left, right) => right.elapsedMs - left.elapsedMs)
       .slice(0, 10),
     byFixture,
   };
+}
+
+function summarizeDiagnosticSlotBuckets(slotBuckets) {
+  return [...slotBuckets.values()]
+    .map((bucket) => ({
+      stage: bucket.stage,
+      engine: bucket.engine,
+      slot: bucket.slot,
+      patternCount: bucket.patternCount,
+      calls: bucket.elapsedMs.length,
+      totalMs: roundMs(bucket.elapsedMs.reduce((sum, ms) => sum + ms, 0)),
+      avgMs:
+        bucket.elapsedMs.length === 0
+          ? 0
+          : roundMs(
+              bucket.elapsedMs.reduce((sum, ms) => sum + ms, 0) /
+                bucket.elapsedMs.length,
+            ),
+      p50Ms: percentile(
+        bucket.elapsedMs.toSorted((a, b) => a - b),
+        0.5,
+      ),
+      p95Ms: percentile(
+        bucket.elapsedMs.toSorted((a, b) => a - b),
+        0.95,
+      ),
+      maxMs: percentile(
+        bucket.elapsedMs.toSorted((a, b) => a - b),
+        1,
+      ),
+      count: bucket.count,
+    }))
+    .sort((left, right) => right.totalMs - left.totalMs);
 }
 
 function diagnosticStageSummaries(events) {
@@ -792,6 +845,9 @@ function diagnosticStageSummaries(events) {
     .map((event) => ({
       stage: event.stage,
       count: event.count ?? 0,
+      slot: event.slot ?? null,
+      patternCount: event.pattern_count ?? null,
+      engine: event.engine ?? null,
       elapsedMs:
         typeof event.elapsed_us === "number"
           ? roundMs(event.elapsed_us / 1_000)

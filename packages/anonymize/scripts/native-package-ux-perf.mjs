@@ -85,6 +85,7 @@ function runScenario({ name, compressed, language, userDataScenario }) {
     prepareTopStages: nativeDiagnostics?.prepare?.topStages ?? [],
     cachedPrepareTopStages: nativeDiagnostics?.cachedPrepare?.topStages ?? [],
     runTopStages: nativeDiagnostics?.run?.topStages ?? [],
+    runTopSlots: nativeDiagnostics?.run?.topSlots ?? [],
     runTopFixtures: nativeDiagnostics?.run?.topFixtures ?? [],
     fixtureTimings: load.fixtureTimings,
     topColdFixtures: load.fixtureTimings.byFixture
