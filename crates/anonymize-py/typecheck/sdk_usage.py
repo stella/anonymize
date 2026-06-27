@@ -16,6 +16,18 @@ def redact_with_package_file(package_path: str, text: str) -> int:
     return result.redaction.entity_count
 
 
+def redact_with_default_package(text: str) -> int:
+    prepared = anonymize.get_default_native_pipeline(language="en")
+    warmed = anonymize.preload_default_native_pipeline(language="en")
+    assert prepared is warmed
+    result = prepared.redact_text(text, {"country": "redact"})
+    return result.redaction.entity_count
+
+
+def default_package_size() -> int:
+    return len(anonymize.read_default_native_pipeline_package_file(language="en"))
+
+
 def runtime_version() -> str:
     return anonymize.native_package_version()
 

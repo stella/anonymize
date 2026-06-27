@@ -39,6 +39,7 @@ import type {
   RedactionResult,
 } from "../types";
 import {
+  PYTHON_NATIVE_SDK_DEFAULT_PACKAGE_FUNCTIONS,
   SHARED_NATIVE_SDK_CLASS_NAMES,
   SHARED_NATIVE_SDK_CORE_TOP_LEVEL_FUNCTIONS,
   SHARED_NATIVE_SDK_PREPARED_METHODS,
@@ -581,6 +582,7 @@ import stella_anonymize as anonymize
 payload = json.loads(payload_path.read_text())
 package_bytes = package_path.read_bytes()
 top_level = payload["top_level_functions"]
+default_package_functions = payload["default_package_functions"]
 prepared_methods = payload["prepared_methods"]
 class_names = payload["class_names"]
 missing_top_level = [
@@ -588,8 +590,19 @@ missing_top_level = [
 ]
 if missing_top_level:
     raise AssertionError(f"missing Python SDK functions: {missing_top_level}")
+missing_default_package = [
+    name
+    for name in default_package_functions
+    if not callable(getattr(anonymize, name, None))
+]
+if missing_default_package:
+    raise AssertionError(
+        f"missing Python default package functions: {missing_default_package}"
+    )
 missing_public_names = [
-    name for name in [*top_level, *class_names] if name not in anonymize.__all__
+    name
+    for name in [*top_level, *default_package_functions, *class_names]
+    if name not in anonymize.__all__
 ]
 if missing_public_names:
     raise AssertionError(f"missing Python SDK public names: {missing_public_names}")
@@ -607,6 +620,11 @@ missing_prepared = [
 if missing_prepared:
     raise AssertionError(f"missing Python prepared methods: {missing_prepared}")
 from_file = anonymize.load_prepared_package_file(package_path)
+default_from_path = anonymize.get_default_native_pipeline(package_path=package_path)
+if default_from_path is not anonymize.get_default_native_pipeline(package_path=package_path):
+    raise AssertionError("default package path cache did not reuse prepared search")
+if anonymize.preload_default_native_pipeline(package_path=package_path) is not default_from_path:
+    raise AssertionError("default package preload did not return cached prepared search")
 if anonymize.prepare_search_package(
     payload["config_json"],
     compressed=payload["compressed"],
@@ -668,6 +686,9 @@ print(
             ],
             "from_file": [
                 redact_with(from_file, item) for item in payload["cases"]
+            ],
+            "default_from_path": [
+                redact_with(default_from_path, item) for item in payload["cases"]
             ],
             "top_level": [
                 json.loads(
@@ -1233,6 +1254,7 @@ describe("native adapter parity", () => {
 
     expect(python.from_bytes).toEqual(rustCoreJson);
     expect(python.from_file).toEqual(rustCoreJson);
+    expect(python.default_from_path).toEqual(rustCoreJson);
     expect(python.top_level).toEqual(rustCoreJson);
     expect(python.top_level_object).toEqual(
       rustCoreJson.map(withoutEntityOffsets),
@@ -2680,6 +2702,7 @@ const callPythonSharedSdkParity = ({
   cases,
   normalizeText,
 }: PythonSharedSdkParityOptions): {
+  default_from_path: StaticRedactionResult[];
   from_bytes: StaticRedactionResult[];
   from_file: StaticRedactionResult[];
   top_level: StaticRedactionResult[];
@@ -2701,6 +2724,7 @@ const callPythonSharedSdkParity = ({
       class_names: SHARED_NATIVE_SDK_CLASS_NAMES,
       compressed: true,
       config_json: CONFIG_JSON,
+      default_package_functions: PYTHON_NATIVE_SDK_DEFAULT_PACKAGE_FUNCTIONS,
       normalize_text: normalizeText,
       prepared_methods: SHARED_NATIVE_SDK_PREPARED_METHODS,
       top_level_functions: SHARED_NATIVE_SDK_TOP_LEVEL_FUNCTIONS,

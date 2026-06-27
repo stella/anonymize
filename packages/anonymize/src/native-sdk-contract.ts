@@ -13,6 +13,13 @@ export const SHARED_NATIVE_SDK_TOP_LEVEL_FUNCTIONS = [
   "load_prepared_package_file",
 ] as const;
 
+export const PYTHON_NATIVE_SDK_DEFAULT_PACKAGE_FUNCTIONS = [
+  "read_default_native_pipeline_package_file",
+  "create_native_pipeline_from_default_package",
+  "get_default_native_pipeline",
+  "preload_default_native_pipeline",
+] as const;
+
 export const SHARED_NATIVE_SDK_PREPARED_METHODS = [
   "redact_text",
   "redact_text_json",

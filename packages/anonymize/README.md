@@ -65,15 +65,13 @@ The config module may export a `PipelineConfig` directly or `{ config, gazetteer
 ```py
 import stella_anonymize as anonymize
 
-package_bytes = anonymize.prepare_search_package(config_json)
-prepared = anonymize.load_prepared_package(package_bytes)
-prepared.warm_lazy_regex()
+prepared = anonymize.preload_default_native_pipeline(language="en")
 result = prepared.redact_text(text, redact_string="***")
 
 print(result.redaction.redacted_text)
 ```
 
-The Python SDK uses the same Rust core and prepared-package contract as the Node SDK. Prefer `load_prepared_package()` or `load_prepared_package_file()` for repeated calls; top-level `redact_text()` and `redact_text_json()` prepare from config on each call.
+The Python SDK uses the same Rust core and prepared-package contract as the Node SDK. Prefer `get_default_native_pipeline()`, `preload_default_native_pipeline()`, `load_prepared_package()`, or `load_prepared_package_file()` for repeated calls; top-level `redact_text()` and `redact_text_json()` prepare from config on each call.
 
 ## Caller-Owned Deny Lists and Regexes
 

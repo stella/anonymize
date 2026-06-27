@@ -94,6 +94,25 @@ def load_prepared_package(package_bytes: BytesLike) -> PreparedAnonymizer: ...
 def load_prepared_package_file(
     package_path: PathLikeString,
 ) -> PreparedAnonymizer: ...
+def read_default_native_pipeline_package_file(
+    *,
+    language: str | None = None,
+) -> bytes: ...
+def create_native_pipeline_from_default_package(
+    *,
+    language: str | None = None,
+    package_path: PathLikeString | None = None,
+) -> PreparedAnonymizer: ...
+def get_default_native_pipeline(
+    *,
+    language: str | None = None,
+    package_path: PathLikeString | None = None,
+) -> PreparedAnonymizer: ...
+def preload_default_native_pipeline(
+    *,
+    language: str | None = None,
+    package_path: PathLikeString | None = None,
+) -> PreparedAnonymizer: ...
 def redact_text(
     config_json: str,
     full_text: str,

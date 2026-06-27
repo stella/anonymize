@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Mapping
 from functools import lru_cache
+from importlib.resources import files
 from os import PathLike
 
 from ._native import (
@@ -31,15 +33,19 @@ __all__ = [
     "RedactionEntry",
     "RedactionResult",
     "StaticRedactionResult",
+    "create_native_pipeline_from_default_package",
     "diagnostics_json",
+    "get_default_native_pipeline",
     "load_prepared_package",
     "load_prepared_package_file",
     "native_package_version",
     "normalize_for_search",
+    "preload_default_native_pipeline",
     "prepare_search_package",
     "prepare_static_search_artifacts_bytes",
     "prepare_static_search_compressed_package_bytes",
     "prepare_static_search_package_bytes",
+    "read_default_native_pipeline_package_file",
     "redact_text",
     "redact_text_json",
     "redact_static_entities_diagnostics_json",
@@ -49,6 +55,10 @@ __all__ = [
 BytesLike = bytes | bytearray | memoryview
 PathLikeString = str | PathLike[str]
 OperatorConfig = Mapping[str, str] | str | None
+DEFAULT_NATIVE_PIPELINE_PACKAGE = "native-pipeline.stlanonpkg"
+_DEFAULT_NATIVE_PIPELINE_LANGUAGE_PATTERN = re.compile(
+    r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
+)
 
 
 class PreparedAnonymizer:
@@ -184,9 +194,73 @@ def load_prepared_package_file(package_path: PathLikeString) -> PreparedAnonymiz
         return load_prepared_package(handle.read())
 
 
+def read_default_native_pipeline_package_file(
+    *,
+    language: str | None = None,
+) -> bytes:
+    package_name = _default_native_pipeline_package_name(language)
+    try:
+        resource = files(__name__).joinpath("native_packages", package_name)
+        return resource.read_bytes()
+    except (FileNotFoundError, ModuleNotFoundError, OSError) as error:
+        raise FileNotFoundError(
+            f"{_default_native_pipeline_package_description(language)} is unavailable: {error}"
+        ) from error
+
+
+def create_native_pipeline_from_default_package(
+    *,
+    language: str | None = None,
+    package_path: PathLikeString | None = None,
+) -> PreparedAnonymizer:
+    return PreparedAnonymizer.from_prepared_package_bytes(
+        _read_default_native_pipeline_package(
+            language=language,
+            package_path=package_path,
+        )
+    )
+
+
+def get_default_native_pipeline(
+    *,
+    language: str | None = None,
+    package_path: PathLikeString | None = None,
+) -> PreparedAnonymizer:
+    return _get_default_native_pipeline(
+        _default_native_pipeline_cache_key(
+            language=language,
+            package_path=package_path,
+        )
+    )
+
+
+def preload_default_native_pipeline(
+    *,
+    language: str | None = None,
+    package_path: PathLikeString | None = None,
+) -> PreparedAnonymizer:
+    pipeline = get_default_native_pipeline(
+        language=language,
+        package_path=package_path,
+    )
+    pipeline.warm_lazy_regex()
+    return pipeline
+
+
 @lru_cache(maxsize=8)
 def _load_prepared_package(package_bytes: bytes) -> PreparedAnonymizer:
     return PreparedAnonymizer.from_prepared_package_bytes(package_bytes)
+
+
+@lru_cache(maxsize=8)
+def _get_default_native_pipeline(
+    cache_key: tuple[str | None, str | None],
+) -> PreparedAnonymizer:
+    language, package_path = cache_key
+    return create_native_pipeline_from_default_package(
+        language=language,
+        package_path=package_path,
+    )
 
 
 @lru_cache(maxsize=8)
@@ -234,6 +308,58 @@ def diagnostics_json(
         operators,
         redact_string=redact_string,
     )
+
+
+def _read_default_native_pipeline_package(
+    *,
+    language: str | None,
+    package_path: PathLikeString | None,
+) -> bytes:
+    if language is not None and package_path is not None:
+        raise ValueError("Use either language or package_path, not both")
+    if package_path is not None:
+        with open(package_path, "rb") as handle:
+            return handle.read()
+    return read_default_native_pipeline_package_file(language=language)
+
+
+def _default_native_pipeline_cache_key(
+    *,
+    language: str | None,
+    package_path: PathLikeString | None,
+) -> tuple[str | None, str | None]:
+    if language is not None and package_path is not None:
+        raise ValueError("Use either language or package_path, not both")
+    return (
+        _normalize_default_native_pipeline_language(language)
+        if language is not None
+        else None,
+        str(package_path) if package_path is not None else None,
+    )
+
+
+def _default_native_pipeline_package_name(language: str | None) -> str:
+    if language is None:
+        return DEFAULT_NATIVE_PIPELINE_PACKAGE
+    normalized = _normalize_default_native_pipeline_language(language)
+    return f"native-pipeline.{normalized}.stlanonpkg"
+
+
+def _default_native_pipeline_package_description(language: str | None) -> str:
+    if language is None:
+        return "Default native pipeline package"
+    normalized = _normalize_default_native_pipeline_language(language)
+    return f'Default native pipeline package for language "{normalized}"'
+
+
+def _normalize_default_native_pipeline_language(language: str) -> str:
+    normalized = language.strip().lower()
+    if not _DEFAULT_NATIVE_PIPELINE_LANGUAGE_PATTERN.fullmatch(normalized):
+        raise ValueError(
+            "Default native pipeline language must match "
+            f"{_DEFAULT_NATIVE_PIPELINE_LANGUAGE_PATTERN.pattern}"
+        )
+    return normalized
 
 
 def _operator_config_json(

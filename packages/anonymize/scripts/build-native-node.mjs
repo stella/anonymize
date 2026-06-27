@@ -1,13 +1,27 @@
 import { execFileSync } from "node:child_process";
-import { copyFileSync, existsSync, readdirSync, rmSync } from "node:fs";
-import { dirname, join } from "node:path";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  rmSync,
+} from "node:fs";
+import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const repoRoot = dirname(dirname(packageRoot));
+const pythonNativePackageRoot = join(
+  repoRoot,
+  "crates",
+  "anonymize-py",
+  "python",
+  "stella_anonymize",
+  "native_packages",
+);
 const DEFAULT_SCOPED_PACKAGE_LANGUAGES = ["cs", "de", "en"];
-const SCOPED_PACKAGE_PATTERN =
-  /^native-pipeline\.[a-z0-9]+(?:-[a-z0-9]+)*\.stlanonpkg$/u;
+const NATIVE_PACKAGE_PATTERN =
+  /^native-pipeline(?:\.[a-z0-9]+(?:-[a-z0-9]+)*)?\.stlanonpkg$/u;
 const scopedPackageLanguages = languageListFromEnv(
   process.env.STELLA_ANONYMIZE_NATIVE_PACKAGE_LANGUAGES,
   DEFAULT_SCOPED_PACKAGE_LANGUAGES,
@@ -39,22 +53,31 @@ if (!existsSync(source)) {
 }
 
 copyFileSync(source, join(packageRoot, "stella_anonymize_napi.node"));
-removeScopedNativePipelinePackages();
+removeNativePipelinePackages(packageRoot);
+removeNativePipelinePackages(pythonNativePackageRoot);
+mkdirSync(pythonNativePackageRoot, { recursive: true });
 
+const defaultPackagePath = join(packageRoot, "native-pipeline.stlanonpkg");
 buildNativePipelinePackage([
   "--out",
-  join(packageRoot, "native-pipeline.stlanonpkg"),
+  defaultPackagePath,
   "--default-dictionaries",
 ]);
+copyNativePipelinePackageToPython(defaultPackagePath);
 
 for (const language of scopedPackageLanguages) {
+  const scopedPackagePath = join(
+    packageRoot,
+    `native-pipeline.${language}.stlanonpkg`,
+  );
   buildNativePipelinePackage([
     "--out",
-    join(packageRoot, `native-pipeline.${language}.stlanonpkg`),
+    scopedPackagePath,
     "--default-dictionaries",
     "--language",
     language,
   ]);
+  copyNativePipelinePackageToPython(scopedPackagePath);
 }
 
 function buildNativePipelinePackage(args) {
@@ -71,12 +94,22 @@ function buildNativePipelinePackage(args) {
   );
 }
 
-function removeScopedNativePipelinePackages() {
-  for (const entry of readdirSync(packageRoot)) {
-    if (!SCOPED_PACKAGE_PATTERN.test(entry)) {
+function copyNativePipelinePackageToPython(packagePath) {
+  copyFileSync(
+    packagePath,
+    join(pythonNativePackageRoot, basename(packagePath)),
+  );
+}
+
+function removeNativePipelinePackages(root) {
+  if (!existsSync(root)) {
+    return;
+  }
+  for (const entry of readdirSync(root)) {
+    if (!NATIVE_PACKAGE_PATTERN.test(entry)) {
       continue;
     }
-    rmSync(join(packageRoot, entry), { force: true });
+    rmSync(join(root, entry), { force: true });
   }
 }
 
