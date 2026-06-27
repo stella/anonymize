@@ -2283,6 +2283,82 @@ fn prepared_search_redacts_custom_deny_list_entities() {
 }
 
 #[test]
+fn prepared_search_parallel_path_matches_diagnostics_path() {
+  let prepared = PreparedSearch::new(PreparedSearchConfig {
+    regex_patterns: vec![SearchPattern::Regex(String::from(
+      r"\b[A-Z]{3}-\d{3}\b",
+    ))],
+    custom_regex_patterns: vec![],
+    literal_patterns: vec![SearchPattern::LiteralWithOptions {
+      pattern: String::from("Secret Code"),
+      case_insensitive: Some(true),
+      whole_words: Some(true),
+    }],
+    regex_options: SearchOptions::default(),
+    custom_regex_options: SearchOptions::default(),
+    literal_options: SearchOptions {
+      literal: LiteralSearchOptions {
+        case_insensitive: true,
+        whole_words: false,
+      },
+      ..SearchOptions::default()
+    },
+    allowed_labels: vec![],
+    threshold: 0.0,
+    confidence_boost: false,
+    slices: PreparedSearchSlices {
+      regex: PatternSlice { start: 0, end: 1 },
+      deny_list: PatternSlice { start: 0, end: 1 },
+      ..PreparedSearchSlices::default()
+    },
+    regex_meta: vec![RegexMatchMeta::new("reference", 0.9)],
+    custom_regex_meta: vec![],
+    deny_list_data: Some(DenyListMatchData {
+      labels: vec![vec![String::from("matter")]].into(),
+      custom_labels: vec![vec![String::from("matter")]].into(),
+      originals: vec![String::from("Secret Code")],
+      pattern_meta: Vec::new(),
+      sources: vec![vec![String::from("custom-deny-list")]].into(),
+      filters: None,
+    }),
+    false_positive_filters: None,
+    gazetteer_data: None,
+    country_data: None,
+    hotword_data: None,
+    trigger_data: None,
+    legal_form_data: None,
+    address_seed_data: None,
+    zone_data: None,
+    address_context_data: None,
+    coreference_data: None,
+    name_corpus_data: None,
+    date_data: None,
+    monetary_data: None,
+  })
+  .unwrap();
+  let full_text = format!("{} Secret Code ABC-123.", "prefix ".repeat(1_200));
+
+  let parallel = prepared
+    .redact_static_entities(&full_text, &OperatorConfig::default())
+    .unwrap();
+  let diagnostics = prepared
+    .redact_static_entities_with_diagnostics(
+      &full_text,
+      &OperatorConfig::default(),
+    )
+    .unwrap();
+
+  assert_eq!(
+    parallel.redaction.redacted_text,
+    diagnostics.result.redaction.redacted_text
+  );
+  assert_eq!(
+    parallel.redaction.entity_count,
+    diagnostics.result.redaction.entity_count
+  );
+}
+
+#[test]
 fn prepared_search_rejects_unsupported_static_slices() {
   let unsupported = PatternSlice { start: 0, end: 1 };
   let error = PreparedSearch::new(PreparedSearchConfig {

@@ -52,6 +52,7 @@ const NEAR_MISS_BAND: f64 = 0.15;
 const BOOST_PER_NEIGHBOUR: f64 = 0.05;
 const CONTEXT_WINDOW_CHARS: f64 = 150.0;
 const HIGH_CONFIDENCE_FLOOR: f64 = 0.9;
+const PARALLEL_SEARCH_MIN_BYTES: usize = 8 * 1024;
 
 pub struct PreparedSearch {
   regex: SearchIndex,
@@ -492,6 +493,9 @@ impl PreparedSearch {
   ) -> Result<PreparedSearchMatches> {
     let total_start = Instant::now();
     let normalized = normalize_search_text(full_text, &mut diagnostics)?;
+    if diagnostics.is_none() && full_text.len() >= PARALLEL_SEARCH_MIN_BYTES {
+      return self.find_matches_parallel(full_text, &normalized);
+    }
 
     let regex_start = Instant::now();
     let regex = offset_index_matches(
@@ -591,6 +595,76 @@ impl PreparedSearch {
       regex,
       custom_regex,
       literal,
+    })
+  }
+
+  fn find_matches_parallel(
+    &self,
+    full_text: &str,
+    normalized: &NormalizedSearchText,
+  ) -> Result<PreparedSearchMatches> {
+    let input_bytes = full_text.len();
+    std::thread::scope(|scope| {
+      let regex = scope.spawn(|| {
+        offset_index_matches(
+          &self.regex,
+          full_text,
+          None,
+          DiagnosticStage::FindRegex,
+          input_bytes,
+          self.slices.regex.start,
+        )
+      });
+      let legal_forms = scope.spawn(|| {
+        normalized_index_matches(
+          &self.legal_forms,
+          normalized,
+          None,
+          DiagnosticStage::FindLegalForm,
+          input_bytes,
+          self.slices.legal_forms.start,
+        )
+      });
+      let triggers = scope.spawn(|| {
+        offset_index_matches(
+          &self.triggers,
+          full_text,
+          None,
+          DiagnosticStage::FindTrigger,
+          input_bytes,
+          self.slices.triggers.start,
+        )
+      });
+      let custom_regex = scope.spawn(|| {
+        offset_index_matches(
+          &self.custom_regex,
+          full_text,
+          None,
+          DiagnosticStage::FindCustomRegex,
+          input_bytes,
+          self.slices.custom_regex.start,
+        )
+      });
+      let literal = scope.spawn(|| {
+        normalized_index_matches(
+          &self.literals,
+          normalized,
+          None,
+          DiagnosticStage::FindLiteral,
+          input_bytes,
+          0,
+        )
+      });
+
+      Ok(PreparedSearchMatches {
+        regex: combine_regex_matches(
+          join_match_handle(regex, "regex")?,
+          join_match_handle(legal_forms, "legal_forms")?,
+          join_match_handle(triggers, "triggers")?,
+        ),
+        custom_regex: join_match_handle(custom_regex, "custom_regex")?,
+        literal: join_match_handle(literal, "literals")?,
+      })
     })
   }
 
@@ -1539,6 +1613,16 @@ fn join_search_index(
   handle.join().map_err(|_| Error::InvalidStaticData {
     field,
     reason: "search index builder panicked".to_owned(),
+  })?
+}
+
+fn join_match_handle(
+  handle: std::thread::ScopedJoinHandle<'_, Result<Vec<SearchMatch>>>,
+  field: &'static str,
+) -> Result<Vec<SearchMatch>> {
+  handle.join().map_err(|_| Error::InvalidStaticData {
+    field,
+    reason: "search worker panicked".to_owned(),
   })?
 }
 

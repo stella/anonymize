@@ -180,7 +180,7 @@ impl SearchIndexArtifacts {
 struct SearchSlot {
   engine: SlotEngine,
   search: text_search::TextSearch,
-  pattern_indexes: Vec<u32>,
+  pattern_remap: PatternRemap,
 }
 
 #[derive(Clone, Copy)]
@@ -188,6 +188,11 @@ enum SlotEngine {
   Literal,
   Regex,
   Fuzzy,
+}
+
+enum PatternRemap {
+  Identity { len: usize },
+  Explicit(Vec<u32>),
 }
 
 struct SearchIndexParts {
@@ -296,7 +301,7 @@ impl SearchIndex {
       slots: vec![SearchSlot {
         engine: SlotEngine::Literal,
         search,
-        pattern_indexes,
+        pattern_remap: PatternRemap::from_indexes(pattern_indexes),
       }],
     })
   }
@@ -333,7 +338,7 @@ impl SearchIndex {
         stats.push(SearchIndexFindStats {
           slot: slot_index,
           engine: SearchEngine::from(slot.engine),
-          pattern_count: slot.pattern_indexes.len(),
+          pattern_count: slot.pattern_remap.len(),
           match_count: slot_matches.len(),
           elapsed_us: elapsed_us(start),
         });
@@ -400,16 +405,13 @@ impl SearchIndex {
     self
       .slots
       .iter()
-      .map(|slot| slot.pattern_indexes.len())
+      .map(|slot| slot.pattern_remap.len())
       .fold(0usize, usize::saturating_add)
   }
 
   #[must_use]
   pub fn is_empty(&self) -> bool {
-    self
-      .slots
-      .iter()
-      .all(|slot| slot.pattern_indexes.is_empty())
+    self.slots.iter().all(|slot| slot.pattern_remap.is_empty())
   }
 }
 
@@ -611,7 +613,7 @@ fn push_slot(
   slots.push(SearchSlot {
     engine,
     search,
-    pattern_indexes,
+    pattern_remap: PatternRemap::from_indexes(pattern_indexes),
   });
   Ok(())
 }
@@ -669,15 +671,9 @@ fn fuzzy_options(
 }
 
 fn remap_pattern(slot: &SearchSlot, local_pattern: u32) -> Result<u32> {
-  let index = usize::try_from(local_pattern).map_err(|_| {
-    Error::PatternIndexNotAddressable {
-      pattern: local_pattern,
-    }
-  })?;
   slot
-    .pattern_indexes
-    .get(index)
-    .copied()
+    .pattern_remap
+    .get(local_pattern)
     .ok_or_else(|| Error::Search {
       engine: slot.engine.into(),
       reason: format!("Missing pattern map entry for {local_pattern}"),
@@ -712,4 +708,60 @@ impl From<SlotEngine> for SearchEngine {
 
 fn pattern_index(index: usize) -> Result<u32> {
   u32::try_from(index).map_err(|_| Error::PatternIndexOutOfRange { index })
+}
+
+impl PatternRemap {
+  fn from_indexes(indexes: Vec<u32>) -> Self {
+    if indexes
+      .iter()
+      .enumerate()
+      .all(|(index, value)| *value == u32::try_from(index).unwrap_or(u32::MAX))
+    {
+      return Self::Identity { len: indexes.len() };
+    }
+    Self::Explicit(indexes)
+  }
+
+  const fn len(&self) -> usize {
+    match self {
+      Self::Identity { len } => *len,
+      Self::Explicit(indexes) => indexes.len(),
+    }
+  }
+
+  const fn is_empty(&self) -> bool {
+    self.len() == 0
+  }
+
+  fn get(&self, local_pattern: u32) -> Option<u32> {
+    let index = usize::try_from(local_pattern).ok()?;
+    match self {
+      Self::Identity { len } => (index < *len).then_some(local_pattern),
+      Self::Explicit(indexes) => indexes.get(index).copied(),
+    }
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::PatternRemap;
+
+  #[test]
+  fn pattern_remap_uses_identity_for_contiguous_indexes() {
+    let remap = PatternRemap::from_indexes(vec![0, 1, 2]);
+
+    assert_eq!(remap.len(), 3);
+    assert_eq!(remap.get(2), Some(2));
+    assert_eq!(remap.get(3), None);
+  }
+
+  #[test]
+  fn pattern_remap_keeps_explicit_non_contiguous_indexes() {
+    let remap = PatternRemap::from_indexes(vec![2, 4]);
+
+    assert_eq!(remap.len(), 2);
+    assert_eq!(remap.get(0), Some(2));
+    assert_eq!(remap.get(1), Some(4));
+    assert_eq!(remap.get(2), None);
+  }
 }
