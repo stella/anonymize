@@ -933,7 +933,6 @@ dependencies = [
 [[package]]
 name = "stella-regex-set-core"
 version = "1.0.5"
-source = "git+https://github.com/stella/regex-set?rev=8b80241a5a54cef8fdc6b6b34119981db0c6f597#8b80241a5a54cef8fdc6b6b34119981db0c6f597"
 dependencies = [
  "fancy-regex",
  "regex",
@@ -954,7 +953,6 @@ dependencies = [
 [[package]]
 name = "stella-text-search-core"
 version = "1.0.6"
-source = "git+https://github.com/stella/text-search?rev=0f35d481d990b720ccbce3594d38b7438846efc2#0f35d481d990b720ccbce3594d38b7438846efc2"
 dependencies = [
  "stella-aho-corasick-core",
  "stella-fuzzy-search-core",
