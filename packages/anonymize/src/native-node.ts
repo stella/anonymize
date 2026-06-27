@@ -51,12 +51,18 @@ export type NativeSdkPackageOptions = NativeSdkOptions & {
 
 export type DefaultNativePipelinePackageOptions = LoadNativeBindingOptions & {
   binding?: NativeAnonymizeBinding;
+  language?: string;
   packagePath?: string;
 };
 
 type ResolvedDefaultNativePipelineOptions = {
   binding: NativeAnonymizeBinding;
+  language?: string;
   packagePath?: string;
+};
+
+export type DefaultNativePipelinePackageFileOptions = {
+  language?: string;
 };
 
 const LOCAL_NATIVE_LOADER = "../index.cjs";
@@ -65,6 +71,7 @@ const DEFAULT_NATIVE_PIPELINE_PACKAGE_URL = new URL(
   "../native-pipeline.stlanonpkg",
   import.meta.url,
 );
+const DEFAULT_NATIVE_PIPELINE_LANGUAGE_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const DEFAULT_NATIVE_PIPELINE_PACKAGE_CACHE_KEY = "<default>";
 const defaultNativePipelineCache = new WeakMap<
   NativeAnonymizeBinding,
@@ -196,28 +203,31 @@ export const diagnostics_json = (
     ...(operators !== undefined ? { operators } : {}),
   });
 
-export const readDefaultNativePipelinePackageFile = (): Uint8Array => {
+export const readDefaultNativePipelinePackageFile = ({
+  language,
+}: DefaultNativePipelinePackageFileOptions = {}): Uint8Array => {
+  const packageUrl = defaultNativePipelinePackageUrl(language);
   try {
-    return new Uint8Array(readFileSync(DEFAULT_NATIVE_PIPELINE_PACKAGE_URL));
+    return new Uint8Array(readFileSync(packageUrl));
   } catch (error) {
     throw new Error(
-      `Default native pipeline package is unavailable: ${formatLoadError(error)}`,
+      `${defaultNativePipelinePackageDescription(language)} is unavailable: ${formatLoadError(error)}`,
     );
   }
 };
 
-export const readDefaultNativePipelinePackageFileAsync =
-  async (): Promise<Uint8Array> => {
-    try {
-      return new Uint8Array(
-        await readFile(DEFAULT_NATIVE_PIPELINE_PACKAGE_URL),
-      );
-    } catch (error) {
-      throw new Error(
-        `Default native pipeline package is unavailable: ${formatLoadError(error)}`,
-      );
-    }
-  };
+export const readDefaultNativePipelinePackageFileAsync = async ({
+  language,
+}: DefaultNativePipelinePackageFileOptions = {}): Promise<Uint8Array> => {
+  const packageUrl = defaultNativePipelinePackageUrl(language);
+  try {
+    return new Uint8Array(await readFile(packageUrl));
+  } catch (error) {
+    throw new Error(
+      `${defaultNativePipelinePackageDescription(language)} is unavailable: ${formatLoadError(error)}`,
+    );
+  }
+};
 
 export const createNativePipelineFromPackageFile = ({
   binding,
@@ -300,10 +310,14 @@ export const preloadDefaultNativePipelineAsync = (
 
 const resolveDefaultNativePipelineOptions = ({
   binding,
+  language,
   packagePath,
   expectedVersion,
   ...loadOptions
 }: DefaultNativePipelinePackageOptions = {}): ResolvedDefaultNativePipelineOptions => {
+  if (language !== undefined && packagePath !== undefined) {
+    throw new Error("Use either language or packagePath, not both");
+  }
   const resolvedBinding =
     binding ??
     loadNativeAnonymizeBinding({
@@ -315,17 +329,23 @@ const resolveDefaultNativePipelineOptions = ({
   }
   return {
     binding: resolvedBinding,
+    ...(language !== undefined
+      ? { language: normalizeDefaultNativePipelineLanguage(language) }
+      : {}),
     ...(packagePath !== undefined ? { packagePath } : {}),
   };
 };
 
 const createNativePipelineFromResolvedDefaultPackage = ({
   binding,
+  language,
   packagePath,
 }: ResolvedDefaultNativePipelineOptions): PreparedNativePipeline => {
   const packageBytes =
     packagePath === undefined
-      ? readDefaultNativePipelinePackageFile()
+      ? readDefaultNativePipelinePackageFile(
+          defaultPackageFileOptions(language),
+        )
       : readNativePipelinePackageFile(packagePath);
   return createNativePipelineFromPackage({
     binding,
@@ -335,17 +355,25 @@ const createNativePipelineFromResolvedDefaultPackage = ({
 
 const createNativePipelineFromResolvedDefaultPackageAsync = async ({
   binding,
+  language,
   packagePath,
 }: ResolvedDefaultNativePipelineOptions): Promise<PreparedNativePipeline> => {
   const packageBytes =
     packagePath === undefined
-      ? await readDefaultNativePipelinePackageFileAsync()
+      ? await readDefaultNativePipelinePackageFileAsync(
+          defaultPackageFileOptions(language),
+        )
       : await readNativePipelinePackageFileAsync(packagePath);
   return createNativePipelineFromPackage({
     binding,
     packageBytes,
   });
 };
+
+const defaultPackageFileOptions = (
+  language: string | undefined,
+): DefaultNativePipelinePackageFileOptions =>
+  language === undefined ? {} : { language };
 
 const resolveNativeSdkBinding = ({
   binding,
@@ -390,12 +418,44 @@ const defaultPipelineInflightCacheFor = (
 
 const defaultPipelineCacheKey = ({
   binding,
+  language,
   packagePath,
 }: ResolvedDefaultNativePipelineOptions): string =>
   [
     binding.nativePackageVersion(),
-    packagePath ?? DEFAULT_NATIVE_PIPELINE_PACKAGE_CACHE_KEY,
+    packagePath ??
+      (language === undefined
+        ? DEFAULT_NATIVE_PIPELINE_PACKAGE_CACHE_KEY
+        : `language:${language}`),
   ].join("\0");
+
+const defaultNativePipelinePackageUrl = (language: string | undefined): URL => {
+  if (language === undefined) {
+    return DEFAULT_NATIVE_PIPELINE_PACKAGE_URL;
+  }
+  const normalized = normalizeDefaultNativePipelineLanguage(language);
+  return new URL(
+    `../native-pipeline.${normalized}.stlanonpkg`,
+    import.meta.url,
+  );
+};
+
+const defaultNativePipelinePackageDescription = (
+  language: string | undefined,
+): string =>
+  language === undefined
+    ? "Default native pipeline package"
+    : `Default native pipeline package for language "${normalizeDefaultNativePipelineLanguage(language)}"`;
+
+const normalizeDefaultNativePipelineLanguage = (language: string): string => {
+  const normalized = language.trim().toLowerCase();
+  if (!DEFAULT_NATIVE_PIPELINE_LANGUAGE_PATTERN.test(normalized)) {
+    throw new Error(
+      `Default native pipeline language must match ${DEFAULT_NATIVE_PIPELINE_LANGUAGE_PATTERN.source}`,
+    );
+  }
+  return normalized;
+};
 
 type NativeBindingSpecifiersOptions = {
   env: Record<string, string | undefined>;

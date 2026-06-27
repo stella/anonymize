@@ -35,6 +35,7 @@
     "index.cjs",
     "*.node",
     "native-pipeline.stlanonpkg",
+    "native-pipeline.*.stlanonpkg",
     "scripts/build-native-pipeline-package.mjs"
   ],
   "publishConfig": {
