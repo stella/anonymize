@@ -102,8 +102,25 @@ pub struct DenyListMatchData {
   pub labels: StringGroups,
   pub custom_labels: StringGroups,
   pub originals: Vec<String>,
+  #[serde(default)]
+  pub pattern_meta: Vec<DenyListPatternMeta>,
   pub sources: StringGroups,
   pub filters: Option<DenyListFilterData>,
+}
+
+#[derive(
+  Clone,
+  Copy,
+  Debug,
+  Default,
+  Eq,
+  PartialEq,
+  serde::Deserialize,
+  serde::Serialize,
+)]
+pub struct DenyListPatternMeta {
+  pub has_alphanumeric: bool,
+  pub short_upper_acronym: bool,
 }
 
 #[derive(
@@ -203,6 +220,46 @@ impl StringGroups {
       table: &self.table,
       indexes,
     })
+  }
+}
+
+impl DenyListMatchData {
+  pub fn compact_runtime_patterns(&mut self) {
+    if self.originals.is_empty() {
+      return;
+    }
+
+    self.pattern_meta = self
+      .originals
+      .iter()
+      .map(|pattern| DenyListPatternMeta::from_pattern(pattern))
+      .collect();
+    self.originals.clear();
+  }
+
+  fn pattern_meta(&self, index: usize) -> DenyListPatternMeta {
+    self
+      .pattern_meta
+      .get(index)
+      .copied()
+      .or_else(|| {
+        self
+          .originals
+          .get(index)
+          .map(|pattern| DenyListPatternMeta::from_pattern(pattern))
+      })
+      .unwrap_or_default()
+  }
+}
+
+impl DenyListPatternMeta {
+  fn from_pattern(pattern: &str) -> Self {
+    Self {
+      has_alphanumeric: pattern.chars().any(char::is_alphanumeric),
+      short_upper_acronym: !pattern.is_empty()
+        && pattern.len() <= 5
+        && all_upper(pattern),
+    }
   }
 }
 
@@ -491,7 +548,7 @@ fn collect_deny_list_matches(
 
     let match_text = offsets.slice(found.start(), found.end())?;
     let keyword = match_text.to_lowercase();
-    let pattern = data.originals.get(local_index).map_or("", String::as_str);
+    let pattern_meta = data.pattern_meta(local_index);
     let custom_pattern_labels = data
       .custom_labels
       .get(local_index)
@@ -502,7 +559,7 @@ fn collect_deny_list_matches(
       offsets,
       found.start(),
       found.end(),
-      pattern,
+      pattern_meta.has_alphanumeric,
     )?;
     let custom_labels = if custom_edges_are_valid {
       custom_pattern_labels.clone()
@@ -524,7 +581,7 @@ fn collect_deny_list_matches(
         start: found.start(),
         match_text: &match_text,
         keyword: &keyword,
-        pattern,
+        pattern_meta,
         labels,
         custom_pattern_labels: &custom_pattern_labels,
         custom_edges_are_valid,
@@ -567,7 +624,7 @@ struct CuratedDenyListMatch<'a> {
   start: u32,
   match_text: &'a str,
   keyword: &'a str,
-  pattern: &'a str,
+  pattern_meta: DenyListPatternMeta,
   labels: StringGroup<'a>,
   custom_pattern_labels: &'a [String],
   custom_edges_are_valid: bool,
@@ -577,11 +634,8 @@ struct CuratedDenyListMatch<'a> {
 fn curated_labels_for_match(
   args: &CuratedDenyListMatch<'_>,
 ) -> Result<Vec<String>> {
-  let pattern_is_acronym = !args.pattern.is_empty()
-    && args.pattern.len() <= 5
-    && all_upper(args.pattern);
   let acronym_matches_acronym =
-    !pattern_is_acronym || all_upper(args.match_text);
+    !args.pattern_meta.short_upper_acronym || all_upper(args.match_text);
   let source_char = char_at(args.full_text, args.offsets, args.start)?;
   let passes_filters = source_char.is_some_and(char::is_uppercase)
     && !args.filters.stopwords.contains(args.keyword)
@@ -1937,9 +1991,9 @@ fn custom_match_has_valid_edges(
   offsets: &ByteOffsets<'_>,
   start: u32,
   end: u32,
-  pattern: &str,
+  pattern_has_alphanumeric: bool,
 ) -> Result<bool> {
-  if !pattern.chars().any(char::is_alphanumeric) {
+  if !pattern_has_alphanumeric {
     return Ok(true);
   }
 

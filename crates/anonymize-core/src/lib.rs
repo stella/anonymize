@@ -52,9 +52,9 @@ pub use prepared::{
   StaticRedactionResult,
 };
 pub use processors::{
-  CountryMatchData, DenyListFilterData, DenyListMatchData, GazetteerMatchData,
-  PatternSlice, RegexMatchMeta, SigningPlaceGuardData, StringGroups,
-  process_country_matches, process_deny_list_matches,
+  CountryMatchData, DenyListFilterData, DenyListMatchData, DenyListPatternMeta,
+  GazetteerMatchData, PatternSlice, RegexMatchMeta, SigningPlaceGuardData,
+  StringGroups, process_country_matches, process_deny_list_matches,
   process_gazetteer_matches, process_regex_matches,
 };
 pub use redact::{deanonymise, redact_text};

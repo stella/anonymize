@@ -1028,9 +1028,7 @@ fn prepared_search_core_package_payload_to_bytes(
   artifacts: &[u8],
 ) -> Result<Vec<u8>> {
   let mut config = config.clone();
-  if core_literal_patterns_are_identity_mapped(&config) {
-    config.literal_patterns.clear();
-  }
+  compact_core_package_config(&mut config);
   let config_bytes =
     bincode::serde::encode_to_vec(config, package_bincode_config())
       .map_err(|error| invalid_prepared_search_package(error.to_string()))?;
@@ -1046,6 +1044,15 @@ fn prepared_search_core_package_payload_to_bytes(
   bytes.extend_from_slice(&config_bytes);
   bytes.extend_from_slice(artifacts);
   Ok(bytes)
+}
+
+fn compact_core_package_config(config: &mut PreparedSearchConfig) {
+  if core_literal_patterns_are_identity_mapped(config) {
+    config.literal_patterns.clear();
+  }
+  if let Some(data) = &mut config.deny_list_data {
+    data.compact_runtime_patterns();
+  }
 }
 
 fn core_package_view_from_payload(
@@ -1417,6 +1424,7 @@ impl<'a> PreparedSearchPackageParts<'a> {
   }
 }
 
+#[derive(Clone, Copy)]
 struct RawPackageHeader<'a> {
   version: u32,
   digest: [u8; 32],
@@ -1474,11 +1482,11 @@ fn prepared_search_package_parts(
   Err(invalid_prepared_search_package("unexpected header"))
 }
 
-fn compressed_package_parts<'a>(
+fn compressed_package_parts(
   core: bool,
-  raw: RawPackageHeader<'a>,
+  raw: RawPackageHeader<'_>,
   compression: PackageCompression,
-) -> Result<PreparedSearchPackageParts<'a>> {
+) -> Result<PreparedSearchPackageParts<'_>> {
   let len_end = std::mem::size_of::<u64>();
   let len_bytes = raw
     .payload
@@ -1603,6 +1611,7 @@ fn deny_list_data_from_binding(
       "deny_list.custom_label_indices",
     )?,
     originals: data.originals,
+    pattern_meta: Vec::new(),
     sources: string_groups_from_binding(
       data.sources,
       data.source_indices,
@@ -2402,9 +2411,9 @@ mod tests {
   #![allow(clippy::unwrap_used)]
 
   use super::{
-    BindingOperatorConfig, BindingPreparedSearchConfig, BindingSearchOptions,
-    BindingSearchPattern, ContractError,
-    MAX_PREPARED_SEARCH_PACKAGE_PAYLOAD_BYTES,
+    BindingDenyListMatchData, BindingOperatorConfig,
+    BindingPreparedSearchConfig, BindingSearchOptions, BindingSearchPattern,
+    ContractError, MAX_PREPARED_SEARCH_PACKAGE_PAYLOAD_BYTES,
     PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER,
     PREPARED_SEARCH_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION,
     PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION,
@@ -2644,6 +2653,43 @@ mod tests {
     assert!(prepared_search_package_has_core_payload(&bytes));
     assert_eq!(package.config, compact_config);
     assert_eq!(package.artifacts, artifacts);
+  }
+
+  #[test]
+  fn prepared_search_core_package_compacts_deny_list_originals() {
+    let binding_config = BindingPreparedSearchConfig {
+      deny_list_data: Some(BindingDenyListMatchData {
+        labels: vec![
+          vec![String::from("person")],
+          vec![String::from("matter")],
+        ],
+        custom_labels: vec![Vec::new(), vec![String::from("matter")]],
+        originals: vec![String::from("VAT"), String::from("Secret Code")],
+        sources: vec![
+          vec![String::from("deny-list")],
+          vec![String::from("custom-deny-list")],
+        ],
+        filters: None,
+        ..BindingDenyListMatchData::default()
+      }),
+      ..BindingPreparedSearchConfig::default()
+    };
+    let config = prepared_search_config_from_binding(binding_config).unwrap();
+
+    let bytes =
+      prepared_search_core_package_to_compressed_bytes(&config, b"artifact")
+        .unwrap();
+    let package = prepared_search_core_package_from_bytes(&bytes).unwrap();
+    let data = package.config.deny_list_data.unwrap();
+
+    assert!(data.originals.is_empty());
+    assert_eq!(data.pattern_meta.len(), 2);
+    let first = data.pattern_meta.first().unwrap();
+    let second = data.pattern_meta.get(1).unwrap();
+    assert!(first.has_alphanumeric);
+    assert!(first.short_upper_acronym);
+    assert!(second.has_alphanumeric);
+    assert!(!second.short_upper_acronym);
   }
 
   #[test]

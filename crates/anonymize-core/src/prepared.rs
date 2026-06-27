@@ -1999,17 +1999,31 @@ fn validate_deny_list_config(config: &PreparedSearchConfig) -> Result<()> {
     config.slices.deny_list,
     data.custom_labels.len(),
   )?;
-  validate_static_data_length(
-    "deny_list.originals",
-    config.slices.deny_list,
-    data.originals.len(),
-  )?;
+  validate_deny_list_pattern_metadata(config.slices.deny_list, data)?;
   validate_static_data_length(
     "deny_list.sources",
     config.slices.deny_list,
     data.sources.len(),
   )?;
   ensure_supported_deny_list_sources(data)
+}
+
+fn validate_deny_list_pattern_metadata(
+  slice: PatternSlice,
+  data: &DenyListMatchData,
+) -> Result<()> {
+  if !data.originals.is_empty() {
+    return validate_static_data_length(
+      "deny_list.originals",
+      slice,
+      data.originals.len(),
+    );
+  }
+  validate_static_data_length(
+    "deny_list.pattern_meta",
+    slice,
+    data.pattern_meta.len(),
+  )
 }
 
 fn validate_gazetteer_config(config: &PreparedSearchConfig) -> Result<()> {
