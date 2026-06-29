@@ -1,8 +1,8 @@
 #![allow(clippy::print_stdout)]
 
-use std::env;
 use std::io::Write;
 use std::time::Instant;
+use std::{env, fs};
 
 use serde::Deserialize;
 use serde_json::json;
@@ -26,7 +26,10 @@ struct Case {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-  let payload = env::var("STELLA_ANONYMIZE_PERF_PAYLOAD")?;
+  let payload = match env::var("STELLA_ANONYMIZE_PERF_PAYLOAD_PATH") {
+    Ok(path) => fs::read_to_string(path)?,
+    Err(_) => env::var("STELLA_ANONYMIZE_PERF_PAYLOAD")?,
+  };
   let payload = serde_json::from_str::<Payload>(&payload)?;
   let config =
     serde_json::from_str::<BindingPreparedSearchConfig>(&payload.config_json)?;

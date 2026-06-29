@@ -16,8 +16,9 @@ const TOP_LEVEL_ITERATIONS = Number(
   process.env.ANONYMIZE_NATIVE_PERF_TOP_LEVEL_ITERATIONS ??
     Math.min(ITERATIONS, 10),
 );
+const USER_DATA_SCENARIOS = userDataScenarios();
 
-const configJson = JSON.stringify({
+const BASE_CONFIG = {
   regex_patterns: [{ kind: "regex", pattern: "\\b[A-Z]{2}\\d{4}\\b" }],
   custom_regex_patterns: [{ kind: "regex", pattern: "\\bMAT-\\d{3}\\b" }],
   literal_patterns: [
@@ -90,7 +91,7 @@ const configJson = JSON.stringify({
     is_fuzzy: [false, true],
   },
   country_data: { labels: ["country"] },
-});
+};
 
 const pythonScript = `
 import importlib.util
@@ -106,7 +107,11 @@ spec = importlib.util.spec_from_file_location(
 )
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
-payload = json.loads(os.environ["STELLA_ANONYMIZE_PERF_PAYLOAD"])
+payload_path = os.environ.get("STELLA_ANONYMIZE_PERF_PAYLOAD_PATH")
+if payload_path is not None:
+    payload = json.loads(pathlib.Path(payload_path).read_text())
+else:
+    payload = json.loads(os.environ["STELLA_ANONYMIZE_PERF_PAYLOAD"])
 prepare_start = time.perf_counter_ns()
 prepared = module.PreparedSearch(payload["config_json"])
 prepare_ms = (time.perf_counter_ns() - prepare_start) / 1_000_000
@@ -142,7 +147,11 @@ sys.path.insert(0, str(module_root))
 
 import stella_anonymize as anonymize
 
-payload = json.loads(os.environ["STELLA_ANONYMIZE_PERF_PAYLOAD"])
+payload_path = os.environ.get("STELLA_ANONYMIZE_PERF_PAYLOAD_PATH")
+if payload_path is not None:
+    payload = json.loads(pathlib.Path(payload_path).read_text())
+else:
+    payload = json.loads(os.environ["STELLA_ANONYMIZE_PERF_PAYLOAD"])
 package_start = time.perf_counter_ns()
 package_bytes = anonymize.prepare_search_package(payload["config_json"])
 package_prepare_ms = (time.perf_counter_ns() - package_start) / 1_000_000
@@ -298,129 +307,141 @@ copyFileSync(
 );
 
 const native = createRequire(import.meta.url)(napiPath);
-const cases = buildCases();
-const payload = {
-  config_json: configJson,
-  iterations: ITERATIONS,
-  top_level_iterations: TOP_LEVEL_ITERATIONS,
-  cases: cases.map(({ text, operatorsConfig, operatorsJson }) => ({
-    text,
-    operators: operatorsConfig?.operators ?? null,
-    operators_json: operatorsJson,
-  })),
-};
-const rustCoreResults = callRustCoreResults(payload, tempDir);
-
-const rustOutput = runCommand(
-  "cargo",
-  [
-    "run",
-    "-p",
-    "stella-anonymize-adapter-contract",
-    "--example",
-    "native_adapter_perf",
-    "--release",
-    "--locked",
-  ],
-  {
-    STELLA_ANONYMIZE_PERF_PAYLOAD: JSON.stringify(payload),
-  },
-);
-const rustSummary = JSON.parse(rustOutput);
-printSummary("rust-core", rustSummary, cases.length, ITERATIONS);
-
-const tsPrepareStart = Bun.nanoseconds();
-const prepared = new native.NativePreparedSearch(configJson);
-const tsPrepareMs = elapsedMs(tsPrepareStart);
-const tsStart = Bun.nanoseconds();
-for (let iteration = 0; iteration < ITERATIONS; iteration += 1) {
-  for (const item of cases) {
-    prepared.redactStaticEntities(
-      item.text,
-      item.operatorsJson === undefined
-        ? undefined
-        : JSON.parse(item.operatorsJson),
-    );
-  }
+for (const userDataScenario of USER_DATA_SCENARIOS) {
+  runScenario(userDataScenario);
 }
-const tsRunMs = elapsedMs(tsStart);
-assertAdapterResults(
-  "ts-napi",
-  cases.map((item) =>
-    canonicalResult(
+
+function runScenario(userDataScenario) {
+  const userData = userDataScenarioData(userDataScenario);
+  const configJson = buildConfigJson(userData);
+  const cases = buildCases(userData);
+  const summaryContext = {
+    userDataScenario,
+    configBytes: Buffer.byteLength(configJson, "utf8"),
+    customDenyListCount: userData.customDenyListCount,
+    customRegexCount: userData.customRegexCount,
+  };
+  const payload = {
+    config_json: configJson,
+    iterations: ITERATIONS,
+    top_level_iterations: TOP_LEVEL_ITERATIONS,
+    cases: cases.map(({ text, operatorsConfig, operatorsJson }) => ({
+      text,
+      operators: operatorsConfig?.operators ?? null,
+      operators_json: operatorsJson,
+    })),
+  };
+  const payloadJson = JSON.stringify(payload);
+  const payloadPath = join(
+    tempDir,
+    `native-adapter-perf-${userDataScenario}.json`,
+  );
+  writeFileSync(payloadPath, payloadJson);
+  const rustCoreResults = callRustCoreResults(payload, tempDir);
+
+  const rustOutput = runCommand(
+    "cargo",
+    [
+      "run",
+      "-p",
+      "stella-anonymize-adapter-contract",
+      "--example",
+      "native_adapter_perf",
+      "--release",
+      "--locked",
+    ],
+    {
+      STELLA_ANONYMIZE_PERF_PAYLOAD_PATH: payloadPath,
+    },
+  );
+  const rustSummary = JSON.parse(rustOutput);
+  printSummary({
+    adapter: "rust-core",
+    summary: rustSummary,
+    fixtureCount: cases.length,
+    iterations: ITERATIONS,
+    context: summaryContext,
+  });
+
+  const tsPrepareStart = Bun.nanoseconds();
+  const prepared = new native.NativePreparedSearch(configJson);
+  const tsPrepareMs = elapsedMs(tsPrepareStart);
+  const tsStart = Bun.nanoseconds();
+  for (let iteration = 0; iteration < ITERATIONS; iteration += 1) {
+    for (const item of cases) {
       prepared.redactStaticEntities(
         item.text,
         item.operatorsJson === undefined
           ? undefined
           : JSON.parse(item.operatorsJson),
+      );
+    }
+  }
+  const tsRunMs = elapsedMs(tsStart);
+  assertAdapterResults(
+    "ts-napi",
+    cases.map((item) =>
+      canonicalResult(
+        prepared.redactStaticEntities(
+          item.text,
+          item.operatorsJson === undefined
+            ? undefined
+            : JSON.parse(item.operatorsJson),
+        ),
       ),
     ),
-  ),
-  rustCoreResults,
-);
-printSummary(
-  "ts-napi",
-  { prepareMs: tsPrepareMs, runMs: tsRunMs },
-  cases.length,
-  ITERATIONS,
-);
+    rustCoreResults,
+  );
+  printSummary({
+    adapter: "ts-napi",
+    summary: { prepareMs: tsPrepareMs, runMs: tsRunMs },
+    fixtureCount: cases.length,
+    iterations: ITERATIONS,
+    context: summaryContext,
+  });
 
-const packageStart = Bun.nanoseconds();
-const packageBytes = prepare_search_package({
-  binding: native,
-  config: configJson,
-});
-const packagePrepareMs = elapsedMs(packageStart);
-const loadStart = Bun.nanoseconds();
-const preparedSdk = load_prepared_package({
-  binding: native,
-  packageBytes,
-});
-const loadMs = elapsedMs(loadStart);
-const sdkRunStart = Bun.nanoseconds();
-for (let iteration = 0; iteration < ITERATIONS; iteration += 1) {
-  for (const item of cases) {
-    preparedSdk.redact_text(item.text, item.operatorsConfig);
+  const packageStart = Bun.nanoseconds();
+  const packageBytes = prepare_search_package({
+    binding: native,
+    config: configJson,
+  });
+  const packagePrepareMs = elapsedMs(packageStart);
+  const loadStart = Bun.nanoseconds();
+  const preparedSdk = load_prepared_package({
+    binding: native,
+    packageBytes,
+  });
+  const loadMs = elapsedMs(loadStart);
+  const sdkRunStart = Bun.nanoseconds();
+  for (let iteration = 0; iteration < ITERATIONS; iteration += 1) {
+    for (const item of cases) {
+      preparedSdk.redact_text(item.text, item.operatorsConfig);
+    }
   }
-}
-const sdkRunMs = elapsedMs(sdkRunStart);
-assertAdapterResults(
-  "ts-sdk-prepared-package",
-  cases.map((item) =>
-    canonicalResult(preparedSdk.redact_text(item.text, item.operatorsConfig)),
-  ),
-  rustCoreResults,
-);
-printSummary(
-  "ts-sdk-prepared-package",
-  {
-    prepareMs: packagePrepareMs + loadMs,
-    packagePrepareMs,
-    loadMs,
-    runMs: sdkRunMs,
-  },
-  cases.length,
-  ITERATIONS,
-);
+  const sdkRunMs = elapsedMs(sdkRunStart);
+  assertAdapterResults(
+    "ts-sdk-prepared-package",
+    cases.map((item) =>
+      canonicalResult(preparedSdk.redact_text(item.text, item.operatorsConfig)),
+    ),
+    rustCoreResults,
+  );
+  printSummary({
+    adapter: "ts-sdk-prepared-package",
+    summary: {
+      prepareMs: packagePrepareMs + loadMs,
+      packagePrepareMs,
+      loadMs,
+      runMs: sdkRunMs,
+    },
+    fixtureCount: cases.length,
+    iterations: ITERATIONS,
+    context: summaryContext,
+  });
 
-const topLevelRunStart = Bun.nanoseconds();
-for (let iteration = 0; iteration < TOP_LEVEL_ITERATIONS; iteration += 1) {
-  for (const item of cases) {
-    redactTextWithSdk({
-      binding: native,
-      config: configJson,
-      fullText: item.text,
-      ...(item.operatorsConfig !== undefined
-        ? { operators: item.operatorsConfig }
-        : {}),
-    });
-  }
-}
-const topLevelRunMs = elapsedMs(topLevelRunStart);
-assertAdapterResults(
-  "ts-sdk-one-shot",
-  cases.map((item) =>
-    canonicalResult(
+  const topLevelRunStart = Bun.nanoseconds();
+  for (let iteration = 0; iteration < TOP_LEVEL_ITERATIONS; iteration += 1) {
+    for (const item of cases) {
       redactTextWithSdk({
         binding: native,
         config: configJson,
@@ -428,60 +449,238 @@ assertAdapterResults(
         ...(item.operatorsConfig !== undefined
           ? { operators: item.operatorsConfig }
           : {}),
+      });
+    }
+  }
+  const topLevelRunMs = elapsedMs(topLevelRunStart);
+  assertAdapterResults(
+    "ts-sdk-one-shot",
+    cases.map((item) =>
+      canonicalResult(
+        redactTextWithSdk({
+          binding: native,
+          config: configJson,
+          fullText: item.text,
+          ...(item.operatorsConfig !== undefined
+            ? { operators: item.operatorsConfig }
+            : {}),
+        }),
+      ),
+    ),
+    rustCoreResults,
+  );
+  printSummary({
+    adapter: "ts-sdk-one-shot",
+    summary: { prepareMs: 0, runMs: topLevelRunMs },
+    fixtureCount: cases.length,
+    iterations: TOP_LEVEL_ITERATIONS,
+    context: summaryContext,
+  });
+
+  const pyOutput = runCommand("python3", ["-c", pythonScript], {
+    STELLA_ANONYMIZE_PERF_PAYLOAD_PATH: payloadPath,
+    STELLA_ANONYMIZE_PY_MODULE: pythonModulePath,
+  });
+  const pySummary = JSON.parse(pyOutput);
+  assertAdapterResults("python-pyo3", pySummary.caseResults, rustCoreResults);
+  printSummary({
+    adapter: "python-pyo3",
+    summary: pySummary,
+    fixtureCount: cases.length,
+    iterations: ITERATIONS,
+    context: summaryContext,
+  });
+
+  const pySdkOutput = runCommand("python3", ["-c", pythonSdkScript], {
+    STELLA_ANONYMIZE_PERF_PAYLOAD_PATH: payloadPath,
+    STELLA_ANONYMIZE_PY_MODULE: pythonModulePath,
+  });
+  const pySdkSummary = JSON.parse(pySdkOutput);
+  assertAdapterResults(
+    "python-sdk-prepared-package",
+    pySdkSummary.packageCaseResults,
+    rustCoreResults,
+  );
+  printSummary({
+    adapter: "python-sdk-prepared-package",
+    summary: {
+      prepareMs: pySdkSummary.packagePrepareMs + pySdkSummary.loadMs,
+      packagePrepareMs: pySdkSummary.packagePrepareMs,
+      loadMs: pySdkSummary.loadMs,
+      runMs: pySdkSummary.runMs,
+    },
+    fixtureCount: cases.length,
+    iterations: ITERATIONS,
+    context: summaryContext,
+  });
+  assertAdapterResults(
+    "python-sdk-one-shot",
+    pySdkSummary.oneShotCaseResults,
+    rustCoreResults,
+  );
+  printSummary({
+    adapter: "python-sdk-one-shot",
+    summary: { prepareMs: 0, runMs: pySdkSummary.oneShotMs },
+    fixtureCount: cases.length,
+    iterations: TOP_LEVEL_ITERATIONS,
+    context: summaryContext,
+  });
+}
+
+function buildConfigJson(userData) {
+  const config = JSON.parse(JSON.stringify(BASE_CONFIG));
+  const denyListSlice = config.slices.deny_list;
+  const gazetteerSlice = config.slices.gazetteer;
+  const countriesSlice = config.slices.countries;
+  const denyListPatterns = config.literal_patterns.slice(
+    denyListSlice.start,
+    denyListSlice.end,
+  );
+  const gazetteerPatterns = config.literal_patterns.slice(
+    gazetteerSlice.start,
+    gazetteerSlice.end,
+  );
+  const countryPatterns = config.literal_patterns.slice(
+    countriesSlice.start,
+    countriesSlice.end,
+  );
+  const customDenyListPatterns = userData.denyListEntries.map(({ value }) =>
+    literalPattern(value),
+  );
+
+  config.literal_patterns = [
+    ...denyListPatterns,
+    ...customDenyListPatterns,
+    ...gazetteerPatterns,
+    ...countryPatterns,
+  ];
+  config.slices.deny_list = {
+    start: 0,
+    end: denyListPatterns.length + customDenyListPatterns.length,
+  };
+  config.slices.gazetteer = {
+    start: config.slices.deny_list.end,
+    end: config.slices.deny_list.end + gazetteerPatterns.length,
+  };
+  config.slices.countries = {
+    start: config.slices.gazetteer.end,
+    end: config.slices.gazetteer.end + countryPatterns.length,
+  };
+
+  for (const entry of userData.denyListEntries) {
+    config.deny_list_data.labels.push([entry.label]);
+    config.deny_list_data.custom_labels.push([entry.label]);
+    config.deny_list_data.originals.push(entry.value);
+    config.deny_list_data.sources.push(["custom-deny-list"]);
+  }
+  for (const entry of userData.regexEntries) {
+    config.custom_regex_patterns.push({
+      kind: "regex",
+      pattern: entry.pattern,
+    });
+    config.custom_regex_meta.push({
+      label: entry.label,
+      score: entry.score,
+      source_detail: "custom-regex",
+    });
+  }
+  config.slices.custom_regex = {
+    start: 0,
+    end: config.custom_regex_patterns.length,
+  };
+
+  return JSON.stringify(config);
+}
+
+function literalPattern(pattern) {
+  return {
+    kind: "literal-with-options",
+    pattern,
+    case_insensitive: true,
+    whole_words: true,
+  };
+}
+
+function userDataScenarioData(userDataScenario) {
+  switch (userDataScenario) {
+    case "none":
+      return {
+        customDenyListCount: 0,
+        customRegexCount: 0,
+        denyListEntries: [],
+        regexEntries: [],
+      };
+    case "sample":
+      return generatedUserData({
+        customDenyListCount: 50,
+        customRegexCount: 5,
+      });
+    case "heavy":
+      return generatedUserData({
+        customDenyListCount: 5_000,
+        customRegexCount: 50,
+      });
+    default:
+      throw new Error(`Unsupported user data scenario: ${userDataScenario}`);
+  }
+}
+
+function generatedUserData({ customDenyListCount, customRegexCount }) {
+  return {
+    customDenyListCount,
+    customRegexCount,
+    denyListEntries: Array.from(
+      { length: customDenyListCount },
+      (_, index) => ({
+        value: generatedCustomDenyListTerm(index),
+        label: index % 2 === 0 ? "organization" : "person",
       }),
     ),
-  ),
-  rustCoreResults,
-);
-printSummary(
-  "ts-sdk-one-shot",
-  { prepareMs: 0, runMs: topLevelRunMs },
-  cases.length,
-  TOP_LEVEL_ITERATIONS,
-);
+    regexEntries: Array.from({ length: customRegexCount }, (_, index) => ({
+      pattern: generatedCustomRegexPattern(index),
+      label:
+        index % 2 === 0 ? "registration number" : "tax identification number",
+      score: 0.92,
+    })),
+  };
+}
 
-const pyOutput = runCommand("python3", ["-c", pythonScript], {
-  STELLA_ANONYMIZE_PERF_PAYLOAD: JSON.stringify(payload),
-  STELLA_ANONYMIZE_PY_MODULE: pythonModulePath,
-});
-const pySummary = JSON.parse(pyOutput);
-assertAdapterResults("python-pyo3", pySummary.caseResults, rustCoreResults);
-printSummary("python-pyo3", pySummary, cases.length, ITERATIONS);
+function generatedCustomDenyListTerm(index) {
+  return `CustomerPrivateTerm${String(index).padStart(5, "0")}`;
+}
 
-const pySdkOutput = runCommand("python3", ["-c", pythonSdkScript], {
-  STELLA_ANONYMIZE_PERF_PAYLOAD: JSON.stringify(payload),
-  STELLA_ANONYMIZE_PY_MODULE: pythonModulePath,
-});
-const pySdkSummary = JSON.parse(pySdkOutput);
-assertAdapterResults(
-  "python-sdk-prepared-package",
-  pySdkSummary.packageCaseResults,
-  rustCoreResults,
-);
-printSummary(
-  "python-sdk-prepared-package",
-  {
-    prepareMs: pySdkSummary.packagePrepareMs + pySdkSummary.loadMs,
-    packagePrepareMs: pySdkSummary.packagePrepareMs,
-    loadMs: pySdkSummary.loadMs,
-    runMs: pySdkSummary.runMs,
-  },
-  cases.length,
-  ITERATIONS,
-);
-assertAdapterResults(
-  "python-sdk-one-shot",
-  pySdkSummary.oneShotCaseResults,
-  rustCoreResults,
-);
-printSummary(
-  "python-sdk-one-shot",
-  { prepareMs: 0, runMs: pySdkSummary.oneShotMs },
-  cases.length,
-  TOP_LEVEL_ITERATIONS,
-);
+function generatedCustomRegexPattern(index) {
+  return `USR-${String(index).padStart(4, "0")}-[A-Z]{2}\\d{4}`;
+}
 
-function buildCases() {
+function generatedCustomRegexValue(index, caseIndex) {
+  return `USR-${String(index).padStart(4, "0")}-AB${String(caseIndex).padStart(
+    4,
+    "0",
+  )}`;
+}
+
+function userDataScenarios() {
+  const value =
+    process.env.ANONYMIZE_NATIVE_PERF_USER_DATA_SCENARIOS ??
+    "none,sample,heavy";
+  return value
+    .split(",")
+    .map((entry) => normalizeUserDataScenario(entry))
+    .filter((entry, index, entries) => entries.indexOf(entry) === index);
+}
+
+function normalizeUserDataScenario(value) {
+  const scenario = value.trim().toLowerCase();
+  if (scenario === "none" || scenario === "sample" || scenario === "heavy") {
+    return scenario;
+  }
+  throw new Error(
+    `ANONYMIZE_NATIVE_PERF_USER_DATA_SCENARIOS must contain none, sample, or heavy; got ${value}`,
+  );
+}
+
+function buildCases(userData) {
   const places = ["Fuzztovn", "Fuzztawn", "Fuzztowm"];
   const operators = [
     undefined,
@@ -496,10 +695,20 @@ function buildCases() {
     const matter = `MAT-${String(index % 1_000).padStart(3, "0")}`;
     const place = places[index % places.length];
     const operatorsJson = operators[index % operators.length];
+    const customText =
+      userData.customDenyListCount === 0 || userData.customRegexCount === 0
+        ? ""
+        : ` Customer ${generatedCustomDenyListTerm(
+            index % userData.customDenyListCount,
+          )} references ${generatedCustomRegexValue(
+            index % userData.customRegexCount,
+            index,
+          )}.`;
     fixtureCases.push({
       text:
         `Reference ${registration} for Acme s.r.o. near ` +
-        `${place}, Turkey, Prague, matter ${matter}, code Secret Code.`,
+        `${place}, Turkey, Prague, matter ${matter}, code Secret Code.` +
+        customText,
       operatorsConfig:
         operatorsJson === undefined ? undefined : JSON.parse(operatorsJson),
       operatorsJson,
@@ -671,7 +880,7 @@ function nativeLibraryPath(name) {
   return join(ROOT_DIR, "target", "release", `${name}.dll`);
 }
 
-function printSummary(adapter, summary, fixtureCount, iterations) {
+function printSummary({ adapter, summary, fixtureCount, iterations, context }) {
   const calls = fixtureCount * iterations;
   const runMs = Number(summary.runMs);
   const prepareMs = Number(summary.prepareMs);
@@ -679,6 +888,10 @@ function printSummary(adapter, summary, fixtureCount, iterations) {
     JSON.stringify({
       event: "native-adapter-perf",
       adapter,
+      userDataScenario: context.userDataScenario,
+      configBytes: context.configBytes,
+      customDenyListCount: context.customDenyListCount,
+      customRegexCount: context.customRegexCount,
       fixtureCount,
       iterations,
       calls,
@@ -723,6 +936,7 @@ function runCommand(command, args, env = {}) {
   throw new Error(
     [
       `${command} ${args.join(" ")} failed with status ${result.status}`,
+      result.error === undefined ? "" : String(result.error),
       result.stdout,
       result.stderr,
     ]
