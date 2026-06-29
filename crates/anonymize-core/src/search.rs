@@ -647,14 +647,7 @@ fn capture_regex_slot_artifacts(
   patterns: Vec<text_search::PatternEntry>,
   options: RegexSearchOptions,
 ) -> Result<()> {
-  if !options.overlap_all {
-    return capture_slot_artifacts(slots, patterns, regex_options(options));
-  }
-
-  for pattern in patterns {
-    capture_slot_artifacts(slots, vec![pattern], regex_options(options))?;
-  }
-  Ok(())
+  capture_slot_artifacts(slots, patterns, regex_options(options))
 }
 
 fn push_regex_slots(
@@ -663,35 +656,18 @@ fn push_regex_slots(
   pattern_indexes: Vec<u32>,
   options: RegexSearchOptions,
   artifacts: &mut Option<&mut SearchIndexArtifactCursor<'_>>,
-  mut stats: Option<&mut Vec<SearchIndexBuildStats>>,
+  stats: Option<&mut Vec<SearchIndexBuildStats>>,
 ) -> Result<()> {
-  if !options.overlap_all {
-    let regex_artifacts = slot_artifacts(&patterns, artifacts)?;
-    return push_slot(
-      slots,
-      SlotEngine::Regex,
-      patterns,
-      pattern_indexes,
-      regex_options(options),
-      regex_artifacts,
-      stats,
-    );
-  }
-
-  for (pattern, pattern_index) in patterns.into_iter().zip(pattern_indexes) {
-    let regex_artifacts =
-      slot_artifacts(std::slice::from_ref(&pattern), artifacts)?;
-    push_slot(
-      slots,
-      SlotEngine::Regex,
-      vec![pattern],
-      vec![pattern_index],
-      regex_options(options),
-      regex_artifacts,
-      stats.as_deref_mut(),
-    )?;
-  }
-  Ok(())
+  let regex_artifacts = slot_artifacts(&patterns, artifacts)?;
+  push_slot(
+    slots,
+    SlotEngine::Regex,
+    patterns,
+    pattern_indexes,
+    regex_options(options),
+    regex_artifacts,
+    stats,
+  )
 }
 
 fn push_slot(
