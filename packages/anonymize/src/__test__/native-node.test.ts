@@ -536,6 +536,14 @@ describe("native node loader", () => {
       diagnostics: { events: [] },
       result: expectedJson,
     });
+    expect(
+      JSON.parse(
+        summary_diagnostics_json("{}", "x", undefined, { binding }) ?? "{}",
+      ),
+    ).toEqual({
+      diagnostics: { events: [] },
+      result: expectedJson,
+    });
 
     const dir = mkdtempSync(join(tmpdir(), "anonymize-shared-sdk-"));
     const packagePath = join(dir, "pipeline.stlanonpkg");
@@ -676,4 +684,6 @@ const fakePreparedSearch = ({
     ? {}
     : { redactStaticEntitiesJson: onRedactStaticEntitiesJson }),
   redactStaticEntitiesDiagnosticsJson: emptyStaticRedactionDiagnosticJson,
+  redactStaticEntitiesSummaryDiagnosticsJson:
+    emptyStaticRedactionDiagnosticJson,
 });

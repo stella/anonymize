@@ -20,6 +20,7 @@ import {
   prepare_search_package as prepareSearchPackageWithBinding,
   redact_text as redactTextWithBinding,
   redact_text_json as redactTextJsonWithBinding,
+  summary_diagnostics_json as summaryDiagnosticsJsonWithBinding,
 } from "./native";
 
 export * from "./native";
@@ -209,6 +210,19 @@ export const diagnostics_json = (
   options: NativeSdkOptions = {},
 ): string | null =>
   diagnosticsJsonWithBinding({
+    binding: resolveNativeSdkBinding(options),
+    config,
+    fullText,
+    ...(operators !== undefined ? { operators } : {}),
+  });
+
+export const summary_diagnostics_json = (
+  config: NativeSearchPackageInput,
+  fullText: string,
+  operators?: NativeOperatorConfig,
+  options: NativeSdkOptions = {},
+): string | null =>
+  summaryDiagnosticsJsonWithBinding({
     binding: resolveNativeSdkBinding(options),
     config,
     fullText,
