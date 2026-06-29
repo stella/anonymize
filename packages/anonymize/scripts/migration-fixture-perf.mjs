@@ -439,9 +439,9 @@ async function runWorker() {
       ? null
       : collectNativeDiagnostics({ runner: runtimeRunner, fixtures });
   if (nativeDiagnostics !== null && PROFILE_REGEX_LABELS) {
-    nativeDiagnostics.regexPrepareByLabel = profileNativeRegexPrepare(
-      search.nativeStaticConfig,
-    );
+    nativeDiagnostics.regexPrepareByLabel = search?.nativeStaticConfig
+      ? profileNativeRegexPrepare(search.nativeStaticConfig)
+      : { unavailable: "prebuilt-package" };
   }
   if (
     nativeDiagnostics !== null &&
