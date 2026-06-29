@@ -1540,17 +1540,41 @@ impl<'a> PreparedSearchPackageParts<'a> {
         }
         match compression {
           PackageCompression::ZstdCompressedDigest => {
-            let verify_start = std::time::Instant::now();
-            verify_prepared_search_package_digest(digest, payload)?;
-            timings.verify = Some(elapsed_us(verify_start));
-            let decompress_start = std::time::Instant::now();
-            let decompressed =
-              zstd::bulk::decompress(payload, uncompressed_len)
-                .map(Cow::Owned)
-                .map_err(|error| {
-                  invalid_prepared_search_package(error.to_string())
-                })?;
-            timings.decompress = Some(elapsed_us(decompress_start));
+            let (
+              verify_result,
+              verify_elapsed,
+              decompressed,
+              decompress_elapsed,
+            ) = std::thread::scope(|scope| {
+              let verify_handle = scope.spawn(|| {
+                let verify_start = std::time::Instant::now();
+                let result =
+                  verify_prepared_search_package_digest(digest, payload);
+                (result, elapsed_us(verify_start))
+              });
+              let decompress_handle = scope.spawn(|| {
+                let decompress_start = std::time::Instant::now();
+                let result = zstd::bulk::decompress(payload, uncompressed_len)
+                  .map_err(|error| {
+                    invalid_prepared_search_package(error.to_string())
+                  });
+                (result, elapsed_us(decompress_start))
+              });
+              let (verify_result, verify_elapsed) =
+                join_package_decode_thread(verify_handle)?;
+              let (decompressed, decompress_elapsed) =
+                join_package_decode_thread(decompress_handle)?;
+              Ok((
+                verify_result,
+                verify_elapsed,
+                decompressed,
+                decompress_elapsed,
+              ))
+            })?;
+            verify_result?;
+            timings.verify = Some(verify_elapsed);
+            let decompressed = decompressed.map(Cow::Owned)?;
+            timings.decompress = Some(decompress_elapsed);
             Ok(decompressed)
           }
           PackageCompression::ZstdPayloadDigest => {
@@ -1614,6 +1638,14 @@ impl<'a> PreparedSearchPackageParts<'a> {
       }
     }
   }
+}
+
+fn join_package_decode_thread<T>(
+  handle: std::thread::ScopedJoinHandle<'_, T>,
+) -> Result<T> {
+  handle.join().map_err(|_| {
+    invalid_prepared_search_package("package decode thread panicked")
+  })
 }
 
 #[derive(Clone, Copy)]
