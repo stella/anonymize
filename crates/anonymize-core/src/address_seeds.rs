@@ -82,6 +82,7 @@ impl PreparedAddressSeedData {
       existing_entities,
     )?;
     let clusters = cluster_seeds(&seeds, full_text, existing_entities);
+    let boundary_starts = self.boundary_starts(full_text);
     let mut results = Vec::new();
 
     for cluster in clusters {
@@ -89,7 +90,12 @@ impl PreparedAddressSeedData {
       if score < 0.6 {
         continue;
       }
-      let span = self.expand_cluster(full_text, &cluster, existing_entities);
+      let span = self.expand_cluster(
+        full_text,
+        &cluster,
+        existing_entities,
+        &boundary_starts,
+      );
       let Some(raw_text) = full_text.get(span.start..span.end) else {
         continue;
       };
@@ -372,6 +378,7 @@ impl PreparedAddressSeedData {
     full_text: &str,
     cluster: &SeedCluster,
     existing_entities: &[PipelineEntity],
+    boundary_starts: &[usize],
   ) -> Span {
     let left_bound = nearest_left_non_address(
       full_text,
@@ -387,7 +394,8 @@ impl PreparedAddressSeedData {
       };
     }
 
-    let right_pos = self.expand_right(full_text, cluster, existing_entities);
+    let right_pos =
+      self.expand_right(full_text, cluster, existing_entities, boundary_starts);
     Span {
       start: left_pos.min(cluster.start),
       end: right_pos.max(cluster.end),
@@ -399,13 +407,16 @@ impl PreparedAddressSeedData {
     full_text: &str,
     cluster: &SeedCluster,
     existing_entities: &[PipelineEntity],
+    boundary_starts: &[usize],
   ) -> usize {
     let right_pos = cluster.end;
     let remaining = full_text.get(right_pos..).unwrap_or_default();
     let mut nearest_boundary =
       utf16_cap_at_char_boundary(remaining, ADDRESS_RIGHT_EXPAND_LIMIT);
 
-    if let Some(boundary) = self.nearest_boundary_word(full_text, right_pos) {
+    if let Some(boundary) =
+      Self::nearest_boundary_word(right_pos, boundary_starts)
+    {
       nearest_boundary = nearest_boundary.min(boundary);
     }
     if let Some(entity_boundary) =
@@ -426,21 +437,27 @@ impl PreparedAddressSeedData {
     trim_address_tail(full_text, right_pos, end)
   }
 
-  fn nearest_boundary_word(
-    &self,
-    full_text: &str,
-    right_pos: usize,
-  ) -> Option<usize> {
-    let search = self.boundary_search.as_ref()?;
-    search
-      .find_iter(full_text)
-      .ok()?
+  fn boundary_starts(&self, full_text: &str) -> Vec<usize> {
+    let Some(search) = self.boundary_search.as_ref() else {
+      return Vec::new();
+    };
+    let Ok(matches) = search.find_iter(full_text) else {
+      return Vec::new();
+    };
+    matches
       .into_iter()
-      .filter_map(|found| {
-        let start = usize::try_from(found.start()).ok()?;
-        (start >= right_pos).then_some(start.saturating_sub(right_pos))
-      })
-      .min()
+      .filter_map(|found| usize::try_from(found.start()).ok())
+      .collect()
+  }
+
+  fn nearest_boundary_word(
+    right_pos: usize,
+    boundary_starts: &[usize],
+  ) -> Option<usize> {
+    let index = boundary_starts.partition_point(|start| *start < right_pos);
+    boundary_starts
+      .get(index)
+      .map(|start| start.saturating_sub(right_pos))
   }
 }
 

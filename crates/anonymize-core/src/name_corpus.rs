@@ -230,6 +230,10 @@ impl PreparedNameCorpusData {
 
   fn detect_token_names(&self, full_text: &str) -> Result<Vec<PipelineEntity>> {
     let words = segment_words(full_text);
+    if !self.has_supplemental_seed(&words) {
+      return Ok(Vec::new());
+    }
+
     let mut tokens = Vec::with_capacity(words.len());
     let mut word_index = 0usize;
     while let Some(word) = words.get(word_index) {
@@ -391,6 +395,23 @@ impl PreparedNameCorpusData {
     classified(word, TokenKind::Capitalized, false)
   }
 
+  fn has_supplemental_seed(&self, words: &[WordSegment<'_>]) -> bool {
+    words.iter().any(|word| {
+      if self.is_non_western_name_token(word.text)
+        || self.is_hyphenated_prefix_name(word.text)
+      {
+        return true;
+      }
+      if word.text.chars().count() < 3 || !is_all_upper(word.text) {
+        return false;
+      }
+      if self.excluded_all_caps.contains(word.text) {
+        return false;
+      }
+      self.is_non_western_name_token(&title_case_simple(word.text))
+    })
+  }
+
   fn build_chain<'a>(
     full_text: &str,
     tokens: &'a [ClassifiedToken<'a>],
@@ -455,8 +476,7 @@ impl PreparedNameCorpusData {
   }
 
   fn is_organization(&self, text: &str) -> bool {
-    let words = segment_words(text);
-    words
+    segment_words(text)
       .iter()
       .any(|word| self.organization_terms.contains(&word.text.to_lowercase()))
   }

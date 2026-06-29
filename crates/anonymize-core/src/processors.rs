@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, btree_map::Entry};
 
 use smallvec::SmallVec;
 
@@ -129,6 +129,8 @@ pub struct DenyListPatternMeta {
 pub struct StringGroups {
   table: Vec<String>,
   groups: Vec<StringGroupIndexes>,
+  group_table: Vec<StringGroupIndexes>,
+  group_refs: Vec<u32>,
 }
 
 type StringGroupIndexes = SmallVec<[u32; 2]>;
@@ -156,7 +158,7 @@ impl StringGroups {
       })
       .collect();
 
-    Self { table, groups }
+    Self::from_table_and_groups(table, groups)
   }
 
   pub fn from_table_indices(
@@ -186,41 +188,143 @@ impl StringGroups {
       .map(StringGroupIndexes::from_vec)
       .collect();
 
-    Ok(Self { table, groups })
+    Ok(Self::from_table_and_groups(table, groups))
   }
 
   #[must_use]
   pub fn empty_groups(len: usize) -> Self {
-    Self {
-      table: Vec::new(),
-      groups: vec![StringGroupIndexes::new(); len],
-    }
+    Self::from_table_and_groups(
+      Vec::new(),
+      vec![StringGroupIndexes::new(); len],
+    )
   }
 
   #[must_use]
   pub const fn len(&self) -> usize {
-    self.groups.len()
+    if self.group_refs.is_empty() {
+      return self.groups.len();
+    }
+    self.group_refs.len()
   }
 
   #[must_use]
   pub const fn is_empty(&self) -> bool {
-    self.groups.is_empty()
+    self.len() == 0
   }
 
   #[must_use]
   pub fn get(&self, index: usize) -> Option<StringGroup<'_>> {
+    let indexes = self.group_indexes(index)?;
     Some(StringGroup {
-      table: &self.table,
-      indexes: self.groups.get(index)?,
-    })
-  }
-
-  pub fn iter(&self) -> impl Iterator<Item = StringGroup<'_>> {
-    self.groups.iter().map(|indexes| StringGroup {
       table: &self.table,
       indexes,
     })
   }
+
+  pub fn iter(&self) -> impl Iterator<Item = StringGroup<'_>> {
+    (0..self.len()).filter_map(|index| self.get(index))
+  }
+
+  pub fn validate(&self, field: &'static str) -> Result<()> {
+    if self.group_refs.is_empty() {
+      validate_group_indexes(field, &self.table, &self.groups)?;
+      return Ok(());
+    }
+
+    validate_group_indexes(field, &self.table, &self.group_table)?;
+    for &group_ref in &self.group_refs {
+      let Ok(index) = usize::try_from(group_ref) else {
+        return Err(Error::InvalidStaticData {
+          field,
+          reason: String::from("group reference exceeds usize range"),
+        });
+      };
+      if index >= self.group_table.len() {
+        return Err(Error::InvalidStaticData {
+          field,
+          reason: String::from("group reference out of range"),
+        });
+      }
+    }
+    Ok(())
+  }
+
+  fn from_table_and_groups(
+    table: Vec<String>,
+    groups: Vec<StringGroupIndexes>,
+  ) -> Self {
+    let (group_table, group_refs) = compact_repeated_groups(&groups);
+    if group_table.len() < groups.len() {
+      return Self {
+        table,
+        groups: Vec::new(),
+        group_table,
+        group_refs,
+      };
+    }
+
+    Self {
+      table,
+      groups,
+      group_table: Vec::new(),
+      group_refs: Vec::new(),
+    }
+  }
+
+  fn group_indexes(&self, index: usize) -> Option<&[u32]> {
+    if self.group_refs.is_empty() {
+      return self.groups.get(index).map(SmallVec::as_slice);
+    }
+    let group_ref = *self.group_refs.get(index)?;
+    let group_index = usize::try_from(group_ref).ok()?;
+    self.group_table.get(group_index).map(SmallVec::as_slice)
+  }
+}
+
+fn compact_repeated_groups(
+  groups: &[StringGroupIndexes],
+) -> (Vec<StringGroupIndexes>, Vec<u32>) {
+  let mut table = Vec::<StringGroupIndexes>::new();
+  let mut table_indexes = BTreeMap::<Vec<u32>, u32>::new();
+  let mut refs = Vec::with_capacity(groups.len());
+  for group in groups {
+    let key = group.to_vec();
+    let index = match table_indexes.entry(key) {
+      Entry::Occupied(entry) => *entry.get(),
+      Entry::Vacant(entry) => {
+        let index = u32::try_from(table.len()).unwrap_or(u32::MAX);
+        entry.insert(index);
+        table.push(group.clone());
+        index
+      }
+    };
+    refs.push(index);
+  }
+  (table, refs)
+}
+
+fn validate_group_indexes(
+  field: &'static str,
+  table: &[String],
+  groups: &[StringGroupIndexes],
+) -> Result<()> {
+  for group in groups {
+    for &index in group {
+      let Ok(index) = usize::try_from(index) else {
+        return Err(Error::InvalidStaticData {
+          field,
+          reason: String::from("string table index exceeds usize range"),
+        });
+      };
+      if index >= table.len() {
+        return Err(Error::InvalidStaticData {
+          field,
+          reason: String::from("string table index out of range"),
+        });
+      }
+    }
+  }
+  Ok(())
 }
 
 impl DenyListMatchData {
@@ -2021,4 +2125,57 @@ const fn fuzzy_distance(found: &SearchMatch) -> Option<u32> {
     return None;
   };
   Some(*distance)
+}
+
+#[cfg(test)]
+mod tests {
+  #![allow(clippy::unwrap_used)]
+
+  use super::*;
+
+  #[test]
+  fn string_groups_compact_repeated_groups() {
+    let groups = StringGroups::from_groups(vec![
+      vec![String::from("person")],
+      vec![String::from("person")],
+      vec![String::from("address"), String::from("location")],
+      vec![String::from("person")],
+    ]);
+
+    assert!(groups.groups.is_empty());
+    assert_eq!(groups.group_table.len(), 2);
+    assert_eq!(groups.group_refs, vec![0, 0, 1, 0]);
+    assert_eq!(
+      groups.get(2).unwrap().to_strings(),
+      vec![String::from("address"), String::from("location")]
+    );
+    assert_eq!(
+      groups
+        .iter()
+        .map(StringGroup::to_strings)
+        .collect::<Vec<_>>(),
+      vec![
+        vec![String::from("person")],
+        vec![String::from("person")],
+        vec![String::from("address"), String::from("location")],
+        vec![String::from("person")],
+      ]
+    );
+    assert!(groups.validate("test").is_ok());
+  }
+
+  #[test]
+  fn string_groups_reject_invalid_compact_reference() {
+    let groups = StringGroups {
+      table: vec![String::from("person")],
+      groups: Vec::new(),
+      group_table: vec![StringGroupIndexes::from_vec(vec![0])],
+      group_refs: vec![1],
+    };
+
+    assert!(matches!(
+      groups.validate("test"),
+      Err(Error::InvalidStaticData { field: "test", .. })
+    ));
+  }
 }

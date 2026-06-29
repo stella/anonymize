@@ -498,39 +498,55 @@ fn trim_to_first_cap_after_verb(
   suffix_start
 }
 
-fn word_tokens(text: &str, start: usize, end: usize) -> Vec<Token<'_>> {
-  let mut tokens = Vec::new();
-  let mut cursor = start;
-  while cursor < end {
-    let Some((ch_start, ch)) = next_char(text, cursor) else {
-      break;
-    };
-    if !is_word_token_char(ch) {
-      cursor = ch_start.saturating_add(ch.len_utf8());
-      continue;
-    }
+const fn word_tokens(text: &str, start: usize, end: usize) -> WordTokens<'_> {
+  WordTokens {
+    text,
+    end,
+    cursor: start,
+  }
+}
 
-    let token_start = ch_start;
-    let mut token_end = ch_start.saturating_add(ch.len_utf8());
-    while token_end < end {
-      let Some((next_start, next)) = next_char(text, token_end) else {
-        break;
+struct WordTokens<'a> {
+  text: &'a str,
+  end: usize,
+  cursor: usize,
+}
+
+impl<'a> Iterator for WordTokens<'a> {
+  type Item = Token<'a>;
+
+  fn next(&mut self) -> Option<Self::Item> {
+    while self.cursor < self.end {
+      let Some((ch_start, ch)) = next_char(self.text, self.cursor) else {
+        self.cursor = self.end;
+        return None;
       };
-      if !is_word_token_char(next) {
-        break;
+      if !is_word_token_char(ch) {
+        self.cursor = ch_start.saturating_add(ch.len_utf8());
+        continue;
       }
-      token_end = next_start.saturating_add(next.len_utf8());
-    }
-    if let Some(token_text) = text.get(token_start..token_end) {
-      tokens.push(Token {
+
+      let token_start = ch_start;
+      let mut token_end = ch_start.saturating_add(ch.len_utf8());
+      while token_end < self.end {
+        let Some((next_start, next)) = next_char(self.text, token_end) else {
+          break;
+        };
+        if !is_word_token_char(next) {
+          break;
+        }
+        token_end = next_start.saturating_add(next.len_utf8());
+      }
+      self.cursor = token_end;
+      let token_text = self.text.get(token_start..token_end)?;
+      return Some(Token {
         start: token_start,
         end: token_end,
         text: token_text,
       });
     }
-    cursor = token_end;
+    None
   }
-  tokens
 }
 
 fn is_word_token_char(ch: char) -> bool {
@@ -1372,7 +1388,7 @@ fn trim_leading_clause(
       if data.comma_gated_direct_prefixes.contains(&prefix_lower) {
         let has_comma = before.trim_end().ends_with(',');
         let has_sentence_verb =
-          word_tokens(before, 0, before.len()).iter().any(|word| {
+          word_tokens(before, 0, before.len()).any(|word| {
             starts_lower(word.text)
               && data
                 .sentence_verb_indicators
@@ -1383,9 +1399,13 @@ fn trim_leading_clause(
         }
       }
 
-      let words = word_tokens(before, 0, before.len());
-      let has_prose_prefix =
-        words.len() >= 3 && words.iter().any(|word| starts_lower(word.text));
+      let mut word_count = 0_usize;
+      let mut has_lower_word = false;
+      for word in word_tokens(before, 0, before.len()) {
+        word_count = word_count.saturating_add(1);
+        has_lower_word |= starts_lower(word.text);
+      }
+      let has_prose_prefix = word_count >= 3 && has_lower_word;
       if has_prose_prefix {
         cut = cut.max(end.saturating_add(after_ws));
       }
@@ -1401,7 +1421,6 @@ fn trim_leading_clause(
     let ws = leading_ws_len(after);
     let candidate = after.get(ws..).unwrap_or_default();
     let upper_words = word_tokens(candidate, 0, candidate.len())
-      .into_iter()
       .filter(|word| starts_upper(word.text))
       .count();
     if upper_words >= 3 {

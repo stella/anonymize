@@ -2518,6 +2518,9 @@ fn validate_deny_list_config(config: &PreparedSearchConfig) -> Result<()> {
     return Err(Error::UnsupportedStaticSlice { slice: "deny_list" });
   };
 
+  data.labels.validate("deny_list.labels")?;
+  data.custom_labels.validate("deny_list.custom_labels")?;
+  data.sources.validate("deny_list.sources")?;
   validate_static_data_length(
     "deny_list.labels",
     config.slices.deny_list,
