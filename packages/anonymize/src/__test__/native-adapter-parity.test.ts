@@ -1346,7 +1346,10 @@ describe("native adapter parity", () => {
       ...prepare_search_package({ binding: adapters.native, config }),
     ]).toEqual([...packageBytes]);
 
-    const rustCoreJson = callRustCoreSharedSdkParity(adapters.tempDir, cases);
+    const rustCoreJson = callRustCoreSharedSdkParity({
+      tempDir: adapters.tempDir,
+      cases,
+    });
     const tsSdkJson = cases.map(({ text, operators }) =>
       JSON.parse(prepared.redact_text_json(text, operators ?? undefined)),
     );
@@ -1424,6 +1427,115 @@ describe("native adapter parity", () => {
     );
     expect(python.normalized).toBe(
       adapters.native.normalizeForSearch("Číslo\u00a0PAS - 1234"),
+    );
+    expect(python.version).toBe(packageJsonVersion());
+  });
+
+  test("shared TS and Python SDK facades match Rust core JSON for user data", async () => {
+    const adapters = getAdapters();
+    const config: PipelineConfig = {
+      threshold: 0.3,
+      enableTriggerPhrases: false,
+      enableRegex: true,
+      enableLegalForms: false,
+      enableNameCorpus: false,
+      enableDenyList: true,
+      customDenyList: [
+        {
+          value: "Project Zephyr",
+          label: "organization",
+          variants: ["Zephyr Project"],
+        },
+        {
+          value: "Mina Roe",
+          label: "person",
+          variants: ["M. Roe"],
+        },
+      ],
+      customRegexes: [
+        {
+          pattern: "\\bUSR-[A-Z]{2}\\d{4}\\b",
+          label: "registration number",
+          score: 0.96,
+        },
+      ],
+      enableGazetteer: false,
+      enableCountries: false,
+      enableNer: false,
+      enableConfidenceBoost: false,
+      enableCoreference: false,
+      enableHotwordRules: false,
+      enableZoneClassification: false,
+      labels: ["organization", "person", "registration number"],
+      workspaceId: "native-shared-sdk-user-data-parity",
+    };
+    const bundle = await buildNativeStaticSearchBundle(
+      config,
+      [],
+      createPipelineContext(),
+    );
+    const configJson = JSON.stringify(bundle.nativeStaticConfig);
+    const packageBytes = prepare_search_package({
+      binding: adapters.native,
+      config: configJson,
+      compressed: true,
+    });
+    const prepared = load_prepared_package({
+      binding: adapters.native,
+      packageBytes,
+    });
+    const cases: SharedSdkParityCase[] = [
+      {
+        text:
+          "Project Zephyr assigned USR-AB1234 to Mina Roe. " +
+          "Zephyr Project also references M. Roe.",
+        operators: null,
+      },
+      {
+        text: "Mina Roe escalated USR-CD9876 after Project Zephyr review.",
+        operators: {
+          operators: {
+            organization: "redact",
+            person: "redact",
+            "registration number": "redact",
+          },
+          redactString: "***",
+        },
+      },
+    ];
+    const rustCoreJson = callRustCoreSharedSdkParity({
+      tempDir: adapters.tempDir,
+      cases,
+      configJson,
+    });
+    const tsSdkJson = cases.map(({ text, operators }) =>
+      JSON.parse(prepared.redact_text_json(text, operators ?? undefined)),
+    );
+    const python = callPythonSharedSdkParity({
+      pythonModulePath: adapters.pythonModulePath,
+      tempDir: adapters.tempDir,
+      packageBytes: Buffer.from(packageBytes),
+      cases,
+      configJson,
+      normalizeText: "Project Zephyr USR-AB1234",
+    });
+
+    expect(tsSdkJson).toEqual(rustCoreJson);
+    expect(python.from_bytes).toEqual(rustCoreJson);
+    expect(python.from_file).toEqual(rustCoreJson);
+    expect(python.top_level).toEqual(rustCoreJson);
+    expect(python.top_level_object).toEqual(
+      rustCoreJson.map(withoutEntityOffsets),
+    );
+    expect(rustCoreJson[0]?.resolved_entities.map(({ text }) => text)).toEqual([
+      "Project Zephyr",
+      "USR-AB1234",
+      "Mina Roe",
+      "Zephyr Project",
+      "M. Roe",
+    ]);
+    expect(rustCoreJson[1]?.redaction.redacted_text).not.toContain(
+      "Project Zephyr",
     );
     expect(python.version).toBe(packageJsonVersion());
   });
@@ -2945,15 +3057,22 @@ const callPythonPackageFacade = ({
   return JSON.parse(output);
 };
 
-const callRustCoreSharedSdkParity = (
-  tempDir: string,
-  cases: SharedSdkParityCase[],
-): StaticRedactionResult[] => {
+type RustCoreSharedSdkParityOptions = {
+  tempDir: string;
+  cases: SharedSdkParityCase[];
+  configJson?: string;
+};
+
+const callRustCoreSharedSdkParity = ({
+  tempDir,
+  cases,
+  configJson = CONFIG_JSON,
+}: RustCoreSharedSdkParityOptions): StaticRedactionResult[] => {
   const payloadPath = join(tempDir, "rust-core-shared-sdk-payload.json");
   writeFileSync(
     payloadPath,
     JSON.stringify({
-      config_json: CONFIG_JSON,
+      config_json: configJson,
       cases: cases.map(({ text, operators }) => ({
         text,
         operators_json: nativeOperatorConfigJson(operators),
@@ -2983,6 +3102,7 @@ type PythonSharedSdkParityOptions = {
   tempDir: string;
   packageBytes: Buffer;
   cases: SharedSdkParityCase[];
+  configJson?: string;
   normalizeText: string;
 };
 
@@ -2991,6 +3111,7 @@ const callPythonSharedSdkParity = ({
   tempDir,
   packageBytes,
   cases,
+  configJson = CONFIG_JSON,
   normalizeText,
 }: PythonSharedSdkParityOptions): {
   default_from_path: StaticRedactionResult[];
@@ -3014,7 +3135,7 @@ const callPythonSharedSdkParity = ({
       })),
       class_names: SHARED_NATIVE_SDK_CLASS_NAMES,
       compressed: true,
-      config_json: CONFIG_JSON,
+      config_json: configJson,
       default_package_functions: SHARED_NATIVE_SDK_DEFAULT_PACKAGE_FUNCTIONS,
       default_package_names: PYTHON_NATIVE_SDK_DEFAULT_PACKAGE_NAMES,
       normalize_text: normalizeText,
