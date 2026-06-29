@@ -317,7 +317,7 @@ def _normalize_default_native_pipeline_warmup(
     warmup: DefaultNativePipelineWarmup | None,
 ) -> DefaultNativePipelineWarmup:
     if warmup is None:
-        return "lazy-regex"
+        return "none"
     if warmup in DEFAULT_NATIVE_PIPELINE_WARMUPS:
         return warmup
     raise ValueError('Default native pipeline warmup must be "lazy-regex" or "none"')

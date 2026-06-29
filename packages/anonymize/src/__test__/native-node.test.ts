@@ -248,6 +248,7 @@ describe("native node loader", () => {
         packagePath,
         expectedVersion: "1.5.0",
       });
+      expect(warmCount).toBe(0);
       const preloaded = preloadDefaultNativePipeline({
         binding,
         packagePath,
@@ -291,6 +292,7 @@ describe("native node loader", () => {
         binding,
         packagePath,
         expectedVersion: "1.5.0",
+        warmup: "lazy-regex",
       });
 
       expect(stillCold).toBe(cold);

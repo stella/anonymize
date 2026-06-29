@@ -449,7 +449,7 @@ const normalizeDefaultNativePipelineWarmup = (
   warmup: DefaultNativePipelineWarmup | undefined,
 ): DefaultNativePipelineWarmup => {
   if (warmup === undefined) {
-    return DEFAULT_NATIVE_PIPELINE_WARMUPS.lazyRegex;
+    return DEFAULT_NATIVE_PIPELINE_WARMUPS.none;
   }
   switch (warmup) {
     case DEFAULT_NATIVE_PIPELINE_WARMUPS.lazyRegex:

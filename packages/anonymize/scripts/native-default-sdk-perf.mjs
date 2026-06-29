@@ -147,9 +147,11 @@ async function runWorker() {
   const prepareTopStages = topDiagnosticStages(
     pipeline.prepareDiagnosticsJson(),
   );
-  const warmupStart = Bun.nanoseconds();
-  const warmupDiagnostics = pipeline.warmLazyRegexDiagnosticsJson();
-  const warmupMs = elapsedMs(warmupStart);
+  const warmupStart = PRELOAD ? Bun.nanoseconds() : null;
+  const warmupDiagnostics = PRELOAD
+    ? pipeline.warmLazyRegexDiagnosticsJson()
+    : null;
+  const warmupMs = warmupStart === null ? 0 : elapsedMs(warmupStart);
   const warmupTopStages = topDiagnosticStages(warmupDiagnostics);
   const prepareMs = roundMs(loadMs + warmupMs);
 
@@ -810,9 +812,13 @@ def main():
     )
     load_ms = elapsed_ms(load_start)
     prepare_top_stages = top_diagnostic_stages(pipeline.prepare_diagnostics_json())
-    warmup_start = time.perf_counter_ns()
-    warmup_diagnostics = pipeline.warm_lazy_regex_diagnostics_json()
-    warmup_ms = elapsed_ms(warmup_start)
+    if payload["preload"]:
+        warmup_start = time.perf_counter_ns()
+        warmup_diagnostics = pipeline.warm_lazy_regex_diagnostics_json()
+        warmup_ms = elapsed_ms(warmup_start)
+    else:
+        warmup_diagnostics = None
+        warmup_ms = 0
     warmup_top_stages = top_diagnostic_stages(warmup_diagnostics)
     prepare_ms = round_ms(load_ms + warmup_ms)
     cold_run = run_fixtures(pipeline, payload["fixtures"])
