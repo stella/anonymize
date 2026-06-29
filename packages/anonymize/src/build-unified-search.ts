@@ -22,6 +22,7 @@ import legalFormRuleWords from "./data/legal-form-rule-words.json";
 import nameCorpusCjk from "./data/name-corpus-cjk.json";
 import nameCorpusParticles from "./data/name-corpus-particles.json";
 import organizationIndicators from "./data/organization-indicators.json";
+import signatureDetection from "./data/signature-detection.json";
 import triggerSupport from "./data/trigger-support.json";
 
 import { getTextSearch } from "./search-engine";
@@ -318,6 +319,15 @@ export type NativeHotwordRuleData = {
   pattern_rule_indices: number[];
 };
 
+export type NativeSignatureData = {
+  labels: string[];
+  witness_phrases: string[];
+  name_particles: string[];
+  post_nominal_suffixes: string[];
+  organization_suffixes: string[];
+  image_stub_prefixes: string[];
+};
+
 export type NativePreparedSearchConfig = {
   regex_patterns: NativeSearchPattern[];
   custom_regex_patterns: NativeSearchPattern[];
@@ -354,6 +364,7 @@ export type NativePreparedSearchConfig = {
   address_context_data?: NativeAddressContextData;
   coreference_data?: NativeCoreferenceData;
   name_corpus_data?: NativeNameCorpusData;
+  signature_data?: NativeSignatureData;
   name_corpus_mode?: NativeNameCorpusMode;
   date_data?: NativeDateData;
   monetary_data?: NativeMonetaryData;
@@ -455,6 +466,15 @@ type TriggerSupportData = {
   phoneExtensionLabels: LanguageKeyedTerms;
   numberMarkers: LanguageKeyedTerms;
   numberLabels: LanguageKeyedTerms;
+};
+
+type SignatureDetectionData = {
+  labels: LanguageKeyedTerms;
+  witnessPhrases: LanguageKeyedTerms;
+  nameParticles: LanguageKeyedTerms;
+  postNominalSuffixes: LanguageKeyedTerms;
+  organizationSuffixes: LanguageKeyedTerms;
+  imageStubPrefixes: LanguageKeyedTerms;
 };
 
 type SectionHeadingsConfig = {
@@ -634,6 +654,7 @@ const uniqueStrings = (values: readonly string[]): string[] => {
 };
 
 const TRIGGER_SUPPORT = triggerSupport as TriggerSupportData;
+const SIGNATURE_DETECTION = signatureDetection as SignatureDetectionData;
 
 const languageKeyedTerms = (
   values: LanguageKeyedTerms,
@@ -654,6 +675,30 @@ const languageKeyedTerms = (
   }
   return uniqueStrings(result);
 };
+
+const buildNativeSignatureData = (): NativeSignatureData => ({
+  labels: languageKeyedTerms(SIGNATURE_DETECTION.labels, undefined),
+  witness_phrases: languageKeyedTerms(
+    SIGNATURE_DETECTION.witnessPhrases,
+    undefined,
+  ),
+  name_particles: languageKeyedTerms(
+    SIGNATURE_DETECTION.nameParticles,
+    undefined,
+  ),
+  post_nominal_suffixes: languageKeyedTerms(
+    SIGNATURE_DETECTION.postNominalSuffixes,
+    undefined,
+  ),
+  organization_suffixes: languageKeyedTerms(
+    SIGNATURE_DETECTION.organizationSuffixes,
+    undefined,
+  ),
+  image_stub_prefixes: languageKeyedTerms(
+    SIGNATURE_DETECTION.imageStubPrefixes,
+    undefined,
+  ),
+});
 
 const buildUnifiedSearchSources = async (
   config: PipelineConfig,
@@ -1435,6 +1480,7 @@ const buildNativeStaticConfig = ({
     },
     regex_meta: nativeRegexMeta,
     custom_regex_meta: nativeCustomRegexMeta,
+    signature_data: buildNativeSignatureData(),
   };
   nativeConfig.regex_patterns.push(
     ...legalFormNativePatterns,

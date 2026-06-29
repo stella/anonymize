@@ -3,96 +3,68 @@ use crate::resolution::{DetectionSource, PipelineEntity};
 const PERSON_LABEL: &str = "person";
 const MAX_NAME_LEN: usize = 60;
 const MAX_WITNESS_SCAN_BYTES: usize = 600;
-const NAME_PARTICLES: &[&str] = &[
-  "de",
-  "del",
-  "della",
-  "der",
-  "den",
-  "di",
-  "du",
-  "da",
-  "das",
-  "do",
-  "dos",
-  "el",
-  "la",
-  "le",
-  "van",
-  "von",
-  "y",
-  "zu",
-  "af",
-  "ben",
-  "bin",
-  "al",
-  "d'",
-  "d\u{2019}",
-];
-const POST_NOMINAL_SUFFIXES: &[&str] = &[
-  "jr", "sr", "ii", "iii", "iv", "v", "esq", "esquire", "md", "phd", "jd",
-  "llm", "mba", "cpa", "pe", "rn", "dds", "dvm", "do", "cfa", "cfp",
-];
-const ORG_SUFFIXES: &[&str] = &[
-  "inc",
-  "inc.",
-  "llc",
-  "llp",
-  "lp",
-  "corp",
-  "corp.",
-  "corporation",
-  "ltd",
-  "ltd.",
-  "gmbh",
-  "ag",
-  "se",
-  "kg",
-  "ohg",
-  "sa",
-  "sas",
-  "sarl",
-  "s.a",
-  "s.a.",
-  "s.p.a",
-  "s.p.a.",
-  "plc",
-  "n.a",
-  "n.a.",
-  "n.v",
-  "n.v.",
-  "b.v",
-  "b.v.",
-  "pty ltd",
-  "pty ltd.",
-  "co",
-  "co.",
-  "s.r.o",
-  "s.r.o.",
-  "a.s",
-  "a.s.",
-  "z.s",
-  "z.s.",
-  "s.p",
-  "s.p.",
-  "s. p.",
-  "ltda",
-  "ltda.",
-  "eireli",
-  "epp",
-  "s/a",
-];
+
+#[derive(
+  Clone, Debug, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize,
+)]
+pub struct SignatureData {
+  #[serde(default)]
+  pub labels: Vec<String>,
+  #[serde(default)]
+  pub witness_phrases: Vec<String>,
+  #[serde(default)]
+  pub name_particles: Vec<String>,
+  #[serde(default)]
+  pub post_nominal_suffixes: Vec<String>,
+  #[serde(default)]
+  pub organization_suffixes: Vec<String>,
+  #[serde(default)]
+  pub image_stub_prefixes: Vec<String>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct PreparedSignatureData {
+  labels: Vec<String>,
+  witness_phrases: Vec<String>,
+  name_particles: Vec<String>,
+  post_nominal_suffixes: Vec<String>,
+  organization_suffixes: Vec<String>,
+  image_stub_prefixes: Vec<String>,
+}
+
+impl PreparedSignatureData {
+  #[must_use]
+  pub(crate) fn new(data: SignatureData) -> Self {
+    Self {
+      labels: non_empty_lowercase(data.labels),
+      witness_phrases: non_empty_lowercase(data.witness_phrases),
+      name_particles: non_empty_lowercase(data.name_particles),
+      post_nominal_suffixes: non_empty_compact_lowercase(
+        data.post_nominal_suffixes,
+      ),
+      organization_suffixes: non_empty_lowercase(data.organization_suffixes),
+      image_stub_prefixes: non_empty_lowercase(data.image_stub_prefixes),
+    }
+  }
+}
 
 #[must_use]
-pub(crate) fn detect_signatures(full_text: &str) -> Vec<PipelineEntity> {
+pub(crate) fn detect_signatures(
+  full_text: &str,
+  data: &PreparedSignatureData,
+) -> Vec<PipelineEntity> {
   let mut results = Vec::new();
-  detect_slash_s(full_text, &mut results);
-  detect_labelled_names(full_text, &mut results);
-  detect_witness_blocks(full_text, &mut results);
+  detect_slash_s(full_text, data, &mut results);
+  detect_labelled_names(full_text, data, &mut results);
+  detect_witness_blocks(full_text, data, &mut results);
   results
 }
 
-fn detect_slash_s(full_text: &str, results: &mut Vec<PipelineEntity>) {
+fn detect_slash_s(
+  full_text: &str,
+  data: &PreparedSignatureData,
+  results: &mut Vec<PipelineEntity>,
+) {
   let mut cursor = 0usize;
   while let Some(relative) =
     full_text.get(cursor..).and_then(|tail| tail.find("/s/"))
@@ -109,6 +81,7 @@ fn detect_slash_s(full_text: &str, results: &mut Vec<PipelineEntity>) {
       try_emit_forward_lines(
         results,
         full_text,
+        data,
         line_end.saturating_add(1),
         4,
         0.9,
@@ -120,23 +93,28 @@ fn detect_slash_s(full_text: &str, results: &mut Vec<PipelineEntity>) {
           .and_then(first_column_end)
           .unwrap_or_else(|| line_end.saturating_sub(after_mark)),
       );
-      try_emit(results, full_text, after_mark, first_cell_end, 0.95);
+      try_emit(results, full_text, data, after_mark, first_cell_end, 0.95);
     }
 
-    if let Some((prev_start, prev_end)) = find_prev_line(full_text, mark_start)
+    if let Some((prev_start, prev_end)) =
+      find_prev_line(full_text, data, mark_start)
     {
-      try_emit(results, full_text, prev_start, prev_end, 0.85);
+      try_emit(results, full_text, data, prev_start, prev_end, 0.85);
     }
     cursor = mark_start.saturating_add("/s/".len());
   }
 }
 
-fn detect_labelled_names(full_text: &str, results: &mut Vec<PipelineEntity>) {
+fn detect_labelled_names(
+  full_text: &str,
+  data: &PreparedSignatureData,
+  results: &mut Vec<PipelineEntity>,
+) {
   let mut line_start = 0usize;
   while line_start <= full_text.len() {
     let line_end = find_line_end(full_text, line_start);
     if let Some(line) = full_text.get(line_start..line_end) {
-      detect_labelled_names_in_line(full_text, line_start, line, results);
+      detect_labelled_names_in_line(full_text, data, line_start, line, results);
     }
     if line_end >= full_text.len() {
       break;
@@ -147,12 +125,13 @@ fn detect_labelled_names(full_text: &str, results: &mut Vec<PipelineEntity>) {
 
 fn detect_labelled_names_in_line(
   full_text: &str,
+  data: &PreparedSignatureData,
   line_start: usize,
   line: &str,
   results: &mut Vec<PipelineEntity>,
 ) {
   let mut cursor = 0usize;
-  while let Some(label) = find_label(line, cursor) {
+  while let Some(label) = find_label(line, cursor, data) {
     let mut value_start = label.value_start;
     if let Some(after_slash) = slash_s_prefix_end(line, value_start) {
       value_start = after_slash;
@@ -174,25 +153,28 @@ fn detect_labelled_names_in_line(
       try_emit_forward_lines(
         results,
         full_text,
+        data,
         global_end.saturating_add(1),
         3,
         0.9,
       );
     } else {
-      try_emit(results, full_text, global_start, global_end, 0.95);
+      try_emit(results, full_text, data, global_start, global_end, 0.95);
     }
     cursor = value_end.max(label.next_cursor);
   }
 }
 
-fn detect_witness_blocks(full_text: &str, results: &mut Vec<PipelineEntity>) {
+fn detect_witness_blocks(
+  full_text: &str,
+  data: &PreparedSignatureData,
+  results: &mut Vec<PipelineEntity>,
+) {
   let mut cursor = 0usize;
-  while let Some(relative) = find_ascii_case_insensitive(
-    full_text.get(cursor..).unwrap_or_default(),
-    "in witness whereof",
-  ) {
-    let anchor = cursor.saturating_add(relative);
-    if !has_word_boundaries(full_text, anchor, "in witness whereof".len()) {
+  while let Some((anchor, phrase_len)) =
+    find_next_witness_phrase(full_text, cursor, data)
+  {
+    if !has_word_boundaries(full_text, anchor, phrase_len) {
       cursor = anchor.saturating_add(1);
       continue;
     }
@@ -204,15 +186,16 @@ fn detect_witness_blocks(full_text: &str, results: &mut Vec<PipelineEntity>) {
       advance_char_boundary(full_text, anchor, MAX_WITNESS_SCAN_BYTES);
     if let Some(scan_from) = find_witness_sentence_end(full_text, anchor, limit)
     {
-      try_emit_forward_lines(results, full_text, scan_from, 6, 0.85);
+      try_emit_forward_lines(results, full_text, data, scan_from, 6, 0.85);
     }
-    cursor = anchor.saturating_add("in witness whereof".len());
+    cursor = anchor.saturating_add(phrase_len);
   }
 }
 
 fn try_emit_forward_lines(
   results: &mut Vec<PipelineEntity>,
   full_text: &str,
+  data: &PreparedSignatureData,
   from_pos: usize,
   max_lines: usize,
   score: f64,
@@ -225,8 +208,8 @@ fn try_emit_forward_lines(
     let line_end = find_line_end(full_text, pos);
     let line = full_text.get(pos..line_end).unwrap_or_default().trim();
     if !line.is_empty()
-      && !is_image_stub(line)
-      && try_emit(results, full_text, pos, line_end, score)
+      && !is_image_stub(line, data)
+      && try_emit(results, full_text, data, pos, line_end, score)
     {
       return true;
     }
@@ -238,16 +221,17 @@ fn try_emit_forward_lines(
 fn try_emit(
   results: &mut Vec<PipelineEntity>,
   full_text: &str,
+  data: &PreparedSignatureData,
   start: usize,
   end: usize,
   score: f64,
 ) -> bool {
   let raw = full_text.get(start..end).unwrap_or_default();
-  if contains_org_suffix(raw) {
+  if contains_org_suffix(raw, data) {
     return false;
   }
-  let candidate = normalise_candidate(raw);
-  if !is_name_shape(&candidate) {
+  let candidate = normalise_candidate(raw, data);
+  if !is_name_shape(&candidate, data) {
     return false;
   }
   let Some(offset) = raw.find(&candidate) else {
@@ -272,8 +256,8 @@ fn try_emit(
   true
 }
 
-fn normalise_candidate(text: &str) -> String {
-  let stripped = strip_post_nominal_suffix(text.trim());
+fn normalise_candidate(text: &str, data: &PreparedSignatureData) -> String {
+  let stripped = strip_post_nominal_suffix(text.trim(), data);
   let first_cell_end = first_column_end(stripped).unwrap_or(stripped.len());
   stripped
     .get(..first_cell_end)
@@ -282,7 +266,10 @@ fn normalise_candidate(text: &str) -> String {
     .to_owned()
 }
 
-fn strip_post_nominal_suffix(text: &str) -> &str {
+fn strip_post_nominal_suffix<'a>(
+  text: &'a str,
+  data: &PreparedSignatureData,
+) -> &'a str {
   let Some(comma) = text.rfind(',') else {
     return text;
   };
@@ -296,13 +283,17 @@ fn strip_post_nominal_suffix(text: &str) -> &str {
     .filter(|ch| *ch != '.')
     .collect::<String>()
     .to_lowercase();
-  if POST_NOMINAL_SUFFIXES.contains(&compact.as_str()) {
+  if data
+    .post_nominal_suffixes
+    .iter()
+    .any(|configured_suffix| configured_suffix == &compact)
+  {
     return text.get(..comma).unwrap_or(text).trim();
   }
   text
 }
 
-fn is_name_shape(text: &str) -> bool {
+fn is_name_shape(text: &str, data: &PreparedSignatureData) -> bool {
   let text_len = text.chars().map(char::len_utf16).sum::<usize>();
   if !(3..=MAX_NAME_LEN).contains(&text_len) {
     return false;
@@ -321,7 +312,7 @@ fn is_name_shape(text: &str) -> bool {
   tokens
     .iter()
     .skip(1)
-    .all(|token| is_name_particle(token) || is_cap_token(token))
+    .all(|token| is_name_particle(token, data) || is_cap_token(token))
 }
 
 fn is_cap_token(token: &str) -> bool {
@@ -336,13 +327,17 @@ fn is_cap_token(token: &str) -> bool {
     })
 }
 
-fn is_name_particle(token: &str) -> bool {
-  NAME_PARTICLES.contains(&token)
+fn is_name_particle(token: &str, data: &PreparedSignatureData) -> bool {
+  data
+    .name_particles
+    .iter()
+    .any(|particle| token.eq_ignore_ascii_case(particle))
 }
 
-fn contains_org_suffix(text: &str) -> bool {
+fn contains_org_suffix(text: &str, data: &PreparedSignatureData) -> bool {
   let lower = text.to_lowercase();
-  ORG_SUFFIXES
+  data
+    .organization_suffixes
     .iter()
     .any(|suffix| contains_bounded(&lower, suffix))
 }
@@ -399,14 +394,18 @@ struct LabelMatch {
   next_cursor: usize,
 }
 
-fn find_label(line: &str, from: usize) -> Option<LabelMatch> {
+fn find_label(
+  line: &str,
+  from: usize,
+  data: &PreparedSignatureData,
+) -> Option<LabelMatch> {
   let mut cursor = from;
   while cursor < line.len() {
     if !line.is_char_boundary(cursor) {
       cursor = cursor.saturating_add(1);
       continue;
     }
-    if let Some(after_label) = label_end_at(line, cursor) {
+    if let Some(after_label) = label_end_at(line, cursor, data) {
       let mut after_spaces = skip_horizontal_ws(line, after_label);
       if line.get(after_spaces..)?.starts_with(':') {
         after_spaces = skip_horizontal_ws(line, after_spaces.saturating_add(1));
@@ -421,17 +420,22 @@ fn find_label(line: &str, from: usize) -> Option<LabelMatch> {
   None
 }
 
-fn label_end_at(line: &str, start: usize) -> Option<usize> {
+fn label_end_at(
+  line: &str,
+  start: usize,
+  data: &PreparedSignatureData,
+) -> Option<usize> {
   if !boundary_before(line, start) {
     return None;
   }
-  if starts_with_ascii_ci(line.get(start..)?, "by") {
-    let end = start.saturating_add("by".len());
-    return label_tail_is_valid(line, end).then_some(end);
-  }
-  if starts_with_ascii_ci(line.get(start..)?, "name") {
-    let end = start.saturating_add("name".len());
-    return label_tail_is_valid(line, end).then_some(end);
+  let tail = line.get(start..)?;
+  for label in &data.labels {
+    if starts_with_ascii_ci(tail, label) {
+      let end = start.saturating_add(label.len());
+      if label_tail_is_valid(line, end) {
+        return Some(end);
+      }
+    }
   }
   None
 }
@@ -474,7 +478,11 @@ fn find_line_end(text: &str, pos: usize) -> usize {
     .map_or(text.len(), |relative| pos.saturating_add(relative))
 }
 
-fn find_prev_line(full_text: &str, pos: usize) -> Option<(usize, usize)> {
+fn find_prev_line(
+  full_text: &str,
+  data: &PreparedSignatureData,
+  pos: usize,
+) -> Option<(usize, usize)> {
   if pos == 0 {
     return None;
   }
@@ -499,7 +507,7 @@ fn find_prev_line(full_text: &str, pos: usize) -> Option<(usize, usize)> {
       .get(line_start..line_end)
       .unwrap_or_default()
       .trim();
-    if !line.is_empty() && !is_image_stub(line) {
+    if !line.is_empty() && !is_image_stub(line, data) {
       return Some((line_start, line_end));
     }
     if line_start == 0 {
@@ -541,6 +549,22 @@ fn find_witness_sentence_end(
     line_start = next_start;
   }
   None
+}
+
+fn find_next_witness_phrase(
+  full_text: &str,
+  from: usize,
+  data: &PreparedSignatureData,
+) -> Option<(usize, usize)> {
+  let tail = full_text.get(from..).unwrap_or_default();
+  data
+    .witness_phrases
+    .iter()
+    .filter_map(|phrase| {
+      find_ascii_case_insensitive(tail, phrase)
+        .map(|relative| (from.saturating_add(relative), phrase.len()))
+    })
+    .min_by_key(|(anchor, _)| *anchor)
 }
 
 fn advance_char_boundary(text: &str, start: usize, max_bytes: usize) -> usize {
@@ -592,21 +616,60 @@ fn char_after(text: &str, byte: usize) -> Option<char> {
   text.get(byte..)?.chars().next()
 }
 
-fn is_image_stub(line: &str) -> bool {
+fn is_image_stub(line: &str, data: &PreparedSignatureData) -> bool {
   let lower = line.trim_start().to_lowercase();
-  lower.starts_with("[img")
-    || lower.starts_with("[image")
-    || lower.starts_with("[logo")
-    || lower.starts_with("(logo")
+  data
+    .image_stub_prefixes
+    .iter()
+    .any(|prefix| lower.starts_with(prefix))
+}
+
+fn non_empty_lowercase(values: Vec<String>) -> Vec<String> {
+  values
+    .into_iter()
+    .map(|value| value.trim().to_lowercase())
+    .filter(|value| !value.is_empty())
+    .collect()
+}
+
+fn non_empty_compact_lowercase(values: Vec<String>) -> Vec<String> {
+  values
+    .into_iter()
+    .map(|value| {
+      value
+        .trim()
+        .trim_end_matches('.')
+        .chars()
+        .filter(|ch| *ch != '.')
+        .collect::<String>()
+        .to_lowercase()
+    })
+    .filter(|value| !value.is_empty())
+    .collect()
 }
 
 #[cfg(test)]
 mod tests {
-  use super::detect_signatures;
+  use super::{PreparedSignatureData, SignatureData, detect_signatures};
+
+  fn detect(text: &str) -> Vec<crate::resolution::PipelineEntity> {
+    detect_signatures(text, &test_data())
+  }
+
+  fn test_data() -> PreparedSignatureData {
+    PreparedSignatureData::new(SignatureData {
+      labels: vec![String::from("name")],
+      witness_phrases: vec![String::from("in witness whereof")],
+      name_particles: Vec::new(),
+      post_nominal_suffixes: Vec::new(),
+      organization_suffixes: vec![String::from("inc.")],
+      image_stub_prefixes: Vec::new(),
+    })
+  }
 
   #[test]
   fn detects_slash_signature_same_line() {
-    let entities = detect_signatures("/s/ Jane Doe   Chief Executive Officer");
+    let entities = detect("/s/ Jane Doe   Chief Executive Officer");
 
     assert_eq!(entities.len(), 1);
     assert_eq!(
@@ -623,7 +686,7 @@ mod tests {
       name.chars().map(char::len_utf16).sum::<usize>() <= super::MAX_NAME_LEN
     );
 
-    let entities = detect_signatures(&format!("/s/ {name}"));
+    let entities = detect(&format!("/s/ {name}"));
 
     assert_eq!(entities.len(), 1);
     assert_eq!(
@@ -635,7 +698,7 @@ mod tests {
   #[test]
   fn detects_multiple_labelled_name_columns() {
     let entities =
-      detect_signatures("Name: Priya Ramanathan   Name: Jonathan H. Whitaker");
+      detect("Name: Priya Ramanathan   Name: Jonathan H. Whitaker");
 
     assert_eq!(
       entities
@@ -648,7 +711,7 @@ mod tests {
 
   #[test]
   fn skips_organization_caption_before_signature_mark() {
-    let entities = detect_signatures("TWITTER, INC.\n/s/ Jane Doe");
+    let entities = detect("TWITTER, INC.\n/s/ Jane Doe");
 
     assert_eq!(entities.len(), 1);
     assert_eq!(

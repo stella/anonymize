@@ -475,6 +475,29 @@ describe("pipeline config semantics", () => {
     );
   });
 
+  test("native signature config is packaged without content-language drift", async () => {
+    const search = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        labels: ["person"],
+        language: "cs",
+      },
+      [],
+      createPipelineContext(),
+    );
+
+    expect(search.nativeStaticConfig.signature_data?.labels).toContain("name");
+    expect(search.nativeStaticConfig.signature_data?.witness_phrases).toContain(
+      "in witness whereof",
+    );
+    expect(
+      search.nativeStaticConfig.signature_data?.organization_suffixes,
+    ).toContain("inc.");
+    expect(
+      search.nativeStaticConfig.signature_data?.image_stub_prefixes,
+    ).toContain("[logo");
+  });
+
   test("native config carries stdnum validator metadata", async () => {
     const search = await buildUnifiedSearch(
       {

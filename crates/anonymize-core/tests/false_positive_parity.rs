@@ -34,6 +34,7 @@ fn empty_config(slices: PreparedSearchSlices) -> PreparedSearchConfig {
     address_context_data: None,
     coreference_data: None,
     name_corpus_data: None,
+    signature_data: None,
     date_data: None,
     monetary_data: None,
   }

@@ -12,25 +12,25 @@ use stella_anonymize_core::{
   OperatorConfig, OperatorType, PatternSlice, PreparedArtifactPolicy,
   PreparedSearchArtifacts, PreparedSearchConfig, PreparedSearchSlices,
   RegexArtifactPolicy, RegexMatchMeta, RegexSearchOptions, SearchEngine,
-  SearchOptions, SearchPattern, ShareQuantityTermData, SigningPlaceGuardData,
-  SourceDetail, StaticRedactionDiagnosticResult, StaticRedactionDiagnostics,
-  StaticRedactionResult, StringGroups, TriggerData, TriggerRule,
-  TriggerStrategy, TriggerValidation, WrittenAmountPatternData, ZoneData,
-  ZonePatternData, ZoneSigningClauseData,
+  SearchOptions, SearchPattern, ShareQuantityTermData, SignatureData,
+  SigningPlaceGuardData, SourceDetail, StaticRedactionDiagnosticResult,
+  StaticRedactionDiagnostics, StaticRedactionResult, StringGroups, TriggerData,
+  TriggerRule, TriggerStrategy, TriggerValidation, WrittenAmountPatternData,
+  ZoneData, ZonePatternData, ZoneSigningClauseData,
 };
 
 pub type Result<T> = std::result::Result<T, ContractError>;
 
 const PREPARED_SEARCH_PACKAGE_HEADER: [u8; 8] = *b"ANONPKG1";
-const PREPARED_SEARCH_PACKAGE_VERSION: u32 = 14;
+const PREPARED_SEARCH_PACKAGE_VERSION: u32 = 15;
 const PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER: [u8; 8] = *b"ANONPKZ1";
-const PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION: u32 = 12;
-const PREPARED_SEARCH_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION: u32 = 11;
+const PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION: u32 = 13;
+const PREPARED_SEARCH_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION: u32 = 12;
 const PREPARED_SEARCH_CORE_PACKAGE_HEADER: [u8; 8] = *b"ANONCPK1";
-const PREPARED_SEARCH_CORE_PACKAGE_VERSION: u32 = 14;
+const PREPARED_SEARCH_CORE_PACKAGE_VERSION: u32 = 15;
 const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_HEADER: [u8; 8] = *b"ANONCPZ1";
-const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION: u32 = 15;
-const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION: u32 = 12;
+const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION: u32 = 16;
+const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION: u32 = 13;
 const PREPARED_SEARCH_PACKAGE_DIGEST_BYTES: usize = 32;
 const PREPARED_SEARCH_PACKAGE_ZSTD_LEVEL: i32 = 1;
 const MAX_PREPARED_SEARCH_PACKAGE_PAYLOAD_BYTES: usize = 256 * 1024 * 1024;
@@ -216,6 +216,22 @@ pub struct BindingTriggerData {
   pub number_markers: Vec<String>,
   #[serde(default)]
   pub number_labels: Vec<String>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BindingSignatureData {
+  #[serde(default)]
+  pub labels: Vec<String>,
+  #[serde(default)]
+  pub witness_phrases: Vec<String>,
+  #[serde(default)]
+  pub name_particles: Vec<String>,
+  #[serde(default)]
+  pub post_nominal_suffixes: Vec<String>,
+  #[serde(default)]
+  pub organization_suffixes: Vec<String>,
+  #[serde(default)]
+  pub image_stub_prefixes: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -581,6 +597,8 @@ pub struct BindingPreparedSearchConfig {
   #[serde(default)]
   pub name_corpus_data: Option<BindingNameCorpusData>,
   #[serde(default)]
+  pub signature_data: Option<BindingSignatureData>,
+  #[serde(default)]
   pub name_corpus_mode: BindingNameCorpusMode,
   #[serde(default)]
   pub date_data: Option<BindingDateData>,
@@ -755,6 +773,7 @@ struct BinaryPreparedSearchConfig {
   address_context_data: Option<BindingAddressContextData>,
   coreference_data: Option<BindingCoreferenceData>,
   name_corpus_data: Option<BindingNameCorpusData>,
+  signature_data: Option<BindingSignatureData>,
   name_corpus_mode: BindingNameCorpusMode,
   date_data: Option<BindingDateData>,
   monetary_data: Option<BindingMonetaryData>,
@@ -1030,6 +1049,7 @@ impl From<BindingPreparedSearchConfig> for BinaryPreparedSearchConfig {
       address_context_data: config.address_context_data,
       coreference_data: config.coreference_data,
       name_corpus_data: config.name_corpus_data,
+      signature_data: config.signature_data,
       name_corpus_mode: config.name_corpus_mode,
       date_data: config.date_data,
       monetary_data: config.monetary_data,
@@ -1066,6 +1086,7 @@ impl From<BinaryPreparedSearchConfig> for BindingPreparedSearchConfig {
       address_context_data: config.address_context_data,
       coreference_data: config.coreference_data,
       name_corpus_data: config.name_corpus_data,
+      signature_data: config.signature_data,
       name_corpus_mode: config.name_corpus_mode,
       date_data: config.date_data,
       monetary_data: config.monetary_data,
@@ -1628,6 +1649,7 @@ pub fn prepared_search_config_from_binding(
     name_corpus_data: config
       .name_corpus_data
       .map(|data| name_corpus_data_from_binding(data, config.name_corpus_mode)),
+    signature_data: config.signature_data.map(signature_data_from_binding),
     date_data: config.date_data.map(|data| DateData {
       month_names_by_language: data.month_names_by_language,
       year_words_by_language: data.year_words_by_language,
@@ -2182,6 +2204,17 @@ fn name_corpus_data_from_binding(
     cjk_non_person_terms: data.cjk_non_person_terms,
     cjk_surname_starters: data.cjk_surname_starters,
     organization_terms: data.organization_terms,
+  }
+}
+
+fn signature_data_from_binding(data: BindingSignatureData) -> SignatureData {
+  SignatureData {
+    labels: data.labels,
+    witness_phrases: data.witness_phrases,
+    name_particles: data.name_particles,
+    post_nominal_suffixes: data.post_nominal_suffixes,
+    organization_suffixes: data.organization_suffixes,
+    image_stub_prefixes: data.image_stub_prefixes,
   }
 }
 
@@ -2824,6 +2857,7 @@ fn diagnostic_stage_name(stage: DiagnosticStage) -> String {
     }
     DiagnosticStage::PrepareCoreferenceData => "prepare.coreference-data",
     DiagnosticStage::PrepareNameCorpusData => "prepare.name-corpus-data",
+    DiagnosticStage::PrepareSignatureData => "prepare.signature-data",
     DiagnosticStage::WarmRegex => "warm.regex",
     DiagnosticStage::WarmCustomRegex => "warm.custom-regex",
     DiagnosticStage::WarmLegalFormSearch => "warm.legal-form-search",

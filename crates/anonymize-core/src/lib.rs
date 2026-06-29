@@ -67,6 +67,7 @@ pub use search::{
   RegexArtifactPolicy, RegexSearchOptions, SearchIndex, SearchIndexArtifacts,
   SearchOptions, SearchPattern,
 };
+pub use signatures::SignatureData;
 pub use triggers::{
   TriggerData, TriggerRule, TriggerStrategy, TriggerValidation,
 };

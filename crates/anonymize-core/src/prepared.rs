@@ -36,7 +36,9 @@ use crate::search::{
   LiteralSearchOptions, SearchIndex, SearchIndexArtifacts,
   SearchIndexBuildStats, SearchOptions, SearchPattern,
 };
-use crate::signatures::detect_signatures;
+use crate::signatures::{
+  PreparedSignatureData, SignatureData, detect_signatures,
+};
 use crate::triggers::{
   PreparedTriggerData, TriggerData, process_trigger_matches,
 };
@@ -78,6 +80,7 @@ pub struct PreparedSearch {
   address_context_data: Option<PreparedAddressContextData>,
   coreference_data: Option<PreparedCoreferenceData>,
   name_corpus_data: Option<PreparedNames>,
+  signature_data: Option<PreparedSignatureData>,
   date_data: Option<PreparedDateData>,
   monetary_data: Option<PreparedMonetaryData>,
   monetary_extraction: bool,
@@ -133,6 +136,8 @@ pub struct PreparedSearchConfig {
   pub coreference_data: Option<CoreferenceData>,
   #[serde(default)]
   pub name_corpus_data: Option<NameCorpusData>,
+  #[serde(default)]
+  pub signature_data: Option<SignatureData>,
   pub date_data: Option<DateData>,
   pub monetary_data: Option<MonetaryData>,
 }
@@ -350,6 +355,7 @@ struct SupportDataInput {
   address_context: Option<AddressContextData>,
   coreference: Option<CoreferenceData>,
   name_corpus: Option<NameCorpusData>,
+  signature: Option<SignatureData>,
 }
 
 struct PreparedSupportData {
@@ -361,6 +367,7 @@ struct PreparedSupportData {
   address_context: Option<PreparedAddressContextData>,
   coreference: Option<PreparedCoreferenceData>,
   names: Option<PreparedNames>,
+  signature: Option<PreparedSignatureData>,
   count: usize,
 }
 
@@ -592,6 +599,7 @@ impl PreparedSearch {
       address_context_data: support_data.address_context,
       coreference_data: support_data.coreference,
       name_corpus_data: support_data.names,
+      signature_data: support_data.signature,
       date_data,
       monetary_data,
       monetary_extraction,
@@ -906,7 +914,7 @@ impl PreparedSearch {
     let trigger =
       self.process_trigger_entities(matches, full_text, diagnostics)?;
 
-    let signature = process_signature_entities(full_text);
+    let signature = self.process_signature_entities(full_text);
 
     let legal_form = self.process_legal_form_entities(matches, full_text)?;
 
@@ -1075,6 +1083,19 @@ impl PreparedSearch {
       entities,
       elapsed_us: elapsed_us(start),
     })
+  }
+
+  fn process_signature_entities(&self, full_text: &str) -> TimedEntities {
+    let start = Instant::now();
+    let entities = self
+      .signature_data
+      .as_ref()
+      .map_or_else(Vec::new, |data| detect_signatures(full_text, data));
+
+    TimedEntities {
+      entities,
+      elapsed_us: elapsed_us(start),
+    }
   }
 
   pub fn redact_static_entities(
@@ -1366,14 +1387,6 @@ fn should_extract_monetary_data(config: &PreparedSearchConfig) -> bool {
       .regex_meta
       .iter()
       .any(|meta| meta.label == "monetary amount")
-}
-
-fn process_signature_entities(full_text: &str) -> TimedEntities {
-  let start = Instant::now();
-  TimedEntities {
-    entities: detect_signatures(full_text),
-    elapsed_us: elapsed_us(start),
-  }
 }
 
 fn filter_entities_for_config(
@@ -2039,6 +2052,7 @@ const fn take_support_input(
     address_context: config.address_context_data.take(),
     coreference: config.coreference_data.take(),
     name_corpus: config.name_corpus_data.take(),
+    signature: config.signature_data.take(),
   }
 }
 
@@ -2119,15 +2133,12 @@ fn prepare_support_data(
     elapsed_us(coreference_data_start),
   );
 
-  let name_corpus_data_len = name_corpus_data_len(input.name_corpus.as_ref());
-  let name_corpus_data_start = Instant::now();
-  let name_corpus_data = input.name_corpus.map(PreparedNames::new);
-  record_prepare_stage_elapsed(
-    diagnostics,
-    DiagnosticStage::PrepareNameCorpusData,
-    name_corpus_data_len,
-    elapsed_us(name_corpus_data_start),
-  );
+  let (name_corpus_data, name_corpus_data_len) =
+    prepare_name_corpus_support_data(input.name_corpus, diagnostics);
+
+  let (signature_data, signature_data_len) =
+    prepare_signature_support_data(input.signature, diagnostics);
+
   let count = [
     hotword_data_len,
     trigger_data_len,
@@ -2137,6 +2148,7 @@ fn prepare_support_data(
     address_context_data_len,
     coreference_data_len,
     name_corpus_data_len,
+    signature_data_len,
   ]
   .into_iter()
   .fold(0usize, usize::saturating_add);
@@ -2150,8 +2162,41 @@ fn prepare_support_data(
     address_context: address_context_data,
     coreference: coreference_data,
     names: name_corpus_data,
+    signature: signature_data,
     count,
   })
+}
+
+fn prepare_name_corpus_support_data(
+  data: Option<NameCorpusData>,
+  diagnostics: &mut Option<&mut StaticRedactionDiagnostics>,
+) -> (Option<PreparedNames>, usize) {
+  let data_len = name_corpus_data_len(data.as_ref());
+  let data_start = Instant::now();
+  let prepared_data = data.map(PreparedNames::new);
+  record_prepare_stage_elapsed(
+    diagnostics,
+    DiagnosticStage::PrepareNameCorpusData,
+    data_len,
+    elapsed_us(data_start),
+  );
+  (prepared_data, data_len)
+}
+
+fn prepare_signature_support_data(
+  data: Option<SignatureData>,
+  diagnostics: &mut Option<&mut StaticRedactionDiagnostics>,
+) -> (Option<PreparedSignatureData>, usize) {
+  let data_len = signature_data_len(data.as_ref());
+  let data_start = Instant::now();
+  let prepared_data = data.map(PreparedSignatureData::new);
+  record_prepare_stage_elapsed(
+    diagnostics,
+    DiagnosticStage::PrepareSignatureData,
+    data_len,
+    elapsed_us(data_start),
+  );
+  (prepared_data, data_len)
 }
 
 fn hotword_data_len(data: Option<&HotwordRuleData>) -> usize {
@@ -2247,6 +2292,21 @@ fn name_corpus_data_len(data: Option<&NameCorpusData>) -> usize {
       data.cjk_non_person_terms.len(),
       data.cjk_surname_starters.len(),
       data.organization_terms.len(),
+    ]
+    .into_iter()
+    .fold(0usize, usize::saturating_add)
+  })
+}
+
+fn signature_data_len(data: Option<&SignatureData>) -> usize {
+  data.map_or(0, |data| {
+    [
+      data.labels.len(),
+      data.witness_phrases.len(),
+      data.name_particles.len(),
+      data.post_nominal_suffixes.len(),
+      data.organization_suffixes.len(),
+      data.image_stub_prefixes.len(),
     ]
     .into_iter()
     .fold(0usize, usize::saturating_add)

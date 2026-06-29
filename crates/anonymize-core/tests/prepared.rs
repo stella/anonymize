@@ -42,6 +42,7 @@ fn empty_config(slices: PreparedSearchSlices) -> PreparedSearchConfig {
     address_context_data: None,
     coreference_data: None,
     name_corpus_data: None,
+    signature_data: None,
     date_data: None,
     monetary_data: None,
   }
@@ -254,6 +255,7 @@ fn prepared_search_runs_normalized_literal_pass() {
     address_context_data: None,
     coreference_data: None,
     name_corpus_data: None,
+    signature_data: None,
     date_data: None,
     monetary_data: None,
   })
@@ -769,6 +771,7 @@ fn prepared_search_artifacts_match_direct_prepare() {
     address_context_data: None,
     coreference_data: None,
     name_corpus_data: None,
+    signature_data: None,
     date_data: None,
     monetary_data: None,
   };
@@ -923,6 +926,7 @@ fn prepared_search_emits_static_detector_entities() {
     address_context_data: None,
     coreference_data: None,
     name_corpus_data: None,
+    signature_data: None,
     date_data: None,
     monetary_data: None,
   })
@@ -1692,6 +1696,7 @@ fn prepared_search_redacts_static_entities_end_to_end() {
     address_context_data: None,
     coreference_data: None,
     name_corpus_data: None,
+    signature_data: None,
     date_data: None,
     monetary_data: None,
   })
@@ -2201,6 +2206,7 @@ fn prepared_search_reports_static_redaction_diagnostics() {
     address_context_data: None,
     coreference_data: None,
     name_corpus_data: None,
+    signature_data: None,
     date_data: None,
     monetary_data: None,
   })
@@ -2364,6 +2370,7 @@ fn prepared_search_redacts_custom_deny_list_entities() {
     address_context_data: None,
     coreference_data: None,
     name_corpus_data: None,
+    signature_data: None,
     date_data: None,
     monetary_data: None,
   })
@@ -2431,6 +2438,7 @@ fn prepared_search_parallel_path_matches_diagnostics_path() {
     address_context_data: None,
     coreference_data: None,
     name_corpus_data: None,
+    signature_data: None,
     date_data: None,
     monetary_data: None,
   })

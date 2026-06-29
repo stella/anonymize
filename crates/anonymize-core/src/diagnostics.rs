@@ -31,6 +31,7 @@ pub enum DiagnosticStage {
   PrepareAddressContextData,
   PrepareCoreferenceData,
   PrepareNameCorpusData,
+  PrepareSignatureData,
   WarmRegex,
   WarmCustomRegex,
   WarmLegalFormSearch,
