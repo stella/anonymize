@@ -866,6 +866,7 @@ fn prepared_search_emits_static_detector_entities() {
       regex: RegexSearchOptions {
         whole_words: false,
         overlap_all: false,
+        ..RegexSearchOptions::default()
       },
       ..SearchOptions::default()
     },
@@ -873,6 +874,7 @@ fn prepared_search_emits_static_detector_entities() {
       regex: RegexSearchOptions {
         whole_words: false,
         overlap_all: false,
+        ..RegexSearchOptions::default()
       },
       ..SearchOptions::default()
     },
@@ -988,6 +990,7 @@ fn prepared_search_preserves_overlapping_custom_regex_matches() {
       regex: RegexSearchOptions {
         whole_words: false,
         overlap_all: true,
+        ..RegexSearchOptions::default()
       },
       ..SearchOptions::default()
     },
@@ -1041,6 +1044,7 @@ fn prepared_search_drops_person_spans_ending_in_trailing_noun() {
       regex: RegexSearchOptions {
         whole_words: false,
         overlap_all: false,
+        ..RegexSearchOptions::default()
       },
       ..SearchOptions::default()
     },
@@ -1627,6 +1631,7 @@ fn prepared_search_redacts_static_entities_end_to_end() {
       regex: RegexSearchOptions {
         whole_words: false,
         overlap_all: false,
+        ..RegexSearchOptions::default()
       },
       ..SearchOptions::default()
     },
@@ -1697,6 +1702,7 @@ fn prepared_search_applies_threshold_before_merge() {
       regex: RegexSearchOptions {
         whole_words: false,
         overlap_all: true,
+        ..RegexSearchOptions::default()
       },
       ..SearchOptions::default()
     },
@@ -2134,6 +2140,7 @@ fn prepared_search_reports_static_redaction_diagnostics() {
       regex: RegexSearchOptions {
         whole_words: false,
         overlap_all: false,
+        ..RegexSearchOptions::default()
       },
       ..SearchOptions::default()
     },
@@ -2946,6 +2953,7 @@ fn prepared_search_does_not_cluster_address_seed_inside_register_span() {
       regex: RegexSearchOptions {
         whole_words: false,
         overlap_all: false,
+        ..RegexSearchOptions::default()
       },
       ..SearchOptions::default()
     },

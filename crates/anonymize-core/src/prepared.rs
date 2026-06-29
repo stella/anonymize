@@ -52,7 +52,7 @@ const NEAR_MISS_BAND: f64 = 0.15;
 const BOOST_PER_NEIGHBOUR: f64 = 0.05;
 const CONTEXT_WINDOW_CHARS: f64 = 150.0;
 const HIGH_CONFIDENCE_FLOOR: f64 = 0.9;
-const PARALLEL_SEARCH_MIN_BYTES: usize = 128 * 1024;
+const PARALLEL_SEARCH_MIN_BYTES: usize = 32 * 1024;
 
 pub struct PreparedSearch {
   regex: SearchIndex,

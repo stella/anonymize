@@ -9,23 +9,23 @@ use napi_derive::napi;
 use stella_anonymize_adapter_contract::{
   BindingOperatorConfig, BindingOperatorEntry, BindingPreparedSearchConfig,
   BindingRedactionResult, BindingStaticRedactionResult, ContractError,
-  PreparedSearchPackageDecodeTimings, operator_config_from_binding,
-  prepared_search_config_from_binding,
+  PreparedSearchPackageDecodeTimings, diagnostic_stage_event,
+  operator_config_from_binding, prepared_search_config_from_binding,
   prepared_search_core_package_decode_from_bytes_with_timings,
   prepared_search_core_package_decode_trusted_from_bytes_with_timings,
   prepared_search_core_package_to_bytes,
   prepared_search_core_package_to_compressed_bytes,
-  prepared_search_package_digest, prepared_search_package_from_bytes,
-  prepared_search_package_has_core_payload,
+  prepared_search_package_decode_timing_events, prepared_search_package_digest,
+  prepared_search_package_from_bytes, prepared_search_package_has_core_payload,
   prepared_search_package_verify_digest_with_timings,
   static_redaction_diagnostic_result_to_utf16_binding,
   static_redaction_diagnostics_to_binding,
   static_redaction_result_to_utf16_binding,
 };
 use stella_anonymize_core::{
-  DiagnosticDetail, DiagnosticEvent, DiagnosticEventKind, DiagnosticStage,
-  OperatorConfig, PreparedSearch, PreparedSearchArtifacts,
-  PreparedSearchConfig, StaticRedactionDiagnostics,
+  DiagnosticDetail, DiagnosticEvent, DiagnosticStage, OperatorConfig,
+  PreparedSearch, PreparedSearchArtifacts, PreparedSearchConfig,
+  StaticRedactionDiagnostics,
 };
 
 const PREPARED_SEARCH_CACHE_LIMIT: usize = 8;
@@ -82,6 +82,7 @@ pub struct JsSearchPattern {
   pub prefilter_case_insensitive: Option<bool>,
   pub prefilter_regex: Option<String>,
   pub prefilter_window_bytes: Option<u32>,
+  pub prepared_artifact_policy: Option<String>,
 }
 
 #[napi(object)]
@@ -90,6 +91,7 @@ pub struct JsSearchOptions {
   pub literal_whole_words: Option<bool>,
   pub regex_whole_words: Option<bool>,
   pub regex_overlap_all: Option<bool>,
+  pub regex_artifact_policy: Option<String>,
   pub fuzzy_case_insensitive: Option<bool>,
   pub fuzzy_whole_words: Option<bool>,
   pub fuzzy_normalize_diacritics: Option<bool>,
@@ -713,7 +715,7 @@ impl NativePreparedSearch {
     .map_err(|error| to_napi_core_error(&error))?;
     let inner = Arc::new(result.prepared);
     let mut events = cache_miss_events(context);
-    events.push(stage_event(
+    events.push(diagnostic_stage_event(
       context.parse_stage,
       None,
       Some(context.parse_elapsed),
@@ -725,7 +727,7 @@ impl NativePreparedSearch {
       ..StaticRedactionDiagnostics::default()
     };
     if let Some((pattern_count, convert_elapsed)) = binding_convert {
-      diagnostics.events.push(stage_event(
+      diagnostics.events.push(diagnostic_stage_event(
         DiagnosticStage::PrepareBindingConvert,
         Some(pattern_count),
         Some(convert_elapsed),
@@ -733,7 +735,7 @@ impl NativePreparedSearch {
       ));
     }
     if let Some((elapsed, bytes)) = artifact_decode {
-      diagnostics.events.push(stage_event(
+      diagnostics.events.push(diagnostic_stage_event(
         DiagnosticStage::PrepareArtifactsDecode,
         None,
         Some(elapsed),
@@ -899,13 +901,13 @@ fn cache_hit_events(
   input_bytes_len: usize,
 ) -> Vec<DiagnosticEvent> {
   vec![
-    stage_event(
+    diagnostic_stage_event(
       DiagnosticStage::PrepareCacheKey,
       None,
       Some(cache.key_elapsed),
       Some(input_bytes_len),
     ),
-    stage_event(
+    diagnostic_stage_event(
       DiagnosticStage::PrepareCacheHit,
       Some(1),
       Some(cache.lookup_elapsed),
@@ -921,20 +923,20 @@ fn cache_miss_events(context: &PrepareContext) -> Vec<DiagnosticEvent> {
       lookup_elapsed,
       ..
     } => vec![
-      stage_event(
+      diagnostic_stage_event(
         DiagnosticStage::PrepareCacheKey,
         None,
         Some(key_elapsed),
         Some(context.input_bytes_len),
       ),
-      stage_event(
+      diagnostic_stage_event(
         DiagnosticStage::PrepareCacheMiss,
         Some(0),
         Some(lookup_elapsed),
         Some(context.input_bytes_len),
       ),
     ],
-    PrepareCache::Bypass => vec![stage_event(
+    PrepareCache::Bypass => vec![diagnostic_stage_event(
       DiagnosticStage::PrepareCacheBypass,
       Some(0),
       Some(0),
@@ -962,30 +964,10 @@ fn append_package_decode_timing_events_for_input(
   timings: PreparedSearchPackageDecodeTimings,
   input_bytes_len: usize,
 ) {
-  if let Some(elapsed) = timings.verify {
-    events.push(stage_event(
-      DiagnosticStage::PreparePackageVerify,
-      None,
-      Some(elapsed),
-      Some(input_bytes_len),
-    ));
-  }
-  if let Some(elapsed) = timings.decompress {
-    events.push(stage_event(
-      DiagnosticStage::PreparePackageDecompress,
-      None,
-      Some(elapsed),
-      Some(input_bytes_len),
-    ));
-  }
-  if let Some(elapsed) = timings.config_decode {
-    events.push(stage_event(
-      DiagnosticStage::PreparePackageConfigDecode,
-      None,
-      Some(elapsed),
-      Some(input_bytes_len),
-    ));
-  }
+  events.extend(prepared_search_package_decode_timing_events(
+    timings,
+    input_bytes_len,
+  ));
 }
 
 fn prepared_search_cache_key(
@@ -1080,37 +1062,6 @@ fn to_js_operator_entries(
       operator: entry.operator,
     })
     .collect()
-}
-
-const fn stage_event(
-  stage: DiagnosticStage,
-  count: Option<usize>,
-  elapsed_us: Option<u64>,
-  input_bytes: Option<usize>,
-) -> DiagnosticEvent {
-  DiagnosticEvent {
-    stage,
-    kind: DiagnosticEventKind::StageSummary,
-    count,
-    slot: None,
-    subslot: None,
-    pattern_count: None,
-    engine: None,
-    pattern: None,
-    source: None,
-    source_detail: None,
-    label: None,
-    start: None,
-    end: None,
-    text: None,
-    score: None,
-    span_valid: None,
-    elapsed_us,
-    input_bytes,
-    artifact_count: None,
-    artifact_bytes: None,
-    reason: None,
-  }
 }
 
 fn elapsed_us(start: Instant) -> u64 {

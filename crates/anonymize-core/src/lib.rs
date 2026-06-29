@@ -63,8 +63,9 @@ pub use resolution::{
   merge_and_dedup, sanitize_entities,
 };
 pub use search::{
-  FuzzySearchOptions, LiteralSearchOptions, RegexSearchOptions, SearchIndex,
-  SearchIndexArtifacts, SearchOptions, SearchPattern,
+  FuzzySearchOptions, LiteralSearchOptions, PreparedArtifactPolicy,
+  RegexArtifactPolicy, RegexSearchOptions, SearchIndex, SearchIndexArtifacts,
+  SearchOptions, SearchPattern,
 };
 pub use triggers::{
   TriggerData, TriggerRule, TriggerStrategy, TriggerValidation,

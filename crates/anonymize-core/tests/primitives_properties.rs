@@ -315,6 +315,7 @@ fn mixed_search_case()
           regex: RegexSearchOptions {
             whole_words: false,
             overlap_all: true,
+            ..RegexSearchOptions::default()
           },
           ..SearchOptions::default()
         },

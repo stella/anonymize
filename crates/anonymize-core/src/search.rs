@@ -24,6 +24,7 @@ pub enum SearchPattern {
     prefilter_case_insensitive: Option<bool>,
     prefilter_regex: Option<String>,
     prefilter_window_bytes: Option<usize>,
+    prepared_artifact_policy: Option<PreparedArtifactPolicy>,
   },
   Fuzzy {
     pattern: String,
@@ -87,6 +88,34 @@ pub struct RegexSearchOptions {
   pub whole_words: bool,
   #[builder(default)]
   pub overlap_all: bool,
+  #[builder(default)]
+  pub artifact_policy: RegexArtifactPolicy,
+}
+
+#[derive(
+  Clone,
+  Copy,
+  Debug,
+  Default,
+  Eq,
+  PartialEq,
+  serde::Deserialize,
+  serde::Serialize,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum RegexArtifactPolicy {
+  #[default]
+  Include,
+  Omit,
+}
+
+#[derive(
+  Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum PreparedArtifactPolicy {
+  Include,
+  Omit,
 }
 
 #[derive(
@@ -549,6 +578,7 @@ fn partition_patterns(
         prefilter_case_insensitive,
         prefilter_regex,
         prefilter_window_bytes,
+        prepared_artifact_policy,
       } => {
         let mut regex_pattern = text_search::RegexPattern::new(pattern);
         regex_pattern.lazy = lazy;
@@ -556,6 +586,8 @@ fn partition_patterns(
         regex_pattern.prefilter_case_insensitive = prefilter_case_insensitive;
         regex_pattern.prefilter_regex = prefilter_regex;
         regex_pattern.prefilter_window_bytes = prefilter_window_bytes;
+        regex_pattern.prepared_artifact_policy =
+          text_search_prepared_artifact_policy(prepared_artifact_policy);
         regex.push(text_search::PatternEntry::Regex(regex_pattern));
         regex_indexes.push(pattern_index);
       }
@@ -582,6 +614,20 @@ fn partition_patterns(
     fuzzy,
     fuzzy_indexes,
   })
+}
+
+const fn text_search_prepared_artifact_policy(
+  value: Option<PreparedArtifactPolicy>,
+) -> text_search::PreparedArtifactPolicy {
+  match value {
+    Some(PreparedArtifactPolicy::Include) => {
+      text_search::PreparedArtifactPolicy::Include
+    }
+    Some(PreparedArtifactPolicy::Omit) => {
+      text_search::PreparedArtifactPolicy::Omit
+    }
+    None => text_search::PreparedArtifactPolicy::Inherit,
+  }
 }
 
 fn build_search_index_inner(
@@ -864,6 +910,10 @@ fn regex_options(
 ) -> text_search::TextSearchOptions {
   text_search::TextSearchOptions {
     whole_words: options.whole_words,
+    regex_artifact_policy: match options.artifact_policy {
+      RegexArtifactPolicy::Include => text_search::RegexArtifactPolicy::Include,
+      RegexArtifactPolicy::Omit => text_search::RegexArtifactPolicy::Omit,
+    },
     overlap_strategy: if options.overlap_all {
       text_search::OverlapStrategy::All
     } else {

@@ -1,23 +1,28 @@
+use std::time::Instant;
+
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 use stella_anonymize_adapter_contract::{
   BindingOperatorConfig, BindingOperatorEntry, BindingPipelineEntity,
   BindingPreparedSearchConfig, BindingRedactionEntry, BindingRedactionResult,
-  BindingStaticRedactionResult, ContractError, operator_config_from_binding,
-  prepared_search_config_from_binding,
+  BindingStaticRedactionResult, ContractError,
+  PreparedSearchPackageDecodeTimings, diagnostic_stage_event,
+  operator_config_from_binding, prepared_search_config_from_binding,
   prepared_search_core_package_decode_from_bytes_with_timings,
   prepared_search_core_package_decode_trusted_from_bytes_with_timings,
   prepared_search_core_package_to_bytes,
   prepared_search_core_package_to_compressed_bytes,
-  prepared_search_package_from_bytes, prepared_search_package_has_core_payload,
+  prepared_search_package_decode_events, prepared_search_package_from_bytes,
+  prepared_search_package_has_core_payload,
   static_redaction_diagnostic_result_to_utf16_binding,
   static_redaction_diagnostics_to_binding, static_redaction_result_to_binding,
   static_redaction_result_to_utf16_binding,
 };
 use stella_anonymize_core::{
-  DiagnosticDetail, OperatorConfig, PreparedSearch as CorePreparedSearch,
-  PreparedSearchArtifacts, StaticRedactionDiagnostics, StaticRedactionResult,
+  DiagnosticDetail, DiagnosticStage, OperatorConfig,
+  PreparedSearch as CorePreparedSearch, PreparedSearchArtifacts,
+  StaticRedactionDiagnostics, StaticRedactionResult,
 };
 
 #[pyclass(name = "RedactionEntry", get_all, skip_from_py_object)]
@@ -87,48 +92,75 @@ impl PyPreparedSearch {
     artifact_bytes: &[u8],
   ) -> PyResult<Self> {
     let config = parse_core_prepared_search_config(config_json)?;
+    let artifact_decode_start = Instant::now();
     let artifacts = PreparedSearchArtifacts::from_bytes(artifact_bytes)
       .map_err(|error| to_py_core_error(&error))?;
+    let artifact_decode_elapsed = elapsed_us(artifact_decode_start);
     let result =
       CorePreparedSearch::new_with_artifacts_diagnostics(config, &artifacts)
         .map_err(|error| to_py_core_error(&error))?;
+    let mut diagnostics = StaticRedactionDiagnostics::default();
+    diagnostics.events.push(diagnostic_stage_event(
+      DiagnosticStage::PrepareArtifactsDecode,
+      None,
+      Some(artifact_decode_elapsed),
+      Some(artifact_bytes.len()),
+    ));
+    diagnostics.extend(result.diagnostics);
     Ok(Self {
       inner: result.prepared,
-      prepare_diagnostics: result.diagnostics,
+      prepare_diagnostics: diagnostics,
     })
   }
 
   #[staticmethod]
   fn from_prepared_package_bytes(package_bytes: &[u8]) -> PyResult<Self> {
     if prepared_search_package_has_core_payload(package_bytes) {
+      let package_decode_start = Instant::now();
       let package =
         prepared_search_core_package_decode_from_bytes_with_timings(
           package_bytes,
         )
         .map_err(|error| to_py_contract_error(&error))?;
-      let result = CorePreparedSearch::new_with_artifacts_diagnostics(
+      let package_decode_elapsed = elapsed_us(package_decode_start);
+      return Self::from_core_package(
         package.config,
         &package.artifacts,
-      )
-      .map_err(|error| to_py_core_error(&error))?;
-      return Ok(Self {
-        inner: result.prepared,
-        prepare_diagnostics: result.diagnostics,
-      });
+        package.package_decode_timings,
+        Some((package.artifacts_decode, package.artifacts_bytes)),
+        package_decode_elapsed,
+        package_bytes.len(),
+      );
     }
 
+    let package_decode_start = Instant::now();
     let package = prepared_search_package_from_bytes(package_bytes)
       .map_err(|error| to_py_contract_error(&error))?;
+    let package_decode_elapsed = elapsed_us(package_decode_start);
     let config = prepared_search_config_from_binding(package.config)
       .map_err(|error| to_py_contract_error(&error))?;
+    let artifact_decode_start = Instant::now();
     let artifacts = PreparedSearchArtifacts::from_bytes(&package.artifacts)
       .map_err(|error| to_py_core_error(&error))?;
+    let artifact_decode_elapsed = elapsed_us(artifact_decode_start);
     let result =
       CorePreparedSearch::new_with_artifacts_diagnostics(config, &artifacts)
         .map_err(|error| to_py_core_error(&error))?;
+    let mut diagnostics = package_prepare_diagnostics(
+      package_decode_elapsed,
+      PreparedSearchPackageDecodeTimings::default(),
+      package_bytes.len(),
+    );
+    diagnostics.events.push(diagnostic_stage_event(
+      DiagnosticStage::PrepareArtifactsDecode,
+      None,
+      Some(artifact_decode_elapsed),
+      Some(package.artifacts.len()),
+    ));
+    diagnostics.extend(result.diagnostics);
     Ok(Self {
       inner: result.prepared,
-      prepare_diagnostics: result.diagnostics,
+      prepare_diagnostics: diagnostics,
     })
   }
 
@@ -137,20 +169,21 @@ impl PyPreparedSearch {
     package_bytes: &[u8],
   ) -> PyResult<Self> {
     if prepared_search_package_has_core_payload(package_bytes) {
+      let package_decode_start = Instant::now();
       let package =
         prepared_search_core_package_decode_trusted_from_bytes_with_timings(
           package_bytes,
         )
         .map_err(|error| to_py_contract_error(&error))?;
-      let result = CorePreparedSearch::new_with_artifacts_diagnostics(
+      let package_decode_elapsed = elapsed_us(package_decode_start);
+      return Self::from_core_package(
         package.config,
         &package.artifacts,
-      )
-      .map_err(|error| to_py_core_error(&error))?;
-      return Ok(Self {
-        inner: result.prepared,
-        prepare_diagnostics: result.diagnostics,
-      });
+        package.package_decode_timings,
+        Some((package.artifacts_decode, package.artifacts_bytes)),
+        package_decode_elapsed,
+        package_bytes.len(),
+      );
     }
 
     Self::from_prepared_package_bytes(package_bytes)
@@ -234,6 +267,37 @@ impl PyPreparedSearch {
 }
 
 impl PyPreparedSearch {
+  fn from_core_package(
+    config: stella_anonymize_core::PreparedSearchConfig,
+    artifacts: &PreparedSearchArtifacts,
+    package_decode_timings: PreparedSearchPackageDecodeTimings,
+    artifact_decode: Option<(u64, usize)>,
+    package_decode_elapsed: u64,
+    input_bytes_len: usize,
+  ) -> PyResult<Self> {
+    let result =
+      CorePreparedSearch::new_with_artifacts_diagnostics(config, artifacts)
+        .map_err(|error| to_py_core_error(&error))?;
+    let mut diagnostics = package_prepare_diagnostics(
+      package_decode_elapsed,
+      package_decode_timings,
+      input_bytes_len,
+    );
+    if let Some((elapsed, bytes)) = artifact_decode {
+      diagnostics.events.push(diagnostic_stage_event(
+        DiagnosticStage::PrepareArtifactsDecode,
+        None,
+        Some(elapsed),
+        Some(bytes),
+      ));
+    }
+    diagnostics.extend(result.diagnostics);
+    Ok(Self {
+      inner: result.prepared,
+      prepare_diagnostics: diagnostics,
+    })
+  }
+
   fn redact_static_entities_diagnostics_json_inner(
     &self,
     full_text: &str,
@@ -274,6 +338,26 @@ impl PyPreparedSearch {
       )
       .map_err(|error| to_py_core_error(&error))
   }
+}
+
+fn package_prepare_diagnostics(
+  package_decode_elapsed: u64,
+  package_decode_timings: PreparedSearchPackageDecodeTimings,
+  input_bytes_len: usize,
+) -> StaticRedactionDiagnostics {
+  StaticRedactionDiagnostics {
+    events: prepared_search_package_decode_events(
+      package_decode_elapsed,
+      package_decode_timings,
+      input_bytes_len,
+    ),
+    ..StaticRedactionDiagnostics::default()
+  }
+}
+
+fn elapsed_us(start: Instant) -> u64 {
+  let micros = start.elapsed().as_micros();
+  u64::try_from(micros).unwrap_or(u64::MAX)
 }
 
 #[pyfunction]

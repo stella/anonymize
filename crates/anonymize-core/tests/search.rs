@@ -24,6 +24,7 @@ fn search_index_routes_literal_regex_and_fuzzy_patterns() {
       regex: RegexSearchOptions {
         whole_words: false,
         overlap_all: false,
+        ..RegexSearchOptions::default()
       },
       fuzzy: FuzzySearchOptions {
         case_insensitive: true,
@@ -198,6 +199,7 @@ fn search_index_can_return_overlapping_regex_matches() {
       regex: RegexSearchOptions {
         whole_words: false,
         overlap_all: true,
+        ..RegexSearchOptions::default()
       },
       ..SearchOptions::default()
     },
@@ -338,6 +340,7 @@ fn search_index_prepared_artifacts_match_direct_index() {
     regex: RegexSearchOptions {
       whole_words: false,
       overlap_all: false,
+      ..RegexSearchOptions::default()
     },
     fuzzy: FuzzySearchOptions {
       case_insensitive: true,

@@ -583,6 +583,13 @@ print(
                     payload.get("operators_json"),
                 )
             ),
+            "prepare_stages": [
+                event.get("stage")
+                for event in json.loads(prepared.prepare_diagnostics_json()).get(
+                    "events",
+                    [],
+                )
+            ],
             "version": anonymize.native_package_version(),
         }
     )
@@ -1359,6 +1366,14 @@ describe("native adapter parity", () => {
 
     expect(result.from_bytes).toEqual(expectedJson);
     expect(result.from_file).toEqual(expectedJson);
+    expect(result.prepare_stages).toEqual(
+      expect.arrayContaining([
+        "prepare.package.decode",
+        "prepare.package.decompress",
+        "prepare.package.config-decode",
+        "prepare.artifacts.decode",
+      ]),
+    );
     expect(result.version).toBe(packageJsonVersion());
   });
 
@@ -3218,6 +3233,7 @@ const callPythonPackageFacade = ({
 }: PythonPackageFacadeOptions): {
   from_bytes: StaticRedactionResult;
   from_file: StaticRedactionResult;
+  prepare_stages: string[];
   version: string;
 } => {
   const payloadPath = join(tempDir, "package-facade-payload.json");

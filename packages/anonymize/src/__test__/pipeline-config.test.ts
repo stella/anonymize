@@ -196,6 +196,12 @@ describe("pipeline config semantics", () => {
     expect(search.nativeStaticConfig.allowed_labels).toEqual(["person"]);
     expect(search.nativeStaticConfig.threshold).toBe(0.93);
     expect(search.nativeStaticConfig.confidence_boost).toBe(true);
+    expect(search.nativeStaticConfig.regex_options.regex_artifact_policy).toBe(
+      "omit",
+    );
+    expect(
+      search.nativeStaticConfig.custom_regex_options.regex_artifact_policy,
+    ).toBe("omit");
   });
 
   test("native config carries false-positive filters without deny-list matching", async () => {
@@ -454,9 +460,8 @@ describe("pipeline config semantics", () => {
       createPipelineContext(),
     );
 
-    const patternIndex = search.nativeStaticConfig.regex_patterns.findIndex(
-      (pattern) =>
-        pattern.kind === "regex" && pattern.pattern.includes("\\d{17}"),
+    const patternIndex = search.nativeStaticConfig.regex_meta.findIndex(
+      (entry) => entry.validator_id === "cn.ric",
     );
     expect(patternIndex).toBeGreaterThanOrEqual(0);
     const meta = search.nativeStaticConfig.regex_meta.at(patternIndex);
@@ -470,6 +475,56 @@ describe("pipeline config semantics", () => {
         (entry) => entry.requires_validation === true && !entry.validator_id,
       ),
     ).toEqual([]);
+  });
+
+  test("native config keeps generated stdnum regexes artifact-free", async () => {
+    const search = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        enableRegex: true,
+        labels: ["tax identification number", "national identification number"],
+      },
+      [],
+      createPipelineContext(),
+    );
+    const patternForValidator = (validatorId: string) => {
+      const index = search.nativeStaticConfig.regex_meta.findIndex(
+        (entry) => entry.validator_id === validatorId,
+      );
+      expect(index).toBeGreaterThanOrEqual(0);
+      const pattern = search.nativeStaticConfig.regex_patterns.at(index);
+      if (pattern?.kind !== "regex") {
+        throw new Error(`Missing regex pattern for ${validatorId}`);
+      }
+      return pattern;
+    };
+
+    expect(patternForValidator("fr.tva")).toMatchObject({
+      lazy: true,
+      prefilter_any: ["FR"],
+      prefilter_case_insensitive: false,
+      prepared_artifact_policy: "omit",
+    });
+    expect(patternForValidator("lv.vat")).toMatchObject({
+      lazy: true,
+      prefilter_any: ["LV"],
+      prepared_artifact_policy: "omit",
+    });
+    expect(patternForValidator("lt.asmens")).not.toHaveProperty(
+      "prepared_artifact_policy",
+    );
+
+    const contextValidatorIndex =
+      search.nativeStaticConfig.regex_meta.findIndex(
+        (entry) => entry.validator_id === "gb.nhs",
+      );
+    expect(contextValidatorIndex).toBeGreaterThanOrEqual(0);
+    expect(
+      search.nativeStaticConfig.regex_patterns.at(contextValidatorIndex),
+    ).toMatchObject({
+      lazy: true,
+      prepared_artifact_policy: "omit",
+    });
   });
 
   test("native config carries static regex prefilter metadata", async () => {
@@ -533,10 +588,12 @@ describe("pipeline config semantics", () => {
     expect(spanishPostalPattern).toMatchObject({
       lazy: true,
       prefilter_window_bytes: 160,
+      prepared_artifact_policy: "omit",
     });
     expect(passportPattern).toMatchObject({
       lazy: true,
       prefilter_window_bytes: 160,
+      prepared_artifact_policy: "omit",
     });
   });
 

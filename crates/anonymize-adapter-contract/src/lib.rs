@@ -9,11 +9,11 @@ use stella_anonymize_core::{
   DiagnosticEventKind, DiagnosticStage, FuzzySearchOptions, GazetteerMatchData,
   HotwordRule, HotwordRuleData, LegalFormData, LiteralSearchOptions,
   MagnitudeSuffixData, MonetaryData, NameCorpusData, NameCorpusMode,
-  OperatorConfig, OperatorType, PatternSlice, PreparedSearchArtifacts,
-  PreparedSearchConfig, PreparedSearchSlices, RegexMatchMeta,
-  RegexSearchOptions, SearchEngine, SearchOptions, SearchPattern,
-  ShareQuantityTermData, SigningPlaceGuardData, SourceDetail,
-  StaticRedactionDiagnosticResult, StaticRedactionDiagnostics,
+  OperatorConfig, OperatorType, PatternSlice, PreparedArtifactPolicy,
+  PreparedSearchArtifacts, PreparedSearchConfig, PreparedSearchSlices,
+  RegexArtifactPolicy, RegexMatchMeta, RegexSearchOptions, SearchEngine,
+  SearchOptions, SearchPattern, ShareQuantityTermData, SigningPlaceGuardData,
+  SourceDetail, StaticRedactionDiagnosticResult, StaticRedactionDiagnostics,
   StaticRedactionResult, StringGroups, TriggerData, TriggerRule,
   TriggerStrategy, TriggerValidation, WrittenAmountPatternData, ZoneData,
   ZonePatternData, ZoneSigningClauseData,
@@ -105,6 +105,7 @@ pub struct BindingSearchPattern {
   pub prefilter_case_insensitive: Option<bool>,
   pub prefilter_regex: Option<String>,
   pub prefilter_window_bytes: Option<u32>,
+  pub prepared_artifact_policy: Option<BindingPreparedArtifactPolicy>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -113,9 +114,24 @@ pub struct BindingSearchOptions {
   pub literal_whole_words: Option<bool>,
   pub regex_whole_words: Option<bool>,
   pub regex_overlap_all: Option<bool>,
+  pub regex_artifact_policy: Option<BindingRegexArtifactPolicy>,
   pub fuzzy_case_insensitive: Option<bool>,
   pub fuzzy_whole_words: Option<bool>,
   pub fuzzy_normalize_diacritics: Option<bool>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BindingRegexArtifactPolicy {
+  Include,
+  Omit,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BindingPreparedArtifactPolicy {
+  Include,
+  Omit,
 }
 
 #[derive(
@@ -620,6 +636,90 @@ pub struct PreparedSearchPackageDecodeTimings {
   pub verify: Option<u64>,
   pub decompress: Option<u64>,
   pub config_decode: Option<u64>,
+}
+
+#[must_use]
+pub const fn diagnostic_stage_event(
+  stage: DiagnosticStage,
+  count: Option<usize>,
+  elapsed_us: Option<u64>,
+  input_bytes: Option<usize>,
+) -> DiagnosticEvent {
+  DiagnosticEvent {
+    stage,
+    kind: DiagnosticEventKind::StageSummary,
+    count,
+    slot: None,
+    subslot: None,
+    pattern_count: None,
+    engine: None,
+    pattern: None,
+    source: None,
+    source_detail: None,
+    label: None,
+    start: None,
+    end: None,
+    text: None,
+    score: None,
+    span_valid: None,
+    elapsed_us,
+    input_bytes,
+    artifact_count: None,
+    artifact_bytes: None,
+    reason: None,
+  }
+}
+
+#[must_use]
+pub fn prepared_search_package_decode_events(
+  package_decode_elapsed: u64,
+  timings: PreparedSearchPackageDecodeTimings,
+  input_bytes_len: usize,
+) -> Vec<DiagnosticEvent> {
+  let mut events = vec![diagnostic_stage_event(
+    DiagnosticStage::PreparePackageDecode,
+    None,
+    Some(package_decode_elapsed),
+    Some(input_bytes_len),
+  )];
+  events.extend(prepared_search_package_decode_timing_events(
+    timings,
+    input_bytes_len,
+  ));
+  events
+}
+
+#[must_use]
+pub fn prepared_search_package_decode_timing_events(
+  timings: PreparedSearchPackageDecodeTimings,
+  input_bytes_len: usize,
+) -> Vec<DiagnosticEvent> {
+  let mut events = Vec::new();
+  if let Some(elapsed) = timings.verify {
+    events.push(diagnostic_stage_event(
+      DiagnosticStage::PreparePackageVerify,
+      None,
+      Some(elapsed),
+      Some(input_bytes_len),
+    ));
+  }
+  if let Some(elapsed) = timings.decompress {
+    events.push(diagnostic_stage_event(
+      DiagnosticStage::PreparePackageDecompress,
+      None,
+      Some(elapsed),
+      Some(input_bytes_len),
+    ));
+  }
+  if let Some(elapsed) = timings.config_decode {
+    events.push(diagnostic_stage_event(
+      DiagnosticStage::PreparePackageConfigDecode,
+      None,
+      Some(elapsed),
+      Some(input_bytes_len),
+    ));
+  }
+  events
 }
 
 #[derive(Deserialize, Serialize)]
@@ -2497,6 +2597,7 @@ fn search_pattern_from_binding(
         || pattern.prefilter_case_insensitive.is_some()
         || pattern.prefilter_regex.is_some()
         || pattern.prefilter_window_bytes.is_some()
+        || pattern.prepared_artifact_policy.is_some()
       {
         return Ok(SearchPattern::RegexWithOptions {
           pattern: pattern.pattern,
@@ -2507,6 +2608,9 @@ fn search_pattern_from_binding(
           prefilter_window_bytes: pattern
             .prefilter_window_bytes
             .and_then(|value| usize::try_from(value).ok()),
+          prepared_artifact_policy: pattern
+            .prepared_artifact_policy
+            .map(prepared_artifact_policy_from_binding),
         });
       }
       Ok(SearchPattern::Regex(pattern.pattern))
@@ -2527,6 +2631,15 @@ fn search_pattern_from_binding(
   }
 }
 
+const fn prepared_artifact_policy_from_binding(
+  policy: BindingPreparedArtifactPolicy,
+) -> PreparedArtifactPolicy {
+  match policy {
+    BindingPreparedArtifactPolicy::Include => PreparedArtifactPolicy::Include,
+    BindingPreparedArtifactPolicy::Omit => PreparedArtifactPolicy::Omit,
+  }
+}
+
 fn search_options_from_binding(
   options: Option<BindingSearchOptions>,
 ) -> SearchOptions {
@@ -2542,6 +2655,12 @@ fn search_options_from_binding(
     regex: RegexSearchOptions {
       whole_words: options.regex_whole_words.unwrap_or(false),
       overlap_all: options.regex_overlap_all.unwrap_or(false),
+      artifact_policy: match options.regex_artifact_policy {
+        Some(BindingRegexArtifactPolicy::Include) | None => {
+          RegexArtifactPolicy::Include
+        }
+        Some(BindingRegexArtifactPolicy::Omit) => RegexArtifactPolicy::Omit,
+      },
     },
     fuzzy: FuzzySearchOptions {
       case_insensitive: options.fuzzy_case_insensitive.unwrap_or(false),
@@ -2751,7 +2870,8 @@ mod tests {
 
   use super::{
     BindingDenyListMatchData, BindingOperatorConfig,
-    BindingPreparedSearchConfig, BindingSearchOptions, BindingSearchPattern,
+    BindingPreparedArtifactPolicy, BindingPreparedSearchConfig,
+    BindingRegexArtifactPolicy, BindingSearchOptions, BindingSearchPattern,
     ContractError, MAX_PREPARED_SEARCH_PACKAGE_PAYLOAD_BYTES,
     PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER,
     PREPARED_SEARCH_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION,
@@ -2760,6 +2880,7 @@ mod tests {
     PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION,
     PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION,
     PREPARED_SEARCH_PACKAGE_DIGEST_BYTES, PREPARED_SEARCH_PACKAGE_ZSTD_LEVEL,
+    PreparedSearchPackageDecodeTimings, diagnostic_stage_event,
     operator_config_from_binding, prepared_search_config_from_binding,
     prepared_search_core_package_decode_from_bytes_with_timings,
     prepared_search_core_package_decode_trusted_from_bytes_with_timings,
@@ -2768,6 +2889,8 @@ mod tests {
     prepared_search_core_package_to_bytes,
     prepared_search_core_package_to_compressed_bytes,
     prepared_search_core_package_view_from_bytes_with_timings,
+    prepared_search_package_decode_events,
+    prepared_search_package_decode_timing_events,
     prepared_search_package_digest, prepared_search_package_from_bytes,
     prepared_search_package_has_core_payload,
     prepared_search_package_payload_to_bytes, prepared_search_package_to_bytes,
@@ -2777,7 +2900,8 @@ mod tests {
   };
   use stella_anonymize_core::{
     DiagnosticEvent, DiagnosticEventKind, DiagnosticStage,
-    PreparedSearchArtifacts, StaticRedactionDiagnostics,
+    PreparedArtifactPolicy, PreparedSearchArtifacts, RegexArtifactPolicy,
+    SearchPattern, StaticRedactionDiagnostics,
   };
 
   #[test]
@@ -2852,6 +2976,49 @@ mod tests {
   }
 
   #[test]
+  fn prepared_search_package_decode_events_report_ordered_stages() {
+    let events = prepared_search_package_decode_events(
+      10,
+      PreparedSearchPackageDecodeTimings {
+        verify: Some(2),
+        decompress: None,
+        config_decode: Some(3),
+      },
+      128,
+    );
+
+    let stages = events.iter().map(|event| event.stage).collect::<Vec<_>>();
+
+    assert_eq!(
+      stages,
+      vec![
+        DiagnosticStage::PreparePackageDecode,
+        DiagnosticStage::PreparePackageVerify,
+        DiagnosticStage::PreparePackageConfigDecode,
+      ]
+    );
+    assert_eq!(
+      events.first().unwrap(),
+      &diagnostic_stage_event(
+        DiagnosticStage::PreparePackageDecode,
+        None,
+        Some(10),
+        Some(128),
+      )
+    );
+  }
+
+  #[test]
+  fn prepared_search_package_decode_timing_events_skip_missing_timings() {
+    let events = prepared_search_package_decode_timing_events(
+      PreparedSearchPackageDecodeTimings::default(),
+      128,
+    );
+
+    assert!(events.is_empty());
+  }
+
+  #[test]
   fn binding_operator_config_accepts_camel_case_redact_string() {
     let config = serde_json::from_str::<BindingOperatorConfig>(
       r#"{"operators":{"country":"redact"},"redactString":"***"}"#,
@@ -2874,6 +3041,52 @@ mod tests {
     let core = prepared_search_config_from_binding(config).unwrap();
 
     assert!(core.custom_regex_options.regex.overlap_all);
+  }
+
+  #[test]
+  fn binding_search_options_accept_regex_artifact_policy() {
+    let config = BindingPreparedSearchConfig {
+      regex_options: Some(BindingSearchOptions {
+        regex_artifact_policy: Some(BindingRegexArtifactPolicy::Omit),
+        ..BindingSearchOptions::default()
+      }),
+      ..BindingPreparedSearchConfig::default()
+    };
+    let core = prepared_search_config_from_binding(config).unwrap();
+
+    assert_eq!(
+      core.regex_options.regex.artifact_policy,
+      RegexArtifactPolicy::Omit
+    );
+  }
+
+  #[test]
+  fn binding_regex_patterns_accept_prepared_artifact_policy() {
+    let config = BindingPreparedSearchConfig {
+      regex_patterns: vec![BindingSearchPattern {
+        kind: "regex".to_string(),
+        pattern: "SSN\\s+\\d+".to_string(),
+        distance: None,
+        case_insensitive: None,
+        whole_words: None,
+        lazy: Some(true),
+        prefilter_any: Some(vec!["SSN".to_string()]),
+        prefilter_case_insensitive: Some(false),
+        prefilter_regex: None,
+        prefilter_window_bytes: Some(80),
+        prepared_artifact_policy: Some(BindingPreparedArtifactPolicy::Omit),
+      }],
+      ..BindingPreparedSearchConfig::default()
+    };
+    let core = prepared_search_config_from_binding(config).unwrap();
+
+    assert!(matches!(
+      core.regex_patterns.first(),
+      Some(SearchPattern::RegexWithOptions {
+        prepared_artifact_policy: Some(PreparedArtifactPolicy::Omit),
+        ..
+      })
+    ));
   }
 
   #[test]
@@ -3211,6 +3424,7 @@ mod tests {
         prefilter_case_insensitive: None,
         prefilter_regex: None,
         prefilter_window_bytes: None,
+        prepared_artifact_policy: None,
       }],
       ..BindingPreparedSearchConfig::default()
     }

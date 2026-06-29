@@ -126,6 +126,7 @@ export type NativeSearchPattern = {
   prefilter_case_insensitive?: boolean;
   prefilter_regex?: string;
   prefilter_window_bytes?: number;
+  prepared_artifact_policy?: "include" | "omit";
 };
 
 export type NativeSearchOptions = {
@@ -133,6 +134,7 @@ export type NativeSearchOptions = {
   literal_whole_words?: boolean;
   regex_whole_words?: boolean;
   regex_overlap_all?: boolean;
+  regex_artifact_policy?: "include" | "omit";
   fuzzy_case_insensitive?: boolean;
   fuzzy_whole_words?: boolean;
   fuzzy_normalize_diacritics?: boolean;
@@ -1350,10 +1352,12 @@ const buildNativeStaticConfig = ({
       literal_case_insensitive: true,
       literal_whole_words: false,
       regex_whole_words: false,
+      regex_artifact_policy: "omit",
     },
     custom_regex_options: {
       regex_whole_words: false,
       regex_overlap_all: true,
+      regex_artifact_policy: "omit",
     },
     literal_options: {
       literal_case_insensitive: true,
@@ -1603,6 +1607,7 @@ const toNativeRegexPattern = (entry: PatternEntry): NativeSearchPattern => {
     prefilterCaseInsensitive?: boolean;
     prefilterRegex?: RegExp;
     prefilterWindowBytes?: number;
+    preparedArtifactPolicy?: "include" | "omit";
   };
   if (regexEntry.lazy !== undefined) {
     pattern.lazy = regexEntry.lazy;
@@ -1618,6 +1623,9 @@ const toNativeRegexPattern = (entry: PatternEntry): NativeSearchPattern => {
   }
   if (regexEntry.prefilterWindowBytes !== undefined) {
     pattern.prefilter_window_bytes = regexEntry.prefilterWindowBytes;
+  }
+  if (regexEntry.preparedArtifactPolicy !== undefined) {
+    pattern.prepared_artifact_policy = regexEntry.preparedArtifactPolicy;
   }
   return pattern;
 };

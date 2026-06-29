@@ -44,6 +44,7 @@ if (WORKER) {
 }
 
 function runParent() {
+  ensureDefaultNativePackages();
   const pythonSdk = preparePythonSdk();
   try {
     const scenarios = scenarioLanguages().map((language) => {
@@ -489,6 +490,58 @@ function preparePythonSdk() {
   };
 }
 
+function ensureDefaultNativePackages() {
+  const languages = scenarioLanguages();
+  const packagePaths = languages.map(defaultPackagePath);
+  const newestInput = newestMtimeMs(defaultNativePackageInputs());
+  const packagesFresh = packagePaths.every(
+    (path) => existsSync(path) && statSync(path).mtimeMs >= newestInput,
+  );
+  if (packagesFresh) {
+    return;
+  }
+
+  const scopedLanguages = languages.filter((language) => language.length > 0);
+  const build = spawnSync("bun", ["run", "build"], {
+    cwd: PACKAGE_DIR,
+    env: {
+      ...process.env,
+      STELLA_ANONYMIZE_NATIVE_PACKAGE_LANGUAGES: scopedLanguages.join(","),
+    },
+    encoding: "utf8",
+    maxBuffer: 128 * 1024 * 1024,
+  });
+  if (build.status === 0) {
+    return;
+  }
+  throw new Error(
+    [
+      "Failed to build default native packages",
+      build.stdout.trim(),
+      build.stderr.trim(),
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  );
+}
+
+function defaultNativePackageInputs() {
+  return [
+    join(ROOT_DIR, "Cargo.lock"),
+    join(ROOT_DIR, "Cargo.toml"),
+    join(ROOT_DIR, "crates", "anonymize-adapter-contract", "Cargo.toml"),
+    join(ROOT_DIR, "crates", "anonymize-adapter-contract", "src"),
+    join(ROOT_DIR, "crates", "anonymize-core", "Cargo.toml"),
+    join(ROOT_DIR, "crates", "anonymize-core", "src"),
+    join(ROOT_DIR, "crates", "anonymize-napi", "Cargo.toml"),
+    join(ROOT_DIR, "crates", "anonymize-napi", "src"),
+    join(PACKAGE_DIR, "package.json"),
+    join(PACKAGE_DIR, "scripts", "build-native-node.mjs"),
+    join(PACKAGE_DIR, "scripts", "build-native-pipeline-package.mjs"),
+    join(PACKAGE_DIR, "src"),
+  ];
+}
+
 function ensurePythonNativeLibrary() {
   const libraryPath = nativeLibraryPath("stella_anonymize_core_py");
   if (existsSync(libraryPath) && !pythonNativeLibraryIsStale(libraryPath)) {
@@ -583,19 +636,22 @@ function readdirSorted(path) {
 }
 
 function defaultPackageBytes(language) {
-  const packagePath =
-    language.length === 0
-      ? join(PACKAGE_DIR, "native-pipeline.stlanonpkg")
-      : join(
-          PACKAGE_DIR,
-          `native-pipeline.${normalizeLanguage(language)}.stlanonpkg`,
-        );
+  const packagePath = defaultPackagePath(language);
   if (!existsSync(packagePath)) {
     throw new Error(
       `Default native pipeline package is missing: ${packagePath}`,
     );
   }
   return statSync(packagePath).size;
+}
+
+function defaultPackagePath(language) {
+  return language.length === 0
+    ? join(PACKAGE_DIR, "native-pipeline.stlanonpkg")
+    : join(
+        PACKAGE_DIR,
+        `native-pipeline.${normalizeLanguage(language)}.stlanonpkg`,
+      );
 }
 
 function scenarioLanguages() {

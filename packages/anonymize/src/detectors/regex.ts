@@ -181,6 +181,7 @@ type RegexDef = {
   prefilterCaseInsensitive?: boolean;
   prefilterRegex?: RegExp;
   prefilterWindowBytes?: number;
+  preparedArtifactPolicy?: "include" | "omit";
   validator?: Validator;
   validatorId?: string;
   validatorInput?: (text: string) => string;
@@ -195,6 +196,7 @@ type RegexPatternEntry = {
   prefilterCaseInsensitive?: boolean;
   prefilterRegex?: RegExp;
   prefilterWindowBytes?: number;
+  preparedArtifactPolicy?: "include" | "omit";
 };
 
 type AmountWordsConfig = {
@@ -376,7 +378,13 @@ type StdnumEntry = {
   label: string;
   score: number;
   pattern: string;
+  lazy?: true;
+  prefilterAny?: readonly string[];
+  prefilterCaseInsensitive?: boolean;
+  preparedArtifactPolicy?: "include" | "omit";
 };
+
+const PREFIXED_STDNUM_PATTERN = /^\(\?<!\\w\)([A-Z]{1,4})(?:\[|\\|\()/u;
 
 const toEntry = (
   validator: Validator,
@@ -385,12 +393,32 @@ const toEntry = (
 ): StdnumEntry | null => {
   const pattern = toRegex(validator).source;
   if (!pattern) return null;
+  const prefilterAny = stdnumPrefixPrefilter(pattern);
+  if (prefilterAny === undefined) {
+    return {
+      validator,
+      label,
+      score,
+      pattern,
+    };
+  }
   return {
     validator,
     label,
     score,
     pattern,
+    lazy: true,
+    preparedArtifactPolicy: "omit",
+    prefilterAny,
+    prefilterCaseInsensitive: false,
   };
+};
+
+const stdnumPrefixPrefilter = (
+  pattern: string,
+): readonly string[] | undefined => {
+  const prefix = PREFIXED_STDNUM_PATTERN.exec(pattern)?.at(1);
+  return prefix === undefined ? undefined : [prefix];
 };
 
 /**
@@ -577,6 +605,8 @@ const STDNUM_ENTRIES: readonly StdnumEntry[] = [
     label: "national identification number",
     score: 0.95,
     pattern: "(?<![A-Za-z0-9_])\\d{17}[\\dXx](?![A-Za-z0-9_])",
+    lazy: true,
+    preparedArtifactPolicy: "omit",
   },
 ].filter((e): e is StdnumEntry => e !== null);
 
@@ -838,6 +868,7 @@ const ES_POSTAL: RegexDef = {
   prefilterAny: ["C.P", "CP", "código postal", "codigo postal"],
   prefilterCaseInsensitive: true,
   prefilterWindowBytes: CONTEXT_REGEX_PREFILTER_WINDOW_BYTES,
+  preparedArtifactPolicy: "omit",
 };
 
 // Spanish DNI: 8 digits + 1 letter. Letter is a
@@ -885,6 +916,7 @@ const NHS_NUMBER_CONTEXT: RegexDef = {
   prefilterAny: ["NHS", "National Health Service"],
   prefilterCaseInsensitive: true,
   prefilterWindowBytes: CONTEXT_REGEX_PREFILTER_WINDOW_BYTES,
+  preparedArtifactPolicy: "omit",
 };
 
 const PASSPORT_CONTEXT: RegexDef = {
@@ -902,6 +934,7 @@ const PASSPORT_CONTEXT: RegexDef = {
   prefilterAny: ["passport"],
   prefilterCaseInsensitive: true,
   prefilterWindowBytes: CONTEXT_REGEX_PREFILTER_WINDOW_BYTES,
+  preparedArtifactPolicy: "omit",
 };
 
 const FR_CNI_CONTEXT: RegexDef = {
@@ -920,6 +953,7 @@ const FR_CNI_CONTEXT: RegexDef = {
   prefilterAny: ["CNI", "carte nationale", "French national identity card"],
   prefilterCaseInsensitive: true,
   prefilterWindowBytes: CONTEXT_REGEX_PREFILTER_WINDOW_BYTES,
+  preparedArtifactPolicy: "omit",
 };
 
 const CY_TIC_CONTEXT: RegexDef = {
@@ -935,6 +969,7 @@ const CY_TIC_CONTEXT: RegexDef = {
   prefilterAny: ["TIC", "tax identification code"],
   prefilterCaseInsensitive: true,
   prefilterWindowBytes: CONTEXT_REGEX_PREFILTER_WINDOW_BYTES,
+  preparedArtifactPolicy: "omit",
 };
 
 const CY_ID_CARD_CONTEXT: RegexDef = {
@@ -950,6 +985,7 @@ const CY_ID_CARD_CONTEXT: RegexDef = {
   prefilterAny: ["Cyprus", "Cypriot", "identity card", "ID card"],
   prefilterCaseInsensitive: true,
   prefilterWindowBytes: CONTEXT_REGEX_PREFILTER_WINDOW_BYTES,
+  preparedArtifactPolicy: "omit",
 };
 
 const UK_DRIVING_LICENCE_CONTEXT: RegexDef = {
@@ -965,6 +1001,7 @@ const UK_DRIVING_LICENCE_CONTEXT: RegexDef = {
   prefilterAny: ["driving licence", "driving license"],
   prefilterCaseInsensitive: true,
   prefilterWindowBytes: CONTEXT_REGEX_PREFILTER_WINDOW_BYTES,
+  preparedArtifactPolicy: "omit",
 };
 
 const US_DRIVER_LICENSE_CONTEXT: RegexDef = {
@@ -994,6 +1031,7 @@ const US_DRIVER_LICENSE_CONTEXT: RegexDef = {
   ],
   prefilterCaseInsensitive: true,
   prefilterWindowBytes: CONTEXT_REGEX_PREFILTER_WINDOW_BYTES,
+  preparedArtifactPolicy: "omit",
 };
 
 const MEDICAL_LICENSE_CONTEXT: RegexDef = {
@@ -1021,6 +1059,7 @@ const MEDICAL_LICENSE_CONTEXT: RegexDef = {
   ],
   prefilterCaseInsensitive: true,
   prefilterWindowBytes: CONTEXT_REGEX_PREFILTER_WINDOW_BYTES,
+  preparedArtifactPolicy: "omit",
 };
 
 const CRYPTO_WALLET_CANDIDATE = crypto.wallet.candidatePattern ?? "(?!)";
@@ -1134,6 +1173,7 @@ const BR_RG_WITH_SSP: RegexDef = {
   lazy: true,
   prefilterAny: ["SSP"],
   prefilterCaseInsensitive: false,
+  preparedArtifactPolicy: "omit",
 };
 
 // Brazilian OAB (lawyer registration). Format:
@@ -1149,6 +1189,7 @@ const BR_OAB: RegexDef = {
   lazy: true,
   prefilterAny: ["OAB/"],
   prefilterCaseInsensitive: false,
+  preparedArtifactPolicy: "omit",
 };
 
 // URL: scheme + host + optional port + path + query +
@@ -1439,7 +1480,8 @@ const toRegexPatternEntry = (definition: RegexDef): PatternEntry => {
     definition.prefilterAny === undefined &&
     definition.prefilterCaseInsensitive === undefined &&
     definition.prefilterRegex === undefined &&
-    definition.prefilterWindowBytes === undefined
+    definition.prefilterWindowBytes === undefined &&
+    definition.preparedArtifactPolicy === undefined
   ) {
     return definition.pattern;
   }
@@ -1459,6 +1501,9 @@ const toRegexPatternEntry = (definition: RegexDef): PatternEntry => {
   }
   if (definition.prefilterWindowBytes !== undefined) {
     entry.prefilterWindowBytes = definition.prefilterWindowBytes;
+  }
+  if (definition.preparedArtifactPolicy !== undefined) {
+    entry.preparedArtifactPolicy = definition.preparedArtifactPolicy;
   }
   return entry;
 };
@@ -2434,27 +2479,30 @@ const buildSigningClausePatterns = (
       continue;
     }
 
-    const prepAlt =
-      entry.prepositions.length > 0 ? entry.prepositions.join("|") : null;
-
-    // Place name: Uppercase word, optionally with
-    // preposition + uppercase, optionally more caps
-    const place = prepAlt
-      ? `(\\p{Lu}\\p{Ll}+` +
-        `(?:\\s+(?:${prepAlt})\\s+\\p{Lu}\\p{Ll}+)*` +
-        `(?:\\s+\\p{Lu}\\p{Ll}+)*)`
-      : `(\\p{Lu}\\p{Ll}+(?:[- ]\\p{Lu}\\p{Ll}+)*)`;
-
-    const full =
-      `(?:^|\\n|[^\\S\\n])` +
-      entry.prefix +
-      place +
-      (entry.suffix ? `(?:${entry.suffix})` : "");
-
-    patterns.push(full);
+    patterns.push(buildSigningClausePattern(entry));
   }
 
   return patterns;
+};
+
+const buildSigningClausePattern = (
+  entry: SigningClauseConfig["patterns"][number],
+): string => {
+  const prepAlt =
+    entry.prepositions.length > 0 ? entry.prepositions.join("|") : null;
+
+  const place = prepAlt
+    ? `(\\p{Lu}\\p{Ll}+` +
+      `(?:\\s+(?:${prepAlt})\\s+\\p{Lu}\\p{Ll}+)*` +
+      `(?:\\s+\\p{Lu}\\p{Ll}+)*)`
+    : `(\\p{Lu}\\p{Ll}+(?:[- ]\\p{Lu}\\p{Ll}+)*)`;
+
+  return (
+    `(?:^|\\n|[^\\S\\n])` +
+    entry.prefix +
+    place +
+    (entry.suffix ? `(?:${entry.suffix})` : "")
+  );
 };
 
 export const SIGNING_CLAUSE_META: Readonly<RegexMeta> = {
