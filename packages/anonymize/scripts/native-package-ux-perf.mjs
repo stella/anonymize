@@ -113,6 +113,8 @@ function runScenario({ name, compressed, language, userDataScenario }) {
       representativeSample.preloadedDiagnostics?.warm?.topStages ?? [],
     cachedPrepareTopStages:
       representativeSample.noWarmDiagnostics?.cachedPrepare?.topStages ?? [],
+    nativeConfigSummary:
+      build.nativeConfigSummary ?? representativeSample.nativeConfigSummary,
     runTopStages: representativeSample.noWarmDiagnostics?.run?.topStages ?? [],
     runTopSlots: representativeSample.noWarmDiagnostics?.run?.topSlots ?? [],
     runTopFixtures:
@@ -147,6 +149,7 @@ function createScenarioSample(iteration, noWarmLoad, preloadedLoad) {
     warmClickMs: noWarmLoad.timings.nativeWarmClickMs,
     noWarmDiagnostics: noWarmLoad.nativeDiagnostics ?? null,
     preloadedDiagnostics: preloadedLoad.nativeDiagnostics ?? null,
+    nativeConfigSummary: noWarmLoad.nativeConfigSummary ?? null,
     fixtureTimings: noWarmLoad.fixtureTimings,
     preloadedFixtureTimings: preloadedLoad.fixtureTimings,
   };

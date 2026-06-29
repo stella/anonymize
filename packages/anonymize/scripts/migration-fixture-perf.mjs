@@ -438,6 +438,9 @@ async function runWorker() {
     runtimeRunner === null
       ? null
       : collectNativeDiagnostics({ runner: runtimeRunner, fixtures });
+  const nativeConfigSummary = search?.nativeStaticConfig
+    ? summarizeNativeConfig(search.nativeStaticConfig)
+    : null;
   if (nativeDiagnostics !== null && PROFILE_REGEX_LABELS) {
     nativeDiagnostics.regexPrepareByLabel = search?.nativeStaticConfig
       ? profileNativeRegexPrepare(search.nativeStaticConfig)
@@ -536,6 +539,7 @@ async function runWorker() {
         warmAvgMs,
       },
       nativeTimingScenario,
+      nativeConfigSummary,
       nativeDiagnostics,
       fixtureTimings,
       fixtures: coldRun.fixtures.map(
@@ -617,6 +621,37 @@ function nativeTimingMode({
     return "build-package-in-process";
   }
   return "build-config-in-process";
+}
+
+function summarizeNativeConfig(nativeStaticConfig) {
+  const fields = Object.entries(nativeStaticConfig)
+    .map(([field, value]) => ({
+      field,
+      bytes: Buffer.byteLength(JSON.stringify(value), "utf8"),
+      count: nativeConfigFieldCount(value),
+    }))
+    .sort((left, right) => right.bytes - left.bytes);
+
+  return {
+    bytes: Buffer.byteLength(JSON.stringify(nativeStaticConfig), "utf8"),
+    fieldCount: fields.length,
+    fields: fields.slice(0, 20),
+    patternCounts: {
+      regex: nativeStaticConfig.regex_patterns?.length ?? 0,
+      customRegex: nativeStaticConfig.custom_regex_patterns?.length ?? 0,
+      literal: nativeStaticConfig.literal_patterns?.length ?? 0,
+    },
+  };
+}
+
+function nativeConfigFieldCount(value) {
+  if (Array.isArray(value)) {
+    return value.length;
+  }
+  if (value !== null && typeof value === "object") {
+    return Object.keys(value).length;
+  }
+  return null;
 }
 
 async function prepareNativeStaticSearch({
@@ -1451,6 +1486,7 @@ function printVariantSummary(result) {
       fixtureCount: result.fixtureCount,
       warmIterations: result.warmIterations,
       timings: result.timings,
+      nativeConfigSummary: result.nativeConfigSummary,
       nativeDiagnostics: result.nativeDiagnostics,
       fixtureTimings: result.fixtureTimings,
       fixtures: result.fixtures,
