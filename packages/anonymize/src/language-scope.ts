@@ -52,6 +52,15 @@ const configuredLanguages = (config: PipelineConfig): readonly string[] => {
   return config.language === undefined ? [] : [config.language];
 };
 
+export const configuredContentLanguages = (
+  config: Pick<PipelineConfig, "language" | "languages">,
+): readonly string[] | undefined => {
+  if (config.languages !== undefined) {
+    return config.languages;
+  }
+  return config.language === undefined ? undefined : [config.language];
+};
+
 export const applyPipelineLanguageScope = (
   config: PipelineConfig,
 ): PipelineConfig => {

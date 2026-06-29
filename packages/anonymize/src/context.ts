@@ -99,6 +99,7 @@ export type PipelineContext = {
 
   // ── Coreference ───────────────────────────────
   corefPatterns: DefinitionPattern[] | null;
+  corefPatternsKey: string;
   corefPatternsPromise: Promise<DefinitionPattern[]> | null;
   corefLoadAttempted: boolean;
   roleStopSet: ReadonlySet<string> | null;
@@ -140,6 +141,7 @@ export const createPipelineContext = (): PipelineContext => ({
   genericRolesPromise: null,
 
   corefPatterns: null,
+  corefPatternsKey: "",
   corefPatternsPromise: null,
   corefLoadAttempted: false,
   roleStopSet: null,

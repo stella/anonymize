@@ -31,7 +31,10 @@ import {
   type GazetteerEntry,
   type PipelineConfig,
 } from "./types";
-import { applyPipelineLanguageScope } from "./language-scope";
+import {
+  applyPipelineLanguageScope,
+  configuredContentLanguages,
+} from "./language-scope";
 import type { RegexMeta } from "./detectors/regex";
 import type { TriggerRule } from "./types";
 import type { DenyListData, DenyListFilterData } from "./detectors/deny-list";
@@ -40,6 +43,7 @@ import { defaultContext } from "./context";
 import { POST_NOMINALS } from "./config/titles";
 import { LEGAL_SUFFIXES } from "./config/legal-forms";
 import { loadLanguageConfigs } from "./util/lang-loader";
+import { languageConfigMatches } from "./util/language-selection";
 
 import {
   REGEX_PATTERN_ENTRIES,
@@ -355,15 +359,6 @@ const labelIsAllowed = (
   label: string,
   allowedLabels: ReadonlySet<string> | null,
 ): boolean => allowedLabels === null || allowedLabels.has(label);
-
-const configuredContentLanguages = (
-  config: Pick<PipelineConfig, "language" | "languages">,
-): readonly string[] | undefined => {
-  if (config.languages !== undefined) {
-    return config.languages;
-  }
-  return config.language === undefined ? undefined : [config.language];
-};
 
 const sliceContains = (slice: PatternSlice, index: number): boolean =>
   index >= slice.start && index < slice.end;
@@ -712,7 +707,7 @@ const buildUnifiedSearchSources = async (
       ? Promise.resolve(getAddressContextData())
       : Promise.resolve(null),
     config.enableCoreference
-      ? buildNativeCoreferenceData()
+      ? buildNativeCoreferenceData(contentLanguages)
       : Promise.resolve(null),
   ]);
   // Read but never populated: the legal-form slice in the unified
@@ -1743,7 +1738,9 @@ const sentenceTerminalCurrencyTerms = (
   ].toSorted();
 };
 
-const buildNativeCoreferenceData = async (): Promise<NativeCoreferenceData> => {
+const buildNativeCoreferenceData = async (
+  selectedLanguages?: readonly string[],
+): Promise<NativeCoreferenceData> => {
   const [roleModule, determinerModule] = await Promise.all([
     import("./data/generic-roles.json"),
     import("./data/coreference-org-determiners.json"),
@@ -1759,6 +1756,7 @@ const buildNativeCoreferenceData = async (): Promise<NativeCoreferenceData> => {
       };
       return moduleValue.default ?? (mod as readonly CoreferenceConfigRow[]);
     },
+    selectedLanguages === undefined ? {} : { languages: selectedLanguages },
   );
   const definitionPatterns: NativeCoreferencePatternData[] = [];
   for (const rows of configs) {
@@ -1778,6 +1776,9 @@ const buildNativeCoreferenceData = async (): Promise<NativeCoreferenceData> => {
     organization_determiners: Object.entries(determinerData)
       .flatMap(([language, values]) => {
         if (language === "_comment" || !Array.isArray(values)) {
+          return [];
+        }
+        if (!languageConfigMatches(language, selectedLanguages)) {
           return [];
         }
         return values;

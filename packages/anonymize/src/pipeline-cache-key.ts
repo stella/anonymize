@@ -3,6 +3,7 @@ import {
   type GazetteerEntry,
   type PipelineConfig,
 } from "./types";
+import { languageSelectionKey } from "./util/language-selection";
 
 const DEFAULT_CUSTOM_REGEX_SCORE = 0.9;
 
@@ -12,11 +13,7 @@ const contentLanguageFingerprint = (
   const languages =
     config.languages ??
     (config.language === undefined ? [] : [config.language]);
-  return languages
-    .map((language) => language.trim().toLowerCase())
-    .filter((language) => language.length > 0)
-    .toSorted()
-    .join(",");
+  return languageSelectionKey(languages);
 };
 
 export const pipelineConfigKey = (

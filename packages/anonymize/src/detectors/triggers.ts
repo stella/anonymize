@@ -14,10 +14,11 @@ import type {
 import { POST_NOMINALS } from "../config/titles";
 import { getKnownLegalSuffixes } from "./legal-forms";
 import { NAME_PARTICLE } from "./signatures";
+import { loadLanguageConfigs } from "../util/lang-loader";
 import {
   languageConfigMatches,
-  loadLanguageConfigs,
-} from "../util/lang-loader";
+  languageSelectionKey,
+} from "../util/language-selection";
 import { DASH, DASH_INNER } from "../util/char-groups";
 
 const VALID_ID_VALIDATORS: Record<ValidIdValidator, Validator> = {
@@ -288,17 +289,6 @@ type TriggerPatterns = {
 
 const triggerPatternsPromises = new Map<string, Promise<TriggerPatterns>>();
 
-const languageCacheKey = (languages: readonly string[] | undefined): string => {
-  if (languages === undefined || languages.length === 0) {
-    return "*";
-  }
-  const normalizedLanguages = languages
-    .map((language) => language.trim().toLowerCase())
-    .filter((language) => language.length > 0)
-    .toSorted();
-  return normalizedLanguages.length === 0 ? "*" : normalizedLanguages.join(",");
-};
-
 /**
  * Build trigger patterns and rules from data configs.
  * Returns string[] for the unified TextSearch
@@ -436,7 +426,7 @@ const loadTriggerPatterns = async (
 export const buildTriggerPatterns = async (
   languages?: readonly string[],
 ): Promise<TriggerPatterns> => {
-  const key = languageCacheKey(languages);
+  const key = languageSelectionKey(languages);
   let promise = triggerPatternsPromises.get(key);
   if (promise === undefined) {
     promise = loadTriggerPatterns(languages);

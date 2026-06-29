@@ -7,6 +7,10 @@
  * bundler compatibility).
  */
 
+import { languageConfigMatches } from "./language-selection";
+
+export { languageConfigMatches } from "./language-selection";
+
 // ── Types ────────────────────────────────────────────
 
 type ManifestLanguage = {
@@ -153,50 +157,6 @@ const FALLBACK_LANGUAGES: Record<ConfigType, readonly string[]> = {
 };
 
 // ── Public API ───────────────────────────────────────
-
-const normalizeLanguageCode = (language: string): string =>
-  language.trim().toLowerCase();
-
-const baseLanguage = (language: string): string => {
-  const index = language.indexOf("-");
-  return index === -1 ? language : language.slice(0, index);
-};
-
-export const languageConfigMatches = (
-  configLanguage: string,
-  selectedLanguages: readonly string[] | undefined,
-): boolean => {
-  if (selectedLanguages === undefined || selectedLanguages.length === 0) {
-    return true;
-  }
-  const normalizedSelectedLanguages = selectedLanguages
-    .map(normalizeLanguageCode)
-    .filter((language) => language.length > 0);
-  if (normalizedSelectedLanguages.length === 0) {
-    return true;
-  }
-
-  const normalizedConfigLanguage = normalizeLanguageCode(configLanguage);
-  if (normalizedConfigLanguage.length === 0) {
-    return false;
-  }
-
-  const genericConfig =
-    baseLanguage(normalizedConfigLanguage) === normalizedConfigLanguage;
-  for (const normalizedLanguage of normalizedSelectedLanguages) {
-    if (normalizedLanguage === normalizedConfigLanguage) {
-      return true;
-    }
-    if (
-      genericConfig &&
-      baseLanguage(normalizedLanguage) === normalizedConfigLanguage
-    ) {
-      return true;
-    }
-  }
-
-  return false;
-};
 
 /**
  * Load all config files of a given type for all

@@ -70,7 +70,10 @@ import { runUnifiedSearch } from "./unified-search";
 import { maskDetectedSpans, unmaskNerEntities } from "./util/entity-masking";
 import type { PipelineContext } from "./context";
 import { defaultContext } from "./context";
-import { applyPipelineLanguageScope } from "./language-scope";
+import {
+  applyPipelineLanguageScope,
+  configuredContentLanguages,
+} from "./language-scope";
 import { pipelineConfigKey } from "./pipeline-cache-key";
 
 /**
@@ -1019,6 +1022,7 @@ export const runPipeline = async (
     context,
   } = options;
   const config = applyPipelineLanguageScope(inputConfig);
+  const contentLanguages = configuredContentLanguages(config);
   const ctx = context ?? defaultContext;
   const allowedLabels = createAllowedLabelSet(config);
   const legalFormsEnabled = isLegalFormsEnabled(config);
@@ -1512,7 +1516,14 @@ export const runPipeline = async (
     const coreferenceSeeds = merged.filter(
       (entity) => !isCallerOwnedEntity(entity),
     );
-    const terms = await extractDefinedTerms(fullText, coreferenceSeeds, ctx);
+    const coreferenceOptions =
+      contentLanguages === undefined ? {} : { languages: contentLanguages };
+    const terms = await extractDefinedTerms(
+      fullText,
+      coreferenceSeeds,
+      ctx,
+      coreferenceOptions,
+    );
     if (terms.length > 0) {
       log("coreference", `${terms.length} defined terms`);
       const corefSpans = findCoreferenceSpans(fullText, terms, ctx);

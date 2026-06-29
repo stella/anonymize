@@ -20,7 +20,7 @@ import {
   getSigningClausePatterns,
 } from "../detectors/regex";
 import { applyPipelineLanguageScope } from "../language-scope";
-import { languageConfigMatches } from "../util/lang-loader";
+import { languageConfigMatches } from "../util/language-selection";
 import type { NativeAnonymizeBinding } from "../native";
 import type { Dictionaries, PipelineConfig } from "../types";
 import { loadTestDictionaries } from "./load-dictionaries";
@@ -358,6 +358,42 @@ describe("pipeline config semantics", () => {
     expect(
       search.nativeStaticConfig.coreference_data?.organization_determiners,
     ).toContain("the\\s+(?:company|corporation|firm)");
+  });
+
+  test("content language scopes native coreference data", async () => {
+    const base = {
+      ...BASE_CONFIG,
+      enableCoreference: true,
+      labels: ["organization"],
+    };
+    const unscoped = await buildUnifiedSearch(
+      base,
+      [],
+      createPipelineContext(),
+    );
+    const scoped = await buildUnifiedSearch(
+      { ...base, language: "en-US" },
+      [],
+      createPipelineContext(),
+    );
+
+    const unscopedPatterns =
+      unscoped.nativeStaticConfig.coreference_data?.definition_patterns ?? [];
+    const scopedPatterns =
+      scoped.nativeStaticConfig.coreference_data?.definition_patterns.map(
+        (pattern) => pattern.pattern,
+      ) ?? [];
+
+    expect(scopedPatterns.length).toBeLessThan(unscopedPatterns.length);
+    expect(
+      scopedPatterns.some((pattern) => pattern.includes("hereinafter")),
+    ).toBe(true);
+    expect(scopedPatterns.some((pattern) => pattern.includes("dále"))).toBe(
+      false,
+    );
+    expect(
+      scoped.nativeStaticConfig.coreference_data?.organization_determiners,
+    ).toEqual(["the\\s+(?:company|corporation|firm)"]);
   });
 
   test("native config carries zone classifier data", async () => {
