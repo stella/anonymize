@@ -79,6 +79,7 @@ pub struct JsSearchPattern {
   pub prefilter_any: Option<Vec<String>>,
   pub prefilter_case_insensitive: Option<bool>,
   pub prefilter_regex: Option<String>,
+  pub prefilter_window_bytes: Option<u32>,
 }
 
 #[napi(object)]
@@ -983,6 +984,7 @@ const fn stage_event(
     kind: DiagnosticEventKind::StageSummary,
     count,
     slot: None,
+    subslot: None,
     pattern_count: None,
     engine: None,
     pattern: None,

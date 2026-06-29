@@ -23,6 +23,7 @@ pub enum SearchPattern {
     prefilter_any: Vec<String>,
     prefilter_case_insensitive: Option<bool>,
     prefilter_regex: Option<String>,
+    prefilter_window_bytes: Option<usize>,
   },
   Fuzzy {
     pattern: String,
@@ -130,7 +131,9 @@ pub(crate) struct SearchIndexFindResult {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct SearchIndexFindStats {
   pub slot: usize,
+  pub subslot: Option<usize>,
   pub engine: SearchEngine,
+  pub pattern: Option<u32>,
   pub pattern_count: usize,
   pub match_count: usize,
   pub elapsed_us: u64,
@@ -139,7 +142,9 @@ pub(crate) struct SearchIndexFindStats {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct SearchIndexBuildStats {
   pub slot: usize,
+  pub subslot: Option<usize>,
   pub engine: SearchEngine,
+  pub pattern: Option<u32>,
   pub pattern_count: usize,
   pub artifact_count: usize,
   pub artifact_bytes: usize,
@@ -332,23 +337,30 @@ impl SearchIndex {
   ) -> Result<SearchIndexBuildResult> {
     let mut cursor = SearchIndexArtifactCursor::new(&artifacts.slots);
     let slot_artifacts = cursor.next()?;
-    let start = collect_stats.then(Instant::now);
-    let search = text_search::TextSearch::with_prepared_all_literal_artifacts(
-      literal_options(options.literal),
-      slot_artifacts,
-    )
-    .map_err(|error| search_error(&error))?;
+    let (search, stats) = if collect_stats {
+      let result =
+        text_search::TextSearch::with_prepared_all_literal_artifacts_build_stats(
+          literal_options(options.literal),
+          slot_artifacts,
+        )
+        .map_err(|error| search_error(&error))?;
+      let stats = result
+        .stats
+        .into_iter()
+        .map(|stat| search_index_build_stat(0, &stat, None))
+        .collect();
+      (result.search, stats)
+    } else {
+      (
+        text_search::TextSearch::with_prepared_all_literal_artifacts(
+          literal_options(options.literal),
+          slot_artifacts,
+        )
+        .map_err(|error| search_error(&error))?,
+        Vec::new(),
+      )
+    };
     let pattern_count = search.len();
-    let stats = start.map_or_else(Vec::new, |start| {
-      vec![SearchIndexBuildStats {
-        slot: 0,
-        engine: SearchEngine::Literal,
-        pattern_count,
-        artifact_count: prepared_artifact_count(slot_artifacts),
-        artifact_bytes: prepared_artifact_bytes(slot_artifacts),
-        elapsed_us: elapsed_us(start),
-      }]
-    });
     cursor.finish()?;
     Ok(SearchIndexBuildResult {
       index: Self {
@@ -386,18 +398,39 @@ impl SearchIndex {
     };
     for (slot_index, slot) in self.slots.iter().enumerate() {
       let start = collect_stats.then(Instant::now);
-      let slot_matches = slot
-        .search
-        .find_iter(haystack)
-        .map_err(|error| search_error(&error))?;
+      let (slot_matches, child_stats) = if collect_stats {
+        let result = slot
+          .search
+          .find_iter_with_stats(haystack)
+          .map_err(|error| search_error(&error))?;
+        (result.matches, result.stats)
+      } else {
+        (
+          slot
+            .search
+            .find_iter(haystack)
+            .map_err(|error| search_error(&error))?,
+          Vec::new(),
+        )
+      };
       if let Some(start) = start {
-        stats.push(SearchIndexFindStats {
-          slot: slot_index,
-          engine: SearchEngine::from(slot.engine),
-          pattern_count: slot.pattern_remap.len(),
-          match_count: slot_matches.len(),
-          elapsed_us: elapsed_us(start),
-        });
+        let mapped_child_stats = child_stats
+          .into_iter()
+          .map(|stat| search_index_find_stat(slot_index, slot, &stat))
+          .collect::<Vec<_>>();
+        if mapped_child_stats.is_empty() {
+          stats.push(SearchIndexFindStats {
+            slot: slot_index,
+            subslot: None,
+            engine: SearchEngine::from(slot.engine),
+            pattern: None,
+            pattern_count: slot.pattern_remap.len(),
+            match_count: slot_matches.len(),
+            elapsed_us: elapsed_us(start),
+          });
+        } else {
+          stats.extend(mapped_child_stats);
+        }
       }
       for found in slot_matches {
         let pattern = remap_pattern(slot, found.pattern)?;
@@ -515,12 +548,14 @@ fn partition_patterns(
         prefilter_any,
         prefilter_case_insensitive,
         prefilter_regex,
+        prefilter_window_bytes,
       } => {
         let mut regex_pattern = text_search::RegexPattern::new(pattern);
         regex_pattern.lazy = lazy;
         regex_pattern.prefilter_any = prefilter_any;
         regex_pattern.prefilter_case_insensitive = prefilter_case_insensitive;
         regex_pattern.prefilter_regex = prefilter_regex;
+        regex_pattern.prefilter_window_bytes = prefilter_window_bytes;
         regex.push(text_search::PatternEntry::Regex(regex_pattern));
         regex_indexes.push(pattern_index);
       }
@@ -676,31 +711,124 @@ fn push_slot(
   let pattern_count = pattern_indexes.len();
   let artifact_count = artifacts.map_or(0, prepared_artifact_count);
   let artifact_bytes = artifacts.map_or(0, prepared_artifact_bytes);
-  let start = stats.as_ref().map(|_| Instant::now());
-  let search = if let Some(artifacts) = artifacts {
-    text_search::TextSearch::with_prepared_artifacts(
-      patterns, options, artifacts,
+  let collect_stats = stats.is_some();
+  let start = collect_stats.then(Instant::now);
+  let (search, child_stats) = if collect_stats {
+    let result = if let Some(artifacts) = artifacts {
+      text_search::TextSearch::with_prepared_artifacts_build_stats(
+        patterns, options, artifacts,
+      )
+    } else {
+      text_search::TextSearch::new_with_build_stats(patterns, options)
+    }
+    .map_err(|error| search_error(&error))?;
+    (result.search, result.stats)
+  } else if let Some(artifacts) = artifacts {
+    (
+      text_search::TextSearch::with_prepared_artifacts(
+        patterns, options, artifacts,
+      )
+      .map_err(|error| search_error(&error))?,
+      Vec::new(),
     )
   } else {
-    text_search::TextSearch::new(patterns, options)
-  }
-  .map_err(|error| search_error(&error))?;
+    (
+      text_search::TextSearch::new(patterns, options)
+        .map_err(|error| search_error(&error))?,
+      Vec::new(),
+    )
+  };
+  let mapped_child_stats = child_stats
+    .into_iter()
+    .map(|stat| search_index_build_stat(slot, &stat, Some(&pattern_indexes)))
+    .collect::<Vec<_>>();
   slots.push(SearchSlot {
     engine,
     search,
     pattern_remap: PatternRemap::from_indexes(pattern_indexes),
   });
   if let (Some(stats), Some(start)) = (stats, start) {
-    stats.push(SearchIndexBuildStats {
-      slot,
-      engine: SearchEngine::from(engine),
-      pattern_count,
-      artifact_count,
-      artifact_bytes,
-      elapsed_us: elapsed_us(start),
-    });
+    if mapped_child_stats.is_empty() {
+      stats.push(SearchIndexBuildStats {
+        slot,
+        subslot: None,
+        engine: SearchEngine::from(engine),
+        pattern: None,
+        pattern_count,
+        artifact_count,
+        artifact_bytes,
+        elapsed_us: elapsed_us(start),
+      });
+    } else {
+      stats.extend(mapped_child_stats);
+    }
   }
   Ok(())
+}
+
+fn search_index_find_stat(
+  slot: usize,
+  search_slot: &SearchSlot,
+  stat: &text_search::FindStats,
+) -> SearchIndexFindStats {
+  SearchIndexFindStats {
+    slot,
+    subslot: stat.subslot.or(Some(stat.slot)),
+    engine: search_engine_from_text_kind(stat.engine),
+    pattern: stat
+      .first_pattern
+      .and_then(|pattern| search_slot.pattern_remap.get(pattern)),
+    pattern_count: stat.pattern_count,
+    match_count: stat.match_count,
+    elapsed_us: stat.elapsed_us,
+  }
+}
+
+fn search_index_build_stat(
+  slot: usize,
+  stat: &text_search::BuildStats,
+  pattern_indexes: Option<&[u32]>,
+) -> SearchIndexBuildStats {
+  SearchIndexBuildStats {
+    slot,
+    subslot: Some(stat.slot),
+    engine: search_engine_from_text_kind(stat.engine),
+    pattern: stat
+      .first_pattern
+      .and_then(|pattern| remap_build_pattern(pattern_indexes, pattern)),
+    pattern_count: stat.pattern_count,
+    artifact_count: stat
+      .aho_artifact_count
+      .saturating_add(stat.regex_artifact_count),
+    artifact_bytes: stat
+      .aho_artifact_bytes
+      .saturating_add(stat.regex_artifact_bytes),
+    elapsed_us: stat.elapsed_us,
+  }
+}
+
+fn remap_build_pattern(
+  pattern_indexes: Option<&[u32]>,
+  pattern: u32,
+) -> Option<u32> {
+  let Some(pattern_indexes) = pattern_indexes else {
+    return Some(pattern);
+  };
+  let Ok(index) = usize::try_from(pattern) else {
+    return None;
+  };
+  pattern_indexes.get(index).copied()
+}
+
+const fn search_engine_from_text_kind(
+  kind: text_search::EngineKind,
+) -> SearchEngine {
+  match kind {
+    text_search::EngineKind::Literal
+    | text_search::EngineKind::SplitLiteral => SearchEngine::Literal,
+    text_search::EngineKind::Regex => SearchEngine::Regex,
+    text_search::EngineKind::Fuzzy => SearchEngine::Fuzzy,
+  }
 }
 
 const fn prepared_artifact_count(

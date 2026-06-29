@@ -157,14 +157,15 @@ describe("pipeline config semantics", () => {
       {
         ...BASE_CONFIG,
         enableRegex: true,
-        labels: ["email address"],
+        labels: ["email address", "registration number"],
       },
       [],
       createPipelineContext(),
     );
     const regexCount = search.slices.regex.end - search.slices.regex.start;
     const expected = REGEX_META.filter(
-      (meta) => meta.label === "email address",
+      (meta) =>
+        meta.label === "email address" || meta.label === "registration number",
     ).length;
 
     expect(regexCount).toBe(expected);
@@ -397,7 +398,7 @@ describe("pipeline config semantics", () => {
       {
         ...BASE_CONFIG,
         enableRegex: true,
-        labels: ["email address"],
+        labels: ["email address", "registration number"],
       },
       [],
       createPipelineContext(),
@@ -415,6 +416,85 @@ describe("pipeline config semantics", () => {
     expect(emailPattern).toMatchObject({
       lazy: true,
       prefilter_any: ["@"],
+      prefilter_case_insensitive: false,
+    });
+
+    const czechRegistryPattern = search.nativeStaticConfig.regex_patterns.find(
+      (pattern) =>
+        pattern.kind === "regex" && pattern.pattern.includes("[Oo][Dd][Dd]"),
+    );
+
+    expect(czechRegistryPattern).toMatchObject({
+      lazy: true,
+      prefilter_any: ["oddíl", "vložka"],
+      prefilter_case_insensitive: true,
+    });
+  });
+
+  test("native config carries windowed regex prefilters", async () => {
+    const search = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        enableRegex: true,
+        labels: ["address", "passport number"],
+      },
+      [],
+      createPipelineContext(),
+    );
+
+    const spanishPostalPattern = search.nativeStaticConfig.regex_patterns.find(
+      (pattern) =>
+        pattern.kind === "regex" && pattern.pattern.includes("[Cc][óo]digo"),
+    );
+    const passportPattern = search.nativeStaticConfig.regex_patterns.find(
+      (pattern) =>
+        pattern.kind === "regex" && pattern.pattern.includes("passports?"),
+    );
+
+    expect(spanishPostalPattern).toMatchObject({
+      lazy: true,
+      prefilter_window_bytes: 160,
+    });
+    expect(passportPattern).toMatchObject({
+      lazy: true,
+      prefilter_window_bytes: 160,
+    });
+  });
+
+  test("native config splits percent regex prefilters", async () => {
+    const search = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        enableRegex: true,
+        labels: ["monetary amount"],
+      },
+      [],
+      createPipelineContext(),
+    );
+
+    const percentPatterns = search.nativeStaticConfig.regex_patterns.filter(
+      (pattern, index) =>
+        pattern.kind === "regex" &&
+        search.nativeStaticConfig.regex_meta[index]?.label ===
+          "monetary amount" &&
+        pattern.pattern.includes("%"),
+    );
+    const writtenPercentPattern = percentPatterns.find((pattern) =>
+      pattern.pattern.includes("one hundred"),
+    );
+    const numericPercentPattern = percentPatterns.find(
+      (pattern) => !pattern.pattern.includes("one hundred"),
+    );
+
+    expect(writtenPercentPattern).toMatchObject({
+      lazy: true,
+      prefilter_any: ["percent"],
+      prefilter_case_insensitive: true,
+      prefilter_window_bytes: 160,
+    });
+    expect(numericPercentPattern).toMatchObject({
+      lazy: true,
+      prefilter_any: ["%"],
       prefilter_case_insensitive: false,
     });
   });

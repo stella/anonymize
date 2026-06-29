@@ -53,6 +53,7 @@ import { DASH, DASH_INNER } from "../util/char-groups";
 
 const MIN_PHONE_LENGTH = 7;
 const MIN_MONTH_NAME_LENGTH = 3;
+const CONTEXT_REGEX_PREFILTER_WINDOW_BYTES = 160;
 const US_STATE_CODE =
   "(?:(?i:A[KLZR]|C[AOT]|D[CE]|FL|GA|HI|I[ADL]|K[SY]|LA|M[ADEHINOPST]|" +
   "N[CDEHJMVY]|O[HK]|PA|RI|S[CD]|T[NX]|UT|V[AIT]|W[AIVY])|I[Nn]|iN|O[Rr]|oR)";
@@ -179,6 +180,7 @@ type RegexDef = {
   prefilterAny?: readonly string[];
   prefilterCaseInsensitive?: boolean;
   prefilterRegex?: RegExp;
+  prefilterWindowBytes?: number;
   validator?: Validator;
   validatorId?: string;
   validatorInput?: (text: string) => string;
@@ -192,6 +194,7 @@ type RegexPatternEntry = {
   prefilterAny?: readonly string[];
   prefilterCaseInsensitive?: boolean;
   prefilterRegex?: RegExp;
+  prefilterWindowBytes?: number;
 };
 
 type AmountWordsConfig = {
@@ -744,11 +747,14 @@ const CZ_BIRTH_NUMBER: RegexDef = {
 //     a 1-6 digit integer.
 const CZ_COMMERCIAL_REGISTER: RegexDef = {
   pattern:
-    `(?i)\\boddíl[^\\S\\n]+[A-Z]` +
+    `\\b[Oo][Dd][Dd][Íí][Ll][^\\S\\n]+[A-Za-z]` +
     `[^\\S\\n]*,[^\\S\\n]*` +
-    `vložka[^\\S\\n]+\\d{1,6}\\b`,
+    `[Vv][Ll][Oo][Žž][Kk][Aa][^\\S\\n]+\\d{1,6}\\b`,
   label: "registration number",
   score: 0.95,
+  lazy: true,
+  prefilterAny: ["oddíl", "vložka"],
+  prefilterCaseInsensitive: true,
 };
 
 const DATE_NUMERIC: RegexDef = {
@@ -822,6 +828,7 @@ const ES_POSTAL: RegexDef = {
   lazy: true,
   prefilterAny: ["C.P", "CP", "código postal", "codigo postal"],
   prefilterCaseInsensitive: true,
+  prefilterWindowBytes: CONTEXT_REGEX_PREFILTER_WINDOW_BYTES,
 };
 
 // Spanish DNI: 8 digits + 1 letter. Letter is a
@@ -868,6 +875,7 @@ const NHS_NUMBER_CONTEXT: RegexDef = {
   lazy: true,
   prefilterAny: ["NHS", "National Health Service"],
   prefilterCaseInsensitive: true,
+  prefilterWindowBytes: CONTEXT_REGEX_PREFILTER_WINDOW_BYTES,
 };
 
 const PASSPORT_CONTEXT: RegexDef = {
@@ -884,6 +892,7 @@ const PASSPORT_CONTEXT: RegexDef = {
   lazy: true,
   prefilterAny: ["passport"],
   prefilterCaseInsensitive: true,
+  prefilterWindowBytes: CONTEXT_REGEX_PREFILTER_WINDOW_BYTES,
 };
 
 const FR_CNI_CONTEXT: RegexDef = {
@@ -901,6 +910,7 @@ const FR_CNI_CONTEXT: RegexDef = {
   lazy: true,
   prefilterAny: ["CNI", "carte nationale", "French national identity card"],
   prefilterCaseInsensitive: true,
+  prefilterWindowBytes: CONTEXT_REGEX_PREFILTER_WINDOW_BYTES,
 };
 
 const CY_TIC_CONTEXT: RegexDef = {
@@ -915,6 +925,7 @@ const CY_TIC_CONTEXT: RegexDef = {
   lazy: true,
   prefilterAny: ["TIC", "tax identification code"],
   prefilterCaseInsensitive: true,
+  prefilterWindowBytes: CONTEXT_REGEX_PREFILTER_WINDOW_BYTES,
 };
 
 const CY_ID_CARD_CONTEXT: RegexDef = {
@@ -929,6 +940,7 @@ const CY_ID_CARD_CONTEXT: RegexDef = {
   lazy: true,
   prefilterAny: ["Cyprus", "Cypriot", "identity card", "ID card"],
   prefilterCaseInsensitive: true,
+  prefilterWindowBytes: CONTEXT_REGEX_PREFILTER_WINDOW_BYTES,
 };
 
 const UK_DRIVING_LICENCE_CONTEXT: RegexDef = {
@@ -943,6 +955,7 @@ const UK_DRIVING_LICENCE_CONTEXT: RegexDef = {
   lazy: true,
   prefilterAny: ["driving licence", "driving license"],
   prefilterCaseInsensitive: true,
+  prefilterWindowBytes: CONTEXT_REGEX_PREFILTER_WINDOW_BYTES,
 };
 
 const US_DRIVER_LICENSE_CONTEXT: RegexDef = {
@@ -971,6 +984,7 @@ const US_DRIVER_LICENSE_CONTEXT: RegexDef = {
     "driving licence",
   ],
   prefilterCaseInsensitive: true,
+  prefilterWindowBytes: CONTEXT_REGEX_PREFILTER_WINDOW_BYTES,
 };
 
 const MEDICAL_LICENSE_CONTEXT: RegexDef = {
@@ -997,6 +1011,7 @@ const MEDICAL_LICENSE_CONTEXT: RegexDef = {
     "nurse",
   ],
   prefilterCaseInsensitive: true,
+  prefilterWindowBytes: CONTEXT_REGEX_PREFILTER_WINDOW_BYTES,
 };
 
 const CRYPTO_WALLET_CANDIDATE = crypto.wallet.candidatePattern ?? "(?!)";
@@ -1270,6 +1285,8 @@ const PERCENT_RANGE_NUMBER = `\\d+(?:[.,]\\d{1,4})?`;
 const PERCENT_RANGE =
   `${PERCENT_RANGE_NUMBER}[^\\S\\n]*${DASH}[^\\S\\n]*` +
   `${PERCENT_RANGE_NUMBER}[^\\S\\n]{0,2}%`;
+const PERCENT_LEFT_BOUNDARY = "(?<![\\p{L}\\p{N}_.,])";
+const PERCENT_RIGHT_BOUNDARY = "(?![\\p{L}\\p{N}_])";
 
 const buildPercentWordPattern = (config: AmountWordsConfig): string => {
   const phrases: string[] = [];
@@ -1291,6 +1308,11 @@ const buildPercentWordPattern = (config: AmountWordsConfig): string => {
 };
 
 const PERCENT_WORD = buildPercentWordPattern(AMOUNT_WORDS);
+const PERCENT_WORD_PREFILTERS = [
+  ...new Set(
+    (AMOUNT_WORDS.percentages ?? []).flatMap((entry) => entry.keywords),
+  ),
+];
 
 // Percentages and financial rates. Captures signed numeric
 // values with dot or comma decimals, grouped thousands, and
@@ -1304,13 +1326,23 @@ const PERCENT_WORD = buildPercentWordPattern(AMOUNT_WORDS);
 // brackets; labelling them as `monetary amount` keeps the
 // operator-side handling consistent with how other quantitative
 // identifiers are redacted.
-const PERCENT_RATE: RegexDef = {
+const PERCENT_WORD_RATE: RegexDef = {
   pattern:
-    `(?<![\\p{L}\\p{N}_.,])(?:` +
+    `${PERCENT_LEFT_BOUNDARY}` +
     `${PERCENT_WORD}[^\\S\\n]*\\([^\\S\\n]*${PERCENT_TOKEN}[^\\S\\n]*\\)` +
-    `|${PERCENT_RANGE}` +
-    `|${PERCENT_TOKEN}` +
-    `)(?![\\p{L}\\p{N}_])`,
+    PERCENT_RIGHT_BOUNDARY,
+  label: "monetary amount",
+  score: 0.85,
+  lazy: true,
+  prefilterAny: PERCENT_WORD_PREFILTERS,
+  prefilterCaseInsensitive: true,
+  prefilterWindowBytes: CONTEXT_REGEX_PREFILTER_WINDOW_BYTES,
+};
+
+const PERCENT_NUMERIC_RATE: RegexDef = {
+  pattern:
+    `${PERCENT_LEFT_BOUNDARY}(?:${PERCENT_RANGE}|${PERCENT_TOKEN})` +
+    PERCENT_RIGHT_BOUNDARY,
   label: "monetary amount",
   score: 0.85,
   lazy: true,
@@ -1382,7 +1414,8 @@ const ALL_REGEX_DEFS: readonly RegexDef[] = [
   UK_POSTCODE,
   UK_NINO,
   TIME_12H,
-  PERCENT_RATE,
+  PERCENT_WORD_RATE,
+  PERCENT_NUMERIC_RATE,
   ...STDNUM_ENTRIES,
 ];
 
@@ -1396,7 +1429,8 @@ const toRegexPatternEntry = (definition: RegexDef): PatternEntry => {
     definition.lazy === undefined &&
     definition.prefilterAny === undefined &&
     definition.prefilterCaseInsensitive === undefined &&
-    definition.prefilterRegex === undefined
+    definition.prefilterRegex === undefined &&
+    definition.prefilterWindowBytes === undefined
   ) {
     return definition.pattern;
   }
@@ -1413,6 +1447,9 @@ const toRegexPatternEntry = (definition: RegexDef): PatternEntry => {
   }
   if (definition.prefilterRegex !== undefined) {
     entry.prefilterRegex = definition.prefilterRegex;
+  }
+  if (definition.prefilterWindowBytes !== undefined) {
+    entry.prefilterWindowBytes = definition.prefilterWindowBytes;
   }
   return entry;
 };

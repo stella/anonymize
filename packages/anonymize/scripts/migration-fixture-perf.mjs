@@ -766,13 +766,19 @@ function summarizeFixtureDiagnostics(fixtureDiagnostics) {
       bucket.count += stage.count ?? 0;
       stageBuckets.set(stage.stage, bucket);
       if (stage.slot !== null) {
-        const slotKey = [stage.stage, stage.engine ?? "", stage.slot].join(
-          "\0",
-        );
+        const slotKey = [
+          stage.stage,
+          stage.engine ?? "",
+          stage.slot,
+          stage.subslot ?? "",
+          stage.pattern ?? "",
+        ].join("\0");
         const slotBucket = slotBuckets.get(slotKey) ?? {
           stage: stage.stage,
           engine: stage.engine,
           slot: stage.slot,
+          subslot: stage.subslot,
+          pattern: stage.pattern,
           patternCount: stage.patternCount,
           elapsedMs: [],
           count: 0,
@@ -836,6 +842,8 @@ function summarizeDiagnosticSlotBuckets(slotBuckets) {
       stage: bucket.stage,
       engine: bucket.engine,
       slot: bucket.slot,
+      subslot: bucket.subslot,
+      pattern: bucket.pattern,
       patternCount: bucket.patternCount,
       calls: bucket.elapsedMs.length,
       totalMs: roundMs(bucket.elapsedMs.reduce((sum, ms) => sum + ms, 0)),
@@ -870,6 +878,8 @@ function diagnosticStageSummaries(events) {
       stage: event.stage,
       count: event.count ?? 0,
       slot: event.slot ?? null,
+      subslot: event.subslot ?? null,
+      pattern: event.pattern ?? null,
       patternCount: event.pattern_count ?? null,
       engine: event.engine ?? null,
       elapsedMs:

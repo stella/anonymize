@@ -121,6 +121,7 @@ export type NativeSearchPattern = {
   prefilter_any?: string[];
   prefilter_case_insensitive?: boolean;
   prefilter_regex?: string;
+  prefilter_window_bytes?: number;
 };
 
 export type NativeSearchOptions = {
@@ -1590,6 +1591,7 @@ const toNativeRegexPattern = (entry: PatternEntry): NativeSearchPattern => {
     prefilterAny?: readonly string[];
     prefilterCaseInsensitive?: boolean;
     prefilterRegex?: RegExp;
+    prefilterWindowBytes?: number;
   };
   if (regexEntry.lazy !== undefined) {
     pattern.lazy = regexEntry.lazy;
@@ -1602,6 +1604,9 @@ const toNativeRegexPattern = (entry: PatternEntry): NativeSearchPattern => {
   }
   if (regexEntry.prefilterRegex !== undefined) {
     pattern.prefilter_regex = toNativeRegexSource(regexEntry.prefilterRegex);
+  }
+  if (regexEntry.prefilterWindowBytes !== undefined) {
+    pattern.prefilter_window_bytes = regexEntry.prefilterWindowBytes;
   }
   return pattern;
 };

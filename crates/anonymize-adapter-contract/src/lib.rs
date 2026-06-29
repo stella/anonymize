@@ -21,14 +21,14 @@ use stella_anonymize_core::{
 pub type Result<T> = std::result::Result<T, ContractError>;
 
 const PREPARED_SEARCH_PACKAGE_HEADER: [u8; 8] = *b"ANONPKG1";
-const PREPARED_SEARCH_PACKAGE_VERSION: u32 = 11;
+const PREPARED_SEARCH_PACKAGE_VERSION: u32 = 12;
 const PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER: [u8; 8] = *b"ANONPKZ1";
 const PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION: u32 = 10;
 const PREPARED_SEARCH_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION: u32 = 9;
 const PREPARED_SEARCH_CORE_PACKAGE_HEADER: [u8; 8] = *b"ANONCPK1";
-const PREPARED_SEARCH_CORE_PACKAGE_VERSION: u32 = 10;
+const PREPARED_SEARCH_CORE_PACKAGE_VERSION: u32 = 12;
 const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_HEADER: [u8; 8] = *b"ANONCPZ1";
-const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION: u32 = 11;
+const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION: u32 = 13;
 const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION: u32 = 10;
 const PREPARED_SEARCH_PACKAGE_DIGEST_BYTES: usize = 32;
 const PREPARED_SEARCH_PACKAGE_ZSTD_LEVEL: i32 = 3;
@@ -103,6 +103,7 @@ pub struct BindingSearchPattern {
   pub prefilter_any: Option<Vec<String>>,
   pub prefilter_case_insensitive: Option<bool>,
   pub prefilter_regex: Option<String>,
+  pub prefilter_window_bytes: Option<u32>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -1342,6 +1343,8 @@ pub struct BindingDiagnosticEvent {
   #[serde(skip_serializing_if = "Option::is_none")]
   pub slot: Option<usize>,
   #[serde(skip_serializing_if = "Option::is_none")]
+  pub subslot: Option<usize>,
+  #[serde(skip_serializing_if = "Option::is_none")]
   pub pattern_count: Option<usize>,
   #[serde(skip_serializing_if = "Option::is_none")]
   pub engine: Option<String>,
@@ -2149,6 +2152,7 @@ fn diagnostic_event_to_binding(
     kind: diagnostic_event_kind_name(event.kind),
     count: event.count,
     slot: event.slot,
+    subslot: event.subslot,
     pattern_count: event.pattern_count,
     engine: event.engine.map(search_engine_name),
     pattern: event.pattern,
@@ -2418,6 +2422,7 @@ fn search_pattern_from_binding(
         || pattern.prefilter_any.is_some()
         || pattern.prefilter_case_insensitive.is_some()
         || pattern.prefilter_regex.is_some()
+        || pattern.prefilter_window_bytes.is_some()
       {
         return Ok(SearchPattern::RegexWithOptions {
           pattern: pattern.pattern,
@@ -2425,6 +2430,9 @@ fn search_pattern_from_binding(
           prefilter_any: pattern.prefilter_any.unwrap_or_default(),
           prefilter_case_insensitive: pattern.prefilter_case_insensitive,
           prefilter_regex: pattern.prefilter_regex,
+          prefilter_window_bytes: pattern
+            .prefilter_window_bytes
+            .and_then(|value| usize::try_from(value).ok()),
         });
       }
       Ok(SearchPattern::Regex(pattern.pattern))
@@ -2798,6 +2806,7 @@ mod tests {
         kind: DiagnosticEventKind::Entity,
         count: None,
         slot: None,
+        subslot: None,
         pattern_count: None,
         engine: None,
         pattern: None,
@@ -3079,6 +3088,7 @@ mod tests {
         prefilter_any: None,
         prefilter_case_insensitive: None,
         prefilter_regex: None,
+        prefilter_window_bytes: None,
       }],
       ..BindingPreparedSearchConfig::default()
     }
