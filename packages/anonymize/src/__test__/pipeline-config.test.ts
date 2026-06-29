@@ -252,6 +252,40 @@ describe("pipeline config semantics", () => {
     expect(nativePatterns.some((pattern) => pattern.includes("À"))).toBe(true);
   });
 
+  test("content language scopes native signing-place patterns", async () => {
+    const [tsPatterns, nativePatterns] = await Promise.all([
+      getSigningClausePatterns(["en-US"]),
+      getNativeSigningClausePatterns(["en-US"]),
+    ]);
+    const search = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        enableRegex: true,
+        enableZoneClassification: true,
+        labels: ["address"],
+        language: "en-US",
+      },
+      [],
+      createPipelineContext(),
+    );
+    const regexPatterns = search.nativeStaticConfig.regex_patterns.map(
+      (pattern) => pattern.pattern,
+    );
+
+    expect(nativePatterns).toEqual(tsPatterns);
+    expect(nativePatterns).toHaveLength(1);
+    expect(nativePatterns.at(0)).toContain("Signed");
+    expect(regexPatterns.some((pattern) => pattern.includes("Signed"))).toBe(
+      true,
+    );
+    expect(regexPatterns.some((pattern) => pattern.includes("Fatto"))).toBe(
+      false,
+    );
+    expect(search.nativeStaticConfig.zone_data?.signing_clauses).toHaveLength(
+      1,
+    );
+  });
+
   test("native pipeline package context cache is scoped by dictionary identity", async () => {
     const { binding, counts } = createCountingNativeBinding(
       "native-cache-context-dictionaries",

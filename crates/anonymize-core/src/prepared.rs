@@ -1224,17 +1224,18 @@ impl PreparedSearch {
     &self,
     detections: &StaticDetectionResult,
     full_text: &str,
-    diagnostics: Option<&mut StaticRedactionDiagnostics>,
+    mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
   ) -> Result<Vec<PipelineEntity>> {
     let zone_adjusted_entities = self.apply_zone_adjustments(
       detections.all_entities(),
       full_text,
-      diagnostics,
+      diagnostics.as_deref_mut(),
     )?;
     self.apply_hotword_entities(
       zone_adjusted_entities,
       full_text,
       &detections.matches.literal,
+      diagnostics,
     )
   }
 
@@ -1243,11 +1244,23 @@ impl PreparedSearch {
     entities: Vec<PipelineEntity>,
     full_text: &str,
     _literal_matches: &[SearchMatch],
+    diagnostics: Option<&mut StaticRedactionDiagnostics>,
   ) -> Result<Vec<PipelineEntity>> {
     let Some(data) = &self.hotword_data else {
       return Ok(entities);
     };
-    apply_hotword_rules(entities, full_text, data, &self.allowed_labels)
+    let start = Instant::now();
+    let adjusted =
+      apply_hotword_rules(entities, full_text, data, &self.allowed_labels)?;
+    if let Some(diagnostics) = diagnostics {
+      diagnostics.record_stage(
+        DiagnosticStage::EntityHotword,
+        Some(adjusted.len()),
+        Some(elapsed_us(start)),
+        Some(full_text.len()),
+      );
+    }
+    Ok(adjusted)
   }
 
   fn apply_zone_adjustments(

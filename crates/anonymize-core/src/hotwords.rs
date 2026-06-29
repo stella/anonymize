@@ -1,4 +1,3 @@
-use crate::byte_offsets::ByteOffsets;
 use crate::resolution::{PipelineEntity, SourceDetail};
 use crate::search::{
   LiteralSearchOptions, SearchIndex, SearchOptions, SearchPattern,
@@ -82,7 +81,7 @@ pub(crate) fn apply_hotword_rules(
   allowed_labels: &[String],
 ) -> Result<Vec<PipelineEntity>> {
   let hits_by_rule = collect_hits_by_rule(full_text, data)?;
-  let offsets = ByteOffsets::new(full_text);
+  let text_offsets = Utf16OffsetMap::new(full_text)?;
   let mut result = Vec::with_capacity(entities.len());
 
   for entity in entities {
@@ -91,7 +90,8 @@ pub(crate) fn apply_hotword_rules(
       continue;
     }
 
-    let adjusted = apply_entity_rules(entity, &offsets, data, &hits_by_rule)?;
+    let adjusted =
+      apply_entity_rules(entity, &text_offsets, data, &hits_by_rule)?;
     if label_allowed(&adjusted.label, allowed_labels) {
       result.push(adjusted);
     }
@@ -136,7 +136,7 @@ fn collect_hits_by_rule(
 
 fn apply_entity_rules(
   mut entity: PipelineEntity,
-  offsets: &ByteOffsets<'_>,
+  text_offsets: &Utf16OffsetMap,
   data: &PreparedHotwordData,
   hits_by_rule: &[Vec<SearchMatch>],
 ) -> Result<PipelineEntity> {
@@ -155,7 +155,7 @@ fn apply_entity_rules(
     };
     for hit in rule_hits {
       let Some((distance, max_distance)) =
-        hotword_distance(offsets, &entity, hit, rule)?
+        hotword_distance(text_offsets, &entity, hit, rule)?
       else {
         continue;
       };
@@ -198,19 +198,19 @@ fn apply_entity_rules(
 }
 
 fn hotword_distance(
-  offsets: &ByteOffsets<'_>,
+  text_offsets: &Utf16OffsetMap,
   entity: &PipelineEntity,
   hit: &SearchMatch,
   rule: &HotwordRule,
 ) -> Result<Option<(u32, u32)>> {
   let (distance, max_distance) = if hit.end() <= entity.start {
     (
-      text_distance(offsets, hit.end(), entity.start)?,
+      text_offsets.distance_between(hit.end(), entity.start)?,
       rule.proximity_before,
     )
   } else if hit.start() >= entity.end {
     (
-      text_distance(offsets, entity.end, hit.start())?,
+      text_offsets.distance_between(entity.end, hit.start())?,
       rule.proximity_after,
     )
   } else {
@@ -221,14 +221,6 @@ fn hotword_distance(
     return Ok(None);
   }
   Ok(Some((distance, max_distance)))
-}
-
-fn text_distance(
-  offsets: &ByteOffsets<'_>,
-  start: u32,
-  end: u32,
-) -> Result<u32> {
-  offsets.utf16_units_between(start, end)
 }
 
 const fn caller_owned(entity: &PipelineEntity) -> bool {
@@ -246,4 +238,100 @@ fn label_allowed(label: &str, allowed_labels: &[String]) -> bool {
 struct HotwordAdjustment {
   score: f64,
   reclassify_to: Option<String>,
+}
+
+struct Utf16OffsetMap {
+  byte_offsets: Vec<usize>,
+  utf16_offsets: Vec<u32>,
+}
+
+impl Utf16OffsetMap {
+  fn new(full_text: &str) -> Result<Self> {
+    let mut byte_offsets = Vec::new();
+    let mut utf16_offsets = Vec::new();
+    let mut utf16_offset = 0_u32;
+
+    for (byte_offset, character) in full_text.char_indices() {
+      byte_offsets.push(byte_offset);
+      utf16_offsets.push(utf16_offset);
+      let width = u32::try_from(character.len_utf16())
+        .map_err(|_| Error::ByteOffsetOutOfBounds { offset: u32::MAX })?;
+      utf16_offset = utf16_offset
+        .checked_add(width)
+        .ok_or(Error::ByteOffsetOutOfBounds { offset: u32::MAX })?;
+    }
+
+    byte_offsets.push(full_text.len());
+    utf16_offsets.push(utf16_offset);
+
+    Ok(Self {
+      byte_offsets,
+      utf16_offsets,
+    })
+  }
+
+  fn distance_between(&self, start: u32, end: u32) -> Result<u32> {
+    if start > end {
+      return Err(Error::InvalidSpan { start, end });
+    }
+    let start_units = self.utf16_units_at(start)?;
+    let end_units = self.utf16_units_at(end)?;
+    Ok(end_units.saturating_sub(start_units))
+  }
+
+  fn utf16_units_at(&self, offset: u32) -> Result<u32> {
+    let byte_offset = usize::try_from(offset)
+      .map_err(|_| Error::ByteOffsetOutOfBounds { offset })?;
+    let max_offset = self.byte_offsets.last().copied().unwrap_or(0);
+    if byte_offset > max_offset {
+      return Err(Error::ByteOffsetOutOfBounds { offset });
+    }
+
+    let index = self
+      .byte_offsets
+      .binary_search(&byte_offset)
+      .map_err(|_| Error::ByteOffsetInsideCodepoint { offset })?;
+    self
+      .utf16_offsets
+      .get(index)
+      .copied()
+      .ok_or(Error::ByteOffsetOutOfBounds { offset: u32::MAX })
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::byte_offsets::ByteOffsets;
+
+  #[test]
+  fn utf16_offset_map_matches_slice_distance_on_boundaries() -> Result<()> {
+    let text = "A😀áZ";
+    let map = Utf16OffsetMap::new(text)?;
+    let offsets = ByteOffsets::new(text);
+    let mut boundaries = text
+      .char_indices()
+      .map(|(offset, _)| offset)
+      .collect::<Vec<_>>();
+    boundaries.push(text.len());
+
+    for start in &boundaries {
+      for end in &boundaries {
+        if start > end {
+          continue;
+        }
+        let start_offset = u32::try_from(*start)
+          .map_err(|_| Error::ByteOffsetOutOfBounds { offset: u32::MAX })?;
+        let end_offset = u32::try_from(*end)
+          .map_err(|_| Error::ByteOffsetOutOfBounds { offset: u32::MAX })?;
+
+        assert_eq!(
+          map.distance_between(start_offset, end_offset)?,
+          offsets.utf16_units_between(start_offset, end_offset)?
+        );
+      }
+    }
+
+    Ok(())
+  }
 }

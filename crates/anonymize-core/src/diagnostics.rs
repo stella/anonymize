@@ -63,6 +63,7 @@ pub enum DiagnosticStage {
   EntityAddressSeed,
   EntityNameCorpus,
   EntityZoneAdjustment,
+  EntityHotword,
   EntityAddressContext,
   EntityCoreference,
   Merge,

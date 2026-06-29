@@ -449,6 +449,7 @@ type SectionHeadingsConfig = {
 
 type SigningClauseConfig = {
   patterns: Array<{
+    lang: string;
     prefix?: string;
     suffix?: string;
     prepositions?: string[];
@@ -687,10 +688,10 @@ const buildUnifiedSearchSources = async (
       ? getDatePatterns(contentLanguages)
       : Promise.resolve([] as string[]),
     config.enableRegex && labelIsAllowed("address", allowedLabels)
-      ? getSigningClausePatterns()
+      ? getSigningClausePatterns(contentLanguages)
       : Promise.resolve([] as string[]),
     config.enableRegex && labelIsAllowed("address", allowedLabels)
-      ? getNativeSigningClausePatterns()
+      ? getNativeSigningClausePatterns(contentLanguages)
       : Promise.resolve([] as string[]),
     config.enableRegex && labelIsAllowed("date", allowedLabels)
       ? getDateMonthData(contentLanguages)
@@ -705,7 +706,7 @@ const buildUnifiedSearchSources = async (
       ? getAddressSeedData()
       : Promise.resolve(null),
     config.enableZoneClassification
-      ? buildNativeZoneData()
+      ? buildNativeZoneData(contentLanguages)
       : Promise.resolve(null),
     labelIsAllowed("address", allowedLabels)
       ? Promise.resolve(getAddressContextData())
@@ -1785,7 +1786,26 @@ const buildNativeCoreferenceData = async (): Promise<NativeCoreferenceData> => {
   };
 };
 
-const buildNativeZoneData = async (): Promise<NativeZoneData> => {
+const signingClauseLanguageMatches = (
+  entryLanguage: string,
+  selectedLanguages: readonly string[] | undefined,
+): boolean => {
+  if (selectedLanguages === undefined || selectedLanguages.length === 0) {
+    return true;
+  }
+  const normalizedEntry = entryLanguage.toLowerCase();
+  return selectedLanguages.some((language) => {
+    const normalized = language.trim().toLowerCase();
+    return (
+      normalized === normalizedEntry ||
+      normalized.split("-").at(0) === normalizedEntry
+    );
+  });
+};
+
+const buildNativeZoneData = async (
+  selectedLanguages?: readonly string[],
+): Promise<NativeZoneData> => {
   const [headingModule, signingModule] = await Promise.all([
     import("./data/section-headings.json"),
     import("./data/signing-clauses.json"),
@@ -1800,11 +1820,15 @@ const buildNativeZoneData = async (): Promise<NativeZoneData> => {
       pattern: pattern.re,
       flags: pattern.flags,
     })),
-    signing_clauses: signingData.patterns.map((pattern) => ({
-      prefix: pattern.prefix ?? "",
-      suffix: pattern.suffix ?? "",
-      prepositions: pattern.prepositions ?? [],
-    })),
+    signing_clauses: signingData.patterns
+      .filter((pattern) =>
+        signingClauseLanguageMatches(pattern.lang, selectedLanguages),
+      )
+      .map((pattern) => ({
+        prefix: pattern.prefix ?? "",
+        suffix: pattern.suffix ?? "",
+        prepositions: pattern.prepositions ?? [],
+      })),
   };
 };
 

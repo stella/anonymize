@@ -2689,6 +2689,7 @@ fn diagnostic_stage_name(stage: DiagnosticStage) -> String {
     DiagnosticStage::EntityAddressSeed => "entity.address-seed",
     DiagnosticStage::EntityNameCorpus => "entity.name-corpus",
     DiagnosticStage::EntityZoneAdjustment => "entity.zone-adjustment",
+    DiagnosticStage::EntityHotword => "entity.hotword",
     DiagnosticStage::EntityAddressContext => "entity.address-context",
     DiagnosticStage::EntityCoreference => "entity.coreference",
     DiagnosticStage::Merge => "resolution.merge",
