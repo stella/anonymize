@@ -5,11 +5,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use stella_anonymize_core::{
   AddressContextData, AddressSeedData, AmountWordsData, CoreferenceData,
   CoreferencePatternData, CountryMatchData, CurrencyData, DateData,
-  DenyListFilterData, DenyListMatchData, DetectionSource, DiagnosticEventKind,
-  DiagnosticStage, EntityKind, Error, FuzzySearchOptions, GazetteerMatchData,
-  HotwordRule, HotwordRuleData, LegalFormData, LiteralSearchOptions,
-  MagnitudeSuffixData, MonetaryData, OperatorConfig, PatternSlice,
-  PreparedSearch, PreparedSearchArtifacts, PreparedSearchConfig,
+  DenyListFilterData, DenyListMatchData, DetectionSource, DiagnosticEvent,
+  DiagnosticEventKind, DiagnosticStage, EntityKind, Error, FuzzySearchOptions,
+  GazetteerMatchData, HotwordRule, HotwordRuleData, LegalFormData,
+  LiteralSearchOptions, MagnitudeSuffixData, MonetaryData, OperatorConfig,
+  PatternSlice, PreparedSearch, PreparedSearchArtifacts, PreparedSearchConfig,
   PreparedSearchSlices, RegexMatchMeta, RegexSearchOptions, SearchEngine,
   SearchOptions, SearchPattern, SourceDetail, TriggerData, TriggerRule,
   TriggerStrategy, TriggerValidation, WrittenAmountPatternData, ZoneData,
@@ -2119,6 +2119,7 @@ fn prepared_search_keeps_person_name_particles_after_trigger() {
 
 #[test]
 fn prepared_search_reports_static_redaction_diagnostics() {
+  const INPUT: &str = "Acme s.r.o. filed AB1234.";
   let prepared = PreparedSearch::new(PreparedSearchConfig {
     regex_patterns: vec![SearchPattern::Regex(String::from(
       r"\b[A-Z]{2}\d{4}\b",
@@ -2175,21 +2176,21 @@ fn prepared_search_reports_static_redaction_diagnostics() {
   .unwrap();
 
   let result = prepared
-    .redact_static_entities_with_diagnostics(
-      "Acme s.r.o. filed AB1234.",
-      &OperatorConfig::default(),
-    )
+    .redact_static_entities_with_diagnostics(INPUT, &OperatorConfig::default())
     .unwrap();
 
   assert_eq!(
     result.result.redaction.redacted_text,
     "[ORGANIZATION_1] filed [REGISTRATION_NUMBER_1]."
   );
-  assert!(result.diagnostics.events.iter().any(|event| {
-    event.stage == DiagnosticStage::SearchRegex
-      && event.kind == DiagnosticEventKind::StageSummary
-      && event.count == Some(1)
-  }));
+  let events = &result.diagnostics.events;
+  assert_stage_summary(events, DiagnosticStage::SearchRegex, Some(1), None);
+  assert_stage_summary(
+    events,
+    DiagnosticStage::DetectTotal,
+    Some(2),
+    Some(INPUT.len()),
+  );
   assert!(result.diagnostics.events.iter().any(|event| {
     event.stage == DiagnosticStage::FindLiteral
       && event.kind == DiagnosticEventKind::StageSummary
@@ -2211,11 +2212,32 @@ fn prepared_search_reports_static_redaction_diagnostics() {
       .iter()
       .all(|event| event.text.is_none())
   );
-  assert!(result.diagnostics.events.iter().any(|event| {
-    event.stage == DiagnosticStage::Redaction
-      && event.kind == DiagnosticEventKind::StageSummary
-      && event.count == Some(2)
-  }));
+  assert_stage_summary(events, DiagnosticStage::Redaction, Some(2), None);
+  assert_stage_summary(
+    events,
+    DiagnosticStage::RedactTotal,
+    Some(2),
+    Some(INPUT.len()),
+  );
+}
+
+fn assert_stage_summary(
+  events: &[DiagnosticEvent],
+  stage: DiagnosticStage,
+  count: Option<usize>,
+  input_bytes: Option<usize>,
+) {
+  assert!(
+    events.iter().any(|event| {
+      event.stage == stage
+        && event.kind == DiagnosticEventKind::StageSummary
+        && event.count == count
+        && input_bytes
+          .is_none_or(|expected| event.input_bytes == Some(expected))
+        && event.elapsed_us.is_some()
+    }),
+    "missing summary stage {stage:?} count {count:?}",
+  );
 }
 
 #[test]

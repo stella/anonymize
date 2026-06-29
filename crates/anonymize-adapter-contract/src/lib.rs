@@ -2663,6 +2663,8 @@ fn diagnostic_stage_name(stage: DiagnosticStage) -> String {
     DiagnosticStage::WarmTriggerSearch => "warm.trigger-search",
     DiagnosticStage::WarmLiteral => "warm.literal",
     DiagnosticStage::WarmTotal => "warm.total",
+    DiagnosticStage::DetectTotal => "detect.total",
+    DiagnosticStage::RedactTotal => "redact.total",
     DiagnosticStage::Normalize => "normalize",
     DiagnosticStage::FindMatches => "find-matches",
     DiagnosticStage::FindRegex => "find.regex",

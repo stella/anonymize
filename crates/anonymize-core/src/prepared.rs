@@ -256,6 +256,25 @@ struct StaticEntityPasses {
   name_corpus: TimedEntities,
 }
 
+impl StaticEntityPasses {
+  const fn entity_count(&self) -> usize {
+    self
+      .regex
+      .entities
+      .len()
+      .saturating_add(self.custom_regex.entities.len())
+      .saturating_add(self.deny_list.entities.len())
+      .saturating_add(self.gazetteer.entities.len())
+      .saturating_add(self.country.entities.len())
+      .saturating_add(self.anchored.entities.len())
+      .saturating_add(self.trigger.entities.len())
+      .saturating_add(self.signature.entities.len())
+      .saturating_add(self.legal_form.entities.len())
+      .saturating_add(self.address_seed.entities.len())
+      .saturating_add(self.name_corpus.entities.len())
+  }
+}
+
 pub struct PreparedSearchBuildResult {
   pub prepared: PreparedSearch,
   pub diagnostics: StaticRedactionDiagnostics,
@@ -777,6 +796,7 @@ impl PreparedSearch {
     full_text: &str,
     mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
   ) -> Result<StaticDetectionResult> {
+    let detect_start = Instant::now();
     let matches =
       self.find_matches_inner(full_text, diagnostics.as_deref_mut())?;
     let passes = self.process_static_entity_passes(
@@ -786,6 +806,12 @@ impl PreparedSearch {
     )?;
 
     if let Some(diagnostics) = &mut diagnostics {
+      diagnostics.record_stage(
+        DiagnosticStage::DetectTotal,
+        Some(passes.entity_count()),
+        Some(elapsed_us(detect_start)),
+        Some(full_text.len()),
+      );
       record_static_entity_diagnostics(diagnostics, full_text, &passes);
     }
 
@@ -1073,6 +1099,7 @@ impl PreparedSearch {
     operators: &OperatorConfig,
     mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
   ) -> Result<StaticRedactionResult> {
+    let redact_start = Instant::now();
     let detections = self
       .detect_static_entities_inner(full_text, diagnostics.as_deref_mut())?;
     let pre_threshold_entities = self.prepare_pre_threshold_entities(
@@ -1160,13 +1187,13 @@ impl PreparedSearch {
       .collect::<Vec<_>>();
     let redaction_start = Instant::now();
     let redaction = redact_text(full_text, &redaction_entities, operators)?;
-    if let Some(diagnostics) = &mut diagnostics {
-      diagnostics.record_redaction(
-        &redaction,
-        Some(elapsed_us(redaction_start)),
-        full_text.len(),
-      );
-    }
+    record_redaction_stages(
+      &mut diagnostics,
+      &redaction,
+      full_text.len(),
+      redaction_start,
+      redact_start,
+    );
 
     Ok(StaticRedactionResult {
       detections,
@@ -1877,6 +1904,29 @@ fn record_prepare_total(
     Some(count),
     Some(elapsed_us(start)),
     None,
+  );
+}
+
+fn record_redaction_stages(
+  diagnostics: &mut Option<&mut StaticRedactionDiagnostics>,
+  redaction: &RedactionResult,
+  input_bytes: usize,
+  redaction_start: Instant,
+  total_start: Instant,
+) {
+  let Some(diagnostics) = diagnostics else {
+    return;
+  };
+  diagnostics.record_redaction(
+    redaction,
+    Some(elapsed_us(redaction_start)),
+    input_bytes,
+  );
+  diagnostics.record_stage(
+    DiagnosticStage::RedactTotal,
+    Some(redaction.entity_count),
+    Some(elapsed_us(total_start)),
+    Some(input_bytes),
   );
 }
 
@@ -2687,8 +2737,8 @@ fn validate_static_data_length(
 
 impl StaticDetectionResult {
   #[must_use]
-  pub fn all_entities(&self) -> Vec<PipelineEntity> {
-    let capacity = self
+  pub const fn entity_count(&self) -> usize {
+    self
       .regex_entities
       .len()
       .saturating_add(self.custom_regex_entities.len())
@@ -2700,8 +2750,12 @@ impl StaticDetectionResult {
       .saturating_add(self.signature_entities.len())
       .saturating_add(self.legal_form_entities.len())
       .saturating_add(self.address_seed_entities.len())
-      .saturating_add(self.name_corpus_entities.len());
-    let mut entities = Vec::with_capacity(capacity);
+      .saturating_add(self.name_corpus_entities.len())
+  }
+
+  #[must_use]
+  pub fn all_entities(&self) -> Vec<PipelineEntity> {
+    let mut entities = Vec::with_capacity(self.entity_count());
     entities.extend(self.regex_entities.iter().cloned());
     entities.extend(self.custom_regex_entities.iter().cloned());
     entities.extend(self.deny_list_entities.iter().cloned());

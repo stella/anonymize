@@ -37,6 +37,8 @@ pub enum DiagnosticStage {
   WarmTriggerSearch,
   WarmLiteral,
   WarmTotal,
+  DetectTotal,
+  RedactTotal,
   Normalize,
   FindMatches,
   FindRegex,
