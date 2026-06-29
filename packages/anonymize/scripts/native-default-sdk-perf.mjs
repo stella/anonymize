@@ -467,7 +467,8 @@ function preparePythonSdk() {
 }
 
 function ensurePythonNativeLibrary() {
-  if (existsSync(nativeLibraryPath("stella_anonymize_core_py"))) {
+  const libraryPath = nativeLibraryPath("stella_anonymize_core_py");
+  if (existsSync(libraryPath) && !pythonNativeLibraryIsStale(libraryPath)) {
     return;
   }
   const build = spawnSync(
@@ -491,6 +492,37 @@ function ensurePythonNativeLibrary() {
       .filter(Boolean)
       .join("\n"),
   );
+}
+
+function pythonNativeLibraryIsStale(libraryPath) {
+  const libraryMtimeMs = statSync(libraryPath).mtimeMs;
+  return (
+    newestMtimeMs([
+      join(ROOT_DIR, "Cargo.lock"),
+      join(ROOT_DIR, "crates", "anonymize-adapter-contract", "Cargo.toml"),
+      join(ROOT_DIR, "crates", "anonymize-adapter-contract", "src"),
+      join(ROOT_DIR, "crates", "anonymize-core", "Cargo.toml"),
+      join(ROOT_DIR, "crates", "anonymize-core", "src"),
+      join(ROOT_DIR, "crates", "anonymize-py", "Cargo.toml"),
+      join(ROOT_DIR, "crates", "anonymize-py", "src"),
+    ]) > libraryMtimeMs
+  );
+}
+
+function newestMtimeMs(paths) {
+  let newest = 0;
+  for (const path of paths) {
+    const stats = statSync(path);
+    newest = Math.max(newest, stats.mtimeMs);
+    if (!stats.isDirectory()) {
+      continue;
+    }
+    newest = Math.max(
+      newest,
+      newestMtimeMs(readdirSync(path).map((entry) => join(path, entry))),
+    );
+  }
+  return newest;
 }
 
 function nativeLibraryPath(name) {

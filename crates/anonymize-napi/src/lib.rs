@@ -12,6 +12,7 @@ use stella_anonymize_adapter_contract::{
   PreparedSearchPackageDecodeTimings, operator_config_from_binding,
   prepared_search_config_from_binding,
   prepared_search_core_package_decode_from_bytes_with_timings,
+  prepared_search_core_package_decode_trusted_from_bytes_with_timings,
   prepared_search_core_package_to_bytes,
   prepared_search_core_package_to_compressed_bytes,
   prepared_search_package_digest, prepared_search_package_from_bytes,
@@ -403,6 +404,12 @@ enum PackageCacheMode {
 }
 
 #[derive(Clone, Copy)]
+enum PackageDecodeMode {
+  Verified,
+  Trusted,
+}
+
+#[derive(Clone, Copy)]
 struct CacheLookup {
   key: [u8; 32],
   key_elapsed: u64,
@@ -437,7 +444,11 @@ impl NativePreparedSearch {
   pub fn from_prepared_package_bytes(
     package_bytes: BufferSlice<'_>,
   ) -> Result<Self> {
-    Self::from_package_bytes(package_bytes.as_ref(), PackageCacheMode::Reuse)
+    Self::from_package_bytes(
+      package_bytes.as_ref(),
+      PackageCacheMode::Reuse,
+      PackageDecodeMode::Verified,
+    )
   }
 
   #[napi(factory)]
@@ -445,7 +456,23 @@ impl NativePreparedSearch {
   pub fn from_prepared_package_bytes_without_cache(
     package_bytes: BufferSlice<'_>,
   ) -> Result<Self> {
-    Self::from_package_bytes(package_bytes.as_ref(), PackageCacheMode::Bypass)
+    Self::from_package_bytes(
+      package_bytes.as_ref(),
+      PackageCacheMode::Bypass,
+      PackageDecodeMode::Verified,
+    )
+  }
+
+  #[napi(factory)]
+  #[allow(clippy::needless_pass_by_value)]
+  pub fn from_trusted_prepared_package_bytes(
+    package_bytes: BufferSlice<'_>,
+  ) -> Result<Self> {
+    Self::from_package_bytes(
+      package_bytes.as_ref(),
+      PackageCacheMode::Bypass,
+      PackageDecodeMode::Trusted,
+    )
   }
 
   fn from_config_bytes(
@@ -500,6 +527,7 @@ impl NativePreparedSearch {
   fn from_package_bytes(
     package_bytes: &[u8],
     cache_mode: PackageCacheMode,
+    decode_mode: PackageDecodeMode,
   ) -> Result<Self> {
     let input_bytes_len = package_bytes.len();
     let cache = match cache_mode {
@@ -544,11 +572,19 @@ impl NativePreparedSearch {
     };
     let parse_start = Instant::now();
     if prepared_search_package_has_core_payload(package_bytes) {
-      let package =
-        prepared_search_core_package_decode_from_bytes_with_timings(
-          package_bytes,
-        )
-        .map_err(|error| to_napi_contract_error(&error))?;
+      let package = match decode_mode {
+        PackageDecodeMode::Verified => {
+          prepared_search_core_package_decode_from_bytes_with_timings(
+            package_bytes,
+          )
+        }
+        PackageDecodeMode::Trusted => {
+          prepared_search_core_package_decode_trusted_from_bytes_with_timings(
+            package_bytes,
+          )
+        }
+      }
+      .map_err(|error| to_napi_contract_error(&error))?;
       let parse_elapsed = elapsed_us(parse_start);
       let config = package.config;
       let artifact_decode = (package.artifacts_decode, package.artifacts_bytes);

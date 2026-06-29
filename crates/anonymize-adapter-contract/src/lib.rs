@@ -833,6 +833,25 @@ pub fn prepared_search_core_package_view_from_bytes_with_timings(
 pub fn prepared_search_core_package_decode_from_bytes_with_timings(
   bytes: &[u8],
 ) -> Result<DecodedCorePreparedSearchPackage> {
+  prepared_search_core_package_decode_from_bytes_with_policy(
+    bytes,
+    PackageDigestPolicy::Verify,
+  )
+}
+
+pub fn prepared_search_core_package_decode_trusted_from_bytes_with_timings(
+  bytes: &[u8],
+) -> Result<DecodedCorePreparedSearchPackage> {
+  prepared_search_core_package_decode_from_bytes_with_policy(
+    bytes,
+    PackageDigestPolicy::Trust,
+  )
+}
+
+fn prepared_search_core_package_decode_from_bytes_with_policy(
+  bytes: &[u8],
+  digest_policy: PackageDigestPolicy,
+) -> Result<DecodedCorePreparedSearchPackage> {
   let mut package_decode_timings =
     PreparedSearchPackageDecodeTimings::default();
   let parts = prepared_search_package_parts(bytes)?;
@@ -841,7 +860,8 @@ pub fn prepared_search_core_package_decode_from_bytes_with_timings(
       "package does not contain a core payload",
     ));
   }
-  let payload = parts.into_verified_payload(&mut package_decode_timings)?;
+  let payload =
+    parts.into_payload(&mut package_decode_timings, digest_policy)?;
   let slices = core_package_payload_slices(payload.as_ref())?;
   let (config, config_decode, artifacts, artifacts_decode) =
     decode_core_package_parts(slices.config, slices.artifacts)?;
@@ -1503,6 +1523,12 @@ enum PackageCompression {
   ZstdPayloadDigest,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PackageDigestPolicy {
+  Verify,
+  Trust,
+}
+
 impl<'a> PreparedSearchPackageParts<'a> {
   const fn digest(&self) -> [u8; 32] {
     match self {
@@ -1520,13 +1546,23 @@ impl<'a> PreparedSearchPackageParts<'a> {
     self,
     timings: &mut PreparedSearchPackageDecodeTimings,
   ) -> Result<Cow<'a, [u8]>> {
+    self.into_payload(timings, PackageDigestPolicy::Verify)
+  }
+
+  fn into_payload(
+    self,
+    timings: &mut PreparedSearchPackageDecodeTimings,
+    digest_policy: PackageDigestPolicy,
+  ) -> Result<Cow<'a, [u8]>> {
     match self {
       Self::Raw {
         digest, payload, ..
       } => {
-        let verify_start = std::time::Instant::now();
-        verify_prepared_search_package_digest(digest, payload)?;
-        timings.verify = Some(elapsed_us(verify_start));
+        if digest_policy == PackageDigestPolicy::Verify {
+          let verify_start = std::time::Instant::now();
+          verify_prepared_search_package_digest(digest, payload)?;
+          timings.verify = Some(elapsed_us(verify_start));
+        }
         Ok(Cow::Borrowed(payload))
       }
       Self::Compressed {
@@ -1543,6 +1579,15 @@ impl<'a> PreparedSearchPackageParts<'a> {
         }
         match compression {
           PackageCompression::ZstdCompressedDigest => {
+            if digest_policy == PackageDigestPolicy::Trust {
+              let decompress_start = std::time::Instant::now();
+              let decompressed =
+                zstd::bulk::decompress(payload, uncompressed_len).map_err(
+                  |error| invalid_prepared_search_package(error.to_string()),
+                )?;
+              timings.decompress = Some(elapsed_us(decompress_start));
+              return Ok(Cow::Owned(decompressed));
+            }
             let (
               verify_result,
               verify_elapsed,
@@ -1587,9 +1632,11 @@ impl<'a> PreparedSearchPackageParts<'a> {
                 invalid_prepared_search_package(error.to_string())
               })?;
             timings.decompress = Some(elapsed_us(decompress_start));
-            let verify_start = std::time::Instant::now();
-            verify_prepared_search_package_digest(digest, &payload)?;
-            timings.verify = Some(elapsed_us(verify_start));
+            if digest_policy == PackageDigestPolicy::Verify {
+              let verify_start = std::time::Instant::now();
+              verify_prepared_search_package_digest(digest, &payload)?;
+              timings.verify = Some(elapsed_us(verify_start));
+            }
             Ok(Cow::Owned(payload))
           }
         }
@@ -2685,6 +2732,7 @@ mod tests {
     PREPARED_SEARCH_PACKAGE_DIGEST_BYTES, PREPARED_SEARCH_PACKAGE_ZSTD_LEVEL,
     operator_config_from_binding, prepared_search_config_from_binding,
     prepared_search_core_package_decode_from_bytes_with_timings,
+    prepared_search_core_package_decode_trusted_from_bytes_with_timings,
     prepared_search_core_package_from_bytes,
     prepared_search_core_package_payload_to_bytes,
     prepared_search_core_package_to_bytes,
@@ -3013,6 +3061,49 @@ mod tests {
     assert!(
       decoded.package_decode_timings.config_decode.is_some(),
       "core config decode timing should be reported"
+    );
+  }
+
+  #[test]
+  fn prepared_search_core_trusted_decode_skips_package_digest() {
+    let config =
+      prepared_search_config_from_binding(package_test_config()).unwrap();
+    let artifact_set = PreparedSearchArtifacts::default();
+    let artifact_bytes = artifact_set.to_bytes().unwrap();
+
+    let mut bytes = prepared_search_core_package_to_compressed_bytes(
+      &config,
+      &artifact_bytes,
+    )
+    .unwrap();
+    let digest_start = PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_HEADER
+      .len()
+      .saturating_add(std::mem::size_of::<u32>());
+    let digest_byte = bytes.get_mut(digest_start).unwrap();
+    *digest_byte ^= 0xff;
+
+    let verified =
+      prepared_search_core_package_decode_from_bytes_with_timings(&bytes);
+    assert!(
+      verified.is_err(),
+      "verified decode must reject a package digest mismatch"
+    );
+
+    let trusted =
+      prepared_search_core_package_decode_trusted_from_bytes_with_timings(
+        &bytes,
+      )
+      .unwrap();
+    assert_eq!(trusted.config.literal_patterns, Vec::new());
+    assert_eq!(trusted.artifacts, artifact_set);
+    assert_eq!(trusted.artifacts_bytes, artifact_bytes.len());
+    assert!(
+      trusted.package_decode_timings.verify.is_none(),
+      "trusted decode should not spend time verifying the package digest"
+    );
+    assert!(
+      trusted.package_decode_timings.decompress.is_some(),
+      "trusted decode still has to decompress compressed packages"
     );
   }
 

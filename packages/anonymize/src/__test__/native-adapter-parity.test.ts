@@ -1143,6 +1143,64 @@ describe("native adapter parity", () => {
     ).toThrow();
   });
 
+  test("trusted prepared package loading skips only package digest verification", () => {
+    const adapters = getAdapters();
+    const text =
+      "Reference AB1234 for Acme s.r.o. near Fuzztovn, Turkey, " +
+      "Prague, matter MAT-123, code Secret Code.";
+    const configBytes = Buffer.from(CONFIG_JSON);
+    const packageBytes =
+      adapters.native.prepareStaticSearchCompressedPackageBytes(configBytes);
+    if (
+      adapters.native.NativePreparedSearch.fromTrustedPreparedPackageBytes ===
+      undefined
+    ) {
+      throw new Error("missing trusted prepared package factory");
+    }
+
+    const corruptedDigest = Buffer.from(packageBytes);
+    const digestStart = 12;
+    const digestByte = corruptedDigest.at(digestStart);
+    if (digestByte === undefined) {
+      throw new Error("prepared package header unexpectedly truncated");
+    }
+    corruptedDigest.writeUInt8(digestByte ^ 0x01, digestStart);
+
+    expect(() =>
+      adapters.native.NativePreparedSearch.fromPreparedPackageBytes(
+        corruptedDigest,
+      ),
+    ).toThrow();
+
+    const trusted =
+      adapters.native.NativePreparedSearch.fromTrustedPreparedPackageBytes(
+        corruptedDigest,
+      );
+    const diagnosticsJson = trusted.prepareDiagnosticsJson?.();
+    if (diagnosticsJson === undefined) {
+      throw new Error("missing trusted prepare diagnostics");
+    }
+    const diagnostics = JSON.parse(diagnosticsJson);
+
+    expect(trusted.redactStaticEntities(text)).toEqual(
+      new adapters.native.NativePreparedSearch(
+        CONFIG_JSON,
+      ).redactStaticEntities(text),
+    );
+    expect(
+      diagnostics.events.some(
+        (event: { stage?: unknown }) =>
+          event.stage === "prepare.package.verify",
+      ),
+    ).toBe(false);
+    expect(
+      diagnostics.events.some(
+        (event: { stage?: unknown }) =>
+          event.stage === "prepare.package.decompress",
+      ),
+    ).toBe(true);
+  });
+
   test("prepared search accepts compressed package bytes through TS and Python adapters", () => {
     const adapters = getAdapters();
     const text =

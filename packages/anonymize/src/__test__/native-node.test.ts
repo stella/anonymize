@@ -191,6 +191,36 @@ describe("native node loader", () => {
     }
   });
 
+  test("prefers the trusted native package factory for default packages", () => {
+    const dir = mkdtempSync(join(tmpdir(), "anonymize-default-trusted-"));
+    const packagePath = join(dir, "native-pipeline.stlanonpkg");
+    const trustedBytes: number[][] = [];
+    const verifiedBytes: number[][] = [];
+    try {
+      writeFileSync(packagePath, Uint8Array.of(22, 23, 24));
+      const binding = fakeNativeBinding("1.5.0", {
+        onPreparedPackageBytesWithoutCache: (bytes) => {
+          verifiedBytes.push([...bytes]);
+        },
+        onTrustedPreparedPackageBytes: (bytes) => {
+          trustedBytes.push([...bytes]);
+        },
+      });
+
+      const pipeline = createNativePipelineFromDefaultPackage({
+        binding,
+        packagePath,
+        expectedVersion: "1.5.0",
+      });
+
+      expect(trustedBytes).toEqual([[22, 23, 24]]);
+      expect(verifiedBytes).toEqual([]);
+      expect(pipeline.redactText("x").redaction.redactedText).toBe("");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("caches the default native pipeline per binding and package path", () => {
     const dir = mkdtempSync(join(tmpdir(), "anonymize-default-cache-"));
     const packagePath = join(dir, "native-pipeline.stlanonpkg");
@@ -573,6 +603,7 @@ type FakeNativeBindingOptions = {
   compressedPackageBytes?: Uint8Array;
   onPreparedPackageBytes?: (bytes: Uint8Array) => void;
   onPreparedPackageBytesWithoutCache?: (bytes: Uint8Array) => void;
+  onTrustedPreparedPackageBytes?: (bytes: Uint8Array) => void;
   onRedactStaticEntitiesJson?: () => string;
   onWarmLazyRegex?: () => void;
 };
@@ -599,6 +630,14 @@ const fakeNativeBinding = (
       options.onPreparedPackageBytesWithoutCache?.(bytes);
       return fakePreparedSearch(preparedOptions());
     },
+    ...(options.onTrustedPreparedPackageBytes === undefined
+      ? {}
+      : {
+          fromTrustedPreparedPackageBytes: (bytes: Uint8Array) => {
+            options.onTrustedPreparedPackageBytes?.(bytes);
+            return fakePreparedSearch(preparedOptions());
+          },
+        }),
   };
   const NativePreparedSearch = options.preparedSearchAsConstructor
     ? Object.assign(function NativePreparedSearch() {}, preparedSearch)

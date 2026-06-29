@@ -7,6 +7,7 @@ use stella_anonymize_adapter_contract::{
   BindingStaticRedactionResult, ContractError, operator_config_from_binding,
   prepared_search_config_from_binding,
   prepared_search_core_package_decode_from_bytes_with_timings,
+  prepared_search_core_package_decode_trusted_from_bytes_with_timings,
   prepared_search_core_package_to_bytes,
   prepared_search_core_package_to_compressed_bytes,
   prepared_search_package_from_bytes, prepared_search_package_has_core_payload,
@@ -129,6 +130,30 @@ impl PyPreparedSearch {
       inner: result.prepared,
       prepare_diagnostics: result.diagnostics,
     })
+  }
+
+  #[staticmethod]
+  fn from_trusted_prepared_package_bytes(
+    package_bytes: &[u8],
+  ) -> PyResult<Self> {
+    if prepared_search_package_has_core_payload(package_bytes) {
+      let package =
+        prepared_search_core_package_decode_trusted_from_bytes_with_timings(
+          package_bytes,
+        )
+        .map_err(|error| to_py_contract_error(&error))?;
+      let result = CorePreparedSearch::new_with_artifacts_diagnostics(
+        package.config,
+        &package.artifacts,
+      )
+      .map_err(|error| to_py_core_error(&error))?;
+      return Ok(Self {
+        inner: result.prepared,
+        prepare_diagnostics: result.diagnostics,
+      });
+    }
+
+    Self::from_prepared_package_bytes(package_bytes)
   }
 
   fn prepare_diagnostics_json(&self) -> PyResult<String> {

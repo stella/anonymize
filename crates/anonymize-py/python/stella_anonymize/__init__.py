@@ -225,13 +225,23 @@ def create_native_pipeline_from_default_package(
     warmup: DefaultNativePipelineWarmup | None = None,
 ) -> PreparedAnonymizer:
     return _apply_default_native_pipeline_warmup(
-        PreparedAnonymizer.from_prepared_package_bytes(
+        _prepared_anonymizer_from_trusted_package_bytes(
             _read_default_native_pipeline_package(
                 language=language,
                 package_path=package_path,
             )
         ),
         _normalize_default_native_pipeline_warmup(warmup),
+    )
+
+
+def _prepared_anonymizer_from_trusted_package_bytes(
+    package_bytes: BytesLike,
+) -> PreparedAnonymizer:
+    return PreparedAnonymizer(
+        NativePreparedSearch.from_trusted_prepared_package_bytes(
+            bytes(package_bytes)
+        )
     )
 
 
