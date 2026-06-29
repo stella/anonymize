@@ -887,6 +887,8 @@ function diagnosticStageSummaries(events) {
           ? roundMs(event.elapsed_us / 1_000)
           : null,
       inputBytes: event.input_bytes ?? null,
+      artifactCount: event.artifact_count ?? null,
+      artifactBytes: event.artifact_bytes ?? null,
     }));
 }
 

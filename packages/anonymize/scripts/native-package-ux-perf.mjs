@@ -96,6 +96,9 @@ function runScenario({ name, compressed, language, userDataScenario }) {
     firstTouchMs: noWarmLoad.timings.nativeFirstTouchMs,
     warmClickMs: noWarmLoad.timings.nativeWarmClickMs,
     prepareTopStages: noWarmDiagnostics?.prepare?.topStages ?? [],
+    prepareArtifacts: summarizePrepareArtifacts(
+      noWarmDiagnostics?.prepare?.stages ?? [],
+    ),
     warmTopStages: preloadedDiagnostics?.warm?.topStages ?? [],
     cachedPrepareTopStages: noWarmDiagnostics?.cachedPrepare?.topStages ?? [],
     runTopStages: noWarmDiagnostics?.run?.topStages ?? [],
@@ -191,6 +194,50 @@ function runMigration(extraEnv) {
   }
 
   return parseVariant(child.stdout);
+}
+
+function summarizePrepareArtifacts(stages) {
+  const artifactStages = stages.filter(
+    (stage) =>
+      typeof stage.artifactBytes === "number" && stage.artifactBytes > 0,
+  );
+  const byStage = new Map();
+  for (const stage of artifactStages) {
+    const bucket = byStage.get(stage.stage) ?? {
+      stage: stage.stage,
+      artifactBytes: 0,
+      artifactCount: 0,
+      patternCount: 0,
+      slots: 0,
+    };
+    bucket.artifactBytes += stage.artifactBytes;
+    bucket.artifactCount += stage.artifactCount ?? 0;
+    bucket.patternCount += stage.patternCount ?? 0;
+    bucket.slots += 1;
+    byStage.set(stage.stage, bucket);
+  }
+  return {
+    totalBytes: artifactStages.reduce(
+      (sum, stage) => sum + stage.artifactBytes,
+      0,
+    ),
+    byStage: [...byStage.values()].sort(
+      (left, right) => right.artifactBytes - left.artifactBytes,
+    ),
+    topSlots: artifactStages
+      .map((stage) => ({
+        stage: stage.stage,
+        engine: stage.engine,
+        slot: stage.slot,
+        subslot: stage.subslot,
+        pattern: stage.pattern,
+        patternCount: stage.patternCount,
+        artifactCount: stage.artifactCount,
+        artifactBytes: stage.artifactBytes,
+      }))
+      .sort((left, right) => right.artifactBytes - left.artifactBytes)
+      .slice(0, 10),
+  };
 }
 
 function parseVariant(stdout) {
