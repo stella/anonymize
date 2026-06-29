@@ -503,7 +503,7 @@ impl NativePreparedSearch {
   ) -> Result<Self> {
     Self::from_package_bytes(
       package_bytes.as_ref(),
-      PackageCacheMode::Bypass,
+      PackageCacheMode::Reuse,
       PackageDecodeMode::Trusted,
     )
   }
@@ -572,20 +572,22 @@ impl NativePreparedSearch {
         let cache_key_elapsed = elapsed_us(cache_key_start);
         let cache_start = Instant::now();
         if let Some(inner) = prepared_search_cache_get(&cache_key) {
-          let verify_timings =
-            prepared_search_package_verify_digest_with_timings(package_bytes)
-              .map_err(|error| to_napi_contract_error(&error))?;
           let cache = CacheLookup {
             key: cache_key,
             key_elapsed: cache_key_elapsed,
             lookup_elapsed: elapsed_us(cache_start),
           };
           let mut events = cache_hit_events(&cache, input_bytes_len);
-          append_package_decode_timing_events_for_input(
-            &mut events,
-            verify_timings,
-            input_bytes_len,
-          );
+          if matches!(decode_mode, PackageDecodeMode::Verified) {
+            let verify_timings =
+              prepared_search_package_verify_digest_with_timings(package_bytes)
+                .map_err(|error| to_napi_contract_error(&error))?;
+            append_package_decode_timing_events_for_input(
+              &mut events,
+              verify_timings,
+              input_bytes_len,
+            );
+          }
           return Ok(Self {
             inner,
             prepare_diagnostics: StaticRedactionDiagnostics {

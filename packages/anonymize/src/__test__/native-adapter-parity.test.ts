@@ -1300,6 +1300,34 @@ describe("native adapter parity", () => {
           event.stage === "prepare.package.decompress",
       ),
     ).toBe(true);
+
+    const cached =
+      adapters.native.NativePreparedSearch.fromTrustedPreparedPackageBytes(
+        corruptedDigest,
+      );
+    const cachedDiagnosticsJson = cached.prepareDiagnosticsJson?.();
+    if (cachedDiagnosticsJson === undefined) {
+      throw new Error("missing cached trusted prepare diagnostics");
+    }
+    const cachedDiagnostics = JSON.parse(cachedDiagnosticsJson);
+
+    expect(
+      cachedDiagnostics.events.some(
+        (event: { stage?: unknown }) => event.stage === "prepare.cache.hit",
+      ),
+    ).toBe(true);
+    expect(
+      cachedDiagnostics.events.some(
+        (event: { stage?: unknown }) =>
+          event.stage === "prepare.package.verify",
+      ),
+    ).toBe(false);
+    expect(
+      cachedDiagnostics.events.some(
+        (event: { stage?: unknown }) =>
+          event.stage === "prepare.package.decompress",
+      ),
+    ).toBe(false);
   });
 
   test("prepared search accepts compressed package bytes through TS and Python adapters", () => {
