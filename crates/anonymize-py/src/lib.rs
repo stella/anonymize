@@ -16,8 +16,8 @@ use stella_anonymize_adapter_contract::{
   static_redaction_result_to_utf16_binding,
 };
 use stella_anonymize_core::{
-  PreparedSearch as CorePreparedSearch, PreparedSearchArtifacts,
-  StaticRedactionDiagnostics, StaticRedactionResult,
+  DiagnosticDetail, OperatorConfig, PreparedSearch as CorePreparedSearch,
+  PreparedSearchArtifacts, StaticRedactionDiagnostics, StaticRedactionResult,
 };
 
 #[pyclass(name = "RedactionEntry", get_all, skip_from_py_object)]
@@ -210,14 +210,45 @@ impl PyPreparedSearch {
     operators_json: Option<&str>,
   ) -> PyResult<String> {
     let operators = parse_operator_config(operators_json)?;
-    let mut result = self
-      .inner
-      .redact_static_entities_with_diagnostics(
-        full_text,
-        &operator_config_from_binding(operators)
-          .map_err(|error| to_py_contract_error(&error))?,
-      )
-      .map_err(|error| to_py_core_error(&error))?;
+    self.redact_static_entities_diagnostics_json_inner(
+      full_text,
+      &operator_config_from_binding(operators)
+        .map_err(|error| to_py_contract_error(&error))?,
+      DiagnosticDetail::Detailed,
+    )
+  }
+
+  fn redact_static_entities_summary_diagnostics_json(
+    &self,
+    full_text: &str,
+    operators_json: Option<&str>,
+  ) -> PyResult<String> {
+    let operators = parse_operator_config(operators_json)?;
+    self.redact_static_entities_diagnostics_json_inner(
+      full_text,
+      &operator_config_from_binding(operators)
+        .map_err(|error| to_py_contract_error(&error))?,
+      DiagnosticDetail::Summary,
+    )
+  }
+}
+
+impl PyPreparedSearch {
+  fn redact_static_entities_diagnostics_json_inner(
+    &self,
+    full_text: &str,
+    operators: &OperatorConfig,
+    detail: DiagnosticDetail,
+  ) -> PyResult<String> {
+    let mut result = match detail {
+      DiagnosticDetail::Detailed => self
+        .inner
+        .redact_static_entities_with_diagnostics(full_text, operators),
+      DiagnosticDetail::Summary => self
+        .inner
+        .redact_static_entities_with_summary_diagnostics(full_text, operators),
+    }
+    .map_err(|error| to_py_core_error(&error))?;
     let mut diagnostics = self.prepare_diagnostics.clone();
     diagnostics.extend(result.diagnostics);
     result.diagnostics = diagnostics;
@@ -227,9 +258,7 @@ impl PyPreparedSearch {
 
     serde_json::to_string(&result).map_err(|error| to_py_serde_error(&error))
   }
-}
 
-impl PyPreparedSearch {
   fn redact_static_entities_core(
     &self,
     full_text: &str,
@@ -313,6 +342,17 @@ fn redact_static_entities_diagnostics_json(
 ) -> PyResult<String> {
   let prepared = PyPreparedSearch::new(config_json)?;
   prepared.redact_static_entities_diagnostics_json(full_text, operators_json)
+}
+
+#[pyfunction]
+fn redact_static_entities_summary_diagnostics_json(
+  config_json: &str,
+  full_text: &str,
+  operators_json: Option<&str>,
+) -> PyResult<String> {
+  let prepared = PyPreparedSearch::new(config_json)?;
+  prepared
+    .redact_static_entities_summary_diagnostics_json(full_text, operators_json)
 }
 
 #[pyfunction]
@@ -516,6 +556,10 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
   )?)?;
   module.add_function(wrap_pyfunction!(
     redact_static_entities_diagnostics_json,
+    module
+  )?)?;
+  module.add_function(wrap_pyfunction!(
+    redact_static_entities_summary_diagnostics_json,
     module
   )?)?;
   module.add_function(wrap_pyfunction!(normalize_for_search, module)?)?;

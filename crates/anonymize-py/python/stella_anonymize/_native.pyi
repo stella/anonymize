@@ -81,6 +81,11 @@ class PreparedSearch:
         full_text: str,
         operators_json: str | None = None,
     ) -> str: ...
+    def redact_static_entities_summary_diagnostics_json(
+        self,
+        full_text: str,
+        operators_json: str | None = None,
+    ) -> str: ...
 
 def redact_static_entities_json(
     config_json: str,
@@ -91,6 +96,11 @@ def prepare_static_search_artifacts_bytes(config_json: str) -> bytes: ...
 def prepare_static_search_package_bytes(config_json: str) -> bytes: ...
 def prepare_static_search_compressed_package_bytes(config_json: str) -> bytes: ...
 def redact_static_entities_diagnostics_json(
+    config_json: str,
+    full_text: str,
+    operators_json: str | None = None,
+) -> str: ...
+def redact_static_entities_summary_diagnostics_json(
     config_json: str,
     full_text: str,
     operators_json: str | None = None,

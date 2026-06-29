@@ -23,8 +23,9 @@ use stella_anonymize_adapter_contract::{
   static_redaction_result_to_utf16_binding,
 };
 use stella_anonymize_core::{
-  DiagnosticEvent, DiagnosticEventKind, DiagnosticStage, PreparedSearch,
-  PreparedSearchArtifacts, PreparedSearchConfig, StaticRedactionDiagnostics,
+  DiagnosticDetail, DiagnosticEvent, DiagnosticEventKind, DiagnosticStage,
+  OperatorConfig, PreparedSearch, PreparedSearchArtifacts,
+  PreparedSearchConfig, StaticRedactionDiagnostics,
 };
 
 const PREPARED_SEARCH_CACHE_LIMIT: usize = 8;
@@ -278,11 +279,38 @@ pub fn redact_static_entities_diagnostics_json(
   full_text: String,
   operators_json: Option<String>,
 ) -> Result<String> {
-  let config =
-    serde_json::from_str::<BindingPreparedSearchConfig>(&config_json)
-      .map_err(|error| to_napi_serde_error(&error))?;
+  redact_static_entities_diagnostics_json_with_detail(
+    &config_json,
+    &full_text,
+    operators_json.as_deref(),
+    DiagnosticDetail::Detailed,
+  )
+}
+
+#[napi]
+#[allow(clippy::needless_pass_by_value)]
+pub fn redact_static_entities_summary_diagnostics_json(
+  config_json: String,
+  full_text: String,
+  operators_json: Option<String>,
+) -> Result<String> {
+  redact_static_entities_diagnostics_json_with_detail(
+    &config_json,
+    &full_text,
+    operators_json.as_deref(),
+    DiagnosticDetail::Summary,
+  )
+}
+
+fn redact_static_entities_diagnostics_json_with_detail(
+  config_json: &str,
+  full_text: &str,
+  operators_json: Option<&str>,
+  detail: DiagnosticDetail,
+) -> Result<String> {
+  let config = serde_json::from_str::<BindingPreparedSearchConfig>(config_json)
+    .map_err(|error| to_napi_serde_error(&error))?;
   let operators = operators_json
-    .as_deref()
     .map(serde_json::from_str::<BindingOperatorConfig>)
     .transpose()
     .map_err(|error| to_napi_serde_error(&error))?;
@@ -292,18 +320,21 @@ pub fn redact_static_entities_diagnostics_json(
   )
   .map_err(|error| to_napi_core_error(&error))?;
   let mut diagnostics = prepared.diagnostics;
-  let mut result = prepared
-    .prepared
-    .redact_static_entities_with_diagnostics(
-      &full_text,
-      &operator_config_from_binding(operators)
-        .map_err(|error| to_napi_contract_error(&error))?,
-    )
-    .map_err(|error| to_napi_core_error(&error))?;
+  let operators = operator_config_from_binding(operators)
+    .map_err(|error| to_napi_contract_error(&error))?;
+  let mut result = match detail {
+    DiagnosticDetail::Detailed => prepared
+      .prepared
+      .redact_static_entities_with_diagnostics(full_text, &operators),
+    DiagnosticDetail::Summary => prepared
+      .prepared
+      .redact_static_entities_with_summary_diagnostics(full_text, &operators),
+  }
+  .map_err(|error| to_napi_core_error(&error))?;
   diagnostics.extend(result.diagnostics);
   result.diagnostics = diagnostics;
   let result =
-    static_redaction_diagnostic_result_to_utf16_binding(result, &full_text)
+    static_redaction_diagnostic_result_to_utf16_binding(result, full_text)
       .map_err(|error| to_napi_contract_error(&error))?;
 
   serde_json::to_string(&result).map_err(|error| to_napi_serde_error(&error))
@@ -496,6 +527,7 @@ impl NativePreparedSearch {
         inner,
         prepare_diagnostics: StaticRedactionDiagnostics {
           events: cache_hit_events(&cache, input_bytes_len),
+          ..StaticRedactionDiagnostics::default()
         },
       });
     }
@@ -554,7 +586,10 @@ impl NativePreparedSearch {
           );
           return Ok(Self {
             inner,
-            prepare_diagnostics: StaticRedactionDiagnostics { events },
+            prepare_diagnostics: StaticRedactionDiagnostics {
+              events,
+              ..StaticRedactionDiagnostics::default()
+            },
           });
         }
         let cache = CacheLookup {
@@ -685,7 +720,10 @@ impl NativePreparedSearch {
       Some(context.input_bytes_len),
     ));
     append_package_decode_timing_events(&mut events, context);
-    let mut diagnostics = StaticRedactionDiagnostics { events };
+    let mut diagnostics = StaticRedactionDiagnostics {
+      events,
+      ..StaticRedactionDiagnostics::default()
+    };
     if let Some((pattern_count, convert_elapsed)) = binding_convert {
       diagnostics.events.push(stage_event(
         DiagnosticStage::PrepareBindingConvert,
@@ -790,15 +828,50 @@ impl NativePreparedSearch {
     let operators =
       operator_config_from_binding(operators.map(to_binding_operator_config))
         .map_err(|error| to_napi_contract_error(&error))?;
-    let mut result = self
-      .inner
-      .redact_static_entities_with_diagnostics(&full_text, &operators)
-      .map_err(|error| to_napi_core_error(&error))?;
+    self.redact_static_entities_diagnostics_json_inner(
+      &full_text,
+      &operators,
+      DiagnosticDetail::Detailed,
+    )
+  }
+
+  #[napi]
+  #[allow(clippy::needless_pass_by_value)]
+  pub fn redact_static_entities_summary_diagnostics_json(
+    &self,
+    full_text: String,
+    operators: Option<JsOperatorConfig>,
+  ) -> Result<String> {
+    let operators =
+      operator_config_from_binding(operators.map(to_binding_operator_config))
+        .map_err(|error| to_napi_contract_error(&error))?;
+    self.redact_static_entities_diagnostics_json_inner(
+      &full_text,
+      &operators,
+      DiagnosticDetail::Summary,
+    )
+  }
+
+  fn redact_static_entities_diagnostics_json_inner(
+    &self,
+    full_text: &str,
+    operators: &OperatorConfig,
+    detail: DiagnosticDetail,
+  ) -> Result<String> {
+    let mut result = match detail {
+      DiagnosticDetail::Detailed => self
+        .inner
+        .redact_static_entities_with_diagnostics(full_text, operators),
+      DiagnosticDetail::Summary => self
+        .inner
+        .redact_static_entities_with_summary_diagnostics(full_text, operators),
+    }
+    .map_err(|error| to_napi_core_error(&error))?;
     let mut diagnostics = self.prepare_diagnostics.clone();
     diagnostics.extend(result.diagnostics);
     result.diagnostics = diagnostics;
     let result =
-      static_redaction_diagnostic_result_to_utf16_binding(result, &full_text)
+      static_redaction_diagnostic_result_to_utf16_binding(result, full_text)
         .map_err(|error| to_napi_contract_error(&error))?;
 
     serde_json::to_string(&result).map_err(|error| to_napi_serde_error(&error))

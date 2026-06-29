@@ -1093,6 +1093,24 @@ impl PreparedSearch {
     })
   }
 
+  pub fn redact_static_entities_with_summary_diagnostics(
+    &self,
+    full_text: &str,
+    operators: &OperatorConfig,
+  ) -> Result<StaticRedactionDiagnosticResult> {
+    let mut diagnostics = StaticRedactionDiagnostics::summary();
+    let result = self.redact_static_entities_inner(
+      full_text,
+      operators,
+      Some(&mut diagnostics),
+    )?;
+
+    Ok(StaticRedactionDiagnosticResult {
+      result,
+      diagnostics,
+    })
+  }
+
   fn redact_static_entities_inner(
     &self,
     full_text: &str,

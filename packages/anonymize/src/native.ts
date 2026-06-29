@@ -76,6 +76,10 @@ export type NativePreparedSearchBinding = {
     fullText: string,
     operators?: NativeBindingOperatorConfig,
   ) => string;
+  redactStaticEntitiesSummaryDiagnosticsJson?: (
+    fullText: string,
+    operators?: NativeBindingOperatorConfig,
+  ) => string;
 };
 
 export type NativeAnonymizeBinding = {
@@ -282,6 +286,26 @@ export class PreparedNativeAnonymizer {
   ): string | null {
     return this.redactStaticEntitiesDiagnosticsJson(fullText, operators);
   }
+
+  redactStaticEntitiesSummaryDiagnosticsJson(
+    fullText: string,
+    operators?: NativeOperatorConfig,
+  ): string | null {
+    if (!this.#prepared.redactStaticEntitiesSummaryDiagnosticsJson) {
+      return null;
+    }
+    return this.#prepared.redactStaticEntitiesSummaryDiagnosticsJson(
+      fullText,
+      toBindingOperatorConfig(operators),
+    );
+  }
+
+  summary_diagnostics_json(
+    fullText: string,
+    operators?: NativeOperatorConfig,
+  ): string | null {
+    return this.redactStaticEntitiesSummaryDiagnosticsJson(fullText, operators);
+  }
 }
 
 export class PreparedNativePipeline {
@@ -352,6 +376,23 @@ export class PreparedNativePipeline {
     operators?: NativeOperatorConfig,
   ): string | null {
     return this.redactTextDiagnosticsJson(fullText, operators);
+  }
+
+  redactTextSummaryDiagnosticsJson(
+    fullText: string,
+    operators?: NativeOperatorConfig,
+  ): string | null {
+    return this.#anonymizer.redactStaticEntitiesSummaryDiagnosticsJson(
+      fullText,
+      operators,
+    );
+  }
+
+  summary_diagnostics_json(
+    fullText: string,
+    operators?: NativeOperatorConfig,
+  ): string | null {
+    return this.redactTextSummaryDiagnosticsJson(fullText, operators);
   }
 }
 
@@ -475,6 +516,18 @@ export const diagnostics_json = ({
       encodeNativeSearchConfigInput(config),
     ),
   ).diagnostics_json(fullText, operators);
+
+export const summary_diagnostics_json = ({
+  binding,
+  config,
+  fullText,
+  operators,
+}: SharedNativeDiagnosticsJsonOptions): string | null =>
+  new PreparedNativeAnonymizer(
+    binding.NativePreparedSearch.fromConfigJsonBytes(
+      encodeNativeSearchConfigInput(config),
+    ),
+  ).summary_diagnostics_json(fullText, operators);
 
 export const createNativePipelineFromPackage = ({
   binding,

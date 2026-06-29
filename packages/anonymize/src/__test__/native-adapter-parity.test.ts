@@ -28,6 +28,7 @@ import {
   PreparedSearch,
   redact_text,
   redact_text_json,
+  summary_diagnostics_json,
   type NativeAnonymizeBinding,
   type NativeOperatorConfig,
   type NativePreparedSearchBinding,
@@ -97,6 +98,11 @@ type NativeAdapter = Omit<
     operatorsJson?: string,
   ) => string;
   redactStaticEntitiesDiagnosticsJson: (
+    configJson: string,
+    fullText: string,
+    operatorsJson?: string,
+  ) => string;
+  redactStaticEntitiesSummaryDiagnosticsJson: (
     configJson: string,
     fullText: string,
     operatorsJson?: string,
@@ -1309,6 +1315,7 @@ describe("native adapter parity", () => {
       prepare_search_package,
       redact_text,
       redact_text_json,
+      summary_diagnostics_json,
     };
     for (const name of SHARED_NATIVE_SDK_CORE_TOP_LEVEL_FUNCTIONS) {
       expect(typeof tsSdkFunctions[name]).toBe("function");
@@ -1383,6 +1390,22 @@ describe("native adapter parity", () => {
       throw new Error("missing top-level shared SDK diagnostics");
     }
     expect(topLevelDiagnosticsJson).toContain('"diagnostics"');
+    const summaryDiagnosticsJson = prepared.summary_diagnostics_json(
+      cases[0].text,
+    );
+    if (summaryDiagnosticsJson === null) {
+      throw new Error("missing shared SDK summary diagnostics");
+    }
+    expect(summaryDiagnosticsJson).toContain('"diagnostics"');
+    const topLevelSummaryDiagnosticsJson = summary_diagnostics_json({
+      binding: adapters.native,
+      config: CONFIG_JSON,
+      fullText: cases[0].text,
+    });
+    if (topLevelSummaryDiagnosticsJson === null) {
+      throw new Error("missing top-level shared SDK summary diagnostics");
+    }
+    expect(topLevelSummaryDiagnosticsJson).toContain('"diagnostics"');
 
     const python = callPythonSharedSdkParity({
       pythonModulePath: adapters.pythonModulePath,
@@ -2485,6 +2508,53 @@ describe("native adapter parity", () => {
       tsResult.diagnostics.events.every((event) => event.text === undefined),
     ).toBe(true);
   });
+
+  test("summary diagnostics JSON is identical through TS and Python adapters", () => {
+    const adapters = getAdapters();
+    const text =
+      "Reference AB1234 for Acme s.r.o. near Fuzztovn, Turkey, " +
+      "Prague, matter MAT-123, code Secret Code.";
+    const operators = { country: "redact" };
+
+    const tsResult = runTsSummaryDiagnosticsAdapter(
+      adapters.native,
+      text,
+      operators,
+    );
+    const pyResult = callPythonSummaryDiagnostics(
+      adapters.pythonModulePath,
+      text,
+      operators,
+    );
+
+    expect(stripDiagnosticTimings(pyResult)).toEqual(
+      stripDiagnosticTimings(tsResult),
+    );
+    expect(
+      tsResult.diagnostics.events.some(
+        (event) =>
+          event.stage === "detect.total" &&
+          event.kind === "stage-summary" &&
+          typeof event.elapsed_us === "number",
+      ),
+    ).toBe(true);
+    expect(
+      tsResult.diagnostics.events.some(
+        (event) =>
+          event.stage === "redact.total" &&
+          event.kind === "stage-summary" &&
+          typeof event.elapsed_us === "number",
+      ),
+    ).toBe(true);
+    expect(
+      tsResult.diagnostics.events.every(
+        (event) => event.kind === "stage-summary",
+      ),
+    ).toBe(true);
+    expect(
+      tsResult.diagnostics.events.every((event) => event.text === undefined),
+    ).toBe(true);
+  });
 });
 
 const getAdapters = () => {
@@ -2553,6 +2623,10 @@ const loadNativeAdapter = (nativePath: string): NativeAdapter => {
     Object(loaded),
     "redactStaticEntitiesDiagnosticsJson",
   );
+  const redactStaticEntitiesSummaryDiagnosticsJson = Reflect.get(
+    Object(loaded),
+    "redactStaticEntitiesSummaryDiagnosticsJson",
+  );
   const prepareStaticSearchArtifactsBytes = Reflect.get(
     Object(loaded),
     "prepareStaticSearchArtifactsBytes",
@@ -2573,7 +2647,8 @@ const loadNativeAdapter = (nativePath: string): NativeAdapter => {
     typeof prepareStaticSearchPackageBytes !== "function" ||
     typeof prepareStaticSearchCompressedPackageBytes !== "function" ||
     typeof redactStaticEntitiesJson !== "function" ||
-    typeof redactStaticEntitiesDiagnosticsJson !== "function"
+    typeof redactStaticEntitiesDiagnosticsJson !== "function" ||
+    typeof redactStaticEntitiesSummaryDiagnosticsJson !== "function"
   ) {
     throw new TypeError("Native anonymize adapter exports are incomplete");
   }
@@ -2587,6 +2662,7 @@ const loadNativeAdapter = (nativePath: string): NativeAdapter => {
     prepareStaticSearchCompressedPackageBytes,
     redactStaticEntitiesJson,
     redactStaticEntitiesDiagnosticsJson,
+    redactStaticEntitiesSummaryDiagnosticsJson,
   };
 };
 
@@ -2609,6 +2685,21 @@ const runTsDiagnosticsAdapter = (
   const operatorsJson = operatorConfigJson(operators);
   return JSON.parse(
     adapter.redactStaticEntitiesDiagnosticsJson(
+      CONFIG_JSON,
+      text,
+      operatorsJson,
+    ),
+  );
+};
+
+const runTsSummaryDiagnosticsAdapter = (
+  adapter: NativeAdapter,
+  text: string,
+  operators: Record<string, string> | null,
+): StaticRedactionDiagnosticResult => {
+  const operatorsJson = operatorConfigJson(operators);
+  return JSON.parse(
+    adapter.redactStaticEntitiesSummaryDiagnosticsJson(
       CONFIG_JSON,
       text,
       operatorsJson,
@@ -2985,7 +3076,42 @@ const callPythonDiagnostics = (
   pythonModulePath: string,
   text: string,
   operators: Record<string, string> | null,
-): StaticRedactionDiagnosticResult => {
+): StaticRedactionDiagnosticResult =>
+  callPythonDiagnosticsFunction({
+    pythonModulePath,
+    text,
+    operators,
+    functionName: "redact_static_entities_diagnostics_json",
+  });
+
+const callPythonSummaryDiagnostics = (
+  pythonModulePath: string,
+  text: string,
+  operators: Record<string, string> | null,
+): StaticRedactionDiagnosticResult =>
+  callPythonDiagnosticsFunction({
+    pythonModulePath,
+    text,
+    operators,
+    functionName: "redact_static_entities_summary_diagnostics_json",
+  });
+
+type PythonDiagnosticsFunctionOptions = {
+  pythonModulePath: string;
+  text: string;
+  operators: Record<string, string> | null;
+  functionName:
+    | "redact_static_entities_diagnostics_json"
+    | "redact_static_entities_summary_diagnostics_json";
+};
+
+const callPythonDiagnosticsFunction = ({
+  pythonModulePath,
+  text,
+  operators,
+  functionName,
+}: PythonDiagnosticsFunctionOptions): StaticRedactionDiagnosticResult => {
+  const operatorsJson = operatorConfigJson(operators);
   const payloadDir = mkdtempSync(
     join(tmpdir(), "stella-anonymize-diagnostics-"),
   );
@@ -2995,7 +3121,7 @@ const callPythonDiagnostics = (
     JSON.stringify({
       config_json: CONFIG_JSON,
       text,
-      operators_json: operatorConfigJson(operators),
+      operators_json: operatorsJson,
     }),
   );
   try {
@@ -3018,8 +3144,12 @@ spec = importlib.util.spec_from_file_location(
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 payload = json.loads(payload_path.read_text())
+diagnostics_function = getattr(
+    module,
+    os.environ["STELLA_ANONYMIZE_DIAGNOSTICS_FUNCTION"],
+)
 print(
-    module.redact_static_entities_diagnostics_json(
+    diagnostics_function(
         payload["config_json"],
         payload["text"],
         payload.get("operators_json"),
@@ -3028,6 +3158,7 @@ print(
 `,
       ],
       {
+        STELLA_ANONYMIZE_DIAGNOSTICS_FUNCTION: functionName,
         STELLA_ANONYMIZE_PAYLOAD: payloadPath,
         STELLA_ANONYMIZE_PY_MODULE: pythonModulePath,
       },

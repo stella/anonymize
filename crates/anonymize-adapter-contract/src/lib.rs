@@ -2874,6 +2874,7 @@ mod tests {
         artifact_bytes: None,
         reason: None,
       }],
+      ..StaticRedactionDiagnostics::default()
     };
 
     let error = static_redaction_diagnostics_to_utf16_binding(diagnostics, "á")

@@ -79,6 +79,13 @@ pub enum DiagnosticEventKind {
   Rejection,
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum DiagnosticDetail {
+  Summary,
+  #[default]
+  Detailed,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct DiagnosticEvent {
   pub stage: DiagnosticStage,
@@ -104,12 +111,30 @@ pub struct DiagnosticEvent {
   pub reason: Option<String>,
 }
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct StaticRedactionDiagnostics {
   pub events: Vec<DiagnosticEvent>,
+  pub detail: DiagnosticDetail,
+}
+
+impl Default for StaticRedactionDiagnostics {
+  fn default() -> Self {
+    Self {
+      events: Vec::new(),
+      detail: DiagnosticDetail::Detailed,
+    }
+  }
 }
 
 impl StaticRedactionDiagnostics {
+  #[must_use]
+  pub const fn summary() -> Self {
+    Self {
+      events: Vec::new(),
+      detail: DiagnosticDetail::Summary,
+    }
+  }
+
   pub(crate) fn record_search_matches(
     &mut self,
     stage: DiagnosticStage,
@@ -123,6 +148,10 @@ impl StaticRedactionDiagnostics {
       elapsed_us,
       Some(full_text.len()),
     );
+
+    if self.detail == DiagnosticDetail::Summary {
+      return;
+    }
 
     let offsets = ByteOffsets::new(full_text);
     for found in matches {
@@ -232,6 +261,10 @@ impl StaticRedactionDiagnostics {
       Some(full_text.len()),
     );
 
+    if self.detail == DiagnosticDetail::Summary {
+      return;
+    }
+
     let offsets = ByteOffsets::new(full_text);
     for entity in entities {
       self.events.push(DiagnosticEvent {
@@ -300,6 +333,10 @@ impl StaticRedactionDiagnostics {
     end: Option<u32>,
     reason: &'static str,
   ) {
+    if self.detail == DiagnosticDetail::Summary {
+      return;
+    }
+
     self.events.push(DiagnosticEvent {
       stage,
       kind: DiagnosticEventKind::Rejection,

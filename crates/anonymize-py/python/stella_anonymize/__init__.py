@@ -23,6 +23,7 @@ from ._native import (
     prepare_static_search_package_bytes,
     redact_static_entities_diagnostics_json,
     redact_static_entities_json,
+    redact_static_entities_summary_diagnostics_json,
 )
 
 __all__ = [
@@ -54,6 +55,8 @@ __all__ = [
     "redact_text_json",
     "redact_static_entities_diagnostics_json",
     "redact_static_entities_json",
+    "redact_static_entities_summary_diagnostics_json",
+    "summary_diagnostics_json",
 ]
 
 BytesLike = bytes | bytearray | memoryview
@@ -65,9 +68,7 @@ DEFAULT_NATIVE_PIPELINE_WARMUPS: tuple[
     DefaultNativePipelineWarmup,
 ] = ("lazy-regex", "none")
 DEFAULT_NATIVE_PIPELINE_PACKAGE = "native-pipeline.stlanonpkg"
-_DEFAULT_NATIVE_PIPELINE_LANGUAGE_PATTERN = re.compile(
-    r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
-)
+_DEFAULT_NATIVE_PIPELINE_LANGUAGE_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 
 class PreparedAnonymizer:
@@ -145,6 +146,18 @@ class PreparedAnonymizer:
             _operator_config_json(operators, redact_string=redact_string),
         )
 
+    def summary_diagnostics_json(
+        self,
+        full_text: str,
+        operators: OperatorConfig = None,
+        *,
+        redact_string: str | None = None,
+    ) -> str:
+        return self._prepared.redact_static_entities_summary_diagnostics_json(
+            full_text,
+            _operator_config_json(operators, redact_string=redact_string),
+        )
+
     def redact_static_entities(
         self,
         full_text: str,
@@ -179,6 +192,19 @@ class PreparedAnonymizer:
         redact_string: str | None = None,
     ) -> str:
         return self.diagnostics_json(
+            full_text,
+            operators,
+            redact_string=redact_string,
+        )
+
+    def redact_static_entities_summary_diagnostics_json(
+        self,
+        full_text: str,
+        operators: OperatorConfig = None,
+        *,
+        redact_string: str | None = None,
+    ) -> str:
+        return self.summary_diagnostics_json(
             full_text,
             operators,
             redact_string=redact_string,
@@ -239,9 +265,7 @@ def _prepared_anonymizer_from_trusted_package_bytes(
     package_bytes: BytesLike,
 ) -> PreparedAnonymizer:
     return PreparedAnonymizer(
-        NativePreparedSearch.from_trusted_prepared_package_bytes(
-            bytes(package_bytes)
-        )
+        NativePreparedSearch.from_trusted_prepared_package_bytes(bytes(package_bytes))
     )
 
 
@@ -357,6 +381,20 @@ def diagnostics_json(
     redact_string: str | None = None,
 ) -> str:
     return _prepare_from_config_json(config_json).diagnostics_json(
+        full_text,
+        operators,
+        redact_string=redact_string,
+    )
+
+
+def summary_diagnostics_json(
+    config_json: str,
+    full_text: str,
+    operators: OperatorConfig = None,
+    *,
+    redact_string: str | None = None,
+) -> str:
+    return _prepare_from_config_json(config_json).summary_diagnostics_json(
         full_text,
         operators,
         redact_string=redact_string,

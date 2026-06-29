@@ -27,6 +27,7 @@ import {
   readNativePipelinePackageFileAsync,
   redact_text,
   redact_text_json,
+  summary_diagnostics_json,
 } from "../native-node";
 import {
   SHARED_NATIVE_SDK_DEFAULT_PACKAGE_FUNCTIONS,
@@ -480,6 +481,7 @@ describe("native node loader", () => {
       prepare_search_package,
       redact_text,
       redact_text_json,
+      summary_diagnostics_json,
     };
     for (const name of SHARED_NATIVE_SDK_TOP_LEVEL_FUNCTIONS) {
       expect(typeof sharedSdkFunctions[name]).toBe("function");

@@ -68,6 +68,13 @@ class PreparedAnonymizer:
         *,
         redact_string: str | None = None,
     ) -> str: ...
+    def summary_diagnostics_json(
+        self,
+        full_text: str,
+        operators: OperatorConfig = None,
+        *,
+        redact_string: str | None = None,
+    ) -> str: ...
     def redact_static_entities(
         self,
         full_text: str,
@@ -83,6 +90,13 @@ class PreparedAnonymizer:
         redact_string: str | None = None,
     ) -> str: ...
     def redact_static_entities_diagnostics_json(
+        self,
+        full_text: str,
+        operators: OperatorConfig = None,
+        *,
+        redact_string: str | None = None,
+    ) -> str: ...
+    def redact_static_entities_summary_diagnostics_json(
         self,
         full_text: str,
         operators: OperatorConfig = None,
@@ -135,6 +149,13 @@ def redact_text_json(
     redact_string: str | None = None,
 ) -> str: ...
 def diagnostics_json(
+    config_json: str,
+    full_text: str,
+    operators: OperatorConfig = None,
+    *,
+    redact_string: str | None = None,
+) -> str: ...
+def summary_diagnostics_json(
     config_json: str,
     full_text: str,
     operators: OperatorConfig = None,

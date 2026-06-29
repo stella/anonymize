@@ -33,7 +33,7 @@ pub use address_seeds::AddressSeedData;
 pub use coreference::{CoreferenceData, CoreferencePatternData};
 pub use dates::DateData;
 pub use diagnostics::{
-  DiagnosticEvent, DiagnosticEventKind, DiagnosticStage,
+  DiagnosticDetail, DiagnosticEvent, DiagnosticEventKind, DiagnosticStage,
   StaticRedactionDiagnostics,
 };
 pub use hotwords::{HotwordRule, HotwordRuleData};
