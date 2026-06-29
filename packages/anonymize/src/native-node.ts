@@ -228,6 +228,10 @@ export const readDefaultNativePipelinePackageFile = ({
   }
 };
 
+export const read_default_native_pipeline_package_file = (
+  options: DefaultNativePipelinePackageFileOptions = {},
+): Uint8Array => readDefaultNativePipelinePackageFile(options);
+
 export const readDefaultNativePipelinePackageFileAsync = async ({
   language,
 }: DefaultNativePipelinePackageFileOptions = {}): Promise<Uint8Array> => {
@@ -272,6 +276,10 @@ export const createNativePipelineFromDefaultPackage = (
   );
 };
 
+export const create_native_pipeline_from_default_package = (
+  options: DefaultNativePipelinePackageOptions = {},
+): PreparedNativePipeline => createNativePipelineFromDefaultPackage(options);
+
 export const getDefaultNativePipeline = (
   options: DefaultNativePipelinePackageOptions = {},
 ): PreparedNativePipeline => {
@@ -288,6 +296,10 @@ export const getDefaultNativePipeline = (
   return applyDefaultNativePipelineWarmup(pipeline, resolvedOptions.warmup);
 };
 
+export const get_default_native_pipeline = (
+  options: DefaultNativePipelinePackageOptions = {},
+): PreparedNativePipeline => getDefaultNativePipeline(options);
+
 export const preloadDefaultNativePipeline = (
   options: DefaultNativePipelinePackageOptions = {},
 ): PreparedNativePipeline => {
@@ -297,6 +309,10 @@ export const preloadDefaultNativePipeline = (
     DEFAULT_NATIVE_PIPELINE_WARMUPS.lazyRegex,
   );
 };
+
+export const preload_default_native_pipeline = (
+  options: DefaultNativePipelinePackageOptions = {},
+): PreparedNativePipeline => preloadDefaultNativePipeline(options);
 
 export const preloadDefaultNativePipelineAsync = (
   options: DefaultNativePipelinePackageOptions = {},

@@ -39,10 +39,10 @@ import type {
   RedactionResult,
 } from "../types";
 import {
-  PYTHON_NATIVE_SDK_DEFAULT_PACKAGE_FUNCTIONS,
   PYTHON_NATIVE_SDK_DEFAULT_PACKAGE_NAMES,
   SHARED_NATIVE_SDK_CLASS_NAMES,
   SHARED_NATIVE_SDK_CORE_TOP_LEVEL_FUNCTIONS,
+  SHARED_NATIVE_SDK_DEFAULT_PACKAGE_FUNCTIONS,
   SHARED_NATIVE_SDK_PREPARED_METHODS,
   SHARED_NATIVE_SDK_TOP_LEVEL_FUNCTIONS,
 } from "../native-sdk-contract";
@@ -2783,7 +2783,7 @@ const callPythonSharedSdkParity = ({
       class_names: SHARED_NATIVE_SDK_CLASS_NAMES,
       compressed: true,
       config_json: CONFIG_JSON,
-      default_package_functions: PYTHON_NATIVE_SDK_DEFAULT_PACKAGE_FUNCTIONS,
+      default_package_functions: SHARED_NATIVE_SDK_DEFAULT_PACKAGE_FUNCTIONS,
       default_package_names: PYTHON_NATIVE_SDK_DEFAULT_PACKAGE_NAMES,
       normalize_text: normalizeText,
       prepared_methods: SHARED_NATIVE_SDK_PREPARED_METHODS,

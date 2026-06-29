@@ -6,25 +6,32 @@ import { fileURLToPath } from "node:url";
 
 import type { NativeAnonymizeBinding } from "../native";
 import {
+  create_native_pipeline_from_default_package,
   createNativePipelineFromDefaultPackage,
   createNativePipelineFromPackageFile,
   diagnostics_json,
+  get_default_native_pipeline,
   getDefaultNativePipeline,
   load_prepared_package,
   load_prepared_package_file,
   loadNativeAnonymizeBinding,
   native_package_version,
   normalize_for_search,
+  preload_default_native_pipeline,
   preloadDefaultNativePipeline,
   preloadDefaultNativePipelineAsync,
   prepare_search_package,
+  read_default_native_pipeline_package_file,
   readDefaultNativePipelinePackageFile,
   readNativePipelinePackageFile,
   readNativePipelinePackageFileAsync,
   redact_text,
   redact_text_json,
 } from "../native-node";
-import { SHARED_NATIVE_SDK_TOP_LEVEL_FUNCTIONS } from "../native-sdk-contract";
+import {
+  SHARED_NATIVE_SDK_DEFAULT_PACKAGE_FUNCTIONS,
+  SHARED_NATIVE_SDK_TOP_LEVEL_FUNCTIONS,
+} from "../native-sdk-contract";
 
 describe("native node loader", () => {
   test("loads the bundled native loader", () => {
@@ -335,6 +342,72 @@ describe("native node loader", () => {
       expect(capturedBytes).toEqual([[31, 32, 33]]);
     } finally {
       rmSync(packagePath, { force: true });
+    }
+  });
+
+  test("shared default package SDK helpers expose snake-case aliases", () => {
+    const aliasFunctions: Record<
+      (typeof SHARED_NATIVE_SDK_DEFAULT_PACKAGE_FUNCTIONS)[number],
+      unknown
+    > = {
+      create_native_pipeline_from_default_package,
+      get_default_native_pipeline,
+      preload_default_native_pipeline,
+      read_default_native_pipeline_package_file,
+    };
+    for (const name of SHARED_NATIVE_SDK_DEFAULT_PACKAGE_FUNCTIONS) {
+      expect(typeof aliasFunctions[name]).toBe("function");
+    }
+
+    const language = "zz-alias";
+    const languagePackagePath = fileURLToPath(
+      new URL(`../../native-pipeline.${language}.stlanonpkg`, import.meta.url),
+    );
+    const dir = mkdtempSync(join(tmpdir(), "anonymize-default-alias-"));
+    const packagePath = join(dir, "native-pipeline.stlanonpkg");
+    const capturedBytes: number[][] = [];
+    try {
+      writeFileSync(languagePackagePath, Uint8Array.of(41, 42, 43));
+      writeFileSync(packagePath, Uint8Array.of(44, 45, 46));
+      let warmCount = 0;
+      const binding = fakeNativeBinding("1.5.0", {
+        onPreparedPackageBytesWithoutCache: (bytes) => {
+          capturedBytes.push([...bytes]);
+        },
+        onWarmLazyRegex: () => {
+          warmCount += 1;
+        },
+      });
+
+      expect([
+        ...read_default_native_pipeline_package_file({ language }),
+      ]).toEqual([41, 42, 43]);
+
+      const created = create_native_pipeline_from_default_package({
+        binding,
+        packagePath,
+        warmup: "none",
+      });
+      const cached = get_default_native_pipeline({
+        binding,
+        packagePath,
+        warmup: "none",
+      });
+      const warmed = preload_default_native_pipeline({
+        binding,
+        packagePath,
+      });
+
+      expect(warmed).toBe(cached);
+      expect(created).not.toBe(cached);
+      expect(capturedBytes).toEqual([
+        [44, 45, 46],
+        [44, 45, 46],
+      ]);
+      expect(warmCount).toBe(1);
+    } finally {
+      rmSync(languagePackagePath, { force: true });
+      rmSync(dir, { recursive: true, force: true });
     }
   });
 
