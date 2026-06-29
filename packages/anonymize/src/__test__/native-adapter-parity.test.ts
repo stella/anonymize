@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import {
   copyFileSync,
+  cpSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -46,6 +47,10 @@ import {
   SHARED_NATIVE_SDK_PREPARED_METHODS,
   SHARED_NATIVE_SDK_TOP_LEVEL_FUNCTIONS,
 } from "../native-sdk-contract";
+import {
+  getDefaultNativePipeline,
+  preloadDefaultNativePipeline,
+} from "../native-node";
 import { buildNativeStaticSearchBundle } from "../build-unified-search";
 import {
   createPipelineContext,
@@ -753,6 +758,41 @@ print(
 )
 `;
 
+const PYTHON_DEFAULT_PACKAGE_PARITY_SCRIPT = `
+import json
+import os
+import pathlib
+import sys
+
+module_root = pathlib.Path(os.environ["STELLA_ANONYMIZE_PY_MODULE"]).parent.parent
+payload_path = pathlib.Path(os.environ["STELLA_ANONYMIZE_PAYLOAD"])
+sys.path.insert(0, str(module_root))
+
+import stella_anonymize as anonymize
+
+payload = json.loads(payload_path.read_text())
+pipeline = anonymize.get_default_native_pipeline(language=payload["language"])
+preloaded = anonymize.preload_default_native_pipeline(language=payload["language"])
+if preloaded is not pipeline:
+    raise AssertionError("default package preload did not reuse cached pipeline")
+print(
+    json.dumps(
+        {
+            "results": [
+                json.loads(
+                    pipeline.redact_text_json(
+                        item["text"],
+                        item.get("operators"),
+                    )
+                )
+                for item in payload["cases"]
+            ],
+            "version": anonymize.native_package_version(),
+        }
+    )
+)
+`;
+
 let loadedAdapters: {
   native: NativeAdapter;
   pythonModulePath: string;
@@ -1304,6 +1344,44 @@ describe("native adapter parity", () => {
     expect(python.normalized).toBe(
       adapters.native.normalizeForSearch("Číslo\u00a0PAS - 1234"),
     );
+    expect(python.version).toBe(packageJsonVersion());
+  });
+
+  test("default package SDK path matches through TS and Python", () => {
+    const adapters = getAdapters();
+    const cases = loadContractFixtureCases("en")
+      .filter(({ name }) =>
+        [
+          "healthcare-trust-employment-amendment.txt",
+          "software-license-agreement.txt",
+        ].includes(name),
+      )
+      .map(({ text }) => ({ operators: null, text }));
+    const tsPipeline = getDefaultNativePipeline({
+      binding: adapters.native,
+      language: "en",
+    });
+
+    expect(
+      preloadDefaultNativePipeline({
+        binding: adapters.native,
+        language: "en",
+      }),
+    ).toBe(tsPipeline);
+
+    const tsResults = cases.map(({ operators, text }) =>
+      toBindingStaticResult(
+        tsPipeline.redactText(text, operators ?? undefined),
+      ),
+    );
+    const python = callPythonDefaultPackageParity({
+      cases,
+      language: "en",
+      pythonModulePath: adapters.pythonModulePath,
+      tempDir: adapters.tempDir,
+    });
+
+    expect(python.results).toEqual(tsResults);
     expect(python.version).toBe(packageJsonVersion());
   });
 
@@ -2376,6 +2454,11 @@ const getAdapters = () => {
     join(PYTHON_SOURCE_DIR, "stella_anonymize", "__init__.py"),
     join(pythonPackageDir, "__init__.py"),
   );
+  cpSync(
+    join(PYTHON_SOURCE_DIR, "stella_anonymize", "native_packages"),
+    join(pythonPackageDir, "native_packages"),
+    { recursive: true },
+  );
 
   const native = loadNativeAdapter(napiPath);
   loadedAdapters = { native, pythonModulePath, tempDir };
@@ -2795,6 +2878,44 @@ const callPythonSharedSdkParity = ({
     ["-c", PYTHON_SHARED_SDK_PARITY_SCRIPT],
     {
       STELLA_ANONYMIZE_PACKAGE: packagePath,
+      STELLA_ANONYMIZE_PAYLOAD: payloadPath,
+      STELLA_ANONYMIZE_PY_MODULE: pythonModulePath,
+    },
+  );
+  return JSON.parse(output);
+};
+
+type PythonDefaultPackageParityOptions = {
+  pythonModulePath: string;
+  tempDir: string;
+  language: string;
+  cases: SharedSdkParityCase[];
+};
+
+const callPythonDefaultPackageParity = ({
+  pythonModulePath,
+  tempDir,
+  language,
+  cases,
+}: PythonDefaultPackageParityOptions): {
+  results: StaticRedactionResult[];
+  version: string;
+} => {
+  const payloadPath = join(tempDir, "default-package-sdk-payload.json");
+  writeFileSync(
+    payloadPath,
+    JSON.stringify({
+      cases: cases.map(({ text, operators }) => ({
+        text,
+        operators: operators?.operators ?? null,
+      })),
+      language,
+    }),
+  );
+  const output = runCommand(
+    "python3",
+    ["-c", PYTHON_DEFAULT_PACKAGE_PARITY_SCRIPT],
+    {
       STELLA_ANONYMIZE_PAYLOAD: payloadPath,
       STELLA_ANONYMIZE_PY_MODULE: pythonModulePath,
     },
