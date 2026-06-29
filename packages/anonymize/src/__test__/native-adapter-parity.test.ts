@@ -590,6 +590,7 @@ print(
                     [],
                 )
             ],
+            "module_version": anonymize.__version__,
             "version": anonymize.native_package_version(),
         }
     )
@@ -655,6 +656,8 @@ if missing_default_package_names:
     )
 if set(anonymize.DEFAULT_NATIVE_PIPELINE_WARMUPS) != {"lazy-regex", "none"}:
     raise AssertionError("unexpected Python default pipeline warmup modes")
+if "__version__" not in anonymize.__all__:
+    raise AssertionError("missing Python SDK version public name")
 missing_classes = [
     name for name in class_names if not callable(getattr(anonymize, name, None))
 ]
@@ -802,6 +805,7 @@ print(
                 redact_object_with_top_level(item) for item in payload["cases"]
             ],
             "normalized": anonymize.normalize_for_search(payload["normalize_text"]),
+            "module_version": anonymize.__version__,
             "version": anonymize.native_package_version(),
         }
     )
@@ -888,6 +892,7 @@ print(
             "helper_object_results": [
                 redact_default_object(item) for item in payload["cases"]
             ],
+            "module_version": anonymize.__version__,
             "version": anonymize.native_package_version(),
         }
     )
@@ -1403,6 +1408,7 @@ describe("native adapter parity", () => {
       ]),
     );
     expect(result.version).toBe(packageJsonVersion());
+    expect(result.module_version).toBe(packageJsonVersion());
   });
 
   test("shared TS and Python SDK facades match Rust core JSON", () => {
@@ -1562,6 +1568,7 @@ describe("native adapter parity", () => {
       adapters.native.normalizeForSearch("Číslo\u00a0PAS - 1234"),
     );
     expect(python.version).toBe(packageJsonVersion());
+    expect(python.module_version).toBe(packageJsonVersion());
   });
 
   test("shared TS and Python SDK facades match Rust core JSON for user data", async () => {
@@ -1673,6 +1680,7 @@ describe("native adapter parity", () => {
       "Project Zephyr",
     );
     expect(python.version).toBe(packageJsonVersion());
+    expect(python.module_version).toBe(packageJsonVersion());
   });
 
   test("default package SDK path matches through TS and Python", () => {
@@ -1733,6 +1741,7 @@ describe("native adapter parity", () => {
       tsResults.map(withoutEntityOffsets),
     );
     expect(python.version).toBe(packageJsonVersion());
+    expect(python.module_version).toBe(packageJsonVersion());
   });
 
   test("native facade redacts from compressed package bytes", () => {
@@ -3262,6 +3271,7 @@ const callPythonPackageFacade = ({
   from_bytes: StaticRedactionResult;
   from_file: StaticRedactionResult;
   prepare_stages: string[];
+  module_version: string;
   version: string;
 } => {
   const payloadPath = join(tempDir, "package-facade-payload.json");
@@ -3349,6 +3359,7 @@ const callPythonSharedSdkParity = ({
   top_level_object: OffsetFreeStaticRedactionResult[];
   top_level_object_json: StaticRedactionResult[];
   normalized: string;
+  module_version: string;
   version: string;
 } => {
   const payloadPath = join(tempDir, "shared-sdk-payload.json");
@@ -3402,6 +3413,7 @@ const callPythonDefaultPackageParity = ({
   helper_object_results: OffsetFreeStaticRedactionResult[];
   helper_results: StaticRedactionResult[];
   results: StaticRedactionResult[];
+  module_version: string;
   version: string;
 } => {
   const payloadPath = join(tempDir, "default-package-sdk-payload.json");

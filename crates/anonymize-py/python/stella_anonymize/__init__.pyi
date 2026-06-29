@@ -30,6 +30,7 @@ DEFAULT_NATIVE_PIPELINE_WARMUPS: tuple[
     DefaultNativePipelineWarmup,
     DefaultNativePipelineWarmup,
 ]
+__version__: str
 
 class PreparedAnonymizer:
     def __init__(self, prepared: NativePreparedSearch) -> None: ...

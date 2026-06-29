@@ -72,6 +72,10 @@ def runtime_version() -> str:
     return anonymize.native_package_version()
 
 
+def package_version() -> str:
+    return anonymize.__version__
+
+
 def redact_json(config_json: str, text: str) -> str:
     return anonymize.redact_text_json(
         config_json,

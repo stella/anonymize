@@ -27,6 +27,7 @@ from ._native import (
 )
 
 __all__ = [
+    "__version__",
     "OperatorEntry",
     "OperatorConfig",
     "DefaultNativePipelineWarmup",
@@ -73,6 +74,7 @@ DEFAULT_NATIVE_PIPELINE_WARMUPS: tuple[
 ] = ("lazy-regex", "none")
 DEFAULT_NATIVE_PIPELINE_PACKAGE = "native-pipeline.stlanonpkg"
 _DEFAULT_NATIVE_PIPELINE_LANGUAGE_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+__version__ = native_package_version()
 
 
 class PreparedAnonymizer:
