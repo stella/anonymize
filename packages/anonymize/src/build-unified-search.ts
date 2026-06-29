@@ -1445,7 +1445,7 @@ const buildNativeStaticConfig = ({
     custom_regex_options: {
       regex_whole_words: false,
       regex_overlap_all: true,
-      regex_artifact_policy: "omit",
+      regex_artifact_policy: "include",
     },
     literal_options: {
       literal_case_insensitive: true,

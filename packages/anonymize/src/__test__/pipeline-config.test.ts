@@ -201,7 +201,7 @@ describe("pipeline config semantics", () => {
     );
     expect(
       search.nativeStaticConfig.custom_regex_options.regex_artifact_policy,
-    ).toBe("omit");
+    ).toBe("include");
   });
 
   test("native config carries false-positive filters without deny-list matching", async () => {
