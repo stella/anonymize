@@ -76,6 +76,8 @@ const NATIVE_PACKAGE_PATH =
   process.env.ANONYMIZE_MIGRATION_NATIVE_PACKAGE_PATH?.trim() ?? "";
 const WRITE_NATIVE_PACKAGE_PATH =
   process.env.ANONYMIZE_MIGRATION_WRITE_NATIVE_PACKAGE_PATH?.trim() ?? "";
+const TRUST_PREBUILT_NATIVE_PACKAGE =
+  process.env.ANONYMIZE_MIGRATION_TRUST_PREBUILT_NATIVE_PACKAGE !== "0";
 const USER_DATA_SCENARIO =
   process.env.ANONYMIZE_MIGRATION_USER_DATA_SCENARIO?.trim() ?? "none";
 
@@ -379,6 +381,7 @@ async function runWorker() {
   const nativeArtifactBytes = runtimeRunner?.artifactBytes ?? 0;
   const nativePackagePrepareMs = runtimeRunner?.packagePrepareMs ?? 0;
   const nativePackageBytes = runtimeRunner?.packageBytes ?? 0;
+  const nativePackageTrusted = runtimeRunner?.packageTrusted ?? false;
   const nativeWarmPrepareMs = runtimeRunner?.warmPrepareMs ?? 0;
   const nativeCachedPrepareMsByIteration =
     runtimeRunner?.cachedPrepareMsByIteration ?? [];
@@ -461,6 +464,7 @@ async function runWorker() {
     usePrebuiltNativeConfig,
     nativePackageCompressed,
     nativePackageBytes,
+    nativePackageTrusted,
     nativePackageReadMs,
     nativePackagePrepareMs,
     nativePrepareMs,
@@ -491,6 +495,7 @@ async function runWorker() {
         nativeArtifactPrepareMs,
         nativeArtifactBytes,
         nativePackageCompressed,
+        nativePackageTrusted,
         nativePackagePrepareMs,
         nativePackageBytes,
         nativePrepareWarmupMode: NATIVE_PREPARE_WARMUP,
@@ -552,6 +557,7 @@ function describeNativeTimingScenario({
   usePrebuiltNativeConfig,
   nativePackageCompressed,
   nativePackageBytes,
+  nativePackageTrusted,
   nativePackageReadMs,
   nativePackagePrepareMs,
   nativePrepareMs,
@@ -576,6 +582,7 @@ function describeNativeTimingScenario({
       nativePackagePrepareMs,
     }),
     packageCompressed: nativePackageCompressed,
+    packageTrusted: nativePackageTrusted,
     packageBytes: nativePackageBytes,
     packageReadMs: nativePackageReadMs,
     offlinePackageBuildMs: nativePackagePrepareMs,
@@ -1961,8 +1968,14 @@ function createNativeStaticRunnerFromJsonBytes(configBytes) {
 
 function createNativeStaticRunnerFromPackageBytes(packageBytes) {
   const native = loadNativeAdapter();
+  const trustedFactory =
+    native.NativePreparedSearch.fromTrustedPreparedPackageBytes;
+  const packageTrusted =
+    TRUST_PREBUILT_NATIVE_PACKAGE && typeof trustedFactory === "function";
   const prepare = () =>
-    native.NativePreparedSearch.fromPreparedPackageBytes(packageBytes);
+    packageTrusted
+      ? trustedFactory.call(native.NativePreparedSearch, packageBytes)
+      : native.NativePreparedSearch.fromPreparedPackageBytes(packageBytes);
   const prepareStart = Bun.nanoseconds();
   const prepared = prepare();
   const prepareMs = elapsedMs(prepareStart);
@@ -1994,6 +2007,7 @@ function createNativeStaticRunnerFromPackageBytes(packageBytes) {
     artifactBytes: 0,
     artifactPrepareMs: 0,
     packageBytes: packageBytes.byteLength,
+    packageTrusted,
     packagePrepareMs: 0,
     stringifyMs: 0,
     prepareMs,
