@@ -666,7 +666,7 @@ const buildUnifiedSearchSources = async (
       ? warmLegalRoleHeads()
       : Promise.resolve(),
     config.enableTriggerPhrases
-      ? buildTriggerPatterns()
+      ? buildTriggerPatterns(contentLanguages)
       : Promise.resolve({
           patterns: [] as string[],
           rules: [] as TriggerRule[],

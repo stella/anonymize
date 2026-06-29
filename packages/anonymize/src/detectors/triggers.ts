@@ -14,7 +14,10 @@ import type {
 import { POST_NOMINALS } from "../config/titles";
 import { getKnownLegalSuffixes } from "./legal-forms";
 import { NAME_PARTICLE } from "./signatures";
-import { loadLanguageConfigs } from "../util/lang-loader";
+import {
+  languageConfigMatches,
+  loadLanguageConfigs,
+} from "../util/lang-loader";
 import { DASH, DASH_INNER } from "../util/char-groups";
 
 const VALID_ID_VALIDATORS: Record<ValidIdValidator, Validator> = {
@@ -283,15 +286,29 @@ type TriggerPatterns = {
   rules: TriggerRule[];
 };
 
-let triggerPatternsPromise: Promise<TriggerPatterns> | null = null;
+const triggerPatternsPromises = new Map<string, Promise<TriggerPatterns>>();
+
+const languageCacheKey = (languages: readonly string[] | undefined): string => {
+  if (languages === undefined || languages.length === 0) {
+    return "*";
+  }
+  const normalizedLanguages = languages
+    .map((language) => language.trim().toLowerCase())
+    .filter((language) => language.length > 0)
+    .toSorted();
+  return normalizedLanguages.length === 0 ? "*" : normalizedLanguages.join(",");
+};
 
 /**
  * Build trigger patterns and rules from data configs.
  * Returns string[] for the unified TextSearch
  * builder and the parallel rules array.
  */
-const loadTriggerPatterns = async (): Promise<TriggerPatterns> => {
+const loadTriggerPatterns = async (
+  languages: readonly string[] | undefined,
+): Promise<TriggerPatterns> => {
   const rules: TriggerRule[] = [];
+  const languageOptions = languages === undefined ? {} : { languages };
 
   const allGroups = await loadLanguageConfigs<readonly TriggerGroupConfig[]>(
     "triggers",
@@ -303,6 +320,7 @@ const loadTriggerPatterns = async (): Promise<TriggerPatterns> => {
       // eslint-disable-next-line no-unsafe-type-assertion -- JSON config
       return (m.default ?? mod) as readonly TriggerGroupConfig[];
     },
+    languageOptions,
   );
   for (const groups of allGroups) {
     if (!Array.isArray(groups)) {
@@ -350,6 +368,9 @@ const loadTriggerPatterns = async (): Promise<TriggerPatterns> => {
     ]);
     for (const [key, words] of Object.entries(data)) {
       if (key.startsWith("_") || !Array.isArray(words)) {
+        continue;
+      }
+      if (!languageConfigMatches(key, languages)) {
         continue;
       }
       for (const word of words) {
@@ -412,9 +433,16 @@ const loadTriggerPatterns = async (): Promise<TriggerPatterns> => {
   return { patterns, rules };
 };
 
-export const buildTriggerPatterns = async (): Promise<TriggerPatterns> => {
-  triggerPatternsPromise ??= loadTriggerPatterns();
-  return triggerPatternsPromise;
+export const buildTriggerPatterns = async (
+  languages?: readonly string[],
+): Promise<TriggerPatterns> => {
+  const key = languageCacheKey(languages);
+  let promise = triggerPatternsPromises.get(key);
+  if (promise === undefined) {
+    promise = loadTriggerPatterns(languages);
+    triggerPatternsPromises.set(key, promise);
+  }
+  return promise;
 };
 
 // ── Value extraction ────────────────────────────────

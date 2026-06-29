@@ -6,6 +6,19 @@ import {
 
 const DEFAULT_CUSTOM_REGEX_SCORE = 0.9;
 
+const contentLanguageFingerprint = (
+  config: Pick<PipelineConfig, "language" | "languages">,
+): string => {
+  const languages =
+    config.languages ??
+    (config.language === undefined ? [] : [config.language]);
+  return languages
+    .map((language) => language.trim().toLowerCase())
+    .filter((language) => language.length > 0)
+    .toSorted()
+    .join(",");
+};
+
 export const pipelineConfigKey = (
   config: PipelineConfig,
   gazetteerEntries: readonly GazetteerEntry[],
@@ -57,6 +70,7 @@ export const pipelineConfigKey = (
     `${config.enableTriggerPhrases}:` +
     `${legalFormsEnabled}:` +
     `${config.enableNameCorpus}:` +
+    `${contentLanguageFingerprint(config)}:` +
     `${config.nameCorpusLanguages?.toSorted().join(",") ?? ""}:` +
     `${config.enableRegex}:` +
     `${config.threshold}:` +

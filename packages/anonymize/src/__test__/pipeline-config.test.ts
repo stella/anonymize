@@ -20,6 +20,7 @@ import {
   getSigningClausePatterns,
 } from "../detectors/regex";
 import { applyPipelineLanguageScope } from "../language-scope";
+import { languageConfigMatches } from "../util/lang-loader";
 import type { NativeAnonymizeBinding } from "../native";
 import type { Dictionaries, PipelineConfig } from "../types";
 import { loadTestDictionaries } from "./load-dictionaries";
@@ -134,6 +135,14 @@ describe("pipeline config semantics", () => {
       nameCorpusLanguages: ["cs"],
       denyListCountries: ["CZ"],
     });
+  });
+
+  test("language config matching keeps regional hints precise", () => {
+    expect(languageConfigMatches("en", ["en-US"])).toBe(true);
+    expect(languageConfigMatches("pt", ["pt-BR"])).toBe(true);
+    expect(languageConfigMatches("pt-br", ["pt-BR"])).toBe(true);
+    expect(languageConfigMatches("pt-br", ["pt-PT"])).toBe(false);
+    expect(languageConfigMatches("en", [""])).toBe(true);
   });
 
   test("empty labels do not suppress deterministic detectors", async () => {
@@ -621,6 +630,37 @@ describe("pipeline config semantics", () => {
     expect(scopedYearLanguages).toEqual(["en"]);
   });
 
+  test("content language scopes trigger data", async () => {
+    const base = {
+      ...BASE_CONFIG,
+      enableTriggerPhrases: true,
+      labels: [],
+    };
+    const unscoped = await buildNativeStaticSearchBundle(
+      base,
+      [],
+      createPipelineContext(),
+    );
+    const scoped = await buildNativeStaticSearchBundle(
+      { ...base, language: "en-US" },
+      [],
+      createPipelineContext(),
+    );
+
+    const unscopedTriggers =
+      unscoped.nativeStaticConfig.trigger_data?.rules ?? [];
+    const scopedTriggers =
+      scoped.nativeStaticConfig.trigger_data?.rules.map((rule) =>
+        rule.trigger.toLowerCase(),
+      ) ?? [];
+
+    expect(scopedTriggers.length).toBeLessThan(unscopedTriggers.length);
+    expect(scopedTriggers).toContain("represented by");
+    expect(scopedTriggers).toContain("year");
+    expect(scopedTriggers).not.toContain("zastoupen");
+    expect(scopedTriggers).not.toContain("rok");
+  });
+
   test("content language scopes deny-list search build", async () => {
     const testDictionaries = await getDictionaries();
     const config = {
@@ -753,6 +793,38 @@ describe("pipeline config semantics", () => {
     const second = await preparePipelineSearch({ config, context });
 
     expect(second).toBe(first);
+  });
+
+  test("preparePipelineSearch cache keys content language", async () => {
+    const context = createPipelineContext();
+    const baseConfig = {
+      ...BASE_CONFIG,
+      enableTriggerPhrases: true,
+      labels: ["person"],
+    };
+
+    const english = await preparePipelineSearch({
+      config: { ...baseConfig, language: "en" },
+      context,
+    });
+    const czech = await preparePipelineSearch({
+      config: { ...baseConfig, language: "cs" },
+      context,
+    });
+
+    const englishTriggers =
+      english.nativeStaticConfig.trigger_data?.rules.map((rule) =>
+        rule.trigger.toLowerCase(),
+      ) ?? [];
+    const czechTriggers =
+      czech.nativeStaticConfig.trigger_data?.rules.map((rule) =>
+        rule.trigger.toLowerCase(),
+      ) ?? [];
+
+    expect(czech).not.toBe(english);
+    expect(englishTriggers).toContain("represented by");
+    expect(englishTriggers).not.toContain("zastoupen");
+    expect(czechTriggers).toContain("zastoupen");
   });
 
   test("preparePipelineSearch reuses shared search across fresh contexts", async () => {
