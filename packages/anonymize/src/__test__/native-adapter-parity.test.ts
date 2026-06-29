@@ -2224,6 +2224,75 @@ describe("native adapter parity", () => {
     });
   });
 
+  test("native pipeline package matches TS standalone name corpus", async () => {
+    const adapters = getAdapters();
+    const fullText = "The agreement is signed by Mina Roe.";
+    const config: PipelineConfig = {
+      threshold: 0.85,
+      enableTriggerPhrases: false,
+      enableRegex: false,
+      enableLegalForms: false,
+      enableNameCorpus: true,
+      enableDenyList: false,
+      enableGazetteer: false,
+      enableCountries: false,
+      enableNer: false,
+      enableConfidenceBoost: false,
+      enableCoreference: false,
+      enableHotwordRules: false,
+      enableZoneClassification: false,
+      nameCorpusLanguages: ["x-test"],
+      dictionaries: {
+        firstNames: { "x-test": ["Mina"] },
+        surnames: { "x-test": ["Roe"] },
+      },
+      labels: ["person"],
+      workspaceId: "native-pipeline-standalone-name-corpus-test",
+    };
+
+    expect(getNativePipelineCompatibility(config)).toEqual({
+      status: "supported",
+    });
+
+    const context = createPipelineContext();
+    const packageBytes = await prepareNativePipelinePackage({
+      binding: adapters.native,
+      config,
+      context,
+      compressed: true,
+    });
+    const nativePipeline = createNativePipelineFromPackage({
+      binding: adapters.native,
+      packageBytes,
+    });
+    const tsContext = createPipelineContext();
+    const operators: OperatorConfig & NativeOperatorConfig = {
+      operators: {},
+      redactString: "[REDACTED]",
+    };
+    const tsEntities = await runPipeline({
+      fullText,
+      config,
+      gazetteerEntries: [],
+      context: tsContext,
+    });
+    const tsRedaction = redactText(fullText, tsEntities, operators, tsContext);
+
+    expect(tsEntities).toEqual([
+      expect.objectContaining({
+        label: "person",
+        text: "Mina Roe",
+        score: 0.9,
+      }),
+    ]);
+    expect(
+      toBindingStaticResult(nativePipeline.redactText(fullText, operators)),
+    ).toEqual({
+      resolved_entities: tsEntities.map(toBindingEntity),
+      redaction: toBindingRedactionResult(tsRedaction),
+    });
+  });
+
   test("native pipeline package matches TS supplemental name corpus", async () => {
     const adapters = getAdapters();
     const fullText = "The agreement is signed by Sato Kenji.";

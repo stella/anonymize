@@ -42,7 +42,7 @@ pub use money::{
   AmountWordsData, CurrencyData, MagnitudeSuffixData, MonetaryData,
   ShareQuantityTermData, WrittenAmountPatternData,
 };
-pub use name_corpus::{NameCorpusData, PreparedNameCorpusData};
+pub use name_corpus::{NameCorpusData, NameCorpusMode, PreparedNameCorpusData};
 pub use normalize::normalize_for_search;
 pub use placeholders::build_placeholder_map;
 pub use prepared::{

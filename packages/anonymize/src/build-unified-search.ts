@@ -275,6 +275,7 @@ export type NativeNameCorpusData = {
   cjk_surname_starters: string[];
   organization_terms: string[];
 };
+export type NativeNameCorpusMode = "full" | "supplemental";
 export type NativeZonePatternData = {
   pattern: string;
   flags: string;
@@ -347,6 +348,7 @@ export type NativePreparedSearchConfig = {
   address_context_data?: NativeAddressContextData;
   coreference_data?: NativeCoreferenceData;
   name_corpus_data?: NativeNameCorpusData;
+  name_corpus_mode?: NativeNameCorpusMode;
   date_data?: NativeDateData;
   monetary_data?: NativeMonetaryData;
 };
@@ -476,6 +478,7 @@ type UnifiedSearchSources = {
   nativeAddressContextData: NativeAddressContextData | null;
   nativeCoreferenceData: NativeCoreferenceData | null;
   nativeNameCorpusData: NativeNameCorpusData | null;
+  nativeNameCorpusMode: NativeNameCorpusMode | null;
   nativeSigningPatterns: readonly string[];
   partyPositionTerms: string[];
   hotwordRules: readonly HotwordRule[];
@@ -518,7 +521,7 @@ const buildNativeNameCorpusData = (
   config: PipelineConfig,
   ctx: PipelineContext,
 ): NativeNameCorpusData | null => {
-  if (!config.enableNameCorpus || !config.enableDenyList || !ctx.nameCorpus) {
+  if (!config.enableNameCorpus || !ctx.nameCorpus) {
     return null;
   }
 
@@ -827,6 +830,9 @@ const buildUnifiedSearchSources = async (
   const nativeSentenceTerminalCurrencyTerms =
     sentenceTerminalCurrencyTerms(monetaryData);
   const nativeNameCorpusData = buildNativeNameCorpusData(config, ctx);
+  const nativeNameCorpusMode: NativeNameCorpusMode = config.enableDenyList
+    ? "supplemental"
+    : "full";
 
   let offset = 0;
 
@@ -984,6 +990,8 @@ const buildUnifiedSearchSources = async (
             organization_suffixes: nativeOrganizationSuffixes,
           },
     nativeNameCorpusData,
+    nativeNameCorpusMode:
+      nativeNameCorpusData === null ? null : nativeNameCorpusMode,
     nativeSigningPatterns,
     partyPositionTerms,
     hotwordRules,
@@ -1040,6 +1048,7 @@ export const buildNativeStaticSearchBundle = async (
       addressContextData: sources.nativeAddressContextData,
       coreferenceData: sources.nativeCoreferenceData,
       nameCorpusData: sources.nativeNameCorpusData,
+      nameCorpusMode: sources.nativeNameCorpusMode,
       nativeSigningPatterns: sources.nativeSigningPatterns,
       partyPositionTerms: sources.partyPositionTerms,
       hotwordRules: sources.hotwordRules,
@@ -1130,6 +1139,7 @@ export const buildUnifiedSearch = async (
     addressContextData: sources.nativeAddressContextData,
     coreferenceData: sources.nativeCoreferenceData,
     nameCorpusData: sources.nativeNameCorpusData,
+    nameCorpusMode: sources.nativeNameCorpusMode,
     nativeSigningPatterns: sources.nativeSigningPatterns,
     partyPositionTerms: sources.partyPositionTerms,
     hotwordRules: sources.hotwordRules,
@@ -1184,6 +1194,7 @@ type BuildNativeStaticConfigArgs = {
   addressContextData: NativeAddressContextData | null;
   coreferenceData: NativeCoreferenceData | null;
   nameCorpusData: NativeNameCorpusData | null;
+  nameCorpusMode: NativeNameCorpusMode | null;
   nativeSigningPatterns: readonly string[];
   partyPositionTerms: readonly string[];
   hotwordRules: readonly HotwordRule[];
@@ -1219,6 +1230,7 @@ const buildNativeStaticConfig = ({
   addressContextData,
   coreferenceData,
   nameCorpusData,
+  nameCorpusMode,
   nativeSigningPatterns,
   partyPositionTerms,
   hotwordRules,
@@ -1424,6 +1436,9 @@ const buildNativeStaticConfig = ({
   }
   if (nameCorpusData) {
     nativeConfig.name_corpus_data = nameCorpusData;
+    if (nameCorpusMode !== null) {
+      nativeConfig.name_corpus_mode = nameCorpusMode;
+    }
   }
   if (dateData) {
     nativeConfig.date_data = dateData;

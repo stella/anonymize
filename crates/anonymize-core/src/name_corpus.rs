@@ -21,6 +21,8 @@ const MAX_HORIZONTAL_CHAIN_GAP: usize = 4;
 )]
 pub struct NameCorpusData {
   #[serde(default)]
+  pub mode: NameCorpusMode,
+  #[serde(default)]
   pub first_names: Vec<String>,
   #[serde(default)]
   pub surnames: Vec<String>,
@@ -54,6 +56,7 @@ pub struct NameCorpusData {
 
 #[derive(Clone, Debug)]
 pub struct PreparedNameCorpusData {
+  mode: NameCorpusMode,
   first_names: HashSet<String>,
   surnames: HashSet<String>,
   title_tokens: HashSet<String>,
@@ -69,6 +72,23 @@ pub struct PreparedNameCorpusData {
   cjk_non_person_terms: HashSet<String>,
   cjk_surname_starters: HashSet<char>,
   organization_terms: HashSet<String>,
+}
+
+#[derive(
+  Clone,
+  Copy,
+  Debug,
+  Default,
+  Eq,
+  PartialEq,
+  serde::Deserialize,
+  serde::Serialize,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum NameCorpusMode {
+  Full,
+  #[default]
+  Supplemental,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -104,6 +124,7 @@ impl PreparedNameCorpusData {
   #[must_use]
   pub fn new(data: NameCorpusData) -> Self {
     Self {
+      mode: data.mode,
       first_names: string_set(data.first_names),
       surnames: string_set(data.surnames),
       title_tokens: lower_string_set(data.title_tokens),
@@ -131,14 +152,33 @@ impl PreparedNameCorpusData {
     full_text: &str,
     deny_list_entities: &[PipelineEntity],
   ) -> Result<Vec<PipelineEntity>> {
+    self.detect(full_text, NameCorpusMode::Supplemental, deny_list_entities)
+  }
+
+  pub fn detect_configured(
+    &self,
+    full_text: &str,
+    deny_list_entities: &[PipelineEntity],
+  ) -> Result<Vec<PipelineEntity>> {
+    self.detect(full_text, self.mode, deny_list_entities)
+  }
+
+  pub fn detect(
+    &self,
+    full_text: &str,
+    mode: NameCorpusMode,
+    deny_list_entities: &[PipelineEntity],
+  ) -> Result<Vec<PipelineEntity>> {
     let mut entities = self.detect_cjk_names(full_text)?;
-    entities.extend(self.detect_token_names(full_text)?);
+    entities.extend(self.detect_token_names(full_text, mode)?);
     let mut entities = deduplicate_spans(entities);
-    entities.retain(|entity| {
-      !deny_list_entities
-        .iter()
-        .any(|deny| covers_same_label(entity, deny))
-    });
+    if mode == NameCorpusMode::Supplemental {
+      entities.retain(|entity| {
+        !deny_list_entities
+          .iter()
+          .any(|deny| covers_same_label(entity, deny))
+      });
+    }
     Ok(entities)
   }
 
@@ -228,9 +268,15 @@ impl PreparedNameCorpusData {
     Ok(())
   }
 
-  fn detect_token_names(&self, full_text: &str) -> Result<Vec<PipelineEntity>> {
+  fn detect_token_names(
+    &self,
+    full_text: &str,
+    mode: NameCorpusMode,
+  ) -> Result<Vec<PipelineEntity>> {
     let words = segment_words(full_text);
-    if !self.has_supplemental_seed(&words) {
+    if mode == NameCorpusMode::Supplemental
+      && !self.has_supplemental_seed(&words)
+    {
       return Ok(Vec::new());
     }
 
@@ -269,8 +315,7 @@ impl PreparedNameCorpusData {
       }
 
       let chain = Self::build_chain(full_text, &tokens, index);
-      let Some(score) = supplemental_chain_score(full_text, &chain, self)
-      else {
+      let Some(score) = chain_score(full_text, &chain, self, mode) else {
         continue;
       };
       let Some(first) = chain.first() else {
@@ -534,19 +579,19 @@ impl PreparedNameCorpusData {
   }
 }
 
-fn supplemental_chain_score(
+fn chain_score(
   full_text: &str,
   chain: &[&ClassifiedToken<'_>],
   data: &PreparedNameCorpusData,
+  mode: NameCorpusMode,
 ) -> Option<f64> {
   let has_title = chain.iter().any(|token| token.kind == TokenKind::Title);
+  let has_corpus_name = chain.iter().any(|token| is_corpus_match(token.kind));
+  let has_first_name = chain.iter().any(|token| token.kind == TokenKind::Name);
   let has_abbreviation = chain
     .iter()
     .any(|token| token.kind == TokenKind::Abbreviation);
   let has_non_western = chain.iter().any(|token| token.non_western);
-  if !has_non_western {
-    return None;
-  }
   let has_ja_suffix =
     chain.iter().any(|token| token.kind == TokenKind::JaSuffix);
   let has_arabic_connector = chain
@@ -556,33 +601,90 @@ fn supplemental_chain_score(
     .iter()
     .filter(|token| token.kind == TokenKind::Capitalized)
     .count();
+  let corpus_count = chain
+    .iter()
+    .filter(|token| is_corpus_match(token.kind))
+    .count();
   let non_western_count =
     chain.iter().filter(|token| token.non_western).count();
   let chain_all_common_words = chain
     .iter()
     .all(|token| data.common_words.contains(&token.text.to_lowercase()));
-  let title_confidence =
-    has_title && (non_western_count > 0 || capitalized_count > 0);
-  let high_confidence = (has_ja_suffix
-    && (capitalized_count > 0 || non_western_count > 0))
-    || (has_arabic_connector && non_western_count > 0)
-    || non_western_count >= 2
-    || (non_western_count > 0
-      && (capitalized_count > 0 || has_abbreviation)
-      && !chain_all_common_words);
-  let score = if title_confidence {
-    TITLE_NAME_SCORE
-  } else if high_confidence {
-    HIGH_CONFIDENCE_NAME_SCORE
-  } else if non_western_count == 1
-    && chain.len() == 1
-    && !is_sentence_start(full_text, chain.first()?.start)
-  {
-    LOW_CONFIDENCE_NAME_SCORE
-  } else {
+  if has_non_western {
+    let title_confidence =
+      has_title && (non_western_count > 0 || capitalized_count > 0);
+    let high_confidence = (has_ja_suffix
+      && (capitalized_count > 0 || non_western_count > 0))
+      || (has_arabic_connector && non_western_count > 0)
+      || non_western_count >= 2
+      || (non_western_count > 0
+        && (capitalized_count > 0 || has_abbreviation)
+        && !chain_all_common_words);
+    let score = if title_confidence {
+      TITLE_NAME_SCORE
+    } else if high_confidence {
+      HIGH_CONFIDENCE_NAME_SCORE
+    } else if non_western_count == 1
+      && chain.len() == 1
+      && !is_sentence_start(full_text, chain.first()?.start)
+    {
+      LOW_CONFIDENCE_NAME_SCORE
+    } else {
+      return None;
+    };
+    if mode == NameCorpusMode::Supplemental
+      && score < HIGH_CONFIDENCE_NAME_SCORE
+    {
+      return None;
+    }
+    return Some(score);
+  }
+
+  if mode == NameCorpusMode::Supplemental {
     return None;
-  };
-  (score >= HIGH_CONFIDENCE_NAME_SCORE).then_some(score)
+  }
+
+  if has_title && has_corpus_name {
+    return Some(TITLE_NAME_SCORE);
+  }
+  if corpus_count >= 2 {
+    return Some(HIGH_CONFIDENCE_NAME_SCORE);
+  }
+  if has_corpus_name && capitalized_count > 0 {
+    return Some(0.7);
+  }
+  if has_abbreviation && has_corpus_name {
+    return Some(0.7);
+  }
+  if has_first_name && chain.len() == 1 {
+    let first = chain.first()?;
+    if is_sentence_start(full_text, first.start)
+      || (is_all_upper(first.text) && first.text.chars().count() >= 3)
+    {
+      return None;
+    }
+    return Some(LOW_CONFIDENCE_NAME_SCORE);
+  }
+  if !has_first_name
+    && chain.len() == 1
+    && chain.first()?.kind == TokenKind::Surname
+  {
+    return None;
+  }
+  if has_title && chain.len() == 1 {
+    return None;
+  }
+  if has_ja_suffix || has_arabic_connector {
+    if !has_corpus_name && !has_first_name {
+      return None;
+    }
+    return Some(LOW_CONFIDENCE_NAME_SCORE);
+  }
+  has_corpus_name.then_some(LOW_CONFIDENCE_NAME_SCORE)
+}
+
+const fn is_corpus_match(kind: TokenKind) -> bool {
+  matches!(kind, TokenKind::Name | TokenKind::Surname)
 }
 
 fn segment_words(full_text: &str) -> Vec<WordSegment<'_>> {
@@ -927,6 +1029,40 @@ fn invalid_name_data(reason: &'static str) -> Error {
 #[allow(clippy::expect_used, clippy::indexing_slicing)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn full_mode_detects_western_corpus_chain() {
+    let data = PreparedNameCorpusData::new(NameCorpusData {
+      first_names: vec![String::from("Mina")],
+      surnames: vec![String::from("Roe")],
+      ..NameCorpusData::default()
+    });
+
+    let entities = data
+      .detect("Agreement signed by Mina Roe.", NameCorpusMode::Full, &[])
+      .expect("full name-corpus detection should succeed");
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].text, "Mina Roe");
+    assert!(
+      (entities[0].score - HIGH_CONFIDENCE_NAME_SCORE).abs() < f64::EPSILON
+    );
+  }
+
+  #[test]
+  fn supplemental_mode_rejects_western_only_chain() {
+    let data = PreparedNameCorpusData::new(NameCorpusData {
+      first_names: vec![String::from("Mina")],
+      surnames: vec![String::from("Roe")],
+      ..NameCorpusData::default()
+    });
+
+    let entities = data
+      .detect_supplemental("Agreement signed by Mina Roe.", &[])
+      .expect("supplemental name-corpus detection should succeed");
+
+    assert!(entities.is_empty());
+  }
 
   #[test]
   fn supplemental_detects_cjk_name_with_configured_surname() {

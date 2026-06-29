@@ -1056,7 +1056,7 @@ impl PreparedSearch {
   ) -> Result<TimedEntities> {
     let start = Instant::now();
     let entities = if let Some(data) = &self.name_corpus_data {
-      data.detect_supplemental(full_text, deny_list_entities)?
+      data.detect_configured(full_text, deny_list_entities)?
     } else {
       Vec::new()
     };

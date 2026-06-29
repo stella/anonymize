@@ -19,7 +19,7 @@ export {
   createNativePipelineFromPackage,
 } from "./native";
 
-export type NativePipelineUnsupportedFeature = "enableNer" | "enableNameCorpus";
+export type NativePipelineUnsupportedFeature = "enableNer";
 
 export type NativePipelineCompatibility =
   | { status: "supported" }
@@ -88,9 +88,6 @@ export const getNativePipelineCompatibility = (
   const unsupportedFeatures: NativePipelineUnsupportedFeature[] = [];
 
   if (config.enableNer) unsupportedFeatures.push("enableNer");
-  if (config.enableNameCorpus && !config.enableDenyList) {
-    unsupportedFeatures.push("enableNameCorpus");
-  }
   if (unsupportedFeatures.length === 0) {
     return { status: "supported" };
   }
