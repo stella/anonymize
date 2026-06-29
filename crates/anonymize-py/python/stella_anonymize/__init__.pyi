@@ -18,11 +18,13 @@ from ._native import (
     prepare_static_search_package_bytes as prepare_static_search_package_bytes,
     redact_static_entities_diagnostics_json as redact_static_entities_diagnostics_json,
     redact_static_entities_json as redact_static_entities_json,
+    redact_static_entities_summary_diagnostics_json as redact_static_entities_summary_diagnostics_json,
 )
 
 BytesLike: TypeAlias = bytes | bytearray | memoryview
 PathLikeString: TypeAlias = str | PathLike[str]
 OperatorConfig: TypeAlias = Mapping[str, str] | str | None
+NativeSearchPackageInput: TypeAlias = str | BytesLike | Mapping[str, object]
 DefaultNativePipelineWarmup: TypeAlias = Literal["lazy-regex", "none"]
 DEFAULT_NATIVE_PIPELINE_WARMUPS: tuple[
     DefaultNativePipelineWarmup,
@@ -32,11 +34,14 @@ DEFAULT_NATIVE_PIPELINE_WARMUPS: tuple[
 class PreparedAnonymizer:
     def __init__(self, prepared: NativePreparedSearch) -> None: ...
     @classmethod
-    def from_config_json(cls, config_json: str) -> PreparedAnonymizer: ...
+    def from_config_json(
+        cls,
+        config_json: NativeSearchPackageInput,
+    ) -> PreparedAnonymizer: ...
     @classmethod
     def from_config_json_and_artifact_bytes(
         cls,
-        config_json: str,
+        config_json: NativeSearchPackageInput,
         artifact_bytes: BytesLike,
     ) -> PreparedAnonymizer: ...
     @classmethod
@@ -107,7 +112,7 @@ class PreparedAnonymizer:
 PreparedSearch: TypeAlias = PreparedAnonymizer
 
 def prepare_search_package(
-    config_json: str, *, compressed: bool = True
+    config_json: NativeSearchPackageInput, *, compressed: bool = True
 ) -> bytes: ...
 def load_prepared_package(package_bytes: BytesLike) -> PreparedAnonymizer: ...
 def load_prepared_package_file(
@@ -135,28 +140,28 @@ def preload_default_native_pipeline(
     package_path: PathLikeString | None = None,
 ) -> PreparedAnonymizer: ...
 def redact_text(
-    config_json: str,
+    config_json: NativeSearchPackageInput,
     full_text: str,
     operators: OperatorConfig = None,
     *,
     redact_string: str | None = None,
 ) -> StaticRedactionResult: ...
 def redact_text_json(
-    config_json: str,
+    config_json: NativeSearchPackageInput,
     full_text: str,
     operators: OperatorConfig = None,
     *,
     redact_string: str | None = None,
 ) -> str: ...
 def diagnostics_json(
-    config_json: str,
+    config_json: NativeSearchPackageInput,
     full_text: str,
     operators: OperatorConfig = None,
     *,
     redact_string: str | None = None,
 ) -> str: ...
 def summary_diagnostics_json(
-    config_json: str,
+    config_json: NativeSearchPackageInput,
     full_text: str,
     operators: OperatorConfig = None,
     *,

@@ -29,6 +29,10 @@ export const PYTHON_NATIVE_SDK_DEFAULT_PACKAGE_NAMES = [
   "DefaultNativePipelineWarmup",
 ] as const;
 
+export const PYTHON_NATIVE_SDK_PUBLIC_TYPE_NAMES = [
+  "NativeSearchPackageInput",
+] as const;
+
 export const SHARED_NATIVE_SDK_PREPARED_METHODS = [
   "redact_text",
   "redact_text_json",

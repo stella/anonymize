@@ -43,7 +43,7 @@ for repeated document processing.
 
 ## API
 
-- `prepare_search_package(config_json, compressed=True) -> bytes`
+- `prepare_search_package(config_json | config_bytes | config_mapping, compressed=True) -> bytes`
 - `load_prepared_package(package_bytes) -> PreparedAnonymizer`
 - `load_prepared_package_file(package_path) -> PreparedAnonymizer`
 - `read_default_native_pipeline_package_file(language=None) -> bytes`

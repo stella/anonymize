@@ -42,6 +42,7 @@ import type {
 } from "../types";
 import {
   PYTHON_NATIVE_SDK_DEFAULT_PACKAGE_NAMES,
+  PYTHON_NATIVE_SDK_PUBLIC_TYPE_NAMES,
   SHARED_NATIVE_SDK_CLASS_NAMES,
   SHARED_NATIVE_SDK_CORE_TOP_LEVEL_FUNCTIONS,
   SHARED_NATIVE_SDK_DEFAULT_PACKAGE_FUNCTIONS,
@@ -604,6 +605,7 @@ package_bytes = package_path.read_bytes()
 top_level = payload["top_level_functions"]
 default_package_functions = payload["default_package_functions"]
 default_package_names = payload["default_package_names"]
+public_type_names = payload["public_type_names"]
 prepared_methods = payload["prepared_methods"]
 class_names = payload["class_names"]
 missing_top_level = [
@@ -626,6 +628,7 @@ missing_public_names = [
         *top_level,
         *default_package_functions,
         *default_package_names,
+        *public_type_names,
         *class_names,
     ]
     if name not in anonymize.__all__
@@ -683,6 +686,16 @@ if anonymize.prepare_search_package(
     compressed=payload["compressed"],
 ) != package_bytes:
     raise AssertionError("facade package bytes differ")
+if anonymize.prepare_search_package(
+    payload["config_json"].encode("utf-8"),
+    compressed=payload["compressed"],
+) != package_bytes:
+    raise AssertionError("facade package bytes differ for bytes config")
+if anonymize.prepare_search_package(
+    payload["config_object"],
+    compressed=payload["compressed"],
+) != package_bytes:
+    raise AssertionError("facade package bytes differ for object config")
 
 def redact_with(instance, item):
     return json.loads(
@@ -747,6 +760,28 @@ print(
                 json.loads(
                     anonymize.redact_text_json(
                         payload["config_json"],
+                        item["text"],
+                        item.get("operators"),
+                        redact_string=item.get("redact_string"),
+                    )
+                )
+                for item in payload["cases"]
+            ],
+            "top_level_bytes": [
+                json.loads(
+                    anonymize.redact_text_json(
+                        payload["config_json"].encode("utf-8"),
+                        item["text"],
+                        item.get("operators"),
+                        redact_string=item.get("redact_string"),
+                    )
+                )
+                for item in payload["cases"]
+            ],
+            "top_level_object_json": [
+                json.loads(
+                    anonymize.redact_text_json(
+                        payload["config_object"],
                         item["text"],
                         item.get("operators"),
                         redact_string=item.get("redact_string"),
@@ -1422,6 +1457,8 @@ describe("native adapter parity", () => {
     expect(python.from_file).toEqual(rustCoreJson);
     expect(python.default_from_path).toEqual(rustCoreJson);
     expect(python.top_level).toEqual(rustCoreJson);
+    expect(python.top_level_bytes).toEqual(rustCoreJson);
+    expect(python.top_level_object_json).toEqual(rustCoreJson);
     expect(python.top_level_object).toEqual(
       rustCoreJson.map(withoutEntityOffsets),
     );
@@ -1524,6 +1561,8 @@ describe("native adapter parity", () => {
     expect(python.from_bytes).toEqual(rustCoreJson);
     expect(python.from_file).toEqual(rustCoreJson);
     expect(python.top_level).toEqual(rustCoreJson);
+    expect(python.top_level_bytes).toEqual(rustCoreJson);
+    expect(python.top_level_object_json).toEqual(rustCoreJson);
     expect(python.top_level_object).toEqual(
       rustCoreJson.map(withoutEntityOffsets),
     );
@@ -3187,7 +3226,9 @@ const callPythonSharedSdkParity = ({
   from_bytes: StaticRedactionResult[];
   from_file: StaticRedactionResult[];
   top_level: StaticRedactionResult[];
+  top_level_bytes: StaticRedactionResult[];
   top_level_object: OffsetFreeStaticRedactionResult[];
+  top_level_object_json: StaticRedactionResult[];
   normalized: string;
   version: string;
 } => {
@@ -3204,11 +3245,13 @@ const callPythonSharedSdkParity = ({
       })),
       class_names: SHARED_NATIVE_SDK_CLASS_NAMES,
       compressed: true,
+      config_object: JSON.parse(configJson),
       config_json: configJson,
       default_package_functions: SHARED_NATIVE_SDK_DEFAULT_PACKAGE_FUNCTIONS,
       default_package_names: PYTHON_NATIVE_SDK_DEFAULT_PACKAGE_NAMES,
       normalize_text: normalizeText,
       prepared_methods: SHARED_NATIVE_SDK_PREPARED_METHODS,
+      public_type_names: PYTHON_NATIVE_SDK_PUBLIC_TYPE_NAMES,
       top_level_functions: SHARED_NATIVE_SDK_TOP_LEVEL_FUNCTIONS,
     }),
   );

@@ -31,6 +31,7 @@ __all__ = [
     "OperatorConfig",
     "DefaultNativePipelineWarmup",
     "DEFAULT_NATIVE_PIPELINE_WARMUPS",
+    "NativeSearchPackageInput",
     "PreparedAnonymizer",
     "NativePreparedSearch",
     "PipelineEntity",
@@ -62,6 +63,7 @@ __all__ = [
 BytesLike = bytes | bytearray | memoryview
 PathLikeString = str | PathLike[str]
 OperatorConfig = Mapping[str, str] | str | None
+NativeSearchPackageInput = str | BytesLike | Mapping[str, object]
 DefaultNativePipelineWarmup = Literal["lazy-regex", "none"]
 DEFAULT_NATIVE_PIPELINE_WARMUPS: tuple[
     DefaultNativePipelineWarmup,
@@ -76,18 +78,21 @@ class PreparedAnonymizer:
         self._prepared = prepared
 
     @classmethod
-    def from_config_json(cls, config_json: str) -> PreparedAnonymizer:
-        return cls(NativePreparedSearch(config_json))
+    def from_config_json(
+        cls,
+        config_json: NativeSearchPackageInput,
+    ) -> PreparedAnonymizer:
+        return cls(NativePreparedSearch(_native_search_config_json(config_json)))
 
     @classmethod
     def from_config_json_and_artifact_bytes(
         cls,
-        config_json: str,
+        config_json: NativeSearchPackageInput,
         artifact_bytes: BytesLike,
     ) -> PreparedAnonymizer:
         return cls(
             NativePreparedSearch.from_config_json_and_artifact_bytes(
-                config_json,
+                _native_search_config_json(config_json),
                 bytes(artifact_bytes),
             )
         )
@@ -215,10 +220,15 @@ PreparedSearch = PreparedAnonymizer
 _warmed_default_native_pipelines: WeakSet[PreparedAnonymizer] = WeakSet()
 
 
-def prepare_search_package(config_json: str, *, compressed: bool = True) -> bytes:
+def prepare_search_package(
+    config_json: NativeSearchPackageInput,
+    *,
+    compressed: bool = True,
+) -> bytes:
+    normalized_config_json = _native_search_config_json(config_json)
     if compressed:
-        return prepare_static_search_compressed_package_bytes(config_json)
-    return prepare_static_search_package_bytes(config_json)
+        return prepare_static_search_compressed_package_bytes(normalized_config_json)
+    return prepare_static_search_package_bytes(normalized_config_json)
 
 
 def load_prepared_package(package_bytes: BytesLike) -> PreparedAnonymizer:
@@ -346,13 +356,14 @@ def _prepare_from_config_json(config_json: str) -> PreparedAnonymizer:
 
 
 def redact_text(
-    config_json: str,
+    config_json: NativeSearchPackageInput,
     full_text: str,
     operators: OperatorConfig = None,
     *,
     redact_string: str | None = None,
 ) -> StaticRedactionResult:
-    return _prepare_from_config_json(config_json).redact_text(
+    prepared = _prepare_from_config_json(_native_search_config_json(config_json))
+    return prepared.redact_text(
         full_text,
         operators,
         redact_string=redact_string,
@@ -360,13 +371,14 @@ def redact_text(
 
 
 def redact_text_json(
-    config_json: str,
+    config_json: NativeSearchPackageInput,
     full_text: str,
     operators: OperatorConfig = None,
     *,
     redact_string: str | None = None,
 ) -> str:
-    return _prepare_from_config_json(config_json).redact_text_json(
+    prepared = _prepare_from_config_json(_native_search_config_json(config_json))
+    return prepared.redact_text_json(
         full_text,
         operators,
         redact_string=redact_string,
@@ -374,13 +386,14 @@ def redact_text_json(
 
 
 def diagnostics_json(
-    config_json: str,
+    config_json: NativeSearchPackageInput,
     full_text: str,
     operators: OperatorConfig = None,
     *,
     redact_string: str | None = None,
 ) -> str:
-    return _prepare_from_config_json(config_json).diagnostics_json(
+    prepared = _prepare_from_config_json(_native_search_config_json(config_json))
+    return prepared.diagnostics_json(
         full_text,
         operators,
         redact_string=redact_string,
@@ -388,13 +401,14 @@ def diagnostics_json(
 
 
 def summary_diagnostics_json(
-    config_json: str,
+    config_json: NativeSearchPackageInput,
     full_text: str,
     operators: OperatorConfig = None,
     *,
     redact_string: str | None = None,
 ) -> str:
-    return _prepare_from_config_json(config_json).summary_diagnostics_json(
+    prepared = _prepare_from_config_json(_native_search_config_json(config_json))
+    return prepared.summary_diagnostics_json(
         full_text,
         operators,
         redact_string=redact_string,
@@ -451,6 +465,14 @@ def _normalize_default_native_pipeline_language(language: str) -> str:
             f"{_DEFAULT_NATIVE_PIPELINE_LANGUAGE_PATTERN.pattern}"
         )
     return normalized
+
+
+def _native_search_config_json(config_json: NativeSearchPackageInput) -> str:
+    if isinstance(config_json, str):
+        return config_json
+    if isinstance(config_json, (bytes, bytearray, memoryview)):
+        return bytes(config_json).decode("utf-8")
+    return json.dumps(config_json, separators=(",", ":"))
 
 
 def _operator_config_json(

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 import stella_anonymize as anonymize
 
 
@@ -8,6 +10,21 @@ def redact_with_prepared_package(config_json: str, text: str) -> str:
     prepared = anonymize.load_prepared_package(package_bytes)
     result = prepared.redact_text(text)
     return result.redaction.redacted_text
+
+
+def redact_with_config_input(
+    config: anonymize.NativeSearchPackageInput,
+    text: str,
+) -> str:
+    return anonymize.redact_text_json(config, text, redact_string="***")
+
+
+def prepare_package_from_object(config: Mapping[str, object]) -> bytes:
+    return anonymize.prepare_search_package(config, compressed=False)
+
+
+def prepare_package_from_bytes(config_json: bytes) -> bytes:
+    return anonymize.prepare_search_package(config_json)
 
 
 def redact_with_package_file(package_path: str, text: str) -> int:
