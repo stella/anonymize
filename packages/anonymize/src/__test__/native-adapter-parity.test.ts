@@ -52,6 +52,8 @@ import {
 import {
   getDefaultNativePipeline,
   preloadDefaultNativePipeline,
+  redact_default_text,
+  redact_default_text_json,
 } from "../native-node";
 import { buildNativeStaticSearchBundle } from "../build-unified-search";
 import {
@@ -816,6 +818,44 @@ pipeline = anonymize.get_default_native_pipeline(language=payload["language"])
 preloaded = anonymize.preload_default_native_pipeline(language=payload["language"])
 if preloaded is not pipeline:
     raise AssertionError("default package preload did not reuse cached pipeline")
+
+def redact_default_object(item):
+    result = anonymize.redact_default_text(
+        item["text"],
+        item.get("operators"),
+        language=payload["language"],
+    )
+    return {
+        "resolved_entities": [
+            {
+                "label": entity.label,
+                "text": entity.text,
+                "score": entity.score,
+                "source": entity.source,
+                "source_detail": entity.source_detail,
+            }
+            for entity in result.resolved_entities
+        ],
+        "redaction": {
+            "redacted_text": result.redaction.redacted_text,
+            "redaction_map": [
+                {
+                    "placeholder": entry.placeholder,
+                    "original": entry.original,
+                }
+                for entry in result.redaction.redaction_map
+            ],
+            "operator_map": [
+                {
+                    "placeholder": entry.placeholder,
+                    "operator": entry.operator,
+                }
+                for entry in result.redaction.operator_map
+            ],
+            "entity_count": result.redaction.entity_count,
+        },
+    }
+
 print(
     json.dumps(
         {
@@ -827,6 +867,19 @@ print(
                     )
                 )
                 for item in payload["cases"]
+            ],
+            "helper_results": [
+                json.loads(
+                    anonymize.redact_default_text_json(
+                        item["text"],
+                        item.get("operators"),
+                        language=payload["language"],
+                    )
+                )
+                for item in payload["cases"]
+            ],
+            "helper_object_results": [
+                redact_default_object(item) for item in payload["cases"]
             ],
             "version": anonymize.native_package_version(),
         }
@@ -1606,6 +1659,22 @@ describe("native adapter parity", () => {
         tsPipeline.redactText(text, operators ?? undefined),
       ),
     );
+    const tsHelperResults = cases.map(({ operators, text }) =>
+      toBindingStaticResult(
+        redact_default_text(text, operators ?? undefined, {
+          binding: adapters.native,
+          language: "en",
+        }),
+      ),
+    );
+    const tsHelperJsonResults = cases.map(({ operators, text }) =>
+      JSON.parse(
+        redact_default_text_json(text, operators ?? undefined, {
+          binding: adapters.native,
+          language: "en",
+        }),
+      ),
+    );
     const python = callPythonDefaultPackageParity({
       cases,
       language: "en",
@@ -1613,7 +1682,13 @@ describe("native adapter parity", () => {
       tempDir: adapters.tempDir,
     });
 
+    expect(tsHelperResults).toEqual(tsResults);
+    expect(tsHelperJsonResults).toEqual(tsResults);
     expect(python.results).toEqual(tsResults);
+    expect(python.helper_results).toEqual(tsResults);
+    expect(python.helper_object_results).toEqual(
+      tsResults.map(withoutEntityOffsets),
+    );
     expect(python.version).toBe(packageJsonVersion());
   });
 
@@ -3280,6 +3355,8 @@ const callPythonDefaultPackageParity = ({
   language,
   cases,
 }: PythonDefaultPackageParityOptions): {
+  helper_object_results: OffsetFreeStaticRedactionResult[];
+  helper_results: StaticRedactionResult[];
   results: StaticRedactionResult[];
   version: string;
 } => {

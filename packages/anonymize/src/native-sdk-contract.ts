@@ -19,6 +19,8 @@ export const SHARED_NATIVE_SDK_DEFAULT_PACKAGE_FUNCTIONS = [
   "create_native_pipeline_from_default_package",
   "get_default_native_pipeline",
   "preload_default_native_pipeline",
+  "redact_default_text",
+  "redact_default_text_json",
 ] as const;
 
 export const PYTHON_NATIVE_SDK_DEFAULT_PACKAGE_FUNCTIONS =

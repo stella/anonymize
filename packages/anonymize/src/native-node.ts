@@ -328,6 +328,33 @@ export const preload_default_native_pipeline = (
   options: DefaultNativePipelinePackageOptions = {},
 ): PreparedNativePipeline => preloadDefaultNativePipeline(options);
 
+export const redactDefaultText = (
+  fullText: string,
+  operators?: NativeOperatorConfig,
+  options: DefaultNativePipelinePackageOptions = {},
+): NativeStaticRedactionResult =>
+  getDefaultNativePipeline(options).redactText(fullText, operators);
+
+export const redact_default_text = (
+  fullText: string,
+  operators?: NativeOperatorConfig,
+  options: DefaultNativePipelinePackageOptions = {},
+): NativeStaticRedactionResult =>
+  redactDefaultText(fullText, operators, options);
+
+export const redactDefaultTextJson = (
+  fullText: string,
+  operators?: NativeOperatorConfig,
+  options: DefaultNativePipelinePackageOptions = {},
+): string =>
+  getDefaultNativePipeline(options).redact_text_json(fullText, operators);
+
+export const redact_default_text_json = (
+  fullText: string,
+  operators?: NativeOperatorConfig,
+  options: DefaultNativePipelinePackageOptions = {},
+): string => redactDefaultTextJson(fullText, operators, options);
+
 export const preloadDefaultNativePipelineAsync = (
   options: DefaultNativePipelinePackageOptions = {},
 ): Promise<PreparedNativePipeline> => {

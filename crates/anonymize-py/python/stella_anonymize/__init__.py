@@ -51,6 +51,8 @@ __all__ = [
     "prepare_static_search_artifacts_bytes",
     "prepare_static_search_compressed_package_bytes",
     "prepare_static_search_package_bytes",
+    "redact_default_text",
+    "redact_default_text_json",
     "read_default_native_pipeline_package_file",
     "redact_text",
     "redact_text_json",
@@ -308,6 +310,46 @@ def preload_default_native_pipeline(
             warmup="none",
         ),
         "lazy-regex",
+    )
+
+
+def redact_default_text(
+    full_text: str,
+    operators: OperatorConfig = None,
+    *,
+    language: str | None = None,
+    package_path: PathLikeString | None = None,
+    warmup: DefaultNativePipelineWarmup | None = None,
+    redact_string: str | None = None,
+) -> StaticRedactionResult:
+    return get_default_native_pipeline(
+        language=language,
+        package_path=package_path,
+        warmup=warmup,
+    ).redact_text(
+        full_text,
+        operators,
+        redact_string=redact_string,
+    )
+
+
+def redact_default_text_json(
+    full_text: str,
+    operators: OperatorConfig = None,
+    *,
+    language: str | None = None,
+    package_path: PathLikeString | None = None,
+    warmup: DefaultNativePipelineWarmup | None = None,
+    redact_string: str | None = None,
+) -> str:
+    return get_default_native_pipeline(
+        language=language,
+        package_path=package_path,
+        warmup=warmup,
+    ).redact_text_json(
+        full_text,
+        operators,
+        redact_string=redact_string,
     )
 
 

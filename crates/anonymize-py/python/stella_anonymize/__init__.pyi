@@ -139,6 +139,24 @@ def preload_default_native_pipeline(
     language: str | None = None,
     package_path: PathLikeString | None = None,
 ) -> PreparedAnonymizer: ...
+def redact_default_text(
+    full_text: str,
+    operators: OperatorConfig = None,
+    *,
+    language: str | None = None,
+    package_path: PathLikeString | None = None,
+    warmup: DefaultNativePipelineWarmup | None = None,
+    redact_string: str | None = None,
+) -> StaticRedactionResult: ...
+def redact_default_text_json(
+    full_text: str,
+    operators: OperatorConfig = None,
+    *,
+    language: str | None = None,
+    package_path: PathLikeString | None = None,
+    warmup: DefaultNativePipelineWarmup | None = None,
+    redact_string: str | None = None,
+) -> str: ...
 def redact_text(
     config_json: NativeSearchPackageInput,
     full_text: str,

@@ -25,6 +25,8 @@ import {
   readDefaultNativePipelinePackageFile,
   readNativePipelinePackageFile,
   readNativePipelinePackageFileAsync,
+  redact_default_text,
+  redact_default_text_json,
   redact_text,
   redact_text_json,
   summary_diagnostics_json,
@@ -387,6 +389,8 @@ describe("native node loader", () => {
       get_default_native_pipeline,
       preload_default_native_pipeline,
       read_default_native_pipeline_package_file,
+      redact_default_text,
+      redact_default_text_json,
     };
     for (const name of SHARED_NATIVE_SDK_DEFAULT_PACKAGE_FUNCTIONS) {
       expect(typeof aliasFunctions[name]).toBe("function");
@@ -430,9 +434,29 @@ describe("native node loader", () => {
         binding,
         packagePath,
       });
+      const helperResult = redact_default_text("x", undefined, {
+        binding,
+        packagePath,
+      });
+      const helperJson = JSON.parse(
+        redact_default_text_json("x", undefined, {
+          binding,
+          packagePath,
+        }),
+      );
 
       expect(warmed).toBe(cached);
       expect(created).not.toBe(cached);
+      expect(helperResult.redaction.redactedText).toBe("");
+      expect(helperJson).toEqual({
+        redaction: {
+          entity_count: 0,
+          operator_map: [],
+          redacted_text: "",
+          redaction_map: [],
+        },
+        resolved_entities: [],
+      });
       expect(capturedBytes).toEqual([
         [44, 45, 46],
         [44, 45, 46],

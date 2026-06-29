@@ -46,6 +46,24 @@ def redact_with_default_package(text: str) -> int:
     return result.redaction.entity_count
 
 
+def redact_default_helper(text: str) -> str:
+    return anonymize.redact_default_text_json(
+        text,
+        {"country": "redact"},
+        language="en",
+        redact_string="***",
+    )
+
+
+def redact_default_object(text: str) -> int:
+    result = anonymize.redact_default_text(
+        text,
+        {"country": "redact"},
+        language="en",
+    )
+    return result.redaction.entity_count
+
+
 def default_package_size() -> int:
     return len(anonymize.read_default_native_pipeline_package_file(language="en"))
 
