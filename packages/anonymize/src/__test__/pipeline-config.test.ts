@@ -449,6 +449,32 @@ describe("pipeline config semantics", () => {
     ).toBeGreaterThan(0);
   });
 
+  test("native trigger config carries language-scoped support labels", async () => {
+    const search = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        enableTriggerPhrases: true,
+        labels: ["phone number", "registration number", "matter id"],
+        language: "en",
+      },
+      [],
+      createPipelineContext(),
+    );
+
+    expect(
+      search.nativeStaticConfig.trigger_data?.phone_extension_labels,
+    ).toContain("ext");
+    expect(search.nativeStaticConfig.trigger_data?.number_markers).toContain(
+      "no",
+    );
+    expect(search.nativeStaticConfig.trigger_data?.number_labels).toContain(
+      "no.",
+    );
+    expect(search.nativeStaticConfig.trigger_data?.number_labels).toContain(
+      "№",
+    );
+  });
+
   test("native config carries stdnum validator metadata", async () => {
     const search = await buildUnifiedSearch(
       {

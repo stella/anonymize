@@ -22,6 +22,7 @@ import legalFormRuleWords from "./data/legal-form-rule-words.json";
 import nameCorpusCjk from "./data/name-corpus-cjk.json";
 import nameCorpusParticles from "./data/name-corpus-particles.json";
 import organizationIndicators from "./data/organization-indicators.json";
+import triggerSupport from "./data/trigger-support.json";
 
 import { getTextSearch } from "./search-engine";
 
@@ -220,6 +221,9 @@ export type NativeTriggerData = {
   party_position_terms: string[];
   post_nominals: string[];
   sentence_terminal_currency_terms: string[];
+  phone_extension_labels: string[];
+  number_markers: string[];
+  number_labels: string[];
 };
 
 export type NativeLegalFormData = {
@@ -442,6 +446,17 @@ type NameCorpusParticleData = Record<
 
 type OrganizationIndicatorData = Record<string, string[] | string | undefined>;
 
+type LanguageKeyedTerms = Record<
+  string,
+  readonly string[] | string | undefined
+>;
+
+type TriggerSupportData = {
+  phoneExtensionLabels: LanguageKeyedTerms;
+  numberMarkers: LanguageKeyedTerms;
+  numberLabels: LanguageKeyedTerms;
+};
+
 type SectionHeadingsConfig = {
   patterns: Array<{ re: string; flags: string }>;
 };
@@ -456,6 +471,7 @@ type SigningClauseConfig = {
 };
 
 type UnifiedSearchSources = {
+  contentLanguages: readonly string[] | undefined;
   allRegex: PatternEntry[];
   regexMeta: RegexMeta[];
   customRegexes: CustomRegexPattern[];
@@ -615,6 +631,28 @@ const uniqueStrings = (values: readonly string[]): string[] => {
     result.push(value);
   }
   return result;
+};
+
+const TRIGGER_SUPPORT = triggerSupport as TriggerSupportData;
+
+const languageKeyedTerms = (
+  values: LanguageKeyedTerms,
+  selectedLanguages: readonly string[] | undefined,
+): string[] => {
+  const result: string[] = [];
+  for (const [language, terms] of Object.entries(values)) {
+    if (!Array.isArray(terms)) {
+      continue;
+    }
+    if (
+      language !== "und" &&
+      !languageConfigMatches(language, selectedLanguages)
+    ) {
+      continue;
+    }
+    result.push(...terms);
+  }
+  return uniqueStrings(result);
 };
 
 const buildUnifiedSearchSources = async (
@@ -975,6 +1013,7 @@ const buildUnifiedSearchSources = async (
     streetTypes,
     gazResult,
     countryResult,
+    contentLanguages,
     nativeLegalFormPatterns,
     nativeLegalFormData,
     nativeDateData,
@@ -1039,6 +1078,7 @@ export const buildNativeStaticSearchBundle = async (
       falsePositiveFilters: sources.falsePositiveFilters,
       triggerPatterns: sources.triggers.patterns,
       triggerRules: sources.triggers.rules,
+      contentLanguages: sources.contentLanguages,
       legalFormPatterns: sources.nativeLegalFormPatterns,
       legalFormData: sources.nativeLegalFormData,
       dateData: sources.nativeDateData,
@@ -1131,6 +1171,7 @@ export const buildUnifiedSearch = async (
     falsePositiveFilters: sources.falsePositiveFilters,
     triggerPatterns: sources.triggers.patterns,
     triggerRules: sources.triggers.rules,
+    contentLanguages: sources.contentLanguages,
     legalFormPatterns: sources.nativeLegalFormPatterns,
     legalFormData: sources.nativeLegalFormData,
     dateData: sources.nativeDateData,
@@ -1186,6 +1227,7 @@ type BuildNativeStaticConfigArgs = {
   falsePositiveFilters: DenyListFilterData;
   triggerPatterns: readonly string[];
   triggerRules: readonly TriggerRule[];
+  contentLanguages: readonly string[] | undefined;
   legalFormPatterns: readonly string[];
   legalFormData: NativeLegalFormData | null;
   dateData: NativeDateData | null;
@@ -1222,6 +1264,7 @@ const buildNativeStaticConfig = ({
   falsePositiveFilters,
   triggerPatterns,
   triggerRules,
+  contentLanguages,
   legalFormPatterns,
   legalFormData,
   dateData,
@@ -1421,6 +1464,18 @@ const buildNativeStaticConfig = ({
       party_position_terms: [...partyPositionTerms],
       post_nominals: [...POST_NOMINALS],
       sentence_terminal_currency_terms: [...sentenceTerminalCurrencyTerms],
+      phone_extension_labels: languageKeyedTerms(
+        TRIGGER_SUPPORT.phoneExtensionLabels,
+        contentLanguages,
+      ),
+      number_markers: languageKeyedTerms(
+        TRIGGER_SUPPORT.numberMarkers,
+        contentLanguages,
+      ),
+      number_labels: languageKeyedTerms(
+        TRIGGER_SUPPORT.numberLabels,
+        contentLanguages,
+      ),
     };
   }
   if (legalFormData) {

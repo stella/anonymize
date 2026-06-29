@@ -22,15 +22,15 @@ use stella_anonymize_core::{
 pub type Result<T> = std::result::Result<T, ContractError>;
 
 const PREPARED_SEARCH_PACKAGE_HEADER: [u8; 8] = *b"ANONPKG1";
-const PREPARED_SEARCH_PACKAGE_VERSION: u32 = 13;
+const PREPARED_SEARCH_PACKAGE_VERSION: u32 = 14;
 const PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER: [u8; 8] = *b"ANONPKZ1";
-const PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION: u32 = 11;
-const PREPARED_SEARCH_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION: u32 = 10;
+const PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION: u32 = 12;
+const PREPARED_SEARCH_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION: u32 = 11;
 const PREPARED_SEARCH_CORE_PACKAGE_HEADER: [u8; 8] = *b"ANONCPK1";
-const PREPARED_SEARCH_CORE_PACKAGE_VERSION: u32 = 13;
+const PREPARED_SEARCH_CORE_PACKAGE_VERSION: u32 = 14;
 const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_HEADER: [u8; 8] = *b"ANONCPZ1";
-const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION: u32 = 14;
-const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION: u32 = 11;
+const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION: u32 = 15;
+const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION: u32 = 12;
 const PREPARED_SEARCH_PACKAGE_DIGEST_BYTES: usize = 32;
 const PREPARED_SEARCH_PACKAGE_ZSTD_LEVEL: i32 = 1;
 const MAX_PREPARED_SEARCH_PACKAGE_PAYLOAD_BYTES: usize = 256 * 1024 * 1024;
@@ -210,6 +210,12 @@ pub struct BindingTriggerData {
   pub post_nominals: Vec<String>,
   #[serde(default)]
   pub sentence_terminal_currency_terms: Vec<String>,
+  #[serde(default)]
+  pub phone_extension_labels: Vec<String>,
+  #[serde(default)]
+  pub number_markers: Vec<String>,
+  #[serde(default)]
+  pub number_labels: Vec<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -762,6 +768,12 @@ struct BinaryTriggerData {
   #[serde(default)]
   post_nominals: Vec<String>,
   sentence_terminal_currency_terms: Vec<String>,
+  #[serde(default)]
+  phone_extension_labels: Vec<String>,
+  #[serde(default)]
+  number_markers: Vec<String>,
+  #[serde(default)]
+  number_labels: Vec<String>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -1073,6 +1085,9 @@ impl From<BindingTriggerData> for BinaryTriggerData {
       party_position_terms: data.party_position_terms,
       post_nominals: data.post_nominals,
       sentence_terminal_currency_terms: data.sentence_terminal_currency_terms,
+      phone_extension_labels: data.phone_extension_labels,
+      number_markers: data.number_markers,
+      number_labels: data.number_labels,
     }
   }
 }
@@ -1089,6 +1104,9 @@ impl From<BinaryTriggerData> for BindingTriggerData {
       party_position_terms: data.party_position_terms,
       post_nominals: data.post_nominals,
       sentence_terminal_currency_terms: data.sentence_terminal_currency_terms,
+      phone_extension_labels: data.phone_extension_labels,
+      number_markers: data.number_markers,
+      number_labels: data.number_labels,
     }
   }
 }
@@ -2478,6 +2496,9 @@ fn trigger_data_from_binding(
     legal_form_suffixes,
     post_nominals: data.post_nominals,
     sentence_terminal_currency_terms: data.sentence_terminal_currency_terms,
+    phone_extension_labels: data.phone_extension_labels,
+    number_markers: data.number_markers,
+    number_labels: data.number_labels,
   }
 }
 

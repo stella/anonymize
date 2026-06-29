@@ -42,6 +42,27 @@ fn prepared_for_trigger(
   label: &str,
   strategy: TriggerStrategy,
 ) -> PreparedSearch {
+  prepared_for_trigger_with_support(
+    trigger,
+    label,
+    strategy,
+    TriggerSupport::default(),
+  )
+}
+
+#[derive(Default)]
+struct TriggerSupport {
+  phone_extension_labels: Vec<String>,
+  number_markers: Vec<String>,
+  number_labels: Vec<String>,
+}
+
+fn prepared_for_trigger_with_support(
+  trigger: &str,
+  label: &str,
+  strategy: TriggerStrategy,
+  support: TriggerSupport,
+) -> PreparedSearch {
   PreparedSearch::new(PreparedSearchConfig {
     regex_patterns: vec![SearchPattern::LiteralWithOptions {
       pattern: trigger.to_lowercase(),
@@ -69,6 +90,9 @@ fn prepared_for_trigger(
         String::from("MBA"),
       ],
       sentence_terminal_currency_terms: vec![String::from("Kč")],
+      phone_extension_labels: support.phone_extension_labels,
+      number_markers: support.number_markers,
+      number_labels: support.number_labels,
     }),
     ..empty_config(PreparedSearchSlices::default())
   })
@@ -109,9 +133,58 @@ fn uppercase_configured_id_triggers_accept_lowercase_source_forms() {
 }
 
 #[test]
+fn company_id_trigger_uses_configured_number_labels() {
+  let prepared = prepared_for_trigger_with_support(
+    "KRS",
+    "registration number",
+    TriggerStrategy::CompanyIdValue,
+    TriggerSupport {
+      number_labels: vec![String::from("nr.")],
+      ..TriggerSupport::default()
+    },
+  );
+
+  let result = prepared
+    .detect_static_entities("KRS nr. 0000123456")
+    .expect("static detection should succeed");
+
+  assert_eq!(trigger_texts(&result), ["0000123456"]);
+}
+
+#[test]
+fn n_words_trigger_skips_configured_number_markers() {
+  let prepared = prepared_for_trigger_with_support(
+    "case",
+    "matter id",
+    TriggerStrategy::NWords { count: 2 },
+    TriggerSupport {
+      number_markers: vec![String::from("no")],
+      ..TriggerSupport::default()
+    },
+  );
+
+  let result = prepared
+    .detect_static_entities("case no ABC 123")
+    .expect("static detection should succeed");
+
+  assert_eq!(trigger_texts(&result), ["ABC 123"]);
+}
+
+#[test]
 fn labelled_phone_trigger_keeps_extension_suffixes() {
-  let prepared =
-    prepared_for_trigger("PHONE", "phone number", TriggerStrategy::ToEndOfLine);
+  let prepared = prepared_for_trigger_with_support(
+    "PHONE",
+    "phone number",
+    TriggerStrategy::ToEndOfLine,
+    TriggerSupport {
+      phone_extension_labels: vec![
+        String::from("extension"),
+        String::from("ext"),
+        String::from("x"),
+      ],
+      ..TriggerSupport::default()
+    },
+  );
 
   for (text, expected) in [
     (
@@ -239,10 +312,14 @@ fn to_next_comma_stops_on_unicode_case_stop_words() {
 
 #[test]
 fn company_id_trigger_rejects_single_digit_dotted_date() {
-  let prepared = prepared_for_trigger(
+  let prepared = prepared_for_trigger_with_support(
     "DNI",
     "national identification number",
     TriggerStrategy::CompanyIdValue,
+    TriggerSupport {
+      number_labels: vec![String::from("no")],
+      ..TriggerSupport::default()
+    },
   );
 
   let result = prepared

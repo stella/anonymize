@@ -1181,6 +1181,9 @@ fn prepared_search_extracts_written_date_of_birth_trigger() {
       legal_form_suffixes: Vec::new(),
       post_nominals: Vec::new(),
       sentence_terminal_currency_terms: Vec::new(),
+      phone_extension_labels: Vec::new(),
+      number_markers: Vec::new(),
+      number_labels: Vec::new(),
     }),
     ..empty_config(PreparedSearchSlices::default())
   })
@@ -1227,6 +1230,9 @@ fn prepared_search_honors_single_word_written_date_trigger_count() {
       legal_form_suffixes: Vec::new(),
       post_nominals: Vec::new(),
       sentence_terminal_currency_terms: Vec::new(),
+      phone_extension_labels: Vec::new(),
+      number_markers: Vec::new(),
+      number_labels: Vec::new(),
     }),
     ..empty_config(PreparedSearchSlices::default())
   })
@@ -1288,6 +1294,9 @@ fn prepared_search_extracts_year_after_duplicate_year_word_noise() {
       legal_form_suffixes: Vec::new(),
       post_nominals: Vec::new(),
       sentence_terminal_currency_terms: Vec::new(),
+      phone_extension_labels: Vec::new(),
+      number_markers: Vec::new(),
+      number_labels: Vec::new(),
     }),
     ..empty_config(PreparedSearchSlices::default())
   })
@@ -1332,6 +1341,9 @@ fn prepared_search_trigger_caps_by_characters_not_bytes() {
       legal_form_suffixes: Vec::new(),
       post_nominals: Vec::new(),
       sentence_terminal_currency_terms: Vec::new(),
+      phone_extension_labels: Vec::new(),
+      number_markers: Vec::new(),
+      number_labels: Vec::new(),
     }),
     ..empty_config(PreparedSearchSlices::default())
   })
@@ -1377,6 +1389,9 @@ fn prepared_search_trigger_validations_count_characters_not_bytes() {
       legal_form_suffixes: Vec::new(),
       post_nominals: Vec::new(),
       sentence_terminal_currency_terms: Vec::new(),
+      phone_extension_labels: Vec::new(),
+      number_markers: Vec::new(),
+      number_labels: Vec::new(),
     }),
     ..empty_config(PreparedSearchSlices::default())
   })
@@ -1419,6 +1434,9 @@ fn prepared_search_rejects_lowercase_acronym_trigger_collisions() {
       legal_form_suffixes: Vec::new(),
       post_nominals: Vec::new(),
       sentence_terminal_currency_terms: Vec::new(),
+      phone_extension_labels: Vec::new(),
+      number_markers: Vec::new(),
+      number_labels: Vec::new(),
     }),
     ..empty_config(PreparedSearchSlices::default())
   })
@@ -1468,6 +1486,9 @@ fn prepared_search_trims_party_position_before_triggered_address() {
       legal_form_suffixes: Vec::new(),
       post_nominals: Vec::new(),
       sentence_terminal_currency_terms: Vec::new(),
+      phone_extension_labels: Vec::new(),
+      number_markers: Vec::new(),
+      number_labels: Vec::new(),
     }),
     ..empty_config(PreparedSearchSlices::default())
   })
@@ -2081,6 +2102,9 @@ fn prepared_search_keeps_person_name_particles_after_trigger() {
       legal_form_suffixes: Vec::new(),
       post_nominals: Vec::new(),
       sentence_terminal_currency_terms: Vec::new(),
+      phone_extension_labels: Vec::new(),
+      number_markers: Vec::new(),
+      number_labels: Vec::new(),
     }),
     ..empty_config(PreparedSearchSlices::default())
   })
@@ -2745,6 +2769,9 @@ fn prepared_search_expands_plain_postal_city_addresses() {
       legal_form_suffixes: Vec::new(),
       post_nominals: Vec::new(),
       sentence_terminal_currency_terms: Vec::new(),
+      phone_extension_labels: Vec::new(),
+      number_markers: Vec::new(),
+      number_labels: Vec::new(),
     }),
     deny_list_data: Some(DenyListMatchData {
       labels: vec![vec![String::from("address")]].into(),
