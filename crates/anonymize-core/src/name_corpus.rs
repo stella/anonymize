@@ -68,6 +68,7 @@ pub struct PreparedNameCorpusData {
   ja_suffixes: HashSet<String>,
   arabic_connectors: HashSet<String>,
   relation_connectors: HashSet<String>,
+  relation_connector_prefixes: HashSet<String>,
   hyphenated_prefixes: HashSet<String>,
   cjk_non_person_terms: HashSet<String>,
   cjk_surname_starters: HashSet<char>,
@@ -123,6 +124,10 @@ struct ClassifiedToken<'a> {
 impl PreparedNameCorpusData {
   #[must_use]
   pub fn new(data: NameCorpusData) -> Self {
+    let relation_connectors = lower_string_set(data.relation_connectors);
+    let relation_connector_prefixes =
+      relation_connector_prefixes(&relation_connectors);
+
     Self {
       mode: data.mode,
       first_names: string_set(data.first_names),
@@ -135,7 +140,8 @@ impl PreparedNameCorpusData {
       excluded_all_caps: string_set(data.excluded_all_caps),
       ja_suffixes: lower_string_set(data.ja_suffixes),
       arabic_connectors: lower_string_set(data.arabic_connectors),
-      relation_connectors: lower_string_set(data.relation_connectors),
+      relation_connectors,
+      relation_connector_prefixes,
       hyphenated_prefixes: lower_string_set(data.hyphenated_prefixes),
       cjk_non_person_terms: string_set(data.cjk_non_person_terms),
       cjk_surname_starters: data
@@ -729,7 +735,7 @@ fn relation_connector<'a>(
   data: &PreparedNameCorpusData,
 ) -> Option<(&'a str, usize, usize)> {
   let lower = word.text.to_lowercase();
-  if !matches!(lower.as_str(), "s" | "d" | "w" | "r") {
+  if !data.relation_connector_prefixes.contains(&lower) {
     return None;
   }
   let next = words.get(index.saturating_add(1))?;
@@ -1011,6 +1017,17 @@ fn lower_string_set(values: Vec<String>) -> HashSet<String> {
     .collect()
 }
 
+fn relation_connector_prefixes(
+  relation_connectors: &HashSet<String>,
+) -> HashSet<String> {
+  relation_connectors
+    .iter()
+    .filter_map(|connector| connector.split_once('/').map(|(prefix, _)| prefix))
+    .filter(|prefix| !prefix.is_empty())
+    .map(ToOwned::to_owned)
+    .collect()
+}
+
 fn usize_to_u32(value: usize, field: &'static str) -> Result<u32> {
   u32::try_from(value).map_err(|_| Error::InvalidStaticData {
     field,
@@ -1126,6 +1143,26 @@ mod tests {
     assert!(
       (entities[0].score - HIGH_CONFIDENCE_NAME_SCORE).abs() < f64::EPSILON
     );
+  }
+
+  #[test]
+  fn relation_connector_prefixes_come_from_data() {
+    let data = PreparedNameCorpusData::new(NameCorpusData {
+      non_western_names: vec![
+        String::from("Rahul"),
+        String::from("Kumar"),
+        String::from("Vikram"),
+      ],
+      relation_connectors: vec![String::from("x/o")],
+      ..NameCorpusData::default()
+    });
+
+    let entities = data
+      .detect_supplemental("Rahul Kumar x/o Vikram Kumar signed.", &[])
+      .expect("name detection should succeed");
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].text, "Rahul Kumar x/o Vikram Kumar");
   }
 
   #[test]
