@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 
 import type { NativeAnonymizeBinding } from "../native";
 import {
+  available_default_native_pipeline_languages,
+  availableDefaultNativePipelineLanguages,
   create_native_pipeline_from_default_package,
   createNativePipelineFromDefaultPackage,
   createNativePipelineFromPackageFile,
@@ -393,6 +395,7 @@ describe("native node loader", () => {
       });
 
       expect(second).toBe(first);
+      expect(availableDefaultNativePipelineLanguages()).toContain(language);
       expect(capturedBytes).toEqual([[31, 32, 33]]);
     } finally {
       rmSync(packagePath, { force: true });
@@ -404,6 +407,7 @@ describe("native node loader", () => {
       (typeof SHARED_NATIVE_SDK_DEFAULT_PACKAGE_FUNCTIONS)[number],
       unknown
     > = {
+      available_default_native_pipeline_languages,
       create_native_pipeline_from_default_package,
       get_default_native_pipeline,
       preload_default_native_pipeline,
@@ -438,6 +442,7 @@ describe("native node loader", () => {
       expect([
         ...read_default_native_pipeline_package_file({ language }),
       ]).toEqual([41, 42, 43]);
+      expect(available_default_native_pipeline_languages()).toContain(language);
 
       const created = create_native_pipeline_from_default_package({
         binding,

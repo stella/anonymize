@@ -68,6 +68,10 @@ def default_package_size() -> int:
     return len(anonymize.read_default_native_pipeline_package_file(language="en"))
 
 
+def default_package_languages() -> tuple[str, ...]:
+    return anonymize.available_default_native_pipeline_languages()
+
+
 def runtime_version() -> str:
     return anonymize.native_package_version()
 

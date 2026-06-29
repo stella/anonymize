@@ -40,6 +40,7 @@ __all__ = [
     "RedactionEntry",
     "RedactionResult",
     "StaticRedactionResult",
+    "available_default_native_pipeline_languages",
     "create_native_pipeline_from_default_package",
     "diagnostics_json",
     "get_default_native_pipeline",
@@ -74,6 +75,9 @@ DEFAULT_NATIVE_PIPELINE_WARMUPS: tuple[
 ] = ("lazy-regex", "none")
 DEFAULT_NATIVE_PIPELINE_PACKAGE = "native-pipeline.stlanonpkg"
 _DEFAULT_NATIVE_PIPELINE_LANGUAGE_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+_DEFAULT_NATIVE_PIPELINE_LANGUAGE_PACKAGE_PATTERN = re.compile(
+    r"^native-pipeline\.([a-z0-9]+(?:-[a-z0-9]+)*)\.stlanonpkg$"
+)
 __version__ = native_package_version()
 
 
@@ -256,6 +260,23 @@ def read_default_native_pipeline_package_file(
         raise FileNotFoundError(
             f"{_default_native_pipeline_package_description(language)} is unavailable: {error}"
         ) from error
+
+
+def available_default_native_pipeline_languages() -> tuple[str, ...]:
+    languages: set[str] = set()
+    try:
+        package_dir = files(__name__).joinpath("native_packages")
+        for resource in package_dir.iterdir():
+            match = _DEFAULT_NATIVE_PIPELINE_LANGUAGE_PACKAGE_PATTERN.fullmatch(
+                resource.name
+            )
+            if match is not None:
+                languages.add(match.group(1))
+    except (FileNotFoundError, ModuleNotFoundError, OSError) as error:
+        raise FileNotFoundError(
+            f"Default native pipeline package directory is unavailable: {error}"
+        ) from error
+    return tuple(sorted(languages))
 
 
 def create_native_pipeline_from_default_package(

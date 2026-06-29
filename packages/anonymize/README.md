@@ -21,9 +21,15 @@ For browser targets, install `@stll/anonymize-wasm` instead. It exposes the same
 ## Usage: Node.js native SDK
 
 ```ts
-import { getDefaultNativePipeline } from "@stll/anonymize/native-node";
+import {
+  availableDefaultNativePipelineLanguages,
+  getDefaultNativePipeline,
+} from "@stll/anonymize/native-node";
 
-const anonymizer = getDefaultNativePipeline();
+const languages = availableDefaultNativePipelineLanguages();
+const anonymizer = getDefaultNativePipeline(
+  languages.includes("en") ? { language: "en" } : {},
+);
 const result = anonymizer.redact_text(text);
 
 console.log(result.redaction.redactedText);
@@ -65,7 +71,10 @@ The config module may export a `PipelineConfig` directly or `{ config, gazetteer
 ```py
 import stella_anonymize as anonymize
 
-prepared = anonymize.preload_default_native_pipeline(language="en")
+languages = anonymize.available_default_native_pipeline_languages()
+prepared = anonymize.preload_default_native_pipeline(
+    language="en" if "en" in languages else None
+)
 result = prepared.redact_text(text, redact_string="***")
 
 print(result.redaction.redacted_text)

@@ -15,6 +15,7 @@ export const SHARED_NATIVE_SDK_TOP_LEVEL_FUNCTIONS = [
 ] as const;
 
 export const SHARED_NATIVE_SDK_DEFAULT_PACKAGE_FUNCTIONS = [
+  "available_default_native_pipeline_languages",
   "read_default_native_pipeline_package_file",
   "create_native_pipeline_from_default_package",
   "get_default_native_pipeline",

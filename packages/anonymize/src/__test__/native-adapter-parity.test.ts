@@ -583,6 +583,9 @@ print(
                     payload.get("operators_json"),
                 )
             ),
+            "available_languages": list(
+                anonymize.available_default_native_pipeline_languages()
+            ),
             "prepare_stages": [
                 event.get("stage")
                 for event in json.loads(prepared.prepare_diagnostics_json()).get(
@@ -804,6 +807,9 @@ print(
             "top_level_object": [
                 redact_object_with_top_level(item) for item in payload["cases"]
             ],
+            "available_languages": list(
+                anonymize.available_default_native_pipeline_languages()
+            ),
             "normalized": anonymize.normalize_for_search(payload["normalize_text"]),
             "module_version": anonymize.__version__,
             "version": anonymize.native_package_version(),
@@ -892,6 +898,9 @@ print(
             "helper_object_results": [
                 redact_default_object(item) for item in payload["cases"]
             ],
+            "available_languages": list(
+                anonymize.available_default_native_pipeline_languages()
+            ),
             "module_version": anonymize.__version__,
             "version": anonymize.native_package_version(),
         }
@@ -1407,6 +1416,7 @@ describe("native adapter parity", () => {
         "prepare.artifacts.decode",
       ]),
     );
+    expect(result.available_languages).toContain("en");
     expect(result.version).toBe(packageJsonVersion());
     expect(result.module_version).toBe(packageJsonVersion());
   });
@@ -1567,6 +1577,7 @@ describe("native adapter parity", () => {
     expect(python.normalized).toBe(
       adapters.native.normalizeForSearch("Číslo\u00a0PAS - 1234"),
     );
+    expect(python.available_languages).toContain("en");
     expect(python.version).toBe(packageJsonVersion());
     expect(python.module_version).toBe(packageJsonVersion());
   });
@@ -1679,6 +1690,7 @@ describe("native adapter parity", () => {
     expect(rustCoreJson[1]?.redaction.redacted_text).not.toContain(
       "Project Zephyr",
     );
+    expect(python.available_languages).toContain("en");
     expect(python.version).toBe(packageJsonVersion());
     expect(python.module_version).toBe(packageJsonVersion());
   });
@@ -1740,6 +1752,7 @@ describe("native adapter parity", () => {
     expect(python.helper_object_results).toEqual(
       tsResults.map(withoutEntityOffsets),
     );
+    expect(python.available_languages).toContain("en");
     expect(python.version).toBe(packageJsonVersion());
     expect(python.module_version).toBe(packageJsonVersion());
   });
@@ -3268,6 +3281,7 @@ const callPythonPackageFacade = ({
   operators,
   compressed,
 }: PythonPackageFacadeOptions): {
+  available_languages: string[];
   from_bytes: StaticRedactionResult;
   from_file: StaticRedactionResult;
   prepare_stages: string[];
@@ -3358,6 +3372,7 @@ const callPythonSharedSdkParity = ({
   top_level_bytes: StaticRedactionResult[];
   top_level_object: OffsetFreeStaticRedactionResult[];
   top_level_object_json: StaticRedactionResult[];
+  available_languages: string[];
   normalized: string;
   module_version: string;
   version: string;
@@ -3410,6 +3425,7 @@ const callPythonDefaultPackageParity = ({
   language,
   cases,
 }: PythonDefaultPackageParityOptions): {
+  available_languages: string[];
   helper_object_results: OffsetFreeStaticRedactionResult[];
   helper_results: StaticRedactionResult[];
   results: StaticRedactionResult[];

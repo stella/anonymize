@@ -1,5 +1,5 @@
 import { createRequire } from "node:module";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import process from "node:process";
 
@@ -83,7 +83,10 @@ const DEFAULT_NATIVE_PIPELINE_PACKAGE_URL = new URL(
   "../native-pipeline.stlanonpkg",
   import.meta.url,
 );
+const DEFAULT_NATIVE_PIPELINE_PACKAGE_DIR_URL = new URL("../", import.meta.url);
 const DEFAULT_NATIVE_PIPELINE_LANGUAGE_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
+const DEFAULT_NATIVE_PIPELINE_LANGUAGE_PACKAGE_PATTERN =
+  /^native-pipeline\.([a-z0-9]+(?:-[a-z0-9]+)*)\.stlanonpkg$/u;
 const DEFAULT_NATIVE_PIPELINE_PACKAGE_CACHE_KEY = "<default>";
 const defaultNativePipelineCache = new WeakMap<
   NativeAnonymizeBinding,
@@ -245,6 +248,30 @@ export const readDefaultNativePipelinePackageFile = ({
 export const read_default_native_pipeline_package_file = (
   options: DefaultNativePipelinePackageFileOptions = {},
 ): Uint8Array => readDefaultNativePipelinePackageFile(options);
+
+export const availableDefaultNativePipelineLanguages = (): string[] => {
+  const languages = new Set<string>();
+  try {
+    for (const fileName of readdirSync(
+      DEFAULT_NATIVE_PIPELINE_PACKAGE_DIR_URL,
+    )) {
+      const match = fileName.match(
+        DEFAULT_NATIVE_PIPELINE_LANGUAGE_PACKAGE_PATTERN,
+      );
+      if (match?.[1] !== undefined) {
+        languages.add(match[1]);
+      }
+    }
+  } catch (error) {
+    throw new Error(
+      `Default native pipeline package directory is unavailable: ${formatLoadError(error)}`,
+    );
+  }
+  return [...languages].toSorted();
+};
+
+export const available_default_native_pipeline_languages =
+  availableDefaultNativePipelineLanguages;
 
 export const readDefaultNativePipelinePackageFileAsync = async ({
   language,

@@ -15,7 +15,10 @@ Prepare or load the anonymizer once, then reuse it for documents.
 ```py
 import stella_anonymize as anonymize
 
-prepared = anonymize.preload_default_native_pipeline(language="en")
+languages = anonymize.available_default_native_pipeline_languages()
+prepared = anonymize.preload_default_native_pipeline(
+    language="en" if "en" in languages else None
+)
 result = prepared.redact_text(text, redact_string="***")
 
 print(result.redaction.redacted_text)
@@ -46,6 +49,7 @@ for repeated document processing.
 - `prepare_search_package(config_json | config_bytes | config_mapping, compressed=True) -> bytes`
 - `load_prepared_package(package_bytes) -> PreparedAnonymizer`
 - `load_prepared_package_file(package_path) -> PreparedAnonymizer`
+- `available_default_native_pipeline_languages() -> tuple[str, ...]`
 - `read_default_native_pipeline_package_file(language=None) -> bytes`
 - `get_default_native_pipeline(language=None, package_path=None, warmup="none") -> PreparedAnonymizer`
 - `preload_default_native_pipeline(language=None, package_path=None) -> PreparedAnonymizer`

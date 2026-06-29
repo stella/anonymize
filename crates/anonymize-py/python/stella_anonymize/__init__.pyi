@@ -123,6 +123,7 @@ def read_default_native_pipeline_package_file(
     *,
     language: str | None = None,
 ) -> bytes: ...
+def available_default_native_pipeline_languages() -> tuple[str, ...]: ...
 def create_native_pipeline_from_default_package(
     *,
     language: str | None = None,
