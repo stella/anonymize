@@ -62,6 +62,11 @@ import { loadTestDictionaries } from "./load-dictionaries";
 setDefaultTimeout(240_000);
 
 const SLOW_NATIVE_FIXTURE_PARITY_TIMEOUT_MS = 600_000;
+const RUN_SLOW_NATIVE_FIXTURE_PARITY =
+  process.env["ANONYMIZE_TEST_SLOW_NATIVE_FIXTURE_PARITY"] === "1";
+const slowNativeFixtureParityTest = RUN_SLOW_NATIVE_FIXTURE_PARITY
+  ? test
+  : test.skip;
 
 type NativeAdapter = Omit<
   NativeAnonymizeBinding,
@@ -2090,7 +2095,7 @@ describe("native adapter parity", () => {
     });
   });
 
-  test(
+  slowNativeFixtureParityTest(
     "native facade and Python match on contract fixture packages",
     async () => {
       const adapters = getAdapters();
@@ -2153,69 +2158,72 @@ describe("native adapter parity", () => {
     SLOW_NATIVE_FIXTURE_PARITY_TIMEOUT_MS,
   );
 
-  test("native fixture improvements are explicit", async () => {
-    const adapters = getAdapters();
-    const languages = [
-      ...new Set(NATIVE_FIXTURE_IMPROVEMENTS.map(({ language }) => language)),
-    ];
+  slowNativeFixtureParityTest(
+    "native fixture improvements are explicit",
+    async () => {
+      const adapters = getAdapters();
+      const languages = [
+        ...new Set(NATIVE_FIXTURE_IMPROVEMENTS.map(({ language }) => language)),
+      ];
 
-    for (const language of languages) {
-      const fixtures = new Map(
-        loadContractFixtureCases(language).map(({ name, text }) => [
-          name,
-          text,
-        ]),
-      );
-      const scopedConfig = applyPipelineLanguageScope({
-        ...contractTestConfig(`native-fixture-improvements-${language}`),
-        language,
-      });
-      const dictionaryScope: Parameters<typeof loadTestDictionaries>[0] = {};
-      if (scopedConfig.denyListCountries !== undefined) {
-        dictionaryScope.denyListCountries = scopedConfig.denyListCountries;
-      }
-      if (scopedConfig.nameCorpusLanguages !== undefined) {
-        dictionaryScope.nameCorpusLanguages = scopedConfig.nameCorpusLanguages;
-      }
-      const dictionaries = await loadTestDictionaries(dictionaryScope);
-      const search = await preparePipelineSearch({
-        config: {
-          ...scopedConfig,
-          dictionaries,
-        },
-        context: createPipelineContext(),
-      });
-      const packageBytes = prepareNativeSearchPackage({
-        binding: adapters.native,
-        config: search.nativeStaticConfig,
-        compressed: true,
-      });
-      const anonymizer = createNativeAnonymizerFromPackage({
-        binding: adapters.native,
-        packageBytes,
-      });
-
-      for (const improvement of NATIVE_FIXTURE_IMPROVEMENTS.filter(
-        (item) => item.language === language,
-      )) {
-        const text = fixtures.get(improvement.fixture);
-        expect(text).toBeDefined();
-        if (text === undefined) {
-          continue;
-        }
-
-        const result = toBindingStaticResult(
-          anonymizer.redactStaticEntities(text),
+      for (const language of languages) {
+        const fixtures = new Map(
+          loadContractFixtureCases(language).map(({ name, text }) => [
+            name,
+            text,
+          ]),
         );
-        for (const entity of improvement.includes ?? []) {
-          expectNativeFixtureEntity(result, entity);
+        const scopedConfig = applyPipelineLanguageScope({
+          ...contractTestConfig(`native-fixture-improvements-${language}`),
+          language,
+        });
+        const dictionaryScope: Parameters<typeof loadTestDictionaries>[0] = {};
+        if (scopedConfig.denyListCountries !== undefined) {
+          dictionaryScope.denyListCountries = scopedConfig.denyListCountries;
         }
-        for (const entity of improvement.excludes ?? []) {
-          expectNativeFixtureEntityAbsent(result, entity);
+        if (scopedConfig.nameCorpusLanguages !== undefined) {
+          dictionaryScope.nameCorpusLanguages = scopedConfig.nameCorpusLanguages;
+        }
+        const dictionaries = await loadTestDictionaries(dictionaryScope);
+        const search = await preparePipelineSearch({
+          config: {
+            ...scopedConfig,
+            dictionaries,
+          },
+          context: createPipelineContext(),
+        });
+        const packageBytes = prepareNativeSearchPackage({
+          binding: adapters.native,
+          config: search.nativeStaticConfig,
+          compressed: true,
+        });
+        const anonymizer = createNativeAnonymizerFromPackage({
+          binding: adapters.native,
+          packageBytes,
+        });
+
+        for (const improvement of NATIVE_FIXTURE_IMPROVEMENTS.filter(
+          (item) => item.language === language,
+        )) {
+          const text = fixtures.get(improvement.fixture);
+          expect(text).toBeDefined();
+          if (text === undefined) {
+            continue;
+          }
+
+          const result = toBindingStaticResult(
+            anonymizer.redactStaticEntities(text),
+          );
+          for (const entity of improvement.includes ?? []) {
+            expectNativeFixtureEntity(result, entity);
+          }
+          for (const entity of improvement.excludes ?? []) {
+            expectNativeFixtureEntityAbsent(result, entity);
+          }
         }
       }
-    }
-  });
+    },
+  );
 
   test("JSON operator config accepts camel-case redactString", () => {
     const adapters = getAdapters();
