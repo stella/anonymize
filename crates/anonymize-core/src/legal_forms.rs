@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::BTreeSet;
 
 use crate::byte_offsets::ByteOffsets;
@@ -230,7 +231,7 @@ fn walk_backward(
       }
     }
 
-    if data.connector_words.contains(&token.text.to_lowercase()) {
+    if contains_lowercase(&data.connector_words, token.text) {
       let previous = token_before(text, token.start);
       if previous
         .as_ref()
@@ -240,7 +241,7 @@ fn walk_backward(
       }
       if data
         .and_connector_words
-        .contains(&token.text.to_lowercase())
+        .contains(lowercase_lookup(token.text).as_ref())
       {
         let upper_before = count_upper_before(text, token.start);
         if upper_before <= 2 || has_middle_initial_before(text, token.start) {
@@ -319,7 +320,7 @@ fn is_token_char(ch: char) -> bool {
 fn is_acceptable_token(token: &str, data: &PreparedLegalFormData) -> bool {
   token.chars().next().is_some_and(|ch| {
     ch.is_uppercase() || ch.is_lowercase() || ch.is_ascii_digit()
-  }) || data.connector_words.contains(&token.to_lowercase())
+  }) || contains_lowercase(&data.connector_words, token)
 }
 
 fn starts_upper(text: &str) -> bool {
@@ -471,9 +472,7 @@ fn trim_to_first_cap_after_verb(
   let mut last_verb_end = None::<usize>;
   for token in word_tokens(text, candidate_start, suffix_start) {
     if starts_lower(token.text)
-      && data
-        .sentence_verb_indicators
-        .contains(&token.text.to_lowercase())
+      && contains_lowercase(&data.sentence_verb_indicators, token.text)
     {
       last_verb_end = Some(token.end);
     }
@@ -486,9 +485,9 @@ fn trim_to_first_cap_after_verb(
     if !starts_upper(token.text) {
       continue;
     }
-    let lower = token.text.to_lowercase();
-    if data.role_heads.contains(&lower)
-      || data.clause_noun_heads.contains(&lower)
+    let lower = lowercase_lookup(token.text);
+    if data.role_heads.contains(lower.as_ref())
+      || data.clause_noun_heads.contains(lower.as_ref())
     {
       continue;
     }
@@ -752,15 +751,11 @@ fn trim_role_head(
   data: &PreparedLegalFormData,
 ) -> Option<TrimmedStart> {
   let first = first_role_word(text)?;
-  let first_lower = first.text.to_lowercase();
-  let first_leading = first
-    .text
-    .split('-')
-    .next()
-    .unwrap_or_default()
-    .to_lowercase();
-  if !data.role_heads.contains(&first_lower)
-    && !data.role_heads.contains(&first_leading)
+  let first_lower = lowercase_lookup(first.text);
+  let first_leading = first.text.split('-').next().unwrap_or_default();
+  let first_leading = lowercase_lookup(first_leading);
+  if !data.role_heads.contains(first_lower.as_ref())
+    && !data.role_heads.contains(first_leading.as_ref())
   {
     return None;
   }
@@ -778,7 +773,7 @@ fn trim_role_head(
   for token in word_tokens(text, mid_start, suffix_offset) {
     if data
       .sentence_verb_indicators
-      .contains(&token.text.to_lowercase())
+      .contains(lowercase_lookup(token.text).as_ref())
     {
       last_verb_end = Some(token.end);
     }
@@ -801,9 +796,9 @@ fn trim_role_head(
     if !starts_upper(token.text) {
       continue;
     }
-    let lower = token.text.to_lowercase();
-    if data.role_heads.contains(&lower)
-      || data.clause_noun_heads.contains(&lower)
+    let lower = lowercase_lookup(token.text);
+    if data.role_heads.contains(lower.as_ref())
+      || data.clause_noun_heads.contains(lower.as_ref())
     {
       continue;
     }
@@ -857,7 +852,7 @@ fn preceding_word_is_sentence_verb(
   trailing_word(before).is_some_and(|word| {
     data
       .sentence_verb_indicators
-      .contains(&word.text.to_lowercase())
+      .contains(lowercase_lookup(word.text).as_ref())
   })
 }
 
@@ -874,7 +869,7 @@ fn is_structural_single_cap_match(
   };
   data
     .structural_single_cap_prefixes
-    .contains(&first.to_lowercase())
+    .contains(lowercase_lookup(first).as_ref())
     && is_single_cap_token(second.trim_matches(','))
 }
 
@@ -890,7 +885,7 @@ fn is_bare_single_cap_structural_inner_match(
   token_before(full_text, match_start).is_some_and(|token| {
     data
       .structural_single_cap_prefixes
-      .contains(&token.text.to_lowercase())
+      .contains(lowercase_lookup(token.text).as_ref())
   })
 }
 
@@ -965,18 +960,18 @@ fn extend_backward(
 ) -> usize {
   let head_word = leading_entity_word(full_text, match_start);
   let suffix_mode = force_suffix_mode
-    || head_word.as_ref().is_some_and(|word| {
-      data.company_suffix_words.contains(&word.to_lowercase())
-    });
+    || head_word
+      .as_ref()
+      .is_some_and(|word| contains_lowercase(&data.company_suffix_words, word));
   let mut pos = match_start;
 
   while let Some(found) = simple_word_before(full_text, pos) {
     let word = found.text;
-    let lower = word.to_lowercase();
+    let lower = lowercase_lookup(word);
     let is_upper = starts_upper(word);
-    let is_connector = data.connector_words.contains(&lower);
+    let is_connector = data.connector_words.contains(lower.as_ref());
     let is_in_name_prep =
-      suffix_mode && data.in_name_prepositions.contains(&lower);
+      suffix_mode && data.in_name_prepositions.contains(lower.as_ref());
 
     if is_upper {
       pos = found.start;
@@ -992,17 +987,17 @@ fn extend_backward(
       {
         break;
       }
-      if data.and_connector_words.contains(&lower) {
+      if data.and_connector_words.contains(lower.as_ref()) {
         let upper_before =
           count_upper_words_before(full_text, found.start, suffix_mode, data);
         let middle_initial = has_middle_initial_before(full_text, found.start);
         if upper_before <= 1
           && (data
             .clause_noun_heads
-            .contains(&previous.text.to_lowercase())
+            .contains(lowercase_lookup(previous.text).as_ref())
             || data
               .connector_prose_heads
-              .contains(&previous.text.to_lowercase()))
+              .contains(lowercase_lookup(previous.text).as_ref()))
         {
           break;
         }
@@ -1097,7 +1092,7 @@ fn count_upper_words_before(
     if cross_in_name_preps
       && data
         .in_name_prepositions
-        .contains(&found.text.to_lowercase())
+        .contains(lowercase_lookup(found.text).as_ref())
     {
       let Some(previous) = simple_word_before(full_text, found.start) else {
         break;
@@ -1392,7 +1387,7 @@ fn trim_leading_clause(
             starts_lower(word.text)
               && data
                 .sentence_verb_indicators
-                .contains(&word.text.to_lowercase())
+                .contains(lowercase_lookup(word.text).as_ref())
           });
         if !has_comma && !has_sentence_verb {
           continue;
@@ -1634,4 +1629,16 @@ fn lower_vec(values: Vec<String>) -> Vec<String> {
     .filter(|value| !value.is_empty())
     .map(|value| value.to_lowercase())
     .collect()
+}
+
+fn lowercase_lookup(text: &str) -> Cow<'_, str> {
+  if text.chars().any(char::is_uppercase) {
+    Cow::Owned(text.to_lowercase())
+  } else {
+    Cow::Borrowed(text)
+  }
+}
+
+fn contains_lowercase(set: &BTreeSet<String>, text: &str) -> bool {
+  set.contains(lowercase_lookup(text).as_ref())
 }
