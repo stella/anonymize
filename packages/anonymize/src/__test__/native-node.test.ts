@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -36,12 +36,31 @@ import {
   SHARED_NATIVE_SDK_TOP_LEVEL_FUNCTIONS,
 } from "../native-sdk-contract";
 
+const packageJsonVersion = (): string => {
+  const packageJson = JSON.parse(
+    readFileSync(
+      fileURLToPath(new URL("../../package.json", import.meta.url)),
+      {
+        encoding: "utf8",
+      },
+    ),
+  ) as { version?: unknown };
+  if (typeof packageJson.version !== "string") {
+    throw new TypeError("Package version is missing");
+  }
+  return packageJson.version;
+};
+
+const PACKAGE_VERSION = packageJsonVersion();
+const MISMATCHED_PACKAGE_VERSION =
+  PACKAGE_VERSION === "0.0.0" ? "999.999.999" : "0.0.0";
+
 describe("native node loader", () => {
   test("loads the bundled native loader", () => {
     const calls: string[] = [];
-    const binding = fakeNativeBinding("1.5.0");
+    const binding = fakeNativeBinding(PACKAGE_VERSION);
     const loaded = loadNativeAnonymizeBinding({
-      expectedVersion: "1.5.0",
+      expectedVersion: PACKAGE_VERSION,
       platform: "darwin",
       arch: "arm64",
       env: {},
@@ -60,9 +79,9 @@ describe("native node loader", () => {
 
   test("loads an explicit native library path first", () => {
     const calls: string[] = [];
-    const binding = fakeNativeBinding("1.5.0");
+    const binding = fakeNativeBinding(PACKAGE_VERSION);
     const loaded = loadNativeAnonymizeBinding({
-      expectedVersion: "1.5.0",
+      expectedVersion: PACKAGE_VERSION,
       env: { STELLA_ANONYMIZE_NATIVE_LIBRARY_PATH: "/tmp/anonymize.node" },
       requireModule: (specifier) => {
         calls.push(specifier);
@@ -79,11 +98,11 @@ describe("native node loader", () => {
 
   test("accepts a napi class constructor on the native binding", () => {
     const calls: string[] = [];
-    const binding = fakeNativeBinding("1.5.0", {
+    const binding = fakeNativeBinding(PACKAGE_VERSION, {
       preparedSearchAsConstructor: true,
     });
     const loaded = loadNativeAnonymizeBinding({
-      expectedVersion: "1.5.0",
+      expectedVersion: PACKAGE_VERSION,
       platform: "darwin",
       arch: "arm64",
       env: {},
@@ -102,18 +121,18 @@ describe("native node loader", () => {
   test("rejects mismatched native binding versions", () => {
     expect(() =>
       loadNativeAnonymizeBinding({
-        expectedVersion: "1.5.0",
+        expectedVersion: PACKAGE_VERSION,
         platform: "darwin",
         arch: "arm64",
         env: {},
         requireModule: (specifier) => {
           if (specifier === "../index.cjs") {
-            return fakeNativeBinding("1.4.0");
+            return fakeNativeBinding(MISMATCHED_PACKAGE_VERSION);
           }
           throw new Error("not found");
         },
       }),
-    ).toThrow("does not match 1.5.0");
+    ).toThrow(`does not match ${PACKAGE_VERSION}`);
   });
 
   test("loads native pipeline package bytes from a file", () => {
@@ -150,7 +169,7 @@ describe("native node loader", () => {
     const capturedBytes: number[][] = [];
     try {
       writeFileSync(packagePath, Uint8Array.of(7, 8, 9));
-      const binding = fakeNativeBinding("1.5.0", {
+      const binding = fakeNativeBinding(PACKAGE_VERSION, {
         onPreparedPackageBytes: (bytes) => {
           capturedBytes.push([...bytes]);
         },
@@ -158,7 +177,7 @@ describe("native node loader", () => {
 
       const pipeline = createNativePipelineFromPackageFile({
         binding,
-        expectedVersion: "1.5.0",
+        expectedVersion: PACKAGE_VERSION,
         packagePath,
       });
 
@@ -175,7 +194,7 @@ describe("native node loader", () => {
     const capturedBytes: number[][] = [];
     try {
       writeFileSync(packagePath, Uint8Array.of(10, 11, 12));
-      const binding = fakeNativeBinding("1.5.0", {
+      const binding = fakeNativeBinding(PACKAGE_VERSION, {
         onPreparedPackageBytesWithoutCache: (bytes) => {
           capturedBytes.push([...bytes]);
         },
@@ -184,7 +203,7 @@ describe("native node loader", () => {
       const pipeline = createNativePipelineFromDefaultPackage({
         binding,
         packagePath,
-        expectedVersion: "1.5.0",
+        expectedVersion: PACKAGE_VERSION,
       });
 
       expect(capturedBytes).toEqual([[10, 11, 12]]);
@@ -201,7 +220,7 @@ describe("native node loader", () => {
     const verifiedBytes: number[][] = [];
     try {
       writeFileSync(packagePath, Uint8Array.of(22, 23, 24));
-      const binding = fakeNativeBinding("1.5.0", {
+      const binding = fakeNativeBinding(PACKAGE_VERSION, {
         onPreparedPackageBytesWithoutCache: (bytes) => {
           verifiedBytes.push([...bytes]);
         },
@@ -213,7 +232,7 @@ describe("native node loader", () => {
       const pipeline = createNativePipelineFromDefaultPackage({
         binding,
         packagePath,
-        expectedVersion: "1.5.0",
+        expectedVersion: PACKAGE_VERSION,
       });
 
       expect(trustedBytes).toEqual([[22, 23, 24]]);
@@ -231,7 +250,7 @@ describe("native node loader", () => {
     try {
       writeFileSync(packagePath, Uint8Array.of(13, 14, 15));
       let warmCount = 0;
-      const binding = fakeNativeBinding("1.5.0", {
+      const binding = fakeNativeBinding(PACKAGE_VERSION, {
         onPreparedPackageBytesWithoutCache: (bytes) => {
           capturedBytes.push([...bytes]);
         },
@@ -243,18 +262,18 @@ describe("native node loader", () => {
       const first = getDefaultNativePipeline({
         binding,
         packagePath,
-        expectedVersion: "1.5.0",
+        expectedVersion: PACKAGE_VERSION,
       });
       const second = getDefaultNativePipeline({
         binding,
         packagePath,
-        expectedVersion: "1.5.0",
+        expectedVersion: PACKAGE_VERSION,
       });
       expect(warmCount).toBe(0);
       const preloaded = preloadDefaultNativePipeline({
         binding,
         packagePath,
-        expectedVersion: "1.5.0",
+        expectedVersion: PACKAGE_VERSION,
       });
 
       expect(second).toBe(first);
@@ -272,7 +291,7 @@ describe("native node loader", () => {
     try {
       writeFileSync(packagePath, Uint8Array.of(19, 20, 21));
       let warmCount = 0;
-      const binding = fakeNativeBinding("1.5.0", {
+      const binding = fakeNativeBinding(PACKAGE_VERSION, {
         onWarmLazyRegex: () => {
           warmCount += 1;
         },
@@ -281,19 +300,19 @@ describe("native node loader", () => {
       const cold = getDefaultNativePipeline({
         binding,
         packagePath,
-        expectedVersion: "1.5.0",
+        expectedVersion: PACKAGE_VERSION,
         warmup: "none",
       });
       const stillCold = getDefaultNativePipeline({
         binding,
         packagePath,
-        expectedVersion: "1.5.0",
+        expectedVersion: PACKAGE_VERSION,
         warmup: "none",
       });
       const warmed = getDefaultNativePipeline({
         binding,
         packagePath,
-        expectedVersion: "1.5.0",
+        expectedVersion: PACKAGE_VERSION,
         warmup: "lazy-regex",
       });
 
@@ -312,7 +331,7 @@ describe("native node loader", () => {
     try {
       writeFileSync(packagePath, Uint8Array.of(16, 17, 18));
       let warmCount = 0;
-      const binding = fakeNativeBinding("1.5.0", {
+      const binding = fakeNativeBinding(PACKAGE_VERSION, {
         onPreparedPackageBytesWithoutCache: (bytes) => {
           capturedBytes.push([...bytes]);
         },
@@ -325,18 +344,18 @@ describe("native node loader", () => {
         preloadDefaultNativePipelineAsync({
           binding,
           packagePath,
-          expectedVersion: "1.5.0",
+          expectedVersion: PACKAGE_VERSION,
         }),
         preloadDefaultNativePipelineAsync({
           binding,
           packagePath,
-          expectedVersion: "1.5.0",
+          expectedVersion: PACKAGE_VERSION,
         }),
       ]);
       const syncCached = getDefaultNativePipeline({
         binding,
         packagePath,
-        expectedVersion: "1.5.0",
+        expectedVersion: PACKAGE_VERSION,
       });
 
       expect(second).toBe(first);
@@ -356,7 +375,7 @@ describe("native node loader", () => {
     const capturedBytes: number[][] = [];
     try {
       writeFileSync(packagePath, Uint8Array.of(31, 32, 33));
-      const binding = fakeNativeBinding("1.5.0", {
+      const binding = fakeNativeBinding(PACKAGE_VERSION, {
         onPreparedPackageBytesWithoutCache: (bytes) => {
           capturedBytes.push([...bytes]);
         },
@@ -365,12 +384,12 @@ describe("native node loader", () => {
       const first = getDefaultNativePipeline({
         binding,
         language: "ZZ-Test",
-        expectedVersion: "1.5.0",
+        expectedVersion: PACKAGE_VERSION,
       });
       const second = getDefaultNativePipeline({
         binding,
         language,
-        expectedVersion: "1.5.0",
+        expectedVersion: PACKAGE_VERSION,
       });
 
       expect(second).toBe(first);
@@ -407,7 +426,7 @@ describe("native node loader", () => {
       writeFileSync(languagePackagePath, Uint8Array.of(41, 42, 43));
       writeFileSync(packagePath, Uint8Array.of(44, 45, 46));
       let warmCount = 0;
-      const binding = fakeNativeBinding("1.5.0", {
+      const binding = fakeNativeBinding(PACKAGE_VERSION, {
         onPreparedPackageBytesWithoutCache: (bytes) => {
           capturedBytes.push([...bytes]);
         },
@@ -474,7 +493,7 @@ describe("native node loader", () => {
     ).toThrow("Default native pipeline language must match");
     expect(() =>
       getDefaultNativePipeline({
-        binding: fakeNativeBinding("1.5.0"),
+        binding: fakeNativeBinding(PACKAGE_VERSION),
         language: "en",
         packagePath: "/tmp/native-pipeline.stlanonpkg",
       }),
@@ -482,7 +501,7 @@ describe("native node loader", () => {
   });
 
   test("rejects unknown default native pipeline warmup modes", () => {
-    const binding = fakeNativeBinding("1.5.0");
+    const binding = fakeNativeBinding(PACKAGE_VERSION);
 
     expect(() =>
       Reflect.apply(getDefaultNativePipeline, undefined, [
@@ -514,14 +533,14 @@ describe("native node loader", () => {
     }
 
     const capturedBytes: number[][] = [];
-    const binding = fakeNativeBinding("1.5.0", {
+    const binding = fakeNativeBinding(PACKAGE_VERSION, {
       compressedPackageBytes: Uint8Array.of(21, 22, 23),
       onPreparedPackageBytes: (bytes) => {
         capturedBytes.push([...bytes]);
       },
     });
 
-    expect(native_package_version({ binding })).toBe("1.5.0");
+    expect(native_package_version({ binding })).toBe(PACKAGE_VERSION);
     expect(normalize_for_search("Číslo", { binding })).toBe("Číslo");
 
     const packageBytes = prepare_search_package("{}", { binding });
@@ -582,7 +601,7 @@ describe("native node loader", () => {
 
   test("prepared pipeline JSON methods use the native JSON hook", () => {
     let jsonCalls = 0;
-    const binding = fakeNativeBinding("1.5.0", {
+    const binding = fakeNativeBinding(PACKAGE_VERSION, {
       onRedactStaticEntitiesJson: () => {
         jsonCalls += 1;
         return JSON.stringify({ marker: "native-json" });
