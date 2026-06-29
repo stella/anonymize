@@ -129,3 +129,9 @@ jobs:
         # Rust-backed static adapter contract.
         continue-on-error: true
         run: bun run --cwd packages/anonymize perf:native-adapters
+
+      - name: Native default SDK performance (informational)
+        # Emits fixture-level default package timings for TS and Python SDKs,
+        # with hashed output parity checked before summaries are printed.
+        continue-on-error: true
+        run: bun run --cwd packages/anonymize perf:native-default
