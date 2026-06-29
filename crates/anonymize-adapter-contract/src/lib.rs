@@ -27,10 +27,10 @@ const PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER: [u8; 8] = *b"ANONPKZ1";
 const PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION: u32 = 13;
 const PREPARED_SEARCH_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION: u32 = 12;
 const PREPARED_SEARCH_CORE_PACKAGE_HEADER: [u8; 8] = *b"ANONCPK1";
-const PREPARED_SEARCH_CORE_PACKAGE_VERSION: u32 = 15;
+const PREPARED_SEARCH_CORE_PACKAGE_VERSION: u32 = 16;
 const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_HEADER: [u8; 8] = *b"ANONCPZ1";
-const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION: u32 = 16;
-const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION: u32 = 13;
+const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION: u32 = 17;
+const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION: u32 = 14;
 const PREPARED_SEARCH_PACKAGE_DIGEST_BYTES: usize = 32;
 const PREPARED_SEARCH_PACKAGE_ZSTD_LEVEL: i32 = 1;
 const MAX_PREPARED_SEARCH_PACKAGE_PAYLOAD_BYTES: usize = 256 * 1024 * 1024;
@@ -660,6 +660,7 @@ pub struct PreparedSearchPackageDecodeTimings {
   pub verify: Option<u64>,
   pub decompress: Option<u64>,
   pub config_decode: Option<u64>,
+  pub config_bytes: Option<usize>,
 }
 
 #[must_use]
@@ -736,11 +737,12 @@ pub fn prepared_search_package_decode_timing_events(
     ));
   }
   if let Some(elapsed) = timings.config_decode {
+    let input_bytes = timings.config_bytes.unwrap_or(input_bytes_len);
     events.push(diagnostic_stage_event(
       DiagnosticStage::PreparePackageConfigDecode,
       None,
       Some(elapsed),
-      Some(input_bytes_len),
+      Some(input_bytes),
     ));
   }
   events
@@ -1008,6 +1010,7 @@ fn prepared_search_core_package_decode_from_bytes_with_policy(
   let payload =
     parts.into_payload(&mut package_decode_timings, digest_policy)?;
   let slices = core_package_payload_slices(payload.as_ref())?;
+  package_decode_timings.config_bytes = Some(slices.config.len());
   let (config, config_decode, artifacts, artifacts_decode) =
     decode_core_package_parts(slices.config, slices.artifacts)?;
   package_decode_timings.config_decode = Some(config_decode);
@@ -1298,6 +1301,7 @@ fn core_package_view_from_payload<'a>(
 ) -> Result<CorePreparedSearchPackageView<'a>> {
   let (config, config_decode, artifacts_start) = {
     let payload_slices = core_package_payload_slices(payload.as_ref())?;
+    timings.config_bytes = Some(payload_slices.config.len());
     let (config, config_decode) =
       decode_core_package_config(payload_slices.config)?;
     (config, config_decode, payload_slices.artifacts_start)
@@ -3038,6 +3042,7 @@ mod tests {
         verify: Some(2),
         decompress: None,
         config_decode: Some(3),
+        config_bytes: Some(64),
       },
       128,
     );
@@ -3060,6 +3065,11 @@ mod tests {
         Some(10),
         Some(128),
       )
+    );
+    assert_eq!(
+      events.last().unwrap().input_bytes,
+      Some(64),
+      "config decode should report encoded config bytes"
     );
   }
 

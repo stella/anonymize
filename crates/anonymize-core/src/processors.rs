@@ -123,17 +123,50 @@ pub struct DenyListPatternMeta {
   pub short_upper_acronym: bool,
 }
 
-#[derive(
-  Clone, Debug, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize,
-)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct StringGroups {
   table: Vec<String>,
   groups: Vec<StringGroupIndexes>,
   group_table: Vec<StringGroupIndexes>,
   group_refs: Vec<u32>,
+  empty_len: usize,
 }
 
 type StringGroupIndexes = SmallVec<[u32; 2]>;
+
+#[derive(serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+enum StringGroupsWire {
+  Empty {
+    len: usize,
+  },
+  Groups {
+    table: Vec<String>,
+    groups: Vec<StringGroupIndexes>,
+  },
+  Refs {
+    table: Vec<String>,
+    group_table: Vec<StringGroupIndexes>,
+    group_refs: Vec<u32>,
+  },
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+enum StringGroupsWireRef<'a> {
+  Empty {
+    len: usize,
+  },
+  Groups {
+    table: &'a [String],
+    groups: &'a [StringGroupIndexes],
+  },
+  Refs {
+    table: &'a [String],
+    group_table: &'a [StringGroupIndexes],
+    group_refs: &'a [u32],
+  },
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct StringGroup<'a> {
@@ -192,15 +225,21 @@ impl StringGroups {
   }
 
   #[must_use]
-  pub fn empty_groups(len: usize) -> Self {
-    Self::from_table_and_groups(
-      Vec::new(),
-      vec![StringGroupIndexes::new(); len],
-    )
+  pub const fn empty_groups(len: usize) -> Self {
+    Self {
+      table: Vec::new(),
+      groups: Vec::new(),
+      group_table: Vec::new(),
+      group_refs: Vec::new(),
+      empty_len: len,
+    }
   }
 
   #[must_use]
   pub const fn len(&self) -> usize {
+    if self.empty_len > 0 {
+      return self.empty_len;
+    }
     if self.group_refs.is_empty() {
       return self.groups.len();
     }
@@ -226,6 +265,20 @@ impl StringGroups {
   }
 
   pub fn validate(&self, field: &'static str) -> Result<()> {
+    if self.empty_len > 0 {
+      if self.table.is_empty()
+        && self.groups.is_empty()
+        && self.group_table.is_empty()
+        && self.group_refs.is_empty()
+      {
+        return Ok(());
+      }
+      return Err(Error::InvalidStaticData {
+        field,
+        reason: String::from("empty string groups carry data"),
+      });
+    }
+
     if self.group_refs.is_empty() {
       validate_group_indexes(field, &self.table, &self.groups)?;
       return Ok(());
@@ -260,6 +313,7 @@ impl StringGroups {
         groups: Vec::new(),
         group_table,
         group_refs,
+        empty_len: 0,
       };
     }
 
@@ -268,10 +322,14 @@ impl StringGroups {
       groups,
       group_table: Vec::new(),
       group_refs: Vec::new(),
+      empty_len: 0,
     }
   }
 
   fn group_indexes(&self, index: usize) -> Option<&[u32]> {
+    if self.empty_len > 0 {
+      return (index < self.empty_len).then_some(&[]);
+    }
     if self.group_refs.is_empty() {
       return self.groups.get(index).map(SmallVec::as_slice);
     }
@@ -370,6 +428,60 @@ impl DenyListPatternMeta {
 impl From<Vec<Vec<String>>> for StringGroups {
   fn from(groups: Vec<Vec<String>>) -> Self {
     Self::from_groups(groups)
+  }
+}
+
+impl serde::Serialize for StringGroups {
+  fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+  where
+    S: serde::Serializer,
+  {
+    let wire = if self.empty_len > 0 {
+      StringGroupsWireRef::Empty {
+        len: self.empty_len,
+      }
+    } else if self.group_refs.is_empty() {
+      StringGroupsWireRef::Groups {
+        table: &self.table,
+        groups: &self.groups,
+      }
+    } else {
+      StringGroupsWireRef::Refs {
+        table: &self.table,
+        group_table: &self.group_table,
+        group_refs: &self.group_refs,
+      }
+    };
+    wire.serialize(serializer)
+  }
+}
+
+impl<'de> serde::Deserialize<'de> for StringGroups {
+  fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+  where
+    D: serde::Deserializer<'de>,
+  {
+    let groups = match StringGroupsWire::deserialize(deserializer)? {
+      StringGroupsWire::Empty { len } => Self::empty_groups(len),
+      StringGroupsWire::Groups { table, groups } => {
+        Self::from_table_and_groups(table, groups)
+      }
+      StringGroupsWire::Refs {
+        table,
+        group_table,
+        group_refs,
+      } => Self {
+        table,
+        groups: Vec::new(),
+        group_table,
+        group_refs,
+        empty_len: 0,
+      },
+    };
+    groups
+      .validate("string_groups")
+      .map_err(serde::de::Error::custom)?;
+    Ok(groups)
   }
 }
 
@@ -2171,11 +2283,27 @@ mod tests {
       groups: Vec::new(),
       group_table: vec![StringGroupIndexes::from_vec(vec![0])],
       group_refs: vec![1],
+      empty_len: 0,
     };
 
     assert!(matches!(
       groups.validate("test"),
       Err(Error::InvalidStaticData { field: "test", .. })
     ));
+  }
+
+  #[test]
+  fn string_groups_empty_groups_store_only_length() {
+    let groups = StringGroups::empty_groups(4);
+
+    assert_eq!(groups.len(), 4);
+    assert!(groups.table.is_empty());
+    assert!(groups.groups.is_empty());
+    assert!(groups.group_table.is_empty());
+    assert!(groups.group_refs.is_empty());
+    assert_eq!(groups.get(0).unwrap().to_strings(), Vec::<String>::new());
+    assert_eq!(groups.get(3).unwrap().to_strings(), Vec::<String>::new());
+    assert!(groups.get(4).is_none());
+    assert!(groups.validate("test").is_ok());
   }
 }
