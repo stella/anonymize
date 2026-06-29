@@ -513,6 +513,35 @@ describe("native node loader", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  test("prepared pipeline JSON methods use the native JSON hook", () => {
+    let jsonCalls = 0;
+    const binding = fakeNativeBinding("1.5.0", {
+      onRedactStaticEntitiesJson: () => {
+        jsonCalls += 1;
+        return JSON.stringify({ marker: "native-json" });
+      },
+    });
+    const dir = mkdtempSync(join(tmpdir(), "anonymize-json-pipeline-"));
+    const packagePath = join(dir, "native-pipeline.stlanonpkg");
+    try {
+      writeFileSync(packagePath, Uint8Array.of(1, 2, 3));
+      const pipeline = createNativePipelineFromDefaultPackage({
+        binding,
+        packagePath,
+      });
+
+      expect(JSON.parse(pipeline.redact_text_json("x"))).toEqual({
+        marker: "native-json",
+      });
+      expect(JSON.parse(pipeline.redactTextJson("x"))).toEqual({
+        marker: "native-json",
+      });
+      expect(jsonCalls).toBe(2);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 const emptyStaticRedactionBindingResult = () => ({
@@ -544,6 +573,7 @@ type FakeNativeBindingOptions = {
   compressedPackageBytes?: Uint8Array;
   onPreparedPackageBytes?: (bytes: Uint8Array) => void;
   onPreparedPackageBytesWithoutCache?: (bytes: Uint8Array) => void;
+  onRedactStaticEntitiesJson?: () => string;
   onWarmLazyRegex?: () => void;
 };
 
@@ -551,15 +581,23 @@ const fakeNativeBinding = (
   version: string,
   options: FakeNativeBindingOptions = {},
 ): NativeAnonymizeBinding => {
+  const preparedOptions = (): FakePreparedSearchOptions => ({
+    ...(options.onRedactStaticEntitiesJson === undefined
+      ? {}
+      : { onRedactStaticEntitiesJson: options.onRedactStaticEntitiesJson }),
+    ...(options.onWarmLazyRegex === undefined
+      ? {}
+      : { onWarmLazyRegex: options.onWarmLazyRegex }),
+  });
   const preparedSearch = {
-    fromConfigJsonBytes: () => fakePreparedSearch(options.onWarmLazyRegex),
+    fromConfigJsonBytes: () => fakePreparedSearch(preparedOptions()),
     fromPreparedPackageBytes: (bytes: Uint8Array) => {
       options.onPreparedPackageBytes?.(bytes);
-      return fakePreparedSearch(options.onWarmLazyRegex);
+      return fakePreparedSearch(preparedOptions());
     },
     fromPreparedPackageBytesWithoutCache: (bytes: Uint8Array) => {
       options.onPreparedPackageBytesWithoutCache?.(bytes);
-      return fakePreparedSearch(options.onWarmLazyRegex);
+      return fakePreparedSearch(preparedOptions());
     },
   };
   const NativePreparedSearch = options.preparedSearchAsConstructor
@@ -576,12 +614,23 @@ const fakeNativeBinding = (
   };
 };
 
-const fakePreparedSearch = (onWarmLazyRegex?: () => void) => ({
+type FakePreparedSearchOptions = {
+  onRedactStaticEntitiesJson?: () => string;
+  onWarmLazyRegex?: () => void;
+};
+
+const fakePreparedSearch = ({
+  onRedactStaticEntitiesJson,
+  onWarmLazyRegex,
+}: FakePreparedSearchOptions) => ({
   prepareDiagnosticsJson: () => JSON.stringify({ events: [] }),
   warmLazyRegex: () => {
     onWarmLazyRegex?.();
   },
   warmLazyRegexDiagnosticsJson: () => JSON.stringify({ events: [] }),
   redactStaticEntities: emptyStaticRedactionBindingResult,
+  ...(onRedactStaticEntitiesJson === undefined
+    ? {}
+    : { redactStaticEntitiesJson: onRedactStaticEntitiesJson }),
   redactStaticEntitiesDiagnosticsJson: emptyStaticRedactionDiagnosticJson,
 });

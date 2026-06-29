@@ -256,6 +256,10 @@ export class PreparedNativeAnonymizer {
     );
   }
 
+  redactTextJson(fullText: string, operators?: NativeOperatorConfig): string {
+    return this.redact_text_json(fullText, operators);
+  }
+
   redactStaticEntitiesDiagnosticsJson(
     fullText: string,
     operators?: NativeOperatorConfig,
@@ -323,9 +327,11 @@ export class PreparedNativePipeline {
   }
 
   redact_text_json(fullText: string, operators?: NativeOperatorConfig): string {
-    return JSON.stringify(
-      toBindingStaticRedactionResult(this.redactText(fullText, operators)),
-    );
+    return this.#anonymizer.redact_text_json(fullText, operators);
+  }
+
+  redactTextJson(fullText: string, operators?: NativeOperatorConfig): string {
+    return this.redact_text_json(fullText, operators);
   }
 
   redactTextDiagnosticsJson(
