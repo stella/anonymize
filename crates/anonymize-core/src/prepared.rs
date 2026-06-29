@@ -721,65 +721,75 @@ impl PreparedSearch {
   ) -> Result<PreparedSearchMatches> {
     let input_bytes = full_text.len();
     std::thread::scope(|scope| {
-      let regex = scope.spawn(|| {
-        offset_index_matches(
-          &self.regex,
-          full_text,
-          None,
-          DiagnosticStage::FindRegex,
-          input_bytes,
-          self.slices.regex.start,
-        )
+      let regex = (!self.regex.is_empty()).then(|| {
+        scope.spawn(|| {
+          offset_index_matches(
+            &self.regex,
+            full_text,
+            None,
+            DiagnosticStage::FindRegex,
+            input_bytes,
+            self.slices.regex.start,
+          )
+        })
       });
-      let legal_forms = scope.spawn(|| {
-        normalized_index_matches(
-          &self.legal_forms,
-          normalized,
-          None,
-          DiagnosticStage::FindLegalForm,
-          input_bytes,
-          self.slices.legal_forms.start,
-        )
+      let legal_forms = (!self.legal_forms.is_empty()).then(|| {
+        scope.spawn(|| {
+          normalized_index_matches(
+            &self.legal_forms,
+            normalized,
+            None,
+            DiagnosticStage::FindLegalForm,
+            input_bytes,
+            self.slices.legal_forms.start,
+          )
+        })
       });
-      let triggers = scope.spawn(|| {
-        offset_index_matches(
-          &self.triggers,
-          full_text,
-          None,
-          DiagnosticStage::FindTrigger,
-          input_bytes,
-          self.slices.triggers.start,
-        )
+      let triggers = (!self.triggers.is_empty()).then(|| {
+        scope.spawn(|| {
+          offset_index_matches(
+            &self.triggers,
+            full_text,
+            None,
+            DiagnosticStage::FindTrigger,
+            input_bytes,
+            self.slices.triggers.start,
+          )
+        })
       });
-      let custom_regex = scope.spawn(|| {
-        offset_index_matches(
-          &self.custom_regex,
-          full_text,
-          None,
-          DiagnosticStage::FindCustomRegex,
-          input_bytes,
-          self.slices.custom_regex.start,
-        )
+      let custom_regex = (!self.custom_regex.is_empty()).then(|| {
+        scope.spawn(|| {
+          offset_index_matches(
+            &self.custom_regex,
+            full_text,
+            None,
+            DiagnosticStage::FindCustomRegex,
+            input_bytes,
+            self.slices.custom_regex.start,
+          )
+        })
       });
-      let literal = scope.spawn(|| {
-        normalized_index_matches(
-          &self.literals,
-          normalized,
-          None,
-          DiagnosticStage::FindLiteral,
-          input_bytes,
-          0,
-        )
+      let literal = (!self.literals.is_empty()).then(|| {
+        scope.spawn(|| {
+          normalized_index_matches(
+            &self.literals,
+            normalized,
+            None,
+            DiagnosticStage::FindLiteral,
+            input_bytes,
+            0,
+          )
+        })
       });
 
       Ok(PreparedSearchMatches {
         regex: combine_regex_matches(
-          join_match_handle(regex, "regex")?,
-          join_match_handle(legal_forms, "legal_forms")?,
-          join_match_handle(triggers, "triggers")?,
+          join_optional_match_handle(regex, "regex")?,
+          join_optional_match_handle(legal_forms, "legal_forms")?,
+          join_optional_match_handle(triggers, "triggers")?,
         ),
-        custom_regex: join_match_handle(custom_regex, "custom_regex")?,
-        literal: join_match_handle(literal, "literals")?,
+        custom_regex: join_optional_match_handle(custom_regex, "custom_regex")?,
+        literal: join_optional_match_handle(literal, "literals")?,
       })
     })
   }
@@ -1882,6 +1892,14 @@ fn join_match_handle(
     field,
     reason: "search worker panicked".to_owned(),
   })?
+}
+
+fn join_optional_match_handle(
+  handle: Option<std::thread::ScopedJoinHandle<'_, Result<Vec<SearchMatch>>>>,
+  field: &'static str,
+) -> Result<Vec<SearchMatch>> {
+  handle
+    .map_or_else(|| Ok(Vec::new()), |handle| join_match_handle(handle, field))
 }
 
 fn record_prepare_stage_elapsed(
