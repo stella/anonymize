@@ -5,18 +5,19 @@ use serde::{Deserialize, Serialize};
 use stella_anonymize_core::{
   AddressContextData, AddressSeedData, AmountWordsData, CoreferenceData,
   CoreferencePatternData, CountryMatchData, CurrencyData, DateData,
-  DenyListFilterData, DenyListMatchData, DetectionSource, DiagnosticEvent,
-  DiagnosticEventKind, DiagnosticStage, FuzzySearchOptions, GazetteerMatchData,
-  HotwordRule, HotwordRuleData, LegalFormData, LiteralSearchOptions,
-  MagnitudeSuffixData, MonetaryData, NameCorpusData, NameCorpusMode,
-  OperatorConfig, OperatorType, PatternSlice, PreparedArtifactPolicy,
-  PreparedSearchArtifacts, PreparedSearchConfig, PreparedSearchSlices,
-  RegexArtifactPolicy, RegexMatchMeta, RegexSearchOptions, SearchEngine,
-  SearchOptions, SearchPattern, ShareQuantityTermData, SignatureData,
-  SigningPlaceGuardData, SourceDetail, StaticRedactionDiagnosticResult,
-  StaticRedactionDiagnostics, StaticRedactionResult, StringGroups, TriggerData,
-  TriggerRule, TriggerStrategy, TriggerValidation, WrittenAmountPatternData,
-  ZoneData, ZonePatternData, ZoneSigningClauseData,
+  DenyListFilterData, DenyListMatchData, DenyListPatternMetaSet,
+  DetectionSource, DiagnosticEvent, DiagnosticEventKind, DiagnosticStage,
+  FuzzySearchOptions, GazetteerMatchData, HotwordRule, HotwordRuleData,
+  LegalFormData, LiteralSearchOptions, MagnitudeSuffixData, MonetaryData,
+  NameCorpusData, NameCorpusMode, OperatorConfig, OperatorType, PatternSlice,
+  PreparedArtifactPolicy, PreparedSearchArtifacts, PreparedSearchConfig,
+  PreparedSearchSlices, RegexArtifactPolicy, RegexMatchMeta,
+  RegexSearchOptions, SearchEngine, SearchOptions, SearchPattern,
+  ShareQuantityTermData, SignatureData, SigningPlaceGuardData, SourceDetail,
+  StaticRedactionDiagnosticResult, StaticRedactionDiagnostics,
+  StaticRedactionResult, StringGroups, TriggerData, TriggerRule,
+  TriggerStrategy, TriggerValidation, WrittenAmountPatternData, ZoneData,
+  ZonePatternData, ZoneSigningClauseData,
 };
 
 pub type Result<T> = std::result::Result<T, ContractError>;
@@ -27,10 +28,10 @@ const PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER: [u8; 8] = *b"ANONPKZ1";
 const PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION: u32 = 13;
 const PREPARED_SEARCH_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION: u32 = 12;
 const PREPARED_SEARCH_CORE_PACKAGE_HEADER: [u8; 8] = *b"ANONCPK1";
-const PREPARED_SEARCH_CORE_PACKAGE_VERSION: u32 = 16;
+const PREPARED_SEARCH_CORE_PACKAGE_VERSION: u32 = 18;
 const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_HEADER: [u8; 8] = *b"ANONCPZ1";
-const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION: u32 = 17;
-const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION: u32 = 14;
+const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION: u32 = 19;
+const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION: u32 = 16;
 const PREPARED_SEARCH_PACKAGE_DIGEST_BYTES: usize = 32;
 const PREPARED_SEARCH_PACKAGE_ZSTD_LEVEL: i32 = 1;
 const MAX_PREPARED_SEARCH_PACKAGE_PAYLOAD_BYTES: usize = 256 * 1024 * 1024;
@@ -2050,7 +2051,7 @@ fn deny_list_data_from_binding(
       "deny_list.custom_label_indices",
     )?,
     originals: data.originals,
-    pattern_meta: Vec::new(),
+    pattern_meta: DenyListPatternMetaSet::default(),
     sources: string_groups_from_binding(
       data.sources,
       data.source_indices,

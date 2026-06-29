@@ -45,7 +45,7 @@ fn empty_deny_list_data(filters: DenyListFilterData) -> DenyListMatchData {
     labels: Vec::<Vec<String>>::new().into(),
     custom_labels: Vec::<Vec<String>>::new().into(),
     originals: vec![],
-    pattern_meta: Vec::new(),
+    pattern_meta: stella_anonymize_core::DenyListPatternMetaSet::default(),
     sources: Vec::<Vec<String>>::new().into(),
     filters: Some(filters),
   }

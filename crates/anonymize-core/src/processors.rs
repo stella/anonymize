@@ -103,7 +103,7 @@ pub struct DenyListMatchData {
   pub custom_labels: StringGroups,
   pub originals: Vec<String>,
   #[serde(default)]
-  pub pattern_meta: Vec<DenyListPatternMeta>,
+  pub pattern_meta: DenyListPatternMetaSet,
   pub sources: StringGroups,
   pub filters: Option<DenyListFilterData>,
 }
@@ -121,6 +121,13 @@ pub struct DenyListMatchData {
 pub struct DenyListPatternMeta {
   pub has_alphanumeric: bool,
   pub short_upper_acronym: bool,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq, serde::Serialize)]
+pub struct DenyListPatternMetaSet {
+  len: usize,
+  has_alphanumeric: Vec<u8>,
+  short_upper_acronym: Vec<u8>,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -391,11 +398,7 @@ impl DenyListMatchData {
       return;
     }
 
-    self.pattern_meta = self
-      .originals
-      .iter()
-      .map(|pattern| DenyListPatternMeta::from_pattern(pattern))
-      .collect();
+    self.pattern_meta = DenyListPatternMetaSet::from_patterns(&self.originals);
     self.originals.clear();
   }
 
@@ -403,7 +406,6 @@ impl DenyListMatchData {
     self
       .pattern_meta
       .get(index)
-      .copied()
       .or_else(|| {
         self
           .originals
@@ -412,6 +414,157 @@ impl DenyListMatchData {
       })
       .unwrap_or_default()
   }
+}
+
+impl DenyListPatternMetaSet {
+  #[must_use]
+  pub fn from_entries(entries: &[DenyListPatternMeta]) -> Self {
+    if entries.is_empty() {
+      return Self::default();
+    }
+
+    let len = entries.len();
+    let mut has_alphanumeric = vec![0u8; bitset_len(len)];
+    let mut short_upper_acronym = vec![0u8; bitset_len(len)];
+    for (index, entry) in entries.iter().enumerate() {
+      if entry.has_alphanumeric {
+        set_bit(&mut has_alphanumeric, index);
+      }
+      if entry.short_upper_acronym {
+        set_bit(&mut short_upper_acronym, index);
+      }
+    }
+    Self {
+      len,
+      has_alphanumeric,
+      short_upper_acronym,
+    }
+  }
+
+  #[must_use]
+  pub fn from_patterns(patterns: &[String]) -> Self {
+    let entries = patterns
+      .iter()
+      .map(|pattern| DenyListPatternMeta::from_pattern(pattern))
+      .collect::<Vec<_>>();
+    Self::from_entries(&entries)
+  }
+
+  #[must_use]
+  pub const fn len(&self) -> usize {
+    self.len
+  }
+
+  #[must_use]
+  pub const fn is_empty(&self) -> bool {
+    self.len == 0
+  }
+
+  #[must_use]
+  pub fn first(&self) -> Option<DenyListPatternMeta> {
+    self.get(0)
+  }
+
+  #[must_use]
+  pub fn get(&self, index: usize) -> Option<DenyListPatternMeta> {
+    if index >= self.len {
+      return None;
+    }
+    Some(DenyListPatternMeta {
+      has_alphanumeric: has_bit(&self.has_alphanumeric, index),
+      short_upper_acronym: has_bit(&self.short_upper_acronym, index),
+    })
+  }
+}
+
+impl<'de> serde::Deserialize<'de> for DenyListPatternMetaSet {
+  fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+  where
+    D: serde::Deserializer<'de>,
+  {
+    #[derive(serde::Deserialize)]
+    struct Wire {
+      len: usize,
+      has_alphanumeric: Vec<u8>,
+      short_upper_acronym: Vec<u8>,
+    }
+
+    let wire = Wire::deserialize(deserializer)?;
+    validate_meta_bitsets(
+      wire.len,
+      &wire.has_alphanumeric,
+      &wire.short_upper_acronym,
+    )
+    .map_err(serde::de::Error::custom)?;
+    Ok(Self {
+      len: wire.len,
+      has_alphanumeric: wire.has_alphanumeric,
+      short_upper_acronym: wire.short_upper_acronym,
+    })
+  }
+}
+
+const fn bitset_len(len: usize) -> usize {
+  len.div_ceil(8)
+}
+
+fn validate_meta_bitsets(
+  len: usize,
+  has_alphanumeric: &[u8],
+  short_upper_acronym: &[u8],
+) -> std::result::Result<(), String> {
+  let expected_len = bitset_len(len);
+  if has_alphanumeric.len() != expected_len {
+    return Err(format!(
+      "has_alphanumeric bitset length mismatch: expected {expected_len}, got {}",
+      has_alphanumeric.len()
+    ));
+  }
+  if short_upper_acronym.len() != expected_len {
+    return Err(format!(
+      "short_upper_acronym bitset length mismatch: expected {expected_len}, got {}",
+      short_upper_acronym.len()
+    ));
+  }
+  if has_unused_bits(has_alphanumeric, len)
+    || has_unused_bits(short_upper_acronym, len)
+  {
+    return Err(String::from("pattern metadata bitset has unused bits set"));
+  }
+  Ok(())
+}
+
+fn set_bit(bits: &mut [u8], index: usize) {
+  let Some(byte) = bits.get_mut(bit_byte_index(index)) else {
+    return;
+  };
+  *byte |= 1u8 << bit_offset(index);
+}
+
+fn has_bit(bits: &[u8], index: usize) -> bool {
+  bits
+    .get(bit_byte_index(index))
+    .is_some_and(|byte| byte & (1u8 << bit_offset(index)) != 0)
+}
+
+const fn bit_byte_index(index: usize) -> usize {
+  index >> 3
+}
+
+const fn bit_offset(index: usize) -> usize {
+  index & 7
+}
+
+fn has_unused_bits(bits: &[u8], len: usize) -> bool {
+  let used_in_last = len % 8;
+  if used_in_last == 0 {
+    return false;
+  }
+  let Some(last) = bits.last() else {
+    return false;
+  };
+  let unused_mask = u8::MAX << used_in_last;
+  last & unused_mask != 0
 }
 
 impl DenyListPatternMeta {

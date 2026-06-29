@@ -2,10 +2,10 @@
 
 use stella_anonymize_core::{
   CountryMatchData, DenyListFilterData, DenyListMatchData, DenyListPatternMeta,
-  DetectionSource, Error, GazetteerMatchData, PatternSlice, PipelineEntity,
-  RegexMatchMeta, SearchMatch, SigningPlaceGuardData, SourceDetail,
-  process_country_matches, process_deny_list_matches,
-  process_gazetteer_matches, process_regex_matches,
+  DenyListPatternMetaSet, DetectionSource, Error, GazetteerMatchData,
+  PatternSlice, PipelineEntity, RegexMatchMeta, SearchMatch,
+  SigningPlaceGuardData, SourceDetail, process_country_matches,
+  process_deny_list_matches, process_gazetteer_matches, process_regex_matches,
 };
 
 #[test]
@@ -196,7 +196,7 @@ fn deny_list_processor_emits_custom_labels() {
     labels: vec![vec![String::from("matter")]].into(),
     custom_labels: vec![vec![String::from("matter")]].into(),
     originals: vec![String::from("Secret Code")],
-    pattern_meta: Vec::new(),
+    pattern_meta: DenyListPatternMetaSet::default(),
     sources: vec![vec![String::from("custom-deny-list")]].into(),
     filters: None,
   };
@@ -236,7 +236,7 @@ fn deny_list_processor_rejects_embedded_custom_word_matches() {
     labels: vec![vec![String::from("matter")]].into(),
     custom_labels: vec![vec![String::from("matter")]].into(),
     originals: vec![String::from("Secret")],
-    pattern_meta: Vec::new(),
+    pattern_meta: DenyListPatternMetaSet::default(),
     sources: vec![vec![String::from("custom-deny-list")]].into(),
     filters: None,
   };
@@ -271,10 +271,12 @@ fn deny_list_processor_rejects_embedded_custom_word_with_compact_meta() {
     labels: vec![vec![String::from("matter")]].into(),
     custom_labels: vec![vec![String::from("matter")]].into(),
     originals: Vec::new(),
-    pattern_meta: vec![DenyListPatternMeta {
-      has_alphanumeric: true,
-      short_upper_acronym: false,
-    }],
+    pattern_meta: DenyListPatternMetaSet::from_entries(&[
+      DenyListPatternMeta {
+        has_alphanumeric: true,
+        short_upper_acronym: false,
+      },
+    ]),
     sources: vec![vec![String::from("custom-deny-list")]].into(),
     filters: None,
   };
@@ -302,7 +304,7 @@ fn deny_list_processor_emits_curated_non_person_labels() {
     labels: vec![vec![String::from("address")]].into(),
     custom_labels: vec![vec![]].into(),
     originals: vec![String::from("Prague")],
-    pattern_meta: Vec::new(),
+    pattern_meta: DenyListPatternMetaSet::default(),
     sources: vec![vec![String::from("city")]].into(),
     filters: Some(DenyListFilterData::default()),
   };
@@ -339,7 +341,7 @@ fn deny_list_processor_suppresses_shorter_curated_same_start_matches() {
       .into(),
     custom_labels: vec![vec![], vec![]].into(),
     originals: vec![String::from("Česká"), String::from("Česká republika")],
-    pattern_meta: Vec::new(),
+    pattern_meta: DenyListPatternMetaSet::default(),
     sources: vec![vec![String::from("city")], vec![String::from("deny-list")]]
       .into(),
     filters: Some(DenyListFilterData::default()),
@@ -380,7 +382,7 @@ fn deny_list_processor_suppresses_shorter_contained_curated_matches() {
     .into(),
     custom_labels: vec![vec![], vec![]].into(),
     originals: vec![String::from("Nemocnice Blansko"), String::from("Blansko")],
-    pattern_meta: Vec::new(),
+    pattern_meta: DenyListPatternMetaSet::default(),
     sources: vec![vec![String::from("deny-list")], vec![String::from("city")]]
       .into(),
     filters: Some(DenyListFilterData::default()),
@@ -419,7 +421,7 @@ fn deny_list_processor_handles_overlapping_person_name_hits() {
       .into(),
     custom_labels: vec![vec![], vec![]].into(),
     originals: vec![String::from("John Smith"), String::from("Smith Jr")],
-    pattern_meta: Vec::new(),
+    pattern_meta: DenyListPatternMetaSet::default(),
     sources: vec![
       vec![String::from("first-name")],
       vec![String::from("surname")],
@@ -454,7 +456,7 @@ fn deny_list_processor_suppresses_signing_place_address() {
     labels: vec![vec![String::from("address")]].into(),
     custom_labels: vec![vec![]].into(),
     originals: vec![String::from("Brně")],
-    pattern_meta: Vec::new(),
+    pattern_meta: DenyListPatternMetaSet::default(),
     sources: vec![vec![String::from("city")]].into(),
     filters: Some(DenyListFilterData {
       signing_place_guards: vec![SigningPlaceGuardData {
@@ -490,7 +492,7 @@ fn deny_list_processor_keeps_real_address_city() {
     labels: vec![vec![String::from("address")]].into(),
     custom_labels: vec![vec![]].into(),
     originals: vec![String::from("Brně")],
-    pattern_meta: Vec::new(),
+    pattern_meta: DenyListPatternMetaSet::default(),
     sources: vec![vec![String::from("city")]].into(),
     filters: Some(DenyListFilterData {
       address_stopwords: [String::from("brně")].into(),
@@ -528,7 +530,7 @@ fn deny_list_processor_keeps_address_when_signing_guards_do_not_pair() {
     labels: vec![vec![String::from("address")]].into(),
     custom_labels: vec![vec![]].into(),
     originals: vec![String::from("Delaware")],
-    pattern_meta: Vec::new(),
+    pattern_meta: DenyListPatternMetaSet::default(),
     sources: vec![vec![String::from("city")]].into(),
     filters: Some(DenyListFilterData {
       signing_place_guards: vec![
@@ -568,7 +570,7 @@ fn deny_list_processor_rejects_curated_sources_without_filters() {
     labels: vec![vec![String::from("address")]].into(),
     custom_labels: vec![vec![]].into(),
     originals: vec![String::from("Prague")],
-    pattern_meta: Vec::new(),
+    pattern_meta: DenyListPatternMetaSet::default(),
     sources: vec![vec![String::from("city")]].into(),
     filters: None,
   };
