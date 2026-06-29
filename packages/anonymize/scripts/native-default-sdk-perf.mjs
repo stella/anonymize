@@ -91,15 +91,21 @@ function runParent() {
         language: language === "" ? null : language,
         packageBytes: tsCold.packageBytes,
         fixtureCount: tsCold.fixtureCount,
+        firstLoadMs: tsCold.loadMs,
+        firstWarmupMs: tsCold.warmupMs,
         firstPrepareMs: tsCold.prepareMs,
         firstRunMs: tsCold.runMs,
         firstTouchMs: roundMs(tsCold.prepareMs + tsCold.runMs),
         warmClickMs: tsCold.warmAvgMs,
+        preloadedLoadMs: tsPreloaded.loadMs,
+        preloadedWarmupMs: tsPreloaded.warmupMs,
         setupBeforeClickMs: tsPreloaded.prepareMs,
         preloadedClickMs: tsPreloaded.runMs,
         preloadedWarmClickMs: tsPreloaded.warmAvgMs,
         prepareTopStages: tsCold.prepareTopStages,
+        warmupTopStages: tsCold.warmupTopStages,
         preloadedPrepareTopStages: tsPreloaded.prepareTopStages,
+        preloadedWarmupTopStages: tsPreloaded.warmupTopStages,
         runTopFixtures: tsCold.runTopFixtures,
         fixtureTimings: tsCold.fixtureTimings,
         preloadedFixtureTimings: tsPreloaded.fixtureTimings,
@@ -132,14 +138,20 @@ async function runWorker() {
   }
   const nativeNode = await import("../src/native-node.ts");
 
-  const prepareStart = Bun.nanoseconds();
-  const pipeline = PRELOAD
-    ? nativeNode.preloadDefaultNativePipeline(pipelineOptions)
-    : nativeNode.getDefaultNativePipeline(pipelineOptions);
-  const prepareMs = elapsedMs(prepareStart);
+  const loadStart = Bun.nanoseconds();
+  const pipeline = nativeNode.getDefaultNativePipeline({
+    ...pipelineOptions,
+    warmup: nativeNode.DEFAULT_NATIVE_PIPELINE_WARMUPS.none,
+  });
+  const loadMs = elapsedMs(loadStart);
   const prepareTopStages = topDiagnosticStages(
     pipeline.prepareDiagnosticsJson(),
   );
+  const warmupStart = Bun.nanoseconds();
+  const warmupDiagnostics = pipeline.warmLazyRegexDiagnosticsJson();
+  const warmupMs = elapsedMs(warmupStart);
+  const warmupTopStages = topDiagnosticStages(warmupDiagnostics);
+  const prepareMs = roundMs(loadMs + warmupMs);
 
   const coldRun = runFixtures(pipeline, fixtures);
   const warmRuns = [];
@@ -156,10 +168,13 @@ async function runWorker() {
       preload: PRELOAD,
       packageBytes,
       fixtureCount: fixtures.length,
+      loadMs,
+      warmupMs,
       prepareMs,
       runMs: coldRun.ms,
       warmAvgMs,
       prepareTopStages,
+      warmupTopStages,
       fixtureTimings: summarizeFixtureTimings(coldRun, warmRuns),
       runTopFixtures: coldRun.fixtures
         .toSorted((left, right) => right.ms - left.ms)
@@ -334,15 +349,21 @@ function summarizeAdapterScenario(adapter, cold, preloaded) {
     adapter,
     packageBytes: cold.packageBytes,
     fixtureCount: cold.fixtureCount,
+    firstLoadMs: cold.loadMs,
+    firstWarmupMs: cold.warmupMs,
     firstPrepareMs: cold.prepareMs,
     firstRunMs: cold.runMs,
     firstTouchMs: roundMs(cold.prepareMs + cold.runMs),
     warmClickMs: cold.warmAvgMs,
+    preloadedLoadMs: preloaded.loadMs,
+    preloadedWarmupMs: preloaded.warmupMs,
     setupBeforeClickMs: preloaded.prepareMs,
     preloadedClickMs: preloaded.runMs,
     preloadedWarmClickMs: preloaded.warmAvgMs,
     prepareTopStages: cold.prepareTopStages,
+    warmupTopStages: cold.warmupTopStages,
     preloadedPrepareTopStages: preloaded.prepareTopStages,
+    preloadedWarmupTopStages: preloaded.warmupTopStages,
     runTopFixtures: cold.runTopFixtures,
     fixtureTimings: cold.fixtureTimings,
     preloadedFixtureTimings: preloaded.fixtureTimings,
@@ -782,13 +803,18 @@ def main():
     payload = json.loads(os.environ["STELLA_ANONYMIZE_DEFAULT_SDK_PERF_PAYLOAD"])
     language = payload["language"]
     pipeline_options = {} if language is None else {"language": language}
-    prepare_start = time.perf_counter_ns()
-    if payload["preload"]:
-        pipeline = anonymize.preload_default_native_pipeline(**pipeline_options)
-    else:
-        pipeline = anonymize.get_default_native_pipeline(**pipeline_options)
-    prepare_ms = (time.perf_counter_ns() - prepare_start) / 1_000_000
+    load_start = time.perf_counter_ns()
+    pipeline = anonymize.get_default_native_pipeline(
+        **pipeline_options,
+        warmup="none",
+    )
+    load_ms = elapsed_ms(load_start)
     prepare_top_stages = top_diagnostic_stages(pipeline.prepare_diagnostics_json())
+    warmup_start = time.perf_counter_ns()
+    warmup_diagnostics = pipeline.warm_lazy_regex_diagnostics_json()
+    warmup_ms = elapsed_ms(warmup_start)
+    warmup_top_stages = top_diagnostic_stages(warmup_diagnostics)
+    prepare_ms = round_ms(load_ms + warmup_ms)
     cold_run = run_fixtures(pipeline, payload["fixtures"])
     warm_runs = [
         run_fixtures(pipeline, payload["fixtures"])
@@ -807,10 +833,13 @@ def main():
                 "preload": payload["preload"],
                 "packageBytes": payload["package_bytes"],
                 "fixtureCount": len(payload["fixtures"]),
-                "prepareMs": round_ms(prepare_ms),
+                "loadMs": load_ms,
+                "warmupMs": warmup_ms,
+                "prepareMs": prepare_ms,
                 "runMs": cold_run["ms"],
                 "warmAvgMs": warm_avg_ms,
                 "prepareTopStages": prepare_top_stages,
+                "warmupTopStages": warmup_top_stages,
                 "fixtureTimings": summarize_fixture_timings(cold_run, warm_runs),
                 "runTopFixtures": [
                     public_fixture_timing(fixture)
