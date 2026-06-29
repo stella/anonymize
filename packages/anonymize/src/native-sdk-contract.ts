@@ -20,6 +20,11 @@ export const PYTHON_NATIVE_SDK_DEFAULT_PACKAGE_FUNCTIONS = [
   "preload_default_native_pipeline",
 ] as const;
 
+export const PYTHON_NATIVE_SDK_DEFAULT_PACKAGE_NAMES = [
+  "DEFAULT_NATIVE_PIPELINE_WARMUPS",
+  "DefaultNativePipelineWarmup",
+] as const;
+
 export const SHARED_NATIVE_SDK_PREPARED_METHODS = [
   "redact_text",
   "redact_text_json",

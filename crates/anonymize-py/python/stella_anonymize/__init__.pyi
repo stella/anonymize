@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from os import PathLike
-from typing import TypeAlias
+from typing import Literal, TypeAlias
 
 from ._native import (
     PreparedSearch as NativePreparedSearch,
@@ -23,6 +23,11 @@ from ._native import (
 BytesLike: TypeAlias = bytes | bytearray | memoryview
 PathLikeString: TypeAlias = str | PathLike[str]
 OperatorConfig: TypeAlias = Mapping[str, str] | str | None
+DefaultNativePipelineWarmup: TypeAlias = Literal["lazy-regex", "none"]
+DEFAULT_NATIVE_PIPELINE_WARMUPS: tuple[
+    DefaultNativePipelineWarmup,
+    DefaultNativePipelineWarmup,
+]
 
 class PreparedAnonymizer:
     def __init__(self, prepared: NativePreparedSearch) -> None: ...
@@ -102,11 +107,13 @@ def create_native_pipeline_from_default_package(
     *,
     language: str | None = None,
     package_path: PathLikeString | None = None,
+    warmup: DefaultNativePipelineWarmup | None = None,
 ) -> PreparedAnonymizer: ...
 def get_default_native_pipeline(
     *,
     language: str | None = None,
     package_path: PathLikeString | None = None,
+    warmup: DefaultNativePipelineWarmup | None = None,
 ) -> PreparedAnonymizer: ...
 def preload_default_native_pipeline(
     *,

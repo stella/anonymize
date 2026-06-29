@@ -33,7 +33,7 @@ prepared.warm_lazy_regex()
 result = prepared.redact_text(text, redact_string="***")
 ```
 
-Top-level `redact_text()` and `redact_text_json()` are available for one-off calls, but they prepare from config on each invocation. Use `load_prepared_package()` or `load_prepared_package_file()` for repeated document processing, then call `warm_lazy_regex()` before the first document when startup can absorb that cost.
+`get_default_native_pipeline()` warms lazy regexes by default so the first document does not pay that cost. Pass `warmup="none"` only when the caller wants to defer warmup deliberately. Top-level `redact_text()` and `redact_text_json()` are available for one-off calls, but they prepare from config on each invocation. Use `load_prepared_package()` or `load_prepared_package_file()` for repeated document processing, then call `warm_lazy_regex()` before the first document when startup can absorb that cost.
 
 ## API
 
@@ -41,7 +41,7 @@ Top-level `redact_text()` and `redact_text_json()` are available for one-off cal
 - `load_prepared_package(package_bytes) -> PreparedAnonymizer`
 - `load_prepared_package_file(package_path) -> PreparedAnonymizer`
 - `read_default_native_pipeline_package_file(language=None) -> bytes`
-- `get_default_native_pipeline(language=None, package_path=None) -> PreparedAnonymizer`
+- `get_default_native_pipeline(language=None, package_path=None, warmup="lazy-regex") -> PreparedAnonymizer`
 - `preload_default_native_pipeline(language=None, package_path=None) -> PreparedAnonymizer`
 - `PreparedAnonymizer.warm_lazy_regex()`
 - `PreparedAnonymizer.warm_lazy_regex_diagnostics_json()`

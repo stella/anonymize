@@ -54,13 +54,23 @@ export type DefaultNativePipelinePackageOptions = LoadNativeBindingOptions & {
   binding?: NativeAnonymizeBinding;
   language?: string;
   packagePath?: string;
+  warmup?: DefaultNativePipelineWarmup;
 };
 
 type ResolvedDefaultNativePipelineOptions = {
   binding: NativeAnonymizeBinding;
   language?: string;
   packagePath?: string;
+  warmup: DefaultNativePipelineWarmup;
 };
+
+export const DEFAULT_NATIVE_PIPELINE_WARMUPS = {
+  lazyRegex: "lazy-regex",
+  none: "none",
+} as const;
+
+export type DefaultNativePipelineWarmup =
+  (typeof DEFAULT_NATIVE_PIPELINE_WARMUPS)[keyof typeof DEFAULT_NATIVE_PIPELINE_WARMUPS];
 
 export type DefaultNativePipelinePackageFileOptions = {
   language?: string;
@@ -78,6 +88,7 @@ const defaultNativePipelineCache = new WeakMap<
   NativeAnonymizeBinding,
   Map<string, PreparedNativePipeline>
 >();
+const warmedDefaultNativePipelines = new WeakSet<PreparedNativePipeline>();
 const defaultNativePipelineInflightCache = new WeakMap<
   NativeAnonymizeBinding,
   Map<string, Promise<PreparedNativePipeline>>
@@ -253,10 +264,13 @@ export const createNativePipelineFromPackageFile = ({
 
 export const createNativePipelineFromDefaultPackage = (
   options: DefaultNativePipelinePackageOptions = {},
-): PreparedNativePipeline =>
-  createNativePipelineFromResolvedDefaultPackage(
-    resolveDefaultNativePipelineOptions(options),
+): PreparedNativePipeline => {
+  const resolvedOptions = resolveDefaultNativePipelineOptions(options);
+  return applyDefaultNativePipelineWarmup(
+    createNativePipelineFromResolvedDefaultPackage(resolvedOptions),
+    resolvedOptions.warmup,
   );
+};
 
 export const getDefaultNativePipeline = (
   options: DefaultNativePipelinePackageOptions = {},
@@ -266,31 +280,38 @@ export const getDefaultNativePipeline = (
   const key = defaultPipelineCacheKey(resolvedOptions);
   const cached = cache.get(key);
   if (cached !== undefined) {
-    return cached;
+    return applyDefaultNativePipelineWarmup(cached, resolvedOptions.warmup);
   }
   const pipeline =
     createNativePipelineFromResolvedDefaultPackage(resolvedOptions);
   cache.set(key, pipeline);
-  return pipeline;
+  return applyDefaultNativePipelineWarmup(pipeline, resolvedOptions.warmup);
 };
 
 export const preloadDefaultNativePipeline = (
   options: DefaultNativePipelinePackageOptions = {},
 ): PreparedNativePipeline => {
   const pipeline = getDefaultNativePipeline(options);
-  pipeline.warmLazyRegex();
-  return pipeline;
+  return applyDefaultNativePipelineWarmup(
+    pipeline,
+    DEFAULT_NATIVE_PIPELINE_WARMUPS.lazyRegex,
+  );
 };
 
 export const preloadDefaultNativePipelineAsync = (
   options: DefaultNativePipelinePackageOptions = {},
 ): Promise<PreparedNativePipeline> => {
-  const resolvedOptions = resolveDefaultNativePipelineOptions(options);
+  const resolvedOptions = {
+    ...resolveDefaultNativePipelineOptions(options),
+    warmup: DEFAULT_NATIVE_PIPELINE_WARMUPS.lazyRegex,
+  };
   const cache = defaultPipelineCacheFor(resolvedOptions.binding);
   const key = defaultPipelineCacheKey(resolvedOptions);
   const cached = cache.get(key);
   if (cached !== undefined) {
-    return Promise.resolve(cached);
+    return Promise.resolve(
+      applyDefaultNativePipelineWarmup(cached, resolvedOptions.warmup),
+    );
   }
 
   const inflightCache = defaultPipelineInflightCacheFor(
@@ -305,9 +326,8 @@ export const preloadDefaultNativePipelineAsync = (
     resolvedOptions,
   )
     .then((pipeline) => {
-      pipeline.warmLazyRegex();
       cache.set(key, pipeline);
-      return pipeline;
+      return applyDefaultNativePipelineWarmup(pipeline, resolvedOptions.warmup);
     })
     .finally(() => {
       inflightCache.delete(key);
@@ -320,6 +340,7 @@ const resolveDefaultNativePipelineOptions = ({
   binding,
   language,
   packagePath,
+  warmup,
   expectedVersion,
   ...loadOptions
 }: DefaultNativePipelinePackageOptions = {}): ResolvedDefaultNativePipelineOptions => {
@@ -337,11 +358,26 @@ const resolveDefaultNativePipelineOptions = ({
   }
   return {
     binding: resolvedBinding,
+    warmup: normalizeDefaultNativePipelineWarmup(warmup),
     ...(language !== undefined
       ? { language: normalizeDefaultNativePipelineLanguage(language) }
       : {}),
     ...(packagePath !== undefined ? { packagePath } : {}),
   };
+};
+
+const applyDefaultNativePipelineWarmup = (
+  pipeline: PreparedNativePipeline,
+  warmup: DefaultNativePipelineWarmup,
+): PreparedNativePipeline => {
+  if (warmup !== DEFAULT_NATIVE_PIPELINE_WARMUPS.lazyRegex) {
+    return pipeline;
+  }
+  if (!warmedDefaultNativePipelines.has(pipeline)) {
+    pipeline.warmLazyRegex();
+    warmedDefaultNativePipelines.add(pipeline);
+  }
+  return pipeline;
 };
 
 const createNativePipelineFromResolvedDefaultPackage = ({
@@ -388,6 +424,22 @@ const defaultPackageFileOptions = (
   language: string | undefined,
 ): DefaultNativePipelinePackageFileOptions =>
   language === undefined ? {} : { language };
+
+const normalizeDefaultNativePipelineWarmup = (
+  warmup: DefaultNativePipelineWarmup | undefined,
+): DefaultNativePipelineWarmup => {
+  if (warmup === undefined) {
+    return DEFAULT_NATIVE_PIPELINE_WARMUPS.lazyRegex;
+  }
+  switch (warmup) {
+    case DEFAULT_NATIVE_PIPELINE_WARMUPS.lazyRegex:
+    case DEFAULT_NATIVE_PIPELINE_WARMUPS.none:
+      return warmup;
+  }
+  throw new Error(
+    'Default native pipeline warmup must be "lazy-regex" or "none"',
+  );
+};
 
 const resolveNativeSdkBinding = ({
   binding,

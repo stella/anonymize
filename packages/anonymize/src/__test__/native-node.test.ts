@@ -225,6 +225,44 @@ describe("native node loader", () => {
     }
   });
 
+  test("can defer default native pipeline warmup", () => {
+    const dir = mkdtempSync(join(tmpdir(), "anonymize-default-warmup-"));
+    const packagePath = join(dir, "native-pipeline.stlanonpkg");
+    try {
+      writeFileSync(packagePath, Uint8Array.of(19, 20, 21));
+      let warmCount = 0;
+      const binding = fakeNativeBinding("1.5.0", {
+        onWarmLazyRegex: () => {
+          warmCount += 1;
+        },
+      });
+
+      const cold = getDefaultNativePipeline({
+        binding,
+        packagePath,
+        expectedVersion: "1.5.0",
+        warmup: "none",
+      });
+      const stillCold = getDefaultNativePipeline({
+        binding,
+        packagePath,
+        expectedVersion: "1.5.0",
+        warmup: "none",
+      });
+      const warmed = getDefaultNativePipeline({
+        binding,
+        packagePath,
+        expectedVersion: "1.5.0",
+      });
+
+      expect(stillCold).toBe(cold);
+      expect(warmed).toBe(cold);
+      expect(warmCount).toBe(1);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("preloads the default native pipeline asynchronously", async () => {
     const dir = mkdtempSync(join(tmpdir(), "anonymize-default-async-cache-"));
     const packagePath = join(dir, "native-pipeline.stlanonpkg");
@@ -311,6 +349,19 @@ describe("native node loader", () => {
         packagePath: "/tmp/native-pipeline.stlanonpkg",
       }),
     ).toThrow("Use either language or packagePath");
+  });
+
+  test("rejects unknown default native pipeline warmup modes", () => {
+    const binding = fakeNativeBinding("1.5.0");
+
+    expect(() =>
+      Reflect.apply(getDefaultNativePipeline, undefined, [
+        {
+          binding,
+          warmup: "eager",
+        },
+      ]),
+    ).toThrow('Default native pipeline warmup must be "lazy-regex" or "none"');
   });
 
   test("shared SDK helpers delegate through the native binding", () => {

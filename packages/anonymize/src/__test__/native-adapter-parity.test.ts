@@ -40,17 +40,18 @@ import type {
 } from "../types";
 import {
   PYTHON_NATIVE_SDK_DEFAULT_PACKAGE_FUNCTIONS,
+  PYTHON_NATIVE_SDK_DEFAULT_PACKAGE_NAMES,
   SHARED_NATIVE_SDK_CLASS_NAMES,
   SHARED_NATIVE_SDK_CORE_TOP_LEVEL_FUNCTIONS,
   SHARED_NATIVE_SDK_PREPARED_METHODS,
   SHARED_NATIVE_SDK_TOP_LEVEL_FUNCTIONS,
 } from "../native-sdk-contract";
+import { buildNativeStaticSearchBundle } from "../build-unified-search";
 import {
   createPipelineContext,
   createNativePipelineFromPackage,
   DEFAULT_ENTITY_LABELS,
   getNativePipelineCompatibility,
-  preparePipelineSearch,
   prepareNativePipelinePackage,
   redactText,
   runPipeline,
@@ -138,6 +139,7 @@ type StaticRedactionDiagnosticResult = {
       kind: string;
       count?: number;
       slot?: number;
+      subslot?: number;
       pattern_count?: number;
       engine?: string;
       pattern?: number;
@@ -590,6 +592,7 @@ payload = json.loads(payload_path.read_text())
 package_bytes = package_path.read_bytes()
 top_level = payload["top_level_functions"]
 default_package_functions = payload["default_package_functions"]
+default_package_names = payload["default_package_names"]
 prepared_methods = payload["prepared_methods"]
 class_names = payload["class_names"]
 missing_top_level = [
@@ -608,11 +611,27 @@ if missing_default_package:
     )
 missing_public_names = [
     name
-    for name in [*top_level, *default_package_functions, *class_names]
+    for name in [
+        *top_level,
+        *default_package_functions,
+        *default_package_names,
+        *class_names,
+    ]
     if name not in anonymize.__all__
 ]
 if missing_public_names:
     raise AssertionError(f"missing Python SDK public names: {missing_public_names}")
+missing_default_package_names = [
+    name
+    for name in default_package_names
+    if not hasattr(anonymize, name)
+]
+if missing_default_package_names:
+    raise AssertionError(
+        f"missing Python default package names: {missing_default_package_names}"
+    )
+if set(anonymize.DEFAULT_NATIVE_PIPELINE_WARMUPS) != {"lazy-regex", "none"}:
+    raise AssertionError("unexpected Python default pipeline warmup modes")
 missing_classes = [
     name for name in class_names if not callable(getattr(anonymize, name, None))
 ]
@@ -627,11 +646,27 @@ missing_prepared = [
 if missing_prepared:
     raise AssertionError(f"missing Python prepared methods: {missing_prepared}")
 from_file = anonymize.load_prepared_package_file(package_path)
-default_from_path = anonymize.get_default_native_pipeline(package_path=package_path)
-if default_from_path is not anonymize.get_default_native_pipeline(package_path=package_path):
+deferred_default_from_path = anonymize.get_default_native_pipeline(
+    package_path=package_path,
+    warmup="none",
+)
+if deferred_default_from_path is not anonymize.get_default_native_pipeline(
+    package_path=package_path,
+    warmup="none",
+):
     raise AssertionError("default package path cache did not reuse prepared search")
+default_from_path = anonymize.get_default_native_pipeline(package_path=package_path)
+if default_from_path is not deferred_default_from_path:
+    raise AssertionError("default package warmup changed prepared search cache key")
 if anonymize.preload_default_native_pipeline(package_path=package_path) is not default_from_path:
     raise AssertionError("default package preload did not return cached prepared search")
+try:
+    anonymize.get_default_native_pipeline(package_path=package_path, warmup="eager")
+except ValueError as error:
+    if 'Default native pipeline warmup must be "lazy-regex" or "none"' not in str(error):
+        raise
+else:
+    raise AssertionError("invalid Python default package warmup was accepted")
 if anonymize.prepare_search_package(
     payload["config_json"],
     compressed=payload["compressed"],
@@ -2114,17 +2149,18 @@ describe("native adapter parity", () => {
             scopedConfig.nameCorpusLanguages;
         }
         const dictionaries = await loadTestDictionaries(dictionaryScope);
-        const search = await preparePipelineSearch({
-          config: {
+        const { nativeStaticConfig } = await buildNativeStaticSearchBundle(
+          {
             ...scopedConfig,
             dictionaries,
           },
-          context: createPipelineContext(),
-        });
-        const configJson = JSON.stringify(search.nativeStaticConfig);
+          [],
+          createPipelineContext(),
+        );
+        const configJson = JSON.stringify(nativeStaticConfig);
         const packageBytes = prepareNativeSearchPackage({
           binding: adapters.native,
-          config: search.nativeStaticConfig,
+          config: nativeStaticConfig,
           compressed: true,
         });
         const anonymizer = createNativeAnonymizerFromPackage({
@@ -2182,19 +2218,21 @@ describe("native adapter parity", () => {
           dictionaryScope.denyListCountries = scopedConfig.denyListCountries;
         }
         if (scopedConfig.nameCorpusLanguages !== undefined) {
-          dictionaryScope.nameCorpusLanguages = scopedConfig.nameCorpusLanguages;
+          dictionaryScope.nameCorpusLanguages =
+            scopedConfig.nameCorpusLanguages;
         }
         const dictionaries = await loadTestDictionaries(dictionaryScope);
-        const search = await preparePipelineSearch({
-          config: {
+        const { nativeStaticConfig } = await buildNativeStaticSearchBundle(
+          {
             ...scopedConfig,
             dictionaries,
           },
-          context: createPipelineContext(),
-        });
+          [],
+          createPipelineContext(),
+        );
         const packageBytes = prepareNativeSearchPackage({
           binding: adapters.native,
-          config: search.nativeStaticConfig,
+          config: nativeStaticConfig,
           compressed: true,
         });
         const anonymizer = createNativeAnonymizerFromPackage({
@@ -2746,6 +2784,7 @@ const callPythonSharedSdkParity = ({
       compressed: true,
       config_json: CONFIG_JSON,
       default_package_functions: PYTHON_NATIVE_SDK_DEFAULT_PACKAGE_FUNCTIONS,
+      default_package_names: PYTHON_NATIVE_SDK_DEFAULT_PACKAGE_NAMES,
       normalize_text: normalizeText,
       prepared_methods: SHARED_NATIVE_SDK_PREPARED_METHODS,
       top_level_functions: SHARED_NATIVE_SDK_TOP_LEVEL_FUNCTIONS,

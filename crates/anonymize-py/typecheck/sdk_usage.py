@@ -18,7 +18,12 @@ def redact_with_package_file(package_path: str, text: str) -> int:
 
 def redact_with_default_package(text: str) -> int:
     prepared = anonymize.get_default_native_pipeline(language="en")
+    deferred = anonymize.get_default_native_pipeline(
+        language="en",
+        warmup="none",
+    )
     warmed = anonymize.preload_default_native_pipeline(language="en")
+    assert prepared is deferred
     assert prepared is warmed
     result = prepared.redact_text(text, {"country": "redact"})
     return result.redaction.entity_count

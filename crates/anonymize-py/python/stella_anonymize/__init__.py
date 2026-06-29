@@ -6,6 +6,8 @@ from collections.abc import Mapping
 from functools import lru_cache
 from importlib.resources import files
 from os import PathLike
+from typing import Literal
+from weakref import WeakSet
 
 from ._native import (
     OperatorEntry,
@@ -26,6 +28,8 @@ from ._native import (
 __all__ = [
     "OperatorEntry",
     "OperatorConfig",
+    "DefaultNativePipelineWarmup",
+    "DEFAULT_NATIVE_PIPELINE_WARMUPS",
     "PreparedAnonymizer",
     "NativePreparedSearch",
     "PipelineEntity",
@@ -55,6 +59,11 @@ __all__ = [
 BytesLike = bytes | bytearray | memoryview
 PathLikeString = str | PathLike[str]
 OperatorConfig = Mapping[str, str] | str | None
+DefaultNativePipelineWarmup = Literal["lazy-regex", "none"]
+DEFAULT_NATIVE_PIPELINE_WARMUPS: tuple[
+    DefaultNativePipelineWarmup,
+    DefaultNativePipelineWarmup,
+] = ("lazy-regex", "none")
 DEFAULT_NATIVE_PIPELINE_PACKAGE = "native-pipeline.stlanonpkg"
 _DEFAULT_NATIVE_PIPELINE_LANGUAGE_PATTERN = re.compile(
     r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
@@ -177,6 +186,7 @@ class PreparedAnonymizer:
 
 
 PreparedSearch = PreparedAnonymizer
+_warmed_default_native_pipelines: WeakSet[PreparedAnonymizer] = WeakSet()
 
 
 def prepare_search_package(config_json: str, *, compressed: bool = True) -> bytes:
@@ -212,12 +222,16 @@ def create_native_pipeline_from_default_package(
     *,
     language: str | None = None,
     package_path: PathLikeString | None = None,
+    warmup: DefaultNativePipelineWarmup | None = None,
 ) -> PreparedAnonymizer:
-    return PreparedAnonymizer.from_prepared_package_bytes(
-        _read_default_native_pipeline_package(
-            language=language,
-            package_path=package_path,
-        )
+    return _apply_default_native_pipeline_warmup(
+        PreparedAnonymizer.from_prepared_package_bytes(
+            _read_default_native_pipeline_package(
+                language=language,
+                package_path=package_path,
+            )
+        ),
+        _normalize_default_native_pipeline_warmup(warmup),
     )
 
 
@@ -225,12 +239,16 @@ def get_default_native_pipeline(
     *,
     language: str | None = None,
     package_path: PathLikeString | None = None,
+    warmup: DefaultNativePipelineWarmup | None = None,
 ) -> PreparedAnonymizer:
-    return _get_default_native_pipeline(
-        _default_native_pipeline_cache_key(
-            language=language,
-            package_path=package_path,
-        )
+    return _apply_default_native_pipeline_warmup(
+        _get_default_native_pipeline(
+            _default_native_pipeline_cache_key(
+                language=language,
+                package_path=package_path,
+            )
+        ),
+        _normalize_default_native_pipeline_warmup(warmup),
     )
 
 
@@ -239,12 +257,36 @@ def preload_default_native_pipeline(
     language: str | None = None,
     package_path: PathLikeString | None = None,
 ) -> PreparedAnonymizer:
-    pipeline = get_default_native_pipeline(
-        language=language,
-        package_path=package_path,
+    return _apply_default_native_pipeline_warmup(
+        get_default_native_pipeline(
+            language=language,
+            package_path=package_path,
+            warmup="none",
+        ),
+        "lazy-regex",
     )
-    pipeline.warm_lazy_regex()
+
+
+def _apply_default_native_pipeline_warmup(
+    pipeline: PreparedAnonymizer,
+    warmup: DefaultNativePipelineWarmup,
+) -> PreparedAnonymizer:
+    if warmup != "lazy-regex":
+        return pipeline
+    if pipeline not in _warmed_default_native_pipelines:
+        pipeline.warm_lazy_regex()
+        _warmed_default_native_pipelines.add(pipeline)
     return pipeline
+
+
+def _normalize_default_native_pipeline_warmup(
+    warmup: DefaultNativePipelineWarmup | None,
+) -> DefaultNativePipelineWarmup:
+    if warmup is None:
+        return "lazy-regex"
+    if warmup in DEFAULT_NATIVE_PIPELINE_WARMUPS:
+        return warmup
+    raise ValueError('Default native pipeline warmup must be "lazy-regex" or "none"')
 
 
 @lru_cache(maxsize=8)
@@ -260,6 +302,7 @@ def _get_default_native_pipeline(
     return create_native_pipeline_from_default_package(
         language=language,
         package_path=package_path,
+        warmup="none",
     )
 
 
