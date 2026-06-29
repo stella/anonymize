@@ -593,6 +593,9 @@ const TITLED_PERSON: RegexDef = {
     `(?:,?${SP}+(?:${POST_NOMINAL})(?:,?${SP}+(?:${POST_NOMINAL}))*)?`,
   label: "person",
   score: 0.95,
+  lazy: true,
+  prefilterAny: TITLE_PREFIXES,
+  prefilterCaseInsensitive: false,
 };
 
 const HONORIFIC_PERSON: RegexDef = {
@@ -604,6 +607,9 @@ const HONORIFIC_PERSON: RegexDef = {
     `(?:${SP}+(?:QC|KC|SC|LJ|AG))?`,
   label: "person",
   score: 0.95,
+  lazy: true,
+  prefilterAny: HONORIFICS,
+  prefilterCaseInsensitive: false,
 };
 
 // Bare post-nominal anchor: a multi-word capitalised
@@ -626,6 +632,9 @@ const POSTNOMINAL_PERSON: RegexDef = {
     `,?${SP}+(?:KC|QC)\\b`,
   label: "person",
   score: 0.95,
+  lazy: true,
+  prefilterAny: ["KC", "QC"],
+  prefilterCaseInsensitive: false,
 };
 
 const IBAN: RegexDef = {
