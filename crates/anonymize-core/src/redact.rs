@@ -1,3 +1,6 @@
+use std::borrow::Cow;
+use std::collections::HashSet;
+
 use crate::byte_offsets::ByteOffsets;
 use crate::normalize::placeholder_fallback;
 use crate::placeholders::build_placeholder_map;
@@ -21,14 +24,12 @@ pub fn redact_text(
   }
 
   let offsets = ByteOffsets::new(full_text);
-  validate_spans(entities, &offsets)?;
-
   let placeholder_map = build_placeholder_map(entities, full_text);
-  let mut sorted = redaction_spans(entities, &offsets)?;
+  let mut sorted = redaction_spans(full_text, entities, &offsets)?;
   sorted.sort_by_key(|span| span.entity.start);
 
   // Existing contract: first accepted span wins overlaps.
-  let mut non_overlapping = Vec::<RedactionSpan>::new();
+  let mut non_overlapping = Vec::<RedactionSpan<'_>>::new();
   let mut last_end = 0;
   for span in sorted {
     if span.entity.start >= last_end {
@@ -37,34 +38,41 @@ pub fn redact_text(
     }
   }
 
-  let mut parts = Vec::<String>::new();
+  let mut redacted_text = String::with_capacity(full_text.len());
   let mut redaction_map = Vec::<RedactionEntry>::new();
   let mut operator_map = Vec::<OperatorEntry>::new();
+  let mut redacted_placeholders = HashSet::<String>::new();
   let mut cursor = 0;
 
   for span in &non_overlapping {
     let entity = &span.entity;
     if entity.start > cursor {
-      parts.push(offsets.slice(cursor, entity.start)?);
+      redacted_text.push_str(source_slice(
+        full_text,
+        &offsets,
+        cursor,
+        entity.start,
+      )?);
     }
 
-    let placeholder = placeholder_map
-      .get_entity(entity)
-      .map_or_else(|| placeholder_fallback(&entity.label), ToOwned::to_owned);
+    let placeholder = placeholder_map.get_entity(entity).map_or_else(
+      || Cow::Owned(placeholder_fallback(&entity.label)),
+      Cow::Borrowed,
+    );
     let operator = operator_for(config, &entity.label);
-    let replacement = match operator {
-      OperatorType::Replace => placeholder.clone(),
-      OperatorType::Redact => config.redact_string.clone(),
-    };
-
-    parts.push(replacement);
+    match operator {
+      OperatorType::Replace => redacted_text.push_str(&placeholder),
+      OperatorType::Redact => redacted_text.push_str(&config.redact_string),
+    }
     set_operator_entry(&mut operator_map, &placeholder, operator);
 
     if operator == OperatorType::Replace
-      && redaction_value(&redaction_map, &placeholder).is_none()
+      && !redacted_placeholders.contains(placeholder.as_ref())
     {
+      let placeholder = placeholder.into_owned();
+      redacted_placeholders.insert(placeholder.clone());
       redaction_map.push(RedactionEntry {
-        placeholder: placeholder.clone(),
+        placeholder,
         original: redaction_original_text(span),
       });
     }
@@ -74,11 +82,16 @@ pub fn redact_text(
 
   let full_text_len = offsets.len()?;
   if cursor < full_text_len {
-    parts.push(offsets.slice(cursor, full_text_len)?);
+    redacted_text.push_str(source_slice(
+      full_text,
+      &offsets,
+      cursor,
+      full_text_len,
+    )?);
   }
 
   Ok(RedactionResult {
-    redacted_text: parts.concat(),
+    redacted_text,
     redaction_map,
     operator_map,
     entity_count: non_overlapping.len(),
@@ -99,10 +112,18 @@ pub fn deanonymise(
   result
 }
 
-fn validate_spans(
-  entities: &[Entity],
+struct RedactionSpan<'a> {
+  entity: &'a Entity,
+  source_text: &'a str,
+}
+
+fn redaction_spans<'a>(
+  full_text: &'a str,
+  entities: &'a [Entity],
   offsets: &ByteOffsets<'_>,
-) -> Result<()> {
+) -> Result<Vec<RedactionSpan<'a>>> {
+  let mut resolved = Vec::with_capacity(entities.len());
+
   for entity in entities {
     // Empty spans would insert without redacting.
     if entity.start >= entity.end {
@@ -112,32 +133,30 @@ fn validate_spans(
       });
     }
 
-    offsets.validate_offset(entity.start)?;
-    offsets.validate_offset(entity.end)?;
-  }
-
-  Ok(())
-}
-
-struct RedactionSpan {
-  entity: Entity,
-  source_text: String,
-}
-
-fn redaction_spans(
-  entities: &[Entity],
-  offsets: &ByteOffsets<'_>,
-) -> Result<Vec<RedactionSpan>> {
-  let mut resolved = Vec::with_capacity(entities.len());
-
-  for entity in entities {
     resolved.push(RedactionSpan {
-      entity: entity.clone(),
-      source_text: offsets.slice(entity.start, entity.end)?,
+      entity,
+      source_text: source_slice(full_text, offsets, entity.start, entity.end)?,
     });
   }
 
   Ok(resolved)
+}
+
+fn source_slice<'a>(
+  full_text: &'a str,
+  offsets: &ByteOffsets<'_>,
+  start: u32,
+  end: u32,
+) -> Result<&'a str> {
+  if start > end {
+    return Err(crate::types::Error::InvalidSpan { start, end });
+  }
+
+  let start_byte = offsets.validate_offset(start)?;
+  let end_byte = offsets.validate_offset(end)?;
+  full_text
+    .get(start_byte..end_byte)
+    .ok_or(crate::types::Error::InvalidSpan { start, end })
 }
 
 fn operator_for(config: &OperatorConfig, label: &str) -> OperatorType {
@@ -167,19 +186,9 @@ fn set_operator_entry(
   });
 }
 
-fn redaction_value<'a>(
-  redaction_map: &'a [RedactionEntry],
-  placeholder: &str,
-) -> Option<&'a str> {
-  redaction_map
-    .iter()
-    .find(|entry| entry.placeholder == placeholder)
-    .map(|entry| entry.original.as_str())
-}
-
-fn redaction_original_text(span: &RedactionSpan) -> String {
+fn redaction_original_text(span: &RedactionSpan<'_>) -> String {
   match &span.entity.kind {
-    EntityKind::Detected => span.source_text.clone(),
+    EntityKind::Detected => span.source_text.to_owned(),
     EntityKind::Coreference { source_text } => source_text.clone(),
   }
 }

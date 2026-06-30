@@ -115,6 +115,10 @@ function runScenario({ name, compressed, language, userDataScenario }) {
       representativeSample.noWarmDiagnostics?.cachedPrepare?.topStages ?? [],
     nativeConfigSummary:
       build.nativeConfigSummary ?? representativeSample.nativeConfigSummary,
+    runBreakdown:
+      representativeSample.noWarmDiagnostics?.run?.breakdown ?? null,
+    preloadedRunBreakdown:
+      representativeSample.preloadedDiagnostics?.run?.breakdown ?? null,
     runTopStages: representativeSample.noWarmDiagnostics?.run?.topStages ?? [],
     runTopSlots: representativeSample.noWarmDiagnostics?.run?.topSlots ?? [],
     runTopFixtures:

@@ -20,10 +20,10 @@ pub fn build_placeholder_map(
   let reserved_placeholders = collect_reserved_placeholders(reserved_text);
   let mut placeholder_map = PlaceholderMap::default();
 
-  let mut sorted = entities.to_vec();
+  let mut sorted = entities.iter().collect::<Vec<_>>();
   sorted.sort_by_key(|entity| entity.start);
 
-  for entity in &sorted {
+  for entity in sorted {
     if placeholder_map.has_entity(entity) {
       continue;
     }

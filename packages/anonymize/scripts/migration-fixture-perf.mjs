@@ -80,6 +80,12 @@ const TRUST_PREBUILT_NATIVE_PACKAGE =
   process.env.ANONYMIZE_MIGRATION_TRUST_PREBUILT_NATIVE_PACKAGE !== "0";
 const USER_DATA_SCENARIO =
   process.env.ANONYMIZE_MIGRATION_USER_DATA_SCENARIO?.trim() ?? "none";
+const RUN_STAGE = {
+  detectTotal: "detect.total",
+  findMatches: "find-matches",
+  finalRedaction: "redaction",
+  redactionTotal: "redact.total",
+};
 
 const INTENTIONAL_NATIVE_STATIC_IMPROVEMENTS = new Map(
   [
@@ -835,6 +841,7 @@ function summarizeFixtureDiagnostics(fixtureDiagnostics) {
     byFixture.push({
       fixture: fixture.fixture,
       elapsedMs: roundMs(fixtureElapsedMs),
+      breakdown: runBreakdown(fixture.stages),
       topStages: topDiagnosticStages(fixture.stages).slice(0, 5),
     });
   }
@@ -869,6 +876,7 @@ function summarizeFixtureDiagnostics(fixtureDiagnostics) {
 
   return {
     stages,
+    breakdown: runBreakdown(stages),
     topStages: stages.slice(0, 10),
     topSlots: summarizeDiagnosticSlotBuckets(slotBuckets).slice(0, 20),
     topFixtures: byFixture
@@ -876,6 +884,36 @@ function summarizeFixtureDiagnostics(fixtureDiagnostics) {
       .slice(0, 10),
     byFixture,
   };
+}
+
+function runBreakdown(stages) {
+  const totalMs = stageTotalMs(stages, RUN_STAGE.redactionTotal);
+  const detectMs = stageTotalMs(stages, RUN_STAGE.detectTotal);
+  const finalRedactionMs = stageTotalMs(stages, RUN_STAGE.finalRedaction);
+  const findMatchesMs = stageTotalMs(stages, RUN_STAGE.findMatches);
+  const postDetectMs = Math.max(0, totalMs - detectMs - finalRedactionMs);
+
+  return {
+    totalMs: roundMs(totalMs),
+    detectMs: roundMs(detectMs),
+    postDetectMs: roundMs(postDetectMs),
+    finalRedactionMs: roundMs(finalRedactionMs),
+    findMatchesMs: roundMs(findMatchesMs),
+  };
+}
+
+function stageTotalMs(stages, stageName) {
+  let totalMs = 0;
+  for (const stage of stages) {
+    if (stage.stage !== stageName) {
+      continue;
+    }
+    totalMs +=
+      typeof stage.totalMs === "number"
+        ? stage.totalMs
+        : (stage.elapsedMs ?? 0);
+  }
+  return totalMs;
 }
 
 function summarizeDiagnosticSlotBuckets(slotBuckets) {

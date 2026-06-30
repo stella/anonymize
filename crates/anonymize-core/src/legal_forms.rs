@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use std::collections::BTreeSet;
+use std::collections::HashSet;
 
 use crate::byte_offsets::ByteOffsets;
 use crate::processors::PatternSlice;
@@ -36,21 +36,21 @@ pub struct LegalFormData {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct PreparedLegalFormData {
   suffixes: Vec<String>,
-  normalized_boundary_suffixes: BTreeSet<String>,
-  normalized_in_name_words: BTreeSet<String>,
-  normalized_suffix_words: BTreeSet<String>,
-  role_heads: BTreeSet<String>,
-  sentence_verb_indicators: BTreeSet<String>,
-  clause_noun_heads: BTreeSet<String>,
-  connector_prose_heads: BTreeSet<String>,
-  structural_single_cap_prefixes: BTreeSet<String>,
+  normalized_boundary_suffixes: HashSet<String>,
+  normalized_in_name_words: HashSet<String>,
+  normalized_suffix_words: HashSet<String>,
+  role_heads: HashSet<String>,
+  sentence_verb_indicators: HashSet<String>,
+  clause_noun_heads: HashSet<String>,
+  connector_prose_heads: HashSet<String>,
+  structural_single_cap_prefixes: HashSet<String>,
   leading_clause_phrases: Vec<String>,
   leading_clause_direct_prefixes: Vec<String>,
-  connector_words: BTreeSet<String>,
-  and_connector_words: BTreeSet<String>,
-  in_name_prepositions: BTreeSet<String>,
-  company_suffix_words: BTreeSet<String>,
-  comma_gated_direct_prefixes: BTreeSet<String>,
+  connector_words: HashSet<String>,
+  and_connector_words: HashSet<String>,
+  in_name_prepositions: HashSet<String>,
+  company_suffix_words: HashSet<String>,
+  comma_gated_direct_prefixes: HashSet<String>,
 }
 
 impl PreparedLegalFormData {
@@ -1615,7 +1615,7 @@ fn next_char(text: &str, pos: usize) -> Option<(usize, char)> {
     .map(|(relative, ch)| (pos.saturating_add(relative), ch))
 }
 
-fn lower_set(values: Vec<String>) -> BTreeSet<String> {
+fn lower_set(values: Vec<String>) -> HashSet<String> {
   values
     .into_iter()
     .filter(|value| !value.is_empty())
@@ -1639,6 +1639,6 @@ fn lowercase_lookup(text: &str) -> Cow<'_, str> {
   }
 }
 
-fn contains_lowercase(set: &BTreeSet<String>, text: &str) -> bool {
+fn contains_lowercase(set: &HashSet<String>, text: &str) -> bool {
   set.contains(lowercase_lookup(text).as_ref())
 }

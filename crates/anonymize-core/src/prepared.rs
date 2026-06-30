@@ -285,6 +285,28 @@ struct TimedEntities {
   elapsed_us: u64,
 }
 
+struct TimedMatches {
+  matches: Vec<SearchMatch>,
+  elapsed_us: u64,
+}
+
+impl TimedMatches {
+  const fn empty() -> Self {
+    Self {
+      matches: Vec::new(),
+      elapsed_us: 0,
+    }
+  }
+}
+
+struct TimedSearchBranches {
+  regex: TimedMatches,
+  legal_forms: TimedMatches,
+  triggers: TimedMatches,
+  custom_regex: TimedMatches,
+  literal: TimedMatches,
+}
+
 struct StaticEntityPasses {
   regex: TimedEntities,
   custom_regex: TimedEntities,
@@ -677,10 +699,30 @@ impl PreparedSearch {
   ) -> Result<PreparedSearchMatches> {
     let total_start = Instant::now();
     let normalized = normalize_search_text(full_text, &mut diagnostics)?;
-    if diagnostics.is_none() && full_text.len() >= PARALLEL_SEARCH_MIN_BYTES {
-      return self.find_matches_parallel(full_text, &normalized);
+    if full_text.len() >= PARALLEL_SEARCH_MIN_BYTES {
+      return self.find_matches_parallel(
+        full_text,
+        &normalized,
+        diagnostics,
+        total_start,
+      );
     }
 
+    self.find_matches_sequential(
+      full_text,
+      &normalized,
+      diagnostics,
+      total_start,
+    )
+  }
+
+  fn find_matches_sequential(
+    &self,
+    full_text: &str,
+    normalized: &NormalizedSearchText,
+    mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
+    total_start: Instant,
+  ) -> Result<PreparedSearchMatches> {
     let regex_start = Instant::now();
     let regex = offset_index_matches(
       &self.regex,
@@ -701,7 +743,7 @@ impl PreparedSearch {
     let legal_form_start = Instant::now();
     let legal_forms = normalized_index_matches(
       &self.legal_forms,
-      &normalized,
+      normalized,
       diagnostics.as_deref_mut(),
       DiagnosticStage::FindLegalForm,
       full_text.len(),
@@ -752,7 +794,7 @@ impl PreparedSearch {
     let literal_start = Instant::now();
     let literal = normalized_index_matches(
       &self.literals,
-      &normalized,
+      normalized,
       diagnostics.as_deref_mut(),
       DiagnosticStage::FindLiteral,
       full_text.len(),
@@ -786,15 +828,16 @@ impl PreparedSearch {
     &self,
     full_text: &str,
     normalized: &NormalizedSearchText,
+    mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
+    total_start: Instant,
   ) -> Result<PreparedSearchMatches> {
     let input_bytes = full_text.len();
-    std::thread::scope(|scope| {
+    let matches = std::thread::scope(|scope| {
       let regex = (!self.regex.is_empty()).then(|| {
         scope.spawn(|| {
-          offset_index_matches(
+          timed_offset_index_matches(
             &self.regex,
             full_text,
-            None,
             DiagnosticStage::FindRegex,
             input_bytes,
             self.slices.regex.start,
@@ -803,10 +846,9 @@ impl PreparedSearch {
       });
       let legal_forms = (!self.legal_forms.is_empty()).then(|| {
         scope.spawn(|| {
-          normalized_index_matches(
+          timed_normalized_index_matches(
             &self.legal_forms,
             normalized,
-            None,
             DiagnosticStage::FindLegalForm,
             input_bytes,
             self.slices.legal_forms.start,
@@ -815,10 +857,9 @@ impl PreparedSearch {
       });
       let triggers = (!self.triggers.is_empty()).then(|| {
         scope.spawn(|| {
-          offset_index_matches(
+          timed_offset_index_matches(
             &self.triggers,
             full_text,
-            None,
             DiagnosticStage::FindTrigger,
             input_bytes,
             self.slices.triggers.start,
@@ -827,10 +868,9 @@ impl PreparedSearch {
       });
       let custom_regex = (!self.custom_regex.is_empty()).then(|| {
         scope.spawn(|| {
-          offset_index_matches(
+          timed_offset_index_matches(
             &self.custom_regex,
             full_text,
-            None,
             DiagnosticStage::FindCustomRegex,
             input_bytes,
             self.slices.custom_regex.start,
@@ -839,10 +879,9 @@ impl PreparedSearch {
       });
       let literal = (!self.literals.is_empty()).then(|| {
         scope.spawn(|| {
-          normalized_index_matches(
+          timed_normalized_index_matches(
             &self.literals,
             normalized,
-            None,
             DiagnosticStage::FindLiteral,
             input_bytes,
             0,
@@ -850,16 +889,29 @@ impl PreparedSearch {
         })
       });
 
-      Ok(PreparedSearchMatches {
-        regex: combine_regex_matches(
-          join_optional_match_handle(regex, "regex")?,
-          join_optional_match_handle(legal_forms, "legal_forms")?,
-          join_optional_match_handle(triggers, "triggers")?,
-        ),
-        custom_regex: join_optional_match_handle(custom_regex, "custom_regex")?,
-        literal: join_optional_match_handle(literal, "literals")?,
-      })
-    })
+      let regex = join_optional_timed_match_handle(regex, "regex")?;
+      let legal_forms =
+        join_optional_timed_match_handle(legal_forms, "legal_forms")?;
+      let triggers = join_optional_timed_match_handle(triggers, "triggers")?;
+      let custom_regex =
+        join_optional_timed_match_handle(custom_regex, "custom_regex")?;
+      let literal = join_optional_timed_match_handle(literal, "literals")?;
+
+      Ok(finish_parallel_matches(
+        &mut diagnostics,
+        full_text,
+        total_start,
+        TimedSearchBranches {
+          regex,
+          legal_forms,
+          triggers,
+          custom_regex,
+          literal,
+        },
+      ))
+    })?;
+
+    Ok(matches)
   }
 
   pub fn detect_static_entities(
@@ -1703,6 +1755,80 @@ fn record_search_matches(
   }
 }
 
+fn record_parallel_search_matches(
+  diagnostics: &mut Option<&mut StaticRedactionDiagnostics>,
+  stage: DiagnosticStage,
+  matches: &TimedMatches,
+  full_text: &str,
+) {
+  if let Some(diagnostics) = diagnostics {
+    diagnostics.record_search_matches(
+      stage,
+      &matches.matches,
+      full_text,
+      Some(matches.elapsed_us),
+    );
+  }
+}
+
+fn finish_parallel_matches(
+  diagnostics: &mut Option<&mut StaticRedactionDiagnostics>,
+  full_text: &str,
+  total_start: Instant,
+  branches: TimedSearchBranches,
+) -> PreparedSearchMatches {
+  record_parallel_search_matches(
+    diagnostics,
+    DiagnosticStage::SearchRegex,
+    &branches.regex,
+    full_text,
+  );
+  record_parallel_search_matches(
+    diagnostics,
+    DiagnosticStage::SearchLegalForm,
+    &branches.legal_forms,
+    full_text,
+  );
+  record_parallel_search_matches(
+    diagnostics,
+    DiagnosticStage::SearchTrigger,
+    &branches.triggers,
+    full_text,
+  );
+  record_parallel_search_matches(
+    diagnostics,
+    DiagnosticStage::SearchCustomRegex,
+    &branches.custom_regex,
+    full_text,
+  );
+  record_parallel_search_matches(
+    diagnostics,
+    DiagnosticStage::SearchLiteral,
+    &branches.literal,
+    full_text,
+  );
+
+  let regex = combine_regex_matches(
+    branches.regex.matches,
+    branches.legal_forms.matches,
+    branches.triggers.matches,
+  );
+  record_find_matches_summary(
+    diagnostics,
+    &regex,
+    &branches.custom_regex.matches,
+    &branches.literal.matches,
+    full_text,
+    total_start,
+  );
+
+  PreparedSearchMatches {
+    regex,
+    custom_regex: branches.custom_regex.matches,
+    literal: branches.literal.matches,
+  }
+}
+
 fn record_find_matches_summary(
   diagnostics: &mut Option<&mut StaticRedactionDiagnostics>,
   regex: &[SearchMatch],
@@ -1959,22 +2085,24 @@ fn join_search_index(
   })?
 }
 
-fn join_match_handle(
-  handle: std::thread::ScopedJoinHandle<'_, Result<Vec<SearchMatch>>>,
+fn join_timed_match_handle(
+  handle: std::thread::ScopedJoinHandle<'_, Result<TimedMatches>>,
   field: &'static str,
-) -> Result<Vec<SearchMatch>> {
+) -> Result<TimedMatches> {
   handle.join().map_err(|_| Error::InvalidStaticData {
     field,
     reason: "search worker panicked".to_owned(),
   })?
 }
 
-fn join_optional_match_handle(
-  handle: Option<std::thread::ScopedJoinHandle<'_, Result<Vec<SearchMatch>>>>,
+fn join_optional_timed_match_handle(
+  handle: Option<std::thread::ScopedJoinHandle<'_, Result<TimedMatches>>>,
   field: &'static str,
-) -> Result<Vec<SearchMatch>> {
-  handle
-    .map_or_else(|| Ok(Vec::new()), |handle| join_match_handle(handle, field))
+) -> Result<TimedMatches> {
+  handle.map_or_else(
+    || Ok(TimedMatches::empty()),
+    |handle| join_timed_match_handle(handle, field),
+  )
 }
 
 fn record_prepare_stage_elapsed(
@@ -2632,6 +2760,21 @@ fn offset_index_matches(
   )
 }
 
+fn timed_offset_index_matches(
+  search: &SearchIndex,
+  haystack: &str,
+  slot_stage: DiagnosticStage,
+  input_bytes: usize,
+  offset: u32,
+) -> Result<TimedMatches> {
+  let start = Instant::now();
+  offset_index_matches(search, haystack, None, slot_stage, input_bytes, offset)
+    .map(|matches| TimedMatches {
+      matches,
+      elapsed_us: elapsed_us(start),
+    })
+}
+
 fn normalized_index_matches(
   search: &SearchIndex,
   normalized: &NormalizedSearchText,
@@ -2651,6 +2794,28 @@ fn normalized_index_matches(
   .map(|found| remap_normalized_match(normalized, found))
   .map(|found| found.and_then(|value| offset_match(value, offset)))
   .collect()
+}
+
+fn timed_normalized_index_matches(
+  search: &SearchIndex,
+  normalized: &NormalizedSearchText,
+  slot_stage: DiagnosticStage,
+  input_bytes: usize,
+  offset: u32,
+) -> Result<TimedMatches> {
+  let start = Instant::now();
+  normalized_index_matches(
+    search,
+    normalized,
+    None,
+    slot_stage,
+    input_bytes,
+    offset,
+  )
+  .map(|matches| TimedMatches {
+    matches,
+    elapsed_us: elapsed_us(start),
+  })
 }
 
 fn offset_matches(
