@@ -34,7 +34,7 @@ pub use coreference::{CoreferenceData, CoreferencePatternData};
 pub use dates::DateData;
 pub use diagnostics::{
   DiagnosticDetail, DiagnosticEvent, DiagnosticEventKind, DiagnosticPhase,
-  DiagnosticStage, StaticRedactionDiagnostics,
+  DiagnosticScope, DiagnosticStage, StaticRedactionDiagnostics,
 };
 pub use hotwords::{HotwordRule, HotwordRuleData};
 pub use legal_forms::LegalFormData;

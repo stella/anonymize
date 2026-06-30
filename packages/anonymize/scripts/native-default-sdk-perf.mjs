@@ -710,6 +710,13 @@ function topDiagnosticStages(diagnosticsJson) {
         typeof event.phase === "string"
           ? event.phase
           : diagnosticPhaseFromStage(event.stage),
+      scope:
+        typeof event.scope === "string"
+          ? event.scope
+          : diagnosticScopeFromStageSummary({
+              stage: event.stage,
+              slot: event.slot,
+            }),
       stage: event.stage,
       elapsedMs:
         typeof event.elapsed_us === "number"
@@ -722,6 +729,22 @@ function topDiagnosticStages(diagnosticsJson) {
     .filter((event) => event.elapsedMs !== null)
     .toSorted((left, right) => (right.elapsedMs ?? 0) - (left.elapsedMs ?? 0))
     .slice(0, 10);
+}
+
+function diagnosticScopeFromStageSummary({ stage, slot }) {
+  if (typeof slot === "number") {
+    return "slot";
+  }
+  if (
+    stage === "detect.total" ||
+    stage === "find-matches" ||
+    stage === "redact.total" ||
+    stage === "prepare.total" ||
+    stage === "warm.total"
+  ) {
+    return "total";
+  }
+  return "step";
 }
 
 function diagnosticPhaseFromStage(stage) {
@@ -1217,6 +1240,7 @@ def top_diagnostic_stages(diagnostics_json):
         stages.append(
             {
                 "phase": event.get("phase") if isinstance(event.get("phase"), str) else diagnostic_phase_from_stage(stage),
+                "scope": event.get("scope") if isinstance(event.get("scope"), str) else diagnostic_scope_from_stage_summary(stage, event.get("slot")),
                 "stage": stage,
                 "elapsedMs": round_ms(elapsed_us / 1_000),
                 "count": event.get("count") if isinstance(event.get("count"), int) else None,
@@ -1224,6 +1248,19 @@ def top_diagnostic_stages(diagnostics_json):
             }
         )
     return sorted(stages, key=lambda event: event["elapsedMs"], reverse=True)[:10]
+
+def diagnostic_scope_from_stage_summary(stage, slot):
+    if isinstance(slot, int):
+        return "slot"
+    if stage in {
+        "detect.total",
+        "find-matches",
+        "redact.total",
+        "prepare.total",
+        "warm.total",
+    }:
+        return "total"
+    return "step"
 
 def diagnostic_phase_from_stage(stage):
     if stage.startswith("prepare."):

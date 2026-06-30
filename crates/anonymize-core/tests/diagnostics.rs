@@ -2,10 +2,11 @@
 
 use stella_anonymize_core::{
   DenyListMatchData, DenyListPatternMetaSet, DiagnosticEvent,
-  DiagnosticEventKind, DiagnosticPhase, DiagnosticStage, Error,
-  GazetteerMatchData, LiteralSearchOptions, OperatorConfig, PatternSlice,
-  PreparedEngine, PreparedEngineConfig, PreparedEngineSlices, RegexMatchMeta,
-  RegexSearchOptions, SearchEngine, SearchOptions, SearchPattern,
+  DiagnosticEventKind, DiagnosticPhase, DiagnosticScope, DiagnosticStage,
+  Error, GazetteerMatchData, LiteralSearchOptions, OperatorConfig,
+  PatternSlice, PreparedEngine, PreparedEngineConfig, PreparedEngineSlices,
+  RegexMatchMeta, RegexSearchOptions, SearchEngine, SearchOptions,
+  SearchPattern,
 };
 
 fn empty_config(slices: PreparedEngineSlices) -> PreparedEngineConfig {
@@ -254,6 +255,42 @@ fn diagnostic_stages_report_pipeline_phase() {
     DiagnosticStage::RedactTotal.phase(),
     DiagnosticPhase::Redact
   );
+}
+
+#[test]
+fn diagnostic_events_report_scope() {
+  let total = DiagnosticEvent {
+    stage: DiagnosticStage::RedactTotal,
+    kind: DiagnosticEventKind::StageSummary,
+    count: None,
+    slot: None,
+    subslot: None,
+    pattern_count: None,
+    engine: None,
+    pattern: None,
+    source: None,
+    source_detail: None,
+    label: None,
+    start: None,
+    end: None,
+    text: None,
+    score: None,
+    span_valid: None,
+    elapsed_us: None,
+    input_bytes: None,
+    artifact_count: None,
+    artifact_bytes: None,
+    reason: None,
+  };
+  let mut slot = total.clone();
+  slot.stage = DiagnosticStage::FindLiteral;
+  slot.slot = Some(0);
+  let mut detail = total.clone();
+  detail.kind = DiagnosticEventKind::Entity;
+
+  assert_eq!(total.scope(), DiagnosticScope::Total);
+  assert_eq!(slot.scope(), DiagnosticScope::Slot);
+  assert_eq!(detail.scope(), DiagnosticScope::Detail);
 }
 
 #[test]

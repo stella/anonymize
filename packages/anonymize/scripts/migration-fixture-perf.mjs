@@ -822,18 +822,21 @@ function summarizeFixtureDiagnostics(fixtureDiagnostics) {
     let fixtureElapsedMs = 0;
     for (const stage of fixture.stages) {
       fixtureElapsedMs += stage.elapsedMs ?? 0;
-      const phaseBucket = phaseBuckets.get(stage.phase) ?? {
-        phase: stage.phase,
-        elapsedMs: [],
-        count: 0,
-      };
-      if (typeof stage.elapsedMs === "number") {
-        phaseBucket.elapsedMs.push(stage.elapsedMs);
+      if (stage.scope === "step") {
+        const phaseBucket = phaseBuckets.get(stage.phase) ?? {
+          phase: stage.phase,
+          elapsedMs: [],
+          count: 0,
+        };
+        if (typeof stage.elapsedMs === "number") {
+          phaseBucket.elapsedMs.push(stage.elapsedMs);
+        }
+        phaseBucket.count += stage.count ?? 0;
+        phaseBuckets.set(stage.phase, phaseBucket);
       }
-      phaseBucket.count += stage.count ?? 0;
-      phaseBuckets.set(stage.phase, phaseBucket);
       const bucket = stageBuckets.get(stage.stage) ?? {
         phase: stage.phase,
+        scope: stage.scope,
         stage: stage.stage,
         elapsedMs: [],
         count: 0,
@@ -854,6 +857,7 @@ function summarizeFixtureDiagnostics(fixtureDiagnostics) {
         const slotBucket = slotBuckets.get(slotKey) ?? {
           stage: stage.stage,
           phase: stage.phase,
+          scope: stage.scope,
           engine: stage.engine,
           slot: stage.slot,
           subslot: stage.subslot,
@@ -880,6 +884,7 @@ function summarizeFixtureDiagnostics(fixtureDiagnostics) {
   const stages = [...stageBuckets.values()]
     .map((bucket) => ({
       phase: bucket.phase,
+      scope: bucket.scope,
       stage: bucket.stage,
       calls: bucket.elapsedMs.length,
       totalMs: roundMs(bucket.elapsedMs.reduce((sum, ms) => sum + ms, 0)),
@@ -953,6 +958,8 @@ function stageTotalMs(stages, stageName) {
 function summarizeDiagnosticSlotBuckets(slotBuckets) {
   return [...slotBuckets.values()]
     .map((bucket) => ({
+      phase: bucket.phase,
+      scope: bucket.scope,
       stage: bucket.stage,
       engine: bucket.engine,
       slot: bucket.slot,
@@ -1008,6 +1015,12 @@ function diagnosticStageSummaries(events) {
     .filter((event) => event.kind === "stage-summary")
     .map((event) => ({
       phase: event.phase ?? diagnosticPhaseFromStage(event.stage),
+      scope:
+        event.scope ??
+        diagnosticScopeFromStageSummary({
+          stage: event.stage,
+          slot: event.slot,
+        }),
       stage: event.stage,
       count: event.count ?? 0,
       slot: event.slot ?? null,
@@ -1023,6 +1036,22 @@ function diagnosticStageSummaries(events) {
       artifactCount: event.artifact_count ?? null,
       artifactBytes: event.artifact_bytes ?? null,
     }));
+}
+
+function diagnosticScopeFromStageSummary({ stage, slot }) {
+  if (typeof slot === "number") {
+    return "slot";
+  }
+  if (
+    stage === RUN_STAGE.detectTotal ||
+    stage === RUN_STAGE.findMatches ||
+    stage === RUN_STAGE.redactionTotal ||
+    stage === "prepare.total" ||
+    stage === "warm.total"
+  ) {
+    return "total";
+  }
+  return "step";
 }
 
 function diagnosticPhaseFromStage(stage) {

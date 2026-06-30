@@ -152,6 +152,7 @@ type StaticRedactionDiagnosticResult = {
   diagnostics: {
     events: Array<{
       phase: string;
+      scope: string;
       stage: string;
       kind: string;
       count?: number;
@@ -2878,6 +2879,7 @@ describe("native adapter parity", () => {
       tsResult.diagnostics.events.some(
         (event) =>
           event.phase === "search" &&
+          event.scope === "step" &&
           event.stage === "search.literal" &&
           event.kind === "stage-summary" &&
           typeof event.count === "number" &&
@@ -2888,6 +2890,7 @@ describe("native adapter parity", () => {
       tsResult.diagnostics.events.some(
         (event) =>
           event.phase === "search" &&
+          event.scope === "slot" &&
           event.stage === "find.literal" &&
           event.kind === "stage-summary" &&
           typeof event.slot === "number" &&
@@ -2899,6 +2902,7 @@ describe("native adapter parity", () => {
       tsResult.diagnostics.events.some(
         (event) =>
           event.phase === "prepare" &&
+          event.scope === "slot" &&
           event.stage === "prepare.regex" &&
           event.kind === "stage-summary" &&
           typeof event.slot === "number" &&
@@ -2911,6 +2915,7 @@ describe("native adapter parity", () => {
       tsResult.diagnostics.events.some(
         (event) =>
           event.phase === "resolve" &&
+          event.scope === "detail" &&
           event.stage === "resolution.sanitize" &&
           event.kind === "entity" &&
           event.span_valid === true,
@@ -2946,6 +2951,7 @@ describe("native adapter parity", () => {
       tsResult.diagnostics.events.some(
         (event) =>
           event.phase === "detect" &&
+          event.scope === "total" &&
           event.stage === "detect.total" &&
           event.kind === "stage-summary" &&
           typeof event.elapsed_us === "number",
@@ -2955,6 +2961,7 @@ describe("native adapter parity", () => {
       tsResult.diagnostics.events.some(
         (event) =>
           event.phase === "redact" &&
+          event.scope === "total" &&
           event.stage === "redact.total" &&
           event.kind === "stage-summary" &&
           typeof event.elapsed_us === "number",

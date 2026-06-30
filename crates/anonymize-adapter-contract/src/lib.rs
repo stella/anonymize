@@ -7,17 +7,17 @@ use stella_anonymize_core::{
   CoreferencePatternData, CountryMatchData, CurrencyData, DateData,
   DenyListFilterData, DenyListMatchData, DenyListPatternMetaSet,
   DetectionSource, DiagnosticEvent, DiagnosticEventKind, DiagnosticPhase,
-  DiagnosticStage, FuzzySearchOptions, GazetteerMatchData, HotwordRule,
-  HotwordRuleData, LegalFormData, LiteralSearchOptions, MagnitudeSuffixData,
-  MonetaryData, NameCorpusData, NameCorpusMode, OperatorConfig, OperatorType,
-  PatternSlice, PreparedArtifactPolicy, PreparedSearchArtifacts,
-  PreparedSearchConfig, PreparedSearchSlices, RegexArtifactPolicy,
-  RegexMatchMeta, RegexSearchOptions, SearchEngine, SearchOptions,
-  SearchPattern, ShareQuantityTermData, SignatureData, SigningPlaceGuardData,
-  SourceDetail, StaticRedactionDiagnosticResult, StaticRedactionDiagnostics,
-  StaticRedactionResult, StringGroups, TriggerData, TriggerRule,
-  TriggerStrategy, TriggerValidation, WrittenAmountPatternData, ZoneData,
-  ZonePatternData, ZoneSigningClauseData,
+  DiagnosticScope, DiagnosticStage, FuzzySearchOptions, GazetteerMatchData,
+  HotwordRule, HotwordRuleData, LegalFormData, LiteralSearchOptions,
+  MagnitudeSuffixData, MonetaryData, NameCorpusData, NameCorpusMode,
+  OperatorConfig, OperatorType, PatternSlice, PreparedArtifactPolicy,
+  PreparedSearchArtifacts, PreparedSearchConfig, PreparedSearchSlices,
+  RegexArtifactPolicy, RegexMatchMeta, RegexSearchOptions, SearchEngine,
+  SearchOptions, SearchPattern, ShareQuantityTermData, SignatureData,
+  SigningPlaceGuardData, SourceDetail, StaticRedactionDiagnosticResult,
+  StaticRedactionDiagnostics, StaticRedactionResult, StringGroups, TriggerData,
+  TriggerRule, TriggerStrategy, TriggerValidation, WrittenAmountPatternData,
+  ZoneData, ZonePatternData, ZoneSigningClauseData,
 };
 
 pub type Result<T> = std::result::Result<T, ContractError>;
@@ -1599,6 +1599,7 @@ pub struct BindingStaticRedactionResult {
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct BindingDiagnosticEvent {
   pub phase: String,
+  pub scope: String,
   pub stage: String,
   pub kind: String,
   #[serde(skip_serializing_if = "Option::is_none")]
@@ -2485,6 +2486,7 @@ fn diagnostic_event_to_binding(
 ) -> BindingDiagnosticEvent {
   BindingDiagnosticEvent {
     phase: diagnostic_phase_name(event.stage.phase()),
+    scope: diagnostic_scope_name(event.scope()),
     stage: diagnostic_stage_name(event.stage),
     kind: diagnostic_event_kind_name(event.kind),
     count: event.count,
@@ -2949,6 +2951,16 @@ fn diagnostic_phase_name(phase: DiagnosticPhase) -> String {
   .to_owned()
 }
 
+fn diagnostic_scope_name(scope: DiagnosticScope) -> String {
+  match scope {
+    DiagnosticScope::Total => "total",
+    DiagnosticScope::Step => "step",
+    DiagnosticScope::Slot => "slot",
+    DiagnosticScope::Detail => "detail",
+  }
+  .to_owned()
+}
+
 fn diagnostic_stage_name(stage: DiagnosticStage) -> String {
   match stage {
     DiagnosticStage::PrepareCacheKey => "prepare.cache-key",
@@ -3317,27 +3329,39 @@ mod tests {
 
   #[test]
   fn binding_diagnostic_events_include_pipeline_phase() {
-    let diagnostics = diagnostic_events_to_binding(&[
-      diagnostic_stage_event(DiagnosticStage::PrepareRegex, None, None, None),
+    let mut prepare_regex =
+      diagnostic_stage_event(DiagnosticStage::PrepareRegex, None, None, None);
+    prepare_regex.slot = Some(0);
+
+    let events = vec![
+      prepare_regex,
       diagnostic_stage_event(DiagnosticStage::FindLiteral, None, None, None),
       diagnostic_stage_event(DiagnosticStage::EntityDenyList, None, None, None),
       diagnostic_stage_event(DiagnosticStage::EntityHotword, None, None, None),
       diagnostic_stage_event(DiagnosticStage::RedactTotal, None, None, None),
-    ]);
-    let phases = diagnostics
+    ];
+
+    let diagnostics = diagnostic_events_to_binding(&events);
+    let metadata = diagnostics
       .events
       .iter()
-      .map(|event| (event.stage.as_str(), event.phase.as_str()))
+      .map(|event| {
+        (
+          event.stage.as_str(),
+          event.phase.as_str(),
+          event.scope.as_str(),
+        )
+      })
       .collect::<Vec<_>>();
 
     assert_eq!(
-      phases,
+      metadata,
       vec![
-        ("prepare.regex", "prepare"),
-        ("find.literal", "search"),
-        ("entity.deny-list", "detect"),
-        ("entity.hotword", "resolve"),
-        ("redact.total", "redact"),
+        ("prepare.regex", "prepare", "slot"),
+        ("find.literal", "search", "step"),
+        ("entity.deny-list", "detect", "step"),
+        ("entity.hotword", "resolve", "step"),
+        ("redact.total", "redact", "total"),
       ]
     );
   }

@@ -14,6 +14,14 @@ pub enum DiagnosticPhase {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DiagnosticScope {
+  Total,
+  Step,
+  Slot,
+  Detail,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DiagnosticStage {
   PrepareCacheKey,
   PrepareCacheBypass,
@@ -154,6 +162,18 @@ impl DiagnosticStage {
       Self::RedactTotal | Self::Redaction => DiagnosticPhase::Redact,
     }
   }
+
+  #[must_use]
+  pub const fn is_total(self) -> bool {
+    matches!(
+      self,
+      Self::PrepareTotal
+        | Self::WarmTotal
+        | Self::FindMatches
+        | Self::DetectTotal
+        | Self::RedactTotal
+    )
+  }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -194,6 +214,24 @@ pub struct DiagnosticEvent {
   pub artifact_count: Option<usize>,
   pub artifact_bytes: Option<usize>,
   pub reason: Option<String>,
+}
+
+impl DiagnosticEvent {
+  #[must_use]
+  pub const fn scope(&self) -> DiagnosticScope {
+    match self.kind {
+      DiagnosticEventKind::SearchMatch
+      | DiagnosticEventKind::Entity
+      | DiagnosticEventKind::Rejection => DiagnosticScope::Detail,
+      DiagnosticEventKind::StageSummary if self.slot.is_some() => {
+        DiagnosticScope::Slot
+      }
+      DiagnosticEventKind::StageSummary if self.stage.is_total() => {
+        DiagnosticScope::Total
+      }
+      DiagnosticEventKind::StageSummary => DiagnosticScope::Step,
+    }
+  }
 }
 
 #[derive(Clone, Debug, PartialEq)]
