@@ -20,7 +20,7 @@ smallvec = { version = "1.15.2", features = [
   "union",
 ] }
 stella-stdnum-core = { version = "2.1.1", git = "https://github.com/stella/stdnum", rev = "2f3c3f107e3976ac059cc438d77916a592595d59" }
-stella-text-search-core = { version = "1.0.6", git = "https://github.com/stella/text-search", rev = "654d9b13af3a3db7a01923935234d8054dfd74ce" }
+stella-text-search-core = { version = "1.0.6", git = "https://github.com/stella/text-search", rev = "d4562c43a6f3109f7a4077ba2a8926c89f4f1e8e" }
 
 [dev-dependencies]
 proptest = "1"
