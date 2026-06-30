@@ -6,14 +6,14 @@ use stella_anonymize_core::{
   AddressContextData, AddressSeedData, AmountWordsData, CoreferenceData,
   CoreferencePatternData, CountryMatchData, CurrencyData, DateData,
   DenyListFilterData, DenyListMatchData, DetectionSource, DiagnosticEvent,
-  DiagnosticEventKind, DiagnosticStage, EntityKind, Error, FuzzySearchOptions,
-  GazetteerMatchData, HotwordRule, HotwordRuleData, LegalFormData,
-  LiteralSearchOptions, MagnitudeSuffixData, MonetaryData, OperatorConfig,
-  PatternSlice, PreparedSearch, PreparedSearchArtifacts, PreparedSearchConfig,
-  PreparedSearchSlices, RegexMatchMeta, RegexSearchOptions, SearchEngine,
-  SearchOptions, SearchPattern, SourceDetail, TriggerData, TriggerRule,
-  TriggerStrategy, TriggerValidation, WrittenAmountPatternData, ZoneData,
-  ZonePatternData, ZoneSigningClauseData,
+  DiagnosticEventKind, DiagnosticPhase, DiagnosticStage, EntityKind, Error,
+  FuzzySearchOptions, GazetteerMatchData, HotwordRule, HotwordRuleData,
+  LegalFormData, LiteralSearchOptions, MagnitudeSuffixData, MonetaryData,
+  OperatorConfig, PatternSlice, PreparedSearch, PreparedSearchArtifacts,
+  PreparedSearchConfig, PreparedSearchSlices, RegexMatchMeta,
+  RegexSearchOptions, SearchEngine, SearchOptions, SearchPattern, SourceDetail,
+  TriggerData, TriggerRule, TriggerStrategy, TriggerValidation,
+  WrittenAmountPatternData, ZoneData, ZonePatternData, ZoneSigningClauseData,
 };
 
 fn empty_config(slices: PreparedSearchSlices) -> PreparedSearchConfig {
@@ -2339,6 +2339,32 @@ fn assert_stage_summary(
         && event.elapsed_us.is_some()
     }),
     "missing summary stage {stage:?} count {count:?}",
+  );
+}
+
+#[test]
+fn diagnostic_stages_report_pipeline_phase() {
+  assert_eq!(
+    DiagnosticStage::PrepareRegex.phase(),
+    DiagnosticPhase::Prepare
+  );
+  assert_eq!(DiagnosticStage::WarmRegex.phase(), DiagnosticPhase::Warm);
+  assert_eq!(
+    DiagnosticStage::FindLiteral.phase(),
+    DiagnosticPhase::Search
+  );
+  assert_eq!(
+    DiagnosticStage::EntityDenyList.phase(),
+    DiagnosticPhase::Detect
+  );
+  assert_eq!(
+    DiagnosticStage::EntityHotword.phase(),
+    DiagnosticPhase::Resolve
+  );
+  assert_eq!(DiagnosticStage::Sanitize.phase(), DiagnosticPhase::Resolve);
+  assert_eq!(
+    DiagnosticStage::RedactTotal.phase(),
+    DiagnosticPhase::Redact
   );
 }
 

@@ -706,6 +706,10 @@ function topDiagnosticStages(diagnosticsJson) {
   return events
     .filter((event) => typeof event.stage === "string")
     .map((event) => ({
+      phase:
+        typeof event.phase === "string"
+          ? event.phase
+          : diagnosticPhaseFromStage(event.stage),
       stage: event.stage,
       elapsedMs:
         typeof event.elapsed_us === "number"
@@ -718,6 +722,43 @@ function topDiagnosticStages(diagnosticsJson) {
     .filter((event) => event.elapsedMs !== null)
     .toSorted((left, right) => (right.elapsedMs ?? 0) - (left.elapsedMs ?? 0))
     .slice(0, 10);
+}
+
+function diagnosticPhaseFromStage(stage) {
+  if (stage.startsWith("prepare.")) {
+    return "prepare";
+  }
+  if (stage.startsWith("warm.")) {
+    return "warm";
+  }
+  if (
+    stage === "normalize" ||
+    stage === "find-matches" ||
+    stage.startsWith("find.") ||
+    stage.startsWith("search.")
+  ) {
+    return "search";
+  }
+  if (
+    stage === "detect.total" ||
+    stage === "entity.regex" ||
+    stage === "entity.custom-regex" ||
+    stage === "entity.anchored" ||
+    stage === "entity.deny-list" ||
+    stage === "entity.gazetteer" ||
+    stage === "entity.country" ||
+    stage === "entity.trigger" ||
+    stage === "entity.signature" ||
+    stage === "entity.legal-form" ||
+    stage === "entity.address-seed" ||
+    stage === "entity.name-corpus"
+  ) {
+    return "detect";
+  }
+  if (stage === "redact.total" || stage === "redaction") {
+    return "redact";
+  }
+  return "resolve";
 }
 
 function preparePythonSdk() {
@@ -1175,6 +1216,7 @@ def top_diagnostic_stages(diagnostics_json):
             continue
         stages.append(
             {
+                "phase": event.get("phase") if isinstance(event.get("phase"), str) else diagnostic_phase_from_stage(stage),
                 "stage": stage,
                 "elapsedMs": round_ms(elapsed_us / 1_000),
                 "count": event.get("count") if isinstance(event.get("count"), int) else None,
@@ -1182,6 +1224,37 @@ def top_diagnostic_stages(diagnostics_json):
             }
         )
     return sorted(stages, key=lambda event: event["elapsedMs"], reverse=True)[:10]
+
+def diagnostic_phase_from_stage(stage):
+    if stage.startswith("prepare."):
+        return "prepare"
+    if stage.startswith("warm."):
+        return "warm"
+    if (
+        stage == "normalize"
+        or stage == "find-matches"
+        or stage.startswith("find.")
+        or stage.startswith("search.")
+    ):
+        return "search"
+    if stage in {
+        "detect.total",
+        "entity.regex",
+        "entity.custom-regex",
+        "entity.anchored",
+        "entity.deny-list",
+        "entity.gazetteer",
+        "entity.country",
+        "entity.trigger",
+        "entity.signature",
+        "entity.legal-form",
+        "entity.address-seed",
+        "entity.name-corpus",
+    }:
+        return "detect"
+    if stage == "redact.total" or stage == "redaction":
+        return "redact"
+    return "resolve"
 
 def elapsed_ms(start):
     return round_ms((time.perf_counter_ns() - start) / 1_000_000)

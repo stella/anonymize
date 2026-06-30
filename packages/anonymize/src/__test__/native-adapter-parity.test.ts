@@ -151,6 +151,7 @@ type StaticRedactionDiagnosticResult = {
   result: StaticRedactionResult;
   diagnostics: {
     events: Array<{
+      phase: string;
       stage: string;
       kind: string;
       count?: number;
@@ -2876,6 +2877,7 @@ describe("native adapter parity", () => {
     expect(
       tsResult.diagnostics.events.some(
         (event) =>
+          event.phase === "search" &&
           event.stage === "search.literal" &&
           event.kind === "stage-summary" &&
           typeof event.count === "number" &&
@@ -2885,6 +2887,7 @@ describe("native adapter parity", () => {
     expect(
       tsResult.diagnostics.events.some(
         (event) =>
+          event.phase === "search" &&
           event.stage === "find.literal" &&
           event.kind === "stage-summary" &&
           typeof event.slot === "number" &&
@@ -2895,6 +2898,7 @@ describe("native adapter parity", () => {
     expect(
       tsResult.diagnostics.events.some(
         (event) =>
+          event.phase === "prepare" &&
           event.stage === "prepare.regex" &&
           event.kind === "stage-summary" &&
           typeof event.slot === "number" &&
@@ -2906,6 +2910,7 @@ describe("native adapter parity", () => {
     expect(
       tsResult.diagnostics.events.some(
         (event) =>
+          event.phase === "resolve" &&
           event.stage === "resolution.sanitize" &&
           event.kind === "entity" &&
           event.span_valid === true,
@@ -2940,6 +2945,7 @@ describe("native adapter parity", () => {
     expect(
       tsResult.diagnostics.events.some(
         (event) =>
+          event.phase === "detect" &&
           event.stage === "detect.total" &&
           event.kind === "stage-summary" &&
           typeof event.elapsed_us === "number",
@@ -2948,6 +2954,7 @@ describe("native adapter parity", () => {
     expect(
       tsResult.diagnostics.events.some(
         (event) =>
+          event.phase === "redact" &&
           event.stage === "redact.total" &&
           event.kind === "stage-summary" &&
           typeof event.elapsed_us === "number",
@@ -3665,9 +3672,7 @@ const stripRuntimeDiagnosticStreamTimings = (
 const runtimeDiagnosticBatch = (
   diagnostics: StaticRedactionDiagnosticBatch,
 ): StaticRedactionDiagnosticBatch => ({
-  events: diagnostics.events.filter(
-    (event) => !event.stage.startsWith("prepare."),
-  ),
+  events: diagnostics.events.filter((event) => event.phase !== "prepare"),
 });
 
 const concatDiagnosticBatches = ({

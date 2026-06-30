@@ -809,11 +809,12 @@ function collectNativeDiagnostics({ runner, fixtures }) {
 }
 
 function isRunStage(stage) {
-  return !stage.stage.startsWith("prepare.");
+  return stage.phase !== "prepare";
 }
 
 function summarizeFixtureDiagnostics(fixtureDiagnostics) {
   const stageBuckets = new Map();
+  const phaseBuckets = new Map();
   const slotBuckets = new Map();
   const byFixture = [];
 
@@ -821,7 +822,18 @@ function summarizeFixtureDiagnostics(fixtureDiagnostics) {
     let fixtureElapsedMs = 0;
     for (const stage of fixture.stages) {
       fixtureElapsedMs += stage.elapsedMs ?? 0;
+      const phaseBucket = phaseBuckets.get(stage.phase) ?? {
+        phase: stage.phase,
+        elapsedMs: [],
+        count: 0,
+      };
+      if (typeof stage.elapsedMs === "number") {
+        phaseBucket.elapsedMs.push(stage.elapsedMs);
+      }
+      phaseBucket.count += stage.count ?? 0;
+      phaseBuckets.set(stage.phase, phaseBucket);
       const bucket = stageBuckets.get(stage.stage) ?? {
+        phase: stage.phase,
         stage: stage.stage,
         elapsedMs: [],
         count: 0,
@@ -841,6 +853,7 @@ function summarizeFixtureDiagnostics(fixtureDiagnostics) {
         ].join("\0");
         const slotBucket = slotBuckets.get(slotKey) ?? {
           stage: stage.stage,
+          phase: stage.phase,
           engine: stage.engine,
           slot: stage.slot,
           subslot: stage.subslot,
@@ -866,6 +879,7 @@ function summarizeFixtureDiagnostics(fixtureDiagnostics) {
 
   const stages = [...stageBuckets.values()]
     .map((bucket) => ({
+      phase: bucket.phase,
       stage: bucket.stage,
       calls: bucket.elapsedMs.length,
       totalMs: roundMs(bucket.elapsedMs.reduce((sum, ms) => sum + ms, 0)),
@@ -891,8 +905,10 @@ function summarizeFixtureDiagnostics(fixtureDiagnostics) {
       count: bucket.count,
     }))
     .sort((left, right) => right.totalMs - left.totalMs);
+  const phases = summarizeDiagnosticPhaseBuckets(phaseBuckets);
 
   return {
+    phases,
     stages,
     breakdown: runBreakdown(stages),
     topStages: stages.slice(0, 10),
@@ -969,10 +985,29 @@ function summarizeDiagnosticSlotBuckets(slotBuckets) {
     .sort((left, right) => right.totalMs - left.totalMs);
 }
 
+function summarizeDiagnosticPhaseBuckets(phaseBuckets) {
+  return [...phaseBuckets.values()]
+    .map((bucket) => ({
+      phase: bucket.phase,
+      calls: bucket.elapsedMs.length,
+      totalMs: roundMs(bucket.elapsedMs.reduce((sum, ms) => sum + ms, 0)),
+      avgMs:
+        bucket.elapsedMs.length === 0
+          ? 0
+          : roundMs(
+              bucket.elapsedMs.reduce((sum, ms) => sum + ms, 0) /
+                bucket.elapsedMs.length,
+            ),
+      count: bucket.count,
+    }))
+    .sort((left, right) => right.totalMs - left.totalMs);
+}
+
 function diagnosticStageSummaries(events) {
   return events
     .filter((event) => event.kind === "stage-summary")
     .map((event) => ({
+      phase: event.phase ?? diagnosticPhaseFromStage(event.stage),
       stage: event.stage,
       count: event.count ?? 0,
       slot: event.slot ?? null,
@@ -988,6 +1023,43 @@ function diagnosticStageSummaries(events) {
       artifactCount: event.artifact_count ?? null,
       artifactBytes: event.artifact_bytes ?? null,
     }));
+}
+
+function diagnosticPhaseFromStage(stage) {
+  if (stage.startsWith("prepare.")) {
+    return "prepare";
+  }
+  if (stage.startsWith("warm.")) {
+    return "warm";
+  }
+  if (
+    stage === "normalize" ||
+    stage === "find-matches" ||
+    stage.startsWith("find.") ||
+    stage.startsWith("search.")
+  ) {
+    return "search";
+  }
+  if (
+    stage === "detect.total" ||
+    stage === "entity.regex" ||
+    stage === "entity.custom-regex" ||
+    stage === "entity.anchored" ||
+    stage === "entity.deny-list" ||
+    stage === "entity.gazetteer" ||
+    stage === "entity.country" ||
+    stage === "entity.trigger" ||
+    stage === "entity.signature" ||
+    stage === "entity.legal-form" ||
+    stage === "entity.address-seed" ||
+    stage === "entity.name-corpus"
+  ) {
+    return "detect";
+  }
+  if (stage === "redact.total" || stage === "redaction") {
+    return "redact";
+  }
+  return "resolve";
 }
 
 function topDiagnosticStages(stages) {

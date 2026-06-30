@@ -4,6 +4,16 @@ use crate::search::{SearchIndexBuildStats, SearchIndexFindStats};
 use crate::types::{RedactionResult, SearchEngine, SearchMatch};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DiagnosticPhase {
+  Prepare,
+  Warm,
+  Search,
+  Detect,
+  Resolve,
+  Redact,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DiagnosticStage {
   PrepareCacheKey,
   PrepareCacheBypass,
@@ -71,6 +81,79 @@ pub enum DiagnosticStage {
   Boundary,
   Sanitize,
   Redaction,
+}
+
+impl DiagnosticStage {
+  #[must_use]
+  pub const fn phase(self) -> DiagnosticPhase {
+    match self {
+      Self::PrepareCacheKey
+      | Self::PrepareCacheBypass
+      | Self::PrepareCacheHit
+      | Self::PrepareCacheMiss
+      | Self::PrepareBindingParse
+      | Self::PreparePackageDecode
+      | Self::PreparePackageVerify
+      | Self::PreparePackageDecompress
+      | Self::PreparePackageConfigDecode
+      | Self::PrepareBindingConvert
+      | Self::PrepareArtifactsDecode
+      | Self::PrepareTotal
+      | Self::PrepareRegex
+      | Self::PrepareCustomRegex
+      | Self::PrepareAnchored
+      | Self::PrepareLegalFormSearch
+      | Self::PrepareTriggerSearch
+      | Self::PrepareLiteral
+      | Self::PrepareHotwordData
+      | Self::PrepareTriggerData
+      | Self::PrepareLegalFormData
+      | Self::PrepareAddressSeedData
+      | Self::PrepareZoneData
+      | Self::PrepareAddressContextData
+      | Self::PrepareCoreferenceData
+      | Self::PrepareNameCorpusData
+      | Self::PrepareSignatureData => DiagnosticPhase::Prepare,
+      Self::WarmRegex
+      | Self::WarmCustomRegex
+      | Self::WarmLegalFormSearch
+      | Self::WarmTriggerSearch
+      | Self::WarmLiteral
+      | Self::WarmTotal => DiagnosticPhase::Warm,
+      Self::Normalize
+      | Self::FindMatches
+      | Self::FindRegex
+      | Self::FindCustomRegex
+      | Self::FindLegalForm
+      | Self::FindTrigger
+      | Self::FindLiteral
+      | Self::SearchRegex
+      | Self::SearchCustomRegex
+      | Self::SearchLegalForm
+      | Self::SearchTrigger
+      | Self::SearchLiteral => DiagnosticPhase::Search,
+      Self::DetectTotal
+      | Self::EntityRegex
+      | Self::EntityCustomRegex
+      | Self::EntityAnchored
+      | Self::EntityDenyList
+      | Self::EntityGazetteer
+      | Self::EntityCountry
+      | Self::EntityTrigger
+      | Self::EntitySignature
+      | Self::EntityLegalForm
+      | Self::EntityAddressSeed
+      | Self::EntityNameCorpus => DiagnosticPhase::Detect,
+      Self::EntityZoneAdjustment
+      | Self::EntityHotword
+      | Self::EntityAddressContext
+      | Self::EntityCoreference
+      | Self::Merge
+      | Self::Boundary
+      | Self::Sanitize => DiagnosticPhase::Resolve,
+      Self::RedactTotal | Self::Redaction => DiagnosticPhase::Redact,
+    }
+  }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
