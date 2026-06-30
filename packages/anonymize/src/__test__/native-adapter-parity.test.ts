@@ -176,6 +176,14 @@ type StaticRedactionDiagnosticResult = {
   };
 };
 
+type StaticRedactionDiagnosticBatch =
+  StaticRedactionDiagnosticResult["diagnostics"];
+
+type StaticRedactionDiagnosticStream = {
+  final: StaticRedactionDiagnosticResult;
+  batches: StaticRedactionDiagnosticBatch[];
+};
+
 type GeneratedNativeCase = {
   text: string;
   operators: Record<string, string> | null;
@@ -761,6 +769,18 @@ def redact_object_with_top_level(item):
         },
     }
 
+def stream_with(instance, item):
+    batches = []
+    final = json.loads(
+        instance.diagnostics_stream_json(
+            item["text"],
+            lambda batch: batches.append(json.loads(batch)),
+            item.get("operators"),
+            redact_string=item.get("redact_string"),
+        )
+    )
+    return {"final": final, "batches": batches}
+
 print(
     json.dumps(
         {
@@ -808,6 +828,9 @@ print(
             ],
             "top_level_object": [
                 redact_object_with_top_level(item) for item in payload["cases"]
+            ],
+            "stream_from_bytes": [
+                stream_with(prepared, item) for item in payload["cases"]
             ],
             "available_languages": list(
                 anonymize.available_default_native_pipeline_languages()
@@ -1529,6 +1552,9 @@ describe("native adapter parity", () => {
         ),
       ),
     ).toEqual(rustCoreJson);
+    const tsStreamJson = cases.map((item) =>
+      collectTsDiagnosticStream(prepared, item),
+    );
     const diagnosticsJson = prepared.diagnostics_json(cases[0].text);
     if (diagnosticsJson === null) {
       throw new Error("missing shared SDK diagnostics");
@@ -1577,6 +1603,24 @@ describe("native adapter parity", () => {
     expect(python.top_level_object).toEqual(
       rustCoreJson.map(withoutEntityOffsets),
     );
+    expect(
+      stripRuntimeDiagnosticStreamTimings(python.stream_from_bytes),
+    ).toEqual(stripRuntimeDiagnosticStreamTimings(tsStreamJson));
+    for (const stream of [...tsStreamJson, ...python.stream_from_bytes]) {
+      expect(
+        stripDiagnosticBatchTimings(concatDiagnosticBatches(stream)),
+      ).toEqual(stripDiagnosticBatchTimings(stream.final.diagnostics));
+      expect(
+        stream.batches.some((batch) =>
+          batch.events.some((event) => event.stage === "detect.total"),
+        ),
+      ).toBe(true);
+      expect(
+        stream.batches
+          .at(-1)
+          ?.events.some((event) => event.stage === "redact.total"),
+      ).toBe(true);
+    }
     expect(python.normalized).toBe(
       adapters.native.normalizeForSearch("Číslo\u00a0PAS - 1234"),
     );
@@ -3402,6 +3446,7 @@ const callPythonSharedSdkParity = ({
   top_level_bytes: StaticRedactionResult[];
   top_level_object: OffsetFreeStaticRedactionResult[];
   top_level_object_json: StaticRedactionResult[];
+  stream_from_bytes: StaticRedactionDiagnosticStream[];
   available_languages: string[];
   normalized: string;
   module_version: string;
@@ -3585,12 +3630,72 @@ const stripDiagnosticTimings = (
   result: StaticRedactionDiagnosticResult,
 ): StaticRedactionDiagnosticResult => ({
   result: result.result,
-  diagnostics: {
-    events: result.diagnostics.events.map(
-      ({ elapsed_us: _elapsedUs, ...event }) => event,
-    ),
-  },
+  diagnostics: stripDiagnosticBatchTimings(result.diagnostics),
 });
+
+const stripDiagnosticBatchTimings = (
+  diagnostics: StaticRedactionDiagnosticBatch,
+): StaticRedactionDiagnosticBatch => ({
+  events: diagnostics.events.map(
+    ({ elapsed_us: _elapsedUs, ...event }) => event,
+  ),
+});
+
+const stripDiagnosticStreamTimings = (
+  streams: StaticRedactionDiagnosticStream[],
+): StaticRedactionDiagnosticStream[] =>
+  streams.map(({ final, batches }) => ({
+    final: stripDiagnosticTimings(final),
+    batches: batches.map(stripDiagnosticBatchTimings),
+  }));
+
+const stripRuntimeDiagnosticStreamTimings = (
+  streams: StaticRedactionDiagnosticStream[],
+): StaticRedactionDiagnosticStream[] =>
+  stripDiagnosticStreamTimings(streams).map((stream) => ({
+    final: {
+      result: stream.final.result,
+      diagnostics: runtimeDiagnosticBatch(stream.final.diagnostics),
+    },
+    batches: stream.batches
+      .map(runtimeDiagnosticBatch)
+      .filter((batch) => batch.events.length > 0),
+  }));
+
+const runtimeDiagnosticBatch = (
+  diagnostics: StaticRedactionDiagnosticBatch,
+): StaticRedactionDiagnosticBatch => ({
+  events: diagnostics.events.filter(
+    (event) => !event.stage.startsWith("prepare."),
+  ),
+});
+
+const concatDiagnosticBatches = ({
+  batches,
+}: StaticRedactionDiagnosticStream): StaticRedactionDiagnosticBatch => ({
+  events: batches.flatMap((batch) => batch.events),
+});
+
+const collectTsDiagnosticStream = (
+  prepared: PreparedAnonymizer,
+  { text, operators }: SharedSdkParityCase,
+): StaticRedactionDiagnosticStream => {
+  const batches: StaticRedactionDiagnosticBatch[] = [];
+  const finalJson = prepared.diagnostics_stream_json(
+    text,
+    (batch) => {
+      batches.push(JSON.parse(batch) as StaticRedactionDiagnosticBatch);
+    },
+    operators ?? undefined,
+  );
+  if (finalJson === null) {
+    throw new Error("missing shared SDK diagnostics stream");
+  }
+  return {
+    final: JSON.parse(finalJson) as StaticRedactionDiagnosticResult,
+    batches,
+  };
+};
 
 const toNativeFacadeEntity = ({
   source_detail: sourceDetail,

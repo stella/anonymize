@@ -34,6 +34,7 @@ export const PYTHON_NATIVE_SDK_DEFAULT_PACKAGE_NAMES = [
 ] as const;
 
 export const PYTHON_NATIVE_SDK_PUBLIC_TYPE_NAMES = [
+  "DiagnosticsBatchCallback",
   "NativeSearchPackageInput",
 ] as const;
 
