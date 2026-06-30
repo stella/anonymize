@@ -1,5 +1,7 @@
 #![allow(clippy::expect_used, clippy::indexing_slicing, clippy::unwrap_used)]
 
+mod support;
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use stella_anonymize_core::{
@@ -15,9 +17,10 @@ use stella_anonymize_core::{
   TriggerValidation, WrittenAmountPatternData, ZoneData, ZonePatternData,
   ZoneSigningClauseData,
 };
+use support::prepared_config;
 
 fn empty_config(slices: PreparedEngineSlices) -> PreparedEngineConfig {
-  PreparedEngineConfig {
+  prepared_config! {
     regex_patterns: vec![],
     custom_regex_patterns: vec![],
     literal_patterns: vec![],
@@ -27,7 +30,7 @@ fn empty_config(slices: PreparedEngineSlices) -> PreparedEngineConfig {
     allowed_labels: vec![],
     threshold: 0.0,
     confidence_boost: false,
-    slices,
+    slices: slices,
     regex_meta: vec![],
     custom_regex_meta: vec![],
     deny_list_data: None,
@@ -58,8 +61,8 @@ fn legal_form_prepared_engine(suffixes: Vec<&str>) -> PreparedEngine {
     .map(|suffix| SearchPattern::Literal(suffix.to_owned()))
     .collect::<Vec<_>>();
 
-  PreparedEngine::new(PreparedEngineConfig {
-    regex_patterns,
+  PreparedEngine::new(prepared_config! {
+    regex_patterns: regex_patterns,
     regex_options: SearchOptions {
       literal: LiteralSearchOptions {
         case_insensitive: false,
@@ -165,8 +168,8 @@ fn legal_form_coreference_prepared_engine(
     .map(|suffix| SearchPattern::Literal(suffix.to_owned()))
     .collect::<Vec<_>>();
 
-  PreparedEngine::new(PreparedEngineConfig {
-    regex_patterns,
+  PreparedEngine::new(prepared_config! {
+    regex_patterns: regex_patterns,
     regex_options: SearchOptions {
       literal: LiteralSearchOptions {
         case_insensitive: false,
@@ -220,7 +223,7 @@ fn prepared_engine_runs_legal_form_pass_on_normalized_text() {
 
 #[test]
 fn prepared_engine_runs_normalized_literal_pass() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     regex_patterns: vec![],
     custom_regex_patterns: vec![],
     literal_patterns: vec![SearchPattern::LiteralWithOptions {
@@ -271,7 +274,7 @@ fn prepared_engine_runs_normalized_literal_pass() {
 
 #[test]
 fn prepared_engine_adds_slash_house_number_address_context() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     regex_patterns: vec![SearchPattern::Regex(String::from(r"\bPraha 2\b"))],
     regex_meta: vec![RegexMatchMeta::new("address", 1.0)],
     slices: PreparedEngineSlices {
@@ -303,7 +306,7 @@ fn prepared_engine_adds_orphan_header_street_line_context() {
     "ACME s.r.o.\nEvropská 710\n160 00 Praha\n{}",
     "body ".repeat(200)
   );
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     custom_regex_patterns: vec![SearchPattern::Regex(String::from(
       r"ACME s\.r\.o\.",
     ))],
@@ -342,7 +345,7 @@ fn prepared_engine_keeps_address_context_above_threshold() {
     "ACME s.r.o.\nEvropská 710\n160 00 Praha\n{}",
     "body ".repeat(200)
   );
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     custom_regex_patterns: vec![SearchPattern::Regex(String::from(
       r"ACME s\.r\.o\.",
     ))],
@@ -371,7 +374,7 @@ fn prepared_engine_keeps_address_context_above_threshold() {
 
 #[test]
 fn prepared_engine_measures_bare_house_context_in_text_offsets() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     regex_patterns: vec![SearchPattern::Regex(String::from(r"\bPraha 10\b"))],
     regex_meta: vec![RegexMatchMeta::new("address", 1.0)],
     slices: PreparedEngineSlices {
@@ -400,7 +403,7 @@ fn prepared_engine_measures_bare_house_context_in_text_offsets() {
 
 #[test]
 fn prepared_engine_filters_capitalized_bare_house_stopwords() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     regex_patterns: vec![SearchPattern::Regex(String::from(r"\bPraha 10\b"))],
     regex_meta: vec![RegexMatchMeta::new("address", 1.0)],
     slices: PreparedEngineSlices {
@@ -431,7 +434,7 @@ fn prepared_engine_filters_capitalized_bare_house_stopwords() {
 
 #[test]
 fn prepared_engine_measures_slash_address_context_in_text_offsets() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     regex_patterns: vec![SearchPattern::Regex(String::from(r"\bPraha 10\b"))],
     regex_meta: vec![RegexMatchMeta::new("address", 1.0)],
     slices: PreparedEngineSlices {
@@ -460,7 +463,7 @@ fn prepared_engine_measures_slash_address_context_in_text_offsets() {
 
 #[test]
 fn prepared_engine_finds_slash_address_context_after_long_multibyte_prefix() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     regex_patterns: vec![SearchPattern::Regex(String::from(r"\bPraha 10\b"))],
     regex_meta: vec![RegexMatchMeta::new("address", 1.0)],
     slices: PreparedEngineSlices {
@@ -495,7 +498,7 @@ fn prepared_engine_finds_slash_address_context_after_long_multibyte_prefix() {
 fn prepared_engine_ignores_caller_owned_addresses_for_bare_house_context() {
   let mut meta = RegexMatchMeta::new("address", 1.0);
   meta.source_detail = Some(SourceDetail::CustomRegex);
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     custom_regex_patterns: vec![SearchPattern::Regex(String::from(
       r"\bPraha 2\b",
     ))],
@@ -533,7 +536,7 @@ fn prepared_engine_measures_header_zone_in_text_offsets() {
     "body ".repeat(80),
     "é".repeat(2_000)
   );
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     custom_regex_patterns: vec![SearchPattern::Regex(String::from(
       r"ACME s\.r\.o\.",
     ))],
@@ -563,7 +566,7 @@ fn prepared_engine_measures_header_zone_in_text_offsets() {
 
 #[test]
 fn prepared_engine_adds_coreference_aliases_with_source_placeholder() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     regex_patterns: vec![SearchPattern::Regex(String::from(
       r"Acme Corporation",
     ))],
@@ -663,7 +666,7 @@ fn prepared_engine_uses_propagated_orgs_as_defined_term_sources() {
 fn prepared_engine_does_not_seed_coreference_from_caller_owned_entities() {
   let mut meta = RegexMatchMeta::new("organization", 1.0);
   meta.source_detail = Some(SourceDetail::CustomRegex);
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     custom_regex_patterns: vec![SearchPattern::Regex(String::from(
       r"Acme Corporation",
     ))],
@@ -697,7 +700,7 @@ fn prepared_engine_does_not_seed_coreference_from_caller_owned_entities() {
 
 #[test]
 fn prepared_engine_rejects_role_and_legal_form_coreference_aliases() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     regex_patterns: vec![
       SearchPattern::Regex(String::from(r"Acme Corporation")),
       SearchPattern::Regex(String::from(r"Beta LLC")),
@@ -735,7 +738,7 @@ fn prepared_engine_rejects_role_and_legal_form_coreference_aliases() {
 
 #[test]
 fn prepared_engine_artifacts_match_direct_prepare() {
-  let config = PreparedEngineConfig {
+  let config = prepared_config! {
     regex_patterns: vec![SearchPattern::Regex(String::from(r"\bID\d{3}\b"))],
     custom_regex_patterns: vec![],
     literal_patterns: vec![SearchPattern::LiteralWithOptions {
@@ -801,7 +804,7 @@ fn prepared_engine_artifacts_match_direct_prepare() {
 
 #[test]
 fn prepared_engine_artifacts_roundtrip_bytes() {
-  let config = PreparedEngineConfig {
+  let config = prepared_config! {
     regex_patterns: vec![SearchPattern::Regex(String::from(r"\bID\d{3}\b"))],
     literal_patterns: vec![SearchPattern::LiteralWithOptions {
       pattern: String::from("Acme Corp"),
@@ -846,7 +849,7 @@ fn prepared_engine_artifacts_reject_invalid_bytes() {
 
 #[test]
 fn prepared_engine_emits_static_detector_entities() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     regex_patterns: vec![SearchPattern::Regex(String::from(
       r"\b[A-Z]{2}\d{4}\b",
     ))],
@@ -948,7 +951,7 @@ fn prepared_engine_emits_static_detector_entities() {
 
 #[test]
 fn prepared_engine_extends_gazetteer_suffix_in_text_offsets() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     literal_patterns: vec![SearchPattern::LiteralWithOptions {
       pattern: String::from("Acme"),
       case_insensitive: Some(true),
@@ -985,7 +988,7 @@ fn prepared_engine_extends_gazetteer_suffix_in_text_offsets() {
 
 #[test]
 fn prepared_engine_preserves_overlapping_custom_regex_matches() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     custom_regex_patterns: vec![
       SearchPattern::Regex(String::from("Alice")),
       SearchPattern::Regex(String::from("Alice Smith")),
@@ -1040,7 +1043,7 @@ fn prepared_engine_preserves_overlapping_custom_regex_matches() {
 
 #[test]
 fn prepared_engine_drops_person_spans_ending_in_trailing_noun() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     regex_patterns: vec![SearchPattern::Regex(String::from(
       r"\bCOBRA Reimbursement Period\b",
     ))],
@@ -1084,7 +1087,7 @@ fn prepared_engine_drops_person_spans_ending_in_trailing_noun() {
 
 #[test]
 fn prepared_engine_extracts_dates_from_anchored_data() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     date_data: Some(DateData {
       month_names_by_language: BTreeMap::from([
         (
@@ -1136,7 +1139,7 @@ fn prepared_engine_extracts_dates_from_anchored_data() {
 
 #[test]
 fn prepared_engine_extracts_uppercase_ordinal_dates() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     date_data: Some(DateData {
       month_names_by_language: BTreeMap::from([(
         String::from("en"),
@@ -1162,7 +1165,7 @@ fn prepared_engine_extracts_uppercase_ordinal_dates() {
 
 #[test]
 fn prepared_engine_extracts_written_date_of_birth_trigger() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     regex_patterns: vec![SearchPattern::LiteralWithOptions {
       pattern: String::from("geboren am"),
       case_insensitive: Some(true),
@@ -1211,7 +1214,7 @@ fn prepared_engine_extracts_written_date_of_birth_trigger() {
 
 #[test]
 fn prepared_engine_honors_single_word_written_date_trigger_count() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     regex_patterns: vec![SearchPattern::LiteralWithOptions {
       pattern: String::from("geboren am"),
       case_insensitive: Some(true),
@@ -1259,7 +1262,7 @@ fn prepared_engine_honors_single_word_written_date_trigger_count() {
 
 #[test]
 fn prepared_engine_extracts_year_after_duplicate_year_word_noise() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     regex_patterns: ["rok", "an", "roce"]
       .into_iter()
       .map(|pattern| SearchPattern::LiteralWithOptions {
@@ -1319,7 +1322,7 @@ fn prepared_engine_extracts_year_after_duplicate_year_word_noise() {
 
 #[test]
 fn prepared_engine_trigger_caps_by_characters_not_bytes() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     regex_patterns: vec![SearchPattern::LiteralWithOptions {
       pattern: String::from("ve výši"),
       case_insensitive: Some(true),
@@ -1367,7 +1370,7 @@ fn prepared_engine_trigger_caps_by_characters_not_bytes() {
 
 #[test]
 fn prepared_engine_trigger_validations_count_characters_not_bytes() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     regex_patterns: vec![SearchPattern::LiteralWithOptions {
       pattern: String::from("jméno"),
       case_insensitive: Some(true),
@@ -1415,7 +1418,7 @@ fn prepared_engine_trigger_validations_count_characters_not_bytes() {
 
 #[test]
 fn prepared_engine_rejects_lowercase_acronym_trigger_collisions() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     regex_patterns: vec![SearchPattern::LiteralWithOptions {
       pattern: String::from("dni"),
       case_insensitive: Some(true),
@@ -1465,7 +1468,7 @@ fn prepared_engine_rejects_lowercase_acronym_trigger_collisions() {
 
 #[test]
 fn prepared_engine_trims_party_position_before_triggered_address() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     regex_patterns: vec![SearchPattern::LiteralWithOptions {
       pattern: String::from("sídlo"),
       case_insensitive: Some(true),
@@ -1515,7 +1518,7 @@ fn prepared_engine_trims_party_position_before_triggered_address() {
 
 #[test]
 fn prepared_engine_extracts_money_from_anchored_data() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     monetary_data: Some(MonetaryData {
       currencies: CurrencyData {
         codes: vec![String::from("USD"), String::from("EUR")],
@@ -1560,7 +1563,7 @@ fn prepared_engine_extracts_money_from_anchored_data() {
 
 #[test]
 fn prepared_engine_rejects_long_ungrouped_money_numbers() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     monetary_data: Some(MonetaryData {
       currencies: CurrencyData {
         codes: vec![String::from("USD")],
@@ -1597,7 +1600,7 @@ fn prepared_engine_rejects_long_ungrouped_money_numbers() {
 
 #[test]
 fn prepared_engine_extends_money_to_written_amount_parenthetical() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     monetary_data: Some(MonetaryData {
       currencies: CurrencyData {
         codes: vec![],
@@ -1635,7 +1638,7 @@ fn prepared_engine_extends_money_to_written_amount_parenthetical() {
 
 #[test]
 fn prepared_engine_redacts_static_entities_end_to_end() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     regex_patterns: vec![SearchPattern::Regex(String::from(
       r"\b[A-Z]{2}\d{4}\b",
     ))],
@@ -1719,7 +1722,7 @@ fn prepared_engine_redacts_static_entities_end_to_end() {
 
 #[test]
 fn prepared_engine_applies_threshold_before_merge() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     regex_patterns: vec![
       SearchPattern::Regex(String::from("Acme")),
       SearchPattern::Regex(String::from(r"Acme s\.r\.o\.")),
@@ -1759,7 +1762,7 @@ fn prepared_engine_applies_threshold_before_merge() {
 
 #[test]
 fn prepared_engine_applies_header_zone_boost_before_threshold() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     regex_patterns: vec![SearchPattern::Regex(String::from("Alice"))],
     regex_meta: vec![RegexMatchMeta::new("person", 0.45)],
     threshold: 0.5,
@@ -1792,7 +1795,7 @@ fn prepared_engine_applies_header_zone_boost_before_threshold() {
 
 #[test]
 fn prepared_engine_applies_table_zone_boost_before_threshold() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     regex_patterns: vec![SearchPattern::Regex(String::from("Alice"))],
     regex_meta: vec![RegexMatchMeta::new("person", 0.46)],
     threshold: 0.5,
@@ -1819,7 +1822,7 @@ fn prepared_engine_applies_table_zone_boost_before_threshold() {
 
 #[test]
 fn prepared_engine_applies_signature_zone_boost_before_threshold() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     regex_patterns: vec![SearchPattern::Regex(String::from("Alice"))],
     regex_meta: vec![RegexMatchMeta::new("person", 0.36)],
     threshold: 0.5,
@@ -1846,7 +1849,7 @@ fn prepared_engine_applies_signature_zone_boost_before_threshold() {
 
 #[test]
 fn prepared_engine_boosts_near_miss_entities_when_enabled() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     regex_patterns: vec![
       SearchPattern::Regex(String::from(r"\bANCHOR-\d+\b")),
       SearchPattern::Regex(String::from(r"\bNEAR-\d+\b")),
@@ -1884,7 +1887,7 @@ fn prepared_engine_boosts_near_miss_entities_when_enabled() {
 
 #[test]
 fn prepared_engine_boost_counts_text_offsets_not_bytes() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     regex_patterns: vec![
       SearchPattern::Regex(String::from(r"\bANCHOR-\d+\b")),
       SearchPattern::Regex(String::from(r"\bNEAR-\d+\b")),
@@ -1916,7 +1919,7 @@ fn prepared_engine_boost_counts_text_offsets_not_bytes() {
 
 #[test]
 fn prepared_engine_hotword_distance_uses_utf16_offsets() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     regex_patterns: vec![SearchPattern::Regex(String::from(
       r"\b\d{2}\.\d{2}\.\d{4}\b",
     ))],
@@ -1952,7 +1955,7 @@ fn prepared_engine_hotword_distance_uses_utf16_offsets() {
 
 #[test]
 fn prepared_engine_hotword_searches_original_text() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     regex_patterns: vec![SearchPattern::Regex(String::from(
       r"\b\d{2}\.\d{2}\.\d{4}\b",
     ))],
@@ -1990,7 +1993,7 @@ fn prepared_engine_hotword_searches_original_text() {
 
 #[test]
 fn prepared_engine_rejects_legacy_hotword_slice() {
-  let result = PreparedEngine::new(PreparedEngineConfig {
+  let result = PreparedEngine::new(prepared_config! {
     literal_patterns: vec![SearchPattern::Literal(String::from("born"))],
     slices: PreparedEngineSlices {
       hotwords: PatternSlice { start: 0, end: 1 },
@@ -2018,7 +2021,7 @@ fn prepared_engine_rejects_legacy_hotword_slice() {
 
 #[test]
 fn prepared_engine_applies_hotword_reclassification_before_threshold() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     regex_patterns: vec![SearchPattern::Regex(String::from(
       r"\b\d{2}\.\d{2}\.\d{4}\b",
     ))],
@@ -2062,7 +2065,7 @@ fn prepared_engine_applies_hotword_reclassification_before_threshold() {
 
 #[test]
 fn prepared_engine_applies_allowed_labels_before_redaction() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     regex_patterns: vec![SearchPattern::Regex(String::from("Alice"))],
     allowed_labels: vec![String::from("date")],
     slices: PreparedEngineSlices {
@@ -2084,7 +2087,7 @@ fn prepared_engine_applies_allowed_labels_before_redaction() {
 
 #[test]
 fn prepared_engine_keeps_person_name_particles_after_trigger() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     regex_patterns: vec![SearchPattern::LiteralWithOptions {
       pattern: String::from("Pan"),
       case_insensitive: Some(true),
@@ -2154,7 +2157,7 @@ fn prepared_engine_keeps_person_name_particles_after_trigger() {
 
 #[test]
 fn prepared_engine_redacts_custom_deny_list_entities() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     regex_patterns: vec![],
     custom_regex_patterns: vec![],
     literal_patterns: vec![SearchPattern::LiteralWithOptions {
@@ -2219,7 +2222,7 @@ fn prepared_engine_redacts_custom_deny_list_entities() {
 
 #[test]
 fn prepared_engine_parallel_path_matches_diagnostics_path() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     regex_patterns: vec![SearchPattern::Regex(String::from(
       r"\b[A-Z]{3}-\d{3}\b",
     ))],
@@ -2297,7 +2300,7 @@ fn prepared_engine_parallel_path_matches_diagnostics_path() {
 #[test]
 fn prepared_engine_rejects_unsupported_static_slices() {
   let unsupported = PatternSlice { start: 0, end: 1 };
-  let error = PreparedEngine::new(PreparedEngineConfig {
+  let error = PreparedEngine::new(prepared_config! {
     literal_patterns: vec![SearchPattern::Literal(String::from("Secret"))],
     ..empty_config(PreparedEngineSlices {
       deny_list: unsupported,
@@ -2312,7 +2315,7 @@ fn prepared_engine_rejects_unsupported_static_slices() {
 
 #[test]
 fn prepared_engine_requires_gazetteer_metadata_for_gazetteer_slice() {
-  let error = PreparedEngine::new(PreparedEngineConfig {
+  let error = PreparedEngine::new(prepared_config! {
     literal_patterns: vec![SearchPattern::Literal(String::from("Acme"))],
     ..empty_config(PreparedEngineSlices {
       gazetteer: PatternSlice { start: 0, end: 1 },
@@ -2332,7 +2335,7 @@ fn prepared_engine_requires_gazetteer_metadata_for_gazetteer_slice() {
 
 #[test]
 fn prepared_engine_rejects_truncated_country_metadata() {
-  let error = PreparedEngine::new(PreparedEngineConfig {
+  let error = PreparedEngine::new(prepared_config! {
     literal_patterns: vec![SearchPattern::Literal(String::from("Turkey"))],
     country_data: Some(CountryMatchData { labels: Vec::new() }),
     ..empty_config(PreparedEngineSlices {
@@ -2355,7 +2358,7 @@ fn prepared_engine_rejects_truncated_country_metadata() {
 
 #[test]
 fn prepared_engine_rejects_missing_regex_metadata() {
-  let error = PreparedEngine::new(PreparedEngineConfig {
+  let error = PreparedEngine::new(prepared_config! {
     regex_patterns: vec![SearchPattern::Regex(String::from(r"\bID\d+\b"))],
     slices: PreparedEngineSlices {
       regex: PatternSlice { start: 0, end: 1 },
@@ -2399,7 +2402,7 @@ fn prepared_engine_rejects_literal_slices_outside_patterns() {
 
 #[test]
 fn prepared_engine_requires_address_seed_data_for_street_types() {
-  let error = PreparedEngine::new(PreparedEngineConfig {
+  let error = PreparedEngine::new(prepared_config! {
     literal_patterns: vec![SearchPattern::Literal(String::from("Street"))],
     ..empty_config(PreparedEngineSlices {
       street_types: PatternSlice { start: 0, end: 1 },
@@ -2419,7 +2422,7 @@ fn prepared_engine_requires_address_seed_data_for_street_types() {
 
 #[test]
 fn prepared_engine_expands_address_seeds_from_street_type_slice() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     literal_patterns: vec![
       SearchPattern::LiteralWithOptions {
         pattern: String::from("Boston"),
@@ -2475,7 +2478,7 @@ fn prepared_engine_expands_address_seeds_from_street_type_slice() {
 
 #[test]
 fn prepared_engine_expands_address_seeds_from_city_and_postal_code() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     literal_patterns: vec![SearchPattern::LiteralWithOptions {
       pattern: String::from("Brno"),
       case_insensitive: Some(true),
@@ -2523,7 +2526,7 @@ fn prepared_engine_expands_address_seeds_from_city_and_postal_code() {
 
 #[test]
 fn prepared_engine_expands_compound_german_street_addresses() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     literal_patterns: vec![SearchPattern::LiteralWithOptions {
       pattern: String::from("Wiesbaden"),
       case_insensitive: Some(true),
@@ -2570,7 +2573,7 @@ fn prepared_engine_expands_compound_german_street_addresses() {
 
 #[test]
 fn prepared_engine_expands_plain_postal_city_addresses() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     regex_patterns: vec![SearchPattern::LiteralWithOptions {
       pattern: String::from("geboren am"),
       case_insensitive: Some(true),
@@ -2640,7 +2643,7 @@ fn prepared_engine_expands_plain_postal_city_addresses() {
 
 #[test]
 fn prepared_engine_stops_address_before_notice_copy_instruction() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     literal_patterns: vec![
       SearchPattern::LiteralWithOptions {
         pattern: String::from("Wilmington"),
@@ -2706,7 +2709,7 @@ fn prepared_engine_stops_address_before_notice_copy_instruction() {
 
 #[test]
 fn prepared_engine_splits_address_seed_clusters_at_paragraph_breaks() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     literal_patterns: vec![SearchPattern::LiteralWithOptions {
       pattern: String::from("Brno"),
       case_insensitive: Some(true),
@@ -2754,7 +2757,7 @@ fn prepared_engine_splits_address_seed_clusters_at_paragraph_breaks() {
 
 #[test]
 fn prepared_engine_stops_address_seed_expansion_at_legal_prose() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     literal_patterns: vec![SearchPattern::LiteralWithOptions {
       pattern: String::from("Liberec"),
       case_insensitive: Some(true),
@@ -2808,7 +2811,7 @@ fn prepared_engine_stops_address_seed_expansion_at_legal_prose() {
 
 #[test]
 fn prepared_engine_does_not_cluster_address_seed_inside_register_span() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     regex_patterns: vec![SearchPattern::Regex(String::from(
       r"Handelsregister des Amtsgerichts Düsseldorf unter HRB \d+",
     ))],
@@ -2879,7 +2882,7 @@ fn prepared_engine_does_not_cluster_address_seed_inside_register_span() {
 
 #[test]
 fn prepared_engine_redacts_curated_deny_list_entities() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     literal_patterns: vec![SearchPattern::LiteralWithOptions {
       pattern: String::from("Prague"),
       case_insensitive: Some(true),
@@ -2916,7 +2919,7 @@ fn prepared_engine_redacts_curated_deny_list_entities() {
 
 #[test]
 fn prepared_engine_rejects_curated_deny_list_without_filters() {
-  let error = PreparedEngine::new(PreparedEngineConfig {
+  let error = PreparedEngine::new(prepared_config! {
     literal_patterns: vec![SearchPattern::Literal(String::from("Prague"))],
     deny_list_data: Some(DenyListMatchData {
       labels: vec![vec![String::from("address")]].into(),
@@ -2944,7 +2947,7 @@ fn prepared_engine_rejects_curated_deny_list_without_filters() {
 
 #[test]
 fn prepared_engine_rejects_truncated_deny_list_data() {
-  let error = PreparedEngine::new(PreparedEngineConfig {
+  let error = PreparedEngine::new(prepared_config! {
     literal_patterns: vec![SearchPattern::Literal(String::from("Secret Code"))],
     deny_list_data: Some(DenyListMatchData {
       labels: vec![vec![String::from("matter")]].into(),

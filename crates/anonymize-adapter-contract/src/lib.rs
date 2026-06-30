@@ -11,7 +11,8 @@ use stella_anonymize_core::{
   HotwordRule, HotwordRuleData, LegalFormData, LiteralSearchOptions,
   MagnitudeSuffixData, MonetaryData, NameCorpusData, NameCorpusMode,
   OperatorConfig, OperatorType, PatternSlice, PreparedArtifactPolicy,
-  PreparedSearchArtifacts, PreparedSearchConfig, PreparedSearchSlices,
+  PreparedEngineArtifacts, PreparedEngineConfig, PreparedEngineDetectorConfig,
+  PreparedEnginePolicyConfig, PreparedEngineSearchConfig, PreparedEngineSlices,
   RegexArtifactPolicy, RegexMatchMeta, RegexSearchOptions, SearchEngine,
   SearchOptions, SearchPattern, ShareQuantityTermData, SignatureData,
   SigningPlaceGuardData, SourceDetail, StaticRedactionDiagnosticResult,
@@ -28,9 +29,9 @@ const PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER: [u8; 8] = *b"ANONPKZ1";
 const PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION: u32 = 13;
 const PREPARED_SEARCH_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION: u32 = 12;
 const PREPARED_SEARCH_CORE_PACKAGE_HEADER: [u8; 8] = *b"ANONCPK1";
-const PREPARED_SEARCH_CORE_PACKAGE_VERSION: u32 = 18;
+const PREPARED_SEARCH_CORE_PACKAGE_VERSION: u32 = 20;
 const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_HEADER: [u8; 8] = *b"ANONCPZ1";
-const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION: u32 = 19;
+const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION: u32 = 21;
 const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION: u32 = 16;
 const PREPARED_SEARCH_PACKAGE_DIGEST_BYTES: usize = 32;
 const PREPARED_SEARCH_PACKAGE_ZSTD_LEVEL: i32 = 1;
@@ -637,13 +638,13 @@ pub struct BindingPreparedSearchPackage {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CorePreparedSearchPackage {
-  pub config: PreparedSearchConfig,
+  pub config: PreparedEngineConfig,
   pub artifacts: Vec<u8>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CorePreparedSearchPackageView<'a> {
-  pub config: PreparedSearchConfig,
+  pub config: PreparedEngineConfig,
   pub artifacts: CorePreparedSearchPackageArtifacts<'a>,
 }
 
@@ -709,8 +710,8 @@ impl<'a> CorePreparedSearchPackageArtifacts<'a> {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct DecodedCorePreparedSearchPackage {
-  pub config: PreparedSearchConfig,
-  pub artifacts: PreparedSearchArtifacts,
+  pub config: PreparedEngineConfig,
+  pub artifacts: PreparedEngineArtifacts,
   pub package_decode_timings: PreparedSearchPackageDecodeTimings,
   pub artifacts_decode: u64,
   pub artifacts_bytes: usize,
@@ -932,7 +933,7 @@ pub fn prepared_search_package_to_compressed_bytes(
 }
 
 pub fn prepared_search_core_package_to_bytes(
-  config: &PreparedSearchConfig,
+  config: &PreparedEngineConfig,
   artifacts: &[u8],
 ) -> Result<Vec<u8>> {
   let payload =
@@ -945,7 +946,7 @@ pub fn prepared_search_core_package_to_bytes(
 }
 
 pub fn prepared_search_core_package_to_compressed_bytes(
-  config: &PreparedSearchConfig,
+  config: &PreparedEngineConfig,
   artifacts: &[u8],
 ) -> Result<Vec<u8>> {
   let payload =
@@ -1350,7 +1351,7 @@ fn prepared_search_package_payload_to_bytes(
 }
 
 fn prepared_search_core_package_payload_to_bytes(
-  config: &PreparedSearchConfig,
+  config: &PreparedEngineConfig,
   artifacts: &[u8],
 ) -> Result<Vec<u8>> {
   let mut config = config.clone();
@@ -1372,11 +1373,11 @@ fn prepared_search_core_package_payload_to_bytes(
   Ok(bytes)
 }
 
-fn compact_core_package_config(config: &mut PreparedSearchConfig) {
+fn compact_core_package_config(config: &mut PreparedEngineConfig) {
   if core_literal_patterns_are_identity_mapped(config) {
-    config.literal_patterns.clear();
+    config.search.literal_patterns.clear();
   }
-  if let Some(data) = &mut config.deny_list_data {
+  if let Some(data) = &mut config.detectors.deny_list_data {
     data.compact_runtime_patterns();
   }
 }
@@ -1444,7 +1445,7 @@ fn core_package_payload_slices(
 fn decode_core_package_parts(
   config_bytes: &[u8],
   artifacts_bytes: &[u8],
-) -> Result<(PreparedSearchConfig, u64, PreparedSearchArtifacts, u64)> {
+) -> Result<(PreparedEngineConfig, u64, PreparedEngineArtifacts, u64)> {
   std::thread::scope(|scope| {
     let config_handle =
       scope.spawn(|| decode_core_package_config(config_bytes));
@@ -1459,10 +1460,10 @@ fn decode_core_package_parts(
 
 fn decode_core_package_config(
   config_bytes: &[u8],
-) -> Result<(PreparedSearchConfig, u64)> {
+) -> Result<(PreparedEngineConfig, u64)> {
   let config_decode_start = std::time::Instant::now();
   let (config, read) = bincode::serde::decode_from_slice::<
-    PreparedSearchConfig,
+    PreparedEngineConfig,
     _,
   >(config_bytes, package_bincode_config())
   .map_err(|error| invalid_prepared_search_package(error.to_string()))?;
@@ -1475,9 +1476,9 @@ fn decode_core_package_config(
 
 fn decode_core_package_artifacts(
   artifacts_bytes: &[u8],
-) -> Result<(PreparedSearchArtifacts, u64)> {
+) -> Result<(PreparedEngineArtifacts, u64)> {
   let artifacts_decode_start = std::time::Instant::now();
-  let artifacts = PreparedSearchArtifacts::from_bytes(artifacts_bytes)
+  let artifacts = PreparedEngineArtifacts::from_bytes(artifacts_bytes)
     .map_err(|error| invalid_prepared_search_package(error.to_string()))?;
   Ok((artifacts, elapsed_us(artifacts_decode_start)))
 }
@@ -1491,10 +1492,11 @@ fn join_core_package_decode<T>(
 }
 
 fn core_literal_patterns_are_identity_mapped(
-  config: &PreparedSearchConfig,
+  config: &PreparedEngineConfig,
 ) -> bool {
-  !config.literal_patterns.is_empty()
+  !config.search.literal_patterns.is_empty()
     && config
+      .search
       .literal_patterns
       .iter()
       .all(|pattern| matches!(pattern, SearchPattern::Literal(_)))
@@ -1655,7 +1657,7 @@ pub struct BindingStaticRedactionDiagnosticResult {
 
 pub fn prepared_search_config_from_binding(
   config: BindingPreparedSearchConfig,
-) -> Result<PreparedSearchConfig> {
+) -> Result<PreparedEngineConfig> {
   let deny_list_data = config.deny_list_data;
   let literal_patterns = literal_patterns_from_binding(
     config.literal_patterns,
@@ -1683,67 +1685,73 @@ pub fn prepared_search_config_from_binding(
   let legal_form_suffixes = legal_form_data
     .as_ref()
     .map_or_else(Vec::new, |data| data.suffixes.clone());
-  Ok(PreparedSearchConfig {
-    regex_patterns: search_patterns_from_binding(config.regex_patterns)?,
-    custom_regex_patterns: search_patterns_from_binding(
-      config.custom_regex_patterns,
-    )?,
-    literal_patterns,
-    regex_options: search_options_from_binding(config.regex_options),
-    custom_regex_options: search_options_from_binding(
-      config.custom_regex_options,
-    ),
-    literal_options: search_options_from_binding(config.literal_options),
-    allowed_labels: config.allowed_labels,
-    threshold: config.threshold,
-    confidence_boost: config.confidence_boost,
-    slices: slices_from_binding(&config.slices),
-    regex_meta: regex_meta_from_binding(config.regex_meta)?,
-    custom_regex_meta: regex_meta_from_binding(config.custom_regex_meta)?,
-    deny_list_data: deny_list_data
-      .map(deny_list_data_from_binding)
-      .transpose()?,
-    false_positive_filters: config
-      .false_positive_filters
-      .map(deny_list_filters_from_binding),
-    gazetteer_data: config.gazetteer_data.map(|data| GazetteerMatchData {
-      labels: data.labels,
-      is_fuzzy: data.is_fuzzy,
-    }),
-    country_data: config.country_data.map(|data| CountryMatchData {
-      labels: data.labels,
-    }),
-    hotword_data: config.hotword_data.map(hotword_data_from_binding),
-    trigger_data: config
-      .trigger_data
-      .map(|data| trigger_data_from_binding(data, legal_form_suffixes)),
-    legal_form_data,
-    address_seed_data: config.address_seed_data.map(|data| AddressSeedData {
-      boundary_words: data.boundary_words,
-      br_cep_cue_words: data.br_cep_cue_words,
-      unit_abbreviations: data.unit_abbreviations,
-    }),
-    zone_data: config.zone_data.map(zone_data_from_binding),
-    address_context_data: config.address_context_data.map(|data| {
-      AddressContextData {
-        address_prepositions: data.address_prepositions,
-        temporal_prepositions: data.temporal_prepositions,
-        street_abbreviations: data.street_abbreviations,
-        bare_house_stopwords: data.bare_house_stopwords,
-      }
-    }),
-    coreference_data: config
-      .coreference_data
-      .map(coreference_data_from_binding),
-    name_corpus_data: config
-      .name_corpus_data
-      .map(|data| name_corpus_data_from_binding(data, config.name_corpus_mode)),
-    signature_data: config.signature_data.map(signature_data_from_binding),
-    date_data: config.date_data.map(|data| DateData {
-      month_names_by_language: data.month_names_by_language,
-      year_words_by_language: data.year_words_by_language,
-    }),
-    monetary_data: config.monetary_data.map(monetary_data_from_binding),
+  Ok(PreparedEngineConfig {
+    search: PreparedEngineSearchConfig {
+      regex_patterns: search_patterns_from_binding(config.regex_patterns)?,
+      custom_regex_patterns: search_patterns_from_binding(
+        config.custom_regex_patterns,
+      )?,
+      literal_patterns,
+      regex_options: search_options_from_binding(config.regex_options),
+      custom_regex_options: search_options_from_binding(
+        config.custom_regex_options,
+      ),
+      literal_options: search_options_from_binding(config.literal_options),
+      slices: slices_from_binding(&config.slices),
+      regex_meta: regex_meta_from_binding(config.regex_meta)?,
+      custom_regex_meta: regex_meta_from_binding(config.custom_regex_meta)?,
+    },
+    policy: PreparedEnginePolicyConfig {
+      allowed_labels: config.allowed_labels,
+      threshold: config.threshold,
+      confidence_boost: config.confidence_boost,
+    },
+    detectors: PreparedEngineDetectorConfig {
+      deny_list_data: deny_list_data
+        .map(deny_list_data_from_binding)
+        .transpose()?,
+      false_positive_filters: config
+        .false_positive_filters
+        .map(deny_list_filters_from_binding),
+      gazetteer_data: config.gazetteer_data.map(|data| GazetteerMatchData {
+        labels: data.labels,
+        is_fuzzy: data.is_fuzzy,
+      }),
+      country_data: config.country_data.map(|data| CountryMatchData {
+        labels: data.labels,
+      }),
+      hotword_data: config.hotword_data.map(hotword_data_from_binding),
+      trigger_data: config
+        .trigger_data
+        .map(|data| trigger_data_from_binding(data, legal_form_suffixes)),
+      legal_form_data,
+      address_seed_data: config.address_seed_data.map(|data| AddressSeedData {
+        boundary_words: data.boundary_words,
+        br_cep_cue_words: data.br_cep_cue_words,
+        unit_abbreviations: data.unit_abbreviations,
+      }),
+      zone_data: config.zone_data.map(zone_data_from_binding),
+      address_context_data: config.address_context_data.map(|data| {
+        AddressContextData {
+          address_prepositions: data.address_prepositions,
+          temporal_prepositions: data.temporal_prepositions,
+          street_abbreviations: data.street_abbreviations,
+          bare_house_stopwords: data.bare_house_stopwords,
+        }
+      }),
+      coreference_data: config
+        .coreference_data
+        .map(coreference_data_from_binding),
+      name_corpus_data: config.name_corpus_data.map(|data| {
+        name_corpus_data_from_binding(data, config.name_corpus_mode)
+      }),
+      signature_data: config.signature_data.map(signature_data_from_binding),
+      date_data: config.date_data.map(|data| DateData {
+        month_names_by_language: data.month_names_by_language,
+        year_words_by_language: data.year_words_by_language,
+      }),
+      monetary_data: config.monetary_data.map(monetary_data_from_binding),
+    },
   })
 }
 
@@ -2840,8 +2848,8 @@ fn search_options_from_binding(
 
 fn slices_from_binding(
   slices: &BindingPreparedSearchSlices,
-) -> PreparedSearchSlices {
-  PreparedSearchSlices {
+) -> PreparedEngineSlices {
+  PreparedEngineSlices {
     regex: slice_from_binding(slices.regex),
     custom_regex: slice_from_binding(slices.custom_regex),
     legal_forms: slice_from_binding(slices.legal_forms),
@@ -3094,7 +3102,7 @@ mod tests {
   };
   use stella_anonymize_core::{
     DiagnosticEvent, DiagnosticEventKind, DiagnosticStage,
-    PreparedArtifactPolicy, PreparedSearchArtifacts, RegexArtifactPolicy,
+    PreparedArtifactPolicy, PreparedEngineArtifacts, RegexArtifactPolicy,
     SearchPattern, StaticRedactionDiagnostics,
   };
 
@@ -3240,7 +3248,7 @@ mod tests {
     };
     let core = prepared_search_config_from_binding(config).unwrap();
 
-    assert!(core.custom_regex_options.regex.overlap_all);
+    assert!(core.search.custom_regex_options.regex.overlap_all);
   }
 
   #[test]
@@ -3255,7 +3263,7 @@ mod tests {
     let core = prepared_search_config_from_binding(config).unwrap();
 
     assert_eq!(
-      core.regex_options.regex.artifact_policy,
+      core.search.regex_options.regex.artifact_policy,
       RegexArtifactPolicy::Omit
     );
   }
@@ -3281,7 +3289,7 @@ mod tests {
     let core = prepared_search_config_from_binding(config).unwrap();
 
     assert!(matches!(
-      core.regex_patterns.first(),
+      core.search.regex_patterns.first(),
       Some(SearchPattern::RegexWithOptions {
         prepared_artifact_policy: Some(PreparedArtifactPolicy::Omit),
         ..
@@ -3487,7 +3495,7 @@ mod tests {
     let config =
       prepared_search_config_from_binding(package_test_config()).unwrap();
     let mut compact_config = config.clone();
-    compact_config.literal_patterns.clear();
+    compact_config.search.literal_patterns.clear();
     let artifacts = b"prepared-artifacts";
 
     let bytes =
@@ -3512,7 +3520,7 @@ mod tests {
     let config =
       prepared_search_config_from_binding(package_test_config()).unwrap();
     let mut compact_config = config.clone();
-    compact_config.literal_patterns.clear();
+    compact_config.search.literal_patterns.clear();
     let artifacts = b"prepared-artifacts";
 
     let bytes =
@@ -3560,7 +3568,7 @@ mod tests {
   fn prepared_search_core_compressed_package_decodes_config_and_artifacts() {
     let config =
       prepared_search_config_from_binding(package_test_config()).unwrap();
-    let artifact_set = PreparedSearchArtifacts::default();
+    let artifact_set = PreparedEngineArtifacts::default();
     let artifact_bytes = artifact_set.to_bytes().unwrap();
 
     let bytes = prepared_search_core_package_to_compressed_bytes(
@@ -3572,7 +3580,7 @@ mod tests {
       prepared_search_core_package_decode_from_bytes_with_timings(&bytes)
         .unwrap();
 
-    assert_eq!(decoded.config.literal_patterns, Vec::new());
+    assert_eq!(decoded.config.search.literal_patterns, Vec::new());
     assert_eq!(decoded.artifacts, artifact_set);
     assert_eq!(decoded.artifacts_bytes, artifact_bytes.len());
     assert!(
@@ -3593,7 +3601,7 @@ mod tests {
   fn prepared_search_core_trusted_decode_skips_package_digest() {
     let config =
       prepared_search_config_from_binding(package_test_config()).unwrap();
-    let artifact_set = PreparedSearchArtifacts::default();
+    let artifact_set = PreparedEngineArtifacts::default();
     let artifact_bytes = artifact_set.to_bytes().unwrap();
 
     let mut bytes = prepared_search_core_package_to_compressed_bytes(
@@ -3619,7 +3627,7 @@ mod tests {
         &bytes,
       )
       .unwrap();
-    assert_eq!(trusted.config.literal_patterns, Vec::new());
+    assert_eq!(trusted.config.search.literal_patterns, Vec::new());
     assert_eq!(trusted.artifacts, artifact_set);
     assert_eq!(trusted.artifacts_bytes, artifact_bytes.len());
     assert!(
@@ -3634,7 +3642,7 @@ mod tests {
     let (trusted_view, trusted_view_timings) =
       prepared_search_core_package_view_trusted_from_bytes_with_timings(&bytes)
         .unwrap();
-    assert_eq!(trusted_view.config.literal_patterns, Vec::new());
+    assert_eq!(trusted_view.config.search.literal_patterns, Vec::new());
     assert_eq!(trusted_view.artifacts.as_bytes(), artifact_bytes.as_slice());
     assert!(
       trusted_view_timings.verify.is_none(),
@@ -3671,7 +3679,7 @@ mod tests {
       prepared_search_core_package_to_compressed_bytes(&config, b"artifact")
         .unwrap();
     let package = prepared_search_core_package_from_bytes(&bytes).unwrap();
-    let data = package.config.deny_list_data.unwrap();
+    let data = package.config.detectors.deny_list_data.unwrap();
 
     assert!(data.originals.is_empty());
     assert_eq!(data.pattern_meta.len(), 2);
@@ -3688,7 +3696,7 @@ mod tests {
     let config =
       prepared_search_config_from_binding(package_test_config()).unwrap();
     let mut compact_config = config.clone();
-    compact_config.literal_patterns.clear();
+    compact_config.search.literal_patterns.clear();
     let artifacts = b"prepared-artifacts";
     let payload =
       prepared_search_core_package_payload_to_bytes(&config, artifacts)

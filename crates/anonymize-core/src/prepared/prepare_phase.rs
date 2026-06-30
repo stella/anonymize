@@ -13,9 +13,14 @@ use super::index_prepare::{
   prepare_search_index_bundle,
 };
 use super::results::PreparedEngineBuildResult;
-use super::support_prepare::{prepare_support_data, take_support_input};
+use super::support_prepare::{
+  PreparedSupportData, prepare_support_data, take_support_input,
+};
 use super::timing::elapsed_us;
-use super::{PreparedEngine, PreparedEngineConfig};
+use super::{
+  PreparedEngine, PreparedEngineConfig, PreparedEngineDetectorConfig,
+  PreparedEnginePolicyConfig, PreparedEngineSearchConfig,
+};
 
 #[bon::bon]
 impl PreparedEngine {
@@ -149,34 +154,36 @@ impl PreparedEngine {
   ) -> Result<Self> {
     let total_start = Instant::now();
     validate_supported_config_for_artifacts(&config, artifacts)?;
-    let monetary_extraction = should_extract_monetary_data(&config);
-    let support_input = take_support_input(&mut config);
+    let monetary_extraction = should_extract_monetary_data(&config.search);
+    let support_input = take_support_input(&mut config.detectors);
     let PreparedEngineConfig {
+      search,
+      policy: policy_config,
+      mut detectors,
+    } = config;
+    let PreparedEngineSearchConfig {
       regex_patterns,
       custom_regex_patterns,
       literal_patterns,
       regex_options,
       custom_regex_options,
       literal_options,
-      allowed_labels,
-      threshold,
-      confidence_boost,
       slices,
       regex_meta,
       custom_regex_meta,
-      deny_list_data,
-      false_positive_filters,
-      gazetteer_data,
-      country_data,
-      date_data,
-      monetary_data,
-      ..
-    } = config;
-    let anchored_len =
-      anchored_config_len(date_data.as_ref(), monetary_data.as_ref());
+    } = search;
+    let PreparedEnginePolicyConfig {
+      allowed_labels,
+      threshold,
+      confidence_boost,
+    } = policy_config;
+    let anchored_len = anchored_config_len(
+      detectors.date_data.as_ref(),
+      detectors.monetary_data.as_ref(),
+    );
     let (date_data, monetary_data) = prepare_anchored_data(
-      date_data.as_ref(),
-      monetary_data,
+      detectors.date_data.as_ref(),
+      detectors.monetary_data.take(),
       anchored_len,
       diagnostics.as_deref_mut(),
     )?;
@@ -202,47 +209,63 @@ impl PreparedEngine {
       &mut diagnostics,
     )?;
     let support_data = prepare_support_data(support_input, &mut diagnostics)?;
-    let prepare_count = counts.total().saturating_add(support_data.count);
-    record_prepare_total(&mut diagnostics, prepare_count, total_start);
+    record_prepare_total(
+      &mut diagnostics,
+      counts.total().saturating_add(support_data.count),
+      total_start,
+    );
+    let indexes = SearchIndexes {
+      regex,
+      custom_regex,
+      legal_forms,
+      triggers,
+      literals,
+    };
+    let policy = PipelinePolicy {
+      allowed_labels,
+      threshold,
+      confidence_boost,
+      slices,
+      regex_meta,
+      custom_regex_meta,
+      monetary_extraction,
+    };
+    let data =
+      prepared_static_data(detectors, support_data, date_data, monetary_data);
     Ok(Self {
-      indexes: SearchIndexes {
-        regex,
-        custom_regex,
-        legal_forms,
-        triggers,
-        literals,
-      },
-      policy: PipelinePolicy {
-        allowed_labels,
-        threshold,
-        confidence_boost,
-        slices,
-        regex_meta,
-        custom_regex_meta,
-        monetary_extraction,
-      },
-      data: PreparedStaticData {
-        deny_list: deny_list_data,
-        false_positive_filters,
-        gazetteer: gazetteer_data,
-        countries: country_data,
-        hotwords: support_data.hotwords,
-        triggers: support_data.triggers,
-        legal_forms: support_data.legal_forms,
-        address_seed: support_data.address_seed,
-        zones: support_data.zones,
-        address_context: support_data.address_context,
-        coreference: support_data.coreference,
-        name_corpus: support_data.names,
-        signatures: support_data.signature,
-        dates: date_data,
-        monetary: monetary_data,
-      },
+      indexes,
+      policy,
+      data,
     })
   }
 }
 
-fn should_extract_monetary_data(config: &PreparedEngineConfig) -> bool {
+fn prepared_static_data(
+  detectors: PreparedEngineDetectorConfig,
+  support_data: PreparedSupportData,
+  date_data: Option<PreparedDateData>,
+  monetary_data: Option<PreparedMonetaryData>,
+) -> PreparedStaticData {
+  PreparedStaticData {
+    deny_list: detectors.deny_list_data,
+    false_positive_filters: detectors.false_positive_filters,
+    gazetteer: detectors.gazetteer_data,
+    countries: detectors.country_data,
+    hotwords: support_data.hotwords,
+    triggers: support_data.triggers,
+    legal_forms: support_data.legal_forms,
+    address_seed: support_data.address_seed,
+    zones: support_data.zones,
+    address_context: support_data.address_context,
+    coreference: support_data.coreference,
+    name_corpus: support_data.names,
+    signatures: support_data.signature,
+    dates: date_data,
+    monetary: monetary_data,
+  }
+}
+
+fn should_extract_monetary_data(config: &PreparedEngineSearchConfig) -> bool {
   config.regex_patterns.is_empty()
     || config
       .regex_meta

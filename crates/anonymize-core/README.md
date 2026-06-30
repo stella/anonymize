@@ -5,8 +5,7 @@ they translate types, load artifacts, and call this crate.
 
 ## Public Shape
 
-- `PreparedEngine` is the canonical prepared anonymization engine.
-- `PreparedSearch` remains as a compatibility alias for older Rust callers.
+- `PreparedEngine` is the prepared anonymization engine.
 - Prefer the bon constructor for new code:
 
 ```rust

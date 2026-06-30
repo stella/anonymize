@@ -24,8 +24,8 @@ use stella_anonymize_adapter_contract::{
 };
 use stella_anonymize_core::{
   DiagnosticDetail, DiagnosticEvent, DiagnosticStage, Error as CoreError,
-  OperatorConfig, PreparedSearch, PreparedSearchArtifactsView,
-  PreparedSearchConfig, StaticRedactionDiagnostics,
+  OperatorConfig, PreparedEngine, PreparedEngineArtifactsView,
+  PreparedEngineConfig, StaticRedactionDiagnostics,
 };
 
 const PREPARED_SEARCH_CACHE_LIMIT: usize = 8;
@@ -34,7 +34,7 @@ static PREPARED_SEARCH_CACHE: LazyLock<Mutex<PreparedSearchCache>> =
   LazyLock::new(|| Mutex::new(PreparedSearchCache::new()));
 
 struct PreparedSearchCache {
-  entries: BTreeMap<[u8; 32], Arc<PreparedSearch>>,
+  entries: BTreeMap<[u8; 32], Arc<PreparedEngine>>,
   order: VecDeque<[u8; 32]>,
 }
 
@@ -46,14 +46,14 @@ impl PreparedSearchCache {
     }
   }
 
-  fn get(&mut self, key: &[u8; 32]) -> Option<Arc<PreparedSearch>> {
+  fn get(&mut self, key: &[u8; 32]) -> Option<Arc<PreparedEngine>> {
     let entry = self.entries.get(key).cloned()?;
     self.retain_order_without(key);
     self.order.push_back(*key);
     Some(entry)
   }
 
-  fn insert(&mut self, key: [u8; 32], value: Arc<PreparedSearch>) {
+  fn insert(&mut self, key: [u8; 32], value: Arc<PreparedEngine>) {
     self.entries.insert(key, value);
     self.retain_order_without(&key);
     self.order.push_back(key);
@@ -256,7 +256,7 @@ pub fn redact_static_entities_json(
     .map(serde_json::from_str::<BindingOperatorConfig>)
     .transpose()
     .map_err(|error| to_napi_serde_error(&error))?;
-  let prepared = PreparedSearch::new(
+  let prepared = PreparedEngine::new(
     prepared_search_config_from_binding(config)
       .map_err(|error| to_napi_contract_error(&error))?,
   )
@@ -316,7 +316,7 @@ fn redact_static_entities_diagnostics_json_with_detail(
     .map(serde_json::from_str::<BindingOperatorConfig>)
     .transpose()
     .map_err(|error| to_napi_serde_error(&error))?;
-  let prepared = PreparedSearch::new_with_diagnostics(
+  let prepared = PreparedEngine::new_with_diagnostics(
     prepared_search_config_from_binding(config)
       .map_err(|error| to_napi_contract_error(&error))?,
   )
@@ -352,7 +352,7 @@ pub fn prepare_static_search_artifacts_bytes(
       .map_err(|error| to_napi_serde_error(&error))?;
   let config = prepared_search_config_from_binding(config)
     .map_err(|error| to_napi_contract_error(&error))?;
-  PreparedSearch::prepare_artifacts(config)
+  PreparedEngine::prepare_artifacts(config)
     .and_then(|artifacts| artifacts.to_bytes())
     .map(Buffer::from)
     .map_err(|error| to_napi_core_error(&error))
@@ -383,7 +383,7 @@ fn prepare_static_search_package_bytes_with(
       .map_err(|error| to_napi_serde_error(&error))?;
   let core_config = prepared_search_config_from_binding(binding_config)
     .map_err(|error| to_napi_contract_error(&error))?;
-  let artifacts = PreparedSearch::prepare_artifacts(core_config.clone())
+  let artifacts = PreparedEngine::prepare_artifacts(core_config.clone())
     .map_err(|error| to_napi_core_error(&error))?;
   let artifact_bytes = artifacts
     .to_bytes()
@@ -397,7 +397,7 @@ fn prepare_static_search_package_bytes_with(
     prepared_search_core_package_to_bytes(&core_config, &artifact_bytes)
   };
   let package = package.map_err(|error| to_napi_contract_error(&error))?;
-  let prepared = PreparedSearch::new_with_artifacts(core_config, &artifacts)
+  let prepared = PreparedEngine::new_with_artifacts(core_config, &artifacts)
     .map_err(|error| to_napi_core_error(&error))?;
   let cache_key = prepared_search_package_digest(&package)
     .map_err(|error| to_napi_contract_error(&error))?;
@@ -407,7 +407,7 @@ fn prepare_static_search_package_bytes_with(
 
 #[napi]
 pub struct NativePreparedSearch {
-  inner: Arc<PreparedSearch>,
+  inner: Arc<PreparedEngine>,
   prepare_diagnostics: StaticRedactionDiagnostics,
 }
 
@@ -675,14 +675,14 @@ impl NativePreparedSearch {
   }
 
   fn from_core_config(
-    config: PreparedSearchConfig,
+    config: PreparedEngineConfig,
     artifact_bytes: Option<&[u8]>,
     context: &PrepareContext,
     binding_convert: Option<(usize, u64)>,
   ) -> Result<Self> {
     let artifact_decode_start = Instant::now();
     let artifacts = artifact_bytes
-      .map(PreparedSearchArtifactsView::from_bytes)
+      .map(PreparedEngineArtifactsView::from_bytes)
       .transpose()
       .map_err(|error| to_napi_core_error(&error))?;
     let artifact_decode_elapsed =
@@ -701,16 +701,16 @@ impl NativePreparedSearch {
   }
 
   fn from_core_config_with_artifacts(
-    config: PreparedSearchConfig,
-    artifacts: Option<&PreparedSearchArtifactsView<'_>>,
+    config: PreparedEngineConfig,
+    artifacts: Option<&PreparedEngineArtifactsView<'_>>,
     artifact_decode: Option<(u64, usize)>,
     context: &PrepareContext,
     binding_convert: Option<(usize, u64)>,
   ) -> Result<Self> {
     let result = if let Some(artifacts) = artifacts {
-      PreparedSearch::new_with_artifact_view_diagnostics(config, artifacts)
+      PreparedEngine::new_with_artifact_view_diagnostics(config, artifacts)
     } else {
-      PreparedSearch::new_with_diagnostics(config)
+      PreparedEngine::new_with_diagnostics(config)
     }
     .map_err(|error| to_napi_core_error(&error))?;
     let inner = Arc::new(result.prepared);
@@ -954,19 +954,20 @@ const fn core_observer_error(reason: String) -> CoreError {
   }
 }
 
-const fn prepared_search_pattern_count(config: &PreparedSearchConfig) -> usize {
+const fn prepared_search_pattern_count(config: &PreparedEngineConfig) -> usize {
   config
+    .search
     .regex_patterns
     .len()
-    .saturating_add(config.custom_regex_patterns.len())
-    .saturating_add(config.literal_patterns.len())
+    .saturating_add(config.search.custom_regex_patterns.len())
+    .saturating_add(config.search.literal_patterns.len())
 }
 
-fn prepared_search_cache_get(key: &[u8; 32]) -> Option<Arc<PreparedSearch>> {
+fn prepared_search_cache_get(key: &[u8; 32]) -> Option<Arc<PreparedEngine>> {
   with_prepared_search_cache(|cache| cache.get(key))
 }
 
-fn prepared_search_cache_insert(key: [u8; 32], value: Arc<PreparedSearch>) {
+fn prepared_search_cache_insert(key: [u8; 32], value: Arc<PreparedEngine>) {
   with_prepared_search_cache(|cache| cache.insert(key, value));
 }
 

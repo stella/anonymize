@@ -1,8 +1,9 @@
 use stella_anonymize_core::{
   DiagnosticEventKind, DiagnosticStage, FuzzySearchOptions,
   LiteralSearchOptions, OperatorConfig, PatternSlice, PreparedEngine,
-  PreparedEngineConfig, PreparedEngineSlices, PreparedSearch, RegexMatchMeta,
-  RegexSearchOptions, Result as CoreResult, SearchOptions, SearchPattern,
+  PreparedEngineConfig, PreparedEngineSearchConfig, PreparedEngineSlices,
+  RegexMatchMeta, RegexSearchOptions, Result as CoreResult, SearchOptions,
+  SearchPattern,
 };
 
 #[test]
@@ -72,48 +73,19 @@ fn prepared_engine_diagnostics_builder_reports_prepare_stages() -> CoreResult<()
   Ok(())
 }
 
-#[test]
-fn prepared_search_alias_keeps_existing_constructor_surface() -> CoreResult<()>
-{
-  let prepared: PreparedSearch = PreparedSearch::new(prepared_engine_config())?;
-
-  assert_eq!(prepared.find_matches("Matter AB1234")?.regex.len(), 1);
-  Ok(())
-}
-
 fn prepared_engine_config() -> PreparedEngineConfig {
-  PreparedEngineConfig {
-    regex_patterns: vec![SearchPattern::Regex(String::from(
-      r"\b[A-Z]{2}\d{4}\b",
-    ))],
-    regex_options: SearchOptions::default(),
-    regex_meta: vec![RegexMatchMeta::new("matter", 0.9)],
-    slices: PreparedEngineSlices {
-      regex: PatternSlice { start: 0, end: 1 },
-      ..PreparedEngineSlices::default()
-    },
-    custom_regex_patterns: vec![],
-    literal_patterns: vec![],
-    custom_regex_options: SearchOptions::default(),
-    literal_options: SearchOptions::default(),
-    allowed_labels: vec![],
-    threshold: 0.0,
-    confidence_boost: false,
-    custom_regex_meta: vec![],
-    deny_list_data: None,
-    false_positive_filters: None,
-    gazetteer_data: None,
-    country_data: None,
-    hotword_data: None,
-    trigger_data: None,
-    legal_form_data: None,
-    address_seed_data: None,
-    zone_data: None,
-    address_context_data: None,
-    coreference_data: None,
-    name_corpus_data: None,
-    signature_data: None,
-    date_data: None,
-    monetary_data: None,
-  }
+  PreparedEngineConfig::builder()
+    .search(
+      PreparedEngineSearchConfig::builder()
+        .regex_patterns(vec![SearchPattern::Regex(String::from(
+          r"\b[A-Z]{2}\d{4}\b",
+        ))])
+        .regex_meta(vec![RegexMatchMeta::new("matter", 0.9)])
+        .slices(PreparedEngineSlices {
+          regex: PatternSlice { start: 0, end: 1 },
+          ..PreparedEngineSlices::default()
+        })
+        .build(),
+    )
+    .build()
 }

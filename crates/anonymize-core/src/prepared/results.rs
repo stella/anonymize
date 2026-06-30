@@ -45,9 +45,6 @@ pub struct PreparedEngineBuildResult {
   pub diagnostics: StaticRedactionDiagnostics,
 }
 
-pub type PreparedSearchBuildResult = PreparedEngineBuildResult;
-pub type PreparedSearchMatches = PreparedEngineMatches;
-
 impl StaticDetectionResult {
   #[must_use]
   pub const fn entity_count(&self) -> usize {

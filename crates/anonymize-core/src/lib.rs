@@ -47,11 +47,11 @@ pub use normalize::normalize_for_search;
 pub use placeholders::build_placeholder_map;
 pub use prepared::{
   PreparedEngine, PreparedEngineArtifacts, PreparedEngineArtifactsView,
-  PreparedEngineBuildResult, PreparedEngineConfig, PreparedEngineMatches,
-  PreparedEngineSlices, PreparedSearch, PreparedSearchArtifacts,
-  PreparedSearchArtifactsView, PreparedSearchBuildResult, PreparedSearchConfig,
-  PreparedSearchMatches, PreparedSearchSlices, StaticDetectionResult,
-  StaticRedactionDiagnosticResult, StaticRedactionResult,
+  PreparedEngineBuildResult, PreparedEngineConfig,
+  PreparedEngineDetectorConfig, PreparedEngineMatches,
+  PreparedEnginePolicyConfig, PreparedEngineSearchConfig, PreparedEngineSlices,
+  StaticDetectionResult, StaticRedactionDiagnosticResult,
+  StaticRedactionResult,
 };
 pub use processors::{
   CountryMatchData, DenyListFilterData, DenyListMatchData, DenyListPatternMeta,

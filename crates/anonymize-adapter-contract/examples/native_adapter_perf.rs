@@ -10,7 +10,7 @@ use stella_anonymize_adapter_contract::{
   BindingOperatorConfig, BindingPreparedSearchConfig,
   operator_config_from_binding, prepared_search_config_from_binding,
 };
-use stella_anonymize_core::PreparedSearch;
+use stella_anonymize_core::PreparedEngine;
 
 #[derive(Deserialize)]
 struct Payload {
@@ -36,7 +36,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
   let prepare_start = Instant::now();
   let prepared =
-    PreparedSearch::new(prepared_search_config_from_binding(config)?)?;
+    PreparedEngine::new(prepared_search_config_from_binding(config)?)?;
   let prepare_ms = elapsed_ms(prepare_start);
 
   let run_cases = payload

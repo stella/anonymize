@@ -1,13 +1,16 @@
 #![allow(clippy::expect_used)]
 
+mod support;
+
 use stella_anonymize_core::{
   PatternSlice, PreparedEngine, PreparedEngineConfig, PreparedEngineSlices,
   SearchOptions, SearchPattern, StaticDetectionResult, TriggerData,
   TriggerRule, TriggerStrategy, TriggerValidation,
 };
+use support::prepared_config;
 
 fn empty_config(slices: PreparedEngineSlices) -> PreparedEngineConfig {
-  PreparedEngineConfig {
+  prepared_config! {
     regex_patterns: vec![],
     custom_regex_patterns: vec![],
     literal_patterns: vec![],
@@ -17,7 +20,7 @@ fn empty_config(slices: PreparedEngineSlices) -> PreparedEngineConfig {
     allowed_labels: vec![],
     threshold: 0.0,
     confidence_boost: false,
-    slices,
+    slices: slices,
     regex_meta: vec![],
     custom_regex_meta: vec![],
     deny_list_data: None,
@@ -64,7 +67,7 @@ fn prepared_for_trigger_with_support(
   strategy: TriggerStrategy,
   support: TriggerSupport,
 ) -> PreparedEngine {
-  PreparedEngine::new(PreparedEngineConfig {
+  PreparedEngine::new(prepared_config! {
     regex_patterns: vec![SearchPattern::LiteralWithOptions {
       pattern: trigger.to_lowercase(),
       case_insensitive: Some(true),

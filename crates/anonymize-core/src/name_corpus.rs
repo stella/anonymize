@@ -3,10 +3,9 @@ use std::collections::HashSet;
 use crate::resolution::{DetectionSource, PipelineEntity};
 use crate::types::{Error, Result};
 
+mod cjk;
+
 const PERSON_LABEL: &str = "person";
-const CJK_HAN_RATIO_NUMERATOR: usize = 15;
-const CJK_HAN_RATIO_DENOMINATOR: usize = 100;
-const CJK_SCORE: f64 = 0.95;
 const HIGH_CONFIDENCE_NAME_SCORE: f64 = 0.9;
 const TITLE_NAME_SCORE: f64 = 0.95;
 const LOW_CONFIDENCE_NAME_SCORE: f64 = 0.5;
@@ -175,7 +174,7 @@ impl PreparedNameCorpusData {
     mode: NameCorpusMode,
     deny_list_entities: &[PipelineEntity],
   ) -> Result<Vec<PipelineEntity>> {
-    let mut entities = self.detect_cjk_names(full_text)?;
+    let mut entities = cjk::detect(self, full_text)?;
     entities.extend(self.detect_token_names(full_text, mode)?);
     let mut entities = deduplicate_spans(entities);
     if mode == NameCorpusMode::Supplemental {
@@ -186,92 +185,6 @@ impl PreparedNameCorpusData {
       });
     }
     Ok(entities)
-  }
-
-  fn detect_cjk_names(&self, full_text: &str) -> Result<Vec<PipelineEntity>> {
-    if self.cjk_surname_starters.is_empty() {
-      return Ok(Vec::new());
-    }
-
-    let text_len = full_text.chars().count();
-    let threshold =
-      ceil_ratio(text_len, CJK_HAN_RATIO_NUMERATOR, CJK_HAN_RATIO_DENOMINATOR);
-    let threshold = threshold.max(1);
-    let mut han_count = 0usize;
-    for ch in full_text.chars() {
-      if is_han(ch) {
-        han_count = han_count.saturating_add(1);
-        if han_count >= threshold {
-          break;
-        }
-      }
-    }
-    if text_len >= 100 && han_count >= threshold {
-      return Ok(Vec::new());
-    }
-
-    let mut entities = Vec::new();
-    let mut run_start = None;
-    let mut run_chars = 0usize;
-    let mut previous_end = 0usize;
-    for (index, ch) in full_text.char_indices() {
-      if is_han(ch) {
-        if run_start.is_none() {
-          run_start = Some(index);
-        }
-        run_chars = run_chars.saturating_add(1);
-        previous_end = index.saturating_add(ch.len_utf8());
-        continue;
-      }
-      self.push_cjk_run(
-        full_text,
-        run_start,
-        previous_end,
-        run_chars,
-        &mut entities,
-      )?;
-      run_start = None;
-      run_chars = 0;
-    }
-    self.push_cjk_run(
-      full_text,
-      run_start,
-      full_text.len(),
-      run_chars,
-      &mut entities,
-    )?;
-    Ok(entities)
-  }
-
-  fn push_cjk_run(
-    &self,
-    full_text: &str,
-    start: Option<usize>,
-    end: usize,
-    char_count: usize,
-    entities: &mut Vec<PipelineEntity>,
-  ) -> Result<()> {
-    if !(2..=4).contains(&char_count) {
-      return Ok(());
-    }
-    let Some(start) = start else {
-      return Ok(());
-    };
-    let Some(text) = full_text.get(start..end) else {
-      return Err(invalid_name_data("cjk span is not a UTF-8 boundary"));
-    };
-    if !self.is_likely_cjk_person_name(text) || self.is_organization(text) {
-      return Ok(());
-    }
-    entities.push(PipelineEntity::detected(
-      usize_to_u32(start, "name_corpus.cjk.start")?,
-      usize_to_u32(end, "name_corpus.cjk.end")?,
-      PERSON_LABEL,
-      text,
-      CJK_SCORE,
-      DetectionSource::Regex,
-    ));
-    Ok(())
   }
 
   fn detect_token_names(
@@ -516,7 +429,7 @@ impl PreparedNameCorpusData {
     chain
   }
 
-  fn is_likely_cjk_person_name(&self, text: &str) -> bool {
+  pub(super) fn is_likely_cjk_person_name(&self, text: &str) -> bool {
     if self.cjk_non_person_terms.contains(text) {
       return false;
     }
@@ -526,7 +439,7 @@ impl PreparedNameCorpusData {
       .is_some_and(|first| self.cjk_surname_starters.contains(&first))
   }
 
-  fn is_organization(&self, text: &str) -> bool {
+  pub(super) fn is_organization(&self, text: &str) -> bool {
     segment_words(text)
       .iter()
       .any(|word| self.organization_terms.contains(&word.text.to_lowercase()))
@@ -942,14 +855,6 @@ fn is_all_caps_context_line(full_text: &str, start: usize) -> bool {
   upper / letters >= ALL_CAPS_NAME_LINE_RATIO
 }
 
-const fn ceil_ratio(
-  value: usize,
-  numerator: usize,
-  denominator: usize,
-) -> usize {
-  value.saturating_mul(numerator).div_ceil(denominator)
-}
-
 fn is_all_caps_line_name_shaped(full_text: &str, start: usize) -> bool {
   let line = current_line(full_text, start);
   if line.chars().any(|ch| ch.is_ascii_digit()) {
@@ -989,21 +894,6 @@ fn leading_word(text: &str) -> Option<&str> {
 
 fn is_word_char(ch: char) -> bool {
   ch.is_alphanumeric() || ch == '\''
-}
-
-const fn is_han(ch: char) -> bool {
-  matches!(
-    ch,
-    '\u{3400}'..='\u{4DBF}'
-      | '\u{4E00}'..='\u{9FFF}'
-      | '\u{F900}'..='\u{FAFF}'
-      | '\u{20000}'..='\u{2A6DF}'
-      | '\u{2A700}'..='\u{2B73F}'
-      | '\u{2B740}'..='\u{2B81F}'
-      | '\u{2B820}'..='\u{2CEAF}'
-      | '\u{2CEB0}'..='\u{2EBEF}'
-      | '\u{30000}'..='\u{3134F}'
-  )
 }
 
 fn string_set(values: Vec<String>) -> HashSet<String> {
@@ -1094,7 +984,7 @@ mod tests {
 
     assert_eq!(entities.len(), 1);
     assert_eq!(entities[0].text, "王小明");
-    assert!((entities[0].score - CJK_SCORE).abs() < f64::EPSILON);
+    assert!((entities[0].score - cjk::SCORE).abs() < f64::EPSILON);
   }
 
   #[test]

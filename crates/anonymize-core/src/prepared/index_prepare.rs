@@ -73,16 +73,17 @@ pub(super) fn prepare_search_artifacts(
   config: PreparedEngineConfig,
 ) -> Result<PreparedEngineArtifacts> {
   validate_supported_config(&config, false)?;
+  let search = config.search;
   let regex_groups =
-    split_regex_patterns(config.regex_patterns, &config.slices)?;
+    split_regex_patterns(search.regex_patterns, &search.slices)?;
   Ok(PreparedEngineArtifacts {
     regex: SearchIndex::prepare_artifacts(
       regex_groups.regex,
-      config.regex_options,
+      search.regex_options,
     )?,
     custom_regex: SearchIndex::prepare_artifacts(
-      config.custom_regex_patterns,
-      config.custom_regex_options,
+      search.custom_regex_patterns,
+      search.custom_regex_options,
     )?,
     legal_forms: SearchIndex::prepare_artifacts(
       regex_groups.legal_forms,
@@ -93,8 +94,8 @@ pub(super) fn prepare_search_artifacts(
       trigger_search_options(),
     )?,
     literals: SearchIndex::prepare_artifacts(
-      config.literal_patterns,
-      config.literal_options,
+      search.literal_patterns,
+      search.literal_options,
     )?,
   })
 }

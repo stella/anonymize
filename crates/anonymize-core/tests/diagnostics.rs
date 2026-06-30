@@ -1,5 +1,7 @@
 #![allow(clippy::unwrap_used)]
 
+mod support;
+
 use stella_anonymize_core::{
   DenyListMatchData, DenyListPatternMetaSet, DiagnosticEvent,
   DiagnosticEventKind, DiagnosticPhase, DiagnosticScope, DiagnosticStage,
@@ -8,9 +10,10 @@ use stella_anonymize_core::{
   RegexMatchMeta, RegexSearchOptions, SearchEngine, SearchOptions,
   SearchPattern,
 };
+use support::prepared_config;
 
 fn empty_config(slices: PreparedEngineSlices) -> PreparedEngineConfig {
-  PreparedEngineConfig {
+  prepared_config! {
     regex_patterns: vec![],
     custom_regex_patterns: vec![],
     literal_patterns: vec![],
@@ -20,7 +23,7 @@ fn empty_config(slices: PreparedEngineSlices) -> PreparedEngineConfig {
     allowed_labels: vec![],
     threshold: 0.0,
     confidence_boost: false,
-    slices,
+    slices: slices,
     regex_meta: vec![],
     custom_regex_meta: vec![],
     deny_list_data: None,
@@ -44,7 +47,7 @@ fn empty_config(slices: PreparedEngineSlices) -> PreparedEngineConfig {
 #[test]
 fn engine_reports_static_redaction_diagnostics() {
   const INPUT: &str = "Acme s.r.o. filed AB1234.";
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     regex_patterns: vec![SearchPattern::Regex(String::from(
       r"\b[A-Z]{2}\d{4}\b",
     ))],
@@ -149,7 +152,7 @@ fn engine_reports_static_redaction_diagnostics() {
 
 #[test]
 fn engine_streams_diagnostic_batches() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     literal_patterns: vec![SearchPattern::LiteralWithOptions {
       pattern: String::from("Secret Code"),
       case_insensitive: Some(true),
@@ -295,7 +298,7 @@ fn diagnostic_events_report_scope() {
 
 #[test]
 fn engine_reports_prepare_slot_diagnostics() {
-  let config = PreparedEngineConfig {
+  let config = prepared_config! {
     regex_patterns: vec![SearchPattern::Regex(String::from(
       r"\b[A-Z]{2}\d{4}\b",
     ))],

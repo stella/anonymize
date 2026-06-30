@@ -30,23 +30,67 @@ pub struct PreparedEngineSlices {
   pub hotwords: PatternSlice,
 }
 
-#[derive(Clone, Debug, PartialEq, serde::Deserialize, serde::Serialize)]
-pub struct PreparedEngineConfig {
+#[derive(
+  bon::Builder,
+  Clone,
+  Debug,
+  Default,
+  PartialEq,
+  serde::Deserialize,
+  serde::Serialize,
+)]
+pub struct PreparedEngineSearchConfig {
+  #[builder(default)]
   pub regex_patterns: Vec<SearchPattern>,
+  #[builder(default)]
   pub custom_regex_patterns: Vec<SearchPattern>,
+  #[builder(default)]
   pub literal_patterns: Vec<SearchPattern>,
+  #[builder(default)]
   pub regex_options: SearchOptions,
+  #[builder(default)]
   pub custom_regex_options: SearchOptions,
+  #[builder(default)]
   pub literal_options: SearchOptions,
+  #[builder(default)]
+  pub slices: PreparedEngineSlices,
+  #[builder(default)]
+  pub regex_meta: Vec<RegexMatchMeta>,
+  #[builder(default)]
+  pub custom_regex_meta: Vec<RegexMatchMeta>,
+}
+
+#[derive(
+  bon::Builder,
+  Clone,
+  Debug,
+  Default,
+  PartialEq,
+  serde::Deserialize,
+  serde::Serialize,
+)]
+pub struct PreparedEnginePolicyConfig {
   #[serde(default)]
+  #[builder(default)]
   pub allowed_labels: Vec<String>,
   #[serde(default)]
+  #[builder(default)]
   pub threshold: f64,
   #[serde(default)]
+  #[builder(default)]
   pub confidence_boost: bool,
-  pub slices: PreparedEngineSlices,
-  pub regex_meta: Vec<RegexMatchMeta>,
-  pub custom_regex_meta: Vec<RegexMatchMeta>,
+}
+
+#[derive(
+  bon::Builder,
+  Clone,
+  Debug,
+  Default,
+  PartialEq,
+  serde::Deserialize,
+  serde::Serialize,
+)]
+pub struct PreparedEngineDetectorConfig {
   pub deny_list_data: Option<DenyListMatchData>,
   #[serde(default)]
   pub false_positive_filters: Option<DenyListFilterData>,
@@ -71,5 +115,20 @@ pub struct PreparedEngineConfig {
   pub monetary_data: Option<MonetaryData>,
 }
 
-pub type PreparedSearchConfig = PreparedEngineConfig;
-pub type PreparedSearchSlices = PreparedEngineSlices;
+#[derive(
+  bon::Builder,
+  Clone,
+  Debug,
+  Default,
+  PartialEq,
+  serde::Deserialize,
+  serde::Serialize,
+)]
+pub struct PreparedEngineConfig {
+  #[builder(default)]
+  pub search: PreparedEngineSearchConfig,
+  #[builder(default)]
+  pub policy: PreparedEnginePolicyConfig,
+  #[builder(default)]
+  pub detectors: PreparedEngineDetectorConfig,
+}

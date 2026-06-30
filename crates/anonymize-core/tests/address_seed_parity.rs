@@ -1,13 +1,16 @@
 #![allow(clippy::expect_used)]
 
+mod support;
+
 use stella_anonymize_core::{
   AddressSeedData, DenyListFilterData, DenyListMatchData, LiteralSearchOptions,
   OperatorConfig, PatternSlice, PreparedEngine, PreparedEngineConfig,
   PreparedEngineSlices, RegexMatchMeta, SearchOptions, SearchPattern,
 };
+use support::prepared_config;
 
 fn empty_config(slices: PreparedEngineSlices) -> PreparedEngineConfig {
-  PreparedEngineConfig {
+  prepared_config! {
     regex_patterns: vec![],
     custom_regex_patterns: vec![],
     literal_patterns: vec![],
@@ -17,7 +20,7 @@ fn empty_config(slices: PreparedEngineSlices) -> PreparedEngineConfig {
     allowed_labels: vec![],
     threshold: 0.0,
     confidence_boost: false,
-    slices,
+    slices: slices,
     regex_meta: vec![],
     custom_regex_meta: vec![],
     deny_list_data: None,
@@ -51,7 +54,7 @@ fn address_texts(
 
 #[test]
 fn detects_state_qualified_zip_plus_four_address_seed() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     address_seed_data: Some(AddressSeedData::default()),
     ..empty_config(PreparedEngineSlices::default())
   })
@@ -74,7 +77,7 @@ fn detects_state_qualified_zip_plus_four_address_seed() {
 
 #[test]
 fn detects_cue_gated_br_cep_address_seed() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     literal_patterns: vec![SearchPattern::LiteralWithOptions {
       pattern: String::from("Rua"),
       case_insensitive: Some(true),
@@ -117,7 +120,7 @@ fn detects_cue_gated_br_cep_address_seed() {
 
 #[test]
 fn keeps_date_like_street_name_in_address_seed_span() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     regex_patterns: vec![SearchPattern::Regex(String::from("May 15"))],
     regex_meta: vec![RegexMatchMeta::new("date", 0.9)],
     literal_patterns: vec![
@@ -176,7 +179,7 @@ fn keeps_date_like_street_name_in_address_seed_span() {
 
 #[test]
 fn clusters_address_seeds_across_multibyte_text_gap() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     literal_patterns: vec![
       SearchPattern::LiteralWithOptions {
         pattern: String::from("Springfield"),
@@ -235,7 +238,7 @@ fn clusters_address_seeds_across_multibyte_text_gap() {
 
 #[test]
 fn preserves_unit_abbreviation_inside_address_seed_span() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     literal_patterns: vec![
       SearchPattern::LiteralWithOptions {
         pattern: String::from("Springfield"),

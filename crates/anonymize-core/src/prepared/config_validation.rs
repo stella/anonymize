@@ -36,38 +36,38 @@ fn validate_search_config(
 ) -> Result<()> {
   validate_slice_bounds(
     "slices.regex",
-    config.slices.regex,
-    config.regex_patterns.len(),
+    config.search.slices.regex,
+    config.search.regex_patterns.len(),
   )?;
   validate_slice_bounds(
     "slices.legal_forms",
-    config.slices.legal_forms,
-    config.regex_patterns.len(),
+    config.search.slices.legal_forms,
+    config.search.regex_patterns.len(),
   )?;
   validate_slice_bounds(
     "slices.triggers",
-    config.slices.triggers,
-    config.regex_patterns.len(),
+    config.search.slices.triggers,
+    config.search.regex_patterns.len(),
   )?;
   validate_slice_bounds(
     "slices.custom_regex",
-    config.slices.custom_regex,
-    config.custom_regex_patterns.len(),
+    config.search.slices.custom_regex,
+    config.search.custom_regex_patterns.len(),
   )?;
   validate_literal_slices(
-    &config.slices,
-    config.literal_patterns.len(),
+    &config.search.slices,
+    config.search.literal_patterns.len(),
     allow_literal_artifacts,
   )?;
   validate_static_data_length(
     "regex_meta",
-    config.slices.regex,
-    config.regex_meta.len(),
+    config.search.slices.regex,
+    config.search.regex_meta.len(),
   )?;
   validate_static_data_length(
     "custom_regex_meta",
-    config.slices.custom_regex,
-    config.custom_regex_meta.len(),
+    config.search.slices.custom_regex,
+    config.search.custom_regex_meta.len(),
   )
 }
 
@@ -117,11 +117,11 @@ fn validate_slice_bounds(
 }
 
 fn validate_legal_form_config(config: &PreparedEngineConfig) -> Result<()> {
-  if config.slices.legal_forms.is_empty() {
+  if config.search.slices.legal_forms.is_empty() {
     return Ok(());
   }
 
-  let Some(data) = &config.legal_form_data else {
+  let Some(data) = &config.detectors.legal_form_data else {
     return Err(Error::MissingStaticData {
       field: "legal_form_data",
     });
@@ -129,17 +129,17 @@ fn validate_legal_form_config(config: &PreparedEngineConfig) -> Result<()> {
 
   validate_static_data_length(
     "legal_form_data.suffixes",
-    config.slices.legal_forms,
+    config.search.slices.legal_forms,
     data.suffixes.len(),
   )
 }
 
 fn validate_deny_list_config(config: &PreparedEngineConfig) -> Result<()> {
-  if config.slices.deny_list.is_empty() {
+  if config.search.slices.deny_list.is_empty() {
     return Ok(());
   }
 
-  let Some(data) = &config.deny_list_data else {
+  let Some(data) = &config.detectors.deny_list_data else {
     return Err(Error::UnsupportedStaticSlice { slice: "deny_list" });
   };
 
@@ -148,18 +148,18 @@ fn validate_deny_list_config(config: &PreparedEngineConfig) -> Result<()> {
   data.sources.validate("deny_list.sources")?;
   validate_static_data_length(
     "deny_list.labels",
-    config.slices.deny_list,
+    config.search.slices.deny_list,
     data.labels.len(),
   )?;
   validate_static_data_length(
     "deny_list.custom_labels",
-    config.slices.deny_list,
+    config.search.slices.deny_list,
     data.custom_labels.len(),
   )?;
-  validate_deny_list_pattern_metadata(config.slices.deny_list, data)?;
+  validate_deny_list_pattern_metadata(config.search.slices.deny_list, data)?;
   validate_static_data_length(
     "deny_list.sources",
-    config.slices.deny_list,
+    config.search.slices.deny_list,
     data.sources.len(),
   )?;
   ensure_supported_deny_list_sources(data)
@@ -184,11 +184,11 @@ fn validate_deny_list_pattern_metadata(
 }
 
 fn validate_gazetteer_config(config: &PreparedEngineConfig) -> Result<()> {
-  if config.slices.gazetteer.is_empty() {
+  if config.search.slices.gazetteer.is_empty() {
     return Ok(());
   }
 
-  let Some(data) = &config.gazetteer_data else {
+  let Some(data) = &config.detectors.gazetteer_data else {
     return Err(Error::MissingStaticData {
       field: "gazetteer_data",
     });
@@ -196,22 +196,22 @@ fn validate_gazetteer_config(config: &PreparedEngineConfig) -> Result<()> {
 
   validate_static_data_length(
     "gazetteer_data.labels",
-    config.slices.gazetteer,
+    config.search.slices.gazetteer,
     data.labels.len(),
   )?;
   validate_static_data_length(
     "gazetteer_data.is_fuzzy",
-    config.slices.gazetteer,
+    config.search.slices.gazetteer,
     data.is_fuzzy.len(),
   )
 }
 
 fn validate_country_config(config: &PreparedEngineConfig) -> Result<()> {
-  if config.slices.countries.is_empty() {
+  if config.search.slices.countries.is_empty() {
     return Ok(());
   }
 
-  let Some(data) = &config.country_data else {
+  let Some(data) = &config.detectors.country_data else {
     return Err(Error::MissingStaticData {
       field: "country_data",
     });
@@ -219,17 +219,17 @@ fn validate_country_config(config: &PreparedEngineConfig) -> Result<()> {
 
   validate_static_data_length(
     "country_data.labels",
-    config.slices.countries,
+    config.search.slices.countries,
     data.labels.len(),
   )
 }
 
 fn validate_hotword_config(config: &PreparedEngineConfig) -> Result<()> {
-  if !config.slices.hotwords.is_empty() {
+  if !config.search.slices.hotwords.is_empty() {
     return Err(Error::UnsupportedStaticSlice { slice: "hotwords" });
   }
 
-  let Some(data) = &config.hotword_data else {
+  let Some(data) = &config.detectors.hotword_data else {
     return Ok(());
   };
 
@@ -256,11 +256,11 @@ fn validate_hotword_config(config: &PreparedEngineConfig) -> Result<()> {
 const fn validate_address_seed_config(
   config: &PreparedEngineConfig,
 ) -> Result<()> {
-  if config.slices.street_types.is_empty() {
+  if config.search.slices.street_types.is_empty() {
     return Ok(());
   }
 
-  if config.address_seed_data.is_some() {
+  if config.detectors.address_seed_data.is_some() {
     return Ok(());
   }
 
@@ -270,11 +270,11 @@ const fn validate_address_seed_config(
 }
 
 fn validate_trigger_config(config: &PreparedEngineConfig) -> Result<()> {
-  if config.slices.triggers.is_empty() {
+  if config.search.slices.triggers.is_empty() {
     return Ok(());
   }
 
-  let Some(data) = &config.trigger_data else {
+  let Some(data) = &config.detectors.trigger_data else {
     return Err(Error::MissingStaticData {
       field: "trigger_data",
     });
@@ -282,7 +282,7 @@ fn validate_trigger_config(config: &PreparedEngineConfig) -> Result<()> {
 
   validate_static_data_length(
     "trigger_data.rules",
-    config.slices.triggers,
+    config.search.slices.triggers,
     data.rules.len(),
   )
 }

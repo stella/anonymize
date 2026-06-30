@@ -1,5 +1,7 @@
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
+mod support;
+
 use std::collections::BTreeSet;
 
 use stella_anonymize_core::{
@@ -7,9 +9,10 @@ use stella_anonymize_core::{
   PreparedEngine, PreparedEngineConfig, PreparedEngineSlices, RegexMatchMeta,
   SearchOptions, SearchPattern, TriggerData, TriggerRule, TriggerStrategy,
 };
+use support::prepared_config;
 
 fn empty_config(slices: PreparedEngineSlices) -> PreparedEngineConfig {
-  PreparedEngineConfig {
+  prepared_config! {
     regex_patterns: vec![],
     custom_regex_patterns: vec![],
     literal_patterns: vec![],
@@ -19,7 +22,7 @@ fn empty_config(slices: PreparedEngineSlices) -> PreparedEngineConfig {
     allowed_labels: vec![],
     threshold: 0.0,
     confidence_boost: false,
-    slices,
+    slices: slices,
     regex_meta: vec![],
     custom_regex_meta: vec![],
     deny_list_data: None,
@@ -67,7 +70,7 @@ fn resolved_texts(prepared: &PreparedEngine, text: &str) -> Vec<String> {
 
 #[test]
 fn keeps_trigger_address_with_extra_component_anchor() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     regex_patterns: vec![SearchPattern::LiteralWithOptions {
       pattern: String::from("bytem"),
       case_insensitive: Some(true),
@@ -112,7 +115,7 @@ fn keeps_trigger_address_with_extra_component_anchor() {
 
 #[test]
 fn rejects_non_trigger_numbers_after_number_abbreviations() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     regex_patterns: vec![SearchPattern::Regex(String::from(r"\b\d{4}\b"))],
     slices: PreparedEngineSlices {
       regex: PatternSlice { start: 0, end: 1 },
@@ -134,7 +137,7 @@ fn rejects_non_trigger_numbers_after_number_abbreviations() {
 
 #[test]
 fn rejects_document_structure_heading_organizations() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     regex_patterns: vec![SearchPattern::Regex(String::from(
       r"Schedule No\. 4|Příloha č\. 2|Acme No\. 4",
     ))],
@@ -162,7 +165,7 @@ fn rejects_document_structure_heading_organizations() {
 
 #[test]
 fn rejects_document_headings_without_deny_list_matching() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     regex_patterns: vec![SearchPattern::Regex(String::from(
       r"Schedule No\. 4|Acme No\. 4",
     ))],
@@ -188,7 +191,7 @@ fn rejects_document_headings_without_deny_list_matching() {
 
 #[test]
 fn rejects_only_ambiguous_street_type_trigger_addresses() {
-  let prepared = PreparedEngine::new(PreparedEngineConfig {
+  let prepared = PreparedEngine::new(prepared_config! {
     regex_patterns: vec![SearchPattern::LiteralWithOptions {
       pattern: String::from("demeurant"),
       case_insensitive: Some(true),

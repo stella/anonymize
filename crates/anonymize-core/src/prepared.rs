@@ -23,19 +23,15 @@ mod support_prepare;
 mod support_slots;
 mod timing;
 
-pub use artifacts::{
-  PreparedEngineArtifacts, PreparedEngineArtifactsView,
-  PreparedSearchArtifacts, PreparedSearchArtifactsView,
-};
+pub use artifacts::{PreparedEngineArtifacts, PreparedEngineArtifactsView};
 pub use config::{
-  PreparedEngineConfig, PreparedEngineSlices, PreparedSearchConfig,
-  PreparedSearchSlices,
+  PreparedEngineConfig, PreparedEngineDetectorConfig,
+  PreparedEnginePolicyConfig, PreparedEngineSearchConfig, PreparedEngineSlices,
 };
 use diagnostic_stream::DiagnosticEventStream;
 use engine_state::{PipelinePolicy, PreparedStaticData, SearchIndexes};
 pub use results::{
-  PreparedEngineBuildResult, PreparedEngineMatches, PreparedSearchBuildResult,
-  PreparedSearchMatches, StaticDetectionResult,
+  PreparedEngineBuildResult, PreparedEngineMatches, StaticDetectionResult,
   StaticRedactionDiagnosticResult, StaticRedactionResult,
 };
 
@@ -44,8 +40,6 @@ pub struct PreparedEngine {
   policy: PipelinePolicy,
   data: PreparedStaticData,
 }
-
-pub type PreparedSearch = PreparedEngine;
 
 impl PreparedEngine {
   pub fn redact_static_entities(

@@ -92,9 +92,6 @@ impl<'a> PreparedEngineArtifactsView<'a> {
   }
 }
 
-pub type PreparedSearchArtifacts = PreparedEngineArtifacts;
-pub type PreparedSearchArtifactsView<'a> = PreparedEngineArtifactsView<'a>;
-
 fn write_index_artifacts(
   writer: &mut ArtifactWriter,
   field: &'static str,

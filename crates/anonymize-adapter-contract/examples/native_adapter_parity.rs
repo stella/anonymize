@@ -9,7 +9,7 @@ use stella_anonymize_adapter_contract::{
   prepared_search_config_from_binding,
   static_redaction_result_to_utf16_binding,
 };
-use stella_anonymize_core::PreparedSearch;
+use stella_anonymize_core::PreparedEngine;
 
 #[derive(Deserialize)]
 struct Payload {
@@ -30,7 +30,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
   let config =
     serde_json::from_str::<BindingPreparedSearchConfig>(&payload.config_json)?;
   let prepared =
-    PreparedSearch::new(prepared_search_config_from_binding(config)?)?;
+    PreparedEngine::new(prepared_search_config_from_binding(config)?)?;
   let results = payload
     .cases
     .iter()
@@ -43,7 +43,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn run_case(
-  prepared: &PreparedSearch,
+  prepared: &PreparedEngine,
   case: &Case,
 ) -> Result<BindingStaticRedactionResult, Box<dyn std::error::Error>> {
   let operators = case

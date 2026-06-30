@@ -12,7 +12,7 @@ use crate::triggers::{PreparedTriggerData, TriggerData};
 use crate::types::Result;
 use crate::zones::{PreparedZoneData, ZoneData};
 
-use super::PreparedEngineConfig;
+use super::PreparedEngineDetectorConfig;
 use super::phase::record_prepare_stage_elapsed;
 use super::support_slots::{
   TimedSupportData, join_support_data, prepare_timed_address_context_data,
@@ -48,7 +48,7 @@ pub(super) struct PreparedSupportData {
 }
 
 pub(super) const fn take_support_input(
-  config: &mut PreparedEngineConfig,
+  config: &mut PreparedEngineDetectorConfig,
 ) -> SupportDataInput {
   SupportDataInput {
     hotwords: config.hotword_data.take(),
