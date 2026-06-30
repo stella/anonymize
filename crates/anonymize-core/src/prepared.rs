@@ -24,12 +24,14 @@ mod config_validation;
 mod detection_phase;
 mod diagnostic_stream;
 mod entity_filter;
+mod index_prepare;
 mod phase;
 mod prepare_phase;
 mod redaction_phase;
 mod resolution_phase;
 mod results;
 mod search_phase;
+mod support_prepare;
 mod timing;
 
 pub use artifacts::{PreparedSearchArtifacts, PreparedSearchArtifactsView};

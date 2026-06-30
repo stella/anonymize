@@ -1,0 +1,431 @@
+use std::time::Instant;
+
+use crate::diagnostics::{DiagnosticStage, StaticRedactionDiagnostics};
+use crate::search::{
+  LiteralSearchOptions, SearchIndex, SearchIndexArtifactsView,
+  SearchIndexBuildStats, SearchOptions, SearchPattern,
+};
+use crate::types::{Error, Result};
+
+use super::artifacts::{PreparedSearchArtifacts, PreparedSearchArtifactsView};
+use super::config_validation::validate_supported_config;
+use super::phase::record_prepare_stage_elapsed;
+use super::timing::elapsed_us;
+use super::{PreparedSearchConfig, PreparedSearchSlices};
+
+struct RegexPatternGroups {
+  regex: Vec<SearchPattern>,
+  legal_forms: Vec<SearchPattern>,
+  triggers: Vec<SearchPattern>,
+}
+
+struct TimedSearchIndex {
+  index: SearchIndex,
+  elapsed_us: u64,
+  stats: Vec<SearchIndexBuildStats>,
+}
+
+struct PreparedSearchIndexes {
+  regex: TimedSearchIndex,
+  custom_regex: TimedSearchIndex,
+  legal_forms: TimedSearchIndex,
+  triggers: TimedSearchIndex,
+  literals: TimedSearchIndex,
+}
+
+pub(super) struct SearchIndexConfigInput {
+  pub(super) regex_patterns: Vec<SearchPattern>,
+  pub(super) custom_regex_patterns: Vec<SearchPattern>,
+  pub(super) literal_patterns: Vec<SearchPattern>,
+  pub(super) regex_options: SearchOptions,
+  pub(super) custom_regex_options: SearchOptions,
+  pub(super) literal_options: SearchOptions,
+  pub(super) anchored_len: usize,
+}
+
+#[derive(Clone, Copy)]
+pub(super) struct SearchPrepareCounts {
+  regex: usize,
+  custom_regex: usize,
+  anchored: usize,
+  legal_forms: usize,
+  triggers: usize,
+  literals: usize,
+}
+
+impl SearchPrepareCounts {
+  pub(super) const fn total(self) -> usize {
+    self
+      .regex
+      .saturating_add(self.custom_regex)
+      .saturating_add(self.anchored)
+      .saturating_add(self.legal_forms)
+      .saturating_add(self.triggers)
+      .saturating_add(self.literals)
+  }
+}
+
+pub(super) struct PreparedSearchIndexBundle {
+  pub(super) regex: SearchIndex,
+  pub(super) custom_regex: SearchIndex,
+  pub(super) legal_forms: SearchIndex,
+  pub(super) triggers: SearchIndex,
+  pub(super) literals: SearchIndex,
+  pub(super) counts: SearchPrepareCounts,
+}
+
+struct SearchIndexBuildInputs {
+  regex_patterns: Vec<SearchPattern>,
+  regex_options: SearchOptions,
+  custom_regex_patterns: Vec<SearchPattern>,
+  custom_regex_options: SearchOptions,
+  legal_form_patterns: Vec<SearchPattern>,
+  trigger_patterns: Vec<SearchPattern>,
+  literal_patterns: Vec<SearchPattern>,
+  literal_options: SearchOptions,
+}
+
+struct SearchIndexPrepareMetrics {
+  regex: SearchIndexPrepareMetric,
+  custom_regex: SearchIndexPrepareMetric,
+  legal_forms: SearchIndexPrepareMetric,
+  triggers: SearchIndexPrepareMetric,
+  literals: SearchIndexPrepareMetric,
+}
+
+struct SearchIndexPrepareMetric {
+  pattern_count: usize,
+  elapsed_us: u64,
+  stats: Vec<SearchIndexBuildStats>,
+}
+
+pub(super) fn prepare_search_artifacts(
+  config: PreparedSearchConfig,
+) -> Result<PreparedSearchArtifacts> {
+  validate_supported_config(&config, false)?;
+  let regex_groups =
+    split_regex_patterns(config.regex_patterns, &config.slices)?;
+  Ok(PreparedSearchArtifacts {
+    regex: SearchIndex::prepare_artifacts(
+      regex_groups.regex,
+      config.regex_options,
+    )?,
+    custom_regex: SearchIndex::prepare_artifacts(
+      config.custom_regex_patterns,
+      config.custom_regex_options,
+    )?,
+    legal_forms: SearchIndex::prepare_artifacts(
+      regex_groups.legal_forms,
+      legal_form_search_options(),
+    )?,
+    triggers: SearchIndex::prepare_artifacts(
+      promote_case_insensitive_literals(regex_groups.triggers),
+      trigger_search_options(),
+    )?,
+    literals: SearchIndex::prepare_artifacts(
+      config.literal_patterns,
+      config.literal_options,
+    )?,
+  })
+}
+
+pub(super) fn prepare_search_index_bundle(
+  input: SearchIndexConfigInput,
+  slices: &PreparedSearchSlices,
+  artifacts: Option<&PreparedSearchArtifactsView<'_>>,
+  diagnostics: &mut Option<&mut StaticRedactionDiagnostics>,
+) -> Result<PreparedSearchIndexBundle> {
+  let SearchIndexConfigInput {
+    regex_patterns,
+    custom_regex_patterns,
+    literal_patterns,
+    regex_options,
+    custom_regex_options,
+    literal_options,
+    anchored_len,
+  } = input;
+  let regex_groups = split_regex_patterns(regex_patterns, slices)?;
+  let mut counts = SearchPrepareCounts {
+    regex: regex_groups.regex.len(),
+    custom_regex: custom_regex_patterns.len(),
+    anchored: anchored_len,
+    legal_forms: regex_groups.legal_forms.len(),
+    triggers: regex_groups.triggers.len(),
+    literals: 0,
+  };
+  let indexes = build_search_indexes(
+    SearchIndexBuildInputs {
+      regex_patterns: regex_groups.regex,
+      regex_options,
+      custom_regex_patterns,
+      custom_regex_options,
+      legal_form_patterns: regex_groups.legal_forms,
+      trigger_patterns: promote_case_insensitive_literals(
+        regex_groups.triggers,
+      ),
+      literal_patterns,
+      literal_options,
+    },
+    artifacts,
+    diagnostics.is_some(),
+  )?;
+  let (
+    regex_index,
+    custom_regex_index,
+    legal_forms_index,
+    triggers_index,
+    literals_index,
+  ) = (
+    indexes.regex,
+    indexes.custom_regex,
+    indexes.legal_forms,
+    indexes.triggers,
+    indexes.literals,
+  );
+  let regex = regex_index.index;
+  let custom_regex = custom_regex_index.index;
+  let legal_forms = legal_forms_index.index;
+  let triggers = triggers_index.index;
+  let literals = literals_index.index;
+  counts.literals = literals.len();
+  record_search_index_prepare_stages(
+    diagnostics,
+    &SearchIndexPrepareMetrics {
+      regex: SearchIndexPrepareMetric {
+        pattern_count: counts.regex,
+        elapsed_us: regex_index.elapsed_us,
+        stats: regex_index.stats,
+      },
+      custom_regex: SearchIndexPrepareMetric {
+        pattern_count: counts.custom_regex,
+        elapsed_us: custom_regex_index.elapsed_us,
+        stats: custom_regex_index.stats,
+      },
+      legal_forms: SearchIndexPrepareMetric {
+        pattern_count: counts.legal_forms,
+        elapsed_us: legal_forms_index.elapsed_us,
+        stats: legal_forms_index.stats,
+      },
+      triggers: SearchIndexPrepareMetric {
+        pattern_count: counts.triggers,
+        elapsed_us: triggers_index.elapsed_us,
+        stats: triggers_index.stats,
+      },
+      literals: SearchIndexPrepareMetric {
+        pattern_count: counts.literals,
+        elapsed_us: literals_index.elapsed_us,
+        stats: literals_index.stats,
+      },
+    },
+  );
+
+  Ok(PreparedSearchIndexBundle {
+    regex,
+    custom_regex,
+    legal_forms,
+    triggers,
+    literals,
+    counts,
+  })
+}
+
+fn build_search_indexes(
+  inputs: SearchIndexBuildInputs,
+  artifacts: Option<&PreparedSearchArtifactsView<'_>>,
+  collect_stats: bool,
+) -> Result<PreparedSearchIndexes> {
+  let SearchIndexBuildInputs {
+    regex_patterns,
+    regex_options,
+    custom_regex_patterns,
+    custom_regex_options,
+    legal_form_patterns,
+    trigger_patterns,
+    literal_patterns,
+    literal_options,
+  } = inputs;
+
+  let regex_artifacts = artifacts.map(|value| &value.regex);
+  let custom_regex_artifacts = artifacts.map(|value| &value.custom_regex);
+  let legal_form_artifacts = artifacts.map(|value| &value.legal_forms);
+  let trigger_artifacts = artifacts.map(|value| &value.triggers);
+  let literal_artifacts = artifacts.map(|value| &value.literals);
+
+  std::thread::scope(|scope| {
+    let regex = scope.spawn(move || {
+      build_search_index(
+        regex_patterns,
+        regex_options,
+        regex_artifacts,
+        collect_stats,
+      )
+    });
+    let custom_regex = scope.spawn(move || {
+      build_search_index(
+        custom_regex_patterns,
+        custom_regex_options,
+        custom_regex_artifacts,
+        collect_stats,
+      )
+    });
+    let legal_forms = scope.spawn(move || {
+      build_search_index(
+        legal_form_patterns,
+        legal_form_search_options(),
+        legal_form_artifacts,
+        collect_stats,
+      )
+    });
+    let triggers = scope.spawn(move || {
+      build_search_index(
+        trigger_patterns,
+        trigger_search_options(),
+        trigger_artifacts,
+        collect_stats,
+      )
+    });
+    let literals = scope.spawn(move || {
+      build_search_index(
+        literal_patterns,
+        literal_options,
+        literal_artifacts,
+        collect_stats,
+      )
+    });
+
+    Ok(PreparedSearchIndexes {
+      regex: join_search_index(regex, "regex")?,
+      custom_regex: join_search_index(custom_regex, "custom_regex")?,
+      legal_forms: join_search_index(legal_forms, "legal_forms")?,
+      triggers: join_search_index(triggers, "triggers")?,
+      literals: join_search_index(literals, "literals")?,
+    })
+  })
+}
+
+fn build_search_index(
+  patterns: Vec<SearchPattern>,
+  options: SearchOptions,
+  artifacts: Option<&SearchIndexArtifactsView<'_>>,
+  collect_stats: bool,
+) -> Result<TimedSearchIndex> {
+  let start = Instant::now();
+  let (index, stats) = if collect_stats {
+    let result = if let Some(artifacts) = artifacts {
+      SearchIndex::new_with_artifacts_view_build_stats(
+        patterns, options, artifacts,
+      )?
+    } else {
+      SearchIndex::new_with_build_stats(patterns, options)?
+    };
+    (result.index, result.stats)
+  } else if let Some(artifacts) = artifacts {
+    (
+      SearchIndex::new_with_artifacts_view(patterns, options, artifacts)?,
+      Vec::new(),
+    )
+  } else {
+    (SearchIndex::new(patterns, options)?, Vec::new())
+  };
+  Ok(TimedSearchIndex {
+    index,
+    elapsed_us: elapsed_us(start),
+    stats,
+  })
+}
+
+fn join_search_index(
+  handle: std::thread::ScopedJoinHandle<'_, Result<TimedSearchIndex>>,
+  field: &'static str,
+) -> Result<TimedSearchIndex> {
+  handle.join().map_err(|_| Error::InvalidStaticData {
+    field,
+    reason: "search index builder panicked".to_owned(),
+  })?
+}
+
+fn record_search_index_prepare_stages(
+  diagnostics: &mut Option<&mut StaticRedactionDiagnostics>,
+  metrics: &SearchIndexPrepareMetrics,
+) {
+  let stages = [
+    (DiagnosticStage::PrepareRegex, &metrics.regex),
+    (DiagnosticStage::PrepareCustomRegex, &metrics.custom_regex),
+    (
+      DiagnosticStage::PrepareLegalFormSearch,
+      &metrics.legal_forms,
+    ),
+    (DiagnosticStage::PrepareTriggerSearch, &metrics.triggers),
+    (DiagnosticStage::PrepareLiteral, &metrics.literals),
+  ];
+  for (stage, metric) in stages {
+    record_prepare_stage_elapsed(
+      diagnostics,
+      stage,
+      metric.pattern_count,
+      metric.elapsed_us,
+    );
+    if let Some(diagnostics) = diagnostics.as_deref_mut() {
+      diagnostics.record_search_build_slot_summaries(stage, &metric.stats);
+    }
+  }
+}
+
+fn split_regex_patterns(
+  patterns: Vec<SearchPattern>,
+  slices: &PreparedSearchSlices,
+) -> Result<RegexPatternGroups> {
+  let mut regex = Vec::new();
+  let mut legal_forms = Vec::new();
+  let mut triggers = Vec::new();
+
+  for (index, pattern) in patterns.into_iter().enumerate() {
+    let pattern_index = u32::try_from(index)
+      .map_err(|_| Error::PatternIndexOutOfRange { index })?;
+    if slices.legal_forms.contains(pattern_index) {
+      legal_forms.push(pattern);
+      continue;
+    }
+    if slices.triggers.contains(pattern_index) {
+      triggers.push(pattern);
+      continue;
+    }
+    regex.push(pattern);
+  }
+
+  Ok(RegexPatternGroups {
+    regex,
+    legal_forms,
+    triggers,
+  })
+}
+
+fn legal_form_search_options() -> SearchOptions {
+  SearchOptions::default()
+}
+
+fn trigger_search_options() -> SearchOptions {
+  SearchOptions {
+    literal: LiteralSearchOptions {
+      case_insensitive: true,
+      whole_words: false,
+    },
+    ..SearchOptions::default()
+  }
+}
+
+fn promote_case_insensitive_literals(
+  patterns: Vec<SearchPattern>,
+) -> Vec<SearchPattern> {
+  patterns
+    .into_iter()
+    .map(|entry| match entry {
+      SearchPattern::LiteralWithOptions {
+        pattern: value,
+        case_insensitive: Some(true),
+        whole_words,
+      } if whole_words != Some(true) => SearchPattern::Literal(value),
+      other => other,
+    })
+    .collect()
+}

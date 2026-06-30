@@ -142,6 +142,17 @@ pub(super) fn record_count_stage(
   }
 }
 
+pub(super) fn record_prepare_stage_elapsed(
+  diagnostics: &mut Option<&mut StaticRedactionDiagnostics>,
+  stage: DiagnosticStage,
+  count: usize,
+  elapsed_us: u64,
+) {
+  if let Some(diagnostics) = diagnostics {
+    diagnostics.record_stage(stage, Some(count), Some(elapsed_us), None);
+  }
+}
+
 pub(super) fn observe_diagnostic_stream(
   diagnostics: &Option<&mut StaticRedactionDiagnostics>,
   event_stream: &mut DiagnosticEventStream<'_>,
