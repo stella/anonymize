@@ -5,12 +5,12 @@ use crate::types::{
   Entity, EntityKind, OperatorConfig, RedactionResult, Result,
 };
 
-use super::PreparedSearch;
+use super::PreparedEngine;
 use super::diagnostic_stream::DiagnosticEventStream;
 use super::phase::{PhaseTimer, observe_diagnostic_stream};
 use super::results::StaticRedactionResult;
 
-impl PreparedSearch {
+impl PreparedEngine {
   pub(super) fn redact_static_entities_inner(
     &self,
     full_text: &str,

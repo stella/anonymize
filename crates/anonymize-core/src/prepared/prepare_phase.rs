@@ -15,11 +15,34 @@ use super::index_prepare::{
 use super::results::PreparedSearchBuildResult;
 use super::support_prepare::{prepare_support_data, take_support_input};
 use super::timing::elapsed_us;
-use super::{PreparedSearch, PreparedSearchConfig};
+use super::{PreparedEngine, PreparedSearchConfig};
 
-impl PreparedSearch {
+#[bon::bon]
+impl PreparedEngine {
+  #[builder]
+  pub fn prepare(
+    config: PreparedSearchConfig,
+    artifacts: Option<&PreparedSearchArtifactsView<'_>>,
+  ) -> Result<Self> {
+    Self::new_inner(config, None, artifacts)
+  }
+
+  #[builder]
+  pub fn prepare_with_diagnostics(
+    config: PreparedSearchConfig,
+    artifacts: Option<&PreparedSearchArtifactsView<'_>>,
+  ) -> Result<PreparedSearchBuildResult> {
+    let mut diagnostics = StaticRedactionDiagnostics::default();
+    let prepared = Self::new_inner(config, Some(&mut diagnostics), artifacts)?;
+
+    Ok(PreparedSearchBuildResult {
+      prepared,
+      diagnostics,
+    })
+  }
+
   pub fn new(config: PreparedSearchConfig) -> Result<Self> {
-    Self::new_inner(config, None, None)
+    Self::prepare().config(config).call()
   }
 
   pub fn warm_lazy_regex(&self) -> Result<()> {
@@ -107,26 +130,16 @@ impl PreparedSearch {
     config: PreparedSearchConfig,
     artifacts: &PreparedSearchArtifactsView<'_>,
   ) -> Result<PreparedSearchBuildResult> {
-    let mut diagnostics = StaticRedactionDiagnostics::default();
-    let prepared =
-      Self::new_inner(config, Some(&mut diagnostics), Some(artifacts))?;
-
-    Ok(PreparedSearchBuildResult {
-      prepared,
-      diagnostics,
-    })
+    Self::prepare_with_diagnostics()
+      .config(config)
+      .artifacts(artifacts)
+      .call()
   }
 
   pub fn new_with_diagnostics(
     config: PreparedSearchConfig,
   ) -> Result<PreparedSearchBuildResult> {
-    let mut diagnostics = StaticRedactionDiagnostics::default();
-    let prepared = Self::new_inner(config, Some(&mut diagnostics), None)?;
-
-    Ok(PreparedSearchBuildResult {
-      prepared,
-      diagnostics,
-    })
+    Self::prepare_with_diagnostics().config(config).call()
   }
 
   fn new_inner(

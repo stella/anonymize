@@ -8,7 +8,7 @@ use crate::resolution::{
 };
 use crate::types::{Result, SearchMatch};
 
-use super::PreparedSearch;
+use super::PreparedEngine;
 use super::diagnostic_stream::DiagnosticEventStream;
 use super::entity_filter::{
   clear_internal_source_details, filter_entities_for_config,
@@ -20,7 +20,7 @@ use super::phase::{
 };
 use super::results::StaticDetectionResult;
 
-impl PreparedSearch {
+impl PreparedEngine {
   pub(super) fn resolve_static_entities(
     &self,
     detections: &StaticDetectionResult,

@@ -2,7 +2,7 @@ use crate::diagnostics::StaticRedactionDiagnostics;
 use crate::resolution::PipelineEntity;
 use crate::types::{RedactionResult, SearchMatch};
 
-use super::PreparedSearch;
+use super::PreparedEngine;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PreparedSearchMatches {
@@ -41,9 +41,12 @@ pub struct StaticRedactionDiagnosticResult {
 }
 
 pub struct PreparedSearchBuildResult {
-  pub prepared: PreparedSearch,
+  pub prepared: PreparedEngine,
   pub diagnostics: StaticRedactionDiagnostics,
 }
+
+pub type PreparedEngineBuildResult = PreparedSearchBuildResult;
+pub type PreparedEngineMatches = PreparedSearchMatches;
 
 impl StaticDetectionResult {
   #[must_use]

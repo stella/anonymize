@@ -42,15 +42,22 @@ pub use artifacts::{PreparedSearchArtifacts, PreparedSearchArtifactsView};
 use diagnostic_stream::DiagnosticEventStream;
 use engine_state::{PipelinePolicy, PreparedStaticData, SearchIndexes};
 pub use results::{
-  PreparedSearchBuildResult, PreparedSearchMatches, StaticDetectionResult,
+  PreparedEngineBuildResult, PreparedEngineMatches, PreparedSearchBuildResult,
+  PreparedSearchMatches, StaticDetectionResult,
   StaticRedactionDiagnosticResult, StaticRedactionResult,
 };
 
-pub struct PreparedSearch {
+pub struct PreparedEngine {
   indexes: SearchIndexes,
   policy: PipelinePolicy,
   data: PreparedStaticData,
 }
+
+pub type PreparedSearch = PreparedEngine;
+pub type PreparedEngineArtifacts = PreparedSearchArtifacts;
+pub type PreparedEngineArtifactsView<'a> = PreparedSearchArtifactsView<'a>;
+pub type PreparedEngineConfig = PreparedSearchConfig;
+pub type PreparedEngineSlices = PreparedSearchSlices;
 
 #[derive(
   Clone, Debug, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize,
@@ -108,7 +115,7 @@ pub struct PreparedSearchConfig {
   pub monetary_data: Option<MonetaryData>,
 }
 
-impl PreparedSearch {
+impl PreparedEngine {
   pub fn redact_static_entities(
     &self,
     full_text: &str,

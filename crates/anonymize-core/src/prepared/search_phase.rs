@@ -6,7 +6,7 @@ use crate::normalize::{
 };
 use crate::types::{Result, SearchMatch};
 
-use super::PreparedSearch;
+use super::PreparedEngine;
 use super::results::PreparedSearchMatches;
 use super::search_matcher::{
   combine_regex_matches, join_optional_timed_match_handle,
@@ -17,7 +17,7 @@ use super::timing::{TimedMatches, TimedSearchBranches, elapsed_us};
 
 const PARALLEL_SEARCH_MIN_BYTES: usize = 32 * 1024;
 
-impl PreparedSearch {
+impl PreparedEngine {
   pub fn find_matches(&self, full_text: &str) -> Result<PreparedSearchMatches> {
     self.find_matches_inner(full_text, None)
   }

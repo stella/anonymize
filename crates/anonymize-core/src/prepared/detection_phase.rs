@@ -11,13 +11,13 @@ use crate::signatures::detect_signatures;
 use crate::triggers::process_trigger_matches;
 use crate::types::Result;
 
-use super::PreparedSearch;
+use super::PreparedEngine;
 use super::detector_registry::STATIC_DETECTORS;
 use super::phase::record_detector_entities;
 use super::results::{PreparedSearchMatches, StaticDetectionResult};
 use super::timing::{StaticEntityPasses, TimedEntities, elapsed_us};
 
-impl PreparedSearch {
+impl PreparedEngine {
   pub fn detect_static_entities(
     &self,
     full_text: &str,
