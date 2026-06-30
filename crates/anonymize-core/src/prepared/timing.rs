@@ -3,6 +3,8 @@ use std::time::Instant;
 use crate::resolution::PipelineEntity;
 use crate::types::SearchMatch;
 
+use super::detector_registry::StaticDetectorId;
+
 pub(super) struct TimedEntities {
   pub(super) entities: Vec<PipelineEntity>,
   pub(super) elapsed_us: u64,
@@ -60,6 +62,25 @@ impl StaticEntityPasses {
       .saturating_add(self.legal_form.entities.len())
       .saturating_add(self.address_seed.entities.len())
       .saturating_add(self.name_corpus.entities.len())
+  }
+
+  pub(super) const fn detector_entities(
+    &self,
+    detector: StaticDetectorId,
+  ) -> &TimedEntities {
+    match detector {
+      StaticDetectorId::Regex => &self.regex,
+      StaticDetectorId::CustomRegex => &self.custom_regex,
+      StaticDetectorId::DenyList => &self.deny_list,
+      StaticDetectorId::Gazetteer => &self.gazetteer,
+      StaticDetectorId::Country => &self.country,
+      StaticDetectorId::Anchored => &self.anchored,
+      StaticDetectorId::Trigger => &self.trigger,
+      StaticDetectorId::Signature => &self.signature,
+      StaticDetectorId::LegalForm => &self.legal_form,
+      StaticDetectorId::NameCorpus => &self.name_corpus,
+      StaticDetectorId::AddressSeed => &self.address_seed,
+    }
   }
 }
 

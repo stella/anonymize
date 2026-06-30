@@ -4,6 +4,7 @@ use crate::diagnostics::{DiagnosticStage, StaticRedactionDiagnostics};
 use crate::resolution::PipelineEntity;
 use crate::types::Result;
 
+use super::detector_registry::StaticDetector;
 use super::diagnostic_stream::DiagnosticEventStream;
 use super::timing::{TimedEntities, elapsed_us};
 
@@ -32,39 +33,6 @@ pub(super) enum ResolverStep {
   Sanitize,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum DetectorPass {
-  Regex,
-  CustomRegex,
-  DenyList,
-  Gazetteer,
-  Country,
-  Anchored,
-  Trigger,
-  Signature,
-  LegalForm,
-  NameCorpus,
-  AddressSeed,
-}
-
-impl DetectorPass {
-  const fn diagnostic_stage(self) -> DiagnosticStage {
-    match self {
-      Self::Regex => DiagnosticStage::EntityRegex,
-      Self::CustomRegex => DiagnosticStage::EntityCustomRegex,
-      Self::DenyList => DiagnosticStage::EntityDenyList,
-      Self::Gazetteer => DiagnosticStage::EntityGazetteer,
-      Self::Country => DiagnosticStage::EntityCountry,
-      Self::Anchored => DiagnosticStage::EntityAnchored,
-      Self::Trigger => DiagnosticStage::EntityTrigger,
-      Self::Signature => DiagnosticStage::EntitySignature,
-      Self::LegalForm => DiagnosticStage::EntityLegalForm,
-      Self::NameCorpus => DiagnosticStage::EntityNameCorpus,
-      Self::AddressSeed => DiagnosticStage::EntityAddressSeed,
-    }
-  }
-}
-
 impl ResolverStep {
   const fn diagnostic_stage(self) -> DiagnosticStage {
     match self {
@@ -78,12 +46,12 @@ impl ResolverStep {
 
 pub(super) fn record_detector_entities(
   diagnostics: &mut StaticRedactionDiagnostics,
-  pass: DetectorPass,
+  detector: StaticDetector,
   timed: &TimedEntities,
   full_text: &str,
 ) {
   diagnostics.record_entities(
-    pass.diagnostic_stage(),
+    detector.diagnostic_stage(),
     &timed.entities,
     full_text,
     Some(timed.elapsed_us),

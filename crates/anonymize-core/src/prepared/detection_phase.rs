@@ -12,7 +12,8 @@ use crate::triggers::process_trigger_matches;
 use crate::types::Result;
 
 use super::PreparedSearch;
-use super::phase::{DetectorPass, record_detector_entities};
+use super::detector_registry::STATIC_DETECTORS;
+use super::phase::record_detector_entities;
 use super::results::{PreparedSearchMatches, StaticDetectionResult};
 use super::timing::{StaticEntityPasses, TimedEntities, elapsed_us};
 
@@ -320,21 +321,17 @@ fn record_static_entity_diagnostics(
   full_text: &str,
   passes: &StaticEntityPasses,
 ) {
-  let detector_passes = [
-    (DetectorPass::Regex, &passes.regex),
-    (DetectorPass::CustomRegex, &passes.custom_regex),
-    (DetectorPass::DenyList, &passes.deny_list),
-    (DetectorPass::Gazetteer, &passes.gazetteer),
-    (DetectorPass::Country, &passes.country),
-    (DetectorPass::Anchored, &passes.anchored),
-    (DetectorPass::Trigger, &passes.trigger),
-    (DetectorPass::Signature, &passes.signature),
-    (DetectorPass::LegalForm, &passes.legal_form),
-    (DetectorPass::NameCorpus, &passes.name_corpus),
-    (DetectorPass::AddressSeed, &passes.address_seed),
-  ];
-  for (detector_pass, entities) in detector_passes {
-    record_detector_entities(diagnostics, detector_pass, entities, full_text);
+  for detector in STATIC_DETECTORS {
+    debug_assert!(
+      !detector.required_inputs().is_empty(),
+      "static detector registry entries must declare required inputs",
+    );
+    record_detector_entities(
+      diagnostics,
+      *detector,
+      passes.detector_entities(detector.id()),
+      full_text,
+    );
   }
 }
 

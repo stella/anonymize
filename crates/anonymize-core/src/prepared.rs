@@ -20,6 +20,7 @@ use crate::zones::ZoneData;
 mod artifacts;
 mod config_validation;
 mod detection_phase;
+mod detector_registry;
 mod diagnostic_stream;
 mod engine_state;
 mod entity_filter;
