@@ -409,6 +409,12 @@ struct PreparedSupportData {
   count: usize,
 }
 
+struct TimedSupportData<T> {
+  data: T,
+  len: usize,
+  elapsed_us: u64,
+}
+
 struct SearchIndexBuildInputs {
   regex_patterns: Vec<SearchPattern>,
   regex_options: SearchOptions,
@@ -2116,143 +2122,271 @@ fn prepare_support_data(
   input: SupportDataInput,
   diagnostics: &mut Option<&mut StaticRedactionDiagnostics>,
 ) -> Result<PreparedSupportData> {
-  let hotword_data_len = hotword_data_len(input.hotwords.as_ref());
-  let hotword_data_start = Instant::now();
-  let hotword_data = prepare_hotword_data(input.hotwords)?;
+  let prepared = std::thread::scope(|scope| {
+    let hotwords = scope.spawn(|| prepare_timed_hotword_data(input.hotwords));
+    let triggers = scope.spawn(|| prepare_timed_trigger_data(input.triggers));
+    let legal_forms =
+      scope.spawn(|| Ok(prepare_timed_legal_form_data(input.legal_forms)));
+    let address_seed =
+      scope.spawn(|| prepare_timed_address_seed_data(input.address_seed));
+    let zones = scope.spawn(|| prepare_timed_zone_data(input.zones.as_ref()));
+    let address_context =
+      scope.spawn(|| prepare_timed_address_context_data(input.address_context));
+    let coreference =
+      scope.spawn(|| prepare_timed_coreference_data(input.coreference));
+    let names =
+      scope.spawn(|| Ok(prepare_timed_name_corpus_data(input.name_corpus)));
+    let signature =
+      scope.spawn(|| Ok(prepare_timed_signature_data(input.signature)));
+
+    Ok(ParallelPreparedSupportData {
+      hotwords: join_support_data(hotwords, "hotword_data")?,
+      triggers: join_support_data(triggers, "trigger_data")?,
+      legal_forms: join_support_data(legal_forms, "legal_form_data")?,
+      address_seed: join_support_data(address_seed, "address_seed_data")?,
+      zones: join_support_data(zones, "zone_data")?,
+      address_context: join_support_data(
+        address_context,
+        "address_context_data",
+      )?,
+      coreference: join_support_data(coreference, "coreference_data")?,
+      names: join_support_data(names, "name_corpus_data")?,
+      signature: join_support_data(signature, "signature_data")?,
+    })
+  })?;
+
+  record_parallel_support_data(diagnostics, &prepared);
+  Ok(parallel_support_data_into_prepared(prepared))
+}
+
+fn record_parallel_support_data(
+  diagnostics: &mut Option<&mut StaticRedactionDiagnostics>,
+  prepared: &ParallelPreparedSupportData,
+) {
   record_prepare_stage_elapsed(
     diagnostics,
     DiagnosticStage::PrepareHotwordData,
-    hotword_data_len,
-    elapsed_us(hotword_data_start),
+    prepared.hotwords.len,
+    prepared.hotwords.elapsed_us,
   );
-
-  let trigger_data_len = trigger_data_len(input.triggers.as_ref());
-  let trigger_data_start = Instant::now();
-  let trigger_data = prepare_trigger_data(input.triggers)?;
   record_prepare_stage_elapsed(
     diagnostics,
     DiagnosticStage::PrepareTriggerData,
-    trigger_data_len,
-    elapsed_us(trigger_data_start),
+    prepared.triggers.len,
+    prepared.triggers.elapsed_us,
   );
-
-  let legal_form_data_len = legal_form_data_len(input.legal_forms.as_ref());
-  let legal_form_data_start = Instant::now();
-  let legal_form_data = input.legal_forms.map(PreparedLegalFormData::new);
   record_prepare_stage_elapsed(
     diagnostics,
     DiagnosticStage::PrepareLegalFormData,
-    legal_form_data_len,
-    elapsed_us(legal_form_data_start),
+    prepared.legal_forms.len,
+    prepared.legal_forms.elapsed_us,
   );
-
-  let address_seed_data_len =
-    address_seed_data_len(input.address_seed.as_ref());
-  let address_seed_data_start = Instant::now();
-  let address_seed_data = prepare_address_seed_data(input.address_seed)?;
   record_prepare_stage_elapsed(
     diagnostics,
     DiagnosticStage::PrepareAddressSeedData,
-    address_seed_data_len,
-    elapsed_us(address_seed_data_start),
+    prepared.address_seed.len,
+    prepared.address_seed.elapsed_us,
   );
-
-  let zone_data_len = zone_data_len(input.zones.as_ref());
-  let zone_data_start = Instant::now();
-  let zone_data = prepare_zone_data(input.zones.as_ref())?;
   record_prepare_stage_elapsed(
     diagnostics,
     DiagnosticStage::PrepareZoneData,
-    zone_data_len,
-    elapsed_us(zone_data_start),
+    prepared.zones.len,
+    prepared.zones.elapsed_us,
   );
-
-  let address_context_data_len =
-    address_context_data_len(input.address_context.as_ref());
-  let address_context_data_start = Instant::now();
-  let address_context_data =
-    prepare_address_context_data(input.address_context)?;
   record_prepare_stage_elapsed(
     diagnostics,
     DiagnosticStage::PrepareAddressContextData,
-    address_context_data_len,
-    elapsed_us(address_context_data_start),
+    prepared.address_context.len,
+    prepared.address_context.elapsed_us,
   );
-
-  let coreference_data_len = coreference_data_len(input.coreference.as_ref());
-  let coreference_data_start = Instant::now();
-  let coreference_data = prepare_coreference_data(input.coreference)?;
   record_prepare_stage_elapsed(
     diagnostics,
     DiagnosticStage::PrepareCoreferenceData,
-    coreference_data_len,
-    elapsed_us(coreference_data_start),
+    prepared.coreference.len,
+    prepared.coreference.elapsed_us,
   );
+  record_prepare_stage_elapsed(
+    diagnostics,
+    DiagnosticStage::PrepareNameCorpusData,
+    prepared.names.len,
+    prepared.names.elapsed_us,
+  );
+  record_prepare_stage_elapsed(
+    diagnostics,
+    DiagnosticStage::PrepareSignatureData,
+    prepared.signature.len,
+    prepared.signature.elapsed_us,
+  );
+}
 
-  let (name_corpus_data, name_corpus_data_len) =
-    prepare_name_corpus_support_data(input.name_corpus, diagnostics);
-
-  let (signature_data, signature_data_len) =
-    prepare_signature_support_data(input.signature, diagnostics);
-
+fn parallel_support_data_into_prepared(
+  prepared: ParallelPreparedSupportData,
+) -> PreparedSupportData {
   let count = [
-    hotword_data_len,
-    trigger_data_len,
-    legal_form_data_len,
-    address_seed_data_len,
-    zone_data_len,
-    address_context_data_len,
-    coreference_data_len,
-    name_corpus_data_len,
-    signature_data_len,
+    prepared.hotwords.len,
+    prepared.triggers.len,
+    prepared.legal_forms.len,
+    prepared.address_seed.len,
+    prepared.zones.len,
+    prepared.address_context.len,
+    prepared.coreference.len,
+    prepared.names.len,
+    prepared.signature.len,
   ]
   .into_iter()
   .fold(0usize, usize::saturating_add);
 
-  Ok(PreparedSupportData {
-    hotwords: hotword_data,
-    triggers: trigger_data,
-    legal_forms: legal_form_data,
-    address_seed: address_seed_data,
-    zones: zone_data,
-    address_context: address_context_data,
-    coreference: coreference_data,
-    names: name_corpus_data,
-    signature: signature_data,
+  PreparedSupportData {
+    hotwords: prepared.hotwords.data,
+    triggers: prepared.triggers.data,
+    legal_forms: prepared.legal_forms.data,
+    address_seed: prepared.address_seed.data,
+    zones: prepared.zones.data,
+    address_context: prepared.address_context.data,
+    coreference: prepared.coreference.data,
+    names: prepared.names.data,
+    signature: prepared.signature.data,
     count,
+  }
+}
+
+struct ParallelPreparedSupportData {
+  hotwords: TimedSupportData<Option<PreparedHotwordData>>,
+  triggers: TimedSupportData<Option<PreparedTriggerData>>,
+  legal_forms: TimedSupportData<Option<PreparedLegalFormData>>,
+  address_seed: TimedSupportData<Option<PreparedAddressSeedData>>,
+  zones: TimedSupportData<Option<PreparedZoneData>>,
+  address_context: TimedSupportData<Option<PreparedAddressContextData>>,
+  coreference: TimedSupportData<Option<PreparedCoreferenceData>>,
+  names: TimedSupportData<Option<PreparedNames>>,
+  signature: TimedSupportData<Option<PreparedSignatureData>>,
+}
+
+fn prepare_timed_hotword_data(
+  data: Option<HotwordRuleData>,
+) -> Result<TimedSupportData<Option<PreparedHotwordData>>> {
+  let len = hotword_data_len(data.as_ref());
+  let start = Instant::now();
+  let data = prepare_hotword_data(data)?;
+  Ok(TimedSupportData {
+    data,
+    len,
+    elapsed_us: elapsed_us(start),
   })
 }
 
-fn prepare_name_corpus_support_data(
-  data: Option<NameCorpusData>,
-  diagnostics: &mut Option<&mut StaticRedactionDiagnostics>,
-) -> (Option<PreparedNames>, usize) {
-  let data_len = name_corpus_data_len(data.as_ref());
-  let data_start = Instant::now();
-  let prepared_data = data.map(PreparedNames::new);
-  record_prepare_stage_elapsed(
-    diagnostics,
-    DiagnosticStage::PrepareNameCorpusData,
-    data_len,
-    elapsed_us(data_start),
-  );
-  (prepared_data, data_len)
+fn prepare_timed_trigger_data(
+  data: Option<TriggerData>,
+) -> Result<TimedSupportData<Option<PreparedTriggerData>>> {
+  let len = trigger_data_len(data.as_ref());
+  let start = Instant::now();
+  let data = prepare_trigger_data(data)?;
+  Ok(TimedSupportData {
+    data,
+    len,
+    elapsed_us: elapsed_us(start),
+  })
 }
 
-fn prepare_signature_support_data(
+fn prepare_timed_legal_form_data(
+  data: Option<LegalFormData>,
+) -> TimedSupportData<Option<PreparedLegalFormData>> {
+  let len = legal_form_data_len(data.as_ref());
+  let start = Instant::now();
+  let data = data.map(PreparedLegalFormData::new);
+  TimedSupportData {
+    data,
+    len,
+    elapsed_us: elapsed_us(start),
+  }
+}
+
+fn prepare_timed_address_seed_data(
+  data: Option<AddressSeedData>,
+) -> Result<TimedSupportData<Option<PreparedAddressSeedData>>> {
+  let len = address_seed_data_len(data.as_ref());
+  let start = Instant::now();
+  let data = prepare_address_seed_data(data)?;
+  Ok(TimedSupportData {
+    data,
+    len,
+    elapsed_us: elapsed_us(start),
+  })
+}
+
+fn prepare_timed_zone_data(
+  data: Option<&ZoneData>,
+) -> Result<TimedSupportData<Option<PreparedZoneData>>> {
+  let len = zone_data_len(data);
+  let start = Instant::now();
+  let data = prepare_zone_data(data)?;
+  Ok(TimedSupportData {
+    data,
+    len,
+    elapsed_us: elapsed_us(start),
+  })
+}
+
+fn prepare_timed_address_context_data(
+  data: Option<AddressContextData>,
+) -> Result<TimedSupportData<Option<PreparedAddressContextData>>> {
+  let len = address_context_data_len(data.as_ref());
+  let start = Instant::now();
+  let data = prepare_address_context_data(data)?;
+  Ok(TimedSupportData {
+    data,
+    len,
+    elapsed_us: elapsed_us(start),
+  })
+}
+
+fn prepare_timed_coreference_data(
+  data: Option<CoreferenceData>,
+) -> Result<TimedSupportData<Option<PreparedCoreferenceData>>> {
+  let len = coreference_data_len(data.as_ref());
+  let start = Instant::now();
+  let data = prepare_coreference_data(data)?;
+  Ok(TimedSupportData {
+    data,
+    len,
+    elapsed_us: elapsed_us(start),
+  })
+}
+
+fn prepare_timed_name_corpus_data(
+  data: Option<NameCorpusData>,
+) -> TimedSupportData<Option<PreparedNames>> {
+  let len = name_corpus_data_len(data.as_ref());
+  let start = Instant::now();
+  let data = data.map(PreparedNames::new);
+  TimedSupportData {
+    data,
+    len,
+    elapsed_us: elapsed_us(start),
+  }
+}
+
+fn prepare_timed_signature_data(
   data: Option<SignatureData>,
-  diagnostics: &mut Option<&mut StaticRedactionDiagnostics>,
-) -> (Option<PreparedSignatureData>, usize) {
-  let data_len = signature_data_len(data.as_ref());
-  let data_start = Instant::now();
-  let prepared_data = data.map(PreparedSignatureData::new);
-  record_prepare_stage_elapsed(
-    diagnostics,
-    DiagnosticStage::PrepareSignatureData,
-    data_len,
-    elapsed_us(data_start),
-  );
-  (prepared_data, data_len)
+) -> TimedSupportData<Option<PreparedSignatureData>> {
+  let len = signature_data_len(data.as_ref());
+  let start = Instant::now();
+  let data = data.map(PreparedSignatureData::new);
+  TimedSupportData {
+    data,
+    len,
+    elapsed_us: elapsed_us(start),
+  }
+}
+
+fn join_support_data<T>(
+  handle: std::thread::ScopedJoinHandle<'_, Result<TimedSupportData<T>>>,
+  field: &'static str,
+) -> Result<TimedSupportData<T>> {
+  handle.join().map_err(|_| Error::InvalidStaticData {
+    field,
+    reason: "support data builder panicked".to_owned(),
+  })?
 }
 
 fn hotword_data_len(data: Option<&HotwordRuleData>) -> usize {
