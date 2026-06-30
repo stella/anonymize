@@ -635,7 +635,7 @@ impl NativePreparedSearch {
       };
       return Self::from_core_config(
         config,
-        Some(package.artifacts.as_ref()),
+        Some(package.artifacts.as_bytes()),
         &context,
         None,
       );

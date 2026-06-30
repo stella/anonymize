@@ -644,7 +644,67 @@ pub struct CorePreparedSearchPackage {
 #[derive(Clone, Debug, PartialEq)]
 pub struct CorePreparedSearchPackageView<'a> {
   pub config: PreparedSearchConfig,
-  pub artifacts: Cow<'a, [u8]>,
+  pub artifacts: CorePreparedSearchPackageArtifacts<'a>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CorePreparedSearchPackageArtifacts<'a> {
+  inner: CorePreparedSearchPackageArtifactsInner<'a>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+enum CorePreparedSearchPackageArtifactsInner<'a> {
+  Borrowed(&'a [u8]),
+  OwnedPayload {
+    payload: Vec<u8>,
+    artifacts_start: usize,
+  },
+}
+
+impl<'a> CorePreparedSearchPackageArtifacts<'a> {
+  const fn borrowed(bytes: &'a [u8]) -> Self {
+    Self {
+      inner: CorePreparedSearchPackageArtifactsInner::Borrowed(bytes),
+    }
+  }
+
+  fn owned_payload(payload: Vec<u8>, artifacts_start: usize) -> Result<Self> {
+    if payload.get(artifacts_start..).is_none() {
+      return Err(invalid_prepared_search_package("missing artifacts"));
+    }
+    Ok(Self {
+      inner: CorePreparedSearchPackageArtifactsInner::OwnedPayload {
+        payload,
+        artifacts_start,
+      },
+    })
+  }
+
+  #[must_use]
+  pub fn as_bytes(&self) -> &[u8] {
+    match &self.inner {
+      CorePreparedSearchPackageArtifactsInner::Borrowed(bytes) => bytes,
+      CorePreparedSearchPackageArtifactsInner::OwnedPayload {
+        payload,
+        artifacts_start,
+      } => payload.get(*artifacts_start..).unwrap_or_default(),
+    }
+  }
+
+  #[must_use]
+  pub fn into_owned(self) -> Vec<u8> {
+    match self.inner {
+      CorePreparedSearchPackageArtifactsInner::Borrowed(bytes) => {
+        bytes.to_vec()
+      }
+      CorePreparedSearchPackageArtifactsInner::OwnedPayload {
+        payload,
+        artifacts_start,
+      } => payload
+        .get(artifacts_start..)
+        .map_or_else(Vec::new, <[u8]>::to_vec),
+    }
+  }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -1335,17 +1395,14 @@ fn core_package_view_from_payload<'a>(
   timings.config_decode = Some(config_decode);
 
   let artifacts = match payload {
-    Cow::Borrowed(bytes) => Cow::Borrowed(
+    Cow::Borrowed(bytes) => CorePreparedSearchPackageArtifacts::borrowed(
       bytes
         .get(artifacts_start..)
         .ok_or_else(|| invalid_prepared_search_package("missing artifacts"))?,
     ),
-    Cow::Owned(bytes) => Cow::Owned(
-      bytes
-        .get(artifacts_start..)
-        .ok_or_else(|| invalid_prepared_search_package("missing artifacts"))?
-        .to_vec(),
-    ),
+    Cow::Owned(bytes) => {
+      CorePreparedSearchPackageArtifacts::owned_payload(bytes, artifacts_start)?
+    }
   };
 
   Ok(CorePreparedSearchPackageView { config, artifacts })
@@ -2957,7 +3014,8 @@ mod tests {
     BindingDenyListMatchData, BindingOperatorConfig,
     BindingPreparedArtifactPolicy, BindingPreparedSearchConfig,
     BindingRegexArtifactPolicy, BindingSearchOptions, BindingSearchPattern,
-    ContractError, MAX_PREPARED_SEARCH_PACKAGE_PAYLOAD_BYTES,
+    ContractError, CorePreparedSearchPackageArtifactsInner,
+    MAX_PREPARED_SEARCH_PACKAGE_PAYLOAD_BYTES,
     PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER,
     PREPARED_SEARCH_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION,
     PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION,
@@ -3349,10 +3407,14 @@ mod tests {
     let bytes =
       prepared_search_core_package_to_compressed_bytes(&config, artifacts)
         .unwrap();
-    let (_package, timings) =
+    let (package, timings) =
       prepared_search_core_package_view_from_bytes_with_timings(&bytes)
         .unwrap();
 
+    assert!(matches!(
+      &package.artifacts.inner,
+      CorePreparedSearchPackageArtifactsInner::OwnedPayload { .. }
+    ));
     assert!(
       timings.verify.is_some(),
       "compressed package digest timing should be reported"
@@ -3446,7 +3508,7 @@ mod tests {
       prepared_search_core_package_view_trusted_from_bytes_with_timings(&bytes)
         .unwrap();
     assert_eq!(trusted_view.config.literal_patterns, Vec::new());
-    assert_eq!(trusted_view.artifacts.as_ref(), artifact_bytes.as_slice());
+    assert_eq!(trusted_view.artifacts.as_bytes(), artifact_bytes.as_slice());
     assert!(
       trusted_view_timings.verify.is_none(),
       "trusted view decode should not spend time verifying the package digest"

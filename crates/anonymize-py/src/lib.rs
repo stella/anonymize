@@ -126,7 +126,7 @@ impl PyPreparedSearch {
       let package_decode_elapsed = elapsed_us(package_decode_start);
       return Self::from_core_package(
         package.config,
-        package.artifacts.as_ref(),
+        package.artifacts.as_bytes(),
         package_decode_timings,
         package_decode_elapsed,
         package_bytes.len(),
@@ -179,7 +179,7 @@ impl PyPreparedSearch {
       let package_decode_elapsed = elapsed_us(package_decode_start);
       return Self::from_core_package(
         package.config,
-        package.artifacts.as_ref(),
+        package.artifacts.as_bytes(),
         package_decode_timings,
         package_decode_elapsed,
         package_bytes.len(),
