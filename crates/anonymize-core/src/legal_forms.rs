@@ -338,25 +338,40 @@ fn starts_with_list_separator(text: &str) -> bool {
     .is_some_and(|ch| matches!(ch, ',' | ';'))
 }
 
-fn normalize_suffix_token(text: &str) -> String {
-  text
+fn normalize_suffix_token(text: &str) -> Cow<'_, str> {
+  if !text
     .chars()
-    .filter(|ch| {
-      !matches!(ch, '.' | ',' | ' ' | '\t' | '\u{00a0}' | '\u{202f}')
-    })
-    .collect::<String>()
-    .to_lowercase()
+    .any(|ch| is_suffix_ignored_char(ch) || ch.is_uppercase())
+  {
+    return Cow::Borrowed(text);
+  }
+
+  let mut normalized = String::with_capacity(text.len());
+  for ch in text.chars() {
+    if is_suffix_ignored_char(ch) {
+      continue;
+    }
+    normalized.extend(ch.to_lowercase());
+  }
+  Cow::Owned(normalized)
+}
+
+const fn is_suffix_ignored_char(ch: char) -> bool {
+  matches!(ch, '.' | ',' | ' ' | '\t' | '\u{00a0}' | '\u{202f}')
 }
 
 fn is_legal_form_suffix_word(word: &str, data: &PreparedLegalFormData) -> bool {
   let normalized = normalize_suffix_token(word);
-  !normalized.is_empty() && data.normalized_suffix_words.contains(&normalized)
+  !normalized.is_empty()
+    && data.normalized_suffix_words.contains(normalized.as_ref())
 }
 
 fn is_known_boundary_suffix(word: &str, data: &PreparedLegalFormData) -> bool {
   let normalized = normalize_suffix_token(word);
   !normalized.is_empty()
-    && data.normalized_boundary_suffixes.contains(&normalized)
+    && data
+      .normalized_boundary_suffixes
+      .contains(normalized.as_ref())
 }
 
 fn is_in_name_legal_form_word(
@@ -364,7 +379,8 @@ fn is_in_name_legal_form_word(
   data: &PreparedLegalFormData,
 ) -> bool {
   let normalized = normalize_suffix_token(word);
-  !normalized.is_empty() && data.normalized_in_name_words.contains(&normalized)
+  !normalized.is_empty()
+    && data.normalized_in_name_words.contains(normalized.as_ref())
 }
 
 fn count_upper_before(text: &str, pos: usize) -> usize {
