@@ -1266,7 +1266,7 @@ export const buildUnifiedSearch = async (
 type BuildNativeStaticConfigArgs = {
   regexPatterns: readonly PatternEntry[];
   regexMeta: readonly RegexMeta[];
-  customRegexes: readonly { pattern: string }[];
+  customRegexes: readonly CustomRegexPattern[];
   customRegexMeta: readonly RegexMeta[];
   denyListData: DenyListData | null;
   falsePositiveFilters: DenyListFilterData;
@@ -1357,6 +1357,9 @@ const buildNativeStaticConfig = ({
   const nativeCustomRegexPatterns = customRegexes.map((entry) => ({
     kind: "regex" as const,
     pattern: entry.pattern,
+    ...(entry.preparedArtifactPolicy === undefined
+      ? {}
+      : { prepared_artifact_policy: entry.preparedArtifactPolicy }),
   }));
   const nativeCustomRegexMeta = customRegexMeta.map(toNativeRegexMeta);
   const legalFormNativePatterns = legalFormPatterns.map(
@@ -1440,12 +1443,12 @@ const buildNativeStaticConfig = ({
       literal_case_insensitive: true,
       literal_whole_words: false,
       regex_whole_words: false,
-      regex_artifact_policy: "include",
+      regex_artifact_policy: "omit",
     },
     custom_regex_options: {
       regex_whole_words: false,
       regex_overlap_all: true,
-      regex_artifact_policy: "include",
+      regex_artifact_policy: "omit",
     },
     literal_options: {
       literal_case_insensitive: true,

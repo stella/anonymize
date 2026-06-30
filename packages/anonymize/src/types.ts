@@ -293,6 +293,7 @@ export type CustomRegexPattern = {
   pattern: string;
   label: string;
   score?: number;
+  preparedArtifactPolicy?: "include" | "omit";
 };
 
 /**

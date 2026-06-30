@@ -197,11 +197,11 @@ describe("pipeline config semantics", () => {
     expect(search.nativeStaticConfig.threshold).toBe(0.93);
     expect(search.nativeStaticConfig.confidence_boost).toBe(true);
     expect(search.nativeStaticConfig.regex_options.regex_artifact_policy).toBe(
-      "include",
+      "omit",
     );
     expect(
       search.nativeStaticConfig.custom_regex_options.regex_artifact_policy,
-    ).toBe("include");
+    ).toBe("omit");
   });
 
   test("native config carries false-positive filters without deny-list matching", async () => {
@@ -220,6 +220,36 @@ describe("pipeline config semantics", () => {
     expect(
       search.nativeStaticConfig.false_positive_filters?.document_heading_words,
     ).toContain("schedule");
+  });
+
+  test("native config lets custom regexes opt into prepared artifacts", async () => {
+    const search = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        enableRegex: true,
+        customRegexes: [
+          {
+            pattern: "INV-[0-9]+",
+            label: "registration number",
+            score: 1,
+            preparedArtifactPolicy: "include",
+          },
+        ],
+        labels: ["registration number"],
+      },
+      [],
+      createPipelineContext(),
+    );
+
+    expect(
+      search.nativeStaticConfig.custom_regex_options.regex_artifact_policy,
+    ).toBe("omit");
+    expect(search.nativeStaticConfig.custom_regex_patterns).toContainEqual(
+      expect.objectContaining({
+        pattern: "INV-[0-9]+",
+        prepared_artifact_policy: "include",
+      }),
+    );
   });
 
   test("native config carries hotword rule metadata", async () => {
