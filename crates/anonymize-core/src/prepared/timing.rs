@@ -10,6 +10,15 @@ pub(super) struct TimedEntities {
   pub(super) elapsed_us: u64,
 }
 
+impl TimedEntities {
+  pub(super) const fn empty() -> Self {
+    Self {
+      entities: Vec::new(),
+      elapsed_us: 0,
+    }
+  }
+}
+
 pub(super) struct TimedMatches {
   pub(super) matches: Vec<SearchMatch>,
   pub(super) elapsed_us: u64,
@@ -47,6 +56,22 @@ pub(super) struct StaticEntityPasses {
 }
 
 impl StaticEntityPasses {
+  pub(super) const fn empty() -> Self {
+    Self {
+      regex: TimedEntities::empty(),
+      custom_regex: TimedEntities::empty(),
+      deny_list: TimedEntities::empty(),
+      gazetteer: TimedEntities::empty(),
+      country: TimedEntities::empty(),
+      anchored: TimedEntities::empty(),
+      trigger: TimedEntities::empty(),
+      signature: TimedEntities::empty(),
+      legal_form: TimedEntities::empty(),
+      address_seed: TimedEntities::empty(),
+      name_corpus: TimedEntities::empty(),
+    }
+  }
+
   pub(super) const fn entity_count(&self) -> usize {
     self
       .regex
@@ -80,6 +105,26 @@ impl StaticEntityPasses {
       StaticDetectorId::LegalForm => &self.legal_form,
       StaticDetectorId::NameCorpus => &self.name_corpus,
       StaticDetectorId::AddressSeed => &self.address_seed,
+    }
+  }
+
+  pub(super) fn set_detector_entities(
+    &mut self,
+    detector: StaticDetectorId,
+    entities: TimedEntities,
+  ) {
+    match detector {
+      StaticDetectorId::Regex => self.regex = entities,
+      StaticDetectorId::CustomRegex => self.custom_regex = entities,
+      StaticDetectorId::DenyList => self.deny_list = entities,
+      StaticDetectorId::Gazetteer => self.gazetteer = entities,
+      StaticDetectorId::Country => self.country = entities,
+      StaticDetectorId::Anchored => self.anchored = entities,
+      StaticDetectorId::Trigger => self.trigger = entities,
+      StaticDetectorId::Signature => self.signature = entities,
+      StaticDetectorId::LegalForm => self.legal_form = entities,
+      StaticDetectorId::NameCorpus => self.name_corpus = entities,
+      StaticDetectorId::AddressSeed => self.address_seed = entities,
     }
   }
 }
