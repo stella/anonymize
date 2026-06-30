@@ -36,6 +36,9 @@ const WARM_ITERATIONS = positiveIntegerEnv(
   "ANONYMIZE_NATIVE_DEFAULT_SDK_PERF_WARM_ITERATIONS",
   1,
 );
+const RESULT_MODE = resultModeFromEnv(
+  process.env.ANONYMIZE_NATIVE_DEFAULT_SDK_PERF_RESULT_MODE,
+);
 
 if (WORKER) {
   await runWorker();
@@ -117,6 +120,7 @@ function runParent() {
     console.log(
       JSON.stringify({
         event: "native-default-sdk-perf",
+        resultMode: RESULT_MODE,
         scenarios,
       }),
     );
@@ -241,6 +245,7 @@ function runPythonWorker({ language, fixtures, packageBytes }) {
     language: language.length === 0 ? null : language,
     preload: PRELOAD,
     package_bytes: packageBytes,
+    result_mode: RESULT_MODE,
     warm_iterations: WARM_ITERATIONS,
     fixtures,
   };
@@ -273,18 +278,38 @@ function runFixtures(pipeline, fixtures) {
   const results = [];
   for (const fixture of fixtures) {
     const fixtureStart = Bun.nanoseconds();
-    const result = pipeline.redactText(fixture.text);
+    const result = runFixture(pipeline, fixture.text);
     results.push({
       fixture: fixture.fixture,
       ms: elapsedMs(fixtureStart),
-      entityCount: result.redaction.entityCount,
-      redactedTextLength: result.redaction.redactedText.length,
-      signature: hashSignature(canonicalNativeResult(result)),
+      entityCount: result.entityCount,
+      redactedTextLength: result.redactedTextLength,
+      signature: hashSignature(result.canonical),
     });
   }
   return {
     ms: elapsedMs(started),
     fixtures: results,
+  };
+}
+
+function runFixture(pipeline, text) {
+  if (RESULT_MODE === "json") {
+    const canonical = canonicalJsonResult(
+      JSON.parse(pipeline.redactTextJson(text)),
+    );
+    return {
+      canonical,
+      entityCount: canonical.redaction.entity_count,
+      redactedTextLength: canonical.redaction.redacted_text.length,
+    };
+  }
+  const result = pipeline.redactText(text);
+  const canonical = canonicalNativeResult(result);
+  return {
+    canonical,
+    entityCount: result.redaction.entityCount,
+    redactedTextLength: result.redaction.redactedText.length,
   };
 }
 
@@ -336,6 +361,26 @@ function canonicalNativeResult(result) {
         ([placeholder, operator]) => ({ placeholder, operator }),
       ),
       entity_count: result.redaction.entityCount,
+    },
+  };
+}
+
+function canonicalJsonResult(result) {
+  return {
+    resolved_entities: result.resolved_entities.map((entity) => ({
+      start: entity.start,
+      end: entity.end,
+      label: entity.label,
+      text: entity.text,
+      score: entity.score.toFixed(6),
+      source: entity.source,
+      source_detail: entity.source_detail ?? null,
+    })),
+    redaction: {
+      redacted_text: result.redaction.redacted_text,
+      redaction_map: result.redaction.redaction_map,
+      operator_map: result.redaction.operator_map,
+      entity_count: result.redaction.entity_count,
     },
   };
 }
@@ -665,6 +710,19 @@ function scenarioLanguages() {
     .filter((entry, index, entries) => entries.indexOf(entry) === index);
 }
 
+function resultModeFromEnv(value) {
+  const normalized = (value ?? "structured").trim().toLowerCase();
+  switch (normalized) {
+    case "json":
+    case "structured":
+      return normalized;
+    default:
+      throw new Error(
+        "ANONYMIZE_NATIVE_DEFAULT_SDK_PERF_RESULT_MODE must be json or structured",
+      );
+  }
+}
+
 function normalizeLanguage(language) {
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(language)) {
     throw new Error(`Invalid default SDK benchmark language: ${language}`);
@@ -704,22 +762,37 @@ sys.path.insert(0, os.environ["STELLA_ANONYMIZE_PYTHON_SDK_ROOT"])
 
 import stella_anonymize as anonymize
 
-def run_fixtures(pipeline, fixtures):
+def run_fixtures(pipeline, fixtures, result_mode):
     started = time.perf_counter_ns()
     results = []
     for fixture in fixtures:
         fixture_start = time.perf_counter_ns()
-        result = pipeline.redact_text(fixture["text"])
+        result = run_fixture(pipeline, fixture["text"], result_mode)
         results.append(
             {
                 "fixture": fixture["fixture"],
                 "ms": elapsed_ms(fixture_start),
-                "entityCount": result.redaction.entity_count,
-                "redactedTextLength": len(result.redaction.redacted_text),
-                "signature": hash_signature(canonical_result(result)),
+                "entityCount": result["entityCount"],
+                "redactedTextLength": result["redactedTextLength"],
+                "signature": hash_signature(result["canonical"]),
             }
         )
     return {"ms": elapsed_ms(started), "fixtures": results}
+
+def run_fixture(pipeline, text, result_mode):
+    if result_mode == "json":
+        canonical = canonical_json_result(json.loads(pipeline.redact_text_json(text)))
+        return {
+            "canonical": canonical,
+            "entityCount": canonical["redaction"]["entity_count"],
+            "redactedTextLength": len(canonical["redaction"]["redacted_text"]),
+        }
+    result = pipeline.redact_text(text)
+    return {
+        "canonical": canonical_result(result),
+        "entityCount": result.redaction.entity_count,
+        "redactedTextLength": len(result.redaction.redacted_text),
+    }
 
 def public_fixture_timing(fixture):
     return {
@@ -819,6 +892,28 @@ def canonical_result(result):
         },
     }
 
+def canonical_json_result(result):
+    return {
+        "resolved_entities": [
+            {
+                "start": entity["start"],
+                "end": entity["end"],
+                "label": entity["label"],
+                "text": entity["text"],
+                "score": format(float(entity["score"]), ".6f"),
+                "source": entity["source"],
+                "source_detail": entity.get("source_detail"),
+            }
+            for entity in result["resolved_entities"]
+        ],
+        "redaction": {
+            "redacted_text": result["redaction"]["redacted_text"],
+            "redaction_map": result["redaction"]["redaction_map"],
+            "operator_map": result["redaction"]["operator_map"],
+            "entity_count": result["redaction"]["entity_count"],
+        },
+    }
+
 def hash_signature(value):
     return hashlib.sha256(
         json.dumps(
@@ -860,6 +955,7 @@ def round_ms(value):
 def main():
     payload = json.loads(os.environ["STELLA_ANONYMIZE_DEFAULT_SDK_PERF_PAYLOAD"])
     language = payload["language"]
+    result_mode = payload["result_mode"]
     pipeline_options = {} if language is None else {"language": language}
     load_start = time.perf_counter_ns()
     pipeline = anonymize.get_default_native_pipeline(
@@ -877,9 +973,9 @@ def main():
         warmup_ms = 0
     warmup_top_stages = top_diagnostic_stages(warmup_diagnostics)
     prepare_ms = round_ms(load_ms + warmup_ms)
-    cold_run = run_fixtures(pipeline, payload["fixtures"])
+    cold_run = run_fixtures(pipeline, payload["fixtures"], result_mode)
     warm_runs = [
-        run_fixtures(pipeline, payload["fixtures"])
+        run_fixtures(pipeline, payload["fixtures"], result_mode)
         for _ in range(payload["warm_iterations"])
     ]
     warm_avg_ms = (
