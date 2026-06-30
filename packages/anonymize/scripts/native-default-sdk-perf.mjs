@@ -42,6 +42,9 @@ const RESULT_MODE = resultModeFromEnv(
 const REPEATS = repeatCountFromEnv(
   process.env.ANONYMIZE_NATIVE_DEFAULT_SDK_PERF_REPEATS,
 );
+const OUTPUT_MODE = outputModeFromEnv(
+  process.env.ANONYMIZE_NATIVE_DEFAULT_SDK_PERF_OUTPUT,
+);
 
 if (WORKER) {
   await runWorker();
@@ -122,13 +125,17 @@ function runParent() {
       };
     });
 
+    const result = {
+      event: "native-default-sdk-perf",
+      resultMode: RESULT_MODE,
+      repeats: REPEATS,
+      scenarios,
+    };
+
     console.log(
-      JSON.stringify({
-        event: "native-default-sdk-perf",
-        resultMode: RESULT_MODE,
-        repeats: REPEATS,
-        scenarios,
-      }),
+      JSON.stringify(
+        OUTPUT_MODE === "summary" ? summarizePerfResult(result) : result,
+      ),
     );
   } finally {
     pythonSdk.cleanup();
@@ -559,6 +566,45 @@ function summarizeAdapterScenario(adapter, cold, preloaded) {
   };
 }
 
+function summarizePerfResult(result) {
+  return {
+    event: "native-default-sdk-perf-summary",
+    resultMode: result.resultMode,
+    repeats: result.repeats,
+    scenarios: result.scenarios.map(summarizePerfScenario),
+  };
+}
+
+function summarizePerfScenario(scenario) {
+  return {
+    name: scenario.name,
+    language: scenario.language,
+    packageBytes: scenario.packageBytes,
+    packageMb: roundMs(scenario.packageBytes / (1024 * 1024)),
+    fixtureCount: scenario.fixtureCount,
+    adapters: scenario.adapters.map(summarizePerfAdapter),
+  };
+}
+
+function summarizePerfAdapter(adapter) {
+  return {
+    adapter: adapter.adapter,
+    firstTouchMs: adapter.firstTouchMs,
+    firstPrepareMs: adapter.firstPrepareMs,
+    firstRunMs: adapter.firstRunMs,
+    warmClickMs: adapter.warmClickMs,
+    setupBeforeClickMs: adapter.setupBeforeClickMs,
+    preloadedClickMs: adapter.preloadedClickMs,
+    preloadedWarmClickMs: adapter.preloadedWarmClickMs,
+    fixtureTimings: adapter.fixtureTimings,
+    preloadedFixtureTimings: adapter.preloadedFixtureTimings,
+    prepareTopStages: adapter.prepareTopStages.slice(0, 6),
+    preloadedPrepareTopStages: adapter.preloadedPrepareTopStages.slice(0, 6),
+    preloadedWarmupTopStages: adapter.preloadedWarmupTopStages.slice(0, 6),
+    runTopFixtures: adapter.runTopFixtures.slice(0, 5),
+  };
+}
+
 function assertFixtureSignatureParity({
   scenarioName,
   mode,
@@ -878,6 +924,19 @@ function resultModeFromEnv(value) {
     default:
       throw new Error(
         "ANONYMIZE_NATIVE_DEFAULT_SDK_PERF_RESULT_MODE must be json or structured",
+      );
+  }
+}
+
+function outputModeFromEnv(value) {
+  const normalized = (value ?? "full").trim().toLowerCase();
+  switch (normalized) {
+    case "full":
+    case "summary":
+      return normalized;
+    default:
+      throw new Error(
+        "ANONYMIZE_NATIVE_DEFAULT_SDK_PERF_OUTPUT must be full or summary",
       );
   }
 }
