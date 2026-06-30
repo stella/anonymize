@@ -7,13 +7,8 @@ use crate::dates::{DateData, PreparedDateData};
 use crate::diagnostics::{
   DiagnosticEvent, DiagnosticStage, StaticRedactionDiagnostics,
 };
-use crate::false_positives::filter_entity_false_positives;
-use crate::hotwords::{
-  HotwordRuleData, PreparedHotwordData, apply_hotword_rules,
-};
-use crate::legal_forms::{
-  LegalFormData, PreparedLegalFormData, process_legal_form_matches,
-};
+use crate::hotwords::{HotwordRuleData, PreparedHotwordData};
+use crate::legal_forms::{LegalFormData, PreparedLegalFormData};
 use crate::money::{MonetaryData, PreparedMonetaryData};
 use crate::name_corpus::{
   NameCorpusData, PreparedNameCorpusData as PreparedNames,
@@ -23,34 +18,24 @@ use crate::normalize::{
 };
 use crate::processors::{
   CountryMatchData, DenyListFilterData, DenyListMatchData, GazetteerMatchData,
-  PatternSlice, RegexMatchMeta, process_country_matches,
-  process_deny_list_matches, process_gazetteer_matches, process_regex_matches,
-};
-use crate::redact::redact_text;
-use crate::resolution::{
-  PipelineEntity, enforce_boundary_consistency, merge_and_dedup,
-  sanitize_entities_with_source,
+  PatternSlice, RegexMatchMeta,
 };
 use crate::search::{
   LiteralSearchOptions, SearchIndex, SearchIndexArtifactsView,
   SearchIndexBuildStats, SearchOptions, SearchPattern,
 };
-use crate::signatures::{
-  PreparedSignatureData, SignatureData, detect_signatures,
-};
-use crate::triggers::{
-  PreparedTriggerData, TriggerData, process_trigger_matches,
-};
-use crate::types::{
-  Entity, EntityKind, Error, OperatorConfig, RedactionResult, Result,
-  SearchMatch,
-};
+use crate::signatures::{PreparedSignatureData, SignatureData};
+use crate::triggers::{PreparedTriggerData, TriggerData};
+use crate::types::{Error, OperatorConfig, Result, SearchMatch};
 use crate::zones::{PreparedZoneData, ZoneData};
 
 mod artifacts;
 mod config_validation;
+mod detection_phase;
 mod diagnostic_stream;
 mod entity_filter;
+mod redaction_phase;
+mod resolution_phase;
 mod results;
 mod timing;
 
@@ -59,18 +44,11 @@ use config_validation::{
   validate_supported_config, validate_supported_config_for_artifacts,
 };
 use diagnostic_stream::DiagnosticEventStream;
-use entity_filter::{
-  clear_internal_source_details, filter_entities_for_config,
-  filter_entities_for_labels, filter_entities_for_redaction, label_is_allowed,
-};
 pub use results::{
   PreparedSearchBuildResult, PreparedSearchMatches, StaticDetectionResult,
   StaticRedactionDiagnosticResult, StaticRedactionResult,
 };
-use timing::{
-  StaticEntityPasses, TimedEntities, TimedMatches, TimedSearchBranches,
-  elapsed_us,
-};
+use timing::{TimedMatches, TimedSearchBranches, elapsed_us};
 
 const PARALLEL_SEARCH_MIN_BYTES: usize = 32 * 1024;
 
@@ -729,302 +707,6 @@ impl PreparedSearch {
     Ok(matches)
   }
 
-  pub fn detect_static_entities(
-    &self,
-    full_text: &str,
-  ) -> Result<StaticDetectionResult> {
-    self.detect_static_entities_inner(full_text, None)
-  }
-
-  fn detect_static_entities_inner(
-    &self,
-    full_text: &str,
-    mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
-  ) -> Result<StaticDetectionResult> {
-    let detect_start = Instant::now();
-    let matches =
-      self.find_matches_inner(full_text, diagnostics.as_deref_mut())?;
-    let passes = self.process_static_entity_passes(
-      &matches,
-      full_text,
-      diagnostics.as_deref_mut(),
-    )?;
-
-    if let Some(diagnostics) = &mut diagnostics {
-      diagnostics.record_stage(
-        DiagnosticStage::DetectTotal,
-        Some(passes.entity_count()),
-        Some(elapsed_us(detect_start)),
-        Some(full_text.len()),
-      );
-      record_static_entity_diagnostics(diagnostics, full_text, &passes);
-    }
-
-    Ok(StaticDetectionResult {
-      matches,
-      regex_entities: passes.regex.entities,
-      custom_regex_entities: passes.custom_regex.entities,
-      deny_list_entities: passes.deny_list.entities,
-      gazetteer_entities: passes.gazetteer.entities,
-      country_entities: passes.country.entities,
-      anchored_entities: passes.anchored.entities,
-      trigger_entities: passes.trigger.entities,
-      signature_entities: passes.signature.entities,
-      legal_form_entities: passes.legal_form.entities,
-      address_seed_entities: passes.address_seed.entities,
-      name_corpus_entities: passes.name_corpus.entities,
-    })
-  }
-
-  fn process_static_entity_passes(
-    &self,
-    matches: &PreparedSearchMatches,
-    full_text: &str,
-    diagnostics: Option<&mut StaticRedactionDiagnostics>,
-  ) -> Result<StaticEntityPasses> {
-    let regex_start = Instant::now();
-    let regex = TimedEntities {
-      entities: process_regex_matches(
-        &matches.regex,
-        self.slices.regex,
-        full_text,
-        &self.regex_meta,
-      )?,
-      elapsed_us: elapsed_us(regex_start),
-    };
-
-    let custom_regex_start = Instant::now();
-    let custom_regex = TimedEntities {
-      entities: process_regex_matches(
-        &matches.custom_regex,
-        self.slices.custom_regex,
-        full_text,
-        &self.custom_regex_meta,
-      )?,
-      elapsed_us: elapsed_us(custom_regex_start),
-    };
-
-    let deny_list_start = Instant::now();
-    let deny_list = TimedEntities {
-      entities: if let Some(data) = &self.deny_list_data {
-        process_deny_list_matches(
-          &matches.literal,
-          self.slices.deny_list,
-          full_text,
-          data,
-        )?
-      } else {
-        Vec::new()
-      },
-      elapsed_us: elapsed_us(deny_list_start),
-    };
-
-    let gazetteer_start = Instant::now();
-    let gazetteer = TimedEntities {
-      entities: if let Some(data) = &self.gazetteer_data {
-        process_gazetteer_matches(
-          &matches.literal,
-          self.slices.gazetteer,
-          full_text,
-          data,
-        )?
-      } else {
-        Vec::new()
-      },
-      elapsed_us: elapsed_us(gazetteer_start),
-    };
-
-    let country = self.process_country_entities(matches, full_text)?;
-
-    let anchored = self.process_anchored_entities(full_text)?;
-
-    let trigger =
-      self.process_trigger_entities(matches, full_text, diagnostics)?;
-
-    let signature = self.process_signature_entities(full_text);
-
-    let legal_form = self.process_legal_form_entities(matches, full_text)?;
-
-    let name_corpus =
-      self.process_name_corpus_entities(full_text, &deny_list.entities)?;
-
-    let address_seed = self.process_address_seed_entities(
-      matches,
-      full_text,
-      &[
-        &regex.entities,
-        &custom_regex.entities,
-        &anchored.entities,
-        &trigger.entities,
-        &signature.entities,
-        &legal_form.entities,
-        &deny_list.entities,
-        &gazetteer.entities,
-        &name_corpus.entities,
-      ],
-    )?;
-
-    Ok(StaticEntityPasses {
-      regex,
-      custom_regex,
-      deny_list,
-      gazetteer,
-      country,
-      anchored,
-      trigger,
-      signature,
-      legal_form,
-      address_seed,
-      name_corpus,
-    })
-  }
-
-  fn process_anchored_entities(
-    &self,
-    full_text: &str,
-  ) -> Result<TimedEntities> {
-    let anchored_start = Instant::now();
-    let mut entities = Vec::new();
-    if let Some(data) = &self.date_data {
-      entities.extend(data.process(full_text)?);
-    }
-    if self.monetary_extraction
-      && let Some(data) = &self.monetary_data
-    {
-      entities.extend(data.process(full_text)?);
-    }
-
-    Ok(TimedEntities {
-      entities,
-      elapsed_us: elapsed_us(anchored_start),
-    })
-  }
-
-  fn process_trigger_entities(
-    &self,
-    matches: &PreparedSearchMatches,
-    full_text: &str,
-    diagnostics: Option<&mut StaticRedactionDiagnostics>,
-  ) -> Result<TimedEntities> {
-    let start = Instant::now();
-    let entities = if let Some(data) = &self.trigger_data {
-      process_trigger_matches(
-        &matches.regex,
-        self.slices.triggers,
-        full_text,
-        data,
-        diagnostics,
-      )?
-    } else {
-      Vec::new()
-    };
-
-    Ok(TimedEntities {
-      entities,
-      elapsed_us: elapsed_us(start),
-    })
-  }
-
-  fn process_legal_form_entities(
-    &self,
-    matches: &PreparedSearchMatches,
-    full_text: &str,
-  ) -> Result<TimedEntities> {
-    let start = Instant::now();
-    let entities = if let Some(data) = &self.legal_form_data {
-      process_legal_form_matches(
-        &matches.regex,
-        self.slices.legal_forms,
-        full_text,
-        data,
-      )?
-    } else {
-      Vec::new()
-    };
-
-    Ok(TimedEntities {
-      entities,
-      elapsed_us: elapsed_us(start),
-    })
-  }
-
-  fn process_address_seed_entities(
-    &self,
-    matches: &PreparedSearchMatches,
-    full_text: &str,
-    context_layers: &[&[PipelineEntity]],
-  ) -> Result<TimedEntities> {
-    let start = Instant::now();
-    let entities = if let Some(data) = &self.address_seed_data {
-      let existing_entities = address_seed_context(context_layers);
-      data.process(
-        &matches.literal,
-        self.slices.street_types,
-        full_text,
-        &existing_entities,
-      )?
-    } else {
-      Vec::new()
-    };
-
-    Ok(TimedEntities {
-      entities,
-      elapsed_us: elapsed_us(start),
-    })
-  }
-
-  fn process_country_entities(
-    &self,
-    matches: &PreparedSearchMatches,
-    full_text: &str,
-  ) -> Result<TimedEntities> {
-    let country_start = Instant::now();
-    Ok(TimedEntities {
-      entities: if let Some(data) = &self.country_data {
-        process_country_matches(
-          &matches.literal,
-          self.slices.countries,
-          full_text,
-          data,
-        )?
-      } else {
-        Vec::new()
-      },
-      elapsed_us: elapsed_us(country_start),
-    })
-  }
-
-  fn process_name_corpus_entities(
-    &self,
-    full_text: &str,
-    deny_list_entities: &[PipelineEntity],
-  ) -> Result<TimedEntities> {
-    let start = Instant::now();
-    let entities = if let Some(data) = &self.name_corpus_data {
-      data.detect_configured(full_text, deny_list_entities)?
-    } else {
-      Vec::new()
-    };
-
-    Ok(TimedEntities {
-      entities,
-      elapsed_us: elapsed_us(start),
-    })
-  }
-
-  fn process_signature_entities(&self, full_text: &str) -> TimedEntities {
-    let start = Instant::now();
-    let entities = self
-      .signature_data
-      .as_ref()
-      .map_or_else(Vec::new, |data| detect_signatures(full_text, data));
-
-    TimedEntities {
-      entities,
-      elapsed_us: elapsed_us(start),
-    }
-  }
-
   pub fn redact_static_entities(
     &self,
     full_text: &str,
@@ -1102,268 +784,6 @@ impl PreparedSearch {
       diagnostics,
     })
   }
-
-  fn redact_static_entities_inner(
-    &self,
-    full_text: &str,
-    operators: &OperatorConfig,
-    mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
-    event_stream: &mut DiagnosticEventStream<'_>,
-  ) -> Result<StaticRedactionResult> {
-    let redact_start = Instant::now();
-    let detections = self
-      .detect_static_entities_inner(full_text, diagnostics.as_deref_mut())?;
-    observe_diagnostic_stream(&diagnostics, event_stream)?;
-    let resolved_entities = self.resolve_static_entities(
-      &detections,
-      full_text,
-      &mut diagnostics,
-      event_stream,
-    )?;
-    let redaction_entities = resolved_entities
-      .iter()
-      .map(to_redaction_entity)
-      .collect::<Vec<_>>();
-    let redaction_start = Instant::now();
-    let redaction = redact_text(full_text, &redaction_entities, operators)?;
-    record_redaction_stages(
-      &mut diagnostics,
-      &redaction,
-      full_text.len(),
-      redaction_start,
-      redact_start,
-    );
-    observe_diagnostic_stream(&diagnostics, event_stream)?;
-
-    Ok(StaticRedactionResult {
-      detections,
-      resolved_entities,
-      redaction,
-    })
-  }
-
-  fn resolve_static_entities(
-    &self,
-    detections: &StaticDetectionResult,
-    full_text: &str,
-    diagnostics: &mut Option<&mut StaticRedactionDiagnostics>,
-    event_stream: &mut DiagnosticEventStream<'_>,
-  ) -> Result<Vec<PipelineEntity>> {
-    let pre_threshold_entities = self.prepare_pre_threshold_entities(
-      detections,
-      full_text,
-      diagnostics.as_deref_mut(),
-    )?;
-    observe_diagnostic_stream(diagnostics, event_stream)?;
-    let mut raw_entities = filter_entities_for_redaction(
-      pre_threshold_entities,
-      full_text,
-      self.threshold,
-      self.confidence_boost,
-      &self.allowed_labels,
-    )?;
-    let address_context_start = Instant::now();
-    let address_context_entities =
-      self.process_address_context_entities(full_text, &raw_entities)?;
-    if let Some(diagnostics) = diagnostics {
-      diagnostics.record_entities(
-        DiagnosticStage::EntityAddressContext,
-        &address_context_entities,
-        full_text,
-        Some(elapsed_us(address_context_start)),
-      );
-    }
-    observe_diagnostic_stream(diagnostics, event_stream)?;
-    raw_entities.extend(address_context_entities);
-    let merge_start = Instant::now();
-    let merged = merge_and_dedup(&raw_entities);
-    let merged = self.extend_monetary_entities(full_text, &merged);
-    if let Some(diagnostics) = diagnostics {
-      diagnostics.record_entities(
-        DiagnosticStage::Merge,
-        &merged,
-        full_text,
-        Some(elapsed_us(merge_start)),
-      );
-    }
-    observe_diagnostic_stream(diagnostics, event_stream)?;
-    let boundary_start = Instant::now();
-    let consistent = enforce_boundary_consistency(&merged, full_text)?;
-    if let Some(diagnostics) = diagnostics {
-      diagnostics.record_entities(
-        DiagnosticStage::Boundary,
-        &consistent,
-        full_text,
-        Some(elapsed_us(boundary_start)),
-      );
-    }
-    observe_diagnostic_stream(diagnostics, event_stream)?;
-    let sanitize_start = Instant::now();
-    let sanitized_entities =
-      sanitize_entities_with_source(&consistent, full_text)?;
-    let false_positive_filters =
-      self.false_positive_filters.as_ref().or_else(|| {
-        self
-          .deny_list_data
-          .as_ref()
-          .and_then(|data| data.filters.as_ref())
-      });
-    let mut resolved_entities = filter_entities_for_config(
-      filter_entity_false_positives(
-        sanitized_entities,
-        full_text,
-        false_positive_filters,
-      )?,
-      self.threshold,
-      &self.allowed_labels,
-    );
-    resolved_entities = self.process_coreference_entities(
-      full_text,
-      resolved_entities,
-      false_positive_filters,
-      diagnostics.as_deref_mut(),
-    )?;
-    clear_internal_source_details(&mut resolved_entities);
-    if let Some(diagnostics) = diagnostics {
-      diagnostics.record_entities(
-        DiagnosticStage::Sanitize,
-        &resolved_entities,
-        full_text,
-        Some(elapsed_us(sanitize_start)),
-      );
-    }
-    observe_diagnostic_stream(diagnostics, event_stream)?;
-    Ok(resolved_entities)
-  }
-
-  fn prepare_pre_threshold_entities(
-    &self,
-    detections: &StaticDetectionResult,
-    full_text: &str,
-    mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
-  ) -> Result<Vec<PipelineEntity>> {
-    let zone_adjusted_entities = self.apply_zone_adjustments(
-      detections.all_entities(),
-      full_text,
-      diagnostics.as_deref_mut(),
-    )?;
-    self.apply_hotword_entities(
-      zone_adjusted_entities,
-      full_text,
-      &detections.matches.literal,
-      diagnostics,
-    )
-  }
-
-  fn apply_hotword_entities(
-    &self,
-    entities: Vec<PipelineEntity>,
-    full_text: &str,
-    _literal_matches: &[SearchMatch],
-    diagnostics: Option<&mut StaticRedactionDiagnostics>,
-  ) -> Result<Vec<PipelineEntity>> {
-    let Some(data) = &self.hotword_data else {
-      return Ok(entities);
-    };
-    let start = Instant::now();
-    let adjusted =
-      apply_hotword_rules(entities, full_text, data, &self.allowed_labels)?;
-    if let Some(diagnostics) = diagnostics {
-      diagnostics.record_stage(
-        DiagnosticStage::EntityHotword,
-        Some(adjusted.len()),
-        Some(elapsed_us(start)),
-        Some(full_text.len()),
-      );
-    }
-    Ok(adjusted)
-  }
-
-  fn apply_zone_adjustments(
-    &self,
-    entities: Vec<PipelineEntity>,
-    full_text: &str,
-    mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
-  ) -> Result<Vec<PipelineEntity>> {
-    let Some(data) = &self.zone_data else {
-      return Ok(entities);
-    };
-
-    let start = Instant::now();
-    let adjusted = data.adjust_entities(full_text, entities)?;
-    if let Some(diagnostics) = &mut diagnostics {
-      diagnostics.record_stage(
-        DiagnosticStage::EntityZoneAdjustment,
-        Some(adjusted.boosted),
-        Some(elapsed_us(start)),
-        Some(full_text.len()),
-      );
-    }
-    Ok(adjusted.entities)
-  }
-
-  fn process_address_context_entities(
-    &self,
-    full_text: &str,
-    existing_entities: &[PipelineEntity],
-  ) -> Result<Vec<PipelineEntity>> {
-    if !label_is_allowed("address", &self.allowed_labels) {
-      return Ok(Vec::new());
-    }
-    let Some(data) = &self.address_context_data else {
-      return Ok(Vec::new());
-    };
-    data.process(full_text, existing_entities)
-  }
-
-  fn process_coreference_entities(
-    &self,
-    full_text: &str,
-    existing_entities: Vec<PipelineEntity>,
-    false_positive_filters: Option<&DenyListFilterData>,
-    mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
-  ) -> Result<Vec<PipelineEntity>> {
-    let Some(data) = &self.coreference_data else {
-      return Ok(existing_entities);
-    };
-
-    let start = Instant::now();
-    let coreference_entities =
-      data.process(full_text, &existing_entities, self.threshold)?;
-    if let Some(diagnostics) = &mut diagnostics {
-      diagnostics.record_entities(
-        DiagnosticStage::EntityCoreference,
-        &coreference_entities,
-        full_text,
-        Some(elapsed_us(start)),
-      );
-    }
-    if coreference_entities.is_empty() {
-      return Ok(existing_entities);
-    }
-
-    let merged =
-      merge_and_dedup(&[existing_entities, coreference_entities].concat());
-    let consistent = enforce_boundary_consistency(&merged, full_text)?;
-    let sanitized = sanitize_entities_with_source(&consistent, full_text)?;
-    let filtered = filter_entity_false_positives(
-      sanitized,
-      full_text,
-      false_positive_filters,
-    )?;
-    Ok(filter_entities_for_labels(filtered, &self.allowed_labels))
-  }
-
-  fn extend_monetary_entities(
-    &self,
-    full_text: &str,
-    entities: &[PipelineEntity],
-  ) -> Vec<PipelineEntity> {
-    let Some(data) = &self.monetary_data else {
-      return entities.to_vec();
-    };
-    data.extend_entities(full_text, entities)
-  }
 }
 
 fn should_extract_monetary_data(config: &PreparedSearchConfig) -> bool {
@@ -1372,79 +792,6 @@ fn should_extract_monetary_data(config: &PreparedSearchConfig) -> bool {
       .regex_meta
       .iter()
       .any(|meta| meta.label == "monetary amount")
-}
-
-fn record_static_entity_diagnostics(
-  diagnostics: &mut StaticRedactionDiagnostics,
-  full_text: &str,
-  passes: &StaticEntityPasses,
-) {
-  diagnostics.record_entities(
-    DiagnosticStage::EntityRegex,
-    &passes.regex.entities,
-    full_text,
-    Some(passes.regex.elapsed_us),
-  );
-  diagnostics.record_entities(
-    DiagnosticStage::EntityCustomRegex,
-    &passes.custom_regex.entities,
-    full_text,
-    Some(passes.custom_regex.elapsed_us),
-  );
-  diagnostics.record_entities(
-    DiagnosticStage::EntityDenyList,
-    &passes.deny_list.entities,
-    full_text,
-    Some(passes.deny_list.elapsed_us),
-  );
-  diagnostics.record_entities(
-    DiagnosticStage::EntityGazetteer,
-    &passes.gazetteer.entities,
-    full_text,
-    Some(passes.gazetteer.elapsed_us),
-  );
-  diagnostics.record_entities(
-    DiagnosticStage::EntityCountry,
-    &passes.country.entities,
-    full_text,
-    Some(passes.country.elapsed_us),
-  );
-  diagnostics.record_entities(
-    DiagnosticStage::EntityAnchored,
-    &passes.anchored.entities,
-    full_text,
-    Some(passes.anchored.elapsed_us),
-  );
-  diagnostics.record_entities(
-    DiagnosticStage::EntityTrigger,
-    &passes.trigger.entities,
-    full_text,
-    Some(passes.trigger.elapsed_us),
-  );
-  diagnostics.record_entities(
-    DiagnosticStage::EntitySignature,
-    &passes.signature.entities,
-    full_text,
-    Some(passes.signature.elapsed_us),
-  );
-  diagnostics.record_entities(
-    DiagnosticStage::EntityLegalForm,
-    &passes.legal_form.entities,
-    full_text,
-    Some(passes.legal_form.elapsed_us),
-  );
-  diagnostics.record_entities(
-    DiagnosticStage::EntityNameCorpus,
-    &passes.name_corpus.entities,
-    full_text,
-    Some(passes.name_corpus.elapsed_us),
-  );
-  diagnostics.record_entities(
-    DiagnosticStage::EntityAddressSeed,
-    &passes.address_seed.entities,
-    full_text,
-    Some(passes.address_seed.elapsed_us),
-  );
 }
 
 fn normalize_search_text(
@@ -1577,18 +924,6 @@ fn record_find_matches_summary(
     Some(elapsed_us(start)),
     Some(full_text.len()),
   );
-}
-
-fn address_seed_context(layers: &[&[PipelineEntity]]) -> Vec<PipelineEntity> {
-  let capacity = layers
-    .iter()
-    .map(|layer| layer.len())
-    .fold(0usize, usize::saturating_add);
-  let mut entities = Vec::with_capacity(capacity);
-  for layer in layers {
-    entities.extend(layer.iter().cloned());
-  }
-  entities
 }
 
 fn prepare_search_index_bundle(
@@ -1877,29 +1212,6 @@ fn record_prepare_total(
     Some(count),
     Some(elapsed_us(start)),
     None,
-  );
-}
-
-fn record_redaction_stages(
-  diagnostics: &mut Option<&mut StaticRedactionDiagnostics>,
-  redaction: &RedactionResult,
-  input_bytes: usize,
-  redaction_start: Instant,
-  total_start: Instant,
-) {
-  let Some(diagnostics) = diagnostics else {
-    return;
-  };
-  diagnostics.record_redaction(
-    redaction,
-    Some(elapsed_us(redaction_start)),
-    input_bytes,
-  );
-  diagnostics.record_stage(
-    DiagnosticStage::RedactTotal,
-    Some(redaction.entity_count),
-    Some(elapsed_us(total_start)),
-    Some(input_bytes),
   );
 }
 
@@ -2619,22 +1931,4 @@ fn remap_normalized_match(
 ) -> Result<SearchMatch> {
   let (start, end) = normalized.map_span(found.start(), found.end())?;
   Ok(found.with_span(start, end))
-}
-
-fn to_redaction_entity(entity: &PipelineEntity) -> Entity {
-  match &entity.kind {
-    EntityKind::Detected => Entity::detected(
-      entity.start,
-      entity.end,
-      entity.label.clone(),
-      entity.text.clone(),
-    ),
-    EntityKind::Coreference { source_text } => Entity::coreference(
-      entity.start,
-      entity.end,
-      entity.label.clone(),
-      entity.text.clone(),
-      source_text.clone(),
-    ),
-  }
 }
