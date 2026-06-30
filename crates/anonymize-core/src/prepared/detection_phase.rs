@@ -74,9 +74,9 @@ impl PreparedSearch {
     let regex = TimedEntities {
       entities: process_regex_matches(
         &matches.regex,
-        self.slices.regex,
+        self.policy.slices.regex,
         full_text,
-        &self.regex_meta,
+        &self.policy.regex_meta,
       )?,
       elapsed_us: elapsed_us(regex_start),
     };
@@ -85,19 +85,19 @@ impl PreparedSearch {
     let custom_regex = TimedEntities {
       entities: process_regex_matches(
         &matches.custom_regex,
-        self.slices.custom_regex,
+        self.policy.slices.custom_regex,
         full_text,
-        &self.custom_regex_meta,
+        &self.policy.custom_regex_meta,
       )?,
       elapsed_us: elapsed_us(custom_regex_start),
     };
 
     let deny_list_start = Instant::now();
     let deny_list = TimedEntities {
-      entities: if let Some(data) = &self.deny_list_data {
+      entities: if let Some(data) = &self.data.deny_list {
         process_deny_list_matches(
           &matches.literal,
-          self.slices.deny_list,
+          self.policy.slices.deny_list,
           full_text,
           data,
         )?
@@ -109,10 +109,10 @@ impl PreparedSearch {
 
     let gazetteer_start = Instant::now();
     let gazetteer = TimedEntities {
-      entities: if let Some(data) = &self.gazetteer_data {
+      entities: if let Some(data) = &self.data.gazetteer {
         process_gazetteer_matches(
           &matches.literal,
-          self.slices.gazetteer,
+          self.policy.slices.gazetteer,
           full_text,
           data,
         )?
@@ -173,11 +173,11 @@ impl PreparedSearch {
   ) -> Result<TimedEntities> {
     let anchored_start = Instant::now();
     let mut entities = Vec::new();
-    if let Some(data) = &self.date_data {
+    if let Some(data) = &self.data.dates {
       entities.extend(data.process(full_text)?);
     }
-    if self.monetary_extraction
-      && let Some(data) = &self.monetary_data
+    if self.policy.monetary_extraction
+      && let Some(data) = &self.data.monetary
     {
       entities.extend(data.process(full_text)?);
     }
@@ -195,10 +195,10 @@ impl PreparedSearch {
     diagnostics: Option<&mut StaticRedactionDiagnostics>,
   ) -> Result<TimedEntities> {
     let start = Instant::now();
-    let entities = if let Some(data) = &self.trigger_data {
+    let entities = if let Some(data) = &self.data.triggers {
       process_trigger_matches(
         &matches.regex,
-        self.slices.triggers,
+        self.policy.slices.triggers,
         full_text,
         data,
         diagnostics,
@@ -219,10 +219,10 @@ impl PreparedSearch {
     full_text: &str,
   ) -> Result<TimedEntities> {
     let start = Instant::now();
-    let entities = if let Some(data) = &self.legal_form_data {
+    let entities = if let Some(data) = &self.data.legal_forms {
       process_legal_form_matches(
         &matches.regex,
-        self.slices.legal_forms,
+        self.policy.slices.legal_forms,
         full_text,
         data,
       )?
@@ -243,11 +243,11 @@ impl PreparedSearch {
     context_layers: &[&[PipelineEntity]],
   ) -> Result<TimedEntities> {
     let start = Instant::now();
-    let entities = if let Some(data) = &self.address_seed_data {
+    let entities = if let Some(data) = &self.data.address_seed {
       let existing_entities = address_seed_context(context_layers);
       data.process(
         &matches.literal,
-        self.slices.street_types,
+        self.policy.slices.street_types,
         full_text,
         &existing_entities,
       )?
@@ -268,10 +268,10 @@ impl PreparedSearch {
   ) -> Result<TimedEntities> {
     let country_start = Instant::now();
     Ok(TimedEntities {
-      entities: if let Some(data) = &self.country_data {
+      entities: if let Some(data) = &self.data.countries {
         process_country_matches(
           &matches.literal,
-          self.slices.countries,
+          self.policy.slices.countries,
           full_text,
           data,
         )?
@@ -288,7 +288,7 @@ impl PreparedSearch {
     deny_list_entities: &[PipelineEntity],
   ) -> Result<TimedEntities> {
     let start = Instant::now();
-    let entities = if let Some(data) = &self.name_corpus_data {
+    let entities = if let Some(data) = &self.data.name_corpus {
       data.detect_configured(full_text, deny_list_entities)?
     } else {
       Vec::new()
@@ -303,7 +303,8 @@ impl PreparedSearch {
   fn process_signature_entities(&self, full_text: &str) -> TimedEntities {
     let start = Instant::now();
     let entities = self
-      .signature_data
+      .data
+      .signatures
       .as_ref()
       .map_or_else(Vec::new, |data| detect_signatures(full_text, data));
 

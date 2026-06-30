@@ -37,9 +37,9 @@ impl PreparedSearch {
     let mut raw_entities = filter_entities_for_redaction(
       pre_threshold_entities,
       full_text,
-      self.threshold,
-      self.confidence_boost,
-      &self.allowed_labels,
+      self.policy.threshold,
+      self.policy.confidence_boost,
+      &self.policy.allowed_labels,
     )?;
     let address_context_timer = PhaseTimer::start();
     let address_context_entities =
@@ -78,9 +78,10 @@ impl PreparedSearch {
     let sanitized_entities =
       sanitize_entities_with_source(&consistent, full_text)?;
     let false_positive_filters =
-      self.false_positive_filters.as_ref().or_else(|| {
+      self.data.false_positive_filters.as_ref().or_else(|| {
         self
-          .deny_list_data
+          .data
+          .deny_list
           .as_ref()
           .and_then(|data| data.filters.as_ref())
       });
@@ -90,8 +91,8 @@ impl PreparedSearch {
         full_text,
         false_positive_filters,
       )?,
-      self.threshold,
-      &self.allowed_labels,
+      self.policy.threshold,
+      &self.policy.allowed_labels,
     );
     resolved_entities = self.process_coreference_entities(
       full_text,
@@ -137,12 +138,16 @@ impl PreparedSearch {
     _literal_matches: &[SearchMatch],
     mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
   ) -> Result<Vec<PipelineEntity>> {
-    let Some(data) = &self.hotword_data else {
+    let Some(data) = &self.data.hotwords else {
       return Ok(entities);
     };
     let timer = PhaseTimer::start();
-    let adjusted =
-      apply_hotword_rules(entities, full_text, data, &self.allowed_labels)?;
+    let adjusted = apply_hotword_rules(
+      entities,
+      full_text,
+      data,
+      &self.policy.allowed_labels,
+    )?;
     record_count_stage(
       &mut diagnostics,
       DiagnosticStage::EntityHotword,
@@ -159,7 +164,7 @@ impl PreparedSearch {
     full_text: &str,
     mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
   ) -> Result<Vec<PipelineEntity>> {
-    let Some(data) = &self.zone_data else {
+    let Some(data) = &self.data.zones else {
       return Ok(entities);
     };
 
@@ -180,10 +185,10 @@ impl PreparedSearch {
     full_text: &str,
     existing_entities: &[PipelineEntity],
   ) -> Result<Vec<PipelineEntity>> {
-    if !label_is_allowed("address", &self.allowed_labels) {
+    if !label_is_allowed("address", &self.policy.allowed_labels) {
       return Ok(Vec::new());
     }
-    let Some(data) = &self.address_context_data else {
+    let Some(data) = &self.data.address_context else {
       return Ok(Vec::new());
     };
     data.process(full_text, existing_entities)
@@ -196,13 +201,13 @@ impl PreparedSearch {
     false_positive_filters: Option<&DenyListFilterData>,
     mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
   ) -> Result<Vec<PipelineEntity>> {
-    let Some(data) = &self.coreference_data else {
+    let Some(data) = &self.data.coreference else {
       return Ok(existing_entities);
     };
 
     let timer = PhaseTimer::start();
     let coreference_entities =
-      data.process(full_text, &existing_entities, self.threshold)?;
+      data.process(full_text, &existing_entities, self.policy.threshold)?;
     record_entities(
       &mut diagnostics,
       DiagnosticStage::EntityCoreference,
@@ -223,7 +228,10 @@ impl PreparedSearch {
       full_text,
       false_positive_filters,
     )?;
-    Ok(filter_entities_for_labels(filtered, &self.allowed_labels))
+    Ok(filter_entities_for_labels(
+      filtered,
+      &self.policy.allowed_labels,
+    ))
   }
 
   fn extend_monetary_entities(
@@ -231,7 +239,7 @@ impl PreparedSearch {
     full_text: &str,
     entities: &[PipelineEntity],
   ) -> Vec<PipelineEntity> {
-    let Some(data) = &self.monetary_data else {
+    let Some(data) = &self.data.monetary else {
       return entities.to_vec();
     };
     data.extend_entities(full_text, entities)

@@ -55,12 +55,12 @@ impl PreparedSearch {
   ) -> Result<PreparedSearchMatches> {
     let regex_start = Instant::now();
     let regex = offset_index_matches(
-      &self.regex,
+      &self.indexes.regex,
       full_text,
       diagnostics.as_deref_mut(),
       DiagnosticStage::FindRegex,
       full_text.len(),
-      self.slices.regex.start,
+      self.policy.slices.regex.start,
     )?;
     record_search_matches(
       &mut diagnostics,
@@ -72,12 +72,12 @@ impl PreparedSearch {
 
     let legal_form_start = Instant::now();
     let legal_forms = normalized_index_matches(
-      &self.legal_forms,
+      &self.indexes.legal_forms,
       normalized,
       diagnostics.as_deref_mut(),
       DiagnosticStage::FindLegalForm,
       full_text.len(),
-      self.slices.legal_forms.start,
+      self.policy.slices.legal_forms.start,
     )?;
     record_search_matches(
       &mut diagnostics,
@@ -89,12 +89,12 @@ impl PreparedSearch {
 
     let trigger_start = Instant::now();
     let triggers = offset_index_matches(
-      &self.triggers,
+      &self.indexes.triggers,
       full_text,
       diagnostics.as_deref_mut(),
       DiagnosticStage::FindTrigger,
       full_text.len(),
-      self.slices.triggers.start,
+      self.policy.slices.triggers.start,
     )?;
     record_search_matches(
       &mut diagnostics,
@@ -106,12 +106,12 @@ impl PreparedSearch {
 
     let custom_regex_start = Instant::now();
     let custom_regex = offset_index_matches(
-      &self.custom_regex,
+      &self.indexes.custom_regex,
       full_text,
       diagnostics.as_deref_mut(),
       DiagnosticStage::FindCustomRegex,
       full_text.len(),
-      self.slices.custom_regex.start,
+      self.policy.slices.custom_regex.start,
     )?;
     record_search_matches(
       &mut diagnostics,
@@ -123,7 +123,7 @@ impl PreparedSearch {
 
     let literal_start = Instant::now();
     let literal = normalized_index_matches(
-      &self.literals,
+      &self.indexes.literals,
       normalized,
       diagnostics.as_deref_mut(),
       DiagnosticStage::FindLiteral,
@@ -163,54 +163,54 @@ impl PreparedSearch {
   ) -> Result<PreparedSearchMatches> {
     let input_bytes = full_text.len();
     let matches = std::thread::scope(|scope| {
-      let regex = (!self.regex.is_empty()).then(|| {
+      let regex = (!self.indexes.regex.is_empty()).then(|| {
         scope.spawn(|| {
           timed_offset_index_matches(
-            &self.regex,
+            &self.indexes.regex,
             full_text,
             DiagnosticStage::FindRegex,
             input_bytes,
-            self.slices.regex.start,
+            self.policy.slices.regex.start,
           )
         })
       });
-      let legal_forms = (!self.legal_forms.is_empty()).then(|| {
+      let legal_forms = (!self.indexes.legal_forms.is_empty()).then(|| {
         scope.spawn(|| {
           timed_normalized_index_matches(
-            &self.legal_forms,
+            &self.indexes.legal_forms,
             normalized,
             DiagnosticStage::FindLegalForm,
             input_bytes,
-            self.slices.legal_forms.start,
+            self.policy.slices.legal_forms.start,
           )
         })
       });
-      let triggers = (!self.triggers.is_empty()).then(|| {
+      let triggers = (!self.indexes.triggers.is_empty()).then(|| {
         scope.spawn(|| {
           timed_offset_index_matches(
-            &self.triggers,
+            &self.indexes.triggers,
             full_text,
             DiagnosticStage::FindTrigger,
             input_bytes,
-            self.slices.triggers.start,
+            self.policy.slices.triggers.start,
           )
         })
       });
-      let custom_regex = (!self.custom_regex.is_empty()).then(|| {
+      let custom_regex = (!self.indexes.custom_regex.is_empty()).then(|| {
         scope.spawn(|| {
           timed_offset_index_matches(
-            &self.custom_regex,
+            &self.indexes.custom_regex,
             full_text,
             DiagnosticStage::FindCustomRegex,
             input_bytes,
-            self.slices.custom_regex.start,
+            self.policy.slices.custom_regex.start,
           )
         })
       });
-      let literal = (!self.literals.is_empty()).then(|| {
+      let literal = (!self.indexes.literals.is_empty()).then(|| {
         scope.spawn(|| {
           timed_normalized_index_matches(
-            &self.literals,
+            &self.indexes.literals,
             normalized,
             DiagnosticStage::FindLiteral,
             input_bytes,

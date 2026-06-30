@@ -7,6 +7,7 @@ use crate::types::Result;
 
 use super::artifacts::{PreparedSearchArtifacts, PreparedSearchArtifactsView};
 use super::config_validation::validate_supported_config_for_artifacts;
+use super::engine_state::{PipelinePolicy, PreparedStaticData, SearchIndexes};
 use super::index_prepare::{
   PreparedSearchIndexBundle, SearchIndexConfigInput, prepare_search_artifacts,
   prepare_search_index_bundle,
@@ -39,11 +40,14 @@ impl PreparedSearch {
   ) -> Result<()> {
     let total_start = Instant::now();
     let stages = [
-      (DiagnosticStage::WarmRegex, &self.regex),
-      (DiagnosticStage::WarmCustomRegex, &self.custom_regex),
-      (DiagnosticStage::WarmLegalFormSearch, &self.legal_forms),
-      (DiagnosticStage::WarmTriggerSearch, &self.triggers),
-      (DiagnosticStage::WarmLiteral, &self.literals),
+      (DiagnosticStage::WarmRegex, &self.indexes.regex),
+      (DiagnosticStage::WarmCustomRegex, &self.indexes.custom_regex),
+      (
+        DiagnosticStage::WarmLegalFormSearch,
+        &self.indexes.legal_forms,
+      ),
+      (DiagnosticStage::WarmTriggerSearch, &self.indexes.triggers),
+      (DiagnosticStage::WarmLiteral, &self.indexes.literals),
     ];
     let mut count = 0usize;
     for (stage, index) in stages {
@@ -188,33 +192,39 @@ impl PreparedSearch {
     let prepare_count = counts.total().saturating_add(support_data.count);
     record_prepare_total(&mut diagnostics, prepare_count, total_start);
     Ok(Self {
-      regex,
-      custom_regex,
-      legal_forms,
-      triggers,
-      literals,
-      allowed_labels,
-      threshold,
-      confidence_boost,
-      slices,
-      regex_meta,
-      custom_regex_meta,
-      deny_list_data,
-      false_positive_filters,
-      gazetteer_data,
-      country_data,
-      hotword_data: support_data.hotwords,
-      trigger_data: support_data.triggers,
-      legal_form_data: support_data.legal_forms,
-      address_seed_data: support_data.address_seed,
-      zone_data: support_data.zones,
-      address_context_data: support_data.address_context,
-      coreference_data: support_data.coreference,
-      name_corpus_data: support_data.names,
-      signature_data: support_data.signature,
-      date_data,
-      monetary_data,
-      monetary_extraction,
+      indexes: SearchIndexes {
+        regex,
+        custom_regex,
+        legal_forms,
+        triggers,
+        literals,
+      },
+      policy: PipelinePolicy {
+        allowed_labels,
+        threshold,
+        confidence_boost,
+        slices,
+        regex_meta,
+        custom_regex_meta,
+        monetary_extraction,
+      },
+      data: PreparedStaticData {
+        deny_list: deny_list_data,
+        false_positive_filters,
+        gazetteer: gazetteer_data,
+        countries: country_data,
+        hotwords: support_data.hotwords,
+        triggers: support_data.triggers,
+        legal_forms: support_data.legal_forms,
+        address_seed: support_data.address_seed,
+        zones: support_data.zones,
+        address_context: support_data.address_context,
+        coreference: support_data.coreference,
+        name_corpus: support_data.names,
+        signatures: support_data.signature,
+        dates: date_data,
+        monetary: monetary_data,
+      },
     })
   }
 }

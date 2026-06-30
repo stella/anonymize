@@ -1,28 +1,27 @@
-use crate::address_context::{AddressContextData, PreparedAddressContextData};
-use crate::address_seeds::{AddressSeedData, PreparedAddressSeedData};
-use crate::coreference::{CoreferenceData, PreparedCoreferenceData};
-use crate::dates::{DateData, PreparedDateData};
+use crate::address_context::AddressContextData;
+use crate::address_seeds::AddressSeedData;
+use crate::coreference::CoreferenceData;
+use crate::dates::DateData;
 use crate::diagnostics::{DiagnosticEvent, StaticRedactionDiagnostics};
-use crate::hotwords::{HotwordRuleData, PreparedHotwordData};
-use crate::legal_forms::{LegalFormData, PreparedLegalFormData};
-use crate::money::{MonetaryData, PreparedMonetaryData};
-use crate::name_corpus::{
-  NameCorpusData, PreparedNameCorpusData as PreparedNames,
-};
+use crate::hotwords::HotwordRuleData;
+use crate::legal_forms::LegalFormData;
+use crate::money::MonetaryData;
+use crate::name_corpus::NameCorpusData;
 use crate::processors::{
   CountryMatchData, DenyListFilterData, DenyListMatchData, GazetteerMatchData,
   PatternSlice, RegexMatchMeta,
 };
-use crate::search::{SearchIndex, SearchOptions, SearchPattern};
-use crate::signatures::{PreparedSignatureData, SignatureData};
-use crate::triggers::{PreparedTriggerData, TriggerData};
+use crate::search::{SearchOptions, SearchPattern};
+use crate::signatures::SignatureData;
+use crate::triggers::TriggerData;
 use crate::types::{OperatorConfig, Result};
-use crate::zones::{PreparedZoneData, ZoneData};
+use crate::zones::ZoneData;
 
 mod artifacts;
 mod config_validation;
 mod detection_phase;
 mod diagnostic_stream;
+mod engine_state;
 mod entity_filter;
 mod index_builder;
 mod index_patterns;
@@ -40,39 +39,16 @@ mod timing;
 
 pub use artifacts::{PreparedSearchArtifacts, PreparedSearchArtifactsView};
 use diagnostic_stream::DiagnosticEventStream;
+use engine_state::{PipelinePolicy, PreparedStaticData, SearchIndexes};
 pub use results::{
   PreparedSearchBuildResult, PreparedSearchMatches, StaticDetectionResult,
   StaticRedactionDiagnosticResult, StaticRedactionResult,
 };
 
 pub struct PreparedSearch {
-  regex: SearchIndex,
-  custom_regex: SearchIndex,
-  legal_forms: SearchIndex,
-  triggers: SearchIndex,
-  literals: SearchIndex,
-  allowed_labels: Vec<String>,
-  threshold: f64,
-  confidence_boost: bool,
-  slices: PreparedSearchSlices,
-  regex_meta: Vec<RegexMatchMeta>,
-  custom_regex_meta: Vec<RegexMatchMeta>,
-  deny_list_data: Option<DenyListMatchData>,
-  false_positive_filters: Option<DenyListFilterData>,
-  gazetteer_data: Option<GazetteerMatchData>,
-  country_data: Option<CountryMatchData>,
-  hotword_data: Option<PreparedHotwordData>,
-  trigger_data: Option<PreparedTriggerData>,
-  legal_form_data: Option<PreparedLegalFormData>,
-  address_seed_data: Option<PreparedAddressSeedData>,
-  zone_data: Option<PreparedZoneData>,
-  address_context_data: Option<PreparedAddressContextData>,
-  coreference_data: Option<PreparedCoreferenceData>,
-  name_corpus_data: Option<PreparedNames>,
-  signature_data: Option<PreparedSignatureData>,
-  date_data: Option<PreparedDateData>,
-  monetary_data: Option<PreparedMonetaryData>,
-  monetary_extraction: bool,
+  indexes: SearchIndexes,
+  policy: PipelinePolicy,
+  data: PreparedStaticData,
 }
 
 #[derive(
