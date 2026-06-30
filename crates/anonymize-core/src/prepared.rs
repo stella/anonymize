@@ -30,6 +30,7 @@ mod prepare_phase;
 mod redaction_phase;
 mod resolution_phase;
 mod results;
+mod search_matcher;
 mod search_phase;
 mod support_prepare;
 mod timing;
