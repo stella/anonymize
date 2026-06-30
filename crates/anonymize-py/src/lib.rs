@@ -190,6 +190,13 @@ impl PyPreparedSearch {
     Self::from_prepared_package_bytes(package_bytes)
   }
 
+  #[staticmethod]
+  fn from_trusted_prepared_package_bytes_without_cache(
+    package_bytes: &[u8],
+  ) -> PyResult<Self> {
+    Self::from_trusted_prepared_package_bytes(package_bytes)
+  }
+
   fn prepare_diagnostics_json(&self) -> PyResult<String> {
     let diagnostics =
       static_redaction_diagnostics_to_binding(self.prepare_diagnostics.clone());

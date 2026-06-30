@@ -508,6 +508,18 @@ impl NativePreparedSearch {
     )
   }
 
+  #[napi(factory)]
+  #[allow(clippy::needless_pass_by_value)]
+  pub fn from_trusted_prepared_package_bytes_without_cache(
+    package_bytes: BufferSlice<'_>,
+  ) -> Result<Self> {
+    Self::from_package_bytes(
+      package_bytes.as_ref(),
+      PackageCacheMode::Bypass,
+      PackageDecodeMode::Trusted,
+    )
+  }
+
   fn from_config_bytes(
     config_bytes: &[u8],
     artifact_bytes: Option<&[u8]>,

@@ -219,19 +219,23 @@ describe("native node loader", () => {
     }
   });
 
-  test("prefers the trusted native package factory for default packages", () => {
+  test("prefers the trusted native package no-cache factory for default packages", () => {
     const dir = mkdtempSync(join(tmpdir(), "anonymize-default-trusted-"));
     const packagePath = join(dir, "native-pipeline.stlanonpkg");
-    const trustedBytes: number[][] = [];
+    const trustedNoCacheBytes: number[][] = [];
+    const trustedCachedBytes: number[][] = [];
     const verifiedBytes: number[][] = [];
     try {
       writeFileSync(packagePath, Uint8Array.of(22, 23, 24));
       const binding = fakeNativeBinding(PACKAGE_VERSION, {
-        onPreparedPackageBytesWithoutCache: (bytes) => {
-          verifiedBytes.push([...bytes]);
+        onTrustedPreparedPackageBytesWithoutCache: (bytes) => {
+          trustedNoCacheBytes.push([...bytes]);
         },
         onTrustedPreparedPackageBytes: (bytes) => {
-          trustedBytes.push([...bytes]);
+          trustedCachedBytes.push([...bytes]);
+        },
+        onPreparedPackageBytesWithoutCache: (bytes) => {
+          verifiedBytes.push([...bytes]);
         },
       });
 
@@ -241,7 +245,8 @@ describe("native node loader", () => {
         expectedVersion: PACKAGE_VERSION,
       });
 
-      expect(trustedBytes).toEqual([[22, 23, 24]]);
+      expect(trustedNoCacheBytes).toEqual([[22, 23, 24]]);
+      expect(trustedCachedBytes).toEqual([]);
       expect(verifiedBytes).toEqual([]);
       expect(pipeline.redactText("x").redaction.redactedText).toBe("");
     } finally {
@@ -544,7 +549,7 @@ describe("native node loader", () => {
 
     const capturedBytes: number[][] = [];
     const binding = fakeNativeBinding(PACKAGE_VERSION, {
-      compressedPackageBytes: Uint8Array.of(21, 22, 23),
+      packageBytes: Uint8Array.of(21, 22, 23),
       onPreparedPackageBytes: (bytes) => {
         capturedBytes.push([...bytes]);
       },
@@ -683,10 +688,12 @@ const emptyStaticRedactionDiagnosticJson = (): string =>
 
 type FakeNativeBindingOptions = {
   preparedSearchAsConstructor?: boolean;
+  packageBytes?: Uint8Array;
   compressedPackageBytes?: Uint8Array;
   onPreparedPackageBytes?: (bytes: Uint8Array) => void;
   onPreparedPackageBytesWithoutCache?: (bytes: Uint8Array) => void;
   onTrustedPreparedPackageBytes?: (bytes: Uint8Array) => void;
+  onTrustedPreparedPackageBytesWithoutCache?: (bytes: Uint8Array) => void;
   onRedactStaticEntitiesJson?: () => string;
   onDiagnosticsStreamJson?: (onBatch: NativeDiagnosticsBatchCallback) => string;
   onWarmLazyRegex?: () => void;
@@ -717,6 +724,14 @@ const fakeNativeBinding = (
       options.onPreparedPackageBytesWithoutCache?.(bytes);
       return fakePreparedSearch(preparedOptions());
     },
+    ...(options.onTrustedPreparedPackageBytesWithoutCache === undefined
+      ? {}
+      : {
+          fromTrustedPreparedPackageBytesWithoutCache: (bytes: Uint8Array) => {
+            options.onTrustedPreparedPackageBytesWithoutCache?.(bytes);
+            return fakePreparedSearch(preparedOptions());
+          },
+        }),
     ...(options.onTrustedPreparedPackageBytes === undefined
       ? {}
       : {
@@ -734,7 +749,8 @@ const fakeNativeBinding = (
     normalizeForSearch: (text: string) => text,
     nativePackageVersion: () => version,
     NativePreparedSearch,
-    prepareStaticSearchPackageBytes: () => new Uint8Array(),
+    prepareStaticSearchPackageBytes: () =>
+      options.packageBytes ?? new Uint8Array(),
     prepareStaticSearchCompressedPackageBytes: () =>
       options.compressedPackageBytes ?? new Uint8Array(),
   };

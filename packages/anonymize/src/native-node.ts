@@ -514,9 +514,12 @@ const createNativePipelineFromTrustedDefaultPackage = (
 ): PreparedNativePipeline =>
   new PreparedNativePipeline(
     new PreparedNativeAnonymizer(
-      binding.NativePreparedSearch.fromTrustedPreparedPackageBytes?.(
+      binding.NativePreparedSearch.fromTrustedPreparedPackageBytesWithoutCache?.(
         packageBytes,
       ) ??
+        binding.NativePreparedSearch.fromTrustedPreparedPackageBytes?.(
+          packageBytes,
+        ) ??
         binding.NativePreparedSearch.fromPreparedPackageBytesWithoutCache?.(
           packageBytes,
         ) ??

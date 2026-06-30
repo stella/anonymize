@@ -105,6 +105,9 @@ export type NativeAnonymizeBinding = {
     fromTrustedPreparedPackageBytes?: (
       packageBytes: Uint8Array,
     ) => NativePreparedSearchBinding;
+    fromTrustedPreparedPackageBytesWithoutCache?: (
+      packageBytes: Uint8Array,
+    ) => NativePreparedSearchBinding;
   };
   prepareStaticSearchPackageBytes: (configJson: Uint8Array) => Uint8Array;
   prepareStaticSearchCompressedPackageBytes: (
