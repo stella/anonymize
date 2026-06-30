@@ -6,6 +6,7 @@ export const SHARED_NATIVE_SDK_CORE_TOP_LEVEL_FUNCTIONS = [
   "redact_text",
   "redact_text_json",
   "diagnostics_json",
+  "diagnostics_stream_json",
   "summary_diagnostics_json",
 ] as const;
 
@@ -40,6 +41,7 @@ export const SHARED_NATIVE_SDK_PREPARED_METHODS = [
   "redact_text",
   "redact_text_json",
   "diagnostics_json",
+  "diagnostics_stream_json",
   "summary_diagnostics_json",
   "prepare_diagnostics_json",
   "warm_lazy_regex",

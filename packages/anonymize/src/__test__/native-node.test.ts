@@ -4,7 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import type { NativeAnonymizeBinding } from "../native";
+import type {
+  NativeAnonymizeBinding,
+  NativeDiagnosticsBatchCallback,
+} from "../native";
 import {
   available_default_native_pipeline_languages,
   availableDefaultNativePipelineLanguages,
@@ -12,6 +15,7 @@ import {
   createNativePipelineFromDefaultPackage,
   createNativePipelineFromPackageFile,
   diagnostics_json,
+  diagnostics_stream_json,
   get_default_native_pipeline,
   getDefaultNativePipeline,
   load_prepared_package,
@@ -524,6 +528,7 @@ describe("native node loader", () => {
       unknown
     > = {
       diagnostics_json,
+      diagnostics_stream_json,
       load_prepared_package,
       load_prepared_package_file,
       native_package_version,
@@ -584,6 +589,24 @@ describe("native node loader", () => {
       diagnostics: { events: [] },
       result: expectedJson,
     });
+    const streamedBatches: unknown[] = [];
+    expect(
+      JSON.parse(
+        diagnostics_stream_json(
+          "{}",
+          "x",
+          (batch) => {
+            streamedBatches.push(JSON.parse(batch) as unknown);
+          },
+          undefined,
+          { binding },
+        ) ?? "{}",
+      ),
+    ).toEqual({
+      diagnostics: { events: [] },
+      result: expectedJson,
+    });
+    expect(streamedBatches).toEqual([{ events: [{ stage: "detect-total" }] }]);
     expect(
       JSON.parse(
         summary_diagnostics_json("{}", "x", undefined, { binding }) ?? "{}",
@@ -665,6 +688,7 @@ type FakeNativeBindingOptions = {
   onPreparedPackageBytesWithoutCache?: (bytes: Uint8Array) => void;
   onTrustedPreparedPackageBytes?: (bytes: Uint8Array) => void;
   onRedactStaticEntitiesJson?: () => string;
+  onDiagnosticsStreamJson?: (onBatch: NativeDiagnosticsBatchCallback) => string;
   onWarmLazyRegex?: () => void;
 };
 
@@ -676,6 +700,9 @@ const fakeNativeBinding = (
     ...(options.onRedactStaticEntitiesJson === undefined
       ? {}
       : { onRedactStaticEntitiesJson: options.onRedactStaticEntitiesJson }),
+    ...(options.onDiagnosticsStreamJson === undefined
+      ? {}
+      : { onDiagnosticsStreamJson: options.onDiagnosticsStreamJson }),
     ...(options.onWarmLazyRegex === undefined
       ? {}
       : { onWarmLazyRegex: options.onWarmLazyRegex }),
@@ -715,11 +742,13 @@ const fakeNativeBinding = (
 
 type FakePreparedSearchOptions = {
   onRedactStaticEntitiesJson?: () => string;
+  onDiagnosticsStreamJson?: (onBatch: NativeDiagnosticsBatchCallback) => string;
   onWarmLazyRegex?: () => void;
 };
 
 const fakePreparedSearch = ({
   onRedactStaticEntitiesJson,
+  onDiagnosticsStreamJson,
   onWarmLazyRegex,
 }: FakePreparedSearchOptions) => ({
   prepareDiagnosticsJson: () => JSON.stringify({ events: [] }),
@@ -731,6 +760,16 @@ const fakePreparedSearch = ({
   ...(onRedactStaticEntitiesJson === undefined
     ? {}
     : { redactStaticEntitiesJson: onRedactStaticEntitiesJson }),
+  redactStaticEntitiesDiagnosticsStreamJson: (
+    _fullText: string,
+    _operators: unknown,
+    onBatch: NativeDiagnosticsBatchCallback,
+  ) =>
+    onDiagnosticsStreamJson?.(onBatch) ??
+    (() => {
+      onBatch(JSON.stringify({ events: [{ stage: "detect-total" }] }));
+      return emptyStaticRedactionDiagnosticJson();
+    })(),
   redactStaticEntitiesDiagnosticsJson: emptyStaticRedactionDiagnosticJson,
   redactStaticEntitiesSummaryDiagnosticsJson:
     emptyStaticRedactionDiagnosticJson,

@@ -6,7 +6,9 @@ use crate::artifact_bytes::{ArtifactReader, ArtifactWriter};
 use crate::byte_offsets::ByteOffsets;
 use crate::coreference::{CoreferenceData, PreparedCoreferenceData};
 use crate::dates::{DateData, PreparedDateData};
-use crate::diagnostics::{DiagnosticStage, StaticRedactionDiagnostics};
+use crate::diagnostics::{
+  DiagnosticEvent, DiagnosticStage, StaticRedactionDiagnostics,
+};
 use crate::false_positives::filter_entity_false_positives;
 use crate::hotwords::{
   HotwordRuleData, PreparedHotwordData, apply_hotword_rules,
@@ -319,6 +321,55 @@ struct StaticEntityPasses {
   legal_form: TimedEntities,
   address_seed: TimedEntities,
   name_corpus: TimedEntities,
+}
+
+type DiagnosticObserver<'a> =
+  &'a mut dyn FnMut(&[DiagnosticEvent]) -> Result<()>;
+
+struct DiagnosticEventStream<'a> {
+  observed_event_count: usize,
+  observer: Option<DiagnosticObserver<'a>>,
+}
+
+impl<'a> DiagnosticEventStream<'a> {
+  const fn none() -> Self {
+    Self {
+      observed_event_count: 0,
+      observer: None,
+    }
+  }
+
+  const fn observed(observer: DiagnosticObserver<'a>) -> Self {
+    Self {
+      observed_event_count: 0,
+      observer: Some(observer),
+    }
+  }
+
+  fn observe(
+    &mut self,
+    diagnostics: Option<&StaticRedactionDiagnostics>,
+  ) -> Result<()> {
+    let Some(observer) = self.observer.as_deref_mut() else {
+      return Ok(());
+    };
+    let Some(diagnostics) = diagnostics else {
+      return Ok(());
+    };
+    let events = diagnostics
+      .events
+      .get(self.observed_event_count..)
+      .ok_or_else(|| Error::InvalidStaticData {
+        field: "diagnostics.events",
+        reason: String::from("observed event cursor is out of bounds"),
+      })?;
+    if events.is_empty() {
+      return Ok(());
+    }
+    observer(events)?;
+    self.observed_event_count = diagnostics.events.len();
+    Ok(())
+  }
 }
 
 impl StaticEntityPasses {
@@ -1215,7 +1266,13 @@ impl PreparedSearch {
     full_text: &str,
     operators: &OperatorConfig,
   ) -> Result<StaticRedactionResult> {
-    self.redact_static_entities_inner(full_text, operators, None)
+    let mut event_stream = DiagnosticEventStream::none();
+    self.redact_static_entities_inner(
+      full_text,
+      operators,
+      None,
+      &mut event_stream,
+    )
   }
 
   pub fn redact_static_entities_with_diagnostics(
@@ -1224,10 +1281,12 @@ impl PreparedSearch {
     operators: &OperatorConfig,
   ) -> Result<StaticRedactionDiagnosticResult> {
     let mut diagnostics = StaticRedactionDiagnostics::default();
+    let mut event_stream = DiagnosticEventStream::none();
     let result = self.redact_static_entities_inner(
       full_text,
       operators,
       Some(&mut diagnostics),
+      &mut event_stream,
     )?;
 
     Ok(StaticRedactionDiagnosticResult {
@@ -1242,10 +1301,36 @@ impl PreparedSearch {
     operators: &OperatorConfig,
   ) -> Result<StaticRedactionDiagnosticResult> {
     let mut diagnostics = StaticRedactionDiagnostics::summary();
+    let mut event_stream = DiagnosticEventStream::none();
     let result = self.redact_static_entities_inner(
       full_text,
       operators,
       Some(&mut diagnostics),
+      &mut event_stream,
+    )?;
+
+    Ok(StaticRedactionDiagnosticResult {
+      result,
+      diagnostics,
+    })
+  }
+
+  pub fn redact_static_entities_with_diagnostics_observer<F>(
+    &self,
+    full_text: &str,
+    operators: &OperatorConfig,
+    mut observer: F,
+  ) -> Result<StaticRedactionDiagnosticResult>
+  where
+    F: FnMut(&[DiagnosticEvent]) -> Result<()>,
+  {
+    let mut diagnostics = StaticRedactionDiagnostics::default();
+    let mut event_stream = DiagnosticEventStream::observed(&mut observer);
+    let result = self.redact_static_entities_inner(
+      full_text,
+      operators,
+      Some(&mut diagnostics),
+      &mut event_stream,
     )?;
 
     Ok(StaticRedactionDiagnosticResult {
@@ -1259,15 +1344,53 @@ impl PreparedSearch {
     full_text: &str,
     operators: &OperatorConfig,
     mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
+    event_stream: &mut DiagnosticEventStream<'_>,
   ) -> Result<StaticRedactionResult> {
     let redact_start = Instant::now();
     let detections = self
       .detect_static_entities_inner(full_text, diagnostics.as_deref_mut())?;
-    let pre_threshold_entities = self.prepare_pre_threshold_entities(
+    observe_diagnostic_stream(&diagnostics, event_stream)?;
+    let resolved_entities = self.resolve_static_entities(
       &detections,
+      full_text,
+      &mut diagnostics,
+      event_stream,
+    )?;
+    let redaction_entities = resolved_entities
+      .iter()
+      .map(to_redaction_entity)
+      .collect::<Vec<_>>();
+    let redaction_start = Instant::now();
+    let redaction = redact_text(full_text, &redaction_entities, operators)?;
+    record_redaction_stages(
+      &mut diagnostics,
+      &redaction,
+      full_text.len(),
+      redaction_start,
+      redact_start,
+    );
+    observe_diagnostic_stream(&diagnostics, event_stream)?;
+
+    Ok(StaticRedactionResult {
+      detections,
+      resolved_entities,
+      redaction,
+    })
+  }
+
+  fn resolve_static_entities(
+    &self,
+    detections: &StaticDetectionResult,
+    full_text: &str,
+    diagnostics: &mut Option<&mut StaticRedactionDiagnostics>,
+    event_stream: &mut DiagnosticEventStream<'_>,
+  ) -> Result<Vec<PipelineEntity>> {
+    let pre_threshold_entities = self.prepare_pre_threshold_entities(
+      detections,
       full_text,
       diagnostics.as_deref_mut(),
     )?;
+    observe_diagnostic_stream(diagnostics, event_stream)?;
     let mut raw_entities = filter_entities_for_redaction(
       pre_threshold_entities,
       full_text,
@@ -1278,7 +1401,7 @@ impl PreparedSearch {
     let address_context_start = Instant::now();
     let address_context_entities =
       self.process_address_context_entities(full_text, &raw_entities)?;
-    if let Some(diagnostics) = &mut diagnostics {
+    if let Some(diagnostics) = diagnostics {
       diagnostics.record_entities(
         DiagnosticStage::EntityAddressContext,
         &address_context_entities,
@@ -1286,11 +1409,12 @@ impl PreparedSearch {
         Some(elapsed_us(address_context_start)),
       );
     }
+    observe_diagnostic_stream(diagnostics, event_stream)?;
     raw_entities.extend(address_context_entities);
     let merge_start = Instant::now();
     let merged = merge_and_dedup(&raw_entities);
     let merged = self.extend_monetary_entities(full_text, &merged);
-    if let Some(diagnostics) = &mut diagnostics {
+    if let Some(diagnostics) = diagnostics {
       diagnostics.record_entities(
         DiagnosticStage::Merge,
         &merged,
@@ -1298,9 +1422,10 @@ impl PreparedSearch {
         Some(elapsed_us(merge_start)),
       );
     }
+    observe_diagnostic_stream(diagnostics, event_stream)?;
     let boundary_start = Instant::now();
     let consistent = enforce_boundary_consistency(&merged, full_text)?;
-    if let Some(diagnostics) = &mut diagnostics {
+    if let Some(diagnostics) = diagnostics {
       diagnostics.record_entities(
         DiagnosticStage::Boundary,
         &consistent,
@@ -1308,6 +1433,7 @@ impl PreparedSearch {
         Some(elapsed_us(boundary_start)),
       );
     }
+    observe_diagnostic_stream(diagnostics, event_stream)?;
     let sanitize_start = Instant::now();
     let sanitized_entities =
       sanitize_entities_with_source(&consistent, full_text)?;
@@ -1334,7 +1460,7 @@ impl PreparedSearch {
       diagnostics.as_deref_mut(),
     )?;
     clear_internal_source_details(&mut resolved_entities);
-    if let Some(diagnostics) = &mut diagnostics {
+    if let Some(diagnostics) = diagnostics {
       diagnostics.record_entities(
         DiagnosticStage::Sanitize,
         &resolved_entities,
@@ -1342,25 +1468,8 @@ impl PreparedSearch {
         Some(elapsed_us(sanitize_start)),
       );
     }
-    let redaction_entities = resolved_entities
-      .iter()
-      .map(to_redaction_entity)
-      .collect::<Vec<_>>();
-    let redaction_start = Instant::now();
-    let redaction = redact_text(full_text, &redaction_entities, operators)?;
-    record_redaction_stages(
-      &mut diagnostics,
-      &redaction,
-      full_text.len(),
-      redaction_start,
-      redact_start,
-    );
-
-    Ok(StaticRedactionResult {
-      detections,
-      resolved_entities,
-      redaction,
-    })
+    observe_diagnostic_stream(diagnostics, event_stream)?;
+    Ok(resolved_entities)
   }
 
   fn prepare_pre_threshold_entities(
@@ -2180,6 +2289,13 @@ fn record_redaction_stages(
     Some(elapsed_us(total_start)),
     Some(input_bytes),
   );
+}
+
+fn observe_diagnostic_stream(
+  diagnostics: &Option<&mut StaticRedactionDiagnostics>,
+  event_stream: &mut DiagnosticEventStream<'_>,
+) -> Result<()> {
+  event_stream.observe(diagnostics.as_ref().map(|value| &**value))
 }
 
 fn anchored_config_len(

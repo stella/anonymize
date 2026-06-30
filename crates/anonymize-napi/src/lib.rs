@@ -9,9 +9,9 @@ use napi_derive::napi;
 use stella_anonymize_adapter_contract::{
   BindingOperatorConfig, BindingOperatorEntry, BindingPreparedSearchConfig,
   BindingRedactionResult, BindingStaticRedactionResult, ContractError,
-  PreparedSearchPackageDecodeTimings, diagnostic_stage_event,
-  operator_config_from_binding, prepared_search_config_from_binding,
-  prepared_search_core_package_to_bytes,
+  PreparedSearchPackageDecodeTimings, diagnostic_events_to_utf16_binding,
+  diagnostic_stage_event, operator_config_from_binding,
+  prepared_search_config_from_binding, prepared_search_core_package_to_bytes,
   prepared_search_core_package_to_compressed_bytes,
   prepared_search_core_package_view_from_bytes_with_timings,
   prepared_search_core_package_view_trusted_from_bytes_with_timings,
@@ -23,9 +23,9 @@ use stella_anonymize_adapter_contract::{
   static_redaction_result_to_utf16_binding,
 };
 use stella_anonymize_core::{
-  DiagnosticDetail, DiagnosticEvent, DiagnosticStage, OperatorConfig,
-  PreparedSearch, PreparedSearchArtifactsView, PreparedSearchConfig,
-  StaticRedactionDiagnostics,
+  DiagnosticDetail, DiagnosticEvent, DiagnosticStage, Error as CoreError,
+  OperatorConfig, PreparedSearch, PreparedSearchArtifactsView,
+  PreparedSearchConfig, StaticRedactionDiagnostics,
 };
 
 const PREPARED_SEARCH_CACHE_LIMIT: usize = 8;
@@ -854,6 +854,42 @@ impl NativePreparedSearch {
     )
   }
 
+  #[napi]
+  #[allow(clippy::needless_pass_by_value)]
+  pub fn redact_static_entities_diagnostics_stream_json(
+    &self,
+    full_text: String,
+    operators: Option<JsOperatorConfig>,
+    on_batch: Function<'_, (String,), ()>,
+  ) -> Result<String> {
+    let operators =
+      operator_config_from_binding(operators.map(to_binding_operator_config))
+        .map_err(|error| to_napi_contract_error(&error))?;
+    emit_prepare_diagnostics_batch(&self.prepare_diagnostics, &on_batch)?;
+    let mut result = self
+      .inner
+      .redact_static_entities_with_diagnostics_observer(
+        &full_text,
+        &operators,
+        |events| {
+          let batch_json = diagnostic_event_batch_json(events, &full_text)?;
+          on_batch
+            .call((batch_json,))
+            .map_err(|error| core_observer_error(error.to_string()))?;
+          Ok(())
+        },
+      )
+      .map_err(|error| to_napi_core_error(&error))?;
+    let mut diagnostics = self.prepare_diagnostics.clone();
+    diagnostics.extend(result.diagnostics);
+    result.diagnostics = diagnostics;
+    let result =
+      static_redaction_diagnostic_result_to_utf16_binding(result, &full_text)
+        .map_err(|error| to_napi_contract_error(&error))?;
+
+    serde_json::to_string(&result).map_err(|error| to_napi_serde_error(&error))
+  }
+
   fn redact_static_entities_diagnostics_json_inner(
     &self,
     full_text: &str,
@@ -877,6 +913,44 @@ impl NativePreparedSearch {
         .map_err(|error| to_napi_contract_error(&error))?;
 
     serde_json::to_string(&result).map_err(|error| to_napi_serde_error(&error))
+  }
+}
+
+fn emit_prepare_diagnostics_batch(
+  diagnostics: &StaticRedactionDiagnostics,
+  on_batch: &Function<'_, (String,), ()>,
+) -> Result<()> {
+  if diagnostics.events.is_empty() {
+    return Ok(());
+  }
+  let diagnostics =
+    static_redaction_diagnostics_to_binding(diagnostics.clone());
+  let batch_json = serde_json::to_string(&diagnostics)
+    .map_err(|error| to_napi_serde_error(&error))?;
+  on_batch.call((batch_json,))
+}
+
+fn diagnostic_event_batch_json(
+  events: &[DiagnosticEvent],
+  full_text: &str,
+) -> stella_anonymize_core::Result<String> {
+  let diagnostics = diagnostic_events_to_utf16_binding(events, full_text)
+    .map_err(|error| {
+      core_observer_error(format!(
+        "diagnostic batch conversion failed: {error}"
+      ))
+    })?;
+  serde_json::to_string(&diagnostics).map_err(|error| {
+    core_observer_error(format!(
+      "diagnostic batch serialization failed: {error}"
+    ))
+  })
+}
+
+const fn core_observer_error(reason: String) -> CoreError {
+  CoreError::InvalidStaticData {
+    field: "diagnostics.observer",
+    reason,
   }
 }
 

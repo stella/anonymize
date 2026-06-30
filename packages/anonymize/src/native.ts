@@ -6,6 +6,8 @@ type NativeBindingOperatorConfig = {
   redactString?: string;
 };
 
+export type NativeDiagnosticsBatchCallback = (diagnosticsJson: string) => void;
+
 type NativeBindingRedactionEntry = {
   placeholder: string;
   original: string;
@@ -75,6 +77,11 @@ export type NativePreparedSearchBinding = {
   redactStaticEntitiesDiagnosticsJson?: (
     fullText: string,
     operators?: NativeBindingOperatorConfig,
+  ) => string;
+  redactStaticEntitiesDiagnosticsStreamJson?: (
+    fullText: string,
+    operators: NativeBindingOperatorConfig | undefined,
+    onBatch: NativeDiagnosticsBatchCallback,
   ) => string;
   redactStaticEntitiesSummaryDiagnosticsJson?: (
     fullText: string,
@@ -165,6 +172,11 @@ export type SharedNativeRedactTextOptions = SharedNativeRedactTextJsonOptions;
 
 export type SharedNativeDiagnosticsJsonOptions =
   SharedNativeRedactTextJsonOptions;
+
+export type SharedNativeDiagnosticsStreamJsonOptions =
+  SharedNativeRedactTextJsonOptions & {
+    onBatch: NativeDiagnosticsBatchCallback;
+  };
 
 export type NativeNormalizeOptions = {
   binding: NativeAnonymizeBinding;
@@ -287,6 +299,29 @@ export class PreparedNativeAnonymizer {
     return this.redactStaticEntitiesDiagnosticsJson(fullText, operators);
   }
 
+  diagnosticsStreamJson(
+    fullText: string,
+    onBatch: NativeDiagnosticsBatchCallback,
+    operators?: NativeOperatorConfig,
+  ): string | null {
+    if (!this.#prepared.redactStaticEntitiesDiagnosticsStreamJson) {
+      return null;
+    }
+    return this.#prepared.redactStaticEntitiesDiagnosticsStreamJson(
+      fullText,
+      toBindingOperatorConfig(operators),
+      onBatch,
+    );
+  }
+
+  diagnostics_stream_json(
+    fullText: string,
+    onBatch: NativeDiagnosticsBatchCallback,
+    operators?: NativeOperatorConfig,
+  ): string | null {
+    return this.diagnosticsStreamJson(fullText, onBatch, operators);
+  }
+
   redactStaticEntitiesSummaryDiagnosticsJson(
     fullText: string,
     operators?: NativeOperatorConfig,
@@ -376,6 +411,22 @@ export class PreparedNativePipeline {
     operators?: NativeOperatorConfig,
   ): string | null {
     return this.redactTextDiagnosticsJson(fullText, operators);
+  }
+
+  diagnosticsStreamJson(
+    fullText: string,
+    onBatch: NativeDiagnosticsBatchCallback,
+    operators?: NativeOperatorConfig,
+  ): string | null {
+    return this.#anonymizer.diagnosticsStreamJson(fullText, onBatch, operators);
+  }
+
+  diagnostics_stream_json(
+    fullText: string,
+    onBatch: NativeDiagnosticsBatchCallback,
+    operators?: NativeOperatorConfig,
+  ): string | null {
+    return this.diagnosticsStreamJson(fullText, onBatch, operators);
   }
 
   redactTextSummaryDiagnosticsJson(
@@ -516,6 +567,19 @@ export const diagnostics_json = ({
       encodeNativeSearchConfigInput(config),
     ),
   ).diagnostics_json(fullText, operators);
+
+export const diagnostics_stream_json = ({
+  binding,
+  config,
+  fullText,
+  operators,
+  onBatch,
+}: SharedNativeDiagnosticsStreamJsonOptions): string | null =>
+  new PreparedNativeAnonymizer(
+    binding.NativePreparedSearch.fromConfigJsonBytes(
+      encodeNativeSearchConfigInput(config),
+    ),
+  ).diagnostics_stream_json(fullText, onBatch, operators);
 
 export const summary_diagnostics_json = ({
   binding,

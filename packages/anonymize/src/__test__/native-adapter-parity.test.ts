@@ -19,6 +19,7 @@ import {
   assertNativeBindingVersion,
   createNativeAnonymizerFromPackage,
   diagnostics_json,
+  diagnostics_stream_json,
   getNativeBindingVersion,
   load_prepared_package,
   native_package_version,
@@ -1457,6 +1458,7 @@ describe("native adapter parity", () => {
       unknown
     > = {
       diagnostics_json,
+      diagnostics_stream_json,
       load_prepared_package,
       native_package_version,
       normalize_for_search,

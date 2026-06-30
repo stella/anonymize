@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from os import PathLike
 from typing import Literal, TypeAlias
 
@@ -24,6 +24,7 @@ from ._native import (
 BytesLike: TypeAlias = bytes | bytearray | memoryview
 PathLikeString: TypeAlias = str | PathLike[str]
 OperatorConfig: TypeAlias = Mapping[str, str] | str | None
+DiagnosticsBatchCallback: TypeAlias = Callable[[str], object]
 NativeSearchPackageInput: TypeAlias = str | BytesLike | Mapping[str, object]
 DefaultNativePipelineWarmup: TypeAlias = Literal["lazy-regex", "none"]
 DEFAULT_NATIVE_PIPELINE_WARMUPS: tuple[
@@ -70,6 +71,14 @@ class PreparedAnonymizer:
     def diagnostics_json(
         self,
         full_text: str,
+        operators: OperatorConfig = None,
+        *,
+        redact_string: str | None = None,
+    ) -> str: ...
+    def diagnostics_stream_json(
+        self,
+        full_text: str,
+        on_batch: DiagnosticsBatchCallback,
         operators: OperatorConfig = None,
         *,
         redact_string: str | None = None,
@@ -176,6 +185,14 @@ def redact_text_json(
 def diagnostics_json(
     config_json: NativeSearchPackageInput,
     full_text: str,
+    operators: OperatorConfig = None,
+    *,
+    redact_string: str | None = None,
+) -> str: ...
+def diagnostics_stream_json(
+    config_json: NativeSearchPackageInput,
+    full_text: str,
+    on_batch: DiagnosticsBatchCallback,
     operators: OperatorConfig = None,
     *,
     redact_string: str | None = None,

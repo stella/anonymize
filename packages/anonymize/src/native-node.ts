@@ -14,6 +14,7 @@ import {
   PreparedNativePipeline,
   type NativeStaticRedactionResult,
   diagnostics_json as diagnosticsJsonWithBinding,
+  diagnostics_stream_json as diagnosticsStreamJsonWithBinding,
   load_prepared_package as loadPreparedPackageWithBinding,
   native_package_version as nativePackageVersionWithBinding,
   normalize_for_search as normalizeForSearchWithBinding,
@@ -216,6 +217,21 @@ export const diagnostics_json = (
     binding: resolveNativeSdkBinding(options),
     config,
     fullText,
+    ...(operators !== undefined ? { operators } : {}),
+  });
+
+export const diagnostics_stream_json = (
+  config: NativeSearchPackageInput,
+  fullText: string,
+  onBatch: (diagnosticsJson: string) => void,
+  operators?: NativeOperatorConfig,
+  options: NativeSdkOptions = {},
+): string | null =>
+  diagnosticsStreamJsonWithBinding({
+    binding: resolveNativeSdkBinding(options),
+    config,
+    fullText,
+    onBatch,
     ...(operators !== undefined ? { operators } : {}),
   });
 

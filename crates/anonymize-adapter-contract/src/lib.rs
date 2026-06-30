@@ -2456,6 +2456,29 @@ pub fn static_redaction_diagnostics_to_utf16_binding(
   Ok(diagnostics)
 }
 
+#[must_use]
+pub fn diagnostic_events_to_binding(
+  events: &[DiagnosticEvent],
+) -> BindingStaticRedactionDiagnostics {
+  BindingStaticRedactionDiagnostics {
+    events: events
+      .iter()
+      .cloned()
+      .map(diagnostic_event_to_binding)
+      .collect(),
+  }
+}
+
+pub fn diagnostic_events_to_utf16_binding(
+  events: &[DiagnosticEvent],
+  full_text: &str,
+) -> Result<BindingStaticRedactionDiagnostics> {
+  let offsets = Utf16OffsetMap::new(full_text)?;
+  let mut diagnostics = diagnostic_events_to_binding(events);
+  convert_diagnostic_offsets(&mut diagnostics.events, &offsets)?;
+  Ok(diagnostics)
+}
+
 fn diagnostic_event_to_binding(
   event: DiagnosticEvent,
 ) -> BindingDiagnosticEvent {
@@ -3023,8 +3046,9 @@ mod tests {
     PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION,
     PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION,
     PREPARED_SEARCH_PACKAGE_DIGEST_BYTES, PREPARED_SEARCH_PACKAGE_ZSTD_LEVEL,
-    PreparedSearchPackageDecodeTimings, diagnostic_stage_event,
-    operator_config_from_binding, prepared_search_config_from_binding,
+    PreparedSearchPackageDecodeTimings, diagnostic_events_to_utf16_binding,
+    diagnostic_stage_event, operator_config_from_binding,
+    prepared_search_config_from_binding,
     prepared_search_core_package_decode_from_bytes_with_timings,
     prepared_search_core_package_decode_trusted_from_bytes_with_timings,
     prepared_search_core_package_from_bytes,
@@ -3275,6 +3299,44 @@ mod tests {
       error,
       ContractError::InvalidBindingOffset { offset: 1 }
     ));
+  }
+
+  #[test]
+  fn utf16_diagnostic_event_batches_match_full_diagnostics() {
+    let diagnostics = StaticRedactionDiagnostics {
+      events: vec![DiagnosticEvent {
+        stage: DiagnosticStage::EntityRegex,
+        kind: DiagnosticEventKind::Entity,
+        count: None,
+        slot: None,
+        subslot: None,
+        pattern_count: None,
+        engine: None,
+        pattern: None,
+        source: None,
+        source_detail: None,
+        label: Some("name".to_string()),
+        start: Some(0),
+        end: Some(2),
+        text: None,
+        score: Some(0.9),
+        span_valid: Some(true),
+        elapsed_us: Some(12),
+        input_bytes: None,
+        artifact_count: None,
+        artifact_bytes: None,
+        reason: None,
+      }],
+      ..StaticRedactionDiagnostics::default()
+    };
+
+    let full =
+      static_redaction_diagnostics_to_utf16_binding(diagnostics.clone(), "áx")
+        .unwrap();
+    let batch =
+      diagnostic_events_to_utf16_binding(&diagnostics.events, "áx").unwrap();
+
+    assert_eq!(batch, full);
   }
 
   #[test]

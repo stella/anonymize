@@ -2258,6 +2258,71 @@ fn prepared_search_reports_static_redaction_diagnostics() {
   );
 }
 
+#[test]
+fn prepared_search_streams_diagnostic_batches() {
+  let prepared = PreparedSearch::new(PreparedSearchConfig {
+    literal_patterns: vec![SearchPattern::LiteralWithOptions {
+      pattern: String::from("Secret Code"),
+      case_insensitive: Some(true),
+      whole_words: Some(true),
+    }],
+    literal_options: SearchOptions {
+      literal: LiteralSearchOptions {
+        case_insensitive: true,
+        whole_words: false,
+      },
+      ..SearchOptions::default()
+    },
+    slices: PreparedSearchSlices {
+      deny_list: PatternSlice { start: 0, end: 1 },
+      ..PreparedSearchSlices::default()
+    },
+    deny_list_data: Some(DenyListMatchData {
+      labels: vec![vec![String::from("matter")]].into(),
+      custom_labels: vec![vec![String::from("matter")]].into(),
+      originals: vec![String::from("Secret Code")],
+      pattern_meta: stella_anonymize_core::DenyListPatternMetaSet::default(),
+      sources: vec![vec![String::from("custom-deny-list")]].into(),
+      filters: None,
+    }),
+    ..empty_config(PreparedSearchSlices::default())
+  })
+  .unwrap();
+  let mut streamed_events = Vec::new();
+  let mut batch_stages = Vec::new();
+
+  let result = prepared
+    .redact_static_entities_with_diagnostics_observer(
+      "Secret Code was disclosed.",
+      &OperatorConfig::default(),
+      |events| {
+        batch_stages
+          .push(events.iter().map(|event| event.stage).collect::<Vec<_>>());
+        streamed_events.extend_from_slice(events);
+        Ok::<(), Error>(())
+      },
+    )
+    .unwrap();
+
+  assert_eq!(
+    result.result.redaction.redacted_text,
+    "[MATTER_1] was disclosed."
+  );
+  assert_eq!(streamed_events, result.diagnostics.events);
+  assert!(
+    batch_stages
+      .first()
+      .is_some_and(|stages| stages.contains(&DiagnosticStage::DetectTotal)
+        && !stages.contains(&DiagnosticStage::Redaction))
+  );
+  assert!(
+    batch_stages
+      .last()
+      .is_some_and(|stages| stages.contains(&DiagnosticStage::Redaction)
+        && stages.contains(&DiagnosticStage::RedactTotal))
+  );
+}
+
 fn assert_stage_summary(
   events: &[DiagnosticEvent],
   stage: DiagnosticStage,

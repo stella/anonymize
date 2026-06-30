@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from functools import lru_cache
 from importlib.resources import files
 from os import PathLike
@@ -30,6 +30,7 @@ __all__ = [
     "__version__",
     "OperatorEntry",
     "OperatorConfig",
+    "DiagnosticsBatchCallback",
     "DefaultNativePipelineWarmup",
     "DEFAULT_NATIVE_PIPELINE_WARMUPS",
     "NativeSearchPackageInput",
@@ -43,6 +44,7 @@ __all__ = [
     "available_default_native_pipeline_languages",
     "create_native_pipeline_from_default_package",
     "diagnostics_json",
+    "diagnostics_stream_json",
     "get_default_native_pipeline",
     "load_prepared_package",
     "load_prepared_package_file",
@@ -67,6 +69,7 @@ __all__ = [
 BytesLike = bytes | bytearray | memoryview
 PathLikeString = str | PathLike[str]
 OperatorConfig = Mapping[str, str] | str | None
+DiagnosticsBatchCallback = Callable[[str], object]
 NativeSearchPackageInput = str | BytesLike | Mapping[str, object]
 DefaultNativePipelineWarmup = Literal["lazy-regex", "none"]
 DEFAULT_NATIVE_PIPELINE_WARMUPS: tuple[
@@ -156,6 +159,20 @@ class PreparedAnonymizer:
     ) -> str:
         return self._prepared.redact_static_entities_diagnostics_json(
             full_text,
+            _operator_config_json(operators, redact_string=redact_string),
+        )
+
+    def diagnostics_stream_json(
+        self,
+        full_text: str,
+        on_batch: DiagnosticsBatchCallback,
+        operators: OperatorConfig = None,
+        *,
+        redact_string: str | None = None,
+    ) -> str:
+        return self._prepared.redact_static_entities_diagnostics_stream_json(
+            full_text,
+            on_batch,
             _operator_config_json(operators, redact_string=redact_string),
         )
 
@@ -460,6 +477,23 @@ def diagnostics_json(
     prepared = _prepare_from_config_json(_native_search_config_json(config_json))
     return prepared.diagnostics_json(
         full_text,
+        operators,
+        redact_string=redact_string,
+    )
+
+
+def diagnostics_stream_json(
+    config_json: NativeSearchPackageInput,
+    full_text: str,
+    on_batch: DiagnosticsBatchCallback,
+    operators: OperatorConfig = None,
+    *,
+    redact_string: str | None = None,
+) -> str:
+    prepared = _prepare_from_config_json(_native_search_config_json(config_json))
+    return prepared.diagnostics_stream_json(
+        full_text,
+        on_batch,
         operators,
         redact_string=redact_string,
     )
