@@ -33,7 +33,7 @@ use diagnostic_stream::DiagnosticEventStream;
 use engine_state::{PipelinePolicy, PreparedStaticData, SearchIndexes};
 pub use results::{
   PreparedEngineBuildResult, PreparedEngineMatches, StaticDetectionResult,
-  StaticRedactionDiagnosticResult, StaticRedactionResult,
+  StaticEntityLayers, StaticRedactionDiagnosticResult, StaticRedactionResult,
 };
 
 pub struct PreparedEngine {

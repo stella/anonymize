@@ -50,7 +50,7 @@ pub use prepared::{
   PreparedEngineBuildResult, PreparedEngineConfig,
   PreparedEngineDetectorConfig, PreparedEngineMatches,
   PreparedEnginePolicyConfig, PreparedEngineSearchConfig, PreparedEngineSlices,
-  StaticDetectionResult, StaticRedactionDiagnosticResult,
+  StaticDetectionResult, StaticEntityLayers, StaticRedactionDiagnosticResult,
   StaticRedactionResult,
 };
 pub use processors::{

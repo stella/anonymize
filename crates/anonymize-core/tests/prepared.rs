@@ -217,8 +217,8 @@ fn prepared_engine_runs_legal_form_pass_on_normalized_text() {
     .detect_static_entities("Acme Pty\u{00a0}Ltd signed the agreement.")
     .unwrap();
 
-  assert_eq!(result.legal_form_entities.len(), 1);
-  assert_eq!(result.legal_form_entities[0].text, "Acme Pty\u{00a0}Ltd");
+  assert_eq!(result.entities.legal_form.len(), 1);
+  assert_eq!(result.entities.legal_form[0].text, "Acme Pty\u{00a0}Ltd");
 }
 
 #[test]
@@ -268,8 +268,8 @@ fn prepared_engine_runs_normalized_literal_pass() {
     .detect_static_entities("Acme\u{00a0}Corp. signed")
     .unwrap();
 
-  assert_eq!(result.gazetteer_entities.len(), 1);
-  assert_eq!(result.gazetteer_entities[0].text, "Acme\u{00a0}Corp");
+  assert_eq!(result.entities.gazetteer.len(), 1);
+  assert_eq!(result.entities.gazetteer[0].text, "Acme\u{00a0}Corp");
 }
 
 #[test]
@@ -939,14 +939,14 @@ fn prepared_engine_emits_static_detector_entities() {
     .detect_static_entities("Acme s.r.o. filed AB1234 in Turkey under MAT-123")
     .unwrap();
 
-  assert_eq!(result.regex_entities[0].label, "registration number");
-  assert_eq!(result.custom_regex_entities[0].label, "matter id");
+  assert_eq!(result.entities.regex[0].label, "registration number");
+  assert_eq!(result.entities.custom_regex[0].label, "matter id");
   assert_eq!(
-    result.custom_regex_entities[0].source_detail,
+    result.entities.custom_regex[0].source_detail,
     Some(SourceDetail::CustomRegex)
   );
-  assert_eq!(result.gazetteer_entities[0].text, "Acme s.r.o.");
-  assert_eq!(result.country_entities[0].source, DetectionSource::Country);
+  assert_eq!(result.entities.gazetteer[0].text, "Acme s.r.o.");
+  assert_eq!(result.entities.country[0].source, DetectionSource::Country);
 }
 
 #[test]
@@ -1033,7 +1033,8 @@ fn prepared_engine_preserves_overlapping_custom_regex_matches() {
     .detect_static_entities("Alice Smith signed.")
     .unwrap();
   let custom_texts = result
-    .custom_regex_entities
+    .entities
+    .custom_regex
     .iter()
     .map(|entity| entity.text.as_str())
     .collect::<Vec<_>>();
@@ -1118,7 +1119,8 @@ fn prepared_engine_extracts_dates_from_anchored_data() {
     )
     .unwrap();
   let entities = result
-    .anchored_entities
+    .entities
+    .anchored
     .iter()
     .map(|entity| (entity.text.as_str(), entity.label.as_str(), entity.source))
     .collect::<Vec<_>>();
@@ -1157,7 +1159,8 @@ fn prepared_engine_extracts_uppercase_ordinal_dates() {
 
   assert!(
     result
-      .anchored_entities
+      .entities
+      .anchored
       .iter()
       .any(|entity| entity.text == "1ST January 2025")
   );
@@ -1314,7 +1317,8 @@ fn prepared_engine_extracts_year_after_duplicate_year_word_noise() {
 
   assert!(
     result
-      .trigger_entities
+      .entities
+      .trigger
       .iter()
       .any(|entity| entity.label == "date" && entity.text == "2026")
   );
@@ -1362,7 +1366,7 @@ fn prepared_engine_trigger_caps_by_characters_not_bytes() {
     .unwrap();
 
   assert!(
-    result.trigger_entities.iter().any(|entity| entity.label
+    result.entities.trigger.iter().any(|entity| entity.label
       == "monetary amount"
       && entity.text == expected)
   );
@@ -1410,7 +1414,8 @@ fn prepared_engine_trigger_validations_count_characters_not_bytes() {
 
   assert!(
     result
-      .trigger_entities
+      .entities
+      .trigger
       .iter()
       .any(|entity| entity.label == "person" && entity.text == "Áběčď")
   );
@@ -1452,14 +1457,15 @@ fn prepared_engine_rejects_lowercase_acronym_trigger_collisions() {
   let lower = prepared
     .detect_static_entities("Cena je stanovena ke dni 6.11.2025.")
     .unwrap();
-  assert!(lower.trigger_entities.is_empty());
+  assert!(lower.entities.trigger.is_empty());
 
   let upper = prepared
     .detect_static_entities("Documento DNI 12345678Z.")
     .unwrap();
   assert!(
     upper
-      .trigger_entities
+      .entities
+      .trigger
       .iter()
       .any(|entity| entity.text == "12345678Z"
         && entity.label == "national identification number")
@@ -1509,7 +1515,8 @@ fn prepared_engine_trims_party_position_before_triggered_address() {
 
   assert!(
     result
-      .trigger_entities
+      .entities
+      .trigger
       .iter()
       .any(|entity| entity.label == "address"
         && entity.text == "Na Květnici 1657/16, 140 00 Praha 4")
@@ -1545,7 +1552,8 @@ fn prepared_engine_extracts_money_from_anchored_data() {
     )
     .unwrap();
   let entities = result
-    .anchored_entities
+    .entities
+    .anchored
     .iter()
     .map(|entity| entity.text.as_str())
     .collect::<Vec<_>>();
@@ -1586,7 +1594,8 @@ fn prepared_engine_rejects_long_ungrouped_money_numbers() {
     )
     .unwrap();
   let entities = result
-    .anchored_entities
+    .entities
+    .anchored
     .iter()
     .map(|entity| entity.text.as_str())
     .collect::<Vec<_>>();
@@ -1625,7 +1634,8 @@ fn prepared_engine_extends_money_to_written_amount_parenthetical() {
     )
     .unwrap();
   let entities = result
-    .anchored_entities
+    .entities
+    .anchored
     .iter()
     .map(|entity| entity.text.as_str())
     .collect::<Vec<_>>();
@@ -2123,7 +2133,8 @@ fn prepared_engine_keeps_person_name_particles_after_trigger() {
     .unwrap();
   assert!(
     with_apostrophe
-      .trigger_entities
+      .entities
+      .trigger
       .iter()
       .any(|entity| entity.text == "Jean d'Arc")
   );
@@ -2133,7 +2144,8 @@ fn prepared_engine_keeps_person_name_particles_after_trigger() {
     .unwrap();
   assert!(
     with_particle
-      .trigger_entities
+      .entities
+      .trigger
       .iter()
       .any(|entity| entity.text == "João dos Santos")
   );
@@ -2143,13 +2155,15 @@ fn prepared_engine_keeps_person_name_particles_after_trigger() {
     .unwrap();
   assert!(
     trailing_particle
-      .trigger_entities
+      .entities
+      .trigger
       .iter()
       .any(|entity| entity.text == "Novák")
   );
   assert!(
     trailing_particle
-      .trigger_entities
+      .entities
+      .trigger
       .iter()
       .all(|entity| !entity.text.contains("von"))
   );
@@ -2215,7 +2229,7 @@ fn prepared_engine_redacts_custom_deny_list_entities() {
     )
     .unwrap();
 
-  assert_eq!(result.detections.deny_list_entities.len(), 1);
+  assert_eq!(result.detections.entities.deny_list.len(), 1);
   assert_eq!(result.redaction.redacted_text, "[MATTER_1] was disclosed.");
   assert_eq!(result.redaction.entity_count, 1);
 }
@@ -2983,10 +2997,10 @@ fn prepared_engine_detects_non_english_legal_form_entities() {
     .detect_static_entities("Smlouvu podepsaly Pražské služby, a.s. dnes.")
     .unwrap();
 
-  assert_eq!(result.legal_form_entities.len(), 1);
-  assert_eq!(result.legal_form_entities[0].text, "Pražské služby, a.s.");
+  assert_eq!(result.entities.legal_form.len(), 1);
+  assert_eq!(result.entities.legal_form[0].text, "Pražské služby, a.s.");
   assert_eq!(
-    result.legal_form_entities[0].source,
+    result.entities.legal_form[0].source,
     DetectionSource::LegalForm
   );
 }
@@ -3001,9 +3015,9 @@ fn prepared_engine_keeps_indented_line_wrapped_legal_form_suffix() {
     )
     .unwrap();
 
-  assert_eq!(result.legal_form_entities.len(), 1);
+  assert_eq!(result.entities.legal_form.len(), 1);
   assert_eq!(
-    result.legal_form_entities[0].text,
+    result.entities.legal_form[0].text,
     "Goldman Sachs & Co.\n  LLC"
   );
 }
@@ -3018,7 +3032,8 @@ fn prepared_engine_splits_embedded_legal_form_lists() {
     )
     .unwrap();
   let texts = result
-    .legal_form_entities
+    .entities
+    .legal_form
     .iter()
     .map(|entity| entity.text.as_str())
     .collect::<Vec<_>>();
@@ -3034,5 +3049,5 @@ fn prepared_engine_rejects_dotted_citation_legal_form_substrings() {
     .detect_static_entities("See 18 U.S.C. Section 1833(b) for civil immunity.")
     .unwrap();
 
-  assert!(result.legal_form_entities.is_empty());
+  assert!(result.entities.legal_form.is_empty());
 }

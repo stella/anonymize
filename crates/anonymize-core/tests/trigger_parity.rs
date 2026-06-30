@@ -105,7 +105,8 @@ fn prepared_for_trigger_with_support(
 
 fn trigger_texts(result: &StaticDetectionResult) -> Vec<&str> {
   result
-    .trigger_entities
+    .entities
+    .trigger
     .iter()
     .map(|entity| entity.text.as_str())
     .collect()
@@ -131,7 +132,7 @@ fn uppercase_configured_id_triggers_accept_lowercase_source_forms() {
     assert!(
       trigger_texts(&result).contains(&expected),
       "trigger {trigger} should extract {expected:?}; entities: {:?}",
-      result.trigger_entities,
+      result.entities.trigger,
     );
   }
 }
@@ -211,7 +212,7 @@ fn labelled_phone_trigger_keeps_extension_suffixes() {
     assert!(
       trigger_texts(&result).contains(&expected),
       "phone trigger should keep extension in {expected:?}; entities: {:?}",
-      result.trigger_entities,
+      result.entities.trigger,
     );
   }
 }
@@ -270,7 +271,7 @@ fn match_pattern_trigger_requires_match_at_value_start() {
     .detect_static_entities("Telephone : 123456789 SIREN")
     .expect("static detection should succeed");
 
-  assert!(rejected.trigger_entities.is_empty());
+  assert!(rejected.entities.trigger.is_empty());
   assert_eq!(trigger_texts(&accepted), ["123456789"]);
 }
 
@@ -292,7 +293,7 @@ fn to_next_comma_stops_after_short_currency_abbreviation_sentence_tail() {
   assert!(
     trigger_texts(&result).contains(&"100 Kč"),
     "currency sentence tail should stop the capture; entities: {:?}",
-    result.trigger_entities,
+    result.entities.trigger,
   );
 }
 
@@ -330,7 +331,7 @@ fn company_id_trigger_rejects_single_digit_dotted_date() {
     .detect_static_entities("DNI 6.11.2025")
     .expect("static detection should succeed");
 
-  assert!(result.trigger_entities.is_empty());
+  assert!(result.entities.trigger.is_empty());
 }
 
 #[test]
@@ -348,7 +349,7 @@ fn company_id_trigger_caps_leading_alpha_prefixes() {
     .detect_static_entities("Company No. AB12345")
     .expect("static detection should succeed");
 
-  assert!(rejected.trigger_entities.is_empty());
+  assert!(rejected.entities.trigger.is_empty());
   assert_eq!(trigger_texts(&accepted), ["AB12345"]);
 }
 
@@ -369,7 +370,7 @@ fn address_trigger_stops_after_short_proper_noun_before_real_sentence() {
   assert!(
     trigger_texts(&result).contains(&"Brno"),
     "proper-noun sentence tail should stop the address; entities: {:?}",
-    result.trigger_entities,
+    result.entities.trigger,
   );
 }
 

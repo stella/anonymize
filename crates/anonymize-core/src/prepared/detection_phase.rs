@@ -8,7 +8,9 @@ use super::detector_registry::{
   STATIC_ENTITY_DETECTORS, StaticDetectorContext,
 };
 use super::phase::record_detector_entities;
-use super::results::{PreparedEngineMatches, StaticDetectionResult};
+use super::results::{
+  PreparedEngineMatches, StaticDetectionResult, StaticEntityLayers,
+};
 use super::timing::{StaticEntityPasses, elapsed_us};
 
 impl PreparedEngine {
@@ -45,17 +47,7 @@ impl PreparedEngine {
 
     Ok(StaticDetectionResult {
       matches,
-      regex_entities: passes.regex.entities,
-      custom_regex_entities: passes.custom_regex.entities,
-      deny_list_entities: passes.deny_list.entities,
-      gazetteer_entities: passes.gazetteer.entities,
-      country_entities: passes.country.entities,
-      anchored_entities: passes.anchored.entities,
-      trigger_entities: passes.trigger.entities,
-      signature_entities: passes.signature.entities,
-      legal_form_entities: passes.legal_form.entities,
-      address_seed_entities: passes.address_seed.entities,
-      name_corpus_entities: passes.name_corpus.entities,
+      entities: StaticEntityLayers::from_passes(passes),
     })
   }
 
