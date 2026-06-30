@@ -16,7 +16,8 @@ It contains the runtime package, the published data package, and the browser/WAS
 | `@stll/anonymize-data`  | Published deny-list dictionaries and trigger/config data       |
 | `@stll/anonymize-wasm`  | Browser/WASM build of the runtime                              |
 | `@stll/anonymize-cli`   | Command-line anonymization (`anonymize` binary)                |
-| `stella-anonymize-core` | Python bindings for the Rust anonymization core                |
+| `stella-anonymize-core` | Rust anonymization core                                        |
+| `stella-anonymize-py`   | Python bindings for the Rust anonymization core                |
 
 ## Install
 
@@ -73,4 +74,5 @@ bun run hooks:install
 - [`packages/anonymize`](packages/anonymize)
 - [`packages/data`](packages/data)
 - [`packages/anonymize/wasm`](packages/anonymize/wasm)
+- [`crates/anonymize-core`](crates/anonymize-core)
 - [`crates/anonymize-py`](crates/anonymize-py)
