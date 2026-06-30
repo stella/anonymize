@@ -2,22 +2,20 @@ use std::time::Instant;
 
 use crate::diagnostics::{DiagnosticStage, StaticRedactionDiagnostics};
 use crate::search::{
-  LiteralSearchOptions, SearchIndex, SearchIndexArtifactsView,
-  SearchIndexBuildStats, SearchOptions, SearchPattern,
+  SearchIndex, SearchIndexArtifactsView, SearchIndexBuildStats, SearchOptions,
+  SearchPattern,
 };
 use crate::types::{Error, Result};
 
 use super::artifacts::{PreparedSearchArtifacts, PreparedSearchArtifactsView};
 use super::config_validation::validate_supported_config;
+use super::index_patterns::{
+  legal_form_search_options, promote_case_insensitive_literals,
+  split_regex_patterns, trigger_search_options,
+};
 use super::phase::record_prepare_stage_elapsed;
 use super::timing::elapsed_us;
 use super::{PreparedSearchConfig, PreparedSearchSlices};
-
-struct RegexPatternGroups {
-  regex: Vec<SearchPattern>,
-  legal_forms: Vec<SearchPattern>,
-  triggers: Vec<SearchPattern>,
-}
 
 struct TimedSearchIndex {
   index: SearchIndex,
@@ -369,63 +367,4 @@ fn record_search_index_prepare_stages(
       diagnostics.record_search_build_slot_summaries(stage, &metric.stats);
     }
   }
-}
-
-fn split_regex_patterns(
-  patterns: Vec<SearchPattern>,
-  slices: &PreparedSearchSlices,
-) -> Result<RegexPatternGroups> {
-  let mut regex = Vec::new();
-  let mut legal_forms = Vec::new();
-  let mut triggers = Vec::new();
-
-  for (index, pattern) in patterns.into_iter().enumerate() {
-    let pattern_index = u32::try_from(index)
-      .map_err(|_| Error::PatternIndexOutOfRange { index })?;
-    if slices.legal_forms.contains(pattern_index) {
-      legal_forms.push(pattern);
-      continue;
-    }
-    if slices.triggers.contains(pattern_index) {
-      triggers.push(pattern);
-      continue;
-    }
-    regex.push(pattern);
-  }
-
-  Ok(RegexPatternGroups {
-    regex,
-    legal_forms,
-    triggers,
-  })
-}
-
-fn legal_form_search_options() -> SearchOptions {
-  SearchOptions::default()
-}
-
-fn trigger_search_options() -> SearchOptions {
-  SearchOptions {
-    literal: LiteralSearchOptions {
-      case_insensitive: true,
-      whole_words: false,
-    },
-    ..SearchOptions::default()
-  }
-}
-
-fn promote_case_insensitive_literals(
-  patterns: Vec<SearchPattern>,
-) -> Vec<SearchPattern> {
-  patterns
-    .into_iter()
-    .map(|entry| match entry {
-      SearchPattern::LiteralWithOptions {
-        pattern: value,
-        case_insensitive: Some(true),
-        whole_words,
-      } if whole_words != Some(true) => SearchPattern::Literal(value),
-      other => other,
-    })
-    .collect()
 }
