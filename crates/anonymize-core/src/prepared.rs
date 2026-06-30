@@ -2,8 +2,6 @@ use std::time::Instant;
 
 use crate::address_context::{AddressContextData, PreparedAddressContextData};
 use crate::address_seeds::{AddressSeedData, PreparedAddressSeedData};
-use crate::artifact_bytes::{ArtifactReader, ArtifactWriter};
-use crate::byte_offsets::ByteOffsets;
 use crate::coreference::{CoreferenceData, PreparedCoreferenceData};
 use crate::dates::{DateData, PreparedDateData};
 use crate::diagnostics::{
@@ -25,19 +23,17 @@ use crate::normalize::{
 };
 use crate::processors::{
   CountryMatchData, DenyListFilterData, DenyListMatchData, GazetteerMatchData,
-  PatternSlice, RegexMatchMeta, ensure_supported_deny_list_sources,
-  process_country_matches, process_deny_list_matches,
-  process_gazetteer_matches, process_regex_matches,
+  PatternSlice, RegexMatchMeta, process_country_matches,
+  process_deny_list_matches, process_gazetteer_matches, process_regex_matches,
 };
 use crate::redact::redact_text;
 use crate::resolution::{
-  PipelineEntity, SourceDetail, enforce_boundary_consistency, merge_and_dedup,
+  PipelineEntity, enforce_boundary_consistency, merge_and_dedup,
   sanitize_entities_with_source,
 };
 use crate::search::{
-  LiteralSearchOptions, SearchIndex, SearchIndexArtifacts,
-  SearchIndexArtifactsView, SearchIndexBuildStats, SearchOptions,
-  SearchPattern,
+  LiteralSearchOptions, SearchIndex, SearchIndexArtifactsView,
+  SearchIndexBuildStats, SearchOptions, SearchPattern,
 };
 use crate::signatures::{
   PreparedSignatureData, SignatureData, detect_signatures,
@@ -51,12 +47,31 @@ use crate::types::{
 };
 use crate::zones::{PreparedZoneData, ZoneData};
 
-const PREPARED_SEARCH_ARTIFACTS_HEADER: [u8; 8] = *b"ANONPSR1";
-const PREPARED_SEARCH_ARTIFACTS_VERSION: u32 = 1;
-const NEAR_MISS_BAND: f64 = 0.15;
-const BOOST_PER_NEIGHBOUR: f64 = 0.05;
-const CONTEXT_WINDOW_CHARS: f64 = 150.0;
-const HIGH_CONFIDENCE_FLOOR: f64 = 0.9;
+mod artifacts;
+mod config_validation;
+mod diagnostic_stream;
+mod entity_filter;
+mod results;
+mod timing;
+
+pub use artifacts::{PreparedSearchArtifacts, PreparedSearchArtifactsView};
+use config_validation::{
+  validate_supported_config, validate_supported_config_for_artifacts,
+};
+use diagnostic_stream::DiagnosticEventStream;
+use entity_filter::{
+  clear_internal_source_details, filter_entities_for_config,
+  filter_entities_for_labels, filter_entities_for_redaction, label_is_allowed,
+};
+pub use results::{
+  PreparedSearchBuildResult, PreparedSearchMatches, StaticDetectionResult,
+  StaticRedactionDiagnosticResult, StaticRedactionResult,
+};
+use timing::{
+  StaticEntityPasses, TimedEntities, TimedMatches, TimedSearchBranches,
+  elapsed_us,
+};
+
 const PARALLEL_SEARCH_MIN_BYTES: usize = 32 * 1024;
 
 pub struct PreparedSearch {
@@ -143,257 +158,6 @@ pub struct PreparedSearchConfig {
   pub signature_data: Option<SignatureData>,
   pub date_data: Option<DateData>,
   pub monetary_data: Option<MonetaryData>,
-}
-
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct PreparedSearchArtifacts {
-  pub regex: SearchIndexArtifacts,
-  pub custom_regex: SearchIndexArtifacts,
-  pub legal_forms: SearchIndexArtifacts,
-  pub triggers: SearchIndexArtifacts,
-  pub literals: SearchIndexArtifacts,
-}
-
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct PreparedSearchArtifactsView<'a> {
-  pub regex: SearchIndexArtifactsView<'a>,
-  pub custom_regex: SearchIndexArtifactsView<'a>,
-  pub legal_forms: SearchIndexArtifactsView<'a>,
-  pub triggers: SearchIndexArtifactsView<'a>,
-  pub literals: SearchIndexArtifactsView<'a>,
-}
-
-impl PreparedSearchArtifacts {
-  pub fn to_bytes(&self) -> Result<Vec<u8>> {
-    let mut writer = ArtifactWriter::new(
-      PREPARED_SEARCH_ARTIFACTS_HEADER,
-      PREPARED_SEARCH_ARTIFACTS_VERSION,
-    );
-    write_index_artifacts(&mut writer, "prepared.regex", &self.regex)?;
-    write_index_artifacts(
-      &mut writer,
-      "prepared.custom_regex",
-      &self.custom_regex,
-    )?;
-    write_index_artifacts(
-      &mut writer,
-      "prepared.legal_forms",
-      &self.legal_forms,
-    )?;
-    write_index_artifacts(&mut writer, "prepared.triggers", &self.triggers)?;
-    write_index_artifacts(&mut writer, "prepared.literals", &self.literals)?;
-    Ok(writer.into_bytes())
-  }
-
-  pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
-    Ok(PreparedSearchArtifactsView::from_bytes(bytes)?.into_owned())
-  }
-
-  #[must_use]
-  pub fn as_view(&self) -> PreparedSearchArtifactsView<'_> {
-    PreparedSearchArtifactsView {
-      regex: self.regex.as_view(),
-      custom_regex: self.custom_regex.as_view(),
-      legal_forms: self.legal_forms.as_view(),
-      triggers: self.triggers.as_view(),
-      literals: self.literals.as_view(),
-    }
-  }
-}
-
-impl<'a> PreparedSearchArtifactsView<'a> {
-  pub fn from_bytes(bytes: &'a [u8]) -> Result<Self> {
-    let mut reader = ArtifactReader::new(
-      bytes,
-      PREPARED_SEARCH_ARTIFACTS_HEADER,
-      PREPARED_SEARCH_ARTIFACTS_VERSION,
-      "prepared_search_artifacts",
-    )?;
-    let artifacts = Self {
-      regex: read_index_artifact_view(&mut reader)?,
-      custom_regex: read_index_artifact_view(&mut reader)?,
-      legal_forms: read_index_artifact_view(&mut reader)?,
-      triggers: read_index_artifact_view(&mut reader)?,
-      literals: read_index_artifact_view(&mut reader)?,
-    };
-    reader.finish()?;
-    Ok(artifacts)
-  }
-
-  #[must_use]
-  pub fn into_owned(self) -> PreparedSearchArtifacts {
-    PreparedSearchArtifacts {
-      regex: self.regex.into_owned(),
-      custom_regex: self.custom_regex.into_owned(),
-      legal_forms: self.legal_forms.into_owned(),
-      triggers: self.triggers.into_owned(),
-      literals: self.literals.into_owned(),
-    }
-  }
-}
-
-fn write_index_artifacts(
-  writer: &mut ArtifactWriter,
-  field: &'static str,
-  artifacts: &SearchIndexArtifacts,
-) -> Result<()> {
-  writer.write_len_prefixed_bytes(field, &artifacts.to_bytes()?)
-}
-
-fn read_index_artifact_view<'a>(
-  reader: &mut ArtifactReader<'a>,
-) -> Result<SearchIndexArtifactsView<'a>> {
-  SearchIndexArtifactsView::from_bytes(reader.read_len_prefixed_bytes()?)
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PreparedSearchMatches {
-  pub regex: Vec<SearchMatch>,
-  pub custom_regex: Vec<SearchMatch>,
-  pub literal: Vec<SearchMatch>,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct StaticDetectionResult {
-  pub matches: PreparedSearchMatches,
-  pub regex_entities: Vec<PipelineEntity>,
-  pub custom_regex_entities: Vec<PipelineEntity>,
-  pub deny_list_entities: Vec<PipelineEntity>,
-  pub gazetteer_entities: Vec<PipelineEntity>,
-  pub country_entities: Vec<PipelineEntity>,
-  pub anchored_entities: Vec<PipelineEntity>,
-  pub trigger_entities: Vec<PipelineEntity>,
-  pub signature_entities: Vec<PipelineEntity>,
-  pub legal_form_entities: Vec<PipelineEntity>,
-  pub address_seed_entities: Vec<PipelineEntity>,
-  pub name_corpus_entities: Vec<PipelineEntity>,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct StaticRedactionResult {
-  pub detections: StaticDetectionResult,
-  pub resolved_entities: Vec<PipelineEntity>,
-  pub redaction: RedactionResult,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct StaticRedactionDiagnosticResult {
-  pub result: StaticRedactionResult,
-  pub diagnostics: StaticRedactionDiagnostics,
-}
-
-struct TimedEntities {
-  entities: Vec<PipelineEntity>,
-  elapsed_us: u64,
-}
-
-struct TimedMatches {
-  matches: Vec<SearchMatch>,
-  elapsed_us: u64,
-}
-
-impl TimedMatches {
-  const fn empty() -> Self {
-    Self {
-      matches: Vec::new(),
-      elapsed_us: 0,
-    }
-  }
-}
-
-struct TimedSearchBranches {
-  regex: TimedMatches,
-  legal_forms: TimedMatches,
-  triggers: TimedMatches,
-  custom_regex: TimedMatches,
-  literal: TimedMatches,
-}
-
-struct StaticEntityPasses {
-  regex: TimedEntities,
-  custom_regex: TimedEntities,
-  deny_list: TimedEntities,
-  gazetteer: TimedEntities,
-  country: TimedEntities,
-  anchored: TimedEntities,
-  trigger: TimedEntities,
-  signature: TimedEntities,
-  legal_form: TimedEntities,
-  address_seed: TimedEntities,
-  name_corpus: TimedEntities,
-}
-
-type DiagnosticObserver<'a> =
-  &'a mut dyn FnMut(&[DiagnosticEvent]) -> Result<()>;
-
-struct DiagnosticEventStream<'a> {
-  observed_event_count: usize,
-  observer: Option<DiagnosticObserver<'a>>,
-}
-
-impl<'a> DiagnosticEventStream<'a> {
-  const fn none() -> Self {
-    Self {
-      observed_event_count: 0,
-      observer: None,
-    }
-  }
-
-  const fn observed(observer: DiagnosticObserver<'a>) -> Self {
-    Self {
-      observed_event_count: 0,
-      observer: Some(observer),
-    }
-  }
-
-  fn observe(
-    &mut self,
-    diagnostics: Option<&StaticRedactionDiagnostics>,
-  ) -> Result<()> {
-    let Some(observer) = self.observer.as_deref_mut() else {
-      return Ok(());
-    };
-    let Some(diagnostics) = diagnostics else {
-      return Ok(());
-    };
-    let events = diagnostics
-      .events
-      .get(self.observed_event_count..)
-      .ok_or_else(|| Error::InvalidStaticData {
-        field: "diagnostics.events",
-        reason: String::from("observed event cursor is out of bounds"),
-      })?;
-    if events.is_empty() {
-      return Ok(());
-    }
-    observer(events)?;
-    self.observed_event_count = diagnostics.events.len();
-    Ok(())
-  }
-}
-
-impl StaticEntityPasses {
-  const fn entity_count(&self) -> usize {
-    self
-      .regex
-      .entities
-      .len()
-      .saturating_add(self.custom_regex.entities.len())
-      .saturating_add(self.deny_list.entities.len())
-      .saturating_add(self.gazetteer.entities.len())
-      .saturating_add(self.country.entities.len())
-      .saturating_add(self.anchored.entities.len())
-      .saturating_add(self.trigger.entities.len())
-      .saturating_add(self.signature.entities.len())
-      .saturating_add(self.legal_form.entities.len())
-      .saturating_add(self.address_seed.entities.len())
-      .saturating_add(self.name_corpus.entities.len())
-  }
-}
-
-pub struct PreparedSearchBuildResult {
-  pub prepared: PreparedSearch,
-  pub diagnostics: StaticRedactionDiagnostics,
 }
 
 struct RegexPatternGroups {
@@ -1610,153 +1374,6 @@ fn should_extract_monetary_data(config: &PreparedSearchConfig) -> bool {
       .any(|meta| meta.label == "monetary amount")
 }
 
-fn filter_entities_for_config(
-  entities: Vec<PipelineEntity>,
-  threshold: f64,
-  allowed_labels: &[String],
-) -> Vec<PipelineEntity> {
-  filter_entities_for_threshold(
-    filter_entities_for_labels(entities, allowed_labels),
-    threshold,
-  )
-}
-
-fn filter_entities_for_redaction(
-  entities: Vec<PipelineEntity>,
-  full_text: &str,
-  threshold: f64,
-  confidence_boost: bool,
-  allowed_labels: &[String],
-) -> Result<Vec<PipelineEntity>> {
-  let entities = filter_entities_for_labels(entities, allowed_labels);
-  if confidence_boost {
-    return boost_near_miss_entities(entities, full_text, threshold);
-  }
-  Ok(filter_entities_for_threshold(entities, threshold))
-}
-
-fn filter_entities_for_labels(
-  entities: Vec<PipelineEntity>,
-  allowed_labels: &[String],
-) -> Vec<PipelineEntity> {
-  entities
-    .into_iter()
-    .filter(|entity| {
-      allowed_labels.is_empty()
-        || allowed_labels.iter().any(|label| label == &entity.label)
-    })
-    .collect()
-}
-
-fn label_is_allowed(label: &str, allowed_labels: &[String]) -> bool {
-  allowed_labels.is_empty()
-    || allowed_labels.iter().any(|allowed| allowed == label)
-}
-
-fn filter_entities_for_threshold(
-  entities: Vec<PipelineEntity>,
-  threshold: f64,
-) -> Vec<PipelineEntity> {
-  entities
-    .into_iter()
-    .filter(|entity| {
-      entity.score >= threshold
-        || entity.source_detail == Some(SourceDetail::AddressContext)
-    })
-    .collect()
-}
-
-fn clear_internal_source_details(entities: &mut [PipelineEntity]) {
-  for entity in entities {
-    if entity.source_detail == Some(SourceDetail::AddressContext) {
-      entity.source_detail = None;
-    }
-  }
-}
-
-fn boost_near_miss_entities(
-  entities: Vec<PipelineEntity>,
-  full_text: &str,
-  threshold: f64,
-) -> Result<Vec<PipelineEntity>> {
-  let near_miss_floor = f64::max(0.0, threshold - NEAR_MISS_BAND);
-  let byte_offsets = ByteOffsets::new(full_text);
-  let text_offsets = TextOffsetMap::new(full_text);
-  let anchors = entities
-    .iter()
-    .filter(|entity| entity.score >= HIGH_CONFIDENCE_FLOOR)
-    .map(|entity| entity_midpoint(entity, &byte_offsets, &text_offsets))
-    .collect::<Result<Vec<_>>>()?;
-
-  let mut boosted = Vec::with_capacity(entities.len());
-  for mut entity in entities {
-    if entity.score >= threshold {
-      boosted.push(entity);
-      continue;
-    }
-    if entity.score < near_miss_floor {
-      continue;
-    }
-
-    let midpoint = entity_midpoint(&entity, &byte_offsets, &text_offsets)?;
-    let neighbours = anchors
-      .iter()
-      .filter(|anchor| (midpoint - **anchor).abs() <= CONTEXT_WINDOW_CHARS)
-      .count();
-    let neighbour_count = u32::try_from(neighbours).unwrap_or(u32::MAX);
-    let boosted_score =
-      f64::from(neighbour_count).mul_add(BOOST_PER_NEIGHBOUR, entity.score);
-    if boosted_score < threshold {
-      continue;
-    }
-
-    entity.score = f64::min(1.0, boosted_score);
-    boosted.push(entity);
-  }
-
-  Ok(boosted)
-}
-
-fn entity_midpoint(
-  entity: &PipelineEntity,
-  byte_offsets: &ByteOffsets<'_>,
-  text_offsets: &TextOffsetMap,
-) -> Result<f64> {
-  let start = text_offsets.offset_for(byte_offsets, entity.start)?;
-  let end = text_offsets.offset_for(byte_offsets, entity.end)?;
-  Ok(f64::midpoint(start, end))
-}
-
-struct TextOffsetMap {
-  byte_offsets: Vec<usize>,
-}
-
-impl TextOffsetMap {
-  fn new(full_text: &str) -> Self {
-    let mut byte_offsets = full_text
-      .char_indices()
-      .map(|(byte_offset, _)| byte_offset)
-      .collect::<Vec<_>>();
-    byte_offsets.push(full_text.len());
-    Self { byte_offsets }
-  }
-
-  fn offset_for(
-    &self,
-    byte_offsets: &ByteOffsets<'_>,
-    offset: u32,
-  ) -> Result<f64> {
-    let byte_offset = byte_offsets.validate_offset(offset)?;
-    let index = self
-      .byte_offsets
-      .binary_search(&byte_offset)
-      .map_err(|_| Error::ByteOffsetInsideCodepoint { offset })?;
-    let index = u32::try_from(index)
-      .map_err(|_| Error::ByteOffsetOutOfBounds { offset: u32::MAX })?;
-    Ok(f64::from(index))
-  }
-}
-
 fn record_static_entity_diagnostics(
   diagnostics: &mut StaticRedactionDiagnostics,
   full_text: &str,
@@ -1972,11 +1589,6 @@ fn address_seed_context(layers: &[&[PipelineEntity]]) -> Vec<PipelineEntity> {
     entities.extend(layer.iter().cloned());
   }
   entities
-}
-
-fn elapsed_us(start: Instant) -> u64 {
-  let micros = start.elapsed().as_micros();
-  u64::try_from(micros).unwrap_or(u64::MAX)
 }
 
 fn prepare_search_index_bundle(
@@ -3007,348 +2619,6 @@ fn remap_normalized_match(
 ) -> Result<SearchMatch> {
   let (start, end) = normalized.map_span(found.start(), found.end())?;
   Ok(found.with_span(start, end))
-}
-
-fn validate_supported_config(
-  config: &PreparedSearchConfig,
-  allow_literal_artifacts: bool,
-) -> Result<()> {
-  validate_search_config(config, allow_literal_artifacts)?;
-  validate_legal_form_config(config)?;
-  validate_trigger_config(config)?;
-  validate_deny_list_config(config)?;
-  validate_gazetteer_config(config)?;
-  validate_country_config(config)?;
-  validate_hotword_config(config)?;
-  validate_address_seed_config(config)
-}
-
-fn validate_supported_config_for_artifacts(
-  config: &PreparedSearchConfig,
-  artifacts: Option<&PreparedSearchArtifactsView<'_>>,
-) -> Result<()> {
-  let allow_literal_artifacts =
-    artifacts.is_some_and(|artifacts| !artifacts.literals.slots.is_empty());
-  validate_supported_config(config, allow_literal_artifacts)
-}
-
-fn validate_search_config(
-  config: &PreparedSearchConfig,
-  allow_literal_artifacts: bool,
-) -> Result<()> {
-  validate_slice_bounds(
-    "slices.regex",
-    config.slices.regex,
-    config.regex_patterns.len(),
-  )?;
-  validate_slice_bounds(
-    "slices.legal_forms",
-    config.slices.legal_forms,
-    config.regex_patterns.len(),
-  )?;
-  validate_slice_bounds(
-    "slices.triggers",
-    config.slices.triggers,
-    config.regex_patterns.len(),
-  )?;
-  validate_slice_bounds(
-    "slices.custom_regex",
-    config.slices.custom_regex,
-    config.custom_regex_patterns.len(),
-  )?;
-  if !allow_literal_artifacts || !config.literal_patterns.is_empty() {
-    validate_slice_bounds(
-      "slices.deny_list",
-      config.slices.deny_list,
-      config.literal_patterns.len(),
-    )?;
-    validate_slice_bounds(
-      "slices.street_types",
-      config.slices.street_types,
-      config.literal_patterns.len(),
-    )?;
-    validate_slice_bounds(
-      "slices.gazetteer",
-      config.slices.gazetteer,
-      config.literal_patterns.len(),
-    )?;
-    validate_slice_bounds(
-      "slices.countries",
-      config.slices.countries,
-      config.literal_patterns.len(),
-    )?;
-    validate_slice_bounds(
-      "slices.hotwords",
-      config.slices.hotwords,
-      config.literal_patterns.len(),
-    )?;
-  }
-  validate_static_data_length(
-    "regex_meta",
-    config.slices.regex,
-    config.regex_meta.len(),
-  )?;
-  validate_static_data_length(
-    "custom_regex_meta",
-    config.slices.custom_regex,
-    config.custom_regex_meta.len(),
-  )
-}
-
-fn validate_slice_bounds(
-  field: &'static str,
-  slice: PatternSlice,
-  pattern_count: usize,
-) -> Result<()> {
-  if slice.start > slice.end {
-    return Err(Error::InvalidStaticData {
-      field,
-      reason: "slice start exceeds slice end".to_owned(),
-    });
-  }
-  let Some(end) = usize::try_from(slice.end).ok() else {
-    return Err(Error::InvalidStaticData {
-      field,
-      reason: "slice end exceeds usize range".to_owned(),
-    });
-  };
-  if end <= pattern_count {
-    return Ok(());
-  }
-  Err(Error::InvalidStaticData {
-    field,
-    reason: format!("slice end {end} exceeds pattern count {pattern_count}"),
-  })
-}
-
-fn validate_legal_form_config(config: &PreparedSearchConfig) -> Result<()> {
-  if config.slices.legal_forms.is_empty() {
-    return Ok(());
-  }
-
-  let Some(data) = &config.legal_form_data else {
-    return Err(Error::MissingStaticData {
-      field: "legal_form_data",
-    });
-  };
-
-  validate_static_data_length(
-    "legal_form_data.suffixes",
-    config.slices.legal_forms,
-    data.suffixes.len(),
-  )
-}
-
-fn validate_deny_list_config(config: &PreparedSearchConfig) -> Result<()> {
-  if config.slices.deny_list.is_empty() {
-    return Ok(());
-  }
-
-  let Some(data) = &config.deny_list_data else {
-    return Err(Error::UnsupportedStaticSlice { slice: "deny_list" });
-  };
-
-  data.labels.validate("deny_list.labels")?;
-  data.custom_labels.validate("deny_list.custom_labels")?;
-  data.sources.validate("deny_list.sources")?;
-  validate_static_data_length(
-    "deny_list.labels",
-    config.slices.deny_list,
-    data.labels.len(),
-  )?;
-  validate_static_data_length(
-    "deny_list.custom_labels",
-    config.slices.deny_list,
-    data.custom_labels.len(),
-  )?;
-  validate_deny_list_pattern_metadata(config.slices.deny_list, data)?;
-  validate_static_data_length(
-    "deny_list.sources",
-    config.slices.deny_list,
-    data.sources.len(),
-  )?;
-  ensure_supported_deny_list_sources(data)
-}
-
-fn validate_deny_list_pattern_metadata(
-  slice: PatternSlice,
-  data: &DenyListMatchData,
-) -> Result<()> {
-  if !data.originals.is_empty() {
-    return validate_static_data_length(
-      "deny_list.originals",
-      slice,
-      data.originals.len(),
-    );
-  }
-  validate_static_data_length(
-    "deny_list.pattern_meta",
-    slice,
-    data.pattern_meta.len(),
-  )
-}
-
-fn validate_gazetteer_config(config: &PreparedSearchConfig) -> Result<()> {
-  if config.slices.gazetteer.is_empty() {
-    return Ok(());
-  }
-
-  let Some(data) = &config.gazetteer_data else {
-    return Err(Error::MissingStaticData {
-      field: "gazetteer_data",
-    });
-  };
-
-  validate_static_data_length(
-    "gazetteer_data.labels",
-    config.slices.gazetteer,
-    data.labels.len(),
-  )?;
-  validate_static_data_length(
-    "gazetteer_data.is_fuzzy",
-    config.slices.gazetteer,
-    data.is_fuzzy.len(),
-  )
-}
-
-fn validate_country_config(config: &PreparedSearchConfig) -> Result<()> {
-  if config.slices.countries.is_empty() {
-    return Ok(());
-  }
-
-  let Some(data) = &config.country_data else {
-    return Err(Error::MissingStaticData {
-      field: "country_data",
-    });
-  };
-
-  validate_static_data_length(
-    "country_data.labels",
-    config.slices.countries,
-    data.labels.len(),
-  )
-}
-
-fn validate_hotword_config(config: &PreparedSearchConfig) -> Result<()> {
-  if !config.slices.hotwords.is_empty() {
-    return Err(Error::UnsupportedStaticSlice { slice: "hotwords" });
-  }
-
-  let Some(data) = &config.hotword_data else {
-    return Ok(());
-  };
-
-  for rule in &data.rules {
-    if rule.hotwords.is_empty() {
-      return Err(Error::InvalidStaticData {
-        field: "hotword_data.rules.hotwords",
-        reason: String::from("native hotword rules require hotword strings"),
-      });
-    }
-    for hotword in &rule.hotwords {
-      if hotword.is_empty() {
-        return Err(Error::InvalidStaticData {
-          field: "hotword_data.rules.hotwords",
-          reason: String::from("hotword must not be empty"),
-        });
-      }
-    }
-  }
-
-  Ok(())
-}
-
-const fn validate_address_seed_config(
-  config: &PreparedSearchConfig,
-) -> Result<()> {
-  if config.slices.street_types.is_empty() {
-    return Ok(());
-  }
-
-  if config.address_seed_data.is_some() {
-    return Ok(());
-  }
-
-  Err(Error::MissingStaticData {
-    field: "address_seed_data",
-  })
-}
-
-fn validate_trigger_config(config: &PreparedSearchConfig) -> Result<()> {
-  if config.slices.triggers.is_empty() {
-    return Ok(());
-  }
-
-  let Some(data) = &config.trigger_data else {
-    return Err(Error::MissingStaticData {
-      field: "trigger_data",
-    });
-  };
-
-  validate_static_data_length(
-    "trigger_data.rules",
-    config.slices.triggers,
-    data.rules.len(),
-  )
-}
-
-fn validate_static_data_length(
-  field: &'static str,
-  slice: PatternSlice,
-  actual: usize,
-) -> Result<()> {
-  let expected = usize::try_from(slice.len()).map_err(|_| {
-    Error::StaticDataLengthMismatch {
-      field,
-      expected: usize::MAX,
-      actual,
-    }
-  })?;
-  if actual == expected {
-    return Ok(());
-  }
-
-  Err(Error::StaticDataLengthMismatch {
-    field,
-    expected,
-    actual,
-  })
-}
-
-impl StaticDetectionResult {
-  #[must_use]
-  pub const fn entity_count(&self) -> usize {
-    self
-      .regex_entities
-      .len()
-      .saturating_add(self.custom_regex_entities.len())
-      .saturating_add(self.deny_list_entities.len())
-      .saturating_add(self.gazetteer_entities.len())
-      .saturating_add(self.country_entities.len())
-      .saturating_add(self.anchored_entities.len())
-      .saturating_add(self.trigger_entities.len())
-      .saturating_add(self.signature_entities.len())
-      .saturating_add(self.legal_form_entities.len())
-      .saturating_add(self.address_seed_entities.len())
-      .saturating_add(self.name_corpus_entities.len())
-  }
-
-  #[must_use]
-  pub fn all_entities(&self) -> Vec<PipelineEntity> {
-    let mut entities = Vec::with_capacity(self.entity_count());
-    entities.extend(self.regex_entities.iter().cloned());
-    entities.extend(self.custom_regex_entities.iter().cloned());
-    entities.extend(self.deny_list_entities.iter().cloned());
-    entities.extend(self.gazetteer_entities.iter().cloned());
-    entities.extend(self.country_entities.iter().cloned());
-    entities.extend(self.anchored_entities.iter().cloned());
-    entities.extend(self.trigger_entities.iter().cloned());
-    entities.extend(self.signature_entities.iter().cloned());
-    entities.extend(self.legal_form_entities.iter().cloned());
-    entities.extend(self.address_seed_entities.iter().cloned());
-    entities.extend(self.name_corpus_entities.iter().cloned());
-    entities
-  }
 }
 
 fn to_redaction_entity(entity: &PipelineEntity) -> Entity {
