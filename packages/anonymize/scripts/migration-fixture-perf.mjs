@@ -80,6 +80,12 @@ const TRUST_PREBUILT_NATIVE_PACKAGE =
   process.env.ANONYMIZE_MIGRATION_TRUST_PREBUILT_NATIVE_PACKAGE !== "0";
 const USER_DATA_SCENARIO =
   process.env.ANONYMIZE_MIGRATION_USER_DATA_SCENARIO?.trim() ?? "none";
+const ACCEPTED_NATIVE_STATIC_DIFFERENCES_PATH = join(
+  PACKAGE_DIR,
+  "scripts",
+  "data",
+  "native-static-accepted-differences.json",
+);
 const RUN_STAGE = {
   detectTotal: "detect.total",
   findMatches: "find-matches",
@@ -87,58 +93,70 @@ const RUN_STAGE = {
   redactionTotal: "redact.total",
 };
 
-const INTENTIONAL_NATIVE_STATIC_IMPROVEMENTS = new Map(
-  [
-    {
-      fixture: "cs/asset-transfer-court-declensions.txt",
-      reason: "wider-address-span",
-      candidateExtra: [
-        { start: 445, end: 485, label: "address", source: "regex" },
-      ],
-      candidateMissing: [
-        { start: 471, end: 485, label: "address", source: "deny-list" },
-      ],
-    },
-    {
-      fixture: "cs/nakit-legal-services-framework.txt",
-      reason: "role-heading-not-person",
-      candidateExtra: [],
-      candidateMissing: [
-        { start: 49384, end: 49395, label: "person", source: "trigger" },
-      ],
-    },
-    {
-      fixture: "cs/vinci-donation-agreement.txt",
-      reason: "party-organization-retained",
-      candidateExtra: [
-        { start: 542, end: 585, label: "organization", source: "deny-list" },
-        {
-          start: 3226,
-          end: 3247,
-          label: "organization",
-          source: "coreference",
-        },
-      ],
-      candidateMissing: [],
-    },
-    {
-      fixture: "en/software-license-agreement.txt",
-      reason: "wider-notice-address-spans",
-      candidateExtra: [
-        { start: 506, end: 541, label: "address", source: "regex" },
-        { start: 1624, end: 1664, label: "address", source: "regex" },
-        { start: 1813, end: 1848, label: "address", source: "regex" },
-        { start: 1857, end: 1871, label: "phone number", source: "regex" },
-      ],
-      candidateMissing: [
-        { start: 515, end: 531, label: "address", source: "deny-list" },
-        { start: 1629, end: 1654, label: "address", source: "deny-list" },
-        { start: 1822, end: 1838, label: "address", source: "deny-list" },
-        { start: 1858, end: 1871, label: "phone number", source: "trigger" },
-      ],
-    },
-  ].map((entry) => [entry.fixture, entry]),
-);
+const INTENTIONAL_NATIVE_STATIC_IMPROVEMENTS =
+  loadAcceptedNativeStaticDifferences();
+
+function loadAcceptedNativeStaticDifferences() {
+  const manifest = JSON.parse(
+    readFileSync(ACCEPTED_NATIVE_STATIC_DIFFERENCES_PATH, "utf8"),
+  );
+  if (manifest.schemaVersion !== 1) {
+    throw new Error(
+      `Unsupported native-static accepted differences schema: ${manifest.schemaVersion}`,
+    );
+  }
+  if (!Array.isArray(manifest.entries)) {
+    throw new Error("Accepted native-static differences must contain entries");
+  }
+
+  const entries = new Map();
+  for (const entry of manifest.entries) {
+    validateAcceptedDifference(entry);
+    if (entries.has(entry.fixture)) {
+      throw new Error(
+        `Duplicate native-static accepted difference: ${entry.fixture}`,
+      );
+    }
+    entries.set(entry.fixture, entry);
+  }
+  return entries;
+}
+
+function validateAcceptedDifference(entry) {
+  if (typeof entry?.fixture !== "string" || entry.fixture.length === 0) {
+    throw new Error("Accepted native-static difference must name a fixture");
+  }
+  if (typeof entry.reason !== "string" || entry.reason.length === 0) {
+    throw new Error(
+      `Accepted native-static difference must name a reason: ${entry.fixture}`,
+    );
+  }
+  validateAcceptedEntitySummaries(entry.fixture, "candidateExtra", entry);
+  validateAcceptedEntitySummaries(entry.fixture, "candidateMissing", entry);
+}
+
+function validateAcceptedEntitySummaries(fixture, field, entry) {
+  const entities = entry[field];
+  if (!Array.isArray(entities)) {
+    throw new Error(
+      `Accepted native-static difference ${fixture} must contain ${field}`,
+    );
+  }
+  for (const entity of entities) {
+    if (!Number.isInteger(entity?.start) || entity.start < 0) {
+      throw new Error(`${fixture} ${field} entry has invalid start`);
+    }
+    if (!Number.isInteger(entity.end) || entity.end < entity.start) {
+      throw new Error(`${fixture} ${field} entry has invalid end`);
+    }
+    if (typeof entity.label !== "string" || entity.label.length === 0) {
+      throw new Error(`${fixture} ${field} entry has invalid label`);
+    }
+    if (typeof entity.source !== "string" || entity.source.length === 0) {
+      throw new Error(`${fixture} ${field} entry has invalid source`);
+    }
+  }
+}
 
 if (process.env.ANONYMIZE_MIGRATION_WORKER === "1") {
   await runWorker();
