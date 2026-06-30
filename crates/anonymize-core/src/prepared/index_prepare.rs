@@ -1,35 +1,18 @@
-use std::time::Instant;
-
 use crate::diagnostics::{DiagnosticStage, StaticRedactionDiagnostics};
 use crate::search::{
-  SearchIndex, SearchIndexArtifactsView, SearchIndexBuildStats, SearchOptions,
-  SearchPattern,
+  SearchIndex, SearchIndexBuildStats, SearchOptions, SearchPattern,
 };
-use crate::types::{Error, Result};
+use crate::types::Result;
 
 use super::artifacts::{PreparedSearchArtifacts, PreparedSearchArtifactsView};
 use super::config_validation::validate_supported_config;
+use super::index_builder::{SearchIndexBuildInputs, build_search_indexes};
 use super::index_patterns::{
   legal_form_search_options, promote_case_insensitive_literals,
   split_regex_patterns, trigger_search_options,
 };
 use super::phase::record_prepare_stage_elapsed;
-use super::timing::elapsed_us;
 use super::{PreparedSearchConfig, PreparedSearchSlices};
-
-struct TimedSearchIndex {
-  index: SearchIndex,
-  elapsed_us: u64,
-  stats: Vec<SearchIndexBuildStats>,
-}
-
-struct PreparedSearchIndexes {
-  regex: TimedSearchIndex,
-  custom_regex: TimedSearchIndex,
-  legal_forms: TimedSearchIndex,
-  triggers: TimedSearchIndex,
-  literals: TimedSearchIndex,
-}
 
 pub(super) struct SearchIndexConfigInput {
   pub(super) regex_patterns: Vec<SearchPattern>,
@@ -70,17 +53,6 @@ pub(super) struct PreparedSearchIndexBundle {
   pub(super) triggers: SearchIndex,
   pub(super) literals: SearchIndex,
   pub(super) counts: SearchPrepareCounts,
-}
-
-struct SearchIndexBuildInputs {
-  regex_patterns: Vec<SearchPattern>,
-  regex_options: SearchOptions,
-  custom_regex_patterns: Vec<SearchPattern>,
-  custom_regex_options: SearchOptions,
-  legal_form_patterns: Vec<SearchPattern>,
-  trigger_patterns: Vec<SearchPattern>,
-  literal_patterns: Vec<SearchPattern>,
-  literal_options: SearchOptions,
 }
 
 struct SearchIndexPrepareMetrics {
@@ -225,121 +197,6 @@ pub(super) fn prepare_search_index_bundle(
     literals,
     counts,
   })
-}
-
-fn build_search_indexes(
-  inputs: SearchIndexBuildInputs,
-  artifacts: Option<&PreparedSearchArtifactsView<'_>>,
-  collect_stats: bool,
-) -> Result<PreparedSearchIndexes> {
-  let SearchIndexBuildInputs {
-    regex_patterns,
-    regex_options,
-    custom_regex_patterns,
-    custom_regex_options,
-    legal_form_patterns,
-    trigger_patterns,
-    literal_patterns,
-    literal_options,
-  } = inputs;
-
-  let regex_artifacts = artifacts.map(|value| &value.regex);
-  let custom_regex_artifacts = artifacts.map(|value| &value.custom_regex);
-  let legal_form_artifacts = artifacts.map(|value| &value.legal_forms);
-  let trigger_artifacts = artifacts.map(|value| &value.triggers);
-  let literal_artifacts = artifacts.map(|value| &value.literals);
-
-  std::thread::scope(|scope| {
-    let regex = scope.spawn(move || {
-      build_search_index(
-        regex_patterns,
-        regex_options,
-        regex_artifacts,
-        collect_stats,
-      )
-    });
-    let custom_regex = scope.spawn(move || {
-      build_search_index(
-        custom_regex_patterns,
-        custom_regex_options,
-        custom_regex_artifacts,
-        collect_stats,
-      )
-    });
-    let legal_forms = scope.spawn(move || {
-      build_search_index(
-        legal_form_patterns,
-        legal_form_search_options(),
-        legal_form_artifacts,
-        collect_stats,
-      )
-    });
-    let triggers = scope.spawn(move || {
-      build_search_index(
-        trigger_patterns,
-        trigger_search_options(),
-        trigger_artifacts,
-        collect_stats,
-      )
-    });
-    let literals = scope.spawn(move || {
-      build_search_index(
-        literal_patterns,
-        literal_options,
-        literal_artifacts,
-        collect_stats,
-      )
-    });
-
-    Ok(PreparedSearchIndexes {
-      regex: join_search_index(regex, "regex")?,
-      custom_regex: join_search_index(custom_regex, "custom_regex")?,
-      legal_forms: join_search_index(legal_forms, "legal_forms")?,
-      triggers: join_search_index(triggers, "triggers")?,
-      literals: join_search_index(literals, "literals")?,
-    })
-  })
-}
-
-fn build_search_index(
-  patterns: Vec<SearchPattern>,
-  options: SearchOptions,
-  artifacts: Option<&SearchIndexArtifactsView<'_>>,
-  collect_stats: bool,
-) -> Result<TimedSearchIndex> {
-  let start = Instant::now();
-  let (index, stats) = if collect_stats {
-    let result = if let Some(artifacts) = artifacts {
-      SearchIndex::new_with_artifacts_view_build_stats(
-        patterns, options, artifacts,
-      )?
-    } else {
-      SearchIndex::new_with_build_stats(patterns, options)?
-    };
-    (result.index, result.stats)
-  } else if let Some(artifacts) = artifacts {
-    (
-      SearchIndex::new_with_artifacts_view(patterns, options, artifacts)?,
-      Vec::new(),
-    )
-  } else {
-    (SearchIndex::new(patterns, options)?, Vec::new())
-  };
-  Ok(TimedSearchIndex {
-    index,
-    elapsed_us: elapsed_us(start),
-    stats,
-  })
-}
-
-fn join_search_index(
-  handle: std::thread::ScopedJoinHandle<'_, Result<TimedSearchIndex>>,
-  field: &'static str,
-) -> Result<TimedSearchIndex> {
-  handle.join().map_err(|_| Error::InvalidStaticData {
-    field,
-    reason: "search index builder panicked".to_owned(),
-  })?
 }
 
 fn record_search_index_prepare_stages(

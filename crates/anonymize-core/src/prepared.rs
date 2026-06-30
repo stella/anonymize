@@ -24,6 +24,7 @@ mod config_validation;
 mod detection_phase;
 mod diagnostic_stream;
 mod entity_filter;
+mod index_builder;
 mod index_patterns;
 mod index_prepare;
 mod phase;
