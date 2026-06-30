@@ -1440,7 +1440,7 @@ const buildNativeStaticConfig = ({
       literal_case_insensitive: true,
       literal_whole_words: false,
       regex_whole_words: false,
-      regex_artifact_policy: "omit",
+      regex_artifact_policy: "include",
     },
     custom_regex_options: {
       regex_whole_words: false,

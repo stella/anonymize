@@ -197,7 +197,7 @@ describe("pipeline config semantics", () => {
     expect(search.nativeStaticConfig.threshold).toBe(0.93);
     expect(search.nativeStaticConfig.confidence_boost).toBe(true);
     expect(search.nativeStaticConfig.regex_options.regex_artifact_policy).toBe(
-      "omit",
+      "include",
     );
     expect(
       search.nativeStaticConfig.custom_regex_options.regex_artifact_policy,
