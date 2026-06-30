@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import {
   copyFileSync,
   cpSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -2922,6 +2923,8 @@ const getAdapters = () => {
     return loadedAdapters;
   }
 
+  ensureDefaultNativePackageArtifacts();
+
   runCommand("cargo", [
     "build",
     "-p",
@@ -2951,6 +2954,31 @@ const getAdapters = () => {
   const native = loadNativeAdapter(napiPath);
   loadedAdapters = { native, pythonModulePath, tempDir };
   return loadedAdapters;
+};
+
+const ensureDefaultNativePackageArtifacts = () => {
+  const packageDir = join(ROOT_DIR, "packages", "anonymize");
+  const requiredPackages = [
+    "native-pipeline.stlanonpkg",
+    ...CONTRACT_FIXTURE_LANGUAGES.map(
+      (language) => `native-pipeline.${language}.stlanonpkg`,
+    ),
+  ];
+  if (
+    requiredPackages.every((fileName) => existsSync(join(packageDir, fileName)))
+  ) {
+    return;
+  }
+
+  runCommand(
+    "bun",
+    ["run", "build"],
+    {
+      STELLA_ANONYMIZE_NATIVE_PACKAGE_LANGUAGES:
+        CONTRACT_FIXTURE_LANGUAGES.join(","),
+    },
+    packageDir,
+  );
 };
 
 const nativeLibraryPath = (name: string): string => {
@@ -3699,9 +3727,10 @@ const runCommand = (
   command: string,
   args: string[],
   env: Record<string, string> = {},
+  cwd: string = ROOT_DIR,
 ): string => {
   const result = spawnSync(command, args, {
-    cwd: ROOT_DIR,
+    cwd,
     encoding: "utf8",
     env: { ...process.env, ...env },
   });
