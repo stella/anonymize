@@ -1,5 +1,7 @@
+use crate::diagnostics::DiagnosticStage;
 use crate::prepared::detector_registry::{
-  StaticDetector, StaticDetectorContext, StaticDetectorId, StaticEntityDetector,
+  StaticDetector, StaticDetectorContext, StaticDetectorId, StaticDetectorInput,
+  StaticEntityDetector,
 };
 use crate::prepared::timing::{StaticEntityPasses, TimedEntities};
 use crate::resolution::PipelineEntity;
@@ -11,7 +13,15 @@ pub(in crate::prepared) struct AddressSeedDetector;
 
 impl StaticEntityDetector for AddressSeedDetector {
   fn spec(&self) -> StaticDetector {
-    StaticDetector::by_id(StaticDetectorId::AddressSeed)
+    StaticDetector::new(
+      StaticDetectorId::AddressSeed,
+      DiagnosticStage::EntityAddressSeed,
+      &[
+        StaticDetectorInput::LiteralMatches,
+        StaticDetectorInput::AddressSeedData,
+        StaticDetectorInput::ContextEntities,
+      ],
+    )
   }
 
   fn detect(

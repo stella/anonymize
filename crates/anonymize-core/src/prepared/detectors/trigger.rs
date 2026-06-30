@@ -1,5 +1,7 @@
+use crate::diagnostics::DiagnosticStage;
 use crate::prepared::detector_registry::{
-  StaticDetector, StaticDetectorContext, StaticDetectorId, StaticEntityDetector,
+  StaticDetector, StaticDetectorContext, StaticDetectorId, StaticDetectorInput,
+  StaticEntityDetector,
 };
 use crate::prepared::timing::{StaticEntityPasses, TimedEntities};
 use crate::triggers::process_trigger_matches;
@@ -11,7 +13,14 @@ pub(in crate::prepared) struct TriggerDetector;
 
 impl StaticEntityDetector for TriggerDetector {
   fn spec(&self) -> StaticDetector {
-    StaticDetector::by_id(StaticDetectorId::Trigger)
+    StaticDetector::new(
+      StaticDetectorId::Trigger,
+      DiagnosticStage::EntityTrigger,
+      &[
+        StaticDetectorInput::RegexMatches,
+        StaticDetectorInput::TriggerData,
+      ],
+    )
   }
 
   fn detect(

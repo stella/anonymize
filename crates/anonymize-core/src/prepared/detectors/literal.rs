@@ -1,5 +1,7 @@
+use crate::diagnostics::DiagnosticStage;
 use crate::prepared::detector_registry::{
-  StaticDetector, StaticDetectorContext, StaticDetectorId, StaticEntityDetector,
+  StaticDetector, StaticDetectorContext, StaticDetectorId, StaticDetectorInput,
+  StaticEntityDetector,
 };
 use crate::prepared::timing::{StaticEntityPasses, TimedEntities};
 use crate::processors::{
@@ -13,7 +15,14 @@ pub(in crate::prepared) struct DenyListDetector;
 
 impl StaticEntityDetector for DenyListDetector {
   fn spec(&self) -> StaticDetector {
-    StaticDetector::by_id(StaticDetectorId::DenyList)
+    StaticDetector::new(
+      StaticDetectorId::DenyList,
+      DiagnosticStage::EntityDenyList,
+      &[
+        StaticDetectorInput::LiteralMatches,
+        StaticDetectorInput::DenyListData,
+      ],
+    )
   }
 
   fn detect(
@@ -39,7 +48,14 @@ pub(in crate::prepared) struct GazetteerDetector;
 
 impl StaticEntityDetector for GazetteerDetector {
   fn spec(&self) -> StaticDetector {
-    StaticDetector::by_id(StaticDetectorId::Gazetteer)
+    StaticDetector::new(
+      StaticDetectorId::Gazetteer,
+      DiagnosticStage::EntityGazetteer,
+      &[
+        StaticDetectorInput::LiteralMatches,
+        StaticDetectorInput::GazetteerData,
+      ],
+    )
   }
 
   fn detect(
@@ -65,7 +81,14 @@ pub(in crate::prepared) struct CountryDetector;
 
 impl StaticEntityDetector for CountryDetector {
   fn spec(&self) -> StaticDetector {
-    StaticDetector::by_id(StaticDetectorId::Country)
+    StaticDetector::new(
+      StaticDetectorId::Country,
+      DiagnosticStage::EntityCountry,
+      &[
+        StaticDetectorInput::LiteralMatches,
+        StaticDetectorInput::CountryData,
+      ],
+    )
   }
 
   fn detect(

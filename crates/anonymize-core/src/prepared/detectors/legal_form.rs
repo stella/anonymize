@@ -1,6 +1,8 @@
+use crate::diagnostics::DiagnosticStage;
 use crate::legal_forms::process_legal_form_matches;
 use crate::prepared::detector_registry::{
-  StaticDetector, StaticDetectorContext, StaticDetectorId, StaticEntityDetector,
+  StaticDetector, StaticDetectorContext, StaticDetectorId, StaticDetectorInput,
+  StaticEntityDetector,
 };
 use crate::prepared::timing::{StaticEntityPasses, TimedEntities};
 use crate::types::Result;
@@ -11,7 +13,14 @@ pub(in crate::prepared) struct LegalFormDetector;
 
 impl StaticEntityDetector for LegalFormDetector {
   fn spec(&self) -> StaticDetector {
-    StaticDetector::by_id(StaticDetectorId::LegalForm)
+    StaticDetector::new(
+      StaticDetectorId::LegalForm,
+      DiagnosticStage::EntityLegalForm,
+      &[
+        StaticDetectorInput::RegexMatches,
+        StaticDetectorInput::LegalFormData,
+      ],
+    )
   }
 
   fn detect(

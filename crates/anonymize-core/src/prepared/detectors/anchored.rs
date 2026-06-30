@@ -1,5 +1,7 @@
+use crate::diagnostics::DiagnosticStage;
 use crate::prepared::detector_registry::{
-  StaticDetector, StaticDetectorContext, StaticDetectorId, StaticEntityDetector,
+  StaticDetector, StaticDetectorContext, StaticDetectorId, StaticDetectorInput,
+  StaticEntityDetector,
 };
 use crate::prepared::timing::{StaticEntityPasses, TimedEntities};
 use crate::types::Result;
@@ -10,7 +12,15 @@ pub(in crate::prepared) struct AnchoredDetector;
 
 impl StaticEntityDetector for AnchoredDetector {
   fn spec(&self) -> StaticDetector {
-    StaticDetector::by_id(StaticDetectorId::Anchored)
+    StaticDetector::new(
+      StaticDetectorId::Anchored,
+      DiagnosticStage::EntityAnchored,
+      &[
+        StaticDetectorInput::FullText,
+        StaticDetectorInput::DateData,
+        StaticDetectorInput::MonetaryData,
+      ],
+    )
   }
 
   fn detect(

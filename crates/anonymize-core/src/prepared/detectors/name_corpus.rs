@@ -1,5 +1,7 @@
+use crate::diagnostics::DiagnosticStage;
 use crate::prepared::detector_registry::{
-  StaticDetector, StaticDetectorContext, StaticDetectorId, StaticEntityDetector,
+  StaticDetector, StaticDetectorContext, StaticDetectorId, StaticDetectorInput,
+  StaticEntityDetector,
 };
 use crate::prepared::timing::{StaticEntityPasses, TimedEntities};
 use crate::types::Result;
@@ -10,7 +12,15 @@ pub(in crate::prepared) struct NameCorpusDetector;
 
 impl StaticEntityDetector for NameCorpusDetector {
   fn spec(&self) -> StaticDetector {
-    StaticDetector::by_id(StaticDetectorId::NameCorpus)
+    StaticDetector::new(
+      StaticDetectorId::NameCorpus,
+      DiagnosticStage::EntityNameCorpus,
+      &[
+        StaticDetectorInput::FullText,
+        StaticDetectorInput::NameCorpusData,
+        StaticDetectorInput::DenyListEntities,
+      ],
+    )
   }
 
   fn detect(

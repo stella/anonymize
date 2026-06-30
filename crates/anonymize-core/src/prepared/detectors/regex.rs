@@ -1,17 +1,27 @@
+use crate::diagnostics::DiagnosticStage;
+use crate::prepared::detector_registry::{
+  StaticDetector, StaticDetectorContext, StaticDetectorId, StaticDetectorInput,
+  StaticEntityDetector,
+};
+use crate::prepared::timing::{StaticEntityPasses, TimedEntities};
 use crate::processors::process_regex_matches;
 use crate::types::Result;
 
 use super::timed_entities;
-use crate::prepared::detector_registry::{
-  StaticDetector, StaticDetectorContext, StaticDetectorId, StaticEntityDetector,
-};
-use crate::prepared::timing::{StaticEntityPasses, TimedEntities};
 
 pub(in crate::prepared) struct RegexDetector;
 
 impl StaticEntityDetector for RegexDetector {
   fn spec(&self) -> StaticDetector {
-    StaticDetector::by_id(StaticDetectorId::Regex)
+    StaticDetector::new(
+      StaticDetectorId::Regex,
+      DiagnosticStage::EntityRegex,
+      &[
+        StaticDetectorInput::RegexMatches,
+        StaticDetectorInput::FullText,
+        StaticDetectorInput::RegexMeta,
+      ],
+    )
   }
 
   fn detect(
@@ -34,7 +44,15 @@ pub(in crate::prepared) struct CustomRegexDetector;
 
 impl StaticEntityDetector for CustomRegexDetector {
   fn spec(&self) -> StaticDetector {
-    StaticDetector::by_id(StaticDetectorId::CustomRegex)
+    StaticDetector::new(
+      StaticDetectorId::CustomRegex,
+      DiagnosticStage::EntityCustomRegex,
+      &[
+        StaticDetectorInput::CustomRegexMatches,
+        StaticDetectorInput::FullText,
+        StaticDetectorInput::CustomRegexMeta,
+      ],
+    )
   }
 
   fn detect(

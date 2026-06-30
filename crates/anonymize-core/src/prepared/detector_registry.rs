@@ -56,7 +56,7 @@ pub(super) struct StaticDetector {
 }
 
 impl StaticDetector {
-  const fn new(
+  pub(super) const fn new(
     id: StaticDetectorId,
     stage: DiagnosticStage,
     required_inputs: &'static [StaticDetectorInput],
@@ -78,104 +78,6 @@ impl StaticDetector {
 
   pub(super) const fn required_inputs(self) -> &'static [StaticDetectorInput] {
     self.required_inputs
-  }
-
-  pub(super) const fn by_id(id: StaticDetectorId) -> Self {
-    match id {
-      StaticDetectorId::Regex => Self::new(
-        StaticDetectorId::Regex,
-        DiagnosticStage::EntityRegex,
-        &[
-          StaticDetectorInput::RegexMatches,
-          StaticDetectorInput::FullText,
-          StaticDetectorInput::RegexMeta,
-        ],
-      ),
-      StaticDetectorId::CustomRegex => Self::new(
-        StaticDetectorId::CustomRegex,
-        DiagnosticStage::EntityCustomRegex,
-        &[
-          StaticDetectorInput::CustomRegexMatches,
-          StaticDetectorInput::FullText,
-          StaticDetectorInput::CustomRegexMeta,
-        ],
-      ),
-      StaticDetectorId::DenyList => Self::new(
-        StaticDetectorId::DenyList,
-        DiagnosticStage::EntityDenyList,
-        &[
-          StaticDetectorInput::LiteralMatches,
-          StaticDetectorInput::DenyListData,
-        ],
-      ),
-      StaticDetectorId::Gazetteer => Self::new(
-        StaticDetectorId::Gazetteer,
-        DiagnosticStage::EntityGazetteer,
-        &[
-          StaticDetectorInput::LiteralMatches,
-          StaticDetectorInput::GazetteerData,
-        ],
-      ),
-      StaticDetectorId::Country => Self::new(
-        StaticDetectorId::Country,
-        DiagnosticStage::EntityCountry,
-        &[
-          StaticDetectorInput::LiteralMatches,
-          StaticDetectorInput::CountryData,
-        ],
-      ),
-      StaticDetectorId::Anchored => Self::new(
-        StaticDetectorId::Anchored,
-        DiagnosticStage::EntityAnchored,
-        &[
-          StaticDetectorInput::FullText,
-          StaticDetectorInput::DateData,
-          StaticDetectorInput::MonetaryData,
-        ],
-      ),
-      StaticDetectorId::Trigger => Self::new(
-        StaticDetectorId::Trigger,
-        DiagnosticStage::EntityTrigger,
-        &[
-          StaticDetectorInput::RegexMatches,
-          StaticDetectorInput::TriggerData,
-        ],
-      ),
-      StaticDetectorId::Signature => Self::new(
-        StaticDetectorId::Signature,
-        DiagnosticStage::EntitySignature,
-        &[
-          StaticDetectorInput::FullText,
-          StaticDetectorInput::SignatureData,
-        ],
-      ),
-      StaticDetectorId::LegalForm => Self::new(
-        StaticDetectorId::LegalForm,
-        DiagnosticStage::EntityLegalForm,
-        &[
-          StaticDetectorInput::RegexMatches,
-          StaticDetectorInput::LegalFormData,
-        ],
-      ),
-      StaticDetectorId::NameCorpus => Self::new(
-        StaticDetectorId::NameCorpus,
-        DiagnosticStage::EntityNameCorpus,
-        &[
-          StaticDetectorInput::FullText,
-          StaticDetectorInput::NameCorpusData,
-          StaticDetectorInput::DenyListEntities,
-        ],
-      ),
-      StaticDetectorId::AddressSeed => Self::new(
-        StaticDetectorId::AddressSeed,
-        DiagnosticStage::EntityAddressSeed,
-        &[
-          StaticDetectorInput::LiteralMatches,
-          StaticDetectorInput::AddressSeedData,
-          StaticDetectorInput::ContextEntities,
-        ],
-      ),
-    }
   }
 }
 
@@ -228,17 +130,26 @@ mod tests {
 
   #[test]
   fn detector_registry_entries_declare_metadata() {
+    let mut ids = Vec::new();
+    let mut stages = Vec::new();
     for detector in STATIC_ENTITY_DETECTORS {
       let metadata = detector.spec();
-      assert_eq!(
-        metadata,
-        super::StaticDetector::by_id(metadata.id()),
-        "detector metadata must be derived from the detector id",
+      assert!(
+        !ids.contains(&metadata.id()),
+        "detector ids must be unique: {:?}",
+        metadata.id(),
+      );
+      assert!(
+        !stages.contains(&metadata.diagnostic_stage()),
+        "detector diagnostic stages must be unique: {:?}",
+        metadata.diagnostic_stage(),
       );
       assert!(
         !metadata.required_inputs().is_empty(),
         "detectors must declare their required inputs",
       );
+      ids.push(metadata.id());
+      stages.push(metadata.diagnostic_stage());
     }
   }
 

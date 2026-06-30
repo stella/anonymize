@@ -1,5 +1,7 @@
+use crate::diagnostics::DiagnosticStage;
 use crate::prepared::detector_registry::{
-  StaticDetector, StaticDetectorContext, StaticDetectorId, StaticEntityDetector,
+  StaticDetector, StaticDetectorContext, StaticDetectorId, StaticDetectorInput,
+  StaticEntityDetector,
 };
 use crate::prepared::timing::{StaticEntityPasses, TimedEntities};
 use crate::signatures::detect_signatures;
@@ -11,7 +13,14 @@ pub(in crate::prepared) struct SignatureDetector;
 
 impl StaticEntityDetector for SignatureDetector {
   fn spec(&self) -> StaticDetector {
-    StaticDetector::by_id(StaticDetectorId::Signature)
+    StaticDetector::new(
+      StaticDetectorId::Signature,
+      DiagnosticStage::EntitySignature,
+      &[
+        StaticDetectorInput::FullText,
+        StaticDetectorInput::SignatureData,
+      ],
+    )
   }
 
   fn detect(
