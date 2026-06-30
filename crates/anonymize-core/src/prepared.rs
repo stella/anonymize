@@ -24,6 +24,7 @@ mod config_validation;
 mod detection_phase;
 mod diagnostic_stream;
 mod entity_filter;
+mod phase;
 mod prepare_phase;
 mod redaction_phase;
 mod resolution_phase;
@@ -202,11 +203,4 @@ impl PreparedSearch {
       diagnostics,
     })
   }
-}
-
-fn observe_diagnostic_stream(
-  diagnostics: &Option<&mut StaticRedactionDiagnostics>,
-  event_stream: &mut DiagnosticEventStream<'_>,
-) -> Result<()> {
-  event_stream.observe(diagnostics.as_ref().map(|value| &**value))
 }

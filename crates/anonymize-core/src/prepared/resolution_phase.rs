@@ -1,5 +1,3 @@
-use std::time::Instant;
-
 use crate::diagnostics::{DiagnosticStage, StaticRedactionDiagnostics};
 use crate::false_positives::filter_entity_false_positives;
 use crate::hotwords::apply_hotword_rules;
@@ -10,14 +8,17 @@ use crate::resolution::{
 };
 use crate::types::{Result, SearchMatch};
 
+use super::PreparedSearch;
 use super::diagnostic_stream::DiagnosticEventStream;
 use super::entity_filter::{
   clear_internal_source_details, filter_entities_for_config,
   filter_entities_for_labels, filter_entities_for_redaction, label_is_allowed,
 };
+use super::phase::{
+  PhaseTimer, ResolverStep, observe_diagnostic_stream, record_count_stage,
+  record_entities, record_resolver_entities,
+};
 use super::results::StaticDetectionResult;
-use super::timing::elapsed_us;
-use super::{PreparedSearch, observe_diagnostic_stream};
 
 impl PreparedSearch {
   pub(super) fn resolve_static_entities(
@@ -40,43 +41,40 @@ impl PreparedSearch {
       self.confidence_boost,
       &self.allowed_labels,
     )?;
-    let address_context_start = Instant::now();
+    let address_context_timer = PhaseTimer::start();
     let address_context_entities =
       self.process_address_context_entities(full_text, &raw_entities)?;
-    if let Some(diagnostics) = diagnostics {
-      diagnostics.record_entities(
-        DiagnosticStage::EntityAddressContext,
-        &address_context_entities,
-        full_text,
-        Some(elapsed_us(address_context_start)),
-      );
-    }
-    observe_diagnostic_stream(diagnostics, event_stream)?;
+    record_resolver_entities(
+      diagnostics,
+      event_stream,
+      ResolverStep::AddressContext,
+      &address_context_entities,
+      full_text,
+      address_context_timer,
+    )?;
     raw_entities.extend(address_context_entities);
-    let merge_start = Instant::now();
+    let merge_timer = PhaseTimer::start();
     let merged = merge_and_dedup(&raw_entities);
     let merged = self.extend_monetary_entities(full_text, &merged);
-    if let Some(diagnostics) = diagnostics {
-      diagnostics.record_entities(
-        DiagnosticStage::Merge,
-        &merged,
-        full_text,
-        Some(elapsed_us(merge_start)),
-      );
-    }
-    observe_diagnostic_stream(diagnostics, event_stream)?;
-    let boundary_start = Instant::now();
+    record_resolver_entities(
+      diagnostics,
+      event_stream,
+      ResolverStep::Merge,
+      &merged,
+      full_text,
+      merge_timer,
+    )?;
+    let boundary_timer = PhaseTimer::start();
     let consistent = enforce_boundary_consistency(&merged, full_text)?;
-    if let Some(diagnostics) = diagnostics {
-      diagnostics.record_entities(
-        DiagnosticStage::Boundary,
-        &consistent,
-        full_text,
-        Some(elapsed_us(boundary_start)),
-      );
-    }
-    observe_diagnostic_stream(diagnostics, event_stream)?;
-    let sanitize_start = Instant::now();
+    record_resolver_entities(
+      diagnostics,
+      event_stream,
+      ResolverStep::Boundary,
+      &consistent,
+      full_text,
+      boundary_timer,
+    )?;
+    let sanitize_timer = PhaseTimer::start();
     let sanitized_entities =
       sanitize_entities_with_source(&consistent, full_text)?;
     let false_positive_filters =
@@ -102,15 +100,14 @@ impl PreparedSearch {
       diagnostics.as_deref_mut(),
     )?;
     clear_internal_source_details(&mut resolved_entities);
-    if let Some(diagnostics) = diagnostics {
-      diagnostics.record_entities(
-        DiagnosticStage::Sanitize,
-        &resolved_entities,
-        full_text,
-        Some(elapsed_us(sanitize_start)),
-      );
-    }
-    observe_diagnostic_stream(diagnostics, event_stream)?;
+    record_resolver_entities(
+      diagnostics,
+      event_stream,
+      ResolverStep::Sanitize,
+      &resolved_entities,
+      full_text,
+      sanitize_timer,
+    )?;
     Ok(resolved_entities)
   }
 
@@ -138,22 +135,21 @@ impl PreparedSearch {
     entities: Vec<PipelineEntity>,
     full_text: &str,
     _literal_matches: &[SearchMatch],
-    diagnostics: Option<&mut StaticRedactionDiagnostics>,
+    mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
   ) -> Result<Vec<PipelineEntity>> {
     let Some(data) = &self.hotword_data else {
       return Ok(entities);
     };
-    let start = Instant::now();
+    let timer = PhaseTimer::start();
     let adjusted =
       apply_hotword_rules(entities, full_text, data, &self.allowed_labels)?;
-    if let Some(diagnostics) = diagnostics {
-      diagnostics.record_stage(
-        DiagnosticStage::EntityHotword,
-        Some(adjusted.len()),
-        Some(elapsed_us(start)),
-        Some(full_text.len()),
-      );
-    }
+    record_count_stage(
+      &mut diagnostics,
+      DiagnosticStage::EntityHotword,
+      adjusted.len(),
+      full_text.len(),
+      timer,
+    );
     Ok(adjusted)
   }
 
@@ -167,16 +163,15 @@ impl PreparedSearch {
       return Ok(entities);
     };
 
-    let start = Instant::now();
+    let timer = PhaseTimer::start();
     let adjusted = data.adjust_entities(full_text, entities)?;
-    if let Some(diagnostics) = &mut diagnostics {
-      diagnostics.record_stage(
-        DiagnosticStage::EntityZoneAdjustment,
-        Some(adjusted.boosted),
-        Some(elapsed_us(start)),
-        Some(full_text.len()),
-      );
-    }
+    record_count_stage(
+      &mut diagnostics,
+      DiagnosticStage::EntityZoneAdjustment,
+      adjusted.boosted,
+      full_text.len(),
+      timer,
+    );
     Ok(adjusted.entities)
   }
 
@@ -205,17 +200,16 @@ impl PreparedSearch {
       return Ok(existing_entities);
     };
 
-    let start = Instant::now();
+    let timer = PhaseTimer::start();
     let coreference_entities =
       data.process(full_text, &existing_entities, self.threshold)?;
-    if let Some(diagnostics) = &mut diagnostics {
-      diagnostics.record_entities(
-        DiagnosticStage::EntityCoreference,
-        &coreference_entities,
-        full_text,
-        Some(elapsed_us(start)),
-      );
-    }
+    record_entities(
+      &mut diagnostics,
+      DiagnosticStage::EntityCoreference,
+      &coreference_entities,
+      full_text,
+      timer,
+    );
     if coreference_entities.is_empty() {
       return Ok(existing_entities);
     }

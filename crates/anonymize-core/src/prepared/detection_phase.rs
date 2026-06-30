@@ -12,6 +12,7 @@ use crate::triggers::process_trigger_matches;
 use crate::types::Result;
 
 use super::PreparedSearch;
+use super::phase::{DetectorPass, record_detector_entities};
 use super::results::{PreparedSearchMatches, StaticDetectionResult};
 use super::timing::{StaticEntityPasses, TimedEntities, elapsed_us};
 
@@ -318,72 +319,22 @@ fn record_static_entity_diagnostics(
   full_text: &str,
   passes: &StaticEntityPasses,
 ) {
-  diagnostics.record_entities(
-    DiagnosticStage::EntityRegex,
-    &passes.regex.entities,
-    full_text,
-    Some(passes.regex.elapsed_us),
-  );
-  diagnostics.record_entities(
-    DiagnosticStage::EntityCustomRegex,
-    &passes.custom_regex.entities,
-    full_text,
-    Some(passes.custom_regex.elapsed_us),
-  );
-  diagnostics.record_entities(
-    DiagnosticStage::EntityDenyList,
-    &passes.deny_list.entities,
-    full_text,
-    Some(passes.deny_list.elapsed_us),
-  );
-  diagnostics.record_entities(
-    DiagnosticStage::EntityGazetteer,
-    &passes.gazetteer.entities,
-    full_text,
-    Some(passes.gazetteer.elapsed_us),
-  );
-  diagnostics.record_entities(
-    DiagnosticStage::EntityCountry,
-    &passes.country.entities,
-    full_text,
-    Some(passes.country.elapsed_us),
-  );
-  diagnostics.record_entities(
-    DiagnosticStage::EntityAnchored,
-    &passes.anchored.entities,
-    full_text,
-    Some(passes.anchored.elapsed_us),
-  );
-  diagnostics.record_entities(
-    DiagnosticStage::EntityTrigger,
-    &passes.trigger.entities,
-    full_text,
-    Some(passes.trigger.elapsed_us),
-  );
-  diagnostics.record_entities(
-    DiagnosticStage::EntitySignature,
-    &passes.signature.entities,
-    full_text,
-    Some(passes.signature.elapsed_us),
-  );
-  diagnostics.record_entities(
-    DiagnosticStage::EntityLegalForm,
-    &passes.legal_form.entities,
-    full_text,
-    Some(passes.legal_form.elapsed_us),
-  );
-  diagnostics.record_entities(
-    DiagnosticStage::EntityNameCorpus,
-    &passes.name_corpus.entities,
-    full_text,
-    Some(passes.name_corpus.elapsed_us),
-  );
-  diagnostics.record_entities(
-    DiagnosticStage::EntityAddressSeed,
-    &passes.address_seed.entities,
-    full_text,
-    Some(passes.address_seed.elapsed_us),
-  );
+  let detector_passes = [
+    (DetectorPass::Regex, &passes.regex),
+    (DetectorPass::CustomRegex, &passes.custom_regex),
+    (DetectorPass::DenyList, &passes.deny_list),
+    (DetectorPass::Gazetteer, &passes.gazetteer),
+    (DetectorPass::Country, &passes.country),
+    (DetectorPass::Anchored, &passes.anchored),
+    (DetectorPass::Trigger, &passes.trigger),
+    (DetectorPass::Signature, &passes.signature),
+    (DetectorPass::LegalForm, &passes.legal_form),
+    (DetectorPass::NameCorpus, &passes.name_corpus),
+    (DetectorPass::AddressSeed, &passes.address_seed),
+  ];
+  for (detector_pass, entities) in detector_passes {
+    record_detector_entities(diagnostics, detector_pass, entities, full_text);
+  }
 }
 
 fn address_seed_context(layers: &[&[PipelineEntity]]) -> Vec<PipelineEntity> {

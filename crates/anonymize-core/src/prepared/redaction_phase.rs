@@ -1,5 +1,3 @@
-use std::time::Instant;
-
 use crate::diagnostics::StaticRedactionDiagnostics;
 use crate::redact::redact_text;
 use crate::resolution::PipelineEntity;
@@ -7,10 +5,10 @@ use crate::types::{
   Entity, EntityKind, OperatorConfig, RedactionResult, Result,
 };
 
+use super::PreparedSearch;
 use super::diagnostic_stream::DiagnosticEventStream;
+use super::phase::{PhaseTimer, observe_diagnostic_stream};
 use super::results::StaticRedactionResult;
-use super::timing::elapsed_us;
-use super::{PreparedSearch, observe_diagnostic_stream};
 
 impl PreparedSearch {
   pub(super) fn redact_static_entities_inner(
@@ -20,7 +18,7 @@ impl PreparedSearch {
     mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
     event_stream: &mut DiagnosticEventStream<'_>,
   ) -> Result<StaticRedactionResult> {
-    let redact_start = Instant::now();
+    let redact_timer = PhaseTimer::start();
     let detections = self
       .detect_static_entities_inner(full_text, diagnostics.as_deref_mut())?;
     observe_diagnostic_stream(&diagnostics, event_stream)?;
@@ -34,14 +32,14 @@ impl PreparedSearch {
       .iter()
       .map(to_redaction_entity)
       .collect::<Vec<_>>();
-    let redaction_start = Instant::now();
+    let redaction_timer = PhaseTimer::start();
     let redaction = redact_text(full_text, &redaction_entities, operators)?;
     record_redaction_stages(
       &mut diagnostics,
       &redaction,
       full_text.len(),
-      redaction_start,
-      redact_start,
+      redaction_timer,
+      redact_timer,
     );
     observe_diagnostic_stream(&diagnostics, event_stream)?;
 
@@ -57,21 +55,21 @@ fn record_redaction_stages(
   diagnostics: &mut Option<&mut StaticRedactionDiagnostics>,
   redaction: &RedactionResult,
   input_bytes: usize,
-  redaction_start: Instant,
-  total_start: Instant,
+  redaction_timer: PhaseTimer,
+  total_timer: PhaseTimer,
 ) {
   let Some(diagnostics) = diagnostics else {
     return;
   };
   diagnostics.record_redaction(
     redaction,
-    Some(elapsed_us(redaction_start)),
+    Some(redaction_timer.elapsed_us()),
     input_bytes,
   );
   diagnostics.record_stage(
     crate::diagnostics::DiagnosticStage::RedactTotal,
     Some(redaction.entity_count),
-    Some(elapsed_us(total_start)),
+    Some(total_timer.elapsed_us()),
     Some(input_bytes),
   );
 }
