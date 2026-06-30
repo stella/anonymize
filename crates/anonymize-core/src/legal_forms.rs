@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use crate::byte_offsets::ByteOffsets;
 use crate::processors::PatternSlice;
@@ -36,6 +36,8 @@ pub struct LegalFormData {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct PreparedLegalFormData {
   suffixes: Vec<String>,
+  list_suffix_indices: Vec<usize>,
+  suffix_indices_by_last_char: HashMap<char, Vec<usize>>,
   normalized_boundary_suffixes: HashSet<String>,
   normalized_in_name_words: HashSet<String>,
   normalized_suffix_words: HashSet<String>,
@@ -55,31 +57,71 @@ pub(crate) struct PreparedLegalFormData {
 
 impl PreparedLegalFormData {
   pub(crate) fn new(data: LegalFormData) -> Self {
+    let LegalFormData {
+      suffixes,
+      normalized_boundary_suffixes,
+      normalized_in_name_words,
+      normalized_suffix_words,
+      role_heads,
+      sentence_verb_indicators,
+      clause_noun_heads,
+      connector_prose_heads,
+      structural_single_cap_prefixes,
+      leading_clause_phrases,
+      leading_clause_direct_prefixes,
+      connector_words,
+      and_connector_words,
+      in_name_prepositions,
+      company_suffix_words,
+      comma_gated_direct_prefixes,
+    } = data;
+    let list_suffix_indices = list_suffix_indices(&suffixes);
+    let suffix_indices_by_last_char = suffix_indices_by_last_char(&suffixes);
+
     Self {
-      suffixes: data.suffixes,
-      normalized_boundary_suffixes: lower_set(
-        data.normalized_boundary_suffixes,
-      ),
-      normalized_in_name_words: lower_set(data.normalized_in_name_words),
-      normalized_suffix_words: lower_set(data.normalized_suffix_words),
-      role_heads: lower_set(data.role_heads),
-      sentence_verb_indicators: lower_set(data.sentence_verb_indicators),
-      clause_noun_heads: lower_set(data.clause_noun_heads),
-      connector_prose_heads: lower_set(data.connector_prose_heads),
-      structural_single_cap_prefixes: lower_set(
-        data.structural_single_cap_prefixes,
-      ),
-      leading_clause_phrases: lower_vec(data.leading_clause_phrases),
-      leading_clause_direct_prefixes: lower_vec(
-        data.leading_clause_direct_prefixes,
-      ),
-      connector_words: lower_set(data.connector_words),
-      and_connector_words: lower_set(data.and_connector_words),
-      in_name_prepositions: lower_set(data.in_name_prepositions),
-      company_suffix_words: lower_set(data.company_suffix_words),
-      comma_gated_direct_prefixes: lower_set(data.comma_gated_direct_prefixes),
+      suffixes,
+      list_suffix_indices,
+      suffix_indices_by_last_char,
+      normalized_boundary_suffixes: lower_set(normalized_boundary_suffixes),
+      normalized_in_name_words: lower_set(normalized_in_name_words),
+      normalized_suffix_words: lower_set(normalized_suffix_words),
+      role_heads: lower_set(role_heads),
+      sentence_verb_indicators: lower_set(sentence_verb_indicators),
+      clause_noun_heads: lower_set(clause_noun_heads),
+      connector_prose_heads: lower_set(connector_prose_heads),
+      structural_single_cap_prefixes: lower_set(structural_single_cap_prefixes),
+      leading_clause_phrases: lower_vec(leading_clause_phrases),
+      leading_clause_direct_prefixes: lower_vec(leading_clause_direct_prefixes),
+      connector_words: lower_set(connector_words),
+      and_connector_words: lower_set(and_connector_words),
+      in_name_prepositions: lower_set(in_name_prepositions),
+      company_suffix_words: lower_set(company_suffix_words),
+      comma_gated_direct_prefixes: lower_set(comma_gated_direct_prefixes),
     }
   }
+}
+
+fn list_suffix_indices(suffixes: &[String]) -> Vec<usize> {
+  suffixes
+    .iter()
+    .enumerate()
+    .filter_map(|(index, suffix)| {
+      (!is_roman_legal_suffix(suffix)).then_some(index)
+    })
+    .collect()
+}
+
+fn suffix_indices_by_last_char(
+  suffixes: &[String],
+) -> HashMap<char, Vec<usize>> {
+  let mut by_char = HashMap::<char, Vec<usize>>::new();
+  for (index, suffix) in suffixes.iter().enumerate() {
+    let Some(last) = suffix.chars().next_back() else {
+      continue;
+    };
+    by_char.entry(last).or_default().push(index);
+  }
+  by_char
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1190,10 +1232,7 @@ fn split_embedded_legal_form_list<'a>(
   }
 
   let mut cuts = vec![0_usize];
-  for suffix in &data.suffixes {
-    if is_roman_numeral(&clean_suffix(suffix)) {
-      continue;
-    }
+  for suffix in list_suffixes(data) {
     let mut search_from = 0_usize;
     while let Some(relative) = entity_text
       .get(search_from..)
@@ -1276,7 +1315,20 @@ fn legal_list_boundary_len(text: &str) -> usize {
 }
 
 fn ends_with_legal_suffix(text: &str, data: &PreparedLegalFormData) -> bool {
-  data.suffixes.iter().any(|suffix| text.ends_with(suffix))
+  let Some(last) = text.chars().next_back() else {
+    return false;
+  };
+  data
+    .suffix_indices_by_last_char
+    .get(&last)
+    .is_some_and(|indices| {
+      indices.iter().any(|index| {
+        data
+          .suffixes
+          .get(*index)
+          .is_some_and(|suffix| text.ends_with(suffix))
+      })
+    })
 }
 
 fn trim_embedded_legal_form_list_prefix<'a>(
@@ -1289,10 +1341,7 @@ fn trim_embedded_legal_form_list_prefix<'a>(
   }
 
   let mut cut = 0_usize;
-  for suffix in &data.suffixes {
-    if is_roman_numeral(&clean_suffix(suffix)) {
-      continue;
-    }
+  for suffix in list_suffixes(data) {
     let mut search_from = 0_usize;
     while let Some(relative) = entity_text
       .get(search_from..)
@@ -1518,6 +1567,19 @@ fn last_suffix_separator(text: &str) -> Option<usize> {
 
 fn clean_suffix(text: &str) -> String {
   text.chars().filter(|ch| !matches!(ch, '.' | ',')).collect()
+}
+
+fn is_roman_legal_suffix(text: &str) -> bool {
+  let suffix = clean_suffix(text);
+  !suffix.is_empty() && is_roman_numeral(&suffix)
+}
+
+fn list_suffixes(
+  data: &PreparedLegalFormData,
+) -> impl Iterator<Item = &str> + '_ {
+  data.list_suffix_indices.iter().filter_map(|index| {
+    data.suffixes.get(*index).map(std::string::String::as_str)
+  })
 }
 
 fn is_roman_numeral(text: &str) -> bool {
