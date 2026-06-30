@@ -9,10 +9,10 @@ use stella_anonymize_adapter_contract::{
   BindingStaticRedactionResult, ContractError,
   PreparedSearchPackageDecodeTimings, diagnostic_stage_event,
   operator_config_from_binding, prepared_search_config_from_binding,
-  prepared_search_core_package_decode_from_bytes_with_timings,
-  prepared_search_core_package_decode_trusted_from_bytes_with_timings,
   prepared_search_core_package_to_bytes,
   prepared_search_core_package_to_compressed_bytes,
+  prepared_search_core_package_view_from_bytes_with_timings,
+  prepared_search_core_package_view_trusted_from_bytes_with_timings,
   prepared_search_package_decode_events, prepared_search_package_from_bytes,
   prepared_search_package_has_core_payload,
   static_redaction_diagnostic_result_to_utf16_binding,
@@ -21,7 +21,7 @@ use stella_anonymize_adapter_contract::{
 };
 use stella_anonymize_core::{
   DiagnosticDetail, DiagnosticStage, OperatorConfig,
-  PreparedSearch as CorePreparedSearch, PreparedSearchArtifacts,
+  PreparedSearch as CorePreparedSearch, PreparedSearchArtifactsView,
   StaticRedactionDiagnostics, StaticRedactionResult,
 };
 
@@ -93,12 +93,13 @@ impl PyPreparedSearch {
   ) -> PyResult<Self> {
     let config = parse_core_prepared_search_config(config_json)?;
     let artifact_decode_start = Instant::now();
-    let artifacts = PreparedSearchArtifacts::from_bytes(artifact_bytes)
+    let artifacts = PreparedSearchArtifactsView::from_bytes(artifact_bytes)
       .map_err(|error| to_py_core_error(&error))?;
     let artifact_decode_elapsed = elapsed_us(artifact_decode_start);
-    let result =
-      CorePreparedSearch::new_with_artifacts_diagnostics(config, &artifacts)
-        .map_err(|error| to_py_core_error(&error))?;
+    let result = CorePreparedSearch::new_with_artifact_view_diagnostics(
+      config, &artifacts,
+    )
+    .map_err(|error| to_py_core_error(&error))?;
     let mut diagnostics = StaticRedactionDiagnostics::default();
     diagnostics.events.push(diagnostic_stage_event(
       DiagnosticStage::PrepareArtifactsDecode,
@@ -117,17 +118,16 @@ impl PyPreparedSearch {
   fn from_prepared_package_bytes(package_bytes: &[u8]) -> PyResult<Self> {
     if prepared_search_package_has_core_payload(package_bytes) {
       let package_decode_start = Instant::now();
-      let package =
-        prepared_search_core_package_decode_from_bytes_with_timings(
+      let (package, package_decode_timings) =
+        prepared_search_core_package_view_from_bytes_with_timings(
           package_bytes,
         )
         .map_err(|error| to_py_contract_error(&error))?;
       let package_decode_elapsed = elapsed_us(package_decode_start);
       return Self::from_core_package(
         package.config,
-        &package.artifacts,
-        package.package_decode_timings,
-        Some((package.artifacts_decode, package.artifacts_bytes)),
+        package.artifacts.as_ref(),
+        package_decode_timings,
         package_decode_elapsed,
         package_bytes.len(),
       );
@@ -140,12 +140,13 @@ impl PyPreparedSearch {
     let config = prepared_search_config_from_binding(package.config)
       .map_err(|error| to_py_contract_error(&error))?;
     let artifact_decode_start = Instant::now();
-    let artifacts = PreparedSearchArtifacts::from_bytes(&package.artifacts)
+    let artifacts = PreparedSearchArtifactsView::from_bytes(&package.artifacts)
       .map_err(|error| to_py_core_error(&error))?;
     let artifact_decode_elapsed = elapsed_us(artifact_decode_start);
-    let result =
-      CorePreparedSearch::new_with_artifacts_diagnostics(config, &artifacts)
-        .map_err(|error| to_py_core_error(&error))?;
+    let result = CorePreparedSearch::new_with_artifact_view_diagnostics(
+      config, &artifacts,
+    )
+    .map_err(|error| to_py_core_error(&error))?;
     let mut diagnostics = package_prepare_diagnostics(
       package_decode_elapsed,
       PreparedSearchPackageDecodeTimings::default(),
@@ -170,17 +171,16 @@ impl PyPreparedSearch {
   ) -> PyResult<Self> {
     if prepared_search_package_has_core_payload(package_bytes) {
       let package_decode_start = Instant::now();
-      let package =
-        prepared_search_core_package_decode_trusted_from_bytes_with_timings(
+      let (package, package_decode_timings) =
+        prepared_search_core_package_view_trusted_from_bytes_with_timings(
           package_bytes,
         )
         .map_err(|error| to_py_contract_error(&error))?;
       let package_decode_elapsed = elapsed_us(package_decode_start);
       return Self::from_core_package(
         package.config,
-        &package.artifacts,
-        package.package_decode_timings,
-        Some((package.artifacts_decode, package.artifacts_bytes)),
+        package.artifacts.as_ref(),
+        package_decode_timings,
         package_decode_elapsed,
         package_bytes.len(),
       );
@@ -269,28 +269,30 @@ impl PyPreparedSearch {
 impl PyPreparedSearch {
   fn from_core_package(
     config: stella_anonymize_core::PreparedSearchConfig,
-    artifacts: &PreparedSearchArtifacts,
+    artifact_bytes: &[u8],
     package_decode_timings: PreparedSearchPackageDecodeTimings,
-    artifact_decode: Option<(u64, usize)>,
     package_decode_elapsed: u64,
     input_bytes_len: usize,
   ) -> PyResult<Self> {
-    let result =
-      CorePreparedSearch::new_with_artifacts_diagnostics(config, artifacts)
-        .map_err(|error| to_py_core_error(&error))?;
+    let artifact_decode_start = Instant::now();
+    let artifacts = PreparedSearchArtifactsView::from_bytes(artifact_bytes)
+      .map_err(|error| to_py_core_error(&error))?;
+    let artifact_decode = elapsed_us(artifact_decode_start);
+    let result = CorePreparedSearch::new_with_artifact_view_diagnostics(
+      config, &artifacts,
+    )
+    .map_err(|error| to_py_core_error(&error))?;
     let mut diagnostics = package_prepare_diagnostics(
       package_decode_elapsed,
       package_decode_timings,
       input_bytes_len,
     );
-    if let Some((elapsed, bytes)) = artifact_decode {
-      diagnostics.events.push(diagnostic_stage_event(
-        DiagnosticStage::PrepareArtifactsDecode,
-        None,
-        Some(elapsed),
-        Some(bytes),
-      ));
-    }
+    diagnostics.events.push(diagnostic_stage_event(
+      DiagnosticStage::PrepareArtifactsDecode,
+      None,
+      Some(artifact_decode),
+      Some(artifact_bytes.len()),
+    ));
     diagnostics.extend(result.diagnostics);
     Ok(Self {
       inner: result.prepared,

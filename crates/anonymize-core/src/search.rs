@@ -190,6 +190,11 @@ pub struct SearchIndexArtifacts {
   pub slots: Vec<text_search::PreparedTextSearchArtifacts>,
 }
 
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct SearchIndexArtifactsView<'a> {
+  pub slots: Vec<text_search::PreparedTextSearchArtifactsView<'a>>,
+}
+
 impl SearchIndexArtifacts {
   pub fn to_bytes(&self) -> Result<Vec<u8>> {
     let mut writer = ArtifactWriter::new(
@@ -205,6 +210,19 @@ impl SearchIndexArtifacts {
   }
 
   pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
+    Ok(SearchIndexArtifactsView::from_bytes(bytes)?.into_owned())
+  }
+
+  #[must_use]
+  pub fn as_view(&self) -> SearchIndexArtifactsView<'_> {
+    SearchIndexArtifactsView {
+      slots: self.slots.iter().map(|slot| slot.as_view()).collect(),
+    }
+  }
+}
+
+impl<'a> SearchIndexArtifactsView<'a> {
+  pub fn from_bytes(bytes: &'a [u8]) -> Result<Self> {
     let mut reader = ArtifactReader::new(
       bytes,
       SEARCH_INDEX_ARTIFACTS_HEADER,
@@ -215,7 +233,7 @@ impl SearchIndexArtifacts {
     let mut slots = Vec::new();
     for _ in 0..count {
       slots.push(
-        text_search::PreparedTextSearchArtifacts::from_bytes(
+        text_search::PreparedTextSearchArtifactsView::from_bytes(
           reader.read_len_prefixed_bytes()?,
         )
         .map_err(|error| search_error(&error))?,
@@ -223,6 +241,19 @@ impl SearchIndexArtifacts {
     }
     reader.finish()?;
     Ok(Self { slots })
+  }
+
+  #[must_use]
+  pub fn into_owned(self) -> SearchIndexArtifacts {
+    SearchIndexArtifacts {
+      slots: self
+        .slots
+        .into_iter()
+        .map(
+          stella_text_search_core::PreparedTextSearchArtifactsView::into_owned,
+        )
+        .collect(),
+    }
   }
 }
 
@@ -254,16 +285,20 @@ struct SearchIndexParts {
 }
 
 struct SearchIndexArtifactCursor<'a> {
-  slots: &'a [text_search::PreparedTextSearchArtifacts],
+  slots: &'a [text_search::PreparedTextSearchArtifactsView<'a>],
   index: usize,
 }
 
 impl<'a> SearchIndexArtifactCursor<'a> {
-  const fn new(slots: &'a [text_search::PreparedTextSearchArtifacts]) -> Self {
+  const fn new(
+    slots: &'a [text_search::PreparedTextSearchArtifactsView<'a>],
+  ) -> Self {
     Self { slots, index: 0 }
   }
 
-  fn next(&mut self) -> Result<&'a text_search::PreparedTextSearchArtifacts> {
+  fn next(
+    &mut self,
+  ) -> Result<&'a text_search::PreparedTextSearchArtifactsView<'a>> {
     let index = self.index;
     let Some(artifacts) = self.slots.get(index) else {
       return Err(search_message(format!(
@@ -328,6 +363,15 @@ impl SearchIndex {
     options: SearchOptions,
     artifacts: &SearchIndexArtifacts,
   ) -> Result<Self> {
+    let artifacts = artifacts.as_view();
+    Self::new_with_artifacts_view(patterns, options, &artifacts)
+  }
+
+  pub fn new_with_artifacts_view(
+    patterns: Vec<SearchPattern>,
+    options: SearchOptions,
+    artifacts: &SearchIndexArtifactsView<'_>,
+  ) -> Result<Self> {
     if patterns.is_empty() && !artifacts.slots.is_empty() {
       return Ok(
         Self::new_all_literal_with_artifacts(options, artifacts, false)?.index,
@@ -342,10 +386,10 @@ impl SearchIndex {
     Ok(search.index)
   }
 
-  pub(crate) fn new_with_artifacts_build_stats(
+  pub(crate) fn new_with_artifacts_view_build_stats(
     patterns: Vec<SearchPattern>,
     options: SearchOptions,
-    artifacts: &SearchIndexArtifacts,
+    artifacts: &SearchIndexArtifactsView<'_>,
   ) -> Result<SearchIndexBuildResult> {
     if patterns.is_empty() && !artifacts.slots.is_empty() {
       return Self::new_all_literal_with_artifacts(options, artifacts, true);
@@ -361,14 +405,14 @@ impl SearchIndex {
 
   fn new_all_literal_with_artifacts(
     options: SearchOptions,
-    artifacts: &SearchIndexArtifacts,
+    artifacts: &SearchIndexArtifactsView<'_>,
     collect_stats: bool,
   ) -> Result<SearchIndexBuildResult> {
     let mut cursor = SearchIndexArtifactCursor::new(&artifacts.slots);
     let slot_artifacts = cursor.next()?;
     let (search, stats) = if collect_stats {
       let result =
-        text_search::TextSearch::with_prepared_all_literal_artifacts_build_stats(
+        text_search::TextSearch::with_prepared_all_literal_artifacts_view_build_stats(
           literal_options(options.literal),
           slot_artifacts,
         )
@@ -381,7 +425,7 @@ impl SearchIndex {
       (result.search, stats)
     } else {
       (
-        text_search::TextSearch::with_prepared_all_literal_artifacts(
+        text_search::TextSearch::with_prepared_all_literal_artifacts_view(
           literal_options(options.literal),
           slot_artifacts,
         )
@@ -678,7 +722,7 @@ fn build_search_index_inner(
 fn slot_artifacts<'a>(
   patterns: &[text_search::PatternEntry],
   artifacts: &mut Option<&mut SearchIndexArtifactCursor<'a>>,
-) -> Result<Option<&'a text_search::PreparedTextSearchArtifacts>> {
+) -> Result<Option<&'a text_search::PreparedTextSearchArtifactsView<'a>>> {
   if patterns.is_empty() {
     return Ok(None);
   }
@@ -722,7 +766,7 @@ fn push_slot(
   patterns: Vec<text_search::PatternEntry>,
   pattern_indexes: Vec<u32>,
   options: text_search::TextSearchOptions,
-  artifacts: Option<&text_search::PreparedTextSearchArtifacts>,
+  artifacts: Option<&text_search::PreparedTextSearchArtifactsView<'_>>,
   stats: Option<&mut Vec<SearchIndexBuildStats>>,
 ) -> Result<()> {
   if patterns.is_empty() {
@@ -737,7 +781,7 @@ fn push_slot(
   let start = collect_stats.then(Instant::now);
   let (search, child_stats) = if collect_stats {
     let result = if let Some(artifacts) = artifacts {
-      text_search::TextSearch::with_prepared_artifacts_build_stats(
+      text_search::TextSearch::with_prepared_artifacts_view_build_stats(
         patterns, options, artifacts,
       )
     } else {
@@ -747,7 +791,7 @@ fn push_slot(
     (result.search, result.stats)
   } else if let Some(artifacts) = artifacts {
     (
-      text_search::TextSearch::with_prepared_artifacts(
+      text_search::TextSearch::with_prepared_artifacts_view(
         patterns, options, artifacts,
       )
       .map_err(|error| search_error(&error))?,
@@ -854,7 +898,7 @@ const fn search_engine_from_text_kind(
 }
 
 const fn prepared_artifact_count(
-  artifacts: &text_search::PreparedTextSearchArtifacts,
+  artifacts: &text_search::PreparedTextSearchArtifactsView<'_>,
 ) -> usize {
   artifacts
     .aho_automata
@@ -863,7 +907,7 @@ const fn prepared_artifact_count(
 }
 
 fn prepared_artifact_bytes(
-  artifacts: &text_search::PreparedTextSearchArtifacts,
+  artifacts: &text_search::PreparedTextSearchArtifactsView<'_>,
 ) -> usize {
   artifacts
     .aho_automata

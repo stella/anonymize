@@ -966,6 +966,31 @@ pub fn prepared_search_core_package_view_from_bytes_with_timings(
   CorePreparedSearchPackageView<'_>,
   PreparedSearchPackageDecodeTimings,
 )> {
+  prepared_search_core_package_view_from_bytes_with_policy(
+    bytes,
+    PackageDigestPolicy::Verify,
+  )
+}
+
+pub fn prepared_search_core_package_view_trusted_from_bytes_with_timings(
+  bytes: &[u8],
+) -> Result<(
+  CorePreparedSearchPackageView<'_>,
+  PreparedSearchPackageDecodeTimings,
+)> {
+  prepared_search_core_package_view_from_bytes_with_policy(
+    bytes,
+    PackageDigestPolicy::Trust,
+  )
+}
+
+fn prepared_search_core_package_view_from_bytes_with_policy(
+  bytes: &[u8],
+  digest_policy: PackageDigestPolicy,
+) -> Result<(
+  CorePreparedSearchPackageView<'_>,
+  PreparedSearchPackageDecodeTimings,
+)> {
   let mut timings = PreparedSearchPackageDecodeTimings::default();
   let parts = prepared_search_package_parts(bytes)?;
   if !parts.is_core() {
@@ -973,7 +998,7 @@ pub fn prepared_search_core_package_view_from_bytes_with_timings(
       "package does not contain a core payload",
     ));
   }
-  let payload = parts.into_verified_payload(&mut timings)?;
+  let payload = parts.into_payload(&mut timings, digest_policy)?;
   let package = core_package_view_from_payload(payload, &mut timings)?;
   Ok((package, timings))
 }
@@ -2949,6 +2974,7 @@ mod tests {
     prepared_search_core_package_to_bytes,
     prepared_search_core_package_to_compressed_bytes,
     prepared_search_core_package_view_from_bytes_with_timings,
+    prepared_search_core_package_view_trusted_from_bytes_with_timings,
     prepared_search_package_decode_events,
     prepared_search_package_decode_timing_events,
     prepared_search_package_digest, prepared_search_package_from_bytes,
@@ -3414,6 +3440,20 @@ mod tests {
     assert!(
       trusted.package_decode_timings.decompress.is_some(),
       "trusted decode still has to decompress compressed packages"
+    );
+
+    let (trusted_view, trusted_view_timings) =
+      prepared_search_core_package_view_trusted_from_bytes_with_timings(&bytes)
+        .unwrap();
+    assert_eq!(trusted_view.config.literal_patterns, Vec::new());
+    assert_eq!(trusted_view.artifacts.as_ref(), artifact_bytes.as_slice());
+    assert!(
+      trusted_view_timings.verify.is_none(),
+      "trusted view decode should not spend time verifying the package digest"
+    );
+    assert!(
+      trusted_view_timings.decompress.is_some(),
+      "trusted view decode still has to decompress compressed packages"
     );
   }
 

@@ -34,7 +34,8 @@ use crate::resolution::{
 };
 use crate::search::{
   LiteralSearchOptions, SearchIndex, SearchIndexArtifacts,
-  SearchIndexBuildStats, SearchOptions, SearchPattern,
+  SearchIndexArtifactsView, SearchIndexBuildStats, SearchOptions,
+  SearchPattern,
 };
 use crate::signatures::{
   PreparedSignatureData, SignatureData, detect_signatures,
@@ -151,6 +152,15 @@ pub struct PreparedSearchArtifacts {
   pub literals: SearchIndexArtifacts,
 }
 
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct PreparedSearchArtifactsView<'a> {
+  pub regex: SearchIndexArtifactsView<'a>,
+  pub custom_regex: SearchIndexArtifactsView<'a>,
+  pub legal_forms: SearchIndexArtifactsView<'a>,
+  pub triggers: SearchIndexArtifactsView<'a>,
+  pub literals: SearchIndexArtifactsView<'a>,
+}
+
 impl PreparedSearchArtifacts {
   pub fn to_bytes(&self) -> Result<Vec<u8>> {
     let mut writer = ArtifactWriter::new(
@@ -174,6 +184,23 @@ impl PreparedSearchArtifacts {
   }
 
   pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
+    Ok(PreparedSearchArtifactsView::from_bytes(bytes)?.into_owned())
+  }
+
+  #[must_use]
+  pub fn as_view(&self) -> PreparedSearchArtifactsView<'_> {
+    PreparedSearchArtifactsView {
+      regex: self.regex.as_view(),
+      custom_regex: self.custom_regex.as_view(),
+      legal_forms: self.legal_forms.as_view(),
+      triggers: self.triggers.as_view(),
+      literals: self.literals.as_view(),
+    }
+  }
+}
+
+impl<'a> PreparedSearchArtifactsView<'a> {
+  pub fn from_bytes(bytes: &'a [u8]) -> Result<Self> {
     let mut reader = ArtifactReader::new(
       bytes,
       PREPARED_SEARCH_ARTIFACTS_HEADER,
@@ -181,14 +208,25 @@ impl PreparedSearchArtifacts {
       "prepared_search_artifacts",
     )?;
     let artifacts = Self {
-      regex: read_index_artifacts(&mut reader)?,
-      custom_regex: read_index_artifacts(&mut reader)?,
-      legal_forms: read_index_artifacts(&mut reader)?,
-      triggers: read_index_artifacts(&mut reader)?,
-      literals: read_index_artifacts(&mut reader)?,
+      regex: read_index_artifact_view(&mut reader)?,
+      custom_regex: read_index_artifact_view(&mut reader)?,
+      legal_forms: read_index_artifact_view(&mut reader)?,
+      triggers: read_index_artifact_view(&mut reader)?,
+      literals: read_index_artifact_view(&mut reader)?,
     };
     reader.finish()?;
     Ok(artifacts)
+  }
+
+  #[must_use]
+  pub fn into_owned(self) -> PreparedSearchArtifacts {
+    PreparedSearchArtifacts {
+      regex: self.regex.into_owned(),
+      custom_regex: self.custom_regex.into_owned(),
+      legal_forms: self.legal_forms.into_owned(),
+      triggers: self.triggers.into_owned(),
+      literals: self.literals.into_owned(),
+    }
   }
 }
 
@@ -200,10 +238,10 @@ fn write_index_artifacts(
   writer.write_len_prefixed_bytes(field, &artifacts.to_bytes()?)
 }
 
-fn read_index_artifacts(
-  reader: &mut ArtifactReader<'_>,
-) -> Result<SearchIndexArtifacts> {
-  SearchIndexArtifacts::from_bytes(reader.read_len_prefixed_bytes()?)
+fn read_index_artifact_view<'a>(
+  reader: &mut ArtifactReader<'a>,
+) -> Result<SearchIndexArtifactsView<'a>> {
+  SearchIndexArtifactsView::from_bytes(reader.read_len_prefixed_bytes()?)
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -484,12 +522,28 @@ impl PreparedSearch {
     config: PreparedSearchConfig,
     artifacts: &PreparedSearchArtifacts,
   ) -> Result<Self> {
+    let artifacts = artifacts.as_view();
+    Self::new_with_artifact_view(config, &artifacts)
+  }
+
+  pub fn new_with_artifact_view(
+    config: PreparedSearchConfig,
+    artifacts: &PreparedSearchArtifactsView<'_>,
+  ) -> Result<Self> {
     Self::new_inner(config, None, Some(artifacts))
   }
 
   pub fn new_with_artifacts_diagnostics(
     config: PreparedSearchConfig,
     artifacts: &PreparedSearchArtifacts,
+  ) -> Result<PreparedSearchBuildResult> {
+    let artifacts = artifacts.as_view();
+    Self::new_with_artifact_view_diagnostics(config, &artifacts)
+  }
+
+  pub fn new_with_artifact_view_diagnostics(
+    config: PreparedSearchConfig,
+    artifacts: &PreparedSearchArtifactsView<'_>,
   ) -> Result<PreparedSearchBuildResult> {
     let mut diagnostics = StaticRedactionDiagnostics::default();
     let prepared =
@@ -516,7 +570,7 @@ impl PreparedSearch {
   fn new_inner(
     mut config: PreparedSearchConfig,
     mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
-    artifacts: Option<&PreparedSearchArtifacts>,
+    artifacts: Option<&PreparedSearchArtifactsView<'_>>,
   ) -> Result<Self> {
     let total_start = Instant::now();
     validate_supported_config_for_artifacts(&config, artifacts)?;
@@ -1687,7 +1741,7 @@ fn elapsed_us(start: Instant) -> u64 {
 fn prepare_search_index_bundle(
   input: SearchIndexConfigInput,
   slices: &PreparedSearchSlices,
-  artifacts: Option<&PreparedSearchArtifacts>,
+  artifacts: Option<&PreparedSearchArtifactsView<'_>>,
   diagnostics: &mut Option<&mut StaticRedactionDiagnostics>,
 ) -> Result<PreparedSearchIndexBundle> {
   let SearchIndexConfigInput {
@@ -1786,7 +1840,7 @@ fn prepare_search_index_bundle(
 
 fn build_search_indexes(
   inputs: SearchIndexBuildInputs,
-  artifacts: Option<&PreparedSearchArtifacts>,
+  artifacts: Option<&PreparedSearchArtifactsView<'_>>,
   collect_stats: bool,
 ) -> Result<PreparedSearchIndexes> {
   let SearchIndexBuildInputs {
@@ -1861,20 +1915,22 @@ fn build_search_indexes(
 fn build_search_index(
   patterns: Vec<SearchPattern>,
   options: SearchOptions,
-  artifacts: Option<&SearchIndexArtifacts>,
+  artifacts: Option<&SearchIndexArtifactsView<'_>>,
   collect_stats: bool,
 ) -> Result<TimedSearchIndex> {
   let start = Instant::now();
   let (index, stats) = if collect_stats {
     let result = if let Some(artifacts) = artifacts {
-      SearchIndex::new_with_artifacts_build_stats(patterns, options, artifacts)?
+      SearchIndex::new_with_artifacts_view_build_stats(
+        patterns, options, artifacts,
+      )?
     } else {
       SearchIndex::new_with_build_stats(patterns, options)?
     };
     (result.index, result.stats)
   } else if let Some(artifacts) = artifacts {
     (
-      SearchIndex::new_with_artifacts(patterns, options, artifacts)?,
+      SearchIndex::new_with_artifacts_view(patterns, options, artifacts)?,
       Vec::new(),
     )
   } else {
@@ -2554,7 +2610,7 @@ fn validate_supported_config(
 
 fn validate_supported_config_for_artifacts(
   config: &PreparedSearchConfig,
-  artifacts: Option<&PreparedSearchArtifacts>,
+  artifacts: Option<&PreparedSearchArtifactsView<'_>>,
 ) -> Result<()> {
   let allow_literal_artifacts =
     artifacts.is_some_and(|artifacts| !artifacts.literals.slots.is_empty());

@@ -11,10 +11,10 @@ use stella_anonymize_adapter_contract::{
   BindingRedactionResult, BindingStaticRedactionResult, ContractError,
   PreparedSearchPackageDecodeTimings, diagnostic_stage_event,
   operator_config_from_binding, prepared_search_config_from_binding,
-  prepared_search_core_package_decode_from_bytes_with_timings,
-  prepared_search_core_package_decode_trusted_from_bytes_with_timings,
   prepared_search_core_package_to_bytes,
   prepared_search_core_package_to_compressed_bytes,
+  prepared_search_core_package_view_from_bytes_with_timings,
+  prepared_search_core_package_view_trusted_from_bytes_with_timings,
   prepared_search_package_decode_timing_events, prepared_search_package_digest,
   prepared_search_package_from_bytes, prepared_search_package_has_core_payload,
   prepared_search_package_verify_digest_with_timings,
@@ -24,7 +24,7 @@ use stella_anonymize_adapter_contract::{
 };
 use stella_anonymize_core::{
   DiagnosticDetail, DiagnosticEvent, DiagnosticStage, OperatorConfig,
-  PreparedSearch, PreparedSearchArtifacts, PreparedSearchConfig,
+  PreparedSearch, PreparedSearchArtifactsView, PreparedSearchConfig,
   StaticRedactionDiagnostics,
 };
 
@@ -611,14 +611,14 @@ impl NativePreparedSearch {
     };
     let parse_start = Instant::now();
     if prepared_search_package_has_core_payload(package_bytes) {
-      let package = match decode_mode {
+      let (package, package_decode_timings) = match decode_mode {
         PackageDecodeMode::Verified => {
-          prepared_search_core_package_decode_from_bytes_with_timings(
+          prepared_search_core_package_view_from_bytes_with_timings(
             package_bytes,
           )
         }
         PackageDecodeMode::Trusted => {
-          prepared_search_core_package_decode_trusted_from_bytes_with_timings(
+          prepared_search_core_package_view_trusted_from_bytes_with_timings(
             package_bytes,
           )
         }
@@ -626,18 +626,16 @@ impl NativePreparedSearch {
       .map_err(|error| to_napi_contract_error(&error))?;
       let parse_elapsed = elapsed_us(parse_start);
       let config = package.config;
-      let artifact_decode = (package.artifacts_decode, package.artifacts_bytes);
       let context = PrepareContext {
         input_bytes_len,
         cache,
         parse_elapsed,
         parse_stage: DiagnosticStage::PreparePackageDecode,
-        package_decode_timings: Some(package.package_decode_timings),
+        package_decode_timings: Some(package_decode_timings),
       };
-      return Self::from_core_config_with_artifacts(
+      return Self::from_core_config(
         config,
-        Some(&package.artifacts),
-        Some(artifact_decode),
+        Some(package.artifacts.as_ref()),
         &context,
         None,
       );
@@ -684,7 +682,7 @@ impl NativePreparedSearch {
   ) -> Result<Self> {
     let artifact_decode_start = Instant::now();
     let artifacts = artifact_bytes
-      .map(PreparedSearchArtifacts::from_bytes)
+      .map(PreparedSearchArtifactsView::from_bytes)
       .transpose()
       .map_err(|error| to_napi_core_error(&error))?;
     let artifact_decode_elapsed =
@@ -704,13 +702,13 @@ impl NativePreparedSearch {
 
   fn from_core_config_with_artifacts(
     config: PreparedSearchConfig,
-    artifacts: Option<&PreparedSearchArtifacts>,
+    artifacts: Option<&PreparedSearchArtifactsView<'_>>,
     artifact_decode: Option<(u64, usize)>,
     context: &PrepareContext,
     binding_convert: Option<(usize, u64)>,
   ) -> Result<Self> {
     let result = if let Some(artifacts) = artifacts {
-      PreparedSearch::new_with_artifacts_diagnostics(config, artifacts)
+      PreparedSearch::new_with_artifact_view_diagnostics(config, artifacts)
     } else {
       PreparedSearch::new_with_diagnostics(config)
     }

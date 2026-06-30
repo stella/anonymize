@@ -46,9 +46,9 @@ pub use name_corpus::{NameCorpusData, NameCorpusMode, PreparedNameCorpusData};
 pub use normalize::normalize_for_search;
 pub use placeholders::build_placeholder_map;
 pub use prepared::{
-  PreparedSearch, PreparedSearchArtifacts, PreparedSearchBuildResult,
-  PreparedSearchConfig, PreparedSearchMatches, PreparedSearchSlices,
-  StaticDetectionResult, StaticRedactionDiagnosticResult,
+  PreparedSearch, PreparedSearchArtifacts, PreparedSearchArtifactsView,
+  PreparedSearchBuildResult, PreparedSearchConfig, PreparedSearchMatches,
+  PreparedSearchSlices, StaticDetectionResult, StaticRedactionDiagnosticResult,
   StaticRedactionResult,
 };
 pub use processors::{
