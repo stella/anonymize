@@ -39,6 +39,9 @@ const WARM_ITERATIONS = positiveIntegerEnv(
 const RESULT_MODE = resultModeFromEnv(
   process.env.ANONYMIZE_NATIVE_DEFAULT_SDK_PERF_RESULT_MODE,
 );
+const REPEATS = repeatCountFromEnv(
+  process.env.ANONYMIZE_NATIVE_DEFAULT_SDK_PERF_REPEATS,
+);
 
 if (WORKER) {
   await runWorker();
@@ -51,23 +54,23 @@ function runParent() {
   const pythonSdk = preparePythonSdk();
   try {
     const scenarios = scenarioLanguages().map((language) => {
-      const tsCold = runWorkerProcess({
+      const tsCold = runWorkerRepeated({
         adapter: "ts-node",
         language,
         preload: false,
       });
-      const tsPreloaded = runWorkerProcess({
+      const tsPreloaded = runWorkerRepeated({
         adapter: "ts-node",
         language,
         preload: true,
       });
-      const pythonCold = runWorkerProcess({
+      const pythonCold = runWorkerRepeated({
         adapter: "python",
         language,
         preload: false,
         pythonSdkRoot: pythonSdk.root,
       });
-      const pythonPreloaded = runWorkerProcess({
+      const pythonPreloaded = runWorkerRepeated({
         adapter: "python",
         language,
         preload: true,
@@ -95,6 +98,8 @@ function runParent() {
         language: language === "" ? null : language,
         packageBytes: tsCold.packageBytes,
         fixtureCount: tsCold.fixtureCount,
+        sampleCount: tsCold.sampleCount,
+        preloadedSampleCount: tsPreloaded.sampleCount,
         firstLoadMs: tsCold.loadMs,
         firstWarmupMs: tsCold.warmupMs,
         firstPrepareMs: tsCold.prepareMs,
@@ -121,6 +126,7 @@ function runParent() {
       JSON.stringify({
         event: "native-default-sdk-perf",
         resultMode: RESULT_MODE,
+        repeats: REPEATS,
         scenarios,
       }),
     );
@@ -195,6 +201,14 @@ async function runWorker() {
   );
 }
 
+function runWorkerRepeated(options) {
+  const samples = [];
+  for (let index = 0; index < REPEATS; index += 1) {
+    samples.push(runWorkerProcess(options));
+  }
+  return aggregateWorkerSamples(samples);
+}
+
 function runWorkerProcess({ adapter, language, preload, pythonSdkRoot }) {
   const child = spawnSync(process.execPath, [SCRIPT_PATH], {
     cwd: ROOT_DIR,
@@ -235,6 +249,129 @@ function runWorkerProcess({ adapter, language, preload, pythonSdkRoot }) {
     }
   }
   throw new Error("Native default SDK benchmark worker did not emit JSON");
+}
+
+function aggregateWorkerSamples(samples) {
+  const first = samples[0];
+  if (first === undefined) {
+    throw new Error("Native default SDK benchmark did not collect samples");
+  }
+  assertWorkerSamplesCompatible(samples);
+  const byFixture = aggregateFixtureTimings(samples);
+  const representativePrepare = representativeSample(samples, "prepareMs");
+  const representativeRun = representativeSample(samples, "runMs");
+  const representativeWarmup = representativeSample(samples, "warmupMs");
+  return {
+    ...first,
+    sampleCount: samples.length,
+    samples: samples.map(compactWorkerSample),
+    loadMs: medianMs(samples.map((sample) => sample.loadMs)),
+    warmupMs: medianMs(samples.map((sample) => sample.warmupMs)),
+    prepareMs: medianMs(samples.map((sample) => sample.prepareMs)),
+    runMs: medianMs(samples.map((sample) => sample.runMs)),
+    warmAvgMs: medianMs(samples.map((sample) => sample.warmAvgMs)),
+    prepareTopStages: representativePrepare.prepareTopStages,
+    warmupTopStages: representativeWarmup.warmupTopStages,
+    fixtureTimings: {
+      cold: summarizeMs(byFixture.map((fixture) => fixture.coldMs)),
+      warm: summarizeMs(byFixture.map((fixture) => fixture.warmAvgMs)),
+      byFixture,
+    },
+    runTopFixtures: byFixture
+      .toSorted((left, right) => right.coldMs - left.coldMs)
+      .slice(0, 5)
+      .map(({ coldMs, fixture, entityCount, redactedTextLength }) => ({
+        fixture,
+        ms: coldMs,
+        entityCount,
+        redactedTextLength,
+      })),
+    fixtureSignatures: representativeRun.fixtureSignatures,
+  };
+}
+
+function assertWorkerSamplesCompatible(samples) {
+  const first = samples[0];
+  if (first === undefined) {
+    return;
+  }
+  for (const sample of samples.slice(1)) {
+    if (
+      sample.language !== first.language ||
+      sample.preload !== first.preload ||
+      sample.packageBytes !== first.packageBytes ||
+      sample.fixtureCount !== first.fixtureCount
+    ) {
+      throw new Error("Native default SDK benchmark samples are incompatible");
+    }
+    assertFixtureSignatureParity({
+      scenarioName: first.language ?? "default",
+      mode: first.preload ? "preloaded-repeat" : "cold-repeat",
+      expected: first,
+      actual: sample,
+    });
+  }
+}
+
+function aggregateFixtureTimings(samples) {
+  const first = samples[0];
+  if (first === undefined) {
+    return [];
+  }
+  return first.fixtureTimings.byFixture.map((fixture) => {
+    const entries = samples.map((sample) => {
+      const match = sample.fixtureTimings.byFixture.find(
+        (candidate) => candidate.fixture === fixture.fixture,
+      );
+      if (match === undefined) {
+        throw new Error(`Missing fixture timing for ${fixture.fixture}`);
+      }
+      if (
+        match.entityCount !== fixture.entityCount ||
+        match.redactedTextLength !== fixture.redactedTextLength
+      ) {
+        throw new Error(
+          `Fixture output changed across repeats: ${fixture.fixture}`,
+        );
+      }
+      return match;
+    });
+    return {
+      fixture: fixture.fixture,
+      coldMs: medianMs(entries.map((entry) => entry.coldMs)),
+      warmAvgMs: medianMs(entries.map((entry) => entry.warmAvgMs)),
+      entityCount: fixture.entityCount,
+      redactedTextLength: fixture.redactedTextLength,
+    };
+  });
+}
+
+function representativeSample(samples, metric) {
+  const median = medianNumber(samples.map((sample) => sample[metric]));
+  const sample = samples
+    .toSorted(
+      (left, right) =>
+        Math.abs(left[metric] - median) - Math.abs(right[metric] - median),
+    )
+    .at(0);
+  if (sample === undefined) {
+    throw new Error("Native default SDK benchmark did not collect samples");
+  }
+  return sample;
+}
+
+function compactWorkerSample(sample) {
+  return {
+    loadMs: sample.loadMs,
+    warmupMs: sample.warmupMs,
+    prepareMs: sample.prepareMs,
+    runMs: sample.runMs,
+    warmAvgMs: sample.warmAvgMs,
+    fixtureTimings: {
+      cold: sample.fixtureTimings.cold,
+      warm: sample.fixtureTimings.warm,
+    },
+  };
 }
 
 function runPythonWorker({ language, fixtures, packageBytes }) {
@@ -408,6 +545,10 @@ function summarizeAdapterScenario(adapter, cold, preloaded) {
     setupBeforeClickMs: preloaded.prepareMs,
     preloadedClickMs: preloaded.runMs,
     preloadedWarmClickMs: preloaded.warmAvgMs,
+    sampleCount: cold.sampleCount,
+    preloadedSampleCount: preloaded.sampleCount,
+    samples: cold.samples,
+    preloadedSamples: preloaded.samples,
     prepareTopStages: cold.prepareTopStages,
     warmupTopStages: cold.warmupTopStages,
     preloadedPrepareTopStages: preloaded.prepareTopStages,
@@ -476,6 +617,24 @@ function summarizeMs(values) {
     p95Ms: percentile(sorted, 0.95),
     maxMs: sorted.at(-1),
   };
+}
+
+function medianMs(values) {
+  return roundMs(medianNumber(values));
+}
+
+function medianNumber(values) {
+  const sorted = values.toSorted((left, right) => left - right);
+  if (sorted.length === 0) {
+    return 0;
+  }
+  const middle = Math.floor(sorted.length / 2);
+  const right = sorted.at(middle) ?? 0;
+  if (sorted.length % 2 === 1) {
+    return right;
+  }
+  const left = sorted.at(middle - 1) ?? right;
+  return (left + right) / 2;
 }
 
 function percentile(sortedValues, percentileValue) {
@@ -721,6 +880,25 @@ function resultModeFromEnv(value) {
         "ANONYMIZE_NATIVE_DEFAULT_SDK_PERF_RESULT_MODE must be json or structured",
       );
   }
+}
+
+function repeatCountFromEnv(value) {
+  const raw = value?.trim();
+  if (raw === undefined || raw.length === 0) {
+    return 1;
+  }
+  const count = Number(raw);
+  if (count < 1) {
+    throw new Error(
+      "ANONYMIZE_NATIVE_DEFAULT_SDK_PERF_REPEATS must be at least 1",
+    );
+  }
+  if (!Number.isInteger(count)) {
+    throw new Error(
+      "ANONYMIZE_NATIVE_DEFAULT_SDK_PERF_REPEATS must be an integer",
+    );
+  }
+  return count;
 }
 
 function normalizeLanguage(language) {
