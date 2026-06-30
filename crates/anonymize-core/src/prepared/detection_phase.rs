@@ -5,7 +5,7 @@ use crate::types::Result;
 
 use super::PreparedEngine;
 use super::detector_registry::{
-  STATIC_DETECTORS, STATIC_ENTITY_DETECTORS, StaticDetectorContext,
+  STATIC_ENTITY_DETECTORS, StaticDetectorContext,
 };
 use super::phase::record_detector_entities;
 use super::results::{PreparedEngineMatches, StaticDetectionResult};
@@ -90,14 +90,15 @@ fn record_static_entity_diagnostics(
   full_text: &str,
   passes: &StaticEntityPasses,
 ) {
-  for detector in STATIC_DETECTORS {
+  for detector in STATIC_ENTITY_DETECTORS {
+    let detector = detector.spec();
     debug_assert!(
       !detector.required_inputs().is_empty(),
       "static detector registry entries must declare required inputs",
     );
     record_detector_entities(
       diagnostics,
-      *detector,
+      detector,
       passes.detector_entities(detector.id()),
       full_text,
     );

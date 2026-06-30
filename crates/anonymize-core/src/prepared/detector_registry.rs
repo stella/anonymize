@@ -208,20 +208,6 @@ static LEGAL_FORM_DETECTOR: LegalFormDetector = LegalFormDetector;
 static NAME_CORPUS_DETECTOR: NameCorpusDetector = NameCorpusDetector;
 static ADDRESS_SEED_DETECTOR: AddressSeedDetector = AddressSeedDetector;
 
-pub(super) const STATIC_DETECTORS: &[StaticDetector] = &[
-  StaticDetector::by_id(StaticDetectorId::Regex),
-  StaticDetector::by_id(StaticDetectorId::CustomRegex),
-  StaticDetector::by_id(StaticDetectorId::DenyList),
-  StaticDetector::by_id(StaticDetectorId::Gazetteer),
-  StaticDetector::by_id(StaticDetectorId::Country),
-  StaticDetector::by_id(StaticDetectorId::Anchored),
-  StaticDetector::by_id(StaticDetectorId::Trigger),
-  StaticDetector::by_id(StaticDetectorId::Signature),
-  StaticDetector::by_id(StaticDetectorId::LegalForm),
-  StaticDetector::by_id(StaticDetectorId::NameCorpus),
-  StaticDetector::by_id(StaticDetectorId::AddressSeed),
-];
-
 pub(super) static STATIC_ENTITY_DETECTORS: &[&dyn StaticEntityDetector] = &[
   &REGEX_DETECTOR,
   &CUSTOM_REGEX_DETECTOR,
@@ -238,25 +224,16 @@ pub(super) static STATIC_ENTITY_DETECTORS: &[&dyn StaticEntityDetector] = &[
 
 #[cfg(test)]
 mod tests {
-  use super::{STATIC_DETECTORS, STATIC_ENTITY_DETECTORS, StaticDetectorId};
+  use super::{STATIC_ENTITY_DETECTORS, StaticDetectorId};
 
   #[test]
-  fn detector_metadata_matches_runtime_registry_order() {
-    assert_eq!(
-      STATIC_DETECTORS.len(),
-      STATIC_ENTITY_DETECTORS.len(),
-      "detector metadata and runtime registry must stay aligned",
-    );
-
-    for (metadata, detector) in STATIC_DETECTORS
-      .iter()
-      .copied()
-      .zip(STATIC_ENTITY_DETECTORS.iter().copied())
-    {
+  fn detector_registry_entries_declare_metadata() {
+    for detector in STATIC_ENTITY_DETECTORS {
+      let metadata = detector.spec();
       assert_eq!(
         metadata,
-        detector.spec(),
-        "detector metadata must match the runtime implementation order",
+        super::StaticDetector::by_id(metadata.id()),
+        "detector metadata must be derived from the detector id",
       );
       assert!(
         !metadata.required_inputs().is_empty(),
