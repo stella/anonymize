@@ -1,13 +1,13 @@
 #![allow(clippy::expect_used)]
 
 use stella_anonymize_core::{
-  PatternSlice, PreparedSearch, PreparedSearchConfig, PreparedSearchSlices,
+  PatternSlice, PreparedEngine, PreparedEngineConfig, PreparedEngineSlices,
   SearchOptions, SearchPattern, StaticDetectionResult, TriggerData,
   TriggerRule, TriggerStrategy, TriggerValidation,
 };
 
-fn empty_config(slices: PreparedSearchSlices) -> PreparedSearchConfig {
-  PreparedSearchConfig {
+fn empty_config(slices: PreparedEngineSlices) -> PreparedEngineConfig {
+  PreparedEngineConfig {
     regex_patterns: vec![],
     custom_regex_patterns: vec![],
     literal_patterns: vec![],
@@ -42,7 +42,7 @@ fn prepared_for_trigger(
   trigger: &str,
   label: &str,
   strategy: TriggerStrategy,
-) -> PreparedSearch {
+) -> PreparedEngine {
   prepared_for_trigger_with_support(
     trigger,
     label,
@@ -63,16 +63,16 @@ fn prepared_for_trigger_with_support(
   label: &str,
   strategy: TriggerStrategy,
   support: TriggerSupport,
-) -> PreparedSearch {
-  PreparedSearch::new(PreparedSearchConfig {
+) -> PreparedEngine {
+  PreparedEngine::new(PreparedEngineConfig {
     regex_patterns: vec![SearchPattern::LiteralWithOptions {
       pattern: trigger.to_lowercase(),
       case_insensitive: Some(true),
       whole_words: Some(false),
     }],
-    slices: PreparedSearchSlices {
+    slices: PreparedEngineSlices {
       triggers: PatternSlice { start: 0, end: 1 },
-      ..PreparedSearchSlices::default()
+      ..PreparedEngineSlices::default()
     },
     trigger_data: Some(TriggerData {
       rules: vec![TriggerRule {
@@ -95,7 +95,7 @@ fn prepared_for_trigger_with_support(
       number_markers: support.number_markers,
       number_labels: support.number_labels,
     }),
-    ..empty_config(PreparedSearchSlices::default())
+    ..empty_config(PreparedEngineSlices::default())
   })
   .expect("trigger config should prepare")
 }

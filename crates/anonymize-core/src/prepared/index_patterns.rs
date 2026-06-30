@@ -1,7 +1,7 @@
 use crate::search::{LiteralSearchOptions, SearchOptions, SearchPattern};
 use crate::types::{Error, Result};
 
-use super::PreparedSearchSlices;
+use super::PreparedEngineSlices;
 
 pub(super) struct RegexPatternGroups {
   pub(super) regex: Vec<SearchPattern>,
@@ -11,7 +11,7 @@ pub(super) struct RegexPatternGroups {
 
 pub(super) fn split_regex_patterns(
   patterns: Vec<SearchPattern>,
-  slices: &PreparedSearchSlices,
+  slices: &PreparedEngineSlices,
 ) -> Result<RegexPatternGroups> {
   let mut regex = Vec::new();
   let mut legal_forms = Vec::new();

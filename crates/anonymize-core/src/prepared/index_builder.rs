@@ -6,7 +6,7 @@ use crate::search::{
 };
 use crate::types::{Error, Result};
 
-use super::artifacts::PreparedSearchArtifactsView;
+use super::artifacts::PreparedEngineArtifactsView;
 use super::index_patterns::{
   legal_form_search_options, trigger_search_options,
 };
@@ -18,7 +18,7 @@ pub(super) struct TimedSearchIndex {
   pub(super) stats: Vec<SearchIndexBuildStats>,
 }
 
-pub(super) struct PreparedSearchIndexes {
+pub(super) struct PreparedEngineIndexes {
   pub(super) regex: TimedSearchIndex,
   pub(super) custom_regex: TimedSearchIndex,
   pub(super) legal_forms: TimedSearchIndex,
@@ -39,9 +39,9 @@ pub(super) struct SearchIndexBuildInputs {
 
 pub(super) fn build_search_indexes(
   inputs: SearchIndexBuildInputs,
-  artifacts: Option<&PreparedSearchArtifactsView<'_>>,
+  artifacts: Option<&PreparedEngineArtifactsView<'_>>,
   collect_stats: bool,
-) -> Result<PreparedSearchIndexes> {
+) -> Result<PreparedEngineIndexes> {
   let SearchIndexBuildInputs {
     regex_patterns,
     regex_options,
@@ -101,7 +101,7 @@ pub(super) fn build_search_indexes(
       )
     });
 
-    Ok(PreparedSearchIndexes {
+    Ok(PreparedEngineIndexes {
       regex: join_search_index(regex, "regex")?,
       custom_regex: join_search_index(custom_regex, "custom_regex")?,
       legal_forms: join_search_index(legal_forms, "legal_forms")?,

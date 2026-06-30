@@ -15,7 +15,7 @@ use crate::signatures::PreparedSignatureData;
 use crate::triggers::PreparedTriggerData;
 use crate::zones::PreparedZoneData;
 
-use super::PreparedSearchSlices;
+use super::PreparedEngineSlices;
 
 pub(super) struct SearchIndexes {
   pub(super) regex: SearchIndex,
@@ -29,7 +29,7 @@ pub(super) struct PipelinePolicy {
   pub(super) allowed_labels: Vec<String>,
   pub(super) threshold: f64,
   pub(super) confidence_boost: bool,
-  pub(super) slices: PreparedSearchSlices,
+  pub(super) slices: PreparedEngineSlices,
   pub(super) regex_meta: Vec<RegexMatchMeta>,
   pub(super) custom_regex_meta: Vec<RegexMatchMeta>,
   pub(super) monetary_extraction: bool,

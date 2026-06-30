@@ -4,7 +4,7 @@ use crate::search::{
 };
 use crate::types::Result;
 
-use super::artifacts::{PreparedSearchArtifacts, PreparedSearchArtifactsView};
+use super::artifacts::{PreparedEngineArtifacts, PreparedEngineArtifactsView};
 use super::config_validation::validate_supported_config;
 use super::index_builder::{SearchIndexBuildInputs, build_search_indexes};
 use super::index_patterns::{
@@ -12,7 +12,7 @@ use super::index_patterns::{
   split_regex_patterns, trigger_search_options,
 };
 use super::phase::record_prepare_stage_elapsed;
-use super::{PreparedSearchConfig, PreparedSearchSlices};
+use super::{PreparedEngineConfig, PreparedEngineSlices};
 
 pub(super) struct SearchIndexConfigInput {
   pub(super) regex_patterns: Vec<SearchPattern>,
@@ -46,7 +46,7 @@ impl SearchPrepareCounts {
   }
 }
 
-pub(super) struct PreparedSearchIndexBundle {
+pub(super) struct PreparedEngineIndexBundle {
   pub(super) regex: SearchIndex,
   pub(super) custom_regex: SearchIndex,
   pub(super) legal_forms: SearchIndex,
@@ -70,12 +70,12 @@ struct SearchIndexPrepareMetric {
 }
 
 pub(super) fn prepare_search_artifacts(
-  config: PreparedSearchConfig,
-) -> Result<PreparedSearchArtifacts> {
+  config: PreparedEngineConfig,
+) -> Result<PreparedEngineArtifacts> {
   validate_supported_config(&config, false)?;
   let regex_groups =
     split_regex_patterns(config.regex_patterns, &config.slices)?;
-  Ok(PreparedSearchArtifacts {
+  Ok(PreparedEngineArtifacts {
     regex: SearchIndex::prepare_artifacts(
       regex_groups.regex,
       config.regex_options,
@@ -101,10 +101,10 @@ pub(super) fn prepare_search_artifacts(
 
 pub(super) fn prepare_search_index_bundle(
   input: SearchIndexConfigInput,
-  slices: &PreparedSearchSlices,
-  artifacts: Option<&PreparedSearchArtifactsView<'_>>,
+  slices: &PreparedEngineSlices,
+  artifacts: Option<&PreparedEngineArtifactsView<'_>>,
   diagnostics: &mut Option<&mut StaticRedactionDiagnostics>,
-) -> Result<PreparedSearchIndexBundle> {
+) -> Result<PreparedEngineIndexBundle> {
   let SearchIndexConfigInput {
     regex_patterns,
     custom_regex_patterns,
@@ -189,7 +189,7 @@ pub(super) fn prepare_search_index_bundle(
     },
   );
 
-  Ok(PreparedSearchIndexBundle {
+  Ok(PreparedEngineIndexBundle {
     regex,
     custom_regex,
     legal_forms,

@@ -14,7 +14,7 @@ use crate::types::Result;
 use super::PreparedEngine;
 use super::detector_registry::STATIC_DETECTORS;
 use super::phase::record_detector_entities;
-use super::results::{PreparedSearchMatches, StaticDetectionResult};
+use super::results::{PreparedEngineMatches, StaticDetectionResult};
 use super::timing::{StaticEntityPasses, TimedEntities, elapsed_us};
 
 impl PreparedEngine {
@@ -67,7 +67,7 @@ impl PreparedEngine {
 
   fn process_static_entity_passes(
     &self,
-    matches: &PreparedSearchMatches,
+    matches: &PreparedEngineMatches,
     full_text: &str,
     diagnostics: Option<&mut StaticRedactionDiagnostics>,
   ) -> Result<StaticEntityPasses> {
@@ -191,7 +191,7 @@ impl PreparedEngine {
 
   fn process_trigger_entities(
     &self,
-    matches: &PreparedSearchMatches,
+    matches: &PreparedEngineMatches,
     full_text: &str,
     diagnostics: Option<&mut StaticRedactionDiagnostics>,
   ) -> Result<TimedEntities> {
@@ -216,7 +216,7 @@ impl PreparedEngine {
 
   fn process_legal_form_entities(
     &self,
-    matches: &PreparedSearchMatches,
+    matches: &PreparedEngineMatches,
     full_text: &str,
   ) -> Result<TimedEntities> {
     let start = Instant::now();
@@ -239,7 +239,7 @@ impl PreparedEngine {
 
   fn process_address_seed_entities(
     &self,
-    matches: &PreparedSearchMatches,
+    matches: &PreparedEngineMatches,
     full_text: &str,
     context_layers: &[&[PipelineEntity]],
   ) -> Result<TimedEntities> {
@@ -264,7 +264,7 @@ impl PreparedEngine {
 
   fn process_country_entities(
     &self,
-    matches: &PreparedSearchMatches,
+    matches: &PreparedEngineMatches,
     full_text: &str,
   ) -> Result<TimedEntities> {
     let country_start = Instant::now();

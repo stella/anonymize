@@ -7,7 +7,7 @@ use crate::normalize::{
 use crate::types::{Result, SearchMatch};
 
 use super::PreparedEngine;
-use super::results::PreparedSearchMatches;
+use super::results::PreparedEngineMatches;
 use super::search_matcher::{
   combine_regex_matches, join_optional_timed_match_handle,
   normalized_index_matches, offset_index_matches,
@@ -18,7 +18,7 @@ use super::timing::{TimedMatches, TimedSearchBranches, elapsed_us};
 const PARALLEL_SEARCH_MIN_BYTES: usize = 32 * 1024;
 
 impl PreparedEngine {
-  pub fn find_matches(&self, full_text: &str) -> Result<PreparedSearchMatches> {
+  pub fn find_matches(&self, full_text: &str) -> Result<PreparedEngineMatches> {
     self.find_matches_inner(full_text, None)
   }
 
@@ -26,7 +26,7 @@ impl PreparedEngine {
     &self,
     full_text: &str,
     mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
-  ) -> Result<PreparedSearchMatches> {
+  ) -> Result<PreparedEngineMatches> {
     let total_start = Instant::now();
     let normalized = normalize_search_text(full_text, &mut diagnostics)?;
     if full_text.len() >= PARALLEL_SEARCH_MIN_BYTES {
@@ -52,7 +52,7 @@ impl PreparedEngine {
     normalized: &NormalizedSearchText,
     mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
     total_start: Instant,
-  ) -> Result<PreparedSearchMatches> {
+  ) -> Result<PreparedEngineMatches> {
     let regex_start = Instant::now();
     let regex = offset_index_matches(
       &self.indexes.regex,
@@ -147,7 +147,7 @@ impl PreparedEngine {
       total_start,
     );
 
-    Ok(PreparedSearchMatches {
+    Ok(PreparedEngineMatches {
       regex,
       custom_regex,
       literal,
@@ -160,7 +160,7 @@ impl PreparedEngine {
     normalized: &NormalizedSearchText,
     mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
     total_start: Instant,
-  ) -> Result<PreparedSearchMatches> {
+  ) -> Result<PreparedEngineMatches> {
     let input_bytes = full_text.len();
     let matches = std::thread::scope(|scope| {
       let regex = (!self.indexes.regex.is_empty()).then(|| {
@@ -300,7 +300,7 @@ fn finish_parallel_matches(
   full_text: &str,
   total_start: Instant,
   branches: TimedSearchBranches,
-) -> PreparedSearchMatches {
+) -> PreparedEngineMatches {
   record_parallel_search_matches(
     diagnostics,
     DiagnosticStage::SearchRegex,
@@ -346,7 +346,7 @@ fn finish_parallel_matches(
     total_start,
   );
 
-  PreparedSearchMatches {
+  PreparedEngineMatches {
     regex,
     custom_regex: branches.custom_regex.matches,
     literal: branches.literal.matches,

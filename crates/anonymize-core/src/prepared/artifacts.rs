@@ -6,7 +6,7 @@ const PREPARED_SEARCH_ARTIFACTS_HEADER: [u8; 8] = *b"ANONPSR1";
 const PREPARED_SEARCH_ARTIFACTS_VERSION: u32 = 1;
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct PreparedSearchArtifacts {
+pub struct PreparedEngineArtifacts {
   pub regex: SearchIndexArtifacts,
   pub custom_regex: SearchIndexArtifacts,
   pub legal_forms: SearchIndexArtifacts,
@@ -15,7 +15,7 @@ pub struct PreparedSearchArtifacts {
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct PreparedSearchArtifactsView<'a> {
+pub struct PreparedEngineArtifactsView<'a> {
   pub regex: SearchIndexArtifactsView<'a>,
   pub custom_regex: SearchIndexArtifactsView<'a>,
   pub legal_forms: SearchIndexArtifactsView<'a>,
@@ -23,7 +23,7 @@ pub struct PreparedSearchArtifactsView<'a> {
   pub literals: SearchIndexArtifactsView<'a>,
 }
 
-impl PreparedSearchArtifacts {
+impl PreparedEngineArtifacts {
   pub fn to_bytes(&self) -> Result<Vec<u8>> {
     let mut writer = ArtifactWriter::new(
       PREPARED_SEARCH_ARTIFACTS_HEADER,
@@ -46,12 +46,12 @@ impl PreparedSearchArtifacts {
   }
 
   pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
-    Ok(PreparedSearchArtifactsView::from_bytes(bytes)?.into_owned())
+    Ok(PreparedEngineArtifactsView::from_bytes(bytes)?.into_owned())
   }
 
   #[must_use]
-  pub fn as_view(&self) -> PreparedSearchArtifactsView<'_> {
-    PreparedSearchArtifactsView {
+  pub fn as_view(&self) -> PreparedEngineArtifactsView<'_> {
+    PreparedEngineArtifactsView {
       regex: self.regex.as_view(),
       custom_regex: self.custom_regex.as_view(),
       legal_forms: self.legal_forms.as_view(),
@@ -61,7 +61,7 @@ impl PreparedSearchArtifacts {
   }
 }
 
-impl<'a> PreparedSearchArtifactsView<'a> {
+impl<'a> PreparedEngineArtifactsView<'a> {
   pub fn from_bytes(bytes: &'a [u8]) -> Result<Self> {
     let mut reader = ArtifactReader::new(
       bytes,
@@ -81,8 +81,8 @@ impl<'a> PreparedSearchArtifactsView<'a> {
   }
 
   #[must_use]
-  pub fn into_owned(self) -> PreparedSearchArtifacts {
-    PreparedSearchArtifacts {
+  pub fn into_owned(self) -> PreparedEngineArtifacts {
+    PreparedEngineArtifacts {
       regex: self.regex.into_owned(),
       custom_regex: self.custom_regex.into_owned(),
       legal_forms: self.legal_forms.into_owned(),
@@ -91,6 +91,9 @@ impl<'a> PreparedSearchArtifactsView<'a> {
     }
   }
 }
+
+pub type PreparedSearchArtifacts = PreparedEngineArtifacts;
+pub type PreparedSearchArtifactsView<'a> = PreparedEngineArtifactsView<'a>;
 
 fn write_index_artifacts(
   writer: &mut ArtifactWriter,

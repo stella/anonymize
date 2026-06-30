@@ -5,43 +5,43 @@ use crate::diagnostics::{DiagnosticStage, StaticRedactionDiagnostics};
 use crate::money::{MonetaryData, PreparedMonetaryData};
 use crate::types::Result;
 
-use super::artifacts::{PreparedSearchArtifacts, PreparedSearchArtifactsView};
+use super::artifacts::{PreparedEngineArtifacts, PreparedEngineArtifactsView};
 use super::config_validation::validate_supported_config_for_artifacts;
 use super::engine_state::{PipelinePolicy, PreparedStaticData, SearchIndexes};
 use super::index_prepare::{
-  PreparedSearchIndexBundle, SearchIndexConfigInput, prepare_search_artifacts,
+  PreparedEngineIndexBundle, SearchIndexConfigInput, prepare_search_artifacts,
   prepare_search_index_bundle,
 };
-use super::results::PreparedSearchBuildResult;
+use super::results::PreparedEngineBuildResult;
 use super::support_prepare::{prepare_support_data, take_support_input};
 use super::timing::elapsed_us;
-use super::{PreparedEngine, PreparedSearchConfig};
+use super::{PreparedEngine, PreparedEngineConfig};
 
 #[bon::bon]
 impl PreparedEngine {
   #[builder]
   pub fn prepare(
-    config: PreparedSearchConfig,
-    artifacts: Option<&PreparedSearchArtifactsView<'_>>,
+    config: PreparedEngineConfig,
+    artifacts: Option<&PreparedEngineArtifactsView<'_>>,
   ) -> Result<Self> {
     Self::new_inner(config, None, artifacts)
   }
 
   #[builder]
   pub fn prepare_with_diagnostics(
-    config: PreparedSearchConfig,
-    artifacts: Option<&PreparedSearchArtifactsView<'_>>,
-  ) -> Result<PreparedSearchBuildResult> {
+    config: PreparedEngineConfig,
+    artifacts: Option<&PreparedEngineArtifactsView<'_>>,
+  ) -> Result<PreparedEngineBuildResult> {
     let mut diagnostics = StaticRedactionDiagnostics::default();
     let prepared = Self::new_inner(config, Some(&mut diagnostics), artifacts)?;
 
-    Ok(PreparedSearchBuildResult {
+    Ok(PreparedEngineBuildResult {
       prepared,
       diagnostics,
     })
   }
 
-  pub fn new(config: PreparedSearchConfig) -> Result<Self> {
+  pub fn new(config: PreparedEngineConfig) -> Result<Self> {
     Self::prepare().config(config).call()
   }
 
@@ -98,38 +98,38 @@ impl PreparedEngine {
   }
 
   pub fn prepare_artifacts(
-    config: PreparedSearchConfig,
-  ) -> Result<PreparedSearchArtifacts> {
+    config: PreparedEngineConfig,
+  ) -> Result<PreparedEngineArtifacts> {
     prepare_search_artifacts(config)
   }
 
   pub fn new_with_artifacts(
-    config: PreparedSearchConfig,
-    artifacts: &PreparedSearchArtifacts,
+    config: PreparedEngineConfig,
+    artifacts: &PreparedEngineArtifacts,
   ) -> Result<Self> {
     let artifacts = artifacts.as_view();
     Self::new_with_artifact_view(config, &artifacts)
   }
 
   pub fn new_with_artifact_view(
-    config: PreparedSearchConfig,
-    artifacts: &PreparedSearchArtifactsView<'_>,
+    config: PreparedEngineConfig,
+    artifacts: &PreparedEngineArtifactsView<'_>,
   ) -> Result<Self> {
     Self::new_inner(config, None, Some(artifacts))
   }
 
   pub fn new_with_artifacts_diagnostics(
-    config: PreparedSearchConfig,
-    artifacts: &PreparedSearchArtifacts,
-  ) -> Result<PreparedSearchBuildResult> {
+    config: PreparedEngineConfig,
+    artifacts: &PreparedEngineArtifacts,
+  ) -> Result<PreparedEngineBuildResult> {
     let artifacts = artifacts.as_view();
     Self::new_with_artifact_view_diagnostics(config, &artifacts)
   }
 
   pub fn new_with_artifact_view_diagnostics(
-    config: PreparedSearchConfig,
-    artifacts: &PreparedSearchArtifactsView<'_>,
-  ) -> Result<PreparedSearchBuildResult> {
+    config: PreparedEngineConfig,
+    artifacts: &PreparedEngineArtifactsView<'_>,
+  ) -> Result<PreparedEngineBuildResult> {
     Self::prepare_with_diagnostics()
       .config(config)
       .artifacts(artifacts)
@@ -137,21 +137,21 @@ impl PreparedEngine {
   }
 
   pub fn new_with_diagnostics(
-    config: PreparedSearchConfig,
-  ) -> Result<PreparedSearchBuildResult> {
+    config: PreparedEngineConfig,
+  ) -> Result<PreparedEngineBuildResult> {
     Self::prepare_with_diagnostics().config(config).call()
   }
 
   fn new_inner(
-    mut config: PreparedSearchConfig,
+    mut config: PreparedEngineConfig,
     mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
-    artifacts: Option<&PreparedSearchArtifactsView<'_>>,
+    artifacts: Option<&PreparedEngineArtifactsView<'_>>,
   ) -> Result<Self> {
     let total_start = Instant::now();
     validate_supported_config_for_artifacts(&config, artifacts)?;
     let monetary_extraction = should_extract_monetary_data(&config);
     let support_input = take_support_input(&mut config);
-    let PreparedSearchConfig {
+    let PreparedEngineConfig {
       regex_patterns,
       custom_regex_patterns,
       literal_patterns,
@@ -180,7 +180,7 @@ impl PreparedEngine {
       anchored_len,
       diagnostics.as_deref_mut(),
     )?;
-    let PreparedSearchIndexBundle {
+    let PreparedEngineIndexBundle {
       regex,
       custom_regex,
       legal_forms,
@@ -242,7 +242,7 @@ impl PreparedEngine {
   }
 }
 
-fn should_extract_monetary_data(config: &PreparedSearchConfig) -> bool {
+fn should_extract_monetary_data(config: &PreparedEngineConfig) -> bool {
   config.regex_patterns.is_empty()
     || config
       .regex_meta

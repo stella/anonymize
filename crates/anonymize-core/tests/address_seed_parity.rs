@@ -2,12 +2,12 @@
 
 use stella_anonymize_core::{
   AddressSeedData, DenyListFilterData, DenyListMatchData, LiteralSearchOptions,
-  OperatorConfig, PatternSlice, PreparedSearch, PreparedSearchConfig,
-  PreparedSearchSlices, RegexMatchMeta, SearchOptions, SearchPattern,
+  OperatorConfig, PatternSlice, PreparedEngine, PreparedEngineConfig,
+  PreparedEngineSlices, RegexMatchMeta, SearchOptions, SearchPattern,
 };
 
-fn empty_config(slices: PreparedSearchSlices) -> PreparedSearchConfig {
-  PreparedSearchConfig {
+fn empty_config(slices: PreparedEngineSlices) -> PreparedEngineConfig {
+  PreparedEngineConfig {
     regex_patterns: vec![],
     custom_regex_patterns: vec![],
     literal_patterns: vec![],
@@ -51,9 +51,9 @@ fn address_texts(
 
 #[test]
 fn detects_state_qualified_zip_plus_four_address_seed() {
-  let prepared = PreparedSearch::new(PreparedSearchConfig {
+  let prepared = PreparedEngine::new(PreparedEngineConfig {
     address_seed_data: Some(AddressSeedData::default()),
-    ..empty_config(PreparedSearchSlices::default())
+    ..empty_config(PreparedEngineSlices::default())
   })
   .expect("address seed data should prepare");
 
@@ -74,7 +74,7 @@ fn detects_state_qualified_zip_plus_four_address_seed() {
 
 #[test]
 fn detects_cue_gated_br_cep_address_seed() {
-  let prepared = PreparedSearch::new(PreparedSearchConfig {
+  let prepared = PreparedEngine::new(PreparedEngineConfig {
     literal_patterns: vec![SearchPattern::LiteralWithOptions {
       pattern: String::from("Rua"),
       case_insensitive: Some(true),
@@ -87,16 +87,16 @@ fn detects_cue_gated_br_cep_address_seed() {
       },
       ..SearchOptions::default()
     },
-    slices: PreparedSearchSlices {
+    slices: PreparedEngineSlices {
       street_types: PatternSlice { start: 0, end: 1 },
-      ..PreparedSearchSlices::default()
+      ..PreparedEngineSlices::default()
     },
     address_seed_data: Some(AddressSeedData {
       boundary_words: Vec::new(),
       br_cep_cue_words: vec![String::from("CEP")],
       unit_abbreviations: Vec::new(),
     }),
-    ..empty_config(PreparedSearchSlices::default())
+    ..empty_config(PreparedEngineSlices::default())
   })
   .expect("address seed data should prepare");
 
@@ -117,7 +117,7 @@ fn detects_cue_gated_br_cep_address_seed() {
 
 #[test]
 fn keeps_date_like_street_name_in_address_seed_span() {
-  let prepared = PreparedSearch::new(PreparedSearchConfig {
+  let prepared = PreparedEngine::new(PreparedEngineConfig {
     regex_patterns: vec![SearchPattern::Regex(String::from("May 15"))],
     regex_meta: vec![RegexMatchMeta::new("date", 0.9)],
     literal_patterns: vec![
@@ -139,11 +139,11 @@ fn keeps_date_like_street_name_in_address_seed_span() {
       },
       ..SearchOptions::default()
     },
-    slices: PreparedSearchSlices {
+    slices: PreparedEngineSlices {
       regex: PatternSlice { start: 0, end: 1 },
       deny_list: PatternSlice { start: 0, end: 1 },
       street_types: PatternSlice { start: 1, end: 2 },
-      ..PreparedSearchSlices::default()
+      ..PreparedEngineSlices::default()
     },
     deny_list_data: Some(DenyListMatchData {
       labels: vec![vec![String::from("address")]].into(),
@@ -154,7 +154,7 @@ fn keeps_date_like_street_name_in_address_seed_span() {
       filters: Some(DenyListFilterData::default()),
     }),
     address_seed_data: Some(AddressSeedData::default()),
-    ..empty_config(PreparedSearchSlices::default())
+    ..empty_config(PreparedEngineSlices::default())
   })
   .expect("address seed data should prepare");
 
@@ -176,7 +176,7 @@ fn keeps_date_like_street_name_in_address_seed_span() {
 
 #[test]
 fn clusters_address_seeds_across_multibyte_text_gap() {
-  let prepared = PreparedSearch::new(PreparedSearchConfig {
+  let prepared = PreparedEngine::new(PreparedEngineConfig {
     literal_patterns: vec![
       SearchPattern::LiteralWithOptions {
         pattern: String::from("Springfield"),
@@ -196,10 +196,10 @@ fn clusters_address_seeds_across_multibyte_text_gap() {
       },
       ..SearchOptions::default()
     },
-    slices: PreparedSearchSlices {
+    slices: PreparedEngineSlices {
       deny_list: PatternSlice { start: 0, end: 1 },
       street_types: PatternSlice { start: 1, end: 2 },
-      ..PreparedSearchSlices::default()
+      ..PreparedEngineSlices::default()
     },
     deny_list_data: Some(DenyListMatchData {
       labels: vec![vec![String::from("address")]].into(),
@@ -210,7 +210,7 @@ fn clusters_address_seeds_across_multibyte_text_gap() {
       filters: Some(DenyListFilterData::default()),
     }),
     address_seed_data: Some(AddressSeedData::default()),
-    ..empty_config(PreparedSearchSlices::default())
+    ..empty_config(PreparedEngineSlices::default())
   })
   .expect("address seed data should prepare");
   let gap = "á".repeat(140);
@@ -235,7 +235,7 @@ fn clusters_address_seeds_across_multibyte_text_gap() {
 
 #[test]
 fn preserves_unit_abbreviation_inside_address_seed_span() {
-  let prepared = PreparedSearch::new(PreparedSearchConfig {
+  let prepared = PreparedEngine::new(PreparedEngineConfig {
     literal_patterns: vec![
       SearchPattern::LiteralWithOptions {
         pattern: String::from("Springfield"),
@@ -255,10 +255,10 @@ fn preserves_unit_abbreviation_inside_address_seed_span() {
       },
       ..SearchOptions::default()
     },
-    slices: PreparedSearchSlices {
+    slices: PreparedEngineSlices {
       deny_list: PatternSlice { start: 0, end: 1 },
       street_types: PatternSlice { start: 1, end: 2 },
-      ..PreparedSearchSlices::default()
+      ..PreparedEngineSlices::default()
     },
     deny_list_data: Some(DenyListMatchData {
       labels: vec![vec![String::from("address")]].into(),
@@ -273,7 +273,7 @@ fn preserves_unit_abbreviation_inside_address_seed_span() {
       br_cep_cue_words: Vec::new(),
       unit_abbreviations: vec![String::from("apt.")],
     }),
-    ..empty_config(PreparedSearchSlices::default())
+    ..empty_config(PreparedEngineSlices::default())
   })
   .expect("address seed data should prepare");
 

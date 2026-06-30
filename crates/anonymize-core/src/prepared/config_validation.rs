@@ -4,11 +4,11 @@ use crate::processors::{
 use crate::types::{Error, Result};
 
 use super::{
-  PreparedSearchArtifactsView, PreparedSearchConfig, PreparedSearchSlices,
+  PreparedEngineArtifactsView, PreparedEngineConfig, PreparedEngineSlices,
 };
 
 pub(super) fn validate_supported_config(
-  config: &PreparedSearchConfig,
+  config: &PreparedEngineConfig,
   allow_literal_artifacts: bool,
 ) -> Result<()> {
   validate_search_config(config, allow_literal_artifacts)?;
@@ -22,8 +22,8 @@ pub(super) fn validate_supported_config(
 }
 
 pub(super) fn validate_supported_config_for_artifacts(
-  config: &PreparedSearchConfig,
-  artifacts: Option<&PreparedSearchArtifactsView<'_>>,
+  config: &PreparedEngineConfig,
+  artifacts: Option<&PreparedEngineArtifactsView<'_>>,
 ) -> Result<()> {
   let allow_literal_artifacts =
     artifacts.is_some_and(|artifacts| !artifacts.literals.slots.is_empty());
@@ -31,7 +31,7 @@ pub(super) fn validate_supported_config_for_artifacts(
 }
 
 fn validate_search_config(
-  config: &PreparedSearchConfig,
+  config: &PreparedEngineConfig,
   allow_literal_artifacts: bool,
 ) -> Result<()> {
   validate_slice_bounds(
@@ -72,7 +72,7 @@ fn validate_search_config(
 }
 
 fn validate_literal_slices(
-  slices: &PreparedSearchSlices,
+  slices: &PreparedEngineSlices,
   literal_count: usize,
   allow_literal_artifacts: bool,
 ) -> Result<()> {
@@ -116,7 +116,7 @@ fn validate_slice_bounds(
   })
 }
 
-fn validate_legal_form_config(config: &PreparedSearchConfig) -> Result<()> {
+fn validate_legal_form_config(config: &PreparedEngineConfig) -> Result<()> {
   if config.slices.legal_forms.is_empty() {
     return Ok(());
   }
@@ -134,7 +134,7 @@ fn validate_legal_form_config(config: &PreparedSearchConfig) -> Result<()> {
   )
 }
 
-fn validate_deny_list_config(config: &PreparedSearchConfig) -> Result<()> {
+fn validate_deny_list_config(config: &PreparedEngineConfig) -> Result<()> {
   if config.slices.deny_list.is_empty() {
     return Ok(());
   }
@@ -183,7 +183,7 @@ fn validate_deny_list_pattern_metadata(
   )
 }
 
-fn validate_gazetteer_config(config: &PreparedSearchConfig) -> Result<()> {
+fn validate_gazetteer_config(config: &PreparedEngineConfig) -> Result<()> {
   if config.slices.gazetteer.is_empty() {
     return Ok(());
   }
@@ -206,7 +206,7 @@ fn validate_gazetteer_config(config: &PreparedSearchConfig) -> Result<()> {
   )
 }
 
-fn validate_country_config(config: &PreparedSearchConfig) -> Result<()> {
+fn validate_country_config(config: &PreparedEngineConfig) -> Result<()> {
   if config.slices.countries.is_empty() {
     return Ok(());
   }
@@ -224,7 +224,7 @@ fn validate_country_config(config: &PreparedSearchConfig) -> Result<()> {
   )
 }
 
-fn validate_hotword_config(config: &PreparedSearchConfig) -> Result<()> {
+fn validate_hotword_config(config: &PreparedEngineConfig) -> Result<()> {
   if !config.slices.hotwords.is_empty() {
     return Err(Error::UnsupportedStaticSlice { slice: "hotwords" });
   }
@@ -254,7 +254,7 @@ fn validate_hotword_config(config: &PreparedSearchConfig) -> Result<()> {
 }
 
 const fn validate_address_seed_config(
-  config: &PreparedSearchConfig,
+  config: &PreparedEngineConfig,
 ) -> Result<()> {
   if config.slices.street_types.is_empty() {
     return Ok(());
@@ -269,7 +269,7 @@ const fn validate_address_seed_config(
   })
 }
 
-fn validate_trigger_config(config: &PreparedSearchConfig) -> Result<()> {
+fn validate_trigger_config(config: &PreparedEngineConfig) -> Result<()> {
   if config.slices.triggers.is_empty() {
     return Ok(());
   }

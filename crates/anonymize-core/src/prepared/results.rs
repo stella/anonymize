@@ -5,7 +5,7 @@ use crate::types::{RedactionResult, SearchMatch};
 use super::PreparedEngine;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PreparedSearchMatches {
+pub struct PreparedEngineMatches {
   pub regex: Vec<SearchMatch>,
   pub custom_regex: Vec<SearchMatch>,
   pub literal: Vec<SearchMatch>,
@@ -13,7 +13,7 @@ pub struct PreparedSearchMatches {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct StaticDetectionResult {
-  pub matches: PreparedSearchMatches,
+  pub matches: PreparedEngineMatches,
   pub regex_entities: Vec<PipelineEntity>,
   pub custom_regex_entities: Vec<PipelineEntity>,
   pub deny_list_entities: Vec<PipelineEntity>,
@@ -40,13 +40,13 @@ pub struct StaticRedactionDiagnosticResult {
   pub diagnostics: StaticRedactionDiagnostics,
 }
 
-pub struct PreparedSearchBuildResult {
+pub struct PreparedEngineBuildResult {
   pub prepared: PreparedEngine,
   pub diagnostics: StaticRedactionDiagnostics,
 }
 
-pub type PreparedEngineBuildResult = PreparedSearchBuildResult;
-pub type PreparedEngineMatches = PreparedSearchMatches;
+pub type PreparedSearchBuildResult = PreparedEngineBuildResult;
+pub type PreparedSearchMatches = PreparedEngineMatches;
 
 impl StaticDetectionResult {
   #[must_use]

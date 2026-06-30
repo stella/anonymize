@@ -352,7 +352,7 @@ fn search_index_prepared_artifacts_match_direct_index() {
     SearchIndex::prepare_artifacts(patterns.clone(), options).unwrap();
   assert!(
     !artifacts.slots.is_empty(),
-    "prepared search index should record text-search slot artifacts"
+    "prepared engine index should record text-search slot artifacts"
   );
   let direct = SearchIndex::new(patterns.clone(), options).unwrap();
   let prepared =
