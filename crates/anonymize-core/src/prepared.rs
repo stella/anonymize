@@ -33,6 +33,7 @@ mod results;
 mod search_matcher;
 mod search_phase;
 mod support_prepare;
+mod support_slots;
 mod timing;
 
 pub use artifacts::{PreparedSearchArtifacts, PreparedSearchArtifactsView};
