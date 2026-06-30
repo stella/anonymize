@@ -1454,6 +1454,10 @@ describe("native adapter parity", () => {
     const packageBytes = prepare_search_package({
       binding: adapters.native,
       config: CONFIG_JSON,
+    });
+    const compressedPackageBytes = prepare_search_package({
+      binding: adapters.native,
+      config: CONFIG_JSON,
       compressed: true,
     });
     const prepared = load_prepared_package({
@@ -1517,8 +1521,18 @@ describe("native adapter parity", () => {
         text: "Číslo\u00a0PAS - 1234",
       }),
     ).toBe(adapters.native.normalizeForSearch("Číslo\u00a0PAS - 1234"));
+    expect(Buffer.from(packageBytes.subarray(0, 8)).toString("ascii")).toBe(
+      "ANONCPK1",
+    );
+    expect(
+      Buffer.from(compressedPackageBytes.subarray(0, 8)).toString("ascii"),
+    ).toBe("ANONCPZ1");
     expect([
-      ...prepare_search_package({ binding: adapters.native, config }),
+      ...prepare_search_package({
+        binding: adapters.native,
+        config,
+        compressed: false,
+      }),
     ]).toEqual([...packageBytes]);
 
     const rustCoreJson = callRustCoreSharedSdkParity({
@@ -1593,6 +1607,7 @@ describe("native adapter parity", () => {
       tempDir: adapters.tempDir,
       packageBytes: Buffer.from(packageBytes),
       cases,
+      compressed: false,
       normalizeText: "Číslo\u00a0PAS - 1234",
     });
 
@@ -1716,6 +1731,7 @@ describe("native adapter parity", () => {
       tempDir: adapters.tempDir,
       packageBytes: Buffer.from(packageBytes),
       cases,
+      compressed: true,
       configJson,
       normalizeText: "Project Zephyr USR-AB1234",
     });
@@ -3441,6 +3457,7 @@ type PythonSharedSdkParityOptions = {
   tempDir: string;
   packageBytes: Buffer;
   cases: SharedSdkParityCase[];
+  compressed: boolean;
   configJson?: string;
   normalizeText: string;
 };
@@ -3450,6 +3467,7 @@ const callPythonSharedSdkParity = ({
   tempDir,
   packageBytes,
   cases,
+  compressed,
   configJson = CONFIG_JSON,
   normalizeText,
 }: PythonSharedSdkParityOptions): {
@@ -3478,7 +3496,7 @@ const callPythonSharedSdkParity = ({
         redact_string: operators?.redactString,
       })),
       class_names: SHARED_NATIVE_SDK_CLASS_NAMES,
-      compressed: true,
+      compressed,
       config_object: JSON.parse(configJson),
       config_json: configJson,
       default_package_functions: SHARED_NATIVE_SDK_DEFAULT_PACKAGE_FUNCTIONS,

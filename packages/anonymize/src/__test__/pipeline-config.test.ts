@@ -328,7 +328,7 @@ describe("pipeline config semantics", () => {
       context,
     });
 
-    expect(counts().compressedPrepare).toBe(2);
+    expect(counts().rawPrepare).toBe(2);
   });
 
   test("native config carries coreference definition data", async () => {
@@ -1079,7 +1079,7 @@ describe("pipeline config semantics", () => {
     });
     await createNativePipelineFromConfig({ binding, config, context });
 
-    expect(counts().compressedPrepare).toBe(1);
+    expect(counts().rawPrepare).toBe(1);
     expect(second[0]).toBe(1);
   });
 
@@ -1118,7 +1118,7 @@ describe("pipeline config semantics", () => {
       context: createPipelineContext(),
     });
 
-    expect(counts().compressedPrepare).toBe(2);
+    expect(counts().rawPrepare).toBe(2);
   });
 
   test("native pipeline package cache keys caller data", async () => {
@@ -1154,7 +1154,7 @@ describe("pipeline config semantics", () => {
       context,
     });
 
-    expect(counts().compressedPrepare).toBe(2);
+    expect(counts().rawPrepare).toBe(2);
   });
 
   test("native pipeline package cache keys contextual native passes", async () => {
@@ -1188,7 +1188,7 @@ describe("pipeline config semantics", () => {
       context,
     });
 
-    expect(counts().compressedPrepare).toBe(3);
+    expect(counts().rawPrepare).toBe(3);
   });
 
   test("native pipeline package cache retries after failed build", async () => {
@@ -1215,14 +1215,14 @@ describe("pipeline config semantics", () => {
           }),
         }),
       },
-      prepareStaticSearchPackageBytes: () => new Uint8Array([9]),
-      prepareStaticSearchCompressedPackageBytes: () => {
+      prepareStaticSearchPackageBytes: () => {
         attempts += 1;
         if (attempts === 1) {
           throw new Error("build failed");
         }
         return new Uint8Array([attempts]);
       },
+      prepareStaticSearchCompressedPackageBytes: () => new Uint8Array([9]),
     } satisfies NativeAnonymizeBinding;
     const context = createPipelineContext();
     const config = {

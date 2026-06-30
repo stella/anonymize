@@ -248,7 +248,7 @@ _warmed_default_native_pipelines: WeakSet[PreparedAnonymizer] = WeakSet()
 def prepare_search_package(
     config_json: NativeSearchPackageInput,
     *,
-    compressed: bool = True,
+    compressed: bool = False,
 ) -> bytes:
     normalized_config_json = _native_search_config_json(config_json)
     if compressed:

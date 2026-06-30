@@ -126,7 +126,7 @@ export const prepareNativePipelinePackage = async ({
   config,
   gazetteerEntries = [],
   context,
-  compressed = true,
+  compressed = false,
 }: NativePipelinePackageOptions): Promise<Uint8Array> => {
   const packageBytes = await getCachedNativePipelinePackage({
     config,
@@ -158,7 +158,7 @@ const getCachedNativePipelinePackage = async ({
   config,
   gazetteerEntries = [],
   context,
-  compressed = true,
+  compressed = false,
 }: NativePipelinePackageOptions): Promise<Uint8Array> => {
   const scopedConfig = applyPipelineLanguageScope(config);
   assertNativePipelineSupported(scopedConfig);

@@ -159,7 +159,7 @@ export const normalize_for_search = (
 
 export const prepare_search_package = (
   config: NativeSearchPackageInput,
-  { compressed = true, ...options }: NativeSdkPackageOptions = {},
+  { compressed = false, ...options }: NativeSdkPackageOptions = {},
 ): Uint8Array =>
   prepareSearchPackageWithBinding({
     binding: resolveNativeSdkBinding(options),

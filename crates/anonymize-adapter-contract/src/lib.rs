@@ -26,14 +26,17 @@ pub type Result<T> = std::result::Result<T, ContractError>;
 const PREPARED_SEARCH_PACKAGE_HEADER: [u8; 8] = *b"ANONPKG1";
 const PREPARED_SEARCH_PACKAGE_VERSION: u32 = 15;
 const PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER: [u8; 8] = *b"ANONPKZ1";
-const PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION: u32 = 13;
+const PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION: u32 = 14;
+const PREPARED_SEARCH_COMPRESSED_PACKAGE_ZSTD_VERSION: u32 = 13;
 const PREPARED_SEARCH_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION: u32 = 12;
 const PREPARED_SEARCH_CORE_PACKAGE_HEADER: [u8; 8] = *b"ANONCPK1";
 const PREPARED_SEARCH_CORE_PACKAGE_VERSION: u32 = 20;
 const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_HEADER: [u8; 8] = *b"ANONCPZ1";
-const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION: u32 = 21;
+const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION: u32 = 22;
+const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_ZSTD_VERSION: u32 = 21;
 const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION: u32 = 16;
 const PREPARED_SEARCH_PACKAGE_DIGEST_BYTES: usize = 32;
+#[cfg(test)]
 const PREPARED_SEARCH_PACKAGE_ZSTD_LEVEL: i32 = 1;
 const MAX_PREPARED_SEARCH_PACKAGE_PAYLOAD_BYTES: usize = 256 * 1024 * 1024;
 
@@ -1519,9 +1522,7 @@ fn prepared_search_package_compress_payload(
   version: u32,
   payload: &[u8],
 ) -> Result<Vec<u8>> {
-  let compressed =
-    zstd::bulk::compress(payload, PREPARED_SEARCH_PACKAGE_ZSTD_LEVEL)
-      .map_err(|error| invalid_prepared_search_package(error.to_string()))?;
+  let compressed = lz4_flex::block::compress(payload);
   let digest = blake3::hash(&compressed);
   let mut bytes = Vec::with_capacity(
     raw_package_header_len(&compressed)
@@ -1772,8 +1773,9 @@ enum PreparedSearchPackageParts<'a> {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum PackageCompression {
-  ZstdCompressedDigest,
-  ZstdPayloadDigest,
+  Lz4,
+  ZstdCompressed,
+  ZstdPayload,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1831,59 +1833,23 @@ impl<'a> PreparedSearchPackageParts<'a> {
           ));
         }
         match compression {
-          PackageCompression::ZstdCompressedDigest => {
-            if digest_policy == PackageDigestPolicy::Trust {
-              let decompress_start = std::time::Instant::now();
-              let decompressed =
-                zstd::bulk::decompress(payload, uncompressed_len).map_err(
-                  |error| invalid_prepared_search_package(error.to_string()),
-                )?;
-              timings.decompress = Some(elapsed_us(decompress_start));
-              return Ok(Cow::Owned(decompressed));
-            }
-            let (
-              verify_result,
-              verify_elapsed,
-              decompressed,
-              decompress_elapsed,
-            ) = std::thread::scope(|scope| {
-              let verify_handle = scope.spawn(|| {
-                let verify_start = std::time::Instant::now();
-                let result =
-                  verify_prepared_search_package_digest(digest, payload);
-                (result, elapsed_us(verify_start))
-              });
-              let decompress_handle = scope.spawn(|| {
-                let decompress_start = std::time::Instant::now();
-                let result = zstd::bulk::decompress(payload, uncompressed_len)
-                  .map_err(|error| {
-                    invalid_prepared_search_package(error.to_string())
-                  });
-                (result, elapsed_us(decompress_start))
-              });
-              let (verify_result, verify_elapsed) =
-                join_package_decode_thread(verify_handle)?;
-              let (decompressed, decompress_elapsed) =
-                join_package_decode_thread(decompress_handle)?;
-              Ok((
-                verify_result,
-                verify_elapsed,
-                decompressed,
-                decompress_elapsed,
-              ))
-            })?;
-            verify_result?;
-            timings.verify = Some(verify_elapsed);
-            let decompressed = decompressed.map(Cow::Owned)?;
-            timings.decompress = Some(decompress_elapsed);
-            Ok(decompressed)
+          PackageCompression::Lz4 | PackageCompression::ZstdCompressed => {
+            compressed_digest_payload(
+              compression,
+              digest,
+              uncompressed_len,
+              payload,
+              timings,
+              digest_policy,
+            )
           }
-          PackageCompression::ZstdPayloadDigest => {
+          PackageCompression::ZstdPayload => {
             let decompress_start = std::time::Instant::now();
-            let payload = zstd::bulk::decompress(payload, uncompressed_len)
-              .map_err(|error| {
-                invalid_prepared_search_package(error.to_string())
-              })?;
+            let payload = decompress_package_payload(
+              PackageCompression::ZstdPayload,
+              payload,
+              uncompressed_len,
+            )?;
             timings.decompress = Some(elapsed_us(decompress_start));
             if digest_policy == PackageDigestPolicy::Verify {
               let verify_start = std::time::Instant::now();
@@ -1906,7 +1872,8 @@ impl<'a> PreparedSearchPackageParts<'a> {
         digest, payload, ..
       }
       | Self::Compressed {
-        compression: PackageCompression::ZstdCompressedDigest,
+        compression:
+          PackageCompression::Lz4 | PackageCompression::ZstdCompressed,
         digest,
         payload,
         ..
@@ -1917,7 +1884,7 @@ impl<'a> PreparedSearchPackageParts<'a> {
         Ok(())
       }
       Self::Compressed {
-        compression: PackageCompression::ZstdPayloadDigest,
+        compression: PackageCompression::ZstdPayload,
         digest,
         uncompressed_len,
         payload,
@@ -1939,6 +1906,70 @@ impl<'a> PreparedSearchPackageParts<'a> {
         timings.verify = Some(elapsed_us(verify_start));
         Ok(())
       }
+    }
+  }
+}
+
+fn compressed_digest_payload<'a>(
+  compression: PackageCompression,
+  digest: [u8; PREPARED_SEARCH_PACKAGE_DIGEST_BYTES],
+  uncompressed_len: usize,
+  payload: &'a [u8],
+  timings: &mut PreparedSearchPackageDecodeTimings,
+  digest_policy: PackageDigestPolicy,
+) -> Result<Cow<'a, [u8]>> {
+  if digest_policy == PackageDigestPolicy::Trust {
+    let decompress_start = std::time::Instant::now();
+    let decompressed =
+      decompress_package_payload(compression, payload, uncompressed_len)?;
+    timings.decompress = Some(elapsed_us(decompress_start));
+    return Ok(Cow::Owned(decompressed));
+  }
+
+  let (verify_result, verify_elapsed, decompressed, decompress_elapsed) =
+    std::thread::scope(|scope| {
+      let verify_handle = scope.spawn(|| {
+        let verify_start = std::time::Instant::now();
+        let result = verify_prepared_search_package_digest(digest, payload);
+        (result, elapsed_us(verify_start))
+      });
+      let decompress_handle = scope.spawn(|| {
+        let decompress_start = std::time::Instant::now();
+        let result =
+          decompress_package_payload(compression, payload, uncompressed_len);
+        (result, elapsed_us(decompress_start))
+      });
+      let (verify_result, verify_elapsed) =
+        join_package_decode_thread(verify_handle)?;
+      let (decompressed, decompress_elapsed) =
+        join_package_decode_thread(decompress_handle)?;
+      Ok((
+        verify_result,
+        verify_elapsed,
+        decompressed,
+        decompress_elapsed,
+      ))
+    })?;
+  verify_result?;
+  timings.verify = Some(verify_elapsed);
+  let decompressed = decompressed.map(Cow::Owned)?;
+  timings.decompress = Some(decompress_elapsed);
+  Ok(decompressed)
+}
+
+fn decompress_package_payload(
+  compression: PackageCompression,
+  payload: &[u8],
+  uncompressed_len: usize,
+) -> Result<Vec<u8>> {
+  match compression {
+    PackageCompression::Lz4 => {
+      lz4_flex::block::decompress(payload, uncompressed_len)
+        .map_err(|error| invalid_prepared_search_package(error.to_string()))
+    }
+    PackageCompression::ZstdCompressed | PackageCompression::ZstdPayload => {
+      zstd::bulk::decompress(payload, uncompressed_len)
+        .map_err(|error| invalid_prepared_search_package(error.to_string()))
     }
   }
 }
@@ -1992,6 +2023,7 @@ fn prepared_search_package_parts(
     let (raw, compression) = compressed_package_header(
       bytes,
       PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION,
+      PREPARED_SEARCH_COMPRESSED_PACKAGE_ZSTD_VERSION,
       PREPARED_SEARCH_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION,
       PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER.len(),
     )?;
@@ -2001,6 +2033,7 @@ fn prepared_search_package_parts(
     let (raw, compression) = compressed_package_header(
       bytes,
       PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION,
+      PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_ZSTD_VERSION,
       PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION,
       PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_HEADER.len(),
     )?;
@@ -2038,15 +2071,18 @@ fn compressed_package_parts(
 
 fn compressed_package_header(
   bytes: &[u8],
-  compressed_digest_version: u32,
+  lz4_compressed_digest_version: u32,
+  zstd_compressed_digest_version: u32,
   payload_digest_version: u32,
   header_len: usize,
 ) -> Result<(RawPackageHeader<'_>, PackageCompression)> {
   let raw = raw_package_header_any_version(bytes, header_len)?;
-  let compression = if raw.version == compressed_digest_version {
-    PackageCompression::ZstdCompressedDigest
+  let compression = if raw.version == lz4_compressed_digest_version {
+    PackageCompression::Lz4
+  } else if raw.version == zstd_compressed_digest_version {
+    PackageCompression::ZstdCompressed
   } else if raw.version == payload_digest_version {
-    PackageCompression::ZstdPayloadDigest
+    PackageCompression::ZstdPayload
   } else {
     return Err(invalid_prepared_search_package("unsupported version"));
   };
@@ -3076,9 +3112,11 @@ mod tests {
     PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER,
     PREPARED_SEARCH_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION,
     PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION,
+    PREPARED_SEARCH_COMPRESSED_PACKAGE_ZSTD_VERSION,
     PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_HEADER,
     PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION,
     PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION,
+    PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_ZSTD_VERSION,
     PREPARED_SEARCH_PACKAGE_DIGEST_BYTES, PREPARED_SEARCH_PACKAGE_ZSTD_LEVEL,
     PreparedSearchPackageDecodeTimings, diagnostic_events_to_binding,
     diagnostic_events_to_utf16_binding, diagnostic_stage_event,
@@ -3421,6 +3459,28 @@ mod tests {
       prepared_search_package_to_compressed_bytes(&config, artifacts).unwrap();
     let package = prepared_search_package_from_bytes(&bytes).unwrap();
 
+    assert_eq!(
+      package_version(&bytes, PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER),
+      PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION
+    );
+    assert_eq!(package.config, config);
+    assert_eq!(package.artifacts, artifacts);
+  }
+
+  #[test]
+  fn prepared_search_compressed_package_reads_legacy_zstd_digest() {
+    let config = package_test_config();
+    let artifacts = b"prepared-artifacts";
+    let payload =
+      prepared_search_package_payload_to_bytes(&config, artifacts).unwrap();
+    let bytes = zstd_compressed_digest_package(
+      PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER,
+      PREPARED_SEARCH_COMPRESSED_PACKAGE_ZSTD_VERSION,
+      &payload,
+    );
+
+    let package = prepared_search_package_from_bytes(&bytes).unwrap();
+
     assert_eq!(package.config, config);
     assert_eq!(package.artifacts, artifacts);
   }
@@ -3526,6 +3586,33 @@ mod tests {
     let bytes =
       prepared_search_core_package_to_compressed_bytes(&config, artifacts)
         .unwrap();
+    let package = prepared_search_core_package_from_bytes(&bytes).unwrap();
+
+    assert!(prepared_search_package_has_core_payload(&bytes));
+    assert_eq!(
+      package_version(&bytes, PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_HEADER),
+      PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION
+    );
+    assert_eq!(package.config, compact_config);
+    assert_eq!(package.artifacts, artifacts);
+  }
+
+  #[test]
+  fn prepared_search_core_compressed_package_reads_legacy_zstd_digest() {
+    let config =
+      prepared_search_config_from_binding(package_test_config()).unwrap();
+    let mut compact_config = config.clone();
+    compact_config.search.literal_patterns.clear();
+    let artifacts = b"prepared-artifacts";
+    let payload =
+      prepared_search_core_package_payload_to_bytes(&config, artifacts)
+        .unwrap();
+    let bytes = zstd_compressed_digest_package(
+      PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_HEADER,
+      PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_ZSTD_VERSION,
+      &payload,
+    );
+
     let package = prepared_search_core_package_from_bytes(&bytes).unwrap();
 
     assert!(prepared_search_package_has_core_payload(&bytes));
@@ -3748,6 +3835,30 @@ mod tests {
     bytes.extend_from_slice(&payload_len.to_le_bytes());
     bytes.extend_from_slice(&compressed);
     bytes
+  }
+
+  fn zstd_compressed_digest_package(
+    header: [u8; 8],
+    version: u32,
+    payload: &[u8],
+  ) -> Vec<u8> {
+    let compressed =
+      zstd::bulk::compress(payload, PREPARED_SEARCH_PACKAGE_ZSTD_LEVEL)
+        .unwrap();
+    let digest = blake3::hash(&compressed);
+    let mut bytes = Vec::new();
+    write_package_header(&mut bytes, header, version, digest.as_bytes());
+    let payload_len = u64::try_from(payload.len()).unwrap();
+    bytes.extend_from_slice(&payload_len.to_le_bytes());
+    bytes.extend_from_slice(&compressed);
+    bytes
+  }
+
+  fn package_version(bytes: &[u8], header: [u8; 8]) -> u32 {
+    let version_start = header.len();
+    let version_end = version_start.saturating_add(std::mem::size_of::<u32>());
+    let version_bytes = bytes.get(version_start..version_end).unwrap();
+    u32::from_le_bytes(<[u8; 4]>::try_from(version_bytes).unwrap())
   }
 
   fn compressed_package_with_len(

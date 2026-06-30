@@ -21,8 +21,8 @@ use stella_anonymize_adapter_contract::{
 };
 use stella_anonymize_core::{
   DiagnosticDetail, DiagnosticEvent, DiagnosticStage, Error as CoreError,
-  OperatorConfig, PreparedSearch as CorePreparedSearch,
-  PreparedSearchArtifactsView, StaticRedactionDiagnostics,
+  OperatorConfig, PreparedEngine as CorePreparedEngine,
+  PreparedEngineArtifactsView, StaticRedactionDiagnostics,
   StaticRedactionResult,
 };
 
@@ -70,7 +70,7 @@ pub struct PyStaticRedactionResult {
 
 #[pyclass(name = "PreparedSearch")]
 pub struct PyPreparedSearch {
-  inner: CorePreparedSearch,
+  inner: CorePreparedEngine,
   prepare_diagnostics: StaticRedactionDiagnostics,
 }
 
@@ -79,7 +79,7 @@ impl PyPreparedSearch {
   #[new]
   fn new(config_json: &str) -> PyResult<Self> {
     let config = parse_core_prepared_search_config(config_json)?;
-    let result = CorePreparedSearch::new_with_diagnostics(config)
+    let result = CorePreparedEngine::new_with_diagnostics(config)
       .map_err(|error| to_py_core_error(&error))?;
     Ok(Self {
       inner: result.prepared,
@@ -94,10 +94,10 @@ impl PyPreparedSearch {
   ) -> PyResult<Self> {
     let config = parse_core_prepared_search_config(config_json)?;
     let artifact_decode_start = Instant::now();
-    let artifacts = PreparedSearchArtifactsView::from_bytes(artifact_bytes)
+    let artifacts = PreparedEngineArtifactsView::from_bytes(artifact_bytes)
       .map_err(|error| to_py_core_error(&error))?;
     let artifact_decode_elapsed = elapsed_us(artifact_decode_start);
-    let result = CorePreparedSearch::new_with_artifact_view_diagnostics(
+    let result = CorePreparedEngine::new_with_artifact_view_diagnostics(
       config, &artifacts,
     )
     .map_err(|error| to_py_core_error(&error))?;
@@ -141,10 +141,10 @@ impl PyPreparedSearch {
     let config = prepared_search_config_from_binding(package.config)
       .map_err(|error| to_py_contract_error(&error))?;
     let artifact_decode_start = Instant::now();
-    let artifacts = PreparedSearchArtifactsView::from_bytes(&package.artifacts)
+    let artifacts = PreparedEngineArtifactsView::from_bytes(&package.artifacts)
       .map_err(|error| to_py_core_error(&error))?;
     let artifact_decode_elapsed = elapsed_us(artifact_decode_start);
-    let result = CorePreparedSearch::new_with_artifact_view_diagnostics(
+    let result = CorePreparedEngine::new_with_artifact_view_diagnostics(
       config, &artifacts,
     )
     .map_err(|error| to_py_core_error(&error))?;
@@ -303,17 +303,17 @@ impl PyPreparedSearch {
 
 impl PyPreparedSearch {
   fn from_core_package(
-    config: stella_anonymize_core::PreparedSearchConfig,
+    config: stella_anonymize_core::PreparedEngineConfig,
     artifact_bytes: &[u8],
     package_decode_timings: PreparedSearchPackageDecodeTimings,
     package_decode_elapsed: u64,
     input_bytes_len: usize,
   ) -> PyResult<Self> {
     let artifact_decode_start = Instant::now();
-    let artifacts = PreparedSearchArtifactsView::from_bytes(artifact_bytes)
+    let artifacts = PreparedEngineArtifactsView::from_bytes(artifact_bytes)
       .map_err(|error| to_py_core_error(&error))?;
     let artifact_decode = elapsed_us(artifact_decode_start);
-    let result = CorePreparedSearch::new_with_artifact_view_diagnostics(
+    let result = CorePreparedEngine::new_with_artifact_view_diagnostics(
       config, &artifacts,
     )
     .map_err(|error| to_py_core_error(&error))?;
@@ -452,7 +452,7 @@ fn prepare_static_search_artifacts_bytes<'py>(
   config_json: &str,
 ) -> PyResult<Bound<'py, PyBytes>> {
   let config = parse_core_prepared_search_config(config_json)?;
-  let bytes = CorePreparedSearch::prepare_artifacts(config)
+  let bytes = CorePreparedEngine::prepare_artifacts(config)
     .and_then(|artifacts| artifacts.to_bytes())
     .map_err(|error| to_py_core_error(&error))?;
   Ok(PyBytes::new(py, &bytes))
@@ -482,7 +482,7 @@ fn prepare_static_search_package_bytes_with<'py>(
   let binding_config = parse_prepared_search_config(config_json)?;
   let core_config = prepared_search_config_from_binding(binding_config)
     .map_err(|error| to_py_contract_error(&error))?;
-  let artifacts = CorePreparedSearch::prepare_artifacts(core_config.clone())
+  let artifacts = CorePreparedEngine::prepare_artifacts(core_config.clone())
     .and_then(|artifacts| artifacts.to_bytes())
     .map_err(|error| to_py_core_error(&error))?;
   let package = if compressed {
@@ -534,7 +534,7 @@ fn parse_prepared_search_config(
 
 fn parse_core_prepared_search_config(
   config_json: &str,
-) -> PyResult<stella_anonymize_core::PreparedSearchConfig> {
+) -> PyResult<stella_anonymize_core::PreparedEngineConfig> {
   prepared_search_config_from_binding(parse_prepared_search_config(
     config_json,
   )?)

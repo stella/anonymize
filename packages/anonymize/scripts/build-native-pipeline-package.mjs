@@ -12,7 +12,7 @@ import { loadNativeAnonymizeBinding } from "../dist/native-node.mjs";
 
 const args = parseArgs(process.argv.slice(2));
 const outputPath = resolve(args.out ?? "native-pipeline.stlanonpkg");
-const compressed = args.raw !== true;
+const compressed = args.compressed === true;
 const { config, gazetteerEntries } = await loadPackageInput(args);
 const binding = loadNativeAnonymizeBinding();
 const packageBytes = await prepareNativePipelinePackage({
@@ -60,6 +60,10 @@ function parseArgs(values) {
         result.raw = true;
         break;
       }
+      case "--compressed": {
+        result.compressed = true;
+        break;
+      }
       case "--default-dictionaries": {
         result.defaultDictionaries = true;
         break;
@@ -81,6 +85,9 @@ function parseArgs(values) {
       default:
         throw new Error(`Unknown option: ${value}`);
     }
+  }
+  if (result.raw && result.compressed) {
+    throw new Error("Use either --raw or --compressed, not both");
   }
   return result;
 }
@@ -214,6 +221,7 @@ Options:
   --language <code>         Build a package scoped to one content language.
   --languages <codes>       Build a package scoped to comma-separated content languages.
   --default-dictionaries    Load @stll/anonymize-data into configs that do not provide dictionaries.
-  --raw                     Write an uncompressed package.
+  --compressed              Write an LZ4-compressed package.
+  --raw                     Write an uncompressed package. This is the default.
 `);
 }

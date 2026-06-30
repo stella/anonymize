@@ -122,7 +122,7 @@ class PreparedAnonymizer:
 PreparedSearch: TypeAlias = PreparedAnonymizer
 
 def prepare_search_package(
-    config_json: NativeSearchPackageInput, *, compressed: bool = True
+    config_json: NativeSearchPackageInput, *, compressed: bool = False
 ) -> bytes: ...
 def load_prepared_package(package_bytes: BytesLike) -> PreparedAnonymizer: ...
 def load_prepared_package_file(

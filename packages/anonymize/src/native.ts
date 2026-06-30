@@ -489,7 +489,7 @@ export const assertNativeBindingVersion = ({
 export const prepareNativeSearchPackage = ({
   binding,
   config,
-  compressed = true,
+  compressed = false,
 }: NativeSearchPackageOptions): Uint8Array => {
   const configBytes = encodeNativeSearchConfig(config);
   return compressed
@@ -500,7 +500,7 @@ export const prepareNativeSearchPackage = ({
 export const prepare_search_package = ({
   binding,
   config,
-  compressed = true,
+  compressed = false,
 }: SharedNativeSearchPackageOptions): Uint8Array => {
   const configBytes = encodeNativeSearchConfigInput(config);
   return compressed
