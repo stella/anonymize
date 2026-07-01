@@ -82,7 +82,10 @@ impl PreparedAddressSeedData {
       existing_entities,
     )?;
     let clusters = cluster_seeds(&seeds, full_text, existing_entities);
-    let boundary_starts = self.boundary_starts(full_text);
+    if clusters.is_empty() {
+      return Ok(Vec::new());
+    }
+    let mut boundary_starts = None;
     let mut results = Vec::new();
 
     for cluster in clusters {
@@ -90,11 +93,18 @@ impl PreparedAddressSeedData {
       if score < 0.6 {
         continue;
       }
+      let boundary_starts = if cluster.has_expandable_address_context() {
+        boundary_starts
+          .get_or_insert_with(|| self.boundary_starts(full_text))
+          .as_slice()
+      } else {
+        &[]
+      };
       let span = self.expand_cluster(
         full_text,
         &cluster,
         existing_entities,
-        &boundary_starts,
+        boundary_starts,
       );
       let Some(raw_text) = full_text.get(span.start..span.end) else {
         continue;
@@ -253,6 +263,9 @@ impl PreparedAddressSeedData {
   }
 
   fn collect_italian_cap_seeds(&self, seeds: &mut Vec<Seed>, full_text: &str) {
+    if seeds.is_empty() {
+      return;
+    }
     for captures in self.italian_cap_re.captures_iter(full_text) {
       let Some(found) = captures.name("cap") else {
         continue;
