@@ -3,6 +3,7 @@ use crate::resolution::PipelineEntity;
 use crate::types::{RedactionResult, SearchMatch};
 
 use super::PreparedEngine;
+use super::detector_registry::StaticDetectorId;
 use super::timing::StaticEntityPasses;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -13,18 +14,14 @@ pub struct PreparedEngineMatches {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+struct StaticEntityLayer {
+  detector: StaticDetectorId,
+  entities: Vec<PipelineEntity>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct StaticEntityLayers {
-  pub regex: Vec<PipelineEntity>,
-  pub custom_regex: Vec<PipelineEntity>,
-  pub deny_list: Vec<PipelineEntity>,
-  pub gazetteer: Vec<PipelineEntity>,
-  pub country: Vec<PipelineEntity>,
-  pub anchored: Vec<PipelineEntity>,
-  pub trigger: Vec<PipelineEntity>,
-  pub signature: Vec<PipelineEntity>,
-  pub legal_form: Vec<PipelineEntity>,
-  pub address_seed: Vec<PipelineEntity>,
-  pub name_corpus: Vec<PipelineEntity>,
+  layers: Vec<StaticEntityLayer>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -48,52 +45,96 @@ pub struct StaticRedactionDiagnosticResult {
 
 impl StaticEntityLayers {
   #[must_use]
-  pub const fn entity_count(&self) -> usize {
+  pub fn entity_count(&self) -> usize {
     self
-      .regex
-      .len()
-      .saturating_add(self.custom_regex.len())
-      .saturating_add(self.deny_list.len())
-      .saturating_add(self.gazetteer.len())
-      .saturating_add(self.country.len())
-      .saturating_add(self.anchored.len())
-      .saturating_add(self.trigger.len())
-      .saturating_add(self.signature.len())
-      .saturating_add(self.legal_form.len())
-      .saturating_add(self.address_seed.len())
-      .saturating_add(self.name_corpus.len())
+      .layers
+      .iter()
+      .map(|layer| layer.entities.len())
+      .fold(0usize, usize::saturating_add)
   }
 
   #[must_use]
   pub fn all_entities(&self) -> Vec<PipelineEntity> {
     let mut entities = Vec::with_capacity(self.entity_count());
-    entities.extend(self.regex.iter().cloned());
-    entities.extend(self.custom_regex.iter().cloned());
-    entities.extend(self.deny_list.iter().cloned());
-    entities.extend(self.gazetteer.iter().cloned());
-    entities.extend(self.country.iter().cloned());
-    entities.extend(self.anchored.iter().cloned());
-    entities.extend(self.trigger.iter().cloned());
-    entities.extend(self.signature.iter().cloned());
-    entities.extend(self.legal_form.iter().cloned());
-    entities.extend(self.address_seed.iter().cloned());
-    entities.extend(self.name_corpus.iter().cloned());
+    for layer in &self.layers {
+      entities.extend(layer.entities.iter().cloned());
+    }
     entities
+  }
+
+  #[must_use]
+  pub fn regex(&self) -> &[PipelineEntity] {
+    self.entities_for(StaticDetectorId::Regex)
+  }
+
+  #[must_use]
+  pub fn custom_regex(&self) -> &[PipelineEntity] {
+    self.entities_for(StaticDetectorId::CustomRegex)
+  }
+
+  #[must_use]
+  pub fn deny_list(&self) -> &[PipelineEntity] {
+    self.entities_for(StaticDetectorId::DenyList)
+  }
+
+  #[must_use]
+  pub fn gazetteer(&self) -> &[PipelineEntity] {
+    self.entities_for(StaticDetectorId::Gazetteer)
+  }
+
+  #[must_use]
+  pub fn country(&self) -> &[PipelineEntity] {
+    self.entities_for(StaticDetectorId::Country)
+  }
+
+  #[must_use]
+  pub fn anchored(&self) -> &[PipelineEntity] {
+    self.entities_for(StaticDetectorId::Anchored)
+  }
+
+  #[must_use]
+  pub fn trigger(&self) -> &[PipelineEntity] {
+    self.entities_for(StaticDetectorId::Trigger)
+  }
+
+  #[must_use]
+  pub fn signature(&self) -> &[PipelineEntity] {
+    self.entities_for(StaticDetectorId::Signature)
+  }
+
+  #[must_use]
+  pub fn legal_form(&self) -> &[PipelineEntity] {
+    self.entities_for(StaticDetectorId::LegalForm)
+  }
+
+  #[must_use]
+  pub fn name_corpus(&self) -> &[PipelineEntity] {
+    self.entities_for(StaticDetectorId::NameCorpus)
+  }
+
+  #[must_use]
+  pub fn address_seed(&self) -> &[PipelineEntity] {
+    self.entities_for(StaticDetectorId::AddressSeed)
+  }
+
+  fn entities_for(&self, detector: StaticDetectorId) -> &[PipelineEntity] {
+    self
+      .layers
+      .iter()
+      .find(|layer| layer.detector == detector)
+      .map_or(&[], |layer| layer.entities.as_slice())
   }
 
   pub(super) fn from_passes(passes: StaticEntityPasses) -> Self {
     Self {
-      regex: passes.regex.entities,
-      custom_regex: passes.custom_regex.entities,
-      deny_list: passes.deny_list.entities,
-      gazetteer: passes.gazetteer.entities,
-      country: passes.country.entities,
-      anchored: passes.anchored.entities,
-      trigger: passes.trigger.entities,
-      signature: passes.signature.entities,
-      legal_form: passes.legal_form.entities,
-      address_seed: passes.address_seed.entities,
-      name_corpus: passes.name_corpus.entities,
+      layers: passes
+        .into_layers()
+        .into_iter()
+        .map(|layer| StaticEntityLayer {
+          detector: layer.detector,
+          entities: layer.timed.entities,
+        })
+        .collect(),
     }
   }
 }
@@ -105,7 +146,7 @@ pub struct PreparedEngineBuildResult {
 
 impl StaticDetectionResult {
   #[must_use]
-  pub const fn entity_count(&self) -> usize {
+  pub fn entity_count(&self) -> usize {
     self.entities.entity_count()
   }
 

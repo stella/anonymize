@@ -32,7 +32,10 @@ impl StaticEntityDetector for NameCorpusDetector {
       let Some(data) = &context.engine.data.name_corpus else {
         return Ok(Vec::new());
       };
-      data.detect_configured(context.full_text, &passes.deny_list.entities)
+      data.detect_configured(
+        context.full_text,
+        passes.entities(StaticDetectorId::DenyList),
+      )
     })
   }
 }

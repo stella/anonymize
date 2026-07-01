@@ -34,15 +34,15 @@ impl StaticEntityDetector for AddressSeedDetector {
         return Ok(Vec::new());
       };
       let existing_entities = address_seed_context(&[
-        &passes.regex.entities,
-        &passes.custom_regex.entities,
-        &passes.anchored.entities,
-        &passes.trigger.entities,
-        &passes.signature.entities,
-        &passes.legal_form.entities,
-        &passes.deny_list.entities,
-        &passes.gazetteer.entities,
-        &passes.name_corpus.entities,
+        passes.entities(StaticDetectorId::Regex),
+        passes.entities(StaticDetectorId::CustomRegex),
+        passes.entities(StaticDetectorId::Anchored),
+        passes.entities(StaticDetectorId::Trigger),
+        passes.entities(StaticDetectorId::Signature),
+        passes.entities(StaticDetectorId::LegalForm),
+        passes.entities(StaticDetectorId::DenyList),
+        passes.entities(StaticDetectorId::Gazetteer),
+        passes.entities(StaticDetectorId::NameCorpus),
       ]);
       data.process(
         &context.matches.literal,

@@ -172,7 +172,7 @@ fn keeps_date_like_street_name_in_address_seed_span() {
     address_texts(&result).contains(&"May 15 Street, London 12345"),
     "resolved address entities: {:?}; address seed entities: {:?}",
     result.resolved_entities,
-    result.detections.entities.address_seed,
+    result.detections.entities.address_seed(),
   );
   assert!(!result.redaction.redacted_text.contains("May 15 Street"));
 }
@@ -232,7 +232,7 @@ fn clusters_address_seeds_across_multibyte_text_gap() {
         && entity.text.contains("Springfield 12345")),
     "resolved address entities: {:?}; address seed entities: {:?}",
     result.resolved_entities,
-    result.detections.entities.address_seed,
+    result.detections.entities.address_seed(),
   );
 }
 
@@ -293,7 +293,7 @@ fn preserves_unit_abbreviation_inside_address_seed_span() {
     address_texts(&result).contains(&expected.as_str()),
     "resolved address entities: {:?}; address seed entities: {:?}",
     result.resolved_entities,
-    result.detections.entities.address_seed,
+    result.detections.entities.address_seed(),
   );
   assert!(!result.redaction.redacted_text.contains("Apt. 5"));
   assert!(!result.redaction.redacted_text.contains(&suffix));

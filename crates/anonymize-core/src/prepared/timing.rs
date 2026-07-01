@@ -19,6 +19,13 @@ impl TimedEntities {
   }
 }
 
+static EMPTY_TIMED_ENTITIES: TimedEntities = TimedEntities::empty();
+
+pub(super) struct DetectorEntityPass {
+  pub(super) detector: StaticDetectorId,
+  pub(super) timed: TimedEntities,
+}
+
 pub(super) struct TimedMatches {
   pub(super) matches: Vec<SearchMatch>,
   pub(super) elapsed_us: u64,
@@ -42,70 +49,38 @@ pub(super) struct TimedSearchBranches {
 }
 
 pub(super) struct StaticEntityPasses {
-  pub(super) regex: TimedEntities,
-  pub(super) custom_regex: TimedEntities,
-  pub(super) deny_list: TimedEntities,
-  pub(super) gazetteer: TimedEntities,
-  pub(super) country: TimedEntities,
-  pub(super) anchored: TimedEntities,
-  pub(super) trigger: TimedEntities,
-  pub(super) signature: TimedEntities,
-  pub(super) legal_form: TimedEntities,
-  pub(super) address_seed: TimedEntities,
-  pub(super) name_corpus: TimedEntities,
+  layers: Vec<DetectorEntityPass>,
 }
 
 impl StaticEntityPasses {
   pub(super) const fn empty() -> Self {
-    Self {
-      regex: TimedEntities::empty(),
-      custom_regex: TimedEntities::empty(),
-      deny_list: TimedEntities::empty(),
-      gazetteer: TimedEntities::empty(),
-      country: TimedEntities::empty(),
-      anchored: TimedEntities::empty(),
-      trigger: TimedEntities::empty(),
-      signature: TimedEntities::empty(),
-      legal_form: TimedEntities::empty(),
-      address_seed: TimedEntities::empty(),
-      name_corpus: TimedEntities::empty(),
-    }
+    Self { layers: Vec::new() }
   }
 
-  pub(super) const fn entity_count(&self) -> usize {
+  pub(super) fn entity_count(&self) -> usize {
     self
-      .regex
-      .entities
-      .len()
-      .saturating_add(self.custom_regex.entities.len())
-      .saturating_add(self.deny_list.entities.len())
-      .saturating_add(self.gazetteer.entities.len())
-      .saturating_add(self.country.entities.len())
-      .saturating_add(self.anchored.entities.len())
-      .saturating_add(self.trigger.entities.len())
-      .saturating_add(self.signature.entities.len())
-      .saturating_add(self.legal_form.entities.len())
-      .saturating_add(self.address_seed.entities.len())
-      .saturating_add(self.name_corpus.entities.len())
+      .layers
+      .iter()
+      .map(|layer| layer.timed.entities.len())
+      .fold(0usize, usize::saturating_add)
   }
 
-  pub(super) const fn detector_entities(
+  pub(super) fn entities(
+    &self,
+    detector: StaticDetectorId,
+  ) -> &[PipelineEntity] {
+    &self.detector_entities(detector).entities
+  }
+
+  pub(super) fn detector_entities(
     &self,
     detector: StaticDetectorId,
   ) -> &TimedEntities {
-    match detector {
-      StaticDetectorId::Regex => &self.regex,
-      StaticDetectorId::CustomRegex => &self.custom_regex,
-      StaticDetectorId::DenyList => &self.deny_list,
-      StaticDetectorId::Gazetteer => &self.gazetteer,
-      StaticDetectorId::Country => &self.country,
-      StaticDetectorId::Anchored => &self.anchored,
-      StaticDetectorId::Trigger => &self.trigger,
-      StaticDetectorId::Signature => &self.signature,
-      StaticDetectorId::LegalForm => &self.legal_form,
-      StaticDetectorId::NameCorpus => &self.name_corpus,
-      StaticDetectorId::AddressSeed => &self.address_seed,
-    }
+    self
+      .layers
+      .iter()
+      .find(|layer| layer.detector == detector)
+      .map_or(&EMPTY_TIMED_ENTITIES, |layer| &layer.timed)
   }
 
   pub(super) fn set_detector_entities(
@@ -113,19 +88,22 @@ impl StaticEntityPasses {
     detector: StaticDetectorId,
     entities: TimedEntities,
   ) {
-    match detector {
-      StaticDetectorId::Regex => self.regex = entities,
-      StaticDetectorId::CustomRegex => self.custom_regex = entities,
-      StaticDetectorId::DenyList => self.deny_list = entities,
-      StaticDetectorId::Gazetteer => self.gazetteer = entities,
-      StaticDetectorId::Country => self.country = entities,
-      StaticDetectorId::Anchored => self.anchored = entities,
-      StaticDetectorId::Trigger => self.trigger = entities,
-      StaticDetectorId::Signature => self.signature = entities,
-      StaticDetectorId::LegalForm => self.legal_form = entities,
-      StaticDetectorId::NameCorpus => self.name_corpus = entities,
-      StaticDetectorId::AddressSeed => self.address_seed = entities,
+    if let Some(layer) = self
+      .layers
+      .iter_mut()
+      .find(|layer| layer.detector == detector)
+    {
+      layer.timed = entities;
+      return;
     }
+    self.layers.push(DetectorEntityPass {
+      detector,
+      timed: entities,
+    });
+  }
+
+  pub(super) fn into_layers(self) -> Vec<DetectorEntityPass> {
+    self.layers
   }
 }
 
