@@ -24,6 +24,9 @@ result = prepared.redact_text(text, redact_string="***")
 print(result.redaction.redacted_text)
 ```
 
+Regional codes use the exact package when present and otherwise fall back to
+the base language package, so `en-US` can use the shipped `en` artifact.
+
 For caller-owned configs, prepare package bytes before serving documents and
 load them at runtime:
 

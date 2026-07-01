@@ -47,6 +47,9 @@ STELLA_ANONYMIZE_NATIVE_PACKAGE_LANGUAGES=en,cs,fr bun run build
 const anonymizer = getDefaultNativePipeline({ language: "en" });
 ```
 
+Regional codes use the exact package when present and otherwise fall back to
+the base language package, so `en-US` can use the shipped `en` artifact.
+
 For build-time generated packages or caller-owned data, prepare the package before runtime and load the bytes in the process that handles documents.
 
 ```bash
