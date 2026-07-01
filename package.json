@@ -24,6 +24,8 @@
     "rust:check": "bun run rust:fmt && bun run rust:lint && bun run rust:dylint && bun run rust:test",
     "python:typecheck": "uvx --from ty==0.0.29 ty check --extra-search-path crates/anonymize-py/python crates/anonymize-py/typecheck",
     "python:wheel": "node .github/tools/check-python-wheel.mjs",
+    "check:v1-native": "cd packages/anonymize && bun run check:v1-native",
+    "check:v1-native:full": "cd packages/anonymize && bun run check:v1-native:full",
     "sync:version": "node .github/tools/sync-runtime-version.mjs",
     "check:version": "node .github/tools/sync-runtime-version.mjs --check",
     "check:bun": "node .github/tools/check-bun-workflows.mjs",
