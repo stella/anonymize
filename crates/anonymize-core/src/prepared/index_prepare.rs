@@ -6,7 +6,9 @@ use crate::types::Result;
 
 use super::artifacts::{PreparedEngineArtifacts, PreparedEngineArtifactsView};
 use super::config_validation::validate_supported_config;
-use super::index_builder::{SearchIndexBuildInputs, build_search_indexes};
+use super::index_builder::{
+  SearchIndexBuildInputs, TimedSearchIndex, build_search_indexes,
+};
 use super::index_patterns::{
   legal_form_search_options, promote_case_insensitive_literals,
   split_regex_patterns, trigger_search_options,
@@ -55,18 +57,16 @@ pub(super) struct PreparedEngineIndexBundle {
   pub(super) counts: SearchPrepareCounts,
 }
 
-struct SearchIndexPrepareMetrics {
-  regex: SearchIndexPrepareMetric,
-  custom_regex: SearchIndexPrepareMetric,
-  legal_forms: SearchIndexPrepareMetric,
-  triggers: SearchIndexPrepareMetric,
-  literals: SearchIndexPrepareMetric,
-}
-
 struct SearchIndexPrepareMetric {
+  stage: DiagnosticStage,
   pattern_count: usize,
   elapsed_us: u64,
   stats: Vec<SearchIndexBuildStats>,
+}
+
+struct PreparedSearchSlot {
+  index: SearchIndex,
+  metric: SearchIndexPrepareMetric,
 }
 
 pub(super) fn prepare_search_artifacts(
@@ -140,89 +140,83 @@ pub(super) fn prepare_search_index_bundle(
     artifacts,
     diagnostics.is_some(),
   )?;
-  let (
-    regex_index,
-    custom_regex_index,
-    legal_forms_index,
-    triggers_index,
-    literals_index,
-  ) = (
+  counts.literals = indexes.literals.index.len();
+  let regex = PreparedSearchSlot::from_timed(
+    DiagnosticStage::PrepareRegex,
+    counts.regex,
     indexes.regex,
+  );
+  let custom_regex = PreparedSearchSlot::from_timed(
+    DiagnosticStage::PrepareCustomRegex,
+    counts.custom_regex,
     indexes.custom_regex,
+  );
+  let legal_forms = PreparedSearchSlot::from_timed(
+    DiagnosticStage::PrepareLegalFormSearch,
+    counts.legal_forms,
     indexes.legal_forms,
+  );
+  let triggers = PreparedSearchSlot::from_timed(
+    DiagnosticStage::PrepareTriggerSearch,
+    counts.triggers,
     indexes.triggers,
+  );
+  let literals = PreparedSearchSlot::from_timed(
+    DiagnosticStage::PrepareLiteral,
+    counts.literals,
     indexes.literals,
   );
-  let regex = regex_index.index;
-  let custom_regex = custom_regex_index.index;
-  let legal_forms = legal_forms_index.index;
-  let triggers = triggers_index.index;
-  let literals = literals_index.index;
-  counts.literals = literals.len();
-  record_search_index_prepare_stages(
-    diagnostics,
-    &SearchIndexPrepareMetrics {
-      regex: SearchIndexPrepareMetric {
-        pattern_count: counts.regex,
-        elapsed_us: regex_index.elapsed_us,
-        stats: regex_index.stats,
-      },
-      custom_regex: SearchIndexPrepareMetric {
-        pattern_count: counts.custom_regex,
-        elapsed_us: custom_regex_index.elapsed_us,
-        stats: custom_regex_index.stats,
-      },
-      legal_forms: SearchIndexPrepareMetric {
-        pattern_count: counts.legal_forms,
-        elapsed_us: legal_forms_index.elapsed_us,
-        stats: legal_forms_index.stats,
-      },
-      triggers: SearchIndexPrepareMetric {
-        pattern_count: counts.triggers,
-        elapsed_us: triggers_index.elapsed_us,
-        stats: triggers_index.stats,
-      },
-      literals: SearchIndexPrepareMetric {
-        pattern_count: counts.literals,
-        elapsed_us: literals_index.elapsed_us,
-        stats: literals_index.stats,
-      },
-    },
-  );
+  let metrics = [
+    regex.metric,
+    custom_regex.metric,
+    legal_forms.metric,
+    triggers.metric,
+    literals.metric,
+  ];
+  record_search_index_prepare_stages(diagnostics, &metrics);
 
   Ok(PreparedEngineIndexBundle {
-    regex,
-    custom_regex,
-    legal_forms,
-    triggers,
-    literals,
+    regex: regex.index,
+    custom_regex: custom_regex.index,
+    legal_forms: legal_forms.index,
+    triggers: triggers.index,
+    literals: literals.index,
     counts,
   })
 }
 
+impl PreparedSearchSlot {
+  fn from_timed(
+    stage: DiagnosticStage,
+    pattern_count: usize,
+    timed: TimedSearchIndex,
+  ) -> Self {
+    Self {
+      index: timed.index,
+      metric: SearchIndexPrepareMetric {
+        stage,
+        pattern_count,
+        elapsed_us: timed.elapsed_us,
+        stats: timed.stats,
+      },
+    }
+  }
+}
+
 fn record_search_index_prepare_stages(
   diagnostics: &mut Option<&mut StaticRedactionDiagnostics>,
-  metrics: &SearchIndexPrepareMetrics,
+  metrics: &[SearchIndexPrepareMetric],
 ) {
-  let stages = [
-    (DiagnosticStage::PrepareRegex, &metrics.regex),
-    (DiagnosticStage::PrepareCustomRegex, &metrics.custom_regex),
-    (
-      DiagnosticStage::PrepareLegalFormSearch,
-      &metrics.legal_forms,
-    ),
-    (DiagnosticStage::PrepareTriggerSearch, &metrics.triggers),
-    (DiagnosticStage::PrepareLiteral, &metrics.literals),
-  ];
-  for (stage, metric) in stages {
+  for metric in metrics {
     record_prepare_stage_elapsed(
       diagnostics,
-      stage,
+      metric.stage,
       metric.pattern_count,
       metric.elapsed_us,
     );
     if let Some(diagnostics) = diagnostics.as_deref_mut() {
-      diagnostics.record_search_build_slot_summaries(stage, &metric.stats);
+      diagnostics
+        .record_search_build_slot_summaries(metric.stage, &metric.stats);
     }
   }
 }
