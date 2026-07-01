@@ -8,6 +8,8 @@ use super::timing::{TimedEntities, elapsed_us};
 
 mod prelude;
 
+// New detector modules own their rule metadata and expose a `RULES` slice.
+// This module only fixes cross-module execution order.
 macro_rules! static_detectors {
   (
     $(
