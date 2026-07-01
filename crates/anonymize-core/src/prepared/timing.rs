@@ -49,13 +49,13 @@ pub(super) struct TimedSearchBranches {
 }
 
 pub(super) struct StaticEntityPasses {
-  layers: Vec<DetectorEntityPass>,
+  layers: [Option<TimedEntities>; StaticDetectorId::COUNT],
 }
 
 impl StaticEntityPasses {
-  pub(super) fn with_capacity(capacity: usize) -> Self {
+  pub(super) fn new() -> Self {
     Self {
-      layers: Vec::with_capacity(capacity),
+      layers: std::array::from_fn(|_| None),
     }
   }
 
@@ -63,7 +63,8 @@ impl StaticEntityPasses {
     self
       .layers
       .iter()
-      .map(|layer| layer.timed.entities.len())
+      .filter_map(Option::as_ref)
+      .map(|timed| timed.entities.len())
       .fold(0usize, usize::saturating_add)
   }
 
@@ -80,9 +81,9 @@ impl StaticEntityPasses {
   ) -> &TimedEntities {
     self
       .layers
-      .iter()
-      .find(|layer| layer.detector == detector)
-      .map_or(&EMPTY_TIMED_ENTITIES, |layer| &layer.timed)
+      .get(detector.index())
+      .and_then(Option::as_ref)
+      .unwrap_or(&EMPTY_TIMED_ENTITIES)
   }
 
   pub(super) fn push_detector_entities(
@@ -90,18 +91,25 @@ impl StaticEntityPasses {
     detector: StaticDetectorId,
     entities: TimedEntities,
   ) {
-    debug_assert!(
-      self.layers.iter().all(|layer| layer.detector != detector),
-      "static detector passes are append-only",
-    );
-    self.layers.push(DetectorEntityPass {
-      detector,
-      timed: entities,
-    });
+    let Some(slot) = self.layers.get_mut(detector.index()) else {
+      debug_assert!(false, "static detector index must be in bounds");
+      return;
+    };
+    debug_assert!(slot.is_none(), "static detector passes are append-only");
+    *slot = Some(entities);
   }
 
   pub(super) fn into_layers(self) -> Vec<DetectorEntityPass> {
-    self.layers
+    let mut layers = Vec::with_capacity(StaticDetectorId::COUNT);
+    for (detector, timed) in
+      StaticDetectorId::ORDER.into_iter().zip(self.layers)
+    {
+      let Some(timed) = timed else {
+        continue;
+      };
+      layers.push(DetectorEntityPass { detector, timed });
+    }
+    layers
   }
 }
 

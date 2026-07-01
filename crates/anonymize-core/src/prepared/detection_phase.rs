@@ -56,8 +56,7 @@ impl PreparedEngine {
     full_text: &str,
     mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
   ) -> Result<StaticEntityPasses> {
-    let mut passes =
-      StaticEntityPasses::with_capacity(STATIC_ENTITY_RULES.len());
+    let mut passes = StaticEntityPasses::new();
     let context = StaticDetectorContext {
       engine: self,
       matches,
