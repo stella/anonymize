@@ -115,9 +115,13 @@ function runParent() {
         preloadedClickMs: tsPreloaded.runMs,
         preloadedWarmClickMs: tsPreloaded.warmAvgMs,
         prepareTopStages: tsCold.prepareTopStages,
+        prepareTopSlots: tsCold.prepareTopSlots,
         warmupTopStages: tsCold.warmupTopStages,
+        warmupTopSlots: tsCold.warmupTopSlots,
         preloadedPrepareTopStages: tsPreloaded.prepareTopStages,
+        preloadedPrepareTopSlots: tsPreloaded.prepareTopSlots,
         preloadedWarmupTopStages: tsPreloaded.warmupTopStages,
+        preloadedWarmupTopSlots: tsPreloaded.warmupTopSlots,
         runTopFixtures: tsCold.runTopFixtures,
         fixtureTimings: tsCold.fixtureTimings,
         preloadedFixtureTimings: tsPreloaded.fixtureTimings,
@@ -162,15 +166,16 @@ async function runWorker() {
     warmup: nativeNode.DEFAULT_NATIVE_PIPELINE_WARMUPS.none,
   });
   const loadMs = elapsedMs(loadStart);
-  const prepareTopStages = topDiagnosticStages(
-    pipeline.prepareDiagnosticsJson(),
-  );
+  const prepareDiagnosticsJson = pipeline.prepareDiagnosticsJson();
+  const prepareTopStages = topDiagnosticStages(prepareDiagnosticsJson);
+  const prepareTopSlots = topDiagnosticSlots(prepareDiagnosticsJson);
   const warmupStart = PRELOAD ? Bun.nanoseconds() : null;
   const warmupDiagnostics = PRELOAD
     ? pipeline.warmLazyRegexDiagnosticsJson()
     : null;
   const warmupMs = warmupStart === null ? 0 : elapsedMs(warmupStart);
   const warmupTopStages = topDiagnosticStages(warmupDiagnostics);
+  const warmupTopSlots = topDiagnosticSlots(warmupDiagnostics);
   const prepareMs = roundMs(loadMs + warmupMs);
 
   const coldRun = runFixtures(pipeline, fixtures);
@@ -194,7 +199,9 @@ async function runWorker() {
       runMs: coldRun.ms,
       warmAvgMs,
       prepareTopStages,
+      prepareTopSlots,
       warmupTopStages,
+      warmupTopSlots,
       fixtureTimings: summarizeFixtureTimings(coldRun, warmRuns),
       runTopFixtures: coldRun.fixtures
         .toSorted((left, right) => right.ms - left.ms)
@@ -278,7 +285,9 @@ function aggregateWorkerSamples(samples) {
     runMs: medianMs(samples.map((sample) => sample.runMs)),
     warmAvgMs: medianMs(samples.map((sample) => sample.warmAvgMs)),
     prepareTopStages: representativePrepare.prepareTopStages,
+    prepareTopSlots: representativePrepare.prepareTopSlots,
     warmupTopStages: representativeWarmup.warmupTopStages,
+    warmupTopSlots: representativeWarmup.warmupTopSlots,
     fixtureTimings: {
       cold: summarizeMs(byFixture.map((fixture) => fixture.coldMs)),
       warm: summarizeMs(byFixture.map((fixture) => fixture.warmAvgMs)),
@@ -557,9 +566,13 @@ function summarizeAdapterScenario(adapter, cold, preloaded) {
     samples: cold.samples,
     preloadedSamples: preloaded.samples,
     prepareTopStages: cold.prepareTopStages,
+    prepareTopSlots: cold.prepareTopSlots,
     warmupTopStages: cold.warmupTopStages,
+    warmupTopSlots: cold.warmupTopSlots,
     preloadedPrepareTopStages: preloaded.prepareTopStages,
+    preloadedPrepareTopSlots: preloaded.prepareTopSlots,
     preloadedWarmupTopStages: preloaded.warmupTopStages,
+    preloadedWarmupTopSlots: preloaded.warmupTopSlots,
     runTopFixtures: cold.runTopFixtures,
     fixtureTimings: cold.fixtureTimings,
     preloadedFixtureTimings: preloaded.fixtureTimings,
@@ -599,8 +612,11 @@ function summarizePerfAdapter(adapter) {
     fixtureTimings: adapter.fixtureTimings,
     preloadedFixtureTimings: adapter.preloadedFixtureTimings,
     prepareTopStages: adapter.prepareTopStages.slice(0, 6),
+    prepareTopSlots: adapter.prepareTopSlots.slice(0, 8),
     preloadedPrepareTopStages: adapter.preloadedPrepareTopStages.slice(0, 6),
+    preloadedPrepareTopSlots: adapter.preloadedPrepareTopSlots.slice(0, 8),
     preloadedWarmupTopStages: adapter.preloadedWarmupTopStages.slice(0, 6),
+    preloadedWarmupTopSlots: adapter.preloadedWarmupTopSlots.slice(0, 8),
     runTopFixtures: adapter.runTopFixtures.slice(0, 5),
   };
 }
@@ -695,15 +711,7 @@ function percentile(sortedValues, percentileValue) {
 }
 
 function topDiagnosticStages(diagnosticsJson) {
-  if (diagnosticsJson === null) {
-    return [];
-  }
-  const parsed = JSON.parse(diagnosticsJson);
-  const events = parsed.events ?? parsed.diagnostics?.events;
-  if (!Array.isArray(events)) {
-    return [];
-  }
-  return events
+  return diagnosticEvents(diagnosticsJson)
     .filter((event) => typeof event.stage === "string")
     .map((event) => ({
       phase:
@@ -725,10 +733,58 @@ function topDiagnosticStages(diagnosticsJson) {
       count: typeof event.count === "number" ? event.count : null,
       inputBytes:
         typeof event.input_bytes === "number" ? event.input_bytes : null,
+      patternCount:
+        typeof event.pattern_count === "number" ? event.pattern_count : null,
+      artifactCount:
+        typeof event.artifact_count === "number" ? event.artifact_count : null,
+      artifactBytes:
+        typeof event.artifact_bytes === "number" ? event.artifact_bytes : null,
     }))
     .filter((event) => event.elapsedMs !== null)
     .toSorted((left, right) => (right.elapsedMs ?? 0) - (left.elapsedMs ?? 0))
     .slice(0, 10);
+}
+
+function topDiagnosticSlots(diagnosticsJson) {
+  return diagnosticEvents(diagnosticsJson)
+    .filter(
+      (event) =>
+        typeof event.stage === "string" &&
+        typeof event.slot === "number" &&
+        typeof event.elapsed_us === "number",
+    )
+    .map((event) => ({
+      phase:
+        typeof event.phase === "string"
+          ? event.phase
+          : diagnosticPhaseFromStage(event.stage),
+      stage: event.stage,
+      slot: event.slot,
+      subslot: typeof event.subslot === "number" ? event.subslot : null,
+      engine: typeof event.engine === "string" ? event.engine : null,
+      pattern: typeof event.pattern === "number" ? event.pattern : null,
+      patternCount:
+        typeof event.pattern_count === "number" ? event.pattern_count : null,
+      elapsedMs: roundMs(event.elapsed_us / 1_000),
+      count: typeof event.count === "number" ? event.count : null,
+      inputBytes:
+        typeof event.input_bytes === "number" ? event.input_bytes : null,
+      artifactCount:
+        typeof event.artifact_count === "number" ? event.artifact_count : null,
+      artifactBytes:
+        typeof event.artifact_bytes === "number" ? event.artifact_bytes : null,
+    }))
+    .toSorted((left, right) => right.elapsedMs - left.elapsedMs)
+    .slice(0, 20);
+}
+
+function diagnosticEvents(diagnosticsJson) {
+  if (diagnosticsJson === null) {
+    return [];
+  }
+  const parsed = JSON.parse(diagnosticsJson);
+  const events = parsed.events ?? parsed.diagnostics?.events;
+  return Array.isArray(events) ? events : [];
 }
 
 function diagnosticScopeFromStageSummary({ stage, slot }) {
@@ -1224,13 +1280,15 @@ def hash_signature(value):
         ).encode("utf-8")
     ).hexdigest()[:16]
 
-def top_diagnostic_stages(diagnostics_json):
+def diagnostic_events(diagnostics_json):
     if diagnostics_json is None:
         return []
     parsed = json.loads(diagnostics_json)
     events = parsed.get("events") or parsed.get("diagnostics", {}).get("events")
-    if not isinstance(events, list):
-        return []
+    return events if isinstance(events, list) else []
+
+def top_diagnostic_stages(diagnostics_json):
+    events = diagnostic_events(diagnostics_json)
     stages = []
     for event in events:
         stage = event.get("stage")
@@ -1245,9 +1303,42 @@ def top_diagnostic_stages(diagnostics_json):
                 "elapsedMs": round_ms(elapsed_us / 1_000),
                 "count": event.get("count") if isinstance(event.get("count"), int) else None,
                 "inputBytes": event.get("input_bytes") if isinstance(event.get("input_bytes"), int) else None,
+                "patternCount": event.get("pattern_count") if isinstance(event.get("pattern_count"), int) else None,
+                "artifactCount": event.get("artifact_count") if isinstance(event.get("artifact_count"), int) else None,
+                "artifactBytes": event.get("artifact_bytes") if isinstance(event.get("artifact_bytes"), int) else None,
             }
         )
     return sorted(stages, key=lambda event: event["elapsedMs"], reverse=True)[:10]
+
+def top_diagnostic_slots(diagnostics_json):
+    slots = []
+    for event in diagnostic_events(diagnostics_json):
+        stage = event.get("stage")
+        slot = event.get("slot")
+        elapsed_us = event.get("elapsed_us")
+        if (
+            not isinstance(stage, str)
+            or not isinstance(slot, int)
+            or not isinstance(elapsed_us, (int, float))
+        ):
+            continue
+        slots.append(
+            {
+                "phase": event.get("phase") if isinstance(event.get("phase"), str) else diagnostic_phase_from_stage(stage),
+                "stage": stage,
+                "slot": slot,
+                "subslot": event.get("subslot") if isinstance(event.get("subslot"), int) else None,
+                "engine": event.get("engine") if isinstance(event.get("engine"), str) else None,
+                "pattern": event.get("pattern") if isinstance(event.get("pattern"), int) else None,
+                "patternCount": event.get("pattern_count") if isinstance(event.get("pattern_count"), int) else None,
+                "elapsedMs": round_ms(elapsed_us / 1_000),
+                "count": event.get("count") if isinstance(event.get("count"), int) else None,
+                "inputBytes": event.get("input_bytes") if isinstance(event.get("input_bytes"), int) else None,
+                "artifactCount": event.get("artifact_count") if isinstance(event.get("artifact_count"), int) else None,
+                "artifactBytes": event.get("artifact_bytes") if isinstance(event.get("artifact_bytes"), int) else None,
+            }
+        )
+    return sorted(slots, key=lambda event: event["elapsedMs"], reverse=True)[:20]
 
 def diagnostic_scope_from_stage_summary(stage, slot):
     if isinstance(slot, int):
@@ -1310,7 +1401,9 @@ def main():
         warmup="none",
     )
     load_ms = elapsed_ms(load_start)
-    prepare_top_stages = top_diagnostic_stages(pipeline.prepare_diagnostics_json())
+    prepare_diagnostics_json = pipeline.prepare_diagnostics_json()
+    prepare_top_stages = top_diagnostic_stages(prepare_diagnostics_json)
+    prepare_top_slots = top_diagnostic_slots(prepare_diagnostics_json)
     if payload["preload"]:
         warmup_start = time.perf_counter_ns()
         warmup_diagnostics = pipeline.warm_lazy_regex_diagnostics_json()
@@ -1319,6 +1412,7 @@ def main():
         warmup_diagnostics = None
         warmup_ms = 0
     warmup_top_stages = top_diagnostic_stages(warmup_diagnostics)
+    warmup_top_slots = top_diagnostic_slots(warmup_diagnostics)
     prepare_ms = round_ms(load_ms + warmup_ms)
     cold_run = run_fixtures(pipeline, payload["fixtures"], result_mode)
     warm_runs = [
@@ -1344,7 +1438,9 @@ def main():
                 "runMs": cold_run["ms"],
                 "warmAvgMs": warm_avg_ms,
                 "prepareTopStages": prepare_top_stages,
+                "prepareTopSlots": prepare_top_slots,
                 "warmupTopStages": warmup_top_stages,
+                "warmupTopSlots": warmup_top_slots,
                 "fixtureTimings": summarize_fixture_timings(cold_run, warm_runs),
                 "runTopFixtures": [
                     public_fixture_timing(fixture)
