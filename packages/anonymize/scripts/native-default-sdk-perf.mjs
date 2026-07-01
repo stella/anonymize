@@ -179,6 +179,7 @@ async function runWorker() {
   const prepareMs = roundMs(loadMs + warmupMs);
 
   const coldRun = runFixtures(pipeline, fixtures);
+  const runProfile = profileSlowestFixture(pipeline, coldRun, fixtures);
   const warmRuns = [];
   for (let index = 0; index < WARM_ITERATIONS; index += 1) {
     warmRuns.push(runFixtures(pipeline, fixtures));
@@ -202,6 +203,7 @@ async function runWorker() {
       prepareTopSlots,
       warmupTopStages,
       warmupTopSlots,
+      runProfile,
       fixtureTimings: summarizeFixtureTimings(coldRun, warmRuns),
       runTopFixtures: coldRun.fixtures
         .toSorted((left, right) => right.ms - left.ms)
@@ -466,6 +468,28 @@ function runFixture(pipeline, text) {
   };
 }
 
+function profileSlowestFixture(pipeline, coldRun, fixtures) {
+  const slowest = coldRun.fixtures
+    .toSorted((left, right) => right.ms - left.ms)
+    .at(0);
+  if (slowest === undefined) {
+    return null;
+  }
+  const fixture = fixtures.find(
+    (candidate) => candidate.fixture === slowest.fixture,
+  );
+  if (fixture === undefined) {
+    return null;
+  }
+  const diagnosticsJson = pipeline.summary_diagnostics_json(fixture.text);
+  return {
+    fixture: slowest.fixture,
+    coldMs: slowest.ms,
+    topStages: topRuntimeDiagnosticStages(diagnosticsJson),
+    topSlots: topRuntimeDiagnosticSlots(diagnosticsJson),
+  };
+}
+
 function publicFixtureTiming({ fixture, ms, entityCount, redactedTextLength }) {
   return { fixture, ms, entityCount, redactedTextLength };
 }
@@ -573,6 +597,8 @@ function summarizeAdapterScenario(adapter, cold, preloaded) {
     preloadedPrepareTopSlots: preloaded.prepareTopSlots,
     preloadedWarmupTopStages: preloaded.warmupTopStages,
     preloadedWarmupTopSlots: preloaded.warmupTopSlots,
+    runProfile: cold.runProfile,
+    preloadedRunProfile: preloaded.runProfile,
     runTopFixtures: cold.runTopFixtures,
     fixtureTimings: cold.fixtureTimings,
     preloadedFixtureTimings: preloaded.fixtureTimings,
@@ -617,6 +643,8 @@ function summarizePerfAdapter(adapter) {
     preloadedPrepareTopSlots: adapter.preloadedPrepareTopSlots.slice(0, 8),
     preloadedWarmupTopStages: adapter.preloadedWarmupTopStages.slice(0, 6),
     preloadedWarmupTopSlots: adapter.preloadedWarmupTopSlots.slice(0, 8),
+    runProfile: adapter.runProfile,
+    preloadedRunProfile: adapter.preloadedRunProfile,
     runTopFixtures: adapter.runTopFixtures.slice(0, 5),
   };
 }
@@ -711,6 +739,16 @@ function percentile(sortedValues, percentileValue) {
 }
 
 function topDiagnosticStages(diagnosticsJson) {
+  return diagnosticStageSummaries(diagnosticsJson).slice(0, 10);
+}
+
+function topRuntimeDiagnosticStages(diagnosticsJson) {
+  return diagnosticStageSummaries(diagnosticsJson)
+    .filter(isRuntimeDiagnosticSummary)
+    .slice(0, 10);
+}
+
+function diagnosticStageSummaries(diagnosticsJson) {
   return diagnosticEvents(diagnosticsJson)
     .filter((event) => typeof event.stage === "string")
     .map((event) => ({
@@ -741,11 +779,20 @@ function topDiagnosticStages(diagnosticsJson) {
         typeof event.artifact_bytes === "number" ? event.artifact_bytes : null,
     }))
     .filter((event) => event.elapsedMs !== null)
-    .toSorted((left, right) => (right.elapsedMs ?? 0) - (left.elapsedMs ?? 0))
-    .slice(0, 10);
+    .toSorted((left, right) => (right.elapsedMs ?? 0) - (left.elapsedMs ?? 0));
 }
 
 function topDiagnosticSlots(diagnosticsJson) {
+  return diagnosticSlotSummaries(diagnosticsJson).slice(0, 20);
+}
+
+function topRuntimeDiagnosticSlots(diagnosticsJson) {
+  return diagnosticSlotSummaries(diagnosticsJson)
+    .filter(isRuntimeDiagnosticSummary)
+    .slice(0, 20);
+}
+
+function diagnosticSlotSummaries(diagnosticsJson) {
   return diagnosticEvents(diagnosticsJson)
     .filter(
       (event) =>
@@ -774,8 +821,11 @@ function topDiagnosticSlots(diagnosticsJson) {
       artifactBytes:
         typeof event.artifact_bytes === "number" ? event.artifact_bytes : null,
     }))
-    .toSorted((left, right) => right.elapsedMs - left.elapsedMs)
-    .slice(0, 20);
+    .toSorted((left, right) => right.elapsedMs - left.elapsedMs);
+}
+
+function isRuntimeDiagnosticSummary(event) {
+  return event.phase !== "prepare" && event.phase !== "warm";
 }
 
 function diagnosticEvents(diagnosticsJson) {
@@ -1151,6 +1201,32 @@ def run_fixture(pipeline, text, result_mode):
         "redactedTextLength": len(result.redaction.redacted_text),
     }
 
+def profile_slowest_fixture(pipeline, cold_run, fixtures):
+    if len(cold_run["fixtures"]) == 0:
+        return None
+    slowest = sorted(
+        cold_run["fixtures"],
+        key=lambda fixture: fixture["ms"],
+        reverse=True,
+    )[0]
+    fixture = next(
+        (
+            candidate
+            for candidate in fixtures
+            if candidate["fixture"] == slowest["fixture"]
+        ),
+        None,
+    )
+    if fixture is None:
+        return None
+    diagnostics_json = pipeline.summary_diagnostics_json(fixture["text"])
+    return {
+        "fixture": slowest["fixture"],
+        "coldMs": slowest["ms"],
+        "topStages": top_runtime_diagnostic_stages(diagnostics_json),
+        "topSlots": top_runtime_diagnostic_slots(diagnostics_json),
+    }
+
 def public_fixture_timing(fixture):
     return {
         "fixture": fixture["fixture"],
@@ -1288,6 +1364,16 @@ def diagnostic_events(diagnostics_json):
     return events if isinstance(events, list) else []
 
 def top_diagnostic_stages(diagnostics_json):
+    return diagnostic_stage_summaries(diagnostics_json)[:10]
+
+def top_runtime_diagnostic_stages(diagnostics_json):
+    return [
+        event
+        for event in diagnostic_stage_summaries(diagnostics_json)
+        if is_runtime_diagnostic_summary(event)
+    ][:10]
+
+def diagnostic_stage_summaries(diagnostics_json):
     events = diagnostic_events(diagnostics_json)
     stages = []
     for event in events:
@@ -1308,9 +1394,19 @@ def top_diagnostic_stages(diagnostics_json):
                 "artifactBytes": event.get("artifact_bytes") if isinstance(event.get("artifact_bytes"), int) else None,
             }
         )
-    return sorted(stages, key=lambda event: event["elapsedMs"], reverse=True)[:10]
+    return sorted(stages, key=lambda event: event["elapsedMs"], reverse=True)
 
 def top_diagnostic_slots(diagnostics_json):
+    return diagnostic_slot_summaries(diagnostics_json)[:20]
+
+def top_runtime_diagnostic_slots(diagnostics_json):
+    return [
+        event
+        for event in diagnostic_slot_summaries(diagnostics_json)
+        if is_runtime_diagnostic_summary(event)
+    ][:20]
+
+def diagnostic_slot_summaries(diagnostics_json):
     slots = []
     for event in diagnostic_events(diagnostics_json):
         stage = event.get("stage")
@@ -1338,7 +1434,10 @@ def top_diagnostic_slots(diagnostics_json):
                 "artifactBytes": event.get("artifact_bytes") if isinstance(event.get("artifact_bytes"), int) else None,
             }
         )
-    return sorted(slots, key=lambda event: event["elapsedMs"], reverse=True)[:20]
+    return sorted(slots, key=lambda event: event["elapsedMs"], reverse=True)
+
+def is_runtime_diagnostic_summary(event):
+    return event["phase"] != "prepare" and event["phase"] != "warm"
 
 def diagnostic_scope_from_stage_summary(stage, slot):
     if isinstance(slot, int):
@@ -1415,6 +1514,11 @@ def main():
     warmup_top_slots = top_diagnostic_slots(warmup_diagnostics)
     prepare_ms = round_ms(load_ms + warmup_ms)
     cold_run = run_fixtures(pipeline, payload["fixtures"], result_mode)
+    run_profile = profile_slowest_fixture(
+        pipeline,
+        cold_run,
+        payload["fixtures"],
+    )
     warm_runs = [
         run_fixtures(pipeline, payload["fixtures"], result_mode)
         for _ in range(payload["warm_iterations"])
@@ -1441,6 +1545,7 @@ def main():
                 "prepareTopSlots": prepare_top_slots,
                 "warmupTopStages": warmup_top_stages,
                 "warmupTopSlots": warmup_top_slots,
+                "runProfile": run_profile,
                 "fixtureTimings": summarize_fixture_timings(cold_run, warm_runs),
                 "runTopFixtures": [
                     public_fixture_timing(fixture)
