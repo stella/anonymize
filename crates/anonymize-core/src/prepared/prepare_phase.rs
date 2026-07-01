@@ -20,6 +20,7 @@ use super::timing::elapsed_us;
 use super::{
   PreparedEngine, PreparedEngineConfig, PreparedEngineDetectorConfig,
   PreparedEnginePolicyConfig, PreparedEngineSearchConfig,
+  PreparedEngineSlices,
 };
 
 #[bon::bon]
@@ -180,12 +181,36 @@ impl PreparedEngine {
       detectors.date_data.as_ref(),
       detectors.monetary_data.as_ref(),
     );
-    let (date_data, monetary_data) = prepare_anchored_data(
-      detectors.date_data.as_ref(),
-      detectors.monetary_data.take(),
+    let date_data_input = detectors.date_data.as_ref();
+    let monetary_data_input = detectors.monetary_data.take();
+    let search_input = SearchIndexConfigInput {
+      regex_patterns,
+      custom_regex_patterns,
+      literal_patterns,
+      regex_options,
+      custom_regex_options,
+      literal_options,
       anchored_len,
-      diagnostics.as_deref_mut(),
+    };
+    let collect_diagnostics = diagnostics.is_some();
+    let PreparedEnginePrepareBranches {
+      anchored,
+      index_bundle,
+      support_data,
+      diagnostics: branch_diagnostics,
+    } = prepare_engine_branches(
+      PrepareEngineBranchInput {
+        date_data: date_data_input,
+        monetary_data: monetary_data_input,
+        search: search_input,
+        support: support_input,
+        slices: &slices,
+        artifacts,
+        collect_diagnostics,
+      },
     )?;
+    append_prepare_branch_diagnostics(&mut diagnostics, branch_diagnostics);
+    let (date_data, monetary_data) = anchored;
     let PreparedEngineIndexBundle {
       regex,
       custom_regex,
@@ -193,21 +218,7 @@ impl PreparedEngine {
       triggers,
       literals,
       counts,
-    } = prepare_search_index_bundle(
-      SearchIndexConfigInput {
-        regex_patterns,
-        custom_regex_patterns,
-        literal_patterns,
-        regex_options,
-        custom_regex_options,
-        literal_options,
-        anchored_len,
-      },
-      &slices,
-      artifacts,
-      &mut diagnostics,
-    )?;
-    let support_data = prepare_support_data(support_input, &mut diagnostics)?;
+    } = index_bundle;
     record_prepare_total(
       &mut diagnostics,
       counts.total().saturating_add(support_data.count),
@@ -236,6 +247,169 @@ impl PreparedEngine {
       policy,
       data,
     })
+  }
+}
+
+type PreparedAnchoredData =
+  (Option<PreparedDateData>, Option<PreparedMonetaryData>);
+
+struct PrepareBranch<T> {
+  value: T,
+  diagnostics: Option<StaticRedactionDiagnostics>,
+}
+
+struct PrepareBranchDiagnostics {
+  anchored: Option<StaticRedactionDiagnostics>,
+  indexes: Option<StaticRedactionDiagnostics>,
+  support: Option<StaticRedactionDiagnostics>,
+}
+
+struct PrepareEngineBranchInput<'a> {
+  date_data: Option<&'a DateData>,
+  monetary_data: Option<MonetaryData>,
+  search: SearchIndexConfigInput,
+  support: super::support_prepare::SupportDataInput,
+  slices: &'a PreparedEngineSlices,
+  artifacts: Option<&'a PreparedEngineArtifactsView<'a>>,
+  collect_diagnostics: bool,
+}
+
+struct PreparedEnginePrepareBranches {
+  anchored: PreparedAnchoredData,
+  index_bundle: PreparedEngineIndexBundle,
+  support_data: PreparedSupportData,
+  diagnostics: PrepareBranchDiagnostics,
+}
+
+fn prepare_engine_branches(
+  input: PrepareEngineBranchInput<'_>,
+) -> Result<PreparedEnginePrepareBranches> {
+  let PrepareEngineBranchInput {
+    date_data,
+    monetary_data,
+    search,
+    support,
+    slices,
+    artifacts,
+    collect_diagnostics,
+  } = input;
+
+  std::thread::scope(|scope| {
+    let anchored = scope.spawn(move || {
+      prepare_anchored_branch(
+        date_data,
+        monetary_data,
+        search.anchored_len,
+        collect_diagnostics,
+      )
+    });
+    let indexes = scope.spawn(move || {
+      prepare_index_branch(
+        search,
+        slices,
+        artifacts,
+        collect_diagnostics,
+      )
+    });
+    let support_data = scope.spawn(move || {
+      prepare_support_branch(support, collect_diagnostics)
+    });
+
+    let anchored = join_prepare_branch(anchored, "anchored_data")?;
+    let indexes = join_prepare_branch(indexes, "search_indexes")?;
+    let support_data = join_prepare_branch(support_data, "support_data")?;
+
+    Ok(PreparedEnginePrepareBranches {
+      anchored: anchored.value,
+      index_bundle: indexes.value,
+      support_data: support_data.value,
+      diagnostics: PrepareBranchDiagnostics {
+        anchored: anchored.diagnostics,
+        indexes: indexes.diagnostics,
+        support: support_data.diagnostics,
+      },
+    })
+  })
+}
+
+fn prepare_anchored_branch(
+  date_data: Option<&DateData>,
+  monetary_data: Option<MonetaryData>,
+  anchored_len: usize,
+  collect_diagnostics: bool,
+) -> Result<PrepareBranch<PreparedAnchoredData>> {
+  let mut diagnostics = branch_diagnostics(collect_diagnostics);
+  let value = prepare_anchored_data(
+    date_data,
+    monetary_data,
+    anchored_len,
+    diagnostics.as_mut(),
+  )?;
+  Ok(PrepareBranch { value, diagnostics })
+}
+
+fn prepare_index_branch(
+  search: SearchIndexConfigInput,
+  slices: &PreparedEngineSlices,
+  artifacts: Option<&PreparedEngineArtifactsView<'_>>,
+  collect_diagnostics: bool,
+) -> Result<PrepareBranch<PreparedEngineIndexBundle>> {
+  let mut diagnostics = branch_diagnostics(collect_diagnostics);
+  let value = {
+    let mut diagnostics_ref = diagnostics.as_mut();
+    prepare_search_index_bundle(
+      search,
+      slices,
+      artifacts,
+      &mut diagnostics_ref,
+    )?
+  };
+  Ok(PrepareBranch { value, diagnostics })
+}
+
+fn prepare_support_branch(
+  support: super::support_prepare::SupportDataInput,
+  collect_diagnostics: bool,
+) -> Result<PrepareBranch<PreparedSupportData>> {
+  let mut diagnostics = branch_diagnostics(collect_diagnostics);
+  let value = {
+    let mut diagnostics_ref = diagnostics.as_mut();
+    prepare_support_data(support, &mut diagnostics_ref)?
+  };
+  Ok(PrepareBranch { value, diagnostics })
+}
+
+fn join_prepare_branch<T>(
+  handle: std::thread::ScopedJoinHandle<'_, Result<PrepareBranch<T>>>,
+  field: &'static str,
+) -> Result<PrepareBranch<T>> {
+  handle.join().map_err(|_| Error::InvalidStaticData {
+    field,
+    reason: "prepare branch panicked".to_owned(),
+  })?
+}
+
+fn branch_diagnostics(
+  collect: bool,
+) -> Option<StaticRedactionDiagnostics> {
+  collect.then(StaticRedactionDiagnostics::default)
+}
+
+fn append_prepare_branch_diagnostics(
+  diagnostics: &mut Option<&mut StaticRedactionDiagnostics>,
+  branch: PrepareBranchDiagnostics,
+) {
+  let Some(diagnostics) = diagnostics else {
+    return;
+  };
+  if let Some(anchored) = branch.anchored {
+    diagnostics.extend(anchored);
+  }
+  if let Some(indexes) = branch.indexes {
+    diagnostics.extend(indexes);
+  }
+  if let Some(support) = branch.support {
+    diagnostics.extend(support);
   }
 }
 
