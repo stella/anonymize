@@ -1829,13 +1829,13 @@ describe("native adapter parity", () => {
       .map(({ text }) => ({ operators: null, text }));
     const tsPipeline = getDefaultNativePipeline({
       binding: adapters.native,
-      language: "en",
+      language: "en-US",
     });
 
     expect(
       preloadDefaultNativePipeline({
         binding: adapters.native,
-        language: "en",
+        language: "en-US",
       }),
     ).toBe(tsPipeline);
 
@@ -1848,7 +1848,7 @@ describe("native adapter parity", () => {
       toBindingStaticResult(
         redact_default_text(text, operators ?? undefined, {
           binding: adapters.native,
-          language: "en",
+          language: "en-US",
         }),
       ),
     );
@@ -1856,13 +1856,13 @@ describe("native adapter parity", () => {
       JSON.parse(
         redact_default_text_json(text, operators ?? undefined, {
           binding: adapters.native,
-          language: "en",
+          language: "en-US",
         }),
       ),
     );
     const python = callPythonDefaultPackageParity({
       cases,
-      language: "en",
+      language: "en-US",
       pythonModulePath: adapters.pythonModulePath,
       tempDir: adapters.tempDir,
     });

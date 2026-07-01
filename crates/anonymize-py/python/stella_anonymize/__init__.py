@@ -601,7 +601,7 @@ def _default_native_pipeline_cache_key(
     if language is not None and package_path is not None:
         raise ValueError("Use either language or package_path, not both")
     return (
-        _normalize_default_native_pipeline_language(language)
+        _resolve_default_native_pipeline_language(language)
         if language is not None
         else None,
         str(package_path) if package_path is not None else None,
@@ -611,15 +611,35 @@ def _default_native_pipeline_cache_key(
 def _default_native_pipeline_package_name(language: str | None) -> str:
     if language is None:
         return DEFAULT_NATIVE_PIPELINE_PACKAGE
-    normalized = _normalize_default_native_pipeline_language(language)
-    return f"native-pipeline.{normalized}.stlanonpkg"
+    resolved = _resolve_default_native_pipeline_language(language)
+    return f"native-pipeline.{resolved}.stlanonpkg"
 
 
 def _default_native_pipeline_package_description(language: str | None) -> str:
     if language is None:
         return "Default native pipeline package"
+    resolved = _resolve_default_native_pipeline_language(language)
+    return f'Default native pipeline package for language "{resolved}"'
+
+
+def _resolve_default_native_pipeline_language(language: str) -> str:
     normalized = _normalize_default_native_pipeline_language(language)
-    return f'Default native pipeline package for language "{normalized}"'
+    if _default_native_pipeline_language_package_exists(normalized):
+        return normalized
+    base_language = normalized.split("-", maxsplit=1)[0]
+    if base_language != normalized and _default_native_pipeline_language_package_exists(
+        base_language
+    ):
+        return base_language
+    return normalized
+
+
+def _default_native_pipeline_language_package_exists(language: str) -> bool:
+    package_name = f"native-pipeline.{language}.stlanonpkg"
+    try:
+        return files(__name__).joinpath("native_packages", package_name).is_file()
+    except (FileNotFoundError, ModuleNotFoundError, OSError):
+        return False
 
 
 def _normalize_default_native_pipeline_language(language: str) -> str:
