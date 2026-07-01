@@ -1,6 +1,6 @@
 use crate::diagnostics::DiagnosticStage;
 use crate::legal_forms::process_legal_form_matches;
-use crate::prepared::detector_registry::{
+use crate::prepared::detector_contract::{
   StaticDetectorContext, StaticDetectorDiagnostics, StaticDetectorId,
   StaticDetectorInput, StaticDetectorRule, StaticDetectorSpec,
 };
@@ -11,17 +11,16 @@ use crate::types::Result;
 use super::timed_entities;
 
 pub(in crate::prepared) const LEGAL_FORM_RULE: StaticDetectorRule =
-  StaticDetectorRule::new(
-    StaticDetectorSpec::new(
+  StaticDetectorRule::declare(
+    StaticDetectorSpec::define(
       StaticDetectorId::LegalForm,
       DiagnosticStage::EntityLegalForm,
-      &[
-        StaticDetectorInput::RegexMatches,
-        StaticDetectorInput::LegalFormData,
-      ],
-      &[],
     )
-    .with_support_resources(&[SupportResourceId::LegalForms]),
+    .requires(&[
+      StaticDetectorInput::RegexMatches,
+      StaticDetectorInput::LegalFormData,
+    ])
+    .uses(&[SupportResourceId::LegalForms]),
     detect_legal_form,
   );
 

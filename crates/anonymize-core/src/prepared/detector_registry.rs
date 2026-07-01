@@ -1,150 +1,9 @@
-use crate::diagnostics::DiagnosticStage;
-use crate::diagnostics::StaticRedactionDiagnostics;
-use crate::types::Result;
-
-use super::PreparedEngine;
+use super::detector_contract::StaticDetectorRule;
 use super::detectors::{
   ADDRESS_SEED_RULE, ANCHORED_RULE, COUNTRY_RULE, CUSTOM_REGEX_RULE,
   DENY_LIST_RULE, GAZETTEER_RULE, LEGAL_FORM_RULE, NAME_CORPUS_RULE,
   REGEX_RULE, SIGNATURE_RULE, TRIGGER_RULE,
 };
-use super::results::PreparedEngineMatches;
-use super::support_resources::SupportResourceId;
-use super::timing::{StaticEntityPasses, TimedEntities};
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum StaticDetectorId {
-  Regex,
-  CustomRegex,
-  DenyList,
-  Gazetteer,
-  Country,
-  Anchored,
-  Trigger,
-  Signature,
-  LegalForm,
-  NameCorpus,
-  AddressSeed,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum StaticDetectorInput {
-  FullText,
-  RegexMatches,
-  CustomRegexMatches,
-  LiteralMatches,
-  RegexMeta,
-  CustomRegexMeta,
-  DenyListData,
-  GazetteerData,
-  CountryData,
-  DateData,
-  MonetaryData,
-  TriggerData,
-  SignatureData,
-  LegalFormData,
-  NameCorpusData,
-  AddressSeedData,
-  ContextEntities,
-  DenyListEntities,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) struct StaticDetectorSpec {
-  id: StaticDetectorId,
-  stage: DiagnosticStage,
-  required_inputs: &'static [StaticDetectorInput],
-  dependencies: &'static [StaticDetectorId],
-  support_resources: &'static [SupportResourceId],
-}
-
-impl StaticDetectorSpec {
-  pub(super) const fn new(
-    id: StaticDetectorId,
-    stage: DiagnosticStage,
-    required_inputs: &'static [StaticDetectorInput],
-    dependencies: &'static [StaticDetectorId],
-  ) -> Self {
-    Self {
-      id,
-      stage,
-      required_inputs,
-      dependencies,
-      support_resources: &[],
-    }
-  }
-
-  pub(super) const fn with_support_resources(
-    mut self,
-    support_resources: &'static [SupportResourceId],
-  ) -> Self {
-    self.support_resources = support_resources;
-    self
-  }
-
-  pub(super) const fn id(self) -> StaticDetectorId {
-    self.id
-  }
-
-  pub(super) const fn diagnostic_stage(self) -> DiagnosticStage {
-    self.stage
-  }
-
-  pub(super) const fn required_inputs(self) -> &'static [StaticDetectorInput] {
-    self.required_inputs
-  }
-
-  pub(super) const fn dependencies(self) -> &'static [StaticDetectorId] {
-    self.dependencies
-  }
-
-  pub(super) const fn support_resources(self) -> &'static [SupportResourceId] {
-    self.support_resources
-  }
-}
-
-pub(super) struct StaticDetectorContext<'a> {
-  pub(super) engine: &'a PreparedEngine,
-  pub(super) matches: &'a PreparedEngineMatches,
-  pub(super) full_text: &'a str,
-}
-
-pub(super) type StaticDetectorDiagnostics<'d> =
-  Option<&'d mut StaticRedactionDiagnostics>;
-
-pub(super) type StaticDetectFn = for<'a, 'p, 'd> fn(
-  &StaticDetectorContext<'a>,
-  &'p StaticEntityPasses,
-  StaticDetectorDiagnostics<'d>,
-) -> Result<TimedEntities>;
-
-#[derive(Clone, Copy)]
-pub(super) struct StaticDetectorRule {
-  spec: StaticDetectorSpec,
-  detect: StaticDetectFn,
-}
-
-impl StaticDetectorRule {
-  pub(super) const fn new(
-    spec: StaticDetectorSpec,
-    detect: StaticDetectFn,
-  ) -> Self {
-    Self { spec, detect }
-  }
-
-  pub(super) const fn spec(self) -> StaticDetectorSpec {
-    self.spec
-  }
-
-  pub(super) fn detect(
-    self,
-    context: &StaticDetectorContext<'_>,
-    passes: &StaticEntityPasses,
-    diagnostics: StaticDetectorDiagnostics<'_>,
-  ) -> Result<TimedEntities> {
-    (self.detect)(context, passes, diagnostics)
-  }
-}
 
 pub(super) static STATIC_ENTITY_RULES: &[StaticDetectorRule] = &[
   REGEX_RULE,
@@ -162,8 +21,8 @@ pub(super) static STATIC_ENTITY_RULES: &[StaticDetectorRule] = &[
 
 #[cfg(test)]
 mod tests {
-  use super::{STATIC_ENTITY_RULES, StaticDetectorId, SupportResourceId};
-  use crate::prepared::support_resources::SUPPORT_RESOURCES;
+  use super::STATIC_ENTITY_RULES;
+  use crate::prepared::detector_contract::StaticDetectorId;
 
   #[test]
   fn detector_registry_entries_declare_metadata() {
@@ -204,15 +63,23 @@ mod tests {
       }
       let mut support_resources = Vec::new();
       for resource in metadata.support_resources() {
+        let resource_spec = resource.spec();
         assert!(
           !support_resources.contains(resource),
           "detector support resources must be unique: {resource:?}",
         );
         support_resources.push(*resource);
+        let detector_input = resource_spec.detector_input();
         assert!(
-          support_resource_exists(*resource),
-          "detector support resource must be registered: {resource:?}",
+          detector_input.is_some(),
+          "detector support resource must expose a detector input",
         );
+        if let Some(input) = detector_input {
+          assert!(
+            metadata.required_inputs().contains(&input),
+            "detector support resource input must be declared: {input:?}",
+          );
+        }
       }
       ids.push(metadata.id());
       stages.push(metadata.diagnostic_stage());
@@ -255,11 +122,5 @@ mod tests {
     STATIC_ENTITY_RULES
       .iter()
       .any(|rule| rule.spec().id() == detector_id)
-  }
-
-  fn support_resource_exists(resource_id: SupportResourceId) -> bool {
-    SUPPORT_RESOURCES
-      .iter()
-      .any(|resource| resource.id() == resource_id)
   }
 }

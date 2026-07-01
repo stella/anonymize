@@ -3,7 +3,7 @@ use crate::resolution::PipelineEntity;
 use crate::types::{RedactionResult, SearchMatch};
 
 use super::PreparedEngine;
-use super::detector_registry::StaticDetectorId;
+use super::detector_contract::StaticDetectorId;
 use super::timing::StaticEntityPasses;
 
 #[derive(Clone, Debug, Eq, PartialEq)]

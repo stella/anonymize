@@ -1,5 +1,5 @@
 use crate::diagnostics::DiagnosticStage;
-use crate::prepared::detector_registry::{
+use crate::prepared::detector_contract::{
   StaticDetectorContext, StaticDetectorDiagnostics, StaticDetectorId,
   StaticDetectorInput, StaticDetectorRule, StaticDetectorSpec,
 };
@@ -11,17 +11,16 @@ use crate::types::Result;
 use super::timed_entities;
 
 pub(in crate::prepared) const SIGNATURE_RULE: StaticDetectorRule =
-  StaticDetectorRule::new(
-    StaticDetectorSpec::new(
+  StaticDetectorRule::declare(
+    StaticDetectorSpec::define(
       StaticDetectorId::Signature,
       DiagnosticStage::EntitySignature,
-      &[
-        StaticDetectorInput::FullText,
-        StaticDetectorInput::SignatureData,
-      ],
-      &[],
     )
-    .with_support_resources(&[SupportResourceId::Signature]),
+    .requires(&[
+      StaticDetectorInput::FullText,
+      StaticDetectorInput::SignatureData,
+    ])
+    .uses(&[SupportResourceId::Signature]),
     detect_signature,
   );
 

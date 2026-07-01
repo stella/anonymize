@@ -1,5 +1,5 @@
 use crate::diagnostics::DiagnosticStage;
-use crate::prepared::detector_registry::{
+use crate::prepared::detector_contract::{
   StaticDetectorContext, StaticDetectorDiagnostics, StaticDetectorId,
   StaticDetectorInput, StaticDetectorRule, StaticDetectorSpec,
 };
@@ -12,44 +12,41 @@ use crate::types::Result;
 use super::timed_entities;
 
 pub(in crate::prepared) const DENY_LIST_RULE: StaticDetectorRule =
-  StaticDetectorRule::new(
-    StaticDetectorSpec::new(
+  StaticDetectorRule::declare(
+    StaticDetectorSpec::define(
       StaticDetectorId::DenyList,
       DiagnosticStage::EntityDenyList,
-      &[
-        StaticDetectorInput::LiteralMatches,
-        StaticDetectorInput::DenyListData,
-      ],
-      &[],
-    ),
+    )
+    .requires(&[
+      StaticDetectorInput::LiteralMatches,
+      StaticDetectorInput::DenyListData,
+    ]),
     detect_deny_list,
   );
 
 pub(in crate::prepared) const GAZETTEER_RULE: StaticDetectorRule =
-  StaticDetectorRule::new(
-    StaticDetectorSpec::new(
+  StaticDetectorRule::declare(
+    StaticDetectorSpec::define(
       StaticDetectorId::Gazetteer,
       DiagnosticStage::EntityGazetteer,
-      &[
-        StaticDetectorInput::LiteralMatches,
-        StaticDetectorInput::GazetteerData,
-      ],
-      &[],
-    ),
+    )
+    .requires(&[
+      StaticDetectorInput::LiteralMatches,
+      StaticDetectorInput::GazetteerData,
+    ]),
     detect_gazetteer,
   );
 
 pub(in crate::prepared) const COUNTRY_RULE: StaticDetectorRule =
-  StaticDetectorRule::new(
-    StaticDetectorSpec::new(
+  StaticDetectorRule::declare(
+    StaticDetectorSpec::define(
       StaticDetectorId::Country,
       DiagnosticStage::EntityCountry,
-      &[
-        StaticDetectorInput::LiteralMatches,
-        StaticDetectorInput::CountryData,
-      ],
-      &[],
-    ),
+    )
+    .requires(&[
+      StaticDetectorInput::LiteralMatches,
+      StaticDetectorInput::CountryData,
+    ]),
     detect_country,
   );
 

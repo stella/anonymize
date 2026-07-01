@@ -1,5 +1,5 @@
 use crate::diagnostics::DiagnosticStage;
-use crate::prepared::detector_registry::{
+use crate::prepared::detector_contract::{
   StaticDetectorContext, StaticDetectorDiagnostics, StaticDetectorId,
   StaticDetectorInput, StaticDetectorRule, StaticDetectorSpec,
 };
@@ -11,17 +11,16 @@ use crate::types::Result;
 use super::timed_entities;
 
 pub(in crate::prepared) const TRIGGER_RULE: StaticDetectorRule =
-  StaticDetectorRule::new(
-    StaticDetectorSpec::new(
+  StaticDetectorRule::declare(
+    StaticDetectorSpec::define(
       StaticDetectorId::Trigger,
       DiagnosticStage::EntityTrigger,
-      &[
-        StaticDetectorInput::RegexMatches,
-        StaticDetectorInput::TriggerData,
-      ],
-      &[],
     )
-    .with_support_resources(&[SupportResourceId::Triggers]),
+    .requires(&[
+      StaticDetectorInput::RegexMatches,
+      StaticDetectorInput::TriggerData,
+    ])
+    .uses(&[SupportResourceId::Triggers]),
     detect_trigger,
   );
 

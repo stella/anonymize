@@ -4,12 +4,12 @@ use crate::diagnostics::{DiagnosticStage, StaticRedactionDiagnostics};
 use crate::types::Result;
 
 use super::PreparedEngine;
-use super::detector_registry::{STATIC_ENTITY_RULES, StaticDetectorContext};
+use super::detector_contract::StaticDetectorContext;
+use super::detector_registry::STATIC_ENTITY_RULES;
 use super::phase::record_detector_entities;
 use super::results::{
   PreparedEngineMatches, StaticDetectionResult, StaticEntityLayers,
 };
-use super::support_resources::support_resource_exists;
 use super::timing::{StaticEntityPasses, elapsed_us};
 
 impl PreparedEngine {
@@ -70,11 +70,14 @@ impl PreparedEngine {
         "static detector registry entries must declare required inputs",
       );
       debug_assert!(
-        spec
-          .support_resources()
-          .iter()
-          .all(|resource| support_resource_exists(*resource)),
-        "static detector support resources must be registered",
+        spec.support_resources().iter().all(|resource| {
+          let resource_spec = resource.spec();
+          resource_spec.id() == *resource
+            && resource_spec
+              .detector_input()
+              .is_some_and(|input| spec.required_inputs().contains(&input))
+        }),
+        "static detector support resources must expose declared inputs",
       );
       let entities =
         rule.detect(&context, &passes, diagnostics.as_deref_mut())?;

@@ -4,7 +4,7 @@ use crate::diagnostics::{DiagnosticStage, StaticRedactionDiagnostics};
 use crate::resolution::PipelineEntity;
 use crate::types::Result;
 
-use super::detector_registry::StaticDetectorSpec;
+use super::detector_contract::StaticDetectorSpec;
 use super::diagnostic_stream::DiagnosticEventStream;
 use super::timing::{TimedEntities, elapsed_us};
 

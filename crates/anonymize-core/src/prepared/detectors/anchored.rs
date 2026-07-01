@@ -1,5 +1,5 @@
 use crate::diagnostics::DiagnosticStage;
-use crate::prepared::detector_registry::{
+use crate::prepared::detector_contract::{
   StaticDetectorContext, StaticDetectorDiagnostics, StaticDetectorId,
   StaticDetectorInput, StaticDetectorRule, StaticDetectorSpec,
 };
@@ -9,17 +9,16 @@ use crate::types::Result;
 use super::timed_entities;
 
 pub(in crate::prepared) const ANCHORED_RULE: StaticDetectorRule =
-  StaticDetectorRule::new(
-    StaticDetectorSpec::new(
+  StaticDetectorRule::declare(
+    StaticDetectorSpec::define(
       StaticDetectorId::Anchored,
       DiagnosticStage::EntityAnchored,
-      &[
-        StaticDetectorInput::FullText,
-        StaticDetectorInput::DateData,
-        StaticDetectorInput::MonetaryData,
-      ],
-      &[],
-    ),
+    )
+    .requires(&[
+      StaticDetectorInput::FullText,
+      StaticDetectorInput::DateData,
+      StaticDetectorInput::MonetaryData,
+    ]),
     detect_anchored,
   );
 

@@ -3,7 +3,7 @@ use std::time::Instant;
 use crate::resolution::PipelineEntity;
 use crate::types::SearchMatch;
 
-use super::detector_registry::StaticDetectorId;
+use super::detector_contract::StaticDetectorId;
 
 pub(super) struct TimedEntities {
   pub(super) entities: Vec<PipelineEntity>,

@@ -1,5 +1,5 @@
 use crate::diagnostics::DiagnosticStage;
-use crate::prepared::detector_registry::{
+use crate::prepared::detector_contract::{
   StaticDetectorContext, StaticDetectorDiagnostics, StaticDetectorId,
   StaticDetectorInput, StaticDetectorRule, StaticDetectorSpec,
 };
@@ -10,18 +10,18 @@ use crate::types::Result;
 use super::timed_entities;
 
 pub(in crate::prepared) const NAME_CORPUS_RULE: StaticDetectorRule =
-  StaticDetectorRule::new(
-    StaticDetectorSpec::new(
+  StaticDetectorRule::declare(
+    StaticDetectorSpec::define(
       StaticDetectorId::NameCorpus,
       DiagnosticStage::EntityNameCorpus,
-      &[
-        StaticDetectorInput::FullText,
-        StaticDetectorInput::NameCorpusData,
-        StaticDetectorInput::DenyListEntities,
-      ],
-      &[StaticDetectorId::DenyList],
     )
-    .with_support_resources(&[SupportResourceId::NameCorpus]),
+    .requires(&[
+      StaticDetectorInput::FullText,
+      StaticDetectorInput::NameCorpusData,
+      StaticDetectorInput::DenyListEntities,
+    ])
+    .after(&[StaticDetectorId::DenyList])
+    .uses(&[SupportResourceId::NameCorpus]),
     detect_name_corpus,
   );
 

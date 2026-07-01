@@ -1,5 +1,5 @@
 use crate::diagnostics::DiagnosticStage;
-use crate::prepared::detector_registry::{
+use crate::prepared::detector_contract::{
   StaticDetectorContext, StaticDetectorDiagnostics, StaticDetectorId,
   StaticDetectorInput, StaticDetectorRule, StaticDetectorSpec,
 };
@@ -10,32 +10,30 @@ use crate::types::Result;
 use super::timed_entities;
 
 pub(in crate::prepared) const REGEX_RULE: StaticDetectorRule =
-  StaticDetectorRule::new(
-    StaticDetectorSpec::new(
+  StaticDetectorRule::declare(
+    StaticDetectorSpec::define(
       StaticDetectorId::Regex,
       DiagnosticStage::EntityRegex,
-      &[
-        StaticDetectorInput::RegexMatches,
-        StaticDetectorInput::FullText,
-        StaticDetectorInput::RegexMeta,
-      ],
-      &[],
-    ),
+    )
+    .requires(&[
+      StaticDetectorInput::RegexMatches,
+      StaticDetectorInput::FullText,
+      StaticDetectorInput::RegexMeta,
+    ]),
     detect_regex,
   );
 
 pub(in crate::prepared) const CUSTOM_REGEX_RULE: StaticDetectorRule =
-  StaticDetectorRule::new(
-    StaticDetectorSpec::new(
+  StaticDetectorRule::declare(
+    StaticDetectorSpec::define(
       StaticDetectorId::CustomRegex,
       DiagnosticStage::EntityCustomRegex,
-      &[
-        StaticDetectorInput::CustomRegexMatches,
-        StaticDetectorInput::FullText,
-        StaticDetectorInput::CustomRegexMeta,
-      ],
-      &[],
-    ),
+    )
+    .requires(&[
+      StaticDetectorInput::CustomRegexMatches,
+      StaticDetectorInput::FullText,
+      StaticDetectorInput::CustomRegexMeta,
+    ]),
     detect_custom_regex,
   );
 

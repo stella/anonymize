@@ -14,11 +14,7 @@ use crate::zones::{PreparedZoneData, ZoneData};
 
 use super::PreparedEngineDetectorConfig;
 use super::phase::record_prepare_stage_elapsed;
-use super::support_resources::{
-  ADDRESS_CONTEXT_RESOURCE, ADDRESS_SEED_RESOURCE, COREFERENCE_RESOURCE,
-  HOTWORD_RESOURCE, LEGAL_FORM_RESOURCE, NAME_CORPUS_RESOURCE,
-  SIGNATURE_RESOURCE, SupportResourceSpec, TRIGGER_RESOURCE, ZONE_RESOURCE,
-};
+use super::support_resources::{SupportResourceId, SupportResourceSpec};
 use super::support_slots::{
   TimedSupportData, join_support_data, prepare_timed_address_context_data,
   prepare_timed_address_seed_data, prepare_timed_coreference_data,
@@ -90,24 +86,42 @@ pub(super) fn prepare_support_data(
       scope.spawn(|| Ok(prepare_timed_signature_data(input.signature)));
 
     Ok(ParallelPreparedSupportData {
-      hotwords: join_support_data(hotwords, HOTWORD_RESOURCE.field())?,
-      triggers: join_support_data(triggers, TRIGGER_RESOURCE.field())?,
-      legal_forms: join_support_data(legal_forms, LEGAL_FORM_RESOURCE.field())?,
+      hotwords: join_support_data(
+        hotwords,
+        SupportResourceId::Hotwords.spec().config_field(),
+      )?,
+      triggers: join_support_data(
+        triggers,
+        SupportResourceId::Triggers.spec().config_field(),
+      )?,
+      legal_forms: join_support_data(
+        legal_forms,
+        SupportResourceId::LegalForms.spec().config_field(),
+      )?,
       address_seed: join_support_data(
         address_seed,
-        ADDRESS_SEED_RESOURCE.field(),
+        SupportResourceId::AddressSeed.spec().config_field(),
       )?,
-      zones: join_support_data(zones, ZONE_RESOURCE.field())?,
+      zones: join_support_data(
+        zones,
+        SupportResourceId::Zones.spec().config_field(),
+      )?,
       address_context: join_support_data(
         address_context,
-        ADDRESS_CONTEXT_RESOURCE.field(),
+        SupportResourceId::AddressContext.spec().config_field(),
       )?,
       coreference: join_support_data(
         coreference,
-        COREFERENCE_RESOURCE.field(),
+        SupportResourceId::Coreference.spec().config_field(),
       )?,
-      names: join_support_data(names, NAME_CORPUS_RESOURCE.field())?,
-      signature: join_support_data(signature, SIGNATURE_RESOURCE.field())?,
+      names: join_support_data(
+        names,
+        SupportResourceId::NameCorpus.spec().config_field(),
+      )?,
+      signature: join_support_data(
+        signature,
+        SupportResourceId::Signature.spec().config_field(),
+      )?,
     })
   })?;
 
@@ -163,21 +177,42 @@ struct ParallelPreparedSupportData {
 impl ParallelPreparedSupportData {
   const fn metrics(&self) -> [SupportPrepareMetric; 9] {
     [
-      SupportPrepareMetric::from_timed(HOTWORD_RESOURCE, &self.hotwords),
-      SupportPrepareMetric::from_timed(TRIGGER_RESOURCE, &self.triggers),
-      SupportPrepareMetric::from_timed(LEGAL_FORM_RESOURCE, &self.legal_forms),
       SupportPrepareMetric::from_timed(
-        ADDRESS_SEED_RESOURCE,
+        SupportResourceId::Hotwords.spec(),
+        &self.hotwords,
+      ),
+      SupportPrepareMetric::from_timed(
+        SupportResourceId::Triggers.spec(),
+        &self.triggers,
+      ),
+      SupportPrepareMetric::from_timed(
+        SupportResourceId::LegalForms.spec(),
+        &self.legal_forms,
+      ),
+      SupportPrepareMetric::from_timed(
+        SupportResourceId::AddressSeed.spec(),
         &self.address_seed,
       ),
-      SupportPrepareMetric::from_timed(ZONE_RESOURCE, &self.zones),
       SupportPrepareMetric::from_timed(
-        ADDRESS_CONTEXT_RESOURCE,
+        SupportResourceId::Zones.spec(),
+        &self.zones,
+      ),
+      SupportPrepareMetric::from_timed(
+        SupportResourceId::AddressContext.spec(),
         &self.address_context,
       ),
-      SupportPrepareMetric::from_timed(COREFERENCE_RESOURCE, &self.coreference),
-      SupportPrepareMetric::from_timed(NAME_CORPUS_RESOURCE, &self.names),
-      SupportPrepareMetric::from_timed(SIGNATURE_RESOURCE, &self.signature),
+      SupportPrepareMetric::from_timed(
+        SupportResourceId::Coreference.spec(),
+        &self.coreference,
+      ),
+      SupportPrepareMetric::from_timed(
+        SupportResourceId::NameCorpus.spec(),
+        &self.names,
+      ),
+      SupportPrepareMetric::from_timed(
+        SupportResourceId::Signature.spec(),
+        &self.signature,
+      ),
     ]
   }
 

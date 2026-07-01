@@ -1,5 +1,5 @@
 use crate::diagnostics::DiagnosticStage;
-use crate::prepared::detector_registry::{
+use crate::prepared::detector_contract::{
   StaticDetectorContext, StaticDetectorDiagnostics, StaticDetectorId,
   StaticDetectorInput, StaticDetectorRule, StaticDetectorSpec,
 };
@@ -23,18 +23,18 @@ const ADDRESS_SEED_DEPENDENCIES: &[StaticDetectorId] = &[
 ];
 
 pub(in crate::prepared) const ADDRESS_SEED_RULE: StaticDetectorRule =
-  StaticDetectorRule::new(
-    StaticDetectorSpec::new(
+  StaticDetectorRule::declare(
+    StaticDetectorSpec::define(
       StaticDetectorId::AddressSeed,
       DiagnosticStage::EntityAddressSeed,
-      &[
-        StaticDetectorInput::LiteralMatches,
-        StaticDetectorInput::AddressSeedData,
-        StaticDetectorInput::ContextEntities,
-      ],
-      ADDRESS_SEED_DEPENDENCIES,
     )
-    .with_support_resources(&[SupportResourceId::AddressSeed]),
+    .requires(&[
+      StaticDetectorInput::LiteralMatches,
+      StaticDetectorInput::AddressSeedData,
+      StaticDetectorInput::ContextEntities,
+    ])
+    .after(ADDRESS_SEED_DEPENDENCIES)
+    .uses(&[SupportResourceId::AddressSeed]),
     detect_address_seed,
   );
 
