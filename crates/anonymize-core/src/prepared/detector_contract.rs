@@ -81,7 +81,7 @@ pub(super) enum StaticDetectorInput {
 pub(super) struct StaticDetectorSpec {
   id: StaticDetectorId,
   stage: DiagnosticStage,
-  required_inputs: &'static [StaticDetectorInput],
+  declared_inputs: &'static [StaticDetectorInput],
   dependencies: &'static [StaticDetectorId],
   support_resources: &'static [SupportResourceId],
 }
@@ -94,7 +94,7 @@ impl StaticDetectorSpec {
     Self {
       id,
       stage,
-      required_inputs: &[],
+      declared_inputs: &[],
       dependencies: &[],
       support_resources: &[],
     }
@@ -102,9 +102,9 @@ impl StaticDetectorSpec {
 
   pub(super) const fn requires(
     mut self,
-    required_inputs: &'static [StaticDetectorInput],
+    declared_inputs: &'static [StaticDetectorInput],
   ) -> Self {
-    self.required_inputs = required_inputs;
+    self.declared_inputs = declared_inputs;
     self
   }
 
@@ -132,8 +132,9 @@ impl StaticDetectorSpec {
     self.stage
   }
 
-  pub(super) const fn required_inputs(self) -> &'static [StaticDetectorInput] {
-    self.required_inputs
+  #[cfg(test)]
+  pub(super) const fn declared_inputs(self) -> &'static [StaticDetectorInput] {
+    self.declared_inputs
   }
 
   pub(super) const fn dependencies(self) -> &'static [StaticDetectorId] {
@@ -142,6 +143,22 @@ impl StaticDetectorSpec {
 
   pub(super) const fn support_resources(self) -> &'static [SupportResourceId] {
     self.support_resources
+  }
+
+  pub(super) fn has_declared_inputs(self) -> bool {
+    !self.declared_inputs.is_empty()
+      || self
+        .support_resources
+        .iter()
+        .any(|resource| resource.spec().detector_input().is_some())
+  }
+
+  pub(super) fn declares_input(self, input: StaticDetectorInput) -> bool {
+    self.declared_inputs.contains(&input)
+      || self
+        .support_resources
+        .iter()
+        .any(|resource| resource.spec().detector_input() == Some(input))
   }
 }
 

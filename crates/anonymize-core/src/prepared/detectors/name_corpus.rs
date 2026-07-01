@@ -17,7 +17,6 @@ pub(in crate::prepared) const NAME_CORPUS_RULE: StaticDetectorRule =
     )
     .requires(&[
       StaticDetectorInput::FullText,
-      StaticDetectorInput::NameCorpusData,
       StaticDetectorInput::DenyListEntities,
     ])
     .after(&[StaticDetectorId::DenyList])

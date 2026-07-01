@@ -16,10 +16,7 @@ pub(in crate::prepared) const SIGNATURE_RULE: StaticDetectorRule =
       StaticDetectorId::Signature,
       DiagnosticStage::EntitySignature,
     )
-    .requires(&[
-      StaticDetectorInput::FullText,
-      StaticDetectorInput::SignatureData,
-    ])
+    .requires(&[StaticDetectorInput::FullText])
     .uses(&[SupportResourceId::Signature]),
     detect_signature,
   );

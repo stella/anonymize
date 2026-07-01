@@ -65,7 +65,7 @@ impl PreparedEngine {
     for rule in STATIC_ENTITY_RULES {
       let spec = rule.spec();
       debug_assert!(
-        !spec.required_inputs().is_empty(),
+        spec.has_declared_inputs(),
         "static detector registry entries must declare required inputs",
       );
       debug_assert!(
@@ -74,7 +74,7 @@ impl PreparedEngine {
           resource_spec.id() == *resource
             && resource_spec
               .detector_input()
-              .is_some_and(|input| spec.required_inputs().contains(&input))
+              .is_some_and(|input| spec.declares_input(input))
         }),
         "static detector support resources must expose declared inputs",
       );
@@ -94,7 +94,7 @@ fn record_static_entity_diagnostics(
   for rule in STATIC_ENTITY_RULES {
     let detector = rule.spec();
     debug_assert!(
-      !detector.required_inputs().is_empty(),
+      detector.has_declared_inputs(),
       "static detector registry entries must declare required inputs",
     );
     record_detector_entities(

@@ -16,10 +16,7 @@ pub(in crate::prepared) const LEGAL_FORM_RULE: StaticDetectorRule =
       StaticDetectorId::LegalForm,
       DiagnosticStage::EntityLegalForm,
     )
-    .requires(&[
-      StaticDetectorInput::RegexMatches,
-      StaticDetectorInput::LegalFormData,
-    ])
+    .requires(&[StaticDetectorInput::RegexMatches])
     .uses(&[SupportResourceId::LegalForms]),
     detect_legal_form,
   );

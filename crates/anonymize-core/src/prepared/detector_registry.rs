@@ -41,7 +41,7 @@ mod tests {
         metadata.diagnostic_stage(),
       );
       assert!(
-        !metadata.required_inputs().is_empty(),
+        metadata.has_declared_inputs(),
         "detectors must declare their required inputs",
       );
       let mut dependencies = Vec::new();
@@ -76,8 +76,12 @@ mod tests {
         );
         if let Some(input) = detector_input {
           assert!(
-            metadata.required_inputs().contains(&input),
-            "detector support resource input must be declared: {input:?}",
+            metadata.declares_input(input),
+            "detector support resource input must be derived: {input:?}",
+          );
+          assert!(
+            !metadata.declared_inputs().contains(&input),
+            "detector support resource input must not be duplicated: {input:?}",
           );
         }
       }

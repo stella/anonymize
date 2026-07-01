@@ -16,10 +16,7 @@ pub(in crate::prepared) const TRIGGER_RULE: StaticDetectorRule =
       StaticDetectorId::Trigger,
       DiagnosticStage::EntityTrigger,
     )
-    .requires(&[
-      StaticDetectorInput::RegexMatches,
-      StaticDetectorInput::TriggerData,
-    ])
+    .requires(&[StaticDetectorInput::RegexMatches])
     .uses(&[SupportResourceId::Triggers]),
     detect_trigger,
   );

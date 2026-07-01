@@ -30,7 +30,6 @@ pub(in crate::prepared) const ADDRESS_SEED_RULE: StaticDetectorRule =
     )
     .requires(&[
       StaticDetectorInput::LiteralMatches,
-      StaticDetectorInput::AddressSeedData,
       StaticDetectorInput::ContextEntities,
     ])
     .after(ADDRESS_SEED_DEPENDENCIES)
