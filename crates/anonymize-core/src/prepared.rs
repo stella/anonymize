@@ -6,7 +6,6 @@ mod config;
 mod config_validation;
 mod detection_phase;
 mod detector_contract;
-mod detector_registry;
 mod detectors;
 mod diagnostic_stream;
 mod engine_state;

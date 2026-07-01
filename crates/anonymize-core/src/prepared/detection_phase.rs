@@ -5,7 +5,7 @@ use crate::types::Result;
 
 use super::PreparedEngine;
 use super::detector_contract::StaticDetectorContext;
-use super::detector_registry::STATIC_ENTITY_RULES;
+use super::detectors::STATIC_ENTITY_RULES;
 use super::phase::record_detector_entities;
 use super::results::{
   PreparedEngineMatches, StaticDetectionResult, StaticEntityLayers,

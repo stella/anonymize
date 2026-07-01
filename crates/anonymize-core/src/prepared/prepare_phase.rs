@@ -19,8 +19,7 @@ use super::support_prepare::{
 use super::timing::elapsed_us;
 use super::{
   PreparedEngine, PreparedEngineConfig, PreparedEngineDetectorConfig,
-  PreparedEnginePolicyConfig, PreparedEngineSearchConfig,
-  PreparedEngineSlices,
+  PreparedEnginePolicyConfig, PreparedEngineSearchConfig, PreparedEngineSlices,
 };
 
 #[bon::bon]
@@ -198,17 +197,15 @@ impl PreparedEngine {
       index_bundle,
       support_data,
       diagnostics: branch_diagnostics,
-    } = prepare_engine_branches(
-      PrepareEngineBranchInput {
-        date_data: date_data_input,
-        monetary_data: monetary_data_input,
-        search: search_input,
-        support: support_input,
-        slices: &slices,
-        artifacts,
-        collect_diagnostics,
-      },
-    )?;
+    } = prepare_engine_branches(PrepareEngineBranchInput {
+      date_data: date_data_input,
+      monetary_data: monetary_data_input,
+      search: search_input,
+      support: support_input,
+      slices: &slices,
+      artifacts,
+      collect_diagnostics,
+    })?;
     append_prepare_branch_diagnostics(&mut diagnostics, branch_diagnostics);
     let (date_data, monetary_data) = anchored;
     let PreparedEngineIndexBundle {
@@ -304,16 +301,10 @@ fn prepare_engine_branches(
       )
     });
     let indexes = scope.spawn(move || {
-      prepare_index_branch(
-        search,
-        slices,
-        artifacts,
-        collect_diagnostics,
-      )
+      prepare_index_branch(search, slices, artifacts, collect_diagnostics)
     });
-    let support_data = scope.spawn(move || {
-      prepare_support_branch(support, collect_diagnostics)
-    });
+    let support_data =
+      scope.spawn(move || prepare_support_branch(support, collect_diagnostics));
 
     let anchored = join_prepare_branch(anchored, "anchored_data")?;
     let indexes = join_prepare_branch(indexes, "search_indexes")?;
@@ -389,9 +380,7 @@ fn join_prepare_branch<T>(
   })?
 }
 
-fn branch_diagnostics(
-  collect: bool,
-) -> Option<StaticRedactionDiagnostics> {
+fn branch_diagnostics(collect: bool) -> Option<StaticRedactionDiagnostics> {
   collect.then(StaticRedactionDiagnostics::default)
 }
 
