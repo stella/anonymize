@@ -20,6 +20,7 @@ impl StaticEntityDetector for AnchoredDetector {
         StaticDetectorInput::DateData,
         StaticDetectorInput::MonetaryData,
       ],
+      &[],
     )
   }
 

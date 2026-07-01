@@ -20,6 +20,7 @@ impl StaticEntityDetector for LegalFormDetector {
         StaticDetectorInput::RegexMatches,
         StaticDetectorInput::LegalFormData,
       ],
+      &[],
     )
   }
 

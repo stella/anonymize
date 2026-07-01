@@ -20,6 +20,7 @@ impl StaticEntityDetector for TriggerDetector {
         StaticDetectorInput::RegexMatches,
         StaticDetectorInput::TriggerData,
       ],
+      &[],
     )
   }
 

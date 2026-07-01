@@ -20,6 +20,7 @@ impl StaticEntityDetector for SignatureDetector {
         StaticDetectorInput::FullText,
         StaticDetectorInput::SignatureData,
       ],
+      &[],
     )
   }
 

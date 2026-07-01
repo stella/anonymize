@@ -22,6 +22,7 @@ impl StaticEntityDetector for DenyListDetector {
         StaticDetectorInput::LiteralMatches,
         StaticDetectorInput::DenyListData,
       ],
+      &[],
     )
   }
 
@@ -55,6 +56,7 @@ impl StaticEntityDetector for GazetteerDetector {
         StaticDetectorInput::LiteralMatches,
         StaticDetectorInput::GazetteerData,
       ],
+      &[],
     )
   }
 
@@ -88,6 +90,7 @@ impl StaticEntityDetector for CountryDetector {
         StaticDetectorInput::LiteralMatches,
         StaticDetectorInput::CountryData,
       ],
+      &[],
     )
   }
 

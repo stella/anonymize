@@ -20,6 +20,7 @@ impl StaticEntityDetector for NameCorpusDetector {
         StaticDetectorInput::NameCorpusData,
         StaticDetectorInput::DenyListEntities,
       ],
+      &[StaticDetectorId::DenyList],
     )
   }
 

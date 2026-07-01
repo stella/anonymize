@@ -53,6 +53,7 @@ pub(super) struct StaticDetector {
   id: StaticDetectorId,
   stage: DiagnosticStage,
   required_inputs: &'static [StaticDetectorInput],
+  dependencies: &'static [StaticDetectorId],
 }
 
 impl StaticDetector {
@@ -60,11 +61,13 @@ impl StaticDetector {
     id: StaticDetectorId,
     stage: DiagnosticStage,
     required_inputs: &'static [StaticDetectorInput],
+    dependencies: &'static [StaticDetectorId],
   ) -> Self {
     Self {
       id,
       stage,
       required_inputs,
+      dependencies,
     }
   }
 
@@ -78,6 +81,10 @@ impl StaticDetector {
 
   pub(super) const fn required_inputs(self) -> &'static [StaticDetectorInput] {
     self.required_inputs
+  }
+
+  pub(super) const fn dependencies(self) -> &'static [StaticDetectorId] {
+    self.dependencies
   }
 }
 
@@ -148,6 +155,23 @@ mod tests {
         !metadata.required_inputs().is_empty(),
         "detectors must declare their required inputs",
       );
+      let mut dependencies = Vec::new();
+      for dependency in metadata.dependencies() {
+        assert_ne!(
+          metadata.id(),
+          *dependency,
+          "detectors must not depend on themselves",
+        );
+        assert!(
+          !dependencies.contains(dependency),
+          "detector dependencies must be unique: {dependency:?}",
+        );
+        dependencies.push(*dependency);
+        assert!(
+          detector_exists(*dependency),
+          "detector dependency must be registered: {dependency:?}",
+        );
+      }
       ids.push(metadata.id());
       stages.push(metadata.diagnostic_stage());
     }
@@ -155,25 +179,15 @@ mod tests {
 
   #[test]
   fn dependent_detectors_run_after_their_context_sources() {
-    assert!(
-      runs_after(StaticDetectorId::NameCorpus, StaticDetectorId::DenyList),
-      "name corpus depends on deny-list entities",
-    );
-    for dependency in [
-      StaticDetectorId::Regex,
-      StaticDetectorId::CustomRegex,
-      StaticDetectorId::Anchored,
-      StaticDetectorId::Trigger,
-      StaticDetectorId::Signature,
-      StaticDetectorId::LegalForm,
-      StaticDetectorId::DenyList,
-      StaticDetectorId::Gazetteer,
-      StaticDetectorId::NameCorpus,
-    ] {
-      assert!(
-        runs_after(StaticDetectorId::AddressSeed, dependency),
-        "address seed depends on earlier context entities",
-      );
+    for detector in STATIC_ENTITY_DETECTORS {
+      let metadata = detector.spec();
+      let id = metadata.id();
+      for dependency in metadata.dependencies() {
+        assert!(
+          runs_after(id, *dependency),
+          "detector {id:?} must run after dependency {dependency:?}",
+        );
+      }
     }
   }
 
@@ -193,5 +207,11 @@ mod tests {
     STATIC_ENTITY_DETECTORS
       .iter()
       .position(|detector| detector.spec().id() == detector_id)
+  }
+
+  fn detector_exists(detector_id: StaticDetectorId) -> bool {
+    STATIC_ENTITY_DETECTORS
+      .iter()
+      .any(|detector| detector.spec().id() == detector_id)
   }
 }

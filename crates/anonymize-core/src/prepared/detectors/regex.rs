@@ -21,6 +21,7 @@ impl StaticEntityDetector for RegexDetector {
         StaticDetectorInput::FullText,
         StaticDetectorInput::RegexMeta,
       ],
+      &[],
     )
   }
 
@@ -52,6 +53,7 @@ impl StaticEntityDetector for CustomRegexDetector {
         StaticDetectorInput::FullText,
         StaticDetectorInput::CustomRegexMeta,
       ],
+      &[],
     )
   }
 

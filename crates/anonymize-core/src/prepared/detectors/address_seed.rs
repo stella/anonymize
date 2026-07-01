@@ -21,6 +21,17 @@ impl StaticEntityDetector for AddressSeedDetector {
         StaticDetectorInput::AddressSeedData,
         StaticDetectorInput::ContextEntities,
       ],
+      &[
+        StaticDetectorId::Regex,
+        StaticDetectorId::CustomRegex,
+        StaticDetectorId::Anchored,
+        StaticDetectorId::Trigger,
+        StaticDetectorId::Signature,
+        StaticDetectorId::LegalForm,
+        StaticDetectorId::DenyList,
+        StaticDetectorId::Gazetteer,
+        StaticDetectorId::NameCorpus,
+      ],
     )
   }
 
@@ -33,17 +44,8 @@ impl StaticEntityDetector for AddressSeedDetector {
       let Some(data) = &context.engine.data.address_seed else {
         return Ok(Vec::new());
       };
-      let existing_entities = address_seed_context(&[
-        passes.entities(StaticDetectorId::Regex),
-        passes.entities(StaticDetectorId::CustomRegex),
-        passes.entities(StaticDetectorId::Anchored),
-        passes.entities(StaticDetectorId::Trigger),
-        passes.entities(StaticDetectorId::Signature),
-        passes.entities(StaticDetectorId::LegalForm),
-        passes.entities(StaticDetectorId::DenyList),
-        passes.entities(StaticDetectorId::Gazetteer),
-        passes.entities(StaticDetectorId::NameCorpus),
-      ]);
+      let spec = self.spec();
+      let existing_entities = address_seed_context(spec.dependencies(), passes);
       data.process(
         &context.matches.literal,
         context.engine.policy.slices.street_types,
@@ -54,14 +56,17 @@ impl StaticEntityDetector for AddressSeedDetector {
   }
 }
 
-fn address_seed_context(layers: &[&[PipelineEntity]]) -> Vec<PipelineEntity> {
-  let capacity = layers
+fn address_seed_context(
+  dependencies: &[StaticDetectorId],
+  passes: &StaticEntityPasses,
+) -> Vec<PipelineEntity> {
+  let capacity = dependencies
     .iter()
-    .map(|layer| layer.len())
+    .map(|detector_id| passes.entities(*detector_id).len())
     .fold(0usize, usize::saturating_add);
   let mut entities = Vec::with_capacity(capacity);
-  for layer in layers {
-    entities.extend(layer.iter().cloned());
+  for detector_id in dependencies {
+    entities.extend(passes.entities(*detector_id).iter().cloned());
   }
   entities
 }
