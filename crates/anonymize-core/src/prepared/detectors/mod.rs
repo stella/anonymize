@@ -6,35 +6,50 @@ use crate::types::Result;
 
 use super::timing::{TimedEntities, elapsed_us};
 
-mod address_seed;
-mod anchored;
-mod legal_form;
-mod literal;
-mod name_corpus;
-mod regex;
-mod signature;
-mod trigger;
+macro_rules! static_detectors {
+  (
+    $(
+      mod $module:ident {
+        $($rule:ident),+ $(,)?
+      }
+    )+
+  ) => {
+    $(mod $module;)+
 
-macro_rules! static_detector_registry {
-  ($($rule:path),+ $(,)?) => {
     pub(super) static STATIC_ENTITY_RULES: &[StaticDetectorRule] = &[
-      $($rule),+
+      $($($module::$rule),+),+
     ];
   };
 }
 
-static_detector_registry! {
-  regex::REGEX_RULE,
-  regex::CUSTOM_REGEX_RULE,
-  literal::DENY_LIST_RULE,
-  literal::GAZETTEER_RULE,
-  literal::COUNTRY_RULE,
-  anchored::ANCHORED_RULE,
-  trigger::TRIGGER_RULE,
-  signature::SIGNATURE_RULE,
-  legal_form::LEGAL_FORM_RULE,
-  name_corpus::NAME_CORPUS_RULE,
-  address_seed::ADDRESS_SEED_RULE,
+static_detectors! {
+  mod regex {
+    REGEX_RULE,
+    CUSTOM_REGEX_RULE,
+  }
+  mod literal {
+    DENY_LIST_RULE,
+    GAZETTEER_RULE,
+    COUNTRY_RULE,
+  }
+  mod anchored {
+    ANCHORED_RULE,
+  }
+  mod trigger {
+    TRIGGER_RULE,
+  }
+  mod signature {
+    SIGNATURE_RULE,
+  }
+  mod legal_form {
+    LEGAL_FORM_RULE,
+  }
+  mod name_corpus {
+    NAME_CORPUS_RULE,
+  }
+  mod address_seed {
+    ADDRESS_SEED_RULE,
+  }
 }
 
 fn timed_entities<F>(detect: F) -> Result<TimedEntities>
