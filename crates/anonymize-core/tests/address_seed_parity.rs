@@ -119,6 +119,84 @@ fn detects_cue_gated_br_cep_address_seed() {
 }
 
 #[test]
+fn detects_titlecase_street_number_address_seed() {
+  let prepared = PreparedEngine::new(prepared_config! {
+    address_seed_data: Some(AddressSeedData::default()),
+    ..empty_config(PreparedEngineSlices::default())
+  })
+  .expect("address seed data should prepare");
+
+  let result = prepared
+    .redact_static_entities(
+      "Registered office: Květnici 551/8, Praha 14000. Notices follow.",
+      &OperatorConfig::default(),
+    )
+    .expect("static redaction should succeed");
+
+  assert!(
+    address_texts(&result).contains(&"Květnici 551/8, Praha 14000"),
+    "resolved address entities: {:?}; address seed entities: {:?}",
+    result.resolved_entities,
+    result.detections.entities.address_seed(),
+  );
+}
+
+#[test]
+fn detects_italian_cap_address_seed() {
+  let prepared = PreparedEngine::new(prepared_config! {
+    literal_patterns: vec![
+      SearchPattern::LiteralWithOptions {
+        pattern: String::from("Roma"),
+        case_insensitive: Some(true),
+        whole_words: Some(true),
+      },
+      SearchPattern::LiteralWithOptions {
+        pattern: String::from("Via"),
+        case_insensitive: Some(true),
+        whole_words: Some(true),
+      },
+    ],
+    literal_options: SearchOptions {
+      literal: LiteralSearchOptions {
+        case_insensitive: true,
+        whole_words: false,
+      },
+      ..SearchOptions::default()
+    },
+    slices: PreparedEngineSlices {
+      deny_list: PatternSlice { start: 0, end: 1 },
+      street_types: PatternSlice { start: 1, end: 2 },
+      ..PreparedEngineSlices::default()
+    },
+    deny_list_data: Some(DenyListMatchData {
+      labels: vec![vec![String::from("address")]].into(),
+      custom_labels: vec![vec![]].into(),
+      originals: vec![String::from("Roma")],
+      pattern_meta: stella_anonymize_core::DenyListPatternMetaSet::default(),
+      sources: vec![vec![String::from("city")]].into(),
+      filters: Some(DenyListFilterData::default()),
+    }),
+    address_seed_data: Some(AddressSeedData::default()),
+    ..empty_config(PreparedEngineSlices::default())
+  })
+  .expect("address seed data should prepare");
+
+  let result = prepared
+    .redact_static_entities(
+      "Registered office: Via Roma, 00100 Roma. Notices follow.",
+      &OperatorConfig::default(),
+    )
+    .expect("static redaction should succeed");
+
+  assert!(
+    address_texts(&result).contains(&"Via Roma, 00100 Roma"),
+    "resolved address entities: {:?}; address seed entities: {:?}",
+    result.resolved_entities,
+    result.detections.entities.address_seed(),
+  );
+}
+
+#[test]
 fn keeps_date_like_street_name_in_address_seed_span() {
   let prepared = PreparedEngine::new(prepared_config! {
     regex_patterns: vec![SearchPattern::Regex(String::from("May 15"))],

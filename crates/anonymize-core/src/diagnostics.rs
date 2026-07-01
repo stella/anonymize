@@ -80,7 +80,24 @@ pub enum DiagnosticStage {
   EntitySignature,
   EntityLegalForm,
   EntityAddressSeed,
+  EntityAddressSeedContext,
+  EntityAddressSeedCollect,
+  EntityAddressSeedCollectStreetTypes,
+  EntityAddressSeedCollectExisting,
+  EntityAddressSeedCollectStreetNumbers,
+  EntityAddressSeedCollectPostalCodes,
+  EntityAddressSeedCollectItalianCap,
+  EntityAddressSeedCluster,
+  EntityAddressSeedBoundary,
+  EntityAddressSeedExpand,
   EntityNameCorpus,
+  EntityNameCorpusCjk,
+  EntityNameCorpusSegment,
+  EntityNameCorpusSeed,
+  EntityNameCorpusClassify,
+  EntityNameCorpusChains,
+  EntityNameCorpusDedupe,
+  EntityNameCorpusFilter,
   EntityZoneAdjustment,
   EntityHotword,
   EntityAddressContext,
@@ -151,7 +168,24 @@ impl DiagnosticStage {
       | Self::EntitySignature
       | Self::EntityLegalForm
       | Self::EntityAddressSeed
-      | Self::EntityNameCorpus => DiagnosticPhase::Detect,
+      | Self::EntityAddressSeedContext
+      | Self::EntityAddressSeedCollect
+      | Self::EntityAddressSeedCollectStreetTypes
+      | Self::EntityAddressSeedCollectExisting
+      | Self::EntityAddressSeedCollectStreetNumbers
+      | Self::EntityAddressSeedCollectPostalCodes
+      | Self::EntityAddressSeedCollectItalianCap
+      | Self::EntityAddressSeedCluster
+      | Self::EntityAddressSeedBoundary
+      | Self::EntityAddressSeedExpand
+      | Self::EntityNameCorpus
+      | Self::EntityNameCorpusCjk
+      | Self::EntityNameCorpusSegment
+      | Self::EntityNameCorpusSeed
+      | Self::EntityNameCorpusClassify
+      | Self::EntityNameCorpusChains
+      | Self::EntityNameCorpusDedupe
+      | Self::EntityNameCorpusFilter => DiagnosticPhase::Detect,
       Self::EntityZoneAdjustment
       | Self::EntityHotword
       | Self::EntityAddressContext

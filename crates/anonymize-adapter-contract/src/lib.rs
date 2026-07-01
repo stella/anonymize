@@ -3118,6 +3118,99 @@ fn diagnostic_scope_name(scope: DiagnosticScope) -> String {
 
 fn diagnostic_stage_name(stage: DiagnosticStage) -> String {
   match stage {
+    DiagnosticStage::PrepareCacheKey
+    | DiagnosticStage::PrepareCacheBypass
+    | DiagnosticStage::PrepareCacheHit
+    | DiagnosticStage::PrepareCacheMiss
+    | DiagnosticStage::PrepareBindingParse
+    | DiagnosticStage::PreparePackageDecode
+    | DiagnosticStage::PreparePackageVerify
+    | DiagnosticStage::PreparePackageDecompress
+    | DiagnosticStage::PreparePackageConfigDecode
+    | DiagnosticStage::PrepareBindingConvert
+    | DiagnosticStage::PrepareArtifactsDecode
+    | DiagnosticStage::PrepareTotal
+    | DiagnosticStage::PrepareRegex
+    | DiagnosticStage::PrepareCustomRegex
+    | DiagnosticStage::PrepareAnchored
+    | DiagnosticStage::PrepareLegalFormSearch
+    | DiagnosticStage::PrepareTriggerSearch
+    | DiagnosticStage::PrepareLiteral
+    | DiagnosticStage::PrepareHotwordData
+    | DiagnosticStage::PrepareTriggerData
+    | DiagnosticStage::PrepareLegalFormData
+    | DiagnosticStage::PrepareAddressSeedData
+    | DiagnosticStage::PrepareZoneData
+    | DiagnosticStage::PrepareAddressContextData
+    | DiagnosticStage::PrepareCoreferenceData
+    | DiagnosticStage::PrepareNameCorpusData
+    | DiagnosticStage::PrepareSignatureData => {
+      diagnostic_prepare_stage_name(stage)
+    }
+    DiagnosticStage::WarmRegex
+    | DiagnosticStage::WarmCustomRegex
+    | DiagnosticStage::WarmLegalFormSearch
+    | DiagnosticStage::WarmTriggerSearch
+    | DiagnosticStage::WarmLiteral
+    | DiagnosticStage::WarmTotal => diagnostic_warm_stage_name(stage),
+    DiagnosticStage::Normalize
+    | DiagnosticStage::FindMatches
+    | DiagnosticStage::FindRegex
+    | DiagnosticStage::FindCustomRegex
+    | DiagnosticStage::FindLegalForm
+    | DiagnosticStage::FindTrigger
+    | DiagnosticStage::FindLiteral
+    | DiagnosticStage::SearchRegex
+    | DiagnosticStage::SearchCustomRegex
+    | DiagnosticStage::SearchLegalForm
+    | DiagnosticStage::SearchTrigger
+    | DiagnosticStage::SearchLiteral => diagnostic_search_stage_name(stage),
+    DiagnosticStage::DetectTotal
+    | DiagnosticStage::EntityRegex
+    | DiagnosticStage::EntityCustomRegex
+    | DiagnosticStage::EntityAnchored
+    | DiagnosticStage::EntityDenyList
+    | DiagnosticStage::EntityGazetteer
+    | DiagnosticStage::EntityCountry
+    | DiagnosticStage::EntityTrigger
+    | DiagnosticStage::EntitySignature
+    | DiagnosticStage::EntityLegalForm
+    | DiagnosticStage::EntityAddressSeed
+    | DiagnosticStage::EntityAddressSeedContext
+    | DiagnosticStage::EntityAddressSeedCollect
+    | DiagnosticStage::EntityAddressSeedCollectStreetTypes
+    | DiagnosticStage::EntityAddressSeedCollectExisting
+    | DiagnosticStage::EntityAddressSeedCollectStreetNumbers
+    | DiagnosticStage::EntityAddressSeedCollectPostalCodes
+    | DiagnosticStage::EntityAddressSeedCollectItalianCap
+    | DiagnosticStage::EntityAddressSeedCluster
+    | DiagnosticStage::EntityAddressSeedBoundary
+    | DiagnosticStage::EntityAddressSeedExpand
+    | DiagnosticStage::EntityNameCorpus
+    | DiagnosticStage::EntityNameCorpusCjk
+    | DiagnosticStage::EntityNameCorpusSegment
+    | DiagnosticStage::EntityNameCorpusSeed
+    | DiagnosticStage::EntityNameCorpusClassify
+    | DiagnosticStage::EntityNameCorpusChains
+    | DiagnosticStage::EntityNameCorpusDedupe
+    | DiagnosticStage::EntityNameCorpusFilter => {
+      diagnostic_detect_stage_name(stage)
+    }
+    DiagnosticStage::EntityZoneAdjustment
+    | DiagnosticStage::EntityHotword
+    | DiagnosticStage::EntityAddressContext
+    | DiagnosticStage::EntityCoreference
+    | DiagnosticStage::Merge
+    | DiagnosticStage::Boundary
+    | DiagnosticStage::Sanitize
+    | DiagnosticStage::RedactTotal
+    | DiagnosticStage::Redaction => diagnostic_finish_stage_name(stage),
+  }
+  .to_owned()
+}
+
+const fn diagnostic_prepare_stage_name(stage: DiagnosticStage) -> &'static str {
+  match stage {
     DiagnosticStage::PrepareCacheKey => "prepare.cache-key",
     DiagnosticStage::PrepareCacheBypass => "prepare.cache.bypass",
     DiagnosticStage::PrepareCacheHit => "prepare.cache.hit",
@@ -3149,14 +3242,24 @@ fn diagnostic_stage_name(stage: DiagnosticStage) -> String {
     DiagnosticStage::PrepareCoreferenceData => "prepare.coreference-data",
     DiagnosticStage::PrepareNameCorpusData => "prepare.name-corpus-data",
     DiagnosticStage::PrepareSignatureData => "prepare.signature-data",
+    _ => "prepare.unknown",
+  }
+}
+
+const fn diagnostic_warm_stage_name(stage: DiagnosticStage) -> &'static str {
+  match stage {
     DiagnosticStage::WarmRegex => "warm.regex",
     DiagnosticStage::WarmCustomRegex => "warm.custom-regex",
     DiagnosticStage::WarmLegalFormSearch => "warm.legal-form-search",
     DiagnosticStage::WarmTriggerSearch => "warm.trigger-search",
     DiagnosticStage::WarmLiteral => "warm.literal",
     DiagnosticStage::WarmTotal => "warm.total",
-    DiagnosticStage::DetectTotal => "detect.total",
-    DiagnosticStage::RedactTotal => "redact.total",
+    _ => "warm.unknown",
+  }
+}
+
+const fn diagnostic_search_stage_name(stage: DiagnosticStage) -> &'static str {
+  match stage {
     DiagnosticStage::Normalize => "normalize",
     DiagnosticStage::FindMatches => "find-matches",
     DiagnosticStage::FindRegex => "find.regex",
@@ -3169,6 +3272,13 @@ fn diagnostic_stage_name(stage: DiagnosticStage) -> String {
     DiagnosticStage::SearchLegalForm => "search.legal-form",
     DiagnosticStage::SearchTrigger => "search.trigger",
     DiagnosticStage::SearchLiteral => "search.literal",
+    _ => "search.unknown",
+  }
+}
+
+const fn diagnostic_detect_stage_name(stage: DiagnosticStage) -> &'static str {
+  match stage {
+    DiagnosticStage::DetectTotal => "detect.total",
     DiagnosticStage::EntityRegex => "entity.regex",
     DiagnosticStage::EntityCustomRegex => "entity.custom-regex",
     DiagnosticStage::EntityAnchored => "entity.anchored",
@@ -3179,7 +3289,42 @@ fn diagnostic_stage_name(stage: DiagnosticStage) -> String {
     DiagnosticStage::EntitySignature => "entity.signature",
     DiagnosticStage::EntityLegalForm => "entity.legal-form",
     DiagnosticStage::EntityAddressSeed => "entity.address-seed",
+    DiagnosticStage::EntityAddressSeedContext => "entity.address-seed.context",
+    DiagnosticStage::EntityAddressSeedCollect => "entity.address-seed.collect",
+    DiagnosticStage::EntityAddressSeedCollectStreetTypes => {
+      "entity.address-seed.collect.street-types"
+    }
+    DiagnosticStage::EntityAddressSeedCollectExisting => {
+      "entity.address-seed.collect.existing"
+    }
+    DiagnosticStage::EntityAddressSeedCollectStreetNumbers => {
+      "entity.address-seed.collect.street-numbers"
+    }
+    DiagnosticStage::EntityAddressSeedCollectPostalCodes => {
+      "entity.address-seed.collect.postal-codes"
+    }
+    DiagnosticStage::EntityAddressSeedCollectItalianCap => {
+      "entity.address-seed.collect.italian-cap"
+    }
+    DiagnosticStage::EntityAddressSeedCluster => "entity.address-seed.cluster",
+    DiagnosticStage::EntityAddressSeedBoundary => {
+      "entity.address-seed.boundary"
+    }
+    DiagnosticStage::EntityAddressSeedExpand => "entity.address-seed.expand",
     DiagnosticStage::EntityNameCorpus => "entity.name-corpus",
+    DiagnosticStage::EntityNameCorpusCjk => "entity.name-corpus.cjk",
+    DiagnosticStage::EntityNameCorpusSegment => "entity.name-corpus.segment",
+    DiagnosticStage::EntityNameCorpusSeed => "entity.name-corpus.seed",
+    DiagnosticStage::EntityNameCorpusClassify => "entity.name-corpus.classify",
+    DiagnosticStage::EntityNameCorpusChains => "entity.name-corpus.chains",
+    DiagnosticStage::EntityNameCorpusDedupe => "entity.name-corpus.dedupe",
+    DiagnosticStage::EntityNameCorpusFilter => "entity.name-corpus.filter",
+    _ => "detect.unknown",
+  }
+}
+
+const fn diagnostic_finish_stage_name(stage: DiagnosticStage) -> &'static str {
+  match stage {
     DiagnosticStage::EntityZoneAdjustment => "entity.zone-adjustment",
     DiagnosticStage::EntityHotword => "entity.hotword",
     DiagnosticStage::EntityAddressContext => "entity.address-context",
@@ -3187,9 +3332,10 @@ fn diagnostic_stage_name(stage: DiagnosticStage) -> String {
     DiagnosticStage::Merge => "resolution.merge",
     DiagnosticStage::Boundary => "resolution.boundary",
     DiagnosticStage::Sanitize => "resolution.sanitize",
+    DiagnosticStage::RedactTotal => "redact.total",
     DiagnosticStage::Redaction => "redaction",
+    _ => "finish.unknown",
   }
-  .to_owned()
 }
 
 fn diagnostic_event_kind_name(kind: DiagnosticEventKind) -> String {

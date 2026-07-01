@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, ops::Range, time::Instant};
 
 use crate::resolution::{DetectionSource, PipelineEntity};
 use crate::types::{Error, Result};
@@ -14,6 +14,7 @@ const ALL_CAPS_NAME_LINE_RATIO: f64 = 0.9;
 const ALL_CAPS_NAME_LINE_MIN_LETTERS: usize = 3;
 const ALL_CAPS_NAME_LINE_MAX_TOKENS: usize = 6;
 const MAX_HORIZONTAL_CHAIN_GAP: usize = 4;
+const SUPPLEMENTAL_SEED_WINDOW_RADIUS: usize = MAX_CHAIN + 2;
 
 #[derive(
   Clone, Debug, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize,
@@ -72,6 +73,36 @@ pub struct PreparedNameCorpusData {
   cjk_non_person_terms: HashSet<String>,
   cjk_surname_starters: HashSet<char>,
   organization_terms: HashSet<String>,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub(crate) struct NameCorpusDetectionProfile {
+  pub(crate) cjk_count: usize,
+  pub(crate) cjk_elapsed_us: u64,
+  pub(crate) word_count: usize,
+  pub(crate) segment_elapsed_us: u64,
+  pub(crate) supplemental_seed_count: usize,
+  pub(crate) supplemental_seed_elapsed_us: u64,
+  pub(crate) token_count: usize,
+  pub(crate) classify_elapsed_us: u64,
+  pub(crate) token_entity_count: usize,
+  pub(crate) chain_elapsed_us: u64,
+  pub(crate) dedupe_count: usize,
+  pub(crate) dedupe_elapsed_us: u64,
+  pub(crate) filter_count: usize,
+  pub(crate) filter_elapsed_us: u64,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) struct NameCorpusDetection {
+  pub(crate) entities: Vec<PipelineEntity>,
+  pub(crate) profile: NameCorpusDetectionProfile,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+struct TokenNameDetection {
+  entities: Vec<PipelineEntity>,
+  profile: NameCorpusDetectionProfile,
 }
 
 #[derive(
@@ -168,42 +199,116 @@ impl PreparedNameCorpusData {
     self.detect(full_text, self.mode, deny_list_entities)
   }
 
+  pub(crate) fn detect_configured_profiled(
+    &self,
+    full_text: &str,
+    deny_list_entities: &[PipelineEntity],
+  ) -> Result<NameCorpusDetection> {
+    self.detect_profiled(full_text, self.mode, deny_list_entities)
+  }
+
   pub fn detect(
     &self,
     full_text: &str,
     mode: NameCorpusMode,
     deny_list_entities: &[PipelineEntity],
   ) -> Result<Vec<PipelineEntity>> {
+    self
+      .detect_profiled(full_text, mode, deny_list_entities)
+      .map(|detection| detection.entities)
+  }
+
+  fn detect_profiled(
+    &self,
+    full_text: &str,
+    mode: NameCorpusMode,
+    deny_list_entities: &[PipelineEntity],
+  ) -> Result<NameCorpusDetection> {
+    let mut profile = NameCorpusDetectionProfile::default();
+    let cjk_start = Instant::now();
     let mut entities = cjk::detect(self, full_text)?;
-    entities.extend(self.detect_token_names(full_text, mode)?);
+    profile.cjk_elapsed_us = elapsed_us(cjk_start);
+    profile.cjk_count = entities.len();
+
+    let token_detection = self.detect_token_names_profiled(full_text, mode)?;
+    merge_name_profile(&mut profile, &token_detection.profile);
+    entities.extend(token_detection.entities);
+
+    let dedupe_start = Instant::now();
     let mut entities = deduplicate_spans(entities);
+    profile.dedupe_elapsed_us = elapsed_us(dedupe_start);
+    profile.dedupe_count = entities.len();
+
     if mode == NameCorpusMode::Supplemental {
+      let filter_start = Instant::now();
       entities.retain(|entity| {
         !deny_list_entities
           .iter()
           .any(|deny| covers_same_label(entity, deny))
       });
+      profile.filter_elapsed_us = elapsed_us(filter_start);
+      profile.filter_count = entities.len();
     }
-    Ok(entities)
+
+    Ok(NameCorpusDetection { entities, profile })
   }
 
-  fn detect_token_names(
+  fn detect_token_names_profiled(
     &self,
     full_text: &str,
     mode: NameCorpusMode,
-  ) -> Result<Vec<PipelineEntity>> {
+  ) -> Result<TokenNameDetection> {
+    let mut profile = NameCorpusDetectionProfile::default();
+    let segment_start = Instant::now();
     let words = segment_words(full_text);
-    if mode == NameCorpusMode::Supplemental
-      && !self.has_supplemental_seed(&words)
-    {
-      return Ok(Vec::new());
+    profile.segment_elapsed_us = elapsed_us(segment_start);
+    profile.word_count = words.len();
+
+    let seed_start = Instant::now();
+    let seed_indexes = if mode == NameCorpusMode::Supplemental {
+      self.supplemental_seed_indexes(&words)
+    } else {
+      Vec::new()
+    };
+    profile.supplemental_seed_elapsed_us = elapsed_us(seed_start);
+    profile.supplemental_seed_count = seed_indexes.len();
+    if mode == NameCorpusMode::Supplemental && seed_indexes.is_empty() {
+      return Ok(TokenNameDetection {
+        entities: Vec::new(),
+        profile,
+      });
     }
 
+    let classify_start = Instant::now();
+    let token_windows = if mode == NameCorpusMode::Supplemental {
+      self.classify_supplemental_windows(full_text, &words, &seed_indexes)
+    } else {
+      vec![self.classify_tokens(full_text, &words)]
+    };
+    profile.classify_elapsed_us = elapsed_us(classify_start);
+    profile.token_count = token_windows.iter().map(Vec::len).sum();
+
+    let chain_start = Instant::now();
+    let mut entities = Vec::new();
+    for tokens in &token_windows {
+      entities.extend(self.detect_token_chains(full_text, mode, tokens)?);
+    }
+    profile.chain_elapsed_us = elapsed_us(chain_start);
+    profile.token_entity_count = entities.len();
+
+    Ok(TokenNameDetection { entities, profile })
+  }
+
+  fn classify_tokens<'a>(
+    &self,
+    full_text: &'a str,
+    words: &[WordSegment<'a>],
+  ) -> Vec<ClassifiedToken<'a>> {
     let mut tokens = Vec::with_capacity(words.len());
     let mut word_index = 0usize;
     while let Some(word) = words.get(word_index) {
       if let Some((connector, end, consumed)) =
-        relation_connector(word, &words, word_index, full_text, self)
+        relation_connector(word, words, word_index, full_text, self)
       {
         tokens.push(ClassifiedToken {
           text: connector,
@@ -219,6 +324,34 @@ impl PreparedNameCorpusData {
       tokens.push(self.classify_token(word, full_text));
       word_index = word_index.saturating_add(1);
     }
+    tokens
+  }
+
+  fn classify_supplemental_windows<'a>(
+    &self,
+    full_text: &'a str,
+    words: &[WordSegment<'a>],
+    seed_indexes: &[usize],
+  ) -> Vec<Vec<ClassifiedToken<'a>>> {
+    supplemental_seed_windows(seed_indexes, words.len())
+      .into_iter()
+      .filter_map(|window| {
+        words
+          .get(window)
+          .map(|window_words| self.classify_tokens(full_text, window_words))
+      })
+      .collect()
+  }
+
+  fn detect_token_chains(
+    &self,
+    full_text: &str,
+    mode: NameCorpusMode,
+    tokens: &[ClassifiedToken<'_>],
+  ) -> Result<Vec<PipelineEntity>> {
+    if tokens.is_empty() {
+      return Ok(Vec::new());
+    }
 
     let mut consumed = vec![false; tokens.len()];
     let mut entities = Vec::new();
@@ -233,7 +366,7 @@ impl PreparedNameCorpusData {
         continue;
       }
 
-      let chain = Self::build_chain(full_text, &tokens, index);
+      let chain = Self::build_chain(full_text, tokens, index);
       let Some(score) = chain_score(full_text, &chain, self, mode) else {
         continue;
       };
@@ -359,21 +492,29 @@ impl PreparedNameCorpusData {
     classified(word, TokenKind::Capitalized, false)
   }
 
-  fn has_supplemental_seed(&self, words: &[WordSegment<'_>]) -> bool {
-    words.iter().any(|word| {
-      if self.is_non_western_name_token(word.text)
-        || self.is_hyphenated_prefix_name(word.text)
-      {
-        return true;
-      }
-      if word.text.chars().count() < 3 || !is_all_upper(word.text) {
-        return false;
-      }
-      if self.excluded_all_caps.contains(word.text) {
-        return false;
-      }
-      self.is_non_western_name_token(&title_case_simple(word.text))
-    })
+  fn supplemental_seed_indexes(&self, words: &[WordSegment<'_>]) -> Vec<usize> {
+    words
+      .iter()
+      .enumerate()
+      .filter_map(|(index, word)| {
+        self.is_supplemental_seed(word.text).then_some(index)
+      })
+      .collect()
+  }
+
+  fn is_supplemental_seed(&self, text: &str) -> bool {
+    if self.is_non_western_name_token(text)
+      || self.is_hyphenated_prefix_name(text)
+    {
+      return true;
+    }
+    if text.chars().count() < 3 || !is_all_upper(text) {
+      return false;
+    }
+    if self.excluded_all_caps.contains(text) {
+      return false;
+    }
+    self.is_non_western_name_token(&title_case_simple(text))
   }
 
   fn build_chain<'a>(
@@ -496,6 +637,20 @@ impl PreparedNameCorpusData {
       || self.is_first_name_token(&title_case_simple(token))
       || self.is_non_western_name_token(token)
   }
+}
+
+const fn merge_name_profile(
+  target: &mut NameCorpusDetectionProfile,
+  source: &NameCorpusDetectionProfile,
+) {
+  target.word_count = source.word_count;
+  target.segment_elapsed_us = source.segment_elapsed_us;
+  target.supplemental_seed_count = source.supplemental_seed_count;
+  target.supplemental_seed_elapsed_us = source.supplemental_seed_elapsed_us;
+  target.token_count = source.token_count;
+  target.classify_elapsed_us = source.classify_elapsed_us;
+  target.token_entity_count = source.token_entity_count;
+  target.chain_elapsed_us = source.chain_elapsed_us;
 }
 
 fn chain_score(
@@ -638,6 +793,30 @@ fn segment_words(full_text: &str) -> Vec<WordSegment<'_>> {
     });
   }
   words
+}
+
+fn supplemental_seed_windows(
+  seed_indexes: &[usize],
+  word_count: usize,
+) -> Vec<Range<usize>> {
+  let mut windows: Vec<Range<usize>> = Vec::new();
+  for seed_index in seed_indexes {
+    let start = seed_index.saturating_sub(SUPPLEMENTAL_SEED_WINDOW_RADIUS);
+    let end = seed_index
+      .saturating_add(SUPPLEMENTAL_SEED_WINDOW_RADIUS)
+      .saturating_add(1)
+      .min(word_count);
+    let Some(previous) = windows.last_mut() else {
+      windows.push(start..end);
+      continue;
+    };
+    if start <= previous.end {
+      previous.end = previous.end.max(end);
+      continue;
+    }
+    windows.push(start..end);
+  }
+  windows
 }
 
 fn relation_connector<'a>(
@@ -925,6 +1104,11 @@ fn usize_to_u32(value: usize, field: &'static str) -> Result<u32> {
   })
 }
 
+fn elapsed_us(start: Instant) -> u64 {
+  let micros = start.elapsed().as_micros();
+  u64::try_from(micros).unwrap_or(u64::MAX)
+}
+
 fn invalid_name_data(reason: &'static str) -> Error {
   Error::InvalidStaticData {
     field: "name_corpus",
@@ -1032,6 +1216,27 @@ mod tests {
     assert_eq!(entities[0].text, "Sato Kenji");
     assert!(
       (entities[0].score - HIGH_CONFIDENCE_NAME_SCORE).abs() < f64::EPSILON
+    );
+  }
+
+  #[test]
+  fn supplemental_seed_does_not_enable_distant_western_chain() {
+    let data = PreparedNameCorpusData::new(NameCorpusData {
+      first_names: vec![String::from("Mina")],
+      surnames: vec![String::from("Roe")],
+      non_western_names: vec![String::from("Sato")],
+      ..NameCorpusData::default()
+    });
+    let filler = " ordinary".repeat(SUPPLEMENTAL_SEED_WINDOW_RADIUS + 3);
+    let text = format!("Sato{filler}. Agreement signed by Mina Roe.");
+
+    let entities = data
+      .detect_supplemental(&text, &[])
+      .expect("supplemental name-corpus detection should succeed");
+
+    assert!(
+      entities.iter().all(|entity| entity.text != "Mina Roe"),
+      "detected entities: {entities:?}",
     );
   }
 

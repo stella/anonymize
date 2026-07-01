@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, time::Instant};
 
 use regex::Regex;
 
@@ -37,8 +37,34 @@ pub(crate) struct PreparedAddressSeedData {
   us_state_before_zip_re: Regex,
   house_number_before_street_re: Regex,
   house_number_after_street_re: Regex,
-  italian_cap_re: Regex,
-  street_number_re: Regex,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub(crate) struct AddressSeedDetectionProfile {
+  pub(crate) seed_count: usize,
+  pub(crate) collect_elapsed_us: u64,
+  pub(crate) street_type_seed_count: usize,
+  pub(crate) street_type_elapsed_us: u64,
+  pub(crate) existing_seed_count: usize,
+  pub(crate) existing_elapsed_us: u64,
+  pub(crate) street_number_seed_count: usize,
+  pub(crate) street_number_elapsed_us: u64,
+  pub(crate) postal_code_seed_count: usize,
+  pub(crate) postal_code_elapsed_us: u64,
+  pub(crate) italian_cap_seed_count: usize,
+  pub(crate) italian_cap_elapsed_us: u64,
+  pub(crate) cluster_count: usize,
+  pub(crate) cluster_elapsed_us: u64,
+  pub(crate) boundary_count: usize,
+  pub(crate) boundary_elapsed_us: u64,
+  pub(crate) expanded_count: usize,
+  pub(crate) expand_elapsed_us: u64,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) struct AddressSeedDetection {
+  pub(crate) entities: Vec<PipelineEntity>,
+  pub(crate) profile: AddressSeedDetectionProfile,
 }
 
 impl PreparedAddressSeedData {
@@ -61,29 +87,38 @@ impl PreparedAddressSeedData {
       house_number_after_street_re: compile_regex(
         r"(?u)^[^\S\n\t]+\d{1,6}(?:[-/]\d{1,6})?\b",
       )?,
-      italian_cap_re: compile_regex(r"(?u)\b(?P<cap>\d{5})\s+\p{Lu}\p{L}+")?,
-      street_number_re: compile_regex(
-        r"(?u)\b(?P<street>\p{Lu}\p{Ll}{2,})\s+(?P<num>\d{1,5}(?:/\d{1,5})?)\s*[,\n]",
-      )?,
     })
   }
 
-  pub(crate) fn process(
+  pub(crate) fn process_profiled(
     &self,
     matches: &[SearchMatch],
     street_type_slice: PatternSlice,
     full_text: &str,
     existing_entities: &[PipelineEntity],
-  ) -> Result<Vec<PipelineEntity>> {
-    let seeds = self.collect_seeds(
+  ) -> Result<AddressSeedDetection> {
+    let mut profile = AddressSeedDetectionProfile::default();
+    let collect_start = Instant::now();
+    let seeds = self.collect_seeds_profiled(
       matches,
       street_type_slice,
       full_text,
       existing_entities,
+      &mut profile,
     )?;
+    profile.collect_elapsed_us = elapsed_us(collect_start);
+    profile.seed_count = seeds.len();
+
+    let cluster_start = Instant::now();
     let clusters = cluster_seeds(&seeds, full_text, existing_entities);
+    profile.cluster_elapsed_us = elapsed_us(cluster_start);
+    profile.cluster_count = clusters.len();
+
     if clusters.is_empty() {
-      return Ok(Vec::new());
+      return Ok(AddressSeedDetection {
+        entities: Vec::new(),
+        profile,
+      });
     }
     let mut boundary_starts = None;
     let mut results = Vec::new();
@@ -94,18 +129,27 @@ impl PreparedAddressSeedData {
         continue;
       }
       let boundary_starts = if cluster.has_expandable_address_context() {
-        boundary_starts
-          .get_or_insert_with(|| self.boundary_starts(full_text))
-          .as_slice()
+        if boundary_starts.is_none() {
+          let boundary_start = Instant::now();
+          let starts = self.boundary_starts(full_text);
+          profile.boundary_elapsed_us = elapsed_us(boundary_start);
+          profile.boundary_count = starts.len();
+          boundary_starts = Some(starts);
+        }
+        boundary_starts.as_deref().unwrap_or_default()
       } else {
         &[]
       };
+      let expand_start = Instant::now();
       let span = self.expand_cluster(
         full_text,
         &cluster,
         existing_entities,
         boundary_starts,
       );
+      profile.expand_elapsed_us = profile
+        .expand_elapsed_us
+        .saturating_add(elapsed_us(expand_start));
       let Some(raw_text) = full_text.get(span.start..span.end) else {
         continue;
       };
@@ -142,23 +186,55 @@ impl PreparedAddressSeedData {
         DetectionSource::Regex,
       ));
     }
+    profile.expanded_count = results.len();
 
-    Ok(results)
+    Ok(AddressSeedDetection {
+      entities: results,
+      profile,
+    })
   }
 
-  fn collect_seeds(
+  fn collect_seeds_profiled(
     &self,
     matches: &[SearchMatch],
     street_type_slice: PatternSlice,
     full_text: &str,
     existing_entities: &[PipelineEntity],
+    profile: &mut AddressSeedDetectionProfile,
   ) -> Result<Vec<Seed>> {
+    let street_type_start = Instant::now();
     let mut seeds =
       self.collect_street_type_seeds(matches, street_type_slice, full_text)?;
+    profile.street_type_elapsed_us = elapsed_us(street_type_start);
+    profile.street_type_seed_count = seeds.len();
+
+    let existing_start = Instant::now();
+    let before_existing = seeds.len();
     collect_existing_entity_seeds(&mut seeds, full_text, existing_entities);
-    self.collect_street_number_seeds(&mut seeds, full_text, existing_entities);
+    profile.existing_elapsed_us = elapsed_us(existing_start);
+    profile.existing_seed_count = seeds.len().saturating_sub(before_existing);
+
+    let street_number_start = Instant::now();
+    let before_street_number = seeds.len();
+    Self::collect_street_number_seeds(&mut seeds, full_text, existing_entities);
+    profile.street_number_elapsed_us = elapsed_us(street_number_start);
+    profile.street_number_seed_count =
+      seeds.len().saturating_sub(before_street_number);
+
+    let postal_code_start = Instant::now();
+    let before_postal_code = seeds.len();
     self.collect_postal_code_seeds(&mut seeds, full_text);
-    self.collect_italian_cap_seeds(&mut seeds, full_text);
+    profile.postal_code_elapsed_us = elapsed_us(postal_code_start);
+    profile.postal_code_seed_count =
+      seeds.len().saturating_sub(before_postal_code);
+
+    let italian_cap_start = Instant::now();
+    let before_italian_cap = seeds.len();
+    Self::collect_italian_cap_seeds(&mut seeds, full_text);
+    profile.italian_cap_elapsed_us = elapsed_us(italian_cap_start);
+    profile.italian_cap_seed_count =
+      seeds.len().saturating_sub(before_italian_cap);
+
     seeds.sort_by(|left, right| {
       left
         .start
@@ -262,57 +338,40 @@ impl PreparedAddressSeedData {
     })
   }
 
-  fn collect_italian_cap_seeds(&self, seeds: &mut Vec<Seed>, full_text: &str) {
+  fn collect_italian_cap_seeds(seeds: &mut Vec<Seed>, full_text: &str) {
     if seeds.is_empty() {
       return;
     }
-    for captures in self.italian_cap_re.captures_iter(full_text) {
-      let Some(found) = captures.name("cap") else {
-        continue;
-      };
-      let start = found.start();
-      let end = found.end();
-      if seed_covered(seeds, start, end) {
+    for found in italian_cap_candidates(full_text) {
+      if seed_covered(seeds, found.start, found.end) {
         continue;
       }
-      if !has_nearby_italian_cap_evidence(full_text, seeds, start) {
+      if !has_nearby_italian_cap_evidence(full_text, seeds, found.start) {
         continue;
       }
       seeds.push(Seed {
         kind: SeedType::PostalCode,
-        start,
-        end,
-        text: found.as_str().to_owned(),
+        start: found.start,
+        end: found.end,
+        text: found.text.to_owned(),
       });
     }
   }
 
   fn collect_street_number_seeds(
-    &self,
     seeds: &mut Vec<Seed>,
     full_text: &str,
     existing_entities: &[PipelineEntity],
   ) {
-    for captures in self.street_number_re.captures_iter(full_text) {
-      let Some(full) = captures.get(0) else {
-        continue;
-      };
-      let Some(street) = captures.name("street") else {
-        continue;
-      };
-      let Some(number) = captures.name("num") else {
-        continue;
-      };
-      let start = full.start();
-      let end = number.end();
-      if range_overlaps_non_address(start, end, existing_entities) {
+    for found in street_number_candidates(full_text) {
+      if range_overlaps_non_address(found.start, found.end, existing_entities) {
         continue;
       }
       seeds.push(Seed {
         kind: SeedType::StreetWord,
-        start,
-        end,
-        text: format!("{} {}", street.as_str(), number.as_str()),
+        start: found.start,
+        end: found.end,
+        text: format!("{} {}", found.street, found.number),
       });
     }
   }
@@ -491,6 +550,21 @@ struct Seed {
   text: String,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct StreetNumberCandidate<'a> {
+  start: usize,
+  end: usize,
+  street: &'a str,
+  number: &'a str,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct ItalianCapCandidate<'a> {
+  start: usize,
+  end: usize,
+  text: &'a str,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct SeedCluster {
   seeds: Vec<Seed>,
@@ -556,6 +630,11 @@ fn compile_regex(pattern: &str) -> Result<Regex> {
     engine: SearchEngine::Regex,
     reason: error.to_string(),
   })
+}
+
+fn elapsed_us(start: Instant) -> u64 {
+  let micros = start.elapsed().as_micros();
+  u64::try_from(micros).unwrap_or(u64::MAX)
 }
 
 fn seed_from_match(
@@ -737,6 +816,172 @@ fn is_plain_five_digit_postal_code(text: &str) -> bool {
 
 const fn is_dash(ch: char) -> bool {
   matches!(ch, '-' | '‐' | '‑' | '‒' | '–' | '—' | '―')
+}
+
+fn street_number_candidates(
+  full_text: &str,
+) -> impl Iterator<Item = StreetNumberCandidate<'_>> {
+  full_text
+    .char_indices()
+    .filter_map(|(start, ch)| street_number_candidate_at(full_text, start, ch))
+}
+
+fn street_number_candidate_at(
+  full_text: &str,
+  start: usize,
+  first: char,
+) -> Option<StreetNumberCandidate<'_>> {
+  if !first.is_uppercase() || !has_left_word_boundary(full_text, start) {
+    return None;
+  }
+  let street_end = scan_title_word_tail(full_text, start, first)?;
+  let number_start = skip_required_whitespace(full_text, street_end)?;
+  let number_end = scan_house_number(full_text, number_start)?;
+  if !has_comma_or_newline_after_optional_whitespace(full_text, number_end) {
+    return None;
+  }
+  Some(StreetNumberCandidate {
+    start,
+    end: number_end,
+    street: full_text.get(start..street_end)?,
+    number: full_text.get(number_start..number_end)?,
+  })
+}
+
+fn italian_cap_candidates(
+  full_text: &str,
+) -> impl Iterator<Item = ItalianCapCandidate<'_>> {
+  full_text
+    .char_indices()
+    .filter_map(|(start, ch)| italian_cap_candidate_at(full_text, start, ch))
+}
+
+fn italian_cap_candidate_at(
+  full_text: &str,
+  start: usize,
+  first: char,
+) -> Option<ItalianCapCandidate<'_>> {
+  if !first.is_ascii_digit() || !has_left_word_boundary(full_text, start) {
+    return None;
+  }
+  let cap_end = scan_exact_ascii_digits(full_text, start, 5)?;
+  let city_start = skip_required_whitespace(full_text, cap_end)?;
+  let (_, city_first) = next_char(full_text, city_start)?;
+  if !city_first.is_uppercase() {
+    return None;
+  }
+  let city_tail_start = city_start.saturating_add(city_first.len_utf8());
+  if !starts_with_letter(full_text, city_tail_start) {
+    return None;
+  }
+  Some(ItalianCapCandidate {
+    start,
+    end: cap_end,
+    text: full_text.get(start..cap_end)?,
+  })
+}
+
+fn scan_title_word_tail(
+  full_text: &str,
+  start: usize,
+  first: char,
+) -> Option<usize> {
+  let mut cursor = start.saturating_add(first.len_utf8());
+  let mut lowercase_count = 0usize;
+  while let Some((index, ch)) = next_char(full_text, cursor) {
+    if !ch.is_lowercase() {
+      break;
+    }
+    lowercase_count = lowercase_count.saturating_add(1);
+    cursor = index.saturating_add(ch.len_utf8());
+  }
+  (lowercase_count >= 2).then_some(cursor)
+}
+
+fn skip_required_whitespace(full_text: &str, start: usize) -> Option<usize> {
+  let mut cursor = start;
+  let mut saw_whitespace = false;
+  while let Some((index, ch)) = next_char(full_text, cursor) {
+    if !ch.is_whitespace() {
+      break;
+    }
+    saw_whitespace = true;
+    cursor = index.saturating_add(ch.len_utf8());
+  }
+  saw_whitespace.then_some(cursor)
+}
+
+fn scan_house_number(full_text: &str, start: usize) -> Option<usize> {
+  let mut end = scan_ascii_digits(full_text, start, 1, 5)?;
+  let Some((slash_start, '/')) = next_char(full_text, end) else {
+    return Some(end);
+  };
+  let slash_end = slash_start.saturating_add('/'.len_utf8());
+  if let Some(next_end) = scan_ascii_digits(full_text, slash_end, 1, 5) {
+    end = next_end;
+  }
+  Some(end)
+}
+
+fn scan_exact_ascii_digits(
+  full_text: &str,
+  start: usize,
+  count: usize,
+) -> Option<usize> {
+  let end = scan_ascii_digits(full_text, start, count, count)?;
+  let next_is_digit =
+    next_char(full_text, end).is_some_and(|(_, ch)| ch.is_ascii_digit());
+  (!next_is_digit).then_some(end)
+}
+
+fn scan_ascii_digits(
+  full_text: &str,
+  start: usize,
+  min: usize,
+  max: usize,
+) -> Option<usize> {
+  let mut cursor = start;
+  let mut count = 0usize;
+  while count < max {
+    let Some((index, ch)) = next_char(full_text, cursor) else {
+      break;
+    };
+    if !ch.is_ascii_digit() {
+      break;
+    }
+    count = count.saturating_add(1);
+    cursor = index.saturating_add(ch.len_utf8());
+  }
+  (count >= min).then_some(cursor)
+}
+
+fn has_comma_or_newline_after_optional_whitespace(
+  full_text: &str,
+  start: usize,
+) -> bool {
+  let mut cursor = start;
+  while let Some((index, ch)) = next_char(full_text, cursor) {
+    if ch == ',' || ch == '\n' {
+      return true;
+    }
+    if !ch.is_whitespace() {
+      return false;
+    }
+    cursor = index.saturating_add(ch.len_utf8());
+  }
+  false
+}
+
+fn starts_with_letter(full_text: &str, start: usize) -> bool {
+  next_char(full_text, start).is_some_and(|(_, ch)| ch.is_alphabetic())
+}
+
+fn has_left_word_boundary(full_text: &str, start: usize) -> bool {
+  previous_char(full_text, start).is_none_or(|(_, ch)| !is_word_like(ch))
+}
+
+fn is_word_like(ch: char) -> bool {
+  ch.is_alphanumeric() || ch == '_'
 }
 
 fn seed_covered(seeds: &[Seed], start: usize, end: usize) -> bool {
@@ -1371,8 +1616,9 @@ mod tests {
       )?,
     ];
 
-    let result =
-      data.process(&[], PatternSlice::default(), full_text, &existing)?;
+    let result = data
+      .process_profiled(&[], PatternSlice::default(), full_text, &existing)?
+      .entities;
 
     assert!(
       result
