@@ -49,14 +49,14 @@ pub(super) enum StaticDetectorInput {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) struct StaticDetector {
+pub(super) struct StaticDetectorSpec {
   id: StaticDetectorId,
   stage: DiagnosticStage,
   required_inputs: &'static [StaticDetectorInput],
   dependencies: &'static [StaticDetectorId],
 }
 
-impl StaticDetector {
+impl StaticDetectorSpec {
   pub(super) const fn new(
     id: StaticDetectorId,
     stage: DiagnosticStage,
@@ -96,7 +96,7 @@ pub(super) struct StaticDetectorContext<'a, 'd> {
 }
 
 pub(super) trait StaticEntityDetector: Sync {
-  fn spec(&self) -> StaticDetector;
+  fn spec(&self) -> StaticDetectorSpec;
 
   fn detect(
     &self,

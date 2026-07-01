@@ -4,7 +4,7 @@ use crate::diagnostics::{DiagnosticStage, StaticRedactionDiagnostics};
 use crate::resolution::PipelineEntity;
 use crate::types::Result;
 
-use super::detector_registry::StaticDetector;
+use super::detector_registry::StaticDetectorSpec;
 use super::diagnostic_stream::DiagnosticEventStream;
 use super::timing::{TimedEntities, elapsed_us};
 
@@ -46,7 +46,7 @@ impl ResolverStep {
 
 pub(super) fn record_detector_entities(
   diagnostics: &mut StaticRedactionDiagnostics,
-  detector: StaticDetector,
+  detector: StaticDetectorSpec,
   timed: &TimedEntities,
   full_text: &str,
 ) {

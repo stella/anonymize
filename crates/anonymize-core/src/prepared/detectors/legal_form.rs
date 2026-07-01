@@ -1,8 +1,8 @@
 use crate::diagnostics::DiagnosticStage;
 use crate::legal_forms::process_legal_form_matches;
 use crate::prepared::detector_registry::{
-  StaticDetector, StaticDetectorContext, StaticDetectorId, StaticDetectorInput,
-  StaticEntityDetector,
+  StaticDetectorContext, StaticDetectorId, StaticDetectorInput,
+  StaticDetectorSpec, StaticEntityDetector,
 };
 use crate::prepared::timing::{StaticEntityPasses, TimedEntities};
 use crate::types::Result;
@@ -12,8 +12,8 @@ use super::timed_entities;
 pub(in crate::prepared) struct LegalFormDetector;
 
 impl StaticEntityDetector for LegalFormDetector {
-  fn spec(&self) -> StaticDetector {
-    StaticDetector::new(
+  fn spec(&self) -> StaticDetectorSpec {
+    StaticDetectorSpec::new(
       StaticDetectorId::LegalForm,
       DiagnosticStage::EntityLegalForm,
       &[
