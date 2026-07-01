@@ -1,5 +1,5 @@
 import { createRequire } from "node:module";
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import process from "node:process";
 
@@ -476,7 +476,7 @@ const resolveDefaultNativePipelineOptions = ({
     binding: resolvedBinding,
     warmup: normalizeDefaultNativePipelineWarmup(warmup),
     ...(language !== undefined
-      ? { language: normalizeDefaultNativePipelineLanguage(language) }
+      ? { language: resolveDefaultNativePipelineLanguage(language) }
       : {}),
     ...(packagePath !== undefined ? { packagePath } : {}),
   };
@@ -622,11 +622,28 @@ const defaultNativePipelinePackageUrl = (language: string | undefined): URL => {
   if (language === undefined) {
     return DEFAULT_NATIVE_PIPELINE_PACKAGE_URL;
   }
+  const normalized = resolveDefaultNativePipelineLanguage(language);
+  return defaultNativePipelineLanguagePackageUrl(normalized);
+};
+
+const defaultNativePipelineLanguagePackageUrl = (language: string): URL =>
+  new URL(`../native-pipeline.${language}.stlanonpkg`, import.meta.url);
+
+const resolveDefaultNativePipelineLanguage = (language: string): string => {
   const normalized = normalizeDefaultNativePipelineLanguage(language);
-  return new URL(
-    `../native-pipeline.${normalized}.stlanonpkg`,
-    import.meta.url,
-  );
+  const exactUrl = defaultNativePipelineLanguagePackageUrl(normalized);
+  if (existsSync(exactUrl)) {
+    return normalized;
+  }
+  const baseLanguage = normalized.split("-").at(0);
+  if (baseLanguage === undefined || baseLanguage === normalized) {
+    return normalized;
+  }
+  const baseUrl = defaultNativePipelineLanguagePackageUrl(baseLanguage);
+  if (existsSync(baseUrl)) {
+    return baseLanguage;
+  }
+  return normalized;
 };
 
 const defaultNativePipelinePackageDescription = (
@@ -634,7 +651,7 @@ const defaultNativePipelinePackageDescription = (
 ): string =>
   language === undefined
     ? "Default native pipeline package"
-    : `Default native pipeline package for language "${normalizeDefaultNativePipelineLanguage(language)}"`;
+    : `Default native pipeline package for language "${resolveDefaultNativePipelineLanguage(language)}"`;
 
 const normalizeDefaultNativePipelineLanguage = (language: string): string => {
   const normalized = language.trim().toLowerCase();

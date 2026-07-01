@@ -412,6 +412,38 @@ describe("native node loader", () => {
     }
   });
 
+  test("falls back from regional default package languages to base packages", () => {
+    const language = "zz";
+    const packagePath = fileURLToPath(
+      new URL(`../../native-pipeline.${language}.stlanonpkg`, import.meta.url),
+    );
+    const capturedBytes: number[][] = [];
+    try {
+      writeFileSync(packagePath, Uint8Array.of(34, 35, 36));
+      const binding = fakeNativeBinding(PACKAGE_VERSION, {
+        onPreparedPackageBytesWithoutCache: (bytes) => {
+          capturedBytes.push([...bytes]);
+        },
+      });
+
+      const regional = getDefaultNativePipeline({
+        binding,
+        language: "ZZ-Test",
+        expectedVersion: PACKAGE_VERSION,
+      });
+      const base = getDefaultNativePipeline({
+        binding,
+        language,
+        expectedVersion: PACKAGE_VERSION,
+      });
+
+      expect(base).toBe(regional);
+      expect(capturedBytes).toEqual([[34, 35, 36]]);
+    } finally {
+      rmSync(packagePath, { force: true });
+    }
+  });
+
   test("shared default package SDK helpers expose snake-case aliases", () => {
     const aliasFunctions: Record<
       (typeof SHARED_NATIVE_SDK_DEFAULT_PACKAGE_FUNCTIONS)[number],
