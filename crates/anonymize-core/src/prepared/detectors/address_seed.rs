@@ -18,21 +18,21 @@ const ADDRESS_SEED_DEPENDENCIES: &[DetectorId] = &[
   DetectorId::NameCorpus,
 ];
 
-static_detector_rule! {
-  pub(in crate::prepared) const ADDRESS_SEED_RULE;
-  id: DetectorId::AddressSeed;
-  stage: DiagnosticStage::EntityAddressSeed;
-  inputs: &[
-    DetectorInput::LiteralMatches,
-    DetectorInput::ContextEntities,
-  ];
-  after: ADDRESS_SEED_DEPENDENCIES;
-  uses: &[SupportResource::AddressSeed];
-  active: address_seed_is_active;
-  detect: detect_address_seed;
+static_detector_rules! {
+  pub(in crate::prepared) const RULES;
+  ADDRESS_SEED_RULE {
+    id: DetectorId::AddressSeed;
+    stage: DiagnosticStage::EntityAddressSeed;
+    inputs: &[
+      DetectorInput::LiteralMatches,
+      DetectorInput::ContextEntities,
+    ];
+    after: ADDRESS_SEED_DEPENDENCIES;
+    uses: &[SupportResource::AddressSeed];
+    active: address_seed_is_active;
+    detect: detect_address_seed;
+  }
 }
-
-pub(in crate::prepared) const RULES: &[StaticDetectorRule] = &[ADDRESS_SEED_RULE];
 
 const fn address_seed_is_active(context: &StaticDetectorContext<'_>) -> bool {
   context.engine.data.address_seed.is_some()

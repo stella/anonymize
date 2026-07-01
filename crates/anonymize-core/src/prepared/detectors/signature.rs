@@ -4,17 +4,17 @@ use crate::signatures::detect_signatures;
 use super::prelude::*;
 use super::timed_entities;
 
-static_detector_rule! {
-  pub(in crate::prepared) const SIGNATURE_RULE;
-  id: DetectorId::Signature;
-  stage: DiagnosticStage::EntitySignature;
-  inputs: &[DetectorInput::FullText];
-  uses: &[SupportResource::Signature];
-  active: signature_is_active;
-  detect: detect_signature;
+static_detector_rules! {
+  pub(in crate::prepared) const RULES;
+  SIGNATURE_RULE {
+    id: DetectorId::Signature;
+    stage: DiagnosticStage::EntitySignature;
+    inputs: &[DetectorInput::FullText];
+    uses: &[SupportResource::Signature];
+    active: signature_is_active;
+    detect: detect_signature;
+  }
 }
-
-pub(in crate::prepared) const RULES: &[StaticDetectorRule] = &[SIGNATURE_RULE];
 
 const fn signature_is_active(context: &StaticDetectorContext<'_>) -> bool {
   context.engine.data.signatures.is_some()

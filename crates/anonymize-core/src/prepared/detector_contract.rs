@@ -184,31 +184,41 @@ impl StaticDetectorRule {
   }
 }
 
-macro_rules! static_detector_rule {
+macro_rules! static_detector_rules {
   (
-    $visibility:vis const $name:ident;
-    id: $id:expr;
-    stage: $stage:expr;
-    inputs: $inputs:expr;
-    $(after: $dependencies:expr;)?
-    $(uses: $resources:expr;)?
-    active: $is_active:path;
-    detect: $detect:path $(;)?
+    $visibility:vis const $rules_name:ident;
+    $(
+      $rule_name:ident {
+        id: $id:expr;
+        stage: $stage:expr;
+        inputs: $inputs:expr;
+        $(after: $dependencies:expr;)?
+        $(uses: $resources:expr;)?
+        active: $is_active:path;
+        detect: $detect:path $(;)?
+      }
+    )+
   ) => {
-    $visibility const $name:
-      $crate::prepared::detector_contract::StaticDetectorRule =
-      $crate::prepared::detector_contract::StaticDetectorRule::declare(
-        $crate::prepared::detector_contract::StaticDetectorSpec::define(
-          $id,
-          $stage,
-        )
-          .requires($inputs)
-          $(.after($dependencies))?
-          $(.uses($resources))?,
-        $is_active,
-        $detect,
-      );
+    $(
+      $visibility const $rule_name:
+        $crate::prepared::detector_contract::StaticDetectorRule =
+        $crate::prepared::detector_contract::StaticDetectorRule::declare(
+          $crate::prepared::detector_contract::StaticDetectorSpec::define(
+            $id,
+            $stage,
+          )
+            .requires($inputs)
+            $(.after($dependencies))?
+            $(.uses($resources))?,
+          $is_active,
+          $detect,
+        );
+    )+
+
+    $visibility const $rules_name:
+      &[$crate::prepared::detector_contract::StaticDetectorRule] =
+      &[$($rule_name),+];
   };
 }
 
-pub(super) use static_detector_rule;
+pub(super) use static_detector_rules;

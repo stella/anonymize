@@ -6,44 +6,39 @@ use crate::processors::{
 use super::prelude::*;
 use super::timed_entities;
 
-static_detector_rule! {
-  pub(in crate::prepared) const DENY_LIST_RULE;
-  id: DetectorId::DenyList;
-  stage: DiagnosticStage::EntityDenyList;
-  inputs: &[
-    DetectorInput::LiteralMatches,
-    DetectorInput::DenyListData,
-  ];
-  active: deny_list_is_active;
-  detect: detect_deny_list;
+static_detector_rules! {
+  pub(in crate::prepared) const RULES;
+  DENY_LIST_RULE {
+    id: DetectorId::DenyList;
+    stage: DiagnosticStage::EntityDenyList;
+    inputs: &[
+      DetectorInput::LiteralMatches,
+      DetectorInput::DenyListData,
+    ];
+    active: deny_list_is_active;
+    detect: detect_deny_list;
+  }
+  GAZETTEER_RULE {
+    id: DetectorId::Gazetteer;
+    stage: DiagnosticStage::EntityGazetteer;
+    inputs: &[
+      DetectorInput::LiteralMatches,
+      DetectorInput::GazetteerData,
+    ];
+    active: gazetteer_is_active;
+    detect: detect_gazetteer;
+  }
+  COUNTRY_RULE {
+    id: DetectorId::Country;
+    stage: DiagnosticStage::EntityCountry;
+    inputs: &[
+      DetectorInput::LiteralMatches,
+      DetectorInput::CountryData,
+    ];
+    active: country_is_active;
+    detect: detect_country;
+  }
 }
-
-static_detector_rule! {
-  pub(in crate::prepared) const GAZETTEER_RULE;
-  id: DetectorId::Gazetteer;
-  stage: DiagnosticStage::EntityGazetteer;
-  inputs: &[
-    DetectorInput::LiteralMatches,
-    DetectorInput::GazetteerData,
-  ];
-  active: gazetteer_is_active;
-  detect: detect_gazetteer;
-}
-
-static_detector_rule! {
-  pub(in crate::prepared) const COUNTRY_RULE;
-  id: DetectorId::Country;
-  stage: DiagnosticStage::EntityCountry;
-  inputs: &[
-    DetectorInput::LiteralMatches,
-    DetectorInput::CountryData,
-  ];
-  active: country_is_active;
-  detect: detect_country;
-}
-
-pub(in crate::prepared) const RULES: &[StaticDetectorRule] =
-  &[DENY_LIST_RULE, GAZETTEER_RULE, COUNTRY_RULE];
 
 const fn deny_list_is_active(context: &StaticDetectorContext<'_>) -> bool {
   !context.matches.literal.is_empty() && context.engine.data.deny_list.is_some()

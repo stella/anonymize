@@ -4,17 +4,17 @@ use crate::triggers::process_trigger_matches;
 use super::prelude::*;
 use super::timed_entities;
 
-static_detector_rule! {
-  pub(in crate::prepared) const TRIGGER_RULE;
-  id: DetectorId::Trigger;
-  stage: DiagnosticStage::EntityTrigger;
-  inputs: &[DetectorInput::RegexMatches];
-  uses: &[SupportResource::Triggers];
-  active: trigger_is_active;
-  detect: detect_trigger;
+static_detector_rules! {
+  pub(in crate::prepared) const RULES;
+  TRIGGER_RULE {
+    id: DetectorId::Trigger;
+    stage: DiagnosticStage::EntityTrigger;
+    inputs: &[DetectorInput::RegexMatches];
+    uses: &[SupportResource::Triggers];
+    active: trigger_is_active;
+    detect: detect_trigger;
+  }
 }
-
-pub(in crate::prepared) const RULES: &[StaticDetectorRule] = &[TRIGGER_RULE];
 
 const fn trigger_is_active(context: &StaticDetectorContext<'_>) -> bool {
   !context.matches.regex.is_empty() && context.engine.data.triggers.is_some()

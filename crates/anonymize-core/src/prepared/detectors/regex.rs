@@ -4,34 +4,31 @@ use crate::processors::process_regex_matches;
 use super::prelude::*;
 use super::timed_entities;
 
-static_detector_rule! {
-  pub(in crate::prepared) const REGEX_RULE;
-  id: DetectorId::Regex;
-  stage: DiagnosticStage::EntityRegex;
-  inputs: &[
-    DetectorInput::RegexMatches,
-    DetectorInput::FullText,
-    DetectorInput::RegexMeta,
-  ];
-  active: regex_is_active;
-  detect: detect_regex;
+static_detector_rules! {
+  pub(in crate::prepared) const RULES;
+  REGEX_RULE {
+    id: DetectorId::Regex;
+    stage: DiagnosticStage::EntityRegex;
+    inputs: &[
+      DetectorInput::RegexMatches,
+      DetectorInput::FullText,
+      DetectorInput::RegexMeta,
+    ];
+    active: regex_is_active;
+    detect: detect_regex;
+  }
+  CUSTOM_REGEX_RULE {
+    id: DetectorId::CustomRegex;
+    stage: DiagnosticStage::EntityCustomRegex;
+    inputs: &[
+      DetectorInput::CustomRegexMatches,
+      DetectorInput::FullText,
+      DetectorInput::CustomRegexMeta,
+    ];
+    active: custom_regex_is_active;
+    detect: detect_custom_regex;
+  }
 }
-
-static_detector_rule! {
-  pub(in crate::prepared) const CUSTOM_REGEX_RULE;
-  id: DetectorId::CustomRegex;
-  stage: DiagnosticStage::EntityCustomRegex;
-  inputs: &[
-    DetectorInput::CustomRegexMatches,
-    DetectorInput::FullText,
-    DetectorInput::CustomRegexMeta,
-  ];
-  active: custom_regex_is_active;
-  detect: detect_custom_regex;
-}
-
-pub(in crate::prepared) const RULES: &[StaticDetectorRule] =
-  &[REGEX_RULE, CUSTOM_REGEX_RULE];
 
 const fn regex_is_active(context: &StaticDetectorContext<'_>) -> bool {
   !context.matches.regex.is_empty()

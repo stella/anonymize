@@ -6,21 +6,21 @@ use crate::name_corpus::NameCorpusDetectionProfile;
 use super::prelude::*;
 use super::elapsed_us;
 
-static_detector_rule! {
-  pub(in crate::prepared) const NAME_CORPUS_RULE;
-  id: DetectorId::NameCorpus;
-  stage: DiagnosticStage::EntityNameCorpus;
-  inputs: &[
-    DetectorInput::FullText,
-    DetectorInput::DenyListEntities,
-  ];
-  after: &[DetectorId::DenyList];
-  uses: &[SupportResource::NameCorpus];
-  active: name_corpus_is_active;
-  detect: detect_name_corpus;
+static_detector_rules! {
+  pub(in crate::prepared) const RULES;
+  NAME_CORPUS_RULE {
+    id: DetectorId::NameCorpus;
+    stage: DiagnosticStage::EntityNameCorpus;
+    inputs: &[
+      DetectorInput::FullText,
+      DetectorInput::DenyListEntities,
+    ];
+    after: &[DetectorId::DenyList];
+    uses: &[SupportResource::NameCorpus];
+    active: name_corpus_is_active;
+    detect: detect_name_corpus;
+  }
 }
-
-pub(in crate::prepared) const RULES: &[StaticDetectorRule] = &[NAME_CORPUS_RULE];
 
 const fn name_corpus_is_active(context: &StaticDetectorContext<'_>) -> bool {
   context.engine.data.name_corpus.is_some()

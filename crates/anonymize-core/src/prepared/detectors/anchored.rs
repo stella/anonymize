@@ -3,20 +3,20 @@ use crate::diagnostics::DiagnosticStage;
 use super::prelude::*;
 use super::timed_entities;
 
-static_detector_rule! {
-  pub(in crate::prepared) const ANCHORED_RULE;
-  id: DetectorId::Anchored;
-  stage: DiagnosticStage::EntityAnchored;
-  inputs: &[
-    DetectorInput::FullText,
-    DetectorInput::DateData,
-    DetectorInput::MonetaryData,
-  ];
-  active: anchored_is_active;
-  detect: detect_anchored;
+static_detector_rules! {
+  pub(in crate::prepared) const RULES;
+  ANCHORED_RULE {
+    id: DetectorId::Anchored;
+    stage: DiagnosticStage::EntityAnchored;
+    inputs: &[
+      DetectorInput::FullText,
+      DetectorInput::DateData,
+      DetectorInput::MonetaryData,
+    ];
+    active: anchored_is_active;
+    detect: detect_anchored;
+  }
 }
-
-pub(in crate::prepared) const RULES: &[StaticDetectorRule] = &[ANCHORED_RULE];
 
 const fn anchored_is_active(context: &StaticDetectorContext<'_>) -> bool {
   context.engine.data.dates.is_some()
