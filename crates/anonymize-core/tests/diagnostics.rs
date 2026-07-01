@@ -271,6 +271,59 @@ fn diagnostic_stages_report_pipeline_phase() {
 }
 
 #[test]
+fn engine_reports_lazy_regex_warm_diagnostics() {
+  let prepared = PreparedEngine::new(prepared_config! {
+    regex_patterns: vec![SearchPattern::RegexWithOptions {
+      pattern: String::from(r"\b[A-Z]{2}\d{4}\b"),
+      lazy: true,
+      prefilter_any: Vec::new(),
+      prefilter_case_insensitive: None,
+      prefilter_regex: None,
+      prefilter_window_bytes: None,
+      prepared_artifact_policy: None,
+    }],
+    custom_regex_patterns: vec![SearchPattern::RegexWithOptions {
+      pattern: String::from(r"\bREF-\d{3}\b"),
+      lazy: true,
+      prefilter_any: Vec::new(),
+      prefilter_case_insensitive: None,
+      prefilter_regex: None,
+      prefilter_window_bytes: None,
+      prepared_artifact_policy: None,
+    }],
+    slices: PreparedEngineSlices {
+      regex: PatternSlice { start: 0, end: 1 },
+      custom_regex: PatternSlice { start: 0, end: 1 },
+      ..PreparedEngineSlices::default()
+    },
+    regex_meta: vec![RegexMatchMeta::new("registration number", 0.9)],
+    custom_regex_meta: vec![RegexMatchMeta::new("reference number", 0.9)],
+    ..empty_config(PreparedEngineSlices::default())
+  })
+  .unwrap();
+
+  let diagnostics = prepared.warm_lazy_regex_diagnostics().unwrap();
+  let events = &diagnostics.events;
+
+  assert_stage_summary(events, DiagnosticStage::WarmRegex, Some(1), None);
+  assert_stage_summary(events, DiagnosticStage::WarmCustomRegex, Some(1), None);
+  assert_stage_summary(
+    events,
+    DiagnosticStage::WarmLegalFormSearch,
+    Some(0),
+    None,
+  );
+  assert_stage_summary(
+    events,
+    DiagnosticStage::WarmTriggerSearch,
+    Some(0),
+    None,
+  );
+  assert_stage_summary(events, DiagnosticStage::WarmLiteral, Some(0), None);
+  assert_stage_summary(events, DiagnosticStage::WarmTotal, Some(2), None);
+}
+
+#[test]
 fn diagnostic_events_report_scope() {
   let total = DiagnosticEvent {
     stage: DiagnosticStage::RedactTotal,

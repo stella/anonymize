@@ -204,3 +204,30 @@ impl StaticDetectorRule {
     (self.detect)(context, passes, diagnostics)
   }
 }
+
+macro_rules! static_detector_rule {
+  (
+    $visibility:vis const $name:ident;
+    id: $id:expr;
+    stage: $stage:expr;
+    inputs: $inputs:expr;
+    $(after: $dependencies:expr;)?
+    $(uses: $resources:expr;)?
+    detect: $detect:path $(;)?
+  ) => {
+    $visibility const $name:
+      $crate::prepared::detector_contract::StaticDetectorRule =
+      $crate::prepared::detector_contract::StaticDetectorRule::declare(
+        $crate::prepared::detector_contract::StaticDetectorSpec::define(
+          $id,
+          $stage,
+        )
+          .requires($inputs)
+          $(.after($dependencies))?
+          $(.uses($resources))?,
+        $detect,
+      );
+  };
+}
+
+pub(super) use static_detector_rule;

@@ -3,7 +3,7 @@ use std::time::Instant;
 use crate::dates::{DateData, PreparedDateData};
 use crate::diagnostics::{DiagnosticStage, StaticRedactionDiagnostics};
 use crate::money::{MonetaryData, PreparedMonetaryData};
-use crate::types::Result;
+use crate::types::{Error, Result};
 
 use super::artifacts::{PreparedEngineArtifacts, PreparedEngineArtifactsView};
 use super::config_validation::validate_supported_config_for_artifacts;
@@ -77,21 +77,20 @@ impl PreparedEngine {
       (DiagnosticStage::WarmTriggerSearch, &self.indexes.triggers),
       (DiagnosticStage::WarmLiteral, &self.indexes.literals),
     ];
-    let mut count = 0usize;
-    for (stage, index) in stages {
-      let start = Instant::now();
-      index.warm_lazy_regex()?;
-      count = count.saturating_add(index.len());
-      if let Some(diagnostics) = &mut diagnostics {
+    let metrics = warm_search_indexes(&stages)?;
+    let count = metrics
+      .iter()
+      .map(|metric| metric.count)
+      .fold(0usize, usize::saturating_add);
+    if let Some(diagnostics) = &mut diagnostics {
+      for metric in metrics {
         diagnostics.record_stage(
-          stage,
-          Some(index.len()),
-          Some(elapsed_us(start)),
+          metric.stage,
+          Some(metric.count),
+          Some(metric.elapsed_us),
           None,
         );
       }
-    }
-    if let Some(diagnostics) = &mut diagnostics {
       diagnostics.record_stage(
         DiagnosticStage::WarmTotal,
         Some(count),
@@ -238,6 +237,45 @@ impl PreparedEngine {
       data,
     })
   }
+}
+
+struct WarmSearchMetric {
+  stage: DiagnosticStage,
+  count: usize,
+  elapsed_us: u64,
+}
+
+fn warm_search_indexes(
+  stages: &[(DiagnosticStage, &crate::search::SearchIndex); 5],
+) -> Result<Vec<WarmSearchMetric>> {
+  std::thread::scope(|scope| {
+    let mut handles = Vec::with_capacity(stages.len());
+    for (stage, index) in stages.iter().copied() {
+      handles.push(scope.spawn(move || warm_search_index(stage, index)));
+    }
+
+    let mut metrics = Vec::with_capacity(handles.len());
+    for handle in handles {
+      metrics.push(handle.join().map_err(|_| Error::InvalidStaticData {
+        field: "search_index_warmup",
+        reason: "search index warm-up panicked".to_owned(),
+      })??);
+    }
+    Ok(metrics)
+  })
+}
+
+fn warm_search_index(
+  stage: DiagnosticStage,
+  index: &crate::search::SearchIndex,
+) -> Result<WarmSearchMetric> {
+  let start = Instant::now();
+  index.warm_lazy_regex()?;
+  Ok(WarmSearchMetric {
+    stage,
+    count: index.len(),
+    elapsed_us: elapsed_us(start),
+  })
 }
 
 fn prepared_static_data(
