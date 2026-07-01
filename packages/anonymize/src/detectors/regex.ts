@@ -2434,6 +2434,7 @@ type SigningClauseConfig = {
     prefix: string;
     suffix: string;
     prepositions: string[];
+    prefilterPhrases?: string[];
     guardPrefixPhrases?: string[];
     guardSuffixPhrases?: string[];
   }>;
@@ -2485,6 +2486,31 @@ const buildSigningClausePatterns = (
   return patterns;
 };
 
+const buildNativeSigningClausePatterns = (
+  data: SigningClauseConfig,
+  selectedLanguages?: readonly string[],
+): PatternEntry[] => {
+  const patterns: PatternEntry[] = [];
+
+  for (const entry of data.patterns) {
+    if (!languageMatches(entry.lang, selectedLanguages)) {
+      continue;
+    }
+
+    const pattern: RegexPatternEntry = {
+      pattern: buildSigningClausePattern(entry),
+      lazy: true,
+      prefilterAny: entry.prefilterPhrases ?? [],
+      prefilterCaseInsensitive: false,
+      prefilterWindowBytes: CONTEXT_REGEX_PREFILTER_WINDOW_BYTES,
+      preparedArtifactPolicy: "omit",
+    };
+    patterns.push(pattern);
+  }
+
+  return patterns;
+};
+
 const buildSigningClausePattern = (
   entry: SigningClauseConfig["patterns"][number],
 ): string => {
@@ -2511,7 +2537,7 @@ export const SIGNING_CLAUSE_META: Readonly<RegexMeta> = {
 };
 
 let signingPatternPromise: Promise<string[]> | null = null;
-let nativeSigningPatternPromise: Promise<string[]> | null = null;
+let nativeSigningPatternPromise: Promise<PatternEntry[]> | null = null;
 
 const loadSigningPatterns = async (
   selectedLanguages?: readonly string[],
@@ -2523,10 +2549,10 @@ const loadSigningPatterns = async (
 
 const loadNativeSigningPatterns = async (
   selectedLanguages?: readonly string[],
-): Promise<string[]> => {
+): Promise<PatternEntry[]> => {
   const mod = await import("../data/signing-clauses.json");
   const data: SigningClauseConfig = mod.default ?? mod;
-  return buildSigningClausePatterns(data, selectedLanguages);
+  return buildNativeSigningClausePatterns(data, selectedLanguages);
 };
 
 export const getSigningClausePatterns = (
@@ -2546,7 +2572,7 @@ export const getSigningClausePatterns = (
 
 export const getNativeSigningClausePatterns = (
   selectedLanguages?: readonly string[],
-): Promise<string[]> => {
+): Promise<PatternEntry[]> => {
   if (selectedLanguages !== undefined) {
     return loadNativeSigningPatterns(selectedLanguages);
   }

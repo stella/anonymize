@@ -52,6 +52,19 @@ const getCtx = () => {
   return sharedCtx;
 };
 
+const signingPatternText = (
+  pattern: Awaited<ReturnType<typeof getNativeSigningClausePatterns>>[number],
+) => {
+  if (typeof pattern === "string") {
+    return pattern;
+  }
+  if (pattern instanceof RegExp) {
+    return pattern.source;
+  }
+  const { pattern: entryPattern } = pattern;
+  return entryPattern instanceof RegExp ? entryPattern.source : entryPattern;
+};
+
 const detect = async (fullText: string, config: Partial<PipelineConfig>) =>
   runPipeline({
     fullText,
@@ -289,12 +302,49 @@ describe("pipeline config semantics", () => {
       getSigningClausePatterns(),
       getNativeSigningClausePatterns(),
     ]);
+    const nativePatternTexts = nativePatterns.map(signingPatternText);
 
-    expect(nativePatterns).toEqual(tsPatterns);
-    expect(nativePatterns.some((pattern) => pattern.includes("Signed"))).toBe(
+    expect(nativePatternTexts).toEqual(tsPatterns);
+    expect(
+      nativePatternTexts.some((pattern) => pattern.includes("Signed")),
+    ).toBe(true);
+    expect(nativePatternTexts.some((pattern) => pattern.includes("À"))).toBe(
       true,
     );
-    expect(nativePatterns.some((pattern) => pattern.includes("À"))).toBe(true);
+  });
+
+  test("native signing-place patterns carry prefilter metadata", async () => {
+    const nativePatterns = await getNativeSigningClausePatterns(["fr-FR"]);
+    expect(nativePatterns).toHaveLength(1);
+    expect(nativePatterns.at(0)).toMatchObject({
+      lazy: true,
+      prefilterAny: ["À ", "à "],
+      prefilterCaseInsensitive: false,
+      prefilterWindowBytes: 160,
+      preparedArtifactPolicy: "omit",
+    });
+
+    const search = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        enableRegex: true,
+        labels: ["address"],
+        language: "fr-FR",
+      },
+      [],
+      createPipelineContext(),
+    );
+    const signingPattern = search.nativeStaticConfig.regex_patterns.find(
+      (pattern) => pattern.kind === "regex" && pattern.pattern.includes("Fait"),
+    );
+
+    expect(signingPattern).toMatchObject({
+      lazy: true,
+      prefilter_any: ["À ", "à "],
+      prefilter_case_insensitive: false,
+      prefilter_window_bytes: 160,
+      prepared_artifact_policy: "omit",
+    });
   });
 
   test("content language scopes native signing-place patterns", async () => {
@@ -302,6 +352,7 @@ describe("pipeline config semantics", () => {
       getSigningClausePatterns(["en-US"]),
       getNativeSigningClausePatterns(["en-US"]),
     ]);
+    const nativePatternTexts = nativePatterns.map(signingPatternText);
     const search = await buildUnifiedSearch(
       {
         ...BASE_CONFIG,
@@ -317,9 +368,9 @@ describe("pipeline config semantics", () => {
       (pattern) => pattern.pattern,
     );
 
-    expect(nativePatterns).toEqual(tsPatterns);
-    expect(nativePatterns).toHaveLength(1);
-    expect(nativePatterns.at(0)).toContain("Signed");
+    expect(nativePatternTexts).toEqual(tsPatterns);
+    expect(nativePatternTexts).toHaveLength(1);
+    expect(nativePatternTexts.at(0)).toContain("Signed");
     expect(regexPatterns.some((pattern) => pattern.includes("Signed"))).toBe(
       true,
     );

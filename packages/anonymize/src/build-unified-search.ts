@@ -517,7 +517,7 @@ type UnifiedSearchSources = {
   nativeCoreferenceData: NativeCoreferenceData | null;
   nativeNameCorpusData: NativeNameCorpusData | null;
   nativeNameCorpusMode: NativeNameCorpusMode | null;
-  nativeSigningPatterns: readonly string[];
+  nativeSigningPatterns: readonly PatternEntry[];
   partyPositionTerms: string[];
   hotwordRules: readonly HotwordRule[];
   nativeCurrencyPatternRange: PatternSlice;
@@ -775,7 +775,7 @@ const buildUnifiedSearchSources = async (
       : Promise.resolve([] as string[]),
     config.enableRegex && labelIsAllowed("address", allowedLabels)
       ? getNativeSigningClausePatterns(contentLanguages)
-      : Promise.resolve([] as string[]),
+      : Promise.resolve([] as PatternEntry[]),
     config.enableRegex && labelIsAllowed("date", allowedLabels)
       ? getDateMonthData(contentLanguages)
       : Promise.resolve(null),
@@ -1284,7 +1284,7 @@ type BuildNativeStaticConfigArgs = {
   coreferenceData: NativeCoreferenceData | null;
   nameCorpusData: NativeNameCorpusData | null;
   nameCorpusMode: NativeNameCorpusMode | null;
-  nativeSigningPatterns: readonly string[];
+  nativeSigningPatterns: readonly PatternEntry[];
   partyPositionTerms: readonly string[];
   hotwordRules: readonly HotwordRule[];
   omitRegexRanges?: readonly PatternSlice[];
