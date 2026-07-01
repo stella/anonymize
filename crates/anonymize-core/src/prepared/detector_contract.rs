@@ -21,40 +21,6 @@ pub(super) enum StaticDetectorId {
   AddressSeed,
 }
 
-impl StaticDetectorId {
-  pub(super) const COUNT: usize = 11;
-
-  pub(super) const ORDER: [Self; Self::COUNT] = [
-    Self::Regex,
-    Self::CustomRegex,
-    Self::DenyList,
-    Self::Gazetteer,
-    Self::Country,
-    Self::Anchored,
-    Self::Trigger,
-    Self::Signature,
-    Self::LegalForm,
-    Self::NameCorpus,
-    Self::AddressSeed,
-  ];
-
-  pub(super) const fn index(self) -> usize {
-    match self {
-      Self::Regex => 0,
-      Self::CustomRegex => 1,
-      Self::DenyList => 2,
-      Self::Gazetteer => 3,
-      Self::Country => 4,
-      Self::Anchored => 5,
-      Self::Trigger => 6,
-      Self::Signature => 7,
-      Self::LegalForm => 8,
-      Self::NameCorpus => 9,
-      Self::AddressSeed => 10,
-    }
-  }
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum StaticDetectorInput {
   FullText,

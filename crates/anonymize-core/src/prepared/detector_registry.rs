@@ -104,16 +104,6 @@ mod tests {
     }
   }
 
-  #[test]
-  fn detector_registry_matches_detector_id_order() {
-    let registered = STATIC_ENTITY_RULES
-      .iter()
-      .map(|rule| rule.spec().id())
-      .collect::<Vec<_>>();
-
-    assert_eq!(registered, StaticDetectorId::ORDER);
-  }
-
   fn runs_after(
     detector: StaticDetectorId,
     dependency: StaticDetectorId,
