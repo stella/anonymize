@@ -108,78 +108,20 @@ fn record_parallel_support_data(
   diagnostics: &mut Option<&mut StaticRedactionDiagnostics>,
   prepared: &ParallelPreparedSupportData,
 ) {
-  record_prepare_stage_elapsed(
-    diagnostics,
-    DiagnosticStage::PrepareHotwordData,
-    prepared.hotwords.len,
-    prepared.hotwords.elapsed_us,
-  );
-  record_prepare_stage_elapsed(
-    diagnostics,
-    DiagnosticStage::PrepareTriggerData,
-    prepared.triggers.len,
-    prepared.triggers.elapsed_us,
-  );
-  record_prepare_stage_elapsed(
-    diagnostics,
-    DiagnosticStage::PrepareLegalFormData,
-    prepared.legal_forms.len,
-    prepared.legal_forms.elapsed_us,
-  );
-  record_prepare_stage_elapsed(
-    diagnostics,
-    DiagnosticStage::PrepareAddressSeedData,
-    prepared.address_seed.len,
-    prepared.address_seed.elapsed_us,
-  );
-  record_prepare_stage_elapsed(
-    diagnostics,
-    DiagnosticStage::PrepareZoneData,
-    prepared.zones.len,
-    prepared.zones.elapsed_us,
-  );
-  record_prepare_stage_elapsed(
-    diagnostics,
-    DiagnosticStage::PrepareAddressContextData,
-    prepared.address_context.len,
-    prepared.address_context.elapsed_us,
-  );
-  record_prepare_stage_elapsed(
-    diagnostics,
-    DiagnosticStage::PrepareCoreferenceData,
-    prepared.coreference.len,
-    prepared.coreference.elapsed_us,
-  );
-  record_prepare_stage_elapsed(
-    diagnostics,
-    DiagnosticStage::PrepareNameCorpusData,
-    prepared.names.len,
-    prepared.names.elapsed_us,
-  );
-  record_prepare_stage_elapsed(
-    diagnostics,
-    DiagnosticStage::PrepareSignatureData,
-    prepared.signature.len,
-    prepared.signature.elapsed_us,
-  );
+  for metric in prepared.metrics() {
+    record_prepare_stage_elapsed(
+      diagnostics,
+      metric.stage,
+      metric.count,
+      metric.elapsed_us,
+    );
+  }
 }
 
 fn parallel_support_data_into_prepared(
   prepared: ParallelPreparedSupportData,
 ) -> PreparedSupportData {
-  let count = [
-    prepared.hotwords.len,
-    prepared.triggers.len,
-    prepared.legal_forms.len,
-    prepared.address_seed.len,
-    prepared.zones.len,
-    prepared.address_context.len,
-    prepared.coreference.len,
-    prepared.names.len,
-    prepared.signature.len,
-  ]
-  .into_iter()
-  .fold(0usize, usize::saturating_add);
+  let count = prepared.total_count();
 
   PreparedSupportData {
     hotwords: prepared.hotwords.data,
@@ -205,4 +147,75 @@ struct ParallelPreparedSupportData {
   coreference: TimedSupportData<Option<PreparedCoreferenceData>>,
   names: TimedSupportData<Option<PreparedNames>>,
   signature: TimedSupportData<Option<PreparedSignatureData>>,
+}
+
+impl ParallelPreparedSupportData {
+  const fn metrics(&self) -> [SupportPrepareMetric; 9] {
+    [
+      SupportPrepareMetric::from_timed(
+        DiagnosticStage::PrepareHotwordData,
+        &self.hotwords,
+      ),
+      SupportPrepareMetric::from_timed(
+        DiagnosticStage::PrepareTriggerData,
+        &self.triggers,
+      ),
+      SupportPrepareMetric::from_timed(
+        DiagnosticStage::PrepareLegalFormData,
+        &self.legal_forms,
+      ),
+      SupportPrepareMetric::from_timed(
+        DiagnosticStage::PrepareAddressSeedData,
+        &self.address_seed,
+      ),
+      SupportPrepareMetric::from_timed(
+        DiagnosticStage::PrepareZoneData,
+        &self.zones,
+      ),
+      SupportPrepareMetric::from_timed(
+        DiagnosticStage::PrepareAddressContextData,
+        &self.address_context,
+      ),
+      SupportPrepareMetric::from_timed(
+        DiagnosticStage::PrepareCoreferenceData,
+        &self.coreference,
+      ),
+      SupportPrepareMetric::from_timed(
+        DiagnosticStage::PrepareNameCorpusData,
+        &self.names,
+      ),
+      SupportPrepareMetric::from_timed(
+        DiagnosticStage::PrepareSignatureData,
+        &self.signature,
+      ),
+    ]
+  }
+
+  fn total_count(&self) -> usize {
+    self
+      .metrics()
+      .into_iter()
+      .map(|metric| metric.count)
+      .fold(0usize, usize::saturating_add)
+  }
+}
+
+#[derive(Clone, Copy)]
+struct SupportPrepareMetric {
+  stage: DiagnosticStage,
+  count: usize,
+  elapsed_us: u64,
+}
+
+impl SupportPrepareMetric {
+  const fn from_timed<T>(
+    stage: DiagnosticStage,
+    timed: &TimedSupportData<T>,
+  ) -> Self {
+    Self {
+      stage,
+      count: timed.len,
+      elapsed_us: timed.elapsed_us,
+    }
+  }
 }
