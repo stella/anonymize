@@ -1,0 +1,12 @@
+---
+source: crates/anonymize-core/tests/redaction.rs
+expression: redaction_snapshot(&result)
+---
+redacted_text: "[ORGANIZATION_1] signed. [ORGANIZATION_1] countersigned."
+entity_count: 2
+redaction_map:
+  - placeholder: "[ORGANIZATION_1]"
+    original: Acme Corporation
+operator_map:
+  - placeholder: "[ORGANIZATION_1]"
+    operator: replace

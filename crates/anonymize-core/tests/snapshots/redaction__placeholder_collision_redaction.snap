@@ -1,0 +1,12 @@
+---
+source: crates/anonymize-core/tests/redaction.rs
+expression: redaction_snapshot(&result)
+---
+redacted_text: "Existing [PERSON_1]. [PERSON_2] called. [PERSON_2] signed."
+entity_count: 2
+redaction_map:
+  - placeholder: "[PERSON_2]"
+    original: Alice Smith
+operator_map:
+  - placeholder: "[PERSON_2]"
+    operator: replace

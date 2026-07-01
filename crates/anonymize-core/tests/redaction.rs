@@ -5,6 +5,10 @@
   clippy::unwrap_used
 )]
 
+#[path = "support/snapshots.rs"]
+mod snapshots;
+
+use snapshots::redaction_snapshot;
 use stella_anonymize_core::{
   Entity, Error, OperatorConfig, OperatorType, deanonymise, redact_text,
 };
@@ -71,6 +75,10 @@ fn repeated_values_share_first_non_colliding_placeholder() {
   assert_eq!(
     deanonymise(&result.redacted_text, &result.redaction_map),
     text
+  );
+  insta::assert_yaml_snapshot!(
+    "placeholder_collision_redaction",
+    redaction_snapshot(&result)
   );
 }
 
@@ -215,6 +223,10 @@ fn coreference_alias_uses_source_placeholder_and_value() {
     "[ORGANIZATION_1] signed. [ORGANIZATION_1] countersigned."
   );
   assert_eq!(result.redaction_map[0].original, "Acme Corporation");
+  insta::assert_yaml_snapshot!(
+    "coreference_alias_redaction",
+    redaction_snapshot(&result)
+  );
 }
 
 #[test]

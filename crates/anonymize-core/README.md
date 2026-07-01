@@ -42,6 +42,11 @@ concept.
 - `tests/builders.rs`: bon builders and public constructor shape.
 - `tests/prepared.rs`: end-to-end prepared-engine behavior.
 - `tests/primitives_properties.rs`: property coverage for artifact/search invariants.
+- `tests/snapshots/`: reviewable `insta` snapshots for stable diagnostics and redaction summaries.
+
+Snapshot tests should serialize stable summaries, not volatile timings. Avoid
+snapshotting sensitive raw fixture text; use small public fixtures or normalized
+summaries with labels, spans, counts, and redacted output.
 
 Useful local checks:
 
@@ -49,4 +54,17 @@ Useful local checks:
 cargo fmt --all --check
 cargo clippy -p stella-anonymize-core --all-targets --all-features -- -D warnings
 cargo test -p stella-anonymize-core --all-features
+```
+
+Snapshot workflow:
+
+```bash
+cargo insta test -p stella-anonymize-core --all-features
+cargo insta accept
+```
+
+If `cargo-insta` is not installed, generate snapshots with:
+
+```bash
+INSTA_UPDATE=always cargo test -p stella-anonymize-core --all-features
 ```

@@ -1,7 +1,10 @@
 #![allow(clippy::unwrap_used)]
 
+#[path = "support/snapshots.rs"]
+mod snapshots;
 mod support;
 
+use snapshots::diagnostics_snapshot;
 use stella_anonymize_core::{
   DenyListMatchData, DenyListPatternMetaSet, DiagnosticEvent,
   DiagnosticEventKind, DiagnosticPhase, DiagnosticScope, DiagnosticStage,
@@ -44,10 +47,8 @@ fn empty_config(slices: PreparedEngineSlices) -> PreparedEngineConfig {
   }
 }
 
-#[test]
-fn engine_reports_static_redaction_diagnostics() {
-  const INPUT: &str = "Acme s.r.o. filed AB1234.";
-  let prepared = PreparedEngine::new(prepared_config! {
+fn static_redaction_diagnostics_engine() -> PreparedEngine {
+  PreparedEngine::new(prepared_config! {
     regex_patterns: vec![SearchPattern::Regex(String::from(
       r"\b[A-Z]{2}\d{4}\b",
     ))],
@@ -102,8 +103,13 @@ fn engine_reports_static_redaction_diagnostics() {
     date_data: None,
     monetary_data: None,
   })
-  .unwrap();
+  .unwrap()
+}
 
+#[test]
+fn engine_reports_static_redaction_diagnostics() {
+  const INPUT: &str = "Acme s.r.o. filed AB1234.";
+  let prepared = static_redaction_diagnostics_engine();
   let result = prepared
     .redact_static_entities_with_diagnostics(INPUT, &OperatorConfig::default())
     .unwrap();
@@ -147,6 +153,10 @@ fn engine_reports_static_redaction_diagnostics() {
     DiagnosticStage::RedactTotal,
     Some(2),
     Some(INPUT.len()),
+  );
+  insta::assert_yaml_snapshot!(
+    "static_redaction_diagnostics",
+    diagnostics_snapshot(&result.result.redaction, events)
   );
 }
 
