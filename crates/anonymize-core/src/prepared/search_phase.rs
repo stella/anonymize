@@ -161,16 +161,15 @@ impl PreparedEngine {
     mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
     total_start: Instant,
   ) -> Result<PreparedEngineMatches> {
-    let input_bytes = full_text.len();
+    let collect_stats = diagnostics.is_some();
     let matches = std::thread::scope(|scope| {
       let regex = (!self.indexes.regex.is_empty()).then(|| {
         scope.spawn(|| {
           timed_offset_index_matches(
             &self.indexes.regex,
             full_text,
-            DiagnosticStage::FindRegex,
-            input_bytes,
             self.policy.slices.regex.start,
+            collect_stats,
           )
         })
       });
@@ -179,9 +178,8 @@ impl PreparedEngine {
           timed_normalized_index_matches(
             &self.indexes.legal_forms,
             normalized,
-            DiagnosticStage::FindLegalForm,
-            input_bytes,
             self.policy.slices.legal_forms.start,
+            collect_stats,
           )
         })
       });
@@ -190,9 +188,8 @@ impl PreparedEngine {
           timed_offset_index_matches(
             &self.indexes.triggers,
             full_text,
-            DiagnosticStage::FindTrigger,
-            input_bytes,
             self.policy.slices.triggers.start,
+            collect_stats,
           )
         })
       });
@@ -201,9 +198,8 @@ impl PreparedEngine {
           timed_offset_index_matches(
             &self.indexes.custom_regex,
             full_text,
-            DiagnosticStage::FindCustomRegex,
-            input_bytes,
             self.policy.slices.custom_regex.start,
+            collect_stats,
           )
         })
       });
@@ -212,9 +208,8 @@ impl PreparedEngine {
           timed_normalized_index_matches(
             &self.indexes.literals,
             normalized,
-            DiagnosticStage::FindLiteral,
-            input_bytes,
             0,
+            collect_stats,
           )
         })
       });
@@ -291,6 +286,11 @@ fn record_parallel_search_matches(
       &matches.matches,
       full_text,
       Some(matches.elapsed_us),
+    );
+    diagnostics.record_search_slot_summaries(
+      stage,
+      &matches.stats,
+      full_text.len(),
     );
   }
 }

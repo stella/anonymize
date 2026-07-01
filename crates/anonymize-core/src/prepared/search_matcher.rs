@@ -2,7 +2,7 @@ use std::time::Instant;
 
 use crate::diagnostics::{DiagnosticStage, StaticRedactionDiagnostics};
 use crate::normalize::NormalizedSearchText;
-use crate::search::SearchIndex;
+use crate::search::{SearchIndex, SearchIndexFindResult};
 use crate::types::{Error, Result, SearchMatch};
 
 use super::timing::{TimedMatches, elapsed_us};
@@ -24,16 +24,16 @@ pub(super) fn offset_index_matches(
 pub(super) fn timed_offset_index_matches(
   search: &SearchIndex,
   haystack: &str,
-  slot_stage: DiagnosticStage,
-  input_bytes: usize,
   offset: u32,
+  collect_stats: bool,
 ) -> Result<TimedMatches> {
   let start = Instant::now();
-  offset_index_matches(search, haystack, None, slot_stage, input_bytes, offset)
-    .map(|matches| TimedMatches {
-      matches,
-      elapsed_us: elapsed_us(start),
-    })
+  let result = find_index_matches_timed(search, haystack, collect_stats)?;
+  offset_matches(result.matches, offset).map(|matches| TimedMatches {
+    matches,
+    stats: result.stats,
+    elapsed_us: elapsed_us(start),
+  })
 }
 
 pub(super) fn normalized_index_matches(
@@ -60,23 +60,23 @@ pub(super) fn normalized_index_matches(
 pub(super) fn timed_normalized_index_matches(
   search: &SearchIndex,
   normalized: &NormalizedSearchText,
-  slot_stage: DiagnosticStage,
-  input_bytes: usize,
   offset: u32,
+  collect_stats: bool,
 ) -> Result<TimedMatches> {
   let start = Instant::now();
-  normalized_index_matches(
-    search,
-    normalized,
-    None,
-    slot_stage,
-    input_bytes,
-    offset,
-  )
-  .map(|matches| TimedMatches {
-    matches,
-    elapsed_us: elapsed_us(start),
-  })
+  let result =
+    find_index_matches_timed(search, normalized.as_str(), collect_stats)?;
+  result
+    .matches
+    .into_iter()
+    .map(|found| remap_normalized_match(normalized, found))
+    .map(|found| found.and_then(|value| offset_match(value, offset)))
+    .collect::<Result<Vec<_>>>()
+    .map(|matches| TimedMatches {
+      matches,
+      stats: result.stats,
+      elapsed_us: elapsed_us(start),
+    })
 }
 
 pub(super) fn combine_regex_matches(
@@ -118,6 +118,22 @@ fn find_index_matches(
     input_bytes,
   );
   Ok(result.matches)
+}
+
+fn find_index_matches_timed(
+  search: &SearchIndex,
+  haystack: &str,
+  collect_stats: bool,
+) -> Result<SearchIndexFindResult> {
+  if collect_stats {
+    return search.find_iter_with_stats(haystack);
+  }
+  search
+    .find_iter(haystack)
+    .map(|matches| SearchIndexFindResult {
+      matches,
+      stats: Vec::new(),
+    })
 }
 
 fn offset_matches(

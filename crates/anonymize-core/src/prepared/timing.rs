@@ -1,6 +1,7 @@
 use std::time::Instant;
 
 use crate::resolution::PipelineEntity;
+use crate::search::SearchIndexFindStats;
 use crate::types::SearchMatch;
 
 use super::detector_contract::StaticDetectorId;
@@ -28,6 +29,7 @@ pub(super) struct DetectorEntityPass {
 
 pub(super) struct TimedMatches {
   pub(super) matches: Vec<SearchMatch>,
+  pub(super) stats: Vec<SearchIndexFindStats>,
   pub(super) elapsed_us: u64,
 }
 
@@ -35,6 +37,7 @@ impl TimedMatches {
   pub(super) const fn empty() -> Self {
     Self {
       matches: Vec::new(),
+      stats: Vec::new(),
       elapsed_us: 0,
     }
   }
