@@ -1,21 +1,14 @@
-use crate::diagnostics::DiagnosticStage;
-use crate::prepared::detector_contract::{
-  StaticDetectorContext, StaticDetectorDiagnostics, StaticDetectorId,
-  StaticDetectorInput, static_detector_rule,
-};
-use crate::prepared::timing::{StaticEntityPasses, TimedEntities};
-use crate::types::Result;
-
+use super::prelude::*;
 use super::timed_entities;
 
 static_detector_rule! {
   pub(in crate::prepared) const ANCHORED_RULE;
-  id: StaticDetectorId::Anchored;
+  id: DetectorId::Anchored;
   stage: DiagnosticStage::EntityAnchored;
   inputs: &[
-    StaticDetectorInput::FullText,
-    StaticDetectorInput::DateData,
-    StaticDetectorInput::MonetaryData,
+    DetectorInput::FullText,
+    DetectorInput::DateData,
+    DetectorInput::MonetaryData,
   ];
   detect: detect_anchored;
 }

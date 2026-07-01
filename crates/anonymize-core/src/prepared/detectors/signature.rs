@@ -1,21 +1,14 @@
-use crate::diagnostics::DiagnosticStage;
-use crate::prepared::detector_contract::{
-  StaticDetectorContext, StaticDetectorDiagnostics, StaticDetectorId,
-  StaticDetectorInput, static_detector_rule,
-};
-use crate::prepared::support_resources::SupportResourceId;
-use crate::prepared::timing::{StaticEntityPasses, TimedEntities};
 use crate::signatures::detect_signatures;
-use crate::types::Result;
 
+use super::prelude::*;
 use super::timed_entities;
 
 static_detector_rule! {
   pub(in crate::prepared) const SIGNATURE_RULE;
-  id: StaticDetectorId::Signature;
+  id: DetectorId::Signature;
   stage: DiagnosticStage::EntitySignature;
-  inputs: &[StaticDetectorInput::FullText];
-  uses: &[SupportResourceId::Signature];
+  inputs: &[DetectorInput::FullText];
+  uses: &[SupportResource::Signature];
   detect: detect_signature;
 }
 

@@ -6,6 +6,8 @@ use crate::types::Result;
 
 use super::timing::{TimedEntities, elapsed_us};
 
+mod prelude;
+
 macro_rules! static_detectors {
   (
     $(

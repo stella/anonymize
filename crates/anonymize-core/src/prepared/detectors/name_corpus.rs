@@ -1,24 +1,16 @@
-use crate::diagnostics::DiagnosticStage;
-use crate::prepared::detector_contract::{
-  StaticDetectorContext, StaticDetectorDiagnostics, StaticDetectorId,
-  StaticDetectorInput, static_detector_rule,
-};
-use crate::prepared::support_resources::SupportResourceId;
-use crate::prepared::timing::{StaticEntityPasses, TimedEntities};
-use crate::types::Result;
-
+use super::prelude::*;
 use super::timed_entities;
 
 static_detector_rule! {
   pub(in crate::prepared) const NAME_CORPUS_RULE;
-  id: StaticDetectorId::NameCorpus;
+  id: DetectorId::NameCorpus;
   stage: DiagnosticStage::EntityNameCorpus;
   inputs: &[
-    StaticDetectorInput::FullText,
-    StaticDetectorInput::DenyListEntities,
+    DetectorInput::FullText,
+    DetectorInput::DenyListEntities,
   ];
-  after: &[StaticDetectorId::DenyList];
-  uses: &[SupportResourceId::NameCorpus];
+  after: &[DetectorId::DenyList];
+  uses: &[SupportResource::NameCorpus];
   detect: detect_name_corpus;
 }
 
@@ -34,6 +26,6 @@ fn detect_name_corpus(
       return Ok(Vec::new());
     };
     data
-      .detect_configured(full_text, passes.entities(StaticDetectorId::DenyList))
+      .detect_configured(full_text, passes.entities(DetectorId::DenyList))
   })
 }

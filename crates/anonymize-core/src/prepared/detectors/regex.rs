@@ -1,34 +1,28 @@
-use crate::diagnostics::DiagnosticStage;
-use crate::prepared::detector_contract::{
-  StaticDetectorContext, StaticDetectorDiagnostics, StaticDetectorId,
-  StaticDetectorInput, static_detector_rule,
-};
-use crate::prepared::timing::{StaticEntityPasses, TimedEntities};
 use crate::processors::process_regex_matches;
-use crate::types::Result;
 
+use super::prelude::*;
 use super::timed_entities;
 
 static_detector_rule! {
   pub(in crate::prepared) const REGEX_RULE;
-  id: StaticDetectorId::Regex;
+  id: DetectorId::Regex;
   stage: DiagnosticStage::EntityRegex;
   inputs: &[
-    StaticDetectorInput::RegexMatches,
-    StaticDetectorInput::FullText,
-    StaticDetectorInput::RegexMeta,
+    DetectorInput::RegexMatches,
+    DetectorInput::FullText,
+    DetectorInput::RegexMeta,
   ];
   detect: detect_regex;
 }
 
 static_detector_rule! {
   pub(in crate::prepared) const CUSTOM_REGEX_RULE;
-  id: StaticDetectorId::CustomRegex;
+  id: DetectorId::CustomRegex;
   stage: DiagnosticStage::EntityCustomRegex;
   inputs: &[
-    StaticDetectorInput::CustomRegexMatches,
-    StaticDetectorInput::FullText,
-    StaticDetectorInput::CustomRegexMeta,
+    DetectorInput::CustomRegexMatches,
+    DetectorInput::FullText,
+    DetectorInput::CustomRegexMeta,
   ];
   detect: detect_custom_regex;
 }

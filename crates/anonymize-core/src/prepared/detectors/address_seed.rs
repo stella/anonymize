@@ -1,37 +1,28 @@
-use crate::diagnostics::DiagnosticStage;
-use crate::prepared::detector_contract::{
-  StaticDetectorContext, StaticDetectorDiagnostics, StaticDetectorId,
-  StaticDetectorInput, static_detector_rule,
-};
-use crate::prepared::support_resources::SupportResourceId;
-use crate::prepared::timing::{StaticEntityPasses, TimedEntities};
-use crate::resolution::PipelineEntity;
-use crate::types::Result;
-
+use super::prelude::*;
 use super::timed_entities;
 
-const ADDRESS_SEED_DEPENDENCIES: &[StaticDetectorId] = &[
-  StaticDetectorId::Regex,
-  StaticDetectorId::CustomRegex,
-  StaticDetectorId::Anchored,
-  StaticDetectorId::Trigger,
-  StaticDetectorId::Signature,
-  StaticDetectorId::LegalForm,
-  StaticDetectorId::DenyList,
-  StaticDetectorId::Gazetteer,
-  StaticDetectorId::NameCorpus,
+const ADDRESS_SEED_DEPENDENCIES: &[DetectorId] = &[
+  DetectorId::Regex,
+  DetectorId::CustomRegex,
+  DetectorId::Anchored,
+  DetectorId::Trigger,
+  DetectorId::Signature,
+  DetectorId::LegalForm,
+  DetectorId::DenyList,
+  DetectorId::Gazetteer,
+  DetectorId::NameCorpus,
 ];
 
 static_detector_rule! {
   pub(in crate::prepared) const ADDRESS_SEED_RULE;
-  id: StaticDetectorId::AddressSeed;
+  id: DetectorId::AddressSeed;
   stage: DiagnosticStage::EntityAddressSeed;
   inputs: &[
-    StaticDetectorInput::LiteralMatches,
-    StaticDetectorInput::ContextEntities,
+    DetectorInput::LiteralMatches,
+    DetectorInput::ContextEntities,
   ];
   after: ADDRESS_SEED_DEPENDENCIES;
-  uses: &[SupportResourceId::AddressSeed];
+  uses: &[SupportResource::AddressSeed];
   detect: detect_address_seed;
 }
 
@@ -59,7 +50,7 @@ fn detect_address_seed(
 }
 
 fn address_seed_context(
-  dependencies: &[StaticDetectorId],
+  dependencies: &[DetectorId],
   passes: &StaticEntityPasses,
 ) -> Vec<PipelineEntity> {
   let capacity = dependencies

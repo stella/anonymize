@@ -1,21 +1,14 @@
-use crate::diagnostics::DiagnosticStage;
-use crate::prepared::detector_contract::{
-  StaticDetectorContext, StaticDetectorDiagnostics, StaticDetectorId,
-  StaticDetectorInput, static_detector_rule,
-};
-use crate::prepared::support_resources::SupportResourceId;
-use crate::prepared::timing::{StaticEntityPasses, TimedEntities};
 use crate::triggers::process_trigger_matches;
-use crate::types::Result;
 
+use super::prelude::*;
 use super::timed_entities;
 
 static_detector_rule! {
   pub(in crate::prepared) const TRIGGER_RULE;
-  id: StaticDetectorId::Trigger;
+  id: DetectorId::Trigger;
   stage: DiagnosticStage::EntityTrigger;
-  inputs: &[StaticDetectorInput::RegexMatches];
-  uses: &[SupportResourceId::Triggers];
+  inputs: &[DetectorInput::RegexMatches];
+  uses: &[SupportResource::Triggers];
   detect: detect_trigger;
 }
 
