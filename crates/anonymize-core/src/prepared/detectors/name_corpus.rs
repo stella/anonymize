@@ -4,7 +4,6 @@ use super::timed_entities;
 static_detector_rule! {
   pub(in crate::prepared) const NAME_CORPUS_RULE;
   id: DetectorId::NameCorpus;
-  stage: DiagnosticStage::EntityNameCorpus;
   inputs: &[
     DetectorInput::FullText,
     DetectorInput::DenyListEntities,

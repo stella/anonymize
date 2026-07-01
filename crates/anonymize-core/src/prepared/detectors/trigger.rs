@@ -6,7 +6,6 @@ use super::timed_entities;
 static_detector_rule! {
   pub(in crate::prepared) const TRIGGER_RULE;
   id: DetectorId::Trigger;
-  stage: DiagnosticStage::EntityTrigger;
   inputs: &[DetectorInput::RegexMatches];
   uses: &[SupportResource::Triggers];
   detect: detect_trigger;

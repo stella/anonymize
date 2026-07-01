@@ -6,7 +6,6 @@ use super::timed_entities;
 static_detector_rule! {
   pub(in crate::prepared) const SIGNATURE_RULE;
   id: DetectorId::Signature;
-  stage: DiagnosticStage::EntitySignature;
   inputs: &[DetectorInput::FullText];
   uses: &[SupportResource::Signature];
   detect: detect_signature;

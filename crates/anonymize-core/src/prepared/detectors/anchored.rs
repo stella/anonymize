@@ -4,7 +4,6 @@ use super::timed_entities;
 static_detector_rule! {
   pub(in crate::prepared) const ANCHORED_RULE;
   id: DetectorId::Anchored;
-  stage: DiagnosticStage::EntityAnchored;
   inputs: &[
     DetectorInput::FullText,
     DetectorInput::DateData,

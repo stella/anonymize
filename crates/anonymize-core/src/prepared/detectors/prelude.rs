@@ -1,4 +1,3 @@
-pub(super) use crate::diagnostics::DiagnosticStage;
 pub(super) use crate::prepared::detector_contract::{
   StaticDetectorContext, StaticDetectorDiagnostics,
   StaticDetectorId as DetectorId, StaticDetectorInput as DetectorInput,

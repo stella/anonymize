@@ -6,7 +6,6 @@ use super::timed_entities;
 static_detector_rule! {
   pub(in crate::prepared) const LEGAL_FORM_RULE;
   id: DetectorId::LegalForm;
-  stage: DiagnosticStage::EntityLegalForm;
   inputs: &[DetectorInput::RegexMatches];
   uses: &[SupportResource::LegalForms];
   detect: detect_legal_form;

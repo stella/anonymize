@@ -8,7 +8,6 @@ use super::timed_entities;
 static_detector_rule! {
   pub(in crate::prepared) const DENY_LIST_RULE;
   id: DetectorId::DenyList;
-  stage: DiagnosticStage::EntityDenyList;
   inputs: &[
     DetectorInput::LiteralMatches,
     DetectorInput::DenyListData,
@@ -19,7 +18,6 @@ static_detector_rule! {
 static_detector_rule! {
   pub(in crate::prepared) const GAZETTEER_RULE;
   id: DetectorId::Gazetteer;
-  stage: DiagnosticStage::EntityGazetteer;
   inputs: &[
     DetectorInput::LiteralMatches,
     DetectorInput::GazetteerData,
@@ -30,7 +28,6 @@ static_detector_rule! {
 static_detector_rule! {
   pub(in crate::prepared) const COUNTRY_RULE;
   id: DetectorId::Country;
-  stage: DiagnosticStage::EntityCountry;
   inputs: &[
     DetectorInput::LiteralMatches,
     DetectorInput::CountryData,

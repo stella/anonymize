@@ -16,7 +16,6 @@ const ADDRESS_SEED_DEPENDENCIES: &[DetectorId] = &[
 static_detector_rule! {
   pub(in crate::prepared) const ADDRESS_SEED_RULE;
   id: DetectorId::AddressSeed;
-  stage: DiagnosticStage::EntityAddressSeed;
   inputs: &[
     DetectorInput::LiteralMatches,
     DetectorInput::ContextEntities,
