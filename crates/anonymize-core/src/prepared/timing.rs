@@ -53,8 +53,10 @@ pub(super) struct StaticEntityPasses {
 }
 
 impl StaticEntityPasses {
-  pub(super) const fn empty() -> Self {
-    Self { layers: Vec::new() }
+  pub(super) fn with_capacity(capacity: usize) -> Self {
+    Self {
+      layers: Vec::with_capacity(capacity),
+    }
   }
 
   pub(super) fn entity_count(&self) -> usize {
@@ -83,19 +85,15 @@ impl StaticEntityPasses {
       .map_or(&EMPTY_TIMED_ENTITIES, |layer| &layer.timed)
   }
 
-  pub(super) fn set_detector_entities(
+  pub(super) fn push_detector_entities(
     &mut self,
     detector: StaticDetectorId,
     entities: TimedEntities,
   ) {
-    if let Some(layer) = self
-      .layers
-      .iter_mut()
-      .find(|layer| layer.detector == detector)
-    {
-      layer.timed = entities;
-      return;
-    }
+    debug_assert!(
+      self.layers.iter().all(|layer| layer.detector != detector),
+      "static detector passes are append-only",
+    );
     self.layers.push(DetectorEntityPass {
       detector,
       timed: entities,

@@ -57,7 +57,8 @@ impl PreparedEngine {
     full_text: &str,
     mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
   ) -> Result<StaticEntityPasses> {
-    let mut passes = StaticEntityPasses::empty();
+    let mut passes =
+      StaticEntityPasses::with_capacity(STATIC_ENTITY_DETECTORS.len());
     for detector in STATIC_ENTITY_DETECTORS {
       let spec = detector.spec();
       debug_assert!(
@@ -71,7 +72,7 @@ impl PreparedEngine {
         diagnostics: diagnostics.as_deref_mut(),
       };
       let entities = detector.detect(context, &passes)?;
-      passes.set_detector_entities(spec.id(), entities);
+      passes.push_detector_entities(spec.id(), entities);
     }
     Ok(passes)
   }
