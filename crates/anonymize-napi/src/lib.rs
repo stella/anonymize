@@ -21,6 +21,7 @@ use stella_anonymize_adapter_contract::{
   static_redaction_diagnostic_result_to_utf16_binding,
   static_redaction_diagnostics_to_binding,
   static_redaction_result_to_utf16_binding,
+  static_redaction_stream_event_to_utf16_binding,
 };
 use stella_anonymize_core::{
   DiagnosticDetail, DiagnosticEvent, DiagnosticStage, Error as CoreError,
@@ -834,6 +835,37 @@ impl NativePreparedSearch {
 
   #[napi]
   #[allow(clippy::needless_pass_by_value)]
+  pub fn redact_static_entities_result_stream_json(
+    &self,
+    full_text: String,
+    operators: Option<JsOperatorConfig>,
+    on_event: Function<'_, (String,), ()>,
+  ) -> Result<String> {
+    let operators =
+      operator_config_from_binding(operators.map(to_binding_operator_config))
+        .map_err(|error| to_napi_contract_error(&error))?;
+    let result = self
+      .inner
+      .redact_static_entities_with_result_observer(
+        &full_text,
+        &operators,
+        |event| {
+          let event_json = result_stream_event_json(event, &full_text)?;
+          on_event
+            .call((event_json,))
+            .map_err(|error| core_result_observer_error(error.to_string()))?;
+          Ok(())
+        },
+      )
+      .map_err(|error| to_napi_core_error(&error))?;
+    let result = static_redaction_result_to_utf16_binding(result, &full_text)
+      .map_err(|error| to_napi_contract_error(&error))?;
+
+    serde_json::to_string(&result).map_err(|error| to_napi_serde_error(&error))
+  }
+
+  #[napi]
+  #[allow(clippy::needless_pass_by_value)]
   pub fn redact_static_entities_diagnostics_json(
     &self,
     full_text: String,
@@ -957,6 +989,30 @@ fn diagnostic_event_batch_json(
       "diagnostic batch serialization failed: {error}"
     ))
   })
+}
+
+fn result_stream_event_json(
+  event: stella_anonymize_core::StaticRedactionStreamEvent<'_>,
+  full_text: &str,
+) -> stella_anonymize_core::Result<String> {
+  let event = static_redaction_stream_event_to_utf16_binding(event, full_text)
+    .map_err(|error| {
+      core_result_observer_error(format!(
+        "result event conversion failed: {error}"
+      ))
+    })?;
+  serde_json::to_string(&event).map_err(|error| {
+    core_result_observer_error(format!(
+      "result event serialization failed: {error}"
+    ))
+  })
+}
+
+const fn core_result_observer_error(reason: String) -> CoreError {
+  CoreError::InvalidStaticData {
+    field: "result.observer",
+    reason,
+  }
 }
 
 const fn core_observer_error(reason: String) -> CoreError {

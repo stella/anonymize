@@ -18,6 +18,7 @@ from ._native import (
     prepare_static_search_package_bytes as prepare_static_search_package_bytes,
     redact_static_entities_diagnostics_json as redact_static_entities_diagnostics_json,
     redact_static_entities_json as redact_static_entities_json,
+    redact_static_entities_result_stream_json as redact_static_entities_result_stream_json,
     redact_static_entities_summary_diagnostics_json as redact_static_entities_summary_diagnostics_json,
 )
 
@@ -25,6 +26,7 @@ BytesLike: TypeAlias = bytes | bytearray | memoryview
 PathLikeString: TypeAlias = str | PathLike[str]
 OperatorConfig: TypeAlias = Mapping[str, str] | str | None
 DiagnosticsBatchCallback: TypeAlias = Callable[[str], object]
+ResultEventCallback: TypeAlias = Callable[[str], object]
 NativeSearchPackageInput: TypeAlias = str | BytesLike | Mapping[str, object]
 DefaultNativePipelineWarmup: TypeAlias = Literal["lazy-regex", "none"]
 DEFAULT_NATIVE_PIPELINE_WARMUPS: tuple[
@@ -68,6 +70,14 @@ class PreparedAnonymizer:
         *,
         redact_string: str | None = None,
     ) -> str: ...
+    def redact_text_stream_json(
+        self,
+        full_text: str,
+        on_event: ResultEventCallback,
+        operators: OperatorConfig = None,
+        *,
+        redact_string: str | None = None,
+    ) -> str: ...
     def diagnostics_json(
         self,
         full_text: str,
@@ -100,6 +110,14 @@ class PreparedAnonymizer:
     def redact_static_entities_json(
         self,
         full_text: str,
+        operators: OperatorConfig = None,
+        *,
+        redact_string: str | None = None,
+    ) -> str: ...
+    def redact_static_entities_result_stream_json(
+        self,
+        full_text: str,
+        on_event: ResultEventCallback,
         operators: OperatorConfig = None,
         *,
         redact_string: str | None = None,
@@ -178,6 +196,14 @@ def redact_text(
 def redact_text_json(
     config_json: NativeSearchPackageInput,
     full_text: str,
+    operators: OperatorConfig = None,
+    *,
+    redact_string: str | None = None,
+) -> str: ...
+def redact_text_stream_json(
+    config_json: NativeSearchPackageInput,
+    full_text: str,
+    on_event: ResultEventCallback,
     operators: OperatorConfig = None,
     *,
     redact_string: str | None = None,

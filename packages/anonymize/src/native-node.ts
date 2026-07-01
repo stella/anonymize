@@ -21,6 +21,7 @@ import {
   prepare_search_package as prepareSearchPackageWithBinding,
   redact_text as redactTextWithBinding,
   redact_text_json as redactTextJsonWithBinding,
+  redact_text_stream_json as redactTextStreamJsonWithBinding,
   summary_diagnostics_json as summaryDiagnosticsJsonWithBinding,
 } from "./native";
 
@@ -204,6 +205,21 @@ export const redact_text_json = (
     binding: resolveNativeSdkBinding(options),
     config,
     fullText,
+    ...(operators !== undefined ? { operators } : {}),
+  });
+
+export const redact_text_stream_json = (
+  config: NativeSearchPackageInput,
+  fullText: string,
+  onEvent: (eventJson: string) => void,
+  operators?: NativeOperatorConfig,
+  options: NativeSdkOptions = {},
+): string | null =>
+  redactTextStreamJsonWithBinding({
+    binding: resolveNativeSdkBinding(options),
+    config,
+    fullText,
+    onEvent,
     ...(operators !== undefined ? { operators } : {}),
   });
 

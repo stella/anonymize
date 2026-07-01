@@ -30,6 +30,7 @@ import {
   PreparedSearch,
   redact_text,
   redact_text_json,
+  redact_text_stream_json,
   summary_diagnostics_json,
   type NativeAnonymizeBinding,
   type NativeOperatorConfig,
@@ -184,6 +185,21 @@ type StaticRedactionDiagnosticBatch =
 type StaticRedactionDiagnosticStream = {
   final: StaticRedactionDiagnosticResult;
   batches: StaticRedactionDiagnosticBatch[];
+};
+
+type StaticRedactionResultStreamEvent =
+  | {
+      type: "detected_entities" | "resolved_entities";
+      entities: StaticRedactionResult["resolved_entities"];
+    }
+  | {
+      type: "redacted";
+      redaction: StaticRedactionResult["redaction"];
+    };
+
+type StaticRedactionResultStream = {
+  final: StaticRedactionResult;
+  events: StaticRedactionResultStreamEvent[];
 };
 
 type GeneratedNativeCase = {
@@ -783,6 +799,18 @@ def stream_with(instance, item):
     )
     return {"final": final, "batches": batches}
 
+def result_stream_with(instance, item):
+    events = []
+    final = json.loads(
+        instance.redact_text_stream_json(
+            item["text"],
+            lambda event: events.append(json.loads(event)),
+            item.get("operators"),
+            redact_string=item.get("redact_string"),
+        )
+    )
+    return {"final": final, "events": events}
+
 print(
     json.dumps(
         {
@@ -833,6 +861,9 @@ print(
             ],
             "stream_from_bytes": [
                 stream_with(prepared, item) for item in payload["cases"]
+            ],
+            "result_stream_from_bytes": [
+                result_stream_with(prepared, item) for item in payload["cases"]
             ],
             "available_languages": list(
                 anonymize.available_default_native_pipeline_languages()
@@ -1494,6 +1525,7 @@ describe("native adapter parity", () => {
       prepare_search_package,
       redact_text,
       redact_text_json,
+      redact_text_stream_json,
       summary_diagnostics_json,
     };
     for (const name of SHARED_NATIVE_SDK_CORE_TOP_LEVEL_FUNCTIONS) {
@@ -1571,6 +1603,30 @@ describe("native adapter parity", () => {
     const tsStreamJson = cases.map((item) =>
       collectTsDiagnosticStream(prepared, item),
     );
+    const tsResultStreamJson = cases.map((item) =>
+      collectTsResultStream(prepared, item),
+    );
+    expect(tsResultStreamJson.map(({ final }) => final)).toEqual(rustCoreJson);
+    const topLevelResultStreamEvents: StaticRedactionResultStreamEvent[] = [];
+    const topLevelResultStreamJson = redact_text_stream_json({
+      binding: adapters.native,
+      config: CONFIG_JSON,
+      fullText: cases[0].text,
+      onEvent: (event) => {
+        topLevelResultStreamEvents.push(
+          JSON.parse(event) as StaticRedactionResultStreamEvent,
+        );
+      },
+    });
+    if (topLevelResultStreamJson === null) {
+      throw new Error("missing top-level shared SDK result stream");
+    }
+    expect(JSON.parse(topLevelResultStreamJson)).toEqual(rustCoreJson[0]);
+    expect(topLevelResultStreamEvents.map(({ type }) => type)).toEqual([
+      "detected_entities",
+      "resolved_entities",
+      "redacted",
+    ]);
     const diagnosticsJson = prepared.diagnostics_json(cases[0].text);
     if (diagnosticsJson === null) {
       throw new Error("missing shared SDK diagnostics");
@@ -1623,6 +1679,7 @@ describe("native adapter parity", () => {
     expect(
       stripRuntimeDiagnosticStreamTimings(python.stream_from_bytes),
     ).toEqual(stripRuntimeDiagnosticStreamTimings(tsStreamJson));
+    expect(python.result_stream_from_bytes).toEqual(tsResultStreamJson);
     for (const stream of [...tsStreamJson, ...python.stream_from_bytes]) {
       expect(
         stripDiagnosticBatchTimings(concatDiagnosticBatches(stream)),
@@ -3478,6 +3535,7 @@ const callPythonSharedSdkParity = ({
   top_level_bytes: StaticRedactionResult[];
   top_level_object: OffsetFreeStaticRedactionResult[];
   top_level_object_json: StaticRedactionResult[];
+  result_stream_from_bytes: StaticRedactionResultStream[];
   stream_from_bytes: StaticRedactionDiagnosticStream[];
   available_languages: string[];
   normalized: string;
@@ -3724,6 +3782,27 @@ const collectTsDiagnosticStream = (
   return {
     final: JSON.parse(finalJson) as StaticRedactionDiagnosticResult,
     batches,
+  };
+};
+
+const collectTsResultStream = (
+  prepared: PreparedAnonymizer,
+  { text, operators }: SharedSdkParityCase,
+): StaticRedactionResultStream => {
+  const events: StaticRedactionResultStreamEvent[] = [];
+  const finalJson = prepared.redact_text_stream_json(
+    text,
+    (event) => {
+      events.push(JSON.parse(event) as StaticRedactionResultStreamEvent);
+    },
+    operators ?? undefined,
+  );
+  if (finalJson === null) {
+    throw new Error("missing shared SDK result stream");
+  }
+  return {
+    final: JSON.parse(finalJson) as StaticRedactionResult,
+    events,
   };
 };
 

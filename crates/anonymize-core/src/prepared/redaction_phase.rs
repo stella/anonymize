@@ -8,7 +8,8 @@ use crate::types::{
 use super::PreparedEngine;
 use super::diagnostic_stream::DiagnosticEventStream;
 use super::phase::{PhaseTimer, observe_diagnostic_stream};
-use super::results::StaticRedactionResult;
+use super::result_stream::StaticRedactionResultStream;
+use super::results::{StaticRedactionResult, StaticRedactionStreamEvent};
 
 impl PreparedEngine {
   pub(super) fn redact_static_entities_inner(
@@ -17,10 +18,13 @@ impl PreparedEngine {
     operators: &OperatorConfig,
     mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
     event_stream: &mut DiagnosticEventStream<'_>,
+    result_stream: &mut StaticRedactionResultStream<'_>,
   ) -> Result<StaticRedactionResult> {
     let redact_timer = PhaseTimer::start();
     let detections = self
       .detect_static_entities_inner(full_text, diagnostics.as_deref_mut())?;
+    result_stream
+      .observe(StaticRedactionStreamEvent::DetectedEntities(&detections))?;
     observe_diagnostic_stream(&diagnostics, event_stream)?;
     let resolved_entities = self.resolve_static_entities(
       &detections,
@@ -28,12 +32,16 @@ impl PreparedEngine {
       &mut diagnostics,
       event_stream,
     )?;
+    result_stream.observe(StaticRedactionStreamEvent::ResolvedEntities(
+      &resolved_entities,
+    ))?;
     let redaction_entities = resolved_entities
       .iter()
       .map(to_redaction_entity)
       .collect::<Vec<_>>();
     let redaction_timer = PhaseTimer::start();
     let redaction = redact_text(full_text, &redaction_entities, operators)?;
+    result_stream.observe(StaticRedactionStreamEvent::Redacted(&redaction))?;
     record_redaction_stages(
       &mut diagnostics,
       &redaction,

@@ -5,6 +5,7 @@ export const SHARED_NATIVE_SDK_CORE_TOP_LEVEL_FUNCTIONS = [
   "normalize_for_search",
   "redact_text",
   "redact_text_json",
+  "redact_text_stream_json",
   "diagnostics_json",
   "diagnostics_stream_json",
   "summary_diagnostics_json",
@@ -36,11 +37,13 @@ export const PYTHON_NATIVE_SDK_DEFAULT_PACKAGE_NAMES = [
 export const PYTHON_NATIVE_SDK_PUBLIC_TYPE_NAMES = [
   "DiagnosticsBatchCallback",
   "NativeSearchPackageInput",
+  "ResultEventCallback",
 ] as const;
 
 export const SHARED_NATIVE_SDK_PREPARED_METHODS = [
   "redact_text",
   "redact_text_json",
+  "redact_text_stream_json",
   "diagnostics_json",
   "diagnostics_stream_json",
   "summary_diagnostics_json",

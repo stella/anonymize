@@ -7,6 +7,7 @@ type NativeBindingOperatorConfig = {
 };
 
 export type NativeDiagnosticsBatchCallback = (diagnosticsJson: string) => void;
+export type NativeResultEventCallback = (eventJson: string) => void;
 
 type NativeBindingRedactionEntry = {
   placeholder: string;
@@ -73,6 +74,11 @@ export type NativePreparedSearchBinding = {
   redactStaticEntitiesJson?: (
     fullText: string,
     operators?: NativeBindingOperatorConfig,
+  ) => string;
+  redactStaticEntitiesResultStreamJson?: (
+    fullText: string,
+    operators: NativeBindingOperatorConfig | undefined,
+    onEvent: NativeResultEventCallback,
   ) => string;
   redactStaticEntitiesDiagnosticsJson?: (
     fullText: string,
@@ -181,6 +187,11 @@ export type SharedNativeDiagnosticsStreamJsonOptions =
     onBatch: NativeDiagnosticsBatchCallback;
   };
 
+export type SharedNativeRedactTextStreamJsonOptions =
+  SharedNativeRedactTextJsonOptions & {
+    onEvent: NativeResultEventCallback;
+  };
+
 export type NativeNormalizeOptions = {
   binding: NativeAnonymizeBinding;
   text: string;
@@ -280,6 +291,29 @@ export class PreparedNativeAnonymizer {
 
   redactTextJson(fullText: string, operators?: NativeOperatorConfig): string {
     return this.redact_text_json(fullText, operators);
+  }
+
+  redactTextStreamJson(
+    fullText: string,
+    onEvent: NativeResultEventCallback,
+    operators?: NativeOperatorConfig,
+  ): string | null {
+    if (!this.#prepared.redactStaticEntitiesResultStreamJson) {
+      return null;
+    }
+    return this.#prepared.redactStaticEntitiesResultStreamJson(
+      fullText,
+      toBindingOperatorConfig(operators),
+      onEvent,
+    );
+  }
+
+  redact_text_stream_json(
+    fullText: string,
+    onEvent: NativeResultEventCallback,
+    operators?: NativeOperatorConfig,
+  ): string | null {
+    return this.redactTextStreamJson(fullText, onEvent, operators);
   }
 
   redactStaticEntitiesDiagnosticsJson(
@@ -397,6 +431,22 @@ export class PreparedNativePipeline {
 
   redactTextJson(fullText: string, operators?: NativeOperatorConfig): string {
     return this.redact_text_json(fullText, operators);
+  }
+
+  redactTextStreamJson(
+    fullText: string,
+    onEvent: NativeResultEventCallback,
+    operators?: NativeOperatorConfig,
+  ): string | null {
+    return this.#anonymizer.redactTextStreamJson(fullText, onEvent, operators);
+  }
+
+  redact_text_stream_json(
+    fullText: string,
+    onEvent: NativeResultEventCallback,
+    operators?: NativeOperatorConfig,
+  ): string | null {
+    return this.redactTextStreamJson(fullText, onEvent, operators);
   }
 
   redactTextDiagnosticsJson(
@@ -558,6 +608,19 @@ export const redact_text = ({
       encodeNativeSearchConfigInput(config),
     ),
   ).redact_text(fullText, operators);
+
+export const redact_text_stream_json = ({
+  binding,
+  config,
+  fullText,
+  operators,
+  onEvent,
+}: SharedNativeRedactTextStreamJsonOptions): string | null =>
+  new PreparedNativeAnonymizer(
+    binding.NativePreparedSearch.fromConfigJsonBytes(
+      encodeNativeSearchConfigInput(config),
+    ),
+  ).redact_text_stream_json(fullText, onEvent, operators);
 
 export const diagnostics_json = ({
   binding,

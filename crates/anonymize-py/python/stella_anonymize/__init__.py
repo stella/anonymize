@@ -23,6 +23,7 @@ from ._native import (
     prepare_static_search_package_bytes,
     redact_static_entities_diagnostics_json,
     redact_static_entities_json,
+    redact_static_entities_result_stream_json,
     redact_static_entities_summary_diagnostics_json,
 )
 
@@ -31,6 +32,7 @@ __all__ = [
     "OperatorEntry",
     "OperatorConfig",
     "DiagnosticsBatchCallback",
+    "ResultEventCallback",
     "DefaultNativePipelineWarmup",
     "DEFAULT_NATIVE_PIPELINE_WARMUPS",
     "NativeSearchPackageInput",
@@ -60,8 +62,10 @@ __all__ = [
     "read_default_native_pipeline_package_file",
     "redact_text",
     "redact_text_json",
+    "redact_text_stream_json",
     "redact_static_entities_diagnostics_json",
     "redact_static_entities_json",
+    "redact_static_entities_result_stream_json",
     "redact_static_entities_summary_diagnostics_json",
     "summary_diagnostics_json",
 ]
@@ -70,6 +74,7 @@ BytesLike = bytes | bytearray | memoryview
 PathLikeString = str | PathLike[str]
 OperatorConfig = Mapping[str, str] | str | None
 DiagnosticsBatchCallback = Callable[[str], object]
+ResultEventCallback = Callable[[str], object]
 NativeSearchPackageInput = str | BytesLike | Mapping[str, object]
 DefaultNativePipelineWarmup = Literal["lazy-regex", "none"]
 DEFAULT_NATIVE_PIPELINE_WARMUPS: tuple[
@@ -150,6 +155,20 @@ class PreparedAnonymizer:
             _operator_config_json(operators, redact_string=redact_string),
         )
 
+    def redact_text_stream_json(
+        self,
+        full_text: str,
+        on_event: ResultEventCallback,
+        operators: OperatorConfig = None,
+        *,
+        redact_string: str | None = None,
+    ) -> str:
+        return self._prepared.redact_static_entities_result_stream_json(
+            full_text,
+            on_event,
+            _operator_config_json(operators, redact_string=redact_string),
+        )
+
     def diagnostics_json(
         self,
         full_text: str,
@@ -210,6 +229,21 @@ class PreparedAnonymizer:
     ) -> str:
         return self.redact_text_json(
             full_text,
+            operators,
+            redact_string=redact_string,
+        )
+
+    def redact_static_entities_result_stream_json(
+        self,
+        full_text: str,
+        on_event: ResultEventCallback,
+        operators: OperatorConfig = None,
+        *,
+        redact_string: str | None = None,
+    ) -> str:
+        return self.redact_text_stream_json(
+            full_text,
+            on_event,
             operators,
             redact_string=redact_string,
         )
@@ -477,6 +511,23 @@ def redact_text_json(
     prepared = _prepare_from_config_json(_native_search_config_json(config_json))
     return prepared.redact_text_json(
         full_text,
+        operators,
+        redact_string=redact_string,
+    )
+
+
+def redact_text_stream_json(
+    config_json: NativeSearchPackageInput,
+    full_text: str,
+    on_event: ResultEventCallback,
+    operators: OperatorConfig = None,
+    *,
+    redact_string: str | None = None,
+) -> str:
+    prepared = _prepare_from_config_json(_native_search_config_json(config_json))
+    return prepared.redact_text_stream_json(
+        full_text,
+        on_event,
         operators,
         redact_string=redact_string,
     )

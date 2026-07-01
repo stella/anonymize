@@ -67,6 +67,7 @@ export {
   prepare_search_package,
   redact_text,
   redact_text_json,
+  redact_text_stream_json,
 } from "./native";
 export type {
   NativeAnonymizeBinding,
@@ -79,6 +80,7 @@ export type {
   NativePipelineFromPackageOptions,
   NativePreparedSearchBinding,
   NativeRedactionResult,
+  NativeResultEventCallback,
   NativeSearchPackageInput,
   NativeSearchPackageOptions,
   NativeStaticRedactionResult,
@@ -87,6 +89,7 @@ export type {
   SharedNativeDiagnosticsJsonOptions,
   SharedNativeRedactTextOptions,
   SharedNativeRedactTextJsonOptions,
+  SharedNativeRedactTextStreamJsonOptions,
   SharedNativeSearchPackageOptions,
 } from "./native";
 export { DEFAULT_NATIVE_PIPELINE_CONFIG } from "./native-default-config";

@@ -43,6 +43,13 @@ pub struct StaticRedactionDiagnosticResult {
   pub diagnostics: StaticRedactionDiagnostics,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum StaticRedactionStreamEvent<'a> {
+  DetectedEntities(&'a StaticDetectionResult),
+  ResolvedEntities(&'a [PipelineEntity]),
+  Redacted(&'a RedactionResult),
+}
+
 impl StaticEntityLayers {
   #[must_use]
   pub fn entity_count(&self) -> usize {

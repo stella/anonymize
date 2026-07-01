@@ -10,15 +10,17 @@ use stella_anonymize_core::{
   DiagnosticScope, DiagnosticStage, FuzzySearchOptions, GazetteerMatchData,
   HotwordRule, HotwordRuleData, LegalFormData, LiteralSearchOptions,
   MagnitudeSuffixData, MonetaryData, NameCorpusData, NameCorpusMode,
-  OperatorConfig, OperatorType, PatternSlice, PreparedArtifactPolicy,
-  PreparedEngineArtifacts, PreparedEngineConfig, PreparedEngineDetectorConfig,
-  PreparedEnginePolicyConfig, PreparedEngineSearchConfig, PreparedEngineSlices,
+  OperatorConfig, OperatorType, PatternSlice, PipelineEntity,
+  PreparedArtifactPolicy, PreparedEngineArtifacts, PreparedEngineConfig,
+  PreparedEngineDetectorConfig, PreparedEnginePolicyConfig,
+  PreparedEngineSearchConfig, PreparedEngineSlices, RedactionResult,
   RegexArtifactPolicy, RegexMatchMeta, RegexSearchOptions, SearchEngine,
   SearchOptions, SearchPattern, ShareQuantityTermData, SignatureData,
   SigningPlaceGuardData, SourceDetail, StaticRedactionDiagnosticResult,
-  StaticRedactionDiagnostics, StaticRedactionResult, StringGroups, TriggerData,
-  TriggerRule, TriggerStrategy, TriggerValidation, WrittenAmountPatternData,
-  ZoneData, ZonePatternData, ZoneSigningClauseData,
+  StaticRedactionDiagnostics, StaticRedactionResult,
+  StaticRedactionStreamEvent, StringGroups, TriggerData, TriggerRule,
+  TriggerStrategy, TriggerValidation, WrittenAmountPatternData, ZoneData,
+  ZonePatternData, ZoneSigningClauseData,
 };
 
 pub type Result<T> = std::result::Result<T, ContractError>;
@@ -1600,6 +1602,20 @@ pub struct BindingStaticRedactionResult {
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum BindingStaticRedactionStreamEvent {
+  DetectedEntities {
+    entities: Vec<BindingPipelineEntity>,
+  },
+  ResolvedEntities {
+    entities: Vec<BindingPipelineEntity>,
+  },
+  Redacted {
+    redaction: BindingRedactionResult,
+  },
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct BindingDiagnosticEvent {
   pub phase: String,
   pub scope: String,
@@ -2410,38 +2426,9 @@ pub fn static_redaction_result_to_binding(
     resolved_entities: result
       .resolved_entities
       .into_iter()
-      .map(|entity| BindingPipelineEntity {
-        start: entity.start,
-        end: entity.end,
-        label: entity.label,
-        text: entity.text,
-        score: entity.score,
-        source: detection_source_name(entity.source),
-        source_detail: entity.source_detail.map(source_detail_name),
-      })
+      .map(binding_pipeline_entity_from_core)
       .collect(),
-    redaction: BindingRedactionResult {
-      redacted_text: result.redaction.redacted_text,
-      redaction_map: result
-        .redaction
-        .redaction_map
-        .into_iter()
-        .map(|entry| BindingRedactionEntry {
-          placeholder: entry.placeholder,
-          original: entry.original,
-        })
-        .collect(),
-      operator_map: result
-        .redaction
-        .operator_map
-        .into_iter()
-        .map(|entry| BindingOperatorEntry {
-          placeholder: entry.placeholder,
-          operator: operator_name(entry.operator),
-        })
-        .collect(),
-      entity_count: result.redaction.entity_count,
-    },
+    redaction: binding_redaction_result_from_core(result.redaction),
   }
 }
 
@@ -2453,6 +2440,130 @@ pub fn static_redaction_result_to_utf16_binding(
   let mut result = static_redaction_result_to_binding(result);
   convert_pipeline_entity_offsets(&mut result.resolved_entities, &offsets)?;
   Ok(result)
+}
+
+#[must_use]
+pub fn static_redaction_stream_event_to_binding(
+  event: StaticRedactionStreamEvent<'_>,
+) -> BindingStaticRedactionStreamEvent {
+  match event {
+    StaticRedactionStreamEvent::DetectedEntities(detections) => {
+      BindingStaticRedactionStreamEvent::DetectedEntities {
+        entities: detections
+          .all_entities()
+          .into_iter()
+          .map(binding_pipeline_entity_from_core)
+          .collect(),
+      }
+    }
+    StaticRedactionStreamEvent::ResolvedEntities(entities) => {
+      BindingStaticRedactionStreamEvent::ResolvedEntities {
+        entities: entities
+          .iter()
+          .map(binding_pipeline_entity_from_core_ref)
+          .collect(),
+      }
+    }
+    StaticRedactionStreamEvent::Redacted(redaction) => {
+      BindingStaticRedactionStreamEvent::Redacted {
+        redaction: binding_redaction_result_from_core_ref(redaction),
+      }
+    }
+  }
+}
+
+pub fn static_redaction_stream_event_to_utf16_binding(
+  event: StaticRedactionStreamEvent<'_>,
+  full_text: &str,
+) -> Result<BindingStaticRedactionStreamEvent> {
+  let offsets = Utf16OffsetMap::new(full_text)?;
+  let mut event = static_redaction_stream_event_to_binding(event);
+  match &mut event {
+    BindingStaticRedactionStreamEvent::DetectedEntities { entities }
+    | BindingStaticRedactionStreamEvent::ResolvedEntities { entities } => {
+      convert_pipeline_entity_offsets(entities, &offsets)?;
+    }
+    BindingStaticRedactionStreamEvent::Redacted { .. } => {}
+  }
+  Ok(event)
+}
+
+fn binding_pipeline_entity_from_core(
+  entity: PipelineEntity,
+) -> BindingPipelineEntity {
+  BindingPipelineEntity {
+    start: entity.start,
+    end: entity.end,
+    label: entity.label,
+    text: entity.text,
+    score: entity.score,
+    source: detection_source_name(entity.source),
+    source_detail: entity.source_detail.map(source_detail_name),
+  }
+}
+
+fn binding_pipeline_entity_from_core_ref(
+  entity: &PipelineEntity,
+) -> BindingPipelineEntity {
+  BindingPipelineEntity {
+    start: entity.start,
+    end: entity.end,
+    label: entity.label.clone(),
+    text: entity.text.clone(),
+    score: entity.score,
+    source: detection_source_name(entity.source),
+    source_detail: entity.source_detail.map(source_detail_name),
+  }
+}
+
+fn binding_redaction_result_from_core(
+  redaction: RedactionResult,
+) -> BindingRedactionResult {
+  BindingRedactionResult {
+    redacted_text: redaction.redacted_text,
+    redaction_map: redaction
+      .redaction_map
+      .into_iter()
+      .map(|entry| BindingRedactionEntry {
+        placeholder: entry.placeholder,
+        original: entry.original,
+      })
+      .collect(),
+    operator_map: redaction
+      .operator_map
+      .into_iter()
+      .map(|entry| BindingOperatorEntry {
+        placeholder: entry.placeholder,
+        operator: operator_name(entry.operator),
+      })
+      .collect(),
+    entity_count: redaction.entity_count,
+  }
+}
+
+fn binding_redaction_result_from_core_ref(
+  redaction: &RedactionResult,
+) -> BindingRedactionResult {
+  BindingRedactionResult {
+    redacted_text: redaction.redacted_text.clone(),
+    redaction_map: redaction
+      .redaction_map
+      .iter()
+      .map(|entry| BindingRedactionEntry {
+        placeholder: entry.placeholder.clone(),
+        original: entry.original.clone(),
+      })
+      .collect(),
+    operator_map: redaction
+      .operator_map
+      .iter()
+      .map(|entry| BindingOperatorEntry {
+        placeholder: entry.placeholder.clone(),
+        operator: operator_name(entry.operator),
+      })
+      .collect(),
+    entity_count: redaction.entity_count,
+  }
 }
 
 #[must_use]

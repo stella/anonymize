@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import TypeAlias
 
 BytesLike: TypeAlias = bytes | bytearray | memoryview
+ResultEventCallback: TypeAlias = Callable[[str], object]
 
 class RedactionEntry:
     @property
@@ -80,6 +82,12 @@ class PreparedSearch:
         full_text: str,
         operators_json: str | None = None,
     ) -> str: ...
+    def redact_static_entities_result_stream_json(
+        self,
+        full_text: str,
+        on_event: ResultEventCallback,
+        operators_json: str | None = None,
+    ) -> str: ...
     def redact_static_entities_diagnostics_json(
         self,
         full_text: str,
@@ -94,6 +102,12 @@ class PreparedSearch:
 def redact_static_entities_json(
     config_json: str,
     full_text: str,
+    operators_json: str | None = None,
+) -> str: ...
+def redact_static_entities_result_stream_json(
+    config_json: str,
+    full_text: str,
+    on_event: ResultEventCallback,
     operators_json: str | None = None,
 ) -> str: ...
 def prepare_static_search_artifacts_bytes(config_json: str) -> bytes: ...

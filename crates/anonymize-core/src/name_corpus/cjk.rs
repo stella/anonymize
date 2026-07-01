@@ -72,10 +72,7 @@ fn push_run_candidate(
   let Some(start) = start else {
     return;
   };
-  runs.push(HanRun {
-    start,
-    end,
-  });
+  runs.push(HanRun { start, end });
 }
 
 fn push_run(

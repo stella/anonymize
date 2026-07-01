@@ -18,6 +18,7 @@ use stella_anonymize_adapter_contract::{
   static_redaction_diagnostic_result_to_utf16_binding,
   static_redaction_diagnostics_to_binding, static_redaction_result_to_binding,
   static_redaction_result_to_utf16_binding,
+  static_redaction_stream_event_to_utf16_binding,
 };
 use stella_anonymize_core::{
   DiagnosticDetail, DiagnosticEvent, DiagnosticStage, Error as CoreError,
@@ -245,6 +246,35 @@ impl PyPreparedSearch {
     serde_json::to_string(&result).map_err(|error| to_py_serde_error(&error))
   }
 
+  fn redact_static_entities_result_stream_json(
+    &self,
+    full_text: &str,
+    on_event: &Bound<'_, PyAny>,
+    operators_json: Option<&str>,
+  ) -> PyResult<String> {
+    let operators = parse_operator_config(operators_json)?;
+    let operators = operator_config_from_binding(operators)
+      .map_err(|error| to_py_contract_error(&error))?;
+    let result = self
+      .inner
+      .redact_static_entities_with_result_observer(
+        full_text,
+        &operators,
+        |event| {
+          let event_json = result_stream_event_json(event, full_text)?;
+          on_event
+            .call1((event_json,))
+            .map_err(|error| core_result_observer_error(error.to_string()))?;
+          Ok(())
+        },
+      )
+      .map_err(|error| to_py_core_error(&error))?;
+    let result = static_redaction_result_to_utf16_binding(result, full_text)
+      .map_err(|error| to_py_contract_error(&error))?;
+
+    serde_json::to_string(&result).map_err(|error| to_py_serde_error(&error))
+  }
+
   fn redact_static_entities_diagnostics_json(
     &self,
     full_text: &str,
@@ -436,6 +466,30 @@ fn diagnostic_event_batch_json(
   })
 }
 
+fn result_stream_event_json(
+  event: stella_anonymize_core::StaticRedactionStreamEvent<'_>,
+  full_text: &str,
+) -> stella_anonymize_core::Result<String> {
+  let event = static_redaction_stream_event_to_utf16_binding(event, full_text)
+    .map_err(|error| {
+      core_result_observer_error(format!(
+        "result event conversion failed: {error}"
+      ))
+    })?;
+  serde_json::to_string(&event).map_err(|error| {
+    core_result_observer_error(format!(
+      "result event serialization failed: {error}"
+    ))
+  })
+}
+
+const fn core_result_observer_error(reason: String) -> CoreError {
+  CoreError::InvalidStaticData {
+    field: "result.observer",
+    reason,
+  }
+}
+
 const fn core_observer_error(reason: String) -> CoreError {
   CoreError::InvalidStaticData {
     field: "diagnostics.observer",
@@ -451,6 +505,21 @@ fn redact_static_entities_json(
 ) -> PyResult<String> {
   let prepared = PyPreparedSearch::new(config_json)?;
   prepared.redact_static_entities_json(full_text, operators_json)
+}
+
+#[pyfunction]
+fn redact_static_entities_result_stream_json(
+  config_json: &str,
+  full_text: &str,
+  on_event: &Bound<'_, PyAny>,
+  operators_json: Option<&str>,
+) -> PyResult<String> {
+  let prepared = PyPreparedSearch::new(config_json)?;
+  prepared.redact_static_entities_result_stream_json(
+    full_text,
+    on_event,
+    operators_json,
+  )
 }
 
 #[pyfunction]
@@ -709,6 +778,10 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
   module.add_class::<PyPipelineEntity>()?;
   module
     .add_function(wrap_pyfunction!(redact_static_entities_json, module)?)?;
+  module.add_function(wrap_pyfunction!(
+    redact_static_entities_result_stream_json,
+    module
+  )?)?;
   module.add_function(wrap_pyfunction!(
     prepare_static_search_artifacts_bytes,
     module

@@ -35,6 +35,7 @@ import {
   redact_default_text_json,
   redact_text,
   redact_text_json,
+  redact_text_stream_json,
   summary_diagnostics_json,
 } from "../native-node";
 import {
@@ -541,6 +542,7 @@ describe("native node loader", () => {
       prepare_search_package,
       redact_text,
       redact_text_json,
+      redact_text_stream_json,
       summary_diagnostics_json,
     };
     for (const name of SHARED_NATIVE_SDK_TOP_LEVEL_FUNCTIONS) {

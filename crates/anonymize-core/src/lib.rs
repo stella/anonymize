@@ -51,7 +51,7 @@ pub use prepared::{
   PreparedEngineDetectorConfig, PreparedEngineMatches,
   PreparedEnginePolicyConfig, PreparedEngineSearchConfig, PreparedEngineSlices,
   StaticDetectionResult, StaticEntityLayers, StaticRedactionDiagnosticResult,
-  StaticRedactionResult,
+  StaticRedactionResult, StaticRedactionStreamEvent,
 };
 pub use processors::{
   CountryMatchData, DenyListFilterData, DenyListMatchData, DenyListPatternMeta,

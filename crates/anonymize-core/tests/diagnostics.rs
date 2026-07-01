@@ -11,7 +11,7 @@ use stella_anonymize_core::{
   Error, GazetteerMatchData, LiteralSearchOptions, OperatorConfig,
   PatternSlice, PreparedEngine, PreparedEngineConfig, PreparedEngineSlices,
   RegexMatchMeta, RegexSearchOptions, SearchEngine, SearchOptions,
-  SearchPattern,
+  SearchPattern, StaticRedactionStreamEvent,
 };
 use support::prepared_config;
 
@@ -223,6 +223,68 @@ fn engine_streams_diagnostic_batches() {
       .is_some_and(|stages| stages.contains(&DiagnosticStage::Redaction)
         && stages.contains(&DiagnosticStage::RedactTotal))
   );
+}
+
+#[test]
+fn engine_streams_static_redaction_results() {
+  let prepared = PreparedEngine::new(prepared_config! {
+    literal_patterns: vec![SearchPattern::LiteralWithOptions {
+      pattern: String::from("Secret Code"),
+      case_insensitive: Some(false),
+      whole_words: Some(true),
+    }],
+    literal_options: SearchOptions {
+      literal: LiteralSearchOptions {
+        case_insensitive: false,
+        whole_words: true,
+      },
+      ..SearchOptions::default()
+    },
+    slices: PreparedEngineSlices {
+      deny_list: PatternSlice { start: 0, end: 1 },
+      ..PreparedEngineSlices::default()
+    },
+    deny_list_data: Some(DenyListMatchData {
+      labels: vec![vec![String::from("matter")]].into(),
+      custom_labels: vec![vec![String::from("matter")]].into(),
+      originals: vec![String::from("Secret Code")],
+      pattern_meta: DenyListPatternMetaSet::default(),
+      sources: vec![vec![String::from("custom-deny-list")]].into(),
+      filters: None,
+    }),
+    ..empty_config(PreparedEngineSlices::default())
+  })
+  .unwrap();
+  let mut event_types = Vec::new();
+  let mut event_counts = Vec::new();
+
+  let result = prepared
+    .redact_static_entities_with_result_observer(
+      "Secret Code was disclosed.",
+      &OperatorConfig::default(),
+      |event| {
+        match event {
+          StaticRedactionStreamEvent::DetectedEntities(detections) => {
+            event_types.push("detected");
+            event_counts.push(detections.entity_count());
+          }
+          StaticRedactionStreamEvent::ResolvedEntities(entities) => {
+            event_types.push("resolved");
+            event_counts.push(entities.len());
+          }
+          StaticRedactionStreamEvent::Redacted(redaction) => {
+            event_types.push("redacted");
+            event_counts.push(redaction.entity_count);
+          }
+        }
+        Ok::<(), Error>(())
+      },
+    )
+    .unwrap();
+
+  assert_eq!(event_types, ["detected", "resolved", "redacted"]);
+  assert_eq!(event_counts, [1, 1, 1]);
+  assert_eq!(result.redaction.redacted_text, "[MATTER_1] was disclosed.");
 }
 
 fn assert_stage_summary(
