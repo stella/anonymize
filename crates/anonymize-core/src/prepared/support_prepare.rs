@@ -1,7 +1,7 @@
 use crate::address_context::{AddressContextData, PreparedAddressContextData};
 use crate::address_seeds::{AddressSeedData, PreparedAddressSeedData};
 use crate::coreference::{CoreferenceData, PreparedCoreferenceData};
-use crate::diagnostics::{DiagnosticStage, StaticRedactionDiagnostics};
+use crate::diagnostics::StaticRedactionDiagnostics;
 use crate::hotwords::{HotwordRuleData, PreparedHotwordData};
 use crate::legal_forms::{LegalFormData, PreparedLegalFormData};
 use crate::name_corpus::{
@@ -14,6 +14,11 @@ use crate::zones::{PreparedZoneData, ZoneData};
 
 use super::PreparedEngineDetectorConfig;
 use super::phase::record_prepare_stage_elapsed;
+use super::support_resources::{
+  ADDRESS_CONTEXT_RESOURCE, ADDRESS_SEED_RESOURCE, COREFERENCE_RESOURCE,
+  HOTWORD_RESOURCE, LEGAL_FORM_RESOURCE, NAME_CORPUS_RESOURCE,
+  SIGNATURE_RESOURCE, SupportResourceSpec, TRIGGER_RESOURCE, ZONE_RESOURCE,
+};
 use super::support_slots::{
   TimedSupportData, join_support_data, prepare_timed_address_context_data,
   prepare_timed_address_seed_data, prepare_timed_coreference_data,
@@ -85,18 +90,24 @@ pub(super) fn prepare_support_data(
       scope.spawn(|| Ok(prepare_timed_signature_data(input.signature)));
 
     Ok(ParallelPreparedSupportData {
-      hotwords: join_support_data(hotwords, "hotword_data")?,
-      triggers: join_support_data(triggers, "trigger_data")?,
-      legal_forms: join_support_data(legal_forms, "legal_form_data")?,
-      address_seed: join_support_data(address_seed, "address_seed_data")?,
-      zones: join_support_data(zones, "zone_data")?,
+      hotwords: join_support_data(hotwords, HOTWORD_RESOURCE.field())?,
+      triggers: join_support_data(triggers, TRIGGER_RESOURCE.field())?,
+      legal_forms: join_support_data(legal_forms, LEGAL_FORM_RESOURCE.field())?,
+      address_seed: join_support_data(
+        address_seed,
+        ADDRESS_SEED_RESOURCE.field(),
+      )?,
+      zones: join_support_data(zones, ZONE_RESOURCE.field())?,
       address_context: join_support_data(
         address_context,
-        "address_context_data",
+        ADDRESS_CONTEXT_RESOURCE.field(),
       )?,
-      coreference: join_support_data(coreference, "coreference_data")?,
-      names: join_support_data(names, "name_corpus_data")?,
-      signature: join_support_data(signature, "signature_data")?,
+      coreference: join_support_data(
+        coreference,
+        COREFERENCE_RESOURCE.field(),
+      )?,
+      names: join_support_data(names, NAME_CORPUS_RESOURCE.field())?,
+      signature: join_support_data(signature, SIGNATURE_RESOURCE.field())?,
     })
   })?;
 
@@ -111,7 +122,7 @@ fn record_parallel_support_data(
   for metric in prepared.metrics() {
     record_prepare_stage_elapsed(
       diagnostics,
-      metric.stage,
+      metric.resource.diagnostic_stage(),
       metric.count,
       metric.elapsed_us,
     );
@@ -152,42 +163,21 @@ struct ParallelPreparedSupportData {
 impl ParallelPreparedSupportData {
   const fn metrics(&self) -> [SupportPrepareMetric; 9] {
     [
+      SupportPrepareMetric::from_timed(HOTWORD_RESOURCE, &self.hotwords),
+      SupportPrepareMetric::from_timed(TRIGGER_RESOURCE, &self.triggers),
+      SupportPrepareMetric::from_timed(LEGAL_FORM_RESOURCE, &self.legal_forms),
       SupportPrepareMetric::from_timed(
-        DiagnosticStage::PrepareHotwordData,
-        &self.hotwords,
-      ),
-      SupportPrepareMetric::from_timed(
-        DiagnosticStage::PrepareTriggerData,
-        &self.triggers,
-      ),
-      SupportPrepareMetric::from_timed(
-        DiagnosticStage::PrepareLegalFormData,
-        &self.legal_forms,
-      ),
-      SupportPrepareMetric::from_timed(
-        DiagnosticStage::PrepareAddressSeedData,
+        ADDRESS_SEED_RESOURCE,
         &self.address_seed,
       ),
+      SupportPrepareMetric::from_timed(ZONE_RESOURCE, &self.zones),
       SupportPrepareMetric::from_timed(
-        DiagnosticStage::PrepareZoneData,
-        &self.zones,
-      ),
-      SupportPrepareMetric::from_timed(
-        DiagnosticStage::PrepareAddressContextData,
+        ADDRESS_CONTEXT_RESOURCE,
         &self.address_context,
       ),
-      SupportPrepareMetric::from_timed(
-        DiagnosticStage::PrepareCoreferenceData,
-        &self.coreference,
-      ),
-      SupportPrepareMetric::from_timed(
-        DiagnosticStage::PrepareNameCorpusData,
-        &self.names,
-      ),
-      SupportPrepareMetric::from_timed(
-        DiagnosticStage::PrepareSignatureData,
-        &self.signature,
-      ),
+      SupportPrepareMetric::from_timed(COREFERENCE_RESOURCE, &self.coreference),
+      SupportPrepareMetric::from_timed(NAME_CORPUS_RESOURCE, &self.names),
+      SupportPrepareMetric::from_timed(SIGNATURE_RESOURCE, &self.signature),
     ]
   }
 
@@ -202,18 +192,18 @@ impl ParallelPreparedSupportData {
 
 #[derive(Clone, Copy)]
 struct SupportPrepareMetric {
-  stage: DiagnosticStage,
+  resource: SupportResourceSpec,
   count: usize,
   elapsed_us: u64,
 }
 
 impl SupportPrepareMetric {
   const fn from_timed<T>(
-    stage: DiagnosticStage,
+    resource: SupportResourceSpec,
     timed: &TimedSupportData<T>,
   ) -> Self {
     Self {
-      stage,
+      resource,
       count: timed.len,
       elapsed_us: timed.elapsed_us,
     }

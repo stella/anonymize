@@ -3,6 +3,7 @@ use crate::prepared::detector_registry::{
   StaticDetectorContext, StaticDetectorDiagnostics, StaticDetectorId,
   StaticDetectorInput, StaticDetectorRule, StaticDetectorSpec,
 };
+use crate::prepared::support_resources::SupportResourceId;
 use crate::prepared::timing::{StaticEntityPasses, TimedEntities};
 use crate::resolution::PipelineEntity;
 use crate::types::Result;
@@ -32,7 +33,8 @@ pub(in crate::prepared) const ADDRESS_SEED_RULE: StaticDetectorRule =
         StaticDetectorInput::ContextEntities,
       ],
       ADDRESS_SEED_DEPENDENCIES,
-    ),
+    )
+    .with_support_resources(&[SupportResourceId::AddressSeed]),
     detect_address_seed,
   );
 

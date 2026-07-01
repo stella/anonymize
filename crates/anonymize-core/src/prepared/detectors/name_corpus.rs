@@ -3,6 +3,7 @@ use crate::prepared::detector_registry::{
   StaticDetectorContext, StaticDetectorDiagnostics, StaticDetectorId,
   StaticDetectorInput, StaticDetectorRule, StaticDetectorSpec,
 };
+use crate::prepared::support_resources::SupportResourceId;
 use crate::prepared::timing::{StaticEntityPasses, TimedEntities};
 use crate::types::Result;
 
@@ -19,7 +20,8 @@ pub(in crate::prepared) const NAME_CORPUS_RULE: StaticDetectorRule =
         StaticDetectorInput::DenyListEntities,
       ],
       &[StaticDetectorId::DenyList],
-    ),
+    )
+    .with_support_resources(&[SupportResourceId::NameCorpus]),
     detect_name_corpus,
   );
 

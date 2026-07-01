@@ -9,6 +9,7 @@ use super::detectors::{
   REGEX_RULE, SIGNATURE_RULE, TRIGGER_RULE,
 };
 use super::results::PreparedEngineMatches;
+use super::support_resources::SupportResourceId;
 use super::timing::{StaticEntityPasses, TimedEntities};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -54,6 +55,7 @@ pub(super) struct StaticDetectorSpec {
   stage: DiagnosticStage,
   required_inputs: &'static [StaticDetectorInput],
   dependencies: &'static [StaticDetectorId],
+  support_resources: &'static [SupportResourceId],
 }
 
 impl StaticDetectorSpec {
@@ -68,7 +70,16 @@ impl StaticDetectorSpec {
       stage,
       required_inputs,
       dependencies,
+      support_resources: &[],
     }
+  }
+
+  pub(super) const fn with_support_resources(
+    mut self,
+    support_resources: &'static [SupportResourceId],
+  ) -> Self {
+    self.support_resources = support_resources;
+    self
   }
 
   pub(super) const fn id(self) -> StaticDetectorId {
@@ -85,6 +96,10 @@ impl StaticDetectorSpec {
 
   pub(super) const fn dependencies(self) -> &'static [StaticDetectorId] {
     self.dependencies
+  }
+
+  pub(super) const fn support_resources(self) -> &'static [SupportResourceId] {
+    self.support_resources
   }
 }
 
@@ -147,7 +162,8 @@ pub(super) static STATIC_ENTITY_RULES: &[StaticDetectorRule] = &[
 
 #[cfg(test)]
 mod tests {
-  use super::{STATIC_ENTITY_RULES, StaticDetectorId};
+  use super::{STATIC_ENTITY_RULES, StaticDetectorId, SupportResourceId};
+  use crate::prepared::support_resources::SUPPORT_RESOURCES;
 
   #[test]
   fn detector_registry_entries_declare_metadata() {
@@ -184,6 +200,18 @@ mod tests {
         assert!(
           detector_exists(*dependency),
           "detector dependency must be registered: {dependency:?}",
+        );
+      }
+      let mut support_resources = Vec::new();
+      for resource in metadata.support_resources() {
+        assert!(
+          !support_resources.contains(resource),
+          "detector support resources must be unique: {resource:?}",
+        );
+        support_resources.push(*resource);
+        assert!(
+          support_resource_exists(*resource),
+          "detector support resource must be registered: {resource:?}",
         );
       }
       ids.push(metadata.id());
@@ -227,5 +255,11 @@ mod tests {
     STATIC_ENTITY_RULES
       .iter()
       .any(|rule| rule.spec().id() == detector_id)
+  }
+
+  fn support_resource_exists(resource_id: SupportResourceId) -> bool {
+    SUPPORT_RESOURCES
+      .iter()
+      .any(|resource| resource.id() == resource_id)
   }
 }

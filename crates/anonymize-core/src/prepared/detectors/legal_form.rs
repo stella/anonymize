@@ -4,6 +4,7 @@ use crate::prepared::detector_registry::{
   StaticDetectorContext, StaticDetectorDiagnostics, StaticDetectorId,
   StaticDetectorInput, StaticDetectorRule, StaticDetectorSpec,
 };
+use crate::prepared::support_resources::SupportResourceId;
 use crate::prepared::timing::{StaticEntityPasses, TimedEntities};
 use crate::types::Result;
 
@@ -19,7 +20,8 @@ pub(in crate::prepared) const LEGAL_FORM_RULE: StaticDetectorRule =
         StaticDetectorInput::LegalFormData,
       ],
       &[],
-    ),
+    )
+    .with_support_resources(&[SupportResourceId::LegalForms]),
     detect_legal_form,
   );
 

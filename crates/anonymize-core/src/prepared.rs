@@ -21,6 +21,7 @@ mod results;
 mod search_matcher;
 mod search_phase;
 mod support_prepare;
+mod support_resources;
 mod support_slots;
 mod timing;
 

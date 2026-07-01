@@ -3,6 +3,7 @@ use crate::prepared::detector_registry::{
   StaticDetectorContext, StaticDetectorDiagnostics, StaticDetectorId,
   StaticDetectorInput, StaticDetectorRule, StaticDetectorSpec,
 };
+use crate::prepared::support_resources::SupportResourceId;
 use crate::prepared::timing::{StaticEntityPasses, TimedEntities};
 use crate::triggers::process_trigger_matches;
 use crate::types::Result;
@@ -19,7 +20,8 @@ pub(in crate::prepared) const TRIGGER_RULE: StaticDetectorRule =
         StaticDetectorInput::TriggerData,
       ],
       &[],
-    ),
+    )
+    .with_support_resources(&[SupportResourceId::Triggers]),
     detect_trigger,
   );
 

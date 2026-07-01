@@ -9,6 +9,7 @@ use super::phase::record_detector_entities;
 use super::results::{
   PreparedEngineMatches, StaticDetectionResult, StaticEntityLayers,
 };
+use super::support_resources::support_resource_exists;
 use super::timing::{StaticEntityPasses, elapsed_us};
 
 impl PreparedEngine {
@@ -67,6 +68,13 @@ impl PreparedEngine {
       debug_assert!(
         !spec.required_inputs().is_empty(),
         "static detector registry entries must declare required inputs",
+      );
+      debug_assert!(
+        spec
+          .support_resources()
+          .iter()
+          .all(|resource| support_resource_exists(*resource)),
+        "static detector support resources must be registered",
       );
       let entities =
         rule.detect(&context, &passes, diagnostics.as_deref_mut())?;
