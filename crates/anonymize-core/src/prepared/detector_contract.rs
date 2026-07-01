@@ -21,24 +21,6 @@ pub(super) enum StaticDetectorId {
   AddressSeed,
 }
 
-impl StaticDetectorId {
-  pub(super) const fn diagnostic_stage(self) -> DiagnosticStage {
-    match self {
-      Self::Regex => DiagnosticStage::EntityRegex,
-      Self::CustomRegex => DiagnosticStage::EntityCustomRegex,
-      Self::DenyList => DiagnosticStage::EntityDenyList,
-      Self::Gazetteer => DiagnosticStage::EntityGazetteer,
-      Self::Country => DiagnosticStage::EntityCountry,
-      Self::Anchored => DiagnosticStage::EntityAnchored,
-      Self::Trigger => DiagnosticStage::EntityTrigger,
-      Self::Signature => DiagnosticStage::EntitySignature,
-      Self::LegalForm => DiagnosticStage::EntityLegalForm,
-      Self::NameCorpus => DiagnosticStage::EntityNameCorpus,
-      Self::AddressSeed => DiagnosticStage::EntityAddressSeed,
-    }
-  }
-}
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum StaticDetectorInput {
   FullText,
@@ -64,15 +46,20 @@ pub(super) enum StaticDetectorInput {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct StaticDetectorSpec {
   id: StaticDetectorId,
+  diagnostic_stage: DiagnosticStage,
   declared_inputs: &'static [StaticDetectorInput],
   dependencies: &'static [StaticDetectorId],
   support_resources: &'static [SupportResourceId],
 }
 
 impl StaticDetectorSpec {
-  pub(super) const fn define(id: StaticDetectorId) -> Self {
+  pub(super) const fn define(
+    id: StaticDetectorId,
+    diagnostic_stage: DiagnosticStage,
+  ) -> Self {
     Self {
       id,
+      diagnostic_stage,
       declared_inputs: &[],
       dependencies: &[],
       support_resources: &[],
@@ -108,7 +95,7 @@ impl StaticDetectorSpec {
   }
 
   pub(super) const fn diagnostic_stage(self) -> DiagnosticStage {
-    self.id.diagnostic_stage()
+    self.diagnostic_stage
   }
 
   #[cfg(test)]
@@ -201,6 +188,7 @@ macro_rules! static_detector_rule {
   (
     $visibility:vis const $name:ident;
     id: $id:expr;
+    stage: $stage:expr;
     inputs: $inputs:expr;
     $(after: $dependencies:expr;)?
     $(uses: $resources:expr;)?
@@ -210,7 +198,10 @@ macro_rules! static_detector_rule {
     $visibility const $name:
       $crate::prepared::detector_contract::StaticDetectorRule =
       $crate::prepared::detector_contract::StaticDetectorRule::declare(
-        $crate::prepared::detector_contract::StaticDetectorSpec::define($id)
+        $crate::prepared::detector_contract::StaticDetectorSpec::define(
+          $id,
+          $stage,
+        )
           .requires($inputs)
           $(.after($dependencies))?
           $(.uses($resources))?,

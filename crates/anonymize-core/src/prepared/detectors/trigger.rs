@@ -1,3 +1,4 @@
+use crate::diagnostics::DiagnosticStage;
 use crate::triggers::process_trigger_matches;
 
 use super::prelude::*;
@@ -6,6 +7,7 @@ use super::timed_entities;
 static_detector_rule! {
   pub(in crate::prepared) const TRIGGER_RULE;
   id: DetectorId::Trigger;
+  stage: DiagnosticStage::EntityTrigger;
   inputs: &[DetectorInput::RegexMatches];
   uses: &[SupportResource::Triggers];
   active: trigger_is_active;

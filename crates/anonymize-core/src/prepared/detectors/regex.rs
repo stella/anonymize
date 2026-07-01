@@ -1,3 +1,4 @@
+use crate::diagnostics::DiagnosticStage;
 use crate::processors::process_regex_matches;
 
 use super::prelude::*;
@@ -6,6 +7,7 @@ use super::timed_entities;
 static_detector_rule! {
   pub(in crate::prepared) const REGEX_RULE;
   id: DetectorId::Regex;
+  stage: DiagnosticStage::EntityRegex;
   inputs: &[
     DetectorInput::RegexMatches,
     DetectorInput::FullText,
@@ -18,6 +20,7 @@ static_detector_rule! {
 static_detector_rule! {
   pub(in crate::prepared) const CUSTOM_REGEX_RULE;
   id: DetectorId::CustomRegex;
+  stage: DiagnosticStage::EntityCustomRegex;
   inputs: &[
     DetectorInput::CustomRegexMatches,
     DetectorInput::FullText,

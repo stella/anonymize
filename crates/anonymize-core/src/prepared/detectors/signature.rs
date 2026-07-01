@@ -1,3 +1,4 @@
+use crate::diagnostics::DiagnosticStage;
 use crate::signatures::detect_signatures;
 
 use super::prelude::*;
@@ -6,6 +7,7 @@ use super::timed_entities;
 static_detector_rule! {
   pub(in crate::prepared) const SIGNATURE_RULE;
   id: DetectorId::Signature;
+  stage: DiagnosticStage::EntitySignature;
   inputs: &[DetectorInput::FullText];
   uses: &[SupportResource::Signature];
   active: signature_is_active;
