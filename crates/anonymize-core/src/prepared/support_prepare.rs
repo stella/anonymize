@@ -175,7 +175,7 @@ struct ParallelPreparedSupportData {
 }
 
 impl ParallelPreparedSupportData {
-  const fn metrics(&self) -> [SupportPrepareMetric; 9] {
+  const fn metrics(&self) -> [SupportPrepareMetric; SupportResourceId::COUNT] {
     [
       SupportPrepareMetric::from_timed(
         SupportResourceId::Hotwords.spec(),

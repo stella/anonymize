@@ -16,6 +16,21 @@ pub(super) enum SupportResourceId {
 }
 
 impl SupportResourceId {
+  pub(super) const COUNT: usize = 9;
+
+  #[cfg(test)]
+  pub(super) const ORDER: [Self; Self::COUNT] = [
+    Self::Hotwords,
+    Self::Triggers,
+    Self::LegalForms,
+    Self::AddressSeed,
+    Self::Zones,
+    Self::AddressContext,
+    Self::Coreference,
+    Self::NameCorpus,
+    Self::Signature,
+  ];
+
   pub(super) const fn spec(self) -> SupportResourceSpec {
     match self {
       Self::Hotwords => HOTWORD_RESOURCE,
@@ -143,21 +158,8 @@ pub(super) const SIGNATURE_RESOURCE: SupportResourceSpec =
   );
 
 #[cfg(test)]
-const SUPPORT_RESOURCES: &[SupportResourceSpec] = &[
-  HOTWORD_RESOURCE,
-  TRIGGER_RESOURCE,
-  LEGAL_FORM_RESOURCE,
-  ADDRESS_SEED_RESOURCE,
-  ZONE_RESOURCE,
-  ADDRESS_CONTEXT_RESOURCE,
-  COREFERENCE_RESOURCE,
-  NAME_CORPUS_RESOURCE,
-  SIGNATURE_RESOURCE,
-];
-
-#[cfg(test)]
 mod tests {
-  use super::SUPPORT_RESOURCES;
+  use super::SupportResourceId;
 
   #[test]
   fn support_resources_declare_unique_metadata() {
@@ -165,7 +167,8 @@ mod tests {
     let mut fields = Vec::new();
     let mut detector_inputs = Vec::new();
     let mut stages = Vec::new();
-    for resource in SUPPORT_RESOURCES {
+    for resource_id in SupportResourceId::ORDER {
+      let resource = resource_id.spec();
       assert!(
         !ids.contains(&resource.id()),
         "support resource ids must be unique: {:?}",
@@ -193,7 +196,7 @@ mod tests {
       stages.push(resource.diagnostic_stage());
       assert_eq!(
         resource.id().spec(),
-        *resource,
+        resource,
         "support resource id must map to its declared spec",
       );
     }
