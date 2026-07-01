@@ -4,9 +4,9 @@ use crate::types::Result;
 
 use super::PreparedEngine;
 use super::detectors::{
-  AddressSeedDetector, AnchoredDetector, CountryDetector, CustomRegexDetector,
-  DenyListDetector, GazetteerDetector, LegalFormDetector, NameCorpusDetector,
-  RegexDetector, SignatureDetector, TriggerDetector,
+  ADDRESS_SEED_RULE, ANCHORED_RULE, COUNTRY_RULE, CUSTOM_REGEX_RULE,
+  DENY_LIST_RULE, GAZETTEER_RULE, LEGAL_FORM_RULE, NAME_CORPUS_RULE,
+  REGEX_RULE, SIGNATURE_RULE, TRIGGER_RULE,
 };
 use super::results::PreparedEngineMatches;
 use super::timing::{StaticEntityPasses, TimedEntities};
@@ -88,59 +88,73 @@ impl StaticDetectorSpec {
   }
 }
 
-pub(super) struct StaticDetectorContext<'a, 'd> {
+pub(super) struct StaticDetectorContext<'a> {
   pub(super) engine: &'a PreparedEngine,
   pub(super) matches: &'a PreparedEngineMatches,
   pub(super) full_text: &'a str,
-  pub(super) diagnostics: Option<&'d mut StaticRedactionDiagnostics>,
 }
 
-pub(super) trait StaticEntityDetector: Sync {
-  fn spec(&self) -> StaticDetectorSpec;
+pub(super) type StaticDetectorDiagnostics<'d> =
+  Option<&'d mut StaticRedactionDiagnostics>;
 
-  fn detect(
-    &self,
-    context: StaticDetectorContext<'_, '_>,
+pub(super) type StaticDetectFn = for<'a, 'p, 'd> fn(
+  &StaticDetectorContext<'a>,
+  &'p StaticEntityPasses,
+  StaticDetectorDiagnostics<'d>,
+) -> Result<TimedEntities>;
+
+#[derive(Clone, Copy)]
+pub(super) struct StaticDetectorRule {
+  spec: StaticDetectorSpec,
+  detect: StaticDetectFn,
+}
+
+impl StaticDetectorRule {
+  pub(super) const fn new(
+    spec: StaticDetectorSpec,
+    detect: StaticDetectFn,
+  ) -> Self {
+    Self { spec, detect }
+  }
+
+  pub(super) const fn spec(self) -> StaticDetectorSpec {
+    self.spec
+  }
+
+  pub(super) fn detect(
+    self,
+    context: &StaticDetectorContext<'_>,
     passes: &StaticEntityPasses,
-  ) -> Result<TimedEntities>;
+    diagnostics: StaticDetectorDiagnostics<'_>,
+  ) -> Result<TimedEntities> {
+    (self.detect)(context, passes, diagnostics)
+  }
 }
 
-static REGEX_DETECTOR: RegexDetector = RegexDetector;
-static CUSTOM_REGEX_DETECTOR: CustomRegexDetector = CustomRegexDetector;
-static DENY_LIST_DETECTOR: DenyListDetector = DenyListDetector;
-static GAZETTEER_DETECTOR: GazetteerDetector = GazetteerDetector;
-static COUNTRY_DETECTOR: CountryDetector = CountryDetector;
-static ANCHORED_DETECTOR: AnchoredDetector = AnchoredDetector;
-static TRIGGER_DETECTOR: TriggerDetector = TriggerDetector;
-static SIGNATURE_DETECTOR: SignatureDetector = SignatureDetector;
-static LEGAL_FORM_DETECTOR: LegalFormDetector = LegalFormDetector;
-static NAME_CORPUS_DETECTOR: NameCorpusDetector = NameCorpusDetector;
-static ADDRESS_SEED_DETECTOR: AddressSeedDetector = AddressSeedDetector;
-
-pub(super) static STATIC_ENTITY_DETECTORS: &[&dyn StaticEntityDetector] = &[
-  &REGEX_DETECTOR,
-  &CUSTOM_REGEX_DETECTOR,
-  &DENY_LIST_DETECTOR,
-  &GAZETTEER_DETECTOR,
-  &COUNTRY_DETECTOR,
-  &ANCHORED_DETECTOR,
-  &TRIGGER_DETECTOR,
-  &SIGNATURE_DETECTOR,
-  &LEGAL_FORM_DETECTOR,
-  &NAME_CORPUS_DETECTOR,
-  &ADDRESS_SEED_DETECTOR,
+pub(super) static STATIC_ENTITY_RULES: &[StaticDetectorRule] = &[
+  REGEX_RULE,
+  CUSTOM_REGEX_RULE,
+  DENY_LIST_RULE,
+  GAZETTEER_RULE,
+  COUNTRY_RULE,
+  ANCHORED_RULE,
+  TRIGGER_RULE,
+  SIGNATURE_RULE,
+  LEGAL_FORM_RULE,
+  NAME_CORPUS_RULE,
+  ADDRESS_SEED_RULE,
 ];
 
 #[cfg(test)]
 mod tests {
-  use super::{STATIC_ENTITY_DETECTORS, StaticDetectorId};
+  use super::{STATIC_ENTITY_RULES, StaticDetectorId};
 
   #[test]
   fn detector_registry_entries_declare_metadata() {
     let mut ids = Vec::new();
     let mut stages = Vec::new();
-    for detector in STATIC_ENTITY_DETECTORS {
-      let metadata = detector.spec();
+    for rule in STATIC_ENTITY_RULES {
+      let metadata = rule.spec();
       assert!(
         !ids.contains(&metadata.id()),
         "detector ids must be unique: {:?}",
@@ -179,8 +193,8 @@ mod tests {
 
   #[test]
   fn dependent_detectors_run_after_their_context_sources() {
-    for detector in STATIC_ENTITY_DETECTORS {
-      let metadata = detector.spec();
+    for rule in STATIC_ENTITY_RULES {
+      let metadata = rule.spec();
       let id = metadata.id();
       for dependency in metadata.dependencies() {
         assert!(
@@ -204,14 +218,14 @@ mod tests {
   }
 
   fn position_of(detector_id: StaticDetectorId) -> Option<usize> {
-    STATIC_ENTITY_DETECTORS
+    STATIC_ENTITY_RULES
       .iter()
-      .position(|detector| detector.spec().id() == detector_id)
+      .position(|rule| rule.spec().id() == detector_id)
   }
 
   fn detector_exists(detector_id: StaticDetectorId) -> bool {
-    STATIC_ENTITY_DETECTORS
+    STATIC_ENTITY_RULES
       .iter()
-      .any(|detector| detector.spec().id() == detector_id)
+      .any(|rule| rule.spec().id() == detector_id)
   }
 }

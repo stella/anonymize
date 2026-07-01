@@ -1,17 +1,15 @@
 use crate::diagnostics::DiagnosticStage;
 use crate::prepared::detector_registry::{
-  StaticDetectorContext, StaticDetectorId, StaticDetectorInput,
-  StaticDetectorSpec, StaticEntityDetector,
+  StaticDetectorContext, StaticDetectorDiagnostics, StaticDetectorId,
+  StaticDetectorInput, StaticDetectorRule, StaticDetectorSpec,
 };
 use crate::prepared::timing::{StaticEntityPasses, TimedEntities};
 use crate::types::Result;
 
 use super::timed_entities;
 
-pub(in crate::prepared) struct NameCorpusDetector;
-
-impl StaticEntityDetector for NameCorpusDetector {
-  fn spec(&self) -> StaticDetectorSpec {
+pub(in crate::prepared) const NAME_CORPUS_RULE: StaticDetectorRule =
+  StaticDetectorRule::new(
     StaticDetectorSpec::new(
       StaticDetectorId::NameCorpus,
       DiagnosticStage::EntityNameCorpus,
@@ -21,22 +19,22 @@ impl StaticEntityDetector for NameCorpusDetector {
         StaticDetectorInput::DenyListEntities,
       ],
       &[StaticDetectorId::DenyList],
-    )
-  }
+    ),
+    detect_name_corpus,
+  );
 
-  fn detect(
-    &self,
-    context: StaticDetectorContext<'_, '_>,
-    passes: &StaticEntityPasses,
-  ) -> Result<TimedEntities> {
-    timed_entities(|| {
-      let Some(data) = &context.engine.data.name_corpus else {
-        return Ok(Vec::new());
-      };
-      data.detect_configured(
-        context.full_text,
-        passes.entities(StaticDetectorId::DenyList),
-      )
-    })
-  }
+fn detect_name_corpus(
+  context: &StaticDetectorContext<'_>,
+  passes: &StaticEntityPasses,
+  _diagnostics: StaticDetectorDiagnostics<'_>,
+) -> Result<TimedEntities> {
+  let engine = context.engine;
+  let full_text = context.full_text;
+  timed_entities(|| {
+    let Some(data) = &engine.data.name_corpus else {
+      return Ok(Vec::new());
+    };
+    data
+      .detect_configured(full_text, passes.entities(StaticDetectorId::DenyList))
+  })
 }

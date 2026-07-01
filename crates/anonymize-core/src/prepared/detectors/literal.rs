@@ -1,7 +1,7 @@
 use crate::diagnostics::DiagnosticStage;
 use crate::prepared::detector_registry::{
-  StaticDetectorContext, StaticDetectorId, StaticDetectorInput,
-  StaticDetectorSpec, StaticEntityDetector,
+  StaticDetectorContext, StaticDetectorDiagnostics, StaticDetectorId,
+  StaticDetectorInput, StaticDetectorRule, StaticDetectorSpec,
 };
 use crate::prepared::timing::{StaticEntityPasses, TimedEntities};
 use crate::processors::{
@@ -11,10 +11,8 @@ use crate::types::Result;
 
 use super::timed_entities;
 
-pub(in crate::prepared) struct DenyListDetector;
-
-impl StaticEntityDetector for DenyListDetector {
-  fn spec(&self) -> StaticDetectorSpec {
+pub(in crate::prepared) const DENY_LIST_RULE: StaticDetectorRule =
+  StaticDetectorRule::new(
     StaticDetectorSpec::new(
       StaticDetectorId::DenyList,
       DiagnosticStage::EntityDenyList,
@@ -23,32 +21,12 @@ impl StaticEntityDetector for DenyListDetector {
         StaticDetectorInput::DenyListData,
       ],
       &[],
-    )
-  }
+    ),
+    detect_deny_list,
+  );
 
-  fn detect(
-    &self,
-    context: StaticDetectorContext<'_, '_>,
-    _passes: &StaticEntityPasses,
-  ) -> Result<TimedEntities> {
-    timed_entities(|| {
-      let Some(data) = &context.engine.data.deny_list else {
-        return Ok(Vec::new());
-      };
-      process_deny_list_matches(
-        &context.matches.literal,
-        context.engine.policy.slices.deny_list,
-        context.full_text,
-        data,
-      )
-    })
-  }
-}
-
-pub(in crate::prepared) struct GazetteerDetector;
-
-impl StaticEntityDetector for GazetteerDetector {
-  fn spec(&self) -> StaticDetectorSpec {
+pub(in crate::prepared) const GAZETTEER_RULE: StaticDetectorRule =
+  StaticDetectorRule::new(
     StaticDetectorSpec::new(
       StaticDetectorId::Gazetteer,
       DiagnosticStage::EntityGazetteer,
@@ -57,32 +35,12 @@ impl StaticEntityDetector for GazetteerDetector {
         StaticDetectorInput::GazetteerData,
       ],
       &[],
-    )
-  }
+    ),
+    detect_gazetteer,
+  );
 
-  fn detect(
-    &self,
-    context: StaticDetectorContext<'_, '_>,
-    _passes: &StaticEntityPasses,
-  ) -> Result<TimedEntities> {
-    timed_entities(|| {
-      let Some(data) = &context.engine.data.gazetteer else {
-        return Ok(Vec::new());
-      };
-      process_gazetteer_matches(
-        &context.matches.literal,
-        context.engine.policy.slices.gazetteer,
-        context.full_text,
-        data,
-      )
-    })
-  }
-}
-
-pub(in crate::prepared) struct CountryDetector;
-
-impl StaticEntityDetector for CountryDetector {
-  fn spec(&self) -> StaticDetectorSpec {
+pub(in crate::prepared) const COUNTRY_RULE: StaticDetectorRule =
+  StaticDetectorRule::new(
     StaticDetectorSpec::new(
       StaticDetectorId::Country,
       DiagnosticStage::EntityCountry,
@@ -91,24 +49,69 @@ impl StaticEntityDetector for CountryDetector {
         StaticDetectorInput::CountryData,
       ],
       &[],
-    )
-  }
+    ),
+    detect_country,
+  );
 
-  fn detect(
-    &self,
-    context: StaticDetectorContext<'_, '_>,
-    _passes: &StaticEntityPasses,
-  ) -> Result<TimedEntities> {
-    timed_entities(|| {
-      let Some(data) = &context.engine.data.countries else {
-        return Ok(Vec::new());
-      };
-      process_country_matches(
-        &context.matches.literal,
-        context.engine.policy.slices.countries,
-        context.full_text,
-        data,
-      )
-    })
-  }
+fn detect_deny_list(
+  context: &StaticDetectorContext<'_>,
+  _passes: &StaticEntityPasses,
+  _diagnostics: StaticDetectorDiagnostics<'_>,
+) -> Result<TimedEntities> {
+  let engine = context.engine;
+  let matches = context.matches;
+  let full_text = context.full_text;
+  timed_entities(|| {
+    let Some(data) = &engine.data.deny_list else {
+      return Ok(Vec::new());
+    };
+    process_deny_list_matches(
+      &matches.literal,
+      engine.policy.slices.deny_list,
+      full_text,
+      data,
+    )
+  })
+}
+
+fn detect_gazetteer(
+  context: &StaticDetectorContext<'_>,
+  _passes: &StaticEntityPasses,
+  _diagnostics: StaticDetectorDiagnostics<'_>,
+) -> Result<TimedEntities> {
+  let engine = context.engine;
+  let matches = context.matches;
+  let full_text = context.full_text;
+  timed_entities(|| {
+    let Some(data) = &engine.data.gazetteer else {
+      return Ok(Vec::new());
+    };
+    process_gazetteer_matches(
+      &matches.literal,
+      engine.policy.slices.gazetteer,
+      full_text,
+      data,
+    )
+  })
+}
+
+fn detect_country(
+  context: &StaticDetectorContext<'_>,
+  _passes: &StaticEntityPasses,
+  _diagnostics: StaticDetectorDiagnostics<'_>,
+) -> Result<TimedEntities> {
+  let engine = context.engine;
+  let matches = context.matches;
+  let full_text = context.full_text;
+  timed_entities(|| {
+    let Some(data) = &engine.data.countries else {
+      return Ok(Vec::new());
+    };
+    process_country_matches(
+      &matches.literal,
+      engine.policy.slices.countries,
+      full_text,
+      data,
+    )
+  })
 }

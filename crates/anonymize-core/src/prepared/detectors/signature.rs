@@ -1,7 +1,7 @@
 use crate::diagnostics::DiagnosticStage;
 use crate::prepared::detector_registry::{
-  StaticDetectorContext, StaticDetectorId, StaticDetectorInput,
-  StaticDetectorSpec, StaticEntityDetector,
+  StaticDetectorContext, StaticDetectorDiagnostics, StaticDetectorId,
+  StaticDetectorInput, StaticDetectorRule, StaticDetectorSpec,
 };
 use crate::prepared::timing::{StaticEntityPasses, TimedEntities};
 use crate::signatures::detect_signatures;
@@ -9,10 +9,8 @@ use crate::types::Result;
 
 use super::timed_entities;
 
-pub(in crate::prepared) struct SignatureDetector;
-
-impl StaticEntityDetector for SignatureDetector {
-  fn spec(&self) -> StaticDetectorSpec {
+pub(in crate::prepared) const SIGNATURE_RULE: StaticDetectorRule =
+  StaticDetectorRule::new(
     StaticDetectorSpec::new(
       StaticDetectorId::Signature,
       DiagnosticStage::EntitySignature,
@@ -21,25 +19,24 @@ impl StaticEntityDetector for SignatureDetector {
         StaticDetectorInput::SignatureData,
       ],
       &[],
-    )
-  }
+    ),
+    detect_signature,
+  );
 
-  fn detect(
-    &self,
-    context: StaticDetectorContext<'_, '_>,
-    _passes: &StaticEntityPasses,
-  ) -> Result<TimedEntities> {
-    timed_entities(|| {
-      Ok(
-        context
-          .engine
-          .data
-          .signatures
-          .as_ref()
-          .map_or_else(Vec::new, |data| {
-            detect_signatures(context.full_text, data)
-          }),
-      )
-    })
-  }
+fn detect_signature(
+  context: &StaticDetectorContext<'_>,
+  _passes: &StaticEntityPasses,
+  _diagnostics: StaticDetectorDiagnostics<'_>,
+) -> Result<TimedEntities> {
+  let engine = context.engine;
+  let full_text = context.full_text;
+  timed_entities(|| {
+    Ok(
+      engine
+        .data
+        .signatures
+        .as_ref()
+        .map_or_else(Vec::new, |data| detect_signatures(full_text, data)),
+    )
+  })
 }

@@ -14,16 +14,14 @@ mod regex;
 mod signature;
 mod trigger;
 
-pub(super) use address_seed::AddressSeedDetector;
-pub(super) use anchored::AnchoredDetector;
-pub(super) use legal_form::LegalFormDetector;
-pub(super) use literal::{
-  CountryDetector, DenyListDetector, GazetteerDetector,
-};
-pub(super) use name_corpus::NameCorpusDetector;
-pub(super) use regex::{CustomRegexDetector, RegexDetector};
-pub(super) use signature::SignatureDetector;
-pub(super) use trigger::TriggerDetector;
+pub(super) use address_seed::ADDRESS_SEED_RULE;
+pub(super) use anchored::ANCHORED_RULE;
+pub(super) use legal_form::LEGAL_FORM_RULE;
+pub(super) use literal::{COUNTRY_RULE, DENY_LIST_RULE, GAZETTEER_RULE};
+pub(super) use name_corpus::NAME_CORPUS_RULE;
+pub(super) use regex::{CUSTOM_REGEX_RULE, REGEX_RULE};
+pub(super) use signature::SIGNATURE_RULE;
+pub(super) use trigger::TRIGGER_RULE;
 
 fn timed_entities<F>(detect: F) -> Result<TimedEntities>
 where

@@ -1,7 +1,7 @@
 use crate::diagnostics::DiagnosticStage;
 use crate::prepared::detector_registry::{
-  StaticDetectorContext, StaticDetectorId, StaticDetectorInput,
-  StaticDetectorSpec, StaticEntityDetector,
+  StaticDetectorContext, StaticDetectorDiagnostics, StaticDetectorId,
+  StaticDetectorInput, StaticDetectorRule, StaticDetectorSpec,
 };
 use crate::prepared::timing::{StaticEntityPasses, TimedEntities};
 use crate::resolution::PipelineEntity;
@@ -9,10 +9,20 @@ use crate::types::Result;
 
 use super::timed_entities;
 
-pub(in crate::prepared) struct AddressSeedDetector;
+const ADDRESS_SEED_DEPENDENCIES: &[StaticDetectorId] = &[
+  StaticDetectorId::Regex,
+  StaticDetectorId::CustomRegex,
+  StaticDetectorId::Anchored,
+  StaticDetectorId::Trigger,
+  StaticDetectorId::Signature,
+  StaticDetectorId::LegalForm,
+  StaticDetectorId::DenyList,
+  StaticDetectorId::Gazetteer,
+  StaticDetectorId::NameCorpus,
+];
 
-impl StaticEntityDetector for AddressSeedDetector {
-  fn spec(&self) -> StaticDetectorSpec {
+pub(in crate::prepared) const ADDRESS_SEED_RULE: StaticDetectorRule =
+  StaticDetectorRule::new(
     StaticDetectorSpec::new(
       StaticDetectorId::AddressSeed,
       DiagnosticStage::EntityAddressSeed,
@@ -21,39 +31,32 @@ impl StaticEntityDetector for AddressSeedDetector {
         StaticDetectorInput::AddressSeedData,
         StaticDetectorInput::ContextEntities,
       ],
-      &[
-        StaticDetectorId::Regex,
-        StaticDetectorId::CustomRegex,
-        StaticDetectorId::Anchored,
-        StaticDetectorId::Trigger,
-        StaticDetectorId::Signature,
-        StaticDetectorId::LegalForm,
-        StaticDetectorId::DenyList,
-        StaticDetectorId::Gazetteer,
-        StaticDetectorId::NameCorpus,
-      ],
-    )
-  }
+      ADDRESS_SEED_DEPENDENCIES,
+    ),
+    detect_address_seed,
+  );
 
-  fn detect(
-    &self,
-    context: StaticDetectorContext<'_, '_>,
-    passes: &StaticEntityPasses,
-  ) -> Result<TimedEntities> {
-    timed_entities(|| {
-      let Some(data) = &context.engine.data.address_seed else {
-        return Ok(Vec::new());
-      };
-      let spec = self.spec();
-      let existing_entities = address_seed_context(spec.dependencies(), passes);
-      data.process(
-        &context.matches.literal,
-        context.engine.policy.slices.street_types,
-        context.full_text,
-        &existing_entities,
-      )
-    })
-  }
+fn detect_address_seed(
+  context: &StaticDetectorContext<'_>,
+  passes: &StaticEntityPasses,
+  _diagnostics: StaticDetectorDiagnostics<'_>,
+) -> Result<TimedEntities> {
+  let engine = context.engine;
+  let matches = context.matches;
+  let full_text = context.full_text;
+  timed_entities(|| {
+    let Some(data) = &engine.data.address_seed else {
+      return Ok(Vec::new());
+    };
+    let existing_entities =
+      address_seed_context(ADDRESS_SEED_RULE.spec().dependencies(), passes);
+    data.process(
+      &matches.literal,
+      engine.policy.slices.street_types,
+      full_text,
+      &existing_entities,
+    )
+  })
 }
 
 fn address_seed_context(

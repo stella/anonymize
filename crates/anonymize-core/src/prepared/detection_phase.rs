@@ -4,9 +4,7 @@ use crate::diagnostics::{DiagnosticStage, StaticRedactionDiagnostics};
 use crate::types::Result;
 
 use super::PreparedEngine;
-use super::detector_registry::{
-  STATIC_ENTITY_DETECTORS, StaticDetectorContext,
-};
+use super::detector_registry::{STATIC_ENTITY_RULES, StaticDetectorContext};
 use super::phase::record_detector_entities;
 use super::results::{
   PreparedEngineMatches, StaticDetectionResult, StaticEntityLayers,
@@ -58,20 +56,20 @@ impl PreparedEngine {
     mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
   ) -> Result<StaticEntityPasses> {
     let mut passes =
-      StaticEntityPasses::with_capacity(STATIC_ENTITY_DETECTORS.len());
-    for detector in STATIC_ENTITY_DETECTORS {
-      let spec = detector.spec();
+      StaticEntityPasses::with_capacity(STATIC_ENTITY_RULES.len());
+    let context = StaticDetectorContext {
+      engine: self,
+      matches,
+      full_text,
+    };
+    for rule in STATIC_ENTITY_RULES {
+      let spec = rule.spec();
       debug_assert!(
         !spec.required_inputs().is_empty(),
         "static detector registry entries must declare required inputs",
       );
-      let context = StaticDetectorContext {
-        engine: self,
-        matches,
-        full_text,
-        diagnostics: diagnostics.as_deref_mut(),
-      };
-      let entities = detector.detect(context, &passes)?;
+      let entities =
+        rule.detect(&context, &passes, diagnostics.as_deref_mut())?;
       passes.push_detector_entities(spec.id(), entities);
     }
     Ok(passes)
@@ -83,8 +81,8 @@ fn record_static_entity_diagnostics(
   full_text: &str,
   passes: &StaticEntityPasses,
 ) {
-  for detector in STATIC_ENTITY_DETECTORS {
-    let detector = detector.spec();
+  for rule in STATIC_ENTITY_RULES {
+    let detector = rule.spec();
     debug_assert!(
       !detector.required_inputs().is_empty(),
       "static detector registry entries must declare required inputs",

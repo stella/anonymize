@@ -1,7 +1,7 @@
 use crate::diagnostics::DiagnosticStage;
 use crate::prepared::detector_registry::{
-  StaticDetectorContext, StaticDetectorId, StaticDetectorInput,
-  StaticDetectorSpec, StaticEntityDetector,
+  StaticDetectorContext, StaticDetectorDiagnostics, StaticDetectorId,
+  StaticDetectorInput, StaticDetectorRule, StaticDetectorSpec,
 };
 use crate::prepared::timing::{StaticEntityPasses, TimedEntities};
 use crate::processors::process_regex_matches;
@@ -9,10 +9,8 @@ use crate::types::Result;
 
 use super::timed_entities;
 
-pub(in crate::prepared) struct RegexDetector;
-
-impl StaticEntityDetector for RegexDetector {
-  fn spec(&self) -> StaticDetectorSpec {
+pub(in crate::prepared) const REGEX_RULE: StaticDetectorRule =
+  StaticDetectorRule::new(
     StaticDetectorSpec::new(
       StaticDetectorId::Regex,
       DiagnosticStage::EntityRegex,
@@ -22,29 +20,12 @@ impl StaticEntityDetector for RegexDetector {
         StaticDetectorInput::RegexMeta,
       ],
       &[],
-    )
-  }
+    ),
+    detect_regex,
+  );
 
-  fn detect(
-    &self,
-    context: StaticDetectorContext<'_, '_>,
-    _passes: &StaticEntityPasses,
-  ) -> Result<TimedEntities> {
-    timed_entities(|| {
-      process_regex_matches(
-        &context.matches.regex,
-        context.engine.policy.slices.regex,
-        context.full_text,
-        &context.engine.policy.regex_meta,
-      )
-    })
-  }
-}
-
-pub(in crate::prepared) struct CustomRegexDetector;
-
-impl StaticEntityDetector for CustomRegexDetector {
-  fn spec(&self) -> StaticDetectorSpec {
+pub(in crate::prepared) const CUSTOM_REGEX_RULE: StaticDetectorRule =
+  StaticDetectorRule::new(
     StaticDetectorSpec::new(
       StaticDetectorId::CustomRegex,
       DiagnosticStage::EntityCustomRegex,
@@ -54,21 +35,42 @@ impl StaticEntityDetector for CustomRegexDetector {
         StaticDetectorInput::CustomRegexMeta,
       ],
       &[],
-    )
-  }
+    ),
+    detect_custom_regex,
+  );
 
-  fn detect(
-    &self,
-    context: StaticDetectorContext<'_, '_>,
-    _passes: &StaticEntityPasses,
-  ) -> Result<TimedEntities> {
-    timed_entities(|| {
-      process_regex_matches(
-        &context.matches.custom_regex,
-        context.engine.policy.slices.custom_regex,
-        context.full_text,
-        &context.engine.policy.custom_regex_meta,
-      )
-    })
-  }
+fn detect_regex(
+  context: &StaticDetectorContext<'_>,
+  _passes: &StaticEntityPasses,
+  _diagnostics: StaticDetectorDiagnostics<'_>,
+) -> Result<TimedEntities> {
+  let engine = context.engine;
+  let matches = context.matches;
+  let full_text = context.full_text;
+  timed_entities(|| {
+    process_regex_matches(
+      &matches.regex,
+      engine.policy.slices.regex,
+      full_text,
+      &engine.policy.regex_meta,
+    )
+  })
+}
+
+fn detect_custom_regex(
+  context: &StaticDetectorContext<'_>,
+  _passes: &StaticEntityPasses,
+  _diagnostics: StaticDetectorDiagnostics<'_>,
+) -> Result<TimedEntities> {
+  let engine = context.engine;
+  let matches = context.matches;
+  let full_text = context.full_text;
+  timed_entities(|| {
+    process_regex_matches(
+      &matches.custom_regex,
+      engine.policy.slices.custom_regex,
+      full_text,
+      &engine.policy.custom_regex_meta,
+    )
+  })
 }
