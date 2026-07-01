@@ -17,28 +17,17 @@ pub(super) fn detect(
     return Ok(Vec::new());
   }
 
-  let text_len = full_text.chars().count();
-  let threshold =
-    ceil_ratio(text_len, HAN_RATIO_NUMERATOR, HAN_RATIO_DENOMINATOR).max(1);
+  let mut text_len = 0usize;
   let mut han_count = 0usize;
-  for ch in full_text.chars() {
-    if is_han(ch) {
-      han_count = han_count.saturating_add(1);
-      if han_count >= threshold {
-        break;
-      }
-    }
-  }
-  if text_len >= 100 && han_count >= threshold {
-    return Ok(Vec::new());
-  }
-
-  let mut entities = Vec::new();
+  let mut runs = Vec::new();
   let mut run_start = None;
   let mut run_chars = 0usize;
   let mut previous_end = 0usize;
+
   for (index, ch) in full_text.char_indices() {
+    text_len = text_len.saturating_add(1);
     if is_han(ch) {
+      han_count = han_count.saturating_add(1);
       if run_start.is_none() {
         run_start = Some(index);
       }
@@ -46,51 +35,64 @@ pub(super) fn detect(
       previous_end = index.saturating_add(ch.len_utf8());
       continue;
     }
-    push_run(
-      data,
-      full_text,
-      run_start,
-      previous_end,
-      run_chars,
-      &mut entities,
-    )?;
+
+    push_run_candidate(run_start, previous_end, run_chars, &mut runs);
     run_start = None;
     run_chars = 0;
   }
-  push_run(
-    data,
-    full_text,
-    run_start,
-    full_text.len(),
-    run_chars,
-    &mut entities,
-  )?;
+  push_run_candidate(run_start, full_text.len(), run_chars, &mut runs);
+  let threshold =
+    ceil_ratio(text_len, HAN_RATIO_NUMERATOR, HAN_RATIO_DENOMINATOR).max(1);
+  if text_len >= 100 && han_count >= threshold {
+    return Ok(Vec::new());
+  }
+
+  let mut entities = Vec::with_capacity(runs.len());
+  for run in runs {
+    push_run(data, full_text, run, &mut entities)?;
+  }
   Ok(entities)
+}
+
+#[derive(Clone, Copy)]
+struct HanRun {
+  start: usize,
+  end: usize,
+}
+
+fn push_run_candidate(
+  start: Option<usize>,
+  end: usize,
+  char_count: usize,
+  runs: &mut Vec<HanRun>,
+) {
+  if !(2..=4).contains(&char_count) {
+    return;
+  }
+  let Some(start) = start else {
+    return;
+  };
+  runs.push(HanRun {
+    start,
+    end,
+  });
 }
 
 fn push_run(
   data: &PreparedNameCorpusData,
   full_text: &str,
-  start: Option<usize>,
-  end: usize,
-  char_count: usize,
+  run: HanRun,
   entities: &mut Vec<PipelineEntity>,
 ) -> Result<()> {
-  if !(2..=4).contains(&char_count) {
-    return Ok(());
-  }
-  let Some(start) = start else {
-    return Ok(());
-  };
-  let Some(text) = full_text.get(start..end) else {
+  let Some(text) = full_text.get(run.start..run.end) else {
     return Err(invalid_name_data("cjk span is not a UTF-8 boundary"));
   };
   if !data.is_likely_cjk_person_name(text) || data.is_organization(text) {
     return Ok(());
   }
   entities.push(PipelineEntity::detected(
-    usize_to_u32(start, "name_corpus.cjk.start")?,
-    usize_to_u32(end, "name_corpus.cjk.end")?,
+    usize_to_u32(run.start, "name_corpus.cjk.start")?,
+    usize_to_u32(run.end, "name_corpus.cjk.end")?,
     PERSON_LABEL,
     text,
     SCORE,
