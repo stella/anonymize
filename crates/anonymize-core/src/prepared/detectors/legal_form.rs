@@ -8,7 +8,13 @@ static_detector_rule! {
   id: DetectorId::LegalForm;
   inputs: &[DetectorInput::RegexMatches];
   uses: &[SupportResource::LegalForms];
+  active: legal_form_is_active;
   detect: detect_legal_form;
+}
+
+const fn legal_form_is_active(context: &StaticDetectorContext<'_>) -> bool {
+  !context.matches.regex.is_empty()
+    && context.engine.data.legal_forms.is_some()
 }
 
 fn detect_legal_form(

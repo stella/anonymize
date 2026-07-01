@@ -150,6 +150,9 @@ pub(super) struct StaticDetectorContext<'a> {
 pub(super) type StaticDetectorDiagnostics<'d> =
   Option<&'d mut StaticRedactionDiagnostics>;
 
+pub(super) type StaticDetectorActiveFn =
+  for<'a> fn(&StaticDetectorContext<'a>) -> bool;
+
 pub(super) type StaticDetectFn = for<'a, 'p, 'd> fn(
   &StaticDetectorContext<'a>,
   &'p StaticEntityPasses,
@@ -159,19 +162,29 @@ pub(super) type StaticDetectFn = for<'a, 'p, 'd> fn(
 #[derive(Clone, Copy)]
 pub(super) struct StaticDetectorRule {
   spec: StaticDetectorSpec,
+  is_active: StaticDetectorActiveFn,
   detect: StaticDetectFn,
 }
 
 impl StaticDetectorRule {
   pub(super) const fn declare(
     spec: StaticDetectorSpec,
+    is_active: StaticDetectorActiveFn,
     detect: StaticDetectFn,
   ) -> Self {
-    Self { spec, detect }
+    Self {
+      spec,
+      is_active,
+      detect,
+    }
   }
 
   pub(super) const fn spec(self) -> StaticDetectorSpec {
     self.spec
+  }
+
+  pub(super) fn is_active(self, context: &StaticDetectorContext<'_>) -> bool {
+    (self.is_active)(context)
   }
 
   pub(super) fn detect(
@@ -191,6 +204,7 @@ macro_rules! static_detector_rule {
     inputs: $inputs:expr;
     $(after: $dependencies:expr;)?
     $(uses: $resources:expr;)?
+    active: $is_active:path;
     detect: $detect:path $(;)?
   ) => {
     $visibility const $name:
@@ -200,6 +214,7 @@ macro_rules! static_detector_rule {
           .requires($inputs)
           $(.after($dependencies))?
           $(.uses($resources))?,
+        $is_active,
         $detect,
       );
   };

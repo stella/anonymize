@@ -9,7 +9,14 @@ static_detector_rule! {
     DetectorInput::DateData,
     DetectorInput::MonetaryData,
   ];
+  active: anchored_is_active;
   detect: detect_anchored;
+}
+
+const fn anchored_is_active(context: &StaticDetectorContext<'_>) -> bool {
+  context.engine.data.dates.is_some()
+    || (context.engine.policy.monetary_extraction
+      && context.engine.data.monetary.is_some())
 }
 
 fn detect_anchored(

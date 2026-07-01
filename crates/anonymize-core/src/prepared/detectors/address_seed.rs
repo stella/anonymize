@@ -27,7 +27,12 @@ static_detector_rule! {
   ];
   after: ADDRESS_SEED_DEPENDENCIES;
   uses: &[SupportResource::AddressSeed];
+  active: address_seed_is_active;
   detect: detect_address_seed;
+}
+
+const fn address_seed_is_active(context: &StaticDetectorContext<'_>) -> bool {
+  context.engine.data.address_seed.is_some()
 }
 
 fn detect_address_seed(

@@ -8,7 +8,12 @@ static_detector_rule! {
   id: DetectorId::Trigger;
   inputs: &[DetectorInput::RegexMatches];
   uses: &[SupportResource::Triggers];
+  active: trigger_is_active;
   detect: detect_trigger;
+}
+
+const fn trigger_is_active(context: &StaticDetectorContext<'_>) -> bool {
+  !context.matches.regex.is_empty() && context.engine.data.triggers.is_some()
 }
 
 fn detect_trigger(

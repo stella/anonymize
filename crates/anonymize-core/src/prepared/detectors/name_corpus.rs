@@ -15,7 +15,12 @@ static_detector_rule! {
   ];
   after: &[DetectorId::DenyList];
   uses: &[SupportResource::NameCorpus];
+  active: name_corpus_is_active;
   detect: detect_name_corpus;
+}
+
+const fn name_corpus_is_active(context: &StaticDetectorContext<'_>) -> bool {
+  context.engine.data.name_corpus.is_some()
 }
 
 fn detect_name_corpus(

@@ -8,7 +8,12 @@ static_detector_rule! {
   id: DetectorId::Signature;
   inputs: &[DetectorInput::FullText];
   uses: &[SupportResource::Signature];
+  active: signature_is_active;
   detect: detect_signature;
+}
+
+const fn signature_is_active(context: &StaticDetectorContext<'_>) -> bool {
+  context.engine.data.signatures.is_some()
 }
 
 fn detect_signature(

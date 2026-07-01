@@ -12,6 +12,7 @@ static_detector_rule! {
     DetectorInput::LiteralMatches,
     DetectorInput::DenyListData,
   ];
+  active: deny_list_is_active;
   detect: detect_deny_list;
 }
 
@@ -22,6 +23,7 @@ static_detector_rule! {
     DetectorInput::LiteralMatches,
     DetectorInput::GazetteerData,
   ];
+  active: gazetteer_is_active;
   detect: detect_gazetteer;
 }
 
@@ -32,7 +34,20 @@ static_detector_rule! {
     DetectorInput::LiteralMatches,
     DetectorInput::CountryData,
   ];
+  active: country_is_active;
   detect: detect_country;
+}
+
+const fn deny_list_is_active(context: &StaticDetectorContext<'_>) -> bool {
+  !context.matches.literal.is_empty() && context.engine.data.deny_list.is_some()
+}
+
+const fn gazetteer_is_active(context: &StaticDetectorContext<'_>) -> bool {
+  !context.matches.literal.is_empty() && context.engine.data.gazetteer.is_some()
+}
+
+const fn country_is_active(context: &StaticDetectorContext<'_>) -> bool {
+  !context.matches.literal.is_empty() && context.engine.data.countries.is_some()
 }
 
 fn detect_deny_list(

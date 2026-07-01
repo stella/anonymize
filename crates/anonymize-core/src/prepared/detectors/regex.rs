@@ -11,6 +11,7 @@ static_detector_rule! {
     DetectorInput::FullText,
     DetectorInput::RegexMeta,
   ];
+  active: regex_is_active;
   detect: detect_regex;
 }
 
@@ -22,7 +23,18 @@ static_detector_rule! {
     DetectorInput::FullText,
     DetectorInput::CustomRegexMeta,
   ];
+  active: custom_regex_is_active;
   detect: detect_custom_regex;
+}
+
+const fn regex_is_active(context: &StaticDetectorContext<'_>) -> bool {
+  !context.matches.regex.is_empty()
+    && !context.engine.policy.regex_meta.is_empty()
+}
+
+const fn custom_regex_is_active(context: &StaticDetectorContext<'_>) -> bool {
+  !context.matches.custom_regex.is_empty()
+    && !context.engine.policy.custom_regex_meta.is_empty()
 }
 
 fn detect_regex(
