@@ -11,47 +11,33 @@ mod prelude;
 macro_rules! static_detectors {
   (
     $(
-      mod $module:ident {
-        $($rule:ident),+ $(,)?
-      }
+      mod $module:ident;
     )+
   ) => {
     $(mod $module;)+
 
-    pub(super) static STATIC_ENTITY_RULES: &[StaticDetectorRule] = &[
-      $($($module::$rule),+),+
+    const STATIC_ENTITY_RULE_GROUPS: &[&[StaticDetectorRule]] = &[
+      $($module::RULES),+
     ];
   };
 }
 
 static_detectors! {
-  mod regex {
-    REGEX_RULE,
-    CUSTOM_REGEX_RULE,
-  }
-  mod literal {
-    DENY_LIST_RULE,
-    GAZETTEER_RULE,
-    COUNTRY_RULE,
-  }
-  mod anchored {
-    ANCHORED_RULE,
-  }
-  mod trigger {
-    TRIGGER_RULE,
-  }
-  mod signature {
-    SIGNATURE_RULE,
-  }
-  mod legal_form {
-    LEGAL_FORM_RULE,
-  }
-  mod name_corpus {
-    NAME_CORPUS_RULE,
-  }
-  mod address_seed {
-    ADDRESS_SEED_RULE,
-  }
+  mod regex;
+  mod literal;
+  mod anchored;
+  mod trigger;
+  mod signature;
+  mod legal_form;
+  mod name_corpus;
+  mod address_seed;
+}
+
+pub(super) fn static_entity_rules() -> impl Iterator<Item = StaticDetectorRule>
+{
+  STATIC_ENTITY_RULE_GROUPS
+    .iter()
+    .flat_map(|rules| rules.iter().copied())
 }
 
 fn timed_entities<F>(detect: F) -> Result<TimedEntities>
@@ -68,14 +54,14 @@ where
 
 #[cfg(test)]
 mod tests {
-  use super::STATIC_ENTITY_RULES;
+  use super::static_entity_rules;
   use crate::prepared::detector_contract::StaticDetectorId;
 
   #[test]
   fn detector_registry_entries_declare_metadata() {
     let mut ids = Vec::new();
     let mut stages = Vec::new();
-    for rule in STATIC_ENTITY_RULES {
+    for rule in static_entity_rules() {
       let metadata = rule.spec();
       assert!(
         !ids.contains(&metadata.id()),
@@ -139,7 +125,7 @@ mod tests {
 
   #[test]
   fn dependent_detectors_run_after_their_context_sources() {
-    for rule in STATIC_ENTITY_RULES {
+    for rule in static_entity_rules() {
       let metadata = rule.spec();
       let id = metadata.id();
       for dependency in metadata.dependencies() {
@@ -164,14 +150,10 @@ mod tests {
   }
 
   fn position_of(detector_id: StaticDetectorId) -> Option<usize> {
-    STATIC_ENTITY_RULES
-      .iter()
-      .position(|rule| rule.spec().id() == detector_id)
+    static_entity_rules().position(|rule| rule.spec().id() == detector_id)
   }
 
   fn detector_exists(detector_id: StaticDetectorId) -> bool {
-    STATIC_ENTITY_RULES
-      .iter()
-      .any(|rule| rule.spec().id() == detector_id)
+    static_entity_rules().any(|rule| rule.spec().id() == detector_id)
   }
 }

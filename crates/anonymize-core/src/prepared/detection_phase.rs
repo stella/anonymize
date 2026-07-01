@@ -5,7 +5,7 @@ use crate::types::Result;
 
 use super::PreparedEngine;
 use super::detector_contract::StaticDetectorContext;
-use super::detectors::STATIC_ENTITY_RULES;
+use super::detectors::static_entity_rules;
 use super::phase::record_detector_entities;
 use super::results::{
   PreparedEngineMatches, StaticDetectionResult, StaticEntityLayers,
@@ -62,7 +62,7 @@ impl PreparedEngine {
       matches,
       full_text,
     };
-    for rule in STATIC_ENTITY_RULES {
+    for rule in static_entity_rules() {
       let spec = rule.spec();
       debug_assert!(
         spec.has_declared_inputs(),
@@ -95,7 +95,7 @@ fn record_static_entity_diagnostics(
   full_text: &str,
   passes: &StaticEntityPasses,
 ) {
-  for rule in STATIC_ENTITY_RULES {
+  for rule in static_entity_rules() {
     let detector = rule.spec();
     debug_assert!(
       detector.has_declared_inputs(),

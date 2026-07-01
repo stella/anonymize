@@ -42,6 +42,9 @@ static_detector_rule! {
   detect: detect_country;
 }
 
+pub(in crate::prepared) const RULES: &[StaticDetectorRule] =
+  &[DENY_LIST_RULE, GAZETTEER_RULE, COUNTRY_RULE];
+
 const fn deny_list_is_active(context: &StaticDetectorContext<'_>) -> bool {
   !context.matches.literal.is_empty() && context.engine.data.deny_list.is_some()
 }

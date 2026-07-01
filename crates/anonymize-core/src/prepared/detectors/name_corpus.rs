@@ -20,6 +20,8 @@ static_detector_rule! {
   detect: detect_name_corpus;
 }
 
+pub(in crate::prepared) const RULES: &[StaticDetectorRule] = &[NAME_CORPUS_RULE];
+
 const fn name_corpus_is_active(context: &StaticDetectorContext<'_>) -> bool {
   context.engine.data.name_corpus.is_some()
 }

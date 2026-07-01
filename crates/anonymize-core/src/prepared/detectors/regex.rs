@@ -30,6 +30,9 @@ static_detector_rule! {
   detect: detect_custom_regex;
 }
 
+pub(in crate::prepared) const RULES: &[StaticDetectorRule] =
+  &[REGEX_RULE, CUSTOM_REGEX_RULE];
+
 const fn regex_is_active(context: &StaticDetectorContext<'_>) -> bool {
   !context.matches.regex.is_empty()
     && !context.engine.policy.regex_meta.is_empty()

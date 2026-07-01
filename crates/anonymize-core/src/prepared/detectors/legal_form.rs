@@ -14,6 +14,8 @@ static_detector_rule! {
   detect: detect_legal_form;
 }
 
+pub(in crate::prepared) const RULES: &[StaticDetectorRule] = &[LEGAL_FORM_RULE];
+
 const fn legal_form_is_active(context: &StaticDetectorContext<'_>) -> bool {
   !context.matches.regex.is_empty()
     && context.engine.data.legal_forms.is_some()

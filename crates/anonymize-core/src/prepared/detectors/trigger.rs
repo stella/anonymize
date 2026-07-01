@@ -14,6 +14,8 @@ static_detector_rule! {
   detect: detect_trigger;
 }
 
+pub(in crate::prepared) const RULES: &[StaticDetectorRule] = &[TRIGGER_RULE];
+
 const fn trigger_is_active(context: &StaticDetectorContext<'_>) -> bool {
   !context.matches.regex.is_empty() && context.engine.data.triggers.is_some()
 }

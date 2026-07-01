@@ -14,6 +14,8 @@ static_detector_rule! {
   detect: detect_signature;
 }
 
+pub(in crate::prepared) const RULES: &[StaticDetectorRule] = &[SIGNATURE_RULE];
+
 const fn signature_is_active(context: &StaticDetectorContext<'_>) -> bool {
   context.engine.data.signatures.is_some()
 }

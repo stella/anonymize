@@ -16,6 +16,8 @@ static_detector_rule! {
   detect: detect_anchored;
 }
 
+pub(in crate::prepared) const RULES: &[StaticDetectorRule] = &[ANCHORED_RULE];
+
 const fn anchored_is_active(context: &StaticDetectorContext<'_>) -> bool {
   context.engine.data.dates.is_some()
     || (context.engine.policy.monetary_extraction

@@ -32,6 +32,8 @@ static_detector_rule! {
   detect: detect_address_seed;
 }
 
+pub(in crate::prepared) const RULES: &[StaticDetectorRule] = &[ADDRESS_SEED_RULE];
+
 const fn address_seed_is_active(context: &StaticDetectorContext<'_>) -> bool {
   context.engine.data.address_seed.is_some()
 }
