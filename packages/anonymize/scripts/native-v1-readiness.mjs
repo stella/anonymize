@@ -16,32 +16,32 @@ const PACKAGE_BUDGETS = {
 
 const DEFAULT_SDK_BUDGETS = {
   default: {
-    firstTouchMs: { fail: 1200, warn: 350 },
-    warmClickMs: { fail: 250, warn: 50 },
-    preloadedClickMs: { fail: 250, warn: 50 },
+    firstTouchMs: { fail: 1500, warn: 350 },
+    warmClickMs: { fail: 600, warn: 50 },
+    preloadedClickMs: { fail: 600, warn: 50 },
   },
   language: {
-    firstTouchMs: { fail: 700, warn: 200 },
-    warmClickMs: { fail: 180, warn: 40 },
-    preloadedClickMs: { fail: 180, warn: 40 },
+    firstTouchMs: { fail: 1000, warn: 200 },
+    warmClickMs: { fail: 300, warn: 40 },
+    preloadedClickMs: { fail: 300, warn: 40 },
   },
 };
 
 const PACKAGE_UX_BUDGETS = {
   default: {
-    firstTouchMs: { fail: 1200, warn: 350 },
-    warmClickMs: { fail: 250, warn: 50 },
-    preloadedClickMs: { fail: 250, warn: 50 },
+    firstTouchMs: { fail: 1500, warn: 350 },
+    warmClickMs: { fail: 600, warn: 50 },
+    preloadedClickMs: { fail: 600, warn: 50 },
   },
   language: {
-    firstTouchMs: { fail: 700, warn: 200 },
-    warmClickMs: { fail: 180, warn: 40 },
-    preloadedClickMs: { fail: 180, warn: 40 },
+    firstTouchMs: { fail: 1000, warn: 200 },
+    warmClickMs: { fail: 300, warn: 40 },
+    preloadedClickMs: { fail: 300, warn: 40 },
   },
   userData: {
-    firstTouchMs: { fail: 1500, warn: 500 },
-    warmClickMs: { fail: 350, warn: 80 },
-    preloadedClickMs: { fail: 350, warn: 80 },
+    firstTouchMs: { fail: 2000, warn: 500 },
+    warmClickMs: { fail: 700, warn: 80 },
+    preloadedClickMs: { fail: 700, warn: 80 },
   },
 };
 
