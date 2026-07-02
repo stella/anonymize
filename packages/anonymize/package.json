@@ -1,6 +1,6 @@
 {
   "name": "@stll/anonymize",
-  "version": "2.0.0",
+  "version": "2.0.0-alpha.1",
   "description": "Multi-layer PII detection and anonymization pipeline with regex, NER, deny lists, and coreference resolution",
   "type": "module",
   "exports": {
@@ -77,11 +77,11 @@
     }
   },
   "optionalDependencies": {
-    "@stll/anonymize-darwin-arm64": "2.0.0",
-    "@stll/anonymize-darwin-x64": "2.0.0",
-    "@stll/anonymize-linux-arm64-gnu": "2.0.0",
-    "@stll/anonymize-linux-x64-gnu": "2.0.0",
-    "@stll/anonymize-win32-x64-msvc": "2.0.0"
+    "@stll/anonymize-darwin-arm64": "2.0.0-alpha.1",
+    "@stll/anonymize-darwin-x64": "2.0.0-alpha.1",
+    "@stll/anonymize-linux-arm64-gnu": "2.0.0-alpha.1",
+    "@stll/anonymize-linux-x64-gnu": "2.0.0-alpha.1",
+    "@stll/anonymize-win32-x64-msvc": "2.0.0-alpha.1"
   },
   "devDependencies": {
     "@stll/anonymize-data": "workspace:*",

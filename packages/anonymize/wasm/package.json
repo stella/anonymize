@@ -1,6 +1,6 @@
 {
   "name": "@stll/anonymize-wasm",
-  "version": "2.0.0",
+  "version": "2.0.0-alpha.1",
   "description": "PII detection and anonymization for browsers via WebAssembly. Same API as @stll/anonymize.",
   "type": "module",
   "module": "dist/wasm.mjs",
