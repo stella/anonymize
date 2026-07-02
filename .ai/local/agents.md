@@ -17,6 +17,9 @@ This is a Bun-first TypeScript monorepo for text anonymization. The library hand
 - Do not log raw input text, extracted entities, or full anonymization fixtures unless the fixture is intentionally public and minimal.
 - Keep dictionary and data changes reproducible and easy to diff.
 - Favor invariant tests around redaction stability, offsets, and replacement safety over snapshot-only examples.
+- Start architecture reviews from `packages/anonymize/ARCHITECTURE.md`; it
+  explains the native package graph, prepared-package flow, and temporary legacy
+  test boundary.
 
 ### Native Detector Shape
 

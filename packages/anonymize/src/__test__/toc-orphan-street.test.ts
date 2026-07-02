@@ -18,7 +18,7 @@ import {
   createPipelineContext,
   DEFAULT_ENTITY_LABELS,
   runPipeline,
-} from "../index";
+} from "../legacy";
 import type { Entity, PipelineConfig } from "../types";
 import { loadTestDictionaries } from "./load-dictionaries";
 

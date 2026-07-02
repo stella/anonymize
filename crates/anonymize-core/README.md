@@ -3,6 +3,9 @@
 Rust core for stella anonymization. Host-language packages should stay thin:
 they translate types, load artifacts, and call this crate.
 
+For package-level architecture, SDK boundaries, and prepared package flow, see
+[`packages/anonymize/ARCHITECTURE.md`](../../packages/anonymize/ARCHITECTURE.md).
+
 ## Public Shape
 
 - `PreparedEngine` is the prepared anonymization engine.

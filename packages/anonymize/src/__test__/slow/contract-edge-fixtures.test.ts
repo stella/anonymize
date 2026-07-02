@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { createPipelineContext, redactText, runPipeline } from "../../index";
+import { createPipelineContext, redactText, runPipeline } from "../../legacy";
 import type { Dictionaries, Entity } from "../../types";
 import {
   assertEntityInvariants,

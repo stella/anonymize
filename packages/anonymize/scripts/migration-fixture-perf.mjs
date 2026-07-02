@@ -328,7 +328,7 @@ async function runWorker() {
     const importStart = Bun.nanoseconds();
     const [loadedIndexModule, configModule, dictionaryModule] =
       await Promise.all([
-        importSource(sourceRoot, "packages/anonymize/src/index.ts", variant),
+        importSource(sourceRoot, "packages/anonymize/src/legacy.ts", variant),
         importSource(
           sourceRoot,
           "packages/anonymize/src/__test__/contract-config.ts",

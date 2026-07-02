@@ -67,7 +67,7 @@ import {
   prepareNativePipelinePackage,
   redactText,
   runPipeline,
-} from "../index";
+} from "../legacy";
 import { applyPipelineLanguageScope } from "../language-scope";
 import { contractTestConfig } from "./contract-config";
 import { loadTestDictionaries } from "./load-dictionaries";

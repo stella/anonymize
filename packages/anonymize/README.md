@@ -16,7 +16,8 @@ bun add @stll/anonymize
 bun add @stll/anonymize-data
 ```
 
-For browser targets, install `@stll/anonymize-wasm` instead. It exposes the same runtime API through WebAssembly and is the supported entrypoint for Vite-based bundles.
+The Node.js package is Rust-native. Browser/WASM support is maintained through
+`@stll/anonymize-wasm` while the native core remains the v1 product path.
 
 ## Usage: Node.js native SDK
 
@@ -87,14 +88,24 @@ The Python SDK uses the same Rust core and prepared-package contract as the Node
 
 ## Caller-Owned Deny Lists and Regexes
 
-Use `customDenyList` for exact terms and variants that you control. These are matched by the deny-list layer, so keep `enableDenyList: true`.
+Use `customDenyList` for exact terms and variants that you control. Use
+`customRegexes` for deterministic patterns that are not built into the package.
+Caller-owned data is part of the prepared package, so build or load a package
+from that config before serving documents.
 
 ```ts
-const entities = await runPipeline({
-  fullText: text,
+import {
+  createNativePipelineFromConfig,
+  loadNativeAnonymizeBinding,
+} from "@stll/anonymize/native-node";
+
+const binding = loadNativeAnonymizeBinding();
+const pipeline = await createNativePipelineFromConfig({
+  binding,
   config: {
     ...baseConfig,
     enableDenyList: true,
+    enableRegex: true,
     customDenyList: [
       {
         value: "Project Nebula",
@@ -102,19 +113,6 @@ const entities = await runPipeline({
         label: "organization",
       },
     ],
-  },
-  gazetteerEntries: [],
-});
-```
-
-Use `customRegexes` for deterministic patterns that are not built into the package. These are matched by the regex layer, so keep `enableRegex: true`.
-
-```ts
-const entities = await runPipeline({
-  fullText: text,
-  config: {
-    ...baseConfig,
-    enableRegex: true,
     customRegexes: [
       {
         pattern: "\\bSTLL-[0-9]{4}\\b",
@@ -125,20 +123,8 @@ const entities = await runPipeline({
   },
   gazetteerEntries: [],
 });
-```
 
-## TypeScript Pipeline Compatibility
-
-The async TypeScript pipeline remains available for compatibility and for browser/WASM builds.
-
-```ts
-import { runPipeline } from "@stll/anonymize";
-
-const entities = await runPipeline({
-  fullText: text,
-  config,
-  gazetteerEntries: [],
-});
+const result = pipeline.redactText(text);
 ```
 
 ## Browser setup
@@ -155,10 +141,13 @@ export default {
 
 ## Notes
 
+- Native architecture and extension guidance:
+  [`ARCHITECTURE.md`](ARCHITECTURE.md).
 - `labels: []` disables deterministic label filtering; when NER is enabled it falls back to the default label set.
 - `enableNameCorpus` also controls whether first names, surnames, and titles are injected into deny-list matching when `enableDenyList` is enabled.
-- The optional `@stll/anonymize-data` package carries the published dictionary and trigger data used by the deny-list layer.
-- `customDenyList` and `customRegexes` are part of the pipeline config and are included in the internal search cache key.
+- The optional `@stll/anonymize-data` package carries the published dictionary and trigger data used when building prepared packages.
+- `customDenyList` and `customRegexes` are part of the prepared package input and should be regenerated when they change.
+- The old TypeScript pipeline is kept only as temporary internal migration/test scaffolding under `src/legacy.ts`; it is not the product runtime.
 
 ## Built on
 

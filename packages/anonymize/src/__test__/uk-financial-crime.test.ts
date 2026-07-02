@@ -4,7 +4,7 @@ import {
   createPipelineContext,
   DEFAULT_ENTITY_LABELS,
   runPipeline,
-} from "../index";
+} from "../legacy";
 
 // Fresh PipelineContext per test pays the regex-set DFA
 // build cost (~1-3 s); 15 s gives headroom on CI without

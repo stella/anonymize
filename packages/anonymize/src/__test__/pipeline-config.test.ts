@@ -8,7 +8,7 @@ import {
   prepareNativePipelinePackage,
   redactText,
   runPipeline,
-} from "../index";
+} from "../legacy";
 import {
   buildNativeStaticSearchBundle,
   buildUnifiedSearch,

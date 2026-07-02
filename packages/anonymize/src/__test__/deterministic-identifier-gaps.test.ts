@@ -5,7 +5,7 @@ import {
   DEFAULT_ENTITY_LABELS,
   redactText,
   runPipeline,
-} from "../index";
+} from "../legacy";
 import type { Entity, PipelineConfig } from "../types";
 
 const CONFIG: PipelineConfig = {

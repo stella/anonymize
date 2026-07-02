@@ -4,7 +4,7 @@ import {
   runPipeline,
   detectNameCorpus,
   initNameCorpus,
-} from "../index";
+} from "../legacy";
 import type { Entity, PipelineConfig } from "../types";
 
 // ── Helpers ────────────────────────────────────────────────────────

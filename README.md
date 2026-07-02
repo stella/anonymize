@@ -76,3 +76,6 @@ bun run hooks:install
 - [`packages/anonymize/wasm`](packages/anonymize/wasm)
 - [`crates/anonymize-core`](crates/anonymize-core)
 - [`crates/anonymize-py`](crates/anonymize-py)
+
+Architecture notes for the native runtime live in
+[`packages/anonymize/ARCHITECTURE.md`](packages/anonymize/ARCHITECTURE.md).

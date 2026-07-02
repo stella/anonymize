@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createPipelineContext, runPipeline } from "../index";
+import { createPipelineContext, runPipeline } from "../legacy";
 import type { Entity, PipelineConfig } from "../types";
 import { loadTestDictionaries } from "./load-dictionaries";
 

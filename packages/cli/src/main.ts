@@ -4,17 +4,17 @@ import { basename, join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 
 import type {
-  createPipelineContext,
   deanonymise,
   Dictionaries,
   Entity,
   exportRedactionKey,
-  OperatorConfig,
+  GazetteerEntry,
+  NativeAnonymizeBinding,
+  NativePipelineBuildOptions,
   OperatorType,
   PipelineConfig,
-  redactText,
-  runPipeline,
 } from "@stll/anonymize";
+import type { PipelineContext as LegacyPipelineContext } from "@stll/anonymize-wasm";
 import { DEFAULT_ENTITY_LABELS } from "@stll/anonymize/constants";
 
 import pkg from "../package.json" with { type: "json" };
@@ -29,11 +29,25 @@ import type { DictionaryScope } from "./dictionary-scope";
  * entry point decides which engine backs the binary.
  */
 export type AnonymizeApi = {
-  createPipelineContext: typeof createPipelineContext;
   deanonymise: typeof deanonymise;
   exportRedactionKey: typeof exportRedactionKey;
-  redactText: typeof redactText;
-  runPipeline: typeof runPipeline;
+  createNativePipelineFromConfig?: (
+    options: NativePipelineBuildOptions,
+  ) => Promise<NativeCliPipeline>;
+  loadNativeAnonymizeBinding?: () => NativeAnonymizeBinding;
+  createPipelineContext?: () => LegacyPipelineContext;
+  redactText?: (
+    fullText: string,
+    entities: Entity[],
+    operators?: CliOperatorConfig,
+    context?: LegacyPipelineContext,
+  ) => CliRedactionResult;
+  runPipeline?: (options: {
+    fullText: string;
+    config: PipelineConfig;
+    gazetteerEntries: GazetteerEntry[];
+    context: LegacyPipelineContext;
+  }) => Promise<Entity[]>;
 };
 
 /**
@@ -93,6 +107,38 @@ const readInputs = async (files: string[]): Promise<NamedInput[]> => {
 };
 
 type EntityLabel = (typeof DEFAULT_ENTITY_LABELS)[number];
+
+type CliEntity = {
+  start: number;
+  end: number;
+  label: string;
+  text: string;
+  score: number;
+  source: string;
+};
+
+type CliOperatorConfig = {
+  operators: Record<string, OperatorType>;
+  redactString: string;
+};
+
+type CliRedactionResult = {
+  redactedText: string;
+  redactionMap: Map<string, string>;
+  operatorMap: Map<string, OperatorType>;
+  entityCount: number;
+};
+
+type NativeCliPipeline = {
+  warmLazyRegex?: () => void;
+  redactText: (
+    fullText: string,
+    operators?: CliOperatorConfig,
+  ) => {
+    resolvedEntities: CliEntity[];
+    redaction: CliRedactionResult;
+  };
+};
 
 // Short aliases for the canonical multi-word labels so that
 // `--labels person,email,iban` works without quoting the space
@@ -193,13 +239,14 @@ const buildPipelineConfig = async (
   };
 };
 
-const buildOperatorConfig = (
-  opts: CliOptions,
-  entities: Entity[],
-): OperatorConfig => {
+const buildOperatorConfig = (opts: CliOptions): CliOperatorConfig => {
   const operators: Record<string, OperatorType> = {};
   if (opts.mode === "redact") {
-    for (const entity of entities) operators[entity.label] = "redact";
+    const labels =
+      opts.labels === undefined
+        ? DEFAULT_ENTITY_LABELS
+        : validateLabels(opts.labels);
+    for (const label of labels) operators[label] = "redact";
   }
   return { operators, redactString: opts.redactString };
 };
@@ -348,7 +395,7 @@ const guardWriteTargets = (
   }
 };
 
-const summarize = (entities: Entity[]): string => {
+const summarize = (entities: readonly CliEntity[]): string => {
   const counts = new Map<string, number>();
   for (const entity of entities) {
     counts.set(entity.label, (counts.get(entity.label) ?? 0) + 1);
@@ -404,13 +451,7 @@ const runAnonymise = async (
   );
 
   const config = await buildPipelineConfig(scoped, loadDictionaries);
-
-  // One shared context for the whole batch: the first
-  // runPipeline builds the search automaton after its own
-  // init steps (hotword rules included) and caches it on
-  // the context for the remaining files. Cross-document
-  // reuse is supported — coref links travel on entities.
-  const context = api.createPipelineContext();
+  const runtime = await prepareCliRuntime(api, config);
 
   if (multi && opts.output !== undefined) {
     await mkdir(opts.output, { recursive: true });
@@ -418,19 +459,11 @@ const runAnonymise = async (
 
   for (const [index, input] of inputs.entries()) {
     const outputPath = outputPaths[index];
-
-    const entities = await api.runPipeline({
-      fullText: input.text,
-      config,
-      gazetteerEntries: [],
-      context,
-    });
-    const result = api.redactText(
+    const { entities, redaction } = await runtime.redact(
       input.text,
-      entities,
-      buildOperatorConfig(opts, entities),
-      context,
+      buildOperatorConfig(opts),
     );
+    const result = redaction;
 
     if (opts.json) {
       // In redact mode the user chose irreversibility, so the
@@ -471,6 +504,59 @@ const runAnonymise = async (
       process.stderr.write(`anonymize: ${source}: ${summarize(entities)}\n`);
     }
   }
+};
+
+type CliRuntime = {
+  redact: (
+    fullText: string,
+    operators: CliOperatorConfig,
+  ) => Promise<{ entities: CliEntity[]; redaction: CliRedactionResult }>;
+};
+
+const prepareCliRuntime = async (
+  api: AnonymizeApi,
+  config: PipelineConfig,
+): Promise<CliRuntime> => {
+  if (api.createNativePipelineFromConfig && api.loadNativeAnonymizeBinding) {
+    const pipeline = await api.createNativePipelineFromConfig({
+      binding: api.loadNativeAnonymizeBinding(),
+      config,
+      gazetteerEntries: [],
+    });
+    pipeline.warmLazyRegex?.();
+    return {
+      redact: async (fullText, operators) => {
+        const result = pipeline.redactText(fullText, operators);
+        return {
+          entities: result.resolvedEntities,
+          redaction: result.redaction,
+        };
+      },
+    };
+  }
+
+  if (!api.createPipelineContext || !api.runPipeline || !api.redactText) {
+    throw new UsageError("anonymize runtime API is incomplete");
+  }
+
+  const context = api.createPipelineContext();
+  return {
+    redact: async (fullText, operators) => {
+      const entities = await api.runPipeline?.({
+        fullText,
+        config,
+        gazetteerEntries: [],
+        context,
+      });
+      if (!entities || !api.redactText) {
+        throw new UsageError("legacy anonymize runtime API is incomplete");
+      }
+      return {
+        entities,
+        redaction: api.redactText(fullText, entities, operators, context),
+      };
+    },
+  };
 };
 
 /**

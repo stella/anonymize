@@ -4,7 +4,6 @@ import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import {
-  createPipelineContext,
   DEFAULT_NATIVE_PIPELINE_CONFIG,
   prepareNativePipelinePackage,
 } from "../dist/index.mjs";
@@ -19,7 +18,6 @@ const packageBytes = await prepareNativePipelinePackage({
   binding,
   config,
   gazetteerEntries,
-  context: createPipelineContext(),
   compressed,
 });
 

@@ -26,6 +26,19 @@ import {
 } from "./native";
 
 export * from "./native";
+export {
+  assertNativePipelineSupported,
+  createNativePipelineFromConfig,
+  getNativePipelineCompatibility,
+  prepareNativePipelineConfig,
+  prepareNativePipelinePackage,
+} from "./native-pipeline";
+export type {
+  NativePipelineBuildOptions,
+  NativePipelineCompatibility,
+  NativePipelinePackageOptions,
+  NativePipelineUnsupportedFeature,
+} from "./native-pipeline";
 
 export type NativeRequire = (specifier: string) => unknown;
 

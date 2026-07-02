@@ -1,10 +1,48 @@
-/* Native entry point — loads TextSearch from
- * @stll/text-search and re-exports the full API. */
+/* Native entry point. The public package surface is intentionally thin:
+ * TypeScript loads packages, translates types, and calls the Rust core.
+ */
 
-import { TextSearch } from "@stll/text-search";
-
-import { initTextSearch } from "./search-engine";
-
-initTextSearch(TextSearch);
-
-export * from "./index-shared";
+export * from "./native-node";
+export {
+  assertNativePipelineSupported,
+  createNativePipelineFromConfig,
+  createNativePipelineFromPackage,
+  getNativePipelineCompatibility,
+  prepareNativePipelineConfig,
+  prepareNativePipelinePackage,
+} from "./native-pipeline";
+export type {
+  NativePipelineBuildOptions,
+  NativePipelineCompatibility,
+  NativePipelinePackageOptions,
+  NativePipelineUnsupportedFeature,
+} from "./native-pipeline";
+export {
+  DEFAULT_ENTITY_LABELS,
+  DETECTION_SOURCES,
+  DETECTOR_PRIORITY,
+  OPERATOR_TYPES,
+} from "./types";
+export type {
+  AnonymisationOperator,
+  CustomDenyListEntry,
+  CustomRegexPattern,
+  DenyListCategory,
+  DetectionSource,
+  Dictionaries,
+  DictionaryMeta,
+  Entity,
+  GazetteerEntry,
+  OperatorConfig,
+  OperatorType,
+  PipelineConfig,
+  RedactionResult,
+  ReviewedEntity,
+  ReviewDecision,
+  TriggerExtension,
+  TriggerGroupConfig,
+  TriggerRule,
+  TriggerStrategy,
+  TriggerValidation,
+} from "./types";
+export { deanonymise, exportRedactionKey } from "./redact";
