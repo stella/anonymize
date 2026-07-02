@@ -6,6 +6,17 @@ use super::PreparedEngine;
 use super::detector_contract::StaticDetectorId;
 use super::timing::StaticEntityPasses;
 
+macro_rules! static_entity_layer_accessors {
+  ($($method:ident => $detector:ident),+ $(,)?) => {
+    $(
+      #[must_use]
+      pub fn $method(&self) -> &[PipelineEntity] {
+        self.entities_for(StaticDetectorId::$detector)
+      }
+    )+
+  };
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PreparedEngineMatches {
   pub regex: Vec<SearchMatch>,
@@ -69,59 +80,18 @@ impl StaticEntityLayers {
     entities
   }
 
-  #[must_use]
-  pub fn regex(&self) -> &[PipelineEntity] {
-    self.entities_for(StaticDetectorId::Regex)
-  }
-
-  #[must_use]
-  pub fn custom_regex(&self) -> &[PipelineEntity] {
-    self.entities_for(StaticDetectorId::CustomRegex)
-  }
-
-  #[must_use]
-  pub fn deny_list(&self) -> &[PipelineEntity] {
-    self.entities_for(StaticDetectorId::DenyList)
-  }
-
-  #[must_use]
-  pub fn gazetteer(&self) -> &[PipelineEntity] {
-    self.entities_for(StaticDetectorId::Gazetteer)
-  }
-
-  #[must_use]
-  pub fn country(&self) -> &[PipelineEntity] {
-    self.entities_for(StaticDetectorId::Country)
-  }
-
-  #[must_use]
-  pub fn anchored(&self) -> &[PipelineEntity] {
-    self.entities_for(StaticDetectorId::Anchored)
-  }
-
-  #[must_use]
-  pub fn trigger(&self) -> &[PipelineEntity] {
-    self.entities_for(StaticDetectorId::Trigger)
-  }
-
-  #[must_use]
-  pub fn signature(&self) -> &[PipelineEntity] {
-    self.entities_for(StaticDetectorId::Signature)
-  }
-
-  #[must_use]
-  pub fn legal_form(&self) -> &[PipelineEntity] {
-    self.entities_for(StaticDetectorId::LegalForm)
-  }
-
-  #[must_use]
-  pub fn name_corpus(&self) -> &[PipelineEntity] {
-    self.entities_for(StaticDetectorId::NameCorpus)
-  }
-
-  #[must_use]
-  pub fn address_seed(&self) -> &[PipelineEntity] {
-    self.entities_for(StaticDetectorId::AddressSeed)
+  static_entity_layer_accessors! {
+    regex => Regex,
+    custom_regex => CustomRegex,
+    deny_list => DenyList,
+    gazetteer => Gazetteer,
+    country => Country,
+    anchored => Anchored,
+    trigger => Trigger,
+    signature => Signature,
+    legal_form => LegalForm,
+    name_corpus => NameCorpus,
+    address_seed => AddressSeed,
   }
 
   fn entities_for(&self, detector: StaticDetectorId) -> &[PipelineEntity] {
