@@ -1,11 +1,12 @@
 {
-  "_comment": "Signing clause patterns. Captures the place name from contract signing locations. Each entry: prefix/suffix build regexes; guardPrefixPhrases/guardSuffixPhrases suppress deny-list place hits in the same signing context.",
+  "_comment": "Signing clause patterns. Captures the place name from contract signing locations. Each entry: prefix/suffix build regexes; prefilterPhrases gate native regex scans; guardPrefixPhrases/guardSuffixPhrases suppress deny-list place hits in the same signing context.",
   "patterns": [
     {
       "lang": "cs",
       "prefix": "(?:V|Ve)\\s+",
       "suffix": "\\s*,?\\s*dne",
       "prepositions": ["nad", "pod", "u", "ve", "na"],
+      "prefilterPhrases": ["dne"],
       "guardPrefixPhrases": ["v", "ve"],
       "guardSuffixPhrases": ["dne"]
     },
@@ -14,6 +15,7 @@
       "prefix": "(?:V|Vo)\\s+",
       "suffix": "\\s*,?\\s*dňa",
       "prepositions": ["nad", "pod", "pri"],
+      "prefilterPhrases": ["dňa"],
       "guardPrefixPhrases": ["v", "vo"],
       "guardSuffixPhrases": ["dňa"]
     },
@@ -22,6 +24,7 @@
       "prefix": "",
       "suffix": "\\s*,\\s*den",
       "prepositions": ["am", "an", "im"],
+      "prefilterPhrases": ["den"],
       "guardPrefixPhrases": [""],
       "guardSuffixPhrases": ["den"]
     },
@@ -30,6 +33,7 @@
       "prefix": "(?:Fait\\s+)?[Àà]\\s+",
       "suffix": "\\s*,?\\s*le",
       "prepositions": [],
+      "prefilterPhrases": ["À ", "à "],
       "guardPrefixPhrases": ["à", "fait à"],
       "guardSuffixPhrases": ["le"]
     },
@@ -38,6 +42,7 @@
       "prefix": "(?:Signed|Executed)\\s+in\\s+",
       "suffix": "",
       "prepositions": [],
+      "prefilterPhrases": ["Signed in", "Executed in"],
       "guardPrefixPhrases": ["signed in", "executed in"],
       "guardSuffixPhrases": [""]
     },
@@ -46,6 +51,7 @@
       "prefix": "(?:W|We)\\s+",
       "suffix": "\\s*,?\\s*dnia",
       "prepositions": ["nad", "pod", "przy"],
+      "prefilterPhrases": ["dnia"],
       "guardPrefixPhrases": ["w", "we"],
       "guardSuffixPhrases": ["dnia"]
     },
@@ -54,6 +60,7 @@
       "prefix": "(?:Fatto\\s+)?[Aa]\\s+",
       "suffix": "\\s*,?\\s*(?:il|lì)",
       "prepositions": [],
+      "prefilterPhrases": ["A ", "a "],
       "guardPrefixPhrases": ["a", "fatto a"],
       "guardSuffixPhrases": ["il", "lì"]
     },
@@ -62,6 +69,7 @@
       "prefix": "(?:Firmado\\s+)?[Ee]n\\s+",
       "suffix": "\\s*,?\\s*(?:a|el)",
       "prepositions": ["de", "del"],
+      "prefilterPhrases": ["En ", "en "],
       "guardPrefixPhrases": ["en", "firmado en"],
       "guardSuffixPhrases": ["a", "el"]
     }
