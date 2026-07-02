@@ -185,6 +185,16 @@ let syncedLockText = lockText.replaceAll(
   },
 );
 
+for (const dependency of ROOT_NATIVE_OPTIONAL_DEPENDENCIES) {
+  const syncedSidecar = syncNativeOptionalDependencyLockVersion(
+    syncedLockText,
+    dependency,
+  );
+  syncedLockText = syncedSidecar.text;
+  lockChanged ||= syncedSidecar.changed;
+  hasMismatch ||= syncedSidecar.hasMismatch;
+}
+
 for (const file of PACKAGE_FILES) {
   const workspace = dirname(file);
   const workspaceVersionRe = new RegExp(
@@ -261,4 +271,41 @@ if (cargoLockChanged) {
 
 if (hasMismatch) {
   process.exit(1);
+}
+
+function syncNativeOptionalDependencyLockVersion(text, dependency) {
+  const sidecarVersionRe = new RegExp(
+    `("${escapeRegExp(dependency)}": ")([^"]+)(")`,
+    "g",
+  );
+  let found = false;
+  let changed = false;
+  let mismatched = false;
+  const syncedText = text.replaceAll(
+    sidecarVersionRe,
+    (match, prefix, lockedVersion, suffix) => {
+      found = true;
+      if (lockedVersion === version) {
+        return match;
+      }
+      if (checkOnly) {
+        console.error(
+          `${LOCK_FILE} has ${dependency}@${lockedVersion}; expected ${version}`,
+        );
+        mismatched = true;
+        return match;
+      }
+      changed = true;
+      return `${prefix}${version}${suffix}`;
+    },
+  );
+  if (!found) {
+    console.error(`${LOCK_FILE} has no optional dependency ${dependency}`);
+    mismatched = true;
+  }
+  return {
+    text: syncedText,
+    changed,
+    hasMismatch: mismatched,
+  };
 }

@@ -20,5 +20,6 @@ manifest-path = "Cargo.toml"
 module-name = "stella_anonymize._native"
 python-source = "python"
 include = [
+  { path = "python/stella_anonymize/ATTRIBUTION.md", format = "wheel" },
   { path = "python/stella_anonymize/native_packages/*.stlanonpkg", format = "wheel" },
 ]

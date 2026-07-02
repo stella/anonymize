@@ -4,6 +4,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   readdirSync,
   rmSync,
 } from "node:fs";
@@ -16,6 +17,7 @@ const profile = process.env.ANONYMIZE_PYTHON_WHEEL_PROFILE ?? "ci";
 const nativePackagePattern =
   /^native-pipeline(?:\.[a-z0-9]+(?:-[a-z0-9]+)*)?\.stlanonpkg$/u;
 const nativePackageSourceDir = join("packages", "anonymize");
+const attributionSource = join(nativePackageSourceDir, "ATTRIBUTION.md");
 const pythonNativePackageDir = join(
   "crates",
   "anonymize-py",
@@ -23,8 +25,16 @@ const pythonNativePackageDir = join(
   "stella_anonymize",
   "native_packages",
 );
+const pythonAttributionFile = join(
+  "crates",
+  "anonymize-py",
+  "python",
+  "stella_anonymize",
+  "ATTRIBUTION.md",
+);
 
 try {
+  assertPythonAttributionMatchesRuntimePackage();
   syncNativePipelinePackages();
   execFileSync(
     "uvx",
@@ -54,6 +64,7 @@ try {
   const required = [
     "stella_anonymize/__init__.py",
     "stella_anonymize/__init__.pyi",
+    "stella_anonymize/ATTRIBUTION.md",
     "stella_anonymize/_native.pyi",
     "stella_anonymize/py.typed",
     "stella_anonymize/native_packages/native-pipeline.stlanonpkg",
@@ -108,6 +119,15 @@ function syncNativePipelinePackages() {
   if (!copied.includes("native-pipeline.stlanonpkg")) {
     throw new Error("native-pipeline.stlanonpkg has not been built");
   }
+}
+
+function assertPythonAttributionMatchesRuntimePackage() {
+  const runtimeAttribution = readFileSync(attributionSource, "utf8");
+  const pythonAttribution = readFileSync(pythonAttributionFile, "utf8");
+  if (runtimeAttribution === pythonAttribution) {
+    return;
+  }
+  throw new Error(`${pythonAttributionFile} must match ${attributionSource}`);
 }
 
 function readWheelFiles(wheelPath) {
