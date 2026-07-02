@@ -135,7 +135,10 @@ export const prepareNativePipelinePackage = async ({
     ...(context ? { context } : {}),
     compressed,
   });
-  return packageBytes.slice();
+  // Return a genuine copy: with the real NAPI binding packageBytes is a Node
+  // Buffer, and Buffer.prototype.slice() yields a memory-sharing view, so a
+  // caller mutating it would corrupt the shared cache and ctx.nativePipelinePackage.
+  return new Uint8Array(packageBytes);
 };
 
 export const createNativePipelineFromConfig = async ({

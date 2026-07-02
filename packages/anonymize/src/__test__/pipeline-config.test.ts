@@ -1205,6 +1205,55 @@ describe("pipeline config semantics", () => {
     expect(second[0]).toBe(1);
   });
 
+  test("prepared native package bytes are copied out of the cache", async () => {
+    // The real NAPI binding hands back a Node Buffer whose slice() aliases the
+    // underlying memory. Reproduce that shape so a caller mutating the returned
+    // array cannot corrupt the cached bytes returned by a later call.
+    const binding = {
+      normalizeForSearch: (text: string) => text,
+      nativePackageVersion: () => "native-package-copy-semantics",
+      NativePreparedSearch: {
+        fromConfigJsonBytes: () => {
+          throw new Error("copy-semantics test should use package bytes");
+        },
+        fromPreparedPackageBytes: () => ({
+          prepareDiagnosticsJson: () => JSON.stringify({ events: [] }),
+          redactStaticEntities: (fullText: string) => ({
+            resolvedEntities: [],
+            redaction: {
+              redactedText: fullText,
+              redactionMap: [],
+              operatorMap: [],
+              entityCount: 0,
+            },
+          }),
+        }),
+      },
+      prepareStaticSearchPackageBytes: () => Buffer.from([1, 2, 3, 4]),
+      prepareStaticSearchCompressedPackageBytes: () => Buffer.from([9]),
+    } satisfies NativeAnonymizeBinding;
+    const context = createPipelineContext();
+    const config = {
+      ...BASE_CONFIG,
+      enableCountries: false,
+      labels: ["person"],
+    };
+
+    const first = await prepareNativePipelinePackage({
+      binding,
+      config,
+      context,
+    });
+    first[0] = 99;
+    const second = await prepareNativePipelinePackage({
+      binding,
+      config,
+      context,
+    });
+
+    expect([...second]).toEqual([1, 2, 3, 4]);
+  });
+
   test("native pipeline package cache is scoped by dictionary identity", async () => {
     const { binding, counts } = createCountingNativeBinding(
       "native-cache-dictionaries",
