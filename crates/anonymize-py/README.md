@@ -4,8 +4,12 @@ Python bindings for the stella anonymization Rust core.
 
 ## Install
 
+This package is not published to PyPI. Build it from source against a checkout
+of the monorepo (run `bun run build` first so the native pipeline packages
+exist):
+
 ```bash
-uv add stella-anonymize-core
+uv add ./crates/anonymize-py
 ```
 
 ## Usage
