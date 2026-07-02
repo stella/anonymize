@@ -605,8 +605,7 @@ fn extract_n_words(
     if punctuation_only(word) || number_marker(word, number_markers) {
       continue;
     }
-    let search_pos =
-      words.last().map_or(0, |entry| entry.end.saturating_add(1));
+    let search_pos = words.last().map_or(0, |entry| entry.end);
     let relative = cell.get(search_pos..)?.find(word)?;
     let start = search_pos.saturating_add(relative);
     words.push(WordToken {

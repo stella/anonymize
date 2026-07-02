@@ -176,6 +176,21 @@ fn n_words_trigger_skips_configured_number_markers() {
 }
 
 #[test]
+fn n_words_trigger_advances_across_multibyte_whitespace() {
+  let prepared = prepared_for_trigger(
+    "case",
+    "matter id",
+    TriggerStrategy::NWords { count: 2 },
+  );
+
+  let result = prepared
+    .detect_static_entities("case ABC\u{00a0}123")
+    .expect("static detection should succeed");
+
+  assert_eq!(trigger_texts(&result), ["ABC\u{00a0}123"]);
+}
+
+#[test]
 fn labelled_phone_trigger_keeps_extension_suffixes() {
   let prepared = prepared_for_trigger_with_support(
     "PHONE",
