@@ -144,6 +144,9 @@ export const loadNativeAnonymizeBinding = (
     return binding;
   }
 
+  if (nativeBindingPackageName({ arch, libc, platform }) === null) {
+    throw unsupportedNativeTargetError({ arch, errors, libc, platform });
+  }
   throw new Error(
     `Unable to load native anonymize binding for ${platform}/${arch}:\n${errors.join("\n")}`,
   );
@@ -703,33 +706,88 @@ const nativeBindingSpecifiers = ({
   return specifiers;
 };
 
+type NativeBindingTarget = {
+  platform: string;
+  arch: string;
+  libc?: NativeLibc;
+  package: string;
+};
+
+// Single source of truth for published native sidecars. Both the runtime
+// package lookup and the "unsupported target" error message derive from this
+// table, so a target is never advertised as supported without a package (and
+// vice versa). musl Linux is intentionally absent: no musl sidecar is shipped.
+const NATIVE_BINDING_TARGETS: readonly NativeBindingTarget[] = [
+  {
+    platform: "darwin",
+    arch: "arm64",
+    package: "@stll/anonymize-darwin-arm64",
+  },
+  { platform: "darwin", arch: "x64", package: "@stll/anonymize-darwin-x64" },
+  {
+    platform: "linux",
+    arch: "arm64",
+    libc: "gnu",
+    package: "@stll/anonymize-linux-arm64-gnu",
+  },
+  {
+    platform: "linux",
+    arch: "x64",
+    libc: "gnu",
+    package: "@stll/anonymize-linux-x64-gnu",
+  },
+  { platform: "win32", arch: "x64", package: "@stll/anonymize-win32-x64-msvc" },
+];
+
 type NativeBindingPackageNameOptions = {
   arch: string;
   libc: NativeLibc | undefined;
   platform: string;
 };
 
+type DescribeNativeTargetOptions = {
+  arch: string;
+  libc?: NativeLibc | undefined;
+  platform: string;
+};
+
+const describeNativeTarget = ({
+  arch,
+  libc,
+  platform,
+}: DescribeNativeTargetOptions): string =>
+  libc === undefined ? `${platform}-${arch}` : `${platform}-${arch}-${libc}`;
+
+const SUPPORTED_NATIVE_TARGETS: readonly string[] = NATIVE_BINDING_TARGETS.map(
+  (target) => describeNativeTarget(target),
+);
+
 const nativeBindingPackageName = ({
   arch,
   libc,
   platform,
 }: NativeBindingPackageNameOptions): string | null => {
-  if (platform === "darwin" && arch === "arm64") {
-    return "@stll/anonymize-darwin-arm64";
-  }
-  if (platform === "darwin" && arch === "x64") {
-    return "@stll/anonymize-darwin-x64";
-  }
-  if (platform === "linux" && arch === "arm64" && libc === "gnu") {
-    return "@stll/anonymize-linux-arm64-gnu";
-  }
-  if (platform === "linux" && arch === "x64" && libc === "gnu") {
-    return "@stll/anonymize-linux-x64-gnu";
-  }
-  if (platform === "win32" && arch === "x64") {
-    return "@stll/anonymize-win32-x64-msvc";
-  }
-  return null;
+  const match = NATIVE_BINDING_TARGETS.find(
+    (target) =>
+      target.platform === platform &&
+      target.arch === arch &&
+      (target.libc === undefined || target.libc === libc),
+  );
+  return match?.package ?? null;
+};
+
+const unsupportedNativeTargetError = ({
+  arch,
+  errors,
+  libc,
+  platform,
+}: NativeBindingPackageNameOptions & { errors: string[] }): Error => {
+  const target = describeNativeTarget({ arch, libc, platform });
+  const supported = SUPPORTED_NATIVE_TARGETS.join(", ");
+  const attempts = errors.length > 0 ? `\n${errors.join("\n")}` : "";
+  return new Error(
+    `No native anonymize binding is published for ${target}; supported targets: ${supported}. Set ${PACKAGE_SPECIFIC_NATIVE_PATH} to a locally built binding to run on this platform.${attempts}`,
+  );
 };
 
 const detectNativeLibc = (platform: string): NativeLibc | undefined => {

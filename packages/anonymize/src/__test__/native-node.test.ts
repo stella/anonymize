@@ -127,6 +127,49 @@ describe("native node loader", () => {
     expect(calls).toEqual(["../index.cjs", "@stll/anonymize-linux-x64-gnu"]);
   });
 
+  test("reports unsupported native targets with an actionable error", () => {
+    const calls: string[] = [];
+    const attempt = () =>
+      loadNativeAnonymizeBinding({
+        expectedVersion: PACKAGE_VERSION,
+        platform: "linux",
+        arch: "x64",
+        libc: "musl",
+        env: {},
+        requireModule: (specifier) => {
+          calls.push(specifier);
+          throw new Error("not found");
+        },
+      });
+
+    expect(attempt).toThrow(
+      "No native anonymize binding is published for linux-x64-musl",
+    );
+    expect(attempt).toThrow("linux-x64-gnu");
+    expect(attempt).toThrow("STELLA_ANONYMIZE_NATIVE_LIBRARY_PATH");
+    // musl resolves to no published sidecar, so only the local loader is tried.
+    expect(calls).toEqual(["../index.cjs", "../index.cjs", "../index.cjs"]);
+  });
+
+  test("prefers an explicit native library path on unsupported targets", () => {
+    const binding = fakeNativeBinding(PACKAGE_VERSION);
+    const loaded = loadNativeAnonymizeBinding({
+      expectedVersion: PACKAGE_VERSION,
+      platform: "linux",
+      arch: "x64",
+      libc: "musl",
+      env: { STELLA_ANONYMIZE_NATIVE_LIBRARY_PATH: "/tmp/anonymize.node" },
+      requireModule: (specifier) => {
+        if (specifier === "/tmp/anonymize.node") {
+          return { default: binding };
+        }
+        throw new Error("not found");
+      },
+    });
+
+    expect(loaded).toBe(binding);
+  });
+
   test("loads an explicit native library path first", () => {
     const calls: string[] = [];
     const binding = fakeNativeBinding(PACKAGE_VERSION);
