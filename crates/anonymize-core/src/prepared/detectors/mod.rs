@@ -8,6 +8,33 @@ use super::timing::{TimedEntities, elapsed_us};
 
 mod prelude;
 
+#[derive(Clone, Copy)]
+struct StaticDetectorRuleGroup {
+  name: &'static str,
+  rules: &'static [StaticDetectorRule],
+}
+
+impl StaticDetectorRuleGroup {
+  const fn new(
+    name: &'static str,
+    rules: &'static [StaticDetectorRule],
+  ) -> Self {
+    Self { name, rules }
+  }
+
+  const fn name(self) -> &'static str {
+    self.name
+  }
+
+  const fn rules(self) -> &'static [StaticDetectorRule] {
+    self.rules
+  }
+
+  const fn is_empty(self) -> bool {
+    self.rules.is_empty()
+  }
+}
+
 // New detector modules own their rule metadata and expose a `RULES` slice.
 // This module only fixes cross-module execution order.
 macro_rules! static_detectors {
@@ -18,8 +45,13 @@ macro_rules! static_detectors {
   ) => {
     $(mod $module;)+
 
-    const STATIC_ENTITY_RULE_GROUPS: &[&[StaticDetectorRule]] = &[
-      $($module::RULES),+
+    const STATIC_ENTITY_RULE_GROUPS: &[StaticDetectorRuleGroup] = &[
+      $(
+        StaticDetectorRuleGroup::new(
+          stringify!($module),
+          $module::RULES,
+        ),
+      )+
     ];
   };
 }
@@ -37,9 +69,17 @@ static_detectors! {
 
 pub(super) fn static_entity_rules() -> impl Iterator<Item = StaticDetectorRule>
 {
-  STATIC_ENTITY_RULE_GROUPS
-    .iter()
-    .flat_map(|rules| rules.iter().copied())
+  STATIC_ENTITY_RULE_GROUPS.iter().copied().flat_map(|group| {
+    debug_assert!(
+      !group.name().is_empty(),
+      "detector rule groups must be named",
+    );
+    debug_assert!(
+      !group.is_empty(),
+      "detector rule group must register at least one rule",
+    );
+    group.rules().iter().copied()
+  })
 }
 
 fn timed_entities<F>(detect: F) -> Result<TimedEntities>
@@ -56,8 +96,30 @@ where
 
 #[cfg(test)]
 mod tests {
-  use super::static_entity_rules;
+  use super::{STATIC_ENTITY_RULE_GROUPS, static_entity_rules};
   use crate::prepared::detector_contract::StaticDetectorId;
+
+  #[test]
+  fn detector_registry_groups_are_named_and_nonempty() {
+    let mut group_names = Vec::new();
+    for group in STATIC_ENTITY_RULE_GROUPS.iter().copied() {
+      assert!(
+        !group.name().is_empty(),
+        "detector rule groups must be named",
+      );
+      assert!(
+        !group.is_empty(),
+        "detector rule group must register at least one rule: {}",
+        group.name(),
+      );
+      assert!(
+        !group_names.contains(&group.name()),
+        "detector rule group names must be unique: {}",
+        group.name(),
+      );
+      group_names.push(group.name());
+    }
+  }
 
   #[test]
   fn detector_registry_entries_declare_metadata() {
