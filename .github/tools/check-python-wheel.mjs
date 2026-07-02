@@ -1,13 +1,31 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readdirSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+} from "node:fs";
+import { basename, join } from "node:path";
 import { tmpdir } from "node:os";
 import process from "node:process";
 
 const outDir = mkdtempSync(join(tmpdir(), "stella-anonymize-wheel-"));
 const profile = process.env.ANONYMIZE_PYTHON_WHEEL_PROFILE ?? "ci";
+const nativePackagePattern =
+  /^native-pipeline(?:\.[a-z0-9]+(?:-[a-z0-9]+)*)?\.stlanonpkg$/u;
+const nativePackageSourceDir = join("packages", "anonymize");
+const pythonNativePackageDir = join(
+  "crates",
+  "anonymize-py",
+  "python",
+  "stella_anonymize",
+  "native_packages",
+);
 
 try {
+  syncNativePipelinePackages();
   execFileSync(
     "uvx",
     [
@@ -61,6 +79,35 @@ try {
   );
 } finally {
   rmSync(outDir, { force: true, recursive: true });
+}
+
+function syncNativePipelinePackages() {
+  if (!existsSync(nativePackageSourceDir)) {
+    throw new Error(
+      `native package source is missing: ${nativePackageSourceDir}`,
+    );
+  }
+  mkdirSync(pythonNativePackageDir, { recursive: true });
+  for (const file of readdirSync(pythonNativePackageDir)) {
+    if (nativePackagePattern.test(file)) {
+      rmSync(join(pythonNativePackageDir, file), { force: true });
+    }
+  }
+
+  const copied = [];
+  for (const file of readdirSync(nativePackageSourceDir)) {
+    if (!nativePackagePattern.test(file)) {
+      continue;
+    }
+    copyFileSync(
+      join(nativePackageSourceDir, file),
+      join(pythonNativePackageDir, basename(file)),
+    );
+    copied.push(file);
+  }
+  if (!copied.includes("native-pipeline.stlanonpkg")) {
+    throw new Error("native-pipeline.stlanonpkg has not been built");
+  }
 }
 
 function readWheelFiles(wheelPath) {
