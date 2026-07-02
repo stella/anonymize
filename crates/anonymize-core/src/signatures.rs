@@ -2,7 +2,7 @@ use crate::resolution::{DetectionSource, PipelineEntity};
 
 const PERSON_LABEL: &str = "person";
 const MAX_NAME_LEN: usize = 60;
-const MAX_WITNESS_SCAN_BYTES: usize = 600;
+const MAX_WITNESS_SCAN_UNITS: usize = 600;
 
 #[derive(
   Clone, Debug, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize,
@@ -183,7 +183,7 @@ fn detect_witness_blocks(
       break;
     }
     let limit =
-      advance_char_boundary(full_text, anchor, MAX_WITNESS_SCAN_BYTES);
+      advance_utf16_boundary(full_text, anchor, MAX_WITNESS_SCAN_UNITS);
     if let Some(scan_from) = find_witness_sentence_end(full_text, anchor, limit)
     {
       try_emit_forward_lines(results, full_text, data, scan_from, 6, 0.85);
@@ -320,11 +320,22 @@ fn is_cap_token(token: &str) -> bool {
   let Some(first) = chars.next() else {
     return false;
   };
-  first.is_uppercase()
-    && chars.take(30).all(|ch| {
-      ch.is_alphabetic()
-        || matches!(ch, '\u{0300}'..='\u{036f}' | '.' | '\'' | '-' | '’')
-    })
+  if !first.is_uppercase() {
+    return false;
+  }
+  let mut tail_len = 0usize;
+  for ch in chars {
+    if tail_len >= 30 {
+      return false;
+    }
+    if !matches!(ch, '\u{0300}'..='\u{036f}' | '.' | '\'' | '-' | '’')
+      && !ch.is_alphabetic()
+    {
+      return false;
+    }
+    tail_len = tail_len.saturating_add(1);
+  }
+  true
 }
 
 fn is_name_particle(token: &str, data: &PreparedSignatureData) -> bool {
@@ -567,16 +578,19 @@ fn find_next_witness_phrase(
     .min_by_key(|(anchor, _)| *anchor)
 }
 
-fn advance_char_boundary(text: &str, start: usize, max_bytes: usize) -> usize {
-  let limit = start.saturating_add(max_bytes).min(text.len());
-  if text.is_char_boundary(limit) {
-    return limit;
+fn advance_utf16_boundary(text: &str, start: usize, max_units: usize) -> usize {
+  let Some(tail) = text.get(start..) else {
+    return start;
+  };
+  let mut units = 0usize;
+  for (relative, ch) in tail.char_indices() {
+    let width = ch.len_utf16();
+    if units.saturating_add(width) > max_units {
+      return start.saturating_add(relative);
+    }
+    units = units.saturating_add(width);
   }
-  let mut cursor = limit;
-  while cursor > start && !text.is_char_boundary(cursor) {
-    cursor = cursor.saturating_sub(1);
-  }
-  cursor
+  text.len()
 }
 
 fn find_ascii_case_insensitive(text: &str, needle: &str) -> Option<usize> {
@@ -680,7 +694,7 @@ mod tests {
 
   #[test]
   fn counts_signature_name_length_in_text_units() {
-    let name = "Élodie ŽluťoučkýKůňÚpělĎábelskéÓdyÁÉÍÓÚÝČĎĚŇŘŠŤŽ";
+    let name = "Élodie ŽluťoučkýKůň ÚpělĎábelskéÓdy ÁÉÍÓÚÝČĎĚŇŘŠŤŽ";
     assert!(name.len() > super::MAX_NAME_LEN);
     assert!(
       name.chars().map(char::len_utf16).sum::<usize>() <= super::MAX_NAME_LEN
@@ -692,6 +706,25 @@ mod tests {
     assert_eq!(
       entities.first().map(|entity| entity.text.as_str()),
       Some(name)
+    );
+  }
+
+  #[test]
+  fn rejects_overlong_capitalized_signature_tokens() {
+    let entities = detect("/s/ Supercalifragilisticexpialidociousxxxx Smith");
+
+    assert!(entities.is_empty());
+  }
+
+  #[test]
+  fn measures_witness_scan_window_in_text_units() {
+    let preamble = "é".repeat(350);
+    let entities = detect(&format!("IN WITNESS WHEREOF {preamble}.\nJane Doe"));
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(
+      entities.first().map(|entity| entity.text.as_str()),
+      Some("Jane Doe")
     );
   }
 
