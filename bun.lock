@@ -36,11 +36,11 @@
         "vite": "^8.0.16",
       },
       "optionalDependencies": {
-        "@stll/anonymize-darwin-arm64": "^1.5.0",
-        "@stll/anonymize-darwin-x64": "^1.5.0",
-        "@stll/anonymize-linux-arm64-gnu": "^1.5.0",
-        "@stll/anonymize-linux-x64-gnu": "^1.5.0",
-        "@stll/anonymize-win32-x64-msvc": "^1.5.0",
+        "@stll/anonymize-darwin-arm64": "1.5.0",
+        "@stll/anonymize-darwin-x64": "1.5.0",
+        "@stll/anonymize-linux-arm64-gnu": "1.5.0",
+        "@stll/anonymize-linux-x64-gnu": "1.5.0",
+        "@stll/anonymize-win32-x64-msvc": "1.5.0",
       },
       "peerDependencies": {
         "@stll/anonymize-data": "^0.0.6",

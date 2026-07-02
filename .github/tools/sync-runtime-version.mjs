@@ -108,22 +108,22 @@ for (const file of PACKAGE_FILES) {
 
 {
   const pkg = JSON.parse(readFileSync(ROOT_RUNTIME_PACKAGE_FILE, "utf8"));
-  const wantedRange = `^${version}`;
+  const wantedVersion = version;
   let changed = false;
   for (const dependency of ROOT_NATIVE_OPTIONAL_DEPENDENCIES) {
     const current = pkg.optionalDependencies?.[dependency];
-    if (current === wantedRange) {
+    if (current === wantedVersion) {
       continue;
     }
     if (checkOnly) {
       console.error(
-        `${ROOT_RUNTIME_PACKAGE_FILE} optional dependency ${dependency}@${current}; expected ${wantedRange}`,
+        `${ROOT_RUNTIME_PACKAGE_FILE} optional dependency ${dependency}@${current}; expected ${wantedVersion}`,
       );
       hasMismatch = true;
       continue;
     }
     pkg.optionalDependencies ??= {};
-    pkg.optionalDependencies[dependency] = wantedRange;
+    pkg.optionalDependencies[dependency] = wantedVersion;
     changed = true;
   }
   if (changed) {
@@ -132,7 +132,7 @@ for (const file of PACKAGE_FILES) {
       `${JSON.stringify(pkg, null, 2)}\n`,
     );
     console.log(
-      `Updated ${ROOT_RUNTIME_PACKAGE_FILE} native optional dependency ranges to ${wantedRange}`,
+      `Updated ${ROOT_RUNTIME_PACKAGE_FILE} native optional dependency versions to ${wantedVersion}`,
     );
   }
 }
