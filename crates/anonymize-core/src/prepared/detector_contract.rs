@@ -147,6 +147,33 @@ pub(super) type StaticDetectFn = for<'a, 'p, 'd> fn(
 ) -> Result<TimedEntities>;
 
 #[derive(Clone, Copy)]
+pub(super) struct StaticDetectorModule {
+  name: &'static str,
+  rules: &'static [StaticDetectorRule],
+}
+
+impl StaticDetectorModule {
+  pub(super) const fn declare(
+    name: &'static str,
+    rules: &'static [StaticDetectorRule],
+  ) -> Self {
+    Self { name, rules }
+  }
+
+  pub(super) const fn name(self) -> &'static str {
+    self.name
+  }
+
+  pub(super) const fn rules(self) -> &'static [StaticDetectorRule] {
+    self.rules
+  }
+
+  pub(super) const fn is_empty(self) -> bool {
+    self.rules.is_empty()
+  }
+}
+
+#[derive(Clone, Copy)]
 pub(super) struct StaticDetectorRule {
   spec: StaticDetectorSpec,
   is_active: StaticDetectorActiveFn,
@@ -221,4 +248,27 @@ macro_rules! static_detector_rules {
   };
 }
 
+macro_rules! static_detector_modules {
+  (
+    $visibility:vis const $modules_name:ident;
+    $(
+      mod $module:ident;
+    )+
+  ) => {
+    $(mod $module;)+
+
+    $visibility const $modules_name:
+      &[$crate::prepared::detector_contract::StaticDetectorModule] =
+      &[
+        $(
+          $crate::prepared::detector_contract::StaticDetectorModule::declare(
+            stringify!($module),
+            $module::RULES,
+          ),
+        )+
+      ];
+  };
+}
+
+pub(super) use static_detector_modules;
 pub(super) use static_detector_rules;

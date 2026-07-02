@@ -161,6 +161,19 @@ pub(super) const SIGNATURE_RESOURCE: SupportResourceSpec =
 mod tests {
   use super::SupportResourceId;
 
+  #[derive(serde::Serialize)]
+  struct SupportResourcesSnapshot {
+    resources: Vec<SupportResourceSnapshot>,
+  }
+
+  #[derive(serde::Serialize)]
+  struct SupportResourceSnapshot {
+    id: String,
+    config_field: &'static str,
+    detector_input: Option<String>,
+    stage: String,
+  }
+
   #[test]
   fn support_resources_declare_unique_metadata() {
     let mut ids = Vec::new();
@@ -199,6 +212,33 @@ mod tests {
         resource,
         "support resource id must map to its declared spec",
       );
+    }
+  }
+
+  #[test]
+  fn support_resources_snapshot() {
+    insta::assert_yaml_snapshot!(
+      "support_resources",
+      support_resources_snapshot_data()
+    );
+  }
+
+  fn support_resources_snapshot_data() -> SupportResourcesSnapshot {
+    SupportResourcesSnapshot {
+      resources: SupportResourceId::ORDER
+        .into_iter()
+        .map(|resource_id| {
+          let resource = resource_id.spec();
+          SupportResourceSnapshot {
+            id: format!("{:?}", resource.id()),
+            config_field: resource.config_field(),
+            detector_input: resource
+              .detector_input()
+              .map(|input| format!("{input:?}")),
+            stage: format!("{:?}", resource.diagnostic_stage()),
+          }
+        })
+        .collect(),
     }
   }
 }

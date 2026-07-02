@@ -1,0 +1,41 @@
+---
+source: crates/anonymize-core/src/prepared/support_resources.rs
+expression: support_resources_snapshot_data()
+---
+resources:
+  - id: Hotwords
+    config_field: hotword_data
+    detector_input: ~
+    stage: PrepareHotwordData
+  - id: Triggers
+    config_field: trigger_data
+    detector_input: TriggerData
+    stage: PrepareTriggerData
+  - id: LegalForms
+    config_field: legal_form_data
+    detector_input: LegalFormData
+    stage: PrepareLegalFormData
+  - id: AddressSeed
+    config_field: address_seed_data
+    detector_input: AddressSeedData
+    stage: PrepareAddressSeedData
+  - id: Zones
+    config_field: zone_data
+    detector_input: ~
+    stage: PrepareZoneData
+  - id: AddressContext
+    config_field: address_context_data
+    detector_input: ~
+    stage: PrepareAddressContextData
+  - id: Coreference
+    config_field: coreference_data
+    detector_input: ~
+    stage: PrepareCoreferenceData
+  - id: NameCorpus
+    config_field: name_corpus_data
+    detector_input: NameCorpusData
+    stage: PrepareNameCorpusData
+  - id: Signature
+    config_field: signature_data
+    detector_input: SignatureData
+    stage: PrepareSignatureData

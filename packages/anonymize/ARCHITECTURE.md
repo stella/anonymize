@@ -20,6 +20,18 @@ types, load prepared packages, and call the same Rust core.
   entrypoint for old tests and migration comparisons. It is not exported from
   `package.json` and should not be used for product features.
 
+## Native Distribution
+
+`@stll/anonymize` is the platform-neutral runtime package. Native Node binaries
+ship through exact-version optional sidecars such as
+`@stll/anonymize-darwin-arm64` and `@stll/anonymize-linux-x64-gnu`. The root
+package must not publish a `.node` file; release publishes sidecars before the
+root package so npm can resolve the optional dependency at install time.
+
+Keep sidecar package names, package metadata, exact optional dependency pins,
+and release matrix entries aligned through
+`.github/tools/check-native-sidecars.mjs`.
+
 ## Runtime Flow
 
 1. Build or load a `.stlanonpkg` prepared package.
@@ -45,6 +57,9 @@ The Rust prepared engine is split by phase:
 Detector modules live under `crates/anonymize-core/src/prepared/detectors`.
 Adding a detector should mean adding module-local rule metadata and detection
 logic through `static_detector_rules!`; the registry only preserves module order.
+The detector registry and support-resource contracts are snapshot-tested, so
+changes to ids, stages, inputs, dependencies, and required prepared data produce
+reviewable diffs.
 
 ## Extension Rules
 

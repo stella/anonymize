@@ -46,6 +46,9 @@ jobs:
       - name: Sync runtime package versions
         run: bun run sync:version
 
+      - name: Verify native sidecar metadata
+        run: node .github/tools/check-native-sidecars.mjs
+
       - name: Build
         run: bun run build
 

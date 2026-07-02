@@ -1,6 +1,8 @@
 use std::time::Instant;
 
-use crate::prepared::detector_contract::StaticDetectorRule;
+use crate::prepared::detector_contract::{
+  StaticDetectorRule, static_detector_modules,
+};
 use crate::resolution::PipelineEntity;
 use crate::types::Result;
 
@@ -8,55 +10,10 @@ use super::timing::{TimedEntities, elapsed_us};
 
 mod prelude;
 
-#[derive(Clone, Copy)]
-struct StaticDetectorRuleGroup {
-  name: &'static str,
-  rules: &'static [StaticDetectorRule],
-}
-
-impl StaticDetectorRuleGroup {
-  const fn new(
-    name: &'static str,
-    rules: &'static [StaticDetectorRule],
-  ) -> Self {
-    Self { name, rules }
-  }
-
-  const fn name(self) -> &'static str {
-    self.name
-  }
-
-  const fn rules(self) -> &'static [StaticDetectorRule] {
-    self.rules
-  }
-
-  const fn is_empty(self) -> bool {
-    self.rules.is_empty()
-  }
-}
-
 // New detector modules own their rule metadata and expose a `RULES` slice.
 // This module only fixes cross-module execution order.
-macro_rules! static_detectors {
-  (
-    $(
-      mod $module:ident;
-    )+
-  ) => {
-    $(mod $module;)+
-
-    const STATIC_ENTITY_RULE_GROUPS: &[StaticDetectorRuleGroup] = &[
-      $(
-        StaticDetectorRuleGroup::new(
-          stringify!($module),
-          $module::RULES,
-        ),
-      )+
-    ];
-  };
-}
-
-static_detectors! {
+static_detector_modules! {
+  pub(super) const STATIC_DETECTOR_MODULES;
   mod regex;
   mod literal;
   mod anchored;
@@ -69,16 +26,13 @@ static_detectors! {
 
 pub(super) fn static_entity_rules() -> impl Iterator<Item = StaticDetectorRule>
 {
-  STATIC_ENTITY_RULE_GROUPS.iter().copied().flat_map(|group| {
+  STATIC_DETECTOR_MODULES.iter().copied().flat_map(|module| {
+    debug_assert!(!module.name().is_empty(), "detector modules must be named");
     debug_assert!(
-      !group.name().is_empty(),
-      "detector rule groups must be named",
+      !module.is_empty(),
+      "detector module must register at least one rule",
     );
-    debug_assert!(
-      !group.is_empty(),
-      "detector rule group must register at least one rule",
-    );
-    group.rules().iter().copied()
+    module.rules().iter().copied()
   })
 }
 
@@ -96,29 +50,56 @@ where
 
 #[cfg(test)]
 mod tests {
-  use super::{STATIC_ENTITY_RULE_GROUPS, static_entity_rules};
-  use crate::prepared::detector_contract::StaticDetectorId;
+  use super::{STATIC_DETECTOR_MODULES, static_entity_rules};
+  use crate::prepared::detector_contract::{
+    StaticDetectorId, StaticDetectorModule, StaticDetectorRule,
+  };
+
+  #[derive(serde::Serialize)]
+  struct DetectorRegistrySnapshot {
+    modules: Vec<DetectorModuleSnapshot>,
+  }
+
+  #[derive(serde::Serialize)]
+  struct DetectorModuleSnapshot {
+    name: &'static str,
+    rules: Vec<DetectorRuleSnapshot>,
+  }
+
+  #[derive(serde::Serialize)]
+  struct DetectorRuleSnapshot {
+    id: String,
+    stage: String,
+    inputs: Vec<String>,
+    dependencies: Vec<String>,
+    support_resources: Vec<String>,
+  }
 
   #[test]
-  fn detector_registry_groups_are_named_and_nonempty() {
-    let mut group_names = Vec::new();
-    for group in STATIC_ENTITY_RULE_GROUPS.iter().copied() {
+  fn detector_registry_modules_are_named_and_nonempty() {
+    let mut module_names = Vec::new();
+    for module in STATIC_DETECTOR_MODULES.iter().copied() {
+      assert!(!module.name().is_empty(), "detector modules must be named");
       assert!(
-        !group.name().is_empty(),
-        "detector rule groups must be named",
+        !module.is_empty(),
+        "detector module must register at least one rule: {}",
+        module.name(),
       );
       assert!(
-        !group.is_empty(),
-        "detector rule group must register at least one rule: {}",
-        group.name(),
+        !module_names.contains(&module.name()),
+        "detector module names must be unique: {}",
+        module.name(),
       );
-      assert!(
-        !group_names.contains(&group.name()),
-        "detector rule group names must be unique: {}",
-        group.name(),
-      );
-      group_names.push(group.name());
+      module_names.push(module.name());
     }
+  }
+
+  #[test]
+  fn detector_registry_snapshot() {
+    insta::assert_yaml_snapshot!(
+      "detector_registry",
+      detector_registry_snapshot_data()
+    );
   }
 
   #[test]
@@ -219,5 +200,47 @@ mod tests {
 
   fn detector_exists(detector_id: StaticDetectorId) -> bool {
     static_entity_rules().any(|rule| rule.spec().id() == detector_id)
+  }
+
+  fn detector_registry_snapshot_data() -> DetectorRegistrySnapshot {
+    DetectorRegistrySnapshot {
+      modules: STATIC_DETECTOR_MODULES
+        .iter()
+        .copied()
+        .map(detector_module_snapshot)
+        .collect(),
+    }
+  }
+
+  fn detector_module_snapshot(
+    module: StaticDetectorModule,
+  ) -> DetectorModuleSnapshot {
+    DetectorModuleSnapshot {
+      name: module.name(),
+      rules: module.rules().iter().map(detector_rule_snapshot).collect(),
+    }
+  }
+
+  fn detector_rule_snapshot(rule: &StaticDetectorRule) -> DetectorRuleSnapshot {
+    let spec = rule.spec();
+    DetectorRuleSnapshot {
+      id: format!("{:?}", spec.id()),
+      stage: format!("{:?}", spec.diagnostic_stage()),
+      inputs: spec
+        .declared_inputs()
+        .iter()
+        .map(|input| format!("{input:?}"))
+        .collect(),
+      dependencies: spec
+        .dependencies()
+        .iter()
+        .map(|dependency| format!("{dependency:?}"))
+        .collect(),
+      support_resources: spec
+        .support_resources()
+        .iter()
+        .map(|resource| format!("{resource:?}"))
+        .collect(),
+    }
   }
 }
