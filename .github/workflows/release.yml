@@ -25,8 +25,34 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    outputs:
+      dist_tag: ${{ steps.dist-tag.outputs.dist_tag }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Derive npm dist-tag from VERSION
+        id: dist-tag
+        run: |
+          set -euo pipefail
+          if [[ ! -f VERSION ]]; then
+            echo "::error::VERSION file is missing"
+            exit 1
+          fi
+
+          version="$(tr -d '[:space:]' < VERSION)"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-(rc|beta|alpha)\.[0-9]+)?$ ]]; then
+            echo "::error::VERSION must look like 1.2.3, 1.2.3-rc.1, 1.2.3-beta.1, or 1.2.3-alpha.1; got '$version'"
+            exit 1
+          fi
+
+          # Prereleases publish under their identifier (alpha/beta/rc) so a
+          # test build never becomes the npm `latest` tag; stable stays latest.
+          dist_tag="latest"
+          if [[ "$version" =~ -(rc|beta|alpha)\. ]]; then
+            dist_tag="${BASH_REMATCH[1]}"
+          fi
+
+          echo "dist_tag=$dist_tag" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
@@ -179,7 +205,7 @@ jobs:
           if-no-files-found: error
 
   publish-native:
-    needs: pack-native
+    needs: [verify, pack-native]
     if: github.event_name == 'push' || inputs.publish_to_npm == true
     runs-on: ubuntu-latest
     permissions:
@@ -217,6 +243,7 @@ jobs:
         uses: stella/.github/.github/actions/npm-publish-hardened@4292546b5b6e5bd8660bd727913b4038644c3d0b
         with:
           tarball: ${{ steps.tarball.outputs.path }}
+          tag: ${{ needs.verify.outputs.dist_tag }}
 
   publish:
     needs: [verify, publish-native]
@@ -308,6 +335,7 @@ jobs:
         uses: stella/.github/.github/actions/npm-publish-hardened@4292546b5b6e5bd8660bd727913b4038644c3d0b
         with:
           tarball: ${{ steps.pack.outputs.tarball }}
+          tag: ${{ needs.verify.outputs.dist_tag }}
 
   github-release:
     name: Create GitHub release
