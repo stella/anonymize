@@ -941,7 +941,7 @@ dependencies = [
 
 [[package]]
 name = "stella-anonymize-adapter-contract"
-version = "1.5.0"
+version = "2.0.0"
 dependencies = [
  "bincode",
  "blake3",
@@ -954,7 +954,7 @@ dependencies = [
 
 [[package]]
 name = "stella-anonymize-core"
-version = "1.5.0"
+version = "2.0.0"
 dependencies = [
  "bon",
  "fancy-regex",
@@ -969,7 +969,7 @@ dependencies = [
 
 [[package]]
 name = "stella-anonymize-napi"
-version = "1.5.0"
+version = "2.0.0"
 dependencies = [
  "blake3",
  "napi",
@@ -982,7 +982,7 @@ dependencies = [
 
 [[package]]
 name = "stella-anonymize-py"
-version = "1.5.0"
+version = "2.0.0"
 dependencies = [
  "pyo3",
  "pyo3-build-config",
