@@ -53,6 +53,14 @@ if (!existsSync(source)) {
 }
 
 copyFileSync(source, join(packageRoot, "stella_anonymize_napi.node"));
+const sidecarRoot = nativeSidecarPackageRoot({
+  arch: process.arch,
+  libc: detectNativeLibc(process.platform),
+  platform: process.platform,
+});
+if (sidecarRoot !== null) {
+  copyFileSync(source, join(sidecarRoot, "stella_anonymize_napi.node"));
+}
 removeNativePipelinePackages(packageRoot);
 removeNativePipelinePackages(pythonNativePackageRoot);
 mkdirSync(pythonNativePackageRoot, { recursive: true });
@@ -138,4 +146,37 @@ function normalizeLanguage(value) {
     );
   }
   return language;
+}
+
+function nativeSidecarPackageRoot({ arch, libc, platform }) {
+  const packageName = nativeSidecarPackageName({ arch, libc, platform });
+  return packageName === null ? null : join(repoRoot, "packages", packageName);
+}
+
+function nativeSidecarPackageName({ arch, libc, platform }) {
+  if (platform === "darwin" && arch === "arm64") {
+    return "anonymize-darwin-arm64";
+  }
+  if (platform === "darwin" && arch === "x64") {
+    return "anonymize-darwin-x64";
+  }
+  if (platform === "linux" && arch === "arm64" && libc === "gnu") {
+    return "anonymize-linux-arm64-gnu";
+  }
+  if (platform === "linux" && arch === "x64" && libc === "gnu") {
+    return "anonymize-linux-x64-gnu";
+  }
+  if (platform === "win32" && arch === "x64") {
+    return "anonymize-win32-x64-msvc";
+  }
+  return null;
+}
+
+function detectNativeLibc(platform) {
+  if (platform !== "linux") {
+    return undefined;
+  }
+  return process.report?.getReport?.().header?.glibcVersionRuntime
+    ? "gnu"
+    : "musl";
 }

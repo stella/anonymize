@@ -1,0 +1,24 @@
+{
+  "name": "@stll/anonymize-darwin-arm64",
+  "version": "1.5.0",
+  "description": "macOS arm64 native binding for @stll/anonymize",
+  "main": "index.cjs",
+  "files": [
+    "index.cjs",
+    "stella_anonymize_napi.node"
+  ],
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stella/anonymize.git"
+  },
+  "license": "MIT"
+}

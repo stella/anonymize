@@ -18,6 +18,9 @@
     "packages/anonymize": {
       "name": "@stll/anonymize",
       "version": "1.5.0",
+      "bin": {
+        "stella-anonymize-build-native-package": "./scripts/build-native-pipeline-package.mjs",
+      },
       "dependencies": {
         "@huggingface/tokenizers": "^0.1.3",
         "@stll/stdnum": "^2.1.1",
@@ -32,12 +35,39 @@
         "typescript": "^6.0.3",
         "vite": "^8.0.16",
       },
+      "optionalDependencies": {
+        "@stll/anonymize-darwin-arm64": "^1.5.0",
+        "@stll/anonymize-darwin-x64": "^1.5.0",
+        "@stll/anonymize-linux-arm64-gnu": "^1.5.0",
+        "@stll/anonymize-linux-x64-gnu": "^1.5.0",
+        "@stll/anonymize-win32-x64-msvc": "^1.5.0",
+      },
       "peerDependencies": {
         "@stll/anonymize-data": "^0.0.6",
       },
       "optionalPeers": [
         "@stll/anonymize-data",
       ],
+    },
+    "packages/anonymize-darwin-arm64": {
+      "name": "@stll/anonymize-darwin-arm64",
+      "version": "1.5.0",
+    },
+    "packages/anonymize-darwin-x64": {
+      "name": "@stll/anonymize-darwin-x64",
+      "version": "1.5.0",
+    },
+    "packages/anonymize-linux-arm64-gnu": {
+      "name": "@stll/anonymize-linux-arm64-gnu",
+      "version": "1.5.0",
+    },
+    "packages/anonymize-linux-x64-gnu": {
+      "name": "@stll/anonymize-linux-x64-gnu",
+      "version": "1.5.0",
+    },
+    "packages/anonymize-win32-x64-msvc": {
+      "name": "@stll/anonymize-win32-x64-msvc",
+      "version": "1.5.0",
     },
     "packages/anonymize/wasm": {
       "name": "@stll/anonymize-wasm",
@@ -272,9 +302,19 @@
 
     "@stll/anonymize-corpus": ["@stll/anonymize-corpus@workspace:packages/corpus"],
 
+    "@stll/anonymize-darwin-arm64": ["@stll/anonymize-darwin-arm64@workspace:packages/anonymize-darwin-arm64"],
+
+    "@stll/anonymize-darwin-x64": ["@stll/anonymize-darwin-x64@workspace:packages/anonymize-darwin-x64"],
+
     "@stll/anonymize-data": ["@stll/anonymize-data@workspace:packages/data"],
 
+    "@stll/anonymize-linux-arm64-gnu": ["@stll/anonymize-linux-arm64-gnu@workspace:packages/anonymize-linux-arm64-gnu"],
+
+    "@stll/anonymize-linux-x64-gnu": ["@stll/anonymize-linux-x64-gnu@workspace:packages/anonymize-linux-x64-gnu"],
+
     "@stll/anonymize-wasm": ["@stll/anonymize-wasm@workspace:packages/anonymize/wasm"],
+
+    "@stll/anonymize-win32-x64-msvc": ["@stll/anonymize-win32-x64-msvc@workspace:packages/anonymize-win32-x64-msvc"],
 
     "@stll/fuzzy-search": ["@stll/fuzzy-search@1.1.3", "", { "optionalDependencies": { "@stll/fuzzy-search-darwin-arm64": "1.1.3", "@stll/fuzzy-search-darwin-x64": "1.1.3", "@stll/fuzzy-search-linux-arm64-gnu": "1.1.3", "@stll/fuzzy-search-linux-x64-gnu": "1.1.3", "@stll/fuzzy-search-wasm32-wasi": "1.1.3", "@stll/fuzzy-search-win32-x64-msvc": "1.1.3" } }, "sha512-OAZPMRT2UIrxoEc3Vv9tdzpKOHHLkMaVhqGygQQE6rz5uvbBNs/EWNrD+bEIpYu/AU053LUUltj1dZmymLz19w=="],
 

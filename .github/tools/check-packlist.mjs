@@ -12,7 +12,6 @@ const PACKAGES = [
       "dist/native-node.d.mts",
       "dist/native-node.mjs",
       "index.cjs",
-      "stella_anonymize_napi.node",
       "native-pipeline.stlanonpkg",
       "native-pipeline.cs.stlanonpkg",
       "native-pipeline.de.stlanonpkg",
@@ -24,6 +23,7 @@ const PACKAGES = [
       "LICENSE",
       "package.json",
     ],
+    forbidden: ["stella_anonymize_napi.node"],
   },
   {
     dir: "packages/data",
@@ -68,7 +68,7 @@ const PACKAGES = [
   },
 ];
 
-for (const { dir, expected } of PACKAGES) {
+for (const { dir, expected, forbidden = [] } of PACKAGES) {
   const packJson = execFileSync("npm", ["pack", "--dry-run", "--json"], {
     cwd: dir,
     encoding: "utf8",
@@ -85,6 +85,13 @@ for (const { dir, expected } of PACKAGES) {
 
   if (missing.length > 0) {
     console.error(`${dir}: missing pack files: ${missing.join(", ")}`);
+    process.exit(1);
+  }
+  const presentForbidden = forbidden.filter((file) => files.has(file));
+  if (presentForbidden.length > 0) {
+    console.error(
+      `${dir}: unexpected pack files: ${presentForbidden.join(", ")}`,
+    );
     process.exit(1);
   }
 }

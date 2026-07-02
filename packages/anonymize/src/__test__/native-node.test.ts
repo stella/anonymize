@@ -84,6 +84,49 @@ describe("native node loader", () => {
     expect(calls).toEqual(["../index.cjs"]);
   });
 
+  test("falls back to the platform native package", () => {
+    const calls: string[] = [];
+    const binding = fakeNativeBinding(PACKAGE_VERSION);
+    const loaded = loadNativeAnonymizeBinding({
+      expectedVersion: PACKAGE_VERSION,
+      platform: "darwin",
+      arch: "arm64",
+      env: {},
+      requireModule: (specifier) => {
+        calls.push(specifier);
+        if (specifier === "@stll/anonymize-darwin-arm64") {
+          return binding;
+        }
+        throw new Error("not found");
+      },
+    });
+
+    expect(loaded).toBe(binding);
+    expect(calls).toEqual(["../index.cjs", "@stll/anonymize-darwin-arm64"]);
+  });
+
+  test("selects the Linux GNU platform package", () => {
+    const calls: string[] = [];
+    const binding = fakeNativeBinding(PACKAGE_VERSION);
+    const loaded = loadNativeAnonymizeBinding({
+      expectedVersion: PACKAGE_VERSION,
+      platform: "linux",
+      arch: "x64",
+      libc: "gnu",
+      env: {},
+      requireModule: (specifier) => {
+        calls.push(specifier);
+        if (specifier === "@stll/anonymize-linux-x64-gnu") {
+          return binding;
+        }
+        throw new Error("not found");
+      },
+    });
+
+    expect(loaded).toBe(binding);
+    expect(calls).toEqual(["../index.cjs", "@stll/anonymize-linux-x64-gnu"]);
+  });
+
   test("loads an explicit native library path first", () => {
     const calls: string[] = [];
     const binding = fakeNativeBinding(PACKAGE_VERSION);

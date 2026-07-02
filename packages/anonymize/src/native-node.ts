@@ -121,8 +121,9 @@ export const loadNativeAnonymizeBinding = (
   const requireModule = options.requireModule ?? createRequire(import.meta.url);
   const platform = options.platform ?? process.platform;
   const arch = options.arch ?? process.arch;
+  const libc = options.libc ?? detectNativeLibc(platform);
   const env = options.env ?? process.env;
-  const specifiers = nativeBindingSpecifiers({ env });
+  const specifiers = nativeBindingSpecifiers({ arch, env, libc, platform });
   const errors: string[] = [];
 
   for (const specifier of specifiers) {
@@ -677,11 +678,17 @@ const normalizeDefaultNativePipelineLanguage = (language: string): string => {
 };
 
 type NativeBindingSpecifiersOptions = {
+  arch: string;
   env: Record<string, string | undefined>;
+  libc: NativeLibc | undefined;
+  platform: string;
 };
 
 const nativeBindingSpecifiers = ({
+  arch,
   env,
+  libc,
+  platform,
 }: NativeBindingSpecifiersOptions): string[] => {
   const specifiers: string[] = [];
   const overridePath = env[PACKAGE_SPECIFIC_NATIVE_PATH];
@@ -689,7 +696,52 @@ const nativeBindingSpecifiers = ({
     specifiers.push(overridePath);
   }
   specifiers.push(LOCAL_NATIVE_LOADER);
+  const platformPackage = nativeBindingPackageName({ arch, libc, platform });
+  if (platformPackage !== null) {
+    specifiers.push(platformPackage);
+  }
   return specifiers;
+};
+
+type NativeBindingPackageNameOptions = {
+  arch: string;
+  libc: NativeLibc | undefined;
+  platform: string;
+};
+
+const nativeBindingPackageName = ({
+  arch,
+  libc,
+  platform,
+}: NativeBindingPackageNameOptions): string | null => {
+  if (platform === "darwin" && arch === "arm64") {
+    return "@stll/anonymize-darwin-arm64";
+  }
+  if (platform === "darwin" && arch === "x64") {
+    return "@stll/anonymize-darwin-x64";
+  }
+  if (platform === "linux" && arch === "arm64" && libc === "gnu") {
+    return "@stll/anonymize-linux-arm64-gnu";
+  }
+  if (platform === "linux" && arch === "x64" && libc === "gnu") {
+    return "@stll/anonymize-linux-x64-gnu";
+  }
+  if (platform === "win32" && arch === "x64") {
+    return "@stll/anonymize-win32-x64-msvc";
+  }
+  return null;
+};
+
+const detectNativeLibc = (platform: string): NativeLibc | undefined => {
+  if (platform !== "linux") {
+    return undefined;
+  }
+  const report = process.report?.getReport();
+  const header =
+    isPropertyBag(report) && isPropertyBag(report["header"])
+      ? report["header"]
+      : null;
+  return typeof header?.["glibcVersionRuntime"] === "string" ? "gnu" : "musl";
 };
 
 type TryLoadNativeBindingOptions = {

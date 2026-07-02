@@ -6,8 +6,21 @@ const VERSION_RE = /^[0-9]+\.[0-9]+\.[0-9]+(-(rc|beta|alpha)\.[0-9]+)?$/;
 
 const PACKAGE_FILES = [
   "packages/anonymize/package.json",
+  "packages/anonymize-darwin-arm64/package.json",
+  "packages/anonymize-darwin-x64/package.json",
+  "packages/anonymize-linux-arm64-gnu/package.json",
+  "packages/anonymize-linux-x64-gnu/package.json",
+  "packages/anonymize-win32-x64-msvc/package.json",
   "packages/anonymize/wasm/package.json",
   "packages/cli/package.json",
+];
+const ROOT_RUNTIME_PACKAGE_FILE = "packages/anonymize/package.json";
+const ROOT_NATIVE_OPTIONAL_DEPENDENCIES = [
+  "@stll/anonymize-darwin-arm64",
+  "@stll/anonymize-darwin-x64",
+  "@stll/anonymize-linux-arm64-gnu",
+  "@stll/anonymize-linux-x64-gnu",
+  "@stll/anonymize-win32-x64-msvc",
 ];
 
 const CARGO_WORKSPACE_MANIFEST = "Cargo.toml";
@@ -91,6 +104,37 @@ for (const file of PACKAGE_FILES) {
   }
   writeFileSync(file, `${JSON.stringify(pkg, null, 2)}\n`);
   console.log(`Updated ${file} to ${version}`);
+}
+
+{
+  const pkg = JSON.parse(readFileSync(ROOT_RUNTIME_PACKAGE_FILE, "utf8"));
+  const wantedRange = `^${version}`;
+  let changed = false;
+  for (const dependency of ROOT_NATIVE_OPTIONAL_DEPENDENCIES) {
+    const current = pkg.optionalDependencies?.[dependency];
+    if (current === wantedRange) {
+      continue;
+    }
+    if (checkOnly) {
+      console.error(
+        `${ROOT_RUNTIME_PACKAGE_FILE} optional dependency ${dependency}@${current}; expected ${wantedRange}`,
+      );
+      hasMismatch = true;
+      continue;
+    }
+    pkg.optionalDependencies ??= {};
+    pkg.optionalDependencies[dependency] = wantedRange;
+    changed = true;
+  }
+  if (changed) {
+    writeFileSync(
+      ROOT_RUNTIME_PACKAGE_FILE,
+      `${JSON.stringify(pkg, null, 2)}\n`,
+    );
+    console.log(
+      `Updated ${ROOT_RUNTIME_PACKAGE_FILE} native optional dependency ranges to ${wantedRange}`,
+    );
+  }
 }
 
 syncTextVersion({

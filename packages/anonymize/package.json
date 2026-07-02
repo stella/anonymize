@@ -33,7 +33,6 @@
     "ATTRIBUTION.md",
     "dist",
     "index.cjs",
-    "*.node",
     "native-pipeline.stlanonpkg",
     "native-pipeline.*.stlanonpkg",
     "scripts/build-native-pipeline-package.mjs"
@@ -76,6 +75,13 @@
     "@stll/anonymize-data": {
       "optional": true
     }
+  },
+  "optionalDependencies": {
+    "@stll/anonymize-darwin-arm64": "^1.5.0",
+    "@stll/anonymize-darwin-x64": "^1.5.0",
+    "@stll/anonymize-linux-arm64-gnu": "^1.5.0",
+    "@stll/anonymize-linux-x64-gnu": "^1.5.0",
+    "@stll/anonymize-win32-x64-msvc": "^1.5.0"
   },
   "devDependencies": {
     "@stll/anonymize-data": "workspace:*",
