@@ -20,10 +20,14 @@ type RunResult = { out: string; err: string; code: number };
 
 const run = async (args: string[], stdin?: string): Promise<RunResult> => {
   const proc = Bun.spawn(["bun", CLI, ...args], {
-    stdin: stdin === undefined ? "ignore" : new TextEncoder().encode(stdin),
+    stdin: stdin === undefined ? "ignore" : "pipe",
     stdout: "pipe",
     stderr: "pipe",
   });
+  if (stdin !== undefined) {
+    proc.stdin?.write(stdin);
+    proc.stdin?.end();
+  }
   const [out, err, code] = await Promise.all([
     new Response(proc.stdout).text(),
     new Response(proc.stderr).text(),
