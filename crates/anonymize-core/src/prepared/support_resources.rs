@@ -2,160 +2,129 @@ use crate::diagnostics::DiagnosticStage;
 
 use super::detector_contract::StaticDetectorInput;
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum SupportResourceId {
-  Hotwords,
-  Triggers,
-  LegalForms,
-  AddressSeed,
-  Zones,
-  AddressContext,
-  Coreference,
-  NameCorpus,
-  Signature,
-}
-
-impl SupportResourceId {
-  pub(super) const COUNT: usize = 9;
-
-  #[cfg(test)]
-  pub(super) const ORDER: [Self; Self::COUNT] = [
-    Self::Hotwords,
-    Self::Triggers,
-    Self::LegalForms,
-    Self::AddressSeed,
-    Self::Zones,
-    Self::AddressContext,
-    Self::Coreference,
-    Self::NameCorpus,
-    Self::Signature,
-  ];
-
-  pub(super) const fn spec(self) -> SupportResourceSpec {
-    match self {
-      Self::Hotwords => HOTWORD_RESOURCE,
-      Self::Triggers => TRIGGER_RESOURCE,
-      Self::LegalForms => LEGAL_FORM_RESOURCE,
-      Self::AddressSeed => ADDRESS_SEED_RESOURCE,
-      Self::Zones => ZONE_RESOURCE,
-      Self::AddressContext => ADDRESS_CONTEXT_RESOURCE,
-      Self::Coreference => COREFERENCE_RESOURCE,
-      Self::NameCorpus => NAME_CORPUS_RESOURCE,
-      Self::Signature => SIGNATURE_RESOURCE,
+macro_rules! support_resources {
+  (
+    $(
+      $variant:ident {
+        config_field: $config_field:literal,
+        detector_input: $detector_input:expr,
+        stage: $stage:expr,
+      }
+    ),+ $(,)?
+  ) => {
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub(super) enum SupportResourceId {
+      $($variant),+
     }
-  }
-}
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) struct SupportResourceSpec {
-  id: SupportResourceId,
-  config_field: &'static str,
-  detector_input: Option<StaticDetectorInput>,
-  stage: DiagnosticStage,
-}
-
-impl SupportResourceSpec {
-  pub(super) const fn new(
-    id: SupportResourceId,
-    config_field: &'static str,
-    detector_input: Option<StaticDetectorInput>,
-    stage: DiagnosticStage,
-  ) -> Self {
-    Self {
-      id,
-      config_field,
-      detector_input,
-      stage,
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub(super) struct SupportResourceSpec {
+      id: SupportResourceId,
+      config_field: &'static str,
+      detector_input: Option<StaticDetectorInput>,
+      stage: DiagnosticStage,
     }
-  }
 
-  pub(super) const fn id(self) -> SupportResourceId {
-    self.id
-  }
+    impl SupportResourceSpec {
+      const fn new(
+        id: SupportResourceId,
+        config_field: &'static str,
+        detector_input: Option<StaticDetectorInput>,
+        stage: DiagnosticStage,
+      ) -> Self {
+        Self {
+          id,
+          config_field,
+          detector_input,
+          stage,
+        }
+      }
 
-  pub(super) const fn config_field(self) -> &'static str {
-    self.config_field
-  }
+      pub(super) const fn id(self) -> SupportResourceId {
+        self.id
+      }
 
-  pub(super) const fn detector_input(self) -> Option<StaticDetectorInput> {
-    self.detector_input
-  }
+      pub(super) const fn config_field(self) -> &'static str {
+        self.config_field
+      }
 
-  pub(super) const fn diagnostic_stage(self) -> DiagnosticStage {
-    self.stage
-  }
+      pub(super) const fn detector_input(
+        self,
+      ) -> Option<StaticDetectorInput> {
+        self.detector_input
+      }
+
+      pub(super) const fn diagnostic_stage(self) -> DiagnosticStage {
+        self.stage
+      }
+    }
+
+    impl SupportResourceId {
+      pub(super) const ORDER: &'static [Self] = &[$(Self::$variant),+];
+
+      pub(super) const fn spec(self) -> SupportResourceSpec {
+        match self {
+          $(
+            Self::$variant => SupportResourceSpec::new(
+              Self::$variant,
+              $config_field,
+              $detector_input,
+              $stage,
+            ),
+          )+
+        }
+      }
+    }
+  };
 }
 
-pub(super) const HOTWORD_RESOURCE: SupportResourceSpec =
-  SupportResourceSpec::new(
-    SupportResourceId::Hotwords,
-    "hotword_data",
-    None,
-    DiagnosticStage::PrepareHotwordData,
-  );
-
-pub(super) const TRIGGER_RESOURCE: SupportResourceSpec =
-  SupportResourceSpec::new(
-    SupportResourceId::Triggers,
-    "trigger_data",
-    Some(StaticDetectorInput::TriggerData),
-    DiagnosticStage::PrepareTriggerData,
-  );
-
-pub(super) const LEGAL_FORM_RESOURCE: SupportResourceSpec =
-  SupportResourceSpec::new(
-    SupportResourceId::LegalForms,
-    "legal_form_data",
-    Some(StaticDetectorInput::LegalFormData),
-    DiagnosticStage::PrepareLegalFormData,
-  );
-
-pub(super) const ADDRESS_SEED_RESOURCE: SupportResourceSpec =
-  SupportResourceSpec::new(
-    SupportResourceId::AddressSeed,
-    "address_seed_data",
-    Some(StaticDetectorInput::AddressSeedData),
-    DiagnosticStage::PrepareAddressSeedData,
-  );
-
-pub(super) const ZONE_RESOURCE: SupportResourceSpec = SupportResourceSpec::new(
-  SupportResourceId::Zones,
-  "zone_data",
-  None,
-  DiagnosticStage::PrepareZoneData,
-);
-
-pub(super) const ADDRESS_CONTEXT_RESOURCE: SupportResourceSpec =
-  SupportResourceSpec::new(
-    SupportResourceId::AddressContext,
-    "address_context_data",
-    None,
-    DiagnosticStage::PrepareAddressContextData,
-  );
-
-pub(super) const COREFERENCE_RESOURCE: SupportResourceSpec =
-  SupportResourceSpec::new(
-    SupportResourceId::Coreference,
-    "coreference_data",
-    None,
-    DiagnosticStage::PrepareCoreferenceData,
-  );
-
-pub(super) const NAME_CORPUS_RESOURCE: SupportResourceSpec =
-  SupportResourceSpec::new(
-    SupportResourceId::NameCorpus,
-    "name_corpus_data",
-    Some(StaticDetectorInput::NameCorpusData),
-    DiagnosticStage::PrepareNameCorpusData,
-  );
-
-pub(super) const SIGNATURE_RESOURCE: SupportResourceSpec =
-  SupportResourceSpec::new(
-    SupportResourceId::Signature,
-    "signature_data",
-    Some(StaticDetectorInput::SignatureData),
-    DiagnosticStage::PrepareSignatureData,
-  );
+support_resources! {
+  Hotwords {
+    config_field: "hotword_data",
+    detector_input: None,
+    stage: DiagnosticStage::PrepareHotwordData,
+  },
+  Triggers {
+    config_field: "trigger_data",
+    detector_input: Some(StaticDetectorInput::TriggerData),
+    stage: DiagnosticStage::PrepareTriggerData,
+  },
+  LegalForms {
+    config_field: "legal_form_data",
+    detector_input: Some(StaticDetectorInput::LegalFormData),
+    stage: DiagnosticStage::PrepareLegalFormData,
+  },
+  AddressSeed {
+    config_field: "address_seed_data",
+    detector_input: Some(StaticDetectorInput::AddressSeedData),
+    stage: DiagnosticStage::PrepareAddressSeedData,
+  },
+  Zones {
+    config_field: "zone_data",
+    detector_input: None,
+    stage: DiagnosticStage::PrepareZoneData,
+  },
+  AddressContext {
+    config_field: "address_context_data",
+    detector_input: None,
+    stage: DiagnosticStage::PrepareAddressContextData,
+  },
+  Coreference {
+    config_field: "coreference_data",
+    detector_input: None,
+    stage: DiagnosticStage::PrepareCoreferenceData,
+  },
+  NameCorpus {
+    config_field: "name_corpus_data",
+    detector_input: Some(StaticDetectorInput::NameCorpusData),
+    stage: DiagnosticStage::PrepareNameCorpusData,
+  },
+  Signature {
+    config_field: "signature_data",
+    detector_input: Some(StaticDetectorInput::SignatureData),
+    stage: DiagnosticStage::PrepareSignatureData,
+  },
+}
 
 #[cfg(test)]
 mod tests {
@@ -180,7 +149,7 @@ mod tests {
     let mut fields = Vec::new();
     let mut detector_inputs = Vec::new();
     let mut stages = Vec::new();
-    for resource_id in SupportResourceId::ORDER {
+    for resource_id in SupportResourceId::ORDER.iter().copied() {
       let resource = resource_id.spec();
       assert!(
         !ids.contains(&resource.id()),
@@ -226,7 +195,8 @@ mod tests {
   fn support_resources_snapshot_data() -> SupportResourcesSnapshot {
     SupportResourcesSnapshot {
       resources: SupportResourceId::ORDER
-        .into_iter()
+        .iter()
+        .copied()
         .map(|resource_id| {
           let resource = resource_id.spec();
           SupportResourceSnapshot {

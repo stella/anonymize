@@ -57,6 +57,9 @@ The Rust prepared engine is split by phase:
 Detector modules live under `crates/anonymize-core/src/prepared/detectors`.
 Adding a detector should mean adding module-local rule metadata and detection
 logic through `static_detector_rules!`; the registry only preserves module order.
+Prepared support resources are declared once in `support_resources.rs`; prepare
+timing, detector input checks, and snapshots derive from that declaration where
+the resource-specific data type still allows it.
 The detector registry and support-resource contracts are snapshot-tested, so
 changes to ids, stages, inputs, dependencies, and required prepared data produce
 reviewable diffs.

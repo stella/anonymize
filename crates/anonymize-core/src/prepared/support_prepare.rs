@@ -86,41 +86,35 @@ pub(super) fn prepare_support_data(
       scope.spawn(|| Ok(prepare_timed_signature_data(input.signature)));
 
     Ok(ParallelPreparedSupportData {
-      hotwords: join_support_data(
+      hotwords: join_support_resource_data(
         hotwords,
-        SupportResourceId::Hotwords.spec().config_field(),
+        SupportResourceId::Hotwords,
       )?,
-      triggers: join_support_data(
+      triggers: join_support_resource_data(
         triggers,
-        SupportResourceId::Triggers.spec().config_field(),
+        SupportResourceId::Triggers,
       )?,
-      legal_forms: join_support_data(
+      legal_forms: join_support_resource_data(
         legal_forms,
-        SupportResourceId::LegalForms.spec().config_field(),
+        SupportResourceId::LegalForms,
       )?,
-      address_seed: join_support_data(
+      address_seed: join_support_resource_data(
         address_seed,
-        SupportResourceId::AddressSeed.spec().config_field(),
+        SupportResourceId::AddressSeed,
       )?,
-      zones: join_support_data(
-        zones,
-        SupportResourceId::Zones.spec().config_field(),
-      )?,
-      address_context: join_support_data(
+      zones: join_support_resource_data(zones, SupportResourceId::Zones)?,
+      address_context: join_support_resource_data(
         address_context,
-        SupportResourceId::AddressContext.spec().config_field(),
+        SupportResourceId::AddressContext,
       )?,
-      coreference: join_support_data(
+      coreference: join_support_resource_data(
         coreference,
-        SupportResourceId::Coreference.spec().config_field(),
+        SupportResourceId::Coreference,
       )?,
-      names: join_support_data(
-        names,
-        SupportResourceId::NameCorpus.spec().config_field(),
-      )?,
-      signature: join_support_data(
+      names: join_support_resource_data(names, SupportResourceId::NameCorpus)?,
+      signature: join_support_resource_data(
         signature,
-        SupportResourceId::Signature.spec().config_field(),
+        SupportResourceId::Signature,
       )?,
     })
   })?;
@@ -141,6 +135,13 @@ fn record_parallel_support_data(
       metric.elapsed_us,
     );
   }
+}
+
+fn join_support_resource_data<T>(
+  handle: std::thread::ScopedJoinHandle<'_, Result<TimedSupportData<T>>>,
+  resource: SupportResourceId,
+) -> Result<TimedSupportData<T>> {
+  join_support_data(handle, resource.spec().config_field())
 }
 
 fn parallel_support_data_into_prepared(
@@ -175,51 +176,48 @@ struct ParallelPreparedSupportData {
 }
 
 impl ParallelPreparedSupportData {
-  const fn metrics(&self) -> [SupportPrepareMetric; SupportResourceId::COUNT] {
-    [
-      SupportPrepareMetric::from_timed(
-        SupportResourceId::Hotwords.spec(),
-        &self.hotwords,
-      ),
-      SupportPrepareMetric::from_timed(
-        SupportResourceId::Triggers.spec(),
-        &self.triggers,
-      ),
-      SupportPrepareMetric::from_timed(
-        SupportResourceId::LegalForms.spec(),
-        &self.legal_forms,
-      ),
-      SupportPrepareMetric::from_timed(
-        SupportResourceId::AddressSeed.spec(),
-        &self.address_seed,
-      ),
-      SupportPrepareMetric::from_timed(
-        SupportResourceId::Zones.spec(),
-        &self.zones,
-      ),
-      SupportPrepareMetric::from_timed(
-        SupportResourceId::AddressContext.spec(),
-        &self.address_context,
-      ),
-      SupportPrepareMetric::from_timed(
-        SupportResourceId::Coreference.spec(),
-        &self.coreference,
-      ),
-      SupportPrepareMetric::from_timed(
-        SupportResourceId::NameCorpus.spec(),
-        &self.names,
-      ),
-      SupportPrepareMetric::from_timed(
-        SupportResourceId::Signature.spec(),
-        &self.signature,
-      ),
-    ]
+  fn metrics(&self) -> impl Iterator<Item = SupportPrepareMetric> + '_ {
+    SupportResourceId::ORDER
+      .iter()
+      .copied()
+      .map(|resource| self.metric(resource))
+  }
+
+  const fn metric(&self, resource: SupportResourceId) -> SupportPrepareMetric {
+    match resource {
+      SupportResourceId::Hotwords => {
+        SupportPrepareMetric::from_timed(resource.spec(), &self.hotwords)
+      }
+      SupportResourceId::Triggers => {
+        SupportPrepareMetric::from_timed(resource.spec(), &self.triggers)
+      }
+      SupportResourceId::LegalForms => {
+        SupportPrepareMetric::from_timed(resource.spec(), &self.legal_forms)
+      }
+      SupportResourceId::AddressSeed => {
+        SupportPrepareMetric::from_timed(resource.spec(), &self.address_seed)
+      }
+      SupportResourceId::Zones => {
+        SupportPrepareMetric::from_timed(resource.spec(), &self.zones)
+      }
+      SupportResourceId::AddressContext => {
+        SupportPrepareMetric::from_timed(resource.spec(), &self.address_context)
+      }
+      SupportResourceId::Coreference => {
+        SupportPrepareMetric::from_timed(resource.spec(), &self.coreference)
+      }
+      SupportResourceId::NameCorpus => {
+        SupportPrepareMetric::from_timed(resource.spec(), &self.names)
+      }
+      SupportResourceId::Signature => {
+        SupportPrepareMetric::from_timed(resource.spec(), &self.signature)
+      }
+    }
   }
 
   fn total_count(&self) -> usize {
     self
       .metrics()
-      .into_iter()
       .map(|metric| metric.count)
       .fold(0usize, usize::saturating_add)
   }
