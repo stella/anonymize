@@ -882,9 +882,6 @@ const ensureSearchSupportData = async (
   config: PipelineConfig,
   ctx: PipelineContext,
 ): Promise<void> => {
-  if (!config.enableDenyList) {
-    return;
-  }
   await ensureDenyListData(
     ctx,
     config.dictionaries,
@@ -1082,16 +1079,10 @@ export const runPipeline = async (
     ]);
   }
 
-  // When a pre-built search is provided, buildDenyList
-  // was skipped for this context. Ensure stopwords,
-  // allow list, and person stopwords are loaded so
-  // processDenyListMatches filters correctly.
-  if (cachedSearch && config.enableDenyList) {
-    await ensureDenyListData(
-      ctx,
-      config.dictionaries,
-      config.nameCorpusLanguages,
-    );
+  // When a pre-built search is provided, the prepare
+  // step may have run on a different context.
+  if (cachedSearch) {
+    await ensureSearchSupportData(config, ctx);
   }
 
   // Classify document zones once up front

@@ -19,10 +19,11 @@ import {
   getNativeSigningClausePatterns,
   getSigningClausePatterns,
 } from "../detectors/regex";
+import { filterFalsePositives } from "../filters/false-positives";
 import { applyPipelineLanguageScope } from "../language-scope";
 import { languageConfigMatches } from "../util/language-selection";
 import type { NativeAnonymizeBinding } from "../native";
-import type { Dictionaries, PipelineConfig } from "../types";
+import type { Dictionaries, Entity, PipelineConfig } from "../types";
 import { loadTestDictionaries } from "./load-dictionaries";
 
 let dictionaries: Dictionaries;
@@ -1072,6 +1073,46 @@ describe("pipeline config semantics", () => {
 
     expect(second).toBe(first);
     expect(secondContext.search).toBe(first);
+  });
+
+  test("preparePipelineSearch replays support data on shared-cache hits", async () => {
+    const testDictionaries = { ...(await getDictionaries()) };
+    const config: PipelineConfig = {
+      ...BASE_CONFIG,
+      dictionaries: testDictionaries,
+      enableNameCorpus: true,
+      labels: ["person"],
+      language: "cs",
+    };
+    const firstContext = createPipelineContext();
+    const secondContext = createPipelineContext();
+
+    const first = await preparePipelineSearch({
+      config,
+      context: firstContext,
+    });
+    const second = await preparePipelineSearch({
+      config,
+      context: secondContext,
+    });
+    const falsePositivePerson: Entity = {
+      end: 4,
+      label: "person",
+      score: 0.95,
+      source: "ner",
+      start: 0,
+      text: "Tato",
+    };
+
+    const filtered = filterFalsePositives(
+      [falsePositivePerson],
+      secondContext,
+      "Tato smlouva",
+    );
+
+    expect(second).toBe(first);
+    expect(secondContext.personStopwords?.has("tato")).toBe(true);
+    expect(filtered).toEqual([]);
   });
 
   test("preparePipelineSearch does not share across dictionary objects", async () => {
