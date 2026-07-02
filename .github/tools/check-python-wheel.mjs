@@ -51,7 +51,15 @@ try {
       "--out",
       outDir,
     ],
-    { stdio: "inherit" },
+    {
+      stdio: "inherit",
+      env: {
+        ...process.env,
+        // Turn the build.rs native-package copy into a hard error: a wheel must
+        // never ship without the bundled native pipeline packages.
+        STELLA_ANONYMIZE_REQUIRE_NATIVE_PACKAGES: "1",
+      },
+    },
   );
 
   const wheel = readdirSync(outDir).find((file) => file.endsWith(".whl"));
