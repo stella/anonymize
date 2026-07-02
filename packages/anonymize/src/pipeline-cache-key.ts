@@ -41,6 +41,7 @@ export const pipelineConfigKey = (
             JSON.stringify({
               label: entry.label,
               pattern: entry.pattern,
+              preparedArtifactPolicy: entry.preparedArtifactPolicy ?? null,
               score: entry.score ?? DEFAULT_CUSTOM_REGEX_SCORE,
             }),
           )

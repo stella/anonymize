@@ -1238,6 +1238,44 @@ describe("pipeline config semantics", () => {
     expect(counts().rawPrepare).toBe(2);
   });
 
+  test("native pipeline package cache keys custom regex artifact policy", async () => {
+    const { binding, counts } = createCountingNativeBinding(
+      "native-cache-custom-regex-artifact-policy",
+    );
+    const context = createPipelineContext();
+    const config = {
+      ...BASE_CONFIG,
+      customRegexes: [
+        {
+          label: "matter id",
+          pattern: "MAT-[0-9]+",
+          preparedArtifactPolicy: "omit" as const,
+        },
+      ],
+      enableCountries: false,
+      enableRegex: true,
+      labels: ["matter id"],
+    };
+
+    await prepareNativePipelinePackage({ binding, config, context });
+    await prepareNativePipelinePackage({
+      binding,
+      config: {
+        ...config,
+        customRegexes: [
+          {
+            label: "matter id",
+            pattern: "MAT-[0-9]+",
+            preparedArtifactPolicy: "include",
+          },
+        ],
+      },
+      context,
+    });
+
+    expect(counts().rawPrepare).toBe(2);
+  });
+
   test("native pipeline package cache keys contextual native passes", async () => {
     const { binding, counts } = createCountingNativeBinding(
       "native-cache-contextual-passes",
