@@ -328,7 +328,7 @@ async function runWorker() {
     const importStart = Bun.nanoseconds();
     const [loadedIndexModule, configModule, dictionaryModule] =
       await Promise.all([
-        importSource(sourceRoot, "packages/anonymize/src/legacy.ts", variant),
+        importSource(sourceRoot, tsPipelineModulePath(sourceRoot), variant),
         importSource(
           sourceRoot,
           "packages/anonymize/src/__test__/contract-config.ts",
@@ -2651,6 +2651,14 @@ function importSource(sourceRoot, relativePath, variant) {
   url.searchParams.set("migrationVariant", variant);
   // eslint-disable-next-line stll/no-dynamic-import-specifier
   return import(url.href);
+}
+
+function tsPipelineModulePath(sourceRoot) {
+  const legacyPath = "packages/anonymize/src/legacy.ts";
+  if (existsSync(join(sourceRoot, legacyPath))) {
+    return legacyPath;
+  }
+  return "packages/anonymize/src/index.ts";
 }
 
 function positiveIntegerEnv(name, fallback) {
