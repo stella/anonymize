@@ -528,13 +528,15 @@ impl SearchIndex {
       }
     }
 
-    matches.sort_by(|left, right| {
-      left
-        .start()
-        .cmp(&right.start())
-        .then_with(|| left.end().cmp(&right.end()))
-        .then_with(|| left.pattern().cmp(&right.pattern()))
-    });
+    if self.slots.len() > 1 {
+      matches.sort_by(|left, right| {
+        left
+          .start()
+          .cmp(&right.start())
+          .then_with(|| left.end().cmp(&right.end()))
+          .then_with(|| left.pattern().cmp(&right.pattern()))
+      });
+    }
     Ok(SearchIndexFindResult { matches, stats })
   }
 

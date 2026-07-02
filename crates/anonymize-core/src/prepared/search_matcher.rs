@@ -84,6 +84,16 @@ pub(super) fn combine_regex_matches(
   legal_forms: Vec<SearchMatch>,
   triggers: Vec<SearchMatch>,
 ) -> Vec<SearchMatch> {
+  if legal_forms.is_empty() && triggers.is_empty() {
+    return regex;
+  }
+  if regex.is_empty() && triggers.is_empty() {
+    return legal_forms;
+  }
+  if regex.is_empty() && legal_forms.is_empty() {
+    return triggers;
+  }
+
   regex.extend(legal_forms);
   regex.extend(triggers);
   sort_matches(&mut regex);

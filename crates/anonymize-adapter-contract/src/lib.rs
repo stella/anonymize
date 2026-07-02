@@ -2692,12 +2692,19 @@ fn convert_diagnostic_offsets(
   Ok(())
 }
 
-struct Utf16OffsetMap {
-  boundaries: Vec<(u32, u32)>,
+enum Utf16OffsetMap {
+  Identity { byte_len: u32 },
+  Boundaries(Vec<(u32, u32)>),
 }
 
 impl Utf16OffsetMap {
   fn new(text: &str) -> Result<Self> {
+    if text.is_ascii() {
+      return Ok(Self::Identity {
+        byte_len: u32_from_usize(text.len())?,
+      });
+    }
+
     let mut boundaries = Vec::new();
     let mut utf16_offset = 0_u32;
     boundaries.push((0, 0));
@@ -2712,7 +2719,7 @@ impl Utf16OffsetMap {
       boundaries.push((u32_from_usize(byte_end)?, utf16_offset));
     }
 
-    Ok(Self { boundaries })
+    Ok(Self::Boundaries(boundaries))
   }
 
   fn convert(&self, offset: u32) -> Result<u32> {
@@ -2722,14 +2729,15 @@ impl Utf16OffsetMap {
   }
 
   fn try_convert(&self, offset: u32) -> Option<u32> {
-    let index = self
-      .boundaries
-      .binary_search_by_key(&offset, |(byte_offset, _)| *byte_offset)
-      .ok()?;
-    self
-      .boundaries
-      .get(index)
-      .map(|(_, utf16_offset)| *utf16_offset)
+    match self {
+      Self::Identity { byte_len } => (offset <= *byte_len).then_some(offset),
+      Self::Boundaries(boundaries) => {
+        let index = boundaries
+          .binary_search_by_key(&offset, |(byte_offset, _)| *byte_offset)
+          .ok()?;
+        boundaries.get(index).map(|(_, utf16_offset)| *utf16_offset)
+      }
+    }
   }
 }
 
@@ -3627,6 +3635,29 @@ mod tests {
     assert!(matches!(
       error,
       ContractError::InvalidBindingOffset { offset: 1 }
+    ));
+  }
+
+  #[test]
+  fn ascii_diagnostics_reject_out_of_range_offsets() {
+    let diagnostics = StaticRedactionDiagnostics {
+      events: vec![DiagnosticEvent {
+        stage: DiagnosticStage::EntityRegex,
+        kind: DiagnosticEventKind::Entity,
+        start: Some(4),
+        end: Some(5),
+        ..diagnostic_stage_event(DiagnosticStage::EntityRegex, None, None, None)
+      }],
+      ..StaticRedactionDiagnostics::default()
+    };
+
+    let error =
+      static_redaction_diagnostics_to_utf16_binding(diagnostics, "abc")
+        .unwrap_err();
+
+    assert!(matches!(
+      error,
+      ContractError::InvalidBindingOffset { offset: 4 }
     ));
   }
 
