@@ -46,9 +46,9 @@
     "@stll/oxlint-config": "^0.3.0",
     "@stll/typescript-config": "^0.3.0",
     "lefthook": "^2.1.9",
-    "oxfmt": "^0.54.0",
-    "oxlint": "^1.70.0",
+    "oxfmt": "^0.56.0",
+    "oxlint": "^1.71.0",
     "oxlint-tsgolint": "^0.23.0",
-    "turbo": "^2.9.18"
+    "turbo": "^2.10.0"
   }
 }

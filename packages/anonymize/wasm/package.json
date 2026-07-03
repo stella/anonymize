@@ -32,7 +32,7 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@napi-rs/wasm-runtime": "^1.1.4"
+    "@napi-rs/wasm-runtime": "^1.1.6"
   },
   "peerDependencies": {
     "vite": ">=5 <10"
