@@ -60,6 +60,14 @@ const dictionaryCacheKey = (
 
 const pipelineCache = new Map<string, Promise<PreparedNativePipeline>>();
 
+// One PipelineContext shared across every config in the test process. The
+// context caches config-dependent bundle artifacts (name corpus, derived
+// stopwords, prepared package), but those caches are config-keyed in the SDK,
+// so reusing a single context across different configs is safe and mirrors how
+// a production caller reuses a context. See context-cache-keying.test.ts, the
+// regression that proves an earlier config no longer poisons a later one.
+const sharedContext = createPipelineContext();
+
 const getPipeline = (
   config: PipelineConfig,
   { gazetteerEntries = [], context }: NativeDetectOptions,
@@ -73,17 +81,11 @@ const getPipeline = (
   if (cached !== undefined) {
     return cached;
   }
-  // Each distinct config gets its own PipelineContext. The context caches
-  // config-dependent bundle artifacts (name-corpus, deny-list, prepared
-  // package), and those caches are not safe to share across different configs;
-  // reusing one global context across configs would let an earlier config
-  // (e.g. name-corpus disabled) poison a later one. A caller may still pass a
-  // context to deliberately share state across related runs.
   const pipeline = createNativePipelineFromConfig({
     binding,
     config,
     gazetteerEntries,
-    context: context ?? createPipelineContext(),
+    context: context ?? sharedContext,
   });
   pipelineCache.set(key, pipeline);
   return pipeline;
