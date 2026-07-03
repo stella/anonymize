@@ -9,13 +9,10 @@ import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
 setDefaultTimeout(60_000);
 
-import {
-  createPipelineContext,
-  DEFAULT_ENTITY_LABELS,
-  runPipeline,
-} from "../legacy";
-import type { Dictionaries, Entity, PipelineConfig } from "../types";
-import type { PipelineContext } from "../context";
+import { DEFAULT_ENTITY_LABELS } from "../legacy";
+import type { NativePipelineEntity } from "../native";
+import type { Dictionaries, PipelineConfig } from "../types";
+import { detectNative } from "./native-detect";
 import { loadTestDictionaries } from "./load-dictionaries";
 
 const baseConfig: Omit<PipelineConfig, "dictionaries"> = {
@@ -41,20 +38,9 @@ const getDictionaries = (): Promise<Dictionaries> => {
   return dictionariesPromise;
 };
 
-let sharedContext: PipelineContext | undefined;
-const getContext = (): PipelineContext => {
-  sharedContext ??= createPipelineContext();
-  return sharedContext;
-};
-
-const detect = async (fullText: string): Promise<Entity[]> => {
+const detect = async (fullText: string): Promise<NativePipelineEntity[]> => {
   const dictionaries = await getDictionaries();
-  return runPipeline({
-    fullText,
-    config: { ...baseConfig, dictionaries },
-    gazetteerEntries: [],
-    context: getContext(),
-  });
+  return detectNative({ ...baseConfig, dictionaries }, fullText);
 };
 
 describe("CN RIC 18-digit national identifier", () => {

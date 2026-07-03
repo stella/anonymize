@@ -13,16 +13,14 @@ import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
 setDefaultTimeout(60_000);
 
-import {
-  createPipelineContext,
-  DEFAULT_ENTITY_LABELS,
-  runPipeline,
-} from "../legacy";
+import { createPipelineContext, type PipelineContext } from "../context";
+import { DEFAULT_ENTITY_LABELS } from "../legacy";
 import addressStopwordsData from "../data/address-stopwords.json";
 import commonWordsData from "../data/common-words-en.json";
 import { buildDenyList } from "../detectors/deny-list";
-import type { Entity, PipelineConfig } from "../types";
-import type { PipelineContext } from "../context";
+import type { NativePipelineEntity } from "../native";
+import type { PipelineConfig } from "../types";
+import { detectNative } from "./native-detect";
 import { loadTestDictionaries } from "./load-dictionaries";
 
 const baseConfig: Omit<PipelineConfig, "dictionaries"> = {
@@ -54,14 +52,9 @@ const getContext = (): PipelineContext => {
   return sharedContext;
 };
 
-const detect = async (fullText: string): Promise<Entity[]> => {
+const detect = async (fullText: string): Promise<NativePipelineEntity[]> => {
   const dictionaries = await getDictionaries();
-  return runPipeline({
-    fullText,
-    config: { ...baseConfig, dictionaries },
-    gazetteerEntries: [],
-    context: getContext(),
-  });
+  return detectNative({ ...baseConfig, dictionaries }, fullText);
 };
 
 const SINGLE_WORD_RE = /^\p{L}+$/u;

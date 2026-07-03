@@ -18,12 +18,9 @@
  */
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
-import {
-  createPipelineContext,
-  DEFAULT_ENTITY_LABELS,
-  runPipeline,
-} from "../legacy";
+import { DEFAULT_ENTITY_LABELS } from "../legacy";
 import type { Dictionaries, PipelineConfig } from "../types";
+import { detectNative } from "./native-detect";
 import { loadTestDictionaries } from "./load-dictionaries";
 
 setDefaultTimeout(60_000);
@@ -51,20 +48,9 @@ const getDictionaries = async (): Promise<Dictionaries> => {
   return cached;
 };
 
-let sharedCtx: ReturnType<typeof createPipelineContext> | undefined;
-const getCtx = () => {
-  if (!sharedCtx) sharedCtx = createPipelineContext();
-  return sharedCtx;
-};
-
 const detect = async (text: string, override?: Partial<PipelineConfig>) => {
   const dictionaries = await getDictionaries();
-  return runPipeline({
-    fullText: text,
-    config: { ...baseConfig, dictionaries, ...override },
-    gazetteerEntries: [],
-    context: getCtx(),
-  });
+  return detectNative({ ...baseConfig, dictionaries, ...override }, text);
 };
 
 describe("dotted-acronym deny-list curation", () => {

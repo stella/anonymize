@@ -1,12 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  createPipelineContext,
-  DEFAULT_ENTITY_LABELS,
-  redactText,
-  runPipeline,
-} from "../legacy";
-import type { Entity, PipelineConfig } from "../types";
+import { DEFAULT_ENTITY_LABELS } from "../legacy";
+import type { NativePipelineEntity } from "../native";
+import type { PipelineConfig } from "../types";
+import { detectNative, redactNative } from "./native-detect";
 
 const CONFIG: PipelineConfig = {
   threshold: 0.3,
@@ -23,20 +20,8 @@ const CONFIG: PipelineConfig = {
   workspaceId: "deterministic-identifier-gaps-test",
 };
 
-let sharedCtx: ReturnType<typeof createPipelineContext> | undefined;
-
-const getCtx = () => {
-  if (!sharedCtx) sharedCtx = createPipelineContext();
-  return sharedCtx;
-};
-
-const detect = async (fullText: string): Promise<Entity[]> =>
-  runPipeline({
-    fullText,
-    config: CONFIG,
-    gazetteerEntries: [],
-    context: getCtx(),
-  });
+const detect = async (fullText: string): Promise<NativePipelineEntity[]> =>
+  detectNative(CONFIG, fullText);
 
 describe("deterministic identifier gap regexes", () => {
   test("crypto wallet addresses are detected as crypto identifiers", async () => {
@@ -211,8 +196,9 @@ describe("deterministic identifier gap regexes", () => {
       "BTC wallet 1BoatSLRHtKNngkdXEeobR76b53LETtpyt.",
     ].join("\n");
 
-    const entities = await detect(fullText);
-    const { redactedText, redactionMap } = redactText(fullText, entities);
+    const {
+      redaction: { redactedText, redactionMap },
+    } = await redactNative(CONFIG, fullText);
 
     expect(redactedText).toContain(
       "ETH wallet [CRYPTO_1].\nETH wallet [CRYPTO_1].",
@@ -234,8 +220,9 @@ describe("deterministic identifier gap regexes", () => {
       "National Health Service # 401 023 2137 was repeated again.",
     ].join("\n");
 
-    const entities = await detect(fullText);
-    const { redactedText, redactionMap } = redactText(fullText, entities);
+    const {
+      redaction: { redactedText, redactionMap },
+    } = await redactNative(CONFIG, fullText);
 
     expect(redactedText).toContain(
       "[NATIONAL_IDENTIFICATION_NUMBER_1] was present.",
@@ -258,8 +245,9 @@ describe("deterministic identifier gap regexes", () => {
       "Passport No. X12345678 was listed on the form.",
     ].join("\n");
 
-    const entities = await detect(fullText);
-    const { redactedText, redactionMap } = redactText(fullText, entities);
+    const {
+      redaction: { redactedText, redactionMap },
+    } = await redactNative(CONFIG, fullText);
 
     expect(redactedText).toContain("[PASSPORT_NUMBER_1] was inspected.");
     expect(redactedText).toContain(

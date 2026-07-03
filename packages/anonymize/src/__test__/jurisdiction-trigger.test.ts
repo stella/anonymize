@@ -8,12 +8,10 @@ import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
 setDefaultTimeout(60_000);
 
-import {
-  createPipelineContext,
-  DEFAULT_ENTITY_LABELS,
-  runPipeline,
-} from "../legacy";
-import type { Entity, PipelineConfig } from "../types";
+import { DEFAULT_ENTITY_LABELS } from "../legacy";
+import type { NativePipelineEntity } from "../native";
+import type { PipelineConfig } from "../types";
+import { detectNative } from "./native-detect";
 import { loadTestDictionaries } from "./load-dictionaries";
 
 const baseConfig: Omit<PipelineConfig, "dictionaries"> = {
@@ -33,15 +31,9 @@ const baseConfig: Omit<PipelineConfig, "dictionaries"> = {
   workspaceId: "jurisdiction-trigger-test",
 };
 
-const detect = async (text: string): Promise<Entity[]> => {
+const detect = async (text: string): Promise<NativePipelineEntity[]> => {
   const dictionaries = await loadTestDictionaries();
-  const context = createPipelineContext();
-  return runPipeline({
-    fullText: text,
-    config: { ...baseConfig, dictionaries },
-    gazetteerEntries: [],
-    context,
-  });
+  return detectNative({ ...baseConfig, dictionaries }, text);
 };
 
 describe("jurisdiction trigger boundary", () => {
