@@ -1451,7 +1451,7 @@ fn decode_core_package_parts(
   config_bytes: &[u8],
   artifacts_bytes: &[u8],
 ) -> Result<(PreparedEngineConfig, u64, PreparedEngineArtifacts, u64)> {
-  std::thread::scope(|scope| {
+  stella_anonymize_core::exec::scope(|scope| {
     let config_handle =
       scope.spawn(|| decode_core_package_config(config_bytes));
     let artifacts_handle =
@@ -1489,7 +1489,7 @@ fn decode_core_package_artifacts(
 }
 
 fn join_core_package_decode<T>(
-  handle: std::thread::ScopedJoinHandle<'_, Result<T>>,
+  handle: stella_anonymize_core::exec::JoinHandle<'_, Result<T>>,
 ) -> Result<T> {
   handle.join().map_err(|_| {
     invalid_prepared_search_package("core package decode panicked")
@@ -1912,10 +1912,7 @@ impl<'a> PreparedSearchPackageParts<'a> {
           ));
         }
         let decompress_start = std::time::Instant::now();
-        let payload = zstd::bulk::decompress(payload, uncompressed_len)
-          .map_err(|error| {
-            invalid_prepared_search_package(error.to_string())
-          })?;
+        let payload = decompress_zstd_payload(payload, uncompressed_len)?;
         timings.decompress = Some(elapsed_us(decompress_start));
         let verify_start = std::time::Instant::now();
         verify_prepared_search_package_digest(digest, &payload)?;
@@ -1943,7 +1940,7 @@ fn compressed_digest_payload<'a>(
   }
 
   let (verify_result, verify_elapsed, decompressed, decompress_elapsed) =
-    std::thread::scope(|scope| {
+    stella_anonymize_core::exec::scope(|scope| {
       let verify_handle = scope.spawn(|| {
         let verify_start = std::time::Instant::now();
         let result = verify_prepared_search_package_digest(digest, payload);
@@ -1984,14 +1981,36 @@ fn decompress_package_payload(
         .map_err(|error| invalid_prepared_search_package(error.to_string()))
     }
     PackageCompression::ZstdCompressed | PackageCompression::ZstdPayload => {
-      zstd::bulk::decompress(payload, uncompressed_len)
-        .map_err(|error| invalid_prepared_search_package(error.to_string()))
+      decompress_zstd_payload(payload, uncompressed_len)
     }
   }
 }
 
+/// zstd decode path. The write path always emits lz4, so zstd support is only
+/// needed to read externally produced zstd-tagged packages. It is gated behind
+/// the default `zstd` feature so wasm targets (where the zstd C library does not
+/// cross-compile) can drop it and still load the lz4 packages this crate emits.
+#[cfg(feature = "zstd")]
+fn decompress_zstd_payload(
+  payload: &[u8],
+  uncompressed_len: usize,
+) -> Result<Vec<u8>> {
+  zstd::bulk::decompress(payload, uncompressed_len)
+    .map_err(|error| invalid_prepared_search_package(error.to_string()))
+}
+
+#[cfg(not(feature = "zstd"))]
+fn decompress_zstd_payload(
+  _payload: &[u8],
+  _uncompressed_len: usize,
+) -> Result<Vec<u8>> {
+  Err(invalid_prepared_search_package(
+    "zstd-compressed prepared packages are not supported in this build",
+  ))
+}
+
 fn join_package_decode_thread<T>(
-  handle: std::thread::ScopedJoinHandle<'_, T>,
+  handle: stella_anonymize_core::exec::JoinHandle<'_, T>,
 ) -> Result<T> {
   handle.join().map_err(|_| {
     invalid_prepared_search_package("package decode thread panicked")

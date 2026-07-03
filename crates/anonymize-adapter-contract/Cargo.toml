@@ -7,6 +7,12 @@ license.workspace = true
 publish.workspace = true
 repository.workspace = true
 
+[features]
+default = ["zstd"]
+# zstd read support. Off for wasm targets: the zstd C library does not
+# cross-compile there, and the write path emits lz4 regardless.
+zstd = ["dep:zstd"]
+
 [dependencies]
 bincode = { version = "2", features = ["serde"] }
 blake3 = "1"
@@ -17,7 +23,7 @@ lz4_flex = { version = "0.13.1", default-features = false, features = [
 ] }
 serde = { version = "1", features = ["derive"] }
 stella-anonymize-core = { path = "../anonymize-core" }
-zstd = "0.13"
+zstd = { version = "0.13", optional = true }
 
 [dev-dependencies]
 serde_json = "1"
