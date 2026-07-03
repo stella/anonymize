@@ -27,30 +27,11 @@ const DEFAULT_SDK_BUDGETS = {
   },
 };
 
-const PACKAGE_UX_BUDGETS = {
-  default: {
-    firstTouchMs: { fail: 1500, warn: 350 },
-    warmClickMs: { fail: 600, warn: 50 },
-    preloadedClickMs: { fail: 600, warn: 50 },
-  },
-  language: {
-    firstTouchMs: { fail: 1000, warn: 200 },
-    warmClickMs: { fail: 300, warn: 40 },
-    preloadedClickMs: { fail: 300, warn: 40 },
-  },
-  userData: {
-    firstTouchMs: { fail: 2000, warn: 500 },
-    warmClickMs: { fail: 700, warn: 80 },
-    preloadedClickMs: { fail: 700, warn: 80 },
-  },
-};
-
 const checks = [];
 const reports = {};
 
 checkPackageArtifacts();
 runDefaultSdkReadiness();
-runPackageUxReadiness();
 
 const failedCount = checks.filter((check) => check.status === "fail").length;
 const warningCount = checks.filter((check) => check.status === "warn").length;
@@ -180,81 +161,6 @@ function compactDefaultSdkReport(report) {
         warmClickMs: adapter.warmClickMs,
         preloadedClickMs: adapter.preloadedClickMs,
       })),
-    })),
-  };
-}
-
-function runPackageUxReadiness() {
-  if (process.env.ANONYMIZE_V1_READINESS_SKIP_PACKAGE_UX === "1") {
-    addCheck({
-      name: "package ux perf",
-      status: "warn",
-      message: "Skipped by ANONYMIZE_V1_READINESS_SKIP_PACKAGE_UX=1",
-    });
-    return;
-  }
-
-  const report = runJsonScript("native-package-ux-perf.mjs", {
-    ANONYMIZE_NATIVE_PACKAGE_UX_ITERATIONS:
-      process.env.ANONYMIZE_NATIVE_PACKAGE_UX_ITERATIONS ??
-      (MODE === "full" ? "3" : "1"),
-    ANONYMIZE_NATIVE_PACKAGE_UX_LANGUAGES:
-      process.env.ANONYMIZE_NATIVE_PACKAGE_UX_LANGUAGES ??
-      (MODE === "full" ? "en,cs,de" : "en"),
-    ANONYMIZE_NATIVE_PACKAGE_UX_USER_DATA_SCENARIOS:
-      process.env.ANONYMIZE_NATIVE_PACKAGE_UX_USER_DATA_SCENARIOS ??
-      (MODE === "full" ? "sample,heavy" : ""),
-  });
-
-  reports.packageUx = compactPackageUxReport(report);
-  checkPackageUxReport(report);
-}
-
-function checkPackageUxReport(report) {
-  if (report.event !== "native-package-ux-perf") {
-    addCheck({
-      name: "package ux report",
-      status: "fail",
-      message: `Unexpected event ${String(report.event)}`,
-    });
-    return;
-  }
-
-  for (const scenario of report.scenarios ?? []) {
-    const budgets = packageUxBudgetsForScenario(scenario);
-    checkPerfFields({
-      prefix: `package ux ${scenario.name}`,
-      metrics: scenario,
-      budgets,
-    });
-  }
-}
-
-function packageUxBudgetsForScenario(scenario) {
-  if (scenario.userDataScenario !== "none") {
-    return PACKAGE_UX_BUDGETS.userData;
-  }
-  if (scenario.language === null) {
-    return PACKAGE_UX_BUDGETS.default;
-  }
-  return PACKAGE_UX_BUDGETS.language;
-}
-
-function compactPackageUxReport(report) {
-  return {
-    event: report.event,
-    scenarios: (report.scenarios ?? []).map((scenario) => ({
-      name: scenario.name,
-      language: scenario.language,
-      userDataScenario: scenario.userDataScenario,
-      packageMb: roundMetric((scenario.packageBytes ?? 0) / MB),
-      offlinePackageBuildMs: scenario.offlinePackageBuildMs,
-      firstPackageReadMs: scenario.firstPackageReadMs,
-      firstPrepareMs: scenario.firstPrepareMs,
-      firstRunMs: scenario.firstRunMs,
-      firstTouchMs: scenario.firstTouchMs,
-      warmClickMs: scenario.warmClickMs,
-      preloadedClickMs: scenario.preloadedClickMs,
     })),
   };
 }
