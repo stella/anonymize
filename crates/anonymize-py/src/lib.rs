@@ -7,9 +7,10 @@ use stella_anonymize_adapter_contract::{
   BindingOperatorConfig, BindingOperatorEntry, BindingPipelineEntity,
   BindingPreparedSearchConfig, BindingRedactionEntry, BindingRedactionResult,
   BindingStaticRedactionResult, ContractError,
-  PreparedSearchPackageDecodeTimings, diagnostic_events_to_utf16_binding,
-  diagnostic_stage_event, operator_config_from_binding,
-  prepared_search_config_from_binding, prepared_search_core_package_to_bytes,
+  PreparedSearchPackageDecodeTimings, assemble_static_search_config,
+  diagnostic_events_to_utf16_binding, diagnostic_stage_event,
+  operator_config_from_binding, prepared_search_config_from_binding,
+  prepared_search_core_package_to_bytes,
   prepared_search_core_package_to_compressed_bytes,
   prepared_search_core_package_view_from_bytes_with_timings,
   prepared_search_core_package_view_trusted_from_bytes_with_timings,
@@ -25,6 +26,7 @@ use stella_anonymize_core::{
   OperatorConfig, PreparedEngine as CorePreparedEngine,
   PreparedEngineArtifactsView, StaticRedactionDiagnostics,
   StaticRedactionResult,
+  assemble::{AssembleError, Dictionaries, GazetteerEntry, PipelineConfig},
 };
 
 #[pyclass(name = "RedactionEntry", get_all, skip_from_py_object)]
@@ -570,6 +572,106 @@ fn prepare_static_search_package_bytes_with<'py>(
   Ok(PyBytes::new(py, &bytes))
 }
 
+/// Assembles a prepared static-search config from a pipeline config plus
+/// out-of-band dictionaries / gazetteer JSON, returning the assembled config as
+/// JSON. Mirrors the napi `assembleStaticSearchConfigJson`.
+#[pyfunction]
+fn assemble_static_search_config_json(
+  pipeline_config_json: &str,
+  dictionaries_json: Option<&str>,
+  gazetteer_json: Option<&str>,
+) -> PyResult<String> {
+  let config = assemble_binding_config(
+    pipeline_config_json,
+    dictionaries_json,
+    gazetteer_json,
+  )?;
+  serde_json::to_string(&config).map_err(|error| to_py_serde_error(&error))
+}
+
+/// Assembles the config and chains it through the prepare/package path,
+/// returning ready-to-load core package bytes. Mirrors the napi
+/// `assembleStaticSearchPackageBytes`.
+#[pyfunction]
+fn assemble_static_search_package_bytes<'py>(
+  py: Python<'py>,
+  pipeline_config_json: &str,
+  dictionaries_json: Option<&str>,
+  gazetteer_json: Option<&str>,
+) -> PyResult<Bound<'py, PyBytes>> {
+  assemble_static_search_package_bytes_with(
+    py,
+    pipeline_config_json,
+    dictionaries_json,
+    gazetteer_json,
+    false,
+  )
+}
+
+/// Compressed counterpart of [`assemble_static_search_package_bytes`]. Mirrors
+/// the napi `assembleStaticSearchCompressedPackageBytes`.
+#[pyfunction]
+fn assemble_static_search_compressed_package_bytes<'py>(
+  py: Python<'py>,
+  pipeline_config_json: &str,
+  dictionaries_json: Option<&str>,
+  gazetteer_json: Option<&str>,
+) -> PyResult<Bound<'py, PyBytes>> {
+  assemble_static_search_package_bytes_with(
+    py,
+    pipeline_config_json,
+    dictionaries_json,
+    gazetteer_json,
+    true,
+  )
+}
+
+fn assemble_static_search_package_bytes_with<'py>(
+  py: Python<'py>,
+  pipeline_config_json: &str,
+  dictionaries_json: Option<&str>,
+  gazetteer_json: Option<&str>,
+  compressed: bool,
+) -> PyResult<Bound<'py, PyBytes>> {
+  let binding_config = assemble_binding_config(
+    pipeline_config_json,
+    dictionaries_json,
+    gazetteer_json,
+  )?;
+  let core_config = prepared_search_config_from_binding(binding_config)
+    .map_err(|error| to_py_contract_error(&error))?;
+  let artifacts = CorePreparedEngine::prepare_artifacts(core_config.clone())
+    .and_then(|artifacts| artifacts.to_bytes())
+    .map_err(|error| to_py_core_error(&error))?;
+  let package = if compressed {
+    prepared_search_core_package_to_compressed_bytes(&core_config, &artifacts)
+  } else {
+    prepared_search_core_package_to_bytes(&core_config, &artifacts)
+  };
+  let bytes = package.map_err(|error| to_py_contract_error(&error))?;
+  Ok(PyBytes::new(py, &bytes))
+}
+
+fn assemble_binding_config(
+  pipeline_config_json: &str,
+  dictionaries_json: Option<&str>,
+  gazetteer_json: Option<&str>,
+) -> PyResult<BindingPreparedSearchConfig> {
+  let config = serde_json::from_str::<PipelineConfig>(pipeline_config_json)
+    .map_err(|error| to_py_serde_error(&error))?;
+  let dictionaries = dictionaries_json
+    .map(serde_json::from_str::<Dictionaries>)
+    .transpose()
+    .map_err(|error| to_py_serde_error(&error))?;
+  let gazetteer = gazetteer_json
+    .map(serde_json::from_str::<Vec<GazetteerEntry>>)
+    .transpose()
+    .map_err(|error| to_py_serde_error(&error))?
+    .unwrap_or_default();
+  assemble_static_search_config(&config, dictionaries.as_ref(), &gazetteer)
+    .map_err(|error| to_py_assemble_error(&error))
+}
+
 #[pyfunction]
 fn redact_static_entities_diagnostics_json(
   config_json: &str,
@@ -768,6 +870,10 @@ fn to_py_serde_error(error: &serde_json::Error) -> PyErr {
   PyValueError::new_err(error.to_string())
 }
 
+fn to_py_assemble_error(error: &AssembleError) -> PyErr {
+  PyValueError::new_err(error.to_string())
+}
+
 #[pymodule(gil_used = false)]
 fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
   module.add_class::<PyPreparedSearch>()?;
@@ -792,6 +898,18 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
   )?)?;
   module.add_function(wrap_pyfunction!(
     prepare_static_search_compressed_package_bytes,
+    module
+  )?)?;
+  module.add_function(wrap_pyfunction!(
+    assemble_static_search_config_json,
+    module
+  )?)?;
+  module.add_function(wrap_pyfunction!(
+    assemble_static_search_package_bytes,
+    module
+  )?)?;
+  module.add_function(wrap_pyfunction!(
+    assemble_static_search_compressed_package_bytes,
     module
   )?)?;
   module.add_function(wrap_pyfunction!(
