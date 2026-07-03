@@ -25,12 +25,13 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 
 import {
   loadNativeAnonymizeBinding,
@@ -155,6 +156,18 @@ const ensureDefaultPackages = (): void => {
 };
 
 let pythonModulePath: string | null = null;
+let pythonModuleTempDir: string | null = null;
+
+afterAll(() => {
+  if (pythonModuleTempDir !== null) {
+    try {
+      rmSync(pythonModuleTempDir, { force: true, recursive: true });
+    } catch {
+      // Best-effort cleanup: a leftover temp dir must not fail the suite.
+    }
+    pythonModuleTempDir = null;
+  }
+});
 
 const getPythonModule = (): string => {
   if (pythonModulePath !== null) {
@@ -164,6 +177,7 @@ const getPythonModule = (): string => {
   runCommand("cargo", ["build", "-p", "stella-anonymize-py", "--locked"]);
 
   const tempDir = mkdtempSync(join(tmpdir(), "stella-anonymize-py-parity-"));
+  pythonModuleTempDir = tempDir;
   const packageDir = join(tempDir, "stella_anonymize");
   mkdirSync(packageDir);
   const modulePath = join(packageDir, "_native.so");
@@ -205,12 +219,16 @@ const runPythonParity = (cases: ParityCase[]): PythonParityOutput => {
       cases: cases.map(({ text, language }) => ({ text, language })),
     }),
   );
-  return JSON.parse(
-    runCommand("python3", ["-c", PYTHON_PARITY_SCRIPT], {
-      STELLA_ANONYMIZE_PAYLOAD: payloadPath,
-      STELLA_ANONYMIZE_PY_MODULE: modulePath,
-    }),
-  ) as PythonParityOutput;
+  try {
+    return JSON.parse(
+      runCommand("python3", ["-c", PYTHON_PARITY_SCRIPT], {
+        STELLA_ANONYMIZE_PAYLOAD: payloadPath,
+        STELLA_ANONYMIZE_PY_MODULE: modulePath,
+      }),
+    ) as PythonParityOutput;
+  } finally {
+    rmSync(payloadPath, { force: true });
+  }
 };
 
 const nativeDefaultRedaction = (
