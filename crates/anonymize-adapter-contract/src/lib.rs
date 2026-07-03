@@ -23,6 +23,11 @@ use stella_anonymize_core::{
   ZonePatternData, ZoneSigningClauseData,
 };
 
+mod assemble;
+pub use assemble::{
+  FIELDS_IMPLEMENTED, FIELDS_PENDING, assemble_static_search_config,
+};
+
 pub type Result<T> = std::result::Result<T, ContractError>;
 
 const PREPARED_SEARCH_PACKAGE_HEADER: [u8; 8] = *b"ANONPKG1";
