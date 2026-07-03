@@ -560,6 +560,7 @@ fn city_entries(
 
 struct DenyBuildContext<'a> {
   config: &'a PipelineConfig,
+  dictionaries: Option<&'a Dictionaries>,
   use_scoped_name_corpus: bool,
   deny_list_countries: Option<&'a [String]>,
   corpus: &'a NameCorpus,
@@ -585,6 +586,7 @@ pub(super) fn build_deny_list(
   let month_names = load_month_names()?;
   let dctx = DenyBuildContext {
     config: ctx.config,
+    dictionaries: ctx.dictionaries,
     use_scoped_name_corpus: ctx.name_corpus_languages.is_some(),
     deny_list_countries: ctx.deny_list_countries,
     corpus: ctx.corpus,
@@ -592,7 +594,7 @@ pub(super) fn build_deny_list(
     month_names: &month_names,
   };
 
-  let dictionaries = dctx.config.dictionaries.as_ref();
+  let dictionaries = dctx.dictionaries;
   let has_deny_list = dictionaries
     .is_some_and(|d| d.deny_list.is_some() && d.deny_list_meta.is_some());
   let has_custom_deny_list = dctx
@@ -659,7 +661,7 @@ fn apply_dictionary_entries(
   allowed_countries: Option<&[String]>,
   exclude_categories: &HashSet<String>,
 ) {
-  let dictionaries = dctx.config.dictionaries.as_ref();
+  let dictionaries = dctx.dictionaries;
   let (Some(deny_list), Some(meta_data)) = (
     dictionaries.and_then(|d| d.deny_list.as_ref()),
     dictionaries.and_then(|d| d.deny_list_meta.as_ref()),
@@ -697,6 +699,7 @@ fn apply_dictionary_entries(
 /// Arguments for [`build_deny_list`].
 pub(super) struct DenyBuildContextArgs<'a> {
   pub config: &'a PipelineConfig,
+  pub dictionaries: Option<&'a Dictionaries>,
   pub name_corpus_languages: Option<&'a [String]>,
   pub deny_list_countries: Option<&'a [String]>,
   pub corpus: &'a NameCorpus,

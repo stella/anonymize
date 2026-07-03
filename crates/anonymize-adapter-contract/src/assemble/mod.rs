@@ -96,6 +96,9 @@ pub const FIELDS_PENDING: &[&str] = &[];
 /// allowed-label set.
 struct AssembleContext<'a> {
   config: &'a PipelineConfig,
+  /// Effective dictionaries: the separately supplied bundle wins over
+  /// `config.dictionaries` (JSON callers pass large bundles out of band).
+  dictionaries: Option<&'a Dictionaries>,
   /// `configuredContentLanguages(config)`: `None` means "all languages".
   content_languages: Option<Vec<String>>,
   /// `createAllowedLabelSet(searchLabels)`: `None` means "no filter".
@@ -134,7 +137,7 @@ impl AssembleContext<'_> {
 /// field fails to parse.
 pub fn assemble_static_search_config(
   config: &PipelineConfig,
-  _dictionaries: Option<&Dictionaries>,
+  dictionaries: Option<&Dictionaries>,
   gazetteer: &[GazetteerEntry],
 ) -> Result<BindingPreparedSearchConfig, AssembleError> {
   // `enableHotwordRules === true` loads the rule set; it feeds both the
@@ -151,6 +154,7 @@ pub fn assemble_static_search_config(
   };
   let ctx = AssembleContext {
     config,
+    dictionaries: dictionaries.or(config.dictionaries.as_ref()),
     content_languages: language::configured_content_languages(config),
     allowed_labels: allowed_label_set(&search_labels),
   };
@@ -257,7 +261,7 @@ fn build_deny_list_unit(
   let config = ctx.config;
   let scoped = language::apply_pipeline_language_scope(config)?;
   let corpus = names::build_name_corpus(
-    config.dictionaries.as_ref(),
+    ctx.dictionaries,
     scoped.name_corpus_languages.as_deref(),
   )?;
   let filters = deny_list::build_deny_list_filter_data(&corpus)?;
@@ -265,6 +269,7 @@ fn build_deny_list_unit(
   let deny_intermediate = if config.enable_deny_list {
     deny_list::build_deny_list(&deny_list::DenyBuildContextArgs {
       config,
+      dictionaries: ctx.dictionaries,
       name_corpus_languages: scoped.name_corpus_languages.as_deref(),
       deny_list_countries: scoped.deny_list_countries.as_deref(),
       corpus: &corpus,
