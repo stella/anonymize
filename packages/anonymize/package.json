@@ -52,7 +52,6 @@
     "test": "bun test --preload ./src/__test__/setup.ts --timeout 15000",
     "test:fast": "bun run test src/__test__/*.test.ts",
     "test:native-fixtures": "ANONYMIZE_TEST_SLOW_NATIVE_FIXTURE_PARITY=1 bun test --preload ./src/__test__/setup.ts --timeout 600000 src/__test__/native-adapter-parity.test.ts",
-    "perf:contracts": "bun scripts/contract-perf.mjs",
     "perf:migration-fixtures": "bun scripts/migration-fixture-perf.mjs",
     "perf:native-adapters": "bun scripts/native-adapter-perf.mjs",
     "perf:native-default": "bun scripts/native-default-sdk-perf.mjs",
