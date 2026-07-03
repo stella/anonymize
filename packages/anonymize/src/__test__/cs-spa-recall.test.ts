@@ -213,7 +213,7 @@ describe("Czech commercial-register reference (oddíl X, vložka NNN)", () => {
   // phrase. The same inputs without a trailing period match correctly (see the
   // passing cases above). The sensitive value is still redacted, but the span
   // over-captures punctuation and misses the documented full-phrase capture.
-  test.skip("lowercase 'oddíl' (mid-sentence usage)", async () => {
+  test("lowercase 'oddíl' (mid-sentence usage)", async () => {
     const entities = await detect(
       "vedená v obchodním rejstříku, oddíl C, vložka 12345.",
     );

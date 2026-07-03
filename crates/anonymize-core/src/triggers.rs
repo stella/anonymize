@@ -619,11 +619,31 @@ fn extract_n_words(
   }
   let first = words.first().copied()?;
   let last = words.last().copied()?;
+  // A sentence-final id keeps document punctuation glued to the last token
+  // ("vložka 12345." tokenizes as "12345."). Trim it so the captured span is
+  // the value only, mirroring the company-id extractor. The trailing period
+  // also let the fragment poke one byte past the commercial-register regex end,
+  // which shadowed the fuller phrase during regex/trigger merge.
+  let end = trim_trailing_value_punctuation(cell, last.start, last.end);
   byte_value(
-    cell.get(first.start..last.end)?,
+    cell.get(first.start..end)?,
     value_start_byte.saturating_add(first.start),
-    last.end.saturating_sub(first.start),
+    end.saturating_sub(first.start),
   )
+}
+
+fn trim_trailing_value_punctuation(cell: &str, floor: usize, mut end: usize) -> usize {
+  while end > floor {
+    let head = cell.get(..end).unwrap_or_default();
+    let Some(ch) = head.chars().next_back() else {
+      break;
+    };
+    if !matches!(ch, '.' | ',' | ';' | ':' | '!' | '?') {
+      break;
+    }
+    end = end.saturating_sub(ch.len_utf8());
+  }
+  end
 }
 
 #[derive(Clone, Copy)]
@@ -1798,5 +1818,28 @@ mod tests {
 
     assert_eq!(entities.len(), 1);
     assert_eq!(entities[0].text, "Krajským soudem v Ústí nad Labem");
+  }
+
+  #[test]
+  fn n_words_trims_sentence_final_punctuation() {
+    // "vložka 12345." tokenizes the value as "12345." — the trailing period
+    // is document punctuation, not part of the registration id.
+    let text = "vložka 12345.";
+    let trigger_len = "vložka".len();
+    let value =
+      extract_n_words(&text[trigger_len..], trigger_len, 1, "registration number", &[])
+        .unwrap();
+    assert_eq!(&text[value.start_byte..value.end_byte], "12345");
+  }
+
+  #[test]
+  fn n_words_keeps_interior_punctuation() {
+    // Only trailing punctuation is trimmed; interior separators stay.
+    let text = "vložka 12/345";
+    let trigger_len = "vložka".len();
+    let value =
+      extract_n_words(&text[trigger_len..], trigger_len, 1, "registration number", &[])
+        .unwrap();
+    assert_eq!(&text[value.start_byte..value.end_byte], "12/345");
   }
 }
