@@ -28,27 +28,28 @@ fn utf16_len(value: &str) -> usize {
 /// for the value, so a term reused by a later entry keeps its original position
 /// while its label is overwritten.
 fn build_search_terms(entries: &[GazetteerEntry]) -> Vec<(String, String)> {
-  let mut order: Vec<String> = Vec::new();
-  let mut labels: HashMap<String, String> = HashMap::new();
-  let mut set_term = |term: &str, label: &str, order: &mut Vec<String>| {
-    if !labels.contains_key(term) {
-      order.push(term.to_string());
-    }
-    labels.insert(term.to_string(), label.to_string());
-  };
+  // `position[term]` is the index into `terms` for a first-seen term; a later
+  // entry reusing the term overwrites its label in place (last-write-wins) but
+  // keeps the original insertion position, matching JS `Map` semantics.
+  let mut terms: Vec<(String, String)> = Vec::new();
+  let mut position: HashMap<String, usize> = HashMap::new();
   for entry in entries {
-    set_term(&entry.canonical, &entry.label, &mut order);
+    let mut set_term = |term: &str| {
+      if let Some(&index) = position.get(term) {
+        if let Some(slot) = terms.get_mut(index) {
+          slot.1.clone_from(&entry.label);
+        }
+      } else {
+        position.insert(term.to_string(), terms.len());
+        terms.push((term.to_string(), entry.label.clone()));
+      }
+    };
+    set_term(&entry.canonical);
     for variant in &entry.variants {
-      set_term(variant, &entry.label, &mut order);
+      set_term(variant);
     }
   }
-  order
-    .into_iter()
-    .map(|term| {
-      let label = labels.get(&term).cloned().unwrap_or_default();
-      (term, label)
-    })
-    .collect()
+  terms
 }
 
 /// Mirrors `buildGazetteerPatterns` + `toNativeGazetteerData`: exact labels for
