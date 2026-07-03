@@ -36,7 +36,9 @@ const pipeline = await loadPipeline(
 ```
 
 With Vite, register the helper plugin so the wasm binary, WASI worker, and
-`.stlanonpkg` assets survive dependency pre-bundling:
+`.stlanonpkg` assets survive both dependency pre-bundling (dev) and a
+production `vite build` (the plugin emits the `native/` assets and rewrites the
+runtime asset base to point at them):
 
 ```ts
 import stllAnonymizeWasm from "@stll/anonymize-wasm/vite";
