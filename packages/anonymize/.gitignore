@@ -1,2 +1,5 @@
 wasm/dist/
 *.node
+
+# napi-rs WebAssembly build output (wasm + generated JS glue).
+native-wasm-dist/

@@ -36,6 +36,11 @@
     "sync-ai": "bash scripts/sync-ai-skills.sh",
     "sync-ai:check": "bash scripts/sync-ai-skills.sh --check"
   },
+  "overrides": {
+    "@emnapi/core": "1.11.1",
+    "@emnapi/runtime": "1.11.1",
+    "emnapi": "1.11.1"
+  },
   "devDependencies": {
     "@stll/anonymize-data": "workspace:*",
     "@stll/oxlint-config": "^0.3.0",
