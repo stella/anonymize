@@ -17,7 +17,10 @@ const syncScript = join(
   "tools",
   "sync-runtime-version.mjs",
 );
-const workspace = mkdtempSync(join(tmpdir(), "stella-version-sync-"));
+let workspace;
+// Windows runners check out with CRLF line endings; the sync script must
+// handle both, so the whole scenario runs once per line ending.
+let lineEnding = "\n";
 const version = "9.8.7";
 const staleVersion = "9.8.6";
 
@@ -40,38 +43,43 @@ const sidecars = [
   "@stll/anonymize-win32-x64-msvc",
 ];
 
-try {
-  writeFixture();
+for (lineEnding of ["\n", "\r\n"]) {
+  workspace = mkdtempSync(join(tmpdir(), "stella-version-sync-"));
+  try {
+    writeFixture();
 
-  const staleCheck = spawnSync("node", [syncScript, "--check"], {
-    cwd: workspace,
-    encoding: "utf8",
-  });
-  if (staleCheck.status === 0 || !staleCheck.stderr.includes(sidecars[0])) {
-    throw new Error("stale sidecar versions were not reported");
-  }
-
-  execFileSync("node", [syncScript], { cwd: workspace, stdio: "pipe" });
-  execFileSync("node", [syncScript, "--check"], {
-    cwd: workspace,
-    stdio: "pipe",
-  });
-
-  const rootPackage = JSON.parse(
-    readFileSync(join(workspace, "packages/anonymize/package.json"), "utf8"),
-  );
-  for (const sidecar of sidecars) {
-    if (rootPackage.optionalDependencies?.[sidecar] !== version) {
-      throw new Error(`package.json did not sync ${sidecar}`);
+    const staleCheck = spawnSync("node", [syncScript, "--check"], {
+      cwd: workspace,
+      encoding: "utf8",
+    });
+    if (staleCheck.status === 0 || !staleCheck.stderr.includes(sidecars[0])) {
+      throw new Error(
+        `stale sidecar versions were not reported (${JSON.stringify(lineEnding)})`,
+      );
     }
-  }
 
-  const lockText = readFileSync(join(workspace, "bun.lock"), "utf8");
-  if (lockText.includes(staleVersion)) {
-    throw new Error("bun.lock still contains stale sidecar versions");
+    execFileSync("node", [syncScript], { cwd: workspace, stdio: "pipe" });
+    execFileSync("node", [syncScript, "--check"], {
+      cwd: workspace,
+      stdio: "pipe",
+    });
+
+    const rootPackage = JSON.parse(
+      readFileSync(join(workspace, "packages/anonymize/package.json"), "utf8"),
+    );
+    for (const sidecar of sidecars) {
+      if (rootPackage.optionalDependencies?.[sidecar] !== version) {
+        throw new Error(`package.json did not sync ${sidecar}`);
+      }
+    }
+
+    const lockText = readFileSync(join(workspace, "bun.lock"), "utf8");
+    if (lockText.includes(staleVersion)) {
+      throw new Error("bun.lock still contains stale sidecar versions");
+    }
+  } finally {
+    rmSync(workspace, { force: true, recursive: true });
   }
-} finally {
-  rmSync(workspace, { force: true, recursive: true });
 }
 
 function writeFixture() {
@@ -176,5 +184,5 @@ function bunLockFixture() {
 function writeText(file, text) {
   const path = join(workspace, file);
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, text);
+  writeFileSync(path, text.replaceAll("\n", lineEnding));
 }

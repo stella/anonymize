@@ -52,8 +52,13 @@ const SYNCED_DEPENDENCY_RANGE_RE = /("@stll\/anonymize": "\^)([^"]+)(")/g;
 
 const escapeRegExp = (value) => value.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+// Windows runners check out with CRLF line endings; the version regexes below
+// anchor on "\n", so normalize before matching (files are written back LF-only).
+const readTextFile = (file) =>
+  readFileSync(file, "utf8").replaceAll("\r\n", "\n");
+
 const syncTextVersion = ({ file, label, re }) => {
-  const text = readFileSync(file, "utf8");
+  const text = readTextFile(file);
   const match = text.match(re);
   if (!match) {
     console.error(`${file} has no ${label} version entry`);
@@ -144,7 +149,7 @@ syncTextVersion({
 });
 
 for (const file of PYPROJECT_FILES) {
-  const text = readFileSync(file, "utf8");
+  const text = readTextFile(file);
   const explicitVersion = text.match(/^version\s*=\s*"([^"]+)"/m);
   if (explicitVersion) {
     syncTextVersion({
@@ -165,7 +170,7 @@ for (const file of PYPROJECT_FILES) {
   hasMismatch = true;
 }
 
-const lockText = readFileSync(LOCK_FILE, "utf8");
+const lockText = readTextFile(LOCK_FILE);
 let lockChanged = false;
 let syncedLockText = lockText.replaceAll(
   SYNCED_DEPENDENCY_RANGE_RE,
@@ -230,7 +235,7 @@ if (lockChanged) {
   );
 }
 
-const cargoLockText = readFileSync(CARGO_LOCK_FILE, "utf8");
+const cargoLockText = readTextFile(CARGO_LOCK_FILE);
 let cargoLockChanged = false;
 let syncedCargoLockText = cargoLockText;
 
