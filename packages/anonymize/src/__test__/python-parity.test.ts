@@ -1,0 +1,261 @@
+/**
+ * Python-binding parity.
+ *
+ * Drives the Rust `crates/anonymize-py` extension in a subprocess and asserts
+ * its default-package redaction output is byte-for-byte identical to the
+ * in-process native binding output on the committed contract fixtures. Both
+ * sides load the same prepared default packages and call into the same Rust
+ * core, so any divergence is a binding-layer bug (offset math, JSON shape,
+ * version drift), not a detector difference.
+ *
+ * The comparison target is the NATIVE binding, not the legacy TypeScript
+ * pipeline: the native SDK is the 2.0 reference implementation.
+ *
+ * Building the Python extension (a debug `cargo build`) is expensive, so the
+ * suite is gated behind ANONYMIZE_TEST_SLOW_NATIVE_FIXTURE_PARITY=1 and skips
+ * cleanly otherwise (matching the slow-fixture-parity gating in
+ * native-adapter-parity.test.ts).
+ */
+import { spawnSync } from "node:child_process";
+import {
+  copyFileSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { describe, expect, setDefaultTimeout, test } from "bun:test";
+
+import {
+  loadNativeAnonymizeBinding,
+  redact_default_text_json,
+} from "../native-node";
+
+setDefaultTimeout(600_000);
+
+const RUN_PYTHON_PARITY =
+  process.env["ANONYMIZE_TEST_SLOW_NATIVE_FIXTURE_PARITY"] === "1";
+const pythonParityTest = RUN_PYTHON_PARITY ? test : test.skip;
+
+const ROOT_DIR = join(import.meta.dir, "..", "..", "..", "..");
+const TARGET_DIR = join(ROOT_DIR, "target", "debug");
+const PACKAGE_DIR = join(ROOT_DIR, "packages", "anonymize");
+const PYTHON_SOURCE_DIR = join(ROOT_DIR, "crates", "anonymize-py", "python");
+const CONTRACT_FIXTURES_DIR = join(
+  PACKAGE_DIR,
+  "src",
+  "__test__",
+  "fixtures",
+  "contracts",
+);
+const CONTRACT_FIXTURE_LANGUAGES = ["cs", "de", "en"] as const;
+
+type FixtureLanguage = (typeof CONTRACT_FIXTURE_LANGUAGES)[number];
+
+type ParityCase = {
+  language: FixtureLanguage;
+  name: string;
+  text: string;
+};
+
+type PythonParityOutput = {
+  results: unknown[];
+  available_languages: string[];
+  version: string;
+  module_version: string;
+};
+
+const PYTHON_PARITY_SCRIPT = `
+import json
+import os
+import pathlib
+import sys
+
+module_root = pathlib.Path(os.environ["STELLA_ANONYMIZE_PY_MODULE"]).parent.parent
+payload = json.loads(pathlib.Path(os.environ["STELLA_ANONYMIZE_PAYLOAD"]).read_text())
+sys.path.insert(0, str(module_root))
+
+import stella_anonymize as anonymize
+
+print(
+    json.dumps(
+        {
+            "results": [
+                json.loads(
+                    anonymize.redact_default_text_json(
+                        case["text"], None, language=case["language"]
+                    )
+                )
+                for case in payload["cases"]
+            ],
+            "available_languages": list(
+                anonymize.available_default_native_pipeline_languages()
+            ),
+            "version": anonymize.native_package_version(),
+            "module_version": anonymize.__version__,
+        }
+    )
+)
+`;
+
+const runCommand = (
+  command: string,
+  args: string[],
+  env: Record<string, string> = {},
+): string => {
+  const result = spawnSync(command, args, {
+    cwd: ROOT_DIR,
+    encoding: "utf8",
+    env: { ...process.env, ...env },
+  });
+  if (result.status === 0) {
+    return result.stdout;
+  }
+  throw new Error(
+    [
+      `${command} ${args.join(" ")} failed with status ${result.status}`,
+      result.stdout,
+      result.stderr,
+    ]
+      .filter(Boolean)
+      .join("\n"),
+  );
+};
+
+const nativeLibraryPath = (name: string): string => {
+  if (process.platform === "darwin") {
+    return join(TARGET_DIR, `lib${name}.dylib`);
+  }
+  if (process.platform === "linux") {
+    return join(TARGET_DIR, `lib${name}.so`);
+  }
+  return join(TARGET_DIR, `${name}.dll`);
+};
+
+const ensureDefaultPackages = (): void => {
+  const required = [
+    "native-pipeline.stlanonpkg",
+    ...CONTRACT_FIXTURE_LANGUAGES.map(
+      (language) => `native-pipeline.${language}.stlanonpkg`,
+    ),
+  ];
+  if (required.every((file) => existsSync(join(PACKAGE_DIR, file)))) {
+    return;
+  }
+  runCommand("bun", ["run", "--cwd", PACKAGE_DIR, "build"], {
+    STELLA_ANONYMIZE_NATIVE_PACKAGE_LANGUAGES:
+      CONTRACT_FIXTURE_LANGUAGES.join(","),
+  });
+};
+
+let pythonModulePath: string | null = null;
+
+const getPythonModule = (): string => {
+  if (pythonModulePath !== null) {
+    return pythonModulePath;
+  }
+  ensureDefaultPackages();
+  runCommand("cargo", ["build", "-p", "stella-anonymize-py", "--locked"]);
+
+  const tempDir = mkdtempSync(join(tmpdir(), "stella-anonymize-py-parity-"));
+  const packageDir = join(tempDir, "stella_anonymize");
+  mkdirSync(packageDir);
+  const modulePath = join(packageDir, "_native.so");
+  copyFileSync(nativeLibraryPath("stella_anonymize_core_py"), modulePath);
+  copyFileSync(
+    join(PYTHON_SOURCE_DIR, "stella_anonymize", "__init__.py"),
+    join(packageDir, "__init__.py"),
+  );
+  cpSync(
+    join(PYTHON_SOURCE_DIR, "stella_anonymize", "native_packages"),
+    join(packageDir, "native_packages"),
+    { recursive: true },
+  );
+  pythonModulePath = modulePath;
+  return pythonModulePath;
+};
+
+const loadContractFixtureCases = (): ParityCase[] =>
+  CONTRACT_FIXTURE_LANGUAGES.flatMap((language) =>
+    readdirSync(join(CONTRACT_FIXTURES_DIR, language))
+      .filter((name) => name.endsWith(".txt"))
+      .toSorted()
+      .map((name) => ({
+        language,
+        name,
+        text: readFileSync(join(CONTRACT_FIXTURES_DIR, language, name), "utf8"),
+      })),
+  );
+
+const runPythonParity = (cases: ParityCase[]): PythonParityOutput => {
+  const modulePath = getPythonModule();
+  const payloadPath = join(
+    tmpdir(),
+    `stella-anonymize-py-payload-${Date.now()}.json`,
+  );
+  writeFileSync(
+    payloadPath,
+    JSON.stringify({
+      cases: cases.map(({ text, language }) => ({ text, language })),
+    }),
+  );
+  return JSON.parse(
+    runCommand("python3", ["-c", PYTHON_PARITY_SCRIPT], {
+      STELLA_ANONYMIZE_PAYLOAD: payloadPath,
+      STELLA_ANONYMIZE_PY_MODULE: modulePath,
+    }),
+  ) as PythonParityOutput;
+};
+
+const nativeDefaultRedaction = (
+  binding: ReturnType<typeof loadNativeAnonymizeBinding>,
+  { text, language }: ParityCase,
+): unknown =>
+  JSON.parse(redact_default_text_json(text, undefined, { binding, language }));
+
+const packageJsonVersion = (): string => {
+  const { version } = JSON.parse(
+    readFileSync(join(PACKAGE_DIR, "package.json"), "utf8"),
+  ) as { version?: unknown };
+  if (typeof version !== "string") {
+    throw new TypeError("package.json version is missing");
+  }
+  return version;
+};
+
+describe("python binding parity", () => {
+  pythonParityTest(
+    "default-package redaction matches the native binding across contract fixtures",
+    () => {
+      const cases = loadContractFixtureCases();
+      expect(cases.length).toBeGreaterThan(0);
+
+      const binding = loadNativeAnonymizeBinding();
+      const nativeResults = cases.map((item) =>
+        nativeDefaultRedaction(binding, item),
+      );
+
+      const python = runPythonParity(cases);
+
+      expect(python.results).toEqual(nativeResults);
+      for (const language of CONTRACT_FIXTURE_LANGUAGES) {
+        expect(python.available_languages).toContain(language);
+      }
+    },
+  );
+
+  pythonParityTest(
+    "python binding reports the package manifest version",
+    () => {
+      const python = runPythonParity([]);
+      expect(python.version).toBe(packageJsonVersion());
+      expect(python.module_version).toBe(packageJsonVersion());
+    },
+  );
+});

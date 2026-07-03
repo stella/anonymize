@@ -22,7 +22,7 @@ import { applyPipelineLanguageScope } from "../language-scope";
 import { languageConfigMatches } from "../util/language-selection";
 import type { NativeAnonymizeBinding } from "../native";
 import { DEFAULT_ENTITY_LABELS } from "../types";
-import type { Dictionaries, PipelineConfig } from "../types";
+import type { Dictionaries, Entity, PipelineConfig } from "../types";
 import { detectNative, redactNative } from "./native-detect";
 import { loadTestDictionaries } from "./load-dictionaries";
 
