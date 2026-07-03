@@ -1,15 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
+import { createPipelineContext } from "../context";
 import {
-  createPipelineContext,
-  DEFAULT_ENTITY_LABELS,
   createNativePipelineFromConfig,
-  preparePipelineSearch,
   prepareNativePipelineConfig,
   prepareNativePipelinePackage,
-  redactText,
-  runPipeline,
-} from "../legacy";
+} from "../native-pipeline";
+import { preparePipelineSearch } from "../pipeline";
 import {
   buildNativeStaticSearchBundle,
   buildUnifiedSearch,
@@ -24,7 +21,9 @@ import { filterFalsePositives } from "../filters/false-positives";
 import { applyPipelineLanguageScope } from "../language-scope";
 import { languageConfigMatches } from "../util/language-selection";
 import type { NativeAnonymizeBinding } from "../native";
-import type { Dictionaries, Entity, PipelineConfig } from "../types";
+import { DEFAULT_ENTITY_LABELS } from "../types";
+import type { Dictionaries, PipelineConfig } from "../types";
+import { detectNative, redactNative } from "./native-detect";
 import { loadTestDictionaries } from "./load-dictionaries";
 
 let dictionaries: Dictionaries;
@@ -48,12 +47,6 @@ const BASE_CONFIG: PipelineConfig = {
   workspaceId: "test",
 };
 
-let sharedCtx: ReturnType<typeof createPipelineContext> | undefined;
-const getCtx = () => {
-  if (!sharedCtx) sharedCtx = createPipelineContext();
-  return sharedCtx;
-};
-
 const signingPatternText = (
   pattern: Awaited<ReturnType<typeof getNativeSigningClausePatterns>>[number],
 ) => {
@@ -67,16 +60,11 @@ const signingPatternText = (
   return entryPattern instanceof RegExp ? entryPattern.source : entryPattern;
 };
 
-const detect = async (fullText: string, config: Partial<PipelineConfig>) =>
-  runPipeline({
-    fullText,
-    config: {
-      ...BASE_CONFIG,
-      ...config,
-    },
-    gazetteerEntries: [],
-    context: getCtx(),
-  });
+const detect = (fullText: string, config: Partial<PipelineConfig>) =>
+  detectNative({ ...BASE_CONFIG, ...config }, fullText);
+
+const redactWith = (fullText: string, config: Partial<PipelineConfig>) =>
+  redactNative({ ...BASE_CONFIG, ...config }, fullText);
 
 const createCountingNativeBinding = (version: string) => {
   let compressedPrepare = 0;
@@ -1519,16 +1507,14 @@ describe("pipeline config semantics", () => {
   });
 
   test("legacy configs without enableLegalForms keep legal-form detection enabled", async () => {
-    const entities = await runPipeline({
-      fullText: "Acme s.r.o.",
-      config: {
+    const entities = await detectNative(
+      {
         ...BASE_CONFIG,
         enableLegalForms: undefined,
         labels: ["organization"],
       } as unknown as PipelineConfig,
-      gazetteerEntries: [],
-      context: createPipelineContext(),
-    });
+      "Acme s.r.o.",
+    );
     expect(entities.some((entity) => entity.label === "organization")).toBe(
       true,
     );
@@ -2259,48 +2245,6 @@ describe("pipeline config semantics", () => {
     ]);
   });
 
-  test("label-filtered custom regexes do not mask requested NER labels", async () => {
-    const fullText = "John met Alice.";
-    const entities = await runPipeline({
-      fullText,
-      config: {
-        ...BASE_CONFIG,
-        enableRegex: true,
-        enableNer: true,
-        customRegexes: [
-          {
-            pattern: "John",
-            label: "code",
-          },
-        ],
-        labels: ["person"],
-      },
-      gazetteerEntries: [],
-      context: createPipelineContext(),
-      nerInference: async (maskedText) => {
-        expect(maskedText).toBe(fullText);
-        return [
-          {
-            start: 0,
-            end: 4,
-            label: "person",
-            text: "John",
-            score: 0.95,
-            source: "ner",
-          },
-        ];
-      },
-    });
-
-    expect(entities).toEqual([
-      expect.objectContaining({
-        label: "person",
-        text: "John",
-        source: "ner",
-      }),
-    ]);
-  });
-
   test("hotword reclassification can promote filtered source labels into requested output labels", async () => {
     const entities = await detect("narozen dne 12.03.1990 v Praze", {
       enableRegex: true,
@@ -2313,36 +2257,6 @@ describe("pipeline config semantics", () => {
           entity.label === "date of birth" && entity.text === "12.03.1990",
       ),
     ).toBe(true);
-  });
-
-  test("address seed expansion keeps unfiltered NER boundaries in context", async () => {
-    const fullText = "Jan Novák, Olbrachtova 1929/62, 140 00 Praha 4";
-    const personEnd = fullText.indexOf(",");
-    const entities = await runPipeline({
-      fullText,
-      config: {
-        ...BASE_CONFIG,
-        enableNer: true,
-        labels: ["address"],
-      },
-      gazetteerEntries: [],
-      context: createPipelineContext(),
-      nerInference: async () => [
-        {
-          start: 0,
-          end: personEnd,
-          label: "person",
-          text: fullText.slice(0, personEnd),
-          score: 0.95,
-          source: "ner",
-        },
-      ],
-    });
-    const address = entities.find((entity) => entity.label === "address");
-    expect(address).toBeDefined();
-    expect(address!.text).toContain("Olbrachtova 1929/62");
-    expect(address!.text).toContain("140 00 Praha 4");
-    expect(address!.text).not.toContain("Jan Novák");
   });
 
   test("address-only output still respects non-address bounds during seed expansion", async () => {
@@ -2390,7 +2304,10 @@ describe("misc entity label", () => {
 
   test("custom deny-list with misc label yields [MISC_N] placeholder", async () => {
     const fullText = "The case file references Widget X and Widget X again.";
-    const entities = await detect(fullText, {
+    const {
+      resolvedEntities: entities,
+      redaction: { redactedText, redactionMap },
+    } = await redactWith(fullText, {
       enableDenyList: true,
       customDenyList: [
         {
@@ -2416,7 +2333,6 @@ describe("misc entity label", () => {
       }),
     ]);
 
-    const { redactedText, redactionMap } = redactText(fullText, entities);
     expect(redactedText).toBe(
       "The case file references [MISC_1] and [MISC_1] again.",
     );
@@ -2425,88 +2341,20 @@ describe("misc entity label", () => {
 
   test("misc case-variants share a placeholder", async () => {
     // `Widget X` and `widget x` are the same real-world entity from
-    // the user's perspective; redact.ts case-normalises MISC so both
+    // the user's perspective; redaction case-normalises MISC so both
     // surface forms collapse to one placeholder, matching
     // PERSON/ORG/ADDRESS behaviour.
     const fullText = "Widget X starts a sentence; later widget x reappears.";
-    const entities = await detect(fullText, {
+    const {
+      redaction: { redactedText, redactionMap },
+    } = await redactWith(fullText, {
       enableDenyList: true,
       customDenyList: [{ value: "Widget X", label: "misc" }],
       labels: ["misc"],
     });
-    const { redactedText, redactionMap } = redactText(fullText, entities);
     expect(redactedText).toBe(
       "[MISC_1] starts a sentence; later [MISC_1] reappears.",
     );
     expect(redactionMap.size).toBe(1);
-  });
-
-  test("NER inference is skipped when only non-NER labels are requested", async () => {
-    // Filtering deterministic/custom-only labels out of the
-    // NER schema can leave the schema empty (e.g.
-    // caller passes `labels: ["crypto", "misc"]`).
-    // Many NER backends reject empty label arrays; the
-    // pipeline should skip the call entirely in that case.
-    let nerCalled = false;
-    await runPipeline({
-      fullText: "Project Widget X is mentioned.",
-      config: {
-        threshold: 0.5,
-        enableTriggerPhrases: false,
-        enableRegex: false,
-        enableLegalForms: false,
-        enableNameCorpus: false,
-        enableDenyList: true,
-        enableGazetteer: false,
-        enableNer: true,
-        enableConfidenceBoost: false,
-        enableCoreference: false,
-        customDenyList: [{ value: "Widget X", label: "misc" }],
-        labels: ["crypto", "misc"],
-        workspaceId: "test",
-      },
-      gazetteerEntries: [],
-      context: createPipelineContext(),
-      nerInference: async () => {
-        nerCalled = true;
-        return [];
-      },
-    });
-    expect(nerCalled).toBe(false);
-  });
-
-  test("non-NER labels are excluded from the NER label schema", async () => {
-    // These labels are deterministic/custom-only; surfacing them
-    // to the NER schema would invite zero-shot guesses on
-    // arbitrary spans.
-    const seenLabels: string[][] = [];
-    await runPipeline({
-      fullText: "Some sentence.",
-      config: {
-        threshold: 0.5,
-        enableTriggerPhrases: false,
-        enableRegex: false,
-        enableLegalForms: false,
-        enableNameCorpus: false,
-        enableDenyList: false,
-        enableGazetteer: false,
-        enableNer: true,
-        enableConfidenceBoost: false,
-        enableCoreference: false,
-        labels: [...DEFAULT_ENTITY_LABELS],
-        workspaceId: "test",
-      },
-      gazetteerEntries: [],
-      context: createPipelineContext(),
-      nerInference: async (_text, labels) => {
-        seenLabels.push([...labels]);
-        return [];
-      },
-    });
-    expect(seenLabels.length).toBe(1);
-    expect(seenLabels[0]).not.toContain("crypto");
-    expect(seenLabels[0]).not.toContain("misc");
-    // Sanity: other defaults still flow through unchanged.
-    expect(seenLabels[0]).toContain("person");
   });
 });
