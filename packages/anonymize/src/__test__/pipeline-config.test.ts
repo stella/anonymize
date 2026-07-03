@@ -5,6 +5,7 @@ import {
   DEFAULT_ENTITY_LABELS,
   createNativePipelineFromConfig,
   preparePipelineSearch,
+  prepareNativePipelineConfig,
   prepareNativePipelinePackage,
   redactText,
   runPipeline,
@@ -911,6 +912,30 @@ describe("pipeline config semantics", () => {
     ).toBeLessThan(
       unscoped.slices.denyList.end - unscoped.slices.denyList.start,
     );
+  });
+
+  test("prepareNativePipelineConfig applies language scope", async () => {
+    const testDictionaries = await getDictionaries();
+    const config = {
+      ...BASE_CONFIG,
+      dictionaries: testDictionaries,
+      enableDenyList: true,
+      enableNameCorpus: true,
+      labels: ["address", "person"],
+      language: "cs",
+    };
+
+    const prepared = await prepareNativePipelineConfig({
+      config,
+      context: createPipelineContext(),
+    });
+    const scopedBundle = await buildNativeStaticSearchBundle(
+      applyPipelineLanguageScope(config),
+      [],
+      createPipelineContext(),
+    );
+
+    expect(prepared).toEqual(scopedBundle.nativeStaticConfig);
   });
 
   test("native config keeps alphanumeric custom deny-list overlays compact", async () => {
