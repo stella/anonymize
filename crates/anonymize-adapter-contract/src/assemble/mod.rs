@@ -20,7 +20,9 @@ mod country;
 mod dates;
 mod hotwords;
 mod language;
+mod legal_forms;
 mod monetary;
+mod regex;
 mod signature;
 mod zones;
 
@@ -63,21 +65,27 @@ pub const FIELDS_IMPLEMENTED: &[&str] = &[
   "country_data",
   "hotword_data",
   "custom_regex_meta",
+  "regex_meta",
+  "legal_form_data",
 ];
 
 /// Fields still left at their `Default` value, to be filled by later slices.
+///
+/// `regex_patterns` is a special case: the assembler populates it with the
+/// static + signing PREFIX (everything up to the trigger-phrase tail, which
+/// belongs to the trigger slice). It stays here because the field is not yet
+/// complete; the parity harness compares the prefix separately rather than the
+/// whole array.
 pub const FIELDS_PENDING: &[&str] = &[
   "regex_patterns",
   "literal_patterns",
   "literal_options",
   "literal_patterns_from_deny_list_data",
   "slices",
-  "regex_meta",
   "deny_list_data",
   "false_positive_filters",
   "gazetteer_data",
   "trigger_data",
-  "legal_form_data",
   "coreference_data",
   "name_corpus_data",
 ];
@@ -148,9 +156,14 @@ pub fn assemble_static_search_config(
     allowed_labels: allowed_label_set(&search_labels),
   };
 
+  let regex = regex::build_regex(&ctx)?;
+
   Ok(BindingPreparedSearchConfig {
     custom_regex_patterns: assemble_custom_regex_patterns(&ctx),
     custom_regex_meta: assemble_custom_regex_meta(&ctx),
+    regex_patterns: regex.patterns,
+    regex_meta: regex.meta,
+    legal_form_data: legal_forms::build_legal_form_data(&ctx)?,
     allowed_labels: config.labels.clone(),
     threshold: config.threshold,
     confidence_boost: config.enable_confidence_boost,

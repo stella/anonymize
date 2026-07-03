@@ -22,6 +22,12 @@ pub enum AssembleError {
     /// The underlying serde error message.
     message: String,
   },
+  /// A regex meta entry references a validator the native config cannot
+  /// support. Mirrors the `toNativeRegexMeta` throw in the TypeScript source.
+  UnsupportedRegexValidator {
+    /// The unsupported validator id (or `"unknown"` when absent).
+    validator: String,
+  },
 }
 
 impl fmt::Display for AssembleError {
@@ -32,6 +38,12 @@ impl fmt::Display for AssembleError {
       }
       Self::DataParse { name, message } => {
         write!(formatter, "failed to parse data file {name}: {message}")
+      }
+      Self::UnsupportedRegexValidator { validator } => {
+        write!(
+          formatter,
+          "native static config does not support regex validator {validator}"
+        )
       }
     }
   }
