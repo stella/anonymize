@@ -54,11 +54,22 @@ const IMPLEMENTED_FIELDS = [
   "custom_regex_meta",
   "legal_form_data",
   // regex_meta is compared byte-for-byte by the Rust parity harness.
-  // regex_patterns is captured for the PARTIAL prefix check (the Rust
-  // assembler produces the static + signing prefix; the trigger-phrase tail
-  // is a later slice), so it lands in the expected files too.
+  // regex_patterns is the FULL array (static + signing + legal-form + trigger
+  // tail) once the trigger slice lands.
   "regex_meta",
   "regex_patterns",
+  // Slice C2 fields.
+  "gazetteer_data",
+  "trigger_data",
+  "coreference_data",
+  "deny_list_data",
+  "false_positive_filters",
+  "name_corpus_data",
+  "name_corpus_mode",
+  "literal_patterns",
+  "literal_options",
+  "literal_patterns_from_deny_list_data",
+  "slices",
 ];
 
 const TOGGLES = [
