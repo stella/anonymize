@@ -11,7 +11,11 @@ use std::collections::HashMap;
 use stella_anonymize_core::assemble::GazetteerEntry;
 
 use super::AssembleContext;
-use crate::BindingGazetteerMatchData;
+use super::search_pattern::{fuzzy_pattern, literal_with_options};
+use crate::{BindingGazetteerMatchData, BindingSearchPattern};
+
+/// `MAX_EDIT_DISTANCE` from `detectors/gazetteer.ts`.
+const MAX_EDIT_DISTANCE: u32 = 2;
 
 /// `MIN_FUZZY_LENGTH` from `detectors/gazetteer.ts`.
 const MIN_FUZZY_LENGTH: usize = 4;
@@ -79,4 +83,36 @@ pub(super) fn build_gazetteer_data(
     is_fuzzy.push(true);
   }
   Some(BindingGazetteerMatchData { labels, is_fuzzy })
+}
+
+/// Whether `buildGazetteerPatterns` would run (gazResult is non-null).
+pub(super) const fn has_gazetteer(
+  ctx: &AssembleContext<'_>,
+  gazetteer: &[GazetteerEntry],
+) -> bool {
+  ctx.config.enable_gazetteer && !gazetteer.is_empty()
+}
+
+/// Mirrors `buildGazetteerPatterns(...).patterns.map(toNativeLiteralPattern)`:
+/// exact `literal-with-options` (wholeWords false) for every term, then a
+/// `fuzzy` pattern (distance 2) for terms at least [`MIN_FUZZY_LENGTH`] long.
+pub(super) fn gazetteer_literal_patterns(
+  ctx: &AssembleContext<'_>,
+  gazetteer: &[GazetteerEntry],
+) -> Vec<BindingSearchPattern> {
+  if !has_gazetteer(ctx, gazetteer) {
+    return Vec::new();
+  }
+  let terms = build_search_terms(gazetteer);
+  let mut patterns = Vec::new();
+  for (term, _) in &terms {
+    patterns.push(literal_with_options(term.clone(), None, Some(false)));
+  }
+  for (term, _) in &terms {
+    if utf16_len(term) < MIN_FUZZY_LENGTH {
+      continue;
+    }
+    patterns.push(fuzzy_pattern(term.clone(), Some(MAX_EDIT_DISTANCE)));
+  }
+  patterns
 }

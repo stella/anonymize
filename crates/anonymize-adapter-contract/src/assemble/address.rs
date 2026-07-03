@@ -36,6 +36,30 @@ struct AddressContextJson {
   bare_house_stopwords: OrderedMap<Value>,
 }
 
+/// Mirrors `buildStreetTypePatterns` (`detectors/address-seeds.ts`): flatten
+/// every array value of `address-street-types.json` in document order, no dedup
+/// and no case change. Non-array values (the `_comment` string) are skipped.
+///
+/// # Errors
+///
+/// Returns [`AssembleError`] when `address-street-types.json` fails to parse.
+pub(super) fn street_type_patterns() -> Result<Vec<String>, AssembleError> {
+  let street_types: OrderedMap<Value> =
+    parse_ordered_data_file("address-street-types.json")?;
+  let mut words = Vec::new();
+  for (_key, value) in &street_types {
+    let Some(items) = value.as_array() else {
+      continue;
+    };
+    for word in items {
+      if let Some(word) = word.as_str() {
+        words.push(word.to_string());
+      }
+    }
+  }
+  Ok(words)
+}
+
 // ── address_context_data ────────────────────────────
 
 /// # Errors

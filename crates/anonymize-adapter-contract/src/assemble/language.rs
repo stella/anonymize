@@ -10,8 +10,106 @@
 
 use std::collections::HashSet;
 
+use serde::Deserialize;
 use serde_json::Value;
-use stella_anonymize_core::assemble::{OrderedMap, PipelineConfig};
+use stella_anonymize_core::assemble::{
+  AssembleError, OrderedMap, PipelineConfig, parse_data_file,
+};
+
+/// Effective `nameCorpusLanguages` / `denyListCountries` after
+/// `applyPipelineLanguageScope`.
+pub(super) struct ScopedLanguages {
+  pub name_corpus_languages: Option<Vec<String>>,
+  pub deny_list_countries: Option<Vec<String>>,
+}
+
+/// A single `language-scopes.json` entry.
+#[derive(Deserialize)]
+struct LanguageScope {
+  #[serde(default, rename = "nameCorpusLanguages")]
+  name_corpus_languages: Vec<String>,
+  #[serde(default, rename = "denyListCountries")]
+  deny_list_countries: Vec<String>,
+}
+
+/// The `language-scopes.json` document.
+#[derive(Deserialize)]
+struct ScopeData {
+  #[serde(default)]
+  languages: std::collections::BTreeMap<String, LanguageScope>,
+}
+
+/// Mirrors `configuredLanguages`: `languages` if present (even empty), else the
+/// single `language` wrapped, else empty.
+fn configured_languages(config: &PipelineConfig) -> Vec<String> {
+  if let Some(languages) = config.languages.as_ref() {
+    return languages.clone();
+  }
+  config
+    .language
+    .as_ref()
+    .map(|language| vec![language.clone()])
+    .unwrap_or_default()
+}
+
+/// Mirrors `uniquePush`: append values not already present, order preserved.
+fn unique_push(target: &mut Vec<String>, values: &[String]) {
+  let mut seen: HashSet<String> = target.iter().cloned().collect();
+  for value in values {
+    if seen.insert(value.clone()) {
+      target.push(value.clone());
+    }
+  }
+}
+
+/// Mirrors `applyPipelineLanguageScope`: derives `nameCorpusLanguages` and
+/// `denyListCountries` from the configured content languages via
+/// `language-scopes.json`, but only fills a field the caller left unset.
+///
+/// # Errors
+///
+/// Returns [`AssembleError`] when `language-scopes.json` fails to parse.
+pub(super) fn apply_pipeline_language_scope(
+  config: &PipelineConfig,
+) -> Result<ScopedLanguages, AssembleError> {
+  let languages = configured_languages(config);
+  if languages.is_empty() {
+    return Ok(ScopedLanguages {
+      name_corpus_languages: config.name_corpus_languages.clone(),
+      deny_list_countries: config.deny_list_countries.clone(),
+    });
+  }
+
+  let scope_data: ScopeData = parse_data_file("language-scopes.json")?;
+
+  let mut name_corpus_languages: Vec<String> = Vec::new();
+  let mut deny_list_countries: Vec<String> = Vec::new();
+  for language in &languages {
+    let normalized = normalize_language_key(language);
+    if normalized.is_empty() {
+      continue;
+    }
+    let scope = scope_data.languages.get(&normalized).or_else(|| {
+      normalized
+        .split_once('-')
+        .and_then(|(base, _)| scope_data.languages.get(base))
+    });
+    let Some(scope) = scope else {
+      continue;
+    };
+    unique_push(&mut name_corpus_languages, &scope.name_corpus_languages);
+    unique_push(&mut deny_list_countries, &scope.deny_list_countries);
+  }
+
+  Ok(ScopedLanguages {
+    name_corpus_languages: config.name_corpus_languages.clone().or_else(|| {
+      (!name_corpus_languages.is_empty()).then_some(name_corpus_languages)
+    }),
+    deny_list_countries: config.deny_list_countries.clone().or_else(|| {
+      (!deny_list_countries.is_empty()).then_some(deny_list_countries)
+    }),
+  })
+}
 
 /// Mirrors `configuredContentLanguages`: prefer `languages` (even when empty),
 /// fall back to the single `language`, else `None` for "all languages".

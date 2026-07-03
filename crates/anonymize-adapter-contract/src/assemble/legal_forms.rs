@@ -315,6 +315,13 @@ pub(super) fn role_heads() -> Result<Vec<String>, AssembleError> {
   Ok(out)
 }
 
+/// Mirrors `getClauseNounHeadsSync` (post-warm): the `clause-noun-heads.json`
+/// union seeded with `CLAUSE_NOUN_HEADS_SEED`, lowercased with insertion-order
+/// dedup. Reused by `false_positive_filters` for `trailingAddressWordExclusions`.
+pub(super) fn clause_noun_heads() -> Result<Vec<String>, AssembleError> {
+  load_lowercase_union("clause-noun-heads.json", CLAUSE_NOUN_HEADS_SEED)
+}
+
 /// Mirrors `getConnectorProseHeadsSync` (post-warm): `generic-roles.json`
 /// `roles`, lowercased, insertion-order dedup.
 fn connector_prose_heads() -> Result<Vec<String>, AssembleError> {

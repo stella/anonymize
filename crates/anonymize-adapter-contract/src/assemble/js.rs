@@ -13,6 +13,74 @@ pub(super) fn utf16_len(value: &str) -> usize {
   value.encode_utf16().count()
 }
 
+/// JS `String.prototype.toLowerCase`: Unicode default (locale-independent) case
+/// folding. Rust's `str::to_lowercase` uses the same Unicode `Lowercase_Mapping`
+/// table, so it matches JS for every case the assembler's datasets exercise.
+/// Kept as a named helper so a divergent character can be special-cased in one
+/// place if a fixture ever surfaces one.
+pub(super) fn js_lowercase(value: &str) -> String {
+  value.to_lowercase()
+}
+
+/// Mirrors the `uniqueStrings` helper: first-occurrence dedup, order preserved.
+pub(super) fn unique_strings<I: IntoIterator<Item = String>>(
+  values: I,
+) -> Vec<String> {
+  let mut seen = HashSet::new();
+  let mut out = Vec::new();
+  for value in values {
+    if seen.insert(value.clone()) {
+      out.push(value);
+    }
+  }
+  out
+}
+
+/// Mirrors `lowerSortedUnique`: `toLowerCase` every value, dedup, then sort by
+/// UTF-16 code units (`Array.prototype.toSorted` default comparator).
+pub(super) fn lower_sorted_unique<'a, I: IntoIterator<Item = &'a str>>(
+  values: I,
+) -> Vec<String> {
+  let mut seen = HashSet::new();
+  let mut out = Vec::new();
+  for value in values {
+    let lowered = js_lowercase(value);
+    if seen.insert(lowered.clone()) {
+      out.push(lowered);
+    }
+  }
+  out.sort_by(|left, right| utf16_cmp(left, right));
+  out
+}
+
+/// Mirrors `normalizeForSearch`: same-length typographic normalization of
+/// non-breaking spaces, en/em dashes, and smart double quotes. Operates on
+/// UTF-16 code units exactly as the TypeScript source does.
+pub(super) fn normalize_for_search(text: &str) -> String {
+  let mut needs_replacement = false;
+  for unit in text.encode_utf16() {
+    if replacement_code(unit) != unit {
+      needs_replacement = true;
+      break;
+    }
+  }
+  if !needs_replacement {
+    return text.to_string();
+  }
+  let replaced: Vec<u16> = text.encode_utf16().map(replacement_code).collect();
+  String::from_utf16_lossy(&replaced)
+}
+
+/// Per-code-unit replacement table from `normalizeForSearch`.
+const fn replacement_code(code: u16) -> u16 {
+  match code {
+    0x00A0 | 0x2007 | 0x202F => 0x0020,
+    0x2013 | 0x2014 => 0x002D,
+    0x201C | 0x201D => 0x0022,
+    other => other,
+  }
+}
+
 /// Compares two strings by their UTF-16 code units, matching the default
 /// comparator of `Array.prototype.sort` / `toSorted` (which coerces elements to
 /// strings and compares them as sequences of UTF-16 code units). This differs
