@@ -16,6 +16,7 @@
 //! `stella_anonymize_core::assemble`.
 
 mod address;
+mod coreference;
 mod country;
 mod dates;
 mod gazetteer;
@@ -69,6 +70,7 @@ pub const FIELDS_IMPLEMENTED: &[&str] = &[
   "regex_meta",
   "legal_form_data",
   "gazetteer_data",
+  "coreference_data",
 ];
 
 /// Fields still left at their `Default` value, to be filled by later slices.
@@ -87,7 +89,6 @@ pub const FIELDS_PENDING: &[&str] = &[
   "deny_list_data",
   "false_positive_filters",
   "trigger_data",
-  "coreference_data",
   "name_corpus_data",
 ];
 
@@ -180,6 +181,7 @@ pub fn assemble_static_search_config(
     country_data: country::build_country_data(&ctx)?,
     hotword_data: hotwords::build_hotword_data(&hotword_rules),
     gazetteer_data: gazetteer::build_gazetteer_data(&ctx, gazetteer),
+    coreference_data: coreference::build_coreference_data(&ctx)?,
     ..BindingPreparedSearchConfig::default()
   })
 }

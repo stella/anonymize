@@ -192,7 +192,10 @@ fn push_unique(
 }
 
 /// Mirrors `LEGAL_SUFFIXES`: `RAW_LEGAL_SUFFIXES` sorted longest-first (stable).
-fn legal_suffixes() -> Vec<String> {
+///
+/// Reused by `coreference_data` as `nativeOrganizationSuffixes`
+/// (`build-unified-search.ts:816`).
+pub(super) fn legal_suffixes() -> Vec<String> {
   let mut out: Vec<String> = RAW_LEGAL_SUFFIXES
     .iter()
     .map(|s| (*s).to_string())
@@ -204,7 +207,10 @@ fn legal_suffixes() -> Vec<String> {
 /// Mirrors `getAllLegalSuffixesSync` (post-warm): flatten `legal-forms.json`
 /// values (first-occurrence dedup), append `LEGAL_SUFFIXES` not already seen,
 /// sort longest-first (stable).
-fn all_legal_suffixes() -> Result<Vec<String>, AssembleError> {
+///
+/// Reused by `coreference_data` as `nativeLegalFormSuffixes` /
+/// `getKnownLegalSuffixes` (`build-unified-search.ts:813`).
+pub(super) fn all_legal_suffixes() -> Result<Vec<String>, AssembleError> {
   let data: OrderedMap<Value> = parse_ordered_data_file("legal-forms.json")?;
   let mut seen = HashSet::new();
   let mut out = Vec::new();

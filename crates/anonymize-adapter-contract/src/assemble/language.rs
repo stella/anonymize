@@ -66,7 +66,7 @@ fn base_language(language: &str) -> &str {
 }
 
 /// Mirrors `languageConfigMatches` from `util/language-selection.ts`.
-fn language_config_matches(
+pub(super) fn language_config_matches(
   config_language: &str,
   selected: Option<&[String]>,
 ) -> bool {

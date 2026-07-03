@@ -171,6 +171,12 @@ fn compare_implemented(
       actual.gazetteer_data, expected.gazetteer_data
     ));
   }
+  if actual.coreference_data != expected.coreference_data {
+    return Err(format!(
+      "{name}: coreference_data {:?} != {:?}",
+      actual.coreference_data, expected.coreference_data
+    ));
+  }
   compare_regex_and_legal(name, actual, expected)?;
   Ok(())
 }
