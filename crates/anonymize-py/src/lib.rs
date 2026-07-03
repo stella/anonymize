@@ -560,13 +560,17 @@ fn prepare_static_search_package_bytes_with<'py>(
   let binding_config = parse_prepared_search_config(config_json)?;
   let core_config = prepared_search_config_from_binding(binding_config)
     .map_err(|error| to_py_contract_error(&error))?;
-  let artifacts = CorePreparedEngine::prepare_artifacts(core_config.clone())
-    .and_then(|artifacts| artifacts.to_bytes())
-    .map_err(|error| to_py_core_error(&error))?;
+  let artifact_bytes =
+    CorePreparedEngine::prepare_artifacts(core_config.clone())
+      .and_then(|artifacts| artifacts.to_bytes())
+      .map_err(|error| to_py_core_error(&error))?;
   let package = if compressed {
-    prepared_search_core_package_to_compressed_bytes(&core_config, &artifacts)
+    prepared_search_core_package_to_compressed_bytes(
+      &core_config,
+      &artifact_bytes,
+    )
   } else {
-    prepared_search_core_package_to_bytes(&core_config, &artifacts)
+    prepared_search_core_package_to_bytes(&core_config, &artifact_bytes)
   };
   let bytes = package.map_err(|error| to_py_contract_error(&error))?;
   Ok(PyBytes::new(py, &bytes))
@@ -640,13 +644,17 @@ fn assemble_static_search_package_bytes_with<'py>(
   )?;
   let core_config = prepared_search_config_from_binding(binding_config)
     .map_err(|error| to_py_contract_error(&error))?;
-  let artifacts = CorePreparedEngine::prepare_artifacts(core_config.clone())
-    .and_then(|artifacts| artifacts.to_bytes())
-    .map_err(|error| to_py_core_error(&error))?;
+  let artifact_bytes =
+    CorePreparedEngine::prepare_artifacts(core_config.clone())
+      .and_then(|artifacts| artifacts.to_bytes())
+      .map_err(|error| to_py_core_error(&error))?;
   let package = if compressed {
-    prepared_search_core_package_to_compressed_bytes(&core_config, &artifacts)
+    prepared_search_core_package_to_compressed_bytes(
+      &core_config,
+      &artifact_bytes,
+    )
   } else {
-    prepared_search_core_package_to_bytes(&core_config, &artifacts)
+    prepared_search_core_package_to_bytes(&core_config, &artifact_bytes)
   };
   let bytes = package.map_err(|error| to_py_contract_error(&error))?;
   Ok(PyBytes::new(py, &bytes))
