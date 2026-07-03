@@ -9,9 +9,10 @@ use napi_derive::napi;
 use stella_anonymize_adapter_contract::{
   BindingOperatorConfig, BindingOperatorEntry, BindingPreparedSearchConfig,
   BindingRedactionResult, BindingStaticRedactionResult, ContractError,
-  PreparedSearchPackageDecodeTimings, diagnostic_events_to_utf16_binding,
-  diagnostic_stage_event, operator_config_from_binding,
-  prepared_search_config_from_binding, prepared_search_core_package_to_bytes,
+  PreparedSearchPackageDecodeTimings, assemble_static_search_config,
+  diagnostic_events_to_utf16_binding, diagnostic_stage_event,
+  operator_config_from_binding, prepared_search_config_from_binding,
+  prepared_search_core_package_to_bytes,
   prepared_search_core_package_to_compressed_bytes,
   prepared_search_core_package_view_from_bytes_with_timings,
   prepared_search_core_package_view_trusted_from_bytes_with_timings,
@@ -27,6 +28,7 @@ use stella_anonymize_core::{
   DiagnosticDetail, DiagnosticEvent, DiagnosticStage, Error as CoreError,
   OperatorConfig, PreparedEngine, PreparedEngineArtifactsView,
   PreparedEngineConfig, StaticRedactionDiagnostics,
+  assemble::{AssembleError, Dictionaries, GazetteerEntry, PipelineConfig},
 };
 
 const PREPARED_SEARCH_CACHE_LIMIT: usize = 8;
@@ -404,6 +406,74 @@ fn prepare_static_search_package_bytes_with(
     .map_err(|error| to_napi_contract_error(&error))?;
   prepared_search_cache_insert(cache_key, Arc::new(prepared));
   Ok(Buffer::from(package))
+}
+
+/// Assembles a prepared static-search config (slice A: trivial fields) and
+/// returns it as JSON bytes, ready to feed the prepare/package path.
+#[napi(js_name = "assembleStaticSearchConfigJson")]
+#[allow(clippy::needless_pass_by_value)]
+pub fn assemble_static_search_config_json(
+  pipeline_config_json: BufferSlice<'_>,
+  dictionaries_json: Option<BufferSlice<'_>>,
+  gazetteer_json: Option<BufferSlice<'_>>,
+) -> Result<Buffer> {
+  let config = assemble_binding_config(
+    pipeline_config_json.as_ref(),
+    dictionaries_json.as_ref().map(AsRef::as_ref),
+    gazetteer_json.as_ref().map(AsRef::as_ref),
+  )?;
+  serde_json::to_vec(&config)
+    .map(Buffer::from)
+    .map_err(|error| to_napi_serde_error(&error))
+}
+
+/// Assembles the config and chains it through the existing prepare/package
+/// path, returning ready-to-load core package bytes.
+#[napi(js_name = "assembleStaticSearchPackageBytes")]
+#[allow(clippy::needless_pass_by_value)]
+pub fn assemble_static_search_package_bytes(
+  pipeline_config_json: BufferSlice<'_>,
+  dictionaries_json: Option<BufferSlice<'_>>,
+  gazetteer_json: Option<BufferSlice<'_>>,
+) -> Result<Buffer> {
+  let binding_config = assemble_binding_config(
+    pipeline_config_json.as_ref(),
+    dictionaries_json.as_ref().map(AsRef::as_ref),
+    gazetteer_json.as_ref().map(AsRef::as_ref),
+  )?;
+  let core_config = prepared_search_config_from_binding(binding_config)
+    .map_err(|error| to_napi_contract_error(&error))?;
+  let artifacts = PreparedEngine::prepare_artifacts(core_config.clone())
+    .map_err(|error| to_napi_core_error(&error))?;
+  let artifact_bytes = artifacts
+    .to_bytes()
+    .map_err(|error| to_napi_core_error(&error))?;
+  prepared_search_core_package_to_bytes(&core_config, &artifact_bytes)
+    .map(Buffer::from)
+    .map_err(|error| to_napi_contract_error(&error))
+}
+
+fn assemble_binding_config(
+  pipeline_config_json: &[u8],
+  dictionaries_json: Option<&[u8]>,
+  gazetteer_json: Option<&[u8]>,
+) -> Result<BindingPreparedSearchConfig> {
+  let config = serde_json::from_slice::<PipelineConfig>(pipeline_config_json)
+    .map_err(|error| to_napi_serde_error(&error))?;
+  let dictionaries = match dictionaries_json {
+    Some(bytes) => Some(
+      serde_json::from_slice::<Dictionaries>(bytes)
+        .map_err(|error| to_napi_serde_error(&error))?,
+    ),
+    None => None,
+  };
+  let gazetteer = match gazetteer_json {
+    Some(bytes) => serde_json::from_slice::<Vec<GazetteerEntry>>(bytes)
+      .map_err(|error| to_napi_serde_error(&error))?,
+    None => Vec::new(),
+  };
+  assemble_static_search_config(&config, dictionaries.as_ref(), &gazetteer)
+    .map_err(|error| to_napi_assemble_error(&error))
 }
 
 #[napi]
@@ -1221,5 +1291,9 @@ fn to_napi_contract_error(error: &ContractError) -> Error {
 }
 
 fn to_napi_serde_error(error: &serde_json::Error) -> Error {
+  Error::from_reason(error.to_string())
+}
+
+fn to_napi_assemble_error(error: &AssembleError) -> Error {
   Error::from_reason(error.to_string())
 }
