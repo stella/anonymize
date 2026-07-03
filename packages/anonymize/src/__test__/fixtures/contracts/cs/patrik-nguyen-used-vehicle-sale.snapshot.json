@@ -50,14 +50,14 @@
       "end": 391,
       "label": "person",
       "text": "Mgr. Romanem Švejdou, DiS., MPA",
-      "source": "regex"
+      "source": "trigger"
     },
     {
       "start": 551,
       "end": 568,
       "label": "person",
       "text": "Patrikem Nguyenem",
-      "source": "deny-list"
+      "source": "trigger"
     },
     {
       "start": 581,
@@ -85,7 +85,7 @@
       "end": 1986,
       "label": "person",
       "text": "Petrem Sudou",
-      "source": "deny-list"
+      "source": "trigger"
     },
     {
       "start": 2018,

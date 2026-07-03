@@ -18,16 +18,15 @@ import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
 setDefaultTimeout(60_000);
 
-import {
-  createPipelineContext,
-  DEFAULT_ENTITY_LABELS,
-  runPipeline,
-} from "../legacy";
-import type { Dictionaries, Entity, PipelineConfig } from "../types";
-import type { PipelineContext } from "../context";
+import { DEFAULT_ENTITY_LABELS } from "../legacy";
+import type { NativePipelineEntity } from "../native";
+import type { PipelineConfig } from "../types";
+import { detectNative } from "./native-detect";
 import { loadTestDictionaries } from "./load-dictionaries";
 
-const baseConfig: Omit<PipelineConfig, "dictionaries"> = {
+const dictionaries = await loadTestDictionaries();
+
+const config: PipelineConfig = {
   threshold: 0.3,
   enableTriggerPhrases: true,
   enableRegex: true,
@@ -42,29 +41,11 @@ const baseConfig: Omit<PipelineConfig, "dictionaries"> = {
   enableZoneClassification: true,
   labels: [...DEFAULT_ENTITY_LABELS],
   workspaceId: "multi-line-us-address-test",
+  dictionaries,
 };
 
-let dictionariesPromise: Promise<Dictionaries> | undefined;
-const getDictionaries = (): Promise<Dictionaries> => {
-  dictionariesPromise ??= loadTestDictionaries();
-  return dictionariesPromise;
-};
-
-let sharedContext: PipelineContext | undefined;
-const getContext = (): PipelineContext => {
-  sharedContext ??= createPipelineContext();
-  return sharedContext;
-};
-
-const detect = async (fullText: string): Promise<Entity[]> => {
-  const dictionaries = await getDictionaries();
-  return runPipeline({
-    fullText,
-    config: { ...baseConfig, dictionaries },
-    gazetteerEntries: [],
-    context: getContext(),
-  });
-};
+const detect = (fullText: string): Promise<NativePipelineEntity[]> =>
+  detectNative(config, fullText);
 
 describe("multi-line US notice-block addresses", () => {
   test("street line + 'City, State ZIP+4' line yields a single address span", async () => {

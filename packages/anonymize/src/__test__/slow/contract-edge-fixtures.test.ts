@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { createPipelineContext, redactText, runPipeline } from "../../legacy";
-import type { Dictionaries, Entity } from "../../types";
+import type { NativePipelineEntity } from "../../native";
+import { redactNative } from "../native-detect";
 import {
   assertEntityInvariants,
   assertRedactionInvariants,
@@ -107,13 +107,16 @@ const FIXTURES: readonly EdgeFixture[] = [
   },
 ];
 
-let dictionaries: Dictionaries | null = null;
-const getDictionaries = async (): Promise<Dictionaries> => {
-  dictionaries ??= await loadTestDictionaries();
-  return dictionaries;
+const dictionaries = await loadTestDictionaries();
+const CONFIG = {
+  ...contractTestConfig("contract-edge-fixtures-test"),
+  dictionaries,
 };
 
-const hasEntity = (entities: readonly Entity[], expected: ExpectedEntity) =>
+const hasEntity = (
+  entities: readonly NativePipelineEntity[],
+  expected: ExpectedEntity,
+) =>
   entities.some(
     (entity) =>
       entity.label === expected.label && entity.text === expected.text,
@@ -124,16 +127,10 @@ describe("contract edge fixtures", () => {
     test(
       fixture.name,
       async () => {
-        const context = createPipelineContext();
-        const entities = await runPipeline({
-          fullText: fixture.text,
-          config: {
-            ...contractTestConfig("contract-edge-fixtures-test"),
-            dictionaries: await getDictionaries(),
-          },
-          gazetteerEntries: [],
-          context,
-        });
+        const { resolvedEntities: entities, redaction } = await redactNative(
+          CONFIG,
+          fixture.text,
+        );
 
         assertEntityInvariants(fixture.text, entities);
         for (const expected of fixture.mustDetect ?? []) {
@@ -143,14 +140,13 @@ describe("contract edge fixtures", () => {
           expect(hasEntity(entities, expected)).toBe(false);
         }
 
-        const result = redactText(fixture.text, entities, undefined, context);
-        assertRedactionInvariants(entities, result);
+        assertRedactionInvariants(entities, redaction);
         assertSensitiveValuesRemoved(
-          result.redactedText,
+          redaction.redactedText,
           fixture.mustRedact ?? [],
         );
         for (const value of fixture.mustPreserve ?? []) {
-          expect(result.redactedText).toContain(value);
+          expect(redaction.redactedText).toContain(value);
         }
       },
       20_000,

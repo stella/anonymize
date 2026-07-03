@@ -1,10 +1,6 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
-import {
-  runPipeline,
-  DEFAULT_ENTITY_LABELS,
-  createPipelineContext,
-} from "../legacy";
-import type { PipelineContext } from "../context";
+import { DEFAULT_ENTITY_LABELS } from "../legacy";
+import { detectNative } from "./native-detect";
 import type { PipelineConfig } from "../types";
 
 setDefaultTimeout(15_000);
@@ -24,19 +20,8 @@ const CONFIG: PipelineConfig = {
   workspaceId: "test",
 };
 
-let sharedCtx: PipelineContext | undefined;
-const getCtx = (): PipelineContext => {
-  if (!sharedCtx) sharedCtx = createPipelineContext();
-  return sharedCtx;
-};
-
-const detect = async (text: string, override?: Partial<PipelineConfig>) =>
-  runPipeline({
-    fullText: text,
-    config: { ...CONFIG, ...override },
-    gazetteerEntries: [],
-    context: getCtx(),
-  });
+const detect = (text: string, override?: Partial<PipelineConfig>) =>
+  detectNative({ ...CONFIG, ...override }, text);
 
 // Regression coverage for trigger value runaway on
 // HTML-flattened or signature-block inputs where the

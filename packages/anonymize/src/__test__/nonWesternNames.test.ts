@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import {
   createPipelineContext,
-  runPipeline,
   detectNameCorpus,
   initNameCorpus,
 } from "../legacy";
+import type { NativePipelineEntity } from "../native";
 import type { Entity, PipelineConfig } from "../types";
+import { detectNative } from "./native-detect";
 
 // ── Helpers ────────────────────────────────────────────────────────
 
@@ -24,33 +25,20 @@ const baseConfig: PipelineConfig = {
   workspaceId: "non-western-test",
 };
 
-const detect = async (text: string): Promise<Entity[]> => {
-  const context = createPipelineContext();
-  return runPipeline({
-    fullText: text,
-    config: baseConfig,
-    gazetteerEntries: [],
-    context,
-  });
-};
+const detect = (text: string): Promise<NativePipelineEntity[]> =>
+  detectNative(baseConfig, text);
 
-const detectWithConfig = async (
+const detectWithConfig = (
   text: string,
   config: PipelineConfig,
-): Promise<Entity[]> => {
-  const context = createPipelineContext();
-  return runPipeline({
-    fullText: text,
-    config,
-    gazetteerEntries: [],
-    context,
-  });
-};
+): Promise<NativePipelineEntity[]> => detectNative(config, text);
 
-const detectWithDenyList = async (text: string): Promise<Entity[]> => {
-  return detectWithConfig(text, { ...baseConfig, enableDenyList: true });
-};
+const detectWithDenyList = (text: string): Promise<NativePipelineEntity[]> =>
+  detectWithConfig(text, { ...baseConfig, enableDenyList: true });
 
+// SLICE3-DELETE: the direct name-corpus detector is a TypeScript-pipeline
+// internal with no native equivalent; slice 3 removes this block along with
+// the legacy barrel.
 /** Direct detector call; returns raw entities without pipeline post-processing. */
 const directCtx = createPipelineContext();
 let directCtxReady = false;
@@ -65,7 +53,7 @@ const detectDirect = async (text: string): Promise<Entity[]> => {
   return detectNameCorpus(text, directCtx);
 };
 
-const persons = (entities: Entity[]): Entity[] =>
+const persons = <T extends { label: string }>(entities: T[]): T[] =>
   entities.filter((e) => e.label === "person");
 
 // ── Tests ──────────────────────────────────────────────────────────

@@ -1,16 +1,15 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
-import {
-  createPipelineContext,
-  DEFAULT_ENTITY_LABELS,
-  runPipeline,
-} from "../legacy";
-import type { Dictionaries, PipelineConfig } from "../types";
+import { DEFAULT_ENTITY_LABELS } from "../legacy";
+import type { PipelineConfig } from "../types";
+import { detectNative } from "./native-detect";
 import { loadTestDictionaries } from "./load-dictionaries";
 
 // Pipeline context build is CPU-bound; mirror the budget
 // used by the other regex-focused suites.
 setDefaultTimeout(15_000);
+
+const dictionaries = await loadTestDictionaries();
 
 const CONFIG: PipelineConfig = {
   threshold: 0.3,
@@ -27,31 +26,10 @@ const CONFIG: PipelineConfig = {
   enableZoneClassification: false,
   labels: [...DEFAULT_ENTITY_LABELS],
   workspaceId: "monetary-suffix-test",
+  dictionaries,
 };
 
-let cachedDictionaries: Dictionaries | undefined;
-const getDictionaries = async () => {
-  if (!cachedDictionaries) {
-    cachedDictionaries = await loadTestDictionaries();
-  }
-  return cachedDictionaries;
-};
-
-let sharedCtx: ReturnType<typeof createPipelineContext> | undefined;
-const getCtx = () => {
-  if (!sharedCtx) sharedCtx = createPipelineContext();
-  return sharedCtx;
-};
-
-const detect = async (text: string) => {
-  const dictionaries = await getDictionaries();
-  return runPipeline({
-    fullText: text,
-    config: { ...CONFIG, dictionaries },
-    gazetteerEntries: [],
-    context: getCtx(),
-  });
-};
+const detect = (text: string) => detectNative(CONFIG, text);
 
 const findMoney = (entities: Awaited<ReturnType<typeof detect>>) =>
   entities.filter((e) => e.label === "monetary amount");

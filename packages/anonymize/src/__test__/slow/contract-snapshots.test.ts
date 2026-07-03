@@ -3,27 +3,23 @@ import { dirname, join } from "node:path";
 
 import { describe, expect, test } from "bun:test";
 
-import { createPipelineContext, redactText, runPipeline } from "../../legacy";
-import type { PipelineContext } from "../../context";
-import type { Dictionaries, Entity } from "../../types";
+import type { NativePipelineEntity } from "../../native";
+import { redactNative } from "../native-detect";
 import { contractTestConfig } from "../contract-config";
 import { loadTestDictionaries } from "../load-dictionaries";
 
 const FIXTURES_DIR = join(import.meta.dir, "..", "fixtures", "contracts");
 const UPDATE_SNAPSHOTS = process.env["UPDATE_CONTRACT_SNAPSHOTS"] === "1";
 
-let dictionaries: Dictionaries;
-const getDictionaries = async () => {
-  if (!dictionaries) dictionaries = await loadTestDictionaries();
-  return dictionaries;
+const dictionaries = await loadTestDictionaries();
+
+const CONFIG = {
+  ...contractTestConfig("contract-snapshot-test"),
+  dictionaries,
 };
 
-const CONFIG = contractTestConfig("contract-snapshot-test");
-
-const CONTEXT = createPipelineContext();
-
 type SnapshotEntity = Pick<
-  Entity,
+  NativePipelineEntity,
   "start" | "end" | "label" | "text" | "source"
 >;
 
@@ -38,7 +34,7 @@ type ContractFixture = {
   name: string;
   textPath: string;
   snapshotPath: string;
-  assertQuality?: (entities: Entity[]) => void;
+  assertQuality?: (entities: NativePipelineEntity[]) => void;
 };
 
 const FIXTURES: ContractFixture[] = [
@@ -502,9 +498,8 @@ const FIXTURES: ContractFixture[] = [
 ];
 
 const toSnapshot = (
-  fullText: string,
-  entities: Entity[],
-  ctx: PipelineContext,
+  entities: NativePipelineEntity[],
+  redactedText: string,
 ): ContractSnapshot => {
   const sorted = entities.toSorted(
     (left, right) =>
@@ -518,8 +513,6 @@ const toSnapshot = (
     counts[entity.label] = (counts[entity.label] ?? 0) + 1;
   }
 
-  const redacted = redactText(fullText, sorted, undefined, ctx);
-
   return {
     entityCount: sorted.length,
     counts,
@@ -530,7 +523,7 @@ const toSnapshot = (
       text,
       source,
     })),
-    redactedText: redacted.redactedText,
+    redactedText,
   };
 };
 
@@ -546,16 +539,14 @@ describe("contract snapshots", () => {
       async () => {
         const rawText = readFileSync(fixture.textPath, "utf8");
         const fullText = rawText.replaceAll("\r\n", "\n");
-        const entities = await runPipeline({
+        const { resolvedEntities: entities, redaction } = await redactNative(
+          CONFIG,
           fullText,
-          config: { ...CONFIG, dictionaries: await getDictionaries() },
-          gazetteerEntries: [],
-          context: CONTEXT,
-        });
+        );
 
         fixture.assertQuality?.(entities);
 
-        const snapshot = toSnapshot(fullText, entities, CONTEXT);
+        const snapshot = toSnapshot(entities, redaction.redactedText);
 
         if (UPDATE_SNAPSHOTS) {
           writeSnapshot(fixture.snapshotPath, snapshot);

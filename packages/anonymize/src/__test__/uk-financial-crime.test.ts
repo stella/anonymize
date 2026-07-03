@@ -1,17 +1,16 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
-import {
-  createPipelineContext,
-  DEFAULT_ENTITY_LABELS,
-  runPipeline,
-} from "../legacy";
+import { DEFAULT_ENTITY_LABELS } from "../legacy";
+import { detectNative } from "./native-detect";
 
-// Fresh PipelineContext per test pays the regex-set DFA
-// build cost (~1-3 s); 15 s gives headroom on CI without
-// hiding real perf regressions.
+// Building the native prepared pipeline pays the regex-set DFA
+// build cost once; 15 s gives headroom on CI without hiding real
+// perf regressions.
 setDefaultTimeout(15_000);
-import type { Dictionaries, PipelineConfig } from "../types";
+import type { PipelineConfig } from "../types";
 import { loadTestDictionaries } from "./load-dictionaries";
+
+const dictionaries = await loadTestDictionaries();
 
 const CONFIG: PipelineConfig = {
   threshold: 0.3,
@@ -28,36 +27,10 @@ const CONFIG: PipelineConfig = {
   enableZoneClassification: false,
   labels: [...DEFAULT_ENTITY_LABELS],
   workspaceId: "uk-financial-crime-test",
+  dictionaries,
 };
 
-let cachedDictionaries: Dictionaries | undefined;
-const getDictionaries = async () => {
-  if (!cachedDictionaries) {
-    cachedDictionaries = await loadTestDictionaries();
-  }
-  return cachedDictionaries;
-};
-
-// Share one PipelineContext across every test in this file
-// so the heavy deny-list + regex-set initialisation runs
-// once. Each test still feeds fresh text through
-// `runPipeline`; only the cached search-engine + dictionary
-// state is reused.
-let sharedCtx: ReturnType<typeof createPipelineContext> | undefined;
-const getCtx = () => {
-  if (!sharedCtx) sharedCtx = createPipelineContext();
-  return sharedCtx;
-};
-
-const run = async (text: string) => {
-  const dictionaries = await getDictionaries();
-  return runPipeline({
-    fullText: text,
-    config: { ...CONFIG, dictionaries },
-    gazetteerEntries: [],
-    context: getCtx(),
-  });
-};
+const run = (text: string) => detectNative(CONFIG, text);
 
 describe("UK financial-crime additions", () => {
   test("UK postcode emits an address entity", async () => {
