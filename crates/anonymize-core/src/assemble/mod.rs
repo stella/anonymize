@@ -20,6 +20,9 @@ pub use config::{
   CustomDenyListEntry, CustomRegexPattern, DenyListCategory, DictionaryMeta,
   PipelineConfig, PreparedArtifactPolicy,
 };
+pub use data::{
+  OrderedMap, data_file, parse_data_file, parse_ordered_data_file,
+};
 pub use dictionaries::Dictionaries;
 pub use error::AssembleError;
 pub use gazetteer::{GazetteerEntry, GazetteerSource};

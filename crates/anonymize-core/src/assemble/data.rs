@@ -5,7 +5,11 @@
 //! effects): callers request a file by name and deserialize it into a typed
 //! shape only when a slice needs it.
 
-use serde::de::DeserializeOwned;
+use std::fmt;
+use std::marker::PhantomData;
+
+use serde::de::{DeserializeOwned, MapAccess, Visitor};
+use serde::{Deserialize, Deserializer};
 
 use super::error::AssembleError;
 
@@ -49,6 +53,77 @@ pub fn parse_data_file<T: DeserializeOwned>(
     name: name.to_string(),
     message: error.to_string(),
   })
+}
+
+/// A JSON object deserialized while preserving its document key order.
+///
+/// `serde_json`'s `Value`/`Map` sort keys into a `BTreeMap` unless the
+/// `preserve_order` feature is on, which would rewrite the semantics globally.
+/// The assembler ports TypeScript logic that iterates `Object.entries(...)` in
+/// insertion order (dictionary flatten/dedup, month tables), so key order is
+/// load-bearing. Streaming deserialization through `MapAccess` yields entries
+/// in document order regardless of that feature, so this newtype captures the
+/// JS `Object.entries` order without touching the rest of the crate.
+#[derive(Clone, Debug, Default)]
+pub struct OrderedMap<T>(pub Vec<(String, T)>);
+
+impl<T> OrderedMap<T> {
+  /// Iterates the `(key, value)` pairs in document order.
+  pub fn iter(&self) -> std::slice::Iter<'_, (String, T)> {
+    self.0.iter()
+  }
+}
+
+impl<'a, T> IntoIterator for &'a OrderedMap<T> {
+  type Item = &'a (String, T);
+  type IntoIter = std::slice::Iter<'a, (String, T)>;
+
+  fn into_iter(self) -> Self::IntoIter {
+    self.0.iter()
+  }
+}
+
+impl<'de, T: Deserialize<'de>> Deserialize<'de> for OrderedMap<T> {
+  fn deserialize<D: Deserializer<'de>>(
+    deserializer: D,
+  ) -> Result<Self, D::Error> {
+    struct OrderedVisitor<T>(PhantomData<T>);
+
+    impl<'de, T: Deserialize<'de>> Visitor<'de> for OrderedVisitor<T> {
+      type Value = Vec<(String, T)>;
+
+      fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("a JSON object")
+      }
+
+      fn visit_map<A: MapAccess<'de>>(
+        self,
+        mut map: A,
+      ) -> Result<Self::Value, A::Error> {
+        let mut entries = Vec::new();
+        while let Some((key, value)) = map.next_entry::<String, T>()? {
+          entries.push((key, value));
+        }
+        Ok(entries)
+      }
+    }
+
+    deserializer
+      .deserialize_map(OrderedVisitor(PhantomData))
+      .map(OrderedMap)
+  }
+}
+
+/// Parses an embedded data file into an order-preserving object on demand.
+///
+/// # Errors
+///
+/// Returns [`AssembleError::MissingDataFile`] when the name is not embedded and
+/// [`AssembleError::DataParse`] when the contents do not match `OrderedMap<T>`.
+pub fn parse_ordered_data_file<T: DeserializeOwned>(
+  name: &str,
+) -> Result<OrderedMap<T>, AssembleError> {
+  parse_data_file(name)
 }
 
 #[cfg(test)]
