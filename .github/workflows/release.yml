@@ -153,6 +153,10 @@ jobs:
 
       - name: Build
         run: bun run build
+        env:
+          # Native sidecar packs only need the platform .node binding; skip
+          # the wasm32-wasip1-threads build on the platform matrix runners.
+          STELLA_ANONYMIZE_SKIP_WASM_BUILD: "1"
 
       - name: Read package metadata
         id: package

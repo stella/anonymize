@@ -29,6 +29,13 @@ import {
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+if (process.env.STELLA_ANONYMIZE_SKIP_WASM_BUILD === "1") {
+  console.log(
+    "build-native-wasm-assets: skipped (STELLA_ANONYMIZE_SKIP_WASM_BUILD=1)",
+  );
+  process.exit(0);
+}
+
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const wasmDistDir = join(packageRoot, "native-wasm-dist");
 const distNativeDir = join(packageRoot, "wasm", "dist", "native");
