@@ -16,6 +16,9 @@ export default defineConfig([
     hash: false,
   },
   {
+    // The wasm binding is loaded at runtime from the copied `native/` asset
+    // directory via a dynamic `import(new URL(...).href)`, so there is no
+    // build-time dependency to keep external here.
     entry: ["src/wasm.ts", "src/constants.ts"],
     outDir: "wasm/dist",
     format: ["esm"],
@@ -23,14 +26,6 @@ export default defineConfig([
     clean: true,
     sourcemap: true,
     hash: false,
-    deps: {
-      neverBundle: [
-        /^@stll\/text-search-wasm$/,
-        /^@stll\/aho-corasick-wasm$/,
-        /^@stll\/fuzzy-search-wasm$/,
-        /^@stll\/regex-set-wasm$/,
-      ],
-    },
   },
   {
     entry: ["src/vite.ts"],

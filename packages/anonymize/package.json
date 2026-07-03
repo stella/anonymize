@@ -62,7 +62,9 @@
     "check:v1-native:full": "ANONYMIZE_V1_READINESS_MODE=full bun scripts/native-v1-readiness.mjs",
     "smoke:dist": "bun scripts/dist-smoke.mjs",
     "build:native-wasm": "napi build --manifest-path ../../crates/anonymize-napi/Cargo.toml --config-path ../../crates/anonymize-napi/napi.json --platform --target wasm32-wasip1-threads --no-default-features --release --output-dir native-wasm-dist",
+    "build:wasm-assets": "node scripts/build-native-wasm-assets.mjs",
     "smoke:wasm": "node scripts/smoke-wasm.mjs",
+    "smoke:wasm-package": "node scripts/smoke-wasm-package.mjs",
     "format": "oxfmt ."
   },
   "dependencies": {
