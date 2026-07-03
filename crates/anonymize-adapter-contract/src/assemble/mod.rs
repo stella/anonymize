@@ -34,8 +34,12 @@ use stella_anonymize_core::assemble::{
 use crate::{
   BindingNameCorpusMode, BindingPreparedArtifactPolicy,
   BindingPreparedSearchConfig, BindingRegexArtifactPolicy,
-  BindingSearchOptions, BindingSearchPattern,
+  BindingRegexMatchMeta, BindingSearchOptions, BindingSearchPattern,
 };
+
+/// `DEFAULT_CUSTOM_REGEX_SCORE`: the score a caller-supplied regex without an
+/// explicit score gets in `customRegexMeta`.
+const DEFAULT_CUSTOM_REGEX_SCORE: f64 = 0.9;
 
 /// Fields of [`BindingPreparedSearchConfig`] this slice fills from the inputs.
 ///
@@ -60,6 +64,7 @@ pub const FIELDS_IMPLEMENTED: &[&str] = &[
   "address_seed_data",
   "country_data",
   "hotword_data",
+  "custom_regex_meta",
 ];
 
 /// Fields still left at their `Default` value, to be filled by later slices.
@@ -70,7 +75,6 @@ pub const FIELDS_PENDING: &[&str] = &[
   "literal_patterns_from_deny_list_data",
   "slices",
   "regex_meta",
-  "custom_regex_meta",
   "deny_list_data",
   "false_positive_filters",
   "gazetteer_data",
@@ -148,6 +152,7 @@ pub fn assemble_static_search_config(
 
   Ok(BindingPreparedSearchConfig {
     custom_regex_patterns: assemble_custom_regex_patterns(&ctx),
+    custom_regex_meta: assemble_custom_regex_meta(&ctx),
     allowed_labels: config.labels.clone(),
     threshold: config.threshold,
     confidence_boost: config.enable_confidence_boost,
@@ -206,6 +211,30 @@ fn assemble_custom_regex_patterns(
     .iter()
     .filter(|entry| ctx.label_allowed(entry.label.as_str()))
     .map(custom_regex_pattern)
+    .collect()
+}
+
+/// Mirrors `customRegexMeta.map(toNativeRegexMeta)`. Caller-supplied regexes
+/// never carry a validator, so this reduces to the label, the score (defaulting
+/// to [`DEFAULT_CUSTOM_REGEX_SCORE`]), and the `custom-regex` source detail.
+fn assemble_custom_regex_meta(
+  ctx: &AssembleContext<'_>,
+) -> Vec<BindingRegexMatchMeta> {
+  if !ctx.config.enable_regex {
+    return Vec::new();
+  }
+  let Some(customs) = ctx.config.custom_regexes.as_ref() else {
+    return Vec::new();
+  };
+  customs
+    .iter()
+    .filter(|entry| ctx.label_allowed(entry.label.as_str()))
+    .map(|entry| BindingRegexMatchMeta {
+      label: entry.label.clone(),
+      score: entry.score.unwrap_or(DEFAULT_CUSTOM_REGEX_SCORE),
+      source_detail: Some("custom-regex".to_string()),
+      ..BindingRegexMatchMeta::default()
+    })
     .collect()
 }
 

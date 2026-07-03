@@ -11767,5 +11767,12 @@
       }
     ],
     "pattern_rule_indices": []
-  }
+  },
+  "custom_regex_meta": [
+    {
+      "label": "case number",
+      "score": 0.9,
+      "source_detail": "custom-regex"
+    }
+  ]
 }

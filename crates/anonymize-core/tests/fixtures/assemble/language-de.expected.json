@@ -11170,5 +11170,6 @@
       }
     ],
     "pattern_rule_indices": []
-  }
+  },
+  "custom_regex_meta": []
 }

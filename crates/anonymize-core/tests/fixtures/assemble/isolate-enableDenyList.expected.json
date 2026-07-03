@@ -565,5 +565,6 @@
       "portadora"
     ],
     "unit_abbreviations": ["apt.", "bldg.", "fl.", "ste.", "unit."]
-  }
+  },
+  "custom_regex_meta": []
 }

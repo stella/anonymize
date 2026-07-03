@@ -159,6 +159,12 @@ fn compare_implemented(
       actual.hotword_data, expected.hotword_data
     ));
   }
+  if actual.custom_regex_meta != expected.custom_regex_meta {
+    return Err(format!(
+      "{name}: custom_regex_meta {:?} != {:?}",
+      actual.custom_regex_meta, expected.custom_regex_meta
+    ));
+  }
   Ok(())
 }
 

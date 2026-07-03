@@ -50,6 +50,7 @@ const IMPLEMENTED_FIELDS = [
   "address_seed_data",
   "country_data",
   "hotword_data",
+  "custom_regex_meta",
 ];
 
 const TOGGLES = [
