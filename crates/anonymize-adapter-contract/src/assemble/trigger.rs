@@ -126,12 +126,21 @@ enum StrategyConfig {
 #[serde(tag = "type", rename_all = "kebab-case")]
 enum ValidationConfig {
   StartsUppercase,
-  MinLength { min: u32 },
-  MaxLength { max: u32 },
+  MinLength {
+    min: u32,
+  },
+  MaxLength {
+    max: u32,
+  },
   NoDigits,
   HasDigits,
-  MatchesPattern { pattern: String, flags: Option<String> },
-  ValidId { validator: String },
+  MatchesPattern {
+    pattern: String,
+    flags: Option<String>,
+  },
+  ValidId {
+    validator: String,
+  },
 }
 
 /// Mirrors `toNativeTriggerStrategy`.
@@ -198,8 +207,11 @@ fn expand_trigger_groups(
   for group in groups {
     let include_trigger = group.include_trigger.unwrap_or(false);
     let strategy = to_native_strategy(group.strategy);
-    let validations: Vec<BindingTriggerValidation> =
-      group.validations.into_iter().map(to_native_validation).collect();
+    let validations: Vec<BindingTriggerValidation> = group
+      .validations
+      .into_iter()
+      .map(to_native_validation)
+      .collect();
 
     let mut order: Vec<String> = Vec::new();
     let mut seen: HashSet<String> = HashSet::new();
@@ -327,7 +339,8 @@ pub(super) fn build_trigger_rules(
     let groups: Vec<TriggerGroupConfig> = parse_data_file(&file)?;
     expand_trigger_groups(groups, &mut rules);
   }
-  let global: Vec<TriggerGroupConfig> = parse_data_file("triggers.global.json")?;
+  let global: Vec<TriggerGroupConfig> =
+    parse_data_file("triggers.global.json")?;
   expand_trigger_groups(global, &mut rules);
   push_year_word_rules(selected, &mut rules)?;
   Ok(rules)

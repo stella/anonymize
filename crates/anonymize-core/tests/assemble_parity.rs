@@ -165,6 +165,18 @@ fn compare_implemented(
       actual.custom_regex_meta, expected.custom_regex_meta
     ));
   }
+  compare_c2_data(name, actual, expected)?;
+  compare_trigger_data(name, actual, expected)?;
+  compare_regex_and_legal(name, actual, expected)?;
+  Ok(())
+}
+
+/// Slice C2 data fields compared field-by-field.
+fn compare_c2_data(
+  name: &str,
+  actual: &BindingPreparedSearchConfig,
+  expected: &BindingPreparedSearchConfig,
+) -> Result<(), String> {
   if actual.gazetteer_data != expected.gazetteer_data {
     return Err(format!(
       "{name}: gazetteer_data {:?} != {:?}",
@@ -177,8 +189,6 @@ fn compare_implemented(
       actual.coreference_data, expected.coreference_data
     ));
   }
-  compare_trigger_data(name, actual, expected)?;
-  compare_regex_and_legal(name, actual, expected)?;
   Ok(())
 }
 
@@ -199,8 +209,7 @@ fn compare_trigger_data(
           want.rules.len()
         ));
       }
-      for (index, (g, w)) in
-        got.rules.iter().zip(want.rules.iter()).enumerate()
+      for (index, (g, w)) in got.rules.iter().zip(want.rules.iter()).enumerate()
       {
         if g != w {
           return Err(format!(
