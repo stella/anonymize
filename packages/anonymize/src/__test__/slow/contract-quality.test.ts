@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { createPipelineContext, runPipeline } from "../../index";
+import { createPipelineContext, runPipeline } from "../../legacy";
 import type { Dictionaries } from "../../types";
 import { contractTestConfig } from "../contract-config";
 import { loadTestDictionaries } from "../load-dictionaries";

@@ -3,7 +3,7 @@ import {
   runPipeline,
   DEFAULT_ENTITY_LABELS,
   createPipelineContext,
-} from "../index";
+} from "../legacy";
 import { processLegalFormMatches } from "../detectors/legal-forms";
 import type { PipelineContext } from "../context";
 import type { PipelineConfig } from "../types";

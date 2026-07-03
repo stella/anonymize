@@ -3,13 +3,28 @@ import { describe, expect, test } from "bun:test";
 import {
   createPipelineContext,
   DEFAULT_ENTITY_LABELS,
+  createNativePipelineFromConfig,
   preparePipelineSearch,
+  prepareNativePipelineConfig,
+  prepareNativePipelinePackage,
   redactText,
   runPipeline,
-} from "../index";
-import { buildUnifiedSearch } from "../build-unified-search";
-import { REGEX_META } from "../detectors/regex";
-import type { Dictionaries, PipelineConfig } from "../types";
+} from "../legacy";
+import {
+  buildNativeStaticSearchBundle,
+  buildUnifiedSearch,
+} from "../build-unified-search";
+import {
+  REGEX_META,
+  REGEX_PATTERNS,
+  getNativeSigningClausePatterns,
+  getSigningClausePatterns,
+} from "../detectors/regex";
+import { filterFalsePositives } from "../filters/false-positives";
+import { applyPipelineLanguageScope } from "../language-scope";
+import { languageConfigMatches } from "../util/language-selection";
+import type { NativeAnonymizeBinding } from "../native";
+import type { Dictionaries, Entity, PipelineConfig } from "../types";
 import { loadTestDictionaries } from "./load-dictionaries";
 
 let dictionaries: Dictionaries;
@@ -39,6 +54,19 @@ const getCtx = () => {
   return sharedCtx;
 };
 
+const signingPatternText = (
+  pattern: Awaited<ReturnType<typeof getNativeSigningClausePatterns>>[number],
+) => {
+  if (typeof pattern === "string") {
+    return pattern;
+  }
+  if (pattern instanceof RegExp) {
+    return pattern.source;
+  }
+  const { pattern: entryPattern } = pattern;
+  return entryPattern instanceof RegExp ? entryPattern.source : entryPattern;
+};
+
 const detect = async (fullText: string, config: Partial<PipelineConfig>) =>
   runPipeline({
     fullText,
@@ -50,7 +78,88 @@ const detect = async (fullText: string, config: Partial<PipelineConfig>) =>
     context: getCtx(),
   });
 
+const createCountingNativeBinding = (version: string) => {
+  let compressedPrepare = 0;
+  let rawPrepare = 0;
+  let fromPackage = 0;
+  const binding = {
+    normalizeForSearch: (text: string) => text,
+    nativePackageVersion: () => version,
+    NativePreparedSearch: {
+      fromConfigJsonBytes: () => {
+        throw new Error("native package cache test should use package bytes");
+      },
+      fromPreparedPackageBytes: () => {
+        fromPackage += 1;
+        return {
+          prepareDiagnosticsJson: () => JSON.stringify({ events: [] }),
+          redactStaticEntities: (fullText: string) => ({
+            resolvedEntities: [],
+            redaction: {
+              redactedText: fullText,
+              redactionMap: [],
+              operatorMap: [],
+              entityCount: 0,
+            },
+          }),
+        };
+      },
+    },
+    prepareStaticSearchPackageBytes: (configJson: Uint8Array) => {
+      rawPrepare += 1;
+      return new Uint8Array([rawPrepare, configJson.byteLength % 256]);
+    },
+    prepareStaticSearchCompressedPackageBytes: (configJson: Uint8Array) => {
+      compressedPrepare += 1;
+      return new Uint8Array([compressedPrepare, configJson.byteLength % 256]);
+    },
+  } satisfies NativeAnonymizeBinding;
+
+  return {
+    binding,
+    counts: () => ({
+      compressedPrepare,
+      fromPackage,
+      rawPrepare,
+    }),
+  };
+};
+
 describe("pipeline config semantics", () => {
+  test("content language derives dictionary scopes", () => {
+    expect(
+      applyPipelineLanguageScope({
+        ...BASE_CONFIG,
+        language: "en-US",
+      }),
+    ).toMatchObject({
+      nameCorpusLanguages: ["en"],
+      denyListCountries: ["US", "GB", "CA", "AU", "IE"],
+    });
+  });
+
+  test("explicit dictionary scopes override content language", () => {
+    expect(
+      applyPipelineLanguageScope({
+        ...BASE_CONFIG,
+        language: "en",
+        denyListCountries: ["CZ"],
+        nameCorpusLanguages: ["cs"],
+      }),
+    ).toMatchObject({
+      nameCorpusLanguages: ["cs"],
+      denyListCountries: ["CZ"],
+    });
+  });
+
+  test("language config matching keeps regional hints precise", () => {
+    expect(languageConfigMatches("en", ["en-US"])).toBe(true);
+    expect(languageConfigMatches("pt", ["pt-BR"])).toBe(true);
+    expect(languageConfigMatches("pt-br", ["pt-BR"])).toBe(true);
+    expect(languageConfigMatches("pt-br", ["pt-PT"])).toBe(false);
+    expect(languageConfigMatches("en", [""])).toBe(true);
+  });
+
   test("empty labels do not suppress deterministic detectors", async () => {
     const entities = await detect("Datum narození: 2024-01-02", {
       enableRegex: true,
@@ -72,17 +181,854 @@ describe("pipeline config semantics", () => {
       {
         ...BASE_CONFIG,
         enableRegex: true,
-        labels: ["email address"],
+        labels: ["email address", "registration number"],
       },
       [],
       createPipelineContext(),
     );
     const regexCount = search.slices.regex.end - search.slices.regex.start;
     const expected = REGEX_META.filter(
-      (meta) => meta.label === "email address",
+      (meta) =>
+        meta.label === "email address" || meta.label === "registration number",
     ).length;
 
     expect(regexCount).toBe(expected);
+  });
+
+  test("native config carries final label and threshold filters", async () => {
+    const search = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        enableRegex: true,
+        enableConfidenceBoost: true,
+        labels: ["person"],
+        threshold: 0.93,
+      },
+      [],
+      createPipelineContext(),
+    );
+
+    expect(search.nativeStaticConfig.allowed_labels).toEqual(["person"]);
+    expect(search.nativeStaticConfig.threshold).toBe(0.93);
+    expect(search.nativeStaticConfig.confidence_boost).toBe(true);
+    expect(search.nativeStaticConfig.regex_options.regex_artifact_policy).toBe(
+      "omit",
+    );
+    expect(
+      search.nativeStaticConfig.custom_regex_options.regex_artifact_policy,
+    ).toBe("omit");
+  });
+
+  test("native config carries false-positive filters without deny-list matching", async () => {
+    const search = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        enableDenyList: false,
+        enableRegex: true,
+        labels: ["organization"],
+      },
+      [],
+      createPipelineContext(),
+    );
+
+    expect(search.nativeStaticConfig.deny_list_data).toBeUndefined();
+    expect(
+      search.nativeStaticConfig.false_positive_filters?.document_heading_words,
+    ).toContain("schedule");
+  });
+
+  test("native config lets custom regexes opt into prepared artifacts", async () => {
+    const search = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        enableRegex: true,
+        customRegexes: [
+          {
+            pattern: "INV-[0-9]+",
+            label: "registration number",
+            score: 1,
+            preparedArtifactPolicy: "include",
+          },
+        ],
+        labels: ["registration number"],
+      },
+      [],
+      createPipelineContext(),
+    );
+
+    expect(
+      search.nativeStaticConfig.custom_regex_options.regex_artifact_policy,
+    ).toBe("omit");
+    expect(search.nativeStaticConfig.custom_regex_patterns).toContainEqual(
+      expect.objectContaining({
+        pattern: "INV-[0-9]+",
+        prepared_artifact_policy: "include",
+      }),
+    );
+  });
+
+  test("native config carries hotword rule metadata", async () => {
+    const search = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        enableRegex: true,
+        enableHotwordRules: true,
+        labels: ["date of birth"],
+      },
+      [],
+      createPipelineContext(),
+    );
+
+    expect(search.nativeStaticConfig.allowed_labels).toEqual(["date of birth"]);
+    expect(search.nativeStaticConfig.slices.hotwords).toEqual({
+      start: search.nativeStaticConfig.slices.hotwords?.start ?? 0,
+      end: search.nativeStaticConfig.slices.hotwords?.start ?? 0,
+    });
+    expect(
+      search.nativeStaticConfig.hotword_data?.rules.some((rule) =>
+        rule.hotwords.includes("born"),
+      ),
+    ).toBe(true);
+    expect(
+      search.nativeStaticConfig.literal_patterns.some(
+        (pattern) => pattern.pattern === "born",
+      ),
+    ).toBe(false);
+    expect(
+      search.nativeStaticConfig.hotword_data?.pattern_rule_indices,
+    ).toEqual([]);
+  });
+
+  test("native signing-place patterns match TypeScript signing patterns", async () => {
+    const [tsPatterns, nativePatterns] = await Promise.all([
+      getSigningClausePatterns(),
+      getNativeSigningClausePatterns(),
+    ]);
+    const nativePatternTexts = nativePatterns.map(signingPatternText);
+
+    expect(nativePatternTexts).toEqual(tsPatterns);
+    expect(
+      nativePatternTexts.some((pattern) => pattern.includes("Signed")),
+    ).toBe(true);
+    expect(nativePatternTexts.some((pattern) => pattern.includes("À"))).toBe(
+      true,
+    );
+  });
+
+  test("native signing-place patterns carry prefilter metadata", async () => {
+    const nativePatterns = await getNativeSigningClausePatterns(["fr-FR"]);
+    expect(nativePatterns).toHaveLength(1);
+    expect(nativePatterns.at(0)).toMatchObject({
+      lazy: true,
+      prefilterAny: ["À ", "à "],
+      prefilterCaseInsensitive: false,
+      prefilterWindowBytes: 160,
+      preparedArtifactPolicy: "omit",
+    });
+
+    const search = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        enableRegex: true,
+        labels: ["address"],
+        language: "fr-FR",
+      },
+      [],
+      createPipelineContext(),
+    );
+    const signingPattern = search.nativeStaticConfig.regex_patterns.find(
+      (pattern) => pattern.kind === "regex" && pattern.pattern.includes("Fait"),
+    );
+
+    expect(signingPattern).toMatchObject({
+      lazy: true,
+      prefilter_any: ["À ", "à "],
+      prefilter_case_insensitive: false,
+      prefilter_window_bytes: 160,
+      prepared_artifact_policy: "omit",
+    });
+  });
+
+  test("content language scopes native signing-place patterns", async () => {
+    const [tsPatterns, nativePatterns] = await Promise.all([
+      getSigningClausePatterns(["en-US"]),
+      getNativeSigningClausePatterns(["en-US"]),
+    ]);
+    const nativePatternTexts = nativePatterns.map(signingPatternText);
+    const search = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        enableRegex: true,
+        enableZoneClassification: true,
+        labels: ["address"],
+        language: "en-US",
+      },
+      [],
+      createPipelineContext(),
+    );
+    const regexPatterns = search.nativeStaticConfig.regex_patterns.map(
+      (pattern) => pattern.pattern,
+    );
+
+    expect(nativePatternTexts).toEqual(tsPatterns);
+    expect(nativePatternTexts).toHaveLength(1);
+    expect(nativePatternTexts.at(0)).toContain("Signed");
+    expect(regexPatterns.some((pattern) => pattern.includes("Signed"))).toBe(
+      true,
+    );
+    expect(regexPatterns.some((pattern) => pattern.includes("Fatto"))).toBe(
+      false,
+    );
+    expect(search.nativeStaticConfig.zone_data?.signing_clauses).toHaveLength(
+      1,
+    );
+  });
+
+  test("native pipeline package context cache is scoped by dictionary identity", async () => {
+    const { binding, counts } = createCountingNativeBinding(
+      "native-cache-context-dictionaries",
+    );
+    const context = createPipelineContext();
+    const cacheDictionaries = {
+      firstNames: {
+        en: ["Ada"],
+      },
+    } satisfies Dictionaries;
+    const config = {
+      ...BASE_CONFIG,
+      dictionaries: cacheDictionaries,
+      enableCountries: false,
+      labels: ["person"],
+    };
+
+    await prepareNativePipelinePackage({ binding, config, context });
+    await prepareNativePipelinePackage({
+      binding,
+      config: {
+        ...config,
+        dictionaries: { ...cacheDictionaries },
+      },
+      context,
+    });
+
+    expect(counts().rawPrepare).toBe(2);
+  });
+
+  test("native config carries coreference definition data", async () => {
+    const search = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        enableCoreference: true,
+        enableRegex: true,
+        labels: ["organization"],
+      },
+      [],
+      createPipelineContext(),
+    );
+
+    expect(
+      search.nativeStaticConfig.coreference_data?.definition_patterns.length,
+    ).toBeGreaterThan(0);
+    expect(
+      search.nativeStaticConfig.coreference_data?.role_stop_terms,
+    ).toContain("seller");
+    expect(
+      search.nativeStaticConfig.coreference_data?.legal_form_aliases,
+    ).toContain("LLC");
+    expect(
+      search.nativeStaticConfig.coreference_data?.legal_form_aliases,
+    ).toContain("Kft.");
+    expect(
+      search.nativeStaticConfig.coreference_data?.organization_suffixes,
+    ).toContain("LLC");
+    expect(
+      search.nativeStaticConfig.coreference_data?.organization_suffixes,
+    ).not.toContain("Kft.");
+    expect(
+      search.nativeStaticConfig.coreference_data?.organization_determiners,
+    ).toContain("the\\s+(?:company|corporation|firm)");
+  });
+
+  test("content language scopes native coreference data", async () => {
+    const base = {
+      ...BASE_CONFIG,
+      enableCoreference: true,
+      labels: ["organization"],
+    };
+    const unscoped = await buildUnifiedSearch(
+      base,
+      [],
+      createPipelineContext(),
+    );
+    const scoped = await buildUnifiedSearch(
+      { ...base, language: "en-US" },
+      [],
+      createPipelineContext(),
+    );
+
+    const unscopedPatterns =
+      unscoped.nativeStaticConfig.coreference_data?.definition_patterns ?? [];
+    const scopedPatterns =
+      scoped.nativeStaticConfig.coreference_data?.definition_patterns.map(
+        (pattern) => pattern.pattern,
+      ) ?? [];
+
+    expect(scopedPatterns.length).toBeLessThan(unscopedPatterns.length);
+    expect(
+      scopedPatterns.some((pattern) => pattern.includes("hereinafter")),
+    ).toBe(true);
+    expect(scopedPatterns.some((pattern) => pattern.includes("dále"))).toBe(
+      false,
+    );
+    expect(
+      scoped.nativeStaticConfig.coreference_data?.organization_determiners,
+    ).toEqual(["the\\s+(?:company|corporation|firm)"]);
+  });
+
+  test("native config carries zone classifier data", async () => {
+    const search = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        enableZoneClassification: true,
+        labels: ["person"],
+      },
+      [],
+      createPipelineContext(),
+    );
+
+    expect(
+      search.nativeStaticConfig.zone_data?.section_heading_patterns.length,
+    ).toBeGreaterThan(0);
+    expect(
+      search.nativeStaticConfig.zone_data?.section_heading_patterns.some(
+        ({ pattern }) => pattern.includes("Article"),
+      ),
+    ).toBe(true);
+    expect(
+      search.nativeStaticConfig.zone_data?.signing_clauses.length,
+    ).toBeGreaterThan(0);
+  });
+
+  test("native trigger config carries legal suffix data without legal-form search", async () => {
+    const search = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        enableTriggerPhrases: true,
+        enableLegalForms: false,
+        labels: ["organization"],
+      },
+      [],
+      createPipelineContext(),
+    );
+
+    const legalFormsSlice = search.nativeStaticConfig.slices.legal_forms;
+    expect(legalFormsSlice).toBeDefined();
+    expect(legalFormsSlice?.end).toBe(legalFormsSlice?.start);
+    expect(
+      search.nativeStaticConfig.legal_form_data?.suffixes.length,
+    ).toBeGreaterThan(0);
+    expect(
+      search.nativeStaticConfig.trigger_data?.rules.length,
+    ).toBeGreaterThan(0);
+  });
+
+  test("native trigger config carries language-scoped support labels", async () => {
+    const search = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        enableTriggerPhrases: true,
+        labels: ["phone number", "registration number", "matter id"],
+        language: "en",
+      },
+      [],
+      createPipelineContext(),
+    );
+
+    expect(
+      search.nativeStaticConfig.trigger_data?.phone_extension_labels,
+    ).toContain("ext");
+    expect(search.nativeStaticConfig.trigger_data?.number_markers).toContain(
+      "no",
+    );
+    expect(search.nativeStaticConfig.trigger_data?.number_labels).toContain(
+      "no.",
+    );
+    expect(search.nativeStaticConfig.trigger_data?.number_labels).toContain(
+      "№",
+    );
+  });
+
+  test("native signature config is packaged without content-language drift", async () => {
+    const search = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        labels: ["person"],
+        language: "cs",
+      },
+      [],
+      createPipelineContext(),
+    );
+
+    expect(search.nativeStaticConfig.signature_data?.labels).toContain("name");
+    expect(search.nativeStaticConfig.signature_data?.witness_phrases).toContain(
+      "in witness whereof",
+    );
+    expect(
+      search.nativeStaticConfig.signature_data?.organization_suffixes,
+    ).toContain("inc.");
+    expect(
+      search.nativeStaticConfig.signature_data?.image_stub_prefixes,
+    ).toContain("[logo");
+  });
+
+  test("native config carries stdnum validator metadata", async () => {
+    const search = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        enableRegex: true,
+        labels: ["national identification number"],
+      },
+      [],
+      createPipelineContext(),
+    );
+
+    const patternIndex = search.nativeStaticConfig.regex_meta.findIndex(
+      (entry) => entry.validator_id === "cn.ric",
+    );
+    expect(patternIndex).toBeGreaterThanOrEqual(0);
+    const meta = search.nativeStaticConfig.regex_meta.at(patternIndex);
+    expect(meta).toMatchObject({
+      label: "national identification number",
+      requires_validation: true,
+      validator_id: "cn.ric",
+    });
+    expect(
+      search.nativeStaticConfig.regex_meta.filter(
+        (entry) => entry.requires_validation === true && !entry.validator_id,
+      ),
+    ).toEqual([]);
+  });
+
+  test("native config keeps generated stdnum regexes artifact-free", async () => {
+    const search = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        enableRegex: true,
+        labels: ["tax identification number", "national identification number"],
+      },
+      [],
+      createPipelineContext(),
+    );
+    const patternForValidator = (validatorId: string) => {
+      const index = search.nativeStaticConfig.regex_meta.findIndex(
+        (entry) => entry.validator_id === validatorId,
+      );
+      expect(index).toBeGreaterThanOrEqual(0);
+      const pattern = search.nativeStaticConfig.regex_patterns.at(index);
+      if (pattern?.kind !== "regex") {
+        throw new Error(`Missing regex pattern for ${validatorId}`);
+      }
+      return pattern;
+    };
+
+    expect(patternForValidator("fr.tva")).toMatchObject({
+      lazy: true,
+      prefilter_any: ["FR"],
+      prefilter_case_insensitive: false,
+      prepared_artifact_policy: "omit",
+    });
+    expect(patternForValidator("lv.vat")).toMatchObject({
+      lazy: true,
+      prefilter_any: ["LV"],
+      prepared_artifact_policy: "omit",
+    });
+    expect(patternForValidator("lt.asmens")).not.toHaveProperty(
+      "prepared_artifact_policy",
+    );
+
+    const contextValidatorIndex =
+      search.nativeStaticConfig.regex_meta.findIndex(
+        (entry) => entry.validator_id === "gb.nhs",
+      );
+    expect(contextValidatorIndex).toBeGreaterThanOrEqual(0);
+    expect(
+      search.nativeStaticConfig.regex_patterns.at(contextValidatorIndex),
+    ).toMatchObject({
+      lazy: true,
+      prepared_artifact_policy: "omit",
+    });
+  });
+
+  test("native config carries static regex prefilter metadata", async () => {
+    const search = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        enableRegex: true,
+        labels: ["email address", "registration number"],
+      },
+      [],
+      createPipelineContext(),
+    );
+
+    expect(REGEX_PATTERNS.every((pattern) => typeof pattern === "string")).toBe(
+      true,
+    );
+    const emailPattern = search.nativeStaticConfig.regex_patterns.find(
+      (pattern) =>
+        pattern.kind === "regex" &&
+        pattern.pattern === "\\b[\\w.+\\-]+@[\\w\\-]+(?:\\.[\\w\\-]+)+\\b",
+    );
+
+    expect(emailPattern).toMatchObject({
+      lazy: true,
+      prefilter_any: ["@"],
+      prefilter_case_insensitive: false,
+    });
+
+    const czechRegistryPattern = search.nativeStaticConfig.regex_patterns.find(
+      (pattern) =>
+        pattern.kind === "regex" && pattern.pattern.includes("[Oo][Dd][Dd]"),
+    );
+
+    expect(czechRegistryPattern).toMatchObject({
+      lazy: true,
+      prefilter_any: ["oddíl", "vložka"],
+      prefilter_case_insensitive: true,
+    });
+  });
+
+  test("native config carries windowed regex prefilters", async () => {
+    const search = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        enableRegex: true,
+        labels: ["address", "passport number"],
+      },
+      [],
+      createPipelineContext(),
+    );
+
+    const spanishPostalPattern = search.nativeStaticConfig.regex_patterns.find(
+      (pattern) =>
+        pattern.kind === "regex" && pattern.pattern.includes("[Cc][óo]digo"),
+    );
+    const passportPattern = search.nativeStaticConfig.regex_patterns.find(
+      (pattern) =>
+        pattern.kind === "regex" && pattern.pattern.includes("passports?"),
+    );
+
+    expect(spanishPostalPattern).toMatchObject({
+      lazy: true,
+      prefilter_window_bytes: 160,
+      prepared_artifact_policy: "omit",
+    });
+    expect(passportPattern).toMatchObject({
+      lazy: true,
+      prefilter_window_bytes: 160,
+      prepared_artifact_policy: "omit",
+    });
+  });
+
+  test("native config splits percent regex prefilters", async () => {
+    const search = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        enableRegex: true,
+        labels: ["monetary amount"],
+      },
+      [],
+      createPipelineContext(),
+    );
+
+    const percentPatterns = search.nativeStaticConfig.regex_patterns.filter(
+      (pattern, index) =>
+        pattern.kind === "regex" &&
+        search.nativeStaticConfig.regex_meta[index]?.label ===
+          "monetary amount" &&
+        pattern.pattern.includes("%"),
+    );
+    const writtenPercentPattern = percentPatterns.find((pattern) =>
+      pattern.pattern.includes("one hundred"),
+    );
+    const numericPercentPattern = percentPatterns.find(
+      (pattern) => !pattern.pattern.includes("one hundred"),
+    );
+
+    expect(writtenPercentPattern).toMatchObject({
+      lazy: true,
+      prefilter_any: ["percent"],
+      prefilter_case_insensitive: true,
+      prefilter_window_bytes: 160,
+    });
+    expect(numericPercentPattern).toMatchObject({
+      lazy: true,
+      prefilter_any: ["%"],
+      prefilter_case_insensitive: false,
+    });
+  });
+
+  test("native trigger config carries currency terms and monetary extension data", async () => {
+    const search = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        enableRegex: false,
+        enableTriggerPhrases: true,
+        labels: [],
+      },
+      [],
+      createPipelineContext(),
+    );
+
+    expect(
+      search.nativeStaticConfig.trigger_data?.sentence_terminal_currency_terms
+        .length,
+    ).toBeGreaterThan(0);
+    expect(search.nativeStaticConfig.monetary_data).toBeDefined();
+  });
+
+  test("native date data gates year words on trigger phrases", async () => {
+    const regexOnly = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        enableRegex: true,
+        enableTriggerPhrases: false,
+        labels: ["date"],
+      },
+      [],
+      createPipelineContext(),
+    );
+    const withTriggers = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        enableRegex: true,
+        enableTriggerPhrases: true,
+        labels: ["date"],
+      },
+      [],
+      createPipelineContext(),
+    );
+
+    expect(
+      Object.values(
+        regexOnly.nativeStaticConfig.date_data?.year_words_by_language ?? {},
+      ).flat(),
+    ).toEqual([]);
+    expect(
+      Object.values(
+        withTriggers.nativeStaticConfig.date_data?.year_words_by_language ?? {},
+      ).flat().length,
+    ).toBeGreaterThan(0);
+  });
+
+  test("content language scopes native date data", async () => {
+    const base = {
+      ...BASE_CONFIG,
+      enableRegex: true,
+      enableTriggerPhrases: true,
+      labels: ["date"],
+    };
+    const unscoped = await buildNativeStaticSearchBundle(
+      base,
+      [],
+      createPipelineContext(),
+    );
+    const scoped = await buildNativeStaticSearchBundle(
+      { ...base, language: "en-US" },
+      [],
+      createPipelineContext(),
+    );
+
+    const unscopedMonthLanguages = Object.keys(
+      unscoped.nativeStaticConfig.date_data?.month_names_by_language ?? {},
+    );
+    const scopedMonthLanguages = Object.keys(
+      scoped.nativeStaticConfig.date_data?.month_names_by_language ?? {},
+    );
+    const scopedYearLanguages = Object.keys(
+      scoped.nativeStaticConfig.date_data?.year_words_by_language ?? {},
+    );
+
+    expect(unscopedMonthLanguages.length).toBeGreaterThan(
+      scopedMonthLanguages.length,
+    );
+    expect(scopedMonthLanguages).toEqual(["en"]);
+    expect(scopedYearLanguages).toEqual(["en"]);
+  });
+
+  test("content language scopes trigger data", async () => {
+    const base = {
+      ...BASE_CONFIG,
+      enableTriggerPhrases: true,
+      labels: [],
+    };
+    const unscoped = await buildNativeStaticSearchBundle(
+      base,
+      [],
+      createPipelineContext(),
+    );
+    const scoped = await buildNativeStaticSearchBundle(
+      { ...base, language: "en-US" },
+      [],
+      createPipelineContext(),
+    );
+
+    const unscopedTriggers =
+      unscoped.nativeStaticConfig.trigger_data?.rules ?? [];
+    const scopedTriggers =
+      scoped.nativeStaticConfig.trigger_data?.rules.map((rule) =>
+        rule.trigger.toLowerCase(),
+      ) ?? [];
+
+    expect(scopedTriggers.length).toBeLessThan(unscopedTriggers.length);
+    expect(scopedTriggers).toContain("represented by");
+    expect(scopedTriggers).toContain("year");
+    expect(scopedTriggers).not.toContain("zastoupen");
+    expect(scopedTriggers).not.toContain("rok");
+  });
+
+  test("content language scopes deny-list search build", async () => {
+    const testDictionaries = await getDictionaries();
+    const config = {
+      ...BASE_CONFIG,
+      dictionaries: testDictionaries,
+      enableDenyList: true,
+      enableNameCorpus: true,
+      labels: ["address", "person"],
+    };
+
+    const unscoped = await buildUnifiedSearch(
+      config,
+      [],
+      createPipelineContext(),
+    );
+    const scoped = await buildUnifiedSearch(
+      { ...config, language: "en" },
+      [],
+      createPipelineContext(),
+    );
+
+    expect(
+      scoped.slices.denyList.end - scoped.slices.denyList.start,
+    ).toBeLessThan(
+      unscoped.slices.denyList.end - unscoped.slices.denyList.start,
+    );
+  });
+
+  test("prepareNativePipelineConfig applies language scope", async () => {
+    const testDictionaries = await getDictionaries();
+    const config = {
+      ...BASE_CONFIG,
+      dictionaries: testDictionaries,
+      enableDenyList: true,
+      enableNameCorpus: true,
+      labels: ["address", "person"],
+      language: "cs",
+    };
+
+    const prepared = await prepareNativePipelineConfig({
+      config,
+      context: createPipelineContext(),
+    });
+    const scopedBundle = await buildNativeStaticSearchBundle(
+      applyPipelineLanguageScope(config),
+      [],
+      createPipelineContext(),
+    );
+
+    expect(prepared).toEqual(scopedBundle.nativeStaticConfig);
+  });
+
+  test("native config keeps alphanumeric custom deny-list overlays compact", async () => {
+    const testDictionaries = await getDictionaries();
+    const search = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        dictionaries: testDictionaries,
+        enableDenyList: true,
+        customDenyList: [
+          {
+            value: "Widget X",
+            label: "organization",
+          },
+        ],
+        labels: ["organization"],
+      },
+      [],
+      createPipelineContext(),
+    );
+
+    expect(search.nativeStaticConfig.literal_patterns_from_deny_list_data).toBe(
+      true,
+    );
+    expect(search.nativeStaticConfig.literal_patterns).toHaveLength(0);
+    expect(search.nativeStaticConfig.deny_list_data?.originals).toContain(
+      "Widget X",
+    );
+    expect(
+      search.nativeStaticConfig.deny_list_data?.originals.length ?? 0,
+    ).toBeGreaterThan(1);
+  });
+
+  test("native config inlines punctuation-edged custom deny-list overlays", async () => {
+    const search = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        enableDenyList: true,
+        customDenyList: [
+          {
+            value: ".env",
+            label: "file",
+          },
+        ],
+        labels: ["file"],
+      },
+      [],
+      createPipelineContext(),
+    );
+
+    expect(search.nativeStaticConfig.literal_patterns_from_deny_list_data).toBe(
+      false,
+    );
+    expect(search.nativeStaticConfig.literal_patterns).toEqual([
+      expect.objectContaining({
+        kind: "literal-with-options",
+        pattern: ".env",
+        whole_words: false,
+      }),
+    ]);
+  });
+
+  test("native config serializes gazetteer metadata with Rust field names", async () => {
+    const search = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        enableGazetteer: true,
+        labels: ["organization"],
+      },
+      [
+        {
+          id: "gazetteer-acme",
+          canonical: "Acme",
+          label: "organization",
+          variants: [],
+          workspaceId: "test",
+          createdAt: 0,
+          source: "manual",
+        },
+      ],
+      createPipelineContext(),
+    );
+
+    expect(search.nativeStaticConfig.gazetteer_data).toEqual({
+      labels: ["organization", "organization"],
+      is_fuzzy: [false, true],
+    });
+    expect(search.nativeStaticConfig.literal_options.fuzzy_whole_words).toBe(
+      false,
+    );
+    expect(
+      Object.hasOwn(search.nativeStaticConfig.gazetteer_data ?? {}, "isFuzzy"),
+    ).toBe(false);
   });
 
   test("preparePipelineSearch reuses the context search cache", async () => {
@@ -96,6 +1042,38 @@ describe("pipeline config semantics", () => {
     const second = await preparePipelineSearch({ config, context });
 
     expect(second).toBe(first);
+  });
+
+  test("preparePipelineSearch cache keys content language", async () => {
+    const context = createPipelineContext();
+    const baseConfig = {
+      ...BASE_CONFIG,
+      enableTriggerPhrases: true,
+      labels: ["person"],
+    };
+
+    const english = await preparePipelineSearch({
+      config: { ...baseConfig, language: "en" },
+      context,
+    });
+    const czech = await preparePipelineSearch({
+      config: { ...baseConfig, language: "cs" },
+      context,
+    });
+
+    const englishTriggers =
+      english.nativeStaticConfig.trigger_data?.rules.map((rule) =>
+        rule.trigger.toLowerCase(),
+      ) ?? [];
+    const czechTriggers =
+      czech.nativeStaticConfig.trigger_data?.rules.map((rule) =>
+        rule.trigger.toLowerCase(),
+      ) ?? [];
+
+    expect(czech).not.toBe(english);
+    expect(englishTriggers).toContain("represented by");
+    expect(englishTriggers).not.toContain("zastoupen");
+    expect(czechTriggers).toContain("zastoupen");
   });
 
   test("preparePipelineSearch reuses shared search across fresh contexts", async () => {
@@ -120,6 +1098,46 @@ describe("pipeline config semantics", () => {
 
     expect(second).toBe(first);
     expect(secondContext.search).toBe(first);
+  });
+
+  test("preparePipelineSearch replays support data on shared-cache hits", async () => {
+    const testDictionaries = { ...(await getDictionaries()) };
+    const config: PipelineConfig = {
+      ...BASE_CONFIG,
+      dictionaries: testDictionaries,
+      enableNameCorpus: true,
+      labels: ["person"],
+      language: "cs",
+    };
+    const firstContext = createPipelineContext();
+    const secondContext = createPipelineContext();
+
+    const first = await preparePipelineSearch({
+      config,
+      context: firstContext,
+    });
+    const second = await preparePipelineSearch({
+      config,
+      context: secondContext,
+    });
+    const falsePositivePerson: Entity = {
+      end: 4,
+      label: "person",
+      score: 0.95,
+      source: "ner",
+      start: 0,
+      text: "Tato",
+    };
+
+    const filtered = filterFalsePositives(
+      [falsePositivePerson],
+      secondContext,
+      "Tato smlouva",
+    );
+
+    expect(second).toBe(first);
+    expect(secondContext.personStopwords?.has("tato")).toBe(true);
+    expect(filtered).toEqual([]);
   });
 
   test("preparePipelineSearch does not share across dictionary objects", async () => {
@@ -147,6 +1165,341 @@ describe("pipeline config semantics", () => {
     });
 
     expect(second).not.toBe(first);
+  });
+
+  test("preparePipelineSearch cache keys native redaction options", async () => {
+    const context = createPipelineContext();
+    const baseConfig = {
+      ...BASE_CONFIG,
+      enableRegex: true,
+      labels: ["date of birth"],
+    };
+
+    const first = await preparePipelineSearch({
+      config: {
+        ...baseConfig,
+        threshold: 0.5,
+        enableConfidenceBoost: false,
+        enableHotwordRules: false,
+      },
+      context,
+    });
+    const second = await preparePipelineSearch({
+      config: {
+        ...baseConfig,
+        threshold: 0.93,
+        enableConfidenceBoost: true,
+        enableHotwordRules: true,
+      },
+      context,
+    });
+
+    expect(second).not.toBe(first);
+    expect(second.nativeStaticConfig.threshold).toBe(0.93);
+    expect(second.nativeStaticConfig.confidence_boost).toBe(true);
+    expect(
+      second.nativeStaticConfig.hotword_data?.rules.length,
+    ).toBeGreaterThan(0);
+  });
+
+  test("native pipeline package cache reuses exact configs", async () => {
+    const { binding, counts } = createCountingNativeBinding(
+      "native-cache-context",
+    );
+    const context = createPipelineContext();
+    const config = {
+      ...BASE_CONFIG,
+      enableCountries: false,
+      labels: ["person"],
+    };
+
+    const first = await prepareNativePipelinePackage({
+      binding,
+      config,
+      context,
+    });
+    first[0] = 99;
+    const second = await prepareNativePipelinePackage({
+      binding,
+      config,
+      context,
+    });
+    await createNativePipelineFromConfig({ binding, config, context });
+
+    expect(counts().rawPrepare).toBe(1);
+    expect(second[0]).toBe(1);
+  });
+
+  test("prepared native package bytes are copied out of the cache", async () => {
+    // The real NAPI binding hands back a Node Buffer whose slice() aliases the
+    // underlying memory. Reproduce that shape so a caller mutating the returned
+    // array cannot corrupt the cached bytes returned by a later call.
+    const binding = {
+      normalizeForSearch: (text: string) => text,
+      nativePackageVersion: () => "native-package-copy-semantics",
+      NativePreparedSearch: {
+        fromConfigJsonBytes: () => {
+          throw new Error("copy-semantics test should use package bytes");
+        },
+        fromPreparedPackageBytes: () => ({
+          prepareDiagnosticsJson: () => JSON.stringify({ events: [] }),
+          redactStaticEntities: (fullText: string) => ({
+            resolvedEntities: [],
+            redaction: {
+              redactedText: fullText,
+              redactionMap: [],
+              operatorMap: [],
+              entityCount: 0,
+            },
+          }),
+        }),
+      },
+      prepareStaticSearchPackageBytes: () => Buffer.from([1, 2, 3, 4]),
+      prepareStaticSearchCompressedPackageBytes: () => Buffer.from([9]),
+    } satisfies NativeAnonymizeBinding;
+    const context = createPipelineContext();
+    const config = {
+      ...BASE_CONFIG,
+      enableCountries: false,
+      labels: ["person"],
+    };
+
+    const first = await prepareNativePipelinePackage({
+      binding,
+      config,
+      context,
+    });
+    first[0] = 99;
+    const second = await prepareNativePipelinePackage({
+      binding,
+      config,
+      context,
+    });
+
+    expect([...second]).toEqual([1, 2, 3, 4]);
+  });
+
+  test("native pipeline package cache is scoped by dictionary identity", async () => {
+    const { binding, counts } = createCountingNativeBinding(
+      "native-cache-dictionaries",
+    );
+    const cacheDictionaries = {
+      firstNames: {
+        en: ["Ada"],
+      },
+    } satisfies Dictionaries;
+    const config = {
+      ...BASE_CONFIG,
+      dictionaries: cacheDictionaries,
+      enableCountries: false,
+      labels: ["person"],
+    };
+
+    await prepareNativePipelinePackage({
+      binding,
+      config,
+      context: createPipelineContext(),
+    });
+    await prepareNativePipelinePackage({
+      binding,
+      config,
+      context: createPipelineContext(),
+    });
+    await prepareNativePipelinePackage({
+      binding,
+      config: {
+        ...config,
+        dictionaries: { ...cacheDictionaries },
+      },
+      context: createPipelineContext(),
+    });
+
+    expect(counts().rawPrepare).toBe(2);
+  });
+
+  test("native pipeline package cache keys caller data", async () => {
+    const { binding, counts } = createCountingNativeBinding(
+      "native-cache-caller-data",
+    );
+    const context = createPipelineContext();
+    const config = {
+      ...BASE_CONFIG,
+      customRegexes: [
+        {
+          label: "matter id",
+          pattern: "MAT-[0-9]+",
+        },
+      ],
+      enableCountries: false,
+      enableRegex: true,
+      labels: ["matter id"],
+    };
+
+    await prepareNativePipelinePackage({ binding, config, context });
+    await prepareNativePipelinePackage({
+      binding,
+      config: {
+        ...config,
+        customRegexes: [
+          {
+            label: "matter id",
+            pattern: "REF-[0-9]+",
+          },
+        ],
+      },
+      context,
+    });
+
+    expect(counts().rawPrepare).toBe(2);
+  });
+
+  test("native pipeline package cache keys custom regex artifact policy", async () => {
+    const { binding, counts } = createCountingNativeBinding(
+      "native-cache-custom-regex-artifact-policy",
+    );
+    const context = createPipelineContext();
+    const config = {
+      ...BASE_CONFIG,
+      customRegexes: [
+        {
+          label: "matter id",
+          pattern: "MAT-[0-9]+",
+          preparedArtifactPolicy: "omit" as const,
+        },
+      ],
+      enableCountries: false,
+      enableRegex: true,
+      labels: ["matter id"],
+    };
+
+    await prepareNativePipelinePackage({ binding, config, context });
+    await prepareNativePipelinePackage({
+      binding,
+      config: {
+        ...config,
+        customRegexes: [
+          {
+            label: "matter id",
+            pattern: "MAT-[0-9]+",
+            preparedArtifactPolicy: "include",
+          },
+        ],
+      },
+      context,
+    });
+
+    expect(counts().rawPrepare).toBe(2);
+  });
+
+  test("native pipeline package cache keys contextual native passes", async () => {
+    const { binding, counts } = createCountingNativeBinding(
+      "native-cache-contextual-passes",
+    );
+    const context = createPipelineContext();
+    const config = {
+      ...BASE_CONFIG,
+      enableCountries: false,
+      enableCoreference: false,
+      enableZoneClassification: false,
+      labels: ["organization"],
+    };
+
+    await prepareNativePipelinePackage({ binding, config, context });
+    await prepareNativePipelinePackage({
+      binding,
+      config: {
+        ...config,
+        enableCoreference: true,
+      },
+      context,
+    });
+    await prepareNativePipelinePackage({
+      binding,
+      config: {
+        ...config,
+        enableZoneClassification: true,
+      },
+      context,
+    });
+
+    expect(counts().rawPrepare).toBe(3);
+  });
+
+  test("native pipeline package cache retries after failed build", async () => {
+    let attempts = 0;
+    const binding = {
+      normalizeForSearch: (text: string) => text,
+      nativePackageVersion: () => "native-cache-retry",
+      NativePreparedSearch: {
+        fromConfigJsonBytes: () => {
+          throw new Error(
+            "native package cache retry should use package bytes",
+          );
+        },
+        fromPreparedPackageBytes: () => ({
+          prepareDiagnosticsJson: () => JSON.stringify({ events: [] }),
+          redactStaticEntities: (fullText: string) => ({
+            resolvedEntities: [],
+            redaction: {
+              redactedText: fullText,
+              redactionMap: [],
+              operatorMap: [],
+              entityCount: 0,
+            },
+          }),
+        }),
+      },
+      prepareStaticSearchPackageBytes: () => {
+        attempts += 1;
+        if (attempts === 1) {
+          throw new Error("build failed");
+        }
+        return new Uint8Array([attempts]);
+      },
+      prepareStaticSearchCompressedPackageBytes: () => new Uint8Array([9]),
+    } satisfies NativeAnonymizeBinding;
+    const context = createPipelineContext();
+    const config = {
+      ...BASE_CONFIG,
+      enableCountries: false,
+      labels: ["person"],
+    };
+
+    try {
+      await prepareNativePipelinePackage({ binding, config, context });
+      throw new Error("expected first native package build to fail");
+    } catch (error) {
+      expect(error).toBeInstanceOf(Error);
+      const message = error instanceof Error ? error.message : "";
+      expect(message).toBe("build failed");
+    }
+
+    const retry = await prepareNativePipelinePackage({
+      binding,
+      config,
+      context,
+    });
+
+    expect([...retry]).toEqual([2]);
+    expect(attempts).toBe(2);
+  });
+
+  test("native trigger configs carry monetary extension data", async () => {
+    const search = await buildUnifiedSearch(
+      {
+        ...BASE_CONFIG,
+        enableTriggerPhrases: true,
+        labels: ["monetary amount"],
+      },
+      [],
+      createPipelineContext(),
+    );
+
+    expect(search.nativeStaticConfig.monetary_data).toBeDefined();
+    expect(
+      search.nativeStaticConfig.monetary_data?.amount_words
+        .written_amount_patterns.length,
+    ).toBeGreaterThan(0);
   });
 
   test("enableLegalForms flag gates legal-form detection", async () => {

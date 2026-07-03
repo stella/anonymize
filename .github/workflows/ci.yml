@@ -1,5 +1,8 @@
 name: CI
 
+env:
+  UV_VERSION: "0.10.1"
+
 on:
   push:
     branches: [main]
@@ -43,6 +46,19 @@ jobs:
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
+      - name: Setup Rust
+        run: |
+          rustup toolchain install 1.96.0 --profile minimal --component rustfmt,clippy
+          rustup toolchain install nightly-2026-04-16 --profile minimal \
+            --component rustc-dev \
+            --component llvm-tools-preview
+          rustup default 1.96.0
+          cargo install cargo-dylint --version 6.0.1 --locked
+          cargo install dylint-link --version 6.0.1 --locked
+
+      - name: Rust checks
+        run: bun run rust:check
+
       - name: Check runtime package versions
         # Verify, do not mutate: a PR that bumps VERSION without bumping
         # the package versions (or vice versa) must fail CI, not be
@@ -64,6 +80,17 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
+      - name: Install uv
+        run: |
+          python3 -m pip install --user "uv==${{ env.UV_VERSION }}"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Python typecheck
+        run: bun run python:typecheck
+
+      - name: Python wheel
+        run: bun run python:wheel
+
       - name: Test
         run: bun run test
 
@@ -73,9 +100,38 @@ jobs:
       - name: Smoke test built artifact
         run: bun run --cwd packages/anonymize smoke:dist
 
+      - name: Migration fixture parity and performance
+        run: |
+          git fetch origin main --depth=1
+          bun run --cwd packages/anonymize perf:migration-fixtures
+
+      - name: Native fixture parity and performance
+        env:
+          ANONYMIZE_MIGRATION_ALLOW_ACCEPTED_MISMATCHES: "1"
+          ANONYMIZE_MIGRATION_CANDIDATE_RUNTIME: native-static
+          ANONYMIZE_MIGRATION_FAIL_ON_MISMATCH: "1"
+          ANONYMIZE_MIGRATION_NATIVE_COMPRESSED_PACKAGE: "1"
+          ANONYMIZE_MIGRATION_NATIVE_PREPARED_PACKAGE: "1"
+          ANONYMIZE_MIGRATION_REQUIRE_NATIVE_PIPELINE: "1"
+        run: |
+          git fetch origin main --depth=1
+          bun run --cwd packages/anonymize perf:migration-fixtures
+
       - name: Contract performance (informational)
         # Surfaces pipeline-latency regressions against the thresholds in
         # contract-perf.mjs. Non-blocking for now (shared-runner timing is
         # noisy); promote to a hard gate once a stable baseline is set.
         continue-on-error: true
         run: bun run --cwd packages/anonymize perf:contracts
+
+      - name: Native adapter performance (informational)
+        # Emits aggregate TS/NAPI and Python/PyO3 timings for the shared
+        # Rust-backed static adapter contract.
+        continue-on-error: true
+        run: bun run --cwd packages/anonymize perf:native-adapters
+
+      - name: Native default SDK performance (informational)
+        # Emits fixture-level default package timings for TS and Python SDKs,
+        # with hashed output parity checked before summaries are printed.
+        continue-on-error: true
+        run: bun run --cwd packages/anonymize perf:native-default

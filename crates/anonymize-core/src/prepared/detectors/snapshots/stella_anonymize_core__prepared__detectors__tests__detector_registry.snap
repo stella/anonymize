@@ -1,0 +1,113 @@
+---
+source: crates/anonymize-core/src/prepared/detectors/mod.rs
+expression: detector_registry_snapshot_data()
+---
+modules:
+  - name: regex
+    rules:
+      - id: Regex
+        stage: EntityRegex
+        inputs:
+          - RegexMatches
+          - FullText
+          - RegexMeta
+        dependencies: []
+        support_resources: []
+      - id: CustomRegex
+        stage: EntityCustomRegex
+        inputs:
+          - CustomRegexMatches
+          - FullText
+          - CustomRegexMeta
+        dependencies: []
+        support_resources: []
+  - name: literal
+    rules:
+      - id: DenyList
+        stage: EntityDenyList
+        inputs:
+          - LiteralMatches
+          - DenyListData
+        dependencies: []
+        support_resources: []
+      - id: Gazetteer
+        stage: EntityGazetteer
+        inputs:
+          - LiteralMatches
+          - GazetteerData
+        dependencies: []
+        support_resources: []
+      - id: Country
+        stage: EntityCountry
+        inputs:
+          - LiteralMatches
+          - CountryData
+        dependencies: []
+        support_resources: []
+  - name: anchored
+    rules:
+      - id: Anchored
+        stage: EntityAnchored
+        inputs:
+          - FullText
+          - DateData
+          - MonetaryData
+        dependencies: []
+        support_resources: []
+  - name: trigger
+    rules:
+      - id: Trigger
+        stage: EntityTrigger
+        inputs:
+          - RegexMatches
+        dependencies: []
+        support_resources:
+          - Triggers
+  - name: signature
+    rules:
+      - id: Signature
+        stage: EntitySignature
+        inputs:
+          - FullText
+        dependencies: []
+        support_resources:
+          - Signature
+  - name: legal_form
+    rules:
+      - id: LegalForm
+        stage: EntityLegalForm
+        inputs:
+          - RegexMatches
+        dependencies: []
+        support_resources:
+          - LegalForms
+  - name: name_corpus
+    rules:
+      - id: NameCorpus
+        stage: EntityNameCorpus
+        inputs:
+          - FullText
+          - DenyListEntities
+        dependencies:
+          - DenyList
+        support_resources:
+          - NameCorpus
+  - name: address_seed
+    rules:
+      - id: AddressSeed
+        stage: EntityAddressSeed
+        inputs:
+          - LiteralMatches
+          - ContextEntities
+        dependencies:
+          - Regex
+          - CustomRegex
+          - Anchored
+          - Trigger
+          - Signature
+          - LegalForm
+          - DenyList
+          - Gazetteer
+          - NameCorpus
+        support_resources:
+          - AddressSeed

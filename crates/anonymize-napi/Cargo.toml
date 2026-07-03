@@ -1,0 +1,28 @@
+[package]
+name = "stella-anonymize-napi"
+version.workspace = true
+edition.workspace = true
+description = "Native bindings for stella anonymization core"
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+blake3 = "1"
+napi = { version = "3", default-features = false, features = [
+  "napi9",
+  "serde-json",
+] }
+napi-derive = "3"
+serde_json = "1"
+stella-anonymize-adapter-contract = { path = "../anonymize-adapter-contract" }
+stella-anonymize-core = { path = "../anonymize-core" }
+
+[build-dependencies]
+napi-build = "2"
+
+[lints]
+workspace = true

@@ -1,4 +1,4 @@
-import type { Match } from "@stll/text-search";
+import type { Match, PatternEntry } from "@stll/text-search";
 import type { Validator } from "@stll/stdnum";
 import {
   at,
@@ -53,6 +53,7 @@ import { DASH, DASH_INNER } from "../util/char-groups";
 
 const MIN_PHONE_LENGTH = 7;
 const MIN_MONTH_NAME_LENGTH = 3;
+const CONTEXT_REGEX_PREFILTER_WINDOW_BYTES = 160;
 const US_STATE_CODE =
   "(?:(?i:A[KLZR]|C[AOT]|D[CE]|FL|GA|HI|I[ADL]|K[SY]|LA|M[ADEHINOPST]|" +
   "N[CDEHJMVY]|O[HK]|PA|RI|S[CD]|T[NX]|UT|V[AIT]|W[AIVY])|I[Nn]|iN|O[Rr]|oR)";
@@ -75,6 +76,26 @@ const escapeRegexPhrase = (s: string): string =>
 
 /** Escape for use inside a regex character class. */
 const escapeCharClass = (s: string): string => s.replace(/[\]\\^-]/g, "\\$&");
+
+const utf8ByteLength = (text: string): number => {
+  let length = 0;
+  for (const char of text) {
+    const codePoint = char.codePointAt(0);
+    if (codePoint === undefined) {
+      continue;
+    }
+    if (codePoint <= 0x7f) {
+      length += 1;
+    } else if (codePoint <= 0x7ff) {
+      length += 2;
+    } else if (codePoint <= 0xffff) {
+      length += 3;
+    } else {
+      length += 4;
+    }
+  }
+  return length;
+};
 
 const toSortedAlternation = (values: readonly string[]): string =>
   [
@@ -141,21 +162,48 @@ export type RegexMeta = {
   label: string;
   score: number;
   sourceDetail?: Entity["sourceDetail"];
+  minByteLength?: number;
   /** Post-match stdnum validator for confirmation. */
   validator?: Validator;
+  validatorId?: string;
   /** Extract the identifier portion when context is part of the regex span. */
   validatorInput?: (text: string) => string;
+  validatorInputKind?: "digits-only" | "crypto-wallet-candidate";
 };
 
 type RegexDef = {
   pattern: string;
   label: string;
   score: number;
+  minByteLength?: number;
+  lazy?: true;
+  prefilterAny?: readonly string[];
+  prefilterCaseInsensitive?: boolean;
+  prefilterRegex?: RegExp;
+  prefilterWindowBytes?: number;
+  preparedArtifactPolicy?: "include" | "omit";
   validator?: Validator;
+  validatorId?: string;
   validatorInput?: (text: string) => string;
+  validatorInputKind?: "digits-only" | "crypto-wallet-candidate";
+};
+
+type RegexPatternEntry = {
+  pattern: string;
+  literal?: false;
+  lazy?: true;
+  prefilterAny?: readonly string[];
+  prefilterCaseInsensitive?: boolean;
+  prefilterRegex?: RegExp;
+  prefilterWindowBytes?: number;
+  preparedArtifactPolicy?: "include" | "omit";
 };
 
 type AmountWordsConfig = {
+  patterns?: Array<{
+    lang: string;
+    keywords: string[];
+  }>;
   percentages?: Array<{
     lang: string;
     keywords: string[];
@@ -180,6 +228,144 @@ type AmountWordsConfig = {
 
 const AMOUNT_WORDS = amountWordsConfig as AmountWordsConfig;
 
+const DIGITS_ONLY_VALIDATOR_INPUT = (text: string): string =>
+  text.replace(/\D/g, "");
+
+const VALIDATOR_IDS = new Map<Validator, string>([
+  [at.businessid, "at.businessid"],
+  [at.tin, "at.tin"],
+  [at.uid, "at.uid"],
+  [au.abn, "au.abn"],
+  [au.acn, "au.acn"],
+  [be.nn, "be.nn"],
+  [be.vat, "be.vat"],
+  [bg.vat, "bg.vat"],
+  [br.cnpj, "br.cnpj"],
+  [br.cpf, "br.cpf"],
+  [ch.uid, "ch.uid"],
+  [cn.ric, "cn.ric"],
+  [crypto.wallet, "crypto.wallet"],
+  [cy.vat, "cy.vat"],
+  [cz.dic, "cz.dic"],
+  [cz.rc, "cz.rc"],
+  [de.idnr, "de.idnr"],
+  [de.stnr, "de.stnr"],
+  [de.svnr, "de.svnr"],
+  [de.vat, "de.vat"],
+  [dk.cpr, "dk.cpr"],
+  [dk.vat, "dk.vat"],
+  [ee.ik, "ee.ik"],
+  [ee.vat, "ee.vat"],
+  [es.cif, "es.cif"],
+  [es.dni, "es.dni"],
+  [es.nie, "es.nie"],
+  [es.nss, "es.nss"],
+  [es.vat, "es.vat"],
+  [fi.hetu, "fi.hetu"],
+  [fi.vat, "fi.vat"],
+  [fi.ytunnus, "fi.ytunnus"],
+  [fr.nir, "fr.nir"],
+  [fr.siren, "fr.siren"],
+  [fr.siret, "fr.siret"],
+  [fr.tva, "fr.tva"],
+  [gb.nhs, "gb.nhs"],
+  [gb.nino, "gb.nino"],
+  [gb.vat, "gb.vat"],
+  [gr.vat, "gr.vat"],
+  [hr.vat, "hr.vat"],
+  [hu.vat, "hu.vat"],
+  [ie.pps, "ie.pps"],
+  [ie.vat, "ie.vat"],
+  [it.codiceFiscale, "it.codiceFiscale"],
+  [it.iva, "it.iva"],
+  [lt.asmens, "lt.asmens"],
+  [lt.vat, "lt.vat"],
+  [lu.vat, "lu.vat"],
+  [lv.vat, "lv.vat"],
+  [mt.vat, "mt.vat"],
+  [nl.vat, "nl.vat"],
+  [no.mva, "no.mva"],
+  [no.orgnr, "no.orgnr"],
+  [pl.nip, "pl.nip"],
+  [pl.pesel, "pl.pesel"],
+  [pt.cc, "pt.cc"],
+  [pt.vat, "pt.vat"],
+  [ro.cnp, "ro.cnp"],
+  [ro.vat, "ro.vat"],
+  [se.personnummer, "se.personnummer"],
+  [si.vat, "si.vat"],
+  [sk.dic, "sk.dic"],
+  [us.ein, "us.ein"],
+]);
+
+export const NATIVE_REGEX_VALIDATOR_IDS: ReadonlySet<string> = new Set([
+  "au.abn",
+  "au.acn",
+  "at.businessid",
+  "at.tin",
+  "at.uid",
+  "be.nn",
+  "be.vat",
+  "bg.vat",
+  "br.cnpj",
+  "br.cpf",
+  "ch.uid",
+  "cn.ric",
+  "crypto.wallet",
+  "cy.vat",
+  "cz.dic",
+  "cz.rc",
+  "de.idnr",
+  "de.stnr",
+  "de.svnr",
+  "de.vat",
+  "dk.cpr",
+  "dk.vat",
+  "ee.ik",
+  "ee.vat",
+  "es.cif",
+  "es.dni",
+  "es.nie",
+  "es.nss",
+  "es.vat",
+  "fi.hetu",
+  "fi.vat",
+  "fi.ytunnus",
+  "fr.nir",
+  "fr.siren",
+  "fr.siret",
+  "fr.tva",
+  "gb.nhs",
+  "gb.nino",
+  "gb.vat",
+  "gr.vat",
+  "hr.vat",
+  "hu.vat",
+  "ie.pps",
+  "ie.vat",
+  "it.codiceFiscale",
+  "it.iva",
+  "lt.asmens",
+  "lt.vat",
+  "lu.vat",
+  "lv.vat",
+  "mt.vat",
+  "nl.vat",
+  "no.mva",
+  "no.orgnr",
+  "pl.nip",
+  "pl.pesel",
+  "pt.cc",
+  "pt.vat",
+  "ro.cnp",
+  "ro.vat",
+  "se.personnummer",
+  "si.vat",
+  "sk.dic",
+  "us.ein",
+  "us.rtn",
+]);
+
 // ── stdnum validator entries ────────────────────────
 // Each entry pairs a @stll/stdnum validator with a
 // label and confidence score. The pattern derived via
@@ -192,7 +378,13 @@ type StdnumEntry = {
   label: string;
   score: number;
   pattern: string;
+  lazy?: true;
+  prefilterAny?: readonly string[];
+  prefilterCaseInsensitive?: boolean;
+  preparedArtifactPolicy?: "include" | "omit";
 };
+
+const PREFIXED_STDNUM_PATTERN = /^\(\?<!\\w\)([A-Z]{1,4})(?:\[|\\|\()/u;
 
 const toEntry = (
   validator: Validator,
@@ -201,12 +393,32 @@ const toEntry = (
 ): StdnumEntry | null => {
   const pattern = toRegex(validator).source;
   if (!pattern) return null;
+  const prefilterAny = stdnumPrefixPrefilter(pattern);
+  if (prefilterAny === undefined) {
+    return {
+      validator,
+      label,
+      score,
+      pattern,
+    };
+  }
   return {
     validator,
     label,
     score,
     pattern,
+    lazy: true,
+    preparedArtifactPolicy: "omit",
+    prefilterAny,
+    prefilterCaseInsensitive: false,
   };
+};
+
+const stdnumPrefixPrefilter = (
+  pattern: string,
+): readonly string[] | undefined => {
+  const prefix = PREFIXED_STDNUM_PATTERN.exec(pattern)?.at(1);
+  return prefix === undefined ? undefined : [prefix];
 };
 
 /**
@@ -393,6 +605,8 @@ const STDNUM_ENTRIES: readonly StdnumEntry[] = [
     label: "national identification number",
     score: 0.95,
     pattern: "(?<![A-Za-z0-9_])\\d{17}[\\dXx](?![A-Za-z0-9_])",
+    lazy: true,
+    preparedArtifactPolicy: "omit",
   },
 ].filter((e): e is StdnumEntry => e !== null);
 
@@ -409,6 +623,9 @@ const TITLED_PERSON: RegexDef = {
     `(?:,?${SP}+(?:${POST_NOMINAL})(?:,?${SP}+(?:${POST_NOMINAL}))*)?`,
   label: "person",
   score: 0.95,
+  lazy: true,
+  prefilterAny: TITLE_PREFIXES,
+  prefilterCaseInsensitive: false,
 };
 
 const HONORIFIC_PERSON: RegexDef = {
@@ -420,6 +637,9 @@ const HONORIFIC_PERSON: RegexDef = {
     `(?:${SP}+(?:QC|KC|SC|LJ|AG))?`,
   label: "person",
   score: 0.95,
+  lazy: true,
+  prefilterAny: HONORIFICS,
+  prefilterCaseInsensitive: false,
 };
 
 // Bare post-nominal anchor: a multi-word capitalised
@@ -442,6 +662,9 @@ const POSTNOMINAL_PERSON: RegexDef = {
     `,?${SP}+(?:KC|QC)\\b`,
   label: "person",
   score: 0.95,
+  lazy: true,
+  prefilterAny: ["KC", "QC"],
+  prefilterCaseInsensitive: false,
 };
 
 const IBAN: RegexDef = {
@@ -457,6 +680,9 @@ const EMAIL: RegexDef = {
   pattern: `\\b[\\w.+\\-]+@[\\w\\-]+(?:\\.[\\w\\-]+)+\\b`,
   label: "email address",
   score: 1,
+  lazy: true,
+  prefilterAny: ["@"],
+  prefilterCaseInsensitive: false,
 };
 
 // [^\S\n] instead of \s: separators must not
@@ -468,6 +694,7 @@ const INTL_PHONE: RegexDef = {
     `(?:[^\\S\\n]|[.\\-])?\\d{0,4}\\b`,
   label: "phone number",
   score: 1,
+  minByteLength: MIN_PHONE_LENGTH,
 };
 
 // Czech phone numbers: mobiles start with 6/7,
@@ -483,6 +710,7 @@ const CZ_PHONE: RegexDef = {
     `(?![^\\S\\n]*(?:Kč|,-|korun|EUR|USD|€|\\$))\\b`,
   label: "phone number",
   score: 0.85,
+  minByteLength: MIN_PHONE_LENGTH,
 };
 
 /**
@@ -498,6 +726,10 @@ const TEL_PREFIX_PHONE: RegexDef = {
     `(?:[^\\S\\n]|[.\\-])?\\d{3}\\b`,
   label: "phone number",
   score: 0.95,
+  minByteLength: MIN_PHONE_LENGTH,
+  lazy: true,
+  prefilterAny: ["tel", "telefon"],
+  prefilterCaseInsensitive: true,
 };
 
 /**
@@ -518,6 +750,7 @@ const US_PAREN_PHONE: RegexDef = {
     `\\(\\d{3}\\)(?:[^\\S\\n]|[.\\-])?\\d{3}` + `(?:[^\\S\\n]|[.\\-])\\d{4}\\b`,
   label: "phone number",
   score: 0.9,
+  minByteLength: MIN_PHONE_LENGTH,
 };
 
 const CREDIT_CARD: RegexDef = {
@@ -553,11 +786,14 @@ const CZ_BIRTH_NUMBER: RegexDef = {
 //     a 1-6 digit integer.
 const CZ_COMMERCIAL_REGISTER: RegexDef = {
   pattern:
-    `(?i)\\boddíl[^\\S\\n]+[A-Z]` +
+    `\\b[Oo][Dd][Dd][Íí][Ll][^\\S\\n]+[A-Za-z]` +
     `[^\\S\\n]*,[^\\S\\n]*` +
-    `vložka[^\\S\\n]+\\d{1,6}\\b`,
+    `[Vv][Ll][Oo][Žž][Kk][Aa][^\\S\\n]+\\d{1,6}\\b`,
   label: "registration number",
   score: 0.95,
+  lazy: true,
+  prefilterAny: ["oddíl", "vložka"],
+  prefilterCaseInsensitive: true,
 };
 
 const DATE_NUMERIC: RegexDef = {
@@ -597,6 +833,7 @@ const HU_LANDLINE: RegexDef = {
     `(?:[^\\S\\n]|[.\\-])?\\d{4}\\b`,
   label: "phone number",
   score: 0.9,
+  minByteLength: MIN_PHONE_LENGTH,
 };
 
 // Czech license plates (SPZ/RZ).
@@ -627,6 +864,11 @@ const ES_POSTAL: RegexDef = {
     `[^\\S\\n]{0,3}:?[^\\S\\n]{0,3}\\d{5}\\b`,
   label: "address",
   score: 0.7,
+  lazy: true,
+  prefilterAny: ["C.P", "CP", "código postal", "codigo postal"],
+  prefilterCaseInsensitive: true,
+  prefilterWindowBytes: CONTEXT_REGEX_PREFILTER_WINDOW_BYTES,
+  preparedArtifactPolicy: "omit",
 };
 
 // Spanish DNI: 8 digits + 1 letter. Letter is a
@@ -668,7 +910,13 @@ const NHS_NUMBER_CONTEXT: RegexDef = {
   label: "national identification number",
   score: 0.95,
   validator: gb.nhs,
-  validatorInput: (text) => text.replace(/\D/g, ""),
+  validatorInput: DIGITS_ONLY_VALIDATOR_INPUT,
+  validatorInputKind: "digits-only",
+  lazy: true,
+  prefilterAny: ["NHS", "National Health Service"],
+  prefilterCaseInsensitive: true,
+  prefilterWindowBytes: CONTEXT_REGEX_PREFILTER_WINDOW_BYTES,
+  preparedArtifactPolicy: "omit",
 };
 
 const PASSPORT_CONTEXT: RegexDef = {
@@ -682,6 +930,11 @@ const PASSPORT_CONTEXT: RegexDef = {
     `(?:[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b`,
   label: "passport number",
   score: 0.96,
+  lazy: true,
+  prefilterAny: ["passport"],
+  prefilterCaseInsensitive: true,
+  prefilterWindowBytes: CONTEXT_REGEX_PREFILTER_WINDOW_BYTES,
+  preparedArtifactPolicy: "omit",
 };
 
 const FR_CNI_CONTEXT: RegexDef = {
@@ -696,6 +949,11 @@ const FR_CNI_CONTEXT: RegexDef = {
     `)\\b`,
   label: "identity card number",
   score: 0.96,
+  lazy: true,
+  prefilterAny: ["CNI", "carte nationale", "French national identity card"],
+  prefilterCaseInsensitive: true,
+  prefilterWindowBytes: CONTEXT_REGEX_PREFILTER_WINDOW_BYTES,
+  preparedArtifactPolicy: "omit",
 };
 
 const CY_TIC_CONTEXT: RegexDef = {
@@ -707,6 +965,11 @@ const CY_TIC_CONTEXT: RegexDef = {
     `\\d{8}[A-Za-z]\\b`,
   label: "tax identification number",
   score: 0.96,
+  lazy: true,
+  prefilterAny: ["TIC", "tax identification code"],
+  prefilterCaseInsensitive: true,
+  prefilterWindowBytes: CONTEXT_REGEX_PREFILTER_WINDOW_BYTES,
+  preparedArtifactPolicy: "omit",
 };
 
 const CY_ID_CARD_CONTEXT: RegexDef = {
@@ -718,6 +981,11 @@ const CY_ID_CARD_CONTEXT: RegexDef = {
     `\\d{6,8}\\b`,
   label: "identity card number",
   score: 0.96,
+  lazy: true,
+  prefilterAny: ["Cyprus", "Cypriot", "identity card", "ID card"],
+  prefilterCaseInsensitive: true,
+  prefilterWindowBytes: CONTEXT_REGEX_PREFILTER_WINDOW_BYTES,
+  preparedArtifactPolicy: "omit",
 };
 
 const UK_DRIVING_LICENCE_CONTEXT: RegexDef = {
@@ -729,6 +997,11 @@ const UK_DRIVING_LICENCE_CONTEXT: RegexDef = {
     `[A-Za-z9]{5}\\d{6}[A-Za-z0-9]{2}\\d[A-Za-z]{2}\\b`,
   label: "identity card number",
   score: 0.96,
+  lazy: true,
+  prefilterAny: ["driving licence", "driving license"],
+  prefilterCaseInsensitive: true,
+  prefilterWindowBytes: CONTEXT_REGEX_PREFILTER_WINDOW_BYTES,
+  preparedArtifactPolicy: "omit",
 };
 
 const US_DRIVER_LICENSE_CONTEXT: RegexDef = {
@@ -743,6 +1016,22 @@ const US_DRIVER_LICENSE_CONTEXT: RegexDef = {
     `)\\b`,
   label: "identity card number",
   score: 0.8,
+  lazy: true,
+  prefilterAny: [
+    "driver license",
+    "driver licence",
+    "drivers license",
+    "drivers licence",
+    "driver's license",
+    "driver's licence",
+    "driver’s license",
+    "driver’s licence",
+    "driving license",
+    "driving licence",
+  ],
+  prefilterCaseInsensitive: true,
+  prefilterWindowBytes: CONTEXT_REGEX_PREFILTER_WINDOW_BYTES,
+  preparedArtifactPolicy: "omit",
 };
 
 const MEDICAL_LICENSE_CONTEXT: RegexDef = {
@@ -757,6 +1046,20 @@ const MEDICAL_LICENSE_CONTEXT: RegexDef = {
     `(?:[A-Za-z]{0,3}\\d{5,8}|\\d{2}[A-Za-z]\\d{4}[A-Za-z])\\b`,
   label: "registration number",
   score: 0.85,
+  lazy: true,
+  prefilterAny: [
+    "GMC",
+    "NMC",
+    "medical",
+    "physician",
+    "doctor",
+    "surgeon",
+    "nursing",
+    "nurse",
+  ],
+  prefilterCaseInsensitive: true,
+  prefilterWindowBytes: CONTEXT_REGEX_PREFILTER_WINDOW_BYTES,
+  preparedArtifactPolicy: "omit",
 };
 
 const CRYPTO_WALLET_CANDIDATE = crypto.wallet.candidatePattern ?? "(?!)";
@@ -775,6 +1078,10 @@ const CRYPTO_WALLET_ADDRESS: RegexDef = {
   score: 0.85,
   validator: crypto.wallet,
   validatorInput: getCryptoWalletCandidate,
+  validatorInputKind: "crypto-wallet-candidate",
+  lazy: true,
+  prefilterAny: ["0x", "bc1", "BTC", "Bitcoin", "crypto", "wallet", "address"],
+  prefilterCaseInsensitive: true,
 };
 
 const AU_ABN_FORMATTED: RegexDef = {
@@ -798,6 +1105,9 @@ const NO_MVA_FORMATTED: RegexDef = {
   label: "tax identification number",
   score: 0.95,
   validator: no.mva,
+  lazy: true,
+  prefilterAny: ["MVA"],
+  prefilterCaseInsensitive: false,
 };
 
 const US_EIN_FORMATTED: RegexDef = {
@@ -860,6 +1170,10 @@ const BR_RG_WITH_SSP: RegexDef = {
     `[^\\S\\n]+SSP(?:/[A-Z]{2})?\\b`,
   label: "national identification number",
   score: 0.95,
+  lazy: true,
+  prefilterAny: ["SSP"],
+  prefilterCaseInsensitive: false,
+  preparedArtifactPolicy: "omit",
 };
 
 // Brazilian OAB (lawyer registration). Format:
@@ -872,6 +1186,10 @@ const BR_OAB: RegexDef = {
     `(?:\\d{1,3}(?:\\.\\d{3})+|\\d{4,6})\\b`,
   label: "registration number",
   score: 0.95,
+  lazy: true,
+  prefilterAny: ["OAB/"],
+  prefilterCaseInsensitive: false,
+  preparedArtifactPolicy: "omit",
 };
 
 // URL: scheme + host + optional port + path + query +
@@ -889,6 +1207,9 @@ const URL: RegexDef = {
     `(?:[/?#][^\\s)\\]>]*[^\\s.,;:!?)\\]>])?`,
   label: "url",
   score: 1,
+  lazy: true,
+  prefilterAny: ["http://", "https://", "http:", "https:", "www."],
+  prefilterCaseInsensitive: false,
 };
 
 // Bare domain: no protocol/www prefix, ends with a
@@ -1002,6 +1323,9 @@ const TIME_12H: RegexDef = {
     `(?=[\\s,;!?)]|$)`,
   label: "date",
   score: 0.9,
+  lazy: true,
+  prefilterAny: ["am", "pm", "a.m", "p.m"],
+  prefilterCaseInsensitive: true,
 };
 
 const PERCENT_NUMBER_BODY = `(?:\\d{1,3}(?:[.,]\\d{3})+(?:[.,]\\d{1,4})?|\\d+(?:[.,]\\d{1,4})?)`;
@@ -1011,6 +1335,8 @@ const PERCENT_RANGE_NUMBER = `\\d+(?:[.,]\\d{1,4})?`;
 const PERCENT_RANGE =
   `${PERCENT_RANGE_NUMBER}[^\\S\\n]*${DASH}[^\\S\\n]*` +
   `${PERCENT_RANGE_NUMBER}[^\\S\\n]{0,2}%`;
+const PERCENT_LEFT_BOUNDARY = "(?<![\\p{L}\\p{N}_.,])";
+const PERCENT_RIGHT_BOUNDARY = "(?![\\p{L}\\p{N}_])";
 
 const buildPercentWordPattern = (config: AmountWordsConfig): string => {
   const phrases: string[] = [];
@@ -1032,6 +1358,11 @@ const buildPercentWordPattern = (config: AmountWordsConfig): string => {
 };
 
 const PERCENT_WORD = buildPercentWordPattern(AMOUNT_WORDS);
+const PERCENT_WORD_PREFILTERS = [
+  ...new Set(
+    (AMOUNT_WORDS.percentages ?? []).flatMap((entry) => entry.keywords),
+  ),
+];
 
 // Percentages and financial rates. Captures signed numeric
 // values with dot or comma decimals, grouped thousands, and
@@ -1045,15 +1376,28 @@ const PERCENT_WORD = buildPercentWordPattern(AMOUNT_WORDS);
 // brackets; labelling them as `monetary amount` keeps the
 // operator-side handling consistent with how other quantitative
 // identifiers are redacted.
-const PERCENT_RATE: RegexDef = {
+const PERCENT_WORD_RATE: RegexDef = {
   pattern:
-    `(?<![\\p{L}\\p{N}_.,])(?:` +
+    `${PERCENT_LEFT_BOUNDARY}` +
     `${PERCENT_WORD}[^\\S\\n]*\\([^\\S\\n]*${PERCENT_TOKEN}[^\\S\\n]*\\)` +
-    `|${PERCENT_RANGE}` +
-    `|${PERCENT_TOKEN}` +
-    `)(?![\\p{L}\\p{N}_])`,
+    PERCENT_RIGHT_BOUNDARY,
   label: "monetary amount",
   score: 0.85,
+  lazy: true,
+  prefilterAny: PERCENT_WORD_PREFILTERS,
+  prefilterCaseInsensitive: true,
+  prefilterWindowBytes: CONTEXT_REGEX_PREFILTER_WINDOW_BYTES,
+};
+
+const PERCENT_NUMERIC_RATE: RegexDef = {
+  pattern:
+    `${PERCENT_LEFT_BOUNDARY}(?:${PERCENT_RANGE}|${PERCENT_TOKEN})` +
+    PERCENT_RIGHT_BOUNDARY,
+  label: "monetary amount",
+  score: 0.85,
+  lazy: true,
+  prefilterAny: ["%"],
+  prefilterCaseInsensitive: false,
 };
 
 // ── Collected definitions ────────────────────────────
@@ -1120,7 +1464,8 @@ const ALL_REGEX_DEFS: readonly RegexDef[] = [
   UK_POSTCODE,
   UK_NINO,
   TIME_12H,
-  PERCENT_RATE,
+  PERCENT_WORD_RATE,
+  PERCENT_NUMERIC_RATE,
   ...STDNUM_ENTRIES,
 ];
 
@@ -1128,6 +1473,44 @@ const ALL_REGEX_DEFS: readonly RegexDef[] = [
 export const REGEX_PATTERNS: readonly string[] = ALL_REGEX_DEFS.map(
   (d) => d.pattern,
 );
+
+const toRegexPatternEntry = (definition: RegexDef): PatternEntry => {
+  if (
+    definition.lazy === undefined &&
+    definition.prefilterAny === undefined &&
+    definition.prefilterCaseInsensitive === undefined &&
+    definition.prefilterRegex === undefined &&
+    definition.prefilterWindowBytes === undefined &&
+    definition.preparedArtifactPolicy === undefined
+  ) {
+    return definition.pattern;
+  }
+
+  const entry: RegexPatternEntry = { pattern: definition.pattern };
+  if (definition.lazy !== undefined) {
+    entry.lazy = definition.lazy;
+  }
+  if (definition.prefilterAny !== undefined) {
+    entry.prefilterAny = definition.prefilterAny;
+  }
+  if (definition.prefilterCaseInsensitive !== undefined) {
+    entry.prefilterCaseInsensitive = definition.prefilterCaseInsensitive;
+  }
+  if (definition.prefilterRegex !== undefined) {
+    entry.prefilterRegex = definition.prefilterRegex;
+  }
+  if (definition.prefilterWindowBytes !== undefined) {
+    entry.prefilterWindowBytes = definition.prefilterWindowBytes;
+  }
+  if (definition.preparedArtifactPolicy !== undefined) {
+    entry.preparedArtifactPolicy = definition.preparedArtifactPolicy;
+  }
+  return entry;
+};
+
+/** Static regex entries with compile-time prefilter hints. */
+export const REGEX_PATTERN_ENTRIES: readonly PatternEntry[] =
+  ALL_REGEX_DEFS.map(toRegexPatternEntry);
 
 /** Parallel metadata. Index = pattern index. */
 export const REGEX_META: readonly RegexMeta[] = ALL_REGEX_DEFS.map(
@@ -1138,9 +1521,21 @@ export const REGEX_META: readonly RegexMeta[] = ALL_REGEX_DEFS.map(
     };
     if (d.validator) {
       meta.validator = d.validator;
+      const validatorId = d.validatorId ?? VALIDATOR_IDS.get(d.validator);
+      if (!validatorId) {
+        throw new Error(`Missing regex validator id for ${d.label}`);
+      }
+      meta.validatorId = validatorId;
+    }
+    if (d.minByteLength) {
+      meta.minByteLength = d.minByteLength;
     }
     if (d.validatorInput) {
       meta.validatorInput = d.validatorInput;
+      if (!d.validatorInputKind) {
+        throw new Error(`Missing regex validator input kind for ${d.label}`);
+      }
+      meta.validatorInputKind = d.validatorInputKind;
     }
     return meta;
   },
@@ -1154,6 +1549,80 @@ export const REGEX_META: readonly RegexMeta[] = ALL_REGEX_DEFS.map(
  * The `_` keys are skipped by `buildMonthAlternation`.
  */
 type DateMonths = Record<string, string[] | string>;
+
+export type DateMonthData = Record<string, string[]>;
+export type YearWordData = Record<string, string[]>;
+
+const languageCacheKey = (languages: readonly string[] | undefined): string => {
+  if (languages === undefined || languages.length === 0) {
+    return "*";
+  }
+  return [...new Set(languages.map(normalizeLanguageKey).filter(Boolean))]
+    .toSorted()
+    .join(",");
+};
+
+const normalizeLanguageKey = (language: string): string =>
+  language.trim().toLowerCase();
+
+const selectedLanguageKeys = (
+  languages: readonly string[] | undefined,
+): ReadonlySet<string> | null => {
+  if (languages === undefined || languages.length === 0) {
+    return null;
+  }
+  const selected = new Set<string>();
+  for (const language of languages) {
+    const normalized = normalizeLanguageKey(language);
+    if (normalized.length === 0) {
+      continue;
+    }
+    selected.add(normalized);
+    const separator = normalized.indexOf("-");
+    if (separator !== -1) {
+      selected.add(normalized.slice(0, separator));
+    }
+  }
+  return selected.size === 0 ? null : selected;
+};
+
+const filterDateMonthsByLanguage = (
+  months: DateMonths,
+  languages: readonly string[] | undefined,
+): DateMonths => {
+  const selected = selectedLanguageKeys(languages);
+  if (selected === null) {
+    return months;
+  }
+
+  const filtered: DateMonths = {};
+  for (const [key, value] of Object.entries(months)) {
+    if (key.startsWith("_") || !selected.has(normalizeLanguageKey(key))) {
+      continue;
+    }
+    filtered[key] = value;
+  }
+  return Object.keys(filtered).length === 0 ? months : filtered;
+};
+
+const filterYearWordsByLanguage = (
+  data: Record<string, unknown>,
+  languages: readonly string[] | undefined,
+): Record<string, unknown> => {
+  const selected = selectedLanguageKeys(languages);
+  if (selected === null) {
+    return data;
+  }
+
+  const filtered: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (key.startsWith("_") || !selected.has(normalizeLanguageKey(key))) {
+      continue;
+    }
+    filtered[key] = value;
+  }
+  return Object.keys(filtered).length === 0 ? data : filtered;
+};
 
 /**
  * Build month-name alternation from date-months.json.
@@ -1181,6 +1650,18 @@ const buildMonthAlternation = (months: DateMonths): string => {
     .toSorted((a, b) => b.length - a.length)
     .map(escapeRegex)
     .join("|");
+};
+
+const buildDateMonthData = (months: DateMonths): DateMonthData => {
+  const result: DateMonthData = {};
+  for (const [key, value] of Object.entries(months)) {
+    if (key.startsWith("_")) continue;
+    const names = Array.isArray(value) ? value : [value];
+    result[key] = names.filter(
+      (name) => name.replace(/\.$/, "").length >= MIN_MONTH_NAME_LENGTH,
+    );
+  }
+  return result;
 };
 
 /**
@@ -1217,15 +1698,25 @@ const buildDatePatternsFromMonths = (alt: string): string[] => {
 };
 
 /** Cached promise for date patterns. Loaded once. */
-let datePatternPromise: Promise<string[]> | null = null;
+const datePatternPromises = new Map<string, Promise<string[]>>();
+const dateMonthDataPromises = new Map<string, Promise<DateMonthData>>();
+const yearWordDataPromises = new Map<string, Promise<YearWordData>>();
 
-const loadDatePatterns = async (): Promise<string[]> => {
+const loadDateMonths = async (): Promise<DateMonths> => {
   const mod = await import("../data/date-months.json");
   // Dynamic import of JSON returns { default, ...keys }.
   // Use `default` if present (ESM wrapper), else the
   // module itself.
-  const months: DateMonths = mod.default ?? mod;
-  const alt = buildMonthAlternation(months);
+  return mod.default ?? mod;
+};
+
+const loadDatePatterns = async (
+  languages?: readonly string[],
+): Promise<string[]> => {
+  const months = await loadDateMonths();
+  const alt = buildMonthAlternation(
+    filterDateMonthsByLanguage(months, languages),
+  );
   return buildDatePatternsFromMonths(alt);
 };
 
@@ -1234,14 +1725,69 @@ const loadDatePatterns = async (): Promise<string[]> => {
  * date-months.json. Returns a cached promise; the JSON
  * is loaded only once.
  */
-export const getDatePatterns = (): Promise<string[]> => {
-  if (!datePatternPromise) {
-    datePatternPromise = loadDatePatterns().catch((err) => {
-      datePatternPromise = null;
+export const getDatePatterns = (
+  languages?: readonly string[],
+): Promise<string[]> => {
+  const key = languageCacheKey(languages);
+  let promise = datePatternPromises.get(key);
+  if (promise === undefined) {
+    promise = loadDatePatterns(languages).catch((err) => {
+      datePatternPromises.delete(key);
       throw err;
     });
+    datePatternPromises.set(key, promise);
   }
-  return datePatternPromise;
+  return promise;
+};
+
+export const getDateMonthData = (
+  languages?: readonly string[],
+): Promise<DateMonthData> => {
+  const key = languageCacheKey(languages);
+  let promise = dateMonthDataPromises.get(key);
+  if (promise === undefined) {
+    promise = loadDateMonths()
+      .then((months) =>
+        buildDateMonthData(filterDateMonthsByLanguage(months, languages)),
+      )
+      .catch((err) => {
+        dateMonthDataPromises.delete(key);
+        throw err;
+      });
+    dateMonthDataPromises.set(key, promise);
+  }
+  return promise;
+};
+
+export const getYearWordData = (
+  languages?: readonly string[],
+): Promise<YearWordData> => {
+  const key = languageCacheKey(languages);
+  let promise = yearWordDataPromises.get(key);
+  if (promise !== undefined) {
+    return promise;
+  }
+  promise = import("../data/year-words.json")
+    .then((mod) => {
+      const data = (mod.default ?? mod) as Record<string, unknown>;
+      const scopedData = filterYearWordsByLanguage(data, languages);
+      const result: YearWordData = {};
+      for (const [language, words] of Object.entries(scopedData)) {
+        if (language.startsWith("_") || !Array.isArray(words)) {
+          continue;
+        }
+        result[language] = words.filter(
+          (word): word is string => typeof word === "string" && word.length > 0,
+        );
+      }
+      return result;
+    })
+    .catch((err) => {
+      yearWordDataPromises.delete(key);
+      throw err;
+    });
+  yearWordDataPromises.set(key, promise);
+  return promise;
 };
 
 /** Date pattern metadata (all are score 1 dates). */
@@ -1260,6 +1806,28 @@ type CurrenciesData = {
   codes: string[];
   symbols: string[];
   localNames?: string[];
+};
+
+export type MonetaryData = {
+  currencies: {
+    codes: string[];
+    symbols: string[];
+    local_names: string[];
+  };
+  amount_words: {
+    written_amount_patterns: Array<{
+      keywords: string[];
+    }>;
+    magnitude_suffixes: Array<{
+      words: string[];
+      abbreviations_case_insensitive: string[];
+      abbreviations_case_sensitive: string[];
+    }>;
+    share_quantity_terms: Array<{
+      modifiers: string[];
+      nouns: string[];
+    }>;
+  };
 };
 
 type FinancialLexicons = {
@@ -1698,6 +2266,7 @@ const buildCurrencyPatternEntries = (
 /** Cached promise for currency patterns. Loaded once. */
 let currencyPatternPromise: Promise<string[]> | null = null;
 let currencyPatternEntryPromise: Promise<CurrencyPatternEntry[]> | null = null;
+let monetaryDataPromise: Promise<MonetaryData> | null = null;
 
 const loadCurrencyPatternEntries = async (): Promise<
   CurrencyPatternEntry[]
@@ -1709,6 +2278,37 @@ const loadCurrencyPatternEntries = async (): Promise<
 
 const loadCurrencyPatterns = async (): Promise<string[]> =>
   (await loadCurrencyPatternEntries()).map((entry) => entry.pattern);
+
+const loadMonetaryData = async (): Promise<MonetaryData> => {
+  const mod = await import("../data/currencies.json");
+  const currencies: CurrenciesData = mod.default ?? mod;
+  return {
+    currencies: {
+      codes: currencies.codes,
+      symbols: currencies.symbols,
+      local_names: currencies.localNames ?? [],
+    },
+    amount_words: {
+      written_amount_patterns: (AMOUNT_WORDS.patterns ?? []).map((entry) => ({
+        keywords: entry.keywords,
+      })),
+      magnitude_suffixes: (AMOUNT_WORDS.magnitudeSuffixes ?? []).map(
+        (entry) => ({
+          words: entry.words ?? [],
+          abbreviations_case_insensitive:
+            entry.abbreviationsCaseInsensitive ?? [],
+          abbreviations_case_sensitive: entry.abbreviationsCaseSensitive ?? [],
+        }),
+      ),
+      share_quantity_terms: (AMOUNT_WORDS.shareQuantityTerms ?? []).map(
+        (entry) => ({
+          modifiers: entry.modifiers ?? [],
+          nouns: entry.nouns,
+        }),
+      ),
+    },
+  };
+};
 
 /**
  * Get dynamically built monetary amount patterns from
@@ -1735,6 +2335,16 @@ export const getCurrencyPatternEntries = (): Promise<
     });
   }
   return currencyPatternEntryPromise;
+};
+
+export const getMonetaryData = (): Promise<MonetaryData> => {
+  if (!monetaryDataPromise) {
+    monetaryDataPromise = loadMonetaryData().catch((err) => {
+      monetaryDataPromise = null;
+      throw err;
+    });
+  }
+  return monetaryDataPromise;
 };
 
 /** Currency pattern metadata (score 0.9). */
@@ -1777,8 +2387,8 @@ export const processRegexMatches = (
     }
     if (
       meta.sourceDetail !== "custom-regex" &&
-      meta.label === "phone number" &&
-      match.text.length < MIN_PHONE_LENGTH
+      meta.minByteLength !== undefined &&
+      utf8ByteLength(match.text) < meta.minByteLength
     ) {
       continue;
     }
@@ -1824,6 +2434,9 @@ type SigningClauseConfig = {
     prefix: string;
     suffix: string;
     prepositions: string[];
+    prefilterPhrases?: string[];
+    guardPrefixPhrases?: string[];
+    guardSuffixPhrases?: string[];
   }>;
 };
 
@@ -1839,31 +2452,83 @@ type SigningClauseConfig = {
  *   optionally followed by more capitalized words
  *   (for "Hradec Králové", "New York", etc.)
  */
-const buildSigningClausePatterns = (data: SigningClauseConfig): string[] => {
+const languageMatches = (
+  entryLanguage: string,
+  selectedLanguages: readonly string[] | undefined,
+): boolean => {
+  if (selectedLanguages === undefined || selectedLanguages.length === 0) {
+    return true;
+  }
+  const normalizedEntry = entryLanguage.toLowerCase();
+  return selectedLanguages.some((language) => {
+    const normalized = language.trim().toLowerCase();
+    return (
+      normalized === normalizedEntry ||
+      normalized.split("-").at(0) === normalizedEntry
+    );
+  });
+};
+
+const buildSigningClausePatterns = (
+  data: SigningClauseConfig,
+  selectedLanguages?: readonly string[],
+): string[] => {
   const patterns: string[] = [];
 
   for (const entry of data.patterns) {
-    const prepAlt =
-      entry.prepositions.length > 0 ? entry.prepositions.join("|") : null;
+    if (!languageMatches(entry.lang, selectedLanguages)) {
+      continue;
+    }
 
-    // Place name: Uppercase word, optionally with
-    // preposition + uppercase, optionally more caps
-    const place = prepAlt
-      ? `(\\p{Lu}\\p{Ll}+` +
-        `(?:\\s+(?:${prepAlt})\\s+\\p{Lu}\\p{Ll}+)*` +
-        `(?:\\s+\\p{Lu}\\p{Ll}+)*)`
-      : `(\\p{Lu}\\p{Ll}+(?:[- ]\\p{Lu}\\p{Ll}+)*)`;
-
-    const full =
-      `(?:^|\\n|[^\\S\\n])` +
-      entry.prefix +
-      place +
-      (entry.suffix ? `(?:${entry.suffix})` : "");
-
-    patterns.push(full);
+    patterns.push(buildSigningClausePattern(entry));
   }
 
   return patterns;
+};
+
+const buildNativeSigningClausePatterns = (
+  data: SigningClauseConfig,
+  selectedLanguages?: readonly string[],
+): PatternEntry[] => {
+  const patterns: PatternEntry[] = [];
+
+  for (const entry of data.patterns) {
+    if (!languageMatches(entry.lang, selectedLanguages)) {
+      continue;
+    }
+
+    const pattern: RegexPatternEntry = {
+      pattern: buildSigningClausePattern(entry),
+      lazy: true,
+      prefilterAny: entry.prefilterPhrases ?? [],
+      prefilterCaseInsensitive: false,
+      prefilterWindowBytes: CONTEXT_REGEX_PREFILTER_WINDOW_BYTES,
+      preparedArtifactPolicy: "omit",
+    };
+    patterns.push(pattern);
+  }
+
+  return patterns;
+};
+
+const buildSigningClausePattern = (
+  entry: SigningClauseConfig["patterns"][number],
+): string => {
+  const prepAlt =
+    entry.prepositions.length > 0 ? entry.prepositions.join("|") : null;
+
+  const place = prepAlt
+    ? `(\\p{Lu}\\p{Ll}+` +
+      `(?:\\s+(?:${prepAlt})\\s+\\p{Lu}\\p{Ll}+)*` +
+      `(?:\\s+\\p{Lu}\\p{Ll}+)*)`
+    : `(\\p{Lu}\\p{Ll}+(?:[- ]\\p{Lu}\\p{Ll}+)*)`;
+
+  return (
+    `(?:^|\\n|[^\\S\\n])` +
+    entry.prefix +
+    place +
+    (entry.suffix ? `(?:${entry.suffix})` : "")
+  );
 };
 
 export const SIGNING_CLAUSE_META: Readonly<RegexMeta> = {
@@ -1872,14 +2537,30 @@ export const SIGNING_CLAUSE_META: Readonly<RegexMeta> = {
 };
 
 let signingPatternPromise: Promise<string[]> | null = null;
+let nativeSigningPatternPromise: Promise<PatternEntry[]> | null = null;
 
-const loadSigningPatterns = async (): Promise<string[]> => {
+const loadSigningPatterns = async (
+  selectedLanguages?: readonly string[],
+): Promise<string[]> => {
   const mod = await import("../data/signing-clauses.json");
   const data: SigningClauseConfig = mod.default ?? mod;
-  return buildSigningClausePatterns(data);
+  return buildSigningClausePatterns(data, selectedLanguages);
 };
 
-export const getSigningClausePatterns = (): Promise<string[]> => {
+const loadNativeSigningPatterns = async (
+  selectedLanguages?: readonly string[],
+): Promise<PatternEntry[]> => {
+  const mod = await import("../data/signing-clauses.json");
+  const data: SigningClauseConfig = mod.default ?? mod;
+  return buildNativeSigningClausePatterns(data, selectedLanguages);
+};
+
+export const getSigningClausePatterns = (
+  selectedLanguages?: readonly string[],
+): Promise<string[]> => {
+  if (selectedLanguages !== undefined) {
+    return loadSigningPatterns(selectedLanguages);
+  }
   if (!signingPatternPromise) {
     signingPatternPromise = loadSigningPatterns().catch((err) => {
       signingPatternPromise = null;
@@ -1887,4 +2568,19 @@ export const getSigningClausePatterns = (): Promise<string[]> => {
     });
   }
   return signingPatternPromise;
+};
+
+export const getNativeSigningClausePatterns = (
+  selectedLanguages?: readonly string[],
+): Promise<PatternEntry[]> => {
+  if (selectedLanguages !== undefined) {
+    return loadNativeSigningPatterns(selectedLanguages);
+  }
+  if (!nativeSigningPatternPromise) {
+    nativeSigningPatternPromise = loadNativeSigningPatterns().catch((err) => {
+      nativeSigningPatternPromise = null;
+      throw err;
+    });
+  }
+  return nativeSigningPatternPromise;
 };

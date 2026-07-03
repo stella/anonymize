@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 
 import { describe, expect, test } from "bun:test";
 
-import { createPipelineContext, redactText, runPipeline } from "../../index";
+import { createPipelineContext, redactText, runPipeline } from "../../legacy";
 import type { PipelineContext } from "../../context";
 import type { Dictionaries, Entity } from "../../types";
 import { contractTestConfig } from "../contract-config";

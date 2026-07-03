@@ -1,13 +1,15 @@
 /**
  * Language manifest loader and config auto-discovery.
  *
- * Language manifest loader and config auto-discovery.
- *
  * Reads manifest.json to determine which languages have
  * which config types, then loads them via a static
  * registry of import() calls (string literals for
  * bundler compatibility).
  */
+
+import { languageConfigMatches } from "./language-selection";
+
+export { languageConfigMatches } from "./language-selection";
 
 // ── Types ────────────────────────────────────────────
 
@@ -22,6 +24,10 @@ type Manifest = {
 };
 
 type ConfigType = "triggers" | "coreference" | "legalRoleHeads";
+
+type LoadLanguageConfigOptions = {
+  languages?: readonly string[];
+};
 
 // ── Manifest loader (cached) ─────────────────────────
 
@@ -162,6 +168,7 @@ const FALLBACK_LANGUAGES: Record<ConfigType, readonly string[]> = {
 export const loadLanguageConfigs = async <T extends NonNullable<unknown>>(
   configType: ConfigType,
   mapFn: (mod: unknown) => T,
+  options: LoadLanguageConfigOptions = {},
 ): Promise<T[]> => {
   const manifest = await loadManifest();
   const registry = LOADER_REGISTRIES[configType];
@@ -169,7 +176,7 @@ export const loadLanguageConfigs = async <T extends NonNullable<unknown>>(
   // Determine which language codes to load
   const hasManifestLanguages = Object.keys(manifest.languages).length > 0;
 
-  const codes = hasManifestLanguages
+  const configuredCodes = hasManifestLanguages
     ? Object.entries(manifest.languages)
         .filter(([code, lang]) => {
           if (!lang || typeof lang !== "object") {
@@ -184,6 +191,9 @@ export const loadLanguageConfigs = async <T extends NonNullable<unknown>>(
         })
         .map(([code]) => code)
     : [...FALLBACK_LANGUAGES[configType]];
+  const codes = configuredCodes.filter((code) =>
+    languageConfigMatches(code, options.languages),
+  );
 
   // Use indexed assignment so results preserve
   // manifest declaration order regardless of import

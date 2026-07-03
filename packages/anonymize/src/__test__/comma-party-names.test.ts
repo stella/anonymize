@@ -3,7 +3,7 @@ import {
   runPipeline,
   DEFAULT_ENTITY_LABELS,
   createPipelineContext,
-} from "../index";
+} from "../legacy";
 import type { PipelineConfig } from "../types";
 
 const CONFIG: PipelineConfig = {

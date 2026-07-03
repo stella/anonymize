@@ -69,6 +69,9 @@ export type PipelineContext = {
   search: UnifiedSearchInstance | null;
   searchKey: string;
   searchPromise: Promise<UnifiedSearchInstance> | null;
+  nativePipelinePackage: Uint8Array | null;
+  nativePipelinePackageKey: string;
+  nativePipelinePackagePromise: Promise<Uint8Array> | null;
 
   // ── Name corpus ───────────────────────────────
   nameCorpus: NameCorpusData | null;
@@ -82,6 +85,8 @@ export type PipelineContext = {
   allowListPromise: Promise<ReadonlySet<string>> | null;
   personStopwords: ReadonlySet<string> | null;
   personStopwordsPromise: Promise<ReadonlySet<string>> | null;
+  definedTermHeads: ReadonlySet<string> | null;
+  definedTermHeadsPromise: Promise<ReadonlySet<string>> | null;
   addressStopwords: ReadonlySet<string> | null;
   addressStopwordsPromise: Promise<ReadonlySet<string>> | null;
   /** First-name exclusions for stopword filtering. */
@@ -94,6 +99,7 @@ export type PipelineContext = {
 
   // ── Coreference ───────────────────────────────
   corefPatterns: DefinitionPattern[] | null;
+  corefPatternsKey: string;
   corefPatternsPromise: Promise<DefinitionPattern[]> | null;
   corefLoadAttempted: boolean;
   roleStopSet: ReadonlySet<string> | null;
@@ -110,6 +116,9 @@ export const createPipelineContext = (): PipelineContext => ({
   search: null,
   searchKey: "",
   searchPromise: null,
+  nativePipelinePackage: null,
+  nativePipelinePackageKey: "",
+  nativePipelinePackagePromise: null,
 
   nameCorpus: null,
   nameCorpusKey: "",
@@ -121,6 +130,8 @@ export const createPipelineContext = (): PipelineContext => ({
   allowListPromise: null,
   personStopwords: null,
   personStopwordsPromise: null,
+  definedTermHeads: null,
+  definedTermHeadsPromise: null,
   addressStopwords: null,
   addressStopwordsPromise: null,
   firstNameExclusions: null,
@@ -130,6 +141,7 @@ export const createPipelineContext = (): PipelineContext => ({
   genericRolesPromise: null,
 
   corefPatterns: null,
+  corefPatternsKey: "",
   corefPatternsPromise: null,
   corefLoadAttempted: false,
   roleStopSet: null,

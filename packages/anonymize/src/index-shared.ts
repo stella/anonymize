@@ -49,6 +49,66 @@ export type {
   PipelineSearchOptions,
 } from "./pipeline";
 
+// ── Native Adapter ───────────────────────────────
+export {
+  PreparedSearch,
+  PreparedNativeAnonymizer,
+  assertNativeBindingVersion,
+  createNativeAnonymizerFromConfig,
+  createNativeAnonymizerFromPackage,
+  encodeNativeSearchConfig,
+  encodeNativeSearchConfigInput,
+  getNativeBindingVersion,
+  diagnostics_json,
+  load_prepared_package,
+  native_package_version,
+  normalize_for_search,
+  prepareNativeSearchPackage,
+  prepare_search_package,
+  redact_text,
+  redact_text_json,
+  redact_text_stream_json,
+} from "./native";
+export type {
+  NativeAnonymizeBinding,
+  NativeAnonymizerFromConfigOptions,
+  NativeAnonymizerFromPackageOptions,
+  NativeBindingVersionOptions,
+  NativeNormalizeOptions,
+  NativeOperatorConfig,
+  NativePipelineEntity,
+  NativePipelineFromPackageOptions,
+  NativePreparedSearchBinding,
+  NativeRedactionResult,
+  NativeResultEventCallback,
+  NativeSearchPackageInput,
+  NativeSearchPackageOptions,
+  NativeStaticRedactionResult,
+  PreparedSearch as PreparedSearchInstance,
+  SharedNativePreparedPackageOptions,
+  SharedNativeDiagnosticsJsonOptions,
+  SharedNativeRedactTextOptions,
+  SharedNativeRedactTextJsonOptions,
+  SharedNativeRedactTextStreamJsonOptions,
+  SharedNativeSearchPackageOptions,
+} from "./native";
+export { DEFAULT_NATIVE_PIPELINE_CONFIG } from "./native-default-config";
+export {
+  PreparedNativePipeline,
+  assertNativePipelineSupported,
+  createNativePipelineFromConfig,
+  createNativePipelineFromPackage,
+  getNativePipelineCompatibility,
+  prepareNativePipelineConfig,
+  prepareNativePipelinePackage,
+} from "./native-pipeline";
+export type {
+  NativePipelineBuildOptions,
+  NativePipelineCompatibility,
+  NativePipelinePackageOptions,
+  NativePipelineUnsupportedFeature,
+} from "./native-pipeline";
+
 // ── Redaction ─────────────────────────────────────
 export {
   redactText,

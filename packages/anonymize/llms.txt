@@ -4,61 +4,31 @@ Multi-layer PII detection and anonymization for
 legal documents. Supports 20+ languages with
 Czech/Slovak specialization.
 
-## Pipeline
+## Runtime Shape
 
-Six detection layers run in parallel, results
-merged with dedup:
+The product runtime is Rust-native. TypeScript and
+Python wrappers load prepared packages, translate
+types, and call the same Rust core.
 
-1. **Regex** — structured PII (IBAN, email, phone,
-   dates, birth numbers, company IDs)
-2. **Triggers** — keyword proximity ("bytem" →
-   address, "narozen" → date)
-3. **Legal forms** — organization suffix detection
-   (s.r.o., GmbH, Ltd.)
-4. **Name corpus** — first/last name matching with
-   Czech declension handling
-5. **Gazetteer** — workspace deny lists via
-   Aho-Corasick + Levenshtein fuzzy
-6. **GLiNER NER** — zero-shot transformer NER
+The default Node path is:
 
-Post-processing: coreference (alias tracking),
-confidence boosting, false positive filtering.
+1. load `native-pipeline.stlanonpkg`
+2. create `PreparedNativePipeline`
+3. optionally warm lazy regex
+4. call `redactText`, JSON, diagnostics, or stream APIs
+
+Language-scoped packages can be selected with
+`getDefaultNativePipeline({ language })`.
 
 ## API
 
 ```typescript
-import { runPipeline, redactText } from '@stll/anonymize'
+import { getDefaultNativePipeline } from '@stll/anonymize'
 
-// Detect entities
-const entities = await runPipeline({
-  fullText: text,
-  config,
-  gazetteerEntries: [],
-})
+const pipeline = getDefaultNativePipeline({ language: 'en' })
+const result = pipeline.redactText(text)
 
-// Caller-owned exact terms and regex detectors
-const customEntities = await runPipeline({
-  fullText: text,
-  config: {
-    ...config,
-    enableDenyList: true,
-    enableRegex: true,
-    customDenyList: [
-      { value: 'Project Nebula', label: 'organization' },
-    ],
-    customRegexes: [
-      { pattern: '\\bSTLL-[0-9]{4}\\b', label: 'matter reference', score: 1 },
-    ],
-  },
-  gazetteerEntries: [],
-})
-
-// Redact
-const { redactedText, redactionMap } = redactText(
-  text, entities, { type: 'replace' }
-)
-// redactedText: "[PERSON_1] prodává [ORGANIZATION_1]..."
-// redactionMap: { "[PERSON_1]": "Jan Novák", ... }
+console.log(result.redaction.redactedText)
 ```
 
 ## Entity Labels
@@ -68,3 +38,9 @@ email address, iban, bank account number, credit card
 number, czech birth number, registration number,
 tax identification number, identity card number,
 passport number
+
+## Extension Rule
+
+Add anonymization behavior in Rust core. Keep host-language
+bindings thin. `src/legacy.ts` is temporary internal scaffolding
+for old tests and migration comparisons, not a public runtime.

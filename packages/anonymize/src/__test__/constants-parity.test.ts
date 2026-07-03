@@ -23,4 +23,9 @@ describe("@stll/anonymize/constants subpath parity", () => {
       ...fromRoot.OPERATOR_TYPES,
     ]);
   });
+
+  test("native shared SDK helpers are exported from the root entrypoint", () => {
+    expect(typeof fromRoot.redact_text).toBe("function");
+    expect(typeof fromRoot.redact_text_json).toBe("function");
+  });
 });

@@ -2,6 +2,7 @@ name: Release
 
 env:
   NPM_VERSION: "11.11.1"
+  UV_VERSION: "0.10.1"
 
 on:
   push:
@@ -24,8 +25,34 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+    outputs:
+      dist_tag: ${{ steps.dist-tag.outputs.dist_tag }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Derive npm dist-tag from VERSION
+        id: dist-tag
+        run: |
+          set -euo pipefail
+          if [[ ! -f VERSION ]]; then
+            echo "::error::VERSION file is missing"
+            exit 1
+          fi
+
+          version="$(tr -d '[:space:]' < VERSION)"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-(rc|beta|alpha)\.[0-9]+)?$ ]]; then
+            echo "::error::VERSION must look like 1.2.3, 1.2.3-rc.1, 1.2.3-beta.1, or 1.2.3-alpha.1; got '$version'"
+            exit 1
+          fi
+
+          # Prereleases publish under their identifier (alpha/beta/rc) so a
+          # test build never becomes the npm `latest` tag; stable stays latest.
+          dist_tag="latest"
+          if [[ "$version" =~ -(rc|beta|alpha)\. ]]; then
+            dist_tag="${BASH_REMATCH[1]}"
+          fi
+
+          echo "dist_tag=$dist_tag" >> "$GITHUB_OUTPUT"
 
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
@@ -45,6 +72,9 @@ jobs:
       - name: Sync runtime package versions
         run: bun run sync:version
 
+      - name: Verify native sidecar metadata
+        run: node .github/tools/check-native-sidecars.mjs
+
       - name: Build
         run: bun run build
 
@@ -54,14 +84,169 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
+      - name: Install uv
+        run: |
+          python3 -m pip install --user "uv==${{ env.UV_VERSION }}"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Python typecheck
+        run: bun run python:typecheck
+
+      - name: Python wheel
+        run: bun run python:wheel
+        env:
+          ANONYMIZE_PYTHON_WHEEL_PROFILE: release
+
       - name: Test
         run: bun run test
 
       - name: Verify package tarballs
         run: node .github/tools/check-packlist.mjs
 
-  publish:
+  pack-native:
     needs: verify
+    if: github.event_name == 'push' || inputs.publish_to_npm == true
+    name: Pack ${{ matrix.package }}
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package: packages/anonymize-linux-x64-gnu
+            runner: ubuntu-24.04
+          - package: packages/anonymize-linux-arm64-gnu
+            runner: ubuntu-24.04-arm
+          - package: packages/anonymize-darwin-x64
+            runner: macos-15-intel
+          - package: packages/anonymize-darwin-arm64
+            runner: macos-15
+          - package: packages/anonymize-win32-x64-msvc
+            runner: windows-2025
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: "22"
+          registry-url: https://registry.npmjs.org
+
+      - name: Install npm for packing
+        run: npm install --global "npm@${{ env.NPM_VERSION }}"
+
+      - name: Verify Bun workflow pin
+        run: node .github/tools/check-bun-workflows.mjs
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Sync runtime package versions
+        run: bun run sync:version
+
+      - name: Build
+        run: bun run build
+
+      - name: Read package metadata
+        id: package
+        working-directory: ${{ matrix.package }}
+        run: |
+          package_name="$(node -p "require('./package.json').name")"
+          artifact_name="$(
+            node -e '
+              const name = require("./package.json").name;
+              console.log(`npm-tarball-${name.replace(/^@/, "").replace(/[\\/]/g, "-")}`);
+            '
+          )"
+
+          echo "name=${package_name}" >> "$GITHUB_OUTPUT"
+          echo "artifact_name=${artifact_name}" >> "$GITHUB_OUTPUT"
+
+      - name: Pack package
+        id: pack
+        working-directory: ${{ matrix.package }}
+        run: |
+          set -euo pipefail
+          pack_dir="$RUNNER_TEMP/npm-tarballs"
+          mkdir -p "$pack_dir"
+
+          pack_json="$(npm pack --json --ignore-scripts --pack-destination "$pack_dir")"
+          node -e '
+            const pack = JSON.parse(process.argv[1])[0];
+            const files = new Set(pack.files.map((file) => file.path));
+            for (const required of ["index.cjs", "stella_anonymize_napi.node"]) {
+              if (!files.has(required)) {
+                console.error(`::error::${pack.name} tarball is missing ${required}`);
+                process.exit(1);
+              }
+            }
+          ' "$pack_json"
+          filename="$(
+            node -e '
+              const pack = JSON.parse(process.argv[1]);
+              console.log(pack[0].filename);
+            ' "$pack_json"
+          )"
+
+          echo "tarball=${pack_dir}/${filename}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload package tarball
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v5
+        with:
+          name: ${{ steps.package.outputs.artifact_name }}
+          path: ${{ steps.pack.outputs.tarball }}
+          if-no-files-found: error
+
+  publish-native:
+    needs: [verify, pack-native]
+    if: github.event_name == 'push' || inputs.publish_to_npm == true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    strategy:
+      fail-fast: false
+      matrix:
+        artifact:
+          - npm-tarball-stll-anonymize-linux-x64-gnu
+          - npm-tarball-stll-anonymize-linux-arm64-gnu
+          - npm-tarball-stll-anonymize-darwin-x64
+          - npm-tarball-stll-anonymize-darwin-arm64
+          - npm-tarball-stll-anonymize-win32-x64-msvc
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: ${{ matrix.artifact }}
+          path: native-tarball
+
+      - name: Find package tarball
+        id: tarball
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          tarballs=(native-tarball/*.tgz)
+          if [[ "${#tarballs[@]}" -ne 1 ]]; then
+            echo "::error::Expected one native tarball for ${{ matrix.artifact }}, found ${#tarballs[@]}"
+            exit 1
+          fi
+          echo "path=${tarballs[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish package
+        uses: stella/.github/.github/actions/npm-publish-hardened@4292546b5b6e5bd8660bd727913b4038644c3d0b
+        with:
+          tarball: ${{ steps.tarball.outputs.path }}
+          tag: ${{ needs.verify.outputs.dist_tag }}
+
+  publish:
+    needs: [verify, publish-native]
     if: github.event_name == 'push' || inputs.publish_to_npm == true
     runs-on: ubuntu-latest
     permissions:
@@ -150,11 +335,12 @@ jobs:
         uses: stella/.github/.github/actions/npm-publish-hardened@4292546b5b6e5bd8660bd727913b4038644c3d0b
         with:
           tarball: ${{ steps.pack.outputs.tarball }}
+          tag: ${{ needs.verify.outputs.dist_tag }}
 
   github-release:
     name: Create GitHub release
-    needs: [verify, publish]
-    if: needs.verify.result == 'success' && needs.publish.result == 'success' && (github.event_name == 'push' || inputs.publish_to_npm == true)
+    needs: [verify, publish-native, publish]
+    if: needs.verify.result == 'success' && needs.publish-native.result == 'success' && needs.publish.result == 'success' && (github.event_name == 'push' || inputs.publish_to_npm == true)
     runs-on: ubuntu-latest
     permissions:
       contents: write

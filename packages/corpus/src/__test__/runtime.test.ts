@@ -1,13 +1,9 @@
 import { expect, test } from "bun:test";
 
-import {
-  createPipelineContext,
-  getNameCorpusNonWesternNames,
-  initNameCorpus,
-} from "@stll/anonymize";
+import { getDefaultNativePipeline } from "@stll/anonymize";
 
-test("built runtime can load bundled non-Western name data", async () => {
-  const context = createPipelineContext();
-  await initNameCorpus(context);
-  expect(getNameCorpusNonWesternNames(context).length).toBeGreaterThan(0);
+test("built runtime can load the default native package", () => {
+  const pipeline = getDefaultNativePipeline();
+  const result = pipeline.redactText("Signed by Jan Novak in Prague.");
+  expect(result.resolvedEntities.length).toBeGreaterThan(0);
 });

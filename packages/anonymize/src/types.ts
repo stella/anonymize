@@ -183,7 +183,11 @@ export type CompiledValidation =
   | { type: "no-digits"; re: RegExp }
   | { type: "has-digits"; re: RegExp }
   | { type: "matches-pattern"; re: RegExp }
-  | { type: "valid-id"; check: (value: string) => boolean };
+  | {
+      type: "valid-id";
+      validator: ValidIdValidator;
+      check: (value: string) => boolean;
+    };
 
 /**
  * Runtime rule — one per trigger string after
@@ -289,6 +293,7 @@ export type CustomRegexPattern = {
   pattern: string;
   label: string;
   score?: number;
+  preparedArtifactPolicy?: "include" | "omit";
 };
 
 /**
@@ -355,6 +360,18 @@ export type PipelineConfig = {
   threshold: number;
   enableTriggerPhrases: boolean;
   enableRegex: boolean;
+  /**
+   * Expected content language codes. When present, these
+   * derive default dictionary scopes for name corpus and
+   * deny-list matching unless the lower-level scope fields
+   * below are set explicitly.
+   */
+  languages?: string[];
+  /**
+   * Convenience form for single-language documents. Ignored
+   * when `languages` is also provided.
+   */
+  language?: string;
   /**
    * Enables legal-form organization detection.
    * Required for typed callers; legacy untyped

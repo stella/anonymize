@@ -80,11 +80,36 @@ type Seed = {
 
 type DictionaryConfig = Record<string, string[] | string>;
 
+export type AddressSeedData = {
+  boundary_words: string[];
+  br_cep_cue_words: string[];
+  unit_abbreviations: string[];
+};
+
 let cachedBoundaryRe: RegExp | null = null;
+let addressSeedDataPromise: Promise<AddressSeedData> | null = null;
 
 const loadBoundaryWords = async (): Promise<DictionaryConfig> => {
   try {
     const mod = await import("../data/address-boundaries.json");
+    return mod.default as DictionaryConfig;
+  } catch {
+    return {};
+  }
+};
+
+const loadFieldStopWords = async (): Promise<DictionaryConfig> => {
+  try {
+    const mod = await import("../data/address-stop-keywords.json");
+    return mod.default as DictionaryConfig;
+  } catch {
+    return {};
+  }
+};
+
+const loadUnitAbbreviations = async (): Promise<DictionaryConfig> => {
+  try {
+    const mod = await import("../data/address-unit-abbreviations.json");
     return mod.default as DictionaryConfig;
   } catch {
     return {};
@@ -337,6 +362,64 @@ const loadStreetTypePatterns = async (): Promise<string[]> => {
 export const buildStreetTypePatterns = async (): Promise<string[]> => {
   streetTypePatternsPromise ??= loadStreetTypePatterns();
   return streetTypePatternsPromise;
+};
+
+export const getAddressSeedData = async (): Promise<AddressSeedData> => {
+  addressSeedDataPromise ??= (async () => {
+    const [boundaryWords, fieldStopWords, unitAbbreviations, brCueWords] =
+      await Promise.all([
+        loadBoundaryWords(),
+        loadFieldStopWords(),
+        loadUnitAbbreviations(),
+        loadBrCueWords(),
+      ]);
+    return {
+      boundary_words: flattenDictionaries([boundaryWords, fieldStopWords]),
+      br_cep_cue_words: [...brCueWords],
+      unit_abbreviations: flattenDictionaries([unitAbbreviations]),
+    };
+  })();
+  return addressSeedDataPromise;
+};
+
+const flattenDictionaries = (
+  configs: readonly DictionaryConfig[],
+): string[] => {
+  const words: string[] = [];
+  const seen = new Set<string>();
+  for (const config of configs) {
+    for (const word of flattenDictionary(config)) {
+      const key = word.toLowerCase();
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      words.push(word);
+    }
+  }
+  return words;
+};
+
+const flattenDictionary = (config: DictionaryConfig): string[] => {
+  const words: string[] = [];
+  const seen = new Set<string>();
+  for (const values of Object.values(config)) {
+    if (!Array.isArray(values)) {
+      continue;
+    }
+    for (const word of values) {
+      if (typeof word !== "string" || word.length === 0) {
+        continue;
+      }
+      const key = word.toLowerCase();
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      words.push(word);
+    }
+  }
+  return words;
 };
 
 // ── Seed collection ─────────────────────────────────

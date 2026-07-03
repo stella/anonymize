@@ -17,7 +17,7 @@ import {
   createPipelineContext,
   DEFAULT_ENTITY_LABELS,
   runPipeline,
-} from "../index";
+} from "../legacy";
 import addressStopwordsData from "../data/address-stopwords.json";
 import commonWordsData from "../data/common-words-en.json";
 import { buildDenyList } from "../detectors/deny-list";

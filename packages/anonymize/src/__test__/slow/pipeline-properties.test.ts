@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { createPipelineContext, redactText, runPipeline } from "../../index";
+import { createPipelineContext, redactText, runPipeline } from "../../legacy";
 import type { CustomDenyListEntry, Dictionaries } from "../../types";
 import {
   assertEntityInvariants,

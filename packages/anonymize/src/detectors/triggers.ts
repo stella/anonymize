@@ -15,6 +15,10 @@ import { POST_NOMINALS } from "../config/titles";
 import { getKnownLegalSuffixes } from "./legal-forms";
 import { NAME_PARTICLE } from "./signatures";
 import { loadLanguageConfigs } from "../util/lang-loader";
+import {
+  languageConfigMatches,
+  languageSelectionKey,
+} from "../util/language-selection";
 import { DASH, DASH_INNER } from "../util/char-groups";
 
 const VALID_ID_VALIDATORS: Record<ValidIdValidator, Validator> = {
@@ -168,6 +172,7 @@ const compileValidations = (
         }
         return {
           type: "valid-id",
+          validator: v.validator,
           check: (value) => {
             // stdnum validators expect compact digits only;
             // strip formatting (spaces, dots, dashes,
@@ -282,15 +287,18 @@ type TriggerPatterns = {
   rules: TriggerRule[];
 };
 
-let triggerPatternsPromise: Promise<TriggerPatterns> | null = null;
+const triggerPatternsPromises = new Map<string, Promise<TriggerPatterns>>();
 
 /**
  * Build trigger patterns and rules from data configs.
  * Returns string[] for the unified TextSearch
  * builder and the parallel rules array.
  */
-const loadTriggerPatterns = async (): Promise<TriggerPatterns> => {
+const loadTriggerPatterns = async (
+  languages: readonly string[] | undefined,
+): Promise<TriggerPatterns> => {
   const rules: TriggerRule[] = [];
+  const languageOptions = languages === undefined ? {} : { languages };
 
   const allGroups = await loadLanguageConfigs<readonly TriggerGroupConfig[]>(
     "triggers",
@@ -302,6 +310,7 @@ const loadTriggerPatterns = async (): Promise<TriggerPatterns> => {
       // eslint-disable-next-line no-unsafe-type-assertion -- JSON config
       return (m.default ?? mod) as readonly TriggerGroupConfig[];
     },
+    languageOptions,
   );
   for (const groups of allGroups) {
     if (!Array.isArray(groups)) {
@@ -349,6 +358,9 @@ const loadTriggerPatterns = async (): Promise<TriggerPatterns> => {
     ]);
     for (const [key, words] of Object.entries(data)) {
       if (key.startsWith("_") || !Array.isArray(words)) {
+        continue;
+      }
+      if (!languageConfigMatches(key, languages)) {
         continue;
       }
       for (const word of words) {
@@ -411,9 +423,16 @@ const loadTriggerPatterns = async (): Promise<TriggerPatterns> => {
   return { patterns, rules };
 };
 
-export const buildTriggerPatterns = async (): Promise<TriggerPatterns> => {
-  triggerPatternsPromise ??= loadTriggerPatterns();
-  return triggerPatternsPromise;
+export const buildTriggerPatterns = async (
+  languages?: readonly string[],
+): Promise<TriggerPatterns> => {
+  const key = languageSelectionKey(languages);
+  let promise = triggerPatternsPromises.get(key);
+  if (promise === undefined) {
+    promise = loadTriggerPatterns(languages);
+    triggerPatternsPromises.set(key, promise);
+  }
+  return promise;
 };
 
 // ── Value extraction ────────────────────────────────
@@ -637,14 +656,13 @@ const loadAddressStopKeywords = async (): Promise<readonly string[]> => {
   return addressStopKeywordsPromise;
 };
 
-const getAddressStopKeywordsSync = (): readonly string[] =>
+export const getAddressStopKeywordsSync = (): readonly string[] =>
   addressStopKeywordsCache ?? ADDRESS_STOP_KEYWORDS_SEED;
 
 /**
- * Warm the address-stop-keywords cache. Pipeline callers
+ * Warm address support data. Pipeline callers
  * await this before invoking trigger detection so the
- * synchronous `extractValue` path uses the merged list
- * instead of the seed fallback.
+ * synchronous `extractValue` path uses merged data.
  */
 export const warmAddressStopKeywords = async (): Promise<void> => {
   await loadAddressStopKeywords();
@@ -1128,7 +1146,10 @@ const extractValue = (
       const idRaw = trailingLetterMatch
         ? idMatch[0] + trailingLetterMatch[0]
         : idMatch[0];
-      const idText = idRaw.trim();
+      const idText = idRaw.trim().replace(/[.,;:!?]+$/u, "");
+      if (idText.length === 0) {
+        return null;
+      }
       const leadingSpaces = idMatch[0].length - idMatch[0].trimStart().length;
       const idStart =
         triggerEnd +

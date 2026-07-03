@@ -3,11 +3,10 @@ import { join } from "node:path";
 import { parseArgs } from "node:util";
 
 import {
-  createPipelineContext,
+  createNativePipelineFromConfig,
   DEFAULT_ENTITY_LABELS,
+  loadNativeAnonymizeBinding,
   type PipelineConfig,
-  preparePipelineSearch,
-  runPipeline,
 } from "@stll/anonymize";
 
 import { loadCorpusDictionaries } from "./dictionaries";
@@ -94,8 +93,13 @@ const config: PipelineConfig = {
   dictionaries,
 };
 
-const context = createPipelineContext();
-await preparePipelineSearch({ config, context });
+const binding = loadNativeAnonymizeBinding();
+const pipeline = await createNativePipelineFromConfig({
+  binding,
+  config,
+  gazetteerEntries: [],
+});
+pipeline.warmLazyRegex();
 
 // Forcing reuses an existing run name; clear stale document
 // artifacts so removed documents do not linger beside fresh output.
@@ -122,12 +126,7 @@ for (const entry of manifest.entries) {
   }
 
   const startedAt = performance.now();
-  const detected = await runPipeline({
-    fullText,
-    config,
-    gazetteerEntries: [],
-    context,
-  });
+  const detected = pipeline.redactText(fullText).resolvedEntities;
   const ms = Math.round(performance.now() - startedAt);
 
   const entities: RunEntity[] = detected

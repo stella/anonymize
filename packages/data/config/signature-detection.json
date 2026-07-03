@@ -1,0 +1,84 @@
+{
+  "_comment": "Signature-block detection terms, organized by concept and language. `und` is reserved for structural markers or name/legal tokens that are not tied to the document language.",
+  "labels": {
+    "en": ["by", "name"]
+  },
+  "witnessPhrases": {
+    "en": ["in witness whereof"]
+  },
+  "nameParticles": {
+    "und": ["d'", "d’"],
+    "ar": ["al", "ben", "bin"],
+    "de": ["der", "den", "von", "zu"],
+    "es": ["de", "del", "la", "y"],
+    "fr": ["de", "du", "le", "la"],
+    "it": ["di", "della"],
+    "nl": ["van"],
+    "pt": ["de", "da", "das", "do", "dos"],
+    "sv": ["af"]
+  },
+  "postNominalSuffixes": {
+    "en": [
+      "jr",
+      "sr",
+      "ii",
+      "iii",
+      "iv",
+      "v",
+      "esq",
+      "esquire",
+      "md",
+      "phd",
+      "jd",
+      "llm",
+      "mba",
+      "cpa",
+      "pe",
+      "rn",
+      "dds",
+      "dvm",
+      "do",
+      "cfa",
+      "cfp"
+    ]
+  },
+  "organizationSuffixes": {
+    "pt-br": ["ltda", "ltda.", "eireli", "epp", "s/a"],
+    "cs": [
+      "s.r.o",
+      "s.r.o.",
+      "a.s",
+      "a.s.",
+      "z.s",
+      "z.s.",
+      "s.p",
+      "s.p.",
+      "s. p."
+    ],
+    "de": ["gmbh", "ag", "se", "kg", "ohg"],
+    "en": [
+      "inc",
+      "inc.",
+      "llc",
+      "llp",
+      "lp",
+      "corp",
+      "corp.",
+      "corporation",
+      "ltd",
+      "ltd.",
+      "plc",
+      "co",
+      "co."
+    ],
+    "es": ["sa", "s.a", "s.a."],
+    "fr": ["sas", "sarl", "sa", "s.a", "s.a."],
+    "it": ["s.p.a", "s.p.a."],
+    "nl": ["n.v", "n.v.", "b.v", "b.v."],
+    "en-us": ["n.a", "n.a."],
+    "en-au": ["pty ltd", "pty ltd."]
+  },
+  "imageStubPrefixes": {
+    "und": ["[img", "[image", "[logo", "(logo"]
+  }
+}

@@ -10,7 +10,7 @@ import {
   runPipeline,
   DEFAULT_ENTITY_LABELS,
   createPipelineContext,
-} from "../index";
+} from "../legacy";
 import type { PipelineConfig } from "../types";
 
 setDefaultTimeout(15_000);
@@ -255,6 +255,17 @@ describe("Czech commercial-register reference (oddíl X, vložka NNN)", () => {
         (e) =>
           e.label === "registration number" &&
           e.text === "oddíl C, vložka 12345",
+      ),
+    ).toBe(true);
+  });
+
+  test("uppercase registry cue with lowercase section", async () => {
+    const entities = await detect("ODDÍL c, VLOŽKA 12345");
+    expect(
+      entities.some(
+        (e) =>
+          e.label === "registration number" &&
+          e.text === "ODDÍL c, VLOŽKA 12345",
       ),
     ).toBe(true);
   });

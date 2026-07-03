@@ -13,7 +13,7 @@ import {
   createPipelineContext,
   DEFAULT_ENTITY_LABELS,
   runPipeline,
-} from "../index";
+} from "../legacy";
 import type { Entity, PipelineConfig } from "../types";
 import type { PipelineContext } from "../context";
 import { loadTestDictionaries } from "./load-dictionaries";

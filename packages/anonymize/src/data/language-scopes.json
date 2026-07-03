@@ -1,0 +1,73 @@
+{
+  "_comment": "Default dictionary scopes for content language hints. Lower-level caller config can still override name corpus languages and deny-list countries independently.",
+  "languages": {
+    "cs": {
+      "nameCorpusLanguages": ["cs", "sk"],
+      "denyListCountries": ["CZ", "SK"]
+    },
+    "de": {
+      "nameCorpusLanguages": ["de"],
+      "denyListCountries": ["DE", "AT", "CH"]
+    },
+    "en": {
+      "nameCorpusLanguages": ["en"],
+      "denyListCountries": ["US", "GB", "CA", "AU", "IE"]
+    },
+    "es": {
+      "nameCorpusLanguages": ["es"],
+      "denyListCountries": [
+        "ES",
+        "MX",
+        "AR",
+        "CL",
+        "CO",
+        "PE",
+        "EC",
+        "VE",
+        "UY",
+        "PY",
+        "BO",
+        "CR",
+        "PA",
+        "DO",
+        "GT",
+        "HN",
+        "SV",
+        "NI",
+        "CU"
+      ]
+    },
+    "fr": {
+      "nameCorpusLanguages": ["fr"],
+      "denyListCountries": ["FR", "BE", "CH", "CA", "LU", "MC"]
+    },
+    "hu": {
+      "nameCorpusLanguages": ["hu"],
+      "denyListCountries": ["HU"]
+    },
+    "it": {
+      "nameCorpusLanguages": ["it"],
+      "denyListCountries": ["IT", "CH"]
+    },
+    "pl": {
+      "nameCorpusLanguages": ["pl"],
+      "denyListCountries": ["PL"]
+    },
+    "pt-br": {
+      "nameCorpusLanguages": ["pt-br"],
+      "denyListCountries": ["BR"]
+    },
+    "ro": {
+      "nameCorpusLanguages": ["ro"],
+      "denyListCountries": ["RO", "MD"]
+    },
+    "sk": {
+      "nameCorpusLanguages": ["sk", "cs"],
+      "denyListCountries": ["SK", "CZ"]
+    },
+    "sv": {
+      "nameCorpusLanguages": ["sv"],
+      "denyListCountries": ["SE", "FI"]
+    }
+  }
+}

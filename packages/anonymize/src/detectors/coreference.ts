@@ -3,6 +3,7 @@ import type { Entity } from "../types";
 import type { DefinitionPattern, PipelineContext } from "../context";
 import { defaultContext } from "../context";
 import { loadLanguageConfigs } from "../util/lang-loader";
+import { languageSelectionKey } from "../util/language-selection";
 import { getKnownLegalSuffixes } from "./legal-forms";
 
 /**
@@ -33,13 +34,20 @@ type CoreferenceConfigRow = {
   label: string;
 };
 
+type ExtractDefinedTermsOptions = {
+  languages?: readonly string[];
+};
+
 /**
  * Load coreference definition patterns from per-language
  * JSON configs in src/data/. Uses the
  * language manifest for auto-discovery.
  */
-const loadDefinitionPatterns = async (): Promise<DefinitionPattern[]> => {
+const loadDefinitionPatterns = async (
+  languages?: readonly string[],
+): Promise<DefinitionPattern[]> => {
   const patterns: DefinitionPattern[] = [];
+  const languageOptions = languages === undefined ? {} : { languages };
 
   const allRows = await loadLanguageConfigs<readonly CoreferenceConfigRow[]>(
     "coreference",
@@ -51,6 +59,7 @@ const loadDefinitionPatterns = async (): Promise<DefinitionPattern[]> => {
       // eslint-disable-next-line no-unsafe-type-assertion -- JSON config
       return (m.default ?? mod) as readonly CoreferenceConfigRow[];
     },
+    languageOptions,
   );
 
   for (const rows of allRows) {
@@ -108,20 +117,28 @@ const getRoleStopSet = async (
 
 const getDefinitionPatterns = async (
   ctx: PipelineContext,
+  languages: readonly string[] | undefined,
 ): Promise<DefinitionPattern[]> => {
-  if (ctx.corefPatterns) {
+  const key = languageSelectionKey(languages);
+  if (ctx.corefPatterns && ctx.corefPatternsKey === key) {
     return ctx.corefPatterns;
   }
-  if (ctx.corefPatternsPromise) {
+  if (ctx.corefPatternsPromise && ctx.corefPatternsKey === key) {
     return ctx.corefPatternsPromise;
   }
-  ctx.corefPatternsPromise = loadDefinitionPatterns();
-  const patterns = await ctx.corefPatternsPromise;
+  ctx.corefPatterns = null;
+  ctx.corefPatternsKey = key;
+  const promise = loadDefinitionPatterns(languages);
+  ctx.corefPatternsPromise = promise;
+  const patterns = await promise;
   if (patterns.length === 0) {
     // All loads failed; cache empty array permanently
     // to avoid retrying dynamic imports and flooding
     // logs on every call in high-volume pipelines.
-    ctx.corefPatterns = patterns;
+    if (ctx.corefPatternsKey === key && ctx.corefPatternsPromise === promise) {
+      ctx.corefPatterns = patterns;
+      ctx.corefPatternsPromise = null;
+    }
     if (!ctx.corefLoadAttempted) {
       ctx.corefLoadAttempted = true;
       console.warn(
@@ -132,7 +149,10 @@ const getDefinitionPatterns = async (
     }
     return patterns;
   }
-  ctx.corefPatterns = patterns;
+  if (ctx.corefPatternsKey === key && ctx.corefPatternsPromise === promise) {
+    ctx.corefPatterns = patterns;
+    ctx.corefPatternsPromise = null;
+  }
   return patterns;
 };
 
@@ -233,9 +253,10 @@ export const extractDefinedTerms = async (
   fullText: string,
   entities: Entity[],
   ctx: PipelineContext = defaultContext,
+  options: ExtractDefinedTermsOptions = {},
 ): Promise<DefinedTerm[]> => {
   const [definitionPatterns, roleStops] = await Promise.all([
-    getDefinitionPatterns(ctx),
+    getDefinitionPatterns(ctx, options.languages),
     getRoleStopSet(ctx),
   ]);
   const terms: DefinedTerm[] = [];

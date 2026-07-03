@@ -38,6 +38,22 @@ describe("extractDefinedTerms", () => {
     expect(tp?.sourceText).toBe("Ing. Tomáš Procházka");
   });
 
+  test("scopes definition-pattern cache by content language", async () => {
+    const ctx = createPipelineContext();
+    const text = 'Ing. Tomáš Procházka (dále jen „TP")';
+    const entities = [makeEntity("person", "Ing. Tomáš Procházka", 0)];
+
+    const englishTerms = await extractDefinedTerms(text, entities, ctx, {
+      languages: ["en-US"],
+    });
+    const czechTerms = await extractDefinedTerms(text, entities, ctx, {
+      languages: ["cs"],
+    });
+
+    expect(englishTerms).toHaveLength(0);
+    expect(czechTerms.some((term) => term.alias === "TP")).toBe(true);
+  });
+
   test("inherits label from nearest person/org", async () => {
     const text = 'ABC s.r.o., IČO: 12345678 (dále jen „Firma")';
     const entities = [

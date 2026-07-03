@@ -1,0 +1,26 @@
+# Portable stella Rust lint configuration. Keep repo-specific wrappers and
+# exceptions in consuming repositories.
+
+disallowed-macros = [
+  { path = "std::dbg", reason = "remove debug output before commit" },
+  { path = "std::print", reason = "library crates should return data or use structured logging" },
+  { path = "std::println", reason = "library crates should return data or use structured logging" },
+  { path = "std::eprint", reason = "library crates should return data or use structured logging" },
+  { path = "std::eprintln", reason = "library crates should return data or use structured logging" },
+]
+
+disallowed-methods = [
+  { path = "std::mem::forget", reason = "leaks ownership; use a narrow ownership type or ManuallyDrop with justification" },
+  { path = "std::string::String::from_utf8_lossy", reason = "lossy decoding can corrupt offsets and user data; validate or keep bytes" },
+]
+
+disallowed-types = [
+  { path = "std::collections::LinkedList", reason = "prefer Vec, VecDeque, or an explicit intrusive structure" },
+]
+
+pass-by-value-size-limit = 64
+stack-size-threshold = 131072
+enum-variant-size-threshold = 128
+too-large-for-stack = 4096
+avoid-breaking-exported-api = false
+accept-comment-above-attributes = true

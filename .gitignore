@@ -1,8 +1,11 @@
 node_modules
 .cache
 *.tsbuildinfo
+*.node
 dist
 .turbo
+target/
+*.stlanonpkg
 
 # Claude Code local worktrees.
 .claude/worktrees/

@@ -1,0 +1,264 @@
+---
+source: crates/anonymize-core/tests/diagnostics.rs
+expression: "diagnostics_snapshot(&result.result.redaction, events)"
+---
+redaction:
+  redacted_text: "[ORGANIZATION_1] filed [REGISTRATION_NUMBER_1]."
+  entity_count: 2
+  redaction_map:
+    - placeholder: "[ORGANIZATION_1]"
+      original: Acme s.r.o.
+    - placeholder: "[REGISTRATION_NUMBER_1]"
+      original: AB1234
+  operator_map:
+    - placeholder: "[ORGANIZATION_1]"
+      operator: replace
+    - placeholder: "[REGISTRATION_NUMBER_1]"
+      operator: replace
+events:
+  - stage: Normalize
+    phase: Search
+    kind: StageSummary
+    input_bytes: 25
+  - stage: FindRegex
+    phase: Search
+    kind: StageSummary
+    count: 1
+    slot: 0
+    subslot: 0
+    pattern_count: 1
+    engine: regex
+    pattern: 0
+    input_bytes: 25
+  - stage: SearchRegex
+    phase: Search
+    kind: StageSummary
+    count: 1
+    input_bytes: 25
+  - stage: SearchRegex
+    phase: Search
+    kind: SearchMatch
+    engine: regex
+    pattern: 0
+    span:
+      start: 18
+      end: 24
+    span_valid: true
+  - stage: SearchLegalForm
+    phase: Search
+    kind: StageSummary
+    count: 0
+    input_bytes: 25
+  - stage: SearchTrigger
+    phase: Search
+    kind: StageSummary
+    count: 0
+    input_bytes: 25
+  - stage: SearchCustomRegex
+    phase: Search
+    kind: StageSummary
+    count: 0
+    input_bytes: 25
+  - stage: FindLiteral
+    phase: Search
+    kind: StageSummary
+    count: 1
+    slot: 0
+    subslot: 0
+    pattern_count: 1
+    engine: literal
+    pattern: 0
+    input_bytes: 25
+  - stage: SearchLiteral
+    phase: Search
+    kind: StageSummary
+    count: 1
+    input_bytes: 25
+  - stage: SearchLiteral
+    phase: Search
+    kind: SearchMatch
+    engine: literal
+    pattern: 0
+    span:
+      start: 0
+      end: 4
+    span_valid: true
+  - stage: FindMatches
+    phase: Search
+    kind: StageSummary
+    count: 2
+    input_bytes: 25
+  - stage: DetectTotal
+    phase: Detect
+    kind: StageSummary
+    count: 2
+    input_bytes: 25
+  - stage: EntityRegex
+    phase: Detect
+    kind: StageSummary
+    count: 1
+    input_bytes: 25
+  - stage: EntityRegex
+    phase: Detect
+    kind: Entity
+    source: Regex
+    label: registration number
+    span:
+      start: 18
+      end: 24
+    score: "0.900"
+    span_valid: true
+  - stage: EntityCustomRegex
+    phase: Detect
+    kind: StageSummary
+    count: 0
+    input_bytes: 25
+  - stage: EntityDenyList
+    phase: Detect
+    kind: StageSummary
+    count: 0
+    input_bytes: 25
+  - stage: EntityGazetteer
+    phase: Detect
+    kind: StageSummary
+    count: 1
+    input_bytes: 25
+  - stage: EntityGazetteer
+    phase: Detect
+    kind: Entity
+    source: Gazetteer
+    source_detail: GazetteerExtension
+    label: organization
+    span:
+      start: 0
+      end: 11
+    score: "0.900"
+    span_valid: true
+  - stage: EntityCountry
+    phase: Detect
+    kind: StageSummary
+    count: 0
+    input_bytes: 25
+  - stage: EntityAnchored
+    phase: Detect
+    kind: StageSummary
+    count: 0
+    input_bytes: 25
+  - stage: EntityTrigger
+    phase: Detect
+    kind: StageSummary
+    count: 0
+    input_bytes: 25
+  - stage: EntitySignature
+    phase: Detect
+    kind: StageSummary
+    count: 0
+    input_bytes: 25
+  - stage: EntityLegalForm
+    phase: Detect
+    kind: StageSummary
+    count: 0
+    input_bytes: 25
+  - stage: EntityNameCorpus
+    phase: Detect
+    kind: StageSummary
+    count: 0
+    input_bytes: 25
+  - stage: EntityAddressSeed
+    phase: Detect
+    kind: StageSummary
+    count: 0
+    input_bytes: 25
+  - stage: EntityAddressContext
+    phase: Resolve
+    kind: StageSummary
+    count: 0
+    input_bytes: 25
+  - stage: Merge
+    phase: Resolve
+    kind: StageSummary
+    count: 2
+    input_bytes: 25
+  - stage: Merge
+    phase: Resolve
+    kind: Entity
+    source: Gazetteer
+    source_detail: GazetteerExtension
+    label: organization
+    span:
+      start: 0
+      end: 11
+    score: "0.900"
+    span_valid: true
+  - stage: Merge
+    phase: Resolve
+    kind: Entity
+    source: Regex
+    label: registration number
+    span:
+      start: 18
+      end: 24
+    score: "0.900"
+    span_valid: true
+  - stage: Boundary
+    phase: Resolve
+    kind: StageSummary
+    count: 2
+    input_bytes: 25
+  - stage: Boundary
+    phase: Resolve
+    kind: Entity
+    source: Gazetteer
+    source_detail: GazetteerExtension
+    label: organization
+    span:
+      start: 0
+      end: 12
+    score: "0.900"
+    span_valid: true
+  - stage: Boundary
+    phase: Resolve
+    kind: Entity
+    source: Regex
+    label: registration number
+    span:
+      start: 18
+      end: 24
+    score: "0.900"
+    span_valid: true
+  - stage: Sanitize
+    phase: Resolve
+    kind: StageSummary
+    count: 2
+    input_bytes: 25
+  - stage: Sanitize
+    phase: Resolve
+    kind: Entity
+    source: Gazetteer
+    source_detail: GazetteerExtension
+    label: organization
+    span:
+      start: 0
+      end: 11
+    score: "0.900"
+    span_valid: true
+  - stage: Sanitize
+    phase: Resolve
+    kind: Entity
+    source: Regex
+    label: registration number
+    span:
+      start: 18
+      end: 24
+    score: "0.900"
+    span_valid: true
+  - stage: Redaction
+    phase: Redact
+    kind: StageSummary
+    count: 2
+    input_bytes: 25
+  - stage: RedactTotal
+    phase: Redact
+    kind: StageSummary
+    count: 2
+    input_bytes: 25

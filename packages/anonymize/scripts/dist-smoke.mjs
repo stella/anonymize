@@ -2,66 +2,57 @@
  * Smoke test against the built artifact. The regression suite
  * imports from src, so it cannot see failures that only exist in
  * the bundled output (e.g. an import the bundler could not
- * resolve). This script imports the published entrypoint the way a
- * package consumer does and fails on either signal of silent
- * degradation: an "[anonymize]" warning, or a non-Western name the
- * corpus chunks are required to detect.
+ * resolve). This script imports the published entrypoints the way a
+ * package consumer does and fails when the native package path is not
+ * usable from the built output.
  *
  * Run after `bun run build`: `bun run smoke:dist`.
  */
-import { createPipelineContext, runPipeline } from "../dist/index.mjs";
+import { getDefaultNativePipeline, redactDefaultText } from "../dist/index.mjs";
+import { createNativeAnonymizerFromPackage } from "../dist/native.mjs";
+import {
+  createNativePipelineFromDefaultPackage,
+  createNativePipelineFromPackageFile,
+  loadNativeAnonymizeBinding,
+} from "../dist/native-node.mjs";
 
-const warnings = [];
-const originalWarn = console.warn;
-console.warn = (...args) => {
-  warnings.push(args.map(String).join(" "));
-  originalWarn(...args);
-};
-
-const config = {
-  threshold: 0.3,
-  enableTriggerPhrases: false,
-  enableRegex: false,
-  enableLegalForms: false,
-  enableNameCorpus: true,
-  enableDenyList: false,
-  enableGazetteer: false,
-  enableNer: false,
-  enableConfidenceBoost: false,
-  enableCoreference: false,
-  labels: ["person"],
-  workspaceId: "dist-smoke",
-};
-
-// Detectable only through the non-Western name corpus (honorific +
-// corpus tokens); same public-figure example as the src test suite.
-const fullText = "A speech was delivered by Smt. Smriti Irani.";
-
-const entities = await runPipeline({
-  fullText,
-  config,
-  gazetteerEntries: [],
-  context: createPipelineContext(),
-});
-
-console.warn = originalWarn;
-
-const degradations = warnings.filter((line) => line.includes("[anonymize]"));
-if (degradations.length > 0) {
-  throw new Error(
-    `dist emitted degradation warnings:\n${degradations.join("\n")}`,
+if (typeof createNativeAnonymizerFromPackage !== "function") {
+  throw new TypeError("dist native entrypoint is missing its package loader");
+}
+if (typeof loadNativeAnonymizeBinding !== "function") {
+  throw new TypeError("dist native-node entrypoint is missing its loader");
+}
+if (typeof createNativePipelineFromPackageFile !== "function") {
+  throw new TypeError("dist native-node entrypoint is missing file loading");
+}
+if (typeof createNativePipelineFromDefaultPackage !== "function") {
+  throw new TypeError(
+    "dist native-node entrypoint is missing default package loading",
+  );
+}
+if (typeof getDefaultNativePipeline !== "function") {
+  throw new TypeError(
+    "dist root entrypoint is missing default pipeline loader",
+  );
+}
+if (typeof redactDefaultText !== "function") {
+  throw new TypeError(
+    "dist root entrypoint is missing native redaction helper",
   );
 }
 
-const person = entities.find(
-  (entity) => entity.label === "person" && entity.text.includes("Smriti Irani"),
+const nativePipeline = createNativePipelineFromDefaultPackage();
+const nativeResult = nativePipeline.redactText(
+  "A contract was signed by Jan Novak at Praha on 1. 1. 2025.",
 );
-if (!person) {
-  throw new Error(
-    "dist build did not detect a non-Western name; corpus chunks are missing from the bundle",
-  );
+if (nativeResult.resolvedEntities.length === 0) {
+  throw new Error("default native pipeline package did not detect any entity");
 }
 
 console.log(
-  JSON.stringify({ event: "dist-smoke", ok: true, detected: person.text }),
+  JSON.stringify({
+    event: "dist-smoke",
+    ok: true,
+    nativeEntityCount: nativeResult.resolvedEntities.length,
+  }),
 );

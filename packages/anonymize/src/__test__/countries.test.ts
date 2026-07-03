@@ -13,7 +13,7 @@ import {
   createPipelineContext,
   DEFAULT_ENTITY_LABELS,
   runPipeline,
-} from "../index";
+} from "../legacy";
 import type { Entity, PipelineConfig } from "../types";
 import { loadTestDictionaries } from "./load-dictionaries";
 
@@ -191,6 +191,21 @@ describe("country detector", () => {
     const text = "North America and South America host most of our offices.";
     const found = countries(await detect(text));
     expect(found).not.toContain("America");
+  });
+
+  test("ambiguous short territory surfaces do not block city-state addresses", async () => {
+    const cityState = "Any arbitration shall take place in Norfolk, Virginia.";
+    const cityStateEntities = await detect(cityState);
+    expect(countries(cityStateEntities)).not.toContain("Norfolk");
+    expect(
+      cityStateEntities.some(
+        (entity) =>
+          entity.label === "address" && entity.text === "Norfolk, Virginia",
+      ),
+    ).toBe(true);
+
+    const fullCountry = "The court is located on Norfolk Island.";
+    expect(countries(await detect(fullCountry))).toContain("Norfolk Island");
   });
 
   test("country token contained in a person span loses to the person", async () => {

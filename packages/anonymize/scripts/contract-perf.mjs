@@ -6,7 +6,7 @@ import {
   DEFAULT_ENTITY_LABELS,
   preparePipelineSearch,
   runPipeline,
-} from "../src/index.ts";
+} from "../src/legacy.ts";
 import { loadTestDictionaries } from "../src/__test__/load-dictionaries.ts";
 
 const DEFAULT_MAX_PIPELINE_MS = 1_000;

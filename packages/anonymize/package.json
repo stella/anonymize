@@ -1,6 +1,6 @@
 {
   "name": "@stll/anonymize",
-  "version": "1.5.0",
+  "version": "2.0.0-alpha.1",
   "description": "Multi-layer PII detection and anonymization pipeline with regex, NER, deny lists, and coreference resolution",
   "type": "module",
   "exports": {
@@ -13,11 +13,29 @@
       "types": "./dist/constants.d.mts",
       "import": "./dist/constants.mjs",
       "default": "./dist/constants.mjs"
+    },
+    "./native": {
+      "types": "./dist/native.d.mts",
+      "import": "./dist/native.mjs",
+      "default": "./dist/native.mjs"
+    },
+    "./native-node": {
+      "types": "./dist/native-node.d.mts",
+      "import": "./dist/native-node.mjs",
+      "default": "./dist/native-node.mjs"
     }
   },
   "types": "dist/index.d.mts",
+  "bin": {
+    "stella-anonymize-build-native-package": "./scripts/build-native-pipeline-package.mjs"
+  },
   "files": [
-    "dist"
+    "ATTRIBUTION.md",
+    "dist",
+    "index.cjs",
+    "native-pipeline.stlanonpkg",
+    "native-pipeline.*.stlanonpkg",
+    "scripts/build-native-pipeline-package.mjs"
   ],
   "publishConfig": {
     "access": "public"
@@ -28,19 +46,27 @@
   },
   "license": "MIT",
   "scripts": {
-    "build": "tsdown",
+    "build": "tsdown && bun scripts/build-native-node.mjs",
     "prepublishOnly": "bun run build",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json && tsc --noEmit -p tsconfig.wasm.json",
     "test": "bun test --preload ./src/__test__/setup.ts --timeout 15000",
     "test:fast": "bun run test src/__test__/*.test.ts",
+    "test:native-fixtures": "ANONYMIZE_TEST_SLOW_NATIVE_FIXTURE_PARITY=1 bun test --preload ./src/__test__/setup.ts --timeout 600000 src/__test__/native-adapter-parity.test.ts",
     "perf:contracts": "bun scripts/contract-perf.mjs",
+    "perf:migration-fixtures": "bun scripts/migration-fixture-perf.mjs",
+    "perf:native-adapters": "bun scripts/native-adapter-perf.mjs",
+    "perf:native-default": "bun scripts/native-default-sdk-perf.mjs",
+    "perf:native-default:summary": "ANONYMIZE_NATIVE_DEFAULT_SDK_PERF_OUTPUT=summary bun scripts/native-default-sdk-perf.mjs",
+    "perf:native-package": "bun scripts/native-package-ux-perf.mjs",
+    "check:v1-native": "bun scripts/native-v1-readiness.mjs",
+    "check:v1-native:full": "ANONYMIZE_V1_READINESS_MODE=full bun scripts/native-v1-readiness.mjs",
     "smoke:dist": "bun scripts/dist-smoke.mjs",
     "format": "oxfmt ."
   },
   "dependencies": {
     "@huggingface/tokenizers": "^0.1.3",
     "@stll/stdnum": "^2.1.1",
-    "@stll/text-search": "^1.0.6"
+    "@stll/text-search": "^1.0.7"
   },
   "peerDependencies": {
     "@stll/anonymize-data": "^0.0.6"
@@ -50,12 +76,19 @@
       "optional": true
     }
   },
+  "optionalDependencies": {
+    "@stll/anonymize-darwin-arm64": "2.0.0-alpha.1",
+    "@stll/anonymize-darwin-x64": "2.0.0-alpha.1",
+    "@stll/anonymize-linux-arm64-gnu": "2.0.0-alpha.1",
+    "@stll/anonymize-linux-x64-gnu": "2.0.0-alpha.1",
+    "@stll/anonymize-win32-x64-msvc": "2.0.0-alpha.1"
+  },
   "devDependencies": {
     "@stll/anonymize-data": "workspace:*",
-    "@stll/text-search-wasm": "^1.0.6",
+    "@stll/text-search-wasm": "^1.0.7",
     "bun-types": "^1.3.14",
     "fast-check": "^4.8.0",
-    "tsdown": "^0.22.2",
+    "tsdown": "^0.22.3",
     "typescript": "^6.0.3",
     "vite": "^8.0.16"
   }
