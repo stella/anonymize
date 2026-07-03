@@ -45,6 +45,37 @@ import stllAnonymizeWasm from "@stll/anonymize-wasm/vite";
 // vite.config: plugins: [stllAnonymizeWasm()]
 ```
 
+By default the plugin emits every bundled prepared package into your build. The
+full-dictionary default package alone is large (~20 MB), plus the per-language
+`cs`, `de`, and `en` variants. If your app only needs some of them, restrict the
+emitted packages with the `packages` option (the wasm binary, glue, and workers
+are always emitted):
+
+```ts
+// Emit only the Czech scoped package.
+stllAnonymizeWasm({ packages: ["cs"] });
+
+// Emit the full-dictionary default plus English.
+stllAnonymizeWasm({ packages: ["default", "en"] });
+
+// Emit no prepared packages; the app supplies its own to loadPipeline().
+stllAnonymizeWasm({ packages: "none" });
+
+// Emit everything (the default).
+stllAnonymizeWasm({ packages: "all" });
+```
+
+`"default"` selects the full-dictionary package that `loadDefaultPipeline()`
+(no argument) loads; a language code selects the scoped package that
+`loadDefaultPipeline("cs")` loads. Requesting a package that is not bundled
+fails the build.
+
+Interplay with the runtime loaders: the plugin only controls which assets ship,
+not which the code asks for. Calling `loadDefaultPipeline(language)` for a
+package you did not emit resolves to a missing asset URL and rejects with a
+fetch error at runtime. Keep the `packages` list aligned with the languages your
+app actually loads, or load your own package bytes through `loadPipeline`.
+
 ## Notes
 
 - Same redaction core as `@stll/anonymize`, running in WebAssembly.
