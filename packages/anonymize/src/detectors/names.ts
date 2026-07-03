@@ -8,6 +8,7 @@ import {
   TITLE_PREFIXES,
 } from "../config/titles";
 import { ALL_UPPER_RE, UPPER_START_RE, isSentenceStart } from "../util/text";
+import { dictionaryIdentityKey } from "../util/dictionary-identity";
 
 // ── Name corpus ──────────────────────────────────────
 // Per-language first names and surnames loaded from
@@ -112,7 +113,14 @@ export const initNameCorpus = (
   dictionaries?: Dictionaries,
   languages?: readonly string[],
 ): Promise<void> => {
-  const languageKey = languages?.toSorted().join(",") ?? "*";
+  // Key by both the selected languages AND the injected dictionaries identity:
+  // the loaded corpus merges legacy JSON with per-language dictionary entries,
+  // so two configs sharing one context but differing only by their dictionaries
+  // (e.g. an earlier config with none, a later one with a full bundle) must not
+  // reuse each other's corpus. See __test__/context-cache-keying.test.ts.
+  const languageKey = `${dictionaryIdentityKey(dictionaries)}|${
+    languages?.toSorted().join(",") ?? "*"
+  }`;
   if (ctx.nameCorpus && ctx.nameCorpusKey === languageKey) {
     return Promise.resolve();
   }

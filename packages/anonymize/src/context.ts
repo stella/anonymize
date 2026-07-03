@@ -81,6 +81,13 @@ export type PipelineContext = {
   // ── Deny-list data sets ───────────────────────
   stopwords: ReadonlySet<string> | null;
   stopwordsPromise: Promise<ReadonlySet<string>> | null;
+  /** First-name-corpus size the cached stopwords were
+   *  filtered against. Stopwords exclude corpus given
+   *  names so they stay person-detectable; when the
+   *  corpus changes (e.g. a later config on a shared
+   *  context injects dictionaries) the filtered set is
+   *  rebuilt. */
+  stopwordsKey: number;
   allowList: ReadonlySet<string> | null;
   allowListPromise: Promise<ReadonlySet<string>> | null;
   personStopwords: ReadonlySet<string> | null;
@@ -126,6 +133,7 @@ export const createPipelineContext = (): PipelineContext => ({
 
   stopwords: null,
   stopwordsPromise: null,
+  stopwordsKey: 0,
   allowList: null,
   allowListPromise: null,
   personStopwords: null,

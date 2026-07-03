@@ -261,7 +261,19 @@ const getFirstNameExclusions = (ctx: PipelineContext): ReadonlySet<string> => {
 // resolved, so getFirstNameExclusions() sees the full
 // corpus. buildDenyList() enforces this ordering.
 const loadStopwords = (ctx: PipelineContext): Promise<ReadonlySet<string>> => {
-  if (ctx.stopwordsPromise) return ctx.stopwordsPromise;
+  // The filtered set depends on the first-name corpus (corpus given names are
+  // excluded so they stay person-detectable). Re-key by corpus size so a later
+  // config that grows the corpus on a shared context rebuilds the set instead
+  // of reusing an earlier config's dictionary-less filtering.
+  const stopwordsKey = getNameCorpusFirstNames(ctx).length;
+  if (ctx.stopwords && ctx.stopwordsKey === stopwordsKey) {
+    return Promise.resolve(ctx.stopwords);
+  }
+  if (ctx.stopwordsPromise && ctx.stopwordsKey === stopwordsKey) {
+    return ctx.stopwordsPromise;
+  }
+  ctx.stopwords = null;
+  ctx.stopwordsKey = stopwordsKey;
   ctx.stopwordsPromise = (async () => {
     try {
       const mod: { default?: string[] } =
