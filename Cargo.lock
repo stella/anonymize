@@ -962,7 +962,9 @@ dependencies = [
  "proptest",
  "regex",
  "serde",
+ "serde_json",
  "smallvec",
+ "stella-anonymize-adapter-contract",
  "stella-stdnum-core",
  "stella-text-search-core",
 ]
