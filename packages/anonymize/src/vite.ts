@@ -84,7 +84,8 @@ const packageFileName = (name: string): string =>
 
 type PackageSelection =
   | { status: "ok"; emit: ReadonlySet<string> }
-  | { status: "missing"; names: string[]; available: string[] };
+  | { status: "missing"; names: string[]; available: string[] }
+  | { status: "invalid"; value: string };
 
 /** Resolve which prepared-package files to emit for the given selection,
  * validating that every explicitly requested name exists in `nativeFiles`. */
@@ -98,6 +99,10 @@ const resolvePackageSelection = (
   }
   if (packages === "none") {
     return { status: "ok", emit: new Set() };
+  }
+  if (!Array.isArray(packages)) {
+    // A bare string like "cs" would otherwise iterate per character below.
+    return { status: "invalid", value: String(packages) };
   }
   const available = new Set(packageFiles);
   const emit = new Set<string>();
@@ -144,6 +149,12 @@ export default function stllAnonymizeWasmVite(
       const nativeDir = join(dirname(id), NATIVE_DIR);
       const files = await readdir(nativeDir);
       const selection = resolvePackageSelection(files, packages);
+      if (selection.status === "invalid") {
+        this.error(
+          `stll-anonymize-wasm: invalid packages option ${JSON.stringify(selection.value)}; ` +
+            `expected "all", "none", or an array like ["default", "cs"].`,
+        );
+      }
       if (selection.status === "missing") {
         this.error(
           `stll-anonymize-wasm: requested package(s) not bundled: ` +

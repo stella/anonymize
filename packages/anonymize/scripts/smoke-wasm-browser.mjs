@@ -38,7 +38,7 @@
  */
 import { createServer } from "node:http";
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, extname, join, normalize } from "node:path";
+import { dirname, extname, join, normalize, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import puppeteer from "puppeteer-core";
 
@@ -104,6 +104,8 @@ const resolveChrome = () => {
     "/usr/bin/google-chrome",
     "/usr/bin/chromium-browser",
     "/usr/bin/chromium",
+    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+    "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
   ];
   for (const candidate of candidates) {
     if (candidate && existsSync(candidate)) {
@@ -129,9 +131,10 @@ const startServer = () =>
         response.end(INDEX_HTML);
         return;
       }
-      // Resolve inside distDir and reject traversal outside it.
+      // Resolve inside distDir and reject traversal outside it. The trailing
+      // separator prevents prefix bypass via sibling dirs (e.g. dist-other).
       const filePath = normalize(join(distDir, urlPath));
-      if (!filePath.startsWith(distDir) || !existsSync(filePath)) {
+      if (!filePath.startsWith(distDir + sep) || !existsSync(filePath)) {
         response.statusCode = 404;
         response.end("not found");
         return;
