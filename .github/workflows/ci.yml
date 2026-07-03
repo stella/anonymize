@@ -48,7 +48,9 @@ jobs:
 
       - name: Setup Rust
         run: |
-          rustup toolchain install 1.96.0 --profile minimal --component rustfmt,clippy
+          rustup toolchain install 1.96.0 --profile minimal \
+            --component rustfmt,clippy \
+            --target wasm32-wasip1-threads
           rustup toolchain install nightly-2026-04-16 --profile minimal \
             --component rustc-dev \
             --component llvm-tools-preview
@@ -99,6 +101,12 @@ jobs:
 
       - name: Smoke test built artifact
         run: bun run --cwd packages/anonymize smoke:dist
+
+      - name: Smoke test wasm binding
+        run: bun run --cwd packages/anonymize smoke:wasm
+
+      - name: Smoke test wasm package entry
+        run: bun run --cwd packages/anonymize smoke:wasm-package
 
       - name: Migration fixture parity and performance
         run: |

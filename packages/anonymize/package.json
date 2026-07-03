@@ -46,7 +46,7 @@
   },
   "license": "MIT",
   "scripts": {
-    "build": "tsdown && bun scripts/build-native-node.mjs",
+    "build": "bun run build:native-wasm && tsdown && bun scripts/build-native-node.mjs && bun run build:wasm-assets",
     "prepublishOnly": "bun run build",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json && tsc --noEmit -p tsconfig.wasm.json",
     "test": "bun test --preload ./src/__test__/setup.ts --timeout 15000",

@@ -54,9 +54,23 @@ const PACKAGES = [
     expected: [
       "dist/wasm.d.mts",
       "dist/wasm.mjs",
-      "dist/names-nw-in.mjs",
+      "dist/constants.mjs",
       "dist/vite.d.mts",
       "dist/vite.mjs",
+      // Runtime wasm binding + napi-rs WASI/browser glue the entry loads
+      // from its own `native/` asset directory. Missing any of these means
+      // build:wasm-assets did not run after tsdown wiped wasm/dist/native.
+      "dist/native/index.wasm32-wasi.wasm",
+      "dist/native/index.wasi.cjs",
+      "dist/native/index.wasi-browser.js",
+      "dist/native/wasi-worker.mjs",
+      "dist/native/wasi-worker-browser.mjs",
+      // Bundled default package plus the per-language compressed packages
+      // (cs, de, en) that loadDefaultPipeline(language) resolves to.
+      "dist/native/native-pipeline.stlanonpkg",
+      "dist/native/native-pipeline.cs.stlanonpkg",
+      "dist/native/native-pipeline.de.stlanonpkg",
+      "dist/native/native-pipeline.en.stlanonpkg",
       "README.md",
       "LICENSE",
       "package.json",
