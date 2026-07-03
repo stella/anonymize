@@ -41,8 +41,12 @@ const getBinding = (): ReturnType<typeof loadNativeAnonymizeBinding> => {
 const dictionaryCacheIds = new WeakMap<Dictionaries, number>();
 let nextDictionaryCacheId = 0;
 
-const dictionaryCacheKey = (dictionaries: Dictionaries | undefined): string => {
-  if (dictionaries === undefined) {
+const dictionaryCacheKey = (
+  dictionaries: Dictionaries | null | undefined,
+): string => {
+  // null is `typeof object` but not a valid WeakMap key, so guard it here
+  // alongside undefined before touching the WeakMap.
+  if (dictionaries === undefined || dictionaries === null) {
     return "none";
   }
   const existing = dictionaryCacheIds.get(dictionaries);
