@@ -566,5 +566,7 @@
     ],
     "unit_abbreviations": ["apt.", "bldg.", "fl.", "ste.", "unit."]
   },
-  "custom_regex_meta": []
+  "custom_regex_meta": [],
+  "regex_meta": [],
+  "regex_patterns": []
 }

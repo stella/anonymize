@@ -10357,5 +10357,7 @@
       "alias"
     ]
   },
-  "custom_regex_meta": []
+  "custom_regex_meta": [],
+  "regex_meta": [],
+  "regex_patterns": []
 }

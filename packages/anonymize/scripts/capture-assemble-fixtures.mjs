@@ -21,6 +21,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { buildNativeStaticSearchBundle } from "../src/build-unified-search.ts";
+import { REGEX_META, REGEX_PATTERN_ENTRIES } from "../src/detectors/regex.ts";
 import { loadNativeAnonymizeBinding } from "../src/native-node.ts";
 
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -51,6 +52,13 @@ const IMPLEMENTED_FIELDS = [
   "country_data",
   "hotword_data",
   "custom_regex_meta",
+  "legal_form_data",
+  // regex_meta is compared byte-for-byte by the Rust parity harness.
+  // regex_patterns is captured for the PARTIAL prefix check (the Rust
+  // assembler produces the static + signing prefix; the trigger-phrase tail
+  // is a later slice), so it lands in the expected files too.
+  "regex_meta",
+  "regex_patterns",
 ];
 
 const TOGGLES = [
@@ -202,6 +210,35 @@ add("labels-and-threshold", {
 // Confidence boost off in isolation (implemented field).
 add("confidence-boost-off", { ...baseConfig(), enableConfidenceBoost: false });
 
+// Custom regex whose label only survives via hotword reclassifyTo expansion:
+// requesting "date of birth" expands the search labels to include "date"
+// (hotword rule reclassifies "date" -> "date of birth"), so the "date" custom
+// regex is not label-filtered even though "date" is not a requested label.
+add("custom-regex-hotword-reclassify", {
+  ...baseConfig(),
+  labels: ["date of birth"],
+  enableHotwordRules: true,
+  customRegexes: [{ pattern: "DOB-\\d+", label: "date" }],
+});
+
+// Regex on, trigger phrases off: exercises the empty year-words branch in
+// date_data and, for the regex_patterns prefix check, leaves no trigger tail
+// so the Rust static+signing prefix equals the full TypeScript array.
+add("regex-only-no-triggers", {
+  ...baseConfig(),
+  enableTriggerPhrases: false,
+  labels: ["date", "address", "monetary amount"],
+});
+
+// Legal forms on across multiple content languages. legal_form_data is
+// language-independent (its getters union every manifest language), so this
+// matches baseline for that field; it stresses signing-clause language scoping
+// inside regex_patterns across de/fr/pl.
+add("legal-forms-multilang", {
+  ...baseConfig(),
+  languages: ["de", "fr", "pl"],
+});
+
 const stableExpected = (config) => {
   const expected = {};
   for (const field of IMPLEMENTED_FIELDS) {
@@ -246,7 +283,74 @@ const tinyDictionaries = () => ({
   citiesByCountry: { CZ: ["Brno"] },
 });
 
+// The static regex table is derived at TypeScript module load from the
+// @stll/stdnum validators (`toRegex(validator).source`), so its pattern source
+// strings cannot be hand-transcribed in Rust. Emit them here as a versioned,
+// generated artifact the Rust assembler embeds and filters by label. This is a
+// data artifact (the DATA is derived), while the label filtering, validator
+// gating, and signing-pattern assembly stay ported Rust logic. The fixtures
+// cross-check it: a stale table makes the regex_meta / regex_patterns parity
+// tests fail.
+const nativeRegexTablePath = join(
+  repoRoot,
+  "crates",
+  "anonymize-adapter-contract",
+  "src",
+  "assemble",
+  "native-regex-table.json",
+);
+
+const toNativeRegexSource = (regex) =>
+  regex.ignoreCase ? `(?i:${regex.source})` : regex.source;
+
+// Mirror of build-unified-search.ts `toNativeRegexPattern` for static entries.
+const toNativeRegexPattern = (entry) => {
+  if (typeof entry === "string") {
+    return { kind: "regex", pattern: entry };
+  }
+  const pattern = { kind: "regex", pattern: entry.pattern };
+  if (entry.lazy !== undefined) pattern.lazy = entry.lazy;
+  if (entry.prefilterAny !== undefined) {
+    pattern.prefilter_any = [...entry.prefilterAny];
+  }
+  if (entry.prefilterCaseInsensitive !== undefined) {
+    pattern.prefilter_case_insensitive = entry.prefilterCaseInsensitive;
+  }
+  if (entry.prefilterRegex !== undefined) {
+    pattern.prefilter_regex = toNativeRegexSource(entry.prefilterRegex);
+  }
+  if (entry.prefilterWindowBytes !== undefined) {
+    pattern.prefilter_window_bytes = entry.prefilterWindowBytes;
+  }
+  if (entry.preparedArtifactPolicy !== undefined) {
+    pattern.prepared_artifact_policy = entry.preparedArtifactPolicy;
+  }
+  return pattern;
+};
+
+const writeNativeRegexTable = () => {
+  const table = REGEX_PATTERN_ENTRIES.map((entry, index) => {
+    const meta = REGEX_META[index];
+    const row = {
+      pattern: toNativeRegexPattern(entry),
+      label: meta.label,
+      score: meta.score,
+    };
+    if (meta.validatorId !== undefined) row.validatorId = meta.validatorId;
+    if (meta.validatorInputKind !== undefined) {
+      row.validatorInputKind = meta.validatorInputKind;
+    }
+    if (meta.minByteLength !== undefined) {
+      row.minByteLength = meta.minByteLength;
+    }
+    return row;
+  });
+  writeFileSync(nativeRegexTablePath, `${JSON.stringify(table, null, 2)}\n`);
+};
+
 const run = async () => {
+  writeNativeRegexTable();
+
   add("with-test-dictionaries", {
     ...baseConfig(),
     language: "cs",

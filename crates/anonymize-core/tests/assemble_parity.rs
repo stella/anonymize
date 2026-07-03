@@ -165,6 +165,70 @@ fn compare_implemented(
       actual.custom_regex_meta, expected.custom_regex_meta
     ));
   }
+  compare_regex_and_legal(name, actual, expected)?;
+  Ok(())
+}
+
+/// Slice C1 fields: `regex_meta` (full), `legal_form_data` (full), and the
+/// `regex_patterns` prefix (partial).
+fn compare_regex_and_legal(
+  name: &str,
+  actual: &BindingPreparedSearchConfig,
+  expected: &BindingPreparedSearchConfig,
+) -> Result<(), String> {
+  if actual.regex_meta != expected.regex_meta {
+    return Err(format!(
+      "{name}: regex_meta {:?} != {:?}",
+      actual.regex_meta, expected.regex_meta
+    ));
+  }
+  if actual.legal_form_data != expected.legal_form_data {
+    return Err(format!(
+      "{name}: legal_form_data {:?} != {:?}",
+      actual.legal_form_data, expected.legal_form_data
+    ));
+  }
+  compare_regex_patterns_prefix(name, actual, expected)
+}
+
+/// PARTIAL check for `regex_patterns`.
+///
+/// The full TypeScript `regex_patterns` array is the static-filtered patterns,
+/// then the native signing patterns, then the (permanently empty) legal-form
+/// patterns, then the trigger-phrase patterns. The trigger tail belongs to a
+/// later slice, so the assembler produces only the prefix: static + signing.
+/// That prefix has exactly `regex_meta.len()` entries (each static/signing
+/// pattern has one meta; legal-form and trigger patterns have none), so we
+/// compare the assembler's output against `expected.regex_patterns[..N]`.
+fn compare_regex_patterns_prefix(
+  name: &str,
+  actual: &BindingPreparedSearchConfig,
+  expected: &BindingPreparedSearchConfig,
+) -> Result<(), String> {
+  let prefix_len = expected.regex_meta.len();
+  if actual.regex_patterns.len() != prefix_len {
+    return Err(format!(
+      "{name}: regex_patterns prefix length {} != regex_meta length {}",
+      actual.regex_patterns.len(),
+      prefix_len
+    ));
+  }
+  let expected_prefix =
+    expected.regex_patterns.get(..prefix_len).ok_or_else(|| {
+      format!("{name}: expected regex_patterns shorter than meta")
+    })?;
+  for (index, (got, want)) in actual
+    .regex_patterns
+    .iter()
+    .zip(expected_prefix)
+    .enumerate()
+  {
+    if got != want {
+      return Err(format!(
+        "{name}: regex_patterns[{index}] differs\n  got:  {got:?}\n  want: {want:?}"
+      ));
+    }
+  }
   Ok(())
 }
 
