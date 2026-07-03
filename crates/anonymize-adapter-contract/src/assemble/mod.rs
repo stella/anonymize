@@ -21,11 +21,13 @@ mod country;
 mod dates;
 mod gazetteer;
 mod hotwords;
+mod js;
 mod language;
 mod legal_forms;
 mod monetary;
 mod regex;
 mod signature;
+mod trigger;
 mod zones;
 
 use stella_anonymize_core::assemble::{
@@ -71,6 +73,7 @@ pub const FIELDS_IMPLEMENTED: &[&str] = &[
   "legal_form_data",
   "gazetteer_data",
   "coreference_data",
+  "trigger_data",
 ];
 
 /// Fields still left at their `Default` value, to be filled by later slices.
@@ -88,7 +91,6 @@ pub const FIELDS_PENDING: &[&str] = &[
   "slices",
   "deny_list_data",
   "false_positive_filters",
-  "trigger_data",
   "name_corpus_data",
 ];
 
@@ -182,6 +184,7 @@ pub fn assemble_static_search_config(
     hotword_data: hotwords::build_hotword_data(&hotword_rules),
     gazetteer_data: gazetteer::build_gazetteer_data(&ctx, gazetteer),
     coreference_data: coreference::build_coreference_data(&ctx)?,
+    trigger_data: trigger::build_trigger_data(&ctx)?,
     ..BindingPreparedSearchConfig::default()
   })
 }

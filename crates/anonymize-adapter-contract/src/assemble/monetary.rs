@@ -5,10 +5,13 @@
 //! camelCase-to-snake_case key rename the TypeScript loader performs. Emitted
 //! when `enableTriggerPhrases` is on or the "monetary amount" regex is active.
 
+use std::collections::HashSet;
+
 use serde::Deserialize;
 use stella_anonymize_core::assemble::{AssembleError, parse_data_file};
 
 use super::AssembleContext;
+use super::js::utf16_cmp;
 use crate::{
   BindingAmountWordsData, BindingCurrencyData, BindingMagnitudeSuffixData,
   BindingMonetaryData, BindingShareQuantityTermData,
@@ -57,6 +60,43 @@ struct ShareQuantityTerm {
   modifiers: Vec<String>,
   #[serde(default)]
   nouns: Vec<String>,
+}
+
+/// Mirrors `sentenceTerminalCurrencyTerms` (`build-unified-search.ts:1851`):
+/// the union of currency codes, symbols, and local names (nonempty), deduped in
+/// first-occurrence order, then `toSorted()` (UTF-16 code-unit order).
+///
+/// Returns `[]` when the monetary data is not built (the TypeScript helper
+/// short-circuits on a null `monetaryData`), matching the same gate as
+/// [`build_monetary_data`].
+///
+/// # Errors
+///
+/// Returns [`AssembleError`] when `currencies.json` fails to parse.
+pub(super) fn sentence_terminal_currency_terms(
+  ctx: &AssembleContext<'_>,
+) -> Result<Vec<String>, AssembleError> {
+  if !(ctx.enable_trigger_phrases() || ctx.regex_monetary_enabled()) {
+    return Ok(Vec::new());
+  }
+  let currencies: CurrenciesData = parse_data_file("currencies.json")?;
+  let mut seen = HashSet::new();
+  let mut terms = Vec::new();
+  for term in currencies
+    .codes
+    .into_iter()
+    .chain(currencies.symbols)
+    .chain(currencies.local_names)
+  {
+    if term.is_empty() {
+      continue;
+    }
+    if seen.insert(term.clone()) {
+      terms.push(term);
+    }
+  }
+  terms.sort_by(|left, right| utf16_cmp(left, right));
+  Ok(terms)
 }
 
 /// # Errors

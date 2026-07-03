@@ -286,7 +286,10 @@ fn load_lowercase_union(
 }
 
 /// Mirrors `getLegalRoleHeadsSync` (post-warm).
-fn role_heads() -> Result<Vec<String>, AssembleError> {
+///
+/// Reused by `trigger_data` as `partyPositionTerms`
+/// (`build-unified-search.ts:851`).
+pub(super) fn role_heads() -> Result<Vec<String>, AssembleError> {
   #[derive(Deserialize)]
   struct RoleHeads {
     #[serde(default)]

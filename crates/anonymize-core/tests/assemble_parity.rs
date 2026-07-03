@@ -177,8 +177,85 @@ fn compare_implemented(
       actual.coreference_data, expected.coreference_data
     ));
   }
+  compare_trigger_data(name, actual, expected)?;
   compare_regex_and_legal(name, actual, expected)?;
   Ok(())
+}
+
+/// Compares `trigger_data` with a targeted first-difference report (the rule
+/// array has ~1400 entries, so a full `{:?}` dump is unreadable).
+fn compare_trigger_data(
+  name: &str,
+  actual: &BindingPreparedSearchConfig,
+  expected: &BindingPreparedSearchConfig,
+) -> Result<(), String> {
+  match (&actual.trigger_data, &expected.trigger_data) {
+    (None, None) => return Ok(()),
+    (Some(got), Some(want)) => {
+      if got.rules.len() != want.rules.len() {
+        return Err(format!(
+          "{name}: trigger_data.rules length {} != {}",
+          got.rules.len(),
+          want.rules.len()
+        ));
+      }
+      for (index, (g, w)) in
+        got.rules.iter().zip(want.rules.iter()).enumerate()
+      {
+        if g != w {
+          return Err(format!(
+            "{name}: trigger_data.rules[{index}] differs\n  got:  {g:?}\n  want: {w:?}"
+          ));
+        }
+      }
+      if got != want {
+        return Err(format!(
+          "{name}: trigger_data support members differ\n  got:  {:?}\n  want: {:?}",
+          TriggerSupport::from(got),
+          TriggerSupport::from(want)
+        ));
+      }
+    }
+    (got, want) => {
+      return Err(format!(
+        "{name}: trigger_data presence differs (got {}, want {})",
+        got.is_some(),
+        want.is_some()
+      ));
+    }
+  }
+  Ok(())
+}
+
+/// Support-member view of `trigger_data` (rules elided) for readable diffs.
+#[derive(Debug)]
+#[allow(dead_code)]
+struct TriggerSupport<'a> {
+  address_stop_keywords: &'a [String],
+  party_position_terms: &'a [String],
+  post_nominals: &'a [String],
+  sentence_terminal_currency_terms: &'a [String],
+  phone_extension_labels: &'a [String],
+  number_markers: &'a [String],
+  number_labels: &'a [String],
+}
+
+impl<'a> From<&'a stella_anonymize_adapter_contract::BindingTriggerData>
+  for TriggerSupport<'a>
+{
+  fn from(
+    data: &'a stella_anonymize_adapter_contract::BindingTriggerData,
+  ) -> Self {
+    Self {
+      address_stop_keywords: &data.address_stop_keywords,
+      party_position_terms: &data.party_position_terms,
+      post_nominals: &data.post_nominals,
+      sentence_terminal_currency_terms: &data.sentence_terminal_currency_terms,
+      phone_extension_labels: &data.phone_extension_labels,
+      number_markers: &data.number_markers,
+      number_labels: &data.number_labels,
+    }
+  }
 }
 
 /// Slice C1 fields: `regex_meta` (full), `legal_form_data` (full), and the
