@@ -1,10 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import {
-  runPipeline,
-  DEFAULT_ENTITY_LABELS,
-  createPipelineContext,
-} from "../legacy";
+import { DEFAULT_ENTITY_LABELS } from "../constants";
 import type { PipelineConfig } from "../types";
+import { detectNative } from "./native-detect";
 
 const CONFIG: PipelineConfig = {
   threshold: 0.3,
@@ -22,13 +19,7 @@ const CONFIG: PipelineConfig = {
 };
 
 const collectOrgs = async (text: string): Promise<string[]> => {
-  const ctx = createPipelineContext();
-  const entities = await runPipeline({
-    fullText: text,
-    config: CONFIG,
-    gazetteerEntries: [],
-    context: ctx,
-  });
+  const entities = await detectNative(CONFIG, text);
   return entities.filter((e) => e.label === "organization").map((e) => e.text);
 };
 

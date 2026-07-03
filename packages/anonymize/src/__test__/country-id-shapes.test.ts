@@ -1,11 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  createPipelineContext,
-  DEFAULT_ENTITY_LABELS,
-  runPipeline,
-} from "../legacy";
-import type { Entity, PipelineConfig } from "../types";
+import { DEFAULT_ENTITY_LABELS } from "../constants";
+import type { NativePipelineEntity } from "../native";
+import type { PipelineConfig } from "../types";
+import { detectNative } from "./native-detect";
 
 const CONFIG: PipelineConfig = {
   threshold: 0.3,
@@ -22,13 +20,8 @@ const CONFIG: PipelineConfig = {
   workspaceId: "country-id-shapes-test",
 };
 
-const detect = async (fullText: string): Promise<Entity[]> =>
-  runPipeline({
-    fullText,
-    config: CONFIG,
-    gazetteerEntries: [],
-    context: createPipelineContext(),
-  });
+const detect = async (fullText: string): Promise<NativePipelineEntity[]> =>
+  detectNative(CONFIG, fullText);
 
 describe("country identifier regex shapes", () => {
   test("Swiss UID is detected as a company registration number", async () => {

@@ -9,16 +9,15 @@ import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
 setDefaultTimeout(60_000);
 
-import {
-  createPipelineContext,
-  DEFAULT_ENTITY_LABELS,
-  runPipeline,
-} from "../legacy";
-import type { Dictionaries, Entity, PipelineConfig } from "../types";
-import type { PipelineContext } from "../context";
+import { DEFAULT_ENTITY_LABELS } from "../constants";
+import type { NativePipelineEntity } from "../native";
+import type { PipelineConfig } from "../types";
+import { detectNative } from "./native-detect";
 import { loadTestDictionaries } from "./load-dictionaries";
 
-const baseConfig: Omit<PipelineConfig, "dictionaries"> = {
+const dictionaries = await loadTestDictionaries();
+
+const config: PipelineConfig = {
   threshold: 0.3,
   enableTriggerPhrases: true,
   enableRegex: true,
@@ -33,31 +32,16 @@ const baseConfig: Omit<PipelineConfig, "dictionaries"> = {
   enableZoneClassification: true,
   labels: [...DEFAULT_ENTITY_LABELS],
   workspaceId: "us-paren-phone-test",
+  dictionaries,
 };
 
-let dictionariesPromise: Promise<Dictionaries> | undefined;
-const getDictionaries = (): Promise<Dictionaries> => {
-  dictionariesPromise ??= loadTestDictionaries();
-  return dictionariesPromise;
-};
+const detect = (fullText: string): Promise<NativePipelineEntity[]> =>
+  detectNative(config, fullText);
 
-let sharedContext: PipelineContext | undefined;
-const getContext = (): PipelineContext => {
-  sharedContext ??= createPipelineContext();
-  return sharedContext;
-};
-
-const detect = async (fullText: string): Promise<Entity[]> => {
-  const dictionaries = await getDictionaries();
-  return runPipeline({
-    fullText,
-    config: { ...baseConfig, dictionaries },
-    gazetteerEntries: [],
-    context: getContext(),
-  });
-};
-
-const expectPhone = (entities: Entity[], substring: string): Entity => {
+const expectPhone = (
+  entities: NativePipelineEntity[],
+  substring: string,
+): NativePipelineEntity => {
   const hit = entities.find(
     (e) => e.label === "phone number" && e.text.includes(substring),
   );

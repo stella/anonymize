@@ -1,11 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import {
-  createPipelineContext,
-  runPipeline,
-  detectNameCorpus,
-  initNameCorpus,
-} from "../legacy";
-import type { Entity, PipelineConfig } from "../types";
+import type { NativePipelineEntity } from "../native";
+import type { PipelineConfig } from "../types";
+import { detectNative } from "./native-detect";
 
 // ── Helpers ────────────────────────────────────────────────────────
 
@@ -24,48 +20,18 @@ const baseConfig: PipelineConfig = {
   workspaceId: "non-western-test",
 };
 
-const detect = async (text: string): Promise<Entity[]> => {
-  const context = createPipelineContext();
-  return runPipeline({
-    fullText: text,
-    config: baseConfig,
-    gazetteerEntries: [],
-    context,
-  });
-};
+const detect = (text: string): Promise<NativePipelineEntity[]> =>
+  detectNative(baseConfig, text);
 
-const detectWithConfig = async (
+const detectWithConfig = (
   text: string,
   config: PipelineConfig,
-): Promise<Entity[]> => {
-  const context = createPipelineContext();
-  return runPipeline({
-    fullText: text,
-    config,
-    gazetteerEntries: [],
-    context,
-  });
-};
+): Promise<NativePipelineEntity[]> => detectNative(config, text);
 
-const detectWithDenyList = async (text: string): Promise<Entity[]> => {
-  return detectWithConfig(text, { ...baseConfig, enableDenyList: true });
-};
+const detectWithDenyList = (text: string): Promise<NativePipelineEntity[]> =>
+  detectWithConfig(text, { ...baseConfig, enableDenyList: true });
 
-/** Direct detector call; returns raw entities without pipeline post-processing. */
-const directCtx = createPipelineContext();
-let directCtxReady = false;
-const ensureDirectCtx = async (): Promise<void> => {
-  if (!directCtxReady) {
-    await initNameCorpus(directCtx);
-    directCtxReady = true;
-  }
-};
-const detectDirect = async (text: string): Promise<Entity[]> => {
-  await ensureDirectCtx();
-  return detectNameCorpus(text, directCtx);
-};
-
-const persons = (entities: Entity[]): Entity[] =>
+const persons = <T extends { label: string }>(entities: T[]): T[] =>
   entities.filter((e) => e.label === "person");
 
 // ── Tests ──────────────────────────────────────────────────────────
@@ -221,24 +187,9 @@ describe("Non-Western Name Detection", () => {
       expect(matches.length).toBe(0);
     });
 
-    test("CJK not detected in CJK-majority document", async () => {
-      // A document with >15% Han characters should not trigger CJK name detection
-      const cjkMajority =
-        "這是一份中文合約文本。這是一份中文合約文本。張小明在此簽名。這是一份中文合約文本。這是一份中文合約文本。";
-      const matches = persons(await detectDirect(cjkMajority));
-      expect(matches.every((m) => m.text !== "張小明")).toBe(true);
-    });
-
     test("single CJK character is ignored (的)", async () => {
       const matches = persons(
         await detect("This is a single character 的 which is a particle."),
-      );
-      expect(matches.length).toBe(0);
-    });
-
-    test("5+ CJK characters are ignored (too long for a name)", async () => {
-      const matches = persons(
-        await detectDirect("The sign reads 美利坚合众国 here."),
       );
       expect(matches.length).toBe(0);
     });
@@ -390,157 +341,6 @@ describe("Non-Western Name Detection", () => {
     });
   });
 
-  // ── Scoring & chain logic (direct detector) ────────────────────────
-  describe("Scoring and chain logic", () => {
-    test("title + non-Western token scores 0.95", async () => {
-      const matches = persons(await detectDirect("Shri Amit arrived."));
-      expect(matches.length).toBe(1);
-      expect(matches[0]?.score).toBe(0.95);
-    });
-
-    test("two non-Western tokens score 0.9", async () => {
-      const matches = persons(await detectDirect("Rahul Sharma spoke."));
-      expect(matches.length).toBe(1);
-      expect(matches[0]?.score).toBe(0.9);
-    });
-
-    test("non-Western token + capitalized scores 0.9", async () => {
-      const matches = persons(await detectDirect("Singh Raghav testified."));
-      expect(matches.length).toBe(1);
-      expect(matches[0]?.score).toBe(0.9);
-    });
-
-    test("Arabic connector + non-Western token scores 0.9", async () => {
-      const matches = persons(await detectDirect("Omar bin Khalid arrived."));
-      expect(matches.length).toBe(1);
-      expect(matches[0]?.score).toBe(0.9);
-    });
-
-    test("Japanese suffix + capitalized scores 0.9", async () => {
-      const matches = persons(await detectDirect("Watanabe-san left early."));
-      expect(matches.length).toBe(1);
-      expect(matches[0]?.score).toBe(0.9);
-    });
-
-    test("standalone non-Western token mid-sentence scores 0.5", async () => {
-      const matches = persons(
-        await detectDirect("The witness Singh testified."),
-      );
-      expect(matches.length).toBe(1);
-      expect(matches[0]?.score).toBe(0.5);
-    });
-
-    test("standalone non-Western token at sentence start is skipped", async () => {
-      const matches = persons(await detectDirect("Singh is a common surname."));
-      expect(matches.length).toBe(0);
-    });
-
-    test("ALL-CAPS surname that is also in name tokens scores as two non-Western tokens (0.9)", async () => {
-      // "SATO" titleCased→"Sato" matches the non-Western name corpus, so it
-      // is classified as NAME with nonWestern=true. Two nonWestern tokens
-      // → score 0.9.
-      const matches = persons(await detectDirect("SATO Kenji presented."));
-      expect(matches.length).toBe(1);
-      expect(matches[0]?.score).toBe(0.9);
-    });
-
-    test("ALL-CAPS non-name word + non-Western token in mixed-case text", async () => {
-      // "SMITH" is all-caps in mixed-case text → OTHER (not in any
-      // corpus and not in a signature-block all-caps line). "Kenji"
-      // alone is a standalone non-Western token mid-sentence → 0.5.
-      const matches = persons(await detectDirect("SMITH Kenji presented."));
-      expect(matches.length).toBe(1);
-      expect(matches[0]?.score).toBe(0.5);
-    });
-
-    test("chain without any non-Western anchor is skipped", async () => {
-      const matches = persons(
-        await detectDirect("Apple Banana Carrot for lunch."),
-      );
-      expect(matches.length).toBe(0);
-    });
-
-    test("ALL-CAPS without a non-Western name token is skipped", async () => {
-      const matches = persons(await detectDirect("THE AGREEMENT is binding."));
-      expect(matches.length).toBe(0);
-    });
-  });
-
-  // ── Chain boundary rules ───────────────────────────────────────────
-  describe("Chain boundary rules", () => {
-    test("chain breaks on semicolon", async () => {
-      const matches = persons(
-        await detectDirect("Rahul Sharma; the witness left."),
-      );
-      // "Rahul Sharma" should be one entity, not extended past the semicolon
-      expect(matches.length).toBe(1);
-      expect(matches[0]?.text).toBe("Rahul Sharma");
-    });
-
-    test("chain breaks on question mark", async () => {
-      const matches = persons(
-        await detectDirect("Rahul Sharma? Yes, he confirmed."),
-      );
-      expect(matches.some((m) => m.text === "Rahul Sharma")).toBe(true);
-    });
-
-    test("chain breaks on newline", async () => {
-      const matches = persons(
-        await detectDirect("Rahul Sharma\nThe witness left."),
-      );
-      expect(matches.some((m) => m.text === "Rahul Sharma")).toBe(true);
-    });
-
-    test("chain respects MAX_CHAIN=5 limit", async () => {
-      // Six non-Western name tokens; the first chain caps at 5, the 6th
-      // starts a standalone chain (score 0.5).
-      const matches = persons(
-        await detectDirect("Singh Rahul Vijay Arun Suresh Kumar arrived."),
-      );
-      expect(matches.length).toBeGreaterThanOrEqual(1);
-      // The longest match must have at most 5 words
-      let longest = matches[0]; // SAFETY: length >= 1
-      for (const m of matches) {
-        if (m.end - m.start > longest.end - longest.start) longest = m;
-      }
-      expect(longest.text.split(" ").length).toBeLessThanOrEqual(5);
-    });
-
-    test("chain breaks on period that is not an initial continuation", async () => {
-      const matches = persons(await detectDirect("Rahul Sharma. He left."));
-      expect(matches.some((m) => m.text === "Rahul Sharma")).toBe(true);
-    });
-
-    test("period after title does not break chain", async () => {
-      const matches = persons(await detectDirect("Dr. Singh testified."));
-      expect(matches.some((m) => m.text.includes("Singh"))).toBe(true);
-    });
-
-    test("Japanese suffix attaches via hyphen or space", async () => {
-      // Both hyphenated and spaced forms are valid in Japanese text.
-      const hyphenated = persons(await detectDirect("Tanaka-sensei taught."));
-      const spaced = persons(await detectDirect("Tanaka sensei taught."));
-      expect(hyphenated.some((m) => m.text === "Tanaka-sensei")).toBe(true);
-      expect(spaced.some((m) => m.text.includes("Tanaka"))).toBe(true);
-    });
-  });
-
-  // ── Deduplication ──────────────────────────────────────────────────
-  describe("Deduplication", () => {
-    test("overlapping spans are deduplicated (first wins)", async () => {
-      const matches = persons(await detectDirect("Singh Rahul Sharma spoke."));
-      // Should produce one non-overlapping entity, not two overlapping ones
-      const starts = matches.map((m) => m.start);
-      const ends = matches.map((m) => m.end);
-      for (let i = 0; i < matches.length; i++) {
-        for (let j = i + 1; j < matches.length; j++) {
-          const overlaps = starts[i] < ends[j] && ends[i] > starts[j];
-          expect(overlaps).toBe(false);
-        }
-      }
-    });
-  });
-
   // ── Negative cases (false positive mitigations) ────────────────────
   describe("False positive mitigations", () => {
     test("common English words are not detected as names", async () => {
@@ -588,21 +388,6 @@ describe("Non-Western Name Detection", () => {
         await detect("Kim is a common surname in Korea."),
       );
       expect(matches.every((m) => m.score < 0.6)).toBe(true);
-    });
-
-    test("Arabic bin without non-Western token is skipped", async () => {
-      const matches = persons(
-        await detectDirect("The bin of the device is full."),
-      );
-      expect(matches.every((m) => !m.text.includes("bin"))).toBe(true);
-    });
-
-    test("WERE in all-caps is excluded", async () => {
-      const matches = persons(
-        await detectDirect("THEY WERE ADVISED OF THE TERMS."),
-      );
-      // "WERE" should not be classified as ALL_CAPS person token
-      expect(matches.every((m) => !m.text.includes("WERE"))).toBe(true);
     });
 
     test("common English word 'more' is not a name", async () => {

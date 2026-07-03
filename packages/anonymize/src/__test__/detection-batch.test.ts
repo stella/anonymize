@@ -1,12 +1,8 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
-import {
-  runPipeline,
-  DEFAULT_ENTITY_LABELS,
-  createPipelineContext,
-} from "../legacy";
+import { DEFAULT_ENTITY_LABELS } from "../constants";
 import { processLegalFormMatches } from "../detectors/legal-forms";
-import type { PipelineContext } from "../context";
 import type { PipelineConfig } from "../types";
+import { detectNative } from "./native-detect";
 
 // The Rust regex-set DFA build is CPU-bound and can briefly
 // exceed the 5 s default when CI is under load. Most tests
@@ -31,26 +27,12 @@ const CONFIG: PipelineConfig = {
   workspaceId: "test",
 };
 
-// One shared PipelineContext for every test in this file. The
-// context caches the unified search instance (the expensive
-// DFA build), so reusing it means we pay the build cost once
-// instead of once per `detect()` call. Each test still gets
-// a fresh `runPipeline` invocation against fresh input, which
-// is what the test cases actually care about.
-let sharedCtx: PipelineContext | undefined;
-const getCtx = (): PipelineContext => {
-  if (!sharedCtx) sharedCtx = createPipelineContext();
-  return sharedCtx;
-};
-
-const detect = async (text: string, config?: Partial<PipelineConfig>) => {
-  return runPipeline({
-    fullText: text,
-    config: { ...CONFIG, ...config },
-    gazetteerEntries: [],
-    context: getCtx(),
-  });
-};
+// The native prepared pipeline is cached per config by the shared helper, so
+// reusing the same CONFIG across tests pays the prepared-package build cost once
+// instead of once per `detect()` call. Each test still gets a fresh redaction
+// run against fresh input, which is what the test cases actually care about.
+const detect = async (text: string, config?: Partial<PipelineConfig>) =>
+  detectNative({ ...CONFIG, ...config }, text);
 
 describe("degree continuation past commas", () => {
   test("captures post-nominal degrees after name", async () => {

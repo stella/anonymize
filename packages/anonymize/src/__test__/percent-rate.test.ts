@@ -9,16 +9,15 @@ import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
 setDefaultTimeout(60_000);
 
-import {
-  createPipelineContext,
-  DEFAULT_ENTITY_LABELS,
-  runPipeline,
-} from "../legacy";
-import type { Entity, PipelineConfig } from "../types";
-import type { PipelineContext } from "../context";
+import { DEFAULT_ENTITY_LABELS } from "../constants";
+import type { NativePipelineEntity } from "../native";
+import type { PipelineConfig } from "../types";
+import { detectNative } from "./native-detect";
 import { loadTestDictionaries } from "./load-dictionaries";
 
-const baseConfig: Omit<PipelineConfig, "dictionaries"> = {
+const dictionaries = await loadTestDictionaries();
+
+const config: PipelineConfig = {
   threshold: 0.3,
   enableTriggerPhrases: true,
   enableRegex: true,
@@ -33,29 +32,11 @@ const baseConfig: Omit<PipelineConfig, "dictionaries"> = {
   enableZoneClassification: true,
   labels: [...DEFAULT_ENTITY_LABELS],
   workspaceId: "percent-rate-test",
+  dictionaries,
 };
 
-let dictionariesPromise: ReturnType<typeof loadTestDictionaries> | undefined;
-const getDictionaries = () => {
-  dictionariesPromise ??= loadTestDictionaries();
-  return dictionariesPromise;
-};
-
-let sharedContext: PipelineContext | undefined;
-const getContext = (): PipelineContext => {
-  sharedContext ??= createPipelineContext();
-  return sharedContext;
-};
-
-const detect = async (text: string): Promise<Entity[]> => {
-  const dictionaries = await getDictionaries();
-  return runPipeline({
-    fullText: text,
-    config: { ...baseConfig, dictionaries },
-    gazetteerEntries: [],
-    context: getContext(),
-  });
-};
+const detect = (text: string): Promise<NativePipelineEntity[]> =>
+  detectNative(config, text);
 
 describe("percent / rate regex", () => {
   test("interest-rate forms (3.875%, 5.000%, 0%) are captured", async () => {

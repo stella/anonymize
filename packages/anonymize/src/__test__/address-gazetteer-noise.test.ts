@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { createPipelineContext, runPipeline } from "../legacy";
-import type { Entity, PipelineConfig } from "../types";
+import type { NativePipelineEntity } from "../native";
+import type { PipelineConfig } from "../types";
+import { detectNative } from "./native-detect";
 import { loadTestDictionaries } from "./load-dictionaries";
 
 const dictionaries = await loadTestDictionaries();
@@ -21,14 +22,8 @@ const config: PipelineConfig = {
   dictionaries,
 };
 
-const addresses = async (text: string): Promise<Entity[]> => {
-  const context = createPipelineContext();
-  const entities = await runPipeline({
-    fullText: text,
-    config,
-    gazetteerEntries: [],
-    context,
-  });
+const addresses = async (text: string): Promise<NativePipelineEntity[]> => {
+  const entities = await detectNative(config, text);
   return entities.filter((e) => e.label === "address");
 };
 

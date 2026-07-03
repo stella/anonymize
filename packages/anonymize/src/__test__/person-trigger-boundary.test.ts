@@ -10,12 +10,10 @@ import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
 setDefaultTimeout(60_000);
 
-import {
-  createPipelineContext,
-  DEFAULT_ENTITY_LABELS,
-  runPipeline,
-} from "../legacy";
-import type { Entity, PipelineConfig } from "../types";
+import { DEFAULT_ENTITY_LABELS } from "../constants";
+import type { NativePipelineEntity } from "../native";
+import type { PipelineConfig } from "../types";
+import { detectNative } from "./native-detect";
 
 // Deny-list / name-corpus / coreference stay off so the
 // person spans asserted here come from the trigger and
@@ -38,17 +36,10 @@ const baseConfig: PipelineConfig = {
   workspaceId: "person-trigger-boundary-test",
 };
 
-const detect = async (text: string): Promise<Entity[]> => {
-  const context = createPipelineContext();
-  return runPipeline({
-    fullText: text,
-    config: baseConfig,
-    gazetteerEntries: [],
-    context,
-  });
-};
+const detect = (text: string): Promise<NativePipelineEntity[]> =>
+  detectNative(baseConfig, text);
 
-const personTexts = (entities: Entity[]): string[] =>
+const personTexts = (entities: NativePipelineEntity[]): string[] =>
   entities.filter((e) => e.label === "person").map((e) => e.text);
 
 describe("person trigger extraction stops at the name run", () => {
@@ -131,13 +122,10 @@ describe("person trigger extraction stops at the name run", () => {
     // reclassification still fires; the name-run trim must
     // not apply to it. Legal-forms and regex detectors are
     // off so the asserted entity comes from the trigger.
-    const context = createPipelineContext();
-    const entities = await runPipeline({
-      fullText: "jednatelem Novák Partners s.r.o. na základě plné moci.",
-      config: { ...baseConfig, enableRegex: false, enableLegalForms: false },
-      gazetteerEntries: [],
-      context,
-    });
+    const entities = await detectNative(
+      { ...baseConfig, enableRegex: false, enableLegalForms: false },
+      "jednatelem Novák Partners s.r.o. na základě plné moci.",
+    );
     const org = entities.find(
       (e) => e.label === "organization" && e.source === "trigger",
     );

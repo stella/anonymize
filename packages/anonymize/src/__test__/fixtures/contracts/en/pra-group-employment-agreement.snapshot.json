@@ -119,7 +119,7 @@
       "end": 36254,
       "label": "country",
       "text": "United States",
-      "source": "deny-list"
+      "source": "country"
     },
     {
       "start": 36422,

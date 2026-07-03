@@ -14,15 +14,15 @@ import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
 setDefaultTimeout(60_000);
 
-import {
-  createPipelineContext,
-  DEFAULT_ENTITY_LABELS,
-  runPipeline,
-} from "../legacy";
-import type { Entity, PipelineConfig } from "../types";
+import { DEFAULT_ENTITY_LABELS } from "../constants";
+import type { NativePipelineEntity } from "../native";
+import type { PipelineConfig } from "../types";
+import { detectNative } from "./native-detect";
 import { loadTestDictionaries } from "./load-dictionaries";
 
-const baseConfig: Omit<PipelineConfig, "dictionaries"> = {
+const dictionaries = await loadTestDictionaries();
+
+const config: PipelineConfig = {
   threshold: 0.3,
   enableTriggerPhrases: true,
   enableRegex: true,
@@ -37,18 +37,11 @@ const baseConfig: Omit<PipelineConfig, "dictionaries"> = {
   enableZoneClassification: true,
   labels: [...DEFAULT_ENTITY_LABELS],
   workspaceId: "toc-orphan-street-test",
+  dictionaries,
 };
 
-const detect = async (fullText: string): Promise<Entity[]> => {
-  const dictionaries = await loadTestDictionaries();
-  const context = createPipelineContext();
-  return runPipeline({
-    fullText,
-    config: { ...baseConfig, dictionaries },
-    gazetteerEntries: [],
-    context,
-  });
-};
+const detect = (fullText: string): Promise<NativePipelineEntity[]> =>
+  detectNative(config, fullText);
 
 describe("TOC + orphan-street guardrails", () => {
   test("TOC entries with title and page number on separate lines are not addresses", async () => {

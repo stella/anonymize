@@ -1,16 +1,15 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
-import {
-  createPipelineContext,
-  DEFAULT_ENTITY_LABELS,
-  runPipeline,
-} from "../legacy";
-import type { Dictionaries, PipelineConfig } from "../types";
+import { DEFAULT_ENTITY_LABELS } from "../constants";
+import { detectNative } from "./native-detect";
+import type { PipelineConfig } from "../types";
 import { loadTestDictionaries } from "./load-dictionaries";
 
-// Fresh PipelineContext per file pays the regex-set DFA
+// Building the native prepared pipeline pays the regex-set DFA
 // build cost once; 15 s gives CI headroom.
 setDefaultTimeout(15_000);
+
+const dictionaries = await loadTestDictionaries();
 
 const CONFIG: PipelineConfig = {
   threshold: 0.3,
@@ -27,20 +26,10 @@ const CONFIG: PipelineConfig = {
   enableZoneClassification: true,
   labels: [...DEFAULT_ENTITY_LABELS],
   workspaceId: "us-bank-routing-test",
+  dictionaries,
 };
 
-let cachedDictionaries: Dictionaries | undefined;
-let sharedCtx: ReturnType<typeof createPipelineContext> | undefined;
-const run = async (text: string) => {
-  cachedDictionaries ??= await loadTestDictionaries();
-  sharedCtx ??= createPipelineContext();
-  return runPipeline({
-    fullText: text,
-    config: { ...CONFIG, dictionaries: cachedDictionaries },
-    gazetteerEntries: [],
-    context: sharedCtx,
-  });
-};
+const run = (text: string) => detectNative(CONFIG, text);
 
 const bankAccounts = (entities: Awaited<ReturnType<typeof run>>) =>
   entities.filter((e) => e.label === "bank account number").map((e) => e.text);

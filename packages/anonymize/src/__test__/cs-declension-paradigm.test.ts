@@ -7,12 +7,9 @@
 // deny-list AC patterns carried only nominative forms.
 
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
-import {
-  createPipelineContext,
-  DEFAULT_ENTITY_LABELS,
-  runPipeline,
-} from "../legacy";
+import { DEFAULT_ENTITY_LABELS } from "../constants";
 import type { Dictionaries, PipelineConfig } from "../types";
+import { detectNative } from "./native-detect";
 import { loadTestDictionaries } from "./load-dictionaries";
 
 setDefaultTimeout(15_000);
@@ -34,16 +31,9 @@ const CONFIG: PipelineConfig = {
 };
 
 let cachedDictionaries: Dictionaries | undefined;
-let sharedCtx: ReturnType<typeof createPipelineContext> | undefined;
 const detect = async (text: string) => {
   cachedDictionaries ??= await loadTestDictionaries();
-  sharedCtx ??= createPipelineContext();
-  return runPipeline({
-    fullText: text,
-    config: { ...CONFIG, dictionaries: cachedDictionaries },
-    gazetteerEntries: [],
-    context: sharedCtx,
-  });
+  return detectNative({ ...CONFIG, dictionaries: cachedDictionaries }, text);
 };
 
 /**

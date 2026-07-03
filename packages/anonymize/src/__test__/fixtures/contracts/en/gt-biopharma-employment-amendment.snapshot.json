@@ -69,21 +69,21 @@
       "end": 2010,
       "label": "country",
       "text": "United Kingdom",
-      "source": "deny-list"
+      "source": "country"
     },
     {
       "start": 2049,
       "end": 2063,
       "label": "country",
       "text": "United Kingdom",
-      "source": "deny-list"
+      "source": "country"
     },
     {
       "start": 2072,
       "end": 2085,
       "label": "country",
       "text": "United States",
-      "source": "deny-list"
+      "source": "country"
     },
     {
       "start": 4527,

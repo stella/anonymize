@@ -1,15 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
+import { createPipelineContext } from "../context";
 import {
-  createPipelineContext,
-  DEFAULT_ENTITY_LABELS,
   createNativePipelineFromConfig,
-  preparePipelineSearch,
   prepareNativePipelineConfig,
   prepareNativePipelinePackage,
-  redactText,
-  runPipeline,
-} from "../legacy";
+} from "../native-pipeline";
 import {
   buildNativeStaticSearchBundle,
   buildUnifiedSearch,
@@ -20,11 +16,12 @@ import {
   getNativeSigningClausePatterns,
   getSigningClausePatterns,
 } from "../detectors/regex";
-import { filterFalsePositives } from "../filters/false-positives";
 import { applyPipelineLanguageScope } from "../language-scope";
 import { languageConfigMatches } from "../util/language-selection";
 import type { NativeAnonymizeBinding } from "../native";
-import type { Dictionaries, Entity, PipelineConfig } from "../types";
+import { DEFAULT_ENTITY_LABELS } from "../types";
+import type { Dictionaries, PipelineConfig } from "../types";
+import { detectNative, redactNative } from "./native-detect";
 import { loadTestDictionaries } from "./load-dictionaries";
 
 let dictionaries: Dictionaries;
@@ -48,12 +45,6 @@ const BASE_CONFIG: PipelineConfig = {
   workspaceId: "test",
 };
 
-let sharedCtx: ReturnType<typeof createPipelineContext> | undefined;
-const getCtx = () => {
-  if (!sharedCtx) sharedCtx = createPipelineContext();
-  return sharedCtx;
-};
-
 const signingPatternText = (
   pattern: Awaited<ReturnType<typeof getNativeSigningClausePatterns>>[number],
 ) => {
@@ -67,16 +58,11 @@ const signingPatternText = (
   return entryPattern instanceof RegExp ? entryPattern.source : entryPattern;
 };
 
-const detect = async (fullText: string, config: Partial<PipelineConfig>) =>
-  runPipeline({
-    fullText,
-    config: {
-      ...BASE_CONFIG,
-      ...config,
-    },
-    gazetteerEntries: [],
-    context: getCtx(),
-  });
+const detect = (fullText: string, config: Partial<PipelineConfig>) =>
+  detectNative({ ...BASE_CONFIG, ...config }, fullText);
+
+const redactWith = (fullText: string, config: Partial<PipelineConfig>) =>
+  redactNative({ ...BASE_CONFIG, ...config }, fullText);
 
 const createCountingNativeBinding = (version: string) => {
   let compressedPrepare = 0;
@@ -1031,177 +1017,6 @@ describe("pipeline config semantics", () => {
     ).toBe(false);
   });
 
-  test("preparePipelineSearch reuses the context search cache", async () => {
-    const context = createPipelineContext();
-    const config = {
-      ...BASE_CONFIG,
-      enableRegex: true,
-      labels: ["email address"],
-    };
-    const first = await preparePipelineSearch({ config, context });
-    const second = await preparePipelineSearch({ config, context });
-
-    expect(second).toBe(first);
-  });
-
-  test("preparePipelineSearch cache keys content language", async () => {
-    const context = createPipelineContext();
-    const baseConfig = {
-      ...BASE_CONFIG,
-      enableTriggerPhrases: true,
-      labels: ["person"],
-    };
-
-    const english = await preparePipelineSearch({
-      config: { ...baseConfig, language: "en" },
-      context,
-    });
-    const czech = await preparePipelineSearch({
-      config: { ...baseConfig, language: "cs" },
-      context,
-    });
-
-    const englishTriggers =
-      english.nativeStaticConfig.trigger_data?.rules.map((rule) =>
-        rule.trigger.toLowerCase(),
-      ) ?? [];
-    const czechTriggers =
-      czech.nativeStaticConfig.trigger_data?.rules.map((rule) =>
-        rule.trigger.toLowerCase(),
-      ) ?? [];
-
-    expect(czech).not.toBe(english);
-    expect(englishTriggers).toContain("represented by");
-    expect(englishTriggers).not.toContain("zastoupen");
-    expect(czechTriggers).toContain("zastoupen");
-  });
-
-  test("preparePipelineSearch reuses shared search across fresh contexts", async () => {
-    const testDictionaries = await getDictionaries();
-    const config = {
-      ...BASE_CONFIG,
-      dictionaries: testDictionaries,
-      enableRegex: true,
-      labels: ["email address"],
-    };
-    const firstContext = createPipelineContext();
-    const secondContext = createPipelineContext();
-
-    const first = await preparePipelineSearch({
-      config,
-      context: firstContext,
-    });
-    const second = await preparePipelineSearch({
-      config,
-      context: secondContext,
-    });
-
-    expect(second).toBe(first);
-    expect(secondContext.search).toBe(first);
-  });
-
-  test("preparePipelineSearch replays support data on shared-cache hits", async () => {
-    const testDictionaries = { ...(await getDictionaries()) };
-    const config: PipelineConfig = {
-      ...BASE_CONFIG,
-      dictionaries: testDictionaries,
-      enableNameCorpus: true,
-      labels: ["person"],
-      language: "cs",
-    };
-    const firstContext = createPipelineContext();
-    const secondContext = createPipelineContext();
-
-    const first = await preparePipelineSearch({
-      config,
-      context: firstContext,
-    });
-    const second = await preparePipelineSearch({
-      config,
-      context: secondContext,
-    });
-    const falsePositivePerson: Entity = {
-      end: 4,
-      label: "person",
-      score: 0.95,
-      source: "ner",
-      start: 0,
-      text: "Tato",
-    };
-
-    const filtered = filterFalsePositives(
-      [falsePositivePerson],
-      secondContext,
-      "Tato smlouva",
-    );
-
-    expect(second).toBe(first);
-    expect(secondContext.personStopwords?.has("tato")).toBe(true);
-    expect(filtered).toEqual([]);
-  });
-
-  test("preparePipelineSearch does not share across dictionary objects", async () => {
-    const testDictionaries = await getDictionaries();
-    const config = {
-      ...BASE_CONFIG,
-      dictionaries: testDictionaries,
-      enableRegex: true,
-      labels: ["email address"],
-    };
-    const clonedConfig = {
-      ...config,
-      dictionaries: {
-        ...testDictionaries,
-      },
-    };
-
-    const first = await preparePipelineSearch({
-      config,
-      context: createPipelineContext(),
-    });
-    const second = await preparePipelineSearch({
-      config: clonedConfig,
-      context: createPipelineContext(),
-    });
-
-    expect(second).not.toBe(first);
-  });
-
-  test("preparePipelineSearch cache keys native redaction options", async () => {
-    const context = createPipelineContext();
-    const baseConfig = {
-      ...BASE_CONFIG,
-      enableRegex: true,
-      labels: ["date of birth"],
-    };
-
-    const first = await preparePipelineSearch({
-      config: {
-        ...baseConfig,
-        threshold: 0.5,
-        enableConfidenceBoost: false,
-        enableHotwordRules: false,
-      },
-      context,
-    });
-    const second = await preparePipelineSearch({
-      config: {
-        ...baseConfig,
-        threshold: 0.93,
-        enableConfidenceBoost: true,
-        enableHotwordRules: true,
-      },
-      context,
-    });
-
-    expect(second).not.toBe(first);
-    expect(second.nativeStaticConfig.threshold).toBe(0.93);
-    expect(second.nativeStaticConfig.confidence_boost).toBe(true);
-    expect(
-      second.nativeStaticConfig.hotword_data?.rules.length,
-    ).toBeGreaterThan(0);
-  });
-
   test("native pipeline package cache reuses exact configs", async () => {
     const { binding, counts } = createCountingNativeBinding(
       "native-cache-context",
@@ -1519,16 +1334,14 @@ describe("pipeline config semantics", () => {
   });
 
   test("legacy configs without enableLegalForms keep legal-form detection enabled", async () => {
-    const entities = await runPipeline({
-      fullText: "Acme s.r.o.",
-      config: {
+    const entities = await detectNative(
+      {
         ...BASE_CONFIG,
         enableLegalForms: undefined,
         labels: ["organization"],
       } as unknown as PipelineConfig,
-      gazetteerEntries: [],
-      context: createPipelineContext(),
-    });
+      "Acme s.r.o.",
+    );
     expect(entities.some((entity) => entity.label === "organization")).toBe(
       true,
     );
@@ -2259,48 +2072,6 @@ describe("pipeline config semantics", () => {
     ]);
   });
 
-  test("label-filtered custom regexes do not mask requested NER labels", async () => {
-    const fullText = "John met Alice.";
-    const entities = await runPipeline({
-      fullText,
-      config: {
-        ...BASE_CONFIG,
-        enableRegex: true,
-        enableNer: true,
-        customRegexes: [
-          {
-            pattern: "John",
-            label: "code",
-          },
-        ],
-        labels: ["person"],
-      },
-      gazetteerEntries: [],
-      context: createPipelineContext(),
-      nerInference: async (maskedText) => {
-        expect(maskedText).toBe(fullText);
-        return [
-          {
-            start: 0,
-            end: 4,
-            label: "person",
-            text: "John",
-            score: 0.95,
-            source: "ner",
-          },
-        ];
-      },
-    });
-
-    expect(entities).toEqual([
-      expect.objectContaining({
-        label: "person",
-        text: "John",
-        source: "ner",
-      }),
-    ]);
-  });
-
   test("hotword reclassification can promote filtered source labels into requested output labels", async () => {
     const entities = await detect("narozen dne 12.03.1990 v Praze", {
       enableRegex: true,
@@ -2313,36 +2084,6 @@ describe("pipeline config semantics", () => {
           entity.label === "date of birth" && entity.text === "12.03.1990",
       ),
     ).toBe(true);
-  });
-
-  test("address seed expansion keeps unfiltered NER boundaries in context", async () => {
-    const fullText = "Jan Novák, Olbrachtova 1929/62, 140 00 Praha 4";
-    const personEnd = fullText.indexOf(",");
-    const entities = await runPipeline({
-      fullText,
-      config: {
-        ...BASE_CONFIG,
-        enableNer: true,
-        labels: ["address"],
-      },
-      gazetteerEntries: [],
-      context: createPipelineContext(),
-      nerInference: async () => [
-        {
-          start: 0,
-          end: personEnd,
-          label: "person",
-          text: fullText.slice(0, personEnd),
-          score: 0.95,
-          source: "ner",
-        },
-      ],
-    });
-    const address = entities.find((entity) => entity.label === "address");
-    expect(address).toBeDefined();
-    expect(address!.text).toContain("Olbrachtova 1929/62");
-    expect(address!.text).toContain("140 00 Praha 4");
-    expect(address!.text).not.toContain("Jan Novák");
   });
 
   test("address-only output still respects non-address bounds during seed expansion", async () => {
@@ -2390,7 +2131,10 @@ describe("misc entity label", () => {
 
   test("custom deny-list with misc label yields [MISC_N] placeholder", async () => {
     const fullText = "The case file references Widget X and Widget X again.";
-    const entities = await detect(fullText, {
+    const {
+      resolvedEntities: entities,
+      redaction: { redactedText, redactionMap },
+    } = await redactWith(fullText, {
       enableDenyList: true,
       customDenyList: [
         {
@@ -2416,7 +2160,6 @@ describe("misc entity label", () => {
       }),
     ]);
 
-    const { redactedText, redactionMap } = redactText(fullText, entities);
     expect(redactedText).toBe(
       "The case file references [MISC_1] and [MISC_1] again.",
     );
@@ -2425,88 +2168,20 @@ describe("misc entity label", () => {
 
   test("misc case-variants share a placeholder", async () => {
     // `Widget X` and `widget x` are the same real-world entity from
-    // the user's perspective; redact.ts case-normalises MISC so both
+    // the user's perspective; redaction case-normalises MISC so both
     // surface forms collapse to one placeholder, matching
     // PERSON/ORG/ADDRESS behaviour.
     const fullText = "Widget X starts a sentence; later widget x reappears.";
-    const entities = await detect(fullText, {
+    const {
+      redaction: { redactedText, redactionMap },
+    } = await redactWith(fullText, {
       enableDenyList: true,
       customDenyList: [{ value: "Widget X", label: "misc" }],
       labels: ["misc"],
     });
-    const { redactedText, redactionMap } = redactText(fullText, entities);
     expect(redactedText).toBe(
       "[MISC_1] starts a sentence; later [MISC_1] reappears.",
     );
     expect(redactionMap.size).toBe(1);
-  });
-
-  test("NER inference is skipped when only non-NER labels are requested", async () => {
-    // Filtering deterministic/custom-only labels out of the
-    // NER schema can leave the schema empty (e.g.
-    // caller passes `labels: ["crypto", "misc"]`).
-    // Many NER backends reject empty label arrays; the
-    // pipeline should skip the call entirely in that case.
-    let nerCalled = false;
-    await runPipeline({
-      fullText: "Project Widget X is mentioned.",
-      config: {
-        threshold: 0.5,
-        enableTriggerPhrases: false,
-        enableRegex: false,
-        enableLegalForms: false,
-        enableNameCorpus: false,
-        enableDenyList: true,
-        enableGazetteer: false,
-        enableNer: true,
-        enableConfidenceBoost: false,
-        enableCoreference: false,
-        customDenyList: [{ value: "Widget X", label: "misc" }],
-        labels: ["crypto", "misc"],
-        workspaceId: "test",
-      },
-      gazetteerEntries: [],
-      context: createPipelineContext(),
-      nerInference: async () => {
-        nerCalled = true;
-        return [];
-      },
-    });
-    expect(nerCalled).toBe(false);
-  });
-
-  test("non-NER labels are excluded from the NER label schema", async () => {
-    // These labels are deterministic/custom-only; surfacing them
-    // to the NER schema would invite zero-shot guesses on
-    // arbitrary spans.
-    const seenLabels: string[][] = [];
-    await runPipeline({
-      fullText: "Some sentence.",
-      config: {
-        threshold: 0.5,
-        enableTriggerPhrases: false,
-        enableRegex: false,
-        enableLegalForms: false,
-        enableNameCorpus: false,
-        enableDenyList: false,
-        enableGazetteer: false,
-        enableNer: true,
-        enableConfidenceBoost: false,
-        enableCoreference: false,
-        labels: [...DEFAULT_ENTITY_LABELS],
-        workspaceId: "test",
-      },
-      gazetteerEntries: [],
-      context: createPipelineContext(),
-      nerInference: async (_text, labels) => {
-        seenLabels.push([...labels]);
-        return [];
-      },
-    });
-    expect(seenLabels.length).toBe(1);
-    expect(seenLabels[0]).not.toContain("crypto");
-    expect(seenLabels[0]).not.toContain("misc");
-    // Sanity: other defaults still flow through unchanged.
-    expect(seenLabels[0]).toContain("person");
   });
 });

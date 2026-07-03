@@ -118,29 +118,13 @@ jobs:
           CHROME_BIN: /usr/bin/google-chrome-stable
         run: bun run --cwd packages/anonymize smoke:wasm-browser
 
-      - name: Migration fixture parity and performance
-        run: |
-          git fetch origin main --depth=1
-          bun run --cwd packages/anonymize perf:migration-fixtures
-
-      - name: Native fixture parity and performance
-        env:
-          ANONYMIZE_MIGRATION_ALLOW_ACCEPTED_MISMATCHES: "1"
-          ANONYMIZE_MIGRATION_CANDIDATE_RUNTIME: native-static
-          ANONYMIZE_MIGRATION_FAIL_ON_MISMATCH: "1"
-          ANONYMIZE_MIGRATION_NATIVE_COMPRESSED_PACKAGE: "1"
-          ANONYMIZE_MIGRATION_NATIVE_PREPARED_PACKAGE: "1"
-          ANONYMIZE_MIGRATION_REQUIRE_NATIVE_PIPELINE: "1"
-        run: |
-          git fetch origin main --depth=1
-          bun run --cwd packages/anonymize perf:migration-fixtures
-
-      - name: Contract performance (informational)
-        # Surfaces pipeline-latency regressions against the thresholds in
-        # contract-perf.mjs. Non-blocking for now (shared-runner timing is
-        # noisy); promote to a hard gate once a stable baseline is set.
-        continue-on-error: true
-        run: bun run --cwd packages/anonymize perf:contracts
+      - name: Native fixture parity
+        # Drives the Rust crates/anonymize-py extension in a subprocess and
+        # asserts its default-package redaction is byte-for-byte identical to
+        # the in-process native binding across the cs/de/en contract fixtures.
+        # This is the go-forward parity gate: the legacy TypeScript pipeline
+        # (and its origin/main migration baseline) has been removed.
+        run: bun run --cwd packages/anonymize test:native-fixtures
 
       - name: Native adapter performance (informational)
         # Emits aggregate TS/NAPI and Python/PyO3 timings for the shared

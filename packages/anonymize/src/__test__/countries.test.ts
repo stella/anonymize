@@ -9,12 +9,11 @@ import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
 setDefaultTimeout(60_000);
 
-import {
-  createPipelineContext,
-  DEFAULT_ENTITY_LABELS,
-  runPipeline,
-} from "../legacy";
-import type { Entity, PipelineConfig } from "../types";
+import { createPipelineContext } from "../context";
+import { DEFAULT_ENTITY_LABELS } from "../constants";
+import type { NativePipelineEntity } from "../native";
+import type { PipelineConfig } from "../types";
+import { detectNative } from "./native-detect";
 import { loadTestDictionaries } from "./load-dictionaries";
 
 const baseConfig: Omit<PipelineConfig, "dictionaries"> = {
@@ -37,18 +36,12 @@ const baseConfig: Omit<PipelineConfig, "dictionaries"> = {
 const detect = async (
   text: string,
   overrides: Partial<PipelineConfig> = {},
-): Promise<Entity[]> => {
+): Promise<NativePipelineEntity[]> => {
   const dictionaries = await loadTestDictionaries();
-  const context = createPipelineContext();
-  return runPipeline({
-    fullText: text,
-    config: { ...baseConfig, dictionaries, ...overrides },
-    gazetteerEntries: [],
-    context,
-  });
+  return detectNative({ ...baseConfig, dictionaries, ...overrides }, text);
 };
 
-const countries = (entities: Entity[]) =>
+const countries = (entities: NativePipelineEntity[]) =>
   entities.filter((e) => e.label === "country").map((e) => e.text);
 
 describe("country detector", () => {
@@ -273,18 +266,16 @@ describe("country detector", () => {
       dictionaries,
     };
 
-    const enabledRun = await runPipeline({
-      fullText: text,
-      config: { ...cfg, enableCountries: true },
-      gazetteerEntries: [],
-      context,
-    });
-    const disabledRun = await runPipeline({
-      fullText: text,
-      config: { ...cfg, enableCountries: false },
-      gazetteerEntries: [],
-      context,
-    });
+    const enabledRun = await detectNative(
+      { ...cfg, enableCountries: true },
+      text,
+      { context },
+    );
+    const disabledRun = await detectNative(
+      { ...cfg, enableCountries: false },
+      text,
+      { context },
+    );
 
     const enabledCount = enabledRun.filter(
       (e) => e.source === "country",

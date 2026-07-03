@@ -1,13 +1,23 @@
 import { expect } from "bun:test";
 
-import type { Entity, RedactionResult } from "../types";
+import type { RedactionResult } from "../types";
+
+// Structural minimums so the helpers accept both the legacy `Entity` shape
+// and the native SDK's `NativePipelineEntity` (wider `label` / `source`)
+// without importing either concrete type.
+type SpanInvariant = {
+  start: number;
+  end: number;
+  text: string;
+  score: number;
+};
 
 export const collapseWhitespace = (text: string): string =>
   text.replace(/\s+/g, " ").trim();
 
 export const assertEntityInvariants = (
   fullText: string,
-  entities: readonly Entity[],
+  entities: readonly SpanInvariant[],
 ): void => {
   let previousStart = 0;
 
@@ -27,7 +37,7 @@ export const assertEntityInvariants = (
 };
 
 export const assertRedactionInvariants = (
-  entities: readonly Entity[],
+  entities: readonly unknown[],
   result: RedactionResult,
 ): void => {
   expect(result.entityCount).toBeLessThanOrEqual(entities.length);

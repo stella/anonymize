@@ -27,7 +27,7 @@
       "end": 111,
       "label": "address",
       "text": "Brno – Nový Lískovec, 634 00",
-      "source": "deny-list"
+      "source": "regex"
     },
     {
       "start": 117,
