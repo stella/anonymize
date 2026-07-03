@@ -7,7 +7,7 @@ import type { Dictionaries } from "../types";
  * distinguish two configs that differ only by their injected dictionaries.
  * Dictionaries are large mutable objects with no natural identifier, so we
  * assign each distinct object a monotonic id the first time we see it and reuse
- * it thereafter. `undefined` (no dictionaries) maps to a fixed sentinel.
+ * it thereafter. `undefined`/`null` (no dictionaries) map to a fixed sentinel.
  *
  * Identity, not deep equality: two structurally identical dictionary objects
  * get different keys. That is the desired behavior for caches keyed by the
@@ -18,9 +18,11 @@ const dictionaryIds = new WeakMap<Dictionaries, number>();
 let nextDictionaryId = 0;
 
 export const dictionaryIdentityKey = (
-  dictionaries: Dictionaries | undefined,
+  dictionaries: Dictionaries | null | undefined,
 ): string => {
-  if (dictionaries === undefined) {
+  // null is `typeof object` but not a valid WeakMap key, so guard it here
+  // alongside undefined before touching the WeakMap.
+  if (dictionaries === undefined || dictionaries === null) {
     return "none";
   }
   const existing = dictionaryIds.get(dictionaries);
