@@ -72,10 +72,11 @@ fn main() -> Result<(), Box<dyn Error>> {
   );
   generated.push_str("pub(crate) static DATA_FILES: &[(&str, &str)] = &[\n");
   for (name, path) in &entries {
-    let path_str = path
-      .to_str()
-      .ok_or_else(|| "non-utf8 data file path".to_string())?;
-    writeln!(generated, "  ({name:?}, include_str!({path_str:?})),")?;
+    // Embed contents as literals rather than include_str!(<absolute path>) so
+    // the generated file is hermetic and reproducible across machines.
+    let contents = fs::read_to_string(path)
+      .map_err(|error| format!("failed to read {}: {error}", path.display()))?;
+    writeln!(generated, "  ({name:?}, {contents:?}),")?;
   }
   generated.push_str("];\n");
 

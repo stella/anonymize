@@ -24,8 +24,6 @@ mod monetary;
 mod signature;
 mod zones;
 
-use std::collections::HashSet;
-
 use stella_anonymize_core::assemble::{
   AssembleError, CustomRegexPattern, Dictionaries, GazetteerEntry,
   PipelineConfig, PreparedArtifactPolicy,
@@ -94,7 +92,7 @@ struct AssembleContext<'a> {
   /// `configuredContentLanguages(config)`: `None` means "all languages".
   content_languages: Option<Vec<String>>,
   /// `createAllowedLabelSet(searchLabels)`: `None` means "no filter".
-  allowed_labels: Option<HashSet<String>>,
+  allowed_labels: Option<Vec<String>>,
 }
 
 impl AssembleContext<'_> {
@@ -103,7 +101,7 @@ impl AssembleContext<'_> {
     self
       .allowed_labels
       .as_ref()
-      .is_none_or(|set| set.contains(label))
+      .is_none_or(|labels| labels.iter().any(|allowed| allowed == label))
   }
 
   const fn enable_regex(&self) -> bool {
@@ -243,11 +241,11 @@ fn assemble_custom_regex_meta(
 /// The labels passed in are the hotword-expanded `searchLabels`, so
 /// custom-regex gating stays consistent with the TypeScript source even when
 /// `enableHotwordRules` reclassifies labels.
-fn allowed_label_set(labels: &[String]) -> Option<HashSet<String>> {
+fn allowed_label_set(labels: &[String]) -> Option<Vec<String>> {
   if labels.is_empty() {
     return None;
   }
-  Some(labels.iter().cloned().collect())
+  Some(labels.to_vec())
 }
 
 fn custom_regex_pattern(entry: &CustomRegexPattern) -> BindingSearchPattern {

@@ -30,10 +30,11 @@ pub fn data_file_count() -> usize {
 /// Returns the raw contents of an embedded data file by name, if present.
 #[must_use]
 pub fn data_file(name: &str) -> Option<&'static str> {
+  // DATA_FILES is emitted sorted by name (build.rs), so binary search holds.
   DATA_FILES
-    .iter()
-    .find(|(file_name, _)| *file_name == name)
-    .map(|(_, contents)| *contents)
+    .binary_search_by_key(&name, |(file_name, _)| file_name)
+    .ok()
+    .and_then(|index| DATA_FILES.get(index).map(|(_, contents)| *contents))
 }
 
 /// Parses an embedded data file into a typed shape on demand.
