@@ -40,7 +40,7 @@ import {
 import type { RegexMeta } from "./detectors/regex";
 import type { TriggerRule } from "./types";
 import type { DenyListData, DenyListFilterData } from "./detectors/deny-list";
-import type { PipelineContext } from "./context";
+import type { NameCorpusData, PipelineContext } from "./context";
 import { defaultContext } from "./context";
 import { POST_NOMINALS } from "./config/titles";
 import { LEGAL_SUFFIXES } from "./config/legal-forms";
@@ -74,6 +74,7 @@ import {
   buildDenyListFilterData,
   ensureDenyListData,
 } from "./detectors/deny-list";
+import { initNameCorpus } from "./detectors/names";
 import {
   buildStreetTypePatterns,
   getAddressSeedData,
@@ -557,9 +558,9 @@ const CJK_LANGUAGE_ALIASES: Record<string, readonly string[]> = {
 
 const buildNativeNameCorpusData = (
   config: PipelineConfig,
-  ctx: PipelineContext,
+  corpus: NameCorpusData | null,
 ): NativeNameCorpusData | null => {
-  if (!config.enableNameCorpus || !ctx.nameCorpus) {
+  if (!config.enableNameCorpus || !corpus) {
     return null;
   }
 
@@ -598,14 +599,14 @@ const buildNativeNameCorpusData = (
   }
 
   return {
-    first_names: [...ctx.nameCorpus.firstNamesList],
-    surnames: [...ctx.nameCorpus.surnamesList],
-    title_tokens: [...ctx.nameCorpus.titlesList],
-    title_abbreviations: [...ctx.nameCorpus.titleAbbreviations],
-    excluded_words: [...ctx.nameCorpus.excludedList],
-    common_words: [...ctx.nameCorpus.commonWords],
-    non_western_names: [...ctx.nameCorpus.nonWesternNamesList],
-    excluded_all_caps: [...ctx.nameCorpus.excludedAllCapsList],
+    first_names: [...corpus.firstNamesList],
+    surnames: [...corpus.surnamesList],
+    title_tokens: [...corpus.titlesList],
+    title_abbreviations: [...corpus.titleAbbreviations],
+    excluded_words: [...corpus.excludedList],
+    common_words: [...corpus.commonWords],
+    non_western_names: [...corpus.nonWesternNamesList],
+    excluded_all_caps: [...corpus.excludedAllCapsList],
     ja_suffixes: uniqueStrings(jaSuffixes),
     arabic_connectors: uniqueStrings(arabicConnectors),
     relation_connectors: uniqueStrings(relationConnectors),
@@ -728,6 +729,7 @@ const buildUnifiedSearchSources = async (
   // still gates whether the v2 detector runs in the pipeline, but
   // its pattern slice is always empty.
   const [
+    nameCorpus,
     _legalFormWarmup,
     triggers,
     denyListData,
@@ -745,6 +747,11 @@ const buildUnifiedSearchSources = async (
     addressContextData,
     coreferenceData,
   ] = await Promise.all([
+    // Resolve this config's corpus once, up front in the same batch. The value
+    // is threaded into the native corpus bake and the deny-list filters below
+    // instead of read back from the shared ctx slot, which a concurrent config
+    // building on the same context may have replaced.
+    initNameCorpus(ctx, config.dictionaries, config.nameCorpusLanguages),
     legalFormsEnabled || config.enableTriggerPhrases || config.enableCoreference
       ? warmLegalRoleHeads()
       : Promise.resolve(),
@@ -756,12 +763,12 @@ const buildUnifiedSearchSources = async (
         }),
     config.enableDenyList ? buildDenyList(config, ctx) : Promise.resolve(null),
     (async () => {
-      await ensureDenyListData(
+      const { corpus, stopwords } = await ensureDenyListData(
         ctx,
         config.dictionaries,
         config.nameCorpusLanguages,
       );
-      return buildDenyListFilterData(ctx);
+      return buildDenyListFilterData(ctx, corpus, stopwords);
     })(),
     buildStreetTypePatterns(),
     regexMonetaryEnabled
@@ -914,7 +921,7 @@ const buildUnifiedSearchSources = async (
     config.enableTriggerPhrases || regexMonetaryEnabled ? monetaryData : null;
   const nativeSentenceTerminalCurrencyTerms =
     sentenceTerminalCurrencyTerms(monetaryData);
-  const nativeNameCorpusData = buildNativeNameCorpusData(config, ctx);
+  const nativeNameCorpusData = buildNativeNameCorpusData(config, nameCorpus);
   const nativeNameCorpusMode: NativeNameCorpusMode = config.enableDenyList
     ? "supplemental"
     : "full";

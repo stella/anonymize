@@ -22,6 +22,22 @@ export type DefinitionPattern = {
 };
 
 /**
+ * A single in-flight-or-resolved keyed load stored on the context.
+ *
+ * Concurrent callers with the same `key` share one `promise`; a caller with a
+ * different key atomically REPLACES the record. This lets loaders detect that
+ * they are outdated: a promise that resolves after its record was replaced must
+ * NOT write shared derived state (see initNameCorpus / loadStopwords), because a
+ * newer config now owns that state. The resolved value still travels on the
+ * promise, so each caller reads its own config's result even after the shared
+ * slot has moved on.
+ */
+export type KeyedLoad<T> = {
+  key: string;
+  promise: Promise<T>;
+};
+
+/**
  * Cached data for the name corpus detector.
  * Populated by initNameCorpus; consumed by
  * detectNameCorpus and deny-list AC integration.
@@ -74,20 +90,23 @@ export type PipelineContext = {
   nativePipelinePackagePromise: Promise<Uint8Array> | null;
 
   // ── Name corpus ───────────────────────────────
+  /** Resolved corpus for the most recently loaded config. Convenience slot
+   *  for the legacy sync accessors and TS detection path; the authoritative
+   *  per-config value travels on `nameCorpusLoad.promise`. */
   nameCorpus: NameCorpusData | null;
-  nameCorpusKey: string;
-  nameCorpusPromise: Promise<void> | null;
+  /** Atomic keyed load. Keyed by dictionary identity + selected languages so
+   *  two configs sharing one context each build their own corpus and an
+   *  outdated load cannot clobber a newer one. */
+  nameCorpusLoad: KeyedLoad<NameCorpusData | null> | null;
 
   // ── Deny-list data sets ───────────────────────
+  /** Resolved stopwords for the most recently loaded config (convenience
+   *  slot; per-config value travels on `stopwordsLoad.promise`). */
   stopwords: ReadonlySet<string> | null;
-  stopwordsPromise: Promise<ReadonlySet<string>> | null;
-  /** First-name-corpus size the cached stopwords were
-   *  filtered against. Stopwords exclude corpus given
-   *  names so they stay person-detectable; when the
-   *  corpus changes (e.g. a later config on a shared
-   *  context injects dictionaries) the filtered set is
-   *  rebuilt. */
-  stopwordsKey: number;
+  /** Atomic keyed load. Keyed by the corpus identity (not its size): the
+   *  filtered set excludes corpus given names so they stay person-detectable,
+   *  and two corpora with equal counts must not alias. */
+  stopwordsLoad: KeyedLoad<ReadonlySet<string>> | null;
   allowList: ReadonlySet<string> | null;
   allowListPromise: Promise<ReadonlySet<string>> | null;
   personStopwords: ReadonlySet<string> | null;
@@ -96,9 +115,6 @@ export type PipelineContext = {
   definedTermHeadsPromise: Promise<ReadonlySet<string>> | null;
   addressStopwords: ReadonlySet<string> | null;
   addressStopwordsPromise: Promise<ReadonlySet<string>> | null;
-  /** First-name exclusions for stopword filtering. */
-  firstNameExclusions: ReadonlySet<string> | null;
-  firstNameExclusionCorpusLen: number;
 
   // ── Generic roles (false-positive filter) ─────
   genericRoles: ReadonlySet<string> | null;
@@ -128,12 +144,10 @@ export const createPipelineContext = (): PipelineContext => ({
   nativePipelinePackagePromise: null,
 
   nameCorpus: null,
-  nameCorpusKey: "",
-  nameCorpusPromise: null,
+  nameCorpusLoad: null,
 
   stopwords: null,
-  stopwordsPromise: null,
-  stopwordsKey: 0,
+  stopwordsLoad: null,
   allowList: null,
   allowListPromise: null,
   personStopwords: null,
@@ -142,8 +156,6 @@ export const createPipelineContext = (): PipelineContext => ({
   definedTermHeadsPromise: null,
   addressStopwords: null,
   addressStopwordsPromise: null,
-  firstNameExclusions: null,
-  firstNameExclusionCorpusLen: 0,
 
   genericRoles: null,
   genericRolesPromise: null,

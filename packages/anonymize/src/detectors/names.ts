@@ -1,6 +1,6 @@
 import { DETECTION_SOURCES } from "../types";
 import type { Dictionaries, Entity } from "../types";
-import type { PipelineContext, NameCorpusData } from "../context";
+import type { KeyedLoad, PipelineContext, NameCorpusData } from "../context";
 import { defaultContext } from "../context";
 import {
   HONORIFIC_ABBREVIATION,
@@ -97,12 +97,35 @@ const getScopedNonWesternHonorifics = (
 };
 
 /**
+ * Stable identity key for a name corpus load.
+ *
+ * Keys by both the selected languages AND the injected dictionaries identity:
+ * the loaded corpus merges legacy JSON with per-language dictionary entries, so
+ * two configs sharing one context but differing only by their dictionaries
+ * (e.g. an earlier config with none, a later one with a full bundle) must not
+ * reuse each other's corpus. See __test__/context-cache-keying.test.ts.
+ */
+export const nameCorpusCacheKey = (
+  dictionaries: Dictionaries | undefined,
+  languages: readonly string[] | undefined,
+): string =>
+  `${dictionaryIdentityKey(dictionaries)}|${
+    languages?.toSorted().join(",") ?? "*"
+  }`;
+
+/**
  * Load name corpus data from injected dictionaries
  * and legacy config files. Merges all sources.
  *
  * Safe to call multiple times; only loads once per
- * context. Must be called before detectNameCorpus or
- * the getNameCorpus*() accessors are used.
+ * context+key. Must be called (and awaited) before
+ * detectNameCorpus or the getNameCorpus*() accessors are used.
+ *
+ * Resolves to the loaded corpus (or null on failure). The value travels on the
+ * returned promise so a caller reads ITS config's corpus even when a different
+ * config concurrently replaces the shared `ctx.nameCorpus` slot. The atomic
+ * keyed record (`ctx.nameCorpusLoad`) dedups same-key callers and lets an
+ * outdated load skip the shared write.
  *
  * @param dictionaries Optional pre-loaded dictionaries
  *   with per-language first names and surnames. When
@@ -112,24 +135,13 @@ export const initNameCorpus = (
   ctx: PipelineContext = defaultContext,
   dictionaries?: Dictionaries,
   languages?: readonly string[],
-): Promise<void> => {
-  // Key by both the selected languages AND the injected dictionaries identity:
-  // the loaded corpus merges legacy JSON with per-language dictionary entries,
-  // so two configs sharing one context but differing only by their dictionaries
-  // (e.g. an earlier config with none, a later one with a full bundle) must not
-  // reuse each other's corpus. See __test__/context-cache-keying.test.ts.
-  const languageKey = `${dictionaryIdentityKey(dictionaries)}|${
-    languages?.toSorted().join(",") ?? "*"
-  }`;
-  if (ctx.nameCorpus && ctx.nameCorpusKey === languageKey) {
-    return Promise.resolve();
+): Promise<NameCorpusData | null> => {
+  const key = nameCorpusCacheKey(dictionaries, languages);
+  const inflight = ctx.nameCorpusLoad;
+  if (inflight && inflight.key === key) {
+    return inflight.promise;
   }
-  if (ctx.nameCorpusPromise && ctx.nameCorpusKey === languageKey) {
-    return ctx.nameCorpusPromise;
-  }
-  ctx.nameCorpus = null;
-  ctx.nameCorpusKey = languageKey;
-  const promise = (async () => {
+  const promise = (async (): Promise<NameCorpusData | null> => {
     try {
       // Load legacy config files (backwards compat)
       const [
@@ -280,7 +292,7 @@ export const initNameCorpus = (
       const dedupNonWestern = dedup(nonWesternNames);
       const dedupExcludedAllCaps = dedup(nwExcludedMod.default.words);
 
-      ctx.nameCorpus = {
+      const corpus: NameCorpusData = {
         firstNames: Object.freeze(new Set(dedupFirst)),
         surnames: Object.freeze(new Set(dedupSurnames)),
         titleTokens: Object.freeze(new Set(dedupTitles)),
@@ -296,20 +308,36 @@ export const initNameCorpus = (
         nonWesternNamesList: Object.freeze(dedupNonWestern),
         excludedAllCapsList: Object.freeze(dedupExcludedAllCaps),
       };
+      return corpus;
     } catch (err) {
-      // Reset so the next call retries the load rather
-      // than returning this (already-resolved) failed
-      // promise. Current awaiters still get a resolved
-      // (not rejected) Promise; ctx.nameCorpus stays null.
-      ctx.nameCorpusPromise = null;
       console.warn(
         "[anonymize] Failed to load name corpus JSON" +
           " — name detection disabled:",
         err,
       );
+      return null;
     }
   })();
-  ctx.nameCorpusPromise = promise;
+  // Set the record on the context SYNCHRONOUSLY, before returning, so a
+  // concurrent different-key caller sees and replaces it. The resolved corpus
+  // travels on `promise`, so every caller reads its own config's value; the
+  // shared `ctx.nameCorpus` slot is only a convenience for legacy sync
+  // accessors and is written by the current record when it resolves.
+  const record: KeyedLoad<NameCorpusData | null> = { key, promise };
+  ctx.nameCorpusLoad = record;
+  void promise.then((corpus) => {
+    if (ctx.nameCorpusLoad !== record) {
+      // A newer config replaced us; leave its state alone.
+      return;
+    }
+    if (corpus) {
+      ctx.nameCorpus = corpus;
+    } else {
+      // Failed load: clear so the next call retries instead of reusing this
+      // resolved-null promise.
+      ctx.nameCorpusLoad = null;
+    }
+  });
   return promise;
 };
 

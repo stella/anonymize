@@ -3,9 +3,8 @@ import type { Match } from "@stll/text-search";
 import {
   expandNameDeclensions,
   getNameCorpusFirstNames,
-  getNameCorpusSurnames,
-  getNameCorpusTitles,
   initNameCorpus,
+  nameCorpusCacheKey,
 } from "./names";
 import { resolveCountries } from "../regions";
 import { DETECTION_SOURCES } from "../types";
@@ -15,7 +14,7 @@ import type {
   Entity,
   PipelineConfig,
 } from "../types";
-import type { PipelineContext } from "../context";
+import type { KeyedLoad, NameCorpusData, PipelineContext } from "../context";
 import { defaultContext } from "../context";
 import { loadGenericRoles } from "../filters/false-positives";
 import { buildStreetTypePatterns } from "./address-seeds";
@@ -225,26 +224,17 @@ const SUPPLEMENTARY_NAME_EXCLUSIONS: ReadonlySet<string> = new Set([
  * kept out of global STOPWORDS so that person detection is
  * not silently suppressed for real given names.
  *
- * Computed lazily after initNameCorpus() has populated
- * the first-name corpus. Re-builds if corpus size changes.
+ * Pure function of the corpus: the stopword loader that calls it is keyed by
+ * the corpus identity, so the exclusion set is rebuilt whenever the corpus
+ * changes (never aliased across corpora that merely share a first-name count).
  */
-const getFirstNameExclusions = (ctx: PipelineContext): ReadonlySet<string> => {
-  const corpus = getNameCorpusFirstNames(ctx);
-  // Re-build if corpus has been populated since last call
-  if (
-    ctx.firstNameExclusions &&
-    corpus.length === ctx.firstNameExclusionCorpusLen
-  ) {
-    return ctx.firstNameExclusions;
-  }
-  ctx.firstNameExclusionCorpusLen = corpus.length;
-  const set: ReadonlySet<string> = new Set([
-    ...corpus.map((n) => n.toLowerCase()),
+const buildFirstNameExclusions = (
+  corpus: NameCorpusData | null,
+): ReadonlySet<string> =>
+  new Set([
+    ...(corpus?.firstNamesList ?? []).map((n) => n.toLowerCase()),
     ...SUPPLEMENTARY_NAME_EXCLUSIONS,
   ]);
-  ctx.firstNameExclusions = set;
-  return set;
-};
 
 /**
  * Global stopwords: common words across 23 EU languages
@@ -257,45 +247,50 @@ const getFirstNameExclusions = (ctx: PipelineContext): ReadonlySet<string> => {
  * Regenerate: bun packages/data/scripts/generate-stopwords.ts
  */
 
-// INVARIANT: must be called after initNameCorpus() has
-// resolved, so getFirstNameExclusions() sees the full
-// corpus. buildDenyList() enforces this ordering.
-const loadStopwords = (ctx: PipelineContext): Promise<ReadonlySet<string>> => {
-  // The filtered set depends on the first-name corpus (corpus given names are
-  // excluded so they stay person-detectable). Re-key by corpus size so a later
-  // config that grows the corpus on a shared context rebuilds the set instead
-  // of reusing an earlier config's dictionary-less filtering.
-  const stopwordsKey = getNameCorpusFirstNames(ctx).length;
-  if (ctx.stopwords && ctx.stopwordsKey === stopwordsKey) {
-    return Promise.resolve(ctx.stopwords);
+// INVARIANT: the caller passes the corpus already resolved by initNameCorpus,
+// so the first-name exclusions reflect the full corpus. `corpusKey` is the
+// corpus identity (dictionary identity + selected languages), NOT a first-name
+// count: two distinct corpora with equal counts must produce distinct keys so
+// one config's filtered set never aliases another's.
+const loadStopwords = (
+  ctx: PipelineContext,
+  corpus: NameCorpusData | null,
+  corpusKey: string,
+): Promise<ReadonlySet<string>> => {
+  const inflight = ctx.stopwordsLoad;
+  if (inflight && inflight.key === corpusKey) {
+    return inflight.promise;
   }
-  if (ctx.stopwordsPromise && ctx.stopwordsKey === stopwordsKey) {
-    return ctx.stopwordsPromise;
-  }
-  ctx.stopwords = null;
-  ctx.stopwordsKey = stopwordsKey;
-  ctx.stopwordsPromise = (async () => {
+  const promise = (async (): Promise<ReadonlySet<string>> => {
     try {
       const mod: { default?: string[] } =
         await import("../data/stopwords.json");
+      const exclusions = buildFirstNameExclusions(corpus);
       const list = (mod.default ?? []).filter(
-        (w: string) => !getFirstNameExclusions(ctx).has(w),
+        (w: string) => !exclusions.has(w),
       );
-      const set: ReadonlySet<string> = new Set(list);
-      ctx.stopwords = set;
-      return set;
+      return new Set(list);
     } catch (err) {
       console.warn(
         "[anonymize] Failed to load stopwords.json" +
           " — stopword filtering disabled:",
         err,
       );
-      const empty: ReadonlySet<string> = new Set();
-      ctx.stopwords = empty;
-      return empty;
+      return new Set<string>();
     }
   })();
-  return ctx.stopwordsPromise;
+  // Set the record synchronously before returning so a concurrent different-key
+  // caller replaces it. The filtered set travels on `promise`, so each caller
+  // reads its own config's stopwords; the shared `ctx.stopwords` slot is a
+  // convenience written by the current record when it resolves.
+  const record: KeyedLoad<ReadonlySet<string>> = { key: corpusKey, promise };
+  ctx.stopwordsLoad = record;
+  void promise.then((set) => {
+    if (ctx.stopwordsLoad === record) {
+      ctx.stopwords = set;
+    }
+  });
+  return promise;
 };
 
 const EMPTY_STOPWORDS: ReadonlySet<string> = new Set();
@@ -774,14 +769,23 @@ export const buildDenyList = async (
   config: DenyListConfig,
   ctx: PipelineContext = defaultContext,
 ): Promise<DenyListData | null> => {
-  // Pre-load name corpus so getNameCorpus*() accessors
-  // and getFirstNameExclusions() are populated before
-  // stopwords filtering runs.
-  await initNameCorpus(ctx, config.dictionaries, config.nameCorpusLanguages);
+  // Resolve the name corpus for THIS config before stopword filtering and the
+  // corpus-derived deny-list entries. Hold the resolved value locally so a
+  // concurrent config building on the same context cannot swap it out from
+  // under us (the shared ctx.nameCorpus slot may move to a different config).
+  const corpusKey = nameCorpusCacheKey(
+    config.dictionaries,
+    config.nameCorpusLanguages,
+  );
+  const corpus = await initNameCorpus(
+    ctx,
+    config.dictionaries,
+    config.nameCorpusLanguages,
+  );
   // Pre-load all JSON data so sync accessors are
   // populated before processDenyListMatches runs.
-  await Promise.all([
-    loadStopwords(ctx),
+  const [stopwords] = await Promise.all([
+    loadStopwords(ctx, corpus, corpusKey),
     loadAllowList(ctx),
     loadPersonStopwords(ctx),
     loadDefinedTermHeads(ctx),
@@ -795,7 +799,7 @@ export const buildDenyList = async (
   ]);
   const commonWords = await loadCommonWords();
   const monthNames = await loadMonthNames();
-  const filters = await buildDenyListFilterData(ctx);
+  const filters = await buildDenyListFilterData(ctx, corpus, stopwords);
 
   const dictionaries = config.dictionaries;
   const hasDenyList = dictionaries?.denyList && dictionaries?.denyListMeta;
@@ -811,7 +815,7 @@ export const buildDenyList = async (
   // No dictionary data available — skip deny-list building
   if (!hasDenyList && !hasCities && !hasCustomDenyList) {
     // Still build name corpus entries if available
-    return buildNameCorpusOnly(config, ctx, filters);
+    return buildNameCorpusOnly(config, corpus, filters);
   }
 
   const excluded = config.denyListExcludeCategories;
@@ -947,7 +951,7 @@ export const buildDenyList = async (
   // for entries that already exist from deny-list.
   appendNameCorpusEntries(
     config,
-    ctx,
+    corpus,
     patternList,
     labelList,
     sourceList,
@@ -975,7 +979,7 @@ export const buildDenyList = async (
  */
 const buildNameCorpusOnly = (
   config: DenyListConfig,
-  ctx: PipelineContext,
+  corpus: NameCorpusData | null,
   filters: DenyListFilterData,
 ): DenyListData | null => {
   if (!config.enableNameCorpus) {
@@ -996,7 +1000,7 @@ const buildNameCorpusOnly = (
 
   appendNameCorpusEntries(
     config,
-    ctx,
+    corpus,
     patternList,
     labelList,
     sourceList,
@@ -1023,7 +1027,7 @@ const buildNameCorpusOnly = (
  */
 const appendNameCorpusEntries = (
   config: DenyListConfig,
-  ctx: PipelineContext,
+  corpus: NameCorpusData | null,
   patternList: string[],
   labelList: PatternLabels[],
   sourceList: PatternSources[],
@@ -1075,15 +1079,15 @@ const appendNameCorpusEntries = (
       addNameEntry(variant, source);
     }
   };
-  for (const name of getNameCorpusFirstNames(ctx)) {
+  for (const name of corpus?.firstNamesList ?? []) {
     addNameEntry(name, "first-name");
     addDeclinedVariants(name, "first-name");
   }
-  for (const name of getNameCorpusSurnames(ctx)) {
+  for (const name of corpus?.surnamesList ?? []) {
     addNameEntry(name, "surname");
     addDeclinedVariants(name, "surname");
   }
-  for (const title of getNameCorpusTitles(ctx)) {
+  for (const title of corpus?.titlesList ?? []) {
     const norm = stripCuratedPatternSyntax(normalizeForSearch(title));
     if (norm.length === 0) continue;
     const lower = norm.toLowerCase();
@@ -1266,6 +1270,8 @@ const loadAddressJurisdictionPrefixes = (): Promise<string[]> => {
 
 export const buildDenyListFilterData = async (
   ctx: PipelineContext,
+  corpus: NameCorpusData | null,
+  stopwords: ReadonlySet<string>,
 ): Promise<DenyListFilterData> => {
   const [
     signingPlaceFilters,
@@ -1282,7 +1288,11 @@ export const buildDenyListFilterData = async (
   ]);
 
   return {
-    stopwords: [...getStopwords(ctx)],
+    // stopwords + firstNames come from the config's own corpus load, threaded
+    // in so a concurrent config building on this context cannot substitute its
+    // corpus via the shared ctx slots. The remaining sets are config-independent
+    // static data and are safe to read from ctx.
+    stopwords: [...stopwords],
     allowList: [...getAllowList(ctx)],
     personStopwords: [...getPersonStopwords(ctx)],
     personTrailingNouns: [...getDefinedTermHeads(ctx)],
@@ -1292,7 +1302,7 @@ export const buildDenyListFilterData = async (
     addressComponentTerms: falsePositiveShapeFilters.addressComponentTerms,
     ambiguousStreetTypeTerms:
       falsePositiveShapeFilters.ambiguousStreetTypeTerms,
-    firstNames: [...getNameCorpusFirstNames(ctx)],
+    firstNames: [...(corpus?.firstNamesList ?? [])],
     genericRoles: [
       ...(ctx.genericRoles ?? EMPTY_GENERIC_ROLES),
       ...getLegalRoleHeadsSync(),
@@ -1331,6 +1341,14 @@ const customMatchHasValidEdges = (
   return true;
 };
 
+/** Resolved corpus + stopwords for a config, so callers can thread the
+ *  config's own values into buildDenyListFilterData / the corpus bake rather
+ *  than re-reading the shared, concurrently-mutated ctx slots. */
+export type EnsuredDenyListData = {
+  corpus: NameCorpusData | null;
+  stopwords: ReadonlySet<string>;
+};
+
 /**
  * Ensure all deny-list support data (stopwords, allow
  * list, person stopwords, generic roles) is loaded on
@@ -1338,18 +1356,23 @@ const customMatchHasValidEdges = (
  * processDenyListMatches / filterFalsePositives when
  * the search instance was built on a different context
  * (e.g. cachedSearch).
+ *
+ * Returns the config's resolved corpus and stopwords; the caller should thread
+ * these rather than reading ctx, so a concurrent config cannot substitute its
+ * values through the shared slots.
  */
 export const ensureDenyListData = async (
   ctx: PipelineContext = defaultContext,
   dictionaries?: Dictionaries,
   nameCorpusLanguages?: readonly string[],
-): Promise<void> => {
+): Promise<EnsuredDenyListData> => {
   // INVARIANT: initNameCorpus must resolve before
   // loadStopwords so first-name exclusions are
   // available when computing the stopword set.
-  await initNameCorpus(ctx, dictionaries, nameCorpusLanguages);
-  await Promise.all([
-    loadStopwords(ctx),
+  const corpusKey = nameCorpusCacheKey(dictionaries, nameCorpusLanguages);
+  const corpus = await initNameCorpus(ctx, dictionaries, nameCorpusLanguages);
+  const [stopwords] = await Promise.all([
+    loadStopwords(ctx, corpus, corpusKey),
     loadAllowList(ctx),
     loadPersonStopwords(ctx),
     loadDefinedTermHeads(ctx),
@@ -1360,6 +1383,7 @@ export const ensureDenyListData = async (
     loadTrailingAddressWordExclusions(),
     loadAddressJurisdictionPrefixes(),
   ]);
+  return { corpus, stopwords };
 };
 
 // ── Match processor ─────────────────────────────────

@@ -93,4 +93,70 @@ describe("shared PipelineContext across different configs", () => {
     expect(persons.some((p) => p.includes("Smith"))).toBe(true);
     expect(countriesFound).not.toContain("Chad");
   });
+
+  test("interleaved builds with different dictionaries each bake their own corpus on a shared context", async () => {
+    const ctx = createPipelineContext();
+    const dictionaries = await loadTestDictionaries();
+
+    // Both configs BUILD their name corpus and consume it (name corpus + deny
+    // list enabled), but differ only by injected dictionaries, so they have
+    // distinct name-corpus cache keys and distinct corpora. "Chad" is a
+    // dictionary-only given name: present in the injected corpus, absent from
+    // the legacy-only corpus. Distinct thresholds keep each off the
+    // process-global prepared-package cache so both genuinely build on `ctx`.
+    const nameConfigBase = {
+      enableTriggerPhrases: true,
+      enableRegex: true,
+      enableLegalForms: true,
+      enableNameCorpus: true,
+      enableDenyList: true,
+      enableGazetteer: false,
+      enableNer: false,
+      enableConfidenceBoost: false,
+      enableCoreference: false,
+      labels: [...DEFAULT_ENTITY_LABELS],
+    } satisfies Partial<PipelineConfig>;
+
+    const withDictConfig: PipelineConfig = {
+      ...nameConfigBase,
+      threshold: 0.35,
+      dictionaries,
+      workspaceId: "context-cache-race-with-dict",
+    };
+    const legacyOnlyConfig: PipelineConfig = {
+      ...nameConfigBase,
+      threshold: 0.36,
+      workspaceId: "context-cache-race-legacy-only",
+    };
+
+    const text = "Chad Smith signed the agreement.";
+
+    // Interleave: start the with-dictionary build, then start the legacy-only
+    // build on the SAME context BEFORE the first resolves. Pre-fix, both builds
+    // read the single shared `ctx.nameCorpus` slot, whichever config's load
+    // wrote it last, so exactly one build baked the other's corpus: either the
+    // dictionary build lost "Chad", or the legacy build gained it. Each build
+    // must instead bake the corpus its own config resolved.
+    const withDictPromise = detectNative(withDictConfig, text, {
+      context: ctx,
+    });
+    const legacyOnlyPromise = detectNative(legacyOnlyConfig, text, {
+      context: ctx,
+    });
+    const [withDictEntities, legacyOnlyEntities] = await Promise.all([
+      withDictPromise,
+      legacyOnlyPromise,
+    ]);
+
+    const personText = (entities: typeof withDictEntities): string[] =>
+      entities.filter((e) => e.label === "person").map((e) => e.text);
+    const withDictPersons = personText(withDictEntities);
+    const legacyOnlyPersons = personText(legacyOnlyEntities);
+
+    // With-dictionary build sees "Chad" as a given name → person.
+    expect(withDictPersons.some((p) => p.includes("Chad"))).toBe(true);
+    // Legacy-only build has no "Chad" in its corpus and must not have inherited
+    // it from the concurrently-built dictionary config.
+    expect(legacyOnlyPersons.some((p) => p.includes("Chad"))).toBe(false);
+  });
 });
