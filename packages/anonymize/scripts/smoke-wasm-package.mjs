@@ -12,9 +12,10 @@
  *   - `bun run build`                    (produces wasm/dist/wasm.mjs)
  *   - `bun run build:wasm-assets`        (assembles wasm/dist/native/)
  *
- * `loadDefaultPipeline()` (fetch-based) is validated in the browser; Node's
- * global fetch does not support file: URLs, so here we byte-load instead and
- * only assert the bundled default package URL resolves to a real file.
+ * `loadDefaultPipeline()` resolves the bundled default package from a file:
+ * URL (import.meta.url). Node's global fetch cannot read file: URLs, so
+ * `toPackageBytes` now reads those through node:fs; this smoke exercises that
+ * path here (previously it could only byte-load the default package).
  */
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -49,6 +50,7 @@ const {
   getBinding,
   native_package_version: nativePackageVersion,
   loadPipeline,
+  loadDefaultPipeline,
   deanonymise,
   defaultPackageUrl,
 } = entry;
@@ -110,6 +112,20 @@ if (restored !== sample) {
   );
 }
 
+// loadDefaultPipeline() resolves the bundled package from its file: URL, which
+// now reads through node:fs under Node. It must detect the same entities as the
+// explicitly byte-loaded pipeline above.
+const defaultPipeline = await loadDefaultPipeline();
+const defaultEntities = defaultPipeline.redactText(sample).resolvedEntities;
+if (!Array.isArray(defaultEntities) || defaultEntities.length === 0) {
+  throw new Error("loadDefaultPipeline() did not detect any entity");
+}
+if (defaultEntities.length !== entities.length) {
+  throw new Error(
+    `loadDefaultPipeline() entity count ${defaultEntities.length} != byte-loaded ${entities.length}`,
+  );
+}
+
 console.log(
   JSON.stringify({
     event: "wasm-package-smoke",
@@ -118,5 +134,6 @@ console.log(
     entityCount: entities.length,
     labels: entities.map((entity) => entity.label),
     deanonymiseRoundTrip: true,
+    loadDefaultPipeline: true,
   }),
 );

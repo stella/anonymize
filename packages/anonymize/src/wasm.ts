@@ -71,6 +71,7 @@ export type WasmBindingOptions = {
 
 const NODE_GLUE_MODULE = "index.wasi.cjs";
 const BROWSER_GLUE_MODULE = "index.wasi-browser.js";
+const NODE_FS_MODULE = "node:fs/promises";
 const NATIVE_ASSET_DIR = "native";
 const DEFAULT_PACKAGE_FILE = "native-pipeline.stlanonpkg";
 const LANGUAGE_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
@@ -126,13 +127,30 @@ const toPackageBytes = async (
   if (source instanceof ArrayBuffer) {
     return new Uint8Array(source);
   }
-  const response = await fetch(source instanceof URL ? source.href : source);
+  const href = source instanceof URL ? source.href : source;
+  // Node's global fetch (undici) rejects file: URLs, so package URLs resolved
+  // from import.meta.url (loadDefaultPipeline, `new URL(..., import.meta.url)`)
+  // fail there. Read those through node:fs instead of fetch.
+  if (href.startsWith("file:")) {
+    return readFileUrlBytes(href);
+  }
+  const response = await fetch(href);
   if (!response.ok) {
     throw new Error(
       `Failed to fetch prepared package (${response.status} ${response.statusText})`,
     );
   }
   return new Uint8Array(await response.arrayBuffer());
+};
+
+/** Read a `file:` URL through node:fs. The import is dynamic and gated behind
+ * the `file:` check (never reached in browsers); the specifier is a runtime
+ * value so the bundler leaves it alone, mirroring the runtime glue import in
+ * {@link loadWasmBinding}, so browser bundles never pull in node:fs. */
+const readFileUrlBytes = async (fileUrl: string): Promise<Uint8Array> => {
+  // eslint-disable-next-line stll/no-dynamic-import-specifier
+  const { readFile } = await import(/* @vite-ignore */ NODE_FS_MODULE);
+  return new Uint8Array(await readFile(new URL(fileUrl)));
 };
 
 // --- Prepared-package loaders (the primary browser flow) ---------------------
@@ -190,7 +208,14 @@ export const getDefaultPipeline = (
   if (cached !== undefined) {
     return cached;
   }
-  const pipeline = loadDefaultPipeline(language, options);
+  // Evict the entry on rejection so a failed load (e.g. a transient fetch/read
+  // error) is retried on the next call instead of caching the rejection.
+  const pipeline = loadDefaultPipeline(language, options).catch(
+    (error: unknown) => {
+      defaultPipelineCache.delete(key);
+      throw error;
+    },
+  );
   defaultPipelineCache.set(key, pipeline);
   return pipeline;
 };
