@@ -196,7 +196,7 @@ describe("legal-form ORG span discipline — clause-connector trim", () => {
   // organization. Shorter leading contexts (", among Twitter, Inc." and
   // "among Twitter, Inc.") trim back to "Twitter, Inc." correctly, so the gap
   // is specific to trimming a long multi-comma preamble.
-  test.skip("comma-preceded 'among' continues to trim leading clause", async () => {
+  test("comma-preceded 'among' continues to trim leading clause", async () => {
     // Existing behaviour: "..., among Twitter, Inc." should trim
     // back to "Twitter, Inc." This is the case the comma gate was
     // originally built for.

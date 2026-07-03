@@ -1446,7 +1446,9 @@ fn trim_leading_clause(
       let end = start.saturating_add(prefix.len());
       search_from = end;
       let after_ws = lower.get(end..).map(leading_ws_len).unwrap_or_default();
-      let after = lower
+      // The company name after the prefix must be capitalized. Read the
+      // original text, not the lowercased copy, or this check never passes.
+      let after = text
         .get(end.saturating_add(after_ws)..)
         .and_then(|suffix| suffix.chars().next());
       if after_ws == 0 || !after.is_some_and(char::is_uppercase) {
@@ -1733,7 +1735,55 @@ fn contains_lowercase(set: &HashSet<String>, text: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-  use super::crosses_sentence_end;
+  use super::{
+    LegalFormData, PreparedLegalFormData, crosses_sentence_end,
+    trim_leading_clause,
+  };
+
+  fn leading_clause_data() -> PreparedLegalFormData {
+    PreparedLegalFormData::new(LegalFormData {
+      leading_clause_phrases: vec![
+        String::from("by and among"),
+        String::from("by and between"),
+        String::from("is between"),
+      ],
+      leading_clause_direct_prefixes: vec![
+        String::from("by"),
+        String::from("among"),
+        String::from("amongst"),
+        String::from("between"),
+      ],
+      comma_gated_direct_prefixes: vec![
+        String::from("among"),
+        String::from("amongst"),
+        String::from("between"),
+      ],
+      ..LegalFormData::default()
+    })
+  }
+
+  #[test]
+  fn comma_gated_prefix_trims_long_preamble() {
+    // A long comma-laden preamble before a comma-gated direct prefix must trim
+    // back to the company name, not drop the whole candidate. The capital-word
+    // check after the prefix has to read the original text, not the lowercased
+    // copy, or it never fires.
+    let data = leading_clause_data();
+    let text =
+      "Investment Agreement, dated as of March 9, 2020, among Twitter, Inc.";
+    let trim = trim_leading_clause(text, &data);
+    assert_eq!(text.get(trim.offset..), Some("Twitter, Inc."));
+  }
+
+  #[test]
+  fn comma_gated_prefix_keeps_in_name_capitalised_word() {
+    // "Stand By Me LLC": "By" is capitalized and mid-name, and the text before
+    // it is not prose, so the direct prefix must not trim.
+    let data = leading_clause_data();
+    let text = "Stand By Me LLC";
+    let trim = trim_leading_clause(text, &data);
+    assert_eq!(trim.offset, 0);
+  }
 
   fn crosses(text: &str, prefix: &str) -> bool {
     // Treat the org candidate as spanning the whole text up to the trailing
