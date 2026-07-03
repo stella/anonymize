@@ -1,16 +1,14 @@
 //! Golden parity: the Rust assembler must reproduce the TypeScript
-//! `buildNativeStaticSearchBundle` output for the fields slice A implements.
+//! `buildNativeStaticSearchBundle` output for every field of the native static
+//! config.
 //!
 //! Fixtures are captured by
 //! `packages/anonymize/scripts/capture-assemble-fixtures.mjs`. Each
 //! `<name>.input.json` holds the `{ config, gazetteer }` inputs; each
-//! `<name>.expected.json` holds the implemented fields of the native static
-//! config in stable key order. This test compares ONLY those fields; later
-//! slices tick fields off `FIELDS_PENDING` and add them here.
-//!
-//! `name_corpus_mode` is intentionally not compared: the TypeScript source only
-//! emits it when name-corpus data is present, which this slice does not yet
-//! assemble.
+//! `<name>.expected.json` holds the full native static config in stable key
+//! order. This test compares every field (large arrays via a targeted
+//! first-difference report); the companion `assemble_digest` test then proves
+//! the assembled config is byte-identical end to end.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -168,6 +166,327 @@ fn compare_implemented(
   compare_c2_data(name, actual, expected)?;
   compare_trigger_data(name, actual, expected)?;
   compare_regex_and_legal(name, actual, expected)?;
+  compare_c3_data(name, actual, expected)?;
+  Ok(())
+}
+
+/// Compares two string vectors, reporting the first divergent index.
+fn compare_str_vec(
+  label: &str,
+  got: &[String],
+  want: &[String],
+) -> Result<(), String> {
+  if got.len() != want.len() {
+    return Err(format!("{label} length {} != {}", got.len(), want.len()));
+  }
+  for (index, (g, w)) in got.iter().zip(want.iter()).enumerate() {
+    if g != w {
+      return Err(format!("{label}[{index}] {g:?} != {w:?}"));
+    }
+  }
+  Ok(())
+}
+
+/// Slice C3: the deny-list unit and the literal/slice fields.
+fn compare_c3_data(
+  name: &str,
+  actual: &BindingPreparedSearchConfig,
+  expected: &BindingPreparedSearchConfig,
+) -> Result<(), String> {
+  if actual.literal_patterns.len() != expected.literal_patterns.len() {
+    return Err(format!(
+      "{name}: literal_patterns length {} != {}",
+      actual.literal_patterns.len(),
+      expected.literal_patterns.len()
+    ));
+  }
+  for (index, (got, want)) in actual
+    .literal_patterns
+    .iter()
+    .zip(expected.literal_patterns.iter())
+    .enumerate()
+  {
+    if got != want {
+      return Err(format!(
+        "{name}: literal_patterns[{index}] differs\n  got:  {got:?}\n  want: {want:?}"
+      ));
+    }
+  }
+  if actual.literal_options != expected.literal_options {
+    return Err(format!(
+      "{name}: literal_options {:?} != {:?}",
+      actual.literal_options, expected.literal_options
+    ));
+  }
+  if actual.literal_patterns_from_deny_list_data
+    != expected.literal_patterns_from_deny_list_data
+  {
+    return Err(format!(
+      "{name}: literal_patterns_from_deny_list_data {} != {}",
+      actual.literal_patterns_from_deny_list_data,
+      expected.literal_patterns_from_deny_list_data
+    ));
+  }
+  if actual.slices != expected.slices {
+    return Err(format!(
+      "{name}: slices {:?} != {:?}",
+      actual.slices, expected.slices
+    ));
+  }
+  if actual.name_corpus_mode != expected.name_corpus_mode {
+    return Err(format!(
+      "{name}: name_corpus_mode {:?} != {:?}",
+      actual.name_corpus_mode, expected.name_corpus_mode
+    ));
+  }
+  compare_name_corpus_data(name, actual, expected)?;
+  compare_filters(
+    &format!("{name}: false_positive_filters"),
+    actual.false_positive_filters.as_ref(),
+    expected.false_positive_filters.as_ref(),
+  )?;
+  compare_deny_list_data(name, actual, expected)?;
+  Ok(())
+}
+
+fn compare_name_corpus_data(
+  name: &str,
+  actual: &BindingPreparedSearchConfig,
+  expected: &BindingPreparedSearchConfig,
+) -> Result<(), String> {
+  match (&actual.name_corpus_data, &expected.name_corpus_data) {
+    (None, None) => Ok(()),
+    (Some(got), Some(want)) => {
+      let fields: [(&str, &Vec<String>, &Vec<String>); 15] = [
+        ("first_names", &got.first_names, &want.first_names),
+        ("surnames", &got.surnames, &want.surnames),
+        ("title_tokens", &got.title_tokens, &want.title_tokens),
+        (
+          "title_abbreviations",
+          &got.title_abbreviations,
+          &want.title_abbreviations,
+        ),
+        ("excluded_words", &got.excluded_words, &want.excluded_words),
+        ("common_words", &got.common_words, &want.common_words),
+        (
+          "non_western_names",
+          &got.non_western_names,
+          &want.non_western_names,
+        ),
+        (
+          "excluded_all_caps",
+          &got.excluded_all_caps,
+          &want.excluded_all_caps,
+        ),
+        ("ja_suffixes", &got.ja_suffixes, &want.ja_suffixes),
+        (
+          "arabic_connectors",
+          &got.arabic_connectors,
+          &want.arabic_connectors,
+        ),
+        (
+          "relation_connectors",
+          &got.relation_connectors,
+          &want.relation_connectors,
+        ),
+        (
+          "hyphenated_prefixes",
+          &got.hyphenated_prefixes,
+          &want.hyphenated_prefixes,
+        ),
+        (
+          "cjk_non_person_terms",
+          &got.cjk_non_person_terms,
+          &want.cjk_non_person_terms,
+        ),
+        (
+          "cjk_surname_starters",
+          &got.cjk_surname_starters,
+          &want.cjk_surname_starters,
+        ),
+        (
+          "organization_terms",
+          &got.organization_terms,
+          &want.organization_terms,
+        ),
+      ];
+      for (field, got_vec, want_vec) in fields {
+        compare_str_vec(
+          &format!("{name}: name_corpus_data.{field}"),
+          got_vec,
+          want_vec,
+        )?;
+      }
+      Ok(())
+    }
+    (got, want) => Err(format!(
+      "{name}: name_corpus_data presence differs (got {}, want {})",
+      got.is_some(),
+      want.is_some()
+    )),
+  }
+}
+
+fn compare_filters(
+  label: &str,
+  got: Option<&stella_anonymize_adapter_contract::BindingDenyListFilterData>,
+  want: Option<&stella_anonymize_adapter_contract::BindingDenyListFilterData>,
+) -> Result<(), String> {
+  match (got, want) {
+    (None, None) => Ok(()),
+    (Some(got), Some(want)) => {
+      let fields: [(&str, &Vec<String>, &Vec<String>); 17] = [
+        ("stopwords", &got.stopwords, &want.stopwords),
+        ("allow_list", &got.allow_list, &want.allow_list),
+        (
+          "person_stopwords",
+          &got.person_stopwords,
+          &want.person_stopwords,
+        ),
+        (
+          "person_trailing_nouns",
+          &got.person_trailing_nouns,
+          &want.person_trailing_nouns,
+        ),
+        (
+          "address_stopwords",
+          &got.address_stopwords,
+          &want.address_stopwords,
+        ),
+        (
+          "address_jurisdiction_prefixes",
+          &got.address_jurisdiction_prefixes,
+          &want.address_jurisdiction_prefixes,
+        ),
+        ("street_types", &got.street_types, &want.street_types),
+        (
+          "address_component_terms",
+          &got.address_component_terms,
+          &want.address_component_terms,
+        ),
+        (
+          "ambiguous_street_type_terms",
+          &got.ambiguous_street_type_terms,
+          &want.ambiguous_street_type_terms,
+        ),
+        ("first_names", &got.first_names, &want.first_names),
+        ("generic_roles", &got.generic_roles, &want.generic_roles),
+        (
+          "number_abbrev_prefixes",
+          &got.number_abbrev_prefixes,
+          &want.number_abbrev_prefixes,
+        ),
+        (
+          "sentence_starters",
+          &got.sentence_starters,
+          &want.sentence_starters,
+        ),
+        (
+          "trailing_address_word_exclusions",
+          &got.trailing_address_word_exclusions,
+          &want.trailing_address_word_exclusions,
+        ),
+        (
+          "document_heading_words",
+          &got.document_heading_words,
+          &want.document_heading_words,
+        ),
+        (
+          "document_heading_ordinal_markers",
+          &got.document_heading_ordinal_markers,
+          &want.document_heading_ordinal_markers,
+        ),
+        (
+          "defined_term_cues",
+          &got.defined_term_cues,
+          &want.defined_term_cues,
+        ),
+      ];
+      for (field, got_vec, want_vec) in fields {
+        compare_str_vec(&format!("{label}.{field}"), got_vec, want_vec)?;
+      }
+      if got.signing_place_guards != want.signing_place_guards {
+        return Err(format!(
+          "{label}.signing_place_guards {:?} != {:?}",
+          got.signing_place_guards, want.signing_place_guards
+        ));
+      }
+      Ok(())
+    }
+    (got, want) => Err(format!(
+      "{label} presence differs (got {}, want {})",
+      got.is_some(),
+      want.is_some()
+    )),
+  }
+}
+
+fn compare_deny_list_data(
+  name: &str,
+  actual: &BindingPreparedSearchConfig,
+  expected: &BindingPreparedSearchConfig,
+) -> Result<(), String> {
+  match (&actual.deny_list_data, &expected.deny_list_data) {
+    (None, None) => Ok(()),
+    (Some(got), Some(want)) => {
+      compare_str_vec(
+        &format!("{name}: deny_list_data.originals"),
+        &got.originals,
+        &want.originals,
+      )?;
+      compare_str_vec(
+        &format!("{name}: deny_list_data.label_table"),
+        &got.label_table,
+        &want.label_table,
+      )?;
+      compare_str_vec(
+        &format!("{name}: deny_list_data.source_table"),
+        &got.source_table,
+        &want.source_table,
+      )?;
+      compare_u32_matrix(
+        &format!("{name}: deny_list_data.label_indices"),
+        &got.label_indices,
+        &want.label_indices,
+      )?;
+      compare_u32_matrix(
+        &format!("{name}: deny_list_data.source_indices"),
+        &got.source_indices,
+        &want.source_indices,
+      )?;
+      compare_u32_matrix(
+        &format!("{name}: deny_list_data.custom_label_indices"),
+        &got.custom_label_indices,
+        &want.custom_label_indices,
+      )?;
+      compare_filters(
+        &format!("{name}: deny_list_data.filters"),
+        got.filters.as_ref(),
+        want.filters.as_ref(),
+      )?;
+      Ok(())
+    }
+    (got, want) => Err(format!(
+      "{name}: deny_list_data presence differs (got {}, want {})",
+      got.is_some(),
+      want.is_some()
+    )),
+  }
+}
+
+fn compare_u32_matrix(
+  label: &str,
+  got: &[Vec<u32>],
+  want: &[Vec<u32>],
+) -> Result<(), String> {
+  if got.len() != want.len() {
+    return Err(format!("{label} length {} != {}", got.len(), want.len()));
+  }
+  for (index, (g, w)) in got.iter().zip(want.iter()).enumerate() {
+    if g != w {
+      return Err(format!("{label}[{index}] {g:?} != {w:?}"));
+    }
+  }
   Ok(())
 }
 

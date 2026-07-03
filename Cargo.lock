@@ -963,6 +963,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "sha2",
  "smallvec",
  "stella-anonymize-adapter-contract",
  "stella-stdnum-core",
