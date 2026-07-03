@@ -6,6 +6,8 @@ mod address_context;
 mod address_seeds;
 mod anchored;
 mod artifact_bytes;
+/// Stage-1 native-config assembly inputs and embedded canonical data.
+pub mod assemble;
 pub(crate) mod byte_offsets;
 mod coreference;
 mod dates;
