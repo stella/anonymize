@@ -1,0 +1,26 @@
+{
+  "config": {
+    "threshold": 0.5,
+    "enableTriggerPhrases": true,
+    "enableRegex": true,
+    "enableLegalForms": true,
+    "enableNameCorpus": true,
+    "enableDenyList": true,
+    "enableGazetteer": true,
+    "enableCountries": true,
+    "enableNer": true,
+    "enableConfidenceBoost": true,
+    "enableCoreference": true,
+    "enableZoneClassification": true,
+    "enableHotwordRules": true,
+    "labels": [],
+    "workspaceId": "ws-fixture",
+    "customDenyList": [
+      {
+        "value": "Acme",
+        "label": "organization"
+      }
+    ]
+  },
+  "gazetteer": []
+}

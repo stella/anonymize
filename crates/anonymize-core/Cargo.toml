@@ -26,6 +26,11 @@ stella-text-search-core = { version = "1.0.6", git = "https://github.com/stella/
 [dev-dependencies]
 insta = { version = "1.48.0", features = ["yaml"] }
 proptest = "1"
+# Dev-only edge for the assemble parity test: the assembler returns the
+# contract-owned BindingPreparedSearchConfig, so the test drives it from here.
+# Cargo permits this cycle because the contract -> core edge is a normal
+# dependency and this reverse edge is dev-only.
+stella-anonymize-adapter-contract = { path = "../anonymize-adapter-contract" }
 
 [lints]
 workspace = true

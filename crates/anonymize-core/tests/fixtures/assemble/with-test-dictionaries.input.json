@@ -1,0 +1,43 @@
+{
+  "config": {
+    "threshold": 0.5,
+    "enableTriggerPhrases": true,
+    "enableRegex": true,
+    "enableLegalForms": true,
+    "enableNameCorpus": true,
+    "enableDenyList": true,
+    "enableGazetteer": true,
+    "enableCountries": true,
+    "enableNer": true,
+    "enableConfidenceBoost": true,
+    "enableCoreference": true,
+    "enableZoneClassification": true,
+    "enableHotwordRules": true,
+    "labels": [],
+    "workspaceId": "ws-fixture",
+    "language": "cs",
+    "dictionaries": {
+      "firstNames": {
+        "cs": ["Jan", "Petr"]
+      },
+      "surnames": {
+        "cs": ["Novak"]
+      },
+      "denyList": {
+        "courts/CZ": ["Ustavni soud"]
+      },
+      "denyListMeta": {
+        "courts/CZ": {
+          "label": "court",
+          "category": "Courts",
+          "country": "CZ"
+        }
+      },
+      "cities": ["Brno"],
+      "citiesByCountry": {
+        "CZ": ["Brno"]
+      }
+    }
+  },
+  "gazetteer": []
+}

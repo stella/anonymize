@@ -1,0 +1,22 @@
+{
+  "custom_regex_patterns": [
+    {
+      "kind": "regex",
+      "pattern": "Person-\\d+"
+    }
+  ],
+  "allowed_labels": ["person"],
+  "threshold": 0.5,
+  "confidence_boost": true,
+  "regex_options": {
+    "literal_case_insensitive": true,
+    "literal_whole_words": false,
+    "regex_whole_words": false,
+    "regex_artifact_policy": "omit"
+  },
+  "custom_regex_options": {
+    "regex_whole_words": false,
+    "regex_overlap_all": true,
+    "regex_artifact_policy": "omit"
+  }
+}

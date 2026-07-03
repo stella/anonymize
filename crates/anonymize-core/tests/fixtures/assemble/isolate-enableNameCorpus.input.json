@@ -1,0 +1,20 @@
+{
+  "config": {
+    "threshold": 0.5,
+    "enableTriggerPhrases": false,
+    "enableRegex": false,
+    "enableLegalForms": false,
+    "enableNameCorpus": true,
+    "enableDenyList": false,
+    "enableGazetteer": false,
+    "enableCountries": false,
+    "enableNer": false,
+    "enableConfidenceBoost": false,
+    "enableCoreference": false,
+    "enableZoneClassification": false,
+    "enableHotwordRules": false,
+    "labels": [],
+    "workspaceId": "ws-fixture"
+  },
+  "gazetteer": []
+}
