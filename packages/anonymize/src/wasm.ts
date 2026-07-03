@@ -214,11 +214,20 @@ export const loadDefaultPipeline = async (
 };
 
 /** Cached variant of {@link loadDefaultPipeline}: the default pipeline for a
- * given language is fetched and prepared once, then reused. */
+ * given language is fetched and prepared once, then reused.
+ *
+ * Only the ambient-binding case is cached. The cache key is language-only, so a
+ * caller that injects its own `options.binding` bypasses the cache entirely:
+ * reusing a pipeline built against a different binding would be wrong, and
+ * folding the binding into the key would keep unbounded per-binding entries
+ * alive. Injected-binding callers get a fresh pipeline each call. */
 export const getDefaultPipeline = (
   language?: string,
   options?: LoadPreparedPackageOptions,
 ): Promise<PreparedNativePipeline> => {
+  if (options?.binding) {
+    return loadDefaultPipeline(language, options);
+  }
   const key = language ?? "<default>";
   const cached = defaultPipelineCache.get(key);
   if (cached !== undefined) {
@@ -226,12 +235,10 @@ export const getDefaultPipeline = (
   }
   // Evict the entry on rejection so a failed load (e.g. a transient fetch/read
   // error) is retried on the next call instead of caching the rejection.
-  const pipeline = loadDefaultPipeline(language, options).catch(
-    (error: unknown) => {
-      defaultPipelineCache.delete(key);
-      throw error;
-    },
-  );
+  const pipeline = loadDefaultPipeline(language).catch((error: unknown) => {
+    defaultPipelineCache.delete(key);
+    throw error;
+  });
   defaultPipelineCache.set(key, pipeline);
   return pipeline;
 };
