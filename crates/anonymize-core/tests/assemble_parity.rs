@@ -258,8 +258,8 @@ impl<'a> From<&'a stella_anonymize_adapter_contract::BindingTriggerData>
   }
 }
 
-/// Slice C1 fields: `regex_meta` (full), `legal_form_data` (full), and the
-/// `regex_patterns` prefix (partial).
+/// `regex_meta` (full), `legal_form_data` (full), and the full `regex_patterns`
+/// array (static + signing prefix, then legal-form and trigger literal tails).
 fn compare_regex_and_legal(
   name: &str,
   actual: &BindingPreparedSearchConfig,
@@ -277,39 +277,26 @@ fn compare_regex_and_legal(
       actual.legal_form_data, expected.legal_form_data
     ));
   }
-  compare_regex_patterns_prefix(name, actual, expected)
+  compare_regex_patterns(name, actual, expected)
 }
 
-/// PARTIAL check for `regex_patterns`.
-///
-/// The full TypeScript `regex_patterns` array is the static-filtered patterns,
-/// then the native signing patterns, then the (permanently empty) legal-form
-/// patterns, then the trigger-phrase patterns. The trigger tail belongs to a
-/// later slice, so the assembler produces only the prefix: static + signing.
-/// That prefix has exactly `regex_meta.len()` entries (each static/signing
-/// pattern has one meta; legal-form and trigger patterns have none), so we
-/// compare the assembler's output against `expected.regex_patterns[..N]`.
-fn compare_regex_patterns_prefix(
+/// FULL check for `regex_patterns` with a targeted first-difference report.
+fn compare_regex_patterns(
   name: &str,
   actual: &BindingPreparedSearchConfig,
   expected: &BindingPreparedSearchConfig,
 ) -> Result<(), String> {
-  let prefix_len = expected.regex_meta.len();
-  if actual.regex_patterns.len() != prefix_len {
+  if actual.regex_patterns.len() != expected.regex_patterns.len() {
     return Err(format!(
-      "{name}: regex_patterns prefix length {} != regex_meta length {}",
+      "{name}: regex_patterns length {} != {}",
       actual.regex_patterns.len(),
-      prefix_len
+      expected.regex_patterns.len()
     ));
   }
-  let expected_prefix =
-    expected.regex_patterns.get(..prefix_len).ok_or_else(|| {
-      format!("{name}: expected regex_patterns shorter than meta")
-    })?;
   for (index, (got, want)) in actual
     .regex_patterns
     .iter()
-    .zip(expected_prefix)
+    .zip(expected.regex_patterns.iter())
     .enumerate()
   {
     if got != want {

@@ -308,7 +308,11 @@ fn push_year_word_rules(
 }
 
 /// Mirrors `buildTriggerPatterns(...).rules`.
-fn build_trigger_rules(
+///
+/// Exposed so the `regex_patterns` tail (trigger literals) and `trigger_data`
+/// share one rule build, mirroring the single `sources.triggers` the
+/// TypeScript source threads into both.
+pub(super) fn build_trigger_rules(
   selected: Option<&[String]>,
 ) -> Result<Vec<BindingTriggerRule>, AssembleError> {
   let mut rules = Vec::new();
@@ -392,20 +396,23 @@ fn trigger_support_field(
   Ok(language_keyed_terms(map, selected))
 }
 
+/// Builds `trigger_data` from the shared trigger rules.
+///
+/// Mirrors the `if (triggerRules.length > 0)` guard: an empty rule set (only
+/// possible when trigger phrases are disabled) omits the field.
+///
 /// # Errors
 ///
-/// Returns [`AssembleError`] when any embedded trigger data file fails to parse.
+/// Returns [`AssembleError`] when any embedded trigger-support data file fails
+/// to parse.
 pub(super) fn build_trigger_data(
   ctx: &AssembleContext<'_>,
+  rules: Vec<BindingTriggerRule>,
 ) -> Result<Option<BindingTriggerData>, AssembleError> {
-  if !ctx.enable_trigger_phrases() {
-    return Ok(None);
-  }
-  let selected = ctx.content_languages.as_deref();
-  let rules = build_trigger_rules(selected)?;
   if rules.is_empty() {
     return Ok(None);
   }
+  let selected = ctx.content_languages.as_deref();
   Ok(Some(BindingTriggerData {
     rules,
     address_stop_keywords: address_stop_keywords()?,

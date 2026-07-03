@@ -39,6 +39,7 @@ use crate::{
   BindingNameCorpusMode, BindingPreparedArtifactPolicy,
   BindingPreparedSearchConfig, BindingRegexArtifactPolicy,
   BindingRegexMatchMeta, BindingSearchOptions, BindingSearchPattern,
+  BindingTriggerRule,
 };
 
 /// `DEFAULT_CUSTOM_REGEX_SCORE`: the score a caller-supplied regex without an
@@ -74,17 +75,11 @@ pub const FIELDS_IMPLEMENTED: &[&str] = &[
   "gazetteer_data",
   "coreference_data",
   "trigger_data",
+  "regex_patterns",
 ];
 
 /// Fields still left at their `Default` value, to be filled by later slices.
-///
-/// `regex_patterns` is a special case: the assembler populates it with the
-/// static + signing PREFIX (everything up to the trigger-phrase tail, which
-/// belongs to the trigger slice). It stays here because the field is not yet
-/// complete; the parity harness compares the prefix separately rather than the
-/// whole array.
 pub const FIELDS_PENDING: &[&str] = &[
-  "regex_patterns",
   "literal_patterns",
   "literal_options",
   "literal_patterns_from_deny_list_data",
@@ -162,10 +157,20 @@ pub fn assemble_static_search_config(
 
   let regex = regex::build_regex(&ctx)?;
 
+  // `sources.triggers.rules` feeds both the `regex_patterns` trigger tail and
+  // `trigger_data`; build it once, like the TypeScript source.
+  let trigger_rules = if ctx.enable_trigger_phrases() {
+    trigger::build_trigger_rules(ctx.content_languages.as_deref())?
+  } else {
+    Vec::new()
+  };
+  let regex_patterns =
+    assemble_regex_patterns(&ctx, regex.patterns, &trigger_rules)?;
+
   Ok(BindingPreparedSearchConfig {
     custom_regex_patterns: assemble_custom_regex_patterns(&ctx),
     custom_regex_meta: assemble_custom_regex_meta(&ctx),
-    regex_patterns: regex.patterns,
+    regex_patterns,
     regex_meta: regex.meta,
     legal_form_data: legal_forms::build_legal_form_data(&ctx)?,
     allowed_labels: config.labels.clone(),
@@ -184,9 +189,70 @@ pub fn assemble_static_search_config(
     hotword_data: hotwords::build_hotword_data(&hotword_rules),
     gazetteer_data: gazetteer::build_gazetteer_data(&ctx, gazetteer),
     coreference_data: coreference::build_coreference_data(&ctx)?,
-    trigger_data: trigger::build_trigger_data(&ctx)?,
+    trigger_data: trigger::build_trigger_data(&ctx, trigger_rules)?,
     ..BindingPreparedSearchConfig::default()
   })
+}
+
+/// Assembles the full `regex_patterns` array: the static + signing prefix, then
+/// the legal-form literal tail, then the trigger literal tail (mirrors the
+/// `nativeConfig.regex_patterns.push(...legalFormNativePatterns,
+/// ...triggerNativePatterns)` at `build-unified-search.ts:1488`).
+///
+/// The legal-form tail is `nativeLegalFormPatterns.map(toNativeLegalFormPattern)`
+/// where `nativeLegalFormPatterns` is `getKnownLegalSuffixes()` gated on
+/// `isLegalFormsEnabled` alone (`enableLegalForms !== false`), NOT the wider
+/// condition that emits `legal_form_data`. The trigger tail is each rule's
+/// trigger lowercased.
+fn assemble_regex_patterns(
+  ctx: &AssembleContext<'_>,
+  prefix: Vec<BindingSearchPattern>,
+  trigger_rules: &[BindingTriggerRule],
+) -> Result<Vec<BindingSearchPattern>, AssembleError> {
+  let mut patterns = prefix;
+  if ctx.config.enable_legal_forms != Some(false) {
+    for suffix in legal_forms::all_legal_suffixes()? {
+      patterns.push(literal_pattern(suffix));
+    }
+  }
+  for rule in trigger_rules {
+    patterns.push(trigger_literal_pattern(rule.trigger.to_lowercase()));
+  }
+  Ok(patterns)
+}
+
+/// `toNativeLegalFormPattern`: a bare case-sensitive literal.
+fn literal_pattern(pattern: String) -> BindingSearchPattern {
+  BindingSearchPattern {
+    kind: "literal".to_string(),
+    pattern,
+    distance: None,
+    case_insensitive: None,
+    whole_words: None,
+    lazy: None,
+    prefilter_any: None,
+    prefilter_case_insensitive: None,
+    prefilter_regex: None,
+    prefilter_window_bytes: None,
+    prepared_artifact_policy: None,
+  }
+}
+
+/// `toNativeTriggerPattern`: a case-insensitive literal-with-options.
+fn trigger_literal_pattern(pattern: String) -> BindingSearchPattern {
+  BindingSearchPattern {
+    kind: "literal-with-options".to_string(),
+    pattern,
+    distance: None,
+    case_insensitive: Some(true),
+    whole_words: None,
+    lazy: None,
+    prefilter_any: None,
+    prefilter_case_insensitive: None,
+    prefilter_regex: None,
+    prefilter_window_bytes: None,
+    prepared_artifact_policy: None,
+  }
 }
 
 const fn name_corpus_mode(config: &PipelineConfig) -> BindingNameCorpusMode {
