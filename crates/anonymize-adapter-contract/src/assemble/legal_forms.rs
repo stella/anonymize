@@ -389,10 +389,10 @@ struct LegalFormRuleWords {
   comma_gated_direct_prefixes: Vec<String>,
 }
 
-const fn is_emitted(ctx: &AssembleContext<'_>) -> bool {
+fn is_emitted(ctx: &AssembleContext<'_>) -> bool {
   let config = ctx.config;
-  // `isLegalFormsEnabled`: `enableLegalForms !== false`.
-  config.enable_legal_forms
+  // `isLegalFormsEnabled`: `enableLegalForms !== false` (omitted = enabled).
+  config.enable_legal_forms != Some(false)
     || config.enable_trigger_phrases
     || config.enable_coreference
 }

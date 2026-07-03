@@ -76,7 +76,10 @@ pub struct PipelineConfig {
   pub enable_regex: bool,
   pub languages: Option<Vec<String>>,
   pub language: Option<String>,
-  pub enable_legal_forms: bool,
+  /// Legacy callers omit this field; TS `isLegalFormsEnabled` treats it as
+  /// `!== false`, so absence means enabled (see `legal_forms_enabled`).
+  #[serde(default)]
+  pub enable_legal_forms: Option<bool>,
   pub enable_name_corpus: bool,
   pub name_corpus_languages: Option<Vec<String>>,
   pub enable_deny_list: bool,
@@ -95,4 +98,35 @@ pub struct PipelineConfig {
   pub labels: Vec<String>,
   pub workspace_id: String,
   pub dictionaries: Option<Dictionaries>,
+}
+
+#[cfg(test)]
+mod tests {
+  use super::PipelineConfig;
+
+  #[test]
+  fn omitted_enable_legal_forms_deserializes_as_none()
+  -> Result<(), serde_json::Error> {
+    let json = r#"{
+      "threshold": 0.5,
+      "enableTriggerPhrases": false,
+      "enableRegex": false,
+      "enableNameCorpus": false,
+      "enableDenyList": false,
+      "enableGazetteer": false,
+      "enableCountries": false,
+      "enableNer": false,
+      "enableConfidenceBoost": false,
+      "enableCoreference": false,
+      "enableZoneClassification": false,
+      "labels": ["person"],
+      "workspaceId": "test"
+    }"#;
+    let config: PipelineConfig = serde_json::from_str(json)?;
+    assert_eq!(
+      config.enable_legal_forms, None,
+      "omitted enableLegalForms must be None (treated as enabled)"
+    );
+    Ok(())
+  }
 }
