@@ -333,9 +333,11 @@ export const initNameCorpus = (
     if (corpus) {
       ctx.nameCorpus = corpus;
     } else {
-      // Failed load: clear so the next call retries instead of reusing this
-      // resolved-null promise.
+      // Failed load: clear the record so the next call retries, and clear the
+      // sync slot so legacy accessors don't keep serving a previous config's
+      // corpus under this record's key.
       ctx.nameCorpusLoad = null;
+      ctx.nameCorpus = null;
     }
   });
   return promise;
