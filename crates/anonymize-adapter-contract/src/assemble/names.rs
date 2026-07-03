@@ -273,7 +273,7 @@ fn scoped_non_western_honorifics(
 /// Appends the language-scoped values of an injected dictionary map.
 fn append_scoped_dictionary(
   target: &mut Vec<String>,
-  map: Option<&std::collections::BTreeMap<String, Vec<String>>>,
+  map: Option<&stella_anonymize_core::assemble::OrderedMap<Vec<String>>>,
   languages: Option<&[String]>,
   normalize_keys: bool,
 ) {

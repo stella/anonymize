@@ -65,10 +65,27 @@ pub fn parse_data_file<T: DeserializeOwned>(
 /// load-bearing. Streaming deserialization through `MapAccess` yields entries
 /// in document order regardless of that feature, so this newtype captures the
 /// JS `Object.entries` order without touching the rest of the crate.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct OrderedMap<T>(pub Vec<(String, T)>);
 
 impl<T> OrderedMap<T> {
+  /// Linear-scan lookup by key. The dictionary maps this backs are small
+  /// (dozens of language/file keys), so O(n) is fine and keeps insertion
+  /// order the single source of truth.
+  #[must_use]
+  pub fn get(&self, key: &str) -> Option<&T> {
+    self
+      .0
+      .iter()
+      .find(|(entry_key, _)| entry_key == key)
+      .map(|(_, value)| value)
+  }
+
+  /// Iterates values in insertion order.
+  pub fn values(&self) -> impl Iterator<Item = &T> {
+    self.0.iter().map(|(_, value)| value)
+  }
+
   /// Iterates the `(key, value)` pairs in document order.
   pub fn iter(&self) -> std::slice::Iter<'_, (String, T)> {
     self.0.iter()
@@ -81,6 +98,15 @@ impl<'a, T> IntoIterator for &'a OrderedMap<T> {
 
   fn into_iter(self) -> Self::IntoIter {
     self.0.iter()
+  }
+}
+
+impl<T: serde::Serialize> serde::Serialize for OrderedMap<T> {
+  fn serialize<S: serde::Serializer>(
+    &self,
+    serializer: S,
+  ) -> Result<S::Ok, S::Error> {
+    serializer.collect_map(self.0.iter().map(|(key, value)| (key, value)))
   }
 }
 

@@ -54,9 +54,53 @@ fn separately_supplied_dictionaries_match_inline_config_dictionaries()
     .as_ref()
     .ok_or("expected name corpus data when dictionaries are supplied")?;
   assert!(
-    corpus.first_names.iter().any(|name| name == "zorblaxian"
-      || name == "Zorblaxian"),
+    corpus
+      .first_names
+      .iter()
+      .any(|name| name == "zorblaxian" || name == "Zorblaxian"),
     "injected first name must reach the assembled corpus"
+  );
+  Ok(())
+}
+
+const ORDERED_DENY_JSON: &str = r#"{
+  "denyList": {"zeta-banks": ["Zeta Trust"], "alpha-courts": ["Alpha Court"]},
+  "denyListMeta": {
+    "zeta-banks": {"label": "organization", "category": "Financial", "country": null},
+    "alpha-courts": {"label": "organization", "category": "Courts", "country": null}
+  }
+}"#;
+
+#[test]
+fn deny_list_dictionary_insertion_order_is_preserved()
+-> Result<(), Box<dyn std::error::Error>> {
+  let mut config: PipelineConfig =
+    serde_json::from_str(&base_config_json(None))?;
+  config.enable_deny_list = true;
+  config.labels = vec!["organization".to_string()];
+  let dictionaries: Dictionaries = serde_json::from_str(ORDERED_DENY_JSON)?;
+
+  let assembled =
+    assemble_static_search_config(&config, Some(&dictionaries), &[])?;
+  let deny = assembled
+    .deny_list_data
+    .as_ref()
+    .ok_or("expected deny list data")?;
+
+  let zeta = deny
+    .originals
+    .iter()
+    .position(|term| term == "Zeta Trust")
+    .ok_or("Zeta Trust missing from originals")?;
+  let alpha = deny
+    .originals
+    .iter()
+    .position(|term| term == "Alpha Court")
+    .ok_or("Alpha Court missing from originals")?;
+  assert!(
+    zeta < alpha,
+    "deny-list dictionaries must be applied in JSON insertion order \
+     (zeta-banks before alpha-courts), not lexicographic order"
   );
   Ok(())
 }
