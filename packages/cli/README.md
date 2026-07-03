@@ -55,10 +55,17 @@ Run `anonymize --help` for the full reference, including the
 
 ## Standalone binary
 
-`bun run compile` produces a self-contained executable (WASM
-engine, dictionaries embedded as a gzip blob) that runs without
-Node, Bun, or npm. Cross-compile with `--target=bun-linux-x64`
-etc.
+The single-file `bun build --compile` binary is temporarily
+unavailable. It embedded the previous in-process TS pipeline;
+that engine has been replaced by the `@stll/anonymize-wasm`
+native binding, which instantiates through the napi-rs
+`wasm32-wasip1-threads` glue (`node:wasi` + worker threads).
+Bun's `node:wasi` does not yet implement `WASI.prototype.initialize`,
+so the binding cannot instantiate under the Bun runtime that a
+compiled binary ships with. The binary will return once Bun
+implements the missing `node:wasi` surface (or a non-threaded
+single-file wasm artifact is available). The npm CLI above is
+the supported distribution in the meantime.
 
 ## License
 

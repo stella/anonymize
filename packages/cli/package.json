@@ -19,7 +19,6 @@
   "license": "MIT",
   "scripts": {
     "build": "tsdown",
-    "compile": "bun scripts/copy-wasm-payloads.ts && bun scripts/embed-data.ts && bun build --compile '--asset-naming=[name].[ext]' src/compile.ts --outfile dist/anonymize",
     "prepublishOnly": "bun run build",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
     "test": "bun test --timeout 60000",
@@ -30,7 +29,6 @@
     "@stll/anonymize-data": "^0.0.6"
   },
   "devDependencies": {
-    "@stll/anonymize-wasm": "workspace:*",
     "@types/node": "^25.9.4",
     "bun-types": "^1.3.14",
     "tsdown": "^0.22.3",

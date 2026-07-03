@@ -94,7 +94,6 @@
         "@stll/anonymize-data": "^0.0.6",
       },
       "devDependencies": {
-        "@stll/anonymize-wasm": "workspace:*",
         "@types/node": "^25.9.4",
         "bun-types": "^1.3.14",
         "tsdown": "^0.22.3",

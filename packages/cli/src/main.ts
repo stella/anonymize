@@ -6,15 +6,12 @@ import { createInterface } from "node:readline/promises";
 import type {
   deanonymise,
   Dictionaries,
-  Entity,
   exportRedactionKey,
-  GazetteerEntry,
   NativeAnonymizeBinding,
   NativePipelineBuildOptions,
   OperatorType,
   PipelineConfig,
 } from "@stll/anonymize";
-import type { PipelineContext as LegacyPipelineContext } from "@stll/anonymize-wasm";
 import { DEFAULT_ENTITY_LABELS } from "@stll/anonymize/constants";
 
 import pkg from "../package.json" with { type: "json" };
@@ -24,36 +21,24 @@ import { HELP, parseCliArgs, parseCountries, UsageError } from "./args";
 import type { DictionaryScope } from "./dictionary-scope";
 
 /**
- * The pipeline functions the CLI needs. Satisfied by both
- * @stll/anonymize (native) and @stll/anonymize-wasm, so the
- * entry point decides which engine backs the binary.
+ * The pipeline functions the CLI needs, backed by the
+ * @stll/anonymize native SDK: a binding loader and the
+ * config-to-pipeline builder, plus the redaction-key
+ * helpers used by the deanonymise path.
  */
 export type AnonymizeApi = {
   deanonymise: typeof deanonymise;
   exportRedactionKey: typeof exportRedactionKey;
-  createNativePipelineFromConfig?: (
+  createNativePipelineFromConfig: (
     options: NativePipelineBuildOptions,
   ) => Promise<NativeCliPipeline>;
-  loadNativeAnonymizeBinding?: () => NativeAnonymizeBinding;
-  createPipelineContext?: () => LegacyPipelineContext;
-  redactText?: (
-    fullText: string,
-    entities: Entity[],
-    operators?: CliOperatorConfig,
-    context?: LegacyPipelineContext,
-  ) => CliRedactionResult;
-  runPipeline?: (options: {
-    fullText: string;
-    config: PipelineConfig;
-    gazetteerEntries: GazetteerEntry[];
-    context: LegacyPipelineContext;
-  }) => Promise<Entity[]>;
+  loadNativeAnonymizeBinding: () => NativeAnonymizeBinding;
 };
 
 /**
  * Everything an entry point injects: the pipeline engine
- * and the dictionary source (npm data package for the
- * Node bin, embedded gzip blob for the compiled binary).
+ * and the dictionary source (the @stll/anonymize-data
+ * package for the npm bin).
  */
 export type CliEngine = {
   api: AnonymizeApi;
@@ -517,43 +502,18 @@ const prepareCliRuntime = async (
   api: AnonymizeApi,
   config: PipelineConfig,
 ): Promise<CliRuntime> => {
-  if (api.createNativePipelineFromConfig && api.loadNativeAnonymizeBinding) {
-    const pipeline = await api.createNativePipelineFromConfig({
-      binding: api.loadNativeAnonymizeBinding(),
-      config,
-      gazetteerEntries: [],
-    });
-    pipeline.warmLazyRegex?.();
-    return {
-      redact: async (fullText, operators) => {
-        const result = pipeline.redactText(fullText, operators);
-        return {
-          entities: result.resolvedEntities,
-          redaction: result.redaction,
-        };
-      },
-    };
-  }
-
-  if (!api.createPipelineContext || !api.runPipeline || !api.redactText) {
-    throw new UsageError("anonymize runtime API is incomplete");
-  }
-
-  const context = api.createPipelineContext();
+  const pipeline = await api.createNativePipelineFromConfig({
+    binding: api.loadNativeAnonymizeBinding(),
+    config,
+    gazetteerEntries: [],
+  });
+  pipeline.warmLazyRegex?.();
   return {
     redact: async (fullText, operators) => {
-      const entities = await api.runPipeline?.({
-        fullText,
-        config,
-        gazetteerEntries: [],
-        context,
-      });
-      if (!entities || !api.redactText) {
-        throw new UsageError("legacy anonymize runtime API is incomplete");
-      }
+      const result = pipeline.redactText(fullText, operators);
       return {
-        entities,
-        redaction: api.redactText(fullText, entities, operators, context),
+        entities: result.resolvedEntities,
+        redaction: result.redaction,
       };
     },
   };
