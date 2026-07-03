@@ -371,10 +371,15 @@ if (watchMode) {
   const watchInput = (inputPath: string) => {
     watch(inputPath, () => {
       if (debounce) clearTimeout(debounce);
-      debounce = setTimeout(async () => {
+      // The timer callback stays synchronous: an `async` callback would return
+      // a floating promise to setTimeout (which ignores it), swallowing any
+      // rejection. Kick off `run()` and surface failures via `.catch`.
+      debounce = setTimeout(() => {
         debounce = null;
         console.log(`\nFile changed: ${inputPath}`);
-        await run();
+        run().catch((error: unknown) => {
+          console.error(error);
+        });
       }, 300);
     });
   };
