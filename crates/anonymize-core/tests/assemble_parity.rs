@@ -165,6 +165,12 @@ fn compare_implemented(
       actual.custom_regex_meta, expected.custom_regex_meta
     ));
   }
+  if actual.gazetteer_data != expected.gazetteer_data {
+    return Err(format!(
+      "{name}: gazetteer_data {:?} != {:?}",
+      actual.gazetteer_data, expected.gazetteer_data
+    ));
+  }
   compare_regex_and_legal(name, actual, expected)?;
   Ok(())
 }

@@ -18,6 +18,7 @@
 mod address;
 mod country;
 mod dates;
+mod gazetteer;
 mod hotwords;
 mod language;
 mod legal_forms;
@@ -67,6 +68,7 @@ pub const FIELDS_IMPLEMENTED: &[&str] = &[
   "custom_regex_meta",
   "regex_meta",
   "legal_form_data",
+  "gazetteer_data",
 ];
 
 /// Fields still left at their `Default` value, to be filled by later slices.
@@ -84,7 +86,6 @@ pub const FIELDS_PENDING: &[&str] = &[
   "slices",
   "deny_list_data",
   "false_positive_filters",
-  "gazetteer_data",
   "trigger_data",
   "coreference_data",
   "name_corpus_data",
@@ -136,7 +137,7 @@ impl AssembleContext<'_> {
 pub fn assemble_static_search_config(
   config: &PipelineConfig,
   _dictionaries: Option<&Dictionaries>,
-  _gazetteer: &[GazetteerEntry],
+  gazetteer: &[GazetteerEntry],
 ) -> Result<BindingPreparedSearchConfig, AssembleError> {
   // `enableHotwordRules === true` loads the rule set; it feeds both the
   // hotword_data field and the label expansion that gates every other field.
@@ -178,6 +179,7 @@ pub fn assemble_static_search_config(
     address_seed_data: address::build_address_seed_data(&ctx)?,
     country_data: country::build_country_data(&ctx)?,
     hotword_data: hotwords::build_hotword_data(&hotword_rules),
+    gazetteer_data: gazetteer::build_gazetteer_data(&ctx, gazetteer),
     ..BindingPreparedSearchConfig::default()
   })
 }
