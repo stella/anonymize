@@ -59,7 +59,7 @@ pub(super) fn build_search_indexes(
   let trigger_artifacts = artifacts.map(|value| &value.triggers);
   let literal_artifacts = artifacts.map(|value| &value.literals);
 
-  std::thread::scope(|scope| {
+  crate::exec::scope(|scope| {
     let regex = scope.spawn(move || {
       build_search_index(
         regex_patterns,
@@ -143,7 +143,7 @@ fn build_search_index(
 }
 
 fn join_search_index(
-  handle: std::thread::ScopedJoinHandle<'_, Result<TimedSearchIndex>>,
+  handle: crate::exec::JoinHandle<'_, Result<TimedSearchIndex>>,
   field: &'static str,
 ) -> Result<TimedSearchIndex> {
   handle.join().map_err(|_| Error::InvalidStaticData {

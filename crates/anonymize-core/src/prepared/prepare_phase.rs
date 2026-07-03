@@ -291,7 +291,7 @@ fn prepare_engine_branches(
     collect_diagnostics,
   } = input;
 
-  std::thread::scope(|scope| {
+  crate::exec::scope(|scope| {
     let anchored = scope.spawn(move || {
       prepare_anchored_branch(
         date_data,
@@ -371,7 +371,7 @@ fn prepare_support_branch(
 }
 
 fn join_prepare_branch<T>(
-  handle: std::thread::ScopedJoinHandle<'_, Result<PrepareBranch<T>>>,
+  handle: crate::exec::JoinHandle<'_, Result<PrepareBranch<T>>>,
   field: &'static str,
 ) -> Result<PrepareBranch<T>> {
   handle.join().map_err(|_| Error::InvalidStaticData {
@@ -411,7 +411,7 @@ struct WarmSearchMetric {
 fn warm_search_indexes(
   stages: &[(DiagnosticStage, &crate::search::SearchIndex); 5],
 ) -> Result<Vec<WarmSearchMetric>> {
-  std::thread::scope(|scope| {
+  crate::exec::scope(|scope| {
     let mut handles = Vec::with_capacity(stages.len());
     for (stage, index) in stages.iter().copied() {
       handles.push(scope.spawn(move || warm_search_index(stage, index)));

@@ -162,7 +162,7 @@ impl PreparedEngine {
     total_start: Instant,
   ) -> Result<PreparedEngineMatches> {
     let collect_stats = diagnostics.is_some();
-    let matches = std::thread::scope(|scope| {
+    let matches = crate::exec::scope(|scope| {
       let regex = (!self.indexes.regex.is_empty()).then(|| {
         scope.spawn(|| {
           timed_offset_index_matches(

@@ -101,7 +101,7 @@ pub(super) fn combine_regex_matches(
 }
 
 pub(super) fn join_optional_timed_match_handle(
-  handle: Option<std::thread::ScopedJoinHandle<'_, Result<TimedMatches>>>,
+  handle: Option<crate::exec::JoinHandle<'_, Result<TimedMatches>>>,
   field: &'static str,
 ) -> Result<TimedMatches> {
   handle.map_or_else(
@@ -211,7 +211,7 @@ fn remap_normalized_match(
 }
 
 fn join_timed_match_handle(
-  handle: std::thread::ScopedJoinHandle<'_, Result<TimedMatches>>,
+  handle: crate::exec::JoinHandle<'_, Result<TimedMatches>>,
   field: &'static str,
 ) -> Result<TimedMatches> {
   handle.join().map_err(|_| Error::InvalidStaticData {

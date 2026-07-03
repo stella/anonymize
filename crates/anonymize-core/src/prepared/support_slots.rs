@@ -139,7 +139,7 @@ pub(super) fn prepare_timed_signature_data(
 }
 
 pub(super) fn join_support_data<T>(
-  handle: std::thread::ScopedJoinHandle<'_, Result<TimedSupportData<T>>>,
+  handle: crate::exec::JoinHandle<'_, Result<TimedSupportData<T>>>,
   field: &'static str,
 ) -> Result<TimedSupportData<T>> {
   handle.join().map_err(|_| Error::InvalidStaticData {

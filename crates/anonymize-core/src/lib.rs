@@ -10,6 +10,10 @@ pub(crate) mod byte_offsets;
 mod coreference;
 mod dates;
 mod diagnostics;
+/// Cross-crate concurrency seam: scoped OS threads on native, sequential
+/// execution on WebAssembly. Public for reuse by workspace binding crates.
+#[doc(hidden)]
+pub mod exec;
 mod false_positives;
 mod hotwords;
 mod legal_forms;

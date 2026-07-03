@@ -68,7 +68,7 @@ pub(super) fn prepare_support_data(
   input: SupportDataInput,
   diagnostics: &mut Option<&mut StaticRedactionDiagnostics>,
 ) -> Result<PreparedSupportData> {
-  let prepared = std::thread::scope(|scope| {
+  let prepared = crate::exec::scope(|scope| {
     let hotwords = scope.spawn(|| prepare_timed_hotword_data(input.hotwords));
     let triggers = scope.spawn(|| prepare_timed_trigger_data(input.triggers));
     let legal_forms =
@@ -138,7 +138,7 @@ fn record_parallel_support_data(
 }
 
 fn join_support_resource_data<T>(
-  handle: std::thread::ScopedJoinHandle<'_, Result<TimedSupportData<T>>>,
+  handle: crate::exec::JoinHandle<'_, Result<TimedSupportData<T>>>,
   resource: SupportResourceId,
 ) -> Result<TimedSupportData<T>> {
   join_support_data(handle, resource.spec().config_field())
