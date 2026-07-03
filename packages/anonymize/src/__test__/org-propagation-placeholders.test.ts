@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { DEFAULT_ENTITY_LABELS } from "../legacy";
+import { DEFAULT_ENTITY_LABELS } from "../constants";
 import { redactNative } from "./native-detect";
 import type { PipelineConfig } from "../types";
 

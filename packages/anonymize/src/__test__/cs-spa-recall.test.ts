@@ -6,8 +6,7 @@
 // references not emitted).
 
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
-import { createPipelineContext } from "../context";
-import { DEFAULT_ENTITY_LABELS } from "../legacy";
+import { DEFAULT_ENTITY_LABELS } from "../constants";
 import type { PipelineConfig } from "../types";
 import { detectNative } from "./native-detect";
 
@@ -56,26 +55,6 @@ describe("Czech demonstrative pronouns are never persons", () => {
       const entities = await detect(`${pronoun} dokument byl podepsán.`);
       expect(entities.some((e) => e.label === "person")).toBe(false);
     }
-  });
-
-  // NER-like emission path: filterFalsePositives is the
-  // shared gate any single-token person span passes
-  // through, regardless of which detector produced it.
-  test("filterFalsePositives drops single-token 'Tato' person", async () => {
-    const { filterFalsePositives } = await import("../filters/false-positives");
-    const { ensureDenyListData } = await import("../detectors/deny-list");
-    const ctx = createPipelineContext();
-    await ensureDenyListData(ctx);
-    const fakeNer = {
-      start: 0,
-      end: 4,
-      label: "person" as const,
-      text: "Tato",
-      score: 0.95,
-      source: "ner" as const,
-    };
-    const filtered = filterFalsePositives([fakeNer], ctx, "Tato smlouva");
-    expect(filtered.filter((e) => e.label === "person")).toEqual([]);
   });
 });
 

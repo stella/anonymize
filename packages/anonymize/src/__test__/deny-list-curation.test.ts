@@ -14,7 +14,7 @@ import { describe, expect, setDefaultTimeout, test } from "bun:test";
 setDefaultTimeout(60_000);
 
 import { createPipelineContext, type PipelineContext } from "../context";
-import { DEFAULT_ENTITY_LABELS } from "../legacy";
+import { DEFAULT_ENTITY_LABELS } from "../constants";
 import addressStopwordsData from "../data/address-stopwords.json";
 import commonWordsData from "../data/common-words-en.json";
 import { buildDenyList } from "../detectors/deny-list";

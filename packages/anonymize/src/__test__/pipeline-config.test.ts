@@ -6,7 +6,6 @@ import {
   prepareNativePipelineConfig,
   prepareNativePipelinePackage,
 } from "../native-pipeline";
-import { preparePipelineSearch } from "../pipeline";
 import {
   buildNativeStaticSearchBundle,
   buildUnifiedSearch,
@@ -17,12 +16,11 @@ import {
   getNativeSigningClausePatterns,
   getSigningClausePatterns,
 } from "../detectors/regex";
-import { filterFalsePositives } from "../filters/false-positives";
 import { applyPipelineLanguageScope } from "../language-scope";
 import { languageConfigMatches } from "../util/language-selection";
 import type { NativeAnonymizeBinding } from "../native";
 import { DEFAULT_ENTITY_LABELS } from "../types";
-import type { Dictionaries, Entity, PipelineConfig } from "../types";
+import type { Dictionaries, PipelineConfig } from "../types";
 import { detectNative, redactNative } from "./native-detect";
 import { loadTestDictionaries } from "./load-dictionaries";
 
@@ -1017,177 +1015,6 @@ describe("pipeline config semantics", () => {
     expect(
       Object.hasOwn(search.nativeStaticConfig.gazetteer_data ?? {}, "isFuzzy"),
     ).toBe(false);
-  });
-
-  test("preparePipelineSearch reuses the context search cache", async () => {
-    const context = createPipelineContext();
-    const config = {
-      ...BASE_CONFIG,
-      enableRegex: true,
-      labels: ["email address"],
-    };
-    const first = await preparePipelineSearch({ config, context });
-    const second = await preparePipelineSearch({ config, context });
-
-    expect(second).toBe(first);
-  });
-
-  test("preparePipelineSearch cache keys content language", async () => {
-    const context = createPipelineContext();
-    const baseConfig = {
-      ...BASE_CONFIG,
-      enableTriggerPhrases: true,
-      labels: ["person"],
-    };
-
-    const english = await preparePipelineSearch({
-      config: { ...baseConfig, language: "en" },
-      context,
-    });
-    const czech = await preparePipelineSearch({
-      config: { ...baseConfig, language: "cs" },
-      context,
-    });
-
-    const englishTriggers =
-      english.nativeStaticConfig.trigger_data?.rules.map((rule) =>
-        rule.trigger.toLowerCase(),
-      ) ?? [];
-    const czechTriggers =
-      czech.nativeStaticConfig.trigger_data?.rules.map((rule) =>
-        rule.trigger.toLowerCase(),
-      ) ?? [];
-
-    expect(czech).not.toBe(english);
-    expect(englishTriggers).toContain("represented by");
-    expect(englishTriggers).not.toContain("zastoupen");
-    expect(czechTriggers).toContain("zastoupen");
-  });
-
-  test("preparePipelineSearch reuses shared search across fresh contexts", async () => {
-    const testDictionaries = await getDictionaries();
-    const config = {
-      ...BASE_CONFIG,
-      dictionaries: testDictionaries,
-      enableRegex: true,
-      labels: ["email address"],
-    };
-    const firstContext = createPipelineContext();
-    const secondContext = createPipelineContext();
-
-    const first = await preparePipelineSearch({
-      config,
-      context: firstContext,
-    });
-    const second = await preparePipelineSearch({
-      config,
-      context: secondContext,
-    });
-
-    expect(second).toBe(first);
-    expect(secondContext.search).toBe(first);
-  });
-
-  test("preparePipelineSearch replays support data on shared-cache hits", async () => {
-    const testDictionaries = { ...(await getDictionaries()) };
-    const config: PipelineConfig = {
-      ...BASE_CONFIG,
-      dictionaries: testDictionaries,
-      enableNameCorpus: true,
-      labels: ["person"],
-      language: "cs",
-    };
-    const firstContext = createPipelineContext();
-    const secondContext = createPipelineContext();
-
-    const first = await preparePipelineSearch({
-      config,
-      context: firstContext,
-    });
-    const second = await preparePipelineSearch({
-      config,
-      context: secondContext,
-    });
-    const falsePositivePerson: Entity = {
-      end: 4,
-      label: "person",
-      score: 0.95,
-      source: "ner",
-      start: 0,
-      text: "Tato",
-    };
-
-    const filtered = filterFalsePositives(
-      [falsePositivePerson],
-      secondContext,
-      "Tato smlouva",
-    );
-
-    expect(second).toBe(first);
-    expect(secondContext.personStopwords?.has("tato")).toBe(true);
-    expect(filtered).toEqual([]);
-  });
-
-  test("preparePipelineSearch does not share across dictionary objects", async () => {
-    const testDictionaries = await getDictionaries();
-    const config = {
-      ...BASE_CONFIG,
-      dictionaries: testDictionaries,
-      enableRegex: true,
-      labels: ["email address"],
-    };
-    const clonedConfig = {
-      ...config,
-      dictionaries: {
-        ...testDictionaries,
-      },
-    };
-
-    const first = await preparePipelineSearch({
-      config,
-      context: createPipelineContext(),
-    });
-    const second = await preparePipelineSearch({
-      config: clonedConfig,
-      context: createPipelineContext(),
-    });
-
-    expect(second).not.toBe(first);
-  });
-
-  test("preparePipelineSearch cache keys native redaction options", async () => {
-    const context = createPipelineContext();
-    const baseConfig = {
-      ...BASE_CONFIG,
-      enableRegex: true,
-      labels: ["date of birth"],
-    };
-
-    const first = await preparePipelineSearch({
-      config: {
-        ...baseConfig,
-        threshold: 0.5,
-        enableConfidenceBoost: false,
-        enableHotwordRules: false,
-      },
-      context,
-    });
-    const second = await preparePipelineSearch({
-      config: {
-        ...baseConfig,
-        threshold: 0.93,
-        enableConfidenceBoost: true,
-        enableHotwordRules: true,
-      },
-      context,
-    });
-
-    expect(second).not.toBe(first);
-    expect(second.nativeStaticConfig.threshold).toBe(0.93);
-    expect(second.nativeStaticConfig.confidence_boost).toBe(true);
-    expect(
-      second.nativeStaticConfig.hotword_data?.rules.length,
-    ).toBeGreaterThan(0);
   });
 
   test("native pipeline package cache reuses exact configs", async () => {

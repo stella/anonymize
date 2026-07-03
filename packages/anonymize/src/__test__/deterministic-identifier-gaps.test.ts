@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { DEFAULT_ENTITY_LABELS } from "../legacy";
+import { DEFAULT_ENTITY_LABELS } from "../constants";
 import type { NativePipelineEntity } from "../native";
 import type { PipelineConfig } from "../types";
 import { detectNative, redactNative } from "./native-detect";
