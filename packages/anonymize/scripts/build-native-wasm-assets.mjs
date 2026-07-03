@@ -11,9 +11,13 @@
  *      the native node binding used to build the prepared packages below.
  *
  * This script then:
- *   - copies the wasm binding + WASI/browser glue + workers into
+ *   - copies the wasm binary and the Node WASI glue + worker into
  *     `wasm/dist/native/`, next to the bundled `wasm.mjs` entry so its
  *     `new URL("./native/…", import.meta.url)` lookups resolve;
+ *   - bundles the browser WASI glue + worker into the same directory with
+ *     `bun build`, inlining `@napi-rs/wasm-runtime` so the shipped browser glue
+ *     is self-contained (a consumer's bundler emits it as a raw asset and never
+ *     rewrites its specifiers);
  *   - builds the LZ4-compressed default prepared package (and per-language
  *     variants) into the same directory for `loadDefaultPipeline()`.
  */
@@ -23,6 +27,7 @@ import {
   existsSync,
   mkdirSync,
   readdirSync,
+  readFileSync,
   rmSync,
   statSync,
 } from "node:fs";
@@ -45,12 +50,25 @@ const scopedLanguages = languageListFromEnv(
   DEFAULT_SCOPED_PACKAGE_LANGUAGES,
 );
 
-// napi-rs glue + binary the runtime binding loader needs, in the same directory.
-const GLUE_FILES = [
-  "index.wasi.cjs",
-  "index.wasi-browser.js",
+// The wasm binary and Node glue are copied verbatim. Node resolves the bare
+// `require("@napi-rs/wasm-runtime")` from the package's own node_modules at
+// runtime (the loader climbs up from wasm/dist/native/), so the Node glue does
+// not need bundling.
+const COPY_FILES = [
   "index.wasm32-wasi.wasm",
+  "index.wasi.cjs",
   "wasi-worker.mjs",
+];
+// Browser glue is bundled (not copied): the napi-rs-generated files import
+// `@napi-rs/wasm-runtime` by bare specifier, and consumer bundlers (Vite/Rollup)
+// emit them as raw assets without rewriting specifiers, so a production browser
+// build would fail to instantiate the binding. Bundling with `bun build` inlines
+// `@napi-rs/wasm-runtime` (and its deps) so the shipped glue is self-contained.
+// The `.wasm` binary and the worker stay referenced by relative
+// `new URL(..., import.meta.url)`; bun leaves those runtime URLs intact so they
+// still resolve to the sibling files in `native/`.
+const BROWSER_GLUE_ENTRIES = [
+  "index.wasi-browser.js",
   "wasi-worker-browser.mjs",
 ];
 
@@ -66,15 +84,27 @@ if (!existsSync(join(packageRoot, "wasm", "dist", "wasm.mjs"))) {
 }
 
 mkdirSync(distNativeDir, { recursive: true });
-const copied = [];
-for (const fileName of GLUE_FILES) {
-  const source = join(wasmDistDir, fileName);
-  if (!existsSync(source)) {
-    throw new Error(`Missing wasm artifact: ${source}`);
-  }
+const glue = [];
+for (const fileName of COPY_FILES) {
+  const source = requireArtifact(fileName);
   const destination = join(distNativeDir, fileName);
   copyFileSync(source, destination);
-  copied.push({ file: fileName, bytes: statSync(destination).size });
+  glue.push({
+    file: fileName,
+    mode: "copy",
+    bytes: statSync(destination).size,
+  });
+}
+for (const fileName of BROWSER_GLUE_ENTRIES) {
+  const source = requireArtifact(fileName);
+  const destination = join(distNativeDir, fileName);
+  bundleBrowserGlue(source, destination);
+  assertSelfContainedGlue(destination);
+  glue.push({
+    file: fileName,
+    mode: "bundle",
+    bytes: statSync(destination).size,
+  });
 }
 
 removeExistingPackages(distNativeDir);
@@ -101,11 +131,56 @@ for (const language of scopedLanguages) {
 
 console.log(
   JSON.stringify(
-    { event: "native-wasm-assets", distNativeDir, glue: copied, packages },
+    { event: "native-wasm-assets", distNativeDir, glue, packages },
     null,
     2,
   ),
 );
+
+function requireArtifact(fileName) {
+  const source = join(wasmDistDir, fileName);
+  if (!existsSync(source)) {
+    throw new Error(`Missing wasm artifact: ${source}`);
+  }
+  return source;
+}
+
+/** Bundle a browser-targeted napi-rs glue entry so its bare
+ * `@napi-rs/wasm-runtime` import (and that runtime's deps) is inlined. Runs
+ * `bun build` from the package root so the runtime resolves from the package's
+ * node_modules. `import.meta.url`-relative `new URL(...)` references (the
+ * `.wasm` binary and the worker) are left intact by bun, so they keep resolving
+ * to the sibling files emitted in `native/`. */
+function bundleBrowserGlue(source, destination) {
+  execFileSync(
+    "bun",
+    [
+      "build",
+      source,
+      "--target=browser",
+      "--format=esm",
+      `--outfile=${destination}`,
+    ],
+    { cwd: packageRoot, stdio: "inherit" },
+  );
+}
+
+/** Fail the build if a bundled browser glue file still carries a bare ESM
+ * import/export specifier (e.g. an un-inlined `@napi-rs/wasm-runtime`). Such a
+ * specifier would survive a consumer's raw-asset emit and break binding
+ * instantiation in a production browser build. */
+function assertSelfContainedGlue(filePath) {
+  const code = readFileSync(filePath, "utf8");
+  const bareSpecifier =
+    /^\s*(?:import|export)\b[^\n]*?\bfrom\s*["'](?![./])([^"']+)["']/gm;
+  const remaining = [...code.matchAll(bareSpecifier)].map((match) => match[1]);
+  if (remaining.length > 0) {
+    throw new Error(
+      `Bundled browser glue ${basename(filePath)} still imports bare specifiers: ` +
+        `${[...new Set(remaining)].join(", ")}. Bundling did not inline them.`,
+    );
+  }
+}
 
 function buildCompressedPackage(args) {
   execFileSync(
