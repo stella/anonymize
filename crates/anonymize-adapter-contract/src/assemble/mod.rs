@@ -2,16 +2,27 @@
 //!
 //! Ports `buildNativeStaticSearchBundle` /
 //! `buildNativeStaticConfig` from
-//! `packages/anonymize/src/build-unified-search.ts` into Rust. This is slice A
-//! (foundation): it fills only the trivial, data-independent fields of
-//! [`BindingPreparedSearchConfig`] and leaves every heavier field at its
-//! `Default`. Later slices tick fields off [`FIELDS_PENDING`].
+//! `packages/anonymize/src/build-unified-search.ts` into Rust. Slice A laid the
+//! foundation (trivial, data-independent fields); slice B ports the
+//! copy-through and templating data fields (signature, monetary, date, zone,
+//! address-context, address-seed, country, hotword). Each field ported here
+//! moves from [`FIELDS_PENDING`] to [`FIELDS_IMPLEMENTED`] and is compared by
+//! the golden parity harness.
 //!
 //! The assembler lives in this crate rather than `stella-anonymize-core`
 //! because the output type [`BindingPreparedSearchConfig`] is defined here, and
 //! the core crate cannot depend on this crate without a cycle. The input
 //! structs and embedded data tree it operates on live in
 //! `stella_anonymize_core::assemble`.
+
+mod address;
+mod country;
+mod dates;
+mod hotwords;
+mod language;
+mod monetary;
+mod signature;
+mod zones;
 
 use std::collections::HashSet;
 
@@ -41,6 +52,14 @@ pub const FIELDS_IMPLEMENTED: &[&str] = &[
   "regex_options",
   "custom_regex_options",
   "name_corpus_mode",
+  "signature_data",
+  "monetary_data",
+  "date_data",
+  "zone_data",
+  "address_context_data",
+  "address_seed_data",
+  "country_data",
+  "hotword_data",
 ];
 
 /// Fields still left at their `Default` value, to be filled by later slices.
@@ -55,45 +74,94 @@ pub const FIELDS_PENDING: &[&str] = &[
   "deny_list_data",
   "false_positive_filters",
   "gazetteer_data",
-  "country_data",
-  "hotword_data",
   "trigger_data",
   "legal_form_data",
-  "address_seed_data",
-  "zone_data",
-  "address_context_data",
   "coreference_data",
   "name_corpus_data",
-  "signature_data",
-  "date_data",
-  "monetary_data",
 ];
+
+/// Gating context shared by every field builder.
+///
+/// Mirrors the locals computed at the top of `buildUnifiedSearchSources`:
+/// content-language scope, the hotword-expanded search labels, and the derived
+/// allowed-label set.
+struct AssembleContext<'a> {
+  config: &'a PipelineConfig,
+  /// `configuredContentLanguages(config)`: `None` means "all languages".
+  content_languages: Option<Vec<String>>,
+  /// `createAllowedLabelSet(searchLabels)`: `None` means "no filter".
+  allowed_labels: Option<HashSet<String>>,
+}
+
+impl AssembleContext<'_> {
+  /// Mirrors `labelIsAllowed`: an absent set means every label is allowed.
+  fn label_allowed(&self, label: &str) -> bool {
+    self
+      .allowed_labels
+      .as_ref()
+      .is_none_or(|set| set.contains(label))
+  }
+
+  const fn enable_regex(&self) -> bool {
+    self.config.enable_regex
+  }
+
+  const fn enable_trigger_phrases(&self) -> bool {
+    self.config.enable_trigger_phrases
+  }
+
+  /// `regexMonetaryEnabled`: regex on and the monetary label allowed.
+  fn regex_monetary_enabled(&self) -> bool {
+    self.enable_regex() && self.label_allowed("monetary amount")
+  }
+}
 
 /// Assembles a prepared static-search config from a pipeline config,
 /// dictionaries, and gazetteer entries.
 ///
-/// Slice A fills the trivial fields listed in [`FIELDS_IMPLEMENTED`]; the
-/// dictionaries and gazetteer inputs are accepted for signature stability but
-/// only consumed by later slices.
-///
 /// # Errors
 ///
-/// Currently infallible, but returns [`AssembleError`] so later slices can
-/// surface data-parse failures without changing the signature.
-#[allow(clippy::unnecessary_wraps)] // later slices parse embedded data fallibly.
+/// Returns [`AssembleError`] when an embedded data file needed by a ported
+/// field fails to parse.
 pub fn assemble_static_search_config(
   config: &PipelineConfig,
   _dictionaries: Option<&Dictionaries>,
   _gazetteer: &[GazetteerEntry],
 ) -> Result<BindingPreparedSearchConfig, AssembleError> {
+  // `enableHotwordRules === true` loads the rule set; it feeds both the
+  // hotword_data field and the label expansion that gates every other field.
+  let hotword_rules = if config.enable_hotword_rules == Some(true) {
+    hotwords::load_hotword_rules()?
+  } else {
+    Vec::new()
+  };
+  let search_labels = if config.enable_hotword_rules == Some(true) {
+    hotwords::expand_labels_for_hotword_rule_set(&config.labels, &hotword_rules)
+  } else {
+    config.labels.clone()
+  };
+  let ctx = AssembleContext {
+    config,
+    content_languages: language::configured_content_languages(config),
+    allowed_labels: allowed_label_set(&search_labels),
+  };
+
   Ok(BindingPreparedSearchConfig {
-    custom_regex_patterns: assemble_custom_regex_patterns(config),
+    custom_regex_patterns: assemble_custom_regex_patterns(&ctx),
     allowed_labels: config.labels.clone(),
     threshold: config.threshold,
     confidence_boost: config.enable_confidence_boost,
     regex_options: Some(regex_options_template()),
     custom_regex_options: Some(custom_regex_options_template()),
     name_corpus_mode: name_corpus_mode(config),
+    signature_data: Some(signature::build_signature_data()?),
+    monetary_data: monetary::build_monetary_data(&ctx)?,
+    date_data: dates::build_date_data(&ctx)?,
+    zone_data: zones::build_zone_data(&ctx)?,
+    address_context_data: address::build_address_context_data(&ctx)?,
+    address_seed_data: address::build_address_seed_data(&ctx)?,
+    country_data: country::build_country_data(&ctx)?,
+    hotword_data: hotwords::build_hotword_data(&hotword_rules),
     ..BindingPreparedSearchConfig::default()
   })
 }
@@ -126,37 +194,31 @@ fn custom_regex_options_template() -> BindingSearchOptions {
 }
 
 fn assemble_custom_regex_patterns(
-  config: &PipelineConfig,
+  ctx: &AssembleContext<'_>,
 ) -> Vec<BindingSearchPattern> {
-  if !config.enable_regex {
+  if !ctx.config.enable_regex {
     return Vec::new();
   }
-  let Some(customs) = config.custom_regexes.as_ref() else {
+  let Some(customs) = ctx.config.custom_regexes.as_ref() else {
     return Vec::new();
   };
-  let allowed = allowed_label_set(&config.labels);
   customs
     .iter()
-    .filter(|entry| label_allowed(entry.label.as_str(), allowed.as_ref()))
+    .filter(|entry| ctx.label_allowed(entry.label.as_str()))
     .map(custom_regex_pattern)
     .collect()
 }
 
 /// Mirrors `createAllowedLabelSet`: an empty label list means "no filter".
 ///
-/// NOTE: the TypeScript source expands the label set for hotword rules before
-/// filtering custom regexes. Slice A filters against `config.labels` directly;
-/// results diverge only when `enable_hotword_rules` is set *and* a custom regex
-/// label is reachable only via that expansion. Later slices close this gap.
-fn allowed_label_set(labels: &[String]) -> Option<HashSet<&str>> {
+/// The labels passed in are the hotword-expanded `searchLabels`, so
+/// custom-regex gating stays consistent with the TypeScript source even when
+/// `enableHotwordRules` reclassifies labels.
+fn allowed_label_set(labels: &[String]) -> Option<HashSet<String>> {
   if labels.is_empty() {
     return None;
   }
-  Some(labels.iter().map(String::as_str).collect())
-}
-
-fn label_allowed(label: &str, allowed: Option<&HashSet<&str>>) -> bool {
-  allowed.is_none_or(|set| set.contains(label))
+  Some(labels.iter().cloned().collect())
 }
 
 fn custom_regex_pattern(entry: &CustomRegexPattern) -> BindingSearchPattern {

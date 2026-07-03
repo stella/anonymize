@@ -111,6 +111,54 @@ fn compare_implemented(
       actual.custom_regex_options, expected.custom_regex_options
     ));
   }
+  if actual.signature_data != expected.signature_data {
+    return Err(format!(
+      "{name}: signature_data {:?} != {:?}",
+      actual.signature_data, expected.signature_data
+    ));
+  }
+  if actual.monetary_data != expected.monetary_data {
+    return Err(format!(
+      "{name}: monetary_data {:?} != {:?}",
+      actual.monetary_data, expected.monetary_data
+    ));
+  }
+  if actual.date_data != expected.date_data {
+    return Err(format!(
+      "{name}: date_data {:?} != {:?}",
+      actual.date_data, expected.date_data
+    ));
+  }
+  if actual.zone_data != expected.zone_data {
+    return Err(format!(
+      "{name}: zone_data {:?} != {:?}",
+      actual.zone_data, expected.zone_data
+    ));
+  }
+  if actual.address_context_data != expected.address_context_data {
+    return Err(format!(
+      "{name}: address_context_data {:?} != {:?}",
+      actual.address_context_data, expected.address_context_data
+    ));
+  }
+  if actual.address_seed_data != expected.address_seed_data {
+    return Err(format!(
+      "{name}: address_seed_data {:?} != {:?}",
+      actual.address_seed_data, expected.address_seed_data
+    ));
+  }
+  if actual.country_data != expected.country_data {
+    return Err(format!(
+      "{name}: country_data {:?} != {:?}",
+      actual.country_data, expected.country_data
+    ));
+  }
+  if actual.hotword_data != expected.hotword_data {
+    return Err(format!(
+      "{name}: hotword_data {:?} != {:?}",
+      actual.hotword_data, expected.hotword_data
+    ));
+  }
   Ok(())
 }
 

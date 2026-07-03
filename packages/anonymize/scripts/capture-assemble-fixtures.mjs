@@ -42,6 +42,14 @@ const IMPLEMENTED_FIELDS = [
   "confidence_boost",
   "regex_options",
   "custom_regex_options",
+  "signature_data",
+  "monetary_data",
+  "date_data",
+  "zone_data",
+  "address_context_data",
+  "address_seed_data",
+  "country_data",
+  "hotword_data",
 ];
 
 const TOGGLES = [
