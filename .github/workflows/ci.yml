@@ -108,6 +108,16 @@ jobs:
       - name: Smoke test wasm package entry
         run: bun run --cwd packages/anonymize smoke:wasm-package
 
+      - name: Smoke test wasm browser path
+        # Exercises the browser glue, its Worker, and the SharedArrayBuffer
+        # (cross-origin isolated) path that the Node-WASI smokes never touch.
+        # Uses the system Chrome preinstalled on ubuntu runners via puppeteer-core
+        # (no browser download). The smoke serves COOP/COEP headers itself, so no
+        # extra Chrome feature flags are required.
+        env:
+          CHROME_BIN: /usr/bin/google-chrome-stable
+        run: bun run --cwd packages/anonymize smoke:wasm-browser
+
       - name: Migration fixture parity and performance
         run: |
           git fetch origin main --depth=1
