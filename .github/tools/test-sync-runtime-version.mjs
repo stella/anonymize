@@ -43,7 +43,8 @@ const sidecars = [
   "@stll/anonymize-win32-x64-msvc",
 ];
 
-for (lineEnding of ["\n", "\r\n"]) {
+for (const scenarioLineEnding of ["\n", "\r\n"]) {
+  lineEnding = scenarioLineEnding;
   workspace = mkdtempSync(join(tmpdir(), "stella-version-sync-"));
   try {
     writeFixture();
