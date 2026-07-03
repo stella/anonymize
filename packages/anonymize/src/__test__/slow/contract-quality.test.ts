@@ -256,7 +256,7 @@ describe("contract quality regressions", () => {
   // rather than emitting the single organization. The other org names in this
   // fixture (Twitter, X Holdings, Bank of America, Goldman Sachs & Co. LLC)
   // resolve correctly natively.
-  test.skip("keeps Twitter merger agreement organization names stable", async () => {
+  test("keeps Twitter merger agreement organization names stable", async () => {
     const entities = await detect(
       "THIS AGREEMENT AND PLAN OF MERGER, dated as of April 25, 2022, is made by and among Twitter, Inc., a Delaware corporation, X Holdings I, Inc., a Delaware corporation, X Holdings II, Inc., a Delaware corporation. " +
         "The confirmations include transactions between the Company and Bank of America, N.A., and between the Company and Goldman Sachs & Co.\nLLC. " +

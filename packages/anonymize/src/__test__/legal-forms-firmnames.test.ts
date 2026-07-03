@@ -52,7 +52,7 @@ describe("legal-form firm name capture", () => {
   // initials); it emits nothing for "J.P. Morgan Securities LLC". The spaced
   // form ("J. P. Morgan Securities LLC") is captured correctly (see the test
   // below), so this is specific to the no-space initials boundary.
-  test.skip("initial-dot prefix (J.P. Morgan)", async () => {
+  test("initial-dot prefix (J.P. Morgan)", async () => {
     // backward extension previously stopped at the dot
     // after `P.` and lost the `J.P.` initials.
     expect(await orgsIn("J.P. Morgan Securities LLC")).toContain(
@@ -120,7 +120,7 @@ describe("legal-form firm name capture", () => {
   // skipped "initial-dot prefix (J.P. Morgan)" test). Native correctly emits
   // "Allen & Company LLC" and does not merge the siblings, but the J.P. Morgan
   // half of the assertion cannot pass until the initial-dot prefix is handled.
-  test.skip("splits sibling orgs separated by 'and'", async () => {
+  test("splits sibling orgs separated by 'and'", async () => {
     // `J.P. Morgan Securities LLC and Allen & Company LLC`
     // — must not collapse the two firms into a single
     // org via backward extension on the second match.

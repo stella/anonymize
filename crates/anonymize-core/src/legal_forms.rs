@@ -488,7 +488,17 @@ fn crosses_sentence_end(text: &str, start: usize, suffix_start: usize) -> bool {
 
   for ch in slice.chars() {
     if ch.is_uppercase() {
-      uppercase_run = uppercase_run.saturating_add(1);
+      // An interior dot delimits a word, so a capital right after one starts
+      // a fresh run. This keeps compact initials ("J.P.") from looking like a
+      // two-letter acronym followed by a sentence break, while a real acronym
+      // ("INC.") still accumulates its run before the trailing period. The
+      // lowercase branch below already gates on the previous char, so only the
+      // uppercase run needs this guard.
+      uppercase_run = if previous == Some('.') {
+        1
+      } else {
+        uppercase_run.saturating_add(1)
+      };
       lowercase_run = 0;
       previous = Some(ch);
       continue;
@@ -1719,4 +1729,36 @@ fn lowercase_lookup(text: &str) -> Cow<'_, str> {
 
 fn contains_lowercase(set: &HashSet<String>, text: &str) -> bool {
   set.contains(lowercase_lookup(text).as_ref())
+}
+
+#[cfg(test)]
+mod tests {
+  use super::crosses_sentence_end;
+
+  fn crosses(text: &str, prefix: &str) -> bool {
+    // Treat the org candidate as spanning the whole text up to the trailing
+    // legal-form suffix (the caller passes walker_start and suffix_start).
+    let suffix_start = text.rfind(prefix).unwrap_or(text.len());
+    crosses_sentence_end(text, 0, suffix_start)
+  }
+
+  #[test]
+  fn compact_initials_are_not_a_sentence_break() {
+    // "J.P. Morgan Securities LLC" — the interior dot must not make "J.P."
+    // read as a two-letter acronym followed by a sentence end.
+    assert!(!crosses("J.P. Morgan Securities LLC", "LLC"));
+    assert!(!crosses("U.S. Robotics Corp LLC", "LLC"));
+  }
+
+  #[test]
+  fn spaced_initials_stay_a_single_candidate() {
+    assert!(!crosses("J. P. Morgan Securities LLC", "LLC"));
+  }
+
+  #[test]
+  fn genuine_sentence_break_still_detected() {
+    // A real 2+ letter word (any case) before ". " remains a boundary.
+    assert!(crosses("Price. LLC", "LLC"));
+    assert!(crosses("Acme INC. Beta LLC", "LLC"));
+  }
 }
