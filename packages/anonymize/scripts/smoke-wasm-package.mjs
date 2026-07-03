@@ -126,6 +126,13 @@ if (defaultEntities.length !== entities.length) {
   );
 }
 
+// Regional locale tags fall back to the shipped base-language package: no
+// en-us package is bundled, so this must load native-pipeline.en.stlanonpkg.
+const regionalPipeline = await loadDefaultPipeline("en-US");
+if (regionalPipeline.redactText(sample).resolvedEntities.length === 0) {
+  throw new Error("loadDefaultPipeline('en-US') did not fall back to en");
+}
+
 console.log(
   JSON.stringify({
     event: "wasm-package-smoke",
@@ -135,5 +142,6 @@ console.log(
     labels: entities.map((entity) => entity.label),
     deanonymiseRoundTrip: true,
     loadDefaultPipeline: true,
+    regionalLanguageFallback: true,
   }),
 );

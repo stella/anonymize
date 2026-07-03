@@ -190,12 +190,28 @@ export const defaultPackageUrl = (language?: string): URL =>
     ? assetUrl(DEFAULT_PACKAGE_FILE)
     : assetUrl(`native-pipeline.${normalizeLanguage(language)}.stlanonpkg`);
 
-/** Load a fresh pipeline from the bundled default prepared package. */
-export const loadDefaultPipeline = (
+/** Load a fresh pipeline from the bundled default prepared package.
+ *
+ * Mirrors the node loader's regional-tag fallback: when an exact package for
+ * a locale tag such as `en-US` is not shipped, the base-language package
+ * (`en`) is loaded instead. The browser cannot check asset existence up
+ * front, so the fallback triggers on a failed load of the exact package. */
+export const loadDefaultPipeline = async (
   language?: string,
   options?: LoadPreparedPackageOptions,
-): Promise<PreparedNativePipeline> =>
-  loadPipeline(defaultPackageUrl(language), options);
+): Promise<PreparedNativePipeline> => {
+  try {
+    return await loadPipeline(defaultPackageUrl(language), options);
+  } catch (error) {
+    const normalized =
+      language === undefined ? undefined : normalizeLanguage(language);
+    const baseLanguage = normalized?.split("-").at(0);
+    if (baseLanguage === undefined || baseLanguage === normalized) {
+      throw error;
+    }
+    return loadPipeline(defaultPackageUrl(baseLanguage), options);
+  }
+};
 
 /** Cached variant of {@link loadDefaultPipeline}: the default pipeline for a
  * given language is fetched and prepared once, then reused. */
