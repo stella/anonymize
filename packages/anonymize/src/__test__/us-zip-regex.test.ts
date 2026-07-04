@@ -61,11 +61,17 @@ describe("US ZIP+4 regex", () => {
     expect(zip).toBeUndefined();
   });
 
-  // NATIVE-GAP: native address-seed expansion for "100 Main St, ..." begins
-  // the span at "St" (it drops the "100 Main" street-number head when the
-  // street name is a common word like "Main") and can trail into following
-  // prose, so the span does not contain "Main St". The "650 Page Mill Road"
-  // form (test above) expands to the full address unaffected.
+  // NATIVE-DESIGN: the "100 Main" head is dropped because "Main" is detected
+  // as a person (it is a production first name in the name corpus). Address
+  // expansion intentionally will not swallow a detected person entity, and the
+  // resolver prioritizes person over address (precise_over_address). Both the
+  // person ("Main") and the address tail ("St, Springfield, IL 62701-1234")
+  // are still redacted, so no sensitive data leaks; only the span is split.
+  // Forcing the address to absorb the person head would regress precision on
+  // the many street names that are also given names/surnames (Park, Lincoln,
+  // Washington, Jackson, ...), so this stays a person-over-address boundary.
+  // The "650 Page Mill Road" form (test above) has no name collision and
+  // expands to the full address.
   test.skip("ZIP+4 in mid-sentence address prose is captured", async () => {
     const text =
       "Notices shall be delivered to 100 Main St, Springfield, IL 62701-1234 at all times.";
@@ -174,9 +180,9 @@ describe("US ZIP+4 regex", () => {
     }
   });
 
-  // NATIVE-GAP: same street-head boundary gap as above — the native address
-  // span for "100 Main St, Palo Alto, CA 94304–1050" starts at "St", so it
-  // does not contain "Main St".
+  // NATIVE-DESIGN: same person-over-address boundary as above — "Main" is a
+  // detected person (production first name), so the address span starts at
+  // "St". See the reasoning on the preceding NATIVE-DESIGN case.
   test.skip("typographic ZIP+4 participates in address-seed expansion", async () => {
     const text = "100 Main St, Palo Alto, CA 94304–1050";
     const entities = await detect(text);
