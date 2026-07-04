@@ -851,11 +851,12 @@ fn trim_open_ended_org_prose(text: &str) -> Option<usize> {
       last_capital_end = Some(idx);
     }
   }
+  let trimmed_end = text.trim_end().len();
   if word_start.is_some() && word_is_capital {
-    last_capital_end = Some(text.trim_end().len());
+    last_capital_end = Some(trimmed_end);
   }
   let end = last_capital_end?;
-  (end < text.trim_end().len()).then_some(end)
+  (end < trimmed_end).then_some(end)
 }
 
 fn word_count(text: &str) -> usize {
