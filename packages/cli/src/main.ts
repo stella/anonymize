@@ -148,6 +148,7 @@ const looksTextual = async (path: string): Promise<boolean> => {
 const walkDirectory = async (
   root: string,
   recursive: boolean,
+  excludeDir?: string,
 ): Promise<string[]> => {
   const found: string[] = [];
   const visit = async (dir: string): Promise<void> => {
@@ -157,6 +158,9 @@ const walkDirectory = async (
     for (const entry of entries) {
       const full = join(dir, entry.name);
       if (entry.isDirectory()) {
+        // Never descend into the output tree: rerunning with --output inside
+        // the input directory must not ingest previously generated files.
+        if (excludeDir !== undefined && resolve(full) === excludeDir) continue;
         if (recursive) await visit(full);
       } else if (entry.isFile()) {
         found.push(full);
@@ -176,7 +180,9 @@ const walkDirectory = async (
 const expandInputs = async (
   files: readonly string[],
   recursive: boolean,
+  outputDir?: string,
 ): Promise<ExpandedInputs> => {
+  const excludeDir = outputDir === undefined ? undefined : resolve(outputDir);
   const jobs: FileJob[] = [];
   let hasDirectory = false;
   let skipped = 0;
@@ -198,7 +204,7 @@ const expandInputs = async (
       continue;
     }
     hasDirectory = true;
-    for (const file of await walkDirectory(path, recursive)) {
+    for (const file of await walkDirectory(path, recursive, excludeDir)) {
       // A file that disappears or turns unreadable mid-walk is queued anyway:
       // the per-file worker try/catch counts it as failed without aborting
       // the batch. Only a successful sniff that says "binary" skips it.
@@ -723,6 +729,7 @@ const runAnonymise = async (
   const { jobs, batch, skipped } = await expandInputs(
     scoped.files,
     scoped.recursive,
+    scoped.output,
   );
 
   if (!batch) {

@@ -1,4 +1,5 @@
 import { expect, setDefaultTimeout, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -214,6 +215,23 @@ test("--recursive walks subdirectories and mirrors the tree", async () => {
     expect(text).toContain("[EMAIL_ADDRESS_1]");
     expect(text).not.toContain("jan.novak@example.com");
   }
+});
+
+test("--recursive skips an output tree nested inside the input", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "anonymize-cli-"));
+  const input = join(dir, "in");
+  const out = join(input, "out");
+  await Bun.write(join(input, "top.txt"), SAMPLE);
+
+  const first = await run([...SCOPE, "--recursive", "-o", out, input]);
+  expect(first.code).toBe(0);
+  // Rerun with the output dir already inside the input tree: the walk must
+  // not ingest previously generated files as new inputs.
+  const second = await run([...SCOPE, "--recursive", "-o", out, input]);
+  expect(second.code).toBe(0);
+  expect(second.stderr).toContain("1 processed");
+  const nested = join(out, "out", "top.txt");
+  expect(existsSync(nested)).toBe(false);
 });
 
 test("--workers >1 matches single-worker output (determinism)", async () => {
