@@ -337,21 +337,31 @@ const renderAdhoc = ({
     const clusters = clusterSpans(spans);
 
     for (const cluster of clusters) {
-      const stellaHit = cluster.byLibrary.has(STELLA);
+      const stellaSpan = cluster.byLibrary.get(STELLA);
       for (const name of okLibraries) {
         if (name === STELLA) {
           continue;
         }
-        const competitorHit = cluster.byLibrary.has(name);
+        const competitorSpan = cluster.byLibrary.get(name);
         const bucket = pair[name];
         if (bucket === undefined) {
           continue;
         }
-        if (stellaHit && competitorHit) {
+        // "both" requires a DIRECT overlap between the two libraries' spans:
+        // union-find clusters are transitive, so co-membership through a third
+        // library must not count as agreement.
+        if (
+          stellaSpan !== undefined &&
+          competitorSpan !== undefined &&
+          sameDetection(stellaSpan, competitorSpan)
+        ) {
           bucket.both++;
-        } else if (stellaHit) {
+        } else if (stellaSpan !== undefined) {
           bucket.stellaOnly++;
-        } else if (competitorHit) {
+          if (competitorSpan !== undefined) {
+            bucket.competitorOnly++;
+          }
+        } else if (competitorSpan !== undefined) {
           bucket.competitorOnly++;
         }
       }
