@@ -801,10 +801,8 @@ fn trim_open_ended_org_prose(text: &str) -> Option<usize> {
         word_start = Some(idx);
         word_is_capital = ch.is_uppercase();
       }
-    } else if word_start.take().is_some() {
-      if word_is_capital {
-        last_capital_end = Some(idx);
-      }
+    } else if word_start.take().is_some() && word_is_capital {
+      last_capital_end = Some(idx);
     }
   }
   if word_start.is_some() && word_is_capital {
@@ -970,8 +968,10 @@ mod tests {
   fn keeps_unit_continuation_after_street_abbreviation() {
     // "123 Main St. Suite 100": the period is the street abbreviation's own
     // dot, not a sentence end, so the unit continuation must not be trimmed.
-    let mut filters = DenyListFilterData::default();
-    filters.street_types = set(["st.", "street"]);
+    let filters = DenyListFilterData {
+      street_types: set(["st.", "street"]),
+      ..DenyListFilterData::default()
+    };
     assert_eq!(
       trim_trailing_address_prose("123 Main St. Suite 100", &filters),
       None
