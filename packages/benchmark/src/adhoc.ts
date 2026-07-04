@@ -127,7 +127,10 @@ type Cluster = {
   readonly common: CommonLabel;
   readonly start: number;
   readonly end: number;
+  /** Widest span per library, for the aligned display row. */
   readonly byLibrary: Map<string, LibrarySpan>;
+  /** Every span per library; pairwise agreement must see non-widest spans. */
+  readonly allByLibrary: Map<string, LibrarySpan[]>;
   readonly excerpt: string;
 };
 
@@ -167,7 +170,14 @@ const clusterSpans = (spans: readonly LibrarySpan[]): Cluster[] => {
   const clusters: Cluster[] = [];
   for (const group of groups.values()) {
     const byLibrary = new Map<string, LibrarySpan>();
+    const allByLibrary = new Map<string, LibrarySpan[]>();
     for (const span of group) {
+      const all = allByLibrary.get(span.library);
+      if (all === undefined) {
+        allByLibrary.set(span.library, [span]);
+      } else {
+        all.push(span);
+      }
       // If a library reports several overlapping spans in one region, keep the
       // widest, so the aligned row shows its fullest detection.
       const existing = byLibrary.get(span.library);
@@ -190,6 +200,7 @@ const clusterSpans = (spans: readonly LibrarySpan[]): Cluster[] => {
       start: Math.min(...group.map((s) => s.start)),
       end: Math.max(...group.map((s) => s.end)),
       byLibrary,
+      allByLibrary,
       excerpt: truncateExcerpt(widest.text),
     });
   }
@@ -337,32 +348,31 @@ const renderAdhoc = ({
     const clusters = clusterSpans(spans);
 
     for (const cluster of clusters) {
-      const stellaSpan = cluster.byLibrary.get(STELLA);
+      const stellaSpans = cluster.allByLibrary.get(STELLA) ?? [];
       for (const name of okLibraries) {
         if (name === STELLA) {
           continue;
         }
-        const competitorSpan = cluster.byLibrary.get(name);
+        const competitorSpans = cluster.allByLibrary.get(name) ?? [];
         const bucket = pair[name];
         if (bucket === undefined) {
           continue;
         }
-        // "both" requires a DIRECT overlap between the two libraries' spans:
-        // union-find clusters are transitive, so co-membership through a third
-        // library must not count as agreement.
-        if (
-          stellaSpan !== undefined &&
-          competitorSpan !== undefined &&
-          sameDetection(stellaSpan, competitorSpan)
-        ) {
+        // "both" requires a DIRECT overlap between the two libraries' spans
+        // (any pair, not just the widest): union-find clusters are transitive,
+        // so co-membership through a third library must not count.
+        const agree = stellaSpans.some((s) =>
+          competitorSpans.some((c) => sameDetection(s, c)),
+        );
+        if (agree) {
           bucket.both++;
-        } else if (stellaSpan !== undefined) {
-          bucket.stellaOnly++;
-          if (competitorSpan !== undefined) {
+        } else {
+          if (stellaSpans.length > 0) {
+            bucket.stellaOnly++;
+          }
+          if (competitorSpans.length > 0) {
             bucket.competitorOnly++;
           }
-        } else if (competitorSpan !== undefined) {
-          bucket.competitorOnly++;
         }
       }
     }

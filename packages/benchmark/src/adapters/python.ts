@@ -4,6 +4,8 @@ import { join } from "node:path";
 import type { GroundTruthDocument } from "../ground-truth";
 import type { Adapter, AdapterOutcome, NativePrediction } from "./types";
 
+const PYTHON_ADAPTER_TIMEOUT_MS = 10 * 60 * 1000;
+
 const PACKAGE_ROOT = join(import.meta.dir, "..", "..");
 
 type PythonResult = {
@@ -74,6 +76,9 @@ export const createPythonAdapter = ({
         stdin: new TextEncoder().encode(job),
         stdout: "pipe",
         stderr: "pipe",
+        // A hung model load must not block the benchmark forever.
+        timeout: PYTHON_ADAPTER_TIMEOUT_MS,
+        killSignal: "SIGKILL",
       });
       const [stdout, stderr, exitCode] = await Promise.all([
         new Response(proc.stdout).text(),

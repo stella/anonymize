@@ -142,7 +142,10 @@ export const REDACT_PII_MAPPING: NativeMapping = {
   usSocialSecurityNumber: "id-number",
   ipAddress: null,
   url: null,
-  digits: null,
+  // redact-pii ships the digits rule enabled by default, so its real-world
+  // behavior redacts digit runs; count them as id-number attempts rather than
+  // dropping an active detector's spans before scoring.
+  digits: "id-number",
   username: null,
   password: null,
   credentials: null,

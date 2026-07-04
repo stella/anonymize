@@ -7,7 +7,7 @@ the top-level README.
 
 ## Layout
 
-```
+```text
 fixtures/                 public-safe synthetic ground truth, per language (en/cs/de)
 python/                   Presidio + scrubadub adapter scripts and pinned requirements
 results/                  committed, date-stamped JSON + Markdown reports (+ latest.md)

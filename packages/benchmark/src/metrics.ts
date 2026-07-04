@@ -56,7 +56,7 @@ export const mapPredictions = (
 ): CommonSpan[] => {
   const mapped: CommonSpan[] = [];
   for (const { start, end, label } of predictions) {
-    if (!(label in mapping)) {
+    if (!Object.hasOwn(mapping, label)) {
       // Unknown native label: keep it if it is already a common label, else
       // drop. Dropping avoids charging a library for labels we never mapped.
       if (isCommonLabel(label)) {

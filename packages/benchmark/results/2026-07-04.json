@@ -1,6 +1,6 @@
 {
-  "createdAt": "2026-07-04T05:16:53.438Z",
-  "gitSha": "eb660e3",
+  "createdAt": "2026-07-04T05:32:31.420Z",
+  "gitSha": "69e1a30-dirty",
   "hardware": "darwin/arm64, 8x Apple M3, 24 GiB RAM",
   "runtime": "Bun 1.3.14",
   "corpus": {
@@ -42,10 +42,10 @@
         "phone"
       ],
       "throughput": {
-        "initSeconds": 1.375527583,
+        "initSeconds": 1.559117375,
         "totalChars": 8153,
-        "coldCharsPerSec": 265389.22211824683,
-        "warmCharsPerSec": 974719.4617989578
+        "coldCharsPerSec": 229450.03109944364,
+        "warmCharsPerSec": 842669.2222017446
       },
       "overall": {
         "overlapAll": {
@@ -180,10 +180,10 @@
         "phone"
       ],
       "throughput": {
-        "initSeconds": 2.2265157910005655,
+        "initSeconds": 2.2163971250120085,
         "totalChars": 8153,
-        "coldCharsPerSec": 24007.611881535846,
-        "warmCharsPerSec": 40624.63336010259
+        "coldCharsPerSec": 25145.92051488356,
+        "warmCharsPerSec": 41304.06116256346
       },
       "overall": {
         "overlapAll": {
@@ -311,10 +311,10 @@
       "notes": "active detectors: credential, credit_card, email, phone, social_security_number, twitter, url",
       "supportedLabels": ["email", "id-number", "phone"],
       "throughput": {
-        "initSeconds": 0.00019183299446012825,
+        "initSeconds": 0.00018483299936633557,
         "totalChars": 8153,
-        "coldCharsPerSec": 533318.8203058641,
-        "warmCharsPerSec": 1484635.6696396784
+        "coldCharsPerSec": 620310.5331655992,
+        "warmCharsPerSec": 1622527.9220004892
       },
       "overall": {
         "overlapAll": {
@@ -441,35 +441,35 @@
       "status": "ok",
       "supportedLabels": ["address", "email", "id-number", "person", "phone"],
       "throughput": {
-        "initSeconds": 0.010588666999999987,
+        "initSeconds": 0.007412999999999556,
         "totalChars": 8153,
-        "coldCharsPerSec": 3800.2674285432367,
-        "warmCharsPerSec": 45949.5877959022
+        "coldCharsPerSec": 3981.511748375594,
+        "warmCharsPerSec": 51548.56198574806
       },
       "overall": {
         "overlapAll": {
-          "precision": 0.45098039215686275,
-          "recall": 0.23469387755102042,
-          "f1": 0.30872483221476515,
-          "tp": 46,
-          "fp": 56,
-          "fn": 150
+          "precision": 0.3048128342245989,
+          "recall": 0.29081632653061223,
+          "f1": 0.2976501305483029,
+          "tp": 57,
+          "fp": 130,
+          "fn": 139
         },
         "overlapSupported": {
-          "precision": 0.45098039215686275,
-          "recall": 0.4,
-          "f1": 0.423963133640553,
-          "tp": 46,
-          "fp": 56,
-          "fn": 69
+          "precision": 0.3048128342245989,
+          "recall": 0.4956521739130435,
+          "f1": 0.3774834437086093,
+          "tp": 57,
+          "fp": 130,
+          "fn": 58
         },
         "exactAll": {
-          "precision": 0.3137254901960784,
-          "recall": 0.16326530612244897,
-          "f1": 0.21476510067114093,
-          "tp": 32,
-          "fp": 70,
-          "fn": 164
+          "precision": 0.20855614973262032,
+          "recall": 0.1989795918367347,
+          "f1": 0.20365535248041775,
+          "tp": 39,
+          "fp": 148,
+          "fn": 157
         }
       },
       "perLabel": {
@@ -514,12 +514,12 @@
           "fn": 6
         },
         "id-number": {
-          "precision": 1,
-          "recall": 0.21052631578947367,
-          "f1": 0.34782608695652173,
-          "tp": 4,
-          "fp": 0,
-          "fn": 15
+          "precision": 0.16853932584269662,
+          "recall": 0.7894736842105263,
+          "f1": 0.2777777777777778,
+          "tp": 15,
+          "fp": 74,
+          "fn": 4
         },
         "date": {
           "precision": 0,
@@ -540,28 +540,28 @@
       },
       "perLanguage": {
         "cs": {
-          "precision": 0.4375,
-          "recall": 0.1,
-          "f1": 0.16279069767441862,
-          "tp": 7,
-          "fp": 9,
-          "fn": 63
+          "precision": 0.3488372093023256,
+          "recall": 0.21428571428571427,
+          "f1": 0.26548672566371684,
+          "tp": 15,
+          "fp": 28,
+          "fn": 55
         },
         "de": {
-          "precision": 0.5333333333333333,
+          "precision": 0.2962962962962963,
           "recall": 0.3018867924528302,
-          "f1": 0.38554216867469876,
+          "f1": 0.2990654205607477,
           "tp": 16,
-          "fp": 14,
+          "fp": 38,
           "fn": 37
         },
         "en": {
-          "precision": 0.4107142857142857,
-          "recall": 0.3150684931506849,
-          "f1": 0.3565891472868217,
-          "tp": 23,
-          "fp": 33,
-          "fn": 50
+          "precision": 0.28888888888888886,
+          "recall": 0.3561643835616438,
+          "f1": 0.31901840490797545,
+          "tp": 26,
+          "fp": 64,
+          "fn": 47
         }
       }
     }
