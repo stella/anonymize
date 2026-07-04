@@ -1,6 +1,6 @@
 {
-  "createdAt": "2026-07-04T05:47:43.328Z",
-  "gitSha": "ba52458",
+  "createdAt": "2026-07-04T06:43:03.842Z",
+  "gitSha": "45f20e9",
   "hardware": "darwin/arm64, 8x Apple M3, 24 GiB RAM",
   "runtime": "Bun 1.3.14",
   "corpus": {
@@ -29,7 +29,7 @@
   "libraries": [
     {
       "name": "stella",
-      "version": "2.0.0-alpha.1",
+      "version": "2.0.0",
       "status": "ok",
       "supportedLabels": [
         "address",
@@ -42,10 +42,10 @@
         "phone"
       ],
       "throughput": {
-        "initSeconds": 1.519300666,
+        "initSeconds": 1.2764847910000001,
         "totalChars": 8153,
-        "coldCharsPerSec": 243783.3817356829,
-        "warmCharsPerSec": 871105.1752921536
+        "coldCharsPerSec": 290541.27950844506,
+        "warmCharsPerSec": 907102.4912329882
       },
       "overall": {
         "overlapAll": {
@@ -180,10 +180,10 @@
         "phone"
       ],
       "throughput": {
-        "initSeconds": 2.36542850000842,
+        "initSeconds": 2.145188250011415,
         "totalChars": 8153,
-        "coldCharsPerSec": 24026.53146746522,
-        "warmCharsPerSec": 34741.09035164132
+        "coldCharsPerSec": 23826.188350629665,
+        "warmCharsPerSec": 41243.81491423083
       },
       "overall": {
         "overlapAll": {
@@ -311,10 +311,10 @@
       "notes": "active detectors: credential, credit_card, email, phone, social_security_number, twitter, url",
       "supportedLabels": ["email", "id-number", "phone"],
       "throughput": {
-        "initSeconds": 0.0009294159972341731,
+        "initSeconds": 0.00018937500135507435,
         "totalChars": 8153,
-        "coldCharsPerSec": 365112.83908929984,
-        "warmCharsPerSec": 919792.2637091659
+        "coldCharsPerSec": 506995.8337721068,
+        "warmCharsPerSec": 1563699.6138713364
       },
       "overall": {
         "overlapAll": {
@@ -441,10 +441,10 @@
       "status": "ok",
       "supportedLabels": ["address", "email", "id-number", "person", "phone"],
       "throughput": {
-        "initSeconds": 0.007755541000000449,
+        "initSeconds": 0.010813833000000158,
         "totalChars": 8153,
-        "coldCharsPerSec": 3786.480446570622,
-        "warmCharsPerSec": 57717.71510793517
+        "coldCharsPerSec": 3911.3690865234507,
+        "warmCharsPerSec": 55823.49150160447
       },
       "overall": {
         "overlapAll": {

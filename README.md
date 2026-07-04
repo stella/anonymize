@@ -167,12 +167,12 @@ tables, and methodology live in
 [`packages/benchmark`](packages/benchmark); this run is from
 [`packages/benchmark/results/latest.md`](packages/benchmark/results/latest.md).
 
-| Library    | Version       | F1 (overlap, all labels) | Throughput (warm, chars/s) |
-| ---------- | ------------- | ------------------------ | -------------------------- |
-| stella     | 2.0.0-alpha.1 | **83.4**                 | 871,105                    |
-| presidio   | 2.2.360       | 50.9                     | 34,741                     |
-| redact-pii | 3.4.0         | 31.6                     | 57,718                     |
-| scrubadub  | 2.0.1         | 26.2                     | 919,792                    |
+| Library    | Version | F1 (overlap, all labels) | Throughput (warm, chars/s) |
+| ---------- | ------- | ------------------------ | -------------------------- |
+| stella     | 2.0.0   | **83.4**                 | 907,102                    |
+| presidio   | 2.2.360 | 50.9                     | 41,244                     |
+| redact-pii | 3.4.0   | 31.6                     | 55,823                     |
+| scrubadub  | 2.0.1   | 26.2                     | 1,563,700                  |
 
 Per-language overlap F1 (all labels):
 
@@ -233,8 +233,9 @@ flow, and extension rules are in
 ## Versioning and status
 
 Current release line: **2.0.0**. In 2.0 the product runtime moved from the in-process TypeScript pipeline to the Rust-native
-SDK, and the package root now exports the native API (`getDefaultNativePipeline`,
-`redactText`, `deanonymise`, and the prepared-package helpers). The 1.x
+SDK, and the package root now exports the native API (`getDefaultNativePipeline`
+whose pipelines expose `redactText`, plus `redact_text`, `deanonymise`,
+`exportRedactionKey`, and the prepared-package helpers). The 1.x
 TypeScript pipeline has been removed entirely; the Rust core owns detection,
 resolution, and configuration assembly across all runtimes. See
 [`packages/anonymize/ARCHITECTURE.md`](packages/anonymize/ARCHITECTURE.md) and
