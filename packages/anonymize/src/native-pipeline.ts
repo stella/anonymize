@@ -278,10 +278,11 @@ const getCachedNativePipelinePackage = async ({
   return packageBytes;
 };
 
-// Returns a promise (not `async`) so the shared package cache can store the
-// in-flight value and dedupe concurrent builds for the same key, even though
-// the Rust assembler call itself is synchronous.
-const buildNativePipelinePackage = ({
+// `async` so the shared package cache can store the in-flight value and dedupe
+// concurrent builds for the same key, and so assembly failures (an older
+// binding without the assemble functions, or a config the assembler rejects)
+// surface as a rejected promise rather than a synchronous throw mid-cache-flow.
+const buildNativePipelinePackage = async ({
   binding,
   config,
   gazetteerEntries,
@@ -289,12 +290,10 @@ const buildNativePipelinePackage = ({
 }: Required<
   Omit<NativePipelinePackageOptions, "context">
 >): Promise<Uint8Array> =>
-  Promise.resolve(
-    assemblePackageBytes(
-      binding,
-      toAssembleInputs(config, gazetteerEntries),
-      compressed,
-    ),
+  assemblePackageBytes(
+    binding,
+    toAssembleInputs(config, gazetteerEntries),
+    compressed,
   );
 
 type NativePackageCacheKeyOptions = {
