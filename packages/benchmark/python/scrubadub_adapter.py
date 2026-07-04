@@ -32,16 +32,20 @@ def scrub_all(scrubber: scrubadub.Scrubber, docs: list[dict]) -> list[dict]:
         text = doc["text"]
         entities = []
         for filth in scrubber.iter_filth(text):
-            # MergedFilth exposes .filths; use the leaf type when available.
-            filth_type = getattr(filth, "type", None) or "unknown"
-            entities.append(
-                {
-                    "start": filth.beg,
-                    "end": filth.end,
-                    "label": filth_type,
-                    "text": text[filth.beg : filth.end],
-                }
-            )
+            # A MergedFilth inherits type "unknown"; emit each leaf child
+            # (with its own span and type) so merged detections are kept
+            # rather than dropped by the label mapping.
+            leaves = getattr(filth, "filths", None) or [filth]
+            for leaf in leaves:
+                leaf_type = getattr(leaf, "type", None) or "unknown"
+                entities.append(
+                    {
+                        "start": leaf.beg,
+                        "end": leaf.end,
+                        "label": leaf_type,
+                        "text": text[leaf.beg : leaf.end],
+                    }
+                )
         results.append({"id": doc["id"], "entities": entities})
     return results
 
