@@ -1,0 +1,216 @@
+import { cpus, arch, platform, totalmem } from "node:os";
+import { join } from "node:path";
+
+import { createStellaAdapter } from "./adapters/stella";
+import { createRedactPiiAdapter } from "./adapters/redact-pii";
+import { createPythonAdapter } from "./adapters/python";
+import type { Adapter, NativePrediction } from "./adapters/types";
+import { loadGroundTruth } from "./ground-truth";
+import {
+  aggregate,
+  OVERLAP_THRESHOLD,
+  scoreCorpus,
+  type ScoredSpan,
+} from "./metrics";
+import {
+  type BenchResult,
+  type LibraryReport,
+  renderMarkdown,
+  type ThroughputReport,
+} from "./report";
+import {
+  COMMON_LABELS,
+  type CommonLabel,
+  type NativeMapping,
+  PRESIDIO_MAPPING,
+  REDACT_PII_MAPPING,
+  SCRUBADUB_MAPPING,
+  STELLA_MAPPING,
+  supportedLabels,
+} from "./taxonomy";
+
+const RESULTS_DIR = join(import.meta.dir, "..", "results");
+
+const git = (args: string[]): string => {
+  try {
+    const proc = Bun.spawnSync(["git", ...args], { cwd: import.meta.dir });
+    return proc.exitCode === 0 ? proc.stdout.toString().trim() : "";
+  } catch {
+    return "";
+  }
+};
+
+const gitSha = (): string => {
+  const sha = git(["rev-parse", "--short", "HEAD"]) || "no-git";
+  const dirty = git(["status", "--porcelain"]) === "" ? "" : "-dirty";
+  return `${sha}${dirty}`;
+};
+
+const hardwareNote = (): string => {
+  const model = cpus().at(0)?.model ?? "unknown CPU";
+  const gib = (totalmem() / 1024 ** 3).toFixed(0);
+  return `${platform()}/${arch()}, ${cpus().length}x ${model}, ${gib} GiB RAM`;
+};
+
+const byLabelPrf = (
+  spans: readonly ScoredSpan[],
+): Record<CommonLabel, ReturnType<typeof aggregate>> => {
+  const record = {} as Record<CommonLabel, ReturnType<typeof aggregate>>;
+  for (const label of COMMON_LABELS) {
+    record[label] = aggregate(spans.filter((span) => span.label === label));
+  }
+  return record;
+};
+
+const byLanguagePrf = (
+  spans: readonly ScoredSpan[],
+  languages: readonly string[],
+): Record<string, ReturnType<typeof aggregate>> => {
+  const record: Record<string, ReturnType<typeof aggregate>> = {};
+  for (const language of languages) {
+    record[language] = aggregate(
+      spans.filter((span) => span.language === language),
+    );
+  }
+  return record;
+};
+
+type RegisteredAdapter = { adapter: Adapter; mapping: NativeMapping };
+
+const run = async (): Promise<void> => {
+  const docs = await loadGroundTruth();
+  const languages = [...new Set(docs.map((doc) => doc.language))].sort();
+
+  const byLanguage: Record<string, number> = {};
+  const byLabel: Record<string, number> = {};
+  let entityCount = 0;
+  for (const doc of docs) {
+    byLanguage[doc.language] = (byLanguage[doc.language] ?? 0) + 1;
+    for (const entity of doc.entities) {
+      byLabel[entity.label] = (byLabel[entity.label] ?? 0) + 1;
+      entityCount++;
+    }
+  }
+
+  const registered: RegisteredAdapter[] = [
+    { adapter: await createStellaAdapter(), mapping: STELLA_MAPPING },
+    {
+      adapter: createPythonAdapter({
+        name: "presidio",
+        venvDir: ".venv-presidio",
+        script: "presidio_adapter.py",
+      }),
+      mapping: PRESIDIO_MAPPING,
+    },
+    {
+      adapter: createPythonAdapter({
+        name: "scrubadub",
+        venvDir: ".venv-scrubadub",
+        script: "scrubadub_adapter.py",
+      }),
+      mapping: SCRUBADUB_MAPPING,
+    },
+    { adapter: createRedactPiiAdapter(), mapping: REDACT_PII_MAPPING },
+  ];
+
+  const libraries: LibraryReport[] = [];
+
+  for (const { adapter, mapping } of registered) {
+    process.stderr.write(`running ${adapter.name}...\n`);
+    const outcome = await adapter.run(docs);
+
+    if (outcome.status === "unavailable") {
+      libraries.push({
+        name: adapter.name,
+        version: adapter.version,
+        status: "unavailable",
+        reason: outcome.reason,
+      });
+      process.stderr.write(`  unavailable: ${outcome.reason}\n`);
+      continue;
+    }
+
+    const supported = [...supportedLabels(mapping)].sort() as CommonLabel[];
+    const supportedSet = new Set<CommonLabel>(supported);
+    const predictions: ReadonlyMap<string, readonly NativePrediction[]> =
+      outcome.predictions;
+
+    const overlapSpans = scoreCorpus(docs, predictions, mapping, "overlap");
+    const exactSpans = scoreCorpus(docs, predictions, mapping, "exact");
+    const overlapSupported = overlapSpans.filter((span) =>
+      supportedSet.has(span.label),
+    );
+
+    const throughput: ThroughputReport = {
+      initSeconds: outcome.timing.initSeconds,
+      totalChars: outcome.timing.totalChars,
+      coldCharsPerSec:
+        outcome.timing.coldSeconds > 0
+          ? outcome.timing.totalChars / outcome.timing.coldSeconds
+          : 0,
+      warmCharsPerSec:
+        outcome.timing.warmSeconds > 0
+          ? outcome.timing.totalChars / outcome.timing.warmSeconds
+          : 0,
+    };
+
+    libraries.push({
+      name: adapter.name,
+      version: outcome.reportedVersion ?? adapter.version,
+      status: "ok",
+      notes: outcome.notes,
+      supportedLabels: supported,
+      throughput,
+      overall: {
+        overlapAll: aggregate(overlapSpans),
+        overlapSupported: aggregate(overlapSupported),
+        exactAll: aggregate(exactSpans),
+      },
+      perLabel: byLabelPrf(overlapSpans),
+      perLanguage: byLanguagePrf(overlapSpans, languages),
+    });
+  }
+
+  const result: BenchResult = {
+    createdAt: new Date().toISOString(),
+    gitSha: gitSha(),
+    hardware: hardwareNote(),
+    runtime: `Bun ${Bun.version}`,
+    corpus: {
+      documents: docs.length,
+      entities: entityCount,
+      byLanguage,
+      byLabel,
+    },
+    matching: {
+      primary: `overlap: same label and IoU >= ${OVERLAP_THRESHOLD}`,
+      secondary: "exact: same label and identical [start, end)",
+    },
+    libraries,
+  };
+
+  const date = result.createdAt.slice(0, 10);
+  const jsonPath = join(RESULTS_DIR, `${date}.json`);
+  const mdPath = join(RESULTS_DIR, `${date}.md`);
+  const latestPath = join(RESULTS_DIR, "latest.md");
+  const markdown = renderMarkdown(result);
+
+  await Bun.write(jsonPath, `${JSON.stringify(result, null, 2)}\n`);
+  await Bun.write(mdPath, markdown);
+  await Bun.write(latestPath, markdown);
+
+  process.stderr.write(
+    `\nwrote:\n  ${jsonPath}\n  ${mdPath}\n  ${latestPath}\n`,
+  );
+
+  process.stderr.write("\noverall (overlap, all-labels):\n");
+  for (const lib of libraries) {
+    if (lib.status === "ok") {
+      process.stderr.write(
+        `  ${lib.name.padEnd(12)} P=${(lib.overall.overlapAll.precision * 100).toFixed(1)} R=${(lib.overall.overlapAll.recall * 100).toFixed(1)} F1=${(lib.overall.overlapAll.f1 * 100).toFixed(1)}\n`,
+      );
+    }
+  }
+};
+
+await run();

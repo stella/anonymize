@@ -1,0 +1,231 @@
+[
+  {
+    "id": "en-software-license",
+    "language": "en",
+    "title": "Software license agreement (synthetic)",
+    "segments": [
+      "This Software License Agreement is entered into as of ",
+      { "t": "February 12, 2025", "label": "date" },
+      " by and between ",
+      { "t": "Aurelia Analytics, Inc.", "label": "organization" },
+      ", a Delaware corporation with its principal place of business at ",
+      { "t": "1209 Orange Street, Wilmington, DE 19801", "label": "address" },
+      ", represented by its Chief Executive Officer ",
+      { "t": "Priya Ramanathan", "label": "person" },
+      ", and ",
+      { "t": "Northwind Capital Partners LLC", "label": "organization" },
+      ", represented by ",
+      { "t": "Jonathan H. Whitaker", "label": "person" },
+      ". The annual license fee is ",
+      { "t": "USD 1,250,000.00", "label": "money" },
+      ", payable to account ",
+      { "t": "4537891022", "label": "id-number" },
+      ". Notices to the Licensor may be sent to ",
+      { "t": "legal@aurelia-analytics.example", "label": "email" },
+      " or by telephone at ",
+      { "t": "(212) 555-0142", "label": "phone" },
+      "."
+    ]
+  },
+  {
+    "id": "en-employment-offer",
+    "language": "en",
+    "title": "Employment offer letter (synthetic)",
+    "segments": [
+      "Dear ",
+      { "t": "Marcus Delgado", "label": "person" },
+      ", we are pleased to offer you the position of Senior Counsel at ",
+      { "t": "Brightwater Holdings Ltd.", "label": "organization" },
+      " with a start date of ",
+      { "t": "March 3, 2025", "label": "date" },
+      ". Your annual base salary will be ",
+      { "t": "$185,000", "label": "money" },
+      ". Please return the signed copy to ",
+      { "t": "hr@brightwater.example", "label": "email" },
+      " or contact our office at ",
+      { "t": "+1 415 555 0199", "label": "phone" },
+      ". Our registered office is located at ",
+      { "t": "500 Market Street, San Francisco, CA 94105", "label": "address" },
+      ". For payroll setup we will need your Social Security Number ",
+      { "t": "078-05-1120", "label": "id-number" },
+      "."
+    ]
+  },
+  {
+    "id": "en-lease-agreement",
+    "language": "en",
+    "title": "Residential lease agreement (synthetic)",
+    "segments": [
+      "This Lease is made on ",
+      { "t": "June 1, 2024", "label": "date" },
+      " between the Landlord ",
+      { "t": "Evelyn Marsh", "label": "person" },
+      " and the Tenant ",
+      { "t": "Daniel O'Connor", "label": "person" },
+      " for the premises at ",
+      { "t": "42 Birchwood Lane, Portland, OR 97209", "label": "address" },
+      ". Monthly rent of ",
+      { "t": "$2,150", "label": "money" },
+      " is due on the first day of each month. The Tenant may be reached at ",
+      { "t": "503-555-0173", "label": "phone" },
+      " or ",
+      { "t": "d.oconnor@example.org", "label": "email" },
+      "."
+    ]
+  },
+  {
+    "id": "en-nda",
+    "language": "en",
+    "title": "Mutual non-disclosure agreement (synthetic)",
+    "segments": [
+      "This Mutual Non-Disclosure Agreement is effective ",
+      { "t": "January 15, 2025", "label": "date" },
+      " between ",
+      { "t": "Cobalt Robotics GmbH", "label": "organization" },
+      " and ",
+      { "t": "Meridian Data Systems, Inc.", "label": "organization" },
+      ". The parties' representatives are ",
+      { "t": "Ingrid Sfollner", "label": "person" },
+      " and ",
+      { "t": "Raymond Tao", "label": "person" },
+      " respectively. Any breach shall be reported within five business days to ",
+      { "t": "compliance@meridian-data.example", "label": "email" },
+      "."
+    ]
+  },
+  {
+    "id": "en-invoice",
+    "language": "en",
+    "title": "Commercial invoice (synthetic)",
+    "segments": [
+      "Invoice issued ",
+      { "t": "April 30, 2025", "label": "date" },
+      " by ",
+      { "t": "Halcyon Consulting LLP", "label": "organization" },
+      " to ",
+      { "t": "Peregrine Foods Corporation", "label": "organization" },
+      ". Bill to: ",
+      { "t": "Sandra Keller", "label": "person" },
+      ", ",
+      {
+        "t": "88 Canal Road, Suite 400, Chicago, IL 60606",
+        "label": "address"
+      },
+      ". Amount due: ",
+      { "t": "EUR 47,320.50", "label": "money" },
+      ". Remit to IBAN ",
+      { "t": "DE89 3704 0044 0532 0130 00", "label": "id-number" },
+      ". Questions to ",
+      { "t": "billing@halcyon.example", "label": "email" },
+      "."
+    ]
+  },
+  {
+    "id": "en-power-of-attorney",
+    "language": "en",
+    "title": "Power of attorney (synthetic)",
+    "segments": [
+      "I, ",
+      { "t": "Theodore Blackwood", "label": "person" },
+      ", residing at ",
+      { "t": "17 Kingsway Avenue, Boston, MA 02116", "label": "address" },
+      ", hereby appoint ",
+      { "t": "Amelia Rourke", "label": "person" },
+      " as my attorney-in-fact, effective ",
+      { "t": "May 20, 2025", "label": "date" },
+      ". My passport number is ",
+      { "t": "X47281905", "label": "id-number" },
+      " and I may be contacted at ",
+      { "t": "617-555-0148", "label": "phone" },
+      "."
+    ]
+  },
+  {
+    "id": "en-service-contract",
+    "language": "en",
+    "title": "Master services agreement (synthetic)",
+    "segments": [
+      "This Master Services Agreement dated ",
+      { "t": "September 9, 2024", "label": "date" },
+      " is between ",
+      { "t": "Quantile Legal Services PLLC", "label": "organization" },
+      " and the client ",
+      { "t": "Harborline Shipping Co.", "label": "organization" },
+      ". The engagement partner is ",
+      { "t": "Nadia Vasquez", "label": "person" },
+      ". Total fees are capped at ",
+      { "t": "$96,500", "label": "money" },
+      ". The client's tax identification number is ",
+      { "t": "45-6789012", "label": "id-number" },
+      ". Correspondence should be addressed to ",
+      { "t": "220 Wharf Street, Seattle, WA 98101", "label": "address" },
+      "."
+    ]
+  },
+  {
+    "id": "en-settlement",
+    "language": "en",
+    "title": "Settlement and release (synthetic)",
+    "segments": [
+      "The parties ",
+      { "t": "Gregory Nash", "label": "person" },
+      " and ",
+      { "t": "Orion Manufacturing Inc.", "label": "organization" },
+      " agree to settle all claims as of ",
+      { "t": "November 2, 2024", "label": "date" },
+      " for the sum of ",
+      { "t": "$412,000.00", "label": "money" },
+      ". Payment shall be wired to the account of counsel, ",
+      { "t": "Fenwick & Gray LLP", "label": "organization" },
+      ", whose office is at ",
+      { "t": "One Liberty Plaza, New York, NY 10006", "label": "address" },
+      ". Confirmation to ",
+      { "t": "settlements@fenwickgray.example", "label": "email" },
+      "."
+    ]
+  },
+  {
+    "id": "en-bank-authorization",
+    "language": "en",
+    "title": "Direct debit authorization (synthetic)",
+    "segments": [
+      "Account holder ",
+      { "t": "Lucia Fernandes", "label": "person" },
+      " authorizes ",
+      { "t": "Cedar Utilities Company", "label": "organization" },
+      " to debit her account ending ",
+      { "t": "6602118843", "label": "id-number" },
+      " beginning ",
+      { "t": "July 1, 2025", "label": "date" },
+      ". Monthly charges will not exceed ",
+      { "t": "$340", "label": "money" },
+      ". Her billing address is ",
+      { "t": "9 Sycamore Court, Austin, TX 78701", "label": "address" },
+      " and her contact number is ",
+      { "t": "512-555-0121", "label": "phone" },
+      "."
+    ]
+  },
+  {
+    "id": "en-board-resolution",
+    "language": "en",
+    "title": "Board resolution (synthetic)",
+    "segments": [
+      "At a meeting held on ",
+      { "t": "December 12, 2024", "label": "date" },
+      ", the board of ",
+      { "t": "Stratos Renewables Corp.", "label": "organization" },
+      " resolved to appoint ",
+      { "t": "Beatrice Lundqvist", "label": "person" },
+      " as Chief Financial Officer. The company's registration number is ",
+      { "t": "0912-448-771", "label": "id-number" },
+      " and its head office is at ",
+      { "t": "310 Pioneer Way, Denver, CO 80202", "label": "address" },
+      ". Enquiries may be directed to the corporate secretary ",
+      { "t": "Owen Radcliffe", "label": "person" },
+      " at ",
+      { "t": "secretary@stratos-renew.example", "label": "email" },
+      "."
+    ]
+  }
+]

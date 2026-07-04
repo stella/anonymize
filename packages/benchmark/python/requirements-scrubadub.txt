@@ -1,0 +1,4 @@
+# Pinned dependencies for the scrubadub adapter.
+# Install into a Python 3.11 virtualenv; see REPRODUCING.md.
+scrubadub==2.0.1
+phonenumbers==8.13.55

@@ -1,0 +1,222 @@
+[
+  {
+    "id": "cs-kupni-smlouva",
+    "language": "cs",
+    "title": "Kupní smlouva (synthetic)",
+    "segments": [
+      "Tato kupní smlouva byla uzavřena dne ",
+      { "t": "12. února 2025", "label": "date" },
+      " mezi prodávajícím ",
+      { "t": "Jan Novák", "label": "person" },
+      ", bytem ",
+      { "t": "Dlouhá 14, 110 00 Praha 1", "label": "address" },
+      ", a kupujícím společností ",
+      { "t": "Modrá věž s.r.o.", "label": "organization" },
+      ", IČO ",
+      { "t": "27154896", "label": "id-number" },
+      ". Kupní cena činí ",
+      { "t": "1 850 000 Kč", "label": "money" },
+      ". Prodávající je zastoupen ",
+      { "t": "Petrou Svobodovou", "label": "person" },
+      " a lze jej kontaktovat na ",
+      { "t": "jan.novak@example.cz", "label": "email" },
+      " nebo telefonicky na ",
+      { "t": "+420 602 123 456", "label": "phone" },
+      "."
+    ]
+  },
+  {
+    "id": "cs-najemni-smlouva",
+    "language": "cs",
+    "title": "Nájemní smlouva (synthetic)",
+    "segments": [
+      "Nájemní smlouva uzavřená dne ",
+      { "t": "1. června 2024", "label": "date" },
+      " mezi pronajímatelem ",
+      { "t": "Eva Horáková", "label": "person" },
+      " a nájemcem ",
+      { "t": "Tomáš Dvořák", "label": "person" },
+      " k bytu na adrese ",
+      { "t": "Nádražní 27, 602 00 Brno", "label": "address" },
+      ". Měsíční nájemné činí ",
+      { "t": "18 500 Kč", "label": "money" },
+      ". Nájemce je narozen dne ",
+      { "t": "14. března 1990", "label": "date" },
+      " a jeho rodné číslo je ",
+      { "t": "900314/1258", "label": "id-number" },
+      ". Kontakt: ",
+      { "t": "725 987 654", "label": "phone" },
+      "."
+    ]
+  },
+  {
+    "id": "cs-pracovni-smlouva",
+    "language": "cs",
+    "title": "Pracovní smlouva (synthetic)",
+    "segments": [
+      "Zaměstnavatel ",
+      { "t": "Sluneční pekárny a.s.", "label": "organization" },
+      ", se sídlem ",
+      { "t": "Průmyslová 5, 700 30 Ostrava", "label": "address" },
+      ", IČO ",
+      { "t": "45193007", "label": "id-number" },
+      ", uzavírá se zaměstnancem ",
+      { "t": "Marie Kučerová", "label": "person" },
+      " pracovní smlouvu s nástupem dne ",
+      { "t": "3. března 2025", "label": "date" },
+      ". Sjednaná měsíční mzda činí ",
+      { "t": "42 000 Kč", "label": "money" },
+      ". Kontaktní e-mail personálního oddělení je ",
+      { "t": "personalni@slunecni-pekarny.cz", "label": "email" },
+      "."
+    ]
+  },
+  {
+    "id": "cs-plna-moc",
+    "language": "cs",
+    "title": "Plná moc (synthetic)",
+    "segments": [
+      "Já, níže podepsaný ",
+      { "t": "Karel Beneš", "label": "person" },
+      ", bytem ",
+      { "t": "Zahradní 8, 370 01 České Budějovice", "label": "address" },
+      ", zmocňuji tímto ",
+      { "t": "Lucii Marešovou", "label": "person" },
+      ", aby mě zastupovala s účinností od ",
+      { "t": "20. května 2025", "label": "date" },
+      ". Číslo mého občanského průkazu je ",
+      { "t": "203845617", "label": "id-number" },
+      " a lze mě zastihnout na telefonu ",
+      { "t": "+420 777 321 654", "label": "phone" },
+      "."
+    ]
+  },
+  {
+    "id": "cs-faktura",
+    "language": "cs",
+    "title": "Faktura (synthetic)",
+    "segments": [
+      "Fakturu vystavila dne ",
+      { "t": "30. dubna 2025", "label": "date" },
+      " společnost ",
+      { "t": "Zelený statek s.r.o.", "label": "organization" },
+      " odběrateli ",
+      { "t": "Vltava trading a.s.", "label": "organization" },
+      ". Fakturovaná částka činí ",
+      { "t": "312 450 Kč", "label": "money" },
+      " a je splatná na účet ",
+      { "t": "CZ65 0800 0000 1920 0014 5399", "label": "id-number" },
+      ". Kontaktní osobou je ",
+      { "t": "Josef Malý", "label": "person" },
+      ", ",
+      { "t": "fakturace@zeleny-statek.cz", "label": "email" },
+      "."
+    ]
+  },
+  {
+    "id": "cs-darovaci-smlouva",
+    "language": "cs",
+    "title": "Darovací smlouva (synthetic)",
+    "segments": [
+      "Dárce ",
+      { "t": "Hana Pokorná", "label": "person" },
+      " daruje dne ",
+      { "t": "2. listopadu 2024", "label": "date" },
+      " obdarovanému ",
+      { "t": "Nadace Přístav", "label": "organization" },
+      " finanční částku ",
+      { "t": "500 000 Kč", "label": "money" },
+      ". Sídlo obdarovaného je ",
+      { "t": "Kostelní 3, 460 01 Liberec", "label": "address" },
+      ". Potvrzení zašlete na ",
+      { "t": "nadace@pristav.example", "label": "email" },
+      "."
+    ]
+  },
+  {
+    "id": "cs-smlouva-o-dilo",
+    "language": "cs",
+    "title": "Smlouva o dílo (synthetic)",
+    "segments": [
+      "Objednatel ",
+      { "t": "Bytové družstvo Kamenná", "label": "organization" },
+      " a zhotovitel ",
+      { "t": "Stavby Horák s.r.o.", "label": "organization" },
+      " uzavírají dne ",
+      { "t": "9. září 2024", "label": "date" },
+      " smlouvu o dílo. Cena díla je stanovena na ",
+      { "t": "2 340 000 Kč", "label": "money" },
+      ". Za zhotovitele jedná ",
+      { "t": "Roman Horák", "label": "person" },
+      ", IČO zhotovitele je ",
+      { "t": "61987234", "label": "id-number" },
+      ". Stavba se nachází na adrese ",
+      { "t": "Polní 112, 500 02 Hradec Králové", "label": "address" },
+      "."
+    ]
+  },
+  {
+    "id": "cs-dohoda-o-narovnani",
+    "language": "cs",
+    "title": "Dohoda o narovnání (synthetic)",
+    "segments": [
+      "Smluvní strany ",
+      { "t": "Filip Sedláček", "label": "person" },
+      " a ",
+      { "t": "Orlické strojírny a.s.", "label": "organization" },
+      " se dne ",
+      { "t": "2. listopadu 2024", "label": "date" },
+      " dohodly na narovnání všech nároků za částku ",
+      { "t": "780 000 Kč", "label": "money" },
+      ". Platba bude poukázána na účet ",
+      { "t": "1920014539/0800", "label": "id-number" },
+      ". Potvrzení zašlete na ",
+      { "t": "narovnani@orlicke.example", "label": "email" },
+      " nebo volejte ",
+      { "t": "601 445 778", "label": "phone" },
+      "."
+    ]
+  },
+  {
+    "id": "cs-souhlas-inkaso",
+    "language": "cs",
+    "title": "Souhlas s inkasem (synthetic)",
+    "segments": [
+      "Majitel účtu ",
+      { "t": "Ludmila Fialová", "label": "person" },
+      " uděluje společnosti ",
+      { "t": "Vodárny Jih s.r.o.", "label": "organization" },
+      " souhlas s inkasem z účtu ",
+      { "t": "2701445778/2010", "label": "id-number" },
+      " počínaje dnem ",
+      { "t": "1. července 2025", "label": "date" },
+      ". Měsíční platba nepřesáhne ",
+      { "t": "1 200 Kč", "label": "money" },
+      ". Fakturační adresa je ",
+      { "t": "Lipová 6, 779 00 Olomouc", "label": "address" },
+      "."
+    ]
+  },
+  {
+    "id": "cs-usneseni-predstavenstva",
+    "language": "cs",
+    "title": "Usnesení představenstva (synthetic)",
+    "segments": [
+      "Na zasedání konaném dne ",
+      { "t": "12. prosince 2024", "label": "date" },
+      " představenstvo společnosti ",
+      { "t": "Severní energie a.s.", "label": "organization" },
+      " jmenovalo ",
+      { "t": "Barboru Novotnou", "label": "person" },
+      " finanční ředitelkou. IČO společnosti je ",
+      { "t": "28471905", "label": "id-number" },
+      " a sídlo se nachází na adrese ",
+      { "t": "Nová 310, 400 01 Ústí nad Labem", "label": "address" },
+      ". Dotazy směřujte na tajemníka ",
+      { "t": "Ondřeje Rybu", "label": "person" },
+      ", ",
+      { "t": "tajemnik@severni-energie.cz", "label": "email" },
+      "."
+    ]
+  }
+]

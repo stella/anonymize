@@ -1,0 +1,5 @@
+# Python virtual environments for competitor adapters (re-created via REPRODUCING.md)
+.venv-presidio/
+.venv-scrubadub/
+# Turbo cache
+.turbo/

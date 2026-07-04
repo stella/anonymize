@@ -1,0 +1,172 @@
+[
+  {
+    "id": "de-kaufvertrag",
+    "language": "de",
+    "title": "Kaufvertrag (synthetic)",
+    "segments": [
+      "Dieser Kaufvertrag wird am ",
+      { "t": "12. Februar 2025", "label": "date" },
+      " zwischen dem Verkäufer ",
+      { "t": "Andreas Meier", "label": "person" },
+      ", wohnhaft ",
+      { "t": "Hauptstraße 14, 10115 Berlin", "label": "address" },
+      ", und der Käuferin ",
+      { "t": "Blaue Turm GmbH", "label": "organization" },
+      " geschlossen. Der Kaufpreis beträgt ",
+      { "t": "185.000 EUR", "label": "money" },
+      ". Der Verkäufer ist erreichbar unter ",
+      { "t": "andreas.meier@example.de", "label": "email" },
+      " oder telefonisch unter ",
+      { "t": "+49 30 1234567", "label": "phone" },
+      ". Die Steuernummer des Verkäufers lautet ",
+      { "t": "27/154/89600", "label": "id-number" },
+      "."
+    ]
+  },
+  {
+    "id": "de-mietvertrag",
+    "language": "de",
+    "title": "Mietvertrag (synthetic)",
+    "segments": [
+      "Der Mietvertrag vom ",
+      { "t": "1. Juni 2024", "label": "date" },
+      " wird zwischen dem Vermieter ",
+      { "t": "Ursula Bergmann", "label": "person" },
+      " und dem Mieter ",
+      { "t": "Thomas Richter", "label": "person" },
+      " über die Wohnung ",
+      { "t": "Bahnhofstraße 27, 80335 München", "label": "address" },
+      " geschlossen. Die monatliche Miete beträgt ",
+      { "t": "1.850 EUR", "label": "money" },
+      ". Der Mieter ist erreichbar unter ",
+      { "t": "+49 89 9876543", "label": "phone" },
+      " oder ",
+      { "t": "t.richter@example.de", "label": "email" },
+      "."
+    ]
+  },
+  {
+    "id": "de-arbeitsvertrag",
+    "language": "de",
+    "title": "Arbeitsvertrag (synthetic)",
+    "segments": [
+      "Der Arbeitgeber ",
+      { "t": "Sonnen Bäckerei AG", "label": "organization" },
+      ", mit Sitz in ",
+      { "t": "Industrieweg 5, 70173 Stuttgart", "label": "address" },
+      ", schließt mit der Arbeitnehmerin ",
+      { "t": "Petra Wagner", "label": "person" },
+      " einen Arbeitsvertrag mit Beginn am ",
+      { "t": "3. März 2025", "label": "date" },
+      ". Das vereinbarte Monatsgehalt beträgt ",
+      { "t": "4.200 EUR", "label": "money" },
+      ". Rückfragen an die Personalabteilung unter ",
+      { "t": "personal@sonnen-baeckerei.de", "label": "email" },
+      "."
+    ]
+  },
+  {
+    "id": "de-vollmacht",
+    "language": "de",
+    "title": "Vollmacht (synthetic)",
+    "segments": [
+      "Ich, ",
+      { "t": "Karl Schuster", "label": "person" },
+      ", wohnhaft ",
+      { "t": "Gartenweg 8, 04109 Leipzig", "label": "address" },
+      ", bevollmächtige hiermit ",
+      { "t": "Julia Fischer", "label": "person" },
+      ", mich mit Wirkung ab dem ",
+      { "t": "20. Mai 2025", "label": "date" },
+      " zu vertreten. Meine Personalausweisnummer lautet ",
+      { "t": "L01X00T471", "label": "id-number" },
+      " und ich bin erreichbar unter ",
+      { "t": "+49 341 5550148", "label": "phone" },
+      "."
+    ]
+  },
+  {
+    "id": "de-rechnung",
+    "language": "de",
+    "title": "Rechnung (synthetic)",
+    "segments": [
+      "Die Rechnung wurde am ",
+      { "t": "30. April 2025", "label": "date" },
+      " von der ",
+      { "t": "Grüner Hof GmbH", "label": "organization" },
+      " an die ",
+      { "t": "Moldau Handel AG", "label": "organization" },
+      " ausgestellt. Der Rechnungsbetrag beträgt ",
+      { "t": "47.320,50 EUR", "label": "money" },
+      " und ist auf das Konto ",
+      { "t": "DE89 3704 0044 0532 0130 00", "label": "id-number" },
+      " zu überweisen. Ansprechpartner ist ",
+      { "t": "Josef Klein", "label": "person" },
+      ", ",
+      { "t": "buchhaltung@gruener-hof.de", "label": "email" },
+      "."
+    ]
+  },
+  {
+    "id": "de-schenkungsvertrag",
+    "language": "de",
+    "title": "Schenkungsvertrag (synthetic)",
+    "segments": [
+      "Der Schenker ",
+      { "t": "Helga Pohl", "label": "person" },
+      " schenkt am ",
+      { "t": "2. November 2024", "label": "date" },
+      " der ",
+      { "t": "Stiftung Hafen", "label": "organization" },
+      " einen Geldbetrag von ",
+      { "t": "50.000 EUR", "label": "money" },
+      ". Der Sitz der Stiftung ist ",
+      { "t": "Kirchweg 3, 20095 Hamburg", "label": "address" },
+      ". Eine Bestätigung senden Sie bitte an ",
+      { "t": "stiftung@hafen.example", "label": "email" },
+      "."
+    ]
+  },
+  {
+    "id": "de-werkvertrag",
+    "language": "de",
+    "title": "Werkvertrag (synthetic)",
+    "segments": [
+      "Der Besteller ",
+      { "t": "Wohnungsbau Genossenschaft Stein", "label": "organization" },
+      " und der Auftragnehmer ",
+      { "t": "Bau Hofer GmbH", "label": "organization" },
+      " schließen am ",
+      { "t": "9. September 2024", "label": "date" },
+      " einen Werkvertrag. Der Werklohn beträgt ",
+      { "t": "234.000 EUR", "label": "money" },
+      ". Für den Auftragnehmer handelt ",
+      { "t": "Roland Hofer", "label": "person" },
+      ". Die Baustelle befindet sich in ",
+      { "t": "Feldstraße 112, 30159 Hannover", "label": "address" },
+      ". Kontakt: ",
+      { "t": "+49 511 5550121", "label": "phone" },
+      "."
+    ]
+  },
+  {
+    "id": "de-vorstandsbeschluss",
+    "language": "de",
+    "title": "Vorstandsbeschluss (synthetic)",
+    "segments": [
+      "In der Sitzung vom ",
+      { "t": "12. Dezember 2024", "label": "date" },
+      " hat der Vorstand der ",
+      { "t": "Nordenergie AG", "label": "organization" },
+      " Frau ",
+      { "t": "Beate Ludwig", "label": "person" },
+      " zur Finanzvorständin bestellt. Der Sitz der Gesellschaft ist ",
+      { "t": "Neue Straße 310, 50667 Köln", "label": "address" },
+      ". Anfragen richten Sie an den Sekretär ",
+      { "t": "Oliver Radek", "label": "person" },
+      " unter ",
+      { "t": "sekretariat@nordenergie.de", "label": "email" },
+      "."
+    ]
+  }
+]

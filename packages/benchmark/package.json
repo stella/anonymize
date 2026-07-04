@@ -1,0 +1,24 @@
+{
+  "name": "@stll/anonymize-benchmark",
+  "version": "0.0.0",
+  "description": "Reproducible comparison of stella/anonymize against open-source PII redaction libraries on recall, precision, and throughput over a public synthetic legal corpus",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "bun test",
+    "format": "oxfmt . \"!results/**\"",
+    "bench:compare": "bun src/bench.ts"
+  },
+  "dependencies": {
+    "@stll/anonymize": "workspace:^",
+    "@stll/anonymize-data": "^0.0.6",
+    "redact-pii": "3.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.1",
+    "bun-types": "^1.3.14",
+    "typescript": "^6.0.3"
+  }
+}
