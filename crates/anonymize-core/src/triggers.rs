@@ -1799,5 +1799,4 @@ mod tests {
     assert_eq!(entities.len(), 1);
     assert_eq!(entities[0].text, "Krajským soudem v Ústí nad Labem");
   }
-
 }

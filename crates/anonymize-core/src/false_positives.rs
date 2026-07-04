@@ -952,7 +952,12 @@ mod tests {
     let text =
       "Conseil de prud'hommes des Sables-d'Olonne a rendu son jugement.";
     let entities = filter_entity_false_positives(
-      vec![entity(text, text, ORGANIZATION_LABEL, DetectionSource::Trigger)],
+      vec![entity(
+        text,
+        text,
+        ORGANIZATION_LABEL,
+        DetectionSource::Trigger,
+      )],
       text,
       Some(&DenyListFilterData::default()),
     )
