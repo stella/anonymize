@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
     inputs:
       publish_to_npm:
-        description: Publish the current package versions to npm after verification
+        description: Publish the current package versions to npm AND PyPI after verification (PyPI releases are immutable)
         required: true
         default: false
         type: boolean

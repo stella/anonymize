@@ -17,7 +17,7 @@ const profile = process.env.ANONYMIZE_PYTHON_WHEEL_PROFILE ?? "ci";
 // the release workflow) instead of building one here. The packlist and smoke
 // assertions stay identical, so a published wheel is checked the same way the
 // verify job checks a locally built one.
-const prebuiltWheel = process.env.ANONYMIZE_PYTHON_WHEEL_PATH;
+const prebuiltWheel = process.env.ANONYMIZE_PYTHON_WHEEL_PATH?.trim();
 const nativePackagePattern =
   /^native-pipeline(?:\.[a-z0-9]+(?:-[a-z0-9]+)*)?\.stlanonpkg$/u;
 const nativePackageSourceDir = join("packages", "anonymize");
@@ -39,8 +39,10 @@ const pythonAttributionFile = join(
 
 if (prebuiltWheel) {
   const wheelPath = resolve(prebuiltWheel);
-  if (!existsSync(wheelPath)) {
-    throw new Error(`prebuilt wheel does not exist: ${wheelPath}`);
+  if (!existsSync(wheelPath) || !wheelPath.endsWith(".whl")) {
+    throw new Error(
+      `prebuilt wheel does not exist or is not a .whl file: ${wheelPath}`,
+    );
   }
   assertWheelContents(wheelPath);
   smokeInstalledWheel(wheelPath);
