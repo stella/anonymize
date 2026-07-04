@@ -203,7 +203,7 @@ describe("contract quality regressions", () => {
   // NATIVE-GAP: native address expansion stops at the "St." abbreviation and
   // emits exactly "123 Main St"; it does not extend the span across the
   // abbreviation dot into the "Suite 100" continuation.
-  test.skip("keeps address continuations after street abbreviations", async () => {
+  test("keeps address continuations after street abbreviations", async () => {
     const entities = await detect(
       "The employee is residing at 123 Main St. Suite 100.",
     );

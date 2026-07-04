@@ -589,7 +589,17 @@ fn trim_trailing_address_prose(
     if !before.chars().any(|candidate| candidate.is_ascii_digit()) {
       continue;
     }
-    if text_ends_with_address_component(before.trim_end(), filters) {
+    // The current period may be the trailing dot of a street abbreviation
+    // ("123 Main St." -> "Suite 100"). Street types are stored dotted ("st."),
+    // so `before` (which excludes this dot) never matches; include the dot so
+    // the abbreviation is recognized as an address component, not a sentence
+    // boundary. Full street names ("Street") already match on `before`.
+    let before_with_dot = text
+      .get(..index.saturating_add('.'.len_utf8()))
+      .unwrap_or(before);
+    if text_ends_with_address_component(before.trim_end(), filters)
+      || text_ends_with_address_component(before_with_dot, filters)
+    {
       continue;
     }
     let after = text
@@ -953,6 +963,23 @@ mod tests {
     assert_eq!(
       entities[0].text,
       "Conseil de prud'hommes des Sables-d'Olonne"
+    );
+  }
+
+  #[test]
+  fn keeps_unit_continuation_after_street_abbreviation() {
+    // "123 Main St. Suite 100": the period is the street abbreviation's own
+    // dot, not a sentence end, so the unit continuation must not be trimmed.
+    let mut filters = DenyListFilterData::default();
+    filters.street_types = set(["st.", "street"]);
+    assert_eq!(
+      trim_trailing_address_prose("123 Main St. Suite 100", &filters),
+      None
+    );
+    // A full street name behaves the same (already did).
+    assert_eq!(
+      trim_trailing_address_prose("123 Main Street. Suite 100", &filters),
+      None
     );
   }
 
