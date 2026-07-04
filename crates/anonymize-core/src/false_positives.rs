@@ -910,11 +910,11 @@ fn trim_open_ended_org_prose(
     let Some(start) = word_start.take() else {
       continue;
     };
-    if word_is_capital {
+    let word = text.get(start..idx);
+    if word_is_capital || is_elided_capital(word) {
       last_capital_end = Some(idx);
       continue;
     }
-    let word = text.get(start..idx);
     if armed && is_sentence_starter(word, sentence_starters) {
       break;
     }
@@ -924,11 +924,41 @@ fn trim_open_ended_org_prose(
       armed = true;
     }
   }
-  if word_start.is_some() && word_is_capital {
+  if let Some(start) = word_start
+    && (word_is_capital || is_elided_capital(text.get(start..trimmed_end)))
+  {
     last_capital_end = Some(trimmed_end);
   }
   let end = last_capital_end?;
   (end < trimmed_end).then_some(end)
+}
+
+/// French/Italian elisions hide the capital behind an apostrophe:
+/// "d'Aix-en-Provence", "l'Oreal", "dell'Arte". A token whose 1-4 letter
+/// lowercase prefix is followed by an apostrophe and an uppercase letter is
+/// part of a proper name, not clause prose.
+fn is_elided_capital(word: Option<&str>) -> bool {
+  let Some(word) = word else {
+    return false;
+  };
+  let Some(apostrophe) = word.find(['\'', '\u{2019}']) else {
+    return false;
+  };
+  let Some(prefix) = word.get(..apostrophe) else {
+    return false;
+  };
+  if prefix.is_empty()
+    || prefix.chars().count() > 4
+    || !prefix
+      .chars()
+      .all(|ch| ch.is_alphabetic() && ch.is_lowercase())
+  {
+    return false;
+  }
+  word
+    .get(apostrophe..)
+    .and_then(|tail| tail.chars().nth(1))
+    .is_some_and(char::is_uppercase)
 }
 
 fn is_in_name_connector(word: Option<&str>) -> bool {
@@ -1118,6 +1148,18 @@ mod tests {
         Some(&starters)
       ),
       Some("ACME Corporation".len())
+    );
+  }
+
+  #[test]
+  fn elided_city_name_is_kept_when_trimming_org_prose() {
+    let starters = set(["the", "this", "for", "by", "a"]);
+    let text = "Conseil de prud'hommes d'Aix-en-Provence a rendu son jugement";
+    let keep = "Conseil de prud'hommes d'Aix-en-Provence";
+    assert_eq!(
+      trim_open_ended_org_prose(text, Some(&starters)),
+      Some(keep.len()),
+      "the elided d'Aix-en-Provence token must count as capitalized"
     );
   }
 
