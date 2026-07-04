@@ -4,9 +4,20 @@ Python bindings for the stella anonymization Rust core.
 
 ## Install
 
-This package is not published to PyPI. Build it from source against a checkout
-of the monorepo (run `bun run build` first so the native pipeline packages
-exist):
+Prebuilt wheels are published to PyPI (this activates with the next release).
+Wheels ship the bundled native pipeline packages, so no monorepo checkout is
+needed:
+
+```bash
+uv add stella-anonymize-core
+# or: pip install stella-anonymize-core
+```
+
+Wheels target Python 3.11+ (abi3) on manylinux x64/aarch64, macOS x64/arm64,
+and Windows x64. Only wheels are published; there is no source distribution.
+The `build.rs` step needs the monorepo's generated `.stlanonpkg` native
+pipeline packages, so a source build cannot be self-contained. To build from a
+checkout instead, run `bun run build` first so those packages exist, then:
 
 ```bash
 uv add ./crates/anonymize-py

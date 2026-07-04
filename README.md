@@ -27,8 +27,8 @@ bun add @stll/anonymize
 bun add @stll/anonymize-data
 # Browser / Vite usage
 bun add @stll/anonymize-wasm
-# Python SDK source build
-uv add ./crates/anonymize-py
+# Python SDK (activates with the next release)
+uv add stella-anonymize-core
 ```
 
 Or anonymize from the terminal without installing:
