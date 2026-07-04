@@ -79,6 +79,28 @@ fn normalize_entity(
     }
   }
 
+  if entity.label == ORGANIZATION_LABEL
+    && matches!(
+      entity.source,
+      DetectionSource::Trigger | DetectionSource::Coreference
+    )
+  {
+    let org_text = slice(&raw_text, start_byte, end_byte)?;
+    // An open-ended trigger org (to-next-comma with no comma before the
+    // sentence end) captures the court/company name plus trailing sentence
+    // prose ("Conseil de prud'hommes des Sables-d'Olonne a rendu son
+    // jugement"). Left whole it trips the open-ended word-count guard and the
+    // whole entity is dropped. When it exceeds the guard, trim the trailing
+    // lowercase prose back to the last capitalized token (the proper-noun
+    // core) so the name survives. Gated on the same word cap, so shorter orgs
+    // that already pass are never touched.
+    if word_count(org_text) > MAX_OPEN_ENDED_ORGANIZATION_WORDS
+      && let Some(cut) = trim_open_ended_org_prose(org_text)
+    {
+      end_byte = start_byte.saturating_add(cut);
+    }
+  }
+
   trim_trailing_separators(&raw_text, start_byte, &mut end_byte);
   if start_byte >= end_byte {
     return Ok(None);
@@ -754,6 +776,34 @@ fn first_word(text: &str) -> Option<(usize, &str)> {
   text.get(..end).map(|word| (end, word))
 }
 
+/// Byte offset just past the last whitespace-run-delimited word whose first
+/// character is uppercase. Returns `Some` only when trailing (lowercase prose)
+/// content follows that word, so callers can trim it off.
+fn trim_open_ended_org_prose(text: &str) -> Option<usize> {
+  let mut last_capital_end = None::<usize>;
+  let mut word_start = None::<usize>;
+  let mut word_is_capital = false;
+  for (idx, ch) in text.char_indices() {
+    let is_word_char =
+      ch.is_alphanumeric() || matches!(ch, '\'' | '’' | '-' | '.');
+    if is_word_char {
+      if word_start.is_none() {
+        word_start = Some(idx);
+        word_is_capital = ch.is_uppercase();
+      }
+    } else if word_start.take().is_some() {
+      if word_is_capital {
+        last_capital_end = Some(idx);
+      }
+    }
+  }
+  if word_start.is_some() && word_is_capital {
+    last_capital_end = Some(text.trim_end().len());
+  }
+  let end = last_capital_end?;
+  (end < text.trim_end().len()).then_some(end)
+}
+
 fn word_count(text: &str) -> usize {
   let mut count = 0usize;
   let mut in_word = false;
@@ -860,6 +910,51 @@ mod tests {
   use std::collections::BTreeSet;
 
   use super::*;
+
+  #[test]
+  fn trims_trailing_prose_back_to_last_capital() {
+    assert_eq!(
+      trim_open_ended_org_prose(
+        "Conseil de prud'hommes des Sables-d'Olonne a rendu son jugement"
+      ),
+      Some("Conseil de prud'hommes des Sables-d'Olonne".len())
+    );
+    assert_eq!(
+      trim_open_ended_org_prose(
+        "Tribunal judiciaire du Mans statue sur l'affaire"
+      ),
+      Some("Tribunal judiciaire du Mans".len())
+    );
+  }
+
+  #[test]
+  fn keeps_capital_terminated_names_untrimmed() {
+    // Nothing to trim when the name already ends at a capital token.
+    assert_eq!(
+      trim_open_ended_org_prose("Conseil de prud'hommes des Sables-d'Olonne"),
+      None
+    );
+    assert_eq!(trim_open_ended_org_prose("Bank of America"), None);
+  }
+
+  #[test]
+  fn open_ended_court_org_survives_word_guard_by_trimming() {
+    // Nine words with trailing prose: rejected outright before the trim,
+    // now trimmed to the five-word proper-noun core and kept.
+    let text =
+      "Conseil de prud'hommes des Sables-d'Olonne a rendu son jugement.";
+    let entities = filter_entity_false_positives(
+      vec![entity(text, text, ORGANIZATION_LABEL, DetectionSource::Trigger)],
+      text,
+      Some(&DenyListFilterData::default()),
+    )
+    .unwrap();
+    assert_eq!(entities.len(), 1);
+    assert_eq!(
+      entities[0].text,
+      "Conseil de prud'hommes des Sables-d'Olonne"
+    );
+  }
 
   #[test]
   fn rejects_template_placeholders() {

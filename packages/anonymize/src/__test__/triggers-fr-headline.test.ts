@@ -141,7 +141,7 @@ describe("French headline-style trigger regressions", () => {
   // NATIVE-GAP: the court trigger does not capture the contracted "des"
   // article ahead of a hyphenated city (Sables-d'Olonne). The "du"/"de"
   // article variants covered by the neighbouring tests do resolve natively.
-  test.skip("court trigger captures contracted 'des' article", async () => {
+  test("court trigger captures contracted 'des' article", async () => {
     const text =
       "Conseil de prud'hommes des Sables-d'Olonne a rendu son jugement.";
     const ents = await runFr(text);
