@@ -1,7 +1,9 @@
+import { mkdirSync } from "node:fs";
 import { cpus, arch, platform, totalmem } from "node:os";
 import { join } from "node:path";
 
-import { createStellaAdapter } from "./adapters/stella";
+import { loadAdhocDocs, runAdhoc } from "./adhoc";
+import { createStllAdapter } from "./adapters/stella";
 import { createRedactPiiAdapter } from "./adapters/redact-pii";
 import { createPythonAdapter } from "./adapters/python";
 import type { Adapter, NativePrediction } from "./adapters/types";
@@ -34,7 +36,12 @@ const RESULTS_DIR = join(import.meta.dir, "..", "results");
 const git = (args: string[]): string => {
   try {
     const proc = Bun.spawnSync(["git", ...args], { cwd: import.meta.dir });
-    return proc.exitCode === 0 ? proc.stdout.toString().trim() : "";
+    // spawnSync can fail to launch (git absent, permission denied): `success`
+    // is false and `stdout` may be null. Only trust stdout on a clean exit.
+    if (!proc.success || proc.exitCode !== 0 || proc.stdout == null) {
+      return "";
+    }
+    return proc.stdout.toString().trim();
   } catch {
     return "";
   }
@@ -77,6 +84,77 @@ const byLanguagePrf = (
 
 type RegisteredAdapter = { adapter: Adapter; mapping: NativeMapping };
 
+const buildRegisteredAdapters = (): RegisteredAdapter[] => [
+  { adapter: createStllAdapter(), mapping: STELLA_MAPPING },
+  {
+    adapter: createPythonAdapter({
+      name: "presidio",
+      venvDir: ".venv-presidio",
+      script: "presidio_adapter.py",
+    }),
+    mapping: PRESIDIO_MAPPING,
+  },
+  {
+    adapter: createPythonAdapter({
+      name: "scrubadub",
+      venvDir: ".venv-scrubadub",
+      script: "scrubadub_adapter.py",
+    }),
+    mapping: SCRUBADUB_MAPPING,
+  },
+  { adapter: createRedactPiiAdapter(), mapping: REDACT_PII_MAPPING },
+];
+
+type CliArgs = {
+  readonly inputPath: string | undefined;
+  readonly language: string;
+};
+
+const parseArgs = (argv: readonly string[]): CliArgs => {
+  let inputPath: string | undefined;
+  let language = "en";
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === "--input" || arg === "-i") {
+      inputPath = argv[i + 1];
+      i++;
+    } else if (arg === "--lang") {
+      language = argv[i + 1] ?? language;
+      i++;
+    }
+  }
+  return { inputPath, language };
+};
+
+/**
+ * Ad-hoc mode: run every available library over user-supplied files with no
+ * ground truth and write an uncommitted side-by-side comparison. This is the
+ * anti-overfitting escape hatch documented in the README.
+ */
+const runAdhocMode = async (
+  inputPath: string,
+  language: string,
+): Promise<void> => {
+  const docs = await loadAdhocDocs(inputPath);
+  const markdown = await runAdhoc({
+    adapters: buildRegisteredAdapters(),
+    docs,
+    language,
+  });
+
+  const adhocDir = join(RESULTS_DIR, "adhoc");
+  mkdirSync(adhocDir, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const outPath = join(adhocDir, `${stamp}.md`);
+  await Bun.write(outPath, markdown);
+
+  process.stderr.write(
+    `\nwrote (uncommitted, git-ignored):\n  ${outPath}\n` +
+      "This report quotes detected entities from your input; do not commit or\n" +
+      "share it if the input was sensitive.\n",
+  );
+};
+
 const run = async (): Promise<void> => {
   const docs = await loadGroundTruth();
   const languages = [...new Set(docs.map((doc) => doc.language))].sort();
@@ -92,26 +170,7 @@ const run = async (): Promise<void> => {
     }
   }
 
-  const registered: RegisteredAdapter[] = [
-    { adapter: await createStellaAdapter(), mapping: STELLA_MAPPING },
-    {
-      adapter: createPythonAdapter({
-        name: "presidio",
-        venvDir: ".venv-presidio",
-        script: "presidio_adapter.py",
-      }),
-      mapping: PRESIDIO_MAPPING,
-    },
-    {
-      adapter: createPythonAdapter({
-        name: "scrubadub",
-        venvDir: ".venv-scrubadub",
-        script: "scrubadub_adapter.py",
-      }),
-      mapping: SCRUBADUB_MAPPING,
-    },
-    { adapter: createRedactPiiAdapter(), mapping: REDACT_PII_MAPPING },
-  ];
+  const registered = buildRegisteredAdapters();
 
   const libraries: LibraryReport[] = [];
 
@@ -213,4 +272,9 @@ const run = async (): Promise<void> => {
   }
 };
 
-await run();
+const { inputPath, language } = parseArgs(process.argv.slice(2));
+if (inputPath !== undefined) {
+  await runAdhocMode(inputPath, language);
+} else {
+  await run();
+}

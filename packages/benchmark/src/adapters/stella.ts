@@ -27,51 +27,55 @@ const stellaVersion = (
  * coreference, hotwords, zone classification. This is a deterministic,
  * model-free run; no external ML model is loaded.
  */
-export const createStellaAdapter = async (): Promise<Adapter> => {
-  const dictionaries = await loadCorpusDictionaries();
-  const config: PipelineConfig = {
-    threshold: 0.3,
-    enableTriggerPhrases: true,
-    enableRegex: true,
-    enableLegalForms: true,
-    enableNameCorpus: true,
-    enableDenyList: true,
-    enableGazetteer: false,
-    enableNer: false,
-    enableConfidenceBoost: true,
-    enableCoreference: true,
-    enableHotwordRules: true,
-    enableZoneClassification: true,
-    labels: [...DEFAULT_ENTITY_LABELS],
-    workspaceId: "benchmark-run",
-    dictionaries,
-  };
+const buildConfig = (
+  dictionaries: Awaited<ReturnType<typeof loadCorpusDictionaries>>,
+): PipelineConfig => ({
+  threshold: 0.3,
+  enableTriggerPhrases: true,
+  enableRegex: true,
+  enableLegalForms: true,
+  enableNameCorpus: true,
+  enableDenyList: true,
+  enableGazetteer: false,
+  enableNer: false,
+  enableConfidenceBoost: true,
+  enableCoreference: true,
+  enableHotwordRules: true,
+  enableZoneClassification: true,
+  labels: [...DEFAULT_ENTITY_LABELS],
+  workspaceId: "benchmark-run",
+  dictionaries,
+});
 
-  const binding = loadNativeAnonymizeBinding();
+export const createStllAdapter = (): Adapter => ({
+  name: "stella",
+  version: stellaVersion,
+  run: async (docs: readonly GroundTruthDocument[]) => {
+    // Init boundary (fairness): everything a competitor loads in its own
+    // one-time setup is timed here too. For stella that means loading the
+    // full bundled dictionaries and the native binding, plus building the
+    // pipeline. This is the analogue of Presidio's spaCy model load, so the
+    // reported init cost is comparable across libraries.
+    const initStart = performance.now();
+    const dictionaries = await loadCorpusDictionaries();
+    const binding = loadNativeAnonymizeBinding();
+    const pipeline = await createNativePipelineFromConfig({
+      binding,
+      config: buildConfig(dictionaries),
+      gazetteerEntries: [],
+    });
+    const initSeconds = (performance.now() - initStart) / 1000;
 
-  return {
-    name: "stella",
-    version: stellaVersion,
-    run: async (docs: readonly GroundTruthDocument[]) => {
-      const initStart = performance.now();
-      const pipeline = await createNativePipelineFromConfig({
-        binding,
-        config,
-        gazetteerEntries: [],
-      });
-      const initSeconds = (performance.now() - initStart) / 1000;
+    const processDoc = (text: string): NativePrediction[] =>
+      pipeline
+        .redactText(text)
+        .resolvedEntities.map(({ start, end, label, text: value }) => ({
+          start,
+          end,
+          label,
+          text: value,
+        }));
 
-      const processDoc = (text: string): NativePrediction[] =>
-        pipeline
-          .redactText(text)
-          .resolvedEntities.map(({ start, end, label, text: value }) => ({
-            start,
-            end,
-            label,
-            text: value,
-          }));
-
-      return runTwoPassInProcess(docs, processDoc, initSeconds);
-    },
-  };
-};
+    return runTwoPassInProcess(docs, processDoc, initSeconds);
+  },
+});

@@ -25,6 +25,22 @@ type PythonAdapterOptions = {
 };
 
 /**
+ * A non-zero exit whose stderr names a missing import/model is a setup gap
+ * (the venv exists but its requirements or model wheels are not installed), not
+ * a crash. These are skipped with instructions; every other failure is fatal.
+ */
+const SETUP_ERROR_MARKERS = [
+  "ModuleNotFoundError",
+  "ImportError",
+  "No module named",
+  "Can't find model", // spaCy model wheel not installed
+  "OSError: [E050]", // spaCy: model not found
+] as const;
+
+const isSetupError = (stderr: string): boolean =>
+  SETUP_ERROR_MARKERS.some((marker) => stderr.includes(marker));
+
+/**
  * Adapter backed by a Python virtualenv. If the venv or its interpreter is
  * missing, the adapter reports `unavailable` with the exact command to create
  * it, rather than failing the whole run.
@@ -66,10 +82,19 @@ export const createPythonAdapter = ({
       ]);
 
       if (exitCode !== 0) {
-        return {
-          status: "unavailable",
-          reason: `python adapter exited ${exitCode}: ${stderr.trim().split("\n").slice(-3).join(" | ")}`,
-        };
+        const tail = stderr.trim().split("\n").slice(-3).join(" | ");
+        // A missing dependency (venv exists but was never `uv pip install`-ed,
+        // or a model wheel is absent) is a setup gap, not a bug: skip it with
+        // the fix, exactly like a missing venv. Any other non-zero exit is a
+        // real crash in the adapter or the library and must fail the run loudly
+        // rather than be silently downgraded to "unavailable".
+        if (isSetupError(stderr)) {
+          return {
+            status: "unavailable",
+            reason: `${name} venv is incomplete (${tail}); reinstall it per REPRODUCING.md`,
+          };
+        }
+        throw new Error(`${name} adapter crashed (exit ${exitCode}): ${tail}`);
       }
 
       let parsed: PythonResult;

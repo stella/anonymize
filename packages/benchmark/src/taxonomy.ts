@@ -103,12 +103,17 @@ export const PRESIDIO_MAPPING: NativeMapping = {
 };
 
 /**
- * scrubadub — detector names. English-only library: it ships `name`, `email`,
- * `phone`, plus UK-specific identifier detectors. No org/address/date/money
- * detectors, so those categories score zero recall for scrubadub (reported).
+ * scrubadub — detector names. English-only library. The BASE install ships
+ * `email`, `phone`, `url`, `twitter`, and `credential` detectors plus
+ * UK-specific identifier detectors; it has NO name detector (that needs the
+ * optional `scrubadub_spacy`/`scrubadub_stanford` plugin, deliberately not
+ * installed here). `name` is therefore intentionally absent from this mapping,
+ * so `person` is not counted among scrubadub's supported labels: it can never
+ * emit one, and listing it would inflate the supported-labels denominator with
+ * a category the base install does not attempt. No org/address/date/money
+ * detectors either, so those score zero recall (reported).
  */
 export const SCRUBADUB_MAPPING: NativeMapping = {
-  name: "person",
   email: "email",
   phone: "phone",
   credit_card: "id-number",

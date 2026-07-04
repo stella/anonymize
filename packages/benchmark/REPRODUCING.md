@@ -115,7 +115,7 @@ Common labels: `person`, `organization`, `address`, `email`, `phone`,
 
 | Common label | stella                                                                                                                 | Presidio                                                                                                                                     | scrubadub                                                                                                                    | redact-pii                               |
 | ------------ | ---------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| person       | person                                                                                                                 | PERSON                                                                                                                                       | name\*                                                                                                                       | names                                    |
+| person       | person                                                                                                                 | PERSON                                                                                                                                       | —                                                                                                                            | names                                    |
 | organization | organization                                                                                                           | ORGANIZATION / ORG                                                                                                                           | —                                                                                                                            | —                                        |
 | address      | address, country, land parcel                                                                                          | LOCATION, GPE, NRP, ADDRESS                                                                                                                  | —                                                                                                                            | streetAddress, zipcode                   |
 | email        | email address                                                                                                          | EMAIL_ADDRESS                                                                                                                                | email                                                                                                                        | emailAddress                             |
@@ -125,9 +125,13 @@ Common labels: `person`, `organization`, `address`, `email`, `phone`,
 | money        | monetary amount                                                                                                        | —                                                                                                                                            | —                                                                                                                            | —                                        |
 
 `—` means the library has no recognizer that maps to that category, so it scores
-zero recall there (reported, not hidden). `*` scrubadub's base install does not
-ship a name detector (it needs the optional `scrubadub_spacy` plugin, not
-installed here), so `name` maps are defined but never fire.
+zero recall there (reported, not hidden). scrubadub's base install ships no name
+detector (it needs the optional `scrubadub_spacy`/`scrubadub_stanford` plugin,
+not installed here), so `person` is deliberately left out of scrubadub's mapping
+in `src/taxonomy.ts`: the base library can never emit a name, and listing it
+would inflate scrubadub's supported-labels denominator with a category it does
+not attempt. scrubadub's supported labels are therefore `email`, `phone`, and
+`id-number` (3/8).
 
 Native labels mapped to `null` in `src/taxonomy.ts` (URLs, usernames, IP
 addresses, Twitter handles, credentials) are dropped before scoring, so a
@@ -162,3 +166,25 @@ category the ground truth does not track.
   reproduction of its `NameRedactor` (internals are not exported) loading the
   same `well-known-names.json`. Running on the original text yields a superset of
   what sequential redaction emits, so this is generous to redact-pii's recall.
+
+## Init vs. per-document boundary (throughput fairness)
+
+The `init (s)` column is one-time setup; `cold`/`warm` chars/sec are the
+per-document detection passes. For the comparison to be fair, every library's
+own one-time cost must fall inside `init`, not be hidden at import time or folded
+into the per-document loop. What counts as init for each adapter:
+
+| Library    | Counted as init (one-time)                                                                      | Per document (cold/warm)       |
+| ---------- | ----------------------------------------------------------------------------------------------- | ------------------------------ |
+| stella     | load full bundled dictionaries (names, deny lists, cities), load native binding, build pipeline | `redactText` per doc           |
+| Presidio   | load the three spaCy models and build the analyzer/recognizer registry                          | `analyzer.analyze` per doc     |
+| scrubadub  | construct `Scrubber()` (instantiates its detectors)                                             | `iter_filth` per doc           |
+| redact-pii | load built-in pattern list + well-known-names, compile regexes (large name alternation)         | run compiled detectors per doc |
+
+stella's dictionary load and binding load are the analogue of Presidio's model
+load, so they are timed inside `init` (`src/adapters/stella.ts`); earlier they
+happened in the adapter factory before the timer started, which understated
+stella's init. redact-pii's pattern/name-list load and regex compilation are
+likewise timed as init rather than left as a module-load side effect
+(`src/adapters/redact-pii.ts`). Python init is measured inside each Python
+process and excludes interpreter startup, which is reported separately in prose.

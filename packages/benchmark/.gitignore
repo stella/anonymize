@@ -3,3 +3,5 @@
 .venv-scrubadub/
 # Turbo cache
 .turbo/
+# Ad-hoc (unseen-input) comparison reports: may quote sensitive input entities.
+results/adhoc/
