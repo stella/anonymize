@@ -589,23 +589,37 @@ fn trim_trailing_address_prose(
     if !before.chars().any(|candidate| candidate.is_ascii_digit()) {
       continue;
     }
-    // The current period may be the trailing dot of a street abbreviation
-    // ("123 Main St." -> "Suite 100"). Street types are stored dotted ("st."),
-    // so `before` (which excludes this dot) never matches; include the dot so
-    // the abbreviation is recognized as an address component, not a sentence
-    // boundary. Full street names ("Street") already match on `before`.
-    let before_with_dot = text
-      .get(..index.saturating_add('.'.len_utf8()))
-      .unwrap_or(before);
-    if text_ends_with_address_component(before.trim_end(), filters)
-      || text_ends_with_address_component(before_with_dot, filters)
-    {
-      continue;
-    }
     let after = text
       .get(index.saturating_add('.'.len_utf8())..)?
       .trim_start();
-    if after.len() < 5 || has_address_component(after, filters) {
+
+    // The current period may be the trailing dot of a street abbreviation
+    // ("123 Main St." -> "Suite 100"). Street types are stored dotted ("st."),
+    // so `before` (which excludes this dot) never matches; include the dot so
+    // the abbreviation is recognized as an address component. Full street
+    // names ("Street") already match on `before`.
+    let before_with_dot = text
+      .get(..index.saturating_add('.'.len_utf8()))
+      .unwrap_or(before);
+    if text_ends_with_address_component(before_with_dot, filters) {
+      // Dotted abbreviation ("St."). The period is only the abbreviation's own
+      // dot when a unit/address continuation follows ("Suite 100"); otherwise
+      // it is a real sentence boundary and trailing prose must be trimmed. Keep
+      // the abbreviation dot in the retained span.
+      if is_unit_or_address_continuation(after, filters) {
+        continue;
+      }
+      if after.chars().next().is_some_and(char::is_uppercase) {
+        return Some(before_with_dot.len());
+      }
+      continue;
+    }
+    if text_ends_with_address_component(before.trim_end(), filters) {
+      // Full street name ("Street") preceding a hard address anchor: the
+      // street name is never a sentence boundary here.
+      continue;
+    }
+    if is_unit_or_address_continuation(after, filters) {
       continue;
     }
     if after.chars().next().is_some_and(char::is_uppercase) {
@@ -613,6 +627,38 @@ fn trim_trailing_address_prose(
     }
   }
   None
+}
+
+/// A period followed by `after` is not a sentence break when `after` opens a
+/// short fragment, carries an address component, or reads as a unit designator
+/// plus identifier ("Suite 100", "Apt 4B") rather than a new prose sentence.
+fn is_unit_or_address_continuation(
+  after: &str,
+  filters: &DenyListFilterData,
+) -> bool {
+  after.len() < 5
+    || has_address_component(after, filters)
+    || starts_with_unit_number(after)
+}
+
+/// True when `text` opens with a capitalized alphabetic designator word
+/// immediately followed by a token that begins with a digit ("Suite 100",
+/// "Unit 5", "Bldg 2"). Prose sentences ("The tenant shall ...") fail because
+/// their second token is not numeric.
+fn starts_with_unit_number(text: &str) -> bool {
+  let mut words = text.split_whitespace();
+  let Some(first) = words.next() else {
+    return false;
+  };
+  if !first.chars().next().is_some_and(char::is_uppercase)
+    || !first.chars().all(char::is_alphabetic)
+  {
+    return false;
+  }
+  words
+    .next()
+    .and_then(|word| word.chars().next())
+    .is_some_and(|ch| ch.is_ascii_digit())
 }
 
 fn has_address_component(text: &str, filters: &DenyListFilterData) -> bool {
@@ -985,6 +1031,25 @@ mod tests {
     assert_eq!(
       trim_trailing_address_prose("123 Main Street. Suite 100", &filters),
       None
+    );
+  }
+
+  #[test]
+  fn trims_new_sentence_after_street_abbreviation() {
+    // "123 Main St. The tenant shall pay rent": the period is the street
+    // abbreviation's dot, but what follows is a new prose sentence, not a
+    // unit continuation, so the sentence trim must apply while keeping the
+    // abbreviation dot on "St.".
+    let filters = DenyListFilterData {
+      street_types: set(["st.", "street"]),
+      ..DenyListFilterData::default()
+    };
+    assert_eq!(
+      trim_trailing_address_prose(
+        "123 Main St. The tenant shall pay rent",
+        &filters
+      ),
+      Some("123 Main St.".len())
     );
   }
 
