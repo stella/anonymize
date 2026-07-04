@@ -385,7 +385,10 @@ fn comparable_trigger_fragment_end(entity: &PipelineEntity) -> u32 {
 }
 
 const fn is_trigger_fragment_trailing_trim(ch: char) -> bool {
-  matches!(ch, ',' | ';' | ':' | '!' | '?' | ' ' | '\t' | '\n' | '\r')
+  matches!(
+    ch,
+    '.' | ',' | ';' | ':' | '!' | '?' | ' ' | '\t' | '\n' | '\r'
+  )
 }
 
 fn u32_char_len(ch: char) -> u32 {

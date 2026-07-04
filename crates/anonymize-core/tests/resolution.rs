@@ -141,6 +141,40 @@ fn structured_regex_span_beats_trigger_fragment_with_trailing_punctuation() {
 }
 
 #[test]
+fn structured_regex_span_beats_sentence_final_trigger_fragment() {
+  // "...vložka 12345." — the n-word trigger captures "12345." with the
+  // sentence-final period, poking one byte past the commercial-register regex
+  // end. The trailing period must be ignored so the regex still absorbs the
+  // fragment and the fuller phrase wins.
+  let regex_text = "oddíl C, vložka 12345";
+  let trigger_start = byte_len("oddíl C, vložka ");
+  let trigger_text = "12345.";
+  let result = merge_and_dedup(&[
+    PipelineEntity::detected(
+      0,
+      byte_len(regex_text),
+      "registration number",
+      regex_text,
+      0.95,
+      DetectionSource::Regex,
+    ),
+    PipelineEntity::detected(
+      trigger_start,
+      trigger_start + byte_len(trigger_text),
+      "registration number",
+      trigger_text,
+      0.95,
+      DetectionSource::Trigger,
+    ),
+  ]);
+
+  assert_eq!(result.len(), 1);
+  let kept = result.first().expect("result");
+  assert_eq!(kept.source, DetectionSource::Regex);
+  assert_eq!(kept.text, regex_text);
+}
+
+#[test]
 fn structured_date_regex_span_beats_trigger_fragment() {
   let regex_text = "21. März 1968";
   let trigger_text = "21.";
