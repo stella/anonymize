@@ -349,10 +349,154 @@ jobs:
           tarball: ${{ steps.pack.outputs.tarball }}
           tag: ${{ needs.verify.outputs.dist_tag }}
 
+  build-wheels:
+    needs: verify
+    if: github.event_name == 'push' || inputs.publish_to_npm == true
+    name: Build wheel ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-24.04
+            manylinux: auto
+            # abi3 wheels are Python-agnostic (cp311-abi3), so verifying one
+            # matrix wheel exercises the packlist + smoke test for all of them.
+            check_wheel: true
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04-arm
+            manylinux: auto
+          - target: x86_64-apple-darwin
+            runner: macos-15-intel
+          - target: aarch64-apple-darwin
+            runner: macos-15
+          - target: x86_64-pc-windows-msvc
+            runner: windows-2025
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: "22"
+
+      - name: Verify Bun workflow pin
+        run: node .github/tools/check-bun-workflows.mjs
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Sync runtime package versions
+        run: bun run sync:version
+
+      - name: Build native pipeline packages
+        run: bun run build
+        env:
+          # The wheel only needs the generated .stlanonpkg native pipeline
+          # packages; skip the wasm32-wasip1-threads build like pack-native.
+          STELLA_ANONYMIZE_SKIP_WASM_BUILD: "1"
+
+      - name: Bundle native pipeline packages into the wheel source
+        run: |
+          set -euo pipefail
+          source_dir="packages/anonymize"
+          target_dir="crates/anonymize-py/python/stella_anonymize/native_packages"
+          if [[ ! -f "${source_dir}/native-pipeline.stlanonpkg" ]]; then
+            echo "::error::native-pipeline.stlanonpkg missing from ${source_dir}; bun run build did not emit it"
+            exit 1
+          fi
+          mkdir -p "${target_dir}"
+          shopt -s nullglob
+          for package in "${source_dir}"/native-pipeline*.stlanonpkg; do
+            cp "${package}" "${target_dir}/"
+          done
+
+      - name: Build wheel
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          target: ${{ matrix.target }}
+          # Ignored on macOS/Windows; drives the manylinux container on Linux.
+          manylinux: ${{ matrix.manylinux || 'auto' }}
+          rust-toolchain: "1.96.0"
+          args: >-
+            --release
+            --locked
+            --manifest-path crates/anonymize-py/Cargo.toml
+            --out dist
+        env:
+          # Non-container builds honour this directly; Linux wheels are already
+          # guarded by the bundle step above.
+          STELLA_ANONYMIZE_REQUIRE_NATIVE_PACKAGES: "1"
+
+      - name: Install uv
+        if: matrix.check_wheel
+        run: |
+          python3 -m pip install --user "uv==${{ env.UV_VERSION }}"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Verify wheel packlist and smoke test
+        if: matrix.check_wheel
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          wheels=(dist/*.whl)
+          if [[ "${#wheels[@]}" -ne 1 ]]; then
+            echo "::error::Expected one wheel for ${{ matrix.target }}, found ${#wheels[@]}"
+            exit 1
+          fi
+          ANONYMIZE_PYTHON_WHEEL_PATH="${wheels[0]}" bun run python:wheel
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v5
+        with:
+          name: python-wheel-${{ matrix.target }}
+          path: dist/*.whl
+          if-no-files-found: error
+
+  publish-pypi:
+    needs: [verify, build-wheels]
+    if: github.event_name == 'push' || inputs.publish_to_npm == true
+    runs-on: ubuntu-latest
+    permissions:
+      # Trusted Publishing (OIDC): no PyPI API token is stored in the repo.
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: python-wheel-*
+          path: dist
+          merge-multiple: true
+
+      - name: Check wheels are present
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          wheels=(dist/*.whl)
+          if [[ "${#wheels[@]}" -eq 0 ]]; then
+            echo "::error::No wheels found to publish to PyPI"
+            exit 1
+          fi
+          printf 'Publishing %d wheel(s):\n' "${#wheels[@]}"
+          printf '  %s\n' "${wheels[@]}"
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # v1.14.0
+        with:
+          packages-dir: dist
+
   github-release:
     name: Create GitHub release
-    needs: [verify, publish-native, publish]
-    if: needs.verify.result == 'success' && needs.publish-native.result == 'success' && needs.publish.result == 'success' && (github.event_name == 'push' || inputs.publish_to_npm == true)
+    needs: [verify, publish-native, publish, publish-pypi]
+    if: needs.verify.result == 'success' && needs.publish-native.result == 'success' && needs.publish.result == 'success' && needs.publish-pypi.result == 'success' && (github.event_name == 'push' || inputs.publish_to_npm == true)
     runs-on: ubuntu-latest
     permissions:
       contents: write

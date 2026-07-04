@@ -8,12 +8,16 @@ import {
   readdirSync,
   rmSync,
 } from "node:fs";
-import { basename, join } from "node:path";
+import { basename, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import process from "node:process";
 
-const outDir = mkdtempSync(join(tmpdir(), "stella-anonymize-wheel-"));
 const profile = process.env.ANONYMIZE_PYTHON_WHEEL_PROFILE ?? "ci";
+// When set, verify an already-built wheel (e.g. a matrix artifact produced by
+// the release workflow) instead of building one here. The packlist and smoke
+// assertions stay identical, so a published wheel is checked the same way the
+// verify job checks a locally built one.
+const prebuiltWheel = process.env.ANONYMIZE_PYTHON_WHEEL_PATH;
 const nativePackagePattern =
   /^native-pipeline(?:\.[a-z0-9]+(?:-[a-z0-9]+)*)?\.stlanonpkg$/u;
 const nativePackageSourceDir = join("packages", "anonymize");
@@ -33,41 +37,77 @@ const pythonAttributionFile = join(
   "ATTRIBUTION.md",
 );
 
-try {
-  assertPythonAttributionMatchesRuntimePackage();
-  syncNativePipelinePackages();
-  execFileSync(
-    "uvx",
-    [
-      "--from",
-      "maturin>=1.14,<2",
-      "maturin",
-      "build",
-      "--manifest-path",
-      "crates/anonymize-py/Cargo.toml",
-      "--locked",
-      "--profile",
-      profile,
-      "--out",
-      outDir,
-    ],
-    {
-      stdio: "inherit",
-      env: {
-        ...process.env,
-        // Turn the build.rs native-package copy into a hard error: a wheel must
-        // never ship without the bundled native pipeline packages.
-        STELLA_ANONYMIZE_REQUIRE_NATIVE_PACKAGES: "1",
-      },
-    },
-  );
-
-  const wheel = readdirSync(outDir).find((file) => file.endsWith(".whl"));
-  if (wheel === undefined) {
-    throw new Error("maturin did not emit a wheel");
+if (prebuiltWheel) {
+  const wheelPath = resolve(prebuiltWheel);
+  if (!existsSync(wheelPath)) {
+    throw new Error(`prebuilt wheel does not exist: ${wheelPath}`);
   }
+  assertWheelContents(wheelPath);
+  smokeInstalledWheel(wheelPath);
+  console.log(
+    JSON.stringify({
+      event: "python-wheel-check",
+      wheel: basename(wheelPath),
+      profile: "prebuilt",
+    }),
+  );
+} else {
+  buildAndCheckWheel();
+}
 
-  const wheelPath = join(outDir, wheel);
+function buildAndCheckWheel() {
+  const outDir = mkdtempSync(join(tmpdir(), "stella-anonymize-wheel-"));
+  try {
+    assertPythonAttributionMatchesRuntimePackage();
+    syncNativePipelinePackages();
+    execFileSync(
+      "uvx",
+      [
+        "--from",
+        "maturin>=1.14,<2",
+        "maturin",
+        "build",
+        "--manifest-path",
+        "crates/anonymize-py/Cargo.toml",
+        "--locked",
+        "--profile",
+        profile,
+        "--out",
+        outDir,
+      ],
+      {
+        stdio: "inherit",
+        env: {
+          ...process.env,
+          // Turn the build.rs native-package copy into a hard error: a wheel
+          // must never ship without the bundled native pipeline packages.
+          STELLA_ANONYMIZE_REQUIRE_NATIVE_PACKAGES: "1",
+        },
+      },
+    );
+
+    const wheel = readdirSync(outDir).find((file) => file.endsWith(".whl"));
+    if (wheel === undefined) {
+      throw new Error("maturin did not emit a wheel");
+    }
+
+    const wheelPath = join(outDir, wheel);
+    assertWheelContents(wheelPath);
+    smokeInstalledWheel(wheelPath);
+
+    console.log(
+      JSON.stringify({
+        event: "python-wheel-check",
+        wheel,
+        profile,
+      }),
+    );
+  } finally {
+    rmSync(outDir, { force: true, recursive: true });
+  }
+}
+
+function assertWheelContents(wheelPath) {
   const files = new Set(JSON.parse(readWheelFiles(wheelPath)));
   const required = [
     "stella_anonymize/__init__.py",
@@ -87,17 +127,6 @@ try {
   if (![...files].some(isNativeExtension)) {
     throw new Error("wheel is missing the native _native extension");
   }
-  smokeInstalledWheel(wheelPath);
-
-  console.log(
-    JSON.stringify({
-      event: "python-wheel-check",
-      wheel,
-      profile,
-    }),
-  );
-} finally {
-  rmSync(outDir, { force: true, recursive: true });
 }
 
 function syncNativePipelinePackages() {
