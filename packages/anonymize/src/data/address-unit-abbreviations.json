@@ -1,4 +1,0 @@
-{
-  "_comment": "Dotted address unit abbreviations that should not terminate address seed expansion. Organised per language because abbreviations are locale-specific.",
-  "en": ["apt.", "bldg.", "fl.", "ste.", "unit."]
-}

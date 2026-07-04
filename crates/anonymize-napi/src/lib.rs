@@ -441,16 +441,46 @@ pub fn assemble_static_search_package_bytes(
     dictionaries_json.as_ref().map(AsRef::as_ref),
     gazetteer_json.as_ref().map(AsRef::as_ref),
   )?;
+  assemble_core_package_bytes(binding_config, false).map(Buffer::from)
+}
+
+/// Assembles the config and chains it through the compressed prepare/package
+/// path, returning ready-to-load LZ4-compressed core package bytes.
+#[napi(js_name = "assembleStaticSearchCompressedPackageBytes")]
+#[allow(clippy::needless_pass_by_value)]
+pub fn assemble_static_search_compressed_package_bytes(
+  pipeline_config_json: BufferSlice<'_>,
+  dictionaries_json: Option<BufferSlice<'_>>,
+  gazetteer_json: Option<BufferSlice<'_>>,
+) -> Result<Buffer> {
+  let binding_config = assemble_binding_config(
+    pipeline_config_json.as_ref(),
+    dictionaries_json.as_ref().map(AsRef::as_ref),
+    gazetteer_json.as_ref().map(AsRef::as_ref),
+  )?;
+  assemble_core_package_bytes(binding_config, true).map(Buffer::from)
+}
+
+/// Shared prepare/package tail for the assemble functions: turn a binding
+/// config into core package bytes, compressed or raw.
+fn assemble_core_package_bytes(
+  binding_config: BindingPreparedSearchConfig,
+  compressed: bool,
+) -> Result<Vec<u8>> {
   let core_config = prepared_search_config_from_binding(binding_config)
     .map_err(|error| to_napi_contract_error(&error))?;
-  let artifacts = PreparedEngine::prepare_artifacts(core_config.clone())
+  let artifact_bytes = PreparedEngine::prepare_artifacts(core_config.clone())
+    .and_then(|artifacts| artifacts.to_bytes())
     .map_err(|error| to_napi_core_error(&error))?;
-  let artifact_bytes = artifacts
-    .to_bytes()
-    .map_err(|error| to_napi_core_error(&error))?;
-  prepared_search_core_package_to_bytes(&core_config, &artifact_bytes)
-    .map(Buffer::from)
-    .map_err(|error| to_napi_contract_error(&error))
+  let package = if compressed {
+    prepared_search_core_package_to_compressed_bytes(
+      &core_config,
+      &artifact_bytes,
+    )
+  } else {
+    prepared_search_core_package_to_bytes(&core_config, &artifact_bytes)
+  };
+  package.map_err(|error| to_napi_contract_error(&error))
 }
 
 fn assemble_binding_config(

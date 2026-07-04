@@ -1,15 +1,11 @@
-import {
-  buildNativeStaticSearchBundle,
-  type NativePreparedSearchConfig,
-} from "./build-unified-search";
 import type { PipelineContext } from "./context";
 import { defaultContext } from "./context";
 import { applyPipelineLanguageScope } from "./language-scope";
+import type { NativePreparedSearchConfig } from "./native-search-config";
 import { pipelineConfigKey } from "./pipeline-cache-key";
 import type { Dictionaries, GazetteerEntry, PipelineConfig } from "./types";
 import {
   createNativePipelineFromPackage,
-  prepareNativeSearchPackage,
   PreparedNativePipeline,
   type NativeAnonymizeBinding,
 } from "./native";
@@ -104,21 +100,75 @@ export const assertNativePipelineSupported = (config: PipelineConfig): void => {
   );
 };
 
+const encoder = new TextEncoder();
+
+type AssembleInputs = {
+  pipelineConfigJson: Uint8Array;
+  dictionariesJson: Uint8Array | undefined;
+  gazetteerJson: Uint8Array | undefined;
+};
+
+/**
+ * Serialize the assembler inputs the Rust binding expects. Dictionaries are
+ * stripped from the pipeline config and passed out of band: the assembler reads
+ * the separate bundle preferentially, and keeping the (large) dictionaries out
+ * of the config JSON avoids serializing them twice.
+ */
+const toAssembleInputs = (
+  { dictionaries, ...config }: PipelineConfig,
+  gazetteerEntries: readonly GazetteerEntry[],
+): AssembleInputs => ({
+  pipelineConfigJson: encoder.encode(JSON.stringify(config)),
+  dictionariesJson:
+    dictionaries === undefined
+      ? undefined
+      : encoder.encode(JSON.stringify(dictionaries)),
+  gazetteerJson:
+    gazetteerEntries.length === 0
+      ? undefined
+      : encoder.encode(JSON.stringify(gazetteerEntries)),
+});
+
+const assemblePackageBytes = (
+  binding: NativeAnonymizeBinding,
+  { pipelineConfigJson, dictionariesJson, gazetteerJson }: AssembleInputs,
+  compressed: boolean,
+): Uint8Array => {
+  const assemble = compressed
+    ? binding.assembleStaticSearchCompressedPackageBytes
+    : binding.assembleStaticSearchPackageBytes;
+  if (assemble === undefined) {
+    throw new Error(
+      "Native anonymize binding does not support static-search config assembly",
+    );
+  }
+  return assemble(pipelineConfigJson, dictionariesJson, gazetteerJson);
+};
+
 export const prepareNativePipelineConfig = async ({
+  binding,
   config,
   gazetteerEntries = [],
-  context,
 }: Omit<
   NativePipelineBuildOptions,
-  "binding"
+  "context"
 >): Promise<NativePreparedSearchConfig> => {
-  assertNativePipelineSupported(config);
-  const bundle = await buildNativeStaticSearchBundle(
-    config,
-    gazetteerEntries,
-    context ?? defaultContext,
+  const scopedConfig = applyPipelineLanguageScope(config);
+  assertNativePipelineSupported(scopedConfig);
+  const assemble = binding.assembleStaticSearchConfigJson;
+  if (assemble === undefined) {
+    throw new Error(
+      "Native anonymize binding does not support static-search config assembly",
+    );
+  }
+  const { pipelineConfigJson, dictionariesJson, gazetteerJson } =
+    toAssembleInputs(scopedConfig, gazetteerEntries);
+  const configJson = assemble(
+    pipelineConfigJson,
+    dictionariesJson,
+    gazetteerJson,
   );
-  return bundle.nativeStaticConfig;
+  return JSON.parse(new TextDecoder().decode(configJson));
 };
 
 export const prepareNativePipelinePackage = async ({
@@ -198,7 +248,6 @@ const getCachedNativePipelinePackage = async ({
     binding,
     config: scopedConfig,
     gazetteerEntries,
-    context: ctx,
     compressed,
   });
   ctx.nativePipelinePackagePromise = promise;
@@ -229,24 +278,23 @@ const getCachedNativePipelinePackage = async ({
   return packageBytes;
 };
 
+// `async` so the shared package cache can store the in-flight value and dedupe
+// concurrent builds for the same key, and so assembly failures (an older
+// binding without the assemble functions, or a config the assembler rejects)
+// surface as a rejected promise rather than a synchronous throw mid-cache-flow.
 const buildNativePipelinePackage = async ({
   binding,
   config,
   gazetteerEntries,
-  context,
   compressed,
-}: Required<NativePipelinePackageOptions>): Promise<Uint8Array> => {
-  const bundle = await buildNativeStaticSearchBundle(
-    config,
-    gazetteerEntries,
-    context,
-  );
-  return prepareNativeSearchPackage({
+}: Required<
+  Omit<NativePipelinePackageOptions, "context">
+>): Promise<Uint8Array> =>
+  assemblePackageBytes(
     binding,
-    config: bundle.nativeStaticConfig,
+    toAssembleInputs(config, gazetteerEntries),
     compressed,
-  });
-};
+  );
 
 type NativePackageCacheKeyOptions = {
   binding: NativeAnonymizeBinding;

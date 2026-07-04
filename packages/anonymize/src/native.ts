@@ -1,5 +1,7 @@
-import type { NativePreparedSearchConfig } from "./build-unified-search";
+import type { NativePreparedSearchConfig } from "./native-search-config";
 import type { OperatorType } from "./types";
+
+export type { NativePreparedSearchConfig } from "./native-search-config";
 
 type NativeBindingOperatorConfig = {
   operators?: Record<string, OperatorType>;
@@ -118,6 +120,26 @@ export type NativeAnonymizeBinding = {
   prepareStaticSearchPackageBytes: (configJson: Uint8Array) => Uint8Array;
   prepareStaticSearchCompressedPackageBytes: (
     configJson: Uint8Array,
+  ) => Uint8Array;
+  // Rust config assembler (replaces the retired TypeScript config-assembly
+  // layer). Takes the pipeline config plus out-of-band dictionaries and
+  // gazetteer JSON and returns either the assembled config JSON or ready
+  // package bytes. Optional so older bindings without the assembler still
+  // satisfy the type; native-node loads them from the same `.node`.
+  assembleStaticSearchConfigJson?: (
+    pipelineConfigJson: Uint8Array,
+    dictionariesJson?: Uint8Array,
+    gazetteerJson?: Uint8Array,
+  ) => Uint8Array;
+  assembleStaticSearchPackageBytes?: (
+    pipelineConfigJson: Uint8Array,
+    dictionariesJson?: Uint8Array,
+    gazetteerJson?: Uint8Array,
+  ) => Uint8Array;
+  assembleStaticSearchCompressedPackageBytes?: (
+    pipelineConfigJson: Uint8Array,
+    dictionariesJson?: Uint8Array,
+    gazetteerJson?: Uint8Array,
   ) => Uint8Array;
 };
 

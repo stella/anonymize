@@ -1,4 +1,0 @@
-{
-  "_comment": "Address-like jurisdiction prefixes that are valid location/address spans without digits or street-type words. Lowercased and organized per language.",
-  "en": ["commonwealth of", "district of", "state of", "territory of"]
-}

@@ -1,17 +1,24 @@
 /**
- * Verify packages/data/config/ is byte-identical to the
- * runtime tree at packages/anonymize/src/data/.
+ * Verify the anonymize package's runtime data subset stays in sync with the
+ * canonical config tree.
  *
- * The runtime tree is canonical (it powers the live
- * pipeline); this package is the public mirror. Drift
- * means consumers pulling the data package directly
- * would see different content than the runtime uses.
+ * `packages/data/config/` is the single canonical source: the Rust core build
+ * (`crates/anonymize-core/build.rs`) embeds it, and the assembler consumes it.
+ * The TypeScript runtime no longer builds detector config in-process, so
+ * `packages/anonymize/src/data/` now holds only the small subset the runtime
+ * still imports directly (e.g. `language-scopes.json`, read by
+ * `src/language-scope.ts`).
  *
- * Exits non-zero with a per-file report when any file
- * is missing, extra, or differs in content.
+ * This check enforces that every JSON file remaining in the runtime subset is
+ * byte-identical to its counterpart in the canonical config tree, so the one
+ * table both the TypeScript runtime and the Rust assembler read cannot drift.
+ * The canonical tree is allowed to hold additional files the runtime does not
+ * import.
  *
- * Run via `bun run --cwd packages/data check:mirror`
- * or from CI.
+ * Exits non-zero with a per-file report when a runtime file is absent from the
+ * canonical tree or differs in content.
+ *
+ * Run via `bun run --cwd packages/data check:mirror` or from CI.
  */
 
 import { createHash } from "node:crypto";
@@ -22,8 +29,14 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, "..", "..", "..");
-const RUNTIME_DIR = join(REPO_ROOT, "packages", "anonymize", "src", "data");
-const MIRROR_DIR = join(REPO_ROOT, "packages", "data", "config");
+const CANONICAL_DIR = join(REPO_ROOT, "packages", "data", "config");
+const RUNTIME_SUBSET_DIR = join(
+  REPO_ROOT,
+  "packages",
+  "anonymize",
+  "src",
+  "data",
+);
 
 const listJsonFiles = (dir) => {
   const entries = readdirSync(dir).filter((name) => name.endsWith(".json"));
@@ -38,46 +51,53 @@ const hashFile = (path) => {
 };
 
 const main = () => {
-  for (const dir of [RUNTIME_DIR, MIRROR_DIR]) {
-    const stat = statSync(dir, { throwIfNoEntry: false });
-    if (!stat || !stat.isDirectory()) {
-      console.error(`check:mirror: expected directory at ${dir}`);
-      process.exit(1);
-    }
+  const canonicalStat = statSync(CANONICAL_DIR, { throwIfNoEntry: false });
+  if (!canonicalStat || !canonicalStat.isDirectory()) {
+    console.error(
+      `check:mirror: expected canonical config directory at ${CANONICAL_DIR}`,
+    );
+    process.exit(1);
   }
+  const canonicalFiles = listJsonFiles(CANONICAL_DIR);
+  if (canonicalFiles.length === 0) {
+    console.error(`check:mirror: canonical config tree is empty`);
+    process.exit(1);
+  }
+  const canonicalSet = new Set(canonicalFiles);
 
-  const runtimeFiles = listJsonFiles(RUNTIME_DIR);
-  const mirrorFiles = listJsonFiles(MIRROR_DIR);
+  const runtimeStat = statSync(RUNTIME_SUBSET_DIR, { throwIfNoEntry: false });
+  const runtimeFiles =
+    runtimeStat && runtimeStat.isDirectory()
+      ? listJsonFiles(RUNTIME_SUBSET_DIR)
+      : [];
 
-  const runtimeSet = new Set(runtimeFiles);
-  const mirrorSet = new Set(mirrorFiles);
+  const missing = runtimeFiles.filter((name) => !canonicalSet.has(name));
+  const differing = runtimeFiles
+    .filter((name) => canonicalSet.has(name))
+    .filter(
+      (name) =>
+        hashFile(join(RUNTIME_SUBSET_DIR, name)) !==
+        hashFile(join(CANONICAL_DIR, name)),
+    );
 
-  const missing = runtimeFiles.filter((name) => !mirrorSet.has(name));
-  const extra = mirrorFiles.filter((name) => !runtimeSet.has(name));
-
-  const shared = runtimeFiles.filter((name) => mirrorSet.has(name));
-  const differing = shared.filter(
-    (name) =>
-      hashFile(join(RUNTIME_DIR, name)) !== hashFile(join(MIRROR_DIR, name)),
-  );
-
-  const problems = missing.length + extra.length + differing.length;
+  const problems = missing.length + differing.length;
   if (problems === 0) {
-    console.log(`check:mirror: ${shared.length} JSON files in sync.`);
+    console.log(
+      `check:mirror: ${runtimeFiles.length} runtime JSON file(s) match the canonical config tree.`,
+    );
     return;
   }
 
-  console.error("check:mirror: drift detected between runtime and mirror.");
-  console.error(`  runtime: ${RUNTIME_DIR}`);
-  console.error(`  mirror:  ${MIRROR_DIR}`);
+  console.error(
+    "check:mirror: drift detected between the runtime data subset and the canonical config tree.",
+  );
+  console.error(`  runtime subset: ${RUNTIME_SUBSET_DIR}`);
+  console.error(`  canonical:      ${CANONICAL_DIR}`);
   for (const name of missing) {
-    console.error(`  missing from mirror: ${name}`);
-  }
-  for (const name of extra) {
-    console.error(`  unexpected in mirror: ${name}`);
+    console.error(`  missing from canonical config: ${name}`);
   }
   for (const name of differing) {
-    console.error(`  content differs: ${name}`);
+    console.error(`  content differs from canonical config: ${name}`);
   }
   process.exit(1);
 };

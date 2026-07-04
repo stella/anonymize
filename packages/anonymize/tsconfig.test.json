@@ -5,10 +5,6 @@
     "types": ["bun-types"],
     "noUncheckedIndexedAccess": false
   },
-  "include": [
-    "src/__test__/**/*.ts",
-    "src/detectors/__test__/**/*.ts",
-    "src/filters/__test__/**/*.ts"
-  ],
+  "include": ["src/__test__/**/*.ts"],
   "exclude": ["node_modules"]
 }
