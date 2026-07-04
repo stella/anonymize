@@ -896,6 +896,7 @@ fn trim_open_ended_org_prose(
   let mut word_start = None::<usize>;
   let mut word_is_capital = false;
   let mut armed = false;
+  let mut prev_word = None::<&str>;
   let trimmed_end = text.trim_end().len();
   for (idx, ch) in text.char_indices() {
     let is_word_char =
@@ -911,8 +912,17 @@ fn trim_open_ended_org_prose(
       continue;
     };
     let word = text.get(start..idx);
-    if word_is_capital || is_elided_capital(word) {
+    let is_capital = word_is_capital || is_elided_capital(word);
+    // A capitalized token that opens a new sentence ("... de Paris. La
+    // décision ...") must stop the scan, not extend the name. It qualifies
+    // only when the previous token ended in a sentence-final period and this
+    // token is a starter/connector that has no business inside the name.
+    if is_capital && starts_new_sentence(prev_word, word, sentence_starters) {
+      break;
+    }
+    if is_capital {
       last_capital_end = Some(idx);
+      prev_word = word;
       continue;
     }
     if armed && is_sentence_starter(word, sentence_starters) {
@@ -923,11 +933,15 @@ fn trim_open_ended_org_prose(
     {
       armed = true;
     }
+    prev_word = word;
   }
-  if let Some(start) = word_start
-    && (word_is_capital || is_elided_capital(text.get(start..trimmed_end)))
-  {
-    last_capital_end = Some(trimmed_end);
+  if let Some(start) = word_start {
+    let tail = text.get(start..trimmed_end);
+    if (word_is_capital || is_elided_capital(tail))
+      && !starts_new_sentence(prev_word, tail, sentence_starters)
+    {
+      last_capital_end = Some(trimmed_end);
+    }
   }
   let end = last_capital_end?;
   (end < trimmed_end).then_some(end)
@@ -975,6 +989,35 @@ fn is_sentence_starter(
     return false;
   };
   starters.contains(&word.to_lowercase())
+}
+
+/// A capitalized `word` begins a new sentence (so it must not be recorded as
+/// part of the organization name) when the previous token closed a sentence
+/// and this token is a sentence-starter or an in-name connector used at
+/// sentence position (French "La", "Le", ...). A capitalized connector after a
+/// sentence-final period is a sentence start, not an in-name particle.
+fn starts_new_sentence(
+  prev_word: Option<&str>,
+  word: Option<&str>,
+  sentence_starters: Option<&BTreeSet<String>>,
+) -> bool {
+  ends_with_sentence_final_period(prev_word)
+    && (is_sentence_starter(word, sentence_starters)
+      || is_in_name_connector(word))
+}
+
+/// The token closes a sentence: it ends in a period whose stem is a
+/// multi-character word carrying a lowercase letter ("Paris."). This excludes
+/// dotted initialisms and acronyms ("J.P.", "U.S.") whose stem has no
+/// lowercase letter, so a capitalized token still joins the name across them.
+fn ends_with_sentence_final_period(word: Option<&str>) -> bool {
+  let Some(word) = word else {
+    return false;
+  };
+  let stem = word.trim_end_matches('.');
+  stem.len() != word.len()
+    && stem.chars().take(2).count() == 2
+    && stem.chars().any(char::is_lowercase)
 }
 
 fn word_count(text: &str) -> usize {
@@ -1176,6 +1219,62 @@ mod tests {
       ),
       Some("Tribunal de commerce des Sables-d'Olonne".len())
     );
+  }
+
+  #[test]
+  fn stops_at_capitalized_sentence_starter_after_period() {
+    // "Tribunal de commerce de Paris. La décision ..." — the sentence-final
+    // period after "Paris" ends the court name. "La" is a capitalized French
+    // sentence starter (also an in-name connector when lowercased), so left
+    // unchecked it is recorded as a name token and the retained span keeps
+    // ". La" garbage. The post-period stop cuts the scan at the period so the
+    // name ends at "Paris." (the caller does not strip the trailing dot).
+    assert_eq!(
+      trim_open_ended_org_prose(
+        "Tribunal de commerce de Paris. La décision a été rendue aujourd'hui",
+        None
+      ),
+      Some("Tribunal de commerce de Paris.".len())
+    );
+  }
+
+  #[test]
+  fn dotted_initials_join_across_capital_after_period() {
+    // "J.P." is a dotted initialism, not a sentence end: its stem carries no
+    // lowercase letter, so the following capitalized token joins the name and
+    // only the trailing lowercase clause is trimmed.
+    let starters = set(["the", "this", "for", "by", "a"]);
+    assert_eq!(
+      trim_open_ended_org_prose(
+        "J.P. Morgan Chase Bank agreed to the terms",
+        Some(&starters)
+      ),
+      Some("J.P. Morgan Chase Bank".len())
+    );
+  }
+
+  #[test]
+  fn open_ended_org_stops_before_capitalized_sentence_starter() {
+    // Entity-level: the open-ended trigger org exceeds the word guard, is
+    // trimmed to "...Paris.", and the following French sentence ("La décision
+    // ...") is dropped rather than absorbed. Uses default filters (empty
+    // sentence starters) to prove the in-name-connector path ("la") arms the
+    // stop without any per-language starter data.
+    let text =
+      "Tribunal de commerce de Paris. La décision a été rendue aujourd'hui.";
+    let entities = filter_entity_false_positives(
+      vec![entity(
+        text,
+        text,
+        ORGANIZATION_LABEL,
+        DetectionSource::Trigger,
+      )],
+      text,
+      Some(&DenyListFilterData::default()),
+    )
+    .unwrap();
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].text, "Tribunal de commerce de Paris.");
   }
 
   #[test]
