@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::sync::LazyLock;
 
 use regex::Regex;
@@ -95,7 +96,10 @@ fn normalize_entity(
     // core) so the name survives. Gated on the same word cap, so shorter orgs
     // that already pass are never touched.
     if word_count(org_text) > MAX_OPEN_ENDED_ORGANIZATION_WORDS
-      && let Some(cut) = trim_open_ended_org_prose(org_text)
+      && let Some(cut) = trim_open_ended_org_prose(
+        org_text,
+        filters.map(|filters| &filters.sentence_starters),
+      )
     {
       end_byte = start_byte.saturating_add(cut);
     }
@@ -857,13 +861,23 @@ fn first_word(text: &str) -> Option<(usize, &str)> {
   text.get(..end).map(|word| (end, word))
 }
 
-/// Byte offset just past the last whitespace-run-delimited word whose first
-/// character is uppercase. Returns `Some` only when trailing (lowercase prose)
-/// content follows that word, so callers can trim it off.
-fn trim_open_ended_org_prose(text: &str) -> Option<usize> {
+/// Byte offset just past the last capitalized token that belongs to the leading
+/// organization name. Scanning stops at the first lowercase sentence-starter
+/// (`the`, `for`, `by`, ...): that word marks the transition from the name to
+/// trailing clause prose, so a capitalized defined term later in the sentence
+/// ("... shall provide the Services ...") is not mistaken for the name's tail.
+/// A run of lowercase non-starter words inside the name ("Conseil de
+/// prud'hommes des Sables-d'Olonne") is preserved because none of those tokens
+/// is a starter. Returns `Some` only when trailing content follows the retained
+/// span, so callers can trim it off.
+fn trim_open_ended_org_prose(
+  text: &str,
+  sentence_starters: Option<&BTreeSet<String>>,
+) -> Option<usize> {
   let mut last_capital_end = None::<usize>;
   let mut word_start = None::<usize>;
   let mut word_is_capital = false;
+  let trimmed_end = text.trim_end().len();
   for (idx, ch) in text.char_indices() {
     let is_word_char =
       ch.is_alphanumeric() || matches!(ch, '\'' | '’' | '-' | '.');
@@ -872,16 +886,32 @@ fn trim_open_ended_org_prose(text: &str) -> Option<usize> {
         word_start = Some(idx);
         word_is_capital = ch.is_uppercase();
       }
-    } else if word_start.take().is_some() && word_is_capital {
+      continue;
+    }
+    let Some(start) = word_start.take() else {
+      continue;
+    };
+    if word_is_capital {
       last_capital_end = Some(idx);
+    } else if is_sentence_starter(text.get(start..idx), sentence_starters) {
+      break;
     }
   }
-  let trimmed_end = text.trim_end().len();
   if word_start.is_some() && word_is_capital {
     last_capital_end = Some(trimmed_end);
   }
   let end = last_capital_end?;
   (end < trimmed_end).then_some(end)
+}
+
+fn is_sentence_starter(
+  word: Option<&str>,
+  sentence_starters: Option<&BTreeSet<String>>,
+) -> bool {
+  let (Some(word), Some(starters)) = (word, sentence_starters) else {
+    return false;
+  };
+  starters.contains(&word.to_lowercase())
 }
 
 fn word_count(text: &str) -> usize {
@@ -993,17 +1023,37 @@ mod tests {
 
   #[test]
   fn trims_trailing_prose_back_to_last_capital() {
+    // Trailing prose is all lowercase, so the last-capital scan lands on the
+    // name's final proper-noun token even without a sentence-starter boundary.
     assert_eq!(
       trim_open_ended_org_prose(
-        "Conseil de prud'hommes des Sables-d'Olonne a rendu son jugement"
+        "Conseil de prud'hommes des Sables-d'Olonne a rendu son jugement",
+        None
       ),
       Some("Conseil de prud'hommes des Sables-d'Olonne".len())
     );
     assert_eq!(
       trim_open_ended_org_prose(
-        "Tribunal judiciaire du Mans statue sur l'affaire"
+        "Tribunal judiciaire du Mans statue sur l'affaire",
+        None
       ),
       Some("Tribunal judiciaire du Mans".len())
+    );
+  }
+
+  #[test]
+  fn stops_at_sentence_starter_before_trailing_defined_term() {
+    // Trailing clause prose contains a capitalized defined term ("Services").
+    // Without a boundary the last-capital scan would keep it; the lowercase
+    // sentence-starter "the" marks the end of the org name so the trim lands on
+    // "Corporation".
+    let starters = set(["the", "this", "for", "by"]);
+    assert_eq!(
+      trim_open_ended_org_prose(
+        "ACME Corporation shall provide the Services under this agreement",
+        Some(&starters)
+      ),
+      Some("ACME Corporation".len())
     );
   }
 
@@ -1011,10 +1061,13 @@ mod tests {
   fn keeps_capital_terminated_names_untrimmed() {
     // Nothing to trim when the name already ends at a capital token.
     assert_eq!(
-      trim_open_ended_org_prose("Conseil de prud'hommes des Sables-d'Olonne"),
+      trim_open_ended_org_prose(
+        "Conseil de prud'hommes des Sables-d'Olonne",
+        None
+      ),
       None
     );
-    assert_eq!(trim_open_ended_org_prose("Bank of America"), None);
+    assert_eq!(trim_open_ended_org_prose("Bank of America", None), None);
   }
 
   #[test]
