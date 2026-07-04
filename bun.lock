@@ -17,7 +17,7 @@
     },
     "packages/anonymize": {
       "name": "@stll/anonymize",
-      "version": "2.0.0-alpha.1",
+      "version": "2.0.0",
       "bin": {
         "stella-anonymize-build-native-package": "./scripts/build-native-pipeline-package.mjs",
       },
@@ -38,11 +38,11 @@
         "vite": "^8.1.0",
       },
       "optionalDependencies": {
-        "@stll/anonymize-darwin-arm64": "2.0.0-alpha.1",
-        "@stll/anonymize-darwin-x64": "2.0.0-alpha.1",
-        "@stll/anonymize-linux-arm64-gnu": "2.0.0-alpha.1",
-        "@stll/anonymize-linux-x64-gnu": "2.0.0-alpha.1",
-        "@stll/anonymize-win32-x64-msvc": "2.0.0-alpha.1",
+        "@stll/anonymize-darwin-arm64": "2.0.0",
+        "@stll/anonymize-darwin-x64": "2.0.0",
+        "@stll/anonymize-linux-arm64-gnu": "2.0.0",
+        "@stll/anonymize-linux-x64-gnu": "2.0.0",
+        "@stll/anonymize-win32-x64-msvc": "2.0.0",
       },
       "peerDependencies": {
         "@stll/anonymize-data": "^0.0.6",
@@ -53,27 +53,27 @@
     },
     "packages/anonymize-darwin-arm64": {
       "name": "@stll/anonymize-darwin-arm64",
-      "version": "2.0.0-alpha.1",
+      "version": "2.0.0",
     },
     "packages/anonymize-darwin-x64": {
       "name": "@stll/anonymize-darwin-x64",
-      "version": "2.0.0-alpha.1",
+      "version": "2.0.0",
     },
     "packages/anonymize-linux-arm64-gnu": {
       "name": "@stll/anonymize-linux-arm64-gnu",
-      "version": "2.0.0-alpha.1",
+      "version": "2.0.0",
     },
     "packages/anonymize-linux-x64-gnu": {
       "name": "@stll/anonymize-linux-x64-gnu",
-      "version": "2.0.0-alpha.1",
+      "version": "2.0.0",
     },
     "packages/anonymize-win32-x64-msvc": {
       "name": "@stll/anonymize-win32-x64-msvc",
-      "version": "2.0.0-alpha.1",
+      "version": "2.0.0",
     },
     "packages/anonymize/wasm": {
       "name": "@stll/anonymize-wasm",
-      "version": "2.0.0-alpha.1",
+      "version": "2.0.0",
       "dependencies": {
         "@napi-rs/wasm-runtime": "^1.1.6",
       },
@@ -100,12 +100,12 @@
     },
     "packages/cli": {
       "name": "@stll/anonymize-cli",
-      "version": "2.0.0-alpha.1",
+      "version": "2.0.0",
       "bin": {
         "anonymize": "./dist/cli.mjs",
       },
       "dependencies": {
-        "@stll/anonymize": "^2.0.0-alpha.1",
+        "@stll/anonymize": "^2.0.0",
         "@stll/anonymize-data": "^0.0.6",
       },
       "devDependencies": {

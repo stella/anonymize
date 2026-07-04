@@ -21,10 +21,9 @@ and it is open source under the MIT license.
 ### Node.js
 
 ```bash
-npm install @stll/anonymize@alpha
+npm install @stll/anonymize
 ```
 
-> 2.0.0 currently ships under the npm `alpha` dist-tag; `npm install @stll/anonymize`
 > still resolves to the stable 1.x line until 2.0.0 is promoted to `latest`.
 
 ```ts
@@ -233,13 +232,11 @@ flow, and extension rules are in
 
 ## Versioning and status
 
-Current release line: **2.0.0** (published as `2.0.0-alpha.1` under the npm
-`alpha` dist-tag while it stabilizes). 2.0.0 is a breaking change from 1.x: the
-product runtime moved from the in-process TypeScript pipeline to the Rust-native
+Current release line: **2.0.0**. In 2.0 the product runtime moved from the in-process TypeScript pipeline to the Rust-native
 SDK, and the package root now exports the native API (`getDefaultNativePipeline`,
-`redactText`, `deanonymise`, and the prepared-package helpers). The old
-TypeScript pipeline remains only as temporary internal migration/test
-scaffolding and is not exported. See
+`redactText`, `deanonymise`, and the prepared-package helpers). The 1.x
+TypeScript pipeline has been removed entirely; the Rust core owns detection,
+resolution, and configuration assembly across all runtimes. See
 [`packages/anonymize/ARCHITECTURE.md`](packages/anonymize/ARCHITECTURE.md) and
 [`packages/anonymize/CHANGELOG.md`](packages/anonymize/CHANGELOG.md) for the
 package-level history.
