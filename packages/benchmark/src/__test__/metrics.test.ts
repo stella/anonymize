@@ -144,7 +144,7 @@ test("python code-point spans convert to utf-16 offsets", () => {
   const text = "\u{1F600}\u{1F600} Jan Novak lives here";
   // Code points: two emoji (1 each) + space = entity starts at cp 3.
   const spans = convertCodePointSpans(text, [
-    { label: "person", start: 3, end: 12 },
+    { label: "person", start: 3, end: 12, text: "Jan Novak" },
   ]);
   const first = spans[0];
   expect(first?.start).toBe(5);
@@ -155,7 +155,7 @@ test("python code-point spans convert to utf-16 offsets", () => {
 test("bmp-only text spans are unchanged by conversion", () => {
   const text = "Jan Novak";
   const spans = convertCodePointSpans(text, [
-    { label: "person", start: 0, end: 9 },
+    { label: "person", start: 0, end: 9, text: "Jan Novak" },
   ]);
   expect(spans[0]?.start).toBe(0);
   expect(spans[0]?.end).toBe(9);
