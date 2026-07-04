@@ -63,6 +63,8 @@ describe("filterDictionaries", () => {
 const opts = (overrides: Partial<CliOptions>): CliOptions => ({
   files: ["a.txt"],
   mode: "replace",
+  recursive: false,
+  workers: 1,
   threshold: 0.3,
   redactString: "[REDACTED]",
   json: false,

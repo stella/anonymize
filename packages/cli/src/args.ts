@@ -1,3 +1,4 @@
+import { availableParallelism } from "node:os";
 import { parseArgs } from "node:util";
 
 export const CLI_MODES = ["replace", "redact"] as const;
@@ -5,6 +6,17 @@ export type CliMode = (typeof CLI_MODES)[number];
 
 export const DEFAULT_THRESHOLD = 0.3;
 export const DEFAULT_REDACT_STRING = "[REDACTED]";
+
+/** Upper bound on the default worker count; batch I/O overlap
+ * saturates well before this, and redaction itself is a
+ * synchronous native call serialized on the JS thread. */
+export const MAX_DEFAULT_WORKERS = 4;
+
+/** Default batch concurrency: min(4, cores). Workers overlap
+ * file reads/writes; the shared native pipeline runs each
+ * redaction to completion on the single JS thread. */
+export const defaultWorkerCount = (): number =>
+  Math.max(1, Math.min(MAX_DEFAULT_WORKERS, availableParallelism()));
 
 /** Invalid invocation; printed with usage hint, exit code 2. */
 export class UsageError extends Error {}
@@ -15,6 +27,9 @@ export type CliOptions = {
   mode: CliMode;
   keyPath?: string | undefined;
   deanonymiseKeyPath?: string | undefined;
+  revert?: string[] | undefined;
+  recursive: boolean;
+  workers: number;
   labels?: string[] | undefined;
   languages?: string[] | undefined;
   countries?: string[] | undefined;
@@ -27,15 +42,17 @@ export type CliOptions = {
   listLabels: boolean;
 };
 
-export const HELP = `Usage: anonymize [options] [file ...]
+export const HELP = `Usage: anonymize [options] [file|dir ...]
 
 Detect and anonymize PII in text. Reads the given files, or stdin
-when no files are given. Writes to stdout, or to --output.
+when no files are given. A directory argument processes the text
+files inside it (add --recursive to descend into subdirectories).
+Writes to stdout, or to --output.
 All processing is local; the CLI makes no network calls.
 
 Options:
-  -o, --output <path>       Output file, or directory when multiple
-                            input files are given
+  -o, --output <path>       Output file, or directory for batch
+                            input (multiple files or a directory)
   -m, --mode <mode>         "replace" (reversible [PERSON_1]
                             placeholders) or "redact"
                             (default: replace)
@@ -43,6 +60,17 @@ Options:
                             (single input, replace mode)
   -d, --deanonymise <path>  Restore redacted text using the
                             redaction key at <path>
+      --revert <term>       With --deanonymise, restore only the
+                            given entity. Match a placeholder token
+                            ("[PERSON_1]") or an original value
+                            ("Jan Novák"), case-sensitive exact.
+                            Repeatable; others stay redacted
+  -r, --recursive           Descend into subdirectories when a
+                            directory is given as input
+      --workers <n>         Batch files to process concurrently
+                            (default: min(${MAX_DEFAULT_WORKERS}, CPU cores)). Overlaps
+                            file I/O; redaction is serialized on
+                            the JS thread
       --labels <list>       Comma-separated entity labels to detect
                             (default: all). Accepts canonical labels
                             ("email address"), short aliases (email,
@@ -65,6 +93,15 @@ Options:
   -v, --version             Show the version
       --list-labels         List detectable entity labels and the
                             short aliases accepted by --labels
+
+Batch input (directory or multiple files):
+  Requires --output <directory>. The input tree is mirrored
+  into the output directory. Directory walks process regular
+  files only and skip likely-binary files (a NUL byte in the
+  first 8 KiB); explicitly named files are always processed.
+  The stderr summary reports how many files were processed,
+  failed, and skipped; any failure sets exit code 1.
+  --key and --json apply to single inputs only.
 
 Interactive prompt:
   When run on files from a terminal without --countries or
@@ -91,6 +128,8 @@ Examples:
   anonymize contract.txt > contract.anon.txt
   anonymize -k contract.key.json -o contract.anon.txt contract.txt
   anonymize -d contract.key.json contract.anon.txt
+  anonymize -r --workers 8 -o out/ docs/
+  anonymize -d key.json --revert "[PERSON_1]" contract.anon.txt
   cat notes.md | anonymize --countries CZ,SK --languages cs,sk
   anonymize --json --quiet input.txt | jq '.entities[].label'
 `;
@@ -110,6 +149,14 @@ const parseThreshold = (raw: string): number => {
     throw new UsageError(
       `--threshold must be a number between 0 and 1, got "${raw}"`,
     );
+  }
+  return value;
+};
+
+const parseWorkers = (raw: string): number => {
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 1) {
+    throw new UsageError(`--workers must be a positive integer, got "${raw}"`);
   }
   return value;
 };
@@ -154,6 +201,15 @@ export const parseCliArgs = (argv: string[]): CliOptions => {
     mode: values.mode === undefined ? "replace" : parseMode(values.mode),
     keyPath: values.key,
     deanonymiseKeyPath: values.deanonymise,
+    revert:
+      values.revert === undefined || values.revert.length === 0
+        ? undefined
+        : values.revert,
+    recursive: values.recursive === true,
+    workers:
+      values.workers === undefined
+        ? defaultWorkerCount()
+        : parseWorkers(values.workers),
     labels: values.labels === undefined ? undefined : splitList(values.labels),
     languages:
       values.languages === undefined ? undefined : splitList(values.languages),
@@ -182,6 +238,9 @@ const PARSE_CONFIG = {
     mode: { type: "string", short: "m" },
     key: { type: "string", short: "k" },
     deanonymise: { type: "string", short: "d" },
+    revert: { type: "string", multiple: true },
+    recursive: { type: "boolean", short: "r" },
+    workers: { type: "string" },
     labels: { type: "string" },
     languages: { type: "string" },
     countries: { type: "string" },

@@ -1,5 +1,5 @@
 import { expect, setDefaultTimeout, test } from "bun:test";
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -179,6 +179,221 @@ test("--list-labels prints canonical labels and aliases", async () => {
   expect(out).toContain("email address");
   // The alias table maps short forms to canonical labels.
   expect(out).toMatch(/email\s+->\s+email address/);
+});
+
+test("processes a directory, non-recursive by default", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "anonymize-cli-"));
+  const input = join(dir, "in");
+  const out = join(dir, "out");
+  await Bun.write(join(input, "top.txt"), SAMPLE);
+  await Bun.write(join(input, "nested", "deep.txt"), SAMPLE);
+
+  const { code, err } = await run([...SCOPE, "-o", out, input]);
+  expect(code).toBe(0);
+  // Top-level file is mirrored; the nested file is not walked
+  // without --recursive.
+  const top = await readFile(join(out, "top.txt"), "utf8");
+  expect(top).toContain("[EMAIL_ADDRESS_1]");
+  expect(top).not.toContain("jan.novak@example.com");
+  expect(await Bun.file(join(out, "nested", "deep.txt")).exists()).toBe(false);
+  // Summary reports one processed file.
+  expect(err).toContain("1 processed");
+});
+
+test("--recursive walks subdirectories and mirrors the tree", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "anonymize-cli-"));
+  const input = join(dir, "in");
+  const out = join(dir, "out");
+  await Bun.write(join(input, "top.txt"), SAMPLE);
+  await Bun.write(join(input, "a", "b", "deep.txt"), SAMPLE);
+
+  const { code } = await run([...SCOPE, "--recursive", "-o", out, input]);
+  expect(code).toBe(0);
+  for (const rel of ["top.txt", join("a", "b", "deep.txt")]) {
+    const text = await readFile(join(out, rel), "utf8");
+    expect(text).toContain("[EMAIL_ADDRESS_1]");
+    expect(text).not.toContain("jan.novak@example.com");
+  }
+});
+
+test("--workers >1 matches single-worker output (determinism)", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "anonymize-cli-"));
+  const input = join(dir, "in");
+  await mkdir(input, { recursive: true });
+  const names: string[] = [];
+  for (let i = 0; i < 12; i += 1) {
+    const name = `f${i}.txt`;
+    names.push(name);
+    await writeFile(join(input, name), `${SAMPLE} file ${i}`, "utf8");
+  }
+
+  const serial = join(dir, "serial");
+  const parallel = join(dir, "parallel");
+  const a = await run([
+    ...SCOPE,
+    "--workers",
+    "1",
+    "--quiet",
+    "-o",
+    serial,
+    input,
+  ]);
+  const b = await run([
+    ...SCOPE,
+    "--workers",
+    "8",
+    "--quiet",
+    "-o",
+    parallel,
+    input,
+  ]);
+  expect(a.code).toBe(0);
+  expect(b.code).toBe(0);
+  for (const name of names) {
+    const one = await readFile(join(serial, name), "utf8");
+    const many = await readFile(join(parallel, name), "utf8");
+    expect(many).toBe(one);
+  }
+});
+
+test("directory walk skips likely-binary files", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "anonymize-cli-"));
+  const input = join(dir, "in");
+  const out = join(dir, "out");
+  await Bun.write(join(input, "text.txt"), SAMPLE);
+  // A NUL byte in the first bytes marks the file as binary.
+  await Bun.write(
+    join(input, "blob.bin"),
+    new Uint8Array([0x00, 0x01, 0x02, 0x03]),
+  );
+
+  const { code, err } = await run([...SCOPE, "-o", out, input]);
+  expect(code).toBe(0);
+  expect(await Bun.file(join(out, "text.txt")).exists()).toBe(true);
+  expect(await Bun.file(join(out, "blob.bin")).exists()).toBe(false);
+  expect(err).toContain("1 processed");
+  expect(err).toContain("1 skipped");
+});
+
+test("batch reports a nonzero exit when a file fails", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "anonymize-cli-"));
+  const out = join(dir, "out");
+  const good = join(dir, "good.txt");
+  await writeFile(good, SAMPLE, "utf8");
+  const missing = join(dir, "missing.txt");
+
+  // Two explicit files, one missing. The batch processes the
+  // good file and counts the missing one as failed, then exits
+  // nonzero.
+  const { code, err } = await run([...SCOPE, "-o", out, good, missing]);
+  expect(code).toBe(1);
+  expect(err).toContain("missing.txt");
+  expect(err).toContain("1 processed, 1 failed");
+  expect(await Bun.file(join(out, "good.txt")).exists()).toBe(true);
+});
+
+test("--revert restores only the named placeholder", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "anonymize-cli-"));
+  const inputPath = join(dir, "input.txt");
+  const redactedPath = join(dir, "redacted.txt");
+  const keyPath = join(dir, "key.json");
+  await writeFile(inputPath, SAMPLE, "utf8");
+
+  const anon = await run([
+    ...SCOPE,
+    "--quiet",
+    "-o",
+    redactedPath,
+    "-k",
+    keyPath,
+    inputPath,
+  ]);
+  expect(anon.code).toBe(0);
+
+  // Restore only the person; the email stays a placeholder.
+  const reverted = await run([
+    "--quiet",
+    "-d",
+    keyPath,
+    "--revert",
+    "[PERSON_1]",
+    redactedPath,
+  ]);
+  expect(reverted.code).toBe(0);
+  expect(reverted.out).toContain("Jan Novák");
+  expect(reverted.out).toContain("[EMAIL_ADDRESS_1]");
+  expect(reverted.out).not.toContain("jan.novak@example.com");
+});
+
+test("--revert matches an original value and is repeatable", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "anonymize-cli-"));
+  const inputPath = join(dir, "input.txt");
+  const redactedPath = join(dir, "redacted.txt");
+  const keyPath = join(dir, "key.json");
+  await writeFile(inputPath, SAMPLE, "utf8");
+
+  await run([
+    ...SCOPE,
+    "--quiet",
+    "-o",
+    redactedPath,
+    "-k",
+    keyPath,
+    inputPath,
+  ]);
+
+  // Match by original text for the person, by placeholder for
+  // the email: both come back. The IBAN, named by neither, stays
+  // redacted.
+  const reverted = await run([
+    "--quiet",
+    "-d",
+    keyPath,
+    "--revert",
+    "Jan Novák",
+    "--revert",
+    "[EMAIL_ADDRESS_1]",
+    redactedPath,
+  ]);
+  expect(reverted.code).toBe(0);
+  expect(reverted.out).toContain("Jan Novák");
+  expect(reverted.out).toContain("jan.novak@example.com");
+  expect(reverted.out).toContain("[IBAN_1]");
+});
+
+test("--revert errors and lists placeholders on no match", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "anonymize-cli-"));
+  const inputPath = join(dir, "input.txt");
+  const redactedPath = join(dir, "redacted.txt");
+  const keyPath = join(dir, "key.json");
+  await writeFile(inputPath, SAMPLE, "utf8");
+
+  await run([
+    ...SCOPE,
+    "--quiet",
+    "-o",
+    redactedPath,
+    "-k",
+    keyPath,
+    inputPath,
+  ]);
+
+  const { code, err } = await run([
+    "-d",
+    keyPath,
+    "--revert",
+    "Nobody Here",
+    redactedPath,
+  ]);
+  expect(code).toBe(2);
+  expect(err).toContain("matched no placeholder or original");
+  expect(err).toContain("[PERSON_1]");
+});
+
+test("--revert without --deanonymise is a usage error", async () => {
+  const { code, err } = await run([...SCOPE, "--revert", "[PERSON_1]"], SAMPLE);
+  expect(code).toBe(2);
+  expect(err).toContain("--revert requires --deanonymise");
 });
 
 test("--json --mode redact omits detected text from the payload", async () => {

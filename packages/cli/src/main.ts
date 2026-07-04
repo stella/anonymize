@@ -1,6 +1,13 @@
 import { realpathSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { basename, join, resolve } from "node:path";
+import {
+  mkdir,
+  open,
+  readdir,
+  readFile,
+  stat,
+  writeFile,
+} from "node:fs/promises";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 
 import type {
@@ -89,6 +96,142 @@ const readInputs = async (files: string[]): Promise<NamedInput[]> => {
   return Promise.all(
     files.map(async (path) => ({ path, text: await readFile(path, "utf8") })),
   );
+};
+
+/**
+ * One file to anonymize in a batch run: the source path to
+ * read and the path, relative to the output directory, to
+ * write. For a plain file argument the relative path is the
+ * basename; for a directory argument the input tree is
+ * mirrored, so it is the path relative to that directory.
+ */
+type FileJob = {
+  path: string;
+  outputRelative: string;
+};
+
+/** Result of expanding the positional arguments into concrete
+ * files. `batch` is true when the output must be a directory:
+ * more than one file, or any directory argument. */
+type ExpandedInputs = {
+  jobs: FileJob[];
+  batch: boolean;
+  /** Likely-binary files skipped during directory walks. */
+  skipped: number;
+};
+
+// Sniff window for the binary check. A regular text file never
+// contains a NUL byte; binaries (images, archives) reliably do.
+const TEXT_SNIFF_BYTES = 8192;
+
+/**
+ * True when the file's first {@link TEXT_SNIFF_BYTES} bytes
+ * contain no NUL byte. Used to skip binaries discovered by a
+ * directory walk without reading the whole file.
+ */
+const looksTextual = async (path: string): Promise<boolean> => {
+  const handle = await open(path, "r");
+  try {
+    const buffer = Buffer.alloc(TEXT_SNIFF_BYTES);
+    const { bytesRead } = await handle.read(buffer, 0, TEXT_SNIFF_BYTES, 0);
+    return buffer.subarray(0, bytesRead).indexOf(0) === -1;
+  } finally {
+    await handle.close();
+  }
+};
+
+/**
+ * Collect regular files under `root`, sorted for deterministic
+ * order. Symlinks are skipped (avoids cycles and escaping the
+ * tree); subdirectories are descended only when `recursive`.
+ */
+const walkDirectory = async (
+  root: string,
+  recursive: boolean,
+): Promise<string[]> => {
+  const found: string[] = [];
+  const visit = async (dir: string): Promise<void> => {
+    const entries = (await readdir(dir, { withFileTypes: true })).toSorted(
+      (a, b) => a.name.localeCompare(b.name),
+    );
+    for (const entry of entries) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (recursive) await visit(full);
+      } else if (entry.isFile()) {
+        found.push(full);
+      }
+    }
+  };
+  await visit(root);
+  return found;
+};
+
+/**
+ * Expand positional arguments into concrete file jobs. A file
+ * argument becomes one job (always processed); a directory is
+ * walked, mirroring its tree into the output and skipping
+ * likely-binary files.
+ */
+const expandInputs = async (
+  files: readonly string[],
+  recursive: boolean,
+): Promise<ExpandedInputs> => {
+  const jobs: FileJob[] = [];
+  let hasDirectory = false;
+  let skipped = 0;
+  for (const path of files) {
+    // A stat failure (missing path, permission error) is not
+    // fatal here: treat it as a file job so the read failure is
+    // reported per file. A single such job stays single-input
+    // and surfaces the error as a runtime exit; in a batch it is
+    // counted as a failed file.
+    let stats: Awaited<ReturnType<typeof stat>> | undefined;
+    try {
+      stats = await stat(path);
+    } catch {
+      jobs.push({ path, outputRelative: basename(path) });
+      continue;
+    }
+    if (!stats.isDirectory()) {
+      jobs.push({ path, outputRelative: basename(path) });
+      continue;
+    }
+    hasDirectory = true;
+    for (const file of await walkDirectory(path, recursive)) {
+      if (!(await looksTextual(file))) {
+        skipped += 1;
+        continue;
+      }
+      jobs.push({ path: file, outputRelative: relative(path, file) });
+    }
+  }
+  return { jobs, batch: hasDirectory || jobs.length > 1, skipped };
+};
+
+/**
+ * Run `task` over `items` with at most `workers` in flight.
+ * The shared native pipeline makes each redaction a synchronous
+ * native call, so concurrency here only overlaps async file
+ * I/O; the increments below are safe without locking because
+ * no `await` sits between the read and the write of `next`.
+ */
+const runPool = async <T>(
+  items: readonly T[],
+  workers: number,
+  task: (item: T) => Promise<void>,
+): Promise<void> => {
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    while (next < items.length) {
+      const index = next;
+      next += 1;
+      // SAFETY: index < items.length checked above.
+      await task(items[index] as T);
+    }
+  };
+  const count = Math.max(1, Math.min(workers, items.length));
+  await Promise.all(Array.from({ length: count }, worker));
 };
 
 type EntityLabel = (typeof DEFAULT_ENTITY_LABELS)[number];
@@ -284,6 +427,37 @@ const parseRedactionKey = (raw: string): Map<string, string> => {
 };
 
 /**
+ * Restrict a redaction key to the entities named by --revert.
+ * Each token matches a placeholder ("[PERSON_1]") or an original
+ * value ("Jan Novák"), case-sensitive and exact. A token that
+ * matches nothing is a usage error listing the placeholders the
+ * key does define, so the caller can correct the spelling.
+ */
+const selectRevertEntries = (
+  redactionMap: ReadonlyMap<string, string>,
+  tokens: readonly string[],
+): Map<string, string> => {
+  const selected = new Map<string, string>();
+  for (const token of tokens) {
+    let matched = false;
+    for (const [placeholder, original] of redactionMap) {
+      if (placeholder === token || original === token) {
+        selected.set(placeholder, original);
+        matched = true;
+      }
+    }
+    if (!matched) {
+      const available = [...redactionMap.keys()].join(", ");
+      throw new UsageError(
+        `--revert ${JSON.stringify(token)} matched no placeholder or ` +
+          `original; available placeholders: ${available}`,
+      );
+    }
+  }
+  return selected;
+};
+
+/**
  * Ask for a country scope when running interactively on
  * files with no scope flags. Skipped for piped stdin so
  * the CLI stays scriptable.
@@ -324,7 +498,15 @@ const runDeanonymise = async (
   }
   const keyPath = opts.deanonymiseKeyPath;
   if (keyPath === undefined) throw new UsageError("missing redaction key path");
-  const redactionMap = parseRedactionKey(await readFile(keyPath, "utf8"));
+  const fullMap = parseRedactionKey(await readFile(keyPath, "utf8"));
+
+  // --revert restores a chosen subset; leaving the rest of the
+  // key out means deanonymise skips those placeholders, so the
+  // other entities stay redacted.
+  const redactionMap =
+    opts.revert === undefined
+      ? fullMap
+      : selectRevertEntries(fullMap, opts.revert);
 
   const inputs = await readInputs(opts.files);
   if (inputs.length > 1) {
@@ -338,18 +520,6 @@ const runDeanonymise = async (
     ]);
   }
   await writeOutput(opts.output, api.deanonymise(input.text, redactionMap));
-};
-
-const outputPathFor = (
-  input: NamedInput,
-  opts: CliOptions,
-  multi: boolean,
-): string | undefined => {
-  if (opts.output === undefined) return undefined;
-  if (!multi) return opts.output;
-  if (input.path === null)
-    throw new UsageError("stdin cannot be combined with multiple files");
-  return join(opts.output, basename(input.path));
 };
 
 /**
@@ -391,20 +561,129 @@ const summarize = (entities: readonly CliEntity[]): string => {
   return parts.length > 0 ? parts.join(", ") : "none";
 };
 
+/**
+ * A single unit of anonymize work: the text to process, where
+ * to write it (undefined means stdout), and a label for the
+ * stderr summary. Used by the stdin and single-file flows,
+ * which additionally support --json and --key.
+ */
+type SingleInput = {
+  text: string;
+  outputPath: string | undefined;
+  source: string;
+};
+
+const runAnonymiseSingle = async (
+  opts: CliOptions,
+  runtime: CliRuntime,
+  api: AnonymizeApi,
+  input: SingleInput,
+): Promise<void> => {
+  const { entities, redaction } = await runtime.redact(
+    input.text,
+    buildOperatorConfig(opts),
+  );
+
+  if (opts.json) {
+    // In redact mode the user chose irreversibility, so the
+    // JSON must not carry any detected text. Whitelist the
+    // non-sensitive metadata fields; this drops `text` and a
+    // coref alias's `corefSourceText`. Offsets index the
+    // caller's own input and are kept.
+    const jsonEntities =
+      opts.mode === "redact"
+        ? entities.map(({ start, end, label, score, source }) => ({
+            start,
+            end,
+            label,
+            score,
+            source,
+          }))
+        : entities;
+    const payload = {
+      entityCount: redaction.entityCount,
+      entities: jsonEntities,
+      redactedText: redaction.redactedText,
+    };
+    await writeOutput(
+      input.outputPath,
+      `${JSON.stringify(payload, null, 2)}\n`,
+    );
+  } else {
+    await writeOutput(input.outputPath, redaction.redactedText);
+  }
+
+  if (opts.keyPath !== undefined) {
+    await writeFile(
+      opts.keyPath,
+      api.exportRedactionKey(redaction.redactionMap, redaction.operatorMap),
+      "utf8",
+    );
+  }
+
+  if (!opts.quiet) {
+    process.stderr.write(
+      `anonymize: ${input.source}: ${summarize(entities)}\n`,
+    );
+  }
+};
+
+/** Tally of a batch run for the closing summary line. */
+type BatchOutcome = { processed: number; failed: number };
+
+const runAnonymiseBatch = async (
+  opts: CliOptions,
+  runtime: CliRuntime,
+  output: string,
+  jobs: readonly FileJob[],
+  skipped: number,
+): Promise<void> => {
+  await mkdir(output, { recursive: true });
+  const operatorConfig = buildOperatorConfig(opts);
+  const outcome: BatchOutcome = { processed: 0, failed: 0 };
+
+  await runPool(jobs, opts.workers, async (job) => {
+    const outputPath = join(output, job.outputRelative);
+    try {
+      const text = await readFile(job.path, "utf8");
+      const { entities, redaction } = await runtime.redact(
+        text,
+        operatorConfig,
+      );
+      await mkdir(dirname(outputPath), { recursive: true });
+      await writeFile(outputPath, redaction.redactedText, "utf8");
+      // No await between here and the increment: safe on the
+      // single JS thread despite concurrent workers.
+      outcome.processed += 1;
+      if (!opts.quiet) {
+        process.stderr.write(
+          `anonymize: ${job.path}: ${summarize(entities)}\n`,
+        );
+      }
+    } catch (err) {
+      outcome.failed += 1;
+      const message = err instanceof Error ? err.message : String(err);
+      process.stderr.write(`anonymize: ${job.path}: error: ${message}\n`);
+    }
+  });
+
+  if (!opts.quiet) {
+    const parts = [
+      `${outcome.processed} processed`,
+      `${outcome.failed} failed`,
+    ];
+    if (skipped > 0) parts.push(`${skipped} skipped`);
+    process.stderr.write(`anonymize: ${parts.join(", ")}\n`);
+  }
+  // Any per-file failure is a nonzero exit, but the whole batch
+  // still runs so one bad file does not hide the rest.
+  if (outcome.failed > 0) process.exitCode = 1;
+};
+
 const runAnonymise = async (
   opts: CliOptions,
   { api, loadDictionaries }: CliEngine,
 ): Promise<void> => {
-  const multi = opts.files.length > 1;
-  if (multi && opts.output === undefined) {
-    throw new UsageError("multiple input files require --output <directory>");
-  }
-  if (multi && opts.keyPath !== undefined) {
-    throw new UsageError("--key works with a single input only");
-  }
-  if (multi && opts.json) {
-    throw new UsageError("--json works with a single input only");
-  }
   if (opts.keyPath !== undefined && opts.mode !== "replace") {
     throw new UsageError('--key requires --mode "replace"');
   }
@@ -416,79 +695,90 @@ const runAnonymise = async (
     ? { ...opts, countries: await promptForCountries() }
     : opts;
 
-  const inputs = await readInputs(scoped.files);
+  // No positional arguments: read stdin as a single input.
+  if (scoped.files.length === 0) {
+    const [input] = await readInputs(scoped.files);
+    if (!input) throw new UsageError("no input to anonymize");
+    guardWriteTargets([], collectSingleTargets(scoped));
+    const runtime = await prepareCliRuntime(
+      api,
+      await buildPipelineConfig(scoped, loadDictionaries),
+    );
+    await runAnonymiseSingle(scoped, runtime, api, {
+      text: input.text,
+      outputPath: scoped.output,
+      source: "stdin",
+    });
+    return;
+  }
 
-  // Validate every write target before any work: output
-  // collisions (same basename from different input dirs,
-  // symlinks to an input, --key hitting the output) fail
-  // fast instead of silently clobbering files mid-batch.
-  const outputPaths = inputs.map((input) => outputPathFor(input, opts, multi));
-  const writeTargets: { path: string; flag: string }[] = [];
-  for (const path of outputPaths) {
-    if (path !== undefined) writeTargets.push({ path, flag: "--output" });
-  }
-  if (opts.keyPath !== undefined) {
-    writeTargets.push({ path: opts.keyPath, flag: "--key" });
-  }
-  guardWriteTargets(
-    inputs.flatMap((input) => (input.path === null ? [] : [input.path])),
-    writeTargets,
+  const { jobs, batch, skipped } = await expandInputs(
+    scoped.files,
+    scoped.recursive,
   );
 
-  const config = await buildPipelineConfig(scoped, loadDictionaries);
-  const runtime = await prepareCliRuntime(api, config);
-
-  if (multi && opts.output !== undefined) {
-    await mkdir(opts.output, { recursive: true });
-  }
-
-  for (const [index, input] of inputs.entries()) {
-    const outputPath = outputPaths[index];
-    const { entities, redaction } = await runtime.redact(
-      input.text,
-      buildOperatorConfig(opts),
+  if (!batch) {
+    // Exactly one plain file: single-input flow with --json/--key.
+    const [job] = jobs;
+    if (!job) throw new UsageError("no input to anonymize");
+    guardWriteTargets([job.path], collectSingleTargets(scoped));
+    const runtime = await prepareCliRuntime(
+      api,
+      await buildPipelineConfig(scoped, loadDictionaries),
     );
-    const result = redaction;
-
-    if (opts.json) {
-      // In redact mode the user chose irreversibility, so the
-      // JSON must not carry any detected text. Whitelist the
-      // non-sensitive metadata fields; this drops `text` and a
-      // coref alias's `corefSourceText`. Offsets index the
-      // caller's own input and are kept.
-      const jsonEntities =
-        opts.mode === "redact"
-          ? entities.map(({ start, end, label, score, source }) => ({
-              start,
-              end,
-              label,
-              score,
-              source,
-            }))
-          : entities;
-      const payload = {
-        entityCount: result.entityCount,
-        entities: jsonEntities,
-        redactedText: result.redactedText,
-      };
-      await writeOutput(outputPath, `${JSON.stringify(payload, null, 2)}\n`);
-    } else {
-      await writeOutput(outputPath, result.redactedText);
-    }
-
-    if (opts.keyPath !== undefined) {
-      await writeFile(
-        opts.keyPath,
-        api.exportRedactionKey(result.redactionMap, result.operatorMap),
-        "utf8",
-      );
-    }
-
-    if (!opts.quiet) {
-      const source = input.path ?? "stdin";
-      process.stderr.write(`anonymize: ${source}: ${summarize(entities)}\n`);
-    }
+    await runAnonymiseSingle(scoped, runtime, api, {
+      text: await readFile(job.path, "utf8"),
+      outputPath: scoped.output,
+      source: job.path,
+    });
+    return;
   }
+
+  // Batch: a directory, or more than one file.
+  const output = scoped.output;
+  if (output === undefined) {
+    throw new UsageError(
+      "batch input (a directory or multiple files) requires --output <directory>",
+    );
+  }
+  if (scoped.keyPath !== undefined) {
+    throw new UsageError("--key works with a single input only");
+  }
+  if (scoped.json) {
+    throw new UsageError("--json works with a single input only");
+  }
+
+  // Validate every write target before any work: colliding
+  // output paths (same basename from different input dirs,
+  // symlinks to an input) fail fast instead of silently
+  // clobbering files mid-batch.
+  guardWriteTargets(
+    jobs.map((job) => job.path),
+    jobs.map((job) => ({
+      path: join(output, job.outputRelative),
+      flag: "--output",
+    })),
+  );
+
+  const runtime = await prepareCliRuntime(
+    api,
+    await buildPipelineConfig(scoped, loadDictionaries),
+  );
+  await runAnonymiseBatch(scoped, runtime, output, jobs, skipped);
+};
+
+/** Write targets for a single-input run: --output and --key. */
+const collectSingleTargets = (
+  opts: CliOptions,
+): { path: string; flag: string }[] => {
+  const targets: { path: string; flag: string }[] = [];
+  if (opts.output !== undefined) {
+    targets.push({ path: opts.output, flag: "--output" });
+  }
+  if (opts.keyPath !== undefined) {
+    targets.push({ path: opts.keyPath, flag: "--key" });
+  }
+  return targets;
 };
 
 type CliRuntime = {
@@ -557,6 +847,9 @@ const dispatch = async (engine: CliEngine): Promise<void> => {
   if (opts.deanonymiseKeyPath !== undefined) {
     await runDeanonymise(opts, engine.api);
     return;
+  }
+  if (opts.revert !== undefined) {
+    throw new UsageError("--revert requires --deanonymise <key>");
   }
   await runAnonymise(opts, engine);
 };
