@@ -199,7 +199,11 @@ const expandInputs = async (
     }
     hasDirectory = true;
     for (const file of await walkDirectory(path, recursive)) {
-      if (!(await looksTextual(file))) {
+      // A file that disappears or turns unreadable mid-walk is queued anyway:
+      // the per-file worker try/catch counts it as failed without aborting
+      // the batch. Only a successful sniff that says "binary" skips it.
+      const textual = await looksTextual(file).catch(() => true);
+      if (!textual) {
         skipped += 1;
         continue;
       }
@@ -447,10 +451,14 @@ const selectRevertEntries = (
       }
     }
     if (!matched) {
-      const available = [...redactionMap.keys()].join(", ");
+      const MAX_LISTED_PLACEHOLDERS = 20;
+      const placeholders = [...redactionMap.keys()];
+      const listed = placeholders.slice(0, MAX_LISTED_PLACEHOLDERS).join(", ");
+      const rest = placeholders.length - MAX_LISTED_PLACEHOLDERS;
+      const suffix = rest > 0 ? ` and ${rest} more` : "";
       throw new UsageError(
         `--revert ${JSON.stringify(token)} matched no placeholder or ` +
-          `original; available placeholders: ${available}`,
+          `original; available placeholders: ${listed}${suffix}`,
       );
     }
   }
