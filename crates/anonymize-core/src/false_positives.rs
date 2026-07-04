@@ -668,10 +668,12 @@ const UNIT_DESIGNATORS: &[&str] = &[
 ];
 
 /// True when `text` opens with a recognized unit designator ("Suite", "Apt",
-/// "Unit", ...) immediately followed by a token that begins with a digit
-/// ("Suite 100", "Unit 5", "Apt 4B"). Prose sentences ("The tenant shall ...")
-/// and capitalized headings that merely precede a number ("Section 2 applies")
-/// fail because their first token is not a designator.
+/// "Unit", ...) immediately followed by a short unit identifier: digit-leading
+/// ("Suite 100", "Unit 5", "Apt 4B") or a short alphanumeric letter code
+/// ("Suite A", "Unit B2"). Prose sentences ("The tenant shall ...") and
+/// capitalized headings that merely precede a number ("Section 2 applies")
+/// fail because their first token is not a designator; prose after a real
+/// designator ("Suite The") fails the short-identifier shape.
 fn starts_with_unit_number(text: &str) -> bool {
   let mut words = text.split_whitespace();
   let Some(first) = words.next() else {
@@ -684,10 +686,25 @@ fn starts_with_unit_number(text: &str) -> bool {
   {
     return false;
   }
-  words
-    .next()
-    .and_then(|word| word.chars().next())
-    .is_some_and(|ch| ch.is_ascii_digit())
+  words.next().is_some_and(is_unit_identifier)
+}
+
+/// A unit identifier after a designator: digit-leading of any length, or a
+/// short (<= 3 chars) alphanumeric code such as "A" or "B2".
+fn is_unit_identifier(word: &str) -> bool {
+  let token = word.trim_end_matches([',', '.', ';']);
+  let mut chars = token.chars();
+  let Some(head) = chars.next() else {
+    return false;
+  };
+  if head.is_ascii_digit() {
+    return true;
+  }
+  // Letter codes: a single letter ("Suite A") or letter + digits ("Unit B2").
+  // Requiring digits after the letter keeps prose words ("Suite The") out.
+  head.is_ascii_alphabetic()
+    && token.chars().count() <= 3
+    && chars.all(|ch| ch.is_ascii_digit())
 }
 
 fn has_address_component(text: &str, filters: &DenyListFilterData) -> bool {
@@ -1330,6 +1347,24 @@ mod tests {
     assert_eq!(
       trim_trailing_address_prose("123 Main Street. Suite 100", &filters),
       None
+    );
+  }
+
+  #[test]
+  fn keeps_lettered_suite_continuation_after_abbreviation() {
+    let filters = DenyListFilterData {
+      street_types: set(["st.", "street"]),
+      ..DenyListFilterData::default()
+    };
+    assert_eq!(
+      trim_trailing_address_prose("123 Main St. Suite A", &filters),
+      None,
+      "a lettered unit after a designator is an address continuation"
+    );
+    assert_eq!(
+      trim_trailing_address_prose("123 Main St. Suite The tenant", &filters),
+      Some("123 Main St.".len()),
+      "prose after a designator must still trim"
     );
   }
 
