@@ -1,6 +1,6 @@
 {
-  "createdAt": "2026-07-04T04:27:40.537Z",
-  "gitSha": "ea4596b",
+  "createdAt": "2026-07-04T05:16:53.438Z",
+  "gitSha": "eb660e3",
   "hardware": "darwin/arm64, 8x Apple M3, 24 GiB RAM",
   "runtime": "Bun 1.3.14",
   "corpus": {
@@ -42,10 +42,10 @@
         "phone"
       ],
       "throughput": {
-        "initSeconds": 1.55955025,
+        "initSeconds": 1.375527583,
         "totalChars": 8153,
-        "coldCharsPerSec": 232640.42459088936,
-        "warmCharsPerSec": 817309.1911846807
+        "coldCharsPerSec": 265389.22211824683,
+        "warmCharsPerSec": 974719.4617989578
       },
       "overall": {
         "overlapAll": {
@@ -180,10 +180,10 @@
         "phone"
       ],
       "throughput": {
-        "initSeconds": 2.5305034999910276,
+        "initSeconds": 2.2265157910005655,
         "totalChars": 8153,
-        "coldCharsPerSec": 24102.562246408917,
-        "warmCharsPerSec": 38769.2095558468
+        "coldCharsPerSec": 24007.611881535846,
+        "warmCharsPerSec": 40624.63336010259
       },
       "overall": {
         "overlapAll": {
@@ -311,35 +311,35 @@
       "notes": "active detectors: credential, credit_card, email, phone, social_security_number, twitter, url",
       "supportedLabels": ["email", "id-number", "phone"],
       "throughput": {
-        "initSeconds": 0.00019508300465531647,
+        "initSeconds": 0.00019183299446012825,
         "totalChars": 8153,
-        "coldCharsPerSec": 600311.119119341,
-        "warmCharsPerSec": 1559300.9636580527
+        "coldCharsPerSec": 533318.8203058641,
+        "warmCharsPerSec": 1484635.6696396784
       },
       "overall": {
         "overlapAll": {
-          "precision": 0.9354838709677419,
-          "recall": 0.14795918367346939,
-          "f1": 0.2555066079295154,
-          "tp": 29,
-          "fp": 2,
-          "fn": 167
+          "precision": 0.9090909090909091,
+          "recall": 0.15306122448979592,
+          "f1": 0.2620087336244542,
+          "tp": 30,
+          "fp": 3,
+          "fn": 166
         },
         "overlapSupported": {
-          "precision": 0.9354838709677419,
-          "recall": 0.5686274509803921,
-          "f1": 0.7073170731707317,
-          "tp": 29,
-          "fp": 2,
-          "fn": 22
+          "precision": 0.9090909090909091,
+          "recall": 0.5882352941176471,
+          "f1": 0.7142857142857143,
+          "tp": 30,
+          "fp": 3,
+          "fn": 21
         },
         "exactAll": {
-          "precision": 0.9354838709677419,
-          "recall": 0.14795918367346939,
-          "f1": 0.2555066079295154,
-          "tp": 29,
-          "fp": 2,
-          "fn": 167
+          "precision": 0.9090909090909091,
+          "recall": 0.15306122448979592,
+          "f1": 0.2620087336244542,
+          "tp": 30,
+          "fp": 3,
+          "fn": 166
         }
       },
       "perLabel": {
@@ -368,20 +368,20 @@
           "fn": 24
         },
         "email": {
-          "precision": 1,
+          "precision": 0.95,
           "recall": 1,
-          "f1": 1,
+          "f1": 0.9743589743589743,
           "tp": 19,
-          "fp": 0,
+          "fp": 1,
           "fn": 0
         },
         "phone": {
-          "precision": 0.8333333333333334,
-          "recall": 0.7692307692307693,
-          "f1": 0.8,
-          "tp": 10,
+          "precision": 0.8461538461538461,
+          "recall": 0.8461538461538461,
+          "f1": 0.8461538461538461,
+          "tp": 11,
           "fp": 2,
-          "fn": 3
+          "fn": 2
         },
         "id-number": {
           "precision": 0,
@@ -426,12 +426,12 @@
           "fn": 43
         },
         "en": {
-          "precision": 0.9166666666666666,
-          "recall": 0.1506849315068493,
-          "f1": 0.2588235294117647,
-          "tp": 11,
-          "fp": 1,
-          "fn": 62
+          "precision": 0.8571428571428571,
+          "recall": 0.1643835616438356,
+          "f1": 0.2758620689655173,
+          "tp": 12,
+          "fp": 2,
+          "fn": 61
         }
       }
     },
@@ -441,10 +441,10 @@
       "status": "ok",
       "supportedLabels": ["address", "email", "id-number", "person", "phone"],
       "throughput": {
-        "initSeconds": 0.006751540999999634,
+        "initSeconds": 0.010588666999999987,
         "totalChars": 8153,
-        "coldCharsPerSec": 3880.7934454462093,
-        "warmCharsPerSec": 51426.22397566911
+        "coldCharsPerSec": 3800.2674285432367,
+        "warmCharsPerSec": 45949.5877959022
       },
       "overall": {
         "overlapAll": {
