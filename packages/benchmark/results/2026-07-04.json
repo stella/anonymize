@@ -1,6 +1,6 @@
 {
-  "createdAt": "2026-07-04T04:01:00.308Z",
-  "gitSha": "e4e8508-dirty",
+  "createdAt": "2026-07-04T04:27:40.537Z",
+  "gitSha": "ea4596b",
   "hardware": "darwin/arm64, 8x Apple M3, 24 GiB RAM",
   "runtime": "Bun 1.3.14",
   "corpus": {
@@ -42,10 +42,10 @@
         "phone"
       ],
       "throughput": {
-        "initSeconds": 1.219876,
+        "initSeconds": 1.55955025,
         "totalChars": 8153,
-        "coldCharsPerSec": 295370.01969302533,
-        "warmCharsPerSec": 930809.6628386575
+        "coldCharsPerSec": 232640.42459088936,
+        "warmCharsPerSec": 817309.1911846807
       },
       "overall": {
         "overlapAll": {
@@ -180,10 +180,10 @@
         "phone"
       ],
       "throughput": {
-        "initSeconds": 1.9214972500049043,
+        "initSeconds": 2.5305034999910276,
         "totalChars": 8153,
-        "coldCharsPerSec": 24239.97668534802,
-        "warmCharsPerSec": 35176.93812131019
+        "coldCharsPerSec": 24102.562246408917,
+        "warmCharsPerSec": 38769.2095558468
       },
       "overall": {
         "overlapAll": {
@@ -309,12 +309,12 @@
       "version": "2.0.1",
       "status": "ok",
       "notes": "active detectors: credential, credit_card, email, phone, social_security_number, twitter, url",
-      "supportedLabels": ["email", "id-number", "person", "phone"],
+      "supportedLabels": ["email", "id-number", "phone"],
       "throughput": {
-        "initSeconds": 0.00018512499809730798,
+        "initSeconds": 0.00019508300465531647,
         "totalChars": 8153,
-        "coldCharsPerSec": 593738.906090883,
-        "warmCharsPerSec": 1611808.884569491
+        "coldCharsPerSec": 600311.119119341,
+        "warmCharsPerSec": 1559300.9636580527
       },
       "overall": {
         "overlapAll": {
@@ -327,11 +327,11 @@
         },
         "overlapSupported": {
           "precision": 0.9354838709677419,
-          "recall": 0.31868131868131866,
-          "f1": 0.47540983606557374,
+          "recall": 0.5686274509803921,
+          "f1": 0.7073170731707317,
           "tp": 29,
           "fp": 2,
-          "fn": 62
+          "fn": 22
         },
         "exactAll": {
           "precision": 0.9354838709677419,
@@ -441,10 +441,10 @@
       "status": "ok",
       "supportedLabels": ["address", "email", "id-number", "person", "phone"],
       "throughput": {
-        "initSeconds": 0,
+        "initSeconds": 0.006751540999999634,
         "totalChars": 8153,
-        "coldCharsPerSec": 3909.232648644094,
-        "warmCharsPerSec": 47672.42693776622
+        "coldCharsPerSec": 3880.7934454462093,
+        "warmCharsPerSec": 51426.22397566911
       },
       "overall": {
         "overlapAll": {
