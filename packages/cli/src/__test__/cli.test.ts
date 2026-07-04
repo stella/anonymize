@@ -229,7 +229,7 @@ test("--recursive skips an output tree nested inside the input", async () => {
   // not ingest previously generated files as new inputs.
   const second = await run([...SCOPE, "--recursive", "-o", out, input]);
   expect(second.code).toBe(0);
-  expect(second.stderr).toContain("1 processed");
+  expect(second.err).toContain("1 processed");
   const nested = join(out, "out", "top.txt");
   expect(existsSync(nested)).toBe(false);
 });
