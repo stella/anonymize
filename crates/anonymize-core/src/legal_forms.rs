@@ -1808,6 +1808,19 @@ mod tests {
   }
 
   #[test]
+  fn dotted_geo_acronym_joins_like_a_name_initial() {
+    // A two-letter dotted acronym is structurally identical whether it is a
+    // geographic prefix ("U.S. Bancorp Inc.") or a person-name initial ("J.P.
+    // Morgan Securities LLC"). The recovered TypeScript detector absorbed both
+    // unconditionally (skipInitialsBackward: `(?:\p{Lu}\.\s?){2,}`, no
+    // known-acronym exception list), so "U.S. Beta LLC" joins the same way.
+    // Splitting it would regress the real "U.S. Bancorp"/"U.S. Robotics"
+    // orgs, which share the exact same shape.
+    assert!(!crosses("U.S. Beta LLC", "LLC"));
+    assert!(!crosses("U.S. Bancorp Inc.", "Inc."));
+  }
+
+  #[test]
   fn spaced_initials_stay_a_single_candidate() {
     assert!(!crosses("J. P. Morgan Securities LLC", "LLC"));
   }
