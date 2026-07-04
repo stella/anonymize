@@ -1,6 +1,6 @@
 {
-  "createdAt": "2026-07-04T05:32:31.420Z",
-  "gitSha": "69e1a30-dirty",
+  "createdAt": "2026-07-04T05:47:43.328Z",
+  "gitSha": "ba52458",
   "hardware": "darwin/arm64, 8x Apple M3, 24 GiB RAM",
   "runtime": "Bun 1.3.14",
   "corpus": {
@@ -42,10 +42,10 @@
         "phone"
       ],
       "throughput": {
-        "initSeconds": 1.559117375,
+        "initSeconds": 1.519300666,
         "totalChars": 8153,
-        "coldCharsPerSec": 229450.03109944364,
-        "warmCharsPerSec": 842669.2222017446
+        "coldCharsPerSec": 243783.3817356829,
+        "warmCharsPerSec": 871105.1752921536
       },
       "overall": {
         "overlapAll": {
@@ -180,10 +180,10 @@
         "phone"
       ],
       "throughput": {
-        "initSeconds": 2.2163971250120085,
+        "initSeconds": 2.36542850000842,
         "totalChars": 8153,
-        "coldCharsPerSec": 25145.92051488356,
-        "warmCharsPerSec": 41304.06116256346
+        "coldCharsPerSec": 24026.53146746522,
+        "warmCharsPerSec": 34741.09035164132
       },
       "overall": {
         "overlapAll": {
@@ -311,10 +311,10 @@
       "notes": "active detectors: credential, credit_card, email, phone, social_security_number, twitter, url",
       "supportedLabels": ["email", "id-number", "phone"],
       "throughput": {
-        "initSeconds": 0.00018483299936633557,
+        "initSeconds": 0.0009294159972341731,
         "totalChars": 8153,
-        "coldCharsPerSec": 620310.5331655992,
-        "warmCharsPerSec": 1622527.9220004892
+        "coldCharsPerSec": 365112.83908929984,
+        "warmCharsPerSec": 919792.2637091659
       },
       "overall": {
         "overlapAll": {
@@ -441,44 +441,44 @@
       "status": "ok",
       "supportedLabels": ["address", "email", "id-number", "person", "phone"],
       "throughput": {
-        "initSeconds": 0.007412999999999556,
+        "initSeconds": 0.007755541000000449,
         "totalChars": 8153,
-        "coldCharsPerSec": 3981.511748375594,
-        "warmCharsPerSec": 51548.56198574806
+        "coldCharsPerSec": 3786.480446570622,
+        "warmCharsPerSec": 57717.71510793517
       },
       "overall": {
         "overlapAll": {
-          "precision": 0.3048128342245989,
-          "recall": 0.29081632653061223,
-          "f1": 0.2976501305483029,
-          "tp": 57,
-          "fp": 130,
-          "fn": 139
+          "precision": 0.381294964028777,
+          "recall": 0.27040816326530615,
+          "f1": 0.3164179104477612,
+          "tp": 53,
+          "fp": 86,
+          "fn": 143
         },
         "overlapSupported": {
-          "precision": 0.3048128342245989,
-          "recall": 0.4956521739130435,
-          "f1": 0.3774834437086093,
-          "tp": 57,
-          "fp": 130,
-          "fn": 58
+          "precision": 0.381294964028777,
+          "recall": 0.4608695652173913,
+          "f1": 0.41732283464566927,
+          "tp": 53,
+          "fp": 86,
+          "fn": 62
         },
         "exactAll": {
-          "precision": 0.20855614973262032,
-          "recall": 0.1989795918367347,
-          "f1": 0.20365535248041775,
-          "tp": 39,
-          "fp": 148,
-          "fn": 157
+          "precision": 0.26618705035971224,
+          "recall": 0.18877551020408162,
+          "f1": 0.2208955223880597,
+          "tp": 37,
+          "fp": 102,
+          "fn": 159
         }
       },
       "perLabel": {
         "person": {
-          "precision": 0.37209302325581395,
+          "precision": 0.43243243243243246,
           "recall": 0.4,
-          "f1": 0.38554216867469876,
+          "f1": 0.4155844155844156,
           "tp": 16,
-          "fp": 27,
+          "fp": 21,
           "fn": 24
         },
         "organization": {
@@ -514,12 +514,12 @@
           "fn": 6
         },
         "id-number": {
-          "precision": 0.16853932584269662,
-          "recall": 0.7894736842105263,
-          "f1": 0.2777777777777778,
-          "tp": 15,
-          "fp": 74,
-          "fn": 4
+          "precision": 0.23404255319148937,
+          "recall": 0.5789473684210527,
+          "f1": 0.3333333333333333,
+          "tp": 11,
+          "fp": 36,
+          "fn": 8
         },
         "date": {
           "precision": 0,
@@ -540,28 +540,28 @@
       },
       "perLanguage": {
         "cs": {
-          "precision": 0.3488372093023256,
-          "recall": 0.21428571428571427,
-          "f1": 0.26548672566371684,
-          "tp": 15,
-          "fp": 28,
-          "fn": 55
+          "precision": 0.37142857142857144,
+          "recall": 0.18571428571428572,
+          "f1": 0.24761904761904763,
+          "tp": 13,
+          "fp": 22,
+          "fn": 57
         },
         "de": {
-          "precision": 0.2962962962962963,
+          "precision": 0.41025641025641024,
           "recall": 0.3018867924528302,
-          "f1": 0.2990654205607477,
+          "f1": 0.34782608695652173,
           "tp": 16,
-          "fp": 38,
+          "fp": 23,
           "fn": 37
         },
         "en": {
-          "precision": 0.28888888888888886,
-          "recall": 0.3561643835616438,
-          "f1": 0.31901840490797545,
-          "tp": 26,
-          "fp": 64,
-          "fn": 47
+          "precision": 0.36923076923076925,
+          "recall": 0.3287671232876712,
+          "f1": 0.34782608695652173,
+          "tp": 24,
+          "fp": 41,
+          "fn": 49
         }
       }
     }
