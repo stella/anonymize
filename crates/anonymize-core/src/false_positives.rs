@@ -641,17 +641,42 @@ fn is_unit_or_address_continuation(
     || starts_with_unit_number(after)
 }
 
-/// True when `text` opens with a capitalized alphabetic designator word
-/// immediately followed by a token that begins with a digit ("Suite 100",
-/// "Unit 5", "Bldg 2"). Prose sentences ("The tenant shall ...") fail because
-/// their second token is not numeric.
+/// Recognized unit designators, matched case-insensitively with an optional
+/// trailing dot ("Ste." -> "ste"). The prepared address data carries dotted
+/// unit abbreviations (`packages/data/config/address-unit-abbreviations.json`),
+/// but that set feeds the address-seed expansion, is not threaded into this
+/// false-positive filter, and only covers a few dotted English spellings. This
+/// filter also needs the common un-dotted forms, so keep a small named set here
+/// per the repo's named-constants rule.
+const UNIT_DESIGNATORS: &[&str] = &[
+  "suite",
+  "ste",
+  "apt",
+  "apartment",
+  "unit",
+  "floor",
+  "fl",
+  "bldg",
+  "building",
+  "room",
+  "rm",
+  "no",
+];
+
+/// True when `text` opens with a recognized unit designator ("Suite", "Apt",
+/// "Unit", ...) immediately followed by a token that begins with a digit
+/// ("Suite 100", "Unit 5", "Apt 4B"). Prose sentences ("The tenant shall ...")
+/// and capitalized headings that merely precede a number ("Section 2 applies")
+/// fail because their first token is not a designator.
 fn starts_with_unit_number(text: &str) -> bool {
   let mut words = text.split_whitespace();
   let Some(first) = words.next() else {
     return false;
   };
-  if !first.chars().next().is_some_and(char::is_uppercase)
-    || !first.chars().all(char::is_alphabetic)
+  let designator = first.trim_end_matches('.');
+  if !UNIT_DESIGNATORS
+    .iter()
+    .any(|known| designator.eq_ignore_ascii_case(known))
   {
     return false;
   }
@@ -1032,6 +1057,25 @@ mod tests {
     assert_eq!(
       trim_trailing_address_prose("123 Main Street. Suite 100", &filters),
       None
+    );
+  }
+
+  #[test]
+  fn keeps_unit_designator_but_trims_capitalized_heading_after_abbreviation() {
+    // Only real unit designators ("Suite", "Apt") count as a continuation of
+    // the address. A capitalized heading that merely precedes a number
+    // ("Section 2 applies") is trailing prose and must be trimmed off.
+    let filters = DenyListFilterData {
+      street_types: set(["st.", "street"]),
+      ..DenyListFilterData::default()
+    };
+    assert_eq!(
+      trim_trailing_address_prose("123 Main St. Apt 4B", &filters),
+      None
+    );
+    assert_eq!(
+      trim_trailing_address_prose("123 Main St. Section 2 applies", &filters),
+      Some("123 Main St.".len())
     );
   }
 
