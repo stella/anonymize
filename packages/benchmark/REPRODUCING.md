@@ -188,3 +188,12 @@ stella's init. redact-pii's pattern/name-list load and regex compilation are
 likewise timed as init rather than left as a module-load side effect
 (`src/adapters/redact-pii.ts`). Python init is measured inside each Python
 process and excludes interpreter startup, which is reported separately in prose.
+
+## Provenance of committed results
+
+The `commit` field in committed results records the SHA of the source tree
+that produced them, which is a PR-branch commit. This repository squash-merges,
+so that SHA is not on `main`'s first-parent history; it remains permanently
+fetchable via the pull request head ref (`git fetch origin pull/<PR>/head`).
+Recording the post-squash SHA is impossible by construction: it does not exist
+until after the results are committed.
