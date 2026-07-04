@@ -107,9 +107,14 @@ export const createPythonAdapter = ({
         };
       }
 
+      const textById = new Map(docs.map((doc) => [doc.id, doc.text]));
       const predictions = new Map<string, readonly NativePrediction[]>();
       for (const { id, entities } of parsed.results) {
-        predictions.set(id, entities);
+        const text = textById.get(id);
+        predictions.set(
+          id,
+          text === undefined ? entities : convertCodePointSpans(text, entities),
+        );
       }
 
       return {
@@ -128,4 +133,31 @@ export const createPythonAdapter = ({
       };
     },
   };
+};
+
+/**
+ * Python string indices count Unicode code points; the scorer, fixtures, and
+ * the JS adapters all use UTF-16 code units. Convert spans by prefix-scanning
+ * the document once: identical for BMP-only text, correct when astral-plane
+ * characters (emoji, rare CJK) precede an entity.
+ */
+export const convertCodePointSpans = (
+  text: string,
+  entities: readonly NativePrediction[],
+): NativePrediction[] => {
+  // utf16Offsets[i] = UTF-16 offset of code point i; last entry = text.length.
+  const utf16Offsets: number[] = [];
+  let offset = 0;
+  for (const ch of text) {
+    utf16Offsets.push(offset);
+    offset += ch.length;
+  }
+  utf16Offsets.push(text.length);
+  const toUtf16 = (codePoint: number): number =>
+    utf16Offsets[Math.min(codePoint, utf16Offsets.length - 1)] ?? text.length;
+  return entities.map((entity) => ({
+    ...entity,
+    start: toUtf16(entity.start),
+    end: toUtf16(entity.end),
+  }));
 };
