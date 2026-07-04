@@ -1420,7 +1420,14 @@ fn trim_leading_clause(
   text: &str,
   data: &PreparedLegalFormData,
 ) -> LeadingTrim {
-  let lower = text.to_lowercase();
+  // Search on a lowercased copy for case-insensitive matching, but keep a map
+  // back to original byte offsets. `to_lowercase()` can change byte lengths
+  // ("İ" U+0130 -> "i" + U+0307), so any offset taken from `lower` must be
+  // translated before it is used to slice the original `text` or returned as a
+  // cut (the caller slices the original with it).
+  let (lower, lower_to_orig) = lowercase_with_offset_map(text);
+  let to_orig =
+    |offset: usize| lower_to_orig.get(offset).copied().unwrap_or(text.len());
   let mut cut = 0_usize;
 
   for phrase in &data.leading_clause_phrases {
@@ -1438,7 +1445,7 @@ fn trim_leading_clause(
           .is_some_and(char::is_whitespace);
       let after_ws = lower.get(end..).map(leading_ws_len).unwrap_or_default();
       if before_ok && after_ws > 0 {
-        cut = cut.max(end.saturating_add(after_ws));
+        cut = cut.max(to_orig(end.saturating_add(after_ws)));
       }
     }
   }
@@ -1453,16 +1460,18 @@ fn trim_leading_clause(
       let end = start.saturating_add(prefix.len());
       search_from = end;
       let after_ws = lower.get(end..).map(leading_ws_len).unwrap_or_default();
+      let after_orig = to_orig(end.saturating_add(after_ws));
       // The company name after the prefix must be capitalized. Read the
-      // original text, not the lowercased copy, or this check never passes.
+      // original text (in original byte offsets), not the lowercased copy, or
+      // this check never passes.
       let after = text
-        .get(end.saturating_add(after_ws)..)
+        .get(after_orig..)
         .and_then(|suffix| suffix.chars().next());
       if after_ws == 0 || !after.is_some_and(char::is_uppercase) {
         continue;
       }
 
-      let before = text.get(..start).unwrap_or_default();
+      let before = text.get(..to_orig(start)).unwrap_or_default();
       let prefix_lower = prefix.to_lowercase();
       if data.comma_gated_direct_prefixes.contains(&prefix_lower) {
         let has_comma = before.trim_end().ends_with(',');
@@ -1486,7 +1495,7 @@ fn trim_leading_clause(
       }
       let has_prose_prefix = word_count >= 3 && has_lower_word;
       if has_prose_prefix {
-        cut = cut.max(end.saturating_add(after_ws));
+        cut = cut.max(after_orig);
       }
     }
   }
@@ -1508,6 +1517,25 @@ fn trim_leading_clause(
   }
 
   LeadingTrim { offset: cut }
+}
+
+/// Lowercase `text`, returning the folded string plus a table that maps each
+/// byte offset in the folded string back to the byte offset of the original
+/// character that produced it. The final entry maps the end of the folded
+/// string to `text.len()`. Case folding can change byte lengths, so offsets
+/// found in the folded copy must be translated through this table before they
+/// index or slice the original text.
+fn lowercase_with_offset_map(text: &str) -> (String, Vec<usize>) {
+  let mut lower = String::with_capacity(text.len());
+  let mut lower_to_orig = Vec::with_capacity(text.len().saturating_add(1));
+  for (orig_idx, ch) in text.char_indices() {
+    for folded in ch.to_lowercase() {
+      lower.push(folded);
+      lower_to_orig.resize(lower.len(), orig_idx);
+    }
+  }
+  lower_to_orig.push(text.len());
+  (lower, lower_to_orig)
 }
 
 fn find_word_at_boundary(haystack: &str, needle: &str) -> Option<usize> {
@@ -1780,6 +1808,22 @@ mod tests {
       "Investment Agreement, dated as of March 9, 2020, among Twitter, Inc.";
     let trim = trim_leading_clause(text, &data);
     assert_eq!(text.get(trim.offset..), Some("Twitter, Inc."));
+  }
+
+  #[test]
+  fn direct_prefix_offset_survives_turkish_dotted_capital() {
+    // `to_lowercase()` expands "İ" (U+0130) to "i" + U+0307, so a byte offset
+    // taken from the lowercased copy drifts one byte past the original once an
+    // İ precedes the clause. The recovered company name must be sliced in
+    // original-text space: the Turkish input yields the same result as its
+    // ASCII twin, with no mis-slice, panic, or None-degradation.
+    let data = leading_clause_data();
+    let ascii = "Istanbul Holding A.S. Investment Agreement, dated as of March 9, 2020, among Twitter, Inc.";
+    let turkish = "İstanbul Holding A.Ş. Investment Agreement, dated as of March 9, 2020, among Twitter, Inc.";
+    let ascii_trim = trim_leading_clause(ascii, &data);
+    let turkish_trim = trim_leading_clause(turkish, &data);
+    assert_eq!(ascii.get(ascii_trim.offset..), Some("Twitter, Inc."));
+    assert_eq!(turkish.get(turkish_trim.offset..), Some("Twitter, Inc."));
   }
 
   #[test]
