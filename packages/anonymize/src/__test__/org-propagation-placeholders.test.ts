@@ -68,7 +68,7 @@ describe("org propagation placeholder consistency", () => {
   // NATIVE-GAP: forward-alias propagation (a bare mention appearing BEFORE
   // the full org form joins that later full form's placeholder) is not
   // implemented in the native SDK; the backward direction (test above) works.
-  test.skip("bare mention before the full form shares its placeholder", async () => {
+  test("bare mention before the full form shares its placeholder", async () => {
     const redacted = await redactWith(
       `Initech term sheet. This deed is made by Initech Corporation, ` +
         `a Delaware corporation.`,
@@ -83,7 +83,7 @@ describe("org propagation placeholder consistency", () => {
 
   // NATIVE-GAP: forward-alias redaction-key canonicalization depends on the
   // same unimplemented forward-alias propagation as the test above.
-  test.skip("forward alias stores the source's full text in the redaction key", async () => {
+  test("forward alias stores the source's full text in the redaction key", async () => {
     const fullText =
       `Initech term sheet. This deed is made by Initech Corporation, ` +
       `a Delaware corporation.`;

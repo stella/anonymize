@@ -167,10 +167,13 @@ pub(crate) fn process_legal_form_matches(
     if walker_start >= effective_suffix_start {
       continue;
     }
-    if crosses_sentence_end(full_text, walker_start, effective_suffix_start) {
-      continue;
-    }
 
+    // Narrow to the org name before the sentence check. The walker bridges
+    // lowercase words (up to MAX_LOWER_BRIDGE) and can reach back over a verb
+    // clause into a prior sentence ("Initech term sheet. This deed is made by
+    // Initech Corporation"). trim_to_first_cap_after_verb drops that prose, so
+    // the sentence-boundary guard must run on the trimmed span or it rejects a
+    // candidate that would have trimmed cleanly to a single-sentence org.
     let candidate_start = trim_to_first_cap_after_verb(
       full_text,
       walker_start,
@@ -178,6 +181,10 @@ pub(crate) fn process_legal_form_matches(
       data,
     );
     if candidate_start >= effective_suffix_start {
+      continue;
+    }
+    if crosses_sentence_end(full_text, candidate_start, effective_suffix_start)
+    {
       continue;
     }
 
