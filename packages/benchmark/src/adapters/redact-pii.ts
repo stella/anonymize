@@ -144,8 +144,20 @@ const buildDetector = (): Detector => {
 
   return (text: string): NativePrediction[] => {
     const spans: NativePrediction[] = [];
+    // Faithful SyncRedactor emulation: detectors run sequentially and each
+    // masks its matches before the next runs, so a later broad rule (digits)
+    // never re-matches inside an earlier redaction (credit card, phone).
+    // Emulate by masking matched ranges in a working copy between detectors;
+    // masking preserves length, so recorded offsets stay in original space.
+    let working = text;
+    const maskRange = (start: number, end: number): void => {
+      working =
+        working.slice(0, start) +
+        "\u0000".repeat(end - start) +
+        working.slice(end);
+    };
     for (const { label, regex } of compiled) {
-      for (const match of text.matchAll(regex)) {
+      for (const match of working.matchAll(regex)) {
         if (match.index === undefined) {
           continue;
         }
@@ -157,11 +169,14 @@ const buildDetector = (): Detector => {
           start: match.index,
           end: match.index + value.length,
           label,
-          text: value,
+          text: text.slice(match.index, match.index + value.length),
         });
+        maskRange(match.index, match.index + value.length);
       }
     }
-    spans.push(...detectNames(text));
+    for (const span of detectNames(working)) {
+      spans.push({ ...span, text: text.slice(span.start, span.end) });
+    }
     return dropContained(spans);
   };
 };
