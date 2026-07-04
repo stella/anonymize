@@ -2012,10 +2012,34 @@ fn strip_defined_term_cue<'a>(
   for cue in &filters.defined_term_cues {
     if lower.starts_with(cue) && word_boundary_after(lower.as_str(), cue.len())
     {
-      return trimmed.get(cue.len()..);
+      // `cue.len()` is a byte offset in the LOWERED text; lowercasing can
+      // change byte lengths (e.g. Turkish dotted capital), so translate to
+      // the matching boundary in the original `trimmed` before slicing.
+      return trimmed.get(original_offset_for_lower_len(trimmed, cue.len())?..);
     }
   }
   None
+}
+
+/// Maps a byte length in `text.to_lowercase()` space back to the byte offset
+/// in `text` whose chars produced exactly that many lowered bytes. Returns
+/// `None` when the lowered length does not land on a char boundary.
+fn original_offset_for_lower_len(
+  text: &str,
+  lower_len: usize,
+) -> Option<usize> {
+  let mut lowered = 0usize;
+  for (offset, ch) in text.char_indices() {
+    if lowered == lower_len {
+      return Some(offset);
+    }
+    if lowered > lower_len {
+      return None;
+    }
+    lowered = lowered
+      .saturating_add(ch.to_lowercase().map(char::len_utf8).sum::<usize>());
+  }
+  (lowered == lower_len).then_some(text.len())
 }
 
 fn word_boundary_after(text: &str, byte: usize) -> bool {
