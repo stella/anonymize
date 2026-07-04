@@ -42,7 +42,9 @@ console.log(deanonymise(redaction.redactedText, redaction.redactionMap));
 
 Create the pipeline once at startup and reuse it; it caches the prepared
 package and search automata. If you know the document language, pass it so the
-runtime loads the smaller scoped artifact.
+runtime loads the smaller scoped artifact — scoped packages ship for `cs`,
+`de`, and `en` (other supported languages use the full default package;
+requesting a scoped package that is not bundled fails at load).
 
 ### Browser (Vite + WebAssembly)
 
