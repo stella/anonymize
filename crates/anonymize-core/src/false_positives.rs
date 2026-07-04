@@ -861,15 +861,33 @@ fn first_word(text: &str) -> Option<(usize, &str)> {
   text.get(..end).map(|word| (end, word))
 }
 
+/// Lowercase tokens that link proper-noun parts inside an organization or
+/// institution name ("Bank of the West", "Tribunal de commerce des ...").
+/// They never mark the transition from the name to trailing clause prose, so
+/// they must not arm the sentence-starter stop in `trim_open_ended_org_prose`.
+/// Kept as a small fixed const here (with `sentence_starters` staying in the
+/// per-language `DenyListFilterData`) because this is stable cross-language
+/// name grammar rather than tunable deny-list data, mirroring the
+/// unit-designator decision for address trimming.
+const IN_NAME_CONNECTORS: &[&str] = &[
+  "of", "de", "des", "du", "da", "la", "le", "von", "van", "and", "und", "&",
+];
+
 /// Byte offset just past the last capitalized token that belongs to the leading
-/// organization name. Scanning stops at the first lowercase sentence-starter
-/// (`the`, `for`, `by`, ...): that word marks the transition from the name to
-/// trailing clause prose, so a capitalized defined term later in the sentence
-/// ("... shall provide the Services ...") is not mistaken for the name's tail.
-/// A run of lowercase non-starter words inside the name ("Conseil de
-/// prud'hommes des Sables-d'Olonne") is preserved because none of those tokens
-/// is a starter. Returns `Some` only when trailing content follows the retained
-/// span, so callers can trim it off.
+/// organization name. Scanning records capitalized tokens as the retained span
+/// and stops at a lowercase sentence-starter (`the`, `for`, `by`, ...) that
+/// marks the transition from the name to trailing clause prose, so a
+/// capitalized defined term later in the sentence ("... shall provide the
+/// Services ...") is not mistaken for the name's tail.
+///
+/// The starter-stop is *armed* only after the scan has passed at least one
+/// lowercase token that is neither a sentence-starter nor an in-name connector
+/// (see `IN_NAME_CONNECTORS`). An in-name article that appears before any prose
+/// ("Bank of **the** West National Association") therefore does not cut the
+/// name: it arrives unarmed. A run of lowercase connector words inside the name
+/// ("Tribunal de commerce des Sables-d'Olonne") is likewise preserved. Returns
+/// `Some` only when trailing content follows the retained span, so callers can
+/// trim it off.
 fn trim_open_ended_org_prose(
   text: &str,
   sentence_starters: Option<&BTreeSet<String>>,
@@ -877,6 +895,7 @@ fn trim_open_ended_org_prose(
   let mut last_capital_end = None::<usize>;
   let mut word_start = None::<usize>;
   let mut word_is_capital = false;
+  let mut armed = false;
   let trimmed_end = text.trim_end().len();
   for (idx, ch) in text.char_indices() {
     let is_word_char =
@@ -893,8 +912,16 @@ fn trim_open_ended_org_prose(
     };
     if word_is_capital {
       last_capital_end = Some(idx);
-    } else if is_sentence_starter(text.get(start..idx), sentence_starters) {
+      continue;
+    }
+    let word = text.get(start..idx);
+    if armed && is_sentence_starter(word, sentence_starters) {
       break;
+    }
+    if !is_in_name_connector(word)
+      && !is_sentence_starter(word, sentence_starters)
+    {
+      armed = true;
     }
   }
   if word_start.is_some() && word_is_capital {
@@ -902,6 +929,12 @@ fn trim_open_ended_org_prose(
   }
   let end = last_capital_end?;
   (end < trimmed_end).then_some(end)
+}
+
+fn is_in_name_connector(word: Option<&str>) -> bool {
+  word.is_some_and(|word| {
+    IN_NAME_CONNECTORS.contains(&word.to_lowercase().as_str())
+  })
 }
 
 fn is_sentence_starter(
@@ -1054,6 +1087,52 @@ mod tests {
         Some(&starters)
       ),
       Some("ACME Corporation".len())
+    );
+  }
+
+  #[test]
+  fn keeps_in_name_article_before_prose() {
+    // "the" here is an in-name article inside "Bank of the West National
+    // Association", not the start of trailing clause prose. The scan must not
+    // stop on it (it arrives before any prose token arms the starter-stop), so
+    // the trim lands at/after "Association".
+    let starters = set(["the", "this", "for", "by", "a"]);
+    assert_eq!(
+      trim_open_ended_org_prose(
+        "Bank of the West National Association shall provide services",
+        Some(&starters)
+      ),
+      Some("Bank of the West National Association".len())
+    );
+  }
+
+  #[test]
+  fn arms_starter_stop_only_after_prose_token() {
+    // Symmetric to the in-name article case: once a prose token ("shall") has
+    // been seen, a following sentence-starter ("the") does stop the scan so the
+    // capitalized defined term ("Services") stays out of the name.
+    let starters = set(["the", "this", "for", "by", "a"]);
+    assert_eq!(
+      trim_open_ended_org_prose(
+        "ACME Corporation shall provide the Services under this agreement",
+        Some(&starters)
+      ),
+      Some("ACME Corporation".len())
+    );
+  }
+
+  #[test]
+  fn in_name_connector_does_not_arm_before_city() {
+    // French court name: the "de"/"des" connectors do not arm the starter-stop,
+    // so the hyphenated city is recorded before any English-style starter
+    // ("a") could stop the scan. Trim ends at "Sables-d'Olonne".
+    let starters = set(["the", "this", "for", "by", "a"]);
+    assert_eq!(
+      trim_open_ended_org_prose(
+        "Tribunal de commerce des Sables-d'Olonne a rendu son jugement",
+        Some(&starters)
+      ),
+      Some("Tribunal de commerce des Sables-d'Olonne".len())
     );
   }
 
