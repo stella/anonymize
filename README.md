@@ -8,8 +8,9 @@
 [![CI](https://github.com/stella/anonymize/actions/workflows/ci.yml/badge.svg)](https://github.com/stella/anonymize/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Deterministic, local-first anonymization of PII and other sensitive text. A
-single Rust core does the detection, resolution, and replacement; thin Node.js,
+**Anonymization pipeline for sensitive text. Deterministic, local-first, fast.**
+
+A single Rust core does the PII detection, resolution, and replacement; thin Node.js,
 browser (WebAssembly), Python, and CLI bindings translate types and call into
 it. There is no model server and no network dependency: the same document
 produces the same redaction on every run and in every runtime. It is built for
