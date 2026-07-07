@@ -17,7 +17,7 @@ bun add @stll/anonymize-data
 ```
 
 The Node.js package is Rust-native. Browser/WASM support is maintained through
-`@stll/anonymize-wasm` while the native core remains the v1 product path.
+`@stll/anonymize-wasm`, which wraps the same native core.
 
 ## Usage: Node.js native SDK
 
