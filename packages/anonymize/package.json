@@ -2,6 +2,15 @@
   "name": "@stll/anonymize",
   "version": "2.0.0-alpha.1",
   "description": "Multi-layer PII detection and anonymization pipeline with regex, NER, deny lists, and coreference resolution",
+  "keywords": [
+    "anonymization",
+    "pii",
+    "redaction",
+    "ner",
+    "pseudonymization",
+    "gdpr",
+    "privacy"
+  ],
   "type": "module",
   "exports": {
     ".": {
@@ -44,6 +53,7 @@
     "type": "git",
     "url": "git+https://github.com/stella/anonymize.git"
   },
+  "homepage": "https://github.com/stella/anonymize",
   "license": "MIT",
   "scripts": {
     "build": "bun run build:native-wasm && tsdown && bun scripts/build-native-node.mjs && bun run build:wasm-assets",

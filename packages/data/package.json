@@ -2,6 +2,16 @@
   "name": "@stll/anonymize-data",
   "version": "0.0.6",
   "description": "Deny list dictionaries and config data for @stll/anonymize",
+  "keywords": [
+    "anonymization",
+    "pii",
+    "redaction",
+    "ner",
+    "pseudonymization",
+    "gdpr",
+    "privacy",
+    "dictionaries"
+  ],
   "type": "module",
   "exports": {
     ".": {
@@ -40,6 +50,7 @@
     "type": "git",
     "url": "git+https://github.com/stella/anonymize.git"
   },
+  "homepage": "https://github.com/stella/anonymize",
   "license": "MIT",
   "scripts": {
     "build": "tsdown",

@@ -2,6 +2,17 @@
   "name": "@stll/anonymize-wasm",
   "version": "2.0.0-alpha.1",
   "description": "PII detection and anonymization for browsers via WebAssembly. Same native SDK API as @stll/anonymize.",
+  "keywords": [
+    "anonymization",
+    "pii",
+    "redaction",
+    "ner",
+    "pseudonymization",
+    "gdpr",
+    "privacy",
+    "wasm",
+    "browser"
+  ],
   "type": "module",
   "module": "dist/wasm.mjs",
   "types": "dist/wasm.d.mts",
@@ -30,6 +41,7 @@
     "type": "git",
     "url": "git+https://github.com/stella/anonymize.git"
   },
+  "homepage": "https://github.com/stella/anonymize",
   "license": "MIT",
   "dependencies": {
     "@napi-rs/wasm-runtime": "^1.1.6"

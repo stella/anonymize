@@ -2,6 +2,16 @@
   "name": "@stll/anonymize-cli",
   "version": "2.0.0-alpha.1",
   "description": "Command-line PII detection and anonymization powered by @stll/anonymize",
+  "keywords": [
+    "anonymization",
+    "pii",
+    "redaction",
+    "ner",
+    "pseudonymization",
+    "gdpr",
+    "privacy",
+    "cli"
+  ],
   "type": "module",
   "bin": {
     "anonymize": "./dist/cli.mjs"
@@ -16,6 +26,7 @@
     "type": "git",
     "url": "git+https://github.com/stella/anonymize.git"
   },
+  "homepage": "https://github.com/stella/anonymize",
   "license": "MIT",
   "scripts": {
     "build": "tsdown",

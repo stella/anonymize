@@ -2,6 +2,11 @@
   "name": "@stll/anonymize-linux-arm64-gnu",
   "version": "2.0.0-alpha.1",
   "description": "Linux arm64 GNU native binding for @stll/anonymize",
+  "keywords": [
+    "anonymization",
+    "napi",
+    "native"
+  ],
   "main": "index.cjs",
   "files": [
     "index.cjs",
@@ -23,5 +28,6 @@
     "type": "git",
     "url": "git+https://github.com/stella/anonymize.git"
   },
+  "homepage": "https://github.com/stella/anonymize",
   "license": "MIT"
 }
