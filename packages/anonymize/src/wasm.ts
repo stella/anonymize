@@ -7,9 +7,12 @@
  * this package now redacts entirely through the wasm binding and PREBUILT
  * prepared packages.
  *
- * Browsers load prepared packages only (no in-browser config building): pass
- * package bytes, an `ArrayBuffer`, or a URL to fetch, or call
- * `loadDefaultPipeline()` for the default package bundled in the tarball.
+ * Browsers can either load prepared packages (pass package bytes, an
+ * `ArrayBuffer`, or a URL to fetch, or call `loadDefaultPipeline()` for the
+ * default package bundled in the tarball) or build a config in-browser: the
+ * wasm binding exposes the same static-search config assembly the Node
+ * binding does, so `prepareNativePipelineConfig` / `createNativePipelineFromConfig`
+ * / `prepareNativePipelinePackage` work here too.
  *
  * No module-level side effects: the wasm binding is instantiated lazily on
  * first use via `getBinding()`. The napi-generated glue is loaded from the
@@ -50,13 +53,36 @@ export {
 export type {
   AnonymisationOperator,
   DetectionSource,
+  Dictionaries,
   Entity,
+  GazetteerEntry,
   OperatorConfig,
   OperatorType,
+  PipelineConfig,
   RedactionResult,
   ReviewDecision,
   ReviewedEntity,
 } from "./types";
+// Config-driven pipeline surface: pure TS that delegates to
+// `binding.assembleStaticSearchConfigJson` / `assembleStaticSearchPackageBytes`,
+// which the wasm binding exposes with no cfg gating (crates/anonymize-napi/src/lib.rs),
+// so browser callers can assemble packages from a `PipelineConfig` (e.g. live
+// gazetteer entries and dictionaries) instead of only loading prebuilt packages.
+export {
+  assertNativePipelineSupported,
+  createNativePipelineFromConfig,
+  getNativePipelineCompatibility,
+  prepareNativePipelineConfig,
+  prepareNativePipelinePackage,
+} from "./native-pipeline";
+export type {
+  NativePipelineBuildOptions,
+  NativePipelineCompatibility,
+  NativePipelinePackageOptions,
+  NativePipelineUnsupportedFeature,
+} from "./native-pipeline";
+export { createPipelineContext } from "./context";
+export type { PipelineContext } from "./context";
 
 /** A prepared package the caller supplies: raw bytes, an ArrayBuffer, or a URL
  * (string or `URL`) that resolves to the package and is fetched. */
