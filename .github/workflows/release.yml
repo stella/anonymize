@@ -420,6 +420,15 @@ jobs:
             cp "${package}" "${target_dir}/"
           done
 
+      - name: Remove host cargo artifacts before the container build
+        # "Build native pipeline packages" compiles the workspace against the
+        # runner's glibc. The manylinux container shares the workspace target
+        # directory and would try to execute those host-built build scripts,
+        # failing with GLIBC version errors. The .stlanonpkg outputs are
+        # already bundled into the wheel source, so a clean target is safe.
+        if: runner.os == 'Linux'
+        run: rm -rf target
+
       - name: Build wheel
         uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
         with:
