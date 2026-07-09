@@ -18,6 +18,16 @@ describe("@stll/anonymize/constants subpath parity", () => {
     expect(fromConstants.DETECTOR_PRIORITY).toEqual(fromRoot.DETECTOR_PRIORITY);
   });
 
+  test("ENTITY_CAPABILITIES is the same manifest via either entrypoint", () => {
+    expect(fromConstants.ENTITY_CAPABILITIES).toEqual(
+      fromRoot.ENTITY_CAPABILITIES,
+    );
+  });
+
+  test("ENTITY_SELECTIONS is the same object via either entrypoint", () => {
+    expect(fromConstants.ENTITY_SELECTIONS).toEqual(fromRoot.ENTITY_SELECTIONS);
+  });
+
   test("OPERATOR_TYPES is the same array via either entrypoint", () => {
     expect([...fromConstants.OPERATOR_TYPES]).toEqual([
       ...fromRoot.OPERATOR_TYPES,

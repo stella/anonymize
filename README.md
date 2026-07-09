@@ -135,12 +135,14 @@ reference, including the `--json` schema and exit codes.
 
 ## Features
 
-- **22 entity labels.** People, organizations, addresses, countries, and land
-  parcels; email, phone, dates, and dates of birth; and a family of identifiers:
-  IBAN and bank account numbers, tax and national identification numbers,
-  identity card, birth, social security, passport, and registration numbers,
-  credit card numbers, crypto addresses, and monetary amounts. The exact list is
-  in [`packages/anonymize/src/constants.ts`](packages/anonymize/src/constants.ts);
+- **22 default entity labels, plus 3 opt-in network labels.** People,
+  organizations, addresses, countries, and land parcels; email, phone, dates, and
+  dates of birth; and a family of identifiers: IBAN and bank account numbers, tax
+  and national identification numbers, identity card, birth, social security,
+  passport, and registration numbers, credit card numbers, crypto addresses, and
+  monetary amounts. IP addresses, MAC addresses, and URLs are built in but opt-in.
+  The machine-readable capability list is exported as `ENTITY_CAPABILITIES` from
+  [`packages/anonymize/src/constants.ts`](packages/anonymize/src/constants.ts);
   scope detection to a subset with `--labels`.
 - **12 languages, multi-script name corpora.** Built-in coverage for cs, de, en,
   es, fr, hu, it, pl, pt-br, ro, sk, and sv, backed by name corpora that reach

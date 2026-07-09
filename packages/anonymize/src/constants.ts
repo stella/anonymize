@@ -58,36 +58,183 @@ export const OPERATOR_TYPES = ["replace", "redact"] as const;
 
 export type OperatorType = (typeof OPERATOR_TYPES)[number];
 
+export const ENTITY_SELECTIONS = {
+  DEFAULT: "default",
+  OPT_IN: "opt-in",
+} as const;
+
+export type EntitySelection =
+  (typeof ENTITY_SELECTIONS)[keyof typeof ENTITY_SELECTIONS];
+
+export type EntityCapability = {
+  label: string;
+  selection: EntitySelection;
+  detectionSources: readonly DetectionSource[];
+};
+
 /**
- * Canonical entity labels used across the pipeline.
- * NER models may use different native labels; the bench
- * NER wrapper maps model output to these canonical names.
+ * Canonical entity capabilities exposed by the deterministic native pipeline.
+ * `selection` describes whether the default package requests the label; opt-in
+ * labels have built-in detection rules but must be requested explicitly.
  *
  * These labels are ephemeral: entities are regenerated on
  * every pipeline run and never persisted to the database.
  * Renaming a label here requires no migration.
  */
-export const DEFAULT_ENTITY_LABELS = [
-  "person",
-  "organization",
-  "phone number",
-  "address",
-  "country",
-  "email address",
-  "date",
-  "date of birth",
-  "bank account number",
-  "iban",
-  "tax identification number",
-  "identity card number",
-  "birth number",
-  "national identification number",
-  "social security number",
-  "registration number",
-  "credit card number",
-  "passport number",
-  "crypto",
-  "monetary amount",
-  "land parcel",
-  "misc",
-] as const;
+export const ENTITY_CAPABILITIES = [
+  {
+    label: "person",
+    selection: ENTITY_SELECTIONS.DEFAULT,
+    detectionSources: [
+      DETECTION_SOURCES.TRIGGER,
+      DETECTION_SOURCES.REGEX,
+      DETECTION_SOURCES.DENY_LIST,
+      DETECTION_SOURCES.COREFERENCE,
+    ],
+  },
+  {
+    label: "organization",
+    selection: ENTITY_SELECTIONS.DEFAULT,
+    detectionSources: [
+      DETECTION_SOURCES.TRIGGER,
+      DETECTION_SOURCES.DENY_LIST,
+      DETECTION_SOURCES.LEGAL_FORM,
+      DETECTION_SOURCES.GAZETTEER,
+      DETECTION_SOURCES.COREFERENCE,
+    ],
+  },
+  {
+    label: "phone number",
+    selection: ENTITY_SELECTIONS.DEFAULT,
+    detectionSources: [DETECTION_SOURCES.REGEX, DETECTION_SOURCES.TRIGGER],
+  },
+  {
+    label: "address",
+    selection: ENTITY_SELECTIONS.DEFAULT,
+    detectionSources: [DETECTION_SOURCES.REGEX, DETECTION_SOURCES.TRIGGER],
+  },
+  {
+    label: "country",
+    selection: ENTITY_SELECTIONS.DEFAULT,
+    detectionSources: [DETECTION_SOURCES.COUNTRY],
+  },
+  {
+    label: "email address",
+    selection: ENTITY_SELECTIONS.DEFAULT,
+    detectionSources: [DETECTION_SOURCES.REGEX],
+  },
+  {
+    label: "date",
+    selection: ENTITY_SELECTIONS.DEFAULT,
+    detectionSources: [DETECTION_SOURCES.REGEX, DETECTION_SOURCES.TRIGGER],
+  },
+  {
+    label: "date of birth",
+    selection: ENTITY_SELECTIONS.DEFAULT,
+    detectionSources: [DETECTION_SOURCES.TRIGGER],
+  },
+  {
+    label: "bank account number",
+    selection: ENTITY_SELECTIONS.DEFAULT,
+    detectionSources: [DETECTION_SOURCES.REGEX, DETECTION_SOURCES.TRIGGER],
+  },
+  {
+    label: "iban",
+    selection: ENTITY_SELECTIONS.DEFAULT,
+    detectionSources: [DETECTION_SOURCES.REGEX, DETECTION_SOURCES.TRIGGER],
+  },
+  {
+    label: "tax identification number",
+    selection: ENTITY_SELECTIONS.DEFAULT,
+    detectionSources: [DETECTION_SOURCES.REGEX, DETECTION_SOURCES.TRIGGER],
+  },
+  {
+    label: "identity card number",
+    selection: ENTITY_SELECTIONS.DEFAULT,
+    detectionSources: [DETECTION_SOURCES.REGEX, DETECTION_SOURCES.TRIGGER],
+  },
+  {
+    label: "birth number",
+    selection: ENTITY_SELECTIONS.DEFAULT,
+    detectionSources: [DETECTION_SOURCES.REGEX, DETECTION_SOURCES.TRIGGER],
+  },
+  {
+    label: "national identification number",
+    selection: ENTITY_SELECTIONS.DEFAULT,
+    detectionSources: [DETECTION_SOURCES.REGEX, DETECTION_SOURCES.TRIGGER],
+  },
+  {
+    label: "social security number",
+    selection: ENTITY_SELECTIONS.DEFAULT,
+    detectionSources: [DETECTION_SOURCES.REGEX, DETECTION_SOURCES.TRIGGER],
+  },
+  {
+    label: "registration number",
+    selection: ENTITY_SELECTIONS.DEFAULT,
+    detectionSources: [DETECTION_SOURCES.REGEX, DETECTION_SOURCES.TRIGGER],
+  },
+  {
+    label: "credit card number",
+    selection: ENTITY_SELECTIONS.DEFAULT,
+    detectionSources: [DETECTION_SOURCES.REGEX],
+  },
+  {
+    label: "passport number",
+    selection: ENTITY_SELECTIONS.DEFAULT,
+    detectionSources: [DETECTION_SOURCES.REGEX],
+  },
+  {
+    label: "crypto",
+    selection: ENTITY_SELECTIONS.DEFAULT,
+    detectionSources: [DETECTION_SOURCES.REGEX],
+  },
+  {
+    label: "monetary amount",
+    selection: ENTITY_SELECTIONS.DEFAULT,
+    detectionSources: [DETECTION_SOURCES.REGEX, DETECTION_SOURCES.TRIGGER],
+  },
+  {
+    label: "land parcel",
+    selection: ENTITY_SELECTIONS.DEFAULT,
+    detectionSources: [DETECTION_SOURCES.TRIGGER],
+  },
+  {
+    label: "misc",
+    selection: ENTITY_SELECTIONS.DEFAULT,
+    detectionSources: [DETECTION_SOURCES.REGEX, DETECTION_SOURCES.DENY_LIST],
+  },
+  {
+    label: "ip address",
+    selection: ENTITY_SELECTIONS.OPT_IN,
+    detectionSources: [DETECTION_SOURCES.REGEX],
+  },
+  {
+    label: "mac address",
+    selection: ENTITY_SELECTIONS.OPT_IN,
+    detectionSources: [DETECTION_SOURCES.REGEX],
+  },
+  {
+    label: "url",
+    selection: ENTITY_SELECTIONS.OPT_IN,
+    detectionSources: [DETECTION_SOURCES.REGEX],
+  },
+] as const satisfies readonly EntityCapability[];
+
+type KnownEntityCapability = (typeof ENTITY_CAPABILITIES)[number];
+
+const isDefaultEntityCapability = (
+  capability: KnownEntityCapability,
+): capability is Extract<
+  KnownEntityCapability,
+  { selection: typeof ENTITY_SELECTIONS.DEFAULT }
+> => capability.selection === ENTITY_SELECTIONS.DEFAULT;
+
+export type DefaultEntityLabel = Extract<
+  KnownEntityCapability,
+  { selection: typeof ENTITY_SELECTIONS.DEFAULT }
+>["label"];
+
+export const DEFAULT_ENTITY_LABELS: readonly DefaultEntityLabel[] =
+  ENTITY_CAPABILITIES.filter(isDefaultEntityCapability).map(
+    ({ label }) => label,
+  );

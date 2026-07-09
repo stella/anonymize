@@ -1,12 +1,11 @@
 {
   "name": "@stll/anonymize",
   "version": "2.0.1",
-  "description": "Multi-layer PII detection and anonymization pipeline with regex, NER, deny lists, and coreference resolution",
+  "description": "Deterministic PII detection and anonymization with regex, deny lists, and coreference resolution",
   "keywords": [
     "anonymization",
     "pii",
     "redaction",
-    "ner",
     "pseudonymization",
     "gdpr",
     "privacy"

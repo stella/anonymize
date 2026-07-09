@@ -21,6 +21,8 @@ export {
   DEFAULT_ENTITY_LABELS,
   DETECTION_SOURCES,
   DETECTOR_PRIORITY,
+  ENTITY_CAPABILITIES,
+  ENTITY_SELECTIONS,
   OPERATOR_TYPES,
 } from "./types";
 export type {
@@ -31,7 +33,10 @@ export type {
   DetectionSource,
   Dictionaries,
   DictionaryMeta,
+  DefaultEntityLabel,
   Entity,
+  EntityCapability,
+  EntitySelection,
   GazetteerEntry,
   OperatorConfig,
   OperatorType,

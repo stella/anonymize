@@ -6,7 +6,7 @@
 
 Runtime package for multi-layer PII detection and anonymization.
 
-It combines regex detectors, trigger phrases, deny-list matching, coreference handling, and NER into a single pipeline that works in native Node.js and in browser builds through the WASM entrypoint.
+It combines regex detectors, trigger phrases, deny-list matching, and coreference handling in a single deterministic pipeline that works in native Node.js and in browser builds through the WASM entrypoint.
 
 ## Install
 
@@ -143,7 +143,10 @@ export default {
 
 - Native architecture and extension guidance:
   [`ARCHITECTURE.md`](ARCHITECTURE.md).
-- `labels: []` disables deterministic label filtering; when NER is enabled it falls back to the default label set.
+- `labels: []` disables deterministic label filtering.
+- `enableNer` is a compatibility field for the removed TypeScript pipeline. The
+  native pipeline rejects `true`; model-produced spans will use a separate
+  caller-detection API.
 - `enableNameCorpus` also controls whether first names, surnames, and titles are injected into deny-list matching when `enableDenyList` is enabled.
 - The optional `@stll/anonymize-data` package carries the published dictionary and trigger data used when building prepared packages.
 - `customDenyList` and `customRegexes` are part of the prepared package input and should be regenerated when they change.
