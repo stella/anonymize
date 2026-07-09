@@ -277,7 +277,7 @@ support resource, but the rule metadata and behavior stay module-local.
 The VM snapshot already provides Bun 1.3.14, Node 22 (via nvm, set as the
 default alias), and the pinned Rust 1.96.0 toolchain with the
 `wasm32-wasip1-threads` target. The startup update script only runs
-`bun install`; standard commands are in "Repository Specifics" above and in
+`bun install`; standard commands are in [Repository Specifics](#repository-specifics) above and in
 `package.json` scripts. Non-obvious caveats:
 
 - **Node version matters for the build.** `bun run build` invokes `tsdown`,
