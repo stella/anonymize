@@ -10,11 +10,13 @@
   <a href="https://stll.app">Website</a> &middot;
   <a href="https://github.com/stella/anonymize/issues">Issues</a> &middot;
   <a href="https://www.npmjs.com/package/@stll/anonymize">npm</a> &middot;
+  <a href="https://pypi.org/project/stella-anonymize-core/">PyPI</a> &middot;
   <a href="https://discord.gg/8dZjmVFjTK">Discord</a>
 </p>
 
 <p align="center">
   <a href="https://www.npmjs.com/package/@stll/anonymize"><img src="https://img.shields.io/npm/v/@stll/anonymize?label=%40stll%2Fanonymize" alt="npm" /></a>
+  <a href="https://pypi.org/project/stella-anonymize-core/"><img src="https://img.shields.io/pypi/v/stella-anonymize-core?label=stella-anonymize-core&logo=pypi&logoColor=white" alt="PyPI" /></a>
   <a href="https://github.com/stella/anonymize/actions/workflows/ci.yml"><img src="https://github.com/stella/anonymize/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License: Apache-2.0" /></a>
   <a href="https://discord.gg/8dZjmVFjTK"><img src="https://img.shields.io/badge/discord-join%20chat-5865F2?logo=discord&logoColor=white" alt="Discord" /></a>
