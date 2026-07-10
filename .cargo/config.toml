@@ -13,3 +13,6 @@ ci-test = "nextest run --workspace --all-features --locked --cargo-profile ci"
 ci-test-doc = "test --workspace --all-features --locked --doc --profile ci"
 # Supply-chain gate: license/advisory/source/duplicate checks (see deny.toml).
 ci-deny = "deny check"
+# Snapshot-hygiene gate: rejects snapshot mismatches and orphaned .snap files
+# (unreferenced by any test). `--check` never writes .snap.new.
+ci-snapshot = "insta test --workspace --all-features --test-runner nextest --profile ci --unreferenced=reject --check"

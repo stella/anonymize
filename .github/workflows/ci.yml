@@ -65,6 +65,9 @@ jobs:
           # Prebuilt cargo-deny for the supply-chain gate (`cargo ci-deny`).
           curl -sSL https://github.com/EmbarkStudios/cargo-deny/releases/download/0.20.2/cargo-deny-0.20.2-x86_64-unknown-linux-musl.tar.gz \
             | tar xz --strip-components=1 -C "${CARGO_HOME:-$HOME/.cargo}/bin" --wildcards '*/cargo-deny'
+          # Prebuilt cargo-insta for the snapshot-hygiene gate (`cargo ci-snapshot`).
+          curl -sSL https://github.com/mitsuhiko/insta/releases/download/1.48.0/cargo-insta-x86_64-unknown-linux-gnu.tar.xz \
+            | tar xJ --strip-components=1 -C "${CARGO_HOME:-$HOME/.cargo}/bin" --wildcards '*/cargo-insta'
 
       # Cache the compiled dependency graph across runs. Without this the whole
       # Rust workspace (and its heavy deps) recompiled from scratch every run;
@@ -91,6 +94,11 @@ jobs:
         # Full-tree license/advisory/source/duplicate checks; complements the
         # PR-scoped dependency-review action. See deny.toml.
         run: bun run rust:deny
+
+      - name: Snapshot hygiene (insta)
+        # Rejects snapshot mismatches and orphaned .snap files no test
+        # references anymore. Reuses the cached `ci` profile build.
+        run: bun run rust:snapshot-check
 
       - name: Fuzz targets compile (anti-bitrot)
         # The fuzz crate is its own workspace, so it is not covered by the
