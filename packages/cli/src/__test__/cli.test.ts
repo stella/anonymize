@@ -194,6 +194,26 @@ test("--list-labels prints canonical labels and aliases", async () => {
   expect(out).toMatch(/email\s+->\s+email address/);
 });
 
+test("--capabilities prints the versioned manifest without reading input", async () => {
+  const { out, err, code } = await run(["--capabilities"]);
+  const manifest = JSON.parse(out) as {
+    schemaVersion: number;
+    runtimes: string[];
+    entities: { label: string; selection: string }[];
+  };
+
+  expect(code).toBe(0);
+  expect(err).toBe("");
+  expect(manifest.schemaVersion).toBe(1);
+  expect(manifest.runtimes).toEqual(["node", "python", "wasm"]);
+  expect(manifest.entities).toContainEqual(
+    expect.objectContaining({ label: "person", selection: "default" }),
+  );
+  expect(manifest.entities).toContainEqual(
+    expect.objectContaining({ label: "ip address", selection: "opt-in" }),
+  );
+});
+
 test("processes a directory, non-recursive by default", async () => {
   const dir = await mkdtemp(join(tmpdir(), "anonymize-cli-"));
   const input = join(dir, "in");

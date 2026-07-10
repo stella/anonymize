@@ -22,6 +22,11 @@
       "import": "./dist/constants.mjs",
       "default": "./dist/constants.mjs"
     },
+    "./capabilities": {
+      "types": "./dist/capabilities.d.mts",
+      "import": "./dist/capabilities.mjs",
+      "default": "./dist/capabilities.mjs"
+    },
     "./native": {
       "types": "./dist/native.d.mts",
       "import": "./dist/native.mjs",

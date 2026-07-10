@@ -40,6 +40,7 @@ export type CliOptions = {
   help: boolean;
   version: boolean;
   listLabels: boolean;
+  capabilities: boolean;
 };
 
 export const HELP = `Usage: anonymize [options] [file|dir ...]
@@ -93,6 +94,7 @@ Options:
   -v, --version             Show the version
       --list-labels         List detectable entity labels and the
                             short aliases accepted by --labels
+      --capabilities        Emit the versioned capability manifest as JSON
 
 Batch input (directory or multiple files):
   Requires --output <directory>. The input tree is mirrored
@@ -227,6 +229,7 @@ export const parseCliArgs = (argv: string[]): CliOptions => {
     help: values.help === true,
     version: values.version === true,
     listLabels: values["list-labels"] === true,
+    capabilities: values.capabilities === true,
   };
 };
 
@@ -251,5 +254,6 @@ const PARSE_CONFIG = {
     help: { type: "boolean", short: "h" },
     version: { type: "boolean", short: "v" },
     "list-labels": { type: "boolean" },
+    capabilities: { type: "boolean" },
   },
 } as const;

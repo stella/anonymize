@@ -155,9 +155,9 @@ reference, including the `--json` schema and exit codes.
   and national identification numbers, identity card, birth, social security,
   passport, and registration numbers, credit card numbers, crypto addresses, and
   monetary amounts. IP addresses, MAC addresses, and URLs are built in but opt-in.
-  The machine-readable capability list is exported as `ENTITY_CAPABILITIES` from
-  [`packages/anonymize/src/constants.ts`](packages/anonymize/src/constants.ts);
-  scope detection to a subset with `--labels`.
+  The versioned machine-readable contract is exported as `CAPABILITY_MANIFEST`
+  from `@stll/anonymize/capabilities` and printed by
+  `anonymize --capabilities`; scope detection to a subset with `--labels`.
 - **12 languages, multi-script name corpora.** Built-in coverage for cs, de, en,
   es, fr, hu, it, pl, pt-br, ro, sk, and sv, backed by name corpora that reach
   beyond Latin script (CJK, Arabic, Thai, Korean, and romanized variants).

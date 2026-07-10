@@ -19,6 +19,7 @@ import type {
   OperatorType,
   PipelineConfig,
 } from "@stll/anonymize";
+import { CAPABILITY_MANIFEST } from "@stll/anonymize/capabilities";
 import {
   DEFAULT_ENTITY_LABELS,
   ENTITY_LABELS,
@@ -859,6 +860,10 @@ const dispatch = async (engine: CliEngine): Promise<void> => {
   }
   if (opts.listLabels) {
     process.stdout.write(formatLabelList());
+    return;
+  }
+  if (opts.capabilities) {
+    process.stdout.write(`${JSON.stringify(CAPABILITY_MANIFEST, null, 2)}\n`);
     return;
   }
   if (opts.deanonymiseKeyPath !== undefined) {

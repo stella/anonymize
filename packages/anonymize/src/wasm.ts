@@ -45,6 +45,12 @@ import {
 export * from "./native";
 export { deanonymise, exportRedactionKey } from "./redact";
 export {
+  CAPABILITY_MANIFEST,
+  CAPABILITY_MANIFEST_SCHEMA_VERSION,
+  CAPABILITY_RUNTIMES,
+} from "./capabilities";
+export type { CapabilityManifest, CapabilityRuntime } from "./capabilities";
+export {
   DEFAULT_ENTITY_LABELS,
   DETECTION_SOURCES,
   DETECTOR_PRIORITY,

@@ -25,6 +25,11 @@
       "import": "./dist/constants.mjs",
       "default": "./dist/constants.mjs"
     },
+    "./capabilities": {
+      "types": "./dist/capabilities.d.mts",
+      "import": "./dist/capabilities.mjs",
+      "default": "./dist/capabilities.mjs"
+    },
     "./vite": {
       "types": "./dist/vite.d.mts",
       "import": "./dist/vite.mjs"

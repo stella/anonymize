@@ -53,7 +53,15 @@ const {
   loadDefaultPipeline,
   deanonymise,
   defaultPackageUrl,
+  CAPABILITY_MANIFEST,
 } = entry;
+
+if (
+  CAPABILITY_MANIFEST.schemaVersion !== 1 ||
+  CAPABILITY_MANIFEST.entities.length === 0
+) {
+  throw new TypeError("wasm capability manifest is missing or invalid");
+}
 
 const binding = await getBinding();
 if (typeof binding.nativePackageVersion !== "function") {

@@ -72,6 +72,7 @@ const opts = (overrides: Partial<CliOptions>): CliOptions => ({
   help: false,
   version: false,
   listLabels: false,
+  capabilities: false,
   ...overrides,
 });
 

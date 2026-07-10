@@ -41,6 +41,7 @@ anonymize -d key.json reply.txt
 | `--threshold <n>`         | Minimum confidence score 0-1 (default 0.3)       |
 | `--redact-string <s>`     | Replacement text in redact mode                  |
 | `--json`                  | Emit entities + redacted text as JSON            |
+| `--capabilities`          | Emit the versioned capability manifest as JSON   |
 | `--quiet`                 | Suppress the stderr summary                      |
 
 Run `anonymize --help` for the full reference, including the
@@ -89,6 +90,7 @@ anonymize -d key.json --revert "[PERSON_1]" --revert "Jan Novák" reply.txt
   stderr are TTYs and no scope flags are given; piped runs
   never block.
 - `--json` offsets are UTF-16 code-unit indexes into the input.
+- `--capabilities` is runtime-free and does not read document input.
 
 ## Standalone binary
 

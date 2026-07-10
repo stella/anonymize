@@ -9,6 +9,7 @@
  * Run after `bun run build`: `bun run smoke:dist`.
  */
 import { getDefaultNativePipeline, redactDefaultText } from "../dist/index.mjs";
+import { CAPABILITY_MANIFEST } from "../dist/capabilities.mjs";
 import { createNativeAnonymizerFromPackage } from "../dist/native.mjs";
 import {
   createNativePipelineFromDefaultPackage,
@@ -39,6 +40,12 @@ if (typeof redactDefaultText !== "function") {
   throw new TypeError(
     "dist root entrypoint is missing native redaction helper",
   );
+}
+if (
+  CAPABILITY_MANIFEST.schemaVersion !== 1 ||
+  CAPABILITY_MANIFEST.entities.length === 0
+) {
+  throw new TypeError("dist capability manifest is missing or invalid");
 }
 
 const nativePipeline = createNativePipelineFromDefaultPackage();
