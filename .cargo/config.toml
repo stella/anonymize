@@ -11,3 +11,5 @@ ci-dylint = "dylint --workspace --all"
 # so `ci-test-doc` covers those separately; keep both wired in `rust:test`.
 ci-test = "nextest run --workspace --all-features --locked --cargo-profile ci"
 ci-test-doc = "test --workspace --all-features --locked --doc --profile ci"
+# Supply-chain gate: license/advisory/source/duplicate checks (see deny.toml).
+ci-deny = "deny check"

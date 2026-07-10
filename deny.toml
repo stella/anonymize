@@ -1,0 +1,59 @@
+# cargo-deny configuration. Run `cargo deny check`.
+#
+# Complements the PR `dependency-review` action (which only sees dependencies
+# added in a PR) with continuous full-tree checks: RustSec advisories, license
+# policy, dependency sources, and duplicate versions.
+
+[advisories]
+version = 2
+# Fail on any crate the registry has yanked.
+yanked = "deny"
+ignore = [
+  # bincode is feature-complete per the advisory itself ("the team considers
+  # this a complete version that is not in need of any updates"); development
+  # stopped after a harassment incident, not because of a defect. Migrating the
+  # adapter-contract serialization off bincode is tracked as separate work.
+  "RUSTSEC-2025-0141",
+]
+
+[licenses]
+version = 2
+# Mirror of the allow-list in .github/workflows/dependency-review.yml. Keep the
+# two lists in sync when adding a dependency with a new license.
+allow = [
+  "MIT",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "0BSD",
+  "BlueOak-1.0.0",
+  "Unlicense",
+  "CC0-1.0",
+  "CC-BY-4.0",
+  "MIT-0",
+  "MPL-2.0",
+  "Python-2.0",
+  "Zlib",
+  "Unicode-3.0",
+]
+confidence-threshold = 0.9
+# The allow-list mirrors dependency-review for parity; not every entry is
+# present in the current tree, so do not warn on the unused allowances.
+unused-allowed-license = "allow"
+
+[bans]
+# Duplicate versions are a warning, matching clippy `multiple_crate_versions`.
+multiple-versions = "warn"
+# A wildcard version requirement is almost always a mistake in this workspace.
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+
+# The stella search-primitive crates are consumed as pinned git dependencies.
+[sources.allow-org]
+github = ["stella"]

@@ -62,6 +62,9 @@ jobs:
           # reproducibility, matching the exact-version pins above.
           curl -LsSf https://get.nexte.st/0.9.140/linux \
             | tar zxf - -C "${CARGO_HOME:-$HOME/.cargo}/bin"
+          # Prebuilt cargo-deny for the supply-chain gate (`cargo ci-deny`).
+          curl -sSL https://github.com/EmbarkStudios/cargo-deny/releases/download/0.20.2/cargo-deny-0.20.2-x86_64-unknown-linux-musl.tar.gz \
+            | tar xz --strip-components=1 -C "${CARGO_HOME:-$HOME/.cargo}/bin" --wildcards '*/cargo-deny'
 
       # Cache the compiled dependency graph across runs. Without this the whole
       # Rust workspace (and its heavy deps) recompiled from scratch every run;
@@ -83,6 +86,11 @@ jobs:
 
       - name: Rust checks
         run: bun run rust:check
+
+      - name: Cargo deny (supply chain)
+        # Full-tree license/advisory/source/duplicate checks; complements the
+        # PR-scoped dependency-review action. See deny.toml.
+        run: bun run rust:deny
 
       - name: Check runtime package versions
         # Verify, do not mutate: a PR that bumps VERSION without bumping
