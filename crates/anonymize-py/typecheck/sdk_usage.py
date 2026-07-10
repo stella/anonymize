@@ -76,6 +76,17 @@ def runtime_version() -> str:
     return anonymize.native_package_version()
 
 
+def redact_caller_detection(text: str) -> str:
+    prepared = anonymize.get_default_native_pipeline(language="en")
+    detections: list[anonymize.CallerDetection] = [
+        {"start": 0, "end": len(text), "label": "person", "score": 0.9}
+    ]
+    return prepared.redact_text_with_caller_detections(
+        text,
+        detections,
+    ).redaction.redacted_text
+
+
 def package_version() -> str:
     return anonymize.__version__
 

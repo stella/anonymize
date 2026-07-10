@@ -88,7 +88,7 @@ impl std::fmt::Display for ContractError {
       Self::InvalidBindingOffset { offset } => {
         write!(
           formatter,
-          "Byte offset is not on a character boundary: {offset}"
+          "Binding offset is not on a character boundary: {offset}"
         )
       }
       Self::InvalidPreparedSearchPackage { reason } => {
@@ -158,6 +158,64 @@ pub fn caller_detections_from_binding(
       })
     })
     .collect()
+}
+
+pub fn caller_detections_from_utf16_binding(
+  mut request: BindingCallerDetectionRequest,
+  full_text: &str,
+) -> Result<Vec<CallerDetection>> {
+  if request.version != CALLER_DETECTION_CONTRACT_VERSION {
+    return Err(ContractError::UnsupportedCallerDetectionContractVersion {
+      version: request.version,
+    });
+  }
+
+  let offsets = Utf16OffsetMap::new(full_text)?;
+  for (index, detection) in request.detections.iter_mut().enumerate() {
+    detection.start =
+      offsets.byte_offset(detection.start).map_err(|error| {
+        ContractError::InvalidCallerDetection {
+          index,
+          reason: error.to_string(),
+        }
+      })?;
+    detection.end = offsets.byte_offset(detection.end).map_err(|error| {
+      ContractError::InvalidCallerDetection {
+        index,
+        reason: error.to_string(),
+      }
+    })?;
+  }
+  caller_detections_from_binding(request)
+}
+
+pub fn caller_detections_from_character_binding(
+  mut request: BindingCallerDetectionRequest,
+  full_text: &str,
+) -> Result<Vec<CallerDetection>> {
+  if request.version != CALLER_DETECTION_CONTRACT_VERSION {
+    return Err(ContractError::UnsupportedCallerDetectionContractVersion {
+      version: request.version,
+    });
+  }
+
+  let offsets = CharacterOffsetMap::new(full_text)?;
+  for (index, detection) in request.detections.iter_mut().enumerate() {
+    detection.start =
+      offsets.byte_offset(detection.start).map_err(|error| {
+        ContractError::InvalidCallerDetection {
+          index,
+          reason: error.to_string(),
+        }
+      })?;
+    detection.end = offsets.byte_offset(detection.end).map_err(|error| {
+      ContractError::InvalidCallerDetection {
+        index,
+        reason: error.to_string(),
+      }
+    })?;
+  }
+  caller_detections_from_binding(request)
 }
 
 impl std::error::Error for ContractError {}
@@ -2820,6 +2878,66 @@ impl Utf16OffsetMap {
       }
     }
   }
+
+  fn byte_offset(&self, utf16_offset: u32) -> Result<u32> {
+    let byte_offset = match self {
+      Self::Identity { byte_len } => {
+        (utf16_offset <= *byte_len).then_some(utf16_offset)
+      }
+      Self::Boundaries(boundaries) => {
+        let index = boundaries
+          .binary_search_by_key(&utf16_offset, |(_, offset)| *offset)
+          .ok();
+        index.and_then(|index| {
+          boundaries.get(index).map(|(byte_offset, _)| *byte_offset)
+        })
+      }
+    };
+    byte_offset.ok_or(ContractError::InvalidBindingOffset {
+      offset: utf16_offset,
+    })
+  }
+}
+
+struct CharacterOffsetMap {
+  boundaries: Vec<(u32, u32)>,
+}
+
+impl CharacterOffsetMap {
+  fn new(text: &str) -> Result<Self> {
+    let mut boundaries = Vec::new();
+    let mut character_offset = 0_u32;
+    boundaries.push((0, 0));
+    for (byte_start, ch) in text.char_indices() {
+      character_offset = character_offset.checked_add(1).ok_or_else(|| {
+        ContractError::InvalidPreparedSearchPackage {
+          reason: String::from("Character offset exceeds u32 range"),
+        }
+      })?;
+      boundaries.push((
+        u32_from_usize(byte_start.saturating_add(ch.len_utf8()))?,
+        character_offset,
+      ));
+    }
+    Ok(Self { boundaries })
+  }
+
+  fn byte_offset(&self, character_offset: u32) -> Result<u32> {
+    let index = self
+      .boundaries
+      .binary_search_by_key(&character_offset, |(_, offset)| *offset)
+      .ok();
+    index
+      .and_then(|index| {
+        self
+          .boundaries
+          .get(index)
+          .map(|(byte_offset, _)| *byte_offset)
+      })
+      .ok_or(ContractError::InvalidBindingOffset {
+        offset: character_offset,
+      })
+  }
 }
 
 const fn char_utf16_width(ch: char) -> u32 {
@@ -3455,7 +3573,7 @@ mod tests {
     BindingDenyListMatchData, BindingOperatorConfig,
     BindingPreparedArtifactPolicy, BindingPreparedSearchConfig,
     BindingRegexArtifactPolicy, BindingSearchOptions, BindingSearchPattern,
-    CALLER_DETECTION_CONTRACT_VERSION, ContractError,
+    CALLER_DETECTION_CONTRACT_VERSION, CharacterOffsetMap, ContractError,
     CorePreparedSearchPackageArtifactsInner,
     MAX_PREPARED_SEARCH_PACKAGE_PAYLOAD_BYTES,
     PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER,
@@ -3467,7 +3585,8 @@ mod tests {
     PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION,
     PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_ZSTD_VERSION,
     PREPARED_SEARCH_PACKAGE_DIGEST_BYTES, PREPARED_SEARCH_PACKAGE_ZSTD_LEVEL,
-    PreparedSearchPackageDecodeTimings, caller_detections_from_binding,
+    PreparedSearchPackageDecodeTimings, Utf16OffsetMap,
+    caller_detections_from_binding, caller_detections_from_utf16_binding,
     diagnostic_events_to_binding, diagnostic_events_to_utf16_binding,
     diagnostic_stage_event, operator_config_from_binding,
     prepared_search_config_from_binding,
@@ -3535,6 +3654,35 @@ mod tests {
       error,
       ContractError::InvalidCallerDetection { index: 0, .. }
     ));
+  }
+
+  #[test]
+  fn caller_detection_contract_rejects_offsets_inside_utf16_surrogate_pairs() {
+    let error = caller_detections_from_utf16_binding(
+      BindingCallerDetectionRequest {
+        version: CALLER_DETECTION_CONTRACT_VERSION,
+        detections: vec![BindingCallerDetection {
+          start: 1,
+          end: 2,
+          label: String::from("person"),
+          score: 0.9,
+        }],
+      },
+      "😀Alice",
+    )
+    .unwrap_err();
+
+    assert!(matches!(
+      error,
+      ContractError::InvalidCallerDetection { index: 0, .. }
+    ));
+  }
+
+  #[test]
+  fn binding_input_offsets_map_to_utf8_boundaries() {
+    let text = "😀Alice";
+    assert_eq!(Utf16OffsetMap::new(text).unwrap().byte_offset(2), Ok(4));
+    assert_eq!(CharacterOffsetMap::new(text).unwrap().byte_offset(1), Ok(4));
   }
   use stella_anonymize_core::{
     DiagnosticEvent, DiagnosticEventKind, DiagnosticStage,

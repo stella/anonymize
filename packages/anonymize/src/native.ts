@@ -8,6 +8,11 @@ type NativeBindingOperatorConfig = {
   redactString?: string;
 };
 
+type NativeBindingCallerRedactionOptions = {
+  requestJson: string;
+  operators?: NativeBindingOperatorConfig;
+};
+
 export type NativeDiagnosticsBatchCallback = (diagnosticsJson: string) => void;
 export type NativeResultEventCallback = (eventJson: string) => void;
 
@@ -76,6 +81,10 @@ export type NativePreparedSearchBinding = {
   redactStaticEntitiesJson?: (
     fullText: string,
     operators?: NativeBindingOperatorConfig,
+  ) => string;
+  redactStaticEntitiesWithCallerDetectionsJson?: (
+    fullText: string,
+    options: NativeBindingCallerRedactionOptions,
   ) => string;
   redactStaticEntitiesResultStreamJson?: (
     fullText: string,
@@ -146,6 +155,20 @@ export type NativeAnonymizeBinding = {
 export type NativeOperatorConfig = {
   operators?: Record<string, OperatorType>;
   redactString?: string;
+};
+
+export const CALLER_DETECTION_CONTRACT_VERSION = 1;
+
+export type NativeCallerDetection = {
+  start: number;
+  end: number;
+  label: string;
+  score: number;
+};
+
+export type NativeCallerRedactionOptions = {
+  detections: readonly NativeCallerDetection[];
+  operators?: NativeOperatorConfig;
 };
 
 export type NativePipelineEntity = {
@@ -311,6 +334,36 @@ export class PreparedNativeAnonymizer {
     );
   }
 
+  redactStaticEntitiesWithCallerDetections(
+    fullText: string,
+    options: NativeCallerRedactionOptions,
+  ): NativeStaticRedactionResult {
+    if (!this.#prepared.redactStaticEntitiesWithCallerDetectionsJson) {
+      throw new Error(
+        "Native anonymize binding does not support caller detections",
+      );
+    }
+    const requestJson = JSON.stringify({
+      version: CALLER_DETECTION_CONTRACT_VERSION,
+      detections: options.detections,
+    });
+    const operators = toBindingOperatorConfig(options.operators);
+    const result: CanonicalStaticRedactionResult = JSON.parse(
+      this.#prepared.redactStaticEntitiesWithCallerDetectionsJson(fullText, {
+        requestJson,
+        ...(operators ? { operators } : {}),
+      }),
+    );
+    return fromCanonicalStaticRedactionResult(result);
+  }
+
+  redact_text_with_caller_detections(
+    fullText: string,
+    options: NativeCallerRedactionOptions,
+  ): NativeStaticRedactionResult {
+    return this.redactStaticEntitiesWithCallerDetections(fullText, options);
+  }
+
   redactTextJson(fullText: string, operators?: NativeOperatorConfig): string {
     return this.redact_text_json(fullText, operators);
   }
@@ -449,6 +502,23 @@ export class PreparedNativePipeline {
 
   redact_text_json(fullText: string, operators?: NativeOperatorConfig): string {
     return this.#anonymizer.redact_text_json(fullText, operators);
+  }
+
+  redactTextWithCallerDetections(
+    fullText: string,
+    options: NativeCallerRedactionOptions,
+  ): NativeStaticRedactionResult {
+    return this.#anonymizer.redactStaticEntitiesWithCallerDetections(
+      fullText,
+      options,
+    );
+  }
+
+  redact_text_with_caller_detections(
+    fullText: string,
+    options: NativeCallerRedactionOptions,
+  ): NativeStaticRedactionResult {
+    return this.redactTextWithCallerDetections(fullText, options);
   }
 
   redactTextJson(fullText: string, operators?: NativeOperatorConfig): string {
@@ -715,6 +785,23 @@ const toNativeStaticRedactionResult = (
 ): NativeStaticRedactionResult => ({
   resolvedEntities: result.resolvedEntities.map(toNativePipelineEntity),
   redaction: toNativeRedactionResult(result.redaction),
+});
+
+const fromCanonicalStaticRedactionResult = (
+  result: CanonicalStaticRedactionResult,
+): NativeStaticRedactionResult => ({
+  resolvedEntities: result.resolved_entities.map(
+    ({ source_detail, ...entity }) => ({
+      ...entity,
+      ...(source_detail ? { sourceDetail: source_detail } : {}),
+    }),
+  ),
+  redaction: {
+    redactedText: result.redaction.redacted_text,
+    redactionMap: toRedactionMap(result.redaction.redaction_map),
+    operatorMap: toOperatorMap(result.redaction.operator_map),
+    entityCount: result.redaction.entity_count,
+  },
 });
 
 const toBindingStaticRedactionResult = (

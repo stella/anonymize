@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from functools import lru_cache
 from importlib.resources import files
 from os import PathLike
-from typing import Literal
+from typing import Literal, TypedDict
 from weakref import WeakSet
 
 from ._native import (
@@ -34,6 +34,8 @@ __all__ = [
     "__version__",
     "OperatorEntry",
     "OperatorConfig",
+    "CallerDetection",
+    "CALLER_DETECTION_CONTRACT_VERSION",
     "DiagnosticsBatchCallback",
     "ResultEventCallback",
     "DefaultNativePipelineWarmup",
@@ -76,6 +78,16 @@ __all__ = [
 BytesLike = bytes | bytearray | memoryview
 PathLikeString = str | PathLike[str]
 OperatorConfig = Mapping[str, str] | str | None
+CALLER_DETECTION_CONTRACT_VERSION = 1
+
+
+class CallerDetection(TypedDict):
+    start: int
+    end: int
+    label: str
+    score: float
+
+
 DiagnosticsBatchCallback = Callable[[str], object]
 ResultEventCallback = Callable[[str], object]
 NativeSearchPackageInput = str | BytesLike | Mapping[str, object]
@@ -156,6 +168,49 @@ class PreparedAnonymizer:
         return self._prepared.redact_static_entities_json(
             full_text,
             _operator_config_json(operators, redact_string=redact_string),
+        )
+
+    def redact_text_with_caller_detections(
+        self,
+        full_text: str,
+        detections: Sequence[CallerDetection],
+        operators: OperatorConfig = None,
+        *,
+        redact_string: str | None = None,
+    ) -> StaticRedactionResult:
+        return self._prepared.redact_static_entities_with_caller_detections(
+            full_text,
+            _caller_detection_request_json(detections),
+            _operator_config_json(operators, redact_string=redact_string),
+        )
+
+    def redact_text_with_caller_detections_json(
+        self,
+        full_text: str,
+        detections: Sequence[CallerDetection],
+        operators: OperatorConfig = None,
+        *,
+        redact_string: str | None = None,
+    ) -> str:
+        return self._prepared.redact_static_entities_with_caller_detections_json(
+            full_text,
+            _caller_detection_request_json(detections),
+            _operator_config_json(operators, redact_string=redact_string),
+        )
+
+    def redact_static_entities_with_caller_detections(
+        self,
+        full_text: str,
+        detections: Sequence[CallerDetection],
+        operators: OperatorConfig = None,
+        *,
+        redact_string: str | None = None,
+    ) -> StaticRedactionResult:
+        return self.redact_text_with_caller_detections(
+            full_text,
+            detections,
+            operators,
+            redact_string=redact_string,
         )
 
     def redact_text_stream_json(
@@ -661,6 +716,18 @@ def _native_search_config_json(config_json: NativeSearchPackageInput) -> str:
     if isinstance(config_json, (bytes, bytearray, memoryview)):
         return bytes(config_json).decode("utf-8")
     return json.dumps(config_json, separators=(",", ":"))
+
+
+def _caller_detection_request_json(
+    detections: Sequence[CallerDetection],
+) -> str:
+    return json.dumps(
+        {
+            "version": CALLER_DETECTION_CONTRACT_VERSION,
+            "detections": list(detections),
+        },
+        separators=(",", ":"),
+    )
 
 
 def _operator_config_json(

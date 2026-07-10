@@ -127,6 +127,27 @@ describe("createNativePipelineFromConfig", () => {
     expect(redaction.entityCount).toBeGreaterThan(0);
     expect(redaction.redactedText).not.toContain("SECRET-42");
   });
+
+  test("redacts caller detections using JavaScript UTF-16 offsets", async () => {
+    const pipeline = await createNativePipelineFromConfig({
+      binding,
+      config: { ...baseConfig(), labels: ["person"] },
+    });
+
+    const result = pipeline.redactTextWithCallerDetections("😀Alice signed.", {
+      detections: [{ start: 2, end: 7, label: "person", score: 0.9 }],
+    });
+
+    expect(result.redaction.redactedText).toBe("😀[PERSON_1] signed.");
+    expect(result.resolvedEntities).toEqual([
+      expect.objectContaining({
+        start: 2,
+        end: 7,
+        text: "Alice",
+        source: "caller",
+      }),
+    ]);
+  });
 });
 
 describe("language scope", () => {

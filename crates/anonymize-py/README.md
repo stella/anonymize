@@ -39,6 +39,16 @@ result = prepared.redact_text(text, redact_string="***")
 print(result.redaction.redacted_text)
 ```
 
+Caller-produced detections use Python character indexes and enter the same
+resolution and redaction pipeline as built-in detections:
+
+```py
+result = prepared.redact_text_with_caller_detections(
+    "😀Alice signed.",
+    [{"start": 1, "end": 6, "label": "person", "score": 0.95}],
+)
+```
+
 Regional codes use the exact package when present and otherwise fall back to
 the base language package, so `en-US` can use the shipped `en` artifact.
 

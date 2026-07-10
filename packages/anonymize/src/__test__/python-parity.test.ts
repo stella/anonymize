@@ -70,6 +70,12 @@ type PythonParityOutput = {
   available_languages: string[];
   version: string;
   module_version: string;
+  caller_result: {
+    redacted_text: string;
+    start: number;
+    end: number;
+    source: string;
+  };
 };
 
 const PYTHON_PARITY_SCRIPT = `
@@ -83,6 +89,13 @@ payload = json.loads(pathlib.Path(os.environ["STELLA_ANONYMIZE_PAYLOAD"]).read_t
 sys.path.insert(0, str(module_root))
 
 import stella_anonymize as anonymize
+
+caller_result = json.loads(
+    anonymize.get_default_native_pipeline(language="en").redact_text_with_caller_detections_json(
+        "😀Alice signed.",
+        [{"start": 1, "end": 6, "label": "person", "score": 0.9}],
+    )
+)
 
 print(
     json.dumps(
@@ -100,6 +113,12 @@ print(
             ),
             "version": anonymize.native_package_version(),
             "module_version": anonymize.__version__,
+            "caller_result": {
+                "redacted_text": caller_result["redaction"]["redacted_text"],
+                "start": caller_result["resolved_entities"][0]["start"],
+                "end": caller_result["resolved_entities"][0]["end"],
+                "source": caller_result["resolved_entities"][0]["source"],
+            },
         }
     )
 )
@@ -276,4 +295,14 @@ describe("python binding parity", () => {
       expect(python.module_version).toBe(packageJsonVersion());
     },
   );
+
+  pythonParityTest("caller detections use Python character offsets", () => {
+    const python = runPythonParity([]);
+    expect(python.caller_result).toEqual({
+      redacted_text: "😀[PERSON_1] signed.",
+      start: 1,
+      end: 6,
+      source: "caller",
+    });
+  });
 });

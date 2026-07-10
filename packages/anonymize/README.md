@@ -68,6 +68,16 @@ const warmDiagnosticsJson = anonymizer.warmLazyRegexDiagnosticsJson();
 const result = anonymizer.redact_text(text, { redactString: "***" });
 ```
 
+Caller-produced spans enter the same resolution and redaction pipeline. Node
+and browser offsets use JavaScript UTF-16 string indexes; matched text is
+derived from the input:
+
+```ts
+const result = anonymizer.redactTextWithCallerDetections("😀Alice signed.", {
+  detections: [{ start: 2, end: 7, label: "person", score: 0.95 }],
+});
+```
+
 The config module may export a `PipelineConfig` directly or `{ config, gazetteerEntries }`. Include `@stll/anonymize-data` dictionaries there if your runtime config uses the deny-list or name-corpus layers; keep the corresponding layers enabled for caller-owned `customDenyList`, `customRegexes`, and gazetteers. Those inputs are part of the prepared package and should be regenerated when they change.
 
 ## Python SDK
@@ -82,6 +92,15 @@ prepared = anonymize.preload_default_native_pipeline(
 result = prepared.redact_text(text, redact_string="***")
 
 print(result.redaction.redacted_text)
+```
+
+Python caller detections use Python character indexes:
+
+```py
+result = prepared.redact_text_with_caller_detections(
+    "😀Alice signed.",
+    [{"start": 1, "end": 6, "label": "person", "score": 0.95}],
+)
 ```
 
 The Python SDK uses the same Rust core and prepared-package contract as the Node SDK. Prefer `get_default_native_pipeline()`, `preload_default_native_pipeline()`, `load_prepared_package()`, or `load_prepared_package_file()` for repeated calls; top-level `redact_text()` and `redact_text_json()` prepare from config on each call.

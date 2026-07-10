@@ -82,6 +82,18 @@ class PreparedSearch:
         full_text: str,
         operators_json: str | None = None,
     ) -> str: ...
+    def redact_static_entities_with_caller_detections(
+        self,
+        full_text: str,
+        request_json: str,
+        operators_json: str | None = None,
+    ) -> StaticRedactionResult: ...
+    def redact_static_entities_with_caller_detections_json(
+        self,
+        full_text: str,
+        request_json: str,
+        operators_json: str | None = None,
+    ) -> str: ...
     def redact_static_entities_result_stream_json(
         self,
         full_text: str,

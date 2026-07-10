@@ -4,13 +4,13 @@ use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyBytes};
 use stella_anonymize_adapter_contract::{
-  BindingOperatorConfig, BindingOperatorEntry, BindingPipelineEntity,
-  BindingPreparedSearchConfig, BindingRedactionEntry, BindingRedactionResult,
-  BindingStaticRedactionResult, ContractError,
+  BindingCallerDetectionRequest, BindingOperatorConfig, BindingOperatorEntry,
+  BindingPipelineEntity, BindingPreparedSearchConfig, BindingRedactionEntry,
+  BindingRedactionResult, BindingStaticRedactionResult, ContractError,
   PreparedSearchPackageDecodeTimings, assemble_static_search_config,
-  diagnostic_events_to_utf16_binding, diagnostic_stage_event,
-  operator_config_from_binding, prepared_search_config_from_binding,
-  prepared_search_core_package_to_bytes,
+  caller_detections_from_character_binding, diagnostic_events_to_utf16_binding,
+  diagnostic_stage_event, operator_config_from_binding,
+  prepared_search_config_from_binding, prepared_search_core_package_to_bytes,
   prepared_search_core_package_to_compressed_bytes,
   prepared_search_core_package_view_from_bytes_with_timings,
   prepared_search_core_package_view_trusted_from_bytes_with_timings,
@@ -22,8 +22,8 @@ use stella_anonymize_adapter_contract::{
   static_redaction_stream_event_to_utf16_binding,
 };
 use stella_anonymize_core::{
-  DiagnosticDetail, DiagnosticEvent, DiagnosticStage, Error as CoreError,
-  OperatorConfig, PreparedEngine as CorePreparedEngine,
+  CallerRedactionOptions, DiagnosticDetail, DiagnosticEvent, DiagnosticStage,
+  Error as CoreError, OperatorConfig, PreparedEngine as CorePreparedEngine,
   PreparedEngineArtifactsView, StaticRedactionDiagnostics,
   StaticRedactionResult,
   assemble::{AssembleError, Dictionaries, GazetteerEntry, PipelineConfig},
@@ -248,6 +248,40 @@ impl PyPreparedSearch {
     serde_json::to_string(&result).map_err(|error| to_py_serde_error(&error))
   }
 
+  #[pyo3(signature = (full_text, request_json, operators_json=None))]
+  fn redact_static_entities_with_caller_detections(
+    &self,
+    full_text: &str,
+    request_json: &str,
+    operators_json: Option<&str>,
+  ) -> PyResult<PyStaticRedactionResult> {
+    let result = self.redact_static_entities_with_caller_detections_core(
+      full_text,
+      request_json,
+      operators_json,
+    )?;
+    static_redaction_result_to_python_binding(result, full_text)
+      .map_err(|error| to_py_contract_error(&error))
+      .map(to_py_static_redaction_result)
+  }
+
+  #[pyo3(signature = (full_text, request_json, operators_json=None))]
+  fn redact_static_entities_with_caller_detections_json(
+    &self,
+    full_text: &str,
+    request_json: &str,
+    operators_json: Option<&str>,
+  ) -> PyResult<String> {
+    let result = self.redact_static_entities_with_caller_detections_core(
+      full_text,
+      request_json,
+      operators_json,
+    )?;
+    let result = static_redaction_result_to_python_binding(result, full_text)
+      .map_err(|error| to_py_contract_error(&error))?;
+    serde_json::to_string(&result).map_err(|error| to_py_serde_error(&error))
+  }
+
   fn redact_static_entities_result_stream_json(
     &self,
     full_text: &str,
@@ -341,6 +375,33 @@ impl PyPreparedSearch {
 }
 
 impl PyPreparedSearch {
+  fn redact_static_entities_with_caller_detections_core(
+    &self,
+    full_text: &str,
+    request_json: &str,
+    operators_json: Option<&str>,
+  ) -> PyResult<StaticRedactionResult> {
+    let request =
+      serde_json::from_str::<BindingCallerDetectionRequest>(request_json)
+        .map_err(|error| to_py_serde_error(&error))?;
+    let detections =
+      caller_detections_from_character_binding(request, full_text)
+        .map_err(|error| to_py_contract_error(&error))?;
+    let operators =
+      operator_config_from_binding(parse_operator_config(operators_json)?)
+        .map_err(|error| to_py_contract_error(&error))?;
+    self
+      .inner
+      .redact_static_entities_with_caller_detections(
+        full_text,
+        CallerRedactionOptions {
+          operators: &operators,
+          detections: &detections,
+        },
+      )
+      .map_err(|error| to_py_core_error(&error))
+  }
+
   fn from_core_package(
     config: stella_anonymize_core::PreparedEngineConfig,
     artifact_bytes: &[u8],

@@ -7,12 +7,13 @@ use std::{
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use stella_anonymize_adapter_contract::{
-  BindingOperatorConfig, BindingOperatorEntry, BindingPreparedSearchConfig,
-  BindingRedactionResult, BindingStaticRedactionResult, ContractError,
+  BindingCallerDetectionRequest, BindingOperatorConfig, BindingOperatorEntry,
+  BindingPreparedSearchConfig, BindingRedactionResult,
+  BindingStaticRedactionResult, ContractError,
   PreparedSearchPackageDecodeTimings, assemble_static_search_config,
-  diagnostic_events_to_utf16_binding, diagnostic_stage_event,
-  operator_config_from_binding, prepared_search_config_from_binding,
-  prepared_search_core_package_to_bytes,
+  caller_detections_from_utf16_binding, diagnostic_events_to_utf16_binding,
+  diagnostic_stage_event, operator_config_from_binding,
+  prepared_search_config_from_binding, prepared_search_core_package_to_bytes,
   prepared_search_core_package_to_compressed_bytes,
   prepared_search_core_package_view_from_bytes_with_timings,
   prepared_search_core_package_view_trusted_from_bytes_with_timings,
@@ -25,9 +26,10 @@ use stella_anonymize_adapter_contract::{
   static_redaction_stream_event_to_utf16_binding,
 };
 use stella_anonymize_core::{
-  DiagnosticDetail, DiagnosticEvent, DiagnosticStage, Error as CoreError,
-  OperatorConfig, PreparedEngine, PreparedEngineArtifactsView,
-  PreparedEngineConfig, StaticRedactionDiagnostics,
+  CallerRedactionOptions, DiagnosticDetail, DiagnosticEvent, DiagnosticStage,
+  Error as CoreError, OperatorConfig, PreparedEngine,
+  PreparedEngineArtifactsView, PreparedEngineConfig,
+  StaticRedactionDiagnostics,
   assemble::{AssembleError, Dictionaries, GazetteerEntry, PipelineConfig},
 };
 
@@ -192,6 +194,12 @@ pub struct JsPreparedSearchConfig {
 pub struct JsOperatorConfig {
   pub operators: Option<BTreeMap<String, String>>,
   pub redact_string: Option<String>,
+}
+
+#[napi(object)]
+pub struct JsCallerRedactionOptions {
+  pub request_json: String,
+  pub operators: Option<JsOperatorConfig>,
 }
 
 #[napi(object)]
@@ -930,6 +938,38 @@ impl NativePreparedSearch {
     let result = static_redaction_result_to_utf16_binding(result, &full_text)
       .map_err(|error| to_napi_contract_error(&error))?;
 
+    serde_json::to_string(&result).map_err(|error| to_napi_serde_error(&error))
+  }
+
+  #[napi]
+  #[allow(clippy::needless_pass_by_value)]
+  pub fn redact_static_entities_with_caller_detections_json(
+    &self,
+    full_text: String,
+    options: JsCallerRedactionOptions,
+  ) -> Result<String> {
+    let request = serde_json::from_str::<BindingCallerDetectionRequest>(
+      &options.request_json,
+    )
+    .map_err(|error| to_napi_serde_error(&error))?;
+    let detections = caller_detections_from_utf16_binding(request, &full_text)
+      .map_err(|error| to_napi_contract_error(&error))?;
+    let operators = operator_config_from_binding(
+      options.operators.map(to_binding_operator_config),
+    )
+    .map_err(|error| to_napi_contract_error(&error))?;
+    let result = self
+      .inner
+      .redact_static_entities_with_caller_detections(
+        &full_text,
+        CallerRedactionOptions {
+          operators: &operators,
+          detections: &detections,
+        },
+      )
+      .map_err(|error| to_napi_core_error(&error))?;
+    let result = static_redaction_result_to_utf16_binding(result, &full_text)
+      .map_err(|error| to_napi_contract_error(&error))?;
     serde_json::to_string(&result).map_err(|error| to_napi_serde_error(&error))
   }
 

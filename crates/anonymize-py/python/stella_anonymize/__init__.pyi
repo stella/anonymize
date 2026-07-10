@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from os import PathLike
-from typing import Literal, TypeAlias
+from typing import Literal, TypeAlias, TypedDict
 
 from ._native import (
     PreparedSearch as NativePreparedSearch,
@@ -28,6 +28,14 @@ from ._native import (
 BytesLike: TypeAlias = bytes | bytearray | memoryview
 PathLikeString: TypeAlias = str | PathLike[str]
 OperatorConfig: TypeAlias = Mapping[str, str] | str | None
+CALLER_DETECTION_CONTRACT_VERSION: int
+
+class CallerDetection(TypedDict):
+    start: int
+    end: int
+    label: str
+    score: float
+
 DiagnosticsBatchCallback: TypeAlias = Callable[[str], object]
 ResultEventCallback: TypeAlias = Callable[[str], object]
 NativeSearchPackageInput: TypeAlias = str | BytesLike | Mapping[str, object]
@@ -73,6 +81,30 @@ class PreparedAnonymizer:
         *,
         redact_string: str | None = None,
     ) -> str: ...
+    def redact_text_with_caller_detections(
+        self,
+        full_text: str,
+        detections: Sequence[CallerDetection],
+        operators: OperatorConfig = None,
+        *,
+        redact_string: str | None = None,
+    ) -> StaticRedactionResult: ...
+    def redact_text_with_caller_detections_json(
+        self,
+        full_text: str,
+        detections: Sequence[CallerDetection],
+        operators: OperatorConfig = None,
+        *,
+        redact_string: str | None = None,
+    ) -> str: ...
+    def redact_static_entities_with_caller_detections(
+        self,
+        full_text: str,
+        detections: Sequence[CallerDetection],
+        operators: OperatorConfig = None,
+        *,
+        redact_string: str | None = None,
+    ) -> StaticRedactionResult: ...
     def redact_text_stream_json(
         self,
         full_text: str,
