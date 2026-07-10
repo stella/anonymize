@@ -31,6 +31,7 @@
     "sync:version": "node .github/tools/sync-runtime-version.mjs",
     "check:version": "node .github/tools/sync-runtime-version.mjs --check && node .github/tools/test-sync-runtime-version.mjs && node .github/tools/check-native-sidecars.mjs",
     "check:exports": "bunx publint@0.3.21 packages/anonymize && bunx @arethetypeswrong/cli@0.18.5 --pack packages/anonymize --ignore-rules no-resolution cjs-resolves-to-esm",
+    "check:knip": "bunx knip@6.26.0 --no-progress",
     "check:bun": "node .github/tools/check-bun-workflows.mjs",
     "check:brand-case": "node .github/tools/check-brand-case.mjs",
     "secrets:check:staged": "bash scripts/check-staged-secrets.sh",
