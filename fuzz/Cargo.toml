@@ -1,0 +1,41 @@
+# cargo-fuzz targets for the anonymize core.
+#
+# This crate is intentionally its own workspace (empty `[workspace]` table
+# below) so it stays out of the main `--workspace` build and its strict lints.
+# It also keeps `libfuzzer-sys` and the nightly-only sanitizer instrumentation
+# off the default `cargo build`/`cargo test` path. Run it with a nightly
+# toolchain via `cargo +nightly fuzz run <target>` (see `fuzz/README.md`).
+
+[package]
+name = "stella-anonymize-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+stella-anonymize-core = { path = "../crates/anonymize-core" }
+
+# Detach from the parent workspace so `cargo build --workspace` at the repo root
+# never pulls in the fuzz targets or their nightly-only dependencies.
+[workspace]
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "artifact_decode"
+path = "fuzz_targets/artifact_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "normalize_text"
+path = "fuzz_targets/normalize_text.rs"
+test = false
+doc = false
+bench = false

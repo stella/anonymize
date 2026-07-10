@@ -45,5 +45,6 @@ jobs:
           allow-dependencies-licenses: >-
             pkg:cargo/stella-aho-corasick-core,
             pkg:cargo/stella-fuzzy-search-core,
-            pkg:cargo/stella-regex-set-core
+            pkg:cargo/stella-regex-set-core,
+            pkg:cargo/libfuzzer-sys
           comment-summary-in-pr: always
