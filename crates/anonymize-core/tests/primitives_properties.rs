@@ -62,6 +62,7 @@ fn trim_text() -> impl Strategy<Value = String> {
 
 fn source_strategy() -> impl Strategy<Value = DetectionSource> {
   sample::select(vec![
+    DetectionSource::Caller,
     DetectionSource::Trigger,
     DetectionSource::Regex,
     DetectionSource::DenyList,

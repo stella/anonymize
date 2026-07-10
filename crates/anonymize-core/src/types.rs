@@ -5,6 +5,10 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Error {
+  InvalidCallerDetection {
+    field: &'static str,
+    reason: String,
+  },
   InvalidSpan {
     start: u32,
     end: u32,
@@ -55,6 +59,12 @@ pub enum Error {
 impl fmt::Display for Error {
   fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
     match self {
+      Self::InvalidCallerDetection { field, reason } => {
+        write!(
+          formatter,
+          "Caller detection field '{field}' is invalid: {reason}"
+        )
+      }
       Self::InvalidSpan { start, end } => {
         write!(formatter, "Invalid entity span: {start}..{end}")
       }

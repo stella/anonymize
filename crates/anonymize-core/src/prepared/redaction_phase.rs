@@ -1,6 +1,6 @@
 use crate::diagnostics::StaticRedactionDiagnostics;
 use crate::redact::redact_text;
-use crate::resolution::PipelineEntity;
+use crate::resolution::{CallerDetection, PipelineEntity};
 use crate::types::{
   Entity, EntityKind, OperatorConfig, RedactionResult, Result,
 };
@@ -16,10 +16,16 @@ impl PreparedEngine {
     &self,
     full_text: &str,
     operators: &OperatorConfig,
+    caller_detections: &[CallerDetection],
     mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
     event_stream: &mut DiagnosticEventStream<'_>,
     result_stream: &mut StaticRedactionResultStream<'_>,
   ) -> Result<StaticRedactionResult> {
+    let caller_entities = caller_detections
+      .iter()
+      .cloned()
+      .map(|detection| detection.into_pipeline_entity(full_text))
+      .collect::<Result<Vec<_>>>()?;
     let redact_timer = PhaseTimer::start();
     let detections = self
       .detect_static_entities_inner(full_text, diagnostics.as_deref_mut())?;
@@ -28,6 +34,7 @@ impl PreparedEngine {
     observe_diagnostic_stream(&diagnostics, event_stream)?;
     let resolved_entities = self.resolve_static_entities(
       &detections,
+      &caller_entities,
       full_text,
       &mut diagnostics,
       event_stream,

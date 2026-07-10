@@ -2,6 +2,7 @@ use crate::types::EntityKind;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DetectionSource {
+  Caller,
   Trigger,
   Regex,
   DenyList,
@@ -19,8 +20,79 @@ impl DetectionSource {
       Self::Trigger => 4,
       Self::LegalForm | Self::Regex | Self::Country => 3,
       Self::DenyList | Self::Coreference => 2,
-      Self::Ner => 1,
+      Self::Caller | Self::Ner => 1,
     }
+  }
+}
+
+/// A caller-supplied entity span using UTF-8 byte offsets.
+///
+/// The matched text is intentionally not accepted from the caller. It is
+/// derived from the document when the detection enters the pipeline.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CallerDetection {
+  start: u32,
+  end: u32,
+  label: String,
+  score: f64,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct CallerDetectionParams {
+  pub start: u32,
+  pub end: u32,
+  pub label: String,
+  pub score: f64,
+}
+
+impl CallerDetection {
+  pub fn new(params: CallerDetectionParams) -> crate::types::Result<Self> {
+    let CallerDetectionParams {
+      start,
+      end,
+      label,
+      score,
+    } = params;
+    if start >= end {
+      return Err(crate::types::Error::InvalidCallerDetection {
+        field: "span",
+        reason: format!("start {start} must be less than end {end}"),
+      });
+    }
+    if label.trim().is_empty() {
+      return Err(crate::types::Error::InvalidCallerDetection {
+        field: "label",
+        reason: String::from("must not be blank"),
+      });
+    }
+    if !score.is_finite() || !(0.0..=1.0).contains(&score) {
+      return Err(crate::types::Error::InvalidCallerDetection {
+        field: "score",
+        reason: String::from("must be finite and between 0 and 1"),
+      });
+    }
+    Ok(Self {
+      start,
+      end,
+      label,
+      score,
+    })
+  }
+
+  pub(crate) fn into_pipeline_entity(
+    self,
+    full_text: &str,
+  ) -> crate::types::Result<PipelineEntity> {
+    let text = crate::byte_offsets::ByteOffsets::new(full_text)
+      .slice(self.start, self.end)?;
+    Ok(PipelineEntity::detected(
+      self.start,
+      self.end,
+      self.label,
+      text,
+      self.score,
+      DetectionSource::Caller,
+    ))
   }
 }
 

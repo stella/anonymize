@@ -26,6 +26,26 @@ let engine = PreparedEngine::prepare()
   .call()?;
 ```
 
+Caller-produced detections enter the same resolution and redaction pipeline.
+Offsets are UTF-8 byte offsets; matched text is derived from the document so a
+caller cannot supply text that disagrees with the span:
+
+```rust
+let detections = vec![CallerDetection::new(CallerDetectionParams {
+  start: 0,
+  end: 5,
+  label: String::from("person"),
+  score: 0.95,
+})?];
+let result = engine.redact_static_entities_with_caller_detections(
+  "Alice signed.",
+  CallerRedactionOptions {
+    operators: &OperatorConfig::default(),
+    detections: &detections,
+  },
+)?;
+```
+
 ## Pipeline Layout
 
 - `prepare_phase.rs`: validates config, loads artifacts, prepares indexes and support data.

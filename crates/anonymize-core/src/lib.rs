@@ -52,8 +52,8 @@ pub use name_corpus::{NameCorpusData, NameCorpusMode, PreparedNameCorpusData};
 pub use normalize::normalize_for_search;
 pub use placeholders::build_placeholder_map;
 pub use prepared::{
-  PreparedEngine, PreparedEngineArtifacts, PreparedEngineArtifactsView,
-  PreparedEngineBuildResult, PreparedEngineConfig,
+  CallerRedactionOptions, PreparedEngine, PreparedEngineArtifacts,
+  PreparedEngineArtifactsView, PreparedEngineBuildResult, PreparedEngineConfig,
   PreparedEngineDetectorConfig, PreparedEngineMatches,
   PreparedEnginePolicyConfig, PreparedEngineSearchConfig, PreparedEngineSlices,
   StaticDetectionResult, StaticEntityLayers, StaticRedactionDiagnosticResult,
@@ -67,8 +67,9 @@ pub use processors::{
 };
 pub use redact::{deanonymise, redact_text};
 pub use resolution::{
-  DetectionSource, PipelineEntity, SourceDetail, enforce_boundary_consistency,
-  merge_and_dedup, sanitize_entities,
+  CallerDetection, CallerDetectionParams, DetectionSource, PipelineEntity,
+  SourceDetail, enforce_boundary_consistency, merge_and_dedup,
+  sanitize_entities,
 };
 pub use search::{
   FuzzySearchOptions, LiteralSearchOptions, PreparedArtifactPolicy,
