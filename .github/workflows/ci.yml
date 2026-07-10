@@ -117,6 +117,12 @@ jobs:
       - name: Build
         run: bun run build
 
+      - name: Package exports (publint + attw)
+        # Validates the published @stll/anonymize package.json exports and that
+        # its types resolve for real consumers. Runs after the build so dist/
+        # exists.
+        run: bun run check:exports
+
       - name: Lint
         run: bun run lint
 
