@@ -398,6 +398,8 @@ fn diagnostic_events_report_scope() {
     pattern: None,
     source: None,
     source_detail: None,
+    provider_id: None,
+    detection_id: None,
     label: None,
     start: None,
     end: None,

@@ -109,7 +109,7 @@ impl CallerDetection {
   }
 
   #[must_use]
-  pub fn provenance(&self) -> &CallerProvenance {
+  pub const fn provenance(&self) -> &CallerProvenance {
     &self.provenance
   }
 
