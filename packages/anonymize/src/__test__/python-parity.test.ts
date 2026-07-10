@@ -93,7 +93,8 @@ import stella_anonymize as anonymize
 caller_result = json.loads(
     anonymize.get_default_native_pipeline(language="en").redact_text_with_caller_detections_json(
         "😀Alice signed.",
-        [{"start": 1, "end": 6, "label": "person", "score": 0.9}],
+        [{"start": 1, "end": 6, "label": "person", "score": 0.9,
+          "provider_id": "parity-provider", "detection_id": "person-1"}],
     )
 )
 

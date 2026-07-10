@@ -74,9 +74,26 @@ derived from the input:
 
 ```ts
 const result = anonymizer.redactTextWithCallerDetections("😀Alice signed.", {
-  detections: [{ start: 2, end: 7, label: "person", score: 0.95 }],
+  detections: [
+    {
+      start: 2,
+      end: 7,
+      label: "person",
+      score: 0.95,
+      providerId: "example-ner",
+      detectionId: "person-1",
+    },
+  ],
 });
 ```
+
+`providerId` and `detectionId` are required provenance identifiers. They must
+be 1–128 ASCII characters, start with an alphanumeric character, and otherwise
+contain only alphanumerics, `.`, `_`, `:`, or `-`; do not encode personal data
+in them. Retained result entities preserve both IDs. Use
+`redactTextWithCallerDetectionsDiagnosticsJson()` for audit-safe input and
+retained counts. Diagnostic events include provenance, labels, offsets, and
+scores, but never matched text.
 
 The config module may export a `PipelineConfig` directly or `{ config, gazetteerEntries }`. Include `@stll/anonymize-data` dictionaries there if your runtime config uses the deny-list or name-corpus layers; keep the corresponding layers enabled for caller-owned `customDenyList`, `customRegexes`, and gazetteers. Those inputs are part of the prepared package and should be regenerated when they change.
 
@@ -99,9 +116,14 @@ Python caller detections use Python character indexes:
 ```py
 result = prepared.redact_text_with_caller_detections(
     "😀Alice signed.",
-    [{"start": 1, "end": 6, "label": "person", "score": 0.95}],
+    [{"start": 1, "end": 6, "label": "person", "score": 0.95,
+      "provider_id": "example-ner", "detection_id": "person-1"}],
 )
 ```
+
+Python preserves `provider_id` and `detection_id` on retained entities. Use
+`redact_text_with_caller_detections_diagnostics_json()` for the same audit-safe
+diagnostics contract.
 
 The Python SDK uses the same Rust core and prepared-package contract as the Node SDK. Prefer `get_default_native_pipeline()`, `preload_default_native_pipeline()`, `load_prepared_package()`, or `load_prepared_package_file()` for repeated calls; top-level `redact_text()` and `redact_text_json()` prepare from config on each call.
 

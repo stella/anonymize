@@ -45,9 +45,17 @@ resolution and redaction pipeline as built-in detections:
 ```py
 result = prepared.redact_text_with_caller_detections(
     "😀Alice signed.",
-    [{"start": 1, "end": 6, "label": "person", "score": 0.95}],
+    [{"start": 1, "end": 6, "label": "person", "score": 0.95,
+      "provider_id": "example-ner", "detection_id": "person-1"}],
 )
 ```
+
+`provider_id` and `detection_id` are required 1–128 byte ASCII identifiers:
+they start with an alphanumeric character and otherwise contain only
+alphanumerics, `.`, `_`, `:`, or `-`. Do not encode personal data in them.
+Retained entities preserve both IDs;
+`redact_text_with_caller_detections_diagnostics_json()` reports audit-safe
+external input and retained counts without matched text.
 
 Regional codes use the exact package when present and otherwise fall back to
 the base language package, so `en-US` can use the shipped `en` artifact.

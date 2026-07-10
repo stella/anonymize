@@ -34,6 +34,8 @@ type NativeBindingPipelineEntity = {
   score: number;
   source: string;
   sourceDetail?: string | null;
+  providerId?: string | null;
+  detectionId?: string | null;
 };
 
 type NativeBindingRedactionResult = {
@@ -56,6 +58,8 @@ type CanonicalPipelineEntity = {
   score: number;
   source: string;
   source_detail?: string | null;
+  provider_id?: string | null;
+  detection_id?: string | null;
 };
 
 type CanonicalStaticRedactionResult = {
@@ -83,6 +87,10 @@ export type NativePreparedSearchBinding = {
     operators?: NativeBindingOperatorConfig,
   ) => string;
   redactStaticEntitiesWithCallerDetectionsJson?: (
+    fullText: string,
+    options: NativeBindingCallerRedactionOptions,
+  ) => string;
+  redactStaticEntitiesWithCallerDetectionsDiagnosticsJson?: (
     fullText: string,
     options: NativeBindingCallerRedactionOptions,
   ) => string;
@@ -157,19 +165,36 @@ export type NativeOperatorConfig = {
   redactString?: string;
 };
 
-export const CALLER_DETECTION_CONTRACT_VERSION = 1;
+export const CALLER_DETECTION_CONTRACT_VERSION = 2;
 
 export type NativeCallerDetection = {
   start: number;
   end: number;
   label: string;
   score: number;
+  providerId: string;
+  detectionId: string;
 };
 
 export type NativeCallerRedactionOptions = {
   detections: readonly NativeCallerDetection[];
   operators?: NativeOperatorConfig;
 };
+
+const callerDetectionRequestJson = (
+  detections: readonly NativeCallerDetection[],
+): string =>
+  JSON.stringify({
+    version: CALLER_DETECTION_CONTRACT_VERSION,
+    detections: detections.map((detection) => ({
+      start: detection.start,
+      end: detection.end,
+      label: detection.label,
+      score: detection.score,
+      provider_id: detection.providerId,
+      detection_id: detection.detectionId,
+    })),
+  });
 
 export type NativePipelineEntity = {
   start: number;
@@ -179,6 +204,8 @@ export type NativePipelineEntity = {
   score: number;
   source: string;
   sourceDetail?: string;
+  providerId?: string;
+  detectionId?: string;
 };
 
 export type NativeRedactionResult = {
@@ -343,10 +370,7 @@ export class PreparedNativeAnonymizer {
         "Native anonymize binding does not support caller detections",
       );
     }
-    const requestJson = JSON.stringify({
-      version: CALLER_DETECTION_CONTRACT_VERSION,
-      detections: options.detections,
-    });
+    const requestJson = callerDetectionRequestJson(options.detections);
     const operators = toBindingOperatorConfig(options.operators);
     const result: CanonicalStaticRedactionResult = JSON.parse(
       this.#prepared.redactStaticEntitiesWithCallerDetectionsJson(fullText, {
@@ -362,6 +386,33 @@ export class PreparedNativeAnonymizer {
     options: NativeCallerRedactionOptions,
   ): NativeStaticRedactionResult {
     return this.redactStaticEntitiesWithCallerDetections(fullText, options);
+  }
+
+  redactStaticEntitiesWithCallerDetectionsDiagnosticsJson(
+    fullText: string,
+    options: NativeCallerRedactionOptions,
+  ): string | null {
+    const redact =
+      this.#prepared.redactStaticEntitiesWithCallerDetectionsDiagnosticsJson;
+    if (!redact) {
+      return null;
+    }
+    const requestJson = callerDetectionRequestJson(options.detections);
+    const operators = toBindingOperatorConfig(options.operators);
+    return redact.call(this.#prepared, fullText, {
+      requestJson,
+      ...(operators ? { operators } : {}),
+    });
+  }
+
+  redact_static_entities_with_caller_detections_diagnostics_json(
+    fullText: string,
+    options: NativeCallerRedactionOptions,
+  ): string | null {
+    return this.redactStaticEntitiesWithCallerDetectionsDiagnosticsJson(
+      fullText,
+      options,
+    );
   }
 
   redactTextJson(fullText: string, operators?: NativeOperatorConfig): string {
@@ -519,6 +570,26 @@ export class PreparedNativePipeline {
     options: NativeCallerRedactionOptions,
   ): NativeStaticRedactionResult {
     return this.redactTextWithCallerDetections(fullText, options);
+  }
+
+  redactTextWithCallerDetectionsDiagnosticsJson(
+    fullText: string,
+    options: NativeCallerRedactionOptions,
+  ): string | null {
+    return this.#anonymizer.redactStaticEntitiesWithCallerDetectionsDiagnosticsJson(
+      fullText,
+      options,
+    );
+  }
+
+  redact_text_with_caller_detections_diagnostics_json(
+    fullText: string,
+    options: NativeCallerRedactionOptions,
+  ): string | null {
+    return this.redactTextWithCallerDetectionsDiagnosticsJson(
+      fullText,
+      options,
+    );
   }
 
   redactTextJson(fullText: string, operators?: NativeOperatorConfig): string {
@@ -791,9 +862,11 @@ const fromCanonicalStaticRedactionResult = (
   result: CanonicalStaticRedactionResult,
 ): NativeStaticRedactionResult => ({
   resolvedEntities: result.resolved_entities.map(
-    ({ source_detail, ...entity }) => ({
+    ({ source_detail, provider_id, detection_id, ...entity }) => ({
       ...entity,
       ...(source_detail ? { sourceDetail: source_detail } : {}),
+      ...(provider_id ? { providerId: provider_id } : {}),
+      ...(detection_id ? { detectionId: detection_id } : {}),
     }),
   ),
   redaction: {
@@ -830,14 +903,20 @@ const toNativePipelineEntity = (
   score: entity.score,
   source: entity.source,
   ...(entity.sourceDetail ? { sourceDetail: entity.sourceDetail } : {}),
+  ...(entity.providerId ? { providerId: entity.providerId } : {}),
+  ...(entity.detectionId ? { detectionId: entity.detectionId } : {}),
 });
 
 const toBindingPipelineEntity = ({
   sourceDetail,
+  providerId,
+  detectionId,
   ...entity
 }: NativePipelineEntity): CanonicalPipelineEntity => ({
   ...entity,
   source_detail: sourceDetail ?? null,
+  provider_id: providerId ?? null,
+  detection_id: detectionId ?? null,
 });
 
 const toNativeRedactionResult = (

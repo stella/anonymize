@@ -35,6 +35,7 @@ pub struct CallerDetection {
   end: u32,
   label: String,
   score: f64,
+  provenance: CallerProvenance,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -43,6 +44,26 @@ pub struct CallerDetectionParams {
   pub end: u32,
   pub label: String,
   pub score: f64,
+  pub provider_id: String,
+  pub detection_id: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CallerProvenance {
+  provider_id: String,
+  detection_id: String,
+}
+
+impl CallerProvenance {
+  #[must_use]
+  pub fn provider_id(&self) -> &str {
+    &self.provider_id
+  }
+
+  #[must_use]
+  pub fn detection_id(&self) -> &str {
+    &self.detection_id
+  }
 }
 
 impl CallerDetection {
@@ -52,6 +73,8 @@ impl CallerDetection {
       end,
       label,
       score,
+      provider_id,
+      detection_id,
     } = params;
     if start >= end {
       return Err(crate::types::Error::InvalidCallerDetection {
@@ -71,12 +94,23 @@ impl CallerDetection {
         reason: String::from("must be finite and between 0 and 1"),
       });
     }
+    validate_provenance_id("provider_id", &provider_id)?;
+    validate_provenance_id("detection_id", &detection_id)?;
     Ok(Self {
       start,
       end,
       label,
       score,
+      provenance: CallerProvenance {
+        provider_id,
+        detection_id,
+      },
     })
+  }
+
+  #[must_use]
+  pub fn provenance(&self) -> &CallerProvenance {
+    &self.provenance
   }
 
   pub(crate) fn into_pipeline_entity(
@@ -85,15 +119,40 @@ impl CallerDetection {
   ) -> crate::types::Result<PipelineEntity> {
     let text = crate::byte_offsets::ByteOffsets::new(full_text)
       .slice(self.start, self.end)?;
-    Ok(PipelineEntity::detected(
+    let mut entity = PipelineEntity::detected(
       self.start,
       self.end,
       self.label,
       text,
       self.score,
       DetectionSource::Caller,
-    ))
+    );
+    entity.caller_provenance = Some(self.provenance);
+    Ok(entity)
   }
+}
+
+fn validate_provenance_id(
+  field: &'static str,
+  value: &str,
+) -> crate::types::Result<()> {
+  const MAX_PROVENANCE_ID_BYTES: usize = 128;
+  let mut bytes = value.bytes();
+  let valid_first = bytes
+    .next()
+    .is_some_and(|byte| byte.is_ascii_alphanumeric());
+  let valid_rest = bytes.all(|byte| {
+    byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b':' | b'-')
+  });
+  if valid_first && valid_rest && value.len() <= MAX_PROVENANCE_ID_BYTES {
+    return Ok(());
+  }
+  Err(crate::types::Error::InvalidCallerDetection {
+    field,
+    reason: String::from(
+      "must be 1-128 ASCII characters: alphanumeric first, then alphanumeric, '.', '_', ':', or '-'",
+    ),
+  })
 }
 
 #[derive(
@@ -116,6 +175,7 @@ pub struct PipelineEntity {
   pub score: f64,
   pub source: DetectionSource,
   pub source_detail: Option<SourceDetail>,
+  pub caller_provenance: Option<CallerProvenance>,
   pub kind: EntityKind,
 }
 
@@ -137,6 +197,7 @@ impl PipelineEntity {
       score,
       source,
       source_detail: None,
+      caller_provenance: None,
       kind: EntityKind::Detected,
     }
   }
@@ -158,6 +219,7 @@ impl PipelineEntity {
       score,
       source: DetectionSource::Coreference,
       source_detail: None,
+      caller_provenance: None,
       kind: EntityKind::Coreference {
         source_text: source_text.into(),
       },

@@ -79,7 +79,14 @@ def runtime_version() -> str:
 def redact_caller_detection(text: str) -> str:
     prepared = anonymize.get_default_native_pipeline(language="en")
     detections: list[anonymize.CallerDetection] = [
-        {"start": 0, "end": len(text), "label": "person", "score": 0.9}
+        {
+            "start": 0,
+            "end": len(text),
+            "label": "person",
+            "score": 0.9,
+            "provider_id": "typecheck-provider",
+            "detection_id": "person-1",
+        }
     ]
     return prepared.redact_text_with_caller_detections(
         text,

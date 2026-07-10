@@ -43,6 +43,10 @@ class PipelineEntity:
     def source(self) -> str: ...
     @property
     def source_detail(self) -> str | None: ...
+    @property
+    def provider_id(self) -> str | None: ...
+    @property
+    def detection_id(self) -> str | None: ...
 
 class StaticRedactionResult:
     @property
@@ -89,6 +93,12 @@ class PreparedSearch:
         operators_json: str | None = None,
     ) -> StaticRedactionResult: ...
     def redact_static_entities_with_caller_detections_json(
+        self,
+        full_text: str,
+        request_json: str,
+        operators_json: str | None = None,
+    ) -> str: ...
+    def redact_static_entities_with_caller_detections_diagnostics_json(
         self,
         full_text: str,
         request_json: str,

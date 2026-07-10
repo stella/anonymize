@@ -58,6 +58,8 @@ pub enum DiagnosticStage {
   WarmTotal,
   DetectTotal,
   RedactTotal,
+  EntityCallerInput,
+  EntityCallerRetained,
   Normalize,
   FindMatches,
   FindRegex,
@@ -185,14 +187,16 @@ impl DiagnosticStage {
       | Self::EntityNameCorpusClassify
       | Self::EntityNameCorpusChains
       | Self::EntityNameCorpusDedupe
-      | Self::EntityNameCorpusFilter => DiagnosticPhase::Detect,
+      | Self::EntityNameCorpusFilter
+      | Self::EntityCallerInput => DiagnosticPhase::Detect,
       Self::EntityZoneAdjustment
       | Self::EntityHotword
       | Self::EntityAddressContext
       | Self::EntityCoreference
       | Self::Merge
       | Self::Boundary
-      | Self::Sanitize => DiagnosticPhase::Resolve,
+      | Self::Sanitize
+      | Self::EntityCallerRetained => DiagnosticPhase::Resolve,
       Self::RedactTotal | Self::Redaction => DiagnosticPhase::Redact,
     }
   }
@@ -237,6 +241,8 @@ pub struct DiagnosticEvent {
   pub pattern: Option<u32>,
   pub source: Option<DetectionSource>,
   pub source_detail: Option<SourceDetail>,
+  pub provider_id: Option<String>,
+  pub detection_id: Option<String>,
   pub label: Option<String>,
   pub start: Option<u32>,
   pub end: Option<u32>,
@@ -324,6 +330,8 @@ impl StaticRedactionDiagnostics {
         pattern: Some(found.pattern()),
         source: None,
         source_detail: None,
+        provider_id: None,
+        detection_id: None,
         label: None,
         start: Some(found.start()),
         end: Some(found.end()),
@@ -357,6 +365,8 @@ impl StaticRedactionDiagnostics {
         pattern: stat.pattern,
         source: None,
         source_detail: None,
+        provider_id: None,
+        detection_id: None,
         label: None,
         start: None,
         end: None,
@@ -389,6 +399,8 @@ impl StaticRedactionDiagnostics {
         pattern: stat.pattern,
         source: None,
         source_detail: None,
+        provider_id: None,
+        detection_id: None,
         label: None,
         start: None,
         end: None,
@@ -435,6 +447,14 @@ impl StaticRedactionDiagnostics {
         pattern: None,
         source: Some(entity.source),
         source_detail: entity.source_detail,
+        provider_id: entity
+          .caller_provenance
+          .as_ref()
+          .map(|provenance| provenance.provider_id().to_owned()),
+        detection_id: entity
+          .caller_provenance
+          .as_ref()
+          .map(|provenance| provenance.detection_id().to_owned()),
         label: Some(entity.label.clone()),
         start: Some(entity.start),
         end: Some(entity.end),
@@ -467,6 +487,8 @@ impl StaticRedactionDiagnostics {
       pattern: None,
       source: None,
       source_detail: None,
+      provider_id: None,
+      detection_id: None,
       label: None,
       start: None,
       end: None,
@@ -505,6 +527,8 @@ impl StaticRedactionDiagnostics {
       pattern,
       source: None,
       source_detail: None,
+      provider_id: None,
+      detection_id: None,
       label: label.map(str::to_owned),
       start,
       end,
@@ -537,6 +561,8 @@ impl StaticRedactionDiagnostics {
       pattern: None,
       source: None,
       source_detail: None,
+      provider_id: None,
+      detection_id: None,
       label: None,
       start: None,
       end: None,

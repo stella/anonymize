@@ -78,7 +78,7 @@ __all__ = [
 BytesLike = bytes | bytearray | memoryview
 PathLikeString = str | PathLike[str]
 OperatorConfig = Mapping[str, str] | str | None
-CALLER_DETECTION_CONTRACT_VERSION = 1
+CALLER_DETECTION_CONTRACT_VERSION = 2
 
 
 class CallerDetection(TypedDict):
@@ -86,6 +86,8 @@ class CallerDetection(TypedDict):
     end: int
     label: str
     score: float
+    provider_id: str
+    detection_id: str
 
 
 DiagnosticsBatchCallback = Callable[[str], object]
@@ -193,6 +195,20 @@ class PreparedAnonymizer:
         redact_string: str | None = None,
     ) -> str:
         return self._prepared.redact_static_entities_with_caller_detections_json(
+            full_text,
+            _caller_detection_request_json(detections),
+            _operator_config_json(operators, redact_string=redact_string),
+        )
+
+    def redact_text_with_caller_detections_diagnostics_json(
+        self,
+        full_text: str,
+        detections: Sequence[CallerDetection],
+        operators: OperatorConfig = None,
+        *,
+        redact_string: str | None = None,
+    ) -> str:
+        return self._prepared.redact_static_entities_with_caller_detections_diagnostics_json(
             full_text,
             _caller_detection_request_json(detections),
             _operator_config_json(operators, redact_string=redact_string),

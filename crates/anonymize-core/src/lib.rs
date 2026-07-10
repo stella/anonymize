@@ -67,8 +67,8 @@ pub use processors::{
 };
 pub use redact::{deanonymise, redact_text};
 pub use resolution::{
-  CallerDetection, CallerDetectionParams, DetectionSource, PipelineEntity,
-  SourceDetail, enforce_boundary_consistency, merge_and_dedup,
+  CallerDetection, CallerDetectionParams, CallerProvenance, DetectionSource,
+  PipelineEntity, SourceDetail, enforce_boundary_consistency, merge_and_dedup,
   sanitize_entities,
 };
 pub use search::{

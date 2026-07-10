@@ -62,6 +62,8 @@ pub struct PyPipelineEntity {
   score: f64,
   source: String,
   source_detail: Option<String>,
+  provider_id: Option<String>,
+  detection_id: Option<String>,
 }
 
 #[pyclass(name = "StaticRedactionResult", get_all, skip_from_py_object)]
@@ -279,6 +281,41 @@ impl PyPreparedSearch {
     )?;
     let result = static_redaction_result_to_python_binding(result, full_text)
       .map_err(|error| to_py_contract_error(&error))?;
+    serde_json::to_string(&result).map_err(|error| to_py_serde_error(&error))
+  }
+
+  #[pyo3(signature = (full_text, request_json, operators_json=None))]
+  fn redact_static_entities_with_caller_detections_diagnostics_json(
+    &self,
+    full_text: &str,
+    request_json: &str,
+    operators_json: Option<&str>,
+  ) -> PyResult<String> {
+    let request =
+      serde_json::from_str::<BindingCallerDetectionRequest>(request_json)
+        .map_err(|error| to_py_serde_error(&error))?;
+    let detections =
+      caller_detections_from_character_binding(request, full_text)
+        .map_err(|error| to_py_contract_error(&error))?;
+    let operators =
+      operator_config_from_binding(parse_operator_config(operators_json)?)
+        .map_err(|error| to_py_contract_error(&error))?;
+    let mut result = self
+      .inner
+      .redact_static_entities_with_caller_detections_and_diagnostics(
+        full_text,
+        CallerRedactionOptions {
+          operators: &operators,
+          detections: &detections,
+        },
+      )
+      .map_err(|error| to_py_core_error(&error))?;
+    let mut diagnostics = self.prepare_diagnostics.clone();
+    diagnostics.extend(result.diagnostics);
+    result.diagnostics = diagnostics;
+    let result =
+      static_redaction_diagnostic_result_to_utf16_binding(result, full_text)
+        .map_err(|error| to_py_contract_error(&error))?;
     serde_json::to_string(&result).map_err(|error| to_py_serde_error(&error))
   }
 
@@ -893,6 +930,8 @@ fn to_py_pipeline_entity(entity: BindingPipelineEntity) -> PyPipelineEntity {
     score: entity.score,
     source: entity.source,
     source_detail: entity.source_detail,
+    provider_id: entity.provider_id,
+    detection_id: entity.detection_id,
   }
 }
 

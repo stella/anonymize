@@ -35,6 +35,8 @@ class CallerDetection(TypedDict):
     end: int
     label: str
     score: float
+    provider_id: str
+    detection_id: str
 
 DiagnosticsBatchCallback: TypeAlias = Callable[[str], object]
 ResultEventCallback: TypeAlias = Callable[[str], object]
@@ -90,6 +92,14 @@ class PreparedAnonymizer:
         redact_string: str | None = None,
     ) -> StaticRedactionResult: ...
     def redact_text_with_caller_detections_json(
+        self,
+        full_text: str,
+        detections: Sequence[CallerDetection],
+        operators: OperatorConfig = None,
+        *,
+        redact_string: str | None = None,
+    ) -> str: ...
+    def redact_text_with_caller_detections_diagnostics_json(
         self,
         full_text: str,
         detections: Sequence[CallerDetection],

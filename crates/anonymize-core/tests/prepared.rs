@@ -34,6 +34,8 @@ fn caller_detections_use_the_shared_resolution_and_redaction_pipeline() {
       end: 5,
       label: String::from("person"),
       score: 0.9,
+      provider_id: String::from("test-provider"),
+      detection_id: String::from("person-1"),
     })
     .unwrap(),
   ];
@@ -51,6 +53,13 @@ fn caller_detections_use_the_shared_resolution_and_redaction_pipeline() {
   assert_eq!(result.resolved_entities.len(), 1);
   assert_eq!(result.resolved_entities[0].text, "Alice");
   assert_eq!(result.resolved_entities[0].source, DetectionSource::Caller);
+  assert_eq!(
+    result.resolved_entities[0]
+      .caller_provenance
+      .as_ref()
+      .map(|provenance| (provenance.provider_id(), provenance.detection_id())),
+    Some(("test-provider", "person-1"))
+  );
   assert_eq!(result.redaction.redacted_text, "[PERSON_1] signed.");
 
   let below_threshold = vec![
@@ -59,6 +68,8 @@ fn caller_detections_use_the_shared_resolution_and_redaction_pipeline() {
       end: 5,
       label: String::from("person"),
       score: 0.4,
+      provider_id: String::from("test-provider"),
+      detection_id: String::from("person-2"),
     })
     .unwrap(),
   ];
@@ -88,6 +99,8 @@ fn caller_detections_reject_offsets_inside_utf8_codepoints() {
       end: 2,
       label: String::from("person"),
       score: 0.9,
+      provider_id: String::from("test-provider"),
+      detection_id: String::from("person-1"),
     })
     .unwrap(),
   ];
@@ -125,6 +138,8 @@ fn deterministic_detections_win_equal_span_conflicts_with_callers() {
       end: 5,
       label: String::from("person"),
       score: 1.0,
+      provider_id: String::from("test-provider"),
+      detection_id: String::from("person-1"),
     })
     .unwrap(),
   ];
@@ -151,6 +166,8 @@ fn caller_detection_constructor_rejects_invalid_fields() {
       end: 5,
       label: String::from("person"),
       score: 0.9,
+      provider_id: String::from("test-provider"),
+      detection_id: String::from("person-1"),
     })
     .is_err()
   );
@@ -160,6 +177,8 @@ fn caller_detection_constructor_rejects_invalid_fields() {
       end: 5,
       label: String::from("  "),
       score: 0.9,
+      provider_id: String::from("test-provider"),
+      detection_id: String::from("person-1"),
     })
     .is_err()
   );
@@ -169,6 +188,8 @@ fn caller_detection_constructor_rejects_invalid_fields() {
       end: 5,
       label: String::from("person"),
       score: f64::NAN,
+      provider_id: String::from("test-provider"),
+      detection_id: String::from("person-1"),
     })
     .is_err()
   );
@@ -178,9 +199,127 @@ fn caller_detection_constructor_rejects_invalid_fields() {
       end: 5,
       label: String::from("person"),
       score: 1.1,
+      provider_id: String::from("test-provider"),
+      detection_id: String::from("person-1"),
     })
     .is_err()
   );
+  assert!(matches!(
+    caller_detection(CallerDetectionParams {
+      start: 0,
+      end: 5,
+      label: String::from("person"),
+      score: 0.9,
+      provider_id: String::from("contains whitespace"),
+      detection_id: String::from("person-1"),
+    }),
+    Err(Error::InvalidCallerDetection {
+      field: "provider_id",
+      ..
+    })
+  ));
+}
+
+#[test]
+fn caller_diagnostics_report_provenance_and_retention_without_text() {
+  let prepared = PreparedEngine::new(prepared_config! {
+    threshold: 0.5,
+    allowed_labels: vec![String::from("person")],
+    ..empty_config(PreparedEngineSlices::default())
+  })
+  .unwrap();
+  let detections = vec![
+    caller_detection(CallerDetectionParams {
+      start: 0,
+      end: 5,
+      label: String::from("person"),
+      score: 0.9,
+      provider_id: String::from("test-provider"),
+      detection_id: String::from("person-1"),
+    })
+    .unwrap(),
+    caller_detection(CallerDetectionParams {
+      start: 13,
+      end: 16,
+      label: String::from("person"),
+      score: 0.4,
+      provider_id: String::from("test-provider"),
+      detection_id: String::from("person-2"),
+    })
+    .unwrap(),
+  ];
+
+  let result = prepared
+    .redact_static_entities_with_caller_detections_and_diagnostics(
+      "Alice signed Bob",
+      CallerRedactionOptions {
+        operators: &OperatorConfig::default(),
+        detections: &detections,
+      },
+    )
+    .unwrap();
+  let input_summary = result
+    .diagnostics
+    .events
+    .iter()
+    .find(|event| {
+      event.stage == DiagnosticStage::EntityCallerInput
+        && event.kind == DiagnosticEventKind::StageSummary
+    })
+    .unwrap();
+  let retained_summary = result
+    .diagnostics
+    .events
+    .iter()
+    .find(|event| {
+      event.stage == DiagnosticStage::EntityCallerRetained
+        && event.kind == DiagnosticEventKind::StageSummary
+    })
+    .unwrap();
+  assert_eq!(input_summary.count, Some(2));
+  assert_eq!(retained_summary.count, Some(1));
+  assert!(
+    result
+      .diagnostics
+      .events
+      .iter()
+      .all(|event| event.text.is_none())
+  );
+  assert!(result.diagnostics.events.iter().any(|event| {
+    event.provider_id.as_deref() == Some("test-provider")
+      && event.detection_id.as_deref() == Some("person-1")
+  }));
+}
+
+#[test]
+fn caller_detection_identities_are_unique_per_request() {
+  let prepared =
+    PreparedEngine::new(empty_config(PreparedEngineSlices::default())).unwrap();
+  let detection = caller_detection(CallerDetectionParams {
+    start: 0,
+    end: 5,
+    label: String::from("person"),
+    score: 0.9,
+    provider_id: String::from("test-provider"),
+    detection_id: String::from("person-1"),
+  })
+  .unwrap();
+  let error = prepared
+    .redact_static_entities_with_caller_detections(
+      "Alice signed.",
+      CallerRedactionOptions {
+        operators: &OperatorConfig::default(),
+        detections: &[detection.clone(), detection],
+      },
+    )
+    .unwrap_err();
+  assert!(matches!(
+    error,
+    Error::InvalidCallerDetection {
+      field: "detection_id",
+      ..
+    }
+  ));
 }
 
 fn caller_detection(

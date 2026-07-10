@@ -231,6 +231,8 @@ pub struct JsPipelineEntity {
   pub score: f64,
   pub source: String,
   pub source_detail: Option<String>,
+  pub provider_id: Option<String>,
+  pub detection_id: Option<String>,
 }
 
 #[napi(object)]
@@ -975,6 +977,42 @@ impl NativePreparedSearch {
 
   #[napi]
   #[allow(clippy::needless_pass_by_value)]
+  pub fn redact_static_entities_with_caller_detections_diagnostics_json(
+    &self,
+    full_text: String,
+    options: JsCallerRedactionOptions,
+  ) -> Result<String> {
+    let request = serde_json::from_str::<BindingCallerDetectionRequest>(
+      &options.request_json,
+    )
+    .map_err(|error| to_napi_serde_error(&error))?;
+    let detections = caller_detections_from_utf16_binding(request, &full_text)
+      .map_err(|error| to_napi_contract_error(&error))?;
+    let operators = operator_config_from_binding(
+      options.operators.map(to_binding_operator_config),
+    )
+    .map_err(|error| to_napi_contract_error(&error))?;
+    let mut result = self
+      .inner
+      .redact_static_entities_with_caller_detections_and_diagnostics(
+        &full_text,
+        CallerRedactionOptions {
+          operators: &operators,
+          detections: &detections,
+        },
+      )
+      .map_err(|error| to_napi_core_error(&error))?;
+    let mut diagnostics = self.prepare_diagnostics.clone();
+    diagnostics.extend(result.diagnostics);
+    result.diagnostics = diagnostics;
+    let result =
+      static_redaction_diagnostic_result_to_utf16_binding(result, &full_text)
+        .map_err(|error| to_napi_contract_error(&error))?;
+    serde_json::to_string(&result).map_err(|error| to_napi_serde_error(&error))
+  }
+
+  #[napi]
+  #[allow(clippy::needless_pass_by_value)]
   pub fn redact_static_entities_result_stream_json(
     &self,
     full_text: String,
@@ -1306,6 +1344,8 @@ fn to_js_static_redaction_result(
         score: entity.score,
         source: entity.source,
         source_detail: entity.source_detail,
+        provider_id: entity.provider_id,
+        detection_id: entity.detection_id,
       })
       .collect(),
     redaction: to_js_redaction_result(result.redaction)?,

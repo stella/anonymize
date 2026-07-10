@@ -135,7 +135,16 @@ describe("createNativePipelineFromConfig", () => {
     });
 
     const result = pipeline.redactTextWithCallerDetections("😀Alice signed.", {
-      detections: [{ start: 2, end: 7, label: "person", score: 0.9 }],
+      detections: [
+        {
+          start: 2,
+          end: 7,
+          label: "person",
+          score: 0.9,
+          providerId: "test-provider",
+          detectionId: "person-1",
+        },
+      ],
     });
 
     expect(result.redaction.redactedText).toBe("😀[PERSON_1] signed.");
@@ -145,8 +154,31 @@ describe("createNativePipelineFromConfig", () => {
         end: 7,
         text: "Alice",
         source: "caller",
+        providerId: "test-provider",
+        detectionId: "person-1",
       }),
     ]);
+
+    const diagnosticsJson =
+      pipeline.redactTextWithCallerDetectionsDiagnosticsJson(
+        "😀Alice signed.",
+        {
+          detections: [
+            {
+              start: 2,
+              end: 7,
+              label: "person",
+              score: 0.9,
+              providerId: "test-provider",
+              detectionId: "person-1",
+            },
+          ],
+        },
+      );
+    expect(diagnosticsJson).not.toBeNull();
+    expect(diagnosticsJson).toContain('"provider_id":"test-provider"');
+    expect(diagnosticsJson).toContain('"detection_id":"person-1"');
+    expect(diagnosticsJson).not.toContain('"text":"Alice"');
   });
 });
 

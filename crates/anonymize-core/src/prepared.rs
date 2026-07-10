@@ -75,6 +75,29 @@ impl PreparedEngine {
     )
   }
 
+  /// Redacts caller-supplied detections and returns audit-safe diagnostics.
+  pub fn redact_static_entities_with_caller_detections_and_diagnostics(
+    &self,
+    full_text: &str,
+    options: CallerRedactionOptions<'_>,
+  ) -> Result<StaticRedactionDiagnosticResult> {
+    let mut diagnostics = StaticRedactionDiagnostics::default();
+    let mut event_stream = DiagnosticEventStream::none();
+    let mut result_stream = StaticRedactionResultStream::none();
+    let result = self.redact_static_entities_inner(
+      full_text,
+      options.operators,
+      options.detections,
+      Some(&mut diagnostics),
+      &mut event_stream,
+      &mut result_stream,
+    )?;
+    Ok(StaticRedactionDiagnosticResult {
+      result,
+      diagnostics,
+    })
+  }
+
   pub fn redact_static_entities(
     &self,
     full_text: &str,
