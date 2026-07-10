@@ -3,24 +3,24 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 use stella_anonymize_core::{
-  AddressContextData, AddressSeedData, AmountWordsData, CoreferenceData,
-  CoreferencePatternData, CountryMatchData, CurrencyData, DateData,
-  DenyListFilterData, DenyListMatchData, DenyListPatternMetaSet,
-  DetectionSource, DiagnosticEvent, DiagnosticEventKind, DiagnosticPhase,
-  DiagnosticScope, DiagnosticStage, FuzzySearchOptions, GazetteerMatchData,
-  HotwordRule, HotwordRuleData, LegalFormData, LiteralSearchOptions,
-  MagnitudeSuffixData, MonetaryData, NameCorpusData, NameCorpusMode,
-  OperatorConfig, OperatorType, PatternSlice, PipelineEntity,
-  PreparedArtifactPolicy, PreparedEngineArtifacts, PreparedEngineConfig,
-  PreparedEngineDetectorConfig, PreparedEnginePolicyConfig,
-  PreparedEngineSearchConfig, PreparedEngineSlices, RedactionResult,
-  RegexArtifactPolicy, RegexMatchMeta, RegexSearchOptions, SearchEngine,
-  SearchOptions, SearchPattern, ShareQuantityTermData, SignatureData,
-  SigningPlaceGuardData, SourceDetail, StaticRedactionDiagnosticResult,
-  StaticRedactionDiagnostics, StaticRedactionResult,
-  StaticRedactionStreamEvent, StringGroups, TriggerData, TriggerRule,
-  TriggerStrategy, TriggerValidation, WrittenAmountPatternData, ZoneData,
-  ZonePatternData, ZoneSigningClauseData,
+  AddressContextData, AddressSeedData, AmountWordsData, CallerDetection,
+  CallerDetectionParams, CoreferenceData, CoreferencePatternData,
+  CountryMatchData, CurrencyData, DateData, DenyListFilterData,
+  DenyListMatchData, DenyListPatternMetaSet, DetectionSource, DiagnosticEvent,
+  DiagnosticEventKind, DiagnosticPhase, DiagnosticScope, DiagnosticStage,
+  FuzzySearchOptions, GazetteerMatchData, HotwordRule, HotwordRuleData,
+  LegalFormData, LiteralSearchOptions, MagnitudeSuffixData, MonetaryData,
+  NameCorpusData, NameCorpusMode, OperatorConfig, OperatorType, PatternSlice,
+  PipelineEntity, PreparedArtifactPolicy, PreparedEngineArtifacts,
+  PreparedEngineConfig, PreparedEngineDetectorConfig,
+  PreparedEnginePolicyConfig, PreparedEngineSearchConfig, PreparedEngineSlices,
+  RedactionResult, RegexArtifactPolicy, RegexMatchMeta, RegexSearchOptions,
+  SearchEngine, SearchOptions, SearchPattern, ShareQuantityTermData,
+  SignatureData, SigningPlaceGuardData, SourceDetail,
+  StaticRedactionDiagnosticResult, StaticRedactionDiagnostics,
+  StaticRedactionResult, StaticRedactionStreamEvent, StringGroups, TriggerData,
+  TriggerRule, TriggerStrategy, TriggerValidation, WrittenAmountPatternData,
+  ZoneData, ZonePatternData, ZoneSigningClauseData,
 };
 
 mod assemble;
@@ -29,6 +29,8 @@ pub use assemble::{
 };
 
 pub type Result<T> = std::result::Result<T, ContractError>;
+
+pub const CALLER_DETECTION_CONTRACT_VERSION: u32 = 1;
 
 const PREPARED_SEARCH_PACKAGE_HEADER: [u8; 8] = *b"ANONPKG1";
 const PREPARED_SEARCH_PACKAGE_VERSION: u32 = 15;
@@ -49,6 +51,7 @@ const MAX_PREPARED_SEARCH_PACKAGE_PAYLOAD_BYTES: usize = 256 * 1024 * 1024;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ContractError {
+  InvalidCallerDetection { index: usize, reason: String },
   CompactStringIndexOutOfRange { field: &'static str, index: u32 },
   FuzzyDistanceOutOfRange { distance: u32 },
   InvalidCompactStringGroups { field: &'static str, reason: String },
@@ -58,11 +61,15 @@ pub enum ContractError {
   UnsupportedOperator { value: String },
   UnsupportedSearchPatternKind { kind: String },
   UnsupportedSourceDetail { value: String },
+  UnsupportedCallerDetectionContractVersion { version: u32 },
 }
 
 impl std::fmt::Display for ContractError {
   fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
+      Self::InvalidCallerDetection { index, reason } => {
+        write!(formatter, "Caller detection {index} is invalid: {reason}")
+      }
       Self::CompactStringIndexOutOfRange { field, index } => {
         write!(
           formatter,
@@ -99,8 +106,58 @@ impl std::fmt::Display for ContractError {
       Self::UnsupportedSourceDetail { value } => {
         write!(formatter, "Unsupported source detail: {value}")
       }
+      Self::UnsupportedCallerDetectionContractVersion { version } => {
+        write!(
+          formatter,
+          "Unsupported caller detection contract version: {version}"
+        )
+      }
     }
   }
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct BindingCallerDetection {
+  pub start: u32,
+  pub end: u32,
+  pub label: String,
+  pub score: f64,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct BindingCallerDetectionRequest {
+  pub version: u32,
+  pub detections: Vec<BindingCallerDetection>,
+}
+
+pub fn caller_detections_from_binding(
+  request: BindingCallerDetectionRequest,
+) -> Result<Vec<CallerDetection>> {
+  if request.version != CALLER_DETECTION_CONTRACT_VERSION {
+    return Err(ContractError::UnsupportedCallerDetectionContractVersion {
+      version: request.version,
+    });
+  }
+
+  request
+    .detections
+    .into_iter()
+    .enumerate()
+    .map(|(index, detection)| {
+      CallerDetection::new(CallerDetectionParams {
+        start: detection.start,
+        end: detection.end,
+        label: detection.label,
+        score: detection.score,
+      })
+      .map_err(|error| ContractError::InvalidCallerDetection {
+        index,
+        reason: error.to_string(),
+      })
+    })
+    .collect()
 }
 
 impl std::error::Error for ContractError {}
@@ -3094,6 +3151,7 @@ fn operator_type_from_binding(value: &str) -> Result<OperatorType> {
 
 fn detection_source_name(source: DetectionSource) -> String {
   match source {
+    DetectionSource::Caller => "caller",
     DetectionSource::Trigger => "trigger",
     DetectionSource::Regex => "regex",
     DetectionSource::DenyList => "deny-list",
@@ -3393,10 +3451,12 @@ mod tests {
   #![allow(clippy::unwrap_used)]
 
   use super::{
+    BindingCallerDetection, BindingCallerDetectionRequest,
     BindingDenyListMatchData, BindingOperatorConfig,
     BindingPreparedArtifactPolicy, BindingPreparedSearchConfig,
     BindingRegexArtifactPolicy, BindingSearchOptions, BindingSearchPattern,
-    ContractError, CorePreparedSearchPackageArtifactsInner,
+    CALLER_DETECTION_CONTRACT_VERSION, ContractError,
+    CorePreparedSearchPackageArtifactsInner,
     MAX_PREPARED_SEARCH_PACKAGE_PAYLOAD_BYTES,
     PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER,
     PREPARED_SEARCH_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION,
@@ -3407,9 +3467,10 @@ mod tests {
     PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION,
     PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_ZSTD_VERSION,
     PREPARED_SEARCH_PACKAGE_DIGEST_BYTES, PREPARED_SEARCH_PACKAGE_ZSTD_LEVEL,
-    PreparedSearchPackageDecodeTimings, diagnostic_events_to_binding,
-    diagnostic_events_to_utf16_binding, diagnostic_stage_event,
-    operator_config_from_binding, prepared_search_config_from_binding,
+    PreparedSearchPackageDecodeTimings, caller_detections_from_binding,
+    diagnostic_events_to_binding, diagnostic_events_to_utf16_binding,
+    diagnostic_stage_event, operator_config_from_binding,
+    prepared_search_config_from_binding,
     prepared_search_core_package_decode_from_bytes_with_timings,
     prepared_search_core_package_decode_trusted_from_bytes_with_timings,
     prepared_search_core_package_from_bytes,
@@ -3427,6 +3488,54 @@ mod tests {
     prepared_search_package_verify_digest_with_timings,
     static_redaction_diagnostics_to_utf16_binding, write_package_header,
   };
+
+  #[test]
+  fn caller_detection_contract_is_versioned_and_validated() {
+    let detections =
+      caller_detections_from_binding(BindingCallerDetectionRequest {
+        version: CALLER_DETECTION_CONTRACT_VERSION,
+        detections: vec![BindingCallerDetection {
+          start: 0,
+          end: 5,
+          label: String::from("person"),
+          score: 0.9,
+        }],
+      })
+      .unwrap();
+
+    assert_eq!(detections.len(), 1);
+
+    let error = caller_detections_from_binding(BindingCallerDetectionRequest {
+      version: CALLER_DETECTION_CONTRACT_VERSION + 1,
+      detections: Vec::new(),
+    })
+    .unwrap_err();
+    assert_eq!(
+      error,
+      ContractError::UnsupportedCallerDetectionContractVersion {
+        version: CALLER_DETECTION_CONTRACT_VERSION + 1,
+      }
+    );
+  }
+
+  #[test]
+  fn caller_detection_contract_reports_the_invalid_item_index() {
+    let error = caller_detections_from_binding(BindingCallerDetectionRequest {
+      version: CALLER_DETECTION_CONTRACT_VERSION,
+      detections: vec![BindingCallerDetection {
+        start: 2,
+        end: 2,
+        label: String::from("person"),
+        score: 0.9,
+      }],
+    })
+    .unwrap_err();
+
+    assert!(matches!(
+      error,
+      ContractError::InvalidCallerDetection { index: 0, .. }
+    ));
+  }
   use stella_anonymize_core::{
     DiagnosticEvent, DiagnosticEventKind, DiagnosticStage,
     PreparedArtifactPolicy, PreparedEngineArtifacts, RegexArtifactPolicy,

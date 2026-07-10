@@ -5,7 +5,8 @@ mod support;
 use std::collections::{BTreeMap, BTreeSet};
 
 use stella_anonymize_core::{
-  AddressContextData, AddressSeedData, AmountWordsData, CoreferenceData,
+  AddressContextData, AddressSeedData, AmountWordsData, CallerDetection,
+  CallerDetectionParams, CallerRedactionOptions, CoreferenceData,
   CoreferencePatternData, CountryMatchData, CurrencyData, DateData,
   DenyListFilterData, DenyListMatchData, DetectionSource, DiagnosticEventKind,
   DiagnosticStage, EntityKind, Error, FuzzySearchOptions, GazetteerMatchData,
@@ -18,6 +19,175 @@ use stella_anonymize_core::{
   ZoneSigningClauseData,
 };
 use support::prepared_config;
+
+#[test]
+fn caller_detections_use_the_shared_resolution_and_redaction_pipeline() {
+  let prepared = PreparedEngine::new(prepared_config! {
+    threshold: 0.5,
+    allowed_labels: vec![String::from("person")],
+    ..empty_config(PreparedEngineSlices::default())
+  })
+  .unwrap();
+  let detections = vec![
+    caller_detection(CallerDetectionParams {
+      start: 0,
+      end: 5,
+      label: String::from("person"),
+      score: 0.9,
+    })
+    .unwrap(),
+  ];
+
+  let result = prepared
+    .redact_static_entities_with_caller_detections(
+      "Alice signed.",
+      CallerRedactionOptions {
+        operators: &OperatorConfig::default(),
+        detections: &detections,
+      },
+    )
+    .unwrap();
+
+  assert_eq!(result.resolved_entities.len(), 1);
+  assert_eq!(result.resolved_entities[0].text, "Alice");
+  assert_eq!(result.resolved_entities[0].source, DetectionSource::Caller);
+  assert_eq!(result.redaction.redacted_text, "[PERSON_1] signed.");
+
+  let below_threshold = vec![
+    caller_detection(CallerDetectionParams {
+      start: 0,
+      end: 5,
+      label: String::from("person"),
+      score: 0.4,
+    })
+    .unwrap(),
+  ];
+  let below_threshold_result = prepared
+    .redact_static_entities_with_caller_detections(
+      "Alice signed.",
+      CallerRedactionOptions {
+        operators: &OperatorConfig::default(),
+        detections: &below_threshold,
+      },
+    )
+    .unwrap();
+  assert!(below_threshold_result.resolved_entities.is_empty());
+  assert_eq!(
+    below_threshold_result.redaction.redacted_text,
+    "Alice signed."
+  );
+}
+
+#[test]
+fn caller_detections_reject_offsets_inside_utf8_codepoints() {
+  let prepared =
+    PreparedEngine::new(empty_config(PreparedEngineSlices::default())).unwrap();
+  let detections = vec![
+    caller_detection(CallerDetectionParams {
+      start: 1,
+      end: 2,
+      label: String::from("person"),
+      score: 0.9,
+    })
+    .unwrap(),
+  ];
+
+  let error = prepared
+    .redact_static_entities_with_caller_detections(
+      "é signed.",
+      CallerRedactionOptions {
+        operators: &OperatorConfig::default(),
+        detections: &detections,
+      },
+    )
+    .unwrap_err();
+
+  assert_eq!(error, Error::ByteOffsetInsideCodepoint { offset: 1 });
+}
+
+#[test]
+fn deterministic_detections_win_equal_span_conflicts_with_callers() {
+  let prepared = PreparedEngine::new(prepared_config! {
+    regex_patterns: vec![SearchPattern::Literal(String::from("Alice"))],
+    regex_meta: vec![RegexMatchMeta::new("person", 0.8)],
+    slices: PreparedEngineSlices {
+      regex: PatternSlice { start: 0, end: 1 },
+      ..PreparedEngineSlices::default()
+    },
+    threshold: 0.5,
+    allowed_labels: vec![String::from("person")],
+    ..empty_config(PreparedEngineSlices::default())
+  })
+  .unwrap();
+  let detections = vec![
+    caller_detection(CallerDetectionParams {
+      start: 0,
+      end: 5,
+      label: String::from("person"),
+      score: 1.0,
+    })
+    .unwrap(),
+  ];
+
+  let result = prepared
+    .redact_static_entities_with_caller_detections(
+      "Alice signed.",
+      CallerRedactionOptions {
+        operators: &OperatorConfig::default(),
+        detections: &detections,
+      },
+    )
+    .unwrap();
+
+  assert_eq!(result.resolved_entities.len(), 1);
+  assert_eq!(result.resolved_entities[0].source, DetectionSource::Regex);
+}
+
+#[test]
+fn caller_detection_constructor_rejects_invalid_fields() {
+  assert!(
+    caller_detection(CallerDetectionParams {
+      start: 5,
+      end: 5,
+      label: String::from("person"),
+      score: 0.9,
+    })
+    .is_err()
+  );
+  assert!(
+    caller_detection(CallerDetectionParams {
+      start: 0,
+      end: 5,
+      label: String::from("  "),
+      score: 0.9,
+    })
+    .is_err()
+  );
+  assert!(
+    caller_detection(CallerDetectionParams {
+      start: 0,
+      end: 5,
+      label: String::from("person"),
+      score: f64::NAN,
+    })
+    .is_err()
+  );
+  assert!(
+    caller_detection(CallerDetectionParams {
+      start: 0,
+      end: 5,
+      label: String::from("person"),
+      score: 1.1,
+    })
+    .is_err()
+  );
+}
+
+fn caller_detection(
+  params: CallerDetectionParams,
+) -> stella_anonymize_core::Result<CallerDetection> {
+  CallerDetection::new(params)
+}
 
 fn empty_config(slices: PreparedEngineSlices) -> PreparedEngineConfig {
   prepared_config! {

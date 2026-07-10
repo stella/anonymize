@@ -24,12 +24,14 @@ impl PreparedEngine {
   pub(super) fn resolve_static_entities(
     &self,
     detections: &StaticDetectionResult,
+    caller_entities: &[PipelineEntity],
     full_text: &str,
     diagnostics: &mut Option<&mut StaticRedactionDiagnostics>,
     event_stream: &mut DiagnosticEventStream<'_>,
   ) -> Result<Vec<PipelineEntity>> {
     let pre_threshold_entities = self.prepare_pre_threshold_entities(
       detections,
+      caller_entities,
       full_text,
       diagnostics.as_deref_mut(),
     )?;
@@ -115,11 +117,14 @@ impl PreparedEngine {
   fn prepare_pre_threshold_entities(
     &self,
     detections: &StaticDetectionResult,
+    caller_entities: &[PipelineEntity],
     full_text: &str,
     mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
   ) -> Result<Vec<PipelineEntity>> {
+    let mut entities = detections.all_entities();
+    entities.extend(caller_entities.iter().cloned());
     let zone_adjusted_entities = self.apply_zone_adjustments(
-      detections.all_entities(),
+      entities,
       full_text,
       diagnostics.as_deref_mut(),
     )?;
