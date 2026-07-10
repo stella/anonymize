@@ -27,7 +27,9 @@ impl PreparedEngine {
       .cloned()
       .map(|detection| detection.into_pipeline_entity(full_text))
       .collect::<Result<Vec<_>>>()?;
-    if let Some(diagnostics) = diagnostics.as_deref_mut() {
+    if !caller_entities.is_empty()
+      && let Some(diagnostics) = diagnostics.as_deref_mut()
+    {
       diagnostics.record_entities(
         crate::diagnostics::DiagnosticStage::EntityCallerInput,
         &caller_entities,
@@ -48,7 +50,9 @@ impl PreparedEngine {
       &mut diagnostics,
       event_stream,
     )?;
-    if let Some(diagnostics) = diagnostics.as_deref_mut() {
+    if !caller_entities.is_empty()
+      && let Some(diagnostics) = diagnostics.as_deref_mut()
+    {
       if diagnostics.detail == crate::diagnostics::DiagnosticDetail::Summary {
         let retained_count = resolved_entities
           .iter()
