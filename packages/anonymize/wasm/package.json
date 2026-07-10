@@ -42,7 +42,7 @@
     "url": "git+https://github.com/stella/anonymize.git"
   },
   "homepage": "https://github.com/stella/anonymize",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "dependencies": {
     "@napi-rs/wasm-runtime": "^1.1.6"
   },

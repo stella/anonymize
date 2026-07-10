@@ -4,7 +4,7 @@
   "description": "Corpus evaluation tooling: fetch public documents, run the detection pipeline, diff runs against frozen verdicts",
   "private": true,
   "type": "module",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
     "test": "bun test",

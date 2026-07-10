@@ -106,4 +106,4 @@ the supported distribution in the meantime.
 
 ## License
 
-MIT
+Apache-2.0

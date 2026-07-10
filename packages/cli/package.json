@@ -27,7 +27,7 @@
     "url": "git+https://github.com/stella/anonymize.git"
   },
   "homepage": "https://github.com/stella/anonymize",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "scripts": {
     "build": "tsdown",
     "prepublishOnly": "bun run build",

@@ -2,20 +2,32 @@
   <img src=".github/assets/banner.png" alt="stella anonymize" width="100%" />
 </p>
 
-# anonymize
+<p align="center">
+  <strong>Anonymization pipeline for sensitive text. Deterministic, local-first, fast.</strong>
+</p>
 
-[![npm](https://img.shields.io/npm/v/@stll/anonymize?label=%40stll%2Fanonymize)](https://www.npmjs.com/package/@stll/anonymize)
-[![CI](https://github.com/stella/anonymize/actions/workflows/ci.yml/badge.svg)](https://github.com/stella/anonymize/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+<p align="center">
+  <a href="https://stll.app">Website</a> &middot;
+  <a href="https://github.com/stella/anonymize/issues">Issues</a> &middot;
+  <a href="https://www.npmjs.com/package/@stll/anonymize">npm</a> &middot;
+  <a href="https://discord.gg/8dZjmVFjTK">Discord</a>
+</p>
 
-**Anonymization pipeline for sensitive text. Deterministic, local-first, fast.**
+<p align="center">
+  <a href="https://www.npmjs.com/package/@stll/anonymize"><img src="https://img.shields.io/npm/v/@stll/anonymize?label=%40stll%2Fanonymize" alt="npm" /></a>
+  <a href="https://github.com/stella/anonymize/actions/workflows/ci.yml"><img src="https://github.com/stella/anonymize/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License: Apache-2.0" /></a>
+  <a href="https://discord.gg/8dZjmVFjTK"><img src="https://img.shields.io/badge/discord-join%20chat-5865F2?logo=discord&logoColor=white" alt="Discord" /></a>
+</p>
+
+---
 
 A single Rust core does the PII detection, resolution, and replacement; thin Node.js,
 browser (WebAssembly), Python, and CLI bindings translate types and call into
 it. There is no model server and no network dependency: the same document
 produces the same redaction on every run and in every runtime. It is built for
 legal documents (contracts, filings, correspondence) across a dozen languages,
-and it is open source under the MIT license.
+and it is open source under the Apache-2.0 license.
 
 ## Quickstart
 
@@ -295,6 +307,6 @@ personal data or non-public fixtures.
 
 ## License
 
-MIT. See [`LICENSE`](LICENSE). Third-party runtime attributions for the browser
+Apache-2.0. See [`LICENSE`](LICENSE). Third-party runtime attributions for the browser
 build are listed in
 [`packages/anonymize/wasm/README.md`](packages/anonymize/wasm/README.md).

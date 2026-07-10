@@ -1,0 +1,20 @@
+anonymize
+Copyright 2026 stella labs, s.r.o.
+
+This product includes software developed at stella labs, s.r.o.
+(https://stll.app/).
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may
+not use this product except in compliance with the License. You may
+obtain a copy of the License in the LICENSE file at the root of this
+repository or at http://www.apache.org/licenses/LICENSE-2.0.
+
+--------------------------------------------------------------------------
+
+Third-party notices
+
+This product bundles and builds on third-party components distributed
+under their own licenses (including MIT). Those components and their
+attributions are listed in the ATTRIBUTION.md files under packages/ and
+crates/, and the browser build's runtime attributions are listed in
+packages/anonymize/wasm/README.md.
