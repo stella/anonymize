@@ -57,6 +57,29 @@ jobs:
           rustup default 1.96.0
           cargo install cargo-dylint --version 6.0.1 --locked
           cargo install dylint-link --version 6.0.1 --locked
+          # Prebuilt nextest binary (the `cargo ci-test` runner); avoids a
+          # from-source compile on every CI run. Version-pinned for
+          # reproducibility, matching the exact-version pins above.
+          curl -LsSf https://get.nexte.st/0.9.140/linux \
+            | tar zxf - -C "${CARGO_HOME:-$HOME/.cargo}/bin"
+
+      # Cache the compiled dependency graph across runs. Without this the whole
+      # Rust workspace (and its heavy deps) recompiled from scratch every run;
+      # caching also amortizes the optimized `ci` test profile so the faster
+      # test execution is a net win, not just a compile-time trade. Keyed on the
+      # lockfile plus the pinned toolchain, so a dependency or Rust bump
+      # invalidates the cache.
+      - name: Cache Rust build
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-1.96.0-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-1.96.0-
 
       - name: Rust checks
         run: bun run rust:check

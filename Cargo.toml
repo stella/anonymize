@@ -121,7 +121,14 @@ strip = "symbols"
 [profile.dev]
 debug = "line-tables-only"
 
+# CI test profile: keep the dev safety checks (debug-assertions, and
+# overflow-checks so offset/span arithmetic traps instead of silently wrapping),
+# but optimize so the heavy prepare/serialize tests (e.g. `assemble_digest`,
+# which builds and hashes whole packages) run in seconds rather than minutes.
+# The default `dev`/`test` profile already enables both checks at opt-level 0;
+# this profile adds the optimization on top. Wired via `cargo ci-test`.
 [profile.ci]
 inherits = "dev"
 debug-assertions = true
 overflow-checks = true
+opt-level = 2

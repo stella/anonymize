@@ -294,11 +294,15 @@ default alias), and the pinned Rust 1.96.0 toolchain with the
   prepared packages the SDKs, CLI, and Python crate consume. Turbo wires
   `^build` for `test`/`typecheck`, but the Python surface needs a completed
   `bun run build` first. The first Rust core build takes a few minutes.
-- **Rust dylint is not preinstalled.** `cargo ci-fmt`, `cargo ci-clippy`, and
-  `cargo ci-test` run on the pinned stable toolchain, but `bun run rust:check`
-  also runs `cargo ci-dylint`, which needs `nightly-2026-04-16` plus
+- **Rust test tooling is not preinstalled.** `cargo ci-fmt` and `cargo ci-clippy`
+  run on the pinned stable toolchain, but `cargo ci-test` (and so
+  `bun run rust:test`) runs the suite through `cargo-nextest`; install it with
+  `cargo install cargo-nextest --locked` or the prebuilt binary from
+  `get.nexte.st` (CI installs the pinned prebuilt). Doctests run separately via
+  `cargo ci-test-doc` on stock cargo. `bun run rust:check` also runs
+  `cargo ci-dylint`, which needs `nightly-2026-04-16` plus
   `cargo-dylint`/`dylint-link` 6.0.1 (see `.github/workflows/ci.yml`). Install
-  those only when changing Rust lints.
+  the dylint tooling only when changing Rust lints.
 - **Python surface is optional** and needs `uv` (not preinstalled);
   `python:typecheck`/`python:wheel` and the Python parity tests are skipped
   without it.

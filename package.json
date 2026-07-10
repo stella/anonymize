@@ -20,7 +20,7 @@
     "rust:fmt": "cargo ci-fmt",
     "rust:lint": "cargo ci-clippy",
     "rust:dylint": "cargo ci-dylint",
-    "rust:test": "cargo ci-test",
+    "rust:test": "cargo ci-test && cargo ci-test-doc",
     "rust:check": "bun run rust:fmt && bun run rust:lint && bun run rust:dylint && bun run rust:test",
     "python:typecheck": "uvx --from ty==0.0.29 ty check --extra-search-path crates/anonymize-py/python crates/anonymize-py/typecheck",
     "python:wheel": "node .github/tools/check-python-wheel.mjs",
