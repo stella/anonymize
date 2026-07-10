@@ -28,15 +28,19 @@ pub fn redact_text(
   let mut sorted = redaction_spans(full_text, entities, &offsets)?;
   sorted.sort_by_key(|span| span.entity.start);
 
-  // Existing contract: first accepted span wins overlaps.
-  let mut non_overlapping = Vec::<RedactionSpan<'_>>::new();
-  let mut last_end = 0;
+  let mut kept = Vec::<RedactionSpan<'_>>::new();
+  let mut redacted = Vec::<RedactionSpan<'_>>::new();
   for span in sorted {
-    if span.entity.start >= last_end {
-      last_end = span.entity.end;
-      non_overlapping.push(span);
+    match operator_for(config, &span.entity.label) {
+      OperatorType::Keep => kept.push(span),
+      OperatorType::Replace | OperatorType::Redact => redacted.push(span),
     }
   }
+  // Existing contract remains within each operator class: the first accepted
+  // span wins overlaps. Kept spans are resolved separately so they cannot
+  // suppress a nested span that must still be redacted.
+  let kept = non_overlapping_spans(kept);
+  let redacted = non_overlapping_spans(redacted);
 
   let mut redacted_text = String::with_capacity(full_text.len());
   let mut redaction_map = Vec::<RedactionEntry>::new();
@@ -44,7 +48,18 @@ pub fn redact_text(
   let mut redacted_placeholders = HashSet::<String>::new();
   let mut cursor = 0;
 
-  for span in &non_overlapping {
+  let mut operator_spans = kept.iter().chain(&redacted).collect::<Vec<_>>();
+  operator_spans.sort_by_key(|span| span.entity.start);
+  for span in operator_spans {
+    let placeholder = placeholder_map.get_entity(span.entity).map_or_else(
+      || Cow::Owned(placeholder_fallback(&span.entity.label)),
+      Cow::Borrowed,
+    );
+    let operator = operator_for(config, &span.entity.label);
+    set_operator_entry(&mut operator_map, &placeholder, operator);
+  }
+
+  for span in &redacted {
     let entity = &span.entity;
     if entity.start > cursor {
       redacted_text.push_str(source_slice(
@@ -63,9 +78,8 @@ pub fn redact_text(
     match operator {
       OperatorType::Replace => redacted_text.push_str(&placeholder),
       OperatorType::Redact => redacted_text.push_str(&config.redact_string),
-      OperatorType::Keep => redacted_text.push_str(span.source_text),
+      OperatorType::Keep => {}
     }
-    set_operator_entry(&mut operator_map, &placeholder, operator);
 
     if operator == OperatorType::Replace
       && !redacted_placeholders.contains(placeholder.as_ref())
@@ -95,7 +109,7 @@ pub fn redact_text(
     redacted_text,
     redaction_map,
     operator_map,
-    entity_count: non_overlapping.len(),
+    entity_count: kept.len().saturating_add(redacted.len()),
   })
 }
 
@@ -116,6 +130,20 @@ pub fn deanonymise(
 struct RedactionSpan<'a> {
   entity: &'a Entity,
   source_text: &'a str,
+}
+
+fn non_overlapping_spans(
+  spans: Vec<RedactionSpan<'_>>,
+) -> Vec<RedactionSpan<'_>> {
+  let mut non_overlapping = Vec::with_capacity(spans.len());
+  let mut last_end = 0;
+  for span in spans {
+    if span.entity.start >= last_end {
+      last_end = span.entity.end;
+      non_overlapping.push(span);
+    }
+  }
+  non_overlapping
 }
 
 fn redaction_spans<'a>(

@@ -320,6 +320,38 @@ fn keep_operator_preserves_text_without_reversible_mapping() {
 }
 
 #[test]
+fn keep_operator_does_not_suppress_nested_redactions() {
+  let text = "Org A alice@example.com";
+  let mut config = OperatorConfig::default();
+  config
+    .operators
+    .insert(String::from("organization"), OperatorType::Keep);
+  let entities = vec![
+    Entity::detected(
+      0,
+      byte_len(text),
+      "organization",
+      "Org A alice@example.com",
+    ),
+    entity(text, "email address", "alice@example.com"),
+  ];
+
+  let result = redact_text(text, &entities, &config).unwrap();
+
+  assert_eq!(result.redacted_text, "Org A [EMAIL_ADDRESS_1]");
+  assert_eq!(result.entity_count, 2);
+  assert_eq!(result.redaction_map.len(), 1);
+  assert!(result.operator_map.iter().any(|entry| {
+    entry.placeholder == "[ORGANIZATION_1]"
+      && entry.operator == OperatorType::Keep
+  }));
+  assert!(result.operator_map.iter().any(|entry| {
+    entry.placeholder == "[EMAIL_ADDRESS_1]"
+      && entry.operator == OperatorType::Replace
+  }));
+}
+
+#[test]
 fn byte_offsets_apply_non_ascii_spans() {
   let text = "A 🦀 Bob";
   let start = byte_len("A 🦀 ");
