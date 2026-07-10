@@ -137,6 +137,9 @@ fn validate_provenance_id(
   value: &str,
 ) -> crate::types::Result<()> {
   const MAX_PROVENANCE_ID_BYTES: usize = 128;
+  if value.is_empty() || value.len() > MAX_PROVENANCE_ID_BYTES {
+    return Err(invalid_provenance_id(field));
+  }
   let mut bytes = value.bytes();
   let valid_first = bytes
     .next()
@@ -144,15 +147,19 @@ fn validate_provenance_id(
   let valid_rest = bytes.all(|byte| {
     byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b':' | b'-')
   });
-  if valid_first && valid_rest && value.len() <= MAX_PROVENANCE_ID_BYTES {
+  if valid_first && valid_rest {
     return Ok(());
   }
-  Err(crate::types::Error::InvalidCallerDetection {
+  Err(invalid_provenance_id(field))
+}
+
+fn invalid_provenance_id(field: &'static str) -> crate::types::Error {
+  crate::types::Error::InvalidCallerDetection {
     field,
     reason: String::from(
       "must be 1-128 ASCII characters: alphanumeric first, then alphanumeric, '.', '_', ':', or '-'",
     ),
-  })
+  }
 }
 
 #[derive(

@@ -49,17 +49,30 @@ impl PreparedEngine {
       event_stream,
     )?;
     if let Some(diagnostics) = diagnostics.as_deref_mut() {
-      let retained_caller_entities = resolved_entities
-        .iter()
-        .filter(|entity| entity.caller_provenance.is_some())
-        .cloned()
-        .collect::<Vec<_>>();
-      diagnostics.record_entities(
-        crate::diagnostics::DiagnosticStage::EntityCallerRetained,
-        &retained_caller_entities,
-        full_text,
-        None,
-      );
+      if diagnostics.detail == crate::diagnostics::DiagnosticDetail::Summary {
+        let retained_count = resolved_entities
+          .iter()
+          .filter(|entity| entity.caller_provenance.is_some())
+          .count();
+        diagnostics.record_stage(
+          crate::diagnostics::DiagnosticStage::EntityCallerRetained,
+          Some(retained_count),
+          None,
+          Some(full_text.len()),
+        );
+      } else {
+        let retained_caller_entities = resolved_entities
+          .iter()
+          .filter(|entity| entity.caller_provenance.is_some())
+          .cloned()
+          .collect::<Vec<_>>();
+        diagnostics.record_entities(
+          crate::diagnostics::DiagnosticStage::EntityCallerRetained,
+          &retained_caller_entities,
+          full_text,
+          None,
+        );
+      }
     }
     result_stream.observe(StaticRedactionStreamEvent::ResolvedEntities(
       &resolved_entities,
