@@ -12,6 +12,14 @@ disallowed-macros = [
 disallowed-methods = [
   { path = "std::mem::forget", reason = "leaks ownership; use a narrow ownership type or ManuallyDrop with justification" },
   { path = "std::string::String::from_utf8_lossy", reason = "lossy decoding can corrupt offsets and user data; validate or keep bytes" },
+  # Determinism: anonymization output must be reproducible. Wall-clock time and
+  # RNG are nondeterministic inputs; inject them from the host if genuinely
+  # needed rather than reading them inside the transform. (Environment reads are
+  # intentionally not banned here: build scripts legitimately use them.)
+  { path = "std::time::SystemTime::now", reason = "wall-clock time is nondeterministic; inject timestamps from the caller" },
+  { path = "rand::random", reason = "nondeterministic RNG has no place in a reproducible transform; seed explicitly if randomness is required" },
+  { path = "rand::thread_rng", reason = "nondeterministic RNG has no place in a reproducible transform; seed explicitly if randomness is required" },
+  { path = "rand::rng", reason = "nondeterministic RNG has no place in a reproducible transform; seed explicitly if randomness is required" },
 ]
 
 disallowed-types = [
