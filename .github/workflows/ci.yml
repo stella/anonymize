@@ -135,6 +135,13 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
+      - name: Knip (unused/undeclared deps)
+        # High-signal only: undeclared (`unlisted`) and unresolved imports. The
+        # unused-file/export/dependency rules are off — this polyglot monorepo
+        # (native bindings, wasm, .mjs scripts, uv tooling) trips too many false
+        # positives on them to gate. See knip.json.
+        run: bun run check:knip
+
       - name: Install uv
         run: |
           python3 -m pip install --user "uv==${{ env.UV_VERSION }}"
