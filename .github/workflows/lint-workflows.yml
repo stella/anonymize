@@ -1,0 +1,48 @@
+name: Lint workflows
+
+# Static analysis of the GitHub Actions workflows themselves:
+#   - actionlint: syntax, expression, and embedded-shell (shellcheck) errors.
+#   - zizmor: security audits (template injection, credential leaks, dangerous
+#     triggers). Started at `high` severity so it lands clean; the pre-existing
+#     `artipacked` (medium) and `adhoc-packages` (low) findings are hardening
+#     opportunities to triage before ratcheting the threshold down.
+
+on:
+  pull_request:
+    paths:
+      - ".github/**"
+  push:
+    branches: [main]
+    paths:
+      - ".github/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lint-workflows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: actionlint + zizmor
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: actionlint
+        run: |
+          curl -sSL https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz \
+            | tar xz actionlint
+          ./actionlint -color
+
+      - name: zizmor
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl -sSL https://github.com/zizmorcore/zizmor/releases/download/v1.26.1/zizmor-x86_64-unknown-linux-gnu.tar.gz \
+            | tar xz zizmor
+          ./zizmor --min-severity=high .github/workflows/
