@@ -128,4 +128,12 @@ describe("entity capabilities", () => {
 
     expect(optInLabels).toEqual(["ip address", "mac address", "url"]);
   });
+
+  test("reports dictionary-backed addresses as deny-list detections", () => {
+    const address = ENTITY_CAPABILITIES.find(
+      ({ label }) => label === "address",
+    );
+
+    expect(address?.detectionSources).toContain(DETECTION_SOURCES.DENY_LIST);
+  });
 });

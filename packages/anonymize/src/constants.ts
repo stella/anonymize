@@ -111,7 +111,11 @@ export const ENTITY_CAPABILITIES = [
   {
     label: "address",
     selection: ENTITY_SELECTIONS.DEFAULT,
-    detectionSources: [DETECTION_SOURCES.REGEX, DETECTION_SOURCES.TRIGGER],
+    detectionSources: [
+      DETECTION_SOURCES.REGEX,
+      DETECTION_SOURCES.TRIGGER,
+      DETECTION_SOURCES.DENY_LIST,
+    ],
   },
   {
     label: "country",
