@@ -193,6 +193,7 @@ pub enum OperatorType {
   #[default]
   Replace,
   Redact,
+  Keep,
 }
 
 #[derive(bon::Builder, Clone, Debug, Eq, PartialEq)]

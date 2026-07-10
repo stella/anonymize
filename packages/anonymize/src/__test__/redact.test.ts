@@ -142,6 +142,26 @@ describe("operator behavior", () => {
     // Email still uses the default replace operator (reversible).
     expect(result.redactionMap.has("[EMAIL_ADDRESS_1]")).toBe(true);
   });
+
+  test("keep operator preserves text without a reversible mapping", () => {
+    const text = "Contact Alice Smith at alice@example.com.";
+    const entities = [
+      at(text, "person", "Alice Smith"),
+      at(text, "email address", "alice@example.com"),
+    ];
+
+    const result = redactText(text, entities, {
+      operators: { person: "keep" },
+      redactString: "[REDACTED]",
+    });
+
+    expect(result.redactedText).toBe(
+      "Contact Alice Smith at [EMAIL_ADDRESS_1].",
+    );
+    expect(result.entityCount).toBe(2);
+    expect(result.redactionMap.has("[PERSON_1]")).toBe(false);
+    expect(result.operatorMap.get("[PERSON_1]")).toBe("keep");
+  });
 });
 
 describe("exportRedactionKey", () => {

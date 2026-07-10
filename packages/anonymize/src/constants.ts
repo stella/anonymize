@@ -54,7 +54,7 @@ export const DETECTOR_PRIORITY = {
  * Anonymization operator types. Each operator defines
  * how a confirmed entity is replaced in the output.
  */
-export const OPERATOR_TYPES = ["replace", "redact"] as const;
+export const OPERATOR_TYPES = ["replace", "redact", "keep"] as const;
 
 export type OperatorType = (typeof OPERATOR_TYPES)[number];
 

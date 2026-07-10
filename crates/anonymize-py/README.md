@@ -50,6 +50,10 @@ result = prepared.redact_text_with_caller_detections(
 )
 ```
 
+Pass `{"organization": "keep"}` as the operators argument to preserve
+detected organizations while processing other labels normally. Kept entities
+remain in the result and operator map, but create no reversible mapping entry.
+
 `provider_id` and `detection_id` are required 1–128 byte ASCII identifiers:
 they start with an alphanumeric character and otherwise contain only
 alphanumerics, `.`, `_`, `:`, or `-`. Do not encode personal data in them.

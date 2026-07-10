@@ -63,6 +63,7 @@ pub fn redact_text(
     match operator {
       OperatorType::Replace => redacted_text.push_str(&placeholder),
       OperatorType::Redact => redacted_text.push_str(&config.redact_string),
+      OperatorType::Keep => redacted_text.push_str(span.source_text),
     }
     set_operator_entry(&mut operator_map, &placeholder, operator);
 

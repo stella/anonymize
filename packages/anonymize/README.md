@@ -68,6 +68,16 @@ const warmDiagnosticsJson = anonymizer.warmLazyRegexDiagnosticsJson();
 const result = anonymizer.redact_text(text, { redactString: "***" });
 ```
 
+Per-label operators support `replace`, `redact`, and `keep`. `keep` records
+that an entity was processed while leaving its source text unchanged; it
+creates no reversible redaction-key entry:
+
+```ts
+const result = anonymizer.redactText(text, {
+  operators: { organization: "keep" },
+});
+```
+
 Caller-produced spans enter the same resolution and redaction pipeline. Node
 and browser offsets use JavaScript UTF-16 string indexes; matched text is
 derived from the input:

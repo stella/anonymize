@@ -18,9 +18,16 @@ const redactOperator: AnonymisationOperator = {
   apply: (_text, _label, _placeholder, redactString) => redactString,
 };
 
+const keepOperator: AnonymisationOperator = {
+  type: "keep",
+  reversibility: "preserving",
+  apply: (text) => text,
+};
+
 export const OPERATOR_REGISTRY = {
   replace: replaceOperator,
   redact: redactOperator,
+  keep: keepOperator,
 } as const satisfies Record<OperatorType, AnonymisationOperator>;
 
 const DEFAULT_REDACT_STRING = "[REDACTED]";

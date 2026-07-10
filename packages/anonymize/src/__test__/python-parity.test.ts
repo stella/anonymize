@@ -77,6 +77,9 @@ type PythonParityOutput = {
     source: string;
     diagnostic_start: number;
     diagnostic_end: number;
+    kept_text: string;
+    keep_map_count: number;
+    keep_operator: string;
   };
 };
 
@@ -110,6 +113,14 @@ caller_diagnostic_entity = next(
     event for event in caller_diagnostics["diagnostics"]["events"]
     if event.get("stage") == "entity.caller.input" and event.get("kind") == "entity"
 )
+caller_keep_result = json.loads(
+    anonymize.get_default_native_pipeline(language="en").redact_text_with_caller_detections_json(
+        "😀Alice signed.",
+        [{"start": 1, "end": 6, "label": "person", "score": 0.9,
+          "provider_id": "parity-provider", "detection_id": "person-1"}],
+        {"person": "keep"},
+    )
+)
 
 print(
     json.dumps(
@@ -134,6 +145,9 @@ print(
                 "source": caller_result["resolved_entities"][0]["source"],
                 "diagnostic_start": caller_diagnostic_entity["start"],
                 "diagnostic_end": caller_diagnostic_entity["end"],
+                "kept_text": caller_keep_result["redaction"]["redacted_text"],
+                "keep_map_count": len(caller_keep_result["redaction"]["redaction_map"]),
+                "keep_operator": caller_keep_result["redaction"]["operator_map"][0]["operator"],
             },
         }
     )
@@ -321,6 +335,9 @@ describe("python binding parity", () => {
       source: "caller",
       diagnostic_start: 1,
       diagnostic_end: 6,
+      kept_text: "😀Alice signed.",
+      keep_map_count: 0,
+      keep_operator: "keep",
     });
   });
 });

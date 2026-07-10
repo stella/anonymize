@@ -186,6 +186,24 @@ describe("createNativePipelineFromConfig", () => {
         ({ text }) => text === undefined,
       ),
     ).toBeTrue();
+
+    const kept = pipeline.redactTextWithCallerDetections("😀Alice signed.", {
+      detections: [
+        {
+          start: 2,
+          end: 7,
+          label: "person",
+          score: 0.9,
+          providerId: "test-provider",
+          detectionId: "person-1",
+        },
+      ],
+      operators: { operators: { person: "keep" } },
+    });
+    expect(kept.redaction.redactedText).toBe("😀Alice signed.");
+    expect(kept.redaction.entityCount).toBe(1);
+    expect(kept.redaction.redactionMap.size).toBe(0);
+    expect(kept.redaction.operatorMap.get("[PERSON_1]")).toBe("keep");
   });
 });
 

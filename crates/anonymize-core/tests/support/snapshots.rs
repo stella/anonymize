@@ -192,6 +192,7 @@ const fn operator_name(operator: OperatorType) -> &'static str {
   match operator {
     OperatorType::Replace => "replace",
     OperatorType::Redact => "redact",
+    OperatorType::Keep => "keep",
   }
 }
 

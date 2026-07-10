@@ -222,7 +222,7 @@ export type OperatorConfig = {
 };
 
 /** Whether an operator produces a reversible redaction entry. */
-type OperatorReversibility = "reversible" | "irreversible";
+type OperatorReversibility = "reversible" | "irreversible" | "preserving";
 
 export type AnonymisationOperator = {
   type: OperatorType;

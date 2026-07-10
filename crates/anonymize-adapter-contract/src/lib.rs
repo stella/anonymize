@@ -3352,6 +3352,7 @@ fn operator_type_from_binding(value: &str) -> Result<OperatorType> {
   match value {
     "replace" => Ok(OperatorType::Replace),
     "redact" => Ok(OperatorType::Redact),
+    "keep" => Ok(OperatorType::Keep),
     _ => Err(ContractError::UnsupportedOperator {
       value: value.to_owned(),
     }),
@@ -3655,6 +3656,7 @@ fn operator_name(operator: OperatorType) -> String {
   match operator {
     OperatorType::Replace => "replace",
     OperatorType::Redact => "redact",
+    OperatorType::Keep => "keep",
   }
   .to_owned()
 }
@@ -3915,12 +3917,16 @@ mod tests {
   #[test]
   fn binding_operator_config_accepts_camel_case_redact_string() {
     let config = serde_json::from_str::<BindingOperatorConfig>(
-      r#"{"operators":{"country":"redact"},"redactString":"***"}"#,
+      r#"{"operators":{"country":"redact","organization":"keep"},"redactString":"***"}"#,
     )
     .unwrap();
     let operators = operator_config_from_binding(Some(config)).unwrap();
 
     assert_eq!(operators.redact_string, "***");
+    assert_eq!(
+      operators.operators.get("organization"),
+      Some(&OperatorType::Keep)
+    );
   }
 
   #[test]

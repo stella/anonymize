@@ -290,6 +290,36 @@ fn redact_operator_is_not_reversible() {
 }
 
 #[test]
+fn keep_operator_preserves_text_without_reversible_mapping() {
+  let text = "Contact Alice Smith at alice@example.com.";
+  let mut config = OperatorConfig::default();
+  config
+    .operators
+    .insert(String::from("person"), OperatorType::Keep);
+  let entities = vec![
+    entity(text, "person", "Alice Smith"),
+    entity(text, "email address", "alice@example.com"),
+  ];
+
+  let result = redact_text(text, &entities, &config).unwrap();
+
+  assert_eq!(
+    result.redacted_text,
+    "Contact Alice Smith at [EMAIL_ADDRESS_1]."
+  );
+  assert_eq!(result.entity_count, 2);
+  assert!(
+    result
+      .redaction_map
+      .iter()
+      .all(|entry| entry.placeholder != "[PERSON_1]")
+  );
+  assert!(result.operator_map.iter().any(|entry| {
+    entry.placeholder == "[PERSON_1]" && entry.operator == OperatorType::Keep
+  }));
+}
+
+#[test]
 fn byte_offsets_apply_non_ascii_spans() {
   let text = "A 🦀 Bob";
   let start = byte_len("A 🦀 ");
