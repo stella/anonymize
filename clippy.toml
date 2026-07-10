@@ -17,9 +17,9 @@ disallowed-methods = [
   # needed rather than reading them inside the transform. (Environment reads are
   # intentionally not banned here: build scripts legitimately use them.)
   { path = "std::time::SystemTime::now", reason = "wall-clock time is nondeterministic; inject timestamps from the caller" },
-  { path = "rand::random", reason = "nondeterministic RNG has no place in a reproducible transform; seed explicitly if randomness is required" },
-  { path = "rand::thread_rng", reason = "nondeterministic RNG has no place in a reproducible transform; seed explicitly if randomness is required" },
-  { path = "rand::rng", reason = "nondeterministic RNG has no place in a reproducible transform; seed explicitly if randomness is required" },
+  { path = "rand::random", reason = "nondeterministic RNG has no place in a reproducible transform; seed explicitly if randomness is required", allow-invalid = true },
+  { path = "rand::thread_rng", reason = "nondeterministic RNG has no place in a reproducible transform; seed explicitly if randomness is required", allow-invalid = true },
+  { path = "rand::rng", reason = "nondeterministic RNG has no place in a reproducible transform; seed explicitly if randomness is required", allow-invalid = true },
 ]
 
 disallowed-types = [
