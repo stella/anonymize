@@ -16,6 +16,7 @@ use stella_anonymize_adapter_contract::{
   prepared_search_core_package_view_trusted_from_bytes_with_timings,
   prepared_search_package_decode_events, prepared_search_package_from_bytes,
   prepared_search_package_has_core_payload,
+  static_redaction_diagnostic_result_to_character_binding,
   static_redaction_diagnostic_result_to_utf16_binding,
   static_redaction_diagnostics_to_binding, static_redaction_result_to_binding,
   static_redaction_result_to_utf16_binding,
@@ -313,9 +314,10 @@ impl PyPreparedSearch {
     let mut diagnostics = self.prepare_diagnostics.clone();
     diagnostics.extend(result.diagnostics);
     result.diagnostics = diagnostics;
-    let result =
-      static_redaction_diagnostic_result_to_utf16_binding(result, full_text)
-        .map_err(|error| to_py_contract_error(&error))?;
+    let result = static_redaction_diagnostic_result_to_character_binding(
+      result, full_text,
+    )
+    .map_err(|error| to_py_contract_error(&error))?;
     serde_json::to_string(&result).map_err(|error| to_py_serde_error(&error))
   }
 

@@ -2758,6 +2758,23 @@ pub fn static_redaction_diagnostic_result_to_utf16_binding(
   Ok(result)
 }
 
+pub fn static_redaction_diagnostic_result_to_character_binding(
+  result: StaticRedactionDiagnosticResult,
+  full_text: &str,
+) -> Result<BindingStaticRedactionDiagnosticResult> {
+  let offsets = CharacterOffsetMap::new(full_text)?;
+  let mut result = static_redaction_diagnostic_result_to_binding(result);
+  convert_pipeline_entity_character_offsets(
+    &mut result.result.resolved_entities,
+    &offsets,
+  )?;
+  convert_diagnostic_character_offsets(
+    &mut result.diagnostics.events,
+    &offsets,
+  )?;
+  Ok(result)
+}
+
 #[must_use]
 pub fn static_redaction_diagnostics_to_binding(
   diagnostics: StaticRedactionDiagnostics,
@@ -2850,6 +2867,32 @@ fn convert_pipeline_entity_offsets(
 fn convert_diagnostic_offsets(
   events: &mut [BindingDiagnosticEvent],
   offsets: &Utf16OffsetMap,
+) -> Result<()> {
+  for event in events {
+    if let Some(start) = event.start {
+      event.start = Some(offsets.convert(start)?);
+    }
+    if let Some(end) = event.end {
+      event.end = Some(offsets.convert(end)?);
+    }
+  }
+  Ok(())
+}
+
+fn convert_pipeline_entity_character_offsets(
+  entities: &mut [BindingPipelineEntity],
+  offsets: &CharacterOffsetMap,
+) -> Result<()> {
+  for entity in entities {
+    entity.start = offsets.convert(entity.start)?;
+    entity.end = offsets.convert(entity.end)?;
+  }
+  Ok(())
+}
+
+fn convert_diagnostic_character_offsets(
+  events: &mut [BindingDiagnosticEvent],
+  offsets: &CharacterOffsetMap,
 ) -> Result<()> {
   for event in events {
     if let Some(start) = event.start {
@@ -2967,6 +3010,23 @@ impl CharacterOffsetMap {
       })
       .ok_or(ContractError::InvalidBindingOffset {
         offset: character_offset,
+      })
+  }
+
+  fn convert(&self, byte_offset: u32) -> Result<u32> {
+    let index = self
+      .boundaries
+      .binary_search_by_key(&byte_offset, |(offset, _)| *offset)
+      .ok();
+    index
+      .and_then(|index| {
+        self
+          .boundaries
+          .get(index)
+          .map(|(_, character_offset)| *character_offset)
+      })
+      .ok_or(ContractError::InvalidBindingOffset {
+        offset: byte_offset,
       })
   }
 }
@@ -3724,6 +3784,7 @@ mod tests {
     let text = "😀Alice";
     assert_eq!(Utf16OffsetMap::new(text).unwrap().byte_offset(2), Ok(4));
     assert_eq!(CharacterOffsetMap::new(text).unwrap().byte_offset(1), Ok(4));
+    assert_eq!(CharacterOffsetMap::new(text).unwrap().convert(4), Ok(1));
   }
   use stella_anonymize_core::{
     DiagnosticEvent, DiagnosticEventKind, DiagnosticStage,

@@ -75,6 +75,8 @@ type PythonParityOutput = {
     start: number;
     end: number;
     source: string;
+    diagnostic_start: number;
+    diagnostic_end: number;
   };
 };
 
@@ -96,6 +98,17 @@ caller_result = json.loads(
         [{"start": 1, "end": 6, "label": "person", "score": 0.9,
           "provider_id": "parity-provider", "detection_id": "person-1"}],
     )
+)
+caller_diagnostics = json.loads(
+    anonymize.get_default_native_pipeline(language="en").redact_text_with_caller_detections_diagnostics_json(
+        "😀Alice signed.",
+        [{"start": 1, "end": 6, "label": "person", "score": 0.9,
+          "provider_id": "parity-provider", "detection_id": "person-1"}],
+    )
+)
+caller_diagnostic_entity = next(
+    event for event in caller_diagnostics["diagnostics"]["events"]
+    if event.get("stage") == "entity.caller.input" and event.get("kind") == "entity"
 )
 
 print(
@@ -119,6 +132,8 @@ print(
                 "start": caller_result["resolved_entities"][0]["start"],
                 "end": caller_result["resolved_entities"][0]["end"],
                 "source": caller_result["resolved_entities"][0]["source"],
+                "diagnostic_start": caller_diagnostic_entity["start"],
+                "diagnostic_end": caller_diagnostic_entity["end"],
             },
         }
     )
@@ -304,6 +319,8 @@ describe("python binding parity", () => {
       start: 1,
       end: 6,
       source: "caller",
+      diagnostic_start: 1,
+      diagnostic_end: 6,
     });
   });
 });
