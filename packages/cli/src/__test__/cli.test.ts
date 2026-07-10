@@ -164,6 +164,15 @@ test("--labels accepts short aliases for multi-word labels", async () => {
   expect(out).toContain("[EMAIL_ADDRESS_1]");
 });
 
+test("--labels accepts opt-in network labels", async () => {
+  const { out, code } = await run(
+    [...SCOPE, "--quiet", "--labels", "ip-address"],
+    "Connect to 192.0.2.1.",
+  );
+  expect(code).toBe(0);
+  expect(out).toContain("[IP_ADDRESS_1]");
+});
+
 test("--labels rejects an unknown label with a usage error", async () => {
   const { err, code } = await run(
     [...SCOPE, "--quiet", "--labels", "definitely-not-a-label"],
@@ -178,6 +187,9 @@ test("--list-labels prints canonical labels and aliases", async () => {
   expect(code).toBe(0);
   expect(out).toContain("person");
   expect(out).toContain("email address");
+  expect(out).toContain("ip address");
+  expect(out).toContain("mac address");
+  expect(out).toContain("url");
   // The alias table maps short forms to canonical labels.
   expect(out).toMatch(/email\s+->\s+email address/);
 });

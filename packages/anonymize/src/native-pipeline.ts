@@ -115,10 +115,10 @@ type AssembleInputs = {
  * of the config JSON avoids serializing them twice.
  */
 const toAssembleInputs = (
-  { dictionaries, ...config }: PipelineConfig,
+  { dictionaries, enableNer = false, ...config }: PipelineConfig,
   gazetteerEntries: readonly GazetteerEntry[],
 ): AssembleInputs => ({
-  pipelineConfigJson: encoder.encode(JSON.stringify(config)),
+  pipelineConfigJson: encoder.encode(JSON.stringify({ ...config, enableNer })),
   dictionariesJson:
     dictionaries === undefined
       ? undefined

@@ -222,6 +222,12 @@ export const ENTITY_CAPABILITIES = [
 
 type KnownEntityCapability = (typeof ENTITY_CAPABILITIES)[number];
 
+export type EntityLabel = KnownEntityCapability["label"];
+
+export const ENTITY_LABELS: readonly EntityLabel[] = ENTITY_CAPABILITIES.map(
+  ({ label }) => label,
+);
+
 const isDefaultEntityCapability = (
   capability: KnownEntityCapability,
 ): capability is Extract<

@@ -24,6 +24,12 @@ describe("@stll/anonymize/constants subpath parity", () => {
     );
   });
 
+  test("ENTITY_LABELS is the same array via either entrypoint", () => {
+    expect([...fromConstants.ENTITY_LABELS]).toEqual([
+      ...fromRoot.ENTITY_LABELS,
+    ]);
+  });
+
   test("ENTITY_SELECTIONS is the same object via either entrypoint", () => {
     expect(fromConstants.ENTITY_SELECTIONS).toEqual(fromRoot.ENTITY_SELECTIONS);
   });

@@ -19,7 +19,11 @@ import type {
   OperatorType,
   PipelineConfig,
 } from "@stll/anonymize";
-import { DEFAULT_ENTITY_LABELS } from "@stll/anonymize/constants";
+import {
+  DEFAULT_ENTITY_LABELS,
+  ENTITY_LABELS,
+  type EntityLabel,
+} from "@stll/anonymize/constants";
 
 import pkg from "../package.json" with { type: "json" };
 
@@ -244,8 +248,6 @@ const runPool = async <T>(
   await Promise.all(Array.from({ length: count }, worker));
 };
 
-type EntityLabel = (typeof DEFAULT_ENTITY_LABELS)[number];
-
 type CliEntity = {
   start: number;
   end: number;
@@ -297,7 +299,7 @@ const LABEL_ALIASES: Record<string, EntityLabel> = {
 };
 
 const LABEL_SEPARATOR_RE = /[\s_-]+/g;
-const ENTITY_LABEL_SET: ReadonlySet<string> = new Set(DEFAULT_ENTITY_LABELS);
+const ENTITY_LABEL_SET: ReadonlySet<string> = new Set(ENTITY_LABELS);
 
 const isEntityLabel = (label: string): label is EntityLabel =>
   ENTITY_LABEL_SET.has(label);
@@ -310,7 +312,7 @@ const isEntityLabel = (label: string): label is EntityLabel =>
  */
 const canonicalizeLabel = (raw: string): string => {
   const normalized = raw.toLowerCase().replace(LABEL_SEPARATOR_RE, " ").trim();
-  const known: readonly string[] = DEFAULT_ENTITY_LABELS;
+  const known: readonly string[] = ENTITY_LABELS;
   if (known.includes(normalized)) {
     return normalized;
   }
@@ -320,7 +322,7 @@ const canonicalizeLabel = (raw: string): string => {
 const validateLabels = (labels: readonly string[]): EntityLabel[] => {
   const resolved = [...new Set(labels.map(canonicalizeLabel))];
   const valid: EntityLabel[] = [];
-  const availableLabels = DEFAULT_ENTITY_LABELS.join(", ");
+  const availableLabels = ENTITY_LABELS.join(", ");
   const availableAliases = Object.keys(LABEL_ALIASES).join(", ");
   for (const label of resolved) {
     if (!isEntityLabel(label)) {
@@ -830,7 +832,7 @@ const prepareCliRuntime = async (
  */
 const formatLabelList = (): string => {
   const lines: string[] = ["Detectable entity labels (pass to --labels):"];
-  for (const label of DEFAULT_ENTITY_LABELS) {
+  for (const label of ENTITY_LABELS) {
     lines.push(`  ${label}`);
   }
   lines.push("", "Short aliases:");

@@ -203,10 +203,12 @@ export type TriggerRule = {
 
 export {
   ENTITY_CAPABILITIES,
+  ENTITY_LABELS,
   ENTITY_SELECTIONS,
   OPERATOR_TYPES,
   type DefaultEntityLabel,
   type EntityCapability,
+  type EntityLabel,
   type EntitySelection,
   type OperatorType,
 } from "./constants";

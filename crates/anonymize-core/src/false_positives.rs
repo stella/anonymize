@@ -11,6 +11,7 @@ use crate::types::{Error, Result};
 const ADDRESS_LABEL: &str = "address";
 const ORGANIZATION_LABEL: &str = "organization";
 const PERSON_LABEL: &str = "person";
+const IP_ADDRESS_LABEL: &str = "ip address";
 const REGISTRATION_NUMBER_LABEL: &str = "registration number";
 const MAX_ORGANIZATION_LENGTH: usize = 80;
 const MAX_PERSON_LENGTH: usize = 60;
@@ -140,7 +141,10 @@ fn should_reject_entity(
   if exceeds_open_ended_word_count(entity) {
     return Ok(true);
   }
-  if is_section_number(text) && entity.source != DetectionSource::Trigger {
+  if entity.label != IP_ADDRESS_LABEL
+    && is_section_number(text)
+    && entity.source != DetectionSource::Trigger
+  {
     return Ok(true);
   }
   if is_standalone_year(text) && entity.source != DetectionSource::Trigger {
@@ -1593,6 +1597,20 @@ mod tests {
     .unwrap();
 
     assert!(entities.is_empty());
+  }
+
+  #[test]
+  fn keeps_ipv4_addresses_that_resemble_section_numbers() {
+    let text = "192.0.2.1";
+    let entities = filter_entity_false_positives(
+      vec![entity(text, text, IP_ADDRESS_LABEL, DetectionSource::Regex)],
+      text,
+      Some(&DenyListFilterData::default()),
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].text, text);
   }
 
   fn entity(

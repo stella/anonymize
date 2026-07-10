@@ -59,6 +59,15 @@ describe("prepareNativePipelineConfig", () => {
     // Enabling regex must produce at least one baked regex pattern.
     expect(prepared.regex_patterns.length).toBeGreaterThan(0);
   });
+
+  test("normalizes an omitted deprecated NER flag to false", async () => {
+    const config = baseConfig();
+    delete config.enableNer;
+
+    const prepared = await prepareNativePipelineConfig({ binding, config });
+
+    expect(prepared.allowed_labels).toEqual([...DEFAULT_ENTITY_LABELS]);
+  });
 });
 
 describe("prepareNativePipelinePackage", () => {
