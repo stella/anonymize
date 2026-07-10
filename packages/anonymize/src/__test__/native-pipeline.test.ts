@@ -178,7 +178,14 @@ describe("createNativePipelineFromConfig", () => {
     expect(diagnosticsJson).not.toBeNull();
     expect(diagnosticsJson).toContain('"provider_id":"test-provider"');
     expect(diagnosticsJson).toContain('"detection_id":"person-1"');
-    expect(diagnosticsJson).not.toContain('"text":"Alice"');
+    const diagnosticsResult: {
+      diagnostics: { events: Array<{ text?: string }> };
+    } = JSON.parse(diagnosticsJson ?? "{}");
+    expect(
+      diagnosticsResult.diagnostics.events.every(
+        ({ text }) => text === undefined,
+      ),
+    ).toBeTrue();
   });
 });
 
