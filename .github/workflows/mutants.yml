@@ -1,0 +1,77 @@
+name: Mutants
+
+# Mutation testing measures whether the test suite actually kills injected bugs
+# in the redaction core, rather than just executing the code. It is slow (each
+# surviving mutant re-runs the tests), so it runs weekly and on demand, scoped
+# to the small correctness-critical modules and excluding the slow package-
+# assembly tests. Exploratory: surviving mutants are reported as an artifact,
+# never a merge gate. Tune the scope/timeout after observing the first runs.
+
+on:
+  schedule:
+    - cron: "0 4 * * 1" # Mondays 04:00 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mutants-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mutants:
+    name: cargo-mutants (redaction core)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Setup Rust
+        run: |
+          rustup toolchain install 1.96.0 --profile minimal
+          rustup default 1.96.0
+          # Test runner used by cargo-mutants.
+          curl -LsSf https://get.nexte.st/0.9.140/linux \
+            | tar zxf - -C "${CARGO_HOME:-$HOME/.cargo}/bin"
+          # Prebuilt cargo-mutants (flat tarball).
+          curl -sSL https://github.com/sourcefrog/cargo-mutants/releases/download/v27.1.0/cargo-mutants-x86_64-unknown-linux-gnu.tar.gz \
+            | tar xz -C "${CARGO_HOME:-$HOME/.cargo}/bin"
+
+      - name: Cache Rust build
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-mutants-1.96.0-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mutants-1.96.0-
+
+      - name: Run cargo-mutants
+        # Scoped to the offset/redaction/normalization logic (~200 mutants),
+        # which the fast unit and property tests cover, so a weekly run finishes
+        # comfortably. The nextest filter drops the slow package-assembly tests.
+        # Widen scope (e.g. src/resolution/**, ~440 more mutants) via sharding
+        # once real timings are known.
+        continue-on-error: true
+        run: |
+          cargo mutants \
+            --package stella-anonymize-core \
+            --test-tool nextest \
+            --file '**/byte_offsets.rs' \
+            --file '**/normalize.rs' \
+            --file '**/redact.rs' \
+            --timeout-multiplier 5 \
+            --output mutants-out \
+            -- -E 'not (test(/assemble/) | test(/address_seed/) | test(/digest/) | test(/parity/))'
+
+      - name: Upload mutants report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v5
+        with:
+          name: mutants-report
+          path: mutants-out/
+          if-no-files-found: warn
