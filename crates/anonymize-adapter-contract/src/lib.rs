@@ -3789,7 +3789,7 @@ mod tests {
     assert_eq!(CharacterOffsetMap::new(text).unwrap().convert(4), Ok(1));
   }
   use stella_anonymize_core::{
-    DiagnosticEvent, DiagnosticEventKind, DiagnosticStage,
+    DiagnosticEvent, DiagnosticEventKind, DiagnosticStage, OperatorType,
     PreparedArtifactPolicy, PreparedEngineArtifacts, RegexArtifactPolicy,
     SearchPattern, StaticRedactionDiagnostics,
   };
