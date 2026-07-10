@@ -14,10 +14,18 @@ use stella_anonymize_core::{
   DetectionSource, Entity, Error, LiteralSearchOptions, OperatorConfig,
   PipelineEntity, RegexSearchOptions, SearchIndex, SearchIndexArtifacts,
   SearchMatch, SearchOptions, SearchPattern, deanonymise, merge_and_dedup,
-  redact_text, sanitize_entities,
+  normalize_for_search, redact_text, sanitize_entities,
 };
 
 const PROPERTY_CASES: u32 = 128;
+
+/// Width and punctuation variants that `normalize_for_search` folds to an ASCII
+/// representative. Kept in sync with the `replacement_char` match arms.
+const FOLDED_CHARS: [char; 7] = [
+  '\u{00a0}', '\u{2007}', '\u{202f}', // -> ' '
+  '\u{2013}', '\u{2014}', // -> '-'
+  '\u{201c}', '\u{201d}', // -> '"'
+];
 
 fn byte_len(text: &str) -> u32 {
   u32::try_from(text.len()).unwrap_or(u32::MAX)
@@ -419,6 +427,28 @@ fn search_output_is_valid(
   true
 }
 
+fn normalizable_char() -> impl Strategy<Value = char> {
+  sample::select(vec![
+    'a', 'Z', '0', ' ', '-', '"', 'á', 'ř', '界', '🦀', '\u{0301}', '\u{00a0}',
+    '\u{2007}', '\u{202f}', '\u{2013}', '\u{2014}', '\u{201c}', '\u{201d}',
+  ])
+}
+
+fn normalizable_text() -> impl Strategy<Value = String> {
+  collection::vec(normalizable_char(), 0..24)
+    .prop_map(|chars| chars.into_iter().collect())
+}
+
+/// Text that contains none of the fold targets, so normalization must be the
+/// identity (exercises the `has_replacement` fast-path).
+fn plain_text() -> impl Strategy<Value = String> {
+  collection::vec(
+    sample::select(vec!['a', 'Z', '0', ' ', '-', '"', 'á', 'ř', '界', '🦀']),
+    0..24,
+  )
+  .prop_map(|chars| chars.into_iter().collect())
+}
+
 fn person_placeholder_number(placeholder: &str) -> Option<u32> {
   placeholder
     .strip_prefix("[PERSON_")?
@@ -802,5 +832,34 @@ proptest! {
     prop_assert!(
       SearchIndex::new_with_artifacts(patterns, options, &extra).is_err()
     );
+  }
+
+  #[test]
+  fn normalize_for_search_is_idempotent_and_char_count_stable(
+    text in normalizable_text(),
+  ) {
+    let once = normalize_for_search(&text);
+
+    // Idempotent: normalized text is a fixed point. Offset maps and cache
+    // keys built on the output must not drift on a second pass.
+    let twice = normalize_for_search(&once);
+    prop_assert_eq!(&twice, &once);
+
+    // The fold is 1:1 per scalar, so it never adds or drops a codepoint.
+    prop_assert_eq!(once.chars().count(), text.chars().count());
+
+    // Every fold target is gone from the output.
+    for folded in FOLDED_CHARS {
+      prop_assert!(!once.contains(folded));
+    }
+  }
+
+  #[test]
+  fn normalize_for_search_is_identity_without_fold_targets(
+    text in plain_text(),
+  ) {
+    // With no fold target present the fast-path must return the input
+    // verbatim (same bytes, not just an equal-looking string).
+    prop_assert_eq!(normalize_for_search(&text), text);
   }
 }
