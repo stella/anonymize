@@ -92,6 +92,14 @@ jobs:
         # PR-scoped dependency-review action. See deny.toml.
         run: bun run rust:deny
 
+      - name: Fuzz targets compile (anti-bitrot)
+        # The fuzz crate is its own workspace, so it is not covered by the
+        # `--workspace` build above and can silently stop compiling when the
+        # core public API changes. A compile-check (no nightly / cargo-fuzz /
+        # sanitizer needed) keeps the targets honest; actual fuzzing runs
+        # locally or on demand (see fuzz/README.md).
+        run: cargo check --manifest-path fuzz/Cargo.toml --bins
+
       - name: Check runtime package versions
         # Verify, do not mutate: a PR that bumps VERSION without bumping
         # the package versions (or vice versa) must fail CI, not be
