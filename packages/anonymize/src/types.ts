@@ -432,7 +432,7 @@ export type PipelineConfig = {
    *
    * @deprecated Native NER is not implemented.
    */
-  enableNer: boolean;
+  enableNer?: boolean;
   enableConfidenceBoost: boolean;
   enableCoreference: boolean;
   enableZoneClassification?: boolean;
