@@ -862,7 +862,11 @@ const fakeNativeBinding = (
         }),
   };
   const NativePreparedSearch = options.preparedSearchAsConstructor
-    ? Object.assign(function NativePreparedSearch() {}, preparedSearch)
+    ? Object.assign(
+        // eslint-disable-next-line eslint/prefer-arrow-callback -- constructor test doubles must be constructable
+        function NativePreparedSearch() {},
+        preparedSearch,
+      )
     : preparedSearch;
 
   return {
