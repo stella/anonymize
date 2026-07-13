@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import type {
   NativeAnonymizeBinding,
   NativeDiagnosticsBatchCallback,
+  NativePreparedRedactionSessionBinding,
 } from "../native";
 import {
   available_default_native_pipeline_languages,
@@ -752,6 +753,31 @@ describe("native node loader", () => {
     }
   });
 
+  test("prepared anonymizers own transferable redaction sessions", () => {
+    const binding = fakeNativeBinding(PACKAGE_VERSION);
+    const prepared = load_prepared_package(Uint8Array.of(1), { binding });
+
+    const session = prepared.create_redaction_session("case_1");
+    expect(session.session_id()).toBe("case_1");
+    expect(session.mapping_count()).toBe(0);
+    expect(session.redact_text("Alice").redaction).toEqual({
+      entityCount: 0,
+      operatorMap: new Map(),
+      redactedText: "",
+      redactionMap: new Map(),
+    });
+
+    const plaintextJson = session.to_plaintext_json();
+    expect(JSON.parse(plaintextJson)).toEqual({
+      counters: {},
+      mappings: [],
+      schema_version: 1,
+      session_id: "case_1",
+    });
+    const restored = prepared.restore_redaction_session(plaintextJson);
+    expect(restored.session_id()).toBe("case_1");
+  });
+
   test("prepared pipeline JSON methods use the native JSON hook", () => {
     let jsonCalls = 0;
     const binding = fakeNativeBinding(PACKAGE_VERSION, {
@@ -896,6 +922,14 @@ const fakePreparedSearch = ({
     onWarmLazyRegex?.();
   },
   warmLazyRegexDiagnosticsJson: () => JSON.stringify({ events: [] }),
+  createRedactionSession: fakePreparedRedactionSession,
+  restoreRedactionSession: (plaintextJson: string) => {
+    const state: { session_id?: unknown } = JSON.parse(plaintextJson);
+    if (typeof state.session_id !== "string") {
+      throw new TypeError("Test session state is missing its id");
+    }
+    return fakePreparedRedactionSession(state.session_id);
+  },
   redactStaticEntities: emptyStaticRedactionBindingResult,
   ...(onRedactStaticEntitiesJson === undefined
     ? {}
@@ -913,4 +947,28 @@ const fakePreparedSearch = ({
   redactStaticEntitiesDiagnosticsJson: emptyStaticRedactionDiagnosticJson,
   redactStaticEntitiesSummaryDiagnosticsJson:
     emptyStaticRedactionDiagnosticJson,
+});
+
+const fakePreparedRedactionSession = (
+  sessionId: string,
+): NativePreparedRedactionSessionBinding => ({
+  sessionId: () => sessionId,
+  mappingCount: () => 0,
+  toPlaintextJson: () =>
+    JSON.stringify({
+      schema_version: 1,
+      session_id: sessionId,
+      counters: {},
+      mappings: [],
+    }),
+  redactStaticEntitiesJson: () =>
+    JSON.stringify({
+      resolved_entities: [],
+      redaction: {
+        redacted_text: "",
+        redaction_map: [],
+        operator_map: [],
+        entity_count: 0,
+      },
+    }),
 });

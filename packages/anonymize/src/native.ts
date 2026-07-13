@@ -72,12 +72,28 @@ type CanonicalStaticRedactionResult = {
   };
 };
 
+export type NativePreparedRedactionSessionBinding = {
+  sessionId: () => string;
+  mappingCount: () => number;
+  toPlaintextJson: () => string;
+  redactStaticEntitiesJson: (
+    fullText: string,
+    operators?: NativeBindingOperatorConfig,
+  ) => string;
+};
+
 export type NativePreparedSearchBinding = {
   prepareDiagnosticsJson?: () => string;
   warmLazyRegex?: () => void;
   warm_lazy_regex?: () => void;
   warmLazyRegexDiagnosticsJson?: () => string;
   warm_lazy_regex_diagnostics_json?: () => string;
+  createRedactionSession?: (
+    sessionId: string,
+  ) => NativePreparedRedactionSessionBinding;
+  restoreRedactionSession?: (
+    plaintextJson: string,
+  ) => NativePreparedRedactionSessionBinding;
   redactStaticEntities: (
     fullText: string,
     operators?: NativeBindingOperatorConfig,
@@ -287,6 +303,73 @@ export type NativeBindingVersionOptions = {
   expectedVersion: string;
 };
 
+export class PreparedNativeRedactionSession {
+  readonly #session: NativePreparedRedactionSessionBinding;
+
+  constructor(session: NativePreparedRedactionSessionBinding) {
+    this.#session = session;
+  }
+
+  sessionId(): string {
+    return this.#session.sessionId();
+  }
+
+  session_id(): string {
+    return this.sessionId();
+  }
+
+  mappingCount(): number {
+    return this.#session.mappingCount();
+  }
+
+  mapping_count(): number {
+    return this.mappingCount();
+  }
+
+  toPlaintextJson(): string {
+    return this.#session.toPlaintextJson();
+  }
+
+  to_plaintext_json(): string {
+    return this.toPlaintextJson();
+  }
+
+  redactStaticEntities(
+    fullText: string,
+    operators?: NativeOperatorConfig,
+  ): NativeStaticRedactionResult {
+    const result: CanonicalStaticRedactionResult = JSON.parse(
+      this.redact_text_json(fullText, operators),
+    );
+    return fromCanonicalStaticRedactionResult(result);
+  }
+
+  redactText(
+    fullText: string,
+    operators?: NativeOperatorConfig,
+  ): NativeStaticRedactionResult {
+    return this.redactStaticEntities(fullText, operators);
+  }
+
+  redact_text(
+    fullText: string,
+    operators?: NativeOperatorConfig,
+  ): NativeStaticRedactionResult {
+    return this.redactText(fullText, operators);
+  }
+
+  redactTextJson(fullText: string, operators?: NativeOperatorConfig): string {
+    return this.redact_text_json(fullText, operators);
+  }
+
+  redact_text_json(fullText: string, operators?: NativeOperatorConfig): string {
+    return this.#session.redactStaticEntitiesJson(
+      fullText,
+      toBindingOperatorConfig(operators),
+    );
+  }
+}
+
 export class PreparedNativeAnonymizer {
   readonly #prepared: NativePreparedSearchBinding;
 
@@ -323,6 +406,42 @@ export class PreparedNativeAnonymizer {
 
   warm_lazy_regex_diagnostics_json(): string | null {
     return this.warmLazyRegexDiagnosticsJson();
+  }
+
+  createRedactionSession(sessionId: string): PreparedNativeRedactionSession {
+    const create = this.#prepared.createRedactionSession;
+    if (!create) {
+      throw new Error(
+        "Native anonymize binding does not support redaction sessions",
+      );
+    }
+    return new PreparedNativeRedactionSession(
+      create.call(this.#prepared, sessionId),
+    );
+  }
+
+  create_redaction_session(sessionId: string): PreparedNativeRedactionSession {
+    return this.createRedactionSession(sessionId);
+  }
+
+  restoreRedactionSession(
+    plaintextJson: string,
+  ): PreparedNativeRedactionSession {
+    const restore = this.#prepared.restoreRedactionSession;
+    if (!restore) {
+      throw new Error(
+        "Native anonymize binding does not support redaction sessions",
+      );
+    }
+    return new PreparedNativeRedactionSession(
+      restore.call(this.#prepared, plaintextJson),
+    );
+  }
+
+  restore_redaction_session(
+    plaintextJson: string,
+  ): PreparedNativeRedactionSession {
+    return this.restoreRedactionSession(plaintextJson);
   }
 
   redactStaticEntities(
@@ -535,6 +654,26 @@ export class PreparedNativePipeline {
 
   warm_lazy_regex_diagnostics_json(): string | null {
     return this.warmLazyRegexDiagnosticsJson();
+  }
+
+  createRedactionSession(sessionId: string): PreparedNativeRedactionSession {
+    return this.#anonymizer.createRedactionSession(sessionId);
+  }
+
+  create_redaction_session(sessionId: string): PreparedNativeRedactionSession {
+    return this.createRedactionSession(sessionId);
+  }
+
+  restoreRedactionSession(
+    plaintextJson: string,
+  ): PreparedNativeRedactionSession {
+    return this.#anonymizer.restoreRedactionSession(plaintextJson);
+  }
+
+  restore_redaction_session(
+    plaintextJson: string,
+  ): PreparedNativeRedactionSession {
+    return this.restoreRedactionSession(plaintextJson);
   }
 
   redactText(

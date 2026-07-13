@@ -42,6 +42,13 @@ const packagePath = join(packageRoot, "native-pipeline.stlanonpkg");
 const packageBytes = readFileSync(packagePath);
 const prepared = NativePreparedSearch.fromPreparedPackageBytes(packageBytes);
 
+if (
+  typeof prepared.createRedactionSession !== "function" ||
+  typeof prepared.restoreRedactionSession !== "function"
+) {
+  throw new TypeError("wasm binding is missing redaction session factories");
+}
+
 const sample = "A contract was signed by Jan Novak at Praha on 1. 1. 2025.";
 const result = prepared.redactStaticEntities(sample);
 const entities = result.resolvedEntities;
@@ -71,12 +78,28 @@ for (const entity of entities) {
   }
 }
 
+const session = prepared.createRedactionSession("smoke_1");
+const sessionResult = JSON.parse(session.redactStaticEntitiesJson(sample));
+if (
+  !Array.isArray(sessionResult.redaction?.redaction_map) ||
+  sessionResult.redaction.redaction_map.length === 0 ||
+  session.mappingCount() === 0
+) {
+  throw new Error("wasm redaction session did not retain any mapping");
+}
+const sessionState = session.toPlaintextJson();
+const restoredSession = prepared.restoreRedactionSession(sessionState);
+if (restoredSession.sessionId() !== "smoke_1") {
+  throw new Error("wasm redaction session did not restore its identity");
+}
+
 console.log(
   JSON.stringify({
     event: "wasm-smoke",
     ok: true,
     nativeVersion: version,
     entityCount: entities.length,
+    sessionMappingCount: session.mappingCount(),
     labels: entities.map((entity) => entity.label),
     firstEntity: {
       start: entities[0].start,
