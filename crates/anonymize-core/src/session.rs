@@ -611,6 +611,13 @@ fn session_placeholder_count(
       "mapping placeholder does not match its label and session id",
     ));
   };
+  if number.is_empty()
+    || !number.chars().all(|character| character.is_ascii_digit())
+  {
+    return Err(invalid_session_state(
+      "mapping placeholder count must contain only ASCII digits",
+    ));
+  }
   if number.starts_with('0') {
     return Err(invalid_session_state(
       "mapping placeholder count must not have a leading zero",

@@ -444,6 +444,19 @@ fn imported_state_rejects_counters_below_allocated_placeholders() {
 }
 
 #[test]
+fn imported_state_rejects_signed_placeholder_counts() {
+  let invalid = concat!(
+    r#"{"schema_version":1,"session_id":"s","counters":{"PERSON":1},"#,
+    r#""mappings":[{"label_key":"PERSON","normalized_text":"alice","#,
+    r#""placeholder":"[PERSON_s_+1]","original":"Alice"}]}"#,
+  );
+
+  let error = RedactionSession::from_plaintext_json(invalid)
+    .expect_err("placeholder counts must contain only digits");
+  assert!(matches!(error, Error::InvalidSessionState { .. }));
+}
+
+#[test]
 fn imported_state_rejects_placeholders_in_originals() {
   let invalid = concat!(
     r#"{"schema_version":1,"session_id":"matter_1","counters":{"PERSON":1},"#,
