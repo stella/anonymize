@@ -91,6 +91,10 @@ type PythonParityOutput = {
     first_placeholder: string;
     second_placeholder: string;
     restored_placeholder: string;
+    object_start: number;
+    object_end: number;
+    json_start: number;
+    json_end: number;
   };
 };
 
@@ -145,6 +149,8 @@ prepared = anonymize.get_default_native_pipeline(language="en")
 session = prepared.create_redaction_session("parity_session_1")
 session_first = session.redact_text("Jan Novak signed.")
 session_second = session.redact_text("Jan Novak signed again.")
+session_object_offsets = session.redact_text("😀Jan Novak signed.")
+session_json_offsets = json.loads(session.redact_text_json("😀Jan Novak signed."))
 restored_session = prepared.restore_redaction_session(session.to_plaintext_json())
 session_restored = restored_session.redact_text("Jan Novak signed once more.")
 
@@ -185,6 +191,10 @@ print(
                 "first_placeholder": session_first.redaction.redaction_map[0].placeholder,
                 "second_placeholder": session_second.redaction.redaction_map[0].placeholder,
                 "restored_placeholder": session_restored.redaction.redaction_map[0].placeholder,
+                "object_start": session_object_offsets.resolved_entities[0].start,
+                "object_end": session_object_offsets.resolved_entities[0].end,
+                "json_start": session_json_offsets["resolved_entities"][0]["start"],
+                "json_end": session_json_offsets["resolved_entities"][0]["end"],
             },
         }
     )
@@ -390,6 +400,10 @@ describe("python binding parity", () => {
       first_placeholder: "[PERSON_parity%5Fsession%5F1_1]",
       second_placeholder: "[PERSON_parity%5Fsession%5F1_1]",
       restored_placeholder: "[PERSON_parity%5Fsession%5F1_1]",
+      object_start: 1,
+      object_end: 10,
+      json_start: 2,
+      json_end: 11,
     });
   });
 });

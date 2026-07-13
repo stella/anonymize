@@ -124,7 +124,7 @@ impl PyPreparedRedactionSession {
     operators_json: Option<&str>,
   ) -> PyResult<String> {
     let result = self.redact_static_entities_core(full_text, operators_json)?;
-    let result = static_redaction_result_to_python_binding(result, full_text)
+    let result = static_redaction_result_to_utf16_binding(result, full_text)
       .map_err(|error| to_py_contract_error(&error))?;
     serde_json::to_string(&result).map_err(|error| to_py_serde_error(&error))
   }
