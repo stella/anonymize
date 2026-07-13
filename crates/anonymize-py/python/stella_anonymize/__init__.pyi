@@ -78,6 +78,12 @@ class PreparedRedactionSession:
     def mapping_count(self) -> int: ...
     def to_plaintext_json(self) -> str: ...
     def to_plaintext_json_at(self, observed_at_epoch_seconds: int) -> str: ...
+    def to_encrypted_archive(self, key: BytesLike) -> bytes: ...
+    def to_encrypted_archive_at(
+        self,
+        key: BytesLike,
+        observed_at_epoch_seconds: int,
+    ) -> bytes: ...
     def inspect(
         self,
         observed_at_epoch_seconds: int | None = None,
@@ -179,6 +185,14 @@ class PreparedAnonymizer:
     def restore_redaction_session(
         self,
         plaintext_json: str,
+    ) -> PreparedRedactionSession: ...
+    def restore_encrypted_redaction_session(
+        self,
+        archive: BytesLike,
+        key: BytesLike,
+        expected_session_id: str,
+        *,
+        observed_at_epoch_seconds: int | None = None,
     ) -> PreparedRedactionSession: ...
     def redact_text(
         self,

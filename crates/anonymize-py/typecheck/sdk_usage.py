@@ -83,6 +83,14 @@ def redact_with_session(text: str) -> str:
     restored = prepared.restore_redaction_session(session.to_plaintext_json())
     assert restored.session_id() == session.session_id()
     assert restored.mapping_count() == session.mapping_count()
+    archive_key = bytes([0x42]) * 32
+    archive: bytes = session.to_encrypted_archive(archive_key)
+    restored_archive = prepared.restore_encrypted_redaction_session(
+        archive,
+        archive_key,
+        session.session_id(),
+    )
+    assert restored_archive.mapping_count() == session.mapping_count()
     return result.redaction.redacted_text
 
 
@@ -97,6 +105,14 @@ def redact_with_lifecycle_session(text: str) -> str:
     metadata: anonymize.SessionMetadata = session.inspect(150)
     assert metadata["status"] == "active"
     session.to_plaintext_json_at(150)
+    archive_key = bytes([0x42]) * 32
+    archive = session.to_encrypted_archive_at(archive_key, 150)
+    prepared.restore_encrypted_redaction_session(
+        archive,
+        archive_key,
+        session.session_id(),
+        observed_at_epoch_seconds=150,
+    )
     deletion: anonymize.SessionDeletionSummary = session.delete()
     assert deletion["deleted_mapping_count"] == session.mapping_count()
     return result.redaction.redacted_text

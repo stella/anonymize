@@ -27,11 +27,12 @@ use stella_anonymize_adapter_contract::{
 };
 use stella_anonymize_core::{
   CallerRedactionOptions, DiagnosticDetail, DiagnosticEvent, DiagnosticStage,
-  Error as CoreError, OperatorConfig, PreparedEngine as CorePreparedEngine,
-  PreparedEngineArtifactsView, PreparedSessionRedactionOptions,
-  RedactionSession, SessionId, SessionLifecycle, SessionMetadata,
-  SessionStatus, SessionTimestamp, StaticRedactionDiagnostics,
-  StaticRedactionResult,
+  Error as CoreError, OpenSessionArchiveOptions, OperatorConfig,
+  PreparedEngine as CorePreparedEngine, PreparedEngineArtifactsView,
+  PreparedSessionRedactionOptions, REDACTION_SESSION_ARCHIVE_KEY_BYTES,
+  REDACTION_SESSION_ARCHIVE_MAX_BYTES, RedactionSession, SessionArchiveKey,
+  SessionId, SessionLifecycle, SessionMetadata, SessionStatus,
+  SessionTimestamp, StaticRedactionDiagnostics, StaticRedactionResult,
   assemble::{AssembleError, Dictionaries, GazetteerEntry, PipelineConfig},
 };
 
@@ -118,6 +119,36 @@ impl PyPreparedRedactionSession {
         observed_at_epoch_seconds,
       ))
       .map_err(|error| to_py_core_error(&error))
+  }
+
+  fn to_encrypted_archive<'py>(
+    &self,
+    py: Python<'py>,
+    key: &[u8],
+  ) -> PyResult<Bound<'py, PyBytes>> {
+    let key = session_archive_key(key)?;
+    let archive = self
+      .lock_session()?
+      .to_encrypted_archive(&key)
+      .map_err(|error| to_py_core_error(&error))?;
+    Ok(PyBytes::new(py, &archive))
+  }
+
+  fn to_encrypted_archive_at<'py>(
+    &self,
+    py: Python<'py>,
+    key: &[u8],
+    observed_at_epoch_seconds: u32,
+  ) -> PyResult<Bound<'py, PyBytes>> {
+    let key = session_archive_key(key)?;
+    let archive = self
+      .lock_session()?
+      .to_encrypted_archive_at(
+        &key,
+        SessionTimestamp::from_epoch_seconds(observed_at_epoch_seconds),
+      )
+      .map_err(|error| to_py_core_error(&error))?;
+    Ok(PyBytes::new(py, &archive))
   }
 
   #[pyo3(signature = (observed_at_epoch_seconds=None))]
@@ -460,6 +491,33 @@ impl PyPreparedSearch {
     plaintext_json: &str,
   ) -> PyResult<PyPreparedRedactionSession> {
     let session = RedactionSession::from_plaintext_json(plaintext_json)
+      .map_err(|error| to_py_core_error(&error))?;
+    Ok(PyPreparedRedactionSession::new(
+      Arc::clone(&self.inner),
+      session,
+    ))
+  }
+
+  #[pyo3(signature = (archive, key, expected_session_id, observed_at_epoch_seconds=None))]
+  fn restore_encrypted_redaction_session(
+    &self,
+    archive: &[u8],
+    key: &[u8],
+    expected_session_id: &str,
+    observed_at_epoch_seconds: Option<u32>,
+  ) -> PyResult<PyPreparedRedactionSession> {
+    let key = session_archive_key(key)?;
+    let expected_session_id = SessionId::new(expected_session_id.to_owned())
+      .map_err(|error| to_py_core_error(&error))?;
+    let archive = session_archive_bytes(archive)?;
+    let session =
+      RedactionSession::from_encrypted_archive(OpenSessionArchiveOptions {
+        archive: &archive,
+        key: &key,
+        expected_session_id: &expected_session_id,
+        observed_at: observed_at_epoch_seconds
+          .map(SessionTimestamp::from_epoch_seconds),
+      })
       .map_err(|error| to_py_core_error(&error))?;
     Ok(PyPreparedRedactionSession::new(
       Arc::clone(&self.inner),
@@ -1204,6 +1262,24 @@ fn to_py_operator_entry(entry: BindingOperatorEntry) -> PyOperatorEntry {
     placeholder: entry.placeholder,
     operator: entry.operator,
   }
+}
+
+fn session_archive_key(bytes: &[u8]) -> PyResult<SessionArchiveKey> {
+  let key_bytes = bytes.try_into().map_err(|_| {
+    PyValueError::new_err(format!(
+      "Encrypted session archive keys must be exactly {REDACTION_SESSION_ARCHIVE_KEY_BYTES} bytes"
+    ))
+  })?;
+  Ok(SessionArchiveKey::from_bytes(key_bytes))
+}
+
+fn session_archive_bytes(bytes: &[u8]) -> PyResult<Vec<u8>> {
+  if bytes.len() > REDACTION_SESSION_ARCHIVE_MAX_BYTES {
+    return Err(PyValueError::new_err(format!(
+      "Encrypted session archives must not exceed {REDACTION_SESSION_ARCHIVE_MAX_BYTES} bytes"
+    )));
+  }
+  Ok(bytes.to_vec())
 }
 
 fn to_py_core_error(error: &stella_anonymize_core::Error) -> PyErr {

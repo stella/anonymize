@@ -17,6 +17,7 @@
  * native-adapter-parity.test.ts).
  */
 import { spawnSync } from "node:child_process";
+import { Buffer } from "node:buffer";
 import {
   copyFileSync,
   cpSync,
@@ -34,6 +35,7 @@ import { join } from "node:path";
 import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 
 import {
+  getDefaultNativePipeline,
   loadNativeAnonymizeBinding,
   redact_default_text_json,
 } from "../native-node";
@@ -104,9 +106,22 @@ type PythonParityOutput = {
     deleted_mapping_count: number;
     deleted_status: string;
   };
+  archive_result: {
+    archive_base64: string;
+    restored_mapping_count: number;
+    restored_placeholder: string;
+    wrong_key_rejected: boolean;
+    wrong_session_id_rejected: boolean;
+    invalid_key_rejected: boolean;
+    oversized_archive_rejected: boolean;
+    lifecycle_restored_status: string;
+    missing_observed_at_rejected: boolean;
+    expired_restore_rejected: boolean;
+  };
 };
 
 const PYTHON_PARITY_SCRIPT = `
+import base64
 import json
 import os
 import pathlib
@@ -161,6 +176,40 @@ session_object_offsets = session.redact_text("😀Jan Novak signed.")
 session_json_offsets = json.loads(session.redact_text_json("😀Jan Novak signed."))
 restored_session = prepared.restore_redaction_session(session.to_plaintext_json())
 session_restored = restored_session.redact_text("Jan Novak signed once more.")
+archive_key = bytes([0x42]) * 32
+session_archive = session.to_encrypted_archive(archive_key)
+encrypted_restored_session = prepared.restore_encrypted_redaction_session(
+    session_archive, archive_key, "parity_session_1"
+)
+encrypted_session_restored = encrypted_restored_session.redact_text(
+    "Jan Novak signed from an archive."
+)
+
+def rejects_value_error(callback):
+    try:
+        callback()
+    except ValueError:
+        return True
+    return False
+
+wrong_key_rejected = rejects_value_error(
+    lambda: prepared.restore_encrypted_redaction_session(
+        session_archive, bytes([0x43]) * 32, "parity_session_1"
+    )
+)
+wrong_session_id_rejected = rejects_value_error(
+    lambda: prepared.restore_encrypted_redaction_session(
+        session_archive, archive_key, "different_session_1"
+    )
+)
+invalid_key_rejected = rejects_value_error(
+    lambda: session.to_encrypted_archive(bytes([0x42]) * 31)
+)
+oversized_archive_rejected = rejects_value_error(
+    lambda: prepared.restore_encrypted_redaction_session(
+        bytes(0x01000000 + 58), archive_key, "parity_session_1"
+    )
+)
 lifecycle_session = prepared.create_redaction_session_with_lifecycle(
     "parity_lifecycle_1",
     created_at_epoch_seconds=100,
@@ -170,6 +219,26 @@ lifecycle_session.redact_text_at(
     "Jan Novak signed.", observed_at_epoch_seconds=150
 )
 lifecycle_active = lifecycle_session.inspect(150)
+lifecycle_archive = lifecycle_session.to_encrypted_archive_at(archive_key, 150)
+lifecycle_archive_restored = prepared.restore_encrypted_redaction_session(
+    lifecycle_archive,
+    archive_key,
+    "parity_lifecycle_1",
+    observed_at_epoch_seconds=150,
+)
+missing_observed_at_rejected = rejects_value_error(
+    lambda: prepared.restore_encrypted_redaction_session(
+        lifecycle_archive, archive_key, "parity_lifecycle_1"
+    )
+)
+expired_restore_rejected = rejects_value_error(
+    lambda: prepared.restore_encrypted_redaction_session(
+        lifecycle_archive,
+        archive_key,
+        "parity_lifecycle_1",
+        observed_at_epoch_seconds=200,
+    )
+)
 lifecycle_state = json.loads(lifecycle_session.to_plaintext_json_at(150))
 lifecycle_restored = prepared.restore_redaction_session(
     json.dumps(lifecycle_state, separators=(",", ":"))
@@ -227,6 +296,18 @@ print(
                 "restored_expiry": lifecycle_expired["expires_at_epoch_seconds"],
                 "deleted_mapping_count": lifecycle_deleted["deleted_mapping_count"],
                 "deleted_status": lifecycle_deleted_metadata["status"],
+            },
+            "archive_result": {
+                "archive_base64": base64.b64encode(session_archive).decode("ascii"),
+                "restored_mapping_count": encrypted_restored_session.mapping_count(),
+                "restored_placeholder": encrypted_session_restored.redaction.redaction_map[0].placeholder,
+                "wrong_key_rejected": wrong_key_rejected,
+                "wrong_session_id_rejected": wrong_session_id_rejected,
+                "invalid_key_rejected": invalid_key_rejected,
+                "oversized_archive_rejected": oversized_archive_rejected,
+                "lifecycle_restored_status": lifecycle_archive_restored.inspect(150)["status"],
+                "missing_observed_at_rejected": missing_observed_at_rejected,
+                "expired_restore_rejected": expired_restore_rejected,
             },
         }
     )
@@ -445,5 +526,31 @@ describe("python binding parity", () => {
       deleted_mapping_count: 1,
       deleted_status: "deleted",
     });
+    expect(python.archive_result).toMatchObject({
+      restored_mapping_count: 1,
+      restored_placeholder: "[PERSON_parity%5Fsession%5F1_1]",
+      wrong_key_rejected: true,
+      wrong_session_id_rejected: true,
+      invalid_key_rejected: true,
+      oversized_archive_rejected: true,
+      lifecycle_restored_status: "active",
+      missing_observed_at_rejected: true,
+      expired_restore_rejected: true,
+    });
+
+    const binding = loadNativeAnonymizeBinding();
+    const native = getDefaultNativePipeline({ binding, language: "en" });
+    const restored = native.restoreEncryptedRedactionSession({
+      archive: new Uint8Array(
+        Buffer.from(python.archive_result.archive_base64, "base64"),
+      ),
+      key: new Uint8Array(32).fill(0x42),
+      expectedSessionId: "parity_session_1",
+    });
+    expect(
+      restored
+        .redactText("Jan Novak signed in Node.")
+        .redaction.redactionMap.has("[PERSON_parity%5Fsession%5F1_1]"),
+    ).toBe(true);
   });
 });
