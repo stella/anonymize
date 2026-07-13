@@ -214,9 +214,22 @@ export {
 } from "./constants";
 
 /** Per-label operator selection. Key is the entity label. */
+export type MaskDirection = "start" | "end";
+
+export type MaskOperatorConfig = {
+  type: "mask";
+  maskingCharacter: string;
+  charactersToMask: number;
+  direction: MaskDirection;
+};
+
+export type OperatorSelection =
+  | Exclude<OperatorType, "mask">
+  | MaskOperatorConfig;
+
 export type OperatorConfig = {
   /** Operator per label. Missing labels default to "replace". */
-  operators: Record<string, OperatorType>;
+  operators: Record<string, OperatorSelection>;
   /** Custom replacement string for the redact operator. */
   redactString: string;
 };
@@ -236,6 +249,7 @@ export type AnonymisationOperator = {
     label: string,
     placeholder: string,
     redactString: string,
+    selection: OperatorSelection,
   ) => string;
 };
 
@@ -246,7 +260,7 @@ export type RedactionResult = {
   redactedText: string;
   /**
    * Maps placeholder to original text. Only populated for
-   * reversible operators (replace). Empty for redact.
+   * reversible operators (replace). Empty for redact, keep, and mask.
    */
   redactionMap: Map<string, string>;
   /** Maps placeholder to the operator that produced it. */

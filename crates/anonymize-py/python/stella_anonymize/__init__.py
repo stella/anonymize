@@ -34,6 +34,8 @@ __all__ = [
     "__version__",
     "OperatorEntry",
     "OperatorConfig",
+    "OperatorSelection",
+    "MaskOperatorConfig",
     "CallerDetection",
     "CALLER_DETECTION_CONTRACT_VERSION",
     "DiagnosticsBatchCallback",
@@ -77,7 +79,17 @@ __all__ = [
 
 BytesLike = bytes | bytearray | memoryview
 PathLikeString = str | PathLike[str]
-OperatorConfig = Mapping[str, str] | str | None
+
+
+class MaskOperatorConfig(TypedDict):
+    type: Literal["mask"]
+    masking_character: str
+    characters_to_mask: int
+    direction: Literal["start", "end"]
+
+
+OperatorSelection = Literal["replace", "redact", "keep"] | MaskOperatorConfig
+OperatorConfig = Mapping[str, OperatorSelection] | str | None
 CALLER_DETECTION_CONTRACT_VERSION = 2
 
 

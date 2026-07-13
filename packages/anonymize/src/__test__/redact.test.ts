@@ -162,6 +162,27 @@ describe("operator behavior", () => {
     expect(result.redactionMap.has("[PERSON_1]")).toBe(false);
     expect(result.operatorMap.get("[PERSON_1]")).toBe("keep");
   });
+
+  test("mask operator preserves Unicode grapheme clusters", () => {
+    const text = "A👨‍👩‍👧‍👦e\u{301}Z";
+    const entities = [at(text, "person", text)];
+
+    const result = redactText(text, entities, {
+      operators: {
+        person: {
+          type: "mask",
+          maskingCharacter: "●",
+          charactersToMask: 2,
+          direction: "end",
+        },
+      },
+      redactString: "[REDACTED]",
+    });
+
+    expect(result.redactedText).toBe("A👨‍👩‍👧‍👦●●");
+    expect(result.redactionMap.size).toBe(0);
+    expect(result.operatorMap.get("[PERSON_1]")).toBe("mask");
+  });
 });
 
 describe("exportRedactionKey", () => {

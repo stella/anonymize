@@ -1,6 +1,7 @@
 import {
   DEFAULT_OPERATOR_CONFIG,
   OPERATOR_REGISTRY,
+  operatorType,
   resolveOperator,
 } from "./operators";
 import type {
@@ -268,7 +269,8 @@ export const redactText = (
       placeholderMap.get(`${entity.label}\0${entity.text}`) ??
       `[${entity.label.toUpperCase().replace(/\s+/g, "_")}]`;
 
-    const opType = resolveOperator(config, entity.label);
+    const selection = resolveOperator(config, entity.label);
+    const opType = operatorType(selection);
     const operator = OPERATOR_REGISTRY[opType];
 
     const replacement = operator.apply(
@@ -276,6 +278,7 @@ export const redactText = (
       entity.label,
       placeholder,
       config.redactString,
+      selection,
     );
 
     parts.push(replacement);

@@ -80,6 +80,9 @@ type PythonParityOutput = {
     kept_text: string;
     keep_map_count: number;
     keep_operator: string;
+    masked_text: string;
+    mask_map_count: number;
+    mask_operator: string;
   };
 };
 
@@ -121,6 +124,15 @@ caller_keep_result = json.loads(
         {"person": "keep"},
     )
 )
+caller_mask_result = json.loads(
+    anonymize.get_default_native_pipeline(language="en").redact_text_with_caller_detections_json(
+        "A👨‍👩‍👧‍👦éZ signed.",
+        [{"start": 0, "end": 11, "label": "person", "score": 0.9,
+          "provider_id": "parity-provider", "detection_id": "person-mask-1"}],
+        {"person": {"type": "mask", "masking_character": "●",
+                    "characters_to_mask": 2, "direction": "end"}},
+    )
+)
 
 print(
     json.dumps(
@@ -148,6 +160,9 @@ print(
                 "kept_text": caller_keep_result["redaction"]["redacted_text"],
                 "keep_map_count": len(caller_keep_result["redaction"]["redaction_map"]),
                 "keep_operator": caller_keep_result["redaction"]["operator_map"][0]["operator"],
+                "masked_text": caller_mask_result["redaction"]["redacted_text"],
+                "mask_map_count": len(caller_mask_result["redaction"]["redaction_map"]),
+                "mask_operator": caller_mask_result["redaction"]["operator_map"][0]["operator"],
             },
         }
     )
@@ -338,6 +353,9 @@ describe("python binding parity", () => {
       kept_text: "😀Alice signed.",
       keep_map_count: 0,
       keep_operator: "keep",
+      masked_text: "A👨‍👩‍👧‍👦●● signed.",
+      mask_map_count: 0,
+      mask_operator: "mask",
     });
   });
 });

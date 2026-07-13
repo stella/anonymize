@@ -81,8 +81,9 @@ pub use triggers::{
   TriggerData, TriggerRule, TriggerStrategy, TriggerValidation,
 };
 pub use types::{
-  Entity, EntityKind, Error, OperatorConfig, OperatorEntry, OperatorType,
-  PlaceholderEntry, PlaceholderMap, RedactionEntry, RedactionResult, Result,
-  SearchEngine, SearchMatch,
+  Entity, EntityKind, Error, MaskConfig, MaskDirection, Operator,
+  OperatorConfig, OperatorEntry, OperatorType, PlaceholderEntry,
+  PlaceholderMap, RedactionEntry, RedactionResult, Result, SearchEngine,
+  SearchMatch,
 };
 pub use zones::{ZoneData, ZonePatternData, ZoneSigningClauseData};

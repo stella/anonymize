@@ -68,13 +68,30 @@ const warmDiagnosticsJson = anonymizer.warmLazyRegexDiagnosticsJson();
 const result = anonymizer.redact_text(text, { redactString: "***" });
 ```
 
-Per-label operators support `replace`, `redact`, and `keep`. `keep` records
+Per-label operators support `replace`, `redact`, `keep`, and tagged `mask`
+configuration. `keep` records
 that an entity was processed while leaving its source text unchanged; it
 creates no reversible redaction-key entry:
 
 ```ts
 const result = anonymizer.redactText(text, {
   operators: { organization: "keep" },
+});
+```
+
+`mask` replaces a configured number of visible Unicode grapheme clusters from
+the start or end. A masking character must itself be exactly one grapheme:
+
+```ts
+const result = anonymizer.redactText(text, {
+  operators: {
+    "email address": {
+      type: "mask",
+      maskingCharacter: "*",
+      charactersToMask: 6,
+      direction: "start",
+    },
+  },
 });
 ```
 

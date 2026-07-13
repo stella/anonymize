@@ -54,6 +54,20 @@ Pass `{"organization": "keep"}` as the operators argument to preserve
 detected organizations while processing other labels normally. Kept entities
 remain in the result and operator map, but create no reversible mapping entry.
 
+Use a tagged mask configuration to replace a number of visible Unicode
+grapheme clusters from the start or end:
+
+```py
+operators = {
+    "email address": {
+        "type": "mask",
+        "masking_character": "*",
+        "characters_to_mask": 6,
+        "direction": "start",
+    }
+}
+```
+
 `provider_id` and `detection_id` are required 1–128 byte ASCII identifiers:
 they start with an alphanumeric character and otherwise contain only
 alphanumerics, `.`, `_`, `:`, or `-`. Do not encode personal data in them.

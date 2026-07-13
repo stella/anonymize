@@ -10,7 +10,8 @@ mod snapshots;
 
 use snapshots::redaction_snapshot;
 use stella_anonymize_core::{
-  Entity, Error, OperatorConfig, OperatorType, deanonymise, redact_text,
+  Entity, Error, MaskConfig, MaskDirection, Operator, OperatorConfig,
+  OperatorType, deanonymise, redact_text,
 };
 
 fn entity(text: &str, label: &str, value: &str) -> Entity {
@@ -265,7 +266,7 @@ fn redact_operator_is_not_reversible() {
   let mut config = OperatorConfig::default();
   config
     .operators
-    .insert(String::from("person"), OperatorType::Redact);
+    .insert(String::from("person"), Operator::Redact);
   config.redact_string = String::from("[GONE]");
   let entities = vec![
     entity(text, "person", "Alice Smith"),
@@ -295,7 +296,7 @@ fn keep_operator_preserves_text_without_reversible_mapping() {
   let mut config = OperatorConfig::default();
   config
     .operators
-    .insert(String::from("person"), OperatorType::Keep);
+    .insert(String::from("person"), Operator::Keep);
   let entities = vec![
     entity(text, "person", "Alice Smith"),
     entity(text, "email address", "alice@example.com"),
@@ -325,7 +326,7 @@ fn keep_operator_does_not_suppress_nested_redactions() {
   let mut config = OperatorConfig::default();
   config
     .operators
-    .insert(String::from("organization"), OperatorType::Keep);
+    .insert(String::from("organization"), Operator::Keep);
   let entities = vec![
     Entity::detected(
       0,
@@ -349,6 +350,29 @@ fn keep_operator_does_not_suppress_nested_redactions() {
     entry.placeholder == "[EMAIL_ADDRESS_1]"
       && entry.operator == OperatorType::Replace
   }));
+}
+
+#[test]
+fn mask_operator_masks_whole_graphemes_from_the_configured_direction() {
+  let text = "A👨‍👩‍👧‍👦e\u{301}Z";
+  for (direction, count, expected) in [
+    (MaskDirection::End, 2, "A👨‍👩‍👧‍👦●●"),
+    (MaskDirection::Start, 2, "●●e\u{301}Z"),
+    (MaskDirection::Start, 99, "●●●●"),
+  ] {
+    let mut config = OperatorConfig::default();
+    config.operators.insert(
+      String::from("person"),
+      Operator::Mask(MaskConfig::new("●", count, direction).unwrap()),
+    );
+    let entities = vec![Entity::detected(0, byte_len(text), "person", text)];
+
+    let result = redact_text(text, &entities, &config).unwrap();
+
+    assert_eq!(result.redacted_text, expected);
+    assert!(result.redaction_map.is_empty());
+    assert_eq!(result.operator_map[0].operator, OperatorType::Mask);
+  }
 }
 
 #[test]

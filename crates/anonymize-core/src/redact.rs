@@ -1,12 +1,13 @@
 use std::borrow::Cow;
 use std::collections::HashSet;
+use unicode_segmentation::UnicodeSegmentation;
 
 use crate::byte_offsets::ByteOffsets;
 use crate::normalize::placeholder_fallback;
 use crate::placeholders::build_placeholder_map;
 use crate::types::{
-  Entity, EntityKind, OperatorConfig, OperatorEntry, OperatorType,
-  RedactionEntry, RedactionResult, Result,
+  Entity, EntityKind, MaskConfig, MaskDirection, Operator, OperatorConfig,
+  OperatorEntry, OperatorType, RedactionEntry, RedactionResult, Result,
 };
 
 pub fn redact_text(
@@ -32,8 +33,10 @@ pub fn redact_text(
   let mut redacted = Vec::<RedactionSpan<'_>>::new();
   for span in sorted {
     match operator_for(config, &span.entity.label) {
-      OperatorType::Keep => kept.push(span),
-      OperatorType::Replace | OperatorType::Redact => redacted.push(span),
+      Operator::Keep => kept.push(span),
+      Operator::Replace | Operator::Redact | Operator::Mask(_) => {
+        redacted.push(span);
+      }
     }
   }
   // Existing contract remains within each operator class: the first accepted
@@ -55,7 +58,7 @@ pub fn redact_text(
       || Cow::Owned(placeholder_fallback(&span.entity.label)),
       Cow::Borrowed,
     );
-    let operator = operator_for(config, &span.entity.label);
+    let operator = operator_for(config, &span.entity.label).operator_type();
     set_operator_entry(&mut operator_map, &placeholder, operator);
   }
 
@@ -76,12 +79,15 @@ pub fn redact_text(
     );
     let operator = operator_for(config, &entity.label);
     match operator {
-      OperatorType::Replace => redacted_text.push_str(&placeholder),
-      OperatorType::Redact => redacted_text.push_str(&config.redact_string),
-      OperatorType::Keep => {}
+      Operator::Replace => redacted_text.push_str(&placeholder),
+      Operator::Redact => redacted_text.push_str(&config.redact_string),
+      Operator::Mask(mask_config) => {
+        redacted_text.push_str(&mask_text(span.source_text, mask_config));
+      }
+      Operator::Keep => {}
     }
 
-    if operator == OperatorType::Replace
+    if operator == &Operator::Replace
       && !redacted_placeholders.contains(placeholder.as_ref())
     {
       let placeholder = placeholder.into_owned();
@@ -188,12 +194,33 @@ fn source_slice<'a>(
     .ok_or(crate::types::Error::InvalidSpan { start, end })
 }
 
-fn operator_for(config: &OperatorConfig, label: &str) -> OperatorType {
-  config
-    .operators
-    .get(label)
-    .copied()
-    .unwrap_or(OperatorType::Replace)
+const DEFAULT_OPERATOR: Operator = Operator::Replace;
+
+fn operator_for<'a>(config: &'a OperatorConfig, label: &str) -> &'a Operator {
+  config.operators.get(label).unwrap_or(&DEFAULT_OPERATOR)
+}
+
+fn mask_text(text: &str, config: &MaskConfig) -> String {
+  let grapheme_count = text.graphemes(true).count();
+  let characters_to_mask = usize::try_from(config.characters_to_mask())
+    .unwrap_or(usize::MAX)
+    .min(grapheme_count);
+  let mask_from = grapheme_count.saturating_sub(characters_to_mask);
+  let mut masked = String::with_capacity(text.len());
+
+  for (index, grapheme) in text.graphemes(true).enumerate() {
+    let should_mask = match config.direction() {
+      MaskDirection::Start => index < characters_to_mask,
+      MaskDirection::End => index >= mask_from,
+    };
+    if should_mask {
+      masked.push_str(config.masking_character());
+    } else {
+      masked.push_str(grapheme);
+    }
+  }
+
+  masked
 }
 
 fn set_operator_entry(

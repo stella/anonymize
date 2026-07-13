@@ -9,18 +9,19 @@ use stella_anonymize_core::{
   DenyListMatchData, DenyListPatternMetaSet, DetectionSource, DiagnosticEvent,
   DiagnosticEventKind, DiagnosticPhase, DiagnosticScope, DiagnosticStage,
   FuzzySearchOptions, GazetteerMatchData, HotwordRule, HotwordRuleData,
-  LegalFormData, LiteralSearchOptions, MagnitudeSuffixData, MonetaryData,
-  NameCorpusData, NameCorpusMode, OperatorConfig, OperatorType, PatternSlice,
-  PipelineEntity, PreparedArtifactPolicy, PreparedEngineArtifacts,
-  PreparedEngineConfig, PreparedEngineDetectorConfig,
-  PreparedEnginePolicyConfig, PreparedEngineSearchConfig, PreparedEngineSlices,
-  RedactionResult, RegexArtifactPolicy, RegexMatchMeta, RegexSearchOptions,
-  SearchEngine, SearchOptions, SearchPattern, ShareQuantityTermData,
-  SignatureData, SigningPlaceGuardData, SourceDetail,
-  StaticRedactionDiagnosticResult, StaticRedactionDiagnostics,
-  StaticRedactionResult, StaticRedactionStreamEvent, StringGroups, TriggerData,
-  TriggerRule, TriggerStrategy, TriggerValidation, WrittenAmountPatternData,
-  ZoneData, ZonePatternData, ZoneSigningClauseData,
+  LegalFormData, LiteralSearchOptions, MagnitudeSuffixData, MaskConfig,
+  MaskDirection, MonetaryData, NameCorpusData, NameCorpusMode, Operator,
+  OperatorConfig, OperatorType, PatternSlice, PipelineEntity,
+  PreparedArtifactPolicy, PreparedEngineArtifacts, PreparedEngineConfig,
+  PreparedEngineDetectorConfig, PreparedEnginePolicyConfig,
+  PreparedEngineSearchConfig, PreparedEngineSlices, RedactionResult,
+  RegexArtifactPolicy, RegexMatchMeta, RegexSearchOptions, SearchEngine,
+  SearchOptions, SearchPattern, ShareQuantityTermData, SignatureData,
+  SigningPlaceGuardData, SourceDetail, StaticRedactionDiagnosticResult,
+  StaticRedactionDiagnostics, StaticRedactionResult,
+  StaticRedactionStreamEvent, StringGroups, TriggerData, TriggerRule,
+  TriggerStrategy, TriggerValidation, WrittenAmountPatternData, ZoneData,
+  ZonePatternData, ZoneSigningClauseData,
 };
 
 mod assemble;
@@ -59,6 +60,7 @@ pub enum ContractError {
   InvalidPreparedSearchPackage { reason: String },
   MissingDenyListDataForLiteralPatterns,
   UnsupportedOperator { value: String },
+  InvalidOperatorConfig { label: String, reason: String },
   UnsupportedSearchPatternKind { kind: String },
   UnsupportedSourceDetail { value: String },
   UnsupportedCallerDetectionContractVersion { version: u32 },
@@ -99,6 +101,9 @@ impl std::fmt::Display for ContractError {
       ),
       Self::UnsupportedOperator { value } => {
         write!(formatter, "Unsupported anonymization operator: {value}")
+      }
+      Self::InvalidOperatorConfig { label, reason } => {
+        write!(formatter, "Invalid operator config for '{label}': {reason}")
       }
       Self::UnsupportedSearchPatternKind { kind } => {
         write!(formatter, "Unsupported search pattern kind: {kind}")
@@ -1685,9 +1690,27 @@ fn write_package_header(
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct BindingOperatorConfig {
-  pub operators: Option<BTreeMap<String, String>>,
+  pub operators: Option<BTreeMap<String, BindingOperator>>,
   #[serde(default, alias = "redactString")]
   pub redact_string: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(untagged)]
+pub enum BindingOperator {
+  Name(String),
+  Tagged(BindingTaggedOperator),
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct BindingTaggedOperator {
+  #[serde(rename = "type")]
+  pub operator_type: String,
+  #[serde(alias = "maskingCharacter")]
+  pub masking_character: String,
+  #[serde(alias = "charactersToMask")]
+  pub characters_to_mask: u32,
+  pub direction: String,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -2560,7 +2583,7 @@ pub fn operator_config_from_binding(
 
   let mut operators = BTreeMap::new();
   for (label, value) in config.operators.unwrap_or_default() {
-    operators.insert(label, operator_type_from_binding(&value)?);
+    operators.insert(label.clone(), operator_from_binding(&label, value)?);
   }
 
   Ok(OperatorConfig {
@@ -3348,15 +3371,58 @@ fn source_detail_from_binding(value: &str) -> Result<SourceDetail> {
   }
 }
 
-fn operator_type_from_binding(value: &str) -> Result<OperatorType> {
+fn operator_from_binding(
+  label: &str,
+  value: BindingOperator,
+) -> Result<Operator> {
   match value {
-    "replace" => Ok(OperatorType::Replace),
-    "redact" => Ok(OperatorType::Redact),
-    "keep" => Ok(OperatorType::Keep),
+    BindingOperator::Name(value) => operator_name_from_binding(&value),
+    BindingOperator::Tagged(config) => {
+      mask_operator_from_binding(label, config)
+    }
+  }
+}
+
+fn operator_name_from_binding(value: &str) -> Result<Operator> {
+  match value {
+    "replace" => Ok(Operator::Replace),
+    "redact" => Ok(Operator::Redact),
+    "keep" => Ok(Operator::Keep),
     _ => Err(ContractError::UnsupportedOperator {
       value: value.to_owned(),
     }),
   }
+}
+
+fn mask_operator_from_binding(
+  label: &str,
+  config: BindingTaggedOperator,
+) -> Result<Operator> {
+  if config.operator_type != "mask" {
+    return Err(ContractError::UnsupportedOperator {
+      value: config.operator_type,
+    });
+  }
+  let direction = match config.direction.as_str() {
+    "start" => MaskDirection::Start,
+    "end" => MaskDirection::End,
+    _ => {
+      return Err(ContractError::InvalidOperatorConfig {
+        label: label.to_owned(),
+        reason: String::from("direction must be 'start' or 'end'"),
+      });
+    }
+  };
+  MaskConfig::new(
+    config.masking_character,
+    config.characters_to_mask,
+    direction,
+  )
+  .map(Operator::Mask)
+  .map_err(|error| ContractError::InvalidOperatorConfig {
+    label: label.to_owned(),
+    reason: error.to_string(),
+  })
 }
 
 fn detection_source_name(source: DetectionSource) -> String {
@@ -3657,6 +3723,7 @@ fn operator_name(operator: OperatorType) -> String {
     OperatorType::Replace => "replace",
     OperatorType::Redact => "redact",
     OperatorType::Keep => "keep",
+    OperatorType::Mask => "mask",
   }
   .to_owned()
 }
@@ -3789,9 +3856,9 @@ mod tests {
     assert_eq!(CharacterOffsetMap::new(text).unwrap().convert(4), Ok(1));
   }
   use stella_anonymize_core::{
-    DiagnosticEvent, DiagnosticEventKind, DiagnosticStage, OperatorType,
-    PreparedArtifactPolicy, PreparedEngineArtifacts, RegexArtifactPolicy,
-    SearchPattern, StaticRedactionDiagnostics,
+    DiagnosticEvent, DiagnosticEventKind, DiagnosticStage, MaskDirection,
+    Operator, PreparedArtifactPolicy, PreparedEngineArtifacts,
+    RegexArtifactPolicy, SearchPattern, StaticRedactionDiagnostics,
   };
 
   #[test]
@@ -3925,8 +3992,53 @@ mod tests {
     assert_eq!(operators.redact_string, "***");
     assert_eq!(
       operators.operators.get("organization"),
-      Some(&OperatorType::Keep)
+      Some(&Operator::Keep)
     );
+  }
+
+  #[test]
+  fn binding_operator_config_accepts_tagged_mask() {
+    let config = serde_json::from_str::<BindingOperatorConfig>(
+      r#"{"operators":{"person":{"type":"mask","maskingCharacter":"●","charactersToMask":2,"direction":"end"}}}"#,
+    )
+    .unwrap();
+    let operators = operator_config_from_binding(Some(config)).unwrap();
+
+    let mask = operators.operators.get("person");
+    assert!(matches!(mask, Some(Operator::Mask(_))));
+    if let Some(Operator::Mask(mask)) = mask {
+      assert_eq!(mask.masking_character(), "●");
+      assert_eq!(mask.characters_to_mask(), 2);
+      assert_eq!(mask.direction(), MaskDirection::End);
+    }
+  }
+
+  #[test]
+  fn binding_operator_config_rejects_invalid_mask_parameters() {
+    for json in [
+      r#"{"operators":{"person":{"type":"mask","maskingCharacter":"ab","charactersToMask":2,"direction":"end"}}}"#,
+      r#"{"operators":{"person":{"type":"mask","maskingCharacter":"*","charactersToMask":2,"direction":"middle"}}}"#,
+      r#"{"operators":{"person":{"type":"mask","maskingCharacter":"*","charactersToMask":0,"direction":"start"}}}"#,
+    ] {
+      let config = serde_json::from_str::<BindingOperatorConfig>(json).unwrap();
+      let error = operator_config_from_binding(Some(config)).unwrap_err();
+      assert!(matches!(error, ContractError::InvalidOperatorConfig { .. }));
+    }
+
+    let oversized_masking_character = format!("a{}", "\u{301}".repeat(32));
+    let json = serde_json::json!({
+      "operators": {
+        "person": {
+          "type": "mask",
+          "maskingCharacter": oversized_masking_character,
+          "charactersToMask": 2,
+          "direction": "end"
+        }
+      }
+    });
+    let config = serde_json::from_value::<BindingOperatorConfig>(json).unwrap();
+    let error = operator_config_from_binding(Some(config)).unwrap_err();
+    assert!(matches!(error, ContractError::InvalidOperatorConfig { .. }));
   }
 
   #[test]
