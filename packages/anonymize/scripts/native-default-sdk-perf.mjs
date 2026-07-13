@@ -246,8 +246,9 @@ function runWorkerProcess({ adapter, language, preload, pythonSdkRoot }) {
     throw new Error(
       [
         "Native default SDK benchmark worker failed",
-        child.stdout.trim(),
-        child.stderr.trim(),
+        child.error?.message,
+        child.stdout?.trim(),
+        child.stderr?.trim(),
       ]
         .filter(Boolean)
         .join("\n"),
@@ -408,18 +409,19 @@ function runPythonWorker({ language, fixtures, packageBytes }) {
     cwd: ROOT_DIR,
     env: {
       ...process.env,
-      STELLA_ANONYMIZE_DEFAULT_SDK_PERF_PAYLOAD: JSON.stringify(payload),
       STELLA_ANONYMIZE_PYTHON_SDK_ROOT: PYTHON_SDK_ROOT,
     },
     encoding: "utf8",
+    input: JSON.stringify(payload),
     maxBuffer: 64 * 1024 * 1024,
   });
   if (child.status !== 0) {
     throw new Error(
       [
         "Python default SDK benchmark worker failed",
-        child.stdout.trim(),
-        child.stderr.trim(),
+        child.error?.message,
+        child.stdout?.trim(),
+        child.stderr?.trim(),
       ]
         .filter(Boolean)
         .join("\n"),
@@ -937,8 +939,9 @@ function ensureDefaultNativePackages() {
   throw new Error(
     [
       "Failed to build default native packages",
-      build.stdout.trim(),
-      build.stderr.trim(),
+      build.error?.message,
+      build.stdout?.trim(),
+      build.stderr?.trim(),
     ]
       .filter(Boolean)
       .join("\n"),
@@ -982,8 +985,9 @@ function ensurePythonNativeLibrary() {
   throw new Error(
     [
       "Failed to build Python native library",
-      build.stdout.trim(),
-      build.stderr.trim(),
+      build.error?.message,
+      build.stdout?.trim(),
+      build.stderr?.trim(),
     ]
       .filter(Boolean)
       .join("\n"),
@@ -1490,7 +1494,7 @@ def round_ms(value):
     return round(value * 1_000) / 1_000
 
 def main():
-    payload = json.loads(os.environ["STELLA_ANONYMIZE_DEFAULT_SDK_PERF_PAYLOAD"])
+    payload = json.load(sys.stdin)
     language = payload["language"]
     result_mode = payload["result_mode"]
     pipeline_options = {} if language is None else {"language": language}
