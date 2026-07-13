@@ -53,6 +53,8 @@ The Rust prepared engine is split by phase:
 - `detection_phase.rs`: run the static detector registry.
 - `resolution_phase.rs`: apply context, hotwords, merge, boundary, sanitize.
 - `redaction_phase.rs`: build replacements and maps.
+- `session_archive.rs`: seal and restore bounded authenticated session archives;
+  callers own key custody and opaque-byte persistence.
 
 Detector modules live under `crates/anonymize-core/src/prepared/detectors`.
 Adding a detector should mean adding module-local rule metadata and detection

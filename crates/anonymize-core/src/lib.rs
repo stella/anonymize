@@ -29,6 +29,7 @@ mod redact;
 mod resolution;
 mod search;
 mod session;
+mod session_archive;
 mod signatures;
 mod triggers;
 mod types;
@@ -85,6 +86,11 @@ pub use session::{
   REDACTION_SESSION_SCHEMA_VERSION, RedactionSession, SessionDeletionSummary,
   SessionId, SessionLifecycle, SessionMetadata, SessionStatus,
   SessionTimestamp,
+};
+pub use session_archive::{
+  OpenSessionArchiveOptions, REDACTION_SESSION_ARCHIVE_ALGORITHM,
+  REDACTION_SESSION_ARCHIVE_KEY_BYTES, REDACTION_SESSION_ARCHIVE_MAX_BYTES,
+  REDACTION_SESSION_ARCHIVE_VERSION, SessionArchiveKey,
 };
 pub use signatures::SignatureData;
 pub use triggers::{
