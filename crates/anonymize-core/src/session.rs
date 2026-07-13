@@ -218,10 +218,10 @@ impl RedactionSession {
         continue;
       }
       let identity = placeholder_identity(input.entity);
-      validate_placeholder_component("label_key", &identity.label_key)?;
-      validate_mapping_value("normalized_text", &identity.text)?;
 
       if input.persist {
+        validate_placeholder_component("label_key", &identity.label_key)?;
+        validate_mapping_value("normalized_text", &identity.text)?;
         if let Some(placeholder) = self.placeholders.get(&identity) {
           placeholder_map.push_entity(input.entity, placeholder);
           continue;

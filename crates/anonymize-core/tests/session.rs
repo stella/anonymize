@@ -257,6 +257,42 @@ fn irreversible_operators_do_not_persist_session_mappings() {
 }
 
 #[test]
+fn transient_operators_do_not_apply_persistence_value_limits() {
+  const OVERSIZED_VALUE_BYTES: usize = 0x0010_0001;
+
+  let oversized = "x".repeat(OVERSIZED_VALUE_BYTES);
+  let oversized_end =
+    u32::try_from(oversized.len()).expect("fixture should fit u32");
+  let mut redact_config = OperatorConfig::default();
+  redact_config
+    .operators
+    .insert(String::from("person"), Operator::Redact);
+  let mut session =
+    RedactionSession::new(SessionId::new("large_value").expect("valid id"));
+  redact(RedactFixtureParams {
+    text: &oversized,
+    entities: &[Entity::detected(0, oversized_end, "person", &oversized)],
+    config: &redact_config,
+    session: &mut session,
+  })
+  .expect("transient oversized values should redact");
+
+  let mut keep_config = OperatorConfig::default();
+  keep_config
+    .operators
+    .insert(String::from("person"), Operator::Keep);
+  redact(RedactFixtureParams {
+    text: "A",
+    entities: &[Entity::detected(0, 1, "person", " ")],
+    config: &keep_config,
+    session: &mut session,
+  })
+  .expect("transient empty normalized values should be kept");
+
+  assert_eq!(session.mapping_count(), 0);
+}
+
+#[test]
 fn session_ids_and_schema_versions_are_validated() {
   for invalid in ["", "contains space", "contains[bracket]"] {
     assert!(SessionId::new(invalid).is_err());
