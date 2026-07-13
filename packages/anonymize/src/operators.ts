@@ -22,10 +22,9 @@ const getTextEncoder = (): TextEncoder => {
   return textEncoder;
 };
 
-const maskText = (
-  text: string,
-  selection: Extract<OperatorSelection, { type: "mask" }>,
-): string => {
+type MaskSelection = Extract<OperatorSelection, { type: "mask" }>;
+
+const maskSegments = (selection: MaskSelection, text: string) => {
   if (
     !Number.isSafeInteger(selection.charactersToMask) ||
     selection.charactersToMask <= 0 ||
@@ -52,17 +51,48 @@ const maskText = (
       "maskingCharacter must contain exactly one grapheme cluster",
     );
   }
-  const graphemes = Array.from(
-    getGraphemeSegmenter().segment(text),
-    ({ segment }) => segment,
-  );
-  const count = Math.min(selection.charactersToMask, graphemes.length);
-  const maskFrom = graphemes.length - count;
-  return graphemes
-    .map((grapheme, index) => {
-      const shouldMask =
-        selection.direction === "start" ? index < count : index >= maskFrom;
-      return shouldMask ? selection.maskingCharacter : grapheme;
+  const segments = Array.from(getGraphemeSegmenter().segment(text));
+  const count = Math.min(selection.charactersToMask, segments.length);
+  return { count, maskFrom: segments.length - count, segments };
+};
+
+const shouldMaskSegment = (
+  selection: MaskSelection,
+  index: number,
+  count: number,
+  maskFrom: number,
+): boolean =>
+  selection.direction === "start" ? index < count : index >= maskFrom;
+
+type MaskReplacementSpan = {
+  start: number;
+  end: number;
+  replacement: string;
+};
+
+export const maskReplacementSpans = (
+  text: string,
+  selection: MaskSelection,
+): MaskReplacementSpan[] => {
+  const { count, maskFrom, segments } = maskSegments(selection, text);
+  const replacements: MaskReplacementSpan[] = [];
+  for (const [index, segment] of segments.entries()) {
+    if (!shouldMaskSegment(selection, index, count, maskFrom)) continue;
+    replacements.push({
+      start: segment.index,
+      end: segment.index + segment.segment.length,
+      replacement: selection.maskingCharacter,
+    });
+  }
+  return replacements;
+};
+
+const maskText = (text: string, selection: MaskSelection): string => {
+  const { count, maskFrom, segments } = maskSegments(selection, text);
+  return segments
+    .map(({ segment }, index) => {
+      const shouldMask = shouldMaskSegment(selection, index, count, maskFrom);
+      return shouldMask ? selection.maskingCharacter : segment;
     })
     .join("");
 };

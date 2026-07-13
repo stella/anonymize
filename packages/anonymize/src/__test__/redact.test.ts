@@ -183,6 +183,31 @@ describe("operator behavior", () => {
     expect(result.redactionMap.size).toBe(0);
     expect(result.operatorMap.get("[PERSON_1]")).toBe("mask");
   });
+
+  test("mask operator does not suppress nested redactions", () => {
+    const text = "Alice@example.com";
+    const entities = [
+      at(text, "email address", text),
+      at(text, "person", "Alice"),
+    ];
+
+    const result = redactText(text, entities, {
+      operators: {
+        "email address": {
+          type: "mask",
+          maskingCharacter: "●",
+          charactersToMask: 4,
+          direction: "end",
+        },
+      },
+      redactString: "[REDACTED]",
+    });
+
+    expect(result.redactedText).toBe("[PERSON_1]@example●●●●");
+    expect(result.entityCount).toBe(2);
+    expect(result.redactionMap.get("[PERSON_1]")).toBe("Alice");
+    expect(result.operatorMap.get("[EMAIL_ADDRESS_1]")).toBe("mask");
+  });
 });
 
 describe("exportRedactionKey", () => {

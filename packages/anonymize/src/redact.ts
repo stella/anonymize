@@ -1,5 +1,6 @@
 import {
   DEFAULT_OPERATOR_CONFIG,
+  maskReplacementSpans,
   OPERATOR_REGISTRY,
   operatorType,
   resolveOperator,
@@ -125,6 +126,45 @@ const normalizeEntityText = (label: string, text: string): string => {
   return text.trim();
 };
 
+const nonOverlappingEntities = (entities: Entity[]): Entity[] => {
+  const result: Entity[] = [];
+  let lastEnd = 0;
+  for (const entity of entities) {
+    if (entity.start < lastEnd) continue;
+    result.push(entity);
+    lastEnd = entity.end;
+  }
+  return result;
+};
+
+type MaskReplacementSpan = {
+  start: number;
+  end: number;
+  replacement: string;
+};
+
+const removeRedactedMaskOverlaps = (
+  replacements: MaskReplacementSpan[],
+  redacted: Entity[],
+): MaskReplacementSpan[] => {
+  const result: MaskReplacementSpan[] = [];
+  let redactedIndex = 0;
+  for (const replacement of replacements) {
+    while (true) {
+      const candidate = redacted.at(redactedIndex);
+      if (candidate === undefined || candidate.end > replacement.start) break;
+      redactedIndex += 1;
+    }
+    const redactedEntity = redacted.at(redactedIndex);
+    const overlaps =
+      redactedEntity !== undefined &&
+      redactedEntity.start < replacement.end &&
+      replacement.start < redactedEntity.end;
+    if (!overlaps) result.push(replacement);
+  }
+  return result;
+};
+
 /**
  * Build a stable mapping from entity text to numbered
  * placeholders. Same real-world value always maps to the
@@ -245,29 +285,91 @@ export const redactText = (
 
   const sorted = entities.toSorted((a, b) => a.start - b.start);
 
-  // Remove overlapping spans (keep first occurrence)
-  const nonOverlapping: Entity[] = [];
-  let lastEnd = 0;
+  const kept: Entity[] = [];
+  const masked: Entity[] = [];
+  const redacted: Entity[] = [];
   for (const entity of sorted) {
-    if (entity.start >= lastEnd) {
-      nonOverlapping.push(entity);
-      lastEnd = entity.end;
+    const opType = operatorType(resolveOperator(config, entity.label));
+    if (opType === "keep") {
+      kept.push(entity);
+    } else if (opType === "mask") {
+      masked.push(entity);
+    } else {
+      redacted.push(entity);
     }
   }
+  const selectedKept = nonOverlappingEntities(kept);
+  const selectedMasked = nonOverlappingEntities(masked);
+  const selectedRedacted = nonOverlappingEntities(redacted);
+
+  const maskReplacements: MaskReplacementSpan[] = [];
+  for (const entity of selectedMasked) {
+    const selection = resolveOperator(config, entity.label);
+    if (typeof selection === "string") continue;
+    const sourceText = fullText.slice(entity.start, entity.end);
+    for (const replacement of maskReplacementSpans(sourceText, selection)) {
+      maskReplacements.push({
+        start: entity.start + replacement.start,
+        end: entity.start + replacement.end,
+        replacement: replacement.replacement,
+      });
+    }
+  }
+  const visibleMaskReplacements = removeRedactedMaskOverlaps(
+    maskReplacements,
+    selectedRedacted,
+  );
 
   const parts: string[] = [];
   const redactionMap = new Map<string, string>();
   const operatorMap = new Map<string, OperatorType>();
   let cursor = 0;
 
-  for (const entity of nonOverlapping) {
-    if (entity.start > cursor) {
-      parts.push(fullText.slice(cursor, entity.start));
-    }
+  const placeholderFor = (entity: Entity): string =>
+    placeholderMap.get(`${entity.label}\0${entity.text}`) ??
+    `[${entity.label.toUpperCase().replace(/\s+/g, "_")}]`;
+  const processed = [
+    ...selectedKept,
+    ...selectedMasked,
+    ...selectedRedacted,
+  ].toSorted((a, b) => a.start - b.start);
+  for (const entity of processed) {
+    operatorMap.set(
+      placeholderFor(entity),
+      operatorType(resolveOperator(config, entity.label)),
+    );
+  }
 
-    const placeholder =
-      placeholderMap.get(`${entity.label}\0${entity.text}`) ??
-      `[${entity.label.toUpperCase().replace(/\s+/g, "_")}]`;
+  let redactedIndex = 0;
+  let maskIndex = 0;
+  while (
+    redactedIndex < selectedRedacted.length ||
+    maskIndex < visibleMaskReplacements.length
+  ) {
+    const redactedEntity = selectedRedacted.at(redactedIndex);
+    const maskReplacement = visibleMaskReplacements.at(maskIndex);
+    const useRedacted =
+      redactedEntity !== undefined &&
+      (maskReplacement === undefined ||
+        redactedEntity.start <= maskReplacement.start);
+    const start = useRedacted
+      ? (redactedEntity?.start ?? cursor)
+      : (maskReplacement?.start ?? cursor);
+    const end = useRedacted
+      ? (redactedEntity?.end ?? start)
+      : (maskReplacement?.end ?? start);
+    if (start > cursor) parts.push(fullText.slice(cursor, start));
+
+    if (!useRedacted && maskReplacement !== undefined) {
+      parts.push(maskReplacement.replacement);
+      cursor = end;
+      maskIndex += 1;
+      continue;
+    }
+    if (redactedEntity === undefined) break;
+
+    const entity = redactedEntity;
+    const placeholder = placeholderFor(entity);
 
     const selection = resolveOperator(config, entity.label);
     const opType = operatorType(selection);
@@ -282,13 +384,6 @@ export const redactText = (
     );
 
     parts.push(replacement);
-    // operatorMap is keyed by the conceptual placeholder
-    // ([LABEL_N]), not by the replacement text. For "redact"
-    // operators the placeholder never appears in the output;
-    // the map is only consulted via exportRedactionKey which
-    // iterates redactionMap (replace entries only).
-    operatorMap.set(placeholder, opType);
-
     // Only populate redactionMap for reversible operators.
     // A coref alias contributes its source's full text, so
     // a forward alias ("Acme" before "Acme Corporation")
@@ -304,7 +399,8 @@ export const redactText = (
       );
     }
 
-    cursor = entity.end;
+    cursor = end;
+    redactedIndex += 1;
   }
 
   if (cursor < fullText.length) {
@@ -315,7 +411,8 @@ export const redactText = (
     redactedText: parts.join(""),
     redactionMap,
     operatorMap,
-    entityCount: nonOverlapping.length,
+    entityCount:
+      selectedKept.length + selectedMasked.length + selectedRedacted.length,
   };
 };
 

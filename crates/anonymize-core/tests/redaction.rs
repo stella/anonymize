@@ -376,6 +376,30 @@ fn mask_operator_masks_whole_graphemes_from_the_configured_direction() {
 }
 
 #[test]
+fn mask_operator_does_not_suppress_nested_redactions() {
+  let text = "Alice@example.com";
+  let mut config = OperatorConfig::default();
+  config.operators.insert(
+    String::from("email address"),
+    Operator::Mask(MaskConfig::new("●", 4, MaskDirection::End).unwrap()),
+  );
+  let entities = vec![
+    Entity::detected(0, byte_len(text), "email address", text),
+    Entity::detected(0, 5, "person", "Alice"),
+  ];
+
+  let result = redact_text(text, &entities, &config).unwrap();
+
+  assert_eq!(result.redacted_text, "[PERSON_1]@example●●●●");
+  assert_eq!(result.entity_count, 2);
+  assert_eq!(result.redaction_map.len(), 1);
+  assert!(result.operator_map.iter().any(|entry| {
+    entry.placeholder == "[EMAIL_ADDRESS_1]"
+      && entry.operator == OperatorType::Mask
+  }));
+}
+
+#[test]
 fn byte_offsets_apply_non_ascii_spans() {
   let text = "A 🦀 Bob";
   let start = byte_len("A 🦀 ");
