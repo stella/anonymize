@@ -3,6 +3,7 @@ import {
   maskReplacementSpans,
   OPERATOR_REGISTRY,
   operatorType,
+  requireMaskSelection,
   resolveOperator,
 } from "./operators";
 import type {
@@ -305,9 +306,11 @@ export const redactText = (
   const maskReplacements: MaskReplacementSpan[] = [];
   for (const entity of selectedMasked) {
     const selection = resolveOperator(config, entity.label);
-    if (typeof selection === "string") continue;
     const sourceText = fullText.slice(entity.start, entity.end);
-    for (const replacement of maskReplacementSpans(sourceText, selection)) {
+    for (const replacement of maskReplacementSpans(
+      sourceText,
+      requireMaskSelection(selection),
+    )) {
       maskReplacements.push({
         start: entity.start + replacement.start,
         end: entity.start + replacement.end,

@@ -24,6 +24,15 @@ const getTextEncoder = (): TextEncoder => {
 
 type MaskSelection = Extract<OperatorSelection, { type: "mask" }>;
 
+export const requireMaskSelection = (
+  selection: OperatorSelection,
+): MaskSelection => {
+  if (typeof selection === "string") {
+    throw new TypeError("mask requires a tagged operator configuration");
+  }
+  return selection;
+};
+
 const maskSegments = (selection: MaskSelection, text: string) => {
   if (
     !Number.isSafeInteger(selection.charactersToMask) ||
@@ -121,10 +130,7 @@ const maskOperator: AnonymisationOperator = {
   type: "mask",
   reversibility: "irreversible",
   apply: (text, _label, _placeholder, _redactString, selection) => {
-    if (typeof selection === "string") {
-      throw new TypeError("mask requires a tagged operator configuration");
-    }
-    return maskText(text, selection);
+    return maskText(text, requireMaskSelection(selection));
   },
 };
 

@@ -208,6 +208,17 @@ describe("operator behavior", () => {
     expect(result.redactionMap.get("[PERSON_1]")).toBe("Alice");
     expect(result.operatorMap.get("[EMAIL_ADDRESS_1]")).toBe("mask");
   });
+
+  test("mask operator rejects a string-only selection", () => {
+    const text = "Alice";
+    const config = JSON.parse(
+      '{"operators":{"person":"mask"},"redactString":"[REDACTED]"}',
+    );
+
+    expect(() => redactText(text, [at(text, "person", text)], config)).toThrow(
+      "mask requires a tagged operator configuration",
+    );
+  });
 });
 
 describe("exportRedactionKey", () => {
