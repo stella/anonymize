@@ -5,6 +5,7 @@ from os import PathLike
 from typing import Literal, TypeAlias, TypedDict
 
 from ._native import (
+    PreparedRedactionSession as NativePreparedRedactionSession,
     PreparedSearch as NativePreparedSearch,
     OperatorEntry as OperatorEntry,
     PipelineEntity as PipelineEntity,
@@ -56,6 +57,40 @@ DEFAULT_NATIVE_PIPELINE_WARMUPS: tuple[
 ]
 __version__: str
 
+class PreparedRedactionSession:
+    def __init__(self, session: NativePreparedRedactionSession) -> None: ...
+    def session_id(self) -> str: ...
+    def mapping_count(self) -> int: ...
+    def to_plaintext_json(self) -> str: ...
+    def redact_text(
+        self,
+        full_text: str,
+        operators: OperatorConfig = None,
+        *,
+        redact_string: str | None = None,
+    ) -> StaticRedactionResult: ...
+    def redact_text_json(
+        self,
+        full_text: str,
+        operators: OperatorConfig = None,
+        *,
+        redact_string: str | None = None,
+    ) -> str: ...
+    def redact_static_entities(
+        self,
+        full_text: str,
+        operators: OperatorConfig = None,
+        *,
+        redact_string: str | None = None,
+    ) -> StaticRedactionResult: ...
+    def redact_static_entities_json(
+        self,
+        full_text: str,
+        operators: OperatorConfig = None,
+        *,
+        redact_string: str | None = None,
+    ) -> str: ...
+
 class PreparedAnonymizer:
     def __init__(self, prepared: NativePreparedSearch) -> None: ...
     @classmethod
@@ -77,6 +112,14 @@ class PreparedAnonymizer:
     def prepare_diagnostics_json(self) -> str: ...
     def warm_lazy_regex(self) -> None: ...
     def warm_lazy_regex_diagnostics_json(self) -> str: ...
+    def create_redaction_session(
+        self,
+        session_id: str,
+    ) -> PreparedRedactionSession: ...
+    def restore_redaction_session(
+        self,
+        plaintext_json: str,
+    ) -> PreparedRedactionSession: ...
     def redact_text(
         self,
         full_text: str,

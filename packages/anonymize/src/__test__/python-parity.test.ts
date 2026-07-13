@@ -84,6 +84,14 @@ type PythonParityOutput = {
     mask_map_count: number;
     mask_operator: string;
   };
+  session_result: {
+    session_id: string;
+    mapping_count: number;
+    restored_mapping_count: number;
+    first_placeholder: string;
+    second_placeholder: string;
+    restored_placeholder: string;
+  };
 };
 
 const PYTHON_PARITY_SCRIPT = `
@@ -133,6 +141,12 @@ caller_mask_result = json.loads(
                     "characters_to_mask": 2, "direction": "end"}},
     )
 )
+prepared = anonymize.get_default_native_pipeline(language="en")
+session = prepared.create_redaction_session("parity_session_1")
+session_first = session.redact_text("Jan Novak signed.")
+session_second = session.redact_text("Jan Novak signed again.")
+restored_session = prepared.restore_redaction_session(session.to_plaintext_json())
+session_restored = restored_session.redact_text("Jan Novak signed once more.")
 
 print(
     json.dumps(
@@ -163,6 +177,14 @@ print(
                 "masked_text": caller_mask_result["redaction"]["redacted_text"],
                 "mask_map_count": len(caller_mask_result["redaction"]["redaction_map"]),
                 "mask_operator": caller_mask_result["redaction"]["operator_map"][0]["operator"],
+            },
+            "session_result": {
+                "session_id": restored_session.session_id(),
+                "mapping_count": session.mapping_count(),
+                "restored_mapping_count": restored_session.mapping_count(),
+                "first_placeholder": session_first.redaction.redaction_map[0].placeholder,
+                "second_placeholder": session_second.redaction.redaction_map[0].placeholder,
+                "restored_placeholder": session_restored.redaction.redaction_map[0].placeholder,
             },
         }
     )
@@ -356,6 +378,18 @@ describe("python binding parity", () => {
       masked_text: "A👨‍👩‍👧‍👦●● signed.",
       mask_map_count: 0,
       mask_operator: "mask",
+    });
+  });
+
+  pythonParityTest("python sessions preserve mappings across transfer", () => {
+    const python = runPythonParity([]);
+    expect(python.session_result).toEqual({
+      session_id: "parity_session_1",
+      mapping_count: 1,
+      restored_mapping_count: 1,
+      first_placeholder: "[PERSON_parity%5Fsession%5F1_1]",
+      second_placeholder: "[PERSON_parity%5Fsession%5F1_1]",
+      restored_placeholder: "[PERSON_parity%5Fsession%5F1_1]",
     });
   });
 });

@@ -1,4 +1,7 @@
-use std::time::Instant;
+use std::{
+  sync::{Arc, Mutex, MutexGuard},
+  time::Instant,
+};
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -25,7 +28,8 @@ use stella_anonymize_adapter_contract::{
 use stella_anonymize_core::{
   CallerRedactionOptions, DiagnosticDetail, DiagnosticEvent, DiagnosticStage,
   Error as CoreError, OperatorConfig, PreparedEngine as CorePreparedEngine,
-  PreparedEngineArtifactsView, StaticRedactionDiagnostics,
+  PreparedEngineArtifactsView, PreparedSessionRedactionOptions,
+  RedactionSession, SessionId, StaticRedactionDiagnostics,
   StaticRedactionResult,
   assemble::{AssembleError, Dictionaries, GazetteerEntry, PipelineConfig},
 };
@@ -76,8 +80,93 @@ pub struct PyStaticRedactionResult {
 
 #[pyclass(name = "PreparedSearch")]
 pub struct PyPreparedSearch {
-  inner: CorePreparedEngine,
+  inner: Arc<CorePreparedEngine>,
   prepare_diagnostics: StaticRedactionDiagnostics,
+}
+
+#[pyclass(name = "PreparedRedactionSession")]
+pub struct PyPreparedRedactionSession {
+  inner: Arc<CorePreparedEngine>,
+  session: Mutex<RedactionSession>,
+}
+
+#[pymethods]
+impl PyPreparedRedactionSession {
+  fn session_id(&self) -> PyResult<String> {
+    Ok(self.lock_session()?.id().as_str().to_owned())
+  }
+
+  fn mapping_count(&self) -> PyResult<usize> {
+    Ok(self.lock_session()?.mapping_count())
+  }
+
+  fn to_plaintext_json(&self) -> PyResult<String> {
+    self
+      .lock_session()?
+      .to_plaintext_json()
+      .map_err(|error| to_py_core_error(&error))
+  }
+
+  fn redact_static_entities(
+    &self,
+    full_text: &str,
+    operators_json: Option<&str>,
+  ) -> PyResult<PyStaticRedactionResult> {
+    let result = self.redact_static_entities_core(full_text, operators_json)?;
+    static_redaction_result_to_python_binding(result, full_text)
+      .map_err(|error| to_py_contract_error(&error))
+      .map(to_py_static_redaction_result)
+  }
+
+  fn redact_static_entities_json(
+    &self,
+    full_text: &str,
+    operators_json: Option<&str>,
+  ) -> PyResult<String> {
+    let result = self.redact_static_entities_core(full_text, operators_json)?;
+    let result = static_redaction_result_to_python_binding(result, full_text)
+      .map_err(|error| to_py_contract_error(&error))?;
+    serde_json::to_string(&result).map_err(|error| to_py_serde_error(&error))
+  }
+}
+
+impl PyPreparedRedactionSession {
+  const fn new(
+    inner: Arc<CorePreparedEngine>,
+    session: RedactionSession,
+  ) -> Self {
+    Self {
+      inner,
+      session: Mutex::new(session),
+    }
+  }
+
+  fn lock_session(&self) -> PyResult<MutexGuard<'_, RedactionSession>> {
+    self.session.lock().map_err(|_| {
+      PyValueError::new_err("Redaction session state lock is unavailable")
+    })
+  }
+
+  fn redact_static_entities_core(
+    &self,
+    full_text: &str,
+    operators_json: Option<&str>,
+  ) -> PyResult<StaticRedactionResult> {
+    let operators =
+      operator_config_from_binding(parse_operator_config(operators_json)?)
+        .map_err(|error| to_py_contract_error(&error))?;
+    let mut session = self.lock_session()?;
+    self
+      .inner
+      .redact_static_entities_with_session(
+        full_text,
+        PreparedSessionRedactionOptions {
+          operators: &operators,
+          session: &mut session,
+        },
+      )
+      .map_err(|error| to_py_core_error(&error))
+  }
 }
 
 #[pymethods]
@@ -88,7 +177,7 @@ impl PyPreparedSearch {
     let result = CorePreparedEngine::new_with_diagnostics(config)
       .map_err(|error| to_py_core_error(&error))?;
     Ok(Self {
-      inner: result.prepared,
+      inner: Arc::new(result.prepared),
       prepare_diagnostics: result.diagnostics,
     })
   }
@@ -116,7 +205,7 @@ impl PyPreparedSearch {
     ));
     diagnostics.extend(result.diagnostics);
     Ok(Self {
-      inner: result.prepared,
+      inner: Arc::new(result.prepared),
       prepare_diagnostics: diagnostics,
     })
   }
@@ -167,7 +256,7 @@ impl PyPreparedSearch {
     ));
     diagnostics.extend(result.diagnostics);
     Ok(Self {
-      inner: result.prepared,
+      inner: Arc::new(result.prepared),
       prepare_diagnostics: diagnostics,
     })
   }
@@ -227,6 +316,30 @@ impl PyPreparedSearch {
 
     serde_json::to_string(&diagnostics)
       .map_err(|error| to_py_serde_error(&error))
+  }
+
+  fn create_redaction_session(
+    &self,
+    session_id: &str,
+  ) -> PyResult<PyPreparedRedactionSession> {
+    let session_id = SessionId::new(session_id.to_owned())
+      .map_err(|error| to_py_core_error(&error))?;
+    Ok(PyPreparedRedactionSession::new(
+      Arc::clone(&self.inner),
+      RedactionSession::new(session_id),
+    ))
+  }
+
+  fn restore_redaction_session(
+    &self,
+    plaintext_json: &str,
+  ) -> PyResult<PyPreparedRedactionSession> {
+    let session = RedactionSession::from_plaintext_json(plaintext_json)
+      .map_err(|error| to_py_core_error(&error))?;
+    Ok(PyPreparedRedactionSession::new(
+      Arc::clone(&self.inner),
+      session,
+    ))
   }
 
   fn redact_static_entities(
@@ -469,7 +582,7 @@ impl PyPreparedSearch {
     ));
     diagnostics.extend(result.diagnostics);
     Ok(Self {
-      inner: result.prepared,
+      inner: Arc::new(result.prepared),
       prepare_diagnostics: diagnostics,
     })
   }
@@ -987,6 +1100,7 @@ fn to_py_assemble_error(error: &AssembleError) -> PyErr {
 #[pymodule(gil_used = false)]
 fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
   module.add_class::<PyPreparedSearch>()?;
+  module.add_class::<PyPreparedRedactionSession>()?;
   module.add_class::<PyStaticRedactionResult>()?;
   module.add_class::<PyRedactionResult>()?;
   module.add_class::<PyRedactionEntry>()?;

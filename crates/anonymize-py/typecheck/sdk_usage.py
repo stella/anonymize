@@ -76,6 +76,16 @@ def runtime_version() -> str:
     return anonymize.native_package_version()
 
 
+def redact_with_session(text: str) -> str:
+    prepared = anonymize.get_default_native_pipeline(language="en")
+    session = prepared.create_redaction_session("typecheck_session_1")
+    result = session.redact_text(text)
+    restored = prepared.restore_redaction_session(session.to_plaintext_json())
+    assert restored.session_id() == session.session_id()
+    assert restored.mapping_count() == session.mapping_count()
+    return result.redaction.redacted_text
+
+
 def redact_caller_detection(text: str) -> str:
     prepared = anonymize.get_default_native_pipeline(language="en")
     detections: list[anonymize.CallerDetection] = [

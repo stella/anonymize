@@ -39,6 +39,21 @@ result = prepared.redact_text(text, redact_string="***")
 print(result.redaction.redacted_text)
 ```
 
+For related documents, create an explicit in-memory session from the prepared
+anonymizer. Repeated normalized entities reuse their placeholders within that
+session:
+
+```py
+session = prepared.create_redaction_session("opaque_case_1")
+first = session.redact_text(first_document)
+second = session.redact_text(second_document)
+```
+
+`session.to_plaintext_json()` supports deterministic in-memory transfer between
+runtime instances. Its output contains original personal data in plaintext: do
+not log it or persist it without an application-owned protection layer. Restore
+validated transfer state with `prepared.restore_redaction_session(json_state)`.
+
 Caller-produced detections use Python character indexes and enter the same
 resolution and redaction pipeline as built-in detections:
 
@@ -109,6 +124,8 @@ for repeated document processing.
 - `preload_default_native_pipeline(language=None, package_path=None) -> PreparedAnonymizer`
 - `PreparedAnonymizer.warm_lazy_regex()`
 - `PreparedAnonymizer.warm_lazy_regex_diagnostics_json()`
+- `PreparedAnonymizer.create_redaction_session(session_id) -> PreparedRedactionSession`
+- `PreparedAnonymizer.restore_redaction_session(plaintext_json) -> PreparedRedactionSession`
 - `PreparedAnonymizer.redact_text(text, operators=None, redact_string=None)`
 - `PreparedAnonymizer.redact_text_json(text, operators=None, redact_string=None)`
 - `PreparedAnonymizer.diagnostics_json(text, operators=None, redact_string=None)`

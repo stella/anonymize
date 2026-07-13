@@ -12,6 +12,7 @@ from weakref import WeakSet
 from ._native import (
     OperatorEntry,
     PipelineEntity,
+    PreparedRedactionSession as NativePreparedRedactionSession,
     PreparedSearch as NativePreparedSearch,
     RedactionEntry,
     RedactionResult,
@@ -44,6 +45,8 @@ __all__ = [
     "DEFAULT_NATIVE_PIPELINE_WARMUPS",
     "NativeSearchPackageInput",
     "PreparedAnonymizer",
+    "PreparedRedactionSession",
+    "NativePreparedRedactionSession",
     "NativePreparedSearch",
     "PipelineEntity",
     "PreparedSearch",
@@ -121,6 +124,70 @@ _DEFAULT_NATIVE_PIPELINE_LANGUAGE_PACKAGE_PATTERN = re.compile(
 __version__ = native_package_version()
 
 
+class PreparedRedactionSession:
+    def __init__(self, session: NativePreparedRedactionSession) -> None:
+        self._session = session
+
+    def session_id(self) -> str:
+        return self._session.session_id()
+
+    def mapping_count(self) -> int:
+        return self._session.mapping_count()
+
+    def to_plaintext_json(self) -> str:
+        return self._session.to_plaintext_json()
+
+    def redact_text(
+        self,
+        full_text: str,
+        operators: OperatorConfig = None,
+        *,
+        redact_string: str | None = None,
+    ) -> StaticRedactionResult:
+        return self._session.redact_static_entities(
+            full_text,
+            _operator_config_json(operators, redact_string=redact_string),
+        )
+
+    def redact_text_json(
+        self,
+        full_text: str,
+        operators: OperatorConfig = None,
+        *,
+        redact_string: str | None = None,
+    ) -> str:
+        return self._session.redact_static_entities_json(
+            full_text,
+            _operator_config_json(operators, redact_string=redact_string),
+        )
+
+    def redact_static_entities(
+        self,
+        full_text: str,
+        operators: OperatorConfig = None,
+        *,
+        redact_string: str | None = None,
+    ) -> StaticRedactionResult:
+        return self.redact_text(
+            full_text,
+            operators,
+            redact_string=redact_string,
+        )
+
+    def redact_static_entities_json(
+        self,
+        full_text: str,
+        operators: OperatorConfig = None,
+        *,
+        redact_string: str | None = None,
+    ) -> str:
+        return self.redact_text_json(
+            full_text,
+            operators,
+            redact_string=redact_string,
+        )
+
+
 class PreparedAnonymizer:
     def __init__(self, prepared: NativePreparedSearch) -> None:
         self._prepared = prepared
@@ -162,6 +229,22 @@ class PreparedAnonymizer:
 
     def warm_lazy_regex_diagnostics_json(self) -> str:
         return self._prepared.warm_lazy_regex_diagnostics_json()
+
+    def create_redaction_session(
+        self,
+        session_id: str,
+    ) -> PreparedRedactionSession:
+        return PreparedRedactionSession(
+            self._prepared.create_redaction_session(session_id)
+        )
+
+    def restore_redaction_session(
+        self,
+        plaintext_json: str,
+    ) -> PreparedRedactionSession:
+        return PreparedRedactionSession(
+            self._prepared.restore_redaction_session(plaintext_json)
+        )
 
     def redact_text(
         self,
