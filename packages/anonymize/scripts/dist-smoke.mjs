@@ -56,10 +56,26 @@ if (nativeResult.resolvedEntities.length === 0) {
   throw new Error("default native pipeline package did not detect any entity");
 }
 
+const session = nativePipeline.createRedactionSession("smoke_1");
+const sessionResult = session.redactText("A contract was signed by Jan Novak.");
+if (sessionResult.redaction.redactionMap.size === 0) {
+  throw new Error("native redaction session did not retain any mapping");
+}
+session.redactText("Jan Novak signed the second contract.");
+if (session.mappingCount() !== 1) {
+  throw new Error("native redaction session did not reuse its mapping");
+}
+const sessionState = session.toPlaintextJson();
+const restoredSession = nativePipeline.restoreRedactionSession(sessionState);
+if (restoredSession.sessionId() !== "smoke_1") {
+  throw new Error("native redaction session did not restore its identity");
+}
+
 console.log(
   JSON.stringify({
     event: "dist-smoke",
     ok: true,
     nativeEntityCount: nativeResult.resolvedEntities.length,
+    sessionMappingCount: session.mappingCount(),
   }),
 );

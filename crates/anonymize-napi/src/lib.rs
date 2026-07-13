@@ -1,6 +1,6 @@
 use std::{
   collections::{BTreeMap, VecDeque},
-  sync::{Arc, LazyLock, Mutex},
+  sync::{Arc, LazyLock, Mutex, MutexGuard},
   time::Instant,
 };
 
@@ -29,6 +29,7 @@ use stella_anonymize_core::{
   CallerRedactionOptions, DiagnosticDetail, DiagnosticEvent, DiagnosticStage,
   Error as CoreError, OperatorConfig, PreparedEngine,
   PreparedEngineArtifactsView, PreparedEngineConfig,
+  PreparedSessionRedactionOptions, RedactionSession, SessionId,
   StaticRedactionDiagnostics,
   assemble::{AssembleError, Dictionaries, GazetteerEntry, PipelineConfig},
 };
@@ -522,6 +523,77 @@ pub struct NativePreparedSearch {
   prepare_diagnostics: StaticRedactionDiagnostics,
 }
 
+#[napi]
+pub struct NativePreparedRedactionSession {
+  inner: Arc<PreparedEngine>,
+  session: Mutex<RedactionSession>,
+}
+
+#[napi]
+impl NativePreparedRedactionSession {
+  #[napi]
+  pub fn session_id(&self) -> Result<String> {
+    Ok(self.lock_session()?.id().as_str().to_owned())
+  }
+
+  #[napi]
+  pub fn mapping_count(&self) -> Result<u32> {
+    let count = self.lock_session()?.mapping_count();
+    u32::try_from(count).map_err(|_| {
+      Error::from_reason("Redaction session mapping count exceeds u32 range")
+    })
+  }
+
+  #[napi]
+  pub fn to_plaintext_json(&self) -> Result<String> {
+    self
+      .lock_session()?
+      .to_plaintext_json()
+      .map_err(|error| to_napi_core_error(&error))
+  }
+
+  #[napi]
+  #[allow(clippy::needless_pass_by_value)]
+  pub fn redact_static_entities_json(
+    &self,
+    full_text: String,
+    operators: Option<JsOperatorConfig>,
+  ) -> Result<String> {
+    let operators = operator_config_from_js(operators)?;
+    let result = {
+      let mut session = self.lock_session()?;
+      self
+        .inner
+        .redact_static_entities_with_session(
+          &full_text,
+          PreparedSessionRedactionOptions {
+            operators: &operators,
+            session: &mut session,
+          },
+        )
+        .map_err(|error| to_napi_core_error(&error))?
+    };
+    let result = static_redaction_result_to_utf16_binding(result, &full_text)
+      .map_err(|error| to_napi_contract_error(&error))?;
+    serde_json::to_string(&result).map_err(|error| to_napi_serde_error(&error))
+  }
+}
+
+impl NativePreparedRedactionSession {
+  const fn new(inner: Arc<PreparedEngine>, session: RedactionSession) -> Self {
+    Self {
+      inner,
+      session: Mutex::new(session),
+    }
+  }
+
+  fn lock_session(&self) -> Result<MutexGuard<'_, RedactionSession>> {
+    self.session.lock().map_err(|_| {
+      Error::from_reason("Redaction session state lock is unavailable")
+    })
+  }
+}
+
 #[derive(Clone, Copy)]
 struct PrepareContext {
   input_bytes_len: usize,
@@ -902,6 +974,33 @@ impl NativePreparedSearch {
 
     serde_json::to_string(&diagnostics)
       .map_err(|error| to_napi_serde_error(&error))
+  }
+
+  #[napi]
+  pub fn create_redaction_session(
+    &self,
+    session_id: String,
+  ) -> Result<NativePreparedRedactionSession> {
+    let session_id =
+      SessionId::new(session_id).map_err(|error| to_napi_core_error(&error))?;
+    Ok(NativePreparedRedactionSession::new(
+      Arc::clone(&self.inner),
+      RedactionSession::new(session_id),
+    ))
+  }
+
+  #[napi]
+  #[allow(clippy::needless_pass_by_value)]
+  pub fn restore_redaction_session(
+    &self,
+    plaintext_json: String,
+  ) -> Result<NativePreparedRedactionSession> {
+    let session = RedactionSession::from_plaintext_json(&plaintext_json)
+      .map_err(|error| to_napi_core_error(&error))?;
+    Ok(NativePreparedRedactionSession::new(
+      Arc::clone(&self.inner),
+      session,
+    ))
   }
 
   #[napi]

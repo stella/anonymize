@@ -68,6 +68,21 @@ const warmDiagnosticsJson = anonymizer.warmLazyRegexDiagnosticsJson();
 const result = anonymizer.redact_text(text, { redactString: "***" });
 ```
 
+For related documents, create an explicit in-memory session from the prepared
+anonymizer. The session reuses placeholders for the same normalized entity while
+keeping its mutable mapping state isolated from other sessions:
+
+```ts
+const session = anonymizer.createRedactionSession("opaque_case_1");
+const first = session.redact_text(firstDocument);
+const second = session.redact_text(secondDocument);
+```
+
+`session.toPlaintextJson()` supports deterministic in-memory transfer between
+runtime instances. Its output contains original personal data in plaintext: do
+not log it or persist it without an application-owned protection layer. Restore
+validated transfer state with `anonymizer.restoreRedactionSession(json)`.
+
 Per-label operators support `replace`, `redact`, `keep`, and tagged `mask`
 configuration. `keep` records
 that an entity was processed while leaving its source text unchanged; it
