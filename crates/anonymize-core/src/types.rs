@@ -17,6 +17,24 @@ pub enum Error {
   InvalidMaskConfig {
     reason: String,
   },
+  InvalidSessionId {
+    reason: String,
+  },
+  InvalidSessionState {
+    reason: String,
+  },
+  UnsupportedSessionVersion {
+    version: u32,
+  },
+  SessionPlaceholderCollision {
+    placeholder: String,
+  },
+  SessionCounterExhausted {
+    label: String,
+  },
+  SessionSerialization {
+    reason: String,
+  },
   ByteOffsetOutOfBounds {
     offset: u32,
   },
@@ -74,6 +92,27 @@ impl fmt::Display for Error {
       }
       Self::InvalidMaskConfig { reason } => {
         write!(formatter, "Invalid mask operator configuration: {reason}")
+      }
+      Self::InvalidSessionId { reason } => {
+        display_invalid_session_id(formatter, reason)
+      }
+      Self::InvalidSessionState { reason } => {
+        display_invalid_session_state(formatter, reason)
+      }
+      Self::UnsupportedSessionVersion { version } => {
+        write!(
+          formatter,
+          "Unsupported redaction session version: {version}"
+        )
+      }
+      Self::SessionPlaceholderCollision { placeholder } => {
+        display_session_placeholder_collision(formatter, placeholder)
+      }
+      Self::SessionCounterExhausted { label } => {
+        display_session_counter_exhausted(formatter, label)
+      }
+      Self::SessionSerialization { reason } => {
+        display_session_serialization_error(formatter, reason)
       }
       Self::ByteOffsetOutOfBounds { offset } => {
         write!(formatter, "Byte offset is out of bounds: {offset}")
@@ -141,6 +180,47 @@ impl fmt::Display for Error {
 }
 
 impl error::Error for Error {}
+
+fn display_invalid_session_id(
+  formatter: &mut fmt::Formatter<'_>,
+  reason: &str,
+) -> fmt::Result {
+  write!(formatter, "Invalid redaction session id: {reason}")
+}
+
+fn display_invalid_session_state(
+  formatter: &mut fmt::Formatter<'_>,
+  reason: &str,
+) -> fmt::Result {
+  write!(formatter, "Invalid redaction session state: {reason}")
+}
+
+fn display_session_placeholder_collision(
+  formatter: &mut fmt::Formatter<'_>,
+  placeholder: &str,
+) -> fmt::Result {
+  write!(
+    formatter,
+    "Input contains a placeholder reserved by this redaction session: {placeholder}"
+  )
+}
+
+fn display_session_counter_exhausted(
+  formatter: &mut fmt::Formatter<'_>,
+  label: &str,
+) -> fmt::Result {
+  write!(
+    formatter,
+    "Redaction session placeholder counter is exhausted for label: {label}"
+  )
+}
+
+fn display_session_serialization_error(
+  formatter: &mut fmt::Formatter<'_>,
+  reason: &str,
+) -> fmt::Result {
+  write!(formatter, "Could not serialize redaction session: {reason}")
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum EntityKind {
