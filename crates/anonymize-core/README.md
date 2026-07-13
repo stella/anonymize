@@ -46,6 +46,29 @@ let result = engine.redact_static_entities_with_caller_detections(
 )?;
 ```
 
+Redaction sessions can be sealed into an opaque authenticated archive before an
+application persists them. The application owns the 256-bit key and storage;
+the core does not read key stores, files, databases, or process configuration:
+
+```rust
+let key = SessionArchiveKey::from_bytes(application_owned_key);
+let archive = session.to_encrypted_archive(&key)?;
+
+let restored = RedactionSession::from_encrypted_archive(
+  OpenSessionArchiveOptions {
+    archive: &archive,
+    key: &key,
+    observed_at: None,
+  },
+)?;
+```
+
+The versioned binary envelope uses XChaCha20-Poly1305 with a fresh OS-random
+nonce. Header metadata is authenticated, archive input is bounded before
+parsing, and temporary plaintext is cleared after sealing or restoration.
+Lifecycle sessions require a caller-supplied observation time when sealed and
+restored so expired archives do not yield a usable session.
+
 ## Pipeline Layout
 
 - `prepare_phase.rs`: validates config, loads artifacts, prepares indexes and support data.
@@ -53,6 +76,7 @@ let result = engine.redact_static_entities_with_caller_detections(
 - `detection_phase.rs`: turns matches into candidate entities through the static detector registry.
 - `resolution_phase.rs`: applies hotwords, zones, coreference, merge, boundary, and sanitize passes.
 - `redaction_phase.rs`: builds final replacements and redaction maps.
+- `session_archive.rs`: owns authenticated encrypted session transfer.
 - `diagnostics.rs`: owns stable diagnostic phases, stages, and event shape.
 
 Keep domain data out of Rust code. Dictionaries, language rules, fixtures, and

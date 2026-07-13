@@ -35,6 +35,18 @@ pub enum Error {
   SessionSerialization {
     reason: String,
   },
+  InvalidSessionArchive {
+    reason: String,
+  },
+  UnsupportedSessionArchiveVersion {
+    version: u32,
+  },
+  UnsupportedSessionArchiveAlgorithm {
+    algorithm: u8,
+  },
+  SessionArchiveRandomnessUnavailable,
+  SessionArchiveEncryptionFailed,
+  SessionArchiveAuthenticationFailed,
   SessionObservationRequired,
   SessionNotYetActive,
   SessionExpired,
@@ -97,31 +109,22 @@ impl fmt::Display for Error {
       Self::InvalidMaskConfig { reason } => {
         write!(formatter, "Invalid mask operator configuration: {reason}")
       }
-      Self::InvalidSessionId { reason } => {
-        display_invalid_session_id(formatter, reason)
-      }
-      Self::InvalidSessionState { reason } => {
-        display_invalid_session_state(formatter, reason)
-      }
-      Self::UnsupportedSessionVersion { version } => {
-        write!(
-          formatter,
-          "Unsupported redaction session version: {version}"
-        )
-      }
-      Self::SessionPlaceholderCollision { placeholder } => {
-        display_session_placeholder_collision(formatter, placeholder)
-      }
-      Self::SessionCounterExhausted { label } => {
-        display_session_counter_exhausted(formatter, label)
-      }
-      Self::SessionSerialization { reason } => {
-        display_session_serialization_error(formatter, reason)
-      }
-      Self::SessionObservationRequired => display_observation(formatter),
-      Self::SessionNotYetActive => display_session_not_active(formatter),
-      Self::SessionExpired => display_session_expired(formatter),
-      Self::SessionDeleted => display_session_deleted(formatter),
+      Self::InvalidSessionId { .. }
+      | Self::InvalidSessionState { .. }
+      | Self::UnsupportedSessionVersion { .. }
+      | Self::SessionPlaceholderCollision { .. }
+      | Self::SessionCounterExhausted { .. }
+      | Self::SessionSerialization { .. }
+      | Self::InvalidSessionArchive { .. }
+      | Self::UnsupportedSessionArchiveVersion { .. }
+      | Self::UnsupportedSessionArchiveAlgorithm { .. }
+      | Self::SessionArchiveRandomnessUnavailable
+      | Self::SessionArchiveEncryptionFailed
+      | Self::SessionArchiveAuthenticationFailed
+      | Self::SessionObservationRequired
+      | Self::SessionNotYetActive
+      | Self::SessionExpired
+      | Self::SessionDeleted => display_session_error(self, formatter),
       Self::ByteOffsetOutOfBounds { offset } => {
         write!(formatter, "Byte offset is out of bounds: {offset}")
       }
@@ -228,6 +231,58 @@ fn display_session_serialization_error(
   reason: &str,
 ) -> fmt::Result {
   write!(formatter, "Could not serialize redaction session: {reason}")
+}
+
+fn display_session_error(
+  error: &Error,
+  formatter: &mut fmt::Formatter<'_>,
+) -> fmt::Result {
+  match error {
+    Error::InvalidSessionId { reason } => {
+      display_invalid_session_id(formatter, reason)
+    }
+    Error::InvalidSessionState { reason } => {
+      display_invalid_session_state(formatter, reason)
+    }
+    Error::UnsupportedSessionVersion { version } => write!(
+      formatter,
+      "Unsupported redaction session version: {version}",
+    ),
+    Error::SessionPlaceholderCollision { placeholder } => {
+      display_session_placeholder_collision(formatter, placeholder)
+    }
+    Error::SessionCounterExhausted { label } => {
+      display_session_counter_exhausted(formatter, label)
+    }
+    Error::SessionSerialization { reason } => {
+      display_session_serialization_error(formatter, reason)
+    }
+    Error::InvalidSessionArchive { reason } => {
+      write!(formatter, "Invalid encrypted session archive: {reason}")
+    }
+    Error::UnsupportedSessionArchiveVersion { version } => write!(
+      formatter,
+      "Unsupported encrypted session archive version: {version}",
+    ),
+    Error::UnsupportedSessionArchiveAlgorithm { algorithm } => write!(
+      formatter,
+      "Unsupported encrypted session archive algorithm: {algorithm}",
+    ),
+    Error::SessionArchiveRandomnessUnavailable => formatter.write_str(
+      "Could not obtain secure randomness for the encrypted session archive",
+    ),
+    Error::SessionArchiveEncryptionFailed => {
+      formatter.write_str("Could not encrypt the redaction session archive")
+    }
+    Error::SessionArchiveAuthenticationFailed => {
+      formatter.write_str("Encrypted session archive authentication failed")
+    }
+    Error::SessionObservationRequired => display_observation(formatter),
+    Error::SessionNotYetActive => display_session_not_active(formatter),
+    Error::SessionExpired => display_session_expired(formatter),
+    Error::SessionDeleted => display_session_deleted(formatter),
+    _ => formatter.write_str("Redaction session failed"),
+  }
 }
 
 fn display_observation(formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
