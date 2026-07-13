@@ -11,6 +11,7 @@ the top-level README.
 fixtures/                 public-safe synthetic ground truth, per language (en/cs/de)
 python/                   Presidio + scrubadub adapter scripts and pinned requirements
 results/                  committed, date-stamped JSON + Markdown reports (+ latest.md)
+vendor/                   pinned third-party benchmark detector assets and licenses
 src/
   taxonomy.ts             common 8-label taxonomy + per-library mapping tables
   ground-truth.ts         segment -> labelled document loader (offsets by construction)

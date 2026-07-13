@@ -9,6 +9,9 @@ import {
 
 const require = createRequire(import.meta.url);
 
+const REDACT_PII_VERSION = "3.4.0";
+const REDACT_PII_VENDOR_PATH = `../../vendor/redact-pii/${REDACT_PII_VERSION}`;
+
 /**
  * redact-pii is a redaction library: `SyncRedactor` returns masked text, not
  * spans. To score it we reproduce its detection with span offsets by running
@@ -117,10 +120,12 @@ const dropContained = (spans: NativePrediction[]): NativePrediction[] => {
 };
 
 const buildDetector = (): Detector => {
-  const patterns =
-    require("redact-pii/lib/built-ins/simple-regexp-patterns") as SimpleRegexpPatterns;
-  const wellKnownNames =
-    require("redact-pii/lib/built-ins/well-known-names.json") as string[];
+  const patterns = require(
+    `${REDACT_PII_VENDOR_PATH}/simple-regexp-patterns.cjs`,
+  ) as SimpleRegexpPatterns;
+  const wellKnownNames = require(
+    `${REDACT_PII_VENDOR_PATH}/well-known-names.json`,
+  ) as string[];
 
   // Precompile every built-in regexp with a global flag once, at build time,
   // rather than per document. Non-RegExp exports (a future version could add a
@@ -183,7 +188,7 @@ const buildDetector = (): Detector => {
 
 export const createRedactPiiAdapter = (): Adapter => ({
   name: "redact-pii",
-  version: (require("redact-pii/package.json") as { version: string }).version,
+  version: REDACT_PII_VERSION,
   run: async (docs: readonly GroundTruthDocument[]) => {
     // Init boundary (fairness, symmetric with the other adapters): loading
     // redact-pii's built-in pattern list and well-known-names corpus, and

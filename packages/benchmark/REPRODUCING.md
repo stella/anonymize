@@ -12,7 +12,7 @@ public, synthetic, legal-domain corpus (en/cs/de):
 
 - **Microsoft Presidio** (`presidio-analyzer`) with spaCy models.
 - **scrubadub** (base install).
-- **redact-pii** (npm).
+- **redact-pii** 3.4.0 detector assets, vendored from the npm package.
 
 Metrics: per-label and overall precision / recall / F1 with span-overlap
 matching, plus throughput (chars/sec, cold and warm). See `src/metrics.ts`.
@@ -54,7 +54,10 @@ bun run build
 
 ### 1. stella and redact-pii (Node/Bun)
 
-No extra setup: both are workspace dependencies of this package.
+No extra setup. stella is a workspace dependency. The exact regexp and name-list
+assets used by the redact-pii 3.4.0 adapter are committed under
+`vendor/redact-pii/3.4.0/` with their upstream license and checksums. The adapter
+does not install redact-pii's unused Google DLP dependency tree.
 
 ### 2. Presidio virtualenv (Python)
 
@@ -164,8 +167,10 @@ category the ground truth does not track.
   adapter recovers spans by running redact-pii's own detectors over the original
   text: the exported regexp built-ins via `matchAll`, and a faithful
   reproduction of its `NameRedactor` (internals are not exported) loading the
-  same `well-known-names.json`. Running on the original text yields a superset of
-  what sequential redaction emits, so this is generous to redact-pii's recall.
+  same `well-known-names.json`. Those detector inputs are vendored byte-for-byte
+  from the pinned 3.4.0 npm package; see the vendor README for provenance and
+  checksums. Running on the original text yields a superset of what sequential
+  redaction emits, so this is generous to redact-pii's recall.
 
 ## Init vs. per-document boundary (throughput fairness)
 

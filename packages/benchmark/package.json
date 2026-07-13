@@ -8,13 +8,12 @@
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "bun test",
-    "format": "oxfmt . \"!results/**\"",
+    "format": "oxfmt . \"!results/**\" \"!vendor/**\"",
     "bench:compare": "bun src/bench.ts"
   },
   "dependencies": {
     "@stll/anonymize": "workspace:^",
-    "@stll/anonymize-data": "^0.0.6",
-    "redact-pii": "3.4.0"
+    "@stll/anonymize-data": "^0.0.6"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",
