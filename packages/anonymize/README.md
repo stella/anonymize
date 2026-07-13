@@ -83,11 +83,31 @@ runtime instances. Its output contains original personal data in plaintext: do
 not log it or persist it without an application-owned protection layer. Restore
 validated transfer state with `anonymizer.restoreRedactionSession(json)`.
 
+For persistence or transfer, prefer an authenticated encrypted archive. Supply
+a caller-owned 32-byte key; key generation, storage, rotation, and access
+control remain application responsibilities. Restoring also requires the
+expected session ID so an archive cannot be substituted across records:
+
+```ts
+const key = crypto.getRandomValues(new Uint8Array(32));
+const archive = session.toEncryptedArchive(key);
+const restored = anonymizer.restoreEncryptedRedactionSession({
+  archive,
+  key,
+  expectedSessionId: "opaque_case_1",
+});
+```
+
+The archive contains personal data as ciphertext. Do not log the key or derive
+it directly from a password; use a key-management boundary appropriate to the
+deployment.
+
 Sessions can carry explicit lifecycle bounds. The engine never reads the system
 clock; supply the UTC epoch-second observation time for each lifecycle-aware
 operation:
 
 ```ts
+const key = crypto.getRandomValues(new Uint8Array(32));
 const session = anonymizer.createRedactionSessionWithLifecycle({
   sessionId: "opaque_case_2",
   createdAtEpochSeconds: 1_800_000_000,
@@ -98,6 +118,13 @@ const result = session.redactTextAt({
   observedAtEpochSeconds: 1_800_000_100,
 });
 const metadata = session.inspect(1_800_000_100); // contains no entity values
+const archive = session.toEncryptedArchiveAt(key, 1_800_000_100);
+const restored = anonymizer.restoreEncryptedRedactionSession({
+  archive,
+  key,
+  expectedSessionId: "opaque_case_2",
+  observedAtEpochSeconds: 1_800_000_100,
+});
 const deletion = session.delete();
 ```
 

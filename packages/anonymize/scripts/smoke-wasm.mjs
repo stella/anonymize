@@ -45,6 +45,7 @@ const prepared = NativePreparedSearch.fromPreparedPackageBytes(packageBytes);
 if (
   typeof prepared.createRedactionSession !== "function" ||
   typeof prepared.restoreRedactionSession !== "function" ||
+  typeof prepared.restoreEncryptedRedactionSession !== "function" ||
   typeof prepared.createRedactionSessionWithLifecycle !== "function"
 ) {
   throw new TypeError("wasm binding is missing redaction session factories");
@@ -93,12 +94,35 @@ const restoredSession = prepared.restoreRedactionSession(sessionState);
 if (restoredSession.sessionId() !== "smoke_1") {
   throw new Error("wasm redaction session did not restore its identity");
 }
+const archiveKey = new Uint8Array(32).fill(0x42);
+const encryptedArchive = session.toEncryptedArchive(archiveKey);
+const encryptedRestoredSession = prepared.restoreEncryptedRedactionSession({
+  archive: encryptedArchive,
+  key: archiveKey,
+  expectedSessionId: "smoke_1",
+});
+if (
+  encryptedRestoredSession.sessionId() !== "smoke_1" ||
+  encryptedRestoredSession.mappingCount() !== session.mappingCount()
+) {
+  throw new Error("wasm encrypted session archive did not round-trip");
+}
 const lifecycleSession = prepared.createRedactionSessionWithLifecycle(
   "lifecycle_smoke_1",
   100,
   200,
 );
 lifecycleSession.redactStaticEntitiesJsonAt(sample, 150);
+const lifecycleArchive = lifecycleSession.toEncryptedArchiveAt(archiveKey, 150);
+const restoredLifecycleSession = prepared.restoreEncryptedRedactionSession({
+  archive: lifecycleArchive,
+  key: archiveKey,
+  expectedSessionId: "lifecycle_smoke_1",
+  observedAtEpochSeconds: 150,
+});
+if (JSON.parse(restoredLifecycleSession.inspectJson(150)).status !== "active") {
+  throw new Error("wasm encrypted lifecycle session did not round-trip");
+}
 const lifecycleMetadata = JSON.parse(lifecycleSession.inspectJson(200));
 if (lifecycleMetadata.status !== "expired") {
   throw new Error("wasm lifecycle session did not expire at its boundary");

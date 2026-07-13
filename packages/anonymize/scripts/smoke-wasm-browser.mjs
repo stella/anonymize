@@ -159,6 +159,15 @@ const runInPage = async (sample) => {
   const module = await import("/wasm.mjs");
   const pipeline = await module.loadDefaultPipeline("en");
   const result = pipeline.redactText(sample);
+  const session = pipeline.createRedactionSession("browser_archive_smoke_1");
+  session.redactText(sample);
+  const key = new Uint8Array(32).fill(0x42);
+  const archive = session.toEncryptedArchive(key);
+  const restoredSession = pipeline.restoreEncryptedRedactionSession({
+    archive,
+    key,
+    expectedSessionId: "browser_archive_smoke_1",
+  });
   return {
     entities: result.resolvedEntities.map(({ start, end, text, label }) => ({
       start,
@@ -167,11 +176,20 @@ const runInPage = async (sample) => {
       label,
     })),
     redactedText: result.redaction.redactedText,
+    archiveByteLength: archive.byteLength,
+    restoredSessionId: restoredSession.sessionId(),
+    restoredMappingCount: restoredSession.mappingCount(),
   };
 };
 
 const validate = (result) => {
-  const { entities, redactedText } = result;
+  const {
+    entities,
+    redactedText,
+    archiveByteLength,
+    restoredSessionId,
+    restoredMappingCount,
+  } = result;
   if (!Array.isArray(entities) || entities.length === 0) {
     throw new Error("browser pipeline did not detect any entity");
   }
@@ -193,6 +211,13 @@ const validate = (result) => {
   }
   if (redactedText === SAMPLE) {
     throw new Error("redaction did not change the text");
+  }
+  if (
+    archiveByteLength <= 0 ||
+    restoredSessionId !== "browser_archive_smoke_1" ||
+    restoredMappingCount <= 0
+  ) {
+    throw new Error("browser encrypted session archive did not round-trip");
   }
 };
 
@@ -249,6 +274,7 @@ const main = async () => {
         chrome: executablePath,
         crossOriginIsolated: true,
         entityCount: result.entities.length,
+        encryptedSessionArchive: true,
         labels: result.entities.map((entity) => entity.label),
         firstEntity: {
           start: result.entities[0].start,

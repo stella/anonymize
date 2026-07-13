@@ -27,11 +27,12 @@ use stella_anonymize_adapter_contract::{
 };
 use stella_anonymize_core::{
   CallerRedactionOptions, DiagnosticDetail, DiagnosticEvent, DiagnosticStage,
-  Error as CoreError, OperatorConfig, PreparedEngine,
-  PreparedEngineArtifactsView, PreparedEngineConfig,
-  PreparedSessionRedactionOptions, RedactionSession, SessionId,
-  SessionLifecycle, SessionMetadata, SessionStatus, SessionTimestamp,
-  StaticRedactionDiagnostics,
+  Error as CoreError, OpenSessionArchiveOptions, OperatorConfig,
+  PreparedEngine, PreparedEngineArtifactsView, PreparedEngineConfig,
+  PreparedSessionRedactionOptions, REDACTION_SESSION_ARCHIVE_KEY_BYTES,
+  REDACTION_SESSION_ARCHIVE_MAX_BYTES, RedactionSession, SessionArchiveKey,
+  SessionId, SessionLifecycle, SessionMetadata, SessionStatus,
+  SessionTimestamp, StaticRedactionDiagnostics,
   assemble::{AssembleError, Dictionaries, GazetteerEntry, PipelineConfig},
 };
 
@@ -530,6 +531,14 @@ pub struct NativePreparedRedactionSession {
   session: Mutex<RedactionSession>,
 }
 
+#[napi(object)]
+pub struct JsOpenSessionArchiveOptions {
+  pub archive: Uint8Array,
+  pub key: Uint8Array,
+  pub expected_session_id: String,
+  pub observed_at_epoch_seconds: Option<u32>,
+}
+
 #[napi]
 impl NativePreparedRedactionSession {
   #[napi]
@@ -563,6 +572,35 @@ impl NativePreparedRedactionSession {
       .to_plaintext_json_at(SessionTimestamp::from_epoch_seconds(
         observed_at_epoch_seconds,
       ))
+      .map_err(|error| to_napi_core_error(&error))
+  }
+
+  #[napi]
+  #[allow(clippy::needless_pass_by_value)]
+  pub fn to_encrypted_archive(&self, key: Uint8Array) -> Result<Uint8Array> {
+    let key = session_archive_key(&key)?;
+    self
+      .lock_session()?
+      .to_encrypted_archive(&key)
+      .map(Uint8Array::new)
+      .map_err(|error| to_napi_core_error(&error))
+  }
+
+  #[napi]
+  #[allow(clippy::needless_pass_by_value)]
+  pub fn to_encrypted_archive_at(
+    &self,
+    key: Uint8Array,
+    observed_at_epoch_seconds: u32,
+  ) -> Result<Uint8Array> {
+    let key = session_archive_key(&key)?;
+    self
+      .lock_session()?
+      .to_encrypted_archive_at(
+        &key,
+        SessionTimestamp::from_epoch_seconds(observed_at_epoch_seconds),
+      )
+      .map(Uint8Array::new)
       .map_err(|error| to_napi_core_error(&error))
   }
 
@@ -1121,6 +1159,32 @@ impl NativePreparedSearch {
 
   #[napi]
   #[allow(clippy::needless_pass_by_value)]
+  pub fn restore_encrypted_redaction_session(
+    &self,
+    options: JsOpenSessionArchiveOptions,
+  ) -> Result<NativePreparedRedactionSession> {
+    let key = session_archive_key(&options.key)?;
+    let expected_session_id = SessionId::new(options.expected_session_id)
+      .map_err(|error| to_napi_core_error(&error))?;
+    let archive = session_archive_bytes(&options.archive)?;
+    let session =
+      RedactionSession::from_encrypted_archive(OpenSessionArchiveOptions {
+        archive: &archive,
+        key: &key,
+        expected_session_id: &expected_session_id,
+        observed_at: options
+          .observed_at_epoch_seconds
+          .map(SessionTimestamp::from_epoch_seconds),
+      })
+      .map_err(|error| to_napi_core_error(&error))?;
+    Ok(NativePreparedRedactionSession::new(
+      Arc::clone(&self.inner),
+      session,
+    ))
+  }
+
+  #[napi]
+  #[allow(clippy::needless_pass_by_value)]
   pub fn redact_static_entities(
     &self,
     full_text: String,
@@ -1595,6 +1659,24 @@ fn to_js_operator_entries(
       operator: entry.operator,
     })
     .collect()
+}
+
+fn session_archive_key(bytes: &[u8]) -> Result<SessionArchiveKey> {
+  let key_bytes = bytes.try_into().map_err(|_| {
+    Error::from_reason(format!(
+      "Encrypted session archive keys must be exactly {REDACTION_SESSION_ARCHIVE_KEY_BYTES} bytes"
+    ))
+  })?;
+  Ok(SessionArchiveKey::from_bytes(key_bytes))
+}
+
+fn session_archive_bytes(bytes: &[u8]) -> Result<Vec<u8>> {
+  if bytes.len() > REDACTION_SESSION_ARCHIVE_MAX_BYTES {
+    return Err(Error::from_reason(format!(
+      "Encrypted session archives must not exceed {REDACTION_SESSION_ARCHIVE_MAX_BYTES} bytes"
+    )));
+  }
+  Ok(bytes.to_vec())
 }
 
 fn elapsed_us(start: Instant) -> u64 {

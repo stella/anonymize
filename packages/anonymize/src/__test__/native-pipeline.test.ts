@@ -128,6 +128,84 @@ describe("createNativePipelineFromConfig", () => {
     expect(redaction.redactedText).not.toContain("SECRET-42");
   });
 
+  test("round-trips encrypted session archives through the native binding", async () => {
+    const pipeline = await createNativePipelineFromConfig({
+      binding,
+      config: {
+        ...baseConfig(),
+        enableRegex: true,
+        labels: ["custom"],
+        customRegexes: [{ pattern: "SECRET-\\d+", label: "custom" }],
+      },
+    });
+    const key = new Uint8Array(32).fill(0x42);
+    const session = pipeline.createRedactionSession("archive_case_1");
+    const initial = session.redactText("code SECRET-42 end");
+    const placeholders = [...initial.redaction.redactionMap.keys()];
+    expect(placeholders).toHaveLength(1);
+    const placeholder = placeholders.at(0);
+    if (placeholder === undefined) {
+      throw new Error("Expected the session redaction to create a placeholder");
+    }
+    const firstArchive = session.toEncryptedArchive(key);
+    const secondArchive = session.to_encrypted_archive(key);
+
+    expect(firstArchive).toBeInstanceOf(Uint8Array);
+    expect(firstArchive).not.toEqual(secondArchive);
+    expect(new TextDecoder().decode(firstArchive)).not.toContain("SECRET-42");
+
+    const restored = pipeline.restoreEncryptedRedactionSession({
+      archive: firstArchive,
+      key,
+      expectedSessionId: "archive_case_1",
+    });
+    const continued = restored.redactText("again SECRET-42");
+    expect(continued.redaction.redactedText).toContain(placeholder);
+
+    expect(() =>
+      pipeline.restoreEncryptedRedactionSession({
+        archive: firstArchive,
+        key: new Uint8Array(32).fill(0x24),
+        expectedSessionId: "archive_case_1",
+      }),
+    ).toThrow("Encrypted session archive authentication failed");
+    expect(() =>
+      pipeline.restoreEncryptedRedactionSession({
+        archive: firstArchive,
+        key,
+        expectedSessionId: "archive_case_2",
+      }),
+    ).toThrow("Encrypted session archive authentication failed");
+    expect(() => session.toEncryptedArchive(new Uint8Array(31))).toThrow(
+      "must be exactly 32 bytes",
+    );
+
+    const lifecycle = pipeline.createRedactionSessionWithLifecycle({
+      sessionId: "archive_lifecycle_1",
+      createdAtEpochSeconds: 100,
+      expiresAtEpochSeconds: 200,
+    });
+    const lifecycleArchive = lifecycle.toEncryptedArchiveAt(key, 150);
+    expect(
+      pipeline
+        .restore_encrypted_redaction_session({
+          archive: lifecycleArchive,
+          key,
+          expectedSessionId: "archive_lifecycle_1",
+          observedAtEpochSeconds: 150,
+        })
+        .inspect(150).status,
+    ).toBe("active");
+    expect(() =>
+      pipeline.restoreEncryptedRedactionSession({
+        archive: lifecycleArchive,
+        key,
+        expectedSessionId: "archive_lifecycle_1",
+        observedAtEpochSeconds: 200,
+      }),
+    ).toThrow("expired");
+  });
+
   test("redacts caller detections using JavaScript UTF-16 offsets", async () => {
     const pipeline = await createNativePipelineFromConfig({
       binding,

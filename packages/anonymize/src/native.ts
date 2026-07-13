@@ -13,6 +13,13 @@ type NativeBindingCallerRedactionOptions = {
   operators?: NativeBindingOperatorConfig;
 };
 
+type NativeBindingOpenSessionArchiveOptions = {
+  archive: Uint8Array;
+  key: Uint8Array;
+  expectedSessionId: string;
+  observedAtEpochSeconds?: number;
+};
+
 export type NativeDiagnosticsBatchCallback = (diagnosticsJson: string) => void;
 export type NativeResultEventCallback = (eventJson: string) => void;
 
@@ -119,11 +126,23 @@ export type NativeCreateSessionWithLifecycleOptions = NativeSessionLifecycle & {
   sessionId: string;
 };
 
+export type NativeOpenSessionArchiveOptions = {
+  archive: Uint8Array;
+  key: Uint8Array;
+  expectedSessionId: string;
+  observedAtEpochSeconds?: number;
+};
+
 export type NativePreparedRedactionSessionBinding = {
   sessionId: () => string;
   mappingCount: () => number;
   toPlaintextJson: () => string;
   toPlaintextJsonAt?: (observedAtEpochSeconds: number) => string;
+  toEncryptedArchive?: (key: Uint8Array) => Uint8Array;
+  toEncryptedArchiveAt?: (
+    key: Uint8Array,
+    observedAtEpochSeconds: number,
+  ) => Uint8Array;
   inspectJson?: (observedAtEpochSeconds?: number) => string;
   deleteJson?: () => string;
   redactStaticEntitiesJson: (
@@ -153,6 +172,9 @@ export type NativePreparedSearchBinding = {
   ) => NativePreparedRedactionSessionBinding;
   restoreRedactionSession?: (
     plaintextJson: string,
+  ) => NativePreparedRedactionSessionBinding;
+  restoreEncryptedRedactionSession?: (
+    options: NativeBindingOpenSessionArchiveOptions,
   ) => NativePreparedRedactionSessionBinding;
   redactStaticEntities: (
     fullText: string,
@@ -408,6 +430,40 @@ export class PreparedNativeRedactionSession {
     return this.toPlaintextJsonAt(observedAtEpochSeconds);
   }
 
+  toEncryptedArchive(key: Uint8Array): Uint8Array {
+    const serialize = this.#session.toEncryptedArchive;
+    if (!serialize) {
+      throw new Error(
+        "Native anonymize binding does not support encrypted session archives",
+      );
+    }
+    return serialize.call(this.#session, key);
+  }
+
+  to_encrypted_archive(key: Uint8Array): Uint8Array {
+    return this.toEncryptedArchive(key);
+  }
+
+  toEncryptedArchiveAt(
+    key: Uint8Array,
+    observedAtEpochSeconds: number,
+  ): Uint8Array {
+    const serialize = this.#session.toEncryptedArchiveAt;
+    if (!serialize) {
+      throw new Error(
+        "Native anonymize binding does not support encrypted session archives",
+      );
+    }
+    return serialize.call(this.#session, key, observedAtEpochSeconds);
+  }
+
+  to_encrypted_archive_at(
+    key: Uint8Array,
+    observedAtEpochSeconds: number,
+  ): Uint8Array {
+    return this.toEncryptedArchiveAt(key, observedAtEpochSeconds);
+  }
+
   inspect(observedAtEpochSeconds?: number): NativeSessionMetadata {
     const inspect = this.#session.inspectJson;
     if (!inspect) {
@@ -628,6 +684,36 @@ export class PreparedNativeAnonymizer {
     plaintextJson: string,
   ): PreparedNativeRedactionSession {
     return this.restoreRedactionSession(plaintextJson);
+  }
+
+  restoreEncryptedRedactionSession({
+    archive,
+    key,
+    expectedSessionId,
+    observedAtEpochSeconds,
+  }: NativeOpenSessionArchiveOptions): PreparedNativeRedactionSession {
+    const restore = this.#prepared.restoreEncryptedRedactionSession;
+    if (!restore) {
+      throw new Error(
+        "Native anonymize binding does not support encrypted session archives",
+      );
+    }
+    return new PreparedNativeRedactionSession(
+      restore.call(this.#prepared, {
+        archive,
+        key,
+        expectedSessionId,
+        ...(observedAtEpochSeconds === undefined
+          ? {}
+          : { observedAtEpochSeconds }),
+      }),
+    );
+  }
+
+  restore_encrypted_redaction_session(
+    options: NativeOpenSessionArchiveOptions,
+  ): PreparedNativeRedactionSession {
+    return this.restoreEncryptedRedactionSession(options);
   }
 
   redactStaticEntities(
@@ -872,6 +958,18 @@ export class PreparedNativePipeline {
     plaintextJson: string,
   ): PreparedNativeRedactionSession {
     return this.restoreRedactionSession(plaintextJson);
+  }
+
+  restoreEncryptedRedactionSession(
+    options: NativeOpenSessionArchiveOptions,
+  ): PreparedNativeRedactionSession {
+    return this.#anonymizer.restoreEncryptedRedactionSession(options);
+  }
+
+  restore_encrypted_redaction_session(
+    options: NativeOpenSessionArchiveOptions,
+  ): PreparedNativeRedactionSession {
+    return this.restoreEncryptedRedactionSession(options);
   }
 
   redactText(
