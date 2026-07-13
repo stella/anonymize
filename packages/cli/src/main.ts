@@ -15,6 +15,7 @@ import type {
   Dictionaries,
   exportRedactionKey,
   NativeAnonymizeBinding,
+  NativeOperatorConfig,
   NativePipelineBuildOptions,
   OperatorType,
   PipelineConfig,
@@ -258,11 +259,6 @@ type CliEntity = {
   source: string;
 };
 
-type CliOperatorConfig = {
-  operators: Record<string, OperatorType>;
-  redactString: string;
-};
-
 type CliRedactionResult = {
   redactedText: string;
   redactionMap: Map<string, string>;
@@ -274,7 +270,7 @@ type NativeCliPipeline = {
   warmLazyRegex?: () => void;
   redactText: (
     fullText: string,
-    operators?: CliOperatorConfig,
+    operators?: NativeOperatorConfig,
   ) => {
     resolvedEntities: CliEntity[];
     redaction: CliRedactionResult;
@@ -380,8 +376,8 @@ const buildPipelineConfig = async (
   };
 };
 
-const buildOperatorConfig = (opts: CliOptions): CliOperatorConfig => {
-  const operators: Record<string, OperatorType> = {};
+const buildOperatorConfig = (opts: CliOptions): NativeOperatorConfig => {
+  const operators: NonNullable<NativeOperatorConfig["operators"]> = {};
   if (opts.mode === "redact") {
     const labels =
       opts.labels === undefined
@@ -802,7 +798,7 @@ const collectSingleTargets = (
 type CliRuntime = {
   redact: (
     fullText: string,
-    operators: CliOperatorConfig,
+    operators: NativeOperatorConfig,
   ) => Promise<{ entities: CliEntity[]; redaction: CliRedactionResult }>;
 };
 
