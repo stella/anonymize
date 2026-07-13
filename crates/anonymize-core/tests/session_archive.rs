@@ -51,6 +51,7 @@ fn encrypted_archives_round_trip_without_exposing_plaintext() {
     RedactionSession::from_encrypted_archive(OpenSessionArchiveOptions {
       archive: &first,
       key: &key,
+      expected_session_id: session.id(),
       observed_at: None,
     })
     .expect("archive should restore");
@@ -70,10 +71,26 @@ fn wrong_keys_and_modified_authenticated_bytes_fail_generically() {
     RedactionSession::from_encrypted_archive(OpenSessionArchiveOptions {
       archive: &archive,
       key: &archive_key(0x43),
+      expected_session_id: session.id(),
       observed_at: None,
     })
     .expect_err("wrong key should fail");
   assert_eq!(wrong_key_error, Error::SessionArchiveAuthenticationFailed,);
+
+  let different_session_id =
+    SessionId::new("case_2").expect("session id should be valid");
+  let wrong_session_error =
+    RedactionSession::from_encrypted_archive(OpenSessionArchiveOptions {
+      archive: &archive,
+      key: &key,
+      expected_session_id: &different_session_id,
+      observed_at: None,
+    })
+    .expect_err("wrong session context should fail");
+  assert_eq!(
+    wrong_session_error,
+    Error::SessionArchiveAuthenticationFailed,
+  );
 
   let mut modified_nonce = archive.clone();
   let nonce_byte = modified_nonce
@@ -84,6 +101,7 @@ fn wrong_keys_and_modified_authenticated_bytes_fail_generically() {
     RedactionSession::from_encrypted_archive(OpenSessionArchiveOptions {
       archive: &modified_nonce,
       key: &key,
+      expected_session_id: session.id(),
       observed_at: None,
     })
     .expect_err("modified nonce should fail");
@@ -98,6 +116,7 @@ fn wrong_keys_and_modified_authenticated_bytes_fail_generically() {
     RedactionSession::from_encrypted_archive(OpenSessionArchiveOptions {
       archive: &modified_ciphertext,
       key: &key,
+      expected_session_id: session.id(),
       observed_at: None,
     })
     .expect_err("modified ciphertext should fail");
@@ -139,6 +158,7 @@ fn malformed_and_unsupported_archives_fail_before_decryption() {
         RedactionSession::from_encrypted_archive(OpenSessionArchiveOptions {
           archive: &malformed,
           key: &key,
+          expected_session_id: session.id(),
           observed_at: None,
         },),
         Err(Error::InvalidSessionArchive { .. })
@@ -156,6 +176,7 @@ fn malformed_and_unsupported_archives_fail_before_decryption() {
     RedactionSession::from_encrypted_archive(OpenSessionArchiveOptions {
       archive: &unsupported_version,
       key: &key,
+      expected_session_id: session.id(),
       observed_at: None,
     })
     .expect_err("unsupported version should fail"),
@@ -170,6 +191,7 @@ fn malformed_and_unsupported_archives_fail_before_decryption() {
     RedactionSession::from_encrypted_archive(OpenSessionArchiveOptions {
       archive: &unsupported_algorithm,
       key: &key,
+      expected_session_id: session.id(),
       observed_at: None,
     })
     .expect_err("unsupported algorithm should fail"),
@@ -180,11 +202,14 @@ fn malformed_and_unsupported_archives_fail_before_decryption() {
 #[test]
 fn oversized_archives_are_rejected_before_parsing() {
   let oversized = vec![0_u8; REDACTION_SESSION_ARCHIVE_MAX_BYTES + 1];
+  let expected_session_id =
+    SessionId::new("case_1").expect("session id should be valid");
 
   assert!(matches!(
     RedactionSession::from_encrypted_archive(OpenSessionArchiveOptions {
       archive: &oversized,
       key: &archive_key(0x42),
+      expected_session_id: &expected_session_id,
       observed_at: None,
     }),
     Err(Error::InvalidSessionArchive { .. })
@@ -221,6 +246,7 @@ fn lifecycle_is_enforced_when_archives_are_sealed_and_opened() {
       RedactionSession::from_encrypted_archive(OpenSessionArchiveOptions {
         archive: &archive,
         key: &key,
+        expected_session_id: session.id(),
         observed_at,
       })
       .expect_err("unavailable lifecycle archive should fail");
@@ -231,6 +257,7 @@ fn lifecycle_is_enforced_when_archives_are_sealed_and_opened() {
     RedactionSession::from_encrypted_archive(OpenSessionArchiveOptions {
       archive: &archive,
       key: &key,
+      expected_session_id: session.id(),
       observed_at: Some(timestamp(150)),
     })
     .expect("active lifecycle archive should restore");
@@ -265,6 +292,8 @@ proptest! {
       OpenSessionArchiveOptions {
         archive: &malformed,
         key: &archive_key(0x42),
+        expected_session_id: &SessionId::new("case_1")
+          .expect("session id should be valid"),
         observed_at: None,
       },
     );

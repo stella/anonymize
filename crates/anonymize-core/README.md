@@ -58,6 +58,7 @@ let restored = RedactionSession::from_encrypted_archive(
   OpenSessionArchiveOptions {
     archive: &archive,
     key: &key,
+    expected_session_id: session.id(),
     observed_at: None,
   },
 )?;
@@ -65,7 +66,9 @@ let restored = RedactionSession::from_encrypted_archive(
 
 The versioned binary envelope uses XChaCha20-Poly1305 with a fresh OS-random
 nonce. Header metadata is authenticated, archive input is bounded before
-parsing, and temporary plaintext is cleared after sealing or restoration.
+parsing, and temporary plaintext is cleared after sealing or restoration. The
+caller supplies the expected session identity on restore, so moving an archive
+between storage records does not restore the wrong session.
 Lifecycle sessions require a caller-supplied observation time when sealed and
 restored so expired archives do not yield a usable session.
 

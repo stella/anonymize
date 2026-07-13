@@ -10,9 +10,9 @@ use chacha20poly1305::aead::{Aead, KeyInit, Payload};
 use chacha20poly1305::{XChaCha20Poly1305, XNonce};
 use zeroize::Zeroizing;
 
-use crate::SessionTimestamp;
 use crate::session::{MAX_SESSION_STATE_BYTES, RedactionSession};
 use crate::types::{Error, Result};
+use crate::{SessionId, SessionTimestamp};
 
 /// Current binary format version for encrypted redaction-session archives.
 pub const REDACTION_SESSION_ARCHIVE_VERSION: u32 = 1;
@@ -66,6 +66,7 @@ impl fmt::Debug for SessionArchiveKey {
 pub struct OpenSessionArchiveOptions<'a> {
   pub archive: &'a [u8],
   pub key: &'a SessionArchiveKey,
+  pub expected_session_id: &'a SessionId,
   pub observed_at: Option<SessionTimestamp>,
 }
 
@@ -94,14 +95,16 @@ impl RedactionSession {
 
   /// Authenticates, decrypts, validates, and restores a session archive.
   ///
-  /// Lifecycle sessions require `observed_at`; archives that are not yet
-  /// active or have expired fail before a usable session is returned.
+  /// The authenticated session identity must match `expected_session_id`.
+  /// Lifecycle sessions require `observed_at`; archives that are not yet active
+  /// or have expired fail before a usable session is returned.
   pub fn from_encrypted_archive(
     options: OpenSessionArchiveOptions<'_>,
   ) -> Result<Self> {
     let OpenSessionArchiveOptions {
       archive,
       key,
+      expected_session_id,
       observed_at,
     } = options;
     let parsed = ParsedSessionArchive::parse(archive)?;
@@ -122,6 +125,9 @@ impl RedactionSession {
       invalid_archive("decrypted session state is not valid UTF-8")
     })?;
     let session = Self::from_plaintext_json(plaintext)?;
+    if session.id() != expected_session_id {
+      return Err(Error::SessionArchiveAuthenticationFailed);
+    }
     session.ensure_active(observed_at)?;
     Ok(session)
   }
