@@ -112,12 +112,23 @@ import stella_anonymize as anonymize
 prepared = anonymize.preload_default_native_pipeline(language="en")
 result = prepared.redact_text("Contact Jan Novák at jan.novak@example.com.")
 
+session = prepared.create_redaction_session("opaque_case_1")
+session.redact_text("Jan Novák signed.")
+archive = session.to_encrypted_archive(application_owned_32_byte_key)
+restored = prepared.restore_encrypted_redaction_session(
+    archive,
+    application_owned_32_byte_key,
+    "opaque_case_1",
+)
+
 print(result.redaction.redacted_text)
 # Contact [PERSON_1] at [EMAIL_ADDRESS_1].
 ```
 
 The Python SDK uses the same Rust core and prepared-package contract as the
-Node SDK. See [`crates/anonymize-py/README.md`](crates/anonymize-py/README.md).
+Node SDK. Encrypted session archives are interoperable across those runtimes;
+the application owns key generation, storage, rotation, and authorization. See
+[`crates/anonymize-py/README.md`](crates/anonymize-py/README.md).
 
 ### CLI
 

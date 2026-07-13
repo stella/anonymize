@@ -199,6 +199,15 @@ prepared = anonymize.preload_default_native_pipeline(
 )
 result = prepared.redact_text(text, redact_string="***")
 
+session = prepared.create_redaction_session("opaque_case_1")
+session.redact_text(text)
+archive = session.to_encrypted_archive(application_owned_32_byte_key)
+restored = prepared.restore_encrypted_redaction_session(
+    archive,
+    application_owned_32_byte_key,
+    "opaque_case_1",
+)
+
 print(result.redaction.redacted_text)
 ```
 
@@ -216,7 +225,13 @@ Python preserves `provider_id` and `detection_id` on retained entities. Use
 `redact_text_with_caller_detections_diagnostics_json()` for the same audit-safe
 diagnostics contract.
 
-The Python SDK uses the same Rust core and prepared-package contract as the Node SDK. Prefer `get_default_native_pipeline()`, `preload_default_native_pipeline()`, `load_prepared_package()`, or `load_prepared_package_file()` for repeated calls; top-level `redact_text()` and `redact_text_json()` prepare from config on each call.
+The Python SDK uses the same Rust core, encrypted session archive format, and
+prepared-package contract as the Node SDK. The application owns archive-key
+generation, storage, rotation, and authorization. Prefer
+`get_default_native_pipeline()`, `preload_default_native_pipeline()`,
+`load_prepared_package()`, or `load_prepared_package_file()` for repeated calls;
+top-level `redact_text()` and `redact_text_json()` prepare from config on each
+call.
 
 ## Caller-Owned Deny Lists and Regexes
 

@@ -54,6 +54,24 @@ runtime instances. Its output contains original personal data in plaintext: do
 not log it or persist it without an application-owned protection layer. Restore
 validated transfer state with `prepared.restore_redaction_session(json_state)`.
 
+For persistence, use the authenticated binary archive API with a caller-owned
+32-byte key. Restoring requires the expected session identity so an archive
+cannot be substituted across records:
+
+```py
+archive = session.to_encrypted_archive(application_key)
+restored = prepared.restore_encrypted_redaction_session(
+    archive,
+    application_key,
+    session.session_id(),
+)
+```
+
+Generate, store, rotate, and authorize access to the key outside the SDK. The
+archive contains personal data as ciphertext; do not log the archive or key.
+Lifecycle sessions use `to_encrypted_archive_at()` and require
+`observed_at_epoch_seconds` when restored.
+
 Sessions can carry explicit lifecycle bounds. The engine never reads the system
 clock; supply the UTC epoch-second observation time for each lifecycle-aware
 operation:

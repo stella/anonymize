@@ -160,6 +160,19 @@ class PreparedRedactionSession:
     def to_plaintext_json_at(self, observed_at_epoch_seconds: int) -> str:
         return self._session.to_plaintext_json_at(observed_at_epoch_seconds)
 
+    def to_encrypted_archive(self, key: BytesLike) -> bytes:
+        return self._session.to_encrypted_archive(bytes(key))
+
+    def to_encrypted_archive_at(
+        self,
+        key: BytesLike,
+        observed_at_epoch_seconds: int,
+    ) -> bytes:
+        return self._session.to_encrypted_archive_at(
+            bytes(key),
+            observed_at_epoch_seconds,
+        )
+
     def inspect(
         self,
         observed_at_epoch_seconds: int | None = None,
@@ -349,6 +362,23 @@ class PreparedAnonymizer:
     ) -> PreparedRedactionSession:
         return PreparedRedactionSession(
             self._prepared.restore_redaction_session(plaintext_json)
+        )
+
+    def restore_encrypted_redaction_session(
+        self,
+        archive: BytesLike,
+        key: BytesLike,
+        expected_session_id: str,
+        *,
+        observed_at_epoch_seconds: int | None = None,
+    ) -> PreparedRedactionSession:
+        return PreparedRedactionSession(
+            self._prepared.restore_encrypted_redaction_session(
+                bytes(archive),
+                bytes(key),
+                expected_session_id,
+                observed_at_epoch_seconds,
+            )
         )
 
     def redact_text(
