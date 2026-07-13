@@ -1,6 +1,9 @@
 use crate::diagnostics::StaticRedactionDiagnostics;
-use crate::redact::redact_text;
+use crate::redact::{
+  RedactTextWithSessionParams, redact_text, redact_text_with_session,
+};
 use crate::resolution::{CallerDetection, PipelineEntity};
+use crate::session::RedactionSession;
 use crate::types::{
   Entity, EntityKind, OperatorConfig, RedactionResult, Result,
 };
@@ -11,16 +14,47 @@ use super::phase::{PhaseTimer, observe_diagnostic_stream};
 use super::result_stream::StaticRedactionResultStream;
 use super::results::{StaticRedactionResult, StaticRedactionStreamEvent};
 
+pub(super) struct StaticRedactionContext<'a> {
+  pub(super) session: Option<&'a mut RedactionSession>,
+  pub(super) diagnostics: Option<&'a mut StaticRedactionDiagnostics>,
+}
+
 impl PreparedEngine {
   pub(super) fn redact_static_entities_inner(
     &self,
     full_text: &str,
     operators: &OperatorConfig,
     caller_detections: &[CallerDetection],
-    mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
+    diagnostics: Option<&mut StaticRedactionDiagnostics>,
     event_stream: &mut DiagnosticEventStream<'_>,
     result_stream: &mut StaticRedactionResultStream<'_>,
   ) -> Result<StaticRedactionResult> {
+    self.redact_static_entities_with_session_inner(
+      full_text,
+      operators,
+      caller_detections,
+      StaticRedactionContext {
+        session: None,
+        diagnostics,
+      },
+      event_stream,
+      result_stream,
+    )
+  }
+
+  pub(super) fn redact_static_entities_with_session_inner(
+    &self,
+    full_text: &str,
+    operators: &OperatorConfig,
+    caller_detections: &[CallerDetection],
+    context: StaticRedactionContext<'_>,
+    event_stream: &mut DiagnosticEventStream<'_>,
+    result_stream: &mut StaticRedactionResultStream<'_>,
+  ) -> Result<StaticRedactionResult> {
+    let StaticRedactionContext {
+      session,
+      mut diagnostics,
+    } = context;
     validate_unique_caller_provenance(caller_detections)?;
     let caller_entities = caller_detections
       .iter()
@@ -86,7 +120,15 @@ impl PreparedEngine {
       .map(to_redaction_entity)
       .collect::<Vec<_>>();
     let redaction_timer = PhaseTimer::start();
-    let redaction = redact_text(full_text, &redaction_entities, operators)?;
+    let redaction = match session {
+      Some(session) => redact_text_with_session(RedactTextWithSessionParams {
+        full_text,
+        entities: &redaction_entities,
+        config: operators,
+        session,
+      })?,
+      None => redact_text(full_text, &redaction_entities, operators)?,
+    };
     result_stream.observe(StaticRedactionStreamEvent::Redacted(&redaction))?;
     record_redaction_stages(
       &mut diagnostics,
