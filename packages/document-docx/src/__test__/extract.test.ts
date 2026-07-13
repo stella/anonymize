@@ -155,11 +155,11 @@ describe("extractDocxText", () => {
         {
           path: "word/document.xml",
           contentTypeSuffix: "document.main+xml",
-          xml: `<x:document xmlns:x="${strictNamespace}"><x:body><x:p><x:r><x:t>Strict</x:t></x:r></x:p></x:body></x:document>`,
+          xml: `<x:document xmlns:x="${strictNamespace}"><x:body><x:p><x:r><x:t><![CDATA[Strict &]]></x:t></x:r></x:p></x:body></x:document>`,
         },
       ]),
     );
-    expect(result.blocks.map(({ text }) => text)).toEqual(["Strict"]);
+    expect(result.blocks.map(({ text }) => text)).toEqual(["Strict &"]);
   });
 
   test("rejects packages without exactly one declared main document", () => {

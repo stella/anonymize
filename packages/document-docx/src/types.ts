@@ -89,6 +89,34 @@ export type DocxExtraction = {
   coverage: DocxCoverage;
 };
 
+export type DocxTextReplacement = {
+  start: number;
+  end: number;
+  replacement: string;
+};
+
+export type DocxBlockRewrite = {
+  location: DocxBlockLocation;
+  expectedText: string;
+  replacements: readonly DocxTextReplacement[];
+};
+
+export type DocxRewriteResult = {
+  document: Uint8Array;
+  rewrittenBlockCount: number;
+  appliedReplacementCount: number;
+};
+
+export const DOCX_REWRITE_ERROR_CODES = {
+  invalidReplacement: "invalid-replacement",
+  rewriteLimitExceeded: "rewrite-limit-exceeded",
+  staleExtraction: "stale-extraction",
+  unsupportedReplacement: "unsupported-replacement",
+} as const;
+
+export type DocxRewriteErrorCode =
+  (typeof DOCX_REWRITE_ERROR_CODES)[keyof typeof DOCX_REWRITE_ERROR_CODES];
+
 export const DOCX_EXTRACTION_ERROR_CODES = {
   archiveLimitExceeded: "archive-limit-exceeded",
   invalidArchive: "invalid-archive",

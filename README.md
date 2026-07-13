@@ -156,6 +156,10 @@ footers, footnotes, endnotes, comments, hyperlinks, and tracked revisions are
 represented explicitly; unsupported WordprocessingML content is reported in
 `extraction.coverage` rather than silently omitted. Input size, expanded ZIP
 size, entry count, and XML nesting are bounded before text is returned.
+Block-local rewrite plans include the expected source text, so stale offsets fail
+closed. Rewrites preserve untouched package entries and XML by content, retain
+run formatting deterministically, and reject tracked-revision or digitally signed
+content until an explicit policy is available.
 
 ### CLI
 

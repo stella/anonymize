@@ -125,7 +125,11 @@ type ArchiveBudget = {
   uncompressedBytes: number;
 };
 
-const archiveFilter = (budget: ArchiveBudget, file: UnzipFileInfo): boolean => {
+const archiveFilter = (
+  budget: ArchiveBudget,
+  file: UnzipFileInfo,
+  includeAllEntries: boolean,
+): boolean => {
   budget.entryCount += 1;
   if (budget.entryCount > DOCX_MAX_ENTRIES) {
     throw new DocxExtractionError(
@@ -153,13 +157,17 @@ const archiveFilter = (budget: ArchiveBudget, file: UnzipFileInfo): boolean => {
     );
   }
   return (
+    includeAllEntries ||
     file.name === CONTENT_TYPES_PATH ||
     file.name === ROOT_RELATIONSHIPS_PATH ||
     (file.name.startsWith("word/") && file.name.endsWith(".xml"))
   );
 };
 
-const unzipDocx = (archive: Uint8Array): Record<string, Uint8Array> => {
+export const unzipDocxArchive = (
+  archive: Uint8Array,
+  includeAllEntries = false,
+): Record<string, Uint8Array> => {
   if (archive.byteLength > DOCX_ARCHIVE_MAX_BYTES) {
     throw new DocxExtractionError(
       DOCX_EXTRACTION_ERROR_CODES.archiveLimitExceeded,
@@ -169,7 +177,7 @@ const unzipDocx = (archive: Uint8Array): Record<string, Uint8Array> => {
   const budget: ArchiveBudget = { entryCount: 0, uncompressedBytes: 0 };
   try {
     return unzipSync(archive, {
-      filter: (file) => archiveFilter(budget, file),
+      filter: (file) => archiveFilter(budget, file, includeAllEntries),
     });
   } catch (error) {
     if (error instanceof DocxExtractionError) {
@@ -548,6 +556,11 @@ const extractPart = (part: DocxPart, xml: string): PartExtraction => {
       currentText += text;
     }
   });
+  parser.on("cdata", (text) => {
+    if (currentTextPath !== null) {
+      currentText += text;
+    }
+  });
   parser.on("closetag", (tag) => {
     const frame = stack.at(-1);
     if (frame === undefined || frame.tag !== tag) {
@@ -626,7 +639,7 @@ const extractPart = (part: DocxPart, xml: string): PartExtraction => {
 };
 
 export const extractDocxText = (archive: Uint8Array): DocxExtraction => {
-  const entries = unzipDocx(archive);
+  const entries = unzipDocxArchive(archive);
   const contentTypesBytes = entries[CONTENT_TYPES_PATH];
   if (contentTypesBytes === undefined) {
     throw invalidPackage("DOCX archive is missing [Content_Types].xml");

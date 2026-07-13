@@ -7,7 +7,14 @@ export {
   DocxExtractionError,
   extractDocxText,
 } from "./extract";
+export { DocxRewriteError, rewriteDocxText } from "./rewrite";
+export {
+  DOCX_EXTRACTION_ERROR_CODES,
+  DOCX_PART_TYPES,
+  DOCX_REWRITE_ERROR_CODES,
+} from "./types";
 export type {
+  DocxBlockRewrite,
   DocxBlockLocation,
   DocxCoverage,
   DocxCoverageItem,
@@ -15,6 +22,9 @@ export type {
   DocxExtractionErrorCode,
   DocxInlineContext,
   DocxPart,
+  DocxRewriteErrorCode,
+  DocxRewriteResult,
+  DocxTextReplacement,
   DocxTextBlock,
   DocxTextSegment,
 } from "./types";
