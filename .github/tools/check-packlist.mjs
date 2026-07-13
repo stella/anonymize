@@ -47,6 +47,17 @@ const PACKAGES = [
     ],
   },
   {
+    dir: "packages/document-docx",
+    expected: [
+      "dist/index.d.mts",
+      "dist/index.mjs",
+      "README.md",
+      "LICENSE",
+      "ATTRIBUTION.md",
+      "package.json",
+    ],
+  },
+  {
     dir: "packages/anonymize/wasm",
     expected: [
       "dist/wasm.d.mts",

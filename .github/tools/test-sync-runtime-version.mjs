@@ -33,6 +33,7 @@ const packageFiles = [
   "packages/anonymize-win32-x64-msvc/package.json",
   "packages/anonymize/wasm/package.json",
   "packages/cli/package.json",
+  "packages/document-docx/package.json",
 ];
 
 const sidecars = [
@@ -131,6 +132,9 @@ function packageNameFor(file) {
   if (file === "packages/cli/package.json") {
     return "@stll/anonymize-cli";
   }
+  if (file === "packages/document-docx/package.json") {
+    return "@stll/anonymize-docx";
+  }
   return `@stll/${file.replace("packages/", "").replace("/package.json", "")}`;
 }
 
@@ -174,6 +178,10 @@ function bunLockFixture() {
           name: "@stll/anonymize-cli",
           version,
           dependencies: { "@stll/anonymize": `^${staleVersion}` },
+        },
+        "packages/document-docx": {
+          name: "@stll/anonymize-docx",
+          version,
         },
       },
     },

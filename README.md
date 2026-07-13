@@ -130,6 +130,33 @@ Node SDK. Encrypted session archives are interoperable across those runtimes;
 the application owns key generation, storage, rotation, and authorization. See
 [`crates/anonymize-py/README.md`](crates/anonymize-py/README.md).
 
+### DOCX extraction
+
+```bash
+npm install @stll/anonymize-docx
+```
+
+Use the document package to extract text without flattening away its source
+structure:
+
+```ts
+import { readFile } from "node:fs/promises";
+import { extractDocxText } from "@stll/anonymize-docx";
+
+const document = await readFile("contract.docx");
+const extraction = extractDocxText(document);
+
+for (const block of extraction.blocks) {
+  console.log(block.text, block.location);
+}
+```
+
+Paragraph, table-cell, and text-box locations remain distinct. Headers,
+footers, footnotes, endnotes, comments, hyperlinks, and tracked revisions are
+represented explicitly; unsupported WordprocessingML content is reported in
+`extraction.coverage` rather than silently omitted. Input size, expanded ZIP
+size, entry count, and XML nesting are bounded before text is returned.
+
 ### CLI
 
 No install needed:

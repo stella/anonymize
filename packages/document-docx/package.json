@@ -1,0 +1,43 @@
+{
+  "name": "@stll/anonymize-docx",
+  "version": "2.0.1",
+  "description": "Structure-aware DOCX text extraction for stella anonymization workflows",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.mjs"
+    }
+  },
+  "files": [
+    "ATTRIBUTION.md",
+    "dist",
+    "LICENSE",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stella/anonymize.git"
+  },
+  "license": "Apache-2.0",
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json",
+    "test": "bun test",
+    "format": "oxfmt ."
+  },
+  "dependencies": {
+    "fflate": "^0.8.3",
+    "saxes": "^6.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "bun-types": "^1.3.14",
+    "tsdown": "^0.22.4",
+    "typescript": "^6.0.3"
+  }
+}
