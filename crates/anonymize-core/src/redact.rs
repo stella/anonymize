@@ -1,10 +1,14 @@
 use std::borrow::Cow;
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::byte_offsets::ByteOffsets;
 use crate::normalize::placeholder_fallback;
 use crate::placeholders::build_placeholder_map;
+use crate::session::{
+  RedactionSession, SessionPlaceholderInput, SessionPlaceholderPlan,
+  SessionUpdate,
+};
 use crate::types::{
   Entity, EntityKind, MaskConfig, MaskDirection, Operator, OperatorConfig,
   OperatorEntry, OperatorType, PlaceholderMap, RedactionEntry, RedactionResult,
@@ -16,7 +20,62 @@ pub fn redact_text(
   entities: &[Entity],
   config: &OperatorConfig,
 ) -> Result<RedactionResult> {
+  redact_text_inner(RedactTextOptions {
+    full_text,
+    entities,
+    config,
+    session: None,
+  })
+}
+
+/// Inputs for transactional cross-document redaction.
+pub struct RedactTextWithSessionParams<'a> {
+  pub full_text: &'a str,
+  pub entities: &'a [Entity],
+  pub config: &'a OperatorConfig,
+  pub session: &'a mut RedactionSession,
+}
+
+/// Redacts text while reusing stable placeholders from a session.
+///
+/// The session is updated only when the complete redaction succeeds.
+pub fn redact_text_with_session(
+  params: RedactTextWithSessionParams<'_>,
+) -> Result<RedactionResult> {
+  let RedactTextWithSessionParams {
+    full_text,
+    entities,
+    config,
+    session,
+  } = params;
+  redact_text_inner(RedactTextOptions {
+    full_text,
+    entities,
+    config,
+    session: Some(session),
+  })
+}
+
+struct RedactTextOptions<'a> {
+  full_text: &'a str,
+  entities: &'a [Entity],
+  config: &'a OperatorConfig,
+  session: Option<&'a mut RedactionSession>,
+}
+
+fn redact_text_inner(
+  options: RedactTextOptions<'_>,
+) -> Result<RedactionResult> {
+  let RedactTextOptions {
+    full_text,
+    entities,
+    config,
+    session,
+  } = options;
   if entities.is_empty() {
+    if let Some(active_session) = session {
+      active_session.validate_reserved_text(full_text)?;
+    }
     return Ok(RedactionResult {
       redacted_text: full_text.to_owned(),
       redaction_map: Vec::new(),
@@ -26,7 +85,6 @@ pub fn redact_text(
   }
 
   let offsets = ByteOffsets::new(full_text);
-  let placeholder_map = build_placeholder_map(entities, full_text);
   let mut sorted = redaction_spans(full_text, entities, &offsets)?;
   sorted.sort_by_key(|span| span.entity.start);
 
@@ -46,11 +104,10 @@ pub fn redact_text(
   let kept = non_overlapping_spans(kept);
   let masked = non_overlapping_spans(masked);
   let redacted = non_overlapping_spans(redacted);
-  let mask_replacements = mask_replacement_spans(&masked, config)?;
-  let mask_replacements =
-    remove_redacted_mask_overlaps(mask_replacements, &redacted);
-
-  let mut operator_map = Vec::<OperatorEntry>::new();
+  let mask_replacements = remove_redacted_mask_overlaps(
+    mask_replacement_spans(&masked, config)?,
+    &redacted,
+  );
 
   let mut operator_spans = kept
     .iter()
@@ -58,6 +115,35 @@ pub fn redact_text(
     .chain(&redacted)
     .collect::<Vec<_>>();
   operator_spans.sort_by_key(|span| span.entity.start);
+  let mut session_update = None;
+  let placeholder_map = match session.as_deref() {
+    Some(active_session) => {
+      let inputs = operator_spans
+        .iter()
+        .map(|span| SessionPlaceholderInput {
+          entity: span.entity,
+          original: redaction_original_text_ref(span),
+          persist: operator_for(config, &span.entity.label)
+            == &Operator::Replace,
+        })
+        .collect::<Vec<_>>();
+      let reserved_sources =
+        session_reserved_sources(SessionReservedSourcesParams {
+          full_text,
+          redacted: &redacted,
+          config,
+        });
+      let SessionPlaceholderPlan {
+        placeholder_map,
+        update,
+      } = active_session.plan_placeholder_map(&inputs, &reserved_sources)?;
+      session_update = Some(update);
+      placeholder_map
+    }
+    None => build_placeholder_map(entities, full_text),
+  };
+
+  let mut operator_map = Vec::<OperatorEntry>::new();
   for span in operator_spans {
     let placeholder = placeholder_map.get_entity(span.entity).map_or_else(
       || Cow::Owned(placeholder_fallback(&span.entity.label)),
@@ -67,14 +153,16 @@ pub fn redact_text(
     set_operator_entry(&mut operator_map, &placeholder, operator);
   }
 
-  let rendered = render_selected_spans(&RenderOptions {
+  let mut rendered = render_selected_spans(&RenderOptions {
     full_text,
     offsets: &offsets,
     placeholder_map: &placeholder_map,
     config,
     redacted: &redacted,
     mask_replacements: &mask_replacements,
+    track_placeholder_counts: session_update.is_some(),
   })?;
+  rendered.commit_session_update(session, session_update)?;
 
   Ok(RedactionResult {
     redacted_text: rendered.text,
@@ -85,6 +173,31 @@ pub fn redact_text(
       .saturating_add(masked.len())
       .saturating_add(redacted.len()),
   })
+}
+
+#[derive(Clone, Copy)]
+struct SessionReservedSourcesParams<'borrow, 'text> {
+  full_text: &'text str,
+  redacted: &'borrow [RedactionSpan<'text>],
+  config: &'text OperatorConfig,
+}
+
+fn session_reserved_sources<'text>(
+  params: SessionReservedSourcesParams<'_, 'text>,
+) -> Vec<&'text str> {
+  let SessionReservedSourcesParams {
+    full_text,
+    redacted,
+    config,
+  } = params;
+  let mut sources = vec![full_text];
+  if redacted
+    .iter()
+    .any(|span| operator_for(config, &span.entity.label) == &Operator::Redact)
+  {
+    sources.push(&config.redact_string);
+  }
+  sources
 }
 
 #[must_use]
@@ -119,11 +232,30 @@ struct RenderOptions<'text, 'config, 'borrow> {
   config: &'config OperatorConfig,
   redacted: &'borrow [RedactionSpan<'text>],
   mask_replacements: &'borrow [MaskReplacementSpan<'config>],
+  track_placeholder_counts: bool,
 }
 
 struct RenderedRedactions {
   text: String,
   map: Vec<RedactionEntry>,
+  placeholder_counts: BTreeMap<String, usize>,
+}
+
+impl RenderedRedactions {
+  fn commit_session_update(
+    &mut self,
+    session: Option<&mut RedactionSession>,
+    update: Option<SessionUpdate>,
+  ) -> Result<()> {
+    let (Some(active_session), Some(update)) = (session, update) else {
+      return Ok(());
+    };
+    active_session
+      .validate_rendered_placeholders(&self.text, &self.placeholder_counts)?;
+    active_session.apply_update(update);
+    active_session.canonicalize_redaction_map(&mut self.map);
+    Ok(())
+  }
 }
 
 #[derive(Clone, Copy)]
@@ -138,6 +270,7 @@ fn render_selected_spans(
   let mut text = String::with_capacity(options.full_text.len());
   let mut map = Vec::<RedactionEntry>::new();
   let mut placeholders = HashSet::<String>::new();
+  let mut placeholder_counts = BTreeMap::<String, usize>::new();
   let mut cursor = 0;
   let mut redacted_index = 0;
   let mut mask_index = 0;
@@ -181,7 +314,15 @@ fn render_selected_spans(
           );
         let operator = operator_for(options.config, &entity.label);
         match operator {
-          Operator::Replace => text.push_str(&placeholder),
+          Operator::Replace => {
+            text.push_str(&placeholder);
+            if options.track_placeholder_counts {
+              let count = placeholder_counts
+                .entry(placeholder.to_string())
+                .or_insert(0);
+              *count = count.saturating_add(1);
+            }
+          }
           Operator::Redact => text.push_str(&options.config.redact_string),
           Operator::Mask(mask) => {
             text.push_str(&mask_text(span.source_text, mask));
@@ -213,7 +354,11 @@ fn render_selected_spans(
       full_text_len,
     )?);
   }
-  Ok(RenderedRedactions { text, map })
+  Ok(RenderedRedactions {
+    text,
+    map,
+    placeholder_counts,
+  })
 }
 
 fn non_overlapping_spans(
@@ -392,8 +537,12 @@ fn set_operator_entry(
 }
 
 fn redaction_original_text(span: &RedactionSpan<'_>) -> String {
+  redaction_original_text_ref(span).to_owned()
+}
+
+fn redaction_original_text_ref<'a>(span: &'a RedactionSpan<'_>) -> &'a str {
   match &span.entity.kind {
-    EntityKind::Detected => span.source_text.to_owned(),
-    EntityKind::Coreference { source_text } => source_text.clone(),
+    EntityKind::Detected => span.source_text,
+    EntityKind::Coreference { source_text } => source_text,
   }
 }

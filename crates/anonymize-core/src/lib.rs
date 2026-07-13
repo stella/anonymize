@@ -28,6 +28,7 @@ mod processors;
 mod redact;
 mod resolution;
 mod search;
+mod session;
 mod signatures;
 mod triggers;
 mod types;
@@ -65,7 +66,10 @@ pub use processors::{
   SigningPlaceGuardData, StringGroups, process_country_matches,
   process_deny_list_matches, process_gazetteer_matches, process_regex_matches,
 };
-pub use redact::{deanonymise, redact_text};
+pub use redact::{
+  RedactTextWithSessionParams, deanonymise, redact_text,
+  redact_text_with_session,
+};
 pub use resolution::{
   CallerDetection, CallerDetectionParams, CallerProvenance, DetectionSource,
   PipelineEntity, SourceDetail, enforce_boundary_consistency, merge_and_dedup,
@@ -75,6 +79,9 @@ pub use search::{
   FuzzySearchOptions, LiteralSearchOptions, PreparedArtifactPolicy,
   RegexArtifactPolicy, RegexSearchOptions, SearchIndex, SearchIndexArtifacts,
   SearchOptions, SearchPattern,
+};
+pub use session::{
+  REDACTION_SESSION_SCHEMA_VERSION, RedactionSession, SessionId,
 };
 pub use signatures::SignatureData;
 pub use triggers::{

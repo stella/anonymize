@@ -3,11 +3,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::normalize::{label_key, normalize_entity_text};
 use crate::types::{Entity, EntityKind, PlaceholderMap};
 
-// Document-local placeholder key.
+// Canonical placeholder identity shared by document-local and session allocators.
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
-struct NormalizedKey {
-  label_key: String,
-  text: String,
+pub(crate) struct PlaceholderIdentity {
+  pub(crate) label_key: String,
+  pub(crate) text: String,
 }
 
 #[must_use]
@@ -16,7 +16,8 @@ pub fn build_placeholder_map(
   reserved_text: &str,
 ) -> PlaceholderMap {
   let mut counters = BTreeMap::<String, u32>::new();
-  let mut normalized_to_placeholder = BTreeMap::<NormalizedKey, String>::new();
+  let mut normalized_to_placeholder =
+    BTreeMap::<PlaceholderIdentity, String>::new();
   let reserved_placeholders = collect_reserved_placeholders(reserved_text);
   let mut placeholder_map = PlaceholderMap::default();
 
@@ -28,16 +29,18 @@ pub fn build_placeholder_map(
       continue;
     }
 
-    let label_key = label_key(&entity.label);
-    let normalized_key = normalized_key(entity, &label_key);
+    let normalized_key = placeholder_identity(entity);
 
     if let Some(existing) = normalized_to_placeholder.get(&normalized_key) {
       placeholder_map.push_entity(entity, existing);
       continue;
     }
 
-    let placeholder =
-      next_placeholder(&label_key, &mut counters, &reserved_placeholders);
+    let placeholder = next_placeholder(
+      &normalized_key.label_key,
+      &mut counters,
+      &reserved_placeholders,
+    );
     placeholder_map.push_entity(entity, &placeholder);
     normalized_to_placeholder.insert(normalized_key, placeholder);
   }
@@ -45,7 +48,8 @@ pub fn build_placeholder_map(
   placeholder_map
 }
 
-fn normalized_key(entity: &Entity, label_key: &str) -> NormalizedKey {
+pub(crate) fn placeholder_identity(entity: &Entity) -> PlaceholderIdentity {
+  let label_key = label_key(&entity.label);
   // Coreference aliases key by source identity, not alias text.
   let text = match &entity.kind {
     EntityKind::Detected => normalize_entity_text(&entity.label, &entity.text),
@@ -54,10 +58,7 @@ fn normalized_key(entity: &Entity, label_key: &str) -> NormalizedKey {
     }
   };
 
-  NormalizedKey {
-    label_key: label_key.to_owned(),
-    text,
-  }
+  PlaceholderIdentity { label_key, text }
 }
 
 fn next_placeholder(
@@ -79,8 +80,14 @@ fn next_placeholder(
   }
 }
 
-fn collect_reserved_placeholders(text: &str) -> BTreeSet<String> {
-  let mut placeholders = BTreeSet::new();
+pub(crate) fn collect_reserved_placeholders(text: &str) -> BTreeSet<String> {
+  collect_placeholder_counts(text).into_keys().collect()
+}
+
+pub(crate) fn collect_placeholder_counts(
+  text: &str,
+) -> BTreeMap<String, usize> {
+  let mut placeholders = BTreeMap::new();
   let mut remaining = text;
 
   while let Some(start) = remaining.find('[') {
@@ -96,7 +103,8 @@ fn collect_reserved_placeholders(text: &str) -> BTreeSet<String> {
     };
     let valid = is_placeholder_inner(inner);
     if valid {
-      placeholders.insert(format!("[{inner}]"));
+      let count = placeholders.entry(format!("[{inner}]")).or_insert(0usize);
+      *count = count.saturating_add(1);
     }
 
     let next_start = if valid {
