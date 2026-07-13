@@ -125,11 +125,17 @@ type ArchiveBudget = {
   uncompressedBytes: number;
 };
 
-const archiveFilter = (
-  budget: ArchiveBudget,
-  file: UnzipFileInfo,
-  includeAllEntries: boolean,
-): boolean => {
+type ArchiveFilterOptions = {
+  budget: ArchiveBudget;
+  file: UnzipFileInfo;
+  includeAllEntries: boolean;
+};
+
+const archiveFilter = ({
+  budget,
+  file,
+  includeAllEntries,
+}: ArchiveFilterOptions): boolean => {
   budget.entryCount += 1;
   if (budget.entryCount > DOCX_MAX_ENTRIES) {
     throw new DocxExtractionError(
@@ -177,7 +183,7 @@ export const unzipDocxArchive = (
   const budget: ArchiveBudget = { entryCount: 0, uncompressedBytes: 0 };
   try {
     return unzipSync(archive, {
-      filter: (file) => archiveFilter(budget, file, includeAllEntries),
+      filter: (file) => archiveFilter({ budget, file, includeAllEntries }),
     });
   } catch (error) {
     if (error instanceof DocxExtractionError) {

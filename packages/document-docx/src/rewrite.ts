@@ -26,6 +26,7 @@ const WORDPROCESSING_NAMESPACES = new Set([
 ]);
 const XML_NAMESPACE = "http://www.w3.org/XML/1998/namespace";
 const DOCX_MAX_REPLACEMENTS = 1_000_000;
+const SIGNATURE_PART_PREFIX = "_xmlsignatures/";
 
 export class DocxRewriteError extends Error {
   readonly code: DocxRewriteErrorCode;
@@ -297,11 +298,17 @@ const hasPreservedSpace = (tag: SaxesTagNS): boolean =>
       attribute.value === "preserve",
   );
 
-const findClosingTagStart = (
-  xml: string,
-  contentStart: number,
-  parserPosition: number,
-): number => {
+type FindClosingTagStartOptions = {
+  xml: string;
+  contentStart: number;
+  parserPosition: number;
+};
+
+const findClosingTagStart = ({
+  xml,
+  contentStart,
+  parserPosition,
+}: FindClosingTagStartOptions): number => {
   for (let index = parserPosition - 1; index >= contentStart; index -= 1) {
     if (xml[index] === "<" && xml[index + 1] === "/") {
       return index;
@@ -360,11 +367,11 @@ const rewritePartXml = (
     if (activeText?.tag === tag) {
       const update = updatesByPath.get(activeText.key);
       if (update !== undefined) {
-        const contentEnd = findClosingTagStart(
+        const contentEnd = findClosingTagStart({
           xml,
-          activeText.contentStart,
-          parser.position,
-        );
+          contentStart: activeText.contentStart,
+          parserPosition: parser.position,
+        });
         patches.push({
           start: activeText.contentStart,
           end: contentEnd,
@@ -479,12 +486,6 @@ export const rewriteDocxText = (
         "DOCX block rewrite plans must contain at least one replacement",
       );
     }
-    const partUpdates =
-      updatesByPart.get(block.location.part.path) ?? new Map();
-    for (const update of planBlockUpdates(block, rewrite)) {
-      partUpdates.set(pathKey(update.path), update);
-    }
-    updatesByPart.set(block.location.part.path, partUpdates);
     if (
       appliedReplacementCount + rewrite.replacements.length >
       DOCX_MAX_REPLACEMENTS
@@ -494,11 +495,21 @@ export const rewriteDocxText = (
         `DOCX rewrites must not contain more than ${DOCX_MAX_REPLACEMENTS} replacements`,
       );
     }
+    const partUpdates =
+      updatesByPart.get(block.location.part.path) ?? new Map();
+    for (const update of planBlockUpdates(block, rewrite)) {
+      partUpdates.set(pathKey(update.path), update);
+    }
+    updatesByPart.set(block.location.part.path, partUpdates);
     appliedReplacementCount += rewrite.replacements.length;
   }
 
   const entries = unzipDocxArchive(archive, true);
-  if (Object.keys(entries).some((path) => path.startsWith("_xmlsignatures/"))) {
+  if (
+    Object.keys(entries).some((path) =>
+      path.toLowerCase().startsWith(SIGNATURE_PART_PREFIX),
+    )
+  ) {
     throw rewriteError(
       DOCX_REWRITE_ERROR_CODES.unsupportedReplacement,
       "Digitally signed DOCX packages must be re-signed before rewriting",

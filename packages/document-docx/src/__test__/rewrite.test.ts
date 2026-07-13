@@ -165,7 +165,7 @@ describe("rewriteDocxText", () => {
     const entries = unzipSync(archive);
     const signedArchive = zipSync({
       ...entries,
-      "_xmlsignatures/sig1.xml": strToU8("<Signature/>"),
+      "_XmlSignatures/sig1.xml": strToU8("<Signature/>"),
     });
     expect(() =>
       rewriteDocxText(signedArchive, [
