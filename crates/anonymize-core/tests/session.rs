@@ -227,6 +227,38 @@ fn input_cannot_reserve_a_future_session_placeholder() {
 }
 
 #[test]
+fn configured_redact_tokens_are_reserved_before_session_allocation() {
+  let text = "Alice shared secret";
+  let entities = [
+    person(text, "Alice"),
+    Entity::detected(13, 19, "confidential", "secret"),
+  ];
+  let mut config = OperatorConfig::default();
+  config
+    .operators
+    .insert(String::from("confidential"), Operator::Redact);
+  config.redact_string = String::from("[PERSON_matter_1_1]");
+  let mut session =
+    RedactionSession::new(SessionId::new("matter_1").expect("valid id"));
+
+  let error = redact(RedactFixtureParams {
+    text,
+    entities: &entities,
+    config: &config,
+    session: &mut session,
+  })
+  .expect_err("configured redact tokens must not collide with the session");
+
+  assert_eq!(
+    error,
+    Error::SessionPlaceholderCollision {
+      placeholder: String::from("[PERSON_matter_1_1]")
+    }
+  );
+  assert_eq!(session.mapping_count(), 0);
+}
+
+#[test]
 fn irreversible_operators_do_not_persist_session_mappings() {
   let text = "Alice signed.";
   let operators = [

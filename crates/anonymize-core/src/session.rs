@@ -201,9 +201,12 @@ impl RedactionSession {
   pub(crate) fn plan_placeholder_map(
     &self,
     inputs: &[SessionPlaceholderInput<'_>],
-    reserved_text: &str,
+    reserved_sources: &[&str],
   ) -> Result<SessionPlaceholderPlan> {
-    let reserved = collect_reserved_placeholders(reserved_text);
+    let mut reserved = BTreeSet::new();
+    for source in reserved_sources {
+      reserved.append(&mut collect_reserved_placeholders(source));
+    }
     self.validate_reserved_placeholders(&reserved)?;
     let mut occupied = reserved;
 

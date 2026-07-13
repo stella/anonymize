@@ -125,11 +125,16 @@ fn redact_text_inner(
             == &Operator::Replace,
         })
         .collect::<Vec<_>>();
-      let plan = active_session.plan_placeholder_map(&inputs, full_text)?;
+      let reserved_sources =
+        session_reserved_sources(SessionReservedSourcesParams {
+          full_text,
+          redacted: &redacted,
+          config,
+        });
       let SessionPlaceholderPlan {
         placeholder_map,
         update,
-      } = plan;
+      } = active_session.plan_placeholder_map(&inputs, &reserved_sources)?;
       session_update = Some(update);
       placeholder_map
     }
@@ -168,6 +173,31 @@ fn redact_text_inner(
       .saturating_add(masked.len())
       .saturating_add(redacted.len()),
   })
+}
+
+#[derive(Clone, Copy)]
+struct SessionReservedSourcesParams<'borrow, 'text> {
+  full_text: &'text str,
+  redacted: &'borrow [RedactionSpan<'text>],
+  config: &'text OperatorConfig,
+}
+
+fn session_reserved_sources<'text>(
+  params: SessionReservedSourcesParams<'_, 'text>,
+) -> Vec<&'text str> {
+  let SessionReservedSourcesParams {
+    full_text,
+    redacted,
+    config,
+  } = params;
+  let mut sources = vec![full_text];
+  if redacted
+    .iter()
+    .any(|span| operator_for(config, &span.entity.label) == &Operator::Redact)
+  {
+    sources.push(&config.redact_string);
+  }
+  sources
 }
 
 #[must_use]
