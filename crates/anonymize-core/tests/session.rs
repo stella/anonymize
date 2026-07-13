@@ -398,6 +398,44 @@ fn imported_state_rejects_placeholders_in_originals() {
   );
 }
 
+#[test]
+fn accepted_session_state_always_remains_transferable() {
+  const VALUE_BYTES: usize = 0x0008_0000;
+
+  let mut session =
+    RedactionSession::new(SessionId::new("bounded").expect("valid id"));
+  let mut reached_limit = false;
+  for index in 0..32 {
+    let value = format!("{index:02}{}", "x".repeat(VALUE_BYTES - 2));
+    let end = u32::try_from(value.len()).expect("fixture should fit u32");
+    let before = session.clone();
+    let result = redact(RedactFixtureParams {
+      text: &value,
+      entities: &[Entity::detected(0, end, "person", &value)],
+      config: &OperatorConfig::default(),
+      session: &mut session,
+    });
+    if result.is_ok() {
+      continue;
+    }
+    let error = result.expect_err("size limit should reject the update");
+    assert!(
+      matches!(error, Error::InvalidSessionState { .. }),
+      "unexpected session error: {error}"
+    );
+    assert_eq!(session, before);
+    reached_limit = true;
+    break;
+  }
+
+  assert!(reached_limit, "fixture should exceed the session byte cap");
+  let serialized = session
+    .to_plaintext_json()
+    .expect("accepted session state should serialize");
+  RedactionSession::from_plaintext_json(&serialized)
+    .expect("accepted session state should remain importable");
+}
+
 proptest! {
   #[test]
   fn plaintext_state_round_trip_is_byte_stable(

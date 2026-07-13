@@ -15,6 +15,8 @@ const MAX_SESSION_MAPPINGS: usize = 100_000;
 const MAX_SESSION_STATE_BYTES: usize = 0x0100_0000;
 const MAX_SESSION_VALUE_BYTES: usize = 0x0010_0000;
 const MAX_PLACEHOLDER_COMPONENT_BYTES: usize = 128;
+const EMPTY_SESSION_STATE_TEMPLATE: &str =
+  r#"{"schema_version":1,"session_id":"","counters":{},"mappings":[]}"#;
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 /// Opaque, non-sensitive namespace embedded in session placeholders.
@@ -75,6 +77,7 @@ pub struct RedactionSession {
   counters: BTreeMap<String, u32>,
   placeholders: BTreeMap<PlaceholderIdentity, String>,
   originals: BTreeMap<String, String>,
+  serialized_len: usize,
 }
 
 pub(crate) struct SessionPlaceholderInput<'a> {
@@ -91,16 +94,21 @@ pub(crate) struct SessionPlaceholderPlan {
 pub(crate) struct SessionUpdate {
   counter_updates: BTreeMap<String, u32>,
   new_mappings: Vec<(PlaceholderIdentity, String, String)>,
+  serialized_len: usize,
 }
 
 impl RedactionSession {
   #[must_use]
   pub const fn new(id: SessionId) -> Self {
+    let serialized_len = EMPTY_SESSION_STATE_TEMPLATE
+      .len()
+      .saturating_add(id.0.len());
     Self {
       id,
       counters: BTreeMap::new(),
       placeholders: BTreeMap::new(),
       originals: BTreeMap::new(),
+      serialized_len,
     }
   }
 
@@ -119,6 +127,23 @@ impl RedactionSession {
   /// The returned JSON contains original and normalized entity values. It must
   /// not be logged or persisted without an application-owned protection layer.
   pub fn to_plaintext_json(&self) -> Result<String> {
+    let serialized = self.serialize_plaintext_json()?;
+    if serialized.len() > MAX_SESSION_STATE_BYTES {
+      return Err(Error::SessionSerialization {
+        reason: String::from(
+          "serialized session state exceeds the maximum byte length",
+        ),
+      });
+    }
+    if serialized.len() != self.serialized_len {
+      return Err(Error::SessionSerialization {
+        reason: String::from("session size metadata is inconsistent"),
+      });
+    }
+    Ok(serialized)
+  }
+
+  fn serialize_plaintext_json(&self) -> Result<String> {
     let mut mappings = Vec::with_capacity(self.placeholders.len());
     for (identity, placeholder) in &self.placeholders {
       let Some(original) = self.originals.get(placeholder) else {
@@ -219,12 +244,21 @@ impl RedactionSession {
       }
     }
 
-    Ok(Self {
+    let mut session = Self {
       id,
       counters: envelope.counters,
       placeholders,
       originals,
-    })
+      serialized_len: 0,
+    };
+    let serialized_len = session.serialize_plaintext_json()?.len();
+    if serialized_len > MAX_SESSION_STATE_BYTES {
+      return Err(invalid_session_state(
+        "session state exceeds the maximum serialized byte length",
+      ));
+    }
+    session.serialized_len = serialized_len;
+    Ok(session)
   }
 
   pub(crate) fn plan_placeholder_map(
@@ -309,11 +343,14 @@ impl RedactionSession {
       transient_counters.insert(identity.label_key.clone(), count);
       transient_mappings.insert(identity, placeholder);
     }
+    let serialized_len =
+      self.projected_serialized_len(&counter_updates, &new_mappings)?;
     Ok(SessionPlaceholderPlan {
       placeholder_map,
       update: SessionUpdate {
         counter_updates,
         new_mappings,
+        serialized_len,
       },
     })
   }
@@ -326,6 +363,7 @@ impl RedactionSession {
       self.originals.insert(placeholder.clone(), original);
       self.placeholders.insert(identity, placeholder);
     }
+    self.serialized_len = update.serialized_len;
   }
 
   pub(crate) fn validate_reserved_text(&self, text: &str) -> Result<()> {
@@ -343,6 +381,70 @@ impl RedactionSession {
       entry.original.clear();
       entry.original.push_str(original);
     }
+  }
+
+  fn projected_serialized_len(
+    &self,
+    counter_updates: &BTreeMap<String, u32>,
+    new_mappings: &[(PlaceholderIdentity, String, String)],
+  ) -> Result<usize> {
+    let mut projected = self.serialized_len;
+    let mut counter_count = self.counters.len();
+    for (label_key, count) in counter_updates {
+      if let Some(previous) = self.counters.get(label_key) {
+        projected = projected
+          .checked_sub(previous.to_string().len())
+          .and_then(|value| value.checked_add(count.to_string().len()))
+          .ok_or_else(session_size_overflow)?;
+        continue;
+      }
+      let serialized_label =
+        serde_json::to_string(label_key).map_err(|error| {
+          Error::SessionSerialization {
+            reason: error.to_string(),
+          }
+        })?;
+      let separator_bytes = usize::from(counter_count > 0);
+      let entry_bytes = serialized_label
+        .len()
+        .checked_add(1)
+        .and_then(|value| value.checked_add(count.to_string().len()))
+        .and_then(|value| value.checked_add(separator_bytes))
+        .ok_or_else(session_size_overflow)?;
+      projected = projected
+        .checked_add(entry_bytes)
+        .ok_or_else(session_size_overflow)?;
+      counter_count = counter_count
+        .checked_add(1)
+        .ok_or_else(session_size_overflow)?;
+    }
+
+    let mut mapping_count = self.placeholders.len();
+    for (identity, placeholder, original) in new_mappings {
+      let serialized = serde_json::to_string(&SessionMappingRef {
+        label_key: &identity.label_key,
+        normalized_text: &identity.text,
+        placeholder,
+        original,
+      })
+      .map_err(|error| Error::SessionSerialization {
+        reason: error.to_string(),
+      })?;
+      let separator_bytes = usize::from(mapping_count > 0);
+      projected = projected
+        .checked_add(serialized.len())
+        .and_then(|value| value.checked_add(separator_bytes))
+        .ok_or_else(session_size_overflow)?;
+      mapping_count = mapping_count
+        .checked_add(1)
+        .ok_or_else(session_size_overflow)?;
+    }
+    if projected > MAX_SESSION_STATE_BYTES {
+      return Err(invalid_session_state(
+        "session state exceeds the maximum serialized byte length",
+      ));
+    }
+    Ok(projected)
   }
 }
 
@@ -490,6 +592,10 @@ fn invalid_session_state(reason: impl Into<String>) -> Error {
   Error::InvalidSessionState {
     reason: reason.into(),
   }
+}
+
+fn session_size_overflow() -> Error {
+  invalid_session_state("session state byte length overflowed")
 }
 
 #[derive(Serialize)]
