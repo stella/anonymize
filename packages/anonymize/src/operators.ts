@@ -6,6 +6,7 @@ import type {
 } from "./types";
 
 let graphemeSegmenter: Intl.Segmenter | undefined;
+let textEncoder: TextEncoder | undefined;
 const MAX_MASKING_CHARACTER_BYTES = 64;
 const MAX_CHARACTERS_TO_MASK = 0xffff_ffff;
 
@@ -14,6 +15,11 @@ const getGraphemeSegmenter = (): Intl.Segmenter => {
     granularity: "grapheme",
   });
   return graphemeSegmenter;
+};
+
+const getTextEncoder = (): TextEncoder => {
+  textEncoder ??= new TextEncoder();
+  return textEncoder;
 };
 
 const maskText = (
@@ -31,7 +37,7 @@ const maskText = (
     throw new RangeError("direction must be either start or end");
   }
   if (
-    new TextEncoder().encode(selection.maskingCharacter).length >
+    getTextEncoder().encode(selection.maskingCharacter).length >
     MAX_MASKING_CHARACTER_BYTES
   ) {
     throw new RangeError(
