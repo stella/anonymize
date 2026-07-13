@@ -34,6 +34,34 @@ impl SessionId {
   pub fn as_str(&self) -> &str {
     &self.0
   }
+
+  fn validate_reserved_text(&self, text: &str) -> Result<()> {
+    self.validate_reserved_placeholders(&collect_reserved_placeholders(text))
+  }
+
+  fn validate_reserved_placeholders(
+    &self,
+    reserved: &BTreeSet<String>,
+  ) -> Result<()> {
+    let namespace_suffix = format!("_{}", self.as_str());
+    let collision = reserved.iter().find(|placeholder| {
+      placeholder
+        .strip_prefix('[')
+        .and_then(|value| value.strip_suffix(']'))
+        .and_then(|value| value.rsplit_once('_'))
+        .is_some_and(|(prefix, _)| {
+          prefix
+            .strip_suffix(&namespace_suffix)
+            .is_some_and(|label_key| !label_key.is_empty())
+        })
+    });
+    let Some(placeholder) = collision else {
+      return Ok(());
+    };
+    Err(Error::SessionPlaceholderCollision {
+      placeholder: placeholder.clone(),
+    })
+  }
 }
 
 /// In-memory cross-document placeholder state.
@@ -154,6 +182,7 @@ impl RedactionSession {
       validate_placeholder_component("label_key", &mapping.label_key)?;
       validate_mapping_value("normalized_text", &mapping.normalized_text)?;
       validate_mapping_value("original", &mapping.original)?;
+      id.validate_reserved_text(&mapping.original)?;
       let count = session_placeholder_count(SessionPlaceholderParams {
         placeholder: &mapping.placeholder,
         label_key: &mapping.label_key,
@@ -207,7 +236,7 @@ impl RedactionSession {
     for source in reserved_sources {
       reserved.append(&mut collect_reserved_placeholders(source));
     }
-    self.validate_reserved_placeholders(&reserved)?;
+    self.id.validate_reserved_placeholders(&reserved)?;
     let mut occupied = reserved;
 
     let mut transient_counters = BTreeMap::<String, u32>::new();
@@ -241,6 +270,7 @@ impl RedactionSession {
           ));
         }
         validate_mapping_value("original", input.original)?;
+        self.id.validate_reserved_text(input.original)?;
         let count = counter_updates
           .get(&identity.label_key)
           .or_else(|| self.counters.get(&identity.label_key))
@@ -299,31 +329,7 @@ impl RedactionSession {
   }
 
   pub(crate) fn validate_reserved_text(&self, text: &str) -> Result<()> {
-    self.validate_reserved_placeholders(&collect_reserved_placeholders(text))
-  }
-
-  fn validate_reserved_placeholders(
-    &self,
-    reserved: &BTreeSet<String>,
-  ) -> Result<()> {
-    let namespace_suffix = format!("_{}", self.id.as_str());
-    let collision = reserved.iter().find(|placeholder| {
-      placeholder
-        .strip_prefix('[')
-        .and_then(|value| value.strip_suffix(']'))
-        .and_then(|value| value.rsplit_once('_'))
-        .is_some_and(|(prefix, _)| {
-          prefix
-            .strip_suffix(&namespace_suffix)
-            .is_some_and(|label_key| !label_key.is_empty())
-        })
-    });
-    let Some(placeholder) = collision else {
-      return Ok(());
-    };
-    Err(Error::SessionPlaceholderCollision {
-      placeholder: placeholder.clone(),
-    })
+    self.id.validate_reserved_text(text)
   }
 
   pub(crate) fn canonicalize_redaction_map(

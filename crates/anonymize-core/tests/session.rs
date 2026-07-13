@@ -259,6 +259,34 @@ fn configured_redact_tokens_are_reserved_before_session_allocation() {
 }
 
 #[test]
+fn persisted_originals_cannot_contain_session_placeholders() {
+  let text = "Alice met her";
+  let entities = [
+    person(text, "Alice"),
+    Entity::coreference(10, 13, "person", "Bob", "[PERSON_matter_1_2]"),
+  ];
+  let mut session =
+    RedactionSession::new(SessionId::new("matter_1").expect("valid id"));
+  let before = session.clone();
+
+  let error = redact(RedactFixtureParams {
+    text,
+    entities: &entities,
+    config: &OperatorConfig::default(),
+    session: &mut session,
+  })
+  .expect_err("persisted originals must not contain session placeholders");
+
+  assert_eq!(
+    error,
+    Error::SessionPlaceholderCollision {
+      placeholder: String::from("[PERSON_matter_1_2]")
+    }
+  );
+  assert_eq!(session, before);
+}
+
+#[test]
 fn irreversible_operators_do_not_persist_session_mappings() {
   let text = "Alice signed.";
   let operators = [
@@ -349,6 +377,25 @@ fn imported_state_rejects_counters_below_allocated_placeholders() {
   let error = RedactionSession::from_plaintext_json(invalid)
     .expect_err("stale counters should fail validation");
   assert!(matches!(error, Error::InvalidSessionState { .. }));
+}
+
+#[test]
+fn imported_state_rejects_placeholders_in_originals() {
+  let invalid = concat!(
+    r#"{"schema_version":1,"session_id":"matter_1","counters":{"PERSON":1},"#,
+    r#""mappings":[{"label_key":"PERSON","normalized_text":"alice","#,
+    r#""placeholder":"[PERSON_matter_1_1]","#,
+    r#""original":"[PERSON_matter_1_1]"}]}"#,
+  );
+
+  let error = RedactionSession::from_plaintext_json(invalid)
+    .expect_err("imported originals must not contain session placeholders");
+  assert_eq!(
+    error,
+    Error::SessionPlaceholderCollision {
+      placeholder: String::from("[PERSON_matter_1_1]")
+    }
+  );
 }
 
 proptest! {
