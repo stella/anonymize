@@ -46,6 +46,9 @@ __all__ = [
     "NativeSearchPackageInput",
     "PreparedAnonymizer",
     "PreparedRedactionSession",
+    "SessionDeletionSummary",
+    "SessionMetadata",
+    "SessionStatus",
     "NativePreparedRedactionSession",
     "NativePreparedSearch",
     "PipelineEntity",
@@ -121,6 +124,23 @@ _DEFAULT_NATIVE_PIPELINE_LANGUAGE_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+
 _DEFAULT_NATIVE_PIPELINE_LANGUAGE_PACKAGE_PATTERN = re.compile(
     r"^native-pipeline\.([a-z0-9]+(?:-[a-z0-9]+)*)\.stlanonpkg$"
 )
+
+SessionStatus = Literal["active", "not_yet_active", "expired", "deleted"]
+
+
+class SessionMetadata(TypedDict):
+    session_id: str
+    created_at_epoch_seconds: int | None
+    expires_at_epoch_seconds: int | None
+    mapping_count: int
+    status: SessionStatus
+
+
+class SessionDeletionSummary(TypedDict):
+    session_id: str
+    deleted_mapping_count: int
+
+
 __version__ = native_package_version()
 
 
@@ -136,6 +156,18 @@ class PreparedRedactionSession:
 
     def to_plaintext_json(self) -> str:
         return self._session.to_plaintext_json()
+
+    def to_plaintext_json_at(self, observed_at_epoch_seconds: int) -> str:
+        return self._session.to_plaintext_json_at(observed_at_epoch_seconds)
+
+    def inspect(
+        self,
+        observed_at_epoch_seconds: int | None = None,
+    ) -> SessionMetadata:
+        return json.loads(self._session.inspect_json(observed_at_epoch_seconds))
+
+    def delete(self) -> SessionDeletionSummary:
+        return json.loads(self._session.delete_json())
 
     def redact_text(
         self,
@@ -158,6 +190,34 @@ class PreparedRedactionSession:
     ) -> str:
         return self._session.redact_static_entities_json(
             full_text,
+            _operator_config_json(operators, redact_string=redact_string),
+        )
+
+    def redact_text_at(
+        self,
+        full_text: str,
+        *,
+        observed_at_epoch_seconds: int,
+        operators: OperatorConfig = None,
+        redact_string: str | None = None,
+    ) -> StaticRedactionResult:
+        return self._session.redact_static_entities_at(
+            full_text,
+            observed_at_epoch_seconds,
+            _operator_config_json(operators, redact_string=redact_string),
+        )
+
+    def redact_text_json_at(
+        self,
+        full_text: str,
+        *,
+        observed_at_epoch_seconds: int,
+        operators: OperatorConfig = None,
+        redact_string: str | None = None,
+    ) -> str:
+        return self._session.redact_static_entities_json_at(
+            full_text,
+            observed_at_epoch_seconds,
             _operator_config_json(operators, redact_string=redact_string),
         )
 
@@ -184,6 +244,36 @@ class PreparedRedactionSession:
         return self.redact_text_json(
             full_text,
             operators,
+            redact_string=redact_string,
+        )
+
+    def redact_static_entities_at(
+        self,
+        full_text: str,
+        *,
+        observed_at_epoch_seconds: int,
+        operators: OperatorConfig = None,
+        redact_string: str | None = None,
+    ) -> StaticRedactionResult:
+        return self.redact_text_at(
+            full_text,
+            observed_at_epoch_seconds=observed_at_epoch_seconds,
+            operators=operators,
+            redact_string=redact_string,
+        )
+
+    def redact_static_entities_json_at(
+        self,
+        full_text: str,
+        *,
+        observed_at_epoch_seconds: int,
+        operators: OperatorConfig = None,
+        redact_string: str | None = None,
+    ) -> str:
+        return self.redact_text_json_at(
+            full_text,
+            observed_at_epoch_seconds=observed_at_epoch_seconds,
+            operators=operators,
             redact_string=redact_string,
         )
 
@@ -236,6 +326,21 @@ class PreparedAnonymizer:
     ) -> PreparedRedactionSession:
         return PreparedRedactionSession(
             self._prepared.create_redaction_session(session_id)
+        )
+
+    def create_redaction_session_with_lifecycle(
+        self,
+        session_id: str,
+        *,
+        created_at_epoch_seconds: int,
+        expires_at_epoch_seconds: int | None = None,
+    ) -> PreparedRedactionSession:
+        return PreparedRedactionSession(
+            self._prepared.create_redaction_session_with_lifecycle(
+                session_id,
+                created_at_epoch_seconds,
+                expires_at_epoch_seconds,
+            )
         )
 
     def restore_redaction_session(

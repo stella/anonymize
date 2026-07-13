@@ -70,6 +70,24 @@ const restoredSession = nativePipeline.restoreRedactionSession(sessionState);
 if (restoredSession.sessionId() !== "smoke_1") {
   throw new Error("native redaction session did not restore its identity");
 }
+const lifecycleSession = nativePipeline.createRedactionSessionWithLifecycle({
+  sessionId: "lifecycle_smoke_1",
+  createdAtEpochSeconds: 100,
+  expiresAtEpochSeconds: 200,
+});
+lifecycleSession.redactTextAt({
+  fullText: "Jan Novak signed.",
+  observedAtEpochSeconds: 150,
+});
+if (lifecycleSession.inspect(200).status !== "expired") {
+  throw new Error("native lifecycle session did not expire at its boundary");
+}
+if (lifecycleSession.delete().deletedMappingCount !== 1) {
+  throw new Error("native lifecycle deletion did not report its mapping count");
+}
+if (lifecycleSession.inspect().status !== "deleted") {
+  throw new Error("native lifecycle session did not remain deleted");
+}
 
 console.log(
   JSON.stringify({

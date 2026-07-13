@@ -7,7 +7,7 @@ use crate::normalize::placeholder_fallback;
 use crate::placeholders::build_placeholder_map;
 use crate::session::{
   RedactionSession, SessionPlaceholderInput, SessionPlaceholderPlan,
-  SessionUpdate,
+  SessionTimestamp, SessionUpdate,
 };
 use crate::types::{
   Entity, EntityKind, MaskConfig, MaskDirection, Operator, OperatorConfig,
@@ -34,6 +34,7 @@ pub struct RedactTextWithSessionParams<'a> {
   pub entities: &'a [Entity],
   pub config: &'a OperatorConfig,
   pub session: &'a mut RedactionSession,
+  pub observed_at: Option<SessionTimestamp>,
 }
 
 /// Redacts text while reusing stable placeholders from a session.
@@ -47,7 +48,9 @@ pub fn redact_text_with_session(
     entities,
     config,
     session,
+    observed_at,
   } = params;
+  session.ensure_active(observed_at)?;
   redact_text_inner(RedactTextOptions {
     full_text,
     entities,

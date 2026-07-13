@@ -58,6 +58,9 @@ class PreparedRedactionSession:
     def session_id(self) -> str: ...
     def mapping_count(self) -> int: ...
     def to_plaintext_json(self) -> str: ...
+    def to_plaintext_json_at(self, observed_at_epoch_seconds: int) -> str: ...
+    def inspect_json(self, observed_at_epoch_seconds: int | None = None) -> str: ...
+    def delete_json(self) -> str: ...
     def redact_static_entities(
         self,
         full_text: str,
@@ -66,6 +69,18 @@ class PreparedRedactionSession:
     def redact_static_entities_json(
         self,
         full_text: str,
+        operators_json: str | None = None,
+    ) -> str: ...
+    def redact_static_entities_at(
+        self,
+        full_text: str,
+        observed_at_epoch_seconds: int,
+        operators_json: str | None = None,
+    ) -> StaticRedactionResult: ...
+    def redact_static_entities_json_at(
+        self,
+        full_text: str,
+        observed_at_epoch_seconds: int,
         operators_json: str | None = None,
     ) -> str: ...
 
@@ -94,6 +109,12 @@ class PreparedSearch:
     def create_redaction_session(
         self,
         session_id: str,
+    ) -> PreparedRedactionSession: ...
+    def create_redaction_session_with_lifecycle(
+        self,
+        session_id: str,
+        created_at_epoch_seconds: int,
+        expires_at_epoch_seconds: int | None = None,
     ) -> PreparedRedactionSession: ...
     def restore_redaction_session(
         self,

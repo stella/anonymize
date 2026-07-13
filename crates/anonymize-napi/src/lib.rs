@@ -30,6 +30,7 @@ use stella_anonymize_core::{
   Error as CoreError, OperatorConfig, PreparedEngine,
   PreparedEngineArtifactsView, PreparedEngineConfig,
   PreparedSessionRedactionOptions, RedactionSession, SessionId,
+  SessionLifecycle, SessionMetadata, SessionStatus, SessionTimestamp,
   StaticRedactionDiagnostics,
   assemble::{AssembleError, Dictionaries, GazetteerEntry, PipelineConfig},
 };
@@ -553,11 +554,85 @@ impl NativePreparedRedactionSession {
   }
 
   #[napi]
+  pub fn to_plaintext_json_at(
+    &self,
+    observed_at_epoch_seconds: u32,
+  ) -> Result<String> {
+    self
+      .lock_session()?
+      .to_plaintext_json_at(SessionTimestamp::from_epoch_seconds(
+        observed_at_epoch_seconds,
+      ))
+      .map_err(|error| to_napi_core_error(&error))
+  }
+
+  #[napi]
+  pub fn inspect_json(
+    &self,
+    observed_at_epoch_seconds: Option<u32>,
+  ) -> Result<String> {
+    let metadata = {
+      let session = self.lock_session()?;
+      session
+        .inspect(
+          observed_at_epoch_seconds.map(SessionTimestamp::from_epoch_seconds),
+        )
+        .map_err(|error| to_napi_core_error(&error))?
+    };
+    Ok(serialize_session_metadata(&metadata))
+  }
+
+  #[napi]
+  pub fn delete_json(&self) -> Result<String> {
+    let deletion = {
+      let mut session = self.lock_session()?;
+      session
+        .delete()
+        .map_err(|error| to_napi_core_error(&error))?
+    };
+    Ok(
+      serde_json::json!({
+        "session_id": deletion.session_id().as_str(),
+        "deleted_mapping_count": deletion.deleted_mapping_count(),
+      })
+      .to_string(),
+    )
+  }
+
+  #[napi]
   #[allow(clippy::needless_pass_by_value)]
   pub fn redact_static_entities_json(
     &self,
     full_text: String,
     operators: Option<JsOperatorConfig>,
+  ) -> Result<String> {
+    self.redact_static_entities_json_inner(&full_text, operators, None)
+  }
+
+  #[napi]
+  #[allow(clippy::needless_pass_by_value)]
+  pub fn redact_static_entities_json_at(
+    &self,
+    full_text: String,
+    observed_at_epoch_seconds: u32,
+    operators: Option<JsOperatorConfig>,
+  ) -> Result<String> {
+    self.redact_static_entities_json_inner(
+      &full_text,
+      operators,
+      Some(SessionTimestamp::from_epoch_seconds(
+        observed_at_epoch_seconds,
+      )),
+    )
+  }
+}
+
+impl NativePreparedRedactionSession {
+  fn redact_static_entities_json_inner(
+    &self,
+    full_text: &str,
+    operators: Option<JsOperatorConfig>,
+    observed_at: Option<SessionTimestamp>,
   ) -> Result<String> {
     let operators = operator_config_from_js(operators)?;
     let result = {
@@ -565,21 +640,20 @@ impl NativePreparedRedactionSession {
       self
         .inner
         .redact_static_entities_with_session(
-          &full_text,
+          full_text,
           PreparedSessionRedactionOptions {
             operators: &operators,
             session: &mut session,
+            observed_at,
           },
         )
         .map_err(|error| to_napi_core_error(&error))?
     };
-    let result = static_redaction_result_to_utf16_binding(result, &full_text)
+    let result = static_redaction_result_to_utf16_binding(result, full_text)
       .map_err(|error| to_napi_contract_error(&error))?;
     serde_json::to_string(&result).map_err(|error| to_napi_serde_error(&error))
   }
-}
 
-impl NativePreparedRedactionSession {
   const fn new(inner: Arc<PreparedEngine>, session: RedactionSession) -> Self {
     Self {
       inner,
@@ -592,6 +666,26 @@ impl NativePreparedRedactionSession {
       Error::from_reason("Redaction session state lock is unavailable")
     })
   }
+}
+
+fn serialize_session_metadata(metadata: &SessionMetadata) -> String {
+  let lifecycle = metadata.lifecycle();
+  serde_json::json!({
+    "session_id": metadata.session_id().as_str(),
+    "created_at_epoch_seconds": lifecycle
+      .map(|value| value.created_at().epoch_seconds()),
+    "expires_at_epoch_seconds": lifecycle
+      .and_then(|value| value.expires_at())
+      .map(SessionTimestamp::epoch_seconds),
+    "mapping_count": metadata.mapping_count(),
+    "status": match metadata.status() {
+      SessionStatus::Active => "active",
+      SessionStatus::NotYetActive => "not_yet_active",
+      SessionStatus::Expired => "expired",
+      SessionStatus::Deleted => "deleted",
+    },
+  })
+  .to_string()
 }
 
 #[derive(Clone, Copy)]
@@ -986,6 +1080,28 @@ impl NativePreparedSearch {
     Ok(NativePreparedRedactionSession::new(
       Arc::clone(&self.inner),
       RedactionSession::new(session_id),
+    ))
+  }
+
+  #[napi]
+  pub fn create_redaction_session_with_lifecycle(
+    &self,
+    session_id: String,
+    created_at_epoch_seconds: u32,
+    expires_at_epoch_seconds: Option<u32>,
+  ) -> Result<NativePreparedRedactionSession> {
+    let session_id =
+      SessionId::new(session_id).map_err(|error| to_napi_core_error(&error))?;
+    let lifecycle = SessionLifecycle::new(
+      SessionTimestamp::from_epoch_seconds(created_at_epoch_seconds),
+      expires_at_epoch_seconds.map(SessionTimestamp::from_epoch_seconds),
+    )
+    .map_err(|error| to_napi_core_error(&error))?;
+    let session = RedactionSession::new_with_lifecycle(session_id, lifecycle)
+      .map_err(|error| to_napi_core_error(&error))?;
+    Ok(NativePreparedRedactionSession::new(
+      Arc::clone(&self.inner),
+      session,
     ))
   }
 

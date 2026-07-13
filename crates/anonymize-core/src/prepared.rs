@@ -1,6 +1,6 @@
 use crate::diagnostics::{DiagnosticEvent, StaticRedactionDiagnostics};
 use crate::resolution::CallerDetection;
-use crate::session::RedactionSession;
+use crate::session::{RedactionSession, SessionTimestamp};
 use crate::types::{OperatorConfig, Result};
 
 mod artifacts;
@@ -57,6 +57,7 @@ pub struct CallerRedactionOptions<'a> {
 pub struct PreparedSessionRedactionOptions<'a> {
   pub operators: &'a OperatorConfig,
   pub session: &'a mut RedactionSession,
+  pub observed_at: Option<SessionTimestamp>,
 }
 
 impl PreparedEngine {
@@ -130,7 +131,12 @@ impl PreparedEngine {
     full_text: &str,
     options: PreparedSessionRedactionOptions<'_>,
   ) -> Result<StaticRedactionResult> {
-    let PreparedSessionRedactionOptions { operators, session } = options;
+    let PreparedSessionRedactionOptions {
+      operators,
+      session,
+      observed_at,
+    } = options;
+    session.ensure_active(observed_at)?;
     let mut event_stream = DiagnosticEventStream::none();
     let mut result_stream = StaticRedactionResultStream::none();
     self.redact_static_entities_with_session_inner(
@@ -139,6 +145,7 @@ impl PreparedEngine {
       &[],
       redaction_phase::StaticRedactionContext {
         session: Some(session),
+        observed_at,
         diagnostics: None,
       },
       &mut event_stream,

@@ -86,6 +86,22 @@ def redact_with_session(text: str) -> str:
     return result.redaction.redacted_text
 
 
+def redact_with_lifecycle_session(text: str) -> str:
+    prepared = anonymize.get_default_native_pipeline(language="en")
+    session = prepared.create_redaction_session_with_lifecycle(
+        "typecheck_lifecycle_1",
+        created_at_epoch_seconds=100,
+        expires_at_epoch_seconds=200,
+    )
+    result = session.redact_text_at(text, observed_at_epoch_seconds=150)
+    metadata: anonymize.SessionMetadata = session.inspect(150)
+    assert metadata["status"] == "active"
+    session.to_plaintext_json_at(150)
+    deletion: anonymize.SessionDeletionSummary = session.delete()
+    assert deletion["deleted_mapping_count"] == session.mapping_count()
+    return result.redaction.redacted_text
+
+
 def redact_caller_detection(text: str) -> str:
     prepared = anonymize.get_default_native_pipeline(language="en")
     detections: list[anonymize.CallerDetection] = [

@@ -776,6 +776,31 @@ describe("native node loader", () => {
     });
     const restored = prepared.restore_redaction_session(plaintextJson);
     expect(restored.session_id()).toBe("case_1");
+
+    const lifecycle = prepared.createRedactionSessionWithLifecycle({
+      sessionId: "case_2",
+      createdAtEpochSeconds: 100,
+      expiresAtEpochSeconds: 200,
+    });
+    expect(lifecycle.inspect(150)).toEqual({
+      sessionId: "case_2",
+      createdAtEpochSeconds: 100,
+      expiresAtEpochSeconds: 200,
+      mappingCount: 0,
+      status: "active",
+    });
+    expect(
+      lifecycle.redactTextAt({
+        fullText: "Alice",
+        observedAtEpochSeconds: 150,
+      }).redaction.redactedText,
+    ).toBe("");
+    expect(JSON.parse(lifecycle.toPlaintextJsonAt(150)).schema_version).toBe(2);
+    expect(lifecycle.delete()).toEqual({
+      sessionId: "case_2",
+      deletedMappingCount: 0,
+    });
+    expect(lifecycle.inspect().status).toBe("deleted");
   });
 
   test("prepared pipeline JSON methods use the native JSON hook", () => {
@@ -923,12 +948,38 @@ const fakePreparedSearch = ({
   },
   warmLazyRegexDiagnosticsJson: () => JSON.stringify({ events: [] }),
   createRedactionSession: fakePreparedRedactionSession,
+  createRedactionSessionWithLifecycle: (
+    sessionId: string,
+    createdAtEpochSeconds: number,
+    expiresAtEpochSeconds?: number,
+  ) =>
+    fakePreparedRedactionSession(sessionId, {
+      createdAtEpochSeconds,
+      expiresAtEpochSeconds: expiresAtEpochSeconds ?? null,
+    }),
   restoreRedactionSession: (plaintextJson: string) => {
-    const state: { session_id?: unknown } = JSON.parse(plaintextJson);
+    const state: {
+      session_id?: unknown;
+      lifecycle?: {
+        created_at_epoch_seconds?: unknown;
+        expires_at_epoch_seconds?: unknown;
+      };
+    } = JSON.parse(plaintextJson);
     if (typeof state.session_id !== "string") {
       throw new TypeError("Test session state is missing its id");
     }
-    return fakePreparedRedactionSession(state.session_id);
+    const createdAtEpochSeconds = state.lifecycle?.created_at_epoch_seconds;
+    if (typeof createdAtEpochSeconds !== "number") {
+      return fakePreparedRedactionSession(state.session_id);
+    }
+    const expiresAtEpochSeconds = state.lifecycle?.expires_at_epoch_seconds;
+    return fakePreparedRedactionSession(state.session_id, {
+      createdAtEpochSeconds,
+      expiresAtEpochSeconds:
+        typeof expiresAtEpochSeconds === "number"
+          ? expiresAtEpochSeconds
+          : null,
+    });
   },
   redactStaticEntities: emptyStaticRedactionBindingResult,
   ...(onRedactStaticEntitiesJson === undefined
@@ -951,24 +1002,78 @@ const fakePreparedSearch = ({
 
 const fakePreparedRedactionSession = (
   sessionId: string,
-): NativePreparedRedactionSessionBinding => ({
-  sessionId: () => sessionId,
-  mappingCount: () => 0,
-  toPlaintextJson: () =>
+  lifecycle?: {
+    createdAtEpochSeconds: number;
+    expiresAtEpochSeconds: number | null;
+  },
+): NativePreparedRedactionSessionBinding => {
+  let deleted = false;
+  const redactionJson = JSON.stringify({
+    resolved_entities: [],
+    redaction: {
+      redacted_text: "",
+      redaction_map: [],
+      operator_map: [],
+      entity_count: 0,
+    },
+  });
+  const plaintextJson = (): string =>
     JSON.stringify({
-      schema_version: 1,
+      schema_version: lifecycle ? 2 : 1,
       session_id: sessionId,
+      ...(lifecycle
+        ? {
+            lifecycle: {
+              created_at_epoch_seconds: lifecycle.createdAtEpochSeconds,
+              expires_at_epoch_seconds: lifecycle.expiresAtEpochSeconds,
+            },
+          }
+        : {}),
       counters: {},
       mappings: [],
-    }),
-  redactStaticEntitiesJson: () =>
-    JSON.stringify({
-      resolved_entities: [],
-      redaction: {
-        redacted_text: "",
-        redaction_map: [],
-        operator_map: [],
-        entity_count: 0,
-      },
-    }),
-});
+    });
+  const status = (observedAtEpochSeconds?: number): string => {
+    if (deleted) {
+      return "deleted";
+    }
+    if (
+      lifecycle &&
+      observedAtEpochSeconds !== undefined &&
+      observedAtEpochSeconds < lifecycle.createdAtEpochSeconds
+    ) {
+      return "not_yet_active";
+    }
+    if (
+      lifecycle?.expiresAtEpochSeconds !== null &&
+      lifecycle?.expiresAtEpochSeconds !== undefined &&
+      observedAtEpochSeconds !== undefined &&
+      observedAtEpochSeconds >= lifecycle.expiresAtEpochSeconds
+    ) {
+      return "expired";
+    }
+    return "active";
+  };
+  return {
+    sessionId: () => sessionId,
+    mappingCount: () => 0,
+    toPlaintextJson: plaintextJson,
+    toPlaintextJsonAt: plaintextJson,
+    inspectJson: (observedAtEpochSeconds?: number) =>
+      JSON.stringify({
+        session_id: sessionId,
+        created_at_epoch_seconds: lifecycle?.createdAtEpochSeconds ?? null,
+        expires_at_epoch_seconds: lifecycle?.expiresAtEpochSeconds ?? null,
+        mapping_count: 0,
+        status: status(observedAtEpochSeconds),
+      }),
+    deleteJson: () => {
+      deleted = true;
+      return JSON.stringify({
+        session_id: sessionId,
+        deleted_mapping_count: 0,
+      });
+    },
+    redactStaticEntitiesJson: () => redactionJson,
+    redactStaticEntitiesJsonAt: () => redactionJson,
+  };
+};

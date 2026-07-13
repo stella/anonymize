@@ -2,8 +2,8 @@
 
 use stella_anonymize_core::{
   Entity, Error, MaskConfig, MaskDirection, Operator, OperatorConfig,
-  RedactTextWithSessionParams, RedactionSession, SessionId,
-  redact_text_with_session,
+  RedactTextWithSessionParams, RedactionSession, SessionId, SessionLifecycle,
+  SessionStatus, SessionTimestamp, redact_text_with_session,
 };
 
 use proptest::proptest;
@@ -40,7 +40,12 @@ fn redact(
     entities,
     config,
     session,
+    observed_at: None,
   })
+}
+
+const fn timestamp(value: u32) -> SessionTimestamp {
+  SessionTimestamp::from_epoch_seconds(value)
 }
 
 #[test]
@@ -164,6 +169,141 @@ fn plaintext_state_round_trips_deterministically_and_continues_counters() {
   })
   .expect("restored session should continue");
   assert_eq!(next.redacted_text, "[PERSON_matter%5F1_2] signed.");
+}
+
+#[test]
+fn lifecycle_status_uses_caller_supplied_time_and_round_trips() {
+  let lifecycle = SessionLifecycle::new(timestamp(100), Some(timestamp(200)))
+    .expect("valid lifecycle");
+  let session = RedactionSession::new_with_lifecycle(
+    SessionId::new("matter_1").expect("valid id"),
+    lifecycle,
+  )
+  .expect("session should initialize");
+
+  assert_eq!(
+    session.inspect(None).expect_err("time is required"),
+    Error::SessionObservationRequired,
+  );
+  assert_eq!(
+    session
+      .inspect(Some(timestamp(99)))
+      .expect("metadata should be available")
+      .status(),
+    SessionStatus::NotYetActive,
+  );
+  let active = session
+    .inspect(Some(timestamp(100)))
+    .expect("metadata should be available");
+  assert_eq!(active.status(), SessionStatus::Active);
+  assert_eq!(active.session_id().as_str(), "matter_1");
+  assert_eq!(active.lifecycle(), Some(lifecycle));
+  assert_eq!(active.mapping_count(), 0);
+  assert_eq!(
+    session
+      .inspect(Some(timestamp(200)))
+      .expect("metadata should be available")
+      .status(),
+    SessionStatus::Expired,
+  );
+
+  let serialized = session
+    .to_plaintext_json_at(timestamp(150))
+    .expect("active session should serialize");
+  assert!(serialized.contains(r#""schema_version":2"#));
+  assert!(serialized.contains(r#""created_at_epoch_seconds":100"#));
+  assert!(serialized.contains(r#""expires_at_epoch_seconds":200"#));
+  let restored = RedactionSession::from_plaintext_json(&serialized)
+    .expect("lifecycle state should restore");
+  assert_eq!(
+    restored
+      .inspect(Some(timestamp(200)))
+      .expect("restored metadata should be available")
+      .status(),
+    SessionStatus::Expired,
+  );
+}
+
+#[test]
+fn lifecycle_rejects_invalid_bounds() {
+  for expires_at in [99, 100] {
+    let error =
+      SessionLifecycle::new(timestamp(100), Some(timestamp(expires_at)))
+        .expect_err("expiry must follow creation");
+    assert!(matches!(error, Error::InvalidSessionState { .. }));
+  }
+}
+
+#[test]
+fn unavailable_sessions_fail_without_mutation() {
+  let lifecycle = SessionLifecycle::new(timestamp(100), Some(timestamp(200)))
+    .expect("valid lifecycle");
+  let mut session = RedactionSession::new_with_lifecycle(
+    SessionId::new("matter_1").expect("valid id"),
+    lifecycle,
+  )
+  .expect("session should initialize");
+  let before = session.clone();
+  let text = "Alice signed.";
+
+  for (observed_at, expected) in [
+    (None, Error::SessionObservationRequired),
+    (Some(timestamp(99)), Error::SessionNotYetActive),
+    (Some(timestamp(200)), Error::SessionExpired),
+  ] {
+    let error = redact_text_with_session(RedactTextWithSessionParams {
+      full_text: text,
+      entities: &[person(text, "Alice")],
+      config: &OperatorConfig::default(),
+      session: &mut session,
+      observed_at,
+    })
+    .expect_err("unavailable session should fail");
+    assert_eq!(error, expected);
+    assert_eq!(session, before);
+  }
+
+  redact_text_with_session(RedactTextWithSessionParams {
+    full_text: text,
+    entities: &[person(text, "Alice")],
+    config: &OperatorConfig::default(),
+    session: &mut session,
+    observed_at: Some(timestamp(150)),
+  })
+  .expect("active session should redact");
+  assert_eq!(session.mapping_count(), 1);
+}
+
+#[test]
+fn logical_deletion_clears_mappings_and_blocks_future_use() {
+  let text = "Alice signed.";
+  let mut session =
+    RedactionSession::new(SessionId::new("matter_1").expect("valid id"));
+  redact(RedactFixtureParams {
+    text,
+    entities: &[person(text, "Alice")],
+    config: &OperatorConfig::default(),
+    session: &mut session,
+  })
+  .expect("session should redact");
+
+  let deletion = session.delete().expect("session should delete");
+  assert_eq!(deletion.session_id().as_str(), "matter_1");
+  assert_eq!(deletion.deleted_mapping_count(), 1);
+  let metadata = session.inspect(None).expect("deleted metadata is safe");
+  assert_eq!(metadata.status(), SessionStatus::Deleted);
+  assert_eq!(metadata.mapping_count(), 0);
+  assert_eq!(session.to_plaintext_json(), Err(Error::SessionDeleted));
+  assert_eq!(session.delete(), Err(Error::SessionDeleted));
+
+  let error = redact(RedactFixtureParams {
+    text,
+    entities: &[person(text, "Alice")],
+    config: &OperatorConfig::default(),
+    session: &mut session,
+  })
+  .expect_err("deleted session should not redact");
+  assert_eq!(error, Error::SessionDeleted);
 }
 
 #[test]
@@ -422,12 +562,22 @@ fn session_ids_and_schema_versions_are_validated() {
     assert!(SessionId::new(invalid).is_err());
   }
   let unsupported = concat!(
-    r#"{"schema_version":2,"session_id":"matter_1","counters":{},"#,
+    r#"{"schema_version":3,"session_id":"matter_1","counters":{},"#,
     r#""mappings":[]}"#
   );
   let error = RedactionSession::from_plaintext_json(unsupported)
     .expect_err("unsupported schema version should fail");
-  assert_eq!(error, Error::UnsupportedSessionVersion { version: 2 });
+  assert_eq!(error, Error::UnsupportedSessionVersion { version: 3 });
+
+  let legacy = concat!(
+    r#"{"schema_version":1,"session_id":"matter_1","counters":{},"#,
+    r#""mappings":[]}"#
+  );
+  let preserved = RedactionSession::from_plaintext_json(legacy)
+    .expect("schema version 1 should remain readable")
+    .to_plaintext_json()
+    .expect("legacy state should remain serializable");
+  assert!(preserved.contains(r#""schema_version":1"#));
 }
 
 #[test]

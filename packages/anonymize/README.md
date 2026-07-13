@@ -83,6 +83,28 @@ runtime instances. Its output contains original personal data in plaintext: do
 not log it or persist it without an application-owned protection layer. Restore
 validated transfer state with `anonymizer.restoreRedactionSession(json)`.
 
+Sessions can carry explicit lifecycle bounds. The engine never reads the system
+clock; supply the UTC epoch-second observation time for each lifecycle-aware
+operation:
+
+```ts
+const session = anonymizer.createRedactionSessionWithLifecycle({
+  sessionId: "opaque_case_2",
+  createdAtEpochSeconds: 1_800_000_000,
+  expiresAtEpochSeconds: 1_800_086_400,
+});
+const result = session.redactTextAt({
+  fullText: document,
+  observedAtEpochSeconds: 1_800_000_100,
+});
+const metadata = session.inspect(1_800_000_100); // contains no entity values
+const deletion = session.delete();
+```
+
+Expiry is fail-closed at its exact boundary. `delete()` performs logical
+deletion: it clears the session mappings and prevents future use, but does not
+revoke earlier exported copies or claim physical erasure of process memory.
+
 Per-label operators support `replace`, `redact`, `keep`, and tagged `mask`
 configuration. `keep` records
 that an entity was processed while leaving its source text unchanged; it

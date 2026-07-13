@@ -44,7 +44,8 @@ const prepared = NativePreparedSearch.fromPreparedPackageBytes(packageBytes);
 
 if (
   typeof prepared.createRedactionSession !== "function" ||
-  typeof prepared.restoreRedactionSession !== "function"
+  typeof prepared.restoreRedactionSession !== "function" ||
+  typeof prepared.createRedactionSessionWithLifecycle !== "function"
 ) {
   throw new TypeError("wasm binding is missing redaction session factories");
 }
@@ -91,6 +92,20 @@ const sessionState = session.toPlaintextJson();
 const restoredSession = prepared.restoreRedactionSession(sessionState);
 if (restoredSession.sessionId() !== "smoke_1") {
   throw new Error("wasm redaction session did not restore its identity");
+}
+const lifecycleSession = prepared.createRedactionSessionWithLifecycle(
+  "lifecycle_smoke_1",
+  100,
+  200,
+);
+lifecycleSession.redactStaticEntitiesJsonAt(sample, 150);
+const lifecycleMetadata = JSON.parse(lifecycleSession.inspectJson(200));
+if (lifecycleMetadata.status !== "expired") {
+  throw new Error("wasm lifecycle session did not expire at its boundary");
+}
+const deletion = JSON.parse(lifecycleSession.deleteJson());
+if (deletion.deleted_mapping_count === 0) {
+  throw new Error("wasm lifecycle deletion did not clear mappings");
 }
 
 console.log(

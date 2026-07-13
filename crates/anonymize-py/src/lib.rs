@@ -29,7 +29,8 @@ use stella_anonymize_core::{
   CallerRedactionOptions, DiagnosticDetail, DiagnosticEvent, DiagnosticStage,
   Error as CoreError, OperatorConfig, PreparedEngine as CorePreparedEngine,
   PreparedEngineArtifactsView, PreparedSessionRedactionOptions,
-  RedactionSession, SessionId, StaticRedactionDiagnostics,
+  RedactionSession, SessionId, SessionLifecycle, SessionMetadata,
+  SessionStatus, SessionTimestamp, StaticRedactionDiagnostics,
   StaticRedactionResult,
   assemble::{AssembleError, Dictionaries, GazetteerEntry, PipelineConfig},
 };
@@ -107,12 +108,55 @@ impl PyPreparedRedactionSession {
       .map_err(|error| to_py_core_error(&error))
   }
 
+  fn to_plaintext_json_at(
+    &self,
+    observed_at_epoch_seconds: u32,
+  ) -> PyResult<String> {
+    self
+      .lock_session()?
+      .to_plaintext_json_at(SessionTimestamp::from_epoch_seconds(
+        observed_at_epoch_seconds,
+      ))
+      .map_err(|error| to_py_core_error(&error))
+  }
+
+  #[pyo3(signature = (observed_at_epoch_seconds=None))]
+  fn inspect_json(
+    &self,
+    observed_at_epoch_seconds: Option<u32>,
+  ) -> PyResult<String> {
+    let metadata = {
+      let session = self.lock_session()?;
+      session
+        .inspect(
+          observed_at_epoch_seconds.map(SessionTimestamp::from_epoch_seconds),
+        )
+        .map_err(|error| to_py_core_error(&error))?
+    };
+    Ok(serialize_py_session_metadata(&metadata))
+  }
+
+  fn delete_json(&self) -> PyResult<String> {
+    let deletion = {
+      let mut session = self.lock_session()?;
+      session.delete().map_err(|error| to_py_core_error(&error))?
+    };
+    Ok(
+      serde_json::json!({
+        "session_id": deletion.session_id().as_str(),
+        "deleted_mapping_count": deletion.deleted_mapping_count(),
+      })
+      .to_string(),
+    )
+  }
+
   fn redact_static_entities(
     &self,
     full_text: &str,
     operators_json: Option<&str>,
   ) -> PyResult<PyStaticRedactionResult> {
-    let result = self.redact_static_entities_core(full_text, operators_json)?;
+    let result =
+      self.redact_static_entities_core(full_text, operators_json, None)?;
     static_redaction_result_to_python_binding(result, full_text)
       .map_err(|error| to_py_contract_error(&error))
       .map(to_py_static_redaction_result)
@@ -123,7 +167,44 @@ impl PyPreparedRedactionSession {
     full_text: &str,
     operators_json: Option<&str>,
   ) -> PyResult<String> {
-    let result = self.redact_static_entities_core(full_text, operators_json)?;
+    let result =
+      self.redact_static_entities_core(full_text, operators_json, None)?;
+    let result = static_redaction_result_to_utf16_binding(result, full_text)
+      .map_err(|error| to_py_contract_error(&error))?;
+    serde_json::to_string(&result).map_err(|error| to_py_serde_error(&error))
+  }
+
+  fn redact_static_entities_at(
+    &self,
+    full_text: &str,
+    observed_at_epoch_seconds: u32,
+    operators_json: Option<&str>,
+  ) -> PyResult<PyStaticRedactionResult> {
+    let result = self.redact_static_entities_core(
+      full_text,
+      operators_json,
+      Some(SessionTimestamp::from_epoch_seconds(
+        observed_at_epoch_seconds,
+      )),
+    )?;
+    static_redaction_result_to_python_binding(result, full_text)
+      .map_err(|error| to_py_contract_error(&error))
+      .map(to_py_static_redaction_result)
+  }
+
+  fn redact_static_entities_json_at(
+    &self,
+    full_text: &str,
+    observed_at_epoch_seconds: u32,
+    operators_json: Option<&str>,
+  ) -> PyResult<String> {
+    let result = self.redact_static_entities_core(
+      full_text,
+      operators_json,
+      Some(SessionTimestamp::from_epoch_seconds(
+        observed_at_epoch_seconds,
+      )),
+    )?;
     let result = static_redaction_result_to_utf16_binding(result, full_text)
       .map_err(|error| to_py_contract_error(&error))?;
     serde_json::to_string(&result).map_err(|error| to_py_serde_error(&error))
@@ -151,6 +232,7 @@ impl PyPreparedRedactionSession {
     &self,
     full_text: &str,
     operators_json: Option<&str>,
+    observed_at: Option<SessionTimestamp>,
   ) -> PyResult<StaticRedactionResult> {
     let operators =
       operator_config_from_binding(parse_operator_config(operators_json)?)
@@ -163,10 +245,31 @@ impl PyPreparedRedactionSession {
         PreparedSessionRedactionOptions {
           operators: &operators,
           session: &mut session,
+          observed_at,
         },
       )
       .map_err(|error| to_py_core_error(&error))
   }
+}
+
+fn serialize_py_session_metadata(metadata: &SessionMetadata) -> String {
+  let lifecycle = metadata.lifecycle();
+  serde_json::json!({
+    "session_id": metadata.session_id().as_str(),
+    "created_at_epoch_seconds": lifecycle
+      .map(|value| value.created_at().epoch_seconds()),
+    "expires_at_epoch_seconds": lifecycle
+      .and_then(|value| value.expires_at())
+      .map(SessionTimestamp::epoch_seconds),
+    "mapping_count": metadata.mapping_count(),
+    "status": match metadata.status() {
+      SessionStatus::Active => "active",
+      SessionStatus::NotYetActive => "not_yet_active",
+      SessionStatus::Expired => "expired",
+      SessionStatus::Deleted => "deleted",
+    },
+  })
+  .to_string()
 }
 
 #[pymethods]
@@ -327,6 +430,28 @@ impl PyPreparedSearch {
     Ok(PyPreparedRedactionSession::new(
       Arc::clone(&self.inner),
       RedactionSession::new(session_id),
+    ))
+  }
+
+  #[pyo3(signature = (session_id, created_at_epoch_seconds, expires_at_epoch_seconds=None))]
+  fn create_redaction_session_with_lifecycle(
+    &self,
+    session_id: &str,
+    created_at_epoch_seconds: u32,
+    expires_at_epoch_seconds: Option<u32>,
+  ) -> PyResult<PyPreparedRedactionSession> {
+    let session_id = SessionId::new(session_id.to_owned())
+      .map_err(|error| to_py_core_error(&error))?;
+    let lifecycle = SessionLifecycle::new(
+      SessionTimestamp::from_epoch_seconds(created_at_epoch_seconds),
+      expires_at_epoch_seconds.map(SessionTimestamp::from_epoch_seconds),
+    )
+    .map_err(|error| to_py_core_error(&error))?;
+    let session = RedactionSession::new_with_lifecycle(session_id, lifecycle)
+      .map_err(|error| to_py_core_error(&error))?;
+    Ok(PyPreparedRedactionSession::new(
+      Arc::clone(&self.inner),
+      session,
     ))
   }
 

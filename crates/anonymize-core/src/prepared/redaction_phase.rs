@@ -3,7 +3,7 @@ use crate::redact::{
   RedactTextWithSessionParams, redact_text, redact_text_with_session,
 };
 use crate::resolution::{CallerDetection, PipelineEntity};
-use crate::session::RedactionSession;
+use crate::session::{RedactionSession, SessionTimestamp};
 use crate::types::{
   Entity, EntityKind, OperatorConfig, RedactionResult, Result,
 };
@@ -16,6 +16,7 @@ use super::results::{StaticRedactionResult, StaticRedactionStreamEvent};
 
 pub(super) struct StaticRedactionContext<'a> {
   pub(super) session: Option<&'a mut RedactionSession>,
+  pub(super) observed_at: Option<SessionTimestamp>,
   pub(super) diagnostics: Option<&'a mut StaticRedactionDiagnostics>,
 }
 
@@ -35,6 +36,7 @@ impl PreparedEngine {
       caller_detections,
       StaticRedactionContext {
         session: None,
+        observed_at: None,
         diagnostics,
       },
       event_stream,
@@ -53,6 +55,7 @@ impl PreparedEngine {
   ) -> Result<StaticRedactionResult> {
     let StaticRedactionContext {
       session,
+      observed_at,
       mut diagnostics,
     } = context;
     validate_unique_caller_provenance(caller_detections)?;
@@ -126,6 +129,7 @@ impl PreparedEngine {
         entities: &redaction_entities,
         config: operators,
         session,
+        observed_at,
       })?,
       None => redact_text(full_text, &redaction_entities, operators)?,
     };

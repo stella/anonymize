@@ -96,6 +96,14 @@ type PythonParityOutput = {
     json_start: number;
     json_end: number;
   };
+  lifecycle_result: {
+    active_status: string;
+    expired_status: string;
+    schema_version: number;
+    restored_expiry: number | null;
+    deleted_mapping_count: number;
+    deleted_status: string;
+  };
 };
 
 const PYTHON_PARITY_SCRIPT = `
@@ -153,6 +161,22 @@ session_object_offsets = session.redact_text("😀Jan Novak signed.")
 session_json_offsets = json.loads(session.redact_text_json("😀Jan Novak signed."))
 restored_session = prepared.restore_redaction_session(session.to_plaintext_json())
 session_restored = restored_session.redact_text("Jan Novak signed once more.")
+lifecycle_session = prepared.create_redaction_session_with_lifecycle(
+    "parity_lifecycle_1",
+    created_at_epoch_seconds=100,
+    expires_at_epoch_seconds=200,
+)
+lifecycle_session.redact_text_at(
+    "Jan Novak signed.", observed_at_epoch_seconds=150
+)
+lifecycle_active = lifecycle_session.inspect(150)
+lifecycle_state = json.loads(lifecycle_session.to_plaintext_json_at(150))
+lifecycle_restored = prepared.restore_redaction_session(
+    json.dumps(lifecycle_state, separators=(",", ":"))
+)
+lifecycle_expired = lifecycle_restored.inspect(200)
+lifecycle_deleted = lifecycle_session.delete()
+lifecycle_deleted_metadata = lifecycle_session.inspect()
 
 print(
     json.dumps(
@@ -195,6 +219,14 @@ print(
                 "object_end": session_object_offsets.resolved_entities[0].end,
                 "json_start": session_json_offsets["resolved_entities"][0]["start"],
                 "json_end": session_json_offsets["resolved_entities"][0]["end"],
+            },
+            "lifecycle_result": {
+                "active_status": lifecycle_active["status"],
+                "expired_status": lifecycle_expired["status"],
+                "schema_version": lifecycle_state["schema_version"],
+                "restored_expiry": lifecycle_expired["expires_at_epoch_seconds"],
+                "deleted_mapping_count": lifecycle_deleted["deleted_mapping_count"],
+                "deleted_status": lifecycle_deleted_metadata["status"],
             },
         }
     )
@@ -404,6 +436,14 @@ describe("python binding parity", () => {
       object_end: 10,
       json_start: 2,
       json_end: 11,
+    });
+    expect(python.lifecycle_result).toEqual({
+      active_status: "active",
+      expired_status: "expired",
+      schema_version: 2,
+      restored_expiry: 200,
+      deleted_mapping_count: 1,
+      deleted_status: "deleted",
     });
   });
 });

@@ -39,6 +39,21 @@ OperatorSelection: TypeAlias = Literal["replace", "redact", "keep"] | MaskOperat
 OperatorConfig: TypeAlias = Mapping[str, OperatorSelection] | str | None
 CALLER_DETECTION_CONTRACT_VERSION: int
 
+SessionStatus: TypeAlias = Literal[
+    "active", "not_yet_active", "expired", "deleted"
+]
+
+class SessionMetadata(TypedDict):
+    session_id: str
+    created_at_epoch_seconds: int | None
+    expires_at_epoch_seconds: int | None
+    mapping_count: int
+    status: SessionStatus
+
+class SessionDeletionSummary(TypedDict):
+    session_id: str
+    deleted_mapping_count: int
+
 class CallerDetection(TypedDict):
     start: int
     end: int
@@ -62,6 +77,12 @@ class PreparedRedactionSession:
     def session_id(self) -> str: ...
     def mapping_count(self) -> int: ...
     def to_plaintext_json(self) -> str: ...
+    def to_plaintext_json_at(self, observed_at_epoch_seconds: int) -> str: ...
+    def inspect(
+        self,
+        observed_at_epoch_seconds: int | None = None,
+    ) -> SessionMetadata: ...
+    def delete(self) -> SessionDeletionSummary: ...
     def redact_text(
         self,
         full_text: str,
@@ -76,6 +97,22 @@ class PreparedRedactionSession:
         *,
         redact_string: str | None = None,
     ) -> str: ...
+    def redact_text_at(
+        self,
+        full_text: str,
+        *,
+        observed_at_epoch_seconds: int,
+        operators: OperatorConfig = None,
+        redact_string: str | None = None,
+    ) -> StaticRedactionResult: ...
+    def redact_text_json_at(
+        self,
+        full_text: str,
+        *,
+        observed_at_epoch_seconds: int,
+        operators: OperatorConfig = None,
+        redact_string: str | None = None,
+    ) -> str: ...
     def redact_static_entities(
         self,
         full_text: str,
@@ -88,6 +125,22 @@ class PreparedRedactionSession:
         full_text: str,
         operators: OperatorConfig = None,
         *,
+        redact_string: str | None = None,
+    ) -> str: ...
+    def redact_static_entities_at(
+        self,
+        full_text: str,
+        *,
+        observed_at_epoch_seconds: int,
+        operators: OperatorConfig = None,
+        redact_string: str | None = None,
+    ) -> StaticRedactionResult: ...
+    def redact_static_entities_json_at(
+        self,
+        full_text: str,
+        *,
+        observed_at_epoch_seconds: int,
+        operators: OperatorConfig = None,
         redact_string: str | None = None,
     ) -> str: ...
 
@@ -115,6 +168,13 @@ class PreparedAnonymizer:
     def create_redaction_session(
         self,
         session_id: str,
+    ) -> PreparedRedactionSession: ...
+    def create_redaction_session_with_lifecycle(
+        self,
+        session_id: str,
+        *,
+        created_at_epoch_seconds: int,
+        expires_at_epoch_seconds: int | None = None,
     ) -> PreparedRedactionSession: ...
     def restore_redaction_session(
         self,

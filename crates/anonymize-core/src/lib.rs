@@ -82,7 +82,9 @@ pub use search::{
   SearchOptions, SearchPattern,
 };
 pub use session::{
-  REDACTION_SESSION_SCHEMA_VERSION, RedactionSession, SessionId,
+  REDACTION_SESSION_SCHEMA_VERSION, RedactionSession, SessionDeletionSummary,
+  SessionId, SessionLifecycle, SessionMetadata, SessionStatus,
+  SessionTimestamp,
 };
 pub use signatures::SignatureData;
 pub use triggers::{

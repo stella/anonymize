@@ -15,8 +15,9 @@ use stella_anonymize_core::{
   PreparedEngine, PreparedEngineArtifacts, PreparedEngineConfig,
   PreparedEngineSlices, PreparedSessionRedactionOptions, RedactionSession,
   RegexMatchMeta, RegexSearchOptions, SearchOptions, SearchPattern, SessionId,
-  SourceDetail, TriggerData, TriggerRule, TriggerStrategy, TriggerValidation,
-  WrittenAmountPatternData, ZoneData, ZonePatternData, ZoneSigningClauseData,
+  SessionLifecycle, SessionTimestamp, SourceDetail, TriggerData, TriggerRule,
+  TriggerStrategy, TriggerValidation, WrittenAmountPatternData, ZoneData,
+  ZonePatternData, ZoneSigningClauseData,
 };
 use support::prepared_config;
 
@@ -2429,6 +2430,7 @@ fn prepared_engine_reuses_session_placeholders_across_documents() {
       PreparedSessionRedactionOptions {
         operators: &OperatorConfig::default(),
         session: &mut session,
+        observed_at: None,
       },
     )
     .expect("first document should redact");
@@ -2438,6 +2440,7 @@ fn prepared_engine_reuses_session_placeholders_across_documents() {
       PreparedSessionRedactionOptions {
         operators: &OperatorConfig::default(),
         session: &mut session,
+        observed_at: None,
       },
     )
     .expect("second document should redact");
@@ -2448,6 +2451,30 @@ fn prepared_engine_reuses_session_placeholders_across_documents() {
     "[PERSON_case%5F1_2] met [PERSON_case%5F1_1]."
   );
   assert_eq!(session.mapping_count(), 2);
+
+  let lifecycle = SessionLifecycle::new(
+    SessionTimestamp::from_epoch_seconds(100),
+    Some(SessionTimestamp::from_epoch_seconds(200)),
+  )
+  .expect("valid lifecycle");
+  let mut expired_session = RedactionSession::new_with_lifecycle(
+    SessionId::new("expired_case").expect("valid id"),
+    lifecycle,
+  )
+  .expect("session should initialize");
+  let before = expired_session.clone();
+  let error = prepared
+    .redact_static_entities_with_session(
+      "Alice signed.",
+      PreparedSessionRedactionOptions {
+        operators: &OperatorConfig::default(),
+        session: &mut expired_session,
+        observed_at: Some(SessionTimestamp::from_epoch_seconds(200)),
+      },
+    )
+    .expect_err("expired session should fail before prepared execution");
+  assert_eq!(error, Error::SessionExpired);
+  assert_eq!(expired_session, before);
 }
 
 #[test]
@@ -2473,6 +2500,7 @@ fn prepared_engine_session_update_is_transactional() {
       PreparedSessionRedactionOptions {
         operators: &OperatorConfig::default(),
         session: &mut session,
+        observed_at: None,
       },
     )
     .expect_err("reserved session placeholder should fail");

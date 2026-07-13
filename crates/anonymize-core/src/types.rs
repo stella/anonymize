@@ -35,6 +35,10 @@ pub enum Error {
   SessionSerialization {
     reason: String,
   },
+  SessionObservationRequired,
+  SessionNotYetActive,
+  SessionExpired,
+  SessionDeleted,
   ByteOffsetOutOfBounds {
     offset: u32,
   },
@@ -114,6 +118,10 @@ impl fmt::Display for Error {
       Self::SessionSerialization { reason } => {
         display_session_serialization_error(formatter, reason)
       }
+      Self::SessionObservationRequired => display_observation(formatter),
+      Self::SessionNotYetActive => display_session_not_active(formatter),
+      Self::SessionExpired => display_session_expired(formatter),
+      Self::SessionDeleted => display_session_deleted(formatter),
       Self::ByteOffsetOutOfBounds { offset } => {
         write!(formatter, "Byte offset is out of bounds: {offset}")
       }
@@ -220,6 +228,26 @@ fn display_session_serialization_error(
   reason: &str,
 ) -> fmt::Result {
   write!(formatter, "Could not serialize redaction session: {reason}")
+}
+
+fn display_observation(formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+  formatter.write_str(
+    "A caller-supplied observation time is required for this redaction session",
+  )
+}
+
+fn display_session_not_active(
+  formatter: &mut fmt::Formatter<'_>,
+) -> fmt::Result {
+  formatter.write_str("Redaction session is not yet active")
+}
+
+fn display_session_expired(formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+  formatter.write_str("Redaction session has expired")
+}
+
+fn display_session_deleted(formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+  formatter.write_str("Redaction session has been deleted")
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

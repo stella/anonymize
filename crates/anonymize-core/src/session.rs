@@ -9,7 +9,7 @@ use crate::placeholders::{
 use crate::types::{Entity, Error, PlaceholderMap, RedactionEntry, Result};
 
 /// Current schema version for plaintext redaction-session transfer.
-pub const REDACTION_SESSION_SCHEMA_VERSION: u32 = 1;
+pub const REDACTION_SESSION_SCHEMA_VERSION: u32 = 2;
 
 const MAX_SESSION_ID_BYTES: usize = 64;
 const MAX_SESSION_MAPPINGS: usize = 100_000;
@@ -18,6 +18,118 @@ const MAX_SESSION_VALUE_BYTES: usize = 0x0010_0000;
 const MAX_PLACEHOLDER_COMPONENT_BYTES: usize = 128;
 const EMPTY_SESSION_STATE_TEMPLATE: &str =
   r#"{"schema_version":1,"session_id":"","counters":{},"mappings":[]}"#;
+
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+/// Whole seconds since 1970-01-01T00:00:00Z.
+///
+/// The core never reads a process clock. Callers provide timestamps so expiry
+/// behavior remains deterministic and testable across runtimes.
+pub struct SessionTimestamp(u32);
+
+impl SessionTimestamp {
+  #[must_use]
+  pub const fn from_epoch_seconds(value: u32) -> Self {
+    Self(value)
+  }
+
+  #[must_use]
+  pub const fn epoch_seconds(self) -> u32 {
+    self.0
+  }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+/// Immutable lifecycle bounds for a redaction session.
+pub struct SessionLifecycle {
+  created_at: SessionTimestamp,
+  expires_at: Option<SessionTimestamp>,
+}
+
+impl SessionLifecycle {
+  pub fn new(
+    created_at: SessionTimestamp,
+    expires_at: Option<SessionTimestamp>,
+  ) -> Result<Self> {
+    if expires_at.is_some_and(|expires_at| expires_at <= created_at) {
+      return Err(invalid_session_state(
+        "session expiry must be later than its creation time",
+      ));
+    }
+    Ok(Self {
+      created_at,
+      expires_at,
+    })
+  }
+
+  #[must_use]
+  pub const fn created_at(&self) -> SessionTimestamp {
+    self.created_at
+  }
+
+  #[must_use]
+  pub const fn expires_at(&self) -> Option<SessionTimestamp> {
+    self.expires_at
+  }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+/// Availability observed at a caller-supplied time.
+pub enum SessionStatus {
+  Active,
+  NotYetActive,
+  Expired,
+  Deleted,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+/// Inspection-safe session state that contains no entity values.
+pub struct SessionMetadata {
+  session_id: SessionId,
+  lifecycle: Option<SessionLifecycle>,
+  mapping_count: usize,
+  status: SessionStatus,
+}
+
+impl SessionMetadata {
+  #[must_use]
+  pub const fn session_id(&self) -> &SessionId {
+    &self.session_id
+  }
+
+  #[must_use]
+  pub const fn lifecycle(&self) -> Option<SessionLifecycle> {
+    self.lifecycle
+  }
+
+  #[must_use]
+  pub const fn mapping_count(&self) -> usize {
+    self.mapping_count
+  }
+
+  #[must_use]
+  pub const fn status(&self) -> SessionStatus {
+    self.status
+  }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+/// Audit-safe result of logical session deletion.
+pub struct SessionDeletionSummary {
+  session_id: SessionId,
+  deleted_mapping_count: usize,
+}
+
+impl SessionDeletionSummary {
+  #[must_use]
+  pub const fn session_id(&self) -> &SessionId {
+    &self.session_id
+  }
+
+  #[must_use]
+  pub const fn deleted_mapping_count(&self) -> usize {
+    self.deleted_mapping_count
+  }
+}
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 /// Opaque, non-sensitive namespace embedded in session placeholders.
@@ -78,6 +190,8 @@ impl SessionId {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RedactionSession {
   id: SessionId,
+  lifecycle: Option<SessionLifecycle>,
+  deleted: bool,
   counters: BTreeMap<String, u32>,
   placeholders: BTreeMap<PlaceholderIdentity, String>,
   originals: BTreeMap<String, String>,
@@ -109,11 +223,30 @@ impl RedactionSession {
       .saturating_add(id.0.len());
     Self {
       id,
+      lifecycle: None,
+      deleted: false,
       counters: BTreeMap::new(),
       placeholders: BTreeMap::new(),
       originals: BTreeMap::new(),
       serialized_len,
     }
+  }
+
+  pub fn new_with_lifecycle(
+    id: SessionId,
+    lifecycle: SessionLifecycle,
+  ) -> Result<Self> {
+    let mut session = Self {
+      id,
+      lifecycle: Some(lifecycle),
+      deleted: false,
+      counters: BTreeMap::new(),
+      placeholders: BTreeMap::new(),
+      originals: BTreeMap::new(),
+      serialized_len: 0,
+    };
+    session.serialized_len = session.serialize_plaintext_json()?.len();
+    Ok(session)
   }
 
   #[must_use]
@@ -126,11 +259,57 @@ impl RedactionSession {
     self.placeholders.len()
   }
 
+  pub fn inspect(
+    &self,
+    observed_at: Option<SessionTimestamp>,
+  ) -> Result<SessionMetadata> {
+    Ok(SessionMetadata {
+      session_id: self.id.clone(),
+      lifecycle: self.lifecycle,
+      mapping_count: self.mapping_count(),
+      status: self.status(observed_at)?,
+    })
+  }
+
+  /// Clears mappings and permanently blocks future use of this instance.
+  ///
+  /// This is logical deletion. It does not revoke earlier clones or serialized
+  /// copies, and does not guarantee physical erasure of allocator or process
+  /// memory.
+  pub fn delete(&mut self) -> Result<SessionDeletionSummary> {
+    if self.deleted {
+      return Err(Error::SessionDeleted);
+    }
+    let deleted_mapping_count = self.mapping_count();
+    self.counters.clear();
+    self.placeholders.clear();
+    self.originals.clear();
+    self.serialized_len = 0;
+    self.deleted = true;
+    Ok(SessionDeletionSummary {
+      session_id: self.id.clone(),
+      deleted_mapping_count,
+    })
+  }
+
   /// Serializes plaintext session state deterministically.
   ///
   /// The returned JSON contains original and normalized entity values. It must
   /// not be logged or persisted without an application-owned protection layer.
   pub fn to_plaintext_json(&self) -> Result<String> {
+    self.ensure_active(None)?;
+    self.to_plaintext_json_unchecked()
+  }
+
+  pub fn to_plaintext_json_at(
+    &self,
+    observed_at: SessionTimestamp,
+  ) -> Result<String> {
+    self.ensure_active(Some(observed_at))?;
+    self.to_plaintext_json_unchecked()
+  }
+
+  fn to_plaintext_json_unchecked(&self) -> Result<String> {
     let serialized = self.serialize_plaintext_json()?;
     if serialized.len() > MAX_SESSION_STATE_BYTES {
       return Err(Error::SessionSerialization {
@@ -165,8 +344,13 @@ impl RedactionSession {
       });
     }
     let envelope = SessionEnvelopeRef {
-      schema_version: REDACTION_SESSION_SCHEMA_VERSION,
+      schema_version: if self.lifecycle.is_some() {
+        REDACTION_SESSION_SCHEMA_VERSION
+      } else {
+        1
+      },
       session_id: self.id.as_str(),
+      lifecycle: self.lifecycle.map(SessionLifecycleRef::from),
       counters: &self.counters,
       mappings,
     };
@@ -191,10 +375,18 @@ impl RedactionSession {
       serde_json::from_str::<SessionEnvelope>(value).map_err(|error| {
         invalid_session_state(format!("invalid JSON: {error}"))
       })?;
-    if envelope.schema_version != REDACTION_SESSION_SCHEMA_VERSION {
+    if !matches!(
+      envelope.schema_version,
+      1 | REDACTION_SESSION_SCHEMA_VERSION
+    ) {
       return Err(Error::UnsupportedSessionVersion {
         version: envelope.schema_version,
       });
+    }
+    if envelope.schema_version == 1 && envelope.lifecycle.is_some() {
+      return Err(invalid_session_state(
+        "schema version 1 must not contain lifecycle metadata",
+      ));
     }
     if envelope.mappings.len() > MAX_SESSION_MAPPINGS {
       return Err(invalid_session_state(
@@ -203,6 +395,10 @@ impl RedactionSession {
     }
 
     let id = SessionId::new(envelope.session_id)?;
+    let lifecycle = envelope
+      .lifecycle
+      .map(SessionLifecycle::try_from)
+      .transpose()?;
     validate_counters(&envelope.counters)?;
     let mut placeholders = BTreeMap::new();
     let mut originals = BTreeMap::new();
@@ -250,6 +446,8 @@ impl RedactionSession {
 
     let mut session = Self {
       id,
+      lifecycle,
+      deleted: false,
       counters: envelope.counters,
       placeholders,
       originals,
@@ -372,6 +570,43 @@ impl RedactionSession {
 
   pub(crate) fn validate_reserved_text(&self, text: &str) -> Result<()> {
     self.id.validate_reserved_text(text)
+  }
+
+  pub(crate) fn ensure_active(
+    &self,
+    observed_at: Option<SessionTimestamp>,
+  ) -> Result<()> {
+    match self.status(observed_at)? {
+      SessionStatus::Active => Ok(()),
+      SessionStatus::NotYetActive => Err(Error::SessionNotYetActive),
+      SessionStatus::Expired => Err(Error::SessionExpired),
+      SessionStatus::Deleted => Err(Error::SessionDeleted),
+    }
+  }
+
+  fn status(
+    &self,
+    observed_at: Option<SessionTimestamp>,
+  ) -> Result<SessionStatus> {
+    if self.deleted {
+      return Ok(SessionStatus::Deleted);
+    }
+    let Some(lifecycle) = self.lifecycle else {
+      return Ok(SessionStatus::Active);
+    };
+    let Some(observed_at) = observed_at else {
+      return Err(Error::SessionObservationRequired);
+    };
+    if observed_at < lifecycle.created_at {
+      return Ok(SessionStatus::NotYetActive);
+    }
+    if lifecycle
+      .expires_at
+      .is_some_and(|expires_at| observed_at >= expires_at)
+    {
+      return Ok(SessionStatus::Expired);
+    }
+    Ok(SessionStatus::Active)
   }
 
   pub(crate) fn validate_rendered_placeholders(
@@ -648,8 +883,28 @@ fn session_size_overflow() -> Error {
 struct SessionEnvelopeRef<'a> {
   schema_version: u32,
   session_id: &'a str,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  lifecycle: Option<SessionLifecycleRef>,
   counters: &'a BTreeMap<String, u32>,
   mappings: Vec<SessionMappingRef<'a>>,
+}
+
+#[derive(Serialize)]
+struct SessionLifecycleRef {
+  created_at_epoch_seconds: u32,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  expires_at_epoch_seconds: Option<u32>,
+}
+
+impl From<SessionLifecycle> for SessionLifecycleRef {
+  fn from(value: SessionLifecycle) -> Self {
+    Self {
+      created_at_epoch_seconds: value.created_at.epoch_seconds(),
+      expires_at_epoch_seconds: value
+        .expires_at
+        .map(SessionTimestamp::epoch_seconds),
+    }
+  }
 }
 
 #[derive(Serialize)]
@@ -665,8 +920,31 @@ struct SessionMappingRef<'a> {
 struct SessionEnvelope {
   schema_version: u32,
   session_id: String,
+  #[serde(default)]
+  lifecycle: Option<SessionLifecycleWire>,
   counters: BTreeMap<String, u32>,
   mappings: Vec<SessionMappingWire>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SessionLifecycleWire {
+  created_at_epoch_seconds: u32,
+  #[serde(default)]
+  expires_at_epoch_seconds: Option<u32>,
+}
+
+impl TryFrom<SessionLifecycleWire> for SessionLifecycle {
+  type Error = Error;
+
+  fn try_from(value: SessionLifecycleWire) -> Result<Self> {
+    Self::new(
+      SessionTimestamp::from_epoch_seconds(value.created_at_epoch_seconds),
+      value
+        .expires_at_epoch_seconds
+        .map(SessionTimestamp::from_epoch_seconds),
+    )
+  }
 }
 
 #[derive(Deserialize)]

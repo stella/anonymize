@@ -72,12 +72,67 @@ type CanonicalStaticRedactionResult = {
   };
 };
 
+type CanonicalSessionMetadata = {
+  session_id: string;
+  created_at_epoch_seconds: number | null;
+  expires_at_epoch_seconds: number | null;
+  mapping_count: number;
+  status: NativeSessionStatus;
+};
+
+type CanonicalSessionDeletionSummary = {
+  session_id: string;
+  deleted_mapping_count: number;
+};
+
+export type NativeSessionStatus =
+  | "active"
+  | "not_yet_active"
+  | "expired"
+  | "deleted";
+
+export type NativeSessionLifecycle = {
+  createdAtEpochSeconds: number;
+  expiresAtEpochSeconds?: number;
+};
+
+export type NativeSessionMetadata = {
+  sessionId: string;
+  createdAtEpochSeconds: number | null;
+  expiresAtEpochSeconds: number | null;
+  mappingCount: number;
+  status: NativeSessionStatus;
+};
+
+export type NativeSessionDeletionSummary = {
+  sessionId: string;
+  deletedMappingCount: number;
+};
+
+export type NativeSessionRedactionAtOptions = {
+  fullText: string;
+  observedAtEpochSeconds: number;
+  operators?: NativeOperatorConfig;
+};
+
+export type NativeCreateSessionWithLifecycleOptions = NativeSessionLifecycle & {
+  sessionId: string;
+};
+
 export type NativePreparedRedactionSessionBinding = {
   sessionId: () => string;
   mappingCount: () => number;
   toPlaintextJson: () => string;
+  toPlaintextJsonAt?: (observedAtEpochSeconds: number) => string;
+  inspectJson?: (observedAtEpochSeconds?: number) => string;
+  deleteJson?: () => string;
   redactStaticEntitiesJson: (
     fullText: string,
+    operators?: NativeBindingOperatorConfig,
+  ) => string;
+  redactStaticEntitiesJsonAt?: (
+    fullText: string,
+    observedAtEpochSeconds: number,
     operators?: NativeBindingOperatorConfig,
   ) => string;
 };
@@ -90,6 +145,11 @@ export type NativePreparedSearchBinding = {
   warm_lazy_regex_diagnostics_json?: () => string;
   createRedactionSession?: (
     sessionId: string,
+  ) => NativePreparedRedactionSessionBinding;
+  createRedactionSessionWithLifecycle?: (
+    sessionId: string,
+    createdAtEpochSeconds: number,
+    expiresAtEpochSeconds?: number,
   ) => NativePreparedRedactionSessionBinding;
   restoreRedactionSession?: (
     plaintextJson: string,
@@ -334,6 +394,55 @@ export class PreparedNativeRedactionSession {
     return this.toPlaintextJson();
   }
 
+  toPlaintextJsonAt(observedAtEpochSeconds: number): string {
+    const serialize = this.#session.toPlaintextJsonAt;
+    if (!serialize) {
+      throw new Error(
+        "Native anonymize binding does not support session lifecycle controls",
+      );
+    }
+    return serialize.call(this.#session, observedAtEpochSeconds);
+  }
+
+  to_plaintext_json_at(observedAtEpochSeconds: number): string {
+    return this.toPlaintextJsonAt(observedAtEpochSeconds);
+  }
+
+  inspect(observedAtEpochSeconds?: number): NativeSessionMetadata {
+    const inspect = this.#session.inspectJson;
+    if (!inspect) {
+      throw new Error(
+        "Native anonymize binding does not support session lifecycle controls",
+      );
+    }
+    const metadata: CanonicalSessionMetadata = JSON.parse(
+      inspect.call(this.#session, observedAtEpochSeconds),
+    );
+    return {
+      sessionId: metadata.session_id,
+      createdAtEpochSeconds: metadata.created_at_epoch_seconds,
+      expiresAtEpochSeconds: metadata.expires_at_epoch_seconds,
+      mappingCount: metadata.mapping_count,
+      status: metadata.status,
+    };
+  }
+
+  delete(): NativeSessionDeletionSummary {
+    const deleteSession = this.#session.deleteJson;
+    if (!deleteSession) {
+      throw new Error(
+        "Native anonymize binding does not support session lifecycle controls",
+      );
+    }
+    const summary: CanonicalSessionDeletionSummary = JSON.parse(
+      deleteSession.call(this.#session),
+    );
+    return {
+      sessionId: summary.session_id,
+      deletedMappingCount: summary.deleted_mapping_count,
+    };
+  }
+
   redactStaticEntities(
     fullText: string,
     operators?: NativeOperatorConfig,
@@ -367,6 +476,56 @@ export class PreparedNativeRedactionSession {
       fullText,
       toBindingOperatorConfig(operators),
     );
+  }
+
+  redactStaticEntitiesAt(
+    options: NativeSessionRedactionAtOptions,
+  ): NativeStaticRedactionResult {
+    const result: CanonicalStaticRedactionResult = JSON.parse(
+      this.redactTextJsonAt(options),
+    );
+    return fromCanonicalStaticRedactionResult(result);
+  }
+
+  redactTextAt(
+    options: NativeSessionRedactionAtOptions,
+  ): NativeStaticRedactionResult {
+    return this.redactStaticEntitiesAt(options);
+  }
+
+  redact_text_at(
+    options: NativeSessionRedactionAtOptions,
+  ): NativeStaticRedactionResult {
+    return this.redactTextAt(options);
+  }
+
+  redact_static_entities_at(
+    options: NativeSessionRedactionAtOptions,
+  ): NativeStaticRedactionResult {
+    return this.redactStaticEntitiesAt(options);
+  }
+
+  redactTextJsonAt({
+    fullText,
+    observedAtEpochSeconds,
+    operators,
+  }: NativeSessionRedactionAtOptions): string {
+    const redact = this.#session.redactStaticEntitiesJsonAt;
+    if (!redact) {
+      throw new Error(
+        "Native anonymize binding does not support session lifecycle controls",
+      );
+    }
+    return redact.call(
+      this.#session,
+      fullText,
+      observedAtEpochSeconds,
+      toBindingOperatorConfig(operators),
+    );
+  }
+
+  redact_text_json_at(options: NativeSessionRedactionAtOptions): string {
+    return this.redactTextJsonAt(options);
   }
 }
 
@@ -422,6 +581,33 @@ export class PreparedNativeAnonymizer {
 
   create_redaction_session(sessionId: string): PreparedNativeRedactionSession {
     return this.createRedactionSession(sessionId);
+  }
+
+  createRedactionSessionWithLifecycle({
+    sessionId,
+    createdAtEpochSeconds,
+    expiresAtEpochSeconds,
+  }: NativeCreateSessionWithLifecycleOptions): PreparedNativeRedactionSession {
+    const create = this.#prepared.createRedactionSessionWithLifecycle;
+    if (!create) {
+      throw new Error(
+        "Native anonymize binding does not support session lifecycle controls",
+      );
+    }
+    return new PreparedNativeRedactionSession(
+      create.call(
+        this.#prepared,
+        sessionId,
+        createdAtEpochSeconds,
+        expiresAtEpochSeconds,
+      ),
+    );
+  }
+
+  create_redaction_session_with_lifecycle(
+    options: NativeCreateSessionWithLifecycleOptions,
+  ): PreparedNativeRedactionSession {
+    return this.createRedactionSessionWithLifecycle(options);
   }
 
   restoreRedactionSession(
@@ -662,6 +848,18 @@ export class PreparedNativePipeline {
 
   create_redaction_session(sessionId: string): PreparedNativeRedactionSession {
     return this.createRedactionSession(sessionId);
+  }
+
+  createRedactionSessionWithLifecycle(
+    options: NativeCreateSessionWithLifecycleOptions,
+  ): PreparedNativeRedactionSession {
+    return this.#anonymizer.createRedactionSessionWithLifecycle(options);
+  }
+
+  create_redaction_session_with_lifecycle(
+    options: NativeCreateSessionWithLifecycleOptions,
+  ): PreparedNativeRedactionSession {
+    return this.createRedactionSessionWithLifecycle(options);
   }
 
   restoreRedactionSession(

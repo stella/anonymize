@@ -54,6 +54,28 @@ runtime instances. Its output contains original personal data in plaintext: do
 not log it or persist it without an application-owned protection layer. Restore
 validated transfer state with `prepared.restore_redaction_session(json_state)`.
 
+Sessions can carry explicit lifecycle bounds. The engine never reads the system
+clock; supply the UTC epoch-second observation time for each lifecycle-aware
+operation:
+
+```py
+session = prepared.create_redaction_session_with_lifecycle(
+    "opaque_case_2",
+    created_at_epoch_seconds=1_800_000_000,
+    expires_at_epoch_seconds=1_800_086_400,
+)
+result = session.redact_text_at(
+    document,
+    observed_at_epoch_seconds=1_800_000_100,
+)
+metadata = session.inspect(1_800_000_100)  # contains no entity values
+deletion = session.delete()
+```
+
+Expiry is fail-closed at its exact boundary. `delete()` performs logical
+deletion: it clears the session mappings and prevents future use, but does not
+revoke earlier exported copies or claim physical erasure of process memory.
+
 Caller-produced detections use Python character indexes and enter the same
 resolution and redaction pipeline as built-in detections:
 
@@ -125,6 +147,7 @@ for repeated document processing.
 - `PreparedAnonymizer.warm_lazy_regex()`
 - `PreparedAnonymizer.warm_lazy_regex_diagnostics_json()`
 - `PreparedAnonymizer.create_redaction_session(session_id) -> PreparedRedactionSession`
+- `PreparedAnonymizer.create_redaction_session_with_lifecycle(...) -> PreparedRedactionSession`
 - `PreparedAnonymizer.restore_redaction_session(plaintext_json) -> PreparedRedactionSession`
 - `PreparedAnonymizer.redact_text(text, operators=None, redact_string=None)`
 - `PreparedAnonymizer.redact_text_json(text, operators=None, redact_string=None)`
