@@ -58,15 +58,14 @@ impl SessionId {
   }
 
   fn owns_placeholder(&self, placeholder: &str) -> bool {
-    let namespace_suffix = format!("_{}", self.as_str());
+    let encoded_namespace = encode_session_namespace(self.as_str());
     placeholder
       .strip_prefix('[')
       .and_then(|value| value.strip_suffix(']'))
       .and_then(|value| value.rsplit_once('_'))
-      .is_some_and(|(prefix, _)| {
-        prefix
-          .strip_suffix(&namespace_suffix)
-          .is_some_and(|label_key| !label_key.is_empty())
+      .and_then(|(prefix, _)| prefix.rsplit_once('_'))
+      .is_some_and(|(label_key, namespace)| {
+        !label_key.is_empty() && namespace == encoded_namespace
       })
   }
 }
@@ -507,7 +506,10 @@ fn next_placeholder(
         })?;
     let placeholder = namespace.map_or_else(
       || format!("[{label_key}_{count}]"),
-      |namespace| format!("[{label_key}_{namespace}_{count}]"),
+      |namespace| {
+        let encoded_namespace = encode_session_namespace(namespace);
+        format!("[{label_key}_{encoded_namespace}_{count}]")
+      },
     );
     if !existing_occupied.contains_key(&placeholder)
       && occupied.insert(placeholder.clone())
@@ -540,6 +542,10 @@ fn validate_session_id(value: &str) -> Result<()> {
     });
   }
   Ok(())
+}
+
+fn encode_session_namespace(value: &str) -> String {
+  value.replace('_', "%5F")
 }
 
 fn validate_counters(counters: &BTreeMap<String, u32>) -> Result<()> {
@@ -595,7 +601,8 @@ fn session_placeholder_count(
     label_key,
     session_id,
   } = params;
-  let prefix = format!("[{label_key}_{session_id}_");
+  let encoded_session_id = encode_session_namespace(session_id);
+  let prefix = format!("[{label_key}_{encoded_session_id}_");
   let Some(number) = placeholder
     .strip_prefix(&prefix)
     .and_then(|value| value.strip_suffix(']'))

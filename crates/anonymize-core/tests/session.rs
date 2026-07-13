@@ -64,10 +64,10 @@ fn session_reuses_placeholders_across_documents() {
   })
   .expect("second redaction should succeed");
 
-  assert_eq!(first.redacted_text, "[PERSON_matter_1_1] signed.");
+  assert_eq!(first.redacted_text, "[PERSON_matter%5F1_1] signed.");
   assert_eq!(
     second.redacted_text,
-    "[PERSON_matter_1_1] replied to [PERSON_matter_1_2]."
+    "[PERSON_matter%5F1_1] replied to [PERSON_matter%5F1_2]."
   );
   assert_eq!(session.mapping_count(), 2);
 }
@@ -96,8 +96,39 @@ fn session_namespaces_are_isolated() {
   })
   .expect("second session should redact");
 
-  assert_eq!(first_result.redacted_text, "[PERSON_matter_a_1] signed.");
-  assert_eq!(second_result.redacted_text, "[PERSON_matter_b_1] signed.");
+  assert_eq!(first_result.redacted_text, "[PERSON_matter%5Fa_1] signed.");
+  assert_eq!(second_result.redacted_text, "[PERSON_matter%5Fb_1] signed.");
+}
+
+#[test]
+fn session_placeholders_encode_label_and_namespace_boundaries() {
+  let text = "Alice signed.";
+  let entity_with_compound_label =
+    Entity::detected(0, 5, "email address", "Alice");
+  let entity_with_simple_label = Entity::detected(0, 5, "email", "Alice");
+  let mut simple_namespace =
+    RedactionSession::new(SessionId::new("1").expect("valid id"));
+  let mut compound_namespace =
+    RedactionSession::new(SessionId::new("ADDRESS_1").expect("valid id"));
+
+  let first = redact(RedactFixtureParams {
+    text,
+    entities: &[entity_with_compound_label],
+    config: &OperatorConfig::default(),
+    session: &mut simple_namespace,
+  })
+  .expect("simple namespace should redact");
+  let second = redact(RedactFixtureParams {
+    text,
+    entities: &[entity_with_simple_label],
+    config: &OperatorConfig::default(),
+    session: &mut compound_namespace,
+  })
+  .expect("compound namespace should redact");
+
+  assert_eq!(first.redacted_text, "[EMAIL_ADDRESS_1_1] signed.");
+  assert_eq!(second.redacted_text, "[EMAIL_ADDRESS%5F1_1] signed.");
+  assert_ne!(first.redacted_text, second.redacted_text);
 }
 
 #[test]
@@ -132,7 +163,7 @@ fn plaintext_state_round_trips_deterministically_and_continues_counters() {
     session: &mut restored,
   })
   .expect("restored session should continue");
-  assert_eq!(next.redacted_text, "[PERSON_matter_1_2] signed.");
+  assert_eq!(next.redacted_text, "[PERSON_matter%5F1_2] signed.");
 }
 
 #[test]
@@ -187,7 +218,7 @@ fn input_cannot_reuse_an_allocated_session_placeholder() {
   })
   .expect("initial redaction should succeed");
   let before = session.clone();
-  let text = "Literal [PERSON_matter_1_1]; Bob signed.";
+  let text = "Literal [PERSON_matter%5F1_1]; Bob signed.";
   let error = redact(RedactFixtureParams {
     text,
     entities: &[person(text, "Bob")],
@@ -199,7 +230,7 @@ fn input_cannot_reuse_an_allocated_session_placeholder() {
   assert_eq!(
     error,
     Error::SessionPlaceholderCollision {
-      placeholder: String::from("[PERSON_matter_1_1]")
+      placeholder: String::from("[PERSON_matter%5F1_1]")
     }
   );
   assert_eq!(session, before);
@@ -210,7 +241,7 @@ fn input_cannot_reserve_a_future_session_placeholder() {
   let mut session =
     RedactionSession::new(SessionId::new("matter_1").expect("valid id"));
   let error = redact(RedactFixtureParams {
-    text: "Literal [PERSON_matter_1_1].",
+    text: "Literal [PERSON_matter%5F1_1].",
     entities: &[],
     config: &OperatorConfig::default(),
     session: &mut session,
@@ -220,7 +251,7 @@ fn input_cannot_reserve_a_future_session_placeholder() {
   assert_eq!(
     error,
     Error::SessionPlaceholderCollision {
-      placeholder: String::from("[PERSON_matter_1_1]")
+      placeholder: String::from("[PERSON_matter%5F1_1]")
     }
   );
   assert_eq!(session.mapping_count(), 0);
@@ -237,7 +268,7 @@ fn configured_redact_tokens_are_reserved_before_session_allocation() {
   config
     .operators
     .insert(String::from("confidential"), Operator::Redact);
-  config.redact_string = String::from("[PERSON_matter_1_1]");
+  config.redact_string = String::from("[PERSON_matter%5F1_1]");
   let mut session =
     RedactionSession::new(SessionId::new("matter_1").expect("valid id"));
 
@@ -252,7 +283,7 @@ fn configured_redact_tokens_are_reserved_before_session_allocation() {
   assert_eq!(
     error,
     Error::SessionPlaceholderCollision {
-      placeholder: String::from("[PERSON_matter_1_1]")
+      placeholder: String::from("[PERSON_matter%5F1_1]")
     }
   );
   assert_eq!(session.mapping_count(), 0);
@@ -269,7 +300,7 @@ fn rendered_output_cannot_synthesize_session_placeholders() {
   config
     .operators
     .insert(String::from("confidential"), Operator::Redact);
-  config.redact_string = String::from("PERSON_matter_1_1");
+  config.redact_string = String::from("PERSON_matter%5F1_1");
   let mut session =
     RedactionSession::new(SessionId::new("matter_1").expect("valid id"));
   let before = session.clone();
@@ -285,7 +316,7 @@ fn rendered_output_cannot_synthesize_session_placeholders() {
   assert_eq!(
     error,
     Error::SessionPlaceholderCollision {
-      placeholder: String::from("[PERSON_matter_1_1]")
+      placeholder: String::from("[PERSON_matter%5F1_1]")
     }
   );
   assert_eq!(session, before);
@@ -296,7 +327,7 @@ fn persisted_originals_cannot_contain_session_placeholders() {
   let text = "Alice met her";
   let entities = [
     person(text, "Alice"),
-    Entity::coreference(10, 13, "person", "Bob", "[PERSON_matter_1_2]"),
+    Entity::coreference(10, 13, "person", "Bob", "[PERSON_matter%5F1_2]"),
   ];
   let mut session =
     RedactionSession::new(SessionId::new("matter_1").expect("valid id"));
@@ -313,7 +344,7 @@ fn persisted_originals_cannot_contain_session_placeholders() {
   assert_eq!(
     error,
     Error::SessionPlaceholderCollision {
-      placeholder: String::from("[PERSON_matter_1_2]")
+      placeholder: String::from("[PERSON_matter%5F1_2]")
     }
   );
   assert_eq!(session, before);
@@ -404,7 +435,7 @@ fn imported_state_rejects_counters_below_allocated_placeholders() {
   let invalid = concat!(
     r#"{"schema_version":1,"session_id":"matter_1","counters":{"PERSON":1},"#,
     r#""mappings":[{"label_key":"PERSON","normalized_text":"alice","#,
-    r#""placeholder":"[PERSON_matter_1_2]","original":"Alice"}]}"#,
+    r#""placeholder":"[PERSON_matter%5F1_2]","original":"Alice"}]}"#,
   );
 
   let error = RedactionSession::from_plaintext_json(invalid)
@@ -417,8 +448,8 @@ fn imported_state_rejects_placeholders_in_originals() {
   let invalid = concat!(
     r#"{"schema_version":1,"session_id":"matter_1","counters":{"PERSON":1},"#,
     r#""mappings":[{"label_key":"PERSON","normalized_text":"alice","#,
-    r#""placeholder":"[PERSON_matter_1_1]","#,
-    r#""original":"[PERSON_matter_1_1]"}]}"#,
+    r#""placeholder":"[PERSON_matter%5F1_1]","#,
+    r#""original":"[PERSON_matter%5F1_1]"}]}"#,
   );
 
   let error = RedactionSession::from_plaintext_json(invalid)
@@ -426,7 +457,7 @@ fn imported_state_rejects_placeholders_in_originals() {
   assert_eq!(
     error,
     Error::SessionPlaceholderCollision {
-      placeholder: String::from("[PERSON_matter_1_1]")
+      placeholder: String::from("[PERSON_matter%5F1_1]")
     }
   );
 }
