@@ -259,6 +259,39 @@ fn configured_redact_tokens_are_reserved_before_session_allocation() {
 }
 
 #[test]
+fn rendered_output_cannot_synthesize_session_placeholders() {
+  let text = "[secret] Alice";
+  let entities = [
+    Entity::detected(1, 7, "confidential", "secret"),
+    person(text, "Alice"),
+  ];
+  let mut config = OperatorConfig::default();
+  config
+    .operators
+    .insert(String::from("confidential"), Operator::Redact);
+  config.redact_string = String::from("PERSON_matter_1_1");
+  let mut session =
+    RedactionSession::new(SessionId::new("matter_1").expect("valid id"));
+  let before = session.clone();
+
+  let error = redact(RedactFixtureParams {
+    text,
+    entities: &entities,
+    config: &config,
+    session: &mut session,
+  })
+  .expect_err("rendered output must not synthesize session placeholders");
+
+  assert_eq!(
+    error,
+    Error::SessionPlaceholderCollision {
+      placeholder: String::from("[PERSON_matter_1_1]")
+    }
+  );
+  assert_eq!(session, before);
+}
+
+#[test]
 fn persisted_originals_cannot_contain_session_placeholders() {
   let text = "Alice met her";
   let entities = [

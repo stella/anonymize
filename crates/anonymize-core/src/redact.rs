@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::byte_offsets::ByteOffsets;
@@ -7,6 +7,7 @@ use crate::normalize::placeholder_fallback;
 use crate::placeholders::build_placeholder_map;
 use crate::session::{
   RedactionSession, SessionPlaceholderInput, SessionPlaceholderPlan,
+  SessionUpdate,
 };
 use crate::types::{
   Entity, EntityKind, MaskConfig, MaskDirection, Operator, OperatorConfig,
@@ -103,9 +104,10 @@ fn redact_text_inner(
   let kept = non_overlapping_spans(kept);
   let masked = non_overlapping_spans(masked);
   let redacted = non_overlapping_spans(redacted);
-  let mask_replacements = mask_replacement_spans(&masked, config)?;
-  let mask_replacements =
-    remove_redacted_mask_overlaps(mask_replacements, &redacted);
+  let mask_replacements = remove_redacted_mask_overlaps(
+    mask_replacement_spans(&masked, config)?,
+    &redacted,
+  );
 
   let mut operator_spans = kept
     .iter()
@@ -158,11 +160,9 @@ fn redact_text_inner(
     config,
     redacted: &redacted,
     mask_replacements: &mask_replacements,
+    track_placeholder_counts: session_update.is_some(),
   })?;
-  if let (Some(active_session), Some(update)) = (session, session_update) {
-    active_session.apply_update(update);
-    active_session.canonicalize_redaction_map(&mut rendered.map);
-  }
+  rendered.commit_session_update(session, session_update)?;
 
   Ok(RedactionResult {
     redacted_text: rendered.text,
@@ -232,11 +232,30 @@ struct RenderOptions<'text, 'config, 'borrow> {
   config: &'config OperatorConfig,
   redacted: &'borrow [RedactionSpan<'text>],
   mask_replacements: &'borrow [MaskReplacementSpan<'config>],
+  track_placeholder_counts: bool,
 }
 
 struct RenderedRedactions {
   text: String,
   map: Vec<RedactionEntry>,
+  placeholder_counts: BTreeMap<String, usize>,
+}
+
+impl RenderedRedactions {
+  fn commit_session_update(
+    &mut self,
+    session: Option<&mut RedactionSession>,
+    update: Option<SessionUpdate>,
+  ) -> Result<()> {
+    let (Some(active_session), Some(update)) = (session, update) else {
+      return Ok(());
+    };
+    active_session
+      .validate_rendered_placeholders(&self.text, &self.placeholder_counts)?;
+    active_session.apply_update(update);
+    active_session.canonicalize_redaction_map(&mut self.map);
+    Ok(())
+  }
 }
 
 #[derive(Clone, Copy)]
@@ -251,6 +270,7 @@ fn render_selected_spans(
   let mut text = String::with_capacity(options.full_text.len());
   let mut map = Vec::<RedactionEntry>::new();
   let mut placeholders = HashSet::<String>::new();
+  let mut placeholder_counts = BTreeMap::<String, usize>::new();
   let mut cursor = 0;
   let mut redacted_index = 0;
   let mut mask_index = 0;
@@ -294,7 +314,15 @@ fn render_selected_spans(
           );
         let operator = operator_for(options.config, &entity.label);
         match operator {
-          Operator::Replace => text.push_str(&placeholder),
+          Operator::Replace => {
+            text.push_str(&placeholder);
+            if options.track_placeholder_counts {
+              let count = placeholder_counts
+                .entry(placeholder.to_string())
+                .or_insert(0);
+              *count = count.saturating_add(1);
+            }
+          }
           Operator::Redact => text.push_str(&options.config.redact_string),
           Operator::Mask(mask) => {
             text.push_str(&mask_text(span.source_text, mask));
@@ -326,7 +354,11 @@ fn render_selected_spans(
       full_text_len,
     )?);
   }
-  Ok(RenderedRedactions { text, map })
+  Ok(RenderedRedactions {
+    text,
+    map,
+    placeholder_counts,
+  })
 }
 
 fn non_overlapping_spans(

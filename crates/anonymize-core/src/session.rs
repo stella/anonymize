@@ -3,7 +3,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::{Deserialize, Serialize};
 
 use crate::placeholders::{
-  PlaceholderIdentity, collect_reserved_placeholders, placeholder_identity,
+  PlaceholderIdentity, collect_placeholder_counts,
+  collect_reserved_placeholders, placeholder_identity,
 };
 use crate::types::{Entity, Error, PlaceholderMap, RedactionEntry, Result};
 
@@ -45,24 +46,28 @@ impl SessionId {
     &self,
     reserved: &BTreeSet<String>,
   ) -> Result<()> {
-    let namespace_suffix = format!("_{}", self.as_str());
-    let collision = reserved.iter().find(|placeholder| {
-      placeholder
-        .strip_prefix('[')
-        .and_then(|value| value.strip_suffix(']'))
-        .and_then(|value| value.rsplit_once('_'))
-        .is_some_and(|(prefix, _)| {
-          prefix
-            .strip_suffix(&namespace_suffix)
-            .is_some_and(|label_key| !label_key.is_empty())
-        })
-    });
+    let collision = reserved
+      .iter()
+      .find(|placeholder| self.owns_placeholder(placeholder));
     let Some(placeholder) = collision else {
       return Ok(());
     };
     Err(Error::SessionPlaceholderCollision {
       placeholder: placeholder.clone(),
     })
+  }
+
+  fn owns_placeholder(&self, placeholder: &str) -> bool {
+    let namespace_suffix = format!("_{}", self.as_str());
+    placeholder
+      .strip_prefix('[')
+      .and_then(|value| value.strip_suffix(']'))
+      .and_then(|value| value.rsplit_once('_'))
+      .is_some_and(|(prefix, _)| {
+        prefix
+          .strip_suffix(&namespace_suffix)
+          .is_some_and(|label_key| !label_key.is_empty())
+      })
   }
 }
 
@@ -368,6 +373,33 @@ impl RedactionSession {
 
   pub(crate) fn validate_reserved_text(&self, text: &str) -> Result<()> {
     self.id.validate_reserved_text(text)
+  }
+
+  pub(crate) fn validate_rendered_placeholders(
+    &self,
+    text: &str,
+    expected: &BTreeMap<String, usize>,
+  ) -> Result<()> {
+    let actual = collect_placeholder_counts(text);
+    let unexpected = actual.iter().find(|(placeholder, count)| {
+      self.id.owns_placeholder(placeholder)
+        && expected.get(*placeholder) != Some(*count)
+    });
+    if let Some((placeholder, _)) = unexpected {
+      return Err(Error::SessionPlaceholderCollision {
+        placeholder: placeholder.clone(),
+      });
+    }
+    let missing = expected.iter().find(|(placeholder, count)| {
+      self.id.owns_placeholder(placeholder)
+        && actual.get(*placeholder) != Some(*count)
+    });
+    let Some((placeholder, _)) = missing else {
+      return Ok(());
+    };
+    Err(Error::SessionPlaceholderCollision {
+      placeholder: placeholder.clone(),
+    })
   }
 
   pub(crate) fn canonicalize_redaction_map(

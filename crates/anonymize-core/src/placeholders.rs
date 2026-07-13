@@ -81,7 +81,13 @@ fn next_placeholder(
 }
 
 pub(crate) fn collect_reserved_placeholders(text: &str) -> BTreeSet<String> {
-  let mut placeholders = BTreeSet::new();
+  collect_placeholder_counts(text).into_keys().collect()
+}
+
+pub(crate) fn collect_placeholder_counts(
+  text: &str,
+) -> BTreeMap<String, usize> {
+  let mut placeholders = BTreeMap::new();
   let mut remaining = text;
 
   while let Some(start) = remaining.find('[') {
@@ -97,7 +103,8 @@ pub(crate) fn collect_reserved_placeholders(text: &str) -> BTreeSet<String> {
     };
     let valid = is_placeholder_inner(inner);
     if valid {
-      placeholders.insert(format!("[{inner}]"));
+      let count = placeholders.entry(format!("[{inner}]")).or_insert(0usize);
+      *count = count.saturating_add(1);
     }
 
     let next_start = if valid {
