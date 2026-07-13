@@ -27,7 +27,15 @@ from ._native import (
 
 BytesLike: TypeAlias = bytes | bytearray | memoryview
 PathLikeString: TypeAlias = str | PathLike[str]
-OperatorConfig: TypeAlias = Mapping[str, str] | str | None
+
+class MaskOperatorConfig(TypedDict):
+    type: Literal["mask"]
+    masking_character: str
+    characters_to_mask: int
+    direction: Literal["start", "end"]
+
+OperatorSelection: TypeAlias = Literal["replace", "redact", "keep"] | MaskOperatorConfig
+OperatorConfig: TypeAlias = Mapping[str, OperatorSelection] | str | None
 CALLER_DETECTION_CONTRACT_VERSION: int
 
 class CallerDetection(TypedDict):

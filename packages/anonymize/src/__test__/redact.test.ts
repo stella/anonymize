@@ -162,6 +162,63 @@ describe("operator behavior", () => {
     expect(result.redactionMap.has("[PERSON_1]")).toBe(false);
     expect(result.operatorMap.get("[PERSON_1]")).toBe("keep");
   });
+
+  test("mask operator preserves Unicode grapheme clusters", () => {
+    const text = "A👨‍👩‍👧‍👦e\u{301}Z";
+    const entities = [at(text, "person", text)];
+
+    const result = redactText(text, entities, {
+      operators: {
+        person: {
+          type: "mask",
+          maskingCharacter: "●",
+          charactersToMask: 2,
+          direction: "end",
+        },
+      },
+      redactString: "[REDACTED]",
+    });
+
+    expect(result.redactedText).toBe("A👨‍👩‍👧‍👦●●");
+    expect(result.redactionMap.size).toBe(0);
+    expect(result.operatorMap.get("[PERSON_1]")).toBe("mask");
+  });
+
+  test("mask operator does not suppress nested redactions", () => {
+    const text = "Alice@example.com";
+    const entities = [
+      at(text, "email address", text),
+      at(text, "person", "Alice"),
+    ];
+
+    const result = redactText(text, entities, {
+      operators: {
+        "email address": {
+          type: "mask",
+          maskingCharacter: "●",
+          charactersToMask: 4,
+          direction: "end",
+        },
+      },
+      redactString: "[REDACTED]",
+    });
+
+    expect(result.redactedText).toBe("[PERSON_1]@example●●●●");
+    expect(result.entityCount).toBe(2);
+    expect(result.redactionMap.get("[PERSON_1]")).toBe("Alice");
+    expect(result.operatorMap.get("[EMAIL_ADDRESS_1]")).toBe("mask");
+  });
+
+  test("mask operator rejects a string-only selection", () => {
+    const text = "Alice";
+    const config = JSON.parse(
+      '{"operators":{"person":"mask"},"redactString":"[REDACTED]"}',
+    );
+
+    expect(() => redactText(text, [at(text, "person", text)], config)).toThrow(
+      "mask requires a tagged operator configuration",
+    );
+  });
 });
 
 describe("exportRedactionKey", () => {

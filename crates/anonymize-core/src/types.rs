@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::{error, fmt};
+use unicode_segmentation::UnicodeSegmentation;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -12,6 +13,9 @@ pub enum Error {
   InvalidSpan {
     start: u32,
     end: u32,
+  },
+  InvalidMaskConfig {
+    reason: String,
   },
   ByteOffsetOutOfBounds {
     offset: u32,
@@ -67,6 +71,9 @@ impl fmt::Display for Error {
       }
       Self::InvalidSpan { start, end } => {
         write!(formatter, "Invalid entity span: {start}..{end}")
+      }
+      Self::InvalidMaskConfig { reason } => {
+        write!(formatter, "Invalid mask operator configuration: {reason}")
       }
       Self::ByteOffsetOutOfBounds { offset } => {
         write!(formatter, "Byte offset is out of bounds: {offset}")
@@ -194,12 +201,97 @@ pub enum OperatorType {
   Replace,
   Redact,
   Keep,
+  Mask,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MaskDirection {
+  Start,
+  End,
+}
+
+const MAX_MASKING_CHARACTER_BYTES: usize = 64;
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MaskConfig {
+  masking_character: String,
+  characters_to_mask: u32,
+  direction: MaskDirection,
+}
+
+impl MaskConfig {
+  pub fn new(
+    masking_character: impl Into<String>,
+    characters_to_mask: u32,
+    direction: MaskDirection,
+  ) -> Result<Self> {
+    let masking_character = masking_character.into();
+    if masking_character.len() > MAX_MASKING_CHARACTER_BYTES {
+      return Err(Error::InvalidMaskConfig {
+        reason: format!(
+          "masking_character must not exceed {MAX_MASKING_CHARACTER_BYTES} UTF-8 bytes"
+        ),
+      });
+    }
+    if masking_character.graphemes(true).count() != 1 {
+      return Err(Error::InvalidMaskConfig {
+        reason: String::from(
+          "masking_character must contain exactly one grapheme cluster",
+        ),
+      });
+    }
+    if characters_to_mask == 0 {
+      return Err(Error::InvalidMaskConfig {
+        reason: String::from("characters_to_mask must be greater than zero"),
+      });
+    }
+    Ok(Self {
+      masking_character,
+      characters_to_mask,
+      direction,
+    })
+  }
+
+  #[must_use]
+  pub fn masking_character(&self) -> &str {
+    &self.masking_character
+  }
+
+  #[must_use]
+  pub const fn characters_to_mask(&self) -> u32 {
+    self.characters_to_mask
+  }
+
+  #[must_use]
+  pub const fn direction(&self) -> MaskDirection {
+    self.direction
+  }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum Operator {
+  Replace,
+  Redact,
+  Keep,
+  Mask(MaskConfig),
+}
+
+impl Operator {
+  #[must_use]
+  pub const fn operator_type(&self) -> OperatorType {
+    match self {
+      Self::Replace => OperatorType::Replace,
+      Self::Redact => OperatorType::Redact,
+      Self::Keep => OperatorType::Keep,
+      Self::Mask(_) => OperatorType::Mask,
+    }
+  }
 }
 
 #[derive(bon::Builder, Clone, Debug, Eq, PartialEq)]
 pub struct OperatorConfig {
   #[builder(default)]
-  pub operators: BTreeMap<String, OperatorType>,
+  pub operators: BTreeMap<String, Operator>,
   #[builder(default = String::from("[REDACTED]"))]
   pub redact_string: String,
 }

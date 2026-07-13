@@ -34,6 +34,8 @@ __all__ = [
     "__version__",
     "OperatorEntry",
     "OperatorConfig",
+    "OperatorSelection",
+    "MaskOperatorConfig",
     "CallerDetection",
     "CALLER_DETECTION_CONTRACT_VERSION",
     "DiagnosticsBatchCallback",
@@ -48,6 +50,9 @@ __all__ = [
     "RedactionEntry",
     "RedactionResult",
     "StaticRedactionResult",
+    "assemble_static_search_compressed_package_bytes",
+    "assemble_static_search_config_json",
+    "assemble_static_search_package_bytes",
     "available_default_native_pipeline_languages",
     "create_native_pipeline_from_default_package",
     "diagnostics_json",
@@ -77,7 +82,17 @@ __all__ = [
 
 BytesLike = bytes | bytearray | memoryview
 PathLikeString = str | PathLike[str]
-OperatorConfig = Mapping[str, str] | str | None
+
+
+class MaskOperatorConfig(TypedDict):
+    type: Literal["mask"]
+    masking_character: str
+    characters_to_mask: int
+    direction: Literal["start", "end"]
+
+
+OperatorSelection = Literal["replace", "redact", "keep"] | MaskOperatorConfig
+OperatorConfig = Mapping[str, OperatorSelection] | str | None
 CALLER_DETECTION_CONTRACT_VERSION = 2
 
 

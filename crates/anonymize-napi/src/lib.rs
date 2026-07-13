@@ -192,7 +192,7 @@ pub struct JsPreparedSearchConfig {
 
 #[napi(object)]
 pub struct JsOperatorConfig {
-  pub operators: Option<BTreeMap<String, String>>,
+  pub operators: Option<serde_json::Value>,
   pub redact_string: Option<String>,
 }
 
@@ -911,9 +911,7 @@ impl NativePreparedSearch {
     full_text: String,
     operators: Option<JsOperatorConfig>,
   ) -> Result<JsStaticRedactionResult> {
-    let operators =
-      operator_config_from_binding(operators.map(to_binding_operator_config))
-        .map_err(|error| to_napi_contract_error(&error))?;
+    let operators = operator_config_from_js(operators)?;
     let result = self
       .inner
       .redact_static_entities(&full_text, &operators)
@@ -930,9 +928,7 @@ impl NativePreparedSearch {
     full_text: String,
     operators: Option<JsOperatorConfig>,
   ) -> Result<String> {
-    let operators =
-      operator_config_from_binding(operators.map(to_binding_operator_config))
-        .map_err(|error| to_napi_contract_error(&error))?;
+    let operators = operator_config_from_js(operators)?;
     let result = self
       .inner
       .redact_static_entities(&full_text, &operators)
@@ -956,10 +952,7 @@ impl NativePreparedSearch {
     .map_err(|error| to_napi_serde_error(&error))?;
     let detections = caller_detections_from_utf16_binding(request, &full_text)
       .map_err(|error| to_napi_contract_error(&error))?;
-    let operators = operator_config_from_binding(
-      options.operators.map(to_binding_operator_config),
-    )
-    .map_err(|error| to_napi_contract_error(&error))?;
+    let operators = operator_config_from_js(options.operators)?;
     let result = self
       .inner
       .redact_static_entities_with_caller_detections(
@@ -988,10 +981,7 @@ impl NativePreparedSearch {
     .map_err(|error| to_napi_serde_error(&error))?;
     let detections = caller_detections_from_utf16_binding(request, &full_text)
       .map_err(|error| to_napi_contract_error(&error))?;
-    let operators = operator_config_from_binding(
-      options.operators.map(to_binding_operator_config),
-    )
-    .map_err(|error| to_napi_contract_error(&error))?;
+    let operators = operator_config_from_js(options.operators)?;
     let mut result = self
       .inner
       .redact_static_entities_with_caller_detections_and_diagnostics(
@@ -1019,9 +1009,7 @@ impl NativePreparedSearch {
     operators: Option<JsOperatorConfig>,
     on_event: Function<'_, (String,), ()>,
   ) -> Result<String> {
-    let operators =
-      operator_config_from_binding(operators.map(to_binding_operator_config))
-        .map_err(|error| to_napi_contract_error(&error))?;
+    let operators = operator_config_from_js(operators)?;
     let result = self
       .inner
       .redact_static_entities_with_result_observer(
@@ -1049,9 +1037,7 @@ impl NativePreparedSearch {
     full_text: String,
     operators: Option<JsOperatorConfig>,
   ) -> Result<String> {
-    let operators =
-      operator_config_from_binding(operators.map(to_binding_operator_config))
-        .map_err(|error| to_napi_contract_error(&error))?;
+    let operators = operator_config_from_js(operators)?;
     self.redact_static_entities_diagnostics_json_inner(
       &full_text,
       &operators,
@@ -1066,9 +1052,7 @@ impl NativePreparedSearch {
     full_text: String,
     operators: Option<JsOperatorConfig>,
   ) -> Result<String> {
-    let operators =
-      operator_config_from_binding(operators.map(to_binding_operator_config))
-        .map_err(|error| to_napi_contract_error(&error))?;
+    let operators = operator_config_from_js(operators)?;
     self.redact_static_entities_diagnostics_json_inner(
       &full_text,
       &operators,
@@ -1084,9 +1068,7 @@ impl NativePreparedSearch {
     operators: Option<JsOperatorConfig>,
     on_batch: Function<'_, (String,), ()>,
   ) -> Result<String> {
-    let operators =
-      operator_config_from_binding(operators.map(to_binding_operator_config))
-        .map_err(|error| to_napi_contract_error(&error))?;
+    let operators = operator_config_from_js(operators)?;
     emit_prepare_diagnostics_batch(&self.prepare_diagnostics, &on_batch)?;
     let mut result = self
       .inner
@@ -1322,11 +1304,24 @@ fn with_prepared_search_cache<T>(
 
 fn to_binding_operator_config(
   config: JsOperatorConfig,
-) -> BindingOperatorConfig {
-  BindingOperatorConfig {
-    operators: config.operators,
+) -> Result<BindingOperatorConfig> {
+  let operators = config
+    .operators
+    .map(serde_json::from_value)
+    .transpose()
+    .map_err(|error| Error::from_reason(error.to_string()))?;
+  Ok(BindingOperatorConfig {
+    operators,
     redact_string: config.redact_string,
-  }
+  })
+}
+
+fn operator_config_from_js(
+  config: Option<JsOperatorConfig>,
+) -> Result<OperatorConfig> {
+  let config = config.map(to_binding_operator_config).transpose()?;
+  operator_config_from_binding(config)
+    .map_err(|error| to_napi_contract_error(&error))
 }
 
 fn to_js_static_redaction_result(

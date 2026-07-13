@@ -1,10 +1,10 @@
 import type { NativePreparedSearchConfig } from "./native-search-config";
-import type { OperatorType } from "./types";
+import type { OperatorSelection, OperatorType } from "./types";
 
 export type { NativePreparedSearchConfig } from "./native-search-config";
 
 type NativeBindingOperatorConfig = {
-  operators?: Record<string, OperatorType>;
+  operators?: Record<string, OperatorSelection>;
   redactString?: string;
 };
 
@@ -161,7 +161,7 @@ export type NativeAnonymizeBinding = {
 };
 
 export type NativeOperatorConfig = {
-  operators?: Record<string, OperatorType>;
+  operators?: Record<string, OperatorSelection>;
   redactString?: string;
 };
 

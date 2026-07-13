@@ -204,6 +204,35 @@ describe("createNativePipelineFromConfig", () => {
     expect(kept.redaction.entityCount).toBe(1);
     expect(kept.redaction.redactionMap.size).toBe(0);
     expect(kept.redaction.operatorMap.get("[PERSON_1]")).toBe("keep");
+
+    const masked = pipeline.redactTextWithCallerDetections(
+      "A👨‍👩‍👧‍👦e\u{301}Z signed.",
+      {
+        detections: [
+          {
+            start: 0,
+            end: 15,
+            label: "person",
+            score: 0.9,
+            providerId: "test-provider",
+            detectionId: "person-mask-1",
+          },
+        ],
+        operators: {
+          operators: {
+            person: {
+              type: "mask",
+              maskingCharacter: "●",
+              charactersToMask: 2,
+              direction: "end",
+            },
+          },
+        },
+      },
+    );
+    expect(masked.redaction.redactedText).toBe("A👨‍👩‍👧‍👦●● signed.");
+    expect(masked.redaction.redactionMap.size).toBe(0);
+    expect(masked.redaction.operatorMap.get("[PERSON_1]")).toBe("mask");
   });
 });
 

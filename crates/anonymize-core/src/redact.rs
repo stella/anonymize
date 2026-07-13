@@ -1,12 +1,14 @@
 use std::borrow::Cow;
 use std::collections::HashSet;
+use unicode_segmentation::UnicodeSegmentation;
 
 use crate::byte_offsets::ByteOffsets;
 use crate::normalize::placeholder_fallback;
 use crate::placeholders::build_placeholder_map;
 use crate::types::{
-  Entity, EntityKind, OperatorConfig, OperatorEntry, OperatorType,
-  RedactionEntry, RedactionResult, Result,
+  Entity, EntityKind, MaskConfig, MaskDirection, Operator, OperatorConfig,
+  OperatorEntry, OperatorType, PlaceholderMap, RedactionEntry, RedactionResult,
+  Result,
 };
 
 pub fn redact_text(
@@ -29,87 +31,59 @@ pub fn redact_text(
   sorted.sort_by_key(|span| span.entity.start);
 
   let mut kept = Vec::<RedactionSpan<'_>>::new();
+  let mut masked = Vec::<RedactionSpan<'_>>::new();
   let mut redacted = Vec::<RedactionSpan<'_>>::new();
   for span in sorted {
     match operator_for(config, &span.entity.label) {
-      OperatorType::Keep => kept.push(span),
-      OperatorType::Replace | OperatorType::Redact => redacted.push(span),
+      Operator::Keep => kept.push(span),
+      Operator::Mask(_) => masked.push(span),
+      Operator::Replace | Operator::Redact => redacted.push(span),
     }
   }
   // Existing contract remains within each operator class: the first accepted
   // span wins overlaps. Kept spans are resolved separately so they cannot
   // suppress a nested span that must still be redacted.
   let kept = non_overlapping_spans(kept);
+  let masked = non_overlapping_spans(masked);
   let redacted = non_overlapping_spans(redacted);
+  let mask_replacements = mask_replacement_spans(&masked, config)?;
+  let mask_replacements =
+    remove_redacted_mask_overlaps(mask_replacements, &redacted);
 
-  let mut redacted_text = String::with_capacity(full_text.len());
-  let mut redaction_map = Vec::<RedactionEntry>::new();
   let mut operator_map = Vec::<OperatorEntry>::new();
-  let mut redacted_placeholders = HashSet::<String>::new();
-  let mut cursor = 0;
 
-  let mut operator_spans = kept.iter().chain(&redacted).collect::<Vec<_>>();
+  let mut operator_spans = kept
+    .iter()
+    .chain(&masked)
+    .chain(&redacted)
+    .collect::<Vec<_>>();
   operator_spans.sort_by_key(|span| span.entity.start);
   for span in operator_spans {
     let placeholder = placeholder_map.get_entity(span.entity).map_or_else(
       || Cow::Owned(placeholder_fallback(&span.entity.label)),
       Cow::Borrowed,
     );
-    let operator = operator_for(config, &span.entity.label);
+    let operator = operator_for(config, &span.entity.label).operator_type();
     set_operator_entry(&mut operator_map, &placeholder, operator);
   }
 
-  for span in &redacted {
-    let entity = &span.entity;
-    if entity.start > cursor {
-      redacted_text.push_str(source_slice(
-        full_text,
-        &offsets,
-        cursor,
-        entity.start,
-      )?);
-    }
-
-    let placeholder = placeholder_map.get_entity(entity).map_or_else(
-      || Cow::Owned(placeholder_fallback(&entity.label)),
-      Cow::Borrowed,
-    );
-    let operator = operator_for(config, &entity.label);
-    match operator {
-      OperatorType::Replace => redacted_text.push_str(&placeholder),
-      OperatorType::Redact => redacted_text.push_str(&config.redact_string),
-      OperatorType::Keep => {}
-    }
-
-    if operator == OperatorType::Replace
-      && !redacted_placeholders.contains(placeholder.as_ref())
-    {
-      let placeholder = placeholder.into_owned();
-      redacted_placeholders.insert(placeholder.clone());
-      redaction_map.push(RedactionEntry {
-        placeholder,
-        original: redaction_original_text(span),
-      });
-    }
-
-    cursor = entity.end;
-  }
-
-  let full_text_len = offsets.len()?;
-  if cursor < full_text_len {
-    redacted_text.push_str(source_slice(
-      full_text,
-      &offsets,
-      cursor,
-      full_text_len,
-    )?);
-  }
+  let rendered = render_selected_spans(&RenderOptions {
+    full_text,
+    offsets: &offsets,
+    placeholder_map: &placeholder_map,
+    config,
+    redacted: &redacted,
+    mask_replacements: &mask_replacements,
+  })?;
 
   Ok(RedactionResult {
-    redacted_text,
-    redaction_map,
+    redacted_text: rendered.text,
+    redaction_map: rendered.map,
     operator_map,
-    entity_count: kept.len().saturating_add(redacted.len()),
+    entity_count: kept
+      .len()
+      .saturating_add(masked.len())
+      .saturating_add(redacted.len()),
   })
 }
 
@@ -130,6 +104,116 @@ pub fn deanonymise(
 struct RedactionSpan<'a> {
   entity: &'a Entity,
   source_text: &'a str,
+}
+
+struct MaskReplacementSpan<'a> {
+  start: u32,
+  end: u32,
+  masking_character: &'a str,
+}
+
+struct RenderOptions<'text, 'config, 'borrow> {
+  full_text: &'text str,
+  offsets: &'borrow ByteOffsets<'text>,
+  placeholder_map: &'borrow PlaceholderMap,
+  config: &'config OperatorConfig,
+  redacted: &'borrow [RedactionSpan<'text>],
+  mask_replacements: &'borrow [MaskReplacementSpan<'config>],
+}
+
+struct RenderedRedactions {
+  text: String,
+  map: Vec<RedactionEntry>,
+}
+
+#[derive(Clone, Copy)]
+enum NextSpan<'borrow, 'text, 'config> {
+  Redacted(&'borrow RedactionSpan<'text>),
+  Mask(&'borrow MaskReplacementSpan<'config>),
+}
+
+fn render_selected_spans(
+  options: &RenderOptions<'_, '_, '_>,
+) -> Result<RenderedRedactions> {
+  let mut text = String::with_capacity(options.full_text.len());
+  let mut map = Vec::<RedactionEntry>::new();
+  let mut placeholders = HashSet::<String>::new();
+  let mut cursor = 0;
+  let mut redacted_index = 0;
+  let mut mask_index = 0;
+
+  loop {
+    let next = match (
+      options.redacted.get(redacted_index),
+      options.mask_replacements.get(mask_index),
+    ) {
+      (Some(redacted), Some(mask)) if redacted.entity.start <= mask.start => {
+        NextSpan::Redacted(redacted)
+      }
+      (_, Some(mask)) => NextSpan::Mask(mask),
+      (Some(redacted), None) => NextSpan::Redacted(redacted),
+      (None, None) => break,
+    };
+    let (start, end) = match next {
+      NextSpan::Redacted(span) => (span.entity.start, span.entity.end),
+      NextSpan::Mask(span) => (span.start, span.end),
+    };
+    if start > cursor {
+      text.push_str(source_slice(
+        options.full_text,
+        options.offsets,
+        cursor,
+        start,
+      )?);
+    }
+
+    match next {
+      NextSpan::Mask(span) => {
+        text.push_str(span.masking_character);
+        mask_index = mask_index.saturating_add(1);
+      }
+      NextSpan::Redacted(span) => {
+        let entity = span.entity;
+        let placeholder =
+          options.placeholder_map.get_entity(entity).map_or_else(
+            || Cow::Owned(placeholder_fallback(&entity.label)),
+            Cow::Borrowed,
+          );
+        let operator = operator_for(options.config, &entity.label);
+        match operator {
+          Operator::Replace => text.push_str(&placeholder),
+          Operator::Redact => text.push_str(&options.config.redact_string),
+          Operator::Mask(mask) => {
+            text.push_str(&mask_text(span.source_text, mask));
+          }
+          Operator::Keep => {}
+        }
+        if operator == &Operator::Replace
+          && !placeholders.contains(placeholder.as_ref())
+        {
+          let placeholder = placeholder.into_owned();
+          placeholders.insert(placeholder.clone());
+          map.push(RedactionEntry {
+            placeholder,
+            original: redaction_original_text(span),
+          });
+        }
+        redacted_index = redacted_index.saturating_add(1);
+      }
+    }
+    cursor = end;
+  }
+
+  let full_text_len = options.offsets.len()?;
+  if cursor < full_text_len {
+    text.push_str(source_slice(
+      options.full_text,
+      options.offsets,
+      cursor,
+      full_text_len,
+    )?);
+  }
+  Ok(RenderedRedactions { text, map })
 }
 
 fn non_overlapping_spans(
@@ -188,12 +272,104 @@ fn source_slice<'a>(
     .ok_or(crate::types::Error::InvalidSpan { start, end })
 }
 
-fn operator_for(config: &OperatorConfig, label: &str) -> OperatorType {
-  config
-    .operators
-    .get(label)
-    .copied()
-    .unwrap_or(OperatorType::Replace)
+const DEFAULT_OPERATOR: Operator = Operator::Replace;
+
+fn operator_for<'a>(config: &'a OperatorConfig, label: &str) -> &'a Operator {
+  config.operators.get(label).unwrap_or(&DEFAULT_OPERATOR)
+}
+
+fn mask_replacement_spans<'a>(
+  spans: &[RedactionSpan<'_>],
+  config: &'a OperatorConfig,
+) -> Result<Vec<MaskReplacementSpan<'a>>> {
+  let mut replacements = Vec::new();
+  for span in spans {
+    let Operator::Mask(mask_config) = operator_for(config, &span.entity.label)
+    else {
+      continue;
+    };
+    let grapheme_count = span.source_text.graphemes(true).count();
+    let characters_to_mask = usize::try_from(mask_config.characters_to_mask())
+      .unwrap_or(usize::MAX)
+      .min(grapheme_count);
+    let mask_from = grapheme_count.saturating_sub(characters_to_mask);
+
+    for (index, (relative_start, grapheme)) in
+      span.source_text.grapheme_indices(true).enumerate()
+    {
+      let should_mask = match mask_config.direction() {
+        MaskDirection::Start => index < characters_to_mask,
+        MaskDirection::End => index >= mask_from,
+      };
+      if !should_mask {
+        continue;
+      }
+      replacements.push(MaskReplacementSpan {
+        start: checked_byte_offset(span.entity.start, relative_start)?,
+        end: checked_byte_offset(
+          span.entity.start,
+          relative_start.saturating_add(grapheme.len()),
+        )?,
+        masking_character: mask_config.masking_character(),
+      });
+    }
+  }
+  Ok(replacements)
+}
+
+fn checked_byte_offset(base: u32, relative: usize) -> Result<u32> {
+  let relative = u32::try_from(relative).map_err(|_| {
+    crate::types::Error::ByteOffsetOutOfBounds { offset: u32::MAX }
+  })?;
+  base
+    .checked_add(relative)
+    .ok_or(crate::types::Error::ByteOffsetOutOfBounds { offset: u32::MAX })
+}
+
+fn remove_redacted_mask_overlaps<'a>(
+  replacements: Vec<MaskReplacementSpan<'a>>,
+  redacted: &[RedactionSpan<'_>],
+) -> Vec<MaskReplacementSpan<'a>> {
+  let mut result = Vec::with_capacity(replacements.len());
+  let mut redacted_index = 0;
+  for replacement in replacements {
+    while redacted
+      .get(redacted_index)
+      .is_some_and(|span| span.entity.end <= replacement.start)
+    {
+      redacted_index = redacted_index.saturating_add(1);
+    }
+    let overlaps = redacted.get(redacted_index).is_some_and(|span| {
+      span.entity.start < replacement.end && replacement.start < span.entity.end
+    });
+    if !overlaps {
+      result.push(replacement);
+    }
+  }
+  result
+}
+
+fn mask_text(text: &str, config: &MaskConfig) -> String {
+  let grapheme_count = text.graphemes(true).count();
+  let characters_to_mask = usize::try_from(config.characters_to_mask())
+    .unwrap_or(usize::MAX)
+    .min(grapheme_count);
+  let mask_from = grapheme_count.saturating_sub(characters_to_mask);
+  let mut masked = String::with_capacity(text.len());
+
+  for (index, grapheme) in text.graphemes(true).enumerate() {
+    let should_mask = match config.direction() {
+      MaskDirection::Start => index < characters_to_mask,
+      MaskDirection::End => index >= mask_from,
+    };
+    if should_mask {
+      masked.push_str(config.masking_character());
+    } else {
+      masked.push_str(grapheme);
+    }
+  }
+
+  masked
 }
 
 fn set_operator_entry(
