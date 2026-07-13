@@ -1,5 +1,6 @@
 use crate::diagnostics::{DiagnosticEvent, StaticRedactionDiagnostics};
 use crate::resolution::CallerDetection;
+use crate::session::RedactionSession;
 use crate::types::{OperatorConfig, Result};
 
 mod artifacts;
@@ -51,6 +52,11 @@ pub struct PreparedEngine {
 pub struct CallerRedactionOptions<'a> {
   pub operators: &'a OperatorConfig,
   pub detections: &'a [CallerDetection],
+}
+
+pub struct PreparedSessionRedactionOptions<'a> {
+  pub operators: &'a OperatorConfig,
+  pub session: &'a mut RedactionSession,
 }
 
 impl PreparedEngine {
@@ -110,6 +116,31 @@ impl PreparedEngine {
       operators,
       &[],
       None,
+      &mut event_stream,
+      &mut result_stream,
+    )
+  }
+
+  /// Redacts prepared detections with stable cross-document placeholders.
+  ///
+  /// Session state is updated only when detection, resolution, and redaction all
+  /// succeed.
+  pub fn redact_static_entities_with_session(
+    &self,
+    full_text: &str,
+    options: PreparedSessionRedactionOptions<'_>,
+  ) -> Result<StaticRedactionResult> {
+    let PreparedSessionRedactionOptions { operators, session } = options;
+    let mut event_stream = DiagnosticEventStream::none();
+    let mut result_stream = StaticRedactionResultStream::none();
+    self.redact_static_entities_with_session_inner(
+      full_text,
+      operators,
+      &[],
+      redaction_phase::StaticRedactionContext {
+        session: Some(session),
+        diagnostics: None,
+      },
       &mut event_stream,
       &mut result_stream,
     )

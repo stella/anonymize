@@ -13,10 +13,10 @@ use stella_anonymize_core::{
   HotwordRule, HotwordRuleData, LegalFormData, LiteralSearchOptions,
   MagnitudeSuffixData, MonetaryData, OperatorConfig, PatternSlice,
   PreparedEngine, PreparedEngineArtifacts, PreparedEngineConfig,
-  PreparedEngineSlices, RegexMatchMeta, RegexSearchOptions, SearchOptions,
-  SearchPattern, SourceDetail, TriggerData, TriggerRule, TriggerStrategy,
-  TriggerValidation, WrittenAmountPatternData, ZoneData, ZonePatternData,
-  ZoneSigningClauseData,
+  PreparedEngineSlices, PreparedSessionRedactionOptions, RedactionSession,
+  RegexMatchMeta, RegexSearchOptions, SearchOptions, SearchPattern, SessionId,
+  SourceDetail, TriggerData, TriggerRule, TriggerStrategy, TriggerValidation,
+  WrittenAmountPatternData, ZoneData, ZonePatternData, ZoneSigningClauseData,
 };
 use support::prepared_config;
 
@@ -2405,6 +2405,85 @@ fn prepared_engine_applies_allowed_labels_before_redaction() {
 
   assert_eq!(result.redaction.redacted_text, "Alice signed.");
   assert!(result.resolved_entities.is_empty());
+}
+
+#[test]
+fn prepared_engine_reuses_session_placeholders_across_documents() {
+  let prepared = PreparedEngine::new(prepared_config! {
+    regex_patterns: vec![SearchPattern::Regex(String::from(r"\b(?:Alice|Bob)\b"))],
+    allowed_labels: vec![String::from("person")],
+    slices: PreparedEngineSlices {
+      regex: PatternSlice { start: 0, end: 1 },
+      ..PreparedEngineSlices::default()
+    },
+    regex_meta: vec![RegexMatchMeta::new("person", 1.0)],
+    ..empty_config(PreparedEngineSlices::default())
+  })
+  .unwrap();
+  let mut session =
+    RedactionSession::new(SessionId::new("case_1").expect("valid id"));
+
+  let first = prepared
+    .redact_static_entities_with_session(
+      "Alice signed.",
+      PreparedSessionRedactionOptions {
+        operators: &OperatorConfig::default(),
+        session: &mut session,
+      },
+    )
+    .expect("first document should redact");
+  let second = prepared
+    .redact_static_entities_with_session(
+      "Bob met Alice.",
+      PreparedSessionRedactionOptions {
+        operators: &OperatorConfig::default(),
+        session: &mut session,
+      },
+    )
+    .expect("second document should redact");
+
+  assert_eq!(first.redaction.redacted_text, "[PERSON_case%5F1_1] signed.");
+  assert_eq!(
+    second.redaction.redacted_text,
+    "[PERSON_case%5F1_2] met [PERSON_case%5F1_1]."
+  );
+  assert_eq!(session.mapping_count(), 2);
+}
+
+#[test]
+fn prepared_engine_session_update_is_transactional() {
+  let prepared = PreparedEngine::new(prepared_config! {
+    regex_patterns: vec![SearchPattern::Regex(String::from("Alice"))],
+    allowed_labels: vec![String::from("person")],
+    slices: PreparedEngineSlices {
+      regex: PatternSlice { start: 0, end: 1 },
+      ..PreparedEngineSlices::default()
+    },
+    regex_meta: vec![RegexMatchMeta::new("person", 1.0)],
+    ..empty_config(PreparedEngineSlices::default())
+  })
+  .unwrap();
+  let mut session =
+    RedactionSession::new(SessionId::new("case_1").expect("valid id"));
+  let before = session.clone();
+
+  let error = prepared
+    .redact_static_entities_with_session(
+      "[PERSON_case%5F1_1] Alice signed.",
+      PreparedSessionRedactionOptions {
+        operators: &OperatorConfig::default(),
+        session: &mut session,
+      },
+    )
+    .expect_err("reserved session placeholder should fail");
+
+  assert_eq!(
+    error,
+    Error::SessionPlaceholderCollision {
+      placeholder: String::from("[PERSON_case%5F1_1]")
+    }
+  );
+  assert_eq!(session, before);
 }
 
 #[test]
