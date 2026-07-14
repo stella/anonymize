@@ -151,6 +151,20 @@ fn session_restoration_rejects_unknown_owned_placeholders() {
 }
 
 #[test]
+fn session_restoration_bounds_work_for_unmatched_opening_brackets() {
+  let session =
+    RedactionSession::new(SessionId::new("bounded").expect("valid id"));
+  let input = format!("{}]", "[".repeat(1_000_000));
+
+  assert_eq!(
+    session
+      .restore_text(&input, None)
+      .expect("malformed non-placeholder text should remain unchanged"),
+    input,
+  );
+}
+
+#[test]
 fn session_restoration_bounds_input_and_expanded_output() {
   const RESTORE_TEXT_MAX_BYTES: usize = 0x0100_0000;
   const ORIGINAL_BYTES: usize = 0x0010_0000;

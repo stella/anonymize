@@ -101,27 +101,29 @@ pub(crate) fn collect_placeholder_counts(
 pub(crate) fn reserved_placeholder_spans(
   text: &str,
 ) -> impl Iterator<Item = (usize, usize)> + '_ {
-  let mut cursor = 0;
+  let mut characters = text.char_indices();
+  let mut start = None;
   std::iter::from_fn(move || {
     loop {
-      let remaining = text.get(cursor..)?;
-      let start = cursor.checked_add(remaining.find('[')?)?;
-      let inner_start = start.checked_add('['.len_utf8())?;
-      let after_open = text.get(inner_start..)?;
-      let Some(relative_end) = after_open.find(']') else {
-        cursor = text.len();
-        return None;
+      let (index, character) = characters.next()?;
+      if character == '[' {
+        start = Some(index);
+        continue;
+      }
+      if character != ']' {
+        continue;
+      }
+      let Some(open) = start.take() else {
+        continue;
       };
-      let inner_end = inner_start.checked_add(relative_end)?;
-      let end = inner_end.checked_add(']'.len_utf8())?;
+      let inner_start = open.checked_add('['.len_utf8())?;
+      let end = index.checked_add(']'.len_utf8())?;
       if text
-        .get(inner_start..inner_end)
+        .get(inner_start..index)
         .is_some_and(is_placeholder_inner)
       {
-        cursor = end;
-        return Some((start, end));
+        return Some((open, end));
       }
-      cursor = inner_start;
     }
   })
 }
