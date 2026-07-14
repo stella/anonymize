@@ -141,6 +141,30 @@ describe("restoreDocxText", () => {
         expectedSessionId: "matter_1",
       }),
     ).toThrow("incomplete placeholder");
+
+    const incompleteBeforeText = docx(
+      "<w:p><w:r><w:t>[PERSON_matter%5F1_1 signed [note</w:t></w:r></w:p>",
+    );
+    expect(() =>
+      restoreDocxText({
+        document: incompleteBeforeText,
+        session: fakeSession(),
+        expectedSessionId: "matter_1",
+      }),
+    ).toThrow("incomplete placeholder");
+  });
+
+  test("bounds work for repeated unmatched opening brackets", () => {
+    const text = "[".repeat(100_000);
+    const document = docx(`<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`);
+    const result = restoreDocxText({
+      document,
+      session: fakeSession(),
+      expectedSessionId: "matter_1",
+    });
+
+    expect(result.document).toEqual(document);
+    expect(result.restoredPlaceholderCount).toBe(0);
   });
 
   test("leaves other namespaces unchanged and still checks session availability", () => {

@@ -45,6 +45,26 @@ const looksLikeOwnedPlaceholder = (
   return count.length > 0 && /^\d+$/u.test(count);
 };
 
+const startsLikeOwnedPlaceholder = (
+  value: string,
+  encodedSessionId: string,
+): boolean => {
+  const marker = `_${encodedSessionId}_`;
+  let markerIndex = value.indexOf(marker, 1);
+  while (markerIndex !== -1) {
+    const firstCountCharacter = value.at(markerIndex + marker.length);
+    if (
+      firstCountCharacter !== undefined &&
+      firstCountCharacter >= "0" &&
+      firstCountCharacter <= "9"
+    ) {
+      return true;
+    }
+    markerIndex = value.indexOf(marker, markerIndex + 1);
+  }
+  return false;
+};
+
 type PlanBlockRestorationOptions = {
   text: string;
   encodedSessionId: string;
@@ -59,29 +79,29 @@ const planBlockRestoration = ({
   budget,
 }: PlanBlockRestorationOptions): DocxTextReplacement[] => {
   const replacements: DocxTextReplacement[] = [];
-  let cursor = 0;
-  while (cursor < text.length) {
-    const start = text.indexOf("[", cursor);
-    if (start === -1) {
-      break;
-    }
-    const nextOpen = text.indexOf("[", start + 1);
-    const end = text.indexOf("]", start + 1);
-    if (nextOpen !== -1 && (end === -1 || nextOpen < end)) {
-      cursor = start + 1;
-      continue;
-    }
-    if (end === -1) {
-      const remainder = text.slice(start + 1);
-      if (looksLikeOwnedPlaceholder(remainder, encodedSessionId)) {
+  let start: number | undefined;
+  for (let cursor = 0; cursor < text.length; cursor += 1) {
+    const character = text.at(cursor);
+    if (character === "[") {
+      if (
+        start !== undefined &&
+        startsLikeOwnedPlaceholder(
+          text.slice(start + 1, cursor),
+          encodedSessionId,
+        )
+      ) {
         throw restorationError(
           DOCX_RESTORATION_ERROR_CODES.invalidPlaceholder,
           "DOCX text contains an incomplete placeholder for the expected session",
         );
       }
-      break;
+      start = cursor;
+      continue;
     }
-    const candidateEnd = end + 1;
+    if (character !== "]" || start === undefined) {
+      continue;
+    }
+    const candidateEnd = cursor + 1;
     const candidate = text.slice(start, candidateEnd);
     budget.candidateCount += 1;
     if (budget.candidateCount > DOCX_RESTORE_MAX_CANDIDATES) {
@@ -97,7 +117,7 @@ const planBlockRestoration = ({
           "DOCX session placeholder exceeds the maximum length",
         );
       }
-      cursor = candidateEnd;
+      start = undefined;
       continue;
     }
     const replacement = restoreCandidate(candidate);
@@ -111,7 +131,16 @@ const planBlockRestoration = ({
         "DOCX text contains an unknown placeholder for the expected session",
       );
     }
-    cursor = candidateEnd;
+    start = undefined;
+  }
+  if (
+    start !== undefined &&
+    startsLikeOwnedPlaceholder(text.slice(start + 1), encodedSessionId)
+  ) {
+    throw restorationError(
+      DOCX_RESTORATION_ERROR_CODES.invalidPlaceholder,
+      "DOCX text contains an incomplete placeholder for the expected session",
+    );
   }
   return replacements;
 };
