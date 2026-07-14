@@ -154,6 +154,13 @@ class PreparedRedactionSession:
     def mapping_count(self) -> int:
         return self._session.mapping_count()
 
+    def restore_text(
+        self,
+        full_text: str,
+        observed_at_epoch_seconds: int | None = None,
+    ) -> str:
+        return self._session.restore_text(full_text, observed_at_epoch_seconds)
+
     def to_plaintext_json(self) -> str:
         return self._session.to_plaintext_json()
 

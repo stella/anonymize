@@ -147,6 +147,10 @@ describe("createNativePipelineFromConfig", () => {
     if (placeholder === undefined) {
       throw new Error("Expected the session redaction to create a placeholder");
     }
+    expect(session.restoreText(`repeat ${placeholder}`)).toBe(
+      "repeat SECRET-42",
+    );
+    expect(session.restore_text(placeholder)).toBe("SECRET-42");
     const firstArchive = session.toEncryptedArchive(key);
     const secondArchive = session.to_encrypted_archive(key);
 
@@ -186,6 +190,23 @@ describe("createNativePipelineFromConfig", () => {
       expiresAtEpochSeconds: 200,
     });
     const lifecycleArchive = lifecycle.toEncryptedArchiveAt(key, 150);
+    const lifecycleRedaction = lifecycle.redactTextAt({
+      fullText: "code SECRET-42 end",
+      observedAtEpochSeconds: 150,
+    });
+    const lifecyclePlaceholder = [
+      ...lifecycleRedaction.redaction.redactionMap.keys(),
+    ].at(0);
+    if (lifecyclePlaceholder === undefined) {
+      throw new Error("Expected lifecycle session placeholder");
+    }
+    expect(lifecycle.restoreText(lifecyclePlaceholder, 150)).toBe("SECRET-42");
+    expect(() => lifecycle.restoreText(lifecyclePlaceholder)).toThrow(
+      "caller-supplied observation time",
+    );
+    expect(() => lifecycle.restoreText(lifecyclePlaceholder, 200)).toThrow(
+      "expired",
+    );
     expect(
       pipeline
         .restore_encrypted_redaction_session({

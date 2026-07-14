@@ -107,6 +107,35 @@ export type DocxRewriteResult = {
   appliedReplacementCount: number;
 };
 
+export type DocxRestorationSession = {
+  sessionId: () => string;
+  restoreText: (text: string, observedAtEpochSeconds?: number) => string;
+};
+
+export type RestoreDocxTextOptions = {
+  document: Uint8Array;
+  session: DocxRestorationSession;
+  expectedSessionId: string;
+  observedAtEpochSeconds?: number;
+};
+
+export type DocxRestorationResult = {
+  document: Uint8Array;
+  sessionId: string;
+  restoredBlockCount: number;
+  restoredPlaceholderCount: number;
+};
+
+export const DOCX_RESTORATION_ERROR_CODES = {
+  invalidPlaceholder: "invalid-placeholder",
+  invalidSession: "invalid-session",
+  restorationLimitExceeded: "restoration-limit-exceeded",
+  sessionMismatch: "session-mismatch",
+} as const;
+
+export type DocxRestorationErrorCode =
+  (typeof DOCX_RESTORATION_ERROR_CODES)[keyof typeof DOCX_RESTORATION_ERROR_CODES];
+
 export const DOCX_REWRITE_ERROR_CODES = {
   invalidReplacement: "invalid-replacement",
   rewriteLimitExceeded: "rewrite-limit-exceeded",

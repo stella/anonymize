@@ -35,6 +35,9 @@ pub enum Error {
   SessionSerialization {
     reason: String,
   },
+  SessionRestoration {
+    reason: String,
+  },
   InvalidSessionArchive {
     reason: String,
   },
@@ -115,6 +118,7 @@ impl fmt::Display for Error {
       | Self::SessionPlaceholderCollision { .. }
       | Self::SessionCounterExhausted { .. }
       | Self::SessionSerialization { .. }
+      | Self::SessionRestoration { .. }
       | Self::InvalidSessionArchive { .. }
       | Self::UnsupportedSessionArchiveVersion { .. }
       | Self::UnsupportedSessionArchiveAlgorithm { .. }
@@ -256,6 +260,12 @@ fn display_session_error(
     }
     Error::SessionSerialization { reason } => {
       display_session_serialization_error(formatter, reason)
+    }
+    Error::SessionRestoration { reason } => {
+      write!(
+        formatter,
+        "Could not restore redaction session text: {reason}"
+      )
     }
     Error::InvalidSessionArchive { reason } => {
       write!(formatter, "Invalid encrypted session archive: {reason}")

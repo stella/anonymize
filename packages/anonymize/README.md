@@ -76,7 +76,13 @@ keeping its mutable mapping state isolated from other sessions:
 const session = anonymizer.createRedactionSession("opaque_case_1");
 const first = session.redact_text(firstDocument);
 const second = session.redact_text(secondDocument);
+const restoredText = session.restoreText(first.redaction.redactedText);
 ```
+
+`restoreText()` replaces only complete placeholders owned by that active
+session. It performs one non-cascading pass, leaves other session namespaces
+unchanged, and rejects unknown placeholders in its own namespace. Pass the
+caller-supplied observation time as the second argument for lifecycle sessions.
 
 `session.toPlaintextJson()` supports deterministic in-memory transfer between
 runtime instances. Its output contains original personal data in plaintext: do
@@ -200,7 +206,8 @@ prepared = anonymize.preload_default_native_pipeline(
 result = prepared.redact_text(text, redact_string="***")
 
 session = prepared.create_redaction_session("opaque_case_1")
-session.redact_text(text)
+redacted = session.redact_text(text)
+restored_text = session.restore_text(redacted.redaction.redacted_text)
 archive = session.to_encrypted_archive(application_owned_32_byte_key)
 restored = prepared.restore_encrypted_redaction_session(
     archive,

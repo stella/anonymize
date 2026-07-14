@@ -102,6 +102,21 @@ impl PyPreparedRedactionSession {
     Ok(self.lock_session()?.mapping_count())
   }
 
+  #[pyo3(signature = (full_text, observed_at_epoch_seconds=None))]
+  fn restore_text(
+    &self,
+    full_text: &str,
+    observed_at_epoch_seconds: Option<u32>,
+  ) -> PyResult<String> {
+    self
+      .lock_session()?
+      .restore_text(
+        full_text,
+        observed_at_epoch_seconds.map(SessionTimestamp::from_epoch_seconds),
+      )
+      .map_err(|error| to_py_core_error(&error))
+  }
+
   fn to_plaintext_json(&self) -> PyResult<String> {
     self
       .lock_session()?

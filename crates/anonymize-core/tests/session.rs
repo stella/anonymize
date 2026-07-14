@@ -106,6 +106,121 @@ fn session_namespaces_are_isolated() {
 }
 
 #[test]
+fn session_restores_known_placeholders_without_touching_other_namespaces() {
+  let text = "Alice replied to Bob.";
+  let mut session =
+    RedactionSession::new(SessionId::new("matter_1").expect("valid id"));
+  let redacted = redact(RedactFixtureParams {
+    text,
+    entities: &[person(text, "Alice"), person(text, "Bob")],
+    config: &OperatorConfig::default(),
+    session: &mut session,
+  })
+  .expect("session should redact");
+  let input = format!(
+    "{} Then {}. Keep [PERSON_other%5Fmatter_1].",
+    redacted.redacted_text, "[PERSON_matter%5F1_1]"
+  );
+
+  assert_eq!(
+    session
+      .restore_text(&input, None)
+      .expect("known placeholders should restore"),
+    "Alice replied to Bob. Then Alice. Keep [PERSON_other%5Fmatter_1]."
+  );
+  assert_eq!(session.mapping_count(), 2);
+}
+
+#[test]
+fn session_restoration_rejects_unknown_owned_placeholders() {
+  let text = "Alice signed.";
+  let mut session =
+    RedactionSession::new(SessionId::new("matter_1").expect("valid id"));
+  redact(RedactFixtureParams {
+    text,
+    entities: &[person(text, "Alice")],
+    config: &OperatorConfig::default(),
+    session: &mut session,
+  })
+  .expect("session should redact");
+
+  let error = session
+    .restore_text("[PERSON_matter%5F1_99]", None)
+    .expect_err("unknown owned placeholders must fail closed");
+  assert!(matches!(error, Error::SessionRestoration { .. }));
+}
+
+#[test]
+fn session_restoration_bounds_input_and_expanded_output() {
+  const RESTORE_TEXT_MAX_BYTES: usize = 0x0100_0000;
+  const ORIGINAL_BYTES: usize = 0x0010_0000;
+
+  let mut session =
+    RedactionSession::new(SessionId::new("bounded").expect("valid id"));
+  assert!(matches!(
+    session.restore_text(&"x".repeat(RESTORE_TEXT_MAX_BYTES + 1), None),
+    Err(Error::SessionRestoration { .. })
+  ));
+
+  let original = "x".repeat(ORIGINAL_BYTES);
+  let original_end = u32::try_from(original.len()).expect("fixture fits u32");
+  let redacted = redact(RedactFixtureParams {
+    text: &original,
+    entities: &[Entity::detected(0, original_end, "person", &original)],
+    config: &OperatorConfig::default(),
+    session: &mut session,
+  })
+  .expect("bounded original should redact");
+  let expanded = redacted.redacted_text.repeat(17);
+  assert!(matches!(
+    session.restore_text(&expanded, None),
+    Err(Error::SessionRestoration { .. })
+  ));
+}
+
+#[test]
+fn session_restoration_enforces_lifecycle_without_mutation() {
+  let lifecycle = SessionLifecycle::new(timestamp(100), Some(timestamp(200)))
+    .expect("valid lifecycle");
+  let mut session = RedactionSession::new_with_lifecycle(
+    SessionId::new("matter_1").expect("valid id"),
+    lifecycle,
+  )
+  .expect("session should initialize");
+  let text = "Alice signed.";
+  redact_text_with_session(RedactTextWithSessionParams {
+    full_text: text,
+    entities: &[person(text, "Alice")],
+    config: &OperatorConfig::default(),
+    session: &mut session,
+    observed_at: Some(timestamp(150)),
+  })
+  .expect("active session should redact");
+  let before = session.clone();
+
+  for (observed_at, expected) in [
+    (None, Error::SessionObservationRequired),
+    (Some(timestamp(99)), Error::SessionNotYetActive),
+    (Some(timestamp(200)), Error::SessionExpired),
+  ] {
+    assert_eq!(
+      session
+        .restore_text("[PERSON_matter%5F1_1]", observed_at)
+        .expect_err("unavailable session should not restore"),
+      expected
+    );
+    assert_eq!(session, before);
+  }
+
+  assert_eq!(
+    session
+      .restore_text("[PERSON_matter%5F1_1]", Some(timestamp(150)))
+      .expect("active session should restore"),
+    "Alice"
+  );
+}
+
+#[test]
 fn session_placeholders_encode_label_and_namespace_boundaries() {
   let text = "Alice signed.";
   let entity_with_compound_label =
@@ -294,6 +409,10 @@ fn logical_deletion_clears_mappings_and_blocks_future_use() {
   assert_eq!(metadata.status(), SessionStatus::Deleted);
   assert_eq!(metadata.mapping_count(), 0);
   assert_eq!(session.to_plaintext_json(), Err(Error::SessionDeleted));
+  assert_eq!(
+    session.restore_text("[PERSON_matter%5F1_1]", None),
+    Err(Error::SessionDeleted)
+  );
   assert_eq!(session.delete(), Err(Error::SessionDeleted));
 
   let error = redact(RedactFixtureParams {
@@ -664,6 +783,34 @@ fn accepted_session_state_always_remains_transferable() {
 }
 
 proptest! {
+  #[test]
+  fn session_restoration_preserves_generated_boundaries(
+    prefix in proptest::string::string_regex("[a-z ]{0,32}")
+      .expect("test strategy should compile"),
+    suffix in proptest::string::string_regex("[a-z ]{0,32}")
+      .expect("test strategy should compile"),
+  ) {
+    let mut session = RedactionSession::new(
+      SessionId::new("property_session").expect("valid id"),
+    );
+    let text = "Alice signed.";
+    let redacted = redact(RedactFixtureParams {
+      text,
+      entities: &[person(text, "Alice")],
+      config: &OperatorConfig::default(),
+      session: &mut session,
+    })
+    .expect("generated session should redact");
+    let input = format!("{prefix}{}{suffix}", redacted.redacted_text);
+
+    assert_eq!(
+      session
+        .restore_text(&input, None)
+        .expect("generated text should restore"),
+      format!("{prefix}{text}{suffix}"),
+    );
+  }
+
   #[test]
   fn plaintext_state_round_trip_is_byte_stable(
     values in proptest::collection::vec(

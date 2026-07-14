@@ -161,6 +161,11 @@ closed. Rewrites preserve untouched package entries and XML by content, retain
 run formatting deterministically, and reject tracked-revision or digitally signed
 content until an explicit policy is available.
 
+`restoreDocxText()` accepts a live redaction session plus a mandatory expected
+session ID. It restores complete known placeholders across ordinary text runs
+without embedding the mapping in the DOCX; lifecycle, unknown-placeholder,
+revision, signature, and structural failures remain fail-closed.
+
 ### CLI
 
 No install needed:

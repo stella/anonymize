@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::placeholders::{
   PlaceholderIdentity, collect_placeholder_counts,
   collect_reserved_placeholders, placeholder_identity,
+  reserved_placeholder_spans,
 };
 use crate::types::{Entity, Error, PlaceholderMap, RedactionEntry, Result};
 
@@ -15,6 +16,7 @@ const MAX_SESSION_ID_BYTES: usize = 64;
 const MAX_SESSION_MAPPINGS: usize = 100_000;
 pub(crate) const MAX_SESSION_STATE_BYTES: usize = 0x0100_0000;
 const MAX_SESSION_VALUE_BYTES: usize = 0x0010_0000;
+const MAX_SESSION_RESTORE_TEXT_BYTES: usize = 0x0100_0000;
 const MAX_PLACEHOLDER_COMPONENT_BYTES: usize = 128;
 const EMPTY_SESSION_STATE_TEMPLATE: &str =
   r#"{"schema_version":1,"session_id":"","counters":{},"mappings":[]}"#;
@@ -307,6 +309,88 @@ impl RedactionSession {
   ) -> Result<String> {
     self.ensure_active(Some(observed_at))?;
     self.to_plaintext_json_unchecked()
+  }
+
+  /// Restores this session's complete placeholders in one non-cascading pass.
+  /// Unknown placeholders owned by the session fail closed.
+  pub fn restore_text(
+    &self,
+    text: &str,
+    observed_at: Option<SessionTimestamp>,
+  ) -> Result<String> {
+    self.ensure_active(observed_at)?;
+    if text.len() > MAX_SESSION_RESTORE_TEXT_BYTES {
+      return Err(Error::SessionRestoration {
+        reason: String::from("input exceeds the maximum byte length"),
+      });
+    }
+    let mut restored = String::with_capacity(text.len());
+    let mut cursor = 0;
+    for (start, end) in reserved_placeholder_spans(text) {
+      let Some(placeholder) = text.get(start..end) else {
+        return Err(Error::SessionRestoration {
+          reason: String::from("placeholder span is invalid"),
+        });
+      };
+      if !self.id.owns_placeholder(placeholder) {
+        continue;
+      }
+      let Some(original) = self.originals.get(placeholder) else {
+        return Err(Error::SessionRestoration {
+          reason: String::from("text contains an unknown session placeholder"),
+        });
+      };
+      let unchanged_bytes =
+        start
+          .checked_sub(cursor)
+          .ok_or_else(|| Error::SessionRestoration {
+            reason: String::from("placeholder spans are not ordered"),
+          })?;
+      let projected_len = restored
+        .len()
+        .checked_add(unchanged_bytes)
+        .and_then(|length| length.checked_add(original.len()))
+        .ok_or_else(|| Error::SessionRestoration {
+          reason: String::from("output byte length overflowed"),
+        })?;
+      if projected_len > MAX_SESSION_RESTORE_TEXT_BYTES {
+        return Err(Error::SessionRestoration {
+          reason: String::from("output exceeds the maximum byte length"),
+        });
+      }
+      let unchanged =
+        text
+          .get(cursor..start)
+          .ok_or_else(|| Error::SessionRestoration {
+            reason: String::from("unchanged text span is invalid"),
+          })?;
+      restored.push_str(unchanged);
+      restored.push_str(original);
+      cursor = end;
+    }
+    let tail_bytes = text.len().checked_sub(cursor).ok_or_else(|| {
+      Error::SessionRestoration {
+        reason: String::from("restoration cursor exceeds the input length"),
+      }
+    })?;
+    let final_len =
+      restored.len().checked_add(tail_bytes).ok_or_else(|| {
+        Error::SessionRestoration {
+          reason: String::from("output byte length overflowed"),
+        }
+      })?;
+    if final_len > MAX_SESSION_RESTORE_TEXT_BYTES {
+      return Err(Error::SessionRestoration {
+        reason: String::from("output exceeds the maximum byte length"),
+      });
+    }
+    let tail = text
+      .get(cursor..)
+      .ok_or_else(|| Error::SessionRestoration {
+        reason: String::from("restoration tail span is invalid"),
+      })?;
+    restored.push_str(tail);
+    Ok(restored)
   }
 
   fn to_plaintext_json_unchecked(&self) -> Result<String> {

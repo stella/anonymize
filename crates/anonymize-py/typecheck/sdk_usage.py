@@ -80,6 +80,7 @@ def redact_with_session(text: str) -> str:
     prepared = anonymize.get_default_native_pipeline(language="en")
     session = prepared.create_redaction_session("typecheck_session_1")
     result = session.redact_text(text)
+    session.restore_text(result.redaction.redacted_text)
     restored = prepared.restore_redaction_session(session.to_plaintext_json())
     assert restored.session_id() == session.session_id()
     assert restored.mapping_count() == session.mapping_count()

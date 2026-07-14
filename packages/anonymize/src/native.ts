@@ -136,6 +136,8 @@ export type NativeOpenSessionArchiveOptions = {
 export type NativePreparedRedactionSessionBinding = {
   sessionId: () => string;
   mappingCount: () => number;
+  restoreText?: (fullText: string) => string;
+  restoreTextAt?: (fullText: string, observedAtEpochSeconds: number) => string;
   toPlaintextJson: () => string;
   toPlaintextJsonAt?: (observedAtEpochSeconds: number) => string;
   toEncryptedArchive?: (key: Uint8Array) => Uint8Array;
@@ -406,6 +408,29 @@ export class PreparedNativeRedactionSession {
 
   mapping_count(): number {
     return this.mappingCount();
+  }
+
+  restoreText(fullText: string, observedAtEpochSeconds?: number): string {
+    if (observedAtEpochSeconds === undefined) {
+      const restore = this.#session.restoreText;
+      if (!restore) {
+        throw new Error(
+          "Native anonymize binding does not support session restoration",
+        );
+      }
+      return restore.call(this.#session, fullText);
+    }
+    const restore = this.#session.restoreTextAt;
+    if (!restore) {
+      throw new Error(
+        "Native anonymize binding does not support session restoration lifecycle controls",
+      );
+    }
+    return restore.call(this.#session, fullText, observedAtEpochSeconds);
+  }
+
+  restore_text(fullText: string, observedAtEpochSeconds?: number): string {
+    return this.restoreText(fullText, observedAtEpochSeconds);
   }
 
   toPlaintextJson(): string {

@@ -88,36 +88,42 @@ pub(crate) fn collect_placeholder_counts(
   text: &str,
 ) -> BTreeMap<String, usize> {
   let mut placeholders = BTreeMap::new();
-  let mut remaining = text;
-
-  while let Some(start) = remaining.find('[') {
-    let candidate_start = start.saturating_add('['.len_utf8());
-    let Some(after_open) = remaining.get(candidate_start..) else {
-      break;
+  for (start, end) in reserved_placeholder_spans(text) {
+    let Some(placeholder) = text.get(start..end) else {
+      continue;
     };
-    let Some(end) = after_open.find(']') else {
-      break;
-    };
-    let Some(inner) = after_open.get(..end) else {
-      break;
-    };
-    let valid = is_placeholder_inner(inner);
-    if valid {
-      let count = placeholders.entry(format!("[{inner}]")).or_insert(0usize);
-      *count = count.saturating_add(1);
-    }
-
-    let next_start = if valid {
-      candidate_start
-        .saturating_add(end)
-        .saturating_add(']'.len_utf8())
-    } else {
-      candidate_start
-    };
-    remaining = remaining.get(next_start..).unwrap_or_default();
+    let count = placeholders.entry(placeholder.to_owned()).or_insert(0usize);
+    *count = count.saturating_add(1);
   }
-
   placeholders
+}
+
+pub(crate) fn reserved_placeholder_spans(
+  text: &str,
+) -> impl Iterator<Item = (usize, usize)> + '_ {
+  let mut cursor = 0;
+  std::iter::from_fn(move || {
+    loop {
+      let remaining = text.get(cursor..)?;
+      let start = cursor.checked_add(remaining.find('[')?)?;
+      let inner_start = start.checked_add('['.len_utf8())?;
+      let after_open = text.get(inner_start..)?;
+      let Some(relative_end) = after_open.find(']') else {
+        cursor = text.len();
+        return None;
+      };
+      let inner_end = inner_start.checked_add(relative_end)?;
+      let end = inner_end.checked_add(']'.len_utf8())?;
+      if text
+        .get(inner_start..inner_end)
+        .is_some_and(is_placeholder_inner)
+      {
+        cursor = end;
+        return Some((start, end));
+      }
+      cursor = inner_start;
+    }
+  })
 }
 
 fn is_placeholder_inner(inner: &str) -> bool {

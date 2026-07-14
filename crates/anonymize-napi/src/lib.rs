@@ -555,6 +555,33 @@ impl NativePreparedRedactionSession {
   }
 
   #[napi]
+  #[allow(clippy::needless_pass_by_value)]
+  pub fn restore_text(&self, full_text: String) -> Result<String> {
+    self
+      .lock_session()?
+      .restore_text(&full_text, None)
+      .map_err(|error| to_napi_core_error(&error))
+  }
+
+  #[napi]
+  #[allow(clippy::needless_pass_by_value)]
+  pub fn restore_text_at(
+    &self,
+    full_text: String,
+    observed_at_epoch_seconds: u32,
+  ) -> Result<String> {
+    self
+      .lock_session()?
+      .restore_text(
+        &full_text,
+        Some(SessionTimestamp::from_epoch_seconds(
+          observed_at_epoch_seconds,
+        )),
+      )
+      .map_err(|error| to_napi_core_error(&error))
+  }
+
+  #[napi]
   pub fn to_plaintext_json(&self) -> Result<String> {
     self
       .lock_session()?

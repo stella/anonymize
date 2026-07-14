@@ -1,7 +1,7 @@
 {
   "name": "@stll/anonymize-docx",
   "version": "2.0.1",
-  "description": "Structure-aware DOCX text extraction for stella anonymization workflows",
+  "description": "Structure-aware DOCX text extraction and rewriting for stella anonymization workflows",
   "type": "module",
   "exports": {
     ".": {

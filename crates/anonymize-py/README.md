@@ -47,7 +47,13 @@ session:
 session = prepared.create_redaction_session("opaque_case_1")
 first = session.redact_text(first_document)
 second = session.redact_text(second_document)
+restored_text = session.restore_text(first.redaction.redacted_text)
 ```
+
+`restore_text()` restores complete known placeholders in one non-cascading
+pass. Other session namespaces remain unchanged; unknown placeholders owned by
+the session fail closed. Lifecycle sessions also require the caller-supplied
+`observed_at_epoch_seconds` argument.
 
 `session.to_plaintext_json()` supports deterministic in-memory transfer between
 runtime instances. Its output contains original personal data in plaintext: do
@@ -167,6 +173,7 @@ for repeated document processing.
 - `PreparedAnonymizer.create_redaction_session(session_id) -> PreparedRedactionSession`
 - `PreparedAnonymizer.create_redaction_session_with_lifecycle(...) -> PreparedRedactionSession`
 - `PreparedAnonymizer.restore_redaction_session(plaintext_json) -> PreparedRedactionSession`
+- `PreparedRedactionSession.restore_text(text, observed_at_epoch_seconds=None) -> str`
 - `PreparedAnonymizer.redact_text(text, operators=None, redact_string=None)`
 - `PreparedAnonymizer.redact_text_json(text, operators=None, redact_string=None)`
 - `PreparedAnonymizer.diagnostics_json(text, operators=None, redact_string=None)`
