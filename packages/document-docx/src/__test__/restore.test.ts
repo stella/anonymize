@@ -193,20 +193,21 @@ describe("restoreDocxText", () => {
 
   test("leaves other namespaces unchanged and still checks session availability", () => {
     const document = docx(
-      "<w:p><w:r><w:t>[PERSON_other%5Fmatter_1]</w:t></w:r></w:p>",
+      "<w:p><w:r><w:t>[PERSON_other%5Fmatter_1] [PERSON_matter%5F1_extra_1]</w:t></w:r></w:p>",
     );
     const observations: Array<number | undefined> = [];
     const result = restoreDocxText({
       document,
       session: fakeSession({
         onRestore: (_text, observedAt) => observations.push(observedAt),
+        rejectUnknownOwned: false,
       }),
       expectedSessionId: "matter_1",
       observedAtEpochSeconds: 150,
     });
     expect(result.document).toEqual(document);
     expect(result.restoredPlaceholderCount).toBe(0);
-    expect(observations).toEqual([150, 150, 150]);
+    expect(observations).toEqual([150, 150]);
   });
 
   test("rechecks session availability after planning and before rewriting", () => {
