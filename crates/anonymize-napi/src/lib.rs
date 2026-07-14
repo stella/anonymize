@@ -794,6 +794,8 @@ impl NativePreparedSessionRedactionPlan {
       Error::from_reason("Redaction session plan has already been committed")
     })?;
     *target = next;
+    drop(target);
+    drop(planned);
     Ok(())
   }
 }
