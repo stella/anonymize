@@ -31,7 +31,7 @@
     "format": "oxfmt ."
   },
   "dependencies": {
-    "@stll/anonymize": "workspace:^",
+    "@stll/anonymize": "^2.0.1",
     "fflate": "^0.8.3",
     "saxes": "^6.0.0"
   },
