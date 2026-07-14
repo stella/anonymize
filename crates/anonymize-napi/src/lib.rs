@@ -747,8 +747,11 @@ impl NativePreparedRedactionSession {
         )
         .map_err(|error| to_napi_core_error(&error))?;
       results.push(
-        static_redaction_plan_result_to_utf16_binding(result, &input.full_text)
-          .map_err(|error| to_napi_contract_error(&error))?,
+        static_redaction_plan_result_to_utf16_binding(
+          &result,
+          &input.full_text,
+        )
+        .map_err(|error| to_napi_contract_error(&error))?,
       );
     }
     let result_json = serde_json::to_string(&results)

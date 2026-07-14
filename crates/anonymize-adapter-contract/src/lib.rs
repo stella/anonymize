@@ -2633,7 +2633,7 @@ pub fn static_redaction_result_to_utf16_binding(
 }
 
 pub fn static_redaction_plan_result_to_utf16_binding(
-  result: StaticRedactionResult,
+  result: &StaticRedactionResult,
   full_text: &str,
 ) -> Result<BindingStaticRedactionPlanResult> {
   let offsets = Utf16OffsetMap::new(full_text)?;
