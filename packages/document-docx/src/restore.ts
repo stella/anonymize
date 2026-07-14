@@ -30,21 +30,6 @@ const restorationError = (
 const encodedSessionNamespace = (sessionId: string): string =>
   sessionId.replaceAll("_", "%5F");
 
-const looksLikeOwnedPlaceholder = (
-  value: string,
-  encodedSessionId: string,
-): boolean => {
-  const marker = `_${encodedSessionId}_`;
-  const markerIndex = value.lastIndexOf(marker);
-  if (markerIndex <= 0) {
-    return false;
-  }
-  const countStart = markerIndex + marker.length;
-  const countEnd = value.endsWith("]") ? -1 : undefined;
-  const count = value.slice(countStart, countEnd);
-  return count.length > 0 && /^\d+$/u.test(count);
-};
-
 const startsLikeOwnedPlaceholder = (
   value: string,
   encodedSessionId: string,
@@ -111,7 +96,7 @@ const planBlockRestoration = ({
       );
     }
     if (candidate.length > DOCX_RESTORE_MAX_PLACEHOLDER_UTF16) {
-      if (looksLikeOwnedPlaceholder(candidate.slice(1), encodedSessionId)) {
+      if (startsLikeOwnedPlaceholder(candidate.slice(1), encodedSessionId)) {
         throw restorationError(
           DOCX_RESTORATION_ERROR_CODES.invalidPlaceholder,
           "DOCX session placeholder exceeds the maximum length",
@@ -124,7 +109,7 @@ const planBlockRestoration = ({
     if (replacement !== candidate) {
       replacements.push({ start, end: candidateEnd, replacement });
     } else if (
-      looksLikeOwnedPlaceholder(candidate.slice(1), encodedSessionId)
+      startsLikeOwnedPlaceholder(candidate.slice(1), encodedSessionId)
     ) {
       throw restorationError(
         DOCX_RESTORATION_ERROR_CODES.invalidPlaceholder,
