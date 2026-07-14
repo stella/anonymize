@@ -30,10 +30,22 @@ const restorationError = (
 const encodedSessionNamespace = (sessionId: string): string =>
   sessionId.replaceAll("_", "%5F");
 
-const startsLikeOwnedPlaceholder = (
+const isOwnedPlaceholderCandidate = (
   value: string,
   encodedSessionId: string,
-): boolean => value.indexOf(`_${encodedSessionId}_`, 1) !== -1;
+): boolean => {
+  const inner = value.endsWith("]") ? value.slice(0, -1) : value;
+  const countSeparator = inner.lastIndexOf("_");
+  if (countSeparator <= 0) {
+    return false;
+  }
+  const prefix = inner.slice(0, countSeparator);
+  const namespaceSeparator = prefix.lastIndexOf("_");
+  if (namespaceSeparator <= 0) {
+    return false;
+  }
+  return prefix.slice(namespaceSeparator + 1) === encodedSessionId;
+};
 
 type PlanBlockRestorationOptions = {
   text: string;
@@ -55,7 +67,7 @@ const planBlockRestoration = ({
     if (character === "[") {
       if (
         start !== undefined &&
-        startsLikeOwnedPlaceholder(
+        isOwnedPlaceholderCandidate(
           text.slice(start + 1, cursor),
           encodedSessionId,
         )
@@ -81,7 +93,7 @@ const planBlockRestoration = ({
       );
     }
     if (candidate.length > DOCX_RESTORE_MAX_PLACEHOLDER_UTF16) {
-      if (startsLikeOwnedPlaceholder(candidate.slice(1), encodedSessionId)) {
+      if (isOwnedPlaceholderCandidate(candidate.slice(1), encodedSessionId)) {
         throw restorationError(
           DOCX_RESTORATION_ERROR_CODES.invalidPlaceholder,
           "DOCX session placeholder exceeds the maximum length",
@@ -94,7 +106,7 @@ const planBlockRestoration = ({
     if (replacement !== candidate) {
       replacements.push({ start, end: candidateEnd, replacement });
     } else if (
-      startsLikeOwnedPlaceholder(candidate.slice(1), encodedSessionId)
+      isOwnedPlaceholderCandidate(candidate.slice(1), encodedSessionId)
     ) {
       throw restorationError(
         DOCX_RESTORATION_ERROR_CODES.invalidPlaceholder,
@@ -105,7 +117,7 @@ const planBlockRestoration = ({
   }
   if (
     start !== undefined &&
-    startsLikeOwnedPlaceholder(text.slice(start + 1), encodedSessionId)
+    isOwnedPlaceholderCandidate(text.slice(start + 1), encodedSessionId)
   ) {
     throw restorationError(
       DOCX_RESTORATION_ERROR_CODES.invalidPlaceholder,
