@@ -207,7 +207,7 @@ describe("restoreDocxText", () => {
     });
     expect(result.document).toEqual(document);
     expect(result.restoredPlaceholderCount).toBe(0);
-    expect(observations).toEqual([150, 150, 150, 150]);
+    expect(observations).toEqual([150, 150]);
   });
 
   test("rechecks session availability after planning and before rewriting", () => {

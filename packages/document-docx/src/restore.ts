@@ -92,8 +92,12 @@ const planBlockRestoration = ({
         `DOCX restoration must not inspect more than ${DOCX_RESTORE_MAX_CANDIDATES} placeholder candidates`,
       );
     }
+    const isOwned = isOwnedPlaceholderCandidate(
+      candidate.slice(1),
+      encodedSessionId,
+    );
     if (candidate.length > DOCX_RESTORE_MAX_PLACEHOLDER_UTF16) {
-      if (isOwnedPlaceholderCandidate(candidate.slice(1), encodedSessionId)) {
+      if (isOwned) {
         throw restorationError(
           DOCX_RESTORATION_ERROR_CODES.invalidPlaceholder,
           "DOCX session placeholder exceeds the maximum length",
@@ -102,12 +106,14 @@ const planBlockRestoration = ({
       start = undefined;
       continue;
     }
+    if (!isOwned) {
+      start = undefined;
+      continue;
+    }
     const replacement = restoreCandidate(candidate);
     if (replacement !== candidate) {
       replacements.push({ start, end: candidateEnd, replacement });
-    } else if (
-      isOwnedPlaceholderCandidate(candidate.slice(1), encodedSessionId)
-    ) {
+    } else {
       throw restorationError(
         DOCX_RESTORATION_ERROR_CODES.invalidPlaceholder,
         "DOCX text contains an unknown placeholder for the expected session",
