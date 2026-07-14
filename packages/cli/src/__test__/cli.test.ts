@@ -1,8 +1,11 @@
 import { expect, setDefaultTimeout, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+import { extractDocxText } from "@stll/anonymize-docx";
+import { strToU8, zipSync } from "fflate";
 
 setDefaultTimeout(60_000);
 
@@ -16,6 +19,51 @@ const SAMPLE =
 
 // Scope dictionaries to keep test startup small.
 const SCOPE = ["--countries", "CZ,DE", "--languages", "cs,en"];
+
+const CONTENT_TYPES_NAMESPACE =
+  "http://schemas.openxmlformats.org/package/2006/content-types";
+const WORD_NAMESPACE =
+  "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+const RELATIONSHIP_NAMESPACE =
+  "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+const PACKAGE_RELATIONSHIP_NAMESPACE =
+  "http://schemas.openxmlformats.org/package/2006/relationships";
+const DOCUMENT_CONTENT_TYPE =
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml";
+
+const docxArchive = (
+  body: string,
+  documentRelationships: readonly string[] = [],
+): Uint8Array =>
+  zipSync({
+    "[Content_Types].xml": strToU8(
+      `<Types xmlns="${CONTENT_TYPES_NAMESPACE}"><Override PartName="/word/document.xml" ContentType="${DOCUMENT_CONTENT_TYPE}"/></Types>`,
+    ),
+    "_rels/.rels": strToU8(
+      `<Relationships xmlns="${PACKAGE_RELATIONSHIP_NAMESPACE}"><Relationship Id="rId1" Type="${RELATIONSHIP_NAMESPACE}/officeDocument" Target="word/document.xml"/></Relationships>`,
+    ),
+    "word/document.xml": strToU8(
+      `<w:document xmlns:w="${WORD_NAMESPACE}" xmlns:r="${RELATIONSHIP_NAMESPACE}"><w:body>${body}</w:body></w:document>`,
+    ),
+    ...(documentRelationships.length === 0
+      ? {}
+      : {
+          "word/_rels/document.xml.rels": strToU8(
+            `<Relationships xmlns="${PACKAGE_RELATIONSHIP_NAMESPACE}">${documentRelationships.join("")}</Relationships>`,
+          ),
+        }),
+  });
+
+const docx = (text: string): Uint8Array =>
+  docxArchive(`<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`);
+
+const hyperlinkDocx = (text: string): Uint8Array =>
+  docxArchive(
+    `<w:p><w:hyperlink r:id="rId2"><w:r><w:t>${text}</w:t></w:r></w:hyperlink></w:p>`,
+    [
+      `<Relationship Id="rId2" Type="${RELATIONSHIP_NAMESPACE}/hyperlink" Target="mailto:person@example.test" TargetMode="External"/>`,
+    ],
+  );
 
 type RunResult = { out: string; err: string; code: number };
 
@@ -468,4 +516,131 @@ test("--json --mode redact omits detected text from the payload", async () => {
   expect(out).not.toContain("jan.novak@example.com");
   expect(out).not.toContain("Novák");
   expect(payload.redactedText).toContain("[REDACTED]");
+});
+
+test("DOCX encrypted-session workflow anonymizes and restores", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "anonymize-cli-docx-"));
+  const inputPath = join(dir, "input.docx");
+  const anonymizedPath = join(dir, "anonymized.docx");
+  const restoredPath = join(dir, "restored.docx");
+  const archivePath = join(dir, "session.stlasession");
+  const keyPath = join(dir, "session.key");
+  const originalText = "Contact person@example.test";
+  await writeFile(inputPath, docx(originalText));
+  // Deterministic public fixture key; production keys must be random.
+  await writeFile(keyPath, new Uint8Array(32).fill(7));
+  await chmod(keyPath, 0o600);
+
+  const anonymized = await run([
+    "docx",
+    "anonymize",
+    "--session-mode",
+    "create",
+    "--session-archive",
+    archivePath,
+    "--session-key-file",
+    keyPath,
+    "--session-id",
+    "matter_1",
+    "--labels",
+    "email",
+    "--languages",
+    "en",
+    "--countries",
+    "US",
+    "--json",
+    "--output",
+    anonymizedPath,
+    inputPath,
+  ]);
+  expect(anonymized.code).toBe(0);
+  expect(anonymized.out).not.toContain("person@example.test");
+  expect(JSON.parse(anonymized.out)).toMatchObject({
+    sessionId: "matter_1",
+    entityCount: 1,
+    coverage: { status: "full" },
+  });
+  expect(
+    extractDocxText(await readFile(anonymizedPath)).blocks.at(0)?.text,
+  ).toBe("Contact [EMAIL_ADDRESS_matter%5F1_1]");
+  expect((await readFile(archivePath)).byteLength).toBeGreaterThan(0);
+
+  const partialInputPath = join(dir, "anonymized-hyperlink.docx");
+  const refusedRestorePath = join(dir, "refused-restored.docx");
+  await writeFile(
+    partialInputPath,
+    hyperlinkDocx("Contact [EMAIL_ADDRESS_matter%5F1_1]"),
+  );
+  const refusedRestore = await run([
+    "docx",
+    "restore",
+    "--session-archive",
+    archivePath,
+    "--session-key-file",
+    keyPath,
+    "--session-id",
+    "matter_1",
+    "--output",
+    refusedRestorePath,
+    partialInputPath,
+  ]);
+  expect(refusedRestore.code).toBe(1);
+  expect(refusedRestore.err).toContain("fully supported restoration coverage");
+  expect(await Bun.file(refusedRestorePath).exists()).toBeFalse();
+
+  const restored = await run([
+    "docx",
+    "restore",
+    "--session-archive",
+    archivePath,
+    "--session-key-file",
+    keyPath,
+    "--session-id",
+    "matter_1",
+    "--json",
+    "--output",
+    restoredPath,
+    anonymizedPath,
+  ]);
+  expect(restored.code).toBe(0);
+  expect(restored.out).not.toContain("person@example.test");
+  expect(JSON.parse(restored.out)).toMatchObject({
+    sessionId: "matter_1",
+    restoredPlaceholderCount: 1,
+    coverage: { status: "full" },
+  });
+  expect(extractDocxText(await readFile(restoredPath)).blocks.at(0)?.text).toBe(
+    originalText,
+  );
+});
+
+test("DOCX create mode refuses an existing session archive before runtime setup", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "anonymize-cli-docx-"));
+  const inputPath = join(dir, "input.docx");
+  const outputPath = join(dir, "output.docx");
+  const archivePath = join(dir, "session.stlasession");
+  const keyPath = join(dir, "session.key");
+  await writeFile(inputPath, docx("No sensitive text"));
+  await writeFile(archivePath, "existing archive", "utf8");
+  await writeFile(keyPath, new Uint8Array(32).fill(7));
+  await chmod(keyPath, 0o600);
+
+  const result = await run([
+    "docx",
+    "anonymize",
+    "--session-mode",
+    "create",
+    "--session-archive",
+    archivePath,
+    "--session-key-file",
+    keyPath,
+    "--session-id",
+    "matter_1",
+    "--output",
+    outputPath,
+    inputPath,
+  ]);
+  expect(result.code).toBe(2);
+  expect(result.err).toContain("refuses to overwrite");
+  expect(await Bun.file(outputPath).exists()).toBeFalse();
 });

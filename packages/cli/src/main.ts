@@ -30,8 +30,19 @@ import {
 import pkg from "../package.json" with { type: "json" };
 
 import type { CliOptions } from "./args";
-import { HELP, parseCliArgs, parseCountries, UsageError } from "./args";
+import {
+  DEFAULT_THRESHOLD,
+  HELP,
+  parseCliArgs,
+  parseCountries,
+  UsageError,
+} from "./args";
 import type { DictionaryScope } from "./dictionary-scope";
+import {
+  type DocxCliPipeline,
+  type DocxPipelineRequest,
+  runDocxCommand,
+} from "./docx";
 
 /**
  * The pipeline functions the CLI needs, backed by the
@@ -266,7 +277,7 @@ type CliRedactionResult = {
   entityCount: number;
 };
 
-type NativeCliPipeline = {
+type NativeCliPipeline = DocxCliPipeline & {
   warmLazyRegex?: () => void;
   redactText: (
     fullText: string,
@@ -339,8 +350,13 @@ const validateLabels = (labels: readonly string[]): EntityLabel[] => {
   return valid;
 };
 
+type PipelineConfigOptions = Pick<
+  CliOptions,
+  "countries" | "labels" | "languages" | "threshold"
+>;
+
 const buildPipelineConfig = async (
-  opts: CliOptions,
+  opts: PipelineConfigOptions,
   loadDictionaries: CliEngine["loadDictionaries"],
 ): Promise<PipelineConfig> => {
   const dictionaries = await loadDictionaries({
@@ -802,16 +818,24 @@ type CliRuntime = {
   ) => Promise<{ entities: CliEntity[]; redaction: CliRedactionResult }>;
 };
 
-const prepareCliRuntime = async (
+const prepareNativeCliPipeline = async (
   api: AnonymizeApi,
   config: PipelineConfig,
-): Promise<CliRuntime> => {
+): Promise<NativeCliPipeline> => {
   const pipeline = await api.createNativePipelineFromConfig({
     binding: api.loadNativeAnonymizeBinding(),
     config,
     gazetteerEntries: [],
   });
   pipeline.warmLazyRegex?.();
+  return pipeline;
+};
+
+const prepareCliRuntime = async (
+  api: AnonymizeApi,
+  config: PipelineConfig,
+): Promise<CliRuntime> => {
+  const pipeline = await prepareNativeCliPipeline(api, config);
   return {
     redact: async (fullText, operators) => {
       const result = pipeline.redactText(fullText, operators);
@@ -845,7 +869,30 @@ const formatLabelList = (): string => {
 };
 
 const dispatch = async (engine: CliEngine): Promise<void> => {
-  const opts = parseCliArgs(process.argv.slice(2));
+  const argv = process.argv.slice(2);
+  if (argv.at(0) === "docx") {
+    await runDocxCommand({
+      argv: argv.slice(1),
+      preparePipeline: async (
+        request: DocxPipelineRequest,
+      ): Promise<DocxCliPipeline> => {
+        const options: PipelineConfigOptions =
+          request.type === "anonymize"
+            ? request.detection
+            : {
+                countries: [],
+                languages: [],
+                threshold: DEFAULT_THRESHOLD,
+              };
+        return prepareNativeCliPipeline(
+          engine.api,
+          await buildPipelineConfig(options, engine.loadDictionaries),
+        );
+      },
+    });
+    return;
+  }
+  const opts = parseCliArgs(argv);
   if (opts.help) {
     process.stdout.write(HELP);
     return;
