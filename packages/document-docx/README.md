@@ -77,9 +77,10 @@ const result = anonymizeDocx({
 
 Caller offsets are UTF-16 code-unit offsets within the identified block. They
 pass through the same native validation and resolution pipeline as built-in
-detections. The default-safe `require-full` policy rejects tracked revisions and
-other content outside the rewrite coverage; `allow-partial` requires explicit
-caller opt-in and reports the remaining gaps.
+detections. The default-safe `require-full` policy rejects hyperlinks, tracked
+revisions, and other content outside the rewrite coverage. Hyperlink display
+text is extracted, but relationship targets are not rewritten. `allow-partial`
+requires explicit caller opt-in and reports the remaining gaps.
 
 The native session is updated transactionally only after the complete DOCX
 rewrite succeeds. The returned summary contains coverage and aggregate counts,

@@ -2,6 +2,7 @@ import type { DocxCoverage, DocxWorkflowCoverage } from "./types";
 
 const hasPartialCoverage = (coverage: DocxCoverage): boolean =>
   coverage.parts.some(({ status }) => status === "unsupported") ||
+  coverage.hyperlinkTextSegmentCount > 0 ||
   coverage.revisionTextSegmentCount > 0 ||
   coverage.unsupportedAlternateContentCount > 0 ||
   coverage.unsupportedSymbolCount > 0 ||

@@ -20,7 +20,10 @@ const PACKAGE_RELATIONSHIP_NAMESPACE =
 const DOCUMENT_CONTENT_TYPE =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml";
 
-const docx = (body: string): Uint8Array =>
+const docx = (
+  body: string,
+  documentRelationships: readonly string[] = [],
+): Uint8Array =>
   zipSync({
     "[Content_Types].xml": strToU8(
       `<Types xmlns="${CONTENT_TYPES_NAMESPACE}"><Override PartName="/word/document.xml" ContentType="${DOCUMENT_CONTENT_TYPE}"/></Types>`,
@@ -29,8 +32,15 @@ const docx = (body: string): Uint8Array =>
       `<Relationships xmlns="${PACKAGE_RELATIONSHIP_NAMESPACE}"><Relationship Id="rId1" Type="${RELATIONSHIP_NAMESPACE}/officeDocument" Target="word/document.xml"/></Relationships>`,
     ),
     "word/document.xml": strToU8(
-      `<w:document xmlns:w="${WORD_NAMESPACE}"><w:body>${body}</w:body></w:document>`,
+      `<w:document xmlns:w="${WORD_NAMESPACE}" xmlns:r="${RELATIONSHIP_NAMESPACE}"><w:body>${body}</w:body></w:document>`,
     ),
+    ...(documentRelationships.length === 0
+      ? {}
+      : {
+          "word/_rels/document.xml.rels": strToU8(
+            `<Relationships xmlns="${PACKAGE_RELATIONSHIP_NAMESPACE}">${documentRelationships.join("")}</Relationships>`,
+          ),
+        }),
   });
 
 const fullCoveragePolicy = {
@@ -196,6 +206,49 @@ describe("anonymizeDocx", () => {
       },
     });
     expect(result.summary.coverage.status).toBe("partial");
+  });
+
+  test("treats hyperlinks as partial while relationship targets are not rewritten", () => {
+    const document = docx(
+      '<w:p><w:hyperlink r:id="rId2"><w:r><w:t>Contact</w:t></w:r></w:hyperlink></w:p>',
+      [
+        `<Relationship Id="rId2" Type="${RELATIONSHIP_NAMESPACE}/hyperlink" Target="mailto:person@example.test" TargetMode="External"/>`,
+      ],
+    );
+    let planned = false;
+    const session: DocxAnonymizationSession = {
+      sessionId: () => "case_1",
+      planTextBatchWithCallerDetections: () => {
+        planned = true;
+        return {
+          blocks: [{ replacements: [], entityCount: 0, callerEntityCount: 0 }],
+          commit: () => {},
+        };
+      },
+    };
+
+    expect(() =>
+      anonymizeDocx({
+        document,
+        session,
+        expectedSessionId: "case_1",
+        policy: fullCoveragePolicy,
+      }),
+    ).toThrow(DocxAnonymizationError);
+    expect(planned).toBeFalse();
+
+    const result = anonymizeDocx({
+      document,
+      session,
+      expectedSessionId: "case_1",
+      policy: {
+        coverage: { mode: DOCX_COVERAGE_MODES.allowPartial },
+      },
+    });
+    expect(result.summary.coverage).toMatchObject({
+      status: "partial",
+      counts: { hyperlinkTextSegmentCount: 1 },
+    });
   });
 
   test("rejects stale caller-detection block locations before planning", () => {
