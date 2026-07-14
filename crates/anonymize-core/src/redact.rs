@@ -247,6 +247,32 @@ struct RenderedRedactions {
   placeholder_counts: BTreeMap<String, usize>,
 }
 
+struct RenderedReplacementOutput {
+  text: String,
+  replacements: Vec<RedactionReplacement>,
+}
+
+impl RenderedReplacementOutput {
+  fn push(&mut self, replacement: RedactionReplacement) {
+    self.text.push_str(&replacement.replacement);
+    self.replacements.push(replacement);
+  }
+
+  fn push_source(
+    &mut self,
+    options: &RenderOptions<'_, '_, '_>,
+    (start, end): (u32, u32),
+  ) -> Result<()> {
+    self.text.push_str(source_slice(
+      options.full_text,
+      options.offsets,
+      start,
+      end,
+    )?);
+    Ok(())
+  }
+}
+
 impl RenderedRedactions {
   fn commit_session_update(
     &mut self,
@@ -273,9 +299,11 @@ enum NextSpan<'borrow, 'text, 'config> {
 fn render_selected_spans(
   options: &RenderOptions<'_, '_, '_>,
 ) -> Result<RenderedRedactions> {
-  let mut text = String::with_capacity(options.full_text.len());
+  let mut output = RenderedReplacementOutput {
+    text: String::with_capacity(options.full_text.len()),
+    replacements: Vec::new(),
+  };
   let mut map = Vec::<RedactionEntry>::new();
-  let mut replacements = Vec::<RedactionReplacement>::new();
   let mut placeholders = HashSet::<String>::new();
   let mut placeholder_counts = BTreeMap::<String, usize>::new();
   let mut cursor = 0;
@@ -299,18 +327,12 @@ fn render_selected_spans(
       NextSpan::Mask(span) => (span.start, span.end),
     };
     if start > cursor {
-      text.push_str(source_slice(
-        options.full_text,
-        options.offsets,
-        cursor,
-        start,
-      )?);
+      output.push_source(options, (cursor, start))?;
     }
 
     match next {
       NextSpan::Mask(span) => {
-        text.push_str(span.masking_character);
-        replacements.push(RedactionReplacement {
+        output.push(RedactionReplacement {
           start,
           end,
           replacement: span.masking_character.to_owned(),
@@ -340,8 +362,7 @@ fn render_selected_spans(
           Operator::Keep => None,
         };
         if let Some(replacement) = replacement {
-          text.push_str(&replacement);
-          replacements.push(RedactionReplacement {
+          output.push(RedactionReplacement {
             start,
             end,
             replacement,
@@ -365,17 +386,12 @@ fn render_selected_spans(
 
   let full_text_len = options.offsets.len()?;
   if cursor < full_text_len {
-    text.push_str(source_slice(
-      options.full_text,
-      options.offsets,
-      cursor,
-      full_text_len,
-    )?);
+    output.push_source(options, (cursor, full_text_len))?;
   }
   Ok(RenderedRedactions {
-    text,
+    text: output.text,
     map,
-    replacements,
+    replacements: output.replacements,
     placeholder_counts,
   })
 }
