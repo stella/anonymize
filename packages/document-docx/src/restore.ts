@@ -33,22 +33,7 @@ const encodedSessionNamespace = (sessionId: string): string =>
 const startsLikeOwnedPlaceholder = (
   value: string,
   encodedSessionId: string,
-): boolean => {
-  const marker = `_${encodedSessionId}_`;
-  let markerIndex = value.indexOf(marker, 1);
-  while (markerIndex !== -1) {
-    const firstCountCharacter = value.at(markerIndex + marker.length);
-    if (
-      firstCountCharacter !== undefined &&
-      firstCountCharacter >= "0" &&
-      firstCountCharacter <= "9"
-    ) {
-      return true;
-    }
-    markerIndex = value.indexOf(marker, markerIndex + 1);
-  }
-  return false;
-};
+): boolean => value.indexOf(`_${encodedSessionId}_`, 1) !== -1;
 
 type PlanBlockRestorationOptions = {
   text: string;

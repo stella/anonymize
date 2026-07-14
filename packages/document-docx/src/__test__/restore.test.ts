@@ -163,6 +163,19 @@ describe("restoreDocxText", () => {
         expectedSessionId: "matter_1",
       }),
     ).toThrow("unknown placeholder for the expected session");
+
+    for (const malformedCount of [
+      "[PERSON_matter%5F1_]",
+      "[PERSON_matter%5F1_+1]",
+    ]) {
+      expect(() =>
+        restoreDocxText({
+          document: docx(`<w:p><w:r><w:t>${malformedCount}</w:t></w:r></w:p>`),
+          session: fakeSession({ rejectUnknownOwned: false }),
+          expectedSessionId: "matter_1",
+        }),
+      ).toThrow("unknown placeholder for the expected session");
+    }
   });
 
   test("bounds work for repeated unmatched opening brackets", () => {
