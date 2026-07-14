@@ -173,7 +173,7 @@ for repeated document processing.
 - `PreparedAnonymizer.create_redaction_session(session_id) -> PreparedRedactionSession`
 - `PreparedAnonymizer.create_redaction_session_with_lifecycle(...) -> PreparedRedactionSession`
 - `PreparedAnonymizer.restore_redaction_session(plaintext_json) -> PreparedRedactionSession`
-- `PreparedRedactionSession.restore_text(text, observed_at_epoch_seconds=None) -> str`
+- `PreparedRedactionSession.restore_text(full_text, observed_at_epoch_seconds=None) -> str`
 - `PreparedAnonymizer.redact_text(text, operators=None, redact_string=None)`
 - `PreparedAnonymizer.redact_text_json(text, operators=None, redact_string=None)`
 - `PreparedAnonymizer.diagnostics_json(text, operators=None, redact_string=None)`
