@@ -1754,6 +1754,20 @@ pub struct BindingStaticRedactionResult {
   pub redaction: BindingRedactionResult,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct BindingTextReplacement {
+  pub start: u32,
+  pub end: u32,
+  pub replacement: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct BindingStaticRedactionPlanResult {
+  pub replacements: Vec<BindingTextReplacement>,
+  pub entity_count: usize,
+  pub caller_entity_count: usize,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum BindingStaticRedactionStreamEvent {
@@ -2616,6 +2630,36 @@ pub fn static_redaction_result_to_utf16_binding(
   let mut result = static_redaction_result_to_binding(result);
   convert_pipeline_entity_offsets(&mut result.resolved_entities, &offsets)?;
   Ok(result)
+}
+
+pub fn static_redaction_plan_result_to_utf16_binding(
+  result: StaticRedactionResult,
+  full_text: &str,
+) -> Result<BindingStaticRedactionPlanResult> {
+  let offsets = Utf16OffsetMap::new(full_text)?;
+  let caller_entity_count = result
+    .resolved_entities
+    .iter()
+    .filter(|entity| entity.caller_provenance.is_some())
+    .count();
+  let entity_count = result.redaction.entity_count;
+  let replacements = result
+    .redaction
+    .replacements
+    .iter()
+    .map(|replacement| {
+      Ok(BindingTextReplacement {
+        start: offsets.convert(replacement.start)?,
+        end: offsets.convert(replacement.end)?,
+        replacement: replacement.replacement.clone(),
+      })
+    })
+    .collect::<Result<Vec<_>>>()?;
+  Ok(BindingStaticRedactionPlanResult {
+    replacements,
+    entity_count,
+    caller_entity_count,
+  })
 }
 
 #[must_use]

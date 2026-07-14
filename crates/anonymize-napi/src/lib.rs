@@ -22,6 +22,7 @@ use stella_anonymize_adapter_contract::{
   prepared_search_package_verify_digest_with_timings,
   static_redaction_diagnostic_result_to_utf16_binding,
   static_redaction_diagnostics_to_binding,
+  static_redaction_plan_result_to_utf16_binding,
   static_redaction_result_to_utf16_binding,
   static_redaction_stream_event_to_utf16_binding,
 };
@@ -29,10 +30,10 @@ use stella_anonymize_core::{
   CallerRedactionOptions, DiagnosticDetail, DiagnosticEvent, DiagnosticStage,
   Error as CoreError, OpenSessionArchiveOptions, OperatorConfig,
   PreparedEngine, PreparedEngineArtifactsView, PreparedEngineConfig,
-  PreparedSessionRedactionOptions, REDACTION_SESSION_ARCHIVE_KEY_BYTES,
-  REDACTION_SESSION_ARCHIVE_MAX_BYTES, RedactionSession, SessionArchiveKey,
-  SessionId, SessionLifecycle, SessionMetadata, SessionStatus,
-  SessionTimestamp, StaticRedactionDiagnostics,
+  PreparedSessionCallerRedactionOptions, PreparedSessionRedactionOptions,
+  REDACTION_SESSION_ARCHIVE_KEY_BYTES, REDACTION_SESSION_ARCHIVE_MAX_BYTES,
+  RedactionSession, SessionArchiveKey, SessionId, SessionLifecycle,
+  SessionMetadata, SessionStatus, SessionTimestamp, StaticRedactionDiagnostics,
   assemble::{AssembleError, Dictionaries, GazetteerEntry, PipelineConfig},
 };
 
@@ -528,7 +529,28 @@ pub struct NativePreparedSearch {
 #[napi]
 pub struct NativePreparedRedactionSession {
   inner: Arc<PreparedEngine>,
-  session: Mutex<RedactionSession>,
+  session: Arc<Mutex<RedactionSession>>,
+}
+
+#[napi]
+pub struct NativePreparedSessionRedactionPlan {
+  target: Arc<Mutex<RedactionSession>>,
+  base: RedactionSession,
+  planned: Mutex<Option<RedactionSession>>,
+  result_json: String,
+}
+
+#[napi(object)]
+pub struct JsSessionCallerRedactionInput {
+  pub full_text: String,
+  pub request_json: String,
+}
+
+#[napi(object)]
+pub struct JsSessionCallerRedactionPlanOptions {
+  pub inputs: Vec<JsSessionCallerRedactionInput>,
+  pub operators: Option<JsOperatorConfig>,
+  pub observed_at_epoch_seconds: Option<u32>,
 }
 
 #[napi(object)]
@@ -690,6 +712,87 @@ impl NativePreparedRedactionSession {
       )),
     )
   }
+
+  #[napi]
+  #[allow(clippy::needless_pass_by_value)]
+  pub fn plan_static_entities_with_caller_detections(
+    &self,
+    options: JsSessionCallerRedactionPlanOptions,
+  ) -> Result<NativePreparedSessionRedactionPlan> {
+    let operators = operator_config_from_js(options.operators)?;
+    let observed_at = options
+      .observed_at_epoch_seconds
+      .map(SessionTimestamp::from_epoch_seconds);
+    let base = self.lock_session()?.clone();
+    let mut planned = base.clone();
+    let mut results = Vec::with_capacity(options.inputs.len());
+    for input in options.inputs {
+      let request = serde_json::from_str::<BindingCallerDetectionRequest>(
+        &input.request_json,
+      )
+      .map_err(|error| to_napi_serde_error(&error))?;
+      let detections =
+        caller_detections_from_utf16_binding(request, &input.full_text)
+          .map_err(|error| to_napi_contract_error(&error))?;
+      let result = self
+        .inner
+        .redact_static_entities_with_caller_detections_and_session(
+          &input.full_text,
+          PreparedSessionCallerRedactionOptions {
+            operators: &operators,
+            detections: &detections,
+            session: &mut planned,
+            observed_at,
+          },
+        )
+        .map_err(|error| to_napi_core_error(&error))?;
+      results.push(
+        static_redaction_plan_result_to_utf16_binding(result, &input.full_text)
+          .map_err(|error| to_napi_contract_error(&error))?,
+      );
+    }
+    let result_json = serde_json::to_string(&results)
+      .map_err(|error| to_napi_serde_error(&error))?;
+    Ok(NativePreparedSessionRedactionPlan {
+      target: Arc::clone(&self.session),
+      base,
+      planned: Mutex::new(Some(planned)),
+      result_json,
+    })
+  }
+}
+
+#[napi]
+impl NativePreparedSessionRedactionPlan {
+  #[napi]
+  pub fn result_json(&self) -> String {
+    self.result_json.clone()
+  }
+
+  #[napi]
+  pub fn commit(&self) -> Result<()> {
+    let mut planned = self.planned.lock().map_err(|_| {
+      Error::from_reason("Redaction session plan lock is unavailable")
+    })?;
+    if planned.is_none() {
+      return Err(Error::from_reason(
+        "Redaction session plan has already been committed",
+      ));
+    }
+    let mut target = self.target.lock().map_err(|_| {
+      Error::from_reason("Redaction session state lock is unavailable")
+    })?;
+    if *target != self.base {
+      return Err(Error::from_reason(
+        "Redaction session changed after the plan was created",
+      ));
+    }
+    let next = planned.take().ok_or_else(|| {
+      Error::from_reason("Redaction session plan has already been committed")
+    })?;
+    *target = next;
+    Ok(())
+  }
 }
 
 impl NativePreparedRedactionSession {
@@ -719,10 +822,10 @@ impl NativePreparedRedactionSession {
     serde_json::to_string(&result).map_err(|error| to_napi_serde_error(&error))
   }
 
-  const fn new(inner: Arc<PreparedEngine>, session: RedactionSession) -> Self {
+  fn new(inner: Arc<PreparedEngine>, session: RedactionSession) -> Self {
     Self {
       inner,
-      session: Mutex::new(session),
+      session: Arc::new(Mutex::new(session)),
     }
   }
 

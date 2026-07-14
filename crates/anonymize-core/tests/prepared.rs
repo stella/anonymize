@@ -13,8 +13,9 @@ use stella_anonymize_core::{
   HotwordRule, HotwordRuleData, LegalFormData, LiteralSearchOptions,
   MagnitudeSuffixData, MonetaryData, OperatorConfig, PatternSlice,
   PreparedEngine, PreparedEngineArtifacts, PreparedEngineConfig,
-  PreparedEngineSlices, PreparedSessionRedactionOptions, RedactionSession,
-  RegexMatchMeta, RegexSearchOptions, SearchOptions, SearchPattern, SessionId,
+  PreparedEngineSlices, PreparedSessionCallerRedactionOptions,
+  PreparedSessionRedactionOptions, RedactionSession, RegexMatchMeta,
+  RegexSearchOptions, SearchOptions, SearchPattern, SessionId,
   SessionLifecycle, SessionTimestamp, SourceDetail, TriggerData, TriggerRule,
   TriggerStrategy, TriggerValidation, WrittenAmountPatternData, ZoneData,
   ZonePatternData, ZoneSigningClauseData,
@@ -88,6 +89,73 @@ fn caller_detections_use_the_shared_resolution_and_redaction_pipeline() {
     below_threshold_result.redaction.redacted_text,
     "Alice signed."
   );
+}
+
+#[test]
+fn caller_detections_reuse_session_placeholders_across_documents() {
+  let prepared = PreparedEngine::new(prepared_config! {
+    threshold: 0.5,
+    allowed_labels: vec![String::from("person")],
+    ..empty_config(PreparedEngineSlices::default())
+  })
+  .unwrap();
+  let mut session =
+    RedactionSession::new(SessionId::new("case_1").expect("valid id"));
+  let first_detections = [caller_detection(CallerDetectionParams {
+    start: 0,
+    end: 5,
+    label: String::from("person"),
+    score: 0.9,
+    provider_id: String::from("test-provider"),
+    detection_id: String::from("first-person"),
+  })
+  .unwrap()];
+  let second_detections = [caller_detection(CallerDetectionParams {
+    start: 0,
+    end: 5,
+    label: String::from("person"),
+    score: 0.9,
+    provider_id: String::from("test-provider"),
+    detection_id: String::from("second-person"),
+  })
+  .unwrap()];
+
+  let first = prepared
+    .redact_static_entities_with_caller_detections_and_session(
+      "Alice signed.",
+      PreparedSessionCallerRedactionOptions {
+        operators: &OperatorConfig::default(),
+        detections: &first_detections,
+        session: &mut session,
+        observed_at: None,
+      },
+    )
+    .unwrap();
+  let second = prepared
+    .redact_static_entities_with_caller_detections_and_session(
+      "Alice replied.",
+      PreparedSessionCallerRedactionOptions {
+        operators: &OperatorConfig::default(),
+        detections: &second_detections,
+        session: &mut session,
+        observed_at: None,
+      },
+    )
+    .unwrap();
+
+  assert_eq!(first.redaction.redacted_text, "[PERSON_case%5F1_1] signed.");
+  assert_eq!(
+    second.redaction.redacted_text,
+    "[PERSON_case%5F1_1] replied."
+  );
+  assert_eq!(first.redaction.replacements.len(), 1);
+  assert_eq!(first.redaction.replacements[0].start, 0);
+  assert_eq!(first.redaction.replacements[0].end, 5);
+  assert_eq!(
+    first.redaction.replacements[0].replacement,
+    "[PERSON_case%5F1_1]"
+  );
+  assert_eq!(session.mapping_count(), 1);
 }
 
 #[test]

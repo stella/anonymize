@@ -60,6 +60,13 @@ pub struct PreparedSessionRedactionOptions<'a> {
   pub observed_at: Option<SessionTimestamp>,
 }
 
+pub struct PreparedSessionCallerRedactionOptions<'a> {
+  pub operators: &'a OperatorConfig,
+  pub detections: &'a [CallerDetection],
+  pub session: &'a mut RedactionSession,
+  pub observed_at: Option<SessionTimestamp>,
+}
+
 impl PreparedEngine {
   /// Redacts built-in and caller-supplied detections in one resolution pass.
   ///
@@ -143,6 +150,39 @@ impl PreparedEngine {
       full_text,
       operators,
       &[],
+      redaction_phase::StaticRedactionContext {
+        session: Some(session),
+        observed_at,
+        diagnostics: None,
+      },
+      &mut event_stream,
+      &mut result_stream,
+    )
+  }
+
+  /// Redacts built-in and caller-supplied detections with stable session
+  /// placeholders in one resolution pass.
+  ///
+  /// Session state is updated only when detection, resolution, and redaction all
+  /// succeed.
+  pub fn redact_static_entities_with_caller_detections_and_session(
+    &self,
+    full_text: &str,
+    options: PreparedSessionCallerRedactionOptions<'_>,
+  ) -> Result<StaticRedactionResult> {
+    let PreparedSessionCallerRedactionOptions {
+      operators,
+      detections,
+      session,
+      observed_at,
+    } = options;
+    session.ensure_active(observed_at)?;
+    let mut event_stream = DiagnosticEventStream::none();
+    let mut result_stream = StaticRedactionResultStream::none();
+    self.redact_static_entities_with_session_inner(
+      full_text,
+      operators,
+      detections,
       redaction_phase::StaticRedactionContext {
         session: Some(session),
         observed_at,

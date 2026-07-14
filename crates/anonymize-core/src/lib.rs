@@ -58,9 +58,9 @@ pub use prepared::{
   PreparedEngineArtifactsView, PreparedEngineBuildResult, PreparedEngineConfig,
   PreparedEngineDetectorConfig, PreparedEngineMatches,
   PreparedEnginePolicyConfig, PreparedEngineSearchConfig, PreparedEngineSlices,
-  PreparedSessionRedactionOptions, StaticDetectionResult, StaticEntityLayers,
-  StaticRedactionDiagnosticResult, StaticRedactionResult,
-  StaticRedactionStreamEvent,
+  PreparedSessionCallerRedactionOptions, PreparedSessionRedactionOptions,
+  StaticDetectionResult, StaticEntityLayers, StaticRedactionDiagnosticResult,
+  StaticRedactionResult, StaticRedactionStreamEvent,
 };
 pub use processors::{
   CountryMatchData, DenyListFilterData, DenyListMatchData, DenyListPatternMeta,
@@ -99,7 +99,7 @@ pub use triggers::{
 pub use types::{
   Entity, EntityKind, Error, MaskConfig, MaskDirection, Operator,
   OperatorConfig, OperatorEntry, OperatorType, PlaceholderEntry,
-  PlaceholderMap, RedactionEntry, RedactionResult, Result, SearchEngine,
-  SearchMatch,
+  PlaceholderMap, RedactionEntry, RedactionReplacement, RedactionResult,
+  Result, SearchEngine, SearchMatch,
 };
 pub use zones::{ZoneData, ZonePatternData, ZoneSigningClauseData};

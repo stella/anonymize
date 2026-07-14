@@ -13,6 +13,17 @@ type NativeBindingCallerRedactionOptions = {
   operators?: NativeBindingOperatorConfig;
 };
 
+type NativeBindingSessionCallerRedactionInput = {
+  fullText: string;
+  requestJson: string;
+};
+
+type NativeBindingSessionCallerRedactionPlanOptions = {
+  inputs: NativeBindingSessionCallerRedactionInput[];
+  operators?: NativeBindingOperatorConfig;
+  observedAtEpochSeconds?: number;
+};
+
 type NativeBindingOpenSessionArchiveOptions = {
   archive: Uint8Array;
   key: Uint8Array;
@@ -92,6 +103,16 @@ type CanonicalSessionDeletionSummary = {
   deleted_mapping_count: number;
 };
 
+type CanonicalSessionRedactionPlanResult = {
+  replacements: Array<{
+    start: number;
+    end: number;
+    replacement: string;
+  }>;
+  entity_count: number;
+  caller_entity_count: number;
+};
+
 export type NativeSessionStatus =
   | "active"
   | "not_yet_active"
@@ -156,6 +177,14 @@ export type NativePreparedRedactionSessionBinding = {
     observedAtEpochSeconds: number,
     operators?: NativeBindingOperatorConfig,
   ) => string;
+  planStaticEntitiesWithCallerDetections?: (
+    options: NativeBindingSessionCallerRedactionPlanOptions,
+  ) => NativePreparedSessionRedactionPlanBinding;
+};
+
+export type NativePreparedSessionRedactionPlanBinding = {
+  resultJson: () => string;
+  commit: () => void;
 };
 
 export type NativePreparedSearchBinding = {
@@ -279,6 +308,29 @@ export type NativeCallerDetection = {
 export type NativeCallerRedactionOptions = {
   detections: readonly NativeCallerDetection[];
   operators?: NativeOperatorConfig;
+};
+
+export type NativeSessionCallerRedactionInput = {
+  fullText: string;
+  detections: readonly NativeCallerDetection[];
+};
+
+export type NativeSessionCallerRedactionPlanOptions = {
+  inputs: readonly NativeSessionCallerRedactionInput[];
+  operators?: NativeOperatorConfig;
+  observedAtEpochSeconds?: number;
+};
+
+export type NativeTextReplacement = {
+  start: number;
+  end: number;
+  replacement: string;
+};
+
+export type NativeSessionBlockRedactionPlan = {
+  replacements: readonly NativeTextReplacement[];
+  entityCount: number;
+  callerEntityCount: number;
 };
 
 const callerDetectionRequestJson = (
@@ -607,6 +659,56 @@ export class PreparedNativeRedactionSession {
 
   redact_text_json_at(options: NativeSessionRedactionAtOptions): string {
     return this.redactTextJsonAt(options);
+  }
+
+  planTextBatchWithCallerDetections({
+    inputs,
+    operators,
+    observedAtEpochSeconds,
+  }: NativeSessionCallerRedactionPlanOptions): PreparedNativeSessionRedactionPlan {
+    const plan = this.#session.planStaticEntitiesWithCallerDetections;
+    if (!plan) {
+      throw new Error(
+        "Native anonymize binding does not support transactional caller-detection session plans",
+      );
+    }
+    const bindingOperators = toBindingOperatorConfig(operators);
+    const bindingPlan = plan.call(this.#session, {
+      inputs: inputs.map(({ detections, fullText }) => ({
+        fullText,
+        requestJson: callerDetectionRequestJson(detections),
+      })),
+      ...(bindingOperators === undefined
+        ? {}
+        : { operators: bindingOperators }),
+      ...(observedAtEpochSeconds === undefined
+        ? {}
+        : { observedAtEpochSeconds }),
+    });
+    return new PreparedNativeSessionRedactionPlan(bindingPlan);
+  }
+}
+
+export class PreparedNativeSessionRedactionPlan {
+  readonly blocks: readonly NativeSessionBlockRedactionPlan[];
+  readonly #plan: NativePreparedSessionRedactionPlanBinding;
+
+  constructor(plan: NativePreparedSessionRedactionPlanBinding) {
+    this.#plan = plan;
+    const blocks: CanonicalSessionRedactionPlanResult[] = JSON.parse(
+      plan.resultJson(),
+    );
+    this.blocks = blocks.map(
+      ({ caller_entity_count, entity_count, replacements }) => ({
+        replacements,
+        entityCount: entity_count,
+        callerEntityCount: caller_entity_count,
+      }),
+    );
+  }
+
+  commit(): void {
+    this.#plan.commit();
   }
 }
 

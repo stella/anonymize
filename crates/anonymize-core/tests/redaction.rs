@@ -278,6 +278,12 @@ fn redact_operator_is_not_reversible() {
   assert!(result.redacted_text.contains("[GONE]"));
   assert!(
     result
+      .replacements
+      .iter()
+      .any(|replacement| replacement.replacement == "[GONE]")
+  );
+  assert!(
+    result
       .redaction_map
       .iter()
       .all(|entry| entry.placeholder != "[PERSON_1]")
@@ -309,6 +315,8 @@ fn keep_operator_preserves_text_without_reversible_mapping() {
     "Contact Alice Smith at [EMAIL_ADDRESS_1]."
   );
   assert_eq!(result.entity_count, 2);
+  assert_eq!(result.replacements.len(), 1);
+  assert_eq!(result.replacements[0].replacement, "[EMAIL_ADDRESS_1]");
   assert!(
     result
       .redaction_map
@@ -370,6 +378,16 @@ fn mask_operator_masks_whole_graphemes_from_the_configured_direction() {
     let result = redact_text(text, &entities, &config).unwrap();
 
     assert_eq!(result.redacted_text, expected);
+    assert_eq!(
+      result.replacements.len(),
+      usize::try_from(count.min(4)).unwrap_or(usize::MAX)
+    );
+    assert!(
+      result
+        .replacements
+        .iter()
+        .all(|replacement| replacement.replacement == "●")
+    );
     assert!(result.redaction_map.is_empty());
     assert_eq!(result.operator_map[0].operator, OperatorType::Mask);
   }

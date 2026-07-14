@@ -333,6 +333,113 @@ describe("createNativePipelineFromConfig", () => {
     expect(masked.redaction.redactionMap.size).toBe(0);
     expect(masked.redaction.operatorMap.get("[PERSON_1]")).toBe("mask");
   });
+
+  test("plans caller-detection session updates transactionally", async () => {
+    const pipeline = await createNativePipelineFromConfig({
+      binding,
+      config: { ...baseConfig(), labels: ["person"] },
+    });
+    const session = pipeline.createRedactionSession("workflow_case_1");
+    const plan = session.planTextBatchWithCallerDetections({
+      inputs: [
+        {
+          fullText: "😀Alice signed.",
+          detections: [
+            {
+              start: 2,
+              end: 7,
+              label: "person",
+              score: 0.9,
+              providerId: "test-provider",
+              detectionId: "person-1",
+            },
+          ],
+        },
+        {
+          fullText: "Alice replied.",
+          detections: [
+            {
+              start: 0,
+              end: 5,
+              label: "person",
+              score: 0.9,
+              providerId: "test-provider",
+              detectionId: "person-2",
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(session.mappingCount()).toBe(0);
+    expect(plan.blocks).toEqual([
+      {
+        replacements: [
+          {
+            start: 2,
+            end: 7,
+            replacement: "[PERSON_workflow%5Fcase%5F1_1]",
+          },
+        ],
+        entityCount: 1,
+        callerEntityCount: 1,
+      },
+      {
+        replacements: [
+          {
+            start: 0,
+            end: 5,
+            replacement: "[PERSON_workflow%5Fcase%5F1_1]",
+          },
+        ],
+        entityCount: 1,
+        callerEntityCount: 1,
+      },
+    ]);
+    plan.commit();
+    expect(session.mappingCount()).toBe(1);
+    expect(session.restoreText("[PERSON_workflow%5Fcase%5F1_1]")).toBe("Alice");
+    expect(() => plan.commit()).toThrow("already been committed");
+
+    const bobPlan = session.planTextBatchWithCallerDetections({
+      inputs: [
+        {
+          fullText: "Bob",
+          detections: [
+            {
+              start: 0,
+              end: 3,
+              label: "person",
+              score: 0.9,
+              providerId: "test-provider",
+              detectionId: "person-3",
+            },
+          ],
+        },
+      ],
+    });
+    const carolPlan = session.planTextBatchWithCallerDetections({
+      inputs: [
+        {
+          fullText: "Carol",
+          detections: [
+            {
+              start: 0,
+              end: 5,
+              label: "person",
+              score: 0.9,
+              providerId: "test-provider",
+              detectionId: "person-4",
+            },
+          ],
+        },
+      ],
+    });
+    bobPlan.commit();
+    expect(() => carolPlan.commit()).toThrow(
+      "changed after the plan was created",
+    );
+  });
 });
 
 describe("language scope", () => {

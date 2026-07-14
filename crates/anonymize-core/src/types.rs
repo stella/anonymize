@@ -569,10 +569,18 @@ pub struct OperatorEntry {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RedactionReplacement {
+  pub start: u32,
+  pub end: u32,
+  pub replacement: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RedactionResult {
   pub redacted_text: String,
   pub redaction_map: Vec<RedactionEntry>,
   pub operator_map: Vec<OperatorEntry>,
+  pub replacements: Vec<RedactionReplacement>,
   pub entity_count: usize,
 }
 
