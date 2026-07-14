@@ -3,7 +3,7 @@ import type {
   NativeOperatorConfig,
   NativeSessionBlockRedactionPlan,
   NativeSessionCallerRedactionPlanOptions,
-} from "@stll/anonymize/native";
+} from "@stll/anonymize";
 
 export const DOCX_PART_TYPES = {
   comments: "comments",
