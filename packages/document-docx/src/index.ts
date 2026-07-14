@@ -10,15 +10,28 @@ export {
 export { DocxRewriteError, rewriteDocxText } from "./rewrite";
 export { DocxRestorationError, restoreDocxText } from "./restore";
 export {
+  DOCX_ANONYMIZATION_ERROR_CODES,
+  DOCX_COVERAGE_MODES,
   DOCX_EXTRACTION_ERROR_CODES,
   DOCX_PART_TYPES,
   DOCX_RESTORATION_ERROR_CODES,
   DOCX_REWRITE_ERROR_CODES,
 } from "./types";
 export type {
+  AnonymizeDocxOptions,
+  DocxAnonymizationErrorCode,
+  DocxAnonymizationPolicy,
+  DocxAnonymizationResult,
+  DocxAnonymizationSession,
+  DocxAnonymizationSummary,
+  DocxBlockCallerDetections,
   DocxBlockRewrite,
   DocxBlockLocation,
+  DocxCallerDetection,
   DocxCoverage,
+  DocxCoverageMode,
+  DocxCoveragePolicy,
+  DocxCoverageSummary,
   DocxCoverageItem,
   DocxExtraction,
   DocxExtractionErrorCode,
@@ -27,10 +40,17 @@ export type {
   DocxRestorationErrorCode,
   DocxRestorationResult,
   DocxRestorationSession,
+  DocxSessionRedactionPlan,
   DocxRewriteErrorCode,
   DocxRewriteResult,
   DocxTextReplacement,
   DocxTextBlock,
   DocxTextSegment,
+  DocxWorkflowCoverage,
   RestoreDocxTextOptions,
 } from "./types";
+export {
+  DOCX_ANONYMIZATION_MAX_CALLER_DETECTIONS,
+  DocxAnonymizationError,
+  anonymizeDocx,
+} from "./anonymize";

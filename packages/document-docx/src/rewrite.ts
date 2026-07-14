@@ -9,9 +9,9 @@ import {
   extractDocxText,
   unzipDocxArchive,
 } from "./extract";
+import { docxLocationKey, docxLocationsEqual } from "./location";
 import {
   DOCX_REWRITE_ERROR_CODES,
-  type DocxBlockLocation,
   type DocxBlockRewrite,
   type DocxRewriteErrorCode,
   type DocxRewriteResult,
@@ -58,51 +58,6 @@ const rewriteError = (
   code: DocxRewriteErrorCode,
   message: string,
 ): DocxRewriteError => new DocxRewriteError(code, message);
-
-const arraysEqual = (
-  left: readonly number[],
-  right: readonly number[],
-): boolean =>
-  left.length === right.length &&
-  left.every((value, index) => value === right.at(index));
-
-const locationsEqual = (
-  left: DocxBlockLocation,
-  right: DocxBlockLocation,
-): boolean => {
-  if (
-    left.type !== right.type ||
-    left.part.type !== right.part.type ||
-    left.part.path !== right.part.path ||
-    left.blockIndex !== right.blockIndex ||
-    !arraysEqual(left.xmlPath, right.xmlPath)
-  ) {
-    return false;
-  }
-  if (left.type === "paragraph" && right.type === "paragraph") {
-    return true;
-  }
-  if (
-    left.type === "table-cell-paragraph" &&
-    right.type === "table-cell-paragraph"
-  ) {
-    return (
-      arraysEqual(left.tablePath, right.tablePath) &&
-      arraysEqual(left.rowPath, right.rowPath) &&
-      arraysEqual(left.cellPath, right.cellPath)
-    );
-  }
-  if (
-    left.type === "text-box-paragraph" &&
-    right.type === "text-box-paragraph"
-  ) {
-    return arraysEqual(left.textBoxPath, right.textBoxPath);
-  }
-  return false;
-};
-
-const locationKey = ({ blockIndex, part }: DocxBlockLocation): string =>
-  `${part.path}\0${blockIndex}`;
 
 const pathKey = (path: readonly number[]): string => path.join(".");
 
@@ -454,14 +409,14 @@ export const rewriteDocxText = (
     };
   }
   const blocksByLocation = new Map(
-    extraction.blocks.map((block) => [locationKey(block.location), block]),
+    extraction.blocks.map((block) => [docxLocationKey(block.location), block]),
   );
   const updatesByPart = new Map<string, Map<string, TextNodeUpdate>>();
   const rewrittenLocations = new Set<string>();
   let appliedReplacementCount = 0;
 
   for (const rewrite of rewrites) {
-    const key = locationKey(rewrite.location);
+    const key = docxLocationKey(rewrite.location);
     if (rewrittenLocations.has(key)) {
       throw rewriteError(
         DOCX_REWRITE_ERROR_CODES.invalidReplacement,
@@ -472,7 +427,7 @@ export const rewriteDocxText = (
     const block = blocksByLocation.get(key);
     if (
       block === undefined ||
-      !locationsEqual(block.location, rewrite.location) ||
+      !docxLocationsEqual(block.location, rewrite.location) ||
       block.text !== rewrite.expectedText
     ) {
       throw rewriteError(

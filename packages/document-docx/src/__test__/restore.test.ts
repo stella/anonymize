@@ -88,6 +88,7 @@ describe("restoreDocxText", () => {
       sessionId: "matter_1",
       restoredBlockCount: 1,
       restoredPlaceholderCount: 2,
+      coverage: { status: "full" },
     });
     expect(extractDocxText(result.document).blocks.at(0)?.text).toBe(
       "Contact Alice and Alice.",

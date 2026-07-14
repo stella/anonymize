@@ -140,6 +140,7 @@
       "name": "@stll/anonymize-docx",
       "version": "2.0.1",
       "dependencies": {
+        "@stll/anonymize": "workspace:^",
         "fflate": "^0.8.3",
         "saxes": "^6.0.0",
       },

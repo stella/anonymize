@@ -1,3 +1,4 @@
+import { docxWorkflowCoverage } from "./coverage";
 import { extractDocxText } from "./extract";
 import { rewriteDocxText } from "./rewrite";
 import {
@@ -195,5 +196,6 @@ export const restoreDocxText = ({
     sessionId,
     restoredBlockCount: restored.rewrittenBlockCount,
     restoredPlaceholderCount,
+    coverage: docxWorkflowCoverage(extraction.coverage),
   };
 };
