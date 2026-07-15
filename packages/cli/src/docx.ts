@@ -1,6 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { realpathSync } from "node:fs";
-import { link, lstat, open, readFile, rename, unlink } from "node:fs/promises";
+import {
+  type FileHandle,
+  link,
+  lstat,
+  open,
+  readFile,
+  rename,
+  unlink,
+} from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 
@@ -18,6 +26,7 @@ import {
 import { parseCountries, UsageError } from "./args";
 
 const DOCX_SESSION_KEY_BYTES = 32;
+const DOCX_SESSION_LOCK_SUFFIX = ".lock";
 const MAX_EPOCH_SECONDS = 4_294_967_295;
 
 const DOCX_SESSION_MODES = {
@@ -115,8 +124,10 @@ Common options:
 
 The session key is read from a file, never from a command argument. In create
 mode the archive path must not exist. Continue mode atomically replaces the
-existing archive only after the DOCX rewrite succeeds. Caller-supplied detection
-plans and interactive review are available through the package API, not this CLI.
+existing archive only after the DOCX rewrite succeeds. It holds an exclusive
+"<archive>.lock" sidecar throughout the continuation to prevent lost updates.
+Caller-supplied detection plans and interactive review are available through the
+package API, not this CLI.
 `;
 
 const splitList = (value: string): string[] => [
@@ -329,6 +340,9 @@ const canonicalPath = (path: string): string => {
   }
 };
 
+const sessionArchiveLockPath = (archivePath: string): string =>
+  `${canonicalPath(archivePath)}${DOCX_SESSION_LOCK_SUFFIX}`;
+
 const assertDistinctPaths = (
   paths: readonly { path: string; flag: string }[],
 ): void => {
@@ -367,12 +381,22 @@ const assertPathDoesNotExist = async (
 const preflightDocxCommand = async (
   command: Exclude<DocxCommand, { type: "help" }>,
 ): Promise<void> => {
-  assertDistinctPaths([
+  const paths = [
     { path: command.inputPath, flag: "input" },
     { path: command.outputPath, flag: "--output" },
     { path: command.sessionArchivePath, flag: "--session-archive" },
     { path: command.sessionKeyPath, flag: "--session-key-file" },
-  ]);
+  ];
+  if (
+    command.type === "anonymize" &&
+    command.sessionMode === DOCX_SESSION_MODES.continue
+  ) {
+    paths.push({
+      path: sessionArchiveLockPath(command.sessionArchivePath),
+      flag: "session archive lock",
+    });
+  }
+  assertDistinctPaths(paths);
   await assertPathDoesNotExist(command.outputPath, "--output");
   if (
     command.type === "anonymize" &&
@@ -383,6 +407,42 @@ const preflightDocxCommand = async (
       "--session-archive",
     );
   }
+};
+
+type SessionArchiveLock = {
+  release: () => Promise<void>;
+};
+
+const acquireSessionArchiveLock = async (
+  archivePath: string,
+): Promise<SessionArchiveLock> => {
+  const lockPath = sessionArchiveLockPath(archivePath);
+  let handle: FileHandle;
+  try {
+    handle = await open(lockPath, "wx", 0o600);
+  } catch (error) {
+    if (isNodeError(error, "EEXIST")) {
+      throw new Error(
+        `encrypted session archive is locked by another continuation; if no process is running, remove the stale lock "${lockPath}"`,
+      );
+    }
+    throw error;
+  }
+  return {
+    release: async () => {
+      try {
+        await handle.close();
+      } finally {
+        try {
+          await unlink(lockPath);
+        } catch (error) {
+          if (!isNodeError(error, "ENOENT")) {
+            throw error;
+          }
+        }
+      }
+    },
+  };
 };
 
 const readSessionKey = async (path: string): Promise<Uint8Array> => {
@@ -529,10 +589,15 @@ const runDocxAnonymize = async (
   command: Extract<DocxCommand, { type: "anonymize" }>,
   pipeline: DocxCliPipeline,
 ): Promise<void> => {
-  const key = await readSessionKey(command.sessionKeyPath);
+  const archiveLock =
+    command.sessionMode === DOCX_SESSION_MODES.continue
+      ? await acquireSessionArchiveLock(command.sessionArchivePath)
+      : undefined;
+  let key: Uint8Array | undefined;
   let documentTemporary: string | undefined;
   let archiveTemporary: string | undefined;
   try {
+    key = await readSessionKey(command.sessionKeyPath);
     const [document, existingArchive] = await Promise.all([
       readFile(command.inputPath),
       command.sessionMode === DOCX_SESSION_MODES.continue
@@ -583,11 +648,12 @@ const runDocxAnonymize = async (
     }
     outputSummary(command, "anonymized", result.summary);
   } finally {
-    key.fill(0);
+    key?.fill(0);
     await Promise.all([
       removeStagedFile(documentTemporary),
       removeStagedFile(archiveTemporary),
     ]);
+    await archiveLock?.release();
   }
 };
 

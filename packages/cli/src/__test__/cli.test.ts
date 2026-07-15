@@ -1,6 +1,13 @@
 import { expect, setDefaultTimeout, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { chmod, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  unlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -564,6 +571,41 @@ test("DOCX encrypted-session workflow anonymizes and restores", async () => {
     extractDocxText(await readFile(anonymizedPath)).blocks.at(0)?.text,
   ).toBe("Contact [EMAIL_ADDRESS_matter%5F1_1]");
   expect((await readFile(archivePath)).byteLength).toBeGreaterThan(0);
+
+  const continuedInputPath = join(dir, "continued-input.docx");
+  const continuedOutputPath = join(dir, "continued-output.docx");
+  const archiveBeforeLock = await readFile(archivePath);
+  const lockPath = `${archivePath}.lock`;
+  await writeFile(continuedInputPath, docx("Contact second@example.test"));
+  await writeFile(lockPath, "", { mode: 0o600 });
+  const refusedContinuation = await run([
+    "docx",
+    "anonymize",
+    "--session-mode",
+    "continue",
+    "--session-archive",
+    archivePath,
+    "--session-key-file",
+    keyPath,
+    "--session-id",
+    "matter_1",
+    "--labels",
+    "email",
+    "--languages",
+    "en",
+    "--countries",
+    "US",
+    "--output",
+    continuedOutputPath,
+    continuedInputPath,
+  ]);
+  expect(refusedContinuation.code).toBe(1);
+  expect(refusedContinuation.err).toContain(
+    "session archive is locked by another continuation",
+  );
+  expect(await Bun.file(continuedOutputPath).exists()).toBeFalse();
+  expect(await readFile(archivePath)).toEqual(archiveBeforeLock);
+  await unlink(lockPath);
 
   const partialInputPath = join(dir, "anonymized-hyperlink.docx");
   const refusedRestorePath = join(dir, "refused-restored.docx");

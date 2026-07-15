@@ -71,7 +71,10 @@ anonymize docx anonymize contract.docx \
 Continue the same session across another document by changing
 `--session-mode create` to `--session-mode continue`. Continue mode opens the
 expected encrypted archive and atomically replaces it only after the complete
-DOCX rewrite succeeds.
+DOCX rewrite succeeds. It holds an exclusive `<archive>.lock` sidecar until the
+archive and document are published, so concurrent continuations fail closed
+instead of losing mappings. If a process is interrupted and leaves the lock
+behind, verify that no continuation is still running before removing it.
 
 Restore a document with the same archive, key, and expected session identity:
 
