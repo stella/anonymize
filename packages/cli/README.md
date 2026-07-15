@@ -47,6 +47,54 @@ anonymize -d key.json reply.txt
 Run `anonymize --help` for the full reference, including the
 `--json` schema and exit codes.
 
+## DOCX workflows
+
+DOCX anonymization preserves supported document structure and stores reversible
+placeholder mappings only in an encrypted session archive. Create a raw 32-byte
+key file outside the document and restrict its filesystem permissions:
+
+```bash
+openssl rand 32 > matter.key
+chmod 600 matter.key
+
+anonymize docx anonymize contract.docx \
+  --output contract.anonymized.docx \
+  --session-mode create \
+  --session-archive matter.stlasession \
+  --session-key-file matter.key \
+  --session-id opaque_matter_1 \
+  --countries CZ,DE \
+  --languages cs,de \
+  --json
+```
+
+Continue the same session across another document by changing
+`--session-mode create` to `--session-mode continue`. Continue mode opens the
+expected encrypted archive and atomically replaces it only after the complete
+DOCX rewrite succeeds. It holds an exclusive `<archive>.lock` sidecar until the
+archive and document are published, so concurrent continuations fail closed
+instead of losing mappings. If a process is interrupted and leaves the lock
+behind, verify that no continuation is still running before removing it.
+
+Restore a document with the same archive, key, and expected session identity:
+
+```bash
+anonymize docx restore contract.anonymized.docx \
+  --output contract.restored.docx \
+  --session-archive matter.stlasession \
+  --session-key-file matter.key \
+  --session-id opaque_matter_1 \
+  --json
+```
+
+The default `--coverage require-full` policy fails closed on hyperlinks,
+tracked revisions, and other content outside the rewrite surface. Processing
+such a document requires explicit `--coverage allow-partial`. JSON output is an
+aggregate audit-safe summary; it excludes extracted text, detected entity text,
+session mappings, key material, and internal DOCX part paths. Document output
+paths never overwrite existing files. Session keys are read only from files,
+never from command arguments.
+
 ## Batch processing
 
 A directory argument anonymizes the text files inside it,

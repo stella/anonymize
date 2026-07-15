@@ -51,6 +51,10 @@ files inside it (add --recursive to descend into subdirectories).
 Writes to stdout, or to --output.
 All processing is local; the CLI makes no network calls.
 
+DOCX workflows:
+  Run "anonymize docx --help" for structure-preserving DOCX anonymization
+  and restoration with encrypted session archives.
+
 Options:
   -o, --output <path>       Output file, or directory for batch
                             input (multiple files or a directory)
@@ -134,6 +138,7 @@ Examples:
   anonymize -d key.json --revert "[PERSON_1]" contract.anon.txt
   cat notes.md | anonymize --countries CZ,SK --languages cs,sk
   anonymize --json --quiet input.txt | jq '.entities[].label'
+  anonymize docx --help
 `;
 
 const splitList = (value: string): string[] => [
