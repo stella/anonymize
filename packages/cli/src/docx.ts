@@ -413,6 +413,21 @@ type SessionArchiveLock = {
   release: () => Promise<void>;
 };
 
+type LockReleaseResult =
+  | { type: "succeeded" }
+  | { type: "failed"; error: unknown };
+
+const releaseResult = async (
+  operation: Promise<void>,
+): Promise<LockReleaseResult> => {
+  try {
+    await operation;
+    return { type: "succeeded" };
+  } catch (error) {
+    return { type: "failed", error };
+  }
+};
+
 const acquireSessionArchiveLock = async (
   archivePath: string,
 ): Promise<SessionArchiveLock> => {
@@ -430,16 +445,16 @@ const acquireSessionArchiveLock = async (
   }
   return {
     release: async () => {
-      try {
-        await handle.close();
-      } finally {
-        try {
-          await unlink(lockPath);
-        } catch (error) {
-          if (!isNodeError(error, "ENOENT")) {
-            throw error;
-          }
-        }
+      const closeResult = await releaseResult(handle.close());
+      const unlinkResult = await releaseResult(unlink(lockPath));
+      if (closeResult.type === "failed") {
+        throw closeResult.error;
+      }
+      if (
+        unlinkResult.type === "failed" &&
+        !isNodeError(unlinkResult.error, "ENOENT")
+      ) {
+        throw unlinkResult.error;
       }
     },
   };
