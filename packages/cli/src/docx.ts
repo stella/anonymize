@@ -413,13 +413,13 @@ type SessionArchiveLock = {
   release: () => Promise<void>;
 };
 
-type LockReleaseResult =
+type OperationResult =
   | { type: "succeeded" }
   | { type: "failed"; error: unknown };
 
-const releaseResult = async (
+const captureOperationResult = async (
   operation: Promise<void>,
-): Promise<LockReleaseResult> => {
+): Promise<OperationResult> => {
   try {
     await operation;
     return { type: "succeeded" };
@@ -445,8 +445,8 @@ const acquireSessionArchiveLock = async (
   }
   return {
     release: async () => {
-      const closeResult = await releaseResult(handle.close());
-      const unlinkResult = await releaseResult(unlink(lockPath));
+      const closeResult = await captureOperationResult(handle.close());
+      const unlinkResult = await captureOperationResult(unlink(lockPath));
       if (closeResult.type === "failed") {
         throw closeResult.error;
       }
@@ -604,10 +604,16 @@ const runDocxAnonymize = async (
   command: Extract<DocxCommand, { type: "anonymize" }>,
   pipeline: DocxCliPipeline,
 ): Promise<void> => {
+  const archivePath =
+    command.sessionMode === DOCX_SESSION_MODES.continue
+      ? canonicalPath(command.sessionArchivePath)
+      : command.sessionArchivePath;
   const archiveLock =
     command.sessionMode === DOCX_SESSION_MODES.continue
-      ? await acquireSessionArchiveLock(command.sessionArchivePath)
+      ? await acquireSessionArchiveLock(archivePath)
       : undefined;
+  let workflowResult: OperationResult = { type: "succeeded" };
+  let lockReleaseResult: OperationResult = { type: "succeeded" };
   let key: Uint8Array | undefined;
   let documentTemporary: string | undefined;
   let archiveTemporary: string | undefined;
@@ -616,7 +622,7 @@ const runDocxAnonymize = async (
     const [document, existingArchive] = await Promise.all([
       readFile(command.inputPath),
       command.sessionMode === DOCX_SESSION_MODES.continue
-        ? readFile(command.sessionArchivePath)
+        ? readFile(archivePath)
         : Promise.resolve(undefined),
     ]);
     const session =
@@ -638,10 +644,7 @@ const runDocxAnonymize = async (
       command.observedAtEpochSeconds,
     );
     documentTemporary = await stageFile(command.outputPath, result.document);
-    archiveTemporary = await stageFile(
-      command.sessionArchivePath,
-      encryptedArchive,
-    );
+    archiveTemporary = await stageFile(archivePath, encryptedArchive);
     if (command.sessionMode === DOCX_SESSION_MODES.create) {
       await publishNewFile(
         archiveTemporary,
@@ -649,7 +652,7 @@ const runDocxAnonymize = async (
         "--session-archive",
       );
     } else {
-      await publishReplacement(archiveTemporary, command.sessionArchivePath);
+      await publishReplacement(archiveTemporary, archivePath);
     }
     archiveTemporary = undefined;
     try {
@@ -662,13 +665,29 @@ const runDocxAnonymize = async (
       );
     }
     outputSummary(command, "anonymized", result.summary);
+  } catch (error) {
+    workflowResult = { type: "failed", error };
   } finally {
     key?.fill(0);
     await Promise.all([
       removeStagedFile(documentTemporary),
       removeStagedFile(archiveTemporary),
     ]);
-    await archiveLock?.release();
+    if (archiveLock !== undefined) {
+      lockReleaseResult = await captureOperationResult(archiveLock.release());
+    }
+  }
+  if (workflowResult.type === "failed") {
+    throw workflowResult.error;
+  }
+  if (lockReleaseResult.type === "failed") {
+    const message =
+      lockReleaseResult.error instanceof Error
+        ? lockReleaseResult.error.message
+        : String(lockReleaseResult.error);
+    throw new Error(
+      `DOCX and session outputs were published, but the session archive lock could not be released: ${message}`,
+    );
   }
 };
 

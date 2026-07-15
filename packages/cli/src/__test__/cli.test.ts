@@ -2,9 +2,11 @@ import { expect, setDefaultTimeout, test } from "bun:test";
 import { existsSync } from "node:fs";
 import {
   chmod,
+  lstat,
   mkdir,
   mkdtemp,
   readFile,
+  symlink,
   unlink,
   writeFile,
 } from "node:fs/promises";
@@ -574,9 +576,11 @@ test("DOCX encrypted-session workflow anonymizes and restores", async () => {
 
   const continuedInputPath = join(dir, "continued-input.docx");
   const continuedOutputPath = join(dir, "continued-output.docx");
+  const continuedArchivePath = join(dir, "continued-session.stlasession");
   const archiveBeforeLock = await readFile(archivePath);
   const lockPath = `${archivePath}.lock`;
   await writeFile(continuedInputPath, docx("Contact second@example.test"));
+  await symlink(archivePath, continuedArchivePath);
   await writeFile(lockPath, "", { mode: 0o600 });
   const refusedContinuation = await run([
     "docx",
@@ -584,7 +588,7 @@ test("DOCX encrypted-session workflow anonymizes and restores", async () => {
     "--session-mode",
     "continue",
     "--session-archive",
-    archivePath,
+    continuedArchivePath,
     "--session-key-file",
     keyPath,
     "--session-id",
@@ -606,6 +610,35 @@ test("DOCX encrypted-session workflow anonymizes and restores", async () => {
   expect(await Bun.file(continuedOutputPath).exists()).toBeFalse();
   expect(await readFile(archivePath)).toEqual(archiveBeforeLock);
   await unlink(lockPath);
+
+  const continued = await run([
+    "docx",
+    "anonymize",
+    "--session-mode",
+    "continue",
+    "--session-archive",
+    continuedArchivePath,
+    "--session-key-file",
+    keyPath,
+    "--session-id",
+    "matter_1",
+    "--labels",
+    "email",
+    "--languages",
+    "en",
+    "--countries",
+    "US",
+    "--output",
+    continuedOutputPath,
+    continuedInputPath,
+  ]);
+  expect(continued.code).toBe(0);
+  expect(
+    extractDocxText(await readFile(continuedOutputPath)).blocks.at(0)?.text,
+  ).toBe("Contact [EMAIL_ADDRESS_matter%5F1_2]");
+  expect(await readFile(archivePath)).not.toEqual(archiveBeforeLock);
+  expect((await lstat(continuedArchivePath)).isSymbolicLink()).toBeTrue();
+  expect(await Bun.file(lockPath).exists()).toBeFalse();
 
   const partialInputPath = join(dir, "anonymized-hyperlink.docx");
   const refusedRestorePath = join(dir, "refused-restored.docx");
@@ -654,6 +687,25 @@ test("DOCX encrypted-session workflow anonymizes and restores", async () => {
   expect(extractDocxText(await readFile(restoredPath)).blocks.at(0)?.text).toBe(
     originalText,
   );
+
+  const continuedRestoredPath = join(dir, "continued-restored.docx");
+  const continuedRestored = await run([
+    "docx",
+    "restore",
+    "--session-archive",
+    archivePath,
+    "--session-key-file",
+    keyPath,
+    "--session-id",
+    "matter_1",
+    "--output",
+    continuedRestoredPath,
+    continuedOutputPath,
+  ]);
+  expect(continuedRestored.code).toBe(0);
+  expect(
+    extractDocxText(await readFile(continuedRestoredPath)).blocks.at(0)?.text,
+  ).toBe("Contact second@example.test");
 });
 
 test("DOCX create mode refuses an existing session archive before runtime setup", async () => {
