@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+## 2.0.2 (2026-07-16)
+
+### Features
+
+- Publish a versioned capability manifest and accept validated caller-supplied
+  detections through the shared resolution and redaction pipeline across Node,
+  browser WASM, and Python, with audit-safe provenance diagnostics.
+- Add `keep` and configurable Unicode-grapheme-safe `mask` operators across all
+  runtimes.
+- Add stable cross-document redaction sessions with lifecycle controls,
+  deterministic placeholders, restoration, and bounded authenticated encrypted
+  archives across Rust, Node, browser WASM, and Python.
+- Publish `@stll/anonymize-docx` with bounded structure-aware extraction,
+  formatting-preserving rewrites, session-backed restoration, scriptable
+  anonymization, explicit coverage policies, and aggregate audit-safe summaries.
+- Add encrypted DOCX anonymize and restore CLI workflows with atomic no-clobber
+  outputs and serialized session continuation.
+
+### Fixes
+
+- Preserve placeholder namespaces during DOCX restoration and reject unsupported
+  or incomplete restoration coverage instead of silently skipping content.
+- Keep benchmark detector assets reproducible without the removed vulnerable
+  runtime dependency tree.
+
 ## 2.0.1 (2026-07-07)
 
 ### Features

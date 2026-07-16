@@ -298,7 +298,7 @@ flow, and extension rules are in
 
 ## Versioning and status
 
-Current release line: **2.0.0**. In 2.0 the product runtime moved from the in-process TypeScript pipeline to the Rust-native
+Current release line: **2.0.2**. In 2.0 the product runtime moved from the in-process TypeScript pipeline to the Rust-native
 SDK, and the package root now exports the native API (`getDefaultNativePipeline`
 whose pipelines expose `redactText`, plus `redact_text`, `deanonymise`,
 `exportRedactionKey`, and the prepared-package helpers). The 1.x
