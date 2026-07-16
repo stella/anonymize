@@ -106,7 +106,7 @@
       "dependencies": {
         "@stll/anonymize": "^2.0.2",
         "@stll/anonymize-data": "^0.0.6",
-        "@stll/anonymize-docx": "^2.0.1",
+        "@stll/anonymize-docx": "^2.0.2",
       },
       "devDependencies": {
         "@types/node": "^26.1.1",
