@@ -30,6 +30,9 @@ jobs:
         with:
           bun-version-file: "package.json"
 
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
       - name: Require a changeset for runtime source changes
         run: bun run changeset:check
         env:
