@@ -39,6 +39,15 @@ export type { NativePipelineFromPackageOptions } from "./native";
 
 type NativePipelinePackageCacheValue = Promise<Uint8Array> | Uint8Array;
 
+// Bounds each shared package cache (the dictionary-less bucket below, and
+// each per-`Dictionaries` bucket handed out by `sharedPackageCacheFor`) to a
+// fixed number of entries. `nativePackageCacheKey` fingerprints
+// caller-suppliable config (custom deny lists, custom regexes, gazetteer
+// entries) via `pipelineConfigKey`, so without a cap a caller that varies
+// those fields grows a bucket — and the multi-MB assembled packages it
+// holds — without limit.
+export const SHARED_PACKAGE_CACHE_MAX_ENTRIES = 32;
+
 const sharedPackageByDictionaries = new WeakMap<
   Dictionaries,
   Map<string, NativePipelinePackageCacheValue>
@@ -49,6 +58,34 @@ const sharedPackageWithoutDictionaries = new Map<
 >();
 const dictionaryCacheIds = new WeakMap<Dictionaries, number>();
 let nextDictionaryCacheId = 0;
+
+/** Record `key` as most-recently-used in `cache`, evicting the
+ * least-recently-used entry first once the cache is at capacity. A `Map`'s
+ * insertion order doubles as recency order here: touching an existing key
+ * deletes then re-sets it to move it to the end, and eviction drops the
+ * first (oldest) key.
+ *
+ * Evicting a still-in-flight build only drops the cache's reference to its
+ * promise; the caller that started the build (and any concurrent caller that
+ * already read the promise before eviction) still resolves it correctly via
+ * the guarded `sharedCache.get(key) === promise` checks in
+ * `getCachedNativePipelinePackage`. A later caller for the same key just
+ * misses the dedupe and starts a fresh build — bounded memory takes priority
+ * over perfect dedupe under cache pressure. */
+const touchSharedPackageCacheEntry = (
+  cache: Map<string, NativePipelinePackageCacheValue>,
+  key: string,
+  value: NativePipelinePackageCacheValue,
+): void => {
+  cache.delete(key);
+  if (cache.size >= SHARED_PACKAGE_CACHE_MAX_ENTRIES) {
+    const oldestKey = cache.keys().next().value;
+    if (oldestKey !== undefined) {
+      cache.delete(oldestKey);
+    }
+  }
+  cache.set(key, value);
+};
 
 const dictionaryCacheKey = (dictionaries: Dictionaries | undefined): string => {
   if (dictionaries === undefined) {
@@ -235,6 +272,7 @@ const getCachedNativePipelinePackage = async ({
   const sharedCache = sharedPackageCacheFor(scopedConfig.dictionaries);
   const shared = sharedCache.get(key);
   if (shared !== undefined) {
+    touchSharedPackageCacheEntry(sharedCache, key, shared);
     const packageBytes = await shared;
     ctx.nativePipelinePackage = packageBytes;
     ctx.nativePipelinePackageKey = key;
@@ -251,7 +289,7 @@ const getCachedNativePipelinePackage = async ({
     compressed,
   });
   ctx.nativePipelinePackagePromise = promise;
-  sharedCache.set(key, promise);
+  touchSharedPackageCacheEntry(sharedCache, key, promise);
   let packageBytes: Uint8Array;
   try {
     packageBytes = await promise;

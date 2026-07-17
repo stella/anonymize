@@ -114,6 +114,13 @@ const NODE_FS_MODULE = "node:fs/promises";
 const NATIVE_ASSET_DIR = "native";
 const DEFAULT_PACKAGE_FILE = "native-pipeline.stlanonpkg";
 const LANGUAGE_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
+const DEFAULT_PIPELINE_CACHE_KEY = "<default>";
+// Bounds `defaultPipelineCache` to a small, fixed number of prepared
+// pipelines: without a cap, a caller that varies `language` (e.g. many
+// unrecognized tags that all fall back to the same bundled package, see
+// `defaultPipelineCacheKey`) grows this cache — and the prepared pipelines it
+// holds — without limit.
+const DEFAULT_PIPELINE_CACHE_MAX_ENTRIES = 32;
 
 let bindingPromise: Promise<NativeAnonymizeBinding> | undefined;
 const defaultPipelineCache = new Map<string, Promise<PreparedNativePipeline>>();
@@ -252,6 +259,36 @@ export const loadDefaultPipeline = async (
   }
 };
 
+/** Normalized cache key for {@link defaultPipelineCache}: `undefined` maps to
+ * the bundled-default sentinel, everything else goes through the same
+ * {@link normalizeLanguage} helper `loadDefaultPipeline`/`defaultPackageUrl`
+ * already validate against, so aliases that differ only by case or whitespace
+ * (e.g. `"EN"` vs `"en"`) share one cached pipeline instead of each minting
+ * their own. */
+const defaultPipelineCacheKey = (language: string | undefined): string =>
+  language === undefined
+    ? DEFAULT_PIPELINE_CACHE_KEY
+    : normalizeLanguage(language);
+
+/** Record `key` as most-recently-used in {@link defaultPipelineCache},
+ * evicting the least-recently-used entry first once the cache is at
+ * capacity. A `Map`'s insertion order doubles as recency order here: touching
+ * an existing key deletes then re-sets it to move it to the end, and
+ * eviction drops the first (oldest) key. */
+const touchDefaultPipelineCacheEntry = (
+  key: string,
+  pipeline: Promise<PreparedNativePipeline>,
+): void => {
+  defaultPipelineCache.delete(key);
+  if (defaultPipelineCache.size >= DEFAULT_PIPELINE_CACHE_MAX_ENTRIES) {
+    const oldestKey = defaultPipelineCache.keys().next().value;
+    if (oldestKey !== undefined) {
+      defaultPipelineCache.delete(oldestKey);
+    }
+  }
+  defaultPipelineCache.set(key, pipeline);
+};
+
 /** Cached variant of {@link loadDefaultPipeline}: the default pipeline for a
  * given language is fetched and prepared once, then reused.
  *
@@ -267,9 +304,19 @@ export const getDefaultPipeline = (
   if (options?.binding) {
     return loadDefaultPipeline(language, options);
   }
-  const key = language ?? "<default>";
+  let key: string;
+  try {
+    key = defaultPipelineCacheKey(language);
+  } catch (error) {
+    // normalizeLanguage() validates the tag; surface an invalid language as a
+    // rejection like the rest of this async surface, not a synchronous throw
+    // (this function isn't declared `async`, so an uncaught throw here would
+    // escape synchronously instead of rejecting the returned promise).
+    return Promise.reject(error);
+  }
   const cached = defaultPipelineCache.get(key);
   if (cached !== undefined) {
+    touchDefaultPipelineCacheEntry(key, cached);
     return cached;
   }
   // Evict the entry on rejection so a failed load (e.g. a transient fetch/read
@@ -278,7 +325,7 @@ export const getDefaultPipeline = (
     defaultPipelineCache.delete(key);
     throw error;
   });
-  defaultPipelineCache.set(key, pipeline);
+  touchDefaultPipelineCacheEntry(key, pipeline);
   return pipeline;
 };
 

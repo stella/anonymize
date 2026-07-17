@@ -16,11 +16,13 @@ import { describe, expect, test } from "bun:test";
 
 import { createPipelineContext } from "../context";
 import { applyPipelineLanguageScope } from "../language-scope";
+import type { NativeAnonymizeBinding } from "../native";
 import { loadNativeAnonymizeBinding } from "../native-node";
 import {
   createNativePipelineFromConfig,
   prepareNativePipelineConfig,
   prepareNativePipelinePackage,
+  SHARED_PACKAGE_CACHE_MAX_ENTRIES,
 } from "../native-pipeline";
 import { DEFAULT_ENTITY_LABELS, type PipelineConfig } from "../types";
 import { loadTestDictionaries } from "./load-dictionaries";
@@ -479,5 +481,74 @@ describe("language scope", () => {
     expect(viaGerman.name_corpus_data).not.toEqual(
       viaLanguage.name_corpus_data,
     );
+  });
+});
+
+describe("shared prepared-package cache bound", () => {
+  // Security regression: `nativePackageCacheKey` fingerprints caller-supplied
+  // config (custom regexes, deny lists, gazetteer entries), so a caller that
+  // sweeps through many distinct values used to grow the shared package cache
+  // (and the multi-MB assembled packages it holds) without limit. The cache
+  // must now evict least-recently-used entries once it hits
+  // `SHARED_PACKAGE_CACHE_MAX_ENTRIES`.
+  test("evicts least-recently-used entries once the dictionary-less bucket is at capacity", async () => {
+    let buildCount = 0;
+    const countingBinding: NativeAnonymizeBinding = {
+      ...binding,
+      assembleStaticSearchPackageBytes: (...args) => {
+        buildCount += 1;
+        const assemble = binding.assembleStaticSearchPackageBytes;
+        if (assemble === undefined) {
+          throw new Error(
+            "binding does not support assembleStaticSearchPackageBytes",
+          );
+        }
+        return assemble(...args);
+      },
+    };
+
+    // A unique custom-regex pattern per iteration gives each config a
+    // distinct `pipelineConfigKey`, so each call is a genuinely new cache
+    // entry rather than a dedupe hit.
+    const configFor = (n: number): PipelineConfig => ({
+      ...baseConfig(),
+      enableRegex: true,
+      labels: ["custom"],
+      customRegexes: [
+        { pattern: `SHARED-CACHE-BOUND-TEST-${n}-\\d+`, label: "custom" },
+      ],
+    });
+
+    // Fill the shared cache past capacity with distinct configs, each on its
+    // own context so only the module-level shared cache (not the
+    // per-context cache) is exercised.
+    const total = SHARED_PACKAGE_CACHE_MAX_ENTRIES + 4;
+    for (let n = 0; n < total; n += 1) {
+      await prepareNativePipelinePackage({
+        binding: countingBinding,
+        config: configFor(n),
+        context: createPipelineContext(),
+      });
+    }
+    const buildsAfterFill = buildCount;
+
+    // The earliest config was evicted long ago: rebuilding it must miss the
+    // cache and trigger a fresh assemble call, proving the cache did not
+    // grow without bound.
+    await prepareNativePipelinePackage({
+      binding: countingBinding,
+      config: configFor(0),
+      context: createPipelineContext(),
+    });
+    expect(buildCount).toBe(buildsAfterFill + 1);
+
+    // The most recently inserted config is still within the cap and must
+    // still be served from the cache without a rebuild.
+    await prepareNativePipelinePackage({
+      binding: countingBinding,
+      config: configFor(total - 1),
+      context: createPipelineContext(),
+    });
+    expect(buildCount).toBe(buildsAfterFill + 1);
   });
 });
