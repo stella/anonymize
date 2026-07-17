@@ -909,11 +909,20 @@ def _redaction_map_pairs(
 ) -> list[tuple[str, str]]:
     if isinstance(redaction_map, Mapping):
         return list(redaction_map.items())
+    if isinstance(redaction_map, (str, bytes, bytearray, memoryview)):
+        raise TypeError(
+            "redaction_map must be a mapping or a sequence of redaction entries"
+        )
     pairs: list[tuple[str, str]] = []
     for entry in redaction_map:
         if isinstance(entry, RedactionEntry):
             pairs.append((entry.placeholder, entry.original))
             continue
+        if not isinstance(entry, (tuple, list)) or len(entry) != 2:
+            raise TypeError(
+                "Each redaction_map entry must be a RedactionEntry "
+                "or a (placeholder, original) pair"
+            )
         placeholder, original = entry
         pairs.append((placeholder, original))
     return pairs
