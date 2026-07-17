@@ -10,8 +10,6 @@ no_auto_install: true
 pre-commit:
   parallel: false
   commands:
-    secrets:
-      run: bun run secrets:check:staged
     lint:
       glob: "**/*.{ts,tsx,js,jsx}"
       run: bun --bun oxlint -c oxlint.config.ts --threads=2 --deny-warnings --no-error-on-unmatched-pattern --fix {staged_files}
@@ -23,10 +21,18 @@ pre-commit:
     # formatting, which pulls any unstaged hunks into the
     # commit. Accepted trade-off — partial-hunk commits across
     # files the formatter touches are rare, and the alternative
-    # (failing the hook) blocks the common case.
+    # (failing the hook) blocks the common case. `secrets` runs
+    # last (after lint/format) precisely so those `stage_fixed`
+    # hunks are scanned too, not just the hunks staged before
+    # this hook ran.
     format:
       run: bun --bun oxfmt --no-error-on-unmatched-pattern {staged_files} "!.ai/**" "!.agents/**" "!.claude/**" "!AGENTS.md" "!CLAUDE.md" "!GEMINI.md"
       stage_fixed: true
+    # Runs last (parallel: false, so ordering is honored) so it scans
+    # everything staged by lint/format's `stage_fixed`, not just what was
+    # staged before this hook ran.
+    secrets:
+      run: bun run secrets:check:staged
 
 pre-push:
   parallel: true

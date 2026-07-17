@@ -454,10 +454,10 @@ const loadContractFixtureCases = (): ParityCase[] =>
 
 const runPythonParity = (cases: ParityCase[]): PythonParityOutput => {
   const modulePath = getPythonModule();
-  const payloadPath = join(
-    tmpdir(),
-    `stella-anonymize-py-payload-${Date.now()}.json`,
+  const payloadDir = mkdtempSync(
+    join(tmpdir(), "stella-anonymize-py-payload-"),
   );
+  const payloadPath = join(payloadDir, "payload.json");
   writeFileSync(
     payloadPath,
     JSON.stringify({
@@ -472,7 +472,7 @@ const runPythonParity = (cases: ParityCase[]): PythonParityOutput => {
       }),
     ) as PythonParityOutput;
   } finally {
-    rmSync(payloadPath, { force: true });
+    rmSync(payloadDir, { force: true, recursive: true });
   }
 };
 

@@ -82,11 +82,24 @@ fn multi_detector_engine() -> PreparedEngine {
 
 #[test]
 fn static_redaction_is_deterministic_across_repeated_runs() {
-  const INPUT: &str = "Acme s.r.o. filed AB1234. Acme paid CD5678.";
+  const FIXTURE: &str = "Acme s.r.o. filed AB1234. Acme paid CD5678.";
+  // Filler with no regex/literal/gazetteer matches of its own, used only to
+  // push the input past `PARALLEL_SEARCH_MIN_BYTES` (32 KiB). Below that
+  // threshold `find_matches_parallel` never runs, and this test would only
+  // exercise the (already-deterministic) sequential path, making the guard
+  // vacuous.
+  const PADDING: &str =
+    "Lorem ipsum dolor sit amet, consectetur adipiscing elit. ";
+  let mut input = String::with_capacity(33 * 1024);
+  while input.len() < 32 * 1024 {
+    input.push_str(PADDING);
+  }
+  input.push_str(FIXTURE);
+
   let prepared = multi_detector_engine();
 
   let baseline = prepared
-    .redact_static_entities(INPUT, &OperatorConfig::default())
+    .redact_static_entities(&input, &OperatorConfig::default())
     .unwrap();
   // Sanity check the fixture actually detects something, or the test is vacuous.
   assert!(
@@ -98,7 +111,7 @@ fn static_redaction_is_deterministic_across_repeated_runs() {
   // completion-order dependency.
   for run in 1..=64 {
     let again = prepared
-      .redact_static_entities(INPUT, &OperatorConfig::default())
+      .redact_static_entities(&input, &OperatorConfig::default())
       .unwrap();
     assert_eq!(
       again, baseline,

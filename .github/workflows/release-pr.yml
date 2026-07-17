@@ -28,6 +28,12 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           token: ${{ steps.app-token.outputs.token }}
+          # The write-scoped app token must not be persisted into .git/config,
+          # where it would be readable by `bun install` lifecycle scripts.
+          # changesets/action authenticates its own push/PR API calls via the
+          # GITHUB_TOKEN env var below (it writes its own ~/.netrc), so it
+          # does not need the checkout-persisted credential.
+          persist-credentials: false
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
