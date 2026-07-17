@@ -10,11 +10,27 @@ const BASE_REF = process.env.CHANGESET_BASE_REF ?? "origin/main";
 const CHANGESET_RE = /^\.changeset\/(?!README\.md$)[^/]+\.md$/;
 const DATA_CHANGESET_RE = /^["']?@stll\/anonymize-data["']?:/m;
 const RUNTIME_SOURCE_RE =
-  /^(?:packages\/(?:anonymize|cli|document-docx)\/(?:src|scripts)\/|crates\/anonymize-(?:adapter-contract|core|napi|py)\/|Cargo\.toml$)/;
+  /^(?:packages\/(?:anonymize|cli|document-docx)\/(?:src|scripts)\/|crates\/anonymize-(?:adapter-contract|core|napi|py)\/)/;
+const RUNTIME_MANIFESTS = new Set([
+  "Cargo.lock",
+  "Cargo.toml",
+  "packages/anonymize/package.json",
+  "packages/anonymize-darwin-arm64/package.json",
+  "packages/anonymize-darwin-x64/package.json",
+  "packages/anonymize-linux-arm64-gnu/package.json",
+  "packages/anonymize-linux-x64-gnu/package.json",
+  "packages/anonymize-win32-x64-msvc/package.json",
+  "packages/anonymize/wasm/package.json",
+  "packages/cli/package.json",
+  "packages/document-docx/package.json",
+]);
 
-await $`git fetch --no-tags origin ${BASE_REF.replace(/^origin\//, "")}`
-  .nothrow()
-  .quiet();
+const firstSlash = BASE_REF.indexOf("/");
+const baseRemote = firstSlash === -1 ? "origin" : BASE_REF.slice(0, firstSlash);
+const baseBranch =
+  firstSlash === -1 ? BASE_REF : BASE_REF.slice(firstSlash + 1);
+
+await $`git fetch --no-tags ${baseRemote} ${baseBranch}`.nothrow().quiet();
 
 const diff = async (filter: string): Promise<string[]> => {
   const result =
@@ -47,12 +63,23 @@ if (dataChangeset) {
   process.exit(1);
 }
 
-const runtimeSourceChanged = (await diff("ACMRD")).some((file) =>
+const changedFiles = await diff("ACMRD");
+const runtimeSourceChanged = changedFiles.some((file) =>
   RUNTIME_SOURCE_RE.test(file),
 );
-if (!runtimeSourceChanged) {
+const runtimeManifestChanged = changedFiles.some((file) =>
+  RUNTIME_MANIFESTS.has(file),
+);
+if (!runtimeSourceChanged && !runtimeManifestChanged) {
   console.log(
     "changeset check: no published runtime source changes; skipping.",
+  );
+  process.exit(0);
+}
+
+if (!runtimeSourceChanged && changedFiles.includes("VERSION")) {
+  console.log(
+    "changeset check: synchronized release metadata includes VERSION. OK.",
   );
   process.exit(0);
 }
