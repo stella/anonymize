@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import TypeAlias
 
 BytesLike: TypeAlias = bytes | bytearray | memoryview
@@ -223,4 +223,8 @@ def redact_static_entities_summary_diagnostics_json(
     operators_json: str | None = None,
 ) -> str: ...
 def normalize_for_search(text: str) -> str: ...
+def deanonymise(
+    redacted_text: str,
+    redaction_map: Sequence[tuple[str, str]],
+) -> str: ...
 def native_package_version() -> str: ...

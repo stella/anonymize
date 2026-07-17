@@ -94,6 +94,10 @@ type PythonParityOutput = {
     second_placeholder: string;
     restored_placeholder: string;
     restored_text: string;
+    deanonymised_text: string;
+    deanonymised_mapping_text: string;
+    deanonymise_string_map_rejected: boolean;
+    deanonymise_invalid_entry_rejected: boolean;
     object_start: number;
     object_end: number;
     json_start: number;
@@ -179,6 +183,29 @@ restored_session = prepared.restore_redaction_session(session.to_plaintext_json(
 session_restored = restored_session.redact_text("Jan Novak signed once more.")
 session_restored_text = restored_session.restore_text(
     session_first.redaction.redaction_map[0].placeholder + " signed."
+)
+deanonymised_text = anonymize.deanonymise(
+    session_first.redaction.redacted_text,
+    session_first.redaction.redaction_map,
+)
+deanonymised_mapping_text = anonymize.deanonymise(
+    session_first.redaction.redacted_text,
+    {entry.placeholder: entry.original
+     for entry in session_first.redaction.redaction_map},
+)
+
+def rejects_type_error(callback):
+    try:
+        callback()
+    except TypeError:
+        return True
+    return False
+
+deanonymise_string_map_rejected = rejects_type_error(
+    lambda: anonymize.deanonymise("text", "[PERSON_1]")
+)
+deanonymise_invalid_entry_rejected = rejects_type_error(
+    lambda: anonymize.deanonymise("text", ["ab"])
 )
 archive_key = bytes([0x42]) * 32
 session_archive = session.to_encrypted_archive(archive_key)
@@ -289,6 +316,10 @@ print(
                 "second_placeholder": session_second.redaction.redaction_map[0].placeholder,
                 "restored_placeholder": session_restored.redaction.redaction_map[0].placeholder,
                 "restored_text": session_restored_text,
+                "deanonymised_text": deanonymised_text,
+                "deanonymised_mapping_text": deanonymised_mapping_text,
+                "deanonymise_string_map_rejected": deanonymise_string_map_rejected,
+                "deanonymise_invalid_entry_rejected": deanonymise_invalid_entry_rejected,
                 "object_start": session_object_offsets.resolved_entities[0].start,
                 "object_end": session_object_offsets.resolved_entities[0].end,
                 "json_start": session_json_offsets["resolved_entities"][0]["start"],
@@ -519,6 +550,10 @@ describe("python binding parity", () => {
       second_placeholder: "[PERSON_parity%5Fsession%5F1_1]",
       restored_placeholder: "[PERSON_parity%5Fsession%5F1_1]",
       restored_text: "Jan Novak signed.",
+      deanonymised_text: "Jan Novak signed.",
+      deanonymised_mapping_text: "Jan Novak signed.",
+      deanonymise_string_map_rejected: true,
+      deanonymise_invalid_entry_rejected: true,
       object_start: 1,
       object_end: 10,
       json_start: 2,

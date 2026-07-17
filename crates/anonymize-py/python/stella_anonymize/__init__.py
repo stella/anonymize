@@ -20,6 +20,7 @@ from ._native import (
     assemble_static_search_compressed_package_bytes,
     assemble_static_search_config_json,
     assemble_static_search_package_bytes,
+    deanonymise as _native_deanonymise,
     native_package_version,
     normalize_for_search,
     prepare_static_search_artifacts_bytes,
@@ -54,6 +55,7 @@ __all__ = [
     "PipelineEntity",
     "PreparedSearch",
     "RedactionEntry",
+    "RedactionMapInput",
     "RedactionResult",
     "StaticRedactionResult",
     "assemble_static_search_compressed_package_bytes",
@@ -61,6 +63,7 @@ __all__ = [
     "assemble_static_search_package_bytes",
     "available_default_native_pipeline_languages",
     "create_native_pipeline_from_default_package",
+    "deanonymise",
     "diagnostics_json",
     "diagnostics_stream_json",
     "get_default_native_pipeline",
@@ -114,6 +117,9 @@ class CallerDetection(TypedDict):
 DiagnosticsBatchCallback = Callable[[str], object]
 ResultEventCallback = Callable[[str], object]
 NativeSearchPackageInput = str | BytesLike | Mapping[str, object]
+RedactionMapInput = (
+    Mapping[str, str] | Sequence[RedactionEntry] | Sequence[tuple[str, str]]
+)
 DefaultNativePipelineWarmup = Literal["lazy-regex", "none"]
 DEFAULT_NATIVE_PIPELINE_WARMUPS: tuple[
     DefaultNativePipelineWarmup,
@@ -892,6 +898,34 @@ def summary_diagnostics_json(
         operators,
         redact_string=redact_string,
     )
+
+
+def deanonymise(redacted_text: str, redaction_map: RedactionMapInput) -> str:
+    return _native_deanonymise(redacted_text, _redaction_map_pairs(redaction_map))
+
+
+def _redaction_map_pairs(
+    redaction_map: RedactionMapInput,
+) -> list[tuple[str, str]]:
+    if isinstance(redaction_map, Mapping):
+        return list(redaction_map.items())
+    if isinstance(redaction_map, (str, bytes, bytearray, memoryview)):
+        raise TypeError(
+            "redaction_map must be a mapping or a sequence of redaction entries"
+        )
+    pairs: list[tuple[str, str]] = []
+    for entry in redaction_map:
+        if isinstance(entry, RedactionEntry):
+            pairs.append((entry.placeholder, entry.original))
+            continue
+        if not isinstance(entry, (tuple, list)) or len(entry) != 2:
+            raise TypeError(
+                "Each redaction_map entry must be a RedactionEntry "
+                "or a (placeholder, original) pair"
+            )
+        placeholder, original = entry
+        pairs.append((placeholder, original))
+    return pairs
 
 
 def _read_default_native_pipeline_package(

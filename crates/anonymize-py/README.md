@@ -39,6 +39,17 @@ result = prepared.redact_text(text, redact_string="***")
 print(result.redaction.redacted_text)
 ```
 
+Reverse replacement placeholders with the returned redaction map (a mapping of
+`placeholder -> original`, a sequence of `RedactionEntry`, or
+`(placeholder, original)` pairs; entries apply in order):
+
+```py
+restored = anonymize.deanonymise(
+    result.redaction.redacted_text,
+    result.redaction.redaction_map,
+)
+```
+
 For related documents, create an explicit in-memory session from the prepared
 anonymizer. Repeated normalized entities reuse their placeholders within that
 session:
@@ -174,6 +185,7 @@ for repeated document processing.
 - `PreparedAnonymizer.create_redaction_session_with_lifecycle(...) -> PreparedRedactionSession`
 - `PreparedAnonymizer.restore_redaction_session(plaintext_json) -> PreparedRedactionSession`
 - `PreparedRedactionSession.restore_text(full_text, observed_at_epoch_seconds=None) -> str`
+- `deanonymise(redacted_text, redaction_map) -> str`
 - `PreparedAnonymizer.redact_text(text, operators=None, redact_string=None)`
 - `PreparedAnonymizer.redact_text_json(text, operators=None, redact_string=None)`
 - `PreparedAnonymizer.diagnostics_json(text, operators=None, redact_string=None)`

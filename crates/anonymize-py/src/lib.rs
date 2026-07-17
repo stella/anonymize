@@ -1117,6 +1117,25 @@ fn normalize_for_search(text: &str) -> String {
   stella_anonymize_core::normalize_for_search(text)
 }
 
+/// Restores original values by replacing placeholders in redacted text.
+/// Mirrors the TypeScript SDK `deanonymise`; entries apply in order.
+#[pyfunction]
+fn deanonymise(
+  redacted_text: &str,
+  redaction_map: Vec<(String, String)>,
+) -> String {
+  let entries = redaction_map
+    .into_iter()
+    .map(
+      |(placeholder, original)| stella_anonymize_core::RedactionEntry {
+        placeholder,
+        original,
+      },
+    )
+    .collect::<Vec<_>>();
+  stella_anonymize_core::deanonymise(redacted_text, &entries)
+}
+
 #[pyfunction]
 #[allow(clippy::missing_const_for_fn)]
 fn native_package_version() -> &'static str {
@@ -1361,6 +1380,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module
   )?)?;
   module.add_function(wrap_pyfunction!(normalize_for_search, module)?)?;
+  module.add_function(wrap_pyfunction!(deanonymise, module)?)?;
   module.add_function(wrap_pyfunction!(native_package_version, module)?)?;
   Ok(())
 }

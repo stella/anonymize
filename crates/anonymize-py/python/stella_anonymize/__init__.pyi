@@ -65,6 +65,9 @@ class CallerDetection(TypedDict):
 DiagnosticsBatchCallback: TypeAlias = Callable[[str], object]
 ResultEventCallback: TypeAlias = Callable[[str], object]
 NativeSearchPackageInput: TypeAlias = str | BytesLike | Mapping[str, object]
+RedactionMapInput: TypeAlias = (
+    Mapping[str, str] | Sequence[RedactionEntry] | Sequence[tuple[str, str]]
+)
 DefaultNativePipelineWarmup: TypeAlias = Literal["lazy-regex", "none"]
 DEFAULT_NATIVE_PIPELINE_WARMUPS: tuple[
     DefaultNativePipelineWarmup,
@@ -404,6 +407,10 @@ def summary_diagnostics_json(
     operators: OperatorConfig = None,
     *,
     redact_string: str | None = None,
+) -> str: ...
+def deanonymise(
+    redacted_text: str,
+    redaction_map: RedactionMapInput,
 ) -> str: ...
 
 __all__: list[str]

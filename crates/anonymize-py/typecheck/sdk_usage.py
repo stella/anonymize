@@ -158,3 +158,20 @@ def redact_object(config_json: str, text: str) -> int:
         redact_string="***",
     )
     return result.redaction.entity_count
+
+
+def deanonymise_entries(text: str) -> str:
+    prepared = anonymize.get_default_native_pipeline(language="en")
+    result = prepared.redact_text(text)
+    return anonymize.deanonymise(
+        result.redaction.redacted_text,
+        result.redaction.redaction_map,
+    )
+
+
+def deanonymise_mapping(redacted_text: str, redaction_map: Mapping[str, str]) -> str:
+    return anonymize.deanonymise(redacted_text, redaction_map)
+
+
+def deanonymise_pairs(redacted_text: str, pairs: list[tuple[str, str]]) -> str:
+    return anonymize.deanonymise(redacted_text, pairs)
