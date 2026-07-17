@@ -536,7 +536,9 @@ fn crosses_sentence_end(
     }
     if ch.is_whitespace() && previous == Some('.') {
       if lowercase_run >= 2 || uppercase_run >= 2 {
-        return Some(start.saturating_add(offset).saturating_add(ch.len_utf8()));
+        return Some(
+          start.saturating_add(offset).saturating_add(ch.len_utf8()),
+        );
       }
       lowercase_run = 0;
       uppercase_run = 0;
@@ -909,8 +911,11 @@ fn trim_role_head(
     // digit right after the role word with no later capitalized word to
     // recover on, so restricting the scan to starts_upper alone clipped the
     // whole name down to the bare suffix.
-    let starts_digit =
-      token.text.chars().next().is_some_and(|ch| ch.is_ascii_digit());
+    let starts_digit = token
+      .text
+      .chars()
+      .next()
+      .is_some_and(|ch| ch.is_ascii_digit());
     if !starts_upper(token.text) && !starts_digit {
       continue;
     }
@@ -2007,7 +2012,10 @@ mod tests {
     let data = connector_test_data();
     let text = "Paul J. Newman and Apple, Inc.";
     let match_start = text.find("Apple").unwrap();
-    assert_eq!(extend_backward(text, match_start, &data, false), match_start);
+    assert_eq!(
+      extend_backward(text, match_start, &data, false),
+      match_start
+    );
   }
 
   fn role_head_test_data() -> PreparedLegalFormData {

@@ -854,7 +854,13 @@ fn load_month_names() -> Result<HashSet<String>, AssembleError> {
 /// "Citizens" that collide with `common-words-en.json`).
 fn load_allow_list_set() -> Result<HashSet<String>, AssembleError> {
   let allow_list: WordsFile = parse_data_file("allow-list.json")?;
-  Ok(allow_list.words.iter().map(|word| js_lowercase(word)).collect())
+  Ok(
+    allow_list
+      .words
+      .iter()
+      .map(|word| js_lowercase(word))
+      .collect(),
+  )
 }
 
 // ── native encoding (toNativeDenyListData) ──────────────────────────────────
