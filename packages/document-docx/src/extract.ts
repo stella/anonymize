@@ -22,9 +22,45 @@ export const DOCX_XML_MAX_DEPTH = 256;
 const DOCX_MAX_ENTRIES = 4096;
 const DOCX_MAX_TEXT_BLOCKS = 100_000;
 const DOCX_MAX_TEXT_SEGMENTS = 1_000_000;
+// Bounds the aggregate cost of inlineContexts() stack scans (segmentCount x
+// stack depth). Each scan is O(depth) regardless of how many segments are
+// produced, so segmentCount and depth budgets alone leave their product
+// unbounded (up to DOCX_MAX_TEXT_SEGMENTS x DOCX_XML_MAX_DEPTH = 256e6 scans
+// from a deep, wide crafted document). This ceiling is far above realistic
+// documents (depth is typically well under 30) but well below the
+// pathological worst case.
+const DOCX_MAX_INLINE_CONTEXT_SCAN_OPS = 20_000_000;
 
 const CONTENT_TYPES_PATH = "[Content_Types].xml";
 const ROOT_RELATIONSHIPS_PATH = "_rels/.rels";
+const DOCX_CORE_PROPERTIES_PATH = "docProps/core.xml";
+const DOCX_APP_PROPERTIES_PATH = "docProps/app.xml";
+const DOCX_CUSTOM_PROPERTIES_PATH = "docProps/custom.xml";
+const DOCX_METADATA_PATHS: readonly string[] = [
+  DOCX_CORE_PROPERTIES_PATH,
+  DOCX_APP_PROPERTIES_PATH,
+  DOCX_CUSTOM_PROPERTIES_PATH,
+];
+const CUSTOM_XML_DIRECTORY_PREFIX = "customXml/";
+// Fallback content types for the well-known metadata parts above, used only
+// when [Content_Types].xml does not carry an explicit <Override> for them
+// (e.g. a part relying on a <Default Extension="xml"> rule). These are the
+// content types the OPC/OOXML specs assign to these fixed part names.
+const KNOWN_METADATA_CONTENT_TYPES: Readonly<Record<string, string>> = {
+  [DOCX_CORE_PROPERTIES_PATH]:
+    "application/vnd.openxmlformats-package.core-properties+xml",
+  [DOCX_APP_PROPERTIES_PATH]:
+    "application/vnd.openxmlformats-officedocument.extended-properties+xml",
+  [DOCX_CUSTOM_PROPERTIES_PATH]:
+    "application/vnd.openxmlformats-officedocument.custom-properties+xml",
+};
+const GENERIC_XML_CONTENT_TYPE = "application/xml";
+const RELATIONSHIPS_CONTENT_TYPE =
+  "application/vnd.openxmlformats-package.relationships+xml";
+// Relationship target URI schemes that can carry PII directly in
+// [Content_Types]-invisible relationship metadata (e.g. hyperlink targets),
+// independent of whatever display text a <w:hyperlink> wraps.
+const PII_RELATIONSHIP_TARGET_SCHEMES: readonly string[] = ["mailto:", "tel:"];
 const CONTENT_TYPES_NAMESPACE =
   "http://schemas.openxmlformats.org/package/2006/content-types";
 const PACKAGE_RELATIONSHIP_NAMESPACES = new Set([
@@ -98,6 +134,7 @@ type PartExtraction = {
 
 type PartTextBudget = {
   segmentCount: number;
+  inlineContextScanOps: number;
 };
 
 const invalidPackage = (message: string): DocxExtractionError =>
@@ -119,6 +156,14 @@ const safeEntryPath = (name: string): boolean =>
   !name.includes("\\") &&
   !name.split("/").includes("..") &&
   !name.includes("\0");
+
+const WORD_RELATIONSHIPS_ENTRY_PATTERN = /(?:^|\/)_rels\/[^/]+\.rels$/u;
+
+const isWordRelationshipsEntry = (name: string): boolean =>
+  name.startsWith("word/") && WORD_RELATIONSHIPS_ENTRY_PATTERN.test(name);
+
+const isCustomXmlEntry = (name: string): boolean =>
+  name.startsWith(CUSTOM_XML_DIRECTORY_PREFIX) && name.endsWith(".xml");
 
 type ArchiveBudget = {
   entryCount: number;
@@ -166,7 +211,10 @@ const archiveFilter = ({
     includeAllEntries ||
     file.name === CONTENT_TYPES_PATH ||
     file.name === ROOT_RELATIONSHIPS_PATH ||
-    (file.name.startsWith("word/") && file.name.endsWith(".xml"))
+    (file.name.startsWith("word/") && file.name.endsWith(".xml")) ||
+    isWordRelationshipsEntry(file.name) ||
+    DOCX_METADATA_PATHS.includes(file.name) ||
+    isCustomXmlEntry(file.name)
   );
 };
 
@@ -348,6 +396,85 @@ const parseMainDocumentTarget = (xml: string): string => {
   return target;
 };
 
+// Given a package part path (e.g. "word/document.xml"), returns the path of
+// its OPC relationships part (e.g. "word/_rels/document.xml.rels").
+const relationshipsPathFor = (partPath: string): string => {
+  const slashIndex = partPath.lastIndexOf("/");
+  const directory =
+    slashIndex === -1 ? "" : `${partPath.slice(0, slashIndex)}/`;
+  const fileName =
+    slashIndex === -1 ? partPath : partPath.slice(slashIndex + 1);
+  return `${directory}_rels/${fileName}.rels`;
+};
+
+const hasPiiRelationshipTargetScheme = (target: string): boolean => {
+  const normalized = target.trim().toLowerCase();
+  return PII_RELATIONSHIP_TARGET_SCHEMES.some((scheme) =>
+    normalized.startsWith(scheme),
+  );
+};
+
+type PiiRelationshipTarget = {
+  relationshipId: string | null;
+};
+
+// Scans a relationships part for Relationship elements whose Target uses a
+// PII-bearing scheme (mailto:, tel:). These targets are never visited by
+// extractPart (which only walks WordprocessingML part XML), so without this
+// check a hyperlink pointing at "mailto:alice@example.test" with no PII in
+// its visible display text (or an orphaned relationship not referenced by
+// any <w:hyperlink>) produces no text segment and is invisible to coverage.
+const parsePiiRelationshipTargets = (
+  xml: string,
+  path: string,
+): PiiRelationshipTarget[] => {
+  const found: PiiRelationshipTarget[] = [];
+  const parser = new SaxesParser({ xmlns: true });
+  let parseError: Error | null = null;
+  let depth = 0;
+  parser.on("error", (error) => {
+    parseError = error;
+  });
+  parser.on("doctype", () => {
+    throw invalidPackage(
+      "DOCX XML must not contain a document type declaration",
+    );
+  });
+  parser.on("opentag", (tag) => {
+    assertXmlDepth(depth);
+    depth += 1;
+    if (
+      tag.local !== "Relationship" ||
+      !PACKAGE_RELATIONSHIP_NAMESPACES.has(tag.uri)
+    ) {
+      return;
+    }
+    const target = attributeByLocalName(tag, "Target");
+    if (target === null || !hasPiiRelationshipTargetScheme(target)) {
+      return;
+    }
+    found.push({ relationshipId: attributeByLocalName(tag, "Id") });
+  });
+  parser.on("closetag", () => {
+    depth -= 1;
+  });
+  try {
+    parser.write(xml).close();
+  } catch (error) {
+    if (error instanceof DocxExtractionError) {
+      throw error;
+    }
+    parseError = error instanceof Error ? error : new Error("invalid XML");
+  }
+  if (parseError !== null) {
+    throw new DocxExtractionError(
+      DOCX_EXTRACTION_ERROR_CODES.invalidXml,
+      `DOCX relationships are not valid XML: ${path}`,
+    );
+  }
+  return found;
+};
+
 const classifyPart = ({
   contentType,
   path,
@@ -474,6 +601,20 @@ const appendSegment = (
     );
   }
   budget.segmentCount += 1;
+  // inlineContexts() below scans the whole element stack, so its cost is
+  // O(stack.length). Bound the aggregate cost (see
+  // DOCX_MAX_INLINE_CONTEXT_SCAN_OPS) rather than only the segment count and
+  // depth independently, since their product is otherwise unbounded.
+  if (
+    budget.inlineContextScanOps + stack.length >
+    DOCX_MAX_INLINE_CONTEXT_SCAN_OPS
+  ) {
+    throw new DocxExtractionError(
+      DOCX_EXTRACTION_ERROR_CODES.uncompressedLimitExceeded,
+      `DOCX parts must not require more than ${DOCX_MAX_INLINE_CONTEXT_SCAN_OPS} aggregate inline-context scan operations`,
+    );
+  }
+  budget.inlineContextScanOps += stack.length;
   const start = block.text.length;
   block.text += value;
   block.segments.push({
@@ -496,7 +637,10 @@ const extractPart = (part: DocxPart, xml: string): PartExtraction => {
   let unsupportedSymbolCount = 0;
   let unsupportedFieldInstructionCount = 0;
   let unsupportedAlternateContentCount = 0;
-  const textBudget: PartTextBudget = { segmentCount: 0 };
+  const textBudget: PartTextBudget = {
+    segmentCount: 0,
+    inlineContextScanOps: 0,
+  };
 
   const parser = new SaxesParser({ xmlns: true });
   parser.on("error", (error) => {
@@ -724,6 +868,69 @@ export const extractDocxText = (archive: Uint8Array): DocxExtraction => {
       extracted.unsupportedFieldInstructionCount;
     unsupportedAlternateContentCount +=
       extracted.unsupportedAlternateContentCount;
+
+    // A supported part's relationships (e.g. word/_rels/document.xml.rels)
+    // are never walked by extractPart, since it only parses the part's own
+    // WordprocessingML. A hyperlink relationship Target using a PII-bearing
+    // scheme (mailto:, tel:) can therefore carry unredacted PII even when
+    // the visible hyperlink display text has no PII of its own, or when the
+    // relationship is not referenced by any <w:hyperlink> at all. Rather
+    // than attempting to rewrite relationship targets, fail closed: mark the
+    // relationships part unsupported so `require-full` cannot report "full".
+    const relsPath = relationshipsPathFor(part.path);
+    const relsBytes = entries[relsPath];
+    if (relsBytes !== undefined) {
+      const piiTargets = parsePiiRelationshipTargets(
+        decodeXml(relsBytes, relsPath),
+        relsPath,
+      );
+      for (const piiTarget of piiTargets) {
+        coverageParts.push({
+          status: "unsupported",
+          path: relsPath,
+          contentType: RELATIONSHIPS_CONTENT_TYPE,
+          reason:
+            piiTarget.relationshipId === null
+              ? "Relationship target uses a PII-bearing external scheme (mailto/tel) that anonymization does not redact"
+              : `Relationship "${piiTarget.relationshipId}" target uses a PII-bearing external scheme (mailto/tel) that anonymization does not redact`,
+        });
+      }
+    }
+  }
+
+  // docProps/*.xml (core, extended, and custom properties) and customXml/*
+  // parts can carry PII (dc:creator, cp:lastModifiedBy, custom properties,
+  // structured custom XML content) but are never walked by extractPart,
+  // which only parses WordprocessingML parts. Redacting arbitrary metadata
+  // and custom-XML schemas is out of scope here, so fail closed: mark any
+  // present metadata/custom-XML part unsupported so `require-full` cannot
+  // report "full" while such content goes unexamined.
+  for (const path of DOCX_METADATA_PATHS) {
+    if (entries[path] === undefined) {
+      continue;
+    }
+    coverageParts.push({
+      status: "unsupported",
+      path,
+      contentType:
+        contentTypes.find((entry) => entry.path === path)?.contentType ??
+        KNOWN_METADATA_CONTENT_TYPES[path] ??
+        GENERIC_XML_CONTENT_TYPE,
+      reason: "Document metadata parts are not extracted or redacted",
+    });
+  }
+  for (const path of Object.keys(entries)) {
+    if (!isCustomXmlEntry(path)) {
+      continue;
+    }
+    coverageParts.push({
+      status: "unsupported",
+      path,
+      contentType:
+        contentTypes.find((entry) => entry.path === path)?.contentType ??
+        GENERIC_XML_CONTENT_TYPE,
+      reason: "Custom XML parts are not extracted or redacted",
+    });
   }
 
   for (const { contentType, path } of contentTypes) {

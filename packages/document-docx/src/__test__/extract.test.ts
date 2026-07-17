@@ -260,4 +260,63 @@ describe("extractDocxText", () => {
       `must not exceed ${DOCX_ENTRY_MAX_BYTES} bytes`,
     );
   });
+
+  test("flags a PII-bearing external relationship target as unsupported even without redactable display text", () => {
+    // The relationship is never referenced by any <w:hyperlink> in the body
+    // (e.g. an icon-only or orphaned hyperlink), so the visible text has no
+    // hyperlink context and hyperlinkTextSegmentCount stays 0. Without
+    // reading word/_rels/document.xml.rels, coverage would never see the
+    // mailto: target and would incorrectly report full coverage.
+    const archive = zipSync({
+      "[Content_Types].xml": strToU8(
+        `<Types xmlns="${CONTENT_TYPES_NAMESPACE}"><Override PartName="/word/document.xml" ContentType="${CONTENT_TYPE_PREFIX}document.main+xml"/></Types>`,
+      ),
+      "_rels/.rels": strToU8(
+        `<Relationships xmlns="${PACKAGE_RELATIONSHIP_NAMESPACE}"><Relationship Id="rId1" Type="${RELATIONSHIP_NAMESPACE}/officeDocument" Target="word/document.xml"/></Relationships>`,
+      ),
+      "word/document.xml": strToU8(
+        wordDocument("<w:p><w:r><w:t>Contact us</w:t></w:r></w:p>"),
+      ),
+      "word/_rels/document.xml.rels": strToU8(
+        `<Relationships xmlns="${PACKAGE_RELATIONSHIP_NAMESPACE}"><Relationship Id="rId5" Type="${RELATIONSHIP_NAMESPACE}/hyperlink" Target="mailto:alice@example.test" TargetMode="External"/></Relationships>`,
+      ),
+    });
+
+    const result = extractDocxText(archive);
+
+    expect(result.coverage.hyperlinkTextSegmentCount).toBe(0);
+    expect(result.coverage.parts).toContainEqual({
+      status: "unsupported",
+      path: "word/_rels/document.xml.rels",
+      contentType: "application/vnd.openxmlformats-package.relationships+xml",
+      reason:
+        'Relationship "rId5" target uses a PII-bearing external scheme (mailto/tel) that anonymization does not redact',
+    });
+  });
+
+  test("flags docProps/core.xml as unsupported instead of silently treating metadata as fully covered", () => {
+    const archive = zipSync({
+      "[Content_Types].xml": strToU8(
+        `<Types xmlns="${CONTENT_TYPES_NAMESPACE}"><Override PartName="/word/document.xml" ContentType="${CONTENT_TYPE_PREFIX}document.main+xml"/></Types>`,
+      ),
+      "_rels/.rels": strToU8(
+        `<Relationships xmlns="${PACKAGE_RELATIONSHIP_NAMESPACE}"><Relationship Id="rId1" Type="${RELATIONSHIP_NAMESPACE}/officeDocument" Target="word/document.xml"/></Relationships>`,
+      ),
+      "word/document.xml": strToU8(
+        wordDocument("<w:p><w:r><w:t>No PII in the body</w:t></w:r></w:p>"),
+      ),
+      "docProps/core.xml": strToU8(
+        '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:creator>Alice Example</dc:creator></cp:coreProperties>',
+      ),
+    });
+
+    const result = extractDocxText(archive);
+
+    expect(result.coverage.parts).toContainEqual({
+      status: "unsupported",
+      path: "docProps/core.xml",
+      contentType: "application/vnd.openxmlformats-package.core-properties+xml",
+      reason: "Document metadata parts are not extracted or redacted",
+    });
+  });
 });

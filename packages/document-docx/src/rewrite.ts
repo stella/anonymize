@@ -126,6 +126,9 @@ const validateReplacement = (
   }
 };
 
+const replacementByteLength = (replacement: DocxTextReplacement): number =>
+  strToU8(replacement.replacement).byteLength;
+
 const coveredTextSegments = (
   block: DocxTextBlock,
   replacement: DocxTextReplacement,
@@ -413,7 +416,9 @@ export const rewriteDocxText = (
   );
   const updatesByPart = new Map<string, Map<string, TextNodeUpdate>>();
   const rewrittenLocations = new Set<string>();
+  const replacementBytesByPart = new Map<string, number>();
   let appliedReplacementCount = 0;
+  let totalReplacementBytes = 0;
 
   for (const rewrite of rewrites) {
     const key = docxLocationKey(rewrite.location);
@@ -448,6 +453,34 @@ export const rewriteDocxText = (
       throw rewriteError(
         DOCX_REWRITE_ERROR_CODES.rewriteLimitExceeded,
         `DOCX rewrites must not contain more than ${DOCX_MAX_REPLACEMENTS} replacements`,
+      );
+    }
+    // Individual replacements are bounded (DOCX_ENTRY_MAX_BYTES) and
+    // DOCX_MAX_REPLACEMENTS caps their count, but nothing previously bounded
+    // their aggregate byte size. rewritePartXml fully materializes a part's
+    // patched XML string before assertArchiveBudgets ever runs, so a large
+    // aggregate of otherwise-individually-valid replacements could exhaust
+    // memory before the budget check has a chance to reject. Track running
+    // totals here, before any XML is built, and fail fast.
+    const rewriteReplacementBytes = rewrite.replacements.reduce(
+      (total, replacement) => total + replacementByteLength(replacement),
+      0,
+    );
+    totalReplacementBytes += rewriteReplacementBytes;
+    if (totalReplacementBytes > DOCX_UNCOMPRESSED_MAX_BYTES) {
+      throw rewriteError(
+        DOCX_REWRITE_ERROR_CODES.rewriteLimitExceeded,
+        `DOCX rewrite replacement text must not exceed ${DOCX_UNCOMPRESSED_MAX_BYTES} aggregate UTF-8 bytes`,
+      );
+    }
+    const partReplacementBytes =
+      (replacementBytesByPart.get(block.location.part.path) ?? 0) +
+      rewriteReplacementBytes;
+    replacementBytesByPart.set(block.location.part.path, partReplacementBytes);
+    if (partReplacementBytes > DOCX_ENTRY_MAX_BYTES) {
+      throw rewriteError(
+        DOCX_REWRITE_ERROR_CODES.rewriteLimitExceeded,
+        `DOCX rewrite replacement text for a single part must not exceed ${DOCX_ENTRY_MAX_BYTES} aggregate UTF-8 bytes`,
       );
     }
     const partUpdates =
