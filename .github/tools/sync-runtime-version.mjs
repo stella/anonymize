@@ -46,10 +46,8 @@ if (!VERSION_RE.test(version)) {
 
 let hasMismatch = false;
 
-// Internal dependency ranges that must track the synced
-// version (the CLI consumes the runtime it ships with).
-const SYNCED_DEPENDENCY = "@stll/anonymize";
-const SYNCED_DEPENDENCY_RANGE_RE = /("@stll\/anonymize": "\^)([^"]+)(")/g;
+// Internal dependency ranges that must track the synchronized runtime train.
+const SYNCED_DEPENDENCIES = ["@stll/anonymize", "@stll/anonymize-docx"];
 
 const escapeRegExp = (value) => value.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -84,10 +82,14 @@ const syncTextVersion = ({ file, label, re }) => {
 for (const file of PACKAGE_FILES) {
   const pkg = JSON.parse(readFileSync(file, "utf8"));
   const wantedRange = `^${version}`;
-  const dependencyRange = pkg.dependencies?.[SYNCED_DEPENDENCY];
-  const dependencyInSync =
-    dependencyRange === undefined || dependencyRange === wantedRange;
-  if (pkg.version === version && dependencyInSync) {
+  const mismatchedDependencies = SYNCED_DEPENDENCIES.flatMap((dependency) => {
+    const dependencyRange = pkg.dependencies?.[dependency];
+    if (dependencyRange === undefined || dependencyRange === wantedRange) {
+      return [];
+    }
+    return [{ dependency, dependencyRange }];
+  });
+  if (pkg.version === version && mismatchedDependencies.length === 0) {
     continue;
   }
 
@@ -95,9 +97,9 @@ for (const file of PACKAGE_FILES) {
     if (pkg.version !== version) {
       console.error(`${file} has version ${pkg.version}; expected ${version}`);
     }
-    if (!dependencyInSync) {
+    for (const { dependency, dependencyRange } of mismatchedDependencies) {
       console.error(
-        `${file} depends on ${SYNCED_DEPENDENCY}@${dependencyRange}; expected ${wantedRange}`,
+        `${file} depends on ${dependency}@${dependencyRange}; expected ${wantedRange}`,
       );
     }
     hasMismatch = true;
@@ -105,8 +107,8 @@ for (const file of PACKAGE_FILES) {
   }
 
   pkg.version = version;
-  if (!dependencyInSync) {
-    pkg.dependencies[SYNCED_DEPENDENCY] = wantedRange;
+  for (const { dependency } of mismatchedDependencies) {
+    pkg.dependencies[dependency] = wantedRange;
   }
   writeFileSync(file, `${JSON.stringify(pkg, null, 2)}\n`);
   console.log(`Updated ${file} to ${version}`);
@@ -173,23 +175,31 @@ for (const file of PYPROJECT_FILES) {
 
 const lockText = readTextFile(LOCK_FILE);
 let lockChanged = false;
-let syncedLockText = lockText.replaceAll(
-  SYNCED_DEPENDENCY_RANGE_RE,
-  (match, prefix, lockedVersion, suffix) => {
-    if (lockedVersion === version) {
-      return match;
-    }
-    if (checkOnly) {
-      console.error(
-        `${LOCK_FILE} has ${SYNCED_DEPENDENCY}@^${lockedVersion}; expected ^${version}`,
-      );
-      hasMismatch = true;
-      return match;
-    }
-    lockChanged = true;
-    return `${prefix}${version}${suffix}`;
-  },
-);
+let syncedLockText = lockText;
+
+for (const dependency of SYNCED_DEPENDENCIES) {
+  const dependencyRangeRe = new RegExp(
+    `("${escapeRegExp(dependency)}": "\\^)([^"]+)(")`,
+    "g",
+  );
+  syncedLockText = syncedLockText.replaceAll(
+    dependencyRangeRe,
+    (match, prefix, lockedVersion, suffix) => {
+      if (lockedVersion === version) {
+        return match;
+      }
+      if (checkOnly) {
+        console.error(
+          `${LOCK_FILE} has ${dependency}@^${lockedVersion}; expected ^${version}`,
+        );
+        hasMismatch = true;
+        return match;
+      }
+      lockChanged = true;
+      return `${prefix}${version}${suffix}`;
+    },
+  );
+}
 
 for (const dependency of ROOT_NATIVE_OPTIONAL_DEPENDENCIES) {
   const syncedSidecar = syncNativeOptionalDependencyLockVersion(
@@ -232,7 +242,7 @@ for (const file of PACKAGE_FILES) {
 if (lockChanged) {
   writeFileSync(LOCK_FILE, syncedLockText);
   console.log(
-    `Updated ${LOCK_FILE} workspace versions and ${SYNCED_DEPENDENCY} ranges to ${version}`,
+    `Updated ${LOCK_FILE} workspace versions and runtime dependency ranges to ${version}`,
   );
 }
 

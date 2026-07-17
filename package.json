@@ -30,6 +30,9 @@
     "check:v1-native:full": "cd packages/anonymize && bun run check:v1-native:full",
     "sync:version": "node .github/tools/sync-runtime-version.mjs",
     "check:version": "node .github/tools/sync-runtime-version.mjs --check && node .github/tools/test-sync-runtime-version.mjs && node .github/tools/check-native-sidecars.mjs",
+    "changeset": "changeset",
+    "changeset:check": "bun scripts/check-changeset.ts",
+    "changeset:version": "changeset version && node scripts/sync-changeset-version.mjs && bun install",
     "check:exports": "bunx publint@0.3.21 packages/anonymize && bunx @arethetypeswrong/cli@0.18.5 --pack packages/anonymize --ignore-rules no-resolution cjs-resolves-to-esm && bunx publint@0.3.21 packages/document-docx && bunx @arethetypeswrong/cli@0.18.5 --pack packages/document-docx --ignore-rules no-resolution cjs-resolves-to-esm",
     "check:knip": "bunx knip@6.26.0 --no-progress",
     "check:bun": "node .github/tools/check-bun-workflows.mjs",
@@ -46,6 +49,8 @@
     "emnapi": "1.11.1"
   },
   "devDependencies": {
+    "@changesets/changelog-github": "^0.7.0",
+    "@changesets/cli": "^2.31.0",
     "@stll/anonymize-data": "workspace:*",
     "@stll/oxlint-config": "^0.4.0",
     "@stll/typescript-config": "^0.4.0",

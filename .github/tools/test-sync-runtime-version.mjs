@@ -75,6 +75,25 @@ for (const scenarioLineEnding of ["\n", "\r\n"]) {
       }
     }
 
+    const cliPackage = JSON.parse(
+      readFileSync(join(workspace, "packages/cli/package.json"), "utf8"),
+    );
+    for (const dependency of ["@stll/anonymize", "@stll/anonymize-docx"]) {
+      if (cliPackage.dependencies?.[dependency] !== `^${version}`) {
+        throw new Error(`CLI package did not sync ${dependency}`);
+      }
+    }
+
+    const docxPackage = JSON.parse(
+      readFileSync(
+        join(workspace, "packages/document-docx/package.json"),
+        "utf8",
+      ),
+    );
+    if (docxPackage.dependencies?.["@stll/anonymize"] !== `^${version}`) {
+      throw new Error("DOCX package did not sync @stll/anonymize");
+    }
+
     const lockText = readFileSync(join(workspace, "bun.lock"), "utf8");
     if (lockText.includes(staleVersion)) {
       throw new Error("bun.lock still contains stale sidecar versions");
@@ -110,6 +129,12 @@ function writeFixture() {
       );
     }
     if (file === "packages/cli/package.json") {
+      pkg.dependencies = {
+        "@stll/anonymize": `^${staleVersion}`,
+        "@stll/anonymize-docx": `^${staleVersion}`,
+      };
+    }
+    if (file === "packages/document-docx/package.json") {
       pkg.dependencies = { "@stll/anonymize": `^${staleVersion}` };
     }
     writeText(file, `${JSON.stringify(pkg, null, 2)}\n`);
@@ -177,11 +202,15 @@ function bunLockFixture() {
         "packages/cli": {
           name: "@stll/anonymize-cli",
           version,
-          dependencies: { "@stll/anonymize": `^${staleVersion}` },
+          dependencies: {
+            "@stll/anonymize": `^${staleVersion}`,
+            "@stll/anonymize-docx": `^${staleVersion}`,
+          },
         },
         "packages/document-docx": {
           name: "@stll/anonymize-docx",
           version,
+          dependencies: { "@stll/anonymize": `^${staleVersion}` },
         },
       },
     },

@@ -13,8 +13,10 @@ target/
 # Local scripts (corpus download, benchmarks)
 scripts/*
 !scripts/check-ai-skill-sources.sh
+!scripts/check-changeset.ts
 !scripts/check-staged-secrets.sh
 !scripts/link-codex-skills.sh
+!scripts/sync-changeset-version.mjs
 !scripts/sync-ai-skills.sh
 packages/data/scripts/
 package-lock.json
