@@ -39,6 +39,10 @@ const baseBranch =
   firstSlash === -1 ? BASE_REF : BASE_REF.slice(firstSlash + 1);
 const expectedVersionBranch = `changeset-release/${baseBranch}`;
 const headRef = process.env.CHANGESET_HEAD_REF ?? "";
+const repository = process.env.CHANGESET_REPOSITORY ?? "";
+const headRepository = process.env.CHANGESET_HEAD_REPOSITORY ?? "";
+const prAuthor = process.env.CHANGESET_PR_AUTHOR ?? "";
+const VERSION_PR_AUTHOR = "stella-provenance-updater[bot]";
 
 await $`git fetch --no-tags ${baseRemote} ${baseBranch}`.nothrow().quiet();
 
@@ -96,6 +100,8 @@ const generatedVersionMetadataOnly = changedFiles.every(
 if (
   !runtimeSourceChanged &&
   headRef === expectedVersionBranch &&
+  headRepository === repository &&
+  prAuthor === VERSION_PR_AUTHOR &&
   changedFiles.includes("VERSION") &&
   generatedVersionMetadataOnly
 ) {

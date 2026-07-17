@@ -40,6 +40,9 @@ jobs:
         run: bun run changeset:check
         env:
           CHANGESET_HEAD_REF: ${{ github.head_ref }}
+          CHANGESET_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          CHANGESET_PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          CHANGESET_REPOSITORY: ${{ github.repository }}
 
   validate:
     runs-on: ubuntu-latest
