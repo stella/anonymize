@@ -84,8 +84,12 @@ impl PreparedAddressSeedData {
       house_number_before_street_re: compile_regex(
         r"(?u)\b\d{1,6}(?:[-/]\d{1,6})?\s+(?:\p{Lu}\p{L}+[^\S\n\t]+){0,4}$",
       )?,
+      // Mirrors `house_number_before_street_re`'s tolerance for up to 4
+      // intervening words (e.g. "rue de la paix 10", where the house number
+      // trails the street word by three lowercase French words) instead of
+      // requiring the digits to sit immediately after the street word.
       house_number_after_street_re: compile_regex(
-        r"(?u)^[^\S\n\t]+\d{1,6}(?:[-/]\d{1,6})?\b",
+        r"(?u)^[^\S\n\t]+(?:\p{L}+[^\S\n\t]+){0,4}\d{1,6}(?:[-/]\d{1,6})?\b",
       )?,
     })
   }
@@ -790,9 +794,12 @@ fn has_house_number_near_street_word(
     return true;
   }
 
+  // Widened from 24 to accommodate the bounded intervening-word tolerance
+  // added to `house_number_after_street_re` (up to 4 words before the house
+  // number, mirroring the "before" window budget).
   let after_end = ceil_char_boundary(
     full_text,
-    seed.end.saturating_add(24).min(full_text.len()),
+    seed.end.saturating_add(60).min(full_text.len()),
   );
   let after = full_text.get(seed.end..after_end).unwrap_or_default();
   data.house_number_after_street_re.is_match(after)
@@ -1626,6 +1633,58 @@ mod tests {
         .any(|entity| entity.text == "Bismarckring 18, 65183 Wiesbaden"),
       "address seed entities: {result:?}",
     );
+    Ok(())
+  }
+
+  #[test]
+  fn lowercase_street_word_with_distant_house_number_counts_as_evidence()
+  -> Result<()> {
+    // "rue de la paix 10": the house number trails the (lowercase) street
+    // word by three intervening lowercase French words, mirroring the
+    // bounded intervening-word tolerance `house_number_before_street_re`
+    // already gives capitalized words ahead of a street word.
+    let data = PreparedAddressSeedData::new(AddressSeedData::default())?;
+    let full_text = "rue de la paix 10";
+    let seed = Seed {
+      kind: SeedType::StreetWord,
+      start: 0,
+      end: 3,
+      text: String::from("rue"),
+    };
+
+    assert!(
+      has_house_number_near_street_word(full_text, &seed, &data),
+      "a house number three words after the street word should count as nearby evidence"
+    );
+    assert!(
+      !is_lowercase_street_word_in_prose(full_text, &seed, &data),
+      "rue should not be suppressed as bare lowercase prose once a trailing house number is recognized"
+    );
+
+    Ok(())
+  }
+
+  #[test]
+  fn lowercase_street_word_without_house_number_is_still_treated_as_prose()
+  -> Result<()> {
+    let data = PreparedAddressSeedData::new(AddressSeedData::default())?;
+    let full_text = "rue is a French word for street, not an address here";
+    let seed = Seed {
+      kind: SeedType::StreetWord,
+      start: 0,
+      end: 3,
+      text: String::from("rue"),
+    };
+
+    assert!(
+      !has_house_number_near_street_word(full_text, &seed, &data),
+      "no house number is nearby, so the widened regex should still not match"
+    );
+    assert!(
+      is_lowercase_street_word_in_prose(full_text, &seed, &data),
+      "rue used as a plain word with no nearby house number should still be treated as prose"
+    );
+
     Ok(())
   }
 }

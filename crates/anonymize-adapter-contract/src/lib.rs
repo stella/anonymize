@@ -670,6 +670,8 @@ pub struct BindingDenyListFilterData {
   pub defined_term_cues: Vec<String>,
   #[serde(default)]
   pub signing_place_guards: Vec<BindingSigningPlaceGuardData>,
+  #[serde(default)]
+  pub title_tokens: Vec<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -2000,6 +2002,11 @@ impl<'a> PreparedSearchPackageParts<'a> {
       Self::Raw {
         digest, payload, ..
       } => {
+        if payload.len() > MAX_PREPARED_SEARCH_PACKAGE_PAYLOAD_BYTES {
+          return Err(invalid_prepared_search_package(
+            "raw payload length exceeds limit",
+          ));
+        }
         if digest_policy == PackageDigestPolicy::Verify {
           let verify_start = std::time::Instant::now();
           verify_prepared_search_package_digest(digest, payload)?;
@@ -2057,8 +2064,18 @@ impl<'a> PreparedSearchPackageParts<'a> {
     match self {
       Self::Raw {
         digest, payload, ..
+      } => {
+        if payload.len() > MAX_PREPARED_SEARCH_PACKAGE_PAYLOAD_BYTES {
+          return Err(invalid_prepared_search_package(
+            "raw payload length exceeds limit",
+          ));
+        }
+        let verify_start = std::time::Instant::now();
+        verify_prepared_search_package_digest(digest, payload)?;
+        timings.verify = Some(elapsed_us(verify_start));
+        Ok(())
       }
-      | Self::Compressed {
+      Self::Compressed {
         compression:
           PackageCompression::Lz4 | PackageCompression::ZstdCompressed,
         digest,
@@ -3145,6 +3162,7 @@ fn deny_list_filters_from_binding(
         suffix_phrases: lower_set(guard.suffix_phrases),
       })
       .collect(),
+    title_tokens: lower_set(filters.title_tokens),
   }
 }
 
@@ -3792,7 +3810,9 @@ mod tests {
     PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION,
     PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION,
     PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_ZSTD_VERSION,
-    PREPARED_SEARCH_PACKAGE_DIGEST_BYTES, PREPARED_SEARCH_PACKAGE_ZSTD_LEVEL,
+    PREPARED_SEARCH_CORE_PACKAGE_HEADER, PREPARED_SEARCH_CORE_PACKAGE_VERSION,
+    PREPARED_SEARCH_PACKAGE_DIGEST_BYTES, PREPARED_SEARCH_PACKAGE_HEADER,
+    PREPARED_SEARCH_PACKAGE_VERSION, PREPARED_SEARCH_PACKAGE_ZSTD_LEVEL,
     PreparedSearchPackageDecodeTimings, Utf16OffsetMap,
     caller_detections_from_binding, caller_detections_from_utf16_binding,
     diagnostic_events_to_binding, diagnostic_events_to_utf16_binding,
@@ -3810,7 +3830,9 @@ mod tests {
     prepared_search_package_decode_timing_events,
     prepared_search_package_digest, prepared_search_package_from_bytes,
     prepared_search_package_has_core_payload,
-    prepared_search_package_payload_to_bytes, prepared_search_package_to_bytes,
+    prepared_search_package_payload_to_bytes,
+    prepared_search_package_raw_payload_to_bytes,
+    prepared_search_package_to_bytes,
     prepared_search_package_to_compressed_bytes,
     prepared_search_package_verify_digest_with_timings,
     static_redaction_diagnostics_to_utf16_binding, write_package_header,
@@ -4385,6 +4407,58 @@ mod tests {
       error,
       "uncompressed payload length exceeds limit",
     );
+  }
+
+  #[test]
+  fn prepared_search_package_rejects_oversized_raw_payload() {
+    // Unlike the compressed formats, a raw package has no separate declared
+    // length field to reject on cheaply: the whole trailing byte slice is
+    // the payload, so the cap must be checked against its actual length
+    // before it is hashed and bincode-decoded.
+    let payload_len = usize::try_from(oversized_payload_len()).unwrap();
+    let bytes = prepared_search_package_raw_payload_to_bytes(
+      PREPARED_SEARCH_PACKAGE_HEADER,
+      PREPARED_SEARCH_PACKAGE_VERSION,
+      &vec![0u8; payload_len],
+    );
+
+    let error = prepared_search_package_from_bytes(&bytes).unwrap_err();
+
+    assert_invalid_package_reason(error, "raw payload length exceeds limit");
+  }
+
+  #[test]
+  fn prepared_search_core_package_rejects_oversized_raw_payload() {
+    let payload_len = usize::try_from(oversized_payload_len()).unwrap();
+    let bytes = prepared_search_package_raw_payload_to_bytes(
+      PREPARED_SEARCH_CORE_PACKAGE_HEADER,
+      PREPARED_SEARCH_CORE_PACKAGE_VERSION,
+      &vec![0u8; payload_len],
+    );
+
+    let error = prepared_search_core_package_from_bytes(&bytes).unwrap_err();
+
+    assert_invalid_package_reason(error, "raw payload length exceeds limit");
+  }
+
+  #[test]
+  fn prepared_search_package_verify_digest_rejects_oversized_raw_payload() {
+    // `verify_digest` is the shared path used by
+    // `prepared_search_package_verify_digest_with_timings`; it must apply
+    // the same cap independently of `into_payload`, since `Raw` used to
+    // share a match arm with the uncapped `Compressed { Lz4 |
+    // ZstdCompressed }` variants.
+    let payload_len = usize::try_from(oversized_payload_len()).unwrap();
+    let bytes = prepared_search_package_raw_payload_to_bytes(
+      PREPARED_SEARCH_PACKAGE_HEADER,
+      PREPARED_SEARCH_PACKAGE_VERSION,
+      &vec![0u8; payload_len],
+    );
+
+    let error =
+      prepared_search_package_verify_digest_with_timings(&bytes).unwrap_err();
+
+    assert_invalid_package_reason(error, "raw payload length exceeds limit");
   }
 
   #[test]

@@ -18,6 +18,11 @@ const CITY_SOURCE: &str = "city";
 const FIRST_NAME_SOURCE: &str = "first-name";
 const SURNAME_SOURCE: &str = "surname";
 const TITLE_SOURCE: &str = "title";
+/// A deny-list entry sourced from an injected Names-category dictionary
+/// (e.g. the bundled `names/global` fallback list), as opposed to the
+/// scoped `first-name`/`surname` name-corpus expansion. Carries the same
+/// person-name weight as those two sources: see [`has_person_name_source`].
+const NAME_DICTIONARY_SOURCE: &str = "name-dictionary";
 const PERSON_LABEL: &str = "person";
 const ADDRESS_LABEL: &str = "address";
 
@@ -700,6 +705,10 @@ pub struct DenyListFilterData {
   pub document_heading_ordinal_markers: BTreeSet<String>,
   pub defined_term_cues: BTreeSet<String>,
   pub signing_place_guards: Vec<SigningPlaceGuardData>,
+  /// Lowercase title tokens (e.g. "dr", "mr", "prof") that may prefix a
+  /// person name. Used to strip a leading title before checking whether a
+  /// defined-term quote starts with a known first name.
+  pub title_tokens: BTreeSet<String>,
 }
 
 #[derive(
@@ -802,13 +811,14 @@ pub fn process_deny_list_matches(
       continue;
     }
     if found.labels.iter().any(|label| label == PERSON_LABEL)
-      && !filter_contains(
-        data
-          .filters
-          .as_ref()
-          .map(|filters| &filters.person_stopwords),
-        &found.text.to_lowercase(),
-      )
+      && (found.has_person_name_source
+        || !filter_contains(
+          data
+            .filters
+            .as_ref()
+            .map(|filters| &filters.person_stopwords),
+          &found.text.to_lowercase(),
+        ))
     {
       name_hits.push(found.clone());
     }
@@ -970,9 +980,11 @@ fn collect_deny_list_matches(
       end: found.end(),
       labels: curated_labels,
       custom_labels,
-      has_person_name_source: sources
-        .iter()
-        .any(|source| source == FIRST_NAME_SOURCE || source == SURNAME_SOURCE),
+      has_person_name_source: sources.iter().any(|source| {
+        source == FIRST_NAME_SOURCE
+          || source == SURNAME_SOURCE
+          || source == NAME_DICTIONARY_SOURCE
+      }),
       text: match_text,
     });
   }
@@ -1400,7 +1412,8 @@ fn validate_deny_list_sources(sources: StringGroup<'_>) -> Result<()> {
       | CUSTOM_DENY_LIST_SOURCE
       | FIRST_NAME_SOURCE
       | SURNAME_SOURCE
-      | TITLE_SOURCE => {}
+      | TITLE_SOURCE
+      | NAME_DICTIONARY_SOURCE => {}
       _ => {
         return Err(Error::UnsupportedDenyListSource {
           source: String::from(source),
@@ -2053,13 +2066,29 @@ fn starts_with_known_first_name(
   quote_content: &str,
   filters: &DenyListFilterData,
 ) -> bool {
-  let first_word = quote_content
-    .trim()
+  let trimmed = quote_content.trim();
+  let first_word = trimmed
     .chars()
     .take_while(|ch| ch.is_alphabetic())
     .collect::<String>();
-  !first_word.is_empty()
-    && filters.first_names.contains(&first_word.to_lowercase())
+  if first_word.is_empty() {
+    return false;
+  }
+  if filters.title_tokens.contains(&first_word.to_lowercase()) {
+    // A leading title ("Dr. John Smith") is not itself the person's first
+    // name; strip it (and the separator that follows, e.g. ". ") and check
+    // the next word instead.
+    let rest = trimmed
+      .trim_start_matches(|ch: char| ch.is_alphabetic())
+      .trim_start_matches(|ch: char| !ch.is_alphabetic());
+    let next_word = rest
+      .chars()
+      .take_while(|ch| ch.is_alphabetic())
+      .collect::<String>();
+    return !next_word.is_empty()
+      && filters.first_names.contains(&next_word.to_lowercase());
+  }
+  filters.first_names.contains(&first_word.to_lowercase())
 }
 
 fn has_person_role_definition(
@@ -2482,5 +2511,177 @@ mod tests {
     assert_eq!(groups.get(3).unwrap().to_strings(), Vec::<String>::new());
     assert!(groups.get(4).is_none());
     assert!(groups.validate("test").is_ok());
+  }
+
+  #[test]
+  fn deny_list_emits_name_dictionary_sourced_person_match() {
+    // A Names-category injected dictionary (e.g. the bundled `names/global`
+    // fallback list) is tagged `name-dictionary` at assemble time
+    // (assemble/deny_list.rs `apply_dictionary_entries`). A lone match
+    // sourced only from that dictionary must still be treated as a person
+    // name and emitted, not silently dropped for lacking a
+    // `first-name`/`surname` source.
+    let matches = vec![SearchMatch::Literal {
+      pattern: 0,
+      start: 0,
+      end: 7,
+    }];
+    let data = DenyListMatchData {
+      labels: vec![vec![String::from("person")]].into(),
+      custom_labels: vec![vec![]].into(),
+      originals: vec![String::from("Aabidah")],
+      pattern_meta: DenyListPatternMetaSet::default(),
+      sources: vec![vec![String::from("name-dictionary")]].into(),
+      filters: Some(DenyListFilterData::default()),
+    };
+
+    let entities = process_deny_list_matches(
+      &matches,
+      PatternSlice { start: 0, end: 1 },
+      "Aabidah signed the form.",
+      &data,
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].label, "person");
+    assert_eq!(entities[0].text, "Aabidah");
+  }
+
+  #[test]
+  fn deny_list_exempts_corpus_backed_person_stopword_from_veto() {
+    // "tito" is a legitimate global `person_stopwords` entry (e.g. to guard
+    // against a Czech demonstrative pronoun), but the same token is also a
+    // genuine first-name corpus match here. The corpus-backed match must not
+    // be vetoed purely because its lowercase form is stopworded.
+    let matches = vec![SearchMatch::Literal {
+      pattern: 0,
+      start: 0,
+      end: 4,
+    }];
+    let mut person_stopwords = BTreeSet::new();
+    person_stopwords.insert(String::from("tito"));
+    let data = DenyListMatchData {
+      labels: vec![vec![String::from("person")]].into(),
+      custom_labels: vec![vec![]].into(),
+      originals: vec![String::from("Tito")],
+      pattern_meta: DenyListPatternMetaSet::default(),
+      sources: vec![vec![String::from("first-name")]].into(),
+      filters: Some(DenyListFilterData {
+        person_stopwords,
+        ..DenyListFilterData::default()
+      }),
+    };
+
+    let entities = process_deny_list_matches(
+      &matches,
+      PatternSlice { start: 0, end: 1 },
+      "Tito signed the agreement.",
+      &data,
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].label, "person");
+    assert_eq!(entities[0].text, "Tito");
+  }
+
+  #[test]
+  fn deny_list_still_vetoes_non_corpus_person_stopword() {
+    // A person-labeled match with no corpus-name source (here: `title`,
+    // matching a bare title-list pattern rather than a first-name/surname
+    // corpus hit) should still be suppressed by the stopword veto; the
+    // exemption above is deliberately narrow.
+    let matches = vec![SearchMatch::Literal {
+      pattern: 0,
+      start: 0,
+      end: 5,
+    }];
+    let mut person_stopwords = BTreeSet::new();
+    person_stopwords.insert(String::from("agent"));
+    let data = DenyListMatchData {
+      labels: vec![vec![String::from("person")]].into(),
+      custom_labels: vec![vec![]].into(),
+      originals: vec![String::from("Agent")],
+      pattern_meta: DenyListPatternMetaSet::default(),
+      sources: vec![vec![String::from("title")]].into(),
+      filters: Some(DenyListFilterData {
+        person_stopwords,
+        ..DenyListFilterData::default()
+      }),
+    };
+
+    let entities = process_deny_list_matches(
+      &matches,
+      PatternSlice { start: 0, end: 1 },
+      "Agent signed the form.",
+      &data,
+    )
+    .unwrap();
+
+    assert!(entities.is_empty());
+  }
+
+  #[test]
+  fn deny_list_redacts_titled_name_in_defined_term_quote() {
+    // `"Dr. John Smith" shall mean ...` must still redact "John Smith": the
+    // defined-term-quote suppression has an exception for quotes that start
+    // with a known first name followed by a role definition, but the raw
+    // quote content starts with the title "Dr", not the name. Stripping a
+    // leading known title before the first-name check lets the exception
+    // fire correctly.
+    let text = "\"Dr. John Smith\" shall mean the party of the first part.";
+    let matches = vec![
+      SearchMatch::Literal {
+        pattern: 0,
+        start: 5,
+        end: 9,
+      },
+      SearchMatch::Literal {
+        pattern: 1,
+        start: 10,
+        end: 15,
+      },
+    ];
+    let mut first_names = BTreeSet::new();
+    first_names.insert(String::from("john"));
+    let mut title_tokens = BTreeSet::new();
+    title_tokens.insert(String::from("dr"));
+    let mut defined_term_cues = BTreeSet::new();
+    defined_term_cues.insert(String::from("shall mean"));
+    let mut generic_roles = BTreeSet::new();
+    generic_roles.insert(String::from("party"));
+
+    let data = DenyListMatchData {
+      labels: vec![vec![String::from("person")], vec![String::from("person")]]
+        .into(),
+      custom_labels: vec![vec![], vec![]].into(),
+      originals: vec![String::from("John"), String::from("Smith")],
+      pattern_meta: DenyListPatternMetaSet::default(),
+      sources: vec![
+        vec![String::from("first-name")],
+        vec![String::from("surname")],
+      ]
+      .into(),
+      filters: Some(DenyListFilterData {
+        first_names,
+        title_tokens,
+        defined_term_cues,
+        generic_roles,
+        ..DenyListFilterData::default()
+      }),
+    };
+
+    let entities = process_deny_list_matches(
+      &matches,
+      PatternSlice { start: 0, end: 2 },
+      text,
+      &data,
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].label, "person");
+    assert_eq!(entities[0].text, "John Smith");
   }
 }

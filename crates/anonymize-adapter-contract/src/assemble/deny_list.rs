@@ -221,6 +221,7 @@ pub(super) fn build_deny_list_filter_data(
     document_heading_ordinal_markers: shape("documentHeadingOrdinalMarkers"),
     defined_term_cues: deny_list_filter_static("definedTermCues")?,
     signing_place_guards,
+    title_tokens: corpus.titles_list.clone(),
   })
 }
 
@@ -566,6 +567,7 @@ struct DenyBuildContext<'a> {
   corpus: &'a NameCorpus,
   common_words: &'a HashSet<String>,
   month_names: &'a HashSet<String>,
+  allow_list: &'a HashSet<String>,
 }
 
 /// Excluded deny-list categories as a lookup set.
@@ -584,6 +586,7 @@ pub(super) fn build_deny_list(
   ctx: &DenyBuildContextArgs<'_>,
 ) -> Result<Option<DenyListData>, AssembleError> {
   let month_names = load_month_names()?;
+  let allow_list = load_allow_list_set()?;
   let dctx = DenyBuildContext {
     config: ctx.config,
     dictionaries: ctx.dictionaries,
@@ -592,6 +595,7 @@ pub(super) fn build_deny_list(
     corpus: ctx.corpus,
     common_words: &ctx.corpus.common_words_set,
     month_names: &month_names,
+    allow_list: &allow_list,
   };
 
   let dictionaries = dctx.dictionaries;
@@ -690,8 +694,22 @@ fn apply_dictionary_entries(
     {
       continue;
     }
+    // Names-category dictionaries (the bundled per-language first-name and
+    // surname lists, plus the mixed-gender `names/global` fallback) are all
+    // genuine person-name sources, not generic curated terms. Tag them
+    // `name-dictionary` rather than the generic `deny-list` source so
+    // `has_person_name_source` (processors.rs) recognizes them the same way
+    // it recognizes the scoped `first-name`/`surname` name-corpus expansion;
+    // otherwise a chain built entirely from these entries (e.g. an
+    // unscoped-config match on a global-list-only name) is silently dropped
+    // in `append_person_name_hits`.
+    let source = if category == "Names" {
+      "name-dictionary"
+    } else {
+      "deny-list"
+    };
     for entry in entries {
-      add_deny_list_entry(builder, dctx, entry, &meta.label, "deny-list");
+      add_deny_list_entry(builder, dctx, entry, &meta.label, source);
     }
   }
 }
@@ -736,7 +754,10 @@ fn add_deny_list_entry(
   let lower = js_lowercase(&normalized);
   if source != "custom-deny-list" {
     if label != "address" {
-      if is_single_word(&normalized) && dctx.common_words.contains(&lower) {
+      if is_single_word(&normalized)
+        && dctx.common_words.contains(&lower)
+        && !dctx.allow_list.contains(&lower)
+      {
         return;
       }
       if is_short_curated_noise_acronym(&normalized) {
@@ -823,6 +844,17 @@ fn load_month_names() -> Result<HashSet<String>, AssembleError> {
   }
   let data: DateMonths = parse_data_file("date-months.json")?;
   Ok(data.en.iter().map(|m| js_lowercase(m)).collect())
+}
+
+/// Loads `allow-list.json` as a lowercased lookup set. Mirrors the
+/// `allow_list` load in [`build_deny_list_filter_data`], but independently:
+/// that function only receives the name corpus, not the deny-list build
+/// context, so `add_deny_list_entry`'s common-word veto needs its own copy
+/// to exempt known-good single-word entries (e.g. org aliases like
+/// "Citizens" that collide with `common-words-en.json`).
+fn load_allow_list_set() -> Result<HashSet<String>, AssembleError> {
+  let allow_list: WordsFile = parse_data_file("allow-list.json")?;
+  Ok(allow_list.words.iter().map(|word| js_lowercase(word)).collect())
 }
 
 // ── native encoding (toNativeDenyListData) ──────────────────────────────────
@@ -938,4 +970,187 @@ pub(super) fn deny_originals_and_sources(
     })
     .collect();
   (data.originals.clone(), sources)
+}
+
+#[cfg(test)]
+mod tests {
+  use stella_anonymize_core::assemble::DictionaryMeta;
+
+  use super::*;
+
+  fn test_pipeline_config() -> PipelineConfig {
+    PipelineConfig {
+      threshold: 0.5,
+      enable_trigger_phrases: false,
+      enable_regex: false,
+      languages: None,
+      language: None,
+      enable_legal_forms: None,
+      enable_name_corpus: false,
+      name_corpus_languages: None,
+      enable_deny_list: true,
+      deny_list_countries: None,
+      deny_list_regions: None,
+      deny_list_exclude_categories: None,
+      custom_deny_list: None,
+      custom_regexes: None,
+      enable_gazetteer: false,
+      enable_countries: None,
+      enable_ner: false,
+      enable_confidence_boost: false,
+      enable_coreference: false,
+      enable_zone_classification: None,
+      enable_hotword_rules: None,
+      labels: Vec::new(),
+      workspace_id: String::from("test-workspace"),
+      dictionaries: None,
+    }
+  }
+
+  fn test_corpus() -> NameCorpus {
+    NameCorpus {
+      first_names_list: Vec::new(),
+      surnames_list: Vec::new(),
+      titles_list: Vec::new(),
+      title_abbreviations: Vec::new(),
+      excluded_list: Vec::new(),
+      common_words: Vec::new(),
+      non_western_names_list: Vec::new(),
+      excluded_all_caps_list: Vec::new(),
+      common_words_set: HashSet::new(),
+    }
+  }
+
+  /// `add_deny_list_entry`'s common-word veto (single-word, non-address,
+  /// non-custom entries whose lowercase form is in `common-words-en.json`)
+  /// used to drop known org/bank aliases like "Citizens" outright, before
+  /// the allow-list (which is only consulted at match time) ever got a
+  /// chance to rescue them. This exercises the assemble-time exemption
+  /// directly: an entry present in `allow_list` must survive even though
+  /// it is also a common word.
+  #[test]
+  fn allow_listed_org_alias_survives_common_word_filter() {
+    let config = test_pipeline_config();
+    let corpus = test_corpus();
+    let common_words = HashSet::from([String::from("citizens")]);
+    let month_names = HashSet::new();
+    let allow_list = HashSet::from([String::from("citizens")]);
+    let dctx = DenyBuildContext {
+      config: &config,
+      dictionaries: None,
+      use_scoped_name_corpus: false,
+      deny_list_countries: None,
+      corpus: &corpus,
+      common_words: &common_words,
+      month_names: &month_names,
+      allow_list: &allow_list,
+    };
+    let mut builder = Builder::new();
+
+    add_deny_list_entry(
+      &mut builder,
+      &dctx,
+      "Citizens",
+      "organization",
+      "deny-list",
+    );
+
+    assert!(
+      builder.pattern_index.contains_key("citizens"),
+      "an allow-listed org alias should survive the common-word filter"
+    );
+  }
+
+  /// A common word that is *not* on the allow-list must still be dropped:
+  /// the exemption above is deliberately narrow.
+  #[test]
+  fn plain_common_word_without_allow_listing_is_still_dropped() {
+    let config = test_pipeline_config();
+    let corpus = test_corpus();
+    let common_words = HashSet::from([String::from("agreement")]);
+    let month_names = HashSet::new();
+    let allow_list = HashSet::new();
+    let dctx = DenyBuildContext {
+      config: &config,
+      dictionaries: None,
+      use_scoped_name_corpus: false,
+      deny_list_countries: None,
+      corpus: &corpus,
+      common_words: &common_words,
+      month_names: &month_names,
+      allow_list: &allow_list,
+    };
+    let mut builder = Builder::new();
+
+    add_deny_list_entry(
+      &mut builder,
+      &dctx,
+      "Agreement",
+      "organization",
+      "deny-list",
+    );
+
+    assert!(
+      !builder.pattern_index.contains_key("agreement"),
+      "a non-allow-listed common word should still be dropped"
+    );
+  }
+
+  /// Names-category dictionary entries (the injected per-language
+  /// first-name/surname lists plus the mixed `names/global` fallback) must
+  /// be tagged with a person-name source, not the generic `deny-list`
+  /// source, so match-time `has_person_name_source` recognizes them the
+  /// same way it recognizes the scoped name-corpus expansion. Without this,
+  /// a global-only name (present only via the injected dictionary, not the
+  /// scoped `first-name`/`surname` corpus expansion) is silently discarded
+  /// downstream in `append_person_name_hits`.
+  #[test]
+  fn names_category_dictionary_entries_get_name_dictionary_source() {
+    let config = PipelineConfig {
+      enable_name_corpus: true,
+      ..test_pipeline_config()
+    };
+    let corpus = test_corpus();
+    let common_words = HashSet::new();
+    let month_names = HashSet::new();
+    let allow_list = HashSet::new();
+    let dictionaries = Dictionaries {
+      deny_list: Some(OrderedMap(vec![(
+        String::from("names/global"),
+        vec![String::from("Aabidah")],
+      )])),
+      deny_list_meta: Some(OrderedMap(vec![(
+        String::from("names/global"),
+        DictionaryMeta {
+          label: String::from("person"),
+          category: DenyListCategory::Names,
+          country: None,
+        },
+      )])),
+      ..Dictionaries::default()
+    };
+    let dctx = DenyBuildContext {
+      config: &config,
+      dictionaries: Some(&dictionaries),
+      use_scoped_name_corpus: false,
+      deny_list_countries: None,
+      corpus: &corpus,
+      common_words: &common_words,
+      month_names: &month_names,
+      allow_list: &allow_list,
+    };
+    let mut builder = Builder::new();
+
+    apply_dictionary_entries(&mut builder, &dctx, None, &HashSet::new());
+
+    let index = builder
+      .pattern_index
+      .get("aabidah")
+      .copied()
+      .expect("global-only name should be registered");
+    assert_eq!(
+      builder.source_list.get(index),
+      Some(&vec![String::from("name-dictionary")])
+    );
+  }
 }

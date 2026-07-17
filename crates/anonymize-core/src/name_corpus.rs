@@ -687,13 +687,26 @@ fn chain_score(
   if has_non_western {
     let title_confidence =
       has_title && (non_western_count > 0 || capitalized_count > 0);
+    // A chain where every token's lowercase form is also a common English
+    // word (e.g. "Loan Green": "loan" is a Vietnamese given name corpus
+    // match, "green" a surname corpus match, and both are also common
+    // words) should not be vetoed when it is otherwise backed by genuine
+    // corpus membership. Two or more corpus matches (`corpus_count >= 2`)
+    // is exactly the bar the western-only branch below already accepts
+    // unconditionally (see the `corpus_count >= 2` check past the
+    // `has_non_western` block); mirror that here so a non-western token in
+    // the chain does not make the bar stricter. For a single corpus match,
+    // `has_corpus_name` still exempts the existing capitalized/abbreviation
+    // disjunct from the common-word veto rather than suppressing it purely
+    // because every token happens to double as a common word.
     let high_confidence = (has_ja_suffix
       && (capitalized_count > 0 || non_western_count > 0))
       || (has_arabic_connector && non_western_count > 0)
       || non_western_count >= 2
+      || corpus_count >= 2
       || (non_western_count > 0
         && (capitalized_count > 0 || has_abbreviation)
-        && !chain_all_common_words);
+        && !(chain_all_common_words && !has_corpus_name));
     let score = if title_confidence {
       TITLE_NAME_SCORE
     } else if high_confidence {
@@ -1135,6 +1148,32 @@ mod tests {
 
     assert_eq!(entities.len(), 1);
     assert_eq!(entities[0].text, "Mina Roe");
+    assert!(
+      (entities[0].score - HIGH_CONFIDENCE_NAME_SCORE).abs() < f64::EPSILON
+    );
+  }
+
+  #[test]
+  fn non_western_chain_with_corpus_pair_is_not_vetoed_as_common_words() {
+    // "Loan" is a Vietnamese given-name corpus match (hence non-western) and
+    // "Green" is a surname corpus match; both also happen to be common
+    // English words. The chain should still be emitted because it is backed
+    // by two genuine corpus matches, exactly like a plain western chain
+    // would be (see `full_mode_detects_western_corpus_chain`).
+    let data = PreparedNameCorpusData::new(NameCorpusData {
+      first_names: vec![String::from("Loan")],
+      surnames: vec![String::from("Green")],
+      non_western_names: vec![String::from("Loan")],
+      common_words: vec![String::from("loan"), String::from("green")],
+      ..NameCorpusData::default()
+    });
+
+    let entities = data
+      .detect("Agreement signed by Loan Green.", NameCorpusMode::Full, &[])
+      .expect("full name-corpus detection should succeed");
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].text, "Loan Green");
     assert!(
       (entities[0].score - HIGH_CONFIDENCE_NAME_SCORE).abs() < f64::EPSILON
     );
