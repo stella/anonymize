@@ -183,10 +183,16 @@ pub(crate) fn process_legal_form_matches(
     if candidate_start >= effective_suffix_start {
       continue;
     }
-    if crosses_sentence_end(full_text, candidate_start, effective_suffix_start)
-    {
+    // A sentence break inside the candidate ("Acme Inc. Beta LLC") no longer
+    // drops the whole thing: re-clip to just after the break and re-validate
+    // the trimmed remainder so the later org ("Beta LLC") still gets emitted.
+    let Some(candidate_start) = clip_past_sentence_breaks(
+      full_text,
+      candidate_start,
+      effective_suffix_start,
+    ) else {
       continue;
-    }
+    };
 
     candidates.push(Candidate {
       start: candidate_start,
@@ -485,15 +491,21 @@ fn trailing_word(text: &str) -> Option<Token<'_>> {
   })
 }
 
-fn crosses_sentence_end(text: &str, start: usize, suffix_start: usize) -> bool {
-  let Some(slice) = text.get(start..suffix_start) else {
-    return false;
-  };
+/// Scans `text[start..suffix_start]` for a sentence-ending `. ` boundary and,
+/// if one is found, returns the byte offset immediately after it (the start
+/// of the next word). `None` means the whole span reads as a single
+/// sentence.
+fn crosses_sentence_end(
+  text: &str,
+  start: usize,
+  suffix_start: usize,
+) -> Option<usize> {
+  let slice = text.get(start..suffix_start)?;
   let mut previous = None::<char>;
   let mut lowercase_run = 0_usize;
   let mut uppercase_run = 0_usize;
 
-  for ch in slice.chars() {
+  for (offset, ch) in slice.char_indices() {
     if ch.is_uppercase() {
       // An interior dot delimits a word, so a capital right after one starts
       // a fresh run. This keeps compact initials ("J.P.") from looking like a
@@ -524,7 +536,7 @@ fn crosses_sentence_end(text: &str, start: usize, suffix_start: usize) -> bool {
     }
     if ch.is_whitespace() && previous == Some('.') {
       if lowercase_run >= 2 || uppercase_run >= 2 {
-        return true;
+        return Some(start.saturating_add(offset).saturating_add(ch.len_utf8()));
       }
       lowercase_run = 0;
       uppercase_run = 0;
@@ -532,7 +544,31 @@ fn crosses_sentence_end(text: &str, start: usize, suffix_start: usize) -> bool {
     previous = Some(ch);
   }
 
-  false
+  None
+}
+
+/// Re-clips `candidate_start` past every sentence break found before
+/// `suffix_start`, re-validating the trimmed remainder each time, instead of
+/// discarding the whole candidate the way a single `crosses_sentence_end`
+/// check used to. For "Acme Inc. Beta LLC", this narrows the `LLC` candidate
+/// from "Acme Inc. Beta " down to "Beta " rather than dropping it outright,
+/// so the later org is still emitted. Returns `None` only when no text is
+/// left before `suffix_start` once every break has been clipped past.
+fn clip_past_sentence_breaks(
+  text: &str,
+  start: usize,
+  suffix_start: usize,
+) -> Option<usize> {
+  let mut candidate_start = start;
+  while let Some(break_end) =
+    crosses_sentence_end(text, candidate_start, suffix_start)
+  {
+    candidate_start = break_end;
+    if candidate_start >= suffix_start {
+      return None;
+    }
+  }
+  Some(candidate_start)
 }
 
 fn trim_to_first_cap_after_verb(
@@ -868,7 +904,14 @@ fn trim_role_head(
 
   let scan_start = last_verb_end.unwrap_or(mid_start);
   for token in word_tokens(text, scan_start, suffix_offset) {
-    if !starts_upper(token.text) {
+    // A digit-leading token ("360", "1") is a valid span start alongside an
+    // uppercase-leading one: "Client 360 LLC" / "Vendor 1 LLC" put the
+    // digit right after the role word with no later capitalized word to
+    // recover on, so restricting the scan to starts_upper alone clipped the
+    // whole name down to the bare suffix.
+    let starts_digit =
+      token.text.chars().next().is_some_and(|ch| ch.is_ascii_digit());
+    if !starts_upper(token.text) && !starts_digit {
       continue;
     }
     let lower = lowercase_lookup(token.text);
@@ -1076,12 +1119,20 @@ fn extend_backward(
         {
           break;
         }
+        // A bare "exactly two capitalized words" run before the connector is
+        // not, by itself, evidence of a person name: it equally matches a
+        // two-word company prefix ("Acme Widgets and Bar, Inc."), and
+        // blocking on word count alone left that prefix unredacted. Require
+        // actual person-name evidence (a dotted middle initial, optionally
+        // paired with a single-cap lead-in for the suffix-first case) before
+        // refusing to extend across the connector. Even then, a connector
+        // word already known to be a legal-form word inside a name (e.g.
+        // "Trust") overrides the initial and lets the walk continue, since
+        // that is corroborating evidence for a company name, not a person.
         let person_name_boundary = if suffix_mode {
           middle_initial && has_single_cap_prefix_before(full_text, match_start)
         } else {
-          (upper_before == 2
-            && !is_in_name_legal_form_word(previous.text, data))
-            || middle_initial
+          middle_initial && !is_in_name_legal_form_word(previous.text, data)
         };
         if person_name_boundary {
           break;
@@ -1772,8 +1823,11 @@ fn contains_lowercase(set: &HashSet<String>, text: &str) -> bool {
 mod tests {
   use super::{
     LegalFormData, PreparedLegalFormData, crosses_sentence_end,
-    trim_leading_clause,
+    extend_backward, process_legal_form_matches, trim_leading_clause,
+    trim_role_head,
   };
+  use crate::processors::PatternSlice;
+  use crate::types::SearchMatch;
 
   fn leading_clause_data() -> PreparedLegalFormData {
     PreparedLegalFormData::new(LegalFormData {
@@ -1840,7 +1894,7 @@ mod tests {
     // Treat the org candidate as spanning the whole text up to the trailing
     // legal-form suffix (the caller passes walker_start and suffix_start).
     let suffix_start = text.rfind(prefix).unwrap_or(text.len());
-    crosses_sentence_end(text, 0, suffix_start)
+    crosses_sentence_end(text, 0, suffix_start).is_some()
   }
 
   #[test]
@@ -1874,5 +1928,119 @@ mod tests {
     // A real 2+ letter word (any case) before ". " remains a boundary.
     assert!(crosses("Price. LLC", "LLC"));
     assert!(crosses("Acme INC. Beta LLC", "LLC"));
+  }
+
+  fn legal_form_test_data() -> PreparedLegalFormData {
+    PreparedLegalFormData::new(LegalFormData {
+      suffixes: vec![String::from("LLC"), String::from("Inc.")],
+      ..LegalFormData::default()
+    })
+  }
+
+  #[test]
+  fn sentence_break_reclips_instead_of_dropping_the_candidate() {
+    // "Acme Inc. Beta LLC signed the agreement." — the LLC candidate's
+    // backward walk reaches all the way to "Acme", crossing the "Inc. "
+    // sentence break along the way. The old code dropped the whole
+    // candidate via `continue`, so "Beta LLC" was never emitted. It now
+    // re-clips forward past the break and re-validates the remainder, so
+    // both the sentence-preceding "Acme Inc." and the later "Beta LLC" are
+    // detected.
+    let data = legal_form_test_data();
+    let text = "Acme Inc. Beta LLC signed the agreement.";
+    let inc_start = text.find("Inc.").unwrap();
+    let inc_end = inc_start + "Inc.".len();
+    let llc_start = text.find("LLC").unwrap();
+    let llc_end = llc_start + "LLC".len();
+    let matches = [
+      SearchMatch::Literal {
+        pattern: 0,
+        start: u32::try_from(inc_start).unwrap(),
+        end: u32::try_from(inc_end).unwrap(),
+      },
+      SearchMatch::Literal {
+        pattern: 0,
+        start: u32::try_from(llc_start).unwrap(),
+        end: u32::try_from(llc_end).unwrap(),
+      },
+    ];
+    let slice = PatternSlice { start: 0, end: 1 };
+    let entities =
+      process_legal_form_matches(&matches, slice, text, &data).unwrap();
+    let texts: Vec<&str> =
+      entities.iter().map(|entity| entity.text.as_str()).collect();
+    assert!(texts.contains(&"Acme Inc."), "{texts:?}");
+    assert!(texts.contains(&"Beta LLC"), "{texts:?}");
+  }
+
+  fn connector_test_data() -> PreparedLegalFormData {
+    PreparedLegalFormData::new(LegalFormData {
+      connector_words: vec![String::from("and")],
+      and_connector_words: vec![String::from("and")],
+      ..LegalFormData::default()
+    })
+  }
+
+  #[test]
+  fn connector_boundary_extends_across_two_word_company_prefix() {
+    // "Acme Widgets and Bar, Inc." — "Widgets" is not a recognized in-name
+    // legal-form word and there is no middle initial, so the old
+    // "exactly two capitalized words" check alone stopped the walk at
+    // "and" and left "Acme Widgets and" unredacted. Corroborating
+    // person-name evidence is now required to block the walk, so absent
+    // any it continues across the connector and recovers the full prefix.
+    let data = connector_test_data();
+    let text = "Acme Widgets and Bar, Inc.";
+    let match_start = text.find("Bar").unwrap();
+    assert_eq!(extend_backward(text, match_start, &data, false), 0);
+  }
+
+  #[test]
+  fn connector_boundary_still_protects_an_initialed_person_name() {
+    // "Paul J. Newman and Apple, Inc." — a genuine dotted middle initial is
+    // real person-name evidence, so the walk must still stop at "and"
+    // rather than swallowing the person's name into the org span. (The
+    // bare "Paul Newman and Apple, Inc." form carries no local signal that
+    // distinguishes it from a genuine two-word company prefix like "Acme
+    // Widgets and Bar, Inc." above — this initialed variant is the
+    // preserved case the guard can still tell apart.)
+    let data = connector_test_data();
+    let text = "Paul J. Newman and Apple, Inc.";
+    let match_start = text.find("Apple").unwrap();
+    assert_eq!(extend_backward(text, match_start, &data, false), match_start);
+  }
+
+  fn role_head_test_data() -> PreparedLegalFormData {
+    PreparedLegalFormData::new(LegalFormData {
+      role_heads: vec![String::from("client"), String::from("vendor")],
+      ..LegalFormData::default()
+    })
+  }
+
+  #[test]
+  fn role_head_digit_trim_recovers_digit_led_name() {
+    // "Client 360 LLC" / "Vendor 1 LLC" — the role word is immediately
+    // followed by a digit with no verb in between, so trim_role_head's
+    // recovery scan has to find where the real name resumes. Restricting
+    // the scan to uppercase-leading tokens skipped the digit-leading token
+    // entirely and, with no later uppercase word to recover on, collapsed
+    // the span down to the bare "LLC" suffix. A digit-leading token is now
+    // accepted too, so "360"/"1" anchors the recovered span instead of
+    // losing the name.
+    let data = role_head_test_data();
+
+    let client_text = "Client 360 LLC";
+    let client_suffix_start = client_text.find("LLC").unwrap();
+    let client_trim =
+      trim_role_head(client_text, 0, client_text, client_suffix_start, &data)
+        .expect("digit-after-role should still trim");
+    assert_eq!(client_text.get(client_trim.start..), Some("360 LLC"));
+
+    let vendor_text = "Vendor 1 LLC";
+    let vendor_suffix_start = vendor_text.find("LLC").unwrap();
+    let vendor_trim =
+      trim_role_head(vendor_text, 0, vendor_text, vendor_suffix_start, &data)
+        .expect("digit-after-role should still trim");
+    assert_eq!(vendor_text.get(vendor_trim.start..), Some("1 LLC"));
   }
 }
