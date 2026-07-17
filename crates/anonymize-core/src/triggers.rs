@@ -368,10 +368,14 @@ pub(crate) fn process_trigger_matches(
     }
     if rule.label == "phone number"
       && char_count(&value.text) > MAX_TRIGGER_VALUE_LEN
-      && char_at(full_text, &offsets, value.end)? != Some('\n')
-      && char_at(full_text, &offsets, value.end)? != Some('\t')
     {
-      value = cap_phone_value(&value);
+      let delimiter_offset =
+        skip_trimmed_whitespace(full_text, &offsets, value.end)?;
+      if char_at(full_text, &offsets, delimiter_offset)? != Some('\n')
+        && char_at(full_text, &offsets, delimiter_offset)? != Some('\t')
+      {
+        value = cap_phone_value(&value);
+      }
     }
 
     let entity_start = if rule.include_trigger {
@@ -469,7 +473,7 @@ fn extract_value(
       value_start_byte,
       label,
       stop_words,
-      max_length.unwrap_or(MAX_TRIGGER_VALUE_LEN),
+      *max_length,
       data.post_nominals,
       data.sentence_terminal_currency_terms,
     ),
@@ -510,7 +514,7 @@ fn extract_to_next_comma(
   value_start_byte: usize,
   label: &str,
   stop_words: &[String],
-  length_cap: usize,
+  length_cap: Option<usize>,
   post_nominals: &[String],
   sentence_terminal_currency_terms: &[String],
 ) -> Option<ByteValue> {
@@ -550,8 +554,10 @@ fn extract_to_next_comma(
     }
     end = end.saturating_add(len);
   }
-  if prefix_char_count(value_text, end) > length_cap {
-    end = cap_at_word_boundary(value_text, length_cap);
+  if let Some(cap) = length_cap
+    && prefix_char_count(value_text, end) > cap
+  {
+    end = cap_at_word_boundary(value_text, cap);
   }
   byte_value(value_text, value_start_byte, end)
 }
@@ -889,9 +895,16 @@ fn build_fancy_regex(pattern: &str, flags: Option<&str>) -> Result<FancyRegex> {
 
 fn get_trigger_lookahead(strategy: &PreparedTriggerStrategy) -> usize {
   match strategy {
-    PreparedTriggerStrategy::ToNextComma { max_length, .. } => max_length
-      .unwrap_or(MAX_TRIGGER_VALUE_LEN)
-      .saturating_add(TRIGGER_LOOKAHEAD_MARGIN),
+    // No configured cap: scan a full line so the structural stop
+    // conditions (comma, hard-stop char, newline) can find the real end
+    // of a long value instead of being cut short by the lookahead.
+    PreparedTriggerStrategy::ToNextComma {
+      max_length: None, ..
+    } => LINE_TRIGGER_LOOKAHEAD,
+    PreparedTriggerStrategy::ToNextComma {
+      max_length: Some(max),
+      ..
+    } => max.saturating_add(TRIGGER_LOOKAHEAD_MARGIN),
     PreparedTriggerStrategy::ToEndOfLine => LINE_TRIGGER_LOOKAHEAD,
     PreparedTriggerStrategy::NWords { count } => count
       .saturating_mul(64)
@@ -949,6 +962,27 @@ fn char_at(
 ) -> Result<Option<char>> {
   let byte = offsets.validate_offset(offset)?;
   Ok(text.get(byte..).and_then(|suffix| suffix.chars().next()))
+}
+
+/// Advances past whitespace that extraction already trimmed off the value
+/// (e.g. trailing spaces before a line/tab delimiter), so delimiter checks
+/// against `value.end` see the real next structural character instead of
+/// the trimmed padding. Never skips `\n`/`\t` themselves, since those are
+/// the delimiters callers check for.
+fn skip_trimmed_whitespace(
+  text: &str,
+  offsets: &ByteOffsets<'_>,
+  offset: u32,
+) -> Result<u32> {
+  let byte = offsets.validate_offset(offset)?;
+  let Some(suffix) = text.get(byte..) else {
+    return Ok(offset);
+  };
+  let trimmed = suffix.trim_start_matches(|ch: char| {
+    ch.is_whitespace() && !matches!(ch, '\n' | '\t')
+  });
+  let skipped = suffix.len().saturating_sub(trimmed.len());
+  Ok(offset.saturating_add(u32::try_from(skipped).unwrap_or(u32::MAX)))
 }
 
 fn char_at_byte(text: &str, byte: usize) -> Option<(char, usize)> {
@@ -1231,7 +1265,10 @@ fn phone_shape_end(
     if ch == '.'
       && text
         .get(index.saturating_add(ch.len_utf8())..)
-        .is_some_and(|tail| tail.starts_with(char::is_whitespace))
+        .is_some_and(|tail| {
+          tail.starts_with(char::is_whitespace)
+            && !dot_space_precedes_digit(tail)
+        })
     {
       break;
     }
@@ -1259,6 +1296,17 @@ fn phone_shape_end(
     end = end.saturating_add(extension_len);
   }
   (end > 0).then_some(end)
+}
+
+/// Reports whether a short lookahead past a `.` + whitespace finds a digit
+/// before any other non-whitespace character, i.e. the dot is a separator
+/// inside a number (`"+1. 555"`) rather than a sentence-ending period.
+fn dot_space_precedes_digit(after_dot: &str) -> bool {
+  after_dot
+    .chars()
+    .take(8)
+    .find(|ch| !ch.is_whitespace())
+    .is_some_and(|ch| ch.is_ascii_digit())
 }
 
 fn phone_extension_suffix_len(
@@ -1333,17 +1381,22 @@ fn is_plausible_phone_trigger_value(value: &str) -> bool {
     >= MIN_TRIGGER_PHONE_DIGITS
 }
 
+/// Recognizes `YYYY-MM-DD` and `YYYY/MM/DD` shaped date padding (the
+/// separator must be the same character in both positions) so date-shaped
+/// text following a phone trigger isn't mistaken for a phone number.
 fn looks_like_iso_date(text: &str) -> bool {
   let bytes = text.as_bytes();
+  let Some(separator @ (b'-' | b'/')) = bytes.get(4).copied() else {
+    return false;
+  };
   bytes.len() >= 10
     && bytes
       .get(0..4)
       .is_some_and(|part| part.iter().all(u8::is_ascii_digit))
-    && bytes.get(4) == Some(&b'-')
+    && bytes.get(7).copied() == Some(separator)
     && bytes
       .get(5..7)
       .is_some_and(|part| part.iter().all(u8::is_ascii_digit))
-    && bytes.get(7) == Some(&b'-')
     && bytes
       .get(8..10)
       .is_some_and(|part| part.iter().all(u8::is_ascii_digit))
@@ -1610,9 +1663,14 @@ fn is_name_particle(token: &str) -> bool {
       | "y"
       | "zu"
       | "af"
+      | "av"
       | "ben"
       | "bin"
       | "al"
+      | "ten"
+      | "ter"
+      | "zum"
+      | "zur"
       | "d'"
       | "d’"
   )
@@ -1755,9 +1813,9 @@ mod tests {
     let prefix = "zapsaná v obchodním rejstříku vedeném Krajským soudem v Ústí nad Labem, oddíl B";
     let trigger_start = prefix.find("Krajským soudem").unwrap();
     let trigger_end = trigger_start.saturating_add("Krajským soudem".len());
-    let lookahead_end = trigger_end
-      .saturating_add(MAX_TRIGGER_VALUE_LEN)
-      .saturating_add(TRIGGER_LOOKAHEAD_MARGIN);
+    // An unset `max_length` scans a full line (LINE_TRIGGER_LOOKAHEAD),
+    // not the historical MAX_TRIGGER_VALUE_LEN + margin window.
+    let lookahead_end = trigger_end.saturating_add(LINE_TRIGGER_LOOKAHEAD);
     let padding_len =
       lookahead_end.saturating_sub(prefix.len()).saturating_sub(1);
     let text = format!("{prefix}{}é trailing", "x".repeat(padding_len));
@@ -1798,5 +1856,194 @@ mod tests {
 
     assert_eq!(entities.len(), 1);
     assert_eq!(entities[0].text, "Krajským soudem v Ústí nad Labem");
+  }
+
+  #[test]
+  fn person_trigger_keeps_full_name_with_missing_particle() {
+    let text = "Name: Maarten ten Brink, born 1980";
+    let start = text.find("Name").unwrap();
+    let end = start.saturating_add("Name".len());
+    let data = PreparedTriggerData::new(TriggerData {
+      rules: vec![TriggerRule {
+        trigger: String::from("Name"),
+        label: String::from("person"),
+        strategy: TriggerStrategy::ToNextComma {
+          stop_words: Vec::new(),
+          max_length: None,
+        },
+        validations: vec![TriggerValidation::StartsUppercase],
+        include_trigger: false,
+      }],
+      address_stop_keywords: Vec::new(),
+      party_position_terms: Vec::new(),
+      legal_form_suffixes: Vec::new(),
+      post_nominals: Vec::new(),
+      sentence_terminal_currency_terms: Vec::new(),
+      phone_extension_labels: Vec::new(),
+      number_markers: Vec::new(),
+      number_labels: Vec::new(),
+    })
+    .unwrap();
+
+    let entities = process_trigger_matches(
+      &[SearchMatch::Literal {
+        pattern: 0,
+        start: u32::try_from(start).unwrap(),
+        end: u32::try_from(end).unwrap(),
+      }],
+      PatternSlice { start: 0, end: 1 },
+      text,
+      &data,
+      None,
+    )
+    .unwrap();
+
+    // "ten" is a missing name particle (see is_name_particle); without it
+    // person_name_run_end() would trim the span to just "Maarten",
+    // leaking "ten Brink".
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].text, "Maarten ten Brink");
+  }
+
+  #[test]
+  fn to_next_comma_without_max_length_captures_full_value() {
+    let long_value = "A".repeat(150);
+    let text = format!("Address: {long_value}, next line");
+    let start = text.find("Address").unwrap();
+    let end = start.saturating_add("Address".len());
+    let data = PreparedTriggerData::new(TriggerData {
+      rules: vec![TriggerRule {
+        trigger: String::from("Address"),
+        label: String::from("organization"),
+        strategy: TriggerStrategy::ToNextComma {
+          stop_words: Vec::new(),
+          max_length: None,
+        },
+        validations: vec![TriggerValidation::MinLength(3)],
+        include_trigger: false,
+      }],
+      address_stop_keywords: Vec::new(),
+      party_position_terms: Vec::new(),
+      legal_form_suffixes: Vec::new(),
+      post_nominals: Vec::new(),
+      sentence_terminal_currency_terms: Vec::new(),
+      phone_extension_labels: Vec::new(),
+      number_markers: Vec::new(),
+      number_labels: Vec::new(),
+    })
+    .unwrap();
+
+    let entities = process_trigger_matches(
+      &[SearchMatch::Literal {
+        pattern: 0,
+        start: u32::try_from(start).unwrap(),
+        end: u32::try_from(end).unwrap(),
+      }],
+      PatternSlice { start: 0, end: 1 },
+      &text,
+      &data,
+      None,
+    )
+    .unwrap();
+
+    // No configured `maxLength` must mean genuinely uncapped: the value is
+    // over MAX_TRIGGER_VALUE_LEN (100) chars but ends cleanly at the
+    // comma, so it must not be truncated to ~100 chars.
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].text, long_value);
+  }
+
+  #[test]
+  fn phone_trigger_accepts_dot_space_separators() {
+    let text = "Phone: +1. 555. 123. 4567\n";
+    let start = text.find("Phone").unwrap();
+    let end = start.saturating_add("Phone".len());
+    let data = PreparedTriggerData::new(TriggerData {
+      rules: vec![TriggerRule {
+        trigger: String::from("Phone"),
+        label: String::from("phone number"),
+        strategy: TriggerStrategy::ToEndOfLine,
+        validations: Vec::new(),
+        include_trigger: false,
+      }],
+      address_stop_keywords: Vec::new(),
+      party_position_terms: Vec::new(),
+      legal_form_suffixes: Vec::new(),
+      post_nominals: Vec::new(),
+      sentence_terminal_currency_terms: Vec::new(),
+      phone_extension_labels: Vec::new(),
+      number_markers: Vec::new(),
+      number_labels: Vec::new(),
+    })
+    .unwrap();
+
+    let entities = process_trigger_matches(
+      &[SearchMatch::Literal {
+        pattern: 0,
+        start: u32::try_from(start).unwrap(),
+        end: u32::try_from(end).unwrap(),
+      }],
+      PatternSlice { start: 0, end: 1 },
+      text,
+      &data,
+      None,
+    )
+    .unwrap();
+
+    // phone_shape_end() must not hard-stop on ". " when digits follow
+    // shortly after; otherwise the value is dropped by the 5-digit
+    // plausibility check.
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].label, "phone number");
+    assert_eq!(entities[0].text, "+1. 555. 123. 4567");
+  }
+
+  #[test]
+  fn phone_trigger_cap_ignores_trailing_spaces_before_newline() {
+    let digits = "1".repeat(105);
+    let text = format!("Phone: {digits}   \n");
+    let start = text.find("Phone").unwrap();
+    let end = start.saturating_add("Phone".len());
+    let data = PreparedTriggerData::new(TriggerData {
+      rules: vec![TriggerRule {
+        trigger: String::from("Phone"),
+        label: String::from("phone number"),
+        strategy: TriggerStrategy::ToNextComma {
+          stop_words: Vec::new(),
+          max_length: None,
+        },
+        validations: Vec::new(),
+        include_trigger: false,
+      }],
+      address_stop_keywords: Vec::new(),
+      party_position_terms: Vec::new(),
+      legal_form_suffixes: Vec::new(),
+      post_nominals: Vec::new(),
+      sentence_terminal_currency_terms: Vec::new(),
+      phone_extension_labels: Vec::new(),
+      number_markers: Vec::new(),
+      number_labels: Vec::new(),
+    })
+    .unwrap();
+
+    let entities = process_trigger_matches(
+      &[SearchMatch::Literal {
+        pattern: 0,
+        start: u32::try_from(start).unwrap(),
+        end: u32::try_from(end).unwrap(),
+      }],
+      PatternSlice { start: 0, end: 1 },
+      &text,
+      &data,
+      None,
+    )
+    .unwrap();
+
+    // The scan (and byte_value()'s trailing-whitespace trim) leaves
+    // value.end pointing before the 3 trailing spaces, not at the `\n`.
+    // The cap decision must look past that trimmed whitespace instead of
+    // treating the value as un-delimited and truncating it.
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].text, digits);
   }
 }

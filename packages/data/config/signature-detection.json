@@ -9,13 +9,13 @@
   "nameParticles": {
     "und": ["d'", "d’"],
     "ar": ["al", "ben", "bin"],
-    "de": ["der", "den", "von", "zu"],
+    "de": ["der", "den", "von", "zu", "zum", "zur"],
     "es": ["de", "del", "la", "y"],
     "fr": ["de", "du", "le", "la"],
     "it": ["di", "della"],
-    "nl": ["van"],
+    "nl": ["van", "ten", "ter"],
     "pt": ["de", "da", "das", "do", "dos"],
-    "sv": ["af"]
+    "sv": ["af", "av"]
   },
   "postNominalSuffixes": {
     "en": [
