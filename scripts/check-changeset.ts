@@ -10,7 +10,7 @@ const BASE_REF = process.env.CHANGESET_BASE_REF ?? "origin/main";
 const CHANGESET_RE = /^\.changeset\/(?!README\.md$)[^/]+\.md$/;
 const DATA_CHANGESET_RE = /^["']?@stll\/anonymize-data["']?:/m;
 const RUNTIME_SOURCE_RE =
-  /^(?:packages\/(?:anonymize|cli|document-docx)\/(?:src|scripts)\/|crates\/anonymize-(?:adapter-contract|core|napi|py)\/)/;
+  /^(?:packages\/(?:anonymize|cli|document-docx)\/(?:(?:src|scripts)\/|(?:index\.cjs|tsconfig(?:\.wasm)?\.json|tsdown\.config\.ts)$)|crates\/anonymize-(?:adapter-contract|core|napi|py)\/)/;
 const RUNTIME_MANIFESTS = new Set([
   "Cargo.lock",
   "Cargo.toml",
@@ -24,11 +24,21 @@ const RUNTIME_MANIFESTS = new Set([
   "packages/cli/package.json",
   "packages/document-docx/package.json",
 ]);
+const GENERATED_VERSION_METADATA = new Set([
+  ...RUNTIME_MANIFESTS,
+  "VERSION",
+  "bun.lock",
+  "crates/anonymize-py/pyproject.toml",
+]);
+const RUNTIME_CHANGELOG_RE =
+  /^packages\/(?:anonymize(?:-(?:darwin-(?:arm64|x64)|linux-(?:arm64|x64)-gnu|win32-x64-msvc))?|cli|document-docx)(?:\/wasm)?\/CHANGELOG\.md$/;
 
 const firstSlash = BASE_REF.indexOf("/");
 const baseRemote = firstSlash === -1 ? "origin" : BASE_REF.slice(0, firstSlash);
 const baseBranch =
   firstSlash === -1 ? BASE_REF : BASE_REF.slice(firstSlash + 1);
+const expectedVersionBranch = `changeset-release/${baseBranch}`;
+const headRef = process.env.CHANGESET_HEAD_REF ?? "";
 
 await $`git fetch --no-tags ${baseRemote} ${baseBranch}`.nothrow().quiet();
 
@@ -77,7 +87,18 @@ if (!runtimeSourceChanged && !runtimeManifestChanged) {
   process.exit(0);
 }
 
-if (!runtimeSourceChanged && changedFiles.includes("VERSION")) {
+const generatedVersionMetadataOnly = changedFiles.every(
+  (file) =>
+    GENERATED_VERSION_METADATA.has(file) ||
+    RUNTIME_CHANGELOG_RE.test(file) ||
+    CHANGESET_RE.test(file),
+);
+if (
+  !runtimeSourceChanged &&
+  headRef === expectedVersionBranch &&
+  changedFiles.includes("VERSION") &&
+  generatedVersionMetadataOnly
+) {
   console.log(
     "changeset check: synchronized release metadata includes VERSION. OK.",
   );
