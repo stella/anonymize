@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.0
+
+### Minor Changes
+
+- [#285](https://github.com/stella/anonymize/pull/285) [`a427007`](https://github.com/stella/anonymize/commit/a427007925e7f1cf6c74e1796cd4e622affd0250) Thanks [@berticeek](https://github.com/berticeek)! - Add Python bindings for `deanonymise()`
+
 ## Unreleased
 
 ## 2.0.2 (2026-07-16)
