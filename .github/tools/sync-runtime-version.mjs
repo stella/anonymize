@@ -178,27 +178,13 @@ let lockChanged = false;
 let syncedLockText = lockText;
 
 for (const dependency of SYNCED_DEPENDENCIES) {
-  const dependencyRangeRe = new RegExp(
-    `("${escapeRegExp(dependency)}": "\\^)([^"]+)(")`,
-    "g",
+  const syncedDependency = syncDependencyRangeLockVersion(
+    syncedLockText,
+    dependency,
   );
-  syncedLockText = syncedLockText.replaceAll(
-    dependencyRangeRe,
-    (match, prefix, lockedVersion, suffix) => {
-      if (lockedVersion === version) {
-        return match;
-      }
-      if (checkOnly) {
-        console.error(
-          `${LOCK_FILE} has ${dependency}@^${lockedVersion}; expected ^${version}`,
-        );
-        hasMismatch = true;
-        return match;
-      }
-      lockChanged = true;
-      return `${prefix}${version}${suffix}`;
-    },
-  );
+  syncedLockText = syncedDependency.text;
+  lockChanged ||= syncedDependency.changed;
+  hasMismatch ||= syncedDependency.hasMismatch;
 }
 
 for (const dependency of ROOT_NATIVE_OPTIONAL_DEPENDENCIES) {
@@ -317,6 +303,43 @@ function syncNativeOptionalDependencyLockVersion(text, dependency) {
   );
   if (!found) {
     console.error(`${LOCK_FILE} has no optional dependency ${dependency}`);
+    mismatched = true;
+  }
+  return {
+    text: syncedText,
+    changed,
+    hasMismatch: mismatched,
+  };
+}
+
+function syncDependencyRangeLockVersion(text, dependency) {
+  const dependencyRangeRe = new RegExp(
+    `("${escapeRegExp(dependency)}": "\\^)([^"]+)(")`,
+    "g",
+  );
+  let found = false;
+  let changed = false;
+  let mismatched = false;
+  const syncedText = text.replaceAll(
+    dependencyRangeRe,
+    (match, prefix, lockedVersion, suffix) => {
+      found = true;
+      if (lockedVersion === version) {
+        return match;
+      }
+      if (checkOnly) {
+        console.error(
+          `${LOCK_FILE} has ${dependency}@^${lockedVersion}; expected ^${version}`,
+        );
+        mismatched = true;
+        return match;
+      }
+      changed = true;
+      return `${prefix}${version}${suffix}`;
+    },
+  );
+  if (!found) {
+    console.error(`${LOCK_FILE} has no dependency range for ${dependency}`);
     mismatched = true;
   }
   return {
