@@ -1,4 +1,4 @@
-use super::{PipelineEntity, SourceDetail};
+use super::{DetectionSource, PipelineEntity, SourceDetail};
 
 pub(crate) const fn contains_span(
   outer: &PipelineEntity,
@@ -12,10 +12,11 @@ pub(crate) const fn entity_len(entity: &PipelineEntity) -> u32 {
 }
 
 pub(crate) const fn is_caller_owned(entity: &PipelineEntity) -> bool {
-  matches!(
-    entity.source_detail,
-    Some(SourceDetail::CustomDenyList | SourceDetail::CustomRegex)
-  )
+  matches!(entity.source, DetectionSource::Caller)
+    || matches!(
+      entity.source_detail,
+      Some(SourceDetail::CustomDenyList | SourceDetail::CustomRegex)
+    )
 }
 
 pub(crate) fn byte_len(text: &str) -> u32 {
