@@ -301,6 +301,7 @@ impl TriggerRegexCache {
   }
 }
 
+#[allow(clippy::too_many_lines)]
 pub(crate) fn process_trigger_matches(
   matches: &[SearchMatch],
   slice: PatternSlice,
@@ -900,12 +901,12 @@ fn get_trigger_lookahead(strategy: &PreparedTriggerStrategy) -> usize {
     // of a long value instead of being cut short by the lookahead.
     PreparedTriggerStrategy::ToNextComma {
       max_length: None, ..
-    } => LINE_TRIGGER_LOOKAHEAD,
+    }
+    | PreparedTriggerStrategy::ToEndOfLine => LINE_TRIGGER_LOOKAHEAD,
     PreparedTriggerStrategy::ToNextComma {
       max_length: Some(max),
       ..
     } => max.saturating_add(TRIGGER_LOOKAHEAD_MARGIN),
-    PreparedTriggerStrategy::ToEndOfLine => LINE_TRIGGER_LOOKAHEAD,
     PreparedTriggerStrategy::NWords { count } => count
       .saturating_mul(64)
       .saturating_add(TRIGGER_LOOKAHEAD_MARGIN),

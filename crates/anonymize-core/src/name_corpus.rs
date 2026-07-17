@@ -706,7 +706,7 @@ fn chain_score(
       || corpus_count >= 2
       || (non_western_count > 0
         && (capitalized_count > 0 || has_abbreviation)
-        && !(chain_all_common_words && !has_corpus_name));
+        && (!chain_all_common_words || has_corpus_name));
     let score = if title_confidence {
       TITLE_NAME_SCORE
     } else if high_confidence {

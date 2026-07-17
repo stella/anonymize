@@ -88,6 +88,7 @@ fn overlapping_indexes(
     .collect()
 }
 
+#[allow(clippy::too_many_lines)]
 fn should_replace(
   candidate: &PipelineEntity,
   existing: &PipelineEntity,
