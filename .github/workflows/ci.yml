@@ -33,9 +33,6 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Validate pending changesets
-        run: bun run changeset status --since origin/main
-
       - name: Require a changeset for runtime source changes
         run: bun run changeset:check
         env:

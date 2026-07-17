@@ -67,6 +67,10 @@ const diff = async (filter: string): Promise<string[]> => {
 
 const addedFiles = await diff("A");
 const addedChangesets = addedFiles.filter((file) => CHANGESET_RE.test(file));
+const changedFiles = await diff("ACMRD");
+const pendingChangesets = (await diff("ACMR")).filter((file) =>
+  CHANGESET_RE.test(file),
+);
 const dataChangeset = addedChangesets.find((file) =>
   DATA_CHANGESET_RE.test(readFileSync(file, "utf8")),
 );
@@ -77,7 +81,18 @@ if (dataChangeset) {
   process.exit(1);
 }
 
-const changedFiles = await diff("ACMRD");
+if (pendingChangesets.length > 0) {
+  const status = await $`bun run changeset status --since ${BASE_REF}`
+    .nothrow()
+    .quiet();
+  if (status.exitCode !== 0) {
+    console.error("changeset check: pending changeset validation failed.");
+    console.error(status.stdout.toString());
+    console.error(status.stderr.toString());
+    process.exit(1);
+  }
+}
+
 const runtimeSourceChanged = changedFiles.some((file) =>
   RUNTIME_SOURCE_RE.test(file),
 );
