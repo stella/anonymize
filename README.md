@@ -292,9 +292,20 @@ flow, and extension rules are in
 - **Data stays local.** The CLI makes no network calls (stated in its `--help`);
   the SDKs load prepared packages from disk or bundled assets, and the browser
   build loads only the packages you bundle. No document text leaves the process.
-- **No text in logs.** Diagnostics and summaries carry entity counts, labels,
-  spans, and scores, not detected text; raw input is kept out of logs and
-  snapshots.
+- **Diagnostics APIs return raw detected text: do not log them.** The
+  diagnostics and summary-diagnostics variants (`redactStaticEntitiesDiagnosticsJson`,
+  `redactStaticEntitiesSummaryDiagnosticsJson`, and their per-language
+  equivalents) return the full redaction result alongside the event trace, so
+  the output includes `resolved_entities[].text` (the raw PII surface text)
+  and `redaction.redaction_map[].original` (the original PII value), even in
+  "summary" mode; the summary variant only drops the per-match/per-entity
+  events from the trace, it does not strip text from the result. Detailed
+  per-entity diagnostic events can also carry an optional `text` field. Treat
+  every `*DiagnosticsJson` output like the source document itself: never send
+  it to logs, telemetry, or any system that must not see PII. The parts that
+  are safe to log are the plain redaction output (`redactedText`, the
+  `placeholder`/`operator` fields of `redactionMap`/`operatorMap`, and entity
+  counts you compute yourself); none of those carry original text.
 
 ## Versioning and status
 
