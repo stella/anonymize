@@ -1022,7 +1022,6 @@ mod tests {
       custom_regexes: None,
       enable_gazetteer: false,
       enable_countries: None,
-      enable_ner: false,
       enable_confidence_boost: false,
       enable_coreference: false,
       enable_zone_classification: None,
