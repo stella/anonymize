@@ -576,9 +576,21 @@ enum ScanStep {
 /// the emitted value anyway. Never crosses `\n`, `\r`, or `\t` — those are
 /// structural stops in their own right and must stay visible to
 /// `scan_step`.
+/// The walk is bounded by `LINE_TRIGGER_LOOKAHEAD` additional bytes so the
+/// padding probe cannot turn the fixed per-trigger lookahead into a
+/// full-tail scan on a crafted document with enormous same-line space
+/// runs. A padding run longer than a whole extra lookahead window never
+/// occurs in a real value-plus-delimiter shape; when the bound is
+/// exhausted the caller's `scan_step` lands on whitespace, reads it as
+/// value content, and the scan fails closed as clipped — preserving the
+/// clipping invariant for every realistic input.
 fn skip_trimmable_padding(value_text: &str, start: usize) -> usize {
+  let limit = start.saturating_add(LINE_TRIGGER_LOOKAHEAD);
   let mut end = start;
-  while let Some((ch, len)) = char_at_byte(value_text, end) {
+  while end < limit {
+    let Some((ch, len)) = char_at_byte(value_text, end) else {
+      break;
+    };
     if !ch.is_whitespace() || matches!(ch, '\n' | '\r' | '\t') {
       break;
     }
@@ -2258,6 +2270,44 @@ mod tests {
       texts,
       Vec::<String>::new(),
       "padding followed by value content past the edge must fail closed"
+    );
+  }
+
+  #[test]
+  fn uncapped_to_next_comma_keeps_value_with_padding_up_to_the_bound() {
+    // A padding run of exactly LINE_TRIGGER_LOOKAHEAD bytes stays within
+    // the bounded probe: the walk ends precisely on the comma and the
+    // value is complete.
+    let data = uncapped_to_next_comma_data();
+    let value = "A".repeat(LINE_TRIGGER_LOOKAHEAD.saturating_sub(2));
+    let padding = " ".repeat(LINE_TRIGGER_LOOKAHEAD);
+    let text = format!("Address: {value}{padding}, next line");
+
+    let texts = run_single_trigger(&text, &data);
+
+    assert_eq!(
+      texts,
+      vec![value],
+      "padding up to the probe bound must still complete the value"
+    );
+  }
+
+  #[test]
+  fn uncapped_to_next_comma_rejects_padding_beyond_the_bound() {
+    // A padding run longer than the probe bound is not walked to its end:
+    // the probe stops inside the run, the position reads as unconsumed
+    // content, and the scan fails closed without scanning the tail.
+    let data = uncapped_to_next_comma_data();
+    let value = "A".repeat(LINE_TRIGGER_LOOKAHEAD.saturating_sub(2));
+    let padding = " ".repeat(LINE_TRIGGER_LOOKAHEAD.saturating_add(1));
+    let text = format!("Address: {value}{padding}, next line");
+
+    let texts = run_single_trigger(&text, &data);
+
+    assert_eq!(
+      texts,
+      Vec::<String>::new(),
+      "padding beyond the probe bound must fail closed"
     );
   }
 
