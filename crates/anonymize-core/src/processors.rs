@@ -2689,4 +2689,67 @@ mod tests {
     assert_eq!(entities[0].label, "person");
     assert_eq!(entities[0].text, "John Smith");
   }
+
+  #[test]
+  fn deny_list_redacts_abbreviated_title_name_in_defined_term_quote() {
+    // Dotted honorifics like the French "M." come from the corpus
+    // title-abbreviation list (trailing dot stripped to "m" at assemble
+    // time), not the plain title-token list. The quote filter must carry
+    // them too: `"M. Jean Dupont" shall mean ...` has to strip the "M."
+    // before the first-name check so the defined-term-quote exception
+    // still fires.
+    let text = "\"M. Jean Dupont\" shall mean the party of the first part.";
+    let matches = vec![
+      SearchMatch::Literal {
+        pattern: 0,
+        start: 4,
+        end: 8,
+      },
+      SearchMatch::Literal {
+        pattern: 1,
+        start: 9,
+        end: 15,
+      },
+    ];
+    let mut first_names = BTreeSet::new();
+    first_names.insert(String::from("jean"));
+    let mut title_tokens = BTreeSet::new();
+    title_tokens.insert(String::from("m"));
+    let mut defined_term_cues = BTreeSet::new();
+    defined_term_cues.insert(String::from("shall mean"));
+    let mut generic_roles = BTreeSet::new();
+    generic_roles.insert(String::from("party"));
+
+    let data = DenyListMatchData {
+      labels: vec![vec![String::from("person")], vec![String::from("person")]]
+        .into(),
+      custom_labels: vec![vec![], vec![]].into(),
+      originals: vec![String::from("Jean"), String::from("Dupont")],
+      pattern_meta: DenyListPatternMetaSet::default(),
+      sources: vec![
+        vec![String::from("first-name")],
+        vec![String::from("surname")],
+      ]
+      .into(),
+      filters: Some(DenyListFilterData {
+        first_names,
+        generic_roles,
+        defined_term_cues,
+        title_tokens,
+        ..DenyListFilterData::default()
+      }),
+    };
+
+    let entities = process_deny_list_matches(
+      &matches,
+      PatternSlice { start: 0, end: 2 },
+      text,
+      &data,
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].label, "person");
+    assert_eq!(entities[0].text, "Jean Dupont");
+  }
 }

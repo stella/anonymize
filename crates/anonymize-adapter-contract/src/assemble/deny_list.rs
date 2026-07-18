@@ -221,7 +221,18 @@ pub(super) fn build_deny_list_filter_data(
     document_heading_ordinal_markers: shape("documentHeadingOrdinalMarkers"),
     defined_term_cues: deny_list_filter_static("definedTermCues")?,
     signing_place_guards,
-    title_tokens: corpus.titles_list.clone(),
+    // Both title sources: dotted honorifics ("M.", "Sig.", "Sr.") live in
+    // `title_abbreviations` (already trailing-dot-stripped and lowercased),
+    // not in `titles_list`, and the defined-term-quote first-name exception
+    // (`starts_with_known_first_name`, processors.rs) must recognize them
+    // too or a quote like `"M. Jean Dupont" shall mean ...` stays
+    // suppressed. Downstream `lower_set` dedups the union.
+    title_tokens: corpus
+      .titles_list
+      .iter()
+      .chain(corpus.title_abbreviations.iter())
+      .cloned()
+      .collect(),
   })
 }
 
@@ -1165,6 +1176,32 @@ mod tests {
     assert_eq!(
       builder.source_list.get(index),
       Some(&vec![String::from("name-dictionary")])
+    );
+  }
+
+  /// The defined-term-quote filter must carry both title sources: plain
+  /// title tokens ("dr") and the trailing-dot-stripped abbreviations
+  /// ("m" from "M."). Only `titles_list` used to be wired through, so a
+  /// quote like `"M. Jean Dupont" shall mean ...` never got the leading
+  /// title stripped and stayed suppressed.
+  #[test]
+  fn quote_filter_title_tokens_include_title_abbreviations() {
+    let corpus = NameCorpus {
+      titles_list: vec![String::from("dr")],
+      title_abbreviations: vec![String::from("m")],
+      ..test_corpus()
+    };
+
+    let filters = build_deny_list_filter_data(&corpus)
+      .expect("deny-list filter data should assemble");
+
+    assert!(
+      filters.title_tokens.contains(&String::from("dr")),
+      "plain title tokens should be retained"
+    );
+    assert!(
+      filters.title_tokens.contains(&String::from("m")),
+      "title abbreviations should be unioned into the quote filter"
     );
   }
 
