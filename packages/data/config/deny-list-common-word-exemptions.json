@@ -1,0 +1,4 @@
+{
+  "_comment": "Curated deny-list entries exempted from the assemble-time single-common-word veto (add_deny_list_entry). These are org/bank aliases that collide with common-words-en.json but should stay detectable. Keep this disjoint from allow-list.json: the allow list rejects matches at match time, so listing a word in both would silently suppress it again.",
+  "words": ["citizens"]
+}

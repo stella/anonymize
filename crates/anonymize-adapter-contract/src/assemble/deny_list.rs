@@ -567,7 +567,7 @@ struct DenyBuildContext<'a> {
   corpus: &'a NameCorpus,
   common_words: &'a HashSet<String>,
   month_names: &'a HashSet<String>,
-  allow_list: &'a HashSet<String>,
+  common_word_exemptions: &'a HashSet<String>,
 }
 
 /// Excluded deny-list categories as a lookup set.
@@ -586,7 +586,7 @@ pub(super) fn build_deny_list(
   ctx: &DenyBuildContextArgs<'_>,
 ) -> Result<Option<DenyListData>, AssembleError> {
   let month_names = load_month_names()?;
-  let allow_list = load_allow_list_set()?;
+  let common_word_exemptions = load_common_word_exemptions()?;
   let dctx = DenyBuildContext {
     config: ctx.config,
     dictionaries: ctx.dictionaries,
@@ -595,7 +595,7 @@ pub(super) fn build_deny_list(
     corpus: ctx.corpus,
     common_words: &ctx.corpus.common_words_set,
     month_names: &month_names,
-    allow_list: &allow_list,
+    common_word_exemptions: &common_word_exemptions,
   };
 
   let dictionaries = dctx.dictionaries;
@@ -756,7 +756,7 @@ fn add_deny_list_entry(
     if label != "address" {
       if is_single_word(&normalized)
         && dctx.common_words.contains(&lower)
-        && !dctx.allow_list.contains(&lower)
+        && !dctx.common_word_exemptions.contains(&lower)
       {
         return;
       }
@@ -846,16 +846,23 @@ fn load_month_names() -> Result<HashSet<String>, AssembleError> {
   Ok(data.en.iter().map(|m| js_lowercase(m)).collect())
 }
 
-/// Loads `allow-list.json` as a lowercased lookup set. Mirrors the
-/// `allow_list` load in [`build_deny_list_filter_data`], but independently:
-/// that function only receives the name corpus, not the deny-list build
-/// context, so `add_deny_list_entry`'s common-word veto needs its own copy
-/// to exempt known-good single-word entries (e.g. org aliases like
-/// "Citizens" that collide with `common-words-en.json`).
-fn load_allow_list_set() -> Result<HashSet<String>, AssembleError> {
-  let allow_list: WordsFile = parse_data_file("allow-list.json")?;
+/// Loads `deny-list-common-word-exemptions.json` as a lowercased lookup set.
+///
+/// These are curated deny-list entries (e.g. bank/org aliases like
+/// "Citizens") that collide with `common-words-en.json` and would otherwise
+/// be dropped by `add_deny_list_entry`'s single-common-word veto. This is
+/// deliberately a separate file from `allow-list.json`: the allow list is
+/// consulted at match time and unconditionally rejects matches on its
+/// keywords (`curated_labels_for_match`), so routing the assemble-time
+/// exemption through it would register the pattern but suppress every match,
+/// making the recovery a no-op. A dedicated exemption set keeps the two
+/// mechanisms disjoint; the `common_word_exemptions_stay_off_the_allow_list`
+/// test enforces that invariant.
+fn load_common_word_exemptions() -> Result<HashSet<String>, AssembleError> {
+  let exemptions: WordsFile =
+    parse_data_file("deny-list-common-word-exemptions.json")?;
   Ok(
-    allow_list
+    exemptions
       .words
       .iter()
       .map(|word| js_lowercase(word))
@@ -980,6 +987,8 @@ pub(super) fn deny_originals_and_sources(
 
 #[cfg(test)]
 mod tests {
+  #![allow(clippy::expect_used)]
+
   use stella_anonymize_core::assemble::DictionaryMeta;
 
   use super::*;
@@ -1029,18 +1038,17 @@ mod tests {
 
   /// `add_deny_list_entry`'s common-word veto (single-word, non-address,
   /// non-custom entries whose lowercase form is in `common-words-en.json`)
-  /// used to drop known org/bank aliases like "Citizens" outright, before
-  /// the allow-list (which is only consulted at match time) ever got a
-  /// chance to rescue them. This exercises the assemble-time exemption
-  /// directly: an entry present in `allow_list` must survive even though
-  /// it is also a common word.
+  /// used to drop known org/bank aliases like "Citizens" outright. This
+  /// exercises the assemble-time exemption directly: an entry present in
+  /// `common_word_exemptions` must survive even though it is also a common
+  /// word.
   #[test]
-  fn allow_listed_org_alias_survives_common_word_filter() {
+  fn exempted_org_alias_survives_common_word_filter() {
     let config = test_pipeline_config();
     let corpus = test_corpus();
     let common_words = HashSet::from([String::from("citizens")]);
     let month_names = HashSet::new();
-    let allow_list = HashSet::from([String::from("citizens")]);
+    let common_word_exemptions = HashSet::from([String::from("citizens")]);
     let dctx = DenyBuildContext {
       config: &config,
       dictionaries: None,
@@ -1049,7 +1057,7 @@ mod tests {
       corpus: &corpus,
       common_words: &common_words,
       month_names: &month_names,
-      allow_list: &allow_list,
+      common_word_exemptions: &common_word_exemptions,
     };
     let mut builder = Builder::new();
 
@@ -1063,19 +1071,19 @@ mod tests {
 
     assert!(
       builder.pattern_index.contains_key("citizens"),
-      "an allow-listed org alias should survive the common-word filter"
+      "an exempted org alias should survive the common-word filter"
     );
   }
 
-  /// A common word that is *not* on the allow-list must still be dropped:
-  /// the exemption above is deliberately narrow.
+  /// A common word that is *not* exempted must still be dropped: the
+  /// exemption above is deliberately narrow.
   #[test]
-  fn plain_common_word_without_allow_listing_is_still_dropped() {
+  fn plain_common_word_without_exemption_is_still_dropped() {
     let config = test_pipeline_config();
     let corpus = test_corpus();
     let common_words = HashSet::from([String::from("agreement")]);
     let month_names = HashSet::new();
-    let allow_list = HashSet::new();
+    let common_word_exemptions = HashSet::new();
     let dctx = DenyBuildContext {
       config: &config,
       dictionaries: None,
@@ -1084,7 +1092,7 @@ mod tests {
       corpus: &corpus,
       common_words: &common_words,
       month_names: &month_names,
-      allow_list: &allow_list,
+      common_word_exemptions: &common_word_exemptions,
     };
     let mut builder = Builder::new();
 
@@ -1119,7 +1127,7 @@ mod tests {
     let corpus = test_corpus();
     let common_words = HashSet::new();
     let month_names = HashSet::new();
-    let allow_list = HashSet::new();
+    let common_word_exemptions = HashSet::new();
     let dictionaries = Dictionaries {
       deny_list: Some(OrderedMap(vec![(
         String::from("names/global"),
@@ -1143,7 +1151,7 @@ mod tests {
       corpus: &corpus,
       common_words: &common_words,
       month_names: &month_names,
-      allow_list: &allow_list,
+      common_word_exemptions: &common_word_exemptions,
     };
     let mut builder = Builder::new();
 
@@ -1157,6 +1165,35 @@ mod tests {
     assert_eq!(
       builder.source_list.get(index),
       Some(&vec![String::from("name-dictionary")])
+    );
+  }
+
+  /// The assemble-time exemption is only effective while the exempted word
+  /// stays *off* the match-time allow list: `curated_labels_for_match`
+  /// (processors.rs) unconditionally rejects any keyword present in
+  /// `allow-list.json`, so a word in both files would be registered at
+  /// assemble time and then suppressed on every match, silently undoing the
+  /// recovery.
+  #[test]
+  fn common_word_exemptions_stay_off_the_allow_list() {
+    let exemptions = load_common_word_exemptions()
+      .expect("embedded exemption file should parse");
+    assert!(
+      !exemptions.is_empty(),
+      "the exemption file should carry at least one entry"
+    );
+    let allow_list: WordsFile = parse_data_file("allow-list.json")
+      .expect("embedded allow-list file should parse");
+    let allow_list: HashSet<String> = allow_list
+      .words
+      .iter()
+      .map(|word| js_lowercase(word))
+      .collect();
+    let overlap: Vec<&String> = exemptions.intersection(&allow_list).collect();
+    assert!(
+      overlap.is_empty(),
+      "deny-list common-word exemptions must not appear in allow-list.json \
+       (match-time filtering would suppress every match): {overlap:?}"
     );
   }
 }
