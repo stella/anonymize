@@ -28,7 +28,6 @@ const baseConfig: Omit<PipelineConfig, "dictionaries"> = {
   enableNameCorpus: true,
   enableDenyList: true,
   enableGazetteer: false,
-  enableNer: false,
   enableConfidenceBoost: true,
   enableCoreference: true,
   enableHotwordRules: true,

@@ -19,7 +19,6 @@ fn base_config_json(with_dictionaries: Option<&str>) -> String {
       "enableDenyList": false,
       "enableGazetteer": false,
       "enableCountries": false,
-      "enableNer": false,
       "enableConfidenceBoost": false,
       "enableCoreference": false,
       "enableZoneClassification": false,

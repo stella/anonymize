@@ -2,9 +2,9 @@
  * Runtime-free constants for the anonymization pipeline.
  *
  * This module is the SSR-safe / browser-safe entrypoint:
- * importing it must not pull in `@stll/text-search`,
- * `@stll/anonymize-wasm`, or any other runtime-bearing
- * module. Consumers that only need the static label list,
+ * importing it must not pull in `@stll/anonymize-wasm`
+ * or any other runtime-bearing module.
+ * Consumers that only need the static label list,
  * detection-source identifiers, or operator names import
  * from `@stll/anonymize/constants` (or
  * `@stll/anonymize-wasm/constants`) without paying the

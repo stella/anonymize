@@ -298,16 +298,13 @@ export default {
 - Native architecture and extension guidance:
   [`ARCHITECTURE.md`](ARCHITECTURE.md).
 - `labels: []` disables deterministic label filtering.
-- `enableNer` is a compatibility field for the removed TypeScript pipeline. The
-  native pipeline rejects `true`; model-produced spans will use a separate
-  caller-detection API.
+- Model-produced (NER) spans are not part of `PipelineConfig`; supply
+  deterministic custom rules today and use the caller-detection API for
+  model-produced spans.
 - `enableNameCorpus` also controls whether first names, surnames, and titles are injected into deny-list matching when `enableDenyList` is enabled.
 - The optional `@stll/anonymize-data` package carries the published dictionary and trigger data used when building prepared packages.
 - `customDenyList` and `customRegexes` are part of the prepared package input and should be regenerated when they change.
-- The old TypeScript pipeline is kept only as temporary internal migration/test scaffolding under `src/legacy.ts`; it is not the product runtime.
 
 ## Built on
 
-- `@stll/text-search`
-- `@stll/stdnum`
 - `@stll/anonymize-data`
