@@ -1,6 +1,12 @@
 {
   "$schema": "https://turborepo.com/schema.json",
-  "globalDependencies": [".oxfmtrc.json"],
+  "globalDependencies": [
+    ".oxfmtrc.json",
+    "Cargo.toml",
+    "Cargo.lock",
+    "rust-toolchain.toml",
+    "crates/**"
+  ],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
