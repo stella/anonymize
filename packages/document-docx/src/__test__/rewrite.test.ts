@@ -168,6 +168,24 @@ describe("rewriteDocxText", () => {
     );
   });
 
+  test("budgets the escaped size of whole updated nodes, not just replacements", () => {
+    // A CDATA "&" run costs one byte per character on disk but five once
+    // escaped, and rewritePartXml re-escapes the entire updated node value
+    // on rebuild. A one-byte replacement into such a node must therefore
+    // trip the budget even though the replacement itself is tiny.
+    const ampersands = "&".repeat(Math.ceil(DOCX_ENTRY_MAX_BYTES / 5) + 1);
+    const archive = docx(
+      `<w:p><w:r><w:t><![CDATA[${ampersands}]]></w:t></w:r></w:p>`,
+    );
+    expect(() =>
+      rewriteDocxText(archive, [
+        rewriteForFirstBlock(archive, [{ start: 0, end: 1, replacement: "x" }]),
+      ]),
+    ).toThrow(
+      `DOCX rewritten text nodes for a single part must not exceed ${DOCX_ENTRY_MAX_BYTES} escaped UTF-8 bytes`,
+    );
+  });
+
   test("returns an exact archive copy for an empty rewrite plan", () => {
     const archive = docx("<w:p><w:r><w:t>Alice</w:t></w:r></w:p>");
     const result = rewriteDocxText(archive, []);

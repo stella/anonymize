@@ -100,6 +100,34 @@ const escapeXmlText = (value: string): string =>
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
 
+// The UTF-8 byte length `escapeXmlText(value)` would serialize to, computed
+// without materializing the (up to five-fold larger) escaped string, so
+// budget checks cannot themselves cause the allocation they guard against.
+const escapedXmlTextByteLength = (value: string): number => {
+  let total = 0;
+  for (const character of value) {
+    if (character === "&") {
+      total += 5; // &amp;
+      continue;
+    }
+    if (character === "<" || character === ">") {
+      total += 4; // &lt; / &gt;
+      continue;
+    }
+    const codePoint = character.codePointAt(0) ?? 0;
+    if (codePoint <= 0x7f) {
+      total += 1;
+    } else if (codePoint <= 0x7ff) {
+      total += 2;
+    } else if (codePoint <= 0xffff) {
+      total += 3;
+    } else {
+      total += 4;
+    }
+  }
+  return total;
+};
+
 // Budget replacements by their escaped size: rewritePartXml expands each
 // "&", "<", and ">" through escapeXmlText before materializing the patched
 // XML, so a replacement made of "&" grows five-fold between a raw-byte
@@ -109,7 +137,7 @@ const escapeXmlText = (value: string): string =>
 // per rewritten text node; assertArchiveBudgets still bounds the final
 // entries.)
 const replacementByteLength = (replacement: DocxTextReplacement): number =>
-  strToU8(escapeXmlText(replacement.replacement)).byteLength;
+  escapedXmlTextByteLength(replacement.replacement);
 
 const validateReplacement = (
   replacement: DocxTextReplacement,
@@ -500,6 +528,33 @@ export const rewriteDocxText = (
     }
     updatesByPart.set(block.location.part.path, partUpdates);
     appliedReplacementCount += rewrite.replacements.length;
+  }
+
+  // Replacement-byte budgets alone are not enough: rewritePartXml escapes
+  // each *entire* updated node value on rebuild, and a text node whose
+  // source stores the value cheaply (a CDATA "&" run occupies one byte per
+  // character on disk but five once escaped) can therefore blow up ~5x
+  // from a one-byte replacement. Budget the actual rebuild output — the
+  // escaped size of every updated node value — before any XML is built.
+  let totalUpdatedNodeBytes = 0;
+  for (const updates of updatesByPart.values()) {
+    let partUpdatedNodeBytes = 0;
+    for (const update of updates.values()) {
+      partUpdatedNodeBytes += escapedXmlTextByteLength(update.value);
+    }
+    if (partUpdatedNodeBytes > DOCX_ENTRY_MAX_BYTES) {
+      throw rewriteError(
+        DOCX_REWRITE_ERROR_CODES.rewriteLimitExceeded,
+        `DOCX rewritten text nodes for a single part must not exceed ${DOCX_ENTRY_MAX_BYTES} escaped UTF-8 bytes`,
+      );
+    }
+    totalUpdatedNodeBytes += partUpdatedNodeBytes;
+    if (totalUpdatedNodeBytes > DOCX_UNCOMPRESSED_MAX_BYTES) {
+      throw rewriteError(
+        DOCX_REWRITE_ERROR_CODES.rewriteLimitExceeded,
+        `DOCX rewritten text nodes must not exceed ${DOCX_UNCOMPRESSED_MAX_BYTES} aggregate escaped UTF-8 bytes`,
+      );
+    }
   }
 
   const entries = unzipDocxArchive(archive, true);
