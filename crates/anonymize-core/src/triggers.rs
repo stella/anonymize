@@ -572,6 +572,21 @@ enum ScanStep {
   Advance(usize),
 }
 
+/// Advances past whitespace that `byte_value` would trim from the end of
+/// the emitted value anyway. Never crosses `\n`, `\r`, or `\t` — those are
+/// structural stops in their own right and must stay visible to
+/// `scan_step`.
+fn skip_trimmable_padding(value_text: &str, start: usize) -> usize {
+  let mut end = start;
+  while let Some((ch, len)) = char_at_byte(value_text, end) {
+    if !ch.is_whitespace() || matches!(ch, '\n' | '\r' | '\t') {
+      break;
+    }
+    end = end.saturating_add(len);
+  }
+  end
+}
+
 fn scan_step(
   value_text: &str,
   end: usize,
@@ -646,23 +661,34 @@ fn extract_to_next_comma(
       }
     }
   }
-  // Reaching the limit is only truncation when text continues past the
-  // scan position and no structural delimiter is anchored exactly there.
-  // The same `scan_step` used inside the loop decides, so every delimiter
-  // form behaves identically at the edge and mid-window.
-  let hit_window_end = !stopped
-    && end < value_text.len()
-    && !matches!(
-      scan_step(
-        value_text,
-        end,
-        label,
-        stop_words,
-        post_nominals,
-        sentence_terminal_currency_terms,
-      ),
-      Some(ScanStep::Stop)
-    );
+  // The clipping invariant: the scan is clipped only if terminating it
+  // would require consuming additional *value* content — non-trimmable,
+  // non-delimiter characters — beyond the limit. Trailing trim-able
+  // padding (whitespace `byte_value` strips from the emitted value
+  // regardless) is walked through first, exactly as it would be consumed
+  // mid-window, and the same `scan_step` used inside the loop then decides
+  // at the first non-padding position: a delimiter, stop word, or end of
+  // text there terminates the value identically to mid-window behavior,
+  // while real value content past the limit fails closed. Nothing walked
+  // here can reach the emitted value, because it is all trailing
+  // whitespace.
+  let hit_window_end = if stopped {
+    false
+  } else {
+    end = skip_trimmable_padding(value_text, end);
+    end < value_text.len()
+      && !matches!(
+        scan_step(
+          value_text,
+          end,
+          label,
+          stop_words,
+          post_nominals,
+          sentence_terminal_currency_terms,
+        ),
+        Some(ScanStep::Stop)
+      )
+  };
   if let Some(cap) = length_cap
     && prefix_char_count(value_text, end) > cap
   {
@@ -2178,6 +2204,77 @@ mod tests {
       texts,
       vec![exact],
       "a complete value whose delimiter sits exactly at the window edge must be kept"
+    );
+  }
+
+  #[test]
+  fn uncapped_to_next_comma_keeps_value_with_padding_before_edge_comma() {
+    // Trim-able padding between the window edge and the comma does not
+    // make the value clipped: mid-window the spaces would be consumed and
+    // then trimmed by byte_value, and the edge must behave identically.
+    let data = uncapped_to_next_comma_data();
+    let value = "A".repeat(LINE_TRIGGER_LOOKAHEAD.saturating_sub(2));
+    let text = format!("Address: {value}   , next line");
+
+    let texts = run_single_trigger(&text, &data);
+
+    assert_eq!(
+      texts,
+      vec![value],
+      "padding before an edge comma must complete the value"
+    );
+  }
+
+  #[test]
+  fn uncapped_to_next_comma_keeps_value_with_padding_before_edge_stop_word() {
+    // The same holds when the delimiter past the padding is a configured
+    // stop word rather than a delimiter character.
+    let data =
+      uncapped_to_next_comma_data_with_stops(vec![String::from("oddíl")]);
+    let value = "A".repeat(LINE_TRIGGER_LOOKAHEAD.saturating_sub(2));
+    let text = format!("Address: {value}   oddíl B");
+
+    let texts = run_single_trigger(&text, &data);
+
+    assert_eq!(
+      texts,
+      vec![value],
+      "padding before an edge stop word must complete the value"
+    );
+  }
+
+  #[test]
+  fn uncapped_to_next_comma_rejects_padding_followed_by_value_content() {
+    // Padding past the edge followed by more value content is a genuine
+    // truncation: terminating the scan would require consuming that
+    // content, so the extraction still fails closed.
+    let data = uncapped_to_next_comma_data();
+    let value = "A".repeat(LINE_TRIGGER_LOOKAHEAD.saturating_sub(2));
+    let text = format!("Address: {value}   more, next line");
+
+    let texts = run_single_trigger(&text, &data);
+
+    assert_eq!(
+      texts,
+      Vec::<String>::new(),
+      "padding followed by value content past the edge must fail closed"
+    );
+  }
+
+  #[test]
+  fn uncapped_to_next_comma_keeps_value_with_padding_to_end_of_text() {
+    // Padding that runs to the end of the text terminates the value like
+    // any end-of-input value; nothing of value sits past the window.
+    let data = uncapped_to_next_comma_data();
+    let value = "A".repeat(LINE_TRIGGER_LOOKAHEAD.saturating_sub(2));
+    let text = format!("Address: {value}   ");
+
+    let texts = run_single_trigger(&text, &data);
+
+    assert_eq!(
+      texts,
+      vec![value],
+      "padding to the end of text must complete the value"
     );
   }
 
