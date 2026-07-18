@@ -29,8 +29,9 @@ const baseConfig: Omit<PipelineConfig, "dictionaries"> = {
   enableZoneClassification: true,
   labels: [...DEFAULT_ENTITY_LABELS],
   workspaceId: "edgar-notice-block-test",
-  countries: ["US"],
   languages: ["en"],
+  denyListCountries: ["US"],
+  nameCorpusLanguages: ["en"],
 };
 
 const detect = async (text: string): Promise<NativePipelineEntity[]> => {
