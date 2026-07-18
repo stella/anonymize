@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 
-use fancy_regex::Regex as FancyRegex;
 use regex::{Regex, RegexBuilder};
 
+use crate::bounded_regex::BoundedRegex;
 use crate::byte_offsets::ByteOffsets;
 use crate::diagnostics::{DiagnosticStage, StaticRedactionDiagnostics};
 use crate::resolution::{DetectionSource, PipelineEntity};
@@ -95,7 +95,7 @@ pub(crate) struct PreparedTriggerData {
 #[derive(Default)]
 struct TriggerRegexCache {
   regex: BTreeMap<TriggerPatternKey, Regex>,
-  fancy_regex: BTreeMap<TriggerPatternKey, FancyRegex>,
+  bounded_regex: BTreeMap<TriggerPatternKey, BoundedRegex>,
 }
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -126,7 +126,7 @@ enum PreparedTriggerStrategy {
     max_chars: Option<usize>,
   },
   MatchPattern {
-    regex: FancyRegex,
+    regex: BoundedRegex,
   },
 }
 
@@ -242,7 +242,7 @@ impl PreparedTriggerStrategy {
         max_chars: max_chars.and_then(|value| usize::try_from(value).ok()),
       },
       TriggerStrategy::MatchPattern { pattern, flags } => Self::MatchPattern {
-        regex: regex_cache.fancy_regex(format!("^(?:{pattern})"), flags)?,
+        regex: regex_cache.bounded_regex(format!("^(?:{pattern})"), flags)?,
       },
     })
   }
@@ -285,18 +285,18 @@ impl TriggerRegexCache {
     Ok(regex)
   }
 
-  fn fancy_regex(
+  fn bounded_regex(
     &mut self,
     pattern: String,
     flags: Option<String>,
-  ) -> Result<FancyRegex> {
+  ) -> Result<BoundedRegex> {
     let key = TriggerPatternKey { pattern, flags };
-    if let Some(regex) = self.fancy_regex.get(&key) {
+    if let Some(regex) = self.bounded_regex.get(&key) {
       return Ok(regex.clone());
     }
 
-    let regex = build_fancy_regex(&key.pattern, key.flags.as_deref())?;
-    self.fancy_regex.insert(key, regex.clone());
+    let regex = build_bounded_regex(&key.pattern, key.flags.as_deref())?;
+    self.bounded_regex.insert(key, regex.clone());
     Ok(regex)
   }
 }
@@ -528,7 +528,7 @@ fn extract_value(
       data.sentence_terminal_currency_terms,
     ),
     PreparedTriggerStrategy::MatchPattern { regex } => {
-      extract_match_pattern(stripped, value_start_byte, regex)
+      extract_match_pattern(stripped, value_start_byte, regex)?
     }
   };
   Ok(extracted.and_then(|value| byte_value_to_offsets(text, offsets, value)))
@@ -910,19 +910,24 @@ fn extract_address(
 fn extract_match_pattern(
   value_text: &str,
   value_start_byte: usize,
-  regex: &FancyRegex,
-) -> Option<ByteValue> {
+  regex: &BoundedRegex,
+) -> Result<Option<ByteValue>> {
   let line = value_text
     .split_once('\n')
     .map_or(value_text, |(head, _)| head);
-  let found = regex.find(line).ok().flatten()?;
-  if found.start() != 0 || found.start() == found.end() {
-    return None;
+  // A backtrack-budget failure propagates as a typed error rather than
+  // reading as "no match": silently dropping the trigger would report a
+  // successful redaction while the triggered value stayed uncovered.
+  let Some(found) = regex.find(line)? else {
+    return Ok(None);
+  };
+  if found.start != 0 || found.is_empty() {
+    return Ok(None);
   }
-  Some(ByteValue {
-    start_byte: value_start_byte.saturating_add(found.start()),
-    end_byte: value_start_byte.saturating_add(found.end()),
-  })
+  Ok(Some(ByteValue {
+    start_byte: value_start_byte.saturating_add(found.start),
+    end_byte: value_start_byte.saturating_add(found.end),
+  }))
 }
 
 #[derive(Clone, Copy)]
@@ -1031,16 +1036,16 @@ fn build_regex(pattern: &str, flags: Option<&str>) -> Result<Regex> {
   })
 }
 
-fn build_fancy_regex(pattern: &str, flags: Option<&str>) -> Result<FancyRegex> {
+fn build_bounded_regex(
+  pattern: &str,
+  flags: Option<&str>,
+) -> Result<BoundedRegex> {
   let source = if flags.is_some_and(|flags| flags.contains('i')) {
     format!("(?i:{pattern})")
   } else {
     pattern.to_owned()
   };
-  FancyRegex::new(&source).map_err(|error| Error::Search {
-    engine: crate::types::SearchEngine::Regex,
-    reason: error.to_string(),
-  })
+  BoundedRegex::new(&source)
 }
 
 fn get_trigger_lookahead(strategy: &PreparedTriggerStrategy) -> usize {

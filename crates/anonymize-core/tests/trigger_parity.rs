@@ -408,3 +408,48 @@ fn trigger_lookahead_counts_text_units_not_utf8_bytes() {
 
   assert_eq!(trigger_texts(&result), [expected]);
 }
+
+#[test]
+fn match_pattern_trigger_with_lookahead_matches_through_bounded_engine() {
+  // A lookaround pattern rides the bounded backtracking arm of the regex
+  // wrapper; the triggered value must extract exactly as before.
+  let prepared = prepared_for_trigger(
+    "Amount",
+    "monetary amount",
+    TriggerStrategy::MatchPattern {
+      pattern: String::from(r"\d{3}(?= CZK)"),
+      flags: None,
+    },
+  );
+
+  let result = prepared
+    .detect_static_entities("Amount: 123 CZK due")
+    .expect("static detection should succeed");
+
+  assert_eq!(trigger_texts(&result), ["123"]);
+}
+
+#[test]
+fn match_pattern_trigger_surfaces_backtrack_budget_exhaustion() {
+  // A catastrophic pattern/input pair must surface as a typed error from
+  // detection — not hang, and not silently read as "no match" while the
+  // triggered value stays uncovered.
+  let prepared = prepared_for_trigger(
+    "Ref",
+    "registration number",
+    TriggerStrategy::MatchPattern {
+      pattern: String::from(r"(a+)+\1$"),
+      flags: None,
+    },
+  );
+  let text = format!("Ref: {}c", "a".repeat(40));
+
+  let error = prepared
+    .detect_static_entities(&text)
+    .expect_err("the backtrack budget must surface as an error");
+
+  assert!(
+    error.to_string().to_lowercase().contains("backtrack"),
+    "unexpected error: {error}"
+  );
+}
