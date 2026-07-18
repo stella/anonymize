@@ -46,6 +46,12 @@ type ElementFrame = {
 type TextNodeUpdate = {
   path: readonly number[];
   value: string;
+  // UTF-8 byte length of the node's original decoded value. Any XML
+  // serialization of a character (raw, entity, character reference, CDATA)
+  // occupies at least that character's UTF-8 length in the source part, so
+  // this is a safe lower bound on the source bytes the patch removes when
+  // projecting the rewritten part's size.
+  originalByteLength: number;
 };
 
 type XmlPatch = {
@@ -99,6 +105,28 @@ const escapeXmlText = (value: string): string =>
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
+
+// Plain UTF-8 byte length of a string, computed without encoding it.
+const utf8ByteLength = (value: string): number => {
+  let total = 0;
+  for (const character of value) {
+    const codePoint = character.codePointAt(0) ?? 0;
+    if (codePoint <= 0x7f) {
+      total += 1;
+    } else if (codePoint <= 0x7ff) {
+      total += 2;
+    } else if (codePoint <= 0xffff) {
+      total += 3;
+    } else {
+      total += 4;
+    }
+  }
+  return total;
+};
+
+// Worst-case bytes the conditional ' xml:space="preserve"' insertion adds
+// to a rewritten text node.
+const XML_SPACE_INSERTION_BYTES = ' xml:space="preserve"'.length;
 
 // The UTF-8 byte length `escapeXmlText(value)` would serialize to, computed
 // without materializing the (up to five-fold larger) escaped string, so
@@ -225,14 +253,13 @@ const planBlockUpdates = (
     if (segment.source !== "text") {
       continue;
     }
+    const original = block.text.slice(segment.start, segment.end);
     values.set(pathKey(segment.xmlPath), {
       path: segment.xmlPath,
-      value: block.text.slice(segment.start, segment.end),
+      value: original,
+      originalByteLength: utf8ByteLength(original),
     });
-    originalValues.set(
-      pathKey(segment.xmlPath),
-      block.text.slice(segment.start, segment.end),
-    );
+    originalValues.set(pathKey(segment.xmlPath), original);
   }
 
   for (const replacement of replacements.toReversed()) {
@@ -567,6 +594,42 @@ export const rewriteDocxText = (
       DOCX_REWRITE_ERROR_CODES.unsupportedReplacement,
       "Digitally signed DOCX packages must be re-signed before rewriting",
     );
+  }
+  // Project the size of every part as it will exist after patching, before
+  // any rewritten XML is materialized: the escaped-node budgets above do
+  // not account for a part's unchanged scaffolding, so a near-limit part
+  // plus modest rewrites could still materialize well past the entry cap
+  // ahead of assertArchiveBudgets. Projection per touched part: original
+  // part bytes + escaped updated values + worst-case xml:space insertions
+  // - a safe lower bound on the source bytes the patches remove (every XML
+  // serialization of a character occupies at least its UTF-8 length).
+  // Shrinking rewrites project below the original, so redacting a large
+  // part stays possible.
+  let projectedTotalBytes = 0;
+  for (const [partPath, partBytes] of Object.entries(entries)) {
+    let projected = partBytes.byteLength;
+    const updates = updatesByPart.get(partPath);
+    if (updates !== undefined) {
+      for (const update of updates.values()) {
+        projected +=
+          escapedXmlTextByteLength(update.value) +
+          XML_SPACE_INSERTION_BYTES -
+          update.originalByteLength;
+      }
+      if (projected > DOCX_ENTRY_MAX_BYTES) {
+        throw rewriteError(
+          DOCX_REWRITE_ERROR_CODES.rewriteLimitExceeded,
+          `Rewritten DOCX parts must not exceed ${DOCX_ENTRY_MAX_BYTES} projected bytes`,
+        );
+      }
+    }
+    projectedTotalBytes += projected;
+    if (projectedTotalBytes > DOCX_UNCOMPRESSED_MAX_BYTES) {
+      throw rewriteError(
+        DOCX_REWRITE_ERROR_CODES.rewriteLimitExceeded,
+        `Rewritten DOCX archives must not exceed ${DOCX_UNCOMPRESSED_MAX_BYTES} projected uncompressed bytes`,
+      );
+    }
   }
   for (const [partPath, updates] of updatesByPart) {
     const partBytes = entries[partPath];

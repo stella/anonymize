@@ -168,6 +168,32 @@ describe("rewriteDocxText", () => {
     );
   });
 
+  test("budgets the projected full part, including untouched scaffolding", () => {
+    // The escaped-node budgets alone miss a part's unchanged markup: a
+    // near-limit part plus a modest rewrite of one small node must be
+    // rejected before the patched XML is materialized, not after.
+    const half = Math.ceil(DOCX_ENTRY_MAX_BYTES / 2) + 1024;
+    const scaffolding = "X".repeat(half);
+    const archive = docx(
+      `<w:p><w:r><w:t>${scaffolding}</w:t></w:r></w:p><w:p><w:r><w:t>Alice</w:t></w:r></w:p>`,
+    );
+    const block = extractDocxText(archive).blocks.at(1);
+    if (block === undefined) {
+      throw new Error("test fixture must contain a second block");
+    }
+    expect(() =>
+      rewriteDocxText(archive, [
+        {
+          location: block.location,
+          expectedText: block.text,
+          replacements: [{ start: 0, end: 5, replacement: "Y".repeat(half) }],
+        },
+      ]),
+    ).toThrow(
+      `Rewritten DOCX parts must not exceed ${DOCX_ENTRY_MAX_BYTES} projected bytes`,
+    );
+  });
+
   test("budgets the escaped size of whole updated nodes, not just replacements", () => {
     // A CDATA "&" run costs one byte per character on disk but five once
     // escaped, and rewritePartXml re-escapes the entire updated node value
