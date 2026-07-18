@@ -121,8 +121,9 @@ export const getNativePipelineCompatibility = (
   const unsupportedFeatures: NativePipelineUnsupportedFeature[] = [];
 
   // `enableNer` is no longer part of `PipelineConfig`; untyped callers that
-  // still request it must fail fast instead of silently losing NER spans.
-  if ("enableNer" in config && config.enableNer === true) {
+  // still request it (any truthy value, e.g. `1` or `"true"` from loose
+  // JSON) must fail fast instead of silently losing NER spans.
+  if ("enableNer" in config && Boolean(config.enableNer)) {
     unsupportedFeatures.push("enableNer");
   }
   if (unsupportedFeatures.length === 0) {

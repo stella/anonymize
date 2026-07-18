@@ -64,13 +64,20 @@ describe("prepareNativePipelineConfig", () => {
   });
 
   test("rejects a stray untyped enableNer request instead of ignoring it", () => {
-    const config = { ...baseConfig(), enableNer: true };
+    for (const stale of [true, 1, "true"]) {
+      const config = { ...baseConfig(), enableNer: stale };
 
-    expect(getNativePipelineCompatibility(config)).toEqual({
-      status: "unsupported",
-      unsupportedFeatures: ["enableNer"],
+      expect(getNativePipelineCompatibility(config)).toEqual({
+        status: "unsupported",
+        unsupportedFeatures: ["enableNer"],
+      });
+      expect(() => assertNativePipelineSupported(config)).toThrow("enableNer");
+    }
+
+    const falsyConfig = { ...baseConfig(), enableNer: false };
+    expect(getNativePipelineCompatibility(falsyConfig)).toEqual({
+      status: "supported",
     });
-    expect(() => assertNativePipelineSupported(config)).toThrow("enableNer");
   });
 });
 
