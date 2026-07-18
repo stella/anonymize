@@ -458,6 +458,67 @@ const PII_SCHEME_TARGET_REASON =
   "target uses a PII-bearing external scheme (mailto/tel) that anonymization does not redact";
 const EXTERNAL_TARGET_REASON =
   "target is external and is not examined or redacted by anonymization";
+const DANGLING_TARGET_REASON =
+  "target does not resolve to a package part and is not examined or redacted by anonymization";
+
+// The OPC base directory internal targets resolve against: the directory
+// that contains the relationships part's _rels folder ("word/" for
+// "word/_rels/document.xml.rels", "" for the package root "_rels/.rels").
+const relationshipBaseDirectory = (relsPath: string): string => {
+  const marker = relsPath.lastIndexOf("_rels/");
+  return marker <= 0 ? "" : relsPath.slice(0, marker);
+};
+
+// Percent-decodes an OPC target segment ("My%20Doc.xml" → "My Doc.xml").
+// Malformed encoding yields null, which callers treat as unresolvable
+// (fail closed) rather than guessing.
+const decodeOpcTarget = (target: string): string | null => {
+  try {
+    return decodeURIComponent(target);
+  } catch {
+    return null;
+  }
+};
+
+// Collapses "." and empty segments and applies ".." segments; a path that
+// climbs above the package root cannot name a part and yields null.
+const normalizeOpcPath = (path: string): string | null => {
+  const segments: string[] = [];
+  for (const segment of path.split("/")) {
+    if (segment === "" || segment === ".") {
+      continue;
+    }
+    if (segment === "..") {
+      if (segments.length === 0) {
+        return null;
+      }
+      segments.pop();
+      continue;
+    }
+    segments.push(segment);
+  }
+  return segments.length === 0 ? null : segments.join("/");
+};
+
+// Resolves an internal relationship target to a package entry name:
+// package-absolute ("/word/document.xml") or relative to the relationships
+// part's base directory ("media/image1.png" from
+// "word/_rels/document.xml.rels" → "word/media/image1.png"). Returns null
+// when the target cannot name a part (malformed encoding, escapes the
+// root, or is empty).
+const resolveInternalRelationshipTarget = (
+  target: string,
+  relsPath: string,
+): string | null => {
+  const decoded = decodeOpcTarget(target.trim());
+  if (decoded === null || decoded === "") {
+    return null;
+  }
+  if (decoded.startsWith("/")) {
+    return normalizeOpcPath(decoded.slice(1));
+  }
+  return normalizeOpcPath(`${relationshipBaseDirectory(relsPath)}${decoded}`);
+};
 
 // Scans a relationships part for Relationship elements whose Target leaves
 // the package. These targets are never visited by extractPart (which only
@@ -469,12 +530,25 @@ const EXTERNAL_TARGET_REASON =
 // coverage. Every external target is uncovered: the rewrite never touches
 // relationship targets, so an external URI of any scheme or shape is an
 // unexamined channel that survives the rewrite verbatim. Internal
-// (in-package) targets are skipped here because the parts they address get
-// their own coverage entries.
-const parseUncoveredRelationshipTargets = (
-  xml: string,
-  path: string,
-): UncoveredRelationshipTarget[] => {
+// (in-package) targets are only covered when they resolve to an actual
+// archive entry (which then carries its own coverage entry); a dangling
+// internal target ("alice@example.test" with no scheme and no matching
+// part) is a PII channel preserved verbatim in the .rels XML and is
+// flagged too.
+type ParseUncoveredRelationshipTargetsOptions = {
+  xml: string;
+  relsPath: string;
+  // Lowercased archive entry names (OPC part-name comparison is
+  // case-insensitive), including entries the retention filter dropped —
+  // those still exist in the package and get inventory coverage entries.
+  knownEntryPaths: ReadonlySet<string>;
+};
+
+const parseUncoveredRelationshipTargets = ({
+  xml,
+  relsPath: path,
+  knownEntryPaths,
+}: ParseUncoveredRelationshipTargetsOptions): UncoveredRelationshipTarget[] => {
   const found: UncoveredRelationshipTarget[] = [];
   const parser = new SaxesParser({ xmlns: true });
   let parseError: Error | null = null;
@@ -512,6 +586,14 @@ const parseUncoveredRelationshipTargets = (
       found.push({
         relationshipId: attributeByLocalName(tag, "Id"),
         reason: EXTERNAL_TARGET_REASON,
+      });
+      return;
+    }
+    const resolved = resolveInternalRelationshipTarget(target, path);
+    if (resolved === null || !knownEntryPaths.has(resolved.toLowerCase())) {
+      found.push({
+        relationshipId: attributeByLocalName(tag, "Id"),
+        reason: DANGLING_TARGET_REASON,
       });
     }
   });
@@ -943,17 +1025,23 @@ export const extractDocxText = (archive: Uint8Array): DocxExtraction => {
   // <w:hyperlink> at all, or when it lives outside word/ entirely (e.g. an
   // extra external relationship in the package root "_rels/.rels"). Rather
   // than attempting to rewrite relationship targets, fail closed: scan
-  // every relationships part in the package and mark every external target
-  // unsupported so `require-full` cannot report "full" while such a target
-  // survives the rewrite untouched.
+  // every relationships part in the package and mark every external or
+  // dangling target unsupported so `require-full` cannot report "full"
+  // while such a target survives the rewrite untouched.
+  const knownEntryPaths: ReadonlySet<string> = new Set(
+    [...Object.keys(entries), ...skippedEntryPaths].map((name) =>
+      name.toLowerCase(),
+    ),
+  );
   for (const [relsPath, relsBytes] of Object.entries(entries)) {
     if (!isRelationshipsEntry(relsPath)) {
       continue;
     }
-    const uncoveredTargets = parseUncoveredRelationshipTargets(
-      decodeXml(relsBytes, relsPath),
+    const uncoveredTargets = parseUncoveredRelationshipTargets({
+      xml: decodeXml(relsBytes, relsPath),
       relsPath,
-    );
+      knownEntryPaths,
+    });
     for (const uncovered of uncoveredTargets) {
       coverageParts.push({
         status: "unsupported",

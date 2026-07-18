@@ -353,6 +353,66 @@ describe("extractDocxText", () => {
     });
   });
 
+  test("flags a dangling internal relationship target", () => {
+    // A relationship whose Target has no scheme and no TargetMode looks
+    // internal, but "alice@example.test" resolves to no package entry: the
+    // PII-bearing string survives verbatim in the retained .rels XML, so
+    // it must surface as uncovered instead of letting require-full pass.
+    const archive = zipSync({
+      "[Content_Types].xml": strToU8(
+        `<Types xmlns="${CONTENT_TYPES_NAMESPACE}"><Override PartName="/word/document.xml" ContentType="${CONTENT_TYPE_PREFIX}document.main+xml"/></Types>`,
+      ),
+      "_rels/.rels": strToU8(
+        `<Relationships xmlns="${PACKAGE_RELATIONSHIP_NAMESPACE}"><Relationship Id="rId1" Type="${RELATIONSHIP_NAMESPACE}/officeDocument" Target="word/document.xml"/><Relationship Id="rId8" Type="${RELATIONSHIP_NAMESPACE}/hyperlink" Target="alice@example.test"/></Relationships>`,
+      ),
+      "word/document.xml": strToU8(
+        wordDocument("<w:p><w:r><w:t>No PII in the body</w:t></w:r></w:p>"),
+      ),
+    });
+
+    const result = extractDocxText(archive);
+
+    expect(result.coverage.parts).toContainEqual({
+      status: "unsupported",
+      path: "_rels/.rels",
+      contentType: "application/vnd.openxmlformats-package.relationships+xml",
+      reason:
+        'Relationship "rId8" target does not resolve to a package part and is not examined or redacted by anonymization',
+    });
+  });
+
+  test("keeps resolving internal relationship targets unflagged", () => {
+    // Relative, package-absolute, and percent-encoded internal targets
+    // that resolve to real archive entries are covered by the parts they
+    // address; the relationships part itself must not be flagged.
+    const archive = zipSync({
+      "[Content_Types].xml": strToU8(
+        `<Types xmlns="${CONTENT_TYPES_NAMESPACE}"><Override PartName="/word/document.xml" ContentType="${CONTENT_TYPE_PREFIX}document.main+xml"/></Types>`,
+      ),
+      "_rels/.rels": strToU8(
+        `<Relationships xmlns="${PACKAGE_RELATIONSHIP_NAMESPACE}"><Relationship Id="rId1" Type="${RELATIONSHIP_NAMESPACE}/officeDocument" Target="/word/document.xml"/></Relationships>`,
+      ),
+      "word/document.xml": strToU8(
+        wordDocument("<w:p><w:r><w:t>No PII in the body</w:t></w:r></w:p>"),
+      ),
+      "word/_rels/document.xml.rels": strToU8(
+        `<Relationships xmlns="${PACKAGE_RELATIONSHIP_NAMESPACE}"><Relationship Id="rId2" Type="${RELATIONSHIP_NAMESPACE}/image" Target="media/image%201.png"/><Relationship Id="rId3" Type="${RELATIONSHIP_NAMESPACE}/settings" Target="../word/document.xml"/></Relationships>`,
+      ),
+      "word/media/image 1.png": new Uint8Array([137, 80, 78, 71]),
+    });
+
+    const result = extractDocxText(archive);
+
+    expect(
+      result.coverage.parts.filter(
+        (item) =>
+          item.status === "unsupported" &&
+          (item.path === "_rels/.rels" ||
+            item.path === "word/_rels/document.xml.rels"),
+      ),
+    ).toEqual([]);
+  });
+
   test("keeps internal relationship targets covered by part-level coverage", () => {
     // Internal targets address parts inside the package; those parts get
     // their own coverage entries, so the relationship itself is not
