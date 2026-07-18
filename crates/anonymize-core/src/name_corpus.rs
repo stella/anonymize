@@ -695,10 +695,10 @@ fn chain_score(
     // is exactly the bar the western-only branch below already accepts
     // unconditionally (see the `corpus_count >= 2` check past the
     // `has_non_western` block); mirror that here so a non-western token in
-    // the chain does not make the bar stricter. For a single corpus match,
-    // `has_corpus_name` still exempts the existing capitalized/abbreviation
-    // disjunct from the common-word veto rather than suppressing it purely
-    // because every token happens to double as a common word.
+    // the chain does not make the bar stricter. A single corpus match is
+    // deliberately not enough to lift the all-common-words veto: one
+    // corpus-listed common word next to an arbitrary capitalized common
+    // word ("Loan Documents", "Loan Amount") is a phrase, not a name.
     let high_confidence = (has_ja_suffix
       && (capitalized_count > 0 || non_western_count > 0))
       || (has_arabic_connector && non_western_count > 0)
@@ -706,7 +706,7 @@ fn chain_score(
       || corpus_count >= 2
       || (non_western_count > 0
         && (capitalized_count > 0 || has_abbreviation)
-        && (!chain_all_common_words || has_corpus_name));
+        && !chain_all_common_words);
     let score = if title_confidence {
       TITLE_NAME_SCORE
     } else if high_confidence {
