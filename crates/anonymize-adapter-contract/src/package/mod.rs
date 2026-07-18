@@ -120,11 +120,17 @@ impl<'a> CorePreparedSearchPackageArtifacts<'a> {
         bytes.to_vec()
       }
       CorePreparedSearchPackageArtifactsInner::OwnedPayload {
-        payload,
+        mut payload,
         artifacts_start,
-      } => payload
-        .get(artifacts_start..)
-        .map_or_else(Vec::new, <[u8]>::to_vec),
+      } => {
+        // `owned_payload` validated the offset; the guard keeps this
+        // panic-free if that invariant ever breaks.
+        if payload.get(artifacts_start..).is_none() {
+          return Vec::new();
+        }
+        payload.drain(..artifacts_start);
+        payload
+      }
     }
   }
 }
