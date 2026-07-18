@@ -477,9 +477,23 @@ fn extract_value(
       // of emitting the truncated span. When the window already reaches
       // the end of the text, running off it is a legitimate end-of-input
       // value and is kept.
-      let window_clipped = lookahead_end < text.len();
+      //
+      // The scan window is extended by one character past `lookahead_end`
+      // so a delimiter sitting exactly at the window edge stays visible: a
+      // value of exactly the lookahead length whose comma/newline is the
+      // next character is complete, not clipped. If that extra character
+      // is ordinary value content instead, the scan still runs off the
+      // (extended) window and fails closed as before.
+      let scan_end = text
+        .get(lookahead_end..)
+        .and_then(|tail| tail.chars().next())
+        .map_or(lookahead_end, |ch| {
+          lookahead_end.saturating_add(ch.len_utf8())
+        });
+      let scan_text = text.get(value_start_byte..scan_end).unwrap_or(stripped);
+      let window_clipped = scan_end < text.len();
       extract_to_next_comma(
-        stripped,
+        scan_text,
         value_start_byte,
         label,
         stop_words,
@@ -2072,6 +2086,26 @@ mod tests {
     let texts = run_single_trigger("Address: Acme Corporation", &data);
 
     assert_eq!(texts, vec![String::from("Acme Corporation")]);
+  }
+
+  #[test]
+  fn uncapped_to_next_comma_keeps_value_with_delimiter_at_window_edge() {
+    // The lookahead window spans LINE_TRIGGER_LOOKAHEAD UTF-16 units from
+    // the trigger end; ": " consumes two of them, so this value fills the
+    // window exactly and its comma is the very next character. The
+    // delimiter sits at the window edge, the value is complete, and it
+    // must be emitted rather than rejected as window-clipped.
+    let data = uncapped_to_next_comma_data();
+    let exact = "A".repeat(LINE_TRIGGER_LOOKAHEAD.saturating_sub(2));
+    let text = format!("Address: {exact}, next line");
+
+    let texts = run_single_trigger(&text, &data);
+
+    assert_eq!(
+      texts,
+      vec![exact],
+      "a complete value whose delimiter sits exactly at the window edge must be kept"
+    );
   }
 
   #[test]
