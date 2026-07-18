@@ -15,6 +15,16 @@ const BR_CEP_CONTEXT_WINDOW: usize = 200;
 const PLAIN_POSTAL_CONTEXT_WINDOW: usize = 120;
 const US_ZIP_CONTEXT_WINDOW: usize = 120;
 
+/// Lowercase connective particles that commonly sit inside street names
+/// ("rue de la Paix", "van der Hoopstraat", "calle de los Reyes").
+/// Deliberately a closed set: the delayed-house-number bridge in
+/// `house_number_after_street_re` may only cross these particles plus a
+/// single street-name word, so arbitrary prose ("rue is a French word
+/// 12345") cannot connect a street word to a distant number.
+const STREET_PARTICLE_ALTERNATION: &str = "de|del|della|delle|dei|degli|der\
+|den|des|di|du|da|das|dos|do|el|al|la|le|les|las|los|van|von|ten|ter|op|aan\
+|am|an|im|zum|zur";
+
 #[derive(
   Clone, Debug, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize,
 )]
@@ -84,13 +94,16 @@ impl PreparedAddressSeedData {
       house_number_before_street_re: compile_regex(
         r"(?u)\b\d{1,6}(?:[-/]\d{1,6})?\s+(?:\p{Lu}\p{L}+[^\S\n\t]+){0,4}$",
       )?,
-      // Mirrors `house_number_before_street_re`'s tolerance for up to 4
-      // intervening words (e.g. "rue de la paix 10", where the house number
-      // trails the street word by three lowercase French words) instead of
-      // requiring the digits to sit immediately after the street word.
-      house_number_after_street_re: compile_regex(
-        r"(?u)^[^\S\n\t]+(?:\p{L}+[^\S\n\t]+){0,4}\d{1,6}(?:[-/]\d{1,6})?\b",
-      )?,
+      // Mirrors `house_number_before_street_re`'s tolerance for a short run
+      // of intervening words (e.g. "rue de la paix 10", where the house
+      // number trails the street word) instead of requiring the digits to
+      // sit immediately after the street word. Unlike the "before" variant,
+      // the bridge is restricted to known street-name particles plus at most
+      // one street-name word directly ahead of the number, so ordinary prose
+      // ("rue is a French word 12345") cannot supply house-number evidence.
+      house_number_after_street_re: compile_regex(&format!(
+        r"(?iu)^[^\S\n\t]+(?:(?:{STREET_PARTICLE_ALTERNATION})[^\S\n\t]+){{0,3}}(?:\p{{L}}+[^\S\n\t]+)?\d{{1,6}}(?:[-/]\d{{1,6}})?\b"
+      ))?,
     })
   }
 
@@ -795,8 +808,8 @@ fn has_house_number_near_street_word(
   }
 
   // Widened from 24 to accommodate the bounded intervening-word tolerance
-  // added to `house_number_after_street_re` (up to 4 words before the house
-  // number, mirroring the "before" window budget).
+  // added to `house_number_after_street_re` (up to 3 street-name particles
+  // plus one street-name word before the house number).
   let after_end = ceil_char_boundary(
     full_text,
     seed.end.saturating_add(60).min(full_text.len()),
@@ -1683,6 +1696,34 @@ mod tests {
     assert!(
       is_lowercase_street_word_in_prose(full_text, &seed, &data),
       "rue used as a plain word with no nearby house number should still be treated as prose"
+    );
+
+    Ok(())
+  }
+
+  #[test]
+  fn prose_words_do_not_bridge_street_word_to_distant_number() -> Result<()> {
+    // The delayed-house-number bridge only crosses street-name particles
+    // (de, la, van, ...) plus at most one street-name word. Arbitrary prose
+    // between the street word and a number must not count as house-number
+    // evidence; otherwise a trailing figure in an explanatory sentence
+    // would defeat the lowercase-prose suppression.
+    let data = PreparedAddressSeedData::new(AddressSeedData::default())?;
+    let full_text = "rue is a French word 12345";
+    let seed = Seed {
+      kind: SeedType::StreetWord,
+      start: 0,
+      end: 3,
+      text: String::from("rue"),
+    };
+
+    assert!(
+      !has_house_number_near_street_word(full_text, &seed, &data),
+      "prose words must not bridge a street word to a distant number"
+    );
+    assert!(
+      is_lowercase_street_word_in_prose(full_text, &seed, &data),
+      "rue followed by prose and an unrelated number should stay suppressed as prose"
     );
 
     Ok(())
