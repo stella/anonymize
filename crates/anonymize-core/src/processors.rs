@@ -2447,7 +2447,7 @@ const fn fuzzy_distance(found: &SearchMatch) -> Option<u32> {
 
 #[cfg(test)]
 mod tests {
-  #![allow(clippy::unwrap_used)]
+  #![allow(clippy::indexing_slicing, clippy::unwrap_used)]
 
   use super::*;
 
@@ -2517,10 +2517,12 @@ mod tests {
   fn deny_list_emits_name_dictionary_sourced_person_match() {
     // A Names-category injected dictionary (e.g. the bundled `names/global`
     // fallback list) is tagged `name-dictionary` at assemble time
-    // (assemble/deny_list.rs `apply_dictionary_entries`). A lone match
-    // sourced only from that dictionary must still be treated as a person
-    // name and emitted, not silently dropped for lacking a
-    // `first-name`/`surname` source.
+    // (assemble/deny_list.rs `apply_dictionary_entries`). A match sourced
+    // only from that dictionary must still be treated as a person name and
+    // emitted, not silently dropped for lacking a `first-name`/`surname`
+    // source. The trailing capitalized word supplies the single-hit context
+    // `append_person_name_hits` requires and is absorbed by
+    // `extend_person_name`.
     let matches = vec![SearchMatch::Literal {
       pattern: 0,
       start: 0,
@@ -2538,14 +2540,14 @@ mod tests {
     let entities = process_deny_list_matches(
       &matches,
       PatternSlice { start: 0, end: 1 },
-      "Aabidah signed the form.",
+      "Aabidah Rahman signed the form.",
       &data,
     )
     .unwrap();
 
     assert_eq!(entities.len(), 1);
     assert_eq!(entities[0].label, "person");
-    assert_eq!(entities[0].text, "Aabidah");
+    assert_eq!(entities[0].text, "Aabidah Rahman");
   }
 
   #[test]
@@ -2553,7 +2555,10 @@ mod tests {
     // "tito" is a legitimate global `person_stopwords` entry (e.g. to guard
     // against a Czech demonstrative pronoun), but the same token is also a
     // genuine first-name corpus match here. The corpus-backed match must not
-    // be vetoed purely because its lowercase form is stopworded.
+    // be vetoed purely because its lowercase form is stopworded. The
+    // trailing capitalized surname supplies the single-hit context
+    // `append_person_name_hits` requires and is absorbed by
+    // `extend_person_name`.
     let matches = vec![SearchMatch::Literal {
       pattern: 0,
       start: 0,
@@ -2576,14 +2581,14 @@ mod tests {
     let entities = process_deny_list_matches(
       &matches,
       PatternSlice { start: 0, end: 1 },
-      "Tito signed the agreement.",
+      "Tito Broz signed the agreement.",
       &data,
     )
     .unwrap();
 
     assert_eq!(entities.len(), 1);
     assert_eq!(entities[0].label, "person");
-    assert_eq!(entities[0].text, "Tito");
+    assert_eq!(entities[0].text, "Tito Broz");
   }
 
   #[test]
@@ -2665,9 +2670,9 @@ mod tests {
       .into(),
       filters: Some(DenyListFilterData {
         first_names,
-        title_tokens,
-        defined_term_cues,
         generic_roles,
+        defined_term_cues,
+        title_tokens,
         ..DenyListFilterData::default()
       }),
     };

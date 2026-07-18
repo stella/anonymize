@@ -1826,6 +1826,8 @@ fn contains_lowercase(set: &HashSet<String>, text: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+  #![allow(clippy::expect_used, clippy::unwrap_used)]
+
   use super::{
     LegalFormData, PreparedLegalFormData, crosses_sentence_end,
     extend_backward, process_legal_form_matches, trim_leading_clause,
