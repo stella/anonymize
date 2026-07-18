@@ -11,6 +11,11 @@ const NAMED_ENTITIES: Record<string, string> = {
   lt: "<",
   nbsp: " ",
   quot: '"',
+  // EDGAR HTML exhibits commonly emit these typographic quotes.
+  ldquo: "\u201c",
+  rdquo: "\u201d",
+  lsquo: "\u2018",
+  rsquo: "\u2019",
 };
 
 /** Largest valid Unicode code point (U+10FFFF). */

@@ -27,6 +27,9 @@ describe("htmlToText", () => {
     expect(
       htmlToText("Smith&nbsp;&amp;&nbsp;Jones&#39;s &#x201C;deal&#x201D;"),
     ).toBe("Smith & Jones's “deal”");
+    expect(htmlToText("this &ldquo;Agreement&rdquo; &rsquo;s term")).toBe(
+      "this \u201cAgreement\u201d \u2019s term",
+    );
   });
 
   test("leaves unknown entities untouched", () => {
