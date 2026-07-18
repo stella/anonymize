@@ -37,7 +37,7 @@
       "end": 218,
       "label": "tax identification number",
       "text": "CZ24729035",
-      "source": "trigger"
+      "source": "regex"
     },
     {
       "start": 257,
@@ -100,7 +100,7 @@
       "end": 572,
       "label": "tax identification number",
       "text": "CZ45317054",
-      "source": "trigger"
+      "source": "regex"
     },
     {
       "start": 611,
@@ -191,7 +191,7 @@
       "end": 1257,
       "label": "bank account number",
       "text": "27-9402310277/0100",
-      "source": "trigger"
+      "source": "regex"
     },
     {
       "start": 1267,

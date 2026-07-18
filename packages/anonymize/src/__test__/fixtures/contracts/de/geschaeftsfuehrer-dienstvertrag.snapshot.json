@@ -108,7 +108,7 @@
       "end": 1198,
       "label": "iban",
       "text": "DE89 3704 0044 0532 0130 00",
-      "source": "trigger"
+      "source": "regex"
     },
     {
       "start": 1206,

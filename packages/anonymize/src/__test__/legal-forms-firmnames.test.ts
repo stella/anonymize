@@ -134,10 +134,22 @@ describe("legal-form firm name capture", () => {
     expect(orgs.some((o) => o.includes("LLC and Allen"))).toBe(false);
   });
 
-  test("keeps Paul Newman and Apple, Inc. boundary intact", async () => {
-    // Existing person/org boundary stays correct after the
-    // backward-extension tightening.
+  test("captures a bare two-cap-word prefix across 'and' (deliberate over-capture)", async () => {
+    // "Paul Newman and Apple, Inc." carries no local signal that
+    // distinguishes it from a genuine two-word company prefix like
+    // "Acme Widgets and Bar, Inc.", which used to be left unredacted (a
+    // leak). The connector walk now prefers over-capture for the bare
+    // form: the whole span is redacted as one org, and the person's name
+    // is still removed with it. A dotted middle initial remains a person
+    // boundary; see the initialed-person test below.
     const orgs = await orgsIn("Paul Newman and Apple, Inc.");
+    expect(orgs).toEqual(["Paul Newman and Apple, Inc."]);
+  });
+
+  test("keeps an initialed person out of the org span across 'and'", async () => {
+    // A dotted middle initial is genuine person-name evidence, so the
+    // backward walk still stops at the connector.
+    const orgs = await orgsIn("Paul J. Newman and Apple, Inc.");
     expect(orgs).toEqual(["Apple, Inc."]);
   });
 

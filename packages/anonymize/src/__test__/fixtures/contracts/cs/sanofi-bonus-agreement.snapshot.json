@@ -37,7 +37,7 @@
       "end": 252,
       "label": "tax identification number",
       "text": "CZ44848200",
-      "source": "trigger"
+      "source": "regex"
     },
     {
       "start": 272,
@@ -93,7 +93,7 @@
       "end": 589,
       "label": "tax identification number",
       "text": "CZ00386634",
-      "source": "trigger"
+      "source": "regex"
     },
     {
       "start": 664,
