@@ -95,14 +95,16 @@ impl PreparedAddressSeedData {
         r"(?u)\b\d{1,6}(?:[-/]\d{1,6})?\s+(?:\p{Lu}\p{L}+[^\S\n\t]+){0,4}$",
       )?,
       // Mirrors `house_number_before_street_re`'s tolerance for a short run
-      // of intervening words (e.g. "rue de la paix 10", where the house
+      // of intervening words (e.g. "rue de la Paix 10", where the house
       // number trails the street word) instead of requiring the digits to
-      // sit immediately after the street word. Unlike the "before" variant,
-      // the bridge is restricted to known street-name particles plus at most
-      // one street-name word directly ahead of the number, so ordinary prose
-      // ("rue is a French word 12345") cannot supply house-number evidence.
+      // sit immediately after the street word. Like the "before" variant
+      // (which only tolerates `\p{Lu}\p{L}+` words), the bridge is
+      // restricted: up to three known street-name particles plus at most
+      // one capitalized street-name word directly ahead of the number, so
+      // ordinary prose ("rue is a French word 12345", "Road docket
+      // 94304-1050") cannot supply house-number evidence.
       house_number_after_street_re: compile_regex(&format!(
-        r"(?iu)^[^\S\n\t]+(?:(?:{STREET_PARTICLE_ALTERNATION})[^\S\n\t]+){{0,3}}(?:\p{{L}}+[^\S\n\t]+)?\d{{1,6}}(?:[-/]\d{{1,6}})?\b"
+        r"(?u)^[^\S\n\t]+(?:(?i:{STREET_PARTICLE_ALTERNATION})[^\S\n\t]+){{0,3}}(?:\p{{Lu}}\p{{L}}+[^\S\n\t]+)?\d{{1,6}}(?:[-/]\d{{1,6}})?\b"
       ))?,
     })
   }
@@ -1652,12 +1654,12 @@ mod tests {
   #[test]
   fn lowercase_street_word_with_distant_house_number_counts_as_evidence()
   -> Result<()> {
-    // "rue de la paix 10": the house number trails the (lowercase) street
-    // word by three intervening lowercase French words, mirroring the
-    // bounded intervening-word tolerance `house_number_before_street_re`
-    // already gives capitalized words ahead of a street word.
+    // "rue de la Paix 10": the house number trails the (lowercase) street
+    // word by two particles and the street-name word, mirroring the bounded
+    // intervening-word tolerance `house_number_before_street_re` already
+    // gives capitalized words ahead of a street word.
     let data = PreparedAddressSeedData::new(AddressSeedData::default())?;
-    let full_text = "rue de la paix 10";
+    let full_text = "rue de la Paix 10";
     let seed = Seed {
       kind: SeedType::StreetWord,
       start: 0,
@@ -1667,7 +1669,7 @@ mod tests {
 
     assert!(
       has_house_number_near_street_word(full_text, &seed, &data),
-      "a house number three words after the street word should count as nearby evidence"
+      "a house number three bridge words after the street word should count as nearby evidence"
     );
     assert!(
       !is_lowercase_street_word_in_prose(full_text, &seed, &data),
@@ -1724,6 +1726,21 @@ mod tests {
     assert!(
       is_lowercase_street_word_in_prose(full_text, &seed, &data),
       "rue followed by prose and an unrelated number should stay suppressed as prose"
+    );
+
+    // A single lowercase word must not bridge either ("Road docket
+    // 94304-1050" is a docket identifier, not a house number); only the
+    // capitalized street-name slot may sit directly ahead of the digits.
+    let docket_text = "The Road docket 94304-1050 is closed.";
+    let docket_seed = Seed {
+      kind: SeedType::StreetWord,
+      start: 4,
+      end: 8,
+      text: String::from("Road"),
+    };
+    assert!(
+      !has_house_number_near_street_word(docket_text, &docket_seed, &data),
+      "a lowercase non-particle word must not bridge to a ZIP-shaped number"
     );
 
     Ok(())
