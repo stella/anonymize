@@ -8,6 +8,7 @@ mod anchored;
 mod artifact_bytes;
 /// Stage-1 native-config assembly inputs and embedded canonical data.
 pub mod assemble;
+pub(crate) mod bounded_regex;
 pub(crate) mod byte_offsets;
 mod coreference;
 mod dates;
