@@ -240,10 +240,13 @@ fn should_strip_period(
   if entity.source == DetectionSource::LegalForm {
     return false;
   }
-  if entity.label == "address" && known_address_final_abbrev(text) {
+  if entity.label == crate::labels::ADDRESS_LABEL
+    && known_address_final_abbrev(text)
+  {
     return false;
   }
-  !(entity.label == "location" && known_location_final_abbrev(text))
+  !(entity.label == crate::labels::LOCATION_LABEL
+    && known_location_final_abbrev(text))
 }
 
 fn known_period_suffix(text: &str) -> bool {

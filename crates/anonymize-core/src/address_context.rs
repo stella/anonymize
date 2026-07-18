@@ -94,7 +94,7 @@ impl PreparedAddressContextData {
     let mut results = Vec::new();
     let address_entities = existing_entities
       .iter()
-      .filter(|entity| entity.label == "address")
+      .filter(|entity| entity.label == crate::labels::ADDRESS_LABEL)
       .filter(|entity| !is_caller_owned_entity(entity))
       .collect::<Vec<_>>();
     let header_end = header_end(full_text);
@@ -338,7 +338,8 @@ impl PreparedAddressContextData {
     let context_entities = existing_entities
       .iter()
       .filter(|entity| {
-        !(entity.label == "address" && is_caller_owned_entity(entity))
+        !(entity.label == crate::labels::ADDRESS_LABEL
+          && is_caller_owned_entity(entity))
       })
       .collect::<Vec<_>>();
     let mut results = Vec::new();

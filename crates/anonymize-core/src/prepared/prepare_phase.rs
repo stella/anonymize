@@ -471,7 +471,7 @@ fn should_extract_monetary_data(config: &PreparedEngineSearchConfig) -> bool {
     || config
       .regex_meta
       .iter()
-      .any(|meta| meta.label == "monetary amount")
+      .any(|meta| meta.label == crate::labels::MONETARY_AMOUNT_LABEL)
 }
 
 fn record_prepare_total(

@@ -315,7 +315,8 @@ fn resolve_same_span_label_conflicts(
         dropped.insert(*index);
         continue;
       }
-      if has_precise_non_address && entity.label == "address" {
+      if has_precise_non_address && entity.label == crate::labels::ADDRESS_LABEL
+      {
         dropped.insert(*index);
       }
     }
@@ -374,7 +375,7 @@ fn curated_organization_contains_fragment(
   matches!(
     outer.source,
     DetectionSource::DenyList | DetectionSource::Gazetteer
-  ) && outer.label == "organization"
+  ) && outer.label == crate::labels::ORGANIZATION_LABEL
     && matches!(inner.label.as_str(), "address" | "country")
     && !is_caller_owned(inner)
     && outer.start <= inner.start
@@ -385,8 +386,8 @@ fn address_contains_bare_postal(
   outer: &PipelineEntity,
   inner: &PipelineEntity,
 ) -> bool {
-  outer.label == "address"
-    && inner.label == "address"
+  outer.label == crate::labels::ADDRESS_LABEL
+    && inner.label == crate::labels::ADDRESS_LABEL
     && outer.start <= inner.start
     && outer.end >= inner.end
     && is_bare_postal_code(&inner.text)
@@ -515,8 +516,8 @@ fn person_regex_contains_name_fragment(
   outer: &PipelineEntity,
   inner: &PipelineEntity,
 ) -> bool {
-  outer.label == "person"
-    && inner.label == "person"
+  outer.label == crate::labels::PERSON_LABEL
+    && inner.label == crate::labels::PERSON_LABEL
     && outer.source == DetectionSource::Regex
     && matches!(
       inner.source,
@@ -530,7 +531,7 @@ fn country_inside_person_or_org(
   country: &PipelineEntity,
   container: &PipelineEntity,
 ) -> bool {
-  country.label == "country"
+  country.label == crate::labels::COUNTRY_LABEL
     && matches!(container.label.as_str(), "person" | "organization")
     && container.start <= country.start
     && container.end >= country.end
@@ -540,8 +541,8 @@ fn address_contains_country(
   address: &PipelineEntity,
   country: &PipelineEntity,
 ) -> bool {
-  address.label == "address"
-    && country.label == "country"
+  address.label == crate::labels::ADDRESS_LABEL
+    && country.label == crate::labels::COUNTRY_LABEL
     && address.start <= country.start
     && address.end >= country.end
 }

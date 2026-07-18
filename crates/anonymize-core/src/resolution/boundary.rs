@@ -404,11 +404,13 @@ const fn has_locked_boundary(entity: &PipelineEntity) -> bool {
 }
 
 fn has_detector_locked_boundary(entity: &PipelineEntity) -> bool {
-  entity.label == "phone number" && entity.source == DetectionSource::Trigger
+  entity.label == crate::labels::PHONE_NUMBER_LABEL
+    && entity.source == DetectionSource::Trigger
 }
 
 fn is_legal_form_organization(entity: &PipelineEntity) -> bool {
-  entity.label == "organization" && entity.source == DetectionSource::LegalForm
+  entity.label == crate::labels::ORGANIZATION_LABEL
+    && entity.source == DetectionSource::LegalForm
 }
 
 fn is_mergeable_gap(gap: &str) -> bool {

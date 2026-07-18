@@ -5,7 +5,7 @@ use crate::types::{Error, Result};
 
 mod cjk;
 
-const PERSON_LABEL: &str = "person";
+use crate::labels::PERSON_LABEL;
 const HIGH_CONFIDENCE_NAME_SCORE: f64 = 0.9;
 const TITLE_NAME_SCORE: f64 = 0.95;
 const LOW_CONFIDENCE_NAME_SCORE: f64 = 0.5;

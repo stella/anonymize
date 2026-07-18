@@ -1,6 +1,6 @@
 use crate::resolution::{DetectionSource, PipelineEntity};
 
-const PERSON_LABEL: &str = "person";
+use crate::labels::PERSON_LABEL;
 const MAX_NAME_LEN: usize = 60;
 const MAX_WITNESS_SCAN_UNITS: usize = 600;
 

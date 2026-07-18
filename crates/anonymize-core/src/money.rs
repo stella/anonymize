@@ -6,7 +6,7 @@ use crate::anchored::{
 use crate::resolution::{DetectionSource, PipelineEntity, SourceDetail};
 use crate::types::Result;
 
-const MONEY_LABEL: &str = "monetary amount";
+use crate::labels::MONETARY_AMOUNT_LABEL;
 const MONEY_SCORE: f64 = 0.9;
 const MAX_LEFT_SCAN_BYTES: usize = 96;
 const MAX_MONEY_NUMBER_SCAN_BYTES: usize = 48;
@@ -265,7 +265,7 @@ impl MonetaryRule {
     full_text: &str,
     entity: &PipelineEntity,
   ) -> PipelineEntity {
-    if entity.label != MONEY_LABEL || caller_owned(entity) {
+    if entity.label != MONETARY_AMOUNT_LABEL || caller_owned(entity) {
       return entity.clone();
     }
 
@@ -648,7 +648,7 @@ fn money_entity(
   Some(PipelineEntity::detected(
     start_u32,
     end_u32,
-    MONEY_LABEL,
+    MONETARY_AMOUNT_LABEL,
     str_slice(full_text, start, end)?.to_owned(),
     MONEY_SCORE,
     DetectionSource::Regex,
