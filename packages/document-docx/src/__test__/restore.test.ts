@@ -88,7 +88,9 @@ describe("restoreDocxText", () => {
       sessionId: "matter_1",
       restoredBlockCount: 1,
       restoredPlaceholderCount: 2,
-      coverage: { status: "full" },
+      // The fixture's word/media/image.bin is preserved verbatim without
+      // being examined, so the coverage inventory reports partial.
+      coverage: { status: "partial" },
     });
     expect(extractDocxText(result.document).blocks.at(0)?.text).toBe(
       "Contact Alice and Alice.",

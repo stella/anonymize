@@ -36,12 +36,21 @@ const ROOT_RELATIONSHIPS_PATH = "_rels/.rels";
 const DOCX_CORE_PROPERTIES_PATH = "docProps/core.xml";
 const DOCX_APP_PROPERTIES_PATH = "docProps/app.xml";
 const DOCX_CUSTOM_PROPERTIES_PATH = "docProps/custom.xml";
-const DOCX_METADATA_PATHS: readonly string[] = [
-  DOCX_CORE_PROPERTIES_PATH,
-  DOCX_APP_PROPERTIES_PATH,
-  DOCX_CUSTOM_PROPERTIES_PATH,
-];
 const CUSTOM_XML_DIRECTORY_PREFIX = "customXml/";
+const DOCPROPS_DIRECTORY_PREFIX = "docProps/";
+// Metadata/properties content types that carry document PII (dc:creator,
+// cp:lastModifiedBy, custom properties) wherever the part lives — a
+// properties part is not required to sit at the conventional docProps/*
+// path, so coverage must also key on the declared content type.
+const METADATA_CONTENT_TYPES = new Set([
+  "application/vnd.openxmlformats-package.core-properties+xml",
+  "application/vnd.openxmlformats-officedocument.extended-properties+xml",
+  "application/vnd.openxmlformats-officedocument.custom-properties+xml",
+]);
+// RFC 3986 scheme prefix ("mailto:", "https:", "file:", even "c:"). Any
+// target carrying a scheme is addressed outside the package, as is a
+// protocol-relative "//host/..." target.
+const ABSOLUTE_URI_PATTERN = /^[a-z][a-z0-9+.-]*:/iu;
 // Fallback content types for the well-known metadata parts above, used only
 // when [Content_Types].xml does not carry an explicit <Override> for them
 // (e.g. a part relying on a <Default Extension="xml"> rule). These are the
@@ -55,6 +64,7 @@ const KNOWN_METADATA_CONTENT_TYPES: Readonly<Record<string, string>> = {
     "application/vnd.openxmlformats-officedocument.custom-properties+xml",
 };
 const GENERIC_XML_CONTENT_TYPE = "application/xml";
+const GENERIC_BINARY_CONTENT_TYPE = "application/octet-stream";
 const RELATIONSHIPS_CONTENT_TYPE =
   "application/vnd.openxmlformats-package.relationships+xml";
 // Relationship target URI schemes that can carry PII directly in
@@ -222,7 +232,11 @@ const archiveFilter = ({
     file.name === CONTENT_TYPES_PATH ||
     (file.name.startsWith("word/") && file.name.endsWith(".xml")) ||
     isRelationshipsEntry(file.name) ||
-    DOCX_METADATA_PATHS.includes(file.name) ||
+    // The whole docProps/ directory, not just the conventional core/app/
+    // custom filenames: a properties relationship may address a
+    // non-conventional part (e.g. docProps/custom2.xml) that must still be
+    // flagged as uncovered metadata.
+    file.name.startsWith(DOCPROPS_DIRECTORY_PREFIX) ||
     isCustomXmlEntry(file.name)
   );
 };
@@ -230,6 +244,7 @@ const archiveFilter = ({
 export const unzipDocxArchive = (
   archive: Uint8Array,
   includeAllEntries = false,
+  onSkippedEntry?: (name: string) => void,
 ): Record<string, Uint8Array> => {
   if (archive.byteLength > DOCX_ARCHIVE_MAX_BYTES) {
     throw new DocxExtractionError(
@@ -240,7 +255,13 @@ export const unzipDocxArchive = (
   const budget: ArchiveBudget = { entryCount: 0, uncompressedBytes: 0 };
   try {
     return unzipSync(archive, {
-      filter: (file) => archiveFilter({ budget, file, includeAllEntries }),
+      filter: (file) => {
+        const keep = archiveFilter({ budget, file, includeAllEntries });
+        if (!keep) {
+          onSkippedEntry?.(file.name);
+        }
+        return keep;
+      },
     });
   } catch (error) {
     if (error instanceof DocxExtractionError) {
@@ -412,21 +433,49 @@ const hasPiiRelationshipTargetScheme = (target: string): boolean => {
   );
 };
 
-type PiiRelationshipTarget = {
-  relationshipId: string | null;
+// A target addressed outside the package: an explicit TargetMode of
+// "External", any target with a URI scheme, or a protocol-relative URL.
+// The attribute alone is not trusted — a crafted archive can carry an
+// absolute URI in a nominally internal relationship.
+const isExternalRelationshipTarget = (
+  target: string,
+  targetMode: string | null,
+): boolean => {
+  const normalized = target.trim();
+  return (
+    targetMode?.trim().toLowerCase() === "external" ||
+    ABSOLUTE_URI_PATTERN.test(normalized) ||
+    normalized.startsWith("//")
+  );
 };
 
-// Scans a relationships part for Relationship elements whose Target uses a
-// PII-bearing scheme (mailto:, tel:). These targets are never visited by
-// extractPart (which only walks WordprocessingML part XML), so without this
-// check a hyperlink pointing at "mailto:alice@example.test" with no PII in
+type UncoveredRelationshipTarget = {
+  relationshipId: string | null;
+  reason: string;
+};
+
+const PII_SCHEME_TARGET_REASON =
+  "target uses a PII-bearing external scheme (mailto/tel) that anonymization does not redact";
+const EXTERNAL_TARGET_REASON =
+  "target is external and is not examined or redacted by anonymization";
+
+// Scans a relationships part for Relationship elements whose Target leaves
+// the package. These targets are never visited by extractPart (which only
+// walks WordprocessingML part XML), so without this check a hyperlink
+// pointing at "mailto:alice@example.test" — or at any external URL that
+// embeds PII in its userinfo, path, query, or fragment — with no PII in
 // its visible display text (or an orphaned relationship not referenced by
-// any <w:hyperlink>) produces no text segment and is invisible to coverage.
-const parsePiiRelationshipTargets = (
+// any <w:hyperlink>) produces no text segment and is invisible to
+// coverage. Every external target is uncovered: the rewrite never touches
+// relationship targets, so an external URI of any scheme or shape is an
+// unexamined channel that survives the rewrite verbatim. Internal
+// (in-package) targets are skipped here because the parts they address get
+// their own coverage entries.
+const parseUncoveredRelationshipTargets = (
   xml: string,
   path: string,
-): PiiRelationshipTarget[] => {
-  const found: PiiRelationshipTarget[] = [];
+): UncoveredRelationshipTarget[] => {
+  const found: UncoveredRelationshipTarget[] = [];
   const parser = new SaxesParser({ xmlns: true });
   let parseError: Error | null = null;
   let depth = 0;
@@ -448,10 +497,23 @@ const parsePiiRelationshipTargets = (
       return;
     }
     const target = attributeByLocalName(tag, "Target");
-    if (target === null || !hasPiiRelationshipTargetScheme(target)) {
+    if (target === null) {
       return;
     }
-    found.push({ relationshipId: attributeByLocalName(tag, "Id") });
+    const targetMode = attributeByLocalName(tag, "TargetMode");
+    if (hasPiiRelationshipTargetScheme(target)) {
+      found.push({
+        relationshipId: attributeByLocalName(tag, "Id"),
+        reason: PII_SCHEME_TARGET_REASON,
+      });
+      return;
+    }
+    if (isExternalRelationshipTarget(target, targetMode)) {
+      found.push({
+        relationshipId: attributeByLocalName(tag, "Id"),
+        reason: EXTERNAL_TARGET_REASON,
+      });
+    }
   });
   parser.on("closetag", () => {
     depth -= 1;
@@ -787,7 +849,12 @@ const extractPart = (
 };
 
 export const extractDocxText = (archive: Uint8Array): DocxExtraction => {
-  const entries = unzipDocxArchive(archive);
+  // Entries the retention filter drops are still preserved verbatim by the
+  // rewrite, so their names are recorded for the coverage inventory below.
+  const skippedEntryPaths: string[] = [];
+  const entries = unzipDocxArchive(archive, false, (name) => {
+    skippedEntryPaths.push(name);
+  });
   const contentTypesBytes = entries[CONTENT_TYPES_PATH];
   if (contentTypesBytes === undefined) {
     throw invalidPackage("DOCX archive is missing [Content_Types].xml");
@@ -868,83 +935,137 @@ export const extractDocxText = (archive: Uint8Array): DocxExtraction => {
   }
 
   // OPC relationships parts are never walked by extractPart, which only
-  // parses WordprocessingML. A relationship Target using a PII-bearing
-  // scheme (mailto:, tel:) can therefore carry unredacted PII even when the
-  // visible hyperlink display text has no PII of its own, when the
-  // relationship is not referenced by any <w:hyperlink> at all, or when it
-  // lives outside word/ entirely (e.g. an extra external relationship in
-  // the package root "_rels/.rels"). Rather than attempting to rewrite
-  // relationship targets, fail closed: scan every relationships part in the
-  // package and mark offenders unsupported so `require-full` cannot report
-  // "full" while such a target survives the rewrite untouched.
+  // parses WordprocessingML. Any external relationship target — a
+  // PII-bearing scheme (mailto:, tel:) or an external URL that embeds PII
+  // in its userinfo, path, query, or fragment — can therefore carry
+  // unredacted PII even when the visible hyperlink display text has no PII
+  // of its own, when the relationship is not referenced by any
+  // <w:hyperlink> at all, or when it lives outside word/ entirely (e.g. an
+  // extra external relationship in the package root "_rels/.rels"). Rather
+  // than attempting to rewrite relationship targets, fail closed: scan
+  // every relationships part in the package and mark every external target
+  // unsupported so `require-full` cannot report "full" while such a target
+  // survives the rewrite untouched.
   for (const [relsPath, relsBytes] of Object.entries(entries)) {
     if (!isRelationshipsEntry(relsPath)) {
       continue;
     }
-    const piiTargets = parsePiiRelationshipTargets(
+    const uncoveredTargets = parseUncoveredRelationshipTargets(
       decodeXml(relsBytes, relsPath),
       relsPath,
     );
-    for (const piiTarget of piiTargets) {
+    for (const uncovered of uncoveredTargets) {
       coverageParts.push({
         status: "unsupported",
         path: relsPath,
         contentType: RELATIONSHIPS_CONTENT_TYPE,
         reason:
-          piiTarget.relationshipId === null
-            ? "Relationship target uses a PII-bearing external scheme (mailto/tel) that anonymization does not redact"
-            : `Relationship "${piiTarget.relationshipId}" target uses a PII-bearing external scheme (mailto/tel) that anonymization does not redact`,
+          uncovered.relationshipId === null
+            ? `Relationship ${uncovered.reason}`
+            : `Relationship "${uncovered.relationshipId}" ${uncovered.reason}`,
       });
     }
   }
 
-  // docProps/*.xml (core, extended, and custom properties) and customXml/*
-  // parts can carry PII (dc:creator, cp:lastModifiedBy, custom properties,
-  // structured custom XML content) but are never walked by extractPart,
-  // which only parses WordprocessingML parts. Redacting arbitrary metadata
-  // and custom-XML schemas is out of scope here, so fail closed: mark any
-  // present metadata/custom-XML part unsupported so `require-full` cannot
-  // report "full" while such content goes unexamined.
-  for (const path of DOCX_METADATA_PATHS) {
-    if (entries[path] === undefined) {
-      continue;
+  // ── Coverage inventory ──────────────────────────────────────────────
+  // Every archive entry must end up either extracted, structural
+  // ([Content_Types].xml and relationships parts, both parsed above), or
+  // explicitly marked unsupported. Anything less lets the rewrite
+  // preserve a part verbatim while `require-full` reports "full".
+  const coveredPaths = new Set<string>([
+    CONTENT_TYPES_PATH,
+    ...supportedParts.map((part) => part.path),
+  ]);
+  const overrideContentTypes = new Map(
+    contentTypes.map((entry) => [entry.path, entry.contentType]),
+  );
+  const markUnsupported = (
+    path: string,
+    contentType: string,
+    reason: string,
+  ): void => {
+    if (coveredPaths.has(path)) {
+      return;
     }
-    coverageParts.push({
-      status: "unsupported",
-      path,
-      contentType:
-        contentTypes.find((entry) => entry.path === path)?.contentType ??
-        KNOWN_METADATA_CONTENT_TYPES[path] ??
-        GENERIC_XML_CONTENT_TYPE,
-      reason: "Document metadata parts are not extracted or redacted",
-    });
-  }
+    coveredPaths.add(path);
+    coverageParts.push({ status: "unsupported", path, contentType, reason });
+  };
+
+  // docProps/* (core, extended, custom, and any non-conventional
+  // properties part) and customXml/* can carry PII (dc:creator,
+  // cp:lastModifiedBy, custom properties, structured custom XML content)
+  // but are never walked by extractPart. Redacting arbitrary metadata and
+  // custom-XML schemas is out of scope here, so fail closed: mark every
+  // present metadata/custom-XML part unsupported.
   for (const path of Object.keys(entries)) {
-    if (!isCustomXmlEntry(path)) {
-      continue;
+    if (path.startsWith(DOCPROPS_DIRECTORY_PREFIX)) {
+      markUnsupported(
+        path,
+        overrideContentTypes.get(path) ??
+          KNOWN_METADATA_CONTENT_TYPES[path] ??
+          GENERIC_XML_CONTENT_TYPE,
+        "Document metadata parts are not extracted or redacted",
+      );
+    } else if (isCustomXmlEntry(path)) {
+      markUnsupported(
+        path,
+        overrideContentTypes.get(path) ?? GENERIC_XML_CONTENT_TYPE,
+        "Custom XML parts are not extracted or redacted",
+      );
     }
-    coverageParts.push({
-      status: "unsupported",
-      path,
-      contentType:
-        contentTypes.find((entry) => entry.path === path)?.contentType ??
-        GENERIC_XML_CONTENT_TYPE,
-      reason: "Custom XML parts are not extracted or redacted",
-    });
   }
 
+  // Every part declared in [Content_Types].xml that the extractor does not
+  // parse is uncovered, whatever its content type: metadata parts at
+  // non-conventional paths, non-extracted WordprocessingML part types
+  // (styles, settings, ...), and any other declared payload (charts,
+  // diagrams, embedded objects, ...) that can carry document text.
   for (const { contentType, path } of contentTypes) {
     if (
-      contentType.startsWith(WORDPROCESSING_CONTENT_TYPE_PREFIX) &&
-      classifyPart({ contentType, path }) === null
+      contentType === RELATIONSHIPS_CONTENT_TYPE ||
+      isRelationshipsEntry(path)
     ) {
-      coverageParts.push({
-        status: "unsupported",
+      continue;
+    }
+    if (METADATA_CONTENT_TYPES.has(contentType)) {
+      markUnsupported(
         path,
         contentType,
-        reason: "WordprocessingML part type is not extracted",
-      });
+        "Document metadata parts are not extracted or redacted",
+      );
+      continue;
     }
+    if (contentType.startsWith(WORDPROCESSING_CONTENT_TYPE_PREFIX)) {
+      markUnsupported(
+        path,
+        contentType,
+        "WordprocessingML part type is not extracted",
+      );
+      continue;
+    }
+    markUnsupported(
+      path,
+      contentType,
+      "Package part type is not extracted or redacted",
+    );
+  }
+
+  // Finally, every remaining archive entry — retained but undeclared, or
+  // dropped by the retention filter (media, fonts, embedded binaries,
+  // arbitrary extra files) — is preserved verbatim by the rewrite without
+  // ever being examined, so it must surface as uncovered too.
+  for (const path of [...Object.keys(entries), ...skippedEntryPaths]) {
+    if (path.endsWith("/") || isRelationshipsEntry(path)) {
+      continue;
+    }
+    markUnsupported(
+      path,
+      overrideContentTypes.get(path) ??
+        (path.endsWith(".xml")
+          ? GENERIC_XML_CONTENT_TYPE
+          : GENERIC_BINARY_CONTENT_TYPE),
+      "Package part is not examined by anonymization",
+    );
   }
 
   return {
