@@ -1268,7 +1268,7 @@ fn phone_shape_end(
         .get(index.saturating_add(ch.len_utf8())..)
         .is_some_and(|tail| {
           tail.starts_with(char::is_whitespace)
-            && !dot_space_precedes_digit(tail)
+            && !dot_space_precedes_phone_digits(tail)
         })
     {
       break;
@@ -1299,15 +1299,30 @@ fn phone_shape_end(
   (end > 0).then_some(end)
 }
 
-/// Reports whether a short lookahead past a `.` + whitespace finds a digit
-/// before any other non-whitespace character, i.e. the dot is a separator
-/// inside a number (`"+1. 555"`) rather than a sentence-ending period.
-fn dot_space_precedes_digit(after_dot: &str) -> bool {
-  after_dot
-    .chars()
-    .take(8)
-    .find(|ch| !ch.is_whitespace())
-    .is_some_and(|ch| ch.is_ascii_digit())
+/// Reports whether a lookahead past a `.` + whitespace finds a phone digit
+/// group, i.e. the dot is a separator inside a number (`"+1. 555"`) rather
+/// than a sentence-ending period. A following digit run only counts as a
+/// phone group when it is not itself a list ordinal: digits immediately
+/// followed by `.` and then a non-digit (`"… 5678. 1. Definitions"`) are a
+/// numbered-sentence marker, so the original dot ends the value.
+fn dot_space_precedes_phone_digits(after_dot: &str) -> bool {
+  let rest = after_dot.trim_start();
+  let digit_len = rest
+    .char_indices()
+    .find(|(_, ch)| !ch.is_ascii_digit())
+    .map_or(rest.len(), |(index, _)| index);
+  if digit_len == 0 {
+    return false;
+  }
+  let Some(after_marker_dot) = rest
+    .get(digit_len..)
+    .and_then(|tail| tail.strip_prefix('.'))
+  else {
+    return true;
+  };
+  !after_marker_dot
+    .trim_start()
+    .starts_with(|ch: char| !ch.is_ascii_digit())
 }
 
 fn phone_extension_suffix_len(
