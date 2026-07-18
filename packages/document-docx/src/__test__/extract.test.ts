@@ -294,6 +294,34 @@ describe("extractDocxText", () => {
     });
   });
 
+  test("flags a PII-bearing external target in the package root relationships part", () => {
+    // The root relationships part (_rels/.rels) sits outside word/, so a
+    // scan restricted to WordprocessingML-part relationships would miss an
+    // extra mailto:/tel: relationship placed there and report full coverage
+    // while the rewritten archive retained the target.
+    const archive = zipSync({
+      "[Content_Types].xml": strToU8(
+        `<Types xmlns="${CONTENT_TYPES_NAMESPACE}"><Override PartName="/word/document.xml" ContentType="${CONTENT_TYPE_PREFIX}document.main+xml"/></Types>`,
+      ),
+      "_rels/.rels": strToU8(
+        `<Relationships xmlns="${PACKAGE_RELATIONSHIP_NAMESPACE}"><Relationship Id="rId1" Type="${RELATIONSHIP_NAMESPACE}/officeDocument" Target="word/document.xml"/><Relationship Id="rId9" Type="${RELATIONSHIP_NAMESPACE}/hyperlink" Target="mailto:alice@example.test" TargetMode="External"/></Relationships>`,
+      ),
+      "word/document.xml": strToU8(
+        wordDocument("<w:p><w:r><w:t>No PII in the body</w:t></w:r></w:p>"),
+      ),
+    });
+
+    const result = extractDocxText(archive);
+
+    expect(result.coverage.parts).toContainEqual({
+      status: "unsupported",
+      path: "_rels/.rels",
+      contentType: "application/vnd.openxmlformats-package.relationships+xml",
+      reason:
+        'Relationship "rId9" target uses a PII-bearing external scheme (mailto/tel) that anonymization does not redact',
+    });
+  });
+
   test("flags docProps/core.xml as unsupported instead of silently treating metadata as fully covered", () => {
     const archive = zipSync({
       "[Content_Types].xml": strToU8(

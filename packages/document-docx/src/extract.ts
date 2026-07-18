@@ -157,10 +157,14 @@ const safeEntryPath = (name: string): boolean =>
   !name.split("/").includes("..") &&
   !name.includes("\0");
 
-const WORD_RELATIONSHIPS_ENTRY_PATTERN = /(?:^|\/)_rels\/[^/]+\.rels$/u;
+const RELATIONSHIPS_ENTRY_PATTERN = /(?:^|\/)_rels\/[^/]+\.rels$/u;
 
-const isWordRelationshipsEntry = (name: string): boolean =>
-  name.startsWith("word/") && WORD_RELATIONSHIPS_ENTRY_PATTERN.test(name);
+// Any OPC relationships part: the package root "_rels/.rels" plus every
+// "<dir>/_rels/<part>.rels", wherever it lives. All of them can carry
+// PII-bearing external targets (mailto:, tel:), so they are retained and
+// scanned uniformly instead of only the ones below word/.
+const isRelationshipsEntry = (name: string): boolean =>
+  name === ROOT_RELATIONSHIPS_PATH || RELATIONSHIPS_ENTRY_PATTERN.test(name);
 
 const isCustomXmlEntry = (name: string): boolean =>
   name.startsWith(CUSTOM_XML_DIRECTORY_PREFIX) && name.endsWith(".xml");
@@ -210,9 +214,8 @@ const archiveFilter = ({
   return (
     includeAllEntries ||
     file.name === CONTENT_TYPES_PATH ||
-    file.name === ROOT_RELATIONSHIPS_PATH ||
     (file.name.startsWith("word/") && file.name.endsWith(".xml")) ||
-    isWordRelationshipsEntry(file.name) ||
+    isRelationshipsEntry(file.name) ||
     DOCX_METADATA_PATHS.includes(file.name) ||
     isCustomXmlEntry(file.name)
   );
@@ -394,17 +397,6 @@ const parseMainDocumentTarget = (xml: string): string => {
     throw invalidPackage("DOCX main-document relationship is unavailable");
   }
   return target;
-};
-
-// Given a package part path (e.g. "word/document.xml"), returns the path of
-// its OPC relationships part (e.g. "word/_rels/document.xml.rels").
-const relationshipsPathFor = (partPath: string): string => {
-  const slashIndex = partPath.lastIndexOf("/");
-  const directory =
-    slashIndex === -1 ? "" : `${partPath.slice(0, slashIndex)}/`;
-  const fileName =
-    slashIndex === -1 ? partPath : partPath.slice(slashIndex + 1);
-  return `${directory}_rels/${fileName}.rels`;
 };
 
 const hasPiiRelationshipTargetScheme = (target: string): boolean => {
@@ -868,33 +860,36 @@ export const extractDocxText = (archive: Uint8Array): DocxExtraction => {
       extracted.unsupportedFieldInstructionCount;
     unsupportedAlternateContentCount +=
       extracted.unsupportedAlternateContentCount;
+  }
 
-    // A supported part's relationships (e.g. word/_rels/document.xml.rels)
-    // are never walked by extractPart, since it only parses the part's own
-    // WordprocessingML. A hyperlink relationship Target using a PII-bearing
-    // scheme (mailto:, tel:) can therefore carry unredacted PII even when
-    // the visible hyperlink display text has no PII of its own, or when the
-    // relationship is not referenced by any <w:hyperlink> at all. Rather
-    // than attempting to rewrite relationship targets, fail closed: mark the
-    // relationships part unsupported so `require-full` cannot report "full".
-    const relsPath = relationshipsPathFor(part.path);
-    const relsBytes = entries[relsPath];
-    if (relsBytes !== undefined) {
-      const piiTargets = parsePiiRelationshipTargets(
-        decodeXml(relsBytes, relsPath),
-        relsPath,
-      );
-      for (const piiTarget of piiTargets) {
-        coverageParts.push({
-          status: "unsupported",
-          path: relsPath,
-          contentType: RELATIONSHIPS_CONTENT_TYPE,
-          reason:
-            piiTarget.relationshipId === null
-              ? "Relationship target uses a PII-bearing external scheme (mailto/tel) that anonymization does not redact"
-              : `Relationship "${piiTarget.relationshipId}" target uses a PII-bearing external scheme (mailto/tel) that anonymization does not redact`,
-        });
-      }
+  // OPC relationships parts are never walked by extractPart, which only
+  // parses WordprocessingML. A relationship Target using a PII-bearing
+  // scheme (mailto:, tel:) can therefore carry unredacted PII even when the
+  // visible hyperlink display text has no PII of its own, when the
+  // relationship is not referenced by any <w:hyperlink> at all, or when it
+  // lives outside word/ entirely (e.g. an extra external relationship in
+  // the package root "_rels/.rels"). Rather than attempting to rewrite
+  // relationship targets, fail closed: scan every relationships part in the
+  // package and mark offenders unsupported so `require-full` cannot report
+  // "full" while such a target survives the rewrite untouched.
+  for (const [relsPath, relsBytes] of Object.entries(entries)) {
+    if (!isRelationshipsEntry(relsPath)) {
+      continue;
+    }
+    const piiTargets = parsePiiRelationshipTargets(
+      decodeXml(relsBytes, relsPath),
+      relsPath,
+    );
+    for (const piiTarget of piiTargets) {
+      coverageParts.push({
+        status: "unsupported",
+        path: relsPath,
+        contentType: RELATIONSHIPS_CONTENT_TYPE,
+        reason:
+          piiTarget.relationshipId === null
+            ? "Relationship target uses a PII-bearing external scheme (mailto/tel) that anonymization does not redact"
+            : `Relationship "${piiTarget.relationshipId}" target uses a PII-bearing external scheme (mailto/tel) that anonymization does not redact`,
+      });
     }
   }
 
