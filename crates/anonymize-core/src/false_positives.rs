@@ -170,6 +170,11 @@ fn should_reject_entity(
       return Ok(true);
     }
     if entity.label == PERSON_LABEL
+      && is_single_allow_listed_person(text, filters)
+    {
+      return Ok(true);
+    }
+    if entity.label == PERSON_LABEL
       && ends_in_person_trailing_noun(entity, filters)
     {
       return Ok(true);
@@ -370,6 +375,19 @@ fn is_single_person_stopword(text: &str, filters: &DenyListFilterData) -> bool {
   !token.is_empty()
     && !token.chars().any(char::is_whitespace)
     && filters.person_stopwords.contains(&token.to_lowercase())
+}
+
+/// Deny-list allow-list entries already suppress curated keyword hits; the
+/// same surfaces must not survive as single-token person triggers either
+/// (e.g. "represented by Shares of Common Stock").
+fn is_single_allow_listed_person(
+  text: &str,
+  filters: &DenyListFilterData,
+) -> bool {
+  let token = trim_token_punctuation(text);
+  !token.is_empty()
+    && !token.chars().any(char::is_whitespace)
+    && filters.allow_list.contains(&token.to_lowercase())
 }
 
 fn ends_in_person_trailing_noun(
@@ -1570,6 +1588,27 @@ mod tests {
     let entities = filter_entity_false_positives(
       vec![entity("Tato", "Tato", PERSON_LABEL, DetectionSource::Regex)],
       "Tato",
+      Some(&filters),
+    )
+    .unwrap();
+
+    assert!(entities.is_empty());
+  }
+
+  #[test]
+  fn rejects_allow_listed_single_token_person_triggers() {
+    let filters = DenyListFilterData {
+      allow_list: set(["shares"]),
+      ..DenyListFilterData::default()
+    };
+    let entities = filter_entity_false_positives(
+      vec![entity(
+        "Shares",
+        "Shares",
+        PERSON_LABEL,
+        DetectionSource::Trigger,
+      )],
+      "Shares",
       Some(&filters),
     )
     .unwrap();

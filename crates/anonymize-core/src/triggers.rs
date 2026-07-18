@@ -569,6 +569,10 @@ struct ToNextCommaScanArgs<'a> {
 /// past the end of the text.
 enum ScanStep {
   Stop,
+  /// Consume this many additional bytes of soft-wrapped continuation,
+  /// then stop. Structurally a stop: the delimiter was found, and only a
+  /// bounded, fully scanned continuation run joins the value.
+  StopAfter(usize),
   Advance(usize),
 }
 
@@ -599,6 +603,55 @@ fn skip_trimmable_padding(value_text: &str, start: usize) -> usize {
   end
 }
 
+/// Scans a soft-wrapped continuation after a newline: one run of
+/// capitalized words (separated by spaces or tabs) on the following line.
+/// Returns the byte end of the run, or `None` when the next line does not
+/// start with a capitalized word (blank lines and lowercase prose keep
+/// the newline as a plain stop). The walk is bounded by
+/// `LINE_TRIGGER_LOOKAHEAD` additional bytes for the same reason as
+/// `skip_trimmable_padding`; a run that exhausts the bound is not
+/// absorbed at all, so a crafted continuation line cannot extend the
+/// value past one extra lookahead window.
+fn take_soft_wrapped_capitalized_run(text: &str, from: usize) -> Option<usize> {
+  let limit = from.saturating_add(LINE_TRIGGER_LOOKAHEAD);
+  let mut cursor = from;
+  let mut consumed_word = false;
+  loop {
+    while let Some((ch, len)) = char_at_byte(text, cursor) {
+      if cursor >= limit {
+        return None;
+      }
+      if ch == ' ' || ch == '\t' {
+        cursor = cursor.saturating_add(len);
+        continue;
+      }
+      break;
+    }
+    let Some((ch, _)) = char_at_byte(text, cursor) else {
+      break;
+    };
+    if ch == '\n' || !ch.is_uppercase() {
+      break;
+    }
+    let word_start = cursor;
+    while let Some((next, len)) = char_at_byte(text, cursor) {
+      if cursor >= limit {
+        return None;
+      }
+      if next.is_alphabetic() {
+        cursor = cursor.saturating_add(len);
+        continue;
+      }
+      break;
+    }
+    if cursor == word_start {
+      break;
+    }
+    consumed_word = true;
+  }
+  consumed_word.then_some(cursor)
+}
+
 fn scan_step(
   value_text: &str,
   end: usize,
@@ -613,6 +666,18 @@ fn scan_step(
   // is itself a legacy line break; treating it as a stop keeps a CRLF at
   // the window edge from looking like ordinary clipped content.
   if matches!(ch, '\n' | '\r' | '(' | ')' | '[' | ']' | '\t' | ';') {
+    // EDGAR HTML exhibits often wrap mid-phrase ("State of New\nYork").
+    // For address values, absorb one soft-wrapped capitalized run and
+    // then stop, so following lowercase prose ("are authorized") is not
+    // captured. Blank lines still terminate: the character after the
+    // newline is another newline, which is not a capitalized word.
+    if ch == '\n'
+      && label == "address"
+      && let Some(wrapped_end) =
+        take_soft_wrapped_capitalized_run(value_text, end.saturating_add(len))
+    {
+      return Some(ScanStep::StopAfter(wrapped_end.saturating_sub(end)));
+    }
     return Some(ScanStep::Stop);
   }
   if ch == '.'
@@ -668,6 +733,11 @@ fn extract_to_next_comma(
         stopped = true;
         break;
       }
+      Some(ScanStep::StopAfter(step)) => {
+        end = end.saturating_add(step);
+        stopped = true;
+        break;
+      }
       Some(ScanStep::Advance(step)) => {
         end = end.saturating_add(step.max(1));
       }
@@ -683,7 +753,9 @@ fn extract_to_next_comma(
   // text there terminates the value identically to mid-window behavior,
   // while real value content past the limit fails closed. Nothing walked
   // here can reach the emitted value, because it is all trailing
-  // whitespace.
+  // whitespace. A soft-wrap continuation (`StopAfter`) anchored at the
+  // limit is real value content beyond the window, so it also fails
+  // closed rather than counting as a plain stop.
   let hit_window_end = if stopped {
     false
   } else {
@@ -2504,5 +2576,101 @@ mod tests {
     // treating the value as un-delimited and truncating it.
     assert_eq!(entities.len(), 1);
     assert_eq!(entities[0].text, digits);
+  }
+
+  #[test]
+  fn address_to_next_comma_soft_wraps_one_capitalized_continuation_line() {
+    let text = "laws of the State of New\nYork shall govern";
+    let start = text.find("State of").unwrap();
+    let end = start.saturating_add("State of".len());
+    let data = PreparedTriggerData::new(TriggerData {
+      rules: vec![TriggerRule {
+        trigger: String::from("state of"),
+        label: String::from("address"),
+        strategy: TriggerStrategy::ToNextComma {
+          stop_words: vec![
+            String::from("or"),
+            String::from("and"),
+            String::from("shall"),
+          ],
+          max_length: Some(30),
+        },
+        validations: Vec::new(),
+        include_trigger: true,
+      }],
+      address_stop_keywords: Vec::new(),
+      party_position_terms: Vec::new(),
+      legal_form_suffixes: Vec::new(),
+      post_nominals: Vec::new(),
+      sentence_terminal_currency_terms: Vec::new(),
+      phone_extension_labels: Vec::new(),
+      number_markers: Vec::new(),
+      number_labels: Vec::new(),
+    })
+    .unwrap();
+
+    let entities = process_trigger_matches(
+      &[SearchMatch::Literal {
+        pattern: 0,
+        start: u32::try_from(start).unwrap(),
+        end: u32::try_from(end).unwrap(),
+      }],
+      PatternSlice { start: 0, end: 1 },
+      text,
+      &data,
+      None,
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].text, "State of New\nYork");
+  }
+
+  #[test]
+  fn address_soft_wrap_does_not_absorb_following_lowercase_prose() {
+    let text = "banking institutions in the State of New\nYork are authorized or required";
+    let start = text.find("State of").unwrap();
+    let end = start.saturating_add("State of".len());
+    let data = PreparedTriggerData::new(TriggerData {
+      rules: vec![TriggerRule {
+        trigger: String::from("state of"),
+        label: String::from("address"),
+        strategy: TriggerStrategy::ToNextComma {
+          stop_words: vec![
+            String::from("or"),
+            String::from("and"),
+            String::from("shall"),
+          ],
+          max_length: Some(30),
+        },
+        validations: Vec::new(),
+        include_trigger: true,
+      }],
+      address_stop_keywords: Vec::new(),
+      party_position_terms: Vec::new(),
+      legal_form_suffixes: Vec::new(),
+      post_nominals: Vec::new(),
+      sentence_terminal_currency_terms: Vec::new(),
+      phone_extension_labels: Vec::new(),
+      number_markers: Vec::new(),
+      number_labels: Vec::new(),
+    })
+    .unwrap();
+
+    let entities = process_trigger_matches(
+      &[SearchMatch::Literal {
+        pattern: 0,
+        start: u32::try_from(start).unwrap(),
+        end: u32::try_from(end).unwrap(),
+      }],
+      PatternSlice { start: 0, end: 1 },
+      text,
+      &data,
+      None,
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].text, "State of New\nYork");
   }
 }
