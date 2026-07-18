@@ -132,7 +132,13 @@ type PartExtraction = {
   unsupportedFieldInstructionCount: number;
 };
 
-type PartTextBudget = {
+// Shared across every extracted part of one archive: `extractDocxText`
+// creates a single budget and threads it through each `extractPart` call,
+// so the segment and inline-context-scan ceilings are enforced
+// archive-wide. A per-part budget would let a crafted archive split the
+// work across parts and stay under each per-part cap while still forcing
+// the aggregate worst case.
+type ArchiveTextBudget = {
   segmentCount: number;
   inlineContextScanOps: number;
 };
@@ -577,7 +583,7 @@ const inlineContexts = (
 
 const appendSegment = (
   block: MutableBlock,
-  budget: PartTextBudget,
+  budget: ArchiveTextBudget,
   value: string,
   source: DocxTextSegment["source"],
   path: readonly number[],
@@ -589,7 +595,7 @@ const appendSegment = (
   if (budget.segmentCount >= DOCX_MAX_TEXT_SEGMENTS) {
     throw new DocxExtractionError(
       DOCX_EXTRACTION_ERROR_CODES.uncompressedLimitExceeded,
-      `DOCX parts must not contain more than ${DOCX_MAX_TEXT_SEGMENTS} text segments`,
+      `DOCX archives must not contain more than ${DOCX_MAX_TEXT_SEGMENTS} text segments`,
     );
   }
   budget.segmentCount += 1;
@@ -603,7 +609,7 @@ const appendSegment = (
   ) {
     throw new DocxExtractionError(
       DOCX_EXTRACTION_ERROR_CODES.uncompressedLimitExceeded,
-      `DOCX parts must not require more than ${DOCX_MAX_INLINE_CONTEXT_SCAN_OPS} aggregate inline-context scan operations`,
+      `DOCX archives must not require more than ${DOCX_MAX_INLINE_CONTEXT_SCAN_OPS} aggregate inline-context scan operations`,
     );
   }
   budget.inlineContextScanOps += stack.length;
@@ -618,7 +624,11 @@ const appendSegment = (
   });
 };
 
-const extractPart = (part: DocxPart, xml: string): PartExtraction => {
+const extractPart = (
+  part: DocxPart,
+  xml: string,
+  textBudget: ArchiveTextBudget,
+): PartExtraction => {
   const blocks: DocxTextBlock[] = [];
   const stack: ElementFrame[] = [];
   const blockStack: MutableBlock[] = [];
@@ -629,10 +639,6 @@ const extractPart = (part: DocxPart, xml: string): PartExtraction => {
   let unsupportedSymbolCount = 0;
   let unsupportedFieldInstructionCount = 0;
   let unsupportedAlternateContentCount = 0;
-  const textBudget: PartTextBudget = {
-    segmentCount: 0,
-    inlineContextScanOps: 0,
-  };
 
   const parser = new SaxesParser({ xmlns: true });
   parser.on("error", (error) => {
@@ -821,7 +827,13 @@ export const extractDocxText = (archive: Uint8Array): DocxExtraction => {
   let unsupportedSymbolCount = 0;
   let unsupportedFieldInstructionCount = 0;
   let unsupportedAlternateContentCount = 0;
-  let textSegmentCount = 0;
+  // One budget for the whole archive: segment count and inline-context scan
+  // ops accumulate across parts inside appendSegment, so splitting the work
+  // over many parts cannot dodge the aggregate ceilings.
+  const textBudget: ArchiveTextBudget = {
+    segmentCount: 0,
+    inlineContextScanOps: 0,
+  };
   for (const part of supportedParts) {
     const bytes = entries[part.path];
     if (bytes === undefined) {
@@ -829,24 +841,17 @@ export const extractDocxText = (archive: Uint8Array): DocxExtraction => {
         `DOCX archive is missing declared part: ${part.path}`,
       );
     }
-    const extracted = extractPart(part, decodeXml(bytes, part.path));
+    const extracted = extractPart(
+      part,
+      decodeXml(bytes, part.path),
+      textBudget,
+    );
     if (blocks.length + extracted.blocks.length > DOCX_MAX_TEXT_BLOCKS) {
       throw new DocxExtractionError(
         DOCX_EXTRACTION_ERROR_CODES.uncompressedLimitExceeded,
         `DOCX archives must not contain more than ${DOCX_MAX_TEXT_BLOCKS} text blocks`,
       );
     }
-    const extractedSegmentCount = extracted.blocks.reduce(
-      (count, block) => count + block.segments.length,
-      0,
-    );
-    if (textSegmentCount + extractedSegmentCount > DOCX_MAX_TEXT_SEGMENTS) {
-      throw new DocxExtractionError(
-        DOCX_EXTRACTION_ERROR_CODES.uncompressedLimitExceeded,
-        `DOCX archives must not contain more than ${DOCX_MAX_TEXT_SEGMENTS} text segments`,
-      );
-    }
-    textSegmentCount += extractedSegmentCount;
     blocks.push(...extracted.blocks);
     coverageParts.push({
       status: "extracted",
