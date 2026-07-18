@@ -416,7 +416,9 @@ fn regex_shape_contains_trigger_fragment(
 /// recognizing that as coverage, the higher-priority truncated trigger
 /// wins and the untruncated suffix leaks. So a partial, non-containing
 /// overlap still counts as covered when `outer` reaches past `inner`'s
-/// raw end.
+/// raw end — but only when the trigger prefix the regex leaves uncovered
+/// is label padding, not value content (see
+/// [`trigger_prefix_is_label_padding`]).
 fn regex_shape_covers_trigger_value(
   outer: &PipelineEntity,
   inner: &PipelineEntity,
@@ -425,7 +427,29 @@ fn regex_shape_covers_trigger_value(
   if outer.start <= inner.start {
     return outer.end >= trimmed_inner_end;
   }
-  outer.end > inner.end && outer.end >= trimmed_inner_end
+  outer.end > inner.end
+    && outer.end >= trimmed_inner_end
+    && trigger_prefix_is_label_padding(inner, outer.start)
+}
+
+/// Whether the slice of `inner`'s captured text that a later-starting
+/// regex match leaves uncovered (`inner.start..outer_start`) is label
+/// padding ("Telefon: ") rather than value content. The regex-shape labels
+/// are all numeric shapes, so any numeric character in that prefix means
+/// the prefix carries part of the value itself (e.g. a country-code head
+/// the regex shape did not match); dropping the trigger would then leave
+/// those digits unredacted. A prefix that cannot be sliced on a char
+/// boundary is treated as value content, keeping the trigger.
+fn trigger_prefix_is_label_padding(
+  inner: &PipelineEntity,
+  outer_start: u32,
+) -> bool {
+  let prefix_len = usize::try_from(outer_start.saturating_sub(inner.start))
+    .unwrap_or(usize::MAX);
+  inner
+    .text
+    .get(..prefix_len)
+    .is_some_and(|prefix| !prefix.chars().any(char::is_numeric))
 }
 
 fn comparable_trigger_fragment_end(entity: &PipelineEntity) -> u32 {

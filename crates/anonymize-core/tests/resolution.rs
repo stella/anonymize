@@ -213,6 +213,41 @@ fn structured_phone_regex_beats_truncated_trigger_with_swept_prefix() {
 }
 
 #[test]
+fn later_starting_regex_does_not_evict_trigger_holding_value_digits() {
+  // Unlike the swept-prefix case above (where the uncovered trigger prefix
+  // is the label padding "Telefon: "), here the trigger prefix the regex
+  // leaves uncovered carries leading value digits ("+420 "): the regex
+  // shape only matched the national part. Evicting the trigger would leave
+  // that country-code head unredacted, so the trigger must win.
+  let trigger_text = "+420 604 123";
+  let regex_text = "604 123 456";
+  let regex_start = byte_len("+420 ");
+  let result = merge_and_dedup(&[
+    PipelineEntity::detected(
+      regex_start,
+      regex_start + byte_len(regex_text),
+      "phone number",
+      regex_text,
+      0.9,
+      DetectionSource::Regex,
+    ),
+    PipelineEntity::detected(
+      0,
+      byte_len(trigger_text),
+      "phone number",
+      trigger_text,
+      0.95,
+      DetectionSource::Trigger,
+    ),
+  ]);
+
+  assert_eq!(result.len(), 1);
+  let kept = result.first().expect("result");
+  assert_eq!(kept.source, DetectionSource::Trigger);
+  assert_eq!(kept.start, 0);
+}
+
+#[test]
 fn structured_date_regex_span_beats_trigger_fragment() {
   let regex_text = "21. März 1968";
   let trigger_text = "21.";
