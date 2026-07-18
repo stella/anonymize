@@ -120,7 +120,11 @@ export const getNativePipelineCompatibility = (
 ): NativePipelineCompatibility => {
   const unsupportedFeatures: NativePipelineUnsupportedFeature[] = [];
 
-  if (config.enableNer) unsupportedFeatures.push("enableNer");
+  // `enableNer` is no longer part of `PipelineConfig`; untyped callers that
+  // still request it must fail fast instead of silently losing NER spans.
+  if ("enableNer" in config && config.enableNer === true) {
+    unsupportedFeatures.push("enableNer");
+  }
   if (unsupportedFeatures.length === 0) {
     return { status: "supported" };
   }
@@ -152,10 +156,10 @@ type AssembleInputs = {
  * of the config JSON avoids serializing them twice.
  */
 const toAssembleInputs = (
-  { dictionaries, enableNer = false, ...config }: PipelineConfig,
+  { dictionaries, ...config }: PipelineConfig,
   gazetteerEntries: readonly GazetteerEntry[],
 ): AssembleInputs => ({
-  pipelineConfigJson: encoder.encode(JSON.stringify({ ...config, enableNer })),
+  pipelineConfigJson: encoder.encode(JSON.stringify(config)),
   dictionariesJson:
     dictionaries === undefined
       ? undefined

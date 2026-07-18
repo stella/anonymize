@@ -19,7 +19,9 @@ import { applyPipelineLanguageScope } from "../language-scope";
 import type { NativeAnonymizeBinding } from "../native";
 import { loadNativeAnonymizeBinding } from "../native-node";
 import {
+  assertNativePipelineSupported,
   createNativePipelineFromConfig,
+  getNativePipelineCompatibility,
   prepareNativePipelineConfig,
   prepareNativePipelinePackage,
   SHARED_PACKAGE_CACHE_MAX_ENTRIES,
@@ -38,7 +40,6 @@ const baseConfig = (): PipelineConfig => ({
   enableDenyList: false,
   enableGazetteer: false,
   enableCountries: false,
-  enableNer: false,
   enableConfidenceBoost: false,
   enableCoreference: false,
   labels: [...DEFAULT_ENTITY_LABELS],
@@ -62,13 +63,14 @@ describe("prepareNativePipelineConfig", () => {
     expect(prepared.regex_patterns.length).toBeGreaterThan(0);
   });
 
-  test("normalizes an omitted deprecated NER flag to false", async () => {
-    const config = baseConfig();
-    delete config.enableNer;
+  test("rejects a stray untyped enableNer request instead of ignoring it", () => {
+    const config = { ...baseConfig(), enableNer: true };
 
-    const prepared = await prepareNativePipelineConfig({ binding, config });
-
-    expect(prepared.allowed_labels).toEqual([...DEFAULT_ENTITY_LABELS]);
+    expect(getNativePipelineCompatibility(config)).toEqual({
+      status: "unsupported",
+      unsupportedFeatures: ["enableNer"],
+    });
+    expect(() => assertNativePipelineSupported(config)).toThrow("enableNer");
   });
 });
 

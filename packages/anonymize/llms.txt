@@ -42,5 +42,4 @@ passport number
 ## Extension Rule
 
 Add anonymization behavior in Rust core. Keep host-language
-bindings thin. `src/legacy.ts` is temporary internal scaffolding
-for old tests and migration comparisons, not a public runtime.
+bindings thin.

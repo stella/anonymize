@@ -378,7 +378,6 @@ const buildPipelineConfig = async (
       : { denyListCountries: [...opts.countries] }),
     enableGazetteer: false,
     enableCountries: true,
-    enableNer: false,
     enableConfidenceBoost: true,
     enableCoreference: true,
     enableZoneClassification: true,

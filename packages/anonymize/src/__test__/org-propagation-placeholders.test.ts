@@ -12,7 +12,6 @@ const CONFIG: PipelineConfig = {
   enableNameCorpus: false,
   enableDenyList: false,
   enableGazetteer: false,
-  enableNer: false,
   enableConfidenceBoost: false,
   enableCoreference: true,
   labels: [...DEFAULT_ENTITY_LABELS],

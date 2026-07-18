@@ -14,7 +14,6 @@ const config: PipelineConfig = {
   enableNameCorpus: false,
   enableDenyList: true,
   enableGazetteer: false,
-  enableNer: false,
   enableConfidenceBoost: false,
   enableCoreference: false,
   labels: ["address"],

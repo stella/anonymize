@@ -13,7 +13,6 @@ const baseConfig: PipelineConfig = {
   enableNameCorpus: true,
   enableDenyList: false,
   enableGazetteer: false,
-  enableNer: false,
   enableConfidenceBoost: false,
   enableCoreference: false,
   labels: ["person"],

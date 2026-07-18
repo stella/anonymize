@@ -90,7 +90,6 @@ pub struct PipelineConfig {
   pub custom_regexes: Option<Vec<CustomRegexPattern>>,
   pub enable_gazetteer: bool,
   pub enable_countries: Option<bool>,
-  pub enable_ner: bool,
   pub enable_confidence_boost: bool,
   pub enable_coreference: bool,
   pub enable_zone_classification: Option<bool>,
@@ -107,6 +106,9 @@ mod tests {
   #[test]
   fn omitted_enable_legal_forms_deserializes_as_none()
   -> Result<(), serde_json::Error> {
+    // `enableNer` stays in this fixture on purpose: configs serialized before
+    // the field was retired must keep deserializing (serde ignores unknown
+    // fields here).
     let json = r#"{
       "threshold": 0.5,
       "enableTriggerPhrases": false,

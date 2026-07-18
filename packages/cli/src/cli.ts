@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /* npm-distributed entry point — backs the CLI with the
- * native engine (@stll/text-search napi bindings) and
+ * native engine (@stll/anonymize napi bindings) and
  * the @stll/anonymize-data dictionary package. */
 import * as anonymize from "@stll/anonymize";
 

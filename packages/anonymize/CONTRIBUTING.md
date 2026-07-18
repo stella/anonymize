@@ -25,9 +25,6 @@ logic to `src/detectors/*.ts` or wire new behavior through `src/pipeline.ts`.
 5. Run the native readiness/perf checks when package shape or runtime cost
    changes.
 
-`packages/anonymize/src/legacy.ts` is temporary internal scaffolding for old
-tests and migration comparisons. It is not a product extension point.
-
 ## Adding trigger phrases
 
 Edit `config/triggers.{lang}.json` in the

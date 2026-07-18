@@ -309,9 +309,9 @@ export type CustomDenyListEntry = {
 
 /**
  * Caller-supplied regex detector. The pattern is passed
- * to the underlying text-search regex engine, so use its
- * supported regex syntax. Inline flags such as `(?i)` are
- * accepted when supported by that engine.
+ * to the native Rust regex engine, so use its supported
+ * regex syntax. Inline flags such as `(?i)` are accepted
+ * when supported by that engine.
  */
 export type CustomRegexPattern = {
   pattern: string;
@@ -334,12 +334,10 @@ export type CustomRegexPattern = {
 export type Dictionaries = {
   /**
    * First names per language code (e.g., "cs", "de").
-   * Merged with legacy config names at init time.
    */
   firstNames?: Readonly<Record<string, readonly string[]>>;
   /**
    * Surnames per language code.
-   * Merged with legacy config names at init time.
    */
   surnames?: Readonly<Record<string, readonly string[]>>;
   /**
@@ -441,14 +439,6 @@ export type PipelineConfig = {
    * additions (Dutch, Russian, Chinese, Arabic, etc.).
    */
   enableCountries?: boolean;
-  /**
-   * Reserved for compatibility with the removed TypeScript pipeline.
-   * The native pipeline rejects `true`; supply deterministic custom rules today
-   * and use the future caller-detection API for model-produced spans.
-   *
-   * @deprecated Native NER is not implemented.
-   */
-  enableNer?: boolean;
   enableConfidenceBoost: boolean;
   enableCoreference: boolean;
   enableZoneClassification?: boolean;

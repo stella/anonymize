@@ -10,7 +10,6 @@ export const DEFAULT_NATIVE_PIPELINE_CONFIG: PipelineConfig = {
   enableDenyList: true,
   enableGazetteer: false,
   enableCountries: true,
-  enableNer: false,
   enableConfidenceBoost: true,
   enableCoreference: true,
   enableHotwordRules: true,

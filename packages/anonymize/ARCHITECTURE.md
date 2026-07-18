@@ -16,9 +16,6 @@ types, load prepared packages, and call the same Rust core.
   prepared-package loader.
 - `packages/anonymize/src/native-pipeline.ts`: build-time/package-time adapter
   from TypeScript config/data files into the Rust prepared package contract.
-- `packages/anonymize/src/legacy.ts`: temporary internal TypeScript pipeline
-  entrypoint for old tests and migration comparisons. It is not exported from
-  `package.json` and should not be used for product features.
 
 ## Native Distribution
 
@@ -73,7 +70,6 @@ reviewable diffs.
 - Add detector behavior in Rust, with focused Rust tests.
 - Keep TypeScript and Python wrappers thin; do not duplicate business logic in
   bindings.
-- Keep legacy TypeScript pipeline changes limited to temporary parity work.
 
 ## Review Checklist
 

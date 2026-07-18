@@ -34,7 +34,6 @@ const config: PipelineConfig = {
   enableNameCorpus: true,
   enableDenyList: true,
   enableGazetteer: false,
-  enableNer: false,
   enableConfidenceBoost: true,
   enableCoreference: true,
   enableHotwordRules: true,

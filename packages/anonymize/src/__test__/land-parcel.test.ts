@@ -12,7 +12,6 @@ const TRIGGERS_ONLY_CONFIG: PipelineConfig = {
   enableNameCorpus: false,
   enableDenyList: false,
   enableGazetteer: false,
-  enableNer: false,
   enableConfidenceBoost: false,
   enableCoreference: false,
   labels: ["land parcel"],
