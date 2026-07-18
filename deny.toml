@@ -8,13 +8,7 @@
 version = 2
 # Fail on any crate the registry has yanked.
 yanked = "deny"
-ignore = [
-  # bincode is feature-complete per the advisory itself ("the team considers
-  # this a complete version that is not in need of any updates"); development
-  # stopped after a harassment incident, not because of a defect. Migrating the
-  # adapter-contract serialization off bincode is tracked as separate work.
-  "RUSTSEC-2025-0141",
-]
+ignore = []
 
 [licenses]
 version = 2
