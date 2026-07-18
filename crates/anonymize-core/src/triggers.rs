@@ -469,15 +469,31 @@ fn extract_value(
     PreparedTriggerStrategy::ToNextComma {
       stop_words,
       max_length,
-    } => extract_to_next_comma(
-      stripped,
-      value_start_byte,
-      label,
-      stop_words,
-      *max_length,
-      data.post_nominals,
-      data.sentence_terminal_currency_terms,
-    ),
+    } => {
+      // An uncapped scan that consumes the whole lookahead window while
+      // more text exists beyond it never found its structural delimiter:
+      // the "value" would be an arbitrary window-sized prefix and the tail
+      // would stay unredacted while looking covered. Fail closed instead
+      // of emitting the truncated span. When the window already reaches
+      // the end of the text, running off it is a legitimate end-of-input
+      // value and is kept.
+      let window_clipped = lookahead_end < text.len();
+      extract_to_next_comma(
+        stripped,
+        value_start_byte,
+        label,
+        stop_words,
+        *max_length,
+        data.post_nominals,
+        data.sentence_terminal_currency_terms,
+      )
+      .and_then(|scan| {
+        if scan.hit_window_end && window_clipped && max_length.is_none() {
+          return None;
+        }
+        Some(scan.value)
+      })
+    }
     PreparedTriggerStrategy::ToEndOfLine => extract_to_end_of_line(
       remaining,
       stripped,
@@ -510,6 +526,16 @@ fn extract_value(
   Ok(extracted.and_then(|value| byte_value_to_offsets(text, offsets, value)))
 }
 
+/// A `to-next-comma` scan result: the extracted value plus whether the
+/// scan consumed the entire window without hitting any structural stop
+/// (comma, newline, bracket, sentence terminator, stop word). The caller
+/// decides whether running off the window is legitimate (end of text) or a
+/// truncation that must fail closed (clipped lookahead window).
+struct ToNextCommaScan {
+  value: ByteValue,
+  hit_window_end: bool,
+}
+
 fn extract_to_next_comma(
   value_text: &str,
   value_start_byte: usize,
@@ -518,7 +544,7 @@ fn extract_to_next_comma(
   length_cap: Option<usize>,
   post_nominals: &[String],
   sentence_terminal_currency_terms: &[String],
-) -> Option<ByteValue> {
+) -> Option<ToNextCommaScan> {
   let mut end = 0;
   while end < value_text.len() {
     let Some((ch, len)) = char_at_byte(value_text, end) else {
@@ -555,12 +581,16 @@ fn extract_to_next_comma(
     }
     end = end.saturating_add(len);
   }
+  let hit_window_end = end >= value_text.len();
   if let Some(cap) = length_cap
     && prefix_char_count(value_text, end) > cap
   {
     end = cap_at_word_boundary(value_text, cap);
   }
-  byte_value(value_text, value_start_byte, end)
+  byte_value(value_text, value_start_byte, end).map(|value| ToNextCommaScan {
+    value,
+    hit_window_end,
+  })
 }
 
 fn extract_to_end_of_line(
@@ -1967,6 +1997,81 @@ mod tests {
     // comma, so it must not be truncated to ~100 chars.
     assert_eq!(entities.len(), 1);
     assert_eq!(entities[0].text, long_value);
+  }
+
+  fn uncapped_to_next_comma_data() -> PreparedTriggerData {
+    PreparedTriggerData::new(TriggerData {
+      rules: vec![TriggerRule {
+        trigger: String::from("Address"),
+        label: String::from("organization"),
+        strategy: TriggerStrategy::ToNextComma {
+          stop_words: Vec::new(),
+          max_length: None,
+        },
+        validations: vec![TriggerValidation::MinLength(3)],
+        include_trigger: false,
+      }],
+      address_stop_keywords: Vec::new(),
+      party_position_terms: Vec::new(),
+      legal_form_suffixes: Vec::new(),
+      post_nominals: Vec::new(),
+      sentence_terminal_currency_terms: Vec::new(),
+      phone_extension_labels: Vec::new(),
+      number_markers: Vec::new(),
+      number_labels: Vec::new(),
+    })
+    .unwrap()
+  }
+
+  fn run_single_trigger(text: &str, data: &PreparedTriggerData) -> Vec<String> {
+    let start = text.find("Address").unwrap();
+    let end = start.saturating_add("Address".len());
+    process_trigger_matches(
+      &[SearchMatch::Literal {
+        pattern: 0,
+        start: u32::try_from(start).unwrap(),
+        end: u32::try_from(end).unwrap(),
+      }],
+      PatternSlice { start: 0, end: 1 },
+      text,
+      data,
+      None,
+    )
+    .unwrap()
+    .into_iter()
+    .map(|entity| entity.text)
+    .collect()
+  }
+
+  #[test]
+  fn uncapped_to_next_comma_fails_closed_on_clipped_lookahead_window() {
+    // The delimiter sits beyond the LINE_TRIGGER_LOOKAHEAD window and more
+    // text exists past the window, so the scan never reaches a structural
+    // stop. Emitting the window-sized prefix would present a truncated
+    // span as a complete value while the tail stays unredacted; the
+    // extraction must fail closed instead.
+    let data = uncapped_to_next_comma_data();
+    let overflow = "A".repeat(LINE_TRIGGER_LOOKAHEAD.saturating_add(64));
+    let text = format!("Address: {overflow}, next line");
+
+    let texts = run_single_trigger(&text, &data);
+
+    assert_eq!(
+      texts,
+      Vec::<String>::new(),
+      "a window-truncated uncapped value must not be emitted"
+    );
+  }
+
+  #[test]
+  fn uncapped_to_next_comma_keeps_value_ending_at_end_of_text() {
+    // Running off the window is legitimate when the window already covers
+    // the rest of the text: the value simply ends at end of input.
+    let data = uncapped_to_next_comma_data();
+
+    let texts = run_single_trigger("Address: Acme Corporation", &data);
+
+    assert_eq!(texts, vec![String::from("Acme Corporation")]);
   }
 
   #[test]
