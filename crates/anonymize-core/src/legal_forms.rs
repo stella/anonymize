@@ -186,13 +186,31 @@ pub(crate) fn process_legal_form_matches(
     // A sentence break inside the candidate ("Acme Inc. Beta LLC") no longer
     // drops the whole thing: re-clip to just after the break and re-validate
     // the trimmed remainder so the later org ("Beta LLC") still gets emitted.
-    let Some(candidate_start) = clip_past_sentence_breaks(
+    let Some(clipped_start) = clip_past_sentence_breaks(
       full_text,
       candidate_start,
       effective_suffix_start,
     ) else {
       continue;
     };
+    // The clipped remainder can open with lowercase bridge prose that was
+    // only reachable because the backward walk had seen a capitalized token
+    // before the break ("Acme Inc. the supplier Beta LLC"): re-anchor it at
+    // the first token that can start an org name, exactly like the walk
+    // would have if it had started inside this sentence.
+    let candidate_start = if clipped_start == candidate_start {
+      candidate_start
+    } else {
+      trim_to_first_name_token(
+        full_text,
+        clipped_start,
+        effective_suffix_start,
+        data,
+      )
+    };
+    if candidate_start >= effective_suffix_start {
+      continue;
+    }
 
     candidates.push(Candidate {
       start: candidate_start,
@@ -571,6 +589,39 @@ fn clip_past_sentence_breaks(
     }
   }
   Some(candidate_start)
+}
+
+/// Advances to the first token that can legitimately start an org name: an
+/// uppercase-leading token that is not a role/clause head, or a
+/// digit-leading token ("360 Ventures LLC", mirroring `trim_role_head`'s
+/// digit acceptance). Used after clipping past a sentence break, where the
+/// remainder may open with lowercase prose the backward walk only bridged
+/// because of a capitalized token before the break. Returns `suffix_start`
+/// (an empty candidate) when no such token exists.
+fn trim_to_first_name_token(
+  text: &str,
+  start: usize,
+  suffix_start: usize,
+  data: &PreparedLegalFormData,
+) -> usize {
+  for token in word_tokens(text, start, suffix_start) {
+    let starts_digit = token
+      .text
+      .chars()
+      .next()
+      .is_some_and(|ch| ch.is_ascii_digit());
+    if !starts_upper(token.text) && !starts_digit {
+      continue;
+    }
+    let lower = lowercase_lookup(token.text);
+    if data.role_heads.contains(lower.as_ref())
+      || data.clause_noun_heads.contains(lower.as_ref())
+    {
+      continue;
+    }
+    return token.start;
+  }
+  suffix_start
 }
 
 fn trim_to_first_cap_after_verb(
@@ -1978,6 +2029,45 @@ mod tests {
       entities.iter().map(|entity| entity.text.as_str()).collect();
     assert!(texts.contains(&"Acme Inc."), "{texts:?}");
     assert!(texts.contains(&"Beta LLC"), "{texts:?}");
+  }
+
+  #[test]
+  fn sentence_break_clip_retrims_leading_lowercase_prose() {
+    // "Acme Inc. the supplier Beta LLC ..." — the LLC candidate's backward
+    // walk bridges "the supplier" and reaches "Acme" across the "Inc. "
+    // break. Clipping past the break used to leave the candidate anchored
+    // on the lowercase prose ("the supplier Beta LLC"); the remainder is
+    // now re-anchored at the first org-name-capable token, so only
+    // "Beta LLC" is emitted for the second sentence.
+    let data = legal_form_test_data();
+    let text = "Acme Inc. the supplier Beta LLC signed the agreement.";
+    let inc_start = text.find("Inc.").unwrap();
+    let inc_end = inc_start + "Inc.".len();
+    let llc_start = text.find("LLC").unwrap();
+    let llc_end = llc_start + "LLC".len();
+    let matches = [
+      SearchMatch::Literal {
+        pattern: 0,
+        start: u32::try_from(inc_start).unwrap(),
+        end: u32::try_from(inc_end).unwrap(),
+      },
+      SearchMatch::Literal {
+        pattern: 0,
+        start: u32::try_from(llc_start).unwrap(),
+        end: u32::try_from(llc_end).unwrap(),
+      },
+    ];
+    let slice = PatternSlice { start: 0, end: 1 };
+    let entities =
+      process_legal_form_matches(&matches, slice, text, &data).unwrap();
+    let texts: Vec<&str> =
+      entities.iter().map(|entity| entity.text.as_str()).collect();
+    assert!(texts.contains(&"Acme Inc."), "{texts:?}");
+    assert!(texts.contains(&"Beta LLC"), "{texts:?}");
+    assert!(
+      !texts.iter().any(|candidate| candidate.contains("supplier")),
+      "leading prose must be trimmed from the clipped candidate: {texts:?}"
+    );
   }
 
   fn connector_test_data() -> PreparedLegalFormData {
