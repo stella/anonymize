@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use super::common::{entity_len, is_caller_owned};
 use super::sanitize::sanitize_entities;
-use super::{DetectionSource, PipelineEntity};
+use super::{DetectionSource, PipelineEntity, SourceDetail};
 
 #[must_use]
 pub fn merge_and_dedup(entities: &[PipelineEntity]) -> Vec<PipelineEntity> {
@@ -98,21 +98,30 @@ fn should_replace(
   let candidate_caller_owned = is_caller_owned(candidate);
   let existing_caller_owned = is_caller_owned(existing);
   if candidate_caller_owned != existing_caller_owned {
-    // Caller/custom-owned spans only outrank a built-in detection when they
-    // are strictly wider than it. A wide caller span still evicts a narrow
-    // built-in fragment (the caller span was being silently overridden by
+    // Caller/custom-owned spans only outrank a built-in detection when
+    // they are at least as wide. A wide owned span still evicts a narrow
+    // built-in fragment (the owned span was being silently overridden by
     // whatever smaller thing a built-in detector happened to catch), but a
-    // narrow caller/custom fragment (e.g. a custom regex that only matches
-    // part of a date) must not splice out a wider built-in span it sits
-    // inside, or the uncovered remainder leaks. Exactly equal spans are not
-    // a containment/leak case either way, so they fall through unchanged to
-    // the rest of this function's tie-break rules (source priority, then
-    // score), preserving prior determinism for genuine ties.
-    let owned_len = if candidate_caller_owned {
-      candidate_len
+    // narrow owned fragment (e.g. a custom regex that only matches part of
+    // a date) must not splice out a wider built-in span it sits inside, or
+    // the uncovered remainder leaks.
+    //
+    // Exactly equal spans are not a leak case in either direction; the tie
+    // splits by ownership class. Custom-configured spans (custom regex /
+    // custom deny-list entries) keep their pre-existing tie win, so the
+    // user-configured entity and label survive an exact overlap instead of
+    // being silently swapped for the built-in's. Caller-supplied spans
+    // (DetectionSource::Caller) deliberately lose exact ties to the
+    // deterministic built-in detection instead — see
+    // `deterministic_detections_win_equal_span_conflicts_with_callers` —
+    // so resolution stays reproducible when a caller echoes a span the
+    // pipeline already finds on its own.
+    let owned = if candidate_caller_owned {
+      candidate
     } else {
-      existing_len
+      existing
     };
+    let owned_len = entity_len(owned);
     let other_len = if candidate_caller_owned {
       existing_len
     } else {
@@ -123,6 +132,13 @@ fn should_replace(
     }
     if owned_len < other_len {
       return !candidate_caller_owned;
+    }
+    let owned_is_custom = matches!(
+      owned.source_detail,
+      Some(SourceDetail::CustomDenyList | SourceDetail::CustomRegex)
+    );
+    if owned_is_custom {
+      return candidate_caller_owned;
     }
   }
 

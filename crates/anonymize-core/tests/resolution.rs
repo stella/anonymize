@@ -429,6 +429,39 @@ fn narrower_custom_span_does_not_evict_wider_built_in_span() {
 }
 
 #[test]
+fn equal_custom_span_keeps_custom_ownership_over_built_in_tie() {
+  // A custom regex/deny-list span with exactly the built-in's offsets
+  // keeps winning the conflict, as it did before ownership became
+  // width-aware: the user-configured entity (and its label) must not be
+  // silently swapped for the built-in's on an exact overlap. Both orders
+  // must agree. (Caller-supplied spans deliberately lose exact ties to
+  // the deterministic built-in instead; see
+  // deterministic_detections_win_equal_span_conflicts_with_callers in
+  // tests/prepared.rs.)
+  let mut custom = entity(DetectionSource::Regex, 0.5, 0, 10, "person");
+  custom.source_detail = Some(SourceDetail::CustomRegex);
+  let result = merge_and_dedup(&[
+    entity(DetectionSource::Trigger, 0.99, 0, 10, "person"),
+    custom.clone(),
+  ]);
+  assert_eq!(result.len(), 1);
+  assert_eq!(
+    result.first().expect("result").source_detail,
+    Some(SourceDetail::CustomRegex)
+  );
+
+  let reversed = merge_and_dedup(&[
+    custom,
+    entity(DetectionSource::Trigger, 0.99, 0, 10, "person"),
+  ]);
+  assert_eq!(reversed.len(), 1);
+  assert_eq!(
+    reversed.first().expect("result").source_detail,
+    Some(SourceDetail::CustomRegex)
+  );
+}
+
+#[test]
 fn wide_caller_span_beats_narrow_overlapping_built_in_span() {
   let caller = entity(DetectionSource::Caller, 0.6, 0, 20, "person");
   let result = merge_and_dedup(&[
