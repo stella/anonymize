@@ -478,31 +478,25 @@ fn extract_value(
       // the end of the text, running off it is a legitimate end-of-input
       // value and is kept.
       //
-      // The scan window is extended by one character past `lookahead_end`
-      // so a delimiter sitting exactly at the window edge stays visible: a
-      // value of exactly the lookahead length whose comma/newline is the
-      // next character is complete, not clipped. If that extra character
-      // is ordinary value content instead, the scan still runs off the
-      // (extended) window and fails closed as before.
-      let scan_end = text
-        .get(lookahead_end..)
-        .and_then(|tail| tail.chars().next())
-        .map_or(lookahead_end, |ch| {
-          lookahead_end.saturating_add(ch.len_utf8())
-        });
-      let scan_text = text.get(value_start_byte..scan_end).unwrap_or(stripped);
-      let window_clipped = scan_end < text.len();
-      extract_to_next_comma(
-        scan_text,
+      // The scanner receives the full text tail and treats the window
+      // purely as a consumption limit, so every delimiter form — single
+      // characters, multi-character stop words (anchored at or straddling
+      // the edge), sentence terminators — keeps its normal lookahead even
+      // at the window boundary; see `extract_to_next_comma`.
+      let tail = text.get(value_start_byte..).unwrap_or(stripped);
+      let scan_limit = lookahead_end.saturating_sub(value_start_byte);
+      extract_to_next_comma(&ToNextCommaScanArgs {
+        value_text: tail,
+        scan_limit,
         value_start_byte,
         label,
         stop_words,
-        *max_length,
-        data.post_nominals,
-        data.sentence_terminal_currency_terms,
-      )
+        length_cap: *max_length,
+        post_nominals: data.post_nominals,
+        sentence_terminal_currency_terms: data.sentence_terminal_currency_terms,
+      })
       .and_then(|scan| {
-        if scan.hit_window_end && window_clipped && max_length.is_none() {
+        if scan.hit_window_end && max_length.is_none() {
           return None;
         }
         Some(scan.value)
@@ -541,61 +535,134 @@ fn extract_value(
 }
 
 /// A `to-next-comma` scan result: the extracted value plus whether the
-/// scan consumed the entire window without hitting any structural stop
-/// (comma, newline, bracket, sentence terminator, stop word). The caller
-/// decides whether running off the window is legitimate (end of text) or a
-/// truncation that must fail closed (clipped lookahead window).
+/// scan was truncated by the lookahead window — it reached the window
+/// limit with more text beyond and no structural delimiter (comma,
+/// newline, bracket, sentence terminator, stop word) anchored exactly at
+/// the limit. The caller fails closed on truncation for uncapped rules.
 struct ToNextCommaScan {
   value: ByteValue,
   hit_window_end: bool,
 }
 
-fn extract_to_next_comma(
-  value_text: &str,
+/// Inputs for [`extract_to_next_comma`].
+struct ToNextCommaScanArgs<'a> {
+  /// The full text tail from the value start — deliberately *not* clipped
+  /// to the lookahead window, so every delimiter check keeps its normal
+  /// lookahead (and one byte of look-behind for stop-word boundaries) even
+  /// at the window edge.
+  value_text: &'a str,
+  /// Maximum bytes of `value_text` the value may consume (the lookahead
+  /// window). Delimiter checks may read past it; the value itself may only
+  /// exceed it by an in-flight skip (decimal comma, post-nominal), which
+  /// then still counts as window truncation when more text follows.
+  scan_limit: usize,
   value_start_byte: usize,
+  label: &'a str,
+  stop_words: &'a [String],
+  length_cap: Option<usize>,
+  post_nominals: &'a [String],
+  sentence_terminal_currency_terms: &'a [String],
+}
+
+/// One scan decision at a byte position: end the value before this
+/// position, or advance by a number of bytes. `None` means the position is
+/// past the end of the text.
+enum ScanStep {
+  Stop,
+  Advance(usize),
+}
+
+fn scan_step(
+  value_text: &str,
+  end: usize,
   label: &str,
   stop_words: &[String],
-  length_cap: Option<usize>,
   post_nominals: &[String],
   sentence_terminal_currency_terms: &[String],
-) -> Option<ToNextCommaScan> {
-  let mut end = 0;
-  while end < value_text.len() {
-    let Some((ch, len)) = char_at_byte(value_text, end) else {
-      break;
-    };
-    if matches!(ch, '\n' | '(' | ')' | '[' | ']' | '\t' | ';') {
-      break;
+) -> Option<ScanStep> {
+  let (ch, len) = char_at_byte(value_text, end)?;
+  // '\r' stops alongside '\n': mid-text a CR is either followed by an LF
+  // (which stopped anyway, with the CR trimmed as trailing whitespace) or
+  // is itself a legacy line break; treating it as a stop keeps a CRLF at
+  // the window edge from looking like ordinary clipped content.
+  if matches!(ch, '\n' | '\r' | '(' | ')' | '[' | ']' | '\t' | ';') {
+    return Some(ScanStep::Stop);
+  }
+  if ch == '.'
+    && is_sentence_terminator(value_text, end, sentence_terminal_currency_terms)
+  {
+    return Some(ScanStep::Stop);
+  }
+  if hits_stop_word(value_text, end, stop_words) {
+    return Some(ScanStep::Stop);
+  }
+  if ch == ',' {
+    let after = value_text.get(end..).unwrap_or_default();
+    if is_decimal_comma(after) {
+      return Some(ScanStep::Advance(len));
     }
-    if ch == '.'
-      && is_sentence_terminator(
+    if label == "person"
+      && let Some(skip) = post_nominal_len(after, post_nominals)
+    {
+      return Some(ScanStep::Advance(skip));
+    }
+    return Some(ScanStep::Stop);
+  }
+  Some(ScanStep::Advance(len))
+}
+
+fn extract_to_next_comma(
+  args: &ToNextCommaScanArgs<'_>,
+) -> Option<ToNextCommaScan> {
+  let ToNextCommaScanArgs {
+    value_text,
+    scan_limit,
+    value_start_byte,
+    label,
+    stop_words,
+    length_cap,
+    post_nominals,
+    sentence_terminal_currency_terms,
+  } = *args;
+  let limit = scan_limit.min(value_text.len());
+  let mut end = 0;
+  let mut stopped = false;
+  while end < limit {
+    match scan_step(
+      value_text,
+      end,
+      label,
+      stop_words,
+      post_nominals,
+      sentence_terminal_currency_terms,
+    ) {
+      None => break,
+      Some(ScanStep::Stop) => {
+        stopped = true;
+        break;
+      }
+      Some(ScanStep::Advance(step)) => {
+        end = end.saturating_add(step.max(1));
+      }
+    }
+  }
+  // Reaching the limit is only truncation when text continues past the
+  // scan position and no structural delimiter is anchored exactly there.
+  // The same `scan_step` used inside the loop decides, so every delimiter
+  // form behaves identically at the edge and mid-window.
+  let hit_window_end = !stopped
+    && end < value_text.len()
+    && !matches!(
+      scan_step(
         value_text,
         end,
+        label,
+        stop_words,
+        post_nominals,
         sentence_terminal_currency_terms,
-      )
-    {
-      break;
-    }
-    if hits_stop_word(value_text, end, stop_words) {
-      break;
-    }
-    if ch == ',' {
-      let after = value_text.get(end..).unwrap_or_default();
-      if is_decimal_comma(after) {
-        end = end.saturating_add(len);
-        continue;
-      }
-      if label == "person"
-        && let Some(skip) = post_nominal_len(after, post_nominals)
-      {
-        end = end.saturating_add(skip);
-        continue;
-      }
-      break;
-    }
-    end = end.saturating_add(len);
-  }
-  let hit_window_end = end >= value_text.len();
+      ),
+      Some(ScanStep::Stop)
+    );
   if let Some(cap) = length_cap
     && prefix_char_count(value_text, end) > cap
   {
@@ -2014,12 +2081,18 @@ mod tests {
   }
 
   fn uncapped_to_next_comma_data() -> PreparedTriggerData {
+    uncapped_to_next_comma_data_with_stops(Vec::new())
+  }
+
+  fn uncapped_to_next_comma_data_with_stops(
+    stop_words: Vec<String>,
+  ) -> PreparedTriggerData {
     PreparedTriggerData::new(TriggerData {
       rules: vec![TriggerRule {
         trigger: String::from("Address"),
         label: String::from("organization"),
         strategy: TriggerStrategy::ToNextComma {
-          stop_words: Vec::new(),
+          stop_words,
           max_length: None,
         },
         validations: vec![TriggerValidation::MinLength(3)],
@@ -2105,6 +2178,85 @@ mod tests {
       texts,
       vec![exact],
       "a complete value whose delimiter sits exactly at the window edge must be kept"
+    );
+  }
+
+  #[test]
+  fn uncapped_to_next_comma_keeps_value_with_stop_word_at_window_edge() {
+    // A multi-character stop word ("oddíl") anchored exactly at the window
+    // edge must end the value the same way it would mid-window: the value
+    // is complete, not clipped. The scanner sees the full text tail, so
+    // the stop word (and its trailing word boundary) stays visible.
+    let data =
+      uncapped_to_next_comma_data_with_stops(vec![String::from("oddíl")]);
+    // ": " consumes two window units and the separating space one more, so
+    // the stop word starts exactly at LINE_TRIGGER_LOOKAHEAD units past
+    // the trigger end.
+    let value = "A".repeat(LINE_TRIGGER_LOOKAHEAD.saturating_sub(3));
+    let text = format!("Address: {value} oddíl B");
+
+    let texts = run_single_trigger(&text, &data);
+
+    assert_eq!(
+      texts,
+      vec![value],
+      "a stop word anchored at the window edge must complete the value"
+    );
+  }
+
+  #[test]
+  fn uncapped_to_next_comma_keeps_value_with_stop_word_straddling_edge() {
+    // A stop word that begins inside the window but extends past the edge
+    // must also be recognized: a window-clipped slice would hide its tail
+    // ("od|díl"), miss the match, and wrongly report the scan as clipped.
+    let data =
+      uncapped_to_next_comma_data_with_stops(vec![String::from("oddíl")]);
+    // The stop word starts two characters before the window edge.
+    let value = "A".repeat(LINE_TRIGGER_LOOKAHEAD.saturating_sub(5));
+    let text = format!("Address: {value} oddíl B, next line");
+
+    let texts = run_single_trigger(&text, &data);
+
+    assert_eq!(
+      texts,
+      vec![value],
+      "a stop word straddling the window edge must complete the value"
+    );
+  }
+
+  #[test]
+  fn uncapped_to_next_comma_keeps_value_with_crlf_at_window_edge() {
+    // A CRLF line break at the window edge is a delimiter, not clipped
+    // content: '\r' stops the scan exactly like '\n'.
+    let data = uncapped_to_next_comma_data();
+    let value = "A".repeat(LINE_TRIGGER_LOOKAHEAD.saturating_sub(2));
+    let text = format!("Address: {value}\r\nnext line");
+
+    let texts = run_single_trigger(&text, &data);
+
+    assert_eq!(
+      texts,
+      vec![value],
+      "a CRLF at the window edge must complete the value"
+    );
+  }
+
+  #[test]
+  fn uncapped_to_next_comma_rejects_multi_unit_char_crossing_the_edge() {
+    // A surrogate-pair character whose two UTF-16 units would straddle the
+    // window limit pushes the limit to the char boundary before it; the
+    // value genuinely continues past the window, so the scan must fail
+    // closed — without panicking on a mid-character slice.
+    let data = uncapped_to_next_comma_data();
+    let value = "A".repeat(LINE_TRIGGER_LOOKAHEAD.saturating_sub(3));
+    let text = format!("Address: {value}\u{1F600}BBBB, next line");
+
+    let texts = run_single_trigger(&text, &data);
+
+    assert_eq!(
+      texts,
+      Vec::<String>::new(),
+      "a value continuing through the edge with a multi-unit char must fail closed"
     );
   }
 
