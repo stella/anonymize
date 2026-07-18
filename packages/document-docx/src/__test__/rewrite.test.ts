@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { strToU8, unzipSync, zipSync } from "fflate";
 
 import {
+  DOCX_ENTRY_MAX_BYTES,
   DocxRewriteError,
   extractDocxText,
   rewriteDocxText,
@@ -147,6 +148,24 @@ describe("rewriteDocxText", () => {
         rewriteForFirstBlock(archive, [{ start: 1, end: 2, replacement: "x" }]),
       ]),
     ).toThrow("UTF-16 boundaries");
+  });
+
+  test("budgets replacement text by its escaped size, not its raw size", () => {
+    // rewritePartXml expands "&" to "&amp;" (5 bytes) before materializing
+    // the patched XML, so the budgets must count post-escape bytes: a
+    // replacement whose raw size fits comfortably under the entry budget can
+    // still materialize far past it once escaped.
+    const archive = docx("<w:p><w:r><w:t>Alice</w:t></w:r></w:p>");
+    const ampersands = "&".repeat(Math.ceil(DOCX_ENTRY_MAX_BYTES / 5) + 1);
+    expect(() =>
+      rewriteDocxText(archive, [
+        rewriteForFirstBlock(archive, [
+          { start: 0, end: 5, replacement: ampersands },
+        ]),
+      ]),
+    ).toThrow(
+      `DOCX rewrite replacement text for a single part must not exceed ${DOCX_ENTRY_MAX_BYTES} aggregate escaped UTF-8 bytes`,
+    );
   });
 
   test("returns an exact archive copy for an empty rewrite plan", () => {
