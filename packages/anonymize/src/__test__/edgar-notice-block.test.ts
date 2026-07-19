@@ -1,8 +1,11 @@
 /**
- * Regressions from an EDGAR EX-10 registration-rights agreement
- * (Jasper Therapeutics, filed 2026-07-17): notice-block counsel
- * names, "represented by Shares" person FPs, and jurisdiction
- * soft-wrap across a single line break.
+ * Regressions from EDGAR EX-10 material contracts:
+ * - Jasper Therapeutics registration-rights (2026-07-17): counsel
+ *   notice-block names, "represented by Shares" person FPs, and
+ *   jurisdiction soft-wrap across a single line break.
+ * - Cadrenal Therapeutics separation agreement (2026-07-17):
+ *   notice-paren person + email, generational suffix vs city
+ *   district, and Dodd-Frank statute person FP.
  */
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
@@ -97,6 +100,60 @@ ProjectComplement-DLACore@us.dlapiper.com`;
     expect(
       entities.some(
         (entity) => entity.label === "address" && entity.text === "York",
+      ),
+    ).toBe(false);
+  });
+
+  test("notice-paren contact name before title and email is a person", async () => {
+    const text = `You may revoke this Agreement by giving notice in writing
+to the Company (Quang Pham, Chief Executive Officer, quang.pham@cadrenal.com)
+by 5:00 p.m. ET on the seventh day.`;
+    const entities = await detect(text);
+    expect(
+      entities.some(
+        (entity) => entity.label === "person" && entity.text === "Quang Pham",
+      ),
+    ).toBe(true);
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "email address" &&
+          entity.text === "quang.pham@cadrenal.com",
+      ),
+    ).toBe(true);
+  });
+
+  test("generational suffix is not a city district after a person prefix", async () => {
+    const text =
+      "the “Company”), and James J. Ferguson III (hereinafter referred to as “you”)";
+    const entities = await detect(text);
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "person" &&
+          (entity.text === "James J. Ferguson III" ||
+            entity.text === "James J. Ferguson"),
+      ),
+    ).toBe(true);
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "address" && entity.text === "Ferguson III",
+      ),
+    ).toBe(false);
+  });
+
+  test("Dodd-Frank Wall Street Reform is not a person", async () => {
+    const text = `claims that you may have under the Dodd-Frank Wall Street
+Reform and Consumer Protection Act.`;
+    const entities = await detect(text);
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "person" &&
+          (entity.text === "Frank Wall Street" ||
+            entity.text === "Frank" ||
+            entity.text.includes("Wall Street")),
       ),
     ).toBe(false);
   });

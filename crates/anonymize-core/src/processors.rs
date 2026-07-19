@@ -1837,6 +1837,8 @@ fn extend_person_name(
     let lower = stripped.to_lowercase();
     if filters.stopwords.contains(&lower)
       || filters.person_stopwords.contains(&lower)
+      || filters.person_trailing_nouns.contains(&lower)
+      || filters.street_types.contains(&lower)
     {
       break;
     }
@@ -2118,9 +2120,14 @@ fn extend_city_districts(
       continue;
     }
 
-    if let Some(suffix) =
-      match_district_suffix(slice_from(full_text, offsets, entity.end)?)
-    {
+    // City lists overlap surnames (e.g. US city "Ferguson"). Do not treat
+    // generational Roman numerals after a personal-name prefix as districts.
+    let before = offsets.slice(0, entity.start)?;
+    let allow_roman_district = !has_personal_name_prefix(before);
+    if let Some(suffix) = match_district_suffix(
+      slice_from(full_text, offsets, entity.end)?,
+      allow_roman_district,
+    ) {
       entity.end = entity.end.saturating_add(byte_len(suffix));
       entity.text = offsets.slice(entity.start, entity.end)?;
     }
@@ -2155,9 +2162,15 @@ fn extend_city_districts(
   Ok(())
 }
 
-fn match_district_suffix(after: &str) -> Option<&str> {
+fn match_district_suffix(after: &str, allow_roman: bool) -> Option<&str> {
   let rest = after.strip_prefix(' ')?;
-  let suffix = numeric_district(rest).or_else(|| roman_district(rest))?;
+  let suffix = numeric_district(rest).or_else(|| {
+    if allow_roman {
+      roman_district(rest)
+    } else {
+      None
+    }
+  })?;
   let end = ' '.len_utf8().saturating_add(suffix.len());
   let next = after.get(end..).and_then(|tail| tail.chars().next());
   next
@@ -2181,6 +2194,52 @@ fn roman_district(text: &str) -> Option<&str> {
   roman_districts()
     .iter()
     .find_map(|roman| text.starts_with(roman).then_some(*roman))
+}
+
+/// True when `before` ends with a given name and optional middle initials,
+/// so a following city-list hit is likely a surname rather than a bare city.
+fn has_personal_name_prefix(before: &str) -> bool {
+  let mut rest = before.trim_end_matches(|ch: char| ch.is_whitespace());
+  loop {
+    let Some(dot_index) = rest.char_indices().next_back().and_then(|(i, ch)| {
+      (ch == '.').then_some(i)
+    }) else {
+      break;
+    };
+    if dot_index.saturating_add('.'.len_utf8()) != rest.len() {
+      break;
+    }
+    let before_dot = rest.get(..dot_index).unwrap_or_default();
+    let Some((initial_index, initial)) = before_dot.char_indices().next_back()
+    else {
+      break;
+    };
+    if !initial.is_uppercase()
+      || before_dot
+        .get(initial_index..)
+        .is_none_or(|tail| tail.chars().count() != 1)
+    {
+      break;
+    }
+    let prefix = before_dot.get(..initial_index).unwrap_or_default().trim_end();
+    if prefix.is_empty() {
+      break;
+    }
+    rest = prefix;
+  }
+
+  let Some(last_word) = rest.split_whitespace().next_back() else {
+    return false;
+  };
+  let mut chars = last_word.chars();
+  let Some(first) = chars.next() else {
+    return false;
+  };
+  first.is_uppercase()
+    && chars.any(char::is_lowercase)
+    && last_word
+      .chars()
+      .all(|ch| ch.is_alphabetic() || matches!(ch, '\'' | '’' | '-'))
 }
 
 const fn roman_districts() -> &'static [&'static str] {
@@ -2423,14 +2482,15 @@ fn custom_match_has_valid_edges(
   let previous = full_text
     .get(..start_byte)
     .and_then(|prefix| prefix.chars().next_back());
-  if previous.is_some_and(char::is_alphanumeric) {
+  // Hyphen is a compound-word glue (e.g. "Dodd-Frank"), not a token edge.
+  if previous.is_some_and(|ch| ch.is_alphanumeric() || ch == '-') {
     return Ok(false);
   }
 
   let next = full_text
     .get(end_byte..)
     .and_then(|suffix| suffix.chars().next());
-  if next.is_some_and(char::is_alphanumeric) {
+  if next.is_some_and(|ch| ch.is_alphanumeric() || ch == '-') {
     return Ok(false);
   }
 
@@ -2750,5 +2810,112 @@ mod tests {
     assert_eq!(entities.len(), 1);
     assert_eq!(entities[0].label, "person");
     assert_eq!(entities[0].text, "Jean Dupont");
+  }
+
+  #[test]
+  fn deny_list_rejects_name_fragment_after_hyphen() {
+    // "Dodd-Frank" must not emit person "Frank" (and then extend through
+    // "Wall Street") just because the hyphen is a non-alphanumeric edge.
+    let text = "under the Dodd-Frank Wall Street Reform Act.";
+    let start = u32::try_from(text.find("Frank").unwrap()).unwrap();
+    let end = start.saturating_add(5);
+    let matches = vec![SearchMatch::Literal {
+      pattern: 0,
+      start,
+      end,
+    }];
+    let data = DenyListMatchData {
+      labels: vec![vec![String::from("person")]].into(),
+      custom_labels: vec![vec![]].into(),
+      originals: vec![String::from("Frank")],
+      pattern_meta: DenyListPatternMetaSet::default(),
+      sources: vec![vec![String::from("first-name")]].into(),
+      filters: Some(DenyListFilterData::default()),
+    };
+
+    let entities = process_deny_list_matches(
+      &matches,
+      PatternSlice { start: 0, end: 1 },
+      text,
+      &data,
+    )
+    .unwrap();
+
+    assert!(entities.is_empty());
+  }
+
+  #[test]
+  fn deny_list_keeps_standalone_city_roman_district() {
+    let text = "office in Paris XV near the river";
+    let start = u32::try_from(text.find("Paris").unwrap()).unwrap();
+    let end = start.saturating_add(5);
+    let matches = vec![SearchMatch::Literal {
+      pattern: 0,
+      start,
+      end,
+    }];
+    let data = DenyListMatchData {
+      labels: vec![vec![String::from("address")]].into(),
+      custom_labels: vec![vec![]].into(),
+      originals: vec![String::from("Paris")],
+      pattern_meta: DenyListPatternMetaSet::default(),
+      sources: vec![vec![String::from("city")]].into(),
+      filters: Some(DenyListFilterData::default()),
+    };
+
+    let entities = process_deny_list_matches(
+      &matches,
+      PatternSlice { start: 0, end: 1 },
+      text,
+      &data,
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].text, "Paris XV");
+  }
+
+  #[test]
+  fn deny_list_does_not_attach_generational_roman_after_person_prefix() {
+    let text = "and James J. Ferguson III (hereinafter referred to as you)";
+    let start = u32::try_from(text.find("Ferguson").unwrap()).unwrap();
+    let end = start.saturating_add(8);
+    let matches = vec![SearchMatch::Literal {
+      pattern: 0,
+      start,
+      end,
+    }];
+    let data = DenyListMatchData {
+      labels: vec![vec![String::from("address")]].into(),
+      custom_labels: vec![vec![]].into(),
+      originals: vec![String::from("Ferguson")],
+      pattern_meta: DenyListPatternMetaSet::default(),
+      sources: vec![vec![String::from("city")]].into(),
+      filters: Some(DenyListFilterData::default()),
+    };
+
+    let entities = process_deny_list_matches(
+      &matches,
+      PatternSlice { start: 0, end: 1 },
+      text,
+      &data,
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].text, "Ferguson");
+    assert!(
+      !entities
+        .iter()
+        .any(|entity| entity.text == "Ferguson III")
+    );
+  }
+
+  #[test]
+  fn personal_name_prefix_recognizes_middle_initials() {
+    assert!(has_personal_name_prefix("and James J. "));
+    assert!(has_personal_name_prefix("James\nJ. "));
+    assert!(!has_personal_name_prefix("office in Paris "));
+    assert!(!has_personal_name_prefix(""));
   }
 }
