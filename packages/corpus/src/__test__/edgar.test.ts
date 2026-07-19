@@ -2,10 +2,51 @@ import { describe, expect, test } from "bun:test";
 
 import {
   buildDocumentUrl,
+  buildSearchUrl,
   isMaterialContract,
   isSupportedDocumentFile,
   parseHit,
 } from "../edgar";
+
+describe("buildSearchUrl", () => {
+  test("adds an inclusive custom filing-date range", () => {
+    const url = new URL(
+      buildSearchUrl({
+        query: "employment agreement",
+        forms: "8-K",
+        from: 10,
+        dateRange: { startDate: "2026-07-17", endDate: "2026-07-19" },
+      }),
+    );
+
+    expect(url.origin + url.pathname).toBe(
+      "https://efts.sec.gov/LATEST/search-index",
+    );
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      q: '"employment agreement"',
+      forms: "8-K",
+      from: "10",
+      dateRange: "custom",
+      startdt: "2026-07-17",
+      enddt: "2026-07-19",
+    });
+  });
+
+  test("omits date parameters when no range is provided", () => {
+    const url = new URL(
+      buildSearchUrl({
+        query: "lease agreement",
+        forms: "8-K",
+        from: 0,
+        dateRange: undefined,
+      }),
+    );
+
+    expect(url.searchParams.has("dateRange")).toBe(false);
+    expect(url.searchParams.has("startdt")).toBe(false);
+    expect(url.searchParams.has("enddt")).toBe(false);
+  });
+});
 
 describe("isMaterialContract", () => {
   test("accepts EX-10 variants", () => {

@@ -1,3 +1,5 @@
+import type { DateRange } from "./options";
+
 const EFTS_SEARCH_URL = "https://efts.sec.gov/LATEST/search-index";
 const EDGAR_ARCHIVES_URL = "https://www.sec.gov/Archives/edgar/data";
 
@@ -85,10 +87,35 @@ export type EdgarClient = {
     query: string;
     forms: string;
     pages: number;
+    dateRange: DateRange | undefined;
   }) => Promise<EdgarDocumentRef[]>;
   fetchDocument: (ref: EdgarDocumentRef) => Promise<string>;
   /** Fetch a raw document body by URL (used by manifest refill). */
   fetchUrl: (url: string) => Promise<string>;
+};
+
+export const buildSearchUrl = ({
+  query,
+  forms,
+  from,
+  dateRange,
+}: {
+  query: string;
+  forms: string;
+  from: number;
+  dateRange: DateRange | undefined;
+}): string => {
+  const params = new URLSearchParams({
+    q: `"${query}"`,
+    forms,
+    from: String(from),
+  });
+  if (dateRange) {
+    params.set("dateRange", "custom");
+    params.set("startdt", dateRange.startDate);
+    params.set("enddt", dateRange.endDate);
+  }
+  return `${EFTS_SEARCH_URL}?${params.toString()}`;
 };
 
 /**
@@ -143,7 +170,7 @@ export const createEdgarClient = ({
   };
 
   return {
-    searchMaterialContracts: async ({ query, forms, pages }) => {
+    searchMaterialContracts: async ({ query, forms, pages, dateRange }) => {
       const refs: EdgarDocumentRef[] = [];
       // EFTS paginates by `from` and returns a fixed page regardless of any
       // size hint, so advance the offset by the hits actually returned rather
@@ -152,13 +179,8 @@ export const createEdgarClient = ({
       // how many requests we make.
       let from = 0;
       for (let page = 0; page < pages; page += 1) {
-        const params = new URLSearchParams({
-          q: `"${query}"`,
-          forms,
-          from: String(from),
-        });
         const response = await politeFetch(
-          `${EFTS_SEARCH_URL}?${params.toString()}`,
+          buildSearchUrl({ query, forms, from, dateRange }),
         );
         // SAFETY: EFTS response shape is owned by the SEC API;
         // optional chaining below tolerates missing fields.

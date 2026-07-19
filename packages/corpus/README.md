@@ -35,9 +35,19 @@ from the repo root (turbo builds the workspace packages) before first use.
    that fail the size bounds are recorded in `skiplist.json` so the same
    oversized or stub filings are not re-downloaded on every search.
 
+   Set `EDGAR_USER_AGENT` to a descriptive identity and real monitored contact
+   address before running the fetcher:
+
    ```sh
-   EDGAR_USER_AGENT="name email@example.com" \
-     bun src/fetch.ts --query "employment agreement" --query "lease agreement" --limit 25
+   bun src/fetch.ts --query "employment agreement" --query "lease agreement" --limit 25
+   ```
+
+   Scope searches to an inclusive filing-date range with both date options. A
+   single day uses the same date for both boundaries:
+
+   ```sh
+   bun src/fetch.ts --query "employment agreement" \
+     --start-date 2026-07-17 --end-date 2026-07-17
    ```
 
    On a fresh clone `corpus/raw/` is empty (it is gitignored) while
@@ -45,10 +55,10 @@ from the repo root (turbo builds the workspace packages) before first use.
    every committed manifest entry: it re-downloads each missing document, re-runs
    extraction, and verifies the result still matches the recorded `sha256`. A
    mismatch means the extraction logic changed since the document was recorded
-   and fails loudly. `--refill` ignores `--query` and adds no new documents.
+   and fails loudly. `--refill` ignores search options and adds no new documents.
 
    ```sh
-   EDGAR_USER_AGENT="name email@example.com" bun src/fetch.ts --refill
+   bun src/fetch.ts --refill
    ```
 
 2. **Run** the rules pipeline (NER off, same configuration as
