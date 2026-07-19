@@ -706,7 +706,10 @@ fn compressed_package_parts(
 mod tests {
   #![allow(clippy::unwrap_used)]
 
-  use stella_anonymize_core::{DiagnosticStage, PreparedEngineArtifacts};
+  use stella_anonymize_core::{
+    DiagnosticStage, PatternSlice, PreparedEngineArtifacts, SearchMatch,
+    process_deny_list_matches,
+  };
 
   use super::version::{
     MAX_PREPARED_SEARCH_PACKAGE_PAYLOAD_BYTES,
@@ -749,7 +752,8 @@ mod tests {
   use crate::config::prepared_search_config_from_binding;
   use crate::error::ContractError;
   use crate::types::{
-    BindingDenyListMatchData, BindingPreparedSearchConfig, BindingSearchPattern,
+    BindingDenyListFilterData, BindingDenyListMatchData,
+    BindingPreparedSearchConfig, BindingSearchPattern,
   };
 
   #[test]
@@ -1249,6 +1253,62 @@ mod tests {
     assert!(first.short_upper_acronym);
     assert!(second.has_alphanumeric);
     assert!(!second.short_upper_acronym);
+  }
+
+  #[test]
+  fn prepared_search_core_package_preserves_compact_surname_evidence() {
+    let binding_config = BindingPreparedSearchConfig {
+      deny_list_data: Some(BindingDenyListMatchData {
+        labels: vec![
+          vec![String::from("person")],
+          vec![String::from("person")],
+        ],
+        custom_labels: vec![Vec::new(), Vec::new()],
+        originals: vec![String::from("Ctibor"), String::from("Příkladný")],
+        sources: vec![
+          vec![String::from("first-name")],
+          vec![String::from("surname")],
+        ],
+        filters: Some(BindingDenyListFilterData::default()),
+        ..BindingDenyListMatchData::default()
+      }),
+      ..BindingPreparedSearchConfig::default()
+    };
+    let config = prepared_search_config_from_binding(binding_config).unwrap();
+
+    let bytes =
+      prepared_search_core_package_to_compressed_bytes(&config, b"artifact")
+        .unwrap();
+    let package = prepared_search_core_package_from_bytes(&bytes).unwrap();
+    let data = package.config.detectors.deny_list_data.unwrap();
+
+    assert!(data.originals.is_empty());
+    assert_eq!(data.pattern_meta.len(), 2);
+
+    let entities = process_deny_list_matches(
+      &[
+        SearchMatch::Literal {
+          pattern: 0,
+          start: 0,
+          end: 6,
+        },
+        SearchMatch::Literal {
+          pattern: 1,
+          start: 7,
+          end: 19,
+        },
+      ],
+      PatternSlice { start: 0, end: 2 },
+      "Ctibor PŘÍKLADNÝ podepsal smlouvu.",
+      &data,
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(
+      entities.first().map(|entity| entity.text.as_str()),
+      Some("Ctibor PŘÍKLADNÝ")
+    );
   }
 
   #[test]

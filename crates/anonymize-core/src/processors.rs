@@ -17,6 +17,7 @@ const DENY_LIST_SOURCE: &str = "deny-list";
 const CITY_SOURCE: &str = "city";
 const FIRST_NAME_SOURCE: &str = "first-name";
 const SURNAME_SOURCE: &str = "surname";
+const CZECH_FEMININE_SURNAME_SUFFIX: &str = "ová";
 const TITLE_SOURCE: &str = "title";
 /// A deny-list entry sourced from an injected Names-category dictionary
 /// (e.g. the bundled `names/global` fallback list), as opposed to the
@@ -726,6 +727,7 @@ struct RawDenyListMatch {
   labels: Vec<String>,
   custom_labels: Vec<String>,
   has_person_name_source: bool,
+  has_surname_source: bool,
   text: String,
 }
 
@@ -845,6 +847,7 @@ pub fn process_deny_list_matches(
     &offsets,
     data,
     &mut name_hits,
+    &matches,
   )?;
   extend_city_districts(
     &mut results,
@@ -969,7 +972,12 @@ fn collect_deny_list_matches(
       Vec::new()
     };
 
-    if curated_labels.is_empty() && custom_labels.is_empty() {
+    let has_surname_source =
+      sources.iter().any(|source| source == SURNAME_SOURCE);
+    if curated_labels.is_empty()
+      && custom_labels.is_empty()
+      && !has_surname_source
+    {
       continue;
     }
 
@@ -984,6 +992,7 @@ fn collect_deny_list_matches(
           || source == SURNAME_SOURCE
           || source == NAME_DICTIONARY_SOURCE
       }),
+      has_surname_source,
       text: match_text,
     });
   }
@@ -1204,6 +1213,7 @@ fn append_person_name_hits(
   offsets: &ByteOffsets<'_>,
   data: &DenyListMatchData,
   name_hits: &mut [RawDenyListMatch],
+  evidence_hits: &[RawDenyListMatch],
 ) -> Result<()> {
   name_hits.sort_by_key(|hit| hit.start);
   let mut consumed = vec![false; name_hits.len()];
@@ -1272,7 +1282,11 @@ fn append_person_name_hits(
 
     if chain.len() == 1
       && !single_name_hit_has_context(
-        full_text, offsets, last.end, filters, data,
+        full_text,
+        offsets,
+        last.end,
+        filters,
+        evidence_hits,
       )?
     {
       continue;
@@ -1795,14 +1809,22 @@ fn single_name_hit_has_context(
   offsets: &ByteOffsets<'_>,
   end: u32,
   filters: &DenyListFilterData,
-  data: &DenyListMatchData,
+  evidence_hits: &[RawDenyListMatch],
 ) -> Result<bool> {
   let tail = slice_from(full_text, offsets, end)?;
   let rest = tail.trim_start();
+  let whitespace_bytes = tail.len().saturating_sub(rest.len());
+  let next_start = end.saturating_add(
+    tail
+      .get(..whitespace_bytes)
+      .map(byte_len)
+      .unwrap_or_default(),
+  );
   let next_word = rest
     .chars()
     .take_while(|ch| ch.is_alphabetic())
     .collect::<String>();
+  let next_end = next_start.saturating_add(byte_len(&next_word));
   let mut chars = next_word.chars();
   let Some(first) = chars.next() else {
     return Ok(false);
@@ -1810,11 +1832,13 @@ fn single_name_hit_has_context(
   let Some(second) = chars.next() else {
     return Ok(false);
   };
+  let remaining_is_upper = chars.all(char::is_uppercase);
   let next_is_upper = first.is_uppercase()
     && (second.is_lowercase()
       || (second.is_uppercase()
-        && chars.all(char::is_uppercase)
-        && deny_list_has_surname(data, &next_word)));
+        && remaining_is_upper
+        && deny_list_has_surname(evidence_hits, next_start, next_end))
+      || is_uppercase_czech_feminine_surname(&next_word));
   if !next_is_upper {
     return Ok(false);
   }
@@ -1826,14 +1850,19 @@ fn single_name_hit_has_context(
   )
 }
 
-fn deny_list_has_surname(data: &DenyListMatchData, word: &str) -> bool {
-  let lowered = word.to_lowercase();
-  data.originals.iter().enumerate().any(|(index, original)| {
-    original.to_lowercase() == lowered
-      && data.sources.get(index).is_some_and(|sources| {
-        sources.iter().any(|source| source == SURNAME_SOURCE)
-      })
+fn deny_list_has_surname(
+  evidence_hits: &[RawDenyListMatch],
+  start: u32,
+  end: u32,
+) -> bool {
+  evidence_hits.iter().any(|found| {
+    found.has_surname_source && found.start == start && found.end == end
   })
+}
+
+fn is_uppercase_czech_feminine_surname(word: &str) -> bool {
+  all_upper(word)
+    && word.to_lowercase().ends_with(CZECH_FEMININE_SURNAME_SUFFIX)
 }
 
 fn slice_from<'a>(
@@ -2742,13 +2771,20 @@ mod tests {
   }
 
   #[test]
-  fn deny_list_accepts_uppercase_surname_as_single_hit_context() {
-    let matches = vec![SearchMatch::Literal {
-      pattern: 0,
-      start: 0,
-      end: 6,
-    }];
-    let data = DenyListMatchData {
+  fn compacted_deny_list_accepts_uppercase_surname_as_single_hit_context() {
+    let matches = vec![
+      SearchMatch::Literal {
+        pattern: 0,
+        start: 0,
+        end: 6,
+      },
+      SearchMatch::Literal {
+        pattern: 1,
+        start: 7,
+        end: 19,
+      },
+    ];
+    let mut data = DenyListMatchData {
       labels: vec![vec![String::from("person")], vec![String::from("person")]]
         .into(),
       custom_labels: vec![vec![], vec![]].into(),
@@ -2761,6 +2797,8 @@ mod tests {
       .into(),
       filters: Some(DenyListFilterData::default()),
     };
+    data.compact_runtime_patterns();
+    assert!(data.originals.is_empty());
 
     let entities = process_deny_list_matches(
       &matches,
@@ -2776,12 +2814,113 @@ mod tests {
   }
 
   #[test]
-  fn deny_list_accepts_short_uppercase_surname_as_single_hit_context() {
+  fn compacted_deny_list_does_not_emit_uppercase_surname_standalone() {
+    let matches = vec![SearchMatch::Literal {
+      pattern: 1,
+      start: 0,
+      end: 12,
+    }];
+    let mut data = DenyListMatchData {
+      labels: vec![vec![String::from("person")], vec![String::from("person")]]
+        .into(),
+      custom_labels: vec![vec![], vec![]].into(),
+      originals: vec![String::from("Ctibor"), String::from("Příkladný")],
+      pattern_meta: DenyListPatternMetaSet::default(),
+      sources: vec![
+        vec![String::from("first-name")],
+        vec![String::from("surname")],
+      ]
+      .into(),
+      filters: Some(DenyListFilterData::default()),
+    };
+    data.compact_runtime_patterns();
+
+    let entities = process_deny_list_matches(
+      &matches,
+      PatternSlice { start: 0, end: 2 },
+      "PŘÍKLADNÝ podepsal smlouvu.",
+      &data,
+    )
+    .unwrap();
+
+    assert!(entities.is_empty());
+  }
+
+  #[test]
+  fn deny_list_accepts_uppercase_ova_surname_without_surname_evidence() {
     let matches = vec![SearchMatch::Literal {
       pattern: 0,
       start: 0,
-      end: 4,
+      end: 6,
     }];
+    let data = DenyListMatchData {
+      labels: vec![vec![String::from("person")]].into(),
+      custom_labels: vec![vec![]].into(),
+      originals: vec![String::from("Ctibor")],
+      pattern_meta: DenyListPatternMetaSet::default(),
+      sources: vec![vec![String::from("first-name")]].into(),
+      filters: Some(DenyListFilterData::default()),
+    };
+
+    let entities = process_deny_list_matches(
+      &matches,
+      PatternSlice { start: 0, end: 1 },
+      "Ctibor PŘÍKLADOVÁ podepsala smlouvu.",
+      &data,
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].label, "person");
+    assert_eq!(entities[0].text, "Ctibor PŘÍKLADOVÁ");
+  }
+
+  #[test]
+  fn deny_list_rejects_uppercase_ova_sentence_starter() {
+    let matches = vec![SearchMatch::Literal {
+      pattern: 0,
+      start: 0,
+      end: 6,
+    }];
+    let mut sentence_starters = BTreeSet::new();
+    sentence_starters.insert(String::from("příkladová"));
+    let data = DenyListMatchData {
+      labels: vec![vec![String::from("person")]].into(),
+      custom_labels: vec![vec![]].into(),
+      originals: vec![String::from("Ctibor")],
+      pattern_meta: DenyListPatternMetaSet::default(),
+      sources: vec![vec![String::from("first-name")]].into(),
+      filters: Some(DenyListFilterData {
+        sentence_starters,
+        ..DenyListFilterData::default()
+      }),
+    };
+
+    let entities = process_deny_list_matches(
+      &matches,
+      PatternSlice { start: 0, end: 1 },
+      "Ctibor PŘÍKLADOVÁ podepsala smlouvu.",
+      &data,
+    )
+    .unwrap();
+
+    assert!(entities.is_empty());
+  }
+
+  #[test]
+  fn deny_list_accepts_short_uppercase_surname_as_single_hit_context() {
+    let matches = vec![
+      SearchMatch::Literal {
+        pattern: 0,
+        start: 0,
+        end: 4,
+      },
+      SearchMatch::Literal {
+        pattern: 1,
+        start: 5,
+        end: 10,
+      },
+    ];
     let data = DenyListMatchData {
       labels: vec![vec![String::from("person")], vec![String::from("person")]]
         .into(),
@@ -2877,18 +3016,24 @@ mod tests {
       start: 0,
       end: 4,
     }];
-    let data = DenyListMatchData {
-      labels: vec![vec![String::from("person")]].into(),
-      custom_labels: vec![vec![]].into(),
-      originals: vec![String::from("Mark")],
+    let mut data = DenyListMatchData {
+      labels: vec![vec![String::from("person")], vec![String::from("person")]]
+        .into(),
+      custom_labels: vec![vec![], vec![]].into(),
+      originals: vec![String::from("Mark"), String::from("Smith")],
       pattern_meta: DenyListPatternMetaSet::default(),
-      sources: vec![vec![String::from("first-name")]].into(),
+      sources: vec![
+        vec![String::from("first-name")],
+        vec![String::from("surname")],
+      ]
+      .into(),
       filters: Some(DenyListFilterData::default()),
     };
+    data.compact_runtime_patterns();
 
     let entities = process_deny_list_matches(
       &matches,
-      PatternSlice { start: 0, end: 1 },
+      PatternSlice { start: 0, end: 2 },
       "Mark VAT as exempt.",
       &data,
     )
