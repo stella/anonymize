@@ -1269,9 +1269,10 @@ fn append_person_name_hits(
     let extended =
       extend_person_name(full_text, offsets, first.start, last.end, filters)?;
     let score = if chain.len() >= 2 { 0.9 } else { 0.5 };
-    let context_ok = chain.len() != 1 || extended.end > last.end;
 
-    if !context_ok {
+    if chain.len() == 1
+      && !single_name_hit_has_context(full_text, offsets, last.end, filters)?
+    {
       continue;
     }
 
@@ -1787,6 +1788,41 @@ fn consume_horizontal_space(
   (consumed >= min).then(|| text.get(byte..)).flatten()
 }
 
+fn single_name_hit_has_context(
+  full_text: &str,
+  offsets: &ByteOffsets<'_>,
+  end: u32,
+  filters: &DenyListFilterData,
+) -> Result<bool> {
+  let tail = slice_from(full_text, offsets, end)?;
+  let rest = tail.trim_start();
+  let next_word = rest
+    .chars()
+    .take_while(|ch| ch.is_alphabetic())
+    .collect::<String>();
+  let mut chars = next_word.chars();
+  let Some(first) = chars.next() else {
+    return Ok(false);
+  };
+  let Some(second) = chars.next() else {
+    return Ok(false);
+  };
+  let next_is_upper = first.is_uppercase()
+    && (second.is_lowercase()
+      || (second.is_uppercase()
+        && chars.next().is_some_and(char::is_uppercase)
+        && chars.all(char::is_uppercase)));
+  if !next_is_upper {
+    return Ok(false);
+  }
+
+  Ok(
+    !filters
+      .sentence_starters
+      .contains(&next_word.to_lowercase()),
+  )
+}
+
 fn slice_from<'a>(
   full_text: &'a str,
   offsets: &ByteOffsets<'_>,
@@ -1832,7 +1868,6 @@ fn extend_person_name(
     let lower = stripped.to_lowercase();
     if filters.stopwords.contains(&lower)
       || filters.person_stopwords.contains(&lower)
-      || filters.sentence_starters.contains(&lower)
     {
       break;
     }
@@ -2720,6 +2755,67 @@ mod tests {
     assert_eq!(entities.len(), 1);
     assert_eq!(entities[0].label, "person");
     assert_eq!(entities[0].text, "Ctibor PŘÍKLADNÝ");
+  }
+
+  #[test]
+  fn deny_list_keeps_single_name_when_context_is_not_extended() {
+    let matches = vec![SearchMatch::Literal {
+      pattern: 0,
+      start: 0,
+      end: 7,
+    }];
+    let mut stopwords = BTreeSet::new();
+    stopwords.insert(String::from("director"));
+    let data = DenyListMatchData {
+      labels: vec![vec![String::from("person")]].into(),
+      custom_labels: vec![vec![]].into(),
+      originals: vec![String::from("Michael")],
+      pattern_meta: DenyListPatternMetaSet::default(),
+      sources: vec![vec![String::from("first-name")]].into(),
+      filters: Some(DenyListFilterData {
+        stopwords,
+        ..DenyListFilterData::default()
+      }),
+    };
+
+    let entities = process_deny_list_matches(
+      &matches,
+      PatternSlice { start: 0, end: 1 },
+      "Michael Director signed the agreement.",
+      &data,
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].label, "person");
+    assert_eq!(entities[0].text, "Michael");
+  }
+
+  #[test]
+  fn deny_list_rejects_short_uppercase_acronym_as_single_hit_context() {
+    let matches = vec![SearchMatch::Literal {
+      pattern: 0,
+      start: 0,
+      end: 4,
+    }];
+    let data = DenyListMatchData {
+      labels: vec![vec![String::from("person")]].into(),
+      custom_labels: vec![vec![]].into(),
+      originals: vec![String::from("Rady")],
+      pattern_meta: DenyListPatternMetaSet::default(),
+      sources: vec![vec![String::from("first-name")]].into(),
+      filters: Some(DenyListFilterData::default()),
+    };
+
+    let entities = process_deny_list_matches(
+      &matches,
+      PatternSlice { start: 0, end: 1 },
+      "Rady EU adopted the regulation.",
+      &data,
+    )
+    .unwrap();
+
+    assert!(entities.is_empty());
   }
 
   #[test]
