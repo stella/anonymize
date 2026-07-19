@@ -727,7 +727,7 @@ struct RawDenyListMatch {
   labels: Vec<String>,
   custom_labels: Vec<String>,
   has_person_name_source: bool,
-  has_surname_source: bool,
+  has_surname_evidence: bool,
   text: String,
 }
 
@@ -952,11 +952,14 @@ fn collect_deny_list_matches(
       continue;
     }
 
+    let has_surname_source =
+      sources.iter().any(|source| source == SURNAME_SOURCE);
+    let mut keep_surname_evidence = false;
     let curated_labels = if has_curated_source(sources) {
       let filters = data.filters.as_ref().ok_or(Error::MissingStaticData {
         field: "deny_list.filters",
       })?;
-      curated_labels_for_match(&CuratedDenyListMatch {
+      let curated_match = CuratedDenyListMatch {
         full_text,
         offsets,
         start: found.start(),
@@ -967,16 +970,17 @@ fn collect_deny_list_matches(
         custom_pattern_labels: &custom_pattern_labels,
         custom_edges_are_valid,
         filters,
-      })?
+      };
+      keep_surname_evidence = has_surname_source
+        && uppercase_surname_evidence_is_allowed(&curated_match)?;
+      curated_labels_for_match(&curated_match)?
     } else {
       Vec::new()
     };
 
-    let has_surname_source =
-      sources.iter().any(|source| source == SURNAME_SOURCE);
     if curated_labels.is_empty()
       && custom_labels.is_empty()
-      && !has_surname_source
+      && !keep_surname_evidence
     {
       continue;
     }
@@ -992,7 +996,7 @@ fn collect_deny_list_matches(
           || source == SURNAME_SOURCE
           || source == NAME_DICTIONARY_SOURCE
       }),
-      has_surname_source,
+      has_surname_evidence: keep_surname_evidence,
       text: match_text,
     });
   }
@@ -1079,6 +1083,43 @@ fn curated_labels_for_match(
       })
       .map(String::from)
       .collect(),
+  )
+}
+
+fn uppercase_surname_evidence_is_allowed(
+  args: &CuratedDenyListMatch<'_>,
+) -> Result<bool> {
+  let acronym_matches_acronym =
+    !args.pattern_meta.short_upper_acronym || all_upper(args.match_text);
+  let source_char = char_at(args.full_text, args.offsets, args.start)?;
+  if !all_upper(args.match_text)
+    || !source_char.is_some_and(char::is_uppercase)
+    || args.filters.stopwords.contains(args.keyword)
+    || args.filters.allow_list.contains(args.keyword)
+    || !acronym_matches_acronym
+    || !args.custom_edges_are_valid
+    || is_dotted_acronym_suffix_collision(
+      args.full_text,
+      args.offsets,
+      args.start,
+      args.match_text,
+    )?
+  {
+    return Ok(false);
+  }
+
+  let end = args.start.saturating_add(byte_len(args.match_text));
+  if !has_hyphen_compound_edge(args.full_text, args.offsets, args.start, end)? {
+    return Ok(true);
+  }
+
+  has_supported_hyphenated_person_edge(
+    args.full_text,
+    args.offsets,
+    args.start,
+    end,
+    args.keyword,
+    args.filters,
   )
 }
 
@@ -1290,15 +1331,26 @@ fn append_person_name_hits(
     if chain.len() == 1 && single_name_context == SingleNameContext::None {
       continue;
     }
-    let extended =
+    let mut extended =
       extend_person_name(full_text, offsets, first.start, last.end, filters)?;
     let score = if chain.len() >= 2
-      || single_name_context == SingleNameContext::KnownUppercaseSurname
-    {
+      || matches!(
+        single_name_context,
+        SingleNameContext::KnownUppercaseSurname { .. }
+      ) {
       0.9
     } else {
       0.5
     };
+    if let SingleNameContext::KnownUppercaseSurname { end } =
+      single_name_context
+      && end > extended.end
+    {
+      extended = ExtendedName {
+        end,
+        text: offsets.slice(first.start, end)?,
+      };
+    }
 
     results.push(PipelineEntity::detected(
       first.start,
@@ -1817,7 +1869,7 @@ enum SingleNameContext {
   None,
   Capitalized,
   UppercaseShape,
-  KnownUppercaseSurname,
+  KnownUppercaseSurname { end: u32 },
 }
 
 fn single_name_hit_context(
@@ -1830,6 +1882,7 @@ fn single_name_hit_context(
   let tail = slice_from(full_text, offsets, end)?;
   let rest = tail.trim_start();
   let whitespace_bytes = tail.len().saturating_sub(rest.len());
+  let separator = tail.get(..whitespace_bytes).unwrap_or_default();
   let next_start = end.saturating_add(
     tail
       .get(..whitespace_bytes)
@@ -1856,19 +1909,35 @@ fn single_name_hit_context(
   {
     return Ok(SingleNameContext::None);
   }
-  if second.is_lowercase() {
+  if second.is_lowercase() && separator == " " {
     return Ok(SingleNameContext::Capitalized);
   }
   if second.is_uppercase()
     && remaining_is_upper
+    && surname_context_separator_is_supported(separator)
     && deny_list_has_surname(evidence_hits, next_start, next_end)
   {
-    return Ok(SingleNameContext::KnownUppercaseSurname);
+    return Ok(SingleNameContext::KnownUppercaseSurname { end: next_end });
   }
-  if is_uppercase_czech_feminine_surname(&next_word) {
+  if separator == " " && is_uppercase_czech_feminine_surname(&next_word) {
     return Ok(SingleNameContext::UppercaseShape);
   }
   Ok(SingleNameContext::None)
+}
+
+fn surname_context_separator_is_supported(separator: &str) -> bool {
+  let mut count = 0_usize;
+  let mut line_breaks = 0_usize;
+  for ch in separator.chars() {
+    if !ch.is_whitespace() {
+      return false;
+    }
+    count = count.saturating_add(1);
+    if ch == '\n' {
+      line_breaks = line_breaks.saturating_add(1);
+    }
+  }
+  (1..=4).contains(&count) && line_breaks <= 1
 }
 
 fn deny_list_has_surname(
@@ -1877,7 +1946,7 @@ fn deny_list_has_surname(
   end: u32,
 ) -> bool {
   evidence_hits.iter().any(|found| {
-    found.has_surname_source && found.start == start && found.end == end
+    found.has_surname_evidence && found.start == start && found.end == end
   })
 }
 
@@ -2832,6 +2901,102 @@ mod tests {
     assert_eq!(entities.len(), 1);
     assert_eq!(entities[0].label, "person");
     assert_eq!(entities[0].text, "Ctibor PŘÍKLADNÝ");
+  }
+
+  #[test]
+  fn compacted_deny_list_covers_uppercase_surname_after_ocr_whitespace() {
+    let mut data = DenyListMatchData {
+      labels: vec![vec![String::from("person")], vec![String::from("person")]]
+        .into(),
+      custom_labels: vec![vec![], vec![]].into(),
+      originals: vec![String::from("Ctibor"), String::from("Příkladný")],
+      pattern_meta: DenyListPatternMetaSet::default(),
+      sources: vec![
+        vec![String::from("first-name")],
+        vec![String::from("surname")],
+      ]
+      .into(),
+      filters: Some(DenyListFilterData::default()),
+    };
+    data.compact_runtime_patterns();
+
+    for separator in ["  ", "\t", "\n"] {
+      let text = format!("Ctibor{separator}PŘÍKLADNÝ podepsal smlouvu.");
+      let surname_start =
+        u32::try_from(text.find("PŘÍKLADNÝ").unwrap()).unwrap();
+      let matches = vec![
+        SearchMatch::Literal {
+          pattern: 0,
+          start: 0,
+          end: 6,
+        },
+        SearchMatch::Literal {
+          pattern: 1,
+          start: surname_start,
+          end: surname_start.saturating_add(byte_len("PŘÍKLADNÝ")),
+        },
+      ];
+
+      let entities = process_deny_list_matches(
+        &matches,
+        PatternSlice { start: 0, end: 2 },
+        &text,
+        &data,
+      )
+      .unwrap();
+
+      assert_eq!(entities.len(), 1, "separator {separator:?}");
+      assert_eq!(
+        entities[0].text,
+        format!("Ctibor{separator}PŘÍKLADNÝ"),
+        "separator {separator:?}"
+      );
+    }
+  }
+
+  #[test]
+  fn compacted_deny_list_does_not_use_allow_list_surname_as_context() {
+    let mut allow_list = BTreeSet::new();
+    allow_list.insert(String::from("stock"));
+    let mut data = DenyListMatchData {
+      labels: vec![vec![String::from("person")], vec![String::from("person")]]
+        .into(),
+      custom_labels: vec![vec![], vec![]].into(),
+      originals: vec![String::from("Alice"), String::from("Stock")],
+      pattern_meta: DenyListPatternMetaSet::default(),
+      sources: vec![
+        vec![String::from("first-name")],
+        vec![String::from("surname")],
+      ]
+      .into(),
+      filters: Some(DenyListFilterData {
+        allow_list,
+        ..DenyListFilterData::default()
+      }),
+    };
+    data.compact_runtime_patterns();
+    let matches = vec![
+      SearchMatch::Literal {
+        pattern: 0,
+        start: 0,
+        end: 5,
+      },
+      SearchMatch::Literal {
+        pattern: 1,
+        start: 6,
+        end: 11,
+      },
+    ];
+
+    let entities = process_deny_list_matches(
+      &matches,
+      PatternSlice { start: 0, end: 2 },
+      "Alice STOCK option",
+      &data,
+    )
+    .unwrap();
+
+    assert!(entities.is_empty());
   }
 
   #[test]
