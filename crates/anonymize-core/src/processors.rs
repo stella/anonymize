@@ -2122,8 +2122,8 @@ fn extend_city_districts(
 
     // City lists overlap surnames (e.g. US city "Ferguson"). Do not treat
     // generational Roman numerals after a personal-name prefix as districts.
-    let before = offsets.slice(0, entity.start)?;
-    let allow_roman_district = !has_personal_name_prefix(&before);
+    let name_prefix_before = offsets.slice(0, entity.start)?;
+    let allow_roman_district = !has_personal_name_prefix(&name_prefix_before);
     if let Some(suffix) = match_district_suffix(
       slice_from(full_text, offsets, entity.end)?,
       allow_roman_district,
@@ -2139,11 +2139,11 @@ fn extend_city_districts(
       entity.text = offsets.slice(entity.start, entity.end)?;
     }
 
-    let before = offsets.slice(
+    let postal_before = offsets.slice(
       offsets.floor_offset(entity.start.saturating_sub(10))?,
       entity.start,
     )?;
-    if let Some(prefix) = postal_prefix(&before) {
+    if let Some(prefix) = postal_prefix(&postal_before) {
       entity.start = entity.start.saturating_sub(byte_len(prefix));
       entity.text = offsets.slice(entity.start, entity.end)?;
     }
@@ -2200,14 +2200,11 @@ fn roman_district(text: &str) -> Option<&str> {
 /// so a following city-list hit is likely a surname rather than a bare city.
 fn has_personal_name_prefix(before: &str) -> bool {
   let mut rest = before.trim_end_matches(|ch: char| ch.is_whitespace());
-  loop {
-    let Some(dot_index) = rest
-      .char_indices()
-      .next_back()
-      .and_then(|(i, ch)| (ch == '.').then_some(i))
-    else {
-      break;
-    };
+  while let Some(dot_index) = rest
+    .char_indices()
+    .next_back()
+    .and_then(|(i, ch)| (ch == '.').then_some(i))
+  {
     if dot_index.saturating_add('.'.len_utf8()) != rest.len() {
       break;
     }
