@@ -55,7 +55,7 @@
   "scripts": {
     "build": "tsdown",
     "prepublishOnly": "bun run build",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "bun ../../scripts/tsc-native.ts --noEmit",
     "validate:triggers": "bun run scripts/validate-triggers.ts",
     "check:mirror": "node scripts/check-mirror.mjs",
     "lint": "bun run validate:triggers && bun run check:mirror",
@@ -64,6 +64,6 @@
   "devDependencies": {
     "stopwords-iso": "1.1.0",
     "tsdown": "^0.22.7",
-    "typescript": "^7.0.2"
+    "typescript": "^6.0.3"
   }
 }

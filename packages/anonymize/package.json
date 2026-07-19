@@ -62,7 +62,7 @@
   "scripts": {
     "build": "bun run build:native-wasm && tsdown && bun scripts/build-native-node.mjs && bun run build:wasm-assets",
     "prepublishOnly": "bun run build",
-    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.test.json && tsc --noEmit -p tsconfig.wasm.json",
+    "typecheck": "bun ../../scripts/tsc-native.ts --noEmit -p tsconfig.json && bun ../../scripts/tsc-native.ts --noEmit -p tsconfig.test.json && bun ../../scripts/tsc-native.ts --noEmit -p tsconfig.wasm.json",
     "test": "bun test --timeout 15000",
     "test:fast": "bun run test src/__test__/*.test.ts",
     "test:native-fixtures": "ANONYMIZE_TEST_SLOW_NATIVE_FIXTURE_PARITY=1 bun test --timeout 600000 src/__test__/python-parity.test.ts",
@@ -101,7 +101,7 @@
     "fast-check": "^4.9.0",
     "puppeteer-core": "25.3.0",
     "tsdown": "^0.22.7",
-    "typescript": "^7.0.2",
+    "typescript": "^6.0.3",
     "vite": "^8.1.4"
   }
 }
