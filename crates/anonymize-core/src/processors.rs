@@ -1810,7 +1810,7 @@ fn single_name_hit_has_context(
   let next_is_upper = first.is_uppercase()
     && (second.is_lowercase()
       || (second.is_uppercase()
-        && chars.next().is_some_and(char::is_uppercase)
+        && next_word.chars().count() >= 5
         && chars.all(char::is_uppercase)));
   if !next_is_upper {
     return Ok(false);
@@ -2811,6 +2811,33 @@ mod tests {
       &matches,
       PatternSlice { start: 0, end: 1 },
       "Rady EU adopted the regulation.",
+      &data,
+    )
+    .unwrap();
+
+    assert!(entities.is_empty());
+  }
+
+  #[test]
+  fn deny_list_rejects_uppercase_acronym_as_single_hit_context() {
+    let matches = vec![SearchMatch::Literal {
+      pattern: 0,
+      start: 0,
+      end: 4,
+    }];
+    let data = DenyListMatchData {
+      labels: vec![vec![String::from("person")]].into(),
+      custom_labels: vec![vec![]].into(),
+      originals: vec![String::from("Mark")],
+      pattern_meta: DenyListPatternMetaSet::default(),
+      sources: vec![vec![String::from("first-name")]].into(),
+      filters: Some(DenyListFilterData::default()),
+    };
+
+    let entities = process_deny_list_matches(
+      &matches,
+      PatternSlice { start: 0, end: 1 },
+      "Mark VAT as exempt.",
       &data,
     )
     .unwrap();
