@@ -2133,6 +2133,8 @@ fn extend_city_districts(
   offsets: &ByteOffsets<'_>,
   filters: Option<&DenyListFilterData>,
 ) -> Result<()> {
+  const PERSONAL_NAME_PREFIX_WINDOW: u32 = 64;
+
   for entity in entities {
     if entity.label != ADDRESS_LABEL
       || entity.source_detail == Some(SourceDetail::CustomDenyList)
@@ -2140,16 +2142,25 @@ fn extend_city_districts(
       continue;
     }
 
-    // City lists overlap surnames (e.g. US city "Ferguson"). Do not treat
-    // generational Roman numerals after a personal-name prefix as districts.
-    let name_prefix_before = offsets.slice(0, entity.start)?;
-    let allow_roman_district = filters.is_none_or(|filters| {
-      !has_personal_name_prefix(&name_prefix_before, filters)
-    });
-    if let Some(suffix) = match_district_suffix(
-      slice_from(full_text, offsets, entity.end)?,
-      allow_roman_district,
-    ) {
+    let after = slice_from(full_text, offsets, entity.end)?;
+    let mut district_suffix = match_district_suffix(after, false);
+    if district_suffix.is_none()
+      && let Some(roman_suffix) = match_district_suffix(after, true)
+    {
+      // City lists overlap surnames (e.g. US city "Ferguson"). Do not treat
+      // generational Roman numerals after a personal-name prefix as districts.
+      let prefix_start = offsets.floor_offset(
+        entity.start.saturating_sub(PERSONAL_NAME_PREFIX_WINDOW),
+      )?;
+      let name_prefix_before = offsets.slice(prefix_start, entity.start)?;
+      let allow_roman_district = filters.is_none_or(|filters| {
+        !has_personal_name_prefix(&name_prefix_before, filters)
+      });
+      if allow_roman_district {
+        district_suffix = Some(roman_suffix);
+      }
+    }
+    if let Some(suffix) = district_suffix {
       entity.end = entity.end.saturating_add(byte_len(suffix));
       entity.text = offsets.slice(entity.start, entity.end)?;
     }
