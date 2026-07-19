@@ -8,11 +8,10 @@ use crate::processors::DenyListFilterData;
 use crate::resolution::{DetectionSource, PipelineEntity, SourceDetail};
 use crate::types::{Error, Result};
 
-const ADDRESS_LABEL: &str = "address";
-const ORGANIZATION_LABEL: &str = "organization";
-const PERSON_LABEL: &str = "person";
-const IP_ADDRESS_LABEL: &str = "ip address";
-const REGISTRATION_NUMBER_LABEL: &str = "registration number";
+use crate::labels::{
+  ADDRESS_LABEL, IP_ADDRESS_LABEL, ORGANIZATION_LABEL, PERSON_LABEL,
+  REGISTRATION_NUMBER_LABEL,
+};
 const MAX_ORGANIZATION_LENGTH: usize = 80;
 const MAX_PERSON_LENGTH: usize = 60;
 const MAX_OPEN_ENDED_ORGANIZATION_WORDS: usize = 8;

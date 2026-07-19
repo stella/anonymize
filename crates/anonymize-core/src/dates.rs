@@ -6,7 +6,7 @@ use crate::anchored::{
 use crate::resolution::{DetectionSource, PipelineEntity};
 use crate::types::Result;
 
-const DATE_LABEL: &str = "date";
+use crate::labels::DATE_LABEL;
 const DATE_SCORE: f64 = 1.0;
 
 #[derive(

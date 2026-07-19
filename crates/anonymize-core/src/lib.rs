@@ -19,6 +19,7 @@ mod diagnostics;
 pub mod exec;
 mod false_positives;
 mod hotwords;
+pub(crate) mod labels;
 mod legal_forms;
 mod money;
 mod name_corpus;

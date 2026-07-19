@@ -23,8 +23,7 @@ const TITLE_SOURCE: &str = "title";
 /// scoped `first-name`/`surname` name-corpus expansion. Carries the same
 /// person-name weight as those two sources: see [`has_person_name_source`].
 const NAME_DICTIONARY_SOURCE: &str = "name-dictionary";
-const PERSON_LABEL: &str = "person";
-const ADDRESS_LABEL: &str = "address";
+use crate::labels::{ADDRESS_LABEL, PERSON_LABEL};
 
 #[derive(
   Clone,

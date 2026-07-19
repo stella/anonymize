@@ -361,13 +361,13 @@ pub(crate) fn process_trigger_matches(
       record_trigger_rejection(&mut diagnostics, found, rule, "validation");
       continue;
     }
-    if rule.label == "phone number"
+    if rule.label == crate::labels::PHONE_NUMBER_LABEL
       && !is_plausible_phone_trigger_value(&value.text)
     {
       record_trigger_rejection(&mut diagnostics, found, rule, "phone-shape");
       continue;
     }
-    if rule.label == "phone number"
+    if rule.label == crate::labels::PHONE_NUMBER_LABEL
       && char_count(&value.text) > MAX_TRIGGER_VALUE_LEN
     {
       let delimiter_offset =
@@ -386,7 +386,7 @@ pub(crate) fn process_trigger_matches(
     };
     let mut entity_end = value.end;
     let mut entity_text = offsets.slice(entity_start, entity_end)?;
-    let mut label = if rule.label == "person"
+    let mut label = if rule.label == crate::labels::PERSON_LABEL
       && has_known_legal_form_suffix(&entity_text, &data.legal_form_suffixes)
     {
       String::from("organization")
@@ -394,7 +394,7 @@ pub(crate) fn process_trigger_matches(
       rule.label.clone()
     };
 
-    if label == "person"
+    if label == crate::labels::PERSON_LABEL
       && let Some(end) = person_name_run_end(&value.text)
       && end < value.text.len()
       && let Some(head) = value.text.get(..end)
@@ -672,7 +672,7 @@ fn scan_step(
     // captured. Blank lines still terminate: the character after the
     // newline is another newline, which is not a capitalized word.
     if ch == '\n'
-      && label == "address"
+      && label == crate::labels::ADDRESS_LABEL
       && let Some(wrapped_end) =
         take_soft_wrapped_capitalized_run(value_text, end.saturating_add(len))
     {
@@ -693,7 +693,7 @@ fn scan_step(
     if is_decimal_comma(after) {
       return Some(ScanStep::Advance(len));
     }
-    if label == "person"
+    if label == crate::labels::PERSON_LABEL
       && let Some(skip) = post_nominal_len(after, post_nominals)
     {
       return Some(ScanStep::Advance(skip));
@@ -805,7 +805,7 @@ fn extract_to_end_of_line(
       found_line_stop = true;
     }
   }
-  if label == "phone number"
+  if label == crate::labels::PHONE_NUMBER_LABEL
     && let Some(shape_end) =
       phone_shape_end(value_text.get(..end)?, phone_extension_labels)
     && shape_end < end
