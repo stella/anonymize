@@ -165,7 +165,9 @@ fn should_reject_entity(
     return Ok(true);
   }
   if let Some(filters) = filters {
-    if entity.label == PERSON_LABEL && is_single_person_stopword(text, filters)
+    if entity.label == PERSON_LABEL
+      && (is_single_rejected_token(text, &filters.person_stopwords)
+        || is_single_rejected_token(text, &filters.allow_list))
     {
       return Ok(true);
     }
@@ -365,11 +367,17 @@ fn is_short_letter_run(text: &str) -> bool {
     && letters.chars().all(char::is_alphabetic)
 }
 
-fn is_single_person_stopword(text: &str, filters: &DenyListFilterData) -> bool {
+/// True when the entity text is a single token (after punctuation trim)
+/// whose lowercase form appears in `rejected`. Used for both person
+/// stopwords and deny-list allow-list entries: allow-listed surfaces
+/// already suppress curated keyword hits, so they must not survive as
+/// single-token person triggers either (e.g. "represented by Shares of
+/// Common Stock").
+fn is_single_rejected_token(text: &str, rejected: &BTreeSet<String>) -> bool {
   let token = trim_token_punctuation(text);
   !token.is_empty()
     && !token.chars().any(char::is_whitespace)
-    && filters.person_stopwords.contains(&token.to_lowercase())
+    && rejected.contains(&token.to_lowercase())
 }
 
 fn ends_in_person_trailing_noun(
@@ -1570,6 +1578,27 @@ mod tests {
     let entities = filter_entity_false_positives(
       vec![entity("Tato", "Tato", PERSON_LABEL, DetectionSource::Regex)],
       "Tato",
+      Some(&filters),
+    )
+    .unwrap();
+
+    assert!(entities.is_empty());
+  }
+
+  #[test]
+  fn rejects_allow_listed_single_token_person_triggers() {
+    let filters = DenyListFilterData {
+      allow_list: set(["shares"]),
+      ..DenyListFilterData::default()
+    };
+    let entities = filter_entity_false_positives(
+      vec![entity(
+        "Shares",
+        "Shares",
+        PERSON_LABEL,
+        DetectionSource::Trigger,
+      )],
+      "Shares",
       Some(&filters),
     )
     .unwrap();
