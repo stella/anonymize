@@ -206,6 +206,11 @@ fn should_reject_address(
   if filters.is_some_and(|filters| is_signing_place_address(text, filters)) {
     return true;
   }
+  // Street-type words inside statute titles (e.g. Dodd-Frank Wall Street
+  // Reform ... Act) must not keep an over-long address span alive.
+  if looks_like_statute_title_address(text) {
+    return true;
+  }
 
   let has_digits = text.chars().any(|ch| ch.is_ascii_digit());
   let has_component =
@@ -227,6 +232,17 @@ fn should_reject_address(
     && !has_digits
     && !regex_is_match(&POSTAL_CODE_RE, text)
     && !has_component
+}
+
+fn looks_like_statute_title_address(text: &str) -> bool {
+  if text.chars().any(|ch| ch.is_ascii_digit()) {
+    return false;
+  }
+  let lower = text.to_lowercase();
+  lower.contains("street")
+    && (lower.contains(" reform")
+      || lower.contains(" protection act")
+      || lower.contains(" act "))
 }
 
 fn exceeds_label_length(entity: &PipelineEntity) -> bool {

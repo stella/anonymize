@@ -1036,15 +1036,27 @@ fn curated_labels_for_match(
     return Ok(Vec::new());
   }
 
+  // Hyphen compounds (Dodd-Frank, Brno-Nový) are real tokens for places and
+  // orgs; only person-name fragments must not match across the hyphen.
+  let reject_person_for_hyphen = has_hyphen_compound_edge(
+    args.full_text,
+    args.offsets,
+    args.start,
+    args.start.saturating_add(byte_len(args.match_text)),
+  )?;
+
   Ok(
     args
       .labels
       .iter()
       .filter(|label| {
-        !args
+        let is_custom_duplicate = args
           .custom_pattern_labels
           .iter()
-          .any(|custom| custom == label)
+          .any(|custom| custom == label);
+        let is_hyphenated_person =
+          reject_person_for_hyphen && *label == PERSON_LABEL;
+        !is_custom_duplicate && !is_hyphenated_person
       })
       .map(String::from)
       .collect(),
@@ -1837,8 +1849,6 @@ fn extend_person_name(
     let lower = stripped.to_lowercase();
     if filters.stopwords.contains(&lower)
       || filters.person_stopwords.contains(&lower)
-      || filters.person_trailing_nouns.contains(&lower)
-      || filters.street_types.contains(&lower)
     {
       break;
     }
@@ -2484,19 +2494,38 @@ fn custom_match_has_valid_edges(
   let previous = full_text
     .get(..start_byte)
     .and_then(|prefix| prefix.chars().next_back());
-  // Hyphen is a compound-word glue (e.g. "Dodd-Frank"), not a token edge.
-  if previous.is_some_and(|ch| ch.is_alphanumeric() || ch == '-') {
+  if previous.is_some_and(char::is_alphanumeric) {
     return Ok(false);
   }
 
   let next = full_text
     .get(end_byte..)
     .and_then(|suffix| suffix.chars().next());
-  if next.is_some_and(|ch| ch.is_alphanumeric() || ch == '-') {
+  if next.is_some_and(char::is_alphanumeric) {
     return Ok(false);
   }
 
   Ok(true)
+}
+
+fn has_hyphen_compound_edge(
+  full_text: &str,
+  offsets: &ByteOffsets<'_>,
+  start: u32,
+  end: u32,
+) -> Result<bool> {
+  let start_byte = offsets.validate_offset(start)?;
+  let end_byte = offsets.validate_offset(end)?;
+  let previous = full_text
+    .get(..start_byte)
+    .and_then(|prefix| prefix.chars().next_back());
+  if previous == Some('-') {
+    return Ok(true);
+  }
+  let next = full_text
+    .get(end_byte..)
+    .and_then(|suffix| suffix.chars().next());
+  Ok(next == Some('-'))
 }
 
 const fn fuzzy_distance(found: &SearchMatch) -> Option<u32> {
