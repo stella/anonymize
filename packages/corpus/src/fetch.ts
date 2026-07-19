@@ -4,7 +4,7 @@ import { createEdgarClient, isSupportedDocumentFile } from "./edgar";
 import { sha256Hex } from "./hash";
 import { htmlToText, looksLikeHtml } from "./html-text";
 import { loadManifest, mergeManifestEntries, saveManifest } from "./manifest";
-import { positiveIntegerOption } from "./options";
+import { dateRangeOptions, positiveIntegerOption } from "./options";
 import { rawPath } from "./paths";
 import { loadSkipList, mergeSkipEntries, saveSkipList } from "./skiplist";
 import type { ManifestEntry, SkipEntry } from "./types";
@@ -24,6 +24,7 @@ const HTML_EXTENSION_RE = /\.html?$/i;
 
 const usage = `Usage: bun src/fetch.ts --query <phrase> [--query <phrase> ...]
        [--limit ${DEFAULT_LIMIT_PER_QUERY}] [--pages ${DEFAULT_PAGES_PER_QUERY}] [--forms ${DEFAULT_FORMS}]
+       [--start-date YYYY-MM-DD --end-date YYYY-MM-DD]
        bun src/fetch.ts --refill
 
 Searches EDGAR full-text search for material contracts (EX-10),
@@ -31,13 +32,16 @@ skips documents already in the manifest or skip list, stores plain
 text under corpus/raw/, records new entries in corpus/manifest.json,
 and appends size-skipped documents to corpus/skiplist.json.
 
+--start-date and --end-date scope every query to an inclusive filing-date
+range. They must be provided together.
+
 --refill re-downloads every manifest document whose raw file is missing
 (e.g. after a fresh clone, where corpus/raw/ is gitignored) and verifies
-the re-extracted text still matches the recorded sha256. It ignores
---query and never adds new documents.
+the re-extracted text still matches the recorded sha256. It ignores all
+search options and never adds new documents.
 
 Requires ${USER_AGENT_ENV} (the SEC asks for a descriptive
-User-Agent with contact info, e.g. "name email@example.com").`;
+User-Agent with a real monitored contact address).`;
 
 const { values } = parseArgs({
   options: {
@@ -45,6 +49,8 @@ const { values } = parseArgs({
     limit: { type: "string" },
     pages: { type: "string" },
     forms: { type: "string" },
+    "start-date": { type: "string" },
+    "end-date": { type: "string" },
     refill: { type: "boolean" },
     help: { type: "boolean" },
   },
@@ -111,6 +117,7 @@ if (queries.length === 0) {
 
 let limit: number;
 let pages: number;
+let dateRange: ReturnType<typeof dateRangeOptions>;
 try {
   limit = positiveIntegerOption({
     name: "limit",
@@ -121,6 +128,10 @@ try {
     name: "pages",
     value: values.pages,
     fallback: DEFAULT_PAGES_PER_QUERY,
+  });
+  dateRange = dateRangeOptions({
+    startDate: values["start-date"],
+    endDate: values["end-date"],
   });
 } catch (error) {
   console.error(error instanceof Error ? error.message : error);
@@ -139,7 +150,12 @@ const newEntries: ManifestEntry[] = [];
 const newSkips: SkipEntry[] = [];
 
 for (const query of queries) {
-  const refs = await client.searchMaterialContracts({ query, forms, pages });
+  const refs = await client.searchMaterialContracts({
+    query,
+    forms,
+    pages,
+    dateRange,
+  });
   const fresh = refs.filter(
     (ref) =>
       !knownIds.has(ref.id) &&
