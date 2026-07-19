@@ -2381,7 +2381,7 @@ fn byte_index_for_char(text: &str, char_index: usize) -> usize {
 }
 
 const fn is_dash(ch: char) -> bool {
-  matches!(ch, '-' | '–' | '—')
+  matches!(ch, '-' | '‑' | '–' | '—')
 }
 
 fn match_trailing_address_word<'a>(
@@ -2537,13 +2537,13 @@ fn has_hyphen_compound_edge(
   let previous = full_text
     .get(..start_byte)
     .and_then(|prefix| prefix.chars().next_back());
-  if previous == Some('-') {
+  if previous.is_some_and(is_dash) {
     return Ok(true);
   }
   let next = full_text
     .get(end_byte..)
     .and_then(|suffix| suffix.chars().next());
-  Ok(next == Some('-'))
+  Ok(next.is_some_and(is_dash))
 }
 
 fn has_supported_hyphenated_person_edge(
@@ -2560,13 +2560,13 @@ fn has_supported_hyphenated_person_edge(
 
   let start_byte = offsets.validate_offset(start)?;
   let end_byte = offsets.validate_offset(end)?;
-  let previous_is_hyphen = full_text
+  let previous_dash = full_text
     .get(..start_byte)
     .and_then(|prefix| prefix.chars().next_back())
-    == Some('-');
-  if previous_is_hyphen {
+    .filter(|ch| is_dash(*ch));
+  if let Some(dash) = previous_dash {
     let partner = start_byte
-      .checked_sub(1)
+      .checked_sub(dash.len_utf8())
       .and_then(|hyphen_byte| full_text.get(..hyphen_byte))
       .map(|prefix| {
         prefix
@@ -2584,13 +2584,13 @@ fn has_supported_hyphenated_person_edge(
     }
   }
 
-  let next_is_hyphen = full_text
+  let next_dash = full_text
     .get(end_byte..)
     .and_then(|suffix| suffix.chars().next())
-    == Some('-');
-  if next_is_hyphen {
+    .filter(|ch| is_dash(*ch));
+  if let Some(dash) = next_dash {
     let partner = end_byte
-      .checked_add(1)
+      .checked_add(dash.len_utf8())
       .and_then(|partner_byte| full_text.get(partner_byte..))
       .map(|suffix| {
         suffix
@@ -2924,16 +2924,6 @@ mod tests {
 
   #[test]
   fn deny_list_rejects_name_fragment_after_hyphen() {
-    // "Dodd-Frank" must not emit person "Frank" (and then extend through
-    // "Wall Street") just because the hyphen is a non-alphanumeric edge.
-    let text = "under the Dodd-Frank Wall Street Reform Act.";
-    let start = u32::try_from(text.find("Frank").unwrap()).unwrap();
-    let end = start.saturating_add(5);
-    let matches = vec![SearchMatch::Literal {
-      pattern: 0,
-      start,
-      end,
-    }];
     let data = DenyListMatchData {
       labels: vec![vec![String::from("person")]].into(),
       custom_labels: vec![vec![]].into(),
@@ -2943,15 +2933,24 @@ mod tests {
       filters: Some(DenyListFilterData::default()),
     };
 
-    let entities = process_deny_list_matches(
-      &matches,
-      PatternSlice { start: 0, end: 1 },
-      text,
-      &data,
-    )
-    .unwrap();
+    for dash in ['-', '‑', '–'] {
+      let text = format!("under the Dodd{dash}Frank Wall Street Reform Act.");
+      let start = u32::try_from(text.find("Frank").unwrap()).unwrap();
+      let matches = vec![SearchMatch::Literal {
+        pattern: 0,
+        start,
+        end: start.saturating_add(5),
+      }];
+      let entities = process_deny_list_matches(
+        &matches,
+        PatternSlice { start: 0, end: 1 },
+        &text,
+        &data,
+      )
+      .unwrap();
 
-    assert!(entities.is_empty());
+      assert!(entities.is_empty(), "dash {dash:?}");
+    }
   }
 
   #[test]
