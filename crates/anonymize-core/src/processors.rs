@@ -2201,9 +2201,11 @@ fn roman_district(text: &str) -> Option<&str> {
 fn has_personal_name_prefix(before: &str) -> bool {
   let mut rest = before.trim_end_matches(|ch: char| ch.is_whitespace());
   loop {
-    let Some(dot_index) = rest.char_indices().next_back().and_then(|(i, ch)| {
-      (ch == '.').then_some(i)
-    }) else {
+    let Some(dot_index) = rest
+      .char_indices()
+      .next_back()
+      .and_then(|(i, ch)| (ch == '.').then_some(i))
+    else {
       break;
     };
     if dot_index.saturating_add('.'.len_utf8()) != rest.len() {
@@ -2221,7 +2223,10 @@ fn has_personal_name_prefix(before: &str) -> bool {
     {
       break;
     }
-    let prefix = before_dot.get(..initial_index).unwrap_or_default().trim_end();
+    let prefix = before_dot
+      .get(..initial_index)
+      .unwrap_or_default()
+      .trim_end();
     if prefix.is_empty() {
       break;
     }
@@ -2904,11 +2909,7 @@ mod tests {
 
     assert_eq!(entities.len(), 1);
     assert_eq!(entities[0].text, "Ferguson");
-    assert!(
-      !entities
-        .iter()
-        .any(|entity| entity.text == "Ferguson III")
-    );
+    assert!(!entities.iter().any(|entity| entity.text == "Ferguson III"));
   }
 
   #[test]
