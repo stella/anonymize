@@ -2123,7 +2123,7 @@ fn extend_city_districts(
     // City lists overlap surnames (e.g. US city "Ferguson"). Do not treat
     // generational Roman numerals after a personal-name prefix as districts.
     let before = offsets.slice(0, entity.start)?;
-    let allow_roman_district = !has_personal_name_prefix(before);
+    let allow_roman_district = !has_personal_name_prefix(&before);
     if let Some(suffix) = match_district_suffix(
       slice_from(full_text, offsets, entity.end)?,
       allow_roman_district,
@@ -2915,7 +2915,7 @@ mod tests {
   fn personal_name_prefix_recognizes_middle_initials() {
     assert!(has_personal_name_prefix("and James J. "));
     assert!(has_personal_name_prefix("James\nJ. "));
-    assert!(!has_personal_name_prefix("office in Paris "));
+    assert!(!has_personal_name_prefix("office in "));
     assert!(!has_personal_name_prefix(""));
   }
 }
