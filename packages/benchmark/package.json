@@ -6,7 +6,7 @@
   "type": "module",
   "license": "Apache-2.0",
   "scripts": {
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "bun ../../scripts/tsc-native.ts --noEmit -p tsconfig.json",
     "test": "bun test",
     "format": "oxfmt . \"!results/**\" \"!vendor/**\"",
     "bench:compare": "bun src/bench.ts"
