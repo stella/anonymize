@@ -2,4 +2,5 @@
 "@stll/anonymize": patch
 ---
 
-Detect person names whose surname is written in uppercase.
+Detect dictionary-backed and Czech feminine surnames written in uppercase,
+including in compacted native packages.
