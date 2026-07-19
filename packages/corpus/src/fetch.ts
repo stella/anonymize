@@ -4,7 +4,11 @@ import { createEdgarClient, isSupportedDocumentFile } from "./edgar";
 import { sha256Hex } from "./hash";
 import { htmlToText, looksLikeHtml } from "./html-text";
 import { loadManifest, mergeManifestEntries, saveManifest } from "./manifest";
-import { dateRangeOptions, positiveIntegerOption } from "./options";
+import {
+  dateRangeOptions,
+  positiveIntegerOption,
+  type DateRange,
+} from "./options";
 import { rawPath } from "./paths";
 import { loadSkipList, mergeSkipEntries, saveSkipList } from "./skiplist";
 import type { ManifestEntry, SkipEntry } from "./types";
@@ -117,7 +121,7 @@ if (queries.length === 0) {
 
 let limit: number;
 let pages: number;
-let dateRange: ReturnType<typeof dateRangeOptions>;
+let dateRange: DateRange | undefined;
 try {
   limit = positiveIntegerOption({
     name: "limit",
