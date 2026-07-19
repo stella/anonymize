@@ -1276,21 +1276,29 @@ fn append_person_name_hits(
       continue;
     }
 
-    let extended =
-      extend_person_name(full_text, offsets, first.start, last.end, filters)?;
-    let score = if chain.len() >= 2 { 0.9 } else { 0.5 };
-
-    if chain.len() == 1
-      && !single_name_hit_has_context(
+    let single_name_context = if chain.len() == 1 {
+      single_name_hit_context(
         full_text,
         offsets,
         last.end,
         filters,
         evidence_hits,
       )?
-    {
+    } else {
+      SingleNameContext::None
+    };
+    if chain.len() == 1 && single_name_context == SingleNameContext::None {
       continue;
     }
+    let extended =
+      extend_person_name(full_text, offsets, first.start, last.end, filters)?;
+    let score = if chain.len() >= 2
+      || single_name_context == SingleNameContext::KnownUppercaseSurname
+    {
+      0.9
+    } else {
+      0.5
+    };
 
     results.push(PipelineEntity::detected(
       first.start,
@@ -1804,13 +1812,21 @@ fn consume_horizontal_space(
   (consumed >= min).then(|| text.get(byte..)).flatten()
 }
 
-fn single_name_hit_has_context(
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SingleNameContext {
+  None,
+  Capitalized,
+  UppercaseShape,
+  KnownUppercaseSurname,
+}
+
+fn single_name_hit_context(
   full_text: &str,
   offsets: &ByteOffsets<'_>,
   end: u32,
   filters: &DenyListFilterData,
   evidence_hits: &[RawDenyListMatch],
-) -> Result<bool> {
+) -> Result<SingleNameContext> {
   let tail = slice_from(full_text, offsets, end)?;
   let rest = tail.trim_start();
   let whitespace_bytes = tail.len().saturating_sub(rest.len());
@@ -1827,27 +1843,32 @@ fn single_name_hit_has_context(
   let next_end = next_start.saturating_add(byte_len(&next_word));
   let mut chars = next_word.chars();
   let Some(first) = chars.next() else {
-    return Ok(false);
+    return Ok(SingleNameContext::None);
   };
   let Some(second) = chars.next() else {
-    return Ok(false);
+    return Ok(SingleNameContext::None);
   };
   let remaining_is_upper = chars.all(char::is_uppercase);
-  let next_is_upper = first.is_uppercase()
-    && (second.is_lowercase()
-      || (second.is_uppercase()
-        && remaining_is_upper
-        && deny_list_has_surname(evidence_hits, next_start, next_end))
-      || is_uppercase_czech_feminine_surname(&next_word));
-  if !next_is_upper {
-    return Ok(false);
-  }
-
-  Ok(
-    !filters
+  if !first.is_uppercase()
+    || filters
       .sentence_starters
-      .contains(&next_word.to_lowercase()),
-  )
+      .contains(&next_word.to_lowercase())
+  {
+    return Ok(SingleNameContext::None);
+  }
+  if second.is_lowercase() {
+    return Ok(SingleNameContext::Capitalized);
+  }
+  if second.is_uppercase()
+    && remaining_is_upper
+    && deny_list_has_surname(evidence_hits, next_start, next_end)
+  {
+    return Ok(SingleNameContext::KnownUppercaseSurname);
+  }
+  if is_uppercase_czech_feminine_surname(&next_word) {
+    return Ok(SingleNameContext::UppercaseShape);
+  }
+  Ok(SingleNameContext::None)
 }
 
 fn deny_list_has_surname(

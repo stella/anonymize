@@ -83,6 +83,9 @@ describe("Czech masculine declension (Jan Novák)", () => {
 });
 
 describe("Czech feminine declension (Jana Nováková)", () => {
+  test("uppercase short surname from prepared package", () =>
+    expectPersonCovering("Smlouvu podepsala Anna NOVÁ.", "Anna NOVÁ"));
+
   test("genitive: podpis Jany Novákové", () =>
     expectPersonCovering(
       "Listina obsahuje podpis Jany Novákové.",
