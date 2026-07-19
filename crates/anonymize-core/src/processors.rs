@@ -2133,7 +2133,9 @@ fn extend_city_districts(
     // City lists overlap surnames (e.g. US city "Ferguson"). Do not treat
     // generational Roman numerals after a personal-name prefix as districts.
     let name_prefix_before = offsets.slice(0, entity.start)?;
-    let allow_roman_district = !has_personal_name_prefix(&name_prefix_before);
+    let allow_roman_district = filters.is_none_or(|filters| {
+      !has_personal_name_prefix(&name_prefix_before, filters)
+    });
     if let Some(suffix) = match_district_suffix(
       slice_from(full_text, offsets, entity.end)?,
       allow_roman_district,
@@ -2208,7 +2210,10 @@ fn roman_district(text: &str) -> Option<&str> {
 
 /// True when `before` ends with a given name and optional middle initials,
 /// so a following city-list hit is likely a surname rather than a bare city.
-fn has_personal_name_prefix(before: &str) -> bool {
+fn has_personal_name_prefix(
+  before: &str,
+  filters: &DenyListFilterData,
+) -> bool {
   let mut rest = before.trim_end_matches(|ch: char| ch.is_whitespace());
   while let Some(dot_index) = rest
     .char_indices()
@@ -2243,15 +2248,7 @@ fn has_personal_name_prefix(before: &str) -> bool {
   let Some(last_word) = rest.split_whitespace().next_back() else {
     return false;
   };
-  let mut chars = last_word.chars();
-  let Some(first) = chars.next() else {
-    return false;
-  };
-  first.is_uppercase()
-    && chars.any(char::is_lowercase)
-    && last_word
-      .chars()
-      .all(|ch| ch.is_alphabetic() || matches!(ch, '\'' | '’' | '-'))
+  filters.first_names.contains(&last_word.to_lowercase())
 }
 
 const fn roman_districts() -> &'static [&'static str] {
@@ -2907,6 +2904,42 @@ mod tests {
   }
 
   #[test]
+  fn deny_list_keeps_city_roman_district_after_capitalized_non_name() {
+    let text = "Company's Paris XV office";
+    let start = u32::try_from(text.find("Paris").unwrap()).unwrap();
+    let end = start.saturating_add(5);
+    let matches = vec![SearchMatch::Literal {
+      pattern: 0,
+      start,
+      end,
+    }];
+    let mut first_names = BTreeSet::new();
+    first_names.insert(String::from("james"));
+    let data = DenyListMatchData {
+      labels: vec![vec![String::from("address")]].into(),
+      custom_labels: vec![vec![]].into(),
+      originals: vec![String::from("Paris")],
+      pattern_meta: DenyListPatternMetaSet::default(),
+      sources: vec![vec![String::from("city")]].into(),
+      filters: Some(DenyListFilterData {
+        first_names,
+        ..DenyListFilterData::default()
+      }),
+    };
+
+    let entities = process_deny_list_matches(
+      &matches,
+      PatternSlice { start: 0, end: 1 },
+      text,
+      &data,
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].text, "Paris XV");
+  }
+
+  #[test]
   fn deny_list_does_not_attach_generational_roman_after_person_prefix() {
     let text = "and James J. Ferguson III (hereinafter referred to as you)";
     let start = u32::try_from(text.find("Ferguson").unwrap()).unwrap();
@@ -2916,13 +2949,18 @@ mod tests {
       start,
       end,
     }];
+    let mut first_names = BTreeSet::new();
+    first_names.insert(String::from("james"));
     let data = DenyListMatchData {
       labels: vec![vec![String::from("address")]].into(),
       custom_labels: vec![vec![]].into(),
       originals: vec![String::from("Ferguson")],
       pattern_meta: DenyListPatternMetaSet::default(),
       sources: vec![vec![String::from("city")]].into(),
-      filters: Some(DenyListFilterData::default()),
+      filters: Some(DenyListFilterData {
+        first_names,
+        ..DenyListFilterData::default()
+      }),
     };
 
     let entities = process_deny_list_matches(
@@ -2939,10 +2977,18 @@ mod tests {
   }
 
   #[test]
-  fn personal_name_prefix_recognizes_middle_initials() {
-    assert!(has_personal_name_prefix("and James J. "));
-    assert!(has_personal_name_prefix("James\nJ. "));
-    assert!(!has_personal_name_prefix("office in "));
-    assert!(!has_personal_name_prefix(""));
+  fn personal_name_prefix_requires_first_name_evidence() {
+    let mut first_names = BTreeSet::new();
+    first_names.insert(String::from("james"));
+    let filters = DenyListFilterData {
+      first_names,
+      ..DenyListFilterData::default()
+    };
+
+    assert!(has_personal_name_prefix("and James J. ", &filters));
+    assert!(has_personal_name_prefix("James\nJ. ", &filters));
+    assert!(!has_personal_name_prefix("Company's ", &filters));
+    assert!(!has_personal_name_prefix("office in ", &filters));
+    assert!(!has_personal_name_prefix("", &filters));
   }
 }
