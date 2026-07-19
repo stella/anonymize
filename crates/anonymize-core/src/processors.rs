@@ -1037,13 +1037,22 @@ fn curated_labels_for_match(
   }
 
   // Hyphen compounds (Dodd-Frank, Brno-Nový) are real tokens for places and
-  // orgs; only person-name fragments must not match across the hyphen.
-  let reject_person_for_hyphen = has_hyphen_compound_edge(
+  // orgs; preserve person names only when both components have name evidence.
+  let has_hyphen_edge = has_hyphen_compound_edge(
     args.full_text,
     args.offsets,
     args.start,
     args.start.saturating_add(byte_len(args.match_text)),
   )?;
+  let supported_hyphenated_person = has_hyphen_edge
+    && has_supported_hyphenated_person_edge(
+      args.full_text,
+      args.offsets,
+      args.start,
+      args.start.saturating_add(byte_len(args.match_text)),
+      args.keyword,
+      args.filters,
+    )?;
 
   Ok(
     args
@@ -1054,8 +1063,9 @@ fn curated_labels_for_match(
           .custom_pattern_labels
           .iter()
           .any(|custom| custom == label);
-        let is_hyphenated_person =
-          reject_person_for_hyphen && *label == PERSON_LABEL;
+        let is_hyphenated_person = has_hyphen_edge
+          && !supported_hyphenated_person
+          && *label == PERSON_LABEL;
         !is_custom_duplicate && !is_hyphenated_person
       })
       .map(String::from)
@@ -2525,6 +2535,67 @@ fn has_hyphen_compound_edge(
   Ok(next == Some('-'))
 }
 
+fn has_supported_hyphenated_person_edge(
+  full_text: &str,
+  offsets: &ByteOffsets<'_>,
+  start: u32,
+  end: u32,
+  keyword: &str,
+  filters: &DenyListFilterData,
+) -> Result<bool> {
+  if !filters.first_names.contains(keyword) {
+    return Ok(false);
+  }
+
+  let start_byte = offsets.validate_offset(start)?;
+  let end_byte = offsets.validate_offset(end)?;
+  let previous_is_hyphen = full_text
+    .get(..start_byte)
+    .and_then(|prefix| prefix.chars().next_back())
+    == Some('-');
+  if previous_is_hyphen {
+    let partner = start_byte
+      .checked_sub(1)
+      .and_then(|hyphen_byte| full_text.get(..hyphen_byte))
+      .map(|prefix| {
+        prefix
+          .chars()
+          .rev()
+          .take_while(|ch| ch.is_alphabetic())
+          .collect::<String>()
+          .chars()
+          .rev()
+          .collect::<String>()
+          .to_lowercase()
+      });
+    if partner.is_some_and(|word| filters.first_names.contains(&word)) {
+      return Ok(true);
+    }
+  }
+
+  let next_is_hyphen = full_text
+    .get(end_byte..)
+    .and_then(|suffix| suffix.chars().next())
+    == Some('-');
+  if next_is_hyphen {
+    let partner = end_byte
+      .checked_add(1)
+      .and_then(|partner_byte| full_text.get(partner_byte..))
+      .map(|suffix| {
+        suffix
+          .chars()
+          .take_while(|ch| ch.is_alphabetic())
+          .collect::<String>()
+          .to_lowercase()
+      });
+    if partner.is_some_and(|word| filters.first_names.contains(&word)) {
+      return Ok(true);
+    }
+  }
+
+  Ok(false)
+}
+
 const fn fuzzy_distance(found: &SearchMatch) -> Option<u32> {
   let SearchMatch::Fuzzy { distance, .. } = found else {
     return None;
@@ -2870,6 +2941,60 @@ mod tests {
     .unwrap();
 
     assert!(entities.is_empty());
+  }
+
+  #[test]
+  fn deny_list_keeps_supported_hyphenated_person_name() {
+    let text = "Signed by Jean-Paul Smith.";
+    let names = ["Jean", "Paul", "Smith"];
+    let matches = names
+      .iter()
+      .enumerate()
+      .map(|(pattern, name)| {
+        let start = u32::try_from(text.find(name).unwrap()).unwrap();
+        SearchMatch::Literal {
+          pattern: u32::try_from(pattern).unwrap(),
+          start,
+          end: start.saturating_add(byte_len(name)),
+        }
+      })
+      .collect::<Vec<_>>();
+    let mut first_names = BTreeSet::new();
+    first_names.insert(String::from("jean"));
+    first_names.insert(String::from("paul"));
+    let data = DenyListMatchData {
+      labels: vec![
+        vec![String::from("person")],
+        vec![String::from("person")],
+        vec![String::from("person")],
+      ]
+      .into(),
+      custom_labels: vec![vec![], vec![], vec![]].into(),
+      originals: names.map(String::from).to_vec(),
+      pattern_meta: DenyListPatternMetaSet::default(),
+      sources: vec![
+        vec![String::from("first-name")],
+        vec![String::from("first-name")],
+        vec![String::from("surname")],
+      ]
+      .into(),
+      filters: Some(DenyListFilterData {
+        first_names,
+        ..DenyListFilterData::default()
+      }),
+    };
+
+    let entities = process_deny_list_matches(
+      &matches,
+      PatternSlice { start: 0, end: 3 },
+      text,
+      &data,
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].label, "person");
+    assert_eq!(entities[0].text, "Jean-Paul Smith");
   }
 
   #[test]
