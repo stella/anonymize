@@ -1909,7 +1909,7 @@ fn single_name_hit_context(
   {
     return Ok(SingleNameContext::None);
   }
-  if second.is_lowercase() && separator == " " {
+  if second.is_lowercase() {
     return Ok(SingleNameContext::Capitalized);
   }
   if second.is_uppercase()
@@ -3158,7 +3158,7 @@ mod tests {
     let entities = process_deny_list_matches(
       &matches,
       PatternSlice { start: 0, end: 1 },
-      "Michael Director signed the agreement.",
+      "Michael  Director signed the agreement.",
       &data,
     )
     .unwrap();
