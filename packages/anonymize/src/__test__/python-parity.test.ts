@@ -139,6 +139,8 @@ type PythonParityOutput = {
     caller_anonymized_text: string;
     retained_caller_detection_count: number;
     external_relationship_is_unsupported: boolean;
+    hyperlink_requires_partial_opt_in: boolean;
+    revision_requires_partial_opt_in: boolean;
   };
 };
 
@@ -309,6 +311,26 @@ docx_caller_anonymized = anonymize.anonymize_docx(
 )
 docx_external = anonymize.extract_docx_text(
     make_docx("Contact us", "mailto:alice@example.test")
+)
+
+def rejects_full_coverage(document, session_id):
+    session = prepared.create_redaction_session(session_id)
+    try:
+        anonymize.anonymize_docx(
+            document, session, session_id,
+            {"coverage": {"mode": "require-full"}},
+        )
+    except anonymize.DocxAnonymizationError as error:
+        return error.code == "incomplete-coverage"
+    return False
+
+docx_hyperlink_requires_partial = rejects_full_coverage(
+    make_docx('</w:t></w:r><w:hyperlink><w:r><w:t>Alice</w:t></w:r></w:hyperlink><w:r><w:t>'),
+    "parity_docx_hyperlink_1",
+)
+docx_revision_requires_partial = rejects_full_coverage(
+    make_docx('</w:t></w:r><w:ins><w:r><w:t>Alice</w:t></w:r></w:ins><w:r><w:t>'),
+    "parity_docx_revision_1",
 )
 deanonymised_text = anonymize.deanonymise(
     session_first.redaction.redacted_text,
@@ -489,6 +511,8 @@ print(
                     item["status"] == "unsupported" and item["path"] == "word/_rels/document.xml.rels"
                     for item in docx_external["coverage"]["parts"]
                 ),
+                "hyperlink_requires_partial_opt_in": docx_hyperlink_requires_partial,
+                "revision_requires_partial_opt_in": docx_revision_requires_partial,
             },
         }
     )
@@ -666,6 +690,8 @@ describe("python binding parity", () => {
       caller_anonymized_text: "[PERSON_parity%5Fdocx%5Fcaller%5F1_1]",
       retained_caller_detection_count: 1,
       external_relationship_is_unsupported: true,
+      hyperlink_requires_partial_opt_in: true,
+      revision_requires_partial_opt_in: true,
     });
   });
 

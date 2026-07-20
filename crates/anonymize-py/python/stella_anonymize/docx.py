@@ -912,6 +912,8 @@ def _workflow_coverage(coverage: Mapping[str, Any]) -> dict[str, Any]:
     partial = counts["unsupportedPartCount"] > 0 or any(
         counts[key] > 0
         for key in (
+            "hyperlinkTextSegmentCount",
+            "revisionTextSegmentCount",
             "unsupportedAlternateContentCount",
             "unsupportedSymbolCount",
             "unsupportedFieldInstructionCount",
