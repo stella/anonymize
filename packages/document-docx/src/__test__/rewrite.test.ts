@@ -206,10 +206,23 @@ describe("rewriteDocxText", () => {
       { start: 3, end: 8, replacement: "Bob" },
     ]) as DocxBlockRewrite & { unexpected?: unknown };
     cyclicPlan.unexpected = cyclicPlan;
+    (
+      cyclicPlan.location as DocxBlockRewrite["location"] & {
+        toJSON?: () => never;
+      }
+    ).toJSON = () => {
+      throw new Error("caller toJSON must not execute");
+    };
+    const hookedPlans = [cyclicPlan] as (typeof cyclicPlan)[] & {
+      toJSON?: () => never;
+    };
+    hookedPlans.toJSON = () => {
+      throw new Error("caller toJSON must not execute");
+    };
     expect(
-      extractDocxText(
-        rewriteDocxText(archive, [cyclicPlan]).document,
-      ).blocks.at(0)?.text,
+      extractDocxText(rewriteDocxText(archive, hookedPlans).document).blocks.at(
+        0,
+      )?.text,
     ).toBe("😀 Bob");
   });
 

@@ -39,21 +39,10 @@ const LOCATION_PATH_KEYS = [
   "cellPath",
   "textBoxPath",
 ] as const;
-const REWRITE_JSON_FIELDS = [
-  "location",
-  "expectedText",
-  "replacements",
-  "start",
-  "end",
-  "replacement",
-  "type",
-  "part",
-  "path",
-  "blockIndex",
-  ...LOCATION_PATH_KEYS,
-] as const;
 
-const preflightRewritePlan = (rewrites: readonly DocxBlockRewrite[]): void => {
+const preflightRewritePlan = (
+  rewrites: readonly DocxBlockRewrite[],
+): readonly unknown[] => {
   if (rewrites.length > DOCX_REWRITE_MAX_BLOCKS) {
     throw new DocxRewriteError(
       DOCX_REWRITE_ERROR_CODES.rewriteLimitExceeded,
@@ -62,6 +51,7 @@ const preflightRewritePlan = (rewrites: readonly DocxBlockRewrite[]): void => {
   }
   let replacementCount = 0;
   let estimatedBytes = rewrites.length * 256;
+  const serializableRewrites: unknown[] = [];
   for (const rewrite of rewrites) {
     if (!Array.isArray(rewrite.replacements)) {
       throw new DocxRewriteError(
@@ -81,21 +71,36 @@ const preflightRewritePlan = (rewrites: readonly DocxBlockRewrite[]): void => {
         ? rewrite.expectedText.length * 6
         : 0) +
       rewrite.replacements.length * 96;
+    const serializableReplacements: unknown[] = [];
     for (const replacement of rewrite.replacements) {
-      if (typeof replacement.replacement === "string") {
-        estimatedBytes += replacement.replacement.length * 6;
+      const value = replacement.replacement;
+      if (typeof value === "string") {
+        estimatedBytes += value.length * 6;
       }
+      serializableReplacements.push({
+        start: typeof replacement.start === "number" ? replacement.start : null,
+        end: typeof replacement.end === "number" ? replacement.end : null,
+        replacement: typeof value === "string" ? value : null,
+      });
     }
     const location = rewrite.location as unknown as Record<string, unknown>;
-    for (const value of [
-      location["type"],
-      (location["part"] as Record<string, unknown> | undefined)?.["type"],
-      (location["part"] as Record<string, unknown> | undefined)?.["path"],
-    ]) {
+    const part = location["part"] as Record<string, unknown> | undefined;
+    for (const value of [location["type"], part?.["type"], part?.["path"]]) {
       if (typeof value === "string") {
         estimatedBytes += value.length * 6;
       }
     }
+    const serializableLocation: Record<string, unknown> = {
+      type: typeof location["type"] === "string" ? location["type"] : null,
+      part: {
+        type: typeof part?.["type"] === "string" ? part["type"] : null,
+        path: typeof part?.["path"] === "string" ? part["path"] : null,
+      },
+      blockIndex:
+        typeof location["blockIndex"] === "number"
+          ? location["blockIndex"]
+          : null,
+    };
     for (const key of LOCATION_PATH_KEYS) {
       const path = location[key];
       if (Array.isArray(path)) {
@@ -106,8 +111,17 @@ const preflightRewritePlan = (rewrites: readonly DocxBlockRewrite[]): void => {
           );
         }
         estimatedBytes += path.length * 24;
+        serializableLocation[key] = path.map((value) =>
+          typeof value === "number" ? value : null,
+        );
       }
     }
+    serializableRewrites.push({
+      location: serializableLocation,
+      expectedText:
+        typeof rewrite.expectedText === "string" ? rewrite.expectedText : null,
+      replacements: serializableReplacements,
+    });
     if (estimatedBytes > DOCX_UNCOMPRESSED_MAX_BYTES) {
       throw new DocxRewriteError(
         DOCX_REWRITE_ERROR_CODES.rewriteLimitExceeded,
@@ -115,6 +129,7 @@ const preflightRewritePlan = (rewrites: readonly DocxBlockRewrite[]): void => {
       );
     }
   }
+  return serializableRewrites;
 };
 
 export const rewriteDocxText = (
@@ -127,8 +142,9 @@ export const rewriteDocxText = (
       "The native anonymize binding does not expose DOCX rewriting",
     );
   }
+  let serializableRewrites: readonly unknown[];
   try {
-    preflightRewritePlan(rewrites);
+    serializableRewrites = preflightRewritePlan(rewrites);
   } catch (error) {
     if (error instanceof DocxRewriteError) {
       throw error;
@@ -141,7 +157,7 @@ export const rewriteDocxText = (
   }
   let rewritesJson: string;
   try {
-    rewritesJson = JSON.stringify(rewrites, [...REWRITE_JSON_FIELDS]);
+    rewritesJson = JSON.stringify(serializableRewrites);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new DocxRewriteError(
