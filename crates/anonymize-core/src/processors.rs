@@ -1880,15 +1880,7 @@ fn single_name_hit_context(
   evidence_hits: &[RawDenyListMatch],
 ) -> Result<SingleNameContext> {
   let tail = slice_from(full_text, offsets, end)?;
-  let rest = tail.trim_start();
-  let whitespace_bytes = tail.len().saturating_sub(rest.len());
-  let separator = tail.get(..whitespace_bytes).unwrap_or_default();
-  let next_start = end.saturating_add(
-    tail
-      .get(..whitespace_bytes)
-      .map(byte_len)
-      .unwrap_or_default(),
-  );
+  let (rest, next_start, separator) = skip_leading_middle_initials(tail, end);
   let next_word = rest
     .chars()
     .take_while(|ch| ch.is_alphabetic())
@@ -1923,6 +1915,46 @@ fn single_name_hit_context(
     return Ok(SingleNameContext::UppercaseShape);
   }
   Ok(SingleNameContext::None)
+}
+
+/// Skip `A.` / `R.` middle initials so the following surname can arm
+/// single-token person extension (`Paul A. Pinkston`).
+fn skip_leading_middle_initials(tail: &str, end: u32) -> (&str, u32, &str) {
+  let mut rest = tail;
+  let mut next_start = end;
+  let mut separator = "";
+  let mut skipped_initial = false;
+
+  loop {
+    let trimmed = rest.trim_start();
+    let whitespace_bytes = rest.len().saturating_sub(trimmed.len());
+    let whitespace = rest.get(..whitespace_bytes).unwrap_or_default();
+    next_start = next_start.saturating_add(byte_len(whitespace));
+    if !skipped_initial {
+      separator = whitespace;
+    }
+    rest = trimmed;
+
+    let token = rest
+      .chars()
+      .take_while(|ch| !ch.is_whitespace())
+      .collect::<String>();
+    if !is_middle_initial_token(&token) {
+      if skipped_initial {
+        separator = " ";
+      }
+      return (rest, next_start, separator);
+    }
+
+    let token_bytes = byte_len(&token);
+    let Some(after) = rest.get(usize::try_from(token_bytes).unwrap_or(0)..)
+    else {
+      return (rest, next_start, separator);
+    };
+    next_start = next_start.saturating_add(token_bytes);
+    rest = after;
+    skipped_initial = true;
+  }
 }
 
 fn surname_context_separator_is_supported(separator: &str) -> bool {
@@ -1994,6 +2026,12 @@ fn extend_person_name(
 
     let word = read_until_whitespace(full_text, offsets, word_start)?;
     let stripped = strip_trailing_name_punctuation(&word);
+    // Dotted middle initials ("A.", "R.") are part of the name; keep
+    // scanning so the surname after them is absorbed.
+    if is_middle_initial_token(&word) {
+      new_end = word_start.saturating_add(byte_len(&word));
+      continue;
+    }
     if stripped.chars().count() < 2 {
       break;
     }
@@ -2011,6 +2049,14 @@ fn extend_person_name(
     end: new_end,
     text: offsets.slice(start, new_end)?,
   })
+}
+
+fn is_middle_initial_token(word: &str) -> bool {
+  let mut chars = word.chars();
+  chars.next().is_some_and(char::is_uppercase)
+    && chars.next() == Some('.')
+    && chars
+      .all(|ch| matches!(ch, ',' | ';' | '”' | '"' | '’' | '\'' | '“' | '»'))
 }
 
 fn read_until_whitespace(
@@ -3634,5 +3680,52 @@ mod tests {
     assert!(!has_personal_name_prefix("Company's ", &filters));
     assert!(!has_personal_name_prefix("office in ", &filters));
     assert!(!has_personal_name_prefix("", &filters));
+  }
+
+  #[test]
+  fn deny_list_extends_person_across_dotted_middle_initial() {
+    let text = "between Paul A. Pinkston (\"I\" or \"Employee\")";
+    let paul_start = u32::try_from(text.find("Paul").unwrap()).unwrap();
+    let paul_end = paul_start.saturating_add(4);
+    let matches = vec![SearchMatch::Literal {
+      pattern: 0,
+      start: paul_start,
+      end: paul_end,
+    }];
+    let mut first_names = BTreeSet::new();
+    first_names.insert(String::from("paul"));
+    let data = DenyListMatchData {
+      labels: vec![vec![String::from("person")]].into(),
+      custom_labels: vec![vec![]].into(),
+      originals: vec![String::from("Paul")],
+      pattern_meta: DenyListPatternMetaSet::default(),
+      sources: vec![vec![String::from("first-name")]].into(),
+      filters: Some(DenyListFilterData {
+        first_names,
+        ..DenyListFilterData::default()
+      }),
+    };
+
+    let entities = process_deny_list_matches(
+      &matches,
+      PatternSlice { start: 0, end: 1 },
+      text,
+      &data,
+    )
+    .unwrap();
+
+    assert!(
+      entities
+        .iter()
+        .any(|entity| entity.label == "person"
+          && entity.text == "Paul A. Pinkston"),
+      "{entities:?}"
+    );
+  }
+
+  #[test]
+  fn bare_single_letter_is_not_a_middle_initial() {
+    assert!(!is_middle_initial_token("A"));
+    assert!(is_middle_initial_token("A."));
   }
 }
