@@ -160,3 +160,13 @@ fn empty_plan_returns_an_exact_copy() -> Result<(), Box<dyn std::error::Error>>
   assert_eq!(result.document, source);
   Ok(())
 }
+
+#[test]
+fn preserves_extraction_errors_before_rewriting()
+-> Result<(), Box<dyn std::error::Error>> {
+  let error = rewrite_docx_text(b"not a DOCX archive", &[])
+    .err()
+    .ok_or("expected invalid archive error")?;
+  assert_eq!(error.code(), DocxRewriteErrorCode::InvalidArchive);
+  Ok(())
+}

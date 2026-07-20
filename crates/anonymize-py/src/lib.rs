@@ -1447,9 +1447,17 @@ fn extract_docx_text_json(document: &[u8]) -> PyResult<String> {
 
 const fn docx_rewrite_code(code: DocxRewriteErrorCode) -> &'static str {
   match code {
+    DocxRewriteErrorCode::ArchiveLimitExceeded => "archive-limit-exceeded",
+    DocxRewriteErrorCode::InvalidArchive => "invalid-archive",
+    DocxRewriteErrorCode::InvalidPackage => "invalid-package",
     DocxRewriteErrorCode::InvalidReplacement => "invalid-replacement",
+    DocxRewriteErrorCode::InvalidXml => "invalid-xml",
     DocxRewriteErrorCode::RewriteLimitExceeded => "rewrite-limit-exceeded",
     DocxRewriteErrorCode::StaleExtraction => "stale-extraction",
+    DocxRewriteErrorCode::UncompressedLimitExceeded => {
+      "uncompressed-limit-exceeded"
+    }
+    DocxRewriteErrorCode::UnsafeEntryPath => "unsafe-entry-path",
     DocxRewriteErrorCode::UnsupportedReplacement => "unsupported-replacement",
   }
 }

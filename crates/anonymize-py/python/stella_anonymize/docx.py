@@ -938,6 +938,15 @@ def rewrite_docx_text(
         message = str(error)
         code, separator, detail = message.partition(": ")
         if separator and code in {
+            "archive-limit-exceeded",
+            "invalid-archive",
+            "invalid-package",
+            "invalid-xml",
+            "unsafe-entry-path",
+            "uncompressed-limit-exceeded",
+        }:
+            raise DocxExtractionError(code, detail) from error
+        if separator and code in {
             "invalid-replacement",
             "rewrite-limit-exceeded",
             "stale-extraction",

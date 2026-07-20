@@ -141,6 +141,7 @@ type PythonParityOutput = {
     external_relationship_is_unsupported: boolean;
     hyperlink_requires_partial_opt_in: boolean;
     revision_requires_partial_opt_in: boolean;
+    invalid_rewrite_error: string | null;
   };
 };
 
@@ -332,6 +333,12 @@ docx_revision_requires_partial = rejects_full_coverage(
     make_docx('</w:t></w:r><w:ins><w:r><w:t>Alice</w:t></w:r></w:ins><w:r><w:t>'),
     "parity_docx_revision_1",
 )
+try:
+    anonymize.rewrite_docx_text(b"not a DOCX archive", [])
+except anonymize.DocxExtractionError as error:
+    docx_invalid_rewrite_error = error.code
+else:
+    docx_invalid_rewrite_error = None
 deanonymised_text = anonymize.deanonymise(
     session_first.redaction.redacted_text,
     session_first.redaction.redaction_map,
@@ -513,6 +520,7 @@ print(
                 ),
                 "hyperlink_requires_partial_opt_in": docx_hyperlink_requires_partial,
                 "revision_requires_partial_opt_in": docx_revision_requires_partial,
+                "invalid_rewrite_error": docx_invalid_rewrite_error,
             },
         }
     )
@@ -692,6 +700,7 @@ describe("python binding parity", () => {
       external_relationship_is_unsupported: true,
       hyperlink_requires_partial_opt_in: true,
       revision_requires_partial_opt_in: true,
+      invalid_rewrite_error: "invalid-archive",
     });
   });
 

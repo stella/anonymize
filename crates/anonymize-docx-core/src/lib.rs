@@ -258,9 +258,15 @@ impl DocxRewriteError {
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum DocxRewriteErrorCode {
+  ArchiveLimitExceeded,
+  InvalidArchive,
+  InvalidPackage,
   InvalidReplacement,
+  InvalidXml,
   RewriteLimitExceeded,
   StaleExtraction,
+  UncompressedLimitExceeded,
+  UnsafeEntryPath,
   UnsupportedReplacement,
 }
 
@@ -319,15 +325,15 @@ impl DocxBlockLocation {
 
 fn map_extraction_error(source: &DocxError) -> DocxRewriteError {
   let code = match source.code() {
-    DocxErrorCode::ArchiveLimitExceeded
-    | DocxErrorCode::UncompressedLimitExceeded => {
-      DocxRewriteErrorCode::RewriteLimitExceeded
+    DocxErrorCode::ArchiveLimitExceeded => {
+      DocxRewriteErrorCode::ArchiveLimitExceeded
     }
-    DocxErrorCode::InvalidArchive
-    | DocxErrorCode::InvalidPackage
-    | DocxErrorCode::InvalidXml
-    | DocxErrorCode::UnsafeEntryPath => {
-      DocxRewriteErrorCode::UnsupportedReplacement
+    DocxErrorCode::InvalidArchive => DocxRewriteErrorCode::InvalidArchive,
+    DocxErrorCode::InvalidPackage => DocxRewriteErrorCode::InvalidPackage,
+    DocxErrorCode::InvalidXml => DocxRewriteErrorCode::InvalidXml,
+    DocxErrorCode::UnsafeEntryPath => DocxRewriteErrorCode::UnsafeEntryPath,
+    DocxErrorCode::UncompressedLimitExceeded => {
+      DocxRewriteErrorCode::UncompressedLimitExceeded
     }
   };
   rewrite_error(code, source.to_string())

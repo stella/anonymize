@@ -3,6 +3,7 @@ import { strToU8, unzipSync, zipSync } from "fflate";
 
 import {
   DOCX_ENTRY_MAX_BYTES,
+  DocxExtractionError,
   DocxRewriteError,
   extractDocxText,
   rewriteDocxText,
@@ -33,6 +34,17 @@ const docx = (body: string): Uint8Array =>
     ),
     "word/media/image.bin": new Uint8Array([0, 1, 2, 3, 255]),
   });
+
+test("preserves extraction errors before rewriting", () => {
+  let caught: unknown;
+  try {
+    rewriteDocxText(strToU8("not a DOCX archive"), []);
+  } catch (error) {
+    caught = error;
+  }
+  expect(caught).toBeInstanceOf(DocxExtractionError);
+  expect((caught as DocxExtractionError).code).toBe("invalid-archive");
+});
 
 const rewriteForFirstBlock = (
   archive: Uint8Array,
