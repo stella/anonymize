@@ -371,13 +371,23 @@ fn parse_xml<'a>(
       format!("DOCX part is not valid XML: {path}"),
     )
   })?;
-  if document.descendants().filter(Node::is_element).any(|node| {
-    node.ancestors().filter(Node::is_element).count() >= DOCX_XML_MAX_DEPTH
-  }) {
-    return Err(error(
-      DocxErrorCode::UncompressedLimitExceeded,
-      format!("DOCX XML must not exceed {DOCX_XML_MAX_DEPTH} nested elements"),
-    ));
+  let mut depths = HashMap::<NodeId, usize>::new();
+  for node in document.descendants().filter(Node::is_element) {
+    let parent_depth = node
+      .parent_element()
+      .and_then(|parent| depths.get(&parent.id()))
+      .copied()
+      .unwrap_or_default();
+    let depth = parent_depth.saturating_add(1);
+    if depth >= DOCX_XML_MAX_DEPTH {
+      return Err(error(
+        DocxErrorCode::UncompressedLimitExceeded,
+        format!(
+          "DOCX XML must not exceed {DOCX_XML_MAX_DEPTH} nested elements"
+        ),
+      ));
+    }
+    depths.insert(node.id(), depth);
   }
   Ok(document)
 }
