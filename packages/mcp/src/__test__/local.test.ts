@@ -103,6 +103,14 @@ describe("PathScope", () => {
     });
     expect(scopedInput.path).toBe(await realpath(input));
     expect(new TextDecoder().decode(scopedInput.bytes)).toBe("Alice");
+    await expect(
+      scope.readInput({
+        path: input,
+        extension: ".txt",
+        maximumBytes: 4,
+        label: "Text",
+      }),
+    ).rejects.toThrow("must not exceed");
     expect((await scope.output(join(root, "output.txt"), ".txt")).path).toBe(
       join(root, "output.txt"),
     );

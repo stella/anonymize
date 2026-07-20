@@ -33,6 +33,7 @@ const TEXT_MAX_BYTES = 64 * 1024 * 1024;
 const PATH_MAX_CHARACTERS = 32_768;
 const SESSION_MAX_COUNT = 256;
 const SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
+const READ_CHUNK_BYTES = 64 * 1024;
 
 export type AuditSafeResult = {
   operation: "anonymize" | "inspect" | "restore";
@@ -64,6 +65,31 @@ type ReadInputOptions = {
 type ScopedInput = {
   bytes: Uint8Array;
   path: string;
+};
+
+type ReadableFileHandle = Pick<Awaited<ReturnType<typeof open>>, "read">;
+
+const readHandleBounded = async (
+  handle: ReadableFileHandle,
+  maximumBytes: number,
+  label: "DOCX" | "Text",
+): Promise<Uint8Array> => {
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const chunk = Buffer.allocUnsafe(
+      Math.min(READ_CHUNK_BYTES, maximumBytes - total + 1),
+    );
+    const { bytesRead } = await handle.read(chunk, 0, chunk.byteLength, null);
+    if (bytesRead === 0) {
+      return Buffer.concat(chunks, total);
+    }
+    total += bytesRead;
+    if (total > maximumBytes) {
+      throw new Error(`${label} inputs must not exceed ${maximumBytes} bytes`);
+    }
+    chunks.push(chunk.subarray(0, bytesRead));
+  }
 };
 
 type DirectoryIdentity = {
@@ -157,12 +183,7 @@ export class PathScope {
           `${label} inputs must not exceed ${maximumBytes} bytes`,
         );
       }
-      const bytes = await handle.readFile();
-      if (bytes.byteLength > maximumBytes) {
-        throw new Error(
-          `${label} inputs must not exceed ${maximumBytes} bytes`,
-        );
-      }
+      const bytes = await readHandleBounded(handle, maximumBytes, label);
       return { bytes, path: canonical };
     } finally {
       await handle.close();
