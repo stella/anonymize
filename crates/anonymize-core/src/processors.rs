@@ -1919,10 +1919,7 @@ fn single_name_hit_context(
 
 /// Skip `A.` / `R.` middle initials so the following surname can arm
 /// single-token person extension (`Paul A. Pinkston`).
-fn skip_leading_middle_initials(
-  tail: &str,
-  end: u32,
-) -> (&str, u32, &str) {
+fn skip_leading_middle_initials(tail: &str, end: u32) -> (&str, u32, &str) {
   let mut rest = tail;
   let mut next_start = end;
   let mut separator = "";
@@ -3721,7 +3718,8 @@ mod tests {
     assert!(
       entities
         .iter()
-        .any(|entity| entity.label == "person" && entity.text == "Paul A. Pinkston"),
+        .any(|entity| entity.label == "person"
+          && entity.text == "Paul A. Pinkston"),
       "{entities:?}"
     );
   }
