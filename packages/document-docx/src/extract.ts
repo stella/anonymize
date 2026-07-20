@@ -1192,7 +1192,11 @@ const nativeExtractionErrorCode = (
   ) {
     return DOCX_EXTRACTION_ERROR_CODES.archiveLimitExceeded;
   }
-  if (message.includes("must not exceed") || message.includes("at most")) {
+  if (
+    message.includes("must not exceed") ||
+    message.includes("must not contain more than") ||
+    message.includes("at most")
+  ) {
     return DOCX_EXTRACTION_ERROR_CODES.uncompressedLimitExceeded;
   }
   return DOCX_EXTRACTION_ERROR_CODES.invalidPackage;

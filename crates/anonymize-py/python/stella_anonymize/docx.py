@@ -544,7 +544,27 @@ def _extract_part(
 def extract_docx_text(document: bytes | bytearray | memoryview) -> dict[str, Any]:
     """Extract redactable DOCX text blocks and fail-closed coverage metadata."""
 
-    return json.loads(_extract_docx_text_json(bytes(document)))
+    try:
+        return json.loads(_extract_docx_text_json(bytes(document)))
+    except ValueError as error:
+        message = str(error)
+        if "unsafe entry path" in message:
+            code = "unsafe-entry-path"
+        elif "valid bounded DOCX ZIP archive" in message:
+            code = "invalid-archive"
+        elif "valid XML" in message or "valid UTF-8" in message:
+            code = "invalid-xml"
+        elif f"must not exceed {DOCX_ARCHIVE_MAX_BYTES} bytes" in message:
+            code = "archive-limit-exceeded"
+        elif (
+            "must not exceed" in message
+            or "must not contain more than" in message
+            or "at most" in message
+        ):
+            code = "uncompressed-limit-exceeded"
+        else:
+            code = "invalid-package"
+        raise DocxExtractionError(code, message) from error
 
 
 def _extract_docx_text_python(document: bytes) -> dict[str, Any]:

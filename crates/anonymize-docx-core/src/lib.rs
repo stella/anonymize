@@ -20,6 +20,7 @@ pub const DOCX_XML_MAX_DEPTH: usize = 256;
 const DOCX_MAX_ENTRIES: usize = 4_096;
 const DOCX_MAX_TEXT_BLOCKS: usize = 100_000;
 const DOCX_MAX_TEXT_SEGMENTS: usize = 1_000_000;
+const DOCX_MAX_INLINE_CONTEXT_SCAN_OPS: usize = 20_000_000;
 
 const CONTENT_TYPES_PATH: &str = "[Content_Types].xml";
 const ROOT_RELATIONSHIPS_PATH: &str = "_rels/.rels";
@@ -322,7 +323,10 @@ fn parse_xml<'a>(
       format!("DOCX XML part is not valid UTF-8: {path}"),
     )
   })?;
-  if text.to_ascii_uppercase().contains("<!DOCTYPE") {
+  if bytes
+    .windows(b"<!DOCTYPE".len())
+    .any(|window| window.eq_ignore_ascii_case(b"<!DOCTYPE"))
+  {
     return Err(error(
       DocxErrorCode::InvalidPackage,
       "DOCX XML must not contain a document type declaration",
@@ -653,12 +657,31 @@ fn node_path(node: Node<'_, '_>) -> Vec<usize> {
   path
 }
 
-fn contexts(node: Node<'_, '_>) -> Vec<DocxInlineContext> {
+fn contexts(
+  node: Node<'_, '_>,
+  inline_context_scan_ops: &mut usize,
+) -> Result<Vec<DocxInlineContext>, DocxError> {
   let mut found = Vec::new();
   let mut ancestors = node
     .ancestors()
     .filter(Node::is_element)
     .collect::<Vec<_>>();
+  *inline_context_scan_ops = inline_context_scan_ops
+    .checked_add(ancestors.len())
+    .ok_or_else(|| {
+      error(
+        DocxErrorCode::UncompressedLimitExceeded,
+        "DOCX inline-context scan operation count overflowed",
+      )
+    })?;
+  if *inline_context_scan_ops > DOCX_MAX_INLINE_CONTEXT_SCAN_OPS {
+    return Err(error(
+      DocxErrorCode::UncompressedLimitExceeded,
+      format!(
+        "DOCX archives must not require more than {DOCX_MAX_INLINE_CONTEXT_SCAN_OPS} aggregate inline-context scan operations"
+      ),
+    ));
+  }
   ancestors.reverse();
   for ancestor in ancestors {
     if is_word(ancestor, "hyperlink") {
@@ -688,7 +711,7 @@ fn contexts(node: Node<'_, '_>) -> Vec<DocxInlineContext> {
       found.push(DocxInlineContext::Revision { revision });
     }
   }
-  found
+  Ok(found)
 }
 
 fn block_location(
@@ -734,9 +757,12 @@ fn nearest_paragraph<'tree, 'input>(
   node.ancestors().find(|ancestor| is_word(*ancestor, "p"))
 }
 
+#[allow(clippy::too_many_lines)]
 fn extract_part(
   part: &DocxPart,
   bytes: &[u8],
+  total_segments: &mut usize,
+  inline_context_scan_ops: &mut usize,
 ) -> Result<(Vec<DocxTextBlock>, DocxCoverage), DocxError> {
   let document = parse_xml(bytes, &part.path)?;
   for node in document.descendants().filter(Node::is_element) {
@@ -767,6 +793,7 @@ fn extract_part(
   let mut coverage = DocxCoverage::default();
   for (block_index, paragraph) in paragraphs.into_iter().enumerate() {
     let mut text = String::new();
+    let mut text_utf16_len = 0_usize;
     let mut segments = Vec::new();
     for node in paragraph.descendants().filter(Node::is_element) {
       if nearest_paragraph(node) != Some(paragraph) {
@@ -789,9 +816,31 @@ fn extract_part(
       if value.is_empty() {
         continue;
       }
-      let start = utf16_len(&text);
+      *total_segments = total_segments.checked_add(1).ok_or_else(|| {
+        error(
+          DocxErrorCode::UncompressedLimitExceeded,
+          "DOCX text segment count overflowed",
+        )
+      })?;
+      if *total_segments > DOCX_MAX_TEXT_SEGMENTS {
+        return Err(error(
+          DocxErrorCode::UncompressedLimitExceeded,
+          format!(
+            "DOCX archives must not contain more than {DOCX_MAX_TEXT_SEGMENTS} text segments"
+          ),
+        ));
+      }
+      let start = text_utf16_len;
+      text_utf16_len = text_utf16_len
+        .checked_add(utf16_len(&value))
+        .ok_or_else(|| {
+          error(
+            DocxErrorCode::UncompressedLimitExceeded,
+            "DOCX text length overflowed",
+          )
+        })?;
       text.push_str(&value);
-      let item_contexts = contexts(node);
+      let item_contexts = contexts(node, inline_context_scan_ops)?;
       if item_contexts
         .iter()
         .any(|item| matches!(item, DocxInlineContext::Hyperlink { .. }))
@@ -806,7 +855,7 @@ fn extract_part(
       }
       segments.push(DocxTextSegment {
         start,
-        end: utf16_len(&text),
+        end: text_utf16_len,
         source,
         contexts: item_contexts,
         xml_path: node_path(node),
@@ -935,6 +984,8 @@ pub fn extract_docx_text(document: &[u8]) -> Result<DocxExtraction, DocxError> {
   validate_main_part(&supported, &main_target)?;
   let mut blocks = Vec::new();
   let mut coverage = DocxCoverage::default();
+  let mut total_segments = 0_usize;
+  let mut inline_context_scan_ops = 0_usize;
   let mut covered =
     HashSet::from([CONTENT_TYPES_PATH, ROOT_RELATIONSHIPS_PATH]);
   for part in &supported {
@@ -944,7 +995,12 @@ pub fn extract_docx_text(document: &[u8]) -> Result<DocxExtraction, DocxError> {
         format!("DOCX archive is missing declared part: {}", part.path),
       )
     })?;
-    let (part_blocks, part_coverage) = extract_part(part, bytes)?;
+    let (part_blocks, part_coverage) = extract_part(
+      part,
+      bytes,
+      &mut total_segments,
+      &mut inline_context_scan_ops,
+    )?;
     if blocks.len().saturating_add(part_blocks.len()) > DOCX_MAX_TEXT_BLOCKS {
       return Err(error(
         DocxErrorCode::UncompressedLimitExceeded,
@@ -981,19 +1037,6 @@ pub fn extract_docx_text(document: &[u8]) -> Result<DocxExtraction, DocxError> {
     covered.insert(part.path.as_str());
   }
   coverage.parts.extend(relationship_coverage(&entries)?);
-  if blocks
-    .iter()
-    .map(|block| block.segments.len())
-    .sum::<usize>()
-    > DOCX_MAX_TEXT_SEGMENTS
-  {
-    return Err(error(
-      DocxErrorCode::UncompressedLimitExceeded,
-      format!(
-        "DOCX archives must not contain more than {DOCX_MAX_TEXT_SEGMENTS} text segments"
-      ),
-    ));
-  }
   add_inventory_coverage(&entries, &content_types, &mut covered, &mut coverage);
   Ok(DocxExtraction {
     contract_version: DOCX_EXTRACTION_CONTRACT_VERSION,
