@@ -530,8 +530,12 @@ fn known_metadata_content_type(path: &str) -> Option<&'static str> {
 }
 
 fn is_relationships_entry(path: &str) -> bool {
-  path == ROOT_RELATIONSHIPS_PATH
-    || (path.contains("/_rels/") && has_extension(path, "rels"))
+  if path == ROOT_RELATIONSHIPS_PATH {
+    return true;
+  }
+  path.rsplit_once("/_rels/").is_some_and(|(_, filename)| {
+    !filename.contains('/') && has_extension(filename, "rels")
+  })
 }
 
 fn has_uri_scheme(target: &str) -> bool {

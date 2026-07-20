@@ -133,12 +133,22 @@ fn inventories_non_opc_rels_payloads_as_unsupported()
       "application/vnd.openxmlformats-package.relationships+xml",
       "<payload>alice@example.test</payload>",
     ),
+    (
+      "word/_rels/nested/secrets.rels",
+      "application/vnd.openxmlformats-package.relationships+xml",
+      "<payload>bob@example.test</payload>",
+    ),
   ])?;
   let extraction = extract_docx_text(&archive)?;
   assert!(extraction.coverage.parts.iter().any(|item| matches!(
     item,
     DocxCoverageItem::Unsupported { path, .. }
       if path == "extra/secrets.rels"
+  )));
+  assert!(extraction.coverage.parts.iter().any(|item| matches!(
+    item,
+    DocxCoverageItem::Unsupported { path, .. }
+      if path == "word/_rels/nested/secrets.rels"
   )));
   Ok(())
 }
