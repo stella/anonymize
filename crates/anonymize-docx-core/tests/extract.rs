@@ -4,7 +4,8 @@ use std::{
 };
 
 use stella_anonymize_docx_core::{
-  DocxCoverageItem, DocxErrorCode, DocxPartType, extract_docx_text,
+  DocxCoverageItem, DocxErrorCode, DocxInlineContext, DocxPartType,
+  extract_docx_text,
 };
 use zip::{ZipWriter, write::SimpleFileOptions};
 
@@ -53,7 +54,7 @@ fn docx(
 fn extracts_structural_blocks_and_utf16_segments()
 -> Result<(), Box<dyn std::error::Error>> {
   let document_xml = format!(
-    "<w:document xmlns:w=\"{WORD_NAMESPACE}\" xmlns:r=\"{OFFICE_RELATIONSHIPS_NAMESPACE}\"><w:body><w:p><w:r><w:t>😀 </w:t></w:r><w:hyperlink r:id=\"rId5\" w:anchor=\"bookmark\"><w:r><w:t>Alice</w:t></w:r></w:hyperlink><w:ins><w:r><w:t> added</w:t></w:r></w:ins><w:r><w:tab/><w:br/></w:r></w:p><w:tbl><w:tr><w:tc><w:p><w:r><w:t>Cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl><w:p><w:r><w:drawing><w:txbxContent><w:p><w:r><w:t>Box</w:t></w:r></w:p></w:txbxContent></w:drawing></w:r></w:p></w:body></w:document>"
+    "<w:document xmlns:w=\"{WORD_NAMESPACE}\" xmlns:r=\"{OFFICE_RELATIONSHIPS_NAMESPACE}\" xmlns:ext=\"urn:example:extension\"><w:body><w:p><w:r><w:t>😀 </w:t></w:r><w:hyperlink r:id=\"rId5\" ext:anchor=\"not-a-bookmark\" w:anchor=\"bookmark\"><w:r><w:t>Alice</w:t></w:r></w:hyperlink><w:ins><w:r><w:t> added</w:t></w:r></w:ins><w:r><w:tab/><w:br/></w:r></w:p><w:tbl><w:tr><w:tc><w:p><w:r><w:t>Cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl><w:p><w:r><w:drawing><w:txbxContent><w:p><w:r><w:t>Box</w:t></w:r></w:p></w:txbxContent></w:drawing></w:r></w:p></w:body></w:document>"
   );
   let archive = docx(&[(
     "word/document.xml",
@@ -74,6 +75,16 @@ fn extracts_structural_blocks_and_utf16_segments()
     first.segments.first().ok_or("missing first segment")?.end,
     3
   );
+  assert!(matches!(
+    first
+      .segments
+      .get(1)
+      .and_then(|segment| segment.contexts.first()),
+    Some(DocxInlineContext::Hyperlink {
+      relationship_id: Some(relationship_id),
+      anchor: Some(anchor),
+    }) if relationship_id == "rId5" && anchor == "bookmark"
+  ));
   assert_eq!(extraction.coverage.hyperlink_text_segment_count, 1);
   assert_eq!(extraction.coverage.revision_text_segment_count, 1);
   assert!(matches!(

@@ -751,7 +751,14 @@ fn contexts(
         .map(|attribute| attribute.value().to_owned());
       found.push(DocxInlineContext::Hyperlink {
         relationship_id,
-        anchor: attribute(ancestor, "anchor"),
+        anchor: ancestor
+          .attributes()
+          .find(|attribute| {
+            attribute.name() == "anchor"
+              && WORDPROCESSING_NAMESPACES
+                .contains(&attribute.namespace().unwrap_or_default())
+          })
+          .map(|attribute| attribute.value().to_owned()),
       });
     }
     let revision = match ancestor.tag_name().name() {
