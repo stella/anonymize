@@ -129,8 +129,10 @@ type SessionEntry = {
 type SessionLease = {
   entry: SessionEntry;
   sessionId: string;
-  created: boolean;
-  checkpoint: string | undefined;
+  rollback:
+    | { type: "delete" }
+    | { type: "release" }
+    | { type: "restore"; checkpoint: string };
 };
 
 type RedactionSession = DocxAnonymizationSession &
@@ -252,8 +254,7 @@ export class LocalAnonymizeService {
       return {
         entry: existing,
         sessionId,
-        created: false,
-        checkpoint,
+        rollback: { type: "restore", checkpoint },
       };
     }
     if (this.#sessions.size >= SESSION_MAX_COUNT) {
@@ -274,8 +275,7 @@ export class LocalAnonymizeService {
     return {
       entry,
       sessionId,
-      created: true,
-      checkpoint: undefined,
+      rollback: { type: "delete" },
     };
   }
 
@@ -283,28 +283,27 @@ export class LocalAnonymizeService {
     entry.status = "ready";
   }
 
-  #rollbackSession({
-    checkpoint,
-    created,
-    entry,
-    sessionId,
-  }: SessionLease): void {
-    if (created && this.#sessions.get(sessionId) === entry) {
+  #rollbackSession({ entry, rollback, sessionId }: SessionLease): void {
+    if (this.#sessions.get(sessionId) !== entry) {
+      return;
+    }
+    if (rollback.type === "delete") {
       this.#sessions.delete(sessionId);
       return;
     }
-    if (checkpoint === undefined || this.#sessions.get(sessionId) !== entry) {
+    if (rollback.type === "release") {
+      entry.status = "ready";
       return;
     }
     try {
-      entry.session = entry.restoreSession(checkpoint);
+      entry.session = entry.restoreSession(rollback.checkpoint);
       entry.status = "ready";
     } catch {
       this.#sessions.delete(sessionId);
     }
   }
 
-  #existingSession(sessionId: string): RedactionSession {
+  #readSession(sessionId: string): SessionLease {
     const entry = this.#sessions.get(sessionId);
     if (entry === undefined) {
       throw new Error("The requested in-memory session is unavailable");
@@ -312,7 +311,8 @@ export class LocalAnonymizeService {
     if (entry.status !== "ready") {
       throw new Error("The requested in-memory session is unavailable");
     }
-    return entry.session;
+    entry.status = "busy";
+    return { entry, sessionId, rollback: { type: "release" } };
   }
 
   async anonymizeText(
@@ -346,16 +346,22 @@ export class LocalAnonymizeService {
     const source = await this.#scope.input(input.inputPath, ".txt");
     const destination = await this.#scope.output(input.outputPath, ".txt");
     assertDifferentPaths(source, destination);
-    const restored = this.#existingSession(input.sessionId).restoreText(
-      await readTextFile(source),
-    );
-    await safeWrite(destination, restored);
-    return {
-      operation: "restore",
-      format: "text",
-      outputCreated: true,
-      sessionId: input.sessionId,
-    };
+    const text = await readTextFile(source);
+    const lease = this.#readSession(input.sessionId);
+    try {
+      const restored = lease.entry.session.restoreText(text);
+      await safeWrite(destination, restored);
+      this.#commitSession(lease);
+      return {
+        operation: "restore",
+        format: "text",
+        outputCreated: true,
+        sessionId: input.sessionId,
+      };
+    } catch (error) {
+      this.#rollbackSession(lease);
+      throw error;
+    }
   }
 
   async anonymizeDocx(
@@ -407,30 +413,38 @@ export class LocalAnonymizeService {
     const source = await this.#scope.input(input.inputPath, ".docx");
     const destination = await this.#scope.output(input.outputPath, ".docx");
     assertDifferentPaths(source, destination);
-    const result = restoreDocxText({
-      document: await readBoundedFile({
-        path: source,
-        maximumBytes: DOCX_ARCHIVE_MAX_BYTES,
-        label: "DOCX",
-      }),
-      session: this.#existingSession(input.sessionId),
-      expectedSessionId: input.sessionId,
+    const document = await readBoundedFile({
+      path: source,
+      maximumBytes: DOCX_ARCHIVE_MAX_BYTES,
+      label: "DOCX",
     });
-    if (result.coverage.status === "partial" && !input.allowPartialCoverage) {
-      throw new Error(
-        "DOCX restoration has partial coverage; set allowPartialCoverage to publish it",
-      );
+    const lease = this.#readSession(input.sessionId);
+    try {
+      const result = restoreDocxText({
+        document,
+        session: lease.entry.session,
+        expectedSessionId: input.sessionId,
+      });
+      if (result.coverage.status === "partial" && !input.allowPartialCoverage) {
+        throw new Error(
+          "DOCX restoration has partial coverage; set allowPartialCoverage to publish it",
+        );
+      }
+      await safeWrite(destination, result.document);
+      this.#commitSession(lease);
+      return {
+        operation: "restore",
+        format: "docx",
+        outputCreated: true,
+        sessionId: input.sessionId,
+        rewrittenBlockCount: result.restoredBlockCount,
+        restoredPlaceholderCount: result.restoredPlaceholderCount,
+        coverageStatus: result.coverage.status,
+      };
+    } catch (error) {
+      this.#rollbackSession(lease);
+      throw error;
     }
-    await safeWrite(destination, result.document);
-    return {
-      operation: "restore",
-      format: "docx",
-      outputCreated: true,
-      sessionId: input.sessionId,
-      rewrittenBlockCount: result.restoredBlockCount,
-      restoredPlaceholderCount: result.restoredPlaceholderCount,
-      coverageStatus: result.coverage.status,
-    };
   }
 
   async inspectDocx(inputPath: string): Promise<AuditSafeResult> {

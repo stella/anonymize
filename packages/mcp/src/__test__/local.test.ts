@@ -195,6 +195,7 @@ describe("local MCP surface", () => {
     const tooLongTemporary = join(root, `${"x".repeat(240)}.txt`);
     const probeInput = join(root, "probe.txt");
     const probeOutput = join(root, "probe-output.txt");
+    const recoveredOutput = join(root, "recovered.txt");
     await writeFile(firstInput, "Alice Smith signed.");
     await writeFile(failedInput, "Bob Jones signed.");
     const service = new LocalAnonymizeService(await PathScope.create([root]));
@@ -222,6 +223,12 @@ describe("local MCP surface", () => {
       }),
     ).rejects.toThrow("unknown session placeholder");
     await expect(readFile(probeOutput)).rejects.toThrow();
+    await service.restoreText({
+      inputPath: firstOutput,
+      outputPath: recoveredOutput,
+      sessionId: "rollback_case_1",
+    });
+    expect(await readFile(recoveredOutput, "utf8")).toBe("Alice Smith signed.");
   });
 
   test("anonymizes and restores DOCX through path-only operations", async () => {
