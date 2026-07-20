@@ -378,10 +378,10 @@ fn is_owned_placeholder_candidate(
   let Some((prefix, _count)) = inner.rsplit_once('_') else {
     return false;
   };
-  let Some((_label, namespace)) = prefix.rsplit_once('_') else {
+  let Some((label, namespace)) = prefix.rsplit_once('_') else {
     return false;
   };
-  namespace == encoded_session_id
+  !label.is_empty() && namespace == encoded_session_id
 }
 
 #[allow(clippy::too_many_lines)]
