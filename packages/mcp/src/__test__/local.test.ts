@@ -9,6 +9,7 @@ import {
   mkdir,
   readFile,
   realpath,
+  rename,
   rm,
   stat,
   symlink,
@@ -99,7 +100,7 @@ describe("PathScope", () => {
     });
     expect(scopedInput.path).toBe(await realpath(input));
     expect(new TextDecoder().decode(scopedInput.bytes)).toBe("Alice");
-    expect(await scope.output(join(root, "output.txt"), ".txt")).toBe(
+    expect((await scope.output(join(root, "output.txt"), ".txt")).path).toBe(
       join(root, "output.txt"),
     );
     expect(
@@ -113,7 +114,7 @@ describe("PathScope", () => {
       ).path,
     ).toBe(await realpath(dotDotInput));
     expect(
-      await scope.output(join(dotDotDirectory, "output.txt"), ".txt"),
+      (await scope.output(join(dotDotDirectory, "output.txt"), ".txt")).path,
     ).toBe(join(dotDotDirectory, "output.txt"));
     await expect(scope.output(existing, ".txt")).rejects.toThrow(
       "already exists",
@@ -161,6 +162,27 @@ describe("PathScope", () => {
     await expect(
       scope.output(join(linkedDirectory, "output.txt"), ".txt"),
     ).rejects.toThrow("outside the configured roots");
+  });
+
+  test("rejects publication when the validated output directory is replaced", async () => {
+    const root = await temporaryDirectory();
+    const outside = await temporaryDirectory();
+    const directory = join(root, "output-directory");
+    const movedDirectory = join(root, "moved-output-directory");
+    const outputPath = join(directory, "output.txt");
+    await mkdir(directory);
+    const scope = await PathScope.create([root]);
+    const output = await scope.output(outputPath, ".txt");
+
+    await rename(directory, movedDirectory);
+    await symlink(outside, directory);
+    await expect(output.write("sensitive output")).rejects.toThrow(
+      "Output directory changed",
+    );
+    await expect(readFile(join(outside, "output.txt"))).rejects.toThrow();
+    await expect(
+      readFile(join(movedDirectory, "output.txt")),
+    ).rejects.toThrow();
   });
 });
 

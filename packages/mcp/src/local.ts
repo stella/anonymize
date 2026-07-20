@@ -17,7 +17,6 @@ import {
   realpath,
   stat,
   unlink,
-  writeFile,
 } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import {
@@ -66,6 +65,28 @@ type ScopedInput = {
   bytes: Uint8Array;
   path: string;
 };
+
+type DirectoryIdentity = {
+  dev: number;
+  ino: number;
+  path: string;
+};
+
+type FileIdentity = Pick<DirectoryIdentity, "dev" | "ino">;
+
+class ScopedOutput {
+  readonly parent: DirectoryIdentity;
+  readonly path: string;
+
+  constructor(path: string, parent: DirectoryIdentity) {
+    this.path = path;
+    this.parent = parent;
+  }
+
+  async write(bytes: Uint8Array | string): Promise<void> {
+    await safeWrite(this, bytes);
+  }
+}
 
 export class PathScope {
   readonly #roots: readonly string[];
@@ -144,7 +165,10 @@ export class PathScope {
     }
   }
 
-  async output(path: string, extension: ".docx" | ".txt"): Promise<string> {
+  async output(
+    path: string,
+    extension: ".docx" | ".txt",
+  ): Promise<ScopedOutput> {
     if (!isAbsolute(path) || extname(path).toLowerCase() !== extension) {
       throw new Error(`Output must be an absolute ${extension} path`);
     }
@@ -153,11 +177,16 @@ export class PathScope {
     if (!this.#roots.some((root) => inside(root, parent))) {
       throw new Error("Output is outside the configured roots");
     }
+    const parentMetadata = await stat(parent);
     try {
       await lstat(normalized);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-        return normalized;
+        return new ScopedOutput(normalized, {
+          dev: parentMetadata.dev,
+          ino: parentMetadata.ino,
+          path: parent,
+        });
       }
       throw new Error("Output availability could not be verified", {
         cause: error,
@@ -202,16 +231,85 @@ type NativeNodeSurface = {
 
 const nativeNodeSurface = nativeNode as unknown as NativeNodeSurface; // SAFETY: These native-node runtime exports are public, but their generated declarations are minified during workspace builds.
 
+const assertOutputParent = async ({
+  parent,
+  path,
+}: ScopedOutput): Promise<void> => {
+  const canonical = await realpath(dirname(path));
+  const metadata = await stat(canonical);
+  if (
+    canonical !== parent.path ||
+    metadata.dev !== parent.dev ||
+    metadata.ino !== parent.ino
+  ) {
+    throw new Error("Output directory changed while it was being used");
+  }
+};
+
+const sameFile = (left: FileIdentity, right: FileIdentity): boolean =>
+  left.dev === right.dev && left.ino === right.ino;
+
 const safeWrite = async (
-  path: string,
+  output: ScopedOutput,
   bytes: Uint8Array | string,
 ): Promise<void> => {
-  const temporary = `${path}.stella-${randomUUID()}.tmp`;
+  await assertOutputParent(output);
+  const temporary = `${output.path}.stella-${randomUUID()}.tmp`;
+  let published = false;
+  let committed = false;
+  let temporaryMetadata: FileIdentity | undefined;
+  const handle = await open(
+    temporary,
+    fsConstants.O_WRONLY |
+      fsConstants.O_CREAT |
+      fsConstants.O_EXCL |
+      fsConstants.O_NOFOLLOW,
+    0o600,
+  );
   try {
-    await writeFile(temporary, bytes, { flag: "wx", mode: 0o600 });
-    await link(temporary, path);
+    temporaryMetadata = await handle.stat();
+    const canonicalTemporary = await realpath(temporary);
+    const currentTemporaryMetadata = await lstat(temporary);
+    if (
+      dirname(canonicalTemporary) !== output.parent.path ||
+      !currentTemporaryMetadata.isFile() ||
+      !sameFile(temporaryMetadata, currentTemporaryMetadata)
+    ) {
+      throw new Error("Output staging file changed while it was being used");
+    }
+    await handle.writeFile(bytes);
+    await handle.sync();
+    await assertOutputParent(output);
+    const stagedMetadata = await lstat(temporary);
+    if (
+      !stagedMetadata.isFile() ||
+      !sameFile(temporaryMetadata, stagedMetadata)
+    ) {
+      throw new Error("Output staging file changed before publication");
+    }
+    await link(temporary, output.path);
+    published = true;
+    const publishedMetadata = await lstat(output.path);
+    if (
+      !publishedMetadata.isFile() ||
+      !sameFile(temporaryMetadata, publishedMetadata)
+    ) {
+      throw new Error("Published output does not match the staged file");
+    }
+    await assertOutputParent(output);
+    committed = true;
   } finally {
+    await handle.close().catch(() => undefined);
     await unlink(temporary).catch(() => undefined);
+    if (published && !committed && temporaryMetadata !== undefined) {
+      const publishedMetadata = await lstat(output.path).catch(() => undefined);
+      if (
+        publishedMetadata !== undefined &&
+        sameFile(temporaryMetadata, publishedMetadata)
+      ) {
+        await unlink(output.path).catch(() => undefined);
+      }
+    }
   }
 };
 
@@ -346,12 +444,12 @@ export class LocalAnonymizeService {
       label: "Text",
     });
     const destination = await this.#scope.output(input.outputPath, ".txt");
-    assertDifferentPaths(source.path, destination);
+    assertDifferentPaths(source.path, destination.path);
     const text = decodeText(source.bytes);
     const lease = this.#session(input.sessionId, input.language);
     try {
       const result = lease.entry.session.redact_text(text);
-      await safeWrite(destination, result.redaction.redactedText);
+      await destination.write(result.redaction.redactedText);
       this.#commitSession(lease);
       return {
         operation: "anonymize",
@@ -376,12 +474,12 @@ export class LocalAnonymizeService {
       label: "Text",
     });
     const destination = await this.#scope.output(input.outputPath, ".txt");
-    assertDifferentPaths(source.path, destination);
+    assertDifferentPaths(source.path, destination.path);
     const text = decodeText(source.bytes);
     const lease = this.#readSession(input.sessionId);
     try {
       const restored = lease.entry.session.restoreText(text);
-      await safeWrite(destination, restored);
+      await destination.write(restored);
       this.#commitSession(lease);
       return {
         operation: "restore",
@@ -405,7 +503,7 @@ export class LocalAnonymizeService {
       label: "DOCX",
     });
     const destination = await this.#scope.output(input.outputPath, ".docx");
-    assertDifferentPaths(source.path, destination);
+    assertDifferentPaths(source.path, destination.path);
     const lease = this.#session(input.sessionId, input.language);
     try {
       const result = anonymizeDocx({
@@ -420,7 +518,7 @@ export class LocalAnonymizeService {
           },
         },
       });
-      await safeWrite(destination, result.document);
+      await destination.write(result.document);
       this.#commitSession(lease);
       return {
         operation: "anonymize",
@@ -448,7 +546,7 @@ export class LocalAnonymizeService {
       label: "DOCX",
     });
     const destination = await this.#scope.output(input.outputPath, ".docx");
-    assertDifferentPaths(source.path, destination);
+    assertDifferentPaths(source.path, destination.path);
     const lease = this.#readSession(input.sessionId);
     try {
       const result = restoreDocxText({
@@ -461,7 +559,7 @@ export class LocalAnonymizeService {
           "DOCX restoration has partial coverage; set allowPartialCoverage to publish it",
         );
       }
-      await safeWrite(destination, result.document);
+      await destination.write(result.document);
       this.#commitSession(lease);
       return {
         operation: "restore",
