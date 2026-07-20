@@ -327,6 +327,9 @@ package-level history.
 
 ## Packages
 
+See [PII redaction surfaces](docs/pii-redaction-surfaces.md) for the runtime,
+format, workflow, and local MCP coverage matrix.
+
 | Package                 | Purpose                                                        |
 | ----------------------- | -------------------------------------------------------------- |
 | `@stll/anonymize`       | Native runtime for multi-layer PII detection and anonymization |

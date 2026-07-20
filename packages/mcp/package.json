@@ -1,8 +1,11 @@
 {
-  "name": "@stll/anonymize-docx",
+  "name": "@stll/anonymize-mcp",
   "version": "2.2.0",
-  "description": "Structure-aware DOCX text extraction and rewriting for stella anonymization workflows",
+  "description": "Path-only local MCP server for stella PII anonymization",
   "type": "module",
+  "bin": {
+    "stella-anonymize-mcp": "./dist/server.mjs"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.mts",
@@ -11,7 +14,6 @@
     }
   },
   "files": [
-    "ATTRIBUTION.md",
     "dist",
     "LICENSE",
     "README.md"
@@ -23,7 +25,11 @@
     "type": "git",
     "url": "git+https://github.com/stella/anonymize.git"
   },
+  "homepage": "https://github.com/stella/anonymize",
   "license": "Apache-2.0",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "build": "tsdown",
     "typecheck": "bun ../../scripts/tsc-native.ts --noEmit -p tsconfig.json && bun ../../scripts/tsc-native.ts --noEmit -p tsconfig.test.json",
@@ -31,8 +37,10 @@
     "format": "oxfmt ."
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@stll/anonymize": "^2.2.0",
-    "fflate": "^0.8.3"
+    "@stll/anonymize-docx": "^2.2.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",

@@ -10,7 +10,7 @@ const BASE_REF = process.env.CHANGESET_BASE_REF ?? "origin/main";
 const CHANGESET_RE = /^\.changeset\/(?!README\.md$)[^/]+\.md$/;
 const DATA_CHANGESET_RE = /^["']?@stll\/anonymize-data["']?:/m;
 const RUNTIME_SOURCE_RE =
-  /^(?:packages\/(?:anonymize|cli|document-docx)\/(?:(?:src|scripts)\/|(?:index\.cjs|tsconfig(?:\.wasm)?\.json|tsdown\.config\.ts)$)|crates\/anonymize-(?:adapter-contract|core|napi|py)\/)/;
+  /^(?:packages\/(?:anonymize|cli|document-docx|mcp)\/(?:(?:src|scripts)\/|(?:index\.cjs|tsconfig(?:\.wasm)?\.json|tsdown\.config\.ts)$)|crates\/anonymize-(?:adapter-contract|core|napi|py)\/)/;
 const RUNTIME_MANIFESTS = new Set([
   "Cargo.lock",
   "Cargo.toml",
@@ -23,6 +23,7 @@ const RUNTIME_MANIFESTS = new Set([
   "packages/anonymize/wasm/package.json",
   "packages/cli/package.json",
   "packages/document-docx/package.json",
+  "packages/mcp/package.json",
 ]);
 const GENERATED_VERSION_METADATA = new Set([
   ...RUNTIME_MANIFESTS,
@@ -31,7 +32,7 @@ const GENERATED_VERSION_METADATA = new Set([
   "crates/anonymize-py/pyproject.toml",
 ]);
 const RUNTIME_CHANGELOG_RE =
-  /^packages\/(?:anonymize(?:-(?:darwin-(?:arm64|x64)|linux-(?:arm64|x64)-gnu|win32-x64-msvc))?|cli|document-docx)(?:\/wasm)?\/CHANGELOG\.md$/;
+  /^packages\/(?:anonymize(?:-(?:darwin-(?:arm64|x64)|linux-(?:arm64|x64)-gnu|win32-x64-msvc))?|cli|document-docx|mcp)(?:\/wasm)?\/CHANGELOG\.md$/;
 
 const firstSlash = BASE_REF.indexOf("/");
 const baseRemote = firstSlash === -1 ? "origin" : BASE_REF.slice(0, firstSlash);

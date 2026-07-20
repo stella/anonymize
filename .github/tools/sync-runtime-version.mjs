@@ -14,6 +14,7 @@ const PACKAGE_FILES = [
   "packages/anonymize/wasm/package.json",
   "packages/cli/package.json",
   "packages/document-docx/package.json",
+  "packages/mcp/package.json",
 ];
 const ROOT_RUNTIME_PACKAGE_FILE = "packages/anonymize/package.json";
 const ROOT_NATIVE_OPTIONAL_DEPENDENCIES = [
