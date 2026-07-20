@@ -122,6 +122,13 @@ export class PathScope {
 type SessionEntry = {
   language: string | undefined;
   session: RedactionSession;
+  status: "initializing" | "ready";
+};
+
+type SessionLease = {
+  entry: SessionEntry;
+  sessionId: string;
+  created: boolean;
 };
 
 type RedactionSession = DocxAnonymizationSession &
@@ -224,13 +231,16 @@ export class LocalAnonymizeService {
     this.#scope = scope;
   }
 
-  #session(sessionId: string, language?: string): RedactionSession {
+  #session(sessionId: string, language?: string): SessionLease {
     const existing = this.#sessions.get(sessionId);
     if (existing !== undefined) {
       if (existing.language !== language) {
         throw new Error("A session cannot change language");
       }
-      return existing.session;
+      if (existing.status === "initializing") {
+        throw new Error("The requested session is still initializing");
+      }
+      return { entry: existing, sessionId, created: false };
     }
     if (this.#sessions.size >= SESSION_MAX_COUNT) {
       throw new Error(`MCP sessions must not exceed ${SESSION_MAX_COUNT}`);
@@ -239,14 +249,34 @@ export class LocalAnonymizeService {
       language === undefined ? {} : { language },
     );
     const session = pipeline.createRedactionSession(sessionId);
-    this.#sessions.set(sessionId, { language, session });
-    return session;
+    const entry: SessionEntry = {
+      language,
+      session,
+      status: "initializing",
+    };
+    this.#sessions.set(sessionId, entry);
+    return { entry, sessionId, created: true };
+  }
+
+  #commitSession({ created, entry }: SessionLease): void {
+    if (created) {
+      entry.status = "ready";
+    }
+  }
+
+  #rollbackSession({ created, entry, sessionId }: SessionLease): void {
+    if (created && this.#sessions.get(sessionId) === entry) {
+      this.#sessions.delete(sessionId);
+    }
   }
 
   #existingSession(sessionId: string): RedactionSession {
     const entry = this.#sessions.get(sessionId);
     if (entry === undefined) {
       throw new Error("The requested in-memory session is unavailable");
+    }
+    if (entry.status === "initializing") {
+      throw new Error("The requested in-memory session is still initializing");
     }
     return entry.session;
   }
@@ -258,17 +288,22 @@ export class LocalAnonymizeService {
     const destination = await this.#scope.output(input.outputPath, ".txt");
     assertDifferentPaths(source, destination);
     const text = await readTextFile(source);
-    const result = this.#session(input.sessionId, input.language).redact_text(
-      text,
-    );
-    await safeWrite(destination, result.redaction.redactedText);
-    return {
-      operation: "anonymize",
-      format: "text",
-      outputCreated: true,
-      sessionId: input.sessionId,
-      entityCount: result.redaction.entityCount,
-    };
+    const lease = this.#session(input.sessionId, input.language);
+    try {
+      const result = lease.entry.session.redact_text(text);
+      await safeWrite(destination, result.redaction.redactedText);
+      this.#commitSession(lease);
+      return {
+        operation: "anonymize",
+        format: "text",
+        outputCreated: true,
+        sessionId: input.sessionId,
+        entityCount: result.redaction.entityCount,
+      };
+    } catch (error) {
+      this.#rollbackSession(lease);
+      throw error;
+    }
   }
 
   async restoreText(
@@ -295,33 +330,41 @@ export class LocalAnonymizeService {
     const source = await this.#scope.input(input.inputPath, ".docx");
     const destination = await this.#scope.output(input.outputPath, ".docx");
     assertDifferentPaths(source, destination);
-    const result = anonymizeDocx({
-      document: await readBoundedFile({
-        path: source,
-        maximumBytes: DOCX_ARCHIVE_MAX_BYTES,
-        label: "DOCX",
-      }),
-      session: this.#session(input.sessionId, input.language),
-      expectedSessionId: input.sessionId,
-      policy: {
-        coverage: {
-          mode: input.allowPartialCoverage
-            ? DOCX_COVERAGE_MODES.allowPartial
-            : DOCX_COVERAGE_MODES.requireFull,
-        },
-      },
+    const document = await readBoundedFile({
+      path: source,
+      maximumBytes: DOCX_ARCHIVE_MAX_BYTES,
+      label: "DOCX",
     });
-    await safeWrite(destination, result.document);
-    return {
-      operation: "anonymize",
-      format: "docx",
-      outputCreated: true,
-      sessionId: input.sessionId,
-      entityCount: result.summary.entityCount,
-      blockCount: result.summary.blockCount,
-      rewrittenBlockCount: result.summary.rewrittenBlockCount,
-      coverageStatus: result.summary.coverage.status,
-    };
+    const lease = this.#session(input.sessionId, input.language);
+    try {
+      const result = anonymizeDocx({
+        document,
+        session: lease.entry.session,
+        expectedSessionId: input.sessionId,
+        policy: {
+          coverage: {
+            mode: input.allowPartialCoverage
+              ? DOCX_COVERAGE_MODES.allowPartial
+              : DOCX_COVERAGE_MODES.requireFull,
+          },
+        },
+      });
+      await safeWrite(destination, result.document);
+      this.#commitSession(lease);
+      return {
+        operation: "anonymize",
+        format: "docx",
+        outputCreated: true,
+        sessionId: input.sessionId,
+        entityCount: result.summary.entityCount,
+        blockCount: result.summary.blockCount,
+        rewrittenBlockCount: result.summary.rewrittenBlockCount,
+        coverageStatus: result.summary.coverage.status,
+      };
+    } catch (error) {
+      this.#rollbackSession(lease);
+      throw error;
+    }
   }
 
   async restoreDocx(

@@ -215,6 +215,7 @@ describe("local MCP surface", () => {
   test("reports and fails closed on partial DOCX coverage", async () => {
     const root = await temporaryDirectory();
     const input = join(root, "partial.docx");
+    const rejectedAnonymized = join(root, "partial-rejected-anonymized.docx");
     const anonymized = join(root, "partial-anonymized.docx");
     const rejectedRestore = join(root, "partial-rejected.docx");
     const restored = join(root, "partial-restored.docx");
@@ -225,6 +226,16 @@ describe("local MCP surface", () => {
     const service = new LocalAnonymizeService(await PathScope.create([root]));
 
     expect((await service.inspectDocx(input)).coverageStatus).toBe("partial");
+    await expect(
+      service.anonymizeDocx({
+        inputPath: input,
+        outputPath: rejectedAnonymized,
+        sessionId: "local_partial_docx_1",
+        language: "de",
+        allowPartialCoverage: false,
+      }),
+    ).rejects.toThrow("outside the fully supported");
+    await expect(readFile(rejectedAnonymized)).rejects.toThrow();
     const anonymizeResult = await service.anonymizeDocx({
       inputPath: input,
       outputPath: anonymized,
