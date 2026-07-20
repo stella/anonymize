@@ -145,6 +145,7 @@ type PythonParityOutput = {
     invalid_plan_error: string | null;
     unserializable_plan_error: string | null;
     oversized_plan_error: string | null;
+    ignored_extra_field: boolean;
   };
 };
 
@@ -372,6 +373,17 @@ except anonymize.DocxRewriteError as error:
     docx_oversized_plan_error = error.code
 else:
     docx_oversized_plan_error = None
+docx_extra_plan = {
+    "location": docx_block["location"],
+    "expected_text": docx_block["text"],
+    "replacements": [{"start": 0, "end": 3, "replacement": "Ana"}],
+}
+docx_extra_plan["unexpected"] = docx_extra_plan
+docx_extra_result = anonymize.rewrite_docx_text(docx_source, [docx_extra_plan])
+docx_ignored_extra_field = (
+    anonymize.extract_docx_text(docx_extra_result["document"])["blocks"][0]["text"]
+    == "Ana Novak signed."
+)
 deanonymised_text = anonymize.deanonymise(
     session_first.redaction.redacted_text,
     session_first.redaction.redaction_map,
@@ -557,6 +569,7 @@ print(
                 "invalid_plan_error": docx_invalid_plan_error,
                 "unserializable_plan_error": docx_unserializable_plan_error,
                 "oversized_plan_error": docx_oversized_plan_error,
+                "ignored_extra_field": docx_ignored_extra_field,
             },
         }
     )
@@ -740,6 +753,7 @@ describe("python binding parity", () => {
       invalid_plan_error: "invalid-replacement",
       unserializable_plan_error: "invalid-replacement",
       oversized_plan_error: "rewrite-limit-exceeded",
+      ignored_extra_field: true,
     });
   });
 

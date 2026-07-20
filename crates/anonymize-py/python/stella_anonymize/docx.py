@@ -918,7 +918,9 @@ def _rewrite_docx_text_python_oracle(
     }
 
 
-def _preflight_rewrite_plan(rewrites: Sequence[Mapping[str, Any]]) -> None:
+def _preflight_rewrite_plan(
+    rewrites: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
     if len(rewrites) > DOCX_MAX_TEXT_BLOCKS:
         raise DocxRewriteError(
             "rewrite-limit-exceeded",
@@ -926,6 +928,7 @@ def _preflight_rewrite_plan(rewrites: Sequence[Mapping[str, Any]]) -> None:
         )
     replacement_count = 0
     estimated_bytes = len(rewrites) * 256
+    serializable_rewrites: list[dict[str, Any]] = []
     for rewrite in rewrites:
         replacements = rewrite.get("replacements")
         if not isinstance(replacements, Sequence) or isinstance(
@@ -945,13 +948,40 @@ def _preflight_rewrite_plan(rewrites: Sequence[Mapping[str, Any]]) -> None:
         estimated_bytes += (
             len(expected_text) * 6 if isinstance(expected_text, str) else 0
         ) + len(replacements) * 96
+        serializable_replacements: list[Any] = []
         for replacement in replacements:
             if isinstance(replacement, Mapping):
                 value = replacement.get("replacement")
                 if isinstance(value, str):
                     estimated_bytes += len(value) * 6
+                serializable_replacements.append(
+                    {
+                        "start": replacement.get("start"),
+                        "end": replacement.get("end"),
+                        "replacement": value,
+                    }
+                )
+            else:
+                serializable_replacements.append(None)
         location = rewrite.get("location")
+        serializable_location: Any = None
         if isinstance(location, Mapping):
+            serializable_location = {
+                "type": location.get("type"),
+                "blockIndex": location.get("blockIndex"),
+            }
+            part = location.get("part")
+            if isinstance(part, Mapping):
+                serializable_location["part"] = {
+                    "type": part.get("type"),
+                    "path": part.get("path"),
+                }
+                for value in (part.get("type"), part.get("path")):
+                    if isinstance(value, str):
+                        estimated_bytes += len(value) * 6
+            location_type = location.get("type")
+            if isinstance(location_type, str):
+                estimated_bytes += len(location_type) * 6
             for key in (
                 "xmlPath",
                 "tablePath",
@@ -969,11 +999,20 @@ def _preflight_rewrite_plan(rewrites: Sequence[Mapping[str, Any]]) -> None:
                             f"DOCX rewrite location paths must not exceed {DOCX_XML_MAX_DEPTH} entries",
                         )
                     estimated_bytes += len(path) * 24
+                    serializable_location[key] = list(path)
+        serializable_rewrites.append(
+            {
+                "location": serializable_location,
+                "expectedText": expected_text,
+                "replacements": serializable_replacements,
+            }
+        )
         if estimated_bytes > DOCX_UNCOMPRESSED_MAX_BYTES:
             raise DocxRewriteError(
                 "rewrite-limit-exceeded",
                 f"DOCX rewrite plans must not exceed {DOCX_UNCOMPRESSED_MAX_BYTES} estimated serialized bytes",
             )
+    return serializable_rewrites
 
 
 def rewrite_docx_text(
@@ -989,8 +1028,8 @@ def rewrite_docx_text(
             if "expectedText" not in normalized and "expected_text" in normalized:
                 normalized["expectedText"] = normalized.pop("expected_text")
             normalized_rewrites.append(normalized)
-        _preflight_rewrite_plan(normalized_rewrites)
-        rewrites_json = json.dumps(normalized_rewrites, separators=(",", ":"))
+        serializable_rewrites = _preflight_rewrite_plan(normalized_rewrites)
+        rewrites_json = json.dumps(serializable_rewrites, separators=(",", ":"))
     except DocxRewriteError:
         raise
     except (TypeError, ValueError) as error:

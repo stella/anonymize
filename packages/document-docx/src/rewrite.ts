@@ -39,6 +39,19 @@ const LOCATION_PATH_KEYS = [
   "cellPath",
   "textBoxPath",
 ] as const;
+const REWRITE_JSON_FIELDS = [
+  "location",
+  "expectedText",
+  "replacements",
+  "start",
+  "end",
+  "replacement",
+  "type",
+  "part",
+  "path",
+  "blockIndex",
+  ...LOCATION_PATH_KEYS,
+] as const;
 
 const preflightRewritePlan = (rewrites: readonly DocxBlockRewrite[]): void => {
   if (rewrites.length > DOCX_REWRITE_MAX_BLOCKS) {
@@ -74,6 +87,15 @@ const preflightRewritePlan = (rewrites: readonly DocxBlockRewrite[]): void => {
       }
     }
     const location = rewrite.location as unknown as Record<string, unknown>;
+    for (const value of [
+      location["type"],
+      (location["part"] as Record<string, unknown> | undefined)?.["type"],
+      (location["part"] as Record<string, unknown> | undefined)?.["path"],
+    ]) {
+      if (typeof value === "string") {
+        estimatedBytes += value.length * 6;
+      }
+    }
     for (const key of LOCATION_PATH_KEYS) {
       const path = location[key];
       if (Array.isArray(path)) {
@@ -105,10 +127,21 @@ export const rewriteDocxText = (
       "The native anonymize binding does not expose DOCX rewriting",
     );
   }
-  preflightRewritePlan(rewrites);
+  try {
+    preflightRewritePlan(rewrites);
+  } catch (error) {
+    if (error instanceof DocxRewriteError) {
+      throw error;
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    throw new DocxRewriteError(
+      DOCX_REWRITE_ERROR_CODES.invalidReplacement,
+      `DOCX rewrite plan is invalid: ${message}`,
+    );
+  }
   let rewritesJson: string;
   try {
-    rewritesJson = JSON.stringify(rewrites);
+    rewritesJson = JSON.stringify(rewrites, [...REWRITE_JSON_FIELDS]);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new DocxRewriteError(
