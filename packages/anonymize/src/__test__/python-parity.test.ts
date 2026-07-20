@@ -75,7 +75,7 @@ const DOCX_RUNTIME_PARITY_FIXTURE = JSON.parse(
     expectedCode: string;
     [key: string]: unknown;
   }[];
-};
+}; // SAFETY: This committed test fixture is owned and reviewed with the parity test schema.
 const CONTRACT_FIXTURE_LANGUAGES = ["cs", "de", "en"] as const;
 
 type FixtureLanguage = (typeof CONTRACT_FIXTURE_LANGUAGES)[number];

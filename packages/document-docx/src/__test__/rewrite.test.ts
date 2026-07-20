@@ -50,7 +50,7 @@ const runtimeParityFixture = JSON.parse(
     join(import.meta.dir, "../../../../fixtures/docx-runtime-parity.json"),
     "utf8",
   ),
-) as RuntimeParityFixture;
+) as RuntimeParityFixture; // SAFETY: This committed test fixture is owned and reviewed with the test schema.
 
 const docx = (body: string): Uint8Array =>
   zipSync({
@@ -134,7 +134,10 @@ describe("rewriteDocxText", () => {
       expect(thrown, `vector ${vector.id} must fail`).toBeInstanceOf(
         DocxRewriteError,
       );
-      expect((thrown as DocxRewriteError).code).toBe(vector.expectedCode);
+      if (!(thrown instanceof DocxRewriteError)) {
+        throw new TypeError(`vector ${vector.id} returned an invalid error`);
+      }
+      expect(thrown.code).toBe(vector.expectedCode);
     }
   });
 
