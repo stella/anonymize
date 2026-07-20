@@ -179,6 +179,44 @@ describe("local MCP surface", () => {
     await expect(readFile(output)).rejects.toThrow();
   });
 
+  test("rolls back an existing session when output publication fails", async () => {
+    const root = await temporaryDirectory();
+    const firstInput = join(root, "first.txt");
+    const firstOutput = join(root, "first-output.txt");
+    const failedInput = join(root, "failed.txt");
+    const tooLongTemporary = join(root, `${"x".repeat(240)}.txt`);
+    const probeInput = join(root, "probe.txt");
+    const probeOutput = join(root, "probe-output.txt");
+    await writeFile(firstInput, "Alice Smith signed.");
+    await writeFile(failedInput, "Bob Jones signed.");
+    const service = new LocalAnonymizeService(await PathScope.create([root]));
+    await service.anonymizeText({
+      inputPath: firstInput,
+      outputPath: firstOutput,
+      sessionId: "rollback_case_1",
+      language: "en",
+    });
+
+    await expect(
+      service.anonymizeText({
+        inputPath: failedInput,
+        outputPath: tooLongTemporary,
+        sessionId: "rollback_case_1",
+        language: "en",
+      }),
+    ).rejects.toThrow();
+    const predictedPlaceholder = "[PERSON_rollback%5Fcase%5F1_2]";
+    await writeFile(probeInput, predictedPlaceholder);
+    await expect(
+      service.restoreText({
+        inputPath: probeInput,
+        outputPath: probeOutput,
+        sessionId: "rollback_case_1",
+      }),
+    ).rejects.toThrow("unknown session placeholder");
+    await expect(readFile(probeOutput)).rejects.toThrow();
+  });
+
   test("anonymizes and restores DOCX through path-only operations", async () => {
     const root = await temporaryDirectory();
     const input = join(root, "input.docx");

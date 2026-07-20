@@ -122,13 +122,15 @@ export class PathScope {
 type SessionEntry = {
   language: string | undefined;
   session: RedactionSession;
-  status: "initializing" | "ready";
+  restoreSession: (plaintextJson: string) => RedactionSession;
+  status: "busy" | "initializing" | "ready";
 };
 
 type SessionLease = {
   entry: SessionEntry;
   sessionId: string;
   created: boolean;
+  checkpoint: string | undefined;
 };
 
 type RedactionSession = DocxAnonymizationSession &
@@ -137,11 +139,13 @@ type RedactionSession = DocxAnonymizationSession &
       redaction: { redactedText: string; entityCount: number };
     };
     restoreText(text: string): string;
+    toPlaintextJson(): string;
   };
 
 type NativeNodeSurface = {
   getDefaultNativePipeline: (options: { language?: string }) => {
     createRedactionSession: (sessionId: string) => RedactionSession;
+    restoreRedactionSession: (plaintextJson: string) => RedactionSession;
   };
   native_package_version: () => string;
 };
@@ -240,7 +244,17 @@ export class LocalAnonymizeService {
       if (existing.status === "initializing") {
         throw new Error("The requested session is still initializing");
       }
-      return { entry: existing, sessionId, created: false };
+      if (existing.status === "busy") {
+        throw new Error("The requested session is handling another operation");
+      }
+      const checkpoint = existing.session.toPlaintextJson();
+      existing.status = "busy";
+      return {
+        entry: existing,
+        sessionId,
+        created: false,
+        checkpoint,
+      };
     }
     if (this.#sessions.size >= SESSION_MAX_COUNT) {
       throw new Error(`MCP sessions must not exceed ${SESSION_MAX_COUNT}`);
@@ -252,20 +266,40 @@ export class LocalAnonymizeService {
     const entry: SessionEntry = {
       language,
       session,
+      restoreSession: (plaintextJson) =>
+        pipeline.restoreRedactionSession(plaintextJson),
       status: "initializing",
     };
     this.#sessions.set(sessionId, entry);
-    return { entry, sessionId, created: true };
+    return {
+      entry,
+      sessionId,
+      created: true,
+      checkpoint: undefined,
+    };
   }
 
-  #commitSession({ created, entry }: SessionLease): void {
-    if (created) {
-      entry.status = "ready";
-    }
+  #commitSession({ entry }: SessionLease): void {
+    entry.status = "ready";
   }
 
-  #rollbackSession({ created, entry, sessionId }: SessionLease): void {
+  #rollbackSession({
+    checkpoint,
+    created,
+    entry,
+    sessionId,
+  }: SessionLease): void {
     if (created && this.#sessions.get(sessionId) === entry) {
+      this.#sessions.delete(sessionId);
+      return;
+    }
+    if (checkpoint === undefined || this.#sessions.get(sessionId) !== entry) {
+      return;
+    }
+    try {
+      entry.session = entry.restoreSession(checkpoint);
+      entry.status = "ready";
+    } catch {
       this.#sessions.delete(sessionId);
     }
   }
@@ -275,8 +309,8 @@ export class LocalAnonymizeService {
     if (entry === undefined) {
       throw new Error("The requested in-memory session is unavailable");
     }
-    if (entry.status === "initializing") {
-      throw new Error("The requested in-memory session is still initializing");
+    if (entry.status !== "ready") {
+      throw new Error("The requested in-memory session is unavailable");
     }
     return entry.session;
   }
