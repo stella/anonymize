@@ -1,0 +1,117 @@
+use std::{
+  fmt::Write as _,
+  io::{Cursor, Write as _},
+};
+
+use stella_anonymize_docx_core::{
+  DocxCoverageItem, DocxErrorCode, DocxPartType, extract_docx_text,
+};
+use zip::{ZipWriter, write::SimpleFileOptions};
+
+const CONTENT_TYPES_NAMESPACE: &str =
+  "http://schemas.openxmlformats.org/package/2006/content-types";
+const PACKAGE_RELATIONSHIPS_NAMESPACE: &str =
+  "http://schemas.openxmlformats.org/package/2006/relationships";
+const OFFICE_RELATIONSHIPS_NAMESPACE: &str =
+  "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+const WORD_NAMESPACE: &str =
+  "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+
+fn docx(
+  parts: &[(&str, &str, &str)],
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+  let output = Cursor::new(Vec::new());
+  let mut archive = ZipWriter::new(output);
+  let options = SimpleFileOptions::default();
+  let mut overrides = String::new();
+  for (path, content_type, _) in parts {
+    write!(
+      &mut overrides,
+      "<Override PartName=\"/{path}\" ContentType=\"{content_type}\"/>"
+    )?;
+  }
+  archive.start_file("[Content_Types].xml", options)?;
+  archive.write_all(
+    format!("<Types xmlns=\"{CONTENT_TYPES_NAMESPACE}\">{overrides}</Types>")
+      .as_bytes(),
+  )?;
+  archive.start_file("_rels/.rels", options)?;
+  archive.write_all(
+    format!(
+      "<Relationships xmlns=\"{PACKAGE_RELATIONSHIPS_NAMESPACE}\"><Relationship Id=\"rId1\" Type=\"{OFFICE_RELATIONSHIPS_NAMESPACE}/officeDocument\" Target=\"word/document.xml\"/></Relationships>"
+    )
+    .as_bytes(),
+  )?;
+  for (path, _, xml) in parts {
+    archive.start_file(*path, options)?;
+    archive.write_all(xml.as_bytes())?;
+  }
+  Ok(archive.finish()?.into_inner())
+}
+
+#[test]
+fn extracts_structural_blocks_and_utf16_segments()
+-> Result<(), Box<dyn std::error::Error>> {
+  let document_xml = format!(
+    "<w:document xmlns:w=\"{WORD_NAMESPACE}\" xmlns:r=\"{OFFICE_RELATIONSHIPS_NAMESPACE}\"><w:body><w:p><w:r><w:t>😀 </w:t></w:r><w:hyperlink r:id=\"rId5\" w:anchor=\"bookmark\"><w:r><w:t>Alice</w:t></w:r></w:hyperlink><w:ins><w:r><w:t> added</w:t></w:r></w:ins><w:r><w:tab/><w:br/></w:r></w:p><w:tbl><w:tr><w:tc><w:p><w:r><w:t>Cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl><w:p><w:r><w:drawing><w:txbxContent><w:p><w:r><w:t>Box</w:t></w:r></w:p></w:txbxContent></w:drawing></w:r></w:p></w:body></w:document>"
+  );
+  let archive = docx(&[(
+    "word/document.xml",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml",
+    &document_xml,
+  )])?;
+  let extraction = extract_docx_text(&archive)?;
+  assert_eq!(
+    extraction
+      .blocks
+      .iter()
+      .map(|block| block.text.as_str())
+      .collect::<Vec<_>>(),
+    vec!["😀 Alice added\t\n", "Cell", "", "Box"]
+  );
+  let first = extraction.blocks.first().ok_or("missing first block")?;
+  assert_eq!(
+    first.segments.first().ok_or("missing first segment")?.end,
+    3
+  );
+  assert_eq!(extraction.coverage.hyperlink_text_segment_count, 1);
+  assert_eq!(extraction.coverage.revision_text_segment_count, 1);
+  assert!(matches!(
+    extraction.coverage.parts.first(),
+    Some(DocxCoverageItem::Extracted { part, block_count: 4 })
+      if part.part_type == DocxPartType::MainDocument
+  ));
+  let value = serde_json::to_value(extraction)?;
+  assert_eq!(value.get("contractVersion"), Some(&serde_json::json!(1)));
+  let segment_start = value
+    .get("blocks")
+    .and_then(|value| value.as_array())
+    .and_then(|blocks| blocks.first())
+    .and_then(|block| block.get("segments"))
+    .and_then(|value| value.as_array())
+    .and_then(|segments| segments.get(1))
+    .and_then(|segment| segment.get("start"));
+  assert_eq!(segment_start, Some(&serde_json::json!(3)));
+  Ok(())
+}
+
+#[test]
+fn rejects_unsafe_or_incomplete_packages()
+-> Result<(), Box<dyn std::error::Error>> {
+  let empty = docx(&[])?;
+  let error = extract_docx_text(&empty)
+    .err()
+    .ok_or("expected package error")?;
+  assert_eq!(error.code(), DocxErrorCode::InvalidPackage);
+
+  let output = Cursor::new(Vec::new());
+  let mut archive = ZipWriter::new(output);
+  archive.start_file("../word/document.xml", SimpleFileOptions::default())?;
+  archive.write_all(b"unsafe")?;
+  let unsafe_archive = archive.finish()?.into_inner();
+  let unsafe_error = extract_docx_text(&unsafe_archive)
+    .err()
+    .ok_or("expected unsafe path error")?;
+  assert_eq!(unsafe_error.code(), DocxErrorCode::UnsafeEntryPath);
+  Ok(())
+}

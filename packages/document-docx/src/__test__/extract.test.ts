@@ -7,6 +7,7 @@ import {
   DocxExtractionError,
   extractDocxText,
 } from "../index";
+import { extractDocxTextTypeScriptOracle } from "../extract";
 
 const CONTENT_TYPES_NAMESPACE =
   "http://schemas.openxmlformats.org/package/2006/content-types";
@@ -94,6 +95,8 @@ describe("extractDocxText", () => {
     ]);
 
     const result = extractDocxText(archive);
+
+    expect(result).toEqual(extractDocxTextTypeScriptOracle(archive));
 
     expect(result.contractVersion).toBe(1);
     expect(result.blocks.map(({ text }) => text)).toEqual([

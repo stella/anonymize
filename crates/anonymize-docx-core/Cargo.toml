@@ -1,0 +1,22 @@
+[package]
+name = "stella-anonymize-docx-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Bounded DOCX extraction and rewriting core for stella anonymization"
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+
+[dependencies]
+roxmltree = "0.21"
+percent-encoding = "2.3"
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
+zip = { version = "7.2", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+serde_json = "1"
+
+[lints]
+workspace = true

@@ -51,6 +51,13 @@ an invariant:
 - `local`: Node.js and Python filesystem behavior.
 - `document`: Node.js and Python structure-aware document adapters.
 
+DOCX ZIP/XML extraction is owned by `crates/anonymize-docx-core`. Both the NAPI
+and PyO3 adapters serialize the same Rust contract, including structural
+locations, UTF-16 segment offsets, resource bounds, and fail-closed coverage.
+The TypeScript extractor is retained only as a parity oracle while surgical
+rewrite moves into the same core; it is not the production Node extraction
+path.
+
 The full surface-parity gate checks API availability for every runtime in the
 profile. Behavioral suites then execute shared fixtures, normalized errors, and
 cross-runtime artifacts such as encrypted sessions. Do not narrow a profile to

@@ -16,6 +16,8 @@ from typing import Any, TypedDict
 from urllib.parse import unquote
 from xml.etree import ElementTree as ET
 
+from ._native import extract_docx_text_json as _extract_docx_text_json
+
 DOCX_EXTRACTION_CONTRACT_VERSION = 1
 DOCX_ARCHIVE_MAX_BYTES = 64 * 1024 * 1024
 DOCX_ENTRY_MAX_BYTES = 16 * 1024 * 1024
@@ -542,7 +544,13 @@ def _extract_part(
 def extract_docx_text(document: bytes | bytearray | memoryview) -> dict[str, Any]:
     """Extract redactable DOCX text blocks and fail-closed coverage metadata."""
 
-    entries, order = _read_archive(bytes(document))
+    return json.loads(_extract_docx_text_json(bytes(document)))
+
+
+def _extract_docx_text_python(document: bytes) -> dict[str, Any]:
+    """Compatibility oracle retained until shared coverage vectors are complete."""
+
+    entries, order = _read_archive(document)
     content_types = _content_type_parts(entries)
     main_target = _main_target(entries)
     supported: list[tuple[dict[str, str], str]] = []

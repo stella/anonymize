@@ -38,6 +38,7 @@ use stella_anonymize_core::{
   StaticRedactionResult,
   assemble::{AssembleError, Dictionaries, GazetteerEntry, PipelineConfig},
 };
+use stella_anonymize_docx_core::extract_docx_text as extract_docx_text_core;
 
 #[pyclass(name = "RedactionEntry", get_all, skip_from_py_object)]
 #[derive(Clone)]
@@ -1433,6 +1434,13 @@ fn to_py_assemble_error(error: &AssembleError) -> PyErr {
   PyValueError::new_err(error.to_string())
 }
 
+#[pyfunction]
+fn extract_docx_text_json(document: &[u8]) -> PyResult<String> {
+  let extraction = extract_docx_text_core(document)
+    .map_err(|error| PyValueError::new_err(error.to_string()))?;
+  serde_json::to_string(&extraction).map_err(|error| to_py_serde_error(&error))
+}
+
 #[pymodule(gil_used = false)]
 fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
   module.add_class::<PyPreparedSearch>()?;
@@ -1484,5 +1492,6 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
   module.add_function(wrap_pyfunction!(normalize_for_search, module)?)?;
   module.add_function(wrap_pyfunction!(deanonymise, module)?)?;
   module.add_function(wrap_pyfunction!(native_package_version, module)?)?;
+  module.add_function(wrap_pyfunction!(extract_docx_text_json, module)?)?;
   Ok(())
 }

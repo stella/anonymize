@@ -36,8 +36,18 @@ use stella_anonymize_core::{
   SessionMetadata, SessionStatus, SessionTimestamp, StaticRedactionDiagnostics,
   assemble::{AssembleError, Dictionaries, GazetteerEntry, PipelineConfig},
 };
+use stella_anonymize_docx_core::extract_docx_text as extract_docx_text_core;
 
 const PREPARED_SEARCH_CACHE_LIMIT: usize = 8;
+
+#[napi]
+#[allow(clippy::needless_pass_by_value)]
+pub fn extract_docx_text_json(document: BufferSlice<'_>) -> Result<String> {
+  let extraction = extract_docx_text_core(&document)
+    .map_err(|error| Error::from_reason(error.to_string()))?;
+  serde_json::to_string(&extraction)
+    .map_err(|error| to_napi_serde_error(&error))
+}
 
 static PREPARED_SEARCH_CACHE: LazyLock<Mutex<PreparedSearchCache>> =
   LazyLock::new(|| Mutex::new(PreparedSearchCache::new()));

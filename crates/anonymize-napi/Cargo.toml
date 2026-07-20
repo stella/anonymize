@@ -27,6 +27,7 @@ napi-derive = "3"
 serde_json = "1"
 stella-anonymize-adapter-contract = { path = "../anonymize-adapter-contract", default-features = false }
 stella-anonymize-core = { path = "../anonymize-core" }
+stella-anonymize-docx-core = { path = "../anonymize-docx-core" }
 
 [build-dependencies]
 napi-build = "2"

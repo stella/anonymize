@@ -1,5 +1,6 @@
 import { unzipSync, type UnzipFileInfo } from "fflate";
 import { SaxesParser, type SaxesTagNS } from "saxes";
+import { loadNativeAnonymizeBinding } from "@stll/anonymize";
 
 import {
   DOCX_EXTRACTION_ERROR_CODES,
@@ -930,7 +931,9 @@ const extractPart = (
   };
 };
 
-export const extractDocxText = (archive: Uint8Array): DocxExtraction => {
+export const extractDocxTextTypeScriptOracle = (
+  archive: Uint8Array,
+): DocxExtraction => {
   // Entries the retention filter drops are still preserved verbatim by the
   // rewrite, so their names are recorded for the coverage inventory below.
   const skippedEntryPaths: string[] = [];
@@ -1168,4 +1171,46 @@ export const extractDocxText = (archive: Uint8Array): DocxExtraction => {
       unsupportedFieldInstructionCount,
     },
   };
+};
+
+const nativeExtractionErrorCode = (
+  message: string,
+): DocxExtractionErrorCode => {
+  if (message.includes("unsafe entry path")) {
+    return DOCX_EXTRACTION_ERROR_CODES.unsafeEntryPath;
+  }
+  if (message.includes("valid bounded DOCX ZIP archive")) {
+    return DOCX_EXTRACTION_ERROR_CODES.invalidArchive;
+  }
+  if (message.includes("valid XML") || message.includes("valid UTF-8")) {
+    return DOCX_EXTRACTION_ERROR_CODES.invalidXml;
+  }
+  if (
+    message.includes(
+      `DOCX archives must not exceed ${DOCX_ARCHIVE_MAX_BYTES} bytes`,
+    )
+  ) {
+    return DOCX_EXTRACTION_ERROR_CODES.archiveLimitExceeded;
+  }
+  if (message.includes("must not exceed") || message.includes("at most")) {
+    return DOCX_EXTRACTION_ERROR_CODES.uncompressedLimitExceeded;
+  }
+  return DOCX_EXTRACTION_ERROR_CODES.invalidPackage;
+};
+
+export const extractDocxText = (archive: Uint8Array): DocxExtraction => {
+  const extract = loadNativeAnonymizeBinding().extractDocxTextJson;
+  if (extract === undefined) {
+    throw new DocxExtractionError(
+      DOCX_EXTRACTION_ERROR_CODES.invalidPackage,
+      "Native anonymize binding does not expose DOCX extraction",
+    );
+  }
+  try {
+    return JSON.parse(extract(archive)) as DocxExtraction;
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "DOCX extraction failed";
+    throw new DocxExtractionError(nativeExtractionErrorCode(message), message);
+  }
 };
