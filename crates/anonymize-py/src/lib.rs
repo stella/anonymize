@@ -39,8 +39,9 @@ use stella_anonymize_core::{
   assemble::{AssembleError, Dictionaries, GazetteerEntry, PipelineConfig},
 };
 use stella_anonymize_docx_core::{
-  DocxBlockRewrite, DocxRewriteErrorCode,
+  DocxBlockRewrite, DocxRestorationErrorCode, DocxRewriteErrorCode,
   extract_docx_text as extract_docx_text_core,
+  plan_docx_restoration as plan_docx_restoration_core,
   rewrite_docx_text as rewrite_docx_text_core,
 };
 
@@ -1462,6 +1463,16 @@ const fn docx_rewrite_code(code: DocxRewriteErrorCode) -> &'static str {
   }
 }
 
+const fn docx_restoration_code(code: DocxRestorationErrorCode) -> &'static str {
+  match code {
+    DocxRestorationErrorCode::InvalidPlaceholder => "invalid-placeholder",
+    DocxRestorationErrorCode::RestorationLimitExceeded => {
+      "restoration-limit-exceeded"
+    }
+    DocxRestorationErrorCode::UnsupportedDocument => "unsupported-document",
+  }
+}
+
 #[pyfunction]
 fn rewrite_docx_text_native(
   document: &[u8],
@@ -1485,6 +1496,21 @@ fn rewrite_docx_text_native(
     result.rewritten_block_count,
     result.applied_replacement_count,
   ))
+}
+
+#[pyfunction]
+fn plan_docx_restoration_json(
+  document: &[u8],
+  session_id: &str,
+) -> PyResult<String> {
+  let plan =
+    plan_docx_restoration_core(document, session_id).map_err(|error| {
+      PyValueError::new_err(format!(
+        "{}: {error}",
+        docx_restoration_code(error.code())
+      ))
+    })?;
+  serde_json::to_string(&plan).map_err(|error| to_py_serde_error(&error))
 }
 
 #[pymodule(gil_used = false)]
@@ -1540,5 +1566,6 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
   module.add_function(wrap_pyfunction!(native_package_version, module)?)?;
   module.add_function(wrap_pyfunction!(extract_docx_text_json, module)?)?;
   module.add_function(wrap_pyfunction!(rewrite_docx_text_native, module)?)?;
+  module.add_function(wrap_pyfunction!(plan_docx_restoration_json, module)?)?;
   Ok(())
 }

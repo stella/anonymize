@@ -253,6 +253,7 @@ export type NativeAnonymizeBinding = {
     rewrittenBlockCount: number;
     appliedReplacementCount: number;
   };
+  planDocxRestorationJson?: (document: Uint8Array, sessionId: string) => string;
   normalizeForSearch: (text: string) => string;
   nativePackageVersion: () => string;
   NativePreparedSearch: {

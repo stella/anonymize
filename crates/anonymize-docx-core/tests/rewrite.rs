@@ -2,7 +2,7 @@ use std::io::{Cursor, Read as _, Write as _};
 
 use stella_anonymize_docx_core::{
   DocxBlockRewrite, DocxRewriteErrorCode, DocxTextReplacement,
-  extract_docx_text, rewrite_docx_text,
+  extract_docx_text, plan_docx_restoration, rewrite_docx_text,
 };
 use zip::{ZipArchive, ZipWriter, write::SimpleFileOptions};
 
@@ -170,5 +170,25 @@ fn preserves_extraction_errors_before_rewriting()
     .err()
     .ok_or("expected invalid archive error")?;
   assert_eq!(error.code(), DocxRewriteErrorCode::InvalidArchive);
+  Ok(())
+}
+
+#[test]
+fn plans_only_owned_session_placeholders_at_utf16_offsets()
+-> Result<(), Box<dyn std::error::Error>> {
+  let source = docx(&format!(
+    "<w:document xmlns:w=\"{WORD_NAMESPACE}\"><w:body><w:p><w:r><w:t>😀 [PERSON_session%5Fone_1] [PERSON_other_1] [_session%5Fone_1]</w:t></w:r></w:p></w:body></w:document>"
+  ))?;
+  let plan = plan_docx_restoration(&source, "session_one")?;
+  assert_eq!(plan.blocks.len(), 1);
+  let block = plan.blocks.first().ok_or("missing restoration block")?;
+  assert_eq!(block.candidates.len(), 1);
+  let candidate = block
+    .candidates
+    .first()
+    .ok_or("missing restoration candidate")?;
+  assert_eq!(candidate.start, 3);
+  assert_eq!(candidate.candidate, "[PERSON_session%5Fone_1]");
+  assert_eq!(plan.candidate_count, 3);
   Ok(())
 }

@@ -37,8 +37,9 @@ use stella_anonymize_core::{
   assemble::{AssembleError, Dictionaries, GazetteerEntry, PipelineConfig},
 };
 use stella_anonymize_docx_core::{
-  DocxBlockRewrite, DocxRewriteErrorCode,
+  DocxBlockRewrite, DocxRestorationErrorCode, DocxRewriteErrorCode,
   extract_docx_text as extract_docx_text_core,
+  plan_docx_restoration as plan_docx_restoration_core,
   rewrite_docx_text as rewrite_docx_text_core,
 };
 
@@ -77,6 +78,16 @@ const fn docx_rewrite_code(code: DocxRewriteErrorCode) -> &'static str {
   }
 }
 
+const fn docx_restoration_code(code: DocxRestorationErrorCode) -> &'static str {
+  match code {
+    DocxRestorationErrorCode::InvalidPlaceholder => "invalid-placeholder",
+    DocxRestorationErrorCode::RestorationLimitExceeded => {
+      "restoration-limit-exceeded"
+    }
+    DocxRestorationErrorCode::UnsupportedDocument => "unsupported-document",
+  }
+}
+
 #[napi]
 #[allow(clippy::needless_pass_by_value)]
 pub fn rewrite_docx_text_native(
@@ -105,6 +116,22 @@ pub fn rewrite_docx_text_native(
     applied_replacement_count: u32::try_from(result.applied_replacement_count)
       .map_err(|_| Error::from_reason("DOCX replacement count overflowed"))?,
   })
+}
+
+#[napi]
+#[allow(clippy::needless_pass_by_value)]
+pub fn plan_docx_restoration_json(
+  document: BufferSlice<'_>,
+  session_id: String,
+) -> Result<String> {
+  let plan =
+    plan_docx_restoration_core(&document, &session_id).map_err(|error| {
+      Error::from_reason(format!(
+        "{}: {error}",
+        docx_restoration_code(error.code())
+      ))
+    })?;
+  serde_json::to_string(&plan).map_err(|error| to_napi_serde_error(&error))
 }
 
 static PREPARED_SEARCH_CACHE: LazyLock<Mutex<PreparedSearchCache>> =

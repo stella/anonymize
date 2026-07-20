@@ -22,6 +22,8 @@ const DOCX_MAX_TEXT_BLOCKS: usize = 100_000;
 const DOCX_MAX_TEXT_SEGMENTS: usize = 1_000_000;
 const DOCX_MAX_INLINE_CONTEXT_SCAN_OPS: usize = 20_000_000;
 const DOCX_MAX_REPLACEMENTS: usize = 1_000_000;
+const DOCX_RESTORE_MAX_CANDIDATES: usize = 1_000_000;
+const DOCX_RESTORE_MAX_PLACEHOLDER_UTF16: usize = 512;
 const XML_SPACE_INSERTION_BYTES: usize = 21;
 const SIGNATURE_PART_PREFIX: &str = "_xmlsignatures/";
 
@@ -242,6 +244,50 @@ pub struct DocxRewriteResult {
   pub applied_replacement_count: usize,
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
+pub struct DocxRestorationCandidate {
+  pub start: usize,
+  pub end: usize,
+  pub candidate: String,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
+pub struct DocxBlockRestorationPlan {
+  pub location: DocxBlockLocation,
+  #[serde(rename = "expectedText")]
+  pub expected_text: String,
+  pub candidates: Vec<DocxRestorationCandidate>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
+pub struct DocxRestorationPlan {
+  pub extraction: DocxExtraction,
+  pub blocks: Vec<DocxBlockRestorationPlan>,
+  #[serde(rename = "candidateCount")]
+  pub candidate_count: usize,
+}
+
+#[derive(Debug, Error, Clone, Eq, PartialEq)]
+#[error("{message}")]
+pub struct DocxRestorationError {
+  code: DocxRestorationErrorCode,
+  message: String,
+}
+
+impl DocxRestorationError {
+  #[must_use]
+  pub const fn code(&self) -> DocxRestorationErrorCode {
+    self.code
+  }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum DocxRestorationErrorCode {
+  InvalidPlaceholder,
+  RestorationLimitExceeded,
+  UnsupportedDocument,
+}
+
 #[derive(Debug, Error, Clone, Eq, PartialEq)]
 #[error("{message}")]
 pub struct DocxRewriteError {
@@ -311,6 +357,152 @@ fn rewrite_error(
     code,
     message: message.into(),
   }
+}
+
+fn restoration_error(
+  code: DocxRestorationErrorCode,
+  message: impl Into<String>,
+) -> DocxRestorationError {
+  DocxRestorationError {
+    code,
+    message: message.into(),
+  }
+}
+
+fn is_owned_placeholder_candidate(
+  value: &str,
+  encoded_session_id: &str,
+) -> bool {
+  let inner = value.strip_prefix('[').unwrap_or(value);
+  let inner = inner.strip_suffix(']').unwrap_or(inner);
+  let Some((prefix, _count)) = inner.rsplit_once('_') else {
+    return false;
+  };
+  let Some((label, namespace)) = prefix.rsplit_once('_') else {
+    return false;
+  };
+  !label.is_empty() && namespace == encoded_session_id
+}
+
+#[allow(clippy::too_many_lines)]
+fn scan_restoration_candidates(
+  text: &str,
+  encoded_session_id: &str,
+  candidate_count: &mut usize,
+) -> Result<Vec<DocxRestorationCandidate>, DocxRestorationError> {
+  let mut candidates = Vec::new();
+  let mut start = None::<(usize, usize)>;
+  let mut utf16_cursor = 0_usize;
+  for (byte_cursor, character) in text.char_indices() {
+    if character == '[' {
+      if let Some((start_byte, _)) = start {
+        let inner_start = start_byte.checked_add(1).ok_or_else(|| {
+          restoration_error(
+            DocxRestorationErrorCode::RestorationLimitExceeded,
+            "DOCX placeholder position overflowed",
+          )
+        })?;
+        if text.get(inner_start..byte_cursor).is_some_and(|value| {
+          is_owned_placeholder_candidate(value, encoded_session_id)
+        }) {
+          return Err(restoration_error(
+            DocxRestorationErrorCode::InvalidPlaceholder,
+            "DOCX text contains an incomplete placeholder for the expected session",
+          ));
+        }
+      }
+      start = Some((byte_cursor, utf16_cursor));
+    } else if character == ']'
+      && let Some((start_byte, start_utf16)) = start
+    {
+      let candidate_end_byte = byte_cursor
+        .checked_add(character.len_utf8())
+        .ok_or_else(|| {
+          restoration_error(
+            DocxRestorationErrorCode::RestorationLimitExceeded,
+            "DOCX placeholder position overflowed",
+          )
+        })?;
+      let candidate_end_utf16 = utf16_cursor
+        .checked_add(character.len_utf16())
+        .ok_or_else(|| {
+          restoration_error(
+            DocxRestorationErrorCode::RestorationLimitExceeded,
+            "DOCX placeholder position overflowed",
+          )
+        })?;
+      *candidate_count = candidate_count.checked_add(1).ok_or_else(|| {
+        restoration_error(
+          DocxRestorationErrorCode::RestorationLimitExceeded,
+          "DOCX restoration candidate count overflowed",
+        )
+      })?;
+      if *candidate_count > DOCX_RESTORE_MAX_CANDIDATES {
+        return Err(restoration_error(
+          DocxRestorationErrorCode::RestorationLimitExceeded,
+          format!(
+            "DOCX restoration must not inspect more than {DOCX_RESTORE_MAX_CANDIDATES} placeholder candidates"
+          ),
+        ));
+      }
+      let candidate =
+        text.get(start_byte..candidate_end_byte).ok_or_else(|| {
+          restoration_error(
+            DocxRestorationErrorCode::InvalidPlaceholder,
+            "DOCX placeholder text is unavailable",
+          )
+        })?;
+      let is_owned =
+        is_owned_placeholder_candidate(candidate, encoded_session_id);
+      if candidate_end_utf16.saturating_sub(start_utf16)
+        > DOCX_RESTORE_MAX_PLACEHOLDER_UTF16
+      {
+        if is_owned {
+          return Err(restoration_error(
+            DocxRestorationErrorCode::InvalidPlaceholder,
+            "DOCX session placeholder exceeds the maximum length",
+          ));
+        }
+        start = None;
+        utf16_cursor = candidate_end_utf16;
+        continue;
+      }
+      if is_owned {
+        candidates.push(DocxRestorationCandidate {
+          start: start_utf16,
+          end: candidate_end_utf16,
+          candidate: candidate.to_owned(),
+        });
+      }
+      start = None;
+    }
+    utf16_cursor =
+      utf16_cursor
+        .checked_add(character.len_utf16())
+        .ok_or_else(|| {
+          restoration_error(
+            DocxRestorationErrorCode::RestorationLimitExceeded,
+            "DOCX text position overflowed",
+          )
+        })?;
+  }
+  if let Some((start_byte, _)) = start {
+    let inner_start = start_byte.checked_add(1).ok_or_else(|| {
+      restoration_error(
+        DocxRestorationErrorCode::RestorationLimitExceeded,
+        "DOCX placeholder position overflowed",
+      )
+    })?;
+    if text.get(inner_start..).is_some_and(|value| {
+      is_owned_placeholder_candidate(value, encoded_session_id)
+    }) {
+      return Err(restoration_error(
+        DocxRestorationErrorCode::InvalidPlaceholder,
+        "DOCX text contains an incomplete placeholder for the expected session",
+      ));
+    }
+  }
+  Ok(candidates)
 }
 
 impl DocxBlockLocation {
@@ -1655,6 +1847,51 @@ pub fn extract_docx_text(document: &[u8]) -> Result<DocxExtraction, DocxError> {
     contract_version: DOCX_EXTRACTION_CONTRACT_VERSION,
     blocks,
     coverage,
+  })
+}
+
+pub fn plan_docx_restoration(
+  document: &[u8],
+  session_id: &str,
+) -> Result<DocxRestorationPlan, DocxRestorationError> {
+  let extraction = extract_docx_text(document).map_err(|source| {
+    restoration_error(
+      match source.code() {
+        DocxErrorCode::ArchiveLimitExceeded
+        | DocxErrorCode::UncompressedLimitExceeded => {
+          DocxRestorationErrorCode::RestorationLimitExceeded
+        }
+        DocxErrorCode::InvalidArchive
+        | DocxErrorCode::InvalidPackage
+        | DocxErrorCode::InvalidXml
+        | DocxErrorCode::UnsafeEntryPath => {
+          DocxRestorationErrorCode::UnsupportedDocument
+        }
+      },
+      source.to_string(),
+    )
+  })?;
+  let encoded_session_id = session_id.replace('_', "%5F");
+  let mut blocks = Vec::new();
+  let mut candidate_count = 0_usize;
+  for block in &extraction.blocks {
+    let candidates = scan_restoration_candidates(
+      &block.text,
+      &encoded_session_id,
+      &mut candidate_count,
+    )?;
+    if !candidates.is_empty() {
+      blocks.push(DocxBlockRestorationPlan {
+        location: block.location.clone(),
+        expected_text: block.text.clone(),
+        candidates,
+      });
+    }
+  }
+  Ok(DocxRestorationPlan {
+    extraction,
+    blocks,
+    candidate_count,
   })
 }
 

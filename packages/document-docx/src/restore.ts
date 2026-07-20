@@ -1,5 +1,6 @@
+import { loadNativeAnonymizeBinding } from "@stll/anonymize";
+
 import { docxWorkflowCoverage } from "./coverage";
-import { extractDocxText } from "./extract";
 import { rewriteDocxText } from "./rewrite";
 import {
   DOCX_RESTORATION_ERROR_CODES,
@@ -9,9 +10,6 @@ import {
   type DocxTextReplacement,
   type RestoreDocxTextOptions,
 } from "./types";
-
-const DOCX_RESTORE_MAX_PLACEHOLDER_UTF16 = 512;
-const DOCX_RESTORE_MAX_CANDIDATES = 1_000_000;
 
 export class DocxRestorationError extends Error {
   readonly code: DocxRestorationErrorCode;
@@ -28,110 +26,19 @@ const restorationError = (
   message: string,
 ): DocxRestorationError => new DocxRestorationError(code, message);
 
-const encodedSessionNamespace = (sessionId: string): string =>
-  sessionId.replaceAll("_", "%5F");
-
-const isOwnedPlaceholderCandidate = (
-  value: string,
-  encodedSessionId: string,
-): boolean => {
-  const inner = value.endsWith("]") ? value.slice(0, -1) : value;
-  const countSeparator = inner.lastIndexOf("_");
-  if (countSeparator <= 0) {
-    return false;
-  }
-  const prefix = inner.slice(0, countSeparator);
-  const namespaceSeparator = prefix.lastIndexOf("_");
-  if (namespaceSeparator <= 0) {
-    return false;
-  }
-  return prefix.slice(namespaceSeparator + 1) === encodedSessionId;
-};
-
-type PlanBlockRestorationOptions = {
-  text: string;
-  encodedSessionId: string;
-  restoreCandidate: (candidate: string) => string;
-  budget: { candidateCount: number };
-};
-
-const planBlockRestoration = ({
-  text,
-  encodedSessionId,
-  restoreCandidate,
-  budget,
-}: PlanBlockRestorationOptions): DocxTextReplacement[] => {
-  const replacements: DocxTextReplacement[] = [];
-  let start: number | undefined;
-  for (let cursor = 0; cursor < text.length; cursor += 1) {
-    const character = text.at(cursor);
-    if (character === "[") {
-      if (
-        start !== undefined &&
-        isOwnedPlaceholderCandidate(
-          text.slice(start + 1, cursor),
-          encodedSessionId,
-        )
-      ) {
-        throw restorationError(
-          DOCX_RESTORATION_ERROR_CODES.invalidPlaceholder,
-          "DOCX text contains an incomplete placeholder for the expected session",
-        );
-      }
-      start = cursor;
-      continue;
-    }
-    if (character !== "]" || start === undefined) {
-      continue;
-    }
-    const candidateEnd = cursor + 1;
-    const candidate = text.slice(start, candidateEnd);
-    budget.candidateCount += 1;
-    if (budget.candidateCount > DOCX_RESTORE_MAX_CANDIDATES) {
-      throw restorationError(
-        DOCX_RESTORATION_ERROR_CODES.restorationLimitExceeded,
-        `DOCX restoration must not inspect more than ${DOCX_RESTORE_MAX_CANDIDATES} placeholder candidates`,
-      );
-    }
-    const isOwned = isOwnedPlaceholderCandidate(
-      candidate.slice(1),
-      encodedSessionId,
-    );
-    if (candidate.length > DOCX_RESTORE_MAX_PLACEHOLDER_UTF16) {
-      if (isOwned) {
-        throw restorationError(
-          DOCX_RESTORATION_ERROR_CODES.invalidPlaceholder,
-          "DOCX session placeholder exceeds the maximum length",
-        );
-      }
-      start = undefined;
-      continue;
-    }
-    if (!isOwned) {
-      start = undefined;
-      continue;
-    }
-    const replacement = restoreCandidate(candidate);
-    if (replacement !== candidate) {
-      replacements.push({ start, end: candidateEnd, replacement });
-    } else {
-      throw restorationError(
-        DOCX_RESTORATION_ERROR_CODES.invalidPlaceholder,
-        "DOCX text contains an unknown placeholder for the expected session",
-      );
-    }
-    start = undefined;
-  }
-  if (
-    start !== undefined &&
-    isOwnedPlaceholderCandidate(text.slice(start + 1), encodedSessionId)
-  ) {
-    throw restorationError(
-      DOCX_RESTORATION_ERROR_CODES.invalidPlaceholder,
-      "DOCX text contains an incomplete placeholder for the expected session",
-    );
-  }
-  return replacements;
+type NativeRestorationPlan = {
+  extraction: {
+    coverage: Parameters<typeof docxWorkflowCoverage>[0];
+  };
+  blocks: readonly {
+    location: DocxBlockRewrite["location"];
+    expectedText: string;
+    candidates: readonly {
+      start: number;
+      end: number;
+      candidate: string;
+    }[];
+  }[];
 };
 
 export const restoreDocxText = ({
@@ -167,25 +74,54 @@ export const restoreDocxText = ({
     restoredCandidates.set(candidate, restored);
     return restored;
   };
-  const encodedSessionId = encodedSessionNamespace(sessionId);
-  const extraction = extractDocxText(document);
+  const planRestoration = loadNativeAnonymizeBinding().planDocxRestorationJson;
+  if (planRestoration === undefined) {
+    throw restorationError(
+      DOCX_RESTORATION_ERROR_CODES.invalidSession,
+      "Native anonymize binding does not expose DOCX restoration planning",
+    );
+  }
+  let plan: NativeRestorationPlan;
+  try {
+    plan = JSON.parse(
+      planRestoration(document, sessionId),
+    ) as NativeRestorationPlan;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const separator = message.indexOf(": ");
+    const code = message.slice(0, separator) as DocxRestorationErrorCode;
+    const knownCodes = new Set<DocxRestorationErrorCode>([
+      DOCX_RESTORATION_ERROR_CODES.invalidPlaceholder,
+      DOCX_RESTORATION_ERROR_CODES.restorationLimitExceeded,
+      DOCX_RESTORATION_ERROR_CODES.unsupportedDocument,
+    ]);
+    if (separator > 0 && knownCodes.has(code)) {
+      throw restorationError(code, message.slice(separator + 2));
+    }
+    throw error;
+  }
   const rewrites: DocxBlockRewrite[] = [];
-  const budget = { candidateCount: 0 };
   let restoredPlaceholderCount = 0;
-  for (const block of extraction.blocks) {
-    const replacements = planBlockRestoration({
-      text: block.text,
-      encodedSessionId,
-      restoreCandidate,
-      budget,
-    });
+  for (const block of plan.blocks) {
+    const replacements: DocxTextReplacement[] = block.candidates.map(
+      ({ candidate, end, start }) => {
+        const replacement = restoreCandidate(candidate);
+        if (replacement === candidate) {
+          throw restorationError(
+            DOCX_RESTORATION_ERROR_CODES.invalidPlaceholder,
+            "DOCX text contains an unknown placeholder for the expected session",
+          );
+        }
+        return { start, end, replacement };
+      },
+    );
     if (replacements.length === 0) {
       continue;
     }
     restoredPlaceholderCount += replacements.length;
     rewrites.push({
       location: block.location,
-      expectedText: block.text,
+      expectedText: block.expectedText,
       replacements,
     });
   }
@@ -196,6 +132,6 @@ export const restoreDocxText = ({
     sessionId,
     restoredBlockCount: restored.rewrittenBlockCount,
     restoredPlaceholderCount,
-    coverage: docxWorkflowCoverage(extraction.coverage),
+    coverage: docxWorkflowCoverage(plan.extraction.coverage),
   };
 };

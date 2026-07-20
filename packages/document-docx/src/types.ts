@@ -225,6 +225,7 @@ export const DOCX_RESTORATION_ERROR_CODES = {
   invalidSession: "invalid-session",
   restorationLimitExceeded: "restoration-limit-exceeded",
   sessionMismatch: "session-mismatch",
+  unsupportedDocument: "unsupported-document",
 } as const;
 
 export type DocxRestorationErrorCode =
