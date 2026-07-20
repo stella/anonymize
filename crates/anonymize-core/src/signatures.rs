@@ -88,10 +88,10 @@ fn detect_slash_s(
       );
     } else {
       let first_cell_end = after_mark.saturating_add(
-        full_text
-          .get(after_mark..line_end)
-          .map(slash_s_cell_end)
-          .unwrap_or_else(|| line_end.saturating_sub(after_mark)),
+        full_text.get(after_mark..line_end).map_or_else(
+          || line_end.saturating_sub(after_mark),
+          slash_s_cell_end,
+        ),
       );
       try_emit(results, full_text, data, after_mark, first_cell_end, 0.95);
     }

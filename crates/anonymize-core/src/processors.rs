@@ -1880,15 +1880,7 @@ fn single_name_hit_context(
   evidence_hits: &[RawDenyListMatch],
 ) -> Result<SingleNameContext> {
   let tail = slice_from(full_text, offsets, end)?;
-  let rest = tail.trim_start();
-  let whitespace_bytes = tail.len().saturating_sub(rest.len());
-  let separator = tail.get(..whitespace_bytes).unwrap_or_default();
-  let next_start = end.saturating_add(
-    tail
-      .get(..whitespace_bytes)
-      .map(byte_len)
-      .unwrap_or_default(),
-  );
+  let (rest, next_start, separator) = skip_leading_middle_initials(tail, end);
   let next_word = rest
     .chars()
     .take_while(|ch| ch.is_alphabetic())
@@ -1923,6 +1915,49 @@ fn single_name_hit_context(
     return Ok(SingleNameContext::UppercaseShape);
   }
   Ok(SingleNameContext::None)
+}
+
+/// Skip `A.` / `R.` middle initials so the following surname can arm
+/// single-token person extension (`Paul A. Pinkston`).
+fn skip_leading_middle_initials(
+  tail: &str,
+  end: u32,
+) -> (&str, u32, &str) {
+  let mut rest = tail;
+  let mut next_start = end;
+  let mut separator = "";
+  let mut skipped_initial = false;
+
+  loop {
+    let trimmed = rest.trim_start();
+    let whitespace_bytes = rest.len().saturating_sub(trimmed.len());
+    let whitespace = rest.get(..whitespace_bytes).unwrap_or_default();
+    next_start = next_start.saturating_add(byte_len(whitespace));
+    if !skipped_initial {
+      separator = whitespace;
+    }
+    rest = trimmed;
+
+    let token = rest
+      .chars()
+      .take_while(|ch| !ch.is_whitespace())
+      .collect::<String>();
+    if !is_middle_initial_token(&token) {
+      if skipped_initial {
+        separator = " ";
+      }
+      return (rest, next_start, separator);
+    }
+
+    let token_bytes = byte_len(&token);
+    let Some(after) = rest.get(usize::try_from(token_bytes).unwrap_or(0)..)
+    else {
+      return (rest, next_start, separator);
+    };
+    next_start = next_start.saturating_add(token_bytes);
+    rest = after;
+    skipped_initial = true;
+  }
 }
 
 fn surname_context_separator_is_supported(separator: &str) -> bool {
