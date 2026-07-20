@@ -245,6 +245,14 @@ export type NativePreparedSearchBinding = {
 
 export type NativeAnonymizeBinding = {
   extractDocxTextJson?: (document: Uint8Array) => string;
+  rewriteDocxTextNative?: (
+    document: Uint8Array,
+    rewritesJson: string,
+  ) => {
+    document: Uint8Array;
+    rewrittenBlockCount: number;
+    appliedReplacementCount: number;
+  };
   normalizeForSearch: (text: string) => string;
   nativePackageVersion: () => string;
   NativePreparedSearch: {

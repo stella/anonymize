@@ -38,7 +38,11 @@ use stella_anonymize_core::{
   StaticRedactionResult,
   assemble::{AssembleError, Dictionaries, GazetteerEntry, PipelineConfig},
 };
-use stella_anonymize_docx_core::extract_docx_text as extract_docx_text_core;
+use stella_anonymize_docx_core::{
+  DocxBlockRewrite, DocxRewriteErrorCode,
+  extract_docx_text as extract_docx_text_core,
+  rewrite_docx_text as rewrite_docx_text_core,
+};
 
 #[pyclass(name = "RedactionEntry", get_all, skip_from_py_object)]
 #[derive(Clone)]
@@ -1441,6 +1445,36 @@ fn extract_docx_text_json(document: &[u8]) -> PyResult<String> {
   serde_json::to_string(&extraction).map_err(|error| to_py_serde_error(&error))
 }
 
+const fn docx_rewrite_code(code: DocxRewriteErrorCode) -> &'static str {
+  match code {
+    DocxRewriteErrorCode::InvalidReplacement => "invalid-replacement",
+    DocxRewriteErrorCode::RewriteLimitExceeded => "rewrite-limit-exceeded",
+    DocxRewriteErrorCode::StaleExtraction => "stale-extraction",
+    DocxRewriteErrorCode::UnsupportedReplacement => "unsupported-replacement",
+  }
+}
+
+#[pyfunction]
+fn rewrite_docx_text_native(
+  document: &[u8],
+  rewrites_json: &str,
+) -> PyResult<(Vec<u8>, usize, usize)> {
+  let rewrites = serde_json::from_str::<Vec<DocxBlockRewrite>>(rewrites_json)
+    .map_err(|error| to_py_serde_error(&error))?;
+  let result =
+    rewrite_docx_text_core(document, &rewrites).map_err(|error| {
+      PyValueError::new_err(format!(
+        "{}: {error}",
+        docx_rewrite_code(error.code())
+      ))
+    })?;
+  Ok((
+    result.document,
+    result.rewritten_block_count,
+    result.applied_replacement_count,
+  ))
+}
+
 #[pymodule(gil_used = false)]
 fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
   module.add_class::<PyPreparedSearch>()?;
@@ -1493,5 +1527,6 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
   module.add_function(wrap_pyfunction!(deanonymise, module)?)?;
   module.add_function(wrap_pyfunction!(native_package_version, module)?)?;
   module.add_function(wrap_pyfunction!(extract_docx_text_json, module)?)?;
+  module.add_function(wrap_pyfunction!(rewrite_docx_text_native, module)?)?;
   Ok(())
 }

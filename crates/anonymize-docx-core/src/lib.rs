@@ -2,15 +2,15 @@
 
 use std::{
   collections::{HashMap, HashSet},
-  io::{Cursor, Read},
+  io::{Cursor, Read, Write},
   path::Path,
 };
 
 use percent_encoding::percent_decode_str;
 use roxmltree::{Document, Node, NodeId};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use zip::ZipArchive;
+use zip::{CompressionMethod, ZipArchive, ZipWriter, write::SimpleFileOptions};
 
 pub const DOCX_EXTRACTION_CONTRACT_VERSION: u8 = 1;
 pub const DOCX_ARCHIVE_MAX_BYTES: usize = 64 * 1024 * 1024;
@@ -21,6 +21,9 @@ const DOCX_MAX_ENTRIES: usize = 4_096;
 const DOCX_MAX_TEXT_BLOCKS: usize = 100_000;
 const DOCX_MAX_TEXT_SEGMENTS: usize = 1_000_000;
 const DOCX_MAX_INLINE_CONTEXT_SCAN_OPS: usize = 20_000_000;
+const DOCX_MAX_REPLACEMENTS: usize = 1_000_000;
+const XML_SPACE_INSERTION_BYTES: usize = 21;
+const SIGNATURE_PART_PREFIX: &str = "_xmlsignatures/";
 
 const CONTENT_TYPES_PATH: &str = "[Content_Types].xml";
 const ROOT_RELATIONSHIPS_PATH: &str = "_rels/.rels";
@@ -79,7 +82,7 @@ pub enum DocxErrorCode {
   UncompressedLimitExceeded,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
+#[derive(Debug, Clone, Eq, Hash, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum DocxPartType {
   Comments,
@@ -90,14 +93,14 @@ pub enum DocxPartType {
   MainDocument,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
+#[derive(Debug, Clone, Eq, Hash, PartialEq, Deserialize, Serialize)]
 pub struct DocxPart {
   #[serde(rename = "type")]
   pub part_type: DocxPartType,
   pub path: String,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Serialize)]
+#[derive(Debug, Clone, Eq, Hash, PartialEq, Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum DocxBlockLocation {
   Paragraph {
@@ -217,6 +220,64 @@ pub struct DocxExtraction {
   pub coverage: DocxCoverage,
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Deserialize, Serialize)]
+pub struct DocxTextReplacement {
+  pub start: usize,
+  pub end: usize,
+  pub replacement: String,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Deserialize, Serialize)]
+pub struct DocxBlockRewrite {
+  pub location: DocxBlockLocation,
+  #[serde(rename = "expectedText")]
+  pub expected_text: String,
+  pub replacements: Vec<DocxTextReplacement>,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct DocxRewriteResult {
+  pub document: Vec<u8>,
+  pub rewritten_block_count: usize,
+  pub applied_replacement_count: usize,
+}
+
+#[derive(Debug, Error, Clone, Eq, PartialEq)]
+#[error("{message}")]
+pub struct DocxRewriteError {
+  code: DocxRewriteErrorCode,
+  message: String,
+}
+
+impl DocxRewriteError {
+  #[must_use]
+  pub const fn code(&self) -> DocxRewriteErrorCode {
+    self.code
+  }
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum DocxRewriteErrorCode {
+  InvalidReplacement,
+  RewriteLimitExceeded,
+  StaleExtraction,
+  UnsupportedReplacement,
+}
+
+#[derive(Debug, Clone)]
+struct TextNodeUpdate {
+  path: Vec<usize>,
+  value: String,
+  original_byte_length: usize,
+}
+
+#[derive(Debug)]
+struct XmlPatch {
+  start: usize,
+  end: usize,
+  value: String,
+}
+
 #[derive(Debug)]
 struct ArchiveEntry {
   path: String,
@@ -234,6 +295,450 @@ fn error(code: DocxErrorCode, message: impl Into<String>) -> DocxError {
     code,
     message: message.into(),
   }
+}
+
+fn rewrite_error(
+  code: DocxRewriteErrorCode,
+  message: impl Into<String>,
+) -> DocxRewriteError {
+  DocxRewriteError {
+    code,
+    message: message.into(),
+  }
+}
+
+impl DocxBlockLocation {
+  fn part_path(&self) -> &str {
+    match self {
+      Self::Paragraph { part, .. }
+      | Self::TableCellParagraph { part, .. }
+      | Self::TextBoxParagraph { part, .. } => &part.path,
+    }
+  }
+}
+
+fn map_extraction_error(source: &DocxError) -> DocxRewriteError {
+  let code = match source.code() {
+    DocxErrorCode::ArchiveLimitExceeded
+    | DocxErrorCode::UncompressedLimitExceeded => {
+      DocxRewriteErrorCode::RewriteLimitExceeded
+    }
+    DocxErrorCode::InvalidArchive
+    | DocxErrorCode::InvalidPackage
+    | DocxErrorCode::InvalidXml
+    | DocxErrorCode::UnsafeEntryPath => {
+      DocxRewriteErrorCode::UnsupportedReplacement
+    }
+  };
+  rewrite_error(code, source.to_string())
+}
+
+fn utf16_byte_index(value: &str, offset: usize) -> Option<usize> {
+  if offset == 0 {
+    return Some(0);
+  }
+  let mut utf16_offset = 0_usize;
+  for (byte_index, character) in value.char_indices() {
+    if utf16_offset == offset {
+      return Some(byte_index);
+    }
+    utf16_offset = utf16_offset.checked_add(character.len_utf16())?;
+    if utf16_offset > offset {
+      return None;
+    }
+  }
+  (utf16_offset == offset).then_some(value.len())
+}
+
+fn is_valid_xml_text(value: &str) -> bool {
+  value.chars().all(|character| {
+    matches!(character, '\u{9}' | '\u{a}' | '\u{d}')
+      || ('\u{20}'..='\u{d7ff}').contains(&character)
+      || ('\u{e000}'..='\u{fffd}').contains(&character)
+      || ('\u{10000}'..='\u{10ffff}').contains(&character)
+  })
+}
+
+fn escaped_xml_text_byte_length(value: &str) -> Option<usize> {
+  value.chars().try_fold(0_usize, |total, character| {
+    let length = match character {
+      '&' => 5,
+      '<' | '>' => 4,
+      _ => character.len_utf8(),
+    };
+    total.checked_add(length)
+  })
+}
+
+fn escape_xml_text(value: &str) -> String {
+  let mut escaped = String::with_capacity(value.len());
+  for character in value.chars() {
+    match character {
+      '&' => escaped.push_str("&amp;"),
+      '<' => escaped.push_str("&lt;"),
+      '>' => escaped.push_str("&gt;"),
+      _ => escaped.push(character),
+    }
+  }
+  escaped
+}
+
+fn validate_replacement(
+  replacement: &DocxTextReplacement,
+  block_text: &str,
+) -> Result<(), DocxRewriteError> {
+  if replacement.start >= replacement.end
+    || utf16_byte_index(block_text, replacement.start).is_none()
+    || utf16_byte_index(block_text, replacement.end).is_none()
+  {
+    return Err(rewrite_error(
+      DocxRewriteErrorCode::InvalidReplacement,
+      "DOCX replacement spans must be nonempty bounded integer ranges at UTF-16 boundaries",
+    ));
+  }
+  if !is_valid_xml_text(&replacement.replacement) {
+    return Err(rewrite_error(
+      DocxRewriteErrorCode::InvalidReplacement,
+      "DOCX replacement text must contain only valid XML characters",
+    ));
+  }
+  if escaped_xml_text_byte_length(&replacement.replacement)
+    .is_none_or(|length| length > DOCX_ENTRY_MAX_BYTES)
+  {
+    return Err(rewrite_error(
+      DocxRewriteErrorCode::RewriteLimitExceeded,
+      format!(
+        "DOCX replacement text must not exceed {DOCX_ENTRY_MAX_BYTES} escaped UTF-8 bytes"
+      ),
+    ));
+  }
+  Ok(())
+}
+
+fn covered_text_segments<'a>(
+  block: &'a DocxTextBlock,
+  replacement: &DocxTextReplacement,
+) -> Result<Vec<&'a DocxTextSegment>, DocxRewriteError> {
+  let segments = block
+    .segments
+    .iter()
+    .filter(|segment| {
+      segment.start < replacement.end && segment.end > replacement.start
+    })
+    .collect::<Vec<_>>();
+  let mut cursor = replacement.start;
+  for segment in &segments {
+    if segment.source != DocxSegmentSource::Text
+      || segment.start > cursor
+      || segment
+        .contexts
+        .iter()
+        .any(|context| matches!(context, DocxInlineContext::Revision { .. }))
+    {
+      return Err(rewrite_error(
+        DocxRewriteErrorCode::UnsupportedReplacement,
+        "DOCX replacements must stay within contiguous non-revision text segments",
+      ));
+    }
+    cursor = replacement.end.min(segment.end);
+  }
+  if segments.is_empty() || cursor != replacement.end {
+    return Err(rewrite_error(
+      DocxRewriteErrorCode::UnsupportedReplacement,
+      "DOCX replacements must stay within contiguous non-revision text segments",
+    ));
+  }
+  Ok(segments)
+}
+
+fn replace_utf16_range(
+  value: &str,
+  start: usize,
+  end: usize,
+  replacement: &str,
+) -> Result<String, DocxRewriteError> {
+  let start_byte = utf16_byte_index(value, start).ok_or_else(|| {
+    rewrite_error(
+      DocxRewriteErrorCode::InvalidReplacement,
+      "DOCX replacement start is not a UTF-16 boundary",
+    )
+  })?;
+  let end_byte = utf16_byte_index(value, end).ok_or_else(|| {
+    rewrite_error(
+      DocxRewriteErrorCode::InvalidReplacement,
+      "DOCX replacement end is not a UTF-16 boundary",
+    )
+  })?;
+  let mut updated = String::with_capacity(
+    value
+      .len()
+      .saturating_sub(end_byte.saturating_sub(start_byte))
+      .saturating_add(replacement.len()),
+  );
+  updated.push_str(value.get(..start_byte).ok_or_else(|| {
+    rewrite_error(
+      DocxRewriteErrorCode::InvalidReplacement,
+      "DOCX replacement start is unavailable",
+    )
+  })?);
+  updated.push_str(replacement);
+  updated.push_str(value.get(end_byte..).ok_or_else(|| {
+    rewrite_error(
+      DocxRewriteErrorCode::InvalidReplacement,
+      "DOCX replacement end is unavailable",
+    )
+  })?);
+  Ok(updated)
+}
+
+#[allow(clippy::too_many_lines)]
+fn plan_block_updates(
+  block: &DocxTextBlock,
+  rewrite: &DocxBlockRewrite,
+) -> Result<Vec<TextNodeUpdate>, DocxRewriteError> {
+  let mut replacements = rewrite.replacements.iter().collect::<Vec<_>>();
+  replacements.sort_by_key(|replacement| replacement.start);
+  for (index, replacement) in replacements.iter().enumerate() {
+    validate_replacement(replacement, &block.text)?;
+    if index > 0
+      && replacements
+        .get(index.saturating_sub(1))
+        .is_some_and(|previous| previous.end > replacement.start)
+    {
+      return Err(rewrite_error(
+        DocxRewriteErrorCode::InvalidReplacement,
+        "DOCX replacement spans must not overlap",
+      ));
+    }
+  }
+
+  let mut values = HashMap::<Vec<usize>, TextNodeUpdate>::new();
+  let mut originals = HashMap::<Vec<usize>, String>::new();
+  for segment in &block.segments {
+    if segment.source != DocxSegmentSource::Text {
+      continue;
+    }
+    let start =
+      utf16_byte_index(&block.text, segment.start).ok_or_else(|| {
+        rewrite_error(
+          DocxRewriteErrorCode::StaleExtraction,
+          "DOCX text segment start is unavailable",
+        )
+      })?;
+    let end = utf16_byte_index(&block.text, segment.end).ok_or_else(|| {
+      rewrite_error(
+        DocxRewriteErrorCode::StaleExtraction,
+        "DOCX text segment end is unavailable",
+      )
+    })?;
+    let original = block
+      .text
+      .get(start..end)
+      .ok_or_else(|| {
+        rewrite_error(
+          DocxRewriteErrorCode::StaleExtraction,
+          "DOCX text segment is unavailable",
+        )
+      })?
+      .to_owned();
+    values.insert(
+      segment.xml_path.clone(),
+      TextNodeUpdate {
+        path: segment.xml_path.clone(),
+        original_byte_length: original.len(),
+        value: original.clone(),
+      },
+    );
+    originals.insert(segment.xml_path.clone(), original);
+  }
+
+  for replacement in replacements.into_iter().rev() {
+    let segments = covered_text_segments(block, replacement)?;
+    let first = segments.first().ok_or_else(|| {
+      rewrite_error(
+        DocxRewriteErrorCode::UnsupportedReplacement,
+        "DOCX replacement text segments are unavailable",
+      )
+    })?;
+    let last = segments.last().ok_or_else(|| {
+      rewrite_error(
+        DocxRewriteErrorCode::UnsupportedReplacement,
+        "DOCX replacement text segments are unavailable",
+      )
+    })?;
+    let first_start = replacement.start.saturating_sub(first.start);
+    let last_end = replacement.end.saturating_sub(last.start);
+    if first.xml_path == last.xml_path {
+      let update = values.get_mut(&first.xml_path).ok_or_else(|| {
+        rewrite_error(
+          DocxRewriteErrorCode::UnsupportedReplacement,
+          "DOCX replacement text nodes are unavailable",
+        )
+      })?;
+      update.value = replace_utf16_range(
+        &update.value,
+        first_start,
+        last_end,
+        &replacement.replacement,
+      )?;
+      continue;
+    }
+    let first_update = values.get_mut(&first.xml_path).ok_or_else(|| {
+      rewrite_error(
+        DocxRewriteErrorCode::UnsupportedReplacement,
+        "DOCX replacement text nodes are unavailable",
+      )
+    })?;
+    let first_length = utf16_len(&first_update.value);
+    first_update.value = replace_utf16_range(
+      &first_update.value,
+      first_start,
+      first_length,
+      &replacement.replacement,
+    )?;
+    for segment in segments
+      .iter()
+      .skip(1)
+      .take(segments.len().saturating_sub(2))
+    {
+      if let Some(update) = values.get_mut(&segment.xml_path) {
+        update.value.clear();
+      }
+    }
+    let last_update = values.get_mut(&last.xml_path).ok_or_else(|| {
+      rewrite_error(
+        DocxRewriteErrorCode::UnsupportedReplacement,
+        "DOCX replacement text nodes are unavailable",
+      )
+    })?;
+    last_update.value =
+      replace_utf16_range(&last_update.value, 0, last_end, "")?;
+  }
+  Ok(
+    values
+      .into_iter()
+      .filter_map(|(path, update)| {
+        (originals.get(&path) != Some(&update.value)).then_some(update)
+      })
+      .collect(),
+  )
+}
+
+fn node_at_path<'tree, 'input>(
+  document: &'tree Document<'input>,
+  path: &[usize],
+) -> Option<Node<'tree, 'input>> {
+  let mut node = document.root_element();
+  if path.first() != Some(&0) {
+    return None;
+  }
+  for child_index in path.iter().skip(1) {
+    node = node.children().filter(Node::is_element).nth(*child_index)?;
+  }
+  Some(node)
+}
+
+fn rewrite_part_xml(
+  xml: &str,
+  updates: &[TextNodeUpdate],
+) -> Result<String, DocxRewriteError> {
+  let document = Document::parse(xml).map_err(|_| {
+    rewrite_error(
+      DocxRewriteErrorCode::UnsupportedReplacement,
+      "DOCX source XML changed after extraction",
+    )
+  })?;
+  let mut patches = Vec::new();
+  for update in updates {
+    let node = node_at_path(&document, &update.path).ok_or_else(|| {
+      rewrite_error(
+        DocxRewriteErrorCode::StaleExtraction,
+        "DOCX text-node locations changed after extraction",
+      )
+    })?;
+    if !(is_word(node, "t") || is_word(node, "delText")) {
+      return Err(rewrite_error(
+        DocxRewriteErrorCode::StaleExtraction,
+        "DOCX text-node locations changed after extraction",
+      ));
+    }
+    let range = node.range();
+    let source = xml.get(range.clone()).ok_or_else(|| {
+      rewrite_error(
+        DocxRewriteErrorCode::StaleExtraction,
+        "DOCX text-node source changed after extraction",
+      )
+    })?;
+    let opening_end_relative = source.find('>').ok_or_else(|| {
+      rewrite_error(
+        DocxRewriteErrorCode::StaleExtraction,
+        "DOCX text-node opening tag changed after extraction",
+      )
+    })?;
+    if source
+      .get(..opening_end_relative)
+      .is_some_and(|opening| opening.trim_end().ends_with('/'))
+    {
+      return Err(rewrite_error(
+        DocxRewriteErrorCode::UnsupportedReplacement,
+        "DOCX self-closing text nodes cannot receive replacements",
+      ));
+    }
+    let closing_relative = source.rfind("</").ok_or_else(|| {
+      rewrite_error(
+        DocxRewriteErrorCode::StaleExtraction,
+        "DOCX text-node closing tag changed after extraction",
+      )
+    })?;
+    let content_start = range
+      .start
+      .checked_add(opening_end_relative)
+      .and_then(|value| value.checked_add(1))
+      .ok_or_else(|| {
+        rewrite_error(
+          DocxRewriteErrorCode::StaleExtraction,
+          "DOCX text-node source changed after extraction",
+        )
+      })?;
+    let content_end = range.start.saturating_add(closing_relative);
+    patches.push(XmlPatch {
+      start: content_start,
+      end: content_end,
+      value: escape_xml_text(&update.value),
+    });
+    let preserved = node.attributes().any(|attribute| {
+      attribute.namespace() == Some("http://www.w3.org/XML/1998/namespace")
+        && attribute.name() == "space"
+        && attribute.value() == "preserve"
+    });
+    if !preserved
+      && (update.value.chars().next().is_some_and(char::is_whitespace)
+        || update
+          .value
+          .chars()
+          .next_back()
+          .is_some_and(char::is_whitespace))
+    {
+      let insertion = range.start.saturating_add(opening_end_relative);
+      patches.push(XmlPatch {
+        start: insertion,
+        end: insertion,
+        value: " xml:space=\"preserve\"".to_owned(),
+      });
+    }
+  }
+  patches.sort_by_key(|patch| std::cmp::Reverse(patch.start));
+  let mut rewritten = xml.to_owned();
+  for patch in patches {
+    if patch.start > patch.end || patch.end > rewritten.len() {
+      return Err(rewrite_error(
+        DocxRewriteErrorCode::StaleExtraction,
+        "DOCX text-node source changed after extraction",
+      ));
+    }
+    rewritten.replace_range(patch.start..patch.end, &patch.value);
+  }
+  Ok(rewritten)
 }
 
 fn safe_entry_path(path: &str) -> bool {
@@ -1111,5 +1616,298 @@ pub fn extract_docx_text(document: &[u8]) -> Result<DocxExtraction, DocxError> {
     contract_version: DOCX_EXTRACTION_CONTRACT_VERSION,
     blocks,
     coverage,
+  })
+}
+
+#[allow(clippy::too_many_lines)]
+pub fn rewrite_docx_text(
+  document: &[u8],
+  rewrites: &[DocxBlockRewrite],
+) -> Result<DocxRewriteResult, DocxRewriteError> {
+  let extraction = extract_docx_text(document)
+    .map_err(|source| map_extraction_error(&source))?;
+  if rewrites.is_empty() {
+    return Ok(DocxRewriteResult {
+      document: document.to_vec(),
+      rewritten_block_count: 0,
+      applied_replacement_count: 0,
+    });
+  }
+  let blocks_by_location = extraction
+    .blocks
+    .iter()
+    .map(|block| (&block.location, block))
+    .collect::<HashMap<_, _>>();
+  let mut rewritten_locations = HashSet::new();
+  let mut updates_by_part =
+    HashMap::<String, HashMap<Vec<usize>, TextNodeUpdate>>::new();
+  let mut replacement_bytes_by_part = HashMap::<String, usize>::new();
+  let mut applied_replacement_count = 0_usize;
+  let mut total_replacement_bytes = 0_usize;
+
+  for rewrite in rewrites {
+    if !rewritten_locations.insert(rewrite.location.clone()) {
+      return Err(rewrite_error(
+        DocxRewriteErrorCode::InvalidReplacement,
+        "Each DOCX block may appear in a rewrite plan only once",
+      ));
+    }
+    let block = blocks_by_location.get(&rewrite.location).ok_or_else(|| {
+      rewrite_error(
+        DocxRewriteErrorCode::StaleExtraction,
+        "DOCX block location or expected text no longer matches",
+      )
+    })?;
+    if block.text != rewrite.expected_text {
+      return Err(rewrite_error(
+        DocxRewriteErrorCode::StaleExtraction,
+        "DOCX block location or expected text no longer matches",
+      ));
+    }
+    if rewrite.replacements.is_empty() {
+      return Err(rewrite_error(
+        DocxRewriteErrorCode::InvalidReplacement,
+        "DOCX block rewrite plans must contain at least one replacement",
+      ));
+    }
+    applied_replacement_count = applied_replacement_count
+      .checked_add(rewrite.replacements.len())
+      .ok_or_else(|| {
+        rewrite_error(
+          DocxRewriteErrorCode::RewriteLimitExceeded,
+          "DOCX replacement count overflowed",
+        )
+      })?;
+    if applied_replacement_count > DOCX_MAX_REPLACEMENTS {
+      return Err(rewrite_error(
+        DocxRewriteErrorCode::RewriteLimitExceeded,
+        format!(
+          "DOCX rewrites must not contain more than {DOCX_MAX_REPLACEMENTS} replacements"
+        ),
+      ));
+    }
+    let rewrite_replacement_bytes = rewrite
+      .replacements
+      .iter()
+      .try_fold(0_usize, |total, replacement| {
+        total.checked_add(
+          escaped_xml_text_byte_length(&replacement.replacement)
+            .unwrap_or(usize::MAX),
+        )
+      })
+      .ok_or_else(|| {
+        rewrite_error(
+          DocxRewriteErrorCode::RewriteLimitExceeded,
+          "DOCX rewrite replacement byte count overflowed",
+        )
+      })?;
+    total_replacement_bytes = total_replacement_bytes
+      .checked_add(rewrite_replacement_bytes)
+      .ok_or_else(|| {
+        rewrite_error(
+          DocxRewriteErrorCode::RewriteLimitExceeded,
+          "DOCX rewrite replacement byte count overflowed",
+        )
+      })?;
+    if total_replacement_bytes > DOCX_UNCOMPRESSED_MAX_BYTES {
+      return Err(rewrite_error(
+        DocxRewriteErrorCode::RewriteLimitExceeded,
+        format!(
+          "DOCX rewrite replacement text must not exceed {DOCX_UNCOMPRESSED_MAX_BYTES} aggregate escaped UTF-8 bytes"
+        ),
+      ));
+    }
+    let part_path = rewrite.location.part_path().to_owned();
+    let part_replacement_bytes = replacement_bytes_by_part
+      .get(&part_path)
+      .copied()
+      .unwrap_or_default()
+      .checked_add(rewrite_replacement_bytes)
+      .ok_or_else(|| {
+        rewrite_error(
+          DocxRewriteErrorCode::RewriteLimitExceeded,
+          "DOCX part replacement byte count overflowed",
+        )
+      })?;
+    if part_replacement_bytes > DOCX_ENTRY_MAX_BYTES {
+      return Err(rewrite_error(
+        DocxRewriteErrorCode::RewriteLimitExceeded,
+        format!(
+          "DOCX rewrite replacement text for a single part must not exceed {DOCX_ENTRY_MAX_BYTES} aggregate escaped UTF-8 bytes"
+        ),
+      ));
+    }
+    replacement_bytes_by_part.insert(part_path.clone(), part_replacement_bytes);
+    let part_updates = updates_by_part.entry(part_path).or_default();
+    for update in plan_block_updates(block, rewrite)? {
+      part_updates.insert(update.path.clone(), update);
+    }
+  }
+
+  let mut total_updated_node_bytes = 0_usize;
+  for updates in updates_by_part.values() {
+    let part_updated_node_bytes = updates
+      .values()
+      .try_fold(0_usize, |total, update| {
+        total.checked_add(
+          escaped_xml_text_byte_length(&update.value).unwrap_or(usize::MAX),
+        )
+      })
+      .ok_or_else(|| {
+        rewrite_error(
+          DocxRewriteErrorCode::RewriteLimitExceeded,
+          "DOCX rewritten text-node byte count overflowed",
+        )
+      })?;
+    if part_updated_node_bytes > DOCX_ENTRY_MAX_BYTES {
+      return Err(rewrite_error(
+        DocxRewriteErrorCode::RewriteLimitExceeded,
+        format!(
+          "DOCX rewritten text nodes for a single part must not exceed {DOCX_ENTRY_MAX_BYTES} escaped UTF-8 bytes"
+        ),
+      ));
+    }
+    total_updated_node_bytes = total_updated_node_bytes
+      .checked_add(part_updated_node_bytes)
+      .ok_or_else(|| {
+        rewrite_error(
+          DocxRewriteErrorCode::RewriteLimitExceeded,
+          "DOCX rewritten text-node byte count overflowed",
+        )
+      })?;
+    if total_updated_node_bytes > DOCX_UNCOMPRESSED_MAX_BYTES {
+      return Err(rewrite_error(
+        DocxRewriteErrorCode::RewriteLimitExceeded,
+        format!(
+          "DOCX rewritten text nodes must not exceed {DOCX_UNCOMPRESSED_MAX_BYTES} aggregate escaped UTF-8 bytes"
+        ),
+      ));
+    }
+  }
+
+  let mut entries =
+    read_archive(document).map_err(|source| map_extraction_error(&source))?;
+  if entries.iter().any(|entry| {
+    entry
+      .path
+      .to_ascii_lowercase()
+      .starts_with(SIGNATURE_PART_PREFIX)
+  }) {
+    return Err(rewrite_error(
+      DocxRewriteErrorCode::UnsupportedReplacement,
+      "Digitally signed DOCX packages must be re-signed before rewriting",
+    ));
+  }
+  let mut projected_total = 0_usize;
+  for entry in &entries {
+    let mut projected = entry.bytes.len();
+    if let Some(updates) = updates_by_part.get(&entry.path) {
+      for update in updates.values() {
+        let escaped =
+          escaped_xml_text_byte_length(&update.value).unwrap_or(usize::MAX);
+        projected = projected
+          .checked_add(escaped)
+          .and_then(|value| value.checked_add(XML_SPACE_INSERTION_BYTES))
+          .and_then(|value| value.checked_sub(update.original_byte_length))
+          .ok_or_else(|| {
+            rewrite_error(
+              DocxRewriteErrorCode::RewriteLimitExceeded,
+              "DOCX projected part byte count overflowed",
+            )
+          })?;
+      }
+      if projected > DOCX_ENTRY_MAX_BYTES {
+        return Err(rewrite_error(
+          DocxRewriteErrorCode::RewriteLimitExceeded,
+          format!(
+            "Rewritten DOCX parts must not exceed {DOCX_ENTRY_MAX_BYTES} projected bytes"
+          ),
+        ));
+      }
+    }
+    projected_total =
+      projected_total.checked_add(projected).ok_or_else(|| {
+        rewrite_error(
+          DocxRewriteErrorCode::RewriteLimitExceeded,
+          "DOCX projected archive byte count overflowed",
+        )
+      })?;
+    if projected_total > DOCX_UNCOMPRESSED_MAX_BYTES {
+      return Err(rewrite_error(
+        DocxRewriteErrorCode::RewriteLimitExceeded,
+        format!(
+          "Rewritten DOCX archives must not exceed {DOCX_UNCOMPRESSED_MAX_BYTES} projected uncompressed bytes"
+        ),
+      ));
+    }
+  }
+  for entry in &mut entries {
+    if let Some(updates) = updates_by_part.get(&entry.path) {
+      let xml = std::str::from_utf8(&entry.bytes).map_err(|_| {
+        rewrite_error(
+          DocxRewriteErrorCode::UnsupportedReplacement,
+          "DOCX source XML changed after extraction",
+        )
+      })?;
+      entry.bytes =
+        rewrite_part_xml(xml, &updates.values().cloned().collect::<Vec<_>>())?
+          .into_bytes();
+    }
+  }
+  if updates_by_part
+    .keys()
+    .any(|path| !entries.iter().any(|entry| &entry.path == path))
+  {
+    return Err(rewrite_error(
+      DocxRewriteErrorCode::StaleExtraction,
+      "DOCX source part changed after extraction",
+    ));
+  }
+  let output = Cursor::new(Vec::new());
+  let mut writer = ZipWriter::new(output);
+  let options = SimpleFileOptions::default()
+    .compression_method(CompressionMethod::Deflated);
+  for entry in entries {
+    if entry.path.ends_with('/') {
+      writer.add_directory(entry.path, options).map_err(|_| {
+        rewrite_error(
+          DocxRewriteErrorCode::UnsupportedReplacement,
+          "Rewritten DOCX archive could not be created",
+        )
+      })?;
+    } else {
+      writer.start_file(entry.path, options).map_err(|_| {
+        rewrite_error(
+          DocxRewriteErrorCode::UnsupportedReplacement,
+          "Rewritten DOCX archive could not be created",
+        )
+      })?;
+      writer.write_all(&entry.bytes).map_err(|_| {
+        rewrite_error(
+          DocxRewriteErrorCode::UnsupportedReplacement,
+          "Rewritten DOCX archive could not be created",
+        )
+      })?;
+    }
+  }
+  let rewritten = writer.finish().map_err(|_| {
+    rewrite_error(
+      DocxRewriteErrorCode::UnsupportedReplacement,
+      "Rewritten DOCX archive could not be created",
+    )
+  })?;
+  let rewritten_document = rewritten.into_inner();
+  if rewritten_document.len() > DOCX_ARCHIVE_MAX_BYTES {
+    return Err(rewrite_error(
+      DocxRewriteErrorCode::RewriteLimitExceeded,
+      format!(
+        "Rewritten DOCX archives must not exceed {DOCX_ARCHIVE_MAX_BYTES} bytes"
+      ),
+    ));
+  }
+  Ok(DocxRewriteResult {
+    document: rewritten_document,
+    rewritten_block_count: rewrites.len(),
+    applied_replacement_count,
   })
 }

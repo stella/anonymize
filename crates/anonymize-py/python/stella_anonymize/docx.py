@@ -17,6 +17,7 @@ from urllib.parse import unquote
 from xml.etree import ElementTree as ET
 
 from ._native import extract_docx_text_json as _extract_docx_text_json
+from ._native import rewrite_docx_text_native as _rewrite_docx_text_native
 
 DOCX_EXTRACTION_CONTRACT_VERSION = 1
 DOCX_ARCHIVE_MAX_BYTES = 64 * 1024 * 1024
@@ -719,7 +720,7 @@ def _write_archive(entries: Mapping[str, bytes], order: Sequence[str]) -> bytes:
     return document
 
 
-def rewrite_docx_text(
+def _rewrite_docx_text_python_oracle(
     document: bytes | bytearray | memoryview,
     rewrites: Sequence[Mapping[str, Any]],
 ) -> dict[str, Any]:
@@ -914,6 +915,34 @@ def rewrite_docx_text(
         "document": _write_archive(entries, order),
         "rewrittenBlockCount": len(rewrites),
         "appliedReplacementCount": applied,
+    }
+
+
+def rewrite_docx_text(
+    document: bytes | bytearray | memoryview,
+    rewrites: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Apply the shared Rust DOCX rewrite contract."""
+
+    try:
+        rewritten, block_count, replacement_count = _rewrite_docx_text_native(
+            bytes(document), json.dumps(list(rewrites), separators=(",", ":"))
+        )
+    except ValueError as error:
+        message = str(error)
+        code, separator, detail = message.partition(": ")
+        if separator and code in {
+            "invalid-replacement",
+            "rewrite-limit-exceeded",
+            "stale-extraction",
+            "unsupported-replacement",
+        }:
+            raise DocxRewriteError(code, detail) from error
+        raise
+    return {
+        "document": bytes(rewritten),
+        "rewrittenBlockCount": block_count,
+        "appliedReplacementCount": replacement_count,
     }
 
 

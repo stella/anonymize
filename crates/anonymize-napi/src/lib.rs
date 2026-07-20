@@ -36,7 +36,11 @@ use stella_anonymize_core::{
   SessionMetadata, SessionStatus, SessionTimestamp, StaticRedactionDiagnostics,
   assemble::{AssembleError, Dictionaries, GazetteerEntry, PipelineConfig},
 };
-use stella_anonymize_docx_core::extract_docx_text as extract_docx_text_core;
+use stella_anonymize_docx_core::{
+  DocxBlockRewrite, DocxRewriteErrorCode,
+  extract_docx_text as extract_docx_text_core,
+  rewrite_docx_text as rewrite_docx_text_core,
+};
 
 const PREPARED_SEARCH_CACHE_LIMIT: usize = 8;
 
@@ -47,6 +51,48 @@ pub fn extract_docx_text_json(document: BufferSlice<'_>) -> Result<String> {
     .map_err(|error| Error::from_reason(error.to_string()))?;
   serde_json::to_string(&extraction)
     .map_err(|error| to_napi_serde_error(&error))
+}
+
+#[napi(object)]
+pub struct JsDocxRewriteResult {
+  pub document: Buffer,
+  pub rewritten_block_count: u32,
+  pub applied_replacement_count: u32,
+}
+
+const fn docx_rewrite_code(code: DocxRewriteErrorCode) -> &'static str {
+  match code {
+    DocxRewriteErrorCode::InvalidReplacement => "invalid-replacement",
+    DocxRewriteErrorCode::RewriteLimitExceeded => "rewrite-limit-exceeded",
+    DocxRewriteErrorCode::StaleExtraction => "stale-extraction",
+    DocxRewriteErrorCode::UnsupportedReplacement => "unsupported-replacement",
+  }
+}
+
+#[napi]
+#[allow(clippy::needless_pass_by_value)]
+pub fn rewrite_docx_text_native(
+  document: BufferSlice<'_>,
+  rewrites_json: String,
+) -> Result<JsDocxRewriteResult> {
+  let rewrites = serde_json::from_str::<Vec<DocxBlockRewrite>>(&rewrites_json)
+    .map_err(|error| to_napi_serde_error(&error))?;
+  let result =
+    rewrite_docx_text_core(&document, &rewrites).map_err(|error| {
+      Error::from_reason(format!(
+        "{}: {error}",
+        docx_rewrite_code(error.code())
+      ))
+    })?;
+  Ok(JsDocxRewriteResult {
+    document: result.document.into(),
+    rewritten_block_count: u32::try_from(result.rewritten_block_count)
+      .map_err(|_| {
+        Error::from_reason("DOCX rewritten block count overflowed")
+      })?,
+    applied_replacement_count: u32::try_from(result.applied_replacement_count)
+      .map_err(|_| Error::from_reason("DOCX replacement count overflowed"))?,
+  })
 }
 
 static PREPARED_SEARCH_CACHE: LazyLock<Mutex<PreparedSearchCache>> =
