@@ -43,23 +43,32 @@ const LOCATION_PATH_KEYS = [
 const preflightRewritePlan = (
   rewrites: readonly DocxBlockRewrite[],
 ): readonly unknown[] => {
-  if (rewrites.length > DOCX_REWRITE_MAX_BLOCKS) {
+  const rewriteCount = rewrites.length;
+  if (rewriteCount > DOCX_REWRITE_MAX_BLOCKS) {
     throw new DocxRewriteError(
       DOCX_REWRITE_ERROR_CODES.rewriteLimitExceeded,
       `DOCX rewrites must not contain more than ${DOCX_REWRITE_MAX_BLOCKS} blocks`,
     );
   }
   let replacementCount = 0;
-  let estimatedBytes = rewrites.length * 256;
+  let estimatedBytes = rewriteCount * 256;
   const serializableRewrites: unknown[] = [];
-  for (const rewrite of rewrites) {
+  for (let rewriteIndex = 0; rewriteIndex < rewriteCount; rewriteIndex += 1) {
+    const rewrite = rewrites[rewriteIndex];
+    if (rewrite === undefined) {
+      throw new DocxRewriteError(
+        DOCX_REWRITE_ERROR_CODES.invalidReplacement,
+        "DOCX rewrite plans must not contain sparse blocks",
+      );
+    }
     if (!Array.isArray(rewrite.replacements)) {
       throw new DocxRewriteError(
         DOCX_REWRITE_ERROR_CODES.invalidReplacement,
         "DOCX block rewrite replacements must be an array",
       );
     }
-    replacementCount += rewrite.replacements.length;
+    const blockReplacementCount = rewrite.replacements.length;
+    replacementCount += blockReplacementCount;
     if (replacementCount > DOCX_REWRITE_MAX_REPLACEMENTS) {
       throw new DocxRewriteError(
         DOCX_REWRITE_ERROR_CODES.rewriteLimitExceeded,
@@ -70,9 +79,20 @@ const preflightRewritePlan = (
       (typeof rewrite.expectedText === "string"
         ? rewrite.expectedText.length * 6
         : 0) +
-      rewrite.replacements.length * 96;
+      blockReplacementCount * 96;
     const serializableReplacements: unknown[] = [];
-    for (const replacement of rewrite.replacements) {
+    for (
+      let replacementIndex = 0;
+      replacementIndex < blockReplacementCount;
+      replacementIndex += 1
+    ) {
+      const replacement = rewrite.replacements[replacementIndex];
+      if (replacement === undefined) {
+        throw new DocxRewriteError(
+          DOCX_REWRITE_ERROR_CODES.invalidReplacement,
+          "DOCX rewrite plans must not contain sparse replacements",
+        );
+      }
       const value = replacement.replacement;
       if (typeof value === "string") {
         estimatedBytes += value.length * 6;
@@ -111,9 +131,12 @@ const preflightRewritePlan = (
           );
         }
         estimatedBytes += path.length * 24;
-        serializableLocation[key] = path.map((value) =>
-          typeof value === "number" ? value : null,
-        );
+        const serializablePath: Array<number | null> = [];
+        for (let pathIndex = 0; pathIndex < path.length; pathIndex += 1) {
+          const value = path[pathIndex];
+          serializablePath.push(typeof value === "number" ? value : null);
+        }
+        serializableLocation[key] = serializablePath;
       }
     }
     serializableRewrites.push({

@@ -219,6 +219,19 @@ describe("rewriteDocxText", () => {
     hookedPlans.toJSON = () => {
       throw new Error("caller toJSON must not execute");
     };
+    const throwingIterator = () => {
+      throw new Error("caller iterator must not execute");
+    };
+    Object.defineProperty(hookedPlans, Symbol.iterator, {
+      value: throwingIterator,
+    });
+    Object.defineProperty(cyclicPlan.replacements, Symbol.iterator, {
+      value: throwingIterator,
+    });
+    const location = cyclicPlan.location as unknown as Record<string, unknown>;
+    Object.defineProperty(location["xmlPath"], Symbol.iterator, {
+      value: throwingIterator,
+    });
     expect(
       extractDocxText(rewriteDocxText(archive, hookedPlans).document).blocks.at(
         0,
