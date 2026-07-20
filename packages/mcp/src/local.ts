@@ -264,7 +264,7 @@ const safeWrite = async (
       fsConstants.O_CREAT |
       fsConstants.O_EXCL |
       fsConstants.O_NOFOLLOW,
-    0o600,
+    0o400,
   );
   try {
     temporaryMetadata = await handle.stat();
@@ -297,8 +297,15 @@ const safeWrite = async (
       throw new Error("Published output does not match the staged file");
     }
     await assertOutputParent(output);
+    await handle.chmod(0o600);
+    await handle.sync();
     committed = true;
   } finally {
+    if (!committed) {
+      await handle.truncate(0).catch(() => undefined);
+      await handle.sync().catch(() => undefined);
+      await handle.chmod(0o000).catch(() => undefined);
+    }
     await handle.close().catch(() => undefined);
     await unlink(temporary).catch(() => undefined);
     if (published && !committed && temporaryMetadata !== undefined) {
