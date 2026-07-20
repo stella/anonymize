@@ -23,6 +23,29 @@ import {
 } from "../local";
 
 const temporaryDirectories: string[] = [];
+const WORD_NAMESPACE =
+  "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+const PACKAGE_NAMESPACE =
+  "http://schemas.openxmlformats.org/package/2006/relationships";
+const OFFICE_NAMESPACE =
+  "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+
+const writeDocx = async (path: string, body: string): Promise<void> => {
+  await writeFile(
+    path,
+    zipSync({
+      "[Content_Types].xml": strToU8(
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>',
+      ),
+      "_rels/.rels": strToU8(
+        `<Relationships xmlns="${PACKAGE_NAMESPACE}"><Relationship Id="rId1" Type="${OFFICE_NAMESPACE}/officeDocument" Target="word/document.xml"/></Relationships>`,
+      ),
+      "word/document.xml": strToU8(
+        `<w:document xmlns:w="${WORD_NAMESPACE}"><w:body>${body}</w:body></w:document>`,
+      ),
+    }),
+  );
+};
 
 const packageVersion = (): string => {
   const manifest: unknown = JSON.parse(
@@ -150,25 +173,9 @@ describe("local MCP surface", () => {
     const input = join(root, "input.docx");
     const anonymized = join(root, "anonymized.docx");
     const restored = join(root, "restored.docx");
-    const wordNamespace =
-      "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
-    const packageNamespace =
-      "http://schemas.openxmlformats.org/package/2006/relationships";
-    const officeNamespace =
-      "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-    await writeFile(
+    await writeDocx(
       input,
-      zipSync({
-        "[Content_Types].xml": strToU8(
-          '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>',
-        ),
-        "_rels/.rels": strToU8(
-          `<Relationships xmlns="${packageNamespace}"><Relationship Id="rId1" Type="${officeNamespace}/officeDocument" Target="word/document.xml"/></Relationships>`,
-        ),
-        "word/document.xml": strToU8(
-          `<w:document xmlns:w="${wordNamespace}"><w:body><w:p><w:r><w:t>Alice Smith signed.</w:t></w:r></w:p></w:body></w:document>`,
-        ),
-      }),
+      "<w:p><w:r><w:t>Alice Smith signed.</w:t></w:r></w:p>",
     );
     const service = new LocalAnonymizeService(await PathScope.create([root]));
     const anonymizeResult = await service.anonymizeDocx({
@@ -187,9 +194,53 @@ describe("local MCP surface", () => {
       inputPath: anonymized,
       outputPath: restored,
       sessionId: "local_docx_1",
+      allowPartialCoverage: false,
     });
     expect(extractDocxText(await readFile(restored)).blocks.at(0)?.text).toBe(
       "Alice Smith signed.",
+    );
+  });
+
+  test("reports and fails closed on partial DOCX coverage", async () => {
+    const root = await temporaryDirectory();
+    const input = join(root, "partial.docx");
+    const anonymized = join(root, "partial-anonymized.docx");
+    const rejectedRestore = join(root, "partial-rejected.docx");
+    const restored = join(root, "partial-restored.docx");
+    await writeDocx(
+      input,
+      "<w:p><w:r><w:t>Alice Smith signed.</w:t></w:r><w:hyperlink><w:r><w:t>Linked Name</w:t></w:r></w:hyperlink></w:p>",
+    );
+    const service = new LocalAnonymizeService(await PathScope.create([root]));
+
+    expect((await service.inspectDocx(input)).coverageStatus).toBe("partial");
+    const anonymizeResult = await service.anonymizeDocx({
+      inputPath: input,
+      outputPath: anonymized,
+      sessionId: "local_partial_docx_1",
+      language: "en",
+      allowPartialCoverage: true,
+    });
+    expect(anonymizeResult.coverageStatus).toBe("partial");
+    await expect(
+      service.restoreDocx({
+        inputPath: anonymized,
+        outputPath: rejectedRestore,
+        sessionId: "local_partial_docx_1",
+        allowPartialCoverage: false,
+      }),
+    ).rejects.toThrow("partial coverage");
+    await expect(readFile(rejectedRestore)).rejects.toThrow();
+
+    const restoreResult = await service.restoreDocx({
+      inputPath: anonymized,
+      outputPath: restored,
+      sessionId: "local_partial_docx_1",
+      allowPartialCoverage: true,
+    });
+    expect(restoreResult.coverageStatus).toBe("partial");
+    expect(extractDocxText(await readFile(restored)).blocks.at(0)?.text).toBe(
+      "Alice Smith signed.Linked Name",
     );
   });
 

@@ -198,6 +198,10 @@ const restoreInput = z.object({
   sessionId: z.string().regex(SESSION_ID),
 });
 
+const docxRestoreInput = restoreInput.extend({
+  allowPartialCoverage: z.boolean().optional().default(false),
+});
+
 const docxInput = textInput.extend({
   allowPartialCoverage: z.boolean().optional().default(false),
 });
@@ -311,7 +315,7 @@ export class LocalAnonymizeService {
   }
 
   async restoreDocx(
-    input: z.infer<typeof restoreInput>,
+    input: z.infer<typeof docxRestoreInput>,
   ): Promise<AuditSafeResult> {
     const source = await this.#scope.input(input.inputPath, ".docx");
     const destination = await this.#scope.output(input.outputPath, ".docx");
@@ -325,6 +329,11 @@ export class LocalAnonymizeService {
       session: this.#existingSession(input.sessionId),
       expectedSessionId: input.sessionId,
     });
+    if (result.coverage.status === "partial" && !input.allowPartialCoverage) {
+      throw new Error(
+        "DOCX restoration has partial coverage; set allowPartialCoverage to publish it",
+      );
+    }
     await safeWrite(destination, result.document);
     return {
       operation: "restore",
@@ -350,6 +359,8 @@ export class LocalAnonymizeService {
       (part) => part.status === "unsupported",
     );
     const structuralGap =
+      extraction.coverage.hyperlinkTextSegmentCount > 0 ||
+      extraction.coverage.revisionTextSegmentCount > 0 ||
       extraction.coverage.unsupportedAlternateContentCount > 0 ||
       extraction.coverage.unsupportedFieldInstructionCount > 0 ||
       extraction.coverage.unsupportedSymbolCount > 0;
@@ -415,7 +426,7 @@ export const createAnonymizeMcpServer = (
     {
       description:
         "Restore a DOCX using an in-memory session from this server process.",
-      inputSchema: restoreInput,
+      inputSchema: docxRestoreInput,
       annotations: { destructiveHint: false, idempotentHint: false },
     },
     async (input) => result(await service.restoreDocx(input)),

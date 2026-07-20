@@ -54,8 +54,5 @@ does not preserve or inventory their original format structure.
 - There is no MCP resource that exposes anonymized output. This is deliberate:
   the host receives only a path and decides whether to read the safe output.
 
-Compared with PII-Shield, stella now has the same essential local path-only MCP
-boundary for text and DOCX, backed by one Rust document contract across Node and
-Python. PII-Shield additionally covers PDF/Markdown/CSV, durable mapping stores,
-review UI, encrypted team handoff, batch/chunk tools, and local audit logs; those
-remain explicit future surfaces rather than implicit claims.
+The remaining format and workflow gaps above are explicit future surfaces, not
+implicit claims of coverage.
