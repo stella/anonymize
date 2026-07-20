@@ -236,3 +236,44 @@ describe("Czech commercial-register reference (oddíl X, vložka NNN)", () => {
     ).toBe(true);
   });
 });
+
+// ── Case: party-role triggers must not force sole traders to org ──
+
+describe("Czech zhotovitel/objednatel person-shaped parties", () => {
+  test("titled sole trader after Zhotovitel is a person", async () => {
+    const entities = await detect("Zhotovitel:\nIng. Jan Novák\n");
+    expect(
+      entities.some((e) => e.label === "person" && e.text === "Ing. Jan Novák"),
+    ).toBe(true);
+    expect(
+      entities.some(
+        (e) => e.label === "organization" && e.text.includes("Jan Novák"),
+      ),
+    ).toBe(false);
+  });
+
+  test("untitled sole trader after Zhotovitel is a person", async () => {
+    const entities = await detect("Zhotovitel:\nPetr Novák\n");
+    expect(
+      entities.some((e) => e.label === "person" && e.text === "Petr Novák"),
+    ).toBe(true);
+    expect(
+      entities.some(
+        (e) => e.label === "organization" && e.text === "Petr Novák",
+      ),
+    ).toBe(false);
+  });
+
+  test("institutional objednatel stays an organization", async () => {
+    const entities = await detect(
+      "Objednatel:\nSpráva a údržba silnic Plzeňského kraje\n",
+    );
+    expect(
+      entities.some(
+        (e) =>
+          e.label === "organization" &&
+          e.text === "Správa a údržba silnic Plzeňského kraje",
+      ),
+    ).toBe(true);
+  });
+});

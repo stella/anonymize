@@ -10,13 +10,14 @@ use stella_anonymize_core::{
   FuzzySearchOptions, GazetteerMatchData, HotwordRule, HotwordRuleData,
   LegalFormData, LiteralSearchOptions, MagnitudeSuffixData, MaskConfig,
   MaskDirection, MonetaryData, NameCorpusData, NameCorpusMode, Operator,
-  OperatorConfig, PatternSlice, PreparedArtifactPolicy, PreparedEngineConfig,
-  PreparedEngineDetectorConfig, PreparedEnginePolicyConfig,
-  PreparedEngineSearchConfig, PreparedEngineSlices, RegexArtifactPolicy,
-  RegexMatchMeta, RegexSearchOptions, SearchOptions, SearchPattern,
-  ShareQuantityTermData, SignatureData, SigningPlaceGuardData, SourceDetail,
-  StringGroups, TriggerData, TriggerRule, TriggerStrategy, TriggerValidation,
-  WrittenAmountPatternData, ZoneData, ZonePatternData, ZoneSigningClauseData,
+  OperatorConfig, PERSON_OR_ORGANIZATION_TRIGGER_LABEL, PatternSlice,
+  PreparedArtifactPolicy, PreparedEngineConfig, PreparedEngineDetectorConfig,
+  PreparedEnginePolicyConfig, PreparedEngineSearchConfig, PreparedEngineSlices,
+  RegexArtifactPolicy, RegexMatchMeta, RegexSearchOptions, SearchOptions,
+  SearchPattern, ShareQuantityTermData, SignatureData, SigningPlaceGuardData,
+  SourceDetail, StringGroups, TriggerData, TriggerRule, TriggerStrategy,
+  TriggerValidation, WrittenAmountPatternData, ZoneData, ZonePatternData,
+  ZoneSigningClauseData,
 };
 
 use crate::error::{ContractError, Result};
@@ -35,6 +36,7 @@ use crate::types::{
 pub fn prepared_search_config_from_binding(
   config: BindingPreparedSearchConfig,
 ) -> Result<PreparedEngineConfig> {
+  let trigger_vocabulary = trigger_vocabulary(&config);
   let deny_list_data = config.deny_list_data;
   let literal_patterns = literal_patterns_from_binding(
     config.literal_patterns,
@@ -98,9 +100,13 @@ pub fn prepared_search_config_from_binding(
         labels: data.labels,
       }),
       hotword_data: config.hotword_data.map(hotword_data_from_binding),
-      trigger_data: config
-        .trigger_data
-        .map(|data| trigger_data_from_binding(data, legal_form_suffixes)),
+      trigger_data: config.trigger_data.map(|data| {
+        trigger_data_from_binding(TriggerDataFromBindingOptions {
+          data,
+          legal_form_suffixes,
+          vocabulary: trigger_vocabulary,
+        })
+      }),
       legal_form_data,
       address_seed_data: config.address_seed_data.map(|data| AddressSeedData {
         boundary_words: data.boundary_words,
@@ -131,6 +137,24 @@ pub fn prepared_search_config_from_binding(
     },
   })
 }
+
+struct TriggerVocabulary {
+  party_roles: BTreeSet<String>,
+}
+
+fn trigger_vocabulary(
+  config: &BindingPreparedSearchConfig,
+) -> TriggerVocabulary {
+  let Some(filters) = config.false_positive_filters.as_ref() else {
+    return TriggerVocabulary {
+      party_roles: BTreeSet::new(),
+    };
+  };
+  TriggerVocabulary {
+    party_roles: lower_set(filters.generic_roles.clone()),
+  }
+}
+
 fn deny_list_data_from_binding(
   data: BindingDenyListMatchData,
 ) -> Result<DenyListMatchData> {
@@ -412,15 +436,25 @@ fn deny_list_filters_from_binding(
   }
 }
 
-fn trigger_data_from_binding(
+struct TriggerDataFromBindingOptions {
   data: BindingTriggerData,
   legal_form_suffixes: Vec<String>,
+  vocabulary: TriggerVocabulary,
+}
+
+fn trigger_data_from_binding(
+  options: TriggerDataFromBindingOptions,
 ) -> TriggerData {
+  let TriggerDataFromBindingOptions {
+    data,
+    legal_form_suffixes,
+    vocabulary,
+  } = options;
   TriggerData {
     rules: data
       .rules
       .into_iter()
-      .map(trigger_rule_from_binding)
+      .map(|rule| trigger_rule_from_binding(rule, &vocabulary.party_roles))
       .collect(),
     address_stop_keywords: data.address_stop_keywords,
     party_position_terms: data.party_position_terms,
@@ -433,10 +467,28 @@ fn trigger_data_from_binding(
   }
 }
 
-fn trigger_rule_from_binding(rule: BindingTriggerRule) -> TriggerRule {
+fn trigger_rule_from_binding(
+  rule: BindingTriggerRule,
+  party_roles: &BTreeSet<String>,
+) -> TriggerRule {
+  let normalized_trigger = rule
+    .trigger
+    .trim()
+    .trim_end_matches(':')
+    .split_whitespace()
+    .collect::<Vec<_>>()
+    .join(" ")
+    .to_lowercase();
+  let label = if rule.label == "organization"
+    && party_roles.contains(&normalized_trigger)
+  {
+    String::from(PERSON_OR_ORGANIZATION_TRIGGER_LABEL)
+  } else {
+    rule.label
+  };
   TriggerRule {
     trigger: rule.trigger,
-    label: rule.label,
+    label,
     strategy: trigger_strategy_from_binding(rule.strategy),
     validations: rule
       .validations
@@ -737,19 +789,23 @@ fn mask_operator_from_binding(
 mod tests {
   #![allow(clippy::unwrap_used)]
 
+  use std::collections::BTreeSet;
+
   use stella_anonymize_core::{
-    MaskDirection, Operator, PreparedArtifactPolicy, RegexArtifactPolicy,
-    SearchPattern,
+    MaskDirection, Operator, PERSON_OR_ORGANIZATION_TRIGGER_LABEL,
+    PreparedArtifactPolicy, RegexArtifactPolicy, SearchPattern,
   };
 
   use super::{
     operator_config_from_binding, prepared_search_config_from_binding,
+    trigger_rule_from_binding,
   };
   use crate::error::ContractError;
   use crate::types::{
     BindingOperatorConfig, BindingPreparedArtifactPolicy,
     BindingPreparedSearchConfig, BindingRegexArtifactPolicy,
-    BindingSearchOptions, BindingSearchPattern,
+    BindingSearchOptions, BindingSearchPattern, BindingTriggerRule,
+    BindingTriggerStrategy,
   };
 
   #[test]
@@ -870,5 +926,34 @@ mod tests {
         ..
       })
     ));
+  }
+
+  #[test]
+  fn party_role_vocabulary_selects_person_or_organization_classification() {
+    let party_roles = BTreeSet::from([String::from("seller")]);
+    let rule = BindingTriggerRule {
+      trigger: String::from("Seller: "),
+      label: String::from("organization"),
+      strategy: BindingTriggerStrategy::ToEndOfLine,
+      validations: Vec::new(),
+      include_trigger: false,
+    };
+
+    assert_eq!(
+      trigger_rule_from_binding(rule, &party_roles).label,
+      PERSON_OR_ORGANIZATION_TRIGGER_LABEL
+    );
+
+    let non_role_rule = BindingTriggerRule {
+      trigger: String::from("Municipality: "),
+      label: String::from("organization"),
+      strategy: BindingTriggerStrategy::ToEndOfLine,
+      validations: Vec::new(),
+      include_trigger: false,
+    };
+    assert_eq!(
+      trigger_rule_from_binding(non_role_rule, &party_roles).label,
+      "organization"
+    );
   }
 }

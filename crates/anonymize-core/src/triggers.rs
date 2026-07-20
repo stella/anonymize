@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use regex::{Regex, RegexBuilder};
 
@@ -17,6 +17,7 @@ const MIN_TRIGGER_PHONE_DIGITS: usize = 5;
 const TRIGGER_LOOKAHEAD_MARGIN: usize = 128;
 const LINE_TRIGGER_LOOKAHEAD: usize = 2_048;
 const MATCH_PATTERN_LOOKAHEAD: usize = 512;
+pub const PERSON_OR_ORGANIZATION_TRIGGER_LABEL: &str = "person-or-organization";
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct TriggerData {
@@ -307,6 +308,7 @@ pub(crate) fn process_trigger_matches(
   slice: PatternSlice,
   full_text: &str,
   data: &PreparedTriggerData,
+  title_tokens: &BTreeSet<String>,
   mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
 ) -> Result<Vec<PipelineEntity>> {
   let offsets = ByteOffsets::new(full_text);
@@ -386,13 +388,27 @@ pub(crate) fn process_trigger_matches(
     };
     let mut entity_end = value.end;
     let mut entity_text = offsets.slice(entity_start, entity_end)?;
-    let mut label = if rule.label == crate::labels::PERSON_LABEL
-      && has_known_legal_form_suffix(&entity_text, &data.legal_form_suffixes)
+    let mut label = if (rule.label == crate::labels::PERSON_LABEL
+      && has_known_legal_form_suffix(&entity_text, &data.legal_form_suffixes))
+      || rule.label == PERSON_OR_ORGANIZATION_TRIGGER_LABEL
     {
-      String::from("organization")
+      String::from(crate::labels::ORGANIZATION_LABEL)
     } else {
       rule.label.clone()
     };
+
+    if rule.label == PERSON_OR_ORGANIZATION_TRIGGER_LABEL
+      && !has_known_legal_form_suffix(&entity_text, &data.legal_form_suffixes)
+      && let Some(end) =
+        organization_value_person_span_end(&value.text, title_tokens)
+      && let Some(head) = value.text.get(..end)
+    {
+      label = String::from(crate::labels::PERSON_LABEL);
+      if end < value.text.len() {
+        entity_end = value.start.saturating_add(u32_len(head));
+        entity_text = offsets.slice(entity_start, entity_end)?;
+      }
+    }
 
     if label == crate::labels::PERSON_LABEL
       && let Some(end) = person_name_run_end(&value.text)
@@ -1838,6 +1854,71 @@ fn person_name_run_end(text: &str) -> Option<usize> {
   saw_token.then_some(end)
 }
 
+/// End offset of a person-shaped prefix inside an organization trigger value.
+///
+/// Accepts either a title-led name (`Ing. Jan Henig`) or an untitled
+/// two-token name (`Petr Šulc`). Rejects multi-word institutional names
+/// (`Gymnázium Jana Keplera`, `Správa a údržba …`). Trailing lowercase
+/// prose after a person-shaped run is trimmed (`… Henig uzavírá`).
+fn organization_value_person_span_end(
+  text: &str,
+  title_tokens: &BTreeSet<String>,
+) -> Option<usize> {
+  let end = person_name_run_end(text)?;
+  let head = text.get(..end)?.trim_end();
+  if head.is_empty() || !is_person_shaped_name_run(head, title_tokens) {
+    return None;
+  }
+  let rest = text.get(end..)?.trim_start();
+  if rest.is_empty() {
+    return Some(end);
+  }
+  let first_rest = rest.split_whitespace().next()?;
+  first_rest
+    .chars()
+    .next()
+    .is_some_and(char::is_lowercase)
+    .then_some(end)
+}
+
+fn is_person_shaped_name_run(
+  text: &str,
+  title_tokens: &BTreeSet<String>,
+) -> bool {
+  let tokens = text
+    .split_whitespace()
+    .map(trim_name_token)
+    .filter(|token| !token.is_empty())
+    .collect::<Vec<_>>();
+  if tokens.is_empty()
+    || tokens.iter().any(|token| {
+      !is_person_title_token(token, title_tokens)
+        && !is_capitalized_name_token(token)
+    })
+  {
+    return false;
+  }
+  let name_tokens = tokens
+    .iter()
+    .copied()
+    .filter(|token| !is_person_title_token(token, title_tokens))
+    .collect::<Vec<_>>();
+  if tokens
+    .first()
+    .is_some_and(|token| is_person_title_token(token, title_tokens))
+  {
+    return matches!(name_tokens.len(), 1..=3);
+  }
+  name_tokens.len() == 2 && tokens.len() == 2
+}
+
+fn is_person_title_token(token: &str, title_tokens: &BTreeSet<String>) -> bool {
+  let bare = token
+    .trim_matches(|ch: char| matches!(ch, '.' | ','))
+    .to_lowercase();
+  title_tokens.contains(&bare)
+}
+
 fn is_person_name_run_token(
   token: &str,
   saw_token: bool,
@@ -1973,6 +2054,7 @@ mod tests {
       PatternSlice { start: 0, end: 1 },
       text,
       &data,
+      &BTreeSet::new(),
       None,
     )
     .unwrap();
@@ -2041,8 +2123,15 @@ mod tests {
     .unwrap();
 
     let matches = search.find_iter(text).unwrap();
-    let entities =
-      process_trigger_matches(&matches, slice, text, &data, None).unwrap();
+    let entities = process_trigger_matches(
+      &matches,
+      slice,
+      text,
+      &data,
+      &BTreeSet::new(),
+      None,
+    )
+    .unwrap();
 
     assert_eq!(entities.len(), 1);
     assert_eq!(entities[0].label, "organization");
@@ -2092,6 +2181,7 @@ mod tests {
       PatternSlice { start: 0, end: 1 },
       &text,
       &data,
+      &BTreeSet::new(),
       None,
     )
     .unwrap();
@@ -2136,6 +2226,7 @@ mod tests {
       PatternSlice { start: 0, end: 1 },
       text,
       &data,
+      &BTreeSet::new(),
       None,
     )
     .unwrap();
@@ -2145,6 +2236,144 @@ mod tests {
     // leaking "ten Brink".
     assert_eq!(entities.len(), 1);
     assert_eq!(entities[0].text, "Maarten ten Brink");
+  }
+
+  fn organization_role_trigger_data(
+    legal_form_suffixes: Vec<String>,
+  ) -> PreparedTriggerData {
+    PreparedTriggerData::new(TriggerData {
+      rules: vec![TriggerRule {
+        trigger: String::from("zhotovitel"),
+        label: String::from(PERSON_OR_ORGANIZATION_TRIGGER_LABEL),
+        strategy: TriggerStrategy::ToNextComma {
+          stop_words: Vec::new(),
+          max_length: None,
+        },
+        validations: vec![TriggerValidation::StartsUppercase],
+        include_trigger: false,
+      }],
+      address_stop_keywords: Vec::new(),
+      party_position_terms: Vec::new(),
+      legal_form_suffixes,
+      post_nominals: Vec::new(),
+      sentence_terminal_currency_terms: Vec::new(),
+      phone_extension_labels: Vec::new(),
+      number_markers: Vec::new(),
+      number_labels: Vec::new(),
+    })
+    .unwrap()
+  }
+
+  fn run_organization_role_trigger(
+    text: &str,
+    data: &PreparedTriggerData,
+  ) -> Vec<(String, String)> {
+    let title_tokens = BTreeSet::from([
+      String::from("ing"),
+      String::from("mgr"),
+      String::from("prof"),
+    ]);
+    let Some(start) = text.to_lowercase().find("zhotovitel") else {
+      return Vec::new();
+    };
+    let end = start.saturating_add("zhotovitel".len());
+    process_trigger_matches(
+      &[SearchMatch::Literal {
+        pattern: 0,
+        start: u32::try_from(start).unwrap(),
+        end: u32::try_from(end).unwrap(),
+      }],
+      PatternSlice { start: 0, end: 1 },
+      text,
+      data,
+      &title_tokens,
+      None,
+    )
+    .unwrap()
+    .into_iter()
+    .map(|entity| (entity.label, entity.text))
+    .collect()
+  }
+
+  #[test]
+  fn organization_role_trigger_reclassifies_titled_person() {
+    let data = organization_role_trigger_data(Vec::new());
+    let texts =
+      run_organization_role_trigger("Zhotovitel:\nIng. Jan Henig\n", &data);
+    assert_eq!(
+      texts,
+      vec![(String::from("person"), String::from("Ing. Jan Henig"))]
+    );
+  }
+
+  #[test]
+  fn organization_role_trigger_reclassifies_untitled_two_token_person() {
+    let data = organization_role_trigger_data(Vec::new());
+    let texts =
+      run_organization_role_trigger("Zhotovitel:\nPetr Šulc\n", &data);
+    assert_eq!(
+      texts,
+      vec![(String::from("person"), String::from("Petr Šulc"))]
+    );
+  }
+
+  #[test]
+  fn organization_role_trigger_trims_trailing_prose_from_person() {
+    let data = organization_role_trigger_data(Vec::new());
+    let texts = run_organization_role_trigger(
+      "zhotovitel Ing. Jan Henig uzavírá smlouvu\n",
+      &data,
+    );
+    assert_eq!(
+      texts,
+      vec![(String::from("person"), String::from("Ing. Jan Henig"))]
+    );
+  }
+
+  #[test]
+  fn organization_role_trigger_keeps_multi_word_organization() {
+    let data = organization_role_trigger_data(Vec::new());
+    let texts = run_organization_role_trigger(
+      "Zhotovitel:\nSpráva a údržba silnic Plzeňského kraje\n",
+      &data,
+    );
+    assert_eq!(
+      texts,
+      vec![(
+        String::from("organization"),
+        String::from("Správa a údržba silnic Plzeňského kraje")
+      )]
+    );
+  }
+
+  #[test]
+  fn organization_role_trigger_keeps_three_token_institution_name() {
+    let data = organization_role_trigger_data(Vec::new());
+    let texts = run_organization_role_trigger(
+      "Zhotovitel:\nGymnázium Jana Keplera\n",
+      &data,
+    );
+    assert_eq!(
+      texts,
+      vec![(
+        String::from("organization"),
+        String::from("Gymnázium Jana Keplera")
+      )]
+    );
+  }
+
+  #[test]
+  fn organization_role_trigger_keeps_legal_form_company() {
+    let data = organization_role_trigger_data(vec![String::from("s.r.o.")]);
+    let texts =
+      run_organization_role_trigger("Zhotovitel:\nLAFURNI, s.r.o.\n", &data);
+    // to-next-comma stops before the legal-form suffix after the comma, so
+    // the captured value is the bare company name; without a person shape
+    // it stays organization.
+    assert_eq!(
+      texts,
+      vec![(String::from("organization"), String::from("LAFURNI"))]
+    );
   }
 
   #[test]
@@ -2184,6 +2413,7 @@ mod tests {
       PatternSlice { start: 0, end: 1 },
       &text,
       &data,
+      &BTreeSet::new(),
       None,
     )
     .unwrap();
@@ -2237,6 +2467,7 @@ mod tests {
       PatternSlice { start: 0, end: 1 },
       text,
       data,
+      &BTreeSet::new(),
       None,
     )
     .unwrap()
@@ -2517,6 +2748,7 @@ mod tests {
       PatternSlice { start: 0, end: 1 },
       text,
       &data,
+      &BTreeSet::new(),
       None,
     )
     .unwrap();
@@ -2566,6 +2798,7 @@ mod tests {
       PatternSlice { start: 0, end: 1 },
       &text,
       &data,
+      &BTreeSet::new(),
       None,
     )
     .unwrap();
@@ -2618,6 +2851,7 @@ mod tests {
       PatternSlice { start: 0, end: 1 },
       text,
       &data,
+      &BTreeSet::new(),
       None,
     )
     .unwrap();
@@ -2666,6 +2900,7 @@ mod tests {
       PatternSlice { start: 0, end: 1 },
       text,
       &data,
+      &BTreeSet::new(),
       None,
     )
     .unwrap();
