@@ -113,6 +113,36 @@ fn rejects_unsafe_or_incomplete_packages()
     .err()
     .ok_or("expected unsafe path error")?;
   assert_eq!(unsafe_error.code(), DocxErrorCode::UnsafeEntryPath);
+
+  let mut duplicate_archive = docx(&[
+    (
+      "word/documen2.xml",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml",
+      "<document/>",
+    ),
+    (
+      "word/document.xml",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml",
+      "<document/>",
+    ),
+  ])?;
+  let old_name = b"word/documen2.xml";
+  let new_name = b"word/document.xml";
+  let name_offsets = duplicate_archive
+    .windows(old_name.len())
+    .enumerate()
+    .filter_map(|(offset, value)| (value == old_name).then_some(offset))
+    .collect::<Vec<_>>();
+  for offset in name_offsets {
+    duplicate_archive
+      .get_mut(offset..offset + new_name.len())
+      .ok_or("missing duplicate filename bytes")?
+      .copy_from_slice(new_name);
+  }
+  let duplicate_error = extract_docx_text(&duplicate_archive)
+    .err()
+    .ok_or("expected duplicate path error")?;
+  assert_eq!(duplicate_error.code(), DocxErrorCode::InvalidPackage);
   Ok(())
 }
 

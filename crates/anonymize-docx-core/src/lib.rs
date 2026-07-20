@@ -244,6 +244,27 @@ fn safe_entry_path(path: &str) -> bool {
     && !path.split('/').any(|part| part == "..")
 }
 
+fn checked_uncompressed_total(
+  total: u64,
+  additional: u64,
+) -> Result<u64, DocxError> {
+  let next = total.checked_add(additional).ok_or_else(|| {
+    error(
+      DocxErrorCode::UncompressedLimitExceeded,
+      "DOCX uncompressed byte count overflowed",
+    )
+  })?;
+  if next > u64::try_from(DOCX_UNCOMPRESSED_MAX_BYTES).unwrap_or(u64::MAX) {
+    return Err(error(
+      DocxErrorCode::UncompressedLimitExceeded,
+      format!(
+        "DOCX archives must not exceed {DOCX_UNCOMPRESSED_MAX_BYTES} uncompressed bytes"
+      ),
+    ));
+  }
+  Ok(next)
+}
+
 fn read_archive(document: &[u8]) -> Result<Vec<ArchiveEntry>, DocxError> {
   if document.len() > DOCX_ARCHIVE_MAX_BYTES {
     return Err(error(
@@ -264,6 +285,7 @@ fn read_archive(document: &[u8]) -> Result<Vec<ArchiveEntry>, DocxError> {
     ));
   }
   let mut entries = Vec::with_capacity(archive.len());
+  let mut seen_paths = HashSet::with_capacity(archive.len());
   let mut total = 0_u64;
   for index in 0..archive.len() {
     let file = archive.by_index(index).map_err(|_| {
@@ -279,6 +301,12 @@ fn read_archive(document: &[u8]) -> Result<Vec<ArchiveEntry>, DocxError> {
         "DOCX archive contains an unsafe entry path",
       ));
     }
+    if !seen_paths.insert(path.clone()) {
+      return Err(error(
+        DocxErrorCode::InvalidPackage,
+        format!("DOCX archive contains a duplicate entry path: {path}"),
+      ));
+    }
     let entry_limit = u64::try_from(DOCX_ENTRY_MAX_BYTES).unwrap_or(u64::MAX);
     if file.size() > entry_limit {
       return Err(error(
@@ -286,22 +314,7 @@ fn read_archive(document: &[u8]) -> Result<Vec<ArchiveEntry>, DocxError> {
         format!("DOCX entries must not exceed {DOCX_ENTRY_MAX_BYTES} bytes"),
       ));
     }
-    let projected_total = total.checked_add(file.size()).ok_or_else(|| {
-      error(
-        DocxErrorCode::UncompressedLimitExceeded,
-        "DOCX uncompressed byte count overflowed",
-      )
-    })?;
-    if projected_total
-      > u64::try_from(DOCX_UNCOMPRESSED_MAX_BYTES).unwrap_or(u64::MAX)
-    {
-      return Err(error(
-        DocxErrorCode::UncompressedLimitExceeded,
-        format!(
-          "DOCX archives must not exceed {DOCX_UNCOMPRESSED_MAX_BYTES} uncompressed bytes"
-        ),
-      ));
-    }
+    checked_uncompressed_total(total, file.size())?;
     let capacity = usize::try_from(file.size()).map_err(|_| {
       error(
         DocxErrorCode::UncompressedLimitExceeded,
@@ -324,22 +337,10 @@ fn read_archive(document: &[u8]) -> Result<Vec<ArchiveEntry>, DocxError> {
         format!("DOCX entries must not exceed {DOCX_ENTRY_MAX_BYTES} bytes"),
       ));
     }
-    total = total
-      .checked_add(u64::try_from(bytes.len()).unwrap_or(u64::MAX))
-      .ok_or_else(|| {
-        error(
-          DocxErrorCode::UncompressedLimitExceeded,
-          "DOCX uncompressed byte count overflowed",
-        )
-      })?;
-    if total > u64::try_from(DOCX_UNCOMPRESSED_MAX_BYTES).unwrap_or(u64::MAX) {
-      return Err(error(
-        DocxErrorCode::UncompressedLimitExceeded,
-        format!(
-          "DOCX archives must not exceed {DOCX_UNCOMPRESSED_MAX_BYTES} uncompressed bytes"
-        ),
-      ));
-    }
+    total = checked_uncompressed_total(
+      total,
+      u64::try_from(bytes.len()).unwrap_or(u64::MAX),
+    )?;
     entries.push(ArchiveEntry { path, bytes });
   }
   Ok(entries)
