@@ -5,6 +5,7 @@
     "Cargo.toml",
     "Cargo.lock",
     "rust-toolchain.toml",
+    "fixtures/docx-runtime-parity.json",
     "crates/**"
   ],
   "tasks": {
