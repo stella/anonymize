@@ -394,6 +394,22 @@ pub(crate) fn process_trigger_matches(
       rule.label.clone()
     };
 
+    // Czech party-role triggers (zhotovitel/objednatel) default to
+    // organization, but sole traders are natural persons. Reclassify and
+    // trim when the captured value is a person-shaped name run; keep
+    // multi-word orgs and legal-form companies unchanged.
+    if label == crate::labels::ORGANIZATION_LABEL
+      && !has_known_legal_form_suffix(&entity_text, &data.legal_form_suffixes)
+      && let Some(end) = organization_value_person_span_end(&value.text)
+      && let Some(head) = value.text.get(..end)
+    {
+      label = String::from(crate::labels::PERSON_LABEL);
+      if end < value.text.len() {
+        entity_end = value.start.saturating_add(u32_len(head));
+        entity_text = offsets.slice(entity_start, entity_end)?;
+      }
+    }
+
     if label == crate::labels::PERSON_LABEL
       && let Some(end) = person_name_run_end(&value.text)
       && end < value.text.len()
@@ -1838,6 +1854,79 @@ fn person_name_run_end(text: &str) -> Option<usize> {
   saw_token.then_some(end)
 }
 
+/// End offset of a person-shaped prefix inside an organization trigger value.
+///
+/// Accepts either a title-led name (`Ing. Jan Henig`) or an untitled
+/// two-token name (`Petr Šulc`). Rejects multi-word institutional names
+/// (`Gymnázium Jana Keplera`, `Správa a údržba …`). Trailing lowercase
+/// prose after a person-shaped run is trimmed (`… Henig uzavírá`).
+fn organization_value_person_span_end(text: &str) -> Option<usize> {
+  let end = person_name_run_end(text)?;
+  let head = text.get(..end)?.trim_end();
+  if head.is_empty() || !is_person_shaped_name_run(head) {
+    return None;
+  }
+  let rest = text.get(end..)?.trim_start();
+  if rest.is_empty() {
+    return Some(end);
+  }
+  let first_rest = rest.split_whitespace().next()?;
+  first_rest
+    .chars()
+    .next()
+    .is_some_and(char::is_lowercase)
+    .then_some(end)
+}
+
+fn is_person_shaped_name_run(text: &str) -> bool {
+  let tokens = text
+    .split_whitespace()
+    .map(trim_name_token)
+    .filter(|token| !token.is_empty())
+    .collect::<Vec<_>>();
+  if tokens.is_empty()
+    || tokens.iter().any(|token| {
+      !is_person_title_token(token) && !is_capitalized_name_token(token)
+    })
+  {
+    return false;
+  }
+  let name_tokens = tokens
+    .iter()
+    .copied()
+    .filter(|token| !is_person_title_token(token))
+    .collect::<Vec<_>>();
+  if tokens
+    .first()
+    .is_some_and(|token| is_person_title_token(token))
+  {
+    return matches!(name_tokens.len(), 1..=3);
+  }
+  name_tokens.len() == 2 && tokens.len() == 2
+}
+
+fn is_person_title_token(token: &str) -> bool {
+  let bare = token
+    .trim_matches(|ch: char| matches!(ch, '.' | ','))
+    .to_lowercase();
+  matches!(
+    bare.as_str(),
+    "bc"
+      | "doc"
+      | "dr"
+      | "ing"
+      | "judr"
+      | "mgr"
+      | "mudr"
+      | "mvdr"
+      | "paeddr"
+      | "phdr"
+      | "prof"
+      | "rndr"
+      | "thdr"
+  )
+}
+
 fn is_person_name_run_token(
   token: &str,
   saw_token: bool,
@@ -2145,6 +2234,139 @@ mod tests {
     // leaking "ten Brink".
     assert_eq!(entities.len(), 1);
     assert_eq!(entities[0].text, "Maarten ten Brink");
+  }
+
+  fn organization_role_trigger_data(
+    legal_form_suffixes: Vec<String>,
+  ) -> PreparedTriggerData {
+    PreparedTriggerData::new(TriggerData {
+      rules: vec![TriggerRule {
+        trigger: String::from("zhotovitel"),
+        label: String::from("organization"),
+        strategy: TriggerStrategy::ToNextComma {
+          stop_words: Vec::new(),
+          max_length: None,
+        },
+        validations: vec![TriggerValidation::StartsUppercase],
+        include_trigger: false,
+      }],
+      address_stop_keywords: Vec::new(),
+      party_position_terms: Vec::new(),
+      legal_form_suffixes,
+      post_nominals: Vec::new(),
+      sentence_terminal_currency_terms: Vec::new(),
+      phone_extension_labels: Vec::new(),
+      number_markers: Vec::new(),
+      number_labels: Vec::new(),
+    })
+    .unwrap()
+  }
+
+  fn run_organization_role_trigger(
+    text: &str,
+    data: &PreparedTriggerData,
+  ) -> Vec<(String, String)> {
+    let start = text
+      .to_lowercase()
+      .find("zhotovitel")
+      .expect("zhotovitel trigger");
+    let end = start.saturating_add("zhotovitel".len());
+    process_trigger_matches(
+      &[SearchMatch::Literal {
+        pattern: 0,
+        start: u32::try_from(start).unwrap(),
+        end: u32::try_from(end).unwrap(),
+      }],
+      PatternSlice { start: 0, end: 1 },
+      text,
+      data,
+      None,
+    )
+    .unwrap()
+    .into_iter()
+    .map(|entity| (entity.label, entity.text))
+    .collect()
+  }
+
+  #[test]
+  fn organization_role_trigger_reclassifies_titled_person() {
+    let data = organization_role_trigger_data(Vec::new());
+    let texts =
+      run_organization_role_trigger("Zhotovitel:\nIng. Jan Henig\n", &data);
+    assert_eq!(
+      texts,
+      vec![(String::from("person"), String::from("Ing. Jan Henig"))]
+    );
+  }
+
+  #[test]
+  fn organization_role_trigger_reclassifies_untitled_two_token_person() {
+    let data = organization_role_trigger_data(Vec::new());
+    let texts =
+      run_organization_role_trigger("Zhotovitel:\nPetr Šulc\n", &data);
+    assert_eq!(
+      texts,
+      vec![(String::from("person"), String::from("Petr Šulc"))]
+    );
+  }
+
+  #[test]
+  fn organization_role_trigger_trims_trailing_prose_from_person() {
+    let data = organization_role_trigger_data(Vec::new());
+    let texts = run_organization_role_trigger(
+      "zhotovitel Ing. Jan Henig uzavírá smlouvu\n",
+      &data,
+    );
+    assert_eq!(
+      texts,
+      vec![(String::from("person"), String::from("Ing. Jan Henig"))]
+    );
+  }
+
+  #[test]
+  fn organization_role_trigger_keeps_multi_word_organization() {
+    let data = organization_role_trigger_data(Vec::new());
+    let texts = run_organization_role_trigger(
+      "Zhotovitel:\nSpráva a údržba silnic Plzeňského kraje\n",
+      &data,
+    );
+    assert_eq!(
+      texts,
+      vec![(
+        String::from("organization"),
+        String::from("Správa a údržba silnic Plzeňského kraje")
+      )]
+    );
+  }
+
+  #[test]
+  fn organization_role_trigger_keeps_three_token_institution_name() {
+    let data = organization_role_trigger_data(Vec::new());
+    let texts = run_organization_role_trigger(
+      "Zhotovitel:\nGymnázium Jana Keplera\n",
+      &data,
+    );
+    assert_eq!(
+      texts,
+      vec![(
+        String::from("organization"),
+        String::from("Gymnázium Jana Keplera")
+      )]
+    );
+  }
+
+  #[test]
+  fn organization_role_trigger_keeps_legal_form_company() {
+    let data = organization_role_trigger_data(vec![String::from("s.r.o.")]);
+    let texts =
+      run_organization_role_trigger("Zhotovitel:\nLAFURNI, s.r.o.\n", &data);
+    // to-next-comma stops before the legal-form suffix after the comma, so
+    // the captured value is the bare company name; without a person shape
+    // it stays organization.
+    assert_eq!(
+      texts,
+      vec![(String::from("organization"), String::from("LAFURNI"))]
+    );
   }
 
   #[test]
