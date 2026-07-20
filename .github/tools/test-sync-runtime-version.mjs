@@ -115,6 +115,7 @@ function writeFixture() {
     [
       cargoPackage("stella-anonymize-adapter-contract"),
       cargoPackage("stella-anonymize-core"),
+      cargoPackage("stella-anonymize-docx-core"),
       cargoPackage("stella-anonymize-napi"),
       cargoPackage("stella-anonymize-py"),
     ].join("\n"),

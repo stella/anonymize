@@ -28,6 +28,7 @@ const CARGO_WORKSPACE_MANIFEST = "Cargo.toml";
 const CARGO_LOCKED_PACKAGES = [
   "stella-anonymize-adapter-contract",
   "stella-anonymize-core",
+  "stella-anonymize-docx-core",
   "stella-anonymize-napi",
   "stella-anonymize-py",
 ];

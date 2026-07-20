@@ -266,7 +266,7 @@ fn read_archive(document: &[u8]) -> Result<Vec<ArchiveEntry>, DocxError> {
   let mut entries = Vec::with_capacity(archive.len());
   let mut total = 0_u64;
   for index in 0..archive.len() {
-    let mut file = archive.by_index(index).map_err(|_| {
+    let file = archive.by_index(index).map_err(|_| {
       error(
         DocxErrorCode::InvalidArchive,
         "Input is not a valid bounded DOCX ZIP archive",
@@ -279,19 +279,22 @@ fn read_archive(document: &[u8]) -> Result<Vec<ArchiveEntry>, DocxError> {
         "DOCX archive contains an unsafe entry path",
       ));
     }
-    if file.size() > u64::try_from(DOCX_ENTRY_MAX_BYTES).unwrap_or(u64::MAX) {
+    let entry_limit = u64::try_from(DOCX_ENTRY_MAX_BYTES).unwrap_or(u64::MAX);
+    if file.size() > entry_limit {
       return Err(error(
         DocxErrorCode::UncompressedLimitExceeded,
         format!("DOCX entries must not exceed {DOCX_ENTRY_MAX_BYTES} bytes"),
       ));
     }
-    total = total.checked_add(file.size()).ok_or_else(|| {
+    let projected_total = total.checked_add(file.size()).ok_or_else(|| {
       error(
         DocxErrorCode::UncompressedLimitExceeded,
         "DOCX uncompressed byte count overflowed",
       )
     })?;
-    if total > u64::try_from(DOCX_UNCOMPRESSED_MAX_BYTES).unwrap_or(u64::MAX) {
+    if projected_total
+      > u64::try_from(DOCX_UNCOMPRESSED_MAX_BYTES).unwrap_or(u64::MAX)
+    {
       return Err(error(
         DocxErrorCode::UncompressedLimitExceeded,
         format!(
@@ -306,12 +309,37 @@ fn read_archive(document: &[u8]) -> Result<Vec<ArchiveEntry>, DocxError> {
       )
     })?;
     let mut bytes = Vec::with_capacity(capacity);
-    file.read_to_end(&mut bytes).map_err(|_| {
-      error(
-        DocxErrorCode::InvalidArchive,
-        "Input is not a valid bounded DOCX ZIP archive",
-      )
-    })?;
+    file
+      .take(entry_limit.saturating_add(1))
+      .read_to_end(&mut bytes)
+      .map_err(|_| {
+        error(
+          DocxErrorCode::InvalidArchive,
+          "Input is not a valid bounded DOCX ZIP archive",
+        )
+      })?;
+    if bytes.len() > DOCX_ENTRY_MAX_BYTES {
+      return Err(error(
+        DocxErrorCode::UncompressedLimitExceeded,
+        format!("DOCX entries must not exceed {DOCX_ENTRY_MAX_BYTES} bytes"),
+      ));
+    }
+    total = total
+      .checked_add(u64::try_from(bytes.len()).unwrap_or(u64::MAX))
+      .ok_or_else(|| {
+        error(
+          DocxErrorCode::UncompressedLimitExceeded,
+          "DOCX uncompressed byte count overflowed",
+        )
+      })?;
+    if total > u64::try_from(DOCX_UNCOMPRESSED_MAX_BYTES).unwrap_or(u64::MAX) {
+      return Err(error(
+        DocxErrorCode::UncompressedLimitExceeded,
+        format!(
+          "DOCX archives must not exceed {DOCX_UNCOMPRESSED_MAX_BYTES} uncompressed bytes"
+        ),
+      ));
+    }
     entries.push(ArchiveEntry { path, bytes });
   }
   Ok(entries)
