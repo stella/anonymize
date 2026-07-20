@@ -21,10 +21,15 @@ import * as wasm from "../wasm";
 
 type RuntimeSurface = Record<CapabilitySurfaceId, unknown>;
 
-const sessionPrototype = native.PreparedNativeRedactionSession.prototype;
-const preparedPrototype = native.PreparedNativeAnonymizer.prototype;
-const prototypeMethod = (prototype: object, name: string): unknown =>
-  Object.getOwnPropertyDescriptor(prototype, name)?.value;
+const sessionPrototype = native.PreparedNativeRedactionSession?.prototype;
+const preparedPrototype = native.PreparedNativeAnonymizer?.prototype;
+const prototypeMethod = (
+  prototype: object | undefined,
+  name: string,
+): unknown =>
+  prototype === undefined
+    ? undefined
+    : Object.getOwnPropertyDescriptor(prototype, name)?.value;
 
 const coreSurface = {
   "package.prepare": native.prepare_search_package,
@@ -72,28 +77,28 @@ const wasmSurface = {
   "text.diagnostics": wasm.diagnostics_json,
   "text.summary-diagnostics": wasm.summary_diagnostics_json,
   "text.caller-detections": prototypeMethod(
-    wasm.PreparedNativeAnonymizer.prototype,
+    wasm.PreparedNativeAnonymizer?.prototype,
     "redact_text_with_caller_detections",
   ),
   "text.operators": prototypeMethod(
-    wasm.PreparedNativeAnonymizer.prototype,
+    wasm.PreparedNativeAnonymizer?.prototype,
     "redact_text",
   ),
   "package.default": wasm.loadDefaultPipeline,
   "session.cross-document": prototypeMethod(
-    wasm.PreparedNativeAnonymizer.prototype,
+    wasm.PreparedNativeAnonymizer?.prototype,
     "createRedactionSession",
   ),
   "session.lifecycle": prototypeMethod(
-    wasm.PreparedNativeAnonymizer.prototype,
+    wasm.PreparedNativeAnonymizer?.prototype,
     "createRedactionSessionWithLifecycle",
   ),
   "session.plaintext-transfer": prototypeMethod(
-    wasm.PreparedNativeRedactionSession.prototype,
+    wasm.PreparedNativeRedactionSession?.prototype,
     "toPlaintextJson",
   ),
   "session.encrypted-archive": prototypeMethod(
-    wasm.PreparedNativeRedactionSession.prototype,
+    wasm.PreparedNativeRedactionSession?.prototype,
     "toEncryptedArchive",
   ),
 } satisfies Partial<RuntimeSurface>;

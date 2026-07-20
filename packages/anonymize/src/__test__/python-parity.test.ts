@@ -157,6 +157,8 @@ sys.path.insert(0, str(module_root))
 
 import stella_anonymize as anonymize
 
+prepared_anonymizer = getattr(anonymize, "PreparedAnonymizer", None)
+prepared_session = getattr(anonymize, "PreparedRedactionSession", None)
 surface_probes = {
     "package.prepare": hasattr(anonymize, "prepare_search_package"),
     "package.load": hasattr(anonymize, "load_prepared_package"),
@@ -167,21 +169,21 @@ surface_probes = {
     "text.diagnostics": hasattr(anonymize, "diagnostics_json"),
     "text.summary-diagnostics": hasattr(anonymize, "summary_diagnostics_json"),
     "text.caller-detections": hasattr(
-        anonymize.PreparedAnonymizer, "redact_text_with_caller_detections"
+        prepared_anonymizer, "redact_text_with_caller_detections"
     ),
-    "text.operators": hasattr(anonymize.PreparedAnonymizer, "redact_text"),
+    "text.operators": hasattr(prepared_anonymizer, "redact_text"),
     "package.default": hasattr(anonymize, "get_default_native_pipeline"),
     "session.cross-document": hasattr(
-        anonymize.PreparedAnonymizer, "create_redaction_session"
+        prepared_anonymizer, "create_redaction_session"
     ),
     "session.lifecycle": hasattr(
-        anonymize.PreparedAnonymizer, "create_redaction_session_with_lifecycle"
+        prepared_anonymizer, "create_redaction_session_with_lifecycle"
     ),
     "session.plaintext-transfer": hasattr(
-        anonymize.PreparedRedactionSession, "to_plaintext_json"
+        prepared_session, "to_plaintext_json"
     ),
     "session.encrypted-archive": hasattr(
-        anonymize.PreparedRedactionSession, "to_encrypted_archive"
+        prepared_session, "to_encrypted_archive"
     ),
     "document.docx.extract": hasattr(anonymize, "extract_docx_text"),
     "document.docx.rewrite": hasattr(anonymize, "rewrite_docx_text"),
@@ -274,7 +276,7 @@ docx_rewritten = anonymize.rewrite_docx_text(
     docx_source,
     [{
         "location": docx_block["location"],
-        "expectedText": docx_block["text"],
+        "expected_text": docx_block["text"],
         "replacements": [{"start": 10, "end": 16, "replacement": "approved"}],
     }],
 )
