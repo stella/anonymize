@@ -373,11 +373,8 @@ fn is_owned_placeholder_candidate(
   value: &str,
   encoded_session_id: &str,
 ) -> bool {
-  let inner = value
-    .strip_suffix(']')
-    .unwrap_or(value)
-    .strip_prefix('[')
-    .unwrap_or(value);
+  let inner = value.strip_prefix('[').unwrap_or(value);
+  let inner = inner.strip_suffix(']').unwrap_or(inner);
   let Some((prefix, _count)) = inner.rsplit_once('_') else {
     return false;
   };

@@ -88,10 +88,17 @@ export const restoreDocxText = ({
     ) as NativeRestorationPlan;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    const code = message.includes("must not inspect more than")
-      ? DOCX_RESTORATION_ERROR_CODES.restorationLimitExceeded
-      : DOCX_RESTORATION_ERROR_CODES.invalidPlaceholder;
-    throw restorationError(code, message);
+    const separator = message.indexOf(": ");
+    const code = message.slice(0, separator) as DocxRestorationErrorCode;
+    const knownCodes = new Set<DocxRestorationErrorCode>([
+      DOCX_RESTORATION_ERROR_CODES.invalidPlaceholder,
+      DOCX_RESTORATION_ERROR_CODES.restorationLimitExceeded,
+      DOCX_RESTORATION_ERROR_CODES.unsupportedDocument,
+    ]);
+    if (separator > 0 && knownCodes.has(code)) {
+      throw restorationError(code, message.slice(separator + 2));
+    }
+    throw error;
   }
   const rewrites: DocxBlockRewrite[] = [];
   let restoredPlaceholderCount = 0;

@@ -429,12 +429,14 @@ def restore_docx_text(
         plan = json.loads(_plan_docx_restoration_json(bytes(document), session_id))
     except ValueError as error:
         message = str(error)
-        code = (
-            "restoration-limit-exceeded"
-            if "must not inspect more than" in message
-            else "invalid-placeholder"
-        )
-        raise DocxRestorationError(code, message) from error
+        code, separator, detail = message.partition(": ")
+        if separator and code in {
+            "invalid-placeholder",
+            "restoration-limit-exceeded",
+            "unsupported-document",
+        }:
+            raise DocxRestorationError(code, detail) from error
+        raise
     rewrites: list[dict[str, Any]] = []
     restored_count = 0
 
