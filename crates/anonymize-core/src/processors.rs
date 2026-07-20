@@ -2052,12 +2052,11 @@ fn extend_person_name(
 }
 
 fn is_middle_initial_token(word: &str) -> bool {
-  let stripped = strip_trailing_name_punctuation(word);
-  let mut chars = stripped.chars();
-  matches!(
-    (chars.next(), chars.next()),
-    (Some(ch), None) if ch.is_uppercase()
-  ) && (word.ends_with('.') || word.len() == stripped.len())
+  let mut chars = word.chars();
+  chars.next().is_some_and(char::is_uppercase)
+    && chars.next() == Some('.')
+    && chars
+      .all(|ch| matches!(ch, ',' | ';' | '”' | '"' | '’' | '\'' | '“' | '»'))
 }
 
 fn read_until_whitespace(
@@ -3722,5 +3721,11 @@ mod tests {
           && entity.text == "Paul A. Pinkston"),
       "{entities:?}"
     );
+  }
+
+  #[test]
+  fn bare_single_letter_is_not_a_middle_initial() {
+    assert!(!is_middle_initial_token("A"));
+    assert!(is_middle_initial_token("A."));
   }
 }
