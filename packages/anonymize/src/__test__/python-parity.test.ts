@@ -142,6 +142,7 @@ type PythonParityOutput = {
     hyperlink_requires_partial_opt_in: boolean;
     revision_requires_partial_opt_in: boolean;
     invalid_rewrite_error: string | null;
+    invalid_plan_error: string | null;
   };
 };
 
@@ -339,6 +340,16 @@ except anonymize.DocxExtractionError as error:
     docx_invalid_rewrite_error = error.code
 else:
     docx_invalid_rewrite_error = None
+try:
+    anonymize.rewrite_docx_text(docx_source, [{
+        "location": docx_block["location"],
+        "expected_text": docx_block["text"],
+        "replacements": [{"start": -1, "end": 2, "replacement": "x"}],
+    }])
+except anonymize.DocxRewriteError as error:
+    docx_invalid_plan_error = error.code
+else:
+    docx_invalid_plan_error = None
 deanonymised_text = anonymize.deanonymise(
     session_first.redaction.redacted_text,
     session_first.redaction.redaction_map,
@@ -521,6 +532,7 @@ print(
                 "hyperlink_requires_partial_opt_in": docx_hyperlink_requires_partial,
                 "revision_requires_partial_opt_in": docx_revision_requires_partial,
                 "invalid_rewrite_error": docx_invalid_rewrite_error,
+                "invalid_plan_error": docx_invalid_plan_error,
             },
         }
     )
@@ -701,6 +713,7 @@ describe("python binding parity", () => {
       hyperlink_requires_partial_opt_in: true,
       revision_requires_partial_opt_in: true,
       invalid_rewrite_error: "invalid-archive",
+      invalid_plan_error: "invalid-replacement",
     });
   });
 

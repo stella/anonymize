@@ -160,6 +160,18 @@ describe("rewriteDocxText", () => {
         rewriteForFirstBlock(archive, [{ start: 1, end: 2, replacement: "x" }]),
       ]),
     ).toThrow("UTF-16 boundaries");
+    let caught: unknown;
+    try {
+      rewriteDocxText(archive, [
+        rewriteForFirstBlock(archive, [
+          { start: -1, end: 2, replacement: "x" },
+        ]),
+      ]);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(DocxRewriteError);
+    expect((caught as DocxRewriteError).code).toBe("invalid-replacement");
   });
 
   test("budgets replacement text by its escaped size, not its raw size", () => {

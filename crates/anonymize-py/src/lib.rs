@@ -1468,7 +1468,11 @@ fn rewrite_docx_text_native(
   rewrites_json: &str,
 ) -> PyResult<(Vec<u8>, usize, usize)> {
   let rewrites = serde_json::from_str::<Vec<DocxBlockRewrite>>(rewrites_json)
-    .map_err(|error| to_py_serde_error(&error))?;
+    .map_err(|error| {
+    PyValueError::new_err(format!(
+      "invalid-replacement: DOCX rewrite plan is invalid: {error}"
+    ))
+  })?;
   let result =
     rewrite_docx_text_core(document, &rewrites).map_err(|error| {
       PyValueError::new_err(format!(
