@@ -1086,6 +1086,7 @@ version = "2.2.0"
 dependencies = [
  "pyo3",
  "pyo3-build-config",
+ "serde",
  "serde_json",
  "stella-anonymize-adapter-contract",
  "stella-anonymize-core",

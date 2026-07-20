@@ -31,6 +31,21 @@ from ._native import (
     redact_static_entities_result_stream_json,
     redact_static_entities_summary_diagnostics_json,
 )
+from .docx import (
+    DOCX_ARCHIVE_MAX_BYTES,
+    DOCX_ENTRY_MAX_BYTES,
+    DOCX_EXTRACTION_CONTRACT_VERSION,
+    DOCX_UNCOMPRESSED_MAX_BYTES,
+    DOCX_XML_MAX_DEPTH,
+    DocxAnonymizationError,
+    DocxExtractionError,
+    DocxRestorationError,
+    DocxRewriteError,
+    anonymize_docx,
+    extract_docx_text,
+    restore_docx_text,
+    rewrite_docx_text,
+)
 
 __all__ = [
     "__version__",
@@ -87,6 +102,19 @@ __all__ = [
     "redact_static_entities_result_stream_json",
     "redact_static_entities_summary_diagnostics_json",
     "summary_diagnostics_json",
+    "DOCX_ARCHIVE_MAX_BYTES",
+    "DOCX_ENTRY_MAX_BYTES",
+    "DOCX_EXTRACTION_CONTRACT_VERSION",
+    "DOCX_UNCOMPRESSED_MAX_BYTES",
+    "DOCX_XML_MAX_DEPTH",
+    "DocxAnonymizationError",
+    "DocxExtractionError",
+    "DocxRestorationError",
+    "DocxRewriteError",
+    "anonymize_docx",
+    "extract_docx_text",
+    "restore_docx_text",
+    "rewrite_docx_text",
 ]
 
 BytesLike = bytes | bytearray | memoryview
@@ -166,6 +194,27 @@ class PreparedRedactionSession:
         observed_at_epoch_seconds: int | None = None,
     ) -> str:
         return self._session.restore_text(full_text, observed_at_epoch_seconds)
+
+    def _plan_docx_text_batch(
+        self,
+        inputs: Sequence[Mapping[str, object]],
+        operators: OperatorConfig,
+        observed_at_epoch_seconds: int | None,
+    ) -> object:
+        native_inputs = [
+            {
+                "full_text": str(item["full_text"]),
+                "request_json": _caller_detection_request_json(
+                    item.get("detections", ())  # type: ignore[arg-type]
+                ),
+            }
+            for item in inputs
+        ]
+        return self._session.plan_docx_text_batch(
+            json.dumps(native_inputs, separators=(",", ":")),
+            _operator_config_json(operators, redact_string=None),
+            observed_at_epoch_seconds,
+        )
 
     def to_plaintext_json(self) -> str:
         return self._session.to_plaintext_json()

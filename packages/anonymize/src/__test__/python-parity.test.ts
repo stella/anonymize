@@ -129,14 +129,27 @@ type PythonParityOutput = {
     missing_observed_at_rejected: boolean;
     expired_restore_rejected: boolean;
   };
+  docx_result: {
+    extracted_text: string;
+    rewritten_text: string;
+    anonymized_text: string;
+    restored_text: string;
+    rewritten_block_count: number;
+    restored_placeholder_count: number;
+    caller_anonymized_text: string;
+    retained_caller_detection_count: number;
+    external_relationship_is_unsupported: boolean;
+  };
 };
 
 const PYTHON_PARITY_SCRIPT = `
 import base64
+import io
 import json
 import os
 import pathlib
 import sys
+import zipfile
 
 module_root = pathlib.Path(os.environ["STELLA_ANONYMIZE_PY_MODULE"]).parent.parent
 payload = json.loads(pathlib.Path(os.environ["STELLA_ANONYMIZE_PAYLOAD"]).read_text())
@@ -221,6 +234,79 @@ restored_session = prepared.restore_redaction_session(session.to_plaintext_json(
 session_restored = restored_session.redact_text("Jan Novak signed once more.")
 session_restored_text = restored_session.restore_text(
     session_first.redaction.redaction_map[0].placeholder + " signed."
+)
+
+def make_docx(text, external_target=None):
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr(
+            "[Content_Types].xml",
+            '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+            '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+            '</Types>',
+        )
+        archive.writestr(
+            "_rels/.rels",
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>'
+            '</Relationships>',
+        )
+        archive.writestr(
+            "word/document.xml",
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>'
+            + text
+            + '</w:t></w:r></w:p></w:body></w:document>',
+        )
+        if external_target is not None:
+            archive.writestr(
+                "word/_rels/document.xml.rels",
+                '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                '<Relationship Id="rIdExternal" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" TargetMode="External" Target="'
+                + external_target
+                + '"/></Relationships>',
+            )
+    return output.getvalue()
+
+docx_source = make_docx("Jan Novak signed.")
+docx_extraction = anonymize.extract_docx_text(docx_source)
+docx_block = docx_extraction["blocks"][0]
+docx_rewritten = anonymize.rewrite_docx_text(
+    docx_source,
+    [{
+        "location": docx_block["location"],
+        "expectedText": docx_block["text"],
+        "replacements": [{"start": 10, "end": 16, "replacement": "approved"}],
+    }],
+)
+docx_session = prepared.create_redaction_session("parity_docx_1")
+docx_anonymized = anonymize.anonymize_docx(
+    docx_source,
+    docx_session,
+    "parity_docx_1",
+    {"coverage": {"mode": "require-full"}},
+)
+docx_restored = anonymize.restore_docx_text(
+    docx_anonymized["document"], docx_session, "parity_docx_1"
+)
+docx_caller_source = make_docx("External Name")
+docx_caller_block = anonymize.extract_docx_text(docx_caller_source)["blocks"][0]
+docx_caller_session = prepared.create_redaction_session("parity_docx_caller_1")
+docx_caller_anonymized = anonymize.anonymize_docx(
+    docx_caller_source,
+    docx_caller_session,
+    "parity_docx_caller_1",
+    {"coverage": {"mode": "require-full"}},
+    caller_detections=[{
+        "location": docx_caller_block["location"],
+        "expectedText": docx_caller_block["text"],
+        "detections": [{
+            "start": 0, "end": 13, "label": "person", "score": 0.99,
+            "provider_id": "parity-provider", "detection_id": "docx-person-1",
+        }],
+    }],
+)
+docx_external = anonymize.extract_docx_text(
+    make_docx("Contact us", "mailto:alice@example.test")
 )
 deanonymised_text = anonymize.deanonymise(
     session_first.redaction.redacted_text,
@@ -388,6 +474,20 @@ print(
                 "missing_observed_at_rejected": missing_observed_at_rejected,
                 "expired_restore_rejected": expired_restore_rejected,
             },
+            "docx_result": {
+                "extracted_text": docx_block["text"],
+                "rewritten_text": anonymize.extract_docx_text(docx_rewritten["document"])["blocks"][0]["text"],
+                "anonymized_text": anonymize.extract_docx_text(docx_anonymized["document"])["blocks"][0]["text"],
+                "restored_text": anonymize.extract_docx_text(docx_restored["document"])["blocks"][0]["text"],
+                "rewritten_block_count": docx_rewritten["rewrittenBlockCount"],
+                "restored_placeholder_count": docx_restored["restoredPlaceholderCount"],
+                "caller_anonymized_text": anonymize.extract_docx_text(docx_caller_anonymized["document"])["blocks"][0]["text"],
+                "retained_caller_detection_count": docx_caller_anonymized["summary"]["retainedCallerDetectionCount"],
+                "external_relationship_is_unsupported": any(
+                    item["status"] == "unsupported" and item["path"] == "word/_rels/document.xml.rels"
+                    for item in docx_external["coverage"]["parts"]
+                ),
+            },
         }
     )
 )
@@ -474,6 +574,10 @@ const getPythonModule = (): string => {
     join(PYTHON_SOURCE_DIR, "stella_anonymize", "__init__.py"),
     join(packageDir, "__init__.py"),
   );
+  copyFileSync(
+    join(PYTHON_SOURCE_DIR, "stella_anonymize", "docx.py"),
+    join(packageDir, "docx.py"),
+  );
   cpSync(
     join(PYTHON_SOURCE_DIR, "stella_anonymize", "native_packages"),
     join(packageDir, "native_packages"),
@@ -547,6 +651,21 @@ describe("python binding parity", () => {
       expect(python.surface_ids).toEqual(expected);
     },
   );
+
+  pythonParityTest("python executes the full DOCX workflow", () => {
+    const python = runPythonParity([]);
+    expect(python.docx_result).toEqual({
+      extracted_text: "Jan Novak signed.",
+      rewritten_text: "Jan Novak approved.",
+      anonymized_text: "[PERSON_parity%5Fdocx%5F1_1] signed.",
+      restored_text: "Jan Novak signed.",
+      rewritten_block_count: 1,
+      restored_placeholder_count: 1,
+      caller_anonymized_text: "[PERSON_parity%5Fdocx%5Fcaller%5F1_1]",
+      retained_caller_detection_count: 1,
+      external_relationship_is_unsupported: true,
+    });
+  });
 
   pythonParityTest(
     "default-package redaction matches the native binding across contract fixtures",

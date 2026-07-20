@@ -6,6 +6,7 @@ use std::{
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::{PyAny, PyBytes};
+use serde::Deserialize;
 use stella_anonymize_adapter_contract::{
   BindingCallerDetectionRequest, BindingOperatorConfig, BindingOperatorEntry,
   BindingPipelineEntity, BindingPreparedSearchConfig, BindingRedactionEntry,
@@ -21,18 +22,20 @@ use stella_anonymize_adapter_contract::{
   prepared_search_package_has_core_payload,
   static_redaction_diagnostic_result_to_character_binding,
   static_redaction_diagnostic_result_to_utf16_binding,
-  static_redaction_diagnostics_to_binding, static_redaction_result_to_binding,
-  static_redaction_result_to_utf16_binding,
+  static_redaction_diagnostics_to_binding,
+  static_redaction_plan_result_to_utf16_binding,
+  static_redaction_result_to_binding, static_redaction_result_to_utf16_binding,
   static_redaction_stream_event_to_utf16_binding,
 };
 use stella_anonymize_core::{
   CallerRedactionOptions, DiagnosticDetail, DiagnosticEvent, DiagnosticStage,
   Error as CoreError, OpenSessionArchiveOptions, OperatorConfig,
   PreparedEngine as CorePreparedEngine, PreparedEngineArtifactsView,
-  PreparedSessionRedactionOptions, REDACTION_SESSION_ARCHIVE_KEY_BYTES,
-  REDACTION_SESSION_ARCHIVE_MAX_BYTES, RedactionSession, SessionArchiveKey,
-  SessionId, SessionLifecycle, SessionMetadata, SessionStatus,
-  SessionTimestamp, StaticRedactionDiagnostics, StaticRedactionResult,
+  PreparedSessionCallerRedactionOptions, PreparedSessionRedactionOptions,
+  REDACTION_SESSION_ARCHIVE_KEY_BYTES, REDACTION_SESSION_ARCHIVE_MAX_BYTES,
+  RedactionSession, SessionArchiveKey, SessionId, SessionLifecycle,
+  SessionMetadata, SessionStatus, SessionTimestamp, StaticRedactionDiagnostics,
+  StaticRedactionResult,
   assemble::{AssembleError, Dictionaries, GazetteerEntry, PipelineConfig},
 };
 
@@ -89,7 +92,49 @@ pub struct PyPreparedSearch {
 #[pyclass(name = "PreparedRedactionSession")]
 pub struct PyPreparedRedactionSession {
   inner: Arc<CorePreparedEngine>,
-  session: Mutex<RedactionSession>,
+  session: Arc<Mutex<RedactionSession>>,
+}
+
+#[pyclass(name = "PreparedSessionRedactionPlan")]
+pub struct PyPreparedSessionRedactionPlan {
+  target: Arc<Mutex<RedactionSession>>,
+  base: RedactionSession,
+  planned: Mutex<Option<RedactionSession>>,
+  result_json: String,
+}
+
+#[derive(Deserialize)]
+struct PySessionCallerRedactionInput {
+  full_text: String,
+  request_json: String,
+}
+
+#[pymethods]
+impl PyPreparedSessionRedactionPlan {
+  fn result_json(&self) -> String {
+    self.result_json.clone()
+  }
+
+  fn commit(&self) -> PyResult<()> {
+    let mut planned = self.planned.lock().map_err(|_| {
+      PyValueError::new_err("Redaction session plan lock is unavailable")
+    })?;
+    let mut target = self.target.lock().map_err(|_| {
+      PyValueError::new_err("Redaction session state lock is unavailable")
+    })?;
+    if *target != self.base {
+      return Err(PyValueError::new_err(
+        "Redaction session changed after the plan was created",
+      ));
+    }
+    let next = planned.take().ok_or_else(|| {
+      PyValueError::new_err("Redaction session plan has already been committed")
+    })?;
+    *target = next;
+    drop(target);
+    drop(planned);
+    Ok(())
+  }
 }
 
 #[pymethods]
@@ -196,6 +241,65 @@ impl PyPreparedRedactionSession {
     )
   }
 
+  #[pyo3(signature = (inputs_json, operators_json=None, observed_at_epoch_seconds=None))]
+  fn plan_docx_text_batch(
+    &self,
+    inputs_json: &str,
+    operators_json: Option<&str>,
+    observed_at_epoch_seconds: Option<u32>,
+  ) -> PyResult<PyPreparedSessionRedactionPlan> {
+    let inputs =
+      serde_json::from_str::<Vec<PySessionCallerRedactionInput>>(inputs_json)
+        .map_err(|error| to_py_serde_error(&error))?;
+    let operators =
+      operator_config_from_binding(parse_operator_config(operators_json)?)
+        .map_err(|error| to_py_contract_error(&error))?;
+    let observed_at =
+      observed_at_epoch_seconds.map(SessionTimestamp::from_epoch_seconds);
+    let base = self.lock_session()?.clone();
+    let mut planned = base.clone();
+    let mut results = Vec::with_capacity(inputs.len());
+    for input in inputs {
+      let request = serde_json::from_str::<BindingCallerDetectionRequest>(
+        &input.request_json,
+      )
+      .map_err(|error| to_py_serde_error(&error))?;
+      let detections =
+        stella_anonymize_adapter_contract::caller_detections_from_utf16_binding(
+          request,
+          &input.full_text,
+        )
+        .map_err(|error| to_py_contract_error(&error))?;
+      let result = self
+        .inner
+        .redact_static_entities_with_caller_detections_and_session(
+          &input.full_text,
+          PreparedSessionCallerRedactionOptions {
+            operators: &operators,
+            detections: &detections,
+            session: &mut planned,
+            observed_at,
+          },
+        )
+        .map_err(|error| to_py_core_error(&error))?;
+      results.push(
+        static_redaction_plan_result_to_utf16_binding(
+          &result,
+          &input.full_text,
+        )
+        .map_err(|error| to_py_contract_error(&error))?,
+      );
+    }
+    let result_json = serde_json::to_string(&results)
+      .map_err(|error| to_py_serde_error(&error))?;
+    Ok(PyPreparedSessionRedactionPlan {
+      target: Arc::clone(&self.session),
+      base,
+      planned: Mutex::new(Some(planned)),
+      result_json,
+    })
+  }
+
   fn redact_static_entities(
     &self,
     full_text: &str,
@@ -258,13 +362,10 @@ impl PyPreparedRedactionSession {
 }
 
 impl PyPreparedRedactionSession {
-  const fn new(
-    inner: Arc<CorePreparedEngine>,
-    session: RedactionSession,
-  ) -> Self {
+  fn new(inner: Arc<CorePreparedEngine>, session: RedactionSession) -> Self {
     Self {
       inner,
-      session: Mutex::new(session),
+      session: Arc::new(Mutex::new(session)),
     }
   }
 
@@ -1336,6 +1437,7 @@ fn to_py_assemble_error(error: &AssembleError) -> PyErr {
 fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
   module.add_class::<PyPreparedSearch>()?;
   module.add_class::<PyPreparedRedactionSession>()?;
+  module.add_class::<PyPreparedSessionRedactionPlan>()?;
   module.add_class::<PyStaticRedactionResult>()?;
   module.add_class::<PyRedactionResult>()?;
   module.add_class::<PyRedactionEntry>()?;
