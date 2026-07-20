@@ -128,9 +128,13 @@ export class PathScope {
     if (!this.#roots.some((root) => inside(root, initiallyCanonical))) {
       throw new Error("Input is outside the configured roots");
     }
+    const initiallyRequestedMetadata = await lstat(path);
+    if (!initiallyRequestedMetadata.isFile()) {
+      throw new Error("Input must be a regular file");
+    }
     const handle = await open(
       path,
-      fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW,
+      fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW | fsConstants.O_NONBLOCK,
     );
     try {
       const openedMetadata = await handle.stat();

@@ -3,6 +3,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { extractDocxText } from "@stll/anonymize-docx";
 import { strToU8, zipSync } from "fflate";
+import { execFile } from "node:child_process";
 import { readFileSync } from "node:fs";
 import {
   mkdtemp,
@@ -17,6 +18,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { promisify } from "node:util";
 
 import {
   LocalAnonymizeService,
@@ -25,6 +27,7 @@ import {
 } from "../local";
 
 const temporaryDirectories: string[] = [];
+const execFileAsync = promisify(execFile);
 const WORD_NAMESPACE =
   "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 const PACKAGE_NAMESPACE =
@@ -183,6 +186,25 @@ describe("PathScope", () => {
     await expect(
       readFile(join(movedDirectory, "output.txt")),
     ).rejects.toThrow();
+  });
+
+  test("rejects FIFO inputs without waiting for a writer", async () => {
+    if (process.platform === "win32") {
+      return;
+    }
+    const root = await temporaryDirectory();
+    const fifo = join(root, "blocking.txt");
+    await execFileAsync("mkfifo", [fifo]);
+    const scope = await PathScope.create([root]);
+
+    await expect(
+      scope.readInput({
+        path: fifo,
+        extension: ".txt",
+        maximumBytes: 1024,
+        label: "Text",
+      }),
+    ).rejects.toThrow("regular file");
   });
 });
 
