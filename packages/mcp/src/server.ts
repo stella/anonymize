@@ -17,7 +17,7 @@ const rootsFromArguments = (arguments_: readonly string[]): string[] => {
       continue;
     }
     if (argument === "--root") {
-      const root = arguments_[index + 1];
+      const root = arguments_.at(index + 1);
       if (root === undefined) {
         throw new Error("--root requires an absolute directory path");
       }
