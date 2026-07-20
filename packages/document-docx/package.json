@@ -32,8 +32,7 @@
   },
   "dependencies": {
     "@stll/anonymize": "^2.2.0",
-    "fflate": "^0.8.3",
-    "saxes": "^6.0.0"
+    "fflate": "^0.8.3"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",
