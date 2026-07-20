@@ -50,6 +50,10 @@ const PACKAGE_RELATIONSHIP_NAMESPACES: [&str; 2] = [
   "http://purl.oclc.org/ooxml/package/relationships",
   "http://schemas.openxmlformats.org/package/2006/relationships",
 ];
+const MARKUP_COMPATIBILITY_NAMESPACES: [&str; 2] = [
+  "http://purl.oclc.org/ooxml/markup-compatibility/main",
+  "http://schemas.openxmlformats.org/markup-compatibility/2006",
+];
 
 #[derive(Debug, Error, Clone, Eq, PartialEq)]
 #[error("{message}")]
@@ -892,7 +896,11 @@ fn extract_part(
     .count();
   coverage.unsupported_alternate_content_count = document
     .descendants()
-    .filter(|node| node.tag_name().name() == "AlternateContent")
+    .filter(|node| {
+      node.tag_name().name() == "AlternateContent"
+        && MARKUP_COMPATIBILITY_NAMESPACES
+          .contains(&node.tag_name().namespace().unwrap_or_default())
+    })
     .count();
   Ok((blocks, coverage))
 }

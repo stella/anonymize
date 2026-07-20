@@ -195,3 +195,23 @@ fn extracts_many_sibling_runs_with_stable_paths()
   );
   Ok(())
 }
+
+#[test]
+fn counts_only_markup_compatibility_alternate_content()
+-> Result<(), Box<dyn std::error::Error>> {
+  let document_xml = format!(
+    "<w:document xmlns:w=\"{WORD_NAMESPACE}\" xmlns:mc=\"http://schemas.openxmlformats.org/markup-compatibility/2006\" xmlns:x=\"urn:extension\"><w:body><w:p><w:r><w:t>Alice</w:t></w:r></w:p><mc:AlternateContent/><x:AlternateContent/></w:body></w:document>"
+  );
+  let archive = docx(&[(
+    "word/document.xml",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml",
+    &document_xml,
+  )])?;
+  assert_eq!(
+    extract_docx_text(&archive)?
+      .coverage
+      .unsupported_alternate_content_count,
+    1,
+  );
+  Ok(())
+}
