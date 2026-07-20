@@ -8,7 +8,11 @@ import {
   type DocxRewriteErrorCode,
   type DocxRewriteResult,
 } from "./types";
-import { DocxExtractionError } from "./extract";
+import {
+  DOCX_UNCOMPRESSED_MAX_BYTES,
+  DOCX_XML_MAX_DEPTH,
+  DocxExtractionError,
+} from "./extract";
 
 export class DocxRewriteError extends Error {
   readonly code: DocxRewriteErrorCode;
@@ -26,6 +30,70 @@ const REWRITE_ERROR_CODES = new Set<DocxRewriteErrorCode>(
 const EXTRACTION_ERROR_CODES = new Set<DocxExtractionErrorCode>(
   Object.values(DOCX_EXTRACTION_ERROR_CODES),
 );
+const DOCX_REWRITE_MAX_BLOCKS = 100_000;
+const DOCX_REWRITE_MAX_REPLACEMENTS = 1_000_000;
+const LOCATION_PATH_KEYS = [
+  "xmlPath",
+  "tablePath",
+  "rowPath",
+  "cellPath",
+  "textBoxPath",
+] as const;
+
+const preflightRewritePlan = (rewrites: readonly DocxBlockRewrite[]): void => {
+  if (rewrites.length > DOCX_REWRITE_MAX_BLOCKS) {
+    throw new DocxRewriteError(
+      DOCX_REWRITE_ERROR_CODES.rewriteLimitExceeded,
+      `DOCX rewrites must not contain more than ${DOCX_REWRITE_MAX_BLOCKS} blocks`,
+    );
+  }
+  let replacementCount = 0;
+  let estimatedBytes = rewrites.length * 256;
+  for (const rewrite of rewrites) {
+    if (!Array.isArray(rewrite.replacements)) {
+      throw new DocxRewriteError(
+        DOCX_REWRITE_ERROR_CODES.invalidReplacement,
+        "DOCX block rewrite replacements must be an array",
+      );
+    }
+    replacementCount += rewrite.replacements.length;
+    if (replacementCount > DOCX_REWRITE_MAX_REPLACEMENTS) {
+      throw new DocxRewriteError(
+        DOCX_REWRITE_ERROR_CODES.rewriteLimitExceeded,
+        `DOCX rewrites must not contain more than ${DOCX_REWRITE_MAX_REPLACEMENTS} replacements`,
+      );
+    }
+    estimatedBytes +=
+      (typeof rewrite.expectedText === "string"
+        ? rewrite.expectedText.length * 6
+        : 0) +
+      rewrite.replacements.length * 96;
+    for (const replacement of rewrite.replacements) {
+      if (typeof replacement.replacement === "string") {
+        estimatedBytes += replacement.replacement.length * 6;
+      }
+    }
+    const location = rewrite.location as unknown as Record<string, unknown>;
+    for (const key of LOCATION_PATH_KEYS) {
+      const path = location[key];
+      if (Array.isArray(path)) {
+        if (path.length > DOCX_XML_MAX_DEPTH) {
+          throw new DocxRewriteError(
+            DOCX_REWRITE_ERROR_CODES.invalidReplacement,
+            `DOCX rewrite location paths must not exceed ${DOCX_XML_MAX_DEPTH} entries`,
+          );
+        }
+        estimatedBytes += path.length * 24;
+      }
+    }
+    if (estimatedBytes > DOCX_UNCOMPRESSED_MAX_BYTES) {
+      throw new DocxRewriteError(
+        DOCX_REWRITE_ERROR_CODES.rewriteLimitExceeded,
+        `DOCX rewrite plans must not exceed ${DOCX_UNCOMPRESSED_MAX_BYTES} estimated serialized bytes`,
+      );
+    }
+  }
+};
 
 export const rewriteDocxText = (
   archive: Uint8Array,
@@ -37,6 +105,7 @@ export const rewriteDocxText = (
       "The native anonymize binding does not expose DOCX rewriting",
     );
   }
+  preflightRewritePlan(rewrites);
   let rewritesJson: string;
   try {
     rewritesJson = JSON.stringify(rewrites);

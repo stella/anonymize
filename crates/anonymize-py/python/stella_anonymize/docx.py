@@ -918,6 +918,64 @@ def _rewrite_docx_text_python_oracle(
     }
 
 
+def _preflight_rewrite_plan(rewrites: Sequence[Mapping[str, Any]]) -> None:
+    if len(rewrites) > DOCX_MAX_TEXT_BLOCKS:
+        raise DocxRewriteError(
+            "rewrite-limit-exceeded",
+            f"DOCX rewrites must not contain more than {DOCX_MAX_TEXT_BLOCKS} blocks",
+        )
+    replacement_count = 0
+    estimated_bytes = len(rewrites) * 256
+    for rewrite in rewrites:
+        replacements = rewrite.get("replacements")
+        if not isinstance(replacements, Sequence) or isinstance(
+            replacements, (str, bytes, bytearray)
+        ):
+            raise DocxRewriteError(
+                "invalid-replacement",
+                "DOCX block rewrite replacements must be a sequence",
+            )
+        replacement_count += len(replacements)
+        if replacement_count > DOCX_MAX_REPLACEMENTS:
+            raise DocxRewriteError(
+                "rewrite-limit-exceeded",
+                f"DOCX rewrites must not contain more than {DOCX_MAX_REPLACEMENTS} replacements",
+            )
+        expected_text = rewrite.get("expectedText")
+        estimated_bytes += (
+            len(expected_text) * 6 if isinstance(expected_text, str) else 0
+        ) + len(replacements) * 96
+        for replacement in replacements:
+            if isinstance(replacement, Mapping):
+                value = replacement.get("replacement")
+                if isinstance(value, str):
+                    estimated_bytes += len(value) * 6
+        location = rewrite.get("location")
+        if isinstance(location, Mapping):
+            for key in (
+                "xmlPath",
+                "tablePath",
+                "rowPath",
+                "cellPath",
+                "textBoxPath",
+            ):
+                path = location.get(key)
+                if isinstance(path, Sequence) and not isinstance(
+                    path, (str, bytes, bytearray)
+                ):
+                    if len(path) > DOCX_XML_MAX_DEPTH:
+                        raise DocxRewriteError(
+                            "invalid-replacement",
+                            f"DOCX rewrite location paths must not exceed {DOCX_XML_MAX_DEPTH} entries",
+                        )
+                    estimated_bytes += len(path) * 24
+        if estimated_bytes > DOCX_UNCOMPRESSED_MAX_BYTES:
+            raise DocxRewriteError(
+                "rewrite-limit-exceeded",
+                f"DOCX rewrite plans must not exceed {DOCX_UNCOMPRESSED_MAX_BYTES} estimated serialized bytes",
+            )
+
+
 def rewrite_docx_text(
     document: bytes | bytearray | memoryview,
     rewrites: Sequence[Mapping[str, Any]],
@@ -931,7 +989,10 @@ def rewrite_docx_text(
             if "expectedText" not in normalized and "expected_text" in normalized:
                 normalized["expectedText"] = normalized.pop("expected_text")
             normalized_rewrites.append(normalized)
+        _preflight_rewrite_plan(normalized_rewrites)
         rewrites_json = json.dumps(normalized_rewrites, separators=(",", ":"))
+    except DocxRewriteError:
+        raise
     except (TypeError, ValueError) as error:
         raise DocxRewriteError(
             "invalid-replacement",

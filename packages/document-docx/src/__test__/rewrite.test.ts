@@ -188,6 +188,18 @@ describe("rewriteDocxText", () => {
     }
     expect(caught).toBeInstanceOf(DocxRewriteError);
     expect((caught as DocxRewriteError).code).toBe("invalid-replacement");
+    caught = undefined;
+    const oversizedReplacements: DocxBlockRewrite["replacements"] = [];
+    oversizedReplacements.length = 1_000_001;
+    try {
+      rewriteDocxText(archive, [
+        rewriteForFirstBlock(archive, oversizedReplacements),
+      ]);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(DocxRewriteError);
+    expect((caught as DocxRewriteError).code).toBe("rewrite-limit-exceeded");
   });
 
   test("budgets replacement text by its escaped size, not its raw size", () => {
