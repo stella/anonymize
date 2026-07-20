@@ -925,8 +925,14 @@ def rewrite_docx_text(
     """Apply the shared Rust DOCX rewrite contract."""
 
     try:
+        normalized_rewrites = []
+        for rewrite in rewrites:
+            normalized = dict(rewrite)
+            if "expectedText" not in normalized and "expected_text" in normalized:
+                normalized["expectedText"] = normalized.pop("expected_text")
+            normalized_rewrites.append(normalized)
         rewritten, block_count, replacement_count = _rewrite_docx_text_native(
-            bytes(document), json.dumps(list(rewrites), separators=(",", ":"))
+            bytes(document), json.dumps(normalized_rewrites, separators=(",", ":"))
         )
     except ValueError as error:
         message = str(error)

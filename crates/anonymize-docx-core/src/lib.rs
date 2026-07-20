@@ -638,6 +638,19 @@ fn node_at_path<'tree, 'input>(
   Some(node)
 }
 
+fn xml_start_tag_end(source: &str) -> Option<usize> {
+  let mut quote = None;
+  for (index, character) in source.char_indices() {
+    match (quote, character) {
+      (Some(expected), current) if current == expected => quote = None,
+      (None, '\'' | '"') => quote = Some(character),
+      (None, '>') => return Some(index),
+      _ => {}
+    }
+  }
+  None
+}
+
 fn rewrite_part_xml(
   xml: &str,
   updates: &[TextNodeUpdate],
@@ -669,7 +682,7 @@ fn rewrite_part_xml(
         "DOCX text-node source changed after extraction",
       )
     })?;
-    let opening_end_relative = source.find('>').ok_or_else(|| {
+    let opening_end_relative = xml_start_tag_end(source).ok_or_else(|| {
       rewrite_error(
         DocxRewriteErrorCode::StaleExtraction,
         "DOCX text-node opening tag changed after extraction",
@@ -1842,22 +1855,18 @@ pub fn rewrite_docx_text(
     }
   }
   for entry in &mut entries {
-    if let Some(updates) = updates_by_part.get(&entry.path) {
+    if let Some(updates) = updates_by_part.remove(&entry.path) {
       let xml = std::str::from_utf8(&entry.bytes).map_err(|_| {
         rewrite_error(
           DocxRewriteErrorCode::UnsupportedReplacement,
           "DOCX source XML changed after extraction",
         )
       })?;
-      entry.bytes =
-        rewrite_part_xml(xml, &updates.values().cloned().collect::<Vec<_>>())?
-          .into_bytes();
+      let updates = updates.into_values().collect::<Vec<_>>();
+      entry.bytes = rewrite_part_xml(xml, &updates)?.into_bytes();
     }
   }
-  if updates_by_part
-    .keys()
-    .any(|path| !entries.iter().any(|entry| &entry.path == path))
-  {
+  if !updates_by_part.is_empty() {
     return Err(rewrite_error(
       DocxRewriteErrorCode::StaleExtraction,
       "DOCX source part changed after extraction",

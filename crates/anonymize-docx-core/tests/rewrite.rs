@@ -89,6 +89,31 @@ fn rewrites_across_runs_and_preserves_untouched_parts()
 }
 
 #[test]
+fn preserves_greater_than_characters_inside_text_node_attributes()
+-> Result<(), Box<dyn std::error::Error>> {
+  let source = docx(&format!(
+    "<w:document xmlns:w=\"{WORD_NAMESPACE}\" xmlns:x=\"urn:test\"><w:body><w:p><w:r><w:t x:condition=\"left > right\">Alice</w:t></w:r></w:p></w:body></w:document>"
+  ))?;
+  let extraction = extract_docx_text(&source)?;
+  let block = extraction.blocks.first().ok_or("missing block")?;
+  let result = rewrite_docx_text(
+    &source,
+    &[DocxBlockRewrite {
+      location: block.location.clone(),
+      expected_text: block.text.clone(),
+      replacements: vec![DocxTextReplacement {
+        start: 0,
+        end: 5,
+        replacement: "Bob".to_owned(),
+      }],
+    }],
+  )?;
+  let xml = String::from_utf8(part(&result.document, "word/document.xml")?)?;
+  assert!(xml.contains("x:condition=\"left > right\">Bob</w:t>"));
+  Ok(())
+}
+
+#[test]
 fn rejects_stale_revision_and_surrogate_splitting_plans()
 -> Result<(), Box<dyn std::error::Error>> {
   let source = docx(&format!(
