@@ -6,9 +6,17 @@ export * from "./native-node";
 export {
   CAPABILITY_MANIFEST,
   CAPABILITY_MANIFEST_SCHEMA_VERSION,
+  CAPABILITY_PARITY_PROFILES,
   CAPABILITY_RUNTIMES,
+  CAPABILITY_SURFACES,
 } from "./capabilities";
-export type { CapabilityManifest, CapabilityRuntime } from "./capabilities";
+export type {
+  CapabilityManifest,
+  CapabilityParityProfile,
+  CapabilityRuntime,
+  CapabilitySurface,
+  CapabilitySurfaceId,
+} from "./capabilities";
 export {
   assertNativePipelineSupported,
   createNativePipelineFromConfig,

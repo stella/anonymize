@@ -21,6 +21,18 @@ This is a Bun-first TypeScript monorepo for text anonymization. The library hand
   explains the native package graph, prepared-package flow, and temporary legacy
   test boundary.
 
+### Runtime Surface Parity
+
+- Treat runtime parity as a public contract, not only as fixture-output
+  equivalence. Every public capability must belong to a named parity profile,
+  and CI must execute it through every runtime in that profile.
+- A capability added to only one binding must fail the full surface-parity gate
+  until its peer bindings land. Do not add permanent expected-missing allowlists.
+- Put inherently platform-specific capabilities in an explicit narrower profile
+  with a documented boundary; do not hide runtime gaps in individual tests.
+- Keep API availability, normalized behavior and errors, and cross-runtime
+  artifacts such as encrypted sessions under parity tests where they apply.
+
 ### Native Detector Shape
 
 Rust static detectors should follow the module-owned rule shape. A detector

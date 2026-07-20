@@ -111,6 +111,31 @@ Expiry is fail-closed at its exact boundary. `delete()` performs logical
 deletion: it clears the session mappings and prevents future use, but does not
 revoke earlier exported copies or claim physical erasure of process memory.
 
+DOCX uses the same session mappings and fail-closed coverage policy as the
+TypeScript document binding. Extraction and rewrite offsets are UTF-16 code
+units because locations and plans are portable across runtimes:
+
+```py
+extraction = anonymize.extract_docx_text(document_bytes)
+result = anonymize.anonymize_docx(
+    document_bytes,
+    session,
+    session.session_id(),
+    {"coverage": {"mode": "require-full"}},
+)
+restored = anonymize.restore_docx_text(
+    result["document"],
+    session,
+    session.session_id(),
+)
+```
+
+`require-full` rejects packages containing unhandled metadata, custom XML,
+external relationship targets, or unsupported WordprocessingML constructs.
+Use `{"mode": "allow-partial"}` only when the caller has explicitly accepted
+the returned coverage inventory. Rewriting refuses signed packages rather than
+silently invalidating their signature.
+
 Caller-produced detections use Python character indexes and enter the same
 resolution and redaction pipeline as built-in detections:
 

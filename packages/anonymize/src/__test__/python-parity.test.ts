@@ -39,6 +39,11 @@ import {
   loadNativeAnonymizeBinding,
   redact_default_text_json,
 } from "../native-node";
+import {
+  CAPABILITY_PARITY_PROFILES,
+  CAPABILITY_SURFACES,
+  type CapabilitySurfaceId,
+} from "../capabilities";
 
 setDefaultTimeout(600_000);
 
@@ -68,6 +73,7 @@ type ParityCase = {
 };
 
 type PythonParityOutput = {
+  surface_ids: CapabilitySurfaceId[];
   results: unknown[];
   available_languages: string[];
   version: string;
@@ -123,20 +129,69 @@ type PythonParityOutput = {
     missing_observed_at_rejected: boolean;
     expired_restore_rejected: boolean;
   };
+  docx_result: {
+    extracted_text: string;
+    rewritten_text: string;
+    anonymized_text: string;
+    restored_text: string;
+    rewritten_block_count: number;
+    restored_placeholder_count: number;
+    caller_anonymized_text: string;
+    retained_caller_detection_count: number;
+    external_relationship_is_unsupported: boolean;
+    hyperlink_requires_partial_opt_in: boolean;
+    revision_requires_partial_opt_in: boolean;
+  };
 };
 
 const PYTHON_PARITY_SCRIPT = `
 import base64
+import io
 import json
 import os
 import pathlib
 import sys
+import zipfile
 
 module_root = pathlib.Path(os.environ["STELLA_ANONYMIZE_PY_MODULE"]).parent.parent
 payload = json.loads(pathlib.Path(os.environ["STELLA_ANONYMIZE_PAYLOAD"]).read_text())
 sys.path.insert(0, str(module_root))
 
 import stella_anonymize as anonymize
+
+prepared_anonymizer = getattr(anonymize, "PreparedAnonymizer", None)
+prepared_session = getattr(anonymize, "PreparedRedactionSession", None)
+surface_probes = {
+    "package.prepare": hasattr(anonymize, "prepare_search_package"),
+    "package.load": hasattr(anonymize, "load_prepared_package"),
+    "package.load-file": hasattr(anonymize, "load_prepared_package_file"),
+    "text.normalize": hasattr(anonymize, "normalize_for_search"),
+    "text.redact": hasattr(anonymize, "redact_text"),
+    "text.redact-stream": hasattr(anonymize, "redact_text_stream_json"),
+    "text.diagnostics": hasattr(anonymize, "diagnostics_json"),
+    "text.summary-diagnostics": hasattr(anonymize, "summary_diagnostics_json"),
+    "text.caller-detections": hasattr(
+        prepared_anonymizer, "redact_text_with_caller_detections"
+    ),
+    "text.operators": hasattr(prepared_anonymizer, "redact_text"),
+    "package.default": hasattr(anonymize, "get_default_native_pipeline"),
+    "session.cross-document": hasattr(
+        prepared_anonymizer, "create_redaction_session"
+    ),
+    "session.lifecycle": hasattr(
+        prepared_anonymizer, "create_redaction_session_with_lifecycle"
+    ),
+    "session.plaintext-transfer": hasattr(
+        prepared_session, "to_plaintext_json"
+    ),
+    "session.encrypted-archive": hasattr(
+        prepared_session, "to_encrypted_archive"
+    ),
+    "document.docx.extract": hasattr(anonymize, "extract_docx_text"),
+    "document.docx.rewrite": hasattr(anonymize, "rewrite_docx_text"),
+    "document.docx.anonymize": hasattr(anonymize, "anonymize_docx"),
+    "document.docx.restore": hasattr(anonymize, "restore_docx_text"),
+}
 
 caller_result = json.loads(
     anonymize.get_default_native_pipeline(language="en").redact_text_with_caller_detections_json(
@@ -183,6 +238,99 @@ restored_session = prepared.restore_redaction_session(session.to_plaintext_json(
 session_restored = restored_session.redact_text("Jan Novak signed once more.")
 session_restored_text = restored_session.restore_text(
     session_first.redaction.redaction_map[0].placeholder + " signed."
+)
+
+def make_docx(text, external_target=None):
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr(
+            "[Content_Types].xml",
+            '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+            '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+            '</Types>',
+        )
+        archive.writestr(
+            "_rels/.rels",
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>'
+            '</Relationships>',
+        )
+        archive.writestr(
+            "word/document.xml",
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>'
+            + text
+            + '</w:t></w:r></w:p></w:body></w:document>',
+        )
+        if external_target is not None:
+            archive.writestr(
+                "word/_rels/document.xml.rels",
+                '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                '<Relationship Id="rIdExternal" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" TargetMode="External" Target="'
+                + external_target
+                + '"/></Relationships>',
+            )
+    return output.getvalue()
+
+docx_source = make_docx("Jan Novak signed.")
+docx_extraction = anonymize.extract_docx_text(docx_source)
+docx_block = docx_extraction["blocks"][0]
+docx_rewritten = anonymize.rewrite_docx_text(
+    docx_source,
+    [{
+        "location": docx_block["location"],
+        "expected_text": docx_block["text"],
+        "replacements": [{"start": 10, "end": 16, "replacement": "approved"}],
+    }],
+)
+docx_session = prepared.create_redaction_session("parity_docx_1")
+docx_anonymized = anonymize.anonymize_docx(
+    docx_source,
+    docx_session,
+    "parity_docx_1",
+    {"coverage": {"mode": "require-full"}},
+)
+docx_restored = anonymize.restore_docx_text(
+    docx_anonymized["document"], docx_session, "parity_docx_1"
+)
+docx_caller_source = make_docx("External Name")
+docx_caller_block = anonymize.extract_docx_text(docx_caller_source)["blocks"][0]
+docx_caller_session = prepared.create_redaction_session("parity_docx_caller_1")
+docx_caller_anonymized = anonymize.anonymize_docx(
+    docx_caller_source,
+    docx_caller_session,
+    "parity_docx_caller_1",
+    {"coverage": {"mode": "require-full"}},
+    caller_detections=[{
+        "location": docx_caller_block["location"],
+        "expectedText": docx_caller_block["text"],
+        "detections": [{
+            "start": 0, "end": 13, "label": "person", "score": 0.99,
+            "provider_id": "parity-provider", "detection_id": "docx-person-1",
+        }],
+    }],
+)
+docx_external = anonymize.extract_docx_text(
+    make_docx("Contact us", "mailto:alice@example.test")
+)
+
+def rejects_full_coverage(document, session_id):
+    session = prepared.create_redaction_session(session_id)
+    try:
+        anonymize.anonymize_docx(
+            document, session, session_id,
+            {"coverage": {"mode": "require-full"}},
+        )
+    except anonymize.DocxAnonymizationError as error:
+        return error.code == "incomplete-coverage"
+    return False
+
+docx_hyperlink_requires_partial = rejects_full_coverage(
+    make_docx('</w:t></w:r><w:hyperlink><w:r><w:t>Alice</w:t></w:r></w:hyperlink><w:r><w:t>'),
+    "parity_docx_hyperlink_1",
+)
+docx_revision_requires_partial = rejects_full_coverage(
+    make_docx('</w:t></w:r><w:ins><w:r><w:t>Alice</w:t></w:r></w:ins><w:r><w:t>'),
+    "parity_docx_revision_1",
 )
 deanonymised_text = anonymize.deanonymise(
     session_first.redaction.redacted_text,
@@ -281,6 +429,11 @@ lifecycle_deleted_metadata = lifecycle_session.inspect()
 print(
     json.dumps(
         {
+            "surface_ids": [
+                surface_id
+                for surface_id, implemented in surface_probes.items()
+                if implemented
+            ],
             "results": [
                 json.loads(
                     anonymize.redact_default_text_json(
@@ -344,6 +497,22 @@ print(
                 "lifecycle_restored_status": lifecycle_archive_restored.inspect(150)["status"],
                 "missing_observed_at_rejected": missing_observed_at_rejected,
                 "expired_restore_rejected": expired_restore_rejected,
+            },
+            "docx_result": {
+                "extracted_text": docx_block["text"],
+                "rewritten_text": anonymize.extract_docx_text(docx_rewritten["document"])["blocks"][0]["text"],
+                "anonymized_text": anonymize.extract_docx_text(docx_anonymized["document"])["blocks"][0]["text"],
+                "restored_text": anonymize.extract_docx_text(docx_restored["document"])["blocks"][0]["text"],
+                "rewritten_block_count": docx_rewritten["rewrittenBlockCount"],
+                "restored_placeholder_count": docx_restored["restoredPlaceholderCount"],
+                "caller_anonymized_text": anonymize.extract_docx_text(docx_caller_anonymized["document"])["blocks"][0]["text"],
+                "retained_caller_detection_count": docx_caller_anonymized["summary"]["retainedCallerDetectionCount"],
+                "external_relationship_is_unsupported": any(
+                    item["status"] == "unsupported" and item["path"] == "word/_rels/document.xml.rels"
+                    for item in docx_external["coverage"]["parts"]
+                ),
+                "hyperlink_requires_partial_opt_in": docx_hyperlink_requires_partial,
+                "revision_requires_partial_opt_in": docx_revision_requires_partial,
             },
         }
     )
@@ -431,6 +600,10 @@ const getPythonModule = (): string => {
     join(PYTHON_SOURCE_DIR, "stella_anonymize", "__init__.py"),
     join(packageDir, "__init__.py"),
   );
+  copyFileSync(
+    join(PYTHON_SOURCE_DIR, "stella_anonymize", "docx.py"),
+    join(packageDir, "docx.py"),
+  );
   cpSync(
     join(PYTHON_SOURCE_DIR, "stella_anonymize", "native_packages"),
     join(packageDir, "native_packages"),
@@ -493,6 +666,35 @@ const packageJsonVersion = (): string => {
 };
 
 describe("python binding parity", () => {
+  pythonParityTest(
+    "python exposes every surface in its parity profiles",
+    () => {
+      const python = runPythonParity([]);
+      const expected = CAPABILITY_SURFACES.filter(({ profile }) =>
+        CAPABILITY_PARITY_PROFILES[profile].includes("python"),
+      ).map(({ id }) => id);
+
+      expect(python.surface_ids).toEqual(expected);
+    },
+  );
+
+  pythonParityTest("python executes the full DOCX workflow", () => {
+    const python = runPythonParity([]);
+    expect(python.docx_result).toEqual({
+      extracted_text: "Jan Novak signed.",
+      rewritten_text: "Jan Novak approved.",
+      anonymized_text: "[PERSON_parity%5Fdocx%5F1_1] signed.",
+      restored_text: "Jan Novak signed.",
+      rewritten_block_count: 1,
+      restored_placeholder_count: 1,
+      caller_anonymized_text: "[PERSON_parity%5Fdocx%5Fcaller%5F1_1]",
+      retained_caller_detection_count: 1,
+      external_relationship_is_unsupported: true,
+      hyperlink_requires_partial_opt_in: true,
+      revision_requires_partial_opt_in: true,
+    });
+  });
+
   pythonParityTest(
     "default-package redaction matches the native binding across contract fixtures",
     () => {

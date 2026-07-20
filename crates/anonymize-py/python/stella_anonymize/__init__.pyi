@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from os import PathLike
-from typing import Literal, TypeAlias, TypedDict
+from typing import Any, Literal, TypeAlias, TypedDict
 
 from ._native import (
     PreparedRedactionSession as NativePreparedRedactionSession,
@@ -39,9 +39,7 @@ OperatorSelection: TypeAlias = Literal["replace", "redact", "keep"] | MaskOperat
 OperatorConfig: TypeAlias = Mapping[str, OperatorSelection] | str | None
 CALLER_DETECTION_CONTRACT_VERSION: int
 
-SessionStatus: TypeAlias = Literal[
-    "active", "not_yet_active", "expired", "deleted"
-]
+SessionStatus: TypeAlias = Literal["active", "not_yet_active", "expired", "deleted"]
 
 class SessionMetadata(TypedDict):
     session_id: str
@@ -74,6 +72,46 @@ DEFAULT_NATIVE_PIPELINE_WARMUPS: tuple[
     DefaultNativePipelineWarmup,
 ]
 __version__: str
+
+DOCX_EXTRACTION_CONTRACT_VERSION: int
+DOCX_ARCHIVE_MAX_BYTES: int
+DOCX_ENTRY_MAX_BYTES: int
+DOCX_UNCOMPRESSED_MAX_BYTES: int
+DOCX_XML_MAX_DEPTH: int
+
+class DocxExtractionError(ValueError):
+    code: str
+
+class DocxRewriteError(ValueError):
+    code: str
+
+class DocxAnonymizationError(ValueError):
+    code: str
+
+class DocxRestorationError(ValueError):
+    code: str
+
+def extract_docx_text(document: BytesLike) -> dict[str, Any]: ...
+def rewrite_docx_text(
+    document: BytesLike,
+    rewrites: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]: ...
+def anonymize_docx(
+    document: BytesLike,
+    session: PreparedRedactionSession,
+    expected_session_id: str,
+    policy: Mapping[str, Any],
+    *,
+    caller_detections: Sequence[Mapping[str, Any]] = ...,
+    observed_at_epoch_seconds: int | None = ...,
+) -> dict[str, Any]: ...
+def restore_docx_text(
+    document: BytesLike,
+    session: PreparedRedactionSession,
+    expected_session_id: str,
+    *,
+    observed_at_epoch_seconds: int | None = ...,
+) -> dict[str, Any]: ...
 
 class PreparedRedactionSession:
     def __init__(self, session: NativePreparedRedactionSession) -> None: ...

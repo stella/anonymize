@@ -41,6 +41,22 @@ language packages. When a caller knows the document language, use
 `getDefaultNativePipeline({ language })` so the runtime uses the smaller scoped
 artifact when available.
 
+## Runtime Surface Parity
+
+`CAPABILITY_MANIFEST` is the public, versioned source of truth for runtime
+parity. Each public capability belongs to a named profile whose runtime list is
+an invariant:
+
+- `core`: Node.js, Python, and browser/WASM byte-oriented SDK behavior.
+- `local`: Node.js and Python filesystem behavior.
+- `document`: Node.js and Python structure-aware document adapters.
+
+The full surface-parity gate checks API availability for every runtime in the
+profile. Behavioral suites then execute shared fixtures, normalized errors, and
+cross-runtime artifacts such as encrypted sessions. Do not narrow a profile to
+make a one-binding feature pass; either land the peer adapters together or keep
+the pull request blocked until the profile is complete.
+
 ## Rust Core Flow
 
 The Rust prepared engine is split by phase:
