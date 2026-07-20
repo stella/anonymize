@@ -238,7 +238,7 @@ export class LocalAnonymizeService {
   #session(sessionId: string, language?: string): SessionLease {
     const existing = this.#sessions.get(sessionId);
     if (existing !== undefined) {
-      if (existing.language !== language) {
+      if (language !== undefined && existing.language !== language) {
         throw new Error("A session cannot change language");
       }
       if (existing.status === "initializing") {

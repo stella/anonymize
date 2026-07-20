@@ -151,6 +151,14 @@ describe("local MCP surface", () => {
     expect(JSON.stringify(anonymizeResult)).not.toContain("Alice");
     expect(await readFile(anonymized, "utf8")).not.toBe("Alice Smith signed.");
     expect((await stat(anonymized)).mode & 0o777).toBe(0o600);
+    await expect(
+      service.anonymizeText({
+        inputPath: input,
+        outputPath: join(root, "language-mismatch.txt"),
+        sessionId: "local_case_1",
+        language: "de",
+      }),
+    ).rejects.toThrow("cannot change language");
 
     const restoreResult = await service.restoreText({
       inputPath: anonymized,
@@ -202,7 +210,6 @@ describe("local MCP surface", () => {
         inputPath: failedInput,
         outputPath: tooLongTemporary,
         sessionId: "rollback_case_1",
-        language: "en",
       }),
     ).rejects.toThrow();
     const predictedPlaceholder = "[PERSON_rollback%5Fcase%5F1_2]";
