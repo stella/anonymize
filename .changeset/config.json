@@ -12,7 +12,8 @@
       "@stll/anonymize-win32-x64-msvc",
       "@stll/anonymize-wasm",
       "@stll/anonymize-cli",
-      "@stll/anonymize-docx"
+      "@stll/anonymize-docx",
+      "@stll/anonymize-mcp"
     ]
   ],
   "linked": [],

@@ -22,7 +22,9 @@ returns document text or plaintext session mappings.
 
 Repeat `--root` to allow more than one directory. Inputs and outputs must be
 absolute paths within those roots. Outputs must be explicit new paths; the
-server refuses overwrites and writes with owner-only permissions.
+server refuses overwrites and writes with owner-only permissions. Text must be
+valid UTF-8; text and DOCX inputs are limited to 64 MiB. A server process holds
+at most 256 in-memory sessions.
 
 Tools:
 

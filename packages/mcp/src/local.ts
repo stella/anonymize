@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
+  DOCX_ARCHIVE_MAX_BYTES,
   DOCX_COVERAGE_MODES,
   anonymizeDocx,
   extractDocxText,
@@ -22,6 +23,8 @@ import { dirname, extname, isAbsolute, relative, resolve } from "node:path";
 import * as z from "zod/v4";
 
 const TEXT_MAX_BYTES = 64 * 1024 * 1024;
+const PATH_MAX_CHARACTERS = 32_768;
+const SESSION_MAX_COUNT = 256;
 const SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 
 export type AuditSafeResult = {
@@ -119,13 +122,14 @@ type RedactionSession = DocxAnonymizationSession &
     restoreText(text: string): string;
   };
 
-const getDefaultNativePipeline = (
-  nativeNode as unknown as {
-    getDefaultNativePipeline: (options: { language?: string }) => {
-      createRedactionSession: (sessionId: string) => RedactionSession;
-    };
-  }
-).getDefaultNativePipeline;
+type NativeNodeSurface = {
+  getDefaultNativePipeline: (options: { language?: string }) => {
+    createRedactionSession: (sessionId: string) => RedactionSession;
+  };
+  native_package_version: () => string;
+};
+
+const nativeNodeSurface = nativeNode as unknown as NativeNodeSurface; // SAFETY: These native-node runtime exports are public, but their generated declarations are minified during workspace builds.
 
 const safeWrite = async (
   path: string,
@@ -140,6 +144,41 @@ const safeWrite = async (
   }
 };
 
+type ReadBoundedFileOptions = {
+  path: string;
+  maximumBytes: number;
+  label: "DOCX" | "Text";
+};
+
+const readBoundedFile = async ({
+  path,
+  maximumBytes,
+  label,
+}: ReadBoundedFileOptions): Promise<Uint8Array> => {
+  const metadata = await stat(path);
+  if (metadata.size > maximumBytes) {
+    throw new Error(`${label} inputs must not exceed ${maximumBytes} bytes`);
+  }
+  const bytes = await readFile(path);
+  if (bytes.byteLength > maximumBytes) {
+    throw new Error(`${label} inputs must not exceed ${maximumBytes} bytes`);
+  }
+  return bytes;
+};
+
+const readTextFile = async (path: string): Promise<string> => {
+  const bytes = await readBoundedFile({
+    path,
+    maximumBytes: TEXT_MAX_BYTES,
+    label: "Text",
+  });
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch (error) {
+    throw new Error("Text inputs must contain valid UTF-8", { cause: error });
+  }
+};
+
 const assertDifferentPaths = (input: string, output: string): void => {
   if (input === output) {
     throw new Error("Input and output paths must differ");
@@ -147,15 +186,15 @@ const assertDifferentPaths = (input: string, output: string): void => {
 };
 
 const textInput = z.object({
-  inputPath: z.string().min(1),
-  outputPath: z.string().min(1),
+  inputPath: z.string().min(1).max(PATH_MAX_CHARACTERS),
+  outputPath: z.string().min(1).max(PATH_MAX_CHARACTERS),
   sessionId: z.string().regex(SESSION_ID),
   language: z.string().min(2).max(35).optional(),
 });
 
 const restoreInput = z.object({
-  inputPath: z.string().min(1),
-  outputPath: z.string().min(1),
+  inputPath: z.string().min(1).max(PATH_MAX_CHARACTERS),
+  outputPath: z.string().min(1).max(PATH_MAX_CHARACTERS),
   sessionId: z.string().regex(SESSION_ID),
 });
 
@@ -179,7 +218,10 @@ export class LocalAnonymizeService {
       }
       return existing.session;
     }
-    const pipeline = getDefaultNativePipeline(
+    if (this.#sessions.size >= SESSION_MAX_COUNT) {
+      throw new Error(`MCP sessions must not exceed ${SESSION_MAX_COUNT}`);
+    }
+    const pipeline = nativeNodeSurface.getDefaultNativePipeline(
       language === undefined ? {} : { language },
     );
     const session = pipeline.createRedactionSession(sessionId);
@@ -201,11 +243,7 @@ export class LocalAnonymizeService {
     const source = await this.#scope.input(input.inputPath, ".txt");
     const destination = await this.#scope.output(input.outputPath, ".txt");
     assertDifferentPaths(source, destination);
-    const metadata = await stat(source);
-    if (metadata.size > TEXT_MAX_BYTES) {
-      throw new Error(`Text inputs must not exceed ${TEXT_MAX_BYTES} bytes`);
-    }
-    const text = await readFile(source, "utf8");
+    const text = await readTextFile(source);
     const result = this.#session(input.sessionId, input.language).redact_text(
       text,
     );
@@ -225,12 +263,8 @@ export class LocalAnonymizeService {
     const source = await this.#scope.input(input.inputPath, ".txt");
     const destination = await this.#scope.output(input.outputPath, ".txt");
     assertDifferentPaths(source, destination);
-    const metadata = await stat(source);
-    if (metadata.size > TEXT_MAX_BYTES) {
-      throw new Error(`Text inputs must not exceed ${TEXT_MAX_BYTES} bytes`);
-    }
     const restored = this.#existingSession(input.sessionId).restoreText(
-      await readFile(source, "utf8"),
+      await readTextFile(source),
     );
     await safeWrite(destination, restored);
     return {
@@ -248,7 +282,11 @@ export class LocalAnonymizeService {
     const destination = await this.#scope.output(input.outputPath, ".docx");
     assertDifferentPaths(source, destination);
     const result = anonymizeDocx({
-      document: await readFile(source),
+      document: await readBoundedFile({
+        path: source,
+        maximumBytes: DOCX_ARCHIVE_MAX_BYTES,
+        label: "DOCX",
+      }),
       session: this.#session(input.sessionId, input.language),
       expectedSessionId: input.sessionId,
       policy: {
@@ -279,7 +317,11 @@ export class LocalAnonymizeService {
     const destination = await this.#scope.output(input.outputPath, ".docx");
     assertDifferentPaths(source, destination);
     const result = restoreDocxText({
-      document: await readFile(source),
+      document: await readBoundedFile({
+        path: source,
+        maximumBytes: DOCX_ARCHIVE_MAX_BYTES,
+        label: "DOCX",
+      }),
       session: this.#existingSession(input.sessionId),
       expectedSessionId: input.sessionId,
     });
@@ -297,7 +339,13 @@ export class LocalAnonymizeService {
 
   async inspectDocx(inputPath: string): Promise<AuditSafeResult> {
     const source = await this.#scope.input(inputPath, ".docx");
-    const extraction = extractDocxText(await readFile(source));
+    const extraction = extractDocxText(
+      await readBoundedFile({
+        path: source,
+        maximumBytes: DOCX_ARCHIVE_MAX_BYTES,
+        label: "DOCX",
+      }),
+    );
     const unsupported = extraction.coverage.parts.some(
       (part) => part.status === "unsupported",
     );
@@ -324,7 +372,10 @@ export const createAnonymizeMcpServer = (
   service: LocalAnonymizeService,
 ): McpServer => {
   const server = new McpServer(
-    { name: "stella-anonymize-local", version: "2.2.0" },
+    {
+      name: "stella-anonymize-local",
+      version: nativeNodeSurface.native_package_version(),
+    },
     {
       instructions:
         "All tools accept local paths only. Never request or return document contents or session mappings. Outputs must be new explicit paths inside configured roots.",
@@ -374,7 +425,9 @@ export const createAnonymizeMcpServer = (
     {
       description:
         "Return only aggregate DOCX coverage and block counts; never document text.",
-      inputSchema: z.object({ inputPath: z.string().min(1) }),
+      inputSchema: z.object({
+        inputPath: z.string().min(1).max(PATH_MAX_CHARACTERS),
+      }),
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,

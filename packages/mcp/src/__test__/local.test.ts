@@ -3,11 +3,13 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { extractDocxText } from "@stll/anonymize-docx";
 import { strToU8, zipSync } from "fflate";
+import { readFileSync } from "node:fs";
 import {
   mkdtemp,
   readFile,
   realpath,
   rm,
+  stat,
   symlink,
   writeFile,
 } from "node:fs/promises";
@@ -21,6 +23,21 @@ import {
 } from "../local";
 
 const temporaryDirectories: string[] = [];
+
+const packageVersion = (): string => {
+  const manifest: unknown = JSON.parse(
+    readFileSync(join(import.meta.dir, "..", "..", "package.json"), "utf8"),
+  );
+  if (
+    typeof manifest !== "object" ||
+    manifest === null ||
+    !("version" in manifest) ||
+    typeof manifest.version !== "string"
+  ) {
+    throw new TypeError("MCP package version is unavailable");
+  }
+  return manifest.version;
+};
 
 const temporaryDirectory = async (): Promise<string> => {
   const directory = await mkdtemp(join(tmpdir(), "stella-mcp-test-"));
@@ -69,6 +86,11 @@ describe("PathScope", () => {
     await expect(scope.input(link, ".txt")).rejects.toThrow(
       "outside the configured roots",
     );
+    const linkedDirectory = join(root, "linked-directory");
+    await symlink(outside, linkedDirectory);
+    await expect(
+      scope.output(join(linkedDirectory, "output.txt"), ".txt"),
+    ).rejects.toThrow("outside the configured roots");
   });
 });
 
@@ -94,6 +116,7 @@ describe("local MCP surface", () => {
     });
     expect(JSON.stringify(anonymizeResult)).not.toContain("Alice");
     expect(await readFile(anonymized, "utf8")).not.toBe("Alice Smith signed.");
+    expect((await stat(anonymized)).mode & 0o777).toBe(0o600);
 
     const restoreResult = await service.restoreText({
       inputPath: anonymized,
@@ -102,6 +125,24 @@ describe("local MCP surface", () => {
     });
     expect(restoreResult.operation).toBe("restore");
     expect(await readFile(restored, "utf8")).toBe("Alice Smith signed.");
+  });
+
+  test("rejects invalid UTF-8 without creating an output", async () => {
+    const root = await temporaryDirectory();
+    const input = join(root, "invalid.txt");
+    const output = join(root, "output.txt");
+    await writeFile(input, new Uint8Array([0xc3, 0x28]));
+    const service = new LocalAnonymizeService(await PathScope.create([root]));
+
+    await expect(
+      service.anonymizeText({
+        inputPath: input,
+        outputPath: output,
+        sessionId: "invalid_utf8_1",
+        language: "en",
+      }),
+    ).rejects.toThrow("valid UTF-8");
+    await expect(readFile(output)).rejects.toThrow();
   });
 
   test("anonymizes and restores DOCX through path-only operations", async () => {
@@ -163,6 +204,7 @@ describe("local MCP surface", () => {
       client.connect(clientTransport),
       server.connect(serverTransport),
     ]);
+    expect(client.getServerVersion()?.version).toBe(packageVersion());
     const tools = await client.listTools();
     expect(tools.tools.map(({ name }) => name).toSorted()).toEqual([
       "anonymize_docx_file",

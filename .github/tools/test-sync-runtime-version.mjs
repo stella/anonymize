@@ -34,6 +34,7 @@ const packageFiles = [
   "packages/anonymize/wasm/package.json",
   "packages/cli/package.json",
   "packages/document-docx/package.json",
+  "packages/mcp/package.json",
 ];
 
 const sidecars = [
@@ -94,6 +95,15 @@ for (const scenarioLineEnding of ["\n", "\r\n"]) {
       throw new Error("DOCX package did not sync @stll/anonymize");
     }
 
+    const mcpPackage = JSON.parse(
+      readFileSync(join(workspace, "packages/mcp/package.json"), "utf8"),
+    );
+    for (const dependency of ["@stll/anonymize", "@stll/anonymize-docx"]) {
+      if (mcpPackage.dependencies?.[dependency] !== `^${version}`) {
+        throw new Error(`MCP package did not sync ${dependency}`);
+      }
+    }
+
     const lockText = readFileSync(join(workspace, "bun.lock"), "utf8");
     if (lockText.includes(staleVersion)) {
       throw new Error("bun.lock still contains stale sidecar versions");
@@ -138,6 +148,12 @@ function writeFixture() {
     if (file === "packages/document-docx/package.json") {
       pkg.dependencies = { "@stll/anonymize": `^${staleVersion}` };
     }
+    if (file === "packages/mcp/package.json") {
+      pkg.dependencies = {
+        "@stll/anonymize": `^${staleVersion}`,
+        "@stll/anonymize-docx": `^${staleVersion}`,
+      };
+    }
     writeText(file, `${JSON.stringify(pkg, null, 2)}\n`);
   }
 
@@ -160,6 +176,9 @@ function packageNameFor(file) {
   }
   if (file === "packages/document-docx/package.json") {
     return "@stll/anonymize-docx";
+  }
+  if (file === "packages/mcp/package.json") {
+    return "@stll/anonymize-mcp";
   }
   return `@stll/${file.replace("packages/", "").replace("/package.json", "")}`;
 }
@@ -212,6 +231,14 @@ function bunLockFixture() {
           name: "@stll/anonymize-docx",
           version,
           dependencies: { "@stll/anonymize": `^${staleVersion}` },
+        },
+        "packages/mcp": {
+          name: "@stll/anonymize-mcp",
+          version,
+          dependencies: {
+            "@stll/anonymize": `^${staleVersion}`,
+            "@stll/anonymize-docx": `^${staleVersion}`,
+          },
         },
       },
     },

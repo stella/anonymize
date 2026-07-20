@@ -58,6 +58,18 @@ const PACKAGES = [
     ],
   },
   {
+    dir: "packages/mcp",
+    expected: [
+      "dist/index.d.mts",
+      "dist/index.mjs",
+      "dist/server.d.mts",
+      "dist/server.mjs",
+      "README.md",
+      "LICENSE",
+      "package.json",
+    ],
+  },
+  {
     dir: "packages/anonymize/wasm",
     expected: [
       "dist/wasm.d.mts",

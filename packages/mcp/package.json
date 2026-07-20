@@ -9,11 +9,13 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.mts",
-      "import": "./dist/index.mjs"
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.mjs"
     }
   },
   "files": [
     "dist",
+    "LICENSE",
     "README.md"
   ],
   "publishConfig": {
@@ -23,7 +25,11 @@
     "type": "git",
     "url": "git+https://github.com/stella/anonymize.git"
   },
+  "homepage": "https://github.com/stella/anonymize",
   "license": "Apache-2.0",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "build": "tsdown",
     "typecheck": "bun ../../scripts/tsc-native.ts --noEmit -p tsconfig.json && bun ../../scripts/tsc-native.ts --noEmit -p tsconfig.test.json",
