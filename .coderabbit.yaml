@@ -9,7 +9,6 @@ reviews:
   path_filters:
     - "!**/*.gen.ts"
     - "!**/*.generated.ts"
-    - "!apps/web/src/routeTree.gen.ts"
     - "!**/drizzle/**/snapshot.json"
     # sync-ai: injected path filters
   auto_review:
@@ -19,7 +18,6 @@ reviews:
     auto_pause_after_reviewed_commits: 2
     ignore_title_keywords:
       - "wip"
-      - "draft"
     ignore_usernames:
       - "dependabot[bot]"
       - "github-actions[bot]"
