@@ -90,7 +90,7 @@ fn detect_slash_s(
       let first_cell_end = after_mark.saturating_add(
         full_text
           .get(after_mark..line_end)
-          .and_then(first_column_end)
+          .map(slash_s_cell_end)
           .unwrap_or_else(|| line_end.saturating_sub(after_mark)),
       );
       try_emit(results, full_text, data, after_mark, first_cell_end, 0.95);
@@ -399,6 +399,33 @@ fn first_column_end(text: &str) -> Option<usize> {
   None
 }
 
+/// End of the signed name after `/s/`: stop at a column break or at another
+/// `/s/` on the same line (EDGAR often packs two signatures on one row).
+fn slash_s_cell_end(text: &str) -> usize {
+  let next_slash = next_slash_s_offset(text);
+  let column = first_column_end(text);
+  match (next_slash, column) {
+    (Some(slash), Some(col)) => slash.min(col),
+    (Some(slash), None) => slash,
+    (None, Some(col)) => col,
+    (None, None) => text.len(),
+  }
+}
+
+fn next_slash_s_offset(text: &str) -> Option<usize> {
+  let mut cursor = 0usize;
+  while let Some(relative) =
+    text.get(cursor..).and_then(|tail| tail.find("/s/"))
+  {
+    let at = cursor.saturating_add(relative);
+    if boundary_before(text, at) {
+      return Some(at);
+    }
+    cursor = at.saturating_add(1);
+  }
+  None
+}
+
 #[derive(Clone, Copy)]
 struct LabelMatch {
   value_start: usize,
@@ -679,6 +706,19 @@ mod tests {
       organization_suffixes: vec![String::from("inc.")],
       image_stub_prefixes: Vec::new(),
     })
+  }
+
+  #[test]
+  fn detects_two_slash_signatures_on_same_line() {
+    let entities = detect("/s/ Paul A. Pinkston /s/ Clark R. Moore");
+
+    assert_eq!(
+      entities
+        .iter()
+        .map(|entity| entity.text.as_str())
+        .collect::<Vec<_>>(),
+      vec!["Paul A. Pinkston", "Clark R. Moore"]
+    );
   }
 
   #[test]

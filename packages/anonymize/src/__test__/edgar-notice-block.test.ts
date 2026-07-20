@@ -6,6 +6,8 @@
  * - Cadrenal Therapeutics separation agreement (2026-07-17):
  *   notice-paren person + email, generational suffix vs city
  *   district, and Dodd-Frank statute person FP.
+ * - PEDEVCO separation agreement (2026-07-17): middle-initial
+ *   honorific/notice names and dual `/s/` signatures on one line.
  */
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
@@ -156,5 +158,51 @@ Reform and Consumer Protection Act.`;
             entity.text.includes("Wall Street")),
       ),
     ).toBe(false);
+  });
+
+  test("middle initial after honorific stays in the person span", async () => {
+    const text =
+      "I must give written notice to Mr. Clark R. Moore of the Company";
+    const entities = await detect(text);
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "person" && entity.text === "Mr. Clark R. Moore",
+      ),
+    ).toBe(true);
+    expect(
+      entities.some(
+        (entity) => entity.label === "address" && entity.text === "Moore",
+      ),
+    ).toBe(false);
+  });
+
+  test("middle initial between given name and surname is a person", async () => {
+    const text =
+      'between Paul A. Pinkston ("I" or "Employee"), and PEDEVCO Corp.';
+    const entities = await detect(text);
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "person" && entity.text === "Paul A. Pinkston",
+      ),
+    ).toBe(true);
+  });
+
+  test("two slash-s signatures on one line are both people", async () => {
+    const text = "/s/ Paul A. Pinkston /s/ Clark R. Moore";
+    const entities = await detect(text);
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "person" && entity.text === "Paul A. Pinkston",
+      ),
+    ).toBe(true);
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "person" && entity.text === "Clark R. Moore",
+      ),
+    ).toBe(true);
   });
 });

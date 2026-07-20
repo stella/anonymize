@@ -16065,7 +16065,7 @@
     },
     {
       "kind": "regex",
-      "pattern": "(?:(?:Messrs|Sig\\.ra|Dott\\.|Avv\\.|Mlle|Sig\\.|Sra\\.|Mme|Mrs|\\bPr\\.|Sr\\.|\\bM\\.|\\bMe|Mr|Ms|\\bPr)\\.?|(?:Mademoiselle|President|Signorina|Monsieur|Justice|Signora|Doamna|Domnul|Madame|Maître|\\bSeñora|Signor|Judge|\\bSeñor|Dame|\\bDoña|Lady|Lord|Miss|\\bDon|Sir))[^\\S\\n]+\\p{Lu}\\p{Ll}+(?:(?:[^\\S\\n]|-){1,2}(?:(?:van der|van den|de la|della|von|van|dos|ibn|ben|bin|del|zum|zur|ten|ter|da|de|di|al|el|le|la|zu|af|av)[^\\S\\n]+)?\\p{Lu}\\p{Ll}+){0,3}(?:[^\\S\\n]+(?:QC|KC|SC|LJ|AG))?",
+      "pattern": "(?:(?:Messrs|Sig\\.ra|Dott\\.|Avv\\.|Mlle|Sig\\.|Sra\\.|Mme|Mrs|\\bPr\\.|Sr\\.|\\bM\\.|\\bMe|Mr|Ms|\\bPr)\\.?|(?:Mademoiselle|President|Signorina|Monsieur|Justice|Signora|Doamna|Domnul|Madame|Maître|\\bSeñora|Signor|Judge|\\bSeñor|Dame|\\bDoña|Lady|Lord|Miss|\\bDon|Sir))[^\\S\\n]+\\p{Lu}\\p{Ll}+(?:(?:[^\\S\\n]|-){1,2}(?:(?:van der|van den|de la|della|von|van|dos|ibn|ben|bin|del|zum|zur|ten|ter|da|de|di|al|el|le|la|zu|af|av)[^\\S\\n]+)?(?:\\p{Lu}\\p{Ll}+|\\p{Lu}\\.)){0,3}(?:[^\\S\\n]+(?:QC|KC|SC|LJ|AG))?",
       "lazy": true,
       "prefilter_any": [
         "Avv.",

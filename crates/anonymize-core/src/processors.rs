@@ -1994,6 +1994,12 @@ fn extend_person_name(
 
     let word = read_until_whitespace(full_text, offsets, word_start)?;
     let stripped = strip_trailing_name_punctuation(&word);
+    // Dotted middle initials ("A.", "R.") are part of the name; keep
+    // scanning so the surname after them is absorbed.
+    if is_middle_initial_token(&word) {
+      new_end = word_start.saturating_add(byte_len(&word));
+      continue;
+    }
     if stripped.chars().count() < 2 {
       break;
     }
@@ -2011,6 +2017,15 @@ fn extend_person_name(
     end: new_end,
     text: offsets.slice(start, new_end)?,
   })
+}
+
+fn is_middle_initial_token(word: &str) -> bool {
+  let stripped = strip_trailing_name_punctuation(word);
+  let mut chars = stripped.chars();
+  matches!(
+    (chars.next(), chars.next()),
+    (Some(ch), None) if ch.is_uppercase()
+  ) && (word.ends_with('.') || word.len() == stripped.len())
 }
 
 fn read_until_whitespace(
@@ -3634,5 +3649,45 @@ mod tests {
     assert!(!has_personal_name_prefix("Company's ", &filters));
     assert!(!has_personal_name_prefix("office in ", &filters));
     assert!(!has_personal_name_prefix("", &filters));
+  }
+
+  #[test]
+  fn deny_list_extends_person_across_dotted_middle_initial() {
+    let text = "between Paul A. Pinkston (\"I\" or \"Employee\")";
+    let paul_start = u32::try_from(text.find("Paul").unwrap()).unwrap();
+    let paul_end = paul_start.saturating_add(4);
+    let matches = vec![SearchMatch::Literal {
+      pattern: 0,
+      start: paul_start,
+      end: paul_end,
+    }];
+    let mut first_names = BTreeSet::new();
+    first_names.insert(String::from("paul"));
+    let data = DenyListMatchData {
+      labels: vec![vec![String::from("person")]].into(),
+      custom_labels: vec![vec![]].into(),
+      originals: vec![String::from("Paul")],
+      pattern_meta: DenyListPatternMetaSet::default(),
+      sources: vec![vec![String::from("first-name")]].into(),
+      filters: Some(DenyListFilterData {
+        first_names,
+        ..DenyListFilterData::default()
+      }),
+    };
+
+    let entities = process_deny_list_matches(
+      &matches,
+      PatternSlice { start: 0, end: 1 },
+      text,
+      &data,
+    )
+    .unwrap();
+
+    assert!(
+      entities
+        .iter()
+        .any(|entity| entity.label == "person" && entity.text == "Paul A. Pinkston"),
+      "{entities:?}"
+    );
   }
 }
