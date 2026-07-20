@@ -55,7 +55,7 @@ fn part(
 fn rewrites_across_runs_and_preserves_untouched_parts()
 -> Result<(), Box<dyn std::error::Error>> {
   let source = docx(&format!(
-    "<w:document xmlns:w=\"{WORD_NAMESPACE}\"><w:body><w:p><w:r><w:t>😀 Alice</w:t></w:r><w:r><w:t> Smith</w:t></w:r></w:p></w:body></w:document>"
+    "<w:document xmlns:w=\"{WORD_NAMESPACE}\"><w:body><w:p><w:r><w:t xml:space=\"default\">😀 Alice</w:t></w:r><w:r><w:t> Smith</w:t></w:r></w:p></w:body></w:document>"
   ))?;
   let extraction = extract_docx_text(&source)?;
   let block = extraction.blocks.first().ok_or("missing block")?;
@@ -83,6 +83,8 @@ fn rewrites_across_runs_and_preserves_untouched_parts()
   let xml = String::from_utf8(part(&result.document, "word/document.xml")?)?;
   assert!(xml.contains("&amp; Bob"));
   assert!(xml.contains("xml:space=\"preserve\""));
+  assert!(!xml.contains("xml:space=\"default\""));
+  assert_eq!(xml.matches("xml:space=").count(), 1);
   assert_eq!(result.rewritten_block_count, 1);
   assert_eq!(result.applied_replacement_count, 1);
   Ok(())

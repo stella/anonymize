@@ -657,6 +657,33 @@ fn xml_start_tag_end(source: &str) -> Option<usize> {
   None
 }
 
+fn add_xml_space_preserve_patch(
+  node: Node<'_, '_>,
+  insertion: usize,
+  patches: &mut Vec<XmlPatch>,
+) {
+  let space_attribute = node.attributes().find(|attribute| {
+    attribute.namespace() == Some("http://www.w3.org/XML/1998/namespace")
+      && attribute.name() == "space"
+  });
+  if let Some(attribute) = space_attribute {
+    if attribute.value() != "preserve" {
+      let value_range = attribute.range_value();
+      patches.push(XmlPatch {
+        start: value_range.start,
+        end: value_range.end,
+        value: "preserve".to_owned(),
+      });
+    }
+  } else {
+    patches.push(XmlPatch {
+      start: insertion,
+      end: insertion,
+      value: " xml:space=\"preserve\"".to_owned(),
+    });
+  }
+}
+
 fn rewrite_part_xml(
   xml: &str,
   updates: &[TextNodeUpdate],
@@ -725,25 +752,18 @@ fn rewrite_part_xml(
       end: content_end,
       value: escape_xml_text(&update.value),
     });
-    let preserved = node.attributes().any(|attribute| {
-      attribute.namespace() == Some("http://www.w3.org/XML/1998/namespace")
-        && attribute.name() == "space"
-        && attribute.value() == "preserve"
-    });
-    if !preserved
-      && (update.value.chars().next().is_some_and(char::is_whitespace)
-        || update
-          .value
-          .chars()
-          .next_back()
-          .is_some_and(char::is_whitespace))
+    if update.value.chars().next().is_some_and(char::is_whitespace)
+      || update
+        .value
+        .chars()
+        .next_back()
+        .is_some_and(char::is_whitespace)
     {
-      let insertion = range.start.saturating_add(opening_end_relative);
-      patches.push(XmlPatch {
-        start: insertion,
-        end: insertion,
-        value: " xml:space=\"preserve\"".to_owned(),
-      });
+      add_xml_space_preserve_patch(
+        node,
+        range.start.saturating_add(opening_end_relative),
+        &mut patches,
+      );
     }
   }
   patches.sort_by_key(|patch| std::cmp::Reverse(patch.start));

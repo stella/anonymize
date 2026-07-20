@@ -37,8 +37,18 @@ export const rewriteDocxText = (
       "The native anonymize binding does not expose DOCX rewriting",
     );
   }
+  let rewritesJson: string;
   try {
-    return rewrite(archive, JSON.stringify(rewrites));
+    rewritesJson = JSON.stringify(rewrites);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new DocxRewriteError(
+      DOCX_REWRITE_ERROR_CODES.invalidReplacement,
+      `DOCX rewrite plan is not serializable: ${message}`,
+    );
+  }
+  try {
+    return rewrite(archive, rewritesJson);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const separator = message.indexOf(": ");

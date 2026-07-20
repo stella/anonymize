@@ -172,6 +172,22 @@ describe("rewriteDocxText", () => {
     }
     expect(caught).toBeInstanceOf(DocxRewriteError);
     expect((caught as DocxRewriteError).code).toBe("invalid-replacement");
+    caught = undefined;
+    try {
+      rewriteDocxText(archive, [
+        rewriteForFirstBlock(archive, [
+          {
+            start: 1n as unknown as number,
+            end: 2,
+            replacement: "x",
+          },
+        ]),
+      ]);
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(DocxRewriteError);
+    expect((caught as DocxRewriteError).code).toBe("invalid-replacement");
   });
 
   test("budgets replacement text by its escaped size, not its raw size", () => {
