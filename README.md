@@ -276,6 +276,12 @@ identical structured output. That equivalence is enforced by cross-runtime
 parity tests in CI (`python-parity.test.ts`, the native SDK contract tests, and
 Rust adapter parity examples).
 
+Parity covers public surface availability as well as fixture output. The
+versioned `CAPABILITY_MANIFEST` assigns each capability to a runtime profile:
+`core` for Node.js, Python, and WASM; `local` for Node.js and Python filesystem
+operations; and `document` for Node.js and Python structure-aware adapters. CI
+fails when one runtime in a profile is missing the corresponding surface.
+
 Dictionaries and language data are baked into `.stlanonpkg` prepared packages at
 build time, not loaded from the network at runtime. Native Node binaries ship as
 per-platform prebuilt sidecars (for example `@stll/anonymize-darwin-arm64`),

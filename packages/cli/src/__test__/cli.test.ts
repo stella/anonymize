@@ -261,7 +261,7 @@ test("--capabilities prints the versioned manifest without reading input", async
 
   expect(code).toBe(0);
   expect(err).toBe("");
-  expect(manifest.schemaVersion).toBe(1);
+  expect(manifest.schemaVersion).toBe(2);
   expect(manifest.runtimes).toEqual(["node", "python", "wasm"]);
   expect(manifest.entities).toContainEqual(
     expect.objectContaining({ label: "person", selection: "default" }),

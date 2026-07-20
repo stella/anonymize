@@ -42,7 +42,7 @@ if (typeof redactDefaultText !== "function") {
   );
 }
 if (
-  CAPABILITY_MANIFEST.schemaVersion !== 1 ||
+  CAPABILITY_MANIFEST.schemaVersion !== 2 ||
   CAPABILITY_MANIFEST.entities.length === 0
 ) {
   throw new TypeError("dist capability manifest is missing or invalid");

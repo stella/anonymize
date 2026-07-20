@@ -57,7 +57,7 @@ const {
 } = entry;
 
 if (
-  CAPABILITY_MANIFEST.schemaVersion !== 1 ||
+  CAPABILITY_MANIFEST.schemaVersion !== 2 ||
   CAPABILITY_MANIFEST.entities.length === 0
 ) {
   throw new TypeError("wasm capability manifest is missing or invalid");

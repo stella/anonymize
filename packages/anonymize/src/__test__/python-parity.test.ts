@@ -39,6 +39,11 @@ import {
   loadNativeAnonymizeBinding,
   redact_default_text_json,
 } from "../native-node";
+import {
+  CAPABILITY_PARITY_PROFILES,
+  CAPABILITY_SURFACES,
+  type CapabilitySurfaceId,
+} from "../capabilities";
 
 setDefaultTimeout(600_000);
 
@@ -68,6 +73,7 @@ type ParityCase = {
 };
 
 type PythonParityOutput = {
+  surface_ids: CapabilitySurfaceId[];
   results: unknown[];
   available_languages: string[];
   version: string;
@@ -137,6 +143,38 @@ payload = json.loads(pathlib.Path(os.environ["STELLA_ANONYMIZE_PAYLOAD"]).read_t
 sys.path.insert(0, str(module_root))
 
 import stella_anonymize as anonymize
+
+surface_probes = {
+    "package.prepare": hasattr(anonymize, "prepare_search_package"),
+    "package.load": hasattr(anonymize, "load_prepared_package"),
+    "package.load-file": hasattr(anonymize, "load_prepared_package_file"),
+    "text.normalize": hasattr(anonymize, "normalize_for_search"),
+    "text.redact": hasattr(anonymize, "redact_text"),
+    "text.redact-stream": hasattr(anonymize, "redact_text_stream_json"),
+    "text.diagnostics": hasattr(anonymize, "diagnostics_json"),
+    "text.summary-diagnostics": hasattr(anonymize, "summary_diagnostics_json"),
+    "text.caller-detections": hasattr(
+        anonymize.PreparedAnonymizer, "redact_text_with_caller_detections"
+    ),
+    "text.operators": hasattr(anonymize.PreparedAnonymizer, "redact_text"),
+    "package.default": hasattr(anonymize, "get_default_native_pipeline"),
+    "session.cross-document": hasattr(
+        anonymize.PreparedAnonymizer, "create_redaction_session"
+    ),
+    "session.lifecycle": hasattr(
+        anonymize.PreparedAnonymizer, "create_redaction_session_with_lifecycle"
+    ),
+    "session.plaintext-transfer": hasattr(
+        anonymize.PreparedRedactionSession, "to_plaintext_json"
+    ),
+    "session.encrypted-archive": hasattr(
+        anonymize.PreparedRedactionSession, "to_encrypted_archive"
+    ),
+    "document.docx.extract": hasattr(anonymize, "extract_docx_text"),
+    "document.docx.rewrite": hasattr(anonymize, "rewrite_docx_text"),
+    "document.docx.anonymize": hasattr(anonymize, "anonymize_docx"),
+    "document.docx.restore": hasattr(anonymize, "restore_docx_text"),
+}
 
 caller_result = json.loads(
     anonymize.get_default_native_pipeline(language="en").redact_text_with_caller_detections_json(
@@ -281,6 +319,11 @@ lifecycle_deleted_metadata = lifecycle_session.inspect()
 print(
     json.dumps(
         {
+            "surface_ids": [
+                surface_id
+                for surface_id, implemented in surface_probes.items()
+                if implemented
+            ],
             "results": [
                 json.loads(
                     anonymize.redact_default_text_json(
@@ -493,6 +536,18 @@ const packageJsonVersion = (): string => {
 };
 
 describe("python binding parity", () => {
+  pythonParityTest(
+    "python exposes every surface in its parity profiles",
+    () => {
+      const python = runPythonParity([]);
+      const expected = CAPABILITY_SURFACES.filter(({ profile }) =>
+        CAPABILITY_PARITY_PROFILES[profile].includes("python"),
+      ).map(({ id }) => id);
+
+      expect(python.surface_ids).toEqual(expected);
+    },
+  );
+
   pythonParityTest(
     "default-package redaction matches the native binding across contract fixtures",
     () => {
