@@ -19,7 +19,14 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
-import { dirname, extname, isAbsolute, relative, resolve } from "node:path";
+import {
+  dirname,
+  extname,
+  isAbsolute,
+  relative,
+  resolve,
+  sep,
+} from "node:path";
 import * as z from "zod/v4";
 
 const TEXT_MAX_BYTES = 64 * 1024 * 1024;
@@ -41,7 +48,10 @@ export type AuditSafeResult = {
 
 const inside = (root: string, target: string): boolean => {
   const path = relative(root, target);
-  return path === "" || (!path.startsWith("..") && !isAbsolute(path));
+  return (
+    path === "" ||
+    (path !== ".." && !path.startsWith(`..${sep}`) && !isAbsolute(path))
+  );
 };
 
 export class PathScope {

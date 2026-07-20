@@ -6,6 +6,7 @@ import { strToU8, zipSync } from "fflate";
 import { readFileSync } from "node:fs";
 import {
   mkdtemp,
+  mkdir,
   readFile,
   realpath,
   rm,
@@ -82,14 +83,24 @@ describe("PathScope", () => {
     const outside = await temporaryDirectory();
     const input = join(root, "input.txt");
     const existing = join(root, "existing.txt");
+    const dotDotDirectory = join(root, "..fixtures");
+    const dotDotInput = join(dotDotDirectory, "input.txt");
+    await mkdir(dotDotDirectory);
     await writeFile(input, "Alice");
     await writeFile(existing, "occupied");
+    await writeFile(dotDotInput, "Bob");
     const scope = await PathScope.create([root]);
 
     expect(await scope.input(input, ".txt")).toBe(await realpath(input));
     expect(await scope.output(join(root, "output.txt"), ".txt")).toBe(
       join(root, "output.txt"),
     );
+    expect(await scope.input(dotDotInput, ".txt")).toBe(
+      await realpath(dotDotInput),
+    );
+    expect(
+      await scope.output(join(dotDotDirectory, "output.txt"), ".txt"),
+    ).toBe(join(dotDotDirectory, "output.txt"));
     await expect(scope.output(existing, ".txt")).rejects.toThrow(
       "already exists",
     );
