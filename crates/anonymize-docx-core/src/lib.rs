@@ -533,9 +533,12 @@ fn is_relationships_entry(path: &str) -> bool {
   if path == ROOT_RELATIONSHIPS_PATH {
     return true;
   }
-  path.rsplit_once("/_rels/").is_some_and(|(_, filename)| {
-    !filename.contains('/') && has_extension(filename, "rels")
-  })
+  path
+    .strip_prefix("_rels/")
+    .or_else(|| path.rsplit_once("/_rels/").map(|(_, filename)| filename))
+    .is_some_and(|filename| {
+      !filename.contains('/') && has_extension(filename, "rels")
+    })
 }
 
 fn has_uri_scheme(target: &str) -> bool {
