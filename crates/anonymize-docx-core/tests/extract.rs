@@ -115,3 +115,63 @@ fn rejects_unsafe_or_incomplete_packages()
   assert_eq!(unsafe_error.code(), DocxErrorCode::UnsafeEntryPath);
   Ok(())
 }
+
+#[test]
+fn inventories_non_opc_rels_payloads_as_unsupported()
+-> Result<(), Box<dyn std::error::Error>> {
+  let document_xml = format!(
+    "<w:document xmlns:w=\"{WORD_NAMESPACE}\"><w:body><w:p><w:r><w:t>Alice</w:t></w:r></w:p></w:body></w:document>"
+  );
+  let archive = docx(&[
+    (
+      "word/document.xml",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml",
+      &document_xml,
+    ),
+    (
+      "extra/secrets.rels",
+      "application/vnd.openxmlformats-package.relationships+xml",
+      "<payload>alice@example.test</payload>",
+    ),
+  ])?;
+  let extraction = extract_docx_text(&archive)?;
+  assert!(extraction.coverage.parts.iter().any(|item| matches!(
+    item,
+    DocxCoverageItem::Unsupported { path, .. }
+      if path == "extra/secrets.rels"
+  )));
+  Ok(())
+}
+
+#[test]
+fn extracts_many_sibling_runs_with_stable_paths()
+-> Result<(), Box<dyn std::error::Error>> {
+  let mut runs = String::new();
+  for index in 0..2_000 {
+    write!(&mut runs, "<w:r><w:t>{index}</w:t></w:r>")?;
+  }
+  let document_xml = format!(
+    "<w:document xmlns:w=\"{WORD_NAMESPACE}\"><w:body><w:p>{runs}</w:p></w:body></w:document>"
+  );
+  let archive = docx(&[(
+    "word/document.xml",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml",
+    &document_xml,
+  )])?;
+  let extraction = extract_docx_text(&archive)?;
+  let block = extraction.blocks.first().ok_or("missing block")?;
+  assert_eq!(block.segments.len(), 2_000);
+  assert_ne!(
+    block
+      .segments
+      .first()
+      .ok_or("missing first segment")?
+      .xml_path,
+    block
+      .segments
+      .last()
+      .ok_or("missing last segment")?
+      .xml_path,
+  );
+  Ok(())
+}

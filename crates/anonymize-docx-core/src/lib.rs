@@ -7,7 +7,7 @@ use std::{
 };
 
 use percent_encoding::percent_decode_str;
-use roxmltree::{Document, Node};
+use roxmltree::{Document, Node, NodeId};
 use serde::Serialize;
 use thiserror::Error;
 use zip::ZipArchive;
@@ -637,21 +637,27 @@ fn relationship_coverage(
   Ok(coverage)
 }
 
-fn node_path(node: Node<'_, '_>) -> Vec<usize> {
+fn element_child_indices(document: &Document<'_>) -> HashMap<NodeId, usize> {
+  let mut indices = HashMap::new();
+  indices.insert(document.root_element().id(), 0);
+  for parent in document.descendants().filter(Node::is_element) {
+    for (index, child) in parent.children().filter(Node::is_element).enumerate()
+    {
+      indices.insert(child.id(), index);
+    }
+  }
+  indices
+}
+
+fn node_path(
+  node: Node<'_, '_>,
+  child_indices: &HashMap<NodeId, usize>,
+) -> Vec<usize> {
   let mut path = Vec::new();
   let mut current = Some(node);
   while let Some(item) = current {
-    let Some(parent) = item.parent_element() else {
-      path.push(0);
-      break;
-    };
-    let index = parent
-      .children()
-      .filter(Node::is_element)
-      .position(|child| child == item)
-      .unwrap_or_default();
-    path.push(index);
-    current = Some(parent);
+    path.push(child_indices.get(&item.id()).copied().unwrap_or_default());
+    current = item.parent_element();
   }
   path.reverse();
   path
@@ -718,8 +724,9 @@ fn block_location(
   part: &DocxPart,
   paragraph: Node<'_, '_>,
   block_index: usize,
+  child_indices: &HashMap<NodeId, usize>,
 ) -> DocxBlockLocation {
-  let xml_path = node_path(paragraph);
+  let xml_path = node_path(paragraph, child_indices);
   if let Some(text_box) = paragraph
     .ancestors()
     .find(|node| is_word(*node, "txbxContent"))
@@ -728,7 +735,7 @@ fn block_location(
       part: part.clone(),
       block_index,
       xml_path,
-      text_box_path: node_path(text_box),
+      text_box_path: node_path(text_box, child_indices),
     };
   }
   let cell = paragraph.ancestors().find(|node| is_word(*node, "tc"));
@@ -739,9 +746,9 @@ fn block_location(
       part: part.clone(),
       block_index,
       xml_path,
-      table_path: node_path(table),
-      row_path: node_path(row),
-      cell_path: node_path(cell),
+      table_path: node_path(table, child_indices),
+      row_path: node_path(row, child_indices),
+      cell_path: node_path(cell, child_indices),
     };
   }
   DocxBlockLocation::Paragraph {
@@ -765,6 +772,7 @@ fn extract_part(
   inline_context_scan_ops: &mut usize,
 ) -> Result<(Vec<DocxTextBlock>, DocxCoverage), DocxError> {
   let document = parse_xml(bytes, &part.path)?;
+  let child_indices = element_child_indices(&document);
   for node in document.descendants().filter(Node::is_element) {
     if (is_word(node, "t") || is_word(node, "delText"))
       && nearest_paragraph(node).is_none()
@@ -858,12 +866,12 @@ fn extract_part(
         end: text_utf16_len,
         source,
         contexts: item_contexts,
-        xml_path: node_path(node),
+        xml_path: node_path(node, &child_indices),
       });
     }
     blocks.push(DocxTextBlock {
       text,
-      location: block_location(part, paragraph, block_index),
+      location: block_location(part, paragraph, block_index, &child_indices),
       segments,
     });
   }
@@ -918,7 +926,7 @@ fn add_inventory_coverage<'a>(
   for entry in entries {
     if covered.contains(entry.path.as_str())
       || entry.path.ends_with('/')
-      || has_extension(&entry.path, "rels")
+      || is_relationships_entry(&entry.path)
     {
       continue;
     }
