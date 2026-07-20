@@ -1,0 +1,49 @@
+{
+  "contractVersion": 1,
+  "successCases": [
+    {
+      "id": "ascii",
+      "text": "Jan Novak signed.",
+      "start": 10,
+      "end": 16,
+      "replacement": "approved",
+      "expectedText": "Jan Novak approved."
+    },
+    {
+      "id": "utf16",
+      "text": "😀 Alice",
+      "start": 3,
+      "end": 8,
+      "replacement": "Bob",
+      "expectedText": "😀 Bob"
+    },
+    {
+      "id": "xml-escaping-and-space",
+      "text": "Alice",
+      "start": 0,
+      "end": 5,
+      "replacement": " Bob & Carol ",
+      "expectedText": " Bob & Carol "
+    }
+  ],
+  "errorCases": [
+    {
+      "id": "stale-text",
+      "text": "Alice",
+      "expectedText": "Changed",
+      "start": 0,
+      "end": 5,
+      "replacement": "Bob",
+      "expectedCode": "stale-extraction"
+    },
+    {
+      "id": "surrogate-split",
+      "text": "😀 Alice",
+      "expectedText": "😀 Alice",
+      "start": 1,
+      "end": 2,
+      "replacement": "X",
+      "expectedCode": "invalid-replacement"
+    }
+  ]
+}

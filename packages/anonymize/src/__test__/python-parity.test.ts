@@ -62,6 +62,20 @@ const CONTRACT_FIXTURES_DIR = join(
   "fixtures",
   "contracts",
 );
+const DOCX_RUNTIME_PARITY_FIXTURE = JSON.parse(
+  readFileSync(join(ROOT_DIR, "fixtures", "docx-runtime-parity.json"), "utf8"),
+) as {
+  successCases: readonly {
+    id: string;
+    expectedText: string;
+    [key: string]: unknown;
+  }[];
+  errorCases: readonly {
+    id: string;
+    expectedCode: string;
+    [key: string]: unknown;
+  }[];
+};
 const CONTRACT_FIXTURE_LANGUAGES = ["cs", "de", "en"] as const;
 
 type FixtureLanguage = (typeof CONTRACT_FIXTURE_LANGUAGES)[number];
@@ -146,6 +160,10 @@ type PythonParityOutput = {
     unserializable_plan_error: string | null;
     oversized_plan_error: string | null;
     ignored_extra_field: boolean;
+  };
+  docx_vector_results: {
+    success: readonly { id: string; text: string }[];
+    errors: readonly { id: string; code: string }[];
   };
 };
 
@@ -317,7 +335,6 @@ docx_caller_anonymized = anonymize.anonymize_docx(
 docx_external = anonymize.extract_docx_text(
     make_docx("Contact us", "mailto:alice@example.test")
 )
-
 def rejects_full_coverage(document, session_id):
     session = prepared.create_redaction_session(session_id)
     try:
@@ -384,6 +401,39 @@ docx_ignored_extra_field = (
     anonymize.extract_docx_text(docx_extra_result["document"])["blocks"][0]["text"]
     == "Ana Novak signed."
 )
+docx_vector_success = []
+for vector in payload["docx_vectors"]["successCases"]:
+    source = make_docx(vector["text"])
+    block = anonymize.extract_docx_text(source)["blocks"][0]
+    rewritten = anonymize.rewrite_docx_text(source, [{
+        "location": block["location"],
+        "expectedText": block["text"],
+        "replacements": [{
+            "start": vector["start"], "end": vector["end"],
+            "replacement": vector["replacement"],
+        }],
+    }])
+    docx_vector_success.append({
+        "id": vector["id"],
+        "text": anonymize.extract_docx_text(rewritten["document"])["blocks"][0]["text"],
+    })
+docx_vector_errors = []
+for vector in payload["docx_vectors"]["errorCases"]:
+    source = make_docx(vector["text"])
+    block = anonymize.extract_docx_text(source)["blocks"][0]
+    try:
+        anonymize.rewrite_docx_text(source, [{
+            "location": block["location"],
+            "expectedText": vector["expectedText"],
+            "replacements": [{
+                "start": vector["start"], "end": vector["end"],
+                "replacement": vector["replacement"],
+            }],
+        }])
+        code = "did-not-fail"
+    except anonymize.DocxRewriteError as error:
+        code = error.code
+    docx_vector_errors.append({"id": vector["id"], "code": code})
 deanonymised_text = anonymize.deanonymise(
     session_first.redaction.redacted_text,
     session_first.redaction.redaction_map,
@@ -571,6 +621,10 @@ print(
                 "oversized_plan_error": docx_oversized_plan_error,
                 "ignored_extra_field": docx_ignored_extra_field,
             },
+            "docx_vector_results": {
+                "success": docx_vector_success,
+                "errors": docx_vector_errors,
+            },
         }
     )
 )
@@ -692,6 +746,7 @@ const runPythonParity = (cases: ParityCase[]): PythonParityOutput => {
     payloadPath,
     JSON.stringify({
       cases: cases.map(({ text, language }) => ({ text, language })),
+      docx_vectors: DOCX_RUNTIME_PARITY_FIXTURE,
     }),
   );
   try {
@@ -754,6 +809,14 @@ describe("python binding parity", () => {
       unserializable_plan_error: "invalid-replacement",
       oversized_plan_error: "rewrite-limit-exceeded",
       ignored_extra_field: true,
+    });
+    expect(python.docx_vector_results).toEqual({
+      success: DOCX_RUNTIME_PARITY_FIXTURE.successCases.map(
+        ({ expectedText, id }) => ({ id, text: expectedText }),
+      ),
+      errors: DOCX_RUNTIME_PARITY_FIXTURE.errorCases.map(
+        ({ expectedCode, id }) => ({ id, code: expectedCode }),
+      ),
     });
   });
 

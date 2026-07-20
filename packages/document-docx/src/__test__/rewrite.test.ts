@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { strToU8, unzipSync, zipSync } from "fflate";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import {
   DOCX_ENTRY_MAX_BYTES,
@@ -8,6 +10,7 @@ import {
   extractDocxText,
   rewriteDocxText,
   type DocxBlockRewrite,
+  type DocxRewriteErrorCode,
 } from "../index";
 
 const CONTENT_TYPES_NAMESPACE =
@@ -20,6 +23,34 @@ const PACKAGE_RELATIONSHIP_NAMESPACE =
   "http://schemas.openxmlformats.org/package/2006/relationships";
 const DOCUMENT_CONTENT_TYPE =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml";
+
+type RuntimeParityFixture = {
+  contractVersion: number;
+  successCases: readonly {
+    id: string;
+    text: string;
+    start: number;
+    end: number;
+    replacement: string;
+    expectedText: string;
+  }[];
+  errorCases: readonly {
+    id: string;
+    text: string;
+    expectedText: string;
+    start: number;
+    end: number;
+    replacement: string;
+    expectedCode: DocxRewriteErrorCode;
+  }[];
+};
+
+const runtimeParityFixture = JSON.parse(
+  readFileSync(
+    join(import.meta.dir, "../../../../fixtures/docx-runtime-parity.json"),
+    "utf8",
+  ),
+) as RuntimeParityFixture;
 
 const docx = (body: string): Uint8Array =>
   zipSync({
@@ -63,6 +94,47 @@ const rewriteForFirstBlock = (
 };
 
 describe("rewriteDocxText", () => {
+  test("satisfies every shared runtime behavioral vector", () => {
+    expect(runtimeParityFixture.contractVersion).toBe(1);
+    for (const vector of runtimeParityFixture.successCases) {
+      const archive = docx(`<w:p><w:r><w:t>${vector.text}</w:t></w:r></w:p>`);
+      const result = rewriteDocxText(archive, [
+        rewriteForFirstBlock(archive, [
+          {
+            start: vector.start,
+            end: vector.end,
+            replacement: vector.replacement,
+          },
+        ]),
+      ]);
+      expect(extractDocxText(result.document).blocks.at(0)?.text).toBe(
+        vector.expectedText,
+      );
+    }
+    for (const vector of runtimeParityFixture.errorCases) {
+      const archive = docx(`<w:p><w:r><w:t>${vector.text}</w:t></w:r></w:p>`);
+      try {
+        rewriteDocxText(archive, [
+          rewriteForFirstBlock(
+            archive,
+            [
+              {
+                start: vector.start,
+                end: vector.end,
+                replacement: vector.replacement,
+              },
+            ],
+            vector.expectedText,
+          ),
+        ]);
+        throw new Error(`vector ${vector.id} must fail`);
+      } catch (error) {
+        expect(error).toBeInstanceOf(DocxRewriteError);
+        expect((error as DocxRewriteError).code).toBe(vector.expectedCode);
+      }
+    }
+  });
+
   test("rewrites spans across runs while preserving untouched package content", () => {
     const archive = docx(
       [
