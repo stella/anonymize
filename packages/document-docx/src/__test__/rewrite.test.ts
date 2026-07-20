@@ -113,6 +113,7 @@ describe("rewriteDocxText", () => {
     }
     for (const vector of runtimeParityFixture.errorCases) {
       const archive = docx(`<w:p><w:r><w:t>${vector.text}</w:t></w:r></w:p>`);
+      let thrown: unknown;
       try {
         rewriteDocxText(archive, [
           rewriteForFirstBlock(
@@ -127,11 +128,13 @@ describe("rewriteDocxText", () => {
             vector.expectedText,
           ),
         ]);
-        throw new Error(`vector ${vector.id} must fail`);
       } catch (error) {
-        expect(error).toBeInstanceOf(DocxRewriteError);
-        expect((error as DocxRewriteError).code).toBe(vector.expectedCode);
+        thrown = error;
       }
+      expect(thrown, `vector ${vector.id} must fail`).toBeInstanceOf(
+        DocxRewriteError,
+      );
+      expect((thrown as DocxRewriteError).code).toBe(vector.expectedCode);
     }
   });
 
