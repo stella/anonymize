@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use regex::{Regex, RegexBuilder};
 
@@ -17,6 +17,7 @@ const MIN_TRIGGER_PHONE_DIGITS: usize = 5;
 const TRIGGER_LOOKAHEAD_MARGIN: usize = 128;
 const LINE_TRIGGER_LOOKAHEAD: usize = 2_048;
 const MATCH_PATTERN_LOOKAHEAD: usize = 512;
+pub const PERSON_OR_ORGANIZATION_TRIGGER_LABEL: &str = "person-or-organization";
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct TriggerData {
@@ -307,6 +308,7 @@ pub(crate) fn process_trigger_matches(
   slice: PatternSlice,
   full_text: &str,
   data: &PreparedTriggerData,
+  title_tokens: &BTreeSet<String>,
   mut diagnostics: Option<&mut StaticRedactionDiagnostics>,
 ) -> Result<Vec<PipelineEntity>> {
   let offsets = ByteOffsets::new(full_text);
@@ -386,21 +388,19 @@ pub(crate) fn process_trigger_matches(
     };
     let mut entity_end = value.end;
     let mut entity_text = offsets.slice(entity_start, entity_end)?;
-    let mut label = if rule.label == crate::labels::PERSON_LABEL
-      && has_known_legal_form_suffix(&entity_text, &data.legal_form_suffixes)
+    let mut label = if (rule.label == crate::labels::PERSON_LABEL
+      && has_known_legal_form_suffix(&entity_text, &data.legal_form_suffixes))
+      || rule.label == PERSON_OR_ORGANIZATION_TRIGGER_LABEL
     {
-      String::from("organization")
+      String::from(crate::labels::ORGANIZATION_LABEL)
     } else {
       rule.label.clone()
     };
 
-    // Czech party-role triggers (zhotovitel/objednatel) default to
-    // organization, but sole traders are natural persons. Reclassify and
-    // trim when the captured value is a person-shaped name run; keep
-    // multi-word orgs and legal-form companies unchanged.
-    if label == crate::labels::ORGANIZATION_LABEL
+    if rule.label == PERSON_OR_ORGANIZATION_TRIGGER_LABEL
       && !has_known_legal_form_suffix(&entity_text, &data.legal_form_suffixes)
-      && let Some(end) = organization_value_person_span_end(&value.text)
+      && let Some(end) =
+        organization_value_person_span_end(&value.text, title_tokens)
       && let Some(head) = value.text.get(..end)
     {
       label = String::from(crate::labels::PERSON_LABEL);
@@ -1860,10 +1860,13 @@ fn person_name_run_end(text: &str) -> Option<usize> {
 /// two-token name (`Petr Šulc`). Rejects multi-word institutional names
 /// (`Gymnázium Jana Keplera`, `Správa a údržba …`). Trailing lowercase
 /// prose after a person-shaped run is trimmed (`… Henig uzavírá`).
-fn organization_value_person_span_end(text: &str) -> Option<usize> {
+fn organization_value_person_span_end(
+  text: &str,
+  title_tokens: &BTreeSet<String>,
+) -> Option<usize> {
   let end = person_name_run_end(text)?;
   let head = text.get(..end)?.trim_end();
-  if head.is_empty() || !is_person_shaped_name_run(head) {
+  if head.is_empty() || !is_person_shaped_name_run(head, title_tokens) {
     return None;
   }
   let rest = text.get(end..)?.trim_start();
@@ -1878,7 +1881,10 @@ fn organization_value_person_span_end(text: &str) -> Option<usize> {
     .then_some(end)
 }
 
-fn is_person_shaped_name_run(text: &str) -> bool {
+fn is_person_shaped_name_run(
+  text: &str,
+  title_tokens: &BTreeSet<String>,
+) -> bool {
   let tokens = text
     .split_whitespace()
     .map(trim_name_token)
@@ -1886,7 +1892,8 @@ fn is_person_shaped_name_run(text: &str) -> bool {
     .collect::<Vec<_>>();
   if tokens.is_empty()
     || tokens.iter().any(|token| {
-      !is_person_title_token(token) && !is_capitalized_name_token(token)
+      !is_person_title_token(token, title_tokens)
+        && !is_capitalized_name_token(token)
     })
   {
     return false;
@@ -1894,37 +1901,22 @@ fn is_person_shaped_name_run(text: &str) -> bool {
   let name_tokens = tokens
     .iter()
     .copied()
-    .filter(|token| !is_person_title_token(token))
+    .filter(|token| !is_person_title_token(token, title_tokens))
     .collect::<Vec<_>>();
   if tokens
     .first()
-    .is_some_and(|token| is_person_title_token(token))
+    .is_some_and(|token| is_person_title_token(token, title_tokens))
   {
     return matches!(name_tokens.len(), 1..=3);
   }
   name_tokens.len() == 2 && tokens.len() == 2
 }
 
-fn is_person_title_token(token: &str) -> bool {
+fn is_person_title_token(token: &str, title_tokens: &BTreeSet<String>) -> bool {
   let bare = token
     .trim_matches(|ch: char| matches!(ch, '.' | ','))
     .to_lowercase();
-  matches!(
-    bare.as_str(),
-    "bc"
-      | "doc"
-      | "dr"
-      | "ing"
-      | "judr"
-      | "mgr"
-      | "mudr"
-      | "mvdr"
-      | "paeddr"
-      | "phdr"
-      | "prof"
-      | "rndr"
-      | "thdr"
-  )
+  title_tokens.contains(&bare)
 }
 
 fn is_person_name_run_token(
@@ -2062,6 +2054,7 @@ mod tests {
       PatternSlice { start: 0, end: 1 },
       text,
       &data,
+      &BTreeSet::new(),
       None,
     )
     .unwrap();
@@ -2130,8 +2123,15 @@ mod tests {
     .unwrap();
 
     let matches = search.find_iter(text).unwrap();
-    let entities =
-      process_trigger_matches(&matches, slice, text, &data, None).unwrap();
+    let entities = process_trigger_matches(
+      &matches,
+      slice,
+      text,
+      &data,
+      &BTreeSet::new(),
+      None,
+    )
+    .unwrap();
 
     assert_eq!(entities.len(), 1);
     assert_eq!(entities[0].label, "organization");
@@ -2181,6 +2181,7 @@ mod tests {
       PatternSlice { start: 0, end: 1 },
       &text,
       &data,
+      &BTreeSet::new(),
       None,
     )
     .unwrap();
@@ -2225,6 +2226,7 @@ mod tests {
       PatternSlice { start: 0, end: 1 },
       text,
       &data,
+      &BTreeSet::new(),
       None,
     )
     .unwrap();
@@ -2242,7 +2244,7 @@ mod tests {
     PreparedTriggerData::new(TriggerData {
       rules: vec![TriggerRule {
         trigger: String::from("zhotovitel"),
-        label: String::from("organization"),
+        label: String::from(PERSON_OR_ORGANIZATION_TRIGGER_LABEL),
         strategy: TriggerStrategy::ToNextComma {
           stop_words: Vec::new(),
           max_length: None,
@@ -2266,10 +2268,14 @@ mod tests {
     text: &str,
     data: &PreparedTriggerData,
   ) -> Vec<(String, String)> {
-    let start = text
-      .to_lowercase()
-      .find("zhotovitel")
-      .expect("zhotovitel trigger");
+    let title_tokens = BTreeSet::from([
+      String::from("ing"),
+      String::from("mgr"),
+      String::from("prof"),
+    ]);
+    let Some(start) = text.to_lowercase().find("zhotovitel") else {
+      return Vec::new();
+    };
     let end = start.saturating_add("zhotovitel".len());
     process_trigger_matches(
       &[SearchMatch::Literal {
@@ -2280,6 +2286,7 @@ mod tests {
       PatternSlice { start: 0, end: 1 },
       text,
       data,
+      &title_tokens,
       None,
     )
     .unwrap()
@@ -2406,6 +2413,7 @@ mod tests {
       PatternSlice { start: 0, end: 1 },
       &text,
       &data,
+      &BTreeSet::new(),
       None,
     )
     .unwrap();
@@ -2459,6 +2467,7 @@ mod tests {
       PatternSlice { start: 0, end: 1 },
       text,
       data,
+      &BTreeSet::new(),
       None,
     )
     .unwrap()
@@ -2739,6 +2748,7 @@ mod tests {
       PatternSlice { start: 0, end: 1 },
       text,
       &data,
+      &BTreeSet::new(),
       None,
     )
     .unwrap();
@@ -2788,6 +2798,7 @@ mod tests {
       PatternSlice { start: 0, end: 1 },
       &text,
       &data,
+      &BTreeSet::new(),
       None,
     )
     .unwrap();
@@ -2840,6 +2851,7 @@ mod tests {
       PatternSlice { start: 0, end: 1 },
       text,
       &data,
+      &BTreeSet::new(),
       None,
     )
     .unwrap();
@@ -2888,6 +2900,7 @@ mod tests {
       PatternSlice { start: 0, end: 1 },
       text,
       &data,
+      &BTreeSet::new(),
       None,
     )
     .unwrap();

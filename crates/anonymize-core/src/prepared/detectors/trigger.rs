@@ -1,5 +1,6 @@
 use crate::diagnostics::DiagnosticStage;
 use crate::triggers::process_trigger_matches;
+use std::collections::BTreeSet;
 
 use super::prelude::*;
 use super::timed_entities;
@@ -32,11 +33,18 @@ fn detect_trigger(
     let Some(data) = &engine.data.triggers else {
       return Ok(Vec::new());
     };
+    let empty_title_tokens = BTreeSet::default();
+    let title_tokens = engine
+      .data
+      .false_positive_filters
+      .as_ref()
+      .map_or(&empty_title_tokens, |filters| &filters.title_tokens);
     process_trigger_matches(
       &matches.regex,
       engine.policy.slices.triggers,
       full_text,
       data,
+      title_tokens,
       diagnostics,
     )
   })

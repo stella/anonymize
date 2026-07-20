@@ -96,7 +96,8 @@ pub use session_archive::{
 };
 pub use signatures::SignatureData;
 pub use triggers::{
-  TriggerData, TriggerRule, TriggerStrategy, TriggerValidation,
+  PERSON_OR_ORGANIZATION_TRIGGER_LABEL, TriggerData, TriggerRule,
+  TriggerStrategy, TriggerValidation,
 };
 pub use types::{
   Entity, EntityKind, Error, MaskConfig, MaskDirection, Operator,
