@@ -91,13 +91,27 @@ describe("PathScope", () => {
     await writeFile(dotDotInput, "Bob");
     const scope = await PathScope.create([root]);
 
-    expect(await scope.input(input, ".txt")).toBe(await realpath(input));
+    const scopedInput = await scope.readInput({
+      path: input,
+      extension: ".txt",
+      maximumBytes: 1024,
+      label: "Text",
+    });
+    expect(scopedInput.path).toBe(await realpath(input));
+    expect(new TextDecoder().decode(scopedInput.bytes)).toBe("Alice");
     expect(await scope.output(join(root, "output.txt"), ".txt")).toBe(
       join(root, "output.txt"),
     );
-    expect(await scope.input(dotDotInput, ".txt")).toBe(
-      await realpath(dotDotInput),
-    );
+    expect(
+      (
+        await scope.readInput({
+          path: dotDotInput,
+          extension: ".txt",
+          maximumBytes: 1024,
+          label: "Text",
+        })
+      ).path,
+    ).toBe(await realpath(dotDotInput));
     expect(
       await scope.output(join(dotDotDirectory, "output.txt"), ".txt"),
     ).toBe(join(dotDotDirectory, "output.txt"));
@@ -105,7 +119,12 @@ describe("PathScope", () => {
       "already exists",
     );
     await expect(
-      scope.input(join(outside, "missing.txt"), ".txt"),
+      scope.readInput({
+        path: join(outside, "missing.txt"),
+        extension: ".txt",
+        maximumBytes: 1024,
+        label: "Text",
+      }),
     ).rejects.toThrow();
   });
 
@@ -114,12 +133,29 @@ describe("PathScope", () => {
     const outside = await temporaryDirectory();
     const target = join(outside, "secret.txt");
     const link = join(root, "linked.txt");
+    const insideTarget = join(root, "inside.txt");
+    const insideLink = join(root, "inside-linked.txt");
     await writeFile(target, "secret");
+    await writeFile(insideTarget, "inside");
     await symlink(target, link);
+    await symlink(insideTarget, insideLink);
     const scope = await PathScope.create([root]);
-    await expect(scope.input(link, ".txt")).rejects.toThrow(
-      "outside the configured roots",
-    );
+    await expect(
+      scope.readInput({
+        path: link,
+        extension: ".txt",
+        maximumBytes: 1024,
+        label: "Text",
+      }),
+    ).rejects.toThrow("outside the configured roots");
+    await expect(
+      scope.readInput({
+        path: insideLink,
+        extension: ".txt",
+        maximumBytes: 1024,
+        label: "Text",
+      }),
+    ).rejects.toThrow();
     const linkedDirectory = join(root, "linked-directory");
     await symlink(outside, linkedDirectory);
     await expect(

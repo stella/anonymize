@@ -10,9 +10,10 @@ import {
 } from "@stll/anonymize-docx";
 import * as nativeNode from "@stll/anonymize/native-node";
 import {
+  constants as fsConstants,
   link,
   lstat,
-  readFile,
+  open,
   realpath,
   stat,
   unlink,
@@ -54,6 +55,18 @@ const inside = (root: string, target: string): boolean => {
   );
 };
 
+type ReadInputOptions = {
+  path: string;
+  extension: ".docx" | ".txt";
+  maximumBytes: number;
+  label: "DOCX" | "Text";
+};
+
+type ScopedInput = {
+  bytes: Uint8Array;
+  path: string;
+};
+
 export class PathScope {
   readonly #roots: readonly string[];
 
@@ -81,19 +94,54 @@ export class PathScope {
     return new PathScope([...new Set(canonical)]);
   }
 
-  async input(path: string, extension: ".docx" | ".txt"): Promise<string> {
+  async readInput({
+    path,
+    extension,
+    maximumBytes,
+    label,
+  }: ReadInputOptions): Promise<ScopedInput> {
     if (!isAbsolute(path) || extname(path).toLowerCase() !== extension) {
       throw new Error(`Input must be an absolute ${extension} path`);
     }
-    const canonical = await realpath(path);
-    if (!this.#roots.some((root) => inside(root, canonical))) {
+    const initiallyCanonical = await realpath(path);
+    if (!this.#roots.some((root) => inside(root, initiallyCanonical))) {
       throw new Error("Input is outside the configured roots");
     }
-    const metadata = await stat(canonical);
-    if (!metadata.isFile()) {
-      throw new Error("Input must be a regular file");
+    const handle = await open(
+      path,
+      fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW,
+    );
+    try {
+      const openedMetadata = await handle.stat();
+      if (!openedMetadata.isFile()) {
+        throw new Error("Input must be a regular file");
+      }
+      const canonical = await realpath(path);
+      if (!this.#roots.some((root) => inside(root, canonical))) {
+        throw new Error("Input is outside the configured roots");
+      }
+      const currentMetadata = await stat(canonical);
+      if (
+        currentMetadata.dev !== openedMetadata.dev ||
+        currentMetadata.ino !== openedMetadata.ino
+      ) {
+        throw new Error("Input changed while it was being validated");
+      }
+      if (openedMetadata.size > maximumBytes) {
+        throw new Error(
+          `${label} inputs must not exceed ${maximumBytes} bytes`,
+        );
+      }
+      const bytes = await handle.readFile();
+      if (bytes.byteLength > maximumBytes) {
+        throw new Error(
+          `${label} inputs must not exceed ${maximumBytes} bytes`,
+        );
+      }
+      return { bytes, path: canonical };
+    } finally {
+      await handle.close();
     }
-    return canonical;
   }
 
   async output(path: string, extension: ".docx" | ".txt"): Promise<string> {
@@ -167,34 +215,7 @@ const safeWrite = async (
   }
 };
 
-type ReadBoundedFileOptions = {
-  path: string;
-  maximumBytes: number;
-  label: "DOCX" | "Text";
-};
-
-const readBoundedFile = async ({
-  path,
-  maximumBytes,
-  label,
-}: ReadBoundedFileOptions): Promise<Uint8Array> => {
-  const metadata = await stat(path);
-  if (metadata.size > maximumBytes) {
-    throw new Error(`${label} inputs must not exceed ${maximumBytes} bytes`);
-  }
-  const bytes = await readFile(path);
-  if (bytes.byteLength > maximumBytes) {
-    throw new Error(`${label} inputs must not exceed ${maximumBytes} bytes`);
-  }
-  return bytes;
-};
-
-const readTextFile = async (path: string): Promise<string> => {
-  const bytes = await readBoundedFile({
-    path,
-    maximumBytes: TEXT_MAX_BYTES,
-    label: "Text",
-  });
+const decodeText = (bytes: Uint8Array): string => {
   try {
     return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
   } catch (error) {
@@ -318,10 +339,15 @@ export class LocalAnonymizeService {
   async anonymizeText(
     input: z.infer<typeof textInput>,
   ): Promise<AuditSafeResult> {
-    const source = await this.#scope.input(input.inputPath, ".txt");
+    const source = await this.#scope.readInput({
+      path: input.inputPath,
+      extension: ".txt",
+      maximumBytes: TEXT_MAX_BYTES,
+      label: "Text",
+    });
     const destination = await this.#scope.output(input.outputPath, ".txt");
-    assertDifferentPaths(source, destination);
-    const text = await readTextFile(source);
+    assertDifferentPaths(source.path, destination);
+    const text = decodeText(source.bytes);
     const lease = this.#session(input.sessionId, input.language);
     try {
       const result = lease.entry.session.redact_text(text);
@@ -343,10 +369,15 @@ export class LocalAnonymizeService {
   async restoreText(
     input: z.infer<typeof restoreInput>,
   ): Promise<AuditSafeResult> {
-    const source = await this.#scope.input(input.inputPath, ".txt");
+    const source = await this.#scope.readInput({
+      path: input.inputPath,
+      extension: ".txt",
+      maximumBytes: TEXT_MAX_BYTES,
+      label: "Text",
+    });
     const destination = await this.#scope.output(input.outputPath, ".txt");
-    assertDifferentPaths(source, destination);
-    const text = await readTextFile(source);
+    assertDifferentPaths(source.path, destination);
+    const text = decodeText(source.bytes);
     const lease = this.#readSession(input.sessionId);
     try {
       const restored = lease.entry.session.restoreText(text);
@@ -367,18 +398,18 @@ export class LocalAnonymizeService {
   async anonymizeDocx(
     input: z.infer<typeof docxInput>,
   ): Promise<AuditSafeResult> {
-    const source = await this.#scope.input(input.inputPath, ".docx");
-    const destination = await this.#scope.output(input.outputPath, ".docx");
-    assertDifferentPaths(source, destination);
-    const document = await readBoundedFile({
-      path: source,
+    const source = await this.#scope.readInput({
+      path: input.inputPath,
+      extension: ".docx",
       maximumBytes: DOCX_ARCHIVE_MAX_BYTES,
       label: "DOCX",
     });
+    const destination = await this.#scope.output(input.outputPath, ".docx");
+    assertDifferentPaths(source.path, destination);
     const lease = this.#session(input.sessionId, input.language);
     try {
       const result = anonymizeDocx({
-        document,
+        document: source.bytes,
         session: lease.entry.session,
         expectedSessionId: input.sessionId,
         policy: {
@@ -410,18 +441,18 @@ export class LocalAnonymizeService {
   async restoreDocx(
     input: z.infer<typeof docxRestoreInput>,
   ): Promise<AuditSafeResult> {
-    const source = await this.#scope.input(input.inputPath, ".docx");
-    const destination = await this.#scope.output(input.outputPath, ".docx");
-    assertDifferentPaths(source, destination);
-    const document = await readBoundedFile({
-      path: source,
+    const source = await this.#scope.readInput({
+      path: input.inputPath,
+      extension: ".docx",
       maximumBytes: DOCX_ARCHIVE_MAX_BYTES,
       label: "DOCX",
     });
+    const destination = await this.#scope.output(input.outputPath, ".docx");
+    assertDifferentPaths(source.path, destination);
     const lease = this.#readSession(input.sessionId);
     try {
       const result = restoreDocxText({
-        document,
+        document: source.bytes,
         session: lease.entry.session,
         expectedSessionId: input.sessionId,
       });
@@ -448,14 +479,13 @@ export class LocalAnonymizeService {
   }
 
   async inspectDocx(inputPath: string): Promise<AuditSafeResult> {
-    const source = await this.#scope.input(inputPath, ".docx");
-    const extraction = extractDocxText(
-      await readBoundedFile({
-        path: source,
-        maximumBytes: DOCX_ARCHIVE_MAX_BYTES,
-        label: "DOCX",
-      }),
-    );
+    const source = await this.#scope.readInput({
+      path: inputPath,
+      extension: ".docx",
+      maximumBytes: DOCX_ARCHIVE_MAX_BYTES,
+      label: "DOCX",
+    });
+    const extraction = extractDocxText(source.bytes);
     const unsupported = extraction.coverage.parts.some(
       (part) => part.status === "unsupported",
     );
