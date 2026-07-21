@@ -1,5 +1,5 @@
 {
-  "_comment": "Institutional head words that identify a proper-name phrase as a legal or public organization. Detection requires a preceding name token; bare generic references are not emitted.",
+  "_comment": "Institutional head words that identify a proper-name phrase as a legal or public organization. Detection requires a specific name token before the head or in a configured complement; bare generic references are not emitted.",
   "en": {
     "heads": [
       "Agency",

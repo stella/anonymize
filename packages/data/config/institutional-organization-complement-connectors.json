@@ -1,0 +1,4 @@
+{
+  "_comment": "Words allowed inside an institutional-name complement, keyed by language.",
+  "en": ["and", "for", "of", "the", "to"]
+}

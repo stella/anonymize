@@ -159,7 +159,12 @@ fn legal_form_data_from_binding(data: BindingLegalFormData) -> LegalFormData {
     in_name_prepositions: data.in_name_prepositions,
     company_suffix_words: data.company_suffix_words,
     comma_gated_direct_prefixes: data.comma_gated_direct_prefixes,
+    institutional_heads: data.detection_only_suffixes,
     institutional_complement_heads: data.institutional_complement_heads,
+    institutional_complement_starters: data.institutional_complement_starters,
+    institutional_complement_connectors: data
+      .institutional_complement_connectors,
+    institutional_generic_words: data.institutional_generic_words,
   }
 }
 

@@ -310,6 +310,48 @@ fn validate_institutional_terms(
   Ok(())
 }
 
+fn institutional_language_words(
+  file_name: &str,
+  languages: Option<&[String]>,
+) -> Result<Vec<String>, AssembleError> {
+  let configured: OrderedMap<Value> = parse_ordered_data_file(file_name)?;
+  let mut result = Vec::new();
+  let mut seen = HashSet::new();
+  for (language_key, value) in &configured {
+    if language_key.starts_with('_')
+      || !language::language_config_matches(language_key, languages)
+    {
+      continue;
+    }
+    let Some(words) = value.as_array() else {
+      return Err(AssembleError::DataParse {
+        name: String::from(file_name),
+        message: format!("language {language_key}: expected an array"),
+      });
+    };
+    for word in words {
+      let Some(word) = word.as_str() else {
+        return Err(AssembleError::DataParse {
+          name: String::from(file_name),
+          message: format!(
+            "language {language_key}: expected non-empty strings"
+          ),
+        });
+      };
+      if word.trim().is_empty() {
+        return Err(AssembleError::DataParse {
+          name: String::from(file_name),
+          message: format!(
+            "language {language_key}: expected non-empty strings"
+          ),
+        });
+      }
+      push_unique(word.to_string(), &mut seen, &mut result);
+    }
+  }
+  Ok(result)
+}
+
 /// Mirrors `isBoundaryLegalSuffixForm`.
 fn is_boundary_legal_suffix_form(
   form: &str,
@@ -547,6 +589,8 @@ pub(super) fn build_legal_form_data(
   let trims = leading_clause_trims()?;
   let rule_words: LegalFormRuleWords =
     parse_data_file("legal-form-rule-words.json")?;
+  let institutional =
+    institutional_organization_data(ctx.content_languages.as_deref())?;
 
   Ok(Some(BindingLegalFormData {
     suffixes,
@@ -575,10 +619,19 @@ pub(super) fn build_legal_form_data(
     in_name_prepositions: rule_words.in_name_prepositions,
     company_suffix_words: rule_words.company_suffix_words,
     comma_gated_direct_prefixes: rule_words.comma_gated_direct_prefixes,
-    institutional_complement_heads: institutional_organization_data(
+    institutional_complement_heads: institutional.complement_heads,
+    institutional_complement_starters: institutional_language_words(
+      "institutional-organization-complement-starters.json",
       ctx.content_languages.as_deref(),
-    )?
-    .complement_heads,
+    )?,
+    institutional_complement_connectors: institutional_language_words(
+      "institutional-organization-complement-connectors.json",
+      ctx.content_languages.as_deref(),
+    )?,
+    institutional_generic_words: institutional_language_words(
+      "institutional-organization-generic-name-words.json",
+      ctx.content_languages.as_deref(),
+    )?,
   }))
 }
 
@@ -588,7 +641,8 @@ mod tests {
 
   use super::{
     InstitutionalOrganizationData, all_legal_suffixes,
-    organization_detection_suffixes, validate_institutional_terms,
+    institutional_language_words, organization_detection_suffixes,
+    validate_institutional_terms,
   };
 
   #[test]
@@ -622,6 +676,31 @@ mod tests {
     ] {
       let error = validate_institutional_terms("en", &data).unwrap_err();
       assert!(error.to_string().contains("must contain non-empty strings"));
+    }
+  }
+
+  #[test]
+  fn institutional_vocabulary_follows_content_language_scope() {
+    for (file_name, expected_english_word) in [
+      ("institutional-organization-complement-starters.json", "of"),
+      (
+        "institutional-organization-complement-connectors.json",
+        "the",
+      ),
+      (
+        "institutional-organization-generic-name-words.json",
+        "legal",
+      ),
+    ] {
+      let english =
+        institutional_language_words(file_name, Some(&[String::from("en")]))
+          .unwrap();
+      let german =
+        institutional_language_words(file_name, Some(&[String::from("de")]))
+          .unwrap();
+
+      assert!(english.iter().any(|word| word == expected_english_word));
+      assert!(german.is_empty());
     }
   }
 }

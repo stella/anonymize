@@ -235,6 +235,9 @@ pub struct BindingLegalFormData {
   #[serde(default)]
   pub comma_gated_direct_prefixes: Vec<String>,
   pub institutional_complement_heads: Vec<String>,
+  pub institutional_complement_starters: Vec<String>,
+  pub institutional_complement_connectors: Vec<String>,
+  pub institutional_generic_words: Vec<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
