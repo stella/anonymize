@@ -12,6 +12,16 @@ pub struct SignatureData {
   pub labels: Vec<String>,
   #[serde(default)]
   pub witness_phrases: Vec<String>,
+  /// Form-field label words ("Name", "Jméno", "Funkce"). Tied to a ':' they
+  /// start the next field of a signature grid, so they terminate the span
+  /// that precedes them instead of joining it.
+  #[serde(default)]
+  pub form_field_labels: Vec<String>,
+  /// Fixed strings PDF signing software stamps onto a page ("Digitally
+  /// signed by", "Digitálně podepsal"). They sit immediately after a name
+  /// and must terminate the person span rather than extend it.
+  #[serde(default)]
+  pub signature_stamp_phrases: Vec<String>,
   #[serde(default)]
   pub name_particles: Vec<String>,
   #[serde(default)]
@@ -26,6 +36,8 @@ pub struct SignatureData {
 pub(crate) struct PreparedSignatureData {
   labels: Vec<String>,
   witness_phrases: Vec<String>,
+  form_field_labels: Vec<String>,
+  signature_stamp_phrases: Vec<String>,
   name_particles: Vec<String>,
   post_nominal_suffixes: Vec<String>,
   organization_suffixes: Vec<String>,
@@ -38,6 +50,10 @@ impl PreparedSignatureData {
     Self {
       labels: non_empty_lowercase(data.labels),
       witness_phrases: non_empty_lowercase(data.witness_phrases),
+      form_field_labels: non_empty_lowercase(data.form_field_labels),
+      signature_stamp_phrases: non_empty_lowercase(
+        data.signature_stamp_phrases,
+      ),
       name_particles: non_empty_lowercase(data.name_particles),
       post_nominal_suffixes: non_empty_compact_lowercase(
         data.post_nominal_suffixes,
@@ -46,6 +62,26 @@ impl PreparedSignatureData {
       image_stub_prefixes: non_empty_lowercase(data.image_stub_prefixes),
     }
   }
+
+  /// Vocabulary that terminates a person span. Owned here because it is
+  /// signature-block domain data; applied once, in the resolution boundary
+  /// pass, rather than by each detector that can produce a person span.
+  #[must_use]
+  pub(crate) fn person_span_terminators(&self) -> PersonSpanTerminators<'_> {
+    PersonSpanTerminators {
+      stamp_phrases: &self.signature_stamp_phrases,
+      field_labels: &self.form_field_labels,
+    }
+  }
+}
+
+/// Lowercased vocabulary marking where a person span must stop.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct PersonSpanTerminators<'a> {
+  /// Signing-software stamps that follow a name ("digitally signed by").
+  pub stamp_phrases: &'a [String],
+  /// Field labels that start the next cell of a form ("name", "jméno").
+  pub field_labels: &'a [String],
 }
 
 #[must_use]
@@ -701,6 +737,8 @@ mod tests {
     PreparedSignatureData::new(SignatureData {
       labels: vec![String::from("name")],
       witness_phrases: vec![String::from("in witness whereof")],
+      form_field_labels: Vec::new(),
+      signature_stamp_phrases: Vec::new(),
       name_particles: Vec::new(),
       post_nominal_suffixes: Vec::new(),
       organization_suffixes: vec![String::from("inc.")],

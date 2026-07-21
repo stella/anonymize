@@ -73,3 +73,26 @@ describe("titled person does not absorb digital-signature modifiers", () => {
     expect(persons.some((p) => p.includes("Quigley"))).toBe(true);
   });
 });
+
+describe("unknown surnames survive in running prose", () => {
+  /**
+   * Under-redaction guard. A shape heuristic ("a capitalized token before
+   * lowercase prose is a modifier, not a surname") drops every one of these,
+   * because -ly / -ně / -lich / -ment(e) are ordinary surname endings. Only
+   * exact stamp/label vocabulary may end a person span.
+   */
+  const cases = [
+    "Mgr. Karel Quigley podepsal smlouvu",
+    "Mgr. Karel Ehrlich podepsal smlouvu",
+    "Mgr. Karel Clemente souhlasí s podmínkami",
+    "Mgr. Karel Connolly je zástupce společnosti",
+  ];
+
+  for (const text of cases) {
+    const surname = text.split(" ")[2] ?? "";
+    test(`${surname} is not trimmed before lowercase prose`, async () => {
+      const persons = await personTexts(text);
+      expect(persons.some((p) => p.includes(surname))).toBe(true);
+    });
+  }
+});

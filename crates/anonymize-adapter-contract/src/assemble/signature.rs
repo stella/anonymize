@@ -26,6 +26,10 @@ struct SignatureDetection {
   #[serde(default)]
   organization_suffixes: OrderedMap<Value>,
   #[serde(default)]
+  form_field_labels: OrderedMap<Value>,
+  #[serde(default)]
+  signature_stamp_phrases: OrderedMap<Value>,
+  #[serde(default)]
   image_stub_prefixes: OrderedMap<Value>,
 }
 
@@ -48,6 +52,11 @@ pub(super) fn build_signature_data()
     ),
     organization_suffixes: language_keyed_terms(
       &data.organization_suffixes,
+      None,
+    ),
+    form_field_labels: language_keyed_terms(&data.form_field_labels, None),
+    signature_stamp_phrases: language_keyed_terms(
+      &data.signature_stamp_phrases,
       None,
     ),
     image_stub_prefixes: language_keyed_terms(&data.image_stub_prefixes, None),

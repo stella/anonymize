@@ -1,23 +1,168 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::byte_offsets::ByteOffsets;
+use crate::signatures::PersonSpanTerminators;
 use crate::types::Result;
 
 use super::common::{byte_len, contains_span, entity_len, is_caller_owned};
 use super::{DetectionSource, PipelineEntity};
 
+/// Inputs to the boundary pass. `person_terminators` is empty when the
+/// engine has no signature data, which disables person-span truncation.
+#[derive(Clone, Copy, Debug)]
+pub struct BoundaryParams<'a> {
+  pub entities: &'a [PipelineEntity],
+  pub full_text: &'a str,
+  pub person_terminators: PersonSpanTerminators<'a>,
+}
+
 pub fn enforce_boundary_consistency(
-  entities: &[PipelineEntity],
-  full_text: &str,
+  params: BoundaryParams<'_>,
 ) -> Result<Vec<PipelineEntity>> {
+  let BoundaryParams {
+    entities,
+    full_text,
+    person_terminators,
+  } = params;
   let offsets = ByteOffsets::new(full_text);
   let spans = char_spans(full_text);
   let boundaries = word_boundaries(&spans);
   let fixed = fix_partial_words(entities, &offsets, &spans, &boundaries)?;
-  let resolved = resolve_cross_label_overlaps(&fixed, &offsets)?;
+  // Truncation runs after word-boundary expansion so expansion cannot push a
+  // person span back across a terminator it was just pulled behind.
+  let truncated =
+    truncate_person_spans(&fixed, full_text, &offsets, person_terminators)?;
+  let resolved = resolve_cross_label_overlaps(&truncated, &offsets)?;
   let deduped = deduplicate_spans(&resolved);
   let merged = merge_adjacent(&deduped, &offsets)?;
   Ok(remove_nested_same_label(&merged))
+}
+
+/// Stop person spans at a signature-stamp phrase or a form-field label.
+///
+/// Both are exact, language-keyed vocabulary from `signature-detection.json`.
+/// A shape heuristic is deliberately avoided here: adverb-like suffixes match
+/// real surnames (Connolly, Ehrlich, Clemente), and dropping a surname is an
+/// under-redaction, the one failure mode this library must not have.
+fn truncate_person_spans(
+  entities: &[PipelineEntity],
+  full_text: &str,
+  offsets: &ByteOffsets<'_>,
+  terminators: PersonSpanTerminators<'_>,
+) -> Result<Vec<PipelineEntity>> {
+  if terminators.stamp_phrases.is_empty() && terminators.field_labels.is_empty()
+  {
+    return Ok(entities.to_vec());
+  }
+
+  let mut result = Vec::with_capacity(entities.len());
+  for entity in entities {
+    if entity.label != crate::labels::PERSON_LABEL
+      || has_locked_boundary(entity)
+    {
+      result.push(entity.clone());
+      continue;
+    }
+
+    let Some(cut) = terminator_start_within(full_text, entity, terminators)
+    else {
+      result.push(entity.clone());
+      continue;
+    };
+
+    let trimmed_end = trim_trailing_space(full_text, entity.start, cut);
+    if trimmed_end <= entity.start {
+      // The span is entirely a terminator; leaving it over-redacts, which is
+      // the safe direction, so keep it rather than emitting an empty span.
+      result.push(entity.clone());
+      continue;
+    }
+
+    let mut adjusted = entity.clone();
+    adjusted.end = trimmed_end;
+    adjusted.text = offsets.slice(entity.start, trimmed_end)?;
+    result.push(adjusted);
+  }
+
+  Ok(result)
+}
+
+/// Byte offset of the first terminator beginning inside the entity span.
+///
+/// A stamp phrase may run past `entity.end` (the detector stops at the name,
+/// so "Karel Digitálně" holds only the first word of "digitálně podepsal"),
+/// so phrases are matched against the full text from each candidate token.
+fn terminator_start_within(
+  full_text: &str,
+  entity: &PipelineEntity,
+  terminators: PersonSpanTerminators<'_>,
+) -> Option<u32> {
+  let start = usize::try_from(entity.start).ok()?;
+  let end = usize::try_from(entity.end).ok()?;
+  let window = full_text.get(start..end)?;
+
+  window
+    .char_indices()
+    .filter(|&(offset, _)| {
+      offset > 0 && is_token_start(window, offset) && offset < end
+    })
+    .find(|&(offset, _)| {
+      let absolute = start.saturating_add(offset);
+      let tail = full_text.get(absolute..).unwrap_or_default();
+      starts_with_stamp_phrase(tail, terminators.stamp_phrases)
+        || is_colon_tied_field_label(tail, terminators.field_labels)
+    })
+    .and_then(|(offset, _)| u32::try_from(start.saturating_add(offset)).ok())
+}
+
+fn starts_with_stamp_phrase(tail: &str, phrases: &[String]) -> bool {
+  phrases
+    .iter()
+    .any(|phrase| starts_with_ignore_case(tail, phrase))
+}
+
+/// A field label counts only when the very next character after it is ':'.
+/// Without the colon, "Name" and "Jméno" are ordinary words, and a surname
+/// that happens to collide with the vocabulary keeps its place in the span.
+fn is_colon_tied_field_label(tail: &str, labels: &[String]) -> bool {
+  labels.iter().any(|label| {
+    if !starts_with_ignore_case(tail, label) {
+      return false;
+    }
+    let rest = tail
+      .char_indices()
+      .nth(label.chars().count())
+      .map_or("", |(index, _)| tail.get(index..).unwrap_or_default());
+    rest.starts_with(':')
+  })
+}
+
+/// Case-insensitive prefix test. `needle` is lowercased at prepare time.
+fn starts_with_ignore_case(haystack: &str, needle: &str) -> bool {
+  let mut lowered = haystack.chars().flat_map(char::to_lowercase);
+  needle
+    .chars()
+    .all(|expected| lowered.next() == Some(expected))
+}
+
+fn is_token_start(window: &str, offset: usize) -> bool {
+  window
+    .get(..offset)
+    .and_then(|prefix| prefix.chars().next_back())
+    .is_none_or(|previous| !previous.is_alphanumeric())
+}
+
+fn trim_trailing_space(full_text: &str, start: u32, end: u32) -> u32 {
+  let (Ok(start_index), Ok(end_index)) =
+    (usize::try_from(start), usize::try_from(end))
+  else {
+    return end;
+  };
+  let Some(slice) = full_text.get(start_index..end_index) else {
+    return end;
+  };
+  let trimmed = slice.trim_end();
+  start.saturating_add(byte_len(trimmed))
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

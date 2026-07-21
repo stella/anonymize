@@ -143,6 +143,8 @@ pub struct BindingSignatureData {
   #[serde(default)]
   pub organization_suffixes: Vec<String>,
   #[serde(default)]
+  pub form_field_labels: Vec<String>,
+  pub signature_stamp_phrases: Vec<String>,
   pub image_stub_prefixes: Vec<String>,
 }
 

@@ -763,21 +763,9 @@ pub fn process_regex_matches(
       continue;
     }
 
-    let (end, text) = if entry.label == PERSON_LABEL {
-      trim_person_regex_modifier_before_prose(
-        full_text,
-        &offsets,
-        found.start(),
-        found.end(),
-        &text,
-      )?
-    } else {
-      (found.end(), text)
-    };
-
     let mut entity = PipelineEntity::detected(
       found.start(),
-      end,
+      found.end(),
       entry.label.clone(),
       text,
       entry.score,
@@ -788,65 +776,6 @@ pub fn process_regex_matches(
   }
 
   Ok(results)
-}
-
-/// Titled-person regexes accept 1–3 capitalized tokens after the given name.
-/// When the final token is immediately followed by lowercase prose on the same
-/// line ("Digitálně podepsal", "Digitally signed"), it is a modifier, not a
-/// surname: trim it so the shorter titled given name remains.
-fn trim_person_regex_modifier_before_prose(
-  full_text: &str,
-  offsets: &ByteOffsets<'_>,
-  start: u32,
-  end: u32,
-  text: &str,
-) -> Result<(u32, String)> {
-  let trimmed = text.trim_end();
-  if trimmed.is_empty() {
-    return Ok((end, text.to_owned()));
-  }
-  let content_end = start.saturating_add(byte_len(trimmed));
-  let after = slice_from(full_text, offsets, content_end)?;
-  let Some(first) = after.chars().next() else {
-    return Ok((end, text.to_owned()));
-  };
-  if first == '\n' || first == '\r' || !first.is_whitespace() {
-    return Ok((end, text.to_owned()));
-  }
-  let rest = after.trim_start_matches(|ch: char| ch == ' ' || ch == '\t');
-  if !rest.chars().next().is_some_and(char::is_lowercase) {
-    return Ok((end, text.to_owned()));
-  }
-
-  let Some((prefix, last)) = trimmed.rsplit_once(char::is_whitespace) else {
-    return Ok((end, text.to_owned()));
-  };
-  if prefix.is_empty() {
-    return Ok((end, text.to_owned()));
-  }
-  let last_core = last.trim_end_matches([',', '.', ';', ':', '”', '"']);
-  if last_core.contains('.')
-    || !last_core.chars().next().is_some_and(char::is_uppercase)
-    || !is_likely_sentence_modifier(last_core)
-  {
-    return Ok((end, text.to_owned()));
-  }
-
-  let trimmed_prefix = prefix.trim_end();
-  let new_end = start.saturating_add(byte_len(trimmed_prefix));
-  Ok((new_end, offsets.slice(start, new_end)?))
-}
-
-/// Capitalized sentence modifiers that titled-person regexes and name runs
-/// sometimes absorb before a lowercase verb ("Digitálně podepsal",
-/// "Digitally signed"). Shape-based, not a locale word list.
-fn is_likely_sentence_modifier(token: &str) -> bool {
-  let lower = token.to_lowercase();
-  lower.ends_with("ly")
-    || lower.ends_with("ně")
-    || lower.ends_with("lich")
-    || lower.ends_with("mente")
-    || lower.ends_with("ment")
 }
 
 pub fn process_deny_list_matches(
@@ -2096,11 +2025,6 @@ fn extend_person_name(
     }
 
     let word = read_until_whitespace(full_text, offsets, word_start)?;
-    // Form-field labels in contracts are capitalized tokens tied to ':'
-    // ("Name:", "Jméno:", "Funkce:"). Do not absorb them into the person span.
-    if word_is_form_field_label(full_text, offsets, word_start, &word)? {
-      break;
-    }
     let stripped = strip_trailing_name_punctuation(&word);
     // Dotted middle initials ("A.", "R.") are part of the name; keep
     // scanning so the surname after them is absorbed.
@@ -2125,19 +2049,6 @@ fn extend_person_name(
     end: new_end,
     text: offsets.slice(start, new_end)?,
   })
-}
-
-fn word_is_form_field_label(
-  full_text: &str,
-  offsets: &ByteOffsets<'_>,
-  word_start: u32,
-  word: &str,
-) -> Result<bool> {
-  if word.contains(':') {
-    return Ok(true);
-  }
-  let word_end = word_start.saturating_add(byte_len(word));
-  Ok(char_at(full_text, offsets, word_end)? == Some(':'))
 }
 
 fn is_middle_initial_token(word: &str) -> bool {
@@ -3361,99 +3272,6 @@ mod tests {
     .unwrap();
 
     assert!(entities.is_empty());
-  }
-
-  #[test]
-  fn deny_list_does_not_absorb_form_field_label_after_name() {
-    // Side-by-side signature grids often place the next column's label
-    // immediately after a name ("Jan Novák Jméno: …"). The label must not
-    // become part of the person span.
-    let matches = vec![
-      SearchMatch::Literal {
-        pattern: 0,
-        start: 0,
-        end: 3,
-      },
-      SearchMatch::Literal {
-        pattern: 1,
-        start: 4,
-        end: 9,
-      },
-    ];
-    let data = DenyListMatchData {
-      labels: vec![
-        vec![String::from("person")],
-        vec![String::from("person")],
-      ]
-      .into(),
-      custom_labels: vec![vec![], vec![]].into(),
-      originals: vec![String::from("Jan"), String::from("Novák")],
-      pattern_meta: DenyListPatternMetaSet::default(),
-      sources: vec![
-        vec![String::from("first-name")],
-        vec![String::from("surname")],
-      ]
-      .into(),
-      filters: Some(DenyListFilterData::default()),
-    };
-
-    let entities = process_deny_list_matches(
-      &matches,
-      PatternSlice { start: 0, end: 2 },
-      "Jan Novák Jméno: Eva",
-      &data,
-    )
-    .unwrap();
-
-    assert_eq!(entities.len(), 1);
-    assert_eq!(entities[0].label, "person");
-    assert_eq!(entities[0].text, "Jan Novák");
-  }
-
-  #[test]
-  fn person_regex_trims_capitalized_modifier_before_lowercase_prose() {
-    let text = "Mgr. Karel Digitálně podepsal";
-    let end = u32::try_from(text.find("podepsal").unwrap()).unwrap();
-    let matches = vec![SearchMatch::Literal {
-      pattern: 0,
-      start: 0,
-      end,
-    }];
-    let meta = vec![RegexMatchMeta::new("person", 0.95)];
-
-    let entities = process_regex_matches(
-      &matches,
-      PatternSlice { start: 0, end: 1 },
-      text,
-      &meta,
-    )
-    .unwrap();
-
-    assert_eq!(entities.len(), 1);
-    assert_eq!(entities[0].text, "Mgr. Karel");
-  }
-
-  #[test]
-  fn person_regex_keeps_unknown_surname_without_following_prose() {
-    let text = "Mgr. Karel Quigley";
-    let end = u32::try_from(text.len()).unwrap();
-    let matches = vec![SearchMatch::Literal {
-      pattern: 0,
-      start: 0,
-      end,
-    }];
-    let meta = vec![RegexMatchMeta::new("person", 0.95)];
-
-    let entities = process_regex_matches(
-      &matches,
-      PatternSlice { start: 0, end: 1 },
-      text,
-      &meta,
-    )
-    .unwrap();
-
-    assert_eq!(entities.len(), 1);
-    assert_eq!(entities[0].text, "Mgr. Karel Quigley");
   }
 
   #[test]

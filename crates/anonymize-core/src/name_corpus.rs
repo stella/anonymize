@@ -564,36 +564,6 @@ impl PreparedNameCorpusData {
       if next.kind == TokenKind::Other {
         break;
       }
-      // Form-field labels ("Name:", "Jméno:") are capitalized tokens tied to
-      // a following ':'; do not absorb them into a person chain.
-      if next.text.contains(':')
-        || full_text
-          .get(next.end..)
-          .and_then(|tail| tail.chars().next())
-          == Some(':')
-      {
-        break;
-      }
-      // Unknown capitalized tokens immediately followed by lowercase prose on
-      // the same line are sentence modifiers ("Digitálně podepsal",
-      // "Digitally signed"), not surnames.
-      if next.kind == TokenKind::Capitalized
-        && let Some(following) = tokens.get(index.saturating_add(1))
-      {
-        let Some(gap_after) = full_text.get(next.end..following.start) else {
-          break;
-        };
-        if !gap_after.contains('\n')
-          && following.kind == TokenKind::Other
-          && following
-            .text
-            .chars()
-            .next()
-            .is_some_and(char::is_lowercase)
-        {
-          break;
-        }
-      }
       chain.push(next);
       index = index.saturating_add(1);
     }
@@ -1181,50 +1151,6 @@ mod tests {
     assert!(
       (entities[0].score - HIGH_CONFIDENCE_NAME_SCORE).abs() < f64::EPSILON
     );
-  }
-
-  #[test]
-  fn titled_chain_does_not_absorb_capitalized_modifier_before_prose() {
-    // PDF signature stamps often interleave a title-led given name with a
-    // capitalized adverb before a lowercase verb ("Digitálně podepsal",
-    // "Digitally signed"). The adverb is Capitalized, not a surname.
-    let data = PreparedNameCorpusData::new(NameCorpusData {
-      first_names: vec![String::from("Karel")],
-      title_tokens: vec![String::from("mgr")],
-      title_abbreviations: vec![String::from("mgr")],
-      ..NameCorpusData::default()
-    });
-
-    let entities = data
-      .detect(
-        "Mgr. Karel Digitálně podepsal",
-        NameCorpusMode::Full,
-        &[],
-      )
-      .expect("full name-corpus detection should succeed");
-
-    assert_eq!(entities.len(), 1);
-    assert_eq!(entities[0].text, "Mgr. Karel");
-    assert!(!entities[0].text.contains("Digitálně"));
-  }
-
-  #[test]
-  fn titled_chain_keeps_unknown_surname_without_following_prose() {
-    // Negative control: an unknown capitalized surname at end-of-span is
-    // still absorbed when nothing lowercase follows on the same line.
-    let data = PreparedNameCorpusData::new(NameCorpusData {
-      first_names: vec![String::from("Karel")],
-      title_tokens: vec![String::from("mgr")],
-      title_abbreviations: vec![String::from("mgr")],
-      ..NameCorpusData::default()
-    });
-
-    let entities = data
-      .detect("Mgr. Karel Quigley", NameCorpusMode::Full, &[])
-      .expect("full name-corpus detection should succeed");
-
-    assert_eq!(entities.len(), 1);
-    assert_eq!(entities[0].text, "Mgr. Karel Quigley");
   }
 
   #[test]

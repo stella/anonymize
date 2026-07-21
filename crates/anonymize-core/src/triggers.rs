@@ -419,20 +419,6 @@ pub(crate) fn process_trigger_matches(
       entity_text = offsets.slice(entity_start, entity_end)?;
     }
 
-    if label == crate::labels::PERSON_LABEL
-      && let Some(trimmed_end) = trim_trailing_sentence_modifier_before_prose(
-        full_text,
-        &offsets,
-        value.start,
-        &entity_text,
-        entity_start,
-        entity_end,
-      )?
-    {
-      entity_end = trimmed_end;
-      entity_text = offsets.slice(entity_start, entity_end)?;
-    }
-
     if label.is_empty() {
       label.clone_from(&rule.label);
     }
@@ -1858,21 +1844,6 @@ fn person_name_run_end(text: &str) -> Option<usize> {
   for (index, token) in tokens.iter().enumerate() {
     let trimmed = trim_name_token(token);
     if is_person_name_run_token(trimmed, saw_token, &tokens, index) {
-      // Capitalized adverb-shaped tokens before lowercase prose are
-      // modifiers ("Digitálně podepsal"), not surnames.
-      if is_capitalized_name_token(trimmed)
-        && is_likely_sentence_modifier(trimmed)
-        && let Some(next) = tokens.get(index.saturating_add(1))
-      {
-        let next_trimmed = trim_name_token(next);
-        if next_trimmed
-          .chars()
-          .next()
-          .is_some_and(char::is_lowercase)
-        {
-          break;
-        }
-      }
       let relative = text.get(end..)?.find(token)?;
       end = end.saturating_add(relative).saturating_add(token.len());
       saw_token = true;
@@ -1881,48 +1852,6 @@ fn person_name_run_end(text: &str) -> Option<usize> {
     break;
   }
   saw_token.then_some(end)
-}
-
-/// Drop a trailing adverb-shaped token when lowercase prose follows in the
-/// full document. Needed for `n-words` honorifics that omit the following
-/// verb from the extracted value ("Mgr. Karel Digitálně" + "podepsal").
-fn trim_trailing_sentence_modifier_before_prose(
-  full_text: &str,
-  offsets: &ByteOffsets<'_>,
-  _value_start: u32,
-  entity_text: &str,
-  entity_start: u32,
-  entity_end: u32,
-) -> Result<Option<u32>> {
-  let end_byte = offsets.validate_offset(entity_end)?;
-  let after = full_text.get(end_byte..).unwrap_or_default();
-  let Some(first) = after.chars().next() else {
-    return Ok(None);
-  };
-  if first == '\n' || first == '\r' || !first.is_whitespace() {
-    return Ok(None);
-  }
-  let rest = after.trim_start_matches(|ch: char| ch == ' ' || ch == '\t');
-  if !rest.chars().next().is_some_and(char::is_lowercase) {
-    return Ok(None);
-  }
-
-  let trimmed = entity_text.trim_end();
-  let Some((prefix, last)) = trimmed.rsplit_once(char::is_whitespace) else {
-    return Ok(None);
-  };
-  if prefix.is_empty() {
-    return Ok(None);
-  }
-  let last_core = trim_name_token(last);
-  if !is_capitalized_name_token(last_core)
-    || !is_likely_sentence_modifier(last_core)
-  {
-    return Ok(None);
-  }
-  let trimmed_prefix = prefix.trim_end();
-  let new_end = entity_start.saturating_add(u32_len(trimmed_prefix));
-  Ok(Some(new_end))
 }
 
 /// End offset of a person-shaped prefix inside an organization trigger value.
@@ -2026,17 +1955,6 @@ fn has_name_after_particle(tokens: &[&str], index: usize) -> bool {
 
 fn is_capitalized_name_token(token: &str) -> bool {
   token.chars().next().is_some_and(char::is_uppercase)
-}
-
-/// Adverb-shaped capitalized tokens that precede lowercase verbs in
-/// signature stamps ("Digitálně podepsal", "Digitally signed").
-fn is_likely_sentence_modifier(token: &str) -> bool {
-  let lower = token.to_lowercase();
-  lower.ends_with("ly")
-    || lower.ends_with("ně")
-    || lower.ends_with("lich")
-    || lower.ends_with("mente")
-    || lower.ends_with("ment")
 }
 
 fn is_apostrophe_name_continuation(token: &str) -> bool {
@@ -2318,51 +2236,6 @@ mod tests {
     // leaking "ten Brink".
     assert_eq!(entities.len(), 1);
     assert_eq!(entities[0].text, "Maarten ten Brink");
-  }
-
-  #[test]
-  fn person_n_words_honorific_trims_adverb_modifier_using_full_text() {
-    // Polish-style `mgr` is an n-words(2) honorific: the extracted value is
-    // only "Karel Digitálně", while "podepsal" remains outside the value.
-    let text = "Mgr. Karel Digitálně podepsal";
-    let start = text.find("Mgr").unwrap();
-    let end = start.saturating_add("Mgr.".len());
-    let data = PreparedTriggerData::new(TriggerData {
-      rules: vec![TriggerRule {
-        trigger: String::from("mgr."),
-        label: String::from("person"),
-        strategy: TriggerStrategy::NWords { count: 2 },
-        validations: vec![TriggerValidation::StartsUppercase],
-        include_trigger: false,
-      }],
-      address_stop_keywords: Vec::new(),
-      party_position_terms: Vec::new(),
-      legal_form_suffixes: Vec::new(),
-      post_nominals: Vec::new(),
-      sentence_terminal_currency_terms: Vec::new(),
-      phone_extension_labels: Vec::new(),
-      number_markers: Vec::new(),
-      number_labels: Vec::new(),
-    })
-    .unwrap();
-
-    let entities = process_trigger_matches(
-      &[SearchMatch::Literal {
-        pattern: 0,
-        start: u32::try_from(start).unwrap(),
-        end: u32::try_from(end).unwrap(),
-      }],
-      PatternSlice { start: 0, end: 1 },
-      text,
-      &data,
-      &BTreeSet::new(),
-      None,
-    )
-    .unwrap();
-
-    assert_eq!(entities.len(), 1);
-    assert_eq!(entities[0].text, "Karel");
-    assert!(!entities[0].text.contains("Digitálně"));
   }
 
   fn organization_role_trigger_data(

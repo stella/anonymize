@@ -1,9 +1,23 @@
 #![allow(clippy::expect_used, clippy::float_cmp, clippy::unwrap_used)]
 
 use stella_anonymize_core::{
-  DetectionSource, PipelineEntity, SourceDetail, enforce_boundary_consistency,
-  merge_and_dedup, sanitize_entities,
+  BoundaryParams, DetectionSource, PersonSpanTerminators, PipelineEntity,
+  SourceDetail, enforce_boundary_consistency, merge_and_dedup,
+  sanitize_entities,
 };
+
+/// Boundary pass with no person-span terminator vocabulary. Terminator
+/// behaviour has its own tests; these cover span geometry.
+fn boundary(
+  entities: &[PipelineEntity],
+  full_text: &str,
+) -> stella_anonymize_core::Result<Vec<PipelineEntity>> {
+  enforce_boundary_consistency(BoundaryParams {
+    entities,
+    full_text,
+    person_terminators: PersonSpanTerminators::default(),
+  })
+}
 
 fn entity(
   source: DetectionSource,
@@ -686,7 +700,7 @@ fn boundary_merges_adjacent_same_label_entities() {
   let jan_end = jan_start.saturating_add(byte_len("Jan"));
   let surname_start = jan_end.saturating_add(byte_len(" "));
   let surname_end = surname_start.saturating_add(byte_len("Novák"));
-  let result = enforce_boundary_consistency(
+  let result = boundary(
     &[
       entity(DetectionSource::Ner, 0.8, jan_start, jan_end, "person"),
       entity(
@@ -714,7 +728,7 @@ fn boundary_expands_partial_words() {
   let full_text = "Kontaktujte Novák prosím.";
   let start = byte_len("Kontaktujte ");
   let partial_end = start.saturating_add(byte_len("Nová"));
-  let result = enforce_boundary_consistency(
+  let result = boundary(
     &[PipelineEntity::detected(
       start,
       partial_end,
@@ -738,7 +752,7 @@ fn boundary_expands_inside_apostrophe_names() {
   let full_text = "Kontaktujte O'Connor prosím.";
   let start = byte_len("Kontaktujte O'");
   let end = start.saturating_add(byte_len("Connor"));
-  let result = enforce_boundary_consistency(
+  let result = boundary(
     &[PipelineEntity::detected(
       start,
       end,
@@ -762,7 +776,7 @@ fn boundary_expands_across_combining_marks() {
   let full_text = "Podepsal Cafe\u{0301}.";
   let start = byte_len("Podepsal ");
   let end = start.saturating_add(byte_len("Cafe"));
-  let result = enforce_boundary_consistency(
+  let result = boundary(
     &[PipelineEntity::detected(
       start,
       end,
@@ -783,7 +797,7 @@ fn boundary_expands_across_combining_marks() {
 #[test]
 fn boundary_clamps_expansion_at_cross_label_neighbors() {
   let full_text = "JanPraha";
-  let result = enforce_boundary_consistency(
+  let result = boundary(
     &[
       entity(DetectionSource::Ner, 0.9, 0, 3, "person"),
       entity(DetectionSource::Ner, 0.8, 3, 8, "address"),
@@ -807,7 +821,7 @@ fn boundary_clamps_expansion_at_cross_label_neighbors() {
 #[test]
 fn boundary_resolves_cross_label_partial_overlaps() {
   let full_text = "JanXPraha";
-  let result = enforce_boundary_consistency(
+  let result = boundary(
     &[
       entity(DetectionSource::Ner, 0.9, 0, 3, "person"),
       entity(DetectionSource::Ner, 0.8, 4, 9, "address"),
@@ -831,7 +845,7 @@ fn boundary_resolves_cross_label_partial_overlaps() {
 #[test]
 fn boundary_removes_nested_same_label_entities() {
   let full_text = "Ing. Pavel Novák";
-  let result = enforce_boundary_consistency(
+  let result = boundary(
     &[
       PipelineEntity::detected(
         0,
@@ -861,7 +875,7 @@ fn boundary_removes_nested_same_label_entities() {
 #[test]
 fn boundary_does_not_merge_legal_form_orgs_across_comma() {
   let full_text = "Twitter, Inc., X Corp.";
-  let result = enforce_boundary_consistency(
+  let result = boundary(
     &[
       PipelineEntity::detected(
         0,
@@ -891,4 +905,141 @@ fn boundary_does_not_merge_legal_form_orgs_across_comma() {
       .collect::<Vec<_>>(),
     vec!["Twitter, Inc.", "X Corp."]
   );
+}
+
+fn boundary_with_terminators(
+  entities: &[PipelineEntity],
+  full_text: &str,
+  stamps: &[String],
+  labels: &[String],
+) -> Vec<PipelineEntity> {
+  enforce_boundary_consistency(BoundaryParams {
+    entities,
+    full_text,
+    person_terminators: PersonSpanTerminators {
+      stamp_phrases: stamps,
+      field_labels: labels,
+    },
+  })
+  .expect("boundary pass")
+}
+
+fn span_at(full_text: &str, text: &str, label: &str) -> PipelineEntity {
+  let start = byte_len(full_text.split(text).next().expect("prefix"));
+  PipelineEntity::detected(
+    start,
+    start.saturating_add(byte_len(text)),
+    label,
+    text,
+    0.8,
+    DetectionSource::DenyList,
+  )
+}
+
+fn person_span(full_text: &str, text: &str) -> PipelineEntity {
+  span_at(full_text, text, "person")
+}
+
+#[test]
+fn person_span_stops_at_signature_stamp_phrase() {
+  let stamps = vec![String::from("digitálně podepsal")];
+  let full_text = "Mgr. Karel Digitálně podepsal dne 1.1.2026";
+  // The detector stops at the name, so the span holds only the first word
+  // of the stamp; the phrase is matched against the full text past the end.
+  let result = boundary_with_terminators(
+    &[person_span(full_text, "Mgr. Karel Digitálně")],
+    full_text,
+    &stamps,
+    &[],
+  );
+
+  assert_eq!(result.len(), 1);
+  assert_eq!(result.first().expect("person").text, "Mgr. Karel");
+}
+
+#[test]
+fn person_span_stops_at_colon_tied_field_label() {
+  let labels = vec![String::from("jméno")];
+  let full_text = "Jan Novák Jméno: Eva";
+  let result = boundary_with_terminators(
+    &[person_span(full_text, "Jan Novák Jméno")],
+    full_text,
+    &[],
+    &labels,
+  );
+
+  assert_eq!(result.len(), 1);
+  assert_eq!(result.first().expect("person").text, "Jan Novák");
+}
+
+#[test]
+fn unknown_surname_in_running_prose_survives_the_boundary_pass() {
+  // Regression guard. A shape heuristic ("capitalized token before lowercase
+  // prose is a modifier") drops real surnames here, which is an
+  // under-redaction. Only exact terminator vocabulary may truncate.
+  let stamps = vec![String::from("digitálně podepsal")];
+  let labels = vec![String::from("jméno")];
+  for full_text in [
+    "Mgr. Karel Quigley podepsal smlouvu",
+    "Mgr. Karel Ehrlich podepsal smlouvu",
+    "Mgr. Karel Clemente souhlasí s podmínkami",
+    "Mgr. Karel Connolly je zástupce společnosti",
+  ] {
+    let name = full_text.split(" podepsal").next().unwrap_or(full_text);
+    let name = name.split(" souhlasí").next().unwrap_or(name);
+    let name = name.split(" je ").next().unwrap_or(name);
+    let result = boundary_with_terminators(
+      &[person_span(full_text, name)],
+      full_text,
+      &stamps,
+      &labels,
+    );
+    assert_eq!(
+      result.first().expect("person").text,
+      name,
+      "surname must survive in: {full_text}"
+    );
+  }
+}
+
+#[test]
+fn field_label_word_without_colon_stays_in_the_span() {
+  // "Name" is field vocabulary, but an untied occurrence is an ordinary
+  // token; only the ':' tie makes it the next cell of a form.
+  let labels = vec![String::from("name")];
+  let full_text = "Jane Name lives here";
+  let result = boundary_with_terminators(
+    &[person_span(full_text, "Jane Name")],
+    full_text,
+    &[],
+    &labels,
+  );
+
+  assert_eq!(result.first().expect("person").text, "Jane Name");
+}
+
+#[test]
+fn terminator_at_span_start_leaves_the_span_untouched() {
+  // Truncating to empty would delete the entity; over-redaction is the safe
+  // direction, so the span is kept whole instead.
+  let labels = vec![String::from("jméno")];
+  let full_text = "Jméno: Eva";
+  let result = boundary_with_terminators(
+    &[person_span(full_text, "Jméno")],
+    full_text,
+    &[],
+    &labels,
+  );
+
+  assert_eq!(result.first().expect("person").text, "Jméno");
+}
+
+#[test]
+fn non_person_labels_are_not_truncated_by_terminators() {
+  let labels = vec![String::from("name")];
+  let full_text = "Acme Name: x";
+  let org = span_at(full_text, "Acme Name", "organization");
+  let result = boundary_with_terminators(&[org], full_text, &[], &labels);
+
+  assert_eq!(result.first().expect("org").text, "Acme Name");
 }
