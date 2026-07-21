@@ -10,8 +10,7 @@ def convert_external_detection_batch(
     document: BytesLike,
     batch_json: str,
 ) -> str: ...
-
-def anonymize_pdf_raster_json(
+def rewrite_pdf_raster_from_detections_json(
     document: BytesLike,
     request_json: str,
     page_pixels: Sequence[BytesLike],

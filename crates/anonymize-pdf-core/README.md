@@ -32,14 +32,17 @@ completely observed, and OCR completely covered the rendered page pixels. The
 pixel requirement applies even when the PDF has no image objects because
 visible text can be encoded as vector outlines.
 
-Raster anonymization accepts SHA-256-bound, provider-asserted opaque RGB8 pages
-from an explicit
-renderer/OCR provider. It validates every source page and its displayed
-geometry, overwrites requested pixel regions, and constructs a fresh PDF whose
-only page content is the sanitized image. It reparses the output, checks its
-risk inventory and image-only object count, and verifies the decompressed image
-digests. No source object, metadata, text layer, attachment, signature, or
-incremental revision is copied. Encrypted PDFs are rejected.
+The low-level raster rewrite accepts SHA-256-bound, provider-asserted opaque
+RGB8 pages, complete observations, and detection spans. It validates every
+source page and its displayed geometry, requires every selected non-whitespace
+UTF-16 unit to map to observed glyph geometry, destructively overwrites those
+pixels, and constructs a fresh PDF whose only page content is the sanitized
+image. It reparses the output, checks an exact object/resource/operator
+allowlist, and verifies the decompressed image digests. No source object,
+metadata, text layer, attachment, signature, or incremental revision is copied.
+Encrypted PDFs are rejected. Detector assembly stays in the Node/Python SDKs;
+this core rewrite function must not be presented as detection or as a PII-clean
+guarantee.
 
 Complete OCR coverage means the provider submitted every rendered page to its
 OCR engine. It cannot prove OCR or detector recall. The provider boundary and

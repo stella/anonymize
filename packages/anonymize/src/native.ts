@@ -250,7 +250,7 @@ export type NativeAnonymizeBinding = {
   ) => NativeCallerDetection[];
   extractDocxTextJson?: (document: Uint8Array) => string;
   inspectPdfJson?: (document: Uint8Array, observationsJson?: string) => string;
-  anonymizePdfRasterJson?: (
+  rewritePdfRasterFromDetectionsJson?: (
     document: Uint8Array,
     requestJson: string,
     pagePixels: readonly Uint8Array[],

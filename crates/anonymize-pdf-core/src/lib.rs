@@ -11,10 +11,12 @@ use thiserror::Error;
 mod raster;
 
 pub use raster::{
-  PDF_RASTER_CONTRACT_VERSION, PDF_RASTER_MAX_OUTPUT_BYTES,
+  PDF_RASTER_CONTRACT_VERSION, PDF_RASTER_MAX_DETECTIONS,
+  PDF_RASTER_MAX_GLYPHS, PDF_RASTER_MAX_OUTPUT_BYTES,
   PDF_RASTER_MAX_PAGE_BYTES, PDF_RASTER_MAX_TOTAL_BYTES,
-  PdfRasterAnonymization, PdfRasterCertificate, PdfRasterError,
-  PdfRasterErrorCode, PdfRasterPage, PdfRasterProvider, anonymize_pdf_raster,
+  PDF_RASTER_REQUEST_JSON_MAX_BYTES, PdfRasterDetection, PdfRasterError,
+  PdfRasterErrorCode, PdfRasterPage, PdfRasterProvider, PdfRasterRewrite,
+  PdfRasterRewriteCertificate, rewrite_pdf_raster_from_detections,
 };
 
 pub const PDF_INSPECTION_CONTRACT_VERSION: u8 = 1;

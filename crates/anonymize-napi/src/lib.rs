@@ -44,10 +44,11 @@ use stella_anonymize_docx_core::{
   rewrite_docx_text as rewrite_docx_text_core,
 };
 use stella_anonymize_pdf_core::{
-  PdfInspectionErrorCode, PdfPageObservation, PdfRasterAnonymization,
-  PdfRasterErrorCode, anonymize_pdf_raster as anonymize_pdf_raster_core,
+  PDF_RASTER_REQUEST_JSON_MAX_BYTES, PdfInspectionErrorCode,
+  PdfPageObservation, PdfRasterErrorCode, PdfRasterRewrite,
   inspect_pdf as inspect_pdf_core,
   inspect_pdf_with_observations as inspect_pdf_with_observations_core,
+  rewrite_pdf_raster_from_detections as rewrite_pdf_raster_from_detections_core,
   validate_pdf_observations_json_byte_length,
 };
 
@@ -92,30 +93,30 @@ pub struct JsPdfRasterResult {
 
 #[napi]
 #[allow(clippy::needless_pass_by_value)]
-pub fn anonymize_pdf_raster_json(
+pub fn rewrite_pdf_raster_from_detections_json(
   document: BufferSlice<'_>,
   request_json: String,
   page_pixels: Vec<Uint8Array>,
 ) -> Result<JsPdfRasterResult> {
-  let request = serde_json::from_str::<PdfRasterAnonymization>(&request_json)
+  if request_json.len() > PDF_RASTER_REQUEST_JSON_MAX_BYTES {
+    return Err(Error::from_reason(
+      "limit-exceeded: PDF raster request JSON exceeds its byte limit",
+    ));
+  }
+  let request = serde_json::from_str::<PdfRasterRewrite>(&request_json)
     .map_err(|parse_error| {
-    Error::from_reason(format!(
-      "invalid-contract: PDF raster contract is invalid: {parse_error}"
-    ))
-  })?;
-  let pixels = page_pixels
-    .into_iter()
-    .map(|page| page.to_vec())
-    .collect::<Vec<_>>();
-  let (output, certificate) = anonymize_pdf_raster_core(
-    &document, &request, &pixels,
-  )
-  .map_err(|raster_error| {
-    Error::from_reason(format!(
-      "{}: {raster_error}",
-      pdf_raster_code(raster_error.code())
-    ))
-  })?;
+      Error::from_reason(format!(
+        "invalid-contract: PDF raster contract is invalid: {parse_error}"
+      ))
+    })?;
+  let (output, certificate) =
+    rewrite_pdf_raster_from_detections_core(&document, &request, &page_pixels)
+      .map_err(|raster_error| {
+        Error::from_reason(format!(
+          "{}: {raster_error}",
+          pdf_raster_code(raster_error.code())
+        ))
+      })?;
   let certificate_json =
     serde_json::to_string(&certificate).map_err(|serialize_error| {
       Error::from_reason(serialize_error.to_string())

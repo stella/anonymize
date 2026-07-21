@@ -47,10 +47,11 @@ use stella_anonymize_docx_core::{
   rewrite_docx_text as rewrite_docx_text_core,
 };
 use stella_anonymize_pdf_core::{
-  PdfInspectionErrorCode, PdfPageObservation, PdfRasterAnonymization,
-  PdfRasterErrorCode, anonymize_pdf_raster as anonymize_pdf_raster_core,
+  PDF_RASTER_REQUEST_JSON_MAX_BYTES, PdfInspectionErrorCode,
+  PdfPageObservation, PdfRasterErrorCode, PdfRasterRewrite,
   inspect_pdf as inspect_pdf_core,
   inspect_pdf_with_observations as inspect_pdf_with_observations_core,
+  rewrite_pdf_raster_from_detections as rewrite_pdf_raster_from_detections_core,
   validate_pdf_observations_json_byte_length,
 };
 
@@ -1489,27 +1490,35 @@ const fn pdf_raster_code(code: PdfRasterErrorCode) -> &'static str {
 
 #[pyfunction]
 #[allow(clippy::needless_pass_by_value)]
-fn anonymize_pdf_raster_json<'py>(
+fn rewrite_pdf_raster_from_detections_json<'py>(
   py: Python<'py>,
   document: &[u8],
   request_json: &str,
-  page_pixels: Vec<Vec<u8>>,
+  page_pixels: Vec<Bound<'py, PyBytes>>,
 ) -> PyResult<(Bound<'py, PyBytes>, String)> {
-  let request = serde_json::from_str::<PdfRasterAnonymization>(request_json)
+  if request_json.len() > PDF_RASTER_REQUEST_JSON_MAX_BYTES {
+    return Err(PyValueError::new_err(
+      "limit-exceeded: PDF raster request JSON exceeds its byte limit",
+    ));
+  }
+  let request = serde_json::from_str::<PdfRasterRewrite>(request_json)
     .map_err(|parse_error| {
       PyValueError::new_err(format!(
         "invalid-contract: PDF raster contract is invalid: {parse_error}"
       ))
     })?;
+  let page_pixels = page_pixels
+    .iter()
+    .map(|page| page.as_bytes())
+    .collect::<Vec<_>>();
   let (output, certificate) =
-    anonymize_pdf_raster_core(document, &request, &page_pixels).map_err(
-      |raster_error| {
-        PyValueError::new_err(format!(
-          "{}: {raster_error}",
-          pdf_raster_code(raster_error.code())
-        ))
-      },
-    )?;
+    rewrite_pdf_raster_from_detections_core(document, &request, &page_pixels)
+      .map_err(|raster_error| {
+      PyValueError::new_err(format!(
+        "{}: {raster_error}",
+        pdf_raster_code(raster_error.code())
+      ))
+    })?;
   let certificate_json = serde_json::to_string(&certificate)
     .map_err(|error| to_py_serde_error(&error))?;
   Ok((PyBytes::new(py, &output), certificate_json))
@@ -1673,7 +1682,10 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
   module.add_function(wrap_pyfunction!(native_package_version, module)?)?;
   module.add_function(wrap_pyfunction!(extract_docx_text_json, module)?)?;
   module.add_function(wrap_pyfunction!(inspect_pdf_json, module)?)?;
-  module.add_function(wrap_pyfunction!(anonymize_pdf_raster_json, module)?)?;
+  module.add_function(wrap_pyfunction!(
+    rewrite_pdf_raster_from_detections_json,
+    module
+  )?)?;
   module.add_function(wrap_pyfunction!(rewrite_docx_text_native, module)?)?;
   module.add_function(wrap_pyfunction!(plan_docx_restoration_json, module)?)?;
   Ok(())

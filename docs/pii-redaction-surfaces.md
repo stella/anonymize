@@ -51,13 +51,15 @@ PDF. In particular, drawing an opaque rectangle over original page content is
 not redaction because the covered text or image can remain in the file.
 
 The provider-neutral raster surface accepts complete rendered/OCR page
-assertions and opaque RGB8 pixels, destructively fills requested regions, and
-writes a fresh image-only PDF without retaining source objects. It is currently
-an SDK contract: no renderer/OCR process adapter, CLI command, or MCP tool is
-bundled. Complete OCR coverage asserts that every page was processed, not that
-OCR or PII detection has perfect recall. Raster output deliberately removes
-searchability, accessibility, forms, links, attachments, metadata, and digital
-signatures.
+observations and opaque RGB8 pixels, runs Stella detection, merges optional
+digest-bound external detections, requires every selected span to map to glyph
+geometry, destructively fills those pixels, and writes a fresh image-only PDF
+without retaining source objects. It is currently an SDK contract: no
+renderer/OCR process adapter, CLI command, or MCP tool is bundled. Its
+certificate explicitly sets `piiCleanGuaranteed` to false because complete OCR
+coverage asserts that every page was processed, not that OCR or PII detection
+has perfect recall. Raster output deliberately removes searchability,
+accessibility, forms, links, attachments, metadata, and digital signatures.
 
 The repository does not yet provide PDF structure-preserving anonymization or
 pipelines for XLSX, PPTX, HTML, Markdown, CSV, email containers, images/OCR,

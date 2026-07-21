@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from os import PathLike
-from typing import Any, Literal, TypeAlias, TypedDict
+from typing import Any, Literal, NotRequired, TypeAlias, TypedDict
 
 from ._native import (
     PreparedRedactionSession as NativePreparedRedactionSession,
@@ -130,6 +130,7 @@ class DocxRestorationError(ValueError):
     code: str
 
 def extract_docx_text(document: BytesLike) -> dict[str, Any]: ...
+
 PdfInspectionErrorCode: TypeAlias = Literal[
     "document-limit-exceeded",
     "invalid-document",
@@ -142,6 +143,7 @@ class PdfInspectionError(ValueError):
     code: PdfInspectionErrorCode
 
 PdfRasterErrorCode: TypeAlias = Literal[
+    "detection-failed",
     "invalid-contract",
     "limit-exceeded",
     "source-rejected",
@@ -240,12 +242,35 @@ PDF_RASTER_CONTRACT_VERSION: int
 PDF_RASTER_MAX_PAGE_BYTES: int
 PDF_RASTER_MAX_TOTAL_BYTES: int
 PDF_RASTER_MAX_OUTPUT_BYTES: int
+PDF_RASTER_REQUEST_JSON_MAX_BYTES: int
+
+class PdfRasterProvider(TypedDict):
+    providerId: str
+    rendererName: str
+    rendererVersion: str
+    ocrName: str
+    ocrVersion: str
+
+class PdfRasterObservedPage(TypedDict):
+    observation: PdfPageObservation
+    widthPixels: int
+    heightPixels: int
+    pixels: BytesLike
+    externalDetectionBatch: NotRequired[ExternalDetectionBatch | str]
 
 def inspect_pdf(
     document: BytesLike,
     page_observations: Sequence[PdfPageObservation] | None = None,
 ) -> PdfInspection: ...
 def anonymize_pdf_raster(
+    document: BytesLike,
+    anonymizer: PreparedAnonymizer,
+    provider: PdfRasterProvider,
+    pages: Sequence[PdfRasterObservedPage],
+    *,
+    fill_rgb: Sequence[int] = ...,
+) -> tuple[bytes, dict[str, Any]]: ...
+def rewrite_pdf_raster_from_detections(
     document: BytesLike,
     request: Mapping[str, Any],
     page_pixels: Sequence[BytesLike],

@@ -49,11 +49,14 @@ appropriate for untrusted files.
 ## Destructive raster anonymization
 
 `anonymizePdfRaster` accepts pages produced by an explicit renderer/OCR
-provider and creates a brand-new image-only PDF. It requires one opaque,
-row-packed RGB8 buffer for every source page, SHA-256 binds the source and each
-page, requires complete rendering and OCR assertions, fills the requested
-regions in the pixel buffers, and verifies both the newly written PDF and its
-decompressed image pixels. Encrypted inputs are rejected.
+provider and creates a brand-new image-only PDF. It requires a prepared Stella
+pipeline, runs native detection over each page's observed text, merges an
+optional digest-bound `ExternalDetectionBatch`, and fails if any selected
+non-whitespace UTF-16 span is not completely mapped to observed glyph geometry.
+It requires one opaque, row-packed RGB8 buffer for every source page, SHA-256
+binds the source and each page, requires complete rendering and OCR assertions,
+destructively fills the mapped pixels, and verifies both the newly written PDF
+graph and its decompressed image pixels. Encrypted inputs are rejected.
 
 The output never reuses source PDF objects, streams, text layers, metadata,
 forms, annotations, attachments, actions, signatures, optional content, or
@@ -65,6 +68,13 @@ and other interactive behavior.
 The package does not bundle or silently select a renderer or OCR engine. A
 provider's `complete` OCR assertion means every rendered page was submitted
 to that OCR engine; it is not a claim that OCR or PII detection has perfect
-recall. Browser rendering is not part of this surface. Raster anonymization is
-a Node and Python document-profile capability; PDF inspection remains available
-through the byte-oriented core runtimes.
+recall. The returned certificate always says `piiCleanGuaranteed: false`:
+verification proves a fresh image-only structure and the requested destructive
+pixel rewrite, not perfect OCR or detector recall. Browser rendering is not
+part of this surface. Raster anonymization is a Node and Python
+document-profile capability; PDF inspection remains available through the
+byte-oriented core runtimes.
+
+`rewritePdfRasterFromDetections` is the advanced rewrite-only seam for trusted
+adapters that already ran detection. Its name and certificate deliberately do
+not imply detection or PII cleanliness.

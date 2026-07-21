@@ -1,10 +1,10 @@
-import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { describe, expect, test } from "bun:test";
 
 import { anonymizePdfRaster, inspectPdf, PdfRasterError } from "../index";
+import type { PdfPageObservation } from "../types";
 
 const source = readFileSync(
   join(
@@ -12,48 +12,74 @@ const source = readFileSync(
     "../../../../crates/anonymize-pdf-core/tests/fixtures/minimal-text.pdf",
   ),
 );
-const sha256 = (value: Uint8Array): string =>
-  createHash("sha256").update(value).digest("hex");
-
 const pixels = new Uint8Array(17 * 22 * 3).fill(255);
-const request = {
-  contractVersion: 1,
-  sourceSha256: sha256(source),
-  provider: {
-    providerId: "synthetic-node-test",
-    rendererName: "synthetic-renderer",
-    rendererVersion: "1.0.0",
-    ocrName: "synthetic-ocr",
-    ocrVersion: "1.0.0",
-  },
-  fillRgb: [0, 0, 0] as const,
-  pages: [
+const observation: PdfPageObservation = {
+  pageIndex: 0,
+  widthPoints: 612,
+  heightPoints: 792,
+  text: "Alice",
+  glyphs: [
     {
-      pageIndex: 0,
-      widthPoints: 612,
-      heightPoints: 792,
-      widthPixels: 17,
-      heightPixels: 22,
-      pixelSha256: sha256(pixels),
-      rendering: "complete" as const,
-      ocr: "complete" as const,
-      redactions: [{ left: 72, bottom: 396, right: 216, top: 540 }],
+      start: 0,
+      end: 5,
+      bounds: { left: 72, bottom: 396, right: 216, top: 540 },
+      source: "ocr",
     },
   ],
-} as const;
+  rendered: true,
+  textLayer: "absent",
+  ocr: "complete",
+  imageCount: 0,
+};
+const provider = {
+  providerId: "synthetic-node-test",
+  rendererName: "synthetic-renderer",
+  rendererVersion: "1.0.0",
+  ocrName: "synthetic-ocr",
+  ocrVersion: "1.0.0",
+};
+
+const detectorResult = (start?: number, end?: number) => ({
+  resolvedEntities:
+    start === undefined || end === undefined
+      ? []
+      : [
+          {
+            start,
+            end,
+            label: "PERSON",
+            text: "Alice",
+            score: 1,
+            source: "test",
+          },
+        ],
+  redaction: {
+    redactedText: "[PERSON]",
+    redactionMap: new Map<string, string>(),
+    operatorMap: new Map(),
+    entityCount: start === undefined ? 0 : 1,
+  },
+});
+const pipeline = (start = 0, end = 5) => ({
+  redactText: () => detectorResult(start, end),
+  redactTextWithCallerDetections: () => detectorResult(start, end),
+});
 
 describe("PDF destructive raster anonymization", () => {
-  test("creates a verified fresh image-only PDF", () => {
+  test("detects text and creates a verified fresh image-only PDF", () => {
     const result = anonymizePdfRaster({
       document: source,
-      request,
-      pagePixels: [pixels],
+      pipeline: pipeline(),
+      provider,
+      pages: [{ observation, widthPixels: 17, heightPixels: 22, pixels }],
     });
     expect(result.certificate).toMatchObject({
       contractVersion: 1,
       pageCount: 1,
-      redactionCount: 1,
-      outputVerified: true,
+      detectionCount: 1,
+      mappedRegionCount: 1,
+      structurePixelRewriteVerified: true,
+      piiCleanGuaranteed: false,
     });
     expect(Buffer.from(result.document).includes("Public fixture")).toBeFalse();
     expect(inspectPdf(result.document).risks).toMatchObject({
@@ -65,16 +91,86 @@ describe("PDF destructive raster anonymization", () => {
     });
   });
 
-  test("rejects pixel buffers that do not match the asserted digest", () => {
+  test("fails closed when a selected span lacks complete glyph geometry", () => {
     expect(() =>
       anonymizePdfRaster({
         document: source,
-        request: {
-          ...request,
-          pages: [{ ...request.pages[0], pixelSha256: "00".repeat(32) }],
-        },
-        pagePixels: [pixels],
+        pipeline: pipeline(0, 6),
+        provider,
+        pages: [{ observation, widthPixels: 17, heightPixels: 22, pixels }],
       }),
     ).toThrow(PdfRasterError);
+  });
+
+  test("never claims that an empty detector result proves the PDF PII-free", () => {
+    const emptyPipeline = {
+      redactText: () => detectorResult(),
+      redactTextWithCallerDetections: () => detectorResult(),
+    };
+    const result = anonymizePdfRaster({
+      document: source,
+      pipeline: emptyPipeline,
+      provider,
+      pages: [{ observation, widthPixels: 17, heightPixels: 22, pixels }],
+    });
+    expect(result.certificate).toMatchObject({
+      detectionCount: 0,
+      mappedRegionCount: 0,
+      structurePixelRewriteVerified: true,
+      piiCleanGuaranteed: false,
+    });
+  });
+
+  test("reports detector failures with a stable non-leaking code", () => {
+    const failingPipeline = {
+      redactText: () => {
+        throw new Error("sensitive provider detail");
+      },
+      redactTextWithCallerDetections: () => detectorResult(),
+    };
+
+    try {
+      anonymizePdfRaster({
+        document: source,
+        pipeline: failingPipeline,
+        provider,
+        pages: [{ observation, widthPixels: 17, heightPixels: 22, pixels }],
+      });
+      throw new Error("expected detector failure");
+    } catch (error) {
+      expect(error).toBeInstanceOf(PdfRasterError);
+      expect((error as PdfRasterError).code).toBe("detection-failed");
+      expect((error as Error).message).toBe(
+        "detection-failed: PDF raster detection failed",
+      );
+    }
+  });
+
+  test("rejects invalid pixel buffers before invoking detection", () => {
+    let calls = 0;
+    const countingPipeline = {
+      redactText: () => {
+        calls += 1;
+        return detectorResult();
+      },
+      redactTextWithCallerDetections: () => detectorResult(),
+    };
+
+    expect(() =>
+      anonymizePdfRaster({
+        document: source,
+        pipeline: countingPipeline,
+        provider,
+        pages: [
+          {
+            observation,
+            widthPixels: 17,
+            heightPixels: 22,
+            pixels: pixels.subarray(1),
+          },
+        ],
+      }),
+    ).toThrow(PdfRasterError);
+    expect(calls).toBe(0);
   });
 });

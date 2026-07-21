@@ -83,19 +83,17 @@ export type PdfRasterProvider = {
 };
 
 export type PdfRasterPage = {
-  pageIndex: number;
-  widthPoints: number;
-  heightPoints: number;
+  observation: PdfPageObservation;
   widthPixels: number;
   heightPixels: number;
   /** Lowercase SHA-256 of this page's exact opaque, row-packed RGB8 bytes. */
   pixelSha256: string;
-  rendering: "complete";
-  ocr: "complete";
-  redactions: readonly PdfRect[];
+  detections: readonly PdfRasterDetection[];
 };
 
-export type PdfRasterAnonymization = {
+export type PdfRasterDetection = { start: number; end: number };
+
+export type PdfRasterRewrite = {
   contractVersion: 1;
   /** Lowercase SHA-256 of the exact source PDF bytes supplied to the call. */
   sourceSha256: string;
@@ -104,19 +102,23 @@ export type PdfRasterAnonymization = {
   pages: readonly PdfRasterPage[];
 };
 
-export type PdfRasterCertificate = {
+export type PdfRasterRewriteCertificate = {
   contractVersion: 1;
   pageCount: number;
-  redactionCount: number;
   sourceSha256: string;
   outputSha256: string;
   provider: PdfRasterProvider;
-  outputVerified: true;
+  detectionCount: number;
+  mappedRegionCount: number;
+  structurePixelRewriteVerified: true;
+  providerAssertedCoverage: "complete-rendering-and-ocr-observation";
+  piiCleanGuaranteed: false;
+  limitation: string;
 };
 
-export type PdfRasterAnonymizationResult = {
+export type PdfRasterRewriteResult = {
   document: Uint8Array;
-  certificate: PdfRasterCertificate;
+  certificate: PdfRasterRewriteCertificate;
 };
 
 export const PDF_INSPECTION_ERROR_CODES = {
@@ -131,6 +133,7 @@ export type PdfInspectionErrorCode =
   (typeof PDF_INSPECTION_ERROR_CODES)[keyof typeof PDF_INSPECTION_ERROR_CODES];
 
 export const PDF_RASTER_ERROR_CODES = {
+  detectionFailed: "detection-failed",
   invalidContract: "invalid-contract",
   limitExceeded: "limit-exceeded",
   sourceRejected: "source-rejected",
