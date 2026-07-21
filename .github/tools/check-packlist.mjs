@@ -18,6 +18,7 @@ const PACKAGES = [
       "native-pipeline.en.stlanonpkg",
       "README.md",
       "LICENSE",
+      "ATTRIBUTION.md",
       "package.json",
     ],
     forbidden: ["stella_anonymize_napi.node"],
@@ -48,6 +49,17 @@ const PACKAGES = [
   },
   {
     dir: "packages/document-docx",
+    expected: [
+      "dist/index.d.mts",
+      "dist/index.mjs",
+      "README.md",
+      "LICENSE",
+      "ATTRIBUTION.md",
+      "package.json",
+    ],
+  },
+  {
+    dir: "packages/document-pdf",
     expected: [
       "dist/index.d.mts",
       "dist/index.mjs",

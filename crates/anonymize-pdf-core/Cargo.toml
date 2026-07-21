@@ -1,0 +1,20 @@
+[package]
+name = "stella-anonymize-pdf-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+description = "Bounded PDF coverage inspection contracts for stella anonymization"
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+
+[dependencies]
+lopdf = { version = "0.44", default-features = false }
+serde = { version = "1", features = ["derive"] }
+thiserror = "2"
+
+[dev-dependencies]
+serde_json = "1"
+
+[lints]
+workspace = true

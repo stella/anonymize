@@ -106,6 +106,16 @@ type PythonParityOutput = {
   available_languages: string[];
   version: string;
   module_version: string;
+  pdf_constants: {
+    loaded_payload_max_bytes: number;
+    max_observed_text_utf8_bytes: number;
+    observations_json_max_bytes: number;
+    page_dimension_tolerance_points: number;
+    stream_decompressed_max_bytes: number;
+  };
+  pdf_inspection: unknown;
+  pdf_observed_inspection: unknown;
+  pdf_invalid_error: { code: string; message: string };
   caller_result: {
     redacted_text: string;
     start: number;
@@ -204,6 +214,31 @@ sys.path.insert(0, str(module_root))
 
 import stella_anonymize as anonymize
 
+pdf_inspection = anonymize.inspect_pdf(base64.b64decode(payload["pdf_base64"]))
+pdf_observation = [{
+    "pageIndex": 0,
+    "widthPoints": 612.0,
+    "heightPoints": 792.0,
+    "text": "Public fixture",
+    "glyphs": [{
+        "start": 0, "end": 14,
+        "bounds": {"left": 72.0, "bottom": 700.0, "right": 108.0, "top": 712.0},
+        "source": "embedded-text",
+    }],
+    "rendered": True,
+    "textLayer": "complete",
+    "ocr": "complete",
+    "imageCount": 0,
+}]
+pdf_observed_inspection = anonymize.inspect_pdf(
+    base64.b64decode(payload["pdf_base64"]), pdf_observation
+)
+try:
+    anonymize.inspect_pdf(b"\\x00")
+    raise AssertionError("invalid PDF bytes were accepted")
+except anonymize.PdfInspectionError as error:
+    pdf_invalid_error = {"code": error.code, "message": str(error)}
+
 prepared_anonymizer = getattr(anonymize, "PreparedAnonymizer", None)
 prepared_session = getattr(anonymize, "PreparedRedactionSession", None)
 surface_probes = {
@@ -239,6 +274,7 @@ surface_probes = {
     "document.docx.rewrite": hasattr(anonymize, "rewrite_docx_text"),
     "document.docx.anonymize": hasattr(anonymize, "anonymize_docx"),
     "document.docx.restore": hasattr(anonymize, "restore_docx_text"),
+    "document.pdf.inspect": hasattr(anonymize, "inspect_pdf"),
 }
 
 caller_result = json.loads(
@@ -589,6 +625,16 @@ print(
             ),
             "version": anonymize.native_package_version(),
             "module_version": anonymize.__version__,
+            "pdf_constants": {
+                "loaded_payload_max_bytes": anonymize.PDF_LOADED_PAYLOAD_MAX_BYTES,
+                "max_observed_text_utf8_bytes": anonymize.PDF_MAX_OBSERVED_TEXT_UTF8_BYTES,
+                "observations_json_max_bytes": anonymize.PDF_OBSERVATIONS_JSON_MAX_BYTES,
+                "page_dimension_tolerance_points": anonymize.PDF_PAGE_DIMENSION_TOLERANCE_POINTS,
+                "stream_decompressed_max_bytes": anonymize.PDF_STREAM_DECOMPRESSED_MAX_BYTES,
+            },
+            "pdf_inspection": pdf_inspection,
+            "pdf_observed_inspection": pdf_observed_inspection,
+            "pdf_invalid_error": pdf_invalid_error,
             "caller_result": {
                 "redacted_text": caller_result["redaction"]["redacted_text"],
                 "start": caller_result["resolved_entities"][0]["start"],
@@ -756,6 +802,10 @@ const getPythonModule = (): string => {
     join(PYTHON_SOURCE_DIR, "stella_anonymize", "docx.py"),
     join(packageDir, "docx.py"),
   );
+  copyFileSync(
+    join(PYTHON_SOURCE_DIR, "stella_anonymize", "pdf.py"),
+    join(packageDir, "pdf.py"),
+  );
   cpSync(
     join(PYTHON_SOURCE_DIR, "stella_anonymize", "native_packages"),
     join(packageDir, "native_packages"),
@@ -789,6 +839,18 @@ const runPythonParity = (cases: ParityCase[]): PythonParityOutput => {
       cases: cases.map(({ text, language }) => ({ text, language })),
       docx_vectors: DOCX_RUNTIME_PARITY_FIXTURE,
       external_detection_batch: EXTERNAL_DETECTION_FIXTURE,
+      pdf_base64: Buffer.from(
+        readFileSync(
+          join(
+            ROOT_DIR,
+            "crates",
+            "anonymize-pdf-core",
+            "tests",
+            "fixtures",
+            "minimal-text.pdf",
+          ),
+        ),
+      ).toString("base64"),
     }),
   );
   try {
@@ -831,6 +893,68 @@ describe("python binding parity", () => {
       expect(python.surface_ids).toEqual(expected);
     },
   );
+
+  pythonParityTest("PDF inspection behavior and limits match Node", () => {
+    const python = runPythonParity([]);
+    const fixture = readFileSync(
+      join(
+        ROOT_DIR,
+        "crates",
+        "anonymize-pdf-core",
+        "tests",
+        "fixtures",
+        "minimal-text.pdf",
+      ),
+    );
+    const node = JSON.parse(
+      loadNativeAnonymizeBinding().inspectPdfJson?.(fixture) ?? "null",
+    ) as unknown;
+    expect(python.pdf_inspection).toEqual(node);
+    const observations = [
+      {
+        pageIndex: 0,
+        widthPoints: 612,
+        heightPoints: 792,
+        text: "Public fixture",
+        glyphs: [
+          {
+            start: 0,
+            end: 14,
+            bounds: { left: 72, bottom: 700, right: 108, top: 712 },
+            source: "embedded-text",
+          },
+        ],
+        rendered: true,
+        textLayer: "complete",
+        ocr: "complete",
+        imageCount: 0,
+      },
+    ];
+    const binding = loadNativeAnonymizeBinding();
+    expect(python.pdf_observed_inspection).toEqual(
+      JSON.parse(
+        binding.inspectPdfJson?.(fixture, JSON.stringify(observations)) ??
+          "null",
+      ),
+    );
+    let nodeMessage = "";
+    try {
+      binding.inspectPdfJson?.(new Uint8Array([0]));
+    } catch (error) {
+      nodeMessage = error instanceof Error ? error.message : String(error);
+    }
+    expect(python.pdf_invalid_error).toEqual({
+      code: nodeMessage.split(":", 1)[0],
+      message: nodeMessage,
+    });
+    expect(python.pdf_constants).toEqual({
+      loaded_payload_max_bytes: 128 * 1024 * 1024,
+      max_observed_text_utf8_bytes: 64 * 1024 * 1024,
+      observations_json_max_bytes: 64 * 1024 * 1024,
+      page_dimension_tolerance_points: 0.25,
+      stream_decompressed_max_bytes: 32 * 1024 * 1024,
+    });
+  });
 
   pythonParityTest("python executes the full DOCX workflow", () => {
     const python = runPythonParity([]);

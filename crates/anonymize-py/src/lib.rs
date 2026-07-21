@@ -46,6 +46,11 @@ use stella_anonymize_docx_core::{
   plan_docx_restoration as plan_docx_restoration_core,
   rewrite_docx_text as rewrite_docx_text_core,
 };
+use stella_anonymize_pdf_core::{
+  PdfInspectionErrorCode, PdfPageObservation, inspect_pdf as inspect_pdf_core,
+  inspect_pdf_with_observations as inspect_pdf_with_observations_core,
+  validate_pdf_observations_json_byte_length,
+};
 
 #[pyfunction]
 fn convert_external_detection_batch(
@@ -1459,6 +1464,52 @@ fn extract_docx_text_json(document: &[u8]) -> PyResult<String> {
   serde_json::to_string(&extraction).map_err(|error| to_py_serde_error(&error))
 }
 
+const fn pdf_inspection_code(code: PdfInspectionErrorCode) -> &'static str {
+  match code {
+    PdfInspectionErrorCode::DocumentLimitExceeded => "document-limit-exceeded",
+    PdfInspectionErrorCode::InvalidDocument => "invalid-document",
+    PdfInspectionErrorCode::InvalidObservation => "invalid-observation",
+    PdfInspectionErrorCode::ObservationLimitExceeded => {
+      "observation-limit-exceeded"
+    }
+    PdfInspectionErrorCode::ProviderFailed => "provider-failed",
+  }
+}
+
+#[pyfunction]
+#[pyo3(signature = (document, observations_json=None))]
+fn inspect_pdf_json(
+  document: &[u8],
+  observations_json: Option<&str>,
+) -> PyResult<String> {
+  let inspection = if let Some(observations_json) = observations_json {
+    validate_pdf_observations_json_byte_length(observations_json.len())
+      .map_err(|inspection_error| {
+        PyValueError::new_err(format!(
+          "{}: {inspection_error}",
+          pdf_inspection_code(inspection_error.code())
+        ))
+      })?;
+    let observations =
+      serde_json::from_str::<Vec<PdfPageObservation>>(observations_json)
+        .map_err(|parse_error| {
+          PyValueError::new_err(format!(
+            "invalid-observation: PDF observations are invalid: {parse_error}"
+          ))
+        })?;
+    inspect_pdf_with_observations_core(document, observations)
+  } else {
+    inspect_pdf_core(document)
+  }
+  .map_err(|inspection_error| {
+    PyValueError::new_err(format!(
+      "{}: {inspection_error}",
+      pdf_inspection_code(inspection_error.code())
+    ))
+  })?;
+  serde_json::to_string(&inspection).map_err(|error| to_py_serde_error(&error))
+}
+
 const fn docx_rewrite_code(code: DocxRewriteErrorCode) -> &'static str {
   match code {
     DocxRewriteErrorCode::ArchiveLimitExceeded => "archive-limit-exceeded",
@@ -1582,6 +1633,7 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
   module.add_function(wrap_pyfunction!(deanonymise, module)?)?;
   module.add_function(wrap_pyfunction!(native_package_version, module)?)?;
   module.add_function(wrap_pyfunction!(extract_docx_text_json, module)?)?;
+  module.add_function(wrap_pyfunction!(inspect_pdf_json, module)?)?;
   module.add_function(wrap_pyfunction!(rewrite_docx_text_native, module)?)?;
   module.add_function(wrap_pyfunction!(plan_docx_restoration_json, module)?)?;
   Ok(())
