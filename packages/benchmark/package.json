@@ -9,7 +9,8 @@
     "typecheck": "bun ../../scripts/tsc-native.ts --noEmit -p tsconfig.json",
     "test": "bun test",
     "format": "oxfmt . \"!results/**\" \"!vendor/**\"",
-    "bench:compare": "bun src/bench.ts"
+    "bench:compare": "bun src/bench.ts",
+    "bench:blind": "bun src/blind.ts"
   },
   "dependencies": {
     "@stll/anonymize": "workspace:^",

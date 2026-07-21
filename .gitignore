@@ -24,3 +24,6 @@ package-lock.json
 
 # Local-only scratch workspace.
 packages/anonymize/hunt/
+
+# Third-party blind-evaluation corpora are fetched into a verified local cache.
+packages/benchmark/.cache/
