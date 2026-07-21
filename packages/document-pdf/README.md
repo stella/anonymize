@@ -1,8 +1,8 @@
 # `@stll/anonymize-pdf`
 
-Bounded PDF structure and coverage inspection for local anonymization workflows.
+Bounded PDF inspection and destructive raster anonymization contracts.
 
-This package does **not** anonymize or redact PDFs. Inspection results inventory
+Inspection results inventory
 structures that can retain sensitive data, including forms, annotations,
 attachments, metadata, JavaScript, XFA, optional content, signatures, and image
 objects. A black rectangle drawn over a PDF page is not redaction because the
@@ -45,3 +45,26 @@ name, dictionary-key, and stream payload after parsing. That aggregate check is
 not a guarantee that the parser allocated no intermediate memory before the
 check; callers must also enforce the input-byte limit and process isolation
 appropriate for untrusted files.
+
+## Destructive raster anonymization
+
+`anonymizePdfRaster` accepts pages produced by an explicit renderer/OCR
+provider and creates a brand-new image-only PDF. It requires one opaque,
+row-packed RGB8 buffer for every source page, SHA-256 binds the source and each
+page, requires complete rendering and OCR assertions, fills the requested
+regions in the pixel buffers, and verifies both the newly written PDF and its
+decompressed image pixels. Encrypted inputs are rejected.
+
+The output never reuses source PDF objects, streams, text layers, metadata,
+forms, annotations, attachments, actions, signatures, optional content, or
+incremental revisions. A solid rectangle in this output is destructive: the
+original pixels are absent rather than hidden underneath it. The tradeoff is
+intentional loss of searchability, accessibility, links, forms, signatures,
+and other interactive behavior.
+
+The package does not bundle or silently select a renderer or OCR engine. A
+provider's `complete` OCR assertion means every rendered page was submitted
+to that OCR engine; it is not a claim that OCR or PII detection has perfect
+recall. Browser rendering is not part of this surface. Raster anonymization is
+a Node and Python document-profile capability; PDF inspection remains available
+through the byte-oriented core runtimes.

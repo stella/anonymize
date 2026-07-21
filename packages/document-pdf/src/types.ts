@@ -74,6 +74,51 @@ export type PdfInspection = {
   };
 };
 
+export type PdfRasterProvider = {
+  providerId: string;
+  rendererName: string;
+  rendererVersion: string;
+  ocrName: string;
+  ocrVersion: string;
+};
+
+export type PdfRasterPage = {
+  pageIndex: number;
+  widthPoints: number;
+  heightPoints: number;
+  widthPixels: number;
+  heightPixels: number;
+  /** Lowercase SHA-256 of this page's exact opaque, row-packed RGB8 bytes. */
+  pixelSha256: string;
+  rendering: "complete";
+  ocr: "complete";
+  redactions: readonly PdfRect[];
+};
+
+export type PdfRasterAnonymization = {
+  contractVersion: 1;
+  /** Lowercase SHA-256 of the exact source PDF bytes supplied to the call. */
+  sourceSha256: string;
+  provider: PdfRasterProvider;
+  fillRgb: readonly [number, number, number];
+  pages: readonly PdfRasterPage[];
+};
+
+export type PdfRasterCertificate = {
+  contractVersion: 1;
+  pageCount: number;
+  redactionCount: number;
+  sourceSha256: string;
+  outputSha256: string;
+  provider: PdfRasterProvider;
+  outputVerified: true;
+};
+
+export type PdfRasterAnonymizationResult = {
+  document: Uint8Array;
+  certificate: PdfRasterCertificate;
+};
+
 export const PDF_INSPECTION_ERROR_CODES = {
   documentLimitExceeded: "document-limit-exceeded",
   invalidDocument: "invalid-document",
@@ -84,3 +129,13 @@ export const PDF_INSPECTION_ERROR_CODES = {
 
 export type PdfInspectionErrorCode =
   (typeof PDF_INSPECTION_ERROR_CODES)[keyof typeof PDF_INSPECTION_ERROR_CODES];
+
+export const PDF_RASTER_ERROR_CODES = {
+  invalidContract: "invalid-contract",
+  limitExceeded: "limit-exceeded",
+  sourceRejected: "source-rejected",
+  verificationFailed: "verification-failed",
+} as const;
+
+export type PdfRasterErrorCode =
+  (typeof PDF_RASTER_ERROR_CODES)[keyof typeof PDF_RASTER_ERROR_CODES];

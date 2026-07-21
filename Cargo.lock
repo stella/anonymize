@@ -1315,8 +1315,10 @@ name = "stella-anonymize-pdf-core"
 version = "2.3.0"
 dependencies = [
  "lopdf",
+ "num-traits",
  "serde",
  "serde_json",
+ "sha2",
  "thiserror",
 ]
 

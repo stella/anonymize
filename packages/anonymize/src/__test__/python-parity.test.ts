@@ -18,6 +18,7 @@
  */
 import { spawnSync } from "node:child_process";
 import { Buffer } from "node:buffer";
+import { createHash } from "node:crypto";
 import {
   copyFileSync,
   cpSync,
@@ -116,6 +117,7 @@ type PythonParityOutput = {
   pdf_inspection: unknown;
   pdf_risky_inspection: unknown;
   pdf_observed_inspection: unknown;
+  pdf_raster: { document_base64: string; certificate: unknown };
   pdf_invalid_error: { code: string; message: string };
   caller_result: {
     redacted_text: string;
@@ -237,6 +239,38 @@ pdf_observation = [{
 pdf_observed_inspection = anonymize.inspect_pdf(
     base64.b64decode(payload["pdf_base64"]), pdf_observation
 )
+pdf_source = base64.b64decode(payload["pdf_base64"])
+pdf_pixels = bytes([255]) * (17 * 22 * 3)
+pdf_raster_request = {
+    "contractVersion": 1,
+    "sourceSha256": __import__("hashlib").sha256(pdf_source).hexdigest(),
+    "provider": {
+        "providerId": "synthetic-parity-provider",
+        "rendererName": "synthetic-renderer",
+        "rendererVersion": "1.0.0",
+        "ocrName": "synthetic-ocr",
+        "ocrVersion": "1.0.0",
+    },
+    "fillRgb": [0, 0, 0],
+    "pages": [{
+        "pageIndex": 0,
+        "widthPoints": 612.0,
+        "heightPoints": 792.0,
+        "widthPixels": 17,
+        "heightPixels": 22,
+        "pixelSha256": __import__("hashlib").sha256(pdf_pixels).hexdigest(),
+        "rendering": "complete",
+        "ocr": "complete",
+        "redactions": [{"left": 72.0, "bottom": 396.0, "right": 216.0, "top": 540.0}],
+    }],
+}
+pdf_raster_document, pdf_raster_certificate = anonymize.anonymize_pdf_raster(
+    pdf_source, pdf_raster_request, [pdf_pixels]
+)
+pdf_raster = {
+    "document_base64": base64.b64encode(pdf_raster_document).decode("ascii"),
+    "certificate": pdf_raster_certificate,
+}
 try:
     anonymize.inspect_pdf(b"\\x00")
     raise AssertionError("invalid PDF bytes were accepted")
@@ -279,6 +313,7 @@ surface_probes = {
     "document.docx.anonymize": hasattr(anonymize, "anonymize_docx"),
     "document.docx.restore": hasattr(anonymize, "restore_docx_text"),
     "document.pdf.inspect": hasattr(anonymize, "inspect_pdf"),
+    "document.pdf.anonymize-raster": hasattr(anonymize, "anonymize_pdf_raster"),
 }
 
 caller_result = json.loads(
@@ -639,6 +674,7 @@ print(
             "pdf_inspection": pdf_inspection,
             "pdf_risky_inspection": pdf_risky_inspection,
             "pdf_observed_inspection": pdf_observed_inspection,
+            "pdf_raster": pdf_raster,
             "pdf_invalid_error": pdf_invalid_error,
             "caller_result": {
                 "redacted_text": caller_result["redaction"]["redacted_text"],
@@ -987,6 +1023,58 @@ describe("python binding parity", () => {
       stream_decompressed_max_bytes: 32 * 1024 * 1024,
     });
   });
+
+  pythonParityTest(
+    "PDF raster output is byte-exact across Node and Python",
+    () => {
+      const python = runPythonParity([]);
+      const source = readFileSync(
+        join(
+          ROOT_DIR,
+          "crates",
+          "anonymize-pdf-core",
+          "tests",
+          "fixtures",
+          "minimal-text.pdf",
+        ),
+      );
+      const pixels = Buffer.alloc(17 * 22 * 3, 255);
+      const sha256 = (value: Uint8Array): string =>
+        createHash("sha256").update(value).digest("hex");
+      const request = {
+        contractVersion: 1,
+        sourceSha256: sha256(source),
+        provider: {
+          providerId: "synthetic-parity-provider",
+          rendererName: "synthetic-renderer",
+          rendererVersion: "1.0.0",
+          ocrName: "synthetic-ocr",
+          ocrVersion: "1.0.0",
+        },
+        fillRgb: [0, 0, 0],
+        pages: [
+          {
+            pageIndex: 0,
+            widthPoints: 612,
+            heightPoints: 792,
+            widthPixels: 17,
+            heightPixels: 22,
+            pixelSha256: sha256(pixels),
+            rendering: "complete",
+            ocr: "complete",
+            redactions: [{ left: 72, bottom: 396, right: 216, top: 540 }],
+          },
+        ],
+      };
+      const anonymize = loadNativeAnonymizeBinding().anonymizePdfRasterJson;
+      expect(typeof anonymize).toBe("function");
+      const node = anonymize?.(source, JSON.stringify(request), [pixels]);
+      expect(python.pdf_raster).toEqual({
+        document_base64: Buffer.from(node?.document ?? []).toString("base64"),
+        certificate: JSON.parse(node?.certificateJson ?? "null"),
+      });
+    },
+  );
 
   pythonParityTest("python executes the full DOCX workflow", () => {
     const python = runPythonParity([]);

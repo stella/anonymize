@@ -6,6 +6,7 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from ._native import anonymize_pdf_raster_json as _anonymize_pdf_raster_json
 from ._native import inspect_pdf_json as _inspect_pdf_json
 
 PDF_INSPECTION_CONTRACT_VERSION = 1
@@ -21,10 +22,22 @@ PDF_MAX_PAGE_TEXT_UTF8_BYTES = 16 * 1024 * 1024
 PDF_MAX_OBSERVED_TEXT_UTF8_BYTES = 64 * 1024 * 1024
 PDF_OBSERVATIONS_JSON_MAX_BYTES = 64 * 1024 * 1024
 PDF_PAGE_DIMENSION_TOLERANCE_POINTS = 0.25
+PDF_RASTER_CONTRACT_VERSION = 1
+PDF_RASTER_MAX_PAGE_BYTES = 128 * 1024 * 1024
+PDF_RASTER_MAX_TOTAL_BYTES = 512 * 1024 * 1024
+PDF_RASTER_MAX_OUTPUT_BYTES = 512 * 1024 * 1024
 
 
 class PdfInspectionError(ValueError):
     """Stable, coded PDF inspection failure."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+
+
+class PdfRasterError(ValueError):
+    """Stable, coded destructive PDF rasterization failure."""
 
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
@@ -49,3 +62,24 @@ def inspect_pdf(
         prefix, separator, _ = message.partition(":")
         code = prefix if separator else "invalid-document"
         raise PdfInspectionError(code, message) from error
+
+
+def anonymize_pdf_raster(
+    document: bytes | bytearray | memoryview,
+    request: Mapping[str, Any],
+    page_pixels: Sequence[bytes | bytearray | memoryview],
+) -> tuple[bytes, dict[str, Any]]:
+    """Create a fresh image-only PDF from provider-asserted opaque RGB8 pages."""
+
+    try:
+        output, certificate_json = _anonymize_pdf_raster_json(
+            bytes(document),
+            json.dumps(dict(request), separators=(",", ":")),
+            [bytes(page) for page in page_pixels],
+        )
+        return output, json.loads(certificate_json)
+    except ValueError as error:
+        message = str(error)
+        prefix, separator, _ = message.partition(":")
+        code = prefix if separator else "invalid-contract"
+        raise PdfRasterError(code, message) from error

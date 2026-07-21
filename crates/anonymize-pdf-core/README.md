@@ -1,8 +1,8 @@
-# stella anonymize PDF inspection core
+# stella anonymize PDF core
 
-This crate provides a bounded, fail-closed PDF structure and page-observation
-contract. It does not redact PDFs. In particular, it never treats a rectangle
-drawn over original page content as anonymization.
+This crate provides bounded, fail-closed PDF inspection and destructive raster
+anonymization contracts. It never treats a rectangle drawn over original page
+content as anonymization.
 
 The built-in inspector inventories document structures that can retain personal
 data, including otherwise-unreferenced action dictionaries and reusable Form
@@ -31,3 +31,17 @@ Coverage is only `full` when every page was rendered, its text layer was
 completely observed, and OCR completely covered the rendered page pixels. The
 pixel requirement applies even when the PDF has no image objects because
 visible text can be encoded as vector outlines.
+
+Raster anonymization accepts SHA-256-bound, provider-asserted opaque RGB8 pages
+from an explicit
+renderer/OCR provider. It validates every source page and its displayed
+geometry, overwrites requested pixel regions, and constructs a fresh PDF whose
+only page content is the sanitized image. It reparses the output, checks its
+risk inventory and image-only object count, and verifies the decompressed image
+digests. No source object, metadata, text layer, attachment, signature, or
+incremental revision is copied. Encrypted PDFs are rejected.
+
+Complete OCR coverage means the provider submitted every rendered page to its
+OCR engine. It cannot prove OCR or detector recall. The provider boundary and
+the deliberate loss of searchable, accessible, and interactive PDF structure
+must remain visible to callers.

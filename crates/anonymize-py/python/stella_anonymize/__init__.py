@@ -48,6 +48,10 @@ from .docx import (
     rewrite_docx_text,
 )
 from .pdf import (
+    PDF_RASTER_CONTRACT_VERSION,
+    PDF_RASTER_MAX_OUTPUT_BYTES,
+    PDF_RASTER_MAX_PAGE_BYTES,
+    PDF_RASTER_MAX_TOTAL_BYTES,
     PDF_DOCUMENT_MAX_BYTES,
     PDF_INSPECTION_CONTRACT_VERSION,
     PDF_LOADED_PAYLOAD_MAX_BYTES,
@@ -62,6 +66,8 @@ from .pdf import (
     PDF_PAGE_DIMENSION_TOLERANCE_POINTS,
     PDF_STREAM_DECOMPRESSED_MAX_BYTES,
     PdfInspectionError,
+    PdfRasterError,
+    anonymize_pdf_raster,
     inspect_pdf,
 )
 
@@ -155,7 +161,13 @@ __all__ = [
     "PDF_PAGE_DIMENSION_TOLERANCE_POINTS",
     "PDF_STREAM_DECOMPRESSED_MAX_BYTES",
     "PdfInspectionError",
+    "PdfRasterError",
     "inspect_pdf",
+    "anonymize_pdf_raster",
+    "PDF_RASTER_CONTRACT_VERSION",
+    "PDF_RASTER_MAX_OUTPUT_BYTES",
+    "PDF_RASTER_MAX_PAGE_BYTES",
+    "PDF_RASTER_MAX_TOTAL_BYTES",
 ]
 
 BytesLike = bytes | bytearray | memoryview

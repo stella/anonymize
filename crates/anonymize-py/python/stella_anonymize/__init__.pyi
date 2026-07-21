@@ -141,6 +141,16 @@ PdfInspectionErrorCode: TypeAlias = Literal[
 class PdfInspectionError(ValueError):
     code: PdfInspectionErrorCode
 
+PdfRasterErrorCode: TypeAlias = Literal[
+    "invalid-contract",
+    "limit-exceeded",
+    "source-rejected",
+    "verification-failed",
+]
+
+class PdfRasterError(ValueError):
+    code: PdfRasterErrorCode
+
 PdfGlyphSource: TypeAlias = Literal["embedded-text", "ocr"]
 PdfTextLayerCoverage: TypeAlias = Literal["absent", "partial", "complete"]
 PdfOcrCoverage: TypeAlias = Literal["not-run", "partial", "complete"]
@@ -226,11 +236,20 @@ PDF_MAX_PAGE_TEXT_UTF8_BYTES: int
 PDF_MAX_OBSERVED_TEXT_UTF8_BYTES: int
 PDF_OBSERVATIONS_JSON_MAX_BYTES: int
 PDF_PAGE_DIMENSION_TOLERANCE_POINTS: float
+PDF_RASTER_CONTRACT_VERSION: int
+PDF_RASTER_MAX_PAGE_BYTES: int
+PDF_RASTER_MAX_TOTAL_BYTES: int
+PDF_RASTER_MAX_OUTPUT_BYTES: int
 
 def inspect_pdf(
     document: BytesLike,
     page_observations: Sequence[PdfPageObservation] | None = None,
 ) -> PdfInspection: ...
+def anonymize_pdf_raster(
+    document: BytesLike,
+    request: Mapping[str, Any],
+    page_pixels: Sequence[BytesLike],
+) -> tuple[bytes, dict[str, Any]]: ...
 def rewrite_docx_text(
     document: BytesLike,
     rewrites: Sequence[Mapping[str, Any]],

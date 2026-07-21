@@ -10,7 +10,9 @@ repository.workspace = true
 
 [dependencies]
 lopdf = { version = "0.44", default-features = false }
+num-traits = "0.2"
 serde = { version = "1", features = ["derive"] }
+sha2 = "0.11"
 thiserror = "2"
 
 [dev-dependencies]
