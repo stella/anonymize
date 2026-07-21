@@ -35,6 +35,12 @@ import { join } from "node:path";
 import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 
 import {
+  EXTERNAL_DETECTION_BATCH_MAX_BYTES,
+  EXTERNAL_DETECTION_DOCUMENT_MAX_BYTES,
+  EXTERNAL_DETECTION_MAX_DETECTIONS,
+  EXTERNAL_DETECTION_MAX_LABEL_MAPPINGS,
+  EXTERNAL_DETECTION_MAX_METADATA_BYTES,
+  EXTERNAL_DETECTION_PROVIDER_ID_MAX_BYTES,
   convert_external_detection_batch,
   getDefaultNativePipeline,
   loadNativeAnonymizeBinding,
@@ -128,6 +134,14 @@ type PythonParityOutput = {
     provider_id: string;
     detection_id: string;
   }[];
+  external_detection_limits: {
+    batch_max_bytes: number;
+    document_max_bytes: number;
+    max_detections: number;
+    max_label_mappings: number;
+    max_metadata_bytes: number;
+    provider_id_max_bytes: number;
+  };
   session_result: {
     session_id: string;
     mapping_count: number;
@@ -251,6 +265,14 @@ caller_result = json.loads(
 external_detection_result = anonymize.convert_external_detection_batch(
     "😀Alice signed.".encode("utf-8"), payload["external_detection_batch"]
 )
+external_detection_limits = {
+    "batch_max_bytes": anonymize.EXTERNAL_DETECTION_BATCH_MAX_BYTES,
+    "document_max_bytes": anonymize.EXTERNAL_DETECTION_DOCUMENT_MAX_BYTES,
+    "max_detections": anonymize.EXTERNAL_DETECTION_MAX_DETECTIONS,
+    "max_label_mappings": anonymize.EXTERNAL_DETECTION_MAX_LABEL_MAPPINGS,
+    "max_metadata_bytes": anonymize.EXTERNAL_DETECTION_MAX_METADATA_BYTES,
+    "provider_id_max_bytes": anonymize.EXTERNAL_DETECTION_PROVIDER_ID_MAX_BYTES,
+}
 caller_diagnostics = json.loads(
     anonymize.get_default_native_pipeline(language="en").redact_text_with_caller_detections_diagnostics_json(
         "😀Alice signed.",
@@ -592,6 +614,7 @@ print(
                 "mask_operator": caller_mask_result["redaction"]["operator_map"][0]["operator"],
             },
             "external_detection_result": external_detection_result,
+            "external_detection_limits": external_detection_limits,
             "session_result": {
                 "session_id": restored_session.session_id(),
                 "mapping_count": session.mapping_count(),
@@ -928,6 +951,15 @@ describe("python binding parity", () => {
           detection_id: "person-1",
         },
       ]);
+
+      expect(runPythonParity([]).external_detection_limits).toEqual({
+        batch_max_bytes: EXTERNAL_DETECTION_BATCH_MAX_BYTES,
+        document_max_bytes: EXTERNAL_DETECTION_DOCUMENT_MAX_BYTES,
+        max_detections: EXTERNAL_DETECTION_MAX_DETECTIONS,
+        max_label_mappings: EXTERNAL_DETECTION_MAX_LABEL_MAPPINGS,
+        max_metadata_bytes: EXTERNAL_DETECTION_MAX_METADATA_BYTES,
+        provider_id_max_bytes: EXTERNAL_DETECTION_PROVIDER_ID_MAX_BYTES,
+      });
     },
   );
 

@@ -40,6 +40,12 @@ OperatorSelection: TypeAlias = Literal["replace", "redact", "keep"] | MaskOperat
 OperatorConfig: TypeAlias = Mapping[str, OperatorSelection] | str | None
 CALLER_DETECTION_CONTRACT_VERSION: int
 EXTERNAL_DETECTION_BATCH_VERSION: Literal[1]
+EXTERNAL_DETECTION_BATCH_MAX_BYTES: Literal[16777216]
+EXTERNAL_DETECTION_DOCUMENT_MAX_BYTES: Literal[67108864]
+EXTERNAL_DETECTION_MAX_DETECTIONS: Literal[100000]
+EXTERNAL_DETECTION_MAX_LABEL_MAPPINGS: Literal[4096]
+EXTERNAL_DETECTION_MAX_METADATA_BYTES: Literal[256]
+EXTERNAL_DETECTION_PROVIDER_ID_MAX_BYTES: Literal[128]
 
 SessionStatus: TypeAlias = Literal["active", "not_yet_active", "expired", "deleted"]
 

@@ -10,6 +10,7 @@ def convert_external_detection_batch(
     document: BytesLike,
     batch_json: str,
 ) -> str: ...
+def external_detection_limits_json() -> str: ...
 
 class RedactionEntry:
     @property

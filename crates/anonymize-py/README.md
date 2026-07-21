@@ -177,8 +177,12 @@ Portable model or service output can be validated with
 the same provider-neutral, SHA-256-bound contract as Node, with an explicit
 `utf8-byte`, `utf16-code-unit`, or `unicode-code-point` offset unit and explicit
 provider-label mappings. It has no model dependency and does not require
-GLiNER. The returned value feeds the existing caller-detection API after the
-shared Rust contract validates and converts its spans.
+GLiNER. `provider.id` is the immutable, versionable audit identity retained on
+detections. `provider.name` and `provider.version` are validated descriptive
+batch metadata but are not copied into caller detections; retain the original
+batch if an audit record needs them. The returned value feeds the existing
+caller-detection API after the shared Rust contract validates and converts its
+spans.
 
 Regional codes use the exact package when present and otherwise fall back to
 the base language package, so `en-US` can use the shipped `en` artifact.

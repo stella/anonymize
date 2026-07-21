@@ -3,7 +3,13 @@ import { createHash } from "node:crypto";
 import { describe, expect, test } from "bun:test";
 
 import {
+  EXTERNAL_DETECTION_BATCH_MAX_BYTES,
   EXTERNAL_DETECTION_BATCH_VERSION,
+  EXTERNAL_DETECTION_DOCUMENT_MAX_BYTES,
+  EXTERNAL_DETECTION_MAX_DETECTIONS,
+  EXTERNAL_DETECTION_MAX_LABEL_MAPPINGS,
+  EXTERNAL_DETECTION_MAX_METADATA_BYTES,
+  EXTERNAL_DETECTION_PROVIDER_ID_MAX_BYTES,
   type ExternalDetectionBatch,
   convert_external_detection_batch,
 } from "../native";
@@ -35,6 +41,27 @@ const fakeProviderBatch = (): ExternalDetectionBatch => ({
 });
 
 describe("ExternalDetectionBatch v1", () => {
+  test("public TypeScript limits exactly match the Rust contract", () => {
+    const limitsJson = binding.externalDetectionLimitsJson?.();
+    expect(limitsJson).toBeDefined();
+    expect(JSON.parse(limitsJson ?? "null")).toEqual({
+      batchMaxBytes: EXTERNAL_DETECTION_BATCH_MAX_BYTES,
+      documentMaxBytes: EXTERNAL_DETECTION_DOCUMENT_MAX_BYTES,
+      maxDetections: EXTERNAL_DETECTION_MAX_DETECTIONS,
+      maxLabelMappings: EXTERNAL_DETECTION_MAX_LABEL_MAPPINGS,
+      maxMetadataBytes: EXTERNAL_DETECTION_MAX_METADATA_BYTES,
+      providerIdMaxBytes: EXTERNAL_DETECTION_PROVIDER_ID_MAX_BYTES,
+    });
+    expect(JSON.parse(limitsJson ?? "null")).toEqual({
+      batchMaxBytes: 16_777_216,
+      documentMaxBytes: 67_108_864,
+      maxDetections: 100_000,
+      maxLabelMappings: 4_096,
+      maxMetadataBytes: 256,
+      providerIdMaxBytes: 128,
+    });
+  });
+
   test("converts provider output to JavaScript caller-detection offsets", () => {
     expect(
       convert_external_detection_batch({
