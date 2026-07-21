@@ -454,9 +454,12 @@ fn validate_metadata(
   value: &str,
   max_bytes: usize,
 ) -> Result<()> {
-  if value.trim().is_empty() || value.len() > max_bytes {
+  if value.trim().is_empty()
+    || value.len() > max_bytes
+    || value.chars().any(char::is_control)
+  {
     return Err(invalid(format!(
-      "{field} must be non-blank and at most {max_bytes} bytes"
+      "{field} must be non-blank, control-free, and at most {max_bytes} bytes"
     )));
   }
   Ok(())
@@ -686,6 +689,12 @@ mod tests {
       ),
       (
         mutate(|batch| {
+          batch["provider"]["name"] = json!("unsafe\nname");
+        }),
+        "control-free",
+      ),
+      (
+        mutate(|batch| {
           batch["labelMap"][0]["providerLabel"] = json!("");
         }),
         "labelMap.providerLabel",
@@ -695,6 +704,12 @@ mod tests {
           batch["labelMap"][0]["entityLabel"] = json!(" ");
         }),
         "labelMap.entityLabel",
+      ),
+      (
+        mutate(|batch| {
+          batch["labelMap"][0]["entityLabel"] = json!("person\u{0007}");
+        }),
+        "control-free",
       ),
       (
         mutate(|batch| batch["document"]["sha256"] = json!("A".repeat(64))),
