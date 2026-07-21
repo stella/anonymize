@@ -929,6 +929,24 @@ mod tests {
   }
 
   #[test]
+  fn prepared_search_compressed_package_rejects_stale_schema_versions() {
+    let payload = prepared_search_package_payload_to_bytes(
+      &package_test_config(),
+      b"prepared-artifacts",
+    )
+    .unwrap();
+    for version in [16, 17, 18] {
+      let bytes = zstd_compressed_package(
+        PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER,
+        version,
+        &payload,
+      );
+      let error = prepared_search_package_from_bytes(&bytes).unwrap_err();
+      assert!(error.to_string().contains("unsupported version"));
+    }
+  }
+
+  #[test]
   fn prepared_search_compressed_package_rejects_digest_mismatch() {
     let config = BindingPreparedSearchConfig::default();
     let mut bytes =
@@ -1332,6 +1350,24 @@ mod tests {
     assert!(prepared_search_package_has_core_payload(&bytes));
     assert_eq!(package.config, compact_config);
     assert_eq!(package.artifacts, artifacts);
+  }
+
+  #[test]
+  fn prepared_search_core_compressed_package_rejects_stale_schema_versions() {
+    let config =
+      prepared_search_config_from_binding(package_test_config()).unwrap();
+    let payload =
+      prepared_search_core_package_payload_to_bytes(&config, b"artifacts")
+        .unwrap();
+    for version in [23, 24, 25] {
+      let bytes = zstd_compressed_package(
+        PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_HEADER,
+        version,
+        &payload,
+      );
+      let error = prepared_search_core_package_from_bytes(&bytes).unwrap_err();
+      assert!(error.to_string().contains("unsupported version"));
+    }
   }
 
   fn package_test_config() -> BindingPreparedSearchConfig {
