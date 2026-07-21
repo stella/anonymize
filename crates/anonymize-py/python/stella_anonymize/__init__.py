@@ -21,6 +21,7 @@ from ._native import (
     assemble_static_search_config_json,
     assemble_static_search_package_bytes,
     convert_external_detection_batch as _native_convert_external_detection_batch,
+    external_detection_limits_json as _native_external_detection_limits_json,
     deanonymise as _native_deanonymise,
     native_package_version,
     normalize_for_search,
@@ -88,6 +89,12 @@ __all__ = [
     "ExternalDetectionOffsetUnit",
     "ExternalDetectionProvider",
     "EXTERNAL_DETECTION_BATCH_VERSION",
+    "EXTERNAL_DETECTION_BATCH_MAX_BYTES",
+    "EXTERNAL_DETECTION_DOCUMENT_MAX_BYTES",
+    "EXTERNAL_DETECTION_MAX_DETECTIONS",
+    "EXTERNAL_DETECTION_MAX_LABEL_MAPPINGS",
+    "EXTERNAL_DETECTION_MAX_METADATA_BYTES",
+    "EXTERNAL_DETECTION_PROVIDER_ID_MAX_BYTES",
     "convert_external_detection_batch",
     "DiagnosticsBatchCallback",
     "ResultEventCallback",
@@ -189,6 +196,23 @@ OperatorSelection = Literal["replace", "redact", "keep"] | MaskOperatorConfig
 OperatorConfig = Mapping[str, OperatorSelection] | str | None
 CALLER_DETECTION_CONTRACT_VERSION = 2
 EXTERNAL_DETECTION_BATCH_VERSION = 1
+_EXTERNAL_DETECTION_LIMITS = cast(
+    dict[str, int], json.loads(_native_external_detection_limits_json())
+)
+EXTERNAL_DETECTION_BATCH_MAX_BYTES = _EXTERNAL_DETECTION_LIMITS["batchMaxBytes"]
+EXTERNAL_DETECTION_DOCUMENT_MAX_BYTES = _EXTERNAL_DETECTION_LIMITS[
+    "documentMaxBytes"
+]
+EXTERNAL_DETECTION_MAX_DETECTIONS = _EXTERNAL_DETECTION_LIMITS["maxDetections"]
+EXTERNAL_DETECTION_MAX_LABEL_MAPPINGS = _EXTERNAL_DETECTION_LIMITS[
+    "maxLabelMappings"
+]
+EXTERNAL_DETECTION_MAX_METADATA_BYTES = _EXTERNAL_DETECTION_LIMITS[
+    "maxMetadataBytes"
+]
+EXTERNAL_DETECTION_PROVIDER_ID_MAX_BYTES = _EXTERNAL_DETECTION_LIMITS[
+    "providerIdMaxBytes"
+]
 
 
 class CallerDetection(TypedDict):

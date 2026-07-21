@@ -13,6 +13,7 @@ use stella_anonymize_adapter_contract::{
   PreparedSearchPackageDecodeTimings, assemble_static_search_config,
   caller_detections_from_utf16_binding, diagnostic_events_to_utf16_binding,
   diagnostic_stage_event, external_detection_batch_to_utf16_caller_request,
+  external_detection_limits_json as contract_external_detection_limits_json,
   operator_config_from_binding, prepared_search_config_from_binding,
   prepared_search_core_package_to_bytes,
   prepared_search_core_package_to_compressed_bytes,
@@ -150,6 +151,12 @@ pub fn convert_external_detection_batch(
       })
       .collect(),
   )
+}
+
+#[napi]
+pub fn external_detection_limits_json() -> Result<String> {
+  contract_external_detection_limits_json()
+    .map_err(|error| Error::from_reason(error.to_string()))
 }
 
 #[napi]

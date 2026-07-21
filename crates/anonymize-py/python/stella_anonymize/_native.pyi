@@ -15,6 +15,7 @@ def rewrite_pdf_raster_from_detections_json(
     request_json: str,
     page_pixels: Sequence[BytesLike],
 ) -> tuple[bytes, str]: ...
+def external_detection_limits_json() -> str: ...
 
 class RedactionEntry:
     @property
