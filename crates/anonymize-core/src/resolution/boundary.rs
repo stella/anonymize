@@ -116,12 +116,20 @@ fn terminator_start_within(
 }
 
 fn starts_with_stamp_phrase(tail: &str, phrases: &[String]) -> bool {
-  phrases
-    .iter()
-    .any(|phrase| starts_with_ignore_case(tail, phrase))
+  phrases.iter().any(|phrase| {
+    starts_with_ignore_case(tail, phrase)
+      && remainder_after_chars(tail, phrase.chars().count()).is_some_and(
+        |rest| {
+          rest
+            .chars()
+            .next()
+            .is_none_or(|next| !next.is_alphanumeric())
+        },
+      )
+  })
 }
 
-/// A field label counts only when the very next character after it is ':'.
+/// A field label counts only when optional whitespace after it ends in a colon.
 /// Without the colon, "Name" and "Jméno" are ordinary words, and a surname
 /// that happens to collide with the vocabulary keeps its place in the span.
 fn is_colon_tied_field_label(tail: &str, labels: &[String]) -> bool {
@@ -129,12 +137,18 @@ fn is_colon_tied_field_label(tail: &str, labels: &[String]) -> bool {
     if !starts_with_ignore_case(tail, label) {
       return false;
     }
-    let rest = tail
-      .char_indices()
-      .nth(label.chars().count())
-      .map_or("", |(index, _)| tail.get(index..).unwrap_or_default());
-    rest.starts_with(':')
+    remainder_after_chars(tail, label.chars().count())
+      .map(str::trim_start)
+      .is_some_and(|rest| rest.starts_with([':', '：']))
   })
+}
+
+fn remainder_after_chars(value: &str, count: usize) -> Option<&str> {
+  if count == value.chars().count() {
+    return Some("");
+  }
+  let index = value.char_indices().nth(count)?.0;
+  value.get(index..)
 }
 
 /// Case-insensitive prefix test. `needle` is lowercased at prepare time.

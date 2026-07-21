@@ -223,7 +223,9 @@ pub fn assemble_static_search_config(
       config,
       unit.name_corpus_data.is_some(),
     ),
-    signature_data: Some(signature::build_signature_data()?),
+    signature_data: Some(signature::build_signature_data(
+      ctx.content_languages.as_deref(),
+    )?),
     monetary_data: monetary::build_monetary_data(&ctx)?,
     date_data: dates::build_date_data(&ctx)?,
     zone_data: zones::build_zone_data(&ctx)?,

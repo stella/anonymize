@@ -973,6 +973,38 @@ fn person_span_stops_at_colon_tied_field_label() {
 }
 
 #[test]
+fn person_span_stops_at_spaced_and_unicode_field_separators() {
+  let labels = vec![String::from("jméno"), String::from("name")];
+  for (full_text, span, expected) in [
+    ("Jan Novák Jméno : Eva", "Jan Novák Jméno", "Jan Novák"),
+    ("Jan Novák Jméno\u{a0}: Eva", "Jan Novák Jméno", "Jan Novák"),
+    ("Jane Roe Name： Eva", "Jane Roe Name", "Jane Roe"),
+  ] {
+    let result = boundary_with_terminators(
+      &[person_span(full_text, span)],
+      full_text,
+      &[],
+      &labels,
+    );
+    assert_eq!(result.first().expect("person").text, expected);
+  }
+}
+
+#[test]
+fn stamp_phrase_prefix_inside_a_surname_does_not_truncate() {
+  let stamps = vec![String::from("digitally signed")];
+  let full_text = "Dr. Jane Digitally Signedman";
+  let result = boundary_with_terminators(
+    &[person_span(full_text, full_text)],
+    full_text,
+    &stamps,
+    &[],
+  );
+
+  assert_eq!(result.first().expect("person").text, full_text);
+}
+
+#[test]
 fn unknown_surname_in_running_prose_survives_the_boundary_pass() {
   // Regression guard. A shape heuristic ("capitalized token before lowercase
   // prose is a modifier") drops real surnames here, which is an
