@@ -85,6 +85,27 @@ describe("native node loader", () => {
     expect(calls).toEqual(["../index.cjs"]);
   });
 
+  test("keeps an unavailable optional external converter feature-scoped", () => {
+    const binding = fakeNativeBinding(PACKAGE_VERSION);
+    delete binding.convertExternalDetectionBatch;
+    const loaded = loadNativeAnonymizeBinding({
+      expectedVersion: PACKAGE_VERSION,
+      platform: "darwin",
+      arch: "arm64",
+      env: {},
+      requireModule: (specifier) => {
+        if (specifier === "../index.cjs") {
+          return binding;
+        }
+        throw new Error("not found");
+      },
+    });
+
+    expect(loaded).toBe(binding);
+    expect(loaded.normalizeForSearch("Alice")).toBe("Alice");
+    expect(loaded.convertExternalDetectionBatch).toBeUndefined();
+  });
+
   test("falls back to the platform native package", () => {
     const calls: string[] = [];
     const binding = fakeNativeBinding(PACKAGE_VERSION);
