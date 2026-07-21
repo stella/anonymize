@@ -10,6 +10,7 @@ import {
   TAB_SAMPLE_SIZE,
 } from "./blind/tab";
 import type { GroundTruthDocument } from "./ground-truth";
+import { benchmarkGitRevision } from "./git-revision";
 import { runSealedBoundary } from "./sealed-boundary";
 import {
   SEALED_AGGREGATE_REPORT_SCHEMA_VERSION,
@@ -20,20 +21,6 @@ import {
 } from "./sealed-report";
 
 const RESULTS_DIR = join(import.meta.dir, "..", "results", "blind");
-
-const git = (args: readonly string[]): string => {
-  try {
-    const child = Bun.spawnSync(["git", ...args], { cwd: import.meta.dir });
-    return child.success ? child.stdout.toString().trim() : "";
-  } catch {
-    return "";
-  }
-};
-
-const gitSha = (): string => {
-  const sha = git(["rev-parse", "--short", "HEAD"]) || "no-git";
-  return `${sha}${git(["status", "--porcelain"]) === "" ? "" : "-dirty"}`;
-};
 
 const full = process.argv.slice(2).includes("--full");
 const corpus = await runSealedBoundary(
@@ -87,7 +74,7 @@ for (const adapter of createBenchmarkAdapters()) {
 const report: SealedAggregateReport = {
   schemaVersion: SEALED_AGGREGATE_REPORT_SCHEMA_VERSION,
   createdAt: new Date().toISOString(),
-  gitSha: gitSha(),
+  gitSha: benchmarkGitRevision(),
   runtime: `Bun ${Bun.version}`,
   policy: "evaluation-only",
   corpus: {

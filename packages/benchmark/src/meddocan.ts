@@ -2,6 +2,7 @@ import { join } from "node:path";
 
 import { createBenchmarkAdapters } from "./adapters";
 import type { GroundTruthDocument } from "./ground-truth";
+import { benchmarkGitRevision } from "./git-revision";
 import { runSealedBoundary } from "./sealed-boundary";
 import {
   SEALED_AGGREGATE_REPORT_SCHEMA_VERSION,
@@ -14,13 +15,6 @@ import { loadVerifiedMeddocan, MEDDOCAN_PROVENANCE } from "./suite/meddocan";
 import { scoreSpanCorpus } from "./suite/span-score";
 
 const RESULTS_DIR = join(import.meta.dir, "..", "results", "blind", "meddocan");
-const gitSha = (): string => {
-  const child = Bun.spawnSync(["git", "rev-parse", "--short", "HEAD"], {
-    cwd: import.meta.dir,
-  });
-  return child.success ? child.stdout.toString().trim() : "no-git";
-};
-
 const documents = await runSealedBoundary(
   "MEDDOCAN verification or parsing",
   loadVerifiedMeddocan,
@@ -65,7 +59,7 @@ for (const adapter of createBenchmarkAdapters()) {
 const report: SealedAggregateReport = {
   schemaVersion: SEALED_AGGREGATE_REPORT_SCHEMA_VERSION,
   createdAt: new Date().toISOString(),
-  gitSha: gitSha(),
+  gitSha: benchmarkGitRevision(),
   runtime: `Bun ${Bun.version}`,
   policy: "evaluation-only",
   corpus: {
