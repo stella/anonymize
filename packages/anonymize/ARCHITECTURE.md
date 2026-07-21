@@ -49,6 +49,7 @@ an invariant:
 
 - `core`: Node.js, Python, and browser/WASM byte-oriented SDK behavior.
 - `local`: Node.js and Python filesystem behavior.
+- `provider`: Node.js and Python provider-output adapter behavior.
 - `document`: Node.js and Python structure-aware document adapters.
 
 DOCX ZIP/XML extraction is owned by `crates/anonymize-docx-core`. Both the NAPI

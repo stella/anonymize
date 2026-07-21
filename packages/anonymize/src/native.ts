@@ -244,7 +244,7 @@ export type NativePreparedSearchBinding = {
 };
 
 export type NativeAnonymizeBinding = {
-  convertExternalDetectionBatch: (
+  convertExternalDetectionBatch?: (
     document: Uint8Array,
     batchJson: string,
   ) => NativeCallerDetection[];
@@ -359,7 +359,13 @@ export const convert_external_detection_batch = ({
   document,
   batch,
 }: ConvertExternalDetectionBatchOptions): NativeCallerDetection[] => {
-  return binding.convertExternalDetectionBatch(
+  const convert = binding.convertExternalDetectionBatch;
+  if (convert === undefined) {
+    throw new Error(
+      "Native anonymize binding does not support external detection batches",
+    );
+  }
+  return convert(
     document,
     typeof batch === "string" ? batch : JSON.stringify(batch),
   );

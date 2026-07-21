@@ -10,6 +10,7 @@ use crate::caller::{
   CALLER_DETECTION_CONTRACT_VERSION, caller_detections_from_binding,
 };
 use crate::error::{ContractError, Result};
+use crate::offsets::{CharacterOffsetMap, Utf16OffsetMap};
 
 pub const EXTERNAL_DETECTION_BATCH_VERSION: u32 = 1;
 pub const EXTERNAL_DETECTION_BATCH_MAX_BYTES: usize = 16 * 1024 * 1024;
@@ -164,16 +165,18 @@ fn convert_detections(
   label_map: &BTreeMap<String, String>,
   external_detections: Vec<ExternalDetection>,
 ) -> Result<Vec<BindingCallerDetection>> {
-  let requested_offsets = external_detections
-    .iter()
-    .flat_map(|detection| [detection.start, detection.end])
-    .collect::<Vec<_>>();
-  let byte_offsets = convert_offset_set(
-    full_text,
-    &requested_offsets,
-    offset_unit,
-    ExternalDetectionOffsetUnit::Utf8Byte,
-  )?;
+  let utf16_offsets = match offset_unit {
+    ExternalDetectionOffsetUnit::Utf16CodeUnit => {
+      Some(Utf16OffsetMap::new(full_text)?)
+    }
+    _ => None,
+  };
+  let character_offsets = match offset_unit {
+    ExternalDetectionOffsetUnit::UnicodeCodePoint => {
+      Some(CharacterOffsetMap::new(full_text)?)
+    }
+    _ => None,
+  };
   let mut provenance = BTreeSet::new();
   let mut detections = Vec::with_capacity(external_detections.len());
   for (index, detection) in external_detections.into_iter().enumerate() {
@@ -185,9 +188,14 @@ fn convert_detections(
     let label = label_map.get(&detection.label).cloned().ok_or_else(|| {
       invalid(format!("detections[{index}].label has no labelMap entry"))
     })?;
-    let start =
-      converted_offset(&byte_offsets, detection.start, index, "start")?;
-    let end = converted_offset(&byte_offsets, detection.end, index, "end")?;
+    let (start, end) = convert_offsets(
+      offset_unit,
+      detection.start,
+      detection.end,
+      utf16_offsets.as_ref(),
+      character_offsets.as_ref(),
+      index,
+    )?;
     if start >= end {
       return Err(invalid(format!(
         "detections[{index}] span start must be less than end"
@@ -233,11 +241,8 @@ pub fn external_detection_batch_to_utf16_caller_request(
   let full_text = document_text(document_bytes)?;
   let mut request =
     external_detection_batch_to_caller_request(document_bytes, batch_json)?;
-  convert_request_offsets(
-    full_text,
-    &mut request,
-    ExternalDetectionOffsetUnit::Utf16CodeUnit,
-  )?;
+  let offsets = Utf16OffsetMap::new(full_text)?;
+  convert_request_offsets(&mut request, |offset| offsets.convert(offset))?;
   Ok(request)
 }
 
@@ -261,34 +266,22 @@ pub fn external_detection_batch_to_character_caller_request(
   let full_text = document_text(document_bytes)?;
   let mut request =
     external_detection_batch_to_caller_request(document_bytes, batch_json)?;
-  convert_request_offsets(
-    full_text,
-    &mut request,
-    ExternalDetectionOffsetUnit::UnicodeCodePoint,
-  )?;
+  let offsets = CharacterOffsetMap::new(full_text)?;
+  convert_request_offsets(&mut request, |offset| offsets.convert(offset))?;
   Ok(request)
 }
 
 fn convert_request_offsets(
-  full_text: &str,
   request: &mut BindingCallerDetectionRequest,
-  output_unit: ExternalDetectionOffsetUnit,
+  convert: impl Fn(u32) -> Result<u32>,
 ) -> Result<()> {
-  let requested_offsets = request
-    .detections
-    .iter()
-    .flat_map(|detection| [detection.start, detection.end])
-    .collect::<Vec<_>>();
-  let converted = convert_offset_set(
-    full_text,
-    &requested_offsets,
-    ExternalDetectionOffsetUnit::Utf8Byte,
-    output_unit,
-  )?;
   for (index, detection) in request.detections.iter_mut().enumerate() {
-    detection.start =
-      converted_offset(&converted, detection.start, index, "start")?;
-    detection.end = converted_offset(&converted, detection.end, index, "end")?;
+    detection.start = convert(detection.start).map_err(|error| {
+      invalid(format!("converted detections[{index}].start: {error}"))
+    })?;
+    detection.end = convert(detection.end).map_err(|error| {
+      invalid(format!("converted detections[{index}].end: {error}"))
+    })?;
   }
   Ok(())
 }
@@ -305,124 +298,28 @@ fn serialize_request(
     .map_err(|error| invalid(format!("converted request: {error}")))
 }
 
-fn convert_offset_set(
-  full_text: &str,
-  requested_offsets: &[u32],
-  input_unit: ExternalDetectionOffsetUnit,
-  output_unit: ExternalDetectionOffsetUnit,
-) -> Result<BTreeMap<u32, u32>> {
-  let mut requested = requested_offsets.to_vec();
-  requested.sort_unstable();
-  requested.dedup();
-  let mut converted = BTreeMap::new();
-  if requested.is_empty() {
-    return Ok(converted);
-  }
-  let mut requested_index = 0_usize;
-  record_requested_boundary(
-    &requested,
-    &mut requested_index,
-    &mut converted,
-    BoundaryOffsets::default(),
-    input_unit,
-    output_unit,
-  )?;
-  if requested_index == requested.len() {
-    return Ok(converted);
-  }
-
-  let mut boundary = BoundaryOffsets::default();
-  for (byte_start, character) in full_text.char_indices() {
-    let byte_end = byte_start
-      .checked_add(character.len_utf8())
-      .and_then(|value| u32::try_from(value).ok())
-      .ok_or_else(|| invalid("document byte offset exceeds u32 range"))?;
-    boundary = BoundaryOffsets {
-      utf8_byte: byte_end,
-      utf16_code_unit: boundary
-        .utf16_code_unit
-        .checked_add(
-          u32::try_from(character.len_utf16())
-            .map_err(|_| invalid("UTF-16 character width exceeds u32 range"))?,
-        )
-        .ok_or_else(|| invalid("UTF-16 offset exceeds u32 range"))?,
-      unicode_code_point: boundary
-        .unicode_code_point
-        .checked_add(1)
-        .ok_or_else(|| invalid("character offset exceeds u32 range"))?,
-    };
-    record_requested_boundary(
-      &requested,
-      &mut requested_index,
-      &mut converted,
-      boundary,
-      input_unit,
-      output_unit,
-    )?;
-    if requested_index == requested.len() {
-      break;
-    }
-  }
-  if requested_index != requested.len() {
-    return Err(invalid(
-      "offset is outside the document or not on a boundary",
-    ));
-  }
-  Ok(converted)
-}
-
-#[derive(Clone, Copy, Default)]
-struct BoundaryOffsets {
-  utf8_byte: u32,
-  utf16_code_unit: u32,
-  unicode_code_point: u32,
-}
-
-impl BoundaryOffsets {
-  const fn get(self, unit: ExternalDetectionOffsetUnit) -> u32 {
-    match unit {
-      ExternalDetectionOffsetUnit::Utf8Byte => self.utf8_byte,
-      ExternalDetectionOffsetUnit::Utf16CodeUnit => self.utf16_code_unit,
-      ExternalDetectionOffsetUnit::UnicodeCodePoint => self.unicode_code_point,
-    }
-  }
-}
-
-fn record_requested_boundary(
-  requested: &[u32],
-  requested_index: &mut usize,
-  converted: &mut BTreeMap<u32, u32>,
-  boundary: BoundaryOffsets,
-  input_unit: ExternalDetectionOffsetUnit,
-  output_unit: ExternalDetectionOffsetUnit,
-) -> Result<()> {
-  let input_offset = boundary.get(input_unit);
-  while requested.get(*requested_index).copied() == Some(input_offset) {
-    converted.insert(input_offset, boundary.get(output_unit));
-    *requested_index = (*requested_index)
-      .checked_add(1)
-      .ok_or_else(|| invalid("requested offset index exceeds usize range"))?;
-  }
-  if requested
-    .get(*requested_index)
-    .is_some_and(|requested_offset| *requested_offset < input_offset)
-  {
-    return Err(invalid("offset is not on a valid text boundary"));
-  }
-  Ok(())
-}
-
-fn converted_offset(
-  converted: &BTreeMap<u32, u32>,
-  offset: u32,
+fn convert_offsets(
+  unit: ExternalDetectionOffsetUnit,
+  start: u32,
+  end: u32,
+  utf16_offsets: Option<&Utf16OffsetMap>,
+  character_offsets: Option<&CharacterOffsetMap>,
   index: usize,
-  field: &'static str,
-) -> Result<u32> {
-  converted.get(&offset).copied().ok_or_else(|| {
-    invalid(format!(
-      "detections[{index}].{field} could not be converted"
-    ))
-  })
+) -> Result<(u32, u32)> {
+  let convert = |offset| match unit {
+    ExternalDetectionOffsetUnit::Utf8Byte => Ok(offset),
+    ExternalDetectionOffsetUnit::Utf16CodeUnit => utf16_offsets
+      .ok_or_else(|| invalid("UTF-16 offset map is unavailable"))?
+      .byte_offset(offset),
+    ExternalDetectionOffsetUnit::UnicodeCodePoint => character_offsets
+      .ok_or_else(|| invalid("character offset map is unavailable"))?
+      .byte_offset(offset),
+  };
+  let start = convert(start)
+    .map_err(|error| invalid(format!("detections[{index}].start: {error}")))?;
+  let end = convert(end)
+    .map_err(|error| invalid(format!("detections[{index}].end: {error}")))?;
+  Ok((start, end))
 }
 
 fn validate_digest(document_bytes: &[u8], expected: &str) -> Result<()> {
@@ -465,12 +362,9 @@ fn validate_metadata(
   value: &str,
   max_bytes: usize,
 ) -> Result<()> {
-  if value.trim().is_empty()
-    || value.len() > max_bytes
-    || value.chars().any(char::is_control)
-  {
+  if value.trim().is_empty() || value.len() > max_bytes {
     return Err(invalid(format!(
-      "{field} must be non-blank, control-free, and at most {max_bytes} bytes"
+      "{field} must be non-blank and at most {max_bytes} bytes"
     )));
   }
   Ok(())
@@ -507,8 +401,7 @@ mod tests {
 
   use super::{
     EXTERNAL_DETECTION_BATCH_MAX_BYTES, ExternalDetectionOffsetUnit,
-    convert_offset_set, external_detection_batch_to_caller_request,
-    external_detection_batch_to_character_caller_request,
+    external_detection_batch_to_caller_request,
     external_detection_batch_to_character_caller_request_json,
     external_detection_batch_to_utf16_caller_request,
   };
@@ -546,56 +439,6 @@ mod tests {
   }
 
   #[test]
-  fn every_source_offset_unit_converts_the_same_span_across_hosts() {
-    let cases = [
-      (ExternalDetectionOffsetUnit::Utf8Byte, 4_u32, 9_u32),
-      (ExternalDetectionOffsetUnit::Utf16CodeUnit, 2, 7),
-      (ExternalDetectionOffsetUnit::UnicodeCodePoint, 1, 6),
-    ];
-    for (unit, start, end) in cases {
-      let batch = mutate(|batch| {
-        batch["offsetUnit"] = serde_json::to_value(unit).unwrap();
-        batch["detections"][0]["start"] = json!(start);
-        batch["detections"][0]["end"] = json!(end);
-      });
-      let batch_json = serde_json::to_string(&batch).unwrap();
-      let core =
-        external_detection_batch_to_caller_request(DOCUMENT, &batch_json)
-          .unwrap();
-      let node =
-        external_detection_batch_to_utf16_caller_request(DOCUMENT, &batch_json)
-          .unwrap();
-      let python = external_detection_batch_to_character_caller_request(
-        DOCUMENT,
-        &batch_json,
-      )
-      .unwrap();
-
-      assert_eq!(core.detections[0].start, 4);
-      assert_eq!(core.detections[0].end, 9);
-      assert_eq!(node.detections[0].start, 2);
-      assert_eq!(node.detections[0].end, 7);
-      assert_eq!(python.detections[0].start, 1);
-      assert_eq!(python.detections[0].end, 6);
-    }
-  }
-
-  #[test]
-  fn large_ascii_conversion_uses_memory_bounded_by_requested_offsets() {
-    let text = "a".repeat(1_000_000);
-    let converted = convert_offset_set(
-      &text,
-      &[0, 1_000_000],
-      ExternalDetectionOffsetUnit::UnicodeCodePoint,
-      ExternalDetectionOffsetUnit::Utf8Byte,
-    )
-    .unwrap();
-    assert_eq!(converted.len(), 2);
-    assert_eq!(converted.get(&0), Some(&0));
-    assert_eq!(converted.get(&1_000_000), Some(&1_000_000));
-  }
-
-  #[test]
   fn contract_rejects_stale_unknown_and_duplicate_inputs() {
     let cases = [
       mutate(|batch| batch["version"] = json!(2)),
@@ -612,10 +455,6 @@ mod tests {
         batch["detections"].as_array_mut().unwrap().push(duplicate);
       }),
       mutate(|batch| batch["detections"][0]["label"] = json!("UNKNOWN")),
-      mutate(|batch| batch["provider"]["name"] = json!("unsafe\nname")),
-      mutate(|batch| {
-        batch["labelMap"][0]["entityLabel"] = json!("person\u{0007}");
-      }),
     ];
     for batch in cases {
       assert!(

@@ -2,5 +2,4 @@
 "@stll/anonymize": minor
 ---
 
-Add provider-neutral, digest-bound ExternalDetectionBatch v1 conversion across
-all core runtime bindings, including Node.js, Python, and browser/WASI.
+Add a provider-neutral, digest-bound ExternalDetectionBatch v1 adapter for Node and Python model sidecars.
