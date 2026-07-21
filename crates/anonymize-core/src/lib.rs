@@ -75,9 +75,9 @@ pub use redact::{
   redact_text_with_session,
 };
 pub use resolution::{
-  CallerDetection, CallerDetectionParams, CallerProvenance, DetectionSource,
-  PipelineEntity, SourceDetail, enforce_boundary_consistency, merge_and_dedup,
-  sanitize_entities,
+  BoundaryParams, CallerDetection, CallerDetectionParams, CallerProvenance,
+  DetectionSource, PipelineEntity, SourceDetail, enforce_boundary_consistency,
+  merge_and_dedup, sanitize_entities,
 };
 pub use search::{
   FuzzySearchOptions, LiteralSearchOptions, PreparedArtifactPolicy,
@@ -94,7 +94,7 @@ pub use session_archive::{
   REDACTION_SESSION_ARCHIVE_KEY_BYTES, REDACTION_SESSION_ARCHIVE_MAX_BYTES,
   REDACTION_SESSION_ARCHIVE_VERSION, SessionArchiveKey,
 };
-pub use signatures::SignatureData;
+pub use signatures::{PersonSpanTerminators, SignatureData};
 pub use triggers::{
   PERSON_OR_ORGANIZATION_TRIGGER_LABEL, TriggerData, TriggerRule,
   TriggerStrategy, TriggerValidation,

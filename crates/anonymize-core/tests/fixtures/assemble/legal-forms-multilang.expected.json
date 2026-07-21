@@ -119,6 +119,38 @@
       "pty ltd",
       "pty ltd."
     ],
+    "form_field_labels": [
+      "name",
+      "funktion",
+      "datum",
+      "unterschrift",
+      "adresse",
+      "nom",
+      "fonction",
+      "date",
+      "signature",
+      "imię",
+      "nazwisko",
+      "stanowisko",
+      "data",
+      "podpis"
+    ],
+    "signature_stamp_phrases": [
+      "digitally signed by",
+      "digitally signed",
+      "digitálně podepsal",
+      "digitálně podepsala",
+      "podepsáno",
+      "digital signiert von",
+      "digital unterschrieben von",
+      "firmado digitalmente por",
+      "signé numériquement par",
+      "firmato digitalmente da",
+      "digitaal ondertekend door",
+      "podpisano cyfrowo przez",
+      "assinado digitalmente por",
+      "digitálne podpísal"
+    ],
     "image_stub_prefixes": ["[img", "[image", "[logo", "(logo"]
   },
   "monetary_data": {

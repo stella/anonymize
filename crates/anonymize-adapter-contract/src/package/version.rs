@@ -8,25 +8,25 @@ use crate::error::invalid_prepared_search_package;
 
 use super::PackageCompression;
 
-// Versions below 16 (binding) / 23 (core) carried bincode payloads; the
-// payload codec is postcard from these versions on, and older versions
-// are rejected with "unsupported version". Version numbers are unique
-// per header magic, across compression variants.
+// Versions below 16 (binding) / 23 (core) carried bincode payloads. Postcard
+// began at those versions; current versions also reject postcard payloads
+// whose positional struct schema predates the current DTOs. Version numbers
+// are unique per header magic, across compression variants.
 pub(crate) const PREPARED_SEARCH_PACKAGE_HEADER: [u8; 8] = *b"ANONPKG1";
-pub(crate) const PREPARED_SEARCH_PACKAGE_VERSION: u32 = 16;
+pub(crate) const PREPARED_SEARCH_PACKAGE_VERSION: u32 = 17;
 pub(crate) const PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER: [u8; 8] =
   *b"ANONPKZ1";
-pub(crate) const PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION: u32 = 16;
-pub(crate) const PREPARED_SEARCH_COMPRESSED_PACKAGE_ZSTD_VERSION: u32 = 17;
+pub(crate) const PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION: u32 = 19;
+pub(crate) const PREPARED_SEARCH_COMPRESSED_PACKAGE_ZSTD_VERSION: u32 = 20;
 pub(crate) const PREPARED_SEARCH_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION:
-  u32 = 18;
+  u32 = 21;
 pub(crate) const PREPARED_SEARCH_CORE_PACKAGE_HEADER: [u8; 8] = *b"ANONCPK1";
-pub(crate) const PREPARED_SEARCH_CORE_PACKAGE_VERSION: u32 = 23;
+pub(crate) const PREPARED_SEARCH_CORE_PACKAGE_VERSION: u32 = 24;
 pub(crate) const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_HEADER: [u8; 8] =
   *b"ANONCPZ1";
-pub(crate) const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION: u32 = 23;
-pub(crate) const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_ZSTD_VERSION: u32 = 24;
-pub(crate) const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION: u32 = 25;
+pub(crate) const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION: u32 = 26;
+pub(crate) const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_ZSTD_VERSION: u32 = 27;
+pub(crate) const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION: u32 = 28;
 pub(crate) const PREPARED_SEARCH_PACKAGE_DIGEST_BYTES: usize = 32;
 #[cfg(test)]
 pub(crate) const PREPARED_SEARCH_PACKAGE_ZSTD_LEVEL: i32 = 1;

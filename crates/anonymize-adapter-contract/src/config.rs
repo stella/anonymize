@@ -343,6 +343,8 @@ fn signature_data_from_binding(data: BindingSignatureData) -> SignatureData {
     name_particles: data.name_particles,
     post_nominal_suffixes: data.post_nominal_suffixes,
     organization_suffixes: data.organization_suffixes,
+    form_field_labels: data.form_field_labels,
+    signature_stamp_phrases: data.signature_stamp_phrases,
     image_stub_prefixes: data.image_stub_prefixes,
   }
 }

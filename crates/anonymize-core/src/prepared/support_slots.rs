@@ -255,6 +255,8 @@ fn signature_data_len(data: Option<&SignatureData>) -> usize {
       data.name_particles.len(),
       data.post_nominal_suffixes.len(),
       data.organization_suffixes.len(),
+      data.form_field_labels.len(),
+      data.signature_stamp_phrases.len(),
       data.image_stub_prefixes.len(),
     ]
     .into_iter()

@@ -3,9 +3,10 @@ use crate::false_positives::filter_entity_false_positives;
 use crate::hotwords::apply_hotword_rules;
 use crate::processors::DenyListFilterData;
 use crate::resolution::{
-  PipelineEntity, enforce_boundary_consistency, merge_and_dedup,
-  sanitize_entities_with_source,
+  BoundaryParams, PipelineEntity, enforce_boundary_consistency,
+  merge_and_dedup, sanitize_entities_with_source,
 };
+use crate::signatures::{PersonSpanTerminators, PreparedSignatureData};
 use crate::types::{Result, SearchMatch};
 
 use super::PreparedEngine;
@@ -67,7 +68,11 @@ impl PreparedEngine {
       merge_timer,
     )?;
     let boundary_timer = PhaseTimer::start();
-    let consistent = enforce_boundary_consistency(&merged, full_text)?;
+    let consistent = enforce_boundary_consistency(BoundaryParams {
+      entities: &merged,
+      full_text,
+      person_terminators: self.person_span_terminators(),
+    })?;
     record_resolver_entities(
       diagnostics,
       event_stream,
@@ -112,6 +117,15 @@ impl PreparedEngine {
       sanitize_timer,
     )?;
     Ok(resolved_entities)
+  }
+
+  fn person_span_terminators(&self) -> PersonSpanTerminators<'_> {
+    self
+      .data
+      .signatures
+      .as_ref()
+      .map(PreparedSignatureData::person_span_terminators)
+      .unwrap_or_default()
   }
 
   fn prepare_pre_threshold_entities(
@@ -226,7 +240,11 @@ impl PreparedEngine {
 
     let merged =
       merge_and_dedup(&[existing_entities, coreference_entities].concat());
-    let consistent = enforce_boundary_consistency(&merged, full_text)?;
+    let consistent = enforce_boundary_consistency(BoundaryParams {
+      entities: &merged,
+      full_text,
+      person_terminators: self.person_span_terminators(),
+    })?;
     let sanitized = sanitize_entities_with_source(&consistent, full_text)?;
     let filtered = filter_entity_false_positives(
       sanitized,

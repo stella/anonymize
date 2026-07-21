@@ -1,23 +1,233 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::byte_offsets::ByteOffsets;
+use crate::signatures::PersonSpanTerminators;
 use crate::types::Result;
 
 use super::common::{byte_len, contains_span, entity_len, is_caller_owned};
 use super::{DetectionSource, PipelineEntity};
 
+/// Inputs to the boundary pass. `person_terminators` is empty when the
+/// engine has no signature data, which disables person-span truncation.
+#[derive(Clone, Copy, Debug)]
+pub struct BoundaryParams<'a> {
+  pub entities: &'a [PipelineEntity],
+  pub full_text: &'a str,
+  pub person_terminators: PersonSpanTerminators<'a>,
+}
+
 pub fn enforce_boundary_consistency(
-  entities: &[PipelineEntity],
-  full_text: &str,
+  params: BoundaryParams<'_>,
 ) -> Result<Vec<PipelineEntity>> {
+  let BoundaryParams {
+    entities,
+    full_text,
+    person_terminators,
+  } = params;
   let offsets = ByteOffsets::new(full_text);
   let spans = char_spans(full_text);
   let boundaries = word_boundaries(&spans);
   let fixed = fix_partial_words(entities, &offsets, &spans, &boundaries)?;
-  let resolved = resolve_cross_label_overlaps(&fixed, &offsets)?;
+  // Truncation runs after word-boundary expansion so expansion cannot push a
+  // person span back across a terminator it was just pulled behind.
+  let truncated =
+    truncate_person_spans(&fixed, full_text, &offsets, person_terminators)?;
+  let resolved = resolve_cross_label_overlaps(&truncated, &offsets)?;
   let deduped = deduplicate_spans(&resolved);
   let merged = merge_adjacent(&deduped, &offsets)?;
   Ok(remove_nested_same_label(&merged))
+}
+
+/// Stop person spans at a signature-stamp phrase or a form-field label.
+///
+/// Both are exact, language-keyed vocabulary from `signature-detection.json`.
+/// A shape heuristic is deliberately avoided here: adverb-like suffixes match
+/// real surnames (Connolly, Ehrlich, Clemente), and dropping a surname is an
+/// under-redaction, the one failure mode this library must not have.
+fn truncate_person_spans(
+  entities: &[PipelineEntity],
+  full_text: &str,
+  offsets: &ByteOffsets<'_>,
+  terminators: PersonSpanTerminators<'_>,
+) -> Result<Vec<PipelineEntity>> {
+  if terminators.stamp_phrases.is_empty() && terminators.field_labels.is_empty()
+  {
+    return Ok(entities.to_vec());
+  }
+
+  let mut result = Vec::with_capacity(entities.len());
+  for entity in entities {
+    if entity.label != crate::labels::PERSON_LABEL
+      || has_locked_boundary(entity)
+    {
+      result.push(entity.clone());
+      continue;
+    }
+
+    if let Some(prefix_end) =
+      leading_terminator_end(full_text, entity, terminators)
+    {
+      // A detector may include both a leading signing-software stamp and the
+      // signer. Retain the name after the exact terminator; only discard the
+      // entity when it contains no text beyond that prefix.
+      let trimmed_start = trim_leading_separator(full_text, prefix_end);
+      if trimmed_start >= entity.end {
+        continue;
+      }
+      let mut adjusted = entity.clone();
+      adjusted.start = trimmed_start;
+      adjusted.text = offsets.slice(trimmed_start, entity.end)?;
+      result.push(adjusted);
+      continue;
+    }
+
+    let Some(cut) = terminator_start_within(full_text, entity, terminators)
+    else {
+      result.push(entity.clone());
+      continue;
+    };
+
+    let trimmed_end = trim_trailing_space(full_text, entity.start, cut);
+    if trimmed_end <= entity.start {
+      continue;
+    }
+
+    let mut adjusted = entity.clone();
+    adjusted.end = trimmed_end;
+    adjusted.text = offsets.slice(entity.start, trimmed_end)?;
+    result.push(adjusted);
+  }
+
+  Ok(result)
+}
+
+fn leading_terminator_end(
+  full_text: &str,
+  entity: &PipelineEntity,
+  terminators: PersonSpanTerminators<'_>,
+) -> Option<u32> {
+  let Ok(start) = usize::try_from(entity.start) else {
+    return None;
+  };
+  let tail = full_text.get(start..).unwrap_or_default();
+  stamp_phrase_end(tail, terminators.stamp_phrases)
+    .or_else(|| field_label_end(tail, terminators.field_labels))
+    .and_then(|relative| u32::try_from(start.saturating_add(relative)).ok())
+}
+
+/// Byte offset of the first terminator beginning inside the entity span.
+///
+/// A stamp phrase may run past `entity.end` (the detector stops at the name,
+/// so "Karel Digitálně" holds only the first word of "digitálně podepsal"),
+/// so phrases are matched against the full text from each candidate token.
+fn terminator_start_within(
+  full_text: &str,
+  entity: &PipelineEntity,
+  terminators: PersonSpanTerminators<'_>,
+) -> Option<u32> {
+  let start = usize::try_from(entity.start).ok()?;
+  let end = usize::try_from(entity.end).ok()?;
+  let window = full_text.get(start..end)?;
+
+  window
+    .char_indices()
+    .filter(|&(offset, _)| {
+      offset > 0 && is_token_start(window, offset) && offset < end
+    })
+    .find(|&(offset, _)| {
+      let absolute = start.saturating_add(offset);
+      let tail = full_text.get(absolute..).unwrap_or_default();
+      starts_with_stamp_phrase(tail, terminators.stamp_phrases)
+        || is_colon_tied_field_label(tail, terminators.field_labels)
+    })
+    .and_then(|(offset, _)| u32::try_from(start.saturating_add(offset)).ok())
+}
+
+fn starts_with_stamp_phrase(tail: &str, phrases: &[String]) -> bool {
+  stamp_phrase_end(tail, phrases).is_some()
+}
+
+fn stamp_phrase_end(tail: &str, phrases: &[String]) -> Option<usize> {
+  phrases.iter().find_map(|phrase| {
+    if !starts_with_ignore_case(tail, phrase) {
+      return None;
+    }
+    let rest = remainder_after_chars(tail, phrase.chars().count())?;
+    if rest.chars().next().is_some_and(char::is_alphanumeric) {
+      return None;
+    }
+    Some(tail.len().saturating_sub(rest.len()))
+  })
+}
+
+/// A field label counts only when optional whitespace after it ends in a colon.
+/// Without the colon, "Name" and "Jméno" are ordinary words, and a surname
+/// that happens to collide with the vocabulary keeps its place in the span.
+fn is_colon_tied_field_label(tail: &str, labels: &[String]) -> bool {
+  field_label_end(tail, labels).is_some()
+}
+
+fn field_label_end(tail: &str, labels: &[String]) -> Option<usize> {
+  labels.iter().find_map(|label| {
+    if !starts_with_ignore_case(tail, label) {
+      return None;
+    }
+    let after_label = remainder_after_chars(tail, label.chars().count())?;
+    let after_space = after_label.trim_start();
+    let separator = after_space.chars().next()?;
+    matches!(separator, ':' | '：').then(|| {
+      let label_end = tail.len().saturating_sub(after_label.len());
+      let separator_start = tail.len().saturating_sub(after_space.len());
+      label_end.max(separator_start.saturating_add(separator.len_utf8()))
+    })
+  })
+}
+
+fn trim_leading_separator(full_text: &str, start: u32) -> u32 {
+  let Ok(start_index) = usize::try_from(start) else {
+    return start;
+  };
+  let tail = full_text.get(start_index..).unwrap_or_default();
+  let trimmed = tail.trim_start_matches(|character: char| {
+    character.is_whitespace() || matches!(character, ':' | '：' | '-' | '–')
+  });
+  u32::try_from(full_text.len().saturating_sub(trimmed.len())).unwrap_or(start)
+}
+
+fn remainder_after_chars(value: &str, count: usize) -> Option<&str> {
+  if count == value.chars().count() {
+    return Some("");
+  }
+  let index = value.char_indices().nth(count)?.0;
+  value.get(index..)
+}
+
+/// Case-insensitive prefix test. `needle` is lowercased at prepare time.
+fn starts_with_ignore_case(haystack: &str, needle: &str) -> bool {
+  let mut lowered = haystack.chars().flat_map(char::to_lowercase);
+  needle
+    .chars()
+    .all(|expected| lowered.next() == Some(expected))
+}
+
+fn is_token_start(window: &str, offset: usize) -> bool {
+  window
+    .get(..offset)
+    .and_then(|prefix| prefix.chars().next_back())
+    .is_none_or(|previous| !previous.is_alphanumeric())
+}
+
+fn trim_trailing_space(full_text: &str, start: u32, end: u32) -> u32 {
+  let (Ok(start_index), Ok(end_index)) =
+    (usize::try_from(start), usize::try_from(end))
+  else {
+    return end;
+  };
+  let Some(slice) = full_text.get(start_index..end_index) else {
+    return end;
+  };
+  let trimmed = slice.trim_end();
+  start.saturating_add(byte_len(trimmed))
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
