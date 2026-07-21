@@ -174,12 +174,70 @@ fn day_month_span(
   month_start: usize,
   month_end: usize,
 ) -> Option<(usize, usize)> {
+  let month = str_slice(text, month_start, month_end)?;
+  let month_lower = month.to_lowercase();
+  if !month.chars().next().is_some_and(char::is_uppercase)
+    && AMBIGUOUS_LOWERCASE_MONTHS.contains(&month_lower.as_str())
+    && !has_terminal_day_month_boundary(text, month_end)
+  {
+    return None;
+  }
   let day = day_before_month(text, month_start)?;
-  let after_month = skip_horizontal_ws(text, month_end);
+  let after_month = skip_date_year_separator(text, month_end);
   if parse_year_forward(text, after_month).is_some() {
     return None;
   }
   right_date_boundary(text, month_end).then_some((day.0, month_end))
+}
+
+// Lowercase month spellings that also occur as ordinary English words or
+// common legal abbreviations. Other languages routinely lowercase months, so
+// this guard is deliberately token-specific rather than casing-wide.
+const AMBIGUOUS_LOWERCASE_MONTHS: &[&str] = &[
+  "ago",
+  "apr",
+  "april",
+  "aug",
+  "august",
+  "dec",
+  "december",
+  "feb",
+  "february",
+  "gen",
+  "jan",
+  "january",
+  "jul",
+  "july",
+  "jun",
+  "june",
+  "lip",
+  "list",
+  "mag",
+  "mai",
+  "mar",
+  "march",
+  "mars",
+  "mart",
+  "may",
+  "nov",
+  "november",
+  "oct",
+  "october",
+  "out",
+  "sep",
+  "sept",
+  "september",
+  "set",
+  "sie",
+];
+
+fn has_terminal_day_month_boundary(text: &str, month_end: usize) -> bool {
+  let after_month = skip_horizontal_ws(text, month_end);
+  str_tail(text, after_month)
+    .and_then(|tail| tail.chars().next())
+    .is_none_or(|character| {
+      matches!(character, '\n' | '\r' | ',' | '.' | ';' | ':' | ')' | ']')
+    })
 }
 
 fn date_entity(
@@ -206,7 +264,7 @@ fn day_month_year_span(
   month_end: usize,
 ) -> Option<(usize, usize)> {
   let day = day_before_month(text, month_start)?;
-  let after_month = skip_horizontal_ws(text, month_end);
+  let after_month = skip_date_year_separator(text, month_end);
   let year = parse_year_forward(text, after_month)?;
   let end = parse_time_suffix(text, year.1).unwrap_or(year.1);
   Some((day.0, end))
@@ -218,7 +276,7 @@ fn ordinal_day_month_span(
   month_end: usize,
 ) -> Option<(usize, usize)> {
   let day = ordinal_day_before_month(text, month_start)?;
-  let after_month = skip_horizontal_ws(text, month_end);
+  let after_month = skip_date_year_separator(text, month_end);
   let end = parse_year_forward(text, after_month).map_or(month_end, |year| {
     parse_time_suffix(text, year.1).unwrap_or(year.1)
   });
@@ -508,13 +566,17 @@ mod tests {
   use super::date_spans_for_month;
 
   fn spans(text: &str) -> Vec<String> {
-    let Some(month_start) = text.find("July") else {
+    spans_for(text, "July")
+  }
+
+  fn spans_for(text: &str, month: &str) -> Vec<String> {
+    let Some(month_start) = text.find(month) else {
       return Vec::new();
     };
     date_spans_for_month(
       text,
       month_start,
-      month_start.saturating_add("July".len()),
+      month_start.saturating_add(month.len()),
     )
     .into_iter()
     .map(|(start, end)| text.get(start..end).unwrap_or_default().to_owned())
@@ -531,11 +593,31 @@ mod tests {
     let found = spans("The hearing was on 22 July 2026.");
     assert_eq!(found, vec!["22 July 2026", "July 2026"]);
     assert!(!found.iter().any(|span| span == "22 July"));
+
+    let comma_separated = spans("The hearing was on 22 July, 2026.");
+    assert_eq!(comma_separated, vec!["22 July, 2026"]);
   }
 
   #[test]
   fn rejects_out_of_range_and_identifier_days() {
     assert!(spans("The reference is 42 July.").is_empty());
     assert!(spans("The reference is item22 July.").is_empty());
+  }
+
+  #[test]
+  fn rejects_lowercase_words_that_overlap_month_names() {
+    assert!(spans_for("Section 12 may be amended.", "may").is_empty());
+    assert!(spans_for("We paid $25 set aside.", "set").is_empty());
+    assert_eq!(spans_for("Due 12 may.", "may"), vec!["12 may"]);
+  }
+
+  #[test]
+  fn accepts_unambiguous_lowercase_months_used_in_other_languages() {
+    assert_eq!(
+      spans_for("Audience le 22 juillet.", "juillet"),
+      vec!["22 juillet"]
+    );
+    assert_eq!(spans_for("Audiencia 12 mayo.", "mayo"), vec!["12 mayo"]);
+    assert_eq!(spans_for("Jednání 12 září.", "září"), vec!["12 září"]);
   }
 }
