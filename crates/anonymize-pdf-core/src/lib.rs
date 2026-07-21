@@ -503,22 +503,59 @@ struct RawRetentionInventory {
 
 fn raw_retention_inventory(
   bytes: &[u8],
+  active_xref_start: usize,
 ) -> Result<RawRetentionInventory, PdfInspectionError> {
   const EOF_MARKER: &[u8] = b"%%EOF";
   const STARTXREF_MARKER: &[u8] = b"startxref";
-  let eof_positions = bytes
-    .windows(EOF_MARKER.len())
-    .enumerate()
-    .filter_map(|(index, window)| (window == EOF_MARKER).then_some(index))
-    .collect::<Vec<_>>();
-  let final_eof_start = eof_positions.last().copied().ok_or_else(|| {
-    invalid_document("PDF document must contain a final %%EOF marker")
-  })?;
-  let startxref_count = bytes
+  let completed_revisions = bytes
     .windows(STARTXREF_MARKER.len())
-    .filter(|window| *window == STARTXREF_MARKER)
-    .count();
-  let completed_revision_count = eof_positions.len().min(startxref_count);
+    .enumerate()
+    .filter_map(|(position, window)| {
+      if window != STARTXREF_MARKER {
+        return None;
+      }
+      let mut cursor = position.checked_add(STARTXREF_MARKER.len())?;
+      while bytes.get(cursor).is_some_and(u8::is_ascii_whitespace) {
+        cursor = cursor.checked_add(1)?;
+      }
+      let offset_start = cursor;
+      let mut xref_start = 0usize;
+      while let Some(digit) = bytes.get(cursor).and_then(|byte| {
+        byte
+          .is_ascii_digit()
+          .then(|| byte.checked_sub(b'0').map(usize::from))
+          .flatten()
+      }) {
+        xref_start = xref_start.checked_mul(10)?.checked_add(digit)?;
+        cursor = cursor.checked_add(1)?;
+      }
+      if cursor == offset_start {
+        return None;
+      }
+      while bytes.get(cursor).is_some_and(u8::is_ascii_whitespace) {
+        cursor = cursor.checked_add(1)?;
+      }
+      bytes
+        .get(cursor..)
+        .is_some_and(|tail| tail.starts_with(EOF_MARKER))
+        .then_some((xref_start, cursor))
+    })
+    .collect::<Vec<_>>();
+  // Use the first syntactically completed revision that points at the xref
+  // table actually selected by the parser. A later marker in appended bytes,
+  // even one repeating the valid xref offset, can therefore never move the
+  // retention boundary past hidden data.
+  let final_eof_start = completed_revisions
+    .iter()
+    .find_map(|(xref_start, eof_start)| {
+      (*xref_start == active_xref_start).then_some(*eof_start)
+    })
+    .ok_or_else(|| {
+      invalid_document(
+        "PDF active revision must end with a matching startxref and %%EOF",
+      )
+    })?;
+  let completed_revision_count = completed_revisions.len();
   let incremental_revision_count = u32::try_from(
     completed_revision_count.saturating_sub(1),
   )
@@ -891,7 +928,7 @@ fn inspect_parsed(
     ));
   }
   let observations = validate_observations(observations, pages)?;
-  let retention = raw_retention_inventory(bytes)?;
+  let retention = raw_retention_inventory(bytes, document.xref_start)?;
   let risks = risk_inventory(&document, pages, retention)?;
   let mut page_inspections = Vec::with_capacity(pages.len());
   for (page_offset, page) in pages.iter().enumerate() {
@@ -1071,13 +1108,15 @@ fn validate_observation(
       .glyphs
       .iter()
       .try_fold(0u32, |expected_start, glyph| {
-        (glyph.start == expected_start).then_some(glyph.end)
+        (glyph.start == expected_start
+          && glyph.source == PdfGlyphSource::EmbeddedText)
+          .then_some(glyph.end)
       })
       .is_some_and(|end| end == text_end);
     if !exactly_covered {
       return Err(error(
         PdfInspectionErrorCode::InvalidObservation,
-        "PDF complete text layers require glyph spans to cover all observed text exactly",
+        "PDF complete text layers require embedded-text glyph spans to cover all observed text exactly",
       ));
     }
   }
@@ -2404,6 +2443,55 @@ mod tests {
         .gaps
         .contains(&PdfInspectionGap::RetainedDocumentBytes)
     );
+
+    let fake_marker_suffixes = [
+      b"\nsecret retained bytes%%EOF\n".to_vec(),
+      format!(
+        "\nsecret retained bytes\nstartxref \r\n {}\t\n%%EOF\n",
+        document.xref_start
+      )
+      .into_bytes(),
+      format!(
+        "\nsecret retained bytes\nstartxref\n{}\n%%EOF\nstartxref\r\n{}\r\n%%EOF\n",
+        document.xref_start, document.xref_start
+      )
+      .into_bytes(),
+    ];
+    for suffix in fake_marker_suffixes {
+      let mut adversarial = MINIMAL_PDF.to_vec();
+      adversarial.extend_from_slice(&suffix);
+      let result = inspect_pdf_with_observations(
+        &adversarial,
+        vec![PdfPageObservation {
+          page_index: 0,
+          width_points: 612.0,
+          height_points: 792.0,
+          text: String::new(),
+          glyphs: Vec::new(),
+          rendered: true,
+          text_layer: PdfTextLayerCoverage::Complete,
+          ocr: PdfOcrCoverage::Complete,
+          image_count: 0,
+        }],
+      );
+      match result {
+        Ok(inspection) => {
+          assert_eq!(
+            inspection.coverage.status,
+            PdfInspectionCoverageStatus::Partial
+          );
+          assert!(
+            inspection
+              .coverage
+              .gaps
+              .contains(&PdfInspectionGap::RetainedDocumentBytes)
+          );
+        }
+        Err(error) => {
+          assert_eq!(error.code(), PdfInspectionErrorCode::InvalidDocument);
+        }
+      }
+    }
   }
 
   #[test]
@@ -2711,6 +2799,59 @@ mod tests {
     let inspection = inspect_pdf(&bytes).unwrap();
     assert_eq!(inspection.pdf_version, "1.5");
     assert_eq!(inspection.page_count, 1);
+  }
+
+  #[test]
+  fn complete_text_layers_reject_ocr_only_and_mixed_source_coverage() {
+    let ocr_glyph = PdfGlyphObservation {
+      start: 6,
+      end: 14,
+      bounds: PdfRect {
+        left: 88.0,
+        bottom: 700.0,
+        right: 108.0,
+        top: 712.0,
+      },
+      source: PdfGlyphSource::Ocr,
+    };
+    let ocr_only = vec![PdfGlyphObservation {
+      start: 0,
+      bounds: PdfRect {
+        left: 72.0,
+        ..ocr_glyph.bounds.clone()
+      },
+      ..ocr_glyph.clone()
+    }];
+    let mixed = vec![
+      PdfGlyphObservation {
+        start: 0,
+        end: 6,
+        bounds: PdfRect {
+          left: 72.0,
+          bottom: 700.0,
+          right: 88.0,
+          top: 712.0,
+        },
+        source: PdfGlyphSource::EmbeddedText,
+      },
+      ocr_glyph,
+    ];
+    for glyphs in [ocr_only, mixed] {
+      let observation = PdfPageObservation {
+        page_index: 0,
+        width_points: 612.0,
+        height_points: 792.0,
+        text: String::from("Public fixture"),
+        glyphs,
+        rendered: true,
+        text_layer: PdfTextLayerCoverage::Complete,
+        ocr: PdfOcrCoverage::Complete,
+        image_count: 0,
+      };
+      let error = inspect_pdf_with_observations(MINIMAL_PDF, vec![observation])
+        .unwrap_err();
+      assert_eq!(error.code(), PdfInspectionErrorCode::InvalidObservation);
+    }
   }
 
   #[test]

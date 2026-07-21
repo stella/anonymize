@@ -15,7 +15,7 @@ lifetime, restoration, and what metadata can still carry PII.
 | Encrypted session transfer         | Yes  | Yes    | No   | Yes | Not exposed yet      |
 | DOCX extraction/coverage           | Yes  | Yes    | No   | Yes | Aggregate inspection |
 | DOCX rewrite/anonymize/restore     | Yes  | Yes    | No   | Yes | Yes                  |
-| PDF structure/coverage inspection  | Yes  | Yes    | No   | No  | No                   |
+| PDF structure/coverage inspection  | Yes  | Yes    | Yes  | No  | No                   |
 | Runtime capability discovery       | Yes  | Yes    | Yes  | Yes | Fixed tool list      |
 
 Node and Python DOCX adapters share bounded extraction, rewrite, and restoration
@@ -26,6 +26,10 @@ The local MCP server deliberately exposes a narrower workflow surface. It uses
 stdio only, requires explicit absolute input and output paths under configured
 roots, rejects symlink escapes and overwrites, and returns aggregate summaries
 without document text or plaintext mappings.
+
+PDF inspection parity includes the browser/WASM byte-oriented API. It does not
+include a browser renderer or OCR provider; without provider observations the
+inspection remains explicitly partial.
 
 ## Format-level gaps
 
