@@ -239,6 +239,7 @@ pub struct BindingLegalFormData {
   pub institutional_complement_starters: Vec<String>,
   pub institutional_complement_connectors: Vec<String>,
   pub institutional_generic_words: Vec<String>,
+  pub institutional_prefix_generic_words: Vec<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]

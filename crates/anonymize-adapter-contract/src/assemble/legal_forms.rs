@@ -633,6 +633,10 @@ pub(super) fn build_legal_form_data(
       "institutional-organization-generic-name-words.json",
       ctx.content_languages.as_deref(),
     )?,
+    institutional_prefix_generic_words: institutional_language_words(
+      "institutional-organization-prefix-generic-name-words.json",
+      ctx.content_languages.as_deref(),
+    )?,
   }))
 }
 

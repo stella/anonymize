@@ -155,6 +155,7 @@ export type NativeLegalFormData = {
   institutional_complement_starters: string[];
   institutional_complement_connectors: string[];
   institutional_generic_words: string[];
+  institutional_prefix_generic_words: string[];
 };
 
 export type NativeDateMonthData = Record<string, string[]>;

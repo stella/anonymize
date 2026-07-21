@@ -16261,8 +16261,6 @@
       "employee",
       "employment",
       "executive",
-      "finance",
-      "financial",
       "general",
       "governing",
       "head",
@@ -16288,11 +16286,11 @@
       "these",
       "those",
       "this",
-      "trade",
       "trustee",
       "trustees",
       "whereas"
-    ]
+    ],
+    "institutional_prefix_generic_words": ["finance", "financial", "trade"]
   },
   "regex_meta": [
     {

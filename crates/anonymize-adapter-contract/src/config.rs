@@ -165,6 +165,7 @@ fn legal_form_data_from_binding(data: BindingLegalFormData) -> LegalFormData {
     institutional_complement_connectors: data
       .institutional_complement_connectors,
     institutional_generic_words: data.institutional_generic_words,
+    institutional_prefix_generic_words: data.institutional_prefix_generic_words,
   }
 }
 

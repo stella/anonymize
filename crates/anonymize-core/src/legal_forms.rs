@@ -36,6 +36,7 @@ pub struct LegalFormData {
   pub institutional_complement_starters: Vec<String>,
   pub institutional_complement_connectors: Vec<String>,
   pub institutional_generic_words: Vec<String>,
+  pub institutional_prefix_generic_words: Vec<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -63,6 +64,7 @@ pub(crate) struct PreparedLegalFormData {
   institutional_complement_starters: HashSet<String>,
   institutional_complement_connectors: HashSet<String>,
   institutional_generic_words: HashSet<String>,
+  institutional_prefix_generic_words: HashSet<String>,
 }
 
 impl PreparedLegalFormData {
@@ -89,6 +91,7 @@ impl PreparedLegalFormData {
       institutional_complement_starters,
       institutional_complement_connectors,
       institutional_generic_words,
+      institutional_prefix_generic_words,
     } = data;
     let list_suffix_indices = list_suffix_indices(&suffixes);
     let suffix_indices_by_last_char = suffix_indices_by_last_char(&suffixes);
@@ -121,6 +124,9 @@ impl PreparedLegalFormData {
         institutional_complement_connectors,
       ),
       institutional_generic_words: lower_set(institutional_generic_words),
+      institutional_prefix_generic_words: lower_set(
+        institutional_prefix_generic_words,
+      ),
     }
   }
 }
@@ -1050,13 +1056,13 @@ fn is_named_institutional_span(
   else {
     return false;
   };
-  match institutional_fragment_has_specific_name(prefix, data) {
+  match institutional_fragment_has_specific_name(prefix, data, false) {
     None => false,
     Some(true) => true,
     Some(false) => full_text
       .get(candidate.suffix_end..emit_end)
       .and_then(|complement| {
-        institutional_fragment_has_specific_name(complement, data)
+        institutional_fragment_has_specific_name(complement, data, true)
       })
       .unwrap_or(false),
   }
@@ -1065,6 +1071,7 @@ fn is_named_institutional_span(
 fn institutional_fragment_has_specific_name(
   fragment: &str,
   data: &PreparedLegalFormData,
+  is_complement: bool,
 ) -> Option<bool> {
   if fragment.char_indices().any(|(index, character)| {
     matches!(character, ',' | ':' | '!' | '?' | '\n' | '\r')
@@ -1078,6 +1085,10 @@ fn institutional_fragment_has_specific_name(
   for token in word_tokens(fragment, 0, fragment.len()) {
     let lower = lowercase_lookup(token.text);
     if data.institutional_generic_words.contains(lower.as_ref())
+      || (!is_complement
+        && data
+          .institutional_prefix_generic_words
+          .contains(lower.as_ref()))
       || data
         .institutional_complement_connectors
         .contains(lower.as_ref())
@@ -2244,6 +2255,9 @@ mod tests {
     let generic_words = english_vocabulary(include_str!(
       "../../../packages/data/config/institutional-organization-generic-name-words.json"
     ));
+    let prefix_generic_words = english_vocabulary(include_str!(
+      "../../../packages/data/config/institutional-organization-prefix-generic-name-words.json"
+    ));
     let data = PreparedLegalFormData::new(LegalFormData {
       suffixes: vec![head.to_string()],
       connector_words: complement_connectors.clone(),
@@ -2252,6 +2266,7 @@ mod tests {
       institutional_complement_starters: complement_starters,
       institutional_complement_connectors: complement_connectors,
       institutional_generic_words: generic_words,
+      institutional_prefix_generic_words: prefix_generic_words,
       ..LegalFormData::default()
     });
     let start = text.rfind(head).expect("institutional head");
@@ -2289,6 +2304,8 @@ mod tests {
       ("Office of the U.S. Attorney", "Office"),
       ("Office of the United Nations High Commissioner", "Office"),
       ("U.S. District Court", "Court"),
+      ("Ministry of Finance", "Ministry"),
+      ("Department of Trade", "Department"),
     ] {
       assert_eq!(institutional_head_entities(text, head), [text]);
     }
@@ -2320,6 +2337,7 @@ mod tests {
       ("An Agency responded", "Agency"),
       ("Legal Department", "Department"),
       ("Head of Trade Department", "Department"),
+      ("Finance Committee", "Committee"),
       ("Our Court held", "Court"),
       ("Such Court may decide", "Court"),
       ("That Court held", "Court"),

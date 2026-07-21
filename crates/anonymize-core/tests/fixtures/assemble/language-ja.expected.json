@@ -15366,7 +15366,8 @@
     "institutional_complement_heads": [],
     "institutional_complement_starters": [],
     "institutional_complement_connectors": [],
-    "institutional_generic_words": []
+    "institutional_generic_words": [],
+    "institutional_prefix_generic_words": []
   },
   "regex_meta": [
     {
@@ -22726,6 +22727,7 @@
         "include_trigger": false
       }
     ],
+    "institutional_prefix_generic_words": [],
     "address_stop_keywords": [
       "steueridentifikationsnummer",
       "inscrição municipal",
