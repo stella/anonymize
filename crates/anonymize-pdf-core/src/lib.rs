@@ -878,6 +878,12 @@ fn inspect_parsed(
   observations: Vec<PdfPageObservation>,
   observation_provider: Option<PdfObservationProvider>,
 ) -> Result<PdfInspection, PdfInspectionError> {
+  if document.is_encrypted() {
+    return Err(error(
+      PdfInspectionErrorCode::InvalidDocument,
+      "encrypted PDF documents cannot be inspected safely",
+    ));
+  }
   let pages = validated_pages(&document)?;
   if observations.len() > pages.len() {
     return Err(error(
@@ -907,7 +913,7 @@ fn inspect_parsed(
         .cloned(),
     });
   }
-  let encrypted = document.is_encrypted();
+  let encrypted = false;
   let coverage = coverage(
     encrypted,
     observation_provider.is_some(),
@@ -1765,6 +1771,20 @@ mod tests {
   fn rejects_real_encrypted_documents_before_reporting_coverage() {
     assert_eq!(
       inspect_pdf(ENCRYPTED_PDF).unwrap_err().code(),
+      PdfInspectionErrorCode::InvalidDocument
+    );
+  }
+
+  #[test]
+  fn parsed_encryption_marker_is_rejected_before_inspection() {
+    let mut document = Document::load_mem(MINIMAL_PDF).unwrap();
+    let encrypt = document.add_object(Dictionary::new());
+    document.trailer.set("Encrypt", Object::Reference(encrypt));
+    assert!(document.is_encrypted());
+    assert_eq!(
+      inspect_parsed(MINIMAL_PDF, document, Vec::new(), None)
+        .unwrap_err()
+        .code(),
       PdfInspectionErrorCode::InvalidDocument
     );
   }
