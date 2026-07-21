@@ -129,13 +129,18 @@ pub fn prepared_search_config_from_binding(
         name_corpus_data_from_binding(data, config.name_corpus_mode)
       }),
       signature_data: config.signature_data.map(signature_data_from_binding),
-      date_data: config.date_data.map(|data| DateData {
-        month_names_by_language: data.month_names_by_language,
-        year_words_by_language: data.year_words_by_language,
-      }),
+      date_data: config.date_data.map(date_data_from_binding),
       monetary_data: config.monetary_data.map(monetary_data_from_binding),
     },
   })
+}
+
+fn date_data_from_binding(data: crate::BindingDateData) -> DateData {
+  DateData {
+    month_names_by_language: data.month_names_by_language,
+    lowercase_month_ambiguities: data.lowercase_month_ambiguities,
+    year_words_by_language: data.year_words_by_language,
+  }
 }
 
 struct TriggerVocabulary {
@@ -804,11 +809,23 @@ mod tests {
   };
   use crate::error::ContractError;
   use crate::types::{
-    BindingOperatorConfig, BindingPreparedArtifactPolicy,
+    BindingDateData, BindingOperatorConfig, BindingPreparedArtifactPolicy,
     BindingPreparedSearchConfig, BindingRegexArtifactPolicy,
     BindingSearchOptions, BindingSearchPattern, BindingTriggerRule,
     BindingTriggerStrategy,
   };
+
+  #[test]
+  fn binding_date_data_rejects_incomplete_schema() {
+    let missing_ambiguities = r#"{
+      "month_names_by_language": {},
+      "year_words_by_language": {}
+    }"#;
+
+    assert!(
+      serde_json::from_str::<BindingDateData>(missing_ambiguities).is_err()
+    );
+  }
 
   #[test]
   fn binding_operator_config_accepts_camel_case_redact_string() {

@@ -14,6 +14,7 @@ const DATE_SCORE: f64 = 1.0;
 )]
 pub struct DateData {
   pub month_names_by_language: BTreeMap<String, Vec<String>>,
+  pub lowercase_month_ambiguities: BTreeMap<String, Vec<String>>,
   pub year_words_by_language: BTreeMap<String, Vec<String>>,
 }
 
@@ -34,6 +35,7 @@ impl PreparedDateData {
 
 struct DateRule {
   month_names: BTreeSet<String>,
+  lowercase_ambiguous_month_names: BTreeSet<String>,
   year_words: BTreeSet<String>,
 }
 
@@ -41,6 +43,10 @@ impl DateRule {
   fn new(data: &DateData) -> Self {
     Self {
       month_names: unique_word_set(&data.month_names_by_language, 3),
+      lowercase_ambiguous_month_names: unique_word_set(
+        &data.lowercase_month_ambiguities,
+        3,
+      ),
       year_words: unique_word_set(&data.year_words_by_language, 2),
     }
   }
@@ -76,9 +82,14 @@ impl AnchoredRule for DateRule {
     let mut spans = Vec::new();
     if self.month_names.contains(&clean) {
       spans.extend(
-        date_spans_for_month(full_text, span.start, span.end)
-          .into_iter()
-          .map(|(start, end)| (start, end, DetectionSource::Regex)),
+        date_spans_for_month(
+          full_text,
+          span.start,
+          span.end,
+          self.lowercase_ambiguous_month_names.contains(&clean),
+        )
+        .into_iter()
+        .map(|(start, end)| (start, end, DetectionSource::Regex)),
       );
     }
     if self.year_words.contains(&clean)
@@ -140,10 +151,15 @@ fn date_spans_for_month(
   full_text: &str,
   month_start: usize,
   month_end: usize,
+  ambiguous_month: bool,
 ) -> Vec<(usize, usize)> {
   let mut spans = Vec::new();
 
   if let Some(span) = day_month_year_span(full_text, month_start, month_end) {
+    spans.push(span);
+  } else if let Some(span) =
+    day_month_span(full_text, month_start, month_end, ambiguous_month)
+  {
     spans.push(span);
   }
   if let Some(span) = ordinal_day_month_span(full_text, month_start, month_end)
@@ -151,6 +167,10 @@ fn date_spans_for_month(
     spans.push(span);
   }
   if let Some(span) = de_day_month_year_span(full_text, month_start, month_end)
+  {
+    spans.push(span);
+  } else if let Some(span) =
+    de_day_month_span(full_text, month_start, month_end, ambiguous_month)
   {
     spans.push(span);
   }
@@ -165,6 +185,49 @@ fn date_spans_for_month(
   }
 
   spans
+}
+
+fn day_month_span(
+  text: &str,
+  month_start: usize,
+  month_end: usize,
+  ambiguous_month: bool,
+) -> Option<(usize, usize)> {
+  let month = str_slice(text, month_start, month_end)?;
+  if !allows_yearless_month(text, month, month_end, ambiguous_month) {
+    return None;
+  }
+  let day = day_before_month(text, month_start)?;
+  if starts_with_year_like_suffix(text, month_end) {
+    return None;
+  }
+  right_date_boundary(text, month_end).then_some((day.0, month_end))
+}
+
+fn allows_yearless_month(
+  text: &str,
+  month: &str,
+  month_end: usize,
+  ambiguous: bool,
+) -> bool {
+  !ambiguous
+    || is_titlecase_word(month)
+    || has_hard_terminal_day_month_boundary(text, month_end)
+}
+
+fn is_titlecase_word(value: &str) -> bool {
+  let mut letters = value.chars().filter(|character| character.is_alphabetic());
+  letters.next().is_some_and(char::is_uppercase)
+    && letters.all(char::is_lowercase)
+}
+
+fn has_hard_terminal_day_month_boundary(text: &str, month_end: usize) -> bool {
+  let after_month = skip_horizontal_ws(text, month_end);
+  str_tail(text, after_month)
+    .and_then(|tail| tail.chars().next())
+    .is_none_or(|character| {
+      matches!(character, '.' | ';' | ':' | '!' | '?' | ')' | ']')
+    })
 }
 
 fn date_entity(
@@ -191,7 +254,7 @@ fn day_month_year_span(
   month_end: usize,
 ) -> Option<(usize, usize)> {
   let day = day_before_month(text, month_start)?;
-  let after_month = skip_horizontal_ws(text, month_end);
+  let after_month = skip_date_year_separator(text, month_end);
   let year = parse_year_forward(text, after_month)?;
   let end = parse_time_suffix(text, year.1).unwrap_or(year.1);
   Some((day.0, end))
@@ -203,7 +266,7 @@ fn ordinal_day_month_span(
   month_end: usize,
 ) -> Option<(usize, usize)> {
   let day = ordinal_day_before_month(text, month_start)?;
-  let after_month = skip_horizontal_ws(text, month_end);
+  let after_month = skip_date_year_separator(text, month_end);
   let end = parse_year_forward(text, after_month).map_or(month_end, |year| {
     parse_time_suffix(text, year.1).unwrap_or(year.1)
   });
@@ -222,13 +285,30 @@ fn de_day_month_year_span(
   Some((day.0, year.1))
 }
 
+fn de_day_month_span(
+  text: &str,
+  month_start: usize,
+  month_end: usize,
+  ambiguous: bool,
+) -> Option<(usize, usize)> {
+  let month = str_slice(text, month_start, month_end)?;
+  if !allows_yearless_month(text, month, month_end, ambiguous) {
+    return None;
+  }
+  let day = de_day_before_month(text, month_start)?;
+  if starts_with_year_like_suffix(text, month_end) {
+    return None;
+  }
+  right_date_boundary(text, month_end).then_some((day.0, month_end))
+}
+
 fn month_day_year_span(
   text: &str,
   month_start: usize,
   month_end: usize,
 ) -> Option<(usize, usize)> {
   let after_month = skip_horizontal_ws(text, month_end);
-  let day = parse_digits_forward(text, after_month, 1, 2)?;
+  let day = parse_day_forward(text, after_month)?;
   let after_day = skip_date_year_separator(text, day.1);
   if let Some(year) = parse_year_forward(text, after_day) {
     return Some((month_start, year.1));
@@ -262,7 +342,7 @@ fn year_month_day_span(
   }
 
   let after_month = skip_horizontal_ws(text, month_end);
-  let day = parse_digits_forward(text, after_month, 1, 2)?;
+  let day = parse_day_forward(text, after_month)?;
   let end = if starts_with_at(text, day.1, ".") {
     day.1.saturating_add(1)
   } else {
@@ -279,7 +359,7 @@ fn day_before_month(text: &str, month_start: usize) -> Option<(usize, usize)> {
   if ends_with_before(text, end, ".") {
     end = end.saturating_sub(1);
   }
-  let day = parse_digits_backward(text, end, 1, 2)?;
+  let day = parse_day_backward(text, end)?;
   left_date_boundary(text, day.0).then_some(day)
 }
 
@@ -296,7 +376,7 @@ fn ordinal_day_before_month(
       continue;
     }
     let day_end = end.saturating_sub(suffix.len());
-    let day = parse_digits_backward(text, day_end, 1, 2)?;
+    let day = parse_day_backward(text, day_end)?;
     if left_date_boundary(text, day.0) {
       return Some((day.0, end));
     }
@@ -314,7 +394,7 @@ fn de_day_before_month(
     return None;
   }
   let day_end = skip_horizontal_ws_backward(text, de_start);
-  let day = parse_digits_backward(text, day_end, 1, 2)?;
+  let day = parse_day_backward(text, day_end)?;
   left_date_boundary(text, day.0).then_some((day.0, end))
 }
 
@@ -329,6 +409,35 @@ fn parse_de_prefix(text: &str, index: usize) -> Option<usize> {
 fn parse_year_forward(text: &str, index: usize) -> Option<(usize, usize)> {
   let year = parse_digits_forward(text, index, 4, 4)?;
   right_date_boundary(text, year.1).then_some(year)
+}
+
+fn starts_with_ascii_digit(text: &str, index: usize) -> bool {
+  str_tail(text, index)
+    .and_then(|tail| tail.chars().next())
+    .is_some_and(|character| character.is_ascii_digit())
+}
+
+fn starts_with_year_like_suffix(text: &str, month_end: usize) -> bool {
+  let after_month = skip_year_like_suffix_separator(text, month_end);
+  let after_de = parse_de_prefix(text, after_month).unwrap_or(after_month);
+  starts_with_ascii_digit(text, skip_any_ws(text, after_de))
+}
+
+fn parse_day_forward(text: &str, index: usize) -> Option<(usize, usize)> {
+  let span = parse_digits_forward(text, index, 1, 2)?;
+  valid_day(text, span).then_some(span)
+}
+
+fn parse_day_backward(text: &str, index: usize) -> Option<(usize, usize)> {
+  let span = parse_digits_backward(text, index, 1, 2)?;
+  valid_day(text, span).then_some(span)
+}
+
+#[must_use]
+fn valid_day(text: &str, span: (usize, usize)) -> bool {
+  str_slice(text, span.0, span.1)
+    .and_then(|value| value.parse::<u8>().ok())
+    .is_some_and(|day| (1..=31).contains(&day))
 }
 
 fn parse_digits_forward(
@@ -386,6 +495,15 @@ fn skip_date_year_separator(text: &str, index: usize) -> usize {
     return skip_any_ws(text, index.saturating_add(1));
   }
   skip_horizontal_ws(text, index)
+}
+
+fn skip_year_like_suffix_separator(text: &str, index: usize) -> usize {
+  let after_comma = if starts_with_at(text, index, ",") {
+    index.saturating_add(1)
+  } else {
+    index
+  };
+  skip_any_ws(text, after_comma)
 }
 
 fn skip_any_ws(text: &str, mut index: usize) -> usize {
@@ -470,4 +588,118 @@ fn str_tail(text: &str, index: usize) -> Option<&str> {
 
 fn str_slice(text: &str, start: usize, end: usize) -> Option<&str> {
   text.get(start..end)
+}
+
+#[cfg(test)]
+mod tests {
+  use super::date_spans_for_month;
+
+  fn spans(text: &str) -> Vec<String> {
+    spans_for(text, "July", false)
+  }
+
+  fn spans_for(text: &str, month: &str, ambiguous_month: bool) -> Vec<String> {
+    let Some(month_start) = text.find(month) else {
+      return Vec::new();
+    };
+    date_spans_for_month(
+      text,
+      month_start,
+      month_start.saturating_add(month.len()),
+      ambiguous_month,
+    )
+    .into_iter()
+    .map(|(start, end)| text.get(start..end).unwrap_or_default().to_owned())
+    .collect()
+  }
+
+  #[test]
+  fn detects_plain_day_month_without_a_year() {
+    assert_eq!(spans("The hearing was on 22 July."), vec!["22 July"]);
+  }
+
+  #[test]
+  fn full_date_does_not_emit_a_nested_partial_date() {
+    let found = spans("The hearing was on 22 July 2026.");
+    assert_eq!(found, vec!["22 July 2026", "July 2026"]);
+    assert!(!found.iter().any(|span| span == "22 July"));
+
+    let comma_separated = spans("The hearing was on 22 July, 2026.");
+    assert_eq!(comma_separated, vec!["22 July, 2026"]);
+
+    assert!(spans("The malformed date is 22 July 20260.").is_empty());
+    assert!(spans("The malformed date is 22 July, 2026A.").is_empty());
+    assert!(spans("The malformed date is 22 July\n20260.").is_empty());
+    assert!(
+      spans_for("La fecha es 12 mayo de\n20260.", "mayo", false).is_empty()
+    );
+  }
+
+  #[test]
+  fn rejects_out_of_range_and_identifier_days() {
+    assert!(spans("The reference is 42 July.").is_empty());
+    assert!(spans("The reference is item22 July.").is_empty());
+  }
+
+  #[test]
+  fn rejects_lowercase_words_that_overlap_month_names() {
+    assert!(spans_for("Section 12 may be amended.", "may", true).is_empty());
+    assert!(
+      spans_for("Section 12 may, upon notice, be amended.", "may", true)
+        .is_empty()
+    );
+    assert!(spans_for("SECTION 12 MAY BE AMENDED", "MAY", true).is_empty());
+    assert!(spans_for("Section 12 may\nbe amended.", "may", true).is_empty());
+    assert!(spans_for("Sections 11 and 12 set forth", "set", true).is_empty());
+    assert_eq!(spans_for("Due 12 may.", "may", true), vec!["12 may"]);
+    assert_eq!(
+      spans_for("Effective 12 May next week.", "May", true),
+      vec!["12 May"]
+    );
+    assert_eq!(spans_for("Due 12 may!", "may", true), vec!["12 may"]);
+    assert_eq!(spans_for("Due 12 may?", "may", true), vec!["12 may"]);
+  }
+
+  #[test]
+  fn accepts_unambiguous_lowercase_months_used_in_other_languages() {
+    assert_eq!(
+      spans_for("Audience le 22 juillet.", "juillet", false),
+      vec!["22 juillet"]
+    );
+    assert_eq!(
+      spans_for("Audiencia 12 mayo.", "mayo", false),
+      vec!["12 mayo"]
+    );
+    assert_eq!(
+      spans_for("Jednání 12 září.", "září", false),
+      vec!["12 září"]
+    );
+  }
+
+  #[test]
+  fn detects_de_prefixed_day_month_without_a_year() {
+    assert_eq!(
+      spans_for("Audiencia 12 de mayo.", "mayo", false),
+      vec!["12 de mayo"]
+    );
+    assert_eq!(
+      spans_for("Audiência 12 de maio.", "maio", false),
+      vec!["12 de maio"]
+    );
+    assert!(
+      spans_for("Audiencia 12 de mayo, 20260.", "mayo", false).is_empty()
+    );
+    assert!(
+      spans_for("Audiencia 12 de mayo de 20260.", "mayo", false).is_empty()
+    );
+    assert!(
+      spans_for("Audiencia 12 de mayo de 2026A.", "mayo", false).is_empty()
+    );
+    assert!(
+      spans_for("Audiencia 12 de mayo\nde 20260.", "mayo", false).is_empty()
+    );
+    assert!(
+      spans_for("Audiencia 12 de mayo de\n20260.", "mayo", false).is_empty()
+    );
+  }
 }

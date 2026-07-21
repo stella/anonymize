@@ -156,6 +156,7 @@ export type NativeYearWordData = Record<string, string[]>;
 
 export type NativeDateData = {
   month_names_by_language: NativeDateMonthData;
+  lowercase_month_ambiguities: NativeDateMonthData;
   year_words_by_language: NativeYearWordData;
 };
 

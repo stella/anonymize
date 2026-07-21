@@ -911,6 +911,38 @@
         "wrześniu"
       ]
     },
+    "lowercase_month_ambiguities": {
+      "de": [
+        "apr",
+        "april",
+        "aug",
+        "august",
+        "feb",
+        "jan",
+        "jul",
+        "jun",
+        "mai",
+        "nov",
+        "november",
+        "sep",
+        "sept",
+        "september"
+      ],
+      "fr": [
+        "dec",
+        "jan",
+        "jul",
+        "jun",
+        "mai",
+        "mar",
+        "mars",
+        "nov",
+        "oct",
+        "sep",
+        "sept"
+      ],
+      "pl": ["lip", "list", "mar", "sie"]
+    },
     "year_words_by_language": {
       "de": ["Jahr", "Jahre", "Jahren", "Jahres"],
       "fr": ["année", "an"],

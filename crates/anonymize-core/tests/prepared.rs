@@ -1485,6 +1485,10 @@ fn prepared_engine_extracts_dates_from_anchored_data() {
           vec![String::from("ledna"), String::from("únor")],
         ),
       ]),
+      lowercase_month_ambiguities: BTreeMap::from([(
+        String::from("en"),
+        vec![String::from("March")],
+      )]),
       year_words_by_language: BTreeMap::from([(
         String::from("cs"),
         vec![String::from("roce")],
@@ -1528,6 +1532,7 @@ fn prepared_engine_extracts_uppercase_ordinal_dates() {
         String::from("en"),
         vec![String::from("January")],
       )]),
+      lowercase_month_ambiguities: BTreeMap::new(),
       year_words_by_language: BTreeMap::new(),
     }),
     ..empty_config(PreparedEngineSlices::default())

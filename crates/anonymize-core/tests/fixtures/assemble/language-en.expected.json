@@ -728,6 +728,22 @@
         "september"
       ]
     },
+    "lowercase_month_ambiguities": {
+      "en": [
+        "april",
+        "august",
+        "december",
+        "february",
+        "january",
+        "july",
+        "june",
+        "march",
+        "may",
+        "november",
+        "october",
+        "september"
+      ]
+    },
     "year_words_by_language": {
       "en": ["year"]
     }

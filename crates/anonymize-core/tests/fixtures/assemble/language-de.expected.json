@@ -755,6 +755,24 @@
         "september"
       ]
     },
+    "lowercase_month_ambiguities": {
+      "de": [
+        "apr",
+        "april",
+        "aug",
+        "august",
+        "feb",
+        "jan",
+        "jul",
+        "jun",
+        "mai",
+        "nov",
+        "november",
+        "sep",
+        "sept",
+        "september"
+      ]
+    },
     "year_words_by_language": {
       "de": ["Jahr", "Jahre", "Jahren", "Jahres"]
     }
