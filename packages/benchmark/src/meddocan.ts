@@ -34,6 +34,7 @@ for (const adapter of createBenchmarkAdapters()) {
     `sealed adapter ${adapter.name}`,
     () => adapter.run(inputs),
   );
+  const elapsedSeconds = (performance.now() - start) / 1000;
   if (outcome.status === "unavailable") {
     libraries.push({
       name: adapter.name,
@@ -51,7 +52,7 @@ for (const adapter of createBenchmarkAdapters()) {
     name: adapter.name,
     version: outcome.reportedVersion ?? adapter.version,
     status: "ok",
-    elapsedSeconds: (performance.now() - start) / 1000,
+    elapsedSeconds,
     metrics,
   });
 }
