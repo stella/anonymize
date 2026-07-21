@@ -9,14 +9,14 @@ lifetime, restoration, and what metadata can still carry PII.
 | Surface                            | Node | Python | WASM | CLI | Local MCP            |
 | ---------------------------------- | ---- | ------ | ---- | --- | -------------------- |
 | In-memory text detection/redaction | Yes  | Yes    | Yes  | Yes | Via file paths       |
-| Caller detections and operators    | Yes  | Yes    | Yes  | Yes | Not exposed yet      |
+| Caller detections and operators    | Yes  | Yes    | Yes  | Yes | v1 sidecar paths     |
 | Streaming text results             | Yes  | Yes    | Yes  | No  | No                   |
 | Cross-document sessions            | Yes  | Yes    | Yes  | Yes | In-memory            |
-| Encrypted session transfer         | Yes  | Yes    | No   | Yes | Not exposed yet      |
+| Encrypted session transfer         | Yes  | Yes    | No   | Yes | No; durable local    |
 | DOCX extraction/coverage           | Yes  | Yes    | No   | Yes | Aggregate inspection |
 | DOCX rewrite/anonymize/restore     | Yes  | Yes    | No   | Yes | Yes                  |
 | PDF structure/coverage inspection  | Yes  | Yes    | Yes  | No  | No                   |
-| Runtime capability discovery       | Yes  | Yes    | Yes  | Yes | Fixed tool list      |
+| Runtime capability discovery       | Yes  | Yes    | Yes  | Yes | Manifest + tools     |
 
 Node and Python DOCX adapters share bounded extraction, rewrite, and restoration
 planning in Rust. Availability gates require every surface in a parity profile,
@@ -25,7 +25,9 @@ and committed behavioral vectors run through both bindings.
 The local MCP server deliberately exposes a narrower workflow surface. It uses
 stdio only, requires explicit absolute input and output paths under configured
 roots, rejects symlink escapes and overwrites, and returns aggregate summaries
-without document text or plaintext mappings.
+without document text or plaintext mappings. It supports opt-in encrypted
+durable sessions on macOS and Linux and provider-neutral external detections
+through bounded, digest-bound v1 JSON sidecar paths.
 
 PDF inspection parity includes the browser/WASM byte-oriented API. It does not
 include a browser renderer or OCR provider; without provider observations the
@@ -54,12 +56,9 @@ engine, but that does not preserve or inventory their original format structure.
 
 ## Workflow gaps
 
-- Durable MCP sessions, encrypted export/import, expiry policy, and recovery
-  after server restart are not exposed. The lower-level runtimes and CLI already
-  provide encrypted session archives.
 - MCP review/correction tools and an MCP Apps user interface are not present.
-  Caller detections exist in the runtime APIs and can support a later review
-  surface without changing the detector core.
+  External caller detections can enter through a sidecar, but there is no
+  interactive span-review surface.
 - Batch and recursive MCP operations are not present. The CLI already covers
   batch text and DOCX workflows.
 - Audit logging is left to the MCP host. Tool results are audit-safe, but the

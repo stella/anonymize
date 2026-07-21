@@ -13,6 +13,8 @@ if (typeof version !== "string" || !VERSION_RE.test(version)) {
 }
 
 writeFileSync(VERSION_FILE, `${version}\n`);
-execFileSync(process.execPath, [".github/tools/sync-runtime-version.mjs"], {
-  stdio: "inherit",
-});
+execFileSync(
+  process.execPath,
+  [".github/tools/sync-runtime-version.mjs", "--release"],
+  { stdio: "inherit" },
+);

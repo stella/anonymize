@@ -39,6 +39,7 @@ const PYPROJECT_FILES = ["crates/anonymize-py/pyproject.toml"];
 const LOCK_FILE = "bun.lock";
 const CARGO_LOCK_FILE = "Cargo.lock";
 const checkOnly = process.argv.includes("--check");
+const releaseMode = process.argv.includes("--release");
 const version = readFileSync("VERSION", "utf8").trim();
 
 if (!VERSION_RE.test(version)) {
@@ -52,6 +53,13 @@ let hasMismatch = false;
 
 // Internal dependency ranges that must track the synchronized runtime train.
 const SYNCED_DEPENDENCIES = ["@stll/anonymize", "@stll/anonymize-docx"];
+// These consumers require APIs introduced by the same fixed release train.
+// Source manifests use workspace:* so local development cannot silently fall
+// back to an older published package. The release path resolves that marker to
+// the exact synchronized version before packing or publishing.
+const EXACT_CO_RELEASE_DEPENDENCIES = new Map([
+  ["packages/mcp/package.json", new Set(["@stll/anonymize"])],
+]);
 
 const escapeRegExp = (value) => value.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -59,6 +67,16 @@ const escapeRegExp = (value) => value.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
 // anchor on "\n", so normalize before matching (files are written back LF-only).
 const readTextFile = (file) =>
   readFileSync(file, "utf8").replaceAll("\r\n", "\n");
+
+const synchronizedDependencyRange = ({ dependencyRange, exactCoRelease }) => {
+  if (!exactCoRelease) {
+    return `^${version}`;
+  }
+  if (releaseMode) {
+    return version;
+  }
+  return dependencyRange === "workspace:*" ? "workspace:*" : version;
+};
 
 const syncTextVersion = ({ file, label, re }) => {
   const text = readTextFile(file);
@@ -85,13 +103,26 @@ const syncTextVersion = ({ file, label, re }) => {
 
 for (const file of PACKAGE_FILES) {
   const pkg = JSON.parse(readFileSync(file, "utf8"));
-  const wantedRange = `^${version}`;
   const mismatchedDependencies = SYNCED_DEPENDENCIES.flatMap((dependency) => {
     const dependencyRange = pkg.dependencies?.[dependency];
-    if (dependencyRange === undefined || dependencyRange === wantedRange) {
+    if (dependencyRange === undefined) {
       return [];
     }
-    return [{ dependency, dependencyRange }];
+    const exactCoRelease =
+      EXACT_CO_RELEASE_DEPENDENCIES.get(file)?.has(dependency) === true;
+    const validSourceRange =
+      dependencyRange === "workspace:*" || dependencyRange === version;
+    const wantedRange = synchronizedDependencyRange({
+      dependencyRange,
+      exactCoRelease,
+    });
+    if (
+      dependencyRange === wantedRange ||
+      (exactCoRelease && !releaseMode && validSourceRange)
+    ) {
+      return [];
+    }
+    return [{ dependency, dependencyRange, exactCoRelease, wantedRange }];
   });
   if (pkg.version === version && mismatchedDependencies.length === 0) {
     continue;
@@ -101,9 +132,18 @@ for (const file of PACKAGE_FILES) {
     if (pkg.version !== version) {
       console.error(`${file} has version ${pkg.version}; expected ${version}`);
     }
-    for (const { dependency, dependencyRange } of mismatchedDependencies) {
+    for (const {
+      dependency,
+      dependencyRange,
+      exactCoRelease,
+      wantedRange,
+    } of mismatchedDependencies) {
       console.error(
-        `${file} depends on ${dependency}@${dependencyRange}; expected ${wantedRange}`,
+        `${file} depends on ${dependency}@${dependencyRange}; expected ${
+          exactCoRelease && !releaseMode
+            ? `workspace:* or ${version}`
+            : wantedRange
+        }`,
       );
     }
     hasMismatch = true;
@@ -111,7 +151,7 @@ for (const file of PACKAGE_FILES) {
   }
 
   pkg.version = version;
-  for (const { dependency } of mismatchedDependencies) {
+  for (const { dependency, wantedRange } of mismatchedDependencies) {
     pkg.dependencies[dependency] = wantedRange;
   }
   writeFileSync(file, `${JSON.stringify(pkg, null, 2)}\n`);
@@ -189,6 +229,30 @@ for (const dependency of SYNCED_DEPENDENCIES) {
   syncedLockText = syncedDependency.text;
   lockChanged ||= syncedDependency.changed;
   hasMismatch ||= syncedDependency.hasMismatch;
+}
+
+for (const [file, dependencies] of EXACT_CO_RELEASE_DEPENDENCIES) {
+  const workspace = dirname(file);
+  const pkg = JSON.parse(readFileSync(file, "utf8"));
+  for (const dependency of dependencies) {
+    const expectedRange = pkg.dependencies?.[dependency];
+    if (expectedRange !== "workspace:*" && expectedRange !== version) {
+      console.error(
+        `${file} has invalid exact co-release dependency ${dependency}@${expectedRange}`,
+      );
+      hasMismatch = true;
+      continue;
+    }
+    const syncedDependency = syncWorkspaceDependencyLockRange(
+      syncedLockText,
+      workspace,
+      dependency,
+      expectedRange,
+    );
+    syncedLockText = syncedDependency.text;
+    lockChanged ||= syncedDependency.changed;
+    hasMismatch ||= syncedDependency.hasMismatch;
+  }
 }
 
 for (const dependency of ROOT_NATIVE_OPTIONAL_DEPENDENCIES) {
@@ -351,4 +415,192 @@ function syncDependencyRangeLockVersion(text, dependency) {
     changed,
     hasMismatch: mismatched,
   };
+}
+
+function syncWorkspaceDependencyLockRange(
+  text,
+  workspace,
+  dependency,
+  expectedRange,
+) {
+  let dependencyProperty;
+  try {
+    // Validate the complete JSONC-shaped lock first. Bun currently emits JSON
+    // with trailing commas but no comments; stripping only commas immediately
+    // before a closing delimiter matches the lockfile guard used elsewhere in
+    // this repository.
+    JSON.parse(text.replaceAll(/,\s*([}\]])/g, "$1"));
+    const rootStart = skipJsonWhitespace(text, 0);
+    const root = requireDirectObjectProperty(text, rootStart, "workspaces");
+    const workspaceProperty = requireDirectObjectProperty(
+      text,
+      root.valueStart,
+      workspace,
+    );
+    const dependencies = requireDirectObjectProperty(
+      text,
+      workspaceProperty.valueStart,
+      "dependencies",
+    );
+    dependencyProperty = requireDirectStringProperty(
+      text,
+      dependencies.valueStart,
+      dependency,
+    );
+  } catch (error) {
+    console.error(
+      `${LOCK_FILE} cannot resolve ${dependency} inside workspace ${workspace}: ${
+        error instanceof Error ? error.message : "invalid lock structure"
+      }`,
+    );
+    return { text, changed: false, hasMismatch: true };
+  }
+  const currentRange = JSON.parse(
+    text.slice(dependencyProperty.valueStart, dependencyProperty.valueEnd),
+  );
+  if (currentRange === expectedRange) {
+    return { text, changed: false, hasMismatch: false };
+  }
+  if (checkOnly) {
+    console.error(
+      `${LOCK_FILE} workspace ${workspace} has ${dependency}@${currentRange}; expected ${expectedRange}`,
+    );
+    return { text, changed: false, hasMismatch: true };
+  }
+  return {
+    text: `${text.slice(0, dependencyProperty.valueStart)}${JSON.stringify(expectedRange)}${text.slice(dependencyProperty.valueEnd)}`,
+    changed: true,
+    hasMismatch: false,
+  };
+}
+
+function skipJsonWhitespace(text, start) {
+  let index = start;
+  while (/\s/u.test(text[index] ?? "")) {
+    index += 1;
+  }
+  return index;
+}
+
+function scanJsonStringEnd(text, start) {
+  if (text[start] !== '"') {
+    throw new Error("expected a JSON string");
+  }
+  for (let index = start + 1; index < text.length; index += 1) {
+    if (text[index] === "\\") {
+      index += 1;
+      continue;
+    }
+    if (text[index] === '"') {
+      return index + 1;
+    }
+  }
+  throw new Error("unterminated JSON string");
+}
+
+function scanJsonCompositeEnd(text, start) {
+  const stack = [text[start]];
+  for (let index = start + 1; index < text.length; index += 1) {
+    const character = text[index];
+    if (character === '"') {
+      index = scanJsonStringEnd(text, index) - 1;
+      continue;
+    }
+    if (character === "{" || character === "[") {
+      stack.push(character);
+      continue;
+    }
+    if (character === "}" || character === "]") {
+      const opening = stack.pop();
+      if (
+        (opening === "{" && character !== "}") ||
+        (opening === "[" && character !== "]")
+      ) {
+        throw new Error("mismatched JSON delimiters");
+      }
+      if (stack.length === 0) {
+        return index + 1;
+      }
+    }
+  }
+  throw new Error("unterminated JSON object or array");
+}
+
+function scanJsonValueEnd(text, start) {
+  if (text[start] === '"') {
+    return scanJsonStringEnd(text, start);
+  }
+  if (text[start] === "{" || text[start] === "[") {
+    return scanJsonCompositeEnd(text, start);
+  }
+  let index = start;
+  while (
+    index < text.length &&
+    text[index] !== "," &&
+    text[index] !== "}" &&
+    text[index] !== "]"
+  ) {
+    index += 1;
+  }
+  while (index > start && /\s/u.test(text[index - 1] ?? "")) {
+    index -= 1;
+  }
+  return index;
+}
+
+function directJsonObjectProperties(text, objectStart) {
+  if (text[objectStart] !== "{") {
+    throw new Error("expected a JSON object");
+  }
+  const objectEnd = scanJsonCompositeEnd(text, objectStart);
+  const properties = [];
+  let index = objectStart + 1;
+  while (index < objectEnd - 1) {
+    index = skipJsonWhitespace(text, index);
+    if (text[index] === ",") {
+      index = skipJsonWhitespace(text, index + 1);
+    }
+    if (index >= objectEnd - 1) {
+      break;
+    }
+    const keyEnd = scanJsonStringEnd(text, index);
+    const key = JSON.parse(text.slice(index, keyEnd));
+    index = skipJsonWhitespace(text, keyEnd);
+    if (text[index] !== ":") {
+      throw new Error("expected a JSON property separator");
+    }
+    const valueStart = skipJsonWhitespace(text, index + 1);
+    const valueEnd = scanJsonValueEnd(text, valueStart);
+    properties.push({ key, valueEnd, valueStart });
+    index = valueEnd;
+  }
+  return properties;
+}
+
+function requireDirectProperty(text, objectStart, property) {
+  const matches = directJsonObjectProperties(text, objectStart).filter(
+    ({ key }) => key === property,
+  );
+  if (matches.length !== 1) {
+    throw new Error(
+      `expected exactly one direct ${JSON.stringify(property)} property`,
+    );
+  }
+  return matches[0];
+}
+
+function requireDirectObjectProperty(text, objectStart, property) {
+  const match = requireDirectProperty(text, objectStart, property);
+  if (text[match.valueStart] !== "{") {
+    throw new Error(`${JSON.stringify(property)} must be an object`);
+  }
+  return match;
+}
+
+function requireDirectStringProperty(text, objectStart, property) {
+  const match = requireDirectProperty(text, objectStart, property);
+  if (text[match.valueStart] !== '"') {
+    throw new Error(`${JSON.stringify(property)} must be a string`);
+  }
+  return match;
 }

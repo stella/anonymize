@@ -231,3 +231,15 @@ jobs:
         # with hashed output parity checked before summaries are printed.
         continue-on-error: true
         run: bun run --cwd packages/anonymize perf:native-default
+
+      - name: Setup minimum supported Node for MCP
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v6
+        with:
+          node-version: "20.20.2"
+          registry-url: https://registry.npmjs.org
+          scope: "@stll"
+
+      - name: MCP Node 20 native-lock and packed-bin smoke
+        # Pins the MCP package's honest runtime floor: exercises the native
+        # advisory lock plus an installed npm tarball through its Unix bin link.
+        run: bun run --cwd packages/mcp test:node-runtime
