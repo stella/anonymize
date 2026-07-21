@@ -22,20 +22,23 @@ const detect = (fullText: string): Promise<NativePipelineEntity[]> =>
   detectNative(TRIGGERS_ONLY_CONFIG, fullText);
 
 describe("Hungarian personal-number trigger", () => {
-  test("detects a value matching the personal-number shape", async () => {
-    const entities = await detect("személyi szám: 123456AB");
+  test.each(["1-850101-1234", "18501011234"])(
+    "detects personal-number value %s",
+    async (value) => {
+      const entities = await detect(`személyi szám: ${value}`);
 
-    expect(entities).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          label: "national identification number",
-          text: "123456AB",
-        }),
-      ]),
-    );
-  });
+      expect(entities).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            label: "national identification number",
+            text: value,
+          }),
+        ]),
+      );
+    },
+  );
 
-  test.each(["123456A", "123456ab", "ABCDEF12"])(
+  test.each(["123456AB", "1-850101-123", "1850101123"])(
     "rejects invalid value %s",
     async (value) => {
       const entities = await detect(`személyi szám: ${value}`);

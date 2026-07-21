@@ -27,6 +27,7 @@ const detect = (
 describe("localized passport-number triggers", () => {
   test.each([
     ["cs", "cestovní pas AB123456", "AB123456"],
+    ["de", "Reisepass C01X00T47", "C01X00T47"],
     ["de", "Reisepass 123456789", "123456789"],
     ["fr", "passeport AB1234567", "AB1234567"],
   ] as const)(

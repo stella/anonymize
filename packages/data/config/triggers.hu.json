@@ -17,7 +17,10 @@
     "strategy": { "type": "n-words", "count": 1 },
     "triggers": ["személyi szám"],
     "validations": [
-      { "type": "matches-pattern", "pattern": "^\\d{6}[A-Z]{2}$" }
+      {
+        "type": "matches-pattern",
+        "pattern": "^(?:\\d{11}|\\d-\\d{6}-\\d{4})$"
+      }
     ]
   },
   {
