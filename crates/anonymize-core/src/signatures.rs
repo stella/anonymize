@@ -22,14 +22,11 @@ pub struct SignatureData {
   pub image_stub_prefixes: Vec<String>,
   /// Form-field label words ("Name", "Jméno", "Funkce"). Tied to a ':' they
   /// start the next field of a signature grid, so they terminate the span
-  /// that precedes them instead of joining it. Keep compatibility fields at
-  /// the end: postcard serializes struct fields by position.
-  #[serde(default)]
+  /// that precedes them instead of joining it.
   pub form_field_labels: Vec<String>,
   /// Fixed strings PDF signing software stamps onto a page ("Digitally
   /// signed by", "Digitálně podepsal"). They sit immediately after a name
   /// and must terminate the person span rather than extend it.
-  #[serde(default)]
   pub signature_stamp_phrases: Vec<String>,
 }
 
