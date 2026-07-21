@@ -1,4 +1,3 @@
-const PHONE_NOISE: [char; 3] = ['(', ')', '-'];
 const ID_SEPARATORS: [char; 3] = ['-', '/', '.'];
 
 use crate::types::{Error, Result};
@@ -136,10 +135,8 @@ pub(crate) fn normalize_entity_text(label: &str, text: &str) -> String {
     return text.to_lowercase().trim().to_owned();
   }
   if upper == "PHONE_NUMBER" || upper == "PHONE" {
-    return text
-      .chars()
-      .filter(|ch| !ch.is_whitespace() && !PHONE_NOISE.contains(ch))
-      .collect();
+    let digits: String = text.chars().filter(char::is_ascii_digit).collect();
+    return digits.strip_prefix("00").unwrap_or(&digits).to_owned();
   }
   if upper == "CRYPTO" {
     return normalize_crypto_text(text);

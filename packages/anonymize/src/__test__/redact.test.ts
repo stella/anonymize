@@ -76,6 +76,18 @@ describe("redactText / deanonymise round-trip", () => {
     expect([...result.redactionMap.keys()]).toEqual(["[EMAIL_ADDRESS_1]"]);
   });
 
+  test("international phone access prefixes normalize identically", () => {
+    const text = "Call +44 20 7946 0958 or 0044 (20) 7946-0958.";
+    const entities = [
+      at(text, "phone number", "+44 20 7946 0958"),
+      at(text, "phone number", "0044 (20) 7946-0958"),
+    ];
+
+    const result = redactText(text, entities);
+    expect(result.redactionMap.size).toBe(1);
+    expect([...result.redactionMap.keys()]).toEqual(["[PHONE_NUMBER_1]"]);
+  });
+
   test("literal placeholder-like source text is not deanonymised", () => {
     const text = "Keep [PERSON_1]; Alice Smith signs.";
     const entities = [at(text, "person", "Alice Smith")];

@@ -158,6 +158,120 @@ fn regex_processor_applies_validator_input_kind() {
 }
 
 #[test]
+fn regex_processor_applies_bounded_nanp_validation() {
+  let matches = vec![
+    SearchMatch::Regex {
+      pattern: 0,
+      start: 0,
+      end: 14,
+    },
+    SearchMatch::Regex {
+      pattern: 0,
+      start: 15,
+      end: 27,
+    },
+    SearchMatch::Regex {
+      pattern: 0,
+      start: 28,
+      end: 40,
+    },
+    SearchMatch::Regex {
+      pattern: 0,
+      start: 41,
+      end: 51,
+    },
+  ];
+  let meta = vec![RegexMatchMeta {
+    label: String::from("phone number"),
+    score: 0.9,
+    source_detail: None,
+    requires_validation: true,
+    validator_id: Some(String::from("phone.nanp")),
+    validator_input: None,
+    min_byte_length: None,
+  }];
+
+  let entities = process_regex_matches(
+    &matches,
+    PatternSlice { start: 0, end: 1 },
+    "(212) 555-0142 012-555-0142 212-111-0142 4537891022",
+    &meta,
+  )
+  .unwrap();
+
+  assert_eq!(entities.len(), 1);
+  assert_eq!(entities[0].text, "(212) 555-0142");
+}
+
+#[test]
+fn regex_processor_applies_bounded_international_phone_validation() {
+  let meta = vec![RegexMatchMeta {
+    label: String::from("phone number"),
+    score: 1.0,
+    source_detail: None,
+    requires_validation: true,
+    validator_id: Some(String::from("phone.international")),
+    validator_input: None,
+    min_byte_length: None,
+  }];
+
+  for value in [
+    "+44 (20 7946 0958",
+    "+44 20) 7946 0958",
+    "+2024-01-01",
+    "+20240721",
+    "+2024-0721",
+    "+44-2024-01-01",
+    "+420 2024 01 01",
+    "+4420240101",
+    "+42020240721",
+    "+1.234.567",
+    "+123-45-67",
+    "+12-345-6789",
+    "+12.34.56.78",
+    "+1234567",
+  ] {
+    let matches = vec![SearchMatch::Regex {
+      pattern: 0,
+      start: 0,
+      end: value.len().try_into().unwrap(),
+    }];
+    let entities = process_regex_matches(
+      &matches,
+      PatternSlice { start: 0, end: 1 },
+      value,
+      &meta,
+    )
+    .unwrap();
+    assert!(
+      entities.is_empty(),
+      "accepted non-phone numeric shape: {value}"
+    );
+  }
+
+  for value in [
+    "+44 (20) 7946 0958",
+    "+1 415 555 0132",
+    "+420 212 345 678",
+    "+49 30 12345678",
+  ] {
+    let matches = vec![SearchMatch::Regex {
+      pattern: 0,
+      start: 0,
+      end: value.len().try_into().unwrap(),
+    }];
+    let entities = process_regex_matches(
+      &matches,
+      PatternSlice { start: 0, end: 1 },
+      value,
+      &meta,
+    )
+    .unwrap();
+    assert_eq!(entities.len(), 1, "rejected real phone: {value}");
+  }
+}
+
+#[test]
 fn regex_processor_preserves_custom_regex_source_detail() {
   let matches = vec![SearchMatch::Regex {
     pattern: 0,

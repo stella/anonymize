@@ -16,7 +16,7 @@ import type { PipelineContext } from "./context";
 import { defaultContext } from "./context";
 
 const WHITESPACE_RE = /\s+/g;
-const PHONE_NOISE_RE = /[()\s-]/g;
+const NON_PHONE_DIGIT_RE = /\D/g;
 const ETHEREUM_ADDRESS_RE = /0x[0-9A-Fa-f]{40}/;
 const BECH32_ADDRESS_RE = /\bbc1[ac-hj-np-z02-9]{11,71}\b/i;
 const BASE58_ADDRESS_RE = /\b[13][a-km-zA-HJ-NP-Z1-9]{25,34}\b/;
@@ -88,7 +88,8 @@ const normalizeEntityText = (label: string, text: string): string => {
     return text.toLowerCase().trim();
   }
   if (upper === "PHONE_NUMBER" || upper === "PHONE") {
-    return text.replace(PHONE_NOISE_RE, "");
+    const digits = text.replace(NON_PHONE_DIGIT_RE, "");
+    return digits.startsWith("00") ? digits.slice(2) : digits;
   }
   if (upper === "CRYPTO") {
     return normalizeCryptoText(text);

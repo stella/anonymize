@@ -15467,6 +15467,8 @@
     {
       "label": "phone number",
       "score": 1,
+      "requires_validation": true,
+      "validator_id": "phone.international",
       "min_byte_length": 7
     },
     {
@@ -15482,6 +15484,8 @@
     {
       "label": "phone number",
       "score": 0.9,
+      "requires_validation": true,
+      "validator_id": "phone.nanp",
       "min_byte_length": 7
     },
     {
@@ -16193,20 +16197,14 @@
     },
     {
       "kind": "regex",
-      "pattern": "\\b[\\w.+\\-]+@[\\w\\-]+(?:\\.[\\w\\-]+)+\\b",
+      "pattern": "(?<![\\p{L}\\p{N}\\p{M}_!#$%&'*+/=?^`{|}~.@\\-])(?:[\\p{L}\\p{N}_!#$%&'*+/=?^`{|}~-][\\p{L}\\p{N}\\p{M}_!#$%&'*+/=?^`{|}~-]*(?:\\.[\\p{L}\\p{N}_!#$%&'*+/=?^`{|}~-][\\p{L}\\p{N}\\p{M}_!#$%&'*+/=?^`{|}~-]*)*)@[\\p{L}\\p{N}](?:[\\p{L}\\p{N}\\p{M}-]{0,61}[\\p{L}\\p{N}\\p{M}])?(?:\\.[\\p{L}\\p{N}](?:[\\p{L}\\p{N}\\p{M}-]{0,61}[\\p{L}\\p{N}\\p{M}])?)+(?![\\p{L}\\p{N}\\p{M}_@-])",
       "lazy": true,
       "prefilter_any": ["@"],
       "prefilter_case_insensitive": false
     },
     {
       "kind": "regex",
-      "pattern": "\\+\\d{1,3}(?:[^\\S\\n]|[.\\-])?(?:\\(0\\)(?:[^\\S\\n]|[.\\-])?)?\\(?\\d{2,4}\\)?(?:[^\\S\\n]|[.\\-])?\\d{3}(?:[^\\S\\n]|[.\\-])?\\d{2,4}(?:[^\\S\\n]|[.\\-])?\\d{0,4}\\b",
-      "case_insensitive": null,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "pattern": "(?:\\+|\\b00)(?:[^\\S\\n]|[.\\-])?[1-9]\\d{0,2}(?:(?:[^\\S\\n]|[.\\-])?(?:\\(\\d{1,4}\\)|\\d{1,4})){2,5}\\b"
     },
     {
       "kind": "regex",
@@ -16227,7 +16225,7 @@
     },
     {
       "kind": "regex",
-      "pattern": "\\(\\d{3}\\)(?:[^\\S\\n]|[.\\-])?\\d{3}(?:[^\\S\\n]|[.\\-])\\d{4}\\b"
+      "pattern": "(?<!\\w)(?:1(?:[^\\S\\n]|[.\\-])?)?(?:\\(\\d{3}\\)(?:[^\\S\\n]|[.\\-])?\\d{3}(?:[^\\S\\n]|[.\\-])?\\d{4}|\\d{3}(?:[^\\S\\n]|[.\\-])\\d{3}(?:[^\\S\\n]|[.\\-])?\\d{4}|\\d{3}(?:[^\\S\\n]|[.\\-])?\\d{3}(?:[^\\S\\n]|[.\\-])\\d{4})\\b"
     },
     {
       "kind": "regex",

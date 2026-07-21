@@ -111,6 +111,21 @@ fn normalized_identifier_values_share_placeholder() {
 }
 
 #[test]
+fn international_phone_access_prefixes_share_placeholder() {
+  let text = "Call +44 20 7946 0958 or 0044 (20) 7946-0958.";
+  let entities = vec![
+    entity(text, "phone number", "+44 20 7946 0958"),
+    entity(text, "phone number", "0044 (20) 7946-0958"),
+  ];
+
+  let result =
+    redact_text(text, &entities, &OperatorConfig::default()).unwrap();
+
+  assert_eq!(result.redaction_map.len(), 1);
+  assert_eq!(result.redaction_map[0].placeholder, "[PHONE_NUMBER_1]");
+}
+
+#[test]
 fn generic_identifier_cues_keep_distinct_placeholder_keys() {
   let text = concat!(
     "CNI: 12AB34567 was present. ",

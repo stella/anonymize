@@ -34,7 +34,9 @@
 //! ported logic; the fixtures cross-check the embedded table byte-for-byte.
 
 use serde::Deserialize;
-use stella_anonymize_core::assemble::{AssembleError, parse_data_file};
+use stella_anonymize_core::assemble::{
+  AssembleError, OrderedMap, parse_data_file,
+};
 
 use super::AssembleContext;
 use super::language::signing_clause_language_matches;
@@ -106,6 +108,8 @@ const NATIVE_REGEX_VALIDATOR_IDS: &[&str] = &[
   "pl.pesel",
   "pt.cc",
   "pt.vat",
+  "phone.international",
+  "phone.nanp",
   "ro.cnp",
   "ro.vat",
   "se.personnummer",
@@ -209,6 +213,112 @@ struct SigningClauseEntry {
   prefilter_phrases: Option<Vec<String>>,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct EmailObfuscationTokens {
+  #[serde(default)]
+  at_tokens: Vec<String>,
+  #[serde(default)]
+  dot_tokens: Vec<String>,
+}
+
+fn regex_literal(value: &str) -> String {
+  let mut escaped = String::with_capacity(value.len());
+  for character in value.chars() {
+    if matches!(
+      character,
+      '\\'
+        | '.'
+        | '^'
+        | '$'
+        | '|'
+        | '?'
+        | '*'
+        | '+'
+        | '('
+        | ')'
+        | '['
+        | ']'
+        | '{'
+        | '}'
+    ) {
+      escaped.push('\\');
+    }
+    escaped.push(character);
+  }
+  escaped
+}
+
+fn token_alternation(tokens: &[String]) -> Option<String> {
+  let escaped: Vec<String> = tokens
+    .iter()
+    .filter(|token| !token.is_empty())
+    .map(|token| regex_literal(token))
+    .collect();
+  (!escaped.is_empty()).then(|| escaped.join("|"))
+}
+
+/// Builds conservative written-email patterns from language-scoped data.
+///
+/// The `at`/`dot` structure is adapted from Scrubadub's email recognizer at
+/// pinned commit 53772cbef417da290d25c95373031f786ab3b5c6. Tokens remain in
+/// `email-obfuscation-tokens.json`; this code only supplies the grammar.
+fn build_obfuscated_email_patterns(
+  languages: Option<&[String]>,
+) -> Result<Vec<BindingSearchPattern>, AssembleError> {
+  let vocabularies: OrderedMap<EmailObfuscationTokens> =
+    parse_data_file("email-obfuscation-tokens.json")?;
+  let mut patterns = Vec::new();
+  for (language, vocabulary) in &vocabularies {
+    if !super::language::language_config_matches(language, languages) {
+      continue;
+    }
+    let Some(at_tokens) = token_alternation(&vocabulary.at_tokens) else {
+      continue;
+    };
+    let Some(dot_tokens) = token_alternation(&vocabulary.dot_tokens) else {
+      continue;
+    };
+    let pattern = format!(
+      concat!(
+        r"(?i)",
+        r"(?<![\p{{L}}\p{{N}}\p{{M}}_!#$%&'*+/=?^`{{|}}~.\-])",
+        r"[\p{{L}}\p{{N}}_!#$%&'*+/=?^`{{|}}~-]",
+        r"[\p{{L}}\p{{N}}\p{{M}}_!#$%&'*+/=?^`{{|}}~-]*",
+        r"(?:\.[\p{{L}}\p{{N}}_!#$%&'*+/=?^`{{|}}~-]",
+        r"[\p{{L}}\p{{N}}\p{{M}}_!#$%&'*+/=?^`{{|}}~-]*)*",
+        r"[^\S\n]+(?:{})[^\S\n]+",
+        r"[\p{{L}}\p{{N}}](?:[\p{{L}}\p{{N}}\p{{M}}-]{{0,61}}[\p{{L}}\p{{N}}\p{{M}}])?",
+        r"(?:[^\S\n]+(?:{})[^\S\n]+",
+        r"[\p{{L}}\p{{N}}](?:[\p{{L}}\p{{N}}\p{{M}}-]{{0,61}}[\p{{L}}\p{{N}}\p{{M}}])?)+\b"
+      ),
+      at_tokens, dot_tokens
+    );
+    patterns.push(BindingSearchPattern {
+      kind: "regex".to_string(),
+      pattern,
+      distance: None,
+      case_insensitive: None,
+      whole_words: None,
+      lazy: Some(true),
+      prefilter_any: None,
+      prefilter_case_insensitive: None,
+      prefilter_regex: Some(format!(r"(?i)[^\S\n](?:{at_tokens})[^\S\n]")),
+      prefilter_window_bytes: None,
+      prepared_artifact_policy: None,
+    });
+  }
+  Ok(patterns)
+}
+
+fn obfuscated_email_meta() -> BindingRegexMatchMeta {
+  BindingRegexMatchMeta {
+    label: "email address".to_string(),
+    score: 0.85,
+    ..BindingRegexMatchMeta::default()
+  }
+}
+
 /// Mirrors `buildSigningClausePattern`.
 fn build_signing_clause_pattern(entry: &SigningClauseEntry) -> String {
   let place = if entry.prepositions.is_empty() {
@@ -284,6 +394,14 @@ pub(super) fn build_regex(
       }
       patterns.push(row.pattern.clone());
       meta.push(to_native_regex_meta(row)?);
+      if row.label == "email address" {
+        for pattern in
+          build_obfuscated_email_patterns(ctx.content_languages.as_deref())?
+        {
+          patterns.push(pattern);
+          meta.push(obfuscated_email_meta());
+        }
+      }
     }
 
     // Native signing-clause patterns: `enableRegex && labelIsAllowed("address")`,

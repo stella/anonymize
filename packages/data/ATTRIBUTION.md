@@ -6,12 +6,25 @@ implementations are original.
 
 ## Prior Art
 
-### Microsoft Presidio (Apache 2.0)
+### Microsoft Presidio (MIT)
 
 - Context-word boosting architecture
 - Structured PII pattern design (IBAN, phone, email)
+- Unicode/IDN domain-label handling and validation-first phone matching,
+  adapted from pinned commit `efc775903f55c3e50e12b5902ec2699c2e52fdf7`
+- Internationalized domains use bounded RFC-like label shapes and accept
+  decomposed Unicode combining marks. Punycode receives shape validation only,
+  not complete IDNA validation.
 - Operator concept (replace vs redact)
-- https://github.com/microsoft/presidio
+- https://github.com/microsoft/presidio/tree/efc775903f55c3e50e12b5902ec2699c2e52fdf7
+
+### Scrubadub (Apache 2.0)
+
+- RFC-style email local-part symbol coverage and conservative written
+  `at`/`dot` email grammar
+- Validation-first phone matching principles
+- Adapted from pinned commit `53772cbef417da290d25c95373031f786ab3b5c6`
+- https://github.com/LeapBeyond/scrubadub/tree/53772cbef417da290d25c95373031f786ab3b5c6
 
 ### GLiNER / GLiNER.js (MIT)
 
