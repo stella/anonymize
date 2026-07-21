@@ -1,0 +1,80 @@
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-07-21T21:08:41.954Z",
+  "gitSha": "eb4d8f8",
+  "runtime": "Bun 1.3.14",
+  "policy": "evaluation-only",
+  "corpus": {
+    "id": "meddocan",
+    "source": "https://zenodo.org/records/4279323",
+    "version": "4279323",
+    "file": "meddocan.zip",
+    "sha256": "d0e4708b58689bc1440ede6f89e017e58d667827d927827622d73810cd68eac3",
+    "license": "CC-BY-4.0",
+    "split": "test",
+    "documentCount": 250,
+    "selection": {
+      "type": "full-test-split"
+    }
+  },
+  "libraries": [
+    {
+      "name": "stella",
+      "version": "2.3.0",
+      "status": "ok",
+      "elapsedSeconds": 1.8651180830000003,
+      "metrics": {
+        "type": "label-agnostic-span-redaction",
+        "spanRecall": 0.510157216039569,
+        "characterRecall": 0.6381858107550317,
+        "characterPrecision": 0.8020292982528946,
+        "goldSpans": 5661
+      }
+    },
+    {
+      "name": "presidio",
+      "version": "2.2.360",
+      "status": "ok",
+      "elapsedSeconds": 43.037773375,
+      "metrics": {
+        "type": "label-agnostic-span-redaction",
+        "spanRecall": 0.525172231054584,
+        "characterRecall": 0.690161308963627,
+        "characterPrecision": 0.5966542485619264,
+        "goldSpans": 5661
+      }
+    },
+    {
+      "name": "scrubadub",
+      "version": "2.0.1",
+      "status": "ok",
+      "elapsedSeconds": 1.3801732919999994,
+      "metrics": {
+        "type": "label-agnostic-span-redaction",
+        "spanRecall": 0.04451510333863275,
+        "characterRecall": 0.09037924942625522,
+        "characterPrecision": 0.9896944494666425,
+        "goldSpans": 5661
+      }
+    },
+    {
+      "name": "redact-pii",
+      "version": "3.4.0",
+      "status": "ok",
+      "elapsedSeconds": 38.614352958,
+      "metrics": {
+        "type": "label-agnostic-span-redaction",
+        "spanRecall": 0.25790496378731675,
+        "characterRecall": 0.4077467928079647,
+        "characterPrecision": 0.769249937702467,
+        "goldSpans": 5661
+      }
+    },
+    {
+      "name": "pii-shield",
+      "version": "unknown",
+      "status": "unavailable",
+      "reasonCode": "adapter-unavailable"
+    }
+  ]
+}

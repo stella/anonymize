@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-07-21T21:07:16.532Z",
+  "gitSha": "eb4d8f8",
+  "runtime": "Bun 1.3.14",
+  "policy": "evaluation-only",
+  "corpus": {
+    "id": "redactionbench",
+    "source": "https://huggingface.co/datasets/RedactionBench/RedactionBench",
+    "version": "d45e9cec89bc49c69355e252fec29cc0229982f6",
+    "file": "data/test-00000-of-00001.parquet",
+    "sha256": "17ea0b577344917ce6e265667dd833cbf18e4f2cc07aa230d55f1e151219f5f0",
+    "license": "CC-BY-4.0",
+    "split": "test",
+    "documentCount": 200,
+    "selection": {
+      "type": "full-test-split"
+    }
+  },
+  "libraries": [
+    {
+      "name": "stella",
+      "version": "2.3.0",
+      "status": "ok",
+      "elapsedSeconds": 5.164460833,
+      "metrics": {
+        "type": "redactionbench-transparent-interim",
+        "documents": 200,
+        "mandatorySpans": 16993,
+        "mandatorySpanRecall": 0.22591655387512505,
+        "mandatoryCharacterRecall": 0.16871765591972593,
+        "acceptedCharacterPrecision": 0.5964920593554297,
+        "predictedSpans": 9539
+      }
+    },
+    {
+      "name": "presidio",
+      "version": "2.2.360",
+      "status": "ok",
+      "elapsedSeconds": 181.179557791,
+      "metrics": {
+        "type": "redactionbench-transparent-interim",
+        "documents": 200,
+        "mandatorySpans": 16993,
+        "mandatorySpanRecall": 0.7405990702053787,
+        "mandatoryCharacterRecall": 0.4281870307830608,
+        "acceptedCharacterPrecision": 0.37350208102496296,
+        "predictedSpans": 40503
+      }
+    },
+    {
+      "name": "scrubadub",
+      "version": "2.0.1",
+      "status": "ok",
+      "elapsedSeconds": 3.771653125000012,
+      "metrics": {
+        "type": "redactionbench-transparent-interim",
+        "documents": 200,
+        "mandatorySpans": 16993,
+        "mandatorySpanRecall": 0.14641322897663744,
+        "mandatoryCharacterRecall": 0.09508855900289123,
+        "acceptedCharacterPrecision": 0.5095078715755548,
+        "predictedSpans": 2930
+      }
+    },
+    {
+      "name": "redact-pii",
+      "version": "3.4.0",
+      "status": "ok",
+      "elapsedSeconds": 115.40861149999996,
+      "metrics": {
+        "type": "redactionbench-transparent-interim",
+        "documents": 200,
+        "mandatorySpans": 16993,
+        "mandatorySpanRecall": 0.6505031483552051,
+        "mandatoryCharacterRecall": 0.3569510921062222,
+        "acceptedCharacterPrecision": 0.5140633239816905,
+        "predictedSpans": 21973
+      }
+    },
+    {
+      "name": "pii-shield",
+      "version": "unknown",
+      "status": "unavailable",
+      "reasonCode": "adapter-unavailable"
+    }
+  ]
+}
