@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from typing import Any
 
 from ._native import inspect_pdf_json as _inspect_pdf_json
 
 PDF_INSPECTION_CONTRACT_VERSION = 1
+PDF_OBSERVATION_BATCH_VERSION = 1
 PDF_DOCUMENT_MAX_BYTES = 64 * 1024 * 1024
 PDF_DECOMPRESSED_MAX_BYTES = 128 * 1024 * 1024
 PDF_MAX_OBJECTS = 200_000
@@ -29,19 +30,48 @@ class PdfInspectionError(ValueError):
         self.code = code
 
 
+def _observation_json(observation_batch: Mapping[str, Any]) -> str:
+    try:
+        serialized = json.dumps(
+            observation_batch, separators=(",", ":"), ensure_ascii=False
+        )
+    except (TypeError, ValueError, OverflowError) as error:
+        raise PdfInspectionError(
+            "invalid-observation",
+            "invalid-observation: PDF observation batch is not JSON-serializable",
+        ) from error
+    # JavaScript JSON.stringify escapes lone UTF-16 surrogates. Python retains
+    # them with ensure_ascii=False, so canonicalize only that invalid Unicode
+    # range while leaving ordinary non-ASCII text encoded as UTF-8.
+    return "".join(
+        f"\\u{ord(character):04x}" if "\ud800" <= character <= "\udfff" else character
+        for character in serialized
+    )
+
+
 def inspect_pdf(
     document: bytes | bytearray | memoryview,
-    page_observations: Sequence[Mapping[str, Any]] | None = None,
+    observation_batch: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Inventory PDF risks and renderer coverage without claiming redaction."""
 
     observations_json = (
-        None
-        if page_observations is None
-        else json.dumps(list(page_observations), separators=(",", ":"))
+        None if observation_batch is None else _observation_json(observation_batch)
     )
-    if observations_json is not None and len(observations_json.encode("utf-8")) > PDF_MAX_OBSERVATION_JSON_BYTES:
-        raise PdfInspectionError("observation-limit-exceeded", "PDF observation JSON exceeds the supported UTF-8 byte limit")
+    try:
+        observation_json_bytes = (
+            0 if observations_json is None else len(observations_json.encode("utf-8"))
+        )
+    except UnicodeError as error:
+        raise PdfInspectionError(
+            "invalid-observation",
+            "invalid-observation: PDF observation batch is not valid UTF-8",
+        ) from error
+    if observation_json_bytes > PDF_MAX_OBSERVATION_JSON_BYTES:
+        raise PdfInspectionError(
+            "observation-limit-exceeded",
+            f"observation-limit-exceeded: PDF observation JSON must not exceed {PDF_MAX_OBSERVATION_JSON_BYTES} UTF-8 bytes",
+        )
     try:
         return json.loads(_inspect_pdf_json(bytes(document), observations_json))
     except ValueError as error:

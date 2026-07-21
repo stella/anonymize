@@ -175,10 +175,15 @@ external input and retained counts without matched text.
 ## PDF inspection
 
 `inspect_pdf()` inventories PDF structures that can retain sensitive content
-and returns fail-closed page coverage. It does not redact PDFs. Without explicit
-renderer/OCR page observations, every page is reported as
-`page-content-not-observed`; opaque rectangle overlays are never treated as
-anonymization.
+and returns fail-closed page coverage. It does not redact PDFs. Without a
+renderer/OCR observation batch, coverage reports both
+`observation-provider-not-identified` and `page-content-not-observed`; opaque
+rectangle overlays are never treated as anonymization. A batch must identify
+its provider and bind to the exact PDF bytes with lowercase SHA-256. Only a
+complete provider assertion can produce `provider-attested-full`; this is
+provenance, not independent verification by the inspector. Encrypted PDFs are
+rejected fail-closed because their complete plaintext object graph cannot be
+validated without decryption.
 
 ```py
 from pathlib import Path

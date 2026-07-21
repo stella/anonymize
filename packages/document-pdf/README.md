@@ -18,16 +18,22 @@ console.log(inspection.coverage);
 ```
 
 Without page observations from a renderer/OCR adapter, coverage is explicitly
-`partial` with `page-content-not-observed`. The optional observation contract
-uses UTF-16 text offsets and PDF points. It is the seam for a later PDFium-backed
-renderer and destructive raster workflow; callers must not describe inspection
-alone as anonymization.
+`partial` with `observation-provider-not-identified` and
+`page-content-not-observed`. Observations must arrive as a versioned batch bound
+to the exact input bytes by lowercase SHA-256 and must identify the provider by
+ID, name, and version. Loose page-observation arrays are rejected. The contract
+uses UTF-16 text offsets and PDF points.
 
-Coverage is only `full` when every page was rendered, its text layer was
-completely observed, and OCR completely covered the rendered page pixels. That
-includes vector outlines, not only PDF image objects.
+Coverage is only `provider-attested-full` when that named provider asserts that
+every page was rendered, its text layer was completely observed, and OCR
+completely covered the rendered page pixels. This is provider provenance, not
+an independent proof by the core. Pixel coverage includes vector outlines, not
+only PDF image objects. Callers must not describe inspection alone as
+anonymization.
 
 Strict inspection accepts classic PDF 1.0–1.4 files only. PDF 1.5+ object and
 cross-reference streams fail closed. Page dimensions are the effective,
 rotated CropBox in points, normalized to origin `(0, 0)`. Incremental revisions
-and trailing retained bytes prevent `full` coverage.
+and trailing retained bytes prevent `provider-attested-full` coverage.
+Encrypted PDFs are rejected fail-closed because the inspector cannot validate
+their complete plaintext object graph without caller-supplied decryption.

@@ -92,10 +92,12 @@ class DocxRestorationError(ValueError):
     code: str
 
 def extract_docx_text(document: BytesLike) -> dict[str, Any]: ...
+
 class PdfInspectionError(ValueError):
     code: str
 
 PDF_INSPECTION_CONTRACT_VERSION: int
+PDF_OBSERVATION_BATCH_VERSION: int
 PDF_DOCUMENT_MAX_BYTES: int
 PDF_DECOMPRESSED_MAX_BYTES: int
 PDF_MAX_OBJECTS: int
@@ -109,7 +111,7 @@ PDF_MAX_OBSERVATION_JSON_BYTES: int
 
 def inspect_pdf(
     document: BytesLike,
-    page_observations: Sequence[Mapping[str, Any]] | None = None,
+    observation_batch: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]: ...
 def rewrite_docx_text(
     document: BytesLike,

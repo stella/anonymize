@@ -37,10 +37,13 @@ coverage gaps. Partial anonymization requires explicit opt-in.
 
 PDF inspection inventories forms, annotations, attachments, metadata,
 JavaScript, XFA, optional content, signatures, and image objects. Page text and
-glyph boxes use an explicit renderer/OCR observation contract; without those
-observations, coverage is reported as partial. Inspection does not anonymize a
-PDF. In particular, drawing an opaque rectangle over original page content is
-not redaction because the covered text or image can remain in the file.
+glyph boxes use a strict renderer/OCR batch bound to the exact document SHA-256
+and named provider version. Without it, coverage is partial. A complete batch
+is reported as `provider-attested-full`, explicitly describing the provider's
+assertion rather than independent verification by the inspector. Inspection
+does not anonymize a PDF. In particular, drawing an opaque rectangle over
+original page content is not redaction because the covered text or image can
+remain in the file.
 
 The repository does not yet provide PDF anonymization or structure-preserving
 pipelines for XLSX, PPTX, HTML, Markdown, CSV, email containers, images/OCR,

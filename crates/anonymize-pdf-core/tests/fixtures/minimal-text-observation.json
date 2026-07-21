@@ -1,0 +1,23 @@
+{
+  "pageIndex": 0,
+  "widthPoints": 612,
+  "heightPoints": 792,
+  "text": "Public fixture: Alice Example signed.",
+  "glyphs": [
+    {
+      "start": 0,
+      "end": 37,
+      "bounds": {
+        "left": 72,
+        "bottom": 717.516,
+        "right": 265.404,
+        "top": 728.616
+      },
+      "source": "embedded-text"
+    }
+  ],
+  "rendered": true,
+  "textLayer": "complete",
+  "ocr": "complete",
+  "imageCount": 0
+}

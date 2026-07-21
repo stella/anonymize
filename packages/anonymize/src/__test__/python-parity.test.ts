@@ -18,6 +18,7 @@
  */
 import { spawnSync } from "node:child_process";
 import { Buffer } from "node:buffer";
+import { createHash } from "node:crypto";
 import {
   copyFileSync,
   cpSync,
@@ -44,6 +45,20 @@ import {
   CAPABILITY_SURFACES,
   type CapabilitySurfaceId,
 } from "../capabilities";
+import {
+  PDF_DECOMPRESSED_MAX_BYTES,
+  PDF_DOCUMENT_MAX_BYTES,
+  PDF_INSPECTION_CONTRACT_VERSION,
+  PDF_MAX_GLYPHS,
+  PDF_MAX_OBJECT_DEPTH,
+  PDF_MAX_OBJECT_NODES,
+  PDF_MAX_OBJECTS,
+  PDF_MAX_OBSERVATION_JSON_BYTES,
+  PDF_MAX_OBSERVATION_TEXT_UTF8_BYTES,
+  PDF_MAX_PAGES,
+  PDF_MAX_PAGE_TEXT_UTF8_BYTES,
+  PDF_OBSERVATION_BATCH_VERSION,
+} from "../../../document-pdf/src/index";
 
 setDefaultTimeout(600_000);
 
@@ -165,10 +180,17 @@ type PythonParityOutput = {
     success: readonly { id: string; text: string }[];
     errors: readonly { id: string; code: string }[];
   };
+  pdf_result: {
+    partial: unknown;
+    full: unknown;
+    errors: Record<string, { code: string; message: string }>;
+  };
+  pdf_limits: Record<string, number>;
 };
 
 const PYTHON_PARITY_SCRIPT = `
 import base64
+import hashlib
 import io
 import json
 import os
@@ -529,6 +551,65 @@ lifecycle_expired = lifecycle_restored.inspect(200)
 lifecycle_deleted = lifecycle_session.delete()
 lifecycle_deleted_metadata = lifecycle_session.inspect()
 
+pdf_source = base64.b64decode(payload["pdf_fixture_base64"])
+pdf_encrypted = base64.b64decode(payload["pdf_encrypted_fixture_base64"])
+pdf_page = payload["pdf_observation"]
+pdf_batch = {
+    "version": 1,
+    "document": {"sha256": hashlib.sha256(pdf_source).hexdigest()},
+    "provider": {
+        "id": "parity-renderer",
+        "name": "Parity Renderer",
+        "version": "1.0.0",
+    },
+    "pages": [pdf_page],
+}
+
+def pdf_error(document, batch=None):
+    try:
+        anonymize.inspect_pdf(document, batch)
+    except anonymize.PdfInspectionError as error:
+        return {"code": error.code, "message": str(error)}
+    return {"code": "did-not-fail", "message": "did not fail"}
+
+pdf_dangling = pdf_source.replace(b"/Contents 7 0 R", b"/Contents 9 0 R", 1)
+pdf_unknown = dict(pdf_batch)
+pdf_unknown["unexpected"] = True
+pdf_unicode = dict(pdf_batch)
+pdf_unicode["pages"] = [dict(pdf_batch["pages"][0])]
+pdf_unicode["pages"][0]["text"] = "😀"
+pdf_unicode["pages"][0]["glyphs"] = [{
+    "start": 0, "end": 1,
+    "bounds": {"left": 0, "bottom": 0, "right": 10, "top": 10},
+    "source": "embedded-text",
+}]
+pdf_lone_surrogate = dict(pdf_batch)
+pdf_lone_surrogate["pages"] = [dict(pdf_page)]
+pdf_lone_surrogate["pages"][0]["text"] = "\\ud800"
+pdf_lone_surrogate["pages"][0]["glyphs"] = [{
+    "start": 0, "end": 1,
+    "bounds": {"left": 0, "bottom": 0, "right": 10, "top": 10},
+    "source": "embedded-text",
+}]
+pdf_page_text_limit = dict(pdf_batch)
+pdf_page_text_limit["pages"] = [dict(pdf_page)]
+pdf_page_text_limit["pages"][0]["text"] = "x" * (16 * 1024 * 1024 + 1)
+pdf_page_text_limit["pages"][0]["glyphs"] = []
+pdf_cyclic = dict(pdf_batch)
+pdf_cyclic["cycle"] = pdf_cyclic
+pdf_errors = {
+    "malformed": pdf_error(b"not a PDF"),
+    "dangling": pdf_error(pdf_dangling),
+    "encrypted": pdf_error(pdf_encrypted),
+    "unknownField": pdf_error(pdf_source, pdf_unknown),
+    "looseArray": pdf_error(pdf_source, pdf_batch["pages"]),
+    "unicodeBoundary": pdf_error(pdf_source, pdf_unicode),
+    "loneSurrogate": pdf_error(pdf_source, pdf_lone_surrogate),
+    "pageTextLimit": pdf_error(pdf_source, pdf_page_text_limit),
+    "jsonSerialization": pdf_error(pdf_source, pdf_cyclic),
+    "documentLimit": pdf_error(bytes(64 * 1024 * 1024 + 1)),
+}
+
 print(
     json.dumps(
         {
@@ -625,6 +706,25 @@ print(
             "docx_vector_results": {
                 "success": docx_vector_success,
                 "errors": docx_vector_errors,
+            },
+            "pdf_result": {
+                "partial": anonymize.inspect_pdf(pdf_source),
+                "full": anonymize.inspect_pdf(pdf_source, pdf_batch),
+                "errors": pdf_errors,
+            },
+            "pdf_limits": {
+                "PDF_INSPECTION_CONTRACT_VERSION": anonymize.PDF_INSPECTION_CONTRACT_VERSION,
+                "PDF_OBSERVATION_BATCH_VERSION": anonymize.PDF_OBSERVATION_BATCH_VERSION,
+                "PDF_DOCUMENT_MAX_BYTES": anonymize.PDF_DOCUMENT_MAX_BYTES,
+                "PDF_DECOMPRESSED_MAX_BYTES": anonymize.PDF_DECOMPRESSED_MAX_BYTES,
+                "PDF_MAX_OBJECTS": anonymize.PDF_MAX_OBJECTS,
+                "PDF_MAX_OBJECT_NODES": anonymize.PDF_MAX_OBJECT_NODES,
+                "PDF_MAX_OBJECT_DEPTH": anonymize.PDF_MAX_OBJECT_DEPTH,
+                "PDF_MAX_PAGES": anonymize.PDF_MAX_PAGES,
+                "PDF_MAX_GLYPHS": anonymize.PDF_MAX_GLYPHS,
+                "PDF_MAX_PAGE_TEXT_UTF8_BYTES": anonymize.PDF_MAX_PAGE_TEXT_UTF8_BYTES,
+                "PDF_MAX_OBSERVATION_TEXT_UTF8_BYTES": anonymize.PDF_MAX_OBSERVATION_TEXT_UTF8_BYTES,
+                "PDF_MAX_OBSERVATION_JSON_BYTES": anonymize.PDF_MAX_OBSERVATION_JSON_BYTES,
             },
         }
     )
@@ -752,6 +852,39 @@ const runPythonParity = (cases: ParityCase[]): PythonParityOutput => {
     JSON.stringify({
       cases: cases.map(({ text, language }) => ({ text, language })),
       docx_vectors: DOCX_RUNTIME_PARITY_FIXTURE,
+      pdf_fixture_base64: readFileSync(
+        join(
+          ROOT_DIR,
+          "crates",
+          "anonymize-pdf-core",
+          "tests",
+          "fixtures",
+          "minimal-text.pdf",
+        ),
+      ).toString("base64"),
+      pdf_encrypted_fixture_base64: readFileSync(
+        join(
+          ROOT_DIR,
+          "crates",
+          "anonymize-pdf-core",
+          "tests",
+          "fixtures",
+          "encrypted.pdf",
+        ),
+      ).toString("base64"),
+      pdf_observation: JSON.parse(
+        readFileSync(
+          join(
+            ROOT_DIR,
+            "crates",
+            "anonymize-pdf-core",
+            "tests",
+            "fixtures",
+            "minimal-text-observation.json",
+          ),
+          "utf8",
+        ),
+      ),
     }),
   );
   try {
@@ -824,6 +957,182 @@ describe("python binding parity", () => {
       ),
     });
   });
+
+  pythonParityTest(
+    "PDF results, validation failures, and limits match Node exactly",
+    () => {
+      const python = runPythonParity([]);
+      const binding = loadNativeAnonymizeBinding();
+      const inspect = binding.inspectPdfJson;
+      expect(inspect).toBeDefined();
+      if (inspect === undefined) return;
+
+      const document = readFileSync(
+        join(
+          ROOT_DIR,
+          "crates",
+          "anonymize-pdf-core",
+          "tests",
+          "fixtures",
+          "minimal-text.pdf",
+        ),
+      );
+      const page = JSON.parse(
+        readFileSync(
+          join(
+            ROOT_DIR,
+            "crates",
+            "anonymize-pdf-core",
+            "tests",
+            "fixtures",
+            "minimal-text-observation.json",
+          ),
+          "utf8",
+        ),
+      ) as Record<string, unknown>; // SAFETY: Generated and validated with the public fixture schema.
+      const batch = {
+        version: 1,
+        document: {
+          sha256: createHash("sha256").update(document).digest("hex"),
+        },
+        provider: {
+          id: "parity-renderer",
+          name: "Parity Renderer",
+          version: "1.0.0",
+        },
+        pages: [page],
+      };
+      const normalizedError = (
+        bytes: Uint8Array,
+        value?: unknown,
+      ): { code: string; message: string } => {
+        let serialized: string | undefined;
+        try {
+          serialized = value === undefined ? undefined : JSON.stringify(value);
+        } catch {
+          return {
+            code: "invalid-observation",
+            message:
+              "invalid-observation: PDF observation batch is not JSON-serializable",
+          };
+        }
+        try {
+          inspect(bytes, serialized);
+          return { code: "did-not-fail", message: "did not fail" };
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          return {
+            code: message.split(":", 1)[0] ?? "invalid-document",
+            message,
+          };
+        }
+      };
+      const dangling = Buffer.from(document);
+      const encrypted = readFileSync(
+        join(
+          ROOT_DIR,
+          "crates",
+          "anonymize-pdf-core",
+          "tests",
+          "fixtures",
+          "encrypted.pdf",
+        ),
+      );
+      const contents = Buffer.from("/Contents 7 0 R");
+      const offset = dangling.indexOf(contents);
+      expect(offset).toBeGreaterThanOrEqual(0);
+      dangling.set(Buffer.from("/Contents 9 0 R"), offset);
+      const unknown = { ...batch, unexpected: true };
+      const unicodeBoundary = {
+        ...batch,
+        pages: [
+          {
+            ...page,
+            text: "😀",
+            glyphs: [
+              {
+                start: 0,
+                end: 1,
+                bounds: {
+                  left: 0,
+                  bottom: 0,
+                  right: 10,
+                  top: 10,
+                },
+                source: "embedded-text",
+              },
+            ],
+          },
+        ],
+      };
+      const loneSurrogate = {
+        ...batch,
+        pages: [
+          {
+            ...page,
+            text: "\ud800",
+            glyphs: [
+              {
+                start: 0,
+                end: 1,
+                bounds: {
+                  left: 0,
+                  bottom: 0,
+                  right: 10,
+                  top: 10,
+                },
+                source: "embedded-text",
+              },
+            ],
+          },
+        ],
+      };
+      const pageTextLimit = {
+        ...batch,
+        pages: [
+          {
+            ...page,
+            text: "x".repeat(PDF_MAX_PAGE_TEXT_UTF8_BYTES + 1),
+            glyphs: [],
+          },
+        ],
+      };
+      const cyclic = { ...batch } as Record<string, unknown>;
+      cyclic["cycle"] = cyclic;
+
+      expect(python.pdf_result).toEqual({
+        partial: JSON.parse(inspect(document)),
+        full: JSON.parse(inspect(document, JSON.stringify(batch))),
+        errors: {
+          malformed: normalizedError(Buffer.from("not a PDF")),
+          dangling: normalizedError(dangling),
+          encrypted: normalizedError(encrypted),
+          unknownField: normalizedError(document, unknown),
+          looseArray: normalizedError(document, batch.pages),
+          unicodeBoundary: normalizedError(document, unicodeBoundary),
+          loneSurrogate: normalizedError(document, loneSurrogate),
+          pageTextLimit: normalizedError(document, pageTextLimit),
+          jsonSerialization: normalizedError(document, cyclic),
+          documentLimit: normalizedError(Buffer.alloc(64 * 1024 * 1024 + 1)),
+        },
+      });
+      expect(python.pdf_limits).toEqual({
+        PDF_INSPECTION_CONTRACT_VERSION,
+        PDF_OBSERVATION_BATCH_VERSION,
+        PDF_DOCUMENT_MAX_BYTES,
+        PDF_DECOMPRESSED_MAX_BYTES,
+        PDF_MAX_OBJECTS,
+        PDF_MAX_OBJECT_NODES,
+        PDF_MAX_OBJECT_DEPTH,
+        PDF_MAX_PAGES,
+        PDF_MAX_GLYPHS,
+        PDF_MAX_PAGE_TEXT_UTF8_BYTES,
+        PDF_MAX_OBSERVATION_TEXT_UTF8_BYTES,
+        PDF_MAX_OBSERVATION_JSON_BYTES,
+      });
+    },
+  );
 
   pythonParityTest(
     "default-package redaction matches the native binding across contract fixtures",
