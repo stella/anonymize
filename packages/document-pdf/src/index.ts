@@ -4,10 +4,11 @@ import {
   PDF_INSPECTION_ERROR_CODES,
   type PdfInspection,
   type PdfInspectionErrorCode,
-  type PdfPageObservation,
+  type PdfObservationBatch,
 } from "./types";
 
 export const PDF_INSPECTION_CONTRACT_VERSION = 1 as const;
+export const PDF_OBSERVATION_BATCH_VERSION = 1 as const;
 export const PDF_DOCUMENT_MAX_BYTES = 64 * 1024 * 1024;
 export const PDF_DECOMPRESSED_MAX_BYTES = 128 * 1024 * 1024;
 export const PDF_MAX_OBJECTS = 200_000;
@@ -37,7 +38,7 @@ const errorCode = (message: string): PdfInspectionErrorCode => {
 };
 
 export type InspectPdfOptions = {
-  pageObservations?: readonly PdfPageObservation[];
+  observationBatch?: PdfObservationBatch;
 };
 
 export const inspectPdf = (
@@ -52,9 +53,22 @@ export const inspectPdf = (
     );
   }
   try {
-    const observations = options.pageObservations;
-    const observationsJson =
-      observations === undefined ? undefined : JSON.stringify(observations);
+    const observationBatch = options.observationBatch;
+    let observationsJson: string | undefined;
+    try {
+      observationsJson =
+        observationBatch === undefined
+          ? undefined
+          : JSON.stringify(observationBatch);
+      if (observationBatch !== undefined && observationsJson === undefined) {
+        throw new TypeError("observation batch serialized to undefined");
+      }
+    } catch {
+      throw new PdfInspectionError(
+        PDF_INSPECTION_ERROR_CODES.invalidObservation,
+        "invalid-observation: PDF observation batch is not JSON-serializable",
+      );
+    }
     if (
       observationsJson !== undefined &&
       new TextEncoder().encode(observationsJson).byteLength >
@@ -79,6 +93,8 @@ export type {
   PdfInspection,
   PdfInspectionErrorCode,
   PdfInspectionGap,
+  PdfObservationBatch,
+  PdfObservationProvider,
   PdfPageInspection,
   PdfPageObservation,
   PdfRect,

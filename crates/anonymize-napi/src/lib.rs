@@ -44,7 +44,7 @@ use stella_anonymize_docx_core::{
   rewrite_docx_text as rewrite_docx_text_core,
 };
 use stella_anonymize_pdf_core::{
-  PDF_MAX_OBSERVATION_JSON_BYTES, PdfInspectionErrorCode, PdfPageObservation,
+  PDF_MAX_OBSERVATION_JSON_BYTES, PdfInspectionErrorCode, PdfObservationBatch,
   inspect_pdf as inspect_pdf_core,
   inspect_pdf_with_observations as inspect_pdf_with_observations_core,
 };
@@ -109,7 +109,7 @@ pub fn inspect_pdf_json(
       return Err(Error::from_reason(format!("observation-limit-exceeded: PDF observation JSON must not exceed {PDF_MAX_OBSERVATION_JSON_BYTES} UTF-8 bytes")));
     }
     let observations =
-      serde_json::from_str::<Vec<PdfPageObservation>>(&observations_json)
+      serde_json::from_str::<PdfObservationBatch>(&observations_json)
         .map_err(|parse_error| {
           Error::from_reason(format!(
             "invalid-observation: PDF observations are invalid: {parse_error}"
