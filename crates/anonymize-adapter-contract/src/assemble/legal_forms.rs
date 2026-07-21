@@ -595,6 +595,7 @@ pub(super) fn build_legal_form_data(
   Ok(Some(BindingLegalFormData {
     suffixes,
     detection_only_suffixes,
+    institutional_heads: institutional.heads,
     normalized_boundary_suffixes,
     normalized_in_name_words,
     normalized_suffix_words,

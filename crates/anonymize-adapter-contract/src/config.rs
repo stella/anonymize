@@ -159,7 +159,7 @@ fn legal_form_data_from_binding(data: BindingLegalFormData) -> LegalFormData {
     in_name_prepositions: data.in_name_prepositions,
     company_suffix_words: data.company_suffix_words,
     comma_gated_direct_prefixes: data.comma_gated_direct_prefixes,
-    institutional_heads: data.detection_only_suffixes,
+    institutional_heads: data.institutional_heads,
     institutional_complement_heads: data.institutional_complement_heads,
     institutional_complement_starters: data.institutional_complement_starters,
     institutional_complement_connectors: data
@@ -866,6 +866,10 @@ mod tests {
       legal_form_data: Some(BindingLegalFormData {
         suffixes: vec![String::from("LLC"), String::from("Court")],
         detection_only_suffixes: vec![String::from("Court")],
+        institutional_heads: vec![
+          String::from("Court"),
+          String::from("Society"),
+        ],
         ..BindingLegalFormData::default()
       }),
       trigger_data: Some(BindingTriggerData::default()),
@@ -876,6 +880,10 @@ mod tests {
     assert_eq!(
       core.detectors.trigger_data.unwrap().legal_form_suffixes,
       ["LLC"]
+    );
+    assert_eq!(
+      core.detectors.legal_form_data.unwrap().institutional_heads,
+      ["Court", "Society"]
     );
   }
 

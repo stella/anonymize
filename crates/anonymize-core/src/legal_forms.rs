@@ -2316,6 +2316,7 @@ mod tests {
     );
     for (text, head) in [
       ("A Court may decide", "Court"),
+      ("A Foundation may decide", "Foundation"),
       ("An Agency responded", "Agency"),
       ("Legal Department", "Department"),
       ("Head of Trade Department", "Department"),
@@ -2328,6 +2329,7 @@ mod tests {
       ("WHEREAS, the Board of Directors", "Board"),
       ("Subject to approval by the Board", "Board"),
       ("The Compensation Committee", "Committee"),
+      ("The Society responded", "Society"),
     ] {
       assert!(
         institutional_head_entities(text, head).is_empty(),
