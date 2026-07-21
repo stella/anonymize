@@ -129,3 +129,20 @@ describe("v2 legal-form span discipline — verb trim", () => {
     expect(sweep).toBeUndefined();
   });
 });
+
+describe("v2 legal-form span discipline — institutional prose trim", () => {
+  test("role prose before a possessive board keeps the named institution", async () => {
+    const text =
+      "its Chairman of the Board reporting to Parent&rsquo;s Board of Directors";
+    expect(orgs(await detect(text)).map((entity) => entity.text)).toContain(
+      "Parent&rsquo;s Board of Directors",
+    );
+  });
+
+  test("configured dotted prefixes remain inside named institutions", async () => {
+    const text = "reporting to St. Jude Children's Research Hospital";
+    expect(orgs(await detect(text)).map((entity) => entity.text)).toContain(
+      "St. Jude Children's Research Hospital",
+    );
+  });
+});

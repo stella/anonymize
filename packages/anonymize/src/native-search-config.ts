@@ -134,6 +134,8 @@ export type NativeTriggerData = {
 
 export type NativeLegalFormData = {
   suffixes: string[];
+  detection_only_suffixes: string[];
+  institutional_heads: string[];
   normalized_boundary_suffixes: string[];
   normalized_in_name_words: string[];
   normalized_suffix_words: string[];
@@ -149,6 +151,11 @@ export type NativeLegalFormData = {
   in_name_prepositions: string[];
   company_suffix_words: string[];
   comma_gated_direct_prefixes: string[];
+  institutional_complement_heads: string[];
+  institutional_complement_starters: string[];
+  institutional_complement_connectors: string[];
+  institutional_generic_words: string[];
+  institutional_prefix_generic_words: string[];
 };
 
 export type NativeDateMonthData = Record<string, string[]>;

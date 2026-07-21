@@ -24,6 +24,12 @@ This is a Bun-first TypeScript monorepo for text anonymization. The library hand
 - Start architecture reviews from `packages/anonymize/ARCHITECTURE.md`; it
   explains the native package graph, prepared-package flow, and TypeScript
   parity-oracle boundary.
+- Keep prepared-package schema versions about payload schema only. Encode
+  orthogonal wire choices such as compression with explicit tagged fields;
+  never consume schema versions to distinguish codecs or digest strategy.
+- Prefer a clean fail-closed format break over compatibility branches for
+  unreleased prepared-package formats. Persisted packages are build artifacts
+  and must be rebuilt after a wire-format break.
 
 ### Runtime Surface Parity
 

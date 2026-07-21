@@ -12492,6 +12492,8 @@
       "CC",
       "RF"
     ],
+    "detection_only_suffixes": [],
+    "institutional_heads": [],
     "normalized_boundary_suffixes": [
       "UG(haftungsbeschränkt)&CoKG",
       "ห้างหุ้นส่วนสามัญนิติบุคคล",
@@ -15434,7 +15436,12 @@
       "Foundation",
       "Institute"
     ],
-    "comma_gated_direct_prefixes": ["among", "amongst", "between"]
+    "comma_gated_direct_prefixes": ["among", "amongst", "between"],
+    "institutional_complement_heads": [],
+    "institutional_complement_starters": [],
+    "institutional_complement_connectors": [],
+    "institutional_generic_words": [],
+    "institutional_prefix_generic_words": []
   },
   "regex_meta": [
     {

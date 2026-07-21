@@ -26,9 +26,9 @@
 //! - `phone_extension_labels` / `number_markers` / `number_labels`:
 //!   `languageKeyedTerms(TRIGGER_SUPPORT.<field>, contentLanguages)`.
 //!
-//! The Rust binding-to-core conversion injects `legal_form_suffixes` into the
-//! core trigger data from `legal_form_data` (`lib.rs`), so the binding-level
-//! `trigger_data` this assembler produces intentionally carries no such field.
+//! The binding-to-core conversion excludes the legal-form data's explicit
+//! detection-only suffix delta before populating core trigger data, so an
+//! institutional head cannot reclassify a value such as "John Court".
 
 use std::collections::HashSet;
 

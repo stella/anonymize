@@ -112,6 +112,7 @@ pub struct BindingHotwordRule {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BindingTriggerData {
   pub rules: Vec<BindingTriggerRule>,
   #[serde(default)]
@@ -203,6 +204,8 @@ pub enum BindingTriggerValidation {
 pub struct BindingLegalFormData {
   #[serde(default)]
   pub suffixes: Vec<String>,
+  pub detection_only_suffixes: Vec<String>,
+  pub institutional_heads: Vec<String>,
   #[serde(default)]
   pub normalized_boundary_suffixes: Vec<String>,
   #[serde(default)]
@@ -233,6 +236,11 @@ pub struct BindingLegalFormData {
   pub company_suffix_words: Vec<String>,
   #[serde(default)]
   pub comma_gated_direct_prefixes: Vec<String>,
+  pub institutional_complement_heads: Vec<String>,
+  pub institutional_complement_starters: Vec<String>,
+  pub institutional_complement_connectors: Vec<String>,
+  pub institutional_generic_words: Vec<String>,
+  pub institutional_prefix_generic_words: Vec<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]

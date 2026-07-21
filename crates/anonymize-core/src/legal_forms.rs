@@ -31,6 +31,12 @@ pub struct LegalFormData {
   pub in_name_prepositions: Vec<String>,
   pub company_suffix_words: Vec<String>,
   pub comma_gated_direct_prefixes: Vec<String>,
+  pub institutional_heads: Vec<String>,
+  pub institutional_complement_heads: Vec<String>,
+  pub institutional_complement_starters: Vec<String>,
+  pub institutional_complement_connectors: Vec<String>,
+  pub institutional_generic_words: Vec<String>,
+  pub institutional_prefix_generic_words: Vec<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -53,6 +59,12 @@ pub(crate) struct PreparedLegalFormData {
   in_name_prepositions: HashSet<String>,
   company_suffix_words: HashSet<String>,
   comma_gated_direct_prefixes: HashSet<String>,
+  institutional_heads: HashSet<String>,
+  institutional_complement_heads: HashSet<String>,
+  institutional_complement_starters: HashSet<String>,
+  institutional_complement_connectors: HashSet<String>,
+  institutional_generic_words: HashSet<String>,
+  institutional_prefix_generic_words: HashSet<String>,
 }
 
 impl PreparedLegalFormData {
@@ -74,6 +86,12 @@ impl PreparedLegalFormData {
       in_name_prepositions,
       company_suffix_words,
       comma_gated_direct_prefixes,
+      institutional_heads,
+      institutional_complement_heads,
+      institutional_complement_starters,
+      institutional_complement_connectors,
+      institutional_generic_words,
+      institutional_prefix_generic_words,
     } = data;
     let list_suffix_indices = list_suffix_indices(&suffixes);
     let suffix_indices_by_last_char = suffix_indices_by_last_char(&suffixes);
@@ -97,6 +115,18 @@ impl PreparedLegalFormData {
       in_name_prepositions: lower_set(in_name_prepositions),
       company_suffix_words: lower_set(company_suffix_words),
       comma_gated_direct_prefixes: lower_set(comma_gated_direct_prefixes),
+      institutional_heads: lower_set(institutional_heads),
+      institutional_complement_heads: lower_set(institutional_complement_heads),
+      institutional_complement_starters: lower_set(
+        institutional_complement_starters,
+      ),
+      institutional_complement_connectors: lower_set(
+        institutional_complement_connectors,
+      ),
+      institutional_generic_words: lower_set(institutional_generic_words),
+      institutional_prefix_generic_words: lower_set(
+        institutional_prefix_generic_words,
+      ),
     }
   }
 }
@@ -128,6 +158,8 @@ fn suffix_indices_by_last_char(
 struct Candidate {
   start: usize,
   suffix_start: usize,
+  matched_suffix_start: usize,
+  suffix_end: usize,
   end: usize,
   trimmed: bool,
 }
@@ -159,14 +191,23 @@ pub(crate) fn process_legal_form_matches(
       continue;
     }
 
-    let Some(walker_start) =
-      walk_backward(full_text, effective_suffix_start, data)
-    else {
-      continue;
-    };
-    if walker_start >= effective_suffix_start {
-      continue;
-    }
+    let candidate_end = extend_institutional_complement(
+      full_text,
+      suffix_start,
+      suffix_end,
+      data,
+    );
+    let head_starts_name = candidate_end > suffix_end
+      && effective_suffix_start == suffix_start
+      && full_text
+        .get(suffix_start..suffix_end)
+        .is_some_and(starts_upper);
+    let walker_start =
+      match walk_backward(full_text, effective_suffix_start, data) {
+        Some(start) if start < effective_suffix_start => start,
+        _ if head_starts_name => effective_suffix_start,
+        _ => continue,
+      };
 
     // Narrow to the org name before the sentence check. The walker bridges
     // lowercase words (up to MAX_LOWER_BRIDGE) and can reach back over a verb
@@ -174,13 +215,20 @@ pub(crate) fn process_legal_form_matches(
     // Initech Corporation"). trim_to_first_cap_after_verb drops that prose, so
     // the sentence-boundary guard must run on the trimmed span or it rejects a
     // candidate that would have trimmed cleanly to a single-sentence org.
-    let candidate_start = trim_to_first_cap_after_verb(
-      full_text,
-      walker_start,
-      effective_suffix_start,
-      data,
-    );
-    if candidate_start >= effective_suffix_start {
+    let candidate_start =
+      if head_starts_name && walker_start == effective_suffix_start {
+        walker_start
+      } else {
+        trim_to_first_cap_after_verb(
+          full_text,
+          walker_start,
+          effective_suffix_start,
+          data,
+        )
+      };
+    if candidate_start > effective_suffix_start
+      || (candidate_start == effective_suffix_start && !head_starts_name)
+    {
       continue;
     }
     // A sentence break inside the candidate ("Acme Inc. Beta LLC") no longer
@@ -208,25 +256,110 @@ pub(crate) fn process_legal_form_matches(
         data,
       )
     };
-    if candidate_start >= effective_suffix_start {
+    if candidate_start > effective_suffix_start
+      || (candidate_start == effective_suffix_start && !head_starts_name)
+    {
       continue;
     }
 
     candidates.push(Candidate {
       start: candidate_start,
       suffix_start: effective_suffix_start,
-      end: suffix_end,
+      matched_suffix_start: suffix_start,
+      suffix_end,
+      end: candidate_end,
       trimmed: candidate_start != walker_start,
     });
   }
 
-  let candidates = drop_overlapping(candidates);
+  let candidates = drop_overlapping(candidates, full_text, data);
   let mut entities = Vec::new();
   for candidate in candidates {
     process_candidate(&mut entities, full_text, &candidate, data);
   }
+  let mut seen_spans = HashSet::new();
+  entities.retain(|entity| seen_spans.insert((entity.start, entity.end)));
+  let emitted_spans = entities
+    .iter()
+    .map(|entity| (entity.start, entity.end))
+    .collect::<Vec<_>>();
+  entities.retain(|entity| {
+    !emitted_spans
+      .iter()
+      .any(|&(start, end)| start == entity.start && end > entity.end)
+  });
 
   Ok(entities)
+}
+
+const MAX_INSTITUTIONAL_COMPLEMENT_TOKENS: usize = 12;
+const MAX_INSTITUTIONAL_COMPLEMENT_BYTES: usize = 180;
+
+/// Extends complement-bearing institutional heads in names such as
+/// "Department of Justice" and "Society for the Protection of Children".
+/// The grammar is intentionally narrow: an exact configured head, an `of` or
+/// `for` starter, connector words, and at least one capitalized complement.
+fn extend_institutional_complement(
+  text: &str,
+  suffix_start: usize,
+  suffix_end: usize,
+  data: &PreparedLegalFormData,
+) -> usize {
+  let Some(head) = text.get(suffix_start..suffix_end) else {
+    return suffix_end;
+  };
+  if !data
+    .institutional_complement_heads
+    .contains(normalize_suffix_token(head).to_lowercase().as_str())
+  {
+    return suffix_end;
+  }
+
+  let mut scan_limit = suffix_end
+    .saturating_add(MAX_INSTITUTIONAL_COMPLEMENT_BYTES)
+    .min(text.len());
+  while !text.is_char_boundary(scan_limit) {
+    scan_limit = scan_limit.saturating_sub(1);
+  }
+  let tail = text.get(suffix_end..scan_limit).unwrap_or_default();
+  let boundary = tail
+    .char_indices()
+    .find_map(|(index, character)| {
+      let absolute_index = suffix_end.saturating_add(index);
+      (matches!(
+        character,
+        '\n' | '\r' | ',' | ';' | ':' | '(' | ')' | '[' | ']'
+      ) || (character == '.'
+        && !is_dotted_uppercase_acronym_period(text, absolute_index)))
+      .then_some(index)
+    })
+    .unwrap_or(tail.len());
+  let scan_end = suffix_end.saturating_add(boundary);
+  let mut tokens = word_tokens(text, suffix_end, scan_end);
+  let Some(starter) = tokens.next() else {
+    return suffix_end;
+  };
+  if !data
+    .institutional_complement_starters
+    .contains(lowercase_lookup(starter.text).as_ref())
+  {
+    return suffix_end;
+  }
+
+  let mut last_capital_end = None;
+  for token in tokens.take(MAX_INSTITUTIONAL_COMPLEMENT_TOKENS) {
+    if starts_upper(token.text) {
+      last_capital_end = Some(token.end);
+      continue;
+    }
+    if !data
+      .institutional_complement_connectors
+      .contains(lowercase_lookup(token.text).as_ref())
+    {
+      break;
+    }
+  }
+  last_capital_end.unwrap_or(suffix_end)
 }
 
 fn effective_line_wrapped_suffix_start(
@@ -391,13 +524,20 @@ fn is_token_char(ch: char) -> bool {
 }
 
 fn is_acceptable_token(token: &str, data: &PreparedLegalFormData) -> bool {
-  token.chars().next().is_some_and(|ch| {
-    ch.is_uppercase() || ch.is_lowercase() || ch.is_ascii_digit()
-  }) || contains_lowercase(&data.connector_words, token)
+  token
+    .chars()
+    .next()
+    .is_some_and(|ch| ch.is_alphabetic() || ch.is_ascii_digit())
+    || contains_lowercase(&data.connector_words, token)
 }
 
 fn starts_upper(text: &str) -> bool {
-  text.chars().next().is_some_and(char::is_uppercase)
+  text.chars().next().is_some_and(is_name_initial)
+}
+
+fn is_name_initial(character: char) -> bool {
+  character.is_uppercase()
+    || (!character.is_lowercase() && character.is_alphabetic())
 }
 
 fn starts_lower(text: &str) -> bool {
@@ -716,7 +856,11 @@ fn is_word_token_char(ch: char) -> bool {
   ch.is_alphanumeric() || matches!(ch, '\'' | '’' | '-')
 }
 
-fn drop_overlapping(candidates: Vec<Candidate>) -> Vec<Candidate> {
+fn drop_overlapping(
+  candidates: Vec<Candidate>,
+  full_text: &str,
+  data: &PreparedLegalFormData,
+) -> Vec<Candidate> {
   let mut sorted = candidates;
   sorted.sort_by(|left, right| {
     left
@@ -727,13 +871,35 @@ fn drop_overlapping(candidates: Vec<Candidate>) -> Vec<Candidate> {
 
   let mut out = Vec::<Candidate>::new();
   for candidate in sorted {
-    if out.last().is_some_and(|last| {
-      candidate.start >= last.start && candidate.end <= last.end
-    }) {
+    let blocked_by_container = out.iter().any(|outer| {
+      if candidate.start < outer.start || candidate.end > outer.end {
+        return false;
+      }
+      let outer_is_institutional = full_text
+        .get(outer.matched_suffix_start..outer.suffix_end)
+        .is_some_and(|head| {
+          data
+            .institutional_heads
+            .contains(&normalize_suffix_token(head).to_lowercase())
+        });
+      let separated_earlier_suffix = candidate.suffix_end
+        <= outer.matched_suffix_start
+        && full_text
+          .get(candidate.suffix_end..outer.matched_suffix_start)
+          .is_some_and(|between| between.contains([',', ';']));
+      !(outer_is_institutional && separated_earlier_suffix)
+    });
+    if blocked_by_container {
       continue;
     }
     out.push(candidate);
   }
+  out.sort_by(|left, right| {
+    left
+      .start
+      .cmp(&right.start)
+      .then_with(|| left.end.cmp(&right.end))
+  });
   out
 }
 
@@ -803,6 +969,7 @@ fn process_candidate(
   );
   emit_candidate_segments(
     results,
+    full_text,
     candidate,
     text,
     entity_start,
@@ -839,6 +1006,7 @@ fn candidate_entity_span<'a>(
 
 fn emit_candidate_segments(
   results: &mut Vec<PipelineEntity>,
+  full_text: &str,
   candidate: &Candidate,
   original_text: &str,
   entity_start: usize,
@@ -891,6 +1059,18 @@ fn emit_candidate_segments(
     }
 
     let end = emit_start.saturating_add(emit_text.len());
+    let Some(validated_start) = named_institutional_span_start(
+      full_text, emit_start, end, candidate, data,
+    ) else {
+      continue;
+    };
+    if validated_start != emit_start {
+      let Some(trimmed) = full_text.get(validated_start..end) else {
+        continue;
+      };
+      emit_start = validated_start;
+      emit_text = trimmed;
+    }
     results.push(PipelineEntity::detected(
       u32::try_from(emit_start).unwrap_or(u32::MAX),
       u32::try_from(end).unwrap_or(u32::MAX),
@@ -900,6 +1080,186 @@ fn emit_candidate_segments(
       DetectionSource::LegalForm,
     ));
   }
+}
+
+fn named_institutional_span_start(
+  full_text: &str,
+  emit_start: usize,
+  emit_end: usize,
+  candidate: &Candidate,
+  data: &PreparedLegalFormData,
+) -> Option<usize> {
+  let candidate_head = full_text
+    .get(candidate.matched_suffix_start..candidate.suffix_end)
+    .filter(|head| {
+      data
+        .institutional_heads
+        .contains(&normalize_suffix_token(head).to_lowercase())
+    })
+    .and_then(|_| {
+      (emit_start <= candidate.matched_suffix_start
+        && candidate.suffix_end <= emit_end)
+        .then_some((candidate.matched_suffix_start, candidate.suffix_end))
+    });
+  let Some((head_start, head_end)) = candidate_head.or_else(|| {
+    trailing_institutional_head_span(full_text, emit_start, emit_end, data)
+  }) else {
+    return Some(emit_start);
+  };
+
+  let prefix = full_text.get(emit_start..head_start)?;
+  match institutional_fragment_has_specific_name(prefix, data, false) {
+    None => word_tokens(full_text, emit_start, head_start)
+      .skip(1)
+      .filter(|token| {
+        let lower = lowercase_lookup(token.text);
+        let dotted_prefix =
+          is_configured_dotted_institutional_prefix(full_text, token.end, data);
+        starts_upper(token.text)
+          && (dotted_prefix
+            || (!data.institutional_generic_words.contains(lower.as_ref())
+              && !data
+                .institutional_prefix_generic_words
+                .contains(lower.as_ref())
+              && !data
+                .institutional_complement_connectors
+                .contains(lower.as_ref())
+              && !matches!(lower.as_ref(), "apos" | "rsquo" | "s")))
+      })
+      .find_map(|token| {
+        full_text
+          .get(token.start..head_start)
+          .and_then(|trimmed_prefix| {
+            (institutional_fragment_has_specific_name(
+              trimmed_prefix,
+              data,
+              false,
+            ) == Some(true))
+            .then_some(token.start)
+          })
+      }),
+    Some(true) => Some(emit_start),
+    Some(false) => full_text
+      .get(head_end..emit_end)
+      .and_then(|complement| {
+        institutional_fragment_has_specific_name(complement, data, true)
+      })
+      .is_some_and(|specific| specific)
+      .then_some(emit_start),
+  }
+}
+
+fn trailing_institutional_head_span(
+  full_text: &str,
+  emit_start: usize,
+  emit_end: usize,
+  data: &PreparedLegalFormData,
+) -> Option<(usize, usize)> {
+  let emitted = full_text.get(emit_start..emit_end)?;
+  data
+    .suffixes
+    .iter()
+    .filter(|suffix| {
+      emitted.ends_with(suffix.as_str())
+        && data
+          .institutional_heads
+          .contains(&normalize_suffix_token(suffix).to_lowercase())
+    })
+    .max_by_key(|suffix| suffix.len())
+    .map(|suffix| (emit_end.saturating_sub(suffix.len()), emit_end))
+}
+
+fn institutional_fragment_has_specific_name(
+  fragment: &str,
+  data: &PreparedLegalFormData,
+  is_complement: bool,
+) -> Option<bool> {
+  if fragment.char_indices().any(|(index, character)| {
+    matches!(character, ',' | ':' | '!' | '?' | '\n' | '\r')
+      || (character == '.'
+        && !is_dotted_uppercase_acronym_period(fragment, index)
+        && !is_configured_dotted_institutional_prefix(fragment, index, data))
+  }) {
+    return None;
+  }
+
+  let mut specific = false;
+  for token in word_tokens(fragment, 0, fragment.len()) {
+    let lower = lowercase_lookup(token.text);
+    if data.institutional_generic_words.contains(lower.as_ref())
+      || (!is_complement
+        && data
+          .institutional_prefix_generic_words
+          .contains(lower.as_ref()))
+      || data
+        .institutional_complement_connectors
+        .contains(lower.as_ref())
+      || matches!(lower.as_ref(), "apos" | "rsquo" | "s")
+    {
+      continue;
+    }
+    if starts_upper(token.text) {
+      specific = true;
+      continue;
+    }
+    if token
+      .text
+      .chars()
+      .all(|character| character.is_ascii_digit())
+    {
+      if !matches!(token.text, "39" | "8217") {
+        specific = true;
+      }
+      continue;
+    }
+    return None;
+  }
+  Some(specific)
+}
+
+fn is_configured_dotted_institutional_prefix(
+  text: &str,
+  period_start: usize,
+  data: &PreparedLegalFormData,
+) -> bool {
+  if text.as_bytes().get(period_start) != Some(&b'.') {
+    return false;
+  }
+  let Some(token) = word_tokens(text, 0, period_start).last() else {
+    return false;
+  };
+  token.end == period_start
+    && token.text.chars().count() <= 3
+    && data
+      .institutional_prefix_generic_words
+      .contains(lowercase_lookup(token.text).as_ref())
+    && next_char(text, period_start.saturating_add(1))
+      .is_none_or(|(_, character)| character.is_whitespace())
+}
+
+fn is_dotted_uppercase_acronym_period(text: &str, period_start: usize) -> bool {
+  let Some((letter_start, letter)) = previous_char(text, period_start) else {
+    return false;
+  };
+  if !letter.is_ascii_uppercase() {
+    return false;
+  }
+
+  let after_period = period_start.saturating_add('.'.len_utf8());
+  if text
+    .get(after_period..)
+    .and_then(|tail| tail.chars().next())
+    .is_some_and(|next| next.is_ascii_uppercase())
+  {
+    return true;
+  }
+
+  let Some((prior_period_start, '.')) = previous_char(text, letter_start)
+  else {
+    return false;
+  };
+  previous_char(text, prior_period_start)
+    .is_some_and(|(_, prior_letter)| prior_letter.is_ascii_uppercase())
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1156,8 +1516,20 @@ fn extend_backward(
       let Some(previous) = simple_word_before(full_text, found.start) else {
         break;
       };
+      let continues_company_name = leading_entity_word(full_text, pos)
+        .is_some_and(|leading_word| {
+          data
+            .company_suffix_words
+            .contains(lowercase_lookup(&leading_word).as_ref())
+        });
       if !starts_upper(previous.text)
-        || is_known_boundary_suffix(previous.text, data)
+        || (!continues_company_name
+          && (is_known_boundary_suffix(previous.text, data)
+            || data.institutional_heads.contains(
+              normalize_suffix_token(previous.text)
+                .to_lowercase()
+                .as_str(),
+            )))
       {
         break;
       }
@@ -1372,7 +1744,9 @@ fn split_embedded_legal_form_list<'a>(
         continue;
       };
       let boundary_len = legal_list_boundary_len(after);
-      if boundary_len > 0 {
+      if boundary_len > 0
+        && following_list_segment_has_name(after, boundary_len, data)
+      {
         cuts.push(suffix_end.saturating_add(boundary_len));
       }
     }
@@ -1402,7 +1776,10 @@ fn split_embedded_legal_form_list<'a>(
     let trimmed = segment.trim_end_matches(|ch: char| {
       ch.is_whitespace() || matches!(ch, ',' | ';')
     });
-    if trimmed.is_empty() || !ends_with_legal_suffix(trimmed, data) {
+    if trimmed.is_empty()
+      || (!has_name_before_trailing_list_suffix(trimmed, data)
+        && !starts_with_named_institutional_complement(trimmed, data))
+    {
       continue;
     }
     segments.push(Segment {
@@ -1412,6 +1789,91 @@ fn split_embedded_legal_form_list<'a>(
   }
 
   segments
+}
+
+fn following_list_segment_has_name(
+  after_suffix: &str,
+  boundary_len: usize,
+  data: &PreparedLegalFormData,
+) -> bool {
+  let Some(after_boundary) = after_suffix.get(boundary_len..) else {
+    return false;
+  };
+  let segment_end = after_boundary
+    .find([',', ';'])
+    .unwrap_or(after_boundary.len());
+  let segment = after_boundary.get(..segment_end).unwrap_or_default().trim();
+  if has_name_before_trailing_list_suffix(segment, data) {
+    return true;
+  }
+  if starts_with_named_institutional_complement(segment, data) {
+    return true;
+  }
+
+  // A list member can itself use the conventional comma before its legal
+  // form ("Acme Holdings, Inc."). Look through exactly one such comma, but
+  // still require a real name before the suffix so ", Inc." is never treated
+  // as a separate organization.
+  let Some(after_comma) = after_boundary.get(segment_end..) else {
+    return false;
+  };
+  let Some(after_comma) = after_comma.strip_prefix(',') else {
+    return false;
+  };
+  let legal_form_end =
+    after_comma.find([',', ';']).unwrap_or(after_comma.len());
+  let legal_form = after_comma.get(..legal_form_end).unwrap_or_default().trim();
+  if legal_form.is_empty() {
+    return false;
+  }
+  let combined_len = segment_end
+    .saturating_add(','.len_utf8())
+    .saturating_add(legal_form_end);
+  after_boundary
+    .get(..combined_len)
+    .map(str::trim)
+    .is_some_and(|combined| {
+      has_name_before_trailing_list_suffix(combined, data)
+    })
+}
+
+fn starts_with_named_institutional_complement(
+  segment: &str,
+  data: &PreparedLegalFormData,
+) -> bool {
+  data
+    .suffixes
+    .iter()
+    .filter(|head| {
+      data
+        .institutional_heads
+        .contains(&normalize_suffix_token(head).to_lowercase())
+    })
+    .filter_map(|head| {
+      segment.strip_prefix(head).filter(|rest| {
+        rest
+          .chars()
+          .next()
+          .is_some_and(|character| !character.is_alphanumeric())
+      })
+    })
+    .any(|complement| {
+      institutional_fragment_has_specific_name(complement, data, true)
+        == Some(true)
+    })
+}
+
+fn has_name_before_trailing_list_suffix(
+  segment: &str,
+  data: &PreparedLegalFormData,
+) -> bool {
+  list_suffixes(data)
+    .filter(|suffix| segment.ends_with(*suffix))
+    .max_by_key(|suffix| suffix.len())
+    .and_then(|suffix| {
+      segment.get(..segment.len().saturating_sub(suffix.len()))
+    })
+    .is_some_and(|prefix| prefix.chars().any(char::is_alphanumeric))
 }
 
 fn legal_list_boundary_len(text: &str) -> usize {
@@ -1430,7 +1892,7 @@ fn legal_list_boundary_len(text: &str) -> usize {
       end = index.saturating_add(ch.len_utf8());
       continue;
     }
-    if saw_space && (ch.is_uppercase() || ch == '.') {
+    if saw_space && (is_name_initial(ch) || ch == '.') {
       return end;
     }
     return 0;
@@ -1481,14 +1943,16 @@ fn trim_embedded_legal_form_list_prefix<'a>(
         continue;
       };
       let boundary_len = comma_upper_boundary_len(after);
-      if boundary_len == 0 {
+      if boundary_len == 0
+        || !following_list_segment_has_name(after, boundary_len, data)
+      {
         continue;
       }
       let next_start = suffix_end.saturating_add(boundary_len);
-      if entity_text
-        .get(next_start..)
-        .is_some_and(|remainder| ends_with_legal_suffix(remainder, data))
-      {
+      if entity_text.get(next_start..).is_some_and(|remainder| {
+        ends_with_legal_suffix(remainder, data)
+          || starts_with_named_institutional_complement(remainder, data)
+      }) {
         cut = cut.max(next_start);
       }
     }
@@ -1512,7 +1976,7 @@ fn comma_upper_boundary_len(text: &str) -> usize {
     return 0;
   }
   let after_ws = stripped.get(ws_len..).unwrap_or_default();
-  if after_ws.chars().next().is_some_and(char::is_uppercase) {
+  if after_ws.chars().next().is_some_and(is_name_initial) {
     return ','.len_utf8().saturating_add(ws_len);
   }
   0
@@ -1995,6 +2459,364 @@ mod tests {
     })
   }
 
+  fn english_vocabulary(source: &str) -> Vec<String> {
+    let value: serde_json::Value =
+      serde_json::from_str(source).expect("language-keyed vocabulary JSON");
+    value
+      .get("en")
+      .and_then(serde_json::Value::as_array)
+      .expect("English vocabulary array")
+      .iter()
+      .map(|word| word.as_str().expect("vocabulary string").to_string())
+      .collect()
+  }
+
+  fn object_vocabulary(source: &str, key: &str) -> Vec<String> {
+    let value: serde_json::Value =
+      serde_json::from_str(source).expect("vocabulary JSON object");
+    value
+      .get(key)
+      .and_then(serde_json::Value::as_array)
+      .expect("vocabulary array")
+      .iter()
+      .map(|word| word.as_str().expect("vocabulary string").to_string())
+      .collect()
+  }
+
+  fn legal_form_entities(
+    text: &str,
+    suffixes: &[&str],
+    institutional_heads: &[&str],
+  ) -> Vec<String> {
+    let complement_starters = english_vocabulary(include_str!(
+      "../../../packages/data/config/institutional-organization-complement-starters.json"
+    ));
+    let complement_connectors = english_vocabulary(include_str!(
+      "../../../packages/data/config/institutional-organization-complement-connectors.json"
+    ));
+    let generic_words = english_vocabulary(include_str!(
+      "../../../packages/data/config/institutional-organization-generic-name-words.json"
+    ));
+    let prefix_generic_words = english_vocabulary(include_str!(
+      "../../../packages/data/config/institutional-organization-prefix-generic-name-words.json"
+    ));
+    let legal_form_rule_words =
+      include_str!("../../../packages/data/config/legal-form-rule-words.json");
+    let data = PreparedLegalFormData::new(LegalFormData {
+      suffixes: suffixes.iter().map(ToString::to_string).collect(),
+      connector_words: object_vocabulary(
+        legal_form_rule_words,
+        "connectorWords",
+      ),
+      and_connector_words: object_vocabulary(
+        legal_form_rule_words,
+        "andConnectorWords",
+      ),
+      company_suffix_words: object_vocabulary(
+        legal_form_rule_words,
+        "companySuffixWords",
+      ),
+      institutional_heads: institutional_heads
+        .iter()
+        .map(ToString::to_string)
+        .collect(),
+      institutional_complement_heads: institutional_heads
+        .iter()
+        .map(ToString::to_string)
+        .collect(),
+      institutional_complement_starters: complement_starters,
+      institutional_complement_connectors: complement_connectors,
+      institutional_generic_words: generic_words,
+      institutional_prefix_generic_words: prefix_generic_words,
+      ..LegalFormData::default()
+    });
+    let found = suffixes
+      .iter()
+      .enumerate()
+      .flat_map(|(pattern, suffix)| {
+        text
+          .match_indices(suffix)
+          .map(move |(start, _)| SearchMatch::Literal {
+            pattern: u32::try_from(pattern).expect("pattern"),
+            start: u32::try_from(start).expect("start"),
+            end: u32::try_from(
+              start.checked_add(suffix.len()).expect("end offset"),
+            )
+            .expect("end"),
+          })
+      })
+      .collect::<Vec<_>>();
+    process_legal_form_matches(
+      &found,
+      PatternSlice {
+        start: 0,
+        end: u32::try_from(suffixes.len()).expect("slice end"),
+      },
+      text,
+      &data,
+    )
+    .expect("institutional organization detection")
+    .into_iter()
+    .map(|entity| entity.text)
+    .collect()
+  }
+
+  fn institutional_head_entities(text: &str, head: &str) -> Vec<String> {
+    legal_form_entities(text, &[head], &[head])
+  }
+
+  #[test]
+  fn institutional_heads_recover_named_legal_and_public_organizations() {
+    for (text, head) in [
+      ("Benefits Agency", "Agency"),
+      ("Foreign and Commonwealth Office", "Office"),
+      (
+        "National Society for the Prevention of Cruelty to Children",
+        "Society",
+      ),
+      ("Siverek Security Directorate", "Directorate"),
+      ("Siverek Magistrates' Court", "Court"),
+      ("Diyarbakır State Security Court", "Court"),
+      ("Court of Appeal", "Court"),
+      ("Office of the U.S. Attorney", "Office"),
+      ("Office of the United Nations High Commissioner", "Office"),
+      ("U.S. District Court", "Court"),
+      ("OFFICE OF THE U.S. ATTORNEY GENERAL", "OFFICE"),
+      ("U.S. DISTRICT COURT", "COURT"),
+      ("Ministry of Finance", "Ministry"),
+      ("Department of Trade", "Department"),
+      ("ǅuro Court", "Court"),
+      ("東京 Court", "Court"),
+    ] {
+      assert_eq!(institutional_head_entities(text, head), [text]);
+    }
+  }
+
+  #[test]
+  fn institutional_complement_scan_preserves_utf8_boundaries() {
+    let text = format!("Court of Appeal {}é", "x".repeat(168));
+    assert_eq!(
+      institutional_head_entities(&text, "Court"),
+      ["Court of Appeal"]
+    );
+  }
+
+  #[test]
+  fn institutional_lists_validate_each_segment_against_its_own_head() {
+    for text in ["Acme Court, Beta Court", "Acme Court; Beta Court"] {
+      assert_eq!(
+        institutional_head_entities(text, "Court"),
+        ["Acme Court", "Beta Court"]
+      );
+    }
+    assert_eq!(
+      institutional_head_entities("Court, Beta Court", "Court"),
+      ["Beta Court"]
+    );
+    assert_eq!(
+      legal_form_entities(
+        "Acme Court, Inc.",
+        &["Court", "Inc", "Inc."],
+        &["Court"],
+      ),
+      ["Acme Court, Inc."]
+    );
+    assert_eq!(
+      legal_form_entities(
+        "Acme Court, Beta Inc.",
+        &["Court", "Inc", "Inc."],
+        &["Court"],
+      ),
+      ["Acme Court", "Beta Inc."]
+    );
+    assert_eq!(
+      legal_form_entities(
+        "Acme LLC, Beta Court",
+        &["LLC", "Court"],
+        &["Court"],
+      ),
+      ["Acme LLC", "Beta Court"]
+    );
+    assert_eq!(
+      legal_form_entities("Acme LLC, Inc.", &["LLC", "Inc", "Inc."], &[],),
+      ["Acme LLC, Inc."]
+    );
+    assert_eq!(
+      legal_form_entities("Acme LLC, LLC", &["LLC"], &[]),
+      ["Acme LLC, LLC"]
+    );
+    assert_eq!(
+      institutional_head_entities("Court and Beta Court", "Court"),
+      ["Beta Court"]
+    );
+    assert_eq!(
+      institutional_head_entities("Acme Court and Beta Court", "Court"),
+      ["Acme Court", "Beta Court"]
+    );
+    assert_eq!(
+      legal_form_entities(
+        "Finance Committee and Beta Court",
+        &["Committee", "Court"],
+        &["Committee", "Court"],
+      ),
+      ["Beta Court"]
+    );
+    assert_eq!(
+      legal_form_entities(
+        "Acme Court and Beta Inc.",
+        &["Court", "Inc", "Inc."],
+        &["Court"],
+      ),
+      ["Acme Court", "Beta Inc."]
+    );
+    assert_eq!(
+      legal_form_entities(
+        "John Smith and Company, Inc., Acme Technologies and X Holdings I, Inc.",
+        &["Company", "Inc", "Inc.", "I"],
+        &["Company"],
+      ),
+      [
+        "John Smith and Company, Inc.",
+        "Acme Technologies and X Holdings I, Inc."
+      ]
+    );
+    assert_eq!(
+      legal_form_entities(
+        "Acme Inc., Court of Appeal",
+        &["Inc", "Inc.", "Court"],
+        &["Court"],
+      ),
+      ["Acme Inc.", "Court of Appeal"]
+    );
+    assert_eq!(
+      legal_form_entities(
+        "Acme Inc., Court",
+        &["Inc", "Inc.", "Court"],
+        &["Court"],
+      ),
+      ["Acme Inc."]
+    );
+  }
+
+  #[test]
+  fn institutional_head_before_company_connector_remains_in_name() {
+    assert_eq!(
+      legal_form_entities(
+        "Acme Court and Associates LLC",
+        &["Court", "LLC"],
+        &["Court"],
+      ),
+      ["Acme Court and Associates LLC"]
+    );
+  }
+
+  #[test]
+  fn institutional_heads_do_not_emit_bare_generic_references() {
+    assert!(institutional_head_entities("the Court held", "Court").is_empty());
+    assert!(
+      institutional_head_entities("an Agency responded", "Agency").is_empty()
+    );
+    assert!(institutional_head_entities("This is Court", "Court").is_empty());
+    assert!(
+      institutional_head_entities("The claimant was an Agency", "Agency")
+        .is_empty()
+    );
+    for (text, head) in [
+      ("A Court may decide", "Court"),
+      ("A Foundation may decide", "Foundation"),
+      ("An Agency responded", "Agency"),
+      ("Legal Department", "Department"),
+      ("Head of Trade Department", "Department"),
+      ("Finance Committee", "Committee"),
+      ("Our Court held", "Court"),
+      ("Such Court may decide", "Court"),
+      ("That Court held", "Court"),
+      ("These Court proceedings", "Court"),
+      ("This Court held", "Court"),
+      ("Those Court proceedings", "Court"),
+      ("WHEREAS, the Board of Directors", "Board"),
+      ("Subject to approval by the Board", "Board"),
+      ("The Compensation Committee", "Committee"),
+      ("The Society responded", "Society"),
+    ] {
+      assert!(
+        institutional_head_entities(text, head).is_empty(),
+        "generic institutional reference should not emit: {text}"
+      );
+    }
+    assert_eq!(
+      institutional_head_entities("Parent&rsquo;s Board of Directors", "Board",),
+      ["Parent&rsquo;s Board of Directors"]
+    );
+    assert_eq!(
+      institutional_head_entities(
+        "Chairman of the Board reporting to Parent&rsquo;s Board of Directors",
+        "Board",
+      ),
+      ["Parent&rsquo;s Board of Directors"]
+    );
+    assert_eq!(
+      institutional_head_entities(
+        "its Chairman of the Board reporting to Parent&rsquo;s Board of Directors",
+        "Board",
+      ),
+      ["Parent&rsquo;s Board of Directors"]
+    );
+    assert!(
+      institutional_head_entities(
+        "its Chairman of the Board reporting to the Board of Directors",
+        "Board",
+      )
+      .is_empty()
+    );
+    assert_eq!(
+      institutional_head_entities(
+        "reporting to St. Jude Children's Research Hospital",
+        "Hospital",
+      ),
+      ["St. Jude Children's Research Hospital"]
+    );
+    assert!(
+      institutional_head_entities("reporting to St. Hospital", "Hospital")
+        .is_empty()
+    );
+    assert_eq!(
+      institutional_head_entities(
+        "Acme Society for the purposes of this Agreement",
+        "Society",
+      ),
+      ["Acme Society"]
+    );
+  }
+
+  #[test]
+  fn verb_trimming_does_not_emit_a_bare_legal_suffix() {
+    let text = "Client is Corporation";
+    let suffix = "Corporation";
+    let suffix_start = text.find(suffix).unwrap();
+    let data = PreparedLegalFormData::new(LegalFormData {
+      suffixes: vec![suffix.to_string()],
+      sentence_verb_indicators: vec![String::from("is")],
+      ..LegalFormData::default()
+    });
+    let found = SearchMatch::Literal {
+      pattern: 0,
+      start: u32::try_from(suffix_start).unwrap(),
+      end: u32::try_from(suffix_start + suffix.len()).unwrap(),
+    };
+
+    assert!(
+      process_legal_form_matches(
+        &[found],
+        PatternSlice { start: 0, end: 1 },
+        text,
+        &data,
+      )
+      .unwrap()
+      .is_empty()
+    );
+  }
+
   #[test]
   fn sentence_break_reclips_instead_of_dropping_the_candidate() {
     // "Acme Inc. Beta LLC signed the agreement." — the LLC candidate's
@@ -2089,6 +2911,19 @@ mod tests {
     let data = connector_test_data();
     let text = "Acme Widgets and Bar, Inc.";
     let match_start = text.find("Bar").unwrap();
+    assert_eq!(extend_backward(text, match_start, &data, false), 0);
+  }
+
+  #[test]
+  fn connector_boundary_extends_across_institutional_head_for_company_word() {
+    let mut data = connector_test_data();
+    data.company_suffix_words.insert(String::from("associates"));
+    data.institutional_heads.insert(String::from("court"));
+    data
+      .normalized_boundary_suffixes
+      .insert(String::from("court"));
+    let text = "Acme Court and Associates LLC";
+    let match_start = text.find("Associates").unwrap();
     assert_eq!(extend_backward(text, match_start, &data, false), 0);
   }
 

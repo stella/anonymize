@@ -2742,6 +2742,7 @@
       "شركة مساهمة",
       "บริษัทจำกัด",
       "CORPORATION",
+      "Directorate",
       "Associació",
       "Կոոպերատիվ",
       "Gen.m.b.H.",
@@ -2782,6 +2783,10 @@
       "Series LLC",
       "Công ty CP",
       "Hợp tác xã",
+      "Commission",
+      "Department",
+      "Solicitors",
+      "University",
       "Fondacion",
       "Հիմնադրամ",
       "Fundación",
@@ -2817,6 +2822,9 @@
       "Unlimited",
       "閉鎖性股份有限公司",
       "(Pty) Ltd",
+      "Authority",
+      "Committee",
+      "Institute",
       "Fundació",
       "Фондация",
       "Fundação",
@@ -2871,6 +2879,11 @@
       "o. p. s.",
       "Pty Ltd.",
       "PTY LTD.",
+      "Chambers",
+      "Hospital",
+      "Ministry",
+      "Registry",
+      "Tribunal",
       "DWC-LLC",
       "Sh.p.k.",
       "Shoqatë",
@@ -2899,6 +2912,7 @@
       "มูลนิธิ",
       "SOC Ltd",
       "PTY LTD",
+      "Council",
       "Branch",
       "FZ-LLC",
       "S.A.S.",
@@ -2982,6 +2996,8 @@
       "B Corp",
       "L.L.C.",
       "L.L.P.",
+      "Agency",
+      "Office",
       "FZ-CO",
       "Sh.a.",
       "GesbR",
@@ -3025,6 +3041,8 @@
       "z. ú.",
       "s. p.",
       "CORP.",
+      "Board",
+      "Court",
       "FZCO",
       "PJSC",
       "Degë",
@@ -3393,6 +3411,49 @@
       "CP",
       "CC",
       "RF"
+    ],
+    "detection_only_suffixes": [
+      "Directorate",
+      "Commission",
+      "Department",
+      "Solicitors",
+      "University",
+      "Authority",
+      "Committee",
+      "Institute",
+      "Chambers",
+      "Hospital",
+      "Ministry",
+      "Registry",
+      "Tribunal",
+      "Council",
+      "Agency",
+      "Office",
+      "Board",
+      "Court"
+    ],
+    "institutional_heads": [
+      "Agency",
+      "Association",
+      "Authority",
+      "Board",
+      "Chambers",
+      "Commission",
+      "Committee",
+      "Council",
+      "Court",
+      "Department",
+      "Directorate",
+      "Foundation",
+      "Hospital",
+      "Institute",
+      "Ministry",
+      "Office",
+      "Registry",
+      "Society",
+      "Solicitors",
+      "Tribunal",
+      "University"
     ],
     "normalized_boundary_suffixes": [
       "UG(haftungsbeschränkt)&CoKG",
@@ -3954,6 +4015,7 @@
       "Cooperativă",
       "Preduzetnik",
       "Eenmanszaak",
+      "Directorate",
       "Associació",
       "Կոոպերատիվ",
       "Kooperativ",
@@ -3978,6 +4040,10 @@
       "Borettslag",
       "Ассоциация",
       "Kooperatif",
+      "Commission",
+      "Department",
+      "Solicitors",
+      "University",
       "Fondacion",
       "Հիմնադրամ",
       "Fundación",
@@ -4001,6 +4067,9 @@
       "Zadužbina",
       "družstvom",
       "Unlimited",
+      "Authority",
+      "Committee",
+      "Institute",
       "Fundació",
       "Фондация",
       "Fundação",
@@ -4025,6 +4094,11 @@
       "Forening",
       "Fundacja",
       "nadáciou",
+      "Chambers",
+      "Hospital",
+      "Ministry",
+      "Registry",
+      "Tribunal",
       "Shoqatë",
       "Limited",
       "Zadruga",
@@ -4038,6 +4112,7 @@
       "Društvo",
       "nadácia",
       "nadácie",
+      "Council",
       "Branch",
       "Verein",
       "CommVA",
@@ -4052,6 +4127,8 @@
       "Berhad",
       "Comité",
       "Dernek",
+      "Agency",
+      "Office",
       "GesbR",
       "PartG",
       "Trust",
@@ -4063,6 +4140,8 @@
       "Félag",
       "Zavod",
       "Vakıf",
+      "Board",
+      "Court",
       "Degë",
       "Fond",
       "Фонд",
@@ -4725,6 +4804,7 @@
       "شركةمساهمة",
       "บริษัทจำกัด",
       "corporation",
+      "directorate",
       "associació",
       "կոոպերատիվ",
       "genmbh",
@@ -4765,6 +4845,10 @@
       "seriesllc",
       "côngtycp",
       "hợptácxã",
+      "commission",
+      "department",
+      "solicitors",
+      "university",
       "fondacion",
       "հիմնադրամ",
       "fundación",
@@ -4800,6 +4884,9 @@
       "unlimited",
       "閉鎖性股份有限公司",
       "(pty)ltd",
+      "authority",
+      "committee",
+      "institute",
       "fundació",
       "фондация",
       "fundação",
@@ -4854,6 +4941,11 @@
       "ops",
       "ptyltd",
       "ptyltd",
+      "chambers",
+      "hospital",
+      "ministry",
+      "registry",
+      "tribunal",
       "dwc-llc",
       "shpk",
       "shoqatë",
@@ -4882,6 +4974,7 @@
       "มูลนิธิ",
       "socltd",
       "ptyltd",
+      "council",
       "branch",
       "fz-llc",
       "sas",
@@ -4965,6 +5058,8 @@
       "bcorp",
       "llc",
       "llp",
+      "agency",
+      "office",
       "fz-co",
       "sha",
       "gesbr",
@@ -5008,6 +5103,8 @@
       "zú",
       "sp",
       "corp",
+      "board",
+      "court",
       "fzco",
       "pjsc",
       "degë",
@@ -6336,7 +6433,78 @@
       "Foundation",
       "Institute"
     ],
-    "comma_gated_direct_prefixes": ["among", "amongst", "between"]
+    "comma_gated_direct_prefixes": ["among", "amongst", "between"],
+    "institutional_complement_heads": [
+      "Agency",
+      "Association",
+      "Authority",
+      "Board",
+      "Commission",
+      "Committee",
+      "Council",
+      "Court",
+      "Department",
+      "Directorate",
+      "Foundation",
+      "Hospital",
+      "Institute",
+      "Ministry",
+      "Office",
+      "Registry",
+      "Society",
+      "Tribunal",
+      "University"
+    ],
+    "institutional_complement_starters": ["for", "of"],
+    "institutional_complement_connectors": ["and", "for", "of", "the", "to"],
+    "institutional_generic_words": [
+      "a",
+      "administrative",
+      "advisory",
+      "an",
+      "audit",
+      "chairman",
+      "compensation",
+      "director",
+      "directors",
+      "employee",
+      "employment",
+      "executive",
+      "general",
+      "governing",
+      "head",
+      "human",
+      "legal",
+      "management",
+      "manager",
+      "managers",
+      "member",
+      "members",
+      "ministers",
+      "nominating",
+      "nomination",
+      "our",
+      "period",
+      "pursuant",
+      "remuneration",
+      "resources",
+      "subject",
+      "such",
+      "supervisory",
+      "that",
+      "these",
+      "those",
+      "this",
+      "trustee",
+      "trustees",
+      "whereas"
+    ],
+    "institutional_prefix_generic_words": [
+      "finance",
+      "financial",
+      "st",
+      "trade"
+    ]
   },
   "regex_meta": [
     {
@@ -7123,23 +7291,11 @@
     },
     {
       "kind": "regex",
-      "pattern": "\\+\\d{1,3}(?:[^\\S\\n]|[.\\-])?(?:\\(0\\)(?:[^\\S\\n]|[.\\-])?)?\\(?\\d{2,4}\\)?(?:[^\\S\\n]|[.\\-])?\\d{3}(?:[^\\S\\n]|[.\\-])?\\d{2,4}(?:[^\\S\\n]|[.\\-])?\\d{0,4}\\b",
-      "case_insensitive": null,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "pattern": "\\+\\d{1,3}(?:[^\\S\\n]|[.\\-])?(?:\\(0\\)(?:[^\\S\\n]|[.\\-])?)?\\(?\\d{2,4}\\)?(?:[^\\S\\n]|[.\\-])?\\d{3}(?:[^\\S\\n]|[.\\-])?\\d{2,4}(?:[^\\S\\n]|[.\\-])?\\d{0,4}\\b"
     },
     {
       "kind": "regex",
-      "pattern": "\\b(?:[2-7]\\d{2}(?:[^\\S\\n]|[.\\-])?\\d{3}(?:[^\\S\\n]|[.\\-])?\\d{3}|0\\d{2,4}(?:[^\\S\\n]|[./\\-])\\d{5,8})(?!(?:[^\\S\\n]|[.\\-])?\\d*/\\d)(?![^\\S\\n]*(?:Kč|,-|korun|EUR|USD|€|\\$))\\b",
-      "case_insensitive": null,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "pattern": "\\b(?:[2-7]\\d{2}(?:[^\\S\\n]|[.\\-])?\\d{3}(?:[^\\S\\n]|[.\\-])?\\d{3}|0\\d{2,4}(?:[^\\S\\n]|[./\\-])\\d{5,8})(?!(?:[^\\S\\n]|[.\\-])?\\d*/\\d)(?![^\\S\\n]*(?:Kč|,-|korun|EUR|USD|€|\\$))\\b"
     },
     {
       "kind": "regex",
@@ -7776,17 +7932,13 @@
     {
       "kind": "regex",
       "pattern": "\\bECLI:[A-Z]{2}:[A-Za-z0-9.]+:\\d{4}:[A-Za-z0-9._]+\\b",
-      "case_insensitive": null,
       "lazy": true,
       "prefilter_any": ["ECLI:"],
-      "prefilter_case_insensitive": false,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "prefilter_case_insensitive": false
     },
     {
       "kind": "regex",
       "pattern": "\\[\\d{4}\\][^\\S\\n]+(?:UKSC|UKPC|EWCA|EWHC|UKUT|UKFTT|EWFC|EWCOP)(?:[^\\S\\n]+(?:Civ|Crim|Ch|Fam|Pat|QB|KB|TCC|Comm))?[^\\S\\n]+\\d+\\b",
-      "case_insensitive": null,
       "lazy": true,
       "prefilter_any": [
         "UKSC",
@@ -7798,19 +7950,11 @@
         "EWFC",
         "EWCOP"
       ],
-      "prefilter_case_insensitive": false,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "prefilter_case_insensitive": false
     },
     {
       "kind": "regex",
-      "pattern": "\\b\\d{1,2}:\\d{2}-(?:[cC][vV]|[cC][rR]|[mM][dD]|[mM][cC]|[mM][jJ])-\\d{1,6}\\b",
-      "case_insensitive": null,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "pattern": "\\b\\d{1,2}:\\d{2}-(?:[cC][vV]|[cC][rR]|[mM][dD]|[mM][cC]|[mM][jJ])-\\d{1,6}\\b"
     },
     {
       "kind": "regex",
@@ -10366,6 +10510,10 @@
     },
     {
       "kind": "literal",
+      "pattern": "Directorate"
+    },
+    {
+      "kind": "literal",
       "pattern": "Associació"
     },
     {
@@ -10526,6 +10674,22 @@
     },
     {
       "kind": "literal",
+      "pattern": "Commission"
+    },
+    {
+      "kind": "literal",
+      "pattern": "Department"
+    },
+    {
+      "kind": "literal",
+      "pattern": "Solicitors"
+    },
+    {
+      "kind": "literal",
+      "pattern": "University"
+    },
+    {
+      "kind": "literal",
       "pattern": "Fondacion"
     },
     {
@@ -10663,6 +10827,18 @@
     {
       "kind": "literal",
       "pattern": "(Pty) Ltd"
+    },
+    {
+      "kind": "literal",
+      "pattern": "Authority"
+    },
+    {
+      "kind": "literal",
+      "pattern": "Committee"
+    },
+    {
+      "kind": "literal",
+      "pattern": "Institute"
     },
     {
       "kind": "literal",
@@ -10882,6 +11058,26 @@
     },
     {
       "kind": "literal",
+      "pattern": "Chambers"
+    },
+    {
+      "kind": "literal",
+      "pattern": "Hospital"
+    },
+    {
+      "kind": "literal",
+      "pattern": "Ministry"
+    },
+    {
+      "kind": "literal",
+      "pattern": "Registry"
+    },
+    {
+      "kind": "literal",
+      "pattern": "Tribunal"
+    },
+    {
+      "kind": "literal",
       "pattern": "DWC-LLC"
     },
     {
@@ -10991,6 +11187,10 @@
     {
       "kind": "literal",
       "pattern": "PTY LTD"
+    },
+    {
+      "kind": "literal",
+      "pattern": "Council"
     },
     {
       "kind": "literal",
@@ -11326,6 +11526,14 @@
     },
     {
       "kind": "literal",
+      "pattern": "Agency"
+    },
+    {
+      "kind": "literal",
+      "pattern": "Office"
+    },
+    {
+      "kind": "literal",
       "pattern": "FZ-CO"
     },
     {
@@ -11495,6 +11703,14 @@
     {
       "kind": "literal",
       "pattern": "CORP."
+    },
+    {
+      "kind": "literal",
+      "pattern": "Board"
+    },
+    {
+      "kind": "literal",
+      "pattern": "Court"
     },
     {
       "kind": "literal",
@@ -90211,11 +90427,11 @@
     },
     "legal_forms": {
       "start": 117,
-      "end": 1388
+      "end": 1406
     },
     "triggers": {
-      "start": 1388,
-      "end": 2845
+      "start": 1406,
+      "end": 2863
     },
     "deny_list": {
       "start": 0,

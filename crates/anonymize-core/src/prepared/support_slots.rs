@@ -175,6 +175,12 @@ fn legal_form_data_len(data: Option<&LegalFormData>) -> usize {
       data.in_name_prepositions.len(),
       data.company_suffix_words.len(),
       data.comma_gated_direct_prefixes.len(),
+      data.institutional_heads.len(),
+      data.institutional_complement_heads.len(),
+      data.institutional_complement_starters.len(),
+      data.institutional_complement_connectors.len(),
+      data.institutional_generic_words.len(),
+      data.institutional_prefix_generic_words.len(),
     ]
     .into_iter()
     .fold(0usize, usize::saturating_add)

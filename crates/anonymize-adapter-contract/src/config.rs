@@ -23,9 +23,9 @@ use stella_anonymize_core::{
 use crate::error::{ContractError, Result};
 use crate::types::{
   BindingCoreferenceData, BindingDenyListFilterData, BindingDenyListMatchData,
-  BindingHotwordRuleData, BindingMonetaryData, BindingNameCorpusData,
-  BindingNameCorpusMode, BindingOperator, BindingOperatorConfig,
-  BindingPatternSlice, BindingPreparedArtifactPolicy,
+  BindingHotwordRuleData, BindingLegalFormData, BindingMonetaryData,
+  BindingNameCorpusData, BindingNameCorpusMode, BindingOperator,
+  BindingOperatorConfig, BindingPatternSlice, BindingPreparedArtifactPolicy,
   BindingPreparedSearchConfig, BindingPreparedSearchSlices,
   BindingRegexArtifactPolicy, BindingRegexMatchMeta, BindingSearchOptions,
   BindingSearchPattern, BindingSignatureData, BindingTaggedOperator,
@@ -34,39 +34,42 @@ use crate::types::{
 };
 
 pub fn prepared_search_config_from_binding(
-  config: BindingPreparedSearchConfig,
+  mut config: BindingPreparedSearchConfig,
 ) -> Result<PreparedEngineConfig> {
   let trigger_vocabulary = trigger_vocabulary(&config);
+  let (regex_patterns, slices, institutional_aliases) =
+    prepared_regex_from_binding(&mut config)?;
   let deny_list_data = config.deny_list_data;
   let literal_patterns = literal_patterns_from_binding(
     config.literal_patterns,
     config.literal_patterns_from_deny_list_data,
     deny_list_data.as_ref(),
   )?;
-  let legal_form_data = config.legal_form_data.map(|data| LegalFormData {
-    suffixes: data.suffixes,
-    normalized_boundary_suffixes: data.normalized_boundary_suffixes,
-    normalized_in_name_words: data.normalized_in_name_words,
-    normalized_suffix_words: data.normalized_suffix_words,
-    role_heads: data.role_heads,
-    sentence_verb_indicators: data.sentence_verb_indicators,
-    clause_noun_heads: data.clause_noun_heads,
-    connector_prose_heads: data.connector_prose_heads,
-    structural_single_cap_prefixes: data.structural_single_cap_prefixes,
-    leading_clause_phrases: data.leading_clause_phrases,
-    leading_clause_direct_prefixes: data.leading_clause_direct_prefixes,
-    connector_words: data.connector_words,
-    and_connector_words: data.and_connector_words,
-    in_name_prepositions: data.in_name_prepositions,
-    company_suffix_words: data.company_suffix_words,
-    comma_gated_direct_prefixes: data.comma_gated_direct_prefixes,
-  });
-  let legal_form_suffixes = legal_form_data
-    .as_ref()
-    .map_or_else(Vec::new, |data| data.suffixes.clone());
+  let legal_form_suffixes =
+    config
+      .legal_form_data
+      .as_ref()
+      .map_or_else(Vec::new, |data| {
+        let detection_only = data
+          .detection_only_suffixes
+          .iter()
+          .map(String::as_str)
+          .collect::<BTreeSet<_>>();
+        data
+          .suffixes
+          .iter()
+          .filter(|suffix| !detection_only.contains(suffix.as_str()))
+          .cloned()
+          .collect()
+      });
+  let mut legal_form_data =
+    config.legal_form_data.map(legal_form_data_from_binding);
+  if let Some(data) = legal_form_data.as_mut() {
+    data.suffixes.extend(institutional_aliases);
+  }
   Ok(PreparedEngineConfig {
     search: PreparedEngineSearchConfig {
-      regex_patterns: search_patterns_from_binding(config.regex_patterns)?,
+      regex_patterns,
       custom_regex_patterns: search_patterns_from_binding(
         config.custom_regex_patterns,
       )?,
@@ -76,7 +79,7 @@ pub fn prepared_search_config_from_binding(
         config.custom_regex_options,
       ),
       literal_options: search_options_from_binding(config.literal_options),
-      slices: slices_from_binding(&config.slices),
+      slices,
       regex_meta: regex_meta_from_binding(config.regex_meta)?,
       custom_regex_meta: regex_meta_from_binding(config.custom_regex_meta)?,
     },
@@ -140,6 +143,34 @@ fn date_data_from_binding(data: crate::BindingDateData) -> DateData {
     month_names_by_language: data.month_names_by_language,
     lowercase_month_ambiguities: data.lowercase_month_ambiguities,
     year_words_by_language: data.year_words_by_language,
+  }
+}
+
+fn legal_form_data_from_binding(data: BindingLegalFormData) -> LegalFormData {
+  LegalFormData {
+    suffixes: data.suffixes,
+    normalized_boundary_suffixes: data.normalized_boundary_suffixes,
+    normalized_in_name_words: data.normalized_in_name_words,
+    normalized_suffix_words: data.normalized_suffix_words,
+    role_heads: data.role_heads,
+    sentence_verb_indicators: data.sentence_verb_indicators,
+    clause_noun_heads: data.clause_noun_heads,
+    connector_prose_heads: data.connector_prose_heads,
+    structural_single_cap_prefixes: data.structural_single_cap_prefixes,
+    leading_clause_phrases: data.leading_clause_phrases,
+    leading_clause_direct_prefixes: data.leading_clause_direct_prefixes,
+    connector_words: data.connector_words,
+    and_connector_words: data.and_connector_words,
+    in_name_prepositions: data.in_name_prepositions,
+    company_suffix_words: data.company_suffix_words,
+    comma_gated_direct_prefixes: data.comma_gated_direct_prefixes,
+    institutional_heads: data.institutional_heads,
+    institutional_complement_heads: data.institutional_complement_heads,
+    institutional_complement_starters: data.institutional_complement_starters,
+    institutional_complement_connectors: data
+      .institutional_complement_connectors,
+    institutional_generic_words: data.institutional_generic_words,
+    institutional_prefix_generic_words: data.institutional_prefix_generic_words,
   }
 }
 
@@ -571,6 +602,97 @@ fn search_patterns_from_binding(
     .collect()
 }
 
+fn prepared_regex_from_binding(
+  config: &mut BindingPreparedSearchConfig,
+) -> Result<(Vec<SearchPattern>, PreparedEngineSlices, Vec<String>)> {
+  let mut patterns =
+    search_patterns_from_binding(std::mem::take(&mut config.regex_patterns))?;
+  let mut slices = slices_from_binding(&config.slices);
+  let institutional_heads = config
+    .legal_form_data
+    .as_ref()
+    .map_or(&[][..], |data| data.institutional_heads.as_slice());
+  let aliases = insert_uppercase_institutional_patterns(
+    &mut patterns,
+    &mut slices,
+    institutional_heads,
+  );
+  Ok((patterns, slices, aliases))
+}
+
+/// Adds all-caps aliases for contextual institutional heads without changing
+/// the binding DTO or its frozen parity fixtures. The aliases remain inside
+/// the legal-form slice and are inserted before trigger patterns.
+fn insert_uppercase_institutional_patterns(
+  patterns: &mut Vec<SearchPattern>,
+  slices: &mut PreparedEngineSlices,
+  institutional_heads: &[String],
+) -> Vec<String> {
+  let Ok(legal_start) = usize::try_from(slices.legal_forms.start) else {
+    return Vec::new();
+  };
+  let Ok(legal_end) = usize::try_from(slices.legal_forms.end) else {
+    return Vec::new();
+  };
+  if legal_start >= legal_end {
+    return Vec::new();
+  }
+  let Some(legal_patterns) = patterns.get(legal_start..legal_end) else {
+    return Vec::new();
+  };
+
+  let mut seen = legal_patterns
+    .iter()
+    .filter_map(|pattern| match pattern {
+      SearchPattern::Literal(value)
+      | SearchPattern::LiteralWithOptions { pattern: value, .. } => {
+        Some(value.clone())
+      }
+      _ => None,
+    })
+    .collect::<BTreeSet<_>>();
+  let mut aliases = Vec::new();
+  for head in institutional_heads {
+    let uppercase = head.to_uppercase();
+    if uppercase != *head && seen.insert(uppercase.clone()) {
+      aliases.push(uppercase);
+    }
+  }
+  let Ok(added) = u32::try_from(aliases.len()) else {
+    return Vec::new();
+  };
+  if added == 0 {
+    return Vec::new();
+  }
+
+  let insertion_point = slices.legal_forms.end;
+  let Some(prepared_legal_end) = insertion_point.checked_add(added) else {
+    return Vec::new();
+  };
+  let shifted_triggers = if slices.triggers.start >= insertion_point {
+    let Some(trigger_start) = slices.triggers.start.checked_add(added) else {
+      return Vec::new();
+    };
+    let Some(trigger_end) = slices.triggers.end.checked_add(added) else {
+      return Vec::new();
+    };
+    Some((trigger_start, trigger_end))
+  } else {
+    None
+  };
+
+  patterns.splice(
+    legal_end..legal_end,
+    aliases.iter().cloned().map(SearchPattern::Literal),
+  );
+  slices.legal_forms.end = prepared_legal_end;
+  if let Some((trigger_start, trigger_end)) = shifted_triggers {
+    slices.triggers.start = trigger_start;
+    slices.triggers.end = trigger_end;
+  }
+  aliases
+}
+
 fn literal_patterns_from_binding(
   patterns: Vec<BindingSearchPattern>,
   from_deny_list_data: bool,
@@ -800,7 +922,7 @@ mod tests {
 
   use stella_anonymize_core::{
     MaskDirection, Operator, PERSON_OR_ORGANIZATION_TRIGGER_LABEL,
-    PreparedArtifactPolicy, RegexArtifactPolicy, SearchPattern,
+    PreparedArtifactPolicy, PreparedEngine, RegexArtifactPolicy, SearchPattern,
   };
 
   use super::{
@@ -809,11 +931,28 @@ mod tests {
   };
   use crate::error::ContractError;
   use crate::types::{
-    BindingDateData, BindingOperatorConfig, BindingPreparedArtifactPolicy,
-    BindingPreparedSearchConfig, BindingRegexArtifactPolicy,
-    BindingSearchOptions, BindingSearchPattern, BindingTriggerRule,
-    BindingTriggerStrategy,
+    BindingDateData, BindingLegalFormData, BindingOperatorConfig,
+    BindingPatternSlice, BindingPreparedArtifactPolicy,
+    BindingPreparedSearchConfig, BindingPreparedSearchSlices,
+    BindingRegexArtifactPolicy, BindingSearchOptions, BindingSearchPattern,
+    BindingTriggerData, BindingTriggerRule, BindingTriggerStrategy,
   };
+
+  fn binding_literal(pattern: &str) -> BindingSearchPattern {
+    BindingSearchPattern {
+      kind: String::from("literal"),
+      pattern: pattern.to_string(),
+      distance: None,
+      case_insensitive: None,
+      whole_words: None,
+      lazy: None,
+      prefilter_any: None,
+      prefilter_case_insensitive: None,
+      prefilter_regex: None,
+      prefilter_window_bytes: None,
+      prepared_artifact_policy: None,
+    }
+  }
 
   #[test]
   fn binding_date_data_rejects_incomplete_schema() {
@@ -825,6 +964,146 @@ mod tests {
     assert!(
       serde_json::from_str::<BindingDateData>(missing_ambiguities).is_err()
     );
+  }
+
+  #[test]
+  fn binding_legal_form_data_rejects_missing_detection_only_schema() {
+    assert!(
+      serde_json::from_str::<BindingLegalFormData>(r#"{"suffixes":[]}"#)
+        .is_err()
+    );
+  }
+
+  #[test]
+  fn detection_only_suffixes_never_reach_trigger_data() {
+    let config = BindingPreparedSearchConfig {
+      legal_form_data: Some(BindingLegalFormData {
+        suffixes: vec![String::from("LLC"), String::from("Court")],
+        detection_only_suffixes: vec![String::from("Court")],
+        institutional_heads: vec![
+          String::from("Court"),
+          String::from("Society"),
+        ],
+        ..BindingLegalFormData::default()
+      }),
+      trigger_data: Some(BindingTriggerData::default()),
+      ..BindingPreparedSearchConfig::default()
+    };
+
+    let core = prepared_search_config_from_binding(config).unwrap();
+    assert_eq!(
+      core.detectors.trigger_data.unwrap().legal_form_suffixes,
+      ["LLC"]
+    );
+    assert_eq!(
+      core.detectors.legal_form_data.unwrap().institutional_heads,
+      ["Court", "Society"]
+    );
+  }
+
+  #[test]
+  fn binding_conversion_inserts_all_caps_institutional_aliases_before_triggers()
+  {
+    let config = BindingPreparedSearchConfig {
+      regex_patterns: vec![
+        binding_literal("prefix"),
+        binding_literal("Court"),
+        binding_literal("Seller: "),
+      ],
+      slices: BindingPreparedSearchSlices {
+        regex: Some(BindingPatternSlice { start: 0, end: 1 }),
+        legal_forms: Some(BindingPatternSlice { start: 1, end: 2 }),
+        triggers: Some(BindingPatternSlice { start: 2, end: 3 }),
+        ..BindingPreparedSearchSlices::default()
+      },
+      legal_form_data: Some(BindingLegalFormData {
+        suffixes: vec![String::from("Court")],
+        institutional_heads: vec![String::from("Court")],
+        ..BindingLegalFormData::default()
+      }),
+      ..BindingPreparedSearchConfig::default()
+    };
+
+    let core = prepared_search_config_from_binding(config).unwrap();
+    assert_eq!(
+      core.search.regex_patterns,
+      [
+        SearchPattern::Literal(String::from("prefix")),
+        SearchPattern::Literal(String::from("Court")),
+        SearchPattern::Literal(String::from("COURT")),
+        SearchPattern::Literal(String::from("Seller: ")),
+      ]
+    );
+    assert_eq!(
+      core.search.slices.legal_forms,
+      stella_anonymize_core::PatternSlice { start: 1, end: 3 }
+    );
+    assert_eq!(
+      core.search.slices.triggers,
+      stella_anonymize_core::PatternSlice { start: 3, end: 4 }
+    );
+    assert_eq!(
+      core.detectors.legal_form_data.unwrap().suffixes,
+      ["Court", "COURT"]
+    );
+  }
+
+  #[test]
+  fn binding_conversion_deduplicates_existing_all_caps_institutional_aliases() {
+    let config = BindingPreparedSearchConfig {
+      regex_patterns: vec![
+        binding_literal("Court"),
+        binding_literal("COURT"),
+        binding_literal("Seller: "),
+      ],
+      slices: BindingPreparedSearchSlices {
+        legal_forms: Some(BindingPatternSlice { start: 0, end: 2 }),
+        triggers: Some(BindingPatternSlice { start: 2, end: 3 }),
+        ..BindingPreparedSearchSlices::default()
+      },
+      legal_form_data: Some(BindingLegalFormData {
+        suffixes: vec![String::from("Court"), String::from("COURT")],
+        institutional_heads: vec![String::from("Court")],
+        ..BindingLegalFormData::default()
+      }),
+      ..BindingPreparedSearchConfig::default()
+    };
+
+    let core = prepared_search_config_from_binding(config).unwrap();
+    assert_eq!(core.search.regex_patterns.len(), 3);
+    assert_eq!(
+      core.search.slices.legal_forms,
+      stella_anonymize_core::PatternSlice { start: 0, end: 2 }
+    );
+    assert_eq!(
+      core.search.slices.triggers,
+      stella_anonymize_core::PatternSlice { start: 2, end: 3 }
+    );
+  }
+
+  #[test]
+  fn binding_conversion_leaves_invalid_legal_slice_for_core_validation() {
+    let config = BindingPreparedSearchConfig {
+      regex_patterns: vec![binding_literal("Court")],
+      slices: BindingPreparedSearchSlices {
+        legal_forms: Some(BindingPatternSlice { start: 0, end: 2 }),
+        ..BindingPreparedSearchSlices::default()
+      },
+      legal_form_data: Some(BindingLegalFormData {
+        suffixes: vec![String::from("Court")],
+        institutional_heads: vec![String::from("Court")],
+        ..BindingLegalFormData::default()
+      }),
+      ..BindingPreparedSearchConfig::default()
+    };
+
+    let core = prepared_search_config_from_binding(config).unwrap();
+    assert_eq!(core.search.regex_patterns.len(), 1);
+    assert_eq!(
+      core.search.slices.legal_forms,
+      stella_anonymize_core::PatternSlice { start: 0, end: 2 }
+    );
+    assert!(PreparedEngine::prepare_artifacts(core).is_err());
   }
 
   #[test]

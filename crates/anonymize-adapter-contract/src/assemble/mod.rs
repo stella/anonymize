@@ -174,7 +174,10 @@ pub fn assemble_static_search_config(
   let legal_forms_len = if config.enable_legal_forms == Some(false) {
     0
   } else {
-    legal_forms::all_legal_suffixes()?.len()
+    legal_forms::organization_detection_suffixes(
+      ctx.content_languages.as_deref(),
+    )?
+    .len()
   };
   let trigger_len = trigger_rules.len();
 
@@ -521,7 +524,9 @@ fn assemble_regex_patterns(
 ) -> Result<Vec<BindingSearchPattern>, AssembleError> {
   let mut patterns = prefix;
   if ctx.config.enable_legal_forms != Some(false) {
-    for suffix in legal_forms::all_legal_suffixes()? {
+    for suffix in legal_forms::organization_detection_suffixes(
+      ctx.content_languages.as_deref(),
+    )? {
       patterns.push(literal_pattern(suffix));
     }
   }
