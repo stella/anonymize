@@ -1313,10 +1313,12 @@ fn risk_inventory(
     unsupported_action_count: 0,
     xfa_entry_count: catalog_xfa_count(document)?,
   };
-  let action_risks = validate_risk_structures(document, pages)?;
-  inventory.external_action_count = action_risks.external;
-  inventory.javascript_action_count = action_risks.javascript;
-  inventory.unsupported_action_count = action_risks.unsupported;
+  let mut structure_risks = validate_risk_structures(document, pages)?;
+  inventory.external_action_count = structure_risks.actions.external;
+  inventory.javascript_action_count = structure_risks.actions.javascript;
+  inventory.unsupported_action_count = structure_risks.actions.unsupported;
+  structure_risks.attachments.add_typed_streams(document);
+  inventory.embedded_file_count = structure_risks.attachments.count();
   let mut scanned_nodes = 0usize;
   for object in document.objects.values() {
     scan_risk_object(object, document, &mut inventory, 0, &mut scanned_nodes)?;
@@ -1364,9 +1366,6 @@ fn scan_risk_object(
   if let Some(dictionary) = object_dictionary(object) {
     if dictionary.get(b"FT").is_ok() {
       increment(&mut inventory.acro_form_field_count);
-    }
-    if name_deref_is(dictionary, b"Type", b"EmbeddedFile", document) {
-      increment(&mut inventory.embedded_file_count);
     }
     if name_deref_is(dictionary, b"Subtype", b"Image", document) {
       increment(&mut inventory.image_object_count);
@@ -1484,8 +1483,9 @@ fn resolve_object<'a>(
 fn validate_risk_structures(
   document: &Document,
   pages: &[ValidatedPage],
-) -> Result<ActionRiskInventory, PdfInspectionError> {
+) -> Result<StructuralRiskInventory, PdfInspectionError> {
   let mut action_risks = ActionRiskInventory::default();
+  let mut attachments = AttachmentInventory::default();
   let catalog = document
     .catalog()
     .map_err(|_| invalid_document("PDF catalog must resolve"))?;
@@ -1515,28 +1515,12 @@ fn validate_risk_structures(
       &mut action_risks,
     )?;
   }
-  if let Some(names) = optional_deref(catalog, b"Names", document)? {
-    let names = names.as_dict().map_err(|_| {
-      invalid_document("PDF catalog Names must resolve to a dictionary")
-    })?;
-    for key in [b"EmbeddedFiles".as_slice(), b"JavaScript"] {
-      if let Some(name_tree) = optional_deref(names, key, document)? {
-        let name_tree = name_tree.as_dict().map_err(|_| {
-          invalid_document(
-            "PDF catalog name trees must resolve to dictionaries",
-          )
-        })?;
-        validate_name_tree(
-          name_tree,
-          document,
-          0,
-          &mut BTreeSet::new(),
-          key == b"JavaScript",
-          &mut action_risks,
-        )?;
-      }
-    }
-  }
+  validate_catalog_name_trees(
+    catalog,
+    document,
+    &mut action_risks,
+    &mut attachments,
+  )?;
   validate_optional_content(catalog, document)?;
   if let Some(actions) = optional_deref(catalog, b"AA", document)? {
     let actions = actions.as_dict().map_err(|_| {
@@ -1559,13 +1543,7 @@ fn validate_risk_structures(
       ));
     }
   }
-  if let Some(attachments) = optional_deref(catalog, b"AF", document)? {
-    validate_dictionary_array(
-      attachments,
-      document,
-      "PDF catalog AF must resolve to an array of file specifications",
-    )?;
-  }
+  validate_catalog_associated_files(catalog, document, &mut attachments)?;
   validate_outlines(catalog, document, &mut action_risks)?;
   for page in pages {
     let page = document.get_dictionary(page.id).map_err(|_| {
@@ -1579,7 +1557,64 @@ fn validate_risk_structures(
     )?;
     validate_page_annotations(page, document, &mut action_risks)?;
   }
-  Ok(action_risks)
+  Ok(StructuralRiskInventory {
+    actions: action_risks,
+    attachments,
+  })
+}
+
+fn validate_catalog_name_trees(
+  catalog: &Dictionary,
+  document: &Document,
+  action_risks: &mut ActionRiskInventory,
+  attachments: &mut AttachmentInventory,
+) -> Result<(), PdfInspectionError> {
+  let Some(names) = optional_deref(catalog, b"Names", document)? else {
+    return Ok(());
+  };
+  let names = names.as_dict().map_err(|_| {
+    invalid_document("PDF catalog Names must resolve to a dictionary")
+  })?;
+  for (key, value_kind) in [
+    (b"EmbeddedFiles".as_slice(), NameTreeValueKind::EmbeddedFile),
+    (b"JavaScript".as_slice(), NameTreeValueKind::Action),
+  ] {
+    let Some(name_tree) = optional_deref(names, key, document)? else {
+      continue;
+    };
+    let name_tree = name_tree.as_dict().map_err(|_| {
+      invalid_document("PDF catalog name trees must resolve to dictionaries")
+    })?;
+    validate_name_tree(
+      name_tree,
+      document,
+      0,
+      &mut BTreeSet::new(),
+      value_kind,
+      action_risks,
+      attachments,
+    )?;
+  }
+  Ok(())
+}
+
+fn validate_catalog_associated_files(
+  catalog: &Dictionary,
+  document: &Document,
+  attachments: &mut AttachmentInventory,
+) -> Result<(), PdfInspectionError> {
+  let Some(attachment_array) = optional_deref(catalog, b"AF", document)? else {
+    return Ok(());
+  };
+  let file_specs = attachment_array.as_array().map_err(|_| {
+    invalid_document(
+      "PDF catalog AF must resolve to an array of file specifications",
+    )
+  })?;
+  for file_spec in file_specs {
+    validate_file_spec(file_spec, document, attachments)?;
+  }
+  Ok(())
 }
 
 fn validate_optional_content(
@@ -1619,6 +1654,48 @@ struct ActionRiskInventory {
   external: u32,
   javascript: u32,
   unsupported: u32,
+}
+
+#[derive(Debug, Default)]
+struct StructuralRiskInventory {
+  actions: ActionRiskInventory,
+  attachments: AttachmentInventory,
+}
+
+#[derive(Debug, Default)]
+struct AttachmentInventory {
+  payload_ids: BTreeSet<lopdf::ObjectId>,
+  spec_only_ids: BTreeSet<lopdf::ObjectId>,
+  anonymous_spec_count: u32,
+}
+
+impl AttachmentInventory {
+  fn add_typed_streams(&mut self, document: &Document) {
+    for (id, object) in &document.objects {
+      if let Object::Stream(stream) = object
+        && name_deref_is(&stream.dict, b"Type", b"EmbeddedFile", document)
+      {
+        self.payload_ids.insert(*id);
+      }
+    }
+  }
+
+  fn count(&self) -> u32 {
+    u32::try_from(
+      self
+        .payload_ids
+        .len()
+        .saturating_add(self.spec_only_ids.len()),
+    )
+    .unwrap_or(u32::MAX)
+    .saturating_add(self.anonymous_spec_count)
+  }
+}
+
+#[derive(Clone, Copy, Debug)]
+enum NameTreeValueKind {
+  Action,
+  EmbeddedFile,
 }
 
 impl ActionRiskInventory {
@@ -2084,8 +2161,9 @@ fn validate_name_tree(
   document: &Document,
   depth: usize,
   visited: &mut BTreeSet<lopdf::ObjectId>,
-  values_are_actions: bool,
+  value_kind: NameTreeValueKind,
   action_risks: &mut ActionRiskInventory,
+  attachments: &mut AttachmentInventory,
 ) -> Result<(), PdfInspectionError> {
   if depth > PDF_MAX_OBJECT_DEPTH {
     return Err(error(
@@ -2121,8 +2199,13 @@ fn validate_name_tree(
         resolve_object(value, document)?.as_dict().map_err(|_| {
           invalid_document("PDF name-tree values must be dictionaries")
         })?;
-        if values_are_actions {
-          action_risks.add(validate_action_entry(value, document)?);
+        match value_kind {
+          NameTreeValueKind::Action => {
+            action_risks.add(validate_action_entry(value, document)?);
+          }
+          NameTreeValueKind::EmbeddedFile => {
+            validate_file_spec(value, document, attachments)?;
+          }
         }
       }
       Ok(())
@@ -2148,8 +2231,9 @@ fn validate_name_tree(
           document,
           depth.saturating_add(1),
           visited,
-          values_are_actions,
+          value_kind,
           action_risks,
+          attachments,
         )?;
       }
       Ok(())
@@ -2157,18 +2241,68 @@ fn validate_name_tree(
   }
 }
 
-fn validate_dictionary_array(
-  object: &Object,
+fn validate_file_spec(
+  file_spec: &Object,
   document: &Document,
-  message: &str,
+  inventory: &mut AttachmentInventory,
 ) -> Result<(), PdfInspectionError> {
-  let values = object.as_array().map_err(|_| invalid_document(message))?;
-  for value in values {
-    resolve_object(value, document)?
+  let file_spec_id = file_spec.as_reference().ok();
+  let dictionary =
+    resolve_object(file_spec, document)?
       .as_dict()
-      .map_err(|_| invalid_document(message))?;
+      .map_err(|_| {
+        invalid_document("PDF attachments must be file specifications")
+      })?;
+  if let Some(file_spec_type) = optional_deref(dictionary, b"Type", document)?
+    && file_spec_type.as_name().ok() != Some(b"Filespec")
+  {
+    return Err(invalid_document(
+      "PDF attachment Type must be Filespec when present",
+    ));
+  }
+  let Some(embedded_files) = optional_deref(dictionary, b"EF", document)?
+  else {
+    add_spec_only_attachment(file_spec_id, inventory);
+    return Ok(());
+  };
+  let embedded_files = embedded_files.as_dict().map_err(|_| {
+    invalid_document("PDF attachment EF must resolve to a dictionary")
+  })?;
+  if embedded_files.is_empty() {
+    add_spec_only_attachment(file_spec_id, inventory);
+    return Ok(());
+  }
+  for (_, payload) in embedded_files {
+    let payload_id = payload.as_reference().map_err(|_| {
+      invalid_document("PDF attachment EF values must be indirect streams")
+    })?;
+    let stream = document.get_object(payload_id).map_err(|_| {
+      invalid_document("PDF attachment EF stream reference must resolve")
+    })?;
+    let stream = stream.as_stream().map_err(|_| {
+      invalid_document("PDF attachment EF values must resolve to streams")
+    })?;
+    if let Some(stream_type) = optional_deref(&stream.dict, b"Type", document)?
+      && stream_type.as_name().ok() != Some(b"EmbeddedFile")
+    {
+      return Err(invalid_document(
+        "PDF attachment stream Type must be EmbeddedFile when present",
+      ));
+    }
+    inventory.payload_ids.insert(payload_id);
   }
   Ok(())
+}
+
+fn add_spec_only_attachment(
+  file_spec_id: Option<lopdf::ObjectId>,
+  inventory: &mut AttachmentInventory,
+) {
+  if let Some(file_spec_id) = file_spec_id {
+    inventory.spec_only_ids.insert(file_spec_id);
+  } else {
+    increment(&mut inventory.anonymous_spec_count);
+  }
 }
 
 fn annotation_count(
@@ -2271,6 +2405,50 @@ mod tests {
     include_bytes!("../tests/fixtures/minimal-text.pdf");
   const RISKY_PDF: &[u8] =
     include_bytes!("../tests/fixtures/risky-structures.pdf");
+
+  fn add_untyped_attachment(
+    document: &mut Document,
+  ) -> (lopdf::ObjectId, lopdf::ObjectId) {
+    let payload_id = document.add_object(Object::Stream(lopdf::Stream::new(
+      Dictionary::new(),
+      b"attachment".to_vec(),
+    )));
+    let mut embedded_files = Dictionary::new();
+    embedded_files.set("F", Object::Reference(payload_id));
+    let mut file_spec = Dictionary::new();
+    file_spec.set("F", Object::string_literal("attachment.txt"));
+    file_spec.set("EF", Object::Dictionary(embedded_files));
+    let file_spec_id = document.add_object(Object::Dictionary(file_spec));
+    (file_spec_id, payload_id)
+  }
+
+  fn set_embedded_file_name_tree(
+    document: &mut Document,
+    file_spec_id: lopdf::ObjectId,
+  ) {
+    let mut embedded_files = Dictionary::new();
+    embedded_files.set(
+      "Names",
+      vec![
+        Object::string_literal("attachment.txt"),
+        Object::Reference(file_spec_id),
+      ],
+    );
+    let embedded_files_id =
+      document.add_object(Object::Dictionary(embedded_files));
+    let mut names = Dictionary::new();
+    names.set("EmbeddedFiles", Object::Reference(embedded_files_id));
+    document
+      .catalog_mut()
+      .unwrap()
+      .set("Names", Object::Dictionary(names));
+  }
+
+  fn inspect_document(document: &mut Document) -> PdfInspection {
+    let mut bytes = Vec::new();
+    document.save_to(&mut bytes).unwrap();
+    inspect_pdf(&bytes).unwrap()
+  }
 
   #[test]
   fn inspection_without_a_renderer_is_explicitly_partial() {
@@ -2931,6 +3109,135 @@ mod tests {
       inspection.coverage.status,
       PdfInspectionCoverageStatus::Full
     );
+  }
+
+  #[test]
+  fn inventories_names_only_attachment_without_stream_type() {
+    let mut document = Document::load_mem(MINIMAL_PDF).unwrap();
+    let (file_spec_id, _) = add_untyped_attachment(&mut document);
+    set_embedded_file_name_tree(&mut document, file_spec_id);
+
+    let inspection = inspect_document(&mut document);
+
+    assert_eq!(inspection.risks.embedded_file_count, 1);
+  }
+
+  #[test]
+  fn inventories_af_only_file_spec_without_a_payload() {
+    let mut document = Document::load_mem(MINIMAL_PDF).unwrap();
+    let mut file_spec = Dictionary::new();
+    file_spec.set("Type", Object::Name(b"Filespec".to_vec()));
+    file_spec.set("F", Object::string_literal("external.txt"));
+    let file_spec_id = document.add_object(Object::Dictionary(file_spec));
+    document
+      .catalog_mut()
+      .unwrap()
+      .set("AF", vec![Object::Reference(file_spec_id)]);
+
+    let inspection = inspect_document(&mut document);
+
+    assert_eq!(inspection.risks.embedded_file_count, 1);
+  }
+
+  #[test]
+  fn deduplicates_file_spec_and_payload_reached_through_names_and_af() {
+    let mut document = Document::load_mem(MINIMAL_PDF).unwrap();
+    let (file_spec_id, _) = add_untyped_attachment(&mut document);
+    set_embedded_file_name_tree(&mut document, file_spec_id);
+    document
+      .catalog_mut()
+      .unwrap()
+      .set("AF", vec![Object::Reference(file_spec_id)]);
+
+    let inspection = inspect_document(&mut document);
+
+    assert_eq!(inspection.risks.embedded_file_count, 1);
+  }
+
+  #[test]
+  fn inventories_unreferenced_typed_embedded_file_stream() {
+    let mut document = Document::load_mem(MINIMAL_PDF).unwrap();
+    let mut stream = lopdf::Stream::new(Dictionary::new(), Vec::new());
+    stream
+      .dict
+      .set("Type", Object::Name(b"EmbeddedFile".to_vec()));
+    document.add_object(Object::Stream(stream));
+
+    let inspection = inspect_document(&mut document);
+
+    assert_eq!(inspection.risks.embedded_file_count, 1);
+  }
+
+  #[test]
+  fn rejects_malformed_attachment_ef_references_and_stream_types() {
+    for malformed_payload in [
+      Object::Dictionary(Dictionary::new()),
+      Object::Stream({
+        let mut stream = lopdf::Stream::new(Dictionary::new(), Vec::new());
+        stream.dict.set("Type", Object::Name(b"Metadata".to_vec()));
+        stream
+      }),
+    ] {
+      let mut document = Document::load_mem(MINIMAL_PDF).unwrap();
+      let payload_id = document.add_object(malformed_payload);
+      let mut embedded_files = Dictionary::new();
+      embedded_files.set("F", Object::Reference(payload_id));
+      let mut file_spec = Dictionary::new();
+      file_spec.set("EF", Object::Dictionary(embedded_files));
+      let file_spec_id = document.add_object(Object::Dictionary(file_spec));
+      document
+        .catalog_mut()
+        .unwrap()
+        .set("AF", vec![Object::Reference(file_spec_id)]);
+      let mut bytes = Vec::new();
+      document.save_to(&mut bytes).unwrap();
+
+      let error = inspect_pdf(&bytes).unwrap_err();
+
+      assert_eq!(error.code(), PdfInspectionErrorCode::InvalidDocument);
+    }
+  }
+
+  #[test]
+  fn rejects_unresolved_attachment_payload_references() {
+    let mut document = Document::load_mem(MINIMAL_PDF).unwrap();
+    let mut embedded_files = Dictionary::new();
+    embedded_files.set("F", Object::Reference((999_999, 0)));
+    let mut file_spec = Dictionary::new();
+    file_spec.set("EF", Object::Dictionary(embedded_files));
+    let file_spec_id = document.add_object(Object::Dictionary(file_spec));
+    document
+      .catalog_mut()
+      .unwrap()
+      .set("AF", vec![Object::Reference(file_spec_id)]);
+    let mut bytes = Vec::new();
+    document.save_to(&mut bytes).unwrap();
+
+    let error = inspect_pdf(&bytes).unwrap_err();
+
+    assert_eq!(error.code(), PdfInspectionErrorCode::InvalidDocument);
+  }
+
+  #[test]
+  fn rejects_cycles_in_embedded_file_name_trees() {
+    let mut document = Document::load_mem(MINIMAL_PDF).unwrap();
+    let tree_id = document.add_object(Object::Dictionary(Dictionary::new()));
+    document
+      .get_dictionary_mut(tree_id)
+      .unwrap()
+      .set("Kids", vec![Object::Reference(tree_id)]);
+    let mut names = Dictionary::new();
+    names.set("EmbeddedFiles", Object::Reference(tree_id));
+    document
+      .catalog_mut()
+      .unwrap()
+      .set("Names", Object::Dictionary(names));
+    let mut bytes = Vec::new();
+    document.save_to(&mut bytes).unwrap();
+
+    let error = inspect_pdf(&bytes).unwrap_err();
+
+    assert_eq!(error.code(), PdfInspectionErrorCode::InvalidDocument);
   }
 
   #[test]
