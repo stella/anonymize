@@ -1059,9 +1059,17 @@ fn emit_candidate_segments(
     }
 
     let end = emit_start.saturating_add(emit_text.len());
-    if !is_named_institutional_span(full_text, emit_start, end, candidate, data)
-    {
+    let Some(validated_start) = named_institutional_span_start(
+      full_text, emit_start, end, candidate, data,
+    ) else {
       continue;
+    };
+    if validated_start != emit_start {
+      let Some(trimmed) = full_text.get(validated_start..end) else {
+        continue;
+      };
+      emit_start = validated_start;
+      emit_text = trimmed;
     }
     results.push(PipelineEntity::detected(
       u32::try_from(emit_start).unwrap_or(u32::MAX),
@@ -1074,13 +1082,13 @@ fn emit_candidate_segments(
   }
 }
 
-fn is_named_institutional_span(
+fn named_institutional_span_start(
   full_text: &str,
   emit_start: usize,
   emit_end: usize,
   candidate: &Candidate,
   data: &PreparedLegalFormData,
-) -> bool {
+) -> Option<usize> {
   let candidate_head = full_text
     .get(candidate.matched_suffix_start..candidate.suffix_end)
     .filter(|head| {
@@ -1096,21 +1104,47 @@ fn is_named_institutional_span(
   let Some((head_start, head_end)) = candidate_head.or_else(|| {
     trailing_institutional_head_span(full_text, emit_start, emit_end, data)
   }) else {
-    return true;
+    return Some(emit_start);
   };
 
   let Some(prefix) = full_text.get(emit_start..head_start) else {
-    return false;
+    return None;
   };
   match institutional_fragment_has_specific_name(prefix, data, false) {
-    None => false,
-    Some(true) => true,
+    None => word_tokens(full_text, emit_start, head_start)
+      .skip(1)
+      .filter(|token| {
+        let lower = lowercase_lookup(token.text);
+        starts_upper(token.text)
+          && !data.institutional_generic_words.contains(lower.as_ref())
+          && !data
+            .institutional_prefix_generic_words
+            .contains(lower.as_ref())
+          && !data
+            .institutional_complement_connectors
+            .contains(lower.as_ref())
+          && !matches!(lower.as_ref(), "apos" | "rsquo" | "s")
+      })
+      .find_map(|token| {
+        full_text
+          .get(token.start..head_start)
+          .and_then(|trimmed_prefix| {
+            (institutional_fragment_has_specific_name(
+              trimmed_prefix,
+              data,
+              false,
+            ) == Some(true))
+            .then_some(token.start)
+          })
+      }),
+    Some(true) => Some(emit_start),
     Some(false) => full_text
       .get(head_end..emit_end)
       .and_then(|complement| {
         institutional_fragment_has_specific_name(complement, data, true)
       })
-      .unwrap_or(false),
+      .is_some_and(|specific| specific)
+      .then_some(emit_start),
   }
 }
 
@@ -2690,6 +2724,20 @@ mod tests {
     }
     assert_eq!(
       institutional_head_entities("Parent&rsquo;s Board of Directors", "Board",),
+      ["Parent&rsquo;s Board of Directors"]
+    );
+    assert_eq!(
+      institutional_head_entities(
+        "Chairman of the Board reporting to Parent&rsquo;s Board of Directors",
+        "Board",
+      ),
+      ["Parent&rsquo;s Board of Directors"]
+    );
+    assert_eq!(
+      institutional_head_entities(
+        "its Chairman of the Board reporting to Parent&rsquo;s Board of Directors",
+        "Board",
+      ),
       ["Parent&rsquo;s Board of Directors"]
     );
     assert_eq!(
