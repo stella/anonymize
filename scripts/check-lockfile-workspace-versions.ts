@@ -22,7 +22,7 @@
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 
-const ROOT = new URL("..", import.meta.url).pathname;
+const ROOT = join(import.meta.dirname, "..");
 
 const readJson = async (path: string): Promise<Record<string, unknown>> =>
   JSON.parse(await Bun.file(path).text());
@@ -98,8 +98,11 @@ const mismatches: string[] = [];
 
 for (const workspaceDir of workspaceDirs) {
   const pkgPath = join(ROOT, workspaceDir, "package.json");
-  if (!(await Bun.file(pkgPath).exists())) continue;
-  const pkg = await readJson(pkgPath);
+  // A directory matched by a workspace glob is not necessarily a real
+  // workspace: skip it (rather than crash the guard) if its package.json
+  // is missing or fails to parse.
+  const pkg = await readJson(pkgPath).catch(() => null);
+  if (pkg === null) continue;
   const name = pkg.name;
   const version = pkg.version;
   if (typeof name !== "string" || typeof version !== "string") continue;
