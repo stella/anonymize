@@ -151,18 +151,15 @@ fn date_spans_for_month(
   full_text: &str,
   month_start: usize,
   month_end: usize,
-  lowercase_requires_terminal_boundary: bool,
+  ambiguous_month: bool,
 ) -> Vec<(usize, usize)> {
   let mut spans = Vec::new();
 
   if let Some(span) = day_month_year_span(full_text, month_start, month_end) {
     spans.push(span);
-  } else if let Some(span) = day_month_span(
-    full_text,
-    month_start,
-    month_end,
-    lowercase_requires_terminal_boundary,
-  ) {
+  } else if let Some(span) =
+    day_month_span(full_text, month_start, month_end, ambiguous_month)
+  {
     spans.push(span);
   }
   if let Some(span) = ordinal_day_month_span(full_text, month_start, month_end)
@@ -170,6 +167,10 @@ fn date_spans_for_month(
     spans.push(span);
   }
   if let Some(span) = de_day_month_year_span(full_text, month_start, month_end)
+  {
+    spans.push(span);
+  } else if let Some(span) =
+    de_day_month_span(full_text, month_start, month_end, ambiguous_month)
   {
     spans.push(span);
   }
@@ -190,13 +191,10 @@ fn day_month_span(
   text: &str,
   month_start: usize,
   month_end: usize,
-  lowercase_requires_terminal_boundary: bool,
+  ambiguous_month: bool,
 ) -> Option<(usize, usize)> {
   let month = str_slice(text, month_start, month_end)?;
-  if !month.chars().next().is_some_and(char::is_uppercase)
-    && lowercase_requires_terminal_boundary
-    && !has_terminal_day_month_boundary(text, month_end)
-  {
+  if !allows_yearless_month(text, month, month_end, ambiguous_month) {
     return None;
   }
   let day = day_before_month(text, month_start)?;
@@ -207,14 +205,31 @@ fn day_month_span(
   right_date_boundary(text, month_end).then_some((day.0, month_end))
 }
 
-fn has_terminal_day_month_boundary(text: &str, month_end: usize) -> bool {
+fn allows_yearless_month(
+  text: &str,
+  month: &str,
+  month_end: usize,
+  ambiguous: bool,
+) -> bool {
+  !ambiguous
+    || is_titlecase_word(month)
+    || has_hard_terminal_day_month_boundary(text, month_end)
+}
+
+fn is_titlecase_word(value: &str) -> bool {
+  let mut letters = value.chars().filter(|character| character.is_alphabetic());
+  letters.next().is_some_and(char::is_uppercase)
+    && letters.all(char::is_lowercase)
+}
+
+fn has_hard_terminal_day_month_boundary(text: &str, month_end: usize) -> bool {
   let after_month = skip_horizontal_ws(text, month_end);
   str_tail(text, after_month)
     .and_then(|tail| tail.chars().next())
     .is_none_or(|character| {
       matches!(
         character,
-        '\n' | '\r' | ',' | '.' | ';' | ':' | '!' | '?' | ')' | ']'
+        '\n' | '\r' | '.' | ';' | ':' | '!' | '?' | ')' | ']'
       )
     })
 }
@@ -272,6 +287,24 @@ fn de_day_month_year_span(
   let after_de = parse_de_prefix(text, after_month).unwrap_or(after_month);
   let year = parse_year_forward(text, after_de)?;
   Some((day.0, year.1))
+}
+
+fn de_day_month_span(
+  text: &str,
+  month_start: usize,
+  month_end: usize,
+  ambiguous: bool,
+) -> Option<(usize, usize)> {
+  let month = str_slice(text, month_start, month_end)?;
+  if !allows_yearless_month(text, month, month_end, ambiguous) {
+    return None;
+  }
+  let day = de_day_before_month(text, month_start)?;
+  let after_month = skip_date_year_separator(text, month_end);
+  if parse_year_forward(text, after_month).is_some() {
+    return None;
+  }
+  right_date_boundary(text, month_end).then_some((day.0, month_end))
 }
 
 fn month_day_year_span(
@@ -549,11 +582,7 @@ mod tests {
     spans_for(text, "July", false)
   }
 
-  fn spans_for(
-    text: &str,
-    month: &str,
-    lowercase_requires_terminal_boundary: bool,
-  ) -> Vec<String> {
+  fn spans_for(text: &str, month: &str, ambiguous_month: bool) -> Vec<String> {
     let Some(month_start) = text.find(month) else {
       return Vec::new();
     };
@@ -561,7 +590,7 @@ mod tests {
       text,
       month_start,
       month_start.saturating_add(month.len()),
-      lowercase_requires_terminal_boundary,
+      ambiguous_month,
     )
     .into_iter()
     .map(|(start, end)| text.get(start..end).unwrap_or_default().to_owned())
@@ -592,7 +621,16 @@ mod tests {
   #[test]
   fn rejects_lowercase_words_that_overlap_month_names() {
     assert!(spans_for("Section 12 may be amended.", "may", true).is_empty());
+    assert!(
+      spans_for("Section 12 may, upon notice, be amended.", "may", true)
+        .is_empty()
+    );
+    assert!(spans_for("SECTION 12 MAY BE AMENDED", "MAY", true).is_empty());
     assert_eq!(spans_for("Due 12 may.", "may", true), vec!["12 may"]);
+    assert_eq!(
+      spans_for("Effective 12 May next week.", "May", true),
+      vec!["12 May"]
+    );
     assert_eq!(spans_for("Due 12 may!", "may", true), vec!["12 may"]);
     assert_eq!(spans_for("Due 12 may?", "may", true), vec!["12 may"]);
   }
@@ -610,6 +648,18 @@ mod tests {
     assert_eq!(
       spans_for("Jednání 12 září.", "září", false),
       vec!["12 září"]
+    );
+  }
+
+  #[test]
+  fn detects_de_prefixed_day_month_without_a_year() {
+    assert_eq!(
+      spans_for("Audiencia 12 de mayo.", "mayo", false),
+      vec!["12 de mayo"]
+    );
+    assert_eq!(
+      spans_for("Audiência 12 de maio.", "maio", false),
+      vec!["12 de maio"]
     );
   }
 }
