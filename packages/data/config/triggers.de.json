@@ -78,7 +78,9 @@
     "strategy": { "type": "company-id-value" },
     "triggers": [
       "Steuernummer",
+      "Steuer-ID",
       "Steuer-Nr.",
+      "IdNr",
       "USt-IdNr.",
       "USt-IdNr",
       "BTW",
