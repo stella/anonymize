@@ -273,11 +273,12 @@ fn institutional_organization_data(
       continue;
     }
     let data =
-      serde_json::from_value::<InstitutionalOrganizationData>(value.clone())
-        .map_err(|error| AssembleError::DataParse {
+      InstitutionalOrganizationData::deserialize(value).map_err(|error| {
+        AssembleError::DataParse {
           name: String::from("institutional-organization-heads.json"),
           message: format!("language {language_key}: {error}"),
-        })?;
+        }
+      })?;
     for head in data.heads {
       push_unique(head, &mut seen_heads, &mut result.heads);
     }

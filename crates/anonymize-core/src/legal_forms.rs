@@ -198,7 +198,9 @@ pub(crate) fn process_legal_form_matches(
           data,
         )
       };
-    if candidate_start > effective_suffix_start {
+    if candidate_start > effective_suffix_start
+      || (candidate_start == effective_suffix_start && !head_starts_name)
+    {
       continue;
     }
     // A sentence break inside the candidate ("Acme Inc. Beta LLC") no longer
@@ -226,7 +228,9 @@ pub(crate) fn process_legal_form_matches(
         data,
       )
     };
-    if candidate_start > effective_suffix_start {
+    if candidate_start > effective_suffix_start
+      || (candidate_start == effective_suffix_start && !head_starts_name)
+    {
       continue;
     }
 
@@ -275,9 +279,12 @@ fn extend_institutional_complement(
     return suffix_end;
   }
 
-  let scan_limit = suffix_end
+  let mut scan_limit = suffix_end
     .saturating_add(MAX_INSTITUTIONAL_COMPLEMENT_BYTES)
     .min(text.len());
+  while !text.is_char_boundary(scan_limit) {
+    scan_limit = scan_limit.saturating_sub(1);
+  }
   let tail = text.get(suffix_end..scan_limit).unwrap_or_default();
   let boundary = tail
     .char_indices()
@@ -294,8 +301,10 @@ fn extend_institutional_complement(
   let Some(starter) = tokens.next() else {
     return suffix_end;
   };
-  let starter_lower = starter.text.to_lowercase();
-  if !INSTITUTIONAL_COMPLEMENT_STARTERS.contains(&starter_lower.as_str()) {
+  if !INSTITUTIONAL_COMPLEMENT_STARTERS
+    .iter()
+    .any(|value| starter.text.eq_ignore_ascii_case(value))
+  {
     return suffix_end;
   }
 
@@ -305,8 +314,10 @@ fn extend_institutional_complement(
       last_capital_end = Some(token.end);
       continue;
     }
-    let lower = token.text.to_lowercase();
-    if !INSTITUTIONAL_COMPLEMENT_CONNECTORS.contains(&lower.as_str()) {
+    if !INSTITUTIONAL_COMPLEMENT_CONNECTORS
+      .iter()
+      .any(|value| token.text.eq_ignore_ascii_case(value))
+    {
       break;
     }
   }
@@ -2089,6 +2100,7 @@ mod tests {
         String::from("the"),
       ],
       and_connector_words: vec![String::from("and")],
+      sentence_verb_indicators: vec![String::from("is"), String::from("was")],
       institutional_complement_heads: vec![head.to_string()],
       ..LegalFormData::default()
     });
@@ -2131,10 +2143,24 @@ mod tests {
   }
 
   #[test]
+  fn institutional_complement_scan_preserves_utf8_boundaries() {
+    let text = format!("Court of Appeal {}é", "x".repeat(168));
+    assert_eq!(
+      institutional_head_entities(&text, "Court"),
+      ["Court of Appeal"]
+    );
+  }
+
+  #[test]
   fn institutional_heads_do_not_emit_bare_generic_references() {
     assert!(institutional_head_entities("the Court held", "Court").is_empty());
     assert!(
       institutional_head_entities("an Agency responded", "Agency").is_empty()
+    );
+    assert!(institutional_head_entities("This is Court", "Court").is_empty());
+    assert!(
+      institutional_head_entities("The claimant was an Agency", "Agency")
+        .is_empty()
     );
     assert_eq!(
       institutional_head_entities(
