@@ -1284,6 +1284,7 @@ fn non_address_label(label: &str) -> bool {
   matches!(
     label,
     "registration number"
+      | "case number"
       | "tax identification number"
       | "national identification number"
       | "social security number"

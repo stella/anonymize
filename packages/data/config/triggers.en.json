@@ -57,7 +57,13 @@
     "id": "en-company-id",
     "label": "registration number",
     "strategy": { "type": "company-id-value" },
-    "triggers": ["registration number", "company id", "company number"]
+    "triggers": [
+      "registration number",
+      "company id",
+      "company number",
+      "KvK",
+      "Kamer van Koophandel"
+    ]
   },
   {
     "id": "en-tax-id",
@@ -69,7 +75,13 @@
     "id": "en-uk-companies-house",
     "label": "registration number",
     "strategy": { "type": "company-id-value" },
-    "triggers": ["Companies House", "Company No.", "Company No", "CRN"],
+    "triggers": [
+      "Companies House",
+      "Company No.",
+      "Company No",
+      "registered number",
+      "CRN"
+    ],
     "extensions": ["add-colon", "add-colon-space"],
     "validations": [
       {

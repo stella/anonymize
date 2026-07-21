@@ -61,6 +61,7 @@ export const STELLA_MAPPING: NativeMapping = {
   "national identification number": "id-number",
   "social security number": "id-number",
   "registration number": "id-number",
+  "case number": "id-number",
   "credit card number": "id-number",
   "passport number": "id-number",
   crypto: "id-number",

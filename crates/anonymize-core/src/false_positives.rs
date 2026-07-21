@@ -9,8 +9,8 @@ use crate::resolution::{DetectionSource, PipelineEntity, SourceDetail};
 use crate::types::{Error, Result};
 
 use crate::labels::{
-  ADDRESS_LABEL, IP_ADDRESS_LABEL, ORGANIZATION_LABEL, PERSON_LABEL,
-  REGISTRATION_NUMBER_LABEL,
+  ADDRESS_LABEL, CASE_NUMBER_LABEL, IP_ADDRESS_LABEL, ORGANIZATION_LABEL,
+  PERSON_LABEL, REGISTRATION_NUMBER_LABEL,
 };
 const MAX_ORGANIZATION_LENGTH: usize = 80;
 const MAX_PERSON_LENGTH: usize = 60;
@@ -150,6 +150,7 @@ fn should_reject_entity(
     return Ok(true);
   }
   if entity.source != DetectionSource::Trigger
+    && entity.label != CASE_NUMBER_LABEL
     && text.chars().next().is_some_and(|ch| ch.is_ascii_digit())
     && let Some(filters) = filters
     && has_number_abbrev_prefix(full_text, offsets, entity, filters)?

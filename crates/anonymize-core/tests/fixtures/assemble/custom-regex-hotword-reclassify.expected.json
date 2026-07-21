@@ -11735,6 +11735,16 @@
     },
     {
       "kind": "literal-with-options",
+      "pattern": "cestovní pas č.",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "cestovní pas",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
       "pattern": "bankovní spojení",
       "case_insensitive": true
     },
@@ -12035,6 +12045,21 @@
     },
     {
       "kind": "literal-with-options",
+      "pattern": "č. j.",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "číslo jednací",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "číslo smlouvy",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
       "pattern": "krajský soud",
       "case_insensitive": true
     },
@@ -12235,6 +12260,11 @@
     },
     {
       "kind": "literal-with-options",
+      "pattern": "st.",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
       "pattern": "parcela č.",
       "case_insensitive": true
     },
@@ -12316,6 +12346,11 @@
     {
       "kind": "literal-with-options",
       "pattern": "st.p.č.:",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "st.:",
       "case_insensitive": true
     },
     {
@@ -12495,6 +12530,16 @@
     },
     {
       "kind": "literal-with-options",
+      "pattern": "reisepass nr.",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "reisepass",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
       "pattern": "vertreten durch",
       "case_insensitive": true
     },
@@ -12555,22 +12600,37 @@
     },
     {
       "kind": "literal-with-options",
-      "pattern": "bic",
-      "case_insensitive": true
-    },
-    {
-      "kind": "literal-with-options",
       "pattern": "kontonummer",
       "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
-      "pattern": "bic:",
+      "pattern": "kontonummer:",
       "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
-      "pattern": "kontonummer:",
+      "pattern": "hra",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "hrb",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "az.",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "aktenzeichen",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "geschäftsnummer",
       "case_insensitive": true
     },
     {
@@ -12581,11 +12641,6 @@
     {
       "kind": "literal-with-options",
       "pattern": "handelsregister",
-      "case_insensitive": true
-    },
-    {
-      "kind": "literal-with-options",
-      "pattern": "hrb",
       "case_insensitive": true
     },
     {
@@ -12605,7 +12660,22 @@
     },
     {
       "kind": "literal-with-options",
+      "pattern": "steuer-id",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
       "pattern": "steuer-nr.",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "idnr.",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "idnr",
       "case_insensitive": true
     },
     {
@@ -12830,6 +12900,16 @@
     },
     {
       "kind": "literal-with-options",
+      "pattern": "kvk",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "kamer van koophandel",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
       "pattern": "vat number",
       "case_insensitive": true
     },
@@ -12865,6 +12945,11 @@
     },
     {
       "kind": "literal-with-options",
+      "pattern": "registered number",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
       "pattern": "crn",
       "case_insensitive": true
     },
@@ -12896,6 +12981,16 @@
     {
       "kind": "literal-with-options",
       "pattern": "company no: ",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "registered number:",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "registered number: ",
       "case_insensitive": true
     },
     {
@@ -14120,6 +14215,16 @@
     },
     {
       "kind": "literal-with-options",
+      "pattern": "passeport n°",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "passeport",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
       "pattern": "représenté par",
       "case_insensitive": true
     },
@@ -14196,6 +14301,21 @@
     {
       "kind": "literal-with-options",
       "pattern": "siret",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "rcs luxembourg",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "rcs paris",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "rcs",
       "case_insensitive": true
     },
     {
@@ -14336,6 +14456,36 @@
     {
       "kind": "literal-with-options",
       "pattern": "siret: ",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "rcs luxembourg:",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "rcs luxembourg: ",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "rcs paris:",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "rcs paris: ",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "rcs:",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "rcs: ",
       "case_insensitive": true
     },
     {
@@ -15085,6 +15235,11 @@
     },
     {
       "kind": "literal-with-options",
+      "pattern": "személyi szám",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
       "pattern": "contact_point",
       "case_insensitive": true
     },
@@ -15406,6 +15561,21 @@
     {
       "kind": "literal-with-options",
       "pattern": "numer krs",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "sygn. akt",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "sygn.",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "sygnatura akt",
       "case_insensitive": true
     },
     {
@@ -17795,12 +17965,32 @@
     },
     {
       "kind": "literal-with-options",
+      "pattern": "swift code",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "bic code",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
       "pattern": "swift",
       "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
       "pattern": "bic",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "swift code:",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "bic code:",
       "case_insensitive": true
     },
     {
@@ -19796,6 +19986,26 @@
         "include_trigger": false
       },
       {
+        "trigger": "cestovní pas č.",
+        "label": "passport number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "cestovní pas",
+        "label": "passport number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
         "trigger": "bankovní spojení",
         "label": "bank account number",
         "strategy": {
@@ -20465,6 +20675,36 @@
         "strategy": {
           "type": "n-words",
           "count": 2
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "č. j.",
+        "label": "registration number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:\\p{Lu}{1,10}\\s+)?[\\p{L}\\d/-]*\\d[\\p{L}\\d/-]*\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "číslo jednací",
+        "label": "registration number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:\\p{Lu}{1,10}\\s+)?[\\p{L}\\d/-]*\\d[\\p{L}\\d/-]*\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "číslo smlouvy",
+        "label": "registration number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:\\p{Lu}{1,10}\\s+)?[\\p{L}\\d/-]*\\d[\\p{L}\\d/-]*\\b"
         },
         "validations": [],
         "include_trigger": false
@@ -21283,510 +21523,360 @@
         "trigger": "parc. č.",
         "label": "land parcel",
         "strategy": {
-          "type": "n-words",
-          "count": 1
+          "type": "match-pattern",
+          "pattern": "^\\d{1,6}(?:/\\d{1,5})?\\b"
         },
-        "validations": [
-          {
-            "type": "matches-pattern",
-            "pattern": "^\\d{1,6}(?:\\/\\d{1,5})?$"
-          }
-        ],
+        "validations": [],
         "include_trigger": false
       },
       {
         "trigger": "parc. č. st.",
         "label": "land parcel",
         "strategy": {
-          "type": "n-words",
-          "count": 1
+          "type": "match-pattern",
+          "pattern": "^\\d{1,6}(?:/\\d{1,5})?\\b"
         },
-        "validations": [
-          {
-            "type": "matches-pattern",
-            "pattern": "^\\d{1,6}(?:\\/\\d{1,5})?$"
-          }
-        ],
+        "validations": [],
         "include_trigger": false
       },
       {
         "trigger": "parc.č.",
         "label": "land parcel",
         "strategy": {
-          "type": "n-words",
-          "count": 1
+          "type": "match-pattern",
+          "pattern": "^\\d{1,6}(?:/\\d{1,5})?\\b"
         },
-        "validations": [
-          {
-            "type": "matches-pattern",
-            "pattern": "^\\d{1,6}(?:\\/\\d{1,5})?$"
-          }
-        ],
+        "validations": [],
         "include_trigger": false
       },
       {
         "trigger": "parc.č. st.",
         "label": "land parcel",
         "strategy": {
-          "type": "n-words",
-          "count": 1
+          "type": "match-pattern",
+          "pattern": "^\\d{1,6}(?:/\\d{1,5})?\\b"
         },
-        "validations": [
-          {
-            "type": "matches-pattern",
-            "pattern": "^\\d{1,6}(?:\\/\\d{1,5})?$"
-          }
-        ],
+        "validations": [],
         "include_trigger": false
       },
       {
         "trigger": "p.č.",
         "label": "land parcel",
         "strategy": {
-          "type": "n-words",
-          "count": 1
+          "type": "match-pattern",
+          "pattern": "^\\d{1,6}(?:/\\d{1,5})?\\b"
         },
-        "validations": [
-          {
-            "type": "matches-pattern",
-            "pattern": "^\\d{1,6}(?:\\/\\d{1,5})?$"
-          }
-        ],
+        "validations": [],
         "include_trigger": false
       },
       {
         "trigger": "p.č. st.",
         "label": "land parcel",
         "strategy": {
-          "type": "n-words",
-          "count": 1
+          "type": "match-pattern",
+          "pattern": "^\\d{1,6}(?:/\\d{1,5})?\\b"
         },
-        "validations": [
-          {
-            "type": "matches-pattern",
-            "pattern": "^\\d{1,6}(?:\\/\\d{1,5})?$"
-          }
-        ],
+        "validations": [],
         "include_trigger": false
       },
       {
         "trigger": "p. č.",
         "label": "land parcel",
         "strategy": {
-          "type": "n-words",
-          "count": 1
+          "type": "match-pattern",
+          "pattern": "^\\d{1,6}(?:/\\d{1,5})?\\b"
         },
-        "validations": [
-          {
-            "type": "matches-pattern",
-            "pattern": "^\\d{1,6}(?:\\/\\d{1,5})?$"
-          }
-        ],
+        "validations": [],
         "include_trigger": false
       },
       {
         "trigger": "p. č. st.",
         "label": "land parcel",
         "strategy": {
-          "type": "n-words",
-          "count": 1
+          "type": "match-pattern",
+          "pattern": "^\\d{1,6}(?:/\\d{1,5})?\\b"
         },
-        "validations": [
-          {
-            "type": "matches-pattern",
-            "pattern": "^\\d{1,6}(?:\\/\\d{1,5})?$"
-          }
-        ],
+        "validations": [],
         "include_trigger": false
       },
       {
         "trigger": "p.p.č.",
         "label": "land parcel",
         "strategy": {
-          "type": "n-words",
-          "count": 1
+          "type": "match-pattern",
+          "pattern": "^\\d{1,6}(?:/\\d{1,5})?\\b"
         },
-        "validations": [
-          {
-            "type": "matches-pattern",
-            "pattern": "^\\d{1,6}(?:\\/\\d{1,5})?$"
-          }
-        ],
+        "validations": [],
         "include_trigger": false
       },
       {
         "trigger": "st.p.č.",
         "label": "land parcel",
         "strategy": {
-          "type": "n-words",
-          "count": 1
+          "type": "match-pattern",
+          "pattern": "^\\d{1,6}(?:/\\d{1,5})?\\b"
         },
-        "validations": [
-          {
-            "type": "matches-pattern",
-            "pattern": "^\\d{1,6}(?:\\/\\d{1,5})?$"
-          }
-        ],
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "st.",
+        "label": "land parcel",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^\\d{1,6}(?:/\\d{1,5})?\\b"
+        },
+        "validations": [],
         "include_trigger": false
       },
       {
         "trigger": "parcela č.",
         "label": "land parcel",
         "strategy": {
-          "type": "n-words",
-          "count": 1
+          "type": "match-pattern",
+          "pattern": "^\\d{1,6}(?:/\\d{1,5})?\\b"
         },
-        "validations": [
-          {
-            "type": "matches-pattern",
-            "pattern": "^\\d{1,6}(?:\\/\\d{1,5})?$"
-          }
-        ],
+        "validations": [],
         "include_trigger": false
       },
       {
         "trigger": "parcelní č.",
         "label": "land parcel",
         "strategy": {
-          "type": "n-words",
-          "count": 1
+          "type": "match-pattern",
+          "pattern": "^\\d{1,6}(?:/\\d{1,5})?\\b"
         },
-        "validations": [
-          {
-            "type": "matches-pattern",
-            "pattern": "^\\d{1,6}(?:\\/\\d{1,5})?$"
-          }
-        ],
+        "validations": [],
         "include_trigger": false
       },
       {
         "trigger": "parcelní číslo",
         "label": "land parcel",
         "strategy": {
-          "type": "n-words",
-          "count": 1
+          "type": "match-pattern",
+          "pattern": "^\\d{1,6}(?:/\\d{1,5})?\\b"
         },
-        "validations": [
-          {
-            "type": "matches-pattern",
-            "pattern": "^\\d{1,6}(?:\\/\\d{1,5})?$"
-          }
-        ],
+        "validations": [],
         "include_trigger": false
       },
       {
         "trigger": "pozemková parcela č.",
         "label": "land parcel",
         "strategy": {
-          "type": "n-words",
-          "count": 1
+          "type": "match-pattern",
+          "pattern": "^\\d{1,6}(?:/\\d{1,5})?\\b"
         },
-        "validations": [
-          {
-            "type": "matches-pattern",
-            "pattern": "^\\d{1,6}(?:\\/\\d{1,5})?$"
-          }
-        ],
+        "validations": [],
         "include_trigger": false
       },
       {
         "trigger": "stavební parcela č.",
         "label": "land parcel",
         "strategy": {
-          "type": "n-words",
-          "count": 1
+          "type": "match-pattern",
+          "pattern": "^\\d{1,6}(?:/\\d{1,5})?\\b"
         },
-        "validations": [
-          {
-            "type": "matches-pattern",
-            "pattern": "^\\d{1,6}(?:\\/\\d{1,5})?$"
-          }
-        ],
+        "validations": [],
         "include_trigger": false
       },
       {
         "trigger": "parc. c.",
         "label": "land parcel",
         "strategy": {
-          "type": "n-words",
-          "count": 1
+          "type": "match-pattern",
+          "pattern": "^\\d{1,6}(?:/\\d{1,5})?\\b"
         },
-        "validations": [
-          {
-            "type": "matches-pattern",
-            "pattern": "^\\d{1,6}(?:\\/\\d{1,5})?$"
-          }
-        ],
+        "validations": [],
         "include_trigger": false
       },
       {
         "trigger": "par. č.",
         "label": "land parcel",
         "strategy": {
-          "type": "n-words",
-          "count": 1
+          "type": "match-pattern",
+          "pattern": "^\\d{1,6}(?:/\\d{1,5})?\\b"
         },
-        "validations": [
-          {
-            "type": "matches-pattern",
-            "pattern": "^\\d{1,6}(?:\\/\\d{1,5})?$"
-          }
-        ],
+        "validations": [],
         "include_trigger": false
       },
       {
         "trigger": "parc. č.:",
         "label": "land parcel",
         "strategy": {
-          "type": "n-words",
-          "count": 1
+          "type": "match-pattern",
+          "pattern": "^\\d{1,6}(?:/\\d{1,5})?\\b"
         },
-        "validations": [
-          {
-            "type": "matches-pattern",
-            "pattern": "^\\d{1,6}(?:\\/\\d{1,5})?$"
-          }
-        ],
+        "validations": [],
         "include_trigger": false
       },
       {
         "trigger": "parc. č. st.:",
         "label": "land parcel",
         "strategy": {
-          "type": "n-words",
-          "count": 1
+          "type": "match-pattern",
+          "pattern": "^\\d{1,6}(?:/\\d{1,5})?\\b"
         },
-        "validations": [
-          {
-            "type": "matches-pattern",
-            "pattern": "^\\d{1,6}(?:\\/\\d{1,5})?$"
-          }
-        ],
+        "validations": [],
         "include_trigger": false
       },
       {
         "trigger": "parc.č.:",
         "label": "land parcel",
         "strategy": {
-          "type": "n-words",
-          "count": 1
+          "type": "match-pattern",
+          "pattern": "^\\d{1,6}(?:/\\d{1,5})?\\b"
         },
-        "validations": [
-          {
-            "type": "matches-pattern",
-            "pattern": "^\\d{1,6}(?:\\/\\d{1,5})?$"
-          }
-        ],
+        "validations": [],
         "include_trigger": false
       },
       {
         "trigger": "parc.č. st.:",
         "label": "land parcel",
         "strategy": {
-          "type": "n-words",
-          "count": 1
+          "type": "match-pattern",
+          "pattern": "^\\d{1,6}(?:/\\d{1,5})?\\b"
         },
-        "validations": [
-          {
-            "type": "matches-pattern",
-            "pattern": "^\\d{1,6}(?:\\/\\d{1,5})?$"
-          }
-        ],
+        "validations": [],
         "include_trigger": false
       },
       {
         "trigger": "p.č.:",
         "label": "land parcel",
         "strategy": {
-          "type": "n-words",
-          "count": 1
+          "type": "match-pattern",
+          "pattern": "^\\d{1,6}(?:/\\d{1,5})?\\b"
         },
-        "validations": [
-          {
-            "type": "matches-pattern",
-            "pattern": "^\\d{1,6}(?:\\/\\d{1,5})?$"
-          }
-        ],
+        "validations": [],
         "include_trigger": false
       },
       {
         "trigger": "p.č. st.:",
         "label": "land parcel",
         "strategy": {
-          "type": "n-words",
-          "count": 1
+          "type": "match-pattern",
+          "pattern": "^\\d{1,6}(?:/\\d{1,5})?\\b"
         },
-        "validations": [
-          {
-            "type": "matches-pattern",
-            "pattern": "^\\d{1,6}(?:\\/\\d{1,5})?$"
-          }
-        ],
+        "validations": [],
         "include_trigger": false
       },
       {
         "trigger": "p. č.:",
         "label": "land parcel",
         "strategy": {
-          "type": "n-words",
-          "count": 1
+          "type": "match-pattern",
+          "pattern": "^\\d{1,6}(?:/\\d{1,5})?\\b"
         },
-        "validations": [
-          {
-            "type": "matches-pattern",
-            "pattern": "^\\d{1,6}(?:\\/\\d{1,5})?$"
-          }
-        ],
+        "validations": [],
         "include_trigger": false
       },
       {
         "trigger": "p. č. st.:",
         "label": "land parcel",
         "strategy": {
-          "type": "n-words",
-          "count": 1
+          "type": "match-pattern",
+          "pattern": "^\\d{1,6}(?:/\\d{1,5})?\\b"
         },
-        "validations": [
-          {
-            "type": "matches-pattern",
-            "pattern": "^\\d{1,6}(?:\\/\\d{1,5})?$"
-          }
-        ],
+        "validations": [],
         "include_trigger": false
       },
       {
         "trigger": "p.p.č.:",
         "label": "land parcel",
         "strategy": {
-          "type": "n-words",
-          "count": 1
+          "type": "match-pattern",
+          "pattern": "^\\d{1,6}(?:/\\d{1,5})?\\b"
         },
-        "validations": [
-          {
-            "type": "matches-pattern",
-            "pattern": "^\\d{1,6}(?:\\/\\d{1,5})?$"
-          }
-        ],
+        "validations": [],
         "include_trigger": false
       },
       {
         "trigger": "st.p.č.:",
         "label": "land parcel",
         "strategy": {
-          "type": "n-words",
-          "count": 1
+          "type": "match-pattern",
+          "pattern": "^\\d{1,6}(?:/\\d{1,5})?\\b"
         },
-        "validations": [
-          {
-            "type": "matches-pattern",
-            "pattern": "^\\d{1,6}(?:\\/\\d{1,5})?$"
-          }
-        ],
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "st.:",
+        "label": "land parcel",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^\\d{1,6}(?:/\\d{1,5})?\\b"
+        },
+        "validations": [],
         "include_trigger": false
       },
       {
         "trigger": "parcela č.:",
         "label": "land parcel",
         "strategy": {
-          "type": "n-words",
-          "count": 1
+          "type": "match-pattern",
+          "pattern": "^\\d{1,6}(?:/\\d{1,5})?\\b"
         },
-        "validations": [
-          {
-            "type": "matches-pattern",
-            "pattern": "^\\d{1,6}(?:\\/\\d{1,5})?$"
-          }
-        ],
+        "validations": [],
         "include_trigger": false
       },
       {
         "trigger": "parcelní č.:",
         "label": "land parcel",
         "strategy": {
-          "type": "n-words",
-          "count": 1
+          "type": "match-pattern",
+          "pattern": "^\\d{1,6}(?:/\\d{1,5})?\\b"
         },
-        "validations": [
-          {
-            "type": "matches-pattern",
-            "pattern": "^\\d{1,6}(?:\\/\\d{1,5})?$"
-          }
-        ],
+        "validations": [],
         "include_trigger": false
       },
       {
         "trigger": "parcelní číslo:",
         "label": "land parcel",
         "strategy": {
-          "type": "n-words",
-          "count": 1
+          "type": "match-pattern",
+          "pattern": "^\\d{1,6}(?:/\\d{1,5})?\\b"
         },
-        "validations": [
-          {
-            "type": "matches-pattern",
-            "pattern": "^\\d{1,6}(?:\\/\\d{1,5})?$"
-          }
-        ],
+        "validations": [],
         "include_trigger": false
       },
       {
         "trigger": "pozemková parcela č.:",
         "label": "land parcel",
         "strategy": {
-          "type": "n-words",
-          "count": 1
+          "type": "match-pattern",
+          "pattern": "^\\d{1,6}(?:/\\d{1,5})?\\b"
         },
-        "validations": [
-          {
-            "type": "matches-pattern",
-            "pattern": "^\\d{1,6}(?:\\/\\d{1,5})?$"
-          }
-        ],
+        "validations": [],
         "include_trigger": false
       },
       {
         "trigger": "stavební parcela č.:",
         "label": "land parcel",
         "strategy": {
-          "type": "n-words",
-          "count": 1
+          "type": "match-pattern",
+          "pattern": "^\\d{1,6}(?:/\\d{1,5})?\\b"
         },
-        "validations": [
-          {
-            "type": "matches-pattern",
-            "pattern": "^\\d{1,6}(?:\\/\\d{1,5})?$"
-          }
-        ],
+        "validations": [],
         "include_trigger": false
       },
       {
         "trigger": "parc. c.:",
         "label": "land parcel",
         "strategy": {
-          "type": "n-words",
-          "count": 1
+          "type": "match-pattern",
+          "pattern": "^\\d{1,6}(?:/\\d{1,5})?\\b"
         },
-        "validations": [
-          {
-            "type": "matches-pattern",
-            "pattern": "^\\d{1,6}(?:\\/\\d{1,5})?$"
-          }
-        ],
+        "validations": [],
         "include_trigger": false
       },
       {
         "trigger": "par. č.:",
         "label": "land parcel",
         "strategy": {
-          "type": "n-words",
-          "count": 1
+          "type": "match-pattern",
+          "pattern": "^\\d{1,6}(?:/\\d{1,5})?\\b"
         },
-        "validations": [
-          {
-            "type": "matches-pattern",
-            "pattern": "^\\d{1,6}(?:\\/\\d{1,5})?$"
-          }
-        ],
+        "validations": [],
         "include_trigger": false
       },
       {
@@ -22178,6 +22268,26 @@
         "include_trigger": false
       },
       {
+        "trigger": "Reisepass Nr.",
+        "label": "passport number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "Reisepass",
+        "label": "passport number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
         "trigger": "vertreten durch",
         "label": "person",
         "strategy": {
@@ -22314,27 +22424,7 @@
         "include_trigger": false
       },
       {
-        "trigger": "BIC",
-        "label": "bank account number",
-        "strategy": {
-          "type": "n-words",
-          "count": 1
-        },
-        "validations": [],
-        "include_trigger": false
-      },
-      {
         "trigger": "Kontonummer",
-        "label": "bank account number",
-        "strategy": {
-          "type": "n-words",
-          "count": 1
-        },
-        "validations": [],
-        "include_trigger": false
-      },
-      {
-        "trigger": "BIC:",
         "label": "bank account number",
         "strategy": {
           "type": "n-words",
@@ -22354,6 +22444,56 @@
         "include_trigger": false
       },
       {
+        "trigger": "HRA",
+        "label": "registration number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^\\d{1,6}(?:\\s+[A-Z])?\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "HRB",
+        "label": "registration number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^\\d{1,6}(?:\\s+[A-Z])?\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "Az.",
+        "label": "case number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^\\d{1,3}\\s+[A-Z][A-Za-z]{0,2}\\s+\\d+/\\d{2,4}\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "Aktenzeichen",
+        "label": "case number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^\\d{1,3}\\s+[A-Z][A-Za-z]{0,2}\\s+\\d+/\\d{2,4}\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "Geschäftsnummer",
+        "label": "case number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^\\d{1,3}\\s+[A-Z][A-Za-z]{0,2}\\s+\\d+/\\d{2,4}\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
         "trigger": "Handelsregisternummer",
         "label": "registration number",
         "strategy": {
@@ -22364,15 +22504,6 @@
       },
       {
         "trigger": "Handelsregister",
-        "label": "registration number",
-        "strategy": {
-          "type": "company-id-value"
-        },
-        "validations": [],
-        "include_trigger": false
-      },
-      {
-        "trigger": "HRB",
         "label": "registration number",
         "strategy": {
           "type": "company-id-value"
@@ -22408,7 +22539,34 @@
         "include_trigger": false
       },
       {
+        "trigger": "Steuer-ID",
+        "label": "tax identification number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
         "trigger": "Steuer-Nr.",
+        "label": "tax identification number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "IdNr.",
+        "label": "tax identification number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "IdNr",
         "label": "tax identification number",
         "strategy": {
           "type": "company-id-value"
@@ -23042,6 +23200,24 @@
         "include_trigger": false
       },
       {
+        "trigger": "KvK",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "Kamer van Koophandel",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
         "trigger": "VAT number",
         "label": "tax identification number",
         "strategy": {
@@ -23115,6 +23291,21 @@
           {
             "type": "matches-pattern",
             "pattern": "^(?:SC|NI|OC|SO|R|FC|GE|GS|IC|IP|LP|NC|NF|NL|NO|NP|NR|NZ|RC|SA|SF|SI|SL|SP|SR|SZ)?\\d{6,8}$"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "registered number",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "matches-pattern",
+            "pattern": "^(?:SC|NI|OC|SO|R|FC|GE|GS|IC|IP|LP|NC|NF|NL|NO|NP|NR|NZ|RC|SA|SF|SI|SL|SP|SR|SZ)?\\d{6,8}$",
+            "flags": null
           }
         ],
         "include_trigger": false
@@ -23213,6 +23404,36 @@
           {
             "type": "matches-pattern",
             "pattern": "^(?:SC|NI|OC|SO|R|FC|GE|GS|IC|IP|LP|NC|NF|NL|NO|NP|NR|NZ|RC|SA|SF|SI|SL|SP|SR|SZ)?\\d{6,8}$"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "registered number:",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "matches-pattern",
+            "pattern": "^(?:SC|NI|OC|SO|R|FC|GE|GS|IC|IP|LP|NC|NF|NL|NO|NP|NR|NZ|RC|SA|SF|SI|SL|SP|SR|SZ)?\\d{6,8}$",
+            "flags": null
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "registered number: ",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "matches-pattern",
+            "pattern": "^(?:SC|NI|OC|SO|R|FC|GE|GS|IC|IP|LP|NC|NF|NL|NO|NP|NR|NZ|RC|SA|SF|SI|SL|SP|SR|SZ)?\\d{6,8}$",
+            "flags": null
           }
         ],
         "include_trigger": false
@@ -26040,6 +26261,26 @@
         "include_trigger": false
       },
       {
+        "trigger": "passeport n°",
+        "label": "passport number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "passeport",
+        "label": "passport number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
         "trigger": "représenté par",
         "label": "person",
         "strategy": {
@@ -26200,6 +26441,33 @@
       },
       {
         "trigger": "SIRET",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "RCS Luxembourg",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "RCS Paris",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "RCS",
         "label": "registration number",
         "strategy": {
           "type": "company-id-value"
@@ -26452,6 +26720,60 @@
       },
       {
         "trigger": "SIRET: ",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "RCS Luxembourg:",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "RCS Luxembourg: ",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "RCS Paris:",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "RCS Paris: ",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "RCS:",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "RCS: ",
         "label": "registration number",
         "strategy": {
           "type": "company-id-value"
@@ -29531,6 +29853,16 @@
         "include_trigger": false
       },
       {
+        "trigger": "személyi szám",
+        "label": "national identification number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:\\d{11}|\\d-\\d{6}-\\d{4})\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
         "trigger": "CONTACT_POINT",
         "label": "person",
         "strategy": {
@@ -30139,6 +30471,36 @@
         "label": "registration number",
         "strategy": {
           "type": "company-id-value"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "sygn. akt",
+        "label": "case number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^[IVXLC]+\\s+[A-Z][A-Za-z]{0,3}\\s+\\d+/\\d{2,4}\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "sygn.",
+        "label": "case number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^[IVXLC]+\\s+[A-Z][A-Za-z]{0,3}\\s+\\d+/\\d{2,4}\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "sygnatura akt",
+        "label": "case number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^[IVXLC]+\\s+[A-Z][A-Za-z]{0,3}\\s+\\d+/\\d{2,4}\\b"
         },
         "validations": [],
         "include_trigger": false
@@ -36716,6 +37078,38 @@
         "include_trigger": false
       },
       {
+        "trigger": "SWIFT code",
+        "label": "bank account number",
+        "strategy": {
+          "type": "n-words",
+          "count": 1
+        },
+        "validations": [
+          {
+            "type": "matches-pattern",
+            "pattern": "^[A-Za-z]{4}[A-Za-z]{2}[A-Za-z0-9]{2}(?:[A-Za-z0-9]{3})?$",
+            "flags": null
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "BIC code",
+        "label": "bank account number",
+        "strategy": {
+          "type": "n-words",
+          "count": 1
+        },
+        "validations": [
+          {
+            "type": "matches-pattern",
+            "pattern": "^[A-Za-z]{4}[A-Za-z]{2}[A-Za-z0-9]{2}(?:[A-Za-z0-9]{3})?$",
+            "flags": null
+          }
+        ],
+        "include_trigger": false
+      },
+      {
         "trigger": "SWIFT",
         "label": "bank account number",
         "strategy": {
@@ -36741,6 +37135,38 @@
           {
             "type": "matches-pattern",
             "pattern": "^[A-Za-z]{4}[A-Za-z]{2}[A-Za-z0-9]{2}(?:[A-Za-z0-9]{3})?$"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "SWIFT code:",
+        "label": "bank account number",
+        "strategy": {
+          "type": "n-words",
+          "count": 1
+        },
+        "validations": [
+          {
+            "type": "matches-pattern",
+            "pattern": "^[A-Za-z]{4}[A-Za-z]{2}[A-Za-z0-9]{2}(?:[A-Za-z0-9]{3})?$",
+            "flags": null
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "BIC code:",
+        "label": "bank account number",
+        "strategy": {
+          "type": "n-words",
+          "count": 1
+        },
+        "validations": [
+          {
+            "type": "matches-pattern",
+            "pattern": "^[A-Za-z]{4}[A-Za-z]{2}[A-Za-z0-9]{2}(?:[A-Za-z0-9]{3})?$",
+            "flags": null
           }
         ],
         "include_trigger": false
@@ -87137,7 +87563,7 @@
     },
     "triggers": {
       "start": 1274,
-      "end": 2693
+      "end": 2731
     },
     "deny_list": {
       "start": 0,

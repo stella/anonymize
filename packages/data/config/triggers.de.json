@@ -16,6 +16,15 @@
     "extensions": ["add-colon"]
   },
   {
+    "id": "de-passport-number",
+    "label": "passport number",
+    "strategy": {
+      "type": "match-pattern",
+      "pattern": "^(?:[A-Za-z0-9]{9}|[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b"
+    },
+    "triggers": ["Reisepass Nr.", "Reisepass"]
+  },
+  {
     "id": "de-person",
     "label": "person",
     "strategy": { "type": "to-next-comma" },
@@ -57,8 +66,26 @@
       "type": "n-words",
       "count": 1
     },
-    "triggers": ["BIC", "Kontonummer"],
+    "triggers": ["Kontonummer"],
     "extensions": ["add-colon"]
+  },
+  {
+    "id": "de-commercial-register-number",
+    "label": "registration number",
+    "strategy": {
+      "type": "match-pattern",
+      "pattern": "^\\d{1,6}(?:\\s+[A-Z])?\\b"
+    },
+    "triggers": ["HRA", "HRB"]
+  },
+  {
+    "id": "de-case-number",
+    "label": "case number",
+    "strategy": {
+      "type": "match-pattern",
+      "pattern": "^\\d{1,3}\\s+[A-Z][A-Za-z]{0,2}\\s+\\d+/\\d{2,4}\\b"
+    },
+    "triggers": ["Az.", "Aktenzeichen", "Geschäftsnummer"]
   },
   {
     "id": "de-company-id",
@@ -67,7 +94,6 @@
     "triggers": [
       "Handelsregisternummer",
       "Handelsregister",
-      "HRB",
       "Registernummer",
       "UID"
     ]
@@ -78,7 +104,10 @@
     "strategy": { "type": "company-id-value" },
     "triggers": [
       "Steuernummer",
+      "Steuer-ID",
       "Steuer-Nr.",
+      "IdNr.",
+      "IdNr",
       "USt-IdNr.",
       "USt-IdNr",
       "BTW",

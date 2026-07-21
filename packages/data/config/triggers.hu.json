@@ -12,6 +12,15 @@
     "triggers": ["cégjegyzékszám"]
   },
   {
+    "id": "hu-personal-number",
+    "label": "national identification number",
+    "strategy": {
+      "type": "match-pattern",
+      "pattern": "^(?:\\d{11}|\\d-\\d{6}-\\d{4})\\b"
+    },
+    "triggers": ["személyi szám"]
+  },
+  {
     "id": "hu-person",
     "label": "person",
     "strategy": { "type": "to-next-comma" },

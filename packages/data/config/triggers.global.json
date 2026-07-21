@@ -1,7 +1,7 @@
 [
   {
     "id": "swift-bic",
-    "triggers": ["SWIFT", "BIC"],
+    "triggers": ["SWIFT code", "BIC code", "SWIFT", "BIC"],
     "label": "bank account number",
     "strategy": {
       "type": "n-words",

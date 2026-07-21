@@ -51,6 +51,26 @@ describe("US ZIP+4 regex", () => {
     expect(fullAddress).toBeDefined();
   });
 
+  test("case number interrupts address expansion and remains precise", async () => {
+    const text = "650 Page Mill Road, 1:23-cv-04567, Palo Alto, CA 94304-1050";
+    const entities = await detect(text);
+
+    expect(entities).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "case number",
+          text: "1:23-cv-04567",
+        }),
+      ]),
+    );
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "address" && entity.text.includes("1:23-cv-04567"),
+      ),
+    ).toBeFalse();
+  });
+
   test("bare ZIP5 not absorbed by ZIP+4 lookaround", async () => {
     // The pattern requires a hyphen + four digits; a
     // standalone five-digit number must not match.

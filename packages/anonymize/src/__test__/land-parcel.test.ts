@@ -38,6 +38,31 @@ describe("Czech land parcel triggers", () => {
     expect(parcels[0]?.text).toContain("852/2");
   });
 
+  test.each([
+    ["st. 452", "452"],
+    ["st. 452/12", "452/12"],
+  ] as const)("%s captures a building parcel", async (text, expected) => {
+    const parcels = findParcels(await detect(text));
+
+    expect(parcels).toEqual([
+      expect.objectContaining({
+        text: expected,
+      }),
+    ]);
+  });
+
+  test("stops a building parcel before trailing punctuation", async () => {
+    const parcels = findParcels(await detect("st. 452, k.ú. Dobříš"));
+
+    expect(parcels).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          text: "452",
+        }),
+      ]),
+    );
+  });
+
   test("k.ú. captures cadastral territory", async () => {
     const entities = await detect("k.ú. Dobříš, okres Příbram");
     const parcels = findParcels(entities);
@@ -102,5 +127,11 @@ describe("land parcel false positive rejection", () => {
     const entities = await detect("parc. č. abc");
     const parcels = findParcels(entities);
     expect(parcels.length).toBe(0);
+  });
+
+  test("ambiguous st. abbreviation requires a numeric parcel", async () => {
+    const parcels = findParcels(await detect("st. budova"));
+
+    expect(parcels).toEqual([]);
   });
 });

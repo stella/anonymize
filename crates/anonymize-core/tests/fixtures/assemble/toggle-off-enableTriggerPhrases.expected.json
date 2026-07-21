@@ -16690,6 +16690,30 @@
       "validator_id": "cn.ric"
     },
     {
+      "label": "case number",
+      "score": 0.95,
+      "requires_validation": null,
+      "validator_id": null,
+      "validator_input": null,
+      "min_byte_length": null
+    },
+    {
+      "label": "case number",
+      "score": 0.95,
+      "requires_validation": null,
+      "validator_id": null,
+      "validator_input": null,
+      "min_byte_length": null
+    },
+    {
+      "label": "case number",
+      "score": 0.95,
+      "requires_validation": null,
+      "validator_id": null,
+      "validator_input": null,
+      "min_byte_length": null
+    },
+    {
       "label": "address",
       "score": 0.9
     },
@@ -16876,11 +16900,21 @@
     },
     {
       "kind": "regex",
-      "pattern": "\\+\\d{1,3}(?:[^\\S\\n]|[.\\-])?\\(?\\d{2,4}\\)?(?:[^\\S\\n]|[.\\-])?\\d{3}(?:[^\\S\\n]|[.\\-])?\\d{2,4}(?:[^\\S\\n]|[.\\-])?\\d{0,4}\\b"
+      "pattern": "\\+\\d{1,3}(?:[^\\S\\n]|[.\\-])?(?:\\(0\\)(?:[^\\S\\n]|[.\\-])?)?\\(?\\d{2,4}\\)?(?:[^\\S\\n]|[.\\-])?\\d{3}(?:[^\\S\\n]|[.\\-])?\\d{2,4}(?:[^\\S\\n]|[.\\-])?\\d{0,4}\\b",
+      "lazy": null,
+      "prefilter_any": null,
+      "prefilter_case_insensitive": null,
+      "prefilter_window_bytes": null,
+      "prepared_artifact_policy": null
     },
     {
       "kind": "regex",
-      "pattern": "\\b[2-7]\\d{2}(?:[^\\S\\n]|[.\\-])?\\d{3}(?:[^\\S\\n]|[.\\-])?\\d{3}(?!(?:[^\\S\\n]|[.\\-])?\\d*/\\d)(?![^\\S\\n]*(?:Kč|,-|korun|EUR|USD|€|\\$))\\b"
+      "pattern": "\\b(?:[2-7]\\d{2}(?:[^\\S\\n]|[.\\-])?\\d{3}(?:[^\\S\\n]|[.\\-])?\\d{3}|0\\d{2,4}(?:[^\\S\\n]|[./\\-])\\d{5,8})(?!(?:[^\\S\\n]|[.\\-])?\\d*/\\d)(?![^\\S\\n]*(?:Kč|,-|korun|EUR|USD|€|\\$))\\b",
+      "lazy": null,
+      "prefilter_any": null,
+      "prefilter_case_insensitive": null,
+      "prefilter_window_bytes": null,
+      "prepared_artifact_policy": null
     },
     {
       "kind": "regex",
@@ -17513,6 +17547,42 @@
       "pattern": "(?<![A-Za-z0-9_])\\d{17}[\\dXx](?![A-Za-z0-9_])",
       "lazy": true,
       "prepared_artifact_policy": "omit"
+    },
+    {
+      "kind": "regex",
+      "pattern": "\\bECLI:[A-Z]{2}:[A-Za-z0-9.]+:\\d{4}:[A-Za-z0-9._]+\\b",
+      "lazy": true,
+      "prefilter_any": ["ECLI:"],
+      "prefilter_case_insensitive": false,
+      "prefilter_window_bytes": null,
+      "prepared_artifact_policy": null
+    },
+    {
+      "kind": "regex",
+      "pattern": "\\[\\d{4}\\][^\\S\\n]+(?:UKSC|UKPC|EWCA|EWHC|UKUT|UKFTT|EWFC|EWCOP)(?:[^\\S\\n]+(?:Civ|Crim|Ch|Fam|Pat|QB|KB|TCC|Comm))?[^\\S\\n]+\\d+\\b",
+      "lazy": true,
+      "prefilter_any": [
+        "UKSC",
+        "UKPC",
+        "EWCA",
+        "EWHC",
+        "UKUT",
+        "UKFTT",
+        "EWFC",
+        "EWCOP"
+      ],
+      "prefilter_case_insensitive": false,
+      "prefilter_window_bytes": null,
+      "prepared_artifact_policy": null
+    },
+    {
+      "kind": "regex",
+      "pattern": "\\b\\d{1,2}:\\d{2}-(?:[cC][vV]|[cC][rR]|[mM][dD]|[mM][cC]|[mM][jJ])-\\d{1,6}\\b",
+      "lazy": null,
+      "prefilter_any": null,
+      "prefilter_case_insensitive": null,
+      "prefilter_window_bytes": null,
+      "prepared_artifact_policy": null
     },
     {
       "kind": "regex",
@@ -85114,19 +85184,19 @@
   "slices": {
     "regex": {
       "start": 0,
-      "end": 114
+      "end": 117
     },
     "custom_regex": {
       "start": 0,
       "end": 0
     },
     "legal_forms": {
-      "start": 114,
-      "end": 1385
+      "start": 117,
+      "end": 1388
     },
     "triggers": {
-      "start": 1385,
-      "end": 1385
+      "start": 1388,
+      "end": 1388
     },
     "deny_list": {
       "start": 0,

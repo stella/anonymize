@@ -73,7 +73,7 @@ describe("entity capabilities", () => {
     ).map(({ label }) => label);
 
     expect(manifestDefaults).toEqual(DEFAULT_ENTITY_LABELS);
-    expect(DEFAULT_ENTITY_LABELS).toHaveLength(22);
+    expect(DEFAULT_ENTITY_LABELS).toHaveLength(23);
   });
 
   test("defines each label and detection source once", () => {

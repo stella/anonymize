@@ -124,6 +124,23 @@ fn structured_regex_span_beats_inner_trigger_fragment() {
 }
 
 #[test]
+fn structured_case_number_regex_span_beats_inner_trigger_fragment() {
+  // A structured case-number regex (e.g. an ECLI or docket shape) must win over
+  // a keyword trigger that only captured a truncated fragment of the same value,
+  // matching the resolution behaviour of the other structured-id labels.
+  let result = merge_and_dedup(&[
+    entity(DetectionSource::Regex, 0.95, 0, 22, "case number"),
+    entity(DetectionSource::Trigger, 0.95, 7, 8, "case number"),
+  ]);
+
+  assert_eq!(result.len(), 1);
+  let kept = result.first().expect("result");
+  assert_eq!(kept.source, DetectionSource::Regex);
+  assert_eq!(kept.start, 0);
+  assert_eq!(kept.end, 22);
+}
+
+#[test]
 fn structured_regex_span_beats_trigger_fragment_with_trailing_punctuation() {
   let regex_text = "oddíl C, vložka 240118";
   let trigger_start = byte_len("oddíl C, vložka ");

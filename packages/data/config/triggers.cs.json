@@ -214,6 +214,15 @@
     "extensions": ["add-colon"]
   },
   {
+    "id": "cs-passport-number",
+    "label": "passport number",
+    "strategy": {
+      "type": "match-pattern",
+      "pattern": "^(?:[A-Za-z]{1,2}\\d{6,8}|\\d{2}[A-Za-z]{2}\\d{5}|\\d{7,9})\\b"
+    },
+    "triggers": ["cestovní pas č.", "cestovní pas"]
+  },
+  {
     "id": "cs-bank-account-eol",
     "label": "bank account number",
     "strategy": {
@@ -346,6 +355,15 @@
       "spisovou značkou",
       "pod sp.zn."
     ]
+  },
+  {
+    "id": "cs-reference-number",
+    "label": "registration number",
+    "strategy": {
+      "type": "match-pattern",
+      "pattern": "^(?:\\p{Lu}{1,10}\\s+)?[\\p{L}\\d/-]*\\d[\\p{L}\\d/-]*\\b"
+    },
+    "triggers": ["č. j.", "číslo jednací", "číslo smlouvy"]
   },
   {
     "id": "soudy-nominative",
@@ -501,8 +519,8 @@
     "id": "cs-parcel-number",
     "label": "land parcel",
     "strategy": {
-      "type": "n-words",
-      "count": 1
+      "type": "match-pattern",
+      "pattern": "^\\d{1,6}(?:/\\d{1,5})?\\b"
     },
     "triggers": [
       "parc. č.",
@@ -515,6 +533,7 @@
       "p. č. st.",
       "p.p.č.",
       "st.p.č.",
+      "st.",
       "parcela č.",
       "parcelní č.",
       "parcelní číslo",
@@ -523,13 +542,7 @@
       "parc. c.",
       "par. č."
     ],
-    "extensions": ["add-colon"],
-    "validations": [
-      {
-        "type": "matches-pattern",
-        "pattern": "^\\d{1,6}(?:/\\d{1,5})?$"
-      }
-    ]
+    "extensions": ["add-colon"]
   },
   {
     "id": "cs-ownership-sheet",

@@ -6,6 +6,7 @@
 //! inline the strings.
 
 pub(crate) const ADDRESS_LABEL: &str = "address";
+pub(crate) const CASE_NUMBER_LABEL: &str = "case number";
 pub(crate) const COUNTRY_LABEL: &str = "country";
 pub(crate) const DATE_LABEL: &str = "date";
 pub(crate) const IP_ADDRESS_LABEL: &str = "ip address";
