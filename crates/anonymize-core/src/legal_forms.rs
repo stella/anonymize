@@ -1632,7 +1632,9 @@ fn split_embedded_legal_form_list<'a>(
         continue;
       };
       let boundary_len = legal_list_boundary_len(after);
-      if boundary_len > 0 {
+      if boundary_len > 0
+        && following_list_segment_has_name(after, boundary_len, data)
+      {
         cuts.push(suffix_end.saturating_add(boundary_len));
       }
     }
@@ -1672,6 +1674,25 @@ fn split_embedded_legal_form_list<'a>(
   }
 
   segments
+}
+
+fn following_list_segment_has_name(
+  after_suffix: &str,
+  boundary_len: usize,
+  data: &PreparedLegalFormData,
+) -> bool {
+  let Some(after_boundary) = after_suffix.get(boundary_len..) else {
+    return false;
+  };
+  let segment_end = after_boundary
+    .find([',', ';'])
+    .unwrap_or(after_boundary.len());
+  let segment = after_boundary.get(..segment_end).unwrap_or_default().trim();
+  list_suffixes(data).any(|suffix| {
+    segment.strip_suffix(suffix).is_some_and(|prefix| {
+      prefix.chars().any(|character| !character.is_whitespace())
+    })
+  })
 }
 
 fn legal_list_boundary_len(text: &str) -> usize {
@@ -1741,7 +1762,9 @@ fn trim_embedded_legal_form_list_prefix<'a>(
         continue;
       };
       let boundary_len = comma_upper_boundary_len(after);
-      if boundary_len == 0 {
+      if boundary_len == 0
+        || !following_list_segment_has_name(after, boundary_len, data)
+      {
         continue;
       }
       let next_start = suffix_end.saturating_add(boundary_len);
@@ -2267,7 +2290,12 @@ mod tests {
       .collect()
   }
 
-  fn institutional_head_entities(text: &str, head: &str) -> Vec<String> {
+  fn legal_form_entities(
+    text: &str,
+    suffixes: &[&str],
+    institutional_heads: &[&str],
+    matched_suffix: &str,
+  ) -> Vec<String> {
     let complement_starters = english_vocabulary(include_str!(
       "../../../packages/data/config/institutional-organization-complement-starters.json"
     ));
@@ -2281,22 +2309,30 @@ mod tests {
       "../../../packages/data/config/institutional-organization-prefix-generic-name-words.json"
     ));
     let data = PreparedLegalFormData::new(LegalFormData {
-      suffixes: vec![head.to_string()],
+      suffixes: suffixes.iter().map(ToString::to_string).collect(),
       connector_words: complement_connectors.clone(),
-      institutional_heads: vec![head.to_string()],
-      institutional_complement_heads: vec![head.to_string()],
+      institutional_heads: institutional_heads
+        .iter()
+        .map(ToString::to_string)
+        .collect(),
+      institutional_complement_heads: institutional_heads
+        .iter()
+        .map(ToString::to_string)
+        .collect(),
       institutional_complement_starters: complement_starters,
       institutional_complement_connectors: complement_connectors,
       institutional_generic_words: generic_words,
       institutional_prefix_generic_words: prefix_generic_words,
       ..LegalFormData::default()
     });
-    let start = text.rfind(head).expect("institutional head");
+    let start = text.rfind(matched_suffix).expect("matched suffix");
     let found = SearchMatch::Literal {
       pattern: 0,
       start: u32::try_from(start).expect("start"),
-      end: u32::try_from(start.checked_add(head.len()).expect("end offset"))
-        .expect("end"),
+      end: u32::try_from(
+        start.checked_add(matched_suffix.len()).expect("end offset"),
+      )
+      .expect("end"),
     };
     process_legal_form_matches(
       &[found],
@@ -2308,6 +2344,10 @@ mod tests {
     .into_iter()
     .map(|entity| entity.text)
     .collect()
+  }
+
+  fn institutional_head_entities(text: &str, head: &str) -> Vec<String> {
+    legal_form_entities(text, &[head], &[head], head)
   }
 
   #[test]
@@ -2353,6 +2393,24 @@ mod tests {
     assert_eq!(
       institutional_head_entities("Court, Beta Court", "Court"),
       ["Beta Court"]
+    );
+    assert_eq!(
+      legal_form_entities(
+        "Acme Court, Inc.",
+        &["Court", "Inc."],
+        &["Court"],
+        "Inc.",
+      ),
+      ["Acme Court, Inc."]
+    );
+    assert_eq!(
+      legal_form_entities(
+        "Acme Court, Beta Inc.",
+        &["Court", "Inc."],
+        &["Court"],
+        "Inc.",
+      ),
+      ["Acme Court", "Beta Inc."]
     );
   }
 
