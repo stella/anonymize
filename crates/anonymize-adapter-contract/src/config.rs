@@ -5,8 +5,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use stella_anonymize_core::{
   AddressContextData, AddressSeedData, AmountWordsData, CoreferenceData,
-  CoreferencePatternData, CountryMatchData, CurrencyData, DateData,
-  DenyListFilterData, DenyListMatchData, DenyListPatternMetaSet,
+  CoreferencePatternData, CountryMatchData, CountryVariant, CurrencyData,
+  DateData, DenyListFilterData, DenyListMatchData, DenyListPatternMetaSet,
   FuzzySearchOptions, GazetteerMatchData, HotwordRule, HotwordRuleData,
   LegalFormData, LiteralSearchOptions, MagnitudeSuffixData, MaskConfig,
   MaskDirection, MonetaryData, NameCorpusData, NameCorpusMode, Operator,
@@ -22,10 +22,11 @@ use stella_anonymize_core::{
 
 use crate::error::{ContractError, Result};
 use crate::types::{
-  BindingCoreferenceData, BindingDenyListFilterData, BindingDenyListMatchData,
-  BindingHotwordRuleData, BindingLegalFormData, BindingMonetaryData,
-  BindingNameCorpusData, BindingNameCorpusMode, BindingOperator,
-  BindingOperatorConfig, BindingPatternSlice, BindingPreparedArtifactPolicy,
+  BindingCoreferenceData, BindingCountryMatchData, BindingCountryVariant,
+  BindingDenyListFilterData, BindingDenyListMatchData, BindingHotwordRuleData,
+  BindingLegalFormData, BindingMonetaryData, BindingNameCorpusData,
+  BindingNameCorpusMode, BindingOperator, BindingOperatorConfig,
+  BindingPatternSlice, BindingPreparedArtifactPolicy,
   BindingPreparedSearchConfig, BindingPreparedSearchSlices,
   BindingRegexArtifactPolicy, BindingRegexMatchMeta, BindingSearchOptions,
   BindingSearchPattern, BindingSignatureData, BindingTaggedOperator,
@@ -99,9 +100,7 @@ pub fn prepared_search_config_from_binding(
         labels: data.labels,
         is_fuzzy: data.is_fuzzy,
       }),
-      country_data: config.country_data.map(|data| CountryMatchData {
-        labels: data.labels,
-      }),
+      country_data: config.country_data.map(country_data_from_binding),
       hotword_data: config.hotword_data.map(hotword_data_from_binding),
       trigger_data: config.trigger_data.map(|data| {
         trigger_data_from_binding(TriggerDataFromBindingOptions {
@@ -136,6 +135,25 @@ pub fn prepared_search_config_from_binding(
       monetary_data: config.monetary_data.map(monetary_data_from_binding),
     },
   })
+}
+
+fn country_data_from_binding(
+  data: BindingCountryMatchData,
+) -> CountryMatchData {
+  CountryMatchData {
+    labels: data.labels,
+    iso_codes: data.iso_codes,
+    variants: data
+      .variants
+      .into_iter()
+      .map(|variant| match variant {
+        BindingCountryVariant::Name => CountryVariant::Name,
+        BindingCountryVariant::Alias => CountryVariant::Alias,
+        BindingCountryVariant::Alpha3 => CountryVariant::Alpha3,
+        BindingCountryVariant::Alpha2 => CountryVariant::Alpha2,
+      })
+      .collect(),
+  }
 }
 
 fn date_data_from_binding(data: crate::BindingDateData) -> DateData {
@@ -548,11 +566,13 @@ fn trigger_strategy_from_binding(
       stop_words,
       max_length,
     },
-    BindingTriggerStrategy::ToEndOfLine => TriggerStrategy::ToEndOfLine,
+    BindingTriggerStrategy::ToEndOfLine {} => TriggerStrategy::ToEndOfLine,
     BindingTriggerStrategy::NWords { count } => {
       TriggerStrategy::NWords { count }
     }
-    BindingTriggerStrategy::CompanyIdValue => TriggerStrategy::CompanyIdValue,
+    BindingTriggerStrategy::CompanyIdValue {} => {
+      TriggerStrategy::CompanyIdValue
+    }
     BindingTriggerStrategy::Address { max_chars } => {
       TriggerStrategy::Address { max_chars }
     }
@@ -566,7 +586,7 @@ fn trigger_validation_from_binding(
   validation: BindingTriggerValidation,
 ) -> TriggerValidation {
   match validation {
-    BindingTriggerValidation::StartsUppercase => {
+    BindingTriggerValidation::StartsUppercase {} => {
       TriggerValidation::StartsUppercase
     }
     BindingTriggerValidation::MinLength { min } => {
@@ -575,8 +595,8 @@ fn trigger_validation_from_binding(
     BindingTriggerValidation::MaxLength { max } => {
       TriggerValidation::MaxLength(max)
     }
-    BindingTriggerValidation::NoDigits => TriggerValidation::NoDigits,
-    BindingTriggerValidation::HasDigits => TriggerValidation::HasDigits,
+    BindingTriggerValidation::NoDigits {} => TriggerValidation::NoDigits,
+    BindingTriggerValidation::HasDigits {} => TriggerValidation::HasDigits,
     BindingTriggerValidation::MatchesPattern { pattern, flags } => {
       TriggerValidation::MatchesPattern { pattern, flags }
     }
@@ -1232,7 +1252,7 @@ mod tests {
     let rule = BindingTriggerRule {
       trigger: String::from("Seller: "),
       label: String::from("organization"),
-      strategy: BindingTriggerStrategy::ToEndOfLine,
+      strategy: BindingTriggerStrategy::ToEndOfLine {},
       validations: Vec::new(),
       include_trigger: false,
     };
@@ -1245,7 +1265,7 @@ mod tests {
     let non_role_rule = BindingTriggerRule {
       trigger: String::from("Municipality: "),
       label: String::from("organization"),
-      strategy: BindingTriggerStrategy::ToEndOfLine,
+      strategy: BindingTriggerStrategy::ToEndOfLine {},
       validations: Vec::new(),
       include_trigger: false,
     };

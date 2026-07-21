@@ -33,6 +33,10 @@ This is a Bun-first TypeScript monorepo for text anonymization. The library hand
 
 ### Runtime Surface Parity
 
+- Prepared-config parity means exact structural equality with the canonical
+  TypeScript fixture. Never compare a hand-picked field subset or deserialize
+  the oracle through a lossy DTO; all reachable DTO objects must reject unknown
+  members while explicitly open language-keyed maps remain open.
 - Treat runtime parity as a public contract, not only as fixture-output
   equivalence. Every public capability must belong to a named parity profile,
   and CI must execute it through every runtime in that profile.

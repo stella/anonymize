@@ -728,9 +728,49 @@ mod tests {
   use crate::config::prepared_search_config_from_binding;
   use crate::error::ContractError;
   use crate::types::{
-    BindingDenyListFilterData, BindingDenyListMatchData, BindingLegalFormData,
+    BindingCountryMatchData, BindingCountryVariant, BindingDenyListFilterData,
+    BindingDenyListMatchData, BindingLegalFormData,
     BindingPreparedSearchConfig, BindingSearchPattern,
   };
+
+  #[test]
+  fn prepared_package_schema_versions_are_clean_v2_breaks() {
+    assert_eq!(BINDING_PACKAGE_SCHEMA_VERSION, 2);
+    assert_eq!(CORE_PACKAGE_SCHEMA_VERSION, 2);
+  }
+
+  #[test]
+  fn prepared_package_readers_reject_v1_payloads() {
+    let binding_payload = prepared_search_package_payload_to_bytes(
+      &package_test_config(),
+      b"artifacts",
+    )
+    .unwrap();
+    let binding = prepared_search_package_raw_payload_to_bytes(
+      PREPARED_SEARCH_PACKAGE_HEADER,
+      1,
+      &binding_payload,
+    );
+    assert_invalid_package_reason(
+      prepared_search_package_from_bytes(&binding).unwrap_err(),
+      "unsupported schema version",
+    );
+
+    let core_config =
+      prepared_search_config_from_binding(package_test_config()).unwrap();
+    let core_payload =
+      prepared_search_core_package_payload_to_bytes(&core_config, b"artifacts")
+        .unwrap();
+    let core_package = prepared_search_package_raw_payload_to_bytes(
+      PREPARED_SEARCH_CORE_PACKAGE_HEADER,
+      1,
+      &core_payload,
+    );
+    assert_invalid_package_reason(
+      prepared_search_core_package_from_bytes(&core_package).unwrap_err(),
+      "unsupported schema version",
+    );
+  }
 
   #[test]
   fn prepared_search_package_roundtrips_config_and_artifacts() {
@@ -1463,6 +1503,14 @@ mod tests {
         prefilter_window_bytes: None,
         prepared_artifact_policy: None,
       }],
+      country_data: Some(BindingCountryMatchData {
+        labels: vec![String::from("country"), String::from("country")],
+        iso_codes: vec![String::from("CH"), String::from("US")],
+        variants: vec![
+          BindingCountryVariant::Name,
+          BindingCountryVariant::Alias,
+        ],
+      }),
       ..BindingPreparedSearchConfig::default()
     }
   }

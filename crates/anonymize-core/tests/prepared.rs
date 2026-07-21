@@ -7,12 +7,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use stella_anonymize_core::{
   AddressContextData, AddressSeedData, AmountWordsData, CallerDetection,
   CallerDetectionParams, CallerRedactionOptions, CoreferenceData,
-  CoreferencePatternData, CountryMatchData, CurrencyData, DateData,
-  DenyListFilterData, DenyListMatchData, DetectionSource, DiagnosticEventKind,
-  DiagnosticStage, EntityKind, Error, FuzzySearchOptions, GazetteerMatchData,
-  HotwordRule, HotwordRuleData, LegalFormData, LiteralSearchOptions,
-  MagnitudeSuffixData, MonetaryData, OperatorConfig, PatternSlice,
-  PreparedEngine, PreparedEngineArtifacts, PreparedEngineConfig,
+  CoreferencePatternData, CountryMatchData, CountryVariant, CurrencyData,
+  DateData, DenyListFilterData, DenyListMatchData, DetectionSource,
+  DiagnosticEventKind, DiagnosticStage, EntityKind, Error, FuzzySearchOptions,
+  GazetteerMatchData, HotwordRule, HotwordRuleData, LegalFormData,
+  LiteralSearchOptions, MagnitudeSuffixData, MonetaryData, OperatorConfig,
+  PatternSlice, PreparedEngine, PreparedEngineArtifacts, PreparedEngineConfig,
   PreparedEngineSlices, PreparedSessionCallerRedactionOptions,
   PreparedSessionRedactionOptions, RedactionSession, RegexMatchMeta,
   RegexSearchOptions, SearchOptions, SearchPattern, SessionId,
@@ -1225,6 +1225,14 @@ fn prepared_engine_artifacts_reject_invalid_bytes() {
   );
 }
 
+fn turkey_country_match_data() -> CountryMatchData {
+  CountryMatchData {
+    labels: vec![String::from("country")],
+    iso_codes: vec![String::from("TR")],
+    variants: vec![CountryVariant::Name],
+  }
+}
+
 #[test]
 fn prepared_engine_emits_static_detector_entities() {
   let prepared = PreparedEngine::new(prepared_config! {
@@ -1296,9 +1304,7 @@ fn prepared_engine_emits_static_detector_entities() {
       labels: vec![String::from("organization")],
       is_fuzzy: vec![false],
     }),
-    country_data: Some(CountryMatchData {
-      labels: vec![String::from("country")],
-    }),
+    country_data: Some(turkey_country_match_data()),
     hotword_data: None,
     trigger_data: None,
     legal_form_data: None,
@@ -2084,9 +2090,7 @@ fn prepared_engine_redacts_static_entities_end_to_end() {
       labels: vec![String::from("organization")],
       is_fuzzy: vec![false],
     }),
-    country_data: Some(CountryMatchData {
-      labels: vec![String::from("country")],
-    }),
+    country_data: Some(turkey_country_match_data()),
     hotword_data: None,
     trigger_data: None,
     legal_form_data: None,
@@ -2843,7 +2847,11 @@ fn prepared_engine_requires_gazetteer_metadata_for_gazetteer_slice() {
 fn prepared_engine_rejects_truncated_country_metadata() {
   let error = PreparedEngine::new(prepared_config! {
     literal_patterns: vec![SearchPattern::Literal(String::from("Turkey"))],
-    country_data: Some(CountryMatchData { labels: Vec::new() }),
+    country_data: Some(CountryMatchData {
+      labels: Vec::new(),
+      iso_codes: Vec::new(),
+      variants: Vec::new(),
+    }),
     ..empty_config(PreparedEngineSlices {
       countries: PatternSlice { start: 0, end: 1 },
       ..PreparedEngineSlices::default()
@@ -2856,6 +2864,60 @@ fn prepared_engine_rejects_truncated_country_metadata() {
     error,
     Error::StaticDataLengthMismatch {
       field: "country_data.labels",
+      expected: 1,
+      actual: 0
+    }
+  );
+}
+
+#[test]
+fn prepared_engine_rejects_truncated_country_iso_codes() {
+  let error = PreparedEngine::new(prepared_config! {
+    literal_patterns: vec![SearchPattern::Literal(String::from("Turkey"))],
+    country_data: Some(CountryMatchData {
+      labels: vec![String::from("country")],
+      iso_codes: Vec::new(),
+      variants: vec![CountryVariant::Name],
+    }),
+    ..empty_config(PreparedEngineSlices {
+      countries: PatternSlice { start: 0, end: 1 },
+      ..PreparedEngineSlices::default()
+    })
+  })
+  .err()
+  .expect("truncated country ISO metadata should be rejected");
+
+  assert_eq!(
+    error,
+    Error::StaticDataLengthMismatch {
+      field: "country_data.isoCodes",
+      expected: 1,
+      actual: 0
+    }
+  );
+}
+
+#[test]
+fn prepared_engine_rejects_truncated_country_variants() {
+  let error = PreparedEngine::new(prepared_config! {
+    literal_patterns: vec![SearchPattern::Literal(String::from("Turkey"))],
+    country_data: Some(CountryMatchData {
+      labels: vec![String::from("country")],
+      iso_codes: vec![String::from("TR")],
+      variants: Vec::new(),
+    }),
+    ..empty_config(PreparedEngineSlices {
+      countries: PatternSlice { start: 0, end: 1 },
+      ..PreparedEngineSlices::default()
+    })
+  })
+  .err()
+  .expect("truncated country variant metadata should be rejected");
+
+  assert_eq!(
+    error,
+    Error::StaticDataLengthMismatch {
+      field: "country_data.variants",
       expected: 1,
       actual: 0
     }

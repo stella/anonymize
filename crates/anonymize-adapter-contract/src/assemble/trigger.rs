@@ -153,11 +153,11 @@ fn to_native_strategy(strategy: StrategyConfig) -> BindingTriggerStrategy {
       stop_words: stop_words.unwrap_or_default(),
       max_length,
     },
-    StrategyConfig::ToEndOfLine => BindingTriggerStrategy::ToEndOfLine,
+    StrategyConfig::ToEndOfLine => BindingTriggerStrategy::ToEndOfLine {},
     StrategyConfig::NWords { count } => {
       BindingTriggerStrategy::NWords { count }
     }
-    StrategyConfig::CompanyIdValue => BindingTriggerStrategy::CompanyIdValue,
+    StrategyConfig::CompanyIdValue => BindingTriggerStrategy::CompanyIdValue {},
     StrategyConfig::Address { max_chars } => {
       BindingTriggerStrategy::Address { max_chars }
     }
@@ -175,7 +175,7 @@ fn to_native_validation(
 ) -> BindingTriggerValidation {
   match validation {
     ValidationConfig::StartsUppercase => {
-      BindingTriggerValidation::StartsUppercase
+      BindingTriggerValidation::StartsUppercase {}
     }
     ValidationConfig::MinLength { min } => {
       BindingTriggerValidation::MinLength { min }
@@ -183,8 +183,8 @@ fn to_native_validation(
     ValidationConfig::MaxLength { max } => {
       BindingTriggerValidation::MaxLength { max }
     }
-    ValidationConfig::NoDigits => BindingTriggerValidation::NoDigits,
-    ValidationConfig::HasDigits => BindingTriggerValidation::HasDigits,
+    ValidationConfig::NoDigits => BindingTriggerValidation::NoDigits {},
+    ValidationConfig::HasDigits => BindingTriggerValidation::HasDigits {},
     ValidationConfig::MatchesPattern { pattern, flags } => {
       let canonical = canonical_regexp_flags(flags.as_deref().unwrap_or(""));
       BindingTriggerValidation::MatchesPattern {

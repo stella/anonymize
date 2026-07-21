@@ -100,6 +100,20 @@ pub struct GazetteerMatchData {
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct CountryMatchData {
   pub labels: Vec<String>,
+  #[serde(rename = "isoCodes")]
+  pub iso_codes: Vec<String>,
+  pub variants: Vec<CountryVariant>,
+}
+
+#[derive(
+  Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize,
+)]
+#[serde(rename_all = "lowercase")]
+pub enum CountryVariant {
+  Name,
+  Alias,
+  Alpha3,
+  Alpha2,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]

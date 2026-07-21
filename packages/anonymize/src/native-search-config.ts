@@ -81,6 +81,7 @@ export type NativeDenyListFilterData = {
   document_heading_ordinal_markers: string[];
   defined_term_cues: string[];
   signing_place_guards: NativeSigningPlaceGuardData[];
+  title_tokens: string[];
 };
 
 export type NativeDenyListMatchData = {
