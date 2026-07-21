@@ -1,10 +1,10 @@
 #![allow(clippy::expect_used, clippy::indexing_slicing, clippy::unwrap_used)]
 
 use stella_anonymize_core::{
-  CountryMatchData, DenyListFilterData, DenyListMatchData, DenyListPatternMeta,
-  DenyListPatternMetaSet, DetectionSource, Error, GazetteerMatchData,
-  PatternSlice, PipelineEntity, RegexMatchMeta, SearchMatch,
-  SigningPlaceGuardData, SourceDetail, process_country_matches,
+  CountryMatchData, CountryVariant, DenyListFilterData, DenyListMatchData,
+  DenyListPatternMeta, DenyListPatternMetaSet, DetectionSource, Error,
+  GazetteerMatchData, PatternSlice, PipelineEntity, RegexMatchMeta,
+  SearchMatch, SigningPlaceGuardData, SourceDetail, process_country_matches,
   process_deny_list_matches, process_gazetteer_matches, process_regex_matches,
 };
 
@@ -668,6 +668,8 @@ fn country_processor_requires_uppercase_letter_start() {
   ];
   let data = CountryMatchData {
     labels: vec![String::from("country")],
+    iso_codes: vec![String::from("TR")],
+    variants: vec![CountryVariant::Name],
   };
 
   let entities = process_country_matches(

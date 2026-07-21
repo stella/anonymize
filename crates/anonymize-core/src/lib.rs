@@ -65,10 +65,11 @@ pub use prepared::{
   StaticRedactionResult, StaticRedactionStreamEvent,
 };
 pub use processors::{
-  CountryMatchData, DenyListFilterData, DenyListMatchData, DenyListPatternMeta,
-  DenyListPatternMetaSet, GazetteerMatchData, PatternSlice, RegexMatchMeta,
-  SigningPlaceGuardData, StringGroups, process_country_matches,
-  process_deny_list_matches, process_gazetteer_matches, process_regex_matches,
+  CountryMatchData, CountryVariant, DenyListFilterData, DenyListMatchData,
+  DenyListPatternMeta, DenyListPatternMetaSet, GazetteerMatchData,
+  PatternSlice, RegexMatchMeta, SigningPlaceGuardData, StringGroups,
+  process_country_matches, process_deny_list_matches,
+  process_gazetteer_matches, process_regex_matches,
 };
 pub use redact::{
   RedactTextWithSessionParams, deanonymise, redact_text,

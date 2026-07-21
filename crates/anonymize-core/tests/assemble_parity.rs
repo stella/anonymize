@@ -10,10 +10,12 @@
 //! first-difference report); the companion `assemble_digest` test then proves
 //! the assembled config is byte-identical end to end.
 
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use stella_anonymize_adapter_contract::{
   BindingPreparedSearchConfig, assemble_static_search_config,
 };
@@ -66,9 +68,73 @@ fn read_json<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T, String> {
     .map_err(|error| format!("parse {}: {error}", path.display()))
 }
 
-/// Compares only the fields slice A assembles. Returns a description of the
-/// first mismatch, if any.
-fn compare_implemented(
+fn first_json_difference(
+  path: &str,
+  actual: &Value,
+  expected: &Value,
+) -> String {
+  match (actual, expected) {
+    (Value::Object(actual), Value::Object(expected)) => {
+      for key in actual.keys().chain(expected.keys()) {
+        if actual.get(key) == expected.get(key) {
+          continue;
+        }
+        let child_path = format!("{path}.{key}");
+        return match (actual.get(key), expected.get(key)) {
+          (Some(actual), Some(expected)) => {
+            first_json_difference(&child_path, actual, expected)
+          }
+          (actual, expected) => {
+            format!("{child_path}: {actual:?} != {expected:?}")
+          }
+        };
+      }
+      format!("{path}: object key order differs")
+    }
+    (Value::Array(actual), Value::Array(expected)) => {
+      for (index, (actual_item, expected_item)) in
+        actual.iter().zip(expected.iter()).enumerate()
+      {
+        if actual_item != expected_item {
+          return first_json_difference(
+            &format!("{path}[{index}]"),
+            actual_item,
+            expected_item,
+          );
+        }
+      }
+      format!("{path}.length: {} != {}", actual.len(), expected.len())
+    }
+    _ => format!("{path}: {actual:?} != {expected:?}"),
+  }
+}
+
+fn serialized_difference<T: Serialize>(actual: &T, expected: &T) -> String {
+  let actual = serde_json::to_value(actual)
+    .unwrap_or_else(|error| Value::String(error.to_string()));
+  let expected = serde_json::to_value(expected)
+    .unwrap_or_else(|error| Value::String(error.to_string()));
+  first_json_difference("config", &actual, &expected)
+}
+
+/// Requires full structural equality, then reports the first mismatch through
+/// the existing field-focused diagnostics when possible.
+fn compare_full_config(
+  name: &str,
+  actual: &BindingPreparedSearchConfig,
+  expected: &BindingPreparedSearchConfig,
+) -> Result<(), String> {
+  if actual == expected {
+    return Ok(());
+  }
+  compare_field_diagnostics(name, actual, expected)?;
+  Err(format!(
+    "{name}: full prepared config differs outside the targeted diagnostics: {}",
+    serialized_difference(actual, expected)
+  ))
+}
+
+fn compare_field_diagnostics(
   name: &str,
   actual: &BindingPreparedSearchConfig,
   expected: &BindingPreparedSearchConfig,
@@ -651,7 +717,7 @@ fn check_fixture(input_path: &Path) -> Result<(), String> {
     &input.gazetteer,
   )
   .map_err(|error| format!("{name}: assemble failed: {error}"))?;
-  compare_implemented(name, &actual, &expected)
+  compare_full_config(name, &actual, &expected)
 }
 
 #[test]
@@ -681,4 +747,224 @@ fn assemble_parity_matches_typescript() -> Result<(), String> {
     inputs.len(),
     failures.join("\n")
   ))
+}
+
+#[derive(Clone, Debug)]
+enum JsonPathSegment {
+  Key(String),
+  Index(usize),
+}
+
+const OPEN_LANGUAGE_MAPS: [&str; 3] = [
+  "month_names_by_language",
+  "lowercase_month_ambiguities",
+  "year_words_by_language",
+];
+
+fn collect_closed_object_paths(
+  value: &Value,
+  path: &mut Vec<JsonPathSegment>,
+  paths: &mut Vec<Vec<JsonPathSegment>>,
+  covered_object_paths: &mut HashSet<String>,
+  parent_key: Option<&str>,
+) {
+  match value {
+    Value::Object(object) => {
+      if parent_key.is_some_and(|key| OPEN_LANGUAGE_MAPS.contains(&key)) {
+        return;
+      }
+      let discriminator = object
+        .get("type")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+      let object_path = semantic_object_path(path, discriminator);
+      if covered_object_paths.insert(object_path) {
+        paths.push(path.clone());
+      }
+      for (key, child) in object {
+        path.push(JsonPathSegment::Key(key.clone()));
+        collect_closed_object_paths(
+          child,
+          path,
+          paths,
+          covered_object_paths,
+          Some(key),
+        );
+        path.pop();
+      }
+    }
+    Value::Array(array) => {
+      for (index, child) in array.iter().enumerate() {
+        path.push(JsonPathSegment::Index(index));
+        collect_closed_object_paths(
+          child,
+          path,
+          paths,
+          covered_object_paths,
+          parent_key,
+        );
+        path.pop();
+      }
+    }
+    _ => {}
+  }
+}
+
+fn semantic_object_path(
+  path: &[JsonPathSegment],
+  discriminator: &str,
+) -> String {
+  let mut semantic = String::new();
+  for segment in path {
+    match segment {
+      JsonPathSegment::Key(key) => {
+        if !semantic.is_empty() {
+          semantic.push('/');
+        }
+        semantic.push_str(key);
+      }
+      JsonPathSegment::Index(_) => semantic.push_str("[*]"),
+    }
+  }
+  format!("{semantic}|{discriminator}")
+}
+
+fn object_at_path_mut<'a>(
+  mut value: &'a mut Value,
+  path: &[JsonPathSegment],
+) -> Option<&'a mut serde_json::Map<String, Value>> {
+  for segment in path {
+    value = match segment {
+      JsonPathSegment::Key(key) => value.get_mut(key)?,
+      JsonPathSegment::Index(index) => value.get_mut(*index)?,
+    };
+  }
+  value.as_object_mut()
+}
+
+#[test]
+fn prepared_config_rejects_unknown_members_recursively() -> Result<(), String> {
+  let fixture = fixtures_dir().join("baseline-all-on.expected.json");
+  let value: Value = read_json(&fixture)?;
+  let mut paths = Vec::new();
+  let mut covered_object_paths = HashSet::new();
+  collect_closed_object_paths(
+    &value,
+    &mut Vec::new(),
+    &mut paths,
+    &mut covered_object_paths,
+    None,
+  );
+  if paths.len() < 20 {
+    return Err(format!(
+      "expected broad recursive DTO coverage, found only {} object paths",
+      paths.len()
+    ));
+  }
+  for same_shape_dto_path in [
+    "zone_data/section_heading_patterns[*]|",
+    "coreference_data/definition_patterns[*]|",
+  ] {
+    if !covered_object_paths.contains(same_shape_dto_path) {
+      return Err(format!(
+        "recursive DTO coverage skipped {same_shape_dto_path}"
+      ));
+    }
+  }
+
+  for path in paths {
+    let mut with_unknown = value.clone();
+    let object = object_at_path_mut(&mut with_unknown, &path)
+      .ok_or_else(|| format!("object path disappeared: {path:?}"))?;
+    object.insert(
+      String::from("__unexpected_prepared_config_member"),
+      Value::Bool(true),
+    );
+    if serde_json::from_value::<BindingPreparedSearchConfig>(with_unknown)
+      .is_ok()
+    {
+      return Err(format!("unknown member accepted at {path:?}"));
+    }
+  }
+  Ok(())
+}
+
+#[test]
+fn prepared_config_language_maps_remain_open() -> Result<(), String> {
+  let fixture = fixtures_dir().join("baseline-all-on.expected.json");
+  let mut value: Value = read_json(&fixture)?;
+  let date_data = value
+    .get_mut("date_data")
+    .and_then(Value::as_object_mut)
+    .ok_or_else(|| String::from("fixture lacks date_data"))?;
+  for field in OPEN_LANGUAGE_MAPS {
+    date_data
+      .get_mut(field)
+      .and_then(Value::as_object_mut)
+      .ok_or_else(|| format!("fixture lacks date_data.{field}"))?
+      .insert(
+        String::from("x-test-language"),
+        Value::Array(vec![Value::String(String::from("token"))]),
+      );
+  }
+  serde_json::from_value::<BindingPreparedSearchConfig>(value)
+    .map(|_| ())
+    .map_err(|error| format!("open language map rejected a language: {error}"))
+}
+
+#[test]
+fn country_metadata_uses_exact_camel_case_and_closed_variants()
+-> Result<(), String> {
+  let valid = serde_json::json!({
+    "labels": ["country", "country", "country", "country"],
+    "isoCodes": ["CH", "US", "GB", "DE"],
+    "variants": ["name", "alias", "alpha3", "alpha2"]
+  });
+  let parsed = serde_json::from_value::<
+    stella_anonymize_adapter_contract::BindingCountryMatchData,
+  >(valid.clone())
+  .map_err(|error| {
+    format!("canonical country metadata should parse: {error}")
+  })?;
+  assert_eq!(
+    serde_json::to_value(parsed)
+      .map_err(|error| format!("country metadata should serialize: {error}"))?,
+    valid
+  );
+
+  for invalid in [
+    serde_json::json!({
+      "labels": ["country"],
+      "iso_codes": ["CH"],
+      "variants": ["name"]
+    }),
+    serde_json::json!({
+      "labels": ["country"],
+      "isoCodes": ["CH"],
+      "variants": ["Name"]
+    }),
+    serde_json::json!({
+      "labels": ["country"],
+      "isoCodes": ["CH"],
+      "variants": ["Alpha3"]
+    }),
+    serde_json::json!({
+      "labels": ["country"],
+      "isoCodes": ["CH"],
+      "variants": ["Alpha2"]
+    }),
+    serde_json::json!({
+      "labels": ["country"],
+      "isoCodes": ["CH"],
+      "variants": ["other"]
+    }),
+  ] {
+    assert!(
+      serde_json::from_value::<
+        stella_anonymize_adapter_contract::BindingCountryMatchData,
+      >(invalid)
+      .is_err()
+    );
+  }
+  Ok(())
 }

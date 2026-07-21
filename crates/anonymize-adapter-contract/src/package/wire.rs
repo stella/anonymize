@@ -291,9 +291,9 @@ impl From<BindingTriggerStrategy> for BinaryTriggerStrategy {
         stop_words,
         max_length,
       },
-      BindingTriggerStrategy::ToEndOfLine => Self::ToEndOfLine,
+      BindingTriggerStrategy::ToEndOfLine {} => Self::ToEndOfLine,
       BindingTriggerStrategy::NWords { count } => Self::NWords { count },
-      BindingTriggerStrategy::CompanyIdValue => Self::CompanyIdValue,
+      BindingTriggerStrategy::CompanyIdValue {} => Self::CompanyIdValue,
       BindingTriggerStrategy::Address { max_chars } => {
         Self::Address { max_chars }
       }
@@ -314,9 +314,9 @@ impl From<BinaryTriggerStrategy> for BindingTriggerStrategy {
         stop_words,
         max_length,
       },
-      BinaryTriggerStrategy::ToEndOfLine => Self::ToEndOfLine,
+      BinaryTriggerStrategy::ToEndOfLine => Self::ToEndOfLine {},
       BinaryTriggerStrategy::NWords { count } => Self::NWords { count },
-      BinaryTriggerStrategy::CompanyIdValue => Self::CompanyIdValue,
+      BinaryTriggerStrategy::CompanyIdValue => Self::CompanyIdValue {},
       BinaryTriggerStrategy::Address { max_chars } => {
         Self::Address { max_chars }
       }
@@ -330,11 +330,11 @@ impl From<BinaryTriggerStrategy> for BindingTriggerStrategy {
 impl From<BindingTriggerValidation> for BinaryTriggerValidation {
   fn from(validation: BindingTriggerValidation) -> Self {
     match validation {
-      BindingTriggerValidation::StartsUppercase => Self::StartsUppercase,
+      BindingTriggerValidation::StartsUppercase {} => Self::StartsUppercase,
       BindingTriggerValidation::MinLength { min } => Self::MinLength { min },
       BindingTriggerValidation::MaxLength { max } => Self::MaxLength { max },
-      BindingTriggerValidation::NoDigits => Self::NoDigits,
-      BindingTriggerValidation::HasDigits => Self::HasDigits,
+      BindingTriggerValidation::NoDigits {} => Self::NoDigits,
+      BindingTriggerValidation::HasDigits {} => Self::HasDigits,
       BindingTriggerValidation::MatchesPattern { pattern, flags } => {
         Self::MatchesPattern { pattern, flags }
       }
@@ -348,11 +348,11 @@ impl From<BindingTriggerValidation> for BinaryTriggerValidation {
 impl From<BinaryTriggerValidation> for BindingTriggerValidation {
   fn from(validation: BinaryTriggerValidation) -> Self {
     match validation {
-      BinaryTriggerValidation::StartsUppercase => Self::StartsUppercase,
+      BinaryTriggerValidation::StartsUppercase => Self::StartsUppercase {},
       BinaryTriggerValidation::MinLength { min } => Self::MinLength { min },
       BinaryTriggerValidation::MaxLength { max } => Self::MaxLength { max },
-      BinaryTriggerValidation::NoDigits => Self::NoDigits,
-      BinaryTriggerValidation::HasDigits => Self::HasDigits,
+      BinaryTriggerValidation::NoDigits => Self::NoDigits {},
+      BinaryTriggerValidation::HasDigits => Self::HasDigits {},
       BinaryTriggerValidation::MatchesPattern { pattern, flags } => {
         Self::MatchesPattern { pattern, flags }
       }

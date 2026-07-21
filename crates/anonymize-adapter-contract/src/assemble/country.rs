@@ -1,12 +1,10 @@
 //! `country_data` + ordered country surface forms.
 //!
 //! Ports `buildCountryPatterns` (`detectors/countries.ts`). The binding
-//! `country_data` field carries only the per-pattern `labels` (always
-//! `"country"`), but the ordered surface forms are also needed to synthesize
-//! `literal_patterns`, so this module produces the ordered list once and derives
-//! the label count from it. alpha-2/alpha-3 codes stay disabled (`INCLUDE_ALPHA2`
-//! / `INCLUDE_ALPHA3` are `false`). Emitted when countries are not explicitly
-//! disabled and the "country" label is allowed.
+//! `country_data` carries parallel label, ISO-code, and variant metadata for
+//! every ordered surface form. alpha-2/alpha-3 codes stay disabled
+//! (`INCLUDE_ALPHA2` / `INCLUDE_ALPHA3` are `false`). Emitted when countries
+//! are not explicitly disabled and the "country" label is allowed.
 
 use std::collections::HashSet;
 
@@ -18,7 +16,7 @@ use stella_anonymize_core::assemble::{
 use stella_anonymize_core::normalize_for_search;
 
 use super::AssembleContext;
-use crate::BindingCountryMatchData;
+use crate::{BindingCountryMatchData, BindingCountryVariant};
 
 const ENTITY_LABEL: &str = "country";
 const CURLY_APOSTROPHES: [char; 2] = ['\u{2018}', '\u{2019}'];
@@ -39,20 +37,33 @@ struct RawCountryData {
   aliases: OrderedMap<Value>,
 }
 
-/// Mirrors `buildCountryPatterns`: the ordered list of registered surface forms
-/// (the `display` values of `surfaceToMeta`, in insertion order). `None` when
-/// the country detector is disabled or its label is filtered out.
+struct CountrySurface {
+  display: String,
+  iso_code: String,
+  variant: BindingCountryVariant,
+}
+
+pub(super) struct CountryUnit {
+  pub(super) surface_forms: Vec<String>,
+  pub(super) match_data: Option<BindingCountryMatchData>,
+}
+
+/// Builds the ordered country search surfaces and their parallel metadata from
+/// one parse of the backing country files.
 ///
 /// # Errors
 ///
 /// Returns [`AssembleError`] when `countries.json` or
 /// `ambiguous-country-surfaces.json` fails to parse.
-pub(super) fn country_surface_forms(
+pub(super) fn build_country_unit(
   ctx: &AssembleContext<'_>,
-) -> Result<Option<Vec<String>>, AssembleError> {
+) -> Result<CountryUnit, AssembleError> {
   if ctx.config.enable_countries == Some(false) || !ctx.label_allowed("country")
   {
-    return Ok(None);
+    return Ok(CountryUnit {
+      surface_forms: Vec::new(),
+      match_data: None,
+    });
   }
 
   let ambiguous: AmbiguousSurfaces =
@@ -66,71 +77,85 @@ pub(super) fn country_surface_forms(
   let raw: RawCountryData = parse_data_file("countries.json")?;
 
   // Insertion-ordered surface set: first writer wins per lowercased key.
-  let mut displays: Vec<String> = Vec::new();
+  let mut surfaces: Vec<CountrySurface> = Vec::new();
   let mut seen: HashSet<String> = HashSet::new();
-  let mut register = |surface: &str| {
-    let trimmed = surface.trim();
-    if trimmed.is_empty() {
-      return;
-    }
-    let normalized = normalize_for_search(trimmed);
-    let key = normalized.to_lowercase();
-    if blocklist.contains(&key) {
-      return;
-    }
-    if seen.insert(key) {
-      displays.push(normalized);
-    }
-    if trimmed.contains(CURLY_APOSTROPHES) {
-      let straight: String = trimmed
-        .chars()
-        .map(|ch| {
-          if CURLY_APOSTROPHES.contains(&ch) {
-            '\''
-          } else {
-            ch
-          }
-        })
-        .collect();
-      let straight_norm = normalize_for_search(&straight);
-      let straight_key = straight_norm.to_lowercase();
-      if seen.insert(straight_key) {
-        displays.push(straight_norm);
+  let mut register =
+    |surface: &str, iso_code: &str, variant: BindingCountryVariant| {
+      let trimmed = surface.trim();
+      if trimmed.is_empty() {
+        return;
       }
-    }
-  };
+      let normalized = normalize_for_search(trimmed);
+      let key = normalized.to_lowercase();
+      if blocklist.contains(&key) {
+        return;
+      }
+      if seen.insert(key) {
+        surfaces.push(CountrySurface {
+          display: normalized,
+          iso_code: iso_code.to_string(),
+          variant,
+        });
+      }
+      if trimmed.contains(CURLY_APOSTROPHES) {
+        let straight: String = trimmed
+          .chars()
+          .map(|ch| {
+            if CURLY_APOSTROPHES.contains(&ch) {
+              '\''
+            } else {
+              ch
+            }
+          })
+          .collect();
+        let straight_norm = normalize_for_search(&straight);
+        let straight_key = straight_norm.to_lowercase();
+        if seen.insert(straight_key) {
+          surfaces.push(CountrySurface {
+            display: straight_norm,
+            iso_code: iso_code.to_string(),
+            variant,
+          });
+        }
+      }
+    };
 
   // Canonical names per language, keyed by alpha-2 code (document order).
   for (_language, per_lang) in &raw.names {
-    for (_code, name) in per_lang {
+    for (code, name) in per_lang {
       if let Some(name) = name.as_str() {
-        register(name);
+        register(name, code, BindingCountryVariant::Name);
       }
     }
   }
   // Curated aliases.
-  for (_iso, aliases) in &raw.aliases {
+  for (iso_code, aliases) in &raw.aliases {
     if let Some(array) = aliases.as_array() {
       for alias in array {
         if let Some(alias) = alias.as_str() {
-          register(alias);
+          register(alias, iso_code, BindingCountryVariant::Alias);
         }
       }
     }
   }
 
-  Ok(Some(displays))
-}
-
-/// # Errors
-///
-/// Returns [`AssembleError`] when a backing data file fails to parse.
-pub(super) fn build_country_data(
-  ctx: &AssembleContext<'_>,
-) -> Result<Option<BindingCountryMatchData>, AssembleError> {
-  Ok(
-    country_surface_forms(ctx)?.map(|forms| BindingCountryMatchData {
-      labels: vec![ENTITY_LABEL.to_string(); forms.len()],
-    }),
-  )
+  let surface_forms = surfaces
+    .iter()
+    .map(|surface| surface.display.clone())
+    .collect();
+  let match_data = BindingCountryMatchData {
+    labels: vec![ENTITY_LABEL.to_string(); surfaces.len()],
+    iso_codes: surfaces
+      .iter()
+      .map(|surface| surface.iso_code.clone())
+      .collect(),
+    variants: surfaces
+      .into_iter()
+      .map(|surface| surface.variant)
+      .collect(),
+  };
+  Ok(CountryUnit {
+    surface_forms,
+    match_data: Some(match_data),
+  })
 }

@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BindingSearchPattern {
   pub kind: String,
   pub pattern: String,
@@ -21,6 +22,7 @@ pub struct BindingSearchPattern {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BindingSearchOptions {
   pub literal_case_insensitive: Option<bool>,
   pub literal_whole_words: Option<bool>,
@@ -49,6 +51,7 @@ pub enum BindingPreparedArtifactPolicy {
 #[derive(
   Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize,
 )]
+#[serde(deny_unknown_fields)]
 pub struct BindingPatternSlice {
   pub start: u32,
   pub end: u32,
@@ -57,6 +60,7 @@ pub struct BindingPatternSlice {
 #[derive(
   Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize,
 )]
+#[serde(deny_unknown_fields)]
 pub struct BindingPreparedSearchSlices {
   pub regex: Option<BindingPatternSlice>,
   pub custom_regex: Option<BindingPatternSlice>,
@@ -70,6 +74,7 @@ pub struct BindingPreparedSearchSlices {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BindingRegexMatchMeta {
   pub label: String,
   pub score: f64,
@@ -81,17 +86,32 @@ pub struct BindingRegexMatchMeta {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BindingGazetteerMatchData {
   pub labels: Vec<String>,
   pub is_fuzzy: Vec<bool>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BindingCountryMatchData {
   pub labels: Vec<String>,
+  #[serde(rename = "isoCodes")]
+  pub iso_codes: Vec<String>,
+  pub variants: Vec<BindingCountryVariant>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BindingCountryVariant {
+  Name,
+  Alias,
+  Alpha3,
+  Alpha2,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BindingHotwordRuleData {
   #[serde(default)]
   pub rules: Vec<BindingHotwordRule>,
@@ -100,6 +120,7 @@ pub struct BindingHotwordRuleData {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BindingHotwordRule {
   #[serde(default)]
   pub hotwords: Vec<String>,
@@ -132,6 +153,7 @@ pub struct BindingTriggerData {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BindingSignatureData {
   #[serde(default)]
   pub labels: Vec<String>,
@@ -149,6 +171,7 @@ pub struct BindingSignatureData {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BindingTriggerRule {
   pub trigger: String,
   pub label: String,
@@ -158,18 +181,20 @@ pub struct BindingTriggerRule {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(tag = "type", rename_all = "kebab-case")]
+#[serde(tag = "type", rename_all = "kebab-case", deny_unknown_fields)]
+// Empty struct variants make serde reject extra members on payload-free cases.
+#[allow(clippy::empty_enum_variants_with_brackets)]
 pub enum BindingTriggerStrategy {
   ToNextComma {
     #[serde(default)]
     stop_words: Vec<String>,
     max_length: Option<u32>,
   },
-  ToEndOfLine,
+  ToEndOfLine {},
   NWords {
     count: u32,
   },
-  CompanyIdValue,
+  CompanyIdValue {},
   Address {
     max_chars: Option<u32>,
   },
@@ -180,17 +205,19 @@ pub enum BindingTriggerStrategy {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(tag = "type", rename_all = "kebab-case")]
+#[serde(tag = "type", rename_all = "kebab-case", deny_unknown_fields)]
+// Empty struct variants make serde reject extra members on payload-free cases.
+#[allow(clippy::empty_enum_variants_with_brackets)]
 pub enum BindingTriggerValidation {
-  StartsUppercase,
+  StartsUppercase {},
   MinLength {
     min: u32,
   },
   MaxLength {
     max: u32,
   },
-  NoDigits,
-  HasDigits,
+  NoDigits {},
+  HasDigits {},
   MatchesPattern {
     pattern: String,
     flags: Option<String>,
@@ -201,6 +228,7 @@ pub enum BindingTriggerValidation {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BindingLegalFormData {
   #[serde(default)]
   pub suffixes: Vec<String>,
@@ -244,6 +272,7 @@ pub struct BindingLegalFormData {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BindingDateData {
   pub month_names_by_language: BTreeMap<String, Vec<String>>,
   pub lowercase_month_ambiguities: BTreeMap<String, Vec<String>>,
@@ -251,6 +280,7 @@ pub struct BindingDateData {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BindingMonetaryData {
   #[serde(default)]
   pub currencies: BindingCurrencyData,
@@ -259,6 +289,7 @@ pub struct BindingMonetaryData {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BindingCurrencyData {
   #[serde(default)]
   pub codes: Vec<String>,
@@ -269,6 +300,7 @@ pub struct BindingCurrencyData {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BindingAmountWordsData {
   #[serde(default)]
   pub written_amount_patterns: Vec<BindingWrittenAmountPatternData>,
@@ -279,12 +311,14 @@ pub struct BindingAmountWordsData {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BindingWrittenAmountPatternData {
   #[serde(default)]
   pub keywords: Vec<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BindingMagnitudeSuffixData {
   #[serde(default)]
   pub words: Vec<String>,
@@ -295,6 +329,7 @@ pub struct BindingMagnitudeSuffixData {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BindingShareQuantityTermData {
   #[serde(default)]
   pub modifiers: Vec<String>,
@@ -303,6 +338,7 @@ pub struct BindingShareQuantityTermData {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BindingAddressSeedData {
   #[serde(default)]
   pub boundary_words: Vec<String>,
@@ -313,6 +349,7 @@ pub struct BindingAddressSeedData {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BindingAddressContextData {
   #[serde(default)]
   pub address_prepositions: Vec<String>,
@@ -325,6 +362,7 @@ pub struct BindingAddressContextData {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BindingZoneData {
   #[serde(default)]
   pub section_heading_patterns: Vec<BindingZonePatternData>,
@@ -333,6 +371,7 @@ pub struct BindingZoneData {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BindingZonePatternData {
   pub pattern: String,
   #[serde(default)]
@@ -340,6 +379,7 @@ pub struct BindingZonePatternData {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BindingZoneSigningClauseData {
   #[serde(default)]
   pub prefix: String,
@@ -350,6 +390,7 @@ pub struct BindingZoneSigningClauseData {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BindingCoreferenceData {
   #[serde(default)]
   pub definition_patterns: Vec<BindingCoreferencePatternData>,
@@ -364,6 +405,7 @@ pub struct BindingCoreferenceData {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BindingCoreferencePatternData {
   pub pattern: String,
   #[serde(default)]
@@ -371,6 +413,7 @@ pub struct BindingCoreferencePatternData {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BindingNameCorpusData {
   #[serde(default)]
   pub first_names: Vec<String>,
@@ -405,6 +448,7 @@ pub struct BindingNameCorpusData {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BindingDenyListMatchData {
   #[serde(default)]
   pub labels: Vec<Vec<String>>,
@@ -427,6 +471,7 @@ pub struct BindingDenyListMatchData {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BindingDenyListFilterData {
   pub stopwords: Vec<String>,
   pub allow_list: Vec<String>,
@@ -459,6 +504,7 @@ pub struct BindingDenyListFilterData {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BindingSigningPlaceGuardData {
   #[serde(default)]
   pub prefix_phrases: Vec<String>,
@@ -467,6 +513,7 @@ pub struct BindingSigningPlaceGuardData {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BindingPreparedSearchConfig {
   #[serde(default)]
   pub regex_patterns: Vec<BindingSearchPattern>,

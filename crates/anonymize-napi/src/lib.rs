@@ -239,6 +239,9 @@ pub struct JsGazetteerMatchData {
 #[napi(object)]
 pub struct JsCountryMatchData {
   pub labels: Vec<String>,
+  #[napi(js_name = "isoCodes")]
+  pub iso_codes: Vec<String>,
+  pub variants: Vec<String>,
 }
 
 #[napi(object)]

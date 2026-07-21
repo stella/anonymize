@@ -221,6 +221,16 @@ fn validate_country_config(config: &PreparedEngineConfig) -> Result<()> {
     "country_data.labels",
     config.search.slices.countries,
     data.labels.len(),
+  )?;
+  validate_static_data_length(
+    "country_data.isoCodes",
+    config.search.slices.countries,
+    data.iso_codes.len(),
+  )?;
+  validate_static_data_length(
+    "country_data.variants",
+    config.search.slices.countries,
+    data.variants.len(),
   )
 }
 
