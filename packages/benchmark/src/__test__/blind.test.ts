@@ -66,7 +66,7 @@ describe("TAB holdout loading", () => {
   test("accepts only the test split and validates quoted spans", () => {
     const parsed = parseTabTestCorpus(corpus());
     expect(parsed).toHaveLength(2);
-    expect(parsed.at(0)?.mentions.at(0)).toMatchObject({
+    expect(parsed.at(0)?.annotations.at(0)?.mentions.at(0)).toMatchObject({
       start: 0,
       end: 4,
       identifierType: "DIRECT",
@@ -141,5 +141,48 @@ describe("blind masking metrics", () => {
     expect(scoreBlindCorpus(documents, predictions).characterPrecision).toBe(
       0.5,
     );
+  });
+
+  test("scores annotator disagreement independently instead of as a union", () => {
+    const documents = parseTabTestCorpus([
+      {
+        doc_id: "disputed",
+        dataset_type: "test",
+        text: "Jane",
+        annotations: {
+          annotator1: {
+            entity_mentions: [
+              {
+                entity_type: "PERSON",
+                entity_id: "person-1",
+                start_offset: 0,
+                end_offset: 4,
+                span_text: "Jane",
+                identifier_type: "DIRECT",
+              },
+            ],
+          },
+          annotator2: {
+            entity_mentions: [
+              {
+                entity_type: "PERSON",
+                entity_id: "person-1",
+                start_offset: 0,
+                end_offset: 4,
+                span_text: "Jane",
+                identifier_type: "NO_MASK",
+              },
+            ],
+          },
+        },
+      },
+    ]);
+    const predictions = new Map<string, readonly NativePrediction[]>([
+      ["disputed", [{ start: 0, end: 4, label: "PERSON", text: "Jane" }]],
+    ]);
+    const score = scoreBlindCorpus(documents, predictions);
+    expect(score.directMentionRecall).toBe(1);
+    expect(score.characterRecall).toBe(1);
+    expect(score.characterPrecision).toBe(0.5);
   });
 });

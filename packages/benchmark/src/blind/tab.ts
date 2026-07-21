@@ -28,6 +28,11 @@ export type TabMention = {
 export type TabDocument = {
   readonly id: string;
   readonly text: string;
+  readonly annotations: readonly TabAnnotation[];
+};
+
+export type TabAnnotation = {
+  readonly annotatorId: string;
   readonly mentions: readonly TabMention[];
 };
 
@@ -102,12 +107,12 @@ export const parseTabTestCorpus = (value: unknown): TabDocument[] => {
     }
     seen.add(raw["doc_id"]);
 
-    const annotationEntries = Object.values(raw["annotations"]);
+    const annotationEntries = Object.entries(raw["annotations"]);
     if (annotationEntries.length === 0) {
       throw new Error(`TAB document ${raw["doc_id"]} has no annotations`);
     }
-    const mentions: TabMention[] = [];
-    for (const annotation of annotationEntries) {
+    const annotations: TabAnnotation[] = [];
+    for (const [annotatorId, annotation] of annotationEntries) {
       if (
         !isRecord(annotation) ||
         !Array.isArray(annotation["entity_mentions"])
@@ -116,11 +121,17 @@ export const parseTabTestCorpus = (value: unknown): TabDocument[] => {
           `TAB document ${raw["doc_id"]} has malformed annotations`,
         );
       }
+      const mentions: TabMention[] = [];
       for (const mention of annotation["entity_mentions"]) {
         mentions.push(parseMention(mention, raw["text"], raw["doc_id"]));
       }
+      annotations.push({ annotatorId, mentions });
     }
-    documents.push({ id: raw["doc_id"], text: raw["text"], mentions });
+    documents.push({
+      id: raw["doc_id"],
+      text: raw["text"],
+      annotations,
+    });
   }
   if (documents.length === 0) {
     throw new Error("TAB test corpus is empty");

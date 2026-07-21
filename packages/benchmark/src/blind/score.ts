@@ -79,46 +79,49 @@ export const scoreBlindCorpus = (
     const rawPredictions = predictionsByDocument.get(document.id) ?? [];
     predictedSpans += rawPredictions.length;
     const masks = mergeSpans(rawPredictions, document.text.length);
-    const goldMentions = document.mentions.filter(
-      ({ identifierType }) => identifierType !== "NO_MASK",
-    );
-    const goldMasks = mergeSpans(goldMentions, document.text.length);
-
-    for (const mention of goldMentions) {
-      const covered = fullyCovered(mention, masks);
-      if (mention.identifierType === "DIRECT") {
-        directMentions++;
-        if (covered) {
-          coveredDirectMentions++;
-        }
-      } else {
-        quasiMentions++;
-        if (covered) {
-          coveredQuasiMentions++;
-        }
-      }
-    }
-
-    const mentionsByEntity = new Map<string, Span[]>();
-    for (const mention of goldMentions) {
-      const mentions = mentionsByEntity.get(mention.entityId) ?? [];
-      mentions.push(mention);
-      mentionsByEntity.set(mention.entityId, mentions);
-    }
-    for (const mentions of mentionsByEntity.values()) {
-      entities++;
-      if (mentions.every((mention) => fullyCovered(mention, masks))) {
-        coveredEntities++;
-      }
-    }
-
     const predictionOffsets = maskedCharacters(document.text, masks);
-    const goldOffsets = maskedCharacters(document.text, goldMasks);
-    predictedCharacters += predictionOffsets.size;
-    goldCharacters += goldOffsets.size;
-    for (const offset of predictionOffsets) {
-      if (goldOffsets.has(offset)) {
-        overlappingCharacters++;
+
+    for (const annotation of document.annotations) {
+      const goldMentions = annotation.mentions.filter(
+        ({ identifierType }) => identifierType !== "NO_MASK",
+      );
+      const goldMasks = mergeSpans(goldMentions, document.text.length);
+
+      for (const mention of goldMentions) {
+        const covered = fullyCovered(mention, masks);
+        if (mention.identifierType === "DIRECT") {
+          directMentions++;
+          if (covered) {
+            coveredDirectMentions++;
+          }
+        } else {
+          quasiMentions++;
+          if (covered) {
+            coveredQuasiMentions++;
+          }
+        }
+      }
+
+      const mentionsByEntity = new Map<string, Span[]>();
+      for (const mention of goldMentions) {
+        const mentions = mentionsByEntity.get(mention.entityId) ?? [];
+        mentions.push(mention);
+        mentionsByEntity.set(mention.entityId, mentions);
+      }
+      for (const mentions of mentionsByEntity.values()) {
+        entities++;
+        if (mentions.every((mention) => fullyCovered(mention, masks))) {
+          coveredEntities++;
+        }
+      }
+
+      const goldOffsets = maskedCharacters(document.text, goldMasks);
+      predictedCharacters += predictionOffsets.size;
+      goldCharacters += goldOffsets.size;
+      for (const offset of predictionOffsets) {
+        if (goldOffsets.has(offset)) {
+          overlappingCharacters++;
+        }
       }
     }
   }

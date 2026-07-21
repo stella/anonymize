@@ -55,15 +55,24 @@ type BlindReport = {
   readonly libraries: readonly LibraryResult[];
 };
 
-const gitSha = (): string => {
+const git = (args: readonly string[]): string => {
   try {
-    const process = Bun.spawnSync(["git", "rev-parse", "--short", "HEAD"], {
+    const process = Bun.spawnSync(["git", ...args], {
       cwd: import.meta.dir,
     });
-    return process.success ? process.stdout.toString().trim() : "unknown";
+    if (!process.success || process.exitCode !== 0) {
+      return "";
+    }
+    return process.stdout.toString().trim();
   } catch {
-    return "unknown";
+    return "";
   }
+};
+
+const gitSha = (): string => {
+  const sha = git(["rev-parse", "--short", "HEAD"]) || "no-git";
+  const dirty = git(["status", "--porcelain"]) === "" ? "" : "-dirty";
+  return `${sha}${dirty}`;
 };
 
 const hardware = (): string => {
@@ -89,8 +98,9 @@ const renderMarkdown = (report: BlindReport): string => {
     "",
     "A mention counts as covered only when the predicted mask fully contains its",
     "annotated span. Entity recall requires every masking-required mention of an",
-    "entity to be covered. Character precision measures non-whitespace masked",
-    "characters which belong to a direct or quasi identifier.",
+    "entity to be covered. Metrics micro-average independent annotator judgments",
+    "rather than treating their union as consensus. Character precision measures",
+    "non-whitespace masked characters which belong to a direct or quasi identifier.",
     "",
     "| Library | Version | Direct recall | Quasi recall | All mention recall | Entity recall | Character precision | Character recall | Seconds |",
     "| ------- | ------- | ------------- | ------------ | ------------------ | ------------- | ------------------- | ---------------- | ------- |",
