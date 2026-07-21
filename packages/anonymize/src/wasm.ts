@@ -27,9 +27,9 @@ import {
   diagnostics_json as diagnosticsJsonWithBinding,
   diagnostics_stream_json as diagnosticsStreamJsonWithBinding,
   type NativeAnonymizeBinding,
-  type NativeDiagnosticsBatchCallback,
   type ExternalDetectionBatch,
   type NativeCallerDetection,
+  type NativeDiagnosticsBatchCallback,
   type NativeOperatorConfig,
   type NativeResultEventCallback,
   type NativeSearchPackageInput,
@@ -173,9 +173,7 @@ const assetUrl = (fileName: string): URL =>
 const resolveBinding = (
   options?: WasmBindingOptions,
 ): Promise<NativeAnonymizeBinding> =>
-  options?.binding
-    ? Promise.resolve(toNativeAnonymizeBinding(options.binding))
-    : getBinding();
+  options?.binding ? Promise.resolve(options.binding) : getBinding();
 
 const toPackageBytes = async (
   source: PreparedPackageSource,
@@ -522,9 +520,6 @@ const isNativeAnonymizeBinding = (
     return false;
   }
   if (typeof value["normalizeForSearch"] !== "function") {
-    return false;
-  }
-  if (typeof value["convertExternalDetectionBatch"] !== "function") {
     return false;
   }
   if (typeof value["prepareStaticSearchPackageBytes"] !== "function") {

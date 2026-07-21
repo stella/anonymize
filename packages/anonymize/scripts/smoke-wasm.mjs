@@ -25,6 +25,7 @@ const binding = require(wasiBindingPath);
 const {
   NativePreparedSearch,
   convertExternalDetectionBatch,
+  externalDetectionLimitsJson,
   nativePackageVersion,
   normalizeForSearch,
 } = binding;
@@ -34,6 +35,24 @@ if (typeof NativePreparedSearch !== "function") {
 }
 if (typeof convertExternalDetectionBatch !== "function") {
   throw new TypeError("wasm binding is missing external detection conversion");
+}
+if (typeof externalDetectionLimitsJson !== "function") {
+  throw new TypeError("wasm binding is missing external detection limits");
+}
+
+const expectedExternalLimits = {
+  batchMaxBytes: 16_777_216,
+  documentMaxBytes: 67_108_864,
+  maxDetections: 100_000,
+  maxLabelMappings: 4_096,
+  maxMetadataBytes: 256,
+  providerIdMaxBytes: 128,
+};
+if (
+  JSON.stringify(JSON.parse(externalDetectionLimitsJson())) !==
+  JSON.stringify(expectedExternalLimits)
+) {
+  throw new Error("wasm external detection limits diverged");
 }
 
 const externalDocument = new TextEncoder().encode("😀Alice signed.");
@@ -69,25 +88,34 @@ for (const [offsetUnit, start, end] of [
     throw new Error(`wasm external ${offsetUnit} conversion diverged`);
   }
 }
-for (const batch of [
-  externalBatch("utf8-byte", 1, 9),
-  externalBatch("utf16-code-unit", 1, 7),
-  {
-    ...externalBatch("unicode-code-point", 1, 6),
-    document: { sha256: "0".repeat(64) },
-  },
-  JSON.stringify({
-    ...externalBatch("unicode-code-point", 1, 6),
-    legacyOffsetGuessing: true,
-  }),
+for (const [batch, expectedError] of [
+  [externalBatch("utf8-byte", 1, 9), "valid text boundary"],
+  [externalBatch("utf16-code-unit", 1, 7), "valid text boundary"],
+  [
+    {
+      ...externalBatch("unicode-code-point", 1, 6),
+      document: { sha256: "0".repeat(64) },
+    },
+    "document.sha256 does not match input bytes",
+  ],
+  [
+    JSON.stringify({
+      ...externalBatch("unicode-code-point", 1, 6),
+      legacyOffsetGuessing: true,
+    }),
+    "unknown field `legacyOffsetGuessing`",
+  ],
 ]) {
   try {
     convertExternalDetectionBatch(
       externalDocument,
       typeof batch === "string" ? batch : JSON.stringify(batch),
     );
-  } catch {
-    continue;
+  } catch (error) {
+    if (error instanceof Error && error.message.includes(expectedError)) {
+      continue;
+    }
+    throw new Error(`wasm external detection error diverged: ${String(error)}`);
   }
   throw new Error("wasm external detection contract did not fail closed");
 }
