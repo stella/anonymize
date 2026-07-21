@@ -172,6 +172,23 @@ Retained entities preserve both IDs;
 `redact_text_with_caller_detections_diagnostics_json()` reports audit-safe
 external input and retained counts without matched text.
 
+## PDF inspection
+
+`inspect_pdf()` inventories PDF structures that can retain sensitive content
+and returns fail-closed page coverage. It does not redact PDFs. Without explicit
+renderer/OCR page observations, every page is reported as
+`page-content-not-observed`; opaque rectangle overlays are never treated as
+anonymization.
+
+```py
+from pathlib import Path
+import stella_anonymize as anonymize
+
+inspection = anonymize.inspect_pdf(Path("contract.pdf").read_bytes())
+print(inspection["risks"])
+print(inspection["coverage"])
+```
+
 Regional codes use the exact package when present and otherwise fall back to
 the base language package, so `en-US` can use the shipped `en` artifact.
 
@@ -216,3 +233,8 @@ for repeated document processing.
 - `PreparedAnonymizer.diagnostics_json(text, operators=None, redact_string=None)`
 
 `PreparedSearch` is an alias for `PreparedAnonymizer`.
+
+PDF inspection is not anonymization. It accepts classic PDF 1.0–1.4 only,
+fails closed on object/cross-reference streams, validates observations against
+the effective rotated CropBox, and reports incremental revisions or trailing
+retained bytes as coverage gaps.

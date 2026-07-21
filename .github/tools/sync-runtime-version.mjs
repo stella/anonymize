@@ -14,6 +14,7 @@ const PACKAGE_FILES = [
   "packages/anonymize/wasm/package.json",
   "packages/cli/package.json",
   "packages/document-docx/package.json",
+  "packages/document-pdf/package.json",
   "packages/mcp/package.json",
 ];
 const ROOT_RUNTIME_PACKAGE_FILE = "packages/anonymize/package.json";
@@ -30,6 +31,7 @@ const CARGO_LOCKED_PACKAGES = [
   "stella-anonymize-adapter-contract",
   "stella-anonymize-core",
   "stella-anonymize-docx-core",
+  "stella-anonymize-pdf-core",
   "stella-anonymize-napi",
   "stella-anonymize-py",
 ];

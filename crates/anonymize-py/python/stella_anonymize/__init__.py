@@ -46,6 +46,21 @@ from .docx import (
     restore_docx_text,
     rewrite_docx_text,
 )
+from .pdf import (
+    PDF_DECOMPRESSED_MAX_BYTES,
+    PDF_DOCUMENT_MAX_BYTES,
+    PDF_INSPECTION_CONTRACT_VERSION,
+    PDF_MAX_GLYPHS,
+    PDF_MAX_OBJECTS,
+    PDF_MAX_OBJECT_DEPTH,
+    PDF_MAX_OBJECT_NODES,
+    PDF_MAX_OBSERVATION_JSON_BYTES,
+    PDF_MAX_OBSERVATION_TEXT_UTF8_BYTES,
+    PDF_MAX_PAGES,
+    PDF_MAX_PAGE_TEXT_UTF8_BYTES,
+    PdfInspectionError,
+    inspect_pdf,
+)
 
 __all__ = [
     "__version__",
@@ -115,6 +130,19 @@ __all__ = [
     "extract_docx_text",
     "restore_docx_text",
     "rewrite_docx_text",
+    "PDF_DECOMPRESSED_MAX_BYTES",
+    "PDF_DOCUMENT_MAX_BYTES",
+    "PDF_INSPECTION_CONTRACT_VERSION",
+    "PDF_MAX_GLYPHS",
+    "PDF_MAX_OBJECTS",
+    "PDF_MAX_OBJECT_DEPTH",
+    "PDF_MAX_OBJECT_NODES",
+    "PDF_MAX_OBSERVATION_JSON_BYTES",
+    "PDF_MAX_OBSERVATION_TEXT_UTF8_BYTES",
+    "PDF_MAX_PAGES",
+    "PDF_MAX_PAGE_TEXT_UTF8_BYTES",
+    "PdfInspectionError",
+    "inspect_pdf",
 ]
 
 BytesLike = bytes | bytearray | memoryview

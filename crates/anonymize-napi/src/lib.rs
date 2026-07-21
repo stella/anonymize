@@ -42,8 +42,56 @@ use stella_anonymize_docx_core::{
   plan_docx_restoration as plan_docx_restoration_core,
   rewrite_docx_text as rewrite_docx_text_core,
 };
+use stella_anonymize_pdf_core::{
+  PDF_MAX_OBSERVATION_JSON_BYTES, PdfInspectionErrorCode, PdfPageObservation,
+  inspect_pdf as inspect_pdf_core,
+  inspect_pdf_with_observations as inspect_pdf_with_observations_core,
+};
 
 const PREPARED_SEARCH_CACHE_LIMIT: usize = 8;
+
+const fn pdf_inspection_code(code: PdfInspectionErrorCode) -> &'static str {
+  match code {
+    PdfInspectionErrorCode::DocumentLimitExceeded => "document-limit-exceeded",
+    PdfInspectionErrorCode::InvalidDocument => "invalid-document",
+    PdfInspectionErrorCode::InvalidObservation => "invalid-observation",
+    PdfInspectionErrorCode::ObservationLimitExceeded => {
+      "observation-limit-exceeded"
+    }
+    PdfInspectionErrorCode::ProviderFailed => "provider-failed",
+  }
+}
+
+#[napi]
+#[allow(clippy::needless_pass_by_value)]
+pub fn inspect_pdf_json(
+  document: BufferSlice<'_>,
+  observations_json: Option<String>,
+) -> Result<String> {
+  let inspection = if let Some(observations_json) = observations_json {
+    if observations_json.len() > PDF_MAX_OBSERVATION_JSON_BYTES {
+      return Err(Error::from_reason(format!("observation-limit-exceeded: PDF observation JSON must not exceed {PDF_MAX_OBSERVATION_JSON_BYTES} UTF-8 bytes")));
+    }
+    let observations =
+      serde_json::from_str::<Vec<PdfPageObservation>>(&observations_json)
+        .map_err(|parse_error| {
+          Error::from_reason(format!(
+            "invalid-observation: PDF observations are invalid: {parse_error}"
+          ))
+        })?;
+    inspect_pdf_with_observations_core(&document, observations)
+  } else {
+    inspect_pdf_core(&document)
+  }
+  .map_err(|inspection_error| {
+    Error::from_reason(format!(
+      "{}: {inspection_error}",
+      pdf_inspection_code(inspection_error.code())
+    ))
+  })?;
+  serde_json::to_string(&inspection)
+    .map_err(|serialize_error| to_napi_serde_error(&serialize_error))
+}
 
 #[napi]
 #[allow(clippy::needless_pass_by_value)]

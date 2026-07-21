@@ -214,6 +214,7 @@ surface_probes = {
     "document.docx.rewrite": hasattr(anonymize, "rewrite_docx_text"),
     "document.docx.anonymize": hasattr(anonymize, "anonymize_docx"),
     "document.docx.restore": hasattr(anonymize, "restore_docx_text"),
+    "document.pdf.inspect": hasattr(anonymize, "inspect_pdf"),
 }
 
 caller_result = json.loads(
@@ -714,6 +715,10 @@ const getPythonModule = (): string => {
   copyFileSync(
     join(PYTHON_SOURCE_DIR, "stella_anonymize", "docx.py"),
     join(packageDir, "docx.py"),
+  );
+  copyFileSync(
+    join(PYTHON_SOURCE_DIR, "stella_anonymize", "pdf.py"),
+    join(packageDir, "pdf.py"),
   );
   cpSync(
     join(PYTHON_SOURCE_DIR, "stella_anonymize", "native_packages"),
