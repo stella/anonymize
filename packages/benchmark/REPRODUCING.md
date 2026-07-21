@@ -37,6 +37,7 @@ Recall/precision are deterministic and machine-independent.
 | spaCy                           | 3.8.7         |
 | en_core_web_lg                  | 3.8.0         |
 | de_core_news_lg                 | 3.8.0         |
+| es_core_news_lg                 | 3.8.0         |
 | xx_ent_wiki_sm (used for Czech) | 3.8.0         |
 | scrubadub                       | 2.0.1         |
 | phonenumbers                    | 8.13.55       |
@@ -69,6 +70,7 @@ uv pip install --python .venv-presidio -r python/requirements-presidio.txt
 uv pip install --python .venv-presidio \
   "https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl" \
   "https://github.com/explosion/spacy-models/releases/download/de_core_news_lg-3.8.0/de_core_news_lg-3.8.0-py3-none-any.whl" \
+  "https://github.com/explosion/spacy-models/releases/download/es_core_news_lg-3.8.0/es_core_news_lg-3.8.0-py3-none-any.whl" \
   "https://github.com/explosion/spacy-models/releases/download/xx_ent_wiki_sm-3.8.0/xx_ent_wiki_sm-3.8.0-py3-none-any.whl"
 ```
 

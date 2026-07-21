@@ -214,7 +214,13 @@ const loadVerifiedBytes = async (): Promise<Uint8Array> => {
 export const loadVerifiedRedactionBench = async (): Promise<
   RedactionBenchDocument[]
 > => {
-  const bytes = Uint8Array.from(await loadVerifiedBytes());
-  const rows = await parquetReadObjects({ file: bytes.buffer });
+  const bytes = await loadVerifiedBytes();
+  const exactBuffer =
+    bytes.buffer instanceof ArrayBuffer &&
+    bytes.byteOffset === 0 &&
+    bytes.byteLength === bytes.buffer.byteLength
+      ? bytes.buffer
+      : bytes.slice().buffer;
+  const rows = await parquetReadObjects({ file: exactBuffer });
   return parseRedactionBenchRows(rows);
 };

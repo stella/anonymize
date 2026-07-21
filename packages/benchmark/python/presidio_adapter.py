@@ -23,6 +23,7 @@ from presidio_analyzer.nlp_engine import NlpEngineProvider
 LANG_MODELS = {
     "en": "en_core_web_lg",
     "de": "de_core_news_lg",
+    "es": "es_core_news_lg",
     "cs": "xx_ent_wiki_sm",
 }
 LANGUAGES = list(LANG_MODELS.keys())
@@ -51,7 +52,9 @@ def build_analyzer() -> AnalyzerEngine:
 def analyze_all(analyzer: AnalyzerEngine, docs: list[dict]) -> list[dict]:
     results = []
     for doc in docs:
-        language = doc["language"] if doc["language"] in LANGUAGES else "en"
+        language = doc["language"]
+        if language not in LANGUAGES:
+            raise ValueError(f"unsupported Presidio benchmark language: {language}")
         text = doc["text"]
         found = analyzer.analyze(text=text, language=language)
         entities = [

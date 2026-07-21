@@ -47,6 +47,11 @@ bun run bench:blind
 
 # Run every executable sealed corpus (TAB, RedactionBench, and MEDDOCAN).
 bun run bench:suite
+
+# Development-only five-document TAB comparison (aggregate by default).
+bun run bench:dev-gap
+# Explicitly opt in to printing public-corpus entity examples locally:
+bun run bench:dev-gap --examples
 ```
 
 `bench:blind` verifies the upstream file against a pinned SHA-256 digest before

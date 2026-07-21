@@ -8,6 +8,12 @@ import type { GroundTruthDocument } from "./ground-truth";
 
 const SAMPLE_SIZE = 5;
 const SAMPLE_SEED = "stella-tab-development-gap-v1";
+const includeExamples = process.argv.slice(2).includes("--examples");
+if (includeExamples) {
+  process.stderr.write(
+    "WARNING: --examples prints entity text from public legal documents; keep this local and do not paste it into CI logs.\n",
+  );
+}
 const selected = (documents: readonly TabDocument[]): TabDocument[] =>
   [...documents]
     .sort((left, right) =>
@@ -78,7 +84,12 @@ for (const document of corpus) {
       if (stellaCovered) row.stella += 1;
       if (presidioCovered) row.presidio += 1;
       rows.set(mention.entityType, row);
-      if (!stellaCovered && presidioCovered && examples.length < 20) {
+      if (
+        includeExamples &&
+        !stellaCovered &&
+        presidioCovered &&
+        examples.length < 20
+      ) {
         examples.push(
           `${document.id}\t${mention.entityType}\t${JSON.stringify(document.text.slice(mention.start, mention.end))}`,
         );
@@ -94,5 +105,7 @@ for (const [entityType, row] of [...rows].sort(
 )) {
   console.log(`${entityType}\t${row.total}\t${row.stella}\t${row.presidio}`);
 }
-console.log("\nPresidio-covered, stella-missed development examples:");
-console.log(examples.join("\n"));
+if (includeExamples) {
+  console.log("\nPresidio-covered, stella-missed development examples:");
+  console.log(examples.join("\n"));
+}

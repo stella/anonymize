@@ -7,4 +7,5 @@ click>=8.1
 # spaCy models are installed separately from pinned release wheels:
 #   en_core_web_lg==3.8.0
 #   de_core_news_lg==3.8.0
+#   es_core_news_lg==3.8.0
 #   xx_ent_wiki_sm==3.8.0  (multilingual model used for Czech)

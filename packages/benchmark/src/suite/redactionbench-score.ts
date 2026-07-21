@@ -38,12 +38,12 @@ const mergeSpans = (spans: readonly Span[], textLength: number): Span[] => {
   return merged;
 };
 
-const characters = (text: string, spans: readonly Span[]): Set<number> => {
-  const result = new Set<number>();
+const characters = (text: string, spans: readonly Span[]): Uint8Array => {
+  const result = new Uint8Array(text.length);
   for (const { start, end } of spans) {
     for (let offset = start; offset < end; offset++) {
       if (!/\s/u.test(text[offset] ?? "")) {
-        result.add(offset);
+        result[offset] = 1;
       }
     }
   }
@@ -81,15 +81,12 @@ export const scoreRedactionBench = (
     const predicted = characters(document.text, masks);
     const requiredCharacters = characters(document.text, mandatory);
     const acceptedCharacters = characters(document.text, document.spans);
-    predictedCharacters += predicted.size;
-    mandatoryCharacters += requiredCharacters.size;
-    for (const offset of predicted) {
-      if (requiredCharacters.has(offset)) {
-        coveredMandatoryCharacters++;
-      }
-      if (acceptedCharacters.has(offset)) {
-        acceptedPredictedCharacters++;
-      }
+    for (let offset = 0; offset < document.text.length; offset++) {
+      if (requiredCharacters[offset] === 1) mandatoryCharacters++;
+      if (predicted[offset] !== 1) continue;
+      predictedCharacters++;
+      if (requiredCharacters[offset] === 1) coveredMandatoryCharacters++;
+      if (acceptedCharacters[offset] === 1) acceptedPredictedCharacters++;
     }
   }
 
