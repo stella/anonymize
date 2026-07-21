@@ -1,0 +1,112 @@
+{
+  "createdAt": "2026-07-21T07:13:21.728Z",
+  "gitSha": "490bd4d",
+  "runtime": "Bun 1.3.14",
+  "hardware": "darwin/arm64, 10x Apple M4, 16 GiB RAM",
+  "policy": "evaluation-only",
+  "corpus": {
+    "repository": "https://github.com/NorskRegnesentral/text-anonymization-benchmark",
+    "commit": "558e09e26d6b36f5f78440074e6a233946d98bd9",
+    "file": "echr_test.json",
+    "sha256": "cd0f0f15f84a8739654c7cf30c6be8ce27b051ef73974d39d792a0cb8c846379",
+    "license": "MIT",
+    "split": "test",
+    "selection": "fixed-hash-sample",
+    "selectionSeed": "stella-blind-tab-v1",
+    "documents": 12
+  },
+  "libraries": [
+    {
+      "name": "stella",
+      "version": "2.2.0",
+      "status": "ok",
+      "elapsedSeconds": 1.0028084590000002,
+      "score": {
+        "documents": 12,
+        "directMentions": 113,
+        "quasiMentions": 1696,
+        "directMentionRecall": 0.5221238938053098,
+        "quasiMentionRecall": 0.6073113207547169,
+        "allMentionRecall": 0.6019900497512438,
+        "entityRecall": 0.6339522546419099,
+        "characterPrecision": 0.5388161534206158,
+        "characterRecall": 0.662254657540456,
+        "predictedSpans": 422
+      }
+    },
+    {
+      "name": "presidio",
+      "version": "2.2.360",
+      "status": "ok",
+      "elapsedSeconds": 4.544281458,
+      "score": {
+        "documents": 12,
+        "directMentions": 113,
+        "quasiMentions": 1696,
+        "directMentionRecall": 0.04424778761061947,
+        "quasiMentionRecall": 0.7682783018867925,
+        "allMentionRecall": 0.7230514096185738,
+        "entityRecall": 0.7068965517241379,
+        "characterPrecision": 0.47182298113112225,
+        "characterRecall": 0.8466977924844749,
+        "predictedSpans": 768
+      }
+    },
+    {
+      "name": "scrubadub",
+      "version": "2.0.1",
+      "status": "ok",
+      "elapsedSeconds": 0.9288559169999998,
+      "score": {
+        "documents": 12,
+        "directMentions": 113,
+        "quasiMentions": 1696,
+        "directMentionRecall": 0,
+        "quasiMentionRecall": 0.0023584905660377358,
+        "allMentionRecall": 0.002211166390270868,
+        "entityRecall": 0,
+        "characterPrecision": 0.44036697247706424,
+        "characterRecall": 0.006527355967544535,
+        "predictedSpans": 6
+      },
+      "notes": "active detectors: credential, credit_card, email, phone, social_security_number, twitter, url"
+    },
+    {
+      "name": "redact-pii",
+      "version": "3.4.0",
+      "status": "ok",
+      "elapsedSeconds": 3.5709383340000005,
+      "score": {
+        "documents": 12,
+        "directMentions": 113,
+        "quasiMentions": 1696,
+        "directMentionRecall": 0.008849557522123894,
+        "quasiMentionRecall": 0.11497641509433962,
+        "allMentionRecall": 0.10834715312327253,
+        "entityRecall": 0.10278514588859416,
+        "characterPrecision": 0.7115975894723896,
+        "characterRecall": 0.2622727890848103,
+        "predictedSpans": 364
+      }
+    },
+    {
+      "name": "pii-shield",
+      "version": "2.2.0",
+      "status": "ok",
+      "elapsedSeconds": 34.689300583999994,
+      "score": {
+        "documents": 12,
+        "directMentions": 113,
+        "quasiMentions": 1696,
+        "directMentionRecall": 0.34513274336283184,
+        "quasiMentionRecall": 0.15625,
+        "allMentionRecall": 0.16804864566058597,
+        "entityRecall": 0.15119363395225463,
+        "characterPrecision": 0.42348063861691804,
+        "characterRecall": 0.21762386111237025,
+        "predictedSpans": 124
+      },
+      "notes": "CLI scan --json; one isolated temporary text file per document; complete validated JSON accepted before PII-Shield 2.2.0 macOS native teardown exit 134"
+    }
+  ]
+}

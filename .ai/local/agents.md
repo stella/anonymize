@@ -33,6 +33,19 @@ This is a Bun-first TypeScript monorepo for text anonymization. The library hand
 - Keep API availability, normalized behavior and errors, and cross-runtime
   artifacts such as encrypted sessions under parity tests where they apply.
 
+### Blind Evaluation Data
+
+- Treat third-party holdout splits named by `packages/benchmark/src/blind.ts`
+  as evaluation-only data. Never use their text, annotations, per-document
+  scores, or failure examples to add rules, tune thresholds, select models, or
+  otherwise change detector behavior.
+- Holdout reports may contain aggregate metrics only. Keep document-level
+  predictions and failure analysis local and uncommitted.
+- Detector improvements must be justified and tested with the repository's
+  synthetic development fixtures or an independently designated training split
+  before the holdout is run. A holdout regression may reject a release; it must
+  not become a tuning loop.
+
 ### Native Detector Shape
 
 Rust static detectors should follow the module-owned rule shape. A detector

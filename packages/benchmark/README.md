@@ -5,6 +5,11 @@ PII redaction libraries on recall, precision, and throughput over a public,
 synthetic, legal-domain corpus (en/cs/de). Intended to back the claims cited in
 the top-level README.
 
+The package also has a separate evaluation-only blind track based on the pinned
+test split of the third-party Text Anonymization Benchmark (TAB). TAB contains
+real English ECHR decisions with human direct/quasi-identifier annotations. Its
+test data is never used for detector development or tuning.
+
 ## Layout
 
 ```text
@@ -35,7 +40,20 @@ uv venv .venv-scrubadub --python 3.11 && uv pip install --python .venv-scrubadub
 
 # run:
 bun run bench:compare
+
+# Aggregate-only blind evaluation over a deterministic 12-document TAB sample.
+# Add --full for the entire 127-document test split.
+bun run bench:blind
 ```
+
+`bench:blind` verifies the upstream file against a pinned SHA-256 digest before
+loading it and writes only aggregate reports under `results/blind/`. Presidio
+and scrubadub use the same optional virtual environments as `bench:compare`.
+PII-Shield is included when its CLI and GLiNER model are installed; set
+`PII_SHIELD_BIN` when the executable is not on `PATH`.
+
+Blind results can reject a release, but must not be used to inspect examples or
+tune behavior. See the repository instructions in `AGENTS.md`.
 
 Libraries whose virtualenv is missing are reported as `unavailable` in the
 report and skipped, rather than failing the run or being fabricated. (A venv
