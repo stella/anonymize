@@ -146,6 +146,9 @@ fn date_spans_for_month(
   if let Some(span) = day_month_year_span(full_text, month_start, month_end) {
     spans.push(span);
   }
+  if let Some(span) = day_month_span(full_text, month_start, month_end) {
+    spans.push(span);
+  }
   if let Some(span) = ordinal_day_month_span(full_text, month_start, month_end)
   {
     spans.push(span);
@@ -165,6 +168,19 @@ fn date_spans_for_month(
   }
 
   spans
+}
+
+fn day_month_span(
+  text: &str,
+  month_start: usize,
+  month_end: usize,
+) -> Option<(usize, usize)> {
+  let day = day_before_month(text, month_start)?;
+  let after_month = skip_horizontal_ws(text, month_end);
+  if parse_year_forward(text, after_month).is_some() {
+    return None;
+  }
+  right_date_boundary(text, month_end).then_some((day.0, month_end))
 }
 
 fn date_entity(
@@ -228,7 +244,7 @@ fn month_day_year_span(
   month_end: usize,
 ) -> Option<(usize, usize)> {
   let after_month = skip_horizontal_ws(text, month_end);
-  let day = parse_digits_forward(text, after_month, 1, 2)?;
+  let day = parse_day_forward(text, after_month)?;
   let after_day = skip_date_year_separator(text, day.1);
   if let Some(year) = parse_year_forward(text, after_day) {
     return Some((month_start, year.1));
@@ -262,7 +278,7 @@ fn year_month_day_span(
   }
 
   let after_month = skip_horizontal_ws(text, month_end);
-  let day = parse_digits_forward(text, after_month, 1, 2)?;
+  let day = parse_day_forward(text, after_month)?;
   let end = if starts_with_at(text, day.1, ".") {
     day.1.saturating_add(1)
   } else {
@@ -279,7 +295,7 @@ fn day_before_month(text: &str, month_start: usize) -> Option<(usize, usize)> {
   if ends_with_before(text, end, ".") {
     end = end.saturating_sub(1);
   }
-  let day = parse_digits_backward(text, end, 1, 2)?;
+  let day = parse_day_backward(text, end)?;
   left_date_boundary(text, day.0).then_some(day)
 }
 
@@ -296,7 +312,7 @@ fn ordinal_day_before_month(
       continue;
     }
     let day_end = end.saturating_sub(suffix.len());
-    let day = parse_digits_backward(text, day_end, 1, 2)?;
+    let day = parse_day_backward(text, day_end)?;
     if left_date_boundary(text, day.0) {
       return Some((day.0, end));
     }
@@ -314,7 +330,7 @@ fn de_day_before_month(
     return None;
   }
   let day_end = skip_horizontal_ws_backward(text, de_start);
-  let day = parse_digits_backward(text, day_end, 1, 2)?;
+  let day = parse_day_backward(text, day_end)?;
   left_date_boundary(text, day.0).then_some((day.0, end))
 }
 
@@ -329,6 +345,22 @@ fn parse_de_prefix(text: &str, index: usize) -> Option<usize> {
 fn parse_year_forward(text: &str, index: usize) -> Option<(usize, usize)> {
   let year = parse_digits_forward(text, index, 4, 4)?;
   right_date_boundary(text, year.1).then_some(year)
+}
+
+fn parse_day_forward(text: &str, index: usize) -> Option<(usize, usize)> {
+  let span = parse_digits_forward(text, index, 1, 2)?;
+  valid_day(text, span).then_some(span)
+}
+
+fn parse_day_backward(text: &str, index: usize) -> Option<(usize, usize)> {
+  let span = parse_digits_backward(text, index, 1, 2)?;
+  valid_day(text, span).then_some(span)
+}
+
+fn valid_day(text: &str, span: (usize, usize)) -> bool {
+  str_slice(text, span.0, span.1)
+    .and_then(|value| value.parse::<u8>().ok())
+    .is_some_and(|day| (1..=31).contains(&day))
 }
 
 fn parse_digits_forward(
@@ -470,4 +502,41 @@ fn str_tail(text: &str, index: usize) -> Option<&str> {
 
 fn str_slice(text: &str, start: usize, end: usize) -> Option<&str> {
   text.get(start..end)
+}
+
+#[cfg(test)]
+mod tests {
+  use super::date_spans_for_month;
+
+  fn spans(text: &str) -> Vec<String> {
+    let Some(month_start) = text.find("July") else {
+      return Vec::new();
+    };
+    date_spans_for_month(
+      text,
+      month_start,
+      month_start.saturating_add("July".len()),
+    )
+    .into_iter()
+    .map(|(start, end)| text.get(start..end).unwrap_or_default().to_owned())
+    .collect()
+  }
+
+  #[test]
+  fn detects_plain_day_month_without_a_year() {
+    assert_eq!(spans("The hearing was on 22 July."), vec!["22 July"]);
+  }
+
+  #[test]
+  fn full_date_does_not_emit_a_nested_partial_date() {
+    let found = spans("The hearing was on 22 July 2026.");
+    assert_eq!(found, vec!["22 July 2026", "July 2026"]);
+    assert!(!found.iter().any(|span| span == "22 July"));
+  }
+
+  #[test]
+  fn rejects_out_of_range_and_identifier_days() {
+    assert!(spans("The reference is 42 July.").is_empty());
+    assert!(spans("The reference is item22 July.").is_empty());
+  }
 }
