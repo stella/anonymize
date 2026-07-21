@@ -1,6 +1,6 @@
 # Python virtual environments for competitor adapters (re-created via REPRODUCING.md)
-.venv-presidio/
-.venv-scrubadub/
+.venv-presidio
+.venv-scrubadub
 # Turbo cache
 .turbo/
 # Ad-hoc (unseen-input) comparison reports: may quote sensitive input entities.
