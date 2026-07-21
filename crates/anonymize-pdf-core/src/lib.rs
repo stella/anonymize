@@ -602,6 +602,7 @@ struct RawRetentionInventory {
 
 fn raw_retention_inventory(
   bytes: &[u8],
+  parsed_xref_start: usize,
 ) -> Result<RawRetentionInventory, PdfInspectionError> {
   const EOF_MARKER: &[u8] = b"%%EOF";
   const STARTXREF_MARKER: &[u8] = b"startxref";
@@ -615,22 +616,43 @@ fn raw_retention_inventory(
     .enumerate()
     .filter_map(|(index, window)| (window == STARTXREF_MARKER).then_some(index))
     .collect::<Vec<_>>();
-  let final_startxref =
-    startxref_positions.last().copied().ok_or_else(|| {
-      invalid_document("PDF document must contain a final startxref marker")
-    })?;
-  let final_eof_start = eof_positions
+  let final_eof_start = startxref_positions
     .iter()
     .copied()
-    .find(|position| *position > final_startxref)
+    .filter(|position| *position > parsed_xref_start)
+    .find_map(|position| {
+      let mut value_start = position.checked_add(STARTXREF_MARKER.len())?;
+      while bytes.get(value_start).is_some_and(u8::is_ascii_whitespace) {
+        value_start = value_start.checked_add(1)?;
+      }
+      let mut value_end = value_start;
+      while bytes.get(value_end).is_some_and(u8::is_ascii_digit) {
+        value_end = value_end.checked_add(1)?;
+      }
+      if value_end == value_start {
+        return None;
+      }
+      let value = std::str::from_utf8(bytes.get(value_start..value_end)?)
+        .ok()?
+        .parse::<usize>()
+        .ok()?;
+      if value != parsed_xref_start {
+        return None;
+      }
+      eof_positions.iter().copied().find(|eof_position| {
+        *eof_position >= value_end
+          && bytes
+            .get(value_end..*eof_position)
+            .is_some_and(|between| between.iter().all(u8::is_ascii_whitespace))
+      })
+    })
     .ok_or_else(|| {
-      invalid_document("PDF final revision must contain an %%EOF marker")
+      invalid_document(
+        "PDF must contain a completed startxref/%%EOF revision for the parsed xref",
+      )
     })?;
-  let completed_revision_count = eof_positions
-    .iter()
-    .filter(|position| **position <= final_eof_start)
-    .count()
-    .min(startxref_positions.len());
+  let completed_revision_count =
+    eof_positions.len().min(startxref_positions.len());
   let incremental_revision_count = u32::try_from(
     completed_revision_count.saturating_sub(1),
   )
@@ -1004,7 +1026,7 @@ fn inspect_parsed(
     ));
   }
   let observations = validate_observations(observations, pages)?;
-  let retention = raw_retention_inventory(bytes)?;
+  let retention = raw_retention_inventory(bytes, document.xref_start)?;
   let risks = risk_inventory(&document, pages, retention)?;
   let mut page_inspections = Vec::with_capacity(pages.len());
   for (page_offset, page) in pages.iter().enumerate() {
@@ -2596,10 +2618,31 @@ mod tests {
 
   #[test]
   fn appended_fake_eof_cannot_hide_retained_bytes() {
+    let document = Document::load_mem(MINIMAL_PDF).unwrap();
     let mut bytes = MINIMAL_PDF.to_vec();
     bytes.extend_from_slice(b"\nsecret retained bytes%%EOF\n");
-    let retention = raw_retention_inventory(&bytes).unwrap();
+    let retention =
+      raw_retention_inventory(&bytes, document.xref_start).unwrap();
     assert!(retention.trailing_non_whitespace_byte_count > 0);
+  }
+
+  #[test]
+  fn appended_forged_startxref_cannot_hide_retained_bytes() {
+    let document = Document::load_mem(MINIMAL_PDF).unwrap();
+    let mut bytes = MINIMAL_PDF.to_vec();
+    bytes.extend_from_slice(b"\nsecret retained bytes\n");
+    bytes.extend_from_slice(
+      format!("startxref\n{}\n%%EOF\n", document.xref_start).as_bytes(),
+    );
+
+    let inspection = inspect_pdf(&bytes).unwrap();
+    assert!(inspection.risks.trailing_non_whitespace_byte_count > 0);
+    assert!(
+      inspection
+        .coverage
+        .gaps
+        .contains(&PdfInspectionGap::RetainedDocumentBytes)
+    );
   }
 
   #[test]
