@@ -23,7 +23,7 @@ use stella_anonymize_core::assemble::{
   parse_ordered_data_file,
 };
 
-use super::AssembleContext;
+use super::{AssembleContext, language};
 use crate::BindingLegalFormData;
 
 /// `RAW_LEGAL_SUFFIXES` from `config/legal-forms.ts`. Sorted longest-first
@@ -235,6 +235,59 @@ pub(super) fn all_legal_suffixes() -> Result<Vec<String>, AssembleError> {
   Ok(out)
 }
 
+/// Legal-form suffixes plus language-scoped institutional heads used only by
+/// organization detection. Coreference deliberately keeps
+/// [`all_legal_suffixes`] so a generic head such as "Court" is never stripped
+/// into an unsafe alias such as "High".
+pub(super) fn organization_detection_suffixes(
+  languages: Option<&[String]>,
+) -> Result<Vec<String>, AssembleError> {
+  let mut out = all_legal_suffixes()?;
+  let mut seen = out.iter().cloned().collect::<HashSet<_>>();
+  for value in institutional_organization_data(languages)?.heads {
+    push_unique(value, &mut seen, &mut out);
+  }
+  sort_longest_first(&mut out);
+  Ok(out)
+}
+
+#[derive(Default, Deserialize)]
+struct InstitutionalOrganizationData {
+  #[serde(default)]
+  heads: Vec<String>,
+  #[serde(default, rename = "complementHeads")]
+  complement_heads: Vec<String>,
+}
+
+fn institutional_organization_data(
+  languages: Option<&[String]>,
+) -> Result<InstitutionalOrganizationData, AssembleError> {
+  let configured: OrderedMap<Value> =
+    parse_ordered_data_file("institutional-organization-heads.json")?;
+  let mut result = InstitutionalOrganizationData::default();
+  let mut seen_heads = HashSet::new();
+  let mut seen_complements = HashSet::new();
+  for (language_key, value) in &configured {
+    if language_key.starts_with('_')
+      || !language::language_config_matches(language_key, languages)
+    {
+      continue;
+    }
+    let Ok(data) =
+      serde_json::from_value::<InstitutionalOrganizationData>(value.clone())
+    else {
+      continue;
+    };
+    for head in data.heads {
+      push_unique(head, &mut seen_heads, &mut result.heads);
+    }
+    for head in data.complement_heads {
+      push_unique(head, &mut seen_complements, &mut result.complement_heads);
+    }
+  }
+  Ok(result)
+}
+
 /// Mirrors `isBoundaryLegalSuffixForm`.
 fn is_boundary_legal_suffix_form(
   form: &str,
@@ -424,7 +477,8 @@ pub(super) fn build_legal_form_data(
     return Ok(None);
   }
 
-  let suffixes = all_legal_suffixes()?;
+  let suffixes =
+    organization_detection_suffixes(ctx.content_languages.as_deref())?;
   let raw_suffix_set: HashSet<&'static str> =
     RAW_LEGAL_SUFFIXES.iter().copied().collect();
 
@@ -488,5 +542,29 @@ pub(super) fn build_legal_form_data(
     in_name_prepositions: rule_words.in_name_prepositions,
     company_suffix_words: rule_words.company_suffix_words,
     comma_gated_direct_prefixes: rule_words.comma_gated_direct_prefixes,
+    institutional_complement_heads: institutional_organization_data(
+      ctx.content_languages.as_deref(),
+    )?
+    .complement_heads,
   }))
+}
+
+#[cfg(test)]
+mod tests {
+  #![allow(clippy::unwrap_used)]
+
+  use super::organization_detection_suffixes;
+
+  #[test]
+  fn institutional_heads_follow_content_language_scope() {
+    let english =
+      organization_detection_suffixes(Some(&[String::from("en")])).unwrap();
+    let german =
+      organization_detection_suffixes(Some(&[String::from("de")])).unwrap();
+    let all = organization_detection_suffixes(None).unwrap();
+
+    assert!(english.iter().any(|suffix| suffix == "Court"));
+    assert!(!german.iter().any(|suffix| suffix == "Court"));
+    assert!(all.iter().any(|suffix| suffix == "Court"));
+  }
 }

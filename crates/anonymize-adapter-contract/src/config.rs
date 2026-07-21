@@ -23,9 +23,9 @@ use stella_anonymize_core::{
 use crate::error::{ContractError, Result};
 use crate::types::{
   BindingCoreferenceData, BindingDenyListFilterData, BindingDenyListMatchData,
-  BindingHotwordRuleData, BindingMonetaryData, BindingNameCorpusData,
-  BindingNameCorpusMode, BindingOperator, BindingOperatorConfig,
-  BindingPatternSlice, BindingPreparedArtifactPolicy,
+  BindingHotwordRuleData, BindingLegalFormData, BindingMonetaryData,
+  BindingNameCorpusData, BindingNameCorpusMode, BindingOperator,
+  BindingOperatorConfig, BindingPatternSlice, BindingPreparedArtifactPolicy,
   BindingPreparedSearchConfig, BindingPreparedSearchSlices,
   BindingRegexArtifactPolicy, BindingRegexMatchMeta, BindingSearchOptions,
   BindingSearchPattern, BindingSignatureData, BindingTaggedOperator,
@@ -43,24 +43,8 @@ pub fn prepared_search_config_from_binding(
     config.literal_patterns_from_deny_list_data,
     deny_list_data.as_ref(),
   )?;
-  let legal_form_data = config.legal_form_data.map(|data| LegalFormData {
-    suffixes: data.suffixes,
-    normalized_boundary_suffixes: data.normalized_boundary_suffixes,
-    normalized_in_name_words: data.normalized_in_name_words,
-    normalized_suffix_words: data.normalized_suffix_words,
-    role_heads: data.role_heads,
-    sentence_verb_indicators: data.sentence_verb_indicators,
-    clause_noun_heads: data.clause_noun_heads,
-    connector_prose_heads: data.connector_prose_heads,
-    structural_single_cap_prefixes: data.structural_single_cap_prefixes,
-    leading_clause_phrases: data.leading_clause_phrases,
-    leading_clause_direct_prefixes: data.leading_clause_direct_prefixes,
-    connector_words: data.connector_words,
-    and_connector_words: data.and_connector_words,
-    in_name_prepositions: data.in_name_prepositions,
-    company_suffix_words: data.company_suffix_words,
-    comma_gated_direct_prefixes: data.comma_gated_direct_prefixes,
-  });
+  let legal_form_data =
+    config.legal_form_data.map(legal_form_data_from_binding);
   let legal_form_suffixes = legal_form_data
     .as_ref()
     .map_or_else(Vec::new, |data| data.suffixes.clone());
@@ -140,6 +124,28 @@ fn date_data_from_binding(data: crate::BindingDateData) -> DateData {
     month_names_by_language: data.month_names_by_language,
     lowercase_month_ambiguities: data.lowercase_month_ambiguities,
     year_words_by_language: data.year_words_by_language,
+  }
+}
+
+fn legal_form_data_from_binding(data: BindingLegalFormData) -> LegalFormData {
+  LegalFormData {
+    suffixes: data.suffixes,
+    normalized_boundary_suffixes: data.normalized_boundary_suffixes,
+    normalized_in_name_words: data.normalized_in_name_words,
+    normalized_suffix_words: data.normalized_suffix_words,
+    role_heads: data.role_heads,
+    sentence_verb_indicators: data.sentence_verb_indicators,
+    clause_noun_heads: data.clause_noun_heads,
+    connector_prose_heads: data.connector_prose_heads,
+    structural_single_cap_prefixes: data.structural_single_cap_prefixes,
+    leading_clause_phrases: data.leading_clause_phrases,
+    leading_clause_direct_prefixes: data.leading_clause_direct_prefixes,
+    connector_words: data.connector_words,
+    and_connector_words: data.and_connector_words,
+    in_name_prepositions: data.in_name_prepositions,
+    company_suffix_words: data.company_suffix_words,
+    comma_gated_direct_prefixes: data.comma_gated_direct_prefixes,
+    institutional_complement_heads: data.institutional_complement_heads,
   }
 }
 

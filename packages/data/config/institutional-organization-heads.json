@@ -1,0 +1,49 @@
+{
+  "_comment": "Institutional head words that identify a proper-name phrase as a legal or public organization. Detection requires a preceding name token; bare generic references are not emitted.",
+  "en": {
+    "heads": [
+    "Agency",
+    "Association",
+    "Authority",
+    "Board",
+    "Chambers",
+    "Commission",
+    "Committee",
+    "Council",
+    "Court",
+    "Department",
+    "Directorate",
+    "Foundation",
+    "Hospital",
+    "Institute",
+    "Ministry",
+    "Office",
+    "Registry",
+    "Society",
+    "Solicitors",
+    "Tribunal",
+    "University"
+    ],
+    "complementHeads": [
+      "Agency",
+      "Association",
+      "Authority",
+      "Board",
+      "Commission",
+      "Committee",
+      "Council",
+      "Court",
+      "Department",
+      "Directorate",
+      "Foundation",
+      "Hospital",
+      "Institute",
+      "Ministry",
+      "Office",
+      "Registry",
+      "Society",
+      "Tribunal",
+      "University"
+    ]
+  }
+}

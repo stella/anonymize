@@ -149,6 +149,7 @@ export type NativeLegalFormData = {
   in_name_prepositions: string[];
   company_suffix_words: string[];
   comma_gated_direct_prefixes: string[];
+  institutional_complement_heads: string[];
 };
 
 export type NativeDateMonthData = Record<string, string[]>;
