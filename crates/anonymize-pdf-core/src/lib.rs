@@ -1543,7 +1543,7 @@ fn validate_risk_structures(
       ));
     }
   }
-  validate_catalog_associated_files(catalog, document, &mut attachments)?;
+  validate_associated_files(catalog, document, &mut attachments, "catalog")?;
   validate_outlines(catalog, document, &mut action_risks)?;
   for page in pages {
     let page = document.get_dictionary(page.id).map_err(|_| {
@@ -1555,7 +1555,13 @@ fn validate_risk_structures(
       "PDF page AA",
       &mut action_risks,
     )?;
-    validate_page_annotations(page, document, &mut action_risks)?;
+    validate_associated_files(page, document, &mut attachments, "page")?;
+    validate_page_annotations(
+      page,
+      document,
+      &mut action_risks,
+      &mut attachments,
+    )?;
   }
   Ok(StructuralRiskInventory {
     actions: action_risks,
@@ -1598,18 +1604,19 @@ fn validate_catalog_name_trees(
   Ok(())
 }
 
-fn validate_catalog_associated_files(
-  catalog: &Dictionary,
+fn validate_associated_files(
+  owner: &Dictionary,
   document: &Document,
   attachments: &mut AttachmentInventory,
+  context: &str,
 ) -> Result<(), PdfInspectionError> {
-  let Some(attachment_array) = optional_deref(catalog, b"AF", document)? else {
+  let Some(attachment_array) = optional_deref(owner, b"AF", document)? else {
     return Ok(());
   };
   let file_specs = attachment_array.as_array().map_err(|_| {
-    invalid_document(
-      "PDF catalog AF must resolve to an array of file specifications",
-    )
+    invalid_document(format!(
+      "PDF {context} AF must resolve to an array of file specifications"
+    ))
   })?;
   for file_spec in file_specs {
     validate_file_spec(file_spec, document, attachments)?;
@@ -1822,6 +1829,7 @@ fn validate_page_annotations(
   page: &Dictionary,
   document: &Document,
   risks: &mut ActionRiskInventory,
+  attachments: &mut AttachmentInventory,
 ) -> Result<(), PdfInspectionError> {
   let Some(annotations) = optional_entry(page, b"Annots") else {
     return Ok(());
@@ -1850,6 +1858,16 @@ fn validate_page_annotations(
       "PDF annotation AA",
       risks,
     )?;
+    let is_file_attachment =
+      name_deref_is(annotation, b"Subtype", b"FileAttachment", document);
+    if let Some(file_spec) = optional_entry(annotation, b"FS") {
+      validate_file_spec(file_spec, document, attachments)?;
+    } else if is_file_attachment {
+      return Err(invalid_document(
+        "PDF FileAttachment annotations must declare FS",
+      ));
+    }
+    validate_associated_files(annotation, document, attachments, "annotation")?;
   }
   Ok(())
 }
@@ -2400,6 +2418,7 @@ mod tests {
   #![allow(clippy::unwrap_used)]
 
   use super::*;
+  use lopdf::dictionary;
 
   const MINIMAL_PDF: &[u8] =
     include_bytes!("../tests/fixtures/minimal-text.pdf");
@@ -2448,6 +2467,10 @@ mod tests {
     let mut bytes = Vec::new();
     document.save_to(&mut bytes).unwrap();
     inspect_pdf(&bytes).unwrap()
+  }
+
+  fn first_page_id(document: &Document) -> lopdf::ObjectId {
+    *document.get_pages().values().next().unwrap()
   }
 
   #[test]
@@ -3137,6 +3160,68 @@ mod tests {
     let inspection = inspect_document(&mut document);
 
     assert_eq!(inspection.risks.embedded_file_count, 1);
+  }
+
+  #[test]
+  fn inventories_file_attachment_annotation_file_spec() {
+    let mut document = Document::load_mem(MINIMAL_PDF).unwrap();
+    let (file_spec_id, _) = add_untyped_attachment(&mut document);
+    let annotation_id = document.add_object(lopdf::dictionary! {
+      "Type" => "Annot",
+      "Subtype" => "FileAttachment",
+      "Rect" => vec![0.into(), 0.into(), 1.into(), 1.into()],
+      "FS" => file_spec_id,
+    });
+    let page_id = first_page_id(&document);
+    document
+      .get_dictionary_mut(page_id)
+      .unwrap()
+      .set("Annots", vec![Object::Reference(annotation_id)]);
+
+    let inspection = inspect_document(&mut document);
+
+    assert_eq!(inspection.risks.embedded_file_count, 1);
+  }
+
+  #[test]
+  fn inventories_and_deduplicates_page_and_annotation_associated_files() {
+    let mut document = Document::load_mem(MINIMAL_PDF).unwrap();
+    let (file_spec_id, _) = add_untyped_attachment(&mut document);
+    let annotation_id = document.add_object(lopdf::dictionary! {
+      "Type" => "Annot",
+      "Subtype" => "Text",
+      "Rect" => vec![0.into(), 0.into(), 1.into(), 1.into()],
+      "AF" => vec![Object::Reference(file_spec_id)],
+    });
+    let page_id = first_page_id(&document);
+    let page = document.get_dictionary_mut(page_id).unwrap();
+    page.set("AF", vec![Object::Reference(file_spec_id)]);
+    page.set("Annots", vec![Object::Reference(annotation_id)]);
+
+    let inspection = inspect_document(&mut document);
+
+    assert_eq!(inspection.risks.embedded_file_count, 1);
+  }
+
+  #[test]
+  fn rejects_file_attachment_annotation_without_file_spec() {
+    let mut document = Document::load_mem(MINIMAL_PDF).unwrap();
+    let annotation_id = document.add_object(lopdf::dictionary! {
+      "Type" => "Annot",
+      "Subtype" => "FileAttachment",
+      "Rect" => vec![0.into(), 0.into(), 1.into(), 1.into()],
+    });
+    let page_id = first_page_id(&document);
+    document
+      .get_dictionary_mut(page_id)
+      .unwrap()
+      .set("Annots", vec![Object::Reference(annotation_id)]);
+    let mut bytes = Vec::new();
+    document.save_to(&mut bytes).unwrap();
+
+    let error = inspect_pdf(&bytes).unwrap_err();
+
+    assert_eq!(error.code(), PdfInspectionErrorCode::InvalidDocument);
   }
 
   #[test]
