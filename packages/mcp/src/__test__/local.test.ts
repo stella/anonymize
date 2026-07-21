@@ -519,17 +519,15 @@ describe("local MCP surface", () => {
       );
     }
     let failPublication = false;
-    const service = new LocalAnonymizeService(
-      await PathScope.create([root]),
-      undefined,
-      {
+    const service = new LocalAnonymizeService(await PathScope.create([root]), {
+      faults: {
         beforeOutputPublish: () => {
           if (failPublication) {
             throw new Error("injected external output failure");
           }
         },
       },
-    );
+    });
     const concurrent = await Promise.allSettled(
       ([0, 1] as const).map((index) =>
         service.anonymizeTextWithExternalDetections({
@@ -708,6 +706,7 @@ describe("local MCP surface", () => {
         externalDetectionBatch: { ingestion: "path-only", version: 1 },
         formats: ["docx", "text"],
         sessionMode: "memory",
+        sessionTtlSeconds: null,
         transport: "stdio",
       },
     });

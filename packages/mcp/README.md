@@ -93,7 +93,9 @@ startup:
         "--session-dir",
         "/absolute/private/path/to/sessions",
         "--key-file",
-        "/absolute/private/path/to/session.key"
+        "/absolute/private/path/to/session.key",
+        "--session-ttl-seconds",
+        "604800"
       ]
     }
   }
@@ -108,13 +110,19 @@ no symbolic-link path components. Generate and protect the key outside the MCP
 server; losing it makes archives unrecoverable, while disclosure permits anyone
 with the archives to recover mappings.
 
+Durable sessions expire seven days after creation by default. Override that
+policy with `--session-ttl-seconds` from 60 seconds through 31536000 seconds
+(365 days). The fixed expiry is authenticated inside the archive and encoded in
+its non-sensitive filename so expired archives can be removed without decrypting
+PII. Expiry is not extended when a session is used.
+
 Durable mode currently supports macOS and Linux only. Startup fails closed on
 other platforms because the server requires POSIX owner identities,
 `O_NOFOLLOW`, directory handles and `fsync`, plus process-lifetime advisory file
-locks. One server exclusively locks the whole session directory; a second
-server fails startup, and the operating system releases the lock if the holder
-exits or crashes. The persistent `.stella-session.lock` file contains no session
-metadata and is not itself proof that a live process holds the lock.
+locks. One server holds an advisory lock on the opened canonical session
+directory itself; a second server fails startup, and the operating system
+releases the lock if the holder exits or crashes. There is no deletable lock-file
+inode that could split exclusivity between processes.
 
 The server stores only bounded, authenticated encrypted session archives. It
 never writes plaintext mappings or includes key material in tools, results, or
@@ -125,7 +133,8 @@ rollback fails, the server preserves an authenticated archive and discards its
 in-memory copy so a later operation reloads from disk; an unused forward mapping
 is safer than erasing the last recoverable state. At most 256 archives
 and 256 MiB of archive data are accepted. Restore authenticates the expected
-session ID and evaluates lifecycle expiry at the current time. A wrong key,
+session ID and evaluates lifecycle expiry at the current time. Expired archives
+are durably removed during inventory validation. A wrong key,
 tampered archive, expired session, unsafe path, partial write, or permission
 change fails closed.
 
@@ -143,4 +152,5 @@ in-memory key before the process exits.
 Tool results contain only aggregate, audit-safe counts and statuses. The
 read-only `capabilities` tool returns `CAPABILITY_MANIFEST`, the native runtime
 version, tool and format lists, stdio transport metadata, and either `memory` or
-`durable-encrypted` session mode; it never returns document or session data.
+`durable-encrypted` session mode plus the active durable TTL; it never returns
+document or session data.

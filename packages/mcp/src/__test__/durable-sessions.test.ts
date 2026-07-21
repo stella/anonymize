@@ -1,7 +1,6 @@
 import { expect } from "expect";
 import { afterEach, describe, test } from "node:test";
 import { extractDocxText } from "@stll/anonymize-docx";
-import { getDefaultNativePipeline } from "@stll/anonymize";
 import { strToU8, zipSync } from "fflate";
 import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
@@ -17,10 +16,11 @@ import {
   rm,
   stat,
   symlink,
+  unlink,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -71,23 +71,36 @@ const createStore = async (
   return store;
 };
 
-const createService = async ({
-  keyFile,
-  root,
-  sessionDirectory,
-}: Awaited<
-  ReturnType<typeof createStorePaths>
->): Promise<LocalAnonymizeService> => {
-  const service = new LocalAnonymizeService(
-    await PathScope.create([root]),
-    await createStore({ keyFile, sessionDirectory }),
-  );
+const createService = async (
+  {
+    keyFile,
+    root,
+    sessionDirectory,
+  }: Awaited<ReturnType<typeof createStorePaths>>,
+  options: {
+    durableSessionTtlSeconds?: number;
+    nowEpochSeconds?: () => number;
+  } = {},
+): Promise<LocalAnonymizeService> => {
+  const service = new LocalAnonymizeService(await PathScope.create([root]), {
+    durableSessions: await createStore({ keyFile, sessionDirectory }),
+    ...options,
+  });
   openServices.add(service);
   return service;
 };
 
-const archiveName = (sessionId: string): string =>
-  `${createHash("sha256").update(sessionId, "utf8").digest("hex")}.stlasess`;
+const archivePath = async (
+  sessionDirectory: string,
+  sessionId: string,
+): Promise<string> => {
+  const prefix = `${createHash("sha256").update(sessionId, "utf8").digest("hex")}.`;
+  const names = (await readdir(sessionDirectory)).filter(
+    (name) => name.startsWith(prefix) && name.endsWith(".stlasess"),
+  );
+  expect(names).toHaveLength(1);
+  return join(sessionDirectory, names.at(0) ?? "missing");
+};
 
 const externalBatch = (document: Uint8Array) => ({
   version: 1,
@@ -159,14 +172,13 @@ void describe("durable MCP sessions", () => {
       outputPath: anonymized,
       sessionId: "durable_text_1",
     });
-    const archive = await readFile(
-      join(paths.sessionDirectory, archiveName("durable_text_1")),
+    const persistedArchive = await archivePath(
+      paths.sessionDirectory,
+      "durable_text_1",
     );
+    const archive = await readFile(persistedArchive);
     expect(archive.toString("utf8")).not.toContain("Alice Smith");
-    expect(
-      (await stat(join(paths.sessionDirectory, archiveName("durable_text_1"))))
-        .mode & 0o777,
-    ).toBe(0o600);
+    expect((await stat(persistedArchive)).mode & 0o777).toBe(0o600);
 
     await initial.close();
     const restarted = await createService(paths);
@@ -292,13 +304,16 @@ void describe("durable MCP sessions", () => {
     await expect(readFile(wrongKeyOutput)).rejects.toThrow();
     await wrongKeyService.close();
 
-    const archivePath = join(
+    const persistedArchive = await archivePath(
       paths.sessionDirectory,
-      archiveName("durable_auth_1"),
+      "durable_auth_1",
     );
     await copyFile(
-      archivePath,
-      join(paths.sessionDirectory, archiveName("different_session_1")),
+      persistedArchive,
+      join(
+        paths.sessionDirectory,
+        `${createHash("sha256").update("different_session_1", "utf8").digest("hex")}.${basename(persistedArchive).split(".").slice(1).join(".")}`,
+      ),
     );
     const mismatchedOutput = join(paths.root, "mismatched.txt");
     const mismatchedService = await createService(paths);
@@ -312,9 +327,9 @@ void describe("durable MCP sessions", () => {
     await expect(readFile(mismatchedOutput)).rejects.toThrow();
     await mismatchedService.close();
 
-    const tampered = await readFile(archivePath);
+    const tampered = await readFile(persistedArchive);
     tampered[tampered.byteLength - 1] ^= 0xff;
-    await writeFile(archivePath, tampered, { mode: 0o600 });
+    await writeFile(persistedArchive, tampered, { mode: 0o600 });
     const tamperedOutput = join(paths.root, "tampered.txt");
     const tamperedService = await createService(paths);
     await expect(
@@ -327,31 +342,66 @@ void describe("durable MCP sessions", () => {
     await expect(readFile(tamperedOutput)).rejects.toThrow();
   });
 
-  void test("enforces lifecycle expiry while lazily restoring", async () => {
+  void test("expires and removes MCP-created sessions across restarts", async () => {
     const paths = await createStorePaths();
-    const store = await createStore(paths);
-    const pipeline = getDefaultNativePipeline({ language: "en" });
-    const session = pipeline.createRedactionSessionWithLifecycle({
-      sessionId: "expired_session_1",
-      createdAtEpochSeconds: 100,
-      expiresAtEpochSeconds: 200,
-    });
-    const archive = session.toEncryptedArchiveAt(
-      new Uint8Array(32).fill(0x42),
-      150,
-    );
-    await store.save("expired_session_1", archive);
-    await store.close();
+    let now = 100;
     const input = join(paths.root, "input.txt");
-    await writeFile(input, "[PERSON_expired%5Fsession%5F1_1]");
+    const anonymized = join(paths.root, "anonymized.txt");
+    await writeFile(input, "Alice Smith signed.");
+    const initial = await createService(paths, {
+      durableSessionTtlSeconds: 60,
+      nowEpochSeconds: () => now,
+    });
+    await initial.anonymizeText({
+      inputPath: input,
+      outputPath: anonymized,
+      sessionId: "expired_session_1",
+    });
+    const persistedArchive = await archivePath(
+      paths.sessionDirectory,
+      "expired_session_1",
+    );
+    expect(persistedArchive).toContain(".160.stlasess");
+    await initial.close();
 
+    now = 160;
+    const restarted = await createService(paths, {
+      durableSessionTtlSeconds: 60,
+      nowEpochSeconds: () => now,
+    });
     await expect(
-      (await createService(paths)).restoreText({
-        inputPath: input,
+      restarted.restoreText({
+        inputPath: anonymized,
         outputPath: join(paths.root, "expired-output.txt"),
         sessionId: "expired_session_1",
       }),
-    ).rejects.toThrow("durable session is unavailable");
+    ).rejects.toThrow("session is unavailable");
+    await expect(readFile(persistedArchive)).rejects.toThrow();
+
+    const sameProcessInput = join(paths.root, "same-process-input.txt");
+    const sameProcessAnonymized = join(
+      paths.root,
+      "same-process-anonymized.txt",
+    );
+    await writeFile(sameProcessInput, "Bob Jones signed.");
+    await restarted.anonymizeText({
+      inputPath: sameProcessInput,
+      outputPath: sameProcessAnonymized,
+      sessionId: "same_process_expiry_1",
+    });
+    const sameProcessArchive = await archivePath(
+      paths.sessionDirectory,
+      "same_process_expiry_1",
+    );
+    now = 220;
+    await expect(
+      restarted.restoreText({
+        inputPath: sameProcessAnonymized,
+        outputPath: join(paths.root, "same-process-expired-output.txt"),
+        sessionId: "same_process_expiry_1",
+      }),
+    ).rejects.toThrow("session is unavailable");
+    await expect(readFile(sameProcessArchive)).rejects.toThrow();
   });
 
   void test("requires private regular key and directory paths", async () => {
@@ -385,21 +435,23 @@ void describe("durable MCP sessions", () => {
     const paths = await createStorePaths();
     const partial = join(
       paths.sessionDirectory,
-      `${"a".repeat(64)}.stlasess.tmp.00000000-0000-0000-0000-000000000000`,
+      `${"a".repeat(64)}.1000.stlasess.tmp.00000000-0000-0000-0000-000000000000`,
     );
     await writeFile(partial, "partial", { mode: 0o600 });
     const store = await createStore(paths);
     await expect(readFile(partial)).rejects.toThrow();
     await expect(
-      store.save(
-        "oversized_session_1",
-        new Uint8Array(SESSION_ARCHIVE_MAX_BYTES + 1),
-      ),
+      store.save({
+        sessionId: "oversized_session_1",
+        archive: new Uint8Array(SESSION_ARCHIVE_MAX_BYTES + 1),
+        expiresAtEpochSeconds: 1_000,
+        observedAtEpochSeconds: 100,
+      }),
     ).rejects.toThrow("byte limit");
     await store.close();
 
     for (let index = 0; index <= SESSION_ARCHIVE_MAX_COUNT; index += 1) {
-      const name = `${index.toString(16).padStart(64, "0")}.stlasess`;
+      const name = `${index.toString(16).padStart(64, "0")}.1000.stlasess`;
       await writeFile(join(paths.sessionDirectory, name), "x", { mode: 0o600 });
     }
     await expect(createStore(paths)).rejects.toThrow("must not exceed");
@@ -414,7 +466,12 @@ void describe("durable MCP sessions", () => {
     await symlink(outside, paths.sessionDirectory);
 
     await expect(
-      store.save("race_session_1", new Uint8Array([1])),
+      store.save({
+        sessionId: "race_session_1",
+        archive: new Uint8Array([1]),
+        expiresAtEpochSeconds: 1_000,
+        observedAtEpochSeconds: 100,
+      }),
     ).rejects.toThrow("session directory changed");
     expect(await readdir(outside)).toEqual([]);
   });
@@ -426,6 +483,18 @@ void describe("durable MCP sessions", () => {
     await first.close();
     const second = await createStore(paths);
     await second.close();
+  });
+
+  void test("keeps exclusivity when a lock-file-shaped decoy is unlinked and recreated", async () => {
+    const paths = await createStorePaths();
+    const first = await createStore(paths);
+    const decoy = join(paths.sessionDirectory, ".stella-session.lock");
+    await writeFile(decoy, "", { mode: 0o600 });
+    await unlink(decoy);
+    await writeFile(decoy, "", { mode: 0o600 });
+    await expect(createStore(paths)).rejects.toThrow("already locked");
+    await unlink(decoy);
+    await first.close();
   });
 
   void test("drains an in-flight mutation before releasing the advisory lock", async () => {
@@ -447,12 +516,22 @@ void describe("durable MCP sessions", () => {
         }
       },
     });
-    const save = store.save("close_race_1", new Uint8Array([1]));
+    const save = store.save({
+      sessionId: "close_race_1",
+      archive: new Uint8Array([1]),
+      expiresAtEpochSeconds: 1_000,
+      observedAtEpochSeconds: 100,
+    });
     await atMutation;
     const close = store.close();
     await expect(createStore(paths)).rejects.toThrow("already locked");
     await expect(
-      store.save("close_race_2", new Uint8Array([2])),
+      store.save({
+        sessionId: "close_race_2",
+        archive: new Uint8Array([2]),
+        expiresAtEpochSeconds: 1_000,
+        observedAtEpochSeconds: 100,
+      }),
     ).rejects.toThrow("closing or closed");
     releaseMutation();
     await save;
@@ -482,7 +561,7 @@ void describe("durable MCP sessions", () => {
     });
     const service = new LocalAnonymizeService(
       await PathScope.create([paths.root]),
-      store,
+      { durableSessions: store },
     );
     const input = join(paths.root, "close-input.txt");
     await writeFile(input, "Alice Smith signed.");
@@ -549,7 +628,7 @@ void describe("durable MCP sessions", () => {
       });
       const service = new LocalAnonymizeService(
         await PathScope.create([paths.root]),
-        store,
+        { durableSessions: store },
       );
       const firstInput = join(paths.root, "fault-first.txt");
       const firstOutput = join(paths.root, "fault-first-output.txt");
@@ -592,12 +671,14 @@ void describe("durable MCP sessions", () => {
     let faultOutput = false;
     const service = new LocalAnonymizeService(
       await PathScope.create([paths.root]),
-      store,
       {
-        beforeOutputPublish: () => {
-          if (faultOutput) {
-            throw new Error("injected output publication failure");
-          }
+        durableSessions: store,
+        faults: {
+          beforeOutputPublish: () => {
+            if (faultOutput) {
+              throw new Error("injected output publication failure");
+            }
+          },
         },
       },
     );

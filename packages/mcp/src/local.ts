@@ -44,6 +44,10 @@ const SESSION_MAX_COUNT = 256;
 const SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 const READ_CHUNK_BYTES = 64 * 1024;
 
+export const MCP_DURABLE_SESSION_TTL_DEFAULT_SECONDS = 7 * 24 * 60 * 60;
+export const MCP_DURABLE_SESSION_TTL_MIN_SECONDS = 60;
+export const MCP_DURABLE_SESSION_TTL_MAX_SECONDS = 365 * 24 * 60 * 60;
+
 const observedAtEpochSeconds = (): number => {
   const seconds = Math.floor(Date.now() / 1000);
   if (seconds < 0 || seconds > 0xff_ff_ff_ff) {
@@ -132,6 +136,13 @@ const externalDetectionStep = async <Result>(
 
 export type LocalAnonymizeServiceFaults = {
   beforeOutputPublish?: () => void;
+};
+
+export type LocalAnonymizeServiceOptions = {
+  durableSessions?: DurableSessionStore;
+  durableSessionTtlSeconds?: number;
+  faults?: LocalAnonymizeServiceFaults;
+  nowEpochSeconds?: () => number;
 };
 
 const inside = (root: string, target: string): boolean => {
@@ -309,6 +320,7 @@ export class PathScope {
 }
 
 type SessionEntry = {
+  expiresAtEpochSeconds: number | undefined;
   language: string | undefined;
   session: RedactionSession;
   restoreSession: (plaintextJson: string) => RedactionSession;
@@ -317,6 +329,7 @@ type SessionEntry = {
 
 type SessionLease = {
   entry: SessionEntry;
+  observedAtEpochSeconds: number | undefined;
   sessionId: string;
   rollback:
     | { type: "delete" }
@@ -330,7 +343,17 @@ type RedactionSession = DocxAnonymizationSession &
       redaction: { redactedText: string; entityCount: number };
     };
     restoreText(text: string): string;
+    redactTextAt(options: {
+      fullText: string;
+      observedAtEpochSeconds: number;
+    }): {
+      redaction: { redactedText: string; entityCount: number };
+    };
+    inspect(observedAtEpochSeconds?: number): {
+      expiresAtEpochSeconds: number | null;
+    };
     toPlaintextJson(): string;
+    toPlaintextJsonAt(observedAtEpochSeconds: number): string;
     toEncryptedArchiveAt(
       key: Uint8Array,
       observedAtEpochSeconds: number,
@@ -344,6 +367,11 @@ type NativeNodeSurface = {
   ) => NativeCallerDetection[];
   getDefaultNativePipeline: (options: { language?: string }) => {
     createRedactionSession: (sessionId: string) => RedactionSession;
+    createRedactionSessionWithLifecycle: (options: {
+      sessionId: string;
+      createdAtEpochSeconds: number;
+      expiresAtEpochSeconds: number;
+    }) => RedactionSession;
     restoreRedactionSession: (plaintextJson: string) => RedactionSession;
     restoreEncryptedRedactionSession: (options: {
       archive: Uint8Array;
@@ -539,22 +567,38 @@ export class LocalAnonymizeService {
   readonly #sessions = new Map<string, SessionEntry>();
   #state: "closed" | "closing" | "open" = "open";
   readonly #durableSessions: DurableSessionStore | undefined;
+  readonly #durableSessionTtlSeconds: number | undefined;
   readonly #faults: LocalAnonymizeServiceFaults;
+  readonly #nowEpochSeconds: () => number;
 
-  constructor(
-    scope: PathScope,
-    durableSessions?: DurableSessionStore,
-    faults: LocalAnonymizeServiceFaults = {},
-  ) {
+  constructor(scope: PathScope, options: LocalAnonymizeServiceOptions = {}) {
     this.#scope = scope;
-    this.#durableSessions = durableSessions;
-    this.#faults = faults;
+    this.#durableSessions = options.durableSessions;
+    this.#faults = options.faults ?? {};
+    this.#nowEpochSeconds = options.nowEpochSeconds ?? observedAtEpochSeconds;
+    this.#durableSessionTtlSeconds =
+      options.durableSessions === undefined
+        ? undefined
+        : (options.durableSessionTtlSeconds ??
+          MCP_DURABLE_SESSION_TTL_DEFAULT_SECONDS);
+    if (
+      this.#durableSessionTtlSeconds !== undefined &&
+      (!Number.isSafeInteger(this.#durableSessionTtlSeconds) ||
+        this.#durableSessionTtlSeconds < MCP_DURABLE_SESSION_TTL_MIN_SECONDS ||
+        this.#durableSessionTtlSeconds > MCP_DURABLE_SESSION_TTL_MAX_SECONDS)
+    ) {
+      throw new Error("MCP durable session TTL is outside the supported range");
+    }
   }
 
   get sessionMode(): McpSessionMode {
     return this.#durableSessions === undefined
       ? MCP_SESSION_MODES.memory
       : MCP_SESSION_MODES.durableEncrypted;
+  }
+
+  get sessionTtlSeconds(): number | null {
+    return this.#durableSessionTtlSeconds ?? null;
   }
 
   async close(): Promise<void> {
@@ -593,6 +637,20 @@ export class LocalAnonymizeService {
     }
   }
 
+  #observedAt(): number {
+    const seconds = this.#nowEpochSeconds();
+    if (
+      !Number.isSafeInteger(seconds) ||
+      seconds < 0 ||
+      seconds > 0xff_ff_ff_ff
+    ) {
+      throw new Error(
+        "The current time is outside the supported session range",
+      );
+    }
+    return seconds;
+  }
+
   async #session(sessionId: string, language?: string): Promise<SessionLease> {
     if (this.#durableSessions !== undefined && language !== undefined) {
       throw new Error(
@@ -610,10 +668,25 @@ export class LocalAnonymizeService {
       if (existing.status === "busy") {
         throw new Error("The requested session is handling another operation");
       }
-      const checkpoint = existing.session.toPlaintextJson();
+      const observedAt =
+        this.#durableSessions === undefined ? undefined : this.#observedAt();
+      if (
+        observedAt !== undefined &&
+        existing.expiresAtEpochSeconds !== undefined &&
+        observedAt >= existing.expiresAtEpochSeconds
+      ) {
+        this.#sessions.delete(sessionId);
+        await this.#durableSessions?.delete(sessionId);
+        throw new Error("The requested session is unavailable");
+      }
+      const checkpoint =
+        observedAt === undefined
+          ? existing.session.toPlaintextJson()
+          : existing.session.toPlaintextJsonAt(observedAt);
       existing.status = "busy";
       return {
         entry: existing,
+        observedAtEpochSeconds: observedAt,
         sessionId,
         rollback: { type: "restore", checkpoint },
       };
@@ -630,13 +703,30 @@ export class LocalAnonymizeService {
         language === undefined ? {} : { language },
       );
       const durableSessions = this.#durableSessions;
+      const observedAt = this.#observedAt();
       const stored =
         durableSessions === undefined
           ? undefined
-          : await durableSessions.load(sessionId);
+          : await durableSessions.load(sessionId, observedAt);
       let session: RedactionSession;
+      let expiresAtEpochSeconds: number | undefined;
       if (stored === undefined) {
-        session = pipeline.createRedactionSession(sessionId);
+        if (durableSessions === undefined) {
+          session = pipeline.createRedactionSession(sessionId);
+        } else {
+          const ttl = this.#durableSessionTtlSeconds;
+          if (ttl === undefined || observedAt > 0xff_ff_ff_ff - ttl) {
+            throw new Error(
+              "MCP durable session expiry is outside the supported range",
+            );
+          }
+          expiresAtEpochSeconds = observedAt + ttl;
+          session = pipeline.createRedactionSessionWithLifecycle({
+            sessionId,
+            createdAtEpochSeconds: observedAt,
+            expiresAtEpochSeconds,
+          });
+        }
       } else {
         if (durableSessions === undefined) {
           throw new Error("Durable session storage is unavailable");
@@ -645,9 +735,18 @@ export class LocalAnonymizeService {
           session = durableSessions.restore({
             archive: stored.bytes,
             expectedSessionId: sessionId,
-            observedAtEpochSeconds: observedAtEpochSeconds(),
+            observedAtEpochSeconds: observedAt,
             restorer: pipeline,
           });
+          if (
+            session.inspect(observedAt).expiresAtEpochSeconds !==
+            stored.expiresAtEpochSeconds
+          ) {
+            throw new Error(
+              "Durable session archive expiry does not match storage",
+            );
+          }
+          expiresAtEpochSeconds = stored.expiresAtEpochSeconds;
         } catch (error) {
           throw new Error("The requested durable session is unavailable", {
             cause: error,
@@ -655,6 +754,7 @@ export class LocalAnonymizeService {
         }
       }
       const entry: SessionEntry = {
+        expiresAtEpochSeconds,
         language,
         session,
         restoreSession: (plaintextJson) =>
@@ -664,6 +764,8 @@ export class LocalAnonymizeService {
       this.#sessions.set(sessionId, entry);
       return {
         entry,
+        observedAtEpochSeconds:
+          durableSessions === undefined ? undefined : observedAt,
         sessionId,
         rollback:
           stored === undefined
@@ -707,6 +809,8 @@ export class LocalAnonymizeService {
 
   async #readSession(sessionId: string): Promise<SessionLease> {
     let entry = this.#sessions.get(sessionId);
+    const observedAt =
+      this.#durableSessions === undefined ? undefined : this.#observedAt();
     if (entry === undefined && this.#durableSessions !== undefined) {
       if (this.#sessionInitializations.has(sessionId)) {
         throw new Error("The requested session is still initializing");
@@ -714,16 +818,28 @@ export class LocalAnonymizeService {
       this.#sessionInitializations.add(sessionId);
       try {
         const pipeline = nativeNodeSurface.getDefaultNativePipeline({});
-        const stored = await this.#durableSessions.load(sessionId);
+        if (observedAt === undefined) {
+          throw new Error("Durable session observation time is unavailable");
+        }
+        const stored = await this.#durableSessions.load(sessionId, observedAt);
         if (stored !== undefined) {
           try {
             const session = this.#durableSessions.restore({
               archive: stored.bytes,
               expectedSessionId: sessionId,
-              observedAtEpochSeconds: observedAtEpochSeconds(),
+              observedAtEpochSeconds: observedAt,
               restorer: pipeline,
             });
+            if (
+              session.inspect(observedAt).expiresAtEpochSeconds !==
+              stored.expiresAtEpochSeconds
+            ) {
+              throw new Error(
+                "Durable session archive expiry does not match storage",
+              );
+            }
             entry = {
+              expiresAtEpochSeconds: stored.expiresAtEpochSeconds,
               language: undefined,
               session,
               restoreSession: (plaintextJson) =>
@@ -744,25 +860,48 @@ export class LocalAnonymizeService {
     if (entry === undefined) {
       throw new Error("The requested session is unavailable");
     }
+    if (
+      observedAt !== undefined &&
+      entry.expiresAtEpochSeconds !== undefined &&
+      observedAt >= entry.expiresAtEpochSeconds
+    ) {
+      this.#sessions.delete(sessionId);
+      await this.#durableSessions?.delete(sessionId);
+      throw new Error("The requested session is unavailable");
+    }
     if (entry.status !== "ready") {
       throw new Error("The requested in-memory session is unavailable");
     }
     entry.status = "busy";
-    return { entry, sessionId, rollback: { type: "release" } };
+    return {
+      entry,
+      observedAtEpochSeconds: observedAt,
+      sessionId,
+      rollback: { type: "release" },
+    };
   }
 
   async #persistSession(
     sessionId: string,
     session: RedactionSession,
+    operationObservedAtEpochSeconds?: number,
   ): Promise<void> {
     if (this.#durableSessions === undefined) {
       return;
     }
-    const archive = this.#durableSessions.seal(
-      session,
-      observedAtEpochSeconds(),
-    );
-    await this.#durableSessions.save(sessionId, archive);
+    const observedAt = operationObservedAtEpochSeconds ?? this.#observedAt();
+    const archive = this.#durableSessions.seal(session, observedAt);
+    const expiresAtEpochSeconds =
+      session.inspect(observedAt).expiresAtEpochSeconds;
+    if (expiresAtEpochSeconds === null) {
+      throw new Error("MCP durable session is missing its expiry policy");
+    }
+    await this.#durableSessions.save({
+      sessionId,
+      archive,
+      expiresAtEpochSeconds,
+      observedAtEpochSeconds: observedAt,
+    });
   }
 
   async anonymizeText(
@@ -785,8 +924,18 @@ export class LocalAnonymizeService {
     const text = decodeText(source.bytes);
     const lease = await this.#session(input.sessionId, input.language);
     try {
-      const result = lease.entry.session.redact_text(text);
-      await this.#persistSession(input.sessionId, lease.entry.session);
+      const result =
+        lease.observedAtEpochSeconds === undefined
+          ? lease.entry.session.redact_text(text)
+          : lease.entry.session.redactTextAt({
+              fullText: text,
+              observedAtEpochSeconds: lease.observedAtEpochSeconds,
+            });
+      await this.#persistSession(
+        input.sessionId,
+        lease.entry.session,
+        lease.observedAtEpochSeconds,
+      );
       this.#faults.beforeOutputPublish?.();
       await destination.write(result.redaction.redactedText);
       this.#commitSession(lease);
@@ -875,6 +1024,9 @@ export class LocalAnonymizeService {
     try {
       const plan = lease.entry.session.planTextBatchWithCallerDetections({
         inputs: [{ fullText: text, detections }],
+        ...(lease.observedAtEpochSeconds === undefined
+          ? {}
+          : { observedAtEpochSeconds: lease.observedAtEpochSeconds }),
       });
       const block = plan.blocks.at(0);
       if (plan.blocks.length !== 1 || block === undefined) {
@@ -884,7 +1036,11 @@ export class LocalAnonymizeService {
       }
       const redactedText = applyTextReplacements(text, block.replacements);
       plan.commit();
-      await this.#persistSession(input.sessionId, lease.entry.session);
+      await this.#persistSession(
+        input.sessionId,
+        lease.entry.session,
+        lease.observedAtEpochSeconds,
+      );
       this.#faults.beforeOutputPublish?.();
       await destination.write(redactedText);
       this.#commitSession(lease);
@@ -921,7 +1077,10 @@ export class LocalAnonymizeService {
     const text = decodeText(source.bytes);
     const lease = await this.#readSession(input.sessionId);
     try {
-      const restored = lease.entry.session.restoreText(text);
+      const restored = lease.entry.session.restoreText(
+        text,
+        lease.observedAtEpochSeconds,
+      );
       await destination.write(restored);
       this.#commitSession(lease);
       return {
@@ -966,8 +1125,15 @@ export class LocalAnonymizeService {
               : DOCX_COVERAGE_MODES.requireFull,
           },
         },
+        ...(lease.observedAtEpochSeconds === undefined
+          ? {}
+          : { observedAtEpochSeconds: lease.observedAtEpochSeconds }),
       });
-      await this.#persistSession(input.sessionId, lease.entry.session);
+      await this.#persistSession(
+        input.sessionId,
+        lease.entry.session,
+        lease.observedAtEpochSeconds,
+      );
       this.#faults.beforeOutputPublish?.();
       await destination.write(result.document);
       this.#commitSession(lease);
@@ -1010,6 +1176,9 @@ export class LocalAnonymizeService {
         document: source.bytes,
         session: lease.entry.session,
         expectedSessionId: input.sessionId,
+        ...(lease.observedAtEpochSeconds === undefined
+          ? {}
+          : { observedAtEpochSeconds: lease.observedAtEpochSeconds }),
       });
       if (result.coverage.status === "partial" && !input.allowPartialCoverage) {
         throw new Error(
@@ -1090,6 +1259,7 @@ const capabilitiesResult = (service: LocalAnonymizeService) => {
       },
       formats: ["docx", "text"] as const,
       sessionMode: service.sessionMode,
+      sessionTtlSeconds: service.sessionTtlSeconds,
       tools: MCP_TOOL_NAMES,
       transport: "stdio" as const,
     },

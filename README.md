@@ -206,7 +206,8 @@ The stdio MCP server exposes path-only text and DOCX anonymization, restoration,
 DOCX inspection, and a read-only capability-discovery tool. It accepts no raw
 document content in tool arguments and returns no document text or session
 mappings. Sessions are in-memory by default; opt-in encrypted persistence across
-server restarts requires explicit `--session-dir` and `--key-file` paths. See
+server restarts requires explicit `--session-dir` and `--key-file` paths and
+uses a seven-day TTL by default (`--session-ttl-seconds` overrides it). See
 [`packages/mcp`](packages/mcp) for the private-path, raw-key, archive-limit, and
 failure-mode contract.
 

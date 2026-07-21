@@ -12,7 +12,7 @@ lifetime, restoration, and what metadata can still carry PII.
 | Caller detections and operators    | Yes  | Yes    | Yes  | Yes | v1 sidecar paths     |
 | Streaming text results             | Yes  | Yes    | Yes  | No  | No                   |
 | Cross-document sessions            | Yes  | Yes    | Yes  | Yes | In-memory            |
-| Encrypted session transfer         | Yes  | Yes    | No   | Yes | No; durable local    |
+| Encrypted session transfer         | Yes  | Yes    | Yes  | Yes | No; durable local    |
 | DOCX extraction/coverage           | Yes  | Yes    | No   | Yes | Aggregate inspection |
 | DOCX rewrite/anonymize/restore     | Yes  | Yes    | No   | Yes | Yes                  |
 | Runtime capability discovery       | Yes  | Yes    | Yes  | Yes | Manifest + tools     |

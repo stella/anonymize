@@ -17,12 +17,15 @@ describe("MCP server arguments", () => {
         "/sessions",
         "--key-file",
         "/key",
+        "--session-ttl-seconds",
+        "3600",
       ]),
     ).toEqual({
       help: false,
       keyFile: "/key",
       roots: ["/workspace"],
       sessionDirectory: "/sessions",
+      sessionTtlSeconds: 3600,
     });
     expect(() =>
       parseServerArguments([
@@ -35,6 +38,28 @@ describe("MCP server arguments", () => {
     expect(() => parseServerArguments(["--root=/workspace"])).toThrow(
       "Unsupported MCP argument",
     );
+    expect(() =>
+      parseServerArguments([
+        "--root",
+        "/workspace",
+        "--session-ttl-seconds",
+        "3600",
+      ]),
+    ).toThrow("requires durable session paths");
+    for (const ttl of ["0", "59", "31536001", "1.5", "-1"]) {
+      expect(() =>
+        parseServerArguments([
+          "--root",
+          "/workspace",
+          "--session-dir",
+          "/sessions",
+          "--key-file",
+          "/key",
+          "--session-ttl-seconds",
+          ttl,
+        ]),
+      ).toThrow();
+    }
   });
 
   test("documents the raw key format and prints help without roots", () => {
@@ -43,6 +68,7 @@ describe("MCP server arguments", () => {
       roots: [],
     });
     expect(SERVER_HELP).toContain("exact 32-byte raw archive key");
+    expect(SERVER_HELP).toContain("default: 604800");
   });
 
   test("serializes signal and transport shutdown while connect is in flight", async () => {

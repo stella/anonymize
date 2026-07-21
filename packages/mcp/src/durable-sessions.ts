@@ -17,12 +17,11 @@ export const SESSION_ARCHIVE_MAX_BYTES = 16 * 1024 * 1024 + 57;
 export const SESSION_ARCHIVE_MAX_COUNT = 256;
 export const SESSION_ARCHIVE_TOTAL_MAX_BYTES = 256 * 1024 * 1024;
 
-const ARCHIVE_NAME = /^[a-f0-9]{64}\.stlasess$/u;
+const ARCHIVE_NAME = /^([a-f0-9]{64})\.([1-9][0-9]{0,9})\.stlasess$/u;
 const SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 const STAGING_NAME =
-  /^[a-f0-9]{64}\.stlasess\.tmp\.[0-9a-f]{8}-[0-9a-f-]{27}$/u;
+  /^[a-f0-9]{64}\.[1-9][0-9]{0,9}\.stlasess\.tmp\.[0-9a-f]{8}-[0-9a-f-]{27}$/u;
 const READ_CHUNK_BYTES = 64 * 1024;
-const LOCK_FILE_NAME = ".stella-session.lock";
 
 export const DURABLE_SESSION_FAULT_POINTS = {
   beforeDirectoryFsync: "before-directory-fsync",
@@ -81,22 +80,20 @@ const assertPosixDurabilitySupport = (): void => {
 const acquireDirectoryLock = async (
   directoryPath: string,
 ): Promise<FileHandle> => {
-  const path = join(directoryPath, LOCK_FILE_NAME);
   const handle = await open(
-    path,
-    fsConstants.O_RDWR |
-      fsConstants.O_CREAT |
+    directoryPath,
+    fsConstants.O_RDONLY |
+      fsConstants.O_DIRECTORY |
       fsConstants.O_NOFOLLOW |
       fsConstants.O_NONBLOCK,
-    0o600,
   );
   try {
     const metadata = await handle.stat();
-    if (!metadata.isFile()) {
-      throw new Error("MCP session lock must be a regular file");
+    if (!metadata.isDirectory()) {
+      throw new Error("MCP session lock must be a directory handle");
     }
-    assertOwner(metadata.uid, "MCP session lock");
-    assertPrivateMode(metadata.mode, "MCP session lock");
+    assertOwner(metadata.uid, "MCP session directory");
+    assertPrivateMode(metadata.mode, "MCP session directory");
     // Loaded lazily because Bun is used as a repository test/build tool but
     // cannot safely load this Node native addon. The shipped MCP runtime is
     // Node; Node integration tests exercise this path.
@@ -212,8 +209,33 @@ const readKey = async (path: string): Promise<Uint8Array> => {
   }
 };
 
-const archiveName = (sessionId: string): string =>
-  `${createHash("sha256").update(sessionId, "utf8").digest("hex")}.stlasess`;
+const archiveHash = (sessionId: string): string =>
+  createHash("sha256").update(sessionId, "utf8").digest("hex");
+
+const archiveName = (
+  sessionId: string,
+  expiresAtEpochSeconds: number,
+): string => `${archiveHash(sessionId)}.${expiresAtEpochSeconds}.stlasess`;
+
+const parseArchiveName = (
+  name: string,
+): { expiresAtEpochSeconds: number; hash: string } | undefined => {
+  const match = ARCHIVE_NAME.exec(name);
+  const hash = match?.at(1);
+  const expiryText = match?.at(2);
+  if (hash === undefined || expiryText === undefined) {
+    return undefined;
+  }
+  const expiresAtEpochSeconds = Number(expiryText);
+  if (
+    !Number.isSafeInteger(expiresAtEpochSeconds) ||
+    expiresAtEpochSeconds <= 0 ||
+    expiresAtEpochSeconds > 0xff_ff_ff_ff
+  ) {
+    return undefined;
+  }
+  return { expiresAtEpochSeconds, hash };
+};
 
 const assertSessionId = (sessionId: string): void => {
   if (!SESSION_ID.test(sessionId)) {
@@ -229,6 +251,14 @@ export type DurableSessionStoreOptions = {
 
 export type StoredSessionArchive = {
   bytes: Uint8Array;
+  expiresAtEpochSeconds: number;
+};
+
+export type SaveStoredSessionOptions = {
+  archive: Uint8Array;
+  expiresAtEpochSeconds: number;
+  observedAtEpochSeconds: number;
+  sessionId: string;
 };
 
 export type EncryptableSession = {
@@ -350,15 +380,30 @@ export class DurableSessionStore {
     return this.#closePromise;
   }
 
-  async load(sessionId: string): Promise<StoredSessionArchive | undefined> {
+  async load(
+    sessionId: string,
+    observedAtEpochSeconds: number,
+  ): Promise<StoredSessionArchive | undefined> {
     this.#assertOpen();
-    return this.#withMutation(() => this.#load(sessionId));
+    return this.#withMutation(() =>
+      this.#load(sessionId, observedAtEpochSeconds),
+    );
   }
 
-  async #load(sessionId: string): Promise<StoredSessionArchive | undefined> {
+  async #load(
+    sessionId: string,
+    observedAtEpochSeconds: number,
+  ): Promise<StoredSessionArchive | undefined> {
     assertSessionId(sessionId);
-    await this.#validateInventory({ removeStagingFiles: false });
-    const path = this.#path(sessionId);
+    const inventory = await this.#validateInventory({
+      removeExpiredAtEpochSeconds: observedAtEpochSeconds,
+      removeStagingFiles: false,
+    });
+    const archive = inventory.archives.get(archiveHash(sessionId));
+    if (archive === undefined) {
+      return undefined;
+    }
+    const path = join(this.#directory.path, archive.name);
     let handle: Awaited<ReturnType<typeof open>>;
     try {
       handle = await open(
@@ -389,27 +434,43 @@ export class DurableSessionStore {
       if (!currentMetadata.isFile() || !sameFile(metadata, currentMetadata)) {
         throw new Error("Encrypted session archive changed while it was read");
       }
-      return { bytes };
+      return { bytes, expiresAtEpochSeconds: archive.expiresAtEpochSeconds };
     } finally {
       await handle.close();
     }
   }
 
-  async save(sessionId: string, archive: Uint8Array): Promise<void> {
+  async save(options: SaveStoredSessionOptions): Promise<void> {
     this.#assertOpen();
-    return this.#withMutation(() => this.#save(sessionId, archive));
+    return this.#withMutation(() => this.#save(options));
   }
 
-  async #save(sessionId: string, archive: Uint8Array): Promise<void> {
+  async #save({
+    sessionId,
+    archive,
+    expiresAtEpochSeconds,
+    observedAtEpochSeconds,
+  }: SaveStoredSessionOptions): Promise<void> {
     assertSessionId(sessionId);
+    if (
+      !Number.isSafeInteger(expiresAtEpochSeconds) ||
+      expiresAtEpochSeconds <= observedAtEpochSeconds ||
+      expiresAtEpochSeconds > 0xff_ff_ff_ff
+    ) {
+      throw new Error("MCP durable session expiry is invalid");
+    }
     if (archive.byteLength > SESSION_ARCHIVE_MAX_BYTES) {
       throw new Error("Encrypted session archive exceeds the byte limit");
     }
     const inventory = await this.#validateInventory({
+      removeExpiredAtEpochSeconds: observedAtEpochSeconds,
       removeStagingFiles: false,
     });
     await this.#assertDirectory();
-    const destination = this.#path(sessionId);
+    const destination = join(
+      this.#directory.path,
+      archiveName(sessionId, expiresAtEpochSeconds),
+    );
     const temporary = `${destination}.tmp.${randomUUID()}`;
     const handle = await open(
       temporary,
@@ -450,6 +511,13 @@ export class DurableSessionStore {
       ) {
         throw new Error("Encrypted session archive path is not a regular file");
       }
+      const prior = inventory.archives.get(archiveHash(sessionId));
+      if (
+        prior !== undefined &&
+        prior.name !== archiveName(sessionId, expiresAtEpochSeconds)
+      ) {
+        throw new Error("MCP session archive expiry cannot change");
+      }
       const nextCount =
         inventory.archiveCount + (existing === undefined ? 1 : 0);
       const nextTotalBytes =
@@ -484,7 +552,14 @@ export class DurableSessionStore {
   async #delete(sessionId: string): Promise<void> {
     assertSessionId(sessionId);
     await this.#assertDirectory();
-    const path = this.#path(sessionId);
+    const inventory = await this.#validateInventory({
+      removeStagingFiles: false,
+    });
+    const archive = inventory.archives.get(archiveHash(sessionId));
+    if (archive === undefined) {
+      return;
+    }
+    const path = join(this.#directory.path, archive.name);
     const metadata = await lstat(path).catch((error: unknown) => {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") {
         return undefined;
@@ -500,10 +575,6 @@ export class DurableSessionStore {
     await unlink(path);
     await this.#syncDirectory();
     await this.#assertDirectory();
-  }
-
-  #path(sessionId: string): string {
-    return join(this.#directory.path, archiveName(sessionId));
   }
 
   #assertOpen(): void {
@@ -546,19 +617,11 @@ export class DurableSessionStore {
 
   async #syncDirectory(): Promise<void> {
     await this.#inject(DURABLE_SESSION_FAULT_POINTS.beforeDirectoryFsync);
-    const handle = await open(
-      this.#directory.path,
-      fsConstants.O_RDONLY | fsConstants.O_DIRECTORY | fsConstants.O_NOFOLLOW,
-    );
-    try {
-      const metadata = await handle.stat();
-      if (!metadata.isDirectory() || !sameFile(this.#directory, metadata)) {
-        throw new Error("MCP session directory changed before synchronization");
-      }
-      await handle.sync();
-    } finally {
-      await handle.close();
+    const metadata = await this.#lockHandle.stat();
+    if (!metadata.isDirectory() || !sameFile(this.#directory, metadata)) {
+      throw new Error("MCP session directory changed before synchronization");
     }
+    await this.#lockHandle.sync();
   }
 
   async #inject(point: DurableSessionFaultPoint): Promise<void> {
@@ -567,26 +630,27 @@ export class DurableSessionStore {
 
   async #validateInventory({
     removeStagingFiles,
+    removeExpiredAtEpochSeconds,
   }: {
     removeStagingFiles: boolean;
-  }): Promise<SessionInventory> {
+    removeExpiredAtEpochSeconds?: number;
+  }): Promise<
+    SessionInventory & {
+      archives: Map<string, { expiresAtEpochSeconds: number; name: string }>;
+    }
+  > {
     await this.#assertDirectory();
     const entries = await readdir(this.#directory.path, {
       withFileTypes: true,
     });
     let archiveCount = 0;
     let totalBytes = 0;
+    const archives = new Map<
+      string,
+      { expiresAtEpochSeconds: number; name: string }
+    >();
     for (const entry of entries) {
       const path = join(this.#directory.path, entry.name);
-      if (entry.name === LOCK_FILE_NAME) {
-        const metadata = await lstat(path);
-        if (!metadata.isFile() || metadata.isSymbolicLink()) {
-          throw new Error("MCP session directory contains an unsafe lock path");
-        }
-        assertOwner(metadata.uid, "MCP session lock");
-        assertPrivateMode(metadata.mode, "MCP session lock");
-        continue;
-      }
       if (STAGING_NAME.test(entry.name)) {
         if (!removeStagingFiles) {
           throw new Error("MCP session directory contains a partial archive");
@@ -601,11 +665,8 @@ export class DurableSessionStore {
         await this.#syncDirectory();
         continue;
       }
-      if (
-        !ARCHIVE_NAME.test(entry.name) ||
-        !entry.isFile() ||
-        entry.isSymbolicLink()
-      ) {
+      const parsed = parseArchiveName(entry.name);
+      if (parsed === undefined || !entry.isFile() || entry.isSymbolicLink()) {
         throw new Error("MCP session directory contains an unsupported entry");
       }
       const metadata = await lstat(path);
@@ -619,6 +680,21 @@ export class DurableSessionStore {
       if (metadata.size > SESSION_ARCHIVE_MAX_BYTES) {
         throw new Error("Encrypted session archive exceeds the byte limit");
       }
+      if (
+        removeExpiredAtEpochSeconds !== undefined &&
+        removeExpiredAtEpochSeconds >= parsed.expiresAtEpochSeconds
+      ) {
+        await unlink(path);
+        await this.#syncDirectory();
+        continue;
+      }
+      if (archives.has(parsed.hash)) {
+        throw new Error("MCP session directory contains duplicate archives");
+      }
+      archives.set(parsed.hash, {
+        expiresAtEpochSeconds: parsed.expiresAtEpochSeconds,
+        name: entry.name,
+      });
       archiveCount += 1;
       totalBytes += metadata.size;
       if (archiveCount > SESSION_ARCHIVE_MAX_COUNT) {
@@ -631,6 +707,6 @@ export class DurableSessionStore {
       }
     }
     await this.#assertDirectory();
-    return { archiveCount, totalBytes };
+    return { archiveCount, archives, totalBytes };
   }
 }

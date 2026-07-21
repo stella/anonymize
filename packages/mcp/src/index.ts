@@ -1,5 +1,8 @@
 export {
   LocalAnonymizeService,
+  MCP_DURABLE_SESSION_TTL_DEFAULT_SECONDS,
+  MCP_DURABLE_SESSION_TTL_MAX_SECONDS,
+  MCP_DURABLE_SESSION_TTL_MIN_SECONDS,
   MCP_SESSION_MODES,
   PathScope,
   createAnonymizeMcpServer,
@@ -7,6 +10,7 @@ export {
 export type {
   AuditSafeResult,
   LocalAnonymizeServiceFaults,
+  LocalAnonymizeServiceOptions,
   McpSessionMode,
 } from "./local";
 export {
@@ -23,5 +27,6 @@ export type {
   EncryptableSession,
   EncryptedSessionRestorer,
   RestoreStoredSessionOptions,
+  SaveStoredSessionOptions,
   StoredSessionArchive,
 } from "./durable-sessions";
