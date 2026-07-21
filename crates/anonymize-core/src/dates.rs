@@ -227,10 +227,7 @@ fn has_hard_terminal_day_month_boundary(text: &str, month_end: usize) -> bool {
   str_tail(text, after_month)
     .and_then(|tail| tail.chars().next())
     .is_none_or(|character| {
-      matches!(
-        character,
-        '\n' | '\r' | '.' | ';' | ':' | '!' | '?' | ')' | ']'
-      )
+      matches!(character, '.' | ';' | ':' | '!' | '?' | ')' | ']')
     })
 }
 
@@ -626,6 +623,7 @@ mod tests {
         .is_empty()
     );
     assert!(spans_for("SECTION 12 MAY BE AMENDED", "MAY", true).is_empty());
+    assert!(spans_for("Section 12 may\nbe amended.", "may", true).is_empty());
     assert_eq!(spans_for("Due 12 may.", "may", true), vec!["12 may"]);
     assert_eq!(
       spans_for("Effective 12 May next week.", "May", true),
