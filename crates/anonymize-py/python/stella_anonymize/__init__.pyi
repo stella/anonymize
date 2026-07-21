@@ -146,6 +146,7 @@ PdfTextLayerCoverage: TypeAlias = Literal["absent", "partial", "complete"]
 PdfOcrCoverage: TypeAlias = Literal["not-run", "partial", "complete"]
 PdfInspectionGap: TypeAlias = Literal[
     "encrypted-document",
+    "observation-provider-not-identified",
     "page-content-not-observed",
     "page-not-rendered",
     "partial-text-layer",
@@ -176,6 +177,20 @@ class PdfPageObservation(TypedDict):
     ocr: PdfOcrCoverage
     imageCount: int
 
+class PdfObservationProvider(TypedDict):
+    id: str
+    name: str
+    version: str
+
+class PdfObservationDocument(TypedDict):
+    sha256: str
+
+class PdfObservationBatch(TypedDict):
+    version: Literal[1]
+    document: PdfObservationDocument
+    provider: PdfObservationProvider
+    pages: Sequence[PdfPageObservation]
+
 class PdfRiskInventory(TypedDict):
     acroFormFieldCount: int
     annotationCount: int
@@ -193,7 +208,7 @@ class PdfRiskInventory(TypedDict):
     xfaEntryCount: int
 
 class PdfInspectionCoverage(TypedDict):
-    status: Literal["full", "partial"]
+    status: Literal["provider-attested-full", "partial"]
     gaps: list[PdfInspectionGap]
 
 class PdfPageInspection(TypedDict):
@@ -208,11 +223,13 @@ class PdfInspection(TypedDict):
     objectCount: int
     pageCount: int
     encrypted: bool
+    observationProvider: PdfObservationProvider | None
     pages: list[PdfPageInspection]
     risks: PdfRiskInventory
     coverage: PdfInspectionCoverage
 
 PDF_INSPECTION_CONTRACT_VERSION: int
+PDF_OBSERVATION_BATCH_VERSION: int
 PDF_DOCUMENT_MAX_BYTES: int
 PDF_MAX_OBJECTS: int
 PDF_LOADED_PAYLOAD_MAX_BYTES: int
@@ -228,7 +245,7 @@ PDF_PAGE_DIMENSION_TOLERANCE_POINTS: float
 
 def inspect_pdf(
     document: BytesLike,
-    page_observations: Sequence[PdfPageObservation] | None = None,
+    observation_batch: PdfObservationBatch | None = None,
 ) -> PdfInspection: ...
 def rewrite_docx_text(
     document: BytesLike,

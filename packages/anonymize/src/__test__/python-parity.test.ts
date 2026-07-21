@@ -18,6 +18,7 @@
  */
 import { spawnSync } from "node:child_process";
 import { Buffer } from "node:buffer";
+import { createHash } from "node:crypto";
 import {
   copyFileSync,
   cpSync,
@@ -115,6 +116,7 @@ type PythonParityOutput = {
   };
   pdf_inspection: unknown;
   pdf_observed_inspection: unknown;
+  pdf_observation_errors: { wrong_sha: string; unknown_field: string };
   pdf_invalid_error: { code: string; message: string };
   caller_result: {
     redacted_text: string;
@@ -201,6 +203,7 @@ type PythonParityOutput = {
 
 const PYTHON_PARITY_SCRIPT = `
 import base64
+import hashlib
 import io
 import json
 import os
@@ -215,24 +218,40 @@ sys.path.insert(0, str(module_root))
 import stella_anonymize as anonymize
 
 pdf_inspection = anonymize.inspect_pdf(base64.b64decode(payload["pdf_base64"]))
-pdf_observation = [{
+pdf_bytes = base64.b64decode(payload["pdf_base64"])
+pdf_observation = {
+  "version": 1,
+  "document": {"sha256": hashlib.sha256(pdf_bytes).hexdigest()},
+  "provider": {"id": "test", "name": "Test renderer", "version": "1.0.0"},
+  "pages": [{
     "pageIndex": 0,
-    "widthPoints": 612.0,
-    "heightPoints": 792.0,
+    "widthPoints": 612,
+    "heightPoints": 792,
     "text": "Public fixture",
     "glyphs": [{
         "start": 0, "end": 14,
-        "bounds": {"left": 72.0, "bottom": 700.0, "right": 108.0, "top": 712.0},
+        "bounds": {"left": 72, "bottom": 700, "right": 108, "top": 712},
         "source": "embedded-text",
     }],
     "rendered": True,
     "textLayer": "complete",
     "ocr": "complete",
     "imageCount": 0,
-}]
+  }]
+}
 pdf_observed_inspection = anonymize.inspect_pdf(
-    base64.b64decode(payload["pdf_base64"]), pdf_observation
+    pdf_bytes, pdf_observation
 )
+pdf_observation_errors = {}
+for key, invalid in {
+    "wrong_sha": {**pdf_observation, "document": {"sha256": "0" * 64}},
+    "unknown_field": {**pdf_observation, "unknown": True},
+}.items():
+    try:
+        anonymize.inspect_pdf(pdf_bytes, invalid)
+        raise AssertionError(f"invalid PDF observation {key} was accepted")
+    except anonymize.PdfInspectionError as error:
+        pdf_observation_errors[key] = str(error)
 try:
     anonymize.inspect_pdf(b"\\x00")
     raise AssertionError("invalid PDF bytes were accepted")
@@ -634,6 +653,7 @@ print(
             },
             "pdf_inspection": pdf_inspection,
             "pdf_observed_inspection": pdf_observed_inspection,
+            "pdf_observation_errors": pdf_observation_errors,
             "pdf_invalid_error": pdf_invalid_error,
             "caller_result": {
                 "redacted_text": caller_result["redaction"]["redacted_text"],
@@ -910,26 +930,33 @@ describe("python binding parity", () => {
       loadNativeAnonymizeBinding().inspectPdfJson?.(fixture) ?? "null",
     ) as unknown;
     expect(python.pdf_inspection).toEqual(node);
-    const observations = [
-      {
-        pageIndex: 0,
-        widthPoints: 612,
-        heightPoints: 792,
-        text: "Public fixture",
-        glyphs: [
-          {
-            start: 0,
-            end: 14,
-            bounds: { left: 72, bottom: 700, right: 108, top: 712 },
-            source: "embedded-text",
-          },
-        ],
-        rendered: true,
-        textLayer: "complete",
-        ocr: "complete",
-        imageCount: 0,
+    const observations = {
+      version: 1,
+      document: {
+        sha256: createHash("sha256").update(fixture).digest("hex"),
       },
-    ];
+      provider: { id: "test", name: "Test renderer", version: "1.0.0" },
+      pages: [
+        {
+          pageIndex: 0,
+          widthPoints: 612,
+          heightPoints: 792,
+          text: "Public fixture",
+          glyphs: [
+            {
+              start: 0,
+              end: 14,
+              bounds: { left: 72, bottom: 700, right: 108, top: 712 },
+              source: "embedded-text",
+            },
+          ],
+          rendered: true,
+          textLayer: "complete",
+          ocr: "complete",
+          imageCount: 0,
+        },
+      ],
+    };
     const binding = loadNativeAnonymizeBinding();
     expect(python.pdf_observed_inspection).toEqual(
       JSON.parse(
@@ -937,6 +964,18 @@ describe("python binding parity", () => {
           "null",
       ),
     );
+    for (const [key, invalid] of [
+      ["wrong_sha", { ...observations, document: { sha256: "0".repeat(64) } }],
+      ["unknown_field", { ...observations, unknown: true }],
+    ] as const) {
+      let message = "";
+      try {
+        binding.inspectPdfJson?.(fixture, JSON.stringify(invalid));
+      } catch (error) {
+        message = error instanceof Error ? error.message : String(error);
+      }
+      expect(python.pdf_observation_errors[key]).toBe(message);
+    }
     let nodeMessage = "";
     try {
       binding.inspectPdfJson?.(new Uint8Array([0]));

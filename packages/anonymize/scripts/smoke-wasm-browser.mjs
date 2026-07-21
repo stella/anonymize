@@ -37,6 +37,7 @@
  * Run: `node scripts/smoke-wasm-browser.mjs` (from packages/anonymize).
  */
 import { createServer } from "node:http";
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, extname, join, normalize, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -162,7 +163,13 @@ const startServer = () =>
 
 /** Runs inside the isolated page: prove SAB is available, load the browser
  * entry, redact, and hand a compact result back to Node. */
-const runInPage = async ({ sample, externalDetectionDocument, pdfBase64 }) => {
+const runInPage = async ({
+  sample,
+  externalDetectionDocument,
+  pdfBase64,
+  pdfObservationJson,
+  invalidPdfObservationJsons,
+}) => {
   if (self.crossOriginIsolated !== true) {
     throw new Error("document is not cross-origin isolated");
   }
@@ -236,6 +243,21 @@ const runInPage = async ({ sample, externalDetectionDocument, pdfBase64 }) => {
     character.charCodeAt(0),
   );
   const pdfInspectionJson = await module.inspect_pdf_json(pdfBytes);
+  const pdfObservedInspectionJson = await module.inspect_pdf_json(
+    pdfBytes,
+    pdfObservationJson,
+  );
+  const pdfObservationErrors = [];
+  for (const invalidJson of invalidPdfObservationJsons) {
+    let message;
+    try {
+      await module.inspect_pdf_json(pdfBytes, invalidJson);
+    } catch (error) {
+      message = String(error?.message ?? error);
+    }
+    if (!message) throw new Error("invalid PDF observation batch was accepted");
+    pdfObservationErrors.push(message);
+  }
   let pdfError;
   try {
     await module.inspect_pdf_json(new Uint8Array([0]));
@@ -256,11 +278,19 @@ const runInPage = async ({ sample, externalDetectionDocument, pdfBase64 }) => {
     externalDetectionResults,
     externalDetectionRejections,
     pdfInspectionJson,
+    pdfObservedInspectionJson,
+    pdfObservationErrors,
     pdfError,
   };
 };
 
-const validate = (result, expectedPdfJson, expectedPdfError) => {
+const validate = (
+  result,
+  expectedPdfJson,
+  expectedPdfError,
+  expectedObservedPdfJson,
+  expectedObservationErrors,
+) => {
   const {
     entities,
     redactedText,
@@ -270,6 +300,8 @@ const validate = (result, expectedPdfJson, expectedPdfError) => {
     externalDetectionResults,
     externalDetectionRejections,
     pdfInspectionJson,
+    pdfObservedInspectionJson,
+    pdfObservationErrors,
     pdfError,
   } = result;
   const expectedExternalDetection = [
@@ -330,6 +362,13 @@ const validate = (result, expectedPdfJson, expectedPdfError) => {
   if (pdfInspectionJson !== expectedPdfJson || pdfError !== expectedPdfError) {
     throw new Error("browser-WASM PDF inspection success/error parity differs");
   }
+  if (
+    pdfObservedInspectionJson !== expectedObservedPdfJson ||
+    JSON.stringify(pdfObservationErrors) !==
+      JSON.stringify(expectedObservationErrors)
+  ) {
+    throw new Error("browser-WASM observed PDF parity differs");
+  }
 };
 
 const withTimeout = (promise, ms, label) =>
@@ -350,6 +389,55 @@ const main = async () => {
   const nodeBinding = nativeNodeEntry.loadNativeAnonymizeBinding();
   const pdfBytes = new Uint8Array(readFileSync(pdfFixturePath));
   const expectedPdfJson = nodeBinding.inspectPdfJson(pdfBytes);
+  const pdfObservationBatch = {
+    version: 1,
+    document: {
+      sha256: createHash("sha256").update(pdfBytes).digest("hex"),
+    },
+    provider: { id: "smoke", name: "Smoke renderer", version: "1.0.0" },
+    pages: [
+      {
+        pageIndex: 0,
+        widthPoints: 612,
+        heightPoints: 792,
+        text: "Public fixture",
+        glyphs: [
+          {
+            start: 0,
+            end: 14,
+            bounds: { left: 72, bottom: 700, right: 108, top: 712 },
+            source: "embedded-text",
+          },
+        ],
+        rendered: true,
+        textLayer: "complete",
+        ocr: "complete",
+        imageCount: 0,
+      },
+    ],
+  };
+  const pdfObservationJson = JSON.stringify(pdfObservationBatch);
+  const invalidPdfObservationJsons = [
+    JSON.stringify({
+      ...pdfObservationBatch,
+      document: { sha256: "0".repeat(64) },
+    }),
+    JSON.stringify({ ...pdfObservationBatch, unknown: true }),
+  ];
+  const expectedObservedPdfJson = nodeBinding.inspectPdfJson(
+    pdfBytes,
+    pdfObservationJson,
+  );
+  const expectedObservationErrors = invalidPdfObservationJsons.map(
+    (invalidJson) => {
+      try {
+        nodeBinding.inspectPdfJson(pdfBytes, invalidJson);
+      } catch (error) {
+        return String(error?.message ?? error);
+      }
+      throw new Error("native Node accepted an invalid PDF observation batch");
+    },
+  );
   let expectedPdfError;
   try {
     nodeBinding.inspectPdfJson(new Uint8Array([0]));
@@ -390,12 +478,20 @@ const main = async () => {
         sample: SAMPLE,
         externalDetectionDocument: EXTERNAL_DETECTION_DOCUMENT,
         pdfBase64: Buffer.from(pdfBytes).toString("base64"),
+        pdfObservationJson,
+        invalidPdfObservationJsons,
       }),
       EVAL_TIMEOUT_MS,
       "page redaction",
     );
     mark("redaction-done");
-    validate(result, expectedPdfJson, expectedPdfError);
+    validate(
+      result,
+      expectedPdfJson,
+      expectedPdfError,
+      expectedObservedPdfJson,
+      expectedObservationErrors,
+    );
 
     console.log(
       JSON.stringify({

@@ -4,10 +4,11 @@ import {
   PDF_INSPECTION_ERROR_CODES,
   type PdfInspection,
   type PdfInspectionErrorCode,
-  type PdfPageObservation,
+  type PdfObservationBatch,
 } from "./types";
 
 export const PDF_INSPECTION_CONTRACT_VERSION = 1 as const;
+export const PDF_OBSERVATION_BATCH_VERSION = 1 as const;
 export const PDF_DOCUMENT_MAX_BYTES = 64 * 1024 * 1024;
 export const PDF_STREAM_DECOMPRESSED_MAX_BYTES = 32 * 1024 * 1024;
 export const PDF_LOADED_PAYLOAD_MAX_BYTES = 128 * 1024 * 1024;
@@ -40,7 +41,7 @@ const errorCode = (message: string): PdfInspectionErrorCode => {
 };
 
 export type InspectPdfOptions = {
-  pageObservations?: readonly PdfPageObservation[];
+  observationBatch?: PdfObservationBatch;
 };
 
 export const inspectPdf = (
@@ -55,7 +56,7 @@ export const inspectPdf = (
     );
   }
   try {
-    const observations = options.pageObservations;
+    const observations = options.observationBatch;
     return JSON.parse(
       inspect(
         document,
@@ -75,6 +76,8 @@ export type {
   PdfInspection,
   PdfInspectionErrorCode,
   PdfInspectionGap,
+  PdfObservationBatch,
+  PdfObservationProvider,
   PdfPageInspection,
   PdfPageObservation,
   PdfRect,

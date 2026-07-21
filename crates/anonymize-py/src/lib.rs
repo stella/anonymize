@@ -47,7 +47,7 @@ use stella_anonymize_docx_core::{
   rewrite_docx_text as rewrite_docx_text_core,
 };
 use stella_anonymize_pdf_core::{
-  PdfInspectionErrorCode, PdfPageObservation, inspect_pdf as inspect_pdf_core,
+  PdfInspectionErrorCode, PdfObservationBatch, inspect_pdf as inspect_pdf_core,
   inspect_pdf_with_observations as inspect_pdf_with_observations_core,
   validate_pdf_observations_json_byte_length,
 };
@@ -1490,13 +1490,14 @@ fn inspect_pdf_json(
           pdf_inspection_code(inspection_error.code())
         ))
       })?;
-    let observations =
-      serde_json::from_str::<Vec<PdfPageObservation>>(observations_json)
-        .map_err(|parse_error| {
-          PyValueError::new_err(format!(
-            "invalid-observation: PDF observations are invalid: {parse_error}"
-          ))
-        })?;
+    let observations = serde_json::from_str::<PdfObservationBatch>(
+      observations_json,
+    )
+    .map_err(|parse_error| {
+      PyValueError::new_err(format!(
+        "invalid-observation: PDF observations are invalid: {parse_error}"
+      ))
+    })?;
     inspect_pdf_with_observations_core(document, observations)
   } else {
     inspect_pdf_core(document)

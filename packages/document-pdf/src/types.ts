@@ -27,6 +27,19 @@ export type PdfPageObservation = {
   imageCount: number;
 };
 
+export type PdfObservationProvider = {
+  id: string;
+  name: string;
+  version: string;
+};
+
+export type PdfObservationBatch = {
+  version: 1;
+  document: { sha256: string };
+  provider: PdfObservationProvider;
+  pages: readonly PdfPageObservation[];
+};
+
 export type PdfRiskInventory = {
   acroFormFieldCount: number;
   annotationCount: number;
@@ -46,6 +59,7 @@ export type PdfRiskInventory = {
 
 export type PdfInspectionGap =
   | "encrypted-document"
+  | "observation-provider-not-identified"
   | "page-content-not-observed"
   | "page-not-rendered"
   | "partial-text-layer"
@@ -65,10 +79,11 @@ export type PdfInspection = {
   objectCount: number;
   pageCount: number;
   encrypted: boolean;
+  observationProvider: PdfObservationProvider | null;
   pages: readonly PdfPageInspection[];
   risks: PdfRiskInventory;
   coverage: {
-    status: "full" | "partial";
+    status: "provider-attested-full" | "partial";
     gaps: readonly PdfInspectionGap[];
   };
 };

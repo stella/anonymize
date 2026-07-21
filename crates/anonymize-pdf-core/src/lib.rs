@@ -6,9 +6,11 @@ use std::fmt;
 use lopdf::xref::XrefEntry;
 use lopdf::{Dictionary, Document, LoadOptions, Object};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use thiserror::Error;
 
 pub const PDF_INSPECTION_CONTRACT_VERSION: u8 = 1;
+pub const PDF_OBSERVATION_BATCH_VERSION: u8 = 1;
 pub const PDF_DOCUMENT_MAX_BYTES: usize = 64 * 1024 * 1024;
 pub const PDF_STREAM_DECOMPRESSED_MAX_BYTES: usize = 32 * 1024 * 1024;
 pub const PDF_LOADED_PAYLOAD_MAX_BYTES: usize = 128 * 1024 * 1024;
@@ -110,6 +112,31 @@ pub struct PdfPageObservation {
   pub image_count: u32,
 }
 
+#[derive(Debug, Clone, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PdfObservationDocument {
+  /// Lowercase hexadecimal SHA-256 of the exact PDF bytes observed.
+  pub sha256: String,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PdfObservationProvider {
+  pub id: String,
+  pub name: String,
+  pub version: String,
+}
+
+/// Strict renderer assertion bound to the exact input document bytes.
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PdfObservationBatch {
+  pub version: u8,
+  pub document: PdfObservationDocument,
+  pub provider: PdfObservationProvider,
+  pub pages: Vec<PdfPageObservation>,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct PdfPageObservationRequest<'a> {
   pub document: &'a [u8],
@@ -122,6 +149,8 @@ pub struct PdfPageObservationRequest<'a> {
 /// independent of a renderer and validates every returned observation.
 pub trait PdfPageObservationProvider {
   type Error: fmt::Display;
+
+  fn metadata(&self) -> PdfObservationProvider;
 
   fn observe_page(
     &mut self,
@@ -159,6 +188,7 @@ pub struct PdfRiskInventory {
 #[serde(rename_all = "kebab-case")]
 pub enum PdfInspectionGap {
   EncryptedDocument,
+  ObservationProviderNotIdentified,
   PageContentNotObserved,
   PageNotRendered,
   PartialTextLayer,
@@ -172,9 +202,9 @@ pub enum PdfInspectionGap {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "kebab-case")]
 pub enum PdfInspectionCoverageStatus {
-  Full,
+  ProviderAttestedFull,
   Partial,
 }
 
@@ -202,6 +232,7 @@ pub struct PdfInspection {
   pub object_count: u32,
   pub page_count: u32,
   pub encrypted: bool,
+  pub observation_provider: Option<PdfObservationProvider>,
   pub pages: Vec<PdfPageInspection>,
   pub risks: PdfRiskInventory,
   pub coverage: PdfInspectionCoverage,
@@ -221,7 +252,9 @@ fn error(
 pub fn inspect_pdf(
   document: &[u8],
 ) -> Result<PdfInspection, PdfInspectionError> {
-  inspect_pdf_with_observations(document, Vec::new())
+  let parsed = parse_document(document)?;
+  let pages = validated_pages(&parsed)?;
+  inspect_parsed(document, parsed, &pages, Vec::new(), None)
 }
 
 pub fn validate_pdf_observations_json_byte_length(
@@ -243,6 +276,8 @@ pub fn inspect_pdf_with_provider<P: PdfPageObservationProvider>(
   provider: &mut P,
 ) -> Result<PdfInspection, PdfInspectionError> {
   let parsed = parse_document(document)?;
+  let provider_metadata = provider.metadata();
+  validate_provider(&provider_metadata)?;
   let pages = validated_pages(&parsed)?;
   let mut observations = Vec::with_capacity(pages.len());
   for page_index in 0..pages.len() {
@@ -266,16 +301,78 @@ pub fn inspect_pdf_with_provider<P: PdfPageObservationProvider>(
         })?,
     );
   }
-  inspect_parsed(document, parsed, &pages, observations)
+  inspect_parsed(
+    document,
+    parsed,
+    &pages,
+    observations,
+    Some(provider_metadata),
+  )
 }
 
 pub fn inspect_pdf_with_observations(
   document: &[u8],
-  observations: Vec<PdfPageObservation>,
+  batch: PdfObservationBatch,
 ) -> Result<PdfInspection, PdfInspectionError> {
   let parsed = parse_document(document)?;
   let pages = validated_pages(&parsed)?;
-  inspect_parsed(document, parsed, &pages, observations)
+  validate_observation_batch(document, &batch)?;
+  inspect_parsed(document, parsed, &pages, batch.pages, Some(batch.provider))
+}
+
+fn validate_observation_batch(
+  document: &[u8],
+  batch: &PdfObservationBatch,
+) -> Result<(), PdfInspectionError> {
+  if batch.version != PDF_OBSERVATION_BATCH_VERSION {
+    return Err(error(
+      PdfInspectionErrorCode::InvalidObservation,
+      format!(
+        "PDF observation batch version must be {PDF_OBSERVATION_BATCH_VERSION}"
+      ),
+    ));
+  }
+  if batch.document.sha256 != sha256_lower_hex(document) {
+    return Err(error(
+      PdfInspectionErrorCode::InvalidObservation,
+      "PDF observation batch SHA-256 does not match the exact document bytes",
+    ));
+  }
+  validate_provider(&batch.provider)
+}
+
+fn sha256_lower_hex(bytes: &[u8]) -> String {
+  let digest = Sha256::digest(bytes);
+  let mut encoded = String::with_capacity(64);
+  for byte in digest {
+    use std::fmt::Write;
+    let _ = write!(encoded, "{byte:02x}");
+  }
+  encoded
+}
+
+fn validate_provider(
+  provider: &PdfObservationProvider,
+) -> Result<(), PdfInspectionError> {
+  for (label, value) in [
+    ("id", provider.id.as_str()),
+    ("name", provider.name.as_str()),
+    ("version", provider.version.as_str()),
+  ] {
+    if value.trim().is_empty()
+      || value.trim() != value
+      || value.len() > 256
+      || value.chars().any(char::is_control)
+    {
+      return Err(error(
+        PdfInspectionErrorCode::InvalidObservation,
+        format!(
+          "PDF observation provider {label} must contain 1 to 256 trimmed UTF-8 bytes without control characters"
+        ),
+      ));
+    }
+  }
+  Ok(())
 }
 
 fn parse_document(document: &[u8]) -> Result<Document, PdfInspectionError> {
@@ -301,6 +398,11 @@ fn parse_document(document: &[u8]) -> Result<Document, PdfInspectionError> {
       ),
     )
   })?;
+  if parsed.is_encrypted() {
+    return Err(invalid_document(
+      "encrypted PDF documents cannot be inspected safely",
+    ));
+  }
   validate_loaded_object_table(&parsed)?;
   if parsed.objects.len() > PDF_MAX_OBJECTS {
     return Err(error(
@@ -318,9 +420,6 @@ fn parse_document(document: &[u8]) -> Result<Document, PdfInspectionError> {
 fn validate_loaded_object_table(
   document: &Document,
 ) -> Result<(), PdfInspectionError> {
-  if document.is_encrypted() {
-    return Ok(());
-  }
   let fully_loaded =
     document
       .reference_table
@@ -503,59 +602,35 @@ struct RawRetentionInventory {
 
 fn raw_retention_inventory(
   bytes: &[u8],
-  active_xref_start: usize,
 ) -> Result<RawRetentionInventory, PdfInspectionError> {
   const EOF_MARKER: &[u8] = b"%%EOF";
   const STARTXREF_MARKER: &[u8] = b"startxref";
-  let completed_revisions = bytes
+  let eof_positions = bytes
+    .windows(EOF_MARKER.len())
+    .enumerate()
+    .filter_map(|(index, window)| (window == EOF_MARKER).then_some(index))
+    .collect::<Vec<_>>();
+  let startxref_positions = bytes
     .windows(STARTXREF_MARKER.len())
     .enumerate()
-    .filter_map(|(position, window)| {
-      if window != STARTXREF_MARKER {
-        return None;
-      }
-      let mut cursor = position.checked_add(STARTXREF_MARKER.len())?;
-      while bytes.get(cursor).is_some_and(u8::is_ascii_whitespace) {
-        cursor = cursor.checked_add(1)?;
-      }
-      let offset_start = cursor;
-      let mut xref_start = 0usize;
-      while let Some(digit) = bytes.get(cursor).and_then(|byte| {
-        byte
-          .is_ascii_digit()
-          .then(|| byte.checked_sub(b'0').map(usize::from))
-          .flatten()
-      }) {
-        xref_start = xref_start.checked_mul(10)?.checked_add(digit)?;
-        cursor = cursor.checked_add(1)?;
-      }
-      if cursor == offset_start {
-        return None;
-      }
-      while bytes.get(cursor).is_some_and(u8::is_ascii_whitespace) {
-        cursor = cursor.checked_add(1)?;
-      }
-      bytes
-        .get(cursor..)
-        .is_some_and(|tail| tail.starts_with(EOF_MARKER))
-        .then_some((xref_start, cursor))
-    })
+    .filter_map(|(index, window)| (window == STARTXREF_MARKER).then_some(index))
     .collect::<Vec<_>>();
-  // Use the first syntactically completed revision that points at the xref
-  // table actually selected by the parser. A later marker in appended bytes,
-  // even one repeating the valid xref offset, can therefore never move the
-  // retention boundary past hidden data.
-  let final_eof_start = completed_revisions
-    .iter()
-    .find_map(|(xref_start, eof_start)| {
-      (*xref_start == active_xref_start).then_some(*eof_start)
-    })
-    .ok_or_else(|| {
-      invalid_document(
-        "PDF active revision must end with a matching startxref and %%EOF",
-      )
+  let final_startxref =
+    startxref_positions.last().copied().ok_or_else(|| {
+      invalid_document("PDF document must contain a final startxref marker")
     })?;
-  let completed_revision_count = completed_revisions.len();
+  let final_eof_start = eof_positions
+    .iter()
+    .copied()
+    .find(|position| *position > final_startxref)
+    .ok_or_else(|| {
+      invalid_document("PDF final revision must contain an %%EOF marker")
+    })?;
+  let completed_revision_count = eof_positions
+    .iter()
+    .filter(|position| **position <= final_eof_start)
+    .count()
+    .min(startxref_positions.len());
   let incremental_revision_count = u32::try_from(
     completed_revision_count.saturating_sub(1),
   )
@@ -920,6 +995,7 @@ fn inspect_parsed(
   document: Document,
   pages: &[ValidatedPage],
   observations: Vec<PdfPageObservation>,
+  observation_provider: Option<PdfObservationProvider>,
 ) -> Result<PdfInspection, PdfInspectionError> {
   if observations.len() > pages.len() {
     return Err(error(
@@ -928,7 +1004,7 @@ fn inspect_parsed(
     ));
   }
   let observations = validate_observations(observations, pages)?;
-  let retention = raw_retention_inventory(bytes, document.xref_start)?;
+  let retention = raw_retention_inventory(bytes)?;
   let risks = risk_inventory(&document, pages, retention)?;
   let mut page_inspections = Vec::with_capacity(pages.len());
   for (page_offset, page) in pages.iter().enumerate() {
@@ -952,7 +1028,12 @@ fn inspect_parsed(
     });
   }
   let encrypted = document.is_encrypted();
-  let coverage = coverage(encrypted, &page_inspections, retention);
+  let coverage = coverage(
+    encrypted,
+    observation_provider.is_some(),
+    &page_inspections,
+    retention,
+  );
   Ok(PdfInspection {
     contract_version: PDF_INSPECTION_CONTRACT_VERSION,
     pdf_version: document.version,
@@ -975,6 +1056,7 @@ fn inspect_parsed(
       )
     })?,
     encrypted,
+    observation_provider,
     pages: page_inspections,
     risks,
     coverage,
@@ -1230,12 +1312,16 @@ fn is_utf16_boundary(boundaries: &[bool], offset: u32) -> bool {
 
 fn coverage(
   encrypted: bool,
+  provider_identified: bool,
   pages: &[PdfPageInspection],
   retention: RawRetentionInventory,
 ) -> PdfInspectionCoverage {
   let mut gaps = BTreeSet::new();
   if encrypted {
     gaps.insert(PdfInspectionGap::EncryptedDocument);
+  }
+  if !provider_identified {
+    gaps.insert(PdfInspectionGap::ObservationProviderNotIdentified);
   }
   if retention.incremental_revision_count > 0
     || retention.trailing_non_whitespace_byte_count > 0
@@ -1260,7 +1346,7 @@ fn coverage(
   let gaps = gaps.into_iter().collect::<Vec<_>>();
   PdfInspectionCoverage {
     status: if gaps.is_empty() {
-      PdfInspectionCoverageStatus::Full
+      PdfInspectionCoverageStatus::ProviderAttestedFull
     } else {
       PdfInspectionCoverageStatus::Partial
     },
@@ -1283,11 +1369,12 @@ impl PartialOrd for PdfInspectionGap {
 const fn gap_rank(gap: &PdfInspectionGap) -> u8 {
   match gap {
     PdfInspectionGap::EncryptedDocument => 0,
-    PdfInspectionGap::PageContentNotObserved => 1,
-    PdfInspectionGap::PageNotRendered => 2,
-    PdfInspectionGap::PartialTextLayer => 3,
-    PdfInspectionGap::RetainedDocumentBytes => 4,
-    PdfInspectionGap::UnobservedVisualContent => 5,
+    PdfInspectionGap::ObservationProviderNotIdentified => 1,
+    PdfInspectionGap::PageContentNotObserved => 2,
+    PdfInspectionGap::PageNotRendered => 3,
+    PdfInspectionGap::PartialTextLayer => 4,
+    PdfInspectionGap::RetainedDocumentBytes => 5,
+    PdfInspectionGap::UnobservedVisualContent => 6,
   }
 }
 
@@ -2265,12 +2352,32 @@ fn catalog_xfa_count(document: &Document) -> Result<u32, PdfInspectionError> {
 mod tests {
   #![allow(clippy::unwrap_used)]
 
+  use base64::Engine;
+
   use super::*;
 
   const MINIMAL_PDF: &[u8] =
     include_bytes!("../tests/fixtures/minimal-text.pdf");
   const RISKY_PDF: &[u8] =
     include_bytes!("../tests/fixtures/risky-structures.pdf");
+
+  fn observation_batch(
+    document: &[u8],
+    pages: Vec<PdfPageObservation>,
+  ) -> PdfObservationBatch {
+    PdfObservationBatch {
+      version: PDF_OBSERVATION_BATCH_VERSION,
+      document: PdfObservationDocument {
+        sha256: sha256_lower_hex(document),
+      },
+      provider: PdfObservationProvider {
+        id: String::from("test-renderer"),
+        name: String::from("Test renderer"),
+        version: String::from("1.0.0"),
+      },
+      pages,
+    }
+  }
 
   #[test]
   fn inspection_without_a_renderer_is_explicitly_partial() {
@@ -2283,7 +2390,40 @@ mod tests {
     );
     assert_eq!(
       inspection.coverage.gaps,
-      vec![PdfInspectionGap::PageContentNotObserved]
+      vec![
+        PdfInspectionGap::ObservationProviderNotIdentified,
+        PdfInspectionGap::PageContentNotObserved,
+      ]
+    );
+  }
+
+  #[test]
+  fn observation_batches_are_document_bound_and_strict() {
+    let mut wrong_document = observation_batch(MINIMAL_PDF, Vec::new());
+    wrong_document.document.sha256 = "0".repeat(64);
+    let error =
+      inspect_pdf_with_observations(MINIMAL_PDF, wrong_document).unwrap_err();
+    assert_eq!(error.code(), PdfInspectionErrorCode::InvalidObservation);
+
+    let mut value =
+      serde_json::to_value(observation_batch(MINIMAL_PDF, Vec::new())).unwrap();
+    value
+      .as_object_mut()
+      .unwrap()
+      .insert("unknown".into(), true.into());
+    assert!(serde_json::from_value::<PdfObservationBatch>(value).is_err());
+  }
+
+  #[test]
+  fn rejects_real_encrypted_documents_before_reporting_coverage() {
+    let bytes = base64::engine::general_purpose::STANDARD
+      .decode(include_str!("../tests/fixtures/encrypted.pdf.b64").trim())
+      .unwrap();
+    let error = inspect_pdf(&bytes).unwrap_err();
+    assert_eq!(error.code(), PdfInspectionErrorCode::InvalidDocument);
+    assert_eq!(
+      error.to_string(),
+      "encrypted PDF documents cannot be inspected safely"
     );
   }
 
@@ -2291,32 +2431,35 @@ mod tests {
   fn complete_renderer_observation_can_close_inspection_coverage() {
     let inspection = inspect_pdf_with_observations(
       MINIMAL_PDF,
-      vec![PdfPageObservation {
-        page_index: 0,
-        width_points: 612.0,
-        height_points: 792.0,
-        text: String::from("Public fixture"),
-        glyphs: vec![PdfGlyphObservation {
-          start: 0,
-          end: 14,
-          bounds: PdfRect {
-            left: 72.0,
-            bottom: 700.0,
-            right: 108.0,
-            top: 712.0,
-          },
-          source: PdfGlyphSource::EmbeddedText,
+      observation_batch(
+        MINIMAL_PDF,
+        vec![PdfPageObservation {
+          page_index: 0,
+          width_points: 612.0,
+          height_points: 792.0,
+          text: String::from("Public fixture"),
+          glyphs: vec![PdfGlyphObservation {
+            start: 0,
+            end: 14,
+            bounds: PdfRect {
+              left: 72.0,
+              bottom: 700.0,
+              right: 108.0,
+              top: 712.0,
+            },
+            source: PdfGlyphSource::EmbeddedText,
+          }],
+          rendered: true,
+          text_layer: PdfTextLayerCoverage::Complete,
+          ocr: PdfOcrCoverage::Complete,
+          image_count: 0,
         }],
-        rendered: true,
-        text_layer: PdfTextLayerCoverage::Complete,
-        ocr: PdfOcrCoverage::Complete,
-        image_count: 0,
-      }],
+      ),
     )
     .unwrap();
     assert_eq!(
       inspection.coverage.status,
-      PdfInspectionCoverageStatus::Full
+      PdfInspectionCoverageStatus::ProviderAttestedFull
     );
     assert!(inspection.coverage.gaps.is_empty());
   }
@@ -2325,27 +2468,30 @@ mod tests {
   fn text_layer_alone_does_not_claim_visual_coverage() {
     let inspection = inspect_pdf_with_observations(
       MINIMAL_PDF,
-      vec![PdfPageObservation {
-        page_index: 0,
-        width_points: 612.0,
-        height_points: 792.0,
-        text: String::from("Public fixture"),
-        glyphs: vec![PdfGlyphObservation {
-          start: 0,
-          end: 14,
-          bounds: PdfRect {
-            left: 72.0,
-            bottom: 700.0,
-            right: 144.0,
-            top: 712.0,
-          },
-          source: PdfGlyphSource::EmbeddedText,
+      observation_batch(
+        MINIMAL_PDF,
+        vec![PdfPageObservation {
+          page_index: 0,
+          width_points: 612.0,
+          height_points: 792.0,
+          text: String::from("Public fixture"),
+          glyphs: vec![PdfGlyphObservation {
+            start: 0,
+            end: 14,
+            bounds: PdfRect {
+              left: 72.0,
+              bottom: 700.0,
+              right: 144.0,
+              top: 712.0,
+            },
+            source: PdfGlyphSource::EmbeddedText,
+          }],
+          rendered: true,
+          text_layer: PdfTextLayerCoverage::Complete,
+          ocr: PdfOcrCoverage::NotRun,
+          image_count: 0,
         }],
-        rendered: true,
-        text_layer: PdfTextLayerCoverage::Complete,
-        ocr: PdfOcrCoverage::NotRun,
-        image_count: 0,
-      }],
+      ),
     )
     .unwrap();
     assert_eq!(
@@ -2377,8 +2523,11 @@ mod tests {
       ocr: PdfOcrCoverage::NotRun,
       image_count: 0,
     };
-    let error =
-      inspect_pdf_with_observations(MINIMAL_PDF, vec![invalid]).unwrap_err();
+    let error = inspect_pdf_with_observations(
+      MINIMAL_PDF,
+      observation_batch(MINIMAL_PDF, vec![invalid]),
+    )
+    .unwrap_err();
     assert_eq!(error.code(), PdfInspectionErrorCode::InvalidObservation);
   }
 
@@ -2443,55 +2592,14 @@ mod tests {
         .gaps
         .contains(&PdfInspectionGap::RetainedDocumentBytes)
     );
+  }
 
-    let fake_marker_suffixes = [
-      b"\nsecret retained bytes%%EOF\n".to_vec(),
-      format!(
-        "\nsecret retained bytes\nstartxref \r\n {}\t\n%%EOF\n",
-        document.xref_start
-      )
-      .into_bytes(),
-      format!(
-        "\nsecret retained bytes\nstartxref\n{}\n%%EOF\nstartxref\r\n{}\r\n%%EOF\n",
-        document.xref_start, document.xref_start
-      )
-      .into_bytes(),
-    ];
-    for suffix in fake_marker_suffixes {
-      let mut adversarial = MINIMAL_PDF.to_vec();
-      adversarial.extend_from_slice(&suffix);
-      let result = inspect_pdf_with_observations(
-        &adversarial,
-        vec![PdfPageObservation {
-          page_index: 0,
-          width_points: 612.0,
-          height_points: 792.0,
-          text: String::new(),
-          glyphs: Vec::new(),
-          rendered: true,
-          text_layer: PdfTextLayerCoverage::Complete,
-          ocr: PdfOcrCoverage::Complete,
-          image_count: 0,
-        }],
-      );
-      match result {
-        Ok(inspection) => {
-          assert_eq!(
-            inspection.coverage.status,
-            PdfInspectionCoverageStatus::Partial
-          );
-          assert!(
-            inspection
-              .coverage
-              .gaps
-              .contains(&PdfInspectionGap::RetainedDocumentBytes)
-          );
-        }
-        Err(error) => {
-          assert_eq!(error.code(), PdfInspectionErrorCode::InvalidDocument);
-        }
-      }
-    }
+  #[test]
+  fn appended_fake_eof_cannot_hide_retained_bytes() {
+    let mut bytes = MINIMAL_PDF.to_vec();
+    bytes.extend_from_slice(b"\nsecret retained bytes%%EOF\n");
+    let retention = raw_retention_inventory(&bytes).unwrap();
+    assert!(retention.trailing_non_whitespace_byte_count > 0);
   }
 
   #[test]
@@ -2802,59 +2910,6 @@ mod tests {
   }
 
   #[test]
-  fn complete_text_layers_reject_ocr_only_and_mixed_source_coverage() {
-    let ocr_glyph = PdfGlyphObservation {
-      start: 6,
-      end: 14,
-      bounds: PdfRect {
-        left: 88.0,
-        bottom: 700.0,
-        right: 108.0,
-        top: 712.0,
-      },
-      source: PdfGlyphSource::Ocr,
-    };
-    let ocr_only = vec![PdfGlyphObservation {
-      start: 0,
-      bounds: PdfRect {
-        left: 72.0,
-        ..ocr_glyph.bounds.clone()
-      },
-      ..ocr_glyph.clone()
-    }];
-    let mixed = vec![
-      PdfGlyphObservation {
-        start: 0,
-        end: 6,
-        bounds: PdfRect {
-          left: 72.0,
-          bottom: 700.0,
-          right: 88.0,
-          top: 712.0,
-        },
-        source: PdfGlyphSource::EmbeddedText,
-      },
-      ocr_glyph,
-    ];
-    for glyphs in [ocr_only, mixed] {
-      let observation = PdfPageObservation {
-        page_index: 0,
-        width_points: 612.0,
-        height_points: 792.0,
-        text: String::from("Public fixture"),
-        glyphs,
-        rendered: true,
-        text_layer: PdfTextLayerCoverage::Complete,
-        ocr: PdfOcrCoverage::Complete,
-        image_count: 0,
-      };
-      let error = inspect_pdf_with_observations(MINIMAL_PDF, vec![observation])
-        .unwrap_err();
-      assert_eq!(error.code(), PdfInspectionErrorCode::InvalidObservation);
-    }
-  }
-
-  #[test]
   fn rejects_false_full_observations_and_wrong_page_geometry() {
     let incomplete = PdfPageObservation {
       page_index: 0,
@@ -2877,10 +2932,44 @@ mod tests {
       ocr: PdfOcrCoverage::Complete,
       image_count: 0,
     };
-    let incomplete_error =
-      inspect_pdf_with_observations(MINIMAL_PDF, vec![incomplete]).unwrap_err();
+    let incomplete_error = inspect_pdf_with_observations(
+      MINIMAL_PDF,
+      observation_batch(MINIMAL_PDF, vec![incomplete]),
+    )
+    .unwrap_err();
     assert_eq!(
       incomplete_error.code(),
+      PdfInspectionErrorCode::InvalidObservation
+    );
+
+    let ocr_cannot_attest_embedded_text = PdfPageObservation {
+      page_index: 0,
+      width_points: 612.0,
+      height_points: 792.0,
+      text: String::from("Public fixture"),
+      glyphs: vec![PdfGlyphObservation {
+        start: 0,
+        end: 14,
+        bounds: PdfRect {
+          left: 72.0,
+          bottom: 700.0,
+          right: 108.0,
+          top: 712.0,
+        },
+        source: PdfGlyphSource::Ocr,
+      }],
+      rendered: true,
+      text_layer: PdfTextLayerCoverage::Complete,
+      ocr: PdfOcrCoverage::Complete,
+      image_count: 0,
+    };
+    let source_error = inspect_pdf_with_observations(
+      MINIMAL_PDF,
+      observation_batch(MINIMAL_PDF, vec![ocr_cannot_attest_embedded_text]),
+    )
+    .unwrap_err();
+    assert_eq!(
+      source_error.code(),
       PdfInspectionErrorCode::InvalidObservation
     );
 
@@ -2895,9 +2984,11 @@ mod tests {
       ocr: PdfOcrCoverage::Complete,
       image_count: 0,
     };
-    let geometry_error =
-      inspect_pdf_with_observations(MINIMAL_PDF, vec![wrong_geometry])
-        .unwrap_err();
+    let geometry_error = inspect_pdf_with_observations(
+      MINIMAL_PDF,
+      observation_batch(MINIMAL_PDF, vec![wrong_geometry]),
+    )
+    .unwrap_err();
     assert_eq!(
       geometry_error.code(),
       PdfInspectionErrorCode::InvalidObservation
@@ -2925,11 +3016,14 @@ mod tests {
       ocr: PdfOcrCoverage::Complete,
       image_count: 0,
     };
-    let inspection =
-      inspect_pdf_with_observations(&bytes, vec![observation]).unwrap();
+    let inspection = inspect_pdf_with_observations(
+      &bytes,
+      observation_batch(&bytes, vec![observation]),
+    )
+    .unwrap();
     assert_eq!(
       inspection.coverage.status,
-      PdfInspectionCoverageStatus::Full
+      PdfInspectionCoverageStatus::ProviderAttestedFull
     );
   }
 

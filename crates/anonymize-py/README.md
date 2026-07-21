@@ -183,9 +183,11 @@ shared Rust contract validates and converts its spans.
 ## PDF inspection
 
 `inspect_pdf()` inventories PDF structures that can retain sensitive content
-and returns fail-closed page coverage. It does not redact PDFs. Without explicit
-renderer/OCR page observations, every page is reported as
-`page-content-not-observed`; opaque rectangle overlays are never treated as
+and returns fail-closed page coverage. It does not redact PDFs. Renderer/OCR
+observations must use the strict v1 batch bound to the exact document SHA-256
+with provider identity; loose page arrays are rejected. Without a batch,
+coverage is partial. Complete coverage is labelled `provider-attested-full`,
+not independently verified. Opaque rectangle overlays are never treated as
 anonymization.
 
 ```py

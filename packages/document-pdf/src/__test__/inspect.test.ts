@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -35,7 +36,10 @@ describe("PDF inspection contract", () => {
     expect(inspection.pageCount).toBe(1);
     expect(inspection.coverage).toEqual({
       status: "partial",
-      gaps: ["page-content-not-observed"],
+      gaps: [
+        "observation-provider-not-identified",
+        "page-content-not-observed",
+      ],
     });
   });
 
@@ -53,53 +57,85 @@ describe("PDF inspection contract", () => {
     expect(risks.xfaEntryCount).toBeGreaterThanOrEqual(1);
   });
 
-  test("validates renderer observations at the native boundary", () => {
-    expect(() =>
-      inspectPdf(fixture("minimal-text.pdf"), {
-        pageObservations: [
+  test("labels complete observations as provider-attested", () => {
+    const document = fixture("minimal-text.pdf");
+    const inspection = inspectPdf(document, {
+      observationBatch: {
+        version: 1,
+        document: {
+          sha256: createHash("sha256").update(document).digest("hex"),
+        },
+        provider: { id: "test", name: "Test renderer", version: "1.0.0" },
+        pages: [
           {
             pageIndex: 0,
-            widthPoints: 100,
-            heightPoints: 100,
-            text: "😀",
+            widthPoints: 612,
+            heightPoints: 792,
+            text: "Public fixture",
             glyphs: [
               {
                 start: 0,
-                end: 1,
-                bounds: { left: 0, bottom: 0, right: 10, top: 10 },
+                end: 14,
+                bounds: { left: 72, bottom: 700, right: 108, top: 712 },
                 source: "embedded-text",
               },
             ],
             rendered: true,
             textLayer: "complete",
-            ocr: "not-run",
+            ocr: "complete",
             imageCount: 0,
           },
         ],
+      },
+    });
+    expect(inspection.coverage).toEqual({
+      status: "provider-attested-full",
+      gaps: [],
+    });
+    expect(inspection.observationProvider).toEqual({
+      id: "test",
+      name: "Test renderer",
+      version: "1.0.0",
+    });
+  });
+
+  test("validates renderer observations at the native boundary", () => {
+    const document = fixture("minimal-text.pdf");
+    const observationBatch = {
+      version: 1 as const,
+      document: {
+        sha256: createHash("sha256").update(document).digest("hex"),
+      },
+      provider: { id: "test", name: "Test renderer", version: "1.0.0" },
+      pages: [
+        {
+          pageIndex: 0,
+          widthPoints: 100,
+          heightPoints: 100,
+          text: "😀",
+          glyphs: [
+            {
+              start: 0,
+              end: 1,
+              bounds: { left: 0, bottom: 0, right: 10, top: 10 },
+              source: "embedded-text" as const,
+            },
+          ],
+          rendered: true,
+          textLayer: "complete" as const,
+          ocr: "not-run" as const,
+          imageCount: 0,
+        },
+      ],
+    };
+    expect(() =>
+      inspectPdf(document, {
+        observationBatch,
       }),
     ).toThrow(PdfInspectionError);
     try {
-      inspectPdf(fixture("minimal-text.pdf"), {
-        pageObservations: [
-          {
-            pageIndex: 0,
-            widthPoints: 100,
-            heightPoints: 100,
-            text: "😀",
-            glyphs: [
-              {
-                start: 0,
-                end: 1,
-                bounds: { left: 0, bottom: 0, right: 10, top: 10 },
-                source: "embedded-text",
-              },
-            ],
-            rendered: true,
-            textLayer: "complete",
-            ocr: "not-run",
-            imageCount: 0,
-          },
-        ],
+      inspectPdf(document, {
+        observationBatch,
       });
     } catch (error) {
       expect(error).toBeInstanceOf(PdfInspectionError);

@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from typing import Any
 
 from ._native import inspect_pdf_json as _inspect_pdf_json
 
 PDF_INSPECTION_CONTRACT_VERSION = 1
+PDF_OBSERVATION_BATCH_VERSION = 1
 PDF_DOCUMENT_MAX_BYTES = 64 * 1024 * 1024
 PDF_STREAM_DECOMPRESSED_MAX_BYTES = 32 * 1024 * 1024
 PDF_LOADED_PAYLOAD_MAX_BYTES = 128 * 1024 * 1024
@@ -33,14 +34,14 @@ class PdfInspectionError(ValueError):
 
 def inspect_pdf(
     document: bytes | bytearray | memoryview,
-    page_observations: Sequence[Mapping[str, Any]] | None = None,
+    observation_batch: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Inventory PDF risks and renderer coverage without claiming redaction."""
 
     observations_json = (
         None
-        if page_observations is None
-        else json.dumps(list(page_observations), separators=(",", ":"))
+        if observation_batch is None
+        else json.dumps(observation_batch, separators=(",", ":"))
     )
     try:
         return json.loads(_inspect_pdf_json(bytes(document), observations_json))

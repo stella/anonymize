@@ -18,6 +18,7 @@
  * path here (previously it could only byte-load the default package).
  */
 import { existsSync, readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -94,6 +95,64 @@ const packagePdfJson = await inspectPdfJson(pdfBytes);
 if (packagePdfJson !== directPdfJson || packagePdfJson !== nodePdfJson) {
   throw new Error("Node and WASI PDF inspection results are not exact");
 }
+const observationBatch = {
+  version: 1,
+  document: { sha256: createHash("sha256").update(pdfBytes).digest("hex") },
+  provider: { id: "smoke", name: "Smoke renderer", version: "1.0.0" },
+  pages: [
+    {
+      pageIndex: 0,
+      widthPoints: 612,
+      heightPoints: 792,
+      text: "Public fixture",
+      glyphs: [
+        {
+          start: 0,
+          end: 14,
+          bounds: { left: 72, bottom: 700, right: 108, top: 712 },
+          source: "embedded-text",
+        },
+      ],
+      rendered: true,
+      textLayer: "complete",
+      ocr: "complete",
+      imageCount: 0,
+    },
+  ],
+};
+const observationJson = JSON.stringify(observationBatch);
+const observedResults = await Promise.all([
+  nodeBinding.inspectPdfJson(pdfBytes, observationJson),
+  binding.inspectPdfJson(pdfBytes, observationJson),
+  inspectPdfJson(pdfBytes, observationJson),
+]);
+if (new Set(observedResults).size !== 1) {
+  throw new Error("Node and WASI observed PDF results are not exact");
+}
+for (const invalid of [
+  { ...observationBatch, document: { sha256: "0".repeat(64) } },
+  { ...observationBatch, unknown: true },
+]) {
+  const invalidJson = JSON.stringify(invalid);
+  const messages = [];
+  for (const invoke of [
+    () => nodeBinding.inspectPdfJson(pdfBytes, invalidJson),
+    () => binding.inspectPdfJson(pdfBytes, invalidJson),
+    () => inspectPdfJson(pdfBytes, invalidJson),
+  ]) {
+    let message;
+    try {
+      await invoke();
+    } catch (error) {
+      message = String(error?.message ?? error);
+    }
+    if (!message) throw new Error("invalid PDF observation batch was accepted");
+    messages.push(message);
+  }
+  if (new Set(messages).size !== 1) {
+    throw new Error("Node and WASI PDF observation errors are not exact");
+  }
+}
 let directPdfError;
 let packagePdfError;
 try {
@@ -154,7 +213,10 @@ for (const { start, end, text } of entities) {
     sample.slice(start, end) !== text
   ) {
     throw new Error(
-      `entity offsets do not round-trip: [${start}, ${end}) => "${sample.slice(start, end)}" != "${text}"`,
+      `entity offsets do not round-trip: [${start}, ${end}) => "${sample.slice(
+        start,
+        end,
+      )}" != "${text}"`,
     );
   }
 }

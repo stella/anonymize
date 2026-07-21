@@ -22,12 +22,16 @@ console.log(inspection.risks);
 console.log(inspection.coverage);
 ```
 
-Without page observations from a renderer/OCR adapter, coverage is explicitly
-`partial` with `page-content-not-observed`. The optional observation contract
-uses UTF-16 text offsets and PDF points. Page dimensions must match the
+Without a renderer/OCR observation batch, coverage is explicitly `partial`.
+The strict v1 batch is bound to the exact PDF bytes by lowercase SHA-256 and
+requires a bounded provider ID, name, and version; loose page arrays are
+rejected. The observation contract uses UTF-16 text offsets and PDF points.
+Page dimensions must match the
 effective CropBox/MediaBox intersection after page rotation and UserUnit scaling
 (within 0.25 points for renderer rounding). A `complete` text layer must map
-every observed UTF-16 code unit to glyph geometry. It is the seam for a later
+every observed UTF-16 code unit to glyph geometry. Each such span must be
+sourced as `embedded-text`; OCR spans cannot stand in for embedded-layer
+coverage. It is the seam for a later
 PDFium-backed renderer and destructive raster workflow; callers must not
 describe inspection alone as anonymization.
 
@@ -35,7 +39,7 @@ Glyph bounds use a normalized displayed-page coordinate space in PDF points:
 the effective visible page's bottom-left is `(0, 0)`, and CropBox translation,
 page rotation, and UserUnit scaling have already been applied.
 
-Coverage is only `full` when every page was rendered, its text layer was
+Coverage is only `provider-attested-full` when every page was rendered, its text layer was
 completely observed, and OCR completely covered the rendered page pixels. That
 includes vector outlines, not only PDF image objects.
 

@@ -41,8 +41,10 @@ coverage gaps. Partial anonymization requires explicit opt-in.
 
 PDF inspection inventories forms, annotations, attachments, metadata,
 JavaScript, XFA, optional content, signatures, and image objects. Page text and
-glyph boxes use an explicit renderer/OCR observation contract; without those
-observations, coverage is reported as partial. Inspection does not anonymize a
+glyph boxes use a strict renderer/OCR observation batch bound to the exact
+document SHA-256 and a named provider version. Without it, coverage is partial;
+complete coverage is `provider-attested-full`, explicitly describing the
+provider's assertion rather than independent proof. Inspection does not anonymize a
 PDF. In particular, drawing an opaque rectangle over original page content is
 not redaction because the covered text or image can remain in the file.
 
