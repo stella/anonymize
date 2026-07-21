@@ -35,6 +35,7 @@ export const CAPABILITY_SURFACES = [
   { id: "document.docx.rewrite", profile: "document" },
   { id: "document.docx.anonymize", profile: "document" },
   { id: "document.docx.restore", profile: "document" },
+  { id: "document.pdf.inspect", profile: "core" },
 ] as const satisfies readonly {
   id: string;
   profile: CapabilityParityProfile;

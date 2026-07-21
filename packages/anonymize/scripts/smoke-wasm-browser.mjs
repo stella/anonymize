@@ -39,12 +39,23 @@
 import { createServer } from "node:http";
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, extname, join, normalize, sep } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import puppeteer from "puppeteer-core";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const packageRoot = dirname(here);
 const distDir = join(packageRoot, "wasm", "dist");
+const nativeNodeEntryPath = join(packageRoot, "dist", "native-node.mjs");
+const pdfFixturePath = join(
+  packageRoot,
+  "..",
+  "..",
+  "crates",
+  "anonymize-pdf-core",
+  "tests",
+  "fixtures",
+  "minimal-text.pdf",
+);
 
 const SAMPLE = "A contract was signed by Jan Novak at Praha on 1. 1. 2025.";
 const EXTERNAL_DETECTION_DOCUMENT = "😀Alice signed.";
@@ -82,6 +93,7 @@ const requireBuilt = () => {
   const enPackage = join(distDir, "native", "native-pipeline.en.stlanonpkg");
   for (const [label, path] of [
     ["package entry", entry],
+    ["native Node entry", nativeNodeEntryPath],
     ["en compressed package", enPackage],
   ]) {
     if (!existsSync(path)) {
@@ -150,7 +162,7 @@ const startServer = () =>
 
 /** Runs inside the isolated page: prove SAB is available, load the browser
  * entry, redact, and hand a compact result back to Node. */
-const runInPage = async (sample, externalDetectionDocument) => {
+const runInPage = async ({ sample, externalDetectionDocument, pdfBase64 }) => {
   if (self.crossOriginIsolated !== true) {
     throw new Error("document is not cross-origin isolated");
   }
@@ -220,6 +232,16 @@ const runInPage = async (sample, externalDetectionDocument) => {
     key,
     expectedSessionId: "browser_archive_smoke_1",
   });
+  const pdfBytes = Uint8Array.from(atob(pdfBase64), (character) =>
+    character.charCodeAt(0),
+  );
+  const pdfInspectionJson = await module.inspect_pdf_json(pdfBytes);
+  let pdfError;
+  try {
+    await module.inspect_pdf_json(new Uint8Array([0]));
+  } catch (error) {
+    pdfError = String(error?.message ?? error);
+  }
   return {
     entities: result.resolvedEntities.map(({ start, end, text, label }) => ({
       start,
@@ -233,10 +255,12 @@ const runInPage = async (sample, externalDetectionDocument) => {
     restoredMappingCount: restoredSession.mappingCount(),
     externalDetectionResults,
     externalDetectionRejections,
+    pdfInspectionJson,
+    pdfError,
   };
 };
 
-const validate = (result) => {
+const validate = (result, expectedPdfJson, expectedPdfError) => {
   const {
     entities,
     redactedText,
@@ -245,6 +269,8 @@ const validate = (result) => {
     restoredMappingCount,
     externalDetectionResults,
     externalDetectionRejections,
+    pdfInspectionJson,
+    pdfError,
   } = result;
   const expectedExternalDetection = [
     {
@@ -301,6 +327,9 @@ const validate = (result) => {
   ) {
     throw new Error("browser encrypted session archive did not round-trip");
   }
+  if (pdfInspectionJson !== expectedPdfJson || pdfError !== expectedPdfError) {
+    throw new Error("browser-WASM PDF inspection success/error parity differs");
+  }
 };
 
 const withTimeout = (promise, ms, label) =>
@@ -316,6 +345,20 @@ const withTimeout = (promise, ms, label) =>
 
 const main = async () => {
   requireBuilt();
+  // eslint-disable-next-line stll/no-dynamic-import-specifier
+  const nativeNodeEntry = await import(pathToFileURL(nativeNodeEntryPath).href);
+  const nodeBinding = nativeNodeEntry.loadNativeAnonymizeBinding();
+  const pdfBytes = new Uint8Array(readFileSync(pdfFixturePath));
+  const expectedPdfJson = nodeBinding.inspectPdfJson(pdfBytes);
+  let expectedPdfError;
+  try {
+    nodeBinding.inspectPdfJson(new Uint8Array([0]));
+  } catch (error) {
+    expectedPdfError = String(error?.message ?? error);
+  }
+  if (!expectedPdfError) {
+    throw new Error("native Node PDF inspection did not reject invalid bytes");
+  }
   const executablePath = resolveChrome();
   const server = await startServer();
   const { port } = server.address();
@@ -325,6 +368,7 @@ const main = async () => {
   const browser = await puppeteer.launch({
     executablePath,
     headless: true,
+    timeout: EVAL_TIMEOUT_MS,
     args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
   });
   mark("browser-launched");
@@ -342,12 +386,16 @@ const main = async () => {
     await page.goto(origin, { waitUntil: "load", timeout: EVAL_TIMEOUT_MS });
     mark("page-loaded");
     const result = await withTimeout(
-      page.evaluate(runInPage, SAMPLE, EXTERNAL_DETECTION_DOCUMENT),
+      page.evaluate(runInPage, {
+        sample: SAMPLE,
+        externalDetectionDocument: EXTERNAL_DETECTION_DOCUMENT,
+        pdfBase64: Buffer.from(pdfBytes).toString("base64"),
+      }),
       EVAL_TIMEOUT_MS,
       "page redaction",
     );
     mark("redaction-done");
-    validate(result);
+    validate(result, expectedPdfJson, expectedPdfError);
 
     console.log(
       JSON.stringify({
@@ -357,6 +405,7 @@ const main = async () => {
         crossOriginIsolated: true,
         entityCount: result.entities.length,
         encryptedSessionArchive: true,
+        pdfInspectionParity: true,
         labels: result.entities.map((entity) => entity.label),
         firstEntity: {
           start: result.entities[0].start,

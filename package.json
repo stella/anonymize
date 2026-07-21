@@ -33,7 +33,7 @@
     "changeset": "changeset",
     "changeset:check": "bun scripts/check-changeset.ts",
     "changeset:version": "changeset version && node scripts/sync-changeset-version.mjs && rm -f bun.lock && bun install",
-    "check:exports": "bunx publint@0.3.21 packages/anonymize && bunx @arethetypeswrong/cli@0.18.5 --pack packages/anonymize --ignore-rules no-resolution cjs-resolves-to-esm && bunx publint@0.3.21 packages/document-docx && bunx @arethetypeswrong/cli@0.18.5 --pack packages/document-docx --ignore-rules no-resolution cjs-resolves-to-esm && bunx publint@0.3.21 packages/mcp && bunx @arethetypeswrong/cli@0.18.5 --pack packages/mcp --ignore-rules no-resolution cjs-resolves-to-esm",
+    "check:exports": "bunx publint@0.3.21 packages/anonymize && bunx @arethetypeswrong/cli@0.18.5 --pack packages/anonymize --ignore-rules no-resolution cjs-resolves-to-esm && bunx publint@0.3.21 packages/document-docx && bunx @arethetypeswrong/cli@0.18.5 --pack packages/document-docx --ignore-rules no-resolution cjs-resolves-to-esm && bunx publint@0.3.21 packages/document-pdf && bunx @arethetypeswrong/cli@0.18.5 --pack packages/document-pdf --ignore-rules no-resolution cjs-resolves-to-esm && bunx publint@0.3.21 packages/mcp && bunx @arethetypeswrong/cli@0.18.5 --pack packages/mcp --ignore-rules no-resolution cjs-resolves-to-esm",
     "check:knip": "bunx knip@6.26.0 --no-progress",
     "check:bun": "node .github/tools/check-bun-workflows.mjs",
     "check:brand-case": "node .github/tools/check-brand-case.mjs",
