@@ -630,7 +630,8 @@ impl PreparedNameCorpusData {
     };
     self.lookup_name_token(next_word)
       || self.is_surname_token(next_word)
-      || self.is_surname_token(&title_case_simple(next_word))
+      || (starts_uppercase(next_word)
+        && self.is_surname_token(&title_case_simple(next_word)))
       || (next_word.chars().count() == 1 && starts_uppercase(next_word))
   }
 
