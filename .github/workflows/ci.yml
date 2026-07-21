@@ -72,6 +72,14 @@ jobs:
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
+      - name: Check bun.lock workspace-version drift
+        # A frozen-lockfile install never validates a workspace's cached
+        # "version" in bun.lock against its own package.json, so a stale
+        # entry (see scripts/check-lockfile-workspace-versions.ts) can
+        # silently persist and ship a wrong `workspace:*`/`workspace:^`
+        # range at pack time.
+        run: bun run scripts/check-lockfile-workspace-versions.ts
+
       - name: Setup Rust
         run: |
           rustup toolchain install 1.96.0 --profile minimal \

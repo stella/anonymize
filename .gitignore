@@ -14,6 +14,7 @@ target/
 scripts/*
 !scripts/check-ai-skill-sources.sh
 !scripts/check-changeset.ts
+!scripts/check-lockfile-workspace-versions.ts
 !scripts/check-staged-secrets.sh
 !scripts/link-codex-skills.sh
 !scripts/sync-changeset-version.mjs
