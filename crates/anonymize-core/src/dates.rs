@@ -199,7 +199,7 @@ fn day_month_span(
   }
   let day = day_before_month(text, month_start)?;
   let after_month = skip_date_year_separator(text, month_end);
-  if parse_year_forward(text, after_month).is_some() {
+  if starts_with_ascii_digit(text, after_month) {
     return None;
   }
   right_date_boundary(text, month_end).then_some((day.0, month_end))
@@ -298,7 +298,7 @@ fn de_day_month_span(
   }
   let day = de_day_before_month(text, month_start)?;
   let after_month = skip_date_year_separator(text, month_end);
-  if parse_year_forward(text, after_month).is_some() {
+  if starts_with_ascii_digit(text, after_month) {
     return None;
   }
   right_date_boundary(text, month_end).then_some((day.0, month_end))
@@ -411,6 +411,12 @@ fn parse_de_prefix(text: &str, index: usize) -> Option<usize> {
 fn parse_year_forward(text: &str, index: usize) -> Option<(usize, usize)> {
   let year = parse_digits_forward(text, index, 4, 4)?;
   right_date_boundary(text, year.1).then_some(year)
+}
+
+fn starts_with_ascii_digit(text: &str, index: usize) -> bool {
+  str_tail(text, index)
+    .and_then(|tail| tail.chars().next())
+    .is_some_and(|character| character.is_ascii_digit())
 }
 
 fn parse_day_forward(text: &str, index: usize) -> Option<(usize, usize)> {
@@ -607,6 +613,9 @@ mod tests {
 
     let comma_separated = spans("The hearing was on 22 July, 2026.");
     assert_eq!(comma_separated, vec!["22 July, 2026"]);
+
+    assert!(spans("The malformed date is 22 July 20260.").is_empty());
+    assert!(spans("The malformed date is 22 July, 2026A.").is_empty());
   }
 
   #[test]
@@ -659,6 +668,9 @@ mod tests {
     assert_eq!(
       spans_for("Audiência 12 de maio.", "maio", false),
       vec!["12 de maio"]
+    );
+    assert!(
+      spans_for("Audiencia 12 de mayo, 20260.", "mayo", false).is_empty()
     );
   }
 }
