@@ -250,6 +250,7 @@ class PdfRasterProvider(TypedDict):
     rendererVersion: str
     ocrName: str
     ocrVersion: str
+    ocrLanguage: str
 
 class PdfRasterObservedPage(TypedDict):
     observation: PdfPageObservation

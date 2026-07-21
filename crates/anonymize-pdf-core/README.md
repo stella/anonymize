@@ -37,7 +37,8 @@ RGB8 pages, complete observations, and detection spans. It validates every
 source page and its displayed geometry, requires every selected non-whitespace
 UTF-16 unit to map to observed glyph geometry, destructively overwrites those
 pixels, and constructs a fresh PDF whose only page content is the sanitized
-image. It reparses the output, checks an exact object/resource/operator
+image. Provider metadata identifies one explicit OCR language pack. It reparses
+the output, checks an exact object/resource/operator
 allowlist, and verifies the decompressed image digests. No source object,
 metadata, text layer, attachment, signature, or incremental revision is copied.
 Encrypted PDFs are rejected. Detector assembly stays in the Node/Python SDKs;

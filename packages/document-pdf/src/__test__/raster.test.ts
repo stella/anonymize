@@ -37,6 +37,7 @@ const provider = {
   rendererVersion: "1.0.0",
   ocrName: "synthetic-ocr",
   ocrVersion: "1.0.0",
+  ocrLanguage: "eng",
 };
 
 const detectorResult = (start?: number, end?: number) => ({

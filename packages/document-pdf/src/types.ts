@@ -80,6 +80,8 @@ export type PdfRasterProvider = {
   rendererVersion: string;
   ocrName: string;
   ocrVersion: string;
+  /** One explicit provider language pack; never an implicit mixed-language set. */
+  ocrLanguage: string;
 };
 
 export type PdfRasterPage = {

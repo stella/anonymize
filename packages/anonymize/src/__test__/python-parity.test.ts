@@ -252,6 +252,7 @@ pdf_raster_request = {
         "rendererVersion": "1.0.0",
         "ocrName": "synthetic-ocr",
         "ocrVersion": "1.0.0",
+        "ocrLanguage": "eng",
     },
     "fillRgb": [0, 0, 0],
     "pages": [{
@@ -1093,6 +1094,7 @@ describe("python binding parity", () => {
           rendererVersion: "1.0.0",
           ocrName: "synthetic-ocr",
           ocrVersion: "1.0.0",
+          ocrLanguage: "eng",
         },
         fillRgb: [0, 0, 0],
         pages: [

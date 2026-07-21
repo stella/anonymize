@@ -53,6 +53,8 @@ provider and creates a brand-new image-only PDF. It requires a prepared Stella
 pipeline, runs native detection over each page's observed text, merges an
 optional digest-bound `ExternalDetectionBatch`, and fails if any selected
 non-whitespace UTF-16 span is not completely mapped to observed glyph geometry.
+Provider metadata must identify one explicit OCR language pack; mixed or
+implicit language selection is not part of the contract.
 It requires one opaque, row-packed RGB8 buffer for every source page, SHA-256
 binds the source and each page, requires complete rendering and OCR assertions,
 destructively fills the mapped pixels, and verifies both the newly written PDF

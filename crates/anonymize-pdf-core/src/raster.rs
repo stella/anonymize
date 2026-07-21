@@ -51,6 +51,7 @@ pub struct PdfRasterProvider {
   pub renderer_version: String,
   pub ocr_name: String,
   pub ocr_version: String,
+  pub ocr_language: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
@@ -125,6 +126,7 @@ fn validate_provider(
     ("renderer version", &provider.renderer_version),
     ("OCR name", &provider.ocr_name),
     ("OCR version", &provider.ocr_version),
+    ("OCR language", &provider.ocr_language),
   ] {
     if value.is_empty()
       || value.trim() != value
@@ -143,6 +145,14 @@ fn validate_provider(
         format!("PDF raster {label} must not contain control characters"),
       ));
     }
+  }
+  if !provider.ocr_language.bytes().all(|byte| {
+    byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.')
+  }) {
+    return Err(error(
+      PdfRasterErrorCode::InvalidContract,
+      "PDF raster OCR language must name one explicit language pack",
+    ));
   }
   Ok(())
 }
@@ -1146,6 +1156,7 @@ mod tests {
         renderer_version: "1.0.0".to_owned(),
         ocr_name: "synthetic-ocr".to_owned(),
         ocr_version: "1.0.0".to_owned(),
+        ocr_language: "eng".to_owned(),
       },
       fill_rgb: [0, 0, 0],
       pages: vec![PdfRasterPage {
@@ -1422,5 +1433,17 @@ mod tests {
         Some(PdfRasterErrorCode::InvalidContract),
       );
     }
+    let mut mixed_language = request(&pixels);
+    mixed_language.provider.ocr_language = "eng+deu".to_owned();
+    assert_eq!(
+      rewrite_pdf_raster_from_detections(
+        SOURCE,
+        &mixed_language,
+        std::slice::from_ref(&pixels),
+      )
+      .err()
+      .map(|failure| failure.code()),
+      Some(PdfRasterErrorCode::InvalidContract),
+    );
   }
 }
