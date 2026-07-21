@@ -66,7 +66,7 @@ export const scoreSpanCorpus = (
         : coveredRequiredCharacters / requiredCharacters,
     characterPrecision:
       predictedCharacters === 0
-        ? 1
+        ? 0
         : acceptedPredictedCharacters / predictedCharacters,
     goldSpans,
   };

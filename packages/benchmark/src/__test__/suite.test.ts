@@ -9,6 +9,7 @@ import {
 import { parseRedactionBenchRows } from "../suite/redactionbench";
 import { scoreRedactionBench } from "../suite/redactionbench-score";
 import { parseMeddocanArchive } from "../suite/meddocan";
+import { scoreSpanCorpus } from "../suite/span-score";
 
 const rows = () => [
   {
@@ -27,6 +28,12 @@ const rows = () => [
 describe("benchmark suite registry", () => {
   test("keeps development and sealed tasks explicit", () => {
     expect(() => validateBenchmarkRegistry()).not.toThrow();
+    expect(
+      BENCHMARK_CORPORA.some(
+        ({ id, policy }) =>
+          id === "tab-echr-development" && policy === "development",
+      ),
+    ).toBe(true);
     expect(BENCHMARK_CORPORA.some(({ id }) => id === "tab-echr")).toBe(true);
     expect(BENCHMARK_CORPORA.some(({ id }) => id === "meddocan")).toBe(true);
     expect(BENCHMARK_CORPORA.every(({ access }) => access !== undefined)).toBe(
@@ -50,6 +57,18 @@ describe("MEDDOCAN normalization", () => {
         spans: [{ label: "NOMBRE_SUJETO_ASISTENCIA", start: 0, end: 5 }],
       },
     ]);
+  });
+});
+
+describe("span-corpus metrics", () => {
+  test("reports zero precision when an adapter masks nothing", () => {
+    const score = scoreSpanCorpus(
+      [{ id: "doc", text: "Jane", spans: [{ start: 0, end: 4 }] }],
+      new Map(),
+    );
+    expect(score.spanRecall).toBe(0);
+    expect(score.characterRecall).toBe(0);
+    expect(score.characterPrecision).toBe(0);
   });
 });
 

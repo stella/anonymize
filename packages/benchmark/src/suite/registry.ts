@@ -35,6 +35,21 @@ export const BENCHMARK_CORPORA: readonly BenchmarkCorpus[] = [
     notes: "Public development fixtures; permitted for detector iteration.",
   },
   {
+    id: "tab-echr-development",
+    name: "Text Anonymization Benchmark (TAB) development split",
+    domains: ["court decisions", "legal"],
+    languages: ["en"],
+    task: "span-redaction",
+    access: "verified-download",
+    policy: "development",
+    license: "MIT",
+    source: "https://github.com/NorskRegnesentral/text-anonymization-benchmark",
+    version: "558e09e26d6b36f5f78440074e6a233946d98bd9",
+    runnable: true,
+    notes:
+      "Declared TAB development split; deterministic five-document diagnostics may guide detector iteration.",
+  },
+  {
     id: "tab-echr",
     name: "Text Anonymization Benchmark (TAB)",
     domains: ["court decisions", "legal"],
