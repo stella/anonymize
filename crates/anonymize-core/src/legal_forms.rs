@@ -1107,9 +1107,7 @@ fn named_institutional_span_start(
     return Some(emit_start);
   };
 
-  let Some(prefix) = full_text.get(emit_start..head_start) else {
-    return None;
-  };
+  let prefix = full_text.get(emit_start..head_start)?;
   match institutional_fragment_has_specific_name(prefix, data, false) {
     None => word_tokens(full_text, emit_start, head_start)
       .skip(1)
@@ -2739,6 +2737,13 @@ mod tests {
         "Board",
       ),
       ["Parent&rsquo;s Board of Directors"]
+    );
+    assert!(
+      institutional_head_entities(
+        "its Chairman of the Board reporting to the Board of Directors",
+        "Board",
+      )
+      .is_empty()
     );
     assert_eq!(
       institutional_head_entities(
