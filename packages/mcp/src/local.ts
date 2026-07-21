@@ -1,5 +1,10 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
+  CAPABILITY_MANIFEST,
+  type NativeCallerDetection,
+  type NativeTextReplacement,
+} from "@stll/anonymize";
+import {
   DOCX_ARCHIVE_MAX_BYTES,
   DOCX_COVERAGE_MODES,
   anonymizeDocx,
@@ -29,11 +34,31 @@ import {
 } from "node:path";
 import * as z from "zod/v4";
 
+import { DurableSessionStore } from "./durable-sessions";
+
 const TEXT_MAX_BYTES = 64 * 1024 * 1024;
+const EXTERNAL_DETECTION_BATCH_MAX_BYTES = 16 * 1024 * 1024;
+const EXTERNAL_DETECTION_BATCH_VERSION = 1 as const;
 const PATH_MAX_CHARACTERS = 32_768;
 const SESSION_MAX_COUNT = 256;
 const SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u;
 const READ_CHUNK_BYTES = 64 * 1024;
+
+const observedAtEpochSeconds = (): number => {
+  const seconds = Math.floor(Date.now() / 1000);
+  if (seconds < 0 || seconds > 0xff_ff_ff_ff) {
+    throw new Error("The current time is outside the supported session range");
+  }
+  return seconds;
+};
+
+export const MCP_SESSION_MODES = {
+  durableEncrypted: "durable-encrypted",
+  memory: "memory",
+} as const;
+
+export type McpSessionMode =
+  (typeof MCP_SESSION_MODES)[keyof typeof MCP_SESSION_MODES];
 
 export type AuditSafeResult = {
   operation: "anonymize" | "inspect" | "restore";
@@ -45,6 +70,68 @@ export type AuditSafeResult = {
   rewrittenBlockCount?: number;
   restoredPlaceholderCount?: number;
   coverageStatus?: "full" | "partial";
+  externalDetectionBatchStatus?: "accepted";
+  externalDetectionCount?: number;
+  retainedExternalDetectionCount?: number;
+};
+
+const EXTERNAL_DETECTION_FAILURES = {
+  batchRejected: {
+    code: "EXTERNAL_DETECTION_BATCH_REJECTED",
+    message: "The external detection batch was rejected.",
+  },
+  documentRejected: {
+    code: "EXTERNAL_DETECTION_DOCUMENT_REJECTED",
+    message: "The external detection document was rejected.",
+  },
+  inputRejected: {
+    code: "EXTERNAL_DETECTION_INPUT_REJECTED",
+    message: "The external detection request paths were rejected.",
+  },
+  operationFailed: {
+    code: "EXTERNAL_DETECTION_OPERATION_FAILED",
+    message: "The external detection operation failed safely.",
+  },
+  sessionRejected: {
+    code: "EXTERNAL_DETECTION_SESSION_REJECTED",
+    message: "The external detection session was rejected.",
+  },
+} as const;
+
+type ExternalDetectionFailure =
+  (typeof EXTERNAL_DETECTION_FAILURES)[keyof typeof EXTERNAL_DETECTION_FAILURES];
+
+class ExternalDetectionAuditError extends Error {
+  readonly code: ExternalDetectionFailure["code"];
+
+  constructor(failure: ExternalDetectionFailure) {
+    super(failure.message);
+    this.name = "ExternalDetectionAuditError";
+    this.code = failure.code;
+  }
+}
+
+const externalDetectionFailure = (
+  error: unknown,
+  failure: ExternalDetectionFailure,
+): ExternalDetectionAuditError =>
+  error instanceof ExternalDetectionAuditError
+    ? error
+    : new ExternalDetectionAuditError(failure);
+
+const externalDetectionStep = async <Result>(
+  failure: ExternalDetectionFailure,
+  operation: () => Result | Promise<Result>,
+): Promise<Result> => {
+  try {
+    return await operation();
+  } catch (error) {
+    throw externalDetectionFailure(error, failure);
+  }
+};
+
+export type LocalAnonymizeServiceFaults = {
+  beforeOutputPublish?: () => void;
 };
 
 const inside = (root: string, target: string): boolean => {
@@ -57,9 +144,9 @@ const inside = (root: string, target: string): boolean => {
 
 type ReadInputOptions = {
   path: string;
-  extension: ".docx" | ".txt";
+  extension: ".docx" | ".json" | ".txt";
   maximumBytes: number;
-  label: "DOCX" | "Text";
+  label: "DOCX" | "External detection batch" | "Text";
 };
 
 type ScopedInput = {
@@ -72,7 +159,7 @@ type ReadableFileHandle = Pick<Awaited<ReturnType<typeof open>>, "read">;
 const readHandleBounded = async (
   handle: ReadableFileHandle,
   maximumBytes: number,
-  label: "DOCX" | "Text",
+  label: "DOCX" | "External detection batch" | "Text",
 ): Promise<Uint8Array> => {
   const chunks: Uint8Array[] = [];
   let total = 0;
@@ -244,12 +331,26 @@ type RedactionSession = DocxAnonymizationSession &
     };
     restoreText(text: string): string;
     toPlaintextJson(): string;
+    toEncryptedArchiveAt(
+      key: Uint8Array,
+      observedAtEpochSeconds: number,
+    ): Uint8Array;
   };
 
 type NativeNodeSurface = {
+  convert_external_detection_batch: (
+    document: Uint8Array,
+    batch: string,
+  ) => NativeCallerDetection[];
   getDefaultNativePipeline: (options: { language?: string }) => {
     createRedactionSession: (sessionId: string) => RedactionSession;
     restoreRedactionSession: (plaintextJson: string) => RedactionSession;
+    restoreEncryptedRedactionSession: (options: {
+      archive: Uint8Array;
+      expectedSessionId: string;
+      key: Uint8Array;
+      observedAtEpochSeconds: number;
+    }) => RedactionSession;
   };
   native_package_version: () => string;
 };
@@ -346,11 +447,56 @@ const safeWrite = async (
 };
 
 const decodeText = (bytes: Uint8Array): string => {
+  return decodeUtf8(bytes, "Text inputs");
+};
+
+const decodeUtf8 = (bytes: Uint8Array, label: string): string => {
   try {
     return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
   } catch (error) {
-    throw new Error("Text inputs must contain valid UTF-8", { cause: error });
+    throw new Error(`${label} must contain valid UTF-8`, { cause: error });
   }
+};
+
+const applyTextReplacements = (
+  text: string,
+  replacements: readonly NativeTextReplacement[],
+): string => {
+  const parts: string[] = [];
+  let cursor = 0;
+  for (const replacement of replacements) {
+    if (
+      !Number.isSafeInteger(replacement.start) ||
+      !Number.isSafeInteger(replacement.end) ||
+      replacement.start < cursor ||
+      replacement.end <= replacement.start ||
+      replacement.end > text.length ||
+      !isUtf16Boundary(text, replacement.start) ||
+      !isUtf16Boundary(text, replacement.end)
+    ) {
+      throw new Error(
+        "Native caller-detection plan returned invalid replacements",
+      );
+    }
+    parts.push(text.slice(cursor, replacement.start), replacement.replacement);
+    cursor = replacement.end;
+  }
+  parts.push(text.slice(cursor));
+  return parts.join("");
+};
+
+const isUtf16Boundary = (text: string, offset: number): boolean => {
+  if (offset <= 0 || offset >= text.length) {
+    return true;
+  }
+  const before = text.charCodeAt(offset - 1);
+  const after = text.charCodeAt(offset);
+  return !(
+    before >= 0xd800 &&
+    before <= 0xdbff &&
+    after >= 0xdc00 &&
+    after <= 0xdfff
+  );
 };
 
 const assertDifferentPaths = (input: string, output: string): void => {
@@ -364,6 +510,10 @@ const textInput = z.object({
   outputPath: z.string().min(1).max(PATH_MAX_CHARACTERS),
   sessionId: z.string().regex(SESSION_ID),
   language: z.string().min(2).max(35).optional(),
+});
+
+const externalDetectionTextInput = textInput.extend({
+  detectionBatchPath: z.string().min(1).max(PATH_MAX_CHARACTERS),
 });
 
 const restoreInput = z.object({
@@ -381,14 +531,74 @@ const docxInput = textInput.extend({
 });
 
 export class LocalAnonymizeService {
+  #activeOperations = 0;
+  #closePromise: Promise<void> | undefined;
+  #operationsDrained: (() => void) | undefined;
   readonly #scope: PathScope;
+  readonly #sessionInitializations = new Set<string>();
   readonly #sessions = new Map<string, SessionEntry>();
+  #state: "closed" | "closing" | "open" = "open";
+  readonly #durableSessions: DurableSessionStore | undefined;
+  readonly #faults: LocalAnonymizeServiceFaults;
 
-  constructor(scope: PathScope) {
+  constructor(
+    scope: PathScope,
+    durableSessions?: DurableSessionStore,
+    faults: LocalAnonymizeServiceFaults = {},
+  ) {
     this.#scope = scope;
+    this.#durableSessions = durableSessions;
+    this.#faults = faults;
   }
 
-  #session(sessionId: string, language?: string): SessionLease {
+  get sessionMode(): McpSessionMode {
+    return this.#durableSessions === undefined
+      ? MCP_SESSION_MODES.memory
+      : MCP_SESSION_MODES.durableEncrypted;
+  }
+
+  async close(): Promise<void> {
+    if (this.#closePromise !== undefined) {
+      return this.#closePromise;
+    }
+    this.#state = "closing";
+    this.#closePromise = (async () => {
+      if (this.#activeOperations > 0) {
+        await new Promise<void>((resolvePromise) => {
+          this.#operationsDrained = resolvePromise;
+        });
+      }
+      this.#sessions.clear();
+      await this.#durableSessions?.close();
+      this.#state = "closed";
+    })();
+    return this.#closePromise;
+  }
+
+  async #runOperation<Result>(
+    operation: () => Promise<Result>,
+  ): Promise<Result> {
+    if (this.#state !== "open") {
+      throw new Error("MCP anonymize service is closing or closed");
+    }
+    this.#activeOperations += 1;
+    try {
+      return await operation();
+    } finally {
+      this.#activeOperations -= 1;
+      if (this.#activeOperations === 0) {
+        this.#operationsDrained?.();
+        this.#operationsDrained = undefined;
+      }
+    }
+  }
+
+  async #session(sessionId: string, language?: string): Promise<SessionLease> {
+    if (this.#durableSessions !== undefined && language !== undefined) {
+      throw new Error(
+        "Durable sessions use the full all-language pipeline; omit language",
+      );
+    }
     const existing = this.#sessions.get(sessionId);
     if (existing !== undefined) {
       if (language !== undefined && existing.language !== language) {
@@ -408,38 +618,78 @@ export class LocalAnonymizeService {
         rollback: { type: "restore", checkpoint },
       };
     }
-    if (this.#sessions.size >= SESSION_MAX_COUNT) {
-      throw new Error(`MCP sessions must not exceed ${SESSION_MAX_COUNT}`);
+    if (this.#sessionInitializations.has(sessionId)) {
+      throw new Error("The requested session is still initializing");
     }
-    const pipeline = nativeNodeSurface.getDefaultNativePipeline(
-      language === undefined ? {} : { language },
-    );
-    const session = pipeline.createRedactionSession(sessionId);
-    const entry: SessionEntry = {
-      language,
-      session,
-      restoreSession: (plaintextJson) =>
-        pipeline.restoreRedactionSession(plaintextJson),
-      status: "initializing",
-    };
-    this.#sessions.set(sessionId, entry);
-    return {
-      entry,
-      sessionId,
-      rollback: { type: "delete" },
-    };
+    this.#sessionInitializations.add(sessionId);
+    try {
+      if (this.#sessions.size >= SESSION_MAX_COUNT) {
+        throw new Error(`MCP sessions must not exceed ${SESSION_MAX_COUNT}`);
+      }
+      const pipeline = nativeNodeSurface.getDefaultNativePipeline(
+        language === undefined ? {} : { language },
+      );
+      const durableSessions = this.#durableSessions;
+      const stored =
+        durableSessions === undefined
+          ? undefined
+          : await durableSessions.load(sessionId);
+      let session: RedactionSession;
+      if (stored === undefined) {
+        session = pipeline.createRedactionSession(sessionId);
+      } else {
+        if (durableSessions === undefined) {
+          throw new Error("Durable session storage is unavailable");
+        }
+        try {
+          session = durableSessions.restore({
+            archive: stored.bytes,
+            expectedSessionId: sessionId,
+            observedAtEpochSeconds: observedAtEpochSeconds(),
+            restorer: pipeline,
+          });
+        } catch (error) {
+          throw new Error("The requested durable session is unavailable", {
+            cause: error,
+          });
+        }
+      }
+      const entry: SessionEntry = {
+        language,
+        session,
+        restoreSession: (plaintextJson) =>
+          pipeline.restoreRedactionSession(plaintextJson),
+        status: "initializing",
+      };
+      this.#sessions.set(sessionId, entry);
+      return {
+        entry,
+        sessionId,
+        rollback:
+          stored === undefined
+            ? { type: "delete" }
+            : { type: "restore", checkpoint: session.toPlaintextJson() },
+      };
+    } finally {
+      this.#sessionInitializations.delete(sessionId);
+    }
   }
 
   #commitSession({ entry }: SessionLease): void {
     entry.status = "ready";
   }
 
-  #rollbackSession({ entry, rollback, sessionId }: SessionLease): void {
+  async #rollbackSession({
+    entry,
+    rollback,
+    sessionId,
+  }: SessionLease): Promise<void> {
     if (this.#sessions.get(sessionId) !== entry) {
       return;
     }
     if (rollback.type === "delete") {
       this.#sessions.delete(sessionId);
+      await this.#durableSessions?.delete(sessionId).catch(() => undefined);
       return;
     }
     if (rollback.type === "release") {
@@ -449,15 +699,50 @@ export class LocalAnonymizeService {
     try {
       entry.session = entry.restoreSession(rollback.checkpoint);
       entry.status = "ready";
+      await this.#persistSession(sessionId, entry.session);
     } catch {
       this.#sessions.delete(sessionId);
     }
   }
 
-  #readSession(sessionId: string): SessionLease {
-    const entry = this.#sessions.get(sessionId);
+  async #readSession(sessionId: string): Promise<SessionLease> {
+    let entry = this.#sessions.get(sessionId);
+    if (entry === undefined && this.#durableSessions !== undefined) {
+      if (this.#sessionInitializations.has(sessionId)) {
+        throw new Error("The requested session is still initializing");
+      }
+      this.#sessionInitializations.add(sessionId);
+      try {
+        const pipeline = nativeNodeSurface.getDefaultNativePipeline({});
+        const stored = await this.#durableSessions.load(sessionId);
+        if (stored !== undefined) {
+          try {
+            const session = this.#durableSessions.restore({
+              archive: stored.bytes,
+              expectedSessionId: sessionId,
+              observedAtEpochSeconds: observedAtEpochSeconds(),
+              restorer: pipeline,
+            });
+            entry = {
+              language: undefined,
+              session,
+              restoreSession: (plaintextJson) =>
+                pipeline.restoreRedactionSession(plaintextJson),
+              status: "ready",
+            };
+            this.#sessions.set(sessionId, entry);
+          } catch (error) {
+            throw new Error("The requested durable session is unavailable", {
+              cause: error,
+            });
+          }
+        }
+      } finally {
+        this.#sessionInitializations.delete(sessionId);
+      }
+    }
     if (entry === undefined) {
-      throw new Error("The requested in-memory session is unavailable");
+      throw new Error("The requested session is unavailable");
     }
     if (entry.status !== "ready") {
       throw new Error("The requested in-memory session is unavailable");
@@ -466,7 +751,27 @@ export class LocalAnonymizeService {
     return { entry, sessionId, rollback: { type: "release" } };
   }
 
+  async #persistSession(
+    sessionId: string,
+    session: RedactionSession,
+  ): Promise<void> {
+    if (this.#durableSessions === undefined) {
+      return;
+    }
+    const archive = this.#durableSessions.seal(
+      session,
+      observedAtEpochSeconds(),
+    );
+    await this.#durableSessions.save(sessionId, archive);
+  }
+
   async anonymizeText(
+    input: z.infer<typeof textInput>,
+  ): Promise<AuditSafeResult> {
+    return this.#runOperation(() => this.#anonymizeText(input));
+  }
+
+  async #anonymizeText(
     input: z.infer<typeof textInput>,
   ): Promise<AuditSafeResult> {
     const source = await this.#scope.readInput({
@@ -478,9 +783,11 @@ export class LocalAnonymizeService {
     const destination = await this.#scope.output(input.outputPath, ".txt");
     assertDifferentPaths(source.path, destination.path);
     const text = decodeText(source.bytes);
-    const lease = this.#session(input.sessionId, input.language);
+    const lease = await this.#session(input.sessionId, input.language);
     try {
       const result = lease.entry.session.redact_text(text);
+      await this.#persistSession(input.sessionId, lease.entry.session);
+      this.#faults.beforeOutputPublish?.();
       await destination.write(result.redaction.redactedText);
       this.#commitSession(lease);
       return {
@@ -491,12 +798,116 @@ export class LocalAnonymizeService {
         entityCount: result.redaction.entityCount,
       };
     } catch (error) {
-      this.#rollbackSession(lease);
+      await this.#rollbackSession(lease);
       throw error;
     }
   }
 
   async restoreText(
+    input: z.infer<typeof restoreInput>,
+  ): Promise<AuditSafeResult> {
+    return this.#runOperation(() => this.#restoreText(input));
+  }
+
+  async anonymizeTextWithExternalDetections(
+    input: z.infer<typeof externalDetectionTextInput>,
+  ): Promise<AuditSafeResult> {
+    try {
+      return await this.#runOperation(() =>
+        this.#anonymizeTextWithExternalDetections(input),
+      );
+    } catch (error) {
+      throw externalDetectionFailure(
+        error,
+        EXTERNAL_DETECTION_FAILURES.operationFailed,
+      );
+    }
+  }
+
+  async #anonymizeTextWithExternalDetections(
+    input: z.infer<typeof externalDetectionTextInput>,
+  ): Promise<AuditSafeResult> {
+    const { batch, destination, source } = await externalDetectionStep(
+      EXTERNAL_DETECTION_FAILURES.inputRejected,
+      async () => {
+        const scopedSource = await this.#scope.readInput({
+          path: input.inputPath,
+          extension: ".txt",
+          maximumBytes: TEXT_MAX_BYTES,
+          label: "Text",
+        });
+        const scopedBatch = await this.#scope.readInput({
+          path: input.detectionBatchPath,
+          extension: ".json",
+          maximumBytes: EXTERNAL_DETECTION_BATCH_MAX_BYTES,
+          label: "External detection batch",
+        });
+        const scopedDestination = await this.#scope.output(
+          input.outputPath,
+          ".txt",
+        );
+        assertDifferentPaths(scopedSource.path, scopedDestination.path);
+        assertDifferentPaths(scopedBatch.path, scopedDestination.path);
+        assertDifferentPaths(scopedSource.path, scopedBatch.path);
+        return {
+          batch: scopedBatch,
+          destination: scopedDestination,
+          source: scopedSource,
+        };
+      },
+    );
+    const text = await externalDetectionStep(
+      EXTERNAL_DETECTION_FAILURES.documentRejected,
+      () => decodeText(source.bytes),
+    );
+    const detections = await externalDetectionStep(
+      EXTERNAL_DETECTION_FAILURES.batchRejected,
+      () =>
+        nativeNodeSurface.convert_external_detection_batch(
+          source.bytes,
+          decodeUtf8(batch.bytes, "External detection batches"),
+        ),
+    );
+    const lease = await externalDetectionStep(
+      EXTERNAL_DETECTION_FAILURES.sessionRejected,
+      () => this.#session(input.sessionId, input.language),
+    );
+    try {
+      const plan = lease.entry.session.planTextBatchWithCallerDetections({
+        inputs: [{ fullText: text, detections }],
+      });
+      const block = plan.blocks.at(0);
+      if (plan.blocks.length !== 1 || block === undefined) {
+        throw new Error(
+          "Native caller-detection plan did not match the text input",
+        );
+      }
+      const redactedText = applyTextReplacements(text, block.replacements);
+      plan.commit();
+      await this.#persistSession(input.sessionId, lease.entry.session);
+      this.#faults.beforeOutputPublish?.();
+      await destination.write(redactedText);
+      this.#commitSession(lease);
+      return {
+        operation: "anonymize",
+        format: "text",
+        outputCreated: true,
+        sessionId: input.sessionId,
+        entityCount: block.entityCount,
+        externalDetectionBatchStatus: "accepted",
+        externalDetectionCount: detections.length,
+        retainedExternalDetectionCount: block.callerEntityCount,
+      };
+    } catch (error) {
+      await this.#rollbackSession(lease);
+      throw externalDetectionFailure(
+        error,
+        EXTERNAL_DETECTION_FAILURES.operationFailed,
+      );
+    }
+  }
+
+  async #restoreText(
     input: z.infer<typeof restoreInput>,
   ): Promise<AuditSafeResult> {
     const source = await this.#scope.readInput({
@@ -508,7 +919,7 @@ export class LocalAnonymizeService {
     const destination = await this.#scope.output(input.outputPath, ".txt");
     assertDifferentPaths(source.path, destination.path);
     const text = decodeText(source.bytes);
-    const lease = this.#readSession(input.sessionId);
+    const lease = await this.#readSession(input.sessionId);
     try {
       const restored = lease.entry.session.restoreText(text);
       await destination.write(restored);
@@ -520,12 +931,18 @@ export class LocalAnonymizeService {
         sessionId: input.sessionId,
       };
     } catch (error) {
-      this.#rollbackSession(lease);
+      await this.#rollbackSession(lease);
       throw error;
     }
   }
 
   async anonymizeDocx(
+    input: z.infer<typeof docxInput>,
+  ): Promise<AuditSafeResult> {
+    return this.#runOperation(() => this.#anonymizeDocx(input));
+  }
+
+  async #anonymizeDocx(
     input: z.infer<typeof docxInput>,
   ): Promise<AuditSafeResult> {
     const source = await this.#scope.readInput({
@@ -536,7 +953,7 @@ export class LocalAnonymizeService {
     });
     const destination = await this.#scope.output(input.outputPath, ".docx");
     assertDifferentPaths(source.path, destination.path);
-    const lease = this.#session(input.sessionId, input.language);
+    const lease = await this.#session(input.sessionId, input.language);
     try {
       const result = anonymizeDocx({
         document: source.bytes,
@@ -550,6 +967,8 @@ export class LocalAnonymizeService {
           },
         },
       });
+      await this.#persistSession(input.sessionId, lease.entry.session);
+      this.#faults.beforeOutputPublish?.();
       await destination.write(result.document);
       this.#commitSession(lease);
       return {
@@ -563,12 +982,18 @@ export class LocalAnonymizeService {
         coverageStatus: result.summary.coverage.status,
       };
     } catch (error) {
-      this.#rollbackSession(lease);
+      await this.#rollbackSession(lease);
       throw error;
     }
   }
 
   async restoreDocx(
+    input: z.infer<typeof docxRestoreInput>,
+  ): Promise<AuditSafeResult> {
+    return this.#runOperation(() => this.#restoreDocx(input));
+  }
+
+  async #restoreDocx(
     input: z.infer<typeof docxRestoreInput>,
   ): Promise<AuditSafeResult> {
     const source = await this.#scope.readInput({
@@ -579,7 +1004,7 @@ export class LocalAnonymizeService {
     });
     const destination = await this.#scope.output(input.outputPath, ".docx");
     assertDifferentPaths(source.path, destination.path);
-    const lease = this.#readSession(input.sessionId);
+    const lease = await this.#readSession(input.sessionId);
     try {
       const result = restoreDocxText({
         document: source.bytes,
@@ -603,12 +1028,16 @@ export class LocalAnonymizeService {
         coverageStatus: result.coverage.status,
       };
     } catch (error) {
-      this.#rollbackSession(lease);
+      await this.#rollbackSession(lease);
       throw error;
     }
   }
 
   async inspectDocx(inputPath: string): Promise<AuditSafeResult> {
+    return this.#runOperation(() => this.#inspectDocx(inputPath));
+  }
+
+  async #inspectDocx(inputPath: string): Promise<AuditSafeResult> {
     const source = await this.#scope.readInput({
       path: inputPath,
       extension: ".docx",
@@ -640,6 +1069,50 @@ const result = (value: AuditSafeResult) => ({
   structuredContent: { ...value },
 });
 
+const MCP_TOOL_NAMES = [
+  "anonymize_docx_file",
+  "anonymize_text_file",
+  "anonymize_text_file_with_external_detections",
+  "capabilities",
+  "inspect_docx_file",
+  "restore_docx_file",
+  "restore_text_file",
+] as const;
+
+const capabilitiesResult = (service: LocalAnonymizeService) => {
+  const value = {
+    capabilityManifest: CAPABILITY_MANIFEST,
+    runtimeVersion: nativeNodeSurface.native_package_version(),
+    mcp: {
+      externalDetectionBatch: {
+        ingestion: "path-only" as const,
+        version: EXTERNAL_DETECTION_BATCH_VERSION,
+      },
+      formats: ["docx", "text"] as const,
+      sessionMode: service.sessionMode,
+      tools: MCP_TOOL_NAMES,
+      transport: "stdio" as const,
+    },
+  };
+  return {
+    content: [{ type: "text" as const, text: JSON.stringify(value) }],
+    structuredContent: value,
+  };
+};
+
+const externalDetectionErrorResult = (error: unknown) => {
+  const failure = externalDetectionFailure(
+    error,
+    EXTERNAL_DETECTION_FAILURES.operationFailed,
+  );
+  const value = { errorCode: failure.code, message: failure.message };
+  return {
+    isError: true,
+    content: [{ type: "text" as const, text: JSON.stringify(value) }],
+    structuredContent: value,
+  };
+};
+
 export const createAnonymizeMcpServer = (
   service: LocalAnonymizeService,
 ): McpServer => {
@@ -654,6 +1127,20 @@ export const createAnonymizeMcpServer = (
     },
   );
   server.registerTool(
+    "capabilities",
+    {
+      description:
+        "Return the public runtime capability manifest and MCP surface metadata.",
+      inputSchema: z.object({}),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
+    },
+    async () => capabilitiesResult(service),
+  );
+  server.registerTool(
     "anonymize_text_file",
     {
       description: "Anonymize a local UTF-8 text file into a new local file.",
@@ -665,12 +1152,27 @@ export const createAnonymizeMcpServer = (
   server.registerTool(
     "restore_text_file",
     {
-      description:
-        "Restore a text file using an in-memory session from this server process.",
+      description: "Restore a text file using the configured session store.",
       inputSchema: restoreInput,
       annotations: { destructiveHint: false, idempotentHint: false },
     },
     async (input) => result(await service.restoreText(input)),
+  );
+  server.registerTool(
+    "anonymize_text_file_with_external_detections",
+    {
+      description:
+        "Anonymize a local UTF-8 text file with a provider-neutral ExternalDetectionBatch v1 JSON sidecar into a new local file.",
+      inputSchema: externalDetectionTextInput,
+      annotations: { destructiveHint: false, idempotentHint: false },
+    },
+    async (input) => {
+      try {
+        return result(await service.anonymizeTextWithExternalDetections(input));
+      } catch (error) {
+        return externalDetectionErrorResult(error);
+      }
+    },
   );
   server.registerTool(
     "anonymize_docx_file",
@@ -685,8 +1187,7 @@ export const createAnonymizeMcpServer = (
   server.registerTool(
     "restore_docx_file",
     {
-      description:
-        "Restore a DOCX using an in-memory session from this server process.",
+      description: "Restore a DOCX using the configured session store.",
       inputSchema: docxRestoreInput,
       annotations: { destructiveHint: false, idempotentHint: false },
     },

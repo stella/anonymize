@@ -194,6 +194,30 @@ or an original value (`Jan Novák`), case-sensitive and exact. All processing is
 local; the CLI makes no network calls. Run `anonymize --help` for the full
 reference, including the `--json` schema and exit codes.
 
+### Local MCP server
+
+The MCP package requires Node.js 20 or newer.
+
+```bash
+npx -y @stll/anonymize-mcp --root /absolute/path/to/workspace
+```
+
+The stdio MCP server exposes path-only text and DOCX anonymization, restoration,
+DOCX inspection, and a read-only capability-discovery tool. It accepts no raw
+document content in tool arguments and returns no document text or session
+mappings. Sessions are in-memory by default; opt-in encrypted persistence across
+server restarts requires explicit `--session-dir` and `--key-file` paths. See
+[`packages/mcp`](packages/mcp) for the private-path, raw-key, archive-limit, and
+failure-mode contract.
+
+For model-assisted local work, the path-only
+`anonymize_text_file_with_external_detections` tool ingests the provider-neutral
+`ExternalDetectionBatch` v1 sidecar shared by the Node, Python, and WASM
+bindings. An application-owned fake or real provider writes the sidecar with the
+exact document SHA-256, declared offsets, label map, and provenance IDs; stella
+then validates it, runs native detection too, and returns only aggregate status.
+No GLiNER dependency or model runner is bundled.
+
 ## Features
 
 - **23 default entity labels, plus 3 opt-in network labels.** People,
