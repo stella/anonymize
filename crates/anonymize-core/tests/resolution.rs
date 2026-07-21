@@ -370,7 +370,11 @@ fn literal_container_survives_overlapping_shorter_fragment() {
 }
 
 #[test]
-fn address_component_beats_low_confidence_name_collision() {
+fn longer_person_beats_nested_address_component_collision() {
+  // A low-score deny-list person that fully contains a high-score address
+  // token must keep the person. Preferring the nested address would drop the
+  // whole person span and leak any non-address residue (middle initials,
+  // given-name prefix) between or beside city-list hits.
   let result = merge_and_dedup(&[
     entity(DetectionSource::DenyList, 0.5, 510, 521, "person"),
     entity(DetectionSource::DenyList, 0.9, 515, 521, "address"),
@@ -378,15 +382,21 @@ fn address_component_beats_low_confidence_name_collision() {
   ]);
 
   assert!(
-    result.iter().any(|entry| entry.label == "address"
-      && entry.start == 515
+    result.iter().any(|entry| entry.label == "person"
+      && entry.start == 510
       && entry.end == 521),
     "merged entities: {result:?}",
   );
   assert!(
-    result.iter().all(|entry| !(entry.label == "person"
-      && entry.start == 510
+    result.iter().all(|entry| !(entry.label == "address"
+      && entry.start == 515
       && entry.end == 521)),
+    "merged entities: {result:?}",
+  );
+  assert!(
+    result.iter().any(|entry| entry.label == "address"
+      && entry.start == 523
+      && entry.end == 531),
     "merged entities: {result:?}",
   );
 }
