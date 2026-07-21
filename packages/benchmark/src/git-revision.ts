@@ -17,7 +17,38 @@ const text = (bytes: Uint8Array): string =>
   new TextDecoder().decode(bytes).trim();
 
 const GENERATED_AGGREGATE_REPORT =
-  /^packages\/benchmark\/results\/blind\/(?:redactionbench\/|meddocan\/)?[^/]+\.(?:json|md)$/u;
+  /^packages\/benchmark\/results\/blind\/(?:(redactionbench|meddocan)\/)?(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z)\.(json|md)$/u;
+
+const generatedAggregateReport = (
+  root: string,
+  path: string,
+  expectedGitSha: string,
+): boolean => {
+  const match = GENERATED_AGGREGATE_REPORT.exec(path);
+  if (match === null) return false;
+  const suite = match[1];
+  const stamp = match[2];
+  if (stamp === undefined) return false;
+  const prefix = `packages/benchmark/results/blind/${suite === undefined ? "" : `${suite}/`}${stamp}`;
+  try {
+    const json = readFileSync(join(root, `${prefix}.json`), "utf8");
+    const markdown = readFileSync(join(root, `${prefix}.md`), "utf8");
+    const report: unknown = JSON.parse(json);
+    assertSealedAggregateReport(report);
+    let expectedCorpus: "meddocan" | "redactionbench" | "tab-echr" = "tab-echr";
+    if (suite === "redactionbench") expectedCorpus = "redactionbench";
+    if (suite === "meddocan") expectedCorpus = "meddocan";
+    return (
+      report.corpus.id === expectedCorpus &&
+      report.gitSha === expectedGitSha &&
+      report.createdAt.replace(/[:.]/gu, "-") === stamp &&
+      serializeSealedAggregateReport(report) === json &&
+      renderSealedAggregateMarkdown(report) === markdown
+    );
+  } catch {
+    return false;
+  }
+};
 
 /** Ignore only new aggregate artifacts emitted by an earlier sealed phase. */
 export const benchmarkGitRevision = (cwd: string = import.meta.dir): string => {
@@ -41,6 +72,14 @@ export const benchmarkGitRevision = (cwd: string = import.meta.dir): string => {
   const relevantUntracked = new TextDecoder()
     .decode(untracked.stdout)
     .split("\0")
-    .some((path) => path !== "" && !GENERATED_AGGREGATE_REPORT.test(path));
+    .some((path) => path !== "" && !generatedAggregateReport(root, path, sha));
   return relevantUntracked ? `${sha}-dirty` : sha;
 };
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+import {
+  assertSealedAggregateReport,
+  renderSealedAggregateMarkdown,
+  serializeSealedAggregateReport,
+} from "./sealed-report";

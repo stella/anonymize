@@ -11,8 +11,82 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { benchmarkGitRevision } from "../git-revision";
+import {
+  renderSealedAggregateMarkdown,
+  SEALED_AGGREGATE_REPORT_SCHEMA_VERSION,
+  type SealedAggregateReport,
+  serializeSealedAggregateReport,
+} from "../sealed-report";
 
 const temporaryRepositories: string[] = [];
+
+const aggregateReport = (
+  gitSha: string,
+  corpus: "redactionbench" | "tab-echr",
+): SealedAggregateReport => ({
+  schemaVersion: SEALED_AGGREGATE_REPORT_SCHEMA_VERSION,
+  createdAt: "2026-01-02T03:04:05.678Z",
+  gitSha,
+  runtime: "Bun test",
+  policy: "evaluation-only",
+  corpus: {
+    id: corpus,
+    source: "https://example.invalid/public-corpus",
+    version: "pinned-version",
+    file: "test.json",
+    sha256: "a".repeat(64),
+    license: "MIT",
+    split: "test",
+    documentCount: 1,
+    selection: { type: "full-test-split" },
+  },
+  libraries: [
+    {
+      name: "stella",
+      version: "test",
+      status: "ok",
+      elapsedSeconds: 1,
+      metrics:
+        corpus === "tab-echr"
+          ? {
+              type: "tab-independent-annotator-span-redaction",
+              documents: 1,
+              directMentions: 1,
+              quasiMentions: 1,
+              directMentionRecall: 1,
+              quasiMentionRecall: 1,
+              allMentionRecall: 1,
+              entityRecall: 1,
+              characterPrecision: 1,
+              characterRecall: 1,
+              predictedSpans: 1,
+            }
+          : {
+              type: "redactionbench-transparent-interim",
+              documents: 1,
+              mandatorySpans: 1,
+              mandatorySpanRecall: 1,
+              mandatoryCharacterRecall: 1,
+              acceptedCharacterPrecision: 1,
+              predictedSpans: 1,
+            },
+    },
+  ],
+});
+
+const writeAggregateReport = (
+  root: string,
+  report: SealedAggregateReport,
+): void => {
+  const suite = report.corpus.id === "tab-echr" ? "" : `${report.corpus.id}/`;
+  const stamp = report.createdAt.replace(/[:.]/gu, "-");
+  const prefix = join(
+    root,
+    `packages/benchmark/results/blind/${suite}${stamp}`,
+  );
+  writeFileSync(`${prefix}.json`, serializeSealedAggregateReport(report));
+  writeFileSync(`${prefix}.md`, renderSealedAggregateMarkdown(report));
+};
 
 const git = (cwd: string, ...args: string[]): string => {
   const process = Bun.spawnSync(["git", ...args], { cwd });
@@ -66,19 +140,24 @@ describe("benchmark Git provenance", () => {
   test("ignores environments and untracked aggregate phase reports", () => {
     const { root, sha } = repository();
     symlinkSync(root, join(root, "packages/benchmark/.venv-presidio"));
-    writeFileSync(
-      join(root, "packages/benchmark/results/blind/2026-01-01.json"),
-      "{}\n",
-    );
-    writeFileSync(
-      join(
-        root,
-        "packages/benchmark/results/blind/redactionbench/2026-01-01.md",
-      ),
-      "aggregate\n",
-    );
+    writeAggregateReport(root, aggregateReport(sha, "tab-echr"));
+    writeAggregateReport(root, aggregateReport(sha, "redactionbench"));
 
     expect(benchmarkGitRevision(root)).toBe(sha);
+  });
+
+  test("does not ignore arbitrary or invalid report-looking files", () => {
+    for (const relativePath of [
+      "packages/benchmark/results/blind/failure-analysis.md",
+      "packages/benchmark/results/blind/per-document.json",
+      "packages/benchmark/results/blind/2026-01-02T03-04-05-678Z.json",
+    ]) {
+      const { root, sha } = repository();
+      writeFileSync(join(root, relativePath), "{}\n");
+      expect(benchmarkGitRevision(root)).toBe(`${sha}-dirty`);
+      temporaryRepositories.splice(temporaryRepositories.indexOf(root), 1);
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   test("marks every other untracked file dirty", () => {
