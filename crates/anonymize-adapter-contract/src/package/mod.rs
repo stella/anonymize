@@ -25,7 +25,11 @@ use crate::error::Result;
 use crate::error::invalid_prepared_search_package;
 use crate::types::BindingPreparedSearchConfig;
 
-use digest::verify_prepared_search_package_digest;
+use digest::{
+  prepared_search_compressed_package_digest,
+  verify_prepared_search_compressed_package_digest,
+  verify_prepared_search_package_digest,
+};
 use format::{
   BINDING_PACKAGE_SCHEMA_VERSION, CORE_PACKAGE_SCHEMA_VERSION,
   CompressedPackageHeader, MAX_PREPARED_SEARCH_PACKAGE_PAYLOAD_BYTES,
@@ -346,7 +350,9 @@ fn prepared_search_package_compress_payload(
   payload: &[u8],
 ) -> Result<Vec<u8>> {
   let compressed = lz4_flex::block::compress(payload);
-  let digest = blake3::hash(&compressed);
+  let compression = PackageCompression::Lz4;
+  let digest =
+    prepared_search_compressed_package_digest(compression, &compressed);
   let mut bytes = Vec::with_capacity(
     raw_package_header_len(&compressed)
       .saturating_add(std::mem::size_of::<u8>())
@@ -356,7 +362,7 @@ fn prepared_search_package_compress_payload(
     &mut bytes,
     header,
     schema_version,
-    PackageCompression::Lz4,
+    compression,
     digest.as_bytes(),
   );
   let payload_len = u64::try_from(payload.len())
@@ -384,6 +390,15 @@ enum PreparedSearchPackageParts<'a> {
 pub(crate) enum PackageCompression {
   Lz4,
   Zstd,
+}
+
+impl PackageCompression {
+  const fn wire_tag(self) -> u8 {
+    match self {
+      Self::Lz4 => 1,
+      Self::Zstd => 2,
+    }
+  }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -476,10 +491,17 @@ impl<'a> PreparedSearchPackageParts<'a> {
         Ok(())
       }
       Self::Compressed {
-        digest, payload, ..
+        compression,
+        digest,
+        payload,
+        ..
       } => {
         let verify_start = std::time::Instant::now();
-        verify_prepared_search_package_digest(digest, payload)?;
+        verify_prepared_search_compressed_package_digest(
+          digest,
+          compression,
+          payload,
+        )?;
         timings.verify = Some(elapsed_us(verify_start));
         Ok(())
       }
@@ -507,7 +529,11 @@ fn compressed_digest_payload<'a>(
     stella_anonymize_core::exec::scope(|scope| {
       let verify_handle = scope.spawn(|| {
         let verify_start = std::time::Instant::now();
-        let result = verify_prepared_search_package_digest(digest, payload);
+        let result = verify_prepared_search_compressed_package_digest(
+          digest,
+          compression,
+          payload,
+        );
         (result, elapsed_us(verify_start))
       });
       let decompress_handle = scope.spawn(|| {
@@ -681,6 +707,7 @@ mod tests {
   use super::{
     CorePreparedSearchPackageArtifactsInner, PackageCompression,
     PreparedSearchPackageDecodeTimings, diagnostic_stage_event,
+    prepared_search_compressed_package_digest,
     prepared_search_core_package_decode_from_bytes_with_timings,
     prepared_search_core_package_decode_trusted_from_bytes_with_timings,
     prepared_search_core_package_from_bytes,
@@ -934,6 +961,37 @@ mod tests {
       matches!(error, ContractError::InvalidPreparedSearchPackage { .. }),
       "corrupted compressed package should fail digest verification"
     );
+  }
+
+  #[test]
+  fn prepared_search_compressed_package_digest_authenticates_codec() {
+    let payload = b"same-compressed-payload";
+    assert_ne!(
+      prepared_search_compressed_package_digest(
+        PackageCompression::Lz4,
+        payload,
+      ),
+      prepared_search_compressed_package_digest(
+        PackageCompression::Zstd,
+        payload,
+      ),
+      "compression codecs must have distinct cache identities",
+    );
+
+    let mut bytes = prepared_search_package_to_compressed_bytes(
+      &package_test_config(),
+      b"artifacts",
+    )
+    .unwrap();
+    let codec_offset = PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER
+      .len()
+      .saturating_add(std::mem::size_of::<u32>());
+    *bytes.get_mut(codec_offset).unwrap() = PackageCompression::Zstd.wire_tag();
+
+    let error =
+      prepared_search_package_verify_digest_with_timings(&bytes).unwrap_err();
+
+    assert_invalid_package_reason(error, "digest mismatch");
   }
 
   #[test]
@@ -1356,7 +1414,10 @@ mod tests {
   #[cfg(not(feature = "zstd"))]
   fn prepared_search_package_rejects_zstd_when_feature_is_disabled() {
     let payload = [1_u8];
-    let digest = blake3::hash(&payload);
+    let digest = prepared_search_compressed_package_digest(
+      PackageCompression::Zstd,
+      &payload,
+    );
     let mut bytes = Vec::new();
     write_compressed_package_header(
       &mut bytes,
@@ -1415,7 +1476,10 @@ mod tests {
     let compressed =
       zstd::bulk::compress(payload, PREPARED_SEARCH_PACKAGE_ZSTD_LEVEL)
         .unwrap();
-    let digest = blake3::hash(&compressed);
+    let digest = prepared_search_compressed_package_digest(
+      PackageCompression::Zstd,
+      &compressed,
+    );
     let mut bytes = Vec::new();
     write_compressed_package_header(
       &mut bytes,

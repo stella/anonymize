@@ -25,8 +25,8 @@ pub(crate) const PREPARED_SEARCH_PACKAGE_ZSTD_LEVEL: i32 = 1;
 pub(crate) const MAX_PREPARED_SEARCH_PACKAGE_PAYLOAD_BYTES: usize =
   256 * 1024 * 1024;
 
-const COMPRESSION_LZ4: u8 = 1;
-const COMPRESSION_ZSTD: u8 = 2;
+const COMPRESSION_LZ4: u8 = PackageCompression::Lz4.wire_tag();
+const COMPRESSION_ZSTD: u8 = PackageCompression::Zstd.wire_tag();
 
 pub(crate) const fn raw_package_header_len(payload: &[u8]) -> usize {
   PREPARED_SEARCH_PACKAGE_HEADER
@@ -56,10 +56,7 @@ pub(crate) fn write_compressed_package_header(
 ) {
   bytes.extend_from_slice(&header);
   bytes.extend_from_slice(&schema_version.to_le_bytes());
-  bytes.push(match compression {
-    PackageCompression::Lz4 => COMPRESSION_LZ4,
-    PackageCompression::Zstd => COMPRESSION_ZSTD,
-  });
+  bytes.push(compression.wire_tag());
   bytes.extend_from_slice(digest);
 }
 
