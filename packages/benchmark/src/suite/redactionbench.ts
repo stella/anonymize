@@ -4,6 +4,8 @@ import { dirname, join } from "node:path";
 
 import { parquetReadObjects } from "hyparquet";
 
+import { parseVerifiedArtifact } from "../verified-artifact";
+
 export const REDACTIONBENCH_PROVENANCE = {
   repository: "https://huggingface.co/datasets/RedactionBench/RedactionBench",
   commit: "d45e9cec89bc49c69355e252fec29cc0229982f6",
@@ -215,12 +217,19 @@ export const loadVerifiedRedactionBench = async (): Promise<
   RedactionBenchDocument[]
 > => {
   const bytes = await loadVerifiedBytes();
-  const exactBuffer =
-    bytes.buffer instanceof ArrayBuffer &&
-    bytes.byteOffset === 0 &&
-    bytes.byteLength === bytes.buffer.byteLength
-      ? bytes.buffer
-      : bytes.slice().buffer;
-  const rows = await parquetReadObjects({ file: exactBuffer });
-  return parseRedactionBenchRows(rows);
+  return parseVerifiedArtifact({
+    bytes,
+    expectedSha256: REDACTIONBENCH_PROVENANCE.sha256,
+    name: "RedactionBench test split",
+    parse: async (verifiedBytes) => {
+      const exactBuffer =
+        verifiedBytes.buffer instanceof ArrayBuffer &&
+        verifiedBytes.byteOffset === 0 &&
+        verifiedBytes.byteLength === verifiedBytes.buffer.byteLength
+          ? verifiedBytes.buffer
+          : verifiedBytes.slice().buffer;
+      const rows = await parquetReadObjects({ file: exactBuffer });
+      return parseRedactionBenchRows(rows);
+    },
+  });
 };

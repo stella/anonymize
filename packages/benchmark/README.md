@@ -48,7 +48,12 @@ bun run bench:compare
 bun run bench:blind
 
 # Run every executable sealed corpus (TAB, RedactionBench, and MEDDOCAN).
-bun run bench:suite
+bun run bench:sealed
+
+# Or run one complete public test split.
+bun run bench:sealed:tab
+bun run bench:sealed:redactionbench
+bun run bench:sealed:meddocan
 
 # Development-only five-document TAB comparison (aggregate by default).
 bun run bench:dev-gap
@@ -66,6 +71,18 @@ PII-Shield is included when its CLI and GLiNER model are installed; set
 
 Blind results can reject a release, but must not be used to inspect examples or
 tune behavior. See the repository instructions in `AGENTS.md`.
+
+All three sealed runners use the same versioned JSON contract in
+`src/sealed-report.ts`. The contract has exact fields and task-discriminated
+aggregate metrics; unknown fields fail closed. The shared serializer and
+Markdown renderer cannot accept document text, examples, categories,
+predictions, failure cases, or per-document results. Unavailable adapters use a
+fixed reason code so subprocess output cannot enter a persisted report.
+
+Each loader verifies the pinned artifact digest before invoking JSON, Parquet,
+ZIP, or BRAT parsing. Only the public test split is reachable from the sealed
+commands. Corpus attribution and pinned digests are recorded in
+`ATTRIBUTION.md`.
 
 ## Unified benchmark suite
 

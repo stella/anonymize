@@ -17,6 +17,33 @@ public, synthetic, legal-domain corpus (en/cs/de):
 Metrics: per-label and overall precision / recall / F1 with span-overlap
 matching, plus throughput (chars/sec, cold and warm). See `src/metrics.ts`.
 
+## Sealed public test runners
+
+The sealed suite uses public tools and credential-free public artifacts:
+
+| Runner         | Public source             | Parser                   | Pinned test artifact           |
+| -------------- | ------------------------- | ------------------------ | ------------------------------ |
+| TAB            | GitHub raw content        | built-in JSON            | repository commit plus SHA-256 |
+| RedactionBench | Hugging Face dataset file | `hyparquet`              | dataset commit plus SHA-256    |
+| MEDDOCAN       | Zenodo record API         | `fflate` and BRAT parser | archive SHA-256                |
+
+From `packages/benchmark`, run all complete test splits or one corpus:
+
+```sh
+bun run bench:sealed
+bun run bench:sealed:tab
+bun run bench:sealed:redactionbench
+bun run bench:sealed:meddocan
+```
+
+The runners download into `.cache/`, enforce byte limits, verify the pinned
+SHA-256 digest, and only then invoke a parser. A mismatched cached file is not
+parsed. Generated JSON and Markdown share the exact aggregate-only schema in
+`src/sealed-report.ts`; no raw text, examples, category breakdowns,
+predictions, failure cases, or per-document records are persisted or printed.
+The three native task semantics remain separate and are never combined into a
+suite-wide score. See `ATTRIBUTION.md` for public provenance and licenses.
+
 ## Hardware / runtime note
 
 The committed run under `results/` was produced on Apple M3 (8 cores), 24 GiB

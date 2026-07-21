@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, rename, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
+import { parseVerifiedArtifact } from "../verified-artifact";
+
 export const TAB_PROVENANCE = {
   repository:
     "https://github.com/NorskRegnesentral/text-anonymization-benchmark",
@@ -274,7 +276,13 @@ const loadVerifiedTabCorpus = async (
       throw error;
     }
   }
-  return parseTabCorpus(JSON.parse(new TextDecoder().decode(bytes)), split);
+  return parseVerifiedArtifact({
+    bytes,
+    expectedSha256: provenance.sha256,
+    name: `TAB ${split} split`,
+    parse: (verified) =>
+      parseTabCorpus(JSON.parse(new TextDecoder().decode(verified)), split),
+  });
 };
 
 export const loadVerifiedTabTestCorpus = async (): Promise<TabDocument[]> =>

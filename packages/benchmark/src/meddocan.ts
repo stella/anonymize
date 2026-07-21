@@ -1,24 +1,30 @@
-import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
 import { createBenchmarkAdapters } from "./adapters";
 import type { GroundTruthDocument } from "./ground-truth";
+import { runSealedBoundary } from "./sealed-boundary";
+import {
+  SEALED_AGGREGATE_REPORT_SCHEMA_VERSION,
+  type MeddocanAggregateMetrics,
+  type SealedAggregateReport,
+  type SealedLibraryResult,
+  writeSealedAggregateReport,
+} from "./sealed-report";
 import { loadVerifiedMeddocan, MEDDOCAN_PROVENANCE } from "./suite/meddocan";
-import { scoreSpanCorpus, type SpanScore } from "./suite/span-score";
+import { scoreSpanCorpus } from "./suite/span-score";
 
 const RESULTS_DIR = join(import.meta.dir, "..", "results", "blind", "meddocan");
-type Result =
-  | {
-      name: string;
-      version: string;
-      status: "ok";
-      seconds: number;
-      score: SpanScore;
-    }
-  | { name: string; version: string; status: "unavailable"; reason: string };
-const percent = (value: number): string => (value * 100).toFixed(1);
+const gitSha = (): string => {
+  const child = Bun.spawnSync(["git", "rev-parse", "--short", "HEAD"], {
+    cwd: import.meta.dir,
+  });
+  return child.success ? child.stdout.toString().trim() : "no-git";
+};
 
-const documents = await loadVerifiedMeddocan();
+const documents = await runSealedBoundary(
+  "MEDDOCAN verification or parsing",
+  loadVerifiedMeddocan,
+);
 const inputs: GroundTruthDocument[] = documents.map(({ id, text }) => ({
   id,
   text,
@@ -26,70 +32,59 @@ const inputs: GroundTruthDocument[] = documents.map(({ id, text }) => ({
   language: "es",
   entities: [],
 }));
-const libraries: Result[] = [];
+const libraries: SealedLibraryResult[] = [];
 for (const adapter of createBenchmarkAdapters()) {
-  process.stderr.write(`running MEDDOCAN adapter ${adapter.name}...\n`);
+  process.stderr.write(`running sealed MEDDOCAN adapter ${adapter.name}...\n`);
   const start = performance.now();
-  const outcome = await adapter.run(inputs);
+  const outcome = await runSealedBoundary(
+    `sealed adapter ${adapter.name}`,
+    () => adapter.run(inputs),
+  );
   if (outcome.status === "unavailable") {
     libraries.push({
       name: adapter.name,
       version: adapter.version,
       status: "unavailable",
-      reason: outcome.reason,
+      reasonCode: "adapter-unavailable",
     });
-  } else {
-    libraries.push({
-      name: adapter.name,
-      version: outcome.reportedVersion ?? adapter.version,
-      status: "ok",
-      seconds: (performance.now() - start) / 1000,
-      score: scoreSpanCorpus(documents, outcome.predictions),
-    });
+    continue;
   }
+  const metrics: MeddocanAggregateMetrics = {
+    type: "label-agnostic-span-redaction",
+    ...scoreSpanCorpus(documents, outcome.predictions),
+  };
+  libraries.push({
+    name: adapter.name,
+    version: outcome.reportedVersion ?? adapter.version,
+    status: "ok",
+    elapsedSeconds: (performance.now() - start) / 1000,
+    metrics,
+  });
 }
 
-const createdAt = new Date().toISOString();
-const report = {
-  createdAt,
-  policy: "evaluation-only" as const,
-  corpus: { ...MEDDOCAN_PROVENANCE, documents: documents.length },
+const report: SealedAggregateReport = {
+  schemaVersion: SEALED_AGGREGATE_REPORT_SCHEMA_VERSION,
+  createdAt: new Date().toISOString(),
+  gitSha: gitSha(),
+  runtime: `Bun ${Bun.version}`,
+  policy: "evaluation-only",
+  corpus: {
+    id: "meddocan",
+    source: MEDDOCAN_PROVENANCE.repository,
+    version: MEDDOCAN_PROVENANCE.version,
+    file: MEDDOCAN_PROVENANCE.file,
+    sha256: MEDDOCAN_PROVENANCE.sha256,
+    license: MEDDOCAN_PROVENANCE.license,
+    split: "test",
+    documentCount: documents.length,
+    selection: { type: "full-test-split" },
+  },
   libraries,
 };
-const lines = [
-  "# Blind Spanish clinical de-identification evaluation",
-  "",
-  "Evaluation-only aggregate results on the complete pinned MEDDOCAN test split.",
-  "Development uses only the separate train/dev splits.",
-  "",
-  `- Generated: ${createdAt}`,
-  `- Corpus DOI: ${MEDDOCAN_PROVENANCE.doi}`,
-  `- Corpus SHA-256: \`${MEDDOCAN_PROVENANCE.sha256}\``,
-  `- Documents: ${documents.length}`,
-  "",
-  "| Library | Version | Span recall | Character recall | Character precision | Seconds |",
-  "| ------- | ------- | ----------- | ---------------- | ------------------- | ------- |",
-];
-for (const library of libraries) {
-  lines.push(
-    library.status === "unavailable"
-      ? `| ${library.name} | ${library.version} | unavailable | — | — | — |`
-      : `| ${library.name} | ${library.version} | ${percent(library.score.spanRecall)} | ${percent(library.score.characterRecall)} | ${percent(library.score.characterPrecision)} | ${library.seconds.toFixed(2)} |`,
-  );
-}
-lines.push(
-  "",
-  "Metrics are label-agnostic and micro-averaged. A gold span counts as",
-  "covered only when one prediction fully contains it.",
-  "",
-);
-mkdirSync(RESULTS_DIR, { recursive: true });
-const stamp = createdAt.replace(/[:.]/gu, "-");
-await Bun.write(
-  join(RESULTS_DIR, `${stamp}.json`),
-  `${JSON.stringify(report, null, 2)}\n`,
-);
-await Bun.write(join(RESULTS_DIR, `${stamp}.md`), `${lines.join("\n")}\n`);
+const { jsonPath, markdownPath } = await writeSealedAggregateReport({
+  directory: RESULTS_DIR,
+  report,
+});
 process.stderr.write(
-  `wrote aggregate-only MEDDOCAN report for ${documents.length} documents\n`,
+  `wrote aggregate-only sealed MEDDOCAN report:\n  ${jsonPath}\n  ${markdownPath}\n`,
 );

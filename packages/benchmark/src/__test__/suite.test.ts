@@ -44,6 +44,13 @@ describe("benchmark suite registry", () => {
         ({ runnable, policy }) => runnable && policy === "evaluation-only",
       ).map(({ execution }) => execution?.script),
     ).toEqual(["blind.ts", "redactionbench.ts", "meddocan.ts"]);
+    for (const corpus of BENCHMARK_CORPORA.filter(
+      ({ policy }) => policy === "evaluation-only",
+    )) {
+      expect(corpus.access).toBe("verified-download");
+      expect(corpus.artifact?.split).toBe("test");
+      expect(corpus.artifact?.sha256).toMatch(/^[a-f0-9]{64}$/u);
+    }
   });
 });
 

@@ -15,6 +15,11 @@ export type BenchmarkCorpus = {
   readonly license: string;
   readonly source: string;
   readonly version: string;
+  readonly artifact?: {
+    readonly file: string;
+    readonly sha256: string;
+    readonly split: "dev" | "test";
+  };
   readonly runnable: boolean;
   readonly execution?: {
     readonly script: string;
@@ -47,8 +52,13 @@ export const BENCHMARK_CORPORA: readonly BenchmarkCorpus[] = [
     access: "verified-download",
     policy: "development",
     license: "MIT",
-    source: "https://github.com/NorskRegnesentral/text-anonymization-benchmark",
-    version: "558e09e26d6b36f5f78440074e6a233946d98bd9",
+    source: TAB_DEV_PROVENANCE.repository,
+    version: TAB_DEV_PROVENANCE.commit,
+    artifact: {
+      file: TAB_DEV_PROVENANCE.file,
+      sha256: TAB_DEV_PROVENANCE.sha256,
+      split: "dev",
+    },
     runnable: true,
     notes:
       "Declared TAB development split; deterministic five-document diagnostics may guide detector iteration.",
@@ -62,8 +72,13 @@ export const BENCHMARK_CORPORA: readonly BenchmarkCorpus[] = [
     access: "verified-download",
     policy: "evaluation-only",
     license: "MIT",
-    source: "https://github.com/NorskRegnesentral/text-anonymization-benchmark",
-    version: "558e09e26d6b36f5f78440074e6a233946d98bd9",
+    source: TAB_PROVENANCE.repository,
+    version: TAB_PROVENANCE.commit,
+    artifact: {
+      file: TAB_PROVENANCE.file,
+      sha256: TAB_PROVENANCE.sha256,
+      split: "test",
+    },
     runnable: true,
     execution: { script: "blind.ts", args: ["--full"] },
     notes: "Independent annotator judgments; aggregate-only sealed reports.",
@@ -88,8 +103,13 @@ export const BENCHMARK_CORPORA: readonly BenchmarkCorpus[] = [
     access: "verified-download",
     policy: "evaluation-only",
     license: "CC-BY-4.0",
-    source: "https://huggingface.co/datasets/RedactionBench/RedactionBench",
-    version: "d45e9cec89bc49c69355e252fec29cc0229982f6",
+    source: REDACTIONBENCH_PROVENANCE.repository,
+    version: REDACTIONBENCH_PROVENANCE.commit,
+    artifact: {
+      file: REDACTIONBENCH_PROVENANCE.file,
+      sha256: REDACTIONBENCH_PROVENANCE.sha256,
+      split: "test",
+    },
     runnable: true,
     execution: { script: "redactionbench.ts", args: [] },
     notes:
@@ -104,8 +124,13 @@ export const BENCHMARK_CORPORA: readonly BenchmarkCorpus[] = [
     access: "verified-download",
     policy: "evaluation-only",
     license: "CC-BY-4.0",
-    source: "https://doi.org/10.5281/zenodo.4279323",
-    version: "d0e4708b58689bc1440ede6f89e017e58d667827d927827622d73810cd68eac3",
+    source: MEDDOCAN_PROVENANCE.repository,
+    version: MEDDOCAN_PROVENANCE.version,
+    artifact: {
+      file: MEDDOCAN_PROVENANCE.file,
+      sha256: MEDDOCAN_PROVENANCE.sha256,
+      split: "test",
+    },
     runnable: true,
     execution: { script: "meddocan.ts", args: [] },
     notes:
@@ -123,6 +148,19 @@ export const validateBenchmarkRegistry = (): void => {
     if (corpus.policy !== "development" && corpus.version.trim() === "") {
       throw new Error(`${corpus.id} must pin a source version`);
     }
+    if (corpus.access === "verified-download") {
+      if (corpus.artifact === undefined) {
+        throw new Error(`${corpus.id} must pin a downloadable artifact`);
+      }
+      if (!/^[a-f0-9]{64}$/u.test(corpus.artifact.sha256)) {
+        throw new Error(`${corpus.id} must pin a valid SHA-256 digest`);
+      }
+      const expectedSplit =
+        corpus.policy === "evaluation-only" ? "test" : "dev";
+      if (corpus.artifact.split !== expectedSplit) {
+        throw new Error(`${corpus.id} artifact split violates its policy`);
+      }
+    }
     if (
       corpus.runnable &&
       corpus.policy === "evaluation-only" &&
@@ -132,3 +170,6 @@ export const validateBenchmarkRegistry = (): void => {
     }
   }
 };
+import { TAB_DEV_PROVENANCE, TAB_PROVENANCE } from "../blind/tab";
+import { MEDDOCAN_PROVENANCE } from "./meddocan";
+import { REDACTIONBENCH_PROVENANCE } from "./redactionbench";

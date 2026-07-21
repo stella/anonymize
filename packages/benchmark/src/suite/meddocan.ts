@@ -4,9 +4,12 @@ import { dirname, join } from "node:path";
 
 import { unzipSync } from "fflate";
 
+import { parseVerifiedArtifact } from "../verified-artifact";
+
 export const MEDDOCAN_PROVENANCE = {
   doi: "10.5281/zenodo.4279323",
   repository: "https://zenodo.org/records/4279323",
+  version: "4279323",
   file: "meddocan.zip",
   url: "https://zenodo.org/api/records/4279323/files/meddocan.zip/content",
   sha256: "d0e4708b58689bc1440ede6f89e017e58d667827d927827622d73810cd68eac3",
@@ -166,4 +169,9 @@ const loadVerifiedBytes = async (): Promise<Uint8Array> => {
 };
 
 export const loadVerifiedMeddocan = async (): Promise<MeddocanDocument[]> =>
-  parseMeddocanArchive(await loadVerifiedBytes());
+  parseVerifiedArtifact({
+    bytes: await loadVerifiedBytes(),
+    expectedSha256: MEDDOCAN_PROVENANCE.sha256,
+    name: "MEDDOCAN test split",
+    parse: (bytes) => parseMeddocanArchive(bytes),
+  });
