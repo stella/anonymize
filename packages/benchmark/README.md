@@ -1,9 +1,11 @@
 # @stll/anonymize-benchmark
 
 Reproducible comparison of `@stll/anonymize` (stella) against other open-source
-PII redaction libraries on recall, precision, and throughput over a public,
-synthetic, legal-domain corpus (en/cs/de). Intended to back the claims cited in
-the top-level README.
+PII redaction libraries on recall, precision, and throughput. The development
+track includes a public synthetic legal-domain corpus (en/cs/de) and a declared
+TAB development split. The evaluation-only suite unifies independently
+published corpora without flattening their different task semantics into one
+misleading score.
 
 The package also has a separate evaluation-only blind track based on the pinned
 test split of the third-party Text Anonymization Benchmark (TAB). TAB contains
@@ -127,8 +129,8 @@ the aligned regions. Paste any previously unseen file and compare directly.
   are stella's own output and are not used here.
 - Every label is reported, including those where stella loses (e.g. Presidio
   scores higher recall on `organization` and `person`).
-- The corpus is legal-domain and multilingual, which favours stella; this caveat
-  is stated in every generated report. A per-language table isolates the
-  English-only comparison.
+- The bundled synthetic development corpus is legal-domain and multilingual,
+  which favours stella; this caveat is stated in every generated report. It is
+  never presented as the sealed multi-corpus suite.
 - Competitor versions are pinned and quoted; taxonomy mappings are deliberately
   generous to competitors. See `REPRODUCING.md`.
