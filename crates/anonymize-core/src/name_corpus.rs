@@ -629,6 +629,8 @@ impl PreparedNameCorpusData {
       return false;
     };
     self.lookup_name_token(next_word)
+      || self.is_surname_token(next_word)
+      || self.is_surname_token(&title_case_simple(next_word))
       || (next_word.chars().count() == 1 && starts_uppercase(next_word))
   }
 
@@ -1151,6 +1153,38 @@ mod tests {
     assert!(
       (entities[0].score - HIGH_CONFIDENCE_NAME_SCORE).abs() < f64::EPSILON
     );
+  }
+
+  #[test]
+  fn full_mode_detects_titled_initial_and_surname() {
+    let data = PreparedNameCorpusData::new(NameCorpusData {
+      surnames: vec![String::from("Glover")],
+      title_tokens: vec![String::from("mrs")],
+      title_abbreviations: vec![String::from("mrs")],
+      ..NameCorpusData::default()
+    });
+
+    let entities = data
+      .detect("Counsel was Mrs A. Glover.", NameCorpusMode::Full, &[])
+      .expect("initialed name detection should succeed");
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].text, "Mrs A. Glover");
+  }
+
+  #[test]
+  fn bare_initial_without_a_known_surname_stays_unclassified() {
+    let data = PreparedNameCorpusData::new(NameCorpusData {
+      title_tokens: vec![String::from("mrs")],
+      title_abbreviations: vec![String::from("mrs")],
+      ..NameCorpusData::default()
+    });
+
+    let entities = data
+      .detect("Section Mrs A. General applies.", NameCorpusMode::Full, &[])
+      .expect("name detection should succeed");
+
+    assert!(entities.is_empty());
   }
 
   #[test]
