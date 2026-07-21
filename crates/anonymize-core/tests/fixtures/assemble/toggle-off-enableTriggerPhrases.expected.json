@@ -17577,7 +17577,7 @@
     },
     {
       "kind": "regex",
-      "pattern": "\\b\\d{1,2}:\\d{2}-(?:[cC][vV]|[cC][rR])-\\d{4,6}\\b",
+      "pattern": "\\b\\d{1,2}:\\d{2}-(?:[cC][vV]|[cC][rR]|[mM][dD]|[mM][cC]|[mM][jJ])-\\d{1,6}\\b",
       "lazy": null,
       "prefilter_any": null,
       "prefilter_case_insensitive": null,

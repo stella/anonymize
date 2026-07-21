@@ -517,6 +517,7 @@ fn regex_shape_preferred_label(label: &str) -> bool {
       | "phone number"
       | "tax identification number"
       | "registration number"
+      | "case number"
       | "national identification number"
       | "social security number"
       | "birth number"

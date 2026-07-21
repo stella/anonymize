@@ -39,6 +39,10 @@ describe("case number formats", () => {
     ["US criminal docket", "12:22-cr-0001", "12:22-cr-0001"],
     ["uppercase US federal docket", "Case No. 1:23-CV-04567", "1:23-CV-04567"],
     ["uppercase US criminal docket", "Case No. 12:22-CR-0001", "12:22-CR-0001"],
+    ["US multidistrict docket", "1:22-md-03047", "1:22-md-03047"],
+    ["US miscellaneous docket", "1:23-mc-0123", "1:23-mc-0123"],
+    ["US magistrate docket", "1:23-mj-0456", "1:23-mj-0456"],
+    ["US docket with a short sequence number", "1:23-cv-45", "1:23-cv-45"],
     ["German Aktenzeichen", "Az. 1 BvR 123/24", "1 BvR 123/24"],
     [
       "punctuated German Aktenzeichen",

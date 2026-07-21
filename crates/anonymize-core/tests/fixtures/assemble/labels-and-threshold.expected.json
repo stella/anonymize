@@ -11739,22 +11739,12 @@
     {
       "kind": "literal-with-options",
       "pattern": "cestovní pas č.",
-      "case_insensitive": true,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
       "pattern": "cestovní pas",
-      "case_insensitive": true,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
@@ -12059,32 +12049,17 @@
     {
       "kind": "literal-with-options",
       "pattern": "č. j.",
-      "case_insensitive": true,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
       "pattern": "číslo jednací",
-      "case_insensitive": true,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
       "pattern": "číslo smlouvy",
-      "case_insensitive": true,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
@@ -12289,12 +12264,7 @@
     {
       "kind": "literal-with-options",
       "pattern": "st.",
-      "case_insensitive": true,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
@@ -12384,12 +12354,7 @@
     {
       "kind": "literal-with-options",
       "pattern": "st.:",
-      "case_insensitive": true,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
@@ -12569,22 +12534,12 @@
     {
       "kind": "literal-with-options",
       "pattern": "reisepass nr.",
-      "case_insensitive": true,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
       "pattern": "reisepass",
-      "case_insensitive": true,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
@@ -12659,52 +12614,27 @@
     {
       "kind": "literal-with-options",
       "pattern": "hra",
-      "case_insensitive": true,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
       "pattern": "hrb",
-      "case_insensitive": true,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
       "pattern": "az.",
-      "case_insensitive": true,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
       "pattern": "aktenzeichen",
-      "case_insensitive": true,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
       "pattern": "geschäftsnummer",
-      "case_insensitive": true,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
@@ -12734,12 +12664,7 @@
     {
       "kind": "literal-with-options",
       "pattern": "steuer-id",
-      "case_insensitive": true,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
@@ -12749,22 +12674,12 @@
     {
       "kind": "literal-with-options",
       "pattern": "idnr.",
-      "case_insensitive": true,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
       "pattern": "idnr",
-      "case_insensitive": true,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
@@ -12989,22 +12904,12 @@
     {
       "kind": "literal-with-options",
       "pattern": "kvk",
-      "case_insensitive": true,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
       "pattern": "kamer van koophandel",
-      "case_insensitive": true,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
@@ -13044,12 +12949,7 @@
     {
       "kind": "literal-with-options",
       "pattern": "registered number",
-      "case_insensitive": true,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
@@ -13089,22 +12989,12 @@
     {
       "kind": "literal-with-options",
       "pattern": "registered number:",
-      "case_insensitive": true,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
       "pattern": "registered number: ",
-      "case_insensitive": true,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
@@ -14329,22 +14219,12 @@
     {
       "kind": "literal-with-options",
       "pattern": "passeport n°",
-      "case_insensitive": true,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
       "pattern": "passeport",
-      "case_insensitive": true,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
@@ -14429,32 +14309,17 @@
     {
       "kind": "literal-with-options",
       "pattern": "rcs luxembourg",
-      "case_insensitive": true,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
       "pattern": "rcs paris",
-      "case_insensitive": true,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
       "pattern": "rcs",
-      "case_insensitive": true,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
@@ -14599,62 +14464,32 @@
     {
       "kind": "literal-with-options",
       "pattern": "rcs luxembourg:",
-      "case_insensitive": true,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
       "pattern": "rcs luxembourg: ",
-      "case_insensitive": true,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
       "pattern": "rcs paris:",
-      "case_insensitive": true,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
       "pattern": "rcs paris: ",
-      "case_insensitive": true,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
       "pattern": "rcs:",
-      "case_insensitive": true,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
       "pattern": "rcs: ",
-      "case_insensitive": true,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
@@ -15404,12 +15239,7 @@
     {
       "kind": "literal-with-options",
       "pattern": "személyi szám",
-      "case_insensitive": true,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
@@ -15739,32 +15569,17 @@
     {
       "kind": "literal-with-options",
       "pattern": "sygn. akt",
-      "case_insensitive": true,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
       "pattern": "sygn.",
-      "case_insensitive": true,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
       "pattern": "sygnatura akt",
-      "case_insensitive": true,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
@@ -18154,22 +17969,12 @@
     {
       "kind": "literal-with-options",
       "pattern": "swift code",
-      "case_insensitive": true,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
       "pattern": "bic code",
-      "case_insensitive": true,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
@@ -18184,22 +17989,12 @@
     {
       "kind": "literal-with-options",
       "pattern": "swift code:",
-      "case_insensitive": true,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
       "pattern": "bic code:",
-      "case_insensitive": true,
-      "lazy": null,
-      "prefilter_any": null,
-      "prefilter_case_insensitive": null,
-      "prefilter_window_bytes": null,
-      "prepared_artifact_policy": null
+      "case_insensitive": true
     },
     {
       "kind": "literal-with-options",
