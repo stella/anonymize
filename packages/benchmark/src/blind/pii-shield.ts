@@ -13,6 +13,8 @@ import type {
 const SCAN_TIMEOUT_MS = 5 * 60 * 1000;
 const MACOS_NATIVE_TEARDOWN_EXIT = 134;
 const MACOS_NATIVE_TEARDOWN_ERROR = "mutex lock failed: Invalid argument";
+const UNAVAILABLE_REASON =
+  "pii-shield CLI or its GLiNER model is unavailable; run `pii-shield doctor` and `pii-shield install-model`, then set PII_SHIELD_BIN if needed";
 
 export const parsePiiShieldEntities = (
   value: unknown,
@@ -97,15 +99,30 @@ export const createPiiShieldAdapter = (): Adapter => ({
     } catch {
       return {
         status: "unavailable",
-        reason:
-          "pii-shield CLI is unavailable; install it and its GLiNER model, then set PII_SHIELD_BIN if needed",
+        reason: UNAVAILABLE_REASON,
       };
     }
     if (version.exitCode !== 0) {
       return {
         status: "unavailable",
-        reason:
-          "pii-shield CLI is unavailable; install it and its GLiNER model, then set PII_SHIELD_BIN if needed",
+        reason: UNAVAILABLE_REASON,
+      };
+    }
+
+    // The public CLI requires its GLiNER model even though `--version` works
+    // without one. Preflight the documented health command so a normal
+    // first-run installation remains an optional unavailable adapter instead
+    // of aborting every other benchmark comparison.
+    let doctor: Awaited<ReturnType<typeof runProcess>>;
+    try {
+      doctor = await runProcess(["doctor"]);
+    } catch {
+      return { status: "unavailable", reason: UNAVAILABLE_REASON };
+    }
+    if (doctor.exitCode !== 0) {
+      return {
+        status: "unavailable",
+        reason: UNAVAILABLE_REASON,
       };
     }
 

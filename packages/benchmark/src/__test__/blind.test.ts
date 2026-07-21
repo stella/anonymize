@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import type { NativePrediction } from "../adapters/types";
-import { parsePiiShieldEntities } from "../blind/pii-shield";
+import {
+  createPiiShieldAdapter,
+  parsePiiShieldEntities,
+} from "../blind/pii-shield";
 import { scoreBlindCorpus } from "../blind/score";
 import { parseTabTestCorpus, selectBlindSample } from "../blind/tab";
 
@@ -102,6 +105,24 @@ describe("PII-Shield output validation", () => {
     expect(() =>
       parsePiiShieldEntities({ entities: [null] }, "Jane", "doc-a"),
     ).toThrow("invalid span");
+  });
+
+  test("treats a failed model health check as unavailable", async () => {
+    const previous = process.env["PII_SHIELD_BIN"];
+    process.env["PII_SHIELD_BIN"] = process.execPath;
+    try {
+      const outcome = await createPiiShieldAdapter().run([]);
+      expect(outcome.status).toBe("unavailable");
+      if (outcome.status === "unavailable") {
+        expect(outcome.reason).toContain("pii-shield doctor");
+      }
+    } finally {
+      if (previous === undefined) {
+        delete process.env["PII_SHIELD_BIN"];
+      } else {
+        process.env["PII_SHIELD_BIN"] = previous;
+      }
+    }
   });
 });
 
