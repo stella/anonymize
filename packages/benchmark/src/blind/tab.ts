@@ -14,6 +14,7 @@ export const TAB_PROVENANCE = {
 export const TAB_SAMPLE_SIZE = 12;
 export const TAB_SAMPLE_SEED = "stella-blind-tab-v1";
 const TAB_MAX_BYTES = 16 * 1024 * 1024;
+const TAB_DOWNLOAD_TIMEOUT_MS = 30_000;
 
 export type TabIdentifierType = "DIRECT" | "QUASI" | "NO_MASK";
 
@@ -227,7 +228,10 @@ export const loadVerifiedTabTestCorpus = async (): Promise<TabDocument[]> => {
     }
   } catch {
     const url = `https://raw.githubusercontent.com/NorskRegnesentral/text-anonymization-benchmark/${TAB_PROVENANCE.commit}/${TAB_PROVENANCE.file}`;
-    const response = await fetch(url, { redirect: "error" });
+    const response = await fetch(url, {
+      redirect: "error",
+      signal: AbortSignal.timeout(TAB_DOWNLOAD_TIMEOUT_MS),
+    });
     if (!response.ok) {
       throw new Error(`TAB download failed with HTTP ${response.status}`);
     }
