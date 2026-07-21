@@ -253,9 +253,8 @@ pub(super) fn organization_detection_suffixes(
 
 #[derive(Default, Deserialize)]
 struct InstitutionalOrganizationData {
-  #[serde(default)]
   heads: Vec<String>,
-  #[serde(default, rename = "complementHeads")]
+  #[serde(rename = "complementHeads")]
   complement_heads: Vec<String>,
 }
 
@@ -273,11 +272,12 @@ fn institutional_organization_data(
     {
       continue;
     }
-    let Ok(data) =
+    let data =
       serde_json::from_value::<InstitutionalOrganizationData>(value.clone())
-    else {
-      continue;
-    };
+        .map_err(|error| AssembleError::DataParse {
+          name: String::from("institutional-organization-heads.json"),
+          message: format!("language {language_key}: {error}"),
+        })?;
     for head in data.heads {
       push_unique(head, &mut seen_heads, &mut result.heads);
     }
