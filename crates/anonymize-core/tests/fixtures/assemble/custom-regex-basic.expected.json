@@ -11923,6 +11923,26 @@
     }
   ],
   "legal_form_data": {
+    "detection_only_suffixes": [
+      "Directorate",
+      "Commission",
+      "Department",
+      "Solicitors",
+      "University",
+      "Authority",
+      "Committee",
+      "Institute",
+      "Chambers",
+      "Hospital",
+      "Ministry",
+      "Registry",
+      "Tribunal",
+      "Council",
+      "Agency",
+      "Office",
+      "Board",
+      "Court"
+    ],
     "suffixes": [
       "Sociedad Anónima Promotora de Inversión de Capital Variable",
       "Partnerschaftsgesellschaft mit beschränkter Berufshaftung",

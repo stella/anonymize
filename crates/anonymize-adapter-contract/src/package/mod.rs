@@ -935,7 +935,7 @@ mod tests {
       b"prepared-artifacts",
     )
     .unwrap();
-    for version in [16, 17, 18, 19, 20, 21, 22, 23, 24] {
+    for version in 16..PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION {
       let bytes = zstd_compressed_package(
         PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER,
         version,
@@ -953,7 +953,7 @@ mod tests {
       b"prepared-artifacts",
     )
     .unwrap();
-    for version in [17, 18] {
+    for version in 16..PREPARED_SEARCH_PACKAGE_VERSION {
       let bytes = prepared_search_package_raw_payload_to_bytes(
         PREPARED_SEARCH_PACKAGE_HEADER,
         version,
@@ -1379,7 +1379,7 @@ mod tests {
     let payload =
       prepared_search_core_package_payload_to_bytes(&config, b"artifacts")
         .unwrap();
-    for version in [23, 24, 25, 26, 27, 28, 29, 30, 31] {
+    for version in 23..PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_VERSION {
       let bytes = zstd_compressed_package(
         PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_HEADER,
         version,
@@ -1397,7 +1397,7 @@ mod tests {
     let payload =
       prepared_search_core_package_payload_to_bytes(&config, b"artifacts")
         .unwrap();
-    for version in [24, 25] {
+    for version in 23..PREPARED_SEARCH_CORE_PACKAGE_VERSION {
       let bytes = prepared_search_package_raw_payload_to_bytes(
         PREPARED_SEARCH_CORE_PACKAGE_HEADER,
         version,

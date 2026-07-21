@@ -43,11 +43,25 @@ pub fn prepared_search_config_from_binding(
     config.literal_patterns_from_deny_list_data,
     deny_list_data.as_ref(),
   )?;
+  let legal_form_suffixes =
+    config
+      .legal_form_data
+      .as_ref()
+      .map_or_else(Vec::new, |data| {
+        let detection_only = data
+          .detection_only_suffixes
+          .iter()
+          .map(String::as_str)
+          .collect::<BTreeSet<_>>();
+        data
+          .suffixes
+          .iter()
+          .filter(|suffix| !detection_only.contains(suffix.as_str()))
+          .cloned()
+          .collect()
+      });
   let legal_form_data =
     config.legal_form_data.map(legal_form_data_from_binding);
-  let legal_form_suffixes = legal_form_data
-    .as_ref()
-    .map_or_else(Vec::new, |data| data.suffixes.clone());
   Ok(PreparedEngineConfig {
     search: PreparedEngineSearchConfig {
       regex_patterns: search_patterns_from_binding(config.regex_patterns)?,
@@ -815,10 +829,10 @@ mod tests {
   };
   use crate::error::ContractError;
   use crate::types::{
-    BindingDateData, BindingOperatorConfig, BindingPreparedArtifactPolicy,
-    BindingPreparedSearchConfig, BindingRegexArtifactPolicy,
-    BindingSearchOptions, BindingSearchPattern, BindingTriggerRule,
-    BindingTriggerStrategy,
+    BindingDateData, BindingLegalFormData, BindingOperatorConfig,
+    BindingPreparedArtifactPolicy, BindingPreparedSearchConfig,
+    BindingRegexArtifactPolicy, BindingSearchOptions, BindingSearchPattern,
+    BindingTriggerData, BindingTriggerRule, BindingTriggerStrategy,
   };
 
   #[test]
@@ -830,6 +844,33 @@ mod tests {
 
     assert!(
       serde_json::from_str::<BindingDateData>(missing_ambiguities).is_err()
+    );
+  }
+
+  #[test]
+  fn binding_legal_form_data_rejects_missing_detection_only_schema() {
+    assert!(
+      serde_json::from_str::<BindingLegalFormData>(r#"{"suffixes":[]}"#)
+        .is_err()
+    );
+  }
+
+  #[test]
+  fn detection_only_suffixes_never_reach_trigger_data() {
+    let config = BindingPreparedSearchConfig {
+      legal_form_data: Some(BindingLegalFormData {
+        suffixes: vec![String::from("LLC"), String::from("Court")],
+        detection_only_suffixes: vec![String::from("Court")],
+        ..BindingLegalFormData::default()
+      }),
+      trigger_data: Some(BindingTriggerData::default()),
+      ..BindingPreparedSearchConfig::default()
+    };
+
+    let core = prepared_search_config_from_binding(config).unwrap();
+    assert_eq!(
+      core.detectors.trigger_data.unwrap().legal_form_suffixes,
+      ["LLC"]
     );
   }
 

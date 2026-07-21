@@ -279,6 +279,7 @@ fn institutional_organization_data(
           message: format!("language {language_key}: {error}"),
         }
       })?;
+    validate_institutional_terms(language_key, &data)?;
     for head in data.heads {
       push_unique(head, &mut seen_heads, &mut result.heads);
     }
@@ -287,6 +288,26 @@ fn institutional_organization_data(
     }
   }
   Ok(result)
+}
+
+fn validate_institutional_terms(
+  language_key: &str,
+  data: &InstitutionalOrganizationData,
+) -> Result<(), AssembleError> {
+  for (field, terms) in [
+    ("heads", &data.heads),
+    ("complementHeads", &data.complement_heads),
+  ] {
+    if terms.iter().any(|term| term.trim().is_empty()) {
+      return Err(AssembleError::DataParse {
+        name: String::from("institutional-organization-heads.json"),
+        message: format!(
+          "language {language_key}: {field} must contain non-empty strings"
+        ),
+      });
+    }
+  }
+  Ok(())
 }
 
 /// Mirrors `isBoundaryLegalSuffixForm`.
@@ -478,8 +499,18 @@ pub(super) fn build_legal_form_data(
     return Ok(None);
   }
 
+  let ordinary_suffixes = all_legal_suffixes()?;
+  let ordinary_suffix_set = ordinary_suffixes
+    .iter()
+    .map(String::as_str)
+    .collect::<HashSet<_>>();
   let suffixes =
     organization_detection_suffixes(ctx.content_languages.as_deref())?;
+  let detection_only_suffixes = suffixes
+    .iter()
+    .filter(|suffix| !ordinary_suffix_set.contains(suffix.as_str()))
+    .cloned()
+    .collect();
   let raw_suffix_set: HashSet<&'static str> =
     RAW_LEGAL_SUFFIXES.iter().copied().collect();
 
@@ -519,6 +550,7 @@ pub(super) fn build_legal_form_data(
 
   Ok(Some(BindingLegalFormData {
     suffixes,
+    detection_only_suffixes,
     normalized_boundary_suffixes,
     normalized_in_name_words,
     normalized_suffix_words,
@@ -554,7 +586,10 @@ pub(super) fn build_legal_form_data(
 mod tests {
   #![allow(clippy::unwrap_used)]
 
-  use super::organization_detection_suffixes;
+  use super::{
+    InstitutionalOrganizationData, all_legal_suffixes,
+    organization_detection_suffixes, validate_institutional_terms,
+  };
 
   #[test]
   fn institutional_heads_follow_content_language_scope() {
@@ -565,7 +600,28 @@ mod tests {
     let all = organization_detection_suffixes(None).unwrap();
 
     assert!(english.iter().any(|suffix| suffix == "Court"));
+    let ordinary = all_legal_suffixes().unwrap();
+    for detection_only in ["Court", "Office", "Chambers"] {
+      assert!(!ordinary.iter().any(|suffix| suffix == detection_only));
+    }
     assert!(!german.iter().any(|suffix| suffix == "Court"));
     assert!(all.iter().any(|suffix| suffix == "Court"));
+  }
+
+  #[test]
+  fn institutional_heads_reject_empty_terms() {
+    for data in [
+      InstitutionalOrganizationData {
+        heads: vec![String::new()],
+        complement_heads: Vec::new(),
+      },
+      InstitutionalOrganizationData {
+        heads: Vec::new(),
+        complement_heads: vec![String::from("  ")],
+      },
+    ] {
+      let error = validate_institutional_terms("en", &data).unwrap_err();
+      assert!(error.to_string().contains("must contain non-empty strings"));
+    }
   }
 }

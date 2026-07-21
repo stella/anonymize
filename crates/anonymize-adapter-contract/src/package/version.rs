@@ -13,13 +13,13 @@ use super::PackageCompression;
 // whose positional struct schema predates the current DTOs. Version numbers
 // are unique per header magic, across compression variants.
 pub(crate) const PREPARED_SEARCH_PACKAGE_HEADER: [u8; 8] = *b"ANONPKG1";
-pub(crate) const PREPARED_SEARCH_PACKAGE_VERSION: u32 = 19;
+pub(crate) const PREPARED_SEARCH_PACKAGE_VERSION: u32 = 20;
 pub(crate) const PREPARED_SEARCH_COMPRESSED_PACKAGE_HEADER: [u8; 8] =
   *b"ANONPKZ1";
-pub(crate) const PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION: u32 = 25;
-pub(crate) const PREPARED_SEARCH_COMPRESSED_PACKAGE_ZSTD_VERSION: u32 = 26;
+pub(crate) const PREPARED_SEARCH_COMPRESSED_PACKAGE_VERSION: u32 = 28;
+pub(crate) const PREPARED_SEARCH_COMPRESSED_PACKAGE_ZSTD_VERSION: u32 = 29;
 pub(crate) const PREPARED_SEARCH_COMPRESSED_PACKAGE_PAYLOAD_DIGEST_VERSION:
-  u32 = 27;
+  u32 = 30;
 pub(crate) const PREPARED_SEARCH_CORE_PACKAGE_HEADER: [u8; 8] = *b"ANONCPK1";
 pub(crate) const PREPARED_SEARCH_CORE_PACKAGE_VERSION: u32 = 26;
 pub(crate) const PREPARED_SEARCH_CORE_COMPRESSED_PACKAGE_HEADER: [u8; 8] =

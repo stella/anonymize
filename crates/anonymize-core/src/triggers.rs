@@ -2318,6 +2318,17 @@ mod tests {
   }
 
   #[test]
+  fn organization_role_trigger_does_not_treat_institutional_head_as_suffix() {
+    let data = organization_role_trigger_data(Vec::new());
+    let texts =
+      run_organization_role_trigger("Zhotovitel:\nJohn Court\n", &data);
+    assert_eq!(
+      texts,
+      vec![(String::from("person"), String::from("John Court"))]
+    );
+  }
+
+  #[test]
   fn organization_role_trigger_trims_trailing_prose_from_person() {
     let data = organization_role_trigger_data(Vec::new());
     let texts = run_organization_role_trigger(

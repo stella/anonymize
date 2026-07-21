@@ -11187,6 +11187,7 @@
   },
   "custom_regex_meta": [],
   "legal_form_data": {
+    "detection_only_suffixes": [],
     "suffixes": [
       "Sociedad Anónima Promotora de Inversión de Capital Variable",
       "Partnerschaftsgesellschaft mit beschränkter Berufshaftung",

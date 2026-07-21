@@ -134,6 +134,7 @@ export type NativeTriggerData = {
 
 export type NativeLegalFormData = {
   suffixes: string[];
+  detection_only_suffixes: string[];
   normalized_boundary_suffixes: string[];
   normalized_in_name_words: string[];
   normalized_suffix_words: string[];

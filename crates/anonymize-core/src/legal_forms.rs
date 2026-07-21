@@ -2172,6 +2172,34 @@ mod tests {
   }
 
   #[test]
+  fn verb_trimming_does_not_emit_a_bare_legal_suffix() {
+    let text = "Client is Corporation";
+    let suffix = "Corporation";
+    let suffix_start = text.find(suffix).unwrap();
+    let data = PreparedLegalFormData::new(LegalFormData {
+      suffixes: vec![suffix.to_string()],
+      sentence_verb_indicators: vec![String::from("is")],
+      ..LegalFormData::default()
+    });
+    let found = SearchMatch::Literal {
+      pattern: 0,
+      start: u32::try_from(suffix_start).unwrap(),
+      end: u32::try_from(suffix_start + suffix.len()).unwrap(),
+    };
+
+    assert!(
+      process_legal_form_matches(
+        &[found],
+        PatternSlice { start: 0, end: 1 },
+        text,
+        &data,
+      )
+      .unwrap()
+      .is_empty()
+    );
+  }
+
+  #[test]
   fn sentence_break_reclips_instead_of_dropping_the_candidate() {
     // "Acme Inc. Beta LLC signed the agreement." — the LLC candidate's
     // backward walk reaches all the way to "Acme", crossing the "Inc. "
