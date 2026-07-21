@@ -145,8 +145,7 @@ fn date_spans_for_month(
 
   if let Some(span) = day_month_year_span(full_text, month_start, month_end) {
     spans.push(span);
-  }
-  if let Some(span) = day_month_span(full_text, month_start, month_end) {
+  } else if let Some(span) = day_month_span(full_text, month_start, month_end) {
     spans.push(span);
   }
   if let Some(span) = ordinal_day_month_span(full_text, month_start, month_end)
