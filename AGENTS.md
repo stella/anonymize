@@ -264,10 +264,15 @@ This is a Bun-first TypeScript monorepo for text anonymization. The library hand
 
 ### Blind Evaluation Data
 
-- Treat third-party holdout splits named by `packages/benchmark/src/blind.ts`
-  as evaluation-only data. Never use their text, annotations, per-document
-  scores, or failure examples to add rules, tune thresholds, select models, or
-  otherwise change detector behavior.
+- Treat third-party holdout splits in
+  `packages/benchmark/src/suite/registry.ts` as evaluation-only data. Never use
+  their text, annotations, categories, per-document scores, or failure examples
+  to add rules, tune thresholds, select models, or otherwise change detector
+  behavior. Only entries explicitly marked `development` may guide iteration.
+- Preserve each registered task's native semantics (span, contextual, or
+  subject inference). Do not combine incompatible metrics into a synthetic
+  suite-wide score, and report unsupported tasks as unsupported rather than
+  zero.
 - Holdout reports may contain aggregate metrics only. Keep document-level
   predictions and failure analysis local and uncommitted.
 - Detector improvements must be justified and tested with the repository's

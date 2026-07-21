@@ -10,11 +10,17 @@
     "test": "bun test",
     "format": "oxfmt . \"!results/**\" \"!vendor/**\"",
     "bench:compare": "bun src/bench.ts",
-    "bench:blind": "bun src/blind.ts"
+    "bench:blind": "bun src/blind.ts",
+    "bench:dev-gap": "bun src/dev-gap.ts",
+    "bench:redactionbench": "bun src/redactionbench.ts",
+    "bench:meddocan": "bun src/meddocan.ts",
+    "bench:suite": "bun src/suite.ts"
   },
   "dependencies": {
     "@stll/anonymize": "workspace:^",
-    "@stll/anonymize-data": "^0.0.6"
+    "@stll/anonymize-data": "^0.0.6",
+    "fflate": "0.8.2",
+    "hyparquet": "1.26.2"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",

@@ -2,11 +2,7 @@ import { mkdirSync } from "node:fs";
 import { cpus, arch, platform, totalmem } from "node:os";
 import { join } from "node:path";
 
-import { createPythonAdapter } from "./adapters/python";
-import { createRedactPiiAdapter } from "./adapters/redact-pii";
-import { createStllAdapter } from "./adapters/stella";
-import type { Adapter } from "./adapters/types";
-import { createPiiShieldAdapter } from "./blind/pii-shield";
+import { createBenchmarkAdapters } from "./adapters";
 import { scoreBlindCorpus, type BlindScore } from "./blind/score";
 import {
   loadVerifiedTabTestCorpus,
@@ -151,22 +147,6 @@ const renderMarkdown = (report: BlindReport): string => {
   return `${lines.join("\n")}\n`;
 };
 
-const adapters = (): Adapter[] => [
-  createStllAdapter(),
-  createPythonAdapter({
-    name: "presidio",
-    venvDir: ".venv-presidio",
-    script: "presidio_adapter.py",
-  }),
-  createPythonAdapter({
-    name: "scrubadub",
-    venvDir: ".venv-scrubadub",
-    script: "scrubadub_adapter.py",
-  }),
-  createRedactPiiAdapter(),
-  createPiiShieldAdapter(),
-];
-
 const full = process.argv.slice(2).includes("--full");
 const corpus = await loadVerifiedTabTestCorpus();
 const selected = full ? corpus : selectBlindSample(corpus);
@@ -179,7 +159,7 @@ const documents: GroundTruthDocument[] = selected.map(({ id, text }) => ({
 }));
 
 const libraries: LibraryResult[] = [];
-for (const adapter of adapters()) {
+for (const adapter of createBenchmarkAdapters()) {
   process.stderr.write(`running blind adapter ${adapter.name}...\n`);
   const start = performance.now();
   const outcome = await adapter.run(documents);

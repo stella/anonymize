@@ -44,6 +44,9 @@ bun run bench:compare
 # Aggregate-only blind evaluation over a deterministic 12-document TAB sample.
 # Add --full for the entire 127-document test split.
 bun run bench:blind
+
+# Run every executable sealed corpus (TAB, RedactionBench, and MEDDOCAN).
+bun run bench:suite
 ```
 
 `bench:blind` verifies the upstream file against a pinned SHA-256 digest before
@@ -54,6 +57,30 @@ PII-Shield is included when its CLI and GLiNER model are installed; set
 
 Blind results can reject a release, but must not be used to inspect examples or
 tune behavior. See the repository instructions in `AGENTS.md`.
+
+## Unified benchmark suite
+
+`src/suite/registry.ts` is the governance and task registry for
+`stella-anon-bench`. It keeps corpus provenance, version, license, language,
+domain, access mode, and usage policy next to the task semantics. Corpora are
+not flattened into one score when their annotations mean different things:
+
+- TAB: span redaction over ECHR court decisions, with independent annotators.
+  The unified suite runs all 127 test judgments, not the 12-document smoke set.
+- RedactionBench: mandatory/contextual character spans over 200 heterogeneous
+  English artifacts, including contracts, legal forms, medical documents,
+  email, financial/government records, source code, files, logs, and terminals.
+- MEDDOCAN: all 250 documents in the public Spanish clinical test split,
+  loaded from its checksum-pinned Zenodo archive.
+  Restricted or gated corpora are intentionally absent. A paper, model, dataset
+  card, or click-through registration page is not enough: the runner only lists
+  corpora it can retrieve as a versioned public artifact without credentials.
+
+RedactionBench's official R-Score reference implementation is not yet
+available. The suite therefore reports explicitly named interim metrics:
+mandatory span recall, mandatory character recall, and character precision
+where both mandatory and contextual spans are accepted. It does not label
+those numbers as R-Score.
 
 Libraries whose virtualenv is missing are reported as `unavailable` in the
 report and skipped, rather than failing the run or being fabricated. (A venv

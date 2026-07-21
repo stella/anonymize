@@ -11,6 +11,20 @@ export const TAB_PROVENANCE = {
   license: "MIT",
 } as const;
 
+export const TAB_DEV_PROVENANCE = {
+  ...TAB_PROVENANCE,
+  file: "echr_dev.json",
+  sha256: "8c3c7306f46b8d54debeb38ae11d8b0b8bcf4bdccbc3b6f13c12ad7be16893ec",
+} as const;
+
+type TabProvenance = {
+  readonly repository: string;
+  readonly commit: string;
+  readonly file: string;
+  readonly sha256: string;
+  readonly license: string;
+};
+
 export const TAB_SAMPLE_SIZE = 12;
 export const TAB_SAMPLE_SEED = "stella-blind-tab-v1";
 const TAB_MAX_BYTES = 16 * 1024 * 1024;
@@ -82,7 +96,10 @@ const parseMention = (
   };
 };
 
-export const parseTabTestCorpus = (value: unknown): TabDocument[] => {
+const parseTabCorpus = (
+  value: unknown,
+  expectedSplit: "dev" | "test",
+): TabDocument[] => {
   if (!Array.isArray(value)) {
     throw new Error("TAB corpus must be a JSON array");
   }
@@ -95,11 +112,13 @@ export const parseTabTestCorpus = (value: unknown): TabDocument[] => {
     const raw = item;
     if (
       typeof raw["doc_id"] !== "string" ||
-      raw["dataset_type"] !== "test" ||
+      raw["dataset_type"] !== expectedSplit ||
       typeof raw["text"] !== "string" ||
       !isRecord(raw["annotations"])
     ) {
-      throw new Error("TAB corpus contains a malformed or non-test document");
+      throw new Error(
+        `TAB corpus contains a malformed or non-${expectedSplit} document`,
+      );
     }
     if (seen.has(raw["doc_id"])) {
       throw new Error(
@@ -140,6 +159,9 @@ export const parseTabTestCorpus = (value: unknown): TabDocument[] => {
   return documents;
 };
 
+export const parseTabTestCorpus = (value: unknown): TabDocument[] =>
+  parseTabCorpus(value, "test");
+
 const digest = (value: string): string =>
   createHash("sha256").update(value).digest("hex");
 
@@ -172,17 +194,17 @@ export const selectBlindSample = (
     .sort((left, right) => compareStrings(left.id, right.id));
 };
 
-const cachePath = (): string =>
+const cachePath = (provenance: TabProvenance): string =>
   join(
     import.meta.dir,
     "..",
     "..",
     ".cache",
-    `tab-${TAB_PROVENANCE.commit}-${TAB_PROVENANCE.file}`,
+    `tab-${provenance.commit}-${provenance.file}`,
   );
 
-const verifiedBytes = (bytes: Uint8Array): boolean =>
-  createHash("sha256").update(bytes).digest("hex") === TAB_PROVENANCE.sha256;
+const verifiedBytes = (bytes: Uint8Array, provenance: TabProvenance): boolean =>
+  createHash("sha256").update(bytes).digest("hex") === provenance.sha256;
 
 const readBoundedResponse = async (response: Response): Promise<Uint8Array> => {
   const contentLength = Number(response.headers.get("content-length"));
@@ -218,16 +240,19 @@ const readBoundedResponse = async (response: Response): Promise<Uint8Array> => {
   return bytes;
 };
 
-export const loadVerifiedTabTestCorpus = async (): Promise<TabDocument[]> => {
-  const target = cachePath();
+const loadVerifiedTabCorpus = async (
+  provenance: TabProvenance,
+  split: "dev" | "test",
+): Promise<TabDocument[]> => {
+  const target = cachePath(provenance);
   let bytes: Uint8Array;
   try {
     bytes = await readFile(target);
-    if (!verifiedBytes(bytes)) {
+    if (!verifiedBytes(bytes, provenance)) {
       throw new Error("cached TAB corpus checksum mismatch");
     }
   } catch {
-    const url = `https://raw.githubusercontent.com/NorskRegnesentral/text-anonymization-benchmark/${TAB_PROVENANCE.commit}/${TAB_PROVENANCE.file}`;
+    const url = `https://raw.githubusercontent.com/NorskRegnesentral/text-anonymization-benchmark/${provenance.commit}/${provenance.file}`;
     const response = await fetch(url, {
       redirect: "error",
       signal: AbortSignal.timeout(TAB_DOWNLOAD_TIMEOUT_MS),
@@ -236,7 +261,7 @@ export const loadVerifiedTabTestCorpus = async (): Promise<TabDocument[]> => {
       throw new Error(`TAB download failed with HTTP ${response.status}`);
     }
     bytes = await readBoundedResponse(response);
-    if (!verifiedBytes(bytes)) {
+    if (!verifiedBytes(bytes, provenance)) {
       throw new Error("TAB download checksum mismatch");
     }
     await mkdir(dirname(target), { recursive: true });
@@ -249,5 +274,11 @@ export const loadVerifiedTabTestCorpus = async (): Promise<TabDocument[]> => {
       throw error;
     }
   }
-  return parseTabTestCorpus(JSON.parse(new TextDecoder().decode(bytes)));
+  return parseTabCorpus(JSON.parse(new TextDecoder().decode(bytes)), split);
 };
+
+export const loadVerifiedTabTestCorpus = async (): Promise<TabDocument[]> =>
+  loadVerifiedTabCorpus(TAB_PROVENANCE, "test");
+
+export const loadVerifiedTabDevCorpus = async (): Promise<TabDocument[]> =>
+  loadVerifiedTabCorpus(TAB_DEV_PROVENANCE, "dev");
