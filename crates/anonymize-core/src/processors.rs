@@ -2025,6 +2025,11 @@ fn extend_person_name(
     }
 
     let word = read_until_whitespace(full_text, offsets, word_start)?;
+    // Form-field labels in contracts are capitalized tokens tied to ':'
+    // ("Name:", "Jméno:", "Funkce:"). Do not absorb them into the person span.
+    if word_is_form_field_label(full_text, offsets, word_start, &word)? {
+      break;
+    }
     let stripped = strip_trailing_name_punctuation(&word);
     // Dotted middle initials ("A.", "R.") are part of the name; keep
     // scanning so the surname after them is absorbed.
@@ -2049,6 +2054,19 @@ fn extend_person_name(
     end: new_end,
     text: offsets.slice(start, new_end)?,
   })
+}
+
+fn word_is_form_field_label(
+  full_text: &str,
+  offsets: &ByteOffsets<'_>,
+  word_start: u32,
+  word: &str,
+) -> Result<bool> {
+  if word.contains(':') {
+    return Ok(true);
+  }
+  let word_end = word_start.saturating_add(byte_len(word));
+  Ok(char_at(full_text, offsets, word_end)? == Some(':'))
 }
 
 fn is_middle_initial_token(word: &str) -> bool {
@@ -3272,6 +3290,53 @@ mod tests {
     .unwrap();
 
     assert!(entities.is_empty());
+  }
+
+  #[test]
+  fn deny_list_does_not_absorb_form_field_label_after_name() {
+    // Side-by-side signature grids often place the next column's label
+    // immediately after a name ("Jan Novák Jméno: …"). The label must not
+    // become part of the person span.
+    let matches = vec![
+      SearchMatch::Literal {
+        pattern: 0,
+        start: 0,
+        end: 3,
+      },
+      SearchMatch::Literal {
+        pattern: 1,
+        start: 4,
+        end: 9,
+      },
+    ];
+    let data = DenyListMatchData {
+      labels: vec![
+        vec![String::from("person")],
+        vec![String::from("person")],
+      ]
+      .into(),
+      custom_labels: vec![vec![], vec![]].into(),
+      originals: vec![String::from("Jan"), String::from("Novák")],
+      pattern_meta: DenyListPatternMetaSet::default(),
+      sources: vec![
+        vec![String::from("first-name")],
+        vec![String::from("surname")],
+      ]
+      .into(),
+      filters: Some(DenyListFilterData::default()),
+    };
+
+    let entities = process_deny_list_matches(
+      &matches,
+      PatternSlice { start: 0, end: 2 },
+      "Jan Novák Jméno: Eva",
+      &data,
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].label, "person");
+    assert_eq!(entities[0].text, "Jan Novák");
   }
 
   #[test]
