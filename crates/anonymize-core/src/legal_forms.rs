@@ -1113,15 +1113,18 @@ fn named_institutional_span_start(
       .skip(1)
       .filter(|token| {
         let lower = lowercase_lookup(token.text);
+        let dotted_prefix =
+          is_configured_dotted_institutional_prefix(full_text, token.end, data);
         starts_upper(token.text)
-          && !data.institutional_generic_words.contains(lower.as_ref())
-          && !data
-            .institutional_prefix_generic_words
-            .contains(lower.as_ref())
-          && !data
-            .institutional_complement_connectors
-            .contains(lower.as_ref())
-          && !matches!(lower.as_ref(), "apos" | "rsquo" | "s")
+          && (dotted_prefix
+            || (!data.institutional_generic_words.contains(lower.as_ref())
+              && !data
+                .institutional_prefix_generic_words
+                .contains(lower.as_ref())
+              && !data
+                .institutional_complement_connectors
+                .contains(lower.as_ref())
+              && !matches!(lower.as_ref(), "apos" | "rsquo" | "s")))
       })
       .find_map(|token| {
         full_text
@@ -1174,7 +1177,8 @@ fn institutional_fragment_has_specific_name(
   if fragment.char_indices().any(|(index, character)| {
     matches!(character, ',' | ':' | '!' | '?' | '\n' | '\r')
       || (character == '.'
-        && !is_dotted_uppercase_acronym_period(fragment, index))
+        && !is_dotted_uppercase_acronym_period(fragment, index)
+        && !is_configured_dotted_institutional_prefix(fragment, index, data))
   }) {
     return None;
   }
@@ -1211,6 +1215,26 @@ fn institutional_fragment_has_specific_name(
     return None;
   }
   Some(specific)
+}
+
+fn is_configured_dotted_institutional_prefix(
+  text: &str,
+  period_start: usize,
+  data: &PreparedLegalFormData,
+) -> bool {
+  if text.as_bytes().get(period_start) != Some(&b'.') {
+    return false;
+  }
+  let Some(token) = word_tokens(text, 0, period_start).last() else {
+    return false;
+  };
+  token.end == period_start
+    && token.text.chars().count() <= 3
+    && data
+      .institutional_prefix_generic_words
+      .contains(lowercase_lookup(token.text).as_ref())
+    && next_char(text, period_start.saturating_add(1))
+      .is_none_or(|(_, character)| character.is_whitespace())
 }
 
 fn is_dotted_uppercase_acronym_period(text: &str, period_start: usize) -> bool {
@@ -2744,6 +2768,17 @@ mod tests {
         "Board",
       )
       .is_empty()
+    );
+    assert_eq!(
+      institutional_head_entities(
+        "reporting to St. Jude Children's Research Hospital",
+        "Hospital",
+      ),
+      ["St. Jude Children's Research Hospital"]
+    );
+    assert!(
+      institutional_head_entities("reporting to St. Hospital", "Hospital")
+        .is_empty()
     );
     assert_eq!(
       institutional_head_entities(

@@ -138,4 +138,11 @@ describe("v2 legal-form span discipline — institutional prose trim", () => {
       "Parent&rsquo;s Board of Directors",
     );
   });
+
+  test("configured dotted prefixes remain inside named institutions", async () => {
+    const text = "reporting to St. Jude Children's Research Hospital";
+    expect(orgs(await detect(text)).map((entity) => entity.text)).toContain(
+      "St. Jude Children's Research Hospital",
+    );
+  });
 });

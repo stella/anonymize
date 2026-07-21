@@ -5571,7 +5571,12 @@
       "trustees",
       "whereas"
     ],
-    "institutional_prefix_generic_words": ["finance", "financial", "trade"]
+    "institutional_prefix_generic_words": [
+      "finance",
+      "financial",
+      "st",
+      "trade"
+    ]
   },
   "regex_meta": [],
   "regex_patterns": [
