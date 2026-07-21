@@ -1069,6 +1069,36 @@ fn terminator_only_person_span_is_dropped_before_adjacent_merge() {
 }
 
 #[test]
+fn signer_after_leading_stamp_phrase_is_retained() {
+  let stamps = vec![String::from("digitally signed by")];
+  let full_text = "Digitally signed by Jane Roe";
+  let result = boundary_with_terminators(
+    &[person_span(full_text, full_text)],
+    full_text,
+    &stamps,
+    &[],
+  );
+
+  assert_eq!(result.len(), 1);
+  assert_eq!(result.first().expect("person").text, "Jane Roe");
+}
+
+#[test]
+fn signer_after_leading_field_label_is_retained() {
+  let labels = vec![String::from("jméno")];
+  let full_text = "Jméno: Jan Novák";
+  let result = boundary_with_terminators(
+    &[person_span(full_text, full_text)],
+    full_text,
+    &[],
+    &labels,
+  );
+
+  assert_eq!(result.len(), 1);
+  assert_eq!(result.first().expect("person").text, "Jan Novák");
+}
+
+#[test]
 fn non_person_labels_are_not_truncated_by_terminators() {
   let labels = vec![String::from("name")];
   let full_text = "Acme Name: x";

@@ -64,10 +64,20 @@ fn truncate_person_spans(
       continue;
     }
 
-    if begins_with_terminator(full_text, entity, terminators) {
-      // A detector may emit the field label or first stamp token as a
-      // separate person span. Drop it here so merge_adjacent cannot attach it
-      // back to the preceding name.
+    if let Some(prefix_end) =
+      leading_terminator_end(full_text, entity, terminators)
+    {
+      // A detector may include both a leading signing-software stamp and the
+      // signer. Retain the name after the exact terminator; only discard the
+      // entity when it contains no text beyond that prefix.
+      let trimmed_start = trim_leading_separator(full_text, prefix_end);
+      if trimmed_start >= entity.end {
+        continue;
+      }
+      let mut adjusted = entity.clone();
+      adjusted.start = trimmed_start;
+      adjusted.text = offsets.slice(trimmed_start, entity.end)?;
+      result.push(adjusted);
       continue;
     }
 
@@ -91,17 +101,18 @@ fn truncate_person_spans(
   Ok(result)
 }
 
-fn begins_with_terminator(
+fn leading_terminator_end(
   full_text: &str,
   entity: &PipelineEntity,
   terminators: PersonSpanTerminators<'_>,
-) -> bool {
+) -> Option<u32> {
   let Ok(start) = usize::try_from(entity.start) else {
-    return false;
+    return None;
   };
   let tail = full_text.get(start..).unwrap_or_default();
-  starts_with_stamp_phrase(tail, terminators.stamp_phrases)
-    || is_colon_tied_field_label(tail, terminators.field_labels)
+  stamp_phrase_end(tail, terminators.stamp_phrases)
+    .or_else(|| field_label_end(tail, terminators.field_labels))
+    .and_then(|relative| u32::try_from(start.saturating_add(relative)).ok())
 }
 
 /// Byte offset of the first terminator beginning inside the entity span.
@@ -133,16 +144,19 @@ fn terminator_start_within(
 }
 
 fn starts_with_stamp_phrase(tail: &str, phrases: &[String]) -> bool {
-  phrases.iter().any(|phrase| {
-    starts_with_ignore_case(tail, phrase)
-      && remainder_after_chars(tail, phrase.chars().count()).is_some_and(
-        |rest| {
-          rest
-            .chars()
-            .next()
-            .is_none_or(|next| !next.is_alphanumeric())
-        },
-      )
+  stamp_phrase_end(tail, phrases).is_some()
+}
+
+fn stamp_phrase_end(tail: &str, phrases: &[String]) -> Option<usize> {
+  phrases.iter().find_map(|phrase| {
+    if !starts_with_ignore_case(tail, phrase) {
+      return None;
+    }
+    let rest = remainder_after_chars(tail, phrase.chars().count())?;
+    if rest.chars().next().is_some_and(char::is_alphanumeric) {
+      return None;
+    }
+    Some(tail.len().saturating_sub(rest.len()))
   })
 }
 
@@ -150,14 +164,34 @@ fn starts_with_stamp_phrase(tail: &str, phrases: &[String]) -> bool {
 /// Without the colon, "Name" and "Jméno" are ordinary words, and a surname
 /// that happens to collide with the vocabulary keeps its place in the span.
 fn is_colon_tied_field_label(tail: &str, labels: &[String]) -> bool {
-  labels.iter().any(|label| {
+  field_label_end(tail, labels).is_some()
+}
+
+fn field_label_end(tail: &str, labels: &[String]) -> Option<usize> {
+  labels.iter().find_map(|label| {
     if !starts_with_ignore_case(tail, label) {
-      return false;
+      return None;
     }
-    remainder_after_chars(tail, label.chars().count())
-      .map(str::trim_start)
-      .is_some_and(|rest| rest.starts_with([':', '：']))
+    let after_label = remainder_after_chars(tail, label.chars().count())?;
+    let after_space = after_label.trim_start();
+    let separator = after_space.chars().next()?;
+    matches!(separator, ':' | '：').then(|| {
+      let label_end = tail.len().saturating_sub(after_label.len());
+      let separator_start = tail.len().saturating_sub(after_space.len());
+      label_end.max(separator_start.saturating_add(separator.len_utf8()))
+    })
   })
+}
+
+fn trim_leading_separator(full_text: &str, start: u32) -> u32 {
+  let Ok(start_index) = usize::try_from(start) else {
+    return start;
+  };
+  let tail = full_text.get(start_index..).unwrap_or_default();
+  let trimmed = tail.trim_start_matches(|character: char| {
+    character.is_whitespace() || matches!(character, ':' | '：' | '-' | '–')
+  });
+  u32::try_from(full_text.len().saturating_sub(trimmed.len())).unwrap_or(start)
 }
 
 fn remainder_after_chars(value: &str, count: usize) -> Option<&str> {
