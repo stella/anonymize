@@ -437,7 +437,6 @@ export const renderSealedAggregateMarkdown = (
   lines.push(
     "",
     "Metrics retain each corpus's native task semantics; no cross-corpus score is computed.",
-    "",
   );
   return `${lines.join("\n")}\n`;
 };

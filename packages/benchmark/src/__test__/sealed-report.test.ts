@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import { describe, expect, test } from "bun:test";
 
@@ -73,9 +75,12 @@ describe("sealed aggregate report contract", () => {
       "corpus",
       "libraries",
     ]);
-    expect(renderSealedAggregateMarkdown(report())).toContain(
+    const markdown = renderSealedAggregateMarkdown(report());
+    expect(markdown).toContain(
       "contains no source text, examples, categories, predictions, or per-document results",
     );
+    expect(markdown.endsWith("\n")).toBe(true);
+    expect(markdown.endsWith("\n\n")).toBe(false);
   });
 
   test("renders one value for every TAB table column", () => {
@@ -86,6 +91,54 @@ describe("sealed aggregate report contract", () => {
     expect(rows.map((line) => line.split("|").slice(1, -1).length)).toEqual([
       9, 9, 9,
     ]);
+  });
+
+  test("keeps every committed sealed Markdown report canonical", () => {
+    const rootResult = Bun.spawnSync(["git", "rev-parse", "--show-toplevel"]);
+    if (!rootResult.success || rootResult.exitCode !== 0) {
+      throw new Error("benchmark tests must run inside a Git repository");
+    }
+    const root = rootResult.stdout.toString().trim();
+    const trackedResult = Bun.spawnSync([
+      "git",
+      "ls-files",
+      "-z",
+      "--",
+      "packages/benchmark/results/blind",
+    ]);
+    if (!trackedResult.success || trackedResult.exitCode !== 0) {
+      throw new Error("could not enumerate committed benchmark reports");
+    }
+    const trackedPaths = trackedResult.stdout
+      .toString()
+      .split("\0")
+      .filter((path) => path !== "");
+    const trackedPathSet = new Set(trackedPaths);
+    let sealedReportCount = 0;
+    for (const jsonPath of trackedPaths.filter((path) =>
+      path.endsWith(".json"),
+    )) {
+      const parsed: unknown = JSON.parse(
+        readFileSync(join(root, jsonPath), "utf8"),
+      );
+      if (
+        parsed === null ||
+        typeof parsed !== "object" ||
+        Array.isArray(parsed) ||
+        !("schemaVersion" in parsed) ||
+        parsed.schemaVersion !== SEALED_AGGREGATE_REPORT_SCHEMA_VERSION
+      ) {
+        continue;
+      }
+      assertSealedAggregateReport(parsed);
+      sealedReportCount += 1;
+      const markdownPath = jsonPath.replace(/\.json$/u, ".md");
+      expect(trackedPathSet.has(markdownPath)).toBe(true);
+      expect(readFileSync(join(root, markdownPath), "utf8")).toBe(
+        renderSealedAggregateMarkdown(parsed),
+      );
+    }
+    expect(sealedReportCount).toBeGreaterThan(0);
   });
 
   test("rejects text, examples, predictions, and per-document fields at every report boundary", () => {

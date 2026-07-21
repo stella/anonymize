@@ -26,7 +26,7 @@ pre-commit:
     # hunks are scanned too, not just the hunks staged before
     # this hook ran.
     format:
-      run: bun --bun oxfmt --no-error-on-unmatched-pattern {staged_files} "!.ai/**" "!.agents/**" "!.claude/**" "!AGENTS.md" "!CLAUDE.md" "!GEMINI.md"
+      run: bun --bun oxfmt --no-error-on-unmatched-pattern {staged_files} "!.ai/**" "!.agents/**" "!.claude/**" "!packages/benchmark/results/**" "!AGENTS.md" "!CLAUDE.md" "!GEMINI.md"
       stage_fixed: true
     # Runs last (parallel: false, so ordering is honored) so it scans
     # everything staged by lint/format's `stage_fixed`, not just what was
