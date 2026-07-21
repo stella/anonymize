@@ -198,7 +198,7 @@ fn day_month_span(
     return None;
   }
   let day = day_before_month(text, month_start)?;
-  let after_month = skip_date_year_separator(text, month_end);
+  let after_month = skip_year_like_suffix_separator(text, month_end);
   if starts_with_ascii_digit(text, after_month) {
     return None;
   }
@@ -297,9 +297,9 @@ fn de_day_month_span(
     return None;
   }
   let day = de_day_before_month(text, month_start)?;
-  let after_month = skip_date_year_separator(text, month_end);
+  let after_month = skip_year_like_suffix_separator(text, month_end);
   let after_de = parse_de_prefix(text, after_month).unwrap_or(after_month);
-  if starts_with_ascii_digit(text, after_de) {
+  if starts_with_ascii_digit(text, skip_any_ws(text, after_de)) {
     return None;
   }
   right_date_boundary(text, month_end).then_some((day.0, month_end))
@@ -494,6 +494,15 @@ fn skip_date_year_separator(text: &str, index: usize) -> usize {
   skip_horizontal_ws(text, index)
 }
 
+fn skip_year_like_suffix_separator(text: &str, index: usize) -> usize {
+  let after_comma = if starts_with_at(text, index, ",") {
+    index.saturating_add(1)
+  } else {
+    index
+  };
+  skip_any_ws(text, after_comma)
+}
+
 fn skip_any_ws(text: &str, mut index: usize) -> usize {
   while let Some(ch) =
     str_tail(text, index).and_then(|value| value.chars().next())
@@ -617,6 +626,7 @@ mod tests {
 
     assert!(spans("The malformed date is 22 July 20260.").is_empty());
     assert!(spans("The malformed date is 22 July, 2026A.").is_empty());
+    assert!(spans("The malformed date is 22 July\n20260.").is_empty());
   }
 
   #[test]
@@ -678,6 +688,12 @@ mod tests {
     );
     assert!(
       spans_for("Audiencia 12 de mayo de 2026A.", "mayo", false).is_empty()
+    );
+    assert!(
+      spans_for("Audiencia 12 de mayo\nde 20260.", "mayo", false).is_empty()
+    );
+    assert!(
+      spans_for("Audiencia 12 de mayo de\n20260.", "mayo", false).is_empty()
     );
   }
 }
