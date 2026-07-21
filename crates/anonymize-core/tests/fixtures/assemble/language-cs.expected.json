@@ -15402,7 +15402,8 @@
       "Foundation",
       "Institute"
     ],
-    "comma_gated_direct_prefixes": ["among", "amongst", "between"]
+    "comma_gated_direct_prefixes": ["among", "amongst", "between"],
+    "institutional_complement_heads": []
   },
   "regex_meta": [
     {
