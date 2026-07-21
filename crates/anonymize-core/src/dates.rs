@@ -298,7 +298,8 @@ fn de_day_month_span(
   }
   let day = de_day_before_month(text, month_start)?;
   let after_month = skip_date_year_separator(text, month_end);
-  if starts_with_ascii_digit(text, after_month) {
+  let after_de = parse_de_prefix(text, after_month).unwrap_or(after_month);
+  if starts_with_ascii_digit(text, after_de) {
     return None;
   }
   right_date_boundary(text, month_end).then_some((day.0, month_end))
@@ -671,6 +672,12 @@ mod tests {
     );
     assert!(
       spans_for("Audiencia 12 de mayo, 20260.", "mayo", false).is_empty()
+    );
+    assert!(
+      spans_for("Audiencia 12 de mayo de 20260.", "mayo", false).is_empty()
+    );
+    assert!(
+      spans_for("Audiencia 12 de mayo de 2026A.", "mayo", false).is_empty()
     );
   }
 }
