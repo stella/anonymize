@@ -2,8 +2,10 @@
 //! (`build-unified-search.ts`).
 //!
 //! Existing detection fields include all languages for captured parity. The
-//! person-boundary terminators are scoped to configured content languages so
-//! an unrelated language's generic form labels cannot truncate a surname.
+//! Generic form labels are scoped to configured content languages so an
+//! unrelated language's label cannot truncate a surname. PDF signing software
+//! stamps are language-neutral because tools commonly emit English text inside
+//! otherwise non-English documents.
 
 use serde::Deserialize;
 use serde_json::Value;
@@ -58,8 +60,29 @@ pub(super) fn build_signature_data(
     form_field_labels: language_keyed_terms(&data.form_field_labels, selected),
     signature_stamp_phrases: language_keyed_terms(
       &data.signature_stamp_phrases,
-      selected,
+      None,
     ),
     image_stub_prefixes: language_keyed_terms(&data.image_stub_prefixes, None),
   })
+}
+
+#[cfg(test)]
+mod tests {
+  #![allow(clippy::unwrap_used)]
+
+  use super::build_signature_data;
+
+  #[test]
+  fn scoped_packages_keep_cross_locale_signing_software_stamps() {
+    let data = build_signature_data(Some(&[String::from("cs")])).unwrap();
+
+    assert!(
+      data
+        .signature_stamp_phrases
+        .iter()
+        .any(|phrase| phrase == "digitally signed by")
+    );
+    assert!(data.form_field_labels.iter().any(|label| label == "jméno"));
+    assert!(!data.form_field_labels.iter().any(|label| label == "name"));
+  }
 }
