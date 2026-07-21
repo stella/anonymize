@@ -308,10 +308,12 @@ fn extend_institutional_complement(
   let boundary = tail
     .char_indices()
     .find_map(|(index, character)| {
-      matches!(
+      let absolute_index = suffix_end.saturating_add(index);
+      (matches!(
         character,
-        '\n' | '\r' | ',' | ';' | ':' | '.' | '(' | ')' | '[' | ']'
-      )
+        '\n' | '\r' | ',' | ';' | ':' | '(' | ')' | '[' | ']'
+      ) || (character == '.'
+        && !is_dotted_uppercase_acronym_period(text, absolute_index)))
       .then_some(index)
     })
     .unwrap_or(tail.len());
@@ -1064,8 +1066,10 @@ fn institutional_fragment_has_specific_name(
   fragment: &str,
   data: &PreparedLegalFormData,
 ) -> Option<bool> {
-  if fragment.chars().any(|character| {
-    matches!(character, ',' | ':' | '.' | '!' | '?' | '\n' | '\r')
+  if fragment.char_indices().any(|(index, character)| {
+    matches!(character, ',' | ':' | '!' | '?' | '\n' | '\r')
+      || (character == '.'
+        && !is_dotted_uppercase_acronym_period(fragment, index))
   }) {
     return None;
   }
@@ -1098,6 +1102,31 @@ fn institutional_fragment_has_specific_name(
     return None;
   }
   Some(specific)
+}
+
+fn is_dotted_uppercase_acronym_period(text: &str, period_start: usize) -> bool {
+  let Some((letter_start, letter)) = previous_char(text, period_start) else {
+    return false;
+  };
+  if !letter.is_ascii_uppercase() {
+    return false;
+  }
+
+  let after_period = period_start.saturating_add('.'.len_utf8());
+  if text
+    .get(after_period..)
+    .and_then(|tail| tail.chars().next())
+    .is_some_and(|next| next.is_ascii_uppercase())
+  {
+    return true;
+  }
+
+  let Some((prior_period_start, '.')) = previous_char(text, letter_start)
+  else {
+    return false;
+  };
+  previous_char(text, prior_period_start)
+    .is_some_and(|(_, prior_letter)| prior_letter.is_ascii_uppercase())
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -2260,7 +2289,9 @@ mod tests {
       ("Siverek Magistrates' Court", "Court"),
       ("Diyarbakır State Security Court", "Court"),
       ("Court of Appeal", "Court"),
+      ("Office of the U.S. Attorney", "Office"),
       ("Office of the United Nations High Commissioner", "Office"),
+      ("U.S. District Court", "Court"),
     ] {
       assert_eq!(institutional_head_entities(text, head), [text]);
     }
