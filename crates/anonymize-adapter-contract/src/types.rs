@@ -237,9 +237,8 @@ pub struct BindingLegalFormData {
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct BindingDateData {
-  #[serde(default)]
   pub month_names_by_language: BTreeMap<String, Vec<String>>,
-  #[serde(default)]
+  pub lowercase_month_ambiguities: BTreeMap<String, Vec<String>>,
   pub year_words_by_language: BTreeMap<String, Vec<String>>,
 }
 

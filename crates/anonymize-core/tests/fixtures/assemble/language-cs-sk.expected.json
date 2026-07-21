@@ -770,6 +770,7 @@
         "septembra"
       ]
     },
+    "lowercase_month_ambiguities": {},
     "year_words_by_language": {
       "cs": ["rok", "roku", "roce", "rokem", "roků"],
       "sk": ["rok", "roku", "roce", "rokom", "rokov"]

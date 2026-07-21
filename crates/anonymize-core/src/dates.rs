@@ -14,6 +14,7 @@ const DATE_SCORE: f64 = 1.0;
 )]
 pub struct DateData {
   pub month_names_by_language: BTreeMap<String, Vec<String>>,
+  pub lowercase_month_ambiguities: BTreeMap<String, Vec<String>>,
   pub year_words_by_language: BTreeMap<String, Vec<String>>,
 }
 
@@ -34,6 +35,7 @@ impl PreparedDateData {
 
 struct DateRule {
   month_names: BTreeSet<String>,
+  lowercase_ambiguous_month_names: BTreeSet<String>,
   year_words: BTreeSet<String>,
 }
 
@@ -41,6 +43,10 @@ impl DateRule {
   fn new(data: &DateData) -> Self {
     Self {
       month_names: unique_word_set(&data.month_names_by_language, 3),
+      lowercase_ambiguous_month_names: unique_word_set(
+        &data.lowercase_month_ambiguities,
+        3,
+      ),
       year_words: unique_word_set(&data.year_words_by_language, 2),
     }
   }
@@ -76,9 +82,14 @@ impl AnchoredRule for DateRule {
     let mut spans = Vec::new();
     if self.month_names.contains(&clean) {
       spans.extend(
-        date_spans_for_month(full_text, span.start, span.end)
-          .into_iter()
-          .map(|(start, end)| (start, end, DetectionSource::Regex)),
+        date_spans_for_month(
+          full_text,
+          span.start,
+          span.end,
+          self.lowercase_ambiguous_month_names.contains(&clean),
+        )
+        .into_iter()
+        .map(|(start, end)| (start, end, DetectionSource::Regex)),
       );
     }
     if self.year_words.contains(&clean)
@@ -140,12 +151,18 @@ fn date_spans_for_month(
   full_text: &str,
   month_start: usize,
   month_end: usize,
+  lowercase_requires_terminal_boundary: bool,
 ) -> Vec<(usize, usize)> {
   let mut spans = Vec::new();
 
   if let Some(span) = day_month_year_span(full_text, month_start, month_end) {
     spans.push(span);
-  } else if let Some(span) = day_month_span(full_text, month_start, month_end) {
+  } else if let Some(span) = day_month_span(
+    full_text,
+    month_start,
+    month_end,
+    lowercase_requires_terminal_boundary,
+  ) {
     spans.push(span);
   }
   if let Some(span) = ordinal_day_month_span(full_text, month_start, month_end)
@@ -173,11 +190,11 @@ fn day_month_span(
   text: &str,
   month_start: usize,
   month_end: usize,
+  lowercase_requires_terminal_boundary: bool,
 ) -> Option<(usize, usize)> {
   let month = str_slice(text, month_start, month_end)?;
-  let month_lower = month.to_lowercase();
   if !month.chars().next().is_some_and(char::is_uppercase)
-    && AMBIGUOUS_LOWERCASE_MONTHS.contains(&month_lower.as_str())
+    && lowercase_requires_terminal_boundary
     && !has_terminal_day_month_boundary(text, month_end)
   {
     return None;
@@ -190,53 +207,15 @@ fn day_month_span(
   right_date_boundary(text, month_end).then_some((day.0, month_end))
 }
 
-// Lowercase month spellings that also occur as ordinary English words or
-// common legal abbreviations. Other languages routinely lowercase months, so
-// this guard is deliberately token-specific rather than casing-wide.
-const AMBIGUOUS_LOWERCASE_MONTHS: &[&str] = &[
-  "ago",
-  "apr",
-  "april",
-  "aug",
-  "august",
-  "dec",
-  "december",
-  "feb",
-  "february",
-  "gen",
-  "jan",
-  "january",
-  "jul",
-  "july",
-  "jun",
-  "june",
-  "lip",
-  "list",
-  "mag",
-  "mai",
-  "mar",
-  "march",
-  "mars",
-  "mart",
-  "may",
-  "nov",
-  "november",
-  "oct",
-  "october",
-  "out",
-  "sep",
-  "sept",
-  "september",
-  "set",
-  "sie",
-];
-
 fn has_terminal_day_month_boundary(text: &str, month_end: usize) -> bool {
   let after_month = skip_horizontal_ws(text, month_end);
   str_tail(text, after_month)
     .and_then(|tail| tail.chars().next())
     .is_none_or(|character| {
-      matches!(character, '\n' | '\r' | ',' | '.' | ';' | ':' | ')' | ']')
+      matches!(
+        character,
+        '\n' | '\r' | ',' | '.' | ';' | ':' | '!' | '?' | ')' | ']'
+      )
     })
 }
 
@@ -414,6 +393,7 @@ fn parse_day_backward(text: &str, index: usize) -> Option<(usize, usize)> {
   valid_day(text, span).then_some(span)
 }
 
+#[must_use]
 fn valid_day(text: &str, span: (usize, usize)) -> bool {
   str_slice(text, span.0, span.1)
     .and_then(|value| value.parse::<u8>().ok())
@@ -566,10 +546,14 @@ mod tests {
   use super::date_spans_for_month;
 
   fn spans(text: &str) -> Vec<String> {
-    spans_for(text, "July")
+    spans_for(text, "July", false)
   }
 
-  fn spans_for(text: &str, month: &str) -> Vec<String> {
+  fn spans_for(
+    text: &str,
+    month: &str,
+    lowercase_requires_terminal_boundary: bool,
+  ) -> Vec<String> {
     let Some(month_start) = text.find(month) else {
       return Vec::new();
     };
@@ -577,6 +561,7 @@ mod tests {
       text,
       month_start,
       month_start.saturating_add(month.len()),
+      lowercase_requires_terminal_boundary,
     )
     .into_iter()
     .map(|(start, end)| text.get(start..end).unwrap_or_default().to_owned())
@@ -606,18 +591,25 @@ mod tests {
 
   #[test]
   fn rejects_lowercase_words_that_overlap_month_names() {
-    assert!(spans_for("Section 12 may be amended.", "may").is_empty());
-    assert!(spans_for("We paid $25 set aside.", "set").is_empty());
-    assert_eq!(spans_for("Due 12 may.", "may"), vec!["12 may"]);
+    assert!(spans_for("Section 12 may be amended.", "may", true).is_empty());
+    assert_eq!(spans_for("Due 12 may.", "may", true), vec!["12 may"]);
+    assert_eq!(spans_for("Due 12 may!", "may", true), vec!["12 may"]);
+    assert_eq!(spans_for("Due 12 may?", "may", true), vec!["12 may"]);
   }
 
   #[test]
   fn accepts_unambiguous_lowercase_months_used_in_other_languages() {
     assert_eq!(
-      spans_for("Audience le 22 juillet.", "juillet"),
+      spans_for("Audience le 22 juillet.", "juillet", false),
       vec!["22 juillet"]
     );
-    assert_eq!(spans_for("Audiencia 12 mayo.", "mayo"), vec!["12 mayo"]);
-    assert_eq!(spans_for("Jednání 12 září.", "září"), vec!["12 září"]);
+    assert_eq!(
+      spans_for("Audiencia 12 mayo.", "mayo", false),
+      vec!["12 mayo"]
+    );
+    assert_eq!(
+      spans_for("Jednání 12 září.", "září", false),
+      vec!["12 září"]
+    );
   }
 }

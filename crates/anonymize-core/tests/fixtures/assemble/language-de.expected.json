@@ -755,6 +755,7 @@
         "september"
       ]
     },
+    "lowercase_month_ambiguities": {},
     "year_words_by_language": {
       "de": ["Jahr", "Jahre", "Jahren", "Jahres"]
     }

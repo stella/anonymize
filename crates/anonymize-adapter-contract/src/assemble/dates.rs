@@ -4,7 +4,8 @@
 //! Emitted only when regex is on and the "date" label is allowed (the
 //! `dateMonthData !== null` gate). `month_names_by_language` filters
 //! `date-months.json` by content language and keeps names >= 3 UTF-16 units
-//! after stripping a trailing dot; `year_words_by_language` is populated from
+//! after stripping a trailing dot. Lowercase ambiguity metadata stays scoped
+//! to the same selected languages. `year_words_by_language` is populated from
 //! `year-words.json` only when trigger phrases are enabled.
 
 use std::collections::BTreeMap;
@@ -22,8 +23,7 @@ const MIN_MONTH_NAME_LENGTH: usize = 3;
 
 /// # Errors
 ///
-/// Returns [`AssembleError`] when `date-months.json` or `year-words.json`
-/// fails to parse.
+/// Returns [`AssembleError`] when date vocabulary data fails to parse.
 pub(super) fn build_date_data(
   ctx: &AssembleContext<'_>,
 ) -> Result<Option<BindingDateData>, AssembleError> {
@@ -33,6 +33,10 @@ pub(super) fn build_date_data(
   let languages = ctx.content_languages.as_deref();
   let months: OrderedMap<Value> = parse_ordered_data_file("date-months.json")?;
   let month_names_by_language = build_date_month_data(&months, languages);
+  let lowercase_ambiguities: OrderedMap<Value> =
+    parse_ordered_data_file("date-month-lowercase-ambiguities.json")?;
+  let lowercase_month_ambiguities =
+    build_language_scoped_date_month_data(&lowercase_ambiguities, languages);
 
   let year_words_by_language = if ctx.enable_trigger_phrases() {
     let year_words: OrderedMap<Value> =
@@ -44,6 +48,7 @@ pub(super) fn build_date_data(
 
   Ok(Some(BindingDateData {
     month_names_by_language,
+    lowercase_month_ambiguities,
     year_words_by_language,
   }))
 }
@@ -110,6 +115,26 @@ fn build_date_month_data(
   result
 }
 
+fn build_language_scoped_date_month_data(
+  data: &OrderedMap<Value>,
+  languages: Option<&[String]>,
+) -> BTreeMap<String, Vec<String>> {
+  let Some(selected) = selected_language_keys(languages) else {
+    return build_date_month_data(data, None);
+  };
+  let mut result = BTreeMap::new();
+  for (key, value) in data.iter().filter(|(key, _)| {
+    !key.starts_with('_') && selected.contains(&normalize_language_key(key))
+  }) {
+    let names = value_to_strings(value)
+      .into_iter()
+      .filter(|name| length_without_trailing_dot(name) >= MIN_MONTH_NAME_LENGTH)
+      .collect();
+    result.insert(key.clone(), names);
+  }
+  result
+}
+
 /// Mirrors the `getYearWordData` result shaping: non-`_` array keys only, with
 /// empty strings dropped.
 fn build_year_word_data(
@@ -133,4 +158,30 @@ fn build_year_word_data(
     result.insert(key.clone(), words);
   }
   result
+}
+
+#[cfg(test)]
+mod tests {
+  use stella_anonymize_core::assemble::parse_ordered_data_file;
+
+  use super::{OrderedMap, Value, build_language_scoped_date_month_data};
+
+  #[test]
+  fn lowercase_ambiguities_remain_language_scoped()
+  -> Result<(), stella_anonymize_core::assemble::AssembleError> {
+    let data: OrderedMap<Value> =
+      parse_ordered_data_file("date-month-lowercase-ambiguities.json")?;
+
+    let english =
+      build_language_scoped_date_month_data(&data, Some(&[String::from("en")]));
+    let spanish =
+      build_language_scoped_date_month_data(&data, Some(&[String::from("es")]));
+
+    assert_eq!(
+      english.keys().map(String::as_str).collect::<Vec<_>>(),
+      ["en"]
+    );
+    assert!(spanish.is_empty());
+    Ok(())
+  }
 }

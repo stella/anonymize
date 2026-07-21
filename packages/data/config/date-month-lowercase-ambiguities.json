@@ -1,0 +1,4 @@
+{
+  "_comment": "Month names that are also ordinary lowercase words in the same language. A yearless day-month match requires a terminal boundary for these spellings.",
+  "en": ["march", "may"]
+}

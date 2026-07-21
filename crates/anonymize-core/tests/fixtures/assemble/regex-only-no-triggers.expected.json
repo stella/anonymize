@@ -1331,6 +1331,7 @@
         "temmuz"
       ]
     },
+    "lowercase_month_ambiguities": { "en": ["march", "may"] },
     "year_words_by_language": {}
   },
   "zone_data": {
