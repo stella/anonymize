@@ -191,12 +191,14 @@ pub fn assemble_static_search_config(
   // ── Literal-side patterns, options, and slices ──
   let address_seed_data = address::build_address_seed_data(&ctx)?;
   let gazetteer_data = gazetteer::build_gazetteer_data(&ctx, gazetteer);
+  let country = country::build_country_unit(&ctx)?;
   let literals = build_literals(&LiteralInputs {
     ctx: &ctx,
     gazetteer,
     deny_list_data: unit.deny_list_data.as_ref(),
     address_seed_present: address_seed_data.is_some(),
     gazetteer_data: gazetteer_data.as_ref(),
+    country_surface_forms: &country.surface_forms,
   })?;
 
   let slices = build_slices(&SliceInputs {
@@ -234,7 +236,7 @@ pub fn assemble_static_search_config(
     zone_data: zones::build_zone_data(&ctx)?,
     address_context_data: address::build_address_context_data(&ctx)?,
     address_seed_data,
-    country_data: country::build_country_data(&ctx)?,
+    country_data: country.match_data,
     hotword_data: hotwords::build_hotword_data(&hotword_rules),
     gazetteer_data,
     coreference_data: coreference::build_coreference_data(&ctx)?,
@@ -365,6 +367,7 @@ struct LiteralInputs<'a> {
   deny_list_data: Option<&'a crate::BindingDenyListMatchData>,
   address_seed_present: bool,
   gazetteer_data: Option<&'a crate::BindingGazetteerMatchData>,
+  country_surface_forms: &'a [String],
 }
 
 /// Ports the literal-pattern half of `buildNativeStaticConfig`
@@ -430,10 +433,10 @@ fn build_literals(
   let gazetteer_patterns =
     gazetteer::gazetteer_literal_patterns(inputs.ctx, inputs.gazetteer);
 
-  let country_forms =
-    country::country_surface_forms(inputs.ctx)?.unwrap_or_default();
-  let country_patterns: Vec<BindingSearchPattern> = country_forms
-    .into_iter()
+  let country_patterns: Vec<BindingSearchPattern> = inputs
+    .country_surface_forms
+    .iter()
+    .cloned()
     .map(|pattern| {
       if can_use_global {
         search_pattern::literal(pattern)

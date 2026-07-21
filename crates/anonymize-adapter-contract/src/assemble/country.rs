@@ -43,31 +43,27 @@ struct CountrySurface {
   variant: BindingCountryVariant,
 }
 
-/// Mirrors `buildCountryPatterns`: the ordered list of registered surface forms
-/// (the `display` values of `surfaceToMeta`, in insertion order). `None` when
-/// the country detector is disabled or its label is filtered out.
+pub(super) struct CountryUnit {
+  pub(super) surface_forms: Vec<String>,
+  pub(super) match_data: Option<BindingCountryMatchData>,
+}
+
+/// Builds the ordered country search surfaces and their parallel metadata from
+/// one parse of the backing country files.
 ///
 /// # Errors
 ///
 /// Returns [`AssembleError`] when `countries.json` or
 /// `ambiguous-country-surfaces.json` fails to parse.
-pub(super) fn country_surface_forms(
+pub(super) fn build_country_unit(
   ctx: &AssembleContext<'_>,
-) -> Result<Option<Vec<String>>, AssembleError> {
-  Ok(country_surfaces(ctx)?.map(|surfaces| {
-    surfaces
-      .into_iter()
-      .map(|surface| surface.display)
-      .collect()
-  }))
-}
-
-fn country_surfaces(
-  ctx: &AssembleContext<'_>,
-) -> Result<Option<Vec<CountrySurface>>, AssembleError> {
+) -> Result<CountryUnit, AssembleError> {
   if ctx.config.enable_countries == Some(false) || !ctx.label_allowed("country")
   {
-    return Ok(None);
+    return Ok(CountryUnit {
+      surface_forms: Vec::new(),
+      match_data: None,
+    });
   }
 
   let ambiguous: AmbiguousSurfaces =
@@ -143,26 +139,23 @@ fn country_surfaces(
     }
   }
 
-  Ok(Some(surfaces))
-}
-
-/// # Errors
-///
-/// Returns [`AssembleError`] when a backing data file fails to parse.
-pub(super) fn build_country_data(
-  ctx: &AssembleContext<'_>,
-) -> Result<Option<BindingCountryMatchData>, AssembleError> {
-  Ok(country_surfaces(ctx)?.map(|surfaces| {
-    BindingCountryMatchData {
-      labels: vec![ENTITY_LABEL.to_string(); surfaces.len()],
-      iso_codes: surfaces
-        .iter()
-        .map(|surface| surface.iso_code.clone())
-        .collect(),
-      variants: surfaces
-        .into_iter()
-        .map(|surface| surface.variant)
-        .collect(),
-    }
-  }))
+  let surface_forms = surfaces
+    .iter()
+    .map(|surface| surface.display.clone())
+    .collect();
+  let match_data = BindingCountryMatchData {
+    labels: vec![ENTITY_LABEL.to_string(); surfaces.len()],
+    iso_codes: surfaces
+      .iter()
+      .map(|surface| surface.iso_code.clone())
+      .collect(),
+    variants: surfaces
+      .into_iter()
+      .map(|surface| surface.variant)
+      .collect(),
+  };
+  Ok(CountryUnit {
+    surface_forms,
+    match_data: Some(match_data),
+  })
 }

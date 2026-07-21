@@ -90,7 +90,11 @@ const BASE_CONFIG = {
     labels: ["organization", "address"],
     is_fuzzy: [false, true],
   },
-  country_data: { labels: ["country"] },
+  country_data: {
+    labels: ["country"],
+    isoCodes: ["TR"],
+    variants: ["name"],
+  },
 };
 
 const pythonScript = `
@@ -271,6 +275,17 @@ copyFileSync(
     "__init__.py",
   ),
   join(pythonPackageDir, "__init__.py"),
+);
+copyFileSync(
+  join(
+    ROOT_DIR,
+    "crates",
+    "anonymize-py",
+    "python",
+    "stella_anonymize",
+    "docx.py",
+  ),
+  join(pythonPackageDir, "docx.py"),
 );
 copyFileSync(
   join(
