@@ -1037,35 +1037,57 @@ fn is_named_institutional_span(
   candidate: &Candidate,
   data: &PreparedLegalFormData,
 ) -> bool {
-  let Some(head) =
-    full_text.get(candidate.matched_suffix_start..candidate.suffix_end)
-  else {
-    return false;
-  };
-  let normalized_head = normalize_suffix_token(head).to_lowercase();
-  if !data.institutional_heads.contains(&normalized_head) {
+  let candidate_head = full_text
+    .get(candidate.matched_suffix_start..candidate.suffix_end)
+    .filter(|head| {
+      data
+        .institutional_heads
+        .contains(&normalize_suffix_token(head).to_lowercase())
+    })
+    .and_then(|_| {
+      (emit_start <= candidate.matched_suffix_start
+        && candidate.suffix_end <= emit_end)
+        .then_some((candidate.matched_suffix_start, candidate.suffix_end))
+    });
+  let Some((head_start, head_end)) = candidate_head.or_else(|| {
+    trailing_institutional_head_span(full_text, emit_start, emit_end, data)
+  }) else {
     return true;
-  }
-  if emit_start > candidate.matched_suffix_start
-    || candidate.suffix_end > emit_end
-  {
-    return false;
-  }
+  };
 
-  let Some(prefix) = full_text.get(emit_start..candidate.matched_suffix_start)
-  else {
+  let Some(prefix) = full_text.get(emit_start..head_start) else {
     return false;
   };
   match institutional_fragment_has_specific_name(prefix, data, false) {
     None => false,
     Some(true) => true,
     Some(false) => full_text
-      .get(candidate.suffix_end..emit_end)
+      .get(head_end..emit_end)
       .and_then(|complement| {
         institutional_fragment_has_specific_name(complement, data, true)
       })
       .unwrap_or(false),
   }
+}
+
+fn trailing_institutional_head_span(
+  full_text: &str,
+  emit_start: usize,
+  emit_end: usize,
+  data: &PreparedLegalFormData,
+) -> Option<(usize, usize)> {
+  let emitted = full_text.get(emit_start..emit_end)?;
+  data
+    .suffixes
+    .iter()
+    .filter(|suffix| {
+      emitted.ends_with(suffix.as_str())
+        && data
+          .institutional_heads
+          .contains(&normalize_suffix_token(suffix).to_lowercase())
+    })
+    .max_by_key(|suffix| suffix.len())
+    .map(|suffix| (emit_end.saturating_sub(suffix.len()), emit_end))
 }
 
 fn institutional_fragment_has_specific_name(
@@ -2317,6 +2339,20 @@ mod tests {
     assert_eq!(
       institutional_head_entities(&text, "Court"),
       ["Court of Appeal"]
+    );
+  }
+
+  #[test]
+  fn institutional_lists_validate_each_segment_against_its_own_head() {
+    for text in ["Acme Court, Beta Court", "Acme Court; Beta Court"] {
+      assert_eq!(
+        institutional_head_entities(text, "Court"),
+        ["Acme Court", "Beta Court"]
+      );
+    }
+    assert_eq!(
+      institutional_head_entities("Court, Beta Court", "Court"),
+      ["Beta Court"]
     );
   }
 
