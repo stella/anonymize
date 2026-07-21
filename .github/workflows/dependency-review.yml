@@ -42,9 +42,13 @@ jobs:
             Python-2.0,
             Zlib,
             Unicode-3.0
+          # rangemap and unicode-properties declare the permitted dual license
+          # using Cargo's pre-SPDX MIT/Apache-2.0 slash syntax.
           allow-dependencies-licenses: >-
             pkg:cargo/stella-aho-corasick-core,
             pkg:cargo/stella-fuzzy-search-core,
             pkg:cargo/stella-regex-set-core,
-            pkg:cargo/libfuzzer-sys
+            pkg:cargo/libfuzzer-sys,
+            pkg:cargo/rangemap,
+            pkg:cargo/unicode-properties
           comment-summary-in-pr: always
