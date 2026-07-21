@@ -1,5 +1,34 @@
 # Changelog
 
+## 2.3.0
+
+### Minor Changes
+
+- [#325](https://github.com/stella/anonymize/pull/325) [`6ae6b7b`](https://github.com/stella/anonymize/commit/6ae6b7bf6107d221e2d00e6ab9bddd464637920d) Thanks [@berticeek](https://github.com/berticeek)! - Detect more identifier types across languages: international court case numbers (ECLI, UK neutral citations, US docket numbers), additional German phone formats and tax IDs, Hungarian personal numbers, SWIFT/BIC codes, and US ZIP codes, plus keyword triggers for passport numbers, company-registration numbers, and Czech land-parcel and reference numbers.
+
+- [#306](https://github.com/stella/anonymize/pull/306) [`dab5a5d`](https://github.com/stella/anonymize/commit/dab5a5d0b2855e0684ceac8d0d70e5ebc5ac234f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Publish versioned runtime parity profiles and public capability surfaces in the capability manifest, with CI gates for Node.js, Python, WASM, and DOCX adapters. Add bounded DOCX extraction, rewrite, transactional anonymization, and restoration to the Python binding.
+
+### Patch Changes
+
+- [#321](https://github.com/stella/anonymize/pull/321) [`1d5a1d0`](https://github.com/stella/anonymize/commit/1d5a1d0e8f4d9d89be949e1074cd3e407ccc5c41) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Detect day-month dates without a year while rejecting invalid calendar days
+  and keeping lowercase month ambiguities scoped to their language vocabulary.
+
+- [#318](https://github.com/stella/anonymize/pull/318) [`f74669b`](https://github.com/stella/anonymize/commit/f74669ba7ca7611d22baaafd71251e8bb39c734b) Thanks [@cursor](https://github.com/apps/cursor)! - Keep Attn notice-block people intact when given names are missing from the scoped English corpus and when middle-initial counsel names overlap US city tokens.
+
+- [#303](https://github.com/stella/anonymize/pull/303) [`d8d415b`](https://github.com/stella/anonymize/commit/d8d415b73081aac38ca5d3b190a237e372d3a557) Thanks [@cursor](https://github.com/apps/cursor)! - Keep dotted middle initials inside EDGAR person spans for honorific notice names, deny-list given+surname extension, and dual `/s/` signatures on one line.
+
+- [#323](https://github.com/stella/anonymize/pull/323) [`9683503`](https://github.com/stella/anonymize/commit/96835036dd4c47d246d4237d9e7476c9d58b9e2a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Detect named courts, agencies, ministries, offices, law firms, and other institutional organizations without requiring a corporate legal-form suffix.
+
+- [#302](https://github.com/stella/anonymize/pull/302) [`b4d8986`](https://github.com/stella/anonymize/commit/b4d89868988c467d20e6d5f5a860235e04464a95) Thanks [@cursor](https://github.com/apps/cursor)! - Classify person-shaped values after organization-labelled party-role triggers from the shared vocabulary as people, while keeping institutions and legal-form companies as organizations.
+
+- [#317](https://github.com/stella/anonymize/pull/317) [`4016556`](https://github.com/stella/anonymize/commit/4016556b0d63d3e534722ac2e8e8eb1023a6cd1a) Thanks [@cursor](https://github.com/apps/cursor)! - Stop person spans at signature-stamp phrases and colon-tied form-field labels. The vocabulary is language-keyed data in `signature-detection.json` and is applied once, in the resolution boundary pass, instead of per detector.
+
+- [#312](https://github.com/stella/anonymize/pull/312) [`2b205ad`](https://github.com/stella/anonymize/commit/2b205adcc78721340aa233fb9d259c614a908e2c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Route Node and Python DOCX extraction through one bounded Rust core, with archive-wide fail-fast budgets and fail-closed package inventory.
+
+- [#314](https://github.com/stella/anonymize/pull/314) [`315b963`](https://github.com/stella/anonymize/commit/315b963107fd6da567d14beac69b85f0575e9a0a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Route DOCX restoration planning through the shared Rust core while preserving stable Node and Python error categories.
+
+- [#313](https://github.com/stella/anonymize/pull/313) [`431611c`](https://github.com/stella/anonymize/commit/431611c978e8c8ac425357af1a42d4534e46f7c7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Route Node and Python DOCX rewriting through the shared bounded Rust core while preserving stable adapter contracts.
+
 ## 2.2.0
 
 ### Minor Changes

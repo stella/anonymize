@@ -1124,7 +1124,7 @@ dependencies = [
 
 [[package]]
 name = "stella-anonymize-adapter-contract"
-version = "2.2.0"
+version = "2.3.0"
 dependencies = [
  "blake3",
  "lz4_flex",
@@ -1137,7 +1137,7 @@ dependencies = [
 
 [[package]]
 name = "stella-anonymize-core"
-version = "2.2.0"
+version = "2.3.0"
 dependencies = [
  "bon",
  "chacha20poly1305",
@@ -1159,7 +1159,7 @@ dependencies = [
 
 [[package]]
 name = "stella-anonymize-docx-core"
-version = "2.2.0"
+version = "2.3.0"
 dependencies = [
  "percent-encoding",
  "roxmltree",
@@ -1171,7 +1171,7 @@ dependencies = [
 
 [[package]]
 name = "stella-anonymize-napi"
-version = "2.2.0"
+version = "2.3.0"
 dependencies = [
  "blake3",
  "napi",
@@ -1185,7 +1185,7 @@ dependencies = [
 
 [[package]]
 name = "stella-anonymize-py"
-version = "2.2.0"
+version = "2.3.0"
 dependencies = [
  "pyo3",
  "pyo3-build-config",
