@@ -1317,12 +1317,19 @@ fn risk_inventory(
   inventory.external_action_count = structure_risks.actions.external;
   inventory.javascript_action_count = structure_risks.actions.javascript;
   inventory.unsupported_action_count = structure_risks.actions.unsupported;
-  structure_risks.attachments.add_typed_streams(document);
-  inventory.embedded_file_count = structure_risks.attachments.count();
   let mut scanned_nodes = 0usize;
   for object in document.objects.values() {
-    scan_risk_object(object, document, &mut inventory, 0, &mut scanned_nodes)?;
+    scan_risk_object(
+      object,
+      document,
+      &mut inventory,
+      &mut structure_risks.attachments,
+      0,
+      &mut scanned_nodes,
+    )?;
   }
+  structure_risks.attachments.add_typed_streams(document);
+  inventory.embedded_file_count = structure_risks.attachments.count();
   for page in pages {
     let page_dictionary = document.get_dictionary(page.id).map_err(|_| {
       invalid_document("PDF page dictionary became unavailable")
@@ -1338,6 +1345,7 @@ fn scan_risk_object(
   object: &Object,
   document: &Document,
   inventory: &mut PdfRiskInventory,
+  attachments: &mut AttachmentInventory,
   depth: usize,
   scanned_nodes: &mut usize,
 ) -> Result<(), PdfInspectionError> {
@@ -1364,6 +1372,7 @@ fn scan_risk_object(
     ));
   }
   if let Some(dictionary) = object_dictionary(object) {
+    validate_associated_files(dictionary, document, attachments, "object")?;
     if dictionary.get(b"FT").is_ok() {
       increment(&mut inventory.acro_form_field_count);
     }
@@ -1386,6 +1395,7 @@ fn scan_risk_object(
         value,
         document,
         inventory,
+        attachments,
         depth.saturating_add(1),
         scanned_nodes,
       )?;
@@ -1397,6 +1407,7 @@ fn scan_risk_object(
         value,
         document,
         inventory,
+        attachments,
         depth.saturating_add(1),
         scanned_nodes,
       )?;
@@ -1507,12 +1518,13 @@ fn validate_risk_structures(
       optional_deref(form, b"Fields", document)?.ok_or_else(|| {
         invalid_document("PDF catalog AcroForm must declare Fields")
       })?;
-    action_risks.add(validate_form_fields(fields, document)?);
+    action_risks.add(validate_form_fields(fields, document, &mut attachments)?);
     validate_additional_actions(
       form,
       document,
       "PDF AcroForm AA",
       &mut action_risks,
+      &mut attachments,
     )?;
   }
   validate_catalog_name_trees(
@@ -1527,13 +1539,21 @@ fn validate_risk_structures(
       invalid_document("PDF catalog AA must resolve to an action dictionary")
     })?;
     for (_, action) in actions {
-      action_risks.add(validate_action_entry(action, document)?);
+      action_risks.add(validate_action_entry(
+        action,
+        document,
+        &mut attachments,
+      )?);
     }
   }
   if let Some(open_action) = optional_entry(catalog, b"OpenAction") {
     let resolved_open_action = resolve_object(open_action, document)?;
     if resolved_open_action.as_dict().is_ok() {
-      action_risks.add(validate_action_entry(open_action, document)?);
+      action_risks.add(validate_action_entry(
+        open_action,
+        document,
+        &mut attachments,
+      )?);
     } else if resolved_open_action.as_array().is_err()
       && resolved_open_action.as_name().is_err()
       && resolved_open_action.as_str().is_err()
@@ -1543,8 +1563,7 @@ fn validate_risk_structures(
       ));
     }
   }
-  validate_associated_files(catalog, document, &mut attachments, "catalog")?;
-  validate_outlines(catalog, document, &mut action_risks)?;
+  validate_outlines(catalog, document, &mut action_risks, &mut attachments)?;
   for page in pages {
     let page = document.get_dictionary(page.id).map_err(|_| {
       invalid_document("PDF page dictionary became unavailable")
@@ -1554,8 +1573,8 @@ fn validate_risk_structures(
       document,
       "PDF page AA",
       &mut action_risks,
+      &mut attachments,
     )?;
-    validate_associated_files(page, document, &mut attachments, "page")?;
     validate_page_annotations(
       page,
       document,
@@ -1713,8 +1732,9 @@ impl ActionRiskInventory {
   }
 }
 
-struct ActionValidator<'a> {
+struct ActionValidator<'a, 'b> {
   document: &'a Document,
+  attachments: &'b mut AttachmentInventory,
   visited: BTreeSet<lopdf::ObjectId>,
   node_count: usize,
   risks: ActionRiskInventory,
@@ -1723,9 +1743,11 @@ struct ActionValidator<'a> {
 fn validate_action_entry(
   action: &Object,
   document: &Document,
+  attachments: &mut AttachmentInventory,
 ) -> Result<ActionRiskInventory, PdfInspectionError> {
   let mut validator = ActionValidator {
     document,
+    attachments,
     visited: BTreeSet::new(),
     node_count: 0,
     risks: ActionRiskInventory::default(),
@@ -1734,7 +1756,7 @@ fn validate_action_entry(
   Ok(validator.risks)
 }
 
-impl ActionValidator<'_> {
+impl ActionValidator<'_, '_> {
   fn validate(
     &mut self,
     action: &Object,
@@ -1793,6 +1815,15 @@ impl ActionValidator<'_> {
     if !KNOWN_ACTION_KINDS.contains(&action_kind) {
       increment(&mut self.risks.unsupported);
     }
+    // File-specification dictionaries may occur in current or future action
+    // kinds. Follow any dictionary-valued F entry rather than maintaining a
+    // brittle action-kind allowlist; simple string file specifications remain
+    // valid external references and contain no embedded payload graph.
+    if let Some(file_spec) = optional_entry(action_dictionary, b"F")
+      && resolve_object(file_spec, self.document)?.as_dict().is_ok()
+    {
+      validate_file_spec(file_spec, self.document, self.attachments)?;
+    }
     if let Some(next) = optional_entry(action_dictionary, b"Next") {
       let resolved_next = resolve_object(next, self.document)?;
       if let Ok(actions) = resolved_next.as_array() {
@@ -1812,6 +1843,7 @@ fn validate_additional_actions(
   document: &Document,
   context: &str,
   risks: &mut ActionRiskInventory,
+  attachments: &mut AttachmentInventory,
 ) -> Result<(), PdfInspectionError> {
   let Some(actions) = optional_entry(owner, b"AA") else {
     return Ok(());
@@ -1820,7 +1852,7 @@ fn validate_additional_actions(
     invalid_document(format!("{context} must resolve to a dictionary"))
   })?;
   for (_, action) in actions {
-    risks.add(validate_action_entry(action, document)?);
+    risks.add(validate_action_entry(action, document, attachments)?);
   }
   Ok(())
 }
@@ -1849,7 +1881,7 @@ fn validate_page_annotations(
         })?;
     for key in [b"A".as_slice(), b"PA"] {
       if let Some(action) = optional_entry(annotation, key) {
-        risks.add(validate_action_entry(action, document)?);
+        risks.add(validate_action_entry(action, document, attachments)?);
       }
     }
     validate_additional_actions(
@@ -1857,6 +1889,7 @@ fn validate_page_annotations(
       document,
       "PDF annotation AA",
       risks,
+      attachments,
     )?;
     let is_file_attachment =
       name_deref_is(annotation, b"Subtype", b"FileAttachment", document);
@@ -1867,13 +1900,13 @@ fn validate_page_annotations(
         "PDF FileAttachment annotations must declare FS",
       ));
     }
-    validate_associated_files(annotation, document, attachments, "annotation")?;
   }
   Ok(())
 }
 
-struct FormFieldValidator<'a> {
+struct FormFieldValidator<'a, 'b> {
   document: &'a Document,
+  attachments: &'b mut AttachmentInventory,
   visited: BTreeSet<lopdf::ObjectId>,
   node_count: usize,
   action_risks: ActionRiskInventory,
@@ -1882,12 +1915,14 @@ struct FormFieldValidator<'a> {
 fn validate_form_fields(
   fields: &Object,
   document: &Document,
+  attachments: &mut AttachmentInventory,
 ) -> Result<ActionRiskInventory, PdfInspectionError> {
   let fields = resolve_object(fields, document)?.as_array().map_err(|_| {
     invalid_document("PDF AcroForm Fields must resolve to an array")
   })?;
   let mut validator = FormFieldValidator {
     document,
+    attachments,
     visited: BTreeSet::new(),
     node_count: 0,
     action_risks: ActionRiskInventory::default(),
@@ -1898,7 +1933,7 @@ fn validate_form_fields(
   Ok(validator.action_risks)
 }
 
-impl FormFieldValidator<'_> {
+impl FormFieldValidator<'_, '_> {
   fn validate_field(
     &mut self,
     field: &Object,
@@ -1951,13 +1986,16 @@ impl FormFieldValidator<'_> {
       self.document,
       "PDF form-field AA",
       &mut self.action_risks,
+      self.attachments,
     )?;
     if name_deref_is(field_dictionary, b"Subtype", b"Widget", self.document)
       && let Some(action) = optional_entry(field_dictionary, b"A")
     {
-      self
-        .action_risks
-        .add(validate_action_entry(action, self.document)?);
+      self.action_risks.add(validate_action_entry(
+        action,
+        self.document,
+        self.attachments,
+      )?);
     }
     let Some(kids) = optional_entry(field_dictionary, b"Kids") else {
       if field_type.is_none() {
@@ -2022,6 +2060,7 @@ fn validate_outlines(
   catalog: &Dictionary,
   document: &Document,
   action_risks: &mut ActionRiskInventory,
+  attachments: &mut AttachmentInventory,
 ) -> Result<(), PdfInspectionError> {
   let Some(outlines_entry) = optional_entry(catalog, b"Outlines") else {
     return Ok(());
@@ -2050,6 +2089,10 @@ fn validate_outlines(
   }
   let mut visited = BTreeSet::new();
   let mut node_count = 0usize;
+  let mut risks = OutlineRisks {
+    actions: action_risks,
+    attachments,
+  };
   let actual_last = validate_outline_chain(
     first,
     outlines_id,
@@ -2057,7 +2100,7 @@ fn validate_outlines(
     &mut visited,
     &mut node_count,
     0,
-    action_risks,
+    &mut risks,
   )?;
   let declared_last = last.as_reference().map_err(|_| {
     invalid_document("PDF outline Last must be an indirect reference")
@@ -2070,6 +2113,11 @@ fn validate_outlines(
   Ok(())
 }
 
+struct OutlineRisks<'a> {
+  actions: &'a mut ActionRiskInventory,
+  attachments: &'a mut AttachmentInventory,
+}
+
 fn validate_outline_chain(
   first: &Object,
   expected_parent: lopdf::ObjectId,
@@ -2077,7 +2125,7 @@ fn validate_outline_chain(
   visited: &mut BTreeSet<lopdf::ObjectId>,
   node_count: &mut usize,
   depth: usize,
-  action_risks: &mut ActionRiskInventory,
+  risks: &mut OutlineRisks<'_>,
 ) -> Result<lopdf::ObjectId, PdfInspectionError> {
   if depth > PDF_MAX_OBJECT_DEPTH {
     return Err(error(
@@ -2138,7 +2186,11 @@ fn validate_outline_chain(
       .as_str()
       .map_err(|_| invalid_document("PDF outline Title must be a string"))?;
     if let Some(action) = optional_entry(item, b"A") {
-      action_risks.add(validate_action_entry(action, document)?);
+      risks.actions.add(validate_action_entry(
+        action,
+        document,
+        risks.attachments,
+      )?);
     }
     let first_child = optional_entry(item, b"First");
     let last_child = optional_entry(item, b"Last");
@@ -2151,7 +2203,7 @@ fn validate_outline_chain(
           visited,
           node_count,
           depth.saturating_add(1),
-          action_risks,
+          risks,
         )?;
         if last_child.as_reference().ok() != Some(actual_last_child) {
           return Err(invalid_document(
@@ -2219,7 +2271,11 @@ fn validate_name_tree(
         })?;
         match value_kind {
           NameTreeValueKind::Action => {
-            action_risks.add(validate_action_entry(value, document)?);
+            action_risks.add(validate_action_entry(
+              value,
+              document,
+              attachments,
+            )?);
           }
           NameTreeValueKind::EmbeddedFile => {
             validate_file_spec(value, document, attachments)?;
@@ -2278,38 +2334,94 @@ fn validate_file_spec(
       "PDF attachment Type must be Filespec when present",
     ));
   }
-  let Some(embedded_files) = optional_deref(dictionary, b"EF", document)?
-  else {
-    add_spec_only_attachment(file_spec_id, inventory);
-    return Ok(());
-  };
-  let embedded_files = embedded_files.as_dict().map_err(|_| {
-    invalid_document("PDF attachment EF must resolve to a dictionary")
-  })?;
-  if embedded_files.is_empty() {
-    add_spec_only_attachment(file_spec_id, inventory);
-    return Ok(());
+  let embedded_files = optional_deref(dictionary, b"EF", document)?
+    .map(|embedded_files| {
+      embedded_files.as_dict().map_err(|_| {
+        invalid_document("PDF attachment EF must resolve to a dictionary")
+      })
+    })
+    .transpose()?;
+  let related_files = optional_deref(dictionary, b"RF", document)?;
+  if related_files.is_some() && embedded_files.is_none() {
+    return Err(invalid_document(
+      "PDF attachment RF requires a corresponding EF dictionary",
+    ));
   }
-  for (_, payload) in embedded_files {
-    let payload_id = payload.as_reference().map_err(|_| {
-      invalid_document("PDF attachment EF values must be indirect streams")
-    })?;
-    let stream = document.get_object(payload_id).map_err(|_| {
-      invalid_document("PDF attachment EF stream reference must resolve")
-    })?;
-    let stream = stream.as_stream().map_err(|_| {
-      invalid_document("PDF attachment EF values must resolve to streams")
-    })?;
-    if let Some(stream_type) = optional_deref(&stream.dict, b"Type", document)?
-      && stream_type.as_name().ok() != Some(b"EmbeddedFile")
-    {
-      return Err(invalid_document(
-        "PDF attachment stream Type must be EmbeddedFile when present",
-      ));
+  let mut found_payload = false;
+  if let Some(embedded_files) = embedded_files {
+    for (_, payload) in embedded_files {
+      inventory
+        .payload_ids
+        .insert(validate_embedded_file_payload(payload, document)?);
+      found_payload = true;
     }
-    inventory.payload_ids.insert(payload_id);
+    if let Some(related_files) = related_files {
+      let related_files = related_files.as_dict().map_err(|_| {
+        invalid_document("PDF attachment RF must resolve to a dictionary")
+      })?;
+      for (key, related_array) in related_files {
+        if embedded_files.get(key).is_err() {
+          return Err(invalid_document(
+            "PDF attachment RF keys must also be present in EF",
+          ));
+        }
+        let related_array = resolve_object(related_array, document)?
+          .as_array()
+          .map_err(|_| {
+            invalid_document(
+              "PDF attachment RF values must be related-file arrays",
+            )
+          })?;
+        if related_array.len() % 2 != 0 {
+          return Err(invalid_document(
+            "PDF related-file arrays must contain name/payload pairs",
+          ));
+        }
+        for pair in related_array.chunks_exact(2) {
+          pair
+            .first()
+            .and_then(|name| name.as_str().ok())
+            .ok_or_else(|| {
+              invalid_document("PDF related-file names must be strings")
+            })?;
+          let payload = pair.get(1).ok_or_else(|| {
+            invalid_document("PDF related-file payload is missing")
+          })?;
+          inventory
+            .payload_ids
+            .insert(validate_embedded_file_payload(payload, document)?);
+          found_payload = true;
+        }
+      }
+    }
+  }
+  if !found_payload {
+    add_spec_only_attachment(file_spec_id, inventory);
   }
   Ok(())
+}
+
+fn validate_embedded_file_payload(
+  payload: &Object,
+  document: &Document,
+) -> Result<lopdf::ObjectId, PdfInspectionError> {
+  let payload_id = payload.as_reference().map_err(|_| {
+    invalid_document("PDF attachment payloads must be indirect streams")
+  })?;
+  let stream = document.get_object(payload_id).map_err(|_| {
+    invalid_document("PDF attachment stream reference must resolve")
+  })?;
+  let stream = stream.as_stream().map_err(|_| {
+    invalid_document("PDF attachment payloads must resolve to streams")
+  })?;
+  if let Some(stream_type) = optional_deref(&stream.dict, b"Type", document)?
+    && stream_type.as_name().ok() != Some(b"EmbeddedFile")
+  {
+    return Err(invalid_document(
+      "PDF attachment stream Type must be EmbeddedFile when present",
+    ));
+  }
+  Ok(payload_id)
 }
 
 fn add_spec_only_attachment(
@@ -3184,6 +3296,96 @@ mod tests {
   }
 
   #[test]
+  fn inventories_related_file_payloads() {
+    let mut document = Document::load_mem(MINIMAL_PDF).unwrap();
+    let (file_spec_id, _) = add_untyped_attachment(&mut document);
+    let related_payload_id = document.add_object(Object::Stream(
+      lopdf::Stream::new(Dictionary::new(), b"related attachment".to_vec()),
+    ));
+    let mut related_files = Dictionary::new();
+    related_files.set(
+      "F",
+      vec![
+        Object::string_literal("related.txt"),
+        Object::Reference(related_payload_id),
+      ],
+    );
+    document
+      .get_dictionary_mut(file_spec_id)
+      .unwrap()
+      .set("RF", Object::Dictionary(related_files));
+    document
+      .catalog_mut()
+      .unwrap()
+      .set("AF", vec![Object::Reference(file_spec_id)]);
+
+    let inspection = inspect_document(&mut document);
+
+    assert_eq!(inspection.risks.embedded_file_count, 2);
+  }
+
+  #[test]
+  fn inventories_embedded_file_specs_reached_through_external_actions() {
+    for (action_kind, external_count) in [
+      ("Launch", 1),
+      ("GoToR", 1),
+      ("SubmitForm", 1),
+      ("ImportData", 1),
+      ("GoToE", 0),
+    ] {
+      let mut document = Document::load_mem(MINIMAL_PDF).unwrap();
+      let (file_spec_id, _) = add_untyped_attachment(&mut document);
+      let action_id = document.add_object(lopdf::dictionary! {
+        "Type" => "Action",
+        "S" => action_kind,
+        "F" => file_spec_id,
+      });
+      document
+        .catalog_mut()
+        .unwrap()
+        .set("OpenAction", Object::Reference(action_id));
+
+      let inspection = inspect_document(&mut document);
+
+      assert_eq!(inspection.risks.embedded_file_count, 1, "{action_kind}");
+      assert_eq!(
+        inspection.risks.external_action_count, external_count,
+        "{action_kind}"
+      );
+    }
+  }
+
+  #[test]
+  fn rejects_related_files_without_matching_embedded_file_entries() {
+    let mut document = Document::load_mem(MINIMAL_PDF).unwrap();
+    let payload_id = document.add_object(Object::Stream(lopdf::Stream::new(
+      Dictionary::new(),
+      Vec::new(),
+    )));
+    let mut related_files = Dictionary::new();
+    related_files.set(
+      "F",
+      vec![
+        Object::string_literal("related.txt"),
+        Object::Reference(payload_id),
+      ],
+    );
+    let mut file_spec = Dictionary::new();
+    file_spec.set("RF", Object::Dictionary(related_files));
+    let file_spec_id = document.add_object(Object::Dictionary(file_spec));
+    document
+      .catalog_mut()
+      .unwrap()
+      .set("AF", vec![Object::Reference(file_spec_id)]);
+    let mut bytes = Vec::new();
+    document.save_to(&mut bytes).unwrap();
+
+    let error = inspect_pdf(&bytes).unwrap_err();
+
+    assert_eq!(error.code(), PdfInspectionErrorCode::InvalidDocument);
+  }
+
+  #[test]
   fn inventories_and_deduplicates_page_and_annotation_associated_files() {
     let mut document = Document::load_mem(MINIMAL_PDF).unwrap();
     let (file_spec_id, _) = add_untyped_attachment(&mut document);
@@ -3197,6 +3399,20 @@ mod tests {
     let page = document.get_dictionary_mut(page_id).unwrap();
     page.set("AF", vec![Object::Reference(file_spec_id)]);
     page.set("Annots", vec![Object::Reference(annotation_id)]);
+
+    let inspection = inspect_document(&mut document);
+
+    assert_eq!(inspection.risks.embedded_file_count, 1);
+  }
+
+  #[test]
+  fn inventories_associated_files_on_arbitrary_pdf_objects() {
+    let mut document = Document::load_mem(MINIMAL_PDF).unwrap();
+    let (file_spec_id, _) = add_untyped_attachment(&mut document);
+    document.add_object(lopdf::dictionary! {
+      "Type" => "CustomOwner",
+      "AF" => vec![Object::Reference(file_spec_id)],
+    });
 
     let inspection = inspect_document(&mut document);
 
