@@ -16,6 +16,10 @@ export type BenchmarkCorpus = {
   readonly source: string;
   readonly version: string;
   readonly runnable: boolean;
+  readonly execution?: {
+    readonly script: string;
+    readonly args: readonly string[];
+  };
   readonly notes: string;
 };
 
@@ -61,6 +65,7 @@ export const BENCHMARK_CORPORA: readonly BenchmarkCorpus[] = [
     source: "https://github.com/NorskRegnesentral/text-anonymization-benchmark",
     version: "558e09e26d6b36f5f78440074e6a233946d98bd9",
     runnable: true,
+    execution: { script: "blind.ts", args: ["--full"] },
     notes: "Independent annotator judgments; aggregate-only sealed reports.",
   },
   {
@@ -86,6 +91,7 @@ export const BENCHMARK_CORPORA: readonly BenchmarkCorpus[] = [
     source: "https://huggingface.co/datasets/RedactionBench/RedactionBench",
     version: "d45e9cec89bc49c69355e252fec29cc0229982f6",
     runnable: true,
+    execution: { script: "redactionbench.ts", args: [] },
     notes:
       "Mandatory/contextual spans. Reports transparent interim metrics until the official R-Score implementation is published.",
   },
@@ -101,6 +107,7 @@ export const BENCHMARK_CORPORA: readonly BenchmarkCorpus[] = [
     source: "https://doi.org/10.5281/zenodo.4279323",
     version: "d0e4708b58689bc1440ede6f89e017e58d667827d927827622d73810cd68eac3",
     runnable: true,
+    execution: { script: "meddocan.ts", args: [] },
     notes:
       "Complete 250-document test split; checksum-pinned Zenodo BRAT archive.",
   },
@@ -115,6 +122,13 @@ export const validateBenchmarkRegistry = (): void => {
     ids.add(corpus.id);
     if (corpus.policy !== "development" && corpus.version.trim() === "") {
       throw new Error(`${corpus.id} must pin a source version`);
+    }
+    if (
+      corpus.runnable &&
+      corpus.policy === "evaluation-only" &&
+      corpus.execution === undefined
+    ) {
+      throw new Error(`${corpus.id} must declare sealed-suite execution`);
     }
   }
 };

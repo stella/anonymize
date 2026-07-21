@@ -130,8 +130,11 @@ export const createPiiShieldAdapter = (): Adapter => ({
     const predictions = new Map<string, readonly NativePrediction[]>();
     const start = performance.now();
     try {
-      for (const document of documents) {
-        const input = join(directory, `${document.id}.txt`);
+      for (const [index, document] of documents.entries()) {
+        // Corpus IDs are metadata, not paths (RedactionBench IDs contain `/`).
+        // A sequence local to this private temp directory is collision-free
+        // and cannot create nested or traversed paths.
+        const input = join(directory, `${index}.txt`);
         await Bun.write(input, document.text);
         const scan = await runProcess([
           "scan",

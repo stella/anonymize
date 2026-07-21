@@ -11,11 +11,12 @@ process.stderr.write(
   `running sealed benchmark suite: ${runnableSealed.map(({ id }) => id).join(", ")}\n`,
 );
 
-for (const [script, args] of [
-  ["blind.ts", ["--full"]],
-  ["redactionbench.ts", []],
-  ["meddocan.ts", []],
-] as const) {
+for (const corpus of runnableSealed) {
+  const execution = corpus.execution;
+  if (execution === undefined) {
+    throw new Error(`${corpus.id} has no sealed-suite execution`);
+  }
+  const { script, args } = execution;
   const child = Bun.spawn(
     [process.execPath, join(import.meta.dir, script), ...args],
     {
@@ -27,6 +28,6 @@ for (const [script, args] of [
   );
   const exitCode = await child.exited;
   if (exitCode !== 0) {
-    throw new Error(`${script} failed with exit ${exitCode}`);
+    throw new Error(`${corpus.id} (${script}) failed with exit ${exitCode}`);
   }
 }

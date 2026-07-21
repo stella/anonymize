@@ -39,6 +39,11 @@ describe("benchmark suite registry", () => {
     expect(BENCHMARK_CORPORA.every(({ access }) => access !== undefined)).toBe(
       true,
     );
+    expect(
+      BENCHMARK_CORPORA.filter(
+        ({ runnable, policy }) => runnable && policy === "evaluation-only",
+      ).map(({ execution }) => execution?.script),
+    ).toEqual(["blind.ts", "redactionbench.ts", "meddocan.ts"]);
   });
 });
 
