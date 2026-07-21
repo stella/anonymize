@@ -218,6 +218,11 @@ const providerOutput = {
 const detections = convert_external_detection_batch(document, providerOutput);
 ```
 
+The same converter is available from `@stll/anonymize-wasm`; its browser and
+Node-WASI entry returns a promise because the WASM binding loads lazily. Node,
+Python, Node-WASI, and browser WASM execute the same Rust validation and offset
+conversion contract.
+
 The example provider output is deliberately synthetic. Real providers may run
 in-process, as a local sidecar, or behind an application-owned service.
 `provider.id` is the immutable audit identity copied into every retained
@@ -231,7 +236,8 @@ and bounded-size violations; it never guesses an offset unit or label mapping.
 Keep IDs free of personal data. Pass the returned detections to
 `redactTextWithCallerDetections()` using the UTF-8-decoded document text.
 
-TypeScript and Python export the same exact v1 limit constants:
+TypeScript (including the WASM entry) and Python export the same exact v1 limit
+constants:
 
 | v1 limit                   | Public constant                            |               Exact value |
 | -------------------------- | ------------------------------------------ | ------------------------: |

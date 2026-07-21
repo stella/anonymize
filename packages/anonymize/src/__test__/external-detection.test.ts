@@ -14,15 +14,28 @@ import {
   convert_external_detection_batch,
 } from "../native";
 import { loadNativeAnonymizeBinding } from "../native-node";
+import { convert_external_detection_batch as convertWasmExternalDetectionBatch } from "../wasm";
 
 const binding = loadNativeAnonymizeBinding();
 const document = new TextEncoder().encode("😀Alice signed.");
 const sha256 = createHash("sha256").update(document).digest("hex");
 
-const fakeProviderBatch = (): ExternalDetectionBatch => ({
+type FakeProviderSpan = {
+  offsetUnit: ExternalDetectionBatch["offsetUnit"];
+  start: number;
+  end: number;
+};
+
+const fakeProviderBatch = (
+  { offsetUnit, start, end }: FakeProviderSpan = {
+    offsetUnit: "unicode-code-point",
+    start: 1,
+    end: 6,
+  },
+): ExternalDetectionBatch => ({
   version: EXTERNAL_DETECTION_BATCH_VERSION,
   document: { sha256 },
-  offsetUnit: "unicode-code-point",
+  offsetUnit,
   provider: {
     id: "fake-provider",
     name: "Deterministic fake provider",
@@ -32,8 +45,8 @@ const fakeProviderBatch = (): ExternalDetectionBatch => ({
   detections: [
     {
       id: "fake-person-1",
-      start: 1,
-      end: 6,
+      start,
+      end,
       label: "PER",
       score: 0.99,
     },
@@ -62,14 +75,8 @@ describe("ExternalDetectionBatch v1", () => {
     });
   });
 
-  test("converts provider output to JavaScript caller-detection offsets", () => {
-    expect(
-      convert_external_detection_batch({
-        binding,
-        document,
-        batch: fakeProviderBatch(),
-      }),
-    ).toEqual([
+  test("converts every source unit identically through Node and WASM", async () => {
+    const expected = [
       {
         start: 2,
         end: 7,
@@ -78,7 +85,22 @@ describe("ExternalDetectionBatch v1", () => {
         providerId: "fake-provider",
         detectionId: "fake-person-1",
       },
-    ]);
+    ];
+    const spans: readonly FakeProviderSpan[] = [
+      { offsetUnit: "utf8-byte", start: 4, end: 9 },
+      { offsetUnit: "utf16-code-unit", start: 2, end: 7 },
+      { offsetUnit: "unicode-code-point", start: 1, end: 6 },
+    ];
+
+    for (const span of spans) {
+      const batch = fakeProviderBatch(span);
+      expect(
+        convert_external_detection_batch({ binding, document, batch }),
+      ).toEqual(expected);
+      expect(
+        await convertWasmExternalDetectionBatch(document, batch, { binding }),
+      ).toEqual(expected);
+    }
   });
 
   test("fails closed on stale bytes and unknown contract fields", () => {
@@ -95,5 +117,51 @@ describe("ExternalDetectionBatch v1", () => {
     expect(() =>
       convert_external_detection_batch({ binding, document, batch: unknown }),
     ).toThrow("unknown field");
+  });
+
+  test("keeps a missing converter feature-scoped in injected WASM bindings", async () => {
+    const staleBinding = new Proxy(binding, {
+      get: (target, property, receiver) =>
+        property === "convertExternalDetectionBatch"
+          ? undefined
+          : Reflect.get(target, property, receiver),
+    });
+
+    expect(staleBinding.normalizeForSearch("Alice")).toBe("Alice");
+    expect(
+      convertWasmExternalDetectionBatch(document, fakeProviderBatch(), {
+        binding: staleBinding,
+      }),
+    ).rejects.toThrow(
+      "Native anonymize binding does not support external detection batches",
+    );
+  });
+
+  test("normalizes validation errors identically through Node and WASM", async () => {
+    const stale = fakeProviderBatch();
+    stale.document.sha256 = "0".repeat(64);
+    const unknown = JSON.stringify({
+      ...fakeProviderBatch(),
+      legacyOffsetGuessing: true,
+    });
+
+    for (const batch of [stale, unknown]) {
+      let nodeMessage: string | undefined;
+      try {
+        convert_external_detection_batch({ binding, document, batch });
+      } catch (error) {
+        nodeMessage = error instanceof Error ? error.message : undefined;
+      }
+
+      let wasmMessage: string | undefined;
+      try {
+        await convertWasmExternalDetectionBatch(document, batch, { binding });
+      } catch (error) {
+        wasmMessage = error instanceof Error ? error.message : undefined;
+      }
+
+      expect(nodeMessage).toBeDefined();
+      expect(wasmMessage).toBe(nodeMessage);
+    }
   });
 });

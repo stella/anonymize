@@ -9,7 +9,6 @@ export type CapabilityRuntime = (typeof CAPABILITY_RUNTIMES)[number];
 export const CAPABILITY_PARITY_PROFILES = {
   core: CAPABILITY_RUNTIMES,
   local: ["node", "python"],
-  provider: ["node", "python"],
   document: ["node", "python"],
 } as const satisfies Record<string, readonly CapabilityRuntime[]>;
 
@@ -25,7 +24,7 @@ export const CAPABILITY_SURFACES = [
   { id: "text.diagnostics", profile: "core" },
   { id: "text.summary-diagnostics", profile: "core" },
   { id: "text.caller-detections", profile: "core" },
-  { id: "text.external-detection-batch", profile: "provider" },
+  { id: "text.external-detection-batch", profile: "core" },
   { id: "text.operators", profile: "core" },
   { id: "package.default", profile: "core" },
   { id: "session.cross-document", profile: "core" },
