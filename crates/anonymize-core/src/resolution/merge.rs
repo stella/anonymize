@@ -559,6 +559,10 @@ fn person_contains_nested_address(
 ) -> bool {
   person.label == crate::labels::PERSON_LABEL
     && address.label == crate::labels::ADDRESS_LABEL
+    // Built-in deny-list address spans are the city-token source this rule is
+    // designed for. Structured trigger, regex, context, and gazetteer spans
+    // retain their normal source/score precedence.
+    && address.source == DetectionSource::DenyList
     && !is_caller_owned(address)
     && person.start <= address.start
     && person.end >= address.end

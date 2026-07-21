@@ -531,6 +531,25 @@ fn longer_person_beats_nested_city_address_fragments() {
 }
 
 #[test]
+fn nested_structured_address_beats_low_confidence_person() {
+  for source in [
+    DetectionSource::Trigger,
+    DetectionSource::Regex,
+    DetectionSource::Gazetteer,
+  ] {
+    let result = merge_and_dedup(&[
+      entity(source, 0.9, 0, 7, "address"),
+      entity(DetectionSource::DenyList, 0.5, 0, 17, "person"),
+    ]);
+
+    let kept = result.first().expect("address");
+    assert_eq!(kept.label, "address", "source: {source:?}");
+    assert_eq!(kept.start, 0, "source: {source:?}");
+    assert_eq!(kept.end, 7, "source: {source:?}");
+  }
+}
+
+#[test]
 fn sanitize_trims_punctuation_and_updates_byte_offsets() {
   let mut input =
     text_entity("\"Tesla Shares\"", "organization", DetectionSource::Ner);
