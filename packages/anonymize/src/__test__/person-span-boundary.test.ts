@@ -22,7 +22,7 @@ const CONFIG: PipelineConfig = {
   enableConfidenceBoost: true,
   enableCoreference: true,
   enableHotwordRules: true,
-  countries: ["CZ"],
+  denyListCountries: ["CZ"],
   nameCorpusLanguages: ["cs"],
   labels: [...DEFAULT_ENTITY_LABELS],
   workspaceId: "person-span-boundary-test",
