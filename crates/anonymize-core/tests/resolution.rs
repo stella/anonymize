@@ -1051,19 +1051,21 @@ fn field_label_word_without_colon_stays_in_the_span() {
 }
 
 #[test]
-fn terminator_at_span_start_leaves_the_span_untouched() {
-  // Truncating to empty would delete the entity; over-redaction is the safe
-  // direction, so the span is kept whole instead.
+fn terminator_only_person_span_is_dropped_before_adjacent_merge() {
   let labels = vec![String::from("jméno")];
-  let full_text = "Jméno: Eva";
+  let full_text = "Jan Novák Jméno: Eva";
   let result = boundary_with_terminators(
-    &[person_span(full_text, "Jméno")],
+    &[
+      person_span(full_text, "Jan Novák"),
+      person_span(full_text, "Jméno"),
+    ],
     full_text,
     &[],
     &labels,
   );
 
-  assert_eq!(result.first().expect("person").text, "Jméno");
+  assert_eq!(result.len(), 1);
+  assert_eq!(result.first().expect("person").text, "Jan Novák");
 }
 
 #[test]

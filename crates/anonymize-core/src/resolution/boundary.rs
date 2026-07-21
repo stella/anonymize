@@ -64,6 +64,13 @@ fn truncate_person_spans(
       continue;
     }
 
+    if begins_with_terminator(full_text, entity, terminators) {
+      // A detector may emit the field label or first stamp token as a
+      // separate person span. Drop it here so merge_adjacent cannot attach it
+      // back to the preceding name.
+      continue;
+    }
+
     let Some(cut) = terminator_start_within(full_text, entity, terminators)
     else {
       result.push(entity.clone());
@@ -72,9 +79,6 @@ fn truncate_person_spans(
 
     let trimmed_end = trim_trailing_space(full_text, entity.start, cut);
     if trimmed_end <= entity.start {
-      // The span is entirely a terminator; leaving it over-redacts, which is
-      // the safe direction, so keep it rather than emitting an empty span.
-      result.push(entity.clone());
       continue;
     }
 
@@ -85,6 +89,19 @@ fn truncate_person_spans(
   }
 
   Ok(result)
+}
+
+fn begins_with_terminator(
+  full_text: &str,
+  entity: &PipelineEntity,
+  terminators: PersonSpanTerminators<'_>,
+) -> bool {
+  let Ok(start) = usize::try_from(entity.start) else {
+    return false;
+  };
+  let tail = full_text.get(start..).unwrap_or_default();
+  starts_with_stamp_phrase(tail, terminators.stamp_phrases)
+    || is_colon_tied_field_label(tail, terminators.field_labels)
 }
 
 /// Byte offset of the first terminator beginning inside the entity span.
