@@ -624,6 +624,7 @@ mod tests {
     );
     assert!(spans_for("SECTION 12 MAY BE AMENDED", "MAY", true).is_empty());
     assert!(spans_for("Section 12 may\nbe amended.", "may", true).is_empty());
+    assert!(spans_for("Sections 11 and 12 set forth", "set", true).is_empty());
     assert_eq!(spans_for("Due 12 may.", "may", true), vec!["12 may"]);
     assert_eq!(
       spans_for("Effective 12 May next week.", "May", true),

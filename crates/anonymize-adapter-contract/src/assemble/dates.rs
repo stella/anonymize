@@ -154,7 +154,18 @@ mod tests {
       english.keys().map(String::as_str).collect::<Vec<_>>(),
       ["en"]
     );
-    assert!(spanish.is_empty());
+    assert_eq!(
+      spanish.keys().map(String::as_str).collect::<Vec<_>>(),
+      ["es"]
+    );
+    assert!(
+      spanish.get("es").is_some_and(|ambiguities| ambiguities
+        .iter()
+        .any(|word| word == "set"))
+    );
+    assert!(spanish.get("es").is_some_and(|ambiguities| {
+      !ambiguities.iter().any(|word| word == "march")
+    }));
     Ok(())
   }
 
