@@ -2222,39 +2222,36 @@ mod tests {
     })
   }
 
+  fn english_vocabulary(source: &str) -> Vec<String> {
+    let value: serde_json::Value =
+      serde_json::from_str(source).expect("language-keyed vocabulary JSON");
+    value
+      .get("en")
+      .and_then(serde_json::Value::as_array)
+      .expect("English vocabulary array")
+      .iter()
+      .map(|word| word.as_str().expect("vocabulary string").to_string())
+      .collect()
+  }
+
   fn institutional_head_entities(text: &str, head: &str) -> Vec<String> {
+    let complement_starters = english_vocabulary(include_str!(
+      "../../../packages/data/config/institutional-organization-complement-starters.json"
+    ));
+    let complement_connectors = english_vocabulary(include_str!(
+      "../../../packages/data/config/institutional-organization-complement-connectors.json"
+    ));
+    let generic_words = english_vocabulary(include_str!(
+      "../../../packages/data/config/institutional-organization-generic-name-words.json"
+    ));
     let data = PreparedLegalFormData::new(LegalFormData {
       suffixes: vec![head.to_string()],
-      connector_words: vec![
-        String::from("and"),
-        String::from("for"),
-        String::from("of"),
-        String::from("the"),
-      ],
-      and_connector_words: vec![String::from("and")],
-      sentence_verb_indicators: vec![String::from("is"), String::from("was")],
+      connector_words: complement_connectors.clone(),
       institutional_heads: vec![head.to_string()],
       institutional_complement_heads: vec![head.to_string()],
-      institutional_complement_starters: ["for", "of"]
-        .into_iter()
-        .map(String::from)
-        .collect(),
-      institutional_complement_connectors: ["and", "for", "of", "the", "to"]
-        .into_iter()
-        .map(String::from)
-        .collect(),
-      institutional_generic_words: [
-        "chairman",
-        "compensation",
-        "director",
-        "directors",
-        "head",
-        "legal",
-        "trade",
-      ]
-      .into_iter()
-      .map(String::from)
-      .collect(),
+      institutional_complement_starters: complement_starters,
+      institutional_complement_connectors: complement_connectors,
+      institutional_generic_words: generic_words,
       ..LegalFormData::default()
     });
     let start = text.rfind(head).expect("institutional head");
@@ -2318,8 +2315,16 @@ mod tests {
         .is_empty()
     );
     for (text, head) in [
+      ("A Court may decide", "Court"),
+      ("An Agency responded", "Agency"),
       ("Legal Department", "Department"),
       ("Head of Trade Department", "Department"),
+      ("Our Court held", "Court"),
+      ("Such Court may decide", "Court"),
+      ("That Court held", "Court"),
+      ("These Court proceedings", "Court"),
+      ("This Court held", "Court"),
+      ("Those Court proceedings", "Court"),
       ("WHEREAS, the Board of Directors", "Board"),
       ("Subject to approval by the Board", "Board"),
       ("The Compensation Committee", "Committee"),
