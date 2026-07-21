@@ -6,6 +6,7 @@
 //! Module map:
 //! - `error`: typed error surface (`ContractError`, `Result`).
 //! - `caller`: versioned caller-detection requests and offset handling.
+//! - `external_detection`: digest-bound, provider-neutral detection batches.
 //! - `types`: binding-facing configuration and operator DTOs.
 //! - `config`: binding DTO to core prepared-engine config conversion.
 //! - `results`: core result/diagnostic conversion back to binding DTOs.
@@ -19,6 +20,7 @@ mod assemble;
 pub(crate) mod caller;
 pub(crate) mod config;
 pub(crate) mod error;
+pub(crate) mod external_detection;
 pub(crate) mod names;
 pub(crate) mod offsets;
 pub(crate) mod package;
@@ -31,6 +33,7 @@ pub use assemble::{
 pub use caller::*;
 pub use config::*;
 pub use error::*;
+pub use external_detection::*;
 pub use package::*;
 pub use results::*;
 pub use types::*;

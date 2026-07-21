@@ -50,6 +50,7 @@ const coreSurface = {
 const nodeSurface = {
   ...coreSurface,
   "package.load-file": nativeNode.load_prepared_package_file,
+  "text.external-detection-batch": nativeNode.convert_external_detection_batch,
   "session.cross-document": prototypeMethod(
     preparedPrototype,
     "createRedactionSession",

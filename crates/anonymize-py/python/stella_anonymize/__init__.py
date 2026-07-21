@@ -6,7 +6,7 @@ from collections.abc import Callable, Mapping, Sequence
 from functools import lru_cache
 from importlib.resources import files
 from os import PathLike
-from typing import Literal, TypedDict
+from typing import Literal, TypedDict, cast
 from weakref import WeakSet
 
 from ._native import (
@@ -20,6 +20,7 @@ from ._native import (
     assemble_static_search_compressed_package_bytes,
     assemble_static_search_config_json,
     assemble_static_search_package_bytes,
+    convert_external_detection_batch as _native_convert_external_detection_batch,
     deanonymise as _native_deanonymise,
     native_package_version,
     normalize_for_search,
@@ -55,6 +56,14 @@ __all__ = [
     "MaskOperatorConfig",
     "CallerDetection",
     "CALLER_DETECTION_CONTRACT_VERSION",
+    "ExternalDetectionBatch",
+    "ExternalDetection",
+    "ExternalDetectionDocument",
+    "ExternalDetectionLabelMapping",
+    "ExternalDetectionOffsetUnit",
+    "ExternalDetectionProvider",
+    "EXTERNAL_DETECTION_BATCH_VERSION",
+    "convert_external_detection_batch",
     "DiagnosticsBatchCallback",
     "ResultEventCallback",
     "DefaultNativePipelineWarmup",
@@ -131,6 +140,7 @@ class MaskOperatorConfig(TypedDict):
 OperatorSelection = Literal["replace", "redact", "keep"] | MaskOperatorConfig
 OperatorConfig = Mapping[str, OperatorSelection] | str | None
 CALLER_DETECTION_CONTRACT_VERSION = 2
+EXTERNAL_DETECTION_BATCH_VERSION = 1
 
 
 class CallerDetection(TypedDict):
@@ -140,6 +150,58 @@ class CallerDetection(TypedDict):
     score: float
     provider_id: str
     detection_id: str
+
+
+ExternalDetectionOffsetUnit = Literal[
+    "utf8-byte", "utf16-code-unit", "unicode-code-point"
+]
+
+
+class ExternalDetectionProvider(TypedDict):
+    id: str
+    name: str
+    version: str
+
+
+class ExternalDetectionDocument(TypedDict):
+    sha256: str
+
+
+class ExternalDetectionLabelMapping(TypedDict):
+    providerLabel: str
+    entityLabel: str
+
+
+class ExternalDetection(TypedDict):
+    id: str
+    start: int
+    end: int
+    label: str
+    score: float
+
+
+class ExternalDetectionBatch(TypedDict):
+    version: Literal[1]
+    document: ExternalDetectionDocument
+    offsetUnit: ExternalDetectionOffsetUnit
+    provider: ExternalDetectionProvider
+    labelMap: Sequence[ExternalDetectionLabelMapping]
+    detections: Sequence[ExternalDetection]
+
+
+def convert_external_detection_batch(
+    document: BytesLike,
+    batch: ExternalDetectionBatch | str,
+) -> list[CallerDetection]:
+    batch_json = (
+        batch
+        if isinstance(batch, str)
+        else json.dumps(batch, separators=(",", ":"))
+    )
+    converted = json.loads(
+        _native_convert_external_detection_batch(bytes(document), batch_json)
+    )
+    return cast(list[CallerDetection], converted["detections"])
 
 
 DiagnosticsBatchCallback = Callable[[str], object]

@@ -172,6 +172,14 @@ Retained entities preserve both IDs;
 `redact_text_with_caller_detections_diagnostics_json()` reports audit-safe
 external input and retained counts without matched text.
 
+Portable model or service output can be validated with
+`convert_external_detection_batch(document_bytes, batch)`. The v1 batch uses
+the same provider-neutral, SHA-256-bound contract as Node, with an explicit
+`utf8-byte`, `utf16-code-unit`, or `unicode-code-point` offset unit and explicit
+provider-label mappings. It has no model dependency and does not require
+GLiNER. The returned value feeds the existing caller-detection API after the
+shared Rust contract validates and converts its spans.
+
 Regional codes use the exact package when present and otherwise fall back to
 the base language package, so `en-US` can use the shipped `en` artifact.
 

@@ -14,6 +14,7 @@ import {
   PreparedNativePipeline,
   type NativeStaticRedactionResult,
   diagnostics_json as diagnosticsJsonWithBinding,
+  convert_external_detection_batch as convertExternalDetectionBatchWithBinding,
   diagnostics_stream_json as diagnosticsStreamJsonWithBinding,
   load_prepared_package as loadPreparedPackageWithBinding,
   native_package_version as nativePackageVersionWithBinding,
@@ -163,6 +164,17 @@ export const readNativePipelinePackageFileAsync = async (
 export const native_package_version = (
   options: NativeSdkOptions = {},
 ): string => nativePackageVersionWithBinding(resolveNativeSdkBinding(options));
+
+export const convert_external_detection_batch = (
+  document: Uint8Array,
+  batch: import("./native").ExternalDetectionBatch | string,
+  options: NativeSdkOptions = {},
+): import("./native").NativeCallerDetection[] =>
+  convertExternalDetectionBatchWithBinding({
+    binding: resolveNativeSdkBinding(options),
+    document,
+    batch,
+  });
 
 export const normalize_for_search = (
   text: string,
@@ -846,6 +858,9 @@ const isNativeAnonymizeBinding = (
     return false;
   }
   if (typeof candidate["normalizeForSearch"] !== "function") {
+    return false;
+  }
+  if (typeof candidate["convertExternalDetectionBatch"] !== "function") {
     return false;
   }
   if (typeof candidate["prepareStaticSearchPackageBytes"] !== "function") {

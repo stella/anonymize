@@ -6,6 +6,11 @@ from typing import TypeAlias
 BytesLike: TypeAlias = bytes | bytearray | memoryview
 ResultEventCallback: TypeAlias = Callable[[str], object]
 
+def convert_external_detection_batch(
+    document: BytesLike,
+    batch_json: str,
+) -> str: ...
+
 class RedactionEntry:
     @property
     def placeholder(self) -> str: ...

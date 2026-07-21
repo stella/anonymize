@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "document": {
+    "sha256": "685da10289f732c8cb761307462bcb48fb75cfd5b22dcde9e4473cc20b61b8e9"
+  },
+  "offsetUnit": "unicode-code-point",
+  "provider": {
+    "id": "example.local",
+    "name": "Example local detector",
+    "version": "1.0.0"
+  },
+  "labelMap": [
+    {
+      "providerLabel": "PER",
+      "entityLabel": "person"
+    }
+  ],
+  "detections": [
+    {
+      "id": "person-1",
+      "start": 1,
+      "end": 6,
+      "label": "PER",
+      "score": 0.99
+    }
+  ]
+}

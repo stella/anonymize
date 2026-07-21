@@ -921,6 +921,7 @@ const fakeNativeBinding = (
     : preparedSearch;
 
   return {
+    convertExternalDetectionBatch: () => [],
     normalizeForSearch: (text: string) => text,
     nativePackageVersion: () => version,
     NativePreparedSearch,

@@ -13,8 +13,10 @@ use stella_anonymize_adapter_contract::{
   BindingRedactionResult, BindingStaticRedactionResult, ContractError,
   PreparedSearchPackageDecodeTimings, assemble_static_search_config,
   caller_detections_from_character_binding, diagnostic_events_to_utf16_binding,
-  diagnostic_stage_event, operator_config_from_binding,
-  prepared_search_config_from_binding, prepared_search_core_package_to_bytes,
+  diagnostic_stage_event,
+  external_detection_batch_to_character_caller_request_json,
+  operator_config_from_binding, prepared_search_config_from_binding,
+  prepared_search_core_package_to_bytes,
   prepared_search_core_package_to_compressed_bytes,
   prepared_search_core_package_view_from_bytes_with_timings,
   prepared_search_core_package_view_trusted_from_bytes_with_timings,
@@ -44,6 +46,17 @@ use stella_anonymize_docx_core::{
   plan_docx_restoration as plan_docx_restoration_core,
   rewrite_docx_text as rewrite_docx_text_core,
 };
+
+#[pyfunction]
+fn convert_external_detection_batch(
+  document: &[u8],
+  batch_json: &str,
+) -> PyResult<String> {
+  external_detection_batch_to_character_caller_request_json(
+    document, batch_json,
+  )
+  .map_err(|error| PyValueError::new_err(error.to_string()))
+}
 
 #[pyclass(name = "RedactionEntry", get_all, skip_from_py_object)]
 #[derive(Clone)]
@@ -1523,6 +1536,10 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
   module.add_class::<PyRedactionEntry>()?;
   module.add_class::<PyOperatorEntry>()?;
   module.add_class::<PyPipelineEntity>()?;
+  module.add_function(wrap_pyfunction!(
+    convert_external_detection_batch,
+    module
+  )?)?;
   module
     .add_function(wrap_pyfunction!(redact_static_entities_json, module)?)?;
   module.add_function(wrap_pyfunction!(

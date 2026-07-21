@@ -12,8 +12,9 @@ use stella_anonymize_adapter_contract::{
   BindingStaticRedactionResult, ContractError,
   PreparedSearchPackageDecodeTimings, assemble_static_search_config,
   caller_detections_from_utf16_binding, diagnostic_events_to_utf16_binding,
-  diagnostic_stage_event, operator_config_from_binding,
-  prepared_search_config_from_binding, prepared_search_core_package_to_bytes,
+  diagnostic_stage_event, external_detection_batch_to_utf16_caller_request,
+  operator_config_from_binding, prepared_search_config_from_binding,
+  prepared_search_core_package_to_bytes,
   prepared_search_core_package_to_compressed_bytes,
   prepared_search_core_package_view_from_bytes_with_timings,
   prepared_search_core_package_view_trusted_from_bytes_with_timings,
@@ -44,6 +45,41 @@ use stella_anonymize_docx_core::{
 };
 
 const PREPARED_SEARCH_CACHE_LIMIT: usize = 8;
+
+#[napi(object)]
+pub struct JsExternalCallerDetection {
+  pub start: u32,
+  pub end: u32,
+  pub label: String,
+  pub score: f64,
+  pub provider_id: String,
+  pub detection_id: String,
+}
+
+#[napi]
+#[allow(clippy::needless_pass_by_value)]
+pub fn convert_external_detection_batch(
+  document: BufferSlice<'_>,
+  batch_json: String,
+) -> Result<Vec<JsExternalCallerDetection>> {
+  let request =
+    external_detection_batch_to_utf16_caller_request(&document, &batch_json)
+      .map_err(|error| Error::from_reason(error.to_string()))?;
+  Ok(
+    request
+      .detections
+      .into_iter()
+      .map(|detection| JsExternalCallerDetection {
+        start: detection.start,
+        end: detection.end,
+        label: detection.label,
+        score: detection.score,
+        provider_id: detection.provider_id,
+        detection_id: detection.detection_id,
+      })
+      .collect(),
+  )
+}
 
 #[napi]
 #[allow(clippy::needless_pass_by_value)]
