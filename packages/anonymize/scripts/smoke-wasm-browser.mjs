@@ -47,6 +47,7 @@ const packageRoot = dirname(here);
 const distDir = join(packageRoot, "wasm", "dist");
 
 const SAMPLE = "A contract was signed by Jan Novak at Praha on 1. 1. 2025.";
+const EXTERNAL_DETECTION_DOCUMENT = "😀Alice signed.";
 // Hard ceiling so a hung browser/worker cannot exceed the CI budget.
 const OVERALL_TIMEOUT_MS = 90_000;
 const EVAL_TIMEOUT_MS = 45_000;
@@ -149,7 +150,7 @@ const startServer = () =>
 
 /** Runs inside the isolated page: prove SAB is available, load the browser
  * entry, redact, and hand a compact result back to Node. */
-const runInPage = async (sample) => {
+const runInPage = async (sample, externalDetectionDocument) => {
   if (self.crossOriginIsolated !== true) {
     throw new Error("document is not cross-origin isolated");
   }
@@ -157,6 +158,57 @@ const runInPage = async (sample) => {
     throw new Error("SharedArrayBuffer is unavailable");
   }
   const module = await import("/wasm.mjs");
+  const externalDocument = new TextEncoder().encode(externalDetectionDocument);
+  const digest = Array.from(
+    new Uint8Array(await crypto.subtle.digest("SHA-256", externalDocument)),
+    (byte) => byte.toString(16).padStart(2, "0"),
+  ).join("");
+  const externalBatch = (offsetUnit, start, end) => ({
+    version: module.EXTERNAL_DETECTION_BATCH_VERSION,
+    document: { sha256: digest },
+    offsetUnit,
+    provider: {
+      id: "browser-fake-provider",
+      name: "Browser fake provider",
+      version: "1",
+    },
+    labelMap: [{ providerLabel: "PER", entityLabel: "person" }],
+    detections: [{ id: "person-1", start, end, label: "PER", score: 0.99 }],
+  });
+  const externalDetectionResults = [];
+  for (const [offsetUnit, start, end] of [
+    ["utf8-byte", 4, 9],
+    ["utf16-code-unit", 2, 7],
+    ["unicode-code-point", 1, 6],
+  ]) {
+    externalDetectionResults.push(
+      await module.convert_external_detection_batch(
+        externalDocument,
+        externalBatch(offsetUnit, start, end),
+      ),
+    );
+  }
+  const rejectionCases = [
+    externalBatch("utf8-byte", 1, 9),
+    externalBatch("utf16-code-unit", 1, 7),
+    {
+      ...externalBatch("unicode-code-point", 1, 6),
+      document: { sha256: "0".repeat(64) },
+    },
+    JSON.stringify({
+      ...externalBatch("unicode-code-point", 1, 6),
+      legacyOffsetGuessing: true,
+    }),
+  ];
+  const externalDetectionRejections = [];
+  for (const batch of rejectionCases) {
+    try {
+      await module.convert_external_detection_batch(externalDocument, batch);
+      externalDetectionRejections.push(false);
+    } catch {
+      externalDetectionRejections.push(true);
+    }
+  }
   const pipeline = await module.loadDefaultPipeline("en");
   const result = pipeline.redactText(sample);
   const session = pipeline.createRedactionSession("browser_archive_smoke_1");
@@ -179,6 +231,8 @@ const runInPage = async (sample) => {
     archiveByteLength: archive.byteLength,
     restoredSessionId: restoredSession.sessionId(),
     restoredMappingCount: restoredSession.mappingCount(),
+    externalDetectionResults,
+    externalDetectionRejections,
   };
 };
 
@@ -189,7 +243,35 @@ const validate = (result) => {
     archiveByteLength,
     restoredSessionId,
     restoredMappingCount,
+    externalDetectionResults,
+    externalDetectionRejections,
   } = result;
+  const expectedExternalDetection = [
+    {
+      start: 2,
+      end: 7,
+      label: "person",
+      score: 0.99,
+      providerId: "browser-fake-provider",
+      detectionId: "person-1",
+    },
+  ];
+  if (
+    externalDetectionResults.length !== 3 ||
+    externalDetectionResults.some(
+      (detections) =>
+        JSON.stringify(detections) !==
+        JSON.stringify(expectedExternalDetection),
+    )
+  ) {
+    throw new Error("browser external detection offset conversion diverged");
+  }
+  if (
+    externalDetectionRejections.length !== 4 ||
+    externalDetectionRejections.some((rejected) => !rejected)
+  ) {
+    throw new Error("browser external detection contract did not fail closed");
+  }
   if (!Array.isArray(entities) || entities.length === 0) {
     throw new Error("browser pipeline did not detect any entity");
   }
@@ -260,7 +342,7 @@ const main = async () => {
     await page.goto(origin, { waitUntil: "load", timeout: EVAL_TIMEOUT_MS });
     mark("page-loaded");
     const result = await withTimeout(
-      page.evaluate(runInPage, SAMPLE),
+      page.evaluate(runInPage, SAMPLE, EXTERNAL_DETECTION_DOCUMENT),
       EVAL_TIMEOUT_MS,
       "page redaction",
     );

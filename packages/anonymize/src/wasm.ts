@@ -23,10 +23,13 @@
 import {
   createNativeAnonymizerFromPackage,
   createNativePipelineFromPackage,
+  convert_external_detection_batch as convertExternalDetectionBatchWithBinding,
   diagnostics_json as diagnosticsJsonWithBinding,
   diagnostics_stream_json as diagnosticsStreamJsonWithBinding,
   type NativeAnonymizeBinding,
   type NativeDiagnosticsBatchCallback,
+  type ExternalDetectionBatch,
+  type NativeCallerDetection,
   type NativeOperatorConfig,
   type NativeResultEventCallback,
   type NativeSearchPackageInput,
@@ -170,7 +173,9 @@ const assetUrl = (fileName: string): URL =>
 const resolveBinding = (
   options?: WasmBindingOptions,
 ): Promise<NativeAnonymizeBinding> =>
-  options?.binding ? Promise.resolve(options.binding) : getBinding();
+  options?.binding
+    ? Promise.resolve(toNativeAnonymizeBinding(options.binding))
+    : getBinding();
 
 const toPackageBytes = async (
   source: PreparedPackageSource,
@@ -358,6 +363,17 @@ export const native_package_version = async (
 ): Promise<string> =>
   nativePackageVersionWithBinding(await resolveBinding(options));
 
+export const convert_external_detection_batch = async (
+  document: Uint8Array,
+  batch: ExternalDetectionBatch | string,
+  options?: WasmBindingOptions,
+): Promise<NativeCallerDetection[]> =>
+  convertExternalDetectionBatchWithBinding({
+    binding: await resolveBinding(options),
+    document,
+    batch,
+  });
+
 export const normalize_for_search = async (
   text: string,
   options?: WasmBindingOptions,
@@ -492,6 +508,9 @@ const isNativeAnonymizeBinding = (
     return false;
   }
   if (typeof value["normalizeForSearch"] !== "function") {
+    return false;
+  }
+  if (typeof value["convertExternalDetectionBatch"] !== "function") {
     return false;
   }
   if (typeof value["prepareStaticSearchPackageBytes"] !== "function") {

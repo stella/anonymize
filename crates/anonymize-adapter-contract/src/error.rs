@@ -5,6 +5,7 @@ pub type Result<T> = std::result::Result<T, ContractError>;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ContractError {
   InvalidCallerDetection { index: usize, reason: String },
+  InvalidExternalDetectionBatch { reason: String },
   CompactStringIndexOutOfRange { field: &'static str, index: u32 },
   FuzzyDistanceOutOfRange { distance: u32 },
   InvalidCompactStringGroups { field: &'static str, reason: String },
@@ -23,6 +24,9 @@ impl std::fmt::Display for ContractError {
     match self {
       Self::InvalidCallerDetection { index, reason } => {
         write!(formatter, "Caller detection {index} is invalid: {reason}")
+      }
+      Self::InvalidExternalDetectionBatch { reason } => {
+        write!(formatter, "External detection batch is invalid: {reason}")
       }
       Self::CompactStringIndexOutOfRange { field, index } => {
         write!(

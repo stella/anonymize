@@ -137,6 +137,22 @@ def redact_caller_detection(text: str) -> str:
     ).redaction.redacted_text
 
 
+def convert_external_detection(document: bytes) -> list[anonymize.CallerDetection]:
+    batch: anonymize.ExternalDetectionBatch = {
+        "version": 1,
+        "document": {"sha256": "0" * 64},
+        "offsetUnit": "unicode-code-point",
+        "provider": {
+            "id": "fake-provider",
+            "name": "Deterministic fake provider",
+            "version": "1.0.0",
+        },
+        "labelMap": [{"providerLabel": "PER", "entityLabel": "person"}],
+        "detections": [],
+    }
+    return anonymize.convert_external_detection_batch(document, batch)
+
+
 def package_version() -> str:
     return anonymize.__version__
 

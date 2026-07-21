@@ -10,6 +10,7 @@
  * Node (the loader relies on `node:wasi`): `node scripts/smoke-wasm.mjs`.
  */
 import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -21,11 +22,74 @@ const require = createRequire(import.meta.url);
 const wasiBindingPath = join(packageRoot, "native-wasm-dist", "index.wasi.cjs");
 const binding = require(wasiBindingPath);
 
-const { NativePreparedSearch, nativePackageVersion, normalizeForSearch } =
-  binding;
+const {
+  NativePreparedSearch,
+  convertExternalDetectionBatch,
+  nativePackageVersion,
+  normalizeForSearch,
+} = binding;
 
 if (typeof NativePreparedSearch !== "function") {
   throw new TypeError("wasm binding is missing NativePreparedSearch");
+}
+if (typeof convertExternalDetectionBatch !== "function") {
+  throw new TypeError("wasm binding is missing external detection conversion");
+}
+
+const externalDocument = new TextEncoder().encode("😀Alice signed.");
+const externalDigest = createHash("sha256")
+  .update(externalDocument)
+  .digest("hex");
+const externalBatch = (offsetUnit, start, end) => ({
+  version: 1,
+  document: { sha256: externalDigest },
+  offsetUnit,
+  provider: {
+    id: "wasm-fake-provider",
+    name: "WASM fake provider",
+    version: "1",
+  },
+  labelMap: [{ providerLabel: "PER", entityLabel: "person" }],
+  detections: [{ id: "person-1", start, end, label: "PER", score: 0.99 }],
+});
+for (const [offsetUnit, start, end] of [
+  ["utf8-byte", 4, 9],
+  ["utf16-code-unit", 2, 7],
+  ["unicode-code-point", 1, 6],
+]) {
+  const detections = convertExternalDetectionBatch(
+    externalDocument,
+    JSON.stringify(externalBatch(offsetUnit, start, end)),
+  );
+  if (
+    detections.length !== 1 ||
+    detections[0].start !== 2 ||
+    detections[0].end !== 7
+  ) {
+    throw new Error(`wasm external ${offsetUnit} conversion diverged`);
+  }
+}
+for (const batch of [
+  externalBatch("utf8-byte", 1, 9),
+  externalBatch("utf16-code-unit", 1, 7),
+  {
+    ...externalBatch("unicode-code-point", 1, 6),
+    document: { sha256: "0".repeat(64) },
+  },
+  JSON.stringify({
+    ...externalBatch("unicode-code-point", 1, 6),
+    legacyOffsetGuessing: true,
+  }),
+]) {
+  try {
+    convertExternalDetectionBatch(
+      externalDocument,
+      typeof batch === "string" ? batch : JSON.stringify(batch),
+    );
+  } catch {
+    continue;
+  }
+  throw new Error("wasm external detection contract did not fail closed");
 }
 
 const version = nativePackageVersion();

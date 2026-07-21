@@ -24,6 +24,7 @@ export const CAPABILITY_SURFACES = [
   { id: "text.diagnostics", profile: "core" },
   { id: "text.summary-diagnostics", profile: "core" },
   { id: "text.caller-detections", profile: "core" },
+  { id: "text.external-detection-batch", profile: "core" },
   { id: "text.operators", profile: "core" },
   { id: "package.default", profile: "core" },
   { id: "session.cross-document", profile: "core" },

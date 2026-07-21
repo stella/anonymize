@@ -17,6 +17,7 @@ from ._native import (
     assemble_static_search_compressed_package_bytes as assemble_static_search_compressed_package_bytes,
     assemble_static_search_config_json as assemble_static_search_config_json,
     assemble_static_search_package_bytes as assemble_static_search_package_bytes,
+    convert_external_detection_batch as _native_convert_external_detection_batch,
     prepare_static_search_artifacts_bytes as prepare_static_search_artifacts_bytes,
     prepare_static_search_compressed_package_bytes as prepare_static_search_compressed_package_bytes,
     prepare_static_search_package_bytes as prepare_static_search_package_bytes,
@@ -38,6 +39,7 @@ class MaskOperatorConfig(TypedDict):
 OperatorSelection: TypeAlias = Literal["replace", "redact", "keep"] | MaskOperatorConfig
 OperatorConfig: TypeAlias = Mapping[str, OperatorSelection] | str | None
 CALLER_DETECTION_CONTRACT_VERSION: int
+EXTERNAL_DETECTION_BATCH_VERSION: Literal[1]
 
 SessionStatus: TypeAlias = Literal["active", "not_yet_active", "expired", "deleted"]
 
@@ -59,6 +61,42 @@ class CallerDetection(TypedDict):
     score: float
     provider_id: str
     detection_id: str
+
+ExternalDetectionOffsetUnit: TypeAlias = Literal[
+    "utf8-byte", "utf16-code-unit", "unicode-code-point"
+]
+
+class ExternalDetectionProvider(TypedDict):
+    id: str
+    name: str
+    version: str
+
+class ExternalDetectionDocument(TypedDict):
+    sha256: str
+
+class ExternalDetectionLabelMapping(TypedDict):
+    providerLabel: str
+    entityLabel: str
+
+class ExternalDetection(TypedDict):
+    id: str
+    start: int
+    end: int
+    label: str
+    score: float
+
+class ExternalDetectionBatch(TypedDict):
+    version: Literal[1]
+    document: ExternalDetectionDocument
+    offsetUnit: ExternalDetectionOffsetUnit
+    provider: ExternalDetectionProvider
+    labelMap: Sequence[ExternalDetectionLabelMapping]
+    detections: Sequence[ExternalDetection]
+
+def convert_external_detection_batch(
+    document: BytesLike,
+    batch: ExternalDetectionBatch | str,
+) -> list[CallerDetection]: ...
 
 DiagnosticsBatchCallback: TypeAlias = Callable[[str], object]
 ResultEventCallback: TypeAlias = Callable[[str], object]

@@ -192,6 +192,40 @@ in them. Retained result entities preserve both IDs. Use
 retained counts. Diagnostic events include provenance, labels, offsets, and
 scores, but never matched text.
 
+For model and service integrations, use the portable
+`ExternalDetectionBatch` v1 exchange contract. It is provider-neutral and does
+not install or require GLiNER (or any other model runtime). The batch is bound
+to the exact UTF-8 document bytes by SHA-256, declares one closed offset unit,
+maps provider labels explicitly, and is converted by the Rust contract before
+entering the existing caller-detection pipeline:
+
+```ts
+import { createHash } from "node:crypto";
+import {
+  EXTERNAL_DETECTION_BATCH_VERSION,
+  convert_external_detection_batch,
+} from "@stll/anonymize";
+
+const document = new TextEncoder().encode("😀Alice signed.");
+const providerOutput = {
+  version: EXTERNAL_DETECTION_BATCH_VERSION,
+  document: { sha256: createHash("sha256").update(document).digest("hex") },
+  offsetUnit: "unicode-code-point",
+  provider: { id: "example.local", name: "Example detector", version: "1" },
+  labelMap: [{ providerLabel: "PER", entityLabel: "person" }],
+  detections: [{ id: "person-1", start: 1, end: 6, label: "PER", score: 0.99 }],
+} as const;
+const detections = convert_external_detection_batch(document, providerOutput);
+```
+
+The example provider output is deliberately synthetic. Real providers may run
+in-process, as a local sidecar, or behind an application-owned service. The
+converter rejects unknown fields and versions, digest mismatch, invalid Unicode
+boundaries, unmapped labels, duplicate provenance, and bounded-size violations;
+it never guesses an offset unit or label mapping. Keep IDs free of personal
+data. Pass the returned detections to `redactTextWithCallerDetections()` using
+the UTF-8-decoded document text.
+
 The config module may export a `PipelineConfig` directly or `{ config, gazetteerEntries }`. Include `@stll/anonymize-data` dictionaries there if your runtime config uses the deny-list or name-corpus layers; keep the corresponding layers enabled for caller-owned `customDenyList`, `customRegexes`, and gazetteers. Those inputs are part of the prepared package and should be regenerated when they change.
 
 ## Python SDK

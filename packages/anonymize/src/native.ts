@@ -244,6 +244,10 @@ export type NativePreparedSearchBinding = {
 };
 
 export type NativeAnonymizeBinding = {
+  convertExternalDetectionBatch: (
+    document: Uint8Array,
+    batchJson: string,
+  ) => NativeCallerDetection[];
   extractDocxTextJson?: (document: Uint8Array) => string;
   rewriteDocxTextNative?: (
     document: Uint8Array,
@@ -306,6 +310,35 @@ export type NativeOperatorConfig = {
 
 export const CALLER_DETECTION_CONTRACT_VERSION = 2;
 
+export const EXTERNAL_DETECTION_BATCH_VERSION = 1 as const;
+
+export const EXTERNAL_DETECTION_OFFSET_UNITS = {
+  unicodeCodePoint: "unicode-code-point",
+  utf16CodeUnit: "utf16-code-unit",
+  utf8Byte: "utf8-byte",
+} as const;
+
+export type ExternalDetectionOffsetUnit =
+  (typeof EXTERNAL_DETECTION_OFFSET_UNITS)[keyof typeof EXTERNAL_DETECTION_OFFSET_UNITS];
+
+export type ExternalDetectionBatch = {
+  version: typeof EXTERNAL_DETECTION_BATCH_VERSION;
+  document: { sha256: string };
+  offsetUnit: ExternalDetectionOffsetUnit;
+  provider: { id: string; name: string; version: string };
+  labelMap: readonly {
+    providerLabel: string;
+    entityLabel: string;
+  }[];
+  detections: readonly {
+    id: string;
+    start: number;
+    end: number;
+    label: string;
+    score: number;
+  }[];
+};
+
 export type NativeCallerDetection = {
   start: number;
   end: number;
@@ -313,6 +346,23 @@ export type NativeCallerDetection = {
   score: number;
   providerId: string;
   detectionId: string;
+};
+
+export type ConvertExternalDetectionBatchOptions = {
+  binding: NativeAnonymizeBinding;
+  document: Uint8Array;
+  batch: ExternalDetectionBatch | string;
+};
+
+export const convert_external_detection_batch = ({
+  binding,
+  document,
+  batch,
+}: ConvertExternalDetectionBatchOptions): NativeCallerDetection[] => {
+  return binding.convertExternalDetectionBatch(
+    document,
+    typeof batch === "string" ? batch : JSON.stringify(batch),
+  );
 };
 
 export type NativeCallerRedactionOptions = {

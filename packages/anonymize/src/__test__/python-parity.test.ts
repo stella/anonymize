@@ -35,6 +35,7 @@ import { join } from "node:path";
 import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 
 import {
+  convert_external_detection_batch,
   getDefaultNativePipeline,
   loadNativeAnonymizeBinding,
   redact_default_text_json,
@@ -76,6 +77,19 @@ const DOCX_RUNTIME_PARITY_FIXTURE = JSON.parse(
     [key: string]: unknown;
   }[];
 }; // SAFETY: This committed test fixture is owned and reviewed with the parity test schema.
+const EXTERNAL_DETECTION_FIXTURE = JSON.parse(
+  readFileSync(
+    join(
+      ROOT_DIR,
+      "crates",
+      "anonymize-adapter-contract",
+      "tests",
+      "fixtures",
+      "external-detection-batch-v1.json",
+    ),
+    "utf8",
+  ),
+) as import("../native").ExternalDetectionBatch; // SAFETY: Rust validates this committed public contract fixture before use.
 const CONTRACT_FIXTURE_LANGUAGES = ["cs", "de", "en"] as const;
 
 type FixtureLanguage = (typeof CONTRACT_FIXTURE_LANGUAGES)[number];
@@ -106,6 +120,14 @@ type PythonParityOutput = {
     mask_map_count: number;
     mask_operator: string;
   };
+  external_detection_results: {
+    start: number;
+    end: number;
+    label: string;
+    score: number;
+    provider_id: string;
+    detection_id: string;
+  }[][];
   session_result: {
     session_id: string;
     mapping_count: number;
@@ -196,6 +218,9 @@ surface_probes = {
     "text.caller-detections": hasattr(
         prepared_anonymizer, "redact_text_with_caller_detections"
     ),
+    "text.external-detection-batch": hasattr(
+        anonymize, "convert_external_detection_batch"
+    ),
     "text.operators": hasattr(prepared_anonymizer, "redact_text"),
     "package.default": hasattr(anonymize, "get_default_native_pipeline"),
     "session.cross-document": hasattr(
@@ -223,6 +248,21 @@ caller_result = json.loads(
           "provider_id": "parity-provider", "detection_id": "person-1"}],
     )
 )
+external_detection_results = []
+for offset_unit, start, end in [
+    ("utf8-byte", 4, 9),
+    ("utf16-code-unit", 2, 7),
+    ("unicode-code-point", 1, 6),
+]:
+    batch = json.loads(json.dumps(payload["external_detection_batch"]))
+    batch["offsetUnit"] = offset_unit
+    batch["detections"][0]["start"] = start
+    batch["detections"][0]["end"] = end
+    external_detection_results.append(
+        anonymize.convert_external_detection_batch(
+            "😀Alice signed.".encode("utf-8"), batch
+        )
+    )
 caller_diagnostics = json.loads(
     anonymize.get_default_native_pipeline(language="en").redact_text_with_caller_detections_diagnostics_json(
         "😀Alice signed.",
@@ -563,6 +603,7 @@ print(
                 "mask_map_count": len(caller_mask_result["redaction"]["redaction_map"]),
                 "mask_operator": caller_mask_result["redaction"]["operator_map"][0]["operator"],
             },
+            "external_detection_results": external_detection_results,
             "session_result": {
                 "session_id": restored_session.session_id(),
                 "mapping_count": session.mapping_count(),
@@ -747,6 +788,7 @@ const runPythonParity = (cases: ParityCase[]): PythonParityOutput => {
     JSON.stringify({
       cases: cases.map(({ text, language }) => ({ text, language })),
       docx_vectors: DOCX_RUNTIME_PARITY_FIXTURE,
+      external_detection_batch: EXTERNAL_DETECTION_FIXTURE,
     }),
   );
   try {
@@ -866,6 +908,42 @@ describe("python binding parity", () => {
       mask_operator: "mask",
     });
   });
+
+  pythonParityTest(
+    "external detection batches share validation and host offset semantics",
+    () => {
+      const binding = loadNativeAnonymizeBinding();
+      const node = convert_external_detection_batch(
+        new TextEncoder().encode("😀Alice signed."),
+        EXTERNAL_DETECTION_FIXTURE,
+        { binding },
+      );
+      const python = runPythonParity([]).external_detection_results;
+
+      expect(node).toEqual([
+        {
+          start: 2,
+          end: 7,
+          label: "person",
+          score: 0.99,
+          providerId: "example.local",
+          detectionId: "person-1",
+        },
+      ]);
+      expect(python).toEqual(
+        Array.from({ length: 3 }, () => [
+          {
+            start: 1,
+            end: 6,
+            label: "person",
+            score: 0.99,
+            provider_id: "example.local",
+            detection_id: "person-1",
+          },
+        ]),
+      );
+    },
+  );
 
   pythonParityTest("python sessions preserve mappings across transfer", () => {
     const python = runPythonParity([]);

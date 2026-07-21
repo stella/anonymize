@@ -50,6 +50,7 @@ const coreSurface = {
 const nodeSurface = {
   ...coreSurface,
   "package.load-file": nativeNode.load_prepared_package_file,
+  "text.external-detection-batch": nativeNode.convert_external_detection_batch,
   "session.cross-document": prototypeMethod(
     preparedPrototype,
     "createRedactionSession",
@@ -80,6 +81,7 @@ const wasmSurface = {
     wasm.PreparedNativeAnonymizer?.prototype,
     "redact_text_with_caller_detections",
   ),
+  "text.external-detection-batch": wasm.convert_external_detection_batch,
   "text.operators": prototypeMethod(
     wasm.PreparedNativeAnonymizer?.prototype,
     "redact_text",
