@@ -10,14 +10,40 @@ use crate::caller::{
   CALLER_DETECTION_CONTRACT_VERSION, caller_detections_from_binding,
 };
 use crate::error::{ContractError, Result};
-use crate::offsets::{CharacterOffsetMap, Utf16OffsetMap};
 
 pub const EXTERNAL_DETECTION_BATCH_VERSION: u32 = 1;
 pub const EXTERNAL_DETECTION_BATCH_MAX_BYTES: usize = 16 * 1024 * 1024;
 pub const EXTERNAL_DETECTION_DOCUMENT_MAX_BYTES: usize = 64 * 1024 * 1024;
 pub const EXTERNAL_DETECTION_MAX_DETECTIONS: usize = 100_000;
-const EXTERNAL_DETECTION_MAX_LABEL_MAPPINGS: usize = 4_096;
-const EXTERNAL_DETECTION_MAX_METADATA_BYTES: usize = 256;
+pub const EXTERNAL_DETECTION_MAX_LABEL_MAPPINGS: usize = 4_096;
+pub const EXTERNAL_DETECTION_MAX_METADATA_BYTES: usize = 256;
+pub const EXTERNAL_DETECTION_PROVIDER_ID_MAX_BYTES: usize = 128;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalDetectionLimits {
+  pub batch_max_bytes: usize,
+  pub document_max_bytes: usize,
+  pub max_detections: usize,
+  pub max_label_mappings: usize,
+  pub max_metadata_bytes: usize,
+  pub provider_id_max_bytes: usize,
+}
+
+pub const EXTERNAL_DETECTION_LIMITS: ExternalDetectionLimits =
+  ExternalDetectionLimits {
+    batch_max_bytes: EXTERNAL_DETECTION_BATCH_MAX_BYTES,
+    document_max_bytes: EXTERNAL_DETECTION_DOCUMENT_MAX_BYTES,
+    max_detections: EXTERNAL_DETECTION_MAX_DETECTIONS,
+    max_label_mappings: EXTERNAL_DETECTION_MAX_LABEL_MAPPINGS,
+    max_metadata_bytes: EXTERNAL_DETECTION_MAX_METADATA_BYTES,
+    provider_id_max_bytes: EXTERNAL_DETECTION_PROVIDER_ID_MAX_BYTES,
+  };
+
+pub fn external_detection_limits_json() -> Result<String> {
+  serde_json::to_string(&EXTERNAL_DETECTION_LIMITS)
+    .map_err(|error| invalid(format!("limits: {error}")))
+}
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -75,6 +101,18 @@ pub fn external_detection_batch_to_caller_request(
   document_bytes: &[u8],
   batch_json: &str,
 ) -> Result<BindingCallerDetectionRequest> {
+  convert_external_detection_batch(
+    document_bytes,
+    batch_json,
+    ExternalDetectionOffsetUnit::Utf8Byte,
+  )
+}
+
+fn convert_external_detection_batch(
+  document_bytes: &[u8],
+  batch_json: &str,
+  output_unit: ExternalDetectionOffsetUnit,
+) -> Result<BindingCallerDetectionRequest> {
   if document_bytes.len() > EXTERNAL_DETECTION_DOCUMENT_MAX_BYTES {
     return Err(invalid("document exceeds byte limit"));
   }
@@ -93,18 +131,26 @@ pub fn external_detection_batch_to_caller_request(
   }
   validate_batch_metadata(document_bytes, &batch)?;
   let label_map = label_map_from(batch.label_map)?;
-  let detections = convert_detections(
+  let (detections, coordinate_spans) = convert_detections(
     full_text,
     batch.offset_unit,
     &batch.provider.id,
     &label_map,
-    batch.detections,
+    &batch.detections,
   )?;
-  let request = BindingCallerDetectionRequest {
+  let mut request = BindingCallerDetectionRequest {
     version: CALLER_DETECTION_CONTRACT_VERSION,
     detections,
   };
   caller_detections_from_binding(request.clone())?;
+  if output_unit != ExternalDetectionOffsetUnit::Utf8Byte {
+    for (detection, (start, end)) in
+      request.detections.iter_mut().zip(coordinate_spans)
+    {
+      detection.start = start.get(output_unit);
+      detection.end = end.get(output_unit);
+    }
+  }
   Ok(request)
 }
 
@@ -163,23 +209,18 @@ fn convert_detections(
   offset_unit: ExternalDetectionOffsetUnit,
   provider_id: &str,
   label_map: &BTreeMap<String, String>,
-  external_detections: Vec<ExternalDetection>,
-) -> Result<Vec<BindingCallerDetection>> {
-  let utf16_offsets = match offset_unit {
-    ExternalDetectionOffsetUnit::Utf16CodeUnit => {
-      Some(Utf16OffsetMap::new(full_text)?)
-    }
-    _ => None,
-  };
-  let character_offsets = match offset_unit {
-    ExternalDetectionOffsetUnit::UnicodeCodePoint => {
-      Some(CharacterOffsetMap::new(full_text)?)
-    }
-    _ => None,
-  };
+  external_detections: &[ExternalDetection],
+) -> Result<ConvertedDetections> {
+  let requested_offsets = external_detections
+    .iter()
+    .flat_map(|detection| [detection.start, detection.end])
+    .collect::<Vec<_>>();
+  let coordinates =
+    resolve_requested_boundaries(full_text, &requested_offsets, offset_unit)?;
   let mut provenance = BTreeSet::new();
   let mut detections = Vec::with_capacity(external_detections.len());
-  for (index, detection) in external_detections.into_iter().enumerate() {
+  let mut coordinate_spans = Vec::with_capacity(external_detections.len());
+  for (index, detection) in external_detections.iter().enumerate() {
     if !provenance.insert(detection.id.clone()) {
       return Err(invalid(format!(
         "detections[{index}].id duplicates provider provenance"
@@ -188,26 +229,19 @@ fn convert_detections(
     let label = label_map.get(&detection.label).cloned().ok_or_else(|| {
       invalid(format!("detections[{index}].label has no labelMap entry"))
     })?;
-    let (start, end) = convert_offsets(
-      offset_unit,
-      detection.start,
-      detection.end,
-      utf16_offsets.as_ref(),
-      character_offsets.as_ref(),
-      index,
-    )?;
+    let start_coordinates =
+      coordinates.get(&detection.start).copied().ok_or_else(|| {
+        invalid(format!("detections[{index}].start could not be converted"))
+      })?;
+    let end_coordinates =
+      coordinates.get(&detection.end).copied().ok_or_else(|| {
+        invalid(format!("detections[{index}].end could not be converted"))
+      })?;
+    let start = start_coordinates.utf8_byte;
+    let end = end_coordinates.utf8_byte;
     if start >= end {
       return Err(invalid(format!(
         "detections[{index}] span start must be less than end"
-      )));
-    }
-    let start_usize = usize::try_from(start)
-      .map_err(|_| invalid(format!("detections[{index}] start is invalid")))?;
-    let end_usize = usize::try_from(end)
-      .map_err(|_| invalid(format!("detections[{index}] end is invalid")))?;
-    if full_text.get(start_usize..end_usize).is_none() {
-      return Err(invalid(format!(
-        "detections[{index}] span is outside the document or not on UTF-8 boundaries"
       )));
     }
     detections.push(BindingCallerDetection {
@@ -216,10 +250,11 @@ fn convert_detections(
       label,
       score: detection.score,
       provider_id: provider_id.to_owned(),
-      detection_id: detection.id,
+      detection_id: detection.id.clone(),
     });
+    coordinate_spans.push((start_coordinates, end_coordinates));
   }
-  Ok(detections)
+  Ok((detections, coordinate_spans))
 }
 
 pub fn external_detection_batch_to_caller_request_json(
@@ -238,12 +273,11 @@ pub fn external_detection_batch_to_utf16_caller_request(
   document_bytes: &[u8],
   batch_json: &str,
 ) -> Result<BindingCallerDetectionRequest> {
-  let full_text = document_text(document_bytes)?;
-  let mut request =
-    external_detection_batch_to_caller_request(document_bytes, batch_json)?;
-  let offsets = Utf16OffsetMap::new(full_text)?;
-  convert_request_offsets(&mut request, |offset| offsets.convert(offset))?;
-  Ok(request)
+  convert_external_detection_batch(
+    document_bytes,
+    batch_json,
+    ExternalDetectionOffsetUnit::Utf16CodeUnit,
+  )
 }
 
 /// Converts a portable batch into Unicode code-point offsets, which are the
@@ -263,32 +297,11 @@ pub fn external_detection_batch_to_character_caller_request(
   document_bytes: &[u8],
   batch_json: &str,
 ) -> Result<BindingCallerDetectionRequest> {
-  let full_text = document_text(document_bytes)?;
-  let mut request =
-    external_detection_batch_to_caller_request(document_bytes, batch_json)?;
-  let offsets = CharacterOffsetMap::new(full_text)?;
-  convert_request_offsets(&mut request, |offset| offsets.convert(offset))?;
-  Ok(request)
-}
-
-fn convert_request_offsets(
-  request: &mut BindingCallerDetectionRequest,
-  convert: impl Fn(u32) -> Result<u32>,
-) -> Result<()> {
-  for (index, detection) in request.detections.iter_mut().enumerate() {
-    detection.start = convert(detection.start).map_err(|error| {
-      invalid(format!("converted detections[{index}].start: {error}"))
-    })?;
-    detection.end = convert(detection.end).map_err(|error| {
-      invalid(format!("converted detections[{index}].end: {error}"))
-    })?;
-  }
-  Ok(())
-}
-
-fn document_text(document_bytes: &[u8]) -> Result<&str> {
-  std::str::from_utf8(document_bytes)
-    .map_err(|_| invalid("document is not valid UTF-8"))
+  convert_external_detection_batch(
+    document_bytes,
+    batch_json,
+    ExternalDetectionOffsetUnit::UnicodeCodePoint,
+  )
 }
 
 fn serialize_request(
@@ -298,28 +311,107 @@ fn serialize_request(
     .map_err(|error| invalid(format!("converted request: {error}")))
 }
 
-fn convert_offsets(
-  unit: ExternalDetectionOffsetUnit,
-  start: u32,
-  end: u32,
-  utf16_offsets: Option<&Utf16OffsetMap>,
-  character_offsets: Option<&CharacterOffsetMap>,
-  index: usize,
-) -> Result<(u32, u32)> {
-  let convert = |offset| match unit {
-    ExternalDetectionOffsetUnit::Utf8Byte => Ok(offset),
-    ExternalDetectionOffsetUnit::Utf16CodeUnit => utf16_offsets
-      .ok_or_else(|| invalid("UTF-16 offset map is unavailable"))?
-      .byte_offset(offset),
-    ExternalDetectionOffsetUnit::UnicodeCodePoint => character_offsets
-      .ok_or_else(|| invalid("character offset map is unavailable"))?
-      .byte_offset(offset),
-  };
-  let start = convert(start)
-    .map_err(|error| invalid(format!("detections[{index}].start: {error}")))?;
-  let end = convert(end)
-    .map_err(|error| invalid(format!("detections[{index}].end: {error}")))?;
-  Ok((start, end))
+#[derive(Clone, Copy, Default)]
+struct BoundaryOffsets {
+  utf8_byte: u32,
+  utf16_code_unit: u32,
+  unicode_code_point: u32,
+}
+
+type ConvertedDetections = (
+  Vec<BindingCallerDetection>,
+  Vec<(BoundaryOffsets, BoundaryOffsets)>,
+);
+
+impl BoundaryOffsets {
+  const fn get(self, unit: ExternalDetectionOffsetUnit) -> u32 {
+    match unit {
+      ExternalDetectionOffsetUnit::Utf8Byte => self.utf8_byte,
+      ExternalDetectionOffsetUnit::Utf16CodeUnit => self.utf16_code_unit,
+      ExternalDetectionOffsetUnit::UnicodeCodePoint => self.unicode_code_point,
+    }
+  }
+}
+
+fn resolve_requested_boundaries(
+  full_text: &str,
+  requested_offsets: &[u32],
+  input_unit: ExternalDetectionOffsetUnit,
+) -> Result<BTreeMap<u32, BoundaryOffsets>> {
+  if requested_offsets.is_empty() {
+    return Ok(BTreeMap::new());
+  }
+  let mut requested = requested_offsets.to_vec();
+  requested.sort_unstable();
+  requested.dedup();
+  let mut resolved = BTreeMap::new();
+  let mut requested_index = 0_usize;
+  record_requested_boundary(
+    &requested,
+    &mut requested_index,
+    &mut resolved,
+    BoundaryOffsets::default(),
+    input_unit,
+  )?;
+
+  let mut boundary = BoundaryOffsets::default();
+  for (byte_start, character) in full_text.char_indices() {
+    if requested_index == requested.len() {
+      break;
+    }
+    boundary = BoundaryOffsets {
+      utf8_byte: u32::try_from(
+        byte_start
+          .checked_add(character.len_utf8())
+          .ok_or_else(|| invalid("document byte offset exceeds usize range"))?,
+      )
+      .map_err(|_| invalid("document byte offset exceeds u32 range"))?,
+      utf16_code_unit: boundary
+        .utf16_code_unit
+        .checked_add(if character.len_utf16() == 1 { 1 } else { 2 })
+        .ok_or_else(|| invalid("UTF-16 offset exceeds u32 range"))?,
+      unicode_code_point: boundary
+        .unicode_code_point
+        .checked_add(1)
+        .ok_or_else(|| invalid("character offset exceeds u32 range"))?,
+    };
+    record_requested_boundary(
+      &requested,
+      &mut requested_index,
+      &mut resolved,
+      boundary,
+      input_unit,
+    )?;
+  }
+  if requested_index != requested.len() {
+    return Err(invalid(
+      "offset is outside the document or not on a boundary",
+    ));
+  }
+  Ok(resolved)
+}
+
+fn record_requested_boundary(
+  requested: &[u32],
+  requested_index: &mut usize,
+  resolved: &mut BTreeMap<u32, BoundaryOffsets>,
+  boundary: BoundaryOffsets,
+  input_unit: ExternalDetectionOffsetUnit,
+) -> Result<()> {
+  let input_offset = boundary.get(input_unit);
+  while requested.get(*requested_index).copied() == Some(input_offset) {
+    resolved.insert(input_offset, boundary);
+    *requested_index = requested_index
+      .checked_add(1)
+      .ok_or_else(|| invalid("requested offset index exceeds usize range"))?;
+  }
+  if requested
+    .get(*requested_index)
+    .is_some_and(|requested_offset| *requested_offset < input_offset)
+  {
+    return Err(invalid("offset is not on a valid text boundary"));
+  }
+  Ok(())
 }
 
 fn validate_digest(document_bytes: &[u8], expected: &str) -> Result<()> {
@@ -371,7 +463,8 @@ fn validate_metadata(
 }
 
 fn validate_provider_id(value: &str) -> Result<()> {
-  if value.is_empty() || value.len() > 128 {
+  if value.is_empty() || value.len() > EXTERNAL_DETECTION_PROVIDER_ID_MAX_BYTES
+  {
     return Err(invalid("provider.id has an invalid length"));
   }
   let mut bytes = value.bytes();
@@ -397,13 +490,20 @@ fn invalid(reason: impl Into<String>) -> ContractError {
 mod tests {
   #![allow(clippy::indexing_slicing, clippy::unwrap_used)]
 
+  use std::fmt::Write as _;
+
   use serde_json::{Value, json};
+  use sha2::{Digest, Sha256};
 
   use super::{
-    EXTERNAL_DETECTION_BATCH_MAX_BYTES, ExternalDetectionOffsetUnit,
+    EXTERNAL_DETECTION_BATCH_MAX_BYTES, EXTERNAL_DETECTION_DOCUMENT_MAX_BYTES,
+    EXTERNAL_DETECTION_MAX_DETECTIONS, EXTERNAL_DETECTION_MAX_LABEL_MAPPINGS,
+    EXTERNAL_DETECTION_MAX_METADATA_BYTES, ExternalDetectionOffsetUnit,
     external_detection_batch_to_caller_request,
+    external_detection_batch_to_character_caller_request,
     external_detection_batch_to_character_caller_request_json,
     external_detection_batch_to_utf16_caller_request,
+    resolve_requested_boundaries,
   };
 
   const DOCUMENT: &[u8] = "😀Alice signed.".as_bytes();
@@ -419,6 +519,14 @@ mod tests {
     assert_eq!(request.detections[0].end, 9);
     assert_eq!(request.detections[0].label, "person");
     assert_eq!(request.detections[0].provider_id, "example.local");
+  }
+
+  #[test]
+  fn public_limits_serialize_for_binding_parity() {
+    assert_eq!(
+      super::external_detection_limits_json().unwrap(),
+      r#"{"batchMaxBytes":16777216,"documentMaxBytes":67108864,"maxDetections":100000,"maxLabelMappings":4096,"maxMetadataBytes":256,"providerIdMaxBytes":128}"#
+    );
   }
 
   #[test]
@@ -439,12 +547,49 @@ mod tests {
   }
 
   #[test]
+  fn every_source_offset_unit_converts_the_same_span_across_hosts() {
+    let cases = [
+      (ExternalDetectionOffsetUnit::Utf8Byte, 4_u32, 9_u32),
+      (ExternalDetectionOffsetUnit::Utf16CodeUnit, 2, 7),
+      (ExternalDetectionOffsetUnit::UnicodeCodePoint, 1, 6),
+    ];
+    for (unit, start, end) in cases {
+      let batch = mutate(|batch| {
+        batch["offsetUnit"] = serde_json::to_value(unit).unwrap();
+        batch["detections"][0]["start"] = json!(start);
+        batch["detections"][0]["end"] = json!(end);
+      });
+      let batch_json = serde_json::to_string(&batch).unwrap();
+      let core =
+        external_detection_batch_to_caller_request(DOCUMENT, &batch_json)
+          .unwrap();
+      let node =
+        external_detection_batch_to_utf16_caller_request(DOCUMENT, &batch_json)
+          .unwrap();
+      let python = external_detection_batch_to_character_caller_request(
+        DOCUMENT,
+        &batch_json,
+      )
+      .unwrap();
+
+      assert_eq!((core.detections[0].start, core.detections[0].end), (4, 9));
+      assert_eq!((node.detections[0].start, node.detections[0].end), (2, 7));
+      assert_eq!(
+        (python.detections[0].start, python.detections[0].end),
+        (1, 6)
+      );
+    }
+  }
+
+  #[test]
   fn contract_rejects_stale_unknown_and_duplicate_inputs() {
     let cases = [
       mutate(|batch| batch["version"] = json!(2)),
       mutate(|batch| batch["document"]["sha256"] = json!("0".repeat(64))),
       mutate(|batch| batch["unknown"] = json!(true)),
+      mutate(|batch| batch["document"]["unknown"] = json!(true)),
       mutate(|batch| batch["provider"]["unknown"] = json!(true)),
+      mutate(|batch| batch["labelMap"][0]["unknown"] = json!(true)),
       mutate(|batch| batch["detections"][0]["unknown"] = json!(true)),
       mutate(|batch| {
         batch["provider"]["id"] = json!("invalid provider");
@@ -455,6 +600,12 @@ mod tests {
         batch["detections"].as_array_mut().unwrap().push(duplicate);
       }),
       mutate(|batch| batch["detections"][0]["label"] = json!("UNKNOWN")),
+      mutate(|batch| batch["detections"][0]["score"] = json!(1.01)),
+      mutate(|batch| batch["detections"][0]["id"] = json!("invalid id")),
+      mutate(|batch| {
+        let duplicate = batch["labelMap"][0].clone();
+        batch["labelMap"].as_array_mut().unwrap().push(duplicate);
+      }),
     ];
     for batch in cases {
       assert!(
@@ -474,6 +625,158 @@ mod tests {
     assert!(
       external_detection_batch_to_caller_request(DOCUMENT, &oversized).is_err()
     );
+  }
+
+  #[test]
+  fn contract_rejects_document_and_collection_limits() {
+    let oversized_document =
+      vec![b'a'; EXTERNAL_DETECTION_DOCUMENT_MAX_BYTES.saturating_add(1)];
+    assert!(
+      external_detection_batch_to_caller_request(&oversized_document, FIXTURE)
+        .unwrap_err()
+        .to_string()
+        .contains("document exceeds byte limit")
+    );
+
+    let too_many_detections = mutate(|batch| {
+      batch["detections"] = Value::Array(
+        (0..=EXTERNAL_DETECTION_MAX_DETECTIONS)
+          .map(|_| json!({"id":"x","start":1,"end":2,"label":"PER","score":1}))
+          .collect(),
+      );
+    });
+    assert_error_contains(
+      DOCUMENT,
+      &too_many_detections,
+      "detections exceeds entry limit",
+    );
+
+    let too_many_mappings = mutate(|batch| {
+      batch["labelMap"] = Value::Array(
+        (0..=EXTERNAL_DETECTION_MAX_LABEL_MAPPINGS)
+          .map(|index| {
+            json!({"providerLabel":format!("P{index}"),"entityLabel":"person"})
+          })
+          .collect(),
+      );
+      batch["detections"] = json!([]);
+    });
+    assert_error_contains(
+      DOCUMENT,
+      &too_many_mappings,
+      "labelMap exceeds entry limit",
+    );
+  }
+
+  #[test]
+  fn contract_rejects_metadata_digest_utf8_and_missing_fields() {
+    let cases = [
+      (
+        mutate(|batch| {
+          batch["provider"]["name"] =
+            json!("x".repeat(EXTERNAL_DETECTION_MAX_METADATA_BYTES + 1));
+        }),
+        "provider.name",
+      ),
+      (
+        mutate(|batch| {
+          batch["provider"]["version"] = json!("   ");
+        }),
+        "provider.version",
+      ),
+      (
+        mutate(|batch| {
+          batch["labelMap"][0]["providerLabel"] = json!("");
+        }),
+        "labelMap.providerLabel",
+      ),
+      (
+        mutate(|batch| {
+          batch["labelMap"][0]["entityLabel"] = json!(" ");
+        }),
+        "labelMap.entityLabel",
+      ),
+      (
+        mutate(|batch| batch["document"]["sha256"] = json!("A".repeat(64))),
+        "64 lowercase hexadecimal",
+      ),
+      (
+        mutate(|batch| {
+          batch.as_object_mut().unwrap().remove("offsetUnit");
+        }),
+        "missing field",
+      ),
+    ];
+    for (batch, expected) in cases {
+      assert_error_contains(DOCUMENT, &batch, expected);
+    }
+
+    let invalid_utf8 = [0xff_u8];
+    assert!(
+      external_detection_batch_to_caller_request(&invalid_utf8, FIXTURE)
+        .unwrap_err()
+        .to_string()
+        .contains("document is not valid UTF-8")
+    );
+  }
+
+  #[test]
+  fn empty_large_multibyte_documents_need_no_boundary_storage() {
+    let document = "é".repeat(1_000_000);
+    let batch = batch_for_document(document.as_bytes(), |batch| {
+      batch["detections"] = json!([]);
+    });
+    let batch_json = serde_json::to_string(&batch).unwrap();
+    assert!(
+      external_detection_batch_to_caller_request(
+        document.as_bytes(),
+        &batch_json
+      )
+      .unwrap()
+      .detections
+      .is_empty()
+    );
+    assert!(
+      external_detection_batch_to_utf16_caller_request(
+        document.as_bytes(),
+        &batch_json
+      )
+      .unwrap()
+      .detections
+      .is_empty()
+    );
+    assert!(
+      external_detection_batch_to_character_caller_request(
+        document.as_bytes(),
+        &batch_json
+      )
+      .unwrap()
+      .detections
+      .is_empty()
+    );
+    assert!(
+      resolve_requested_boundaries(
+        &document,
+        &[],
+        ExternalDetectionOffsetUnit::UnicodeCodePoint
+      )
+      .unwrap()
+      .is_empty()
+    );
+  }
+
+  #[test]
+  fn sparse_resolution_stores_only_requested_multibyte_boundaries() {
+    let document = format!("{}Z", "é".repeat(1_000_000));
+    let resolved = resolve_requested_boundaries(
+      &document,
+      &[0, 1_000_000, 1_000_001],
+      ExternalDetectionOffsetUnit::UnicodeCodePoint,
+    )
+    .unwrap();
+    assert_eq!(resolved.len(), 3);
+    assert_eq!(resolved[&1_000_000].utf8_byte, 2_000_000);
+    assert_eq!(resolved[&1_000_001].utf8_byte, 2_000_001);
   }
 
   #[test]
@@ -497,6 +800,36 @@ mod tests {
         .is_err()
       );
     }
+  }
+
+  fn assert_error_contains(document: &[u8], batch: &Value, expected: &str) {
+    let error = external_detection_batch_to_caller_request(
+      document,
+      &serde_json::to_string(&batch).unwrap(),
+    )
+    .unwrap_err();
+    assert!(
+      error.to_string().contains(expected),
+      "expected {expected:?} in {error}"
+    );
+  }
+
+  fn batch_for_document(
+    document: &[u8],
+    update: impl FnOnce(&mut Value),
+  ) -> Value {
+    let digest = Sha256::digest(document);
+    let sha256 =
+      digest
+        .iter()
+        .fold(String::with_capacity(64), |mut output, byte| {
+          write!(output, "{byte:02x}").unwrap();
+          output
+        });
+    mutate(|batch| {
+      batch["document"]["sha256"] = json!(sha256);
+      update(batch);
+    })
   }
 
   fn mutate(update: impl FnOnce(&mut Value)) -> Value {
