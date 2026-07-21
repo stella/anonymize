@@ -52,6 +52,8 @@ bun run bench:suite
 bun run bench:dev-gap
 # Explicitly opt in to printing public-corpus entity examples locally:
 bun run bench:dev-gap --examples
+# Restrict local examples to one TAB entity type (for example, organizations):
+bun run bench:dev-gap --examples=ORG
 ```
 
 `bench:blind` verifies the upstream file against a pinned SHA-256 digest before

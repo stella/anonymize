@@ -8,7 +8,19 @@ import type { GroundTruthDocument } from "./ground-truth";
 
 const SAMPLE_SIZE = 5;
 const SAMPLE_SEED = "stella-tab-development-gap-v1";
-const includeExamples = process.argv.slice(2).includes("--examples");
+const exampleArgument = process.argv
+  .slice(2)
+  .find(
+    (argument) =>
+      argument === "--examples" || argument.startsWith("--examples="),
+  );
+const includeExamples = exampleArgument !== undefined;
+const exampleEntityType = exampleArgument?.startsWith("--examples=")
+  ? exampleArgument.slice("--examples=".length).trim().toUpperCase()
+  : undefined;
+if (exampleEntityType === "") {
+  throw new Error("--examples=<entity-type> requires a non-empty entity type");
+}
 if (includeExamples) {
   process.stderr.write(
     "WARNING: --examples prints entity text from public legal documents; keep this local and do not paste it into CI logs.\n",
@@ -86,6 +98,8 @@ for (const document of corpus) {
       rows.set(mention.entityType, row);
       if (
         includeExamples &&
+        (exampleEntityType === undefined ||
+          mention.entityType === exampleEntityType) &&
         !stellaCovered &&
         presidioCovered &&
         examples.length < 20
@@ -106,6 +120,9 @@ for (const [entityType, row] of [...rows].sort(
   console.log(`${entityType}\t${row.total}\t${row.stella}\t${row.presidio}`);
 }
 if (includeExamples) {
-  console.log("\nPresidio-covered, stella-missed development examples:");
+  const scope = exampleEntityType === undefined ? "" : ` ${exampleEntityType}`;
+  console.log(
+    `\nPresidio-covered, stella-missed${scope} development examples:`,
+  );
   console.log(examples.join("\n"));
 }
