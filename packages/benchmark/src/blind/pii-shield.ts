@@ -14,47 +14,47 @@ const SCAN_TIMEOUT_MS = 5 * 60 * 1000;
 const MACOS_NATIVE_TEARDOWN_EXIT = 134;
 const MACOS_NATIVE_TEARDOWN_ERROR = "mutex lock failed: Invalid argument";
 
-type ShieldEntity = {
-  readonly start?: unknown;
-  readonly end?: unknown;
-  readonly type?: unknown;
-  readonly text?: unknown;
-};
-
-type ShieldResult = {
-  readonly entities?: unknown;
-};
-
-const parseEntities = (
+export const parsePiiShieldEntities = (
   value: unknown,
   text: string,
   documentId: string,
 ): NativePrediction[] => {
-  const result = value as ShieldResult;
-  if (!Array.isArray(result.entities)) {
+  if (
+    value === null ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    !("entities" in value) ||
+    !Array.isArray(value.entities)
+  ) {
     throw new Error(`PII-Shield returned malformed output for ${documentId}`);
   }
-  return result.entities.map((item) => {
-    const entity = item as ShieldEntity;
+  return value.entities.map((item) => {
     if (
-      typeof entity.start !== "number" ||
-      typeof entity.end !== "number" ||
-      typeof entity.type !== "string" ||
-      typeof entity.text !== "string" ||
-      !Number.isSafeInteger(entity.start) ||
-      !Number.isSafeInteger(entity.end) ||
-      entity.start < 0 ||
-      entity.end <= entity.start ||
-      entity.end > text.length ||
-      text.slice(entity.start, entity.end) !== entity.text
+      item === null ||
+      typeof item !== "object" ||
+      Array.isArray(item) ||
+      !("start" in item) ||
+      !("end" in item) ||
+      !("type" in item) ||
+      !("text" in item) ||
+      typeof item.start !== "number" ||
+      typeof item.end !== "number" ||
+      typeof item.type !== "string" ||
+      typeof item.text !== "string" ||
+      !Number.isSafeInteger(item.start) ||
+      !Number.isSafeInteger(item.end) ||
+      item.start < 0 ||
+      item.end <= item.start ||
+      item.end > text.length ||
+      text.slice(item.start, item.end) !== item.text
     ) {
       throw new Error(`PII-Shield returned an invalid span for ${documentId}`);
     }
     return {
-      start: entity.start,
-      end: entity.end,
-      label: entity.type,
-      text: entity.text,
+      start: item.start,
+      end: item.end,
+      label: item.type,
+      text: item.text,
     };
   });
 };
@@ -146,7 +146,7 @@ export const createPiiShieldAdapter = (): Adapter => ({
         }
         predictions.set(
           document.id,
-          parseEntities(parsed, document.text, document.id),
+          parsePiiShieldEntities(parsed, document.text, document.id),
         );
       }
     } finally {

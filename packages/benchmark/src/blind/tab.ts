@@ -31,34 +31,20 @@ export type TabDocument = {
   readonly mentions: readonly TabMention[];
 };
 
-type RawMention = {
-  readonly entity_type?: unknown;
-  readonly entity_id?: unknown;
-  readonly start_offset?: unknown;
-  readonly end_offset?: unknown;
-  readonly span_text?: unknown;
-  readonly identifier_type?: unknown;
-};
-
-type RawAnnotation = {
-  readonly entity_mentions?: unknown;
-};
-
-type RawDocument = {
-  readonly doc_id?: unknown;
-  readonly dataset_type?: unknown;
-  readonly text?: unknown;
-  readonly annotations?: unknown;
-};
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
 
 const isIdentifierType = (value: unknown): value is TabIdentifierType =>
   value === "DIRECT" || value === "QUASI" || value === "NO_MASK";
 
 const parseMention = (
-  raw: RawMention,
+  raw: unknown,
   text: string,
   documentId: string,
 ): TabMention => {
+  if (!isRecord(raw)) {
+    throw new Error(`TAB document ${documentId} contains an invalid mention`);
+  }
   const { entity_type, entity_id, start_offset, end_offset, identifier_type } =
     raw;
   if (
@@ -76,8 +62,8 @@ const parseMention = (
     throw new Error(`TAB document ${documentId} contains an invalid mention`);
   }
   if (
-    typeof raw.span_text !== "string" ||
-    text.slice(start_offset, end_offset) !== raw.span_text
+    typeof raw["span_text"] !== "string" ||
+    text.slice(start_offset, end_offset) !== raw["span_text"]
   ) {
     throw new Error(`TAB document ${documentId} contains a stale mention span`);
   }
@@ -97,40 +83,44 @@ export const parseTabTestCorpus = (value: unknown): TabDocument[] => {
   const documents: TabDocument[] = [];
   const seen = new Set<string>();
   for (const item of value) {
-    const raw = item as RawDocument;
+    if (!isRecord(item)) {
+      throw new Error("TAB corpus contains a malformed or non-test document");
+    }
+    const raw = item;
     if (
-      typeof raw.doc_id !== "string" ||
-      raw.dataset_type !== "test" ||
-      typeof raw.text !== "string" ||
-      raw.annotations === null ||
-      typeof raw.annotations !== "object" ||
-      Array.isArray(raw.annotations)
+      typeof raw["doc_id"] !== "string" ||
+      raw["dataset_type"] !== "test" ||
+      typeof raw["text"] !== "string" ||
+      !isRecord(raw["annotations"])
     ) {
       throw new Error("TAB corpus contains a malformed or non-test document");
     }
-    if (seen.has(raw.doc_id)) {
-      throw new Error(`TAB corpus contains duplicate document ${raw.doc_id}`);
+    if (seen.has(raw["doc_id"])) {
+      throw new Error(
+        `TAB corpus contains duplicate document ${raw["doc_id"]}`,
+      );
     }
-    seen.add(raw.doc_id);
+    seen.add(raw["doc_id"]);
 
-    const annotationEntries = Object.values(
-      raw.annotations as Record<string, RawAnnotation>,
-    );
+    const annotationEntries = Object.values(raw["annotations"]);
     if (annotationEntries.length === 0) {
-      throw new Error(`TAB document ${raw.doc_id} has no annotations`);
+      throw new Error(`TAB document ${raw["doc_id"]} has no annotations`);
     }
     const mentions: TabMention[] = [];
     for (const annotation of annotationEntries) {
-      if (!Array.isArray(annotation.entity_mentions)) {
-        throw new Error(`TAB document ${raw.doc_id} has malformed annotations`);
-      }
-      for (const mention of annotation.entity_mentions) {
-        mentions.push(
-          parseMention(mention as RawMention, raw.text, raw.doc_id),
+      if (
+        !isRecord(annotation) ||
+        !Array.isArray(annotation["entity_mentions"])
+      ) {
+        throw new Error(
+          `TAB document ${raw["doc_id"]} has malformed annotations`,
         );
       }
+      for (const mention of annotation["entity_mentions"]) {
+        mentions.push(parseMention(mention, raw["text"], raw["doc_id"]));
+      }
     }
-    documents.push({ id: raw.doc_id, text: raw.text, mentions });
+    documents.push({ id: raw["doc_id"], text: raw["text"], mentions });
   }
   if (documents.length === 0) {
     throw new Error("TAB test corpus is empty");
@@ -141,6 +131,16 @@ export const parseTabTestCorpus = (value: unknown): TabDocument[] => {
 const digest = (value: string): string =>
   createHash("sha256").update(value).digest("hex");
 
+const compareStrings = (left: string, right: string): number => {
+  if (left < right) {
+    return -1;
+  }
+  if (left > right) {
+    return 1;
+  }
+  return 0;
+};
+
 export const selectBlindSample = (
   documents: readonly TabDocument[],
   size = TAB_SAMPLE_SIZE,
@@ -150,13 +150,14 @@ export const selectBlindSample = (
   }
   return [...documents]
     .sort((left, right) => {
-      const byHash = digest(`${TAB_SAMPLE_SEED}\0${left.id}`).localeCompare(
+      const byHash = compareStrings(
+        digest(`${TAB_SAMPLE_SEED}\0${left.id}`),
         digest(`${TAB_SAMPLE_SEED}\0${right.id}`),
       );
-      return byHash === 0 ? left.id.localeCompare(right.id) : byHash;
+      return byHash === 0 ? compareStrings(left.id, right.id) : byHash;
     })
     .slice(0, size)
-    .sort((left, right) => left.id.localeCompare(right.id));
+    .sort((left, right) => compareStrings(left.id, right.id));
 };
 
 const cachePath = (): string =>
@@ -210,6 +211,9 @@ export const loadVerifiedTabTestCorpus = async (): Promise<TabDocument[]> => {
   let bytes: Uint8Array;
   try {
     bytes = await readFile(target);
+    if (!verifiedBytes(bytes)) {
+      throw new Error("cached TAB corpus checksum mismatch");
+    }
   } catch {
     const url = `https://raw.githubusercontent.com/NorskRegnesentral/text-anonymization-benchmark/${TAB_PROVENANCE.commit}/${TAB_PROVENANCE.file}`;
     const response = await fetch(url, { redirect: "error" });
@@ -229,9 +233,6 @@ export const loadVerifiedTabTestCorpus = async (): Promise<TabDocument[]> => {
       await rm(staged, { force: true });
       throw error;
     }
-  }
-  if (!verifiedBytes(bytes)) {
-    throw new Error("cached TAB corpus checksum mismatch");
   }
   return parseTabTestCorpus(JSON.parse(new TextDecoder().decode(bytes)));
 };

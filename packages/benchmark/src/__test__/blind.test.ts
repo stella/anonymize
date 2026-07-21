@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { NativePrediction } from "../adapters/types";
+import { parsePiiShieldEntities } from "../blind/pii-shield";
 import { scoreBlindCorpus } from "../blind/score";
 import { parseTabTestCorpus, selectBlindSample } from "../blind/tab";
 
@@ -74,11 +75,33 @@ describe("TAB holdout loading", () => {
     const malformed = corpus();
     malformed[0]!.annotations.annotator1.entity_mentions[0]!.span_text = "John";
     expect(() => parseTabTestCorpus(malformed)).toThrow("stale mention span");
+    expect(() => parseTabTestCorpus([null])).toThrow(
+      "malformed or non-test document",
+    );
+    expect(() =>
+      parseTabTestCorpus([
+        {
+          ...corpus()[0],
+          annotations: { annotator1: { entity_mentions: [null] } },
+        },
+      ]),
+    ).toThrow("invalid mention");
   });
 
   test("selects documents deterministically without consulting annotations", () => {
     const parsed = parseTabTestCorpus(corpus());
     expect(selectBlindSample(parsed, 1)).toEqual(selectBlindSample(parsed, 1));
+  });
+});
+
+describe("PII-Shield output validation", () => {
+  test("rejects malformed envelopes and span elements", () => {
+    expect(() => parsePiiShieldEntities(null, "Jane", "doc-a")).toThrow(
+      "malformed output",
+    );
+    expect(() =>
+      parsePiiShieldEntities({ entities: [null] }, "Jane", "doc-a"),
+    ).toThrow("invalid span");
   });
 });
 

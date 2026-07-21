@@ -56,10 +56,14 @@ type BlindReport = {
 };
 
 const gitSha = (): string => {
-  const process = Bun.spawnSync(["git", "rev-parse", "--short", "HEAD"], {
-    cwd: import.meta.dir,
-  });
-  return process.success ? process.stdout.toString().trim() : "unknown";
+  try {
+    const process = Bun.spawnSync(["git", "rev-parse", "--short", "HEAD"], {
+      cwd: import.meta.dir,
+    });
+    return process.success ? process.stdout.toString().trim() : "unknown";
+  } catch {
+    return "unknown";
+  }
 };
 
 const hardware = (): string => {
