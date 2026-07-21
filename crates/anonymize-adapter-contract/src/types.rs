@@ -112,6 +112,7 @@ pub struct BindingHotwordRule {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct BindingTriggerData {
   pub rules: Vec<BindingTriggerRule>,
   #[serde(default)]

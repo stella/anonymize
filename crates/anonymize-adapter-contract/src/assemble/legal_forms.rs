@@ -696,6 +696,10 @@ mod tests {
         "institutional-organization-generic-name-words.json",
         "legal",
       ),
+      (
+        "institutional-organization-prefix-generic-name-words.json",
+        "finance",
+      ),
     ] {
       let english =
         institutional_language_words(file_name, Some(&[String::from("en")]))
