@@ -15,6 +15,7 @@ lifetime, restoration, and what metadata can still carry PII.
 | Encrypted session transfer         | Yes  | Yes    | No   | Yes | Not exposed yet      |
 | DOCX extraction/coverage           | Yes  | Yes    | No   | Yes | Aggregate inspection |
 | DOCX rewrite/anonymize/restore     | Yes  | Yes    | No   | Yes | Yes                  |
+| PDF structure/coverage inspection  | Yes  | Yes    | No   | No  | No                   |
 | Runtime capability discovery       | Yes  | Yes    | Yes  | Yes | Fixed tool list      |
 
 Node and Python DOCX adapters share bounded extraction, rewrite, and restoration
@@ -34,10 +35,17 @@ Unrewritten metadata, custom XML, external relationship targets, symbols, field
 instructions, alternate content, and other package parts are reported as
 coverage gaps. Partial anonymization requires explicit opt-in.
 
-The repository does not yet provide structure-preserving pipelines for PDF,
-XLSX, PPTX, HTML, Markdown, CSV, email containers, images/OCR, archives, or
-database records. Plain UTF-8 representations can use the text engine, but that
-does not preserve or inventory their original format structure.
+PDF inspection inventories forms, annotations, attachments, metadata,
+JavaScript, XFA, optional content, signatures, and image objects. Page text and
+glyph boxes use an explicit renderer/OCR observation contract; without those
+observations, coverage is reported as partial. Inspection does not anonymize a
+PDF. In particular, drawing an opaque rectangle over original page content is
+not redaction because the covered text or image can remain in the file.
+
+The repository does not yet provide PDF anonymization or structure-preserving
+pipelines for XLSX, PPTX, HTML, Markdown, CSV, email containers, images/OCR,
+archives, or database records. Plain UTF-8 representations can use the text
+engine, but that does not preserve or inventory their original format structure.
 
 ## Workflow gaps
 

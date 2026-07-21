@@ -10,6 +10,7 @@ export const CAPABILITY_PARITY_PROFILES = {
   core: CAPABILITY_RUNTIMES,
   local: ["node", "python"],
   document: ["node", "python"],
+  "pdf-document": ["node", "python"],
 } as const satisfies Record<string, readonly CapabilityRuntime[]>;
 
 export type CapabilityParityProfile = keyof typeof CAPABILITY_PARITY_PROFILES;
@@ -35,6 +36,7 @@ export const CAPABILITY_SURFACES = [
   { id: "document.docx.rewrite", profile: "document" },
   { id: "document.docx.anonymize", profile: "document" },
   { id: "document.docx.restore", profile: "document" },
+  { id: "document.pdf.inspect", profile: "pdf-document" },
 ] as const satisfies readonly {
   id: string;
   profile: CapabilityParityProfile;

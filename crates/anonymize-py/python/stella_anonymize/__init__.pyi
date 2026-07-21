@@ -130,6 +130,25 @@ class DocxRestorationError(ValueError):
     code: str
 
 def extract_docx_text(document: BytesLike) -> dict[str, Any]: ...
+class PdfInspectionError(ValueError):
+    code: str
+
+PDF_INSPECTION_CONTRACT_VERSION: int
+PDF_DOCUMENT_MAX_BYTES: int
+PDF_DECOMPRESSED_MAX_BYTES: int
+PDF_MAX_OBJECTS: int
+PDF_MAX_OBJECT_NODES: int
+PDF_MAX_OBJECT_DEPTH: int
+PDF_MAX_PAGES: int
+PDF_MAX_GLYPHS: int
+PDF_MAX_PAGE_TEXT_UTF8_BYTES: int
+PDF_MAX_OBSERVATION_TEXT_UTF8_BYTES: int
+PDF_MAX_OBSERVATION_JSON_BYTES: int
+
+def inspect_pdf(
+    document: BytesLike,
+    page_observations: Sequence[Mapping[str, Any]] | None = None,
+) -> dict[str, Any]: ...
 def rewrite_docx_text(
     document: BytesLike,
     rewrites: Sequence[Mapping[str, Any]],

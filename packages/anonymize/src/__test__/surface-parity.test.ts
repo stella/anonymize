@@ -67,6 +67,8 @@ const nodeSurface = {
     sessionPrototype,
     "toEncryptedArchive",
   ),
+  "document.pdf.inspect":
+    nativeNode.loadNativeAnonymizeBinding().inspectPdfJson,
 } satisfies Partial<RuntimeSurface>;
 
 const wasmSurface = {
