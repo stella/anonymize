@@ -178,6 +178,11 @@ export const ENTITY_CAPABILITIES = [
     detectionSources: [DETECTION_SOURCES.REGEX, DETECTION_SOURCES.TRIGGER],
   },
   {
+    label: "case number",
+    selection: ENTITY_SELECTIONS.DEFAULT,
+    detectionSources: [DETECTION_SOURCES.REGEX, DETECTION_SOURCES.TRIGGER],
+  },
+  {
     label: "credit card number",
     selection: ENTITY_SELECTIONS.DEFAULT,
     detectionSources: [DETECTION_SOURCES.REGEX],

@@ -196,12 +196,12 @@ reference, including the `--json` schema and exit codes.
 
 ## Features
 
-- **22 default entity labels, plus 3 opt-in network labels.** People,
+- **23 default entity labels, plus 3 opt-in network labels.** People,
   organizations, addresses, countries, and land parcels; email, phone, dates, and
   dates of birth; and a family of identifiers: IBAN and bank account numbers, tax
   and national identification numbers, identity card, birth, social security,
-  passport, and registration numbers, credit card numbers, crypto addresses, and
-  monetary amounts. IP addresses, MAC addresses, and URLs are built in but opt-in.
+  passport, registration, and case numbers, credit card numbers, crypto addresses,
+  and monetary amounts. IP addresses, MAC addresses, and URLs are built in but opt-in.
   The versioned machine-readable contract is exported as `CAPABILITY_MANIFEST`
   from `@stll/anonymize/capabilities` and printed by
   `anonymize --capabilities`; scope detection to a subset with `--labels`.

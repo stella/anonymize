@@ -55,6 +55,21 @@
     ]
   },
   {
+    "id": "pl-case-number",
+    "label": "case number",
+    "strategy": {
+      "type": "n-words",
+      "count": 3
+    },
+    "triggers": ["sygn. akt", "sygn.", "sygnatura akt"],
+    "validations": [
+      {
+        "type": "matches-pattern",
+        "pattern": "^[IVXLC]+\\s+[A-Z][A-Za-z]{0,3}\\s+\\d+/\\d{2,4}$"
+      }
+    ]
+  },
+  {
     "id": "pl-person-represented",
     "label": "person",
     "strategy": {
