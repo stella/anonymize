@@ -502,6 +502,25 @@ fn same_span_country_loses_to_person() {
 }
 
 #[test]
+fn longer_person_beats_nested_city_address_fragments() {
+  // EDGAR notice lines like "Clayton E. Parker" emit a 0.5 person span that
+  // fully contains 0.9 US-city address tokens. Prefer the person so middle
+  // initials are not left between address placeholders.
+  let result = merge_and_dedup(&[
+    entity(DetectionSource::DenyList, 0.9, 0, 7, "address"),
+    entity(DetectionSource::DenyList, 0.9, 11, 17, "address"),
+    entity(DetectionSource::DenyList, 0.5, 0, 17, "person"),
+  ]);
+
+  assert_eq!(result.len(), 1);
+  let kept = result.first().expect("person");
+  assert_eq!(kept.label, "person");
+  assert_eq!(kept.start, 0);
+  assert_eq!(kept.end, 17);
+  assert!((kept.score - 0.5).abs() < f64::EPSILON);
+}
+
+#[test]
 fn sanitize_trims_punctuation_and_updates_byte_offsets() {
   let mut input =
     text_entity("\"Tesla Shares\"", "organization", DetectionSource::Ner);

@@ -213,6 +213,22 @@ fn should_replace(
     return true;
   }
 
+  // A longer person that fully contains city-list address tokens (e.g.
+  // "Clayton E. Parker" over nested "Clayton" / "Parker") must win even at
+  // a lower score. Same-label literal containment does not apply across
+  // person vs address, and without this guard the 0.9 city fragments splice
+  // the 0.5 person and leak middle initials between them.
+  if person_contains_nested_address(candidate, existing)
+    && candidate_len > existing_len
+  {
+    return true;
+  }
+  if person_contains_nested_address(existing, candidate)
+    && existing_len > candidate_len
+  {
+    return false;
+  }
+
   // An address containing a nested country always wins on containment: an
   // address missing a seed type can score below the country's fixed 0.95,
   // and without this guard the narrower country span would splice out (and
@@ -535,6 +551,17 @@ fn country_inside_person_or_org(
     && matches!(container.label.as_str(), "person" | "organization")
     && container.start <= country.start
     && container.end >= country.end
+}
+
+fn person_contains_nested_address(
+  person: &PipelineEntity,
+  address: &PipelineEntity,
+) -> bool {
+  person.label == crate::labels::PERSON_LABEL
+    && address.label == crate::labels::ADDRESS_LABEL
+    && !is_caller_owned(address)
+    && person.start <= address.start
+    && person.end >= address.end
 }
 
 fn address_contains_country(

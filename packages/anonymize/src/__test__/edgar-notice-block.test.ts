@@ -8,6 +8,8 @@
  *   district, and Dodd-Frank statute person FP.
  * - PEDEVCO separation agreement (2026-07-17): middle-initial
  *   honorific/notice names and dual `/s/` signatures on one line.
+ * - Lightwave Logic employment agreement (2026-07-20): Attn given
+ *   name corpus gap and middle-initial counsel vs US city tokens.
  */
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
@@ -204,5 +206,42 @@ Reform and Consumer Protection Act.`;
           entity.label === "person" && entity.text === "Clark R. Moore",
       ),
     ).toBe(true);
+  });
+
+  test("Attn given name and surname are both a person", async () => {
+    const text = `Attn: Clint Calli
+
+Email: clint.calli@example.com`;
+    const entities = await detect(text);
+    expect(
+      entities.some(
+        (entity) => entity.label === "person" && entity.text === "Clint Calli",
+      ),
+    ).toBe(true);
+    expect(
+      entities.some(
+        (entity) => entity.label === "person" && entity.text === "Calli",
+      ),
+    ).toBe(false);
+  });
+
+  test("Attn middle-initial counsel name beats nested city addresses", async () => {
+    const text = `Attn: Clayton E. Parker, Esq.
+
+Email: Clayton.Parker@example.com`;
+    const entities = await detect(text);
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "person" && entity.text === "Clayton E. Parker",
+      ),
+    ).toBe(true);
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "address" &&
+          (entity.text === "Clayton" || entity.text === "Parker"),
+      ),
+    ).toBe(false);
   });
 });
