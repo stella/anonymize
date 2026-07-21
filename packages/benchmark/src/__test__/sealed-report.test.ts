@@ -78,6 +78,16 @@ describe("sealed aggregate report contract", () => {
     );
   });
 
+  test("renders one value for every TAB table column", () => {
+    const rows = renderSealedAggregateMarkdown(report())
+      .split("\n")
+      .filter((line) => line.startsWith("| "));
+    expect(rows).toHaveLength(3);
+    expect(rows.map((line) => line.split("|").slice(1, -1).length)).toEqual([
+      9, 9, 9,
+    ]);
+  });
+
   test("rejects text, examples, predictions, and per-document fields at every report boundary", () => {
     const base = report();
     expect(() =>
