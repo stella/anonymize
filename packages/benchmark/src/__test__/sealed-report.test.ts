@@ -99,13 +99,10 @@ describe("sealed aggregate report contract", () => {
       throw new Error("benchmark tests must run inside a Git repository");
     }
     const root = rootResult.stdout.toString().trim();
-    const trackedResult = Bun.spawnSync([
-      "git",
-      "ls-files",
-      "-z",
-      "--",
-      "packages/benchmark/results/blind",
-    ]);
+    const trackedResult = Bun.spawnSync(
+      ["git", "ls-files", "-z", "--", "packages/benchmark/results/blind"],
+      { cwd: root },
+    );
     if (!trackedResult.success || trackedResult.exitCode !== 0) {
       throw new Error("could not enumerate committed benchmark reports");
     }
