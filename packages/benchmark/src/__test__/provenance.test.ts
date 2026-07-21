@@ -160,6 +160,31 @@ describe("benchmark Git provenance", () => {
     }
   });
 
+  test("requires a current, canonical sealed v1 report pair", () => {
+    const invalid = repository();
+    const invalidPrefix = join(
+      invalid.root,
+      "packages/benchmark/results/blind/2026-01-02T03-04-05-678Z",
+    );
+    writeFileSync(`${invalidPrefix}.json`, "{}\n");
+    writeFileSync(`${invalidPrefix}.md`, "aggregate\n");
+    expect(benchmarkGitRevision(invalid.root)).toBe(`${invalid.sha}-dirty`);
+
+    const stale = repository();
+    writeAggregateReport(stale.root, aggregateReport("abcdef0", "tab-echr"));
+    expect(benchmarkGitRevision(stale.root)).toBe(`${stale.sha}-dirty`);
+
+    const tampered = repository();
+    const report = aggregateReport(tampered.sha, "tab-echr");
+    writeAggregateReport(tampered.root, report);
+    const stamp = report.createdAt.replace(/[:.]/gu, "-");
+    writeFileSync(
+      join(tampered.root, `packages/benchmark/results/blind/${stamp}.md`),
+      "non-aggregate analysis\n",
+    );
+    expect(benchmarkGitRevision(tampered.root)).toBe(`${tampered.sha}-dirty`);
+  });
+
   test("marks every other untracked file dirty", () => {
     const { root, sha } = repository();
     const source = join(root, "packages/benchmark/unreviewed.ts");
