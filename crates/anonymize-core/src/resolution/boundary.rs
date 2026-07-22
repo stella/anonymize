@@ -40,8 +40,8 @@ pub fn enforce_boundary_consistency(
 
 /// Stop person spans at a signature-stamp phrase or a form-field label.
 ///
-/// Stamp phrases and field labels are exact, language-keyed vocabulary from
-/// `signature-detection.json`.
+/// Stamp phrases are configured terminators, while field labels are exact,
+/// language-keyed vocabulary from `signature-detection.json`.
 fn truncate_person_spans(
   entities: &[PipelineEntity],
   full_text: &str,

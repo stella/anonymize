@@ -93,22 +93,24 @@ describe("person span stops before form-field labels", () => {
 
 describe("trailing role trigger does not emit field-label values as people", () => {
   test("Czech regression: IČO after ředitelem is not a person", async () => {
-    const persons = await personTexts(
+    const persons = await personTextsForLanguages(
       [
         "zastoupená prof. MUDr. Markem Svobodou, Ph.D., ředitelem",
         "IČO: 00209805, DIČ: CZ00209805",
       ].join("\n"),
+      ["cs"],
     );
     expect(persons.some((p) => /^IČO:?$/u.test(p.trim()))).toBe(false);
     expect(persons.some((p) => p.includes("Markem Svobodou"))).toBe(true);
   });
 
   test("Czech acronym label permits whitespace before its colon", async () => {
-    const persons = await personTexts(
+    const persons = await personTextsForLanguages(
       [
         "zastoupená prof. MUDr. Markem Svobodou, Ph.D., ředitelem",
         "IČO : 00209805, DIČ : CZ00209805",
       ].join("\n"),
+      ["cs"],
     );
     expect(persons.some((p) => /^IČO:?$/u.test(p.trim()))).toBe(false);
     expect(persons.some((p) => p.includes("Markem Svobodou"))).toBe(true);
@@ -124,8 +126,9 @@ describe("trailing role trigger does not emit field-label values as people", () 
   });
 
   test("English identity field after a role is not a person", async () => {
-    const persons = await personTexts(
+    const persons = await personTextsForLanguages(
       "signed by Jane Roe, director\nSocial Security Number: 12-3456789, USA",
+      ["en"],
     );
     expect(persons).not.toContain("Social Security Number");
     expect(persons.some((p) => p.includes("Jane Roe"))).toBe(true);
