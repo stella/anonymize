@@ -364,11 +364,12 @@ pub(crate) fn process_trigger_matches(
     // label-shaped values are not people. Preserve a complete person-shaped
     // prefix when the field label follows it on the same line.
     if rule.label == crate::labels::PERSON_LABEL
-      && let Some(label_start) =
+      && let Some((label_start, may_preserve_prefix)) =
         inline_field_label_start(&value.text, &data.number_labels)
     {
       let prefix = value.text.get(..label_start).unwrap_or_default().trim_end();
-      let complete_person_prefix = prefix.split_whitespace().count() >= 2
+      let complete_person_prefix = may_preserve_prefix
+        && prefix.split_whitespace().count() >= 2
         && person_name_run_end(prefix) == Some(prefix.len());
       if !complete_person_prefix {
         record_trigger_rejection(
@@ -1690,12 +1691,37 @@ fn inline_field_label(text: &str) -> bool {
 fn inline_field_label_start(
   text: &str,
   configured_labels: &[String],
-) -> Option<usize> {
+) -> Option<(usize, bool)> {
   let configured_start = configured_labels
     .iter()
     .filter_map(|label| configured_field_label_start(text, label))
     .min();
-  configured_start.or_else(|| inline_field_label_token_start(text))
+  if let Some(start) = configured_start {
+    return Some((start, true));
+  }
+  let start = inline_field_label_token_start(text)?;
+  Some((start, unconfigured_label_is_acronym(text, start)))
+}
+
+fn unconfigured_label_is_acronym(text: &str, start: usize) -> bool {
+  let Some(label) = text
+    .get(start..)
+    .and_then(|tail| tail.split(|ch| matches!(ch, ':' | '：')).next())
+  else {
+    return false;
+  };
+  let mut letters = 0_usize;
+  for ch in label.chars() {
+    if ch.is_alphabetic() {
+      if !ch.is_uppercase() {
+        return false;
+      }
+      letters = letters.saturating_add(1);
+    } else if !matches!(ch, '-' | '/') {
+      return false;
+    }
+  }
+  letters >= 2
 }
 
 fn configured_field_label_start(text: &str, label: &str) -> Option<usize> {
@@ -1738,7 +1764,7 @@ fn inline_field_label_token_start(text: &str) -> Option<usize> {
       token_letters = token_letters.saturating_add(1);
       continue;
     }
-    if ch == ' ' {
+    if ch.is_whitespace() {
       token_start = None;
       token_letters = 0;
       continue;
@@ -2318,7 +2344,8 @@ mod tests {
   fn person_trigger_rejects_inline_field_label_values() {
     // Trailing role triggers sit before the next labelled field
     // (`…, director\nEIN: …`). The value is form-field shaped, not a person.
-    let text = "signed by Jane Roe, director\nTax Identification Number： 12-3456789, USA";
+    let text =
+      "signed by Jane Roe, director\nSocial Security Number: 12-3456789, USA";
     let trigger = "director";
     let start = text.find(trigger).unwrap();
     let end = start.saturating_add(trigger.len());
@@ -2340,7 +2367,7 @@ mod tests {
       sentence_terminal_currency_terms: Vec::new(),
       phone_extension_labels: Vec::new(),
       number_markers: Vec::new(),
-      number_labels: vec![String::from("Tax Identification Number")],
+      number_labels: Vec::new(),
     })
     .unwrap();
 
@@ -2451,6 +2478,15 @@ mod tests {
 
     assert_eq!(entities.len(), 1);
     assert_eq!(entities[0].text, "Janem Zorbax");
+  }
+
+  #[test]
+  fn unconfigured_acronym_label_after_nbsp_preserves_prefix_boundary() {
+    let text = "Janem Zorbax\u{a0}IČO： 12345678";
+    let (start, may_preserve_prefix) =
+      inline_field_label_start(text, &[]).expect("field label boundary");
+    assert_eq!(text.get(..start).unwrap().trim_end(), "Janem Zorbax");
+    assert!(may_preserve_prefix);
   }
 
   fn organization_role_trigger_data(
