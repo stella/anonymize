@@ -125,7 +125,11 @@
       "position",
       "date",
       "signature",
-      "address"
+      "address",
+      "tax id",
+      "tax identification number",
+      "vat id",
+      "social security number"
     ],
     "signature_stamp_phrases": [
       "digitally signed by",
@@ -24792,7 +24796,9 @@
       "name",
       "title",
       "tax id",
-      "tax identification number"
+      "tax identification number",
+      "vat id",
+      "social security number"
     ]
   },
   "coreference_data": {

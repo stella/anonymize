@@ -131,6 +131,10 @@
       "date",
       "signature",
       "address",
+      "tax id",
+      "tax identification number",
+      "vat id",
+      "social security number",
       "jméno",
       "příjmení",
       "název",
@@ -138,6 +142,9 @@
       "datum",
       "podpis",
       "adresa",
+      "titul",
+      "ičo",
+      "dič",
       "funktion",
       "unterschrift",
       "adresse",
@@ -50840,8 +50847,12 @@
       "title",
       "tax id",
       "tax identification number",
+      "vat id",
+      "social security number",
       "jméno",
-      "titul"
+      "titul",
+      "ičo",
+      "dič"
     ]
   },
   "coreference_data": {

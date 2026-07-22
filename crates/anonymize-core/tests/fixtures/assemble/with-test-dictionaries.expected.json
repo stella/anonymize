@@ -126,7 +126,10 @@
       "funkce",
       "datum",
       "podpis",
-      "adresa"
+      "adresa",
+      "titul",
+      "ičo",
+      "dič"
     ],
     "signature_stamp_phrases": [
       "digitally signed by",
@@ -29033,7 +29036,7 @@
     "phone_extension_labels": [],
     "number_markers": ["nº", "n°", "№"],
     "number_labels": ["nº", "n°", "№"],
-    "person_field_labels": ["jméno", "titul"]
+    "person_field_labels": ["jméno", "titul", "ičo", "dič"]
   },
   "coreference_data": {
     "definition_patterns": [

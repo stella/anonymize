@@ -127,6 +127,9 @@
       "datum",
       "podpis",
       "adresa",
+      "titul",
+      "ičo",
+      "dič",
       "meno",
       "priezvisko",
       "funkcia",
@@ -35097,7 +35100,7 @@
     "phone_extension_labels": [],
     "number_markers": ["nº", "n°", "№"],
     "number_labels": ["nº", "n°", "№"],
-    "person_field_labels": ["jméno", "titul"]
+    "person_field_labels": ["jméno", "titul", "ičo", "dič"]
   },
   "coreference_data": {
     "definition_patterns": [
