@@ -119,6 +119,7 @@ type PythonParityOutput = {
   pdf_observed_inspection: unknown;
   pdf_raster: { document_base64: string; certificate: unknown };
   pdf_raster_detected: { document_base64: string; certificate: unknown };
+  pdf_raster_astral: { document_base64: string; certificate: unknown };
   pdf_detection_error: { code: string; message: string };
   pdf_invalid_error: { code: string; message: string };
   caller_result: {
@@ -389,6 +390,48 @@ pdf_detected_document, pdf_detected_certificate = anonymize.anonymize_pdf_raster
 pdf_raster_detected = {
     "document_base64": base64.b64encode(pdf_detected_document).decode("ascii"),
     "certificate": pdf_detected_certificate,
+}
+class AstralPdfDetector:
+    def redact_text(self, _text):
+        entity = type("Entity", (), {"start": 1, "end": 6})()
+        return type("Result", (), {"resolved_entities": [entity]})()
+
+pdf_astral_observation = {
+    "pageIndex": 0,
+    "widthPoints": 612.0,
+    "heightPoints": 792.0,
+    "text": "😀Alice",
+    "glyphs": [
+        {
+            "start": 0, "end": 2,
+            "bounds": {"left": 20.0, "bottom": 700.0, "right": 40.0, "top": 712.0},
+            "source": "embedded-text",
+        },
+        {
+            "start": 2, "end": 7,
+            "bounds": {"left": 72.0, "bottom": 700.0, "right": 108.0, "top": 712.0},
+            "source": "embedded-text",
+        },
+    ],
+    "rendered": True,
+    "textLayer": "complete",
+    "ocr": "complete",
+    "imageCount": 0,
+}
+pdf_astral_document, pdf_astral_certificate = anonymize.anonymize_pdf_raster(
+    pdf_source,
+    AstralPdfDetector(),
+    pdf_raster_request["provider"],
+    [{
+        "observation": pdf_astral_observation,
+        "widthPixels": 17,
+        "heightPixels": 22,
+        "pixels": pdf_pixels,
+    }],
+)
+pdf_raster_astral = {
+    "document_base64": base64.b64encode(pdf_astral_document).decode("ascii"),
+    "certificate": pdf_astral_certificate,
 }
 class FailingPdfDetector:
     def redact_text(self, _text):
@@ -718,6 +761,7 @@ print(
             "pdf_observed_inspection": pdf_observed_inspection,
             "pdf_raster": pdf_raster,
             "pdf_raster_detected": pdf_raster_detected,
+            "pdf_raster_astral": pdf_raster_astral,
             "pdf_detection_error": pdf_detection_error,
             "pdf_invalid_error": pdf_invalid_error,
             "caller_result": {
@@ -1133,6 +1177,52 @@ describe("python binding parity", () => {
         certificate: JSON.parse(node?.certificateJson ?? "null"),
       });
       expect(python.pdf_raster_detected).toEqual(python.pdf_raster);
+      const astralObservation = {
+        pageIndex: 0,
+        widthPoints: 612,
+        heightPoints: 792,
+        text: "😀Alice",
+        glyphs: [
+          {
+            start: 0,
+            end: 2,
+            bounds: { left: 20, bottom: 700, right: 40, top: 712 },
+            source: "embedded-text",
+          },
+          {
+            start: 2,
+            end: 7,
+            bounds: { left: 72, bottom: 700, right: 108, top: 712 },
+            source: "embedded-text",
+          },
+        ],
+        rendered: true,
+        textLayer: "complete",
+        ocr: "complete",
+        imageCount: 0,
+      };
+      const astralNode = rewrite?.(
+        source,
+        JSON.stringify({
+          ...request,
+          pages: [
+            {
+              observation: astralObservation,
+              widthPixels: 17,
+              heightPixels: 22,
+              pixelSha256: sha256(pixels),
+              detections: [{ start: 2, end: 7 }],
+            },
+          ],
+        }),
+        [pixels],
+      );
+      expect(python.pdf_raster_astral).toEqual({
+        document_base64: Buffer.from(astralNode?.document ?? []).toString(
+          "base64",
+        ),
+        certificate: JSON.parse(astralNode?.certificateJson ?? "null"),
+      });
       expect(python.pdf_detection_error).toEqual({
         code: "detection-failed",
         message: "detection-failed: PDF raster detection failed",

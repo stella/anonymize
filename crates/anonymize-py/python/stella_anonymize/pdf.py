@@ -75,6 +75,31 @@ def _raster_error(error: ValueError, fallback: str) -> PdfRasterError:
     return PdfRasterError(prefix if separator else fallback, message)
 
 
+def _utf16_offsets(text: str) -> list[int]:
+    offsets = [0]
+    offset = 0
+    for character in text:
+        offset += 2 if ord(character) > 0xFFFF else 1
+        offsets.append(offset)
+    return offsets
+
+
+def _entity_utf16_range(entity: Any, offsets: Sequence[int]) -> dict[str, int]:
+    start = entity.start
+    end = entity.end
+    if (
+        not isinstance(start, int)
+        or isinstance(start, bool)
+        or not isinstance(end, int)
+        or isinstance(end, bool)
+        or start < 0
+        or end < start
+        or end >= len(offsets)
+    ):
+        raise ValueError("detector returned an invalid character range")
+    return {"start": offsets[start], "end": offsets[end]}
+
+
 def rewrite_pdf_raster_from_detections(
     document: bytes | bytearray | memoryview,
     request: Mapping[str, Any],
@@ -239,15 +264,16 @@ def anonymize_pdf_raster(
                 result = anonymizer.redact_text_with_caller_detections(
                     text, converted["detections"]
                 )
+            utf16_offsets = _utf16_offsets(text)
+            detections = [
+                _entity_utf16_range(entity, utf16_offsets)
+                for entity in result.resolved_entities
+            ]
         except Exception as error:
             raise PdfRasterError(
                 "detection-failed",
                 "detection-failed: PDF raster detection failed",
             ) from error
-        detections = [
-            {"start": entity.start, "end": entity.end}
-            for entity in result.resolved_entities
-        ]
         opaque_pixels = bytes(pixels)
         request_pages.append(
             {
