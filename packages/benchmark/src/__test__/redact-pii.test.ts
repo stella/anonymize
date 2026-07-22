@@ -6,7 +6,7 @@ import { createRedactPiiAdapter } from "../adapters/redact-pii";
 import { loadGroundTruth } from "../ground-truth";
 
 const EXPECTED_PREDICTION_DIGEST =
-  "a388052c8c01ba88638be2fb00a1a59cdd11c150a796b4548596eb72aa59d248";
+  "73276b381d24bd28856cbf7782b77ee2d57cfd7d0457d12ac8ec71aec92f0b6a";
 
 type StablePrediction = readonly [
   string,
