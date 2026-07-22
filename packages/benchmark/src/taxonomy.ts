@@ -129,6 +129,30 @@ export const SCRUBADUB_MAPPING: NativeMapping = {
 };
 
 /**
+ * DataFog 4.8.0 core regex engine. The benchmark deliberately excludes its
+ * optional spaCy and GLiNER engines. ZIP labels fold into `address`; financial
+ * and national identifiers fold into the shared `id-number` category. German
+ * structured labels are emitted only when the adapter selects DataFog's `de`
+ * locale for a German document.
+ */
+export const DATAFOG_MAPPING: NativeMapping = {
+  EMAIL: "email",
+  PHONE: "phone",
+  SSN: "id-number",
+  CREDIT_CARD: "id-number",
+  DATE: "date",
+  ZIP_CODE: "address",
+  DE_VAT_ID: "id-number",
+  DE_IBAN: "id-number",
+  DE_TAX_ID: "id-number",
+  DE_SOCIAL_SECURITY_NUMBER: "id-number",
+  DE_POSTAL_CODE: "address",
+  DE_PASSPORT_NUMBER: "id-number",
+  DE_RESIDENCE_PERMIT_NUMBER: "id-number",
+  IP_ADDRESS: null,
+};
+
+/**
  * redact-pii — built-in redactor names (v3). English-only. Street address and
  * zipcode fold into `address`; credit card and SSN fold into `id-number`.
  * No org/date/money support (reported as zero recall).

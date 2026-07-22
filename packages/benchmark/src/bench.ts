@@ -6,6 +6,11 @@ import { loadAdhocDocs, runAdhoc } from "./adhoc";
 import { createStllAdapter } from "./adapters/stella";
 import { createRedactPiiAdapter } from "./adapters/redact-pii";
 import { createPythonAdapter } from "./adapters/python";
+import {
+  DATAFOG_PROVIDER,
+  PRESIDIO_PROVIDER,
+  SCRUBADUB_PROVIDER,
+} from "./adapters/python-providers";
 import type { Adapter, NativePrediction } from "./adapters/types";
 import { loadGroundTruth } from "./ground-truth";
 import {
@@ -22,6 +27,7 @@ import {
 } from "./report";
 import {
   COMMON_LABELS,
+  DATAFOG_MAPPING,
   type CommonLabel,
   type NativeMapping,
   PRESIDIO_MAPPING,
@@ -87,20 +93,16 @@ type RegisteredAdapter = { adapter: Adapter; mapping: NativeMapping };
 const buildRegisteredAdapters = (): RegisteredAdapter[] => [
   { adapter: createStllAdapter(), mapping: STELLA_MAPPING },
   {
-    adapter: createPythonAdapter({
-      name: "presidio",
-      venvDir: ".venv-presidio",
-      script: "presidio_adapter.py",
-    }),
+    adapter: createPythonAdapter(PRESIDIO_PROVIDER),
     mapping: PRESIDIO_MAPPING,
   },
   {
-    adapter: createPythonAdapter({
-      name: "scrubadub",
-      venvDir: ".venv-scrubadub",
-      script: "scrubadub_adapter.py",
-    }),
+    adapter: createPythonAdapter(SCRUBADUB_PROVIDER),
     mapping: SCRUBADUB_MAPPING,
+  },
+  {
+    adapter: createPythonAdapter(DATAFOG_PROVIDER),
+    mapping: DATAFOG_MAPPING,
   },
   { adapter: createRedactPiiAdapter(), mapping: REDACT_PII_MAPPING },
 ];

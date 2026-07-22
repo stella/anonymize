@@ -34,3 +34,16 @@ redistributed by this repository.
 Use of each corpus remains subject to its upstream license and citation
 requirements. See the linked upstream project or record for the canonical
 license text and citation metadata.
+
+## Benchmark provider dependencies
+
+DataFog is invoked as an external, pinned benchmark dependency; its source is
+not redistributed here.
+
+- Project: DataFog Python
+- Source: https://github.com/DataFog/datafog-python
+- Version: `4.8.0`
+- Release: https://github.com/DataFog/datafog-python/releases/tag/v4.8.0
+- License: MIT (see the upstream repository for the canonical license text)
+- Configuration: core `regex` engine only; optional spaCy and GLiNER engines
+  are not installed or invoked

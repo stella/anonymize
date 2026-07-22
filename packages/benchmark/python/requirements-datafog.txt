@@ -1,0 +1,10 @@
+# Fully pinned dependencies for the model-free DataFog adapter.
+# Install into a Python 3.11 virtualenv; see REPRODUCING.md.
+annotated-types==0.7.0
+datafog==4.8.0
+pydantic==2.13.4
+pydantic-core==2.46.4
+pydantic-settings==2.14.2
+python-dotenv==1.2.2
+typing-extensions==4.16.0
+typing-inspection==0.4.2
