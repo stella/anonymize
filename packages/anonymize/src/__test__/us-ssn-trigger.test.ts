@@ -39,6 +39,12 @@ describe("English U.S. Social Security number triggers", () => {
     ["SSN # 219-09-9999", "219-09-9999"],
     ["Employee SSN=219-09-9999", "219-09-9999"],
     ["SSN 219099999", "219099999"],
+    ["SSN 219‐09‐9999", "219‐09‐9999"],
+    ["SSN 219‑09‑9999", "219‑09‑9999"],
+    ["SSN 219‒09‒9999", "219‒09‒9999"],
+    ["SSN 219–09–9999", "219–09–9999"],
+    ["SSN 219—09—9999", "219—09—9999"],
+    ["SSN 219―09―9999", "219―09―9999"],
   ] as const)("%s captures the grouped identifier", async (text, expected) => {
     expect(await socialSecurityNumbers(text)).toContainEqual(
       expect.objectContaining({ text: expected }),
