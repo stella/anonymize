@@ -151,6 +151,14 @@ jobs:
       - name: Build
         run: bun run build
 
+      - name: Address-context scaling regression
+        # Runs after the release build so this gates normalized 48 KiB-to-1 MiB
+        # scaling without making the ordinary debug test suite machine-sensitive.
+        run: >-
+          cargo test --release --locked -p stella-anonymize-core
+          --test prepared address_context_cost_scales_with_input_size
+          -- --ignored --exact
+
       - name: Package exports (publint + attw)
         # Validates the published @stll/anonymize package.json exports and that
         # its types resolve for real consumers. Runs after the build so dist/
