@@ -92,8 +92,10 @@ describe("stella benchmark adapter language scoping", () => {
 
     expect(english.language).toBe("en");
     expect(english.languages).toBeUndefined();
+    expect(english.nameCorpusLanguages).toEqual(["en"]);
     expect(german.language).toBe("de");
     expect(german.languages).toBeUndefined();
+    expect(german.nameCorpusLanguages).toEqual(["de"]);
   });
 
   test("pipeline configs receive only the requested language's names", async () => {

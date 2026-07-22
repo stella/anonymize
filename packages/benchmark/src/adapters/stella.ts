@@ -34,6 +34,7 @@ export const buildStllBenchmarkConfig = (
 ): PipelineConfig => ({
   threshold: 0.3,
   language,
+  nameCorpusLanguages: [language],
   enableTriggerPhrases: true,
   enableRegex: true,
   enableLegalForms: true,
