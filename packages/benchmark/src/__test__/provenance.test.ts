@@ -45,7 +45,13 @@ const aggregateReport = (
       name: "stella",
       version: "test",
       status: "ok",
-      elapsedSeconds: 1,
+      timing: {
+        initSeconds: 0.1,
+        coldSeconds: 0.4,
+        warmSeconds: 0.3,
+        totalChars: 100,
+      },
+      adapterWallSeconds: 0.9,
       metrics:
         corpus === "tab-echr"
           ? {
@@ -160,7 +166,7 @@ describe("benchmark Git provenance", () => {
     }
   });
 
-  test("requires a current, canonical sealed v1 report pair", () => {
+  test("requires a current, canonical sealed report pair", () => {
     const invalid = repository();
     const invalidPrefix = join(
       invalid.root,

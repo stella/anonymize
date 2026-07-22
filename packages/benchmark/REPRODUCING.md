@@ -223,6 +223,16 @@ likewise timed as init rather than left as a module-load side effect
 (`src/adapters/redact-pii.ts`). Python init is measured inside each Python
 process and excludes interpreter startup, which is reported separately in prose.
 
+Sealed reports preserve these phase timings instead of collapsing them into a
+generic duration. Their throughput headline is the second complete corpus pass
+(`warm chars/s`). The parent-observed adapter wall duration is diagnostic only:
+it combines init, two passes, subprocess startup/imports, JSON protocol work,
+and result validation. Because imports occur outside some adapters' internal
+init timer, init values are useful within the declared boundary but are not a
+universal process-start comparison. All wall timings are machine-load sensitive;
+for performance conclusions, run providers in isolation at least three times
+and compare medians.
+
 ## Provenance of committed results
 
 The `commit` field in committed results records the SHA of the source tree
