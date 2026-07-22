@@ -2929,10 +2929,11 @@ mod tests {
 
   fn org_texts_for(text: &str, suffix: &str) -> Vec<String> {
     let suffix_start = text.find(suffix).expect("suffix present");
+    let suffix_end = suffix_start.saturating_add(suffix.len());
     let found = SearchMatch::Literal {
       pattern: 0,
       start: u32::try_from(suffix_start).unwrap(),
-      end: u32::try_from(suffix_start + suffix.len()).unwrap(),
+      end: u32::try_from(suffix_end).unwrap(),
     };
     process_legal_form_matches(
       &[found],
