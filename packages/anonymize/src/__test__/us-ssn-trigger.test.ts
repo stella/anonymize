@@ -69,6 +69,12 @@ describe("English U.S. Social Security number triggers", () => {
     "SSN 219-09-9999/123",
     "SSN 219-09-9999.123",
     "SSN 219-09-9999+123",
+    "SSN 219-09-9999‐123",
+    "SSN 219-09-9999‑123",
+    "SSN 219-09-9999‒123",
+    "SSN 219-09-9999–123",
+    "SSN 219-09-9999—123",
+    "SSN 219-09-9999―123",
   ])("rejects an SSN-shaped prefix of a longer identifier %s", async (text) => {
     expect(await socialSecurityNumbers(text)).toEqual([]);
   });
