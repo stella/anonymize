@@ -1,7 +1,14 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
-export const SEALED_AGGREGATE_REPORT_SCHEMA_VERSION = 1 as const;
+export const SEALED_AGGREGATE_REPORT_SCHEMA_VERSION = 2 as const;
+
+export type SealedTiming = {
+  readonly initSeconds: number;
+  readonly coldSeconds: number;
+  readonly warmSeconds: number;
+  readonly totalChars: number;
+};
 
 export type TabAggregateMetrics = {
   readonly type: "tab-independent-annotator-span-redaction";
@@ -45,7 +52,9 @@ export type SealedLibraryResult =
       readonly name: string;
       readonly version: string;
       readonly status: "ok";
-      readonly elapsedSeconds: number;
+      readonly timing: SealedTiming;
+      /** Parent-observed adapter wall time; diagnostic, not throughput. */
+      readonly adapterWallSeconds: number;
       readonly metrics: SealedAggregateMetrics;
     }
   | {
@@ -122,6 +131,25 @@ const requireRatio = (value: unknown, context: string): void => {
   ) {
     throw new Error(`${context} must be a finite ratio`);
   }
+};
+
+const requireSeconds = (value: unknown, context: string): void => {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    throw new Error(`${context} must be finite and non-negative`);
+  }
+};
+
+const validateTiming = (value: unknown, context: string): void => {
+  if (!isRecord(value)) throw new Error(`${context} must be an object`);
+  exactKeys(
+    value,
+    ["initSeconds", "coldSeconds", "warmSeconds", "totalChars"],
+    context,
+  );
+  requireSeconds(value["initSeconds"], `${context} initSeconds`);
+  requireSeconds(value["coldSeconds"], `${context} coldSeconds`);
+  requireSeconds(value["warmSeconds"], `${context} warmSeconds`);
+  requireCount(value["totalChars"], `${context} totalChars`);
 };
 
 const validateMetrics = (value: unknown): void => {
@@ -299,12 +327,14 @@ export const assertSealedAggregateReport: (
       throw new Error(`sealed library ${index} status is invalid`);
     exactKeys(
       library,
-      ["name", "version", "status", "elapsedSeconds", "metrics"],
+      ["name", "version", "status", "timing", "adapterWallSeconds", "metrics"],
       `sealed library ${index}`,
     );
-    const elapsed = library["elapsedSeconds"];
-    if (typeof elapsed !== "number" || !Number.isFinite(elapsed) || elapsed < 0)
-      throw new Error(`sealed library ${index} elapsedSeconds is invalid`);
+    validateTiming(library["timing"], `sealed library ${index} timing`);
+    requireSeconds(
+      library["adapterWallSeconds"],
+      `sealed library ${index} adapterWallSeconds`,
+    );
     validateMetrics(library["metrics"]);
     const metrics = library["metrics"];
     if (!isRecord(metrics)) {
@@ -337,6 +367,11 @@ export const serializeSealedAggregateReport = (
 const percent = (value: number): string => (value * 100).toFixed(1);
 const cell = (value: string): string =>
   value.replaceAll("|", "\\|").replaceAll(/\r?\n/gu, " ");
+const seconds = (value: number): string => value.toFixed(2);
+const warmCharsPerSecond = (timing: SealedTiming): string =>
+  timing.warmSeconds === 0
+    ? "—"
+    : Math.round(timing.totalChars / timing.warmSeconds).toString();
 
 const tableDefinition = (
   metrics: SealedAggregateMetrics,
@@ -415,8 +450,8 @@ export const renderSealedAggregateMarkdown = (
     `- Generated: ${cell(report.createdAt)}`,
     `- Commit: ${cell(report.gitSha)}`,
     "",
-    `| Library | Version | ${definition.headers.join(" | ")} | Seconds |`,
-    `| ------- | ------- | ${definition.headers.map(() => "---").join(" | ")} | ------- |`,
+    `| Library | Version | ${definition.headers.join(" | ")} | Init (s) | Cold pass (s) | Warm pass (s) | Warm chars/s | Adapter wall (s, diagnostic) |`,
+    `| ------- | ------- | ${definition.headers.map(() => "---").join(" | ")} | -------- | ------------- | ------------- | ------------ | ---------------------------- |`,
   ];
   for (const library of report.libraries) {
     if (library.status === "unavailable") {
@@ -425,18 +460,21 @@ export const renderSealedAggregateMarkdown = (
         ...definition.headers.slice(1).map(() => "—"),
       ].join(" | ");
       lines.push(
-        `| ${cell(library.name)} | ${cell(library.version)} | ${unavailableValues} | — |`,
+        `| ${cell(library.name)} | ${cell(library.version)} | ${unavailableValues} | — | — | — | — | — |`,
       );
       continue;
     }
     const values = tableDefinition(library.metrics).values;
     lines.push(
-      `| ${cell(library.name)} | ${cell(library.version)} | ${values.join(" | ")} | ${library.elapsedSeconds.toFixed(2)} |`,
+      `| ${cell(library.name)} | ${cell(library.version)} | ${values.join(" | ")} | ${seconds(library.timing.initSeconds)} | ${seconds(library.timing.coldSeconds)} | ${seconds(library.timing.warmSeconds)} | ${warmCharsPerSecond(library.timing)} | ${seconds(library.adapterWallSeconds)} |`,
     );
   }
   lines.push(
     "",
     "Metrics retain each corpus's native task semantics; no cross-corpus score is computed.",
+    "Warm chars/s is the steady-state throughput headline and covers one complete second pass over the corpus.",
+    "These are one-shot wall-clock measurements and are sensitive to machine load; compare controlled repeated runs before drawing performance conclusions.",
+    "Adapter wall time is diagnostic only. It includes init plus two corpus passes and may include subprocess startup, imports, and protocol overhead; adapter init/import boundaries differ.",
   );
   return `${lines.join("\n")}\n`;
 };

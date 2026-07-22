@@ -79,6 +79,14 @@ Markdown renderer cannot accept document text, examples, categories,
 predictions, failure cases, or per-document results. Unavailable adapters use a
 fixed reason code so subprocess output cannot enter a persisted report.
 
+Performance is reported by phase: adapter initialization, the first (cold)
+complete corpus pass, and the second (warm) complete corpus pass. Warm
+characters per second is the steady-state throughput figure. Parent-observed
+adapter wall time is retained only as diagnostic metadata because it combines
+initialization, two passes, and—in subprocess adapters—runtime startup, imports,
+serialization, and protocol overhead. Timings are one-shot and machine-load
+sensitive; use repeated isolated runs and compare medians for performance work.
+
 Each loader verifies the pinned artifact digest before invoking JSON, Parquet,
 ZIP, or BRAT parsing. Only the public test split is reachable from the sealed
 commands. Corpus attribution and pinned digests are recorded in

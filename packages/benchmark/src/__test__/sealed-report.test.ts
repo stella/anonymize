@@ -36,7 +36,13 @@ const report = (): SealedAggregateReport => ({
       name: "stella",
       version: "test",
       status: "ok",
-      elapsedSeconds: 1,
+      timing: {
+        initSeconds: 0.25,
+        coldSeconds: 1,
+        warmSeconds: 0.5,
+        totalChars: 1_000,
+      },
+      adapterWallSeconds: 1.8,
       metrics: {
         type: "tab-independent-annotator-span-redaction",
         documents: 127,
@@ -79,6 +85,11 @@ describe("sealed aggregate report contract", () => {
     expect(markdown).toContain(
       "contains no source text, examples, categories, predictions, or per-document results",
     );
+    expect(markdown).toContain("Warm chars/s");
+    expect(markdown).toContain(
+      "| stella | test | 90.0 | 80.0 | 85.0 | 75.0 | 70.0 | 80.0 | 0.25 | 1.00 | 0.50 | 2000 | 1.80 |",
+    );
+    expect(markdown).toContain("Adapter wall time is diagnostic only");
     expect(markdown.endsWith("\n")).toBe(true);
     expect(markdown.endsWith("\n\n")).toBe(false);
   });
@@ -89,11 +100,28 @@ describe("sealed aggregate report contract", () => {
       .filter((line) => line.startsWith("| "));
     expect(rows).toHaveLength(3);
     expect(rows.map((line) => line.split("|").slice(1, -1).length)).toEqual([
-      9, 9, 9,
+      13, 13, 13,
     ]);
   });
 
-  test("keeps every committed sealed Markdown report canonical", () => {
+  test("rejects missing or invalid phase timing", () => {
+    const base = report();
+    const first = base.libraries.at(0);
+    if (first?.status !== "ok")
+      throw new Error("test report must be available");
+    expect(() =>
+      assertSealedAggregateReport({
+        ...base,
+        libraries: [{ ...first, timing: { ...first.timing, warmSeconds: -1 } }],
+      }),
+    ).toThrow("warmSeconds must be finite and non-negative");
+    const { timing: _timing, ...withoutTiming } = first;
+    expect(() =>
+      assertSealedAggregateReport({ ...base, libraries: [withoutTiming] }),
+    ).toThrow("missing field timing");
+  });
+
+  test("keeps every current-schema sealed Markdown report canonical", () => {
     const rootResult = Bun.spawnSync(["git", "rev-parse", "--show-toplevel"]);
     if (!rootResult.success || rootResult.exitCode !== 0) {
       throw new Error("benchmark tests must run inside a Git repository");
@@ -111,7 +139,7 @@ describe("sealed aggregate report contract", () => {
       .split("\0")
       .filter((path) => path !== "");
     const trackedPathSet = new Set(trackedPaths);
-    let sealedReportCount = 0;
+    let aggregateReportCount = 0;
     for (const jsonPath of trackedPaths.filter((path) =>
       path.endsWith(".json"),
     )) {
@@ -123,19 +151,23 @@ describe("sealed aggregate report contract", () => {
         typeof parsed !== "object" ||
         Array.isArray(parsed) ||
         !("schemaVersion" in parsed) ||
-        parsed.schemaVersion !== SEALED_AGGREGATE_REPORT_SCHEMA_VERSION
+        typeof parsed.schemaVersion !== "number"
       ) {
         continue;
       }
+      aggregateReportCount += 1;
+      if (parsed.schemaVersion !== SEALED_AGGREGATE_REPORT_SCHEMA_VERSION) {
+        continue;
+      }
       assertSealedAggregateReport(parsed);
-      sealedReportCount += 1;
       const markdownPath = jsonPath.replace(/\.json$/u, ".md");
       expect(trackedPathSet.has(markdownPath)).toBe(true);
       expect(readFileSync(join(root, markdownPath), "utf8")).toBe(
         renderSealedAggregateMarkdown(parsed),
       );
     }
-    expect(sealedReportCount).toBeGreaterThan(0);
+    // A schema bump intentionally precedes regeneration of sealed results.
+    expect(aggregateReportCount).toBeGreaterThan(0);
   });
 
   test("rejects text, examples, predictions, and per-document fields at every report boundary", () => {
