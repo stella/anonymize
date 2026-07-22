@@ -178,6 +178,14 @@ jobs:
           --lib resolution::boundary::tests::fix_partial_words_same_label_scaling_is_bounded
           -- --ignored --exact
 
+      - name: Resolution-merge scaling regression
+        # Gates the direct accumulated-entity adversary by operation count and
+        # a fixed resolved-output digest in the optimized release profile.
+        run: >-
+          cargo test --release --locked -p stella-anonymize-core
+          --lib resolution::merge::tests::disjoint_resolution_merge_scales_with_candidate_count
+          -- --ignored --exact
+
       - name: Package exports (publint + attw)
         # Validates the published @stll/anonymize package.json exports and that
         # its types resolve for real consumers. Runs after the build so dist/
