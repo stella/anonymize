@@ -1108,6 +1108,7 @@ fn cluster_seeds(
     start: first.start,
     end: first.end,
   };
+  let barrier_index = NonAddressBarrierIndex::new(existing_entities);
 
   for seed in seeds.iter().skip(1) {
     let gap_ok = within_text_window(
@@ -1119,7 +1120,7 @@ fn cluster_seeds(
       full_text,
       current.end,
       seed.start,
-      existing_entities,
+      &barrier_index,
     );
     if gap_ok {
       current.seeds.push(seed.clone());
@@ -1135,6 +1136,89 @@ fn cluster_seeds(
   }
   clusters.push(current);
   clusters
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct NonAddressBarrierIndex {
+  starts: Vec<usize>,
+  max_end_tree: Vec<usize>,
+  leaf_count: usize,
+}
+
+impl NonAddressBarrierIndex {
+  fn new(existing_entities: &[PipelineEntity]) -> Self {
+    let mut intervals = existing_entities
+      .iter()
+      .filter(|entity| non_address_label(&entity.label))
+      .filter_map(|entity| {
+        Some((
+          usize::try_from(entity.start).ok()?,
+          usize::try_from(entity.end).ok()?,
+        ))
+      })
+      .collect::<Vec<_>>();
+    intervals.sort_unstable_by_key(|interval| interval.0);
+
+    let leaf_count = intervals.len().max(1);
+    let mut max_end_tree = vec![0; leaf_count.saturating_mul(2)];
+    let mut starts = Vec::with_capacity(intervals.len());
+    for (index, (start, end)) in intervals.into_iter().enumerate() {
+      starts.push(start);
+      if let Some(leaf) = max_end_tree.get_mut(leaf_count.saturating_add(index))
+      {
+        *leaf = end;
+      }
+    }
+    for index in (1..leaf_count).rev() {
+      let left = max_end_tree
+        .get(index.saturating_mul(2))
+        .copied()
+        .unwrap_or(0);
+      let right = max_end_tree
+        .get(index.saturating_mul(2).saturating_add(1))
+        .copied()
+        .unwrap_or(0);
+      if let Some(node) = max_end_tree.get_mut(index) {
+        *node = left.max(right);
+      }
+    }
+
+    Self {
+      starts,
+      max_end_tree,
+      leaf_count,
+    }
+  }
+
+  fn has_barrier(&self, gap_start: usize, gap_end: usize) -> bool {
+    if gap_start >= gap_end {
+      return false;
+    }
+    let first = self.starts.partition_point(|start| *start < gap_start);
+    let last = self.starts.partition_point(|start| *start < gap_end);
+    self.range_max_end(first, last) > gap_start
+  }
+
+  fn range_max_end(&self, start: usize, end: usize) -> usize {
+    let mut left = self.leaf_count.saturating_add(start);
+    let mut right = self.leaf_count.saturating_add(end);
+    let mut max_end = 0usize;
+    while left < right {
+      if left % 2 == 1 {
+        max_end =
+          max_end.max(self.max_end_tree.get(left).copied().unwrap_or(0));
+        left = left.saturating_add(1);
+      }
+      if right % 2 == 1 {
+        right = right.saturating_sub(1);
+        max_end =
+          max_end.max(self.max_end_tree.get(right).copied().unwrap_or(0));
+      }
+      left /= 2;
+      right /= 2;
+    }
+    max_end
+  }
 }
 
 fn within_text_window(
@@ -1204,17 +1288,12 @@ fn has_cluster_barrier(
   full_text: &str,
   gap_start: usize,
   gap_end: usize,
-  existing_entities: &[PipelineEntity],
+  barrier_index: &NonAddressBarrierIndex,
 ) -> bool {
   full_text
     .get(gap_start..gap_end)
     .is_some_and(has_paragraph_break)
-    || existing_entities.iter().any(|entity| {
-      non_address_label(&entity.label)
-        && usize::try_from(entity.start)
-          .is_ok_and(|start| start >= gap_start && start < gap_end)
-        && usize::try_from(entity.end).is_ok_and(|end| end > gap_start)
-    })
+    || barrier_index.has_barrier(gap_start, gap_end)
 }
 
 fn overlaps_non_address(
@@ -1703,6 +1782,44 @@ mod tests {
       prop_assert_eq!(
         SeedCoverageIndex::new(&seeds).covers(query_start, query_end),
         seed_covered(&seeds, query_start, query_end),
+      );
+    }
+
+    #[test]
+    fn non_address_barrier_index_matches_linear_scan(
+      ranges in proptest::collection::vec(
+        (any::<u32>(), any::<u32>(), any::<bool>()),
+        0..512,
+      ),
+      gap_start in any::<u32>(),
+      gap_end in any::<u32>(),
+    ) {
+      let entities = ranges
+        .into_iter()
+        .map(|(start, end, is_address)| {
+          PipelineEntity::detected(
+            start,
+            end,
+            if is_address { "address" } else { "person" },
+            "fixture",
+            0.9,
+            DetectionSource::Regex,
+          )
+        })
+        .collect::<Vec<_>>();
+      let gap_start = usize::try_from(gap_start).unwrap_or(usize::MAX);
+      let gap_end = usize::try_from(gap_end).unwrap_or(usize::MAX);
+      let expected = entities.iter().any(|entity| {
+        non_address_label(&entity.label)
+          && usize::try_from(entity.start)
+            .is_ok_and(|start| start >= gap_start && start < gap_end)
+          && usize::try_from(entity.end).is_ok_and(|end| end > gap_start)
+      });
+
+      prop_assert_eq!(
+        NonAddressBarrierIndex::new(&entities)
+          .has_barrier(gap_start, gap_end),
+        expected,
       );
     }
   }
