@@ -235,15 +235,330 @@ struct CharSpan {
   ch: char,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum LabelSummary {
+  Empty,
+  Uniform(usize),
+  Mixed,
+}
+
+impl LabelSummary {
+  const fn combine(left: Self, right: Self) -> Self {
+    match (left, right) {
+      (Self::Empty, summary) | (summary, Self::Empty) => summary,
+      (Self::Uniform(left_label), Self::Uniform(right_label))
+        if left_label == right_label =>
+      {
+        Self::Uniform(left_label)
+      }
+      _ => Self::Mixed,
+    }
+  }
+
+  const fn has_different_label(self, excluded_label: usize) -> bool {
+    match self {
+      Self::Empty => false,
+      Self::Uniform(label) => label != excluded_label,
+      Self::Mixed => true,
+    }
+  }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct BoundaryPoint {
+  position: u32,
+  label_id: usize,
+}
+
+// Each tree node records whether all positions below it share one label.
+// A query can therefore discard a same-label subtree in one step and descend
+// only toward the nearest cross-label start or end.
+#[derive(Debug)]
+struct BoundaryPositionIndex {
+  points: Vec<BoundaryPoint>,
+  summaries: Vec<LabelSummary>,
+  leaf_count: usize,
+}
+
+#[derive(Debug, Default)]
+struct BoundarySearchResult {
+  position: Option<u32>,
+  #[cfg(test)]
+  node_visits: usize,
+}
+
+impl BoundaryPositionIndex {
+  fn new(
+    entities: &[PipelineEntity],
+    label_ids: &[usize],
+    position: impl Fn(&PipelineEntity) -> u32,
+  ) -> Self {
+    let mut points = entities
+      .iter()
+      .zip(label_ids)
+      .map(|(entity, &label_id)| BoundaryPoint {
+        position: position(entity),
+        label_id,
+      })
+      .collect::<Vec<_>>();
+    points.sort_by_key(|point| point.position);
+
+    let leaf_count = points.len().next_power_of_two();
+    let mut summaries = vec![LabelSummary::Empty; leaf_count.saturating_mul(2)];
+    for (index, point) in points.iter().enumerate() {
+      if let Some(summary) = summaries.get_mut(leaf_count.saturating_add(index))
+      {
+        *summary = LabelSummary::Uniform(point.label_id);
+      }
+    }
+    for index in (1..leaf_count).rev() {
+      let left = summaries
+        .get(index.saturating_mul(2))
+        .copied()
+        .unwrap_or(LabelSummary::Empty);
+      let right = summaries
+        .get(index.saturating_mul(2).saturating_add(1))
+        .copied()
+        .unwrap_or(LabelSummary::Empty);
+      if let Some(summary) = summaries.get_mut(index) {
+        *summary = LabelSummary::combine(left, right);
+      }
+    }
+
+    Self {
+      points,
+      summaries,
+      leaf_count,
+    }
+  }
+
+  fn leftmost_different(
+    &self,
+    start: u32,
+    end: u32,
+    excluded_label: usize,
+  ) -> BoundarySearchResult {
+    let query_start =
+      self.points.partition_point(|point| point.position < start);
+    let query_end = self.points.partition_point(|point| point.position < end);
+    #[cfg(test)]
+    let mut node_visits = 0_usize;
+    #[cfg(test)]
+    let mut record_visit = || {
+      node_visits = node_visits.saturating_add(1);
+    };
+    #[cfg(not(test))]
+    let mut record_visit = || {};
+    let position = self.find_different(
+      BoundarySearchParams {
+        node: 1,
+        node_start: 0,
+        node_end: self.leaf_count,
+        query_start,
+        query_end,
+        excluded_label,
+        direction: SearchDirection::Leftmost,
+      },
+      &mut record_visit,
+    );
+    BoundarySearchResult {
+      position,
+      #[cfg(test)]
+      node_visits,
+    }
+  }
+
+  fn rightmost_different(
+    &self,
+    start_exclusive: u32,
+    end_inclusive: u32,
+    excluded_label: usize,
+  ) -> BoundarySearchResult {
+    let query_start = self
+      .points
+      .partition_point(|point| point.position <= start_exclusive);
+    let query_end = self
+      .points
+      .partition_point(|point| point.position <= end_inclusive);
+    #[cfg(test)]
+    let mut node_visits = 0_usize;
+    #[cfg(test)]
+    let mut record_visit = || {
+      node_visits = node_visits.saturating_add(1);
+    };
+    #[cfg(not(test))]
+    let mut record_visit = || {};
+    let position = self.find_different(
+      BoundarySearchParams {
+        node: 1,
+        node_start: 0,
+        node_end: self.leaf_count,
+        query_start,
+        query_end,
+        excluded_label,
+        direction: SearchDirection::Rightmost,
+      },
+      &mut record_visit,
+    );
+    BoundarySearchResult {
+      position,
+      #[cfg(test)]
+      node_visits,
+    }
+  }
+
+  fn find_different(
+    &self,
+    params: BoundarySearchParams,
+    record_visit: &mut impl FnMut(),
+  ) -> Option<u32> {
+    let BoundarySearchParams {
+      node,
+      node_start,
+      node_end,
+      query_start,
+      query_end,
+      excluded_label,
+      direction,
+    } = params;
+    if node_end <= query_start || node_start >= query_end {
+      return None;
+    }
+
+    record_visit();
+    if !self
+      .summaries
+      .get(node)
+      .copied()
+      .unwrap_or(LabelSummary::Empty)
+      .has_different_label(excluded_label)
+    {
+      return None;
+    }
+    if node_end.saturating_sub(node_start) == 1 {
+      return self.points.get(node_start).map(|point| point.position);
+    }
+
+    let midpoint =
+      node_start.saturating_add(node_end.saturating_sub(node_start) >> 1);
+    let left = BoundarySearchParams {
+      node: node.saturating_mul(2),
+      node_start,
+      node_end: midpoint,
+      query_start,
+      query_end,
+      excluded_label,
+      direction,
+    };
+    let right = BoundarySearchParams {
+      node: node.saturating_mul(2).saturating_add(1),
+      node_start: midpoint,
+      node_end,
+      query_start,
+      query_end,
+      excluded_label,
+      direction,
+    };
+    match direction {
+      SearchDirection::Leftmost => self
+        .find_different(left, record_visit)
+        .or_else(|| self.find_different(right, record_visit)),
+      SearchDirection::Rightmost => self
+        .find_different(right, record_visit)
+        .or_else(|| self.find_different(left, record_visit)),
+    }
+  }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SearchDirection {
+  Leftmost,
+  Rightmost,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct BoundarySearchParams {
+  node: usize,
+  node_start: usize,
+  node_end: usize,
+  query_start: usize,
+  query_end: usize,
+  excluded_label: usize,
+  direction: SearchDirection,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct BoundaryFixStats {
+  #[cfg(test)]
+  index_node_visits: usize,
+}
+
+impl BoundaryFixStats {
+  #[inline]
+  #[cfg(test)]
+  const fn record_search(&mut self, search: &BoundarySearchResult) {
+    self.index_node_visits =
+      self.index_node_visits.saturating_add(search.node_visits);
+  }
+}
+
+#[derive(Debug)]
+struct BoundaryOverlapIndexes {
+  label_ids: Vec<usize>,
+  starts: BoundaryPositionIndex,
+  ends: BoundaryPositionIndex,
+}
+
+// Linear scans avoid index construction overhead on ordinary small inputs.
+const BOUNDARY_INDEX_MIN_ENTITIES: usize = 64;
+
+impl BoundaryOverlapIndexes {
+  fn new(entities: &[PipelineEntity]) -> Self {
+    let mut labels = BTreeMap::<&str, usize>::new();
+    let label_ids = entities
+      .iter()
+      .map(|entity| {
+        let next_id = labels.len();
+        *labels.entry(&entity.label).or_insert(next_id)
+      })
+      .collect::<Vec<_>>();
+    Self {
+      starts: BoundaryPositionIndex::new(entities, &label_ids, |entity| {
+        entity.start
+      }),
+      ends: BoundaryPositionIndex::new(entities, &label_ids, |entity| {
+        entity.end
+      }),
+      label_ids,
+    }
+  }
+}
+
 fn fix_partial_words(
   entities: &[PipelineEntity],
   offsets: &ByteOffsets<'_>,
   spans: &[CharSpan],
   boundaries: &BTreeSet<u32>,
 ) -> Result<Vec<PipelineEntity>> {
+  fix_partial_words_with_stats(entities, offsets, spans, boundaries)
+    .map(|(fixed, _)| fixed)
+}
+
+fn fix_partial_words_with_stats(
+  entities: &[PipelineEntity],
+  offsets: &ByteOffsets<'_>,
+  spans: &[CharSpan],
+  boundaries: &BTreeSet<u32>,
+) -> Result<(Vec<PipelineEntity>, BoundaryFixStats)> {
   let mut sorted = entities.to_vec();
   sorted.sort_by_key(|entity| entity.start);
+  let indexes = (sorted.len() >= BOUNDARY_INDEX_MIN_ENTITIES)
+    .then(|| BoundaryOverlapIndexes::new(&sorted));
   let mut fixed = Vec::with_capacity(sorted.len());
+  #[cfg(test)]
+  let mut stats = BoundaryFixStats::default();
+  #[cfg(not(test))]
+  let stats = BoundaryFixStats::default();
 
   for (index, entity) in sorted.iter().enumerate() {
     if has_locked_boundary(entity) || has_detector_locked_boundary(entity) {
@@ -259,15 +574,36 @@ fn fix_partial_words(
     let mut new_start = word_start_at(entity.start, boundaries, spans);
     let mut new_end = word_end_at(entity.end, boundaries, spans);
 
-    for (other_index, other) in sorted.iter().enumerate() {
-      if other_index == index || other.label == entity.label {
-        continue;
+    if let Some(indexes) = indexes.as_ref() {
+      let label_id = indexes.label_ids.get(index).copied().unwrap_or_default();
+      let left =
+        indexes
+          .ends
+          .rightmost_different(new_start, entity.start, label_id);
+      #[cfg(test)]
+      stats.record_search(&left);
+      if let Some(end) = left.position {
+        new_start = new_start.max(end);
       }
-      if other.end > new_start && other.end <= entity.start {
-        new_start = new_start.max(other.end);
+      let right = indexes
+        .starts
+        .leftmost_different(entity.end, new_end, label_id);
+      #[cfg(test)]
+      stats.record_search(&right);
+      if let Some(start) = right.position {
+        new_end = new_end.min(start);
       }
-      if other.start >= entity.end && other.start < new_end {
-        new_end = new_end.min(other.start);
+    } else {
+      for (other_index, other) in sorted.iter().enumerate() {
+        if other_index == index || other.label == entity.label {
+          continue;
+        }
+        if other.end > new_start && other.end <= entity.start {
+          new_start = new_start.max(other.end);
+        }
+        if other.start >= entity.end && other.start < new_end {
+          new_end = new_end.min(other.start);
+        }
       }
     }
 
@@ -283,7 +619,7 @@ fn fix_partial_words(
     fixed.push(adjusted);
   }
 
-  Ok(fixed)
+  Ok((fixed, stats))
 }
 
 fn resolve_cross_label_overlaps(
@@ -373,16 +709,179 @@ fn deduplicate_spans(entities: &[PipelineEntity]) -> Vec<PipelineEntity> {
   seen.into_values().collect()
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct LabelEnd {
+  label_id: usize,
+  end: u32,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct CrossLabelMaxEnds {
+  first: Option<LabelEnd>,
+  second: Option<LabelEnd>,
+}
+
+impl CrossLabelMaxEnds {
+  fn insert(&mut self, candidate: LabelEnd) {
+    if let Some(first) = &mut self.first
+      && first.label_id == candidate.label_id
+    {
+      first.end = first.end.max(candidate.end);
+      return;
+    }
+    if let Some(second) = &mut self.second
+      && second.label_id == candidate.label_id
+    {
+      second.end = second.end.max(candidate.end);
+      if self.first.is_some_and(|first| second.end > first.end) {
+        std::mem::swap(&mut self.first, &mut self.second);
+      }
+      return;
+    }
+
+    if self.first.is_none_or(|first| candidate.end > first.end) {
+      self.second = self.first;
+      self.first = Some(candidate);
+      return;
+    }
+    if self.second.is_none_or(|second| candidate.end > second.end) {
+      self.second = Some(candidate);
+    }
+  }
+
+  fn max_end_excluding(self, excluded_label: usize) -> Option<u32> {
+    self
+      .first
+      .filter(|entry| entry.label_id != excluded_label)
+      .or(self.second)
+      .map(|entry| entry.end)
+  }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct GapOccupancyResult {
+  occupied: bool,
+  #[cfg(test)]
+  activated_entities: usize,
+}
+
+/// Start-sorted intervals activated once as the right edge advances. Keeping
+/// the two greatest ends from distinct labels makes each cross-label overlap
+/// query constant-time after amortized linear activation.
+struct GapOccupancyIndex<'a> {
+  entities: &'a [PipelineEntity],
+  label_ids: Vec<usize>,
+  activation_cursor: usize,
+  max_ends: CrossLabelMaxEnds,
+}
+
+impl<'a> GapOccupancyIndex<'a> {
+  fn new(entities: &'a [PipelineEntity]) -> Self {
+    let mut labels = BTreeMap::<&str, usize>::new();
+    let label_ids = entities
+      .iter()
+      .map(|entity| {
+        let next_id = labels.len();
+        *labels.entry(&entity.label).or_insert(next_id)
+      })
+      .collect();
+    Self {
+      entities,
+      label_ids,
+      activation_cursor: 0,
+      max_ends: CrossLabelMaxEnds::default(),
+    }
+  }
+
+  fn has_cross_label_overlap(
+    &mut self,
+    entity_index: usize,
+    gap_start: u32,
+    gap_end: u32,
+  ) -> GapOccupancyResult {
+    #[cfg(test)]
+    let mut activated_entities = 0_usize;
+    while self
+      .entities
+      .get(self.activation_cursor)
+      .is_some_and(|entity| entity.start < gap_end)
+    {
+      let Some(entity) = self.entities.get(self.activation_cursor) else {
+        break;
+      };
+      let label_id = self
+        .label_ids
+        .get(self.activation_cursor)
+        .copied()
+        .unwrap_or_default();
+      self.max_ends.insert(LabelEnd {
+        label_id,
+        end: entity.end,
+      });
+      self.activation_cursor = self.activation_cursor.saturating_add(1);
+      #[cfg(test)]
+      {
+        activated_entities = activated_entities.saturating_add(1);
+      }
+    }
+
+    let excluded_label = self
+      .label_ids
+      .get(entity_index)
+      .copied()
+      .unwrap_or_default();
+    GapOccupancyResult {
+      occupied: self
+        .max_ends
+        .max_end_excluding(excluded_label)
+        .is_some_and(|end| end > gap_start),
+      #[cfg(test)]
+      activated_entities,
+    }
+  }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct MergeAdjacentStats {
+  #[cfg(test)]
+  gap_queries: usize,
+  #[cfg(test)]
+  activated_entities: usize,
+}
+
+impl MergeAdjacentStats {
+  #[cfg(test)]
+  const fn record_query(&mut self, query: GapOccupancyResult) {
+    self.gap_queries = self.gap_queries.saturating_add(1);
+    self.activated_entities = self
+      .activated_entities
+      .saturating_add(query.activated_entities);
+  }
+}
+
 fn merge_adjacent(
   entities: &[PipelineEntity],
   offsets: &ByteOffsets<'_>,
 ) -> Result<Vec<PipelineEntity>> {
+  merge_adjacent_with_stats(entities, offsets).map(|(merged, _)| merged)
+}
+
+fn merge_adjacent_with_stats(
+  entities: &[PipelineEntity],
+  offsets: &ByteOffsets<'_>,
+) -> Result<(Vec<PipelineEntity>, MergeAdjacentStats)> {
   let mut sorted = entities.to_vec();
   sorted.sort_by_key(|entity| entity.start);
+  let mut occupancy_index = (sorted.len() >= BOUNDARY_INDEX_MIN_ENTITIES)
+    .then(|| GapOccupancyIndex::new(&sorted));
   let mut result = Vec::<PipelineEntity>::new();
   let mut last_by_label = BTreeMap::<String, usize>::new();
+  #[cfg(test)]
+  let mut stats = MergeAdjacentStats::default();
+  #[cfg(not(test))]
+  let stats = MergeAdjacentStats::default();
 
-  for entity in &sorted {
+  for (entity_index, entity) in sorted.iter().enumerate() {
     if has_locked_boundary(entity) {
       result.push(entity.clone());
       continue;
@@ -410,21 +909,33 @@ fn merge_adjacent(
     let gap = offsets.slice(previous.end, entity.start)?;
     let gap_start = previous.end;
     let gap_end = entity.start;
-    let gap_occupied = sorted.iter().any(|other| {
-      other.label != entity.label
-        && other.start < gap_end
-        && other.end > gap_start
-    });
     let legal_form_comma = (is_legal_form_organization(previous)
       || is_legal_form_organization(entity))
       && gap.contains(',');
 
-    if !has_locked_boundary(previous)
+    let mergeable = !has_locked_boundary(previous)
       && !legal_form_comma
       && entity.label != "country"
-      && !gap_occupied
-      && is_mergeable_gap(&gap)
-    {
+      && is_mergeable_gap(&gap);
+    let gap_occupied = mergeable
+      && occupancy_index.as_mut().map_or_else(
+        || {
+          sorted.iter().any(|other| {
+            other.label != entity.label
+              && other.start < gap_end
+              && other.end > gap_start
+          })
+        },
+        |index| {
+          let query =
+            index.has_cross_label_overlap(entity_index, gap_start, gap_end);
+          #[cfg(test)]
+          stats.record_query(query);
+          query.occupied
+        },
+      );
+
+    if mergeable && !gap_occupied {
       merge_into_previous(&mut result, previous_index, entity, offsets)?;
       continue;
     }
@@ -434,7 +945,7 @@ fn merge_adjacent(
     last_by_label.insert(entity.label.clone(), index);
   }
 
-  Ok(result)
+  Ok((result, stats))
 }
 
 fn remove_nested_same_label(
@@ -636,4 +1147,356 @@ const fn is_word_end_stop(ch: char) -> bool {
     ch,
     '\n' | '\r' | ',' | ';' | '.' | '(' | ')' | '[' | ']' | '&'
   )
+}
+
+#[cfg(test)]
+mod tests {
+  use proptest::prelude::*;
+
+  use super::*;
+
+  const SAME_LABEL_SCALING_ENTITY_COUNT: usize = 20_000;
+
+  fn fix_partial_words_legacy(
+    entities: &[PipelineEntity],
+    offsets: &ByteOffsets<'_>,
+    spans: &[CharSpan],
+    boundaries: &BTreeSet<u32>,
+  ) -> Result<Vec<PipelineEntity>> {
+    let mut sorted = entities.to_vec();
+    sorted.sort_by_key(|entity| entity.start);
+    let mut fixed = Vec::with_capacity(sorted.len());
+
+    for (index, entity) in sorted.iter().enumerate() {
+      if has_locked_boundary(entity) || has_detector_locked_boundary(entity) {
+        fixed.push(entity.clone());
+        continue;
+      }
+      if entity.text != offsets.slice(entity.start, entity.end)? {
+        fixed.push(entity.clone());
+        continue;
+      }
+
+      let mut new_start = word_start_at(entity.start, boundaries, spans);
+      let mut new_end = word_end_at(entity.end, boundaries, spans);
+      for (other_index, other) in sorted.iter().enumerate() {
+        if other_index == index || other.label == entity.label {
+          continue;
+        }
+        if other.end > new_start && other.end <= entity.start {
+          new_start = new_start.max(other.end);
+        }
+        if other.start >= entity.end && other.start < new_end {
+          new_end = new_end.min(other.start);
+        }
+      }
+
+      if new_start == entity.start && new_end == entity.end {
+        fixed.push(entity.clone());
+        continue;
+      }
+      let mut adjusted = entity.clone();
+      adjusted.start = new_start;
+      adjusted.end = new_end;
+      adjusted.text = offsets.slice(new_start, new_end)?;
+      fixed.push(adjusted);
+    }
+
+    Ok(fixed)
+  }
+
+  fn merge_adjacent_legacy(
+    entities: &[PipelineEntity],
+    offsets: &ByteOffsets<'_>,
+  ) -> Result<Vec<PipelineEntity>> {
+    let mut sorted = entities.to_vec();
+    sorted.sort_by_key(|entity| entity.start);
+    let mut result = Vec::<PipelineEntity>::new();
+    let mut last_by_label = BTreeMap::<String, usize>::new();
+
+    for entity in &sorted {
+      if has_locked_boundary(entity) {
+        result.push(entity.clone());
+        continue;
+      }
+      let Some(previous_index) = last_by_label.get(&entity.label).copied()
+      else {
+        let index = result.len();
+        result.push(entity.clone());
+        last_by_label.insert(entity.label.clone(), index);
+        continue;
+      };
+      let Some(previous) = result.get(previous_index) else {
+        let index = result.len();
+        result.push(entity.clone());
+        last_by_label.insert(entity.label.clone(), index);
+        continue;
+      };
+      if !has_locked_boundary(previous) && entity.start < previous.end {
+        merge_into_previous(&mut result, previous_index, entity, offsets)?;
+        continue;
+      }
+
+      let gap = offsets.slice(previous.end, entity.start)?;
+      let gap_start = previous.end;
+      let gap_end = entity.start;
+      let gap_occupied = sorted.iter().any(|other| {
+        other.label != entity.label
+          && other.start < gap_end
+          && other.end > gap_start
+      });
+      let legal_form_comma = (is_legal_form_organization(previous)
+        || is_legal_form_organization(entity))
+        && gap.contains(',');
+      if !has_locked_boundary(previous)
+        && !legal_form_comma
+        && entity.label != "country"
+        && !gap_occupied
+        && is_mergeable_gap(&gap)
+      {
+        merge_into_previous(&mut result, previous_index, entity, offsets)?;
+        continue;
+      }
+
+      let index = result.len();
+      result.push(entity.clone());
+      last_by_label.insert(entity.label.clone(), index);
+    }
+
+    Ok(result)
+  }
+
+  proptest! {
+    #[test]
+    fn indexed_partial_word_fix_matches_legacy_scan(
+      full_text in "[a-zA-Z ,;.\\n']{0,128}",
+      raw_entities in proptest::collection::vec(
+        (any::<u16>(), any::<u16>(), 0_u8..4, any::<bool>(), 0_u8..3),
+        0..128,
+      ),
+    ) {
+      let text_len = full_text.len();
+      let entities = raw_entities
+        .into_iter()
+        .enumerate()
+        .map(|(index, (left, right, label_index, exact_text, source_index))| {
+          let modulus = text_len.saturating_add(1);
+          let left = usize::from(left).checked_rem(modulus).unwrap_or_default();
+          let right = usize::from(right).checked_rem(modulus).unwrap_or_default();
+          let start = left.min(right);
+          let end = left.max(right);
+          let label = match label_index {
+            0 => "person",
+            1 => "organization",
+            2 => crate::labels::PHONE_NUMBER_LABEL,
+            _ => "address",
+          };
+          let source = match source_index {
+            0 => DetectionSource::Ner,
+            1 => DetectionSource::Trigger,
+            _ => DetectionSource::Caller,
+          };
+          let detected_text = if exact_text {
+            full_text.get(start..end).unwrap_or_default()
+          } else {
+            "intentionally stale"
+          };
+          PipelineEntity::detected(
+            u32::try_from(start).unwrap_or(u32::MAX),
+            u32::try_from(end).unwrap_or(u32::MAX),
+            label,
+            detected_text,
+            f64::from(u32::try_from(index).unwrap_or(u32::MAX)),
+            source,
+          )
+        })
+        .collect::<Vec<_>>();
+      let offsets = ByteOffsets::new(&full_text);
+      let spans = char_spans(&full_text);
+      let boundaries = word_boundaries(&spans);
+
+      prop_assert_eq!(
+        fix_partial_words(&entities, &offsets, &spans, &boundaries)?,
+        fix_partial_words_legacy(&entities, &offsets, &spans, &boundaries)?,
+      );
+    }
+
+    #[test]
+    fn indexed_adjacent_merge_matches_legacy_scan(
+      characters in proptest::collection::vec(
+        prop_oneof![
+          Just('a'), Just('Z'), Just(' '), Just('\t'), Just(','), Just('-'),
+          Just('.'), Just('\n'), Just('é'), Just('東'), Just('🙂'),
+          Just('\u{0301}'), Just('\u{00a0}'),
+        ],
+        0..96,
+      ),
+      raw_entities in proptest::collection::vec(
+        (any::<u16>(), any::<u16>(), 0_u8..5, 0_u8..4),
+        0..128,
+      ),
+    ) {
+      let full_text = characters.into_iter().collect::<String>();
+      let mut boundaries = full_text
+        .char_indices()
+        .map(|(index, _)| index)
+        .collect::<Vec<_>>();
+      boundaries.push(full_text.len());
+      let entities = raw_entities
+        .into_iter()
+        .enumerate()
+        .map(|(index, (left, right, label_index, source_index))| {
+          let left_index = usize::from(left)
+            .checked_rem(boundaries.len())
+            .unwrap_or_default();
+          let right_index = usize::from(right)
+            .checked_rem(boundaries.len())
+            .unwrap_or_default();
+          let start = boundaries.get(left_index).copied().unwrap_or_default();
+          let end = boundaries.get(right_index).copied().unwrap_or_default();
+          let label = match label_index {
+            0 => "person",
+            1 => crate::labels::ORGANIZATION_LABEL,
+            2 => "address",
+            3 => "country",
+            _ => crate::labels::PHONE_NUMBER_LABEL,
+          };
+          let source = match source_index {
+            0 => DetectionSource::Ner,
+            1 => DetectionSource::LegalForm,
+            2 => DetectionSource::Caller,
+            _ => DetectionSource::Trigger,
+          };
+          let detected_text = full_text
+            .get(start..end)
+            .unwrap_or("malformed span");
+          PipelineEntity::detected(
+            u32::try_from(start).unwrap_or(u32::MAX),
+            u32::try_from(end).unwrap_or(u32::MAX),
+            label,
+            detected_text,
+            f64::from(u32::try_from(index).unwrap_or(u32::MAX)),
+            source,
+          )
+        })
+        .collect::<Vec<_>>();
+      let offsets = ByteOffsets::new(&full_text);
+
+      prop_assert_eq!(
+        merge_adjacent(&entities, &offsets),
+        merge_adjacent_legacy(&entities, &offsets),
+      );
+    }
+  }
+
+  #[test]
+  #[ignore = "release-mode scaling regression check"]
+  fn fix_partial_words_same_label_scaling_is_bounded() -> Result<()> {
+    let full_text = "word";
+    let offsets = ByteOffsets::new(full_text);
+    let spans = char_spans(full_text);
+    let boundaries = word_boundaries(&spans);
+    let entities = (0..SAME_LABEL_SCALING_ENTITY_COUNT)
+      .map(|index| {
+        let start = u32::try_from(index % 4).unwrap_or(u32::MAX);
+        PipelineEntity::detected(
+          start,
+          start.saturating_add(1),
+          "person",
+          full_text.get(index % 4..index % 4 + 1).unwrap_or_default(),
+          0.9,
+          DetectionSource::Ner,
+        )
+      })
+      .collect::<Vec<_>>();
+
+    let (fixed, stats) =
+      fix_partial_words_with_stats(&entities, &offsets, &spans, &boundaries)?;
+
+    assert_eq!(fixed.len(), SAME_LABEL_SCALING_ENTITY_COUNT);
+    assert!(
+      fixed.iter().all(|entity| {
+        entity.start == 0
+          && entity.end == 4
+          && entity.text == "word"
+          && entity.label == "person"
+          && entity.source == DetectionSource::Ner
+          && entity.score.to_bits() == 0.9_f64.to_bits()
+      }),
+      "indexed resolution must retain all entity invariants"
+    );
+    assert!(
+      stats.index_node_visits
+        <= SAME_LABEL_SCALING_ENTITY_COUNT.saturating_mul(2),
+      "same-label searches visited {} index nodes for {} entities",
+      stats.index_node_visits,
+      SAME_LABEL_SCALING_ENTITY_COUNT,
+    );
+    Ok(())
+  }
+
+  #[test]
+  #[ignore = "release-mode scaling regression check"]
+  fn merge_adjacent_same_label_scaling_is_bounded() -> Result<()> {
+    let fixture = "MA 02101-1234.\n\n";
+    let full_text = fixture.repeat(SAME_LABEL_SCALING_ENTITY_COUNT);
+    let entities = (0..SAME_LABEL_SCALING_ENTITY_COUNT)
+      .map(|index| {
+        let start = index.saturating_mul(fixture.len());
+        PipelineEntity::detected(
+          u32::try_from(start).unwrap_or(u32::MAX),
+          u32::try_from(start.saturating_add(13)).unwrap_or(u32::MAX),
+          "address",
+          "MA 02101-1234",
+          0.9,
+          DetectionSource::Ner,
+        )
+      })
+      .collect::<Vec<_>>();
+    let offsets = ByteOffsets::new(&full_text);
+    let (separated, separated_stats) =
+      merge_adjacent_with_stats(&entities, &offsets)?;
+
+    assert_eq!(separated, entities);
+    assert_eq!(separated_stats.gap_queries, 0);
+    assert_eq!(separated_stats.activated_entities, 0);
+
+    let mergeable_text = "A ".repeat(SAME_LABEL_SCALING_ENTITY_COUNT);
+    let mergeable_entities = (0..SAME_LABEL_SCALING_ENTITY_COUNT)
+      .map(|index| {
+        let start = index.saturating_mul(2);
+        PipelineEntity::detected(
+          u32::try_from(start).unwrap_or(u32::MAX),
+          u32::try_from(start.saturating_add(1)).unwrap_or(u32::MAX),
+          "person",
+          "A",
+          0.9,
+          DetectionSource::Ner,
+        )
+      })
+      .collect::<Vec<_>>();
+    let mergeable_offsets = ByteOffsets::new(&mergeable_text);
+    let (merged, merged_stats) =
+      merge_adjacent_with_stats(&mergeable_entities, &mergeable_offsets)?;
+
+    assert_eq!(merged.len(), 1);
+    let only = merged
+      .first()
+      .ok_or(crate::types::Error::InvalidSpan { start: 0, end: 0 })?;
+    assert_eq!(only.start, 0);
+    assert_eq!(
+      only.end,
+      u32::try_from(mergeable_text.len().saturating_sub(1)).unwrap_or(u32::MAX)
+    );
+    assert_eq!(only.label, "person");
+    assert!(
+      merged_stats.gap_queries < SAME_LABEL_SCALING_ENTITY_COUNT,
+      "one gap query per later entity is the linear upper bound"
+    );
+    assert!(
+      merged_stats.activated_entities < SAME_LABEL_SCALING_ENTITY_COUNT,
+      "each interval may be activated at most once"
+    );
+    Ok(())
+  }
 }

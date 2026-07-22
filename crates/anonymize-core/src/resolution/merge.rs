@@ -13,13 +13,13 @@ pub fn merge_and_dedup(entities: &[PipelineEntity]) -> Vec<PipelineEntity> {
   let mut sorted = entities.to_vec();
   sorted.sort_by_key(|entity| entity.start);
 
-  let Some(first) = sorted.first() else {
+  let Some(first) = sorted.first().cloned() else {
     return Vec::new();
   };
-  let mut merged = vec![first.clone()];
+  let mut merged = MergeFrontier::new(first);
 
   for entity in sorted.into_iter().skip(1) {
-    let overlaps = overlapping_indexes(&merged, &entity);
+    let overlaps = merged.overlapping_slots(&entity);
     if overlaps.is_empty() {
       merged.push(entity);
       continue;
@@ -41,14 +41,14 @@ pub fn merge_and_dedup(entities: &[PipelineEntity]) -> Vec<PipelineEntity> {
 
       let Some(index) = same_label_index else {
         merged.push(entity);
-        merged.sort_by_key(|entry| entry.start);
+        merged.sort_by_start();
         continue;
       };
 
       if let Some(existing) = merged.get(index)
         && should_replace(&entity, existing)
       {
-        replace_at(&mut merged, index, entity);
+        merged.replace(index, entity);
       }
       continue;
     }
@@ -65,27 +65,143 @@ pub fn merge_and_dedup(entities: &[PipelineEntity]) -> Vec<PipelineEntity> {
     let Some(insert_at) = overlaps.first().copied() else {
       continue;
     };
-    for index in overlaps.iter().rev() {
-      remove_at(&mut merged, *index);
-    }
-    insert_at_or_push(&mut merged, insert_at, entity);
+    merged.replace_overlaps(insert_at, &overlaps, entity);
   }
 
+  let merged = merged.into_entities();
   resolve_same_span_label_conflicts(&sanitize_entities(&merged))
 }
 
-fn overlapping_indexes(
-  entities: &[PipelineEntity],
-  entity: &PipelineEntity,
-) -> Vec<usize> {
-  entities
-    .iter()
-    .enumerate()
-    .filter_map(|(index, existing)| {
-      (existing.end > entity.start && existing.start < entity.end)
-        .then_some(index)
-    })
-    .collect()
+/// Retained entities in their legacy vector positions, plus the subset whose
+/// ends can still overlap the next start-sorted candidate. Slots are never
+/// shifted: replacing the first overlap and tombstoning the rest is equivalent
+/// to the old remove-then-insert sequence while keeping frontier identifiers
+/// stable.
+struct MergeFrontier {
+  slots: Vec<Option<PipelineEntity>>,
+  active_ends: BTreeMap<u32, BTreeSet<usize>>,
+  active_slots: BTreeSet<usize>,
+  #[cfg(test)]
+  candidate_checks: std::cell::Cell<usize>,
+}
+
+impl MergeFrontier {
+  fn new(entity: PipelineEntity) -> Self {
+    let end = entity.end;
+    Self {
+      slots: vec![Some(entity)],
+      active_ends: BTreeMap::from([(end, BTreeSet::from([0]))]),
+      active_slots: BTreeSet::from([0]),
+      #[cfg(test)]
+      candidate_checks: std::cell::Cell::new(0),
+    }
+  }
+
+  fn get(&self, slot: usize) -> Option<&PipelineEntity> {
+    self.slots.get(slot).and_then(Option::as_ref)
+  }
+
+  fn push(&mut self, entity: PipelineEntity) {
+    let slot = self.slots.len();
+    self.slots.push(Some(entity));
+    self.activate(slot);
+  }
+
+  fn sort_by_start(&mut self) {
+    let mut entities = std::mem::take(&mut self.slots)
+      .into_iter()
+      .flatten()
+      .collect::<Vec<_>>();
+    entities.sort_by_key(|entity| entity.start);
+    self.slots = entities.into_iter().map(Some).collect();
+    self.active_ends.clear();
+    self.active_slots.clear();
+    for slot in 0..self.slots.len() {
+      self.activate(slot);
+    }
+  }
+
+  fn replace(&mut self, slot: usize, entity: PipelineEntity) {
+    self.deactivate(slot);
+    let Some(entry) = self.slots.get_mut(slot) else {
+      return;
+    };
+    *entry = Some(entity);
+    self.activate(slot);
+  }
+
+  fn replace_overlaps(
+    &mut self,
+    insert_at: usize,
+    overlaps: &[usize],
+    entity: PipelineEntity,
+  ) {
+    for slot in overlaps {
+      self.deactivate(*slot);
+      if let Some(entry) = self.slots.get_mut(*slot) {
+        *entry = None;
+      }
+    }
+    self.replace(insert_at, entity);
+  }
+
+  fn activate(&mut self, slot: usize) {
+    let Some(end) = self.get(slot).map(|entity| entity.end) else {
+      return;
+    };
+    self.active_slots.insert(slot);
+    self.active_ends.entry(end).or_default().insert(slot);
+  }
+
+  fn deactivate(&mut self, slot: usize) {
+    let Some(end) = self.get(slot).map(|entity| entity.end) else {
+      return;
+    };
+    let remove_end = self.active_ends.get_mut(&end).is_some_and(|slots| {
+      slots.remove(&slot);
+      slots.is_empty()
+    });
+    if remove_end {
+      self.active_ends.remove(&end);
+    }
+    self.active_slots.remove(&slot);
+  }
+
+  fn retire_ended(&mut self, next_start: u32) {
+    while let Some((&end, _)) = self.active_ends.first_key_value() {
+      if end > next_start {
+        break;
+      }
+      let Some((_, slots)) = self.active_ends.pop_first() else {
+        break;
+      };
+      for slot in slots {
+        self.active_slots.remove(&slot);
+      }
+    }
+  }
+
+  fn overlapping_slots(&mut self, entity: &PipelineEntity) -> Vec<usize> {
+    self.retire_ended(entity.start);
+    self
+      .active_slots
+      .iter()
+      .copied()
+      .filter(|slot| {
+        #[cfg(test)]
+        self
+          .candidate_checks
+          .set(self.candidate_checks.get().saturating_add(1));
+        self.get(*slot).is_some_and(|existing| {
+          existing.end > entity.start && existing.start < entity.end
+        })
+      })
+      .collect()
+  }
+
+  fn into_entities(self) -> Vec<PipelineEntity> {
+    self.slots.into_iter().flatten().collect()
+  }
 }
 
 #[allow(clippy::too_many_lines)]
@@ -346,34 +462,6 @@ fn resolve_same_span_label_conflicts(
     .collect()
 }
 
-fn replace_at(
-  entities: &mut [PipelineEntity],
-  index: usize,
-  entity: PipelineEntity,
-) {
-  if let Some(slot) = entities.get_mut(index) {
-    *slot = entity;
-  }
-}
-
-fn remove_at(entities: &mut Vec<PipelineEntity>, index: usize) {
-  if index < entities.len() {
-    entities.remove(index);
-  }
-}
-
-fn insert_at_or_push(
-  entities: &mut Vec<PipelineEntity>,
-  index: usize,
-  entity: PipelineEntity,
-) {
-  if index <= entities.len() {
-    entities.insert(index, entity);
-    return;
-  }
-  entities.push(entity);
-}
-
 fn literal_contains(outer: &PipelineEntity, inner: &PipelineEntity) -> bool {
   outer.label == inner.label
     && matches!(
@@ -623,4 +711,224 @@ fn is_bare_postal_code(text: &str) -> bool {
     .collect::<String>();
   let len = compact.len();
   matches!(len, 5 | 8 | 9) && compact.chars().all(|ch| ch.is_ascii_digit())
+}
+
+#[cfg(test)]
+mod tests {
+  #![allow(clippy::expect_used, clippy::unwrap_used)]
+
+  use std::fmt::Write;
+
+  use proptest::prelude::*;
+  use sha2::{Digest, Sha256};
+
+  use super::*;
+
+  fn legacy_merge_and_dedup(
+    entities: &[PipelineEntity],
+  ) -> Vec<PipelineEntity> {
+    if entities.is_empty() {
+      return Vec::new();
+    }
+
+    let mut sorted = entities.to_vec();
+    sorted.sort_by_key(|entity| entity.start);
+    let Some(first) = sorted.first() else {
+      return Vec::new();
+    };
+    let mut merged = vec![first.clone()];
+
+    for entity in sorted.into_iter().skip(1) {
+      let overlaps = merged
+        .iter()
+        .enumerate()
+        .filter_map(|(index, existing)| {
+          (existing.end > entity.start && existing.start < entity.end)
+            .then_some(index)
+        })
+        .collect::<Vec<_>>();
+      if overlaps.is_empty() {
+        merged.push(entity);
+        continue;
+      }
+
+      let has_partial_overlap = overlaps.iter().any(|index| {
+        merged.get(*index).is_some_and(|existing| {
+          existing.start != entity.start || existing.end != entity.end
+        })
+      });
+      if !has_partial_overlap {
+        let same_label_index = overlaps.iter().find_map(|index| {
+          merged
+            .get(*index)
+            .is_some_and(|existing| existing.label == entity.label)
+            .then_some(*index)
+        });
+        let Some(index) = same_label_index else {
+          merged.push(entity);
+          merged.sort_by_key(|entry| entry.start);
+          continue;
+        };
+        if let Some(existing) = merged.get(index)
+          && should_replace(&entity, existing)
+          && let Some(slot) = merged.get_mut(index)
+        {
+          *slot = entity;
+        }
+        continue;
+      }
+
+      let replaces_all = overlaps.iter().all(|index| {
+        merged
+          .get(*index)
+          .is_some_and(|existing| should_replace(&entity, existing))
+      });
+      if !replaces_all {
+        continue;
+      }
+      let Some(insert_at) = overlaps.first().copied() else {
+        continue;
+      };
+      for index in overlaps.iter().rev() {
+        merged.remove(*index);
+      }
+      merged.insert(insert_at, entity);
+    }
+
+    resolve_same_span_label_conflicts(&sanitize_entities(&merged))
+  }
+
+  fn source_strategy() -> impl Strategy<Value = DetectionSource> {
+    prop_oneof![
+      Just(DetectionSource::Caller),
+      Just(DetectionSource::Trigger),
+      Just(DetectionSource::Regex),
+      Just(DetectionSource::DenyList),
+      Just(DetectionSource::LegalForm),
+      Just(DetectionSource::Gazetteer),
+      Just(DetectionSource::Country),
+      Just(DetectionSource::Ner),
+      Just(DetectionSource::Coreference),
+    ]
+  }
+
+  fn entity_strategy() -> impl Strategy<Value = PipelineEntity> {
+    (
+      0_u32..48,
+      0_u32..48,
+      prop::sample::select(vec![
+        "person",
+        "address",
+        "country",
+        "date",
+        "phone number",
+        "organization",
+      ]),
+      prop::sample::select(vec![0.1_f64, 0.5, 0.9, 1.0]),
+      source_strategy(),
+      prop::option::of(prop::sample::select(vec![
+        SourceDetail::CustomDenyList,
+        SourceDetail::CustomRegex,
+        SourceDetail::GazetteerExtension,
+        SourceDetail::AddressContext,
+      ])),
+    )
+      .prop_map(|(start, end, label, score, source, source_detail)| {
+        let mut entity = PipelineEntity::detected(
+          start,
+          end,
+          label,
+          "x".repeat(
+            usize::try_from(end.saturating_sub(start)).unwrap_or_default(),
+          ),
+          score,
+          source,
+        );
+        entity.source_detail = source_detail;
+        entity
+      })
+  }
+
+  proptest! {
+    #[test]
+    fn frontier_merge_matches_legacy_resolution(
+      entities in prop::collection::vec(entity_strategy(), 0..96),
+    ) {
+      prop_assert_eq!(
+        merge_and_dedup(&entities),
+        legacy_merge_and_dedup(&entities),
+      );
+    }
+  }
+
+  fn disjoint_entities(count: usize) -> Vec<PipelineEntity> {
+    (0..count)
+      .map(|index| {
+        let start = u32::try_from(index.saturating_mul(3)).unwrap_or(u32::MAX);
+        PipelineEntity::detected(
+          start,
+          start.saturating_add(1),
+          "person",
+          "x",
+          0.9,
+          DetectionSource::Regex,
+        )
+      })
+      .collect()
+  }
+
+  fn frontier_candidate_checks(entities: &[PipelineEntity]) -> usize {
+    let Some(first) = entities.first().cloned() else {
+      return 0;
+    };
+    let mut frontier = MergeFrontier::new(first);
+    for entity in entities.iter().skip(1).cloned() {
+      assert!(frontier.overlapping_slots(&entity).is_empty());
+      frontier.push(entity);
+    }
+    frontier.candidate_checks.get()
+  }
+
+  fn output_digest(entities: &[PipelineEntity]) -> String {
+    let mut digest = Sha256::new();
+    for entity in entities {
+      digest.update(format!("{entity:?}\n"));
+    }
+    let digest = digest.finalize();
+    let mut encoded = String::with_capacity(digest.len().saturating_mul(2));
+    for byte in digest {
+      write!(&mut encoded, "{byte:02x}").expect("write to string");
+    }
+    encoded
+  }
+
+  #[test]
+  #[ignore = "release-mode scaling regression check"]
+  fn disjoint_resolution_merge_scales_with_candidate_count() {
+    const SMALL_COUNT: usize = 4_096;
+    const LARGE_COUNT: usize = 0x4000;
+    let small = disjoint_entities(SMALL_COUNT);
+    let large = disjoint_entities(LARGE_COUNT);
+
+    let small_checks = frontier_candidate_checks(&small);
+    let large_checks = frontier_candidate_checks(&large);
+    assert_eq!(small_checks, 0);
+    assert_eq!(large_checks, 0);
+
+    let started = std::time::Instant::now();
+    let resolved = merge_and_dedup(&large);
+    let elapsed = started.elapsed();
+    assert_eq!(resolved.len(), LARGE_COUNT);
+    assert!(resolved.windows(2).all(|pair| {
+      pair
+        .first()
+        .zip(pair.get(1))
+        .is_some_and(|(left, right)| left.end < right.start)
+    }));
+    assert_eq!(
+      output_digest(&resolved),
+      "ceca76ca0c2d23ab459a0bc3ec3d532b21ccf00d509479d1b98f33e635713c85",
+    );
+    std::hint::black_box(elapsed);
+  }
 }
