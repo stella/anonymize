@@ -55,15 +55,23 @@ const releaseJobs = jobHeaders.map((header, index) => ({
     jobHeaders[index + 1]?.index ?? jobsText.length,
   ),
 }));
+const npmPackingCommands = [
+  "npm pack ",
+  "node .github/tools/check-packlist.mjs",
+];
 const packingJobs = releaseJobs.filter(({ body }) =>
-  body.includes("npm pack "),
+  npmPackingCommands.some((command) => body.includes(command)),
 );
 if (packingJobs.length === 0) {
   throw new Error("release workflow has no npm-packing jobs");
 }
 for (const { name, body } of packingJobs) {
   const syncIndex = body.indexOf("run: bun run sync:version -- --release");
-  const packIndex = body.indexOf("npm pack ");
+  const packIndex = Math.min(
+    ...npmPackingCommands
+      .map((command) => body.indexOf(command))
+      .filter((index) => index !== -1),
+  );
   if (syncIndex === -1 || syncIndex > packIndex) {
     throw new Error(
       `release job ${name} must resolve workspace dependencies before npm pack`,
