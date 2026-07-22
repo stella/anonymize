@@ -5,6 +5,7 @@ import {
   PYTHON_BENCHMARK_PROVIDERS,
 } from "../adapters/python-providers";
 import { parsePythonResult } from "../adapters/python";
+import { totalUtf16CodeUnits } from "../adapters/types";
 import { DATAFOG_MAPPING, supportedLabels } from "../taxonomy";
 
 describe("DataFog benchmark provider", () => {
@@ -44,7 +45,6 @@ describe("DataFog benchmark provider", () => {
         initSeconds: 0,
         coldSeconds: 0.1,
         warmSeconds: 0.1,
-        totalChars: 5,
         results: [
           {
             id: "doc",
@@ -53,5 +53,29 @@ describe("DataFog benchmark provider", () => {
         ],
       }),
     ).toThrow("entity offsets");
+    expect(() =>
+      parsePythonResult({
+        version: "4.8.0",
+        initSeconds: 0,
+        coldSeconds: 0.1,
+        warmSeconds: 0.1,
+        totalChars: 5,
+        results: [],
+      }),
+    ).toThrow("unexpected field totalChars");
+  });
+
+  test("uses the scorer's UTF-16 unit for every provider denominator", () => {
+    expect(
+      totalUtf16CodeUnits([
+        {
+          id: "astral",
+          language: "en",
+          title: "astral regression",
+          text: "A\u{1F600}B",
+          entities: [],
+        },
+      ]),
+    ).toBe(4);
   });
 });

@@ -84,7 +84,6 @@ def main() -> None:
     scan_all(docs)
     warm_seconds = time.perf_counter() - warm_start
 
-    total_chars = sum(len(doc["text"]) for doc in docs)
     json.dump(
         {
             "version": pkg_version("datafog"),
@@ -92,7 +91,6 @@ def main() -> None:
             "initSeconds": init_seconds,
             "coldSeconds": cold_seconds,
             "warmSeconds": warm_seconds,
-            "totalChars": total_chars,
             "results": results,
         },
         sys.stdout,

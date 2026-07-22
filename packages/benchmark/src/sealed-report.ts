@@ -318,6 +318,7 @@ export const assertSealedAggregateReport: (
   if (!Array.isArray(libraries) || libraries.length === 0)
     throw new Error("sealed report must contain aggregate library results");
   const libraryNames = new Set<string>();
+  let canonicalTotalChars: number | undefined;
   for (const [index, library] of libraries.entries()) {
     if (!isRecord(library))
       throw new Error(`sealed library ${index} must be an object`);
@@ -357,6 +358,21 @@ export const assertSealedAggregateReport: (
       `sealed library ${index}`,
     );
     validateTiming(library["timing"], `sealed library ${index} timing`);
+    const timing = library["timing"];
+    if (!isRecord(timing)) {
+      throw new Error(`sealed library ${index} timing must be an object`);
+    }
+    const totalChars = timing["totalChars"];
+    if (typeof totalChars !== "number") {
+      throw new Error(`sealed library ${index} totalChars must be a number`);
+    }
+    if (canonicalTotalChars === undefined) {
+      canonicalTotalChars = totalChars;
+    } else if (totalChars !== canonicalTotalChars) {
+      throw new Error(
+        `sealed library ${index} totalChars does not match other providers`,
+      );
+    }
     requireSeconds(
       library["adapterWallSeconds"],
       `sealed library ${index} adapterWallSeconds`,
@@ -476,8 +492,14 @@ export const renderSealedAggregateMarkdown = (
     `- Generated: ${cell(report.createdAt)}`,
     `- Source commit: ${report.sourceGitSha}`,
     "",
-    `| Library | Version | ${definition.headers.join(" | ")} | Init (s) | Cold pass (s) | Warm pass (s) | Warm chars/s | Adapter wall (s, diagnostic) |`,
-    `| ------- | ------- | ${definition.headers.map(() => "---").join(" | ")} | -------- | ------------- | ------------- | ------------ | ---------------------------- |`,
+    `| Library | Version | ${definition.headers.join(
+      " | ",
+    )} | Init (s) | Cold pass (s) | Warm pass (s) | Warm chars/s | Adapter wall (s, diagnostic) |`,
+    `| ------- | ------- | ${definition.headers
+      .map(() => "---")
+      .join(
+        " | ",
+      )} | -------- | ------------- | ------------- | ------------ | ---------------------------- |`,
   ];
   for (const library of report.libraries) {
     if (library.status === "unavailable") {
@@ -486,13 +508,21 @@ export const renderSealedAggregateMarkdown = (
         ...definition.headers.slice(1).map(() => "—"),
       ].join(" | ");
       lines.push(
-        `| ${cell(library.name)} | ${cell(library.version)} | ${unavailableValues} | — | — | — | — | — |`,
+        `| ${cell(library.name)} | ${cell(
+          library.version,
+        )} | ${unavailableValues} | — | — | — | — | — |`,
       );
       continue;
     }
     const values = tableDefinition(library.metrics).values;
     lines.push(
-      `| ${cell(library.name)} | ${cell(library.version)} | ${values.join(" | ")} | ${seconds(library.timing.initSeconds)} | ${seconds(library.timing.coldSeconds)} | ${seconds(library.timing.warmSeconds)} | ${warmCharsPerSecond(library.timing)} | ${seconds(library.adapterWallSeconds)} |`,
+      `| ${cell(library.name)} | ${cell(library.version)} | ${values.join(
+        " | ",
+      )} | ${seconds(library.timing.initSeconds)} | ${seconds(
+        library.timing.coldSeconds,
+      )} | ${seconds(library.timing.warmSeconds)} | ${warmCharsPerSecond(
+        library.timing,
+      )} | ${seconds(library.adapterWallSeconds)} |`,
     );
   }
   lines.push(

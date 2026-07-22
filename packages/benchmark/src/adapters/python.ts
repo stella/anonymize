@@ -2,7 +2,12 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 import type { GroundTruthDocument } from "../ground-truth";
-import type { Adapter, AdapterOutcome, NativePrediction } from "./types";
+import {
+  totalUtf16CodeUnits,
+  type Adapter,
+  type AdapterOutcome,
+  type NativePrediction,
+} from "./types";
 
 const PYTHON_ADAPTER_TIMEOUT_MS = 10 * 60 * 1000;
 
@@ -14,7 +19,6 @@ type PythonResult = {
   initSeconds: number;
   coldSeconds: number;
   warmSeconds: number;
-  totalChars: number;
   results: { id: string; entities: NativePrediction[] }[];
 };
 
@@ -67,6 +71,20 @@ export const parsePythonResult = (value: unknown): PythonResult => {
     return protocolError("root must be an object");
   }
 
+  const allowedRootKeys = new Set([
+    "version",
+    "activeDetectors",
+    "initSeconds",
+    "coldSeconds",
+    "warmSeconds",
+    "results",
+  ]);
+  for (const key of Object.keys(value)) {
+    if (!allowedRootKeys.has(key)) {
+      return protocolError(`root contains unexpected field ${key}`);
+    }
+  }
+
   const { version, activeDetectors, results } = value;
   if (typeof version !== "string" || version.length === 0) {
     return protocolError("version must be a nonempty string");
@@ -102,14 +120,6 @@ export const parsePythonResult = (value: unknown): PythonResult => {
     return { id, entities: entities.map(parsePrediction) };
   });
 
-  const totalChars = parseFiniteNonnegativeNumber(
-    value["totalChars"],
-    "totalChars",
-  );
-  if (!Number.isInteger(totalChars)) {
-    return protocolError("totalChars must be an integer");
-  }
-
   return {
     version,
     ...(parsedActiveDetectors === undefined
@@ -127,7 +137,6 @@ export const parsePythonResult = (value: unknown): PythonResult => {
       value["warmSeconds"],
       "warmSeconds",
     ),
-    totalChars,
     results: parsedResults,
   };
 };
@@ -265,7 +274,11 @@ export const createPythonAdapter = ({
           initSeconds: parsed.initSeconds,
           coldSeconds: parsed.coldSeconds,
           warmSeconds: parsed.warmSeconds,
-          totalChars: parsed.totalChars,
+          // Python `len` counts Unicode code points, while scoring offsets and
+          // JavaScript strings use UTF-16 code units. Keep corpus size outside
+          // the subprocess contract so every provider has one authoritative
+          // denominator even when documents contain astral characters.
+          totalChars: totalUtf16CodeUnits(docs),
         },
         reportedVersion: parsed.version,
         notes: parsed.activeDetectors

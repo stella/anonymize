@@ -122,6 +122,26 @@ describe("sealed aggregate report contract", () => {
     ).toThrow("missing field timing");
   });
 
+  test("requires every provider to use one corpus-size denominator", () => {
+    const base = report();
+    const first = base.libraries.at(0);
+    if (first?.status !== "ok")
+      throw new Error("test report must be available");
+    expect(() =>
+      assertSealedAggregateReport({
+        ...base,
+        libraries: [
+          first,
+          {
+            ...first,
+            name: "other",
+            timing: { ...first.timing, totalChars: 999 },
+          },
+        ],
+      }),
+    ).toThrow("totalChars does not match other providers");
+  });
+
   test("keeps every current-schema sealed Markdown report canonical", () => {
     const rootResult = Bun.spawnSync(["git", "rev-parse", "--show-toplevel"]);
     if (!rootResult.success || rootResult.exitCode !== 0) {
