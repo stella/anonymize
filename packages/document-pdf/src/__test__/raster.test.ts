@@ -183,12 +183,13 @@ describe("PDF destructive raster anonymization", () => {
 
   test("rejects oversized observed text before invoking detection", () => {
     let calls = 0;
+    const recordDetectionCall = () => {
+      calls += 1;
+      return detectorResult();
+    };
     const countingPipeline = {
-      redactText: () => {
-        calls += 1;
-        return detectorResult();
-      },
-      redactTextWithCallerDetections: () => detectorResult(),
+      redactText: recordDetectionCall,
+      redactTextWithCallerDetections: recordDetectionCall,
     };
     const oversizedObservation = {
       ...observation,
@@ -211,20 +212,21 @@ describe("PDF destructive raster anonymization", () => {
       });
       throw new Error("expected observed-text limit failure");
     } catch (error) {
-      expect(error).toBeInstanceOf(PdfRasterError);
-      expect((error as PdfRasterError).code).toBe("limit-exceeded");
+      if (!(error instanceof PdfRasterError)) throw error;
+      expect(error.code).toBe("limit-exceeded");
     }
     expect(calls).toBe(0);
   });
 
   test("rejects aggregate observed text limits before invoking detection", () => {
     let calls = 0;
+    const recordDetectionCall = () => {
+      calls += 1;
+      return detectorResult();
+    };
     const countingPipeline = {
-      redactText: () => {
-        calls += 1;
-        return detectorResult();
-      },
-      redactTextWithCallerDetections: () => detectorResult(),
+      redactText: recordDetectionCall,
+      redactTextWithCallerDetections: recordDetectionCall,
     };
     const pageText = "a".repeat(PDF_MAX_PAGE_TEXT_UTF8_BYTES);
     const pageCount =
@@ -249,8 +251,8 @@ describe("PDF destructive raster anonymization", () => {
       });
       throw new Error("expected aggregate observed-text limit failure");
     } catch (error) {
-      expect(error).toBeInstanceOf(PdfRasterError);
-      expect((error as PdfRasterError).code).toBe("limit-exceeded");
+      if (!(error instanceof PdfRasterError)) throw error;
+      expect(error.code).toBe("limit-exceeded");
     }
     expect(calls).toBe(0);
   });
