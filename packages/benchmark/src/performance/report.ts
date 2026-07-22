@@ -12,6 +12,8 @@ export type PerformanceMachine = {
   readonly logicalCores: number;
   readonly totalMemoryBytes: number;
   readonly freeMemoryBytes: number;
+  /** Linux logical CPU used by canonical workers; local runs are unpinned. */
+  readonly benchmarkCpu: number | null;
   readonly hostnameSha256: string;
   readonly bunVersion: string;
   readonly nodeVersion: string;
@@ -205,6 +207,7 @@ export const assertPerformanceReport: (
     "logicalCores",
     "totalMemoryBytes",
     "freeMemoryBytes",
+    "benchmarkCpu",
     "hostnameSha256",
     "bunVersion",
     "nodeVersion",
@@ -212,15 +215,27 @@ export const assertPerformanceReport: (
   exactKeys(machine, machineKeys, "machine");
   for (const key of machineKeys.filter(
     (candidate) =>
-      !["logicalCores", "totalMemoryBytes", "freeMemoryBytes"].includes(
-        candidate,
-      ),
+      ![
+        "logicalCores",
+        "totalMemoryBytes",
+        "freeMemoryBytes",
+        "benchmarkCpu",
+      ].includes(candidate),
   )) {
     requireString(machine[key], `machine ${key}`);
   }
   requirePositiveInteger(machine["logicalCores"], "logicalCores");
   requirePositiveInteger(machine["totalMemoryBytes"], "totalMemoryBytes");
   requireNonNegative(machine["freeMemoryBytes"], "freeMemoryBytes");
+  if (machine["benchmarkCpu"] !== null) {
+    requireNonNegativeInteger(machine["benchmarkCpu"], "benchmarkCpu");
+  }
+  if (value["mode"] === "canonical" && machine["benchmarkCpu"] === null) {
+    throw new Error("canonical reports must record their pinned benchmark CPU");
+  }
+  if (value["mode"] === "local" && machine["benchmarkCpu"] !== null) {
+    throw new Error("local reports must remain unpinned");
+  }
   requireSha256(machine["hostnameSha256"], "hostnameSha256");
 
   if (!Array.isArray(value["results"]))
@@ -270,7 +285,9 @@ export const assertPerformanceReport: (
   }
 };
 
-export const machineMetadata = async (): Promise<PerformanceMachine> => {
+export const machineMetadata = async (
+  benchmarkCpu: number | null,
+): Promise<PerformanceMachine> => {
   const { createHash } = await import("node:crypto");
   const processors = cpus();
   const firstProcessor = processors.at(0);
@@ -284,6 +301,7 @@ export const machineMetadata = async (): Promise<PerformanceMachine> => {
     logicalCores: processors.length,
     totalMemoryBytes: totalmem(),
     freeMemoryBytes: freemem(),
+    benchmarkCpu,
     hostnameSha256: createHash("sha256").update(hostname()).digest("hex"),
     bunVersion: Bun.version,
     nodeVersion: process.version,

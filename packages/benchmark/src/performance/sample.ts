@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 
 import type { NativePrediction } from "../adapters/types";
 
+const PERFORMANCE_LANGUAGE = "en";
+
 export type PerformanceSample = {
   readonly inputBytes: number;
   readonly inputCharacters: number;
@@ -40,12 +42,15 @@ export const runPerformanceSample = async ({
     import("@stll/anonymize"),
     import("../dictionaries"),
   ]);
-  const dictionaries = await dictionariesModule.loadCorpusDictionaries();
+  const dictionaries =
+    await dictionariesModule.loadCorpusDictionaries(PERFORMANCE_LANGUAGE);
   const binding = anonymize.loadNativeAnonymizeBinding();
   const pipeline = await anonymize.createNativePipelineFromConfig({
     binding,
     config: {
       threshold: 0.3,
+      language: PERFORMANCE_LANGUAGE,
+      nameCorpusLanguages: [PERFORMANCE_LANGUAGE],
       enableTriggerPhrases: true,
       enableRegex: true,
       enableLegalForms: true,

@@ -110,18 +110,44 @@ type WorkerMessage =
 
 type IsolatedSample = PerformanceSample & { readonly startupSeconds: number };
 
-const runIsolatedSample = (inputBytes: number): Promise<IsolatedSample> =>
+export type SampleExecution =
+  | { readonly type: "local" }
+  | { readonly type: "canonical"; readonly benchmarkCpu: number };
+
+export const buildPerformanceWorkerInvocation = (
+  inputBytes: number,
+  execution: SampleExecution,
+): { readonly command: string; readonly args: readonly string[] } => {
+  const workerArgs = [resolve(import.meta.dir, "worker.ts"), `${inputBytes}`];
+  if (execution.type === "local") {
+    return { command: process.execPath, args: workerArgs };
+  }
+  return {
+    command: "taskset",
+    args: [
+      "--cpu-list",
+      `${execution.benchmarkCpu}`,
+      process.execPath,
+      ...workerArgs,
+    ],
+  };
+};
+
+const runIsolatedSample = (
+  inputBytes: number,
+  execution: SampleExecution,
+): Promise<IsolatedSample> =>
   new Promise((resolveSample, reject) => {
     const spawnedAt = performance.now();
-    const child = spawn(
-      process.execPath,
-      [resolve(import.meta.dir, "worker.ts"), `${inputBytes}`],
-      {
-        cwd: resolve(import.meta.dir, "..", "..", "..", ".."),
-        env: process.env,
-        stdio: ["ignore", "pipe", "pipe"],
-      },
+    const { command, args } = buildPerformanceWorkerInvocation(
+      inputBytes,
+      execution,
     );
+    const child = spawn(command, args, {
+      cwd: resolve(import.meta.dir, "..", "..", "..", ".."),
+      env: process.env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
     let startupSeconds: number | undefined;
     let sample: PerformanceSample | undefined;
     let standardError = "";
@@ -200,7 +226,13 @@ const assertSameOutput = (
 export const runPerformance = async (
   options: CliOptions,
 ): Promise<PerformanceReport> => {
-  if (options.mode === "canonical") verifyCanonicalHost();
+  const execution: SampleExecution =
+    options.mode === "canonical"
+      ? {
+          type: "canonical",
+          benchmarkCpu: verifyCanonicalHost().benchmarkCpu,
+        }
+      : { type: "local" };
   const gitSha = benchmarkGitRevision();
   if (options.mode === "canonical" && gitSha.endsWith("-dirty")) {
     throw new Error("canonical performance runs require a clean Git worktree");
@@ -212,7 +244,7 @@ export const runPerformance = async (
       process.stderr.write(
         `warmup ${round + 1}/${options.warmups}: ${size} bytes\n`,
       );
-      const sample = await runIsolatedSample(size);
+      const sample = await runIsolatedSample(size, execution);
       const previous = expected.get(size);
       if (previous === undefined) expected.set(size, sample);
       else assertSameOutput(previous, sample);
@@ -226,7 +258,7 @@ export const runPerformance = async (
       process.stderr.write(
         `sample ${round + 1}/${options.samples}: ${size} bytes\n`,
       );
-      const sample = await runIsolatedSample(size);
+      const sample = await runIsolatedSample(size, execution);
       const previous = expected.get(size);
       if (previous === undefined)
         throw new Error("warmup output is unavailable");
@@ -277,7 +309,9 @@ export const runPerformance = async (
       source: PERFORMANCE_INPUT_SOURCE,
       sha256: performanceInputSourceDigest(),
     },
-    machine: await machineMetadata(),
+    machine: await machineMetadata(
+      execution.type === "canonical" ? execution.benchmarkCpu : null,
+    ),
     results,
   };
   assertPerformanceReport(report);

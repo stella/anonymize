@@ -13,6 +13,7 @@ export type HostProfile = {
   readonly cpuModel: string;
   readonly logicalCores: number;
   readonly totalMemoryBytes: number;
+  readonly benchmarkCpu: number;
   readonly maximumLoadPerCore: number;
   readonly governor: "performance";
   readonly turbo: "disabled";
@@ -28,6 +29,10 @@ export type HostSnapshot = {
   readonly logicalCores: number;
   readonly totalMemoryBytes: number;
   readonly loadOneMinute: number;
+  readonly isolatedCpus: readonly number[];
+  readonly onlineCpus: readonly number[];
+  readonly benchmarkCpuSiblings: readonly number[];
+  readonly tasksetAvailable: boolean;
   readonly governors: readonly string[];
   readonly turboDisabled: boolean;
 };
@@ -50,6 +55,7 @@ const assertHostProfile: (value: unknown) => asserts value is HostProfile = (
     "cpuModel",
     "logicalCores",
     "totalMemoryBytes",
+    "benchmarkCpu",
     "maximumLoadPerCore",
     "governor",
     "turbo",
@@ -76,6 +82,9 @@ const assertHostProfile: (value: unknown) => asserts value is HostProfile = (
     !Number.isSafeInteger(record["totalMemoryBytes"]) ||
     (typeof record["totalMemoryBytes"] === "number" &&
       record["totalMemoryBytes"] <= 0) ||
+    !Number.isSafeInteger(record["benchmarkCpu"]) ||
+    (typeof record["benchmarkCpu"] === "number" &&
+      record["benchmarkCpu"] < 0) ||
     typeof record["maximumLoadPerCore"] !== "number" ||
     !Number.isFinite(record["maximumLoadPerCore"]) ||
     record["maximumLoadPerCore"] <= 0 ||
@@ -86,18 +95,64 @@ const assertHostProfile: (value: unknown) => asserts value is HostProfile = (
   }
 };
 
-const readGovernors = (): string[] => {
+type CpuListOptions = {
+  readonly value: string;
+  readonly context: string;
+};
+
+export const parseCpuList = ({ value, context }: CpuListOptions): number[] => {
+  const trimmed = value.trim();
+  if (trimmed === "") return [];
+  const cpuSet = new Set<number>();
+  for (const item of trimmed.split(",")) {
+    const range = item.split("-");
+    if (range.length > 2) {
+      throw new Error(`${context} contains an invalid range`);
+    }
+    const firstText = range.at(0) ?? "";
+    const lastText = range.at(1) ?? firstText;
+    const first = Number.parseInt(firstText, 10);
+    const last = Number.parseInt(lastText, 10);
+    if (
+      !Number.isSafeInteger(first) ||
+      !Number.isSafeInteger(last) ||
+      first < 0 ||
+      last < first ||
+      `${first}` !== firstText ||
+      `${last}` !== lastText
+    ) {
+      throw new Error(`${context} contains an invalid CPU id`);
+    }
+    for (let cpu = first; cpu <= last; cpu += 1) cpuSet.add(cpu);
+  }
+  return [...cpuSet].sort((left, right) => left - right);
+};
+
+type ReadCpuListOptions = {
+  readonly path: string;
+  readonly context: string;
+};
+
+const readCpuList = ({ path, context }: ReadCpuListOptions): number[] => {
+  try {
+    return parseCpuList({ value: readFileSync(path, "utf8"), context });
+  } catch (error) {
+    throw new Error(`${context} is unavailable`, { cause: error });
+  }
+};
+
+const readGovernors = (cpuIds: readonly number[]): string[] => {
   const values = new Set<string>();
-  for (let index = 0; index < cpus().length; index += 1) {
+  for (const cpu of cpuIds) {
     try {
       values.add(
         readFileSync(
-          `/sys/devices/system/cpu/cpu${index}/cpufreq/scaling_governor`,
+          `/sys/devices/system/cpu/cpu${cpu}/cpufreq/scaling_governor`,
           "utf8",
         ).trim(),
       );
     } catch {
-      throw new Error(`CPU ${index} scaling governor is unavailable`);
+      throw new Error(`CPU ${cpu} scaling governor is unavailable`);
     }
   }
   return [...values].sort();
@@ -123,11 +178,15 @@ const readTurboDisabled = (): boolean => {
   }
 };
 
-export const currentHostSnapshot = (): HostSnapshot => {
+export const currentHostSnapshot = (benchmarkCpu: number): HostSnapshot => {
   const processors = cpus();
   const firstProcessor = processors.at(0);
   if (firstProcessor === undefined)
     throw new Error("CPU metadata is unavailable");
+  const onlineCpus = readCpuList({
+    path: "/sys/devices/system/cpu/online",
+    context: "Linux online CPU list",
+  });
   return {
     eventName: process.env["GITHUB_EVENT_NAME"],
     repository: process.env["GITHUB_REPOSITORY"],
@@ -138,7 +197,17 @@ export const currentHostSnapshot = (): HostSnapshot => {
     logicalCores: processors.length,
     totalMemoryBytes: totalmem(),
     loadOneMinute: loadavg().at(0) ?? Number.POSITIVE_INFINITY,
-    governors: readGovernors(),
+    isolatedCpus: readCpuList({
+      path: "/sys/devices/system/cpu/isolated",
+      context: "Linux isolated CPU list",
+    }),
+    onlineCpus,
+    benchmarkCpuSiblings: readCpuList({
+      path: `/sys/devices/system/cpu/cpu${benchmarkCpu}/topology/thread_siblings_list`,
+      context: "benchmark CPU thread sibling list",
+    }),
+    tasksetAvailable: Bun.which("taskset") !== null,
+    governors: readGovernors(onlineCpus),
     turboDisabled: readTurboDisabled(),
   };
 };
@@ -174,6 +243,23 @@ export const assertCanonicalHost = (
     throw new Error("current memory does not match the canonical host profile");
   }
   if (
+    !snapshot.onlineCpus.includes(profile.benchmarkCpu) ||
+    !snapshot.isolatedCpus.includes(profile.benchmarkCpu)
+  ) {
+    throw new Error(
+      "benchmark CPU must be online and isolated from the scheduler",
+    );
+  }
+  const onlineSiblings = snapshot.benchmarkCpuSiblings.filter(
+    (cpu) => cpu !== profile.benchmarkCpu && snapshot.onlineCpus.includes(cpu),
+  );
+  if (onlineSiblings.length > 0) {
+    throw new Error("benchmark CPU SMT siblings must be offline");
+  }
+  if (!snapshot.tasksetAvailable) {
+    throw new Error("canonical host requires taskset");
+  }
+  if (
     snapshot.loadOneMinute / snapshot.logicalCores >
     profile.maximumLoadPerCore
   ) {
@@ -193,7 +279,7 @@ export const assertCanonicalHost = (
 export const verifyCanonicalHost = (
   profilePath = process.env["ANONYMIZE_PERF_HOST_PROFILE"] ??
     DEFAULT_HOST_PROFILE_PATH,
-): void => {
+): HostProfile => {
   let profile: HostProfile;
   try {
     const parsed: unknown = JSON.parse(readFileSync(profilePath, "utf8"));
@@ -204,5 +290,6 @@ export const verifyCanonicalHost = (
       cause: error,
     });
   }
-  assertCanonicalHost(profile, currentHostSnapshot());
+  assertCanonicalHost(profile, currentHostSnapshot(profile.benchmarkCpu));
+  return profile;
 };

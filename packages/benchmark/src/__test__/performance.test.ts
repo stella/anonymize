@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   assertCanonicalHost,
   CANONICAL_HOST_LABEL,
+  parseCpuList,
   type HostProfile,
   type HostSnapshot,
 } from "../performance/host";
@@ -11,7 +12,10 @@ import {
   assertPerformanceReport,
   PERFORMANCE_REPORT_SCHEMA_VERSION,
 } from "../performance/report";
-import { parsePerformanceArgs } from "../performance/run";
+import {
+  buildPerformanceWorkerInvocation,
+  parsePerformanceArgs,
+} from "../performance/run";
 import { summarize } from "../performance/statistics";
 
 describe("canonical performance statistics", () => {
@@ -43,6 +47,24 @@ describe("canonical performance statistics", () => {
       1,
     );
   });
+
+  test("pins canonical workers and leaves local workers unpinned", () => {
+    const canonical = buildPerformanceWorkerInvocation(49_152, {
+      type: "canonical",
+      benchmarkCpu: 6,
+    });
+    expect(canonical.command).toBe("taskset");
+    expect(canonical.args.slice(0, 3)).toEqual([
+      "--cpu-list",
+      "6",
+      process.execPath,
+    ]);
+    expect(canonical.args.at(-1)).toBe("49152");
+
+    const local = buildPerformanceWorkerInvocation(49_152, { type: "local" });
+    expect(local.command).toBe(process.execPath);
+    expect(local.args).not.toContain("--cpu-list");
+  });
 });
 
 describe("canonical performance host", () => {
@@ -54,6 +76,7 @@ describe("canonical performance host", () => {
     cpuModel: "Canonical CPU",
     logicalCores: 8,
     totalMemoryBytes: 16_000_000_000,
+    benchmarkCpu: 6,
     maximumLoadPerCore: 0.1,
     governor: "performance",
     turbo: "disabled",
@@ -68,6 +91,10 @@ describe("canonical performance host", () => {
     logicalCores: 8,
     totalMemoryBytes: 16_000_000_000,
     loadOneMinute: 0.4,
+    isolatedCpus: [6],
+    onlineCpus: [0, 1, 2, 3, 4, 5, 6],
+    benchmarkCpuSiblings: [6],
+    tasksetAvailable: true,
     governors: ["performance"],
     turboDisabled: true,
   };
@@ -89,6 +116,26 @@ describe("canonical performance host", () => {
     expect(() =>
       assertCanonicalHost(profile, { ...snapshot, turboDisabled: false }),
     ).toThrow("turbo/boost");
+    expect(() =>
+      assertCanonicalHost(profile, { ...snapshot, isolatedCpus: [] }),
+    ).toThrow("online and isolated");
+    expect(() =>
+      assertCanonicalHost(profile, {
+        ...snapshot,
+        benchmarkCpuSiblings: [6, 7],
+        onlineCpus: [...snapshot.onlineCpus, 7],
+      }),
+    ).toThrow("SMT siblings must be offline");
+  });
+
+  test("parses Linux CPU lists without accepting ambiguous syntax", () => {
+    expect(
+      parseCpuList({ value: "1-3,6,8-9\n", context: "test CPU list" }),
+    ).toEqual([1, 2, 3, 6, 8, 9]);
+    expect(parseCpuList({ value: "", context: "test CPU list" })).toEqual([]);
+    expect(() =>
+      parseCpuList({ value: "01", context: "test CPU list" }),
+    ).toThrow("invalid CPU id");
   });
 });
 
@@ -125,6 +172,7 @@ describe("canonical performance report schema", () => {
         logicalCores: 1,
         totalMemoryBytes: 1,
         freeMemoryBytes: 0,
+        benchmarkCpu: null,
         hostnameSha256: "b".repeat(64),
         bunVersion: "1.3.14",
         nodeVersion: "v22",
@@ -145,6 +193,16 @@ describe("canonical performance report schema", () => {
       ],
     };
     expect(() => assertPerformanceReport(report)).not.toThrow();
+    expect(() =>
+      assertPerformanceReport({ ...report, mode: "canonical" }),
+    ).toThrow("must record their pinned benchmark CPU");
+    expect(() =>
+      assertPerformanceReport({
+        ...report,
+        mode: "canonical",
+        machine: { ...report.machine, benchmarkCpu: 6 },
+      }),
+    ).not.toThrow();
     expect(() =>
       assertPerformanceReport({ ...report, text: "forbidden" }),
     ).toThrow("forbids field text");

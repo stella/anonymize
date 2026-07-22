@@ -82,6 +82,7 @@ instead of waiting for an offline machine. Provision the runner with
   "cpuModel": "replace with the exact node:os CPU model",
   "logicalCores": 8,
   "totalMemoryBytes": 17179869184,
+  "benchmarkCpu": 6,
   "maximumLoadPerCore": 0.1,
   "governor": "performance",
   "turbo": "disabled"
@@ -92,8 +93,13 @@ These values are an example, not the canonical hardware specification. Record
 the provisioned machine's exact values. `--canonical` accepts only a manual run
 of `main` or a `main` push in `stella/anonymize`; it also verifies the CPU,
 memory (within 1%), load ceiling, Linux scaling governor, and disabled
-turbo/boost state before measuring. Missing profile or sysfs controls fail the
-run instead of silently producing non-comparable numbers.
+turbo/boost state before measuring. The declared `benchmarkCpu` must be online,
+listed by Linux in `/sys/devices/system/cpu/isolated`, and have no online SMT
+sibling. Every canonical worker runs through
+`taskset --cpu-list <benchmarkCpu>`; the selected logical CPU is recorded in
+the report. Missing profile, `taskset`, isolation, or sysfs controls fail the
+run instead of silently producing non-comparable numbers. Local mode does not
+pin processes and records a null benchmark CPU.
 
 ## Toolchain versions (committed run)
 
