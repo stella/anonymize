@@ -39109,10 +39109,12 @@
       "fein",
       "ssn",
       "jméno",
+      "příjmení",
       "titul",
       "ičo",
       "dič",
-      "meno"
+      "meno",
+      "priezvisko"
     ]
   },
   "coreference_data": {

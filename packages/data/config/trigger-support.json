@@ -25,7 +25,7 @@
       "fein",
       "ssn"
     ],
-    "cs": ["jméno", "titul", "ičo", "dič"],
-    "sk": ["meno", "titul", "ičo", "dič"]
+    "cs": ["jméno", "příjmení", "titul", "ičo", "dič"],
+    "sk": ["meno", "priezvisko", "titul", "ičo", "dič"]
   }
 }

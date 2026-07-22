@@ -50845,10 +50845,12 @@
       "fein",
       "ssn",
       "jméno",
+      "příjmení",
       "titul",
       "ičo",
       "dič",
-      "meno"
+      "meno",
+      "priezvisko"
     ]
   },
   "deny_list_data": {

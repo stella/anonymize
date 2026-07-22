@@ -125,6 +125,28 @@ describe("trailing role trigger does not emit field-label values as people", () 
     expect(persons.some((p) => p.includes("Janou Novákovou"))).toBe(true);
   });
 
+  test("Czech and Slovak surname fields after roles are not people", async () => {
+    const cases = [
+      {
+        language: "cs",
+        text: "zastoupená Janou Novákovou, ředitelkou\nPříjmení: Nováková",
+        label: "Příjmení",
+      },
+      {
+        language: "sk",
+        text: "zastúpená Janou Novákovou, konateľkou\nPriezvisko: Nováková",
+        label: "Priezvisko",
+      },
+    ] as const;
+    for (const { label, language, text } of cases) {
+      const persons = await personTextsForLanguages(text, [language]);
+      expect(persons.some((person) => person.includes(label))).toBe(false);
+      expect(persons.some((person) => person.includes("Janou Novákovou"))).toBe(
+        true,
+      );
+    }
+  });
+
   test("English identity field after a role is not a person", async () => {
     const persons = await personTextsForLanguages(
       "signed by Jane Roe, director\nSocial Security Number: 12-3456789, USA",

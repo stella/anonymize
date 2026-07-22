@@ -33436,10 +33436,12 @@
       "fein",
       "ssn",
       "jméno",
+      "příjmení",
       "titul",
       "ičo",
       "dič",
-      "meno"
+      "meno",
+      "priezvisko"
     ]
   },
   "false_positive_filters": {

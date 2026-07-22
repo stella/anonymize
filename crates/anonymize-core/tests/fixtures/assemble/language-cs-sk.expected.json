@@ -35100,7 +35100,15 @@
     "phone_extension_labels": [],
     "number_markers": ["nº", "n°", "№"],
     "number_labels": ["nº", "n°", "№"],
-    "person_field_labels": ["jméno", "titul", "ičo", "dič", "meno"]
+    "person_field_labels": [
+      "jméno",
+      "příjmení",
+      "titul",
+      "ičo",
+      "dič",
+      "meno",
+      "priezvisko"
+    ]
   },
   "coreference_data": {
     "definition_patterns": [
