@@ -32,7 +32,7 @@ const releaseSyncCommands = [
   ...releaseWorkflow.matchAll(/^\s+run: (bun run sync:version.*)$/gm),
 ].map((match) => match[1]);
 if (
-  releaseSyncCommands.length !== 4 ||
+  releaseSyncCommands.length === 0 ||
   releaseSyncCommands.some(
     (command) => command !== "bun run sync:version -- --release",
   )
@@ -40,6 +40,35 @@ if (
   throw new Error(
     "every release job must resolve workspace dependencies with sync:version -- --release",
   );
+}
+
+const jobsStart = releaseWorkflow.indexOf("\njobs:\n");
+if (jobsStart === -1) {
+  throw new Error("release workflow has no jobs section");
+}
+const jobsText = releaseWorkflow.slice(jobsStart + "\njobs:\n".length);
+const jobHeaders = [...jobsText.matchAll(/^  ([A-Za-z0-9_-]+):\s*$/gm)];
+const releaseJobs = jobHeaders.map((header, index) => ({
+  name: header[1],
+  body: jobsText.slice(
+    header.index,
+    jobHeaders[index + 1]?.index ?? jobsText.length,
+  ),
+}));
+const packingJobs = releaseJobs.filter(({ body }) =>
+  body.includes("npm pack "),
+);
+if (packingJobs.length === 0) {
+  throw new Error("release workflow has no npm-packing jobs");
+}
+for (const { name, body } of packingJobs) {
+  const syncIndex = body.indexOf("run: bun run sync:version -- --release");
+  const packIndex = body.indexOf("npm pack ");
+  if (syncIndex === -1 || syncIndex > packIndex) {
+    throw new Error(
+      `release job ${name} must resolve workspace dependencies before npm pack`,
+    );
+  }
 }
 
 const packageFiles = [
