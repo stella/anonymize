@@ -734,9 +734,9 @@ mod tests {
   };
 
   #[test]
-  fn prepared_package_schema_versions_are_clean_v2_breaks() {
-    assert_eq!(BINDING_PACKAGE_SCHEMA_VERSION, 2);
-    assert_eq!(CORE_PACKAGE_SCHEMA_VERSION, 2);
+  fn prepared_package_schema_versions_track_the_current_payload_shape() {
+    assert_eq!(BINDING_PACKAGE_SCHEMA_VERSION, 3);
+    assert_eq!(CORE_PACKAGE_SCHEMA_VERSION, 3);
   }
 
   #[test]

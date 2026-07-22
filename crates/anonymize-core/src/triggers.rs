@@ -34,6 +34,8 @@ pub struct TriggerData {
   pub number_markers: Vec<String>,
   #[serde(default)]
   pub number_labels: Vec<String>,
+  #[serde(default)]
+  pub person_field_labels: Vec<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
@@ -91,6 +93,7 @@ pub(crate) struct PreparedTriggerData {
   phone_extension_labels: Vec<String>,
   number_markers: Vec<String>,
   number_labels: Vec<String>,
+  person_field_labels: Vec<String>,
 }
 
 #[derive(Default)]
@@ -193,6 +196,11 @@ impl PreparedTriggerData {
         .collect(),
       number_labels: data
         .number_labels
+        .into_iter()
+        .filter(|term| !term.is_empty())
+        .collect(),
+      person_field_labels: data
+        .person_field_labels
         .into_iter()
         .filter(|term| !term.is_empty())
         .collect(),
@@ -365,9 +373,11 @@ pub(crate) fn process_trigger_matches(
     // prefix when the field label follows it on the same line.
     if rule.label == crate::labels::PERSON_LABEL
       && let Some((label_start, may_preserve_prefix)) =
-        inline_field_label_start(&value.text, &data.number_labels)
+        inline_field_label_start(&value.text, &data.person_field_labels)
     {
-      let prefix = value.text.get(..label_start).unwrap_or_default().trim_end();
+      let prefix = trim_field_separator(
+        value.text.get(..label_start).unwrap_or_default().trim_end(),
+      );
       let complete_person_prefix = may_preserve_prefix
         && prefix.split_whitespace().count() >= 2
         && person_name_run_end(prefix) == Some(prefix.len());
@@ -457,6 +467,12 @@ pub(crate) fn process_trigger_matches(
   }
 
   Ok(results)
+}
+
+fn trim_field_separator(text: &str) -> &str {
+  text
+    .trim_end_matches(['-', '–', '—', '/', '|', ';'])
+    .trim_end()
 }
 
 fn record_trigger_rejection(
@@ -2144,6 +2160,7 @@ mod tests {
       phone_extension_labels: Vec::new(),
       number_markers: Vec::new(),
       number_labels: Vec::new(),
+      person_field_labels: Vec::new(),
     })
     .unwrap();
 
@@ -2221,6 +2238,7 @@ mod tests {
       phone_extension_labels: Vec::new(),
       number_markers: Vec::new(),
       number_labels: Vec::new(),
+      person_field_labels: Vec::new(),
     })
     .unwrap();
 
@@ -2271,6 +2289,7 @@ mod tests {
       phone_extension_labels: Vec::new(),
       number_markers: Vec::new(),
       number_labels: Vec::new(),
+      person_field_labels: Vec::new(),
     })
     .unwrap();
 
@@ -2316,6 +2335,7 @@ mod tests {
       phone_extension_labels: Vec::new(),
       number_markers: Vec::new(),
       number_labels: Vec::new(),
+      person_field_labels: Vec::new(),
     })
     .unwrap();
 
@@ -2368,6 +2388,7 @@ mod tests {
       phone_extension_labels: Vec::new(),
       number_markers: Vec::new(),
       number_labels: Vec::new(),
+      person_field_labels: Vec::new(),
     })
     .unwrap();
 
@@ -2413,6 +2434,7 @@ mod tests {
       phone_extension_labels: Vec::new(),
       number_markers: Vec::new(),
       number_labels: Vec::new(),
+      person_field_labels: Vec::new(),
     })
     .unwrap();
 
@@ -2436,10 +2458,7 @@ mod tests {
 
   #[test]
   fn person_trigger_trims_a_same_line_field_label_after_a_real_name() {
-    let text = "approved by director Janem Zorbax Tax ID： 12345678, on site";
     let trigger = "director";
-    let start = text.find(trigger).unwrap();
-    let end = start.saturating_add(trigger.len());
     let data = PreparedTriggerData::new(TriggerData {
       rules: vec![TriggerRule {
         trigger: String::from(trigger),
@@ -2458,26 +2477,48 @@ mod tests {
       sentence_terminal_currency_terms: Vec::new(),
       phone_extension_labels: Vec::new(),
       number_markers: Vec::new(),
-      number_labels: vec![String::from("Tax ID")],
+      number_labels: Vec::new(),
+      person_field_labels: vec![
+        String::from("Name"),
+        String::from("Title"),
+        String::from("Tax ID"),
+      ],
     })
     .unwrap();
 
-    let entities = process_trigger_matches(
-      &[SearchMatch::Literal {
-        pattern: 0,
-        start: u32::try_from(start).unwrap(),
-        end: u32::try_from(end).unwrap(),
-      }],
-      PatternSlice { start: 0, end: 1 },
-      text,
-      &data,
-      &BTreeSet::new(),
-      None,
-    )
-    .unwrap();
+    for (text, expected) in [
+      (
+        "approved by director Janem Zorbax Tax ID： 12345678, on site",
+        "Janem Zorbax",
+      ),
+      (
+        "approved by director Jane Roe Name: account holder, on site",
+        "Jane Roe",
+      ),
+      (
+        "approved by director Janem Novákem - IČO: 12345678, on site",
+        "Janem Novákem",
+      ),
+    ] {
+      let start = text.find(trigger).unwrap();
+      let end = start.saturating_add(trigger.len());
+      let entities = process_trigger_matches(
+        &[SearchMatch::Literal {
+          pattern: 0,
+          start: u32::try_from(start).unwrap(),
+          end: u32::try_from(end).unwrap(),
+        }],
+        PatternSlice { start: 0, end: 1 },
+        text,
+        &data,
+        &BTreeSet::new(),
+        None,
+      )
+      .unwrap();
 
-    assert_eq!(entities.len(), 1);
-    assert_eq!(entities[0].text, "Janem Zorbax");
+      assert_eq!(entities.len(), 1, "{text}");
+      assert_eq!(entities[0].text, expected, "{text}");
+    }
   }
 
   #[test]
@@ -2511,6 +2552,7 @@ mod tests {
       phone_extension_labels: Vec::new(),
       number_markers: Vec::new(),
       number_labels: Vec::new(),
+      person_field_labels: Vec::new(),
     })
     .unwrap()
   }
@@ -2663,6 +2705,7 @@ mod tests {
       phone_extension_labels: Vec::new(),
       number_markers: Vec::new(),
       number_labels: Vec::new(),
+      person_field_labels: Vec::new(),
     })
     .unwrap();
 
@@ -2713,6 +2756,7 @@ mod tests {
       phone_extension_labels: Vec::new(),
       number_markers: Vec::new(),
       number_labels: Vec::new(),
+      person_field_labels: Vec::new(),
     })
     .unwrap()
   }
@@ -2998,6 +3042,7 @@ mod tests {
       phone_extension_labels: Vec::new(),
       number_markers: Vec::new(),
       number_labels: Vec::new(),
+      person_field_labels: Vec::new(),
     })
     .unwrap();
 
@@ -3048,6 +3093,7 @@ mod tests {
       phone_extension_labels: Vec::new(),
       number_markers: Vec::new(),
       number_labels: Vec::new(),
+      person_field_labels: Vec::new(),
     })
     .unwrap();
 
@@ -3101,6 +3147,7 @@ mod tests {
       phone_extension_labels: Vec::new(),
       number_markers: Vec::new(),
       number_labels: Vec::new(),
+      person_field_labels: Vec::new(),
     })
     .unwrap();
 
@@ -3150,6 +3197,7 @@ mod tests {
       phone_extension_labels: Vec::new(),
       number_markers: Vec::new(),
       number_labels: Vec::new(),
+      person_field_labels: Vec::new(),
     })
     .unwrap();
 

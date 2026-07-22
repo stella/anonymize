@@ -131,6 +131,7 @@ export type NativeTriggerData = {
   phone_extension_labels: string[];
   number_markers: string[];
   number_labels: string[];
+  person_field_labels: string[];
 };
 
 export type NativeLegalFormData = {

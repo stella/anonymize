@@ -48592,11 +48592,15 @@
       "no.",
       "n.",
       "n",
-      "tax id",
-      "tax identification number",
       "nr",
       "nr.",
       "numer"
+    ],
+    "person_field_labels": [
+      "name",
+      "title",
+      "tax id",
+      "tax identification number"
     ]
   },
   "coreference_data": {

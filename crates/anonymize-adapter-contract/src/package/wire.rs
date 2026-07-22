@@ -87,6 +87,8 @@ struct BinaryTriggerData {
   number_markers: Vec<String>,
   #[serde(default)]
   number_labels: Vec<String>,
+  #[serde(default)]
+  person_field_labels: Vec<String>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -226,6 +228,7 @@ impl From<BindingTriggerData> for BinaryTriggerData {
       phone_extension_labels: data.phone_extension_labels,
       number_markers: data.number_markers,
       number_labels: data.number_labels,
+      person_field_labels: data.person_field_labels,
     }
   }
 }
@@ -245,6 +248,7 @@ impl From<BinaryTriggerData> for BindingTriggerData {
       phone_extension_labels: data.phone_extension_labels,
       number_markers: data.number_markers,
       number_labels: data.number_labels,
+      person_field_labels: data.person_field_labels,
     }
   }
 }

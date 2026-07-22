@@ -1586,6 +1586,7 @@ fn prepared_engine_extracts_written_date_of_birth_trigger() {
       phone_extension_labels: Vec::new(),
       number_markers: Vec::new(),
       number_labels: Vec::new(),
+      person_field_labels: Vec::new(),
     }),
     ..empty_config(PreparedEngineSlices::default())
   })
@@ -1635,6 +1636,7 @@ fn prepared_engine_honors_single_word_written_date_trigger_count() {
       phone_extension_labels: Vec::new(),
       number_markers: Vec::new(),
       number_labels: Vec::new(),
+      person_field_labels: Vec::new(),
     }),
     ..empty_config(PreparedEngineSlices::default())
   })
@@ -1699,6 +1701,7 @@ fn prepared_engine_extracts_year_after_duplicate_year_word_noise() {
       phone_extension_labels: Vec::new(),
       number_markers: Vec::new(),
       number_labels: Vec::new(),
+      person_field_labels: Vec::new(),
     }),
     ..empty_config(PreparedEngineSlices::default())
   })
@@ -1747,6 +1750,7 @@ fn prepared_engine_trigger_caps_by_characters_not_bytes() {
       phone_extension_labels: Vec::new(),
       number_markers: Vec::new(),
       number_labels: Vec::new(),
+      person_field_labels: Vec::new(),
     }),
     ..empty_config(PreparedEngineSlices::default())
   })
@@ -1795,6 +1799,7 @@ fn prepared_engine_trigger_validations_count_characters_not_bytes() {
       phone_extension_labels: Vec::new(),
       number_markers: Vec::new(),
       number_labels: Vec::new(),
+      person_field_labels: Vec::new(),
     }),
     ..empty_config(PreparedEngineSlices::default())
   })
@@ -1841,6 +1846,7 @@ fn prepared_engine_rejects_lowercase_acronym_trigger_collisions() {
       phone_extension_labels: Vec::new(),
       number_markers: Vec::new(),
       number_labels: Vec::new(),
+      person_field_labels: Vec::new(),
     }),
     ..empty_config(PreparedEngineSlices::default())
   })
@@ -1894,6 +1900,7 @@ fn prepared_engine_trims_party_position_before_triggered_address() {
       phone_extension_labels: Vec::new(),
       number_markers: Vec::new(),
       number_labels: Vec::new(),
+      person_field_labels: Vec::new(),
     }),
     ..empty_config(PreparedEngineSlices::default())
   })
@@ -2619,6 +2626,7 @@ fn prepared_engine_keeps_person_name_particles_after_trigger() {
       phone_extension_labels: Vec::new(),
       number_markers: Vec::new(),
       number_labels: Vec::new(),
+      person_field_labels: Vec::new(),
     }),
     ..empty_config(PreparedEngineSlices::default())
   })
@@ -3180,6 +3188,7 @@ fn prepared_engine_expands_plain_postal_city_addresses() {
       phone_extension_labels: Vec::new(),
       number_markers: Vec::new(),
       number_labels: Vec::new(),
+      person_field_labels: Vec::new(),
     }),
     deny_list_data: Some(DenyListMatchData {
       labels: vec![vec![String::from("address")]].into(),

@@ -23,7 +23,8 @@
 //! - `post_nominals`: the static `POST_NOMINALS` table.
 //! - `sentence_terminal_currency_terms`:
 //!   [`super::monetary::sentence_terminal_currency_terms`].
-//! - `phone_extension_labels` / `number_markers` / `number_labels`:
+//! - `phone_extension_labels` / `number_markers` / `number_labels` /
+//!   `person_field_labels`:
 //!   `languageKeyedTerms(TRIGGER_SUPPORT.<field>, contentLanguages)`.
 //!
 //! The binding-to-core conversion excludes the legal-form data's explicit
@@ -387,8 +388,16 @@ fn address_stop_keywords() -> Result<Vec<String>, AssembleError> {
 }
 
 /// Loads a `TRIGGER_SUPPORT.<field>` map (`trigger-support.json`).
+#[derive(Clone, Copy)]
+enum TriggerSupportField {
+  PhoneExtensionLabels,
+  NumberMarkers,
+  NumberLabels,
+  PersonFieldLabels,
+}
+
 fn trigger_support_field(
-  field: &str,
+  field: TriggerSupportField,
   selected: Option<&[String]>,
 ) -> Result<Vec<String>, AssembleError> {
   #[derive(Deserialize)]
@@ -399,12 +408,17 @@ fn trigger_support_field(
     number_markers: OrderedMap<Value>,
     #[serde(rename = "numberLabels", default)]
     number_labels: OrderedMap<Value>,
+    #[serde(rename = "personFieldLabels", default)]
+    person_field_labels: OrderedMap<Value>,
   }
   let support: TriggerSupport = parse_data_file("trigger-support.json")?;
   let map = match field {
-    "phoneExtensionLabels" => &support.phone_extension_labels,
-    "numberMarkers" => &support.number_markers,
-    _ => &support.number_labels,
+    TriggerSupportField::PhoneExtensionLabels => {
+      &support.phone_extension_labels
+    }
+    TriggerSupportField::NumberMarkers => &support.number_markers,
+    TriggerSupportField::NumberLabels => &support.number_labels,
+    TriggerSupportField::PersonFieldLabels => &support.person_field_labels,
   };
   Ok(language_keyed_terms(map, selected))
 }
@@ -434,10 +448,20 @@ pub(super) fn build_trigger_data(
     sentence_terminal_currency_terms:
       monetary::sentence_terminal_currency_terms(ctx)?,
     phone_extension_labels: trigger_support_field(
-      "phoneExtensionLabels",
+      TriggerSupportField::PhoneExtensionLabels,
       selected,
     )?,
-    number_markers: trigger_support_field("numberMarkers", selected)?,
-    number_labels: trigger_support_field("numberLabels", selected)?,
+    number_markers: trigger_support_field(
+      TriggerSupportField::NumberMarkers,
+      selected,
+    )?,
+    number_labels: trigger_support_field(
+      TriggerSupportField::NumberLabels,
+      selected,
+    )?,
+    person_field_labels: trigger_support_field(
+      TriggerSupportField::PersonFieldLabels,
+      selected,
+    )?,
   }))
 }
