@@ -2485,7 +2485,7 @@ mod tests {
     let text = "Janem Zorbax\u{a0}IČO： 12345678";
     assert_eq!(
       inline_field_label_start(text, &[]),
-      Some(("Janem Zorbax".len(), true))
+      Some(("Janem Zorbax\u{a0}".len(), true))
     );
   }
 
