@@ -16,7 +16,11 @@ its native advisory-lock loader does not support Node.js 18.
         "-y",
         "@stll/anonymize-mcp",
         "--root",
-        "/absolute/path/to/workspace"
+        "/absolute/path/to/workspace",
+        "--pdftoppm",
+        "/absolute/path/to/pdftoppm",
+        "--tesseract",
+        "/absolute/path/to/tesseract"
       ]
     }
   }
@@ -36,8 +40,18 @@ Tools:
 - `anonymize_text_file_with_external_detections`
 - `restore_text_file`
 - `anonymize_docx_file`
+- `anonymize_pdf_file`
 - `restore_docx_file`
 - `inspect_docx_file`
+
+`anonymize_pdf_file` accepts only absolute input/output PDF paths inside the
+configured roots plus bounded raster options and one explicit Tesseract language
+pack. Executable paths are server startup configuration and never tool input.
+The tool renders and OCRs locally, then publishes a fresh image-only PDF; it
+never overlays or copies source PDF objects. Its response contains aggregate
+page/detection/region counts and structural verification only—never document
+text, spans, mappings, or a claim of perfect OCR/detector recall. The certificate
+always reports `piiCleanGuaranteed=false`.
 
 By default, sessions live only in the MCP server process. Restoration therefore
 requires the same `sessionId` and the same running process that performed

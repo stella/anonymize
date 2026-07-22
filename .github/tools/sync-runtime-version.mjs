@@ -52,13 +52,20 @@ if (!VERSION_RE.test(version)) {
 let hasMismatch = false;
 
 // Internal dependency ranges that must track the synchronized runtime train.
-const SYNCED_DEPENDENCIES = ["@stll/anonymize", "@stll/anonymize-docx"];
+const SYNCED_DEPENDENCIES = [
+  "@stll/anonymize",
+  "@stll/anonymize-docx",
+  "@stll/anonymize-pdf",
+];
 // These consumers require APIs introduced by the same fixed release train.
 // Source manifests use workspace:* so local development cannot silently fall
 // back to an older published package. The release path resolves that marker to
 // the exact synchronized version before packing or publishing.
 const EXACT_CO_RELEASE_DEPENDENCIES = new Map([
-  ["packages/mcp/package.json", new Set(["@stll/anonymize"])],
+  [
+    "packages/mcp/package.json",
+    new Set(["@stll/anonymize", "@stll/anonymize-pdf"]),
+  ],
   ["packages/document-pdf/package.json", new Set(["@stll/anonymize"])],
 ]);
 

@@ -78,10 +78,9 @@ const createService = async ({
 }: Awaited<
   ReturnType<typeof createStorePaths>
 >): Promise<LocalAnonymizeService> => {
-  const service = new LocalAnonymizeService(
-    await PathScope.create([root]),
-    await createStore({ keyFile, sessionDirectory }),
-  );
+  const service = new LocalAnonymizeService(await PathScope.create([root]), {
+    durableSessions: await createStore({ keyFile, sessionDirectory }),
+  });
   openServices.add(service);
   return service;
 };
@@ -146,6 +145,22 @@ afterEach(async () => {
 });
 
 void describe("durable MCP sessions", () => {
+  void test("rejects a bare durable store instead of silently using memory sessions", async () => {
+    const paths = await createStorePaths();
+    const store = await createStore(paths);
+    const scope = await PathScope.create([paths.root]);
+
+    expect(
+      () =>
+        new LocalAnonymizeService(
+          scope,
+          store as unknown as ConstructorParameters<
+            typeof LocalAnonymizeService
+          >[1],
+        ),
+    ).toThrow("requires { durableSessions }");
+  });
+
   void test("restores text across server restarts without plaintext archives", async () => {
     const paths = await createStorePaths();
     const input = join(paths.root, "input.txt");
@@ -482,7 +497,7 @@ void describe("durable MCP sessions", () => {
     });
     const service = new LocalAnonymizeService(
       await PathScope.create([paths.root]),
-      store,
+      { durableSessions: store },
     );
     const input = join(paths.root, "close-input.txt");
     await writeFile(input, "Alice Smith signed.");
@@ -549,7 +564,7 @@ void describe("durable MCP sessions", () => {
       });
       const service = new LocalAnonymizeService(
         await PathScope.create([paths.root]),
-        store,
+        { durableSessions: store },
       );
       const firstInput = join(paths.root, "fault-first.txt");
       const firstOutput = join(paths.root, "fault-first-output.txt");
@@ -592,12 +607,14 @@ void describe("durable MCP sessions", () => {
     let faultOutput = false;
     const service = new LocalAnonymizeService(
       await PathScope.create([paths.root]),
-      store,
       {
-        beforeOutputPublish: () => {
-          if (faultOutput) {
-            throw new Error("injected output publication failure");
-          }
+        durableSessions: store,
+        faults: {
+          beforeOutputPublish: () => {
+            if (faultOutput) {
+              throw new Error("injected output publication failure");
+            }
+          },
         },
       },
     );

@@ -16,7 +16,7 @@ lifetime, restoration, and what metadata can still carry PII.
 | DOCX extraction/coverage           | Yes  | Yes    | No   | Yes | Aggregate inspection |
 | DOCX rewrite/anonymize/restore     | Yes  | Yes    | No   | Yes | Yes                  |
 | PDF structure/coverage inspection  | Yes  | Yes    | Yes  | No  | No                   |
-| PDF destructive raster output      | Yes  | Yes    | No   | Yes | No                   |
+| PDF destructive raster output      | Yes  | Yes    | No   | Yes | Yes, path-only       |
 | Runtime capability discovery       | Yes  | Yes    | Yes  | Yes | Manifest + tools     |
 
 Node and Python DOCX adapters share bounded extraction, rewrite, and restoration
@@ -57,8 +57,10 @@ geometry, destructively fills those pixels, and writes a fresh image-only PDF
 without retaining source objects. The Node package and CLI can invoke locally
 installed Poppler and Tesseract directly, sequentially, with private temporary
 files, per-page rendering, document-wide bounds, timeouts, and one explicit OCR
-language pack. No binary is bundled and there is not yet an MCP PDF tool. The certificate explicitly
-sets `piiCleanGuaranteed` to false because complete OCR
+language pack. The local MCP tool exposes only scoped input/output paths and
+bounded options; executable paths are server configuration, and results contain
+aggregate verification only. No binary is bundled. The certificate explicitly sets
+`piiCleanGuaranteed` to false because complete OCR
 coverage asserts that every page was processed, not that OCR or PII detection
 has perfect recall. Raster output deliberately removes searchability,
 accessibility, forms, links, attachments, metadata, and digital signatures.

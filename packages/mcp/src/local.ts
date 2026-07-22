@@ -3,6 +3,7 @@ import {
   CAPABILITY_MANIFEST,
   type NativeCallerDetection,
   type NativeTextReplacement,
+  type PreparedNativePipeline,
 } from "@stll/anonymize";
 import {
   DOCX_ARCHIVE_MAX_BYTES,
@@ -13,6 +14,11 @@ import {
   type DocxAnonymizationSession,
   type DocxRestorationSession,
 } from "@stll/anonymize-docx";
+import {
+  PDF_DOCUMENT_MAX_BYTES,
+  anonymizePdfRaster,
+  renderPdfWithPopplerTesseract,
+} from "@stll/anonymize-pdf";
 import * as nativeNode from "@stll/anonymize/native-node";
 import {
   constants as fsConstants,
@@ -62,7 +68,7 @@ export type McpSessionMode =
 
 export type AuditSafeResult = {
   operation: "anonymize" | "inspect" | "restore";
-  format: "docx" | "text";
+  format: "docx" | "pdf" | "text";
   outputCreated: boolean;
   sessionId?: string;
   entityCount?: number;
@@ -73,6 +79,10 @@ export type AuditSafeResult = {
   externalDetectionBatchStatus?: "accepted";
   externalDetectionCount?: number;
   retainedExternalDetectionCount?: number;
+  pageCount?: number;
+  mappedRegionCount?: number;
+  structurePixelRewriteVerified?: true;
+  piiCleanGuaranteed?: false;
 };
 
 const EXTERNAL_DETECTION_FAILURES = {
@@ -144,9 +154,9 @@ const inside = (root: string, target: string): boolean => {
 
 type ReadInputOptions = {
   path: string;
-  extension: ".docx" | ".json" | ".txt";
+  extension: ".docx" | ".json" | ".pdf" | ".txt";
   maximumBytes: number;
-  label: "DOCX" | "External detection batch" | "Text";
+  label: "DOCX" | "External detection batch" | "PDF" | "Text";
 };
 
 type ScopedInput = {
@@ -159,7 +169,7 @@ type ReadableFileHandle = Pick<Awaited<ReturnType<typeof open>>, "read">;
 const readHandleBounded = async (
   handle: ReadableFileHandle,
   maximumBytes: number,
-  label: "DOCX" | "External detection batch" | "Text",
+  label: "DOCX" | "External detection batch" | "PDF" | "Text",
 ): Promise<Uint8Array> => {
   const chunks: Uint8Array[] = [];
   let total = 0;
@@ -279,7 +289,7 @@ export class PathScope {
 
   async output(
     path: string,
-    extension: ".docx" | ".txt",
+    extension: ".docx" | ".pdf" | ".txt",
   ): Promise<ScopedOutput> {
     if (!isAbsolute(path) || extname(path).toLowerCase() !== extension) {
       throw new Error(`Output must be an absolute ${extension} path`);
@@ -351,7 +361,10 @@ type NativeNodeSurface = {
       key: Uint8Array;
       observedAtEpochSeconds: number;
     }) => RedactionSession;
-  };
+  } & Pick<
+    PreparedNativePipeline,
+    "redactText" | "redactTextWithCallerDetections"
+  >;
   native_package_version: () => string;
 };
 
@@ -530,25 +543,58 @@ const docxInput = textInput.extend({
   allowPartialCoverage: z.boolean().optional().default(false),
 });
 
+const pdfInput = z.object({
+  inputPath: z.string().min(1).max(PATH_MAX_CHARACTERS),
+  outputPath: z.string().min(1).max(PATH_MAX_CHARACTERS),
+  ocrLanguage: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.-]*$/u),
+  detectionLanguage: z.string().min(2).max(35).optional(),
+  dpi: z.number().int().min(72).max(600).optional().default(300),
+  timeoutMs: z.number().int().min(100).max(300_000).optional().default(120_000),
+  fillRgb: z
+    .tuple([
+      z.number().int().min(0).max(255),
+      z.number().int().min(0).max(255),
+      z.number().int().min(0).max(255),
+    ])
+    .optional()
+    .default([0, 0, 0]),
+});
+
+export type LocalPdfProviderConfiguration = {
+  pdftoppmPath?: string | undefined;
+  tesseractPath?: string | undefined;
+};
+
+export type LocalAnonymizeServiceOptions = {
+  durableSessions?: DurableSessionStore | undefined;
+  faults?: LocalAnonymizeServiceFaults | undefined;
+  pdfProvider?: LocalPdfProviderConfiguration | undefined;
+};
+
 export class LocalAnonymizeService {
   #activeOperations = 0;
   #closePromise: Promise<void> | undefined;
   #operationsDrained: (() => void) | undefined;
   readonly #scope: PathScope;
+  #pdfOperationTail: Promise<void> = Promise.resolve();
   readonly #sessionInitializations = new Set<string>();
   readonly #sessions = new Map<string, SessionEntry>();
   #state: "closed" | "closing" | "open" = "open";
   readonly #durableSessions: DurableSessionStore | undefined;
   readonly #faults: LocalAnonymizeServiceFaults;
+  readonly #pdfProvider: LocalPdfProviderConfiguration;
 
-  constructor(
-    scope: PathScope,
-    durableSessions?: DurableSessionStore,
-    faults: LocalAnonymizeServiceFaults = {},
-  ) {
+  constructor(scope: PathScope, options: LocalAnonymizeServiceOptions = {}) {
+    if (options instanceof DurableSessionStore) {
+      throw new TypeError(
+        "LocalAnonymizeService requires { durableSessions } as its second argument",
+      );
+    }
+    const { durableSessions, faults = {}, pdfProvider = {} } = options;
     this.#scope = scope;
     this.#durableSessions = durableSessions;
     this.#faults = faults;
+    this.#pdfProvider = pdfProvider;
   }
 
   get sessionMode(): McpSessionMode {
@@ -769,6 +815,80 @@ export class LocalAnonymizeService {
     input: z.infer<typeof textInput>,
   ): Promise<AuditSafeResult> {
     return this.#runOperation(() => this.#anonymizeText(input));
+  }
+
+  async anonymizePdf(
+    input: z.infer<typeof pdfInput>,
+  ): Promise<AuditSafeResult> {
+    return this.#runOperation(() =>
+      this.#serializePdfOperation(() => this.#anonymizePdf(input)),
+    );
+  }
+
+  async #serializePdfOperation<Result>(
+    operation: () => Promise<Result>,
+  ): Promise<Result> {
+    const previous = this.#pdfOperationTail;
+    let release = (): void => undefined;
+    this.#pdfOperationTail = new Promise<void>((resolvePromise) => {
+      release = resolvePromise;
+    });
+    await previous;
+    try {
+      return await operation();
+    } finally {
+      release();
+    }
+  }
+
+  async #anonymizePdf(
+    input: z.infer<typeof pdfInput>,
+  ): Promise<AuditSafeResult> {
+    const source = await this.#scope.readInput({
+      path: input.inputPath,
+      extension: ".pdf",
+      maximumBytes: PDF_DOCUMENT_MAX_BYTES,
+      label: "PDF",
+    });
+    const destination = await this.#scope.output(input.outputPath, ".pdf");
+    assertDifferentPaths(source.path, destination.path);
+    const pipeline = nativeNodeSurface.getDefaultNativePipeline(
+      input.detectionLanguage === undefined
+        ? {}
+        : { language: input.detectionLanguage },
+    );
+    const observed = await renderPdfWithPopplerTesseract({
+      document: source.bytes,
+      ocrLanguage: input.ocrLanguage,
+      dpi: input.dpi,
+      timeoutMs: input.timeoutMs,
+      ...this.#pdfProvider,
+    });
+    const anonymized = anonymizePdfRaster({
+      document: source.bytes,
+      pipeline,
+      provider: observed.provider,
+      pages: observed.pages,
+      fillRgb: input.fillRgb,
+    });
+    if (
+      anonymized.certificate.structurePixelRewriteVerified !== true ||
+      anonymized.certificate.piiCleanGuaranteed !== false
+    ) {
+      throw new Error("PDF raster verification did not satisfy MCP policy");
+    }
+    this.#faults.beforeOutputPublish?.();
+    await destination.write(anonymized.document);
+    return {
+      operation: "anonymize",
+      format: "pdf",
+      outputCreated: true,
+      pageCount: anonymized.certificate.pageCount,
+      entityCount: anonymized.certificate.detectionCount,
+      mappedRegionCount: anonymized.certificate.mappedRegionCount,
+      structurePixelRewriteVerified: true,
+      piiCleanGuaranteed: false,
+    };
   }
 
   async #anonymizeText(
@@ -1071,6 +1191,7 @@ const result = (value: AuditSafeResult) => ({
 
 const MCP_TOOL_NAMES = [
   "anonymize_docx_file",
+  "anonymize_pdf_file",
   "anonymize_text_file",
   "anonymize_text_file_with_external_detections",
   "capabilities",
@@ -1088,7 +1209,7 @@ const capabilitiesResult = (service: LocalAnonymizeService) => {
         ingestion: "path-only" as const,
         version: EXTERNAL_DETECTION_BATCH_VERSION,
       },
-      formats: ["docx", "text"] as const,
+      formats: ["docx", "pdf", "text"] as const,
       sessionMode: service.sessionMode,
       tools: MCP_TOOL_NAMES,
       transport: "stdio" as const,
@@ -1183,6 +1304,16 @@ export const createAnonymizeMcpServer = (
       annotations: { destructiveHint: false, idempotentHint: false },
     },
     async (input) => result(await service.anonymizeDocx(input)),
+  );
+  server.registerTool(
+    "anonymize_pdf_file",
+    {
+      description:
+        "Destructively raster-anonymize a local PDF into a fresh image-only PDF. Returns aggregate verification only; it does not claim perfect OCR or detector recall.",
+      inputSchema: pdfInput,
+      annotations: { destructiveHint: false, idempotentHint: false },
+    },
+    async (input) => result(await service.anonymizePdf(input)),
   );
   server.registerTool(
     "restore_docx_file",
