@@ -153,6 +153,7 @@ fn street_type_filter_values() -> Result<Vec<String>, AssembleError> {
 /// Returns [`AssembleError`] when an embedded filter data file fails to parse.
 pub(super) fn build_deny_list_filter_data(
   corpus: &NameCorpus,
+  content_languages: Option<&[String]>,
 ) -> Result<BindingDenyListFilterData, AssembleError> {
   // stopwords: stopwords.json filtered by first-name exclusions, Set order.
   let exclusions = first_name_exclusions(corpus);
@@ -185,11 +186,11 @@ pub(super) fn build_deny_list_filter_data(
   // genericRoles: generic-roles.json roles (Set order), then legal role heads.
   let generic_roles_file: GenericRoles = parse_data_file("generic-roles.json")?;
   let mut generic_roles = set_ordered(generic_roles_file.roles);
-  generic_roles.extend(legal_forms::role_heads()?);
+  generic_roles.extend(legal_forms::role_heads(content_languages)?);
 
   // trailingAddressWordExclusions: lowerSortedUnique union, then Set (no-op).
   let mut trailing_union: Vec<String> = Vec::new();
-  trailing_union.extend(legal_forms::role_heads()?);
+  trailing_union.extend(legal_forms::role_heads(content_languages)?);
   trailing_union.extend(legal_forms::clause_noun_heads()?);
   trailing_union.extend(language_word_file("organization-unit-heads.json")?);
   trailing_union
@@ -1191,7 +1192,7 @@ mod tests {
       ..test_corpus()
     };
 
-    let filters = build_deny_list_filter_data(&corpus)
+    let filters = build_deny_list_filter_data(&corpus, None)
       .expect("deny-list filter data should assemble");
 
     assert!(

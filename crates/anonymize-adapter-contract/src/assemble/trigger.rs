@@ -443,7 +443,7 @@ pub(super) fn build_trigger_data(
   Ok(Some(BindingTriggerData {
     rules,
     address_stop_keywords: address_stop_keywords()?,
-    party_position_terms: legal_forms::role_heads()?,
+    party_position_terms: legal_forms::role_heads(selected)?,
     post_nominals: POST_NOMINALS.iter().map(|s| (*s).to_string()).collect(),
     sentence_terminal_currency_terms:
       monetary::sentence_terminal_currency_terms(ctx)?,

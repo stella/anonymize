@@ -9,10 +9,9 @@
 //! fully loaded cache (never the seed fallback) by the time the field is built;
 //! this port reproduces the loaded values directly.
 //!
-//! NOTE: none of these getters are language-scoped. `loadLegalRoleHeads` and the
-//! other loaders union every manifest language regardless of the pipeline
-//! `languages`/`language` selection, so `legal_form_data` is identical for every
-//! config that emits it. The language.rs helpers are therefore not used here.
+//! Legal role heads and institutional organization vocabulary follow the
+//! configured content-language scope. Language-neutral legal-form suffixes and
+//! structural rule words remain shared.
 
 use std::collections::HashSet;
 
@@ -112,10 +111,11 @@ const SENTENCE_VERB_INDICATORS_SEED: &[&str] =
 /// Clause-noun seed set (`CLAUSE_NOUN_HEADS_SEED`).
 const CLAUSE_NOUN_HEADS_SEED: &[&str] = &["agreement", "contract"];
 
-/// Language files that carry `legalRoleHeads`, in `manifest.json` declaration
-/// order. Mirrors `loadLanguageConfigs("legalRoleHeads", ...)`, which is called
-/// without a language filter, so all manifest languages are unioned.
-fn legal_role_head_languages() -> Result<Vec<String>, AssembleError> {
+/// Selected language files that carry `legalRoleHeads`, in `manifest.json`
+/// declaration order. An absent selection keeps the all-language default.
+fn legal_role_head_languages(
+  selected: Option<&[String]>,
+) -> Result<Vec<String>, AssembleError> {
   #[derive(Deserialize)]
   struct Manifest {
     languages: OrderedMap<ManifestLanguage>,
@@ -130,7 +130,10 @@ fn legal_role_head_languages() -> Result<Vec<String>, AssembleError> {
     manifest
       .languages
       .iter()
-      .filter(|(_, lang)| lang.legal_role_heads == Some(true))
+      .filter(|(code, lang)| {
+        lang.legal_role_heads == Some(true)
+          && language::language_config_matches(code, selected)
+      })
       .map(|(code, _)| code.clone())
       .collect(),
   )
@@ -406,7 +409,9 @@ fn load_lowercase_union(
 ///
 /// Reused by `trigger_data` as `partyPositionTerms`
 /// (`build-unified-search.ts:851`).
-pub(super) fn role_heads() -> Result<Vec<String>, AssembleError> {
+pub(super) fn role_heads(
+  selected: Option<&[String]>,
+) -> Result<Vec<String>, AssembleError> {
   #[derive(Deserialize)]
   struct RoleHeads {
     #[serde(default)]
@@ -414,7 +419,7 @@ pub(super) fn role_heads() -> Result<Vec<String>, AssembleError> {
   }
   let mut seen = HashSet::new();
   let mut out = Vec::new();
-  for code in legal_role_head_languages()? {
+  for code in legal_role_head_languages(selected)? {
     let file = format!("legal-role-heads.{code}.json");
     // Manifest may list a language the static registry cannot load; skip it
     // like `loadLanguageConfigs` skips a missing loader.
@@ -599,7 +604,7 @@ pub(super) fn build_legal_form_data(
     normalized_boundary_suffixes,
     normalized_in_name_words,
     normalized_suffix_words,
-    role_heads: role_heads()?,
+    role_heads: role_heads(ctx.content_languages.as_deref())?,
     sentence_verb_indicators: load_lowercase_union(
       "sentence-verb-indicators.json",
       SENTENCE_VERB_INDICATORS_SEED,
@@ -646,7 +651,7 @@ mod tests {
 
   use super::{
     InstitutionalOrganizationData, all_legal_suffixes,
-    institutional_language_words, organization_detection_suffixes,
+    institutional_language_words, organization_detection_suffixes, role_heads,
     validate_institutional_terms,
   };
 
@@ -665,6 +670,15 @@ mod tests {
     }
     assert!(!german.iter().any(|suffix| suffix == "Court"));
     assert!(all.iter().any(|suffix| suffix == "Court"));
+  }
+
+  #[test]
+  fn legal_role_heads_follow_content_language_scope() {
+    let czech = role_heads(Some(&[String::from("cs")])).unwrap();
+    let english = role_heads(Some(&[String::from("en")])).unwrap();
+
+    assert!(czech.iter().any(|word| word == "poskytovatele"));
+    assert!(!english.iter().any(|word| word == "poskytovatele"));
   }
 
   #[test]

@@ -1,5 +1,5 @@
 {
-  "generatedBy": "crates/anonymize-core/tests/assemble_digest.rs (re-baselined for scoped legal field labels and Czech party roles)",
+  "generatedBy": "crates/anonymize-core/tests/assemble_digest.rs (re-baselined for language-scoped legal field labels and role heads)",
   "source": "prepared_search_core_package_to_bytes",
   "digest": {
     "algorithm": "sha256",
@@ -141,31 +141,31 @@
     },
     {
       "name": "language-cs",
-      "packageDigest": "903c85f35109bd85378a8a47f6f5b77b2da2367d2cfb249b164bc93230e00e0b",
+      "packageDigest": "5867696d091eafcbfd3ff8b7c5d45111fd91d2c5c6f8a937c851caa3b3ba2db8",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
     {
       "name": "language-de",
-      "packageDigest": "1dc08d3a03c99c83d005152561e8abd019f0b2783321226428a88dd945c5de28",
+      "packageDigest": "2eb6809e2d30b5056a46971b91cbcd1d9f4afbc0266d6b3c3a96266677c05ee4",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
     {
       "name": "language-en",
-      "packageDigest": "6cb0a5aff06b9c487bd87976f005807bf76d1cdfc5301ff6e3b896198e7ec2b4",
+      "packageDigest": "1513c0d491f856992e1617ede9d7e757d8ca8a6afeb3b82789d92311d4731f44",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
     {
       "name": "language-ja",
-      "packageDigest": "927237afecef47cd69087ef2ea5810a01f46c6a91d94f892d47238a5c633ebd4",
+      "packageDigest": "3bb7996811336e08d7d8651cbce583d369ee337c0865cf3aa477130fb1cff4f1",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
     {
       "name": "language-cs-sk",
-      "packageDigest": "ddecc8e2b11518de1bef9aa4c988fa98942c8bc6be4f8eb54b7e5ff142373125",
+      "packageDigest": "352ad3db254affc9eaf5beade0643e247402487f46ff2173fda7c77a029c4614",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
@@ -243,13 +243,13 @@
     },
     {
       "name": "legal-forms-multilang",
-      "packageDigest": "ee015f75f73cc79d34f9fe6d5e9dcfa8c13027c3d0cef2ccb8cab91e9ea3ddd3",
+      "packageDigest": "3b99a859e4855b6874793a9e6be04c9beedf0f6b55b613189032036394e197d8",
       "hasDictionaries": false,
       "gazetteerCount": 0
     },
     {
       "name": "with-test-dictionaries",
-      "packageDigest": "56ad8275bb071a0ae6472c13c977081cc982f84527df735ad5cf5fcfdc63748d",
+      "packageDigest": "2812ca75d73f8937fd6f7e4857624c906afc49d54f8be10c31b3ef8691394c55",
       "hasDictionaries": true,
       "gazetteerCount": 0
     }

@@ -271,7 +271,10 @@ fn build_deny_list_unit(
     ctx.dictionaries,
     scoped.name_corpus_languages.as_deref(),
   )?;
-  let filters = deny_list::build_deny_list_filter_data(&corpus)?;
+  let filters = deny_list::build_deny_list_filter_data(
+    &corpus,
+    ctx.content_languages.as_deref(),
+  )?;
 
   let deny_intermediate = if config.enable_deny_list {
     deny_list::build_deny_list(&deny_list::DenyBuildContextArgs {
