@@ -108,6 +108,14 @@ describe("legal-form firm name capture", () => {
     ).toBe(true);
   });
 
+  test("connector-complete prior firm record is not merged", async () => {
+    const orgs = await orgsIn(
+      "Wachtell, Lipton, Rosen & Katz,\nMeagher & Flom (UK) LLP",
+    );
+    expect(orgs).toContain("Meagher & Flom (UK) LLP");
+    expect(orgs.some((org) => org.includes("Wachtell"))).toBe(false);
+  });
+
   test("Simpson Thacher & Bartlett LLP across paragraphs", async () => {
     expect(
       await orgsIn("and\nSimpson Thacher & Bartlett LLP\n425 Lexington Avenue"),

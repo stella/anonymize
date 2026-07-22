@@ -566,6 +566,12 @@ fn comma_before_soft_wrap(text: &str, newline_start: usize) -> bool {
       if earlier == '\n' {
         return false;
       }
+      // A connector-complete comma-rich line is more likely a separate firm
+      // record ("Wachtell, Lipton, Rosen & Katz,") than the unfinished prefix
+      // of the suffix-bearing firm on the next line.
+      if earlier == '&' {
+        return false;
+      }
       if earlier == ',' {
         return true;
       }
@@ -3127,6 +3133,16 @@ mod tests {
       vec![String::from(
         "Skadden, Arps, Slate,\nMeagher & Flom (UK) LLP"
       )]
+    );
+  }
+
+  #[test]
+  fn directly_preceding_connector_complete_firm_record_stops_name_walk() {
+    let text = "Wachtell, Lipton, Rosen & Katz,\nMeagher & Flom (UK) LLP";
+    let texts = org_texts_for(text, "LLP");
+    assert_eq!(
+      texts,
+      vec![String::from("Meagher & Flom (UK) LLP")]
     );
   }
 
