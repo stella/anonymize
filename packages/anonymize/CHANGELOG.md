@@ -1,5 +1,29 @@
 # Changelog
 
+## 2.4.1
+
+### Patch Changes
+
+- [#360](https://github.com/stella/anonymize/pull/360) [`6469935`](https://github.com/stella/anonymize/commit/64699354e210eed7eadaa2650d06fd195942c5c6) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Keep state-backed and state-less ZIP+4 context lookups responsive on large
+  documents by querying only context seeds inside the bounded text window.
+
+- [#351](https://github.com/stella/anonymize/pull/351) [`20071a8`](https://github.com/stella/anonymize/commit/20071a8a8d0841cb1c7bf1a7dd41f183966f0ab3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Detect explicitly labelled U.S. Social Security numbers in English text while rejecting impossible values, mixed separators, and non-ASCII digits.
+
+- [#358](https://github.com/stella/anonymize/pull/358) [`bf1eda3`](https://github.com/stella/anonymize/commit/bf1eda396973bc04986c75cb6b5ec63214e24799) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Keep address-seed clustering responsive on large legal documents by indexing
+  non-address entity barriers instead of rescanning every entity between seeds.
+
+- [#355](https://github.com/stella/anonymize/pull/355) [`3e95d22`](https://github.com/stella/anonymize/commit/3e95d22a8768539b539fdbb39df6e1e5d4d8e88f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Keep address-context redaction responsive on large legal documents by bounding
+  header scans and limiting proximity checks to nearby entities.
+
+- [#361](https://github.com/stella/anonymize/pull/361) [`4f5140f`](https://github.com/stella/anonymize/commit/4f5140fbaddbb69aafa68dec98bd06c4b2b7a45e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Keep partial-word and adjacent-span boundary resolution responsive for large
+  candidate sets by indexing cross-label positions instead of rescanning every
+  span.
+
+- [#358](https://github.com/stella/anonymize/pull/358) [`bf1eda3`](https://github.com/stella/anonymize/commit/bf1eda396973bc04986c75cb6b5ec63214e24799) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Keep postal-code address seeding responsive on large legal documents by
+  bounding UTF-16 proximity checks and indexing existing seed coverage.
+
+- [#361](https://github.com/stella/anonymize/pull/361) [`4f5140f`](https://github.com/stella/anonymize/commit/4f5140fbaddbb69aafa68dec98bd06c4b2b7a45e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Keep overlap resolution scalable when documents contain many disjoint detections.
+
 ## 2.4.0
 
 ### Minor Changes
