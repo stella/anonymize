@@ -10,17 +10,19 @@ import {
   TAB_SAMPLE_SIZE,
 } from "./blind/tab";
 import type { GroundTruthDocument } from "./ground-truth";
-import { benchmarkGitRevision } from "./git-revision";
+import { benchmarkSourceGitSha } from "./git-revision";
 import { runSealedBoundary } from "./sealed-boundary";
 import {
   SEALED_AGGREGATE_REPORT_SCHEMA_VERSION,
   type SealedAggregateReport,
   type SealedLibraryResult,
   type TabAggregateMetrics,
+  normalizeSealedProviderVersion,
   writeSealedAggregateReport,
 } from "./sealed-report";
 
 const RESULTS_DIR = join(import.meta.dir, "..", "results", "blind");
+const sourceGitSha = benchmarkSourceGitSha();
 
 const full = process.argv.slice(2).includes("--full");
 const corpus = await runSealedBoundary(
@@ -65,7 +67,9 @@ for (const adapter of createBenchmarkAdapters()) {
   };
   libraries.push({
     name: adapter.name,
-    version: outcome.reportedVersion ?? adapter.version,
+    version: normalizeSealedProviderVersion(
+      outcome.reportedVersion ?? adapter.version,
+    ),
     status: "ok",
     timing: outcome.timing,
     adapterWallSeconds,
@@ -76,7 +80,7 @@ for (const adapter of createBenchmarkAdapters()) {
 const report: SealedAggregateReport = {
   schemaVersion: SEALED_AGGREGATE_REPORT_SCHEMA_VERSION,
   createdAt: new Date().toISOString(),
-  gitSha: benchmarkGitRevision(),
+  sourceGitSha,
   runtime: `Bun ${Bun.version}`,
   policy: "evaluation-only",
   corpus: {

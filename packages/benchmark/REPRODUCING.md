@@ -309,9 +309,16 @@ and compare medians.
 
 ## Provenance of committed results
 
-The `commit` field in committed results records the SHA of the source tree
-that produced them, which is a PR-branch commit. This repository squash-merges,
-so that SHA is not on `main`'s first-parent history; it remains permanently
-fetchable via the pull request head ref (`git fetch origin pull/<PR>/head`).
-Recording the post-squash SHA is impossible by construction: it does not exist
-until after the results are committed.
+The `sourceGitSha` field records the full 40-character SHA of the clean source
+tree that produced a sealed result. A sealed runner fails before loading a
+corpus when tracked source changes, staged changes, or unrelated untracked
+files are present. Canonical aggregate report pairs emitted by an earlier
+sealed phase for the same source SHA are the only untracked files ignored, so
+TAB, RedactionBench, and MEDDOCAN can run sequentially without weakening the
+provenance check.
+
+The recorded source SHA is a PR-branch commit. This repository squash-merges,
+so it is not on `main`'s first-parent history; it remains fetchable via the pull
+request head ref (`git fetch origin pull/<PR>/head`). Recording the post-squash
+SHA is impossible by construction because it does not exist until after the
+results are committed.

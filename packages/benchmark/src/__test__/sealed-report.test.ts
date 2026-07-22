@@ -6,6 +6,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   assertSealedAggregateReport,
+  normalizeSealedProviderVersion,
   renderSealedAggregateMarkdown,
   SEALED_AGGREGATE_REPORT_SCHEMA_VERSION,
   type SealedAggregateReport,
@@ -17,7 +18,7 @@ import { runSealedBoundary } from "../sealed-boundary";
 const report = (): SealedAggregateReport => ({
   schemaVersion: SEALED_AGGREGATE_REPORT_SCHEMA_VERSION,
   createdAt: "2026-07-21T00:00:00.000Z",
-  gitSha: "0123456",
+  sourceGitSha: "0".repeat(40),
   runtime: "Bun test",
   policy: "evaluation-only",
   corpus: {
@@ -75,7 +76,7 @@ describe("sealed aggregate report contract", () => {
     expect(Object.keys(parsed)).toEqual([
       "schemaVersion",
       "createdAt",
-      "gitSha",
+      "sourceGitSha",
       "runtime",
       "policy",
       "corpus",
@@ -203,6 +204,58 @@ describe("sealed aggregate report contract", () => {
         corpus: { ...base.corpus, id: "meddocan" },
       }),
     ).toThrow("metrics do not match the corpus");
+  });
+
+  test("rejects provider-controlled report-channel strings", () => {
+    const base = report();
+    const first = base.libraries.at(0);
+    if (first?.status !== "ok") {
+      throw new Error("test report must be available");
+    }
+    expect(() => normalizeSealedProviderVersion("4.8.0")).not.toThrow();
+    expect(() =>
+      normalizeSealedProviderVersion("pii-shield 2.2.0"),
+    ).not.toThrow();
+    expect(() => normalizeSealedProviderVersion("2.0.1\nsecret")).toThrow(
+      "provider version is invalid",
+    );
+    expect(() => normalizeSealedProviderVersion("x".repeat(129))).toThrow(
+      "provider version is invalid",
+    );
+    expect(() =>
+      assertSealedAggregateReport({
+        ...base,
+        libraries: [{ ...first, name: "stella\nsecret" }],
+      }),
+    ).toThrow("name is invalid");
+    expect(() =>
+      assertSealedAggregateReport({
+        ...base,
+        libraries: [
+          {
+            name: "scrubadub",
+            version: "2.0.1",
+            status: "unavailable",
+            reasonCode: "adapter-unavailable",
+            reason: "subprocess-controlled detail",
+          },
+        ],
+      }),
+    ).toThrow("forbidden field reason");
+  });
+
+  test("requires the full source SHA without accepting the legacy field", () => {
+    const base = report();
+    expect(() =>
+      assertSealedAggregateReport({ ...base, sourceGitSha: "0123456" }),
+    ).toThrow("must be a full Git SHA");
+    const { sourceGitSha: _sourceGitSha, ...withoutSourceGitSha } = base;
+    expect(() =>
+      assertSealedAggregateReport({
+        ...withoutSourceGitSha,
+        gitSha: "0".repeat(40),
+      }),
+    ).toThrow("forbidden field gitSha");
   });
 });
 

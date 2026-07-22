@@ -1,7 +1,18 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
-export const SEALED_AGGREGATE_REPORT_SCHEMA_VERSION = 2 as const;
+export const SEALED_AGGREGATE_REPORT_SCHEMA_VERSION = 3 as const;
+
+const SAFE_PROVIDER_NAME = /^[a-z0-9][a-z0-9._-]{0,63}$/u;
+const SAFE_PROVIDER_VERSION = /^[A-Za-z0-9][A-Za-z0-9 ._+/@():-]{0,127}$/u;
+
+/** Keep subprocess-controlled metadata out of the aggregate report channel. */
+export const normalizeSealedProviderVersion = (value: string): string => {
+  if (!SAFE_PROVIDER_VERSION.test(value)) {
+    throw new Error("sealed provider version is invalid");
+  }
+  return value;
+};
 
 export type SealedTiming = {
   readonly initSeconds: number;
@@ -67,7 +78,7 @@ export type SealedLibraryResult =
 export type SealedAggregateReport = {
   readonly schemaVersion: typeof SEALED_AGGREGATE_REPORT_SCHEMA_VERSION;
   readonly createdAt: string;
-  readonly gitSha: string;
+  readonly sourceGitSha: string;
   readonly runtime: string;
   readonly policy: "evaluation-only";
   readonly corpus: {
@@ -229,7 +240,7 @@ export const assertSealedAggregateReport: (
     [
       "schemaVersion",
       "createdAt",
-      "gitSha",
+      "sourceGitSha",
       "runtime",
       "policy",
       "corpus",
@@ -244,7 +255,12 @@ export const assertSealedAggregateReport: (
     throw new Error("sealed report contract or policy is invalid");
   }
   requireString(value["createdAt"], "sealed report createdAt");
-  requireString(value["gitSha"], "sealed report gitSha");
+  if (
+    typeof value["sourceGitSha"] !== "string" ||
+    !/^[a-f0-9]{40}$/u.test(value["sourceGitSha"])
+  ) {
+    throw new Error("sealed report sourceGitSha must be a full Git SHA");
+  }
   requireString(value["runtime"], "sealed report runtime");
 
   const corpus = value["corpus"];
@@ -307,6 +323,16 @@ export const assertSealedAggregateReport: (
       throw new Error(`sealed library ${index} must be an object`);
     requireString(library["name"], `sealed library ${index} name`);
     requireString(library["version"], `sealed library ${index} version`);
+    if (
+      typeof library["name"] !== "string" ||
+      !SAFE_PROVIDER_NAME.test(library["name"])
+    ) {
+      throw new Error(`sealed library ${index} name is invalid`);
+    }
+    if (typeof library["version"] !== "string") {
+      throw new Error(`sealed library ${index} version is invalid`);
+    }
+    normalizeSealedProviderVersion(library["version"]);
     if (typeof library["name"] === "string") {
       if (libraryNames.has(library["name"])) {
         throw new Error(`sealed library ${index} duplicates a library name`);
@@ -448,7 +474,7 @@ export const renderSealedAggregateMarkdown = (
     `- Split: ${report.corpus.split}`,
     `- Selection: ${report.corpus.selection.type} (${report.corpus.documentCount} documents)`,
     `- Generated: ${cell(report.createdAt)}`,
-    `- Commit: ${cell(report.gitSha)}`,
+    `- Source commit: ${report.sourceGitSha}`,
     "",
     `| Library | Version | ${definition.headers.join(" | ")} | Init (s) | Cold pass (s) | Warm pass (s) | Warm chars/s | Adapter wall (s, diagnostic) |`,
     `| ------- | ------- | ${definition.headers.map(() => "---").join(" | ")} | -------- | ------------- | ------------- | ------------ | ---------------------------- |`,
