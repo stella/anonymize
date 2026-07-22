@@ -59,8 +59,28 @@ const original = deanonymise(redaction.redactedText, redaction.redactionMap);
 
 Create the pipeline once and reuse it. Language-scoped packages are bundled for
 English, Czech, and German; the full package covers the other supported
-languages. See the [Node package guide](packages/anonymize/README.md) for
+languages. Built-in data covers `cs`, `de`, `en`, `es`, `fr`, `hu`, `it`, `pl`,
+`pt-br`, `ro`, `sk`, and `sv`, with detectors for people, organizations,
+locations, contact details, dates, financial data, and legal identifiers. See
+the [Node package guide](packages/anonymize/README.md) for
 sessions, custom detections, operators, diagnostics, and prepared packages.
+
+### Browser
+
+```bash
+npm install @stll/anonymize-wasm
+```
+
+```ts
+import { loadDefaultPipeline } from "@stll/anonymize-wasm";
+
+const pipeline = await loadDefaultPipeline("en");
+const { redaction } = pipeline.redactText("A contract signed by Alice Smith.");
+```
+
+The threaded WASM build requires cross-origin isolation. Vite applications also
+need the package's Vite helper so the WASM worker and prepared data are emitted
+correctly. See the [browser guide](packages/anonymize/wasm/README.md).
 
 ### Python
 
@@ -95,8 +115,8 @@ The `anonymize` command reads stdin, files, or directory trees. It also supports
 reversible keys and DOCX/PDF workflows:
 
 ```bash
-anonymize -k contract.key.json -o contract.anon.txt contract.txt
-anonymize -d contract.key.json contract.anon.txt
+npx @stll/anonymize-cli -k contract.key.json -o contract.anon.txt contract.txt
+npx @stll/anonymize-cli -d contract.key.json contract.anon.txt
 ```
 
 See the [CLI reference](packages/cli/README.md) for batch processing, selective
@@ -168,19 +188,18 @@ The full runtime and format matrix, including known gaps, lives in
 
 ## Runtime and privacy model
 
-- The Rust core owns detection, resolution, replacement, and document planning.
-  Node.js, Python, and WASM bindings remain thin and are checked by exhaustive
-  capability-profile tests.
-- Prepared language data is bundled into versioned `.stlanonpkg` artifacts. The
-  Node.js and Python SDKs and the CLI do not send document text over the network.
+- Rust crates own text detection, replacement, and DOCX/PDF planning. Node.js,
+  Python, and WASM bindings are checked by capability-profile parity tests.
+- Prepared language data is bundled into versioned `.stlanonpkg` artifacts; the
+  default SDKs and CLI do not send document text to a remote service.
 - Reversible redaction maps contain original PII. Encrypted session archives
   protect persisted mappings, but applications still own key generation,
   storage, rotation, and authorization.
-- Diagnostics include raw detected text and original values, including summary
-  diagnostics. Treat diagnostic output as sensitively as the input document;
-  do not send it to ordinary logs or telemetry.
-- External model or service detections can enter through a validated,
-  digest-bound sidecar. stella does not bundle GLiNER or another model runner.
+- Diagnostic events omit matched text, but redaction results and reversible maps
+  can contain original PII. Do not send those values to ordinary logs or
+  telemetry.
+- Optional model or service detections enter through a validated, digest-bound
+  sidecar. stella does not bundle a model runner.
 
 The machine-readable public contract is exported as `CAPABILITY_MANIFEST` from
 `@stll/anonymize/capabilities` and printed by `anonymize --capabilities`. The
@@ -189,17 +208,17 @@ package graph and parity boundaries.
 
 ## Packages
 
-| Package                 | Purpose                                             |
-| ----------------------- | --------------------------------------------------- |
-| `@stll/anonymize`       | Node.js SDK and native runtime                      |
-| `stella-anonymize-core` | Python bindings                                     |
-| `@stll/anonymize-wasm`  | Browser/WASM runtime                                |
-| `@stll/anonymize-cli`   | Command-line text, DOCX, and PDF workflows          |
-| `@stll/anonymize-mcp`   | Path-only local MCP server                          |
-| `@stll/anonymize-docx`  | Structure-aware DOCX adapter                        |
-| `@stll/anonymize-pdf`   | PDF inspection and destructive raster anonymization |
-| `@stll/anonymize-data`  | Published dictionaries and detector configuration   |
-| `crates/anonymize-core` | Shared Rust core                                    |
+| Package                                                     | Purpose                                             |
+| ----------------------------------------------------------- | --------------------------------------------------- |
+| `@stll/anonymize`                                           | Node.js SDK and native runtime                      |
+| `stella-anonymize-core`                                     | Python bindings                                     |
+| [`@stll/anonymize-wasm`](packages/anonymize/wasm/README.md) | Browser/WASM runtime                                |
+| `@stll/anonymize-cli`                                       | Command-line text, DOCX, and PDF workflows          |
+| `@stll/anonymize-mcp`                                       | Path-only local MCP server                          |
+| `@stll/anonymize-docx`                                      | Structure-aware DOCX adapter                        |
+| `@stll/anonymize-pdf`                                       | PDF inspection and destructive raster anonymization |
+| `@stll/anonymize-data`                                      | Published dictionaries and detector configuration   |
+| `crates/anonymize-core`                                     | Shared Rust core                                    |
 
 Platform-specific Node.js binary packages are installed automatically as
 optional dependencies of `@stll/anonymize`.
