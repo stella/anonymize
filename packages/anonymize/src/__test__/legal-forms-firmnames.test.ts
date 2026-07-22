@@ -86,6 +86,12 @@ describe("legal-form firm name capture", () => {
     ).toContain("Skadden, Arps, Slate, Meagher & Flom (UK) LLP");
   });
 
+  test("one-letter schedule marker is not a jurisdiction", async () => {
+    expect(await orgsIn("Schedule (A) LLC Agreement")).not.toContain(
+      "Schedule (A) LLC",
+    );
+  });
+
   test("comma soft-wrap before jurisdiction LLP", async () => {
     const orgs = await orgsIn(
       "with a copy (which will not constitute notice) to:\n\n" +

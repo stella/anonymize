@@ -584,7 +584,9 @@ fn jurisdiction_parenthetical_open(
   let mut letter_count = 0_usize;
   while let Some((prev_start, ch)) = previous_char(text, scan) {
     if ch == '(' {
-      return (letter_count > 0).then_some(prev_start);
+      // ISO-style jurisdiction markers have at least two letters. Reject
+      // one-letter section/schedule markers such as "(A) LLC".
+      return (letter_count >= 2).then_some(prev_start);
     }
     if is_inter_token_space(ch) || ch == '.' {
       scan = prev_start;
@@ -3075,6 +3077,15 @@ mod tests {
     let text = "Licensor (US) Acme LLP";
     let texts = org_texts_for(text, "LLP");
     assert_eq!(texts, vec![String::from("Acme LLP")]);
+  }
+
+  #[test]
+  fn one_letter_parenthetical_before_suffix_is_not_a_jurisdiction() {
+    let texts = org_texts_for("Schedule (A) LLC Agreement", "LLC");
+    assert!(
+      texts.iter().all(|candidate| !candidate.contains("Schedule")),
+      "schedule marker must not be absorbed into an organization: {texts:?}"
+    );
   }
 
   #[test]
