@@ -64,7 +64,7 @@
     "prepublishOnly": "bun run build",
     "typecheck": "bun ../../scripts/tsc-native.ts --noEmit -p tsconfig.json && bun ../../scripts/tsc-native.ts --noEmit -p tsconfig.test.json && bun ../../scripts/tsc-native.ts --noEmit -p tsconfig.wasm.json",
     "test": "bun test --timeout 15000",
-    "test:fast": "bun run test src/__test__/*.test.ts",
+    "test:fast": "bun test --timeout 15000 src/__test__/capabilities.test.ts src/__test__/dictionary-bundle.test.ts src/__test__/operators.test.ts src/__test__/redact.test.ts",
     "test:native-fixtures": "ANONYMIZE_TEST_SLOW_NATIVE_FIXTURE_PARITY=1 bun test --timeout 600000 src/__test__/python-parity.test.ts",
     "perf:native-adapters": "bun scripts/native-adapter-perf.mjs",
     "perf:native-default": "bun scripts/native-default-sdk-perf.mjs",

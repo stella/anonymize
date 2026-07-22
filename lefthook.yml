@@ -38,16 +38,12 @@ pre-push:
   parallel: true
   commands:
     typecheck:
-      run: bun --filter @stll/anonymize typecheck
+      run: bun run --filter @stll/anonymize typecheck
     typecheck-data:
-      run: bun --filter @stll/anonymize-data typecheck
+      run: bun run --filter @stll/anonymize-data typecheck
     format:
       run: bun run format:check
     ai-skills:
-      run: bash scripts/check-ai-skill-sources.sh
-    # Tests intentionally not run here: the full @stll/anonymize suite
-    # takes ~7 minutes, which exceeds the pre-push budget. Swap to a
-    # `test:fast` script once one exists, e.g.:
-    #   test:
-    #     run: bun --filter @stll/anonymize run test:fast
-    # CI runs the full test suite on every PR.
+      run: bun run sync-ai:check:optional
+    test:
+      run: bun run --filter @stll/anonymize test:fast

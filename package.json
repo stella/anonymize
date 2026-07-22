@@ -10,6 +10,7 @@
   ],
   "scripts": {
     "build": "turbo run build",
+    "check:fast": "bun run sync-ai:check:optional && bun run --filter @stll/anonymize typecheck && bun run --filter @stll/anonymize-data typecheck && bun run --filter @stll/anonymize test:fast",
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint && bun run lint:oxlint && bun run check:brand-case",
     "lint:oxlint": "bun --bun oxlint -c oxlint.config.ts --deny-warnings --type-aware .",
@@ -41,7 +42,8 @@
     "hooks:install": "lefthook install",
     "hooks:uninstall": "lefthook uninstall",
     "sync-ai": "bash scripts/sync-ai-skills.sh",
-    "sync-ai:check": "bash scripts/sync-ai-skills.sh --check"
+    "sync-ai:check": "bash scripts/sync-ai-skills.sh --check",
+    "sync-ai:check:optional": "bash scripts/sync-ai-skills.sh --check --optional"
   },
   "overrides": {
     "@emnapi/core": "1.11.1",
