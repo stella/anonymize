@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <strong>Anonymization pipeline for sensitive text. Deterministic, local-first, fast.</strong>
+  <strong>Local PII detection and anonymization for text and legal documents.</strong>
 </p>
 
 <p align="center">
@@ -22,14 +22,18 @@
   <a href="https://discord.gg/8dZjmVFjTK"><img src="https://img.shields.io/badge/discord-join%20chat-5865F2?logo=discord&logoColor=white" alt="Discord" /></a>
 </p>
 
----
+stella anonymize is an open-source PII redaction toolkit for applications that
+need to process sensitive text locally. It is designed with contracts, court
+filings, correspondence, and other legal documents in mind, while remaining a
+general-purpose library.
 
-A single Rust core does the PII detection, resolution, and replacement; thin Node.js,
-browser (WebAssembly), Python, and CLI bindings translate types and call into
-it. There is no model server and no network dependency: the same document
-produces the same redaction on every run and in every runtime. It is built for
-legal documents (contracts, filings, correspondence) across a dozen languages,
-and it is open source under the Apache-2.0 license.
+Detection and replacement live in one Rust core. Node.js, Python, and browser
+bindings call that same implementation; the repository tests their public
+surfaces and normalized behavior for parity. The default pipeline is
+deterministic and does not call a model or remote service.
+
+No detector catches everything. Review coverage reports and output when a miss
+would matter, especially with OCR or partially supported document formats.
 
 ## Quickstart
 
@@ -39,67 +43,48 @@ and it is open source under the Apache-2.0 license.
 npm install @stll/anonymize
 ```
 
-> still resolves to the stable 1.x line until 2.0.0 is promoted to `latest`.
-
 ```ts
-import { getDefaultNativePipeline, deanonymise } from "@stll/anonymize";
+import { deanonymise, getDefaultNativePipeline } from "@stll/anonymize";
 
-const anonymize = getDefaultNativePipeline({ language: "en" });
-const { redaction } = anonymize.redactText(
-  "Contact Jan Novák at jan.novak@example.com.",
+const pipeline = getDefaultNativePipeline({ language: "en" });
+const { redaction } = pipeline.redactText(
+  "Contact Alice Smith at alice@example.com.",
 );
 
 console.log(redaction.redactedText);
 // Contact [PERSON_1] at [EMAIL_ADDRESS_1].
-console.log(deanonymise(redaction.redactedText, redaction.redactionMap));
-// Contact Jan Novák at jan.novak@example.com.
+
+const original = deanonymise(redaction.redactedText, redaction.redactionMap);
+console.log(original);
+// Contact Alice Smith at alice@example.com.
 ```
 
-Create the pipeline once at startup and reuse it; it caches the prepared
-package and search automata. If you know the document language, pass it so the
-runtime loads the smaller scoped artifact — scoped packages ship for `cs`,
-`de`, and `en` (other supported languages use the full default package;
-requesting a scoped package that is not bundled fails at load).
+Create the pipeline once and reuse it. Language-scoped packages are bundled for
+English, Czech, and German; an all-language package is bundled as well. Built-in
+data covers `cs`, `de`, `en`, `es`, `fr`, `hu`, `it`, `pl`, `pt-br`, `ro`,
+`sk`, and `sv`. The [Node package guide](packages/anonymize/README.md) covers
+sessions, custom detections, operators, diagnostics, and prepared packages; the
+[capability manifest](packages/anonymize/src/capabilities.ts) is the exact list
+of public runtime surfaces and entity types.
 
-### Browser (Vite + WebAssembly)
+### Browser
 
 ```bash
 npm install @stll/anonymize-wasm
-```
-
-The wasm build exposes the same SDK surface, backed by WebAssembly. Register
-the Vite plugin so the wasm binary, WASI worker, and `.stlanonpkg` assets
-survive dependency pre-bundling and production builds. The `packages` option
-controls which prepared packages ship (the full-dictionary default is ~20 MB,
-so most apps restrict it):
-
-```ts
-// vite.config.ts
-import stllAnonymizeWasm from "@stll/anonymize-wasm/vite";
-
-export default {
-  // Emit only the packages the app loads, e.g. English + Czech.
-  plugins: [stllAnonymizeWasm({ packages: ["en", "cs"] })],
-};
 ```
 
 ```ts
 import { loadDefaultPipeline } from "@stll/anonymize-wasm";
 
 const pipeline = await loadDefaultPipeline("en");
-const { redaction } = pipeline.redactText("A contract signed by Jan Novák.");
-console.log(redaction.redactedText);
+const { redaction } = pipeline.redactText("A contract signed by Alice Smith.");
 ```
 
-The binding targets `wasm32-wasip1-threads` (shared memory), so it needs a
-cross-origin-isolated (`SharedArrayBuffer`) context. See
-[`packages/anonymize/wasm/README.md`](packages/anonymize/wasm/README.md) for the
-full `packages` option reference.
+The threaded WASM build requires cross-origin isolation. Vite applications also
+need the package's Vite helper so the WASM worker and prepared data are emitted
+correctly. See the [browser guide](packages/anonymize/wasm/README.md).
 
 ### Python
-
-Prebuilt wheels (available from the 2.0.0 release) bundle the native pipeline
-packages, so no monorepo checkout is required.
 
 ```bash
 uv add stella-anonymize-core
@@ -109,263 +94,161 @@ uv add stella-anonymize-core
 ```py
 import stella_anonymize as anonymize
 
-prepared = anonymize.preload_default_native_pipeline(language="en")
-result = prepared.redact_text("Contact Jan Novák at jan.novak@example.com.")
-
-session = prepared.create_redaction_session("opaque_case_1")
-session.redact_text("Jan Novák signed.")
-archive = session.to_encrypted_archive(application_owned_32_byte_key)
-restored = prepared.restore_encrypted_redaction_session(
-    archive,
-    application_owned_32_byte_key,
-    "opaque_case_1",
+pipeline = anonymize.preload_default_native_pipeline(language="en")
+result = pipeline.redact_text(
+    "Contact Alice Smith at alice@example.com."
 )
 
 print(result.redaction.redacted_text)
-# Contact [PERSON_1] at [EMAIL_ADDRESS_1].
 ```
 
-The Python SDK uses the same Rust core and prepared-package contract as the
-Node SDK. Encrypted session archives are interoperable across those runtimes;
-the application owns key generation, storage, rotation, and authorization. See
-[`crates/anonymize-py/README.md`](crates/anonymize-py/README.md).
-
-### DOCX extraction
-
-```bash
-npm install @stll/anonymize-docx
-```
-
-Use the document package to extract text without flattening away its source
-structure:
-
-```ts
-import { readFile } from "node:fs/promises";
-import { extractDocxText } from "@stll/anonymize-docx";
-
-const document = await readFile("contract.docx");
-const extraction = extractDocxText(document);
-
-for (const block of extraction.blocks) {
-  console.log(block.text, block.location);
-}
-```
-
-Paragraph, table-cell, and text-box locations remain distinct. Headers,
-footers, footnotes, endnotes, comments, hyperlinks, and tracked revisions are
-represented explicitly; unsupported WordprocessingML content is reported in
-`extraction.coverage` rather than silently omitted. Input size, expanded ZIP
-size, entry count, and XML nesting are bounded before text is returned.
-Block-local rewrite plans include the expected source text, so stale offsets fail
-closed. Rewrites preserve untouched package entries and XML by content, retain
-run formatting deterministically, and reject tracked-revision or digitally signed
-content until an explicit policy is available.
-
-`restoreDocxText()` accepts a live redaction session plus a mandatory expected
-session ID. It restores complete known placeholders across ordinary text runs
-without embedding the mapping in the DOCX; lifecycle, unknown-placeholder,
-revision, signature, and structural failures remain fail-closed.
+Prebuilt Python 3.11+ wheels target manylinux glibc x64/aarch64, macOS
+x64/arm64, and Windows x64. The [Python guide](crates/anonymize-py/README.md)
+covers sessions, encrypted archives, caller detections, DOCX, and PDF APIs.
 
 ### CLI
 
-No install needed:
-
 ```bash
-echo "Contact Jan Novák at jan.novak@example.com" | bunx @stll/anonymize-cli
+echo "Contact Alice Smith at alice@example.com" | npx @stll/anonymize-cli
 # Contact [PERSON_1] at [EMAIL_ADDRESS_1]
 ```
 
-Batch a directory in reversible `replace` mode, then selectively restore one
-entity from the redaction key:
+The `anonymize` command reads stdin, files, or directory trees. It also supports
+reversible keys and DOCX/PDF workflows:
 
 ```bash
-# Redact a document, writing the reversible key alongside it.
-anonymize -k contract.key.json -o contract.anon.txt contract.txt
-
-# Restore only the person; every other placeholder stays redacted.
-anonymize -d contract.key.json --revert "[PERSON_1]" contract.anon.txt
-
-# Recursively anonymize a tree, 8 files in flight, mirroring into out/.
-anonymize --recursive --workers 8 -o out/ docs/
+npx @stll/anonymize-cli -k contract.key.json -o contract.anon.txt contract.txt
+npx @stll/anonymize-cli -d contract.key.json contract.anon.txt
 ```
 
-`--revert` is repeatable and matches either a placeholder token (`[PERSON_1]`)
-or an original value (`Jan Novák`), case-sensitive and exact. All processing is
-local; the CLI makes no network calls. Run `anonymize --help` for the full
-reference, including the `--json` schema and exit codes.
+See the [CLI reference](packages/cli/README.md) for batch processing, selective
+restoration, document commands, JSON output, and exit codes.
 
 ### Local MCP server
 
-The MCP package requires Node.js 20 or newer.
+`@stll/anonymize-mcp` exposes path-only tools over stdio. Tool arguments contain
+filesystem paths rather than document text, and results contain aggregate
+status rather than document contents or plaintext mappings.
 
-```bash
-npx -y @stll/anonymize-mcp --root /absolute/path/to/workspace
+```json
+{
+  "mcpServers": {
+    "stella-anonymize": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@stll/anonymize-mcp",
+        "--root",
+        "/absolute/path/to/workspace"
+      ]
+    }
+  }
+}
 ```
 
-The stdio MCP server exposes path-only text and DOCX anonymization, restoration,
-DOCX inspection, and a read-only capability-discovery tool. It accepts no raw
-document content in tool arguments and returns no document text or session
-mappings. Sessions are in-memory by default; opt-in encrypted persistence across
-server restarts requires explicit `--session-dir` and `--key-file` paths. See
-[`packages/mcp`](packages/mcp) for the private-path, raw-key, archive-limit, and
-failure-mode contract.
+The server requires Node.js 20+. It supports text, DOCX, PDF, and
+provider-neutral external-detection sidecars for text. Encrypted durable
+sessions are optional and currently limited to macOS and Linux. PDF tools need
+local Poppler and Tesseract installations; their executable paths can be set at
+server startup. Read the [MCP guide](packages/mcp/README.md) before enabling
+durable sessions or document tools; it defines path, permission, key, archive,
+and failure boundaries.
 
-For model-assisted local work, the path-only
-`anonymize_text_file_with_external_detections` tool ingests the provider-neutral
-`ExternalDetectionBatch` v1 sidecar shared by the Node, Python, and WASM
-bindings. An application-owned fake or real provider writes the sidecar with the
-exact document SHA-256, declared offsets, label map, and provenance IDs; stella
-then validates it, runs native detection too, and returns only aggregate status.
-No GLiNER dependency or model runner is bundled.
+## Document support
 
-## Features
+### DOCX
 
-- **23 default entity labels, plus 3 opt-in network labels.** People,
-  organizations, addresses, countries, and land parcels; email, phone, dates, and
-  dates of birth; and a family of identifiers: IBAN and bank account numbers, tax
-  and national identification numbers, identity card, birth, social security,
-  passport, registration, and case numbers, credit card numbers, crypto addresses,
-  and monetary amounts. IP addresses, MAC addresses, and URLs are built in but opt-in.
-  The versioned machine-readable contract is exported as `CAPABILITY_MANIFEST`
-  from `@stll/anonymize/capabilities` and printed by
-  `anonymize --capabilities`; scope detection to a subset with `--labels`.
-- **12 languages, multi-script name corpora.** Built-in coverage for cs, de, en,
-  es, fr, hu, it, pl, pt-br, ro, sk, and sv, backed by name corpora that reach
-  beyond Latin script (CJK, Arabic, Thai, Korean, and romanized variants).
-- **Deterministic numbered placeholders with coreference linking.** Each entity
-  gets a stable `[LABEL_N]` placeholder; repeated and coreferent mentions (for
-  example a defined term and its later short form) collapse to the same number,
-  so the same input always yields the same output.
-- **Reversible keys and selective revert.** `replace` mode emits a self-describing
-  redaction key; deanonymisation restores the original text, and the CLI can
-  revert a chosen subset while leaving the rest redacted.
-- **Extensible detection.** Layer in your own exact-match deny lists, gazetteer
-  entries, and deterministic custom regexes; caller-owned data is baked into the
-  prepared package.
-- **Streaming and diagnostics APIs.** Beyond `redactText`, the SDK exposes JSON,
-  streaming, and per-entity diagnostics variants for pipelines that need spans,
-  scores, and detection provenance.
-- **Offline CLI.** Reads files or stdin, processes directories in parallel, and
-  never makes a network call.
+DOCX extraction, anonymization, and restoration are available in Node.js and
+Python, and through the CLI and local MCP server. The adapters preserve the
+supported Word structures and return a coverage inventory for known content
+outside the rewrite surface. The default `require-full` policy fails closed on
+coverage gaps; partial rewrites require explicit opt-in.
 
-## Benchmarks
+The DOCX never stores the plaintext redaction mapping. Reversible workflows use
+an application-owned session and, when persisted, an encrypted session archive.
+Signed documents, tracked revisions, external relationship targets, and other
+package features have explicit restrictions. See
+[`@stll/anonymize-docx`](packages/document-docx/README.md) for the complete
+coverage contract.
 
-`@stll/anonymize` compared against three open-source PII libraries on a public,
-synthetic, legal-domain corpus (en/cs/de: 28 documents, 196 gold entities).
-Matching is span-overlap (same label, IoU >= 0.5). Full numbers, per-label
-tables, and methodology live in
-[`packages/benchmark`](packages/benchmark); this run is from
-[`packages/benchmark/results/latest.md`](packages/benchmark/results/latest.md).
+### PDF
 
-| Library    | Version | F1 (overlap, all labels) | Throughput (warm, chars/s) |
-| ---------- | ------- | ------------------------ | -------------------------- |
-| stella     | 2.0.0   | **83.4**                 | 907,102                    |
-| presidio   | 2.2.360 | 50.9                     | 41,244                     |
-| redact-pii | 3.4.0   | 31.6                     | 55,823                     |
-| scrubadub  | 2.0.1   | 26.2                     | 1,563,700                  |
+PDF inspection is available in Node.js, Python, and WASM. Node.js and Python
+both expose the destructive raster contract, which requires complete rendered
+page pixels, OCR text, and glyph geometry. The Node.js package can produce
+those observations with separately installed Poppler and Tesseract; the CLI
+and MCP server use that adapter. Python callers must supply observations and
+pixels from their own renderer/OCR boundary.
 
-Per-language overlap F1 (all labels):
+The output is a new image-only PDF. Source PDF objects are not copied and black
+rectangles are not layered over recoverable content. This removes
+searchability, accessibility, links, forms, signatures, metadata, attachments,
+and other interactive features. Verification proves the fresh output structure
+and requested pixel rewrite; it cannot prove perfect OCR or PII detection
+recall. The certificate therefore never claims that the output is PII-free.
+See [`@stll/anonymize-pdf`](packages/document-pdf/README.md) for the inspection,
+rendering, OCR, resource-limit, and verification contracts.
 
-| Library    | cs   | de   | en   |
-| ---------- | ---- | ---- | ---- |
-| stella     | 77.2 | 81.6 | 90.5 |
-| presidio   | 35.0 | 54.7 | 60.5 |
-| redact-pii | 24.8 | 34.8 | 34.8 |
-| scrubadub  | 20.3 | 31.7 | 27.6 |
+The full runtime and format matrix, including known gaps, lives in
+[PII redaction surfaces](docs/pii-redaction-surfaces.md).
 
-Read these numbers with their caveats:
+## Runtime and privacy model
 
-- **This is one fixture set.** The corpus is legal-domain and multilingual
-  (en/cs/de), which is exactly what stella is built for and skews the comparison
-  toward it. scrubadub and redact-pii are English-only; their cs/de scores are
-  expected to be low and are reported as-is. The claims here are scoped to this
-  benchmark, not to PII redaction in general.
-- **Synthetic ground truth.** All text is public-safe synthetic legal prose with
-  positionally-authored spans, so absolute numbers may differ from production
-  filings. Every library sees identical inputs.
-- **Competitors win in places.** Presidio leads on organizations (56.3 vs. 51.0
-  F1) and on phone recall (84.6% vs. 46.2%); scrubadub and redact-pii edge email
-  recall. Every label is reported, including where stella loses.
+- Rust crates own text detection, replacement, and DOCX/PDF planning. Node.js,
+  Python, and WASM bindings are checked by capability-profile parity tests.
+- Prepared language data is bundled into versioned `.stlanonpkg` artifacts; the
+  default SDKs and CLI do not send document text to a remote service.
+- Reversible redaction maps contain original PII. Encrypted session archives
+  protect persisted mappings, but applications still own key generation,
+  storage, rotation, and authorization.
+- Diagnostic events omit matched text, but redaction results and reversible maps
+  can contain original PII. Do not send those values to ordinary logs or
+  telemetry.
+- Optional model or service detections enter through a validated, digest-bound
+  sidecar. stella does not bundle a model runner.
 
-To try your own documents, `packages/benchmark` supports an `--input` mode; see
-[`REPRODUCING.md`](packages/benchmark/REPRODUCING.md) for the exact toolchain,
-library versions, and taxonomy-mapping decisions.
-
-## Architecture
-
-One Rust core (`crates/anonymize-core`) owns detection, resolution, and config
-assembly. The Node.js, browser, and Python bindings are thin: they load a
-prepared package, translate types, and call the same core, so they produce
-identical structured output. That equivalence is enforced by cross-runtime
-parity tests in CI (`python-parity.test.ts`, the native SDK contract tests, and
-Rust adapter parity examples).
-
-Parity covers public surface availability as well as fixture output. The
-versioned `CAPABILITY_MANIFEST` assigns each capability to a runtime profile:
-`core` for Node.js, Python, and WASM (including byte-based PDF inspection);
-`local` for Node.js and Python filesystem operations; and `document` for
-Node.js and Python structure-aware DOCX adapters. CI fails when one
-runtime in a profile is missing the corresponding surface.
-
-Dictionaries and language data are baked into `.stlanonpkg` prepared packages at
-build time, not loaded from the network at runtime. Native Node binaries ship as
-per-platform prebuilt sidecars (for example `@stll/anonymize-darwin-arm64`),
-resolved as optional dependencies at install time. Full package graph, runtime
-flow, and extension rules are in
-[`packages/anonymize/ARCHITECTURE.md`](packages/anonymize/ARCHITECTURE.md).
-
-## Determinism and privacy
-
-- **Deterministic output.** The same input yields the same redaction on every
-  run; detection is rule-driven with fixed priorities, not sampled.
-- **Cross-runtime parity is tested.** CI asserts the Node and Python SDKs return
-  the same structured result from the same fixtures.
-- **Data stays local.** The CLI makes no network calls (stated in its `--help`);
-  the SDKs load prepared packages from disk or bundled assets, and the browser
-  build loads only the packages you bundle. No document text leaves the process.
-- **Diagnostics APIs return raw detected text: do not log them.** The
-  diagnostics and summary-diagnostics variants (`redactStaticEntitiesDiagnosticsJson`,
-  `redactStaticEntitiesSummaryDiagnosticsJson`, and their per-language
-  equivalents) return the full redaction result alongside the event trace, so
-  the output includes `resolved_entities[].text` (the raw PII surface text)
-  and `redaction.redaction_map[].original` (the original PII value), even in
-  "summary" mode; the summary variant only drops the per-match/per-entity
-  events from the trace, it does not strip text from the result. Detailed
-  per-entity diagnostic events can also carry an optional `text` field. Treat
-  every `*DiagnosticsJson` output like the source document itself: never send
-  it to logs, telemetry, or any system that must not see PII. The parts that
-  are safe to log are the plain redaction output (`redactedText`, the
-  `placeholder`/`operator` fields of `redactionMap`/`operatorMap`, and entity
-  counts you compute yourself); none of those carry original text.
-
-## Versioning and status
-
-Current release line: **2.0.2**. In 2.0 the product runtime moved from the in-process TypeScript pipeline to the Rust-native
-SDK, and the package root now exports the native API (`getDefaultNativePipeline`
-whose pipelines expose `redactText`, plus `redact_text`, `deanonymise`,
-`exportRedactionKey`, and the prepared-package helpers). The 1.x
-TypeScript pipeline has been removed entirely; the Rust core owns detection,
-resolution, and configuration assembly across all runtimes. See
-[`packages/anonymize/ARCHITECTURE.md`](packages/anonymize/ARCHITECTURE.md) and
-[`packages/anonymize/CHANGELOG.md`](packages/anonymize/CHANGELOG.md) for the
-package-level history.
+The machine-readable public contract is exported as `CAPABILITY_MANIFEST` from
+`@stll/anonymize/capabilities` and printed by `anonymize --capabilities`. The
+[architecture guide](packages/anonymize/ARCHITECTURE.md) describes the native
+package graph and parity boundaries.
 
 ## Packages
 
-See [PII redaction surfaces](docs/pii-redaction-surfaces.md) for the runtime,
-format, workflow, and local MCP coverage matrix.
+| Package                                                     | Purpose                                             |
+| ----------------------------------------------------------- | --------------------------------------------------- |
+| [`@stll/anonymize`](packages/anonymize/README.md)           | Node.js SDK and native runtime                      |
+| [`stella-anonymize-core`](crates/anonymize-py/README.md)    | Python bindings                                     |
+| [`@stll/anonymize-wasm`](packages/anonymize/wasm/README.md) | Browser/WASM runtime                                |
+| [`@stll/anonymize-cli`](packages/cli/README.md)             | Command-line text, DOCX, and PDF workflows          |
+| [`@stll/anonymize-mcp`](packages/mcp/README.md)             | Path-only local MCP server                          |
+| [`@stll/anonymize-docx`](packages/document-docx/README.md)  | Structure-aware DOCX adapter                        |
+| [`@stll/anonymize-pdf`](packages/document-pdf/README.md)    | PDF inspection and destructive raster anonymization |
+| [`@stll/anonymize-data`](packages/data/README.md)           | Published dictionaries and detector configuration   |
+| [`crates/anonymize-core`](crates/anonymize-core/README.md)  | Shared Rust core                                    |
 
-| Package                 | Purpose                                                        |
-| ----------------------- | -------------------------------------------------------------- |
-| `@stll/anonymize`       | Native runtime for multi-layer PII detection and anonymization |
-| `@stll/anonymize-wasm`  | Browser/WASM build of the runtime                              |
-| `@stll/anonymize-cli`   | Command-line anonymization (`anonymize` binary)                |
-| `@stll/anonymize-data`  | Published deny-list dictionaries and trigger/config data       |
-| `@stll/anonymize-docx`  | Structure-aware DOCX inspection and anonymization              |
-| `@stll/anonymize-pdf`   | Fail-closed PDF structure and coverage inspection              |
-| `@stll/anonymize-mcp`   | Path-only local MCP tools for text and DOCX                    |
-| `stella-anonymize-core` | Python bindings for the Rust anonymization core                |
-| `crates/anonymize-core` | Rust anonymization core                                        |
+Platform-specific Node.js binary packages are installed automatically as
+optional dependencies of `@stll/anonymize`.
+
+## Benchmarks
+
+The sealed reports compare stella with Presidio, base scrubadub, DataFog's
+model-free regex engine, and redact-pii across TAB-ECHR, RedactionBench, and
+MEDDOCAN. Each corpus keeps its native metrics, and committed holdout reports
+contain aggregate values only. PII-Shield is included only when its external
+CLI and model are installed.
+
+Quality-suite timings are one-shot corpus passes, so they are directional
+rather than speed rankings. The separate cross-provider harness runs stella's
+full pipeline, stella's built-in regex detectors, base scrubadub, and DataFog's
+regex engine in fresh processes with discarded warmups and repeated samples.
+It reports startup, initialization, calls, process CPU, and end-to-end wall
+time; read speed alongside output counts because detector scope differs.
+
+Read the [benchmark methodology](packages/benchmark/README.md), browse the
+[committed aggregate results](packages/benchmark/results/), or follow the
+[reproduction guide](packages/benchmark/REPRODUCING.md). Results describe
+particular datasets and versions; they are not a guarantee of performance on
+your documents.
 
 ## Development
 
@@ -377,36 +260,12 @@ bun run test
 bun run build
 ```
 
-### Git hooks (opt-in)
-
-Lefthook config lives at [`lefthook.yml`](lefthook.yml) and is not
-auto-installed. To enable local hooks (format on pre-commit, focused tests,
-typechecks, AI-instruction sync when its submodule is initialized, and format
-check on pre-push):
-
-```bash
-bun run hooks:install
-# bun run hooks:uninstall to remove
-```
-
-## Release hygiene
-
-- Pinned GitHub Actions workflows validate lint, typecheck, tests, and package
-  tarballs before release.
-- The data package tarball is checked so every exported dictionary path is
-  present.
-- Release publishing is gated behind manual workflow dispatch and
-  provenance-enabled npm publish steps.
-
-## Contributing
-
-Contributions are welcome. Run `bun run lint`, `bun run typecheck`, and
-`bun run test` before opening a PR; a CLA check runs on pull requests. Please
-keep language data reproducible and out of source code, and do not commit raw
-personal data or non-public fixtures.
+Contributions are welcome. Please keep language-dependent data in its
+per-language vocabulary, make generated data reproducible, and do not commit
+raw personal data or non-public fixtures. A CLA check runs on pull requests.
 
 ## License
 
-Apache-2.0. See [`LICENSE`](LICENSE). Third-party runtime attributions for the browser
-build are listed in
+Apache-2.0. See [`LICENSE`](LICENSE). Third-party runtime attributions for the
+browser build are listed in
 [`packages/anonymize/wasm/README.md`](packages/anonymize/wasm/README.md).
