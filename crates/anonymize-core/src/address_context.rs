@@ -648,7 +648,15 @@ fn header_scan_end(
     }
   })?;
   let Some(relative_newline) = tail.find('\n') else {
-    return Ok(bounded_end);
+    if bounded_end == full_text.len() {
+      return Ok(bounded_end);
+    }
+    return Ok(
+      full_text
+        .get(..header_end)
+        .and_then(|prefix| prefix.rfind('\n'))
+        .unwrap_or(0),
+    );
   };
   Ok(header_end.saturating_add(relative_newline))
 }
@@ -953,8 +961,8 @@ mod tests {
 
   use super::{
     BARE_HOUSE_CONTEXT_WINDOW, EntityProximityIndex,
-    HEADER_SCAN_MAX_LINE_EXTENSION_UTF16_UNITS, HEADER_ZONE_MAX_UTF16_UNITS,
-    STREET_CONTEXT_WINDOW, header_end, header_scan_end, within_context_window,
+    HEADER_ZONE_MAX_UTF16_UNITS, STREET_CONTEXT_WINDOW, header_end,
+    header_scan_end, within_context_window,
   };
   use crate::byte_offsets::ByteOffsets;
   use crate::resolution::{DetectionSource, PipelineEntity};
@@ -981,12 +989,31 @@ mod tests {
     let text = "x".repeat(1024 * 1024);
     let offsets = ByteOffsets::new(&text);
     let header_end = header_end(&text);
-    let expected = usize::try_from(
-      header_end.saturating_add(HEADER_SCAN_MAX_LINE_EXTENSION_UTF16_UNITS),
-    )
-    .unwrap_or(usize::MAX);
 
-    assert_eq!(header_scan_end(&text, &offsets, header_end)?, expected);
+    assert_eq!(header_scan_end(&text, &offsets, header_end)?, 0);
+    Ok(())
+  }
+
+  #[test]
+  fn header_scan_keeps_complete_eof_lines() -> crate::types::Result<()> {
+    let text = "Evropská 710";
+    let offsets = ByteOffsets::new(text);
+
+    assert_eq!(
+      header_scan_end(text, &offsets, header_end(text))?,
+      text.len(),
+    );
+    Ok(())
+  }
+
+  #[test]
+  fn header_scan_drops_a_line_cut_by_the_artificial_cap()
+  -> crate::types::Result<()> {
+    let text =
+      format!("Header\nEvropská 710 {}", "continuation ".repeat(100_000));
+    let offsets = ByteOffsets::new(&text);
+
+    assert_eq!(header_scan_end(&text, &offsets, header_end(&text))?, 6);
     Ok(())
   }
 
