@@ -44,6 +44,6 @@ pre-push:
     format:
       run: bun run format:check
     ai-skills:
-      run: bash scripts/check-ai-skill-sources.sh
+      run: bun run sync-ai:check
     test:
       run: bun run --filter @stll/anonymize test:fast
