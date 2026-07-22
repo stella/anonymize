@@ -1702,12 +1702,42 @@ struct StructuralRiskInventory {
 
 #[derive(Debug, Default)]
 struct AttachmentInventory {
+  node_count: usize,
   payload_ids: BTreeSet<lopdf::ObjectId>,
   spec_only_ids: BTreeSet<lopdf::ObjectId>,
+  visited_spec_ids: BTreeSet<lopdf::ObjectId>,
   anonymous_spec_count: u32,
 }
 
 impl AttachmentInventory {
+  fn charge_node(&mut self) -> Result<(), PdfInspectionError> {
+    self.node_count = self.node_count.checked_add(1).ok_or_else(|| {
+      error(
+        PdfInspectionErrorCode::DocumentLimitExceeded,
+        "PDF attachment graph node count overflowed",
+      )
+    })?;
+    if self.node_count > PDF_MAX_OBJECT_NODES {
+      return Err(error(
+        PdfInspectionErrorCode::DocumentLimitExceeded,
+        "PDF attachment graph exceeds the object node limit",
+      ));
+    }
+    Ok(())
+  }
+
+  fn begin_file_spec(
+    &mut self,
+    file_spec_id: Option<lopdf::ObjectId>,
+  ) -> Result<bool, PdfInspectionError> {
+    self.charge_node()?;
+    let should_walk = match file_spec_id {
+      Some(id) => self.visited_spec_ids.insert(id),
+      None => true,
+    };
+    Ok(should_walk)
+  }
+
   fn add_typed_streams(&mut self, document: &Document) {
     for (id, object) in &document.objects {
       if let Object::Stream(stream) = object
@@ -1831,10 +1861,15 @@ impl ActionValidator<'_, '_> {
     // kinds. Follow any dictionary-valued F entry rather than maintaining a
     // brittle action-kind allowlist; simple string file specifications remain
     // valid external references and contain no embedded payload graph.
-    if let Some(file_spec) = optional_entry(action_dictionary, b"F")
-      && resolve_object(file_spec, self.document)?.as_dict().is_ok()
-    {
-      validate_file_spec(file_spec, self.document, self.attachments)?;
+    if let Some(file_spec) = optional_entry(action_dictionary, b"F") {
+      let resolved_file_spec = resolve_object(file_spec, self.document)?;
+      if resolved_file_spec.as_dict().is_ok() {
+        validate_file_spec(file_spec, self.document, self.attachments)?;
+      } else if resolved_file_spec.as_str().is_err() {
+        return Err(invalid_document(
+          "PDF action F must be a string or file specification",
+        ));
+      }
     }
     if let Some(next) = optional_entry(action_dictionary, b"Next") {
       let resolved_next = resolve_object(next, self.document)?;
@@ -2333,6 +2368,9 @@ fn validate_file_spec(
   inventory: &mut AttachmentInventory,
 ) -> Result<(), PdfInspectionError> {
   let file_spec_id = file_spec.as_reference().ok();
+  if !inventory.begin_file_spec(file_spec_id)? {
+    return Ok(());
+  }
   let dictionary =
     resolve_object(file_spec, document)?
       .as_dict()
@@ -2362,6 +2400,7 @@ fn validate_file_spec(
   let mut found_payload = false;
   if let Some(embedded_files) = embedded_files {
     for (_, payload) in embedded_files {
+      inventory.charge_node()?;
       inventory
         .payload_ids
         .insert(validate_embedded_file_payload(payload, document)?);
@@ -2390,6 +2429,7 @@ fn validate_file_spec(
           ));
         }
         for pair in related_array.chunks_exact(2) {
+          inventory.charge_node()?;
           pair
             .first()
             .and_then(|name| name.as_str().ok())
@@ -3396,6 +3436,52 @@ mod tests {
         "{action_kind}"
       );
     }
+  }
+
+  #[test]
+  fn rejects_non_file_spec_action_file_values() {
+    for invalid_file in [
+      Object::Array(Vec::new()),
+      Object::Stream(lopdf::Stream::new(Dictionary::new(), Vec::new())),
+    ] {
+      let mut document = Document::load_mem(MINIMAL_PDF).unwrap();
+      let invalid_file_id = document.add_object(invalid_file);
+      let action_id = document.add_object(lopdf::dictionary! {
+        "Type" => "Action",
+        "S" => "Launch",
+        "F" => invalid_file_id,
+      });
+      document
+        .catalog_mut()
+        .unwrap()
+        .set("OpenAction", Object::Reference(action_id));
+      let mut bytes = Vec::new();
+      document.save_to(&mut bytes).unwrap();
+
+      let error = inspect_pdf(&bytes).unwrap_err();
+
+      assert_eq!(error.code(), PdfInspectionErrorCode::InvalidDocument);
+    }
+  }
+
+  #[test]
+  fn bounds_attachment_graph_walks_before_dereferencing() {
+    let mut document = Document::load_mem(MINIMAL_PDF).unwrap();
+    let (file_spec_id, _) = add_untyped_attachment(&mut document);
+    let mut inventory = AttachmentInventory {
+      node_count: PDF_MAX_OBJECT_NODES,
+      ..AttachmentInventory::default()
+    };
+
+    let error = validate_file_spec(
+      &Object::Reference(file_spec_id),
+      &document,
+      &mut inventory,
+    )
+    .unwrap_err();
+
+    assert_eq!(error.code(), PdfInspectionErrorCode::DocumentLimitExceeded);
+    assert!(inventory.payload_ids.is_empty());
   }
 
   #[test]
