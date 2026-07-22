@@ -616,17 +616,18 @@ describe("local MCP surface", () => {
     );
   });
 
-  test("raster-anonymizes PDF paths with server-configured executables", async () => {
+  test("serializes raster PDF paths with server-configured executables", async () => {
     const root = await temporaryDirectory();
-    const input = join(root, "input.pdf");
-    const output = join(root, "output.pdf");
+    const inputs = [join(root, "input-1.pdf"), join(root, "input-2.pdf")];
+    const outputs = [join(root, "output-1.pdf"), join(root, "output-2.pdf")];
+    const ocrLock = join(root, "ocr.lock");
     const fixture = readFileSync(
       join(
         import.meta.dir,
         "../../../../crates/anonymize-pdf-core/tests/fixtures/minimal-text.pdf",
       ),
     );
-    await writeFile(input, fixture);
+    await Promise.all(inputs.map((input) => writeFile(input, fixture)));
     const executable = async (name: string, body: string): Promise<string> => {
       const path = join(root, name);
       await writeFile(path, `#!/usr/bin/env node\n${body}`, {
@@ -655,45 +656,66 @@ writeFileSync(args.at(-1) + ".ppm", Buffer.concat([
     const tesseractPath = await executable(
       "tesseract-test",
       `
+const { closeSync, openSync, unlinkSync } = require("node:fs");
 if (process.argv.includes("--version")) {
   process.stdout.write("tesseract 5.4.1\\n");
   process.exit(0);
 }
-process.stdout.write("level\\tpage_num\\tblock_num\\tpar_num\\tline_num\\tword_num\\tleft\\ttop\\twidth\\theight\\tconf\\ttext\\n");
-process.stdout.write("5\\t1\\t1\\t1\\t1\\t1\\t72\\t80\\t36\\t12\\t99\\tAlice\\n");
+let lock;
+try {
+  lock = openSync(${JSON.stringify(ocrLock)}, "wx");
+} catch {
+  process.stderr.write("concurrent OCR process");
+  process.exit(9);
+}
+try {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 100);
+  process.stdout.write("level\\tpage_num\\tblock_num\\tpar_num\\tline_num\\tword_num\\tleft\\ttop\\twidth\\theight\\tconf\\ttext\\n");
+  process.stdout.write("5\\t1\\t1\\t1\\t1\\t1\\t72\\t80\\t36\\t12\\t99\\tAlice\\n");
+} finally {
+  closeSync(lock);
+  unlinkSync(${JSON.stringify(ocrLock)});
+}
 `,
     );
     const service = new LocalAnonymizeService(await PathScope.create([root]), {
       pdfProvider: { pdftoppmPath, tesseractPath },
     });
 
-    const audit = await service.anonymizePdf({
-      inputPath: input,
-      outputPath: output,
-      ocrLanguage: "eng",
-      dpi: 72,
-      timeoutMs: 10_000,
-      fillRgb: [0, 0, 0],
-    });
+    const audits = await Promise.all(
+      inputs.map((inputPath, index) =>
+        service.anonymizePdf({
+          inputPath,
+          outputPath: outputs[index] ?? "",
+          ocrLanguage: "eng",
+          dpi: 72,
+          timeoutMs: 10_000,
+          fillRgb: [0, 0, 0],
+        }),
+      ),
+    );
 
-    expect(audit).toMatchObject({
-      operation: "anonymize",
-      format: "pdf",
-      outputCreated: true,
-      pageCount: 1,
-      entityCount: 1,
-      mappedRegionCount: 1,
-      structurePixelRewriteVerified: true,
-      piiCleanGuaranteed: false,
-    });
-    expect(JSON.stringify(audit)).not.toContain("Alice");
-    expect(inspectPdf(await readFile(output)).risks).toMatchObject({
-      annotationCount: 0,
-      embeddedFileCount: 0,
-      imageObjectCount: 1,
-      metadataStreamCount: 0,
-    });
-    expect((await stat(output)).mode & 0o777).toBe(0o600);
+    for (const [index, audit] of audits.entries()) {
+      expect(audit).toMatchObject({
+        operation: "anonymize",
+        format: "pdf",
+        outputCreated: true,
+        pageCount: 1,
+        entityCount: 1,
+        mappedRegionCount: 1,
+        structurePixelRewriteVerified: true,
+        piiCleanGuaranteed: false,
+      });
+      expect(JSON.stringify(audit)).not.toContain("Alice");
+      const output = outputs[index] ?? "";
+      expect(inspectPdf(await readFile(output)).risks).toMatchObject({
+        annotationCount: 0,
+        embeddedFileCount: 0,
+        imageObjectCount: 1,
+        metadataStreamCount: 0,
+      });
+      expect((await stat(output)).mode & 0o777).toBe(0o600);
+    }
   });
 
   test("reports and fails closed on partial DOCX coverage", async () => {

@@ -576,6 +576,7 @@ export class LocalAnonymizeService {
   #closePromise: Promise<void> | undefined;
   #operationsDrained: (() => void) | undefined;
   readonly #scope: PathScope;
+  #pdfOperationTail: Promise<void> = Promise.resolve();
   readonly #sessionInitializations = new Set<string>();
   readonly #sessions = new Map<string, SessionEntry>();
   #state: "closed" | "closing" | "open" = "open";
@@ -819,7 +820,25 @@ export class LocalAnonymizeService {
   async anonymizePdf(
     input: z.infer<typeof pdfInput>,
   ): Promise<AuditSafeResult> {
-    return this.#runOperation(() => this.#anonymizePdf(input));
+    return this.#runOperation(() =>
+      this.#serializePdfOperation(() => this.#anonymizePdf(input)),
+    );
+  }
+
+  async #serializePdfOperation<Result>(
+    operation: () => Promise<Result>,
+  ): Promise<Result> {
+    const previous = this.#pdfOperationTail;
+    let release = (): void => undefined;
+    this.#pdfOperationTail = new Promise<void>((resolvePromise) => {
+      release = resolvePromise;
+    });
+    await previous;
+    try {
+      return await operation();
+    } finally {
+      release();
+    }
   }
 
   async #anonymizePdf(
