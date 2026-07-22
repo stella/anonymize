@@ -315,6 +315,9 @@ surface_probes = {
     "document.docx.restore": hasattr(anonymize, "restore_docx_text"),
     "document.pdf.inspect": hasattr(anonymize, "inspect_pdf"),
     "document.pdf.anonymize-raster": hasattr(anonymize, "anonymize_pdf_raster"),
+    "document.pdf.rewrite-raster": hasattr(
+        anonymize, "rewrite_pdf_raster_from_detections"
+    ),
 }
 
 caller_result = json.loads(

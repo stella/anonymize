@@ -60,6 +60,9 @@ certificate explicitly sets `piiCleanGuaranteed` to false because complete OCR
 coverage asserts that every page was processed, not that OCR or PII detection
 has perfect recall. Raster output deliberately removes searchability,
 accessibility, forms, links, attachments, metadata, and digital signatures.
+Both `document.pdf.anonymize-raster` and the advanced
+`document.pdf.rewrite-raster` seam are named document-profile capabilities, so
+the exhaustive Node/Python parity gate covers each public API independently.
 
 The repository does not yet provide PDF structure-preserving anonymization or
 pipelines for XLSX, PPTX, HTML, Markdown, CSV, email containers, images/OCR,

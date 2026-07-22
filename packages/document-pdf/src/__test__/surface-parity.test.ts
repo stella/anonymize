@@ -6,11 +6,16 @@ import {
   type CapabilitySurfaceId,
 } from "@stll/anonymize/capabilities";
 
-import { anonymizePdfRaster, inspectPdf } from "../index";
+import {
+  anonymizePdfRaster,
+  inspectPdf,
+  rewritePdfRasterFromDetections,
+} from "../index";
 
 const nodeSurface: Partial<Record<CapabilitySurfaceId, unknown>> = {
   "document.pdf.inspect": inspectPdf,
   "document.pdf.anonymize-raster": anonymizePdfRaster,
+  "document.pdf.rewrite-raster": rewritePdfRasterFromDetections,
 };
 
 describe("PDF inspection runtime surface parity", () => {
@@ -35,14 +40,21 @@ describe("PDF inspection runtime surface parity", () => {
     expect(typeof nodeSurface["document.pdf.inspect"]).toBe("function");
   });
 
-  test("PDF raster anonymization is a Node/Python document capability", () => {
-    const capability = CAPABILITY_SURFACES.find(
-      ({ id }) => id === "document.pdf.anonymize-raster",
+  test("both PDF raster APIs are Node/Python document capabilities", () => {
+    const rasterCapabilities = CAPABILITY_SURFACES.filter(
+      ({ id }) => id.startsWith("document.pdf.") && id.endsWith("-raster"),
     );
-    expect(capability?.profile).toBe("document");
+    expect(rasterCapabilities.map(({ id }) => id)).toEqual([
+      "document.pdf.anonymize-raster",
+      "document.pdf.rewrite-raster",
+    ]);
+    expect(
+      rasterCapabilities.every(({ profile }) => profile === "document"),
+    ).toBeTrue();
     expect(CAPABILITY_PARITY_PROFILES.document).toEqual(["node", "python"]);
     expect(typeof nodeSurface["document.pdf.anonymize-raster"]).toBe(
       "function",
     );
+    expect(typeof nodeSurface["document.pdf.rewrite-raster"]).toBe("function");
   });
 });
