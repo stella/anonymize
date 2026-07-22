@@ -10,6 +10,7 @@
   ],
   "scripts": {
     "build": "turbo run build",
+    "check:fast": "bun run sync-ai:check && bun run --filter @stll/anonymize typecheck && bun run --filter @stll/anonymize-data typecheck && bun run --filter @stll/anonymize test:fast",
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint && bun run lint:oxlint && bun run check:brand-case",
     "lint:oxlint": "bun --bun oxlint -c oxlint.config.ts --deny-warnings --type-aware .",
