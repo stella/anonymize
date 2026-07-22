@@ -263,16 +263,16 @@ jobs:
         # (and its origin/main migration baseline) has been removed.
         run: bun run --cwd packages/anonymize test:native-fixtures
 
-      - name: Native adapter performance (informational)
+      - name: Native adapter parity and timings
         # Emits aggregate TS/NAPI and Python/PyO3 timings for the shared
-        # Rust-backed static adapter contract.
-        continue-on-error: true
+        # Rust-backed static adapter contract, and gates on adapter failures or
+        # output-parity mismatches. Timings remain informational.
         run: bun run --cwd packages/anonymize perf:native-adapters
 
-      - name: Native default SDK performance (informational)
+      - name: Native default SDK parity and timings
         # Emits fixture-level default package timings for TS and Python SDKs,
-        # with hashed output parity checked before summaries are printed.
-        continue-on-error: true
+        # and gates on adapter failures or hashed-output parity mismatches.
+        # Timings remain informational.
         run: bun run --cwd packages/anonymize perf:native-default
 
       - name: Setup minimum supported Node for MCP
