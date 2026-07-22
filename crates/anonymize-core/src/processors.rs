@@ -2055,19 +2055,6 @@ fn extend_person_name(
     {
       break;
     }
-    // Title tokens belong to the honorific regex, not forward extension.
-    // Absorbing `Ing.` / `Dr.` after a completed name merges two people on
-    // signature lines (`Ph.D. Ing. Jane`). A title-shaped surname with no
-    // following capitalized token (`John Judge`) still extends.
-    if filters.title_tokens.contains(&lower)
-      && title_starts_following_person(
-        full_text,
-        offsets,
-        word_start.saturating_add(byte_len(&word)),
-      )?
-    {
-      break;
-    }
 
     new_end = word_start.saturating_add(byte_len(stripped));
   }
@@ -2084,25 +2071,6 @@ fn is_middle_initial_token(word: &str) -> bool {
     && chars.next() == Some('.')
     && chars
       .all(|ch| matches!(ch, ',' | ';' | '”' | '"' | '’' | '\'' | '“' | '»'))
-}
-
-/// True when a title token is followed by another capitalized name token,
-/// i.e. it opens a new titled person rather than acting as a bare surname.
-fn title_starts_following_person(
-  full_text: &str,
-  offsets: &ByteOffsets<'_>,
-  after_title: u32,
-) -> Result<bool> {
-  let mut cursor = after_title;
-  loop {
-    match char_at(full_text, offsets, cursor)? {
-      Some(' ' | '\t') => {
-        cursor = cursor.saturating_add(1);
-      }
-      Some(ch) if ch.is_uppercase() => return Ok(true),
-      _ => return Ok(false),
-    }
-  }
 }
 
 fn read_until_whitespace(

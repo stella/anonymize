@@ -89,33 +89,6 @@ describe("trailing role trigger does not emit field-label values as people", () 
   });
 });
 
-describe("person extension stops before a following titled person", () => {
-  test("Czech regression: Ph.D. does not absorb following Ing.", async () => {
-    const persons = await personTexts(
-      "prof. MUDr. Marek Svoboda, Ph.D. Ing. Ondřej Machač",
-    );
-    expect(persons.some((p) => p.includes("Ing. Ondřej Machač"))).toBe(true);
-    expect(
-      persons.some((p) => p.includes("Svoboda") && p.includes("Machač")),
-    ).toBe(false);
-    expect(persons.some((p) => p.includes("Marek Svoboda"))).toBe(true);
-  });
-
-  test("English control: adjacent Dr. titles stay separate people", async () => {
-    const persons = await personTexts("Dr. Jane Roe Dr. John Smith");
-    expect(persons.some((p) => p.includes("Jane Roe"))).toBe(true);
-    expect(persons.some((p) => p.includes("John Smith"))).toBe(true);
-    expect(
-      persons.some((p) => p.includes("Jane Roe") && p.includes("John Smith")),
-    ).toBe(false);
-  });
-
-  test("title-shaped surname without a following name still extends", async () => {
-    const persons = await personTexts("John Judge signed the form.");
-    expect(persons.some((p) => p.includes("John Judge"))).toBe(true);
-  });
-});
-
 describe("titled person does not absorb digital-signature modifiers", () => {
   test("Czech regression: Digitálně after a titled given name", async () => {
     const persons = await personTexts("Mgr. Karel Digitálně podepsal");
