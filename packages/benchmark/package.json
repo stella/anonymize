@@ -18,7 +18,8 @@
     "bench:dev-gap": "bun src/dev-gap.ts",
     "bench:redactionbench": "bun src/redactionbench.ts",
     "bench:meddocan": "bun src/meddocan.ts",
-    "bench:suite": "bun src/suite.ts"
+    "bench:suite": "bun src/suite.ts",
+    "bench:performance": "bun src/performance/run.ts"
   },
   "dependencies": {
     "@stll/anonymize": "workspace:^",

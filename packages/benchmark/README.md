@@ -87,6 +87,29 @@ initialization, two passes, and—in subprocess adapters—runtime startup, impo
 serialization, and protocol overhead. Timings are one-shot and machine-load
 sensitive; use repeated isolated runs and compare medians for performance work.
 
+For optimization work, `bun run bench:performance` is the canonical scaling
+harness. It uses only the public-safe synthetic English fixture, expands it to
+48, 256, 512, and 1,024 KiB, then starts a fresh process for every observation.
+Three warmup rounds are discarded; 20 measured rounds report every observation
+plus median, median absolute deviation, and p95 for process startup, pipeline
+initialization, cold detection, warm detection, and warm characters per second.
+Output span count and a digest over offsets and labels must remain identical in
+every process. This harness is development-only and never reads a sealed
+evaluation corpus.
+
+Local runs accept smaller counts for quick verification:
+
+```sh
+bun run bench:performance --warmups=1 --samples=2 --sizes-kib=48
+```
+
+Canonical reports run only on trusted `main` pushes or manual dispatches on the
+`anonymize-perf-v1` self-hosted runner after the repository variable
+`ANONYMIZE_PERF_RUNNER_ENABLED` is set to `true`. Canonical mode fails closed
+unless the machine matches its provisioned hardware profile, uses the
+performance CPU governor with boost disabled, and is below its declared load
+ceiling. See `REPRODUCING.md` for the host profile contract.
+
 Each loader verifies the pinned artifact digest before invoking JSON, Parquet,
 ZIP, or BRAT parsing. Only the public test split is reachable from the sealed
 commands. Corpus attribution and pinned digests are recorded in

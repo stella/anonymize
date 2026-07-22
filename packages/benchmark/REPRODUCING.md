@@ -51,6 +51,50 @@ RAM, macOS, with Bun 1.3.14 and CPython 3.11.12. Throughput is a single run on
 one machine; treat it as order-of-magnitude, not a precise micro-benchmark.
 Recall/precision are deterministic and machine-independent.
 
+### Canonical performance host
+
+The quality runners above are intentionally portable. Optimization decisions
+use the separate process-isolated scaling harness:
+
+```sh
+bun run bench:performance
+```
+
+Its defaults are three discarded warmup rounds and 20 measured rounds at 48,
+256, 512, and 1,024 KiB. Each observation starts a new Bun process and records
+startup, full pipeline initialization, cold detection, and warm detection
+separately. The JSON report contains the raw observations, median, median
+absolute deviation, p95, machine metadata, and deterministic input/output
+digests. It contains no source text or sealed-corpus result.
+
+The canonical GitHub workflow targets only the self-hosted
+`anonymize-perf-v1` label. Until the runner exists, leave the repository
+variable `ANONYMIZE_PERF_RUNNER_ENABLED` unset so trusted pushes skip the job
+instead of waiting for an offline machine. Provision the runner with
+`/etc/stella-anonymize/perf-host-v1.json`:
+
+```json
+{
+  "schemaVersion": 1,
+  "label": "anonymize-perf-v1",
+  "platform": "linux",
+  "architecture": "x64",
+  "cpuModel": "replace with the exact node:os CPU model",
+  "logicalCores": 8,
+  "totalMemoryBytes": 17179869184,
+  "maximumLoadPerCore": 0.1,
+  "governor": "performance",
+  "turbo": "disabled"
+}
+```
+
+These values are an example, not the canonical hardware specification. Record
+the provisioned machine's exact values. `--canonical` accepts only a manual run
+of `main` or a `main` push in `stella/anonymize`; it also verifies the CPU,
+memory (within 1%), load ceiling, Linux scaling governor, and disabled
+turbo/boost state before measuring. Missing profile or sysfs controls fail the
+run instead of silently producing non-comparable numbers.
+
 ## Toolchain versions (committed run)
 
 | Component                       | Version       |
