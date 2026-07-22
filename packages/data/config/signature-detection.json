@@ -7,8 +7,30 @@
     "en": ["in witness whereof"]
   },
   "formFieldLabels": {
-    "en": ["name", "title", "position", "date", "signature", "address"],
-    "cs": ["jméno", "příjmení", "název", "funkce", "datum", "podpis", "adresa"],
+    "en": [
+      "name",
+      "title",
+      "position",
+      "date",
+      "signature",
+      "address",
+      "tax id",
+      "tax identification number",
+      "vat id",
+      "social security number"
+    ],
+    "cs": [
+      "jméno",
+      "příjmení",
+      "název",
+      "funkce",
+      "datum",
+      "podpis",
+      "adresa",
+      "titul",
+      "ičo",
+      "dič"
+    ],
     "de": ["name", "funktion", "datum", "unterschrift", "adresse"],
     "es": ["nombre", "cargo", "fecha", "firma"],
     "fr": ["nom", "fonction", "date", "signature"],

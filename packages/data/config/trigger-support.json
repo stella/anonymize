@@ -14,7 +14,14 @@
     "pl": ["nr", "nr.", "numer"]
   },
   "personFieldLabels": {
-    "en": ["name", "title", "tax id", "tax identification number"],
-    "cs": ["jméno", "titul"]
+    "en": [
+      "name",
+      "title",
+      "tax id",
+      "tax identification number",
+      "vat id",
+      "social security number"
+    ],
+    "cs": ["jméno", "titul", "ičo", "dič"]
   }
 }

@@ -372,14 +372,14 @@ pub(crate) fn process_trigger_matches(
     // label-shaped values are not people. Preserve a complete person-shaped
     // prefix when the field label follows it on the same line.
     if rule.label == crate::labels::PERSON_LABEL
-      && let Some((label_start, may_preserve_prefix)) =
+      && let Some(label_start) =
         inline_field_label_start(&value.text, &data.person_field_labels)
     {
       let prefix = trim_field_separator(
         value.text.get(..label_start).unwrap_or_default().trim_end(),
       );
-      let complete_person_prefix = may_preserve_prefix
-        && person_name_run_end(prefix) == Some(prefix.len());
+      let complete_person_prefix =
+        person_name_run_end(prefix) == Some(prefix.len());
       if !complete_person_prefix {
         record_trigger_rejection(
           &mut diagnostics,
@@ -1706,88 +1706,11 @@ fn inline_field_label(text: &str) -> bool {
 fn inline_field_label_start(
   text: &str,
   configured_labels: &[String],
-) -> Option<(usize, bool)> {
-  let configured_start = configured_labels
+) -> Option<usize> {
+  configured_labels
     .iter()
     .filter_map(|label| configured_field_label_start(text, label))
-    .min();
-  if let Some(start) = configured_start {
-    return Some((start, true));
-  }
-  let start = inline_field_label_token_start(text)?;
-  let is_acronym = unconfigured_label_is_acronym(text, start);
-  let start = if is_acronym {
-    unconfigured_acronym_run_start(text, start)
-  } else {
-    start
-  };
-  Some((start, is_acronym))
-}
-
-pub(crate) fn unconfigured_acronym_field_label_end(
-  text: &str,
-) -> Option<usize> {
-  let (start, is_acronym) = inline_field_label_start(text, &[])?;
-  if start != 0 || !is_acronym {
-    return None;
-  }
-  text
-    .char_indices()
-    .find(|(_, character)| matches!(character, ':' | '：'))
-    .map(|(index, character)| index.saturating_add(character.len_utf8()))
-}
-
-fn unconfigured_label_is_acronym(text: &str, start: usize) -> bool {
-  let Some(label) = text
-    .get(start..)
-    .and_then(|tail| tail.split([':', '：']).next())
-  else {
-    return false;
-  };
-  is_unconfigured_acronym_token(label)
-}
-
-fn is_unconfigured_acronym_token(token: &str) -> bool {
-  let mut letters = 0_usize;
-  for ch in token.chars() {
-    if ch.is_alphabetic() {
-      if !ch.is_uppercase() {
-        return false;
-      }
-      letters = letters.saturating_add(1);
-    } else if !matches!(ch, '-' | '/') {
-      return false;
-    }
-  }
-  letters >= 2
-}
-
-fn unconfigured_acronym_run_start(text: &str, start: usize) -> usize {
-  let mut run_start = start;
-  let mut token_count = 1_usize;
-  loop {
-    if token_count >= 2 {
-      return run_start;
-    }
-    let before = text.get(..run_start).unwrap_or_default();
-    let trimmed = before.trim_end();
-    if trimmed.len() == before.len() {
-      return run_start;
-    }
-    let token_start = trimmed
-      .char_indices()
-      .rev()
-      .find(|(_, character)| character.is_whitespace())
-      .map_or(0, |(index, character)| {
-        index.saturating_add(character.len_utf8())
-      });
-    let token = trimmed.get(token_start..).unwrap_or_default();
-    if !is_unconfigured_acronym_token(token) {
-      return run_start;
-    }
-    run_start = token_start;
-    token_count = token_count.saturating_add(1);
-  }
+    .min()
 }
 
 fn configured_field_label_start(text: &str, label: &str) -> Option<usize> {
@@ -2411,55 +2334,6 @@ mod tests {
   }
 
   #[test]
-  fn person_trigger_rejects_inline_field_label_values() {
-    // Trailing role triggers sit before the next labelled field
-    // (`…, director\nEIN: …`). The value is form-field shaped, not a person.
-    let text =
-      "signed by Jane Roe, director\nSocial Security Number: 12-3456789, USA";
-    let trigger = "director";
-    let start = text.find(trigger).unwrap();
-    let end = start.saturating_add(trigger.len());
-    let data = PreparedTriggerData::new(TriggerData {
-      rules: vec![TriggerRule {
-        trigger: String::from(trigger),
-        label: String::from("person"),
-        strategy: TriggerStrategy::ToNextComma {
-          stop_words: Vec::new(),
-          max_length: None,
-        },
-        validations: vec![TriggerValidation::StartsUppercase],
-        include_trigger: false,
-      }],
-      address_stop_keywords: Vec::new(),
-      party_position_terms: Vec::new(),
-      legal_form_suffixes: Vec::new(),
-      post_nominals: Vec::new(),
-      sentence_terminal_currency_terms: Vec::new(),
-      phone_extension_labels: Vec::new(),
-      number_markers: Vec::new(),
-      number_labels: Vec::new(),
-      person_field_labels: Vec::new(),
-    })
-    .unwrap();
-
-    let entities = process_trigger_matches(
-      &[SearchMatch::Literal {
-        pattern: 0,
-        start: u32::try_from(start).unwrap(),
-        end: u32::try_from(end).unwrap(),
-      }],
-      PatternSlice { start: 0, end: 1 },
-      text,
-      &data,
-      &BTreeSet::new(),
-      None,
-    )
-    .unwrap();
-
-    assert!(entities.is_empty());
-  }
-
-  #[test]
   fn person_trigger_keeps_real_name_after_role_trigger() {
     let text = "approved by director Jane Roe, on site";
     let trigger = "director";
@@ -2556,10 +2430,6 @@ mod tests {
         "Janem Novákem",
       ),
       ("approved by director Novák Titul: jednatel", "Novák"),
-      (
-        "approved by director Jane Roe VAT ID: 123, on site",
-        "Jane Roe",
-      ),
     ] {
       let start = text.find(trigger).unwrap();
       let end = start.saturating_add(trigger.len());
@@ -2580,31 +2450,6 @@ mod tests {
       assert_eq!(entities.len(), 1, "{text}");
       assert_eq!(entities[0].text, expected, "{text}");
     }
-  }
-
-  #[test]
-  fn unconfigured_acronym_label_after_nbsp_preserves_prefix_boundary() {
-    let text = "Janem Zorbax\u{a0}IČO： 12345678";
-    assert_eq!(
-      inline_field_label_start(text, &[]),
-      Some(("Janem Zorbax\u{a0}".len(), true))
-    );
-  }
-
-  #[test]
-  fn multi_word_unconfigured_acronym_preserves_its_full_start() {
-    assert_eq!(
-      inline_field_label_start("Jane Roe VAT ID: 123", &[]),
-      Some(("Jane Roe ".len(), true))
-    );
-  }
-
-  #[test]
-  fn multi_word_acronym_does_not_absorb_an_uppercase_person_prefix() {
-    assert_eq!(
-      inline_field_label_start("JOHN DOE VAT ID: 123", &[]),
-      Some(("JOHN DOE ".len(), true))
-    );
   }
 
   fn organization_role_trigger_data(

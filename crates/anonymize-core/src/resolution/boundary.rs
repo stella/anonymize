@@ -40,17 +40,19 @@ pub fn enforce_boundary_consistency(
 
 /// Stop person spans at a signature-stamp phrase or a form-field label.
 ///
-/// Stamp phrases and ordinary field labels are exact, language-keyed
-/// vocabulary from `signature-detection.json`. The only structural fallback
-/// is the same colon-tied uppercase-acronym field shape used by trigger
-/// extraction, so a resolved person span cannot reabsorb a label that the
-/// detector already excluded.
+/// Stamp phrases and field labels are exact, language-keyed vocabulary from
+/// `signature-detection.json`.
 fn truncate_person_spans(
   entities: &[PipelineEntity],
   full_text: &str,
   offsets: &ByteOffsets<'_>,
   terminators: PersonSpanTerminators<'_>,
 ) -> Result<Vec<PipelineEntity>> {
+  if terminators.stamp_phrases.is_empty() && terminators.field_labels.is_empty()
+  {
+    return Ok(entities.to_vec());
+  }
+
   let mut result = Vec::with_capacity(entities.len());
   for entity in entities {
     if entity.label != crate::labels::PERSON_LABEL
@@ -108,7 +110,6 @@ fn leading_terminator_end(
   let tail = full_text.get(start..).unwrap_or_default();
   stamp_phrase_end(tail, terminators.stamp_phrases)
     .or_else(|| field_label_end(tail, terminators.field_labels))
-    .or_else(|| crate::triggers::unconfigured_acronym_field_label_end(tail))
     .and_then(|relative| u32::try_from(start.saturating_add(relative)).ok())
 }
 
@@ -136,7 +137,6 @@ fn terminator_start_within(
       let tail = full_text.get(absolute..).unwrap_or_default();
       starts_with_stamp_phrase(tail, terminators.stamp_phrases)
         || is_colon_tied_field_label(tail, terminators.field_labels)
-        || crate::triggers::unconfigured_acronym_field_label_end(tail).is_some()
     })
     .and_then(|(offset, _)| u32::try_from(start.saturating_add(offset)).ok())
 }
