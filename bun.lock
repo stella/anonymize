@@ -176,6 +176,7 @@
         "@modelcontextprotocol/sdk": "^1.29.0",
         "@stll/anonymize": "workspace:*",
         "@stll/anonymize-docx": "^2.3.0",
+        "@stll/anonymize-pdf": "workspace:*",
         "fs-native-extensions": "^1.5.0",
         "zod": "^4.4.3",
       },

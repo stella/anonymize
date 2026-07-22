@@ -6,7 +6,9 @@ export {
 } from "./local";
 export type {
   AuditSafeResult,
+  LocalAnonymizeServiceOptions,
   LocalAnonymizeServiceFaults,
+  LocalPdfProviderConfiguration,
   McpSessionMode,
 } from "./local";
 export {

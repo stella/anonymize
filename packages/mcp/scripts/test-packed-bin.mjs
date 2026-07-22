@@ -109,14 +109,16 @@ try {
     await mkdir(dirname(join(releaseWorkspace, file)), { recursive: true });
     await cp(join(repositoryRoot, file), join(releaseWorkspace, file));
   }
-  await cp(
-    join(repositoryRoot, "packages", "document-docx"),
-    join(releaseWorkspace, "packages", "document-docx"),
-    {
-      filter: (source) => basename(source) !== "node_modules",
-      recursive: true,
-    },
-  );
+  for (const packageDirectory of ["document-docx", "document-pdf"]) {
+    await cp(
+      join(repositoryRoot, "packages", packageDirectory),
+      join(releaseWorkspace, "packages", packageDirectory),
+      {
+        filter: (source) => basename(source) !== "node_modules",
+        recursive: true,
+      },
+    );
+  }
   await cp(
     join(repositoryRoot, "packages", "mcp"),
     join(releaseWorkspace, "packages", "mcp"),
@@ -155,12 +157,21 @@ try {
     ),
   );
   if (
-    releaseManifest.dependencies?.["@stll/anonymize"] !== coreManifest.version
+    releaseManifest.dependencies?.["@stll/anonymize"] !==
+      coreManifest.version ||
+    releaseManifest.dependencies?.["@stll/anonymize-pdf"] !==
+      coreManifest.version
   ) {
-    throw new Error("Release sync did not resolve the exact MCP dependency");
+    throw new Error(
+      "Release sync did not resolve the exact MCP co-release dependencies",
+    );
   }
   const releaseDocxArchive = await packPackage(
     join(releaseWorkspace, "packages", "document-docx"),
+    releasePacks,
+  );
+  const releasePdfArchive = await packPackage(
+    join(releaseWorkspace, "packages", "document-pdf"),
     releasePacks,
   );
   const releaseMcpArchive = await packPackage(
@@ -174,7 +185,9 @@ try {
   ]);
   const packedManifest = JSON.parse(packedManifestJson);
   if (
-    packedManifest.dependencies?.["@stll/anonymize"] !== coreManifest.version
+    packedManifest.dependencies?.["@stll/anonymize"] !== coreManifest.version ||
+    packedManifest.dependencies?.["@stll/anonymize-pdf"] !==
+      coreManifest.version
   ) {
     throw new Error(
       "Packed MCP release did not resolve the exact co-release dependency",
@@ -193,6 +206,7 @@ try {
       platformArchive,
       coreArchive,
       releaseDocxArchive,
+      releasePdfArchive,
       releaseMcpArchive,
     ],
     { cwd: consumer },

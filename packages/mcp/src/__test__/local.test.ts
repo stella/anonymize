@@ -2,11 +2,13 @@ import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { extractDocxText } from "@stll/anonymize-docx";
+import { inspectPdf } from "@stll/anonymize-pdf";
 import { strToU8, zipSync } from "fflate";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import {
+  chmod,
   mkdtemp,
   link as createHardLink,
   mkdir,
@@ -519,17 +521,15 @@ describe("local MCP surface", () => {
       );
     }
     let failPublication = false;
-    const service = new LocalAnonymizeService(
-      await PathScope.create([root]),
-      undefined,
-      {
+    const service = new LocalAnonymizeService(await PathScope.create([root]), {
+      faults: {
         beforeOutputPublish: () => {
           if (failPublication) {
             throw new Error("injected external output failure");
           }
         },
       },
-    );
+    });
     const concurrent = await Promise.allSettled(
       ([0, 1] as const).map((index) =>
         service.anonymizeTextWithExternalDetections({
@@ -616,6 +616,86 @@ describe("local MCP surface", () => {
     );
   });
 
+  test("raster-anonymizes PDF paths with server-configured executables", async () => {
+    const root = await temporaryDirectory();
+    const input = join(root, "input.pdf");
+    const output = join(root, "output.pdf");
+    const fixture = readFileSync(
+      join(
+        import.meta.dir,
+        "../../../../crates/anonymize-pdf-core/tests/fixtures/minimal-text.pdf",
+      ),
+    );
+    await writeFile(input, fixture);
+    const executable = async (name: string, body: string): Promise<string> => {
+      const path = join(root, name);
+      await writeFile(path, `#!/usr/bin/env node\n${body}`, {
+        flag: "wx",
+        mode: 0o700,
+      });
+      await chmod(path, 0o700);
+      return path;
+    };
+    const pdftoppmPath = await executable(
+      "pdftoppm-test",
+      `
+const { writeFileSync } = require("node:fs");
+const args = process.argv.slice(2);
+if (args.includes("-v")) {
+  process.stderr.write("pdftoppm version 1.2.3\\n");
+  process.exit(0);
+}
+if (!args.includes("-singlefile")) process.exit(2);
+writeFileSync(args.at(-1) + ".ppm", Buffer.concat([
+  Buffer.from("P6\\n612 792\\n255\\n"),
+  Buffer.alloc(612 * 792 * 3, 255),
+]));
+`,
+    );
+    const tesseractPath = await executable(
+      "tesseract-test",
+      `
+if (process.argv.includes("--version")) {
+  process.stdout.write("tesseract 5.4.1\\n");
+  process.exit(0);
+}
+process.stdout.write("level\\tpage_num\\tblock_num\\tpar_num\\tline_num\\tword_num\\tleft\\ttop\\twidth\\theight\\tconf\\ttext\\n");
+process.stdout.write("5\\t1\\t1\\t1\\t1\\t1\\t72\\t80\\t36\\t12\\t99\\tAlice\\n");
+`,
+    );
+    const service = new LocalAnonymizeService(await PathScope.create([root]), {
+      pdfProvider: { pdftoppmPath, tesseractPath },
+    });
+
+    const audit = await service.anonymizePdf({
+      inputPath: input,
+      outputPath: output,
+      ocrLanguage: "eng",
+      dpi: 72,
+      timeoutMs: 10_000,
+      fillRgb: [0, 0, 0],
+    });
+
+    expect(audit).toMatchObject({
+      operation: "anonymize",
+      format: "pdf",
+      outputCreated: true,
+      pageCount: 1,
+      entityCount: 1,
+      mappedRegionCount: 1,
+      structurePixelRewriteVerified: true,
+      piiCleanGuaranteed: false,
+    });
+    expect(JSON.stringify(audit)).not.toContain("Alice");
+    expect(inspectPdf(await readFile(output)).risks).toMatchObject({
+      annotationCount: 0,
+      embeddedFileCount: 0,
+      imageObjectCount: 1,
+      metadataStreamCount: 0,
+    });
+    expect((await stat(output)).mode & 0o777).toBe(0o600);
+  });
+
   test("reports and fails closed on partial DOCX coverage", async () => {
     const root = await temporaryDirectory();
     const input = join(root, "partial.docx");
@@ -685,6 +765,7 @@ describe("local MCP surface", () => {
     const tools = await client.listTools();
     expect(tools.tools.map(({ name }) => name).toSorted()).toEqual([
       "anonymize_docx_file",
+      "anonymize_pdf_file",
       "anonymize_text_file",
       "anonymize_text_file_with_external_detections",
       "capabilities",
@@ -697,6 +778,8 @@ describe("local MCP surface", () => {
       expect(properties).not.toHaveProperty("text");
       expect(properties).not.toHaveProperty("document");
       expect(properties).not.toHaveProperty("mapping");
+      expect(properties).not.toHaveProperty("pdftoppmPath");
+      expect(properties).not.toHaveProperty("tesseractPath");
     }
     const capabilities = await client.callTool({
       name: "capabilities",
@@ -706,7 +789,7 @@ describe("local MCP surface", () => {
       runtimeVersion: packageVersion(),
       mcp: {
         externalDetectionBatch: { ingestion: "path-only", version: 1 },
-        formats: ["docx", "text"],
+        formats: ["docx", "pdf", "text"],
         sessionMode: "memory",
         transport: "stdio",
       },

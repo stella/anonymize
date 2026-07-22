@@ -80,7 +80,11 @@ for (const scenarioLineEnding of ["\n", "\r\n"]) {
     const cliPackage = JSON.parse(
       readFileSync(join(workspace, "packages/cli/package.json"), "utf8"),
     );
-    for (const dependency of ["@stll/anonymize", "@stll/anonymize-docx"]) {
+    for (const dependency of [
+      "@stll/anonymize",
+      "@stll/anonymize-docx",
+      "@stll/anonymize-pdf",
+    ]) {
       if (cliPackage.dependencies?.[dependency] !== `^${version}`) {
         throw new Error(`CLI package did not sync ${dependency}`);
       }
@@ -114,6 +118,9 @@ for (const scenarioLineEnding of ["\n", "\r\n"]) {
     }
     if (mcpPackage.dependencies?.["@stll/anonymize-docx"] !== `^${version}`) {
       throw new Error("MCP package did not sync @stll/anonymize-docx");
+    }
+    if (mcpPackage.dependencies?.["@stll/anonymize-pdf"] !== "workspace:*") {
+      throw new Error("MCP source package did not preserve PDF workspace:*");
     }
 
     mcpPackage.dependencies["@stll/anonymize"] = `^${version}`;
@@ -172,6 +179,11 @@ for (const scenarioLineEnding of ["\n", "\r\n"]) {
     if (releasedMcpPackage.dependencies?.["@stll/anonymize"] !== version) {
       throw new Error("MCP release package did not resolve the exact version");
     }
+    if (releasedMcpPackage.dependencies?.["@stll/anonymize-pdf"] !== version) {
+      throw new Error(
+        "MCP release package did not resolve the exact PDF version",
+      );
+    }
 
     const releasedPdfPackage = JSON.parse(
       readFileSync(
@@ -191,6 +203,9 @@ for (const scenarioLineEnding of ["\n", "\r\n"]) {
     if (
       releasedLock.workspaces?.["packages/mcp"]?.dependencies?.[
         "@stll/anonymize"
+      ] !== version ||
+      releasedLock.workspaces?.["packages/mcp"]?.dependencies?.[
+        "@stll/anonymize-pdf"
       ] !== version
     ) {
       throw new Error("MCP release lock did not resolve the exact version");
@@ -281,6 +296,7 @@ function writeFixture() {
       pkg.dependencies = {
         "@stll/anonymize": `^${staleVersion}`,
         "@stll/anonymize-docx": `^${staleVersion}`,
+        "@stll/anonymize-pdf": `^${staleVersion}`,
       };
     }
     if (file === "packages/document-docx/package.json") {
@@ -293,6 +309,7 @@ function writeFixture() {
       pkg.dependencies = {
         "@stll/anonymize": "workspace:*",
         "@stll/anonymize-docx": `^${staleVersion}`,
+        "@stll/anonymize-pdf": "workspace:*",
       };
     }
     writeText(file, `${JSON.stringify(pkg, null, 2)}\n`);
@@ -369,6 +386,7 @@ function bunLockFixture() {
           dependencies: {
             "@stll/anonymize": `^${staleVersion}`,
             "@stll/anonymize-docx": `^${staleVersion}`,
+            "@stll/anonymize-pdf": `^${staleVersion}`,
           },
         },
         "packages/document-docx": {
@@ -387,6 +405,7 @@ function bunLockFixture() {
           dependencies: {
             "@stll/anonymize": "workspace:*",
             "@stll/anonymize-docx": `^${staleVersion}`,
+            "@stll/anonymize-pdf": "workspace:*",
           },
         },
       },

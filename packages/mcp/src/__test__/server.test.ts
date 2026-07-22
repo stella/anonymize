@@ -13,6 +13,10 @@ describe("MCP server arguments", () => {
       parseServerArguments([
         "--root",
         "/workspace",
+        "--pdftoppm",
+        "/tools/pdftoppm",
+        "--tesseract",
+        "/tools/tesseract",
         "--session-dir",
         "/sessions",
         "--key-file",
@@ -21,8 +25,10 @@ describe("MCP server arguments", () => {
     ).toEqual({
       help: false,
       keyFile: "/key",
+      pdftoppmPath: "/tools/pdftoppm",
       roots: ["/workspace"],
       sessionDirectory: "/sessions",
+      tesseractPath: "/tools/tesseract",
     });
     expect(() =>
       parseServerArguments([
@@ -43,6 +49,8 @@ describe("MCP server arguments", () => {
       roots: [],
     });
     expect(SERVER_HELP).toContain("exact 32-byte raw archive key");
+    expect(SERVER_HELP).toContain("--pdftoppm");
+    expect(SERVER_HELP).toContain("--tesseract");
   });
 
   test("serializes signal and transport shutdown while connect is in flight", async () => {
