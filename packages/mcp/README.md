@@ -120,14 +120,14 @@ The server stores only bounded, authenticated encrypted session archives. It
 never writes plaintext mappings or includes key material in tools, results, or
 logs. Archive filenames are SHA-256 hashes of validated session IDs. Writes are
 owner-only and atomically replace the preceding archive. The archive is made
-durable before its corresponding output is published. If output publication or
-rollback fails, the server preserves an authenticated archive and discards its
-in-memory copy so a later operation reloads from disk; an unused forward mapping
-is safer than erasing the last recoverable state. At most 256 archives
-and 256 MiB of archive data are accepted. Restore authenticates the expected
-session ID and evaluates lifecycle expiry at the current time. A wrong key,
-tampered archive, expired session, unsafe path, partial write, or permission
-change fails closed.
+durable before its corresponding output is published. If output publication
+fails, the server rolls both memory and durable storage back to the preceding
+successful state, or deletes a newly created session. If rollback storage itself
+fails, the in-memory copy is discarded and later work must reload and
+authenticate whichever atomic archive remains. At most 256 archives and 256 MiB
+of archive data are accepted. Restore authenticates the expected session ID and
+evaluates lifecycle expiry at the current time. A wrong key, tampered archive,
+expired session, unsafe path, partial write, or permission change fails closed.
 
 The encrypted core archive intentionally contains session state, not MCP
 pipeline-selection metadata. To keep pipeline identity stable across restarts,

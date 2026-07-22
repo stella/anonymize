@@ -11,7 +11,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
@@ -28,7 +28,6 @@ const runtimePackageFiles = [
   "packages/anonymize-win32-x64-msvc/package.json",
   "packages/anonymize/wasm/package.json",
   "packages/cli/package.json",
-  "packages/document-docx/package.json",
   "packages/document-pdf/package.json",
 ];
 
@@ -87,6 +86,14 @@ try {
     await cp(join(repositoryRoot, file), join(releaseWorkspace, file));
   }
   await cp(
+    join(repositoryRoot, "packages", "document-docx"),
+    join(releaseWorkspace, "packages", "document-docx"),
+    {
+      filter: (source) => basename(source) !== "node_modules",
+      recursive: true,
+    },
+  );
+  await cp(
     join(repositoryRoot, "packages", "mcp"),
     join(releaseWorkspace, "packages", "mcp"),
     { recursive: true },
@@ -128,6 +135,10 @@ try {
   ) {
     throw new Error("Release sync did not resolve the exact MCP dependency");
   }
+  const releaseDocxArchive = await packPackage(
+    join(releaseWorkspace, "packages", "document-docx"),
+    releasePacks,
+  );
   const releaseMcpArchive = await packPackage(
     join(releaseWorkspace, "packages", "mcp"),
     releasePacks,
@@ -157,6 +168,7 @@ try {
       "--package-lock=false",
       platformArchive,
       coreArchive,
+      releaseDocxArchive,
       releaseMcpArchive,
     ],
     { cwd: consumer },
