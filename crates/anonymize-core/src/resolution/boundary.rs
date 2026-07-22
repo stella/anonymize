@@ -709,16 +709,179 @@ fn deduplicate_spans(entities: &[PipelineEntity]) -> Vec<PipelineEntity> {
   seen.into_values().collect()
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct LabelEnd {
+  label_id: usize,
+  end: u32,
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct CrossLabelMaxEnds {
+  first: Option<LabelEnd>,
+  second: Option<LabelEnd>,
+}
+
+impl CrossLabelMaxEnds {
+  fn insert(&mut self, candidate: LabelEnd) {
+    if let Some(first) = &mut self.first
+      && first.label_id == candidate.label_id
+    {
+      first.end = first.end.max(candidate.end);
+      return;
+    }
+    if let Some(second) = &mut self.second
+      && second.label_id == candidate.label_id
+    {
+      second.end = second.end.max(candidate.end);
+      if self.first.is_some_and(|first| second.end > first.end) {
+        std::mem::swap(&mut self.first, &mut self.second);
+      }
+      return;
+    }
+
+    if self.first.is_none_or(|first| candidate.end > first.end) {
+      self.second = self.first;
+      self.first = Some(candidate);
+      return;
+    }
+    if self.second.is_none_or(|second| candidate.end > second.end) {
+      self.second = Some(candidate);
+    }
+  }
+
+  fn max_end_excluding(self, excluded_label: usize) -> Option<u32> {
+    self
+      .first
+      .filter(|entry| entry.label_id != excluded_label)
+      .or(self.second)
+      .map(|entry| entry.end)
+  }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct GapOccupancyResult {
+  occupied: bool,
+  #[cfg(test)]
+  activated_entities: usize,
+}
+
+/// Start-sorted intervals activated once as the right edge advances. Keeping
+/// the two greatest ends from distinct labels makes each cross-label overlap
+/// query constant-time after amortized linear activation.
+struct GapOccupancyIndex<'a> {
+  entities: &'a [PipelineEntity],
+  label_ids: Vec<usize>,
+  activation_cursor: usize,
+  max_ends: CrossLabelMaxEnds,
+}
+
+impl<'a> GapOccupancyIndex<'a> {
+  fn new(entities: &'a [PipelineEntity]) -> Self {
+    let mut labels = BTreeMap::<&str, usize>::new();
+    let label_ids = entities
+      .iter()
+      .map(|entity| {
+        let next_id = labels.len();
+        *labels.entry(&entity.label).or_insert(next_id)
+      })
+      .collect();
+    Self {
+      entities,
+      label_ids,
+      activation_cursor: 0,
+      max_ends: CrossLabelMaxEnds::default(),
+    }
+  }
+
+  fn has_cross_label_overlap(
+    &mut self,
+    entity_index: usize,
+    gap_start: u32,
+    gap_end: u32,
+  ) -> GapOccupancyResult {
+    #[cfg(test)]
+    let mut activated_entities = 0_usize;
+    while self
+      .entities
+      .get(self.activation_cursor)
+      .is_some_and(|entity| entity.start < gap_end)
+    {
+      let Some(entity) = self.entities.get(self.activation_cursor) else {
+        break;
+      };
+      let label_id = self
+        .label_ids
+        .get(self.activation_cursor)
+        .copied()
+        .unwrap_or_default();
+      self.max_ends.insert(LabelEnd {
+        label_id,
+        end: entity.end,
+      });
+      self.activation_cursor = self.activation_cursor.saturating_add(1);
+      #[cfg(test)]
+      {
+        activated_entities = activated_entities.saturating_add(1);
+      }
+    }
+
+    let excluded_label = self
+      .label_ids
+      .get(entity_index)
+      .copied()
+      .unwrap_or_default();
+    GapOccupancyResult {
+      occupied: self
+        .max_ends
+        .max_end_excluding(excluded_label)
+        .is_some_and(|end| end > gap_start),
+      #[cfg(test)]
+      activated_entities,
+    }
+  }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct MergeAdjacentStats {
+  #[cfg(test)]
+  gap_queries: usize,
+  #[cfg(test)]
+  activated_entities: usize,
+}
+
+impl MergeAdjacentStats {
+  #[cfg(test)]
+  const fn record_query(&mut self, query: GapOccupancyResult) {
+    self.gap_queries = self.gap_queries.saturating_add(1);
+    self.activated_entities = self
+      .activated_entities
+      .saturating_add(query.activated_entities);
+  }
+}
+
 fn merge_adjacent(
   entities: &[PipelineEntity],
   offsets: &ByteOffsets<'_>,
 ) -> Result<Vec<PipelineEntity>> {
+  merge_adjacent_with_stats(entities, offsets).map(|(merged, _)| merged)
+}
+
+fn merge_adjacent_with_stats(
+  entities: &[PipelineEntity],
+  offsets: &ByteOffsets<'_>,
+) -> Result<(Vec<PipelineEntity>, MergeAdjacentStats)> {
   let mut sorted = entities.to_vec();
   sorted.sort_by_key(|entity| entity.start);
+  let mut occupancy_index = (sorted.len() >= BOUNDARY_INDEX_MIN_ENTITIES)
+    .then(|| GapOccupancyIndex::new(&sorted));
   let mut result = Vec::<PipelineEntity>::new();
   let mut last_by_label = BTreeMap::<String, usize>::new();
+  #[cfg(test)]
+  let mut stats = MergeAdjacentStats::default();
+  #[cfg(not(test))]
+  let stats = MergeAdjacentStats::default();
 
-  for entity in &sorted {
+  for (entity_index, entity) in sorted.iter().enumerate() {
     if has_locked_boundary(entity) {
       result.push(entity.clone());
       continue;
@@ -746,21 +909,33 @@ fn merge_adjacent(
     let gap = offsets.slice(previous.end, entity.start)?;
     let gap_start = previous.end;
     let gap_end = entity.start;
-    let gap_occupied = sorted.iter().any(|other| {
-      other.label != entity.label
-        && other.start < gap_end
-        && other.end > gap_start
-    });
     let legal_form_comma = (is_legal_form_organization(previous)
       || is_legal_form_organization(entity))
       && gap.contains(',');
 
-    if !has_locked_boundary(previous)
+    let mergeable = !has_locked_boundary(previous)
       && !legal_form_comma
       && entity.label != "country"
-      && !gap_occupied
-      && is_mergeable_gap(&gap)
-    {
+      && is_mergeable_gap(&gap);
+    let gap_occupied = mergeable
+      && occupancy_index.as_mut().map_or_else(
+        || {
+          sorted.iter().any(|other| {
+            other.label != entity.label
+              && other.start < gap_end
+              && other.end > gap_start
+          })
+        },
+        |index| {
+          let query =
+            index.has_cross_label_overlap(entity_index, gap_start, gap_end);
+          #[cfg(test)]
+          stats.record_query(query);
+          query.occupied
+        },
+      );
+
+    if mergeable && !gap_occupied {
       merge_into_previous(&mut result, previous_index, entity, offsets)?;
       continue;
     }
@@ -770,7 +945,7 @@ fn merge_adjacent(
     last_by_label.insert(entity.label.clone(), index);
   }
 
-  Ok(result)
+  Ok((result, stats))
 }
 
 fn remove_nested_same_label(
@@ -1030,6 +1205,67 @@ mod tests {
     Ok(fixed)
   }
 
+  fn merge_adjacent_legacy(
+    entities: &[PipelineEntity],
+    offsets: &ByteOffsets<'_>,
+  ) -> Result<Vec<PipelineEntity>> {
+    let mut sorted = entities.to_vec();
+    sorted.sort_by_key(|entity| entity.start);
+    let mut result = Vec::<PipelineEntity>::new();
+    let mut last_by_label = BTreeMap::<String, usize>::new();
+
+    for entity in &sorted {
+      if has_locked_boundary(entity) {
+        result.push(entity.clone());
+        continue;
+      }
+      let Some(previous_index) = last_by_label.get(&entity.label).copied()
+      else {
+        let index = result.len();
+        result.push(entity.clone());
+        last_by_label.insert(entity.label.clone(), index);
+        continue;
+      };
+      let Some(previous) = result.get(previous_index) else {
+        let index = result.len();
+        result.push(entity.clone());
+        last_by_label.insert(entity.label.clone(), index);
+        continue;
+      };
+      if !has_locked_boundary(previous) && entity.start < previous.end {
+        merge_into_previous(&mut result, previous_index, entity, offsets)?;
+        continue;
+      }
+
+      let gap = offsets.slice(previous.end, entity.start)?;
+      let gap_start = previous.end;
+      let gap_end = entity.start;
+      let gap_occupied = sorted.iter().any(|other| {
+        other.label != entity.label
+          && other.start < gap_end
+          && other.end > gap_start
+      });
+      let legal_form_comma = (is_legal_form_organization(previous)
+        || is_legal_form_organization(entity))
+        && gap.contains(',');
+      if !has_locked_boundary(previous)
+        && !legal_form_comma
+        && entity.label != "country"
+        && !gap_occupied
+        && is_mergeable_gap(&gap)
+      {
+        merge_into_previous(&mut result, previous_index, entity, offsets)?;
+        continue;
+      }
+
+      let index = result.len();
+      result.push(entity.clone());
+      last_by_label.insert(entity.label.clone(), index);
+    }
+
+    Ok(result)
+  }
+
   proptest! {
     #[test]
     fn indexed_partial_word_fix_matches_legacy_scan(
@@ -1084,6 +1320,73 @@ mod tests {
         fix_partial_words_legacy(&entities, &offsets, &spans, &boundaries)?,
       );
     }
+
+    #[test]
+    fn indexed_adjacent_merge_matches_legacy_scan(
+      characters in proptest::collection::vec(
+        prop_oneof![
+          Just('a'), Just('Z'), Just(' '), Just('\t'), Just(','), Just('-'),
+          Just('.'), Just('\n'), Just('é'), Just('東'), Just('🙂'),
+          Just('\u{0301}'), Just('\u{00a0}'),
+        ],
+        0..96,
+      ),
+      raw_entities in proptest::collection::vec(
+        (any::<u16>(), any::<u16>(), 0_u8..5, 0_u8..4),
+        0..128,
+      ),
+    ) {
+      let full_text = characters.into_iter().collect::<String>();
+      let mut boundaries = full_text
+        .char_indices()
+        .map(|(index, _)| index)
+        .collect::<Vec<_>>();
+      boundaries.push(full_text.len());
+      let entities = raw_entities
+        .into_iter()
+        .enumerate()
+        .map(|(index, (left, right, label_index, source_index))| {
+          let left_index = usize::from(left)
+            .checked_rem(boundaries.len())
+            .unwrap_or_default();
+          let right_index = usize::from(right)
+            .checked_rem(boundaries.len())
+            .unwrap_or_default();
+          let start = boundaries.get(left_index).copied().unwrap_or_default();
+          let end = boundaries.get(right_index).copied().unwrap_or_default();
+          let label = match label_index {
+            0 => "person",
+            1 => crate::labels::ORGANIZATION_LABEL,
+            2 => "address",
+            3 => "country",
+            _ => crate::labels::PHONE_NUMBER_LABEL,
+          };
+          let source = match source_index {
+            0 => DetectionSource::Ner,
+            1 => DetectionSource::LegalForm,
+            2 => DetectionSource::Caller,
+            _ => DetectionSource::Trigger,
+          };
+          let detected_text = full_text
+            .get(start..end)
+            .unwrap_or("malformed span");
+          PipelineEntity::detected(
+            u32::try_from(start).unwrap_or(u32::MAX),
+            u32::try_from(end).unwrap_or(u32::MAX),
+            label,
+            detected_text,
+            f64::from(u32::try_from(index).unwrap_or(u32::MAX)),
+            source,
+          )
+        })
+        .collect::<Vec<_>>();
+      let offsets = ByteOffsets::new(&full_text);
+
+      prop_assert_eq!(
+        merge_adjacent(&entities, &offsets),
+        merge_adjacent_legacy(&entities, &offsets),
+      );
+    }
   }
 
   #[test]
@@ -1128,6 +1431,71 @@ mod tests {
       "same-label searches visited {} index nodes for {} entities",
       stats.index_node_visits,
       SAME_LABEL_SCALING_ENTITY_COUNT,
+    );
+    Ok(())
+  }
+
+  #[test]
+  #[ignore = "release-mode scaling regression check"]
+  fn merge_adjacent_same_label_scaling_is_bounded() -> Result<()> {
+    let fixture = "MA 02101-1234.\n\n";
+    let full_text = fixture.repeat(SAME_LABEL_SCALING_ENTITY_COUNT);
+    let entities = (0..SAME_LABEL_SCALING_ENTITY_COUNT)
+      .map(|index| {
+        let start = index.saturating_mul(fixture.len());
+        PipelineEntity::detected(
+          u32::try_from(start).unwrap_or(u32::MAX),
+          u32::try_from(start.saturating_add(13)).unwrap_or(u32::MAX),
+          "address",
+          "MA 02101-1234",
+          0.9,
+          DetectionSource::Ner,
+        )
+      })
+      .collect::<Vec<_>>();
+    let offsets = ByteOffsets::new(&full_text);
+    let (separated, separated_stats) =
+      merge_adjacent_with_stats(&entities, &offsets)?;
+
+    assert_eq!(separated, entities);
+    assert_eq!(separated_stats.gap_queries, 0);
+    assert_eq!(separated_stats.activated_entities, 0);
+
+    let mergeable_text = "A ".repeat(SAME_LABEL_SCALING_ENTITY_COUNT);
+    let mergeable_entities = (0..SAME_LABEL_SCALING_ENTITY_COUNT)
+      .map(|index| {
+        let start = index.saturating_mul(2);
+        PipelineEntity::detected(
+          u32::try_from(start).unwrap_or(u32::MAX),
+          u32::try_from(start.saturating_add(1)).unwrap_or(u32::MAX),
+          "person",
+          "A",
+          0.9,
+          DetectionSource::Ner,
+        )
+      })
+      .collect::<Vec<_>>();
+    let mergeable_offsets = ByteOffsets::new(&mergeable_text);
+    let (merged, merged_stats) =
+      merge_adjacent_with_stats(&mergeable_entities, &mergeable_offsets)?;
+
+    assert_eq!(merged.len(), 1);
+    let only = merged
+      .first()
+      .ok_or(crate::types::Error::InvalidSpan { start: 0, end: 0 })?;
+    assert_eq!(only.start, 0);
+    assert_eq!(
+      only.end,
+      u32::try_from(mergeable_text.len().saturating_sub(1)).unwrap_or(u32::MAX)
+    );
+    assert_eq!(only.label, "person");
+    assert!(
+      merged_stats.gap_queries < SAME_LABEL_SCALING_ENTITY_COUNT,
+      "one gap query per later entity is the linear upper bound"
+    );
+    assert!(
+      merged_stats.activated_entities < SAME_LABEL_SCALING_ENTITY_COUNT,
+      "each interval may be activated at most once"
     );
     Ok(())
   }

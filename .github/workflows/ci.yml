@@ -178,6 +178,14 @@ jobs:
           --lib resolution::boundary::tests::fix_partial_words_same_label_scaling_is_bounded
           -- --ignored --exact
 
+      - name: Adjacent-boundary scaling regression
+        # Covers both unmergeable legal-document separators and mergeable
+        # same-label gaps with structural query/activation budgets.
+        run: >-
+          cargo test --release --locked -p stella-anonymize-core
+          --lib resolution::boundary::tests::merge_adjacent_same_label_scaling_is_bounded
+          -- --ignored --exact
+
       - name: Resolution-merge scaling regression
         # Gates the direct accumulated-entity adversary by operation count and
         # a fixed resolved-output digest in the optimized release profile.
