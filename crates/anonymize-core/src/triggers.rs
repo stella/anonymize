@@ -359,22 +359,30 @@ pub(crate) fn process_trigger_matches(
       );
       continue;
     };
-    if !apply_validations(&value.text, &rule.validations) {
-      record_trigger_rejection(&mut diagnostics, found, rule, "validation");
-      continue;
-    }
     // Trailing role triggers (`…, director` / `…, ředitelem`) often sit
     // immediately before the next form field (`IČO: …`, `EIN: …`). Those
-    // label-shaped values are not people.
+    // label-shaped values are not people. Preserve a complete person-shaped
+    // prefix when the field label follows it on the same line.
     if rule.label == crate::labels::PERSON_LABEL
-      && inline_field_label(&value.text)
+      && let Some(label_start) = inline_field_label_token_start(&value.text)
     {
-      record_trigger_rejection(
-        &mut diagnostics,
-        found,
-        rule,
-        "field-label-value",
-      );
+      let prefix = value.text.get(..label_start).unwrap_or_default().trim_end();
+      let complete_person_prefix = prefix.split_whitespace().count() >= 2
+        && person_name_run_end(prefix) == Some(prefix.len());
+      if !complete_person_prefix {
+        record_trigger_rejection(
+          &mut diagnostics,
+          found,
+          rule,
+          "field-label-value",
+        );
+        continue;
+      }
+      value.end = value.start.saturating_add(u32_len(prefix));
+      value.text = prefix.to_owned();
+    }
+    if !apply_validations(&value.text, &rule.validations) {
+      record_trigger_rejection(&mut diagnostics, found, rule, "validation");
       continue;
     }
     if rule.label == crate::labels::PHONE_NUMBER_LABEL
@@ -1675,20 +1683,34 @@ fn looks_like_iso_date(text: &str) -> bool {
 }
 
 fn inline_field_label(text: &str) -> bool {
-  let mut letters = 0_usize;
-  for ch in text.chars().take(40) {
-    if ch == ':' && letters >= 2 {
-      return true;
+  inline_field_label_token_start(text).is_some()
+}
+
+fn inline_field_label_token_start(text: &str) -> Option<usize> {
+  let mut token_start = None;
+  let mut token_letters = 0_usize;
+  for (index, ch) in text.char_indices().take(40) {
+    if ch == ':' && token_letters >= 2 {
+      return token_start;
     }
-    if ch.is_alphabetic() || matches!(ch, ' ' | '/' | '-') {
-      letters = letters.saturating_add(usize::from(ch.is_alphabetic()));
+    if ch.is_alphabetic() {
+      token_start.get_or_insert(index);
+      token_letters = token_letters.saturating_add(1);
       continue;
     }
-    if letters > 0 {
+    if ch == ' ' {
+      token_start = None;
+      token_letters = 0;
+      continue;
+    }
+    if matches!(ch, '/' | '-') && token_start.is_some() {
+      continue;
+    }
+    if token_start.is_some() {
       break;
     }
   }
-  false
+  None
 }
 
 fn cap_phone_value(value: &ExtractedValue) -> ExtractedValue {
@@ -2343,6 +2365,52 @@ mod tests {
 
     assert_eq!(entities.len(), 1);
     assert_eq!(entities[0].text, "Jane Roe");
+  }
+
+  #[test]
+  fn person_trigger_trims_a_same_line_field_label_after_a_real_name() {
+    let text = "approved by director Janem Zorbax IČO: 12345678, on site";
+    let trigger = "director";
+    let start = text.find(trigger).unwrap();
+    let end = start.saturating_add(trigger.len());
+    let data = PreparedTriggerData::new(TriggerData {
+      rules: vec![TriggerRule {
+        trigger: String::from(trigger),
+        label: String::from("person"),
+        strategy: TriggerStrategy::ToNextComma {
+          stop_words: Vec::new(),
+          max_length: None,
+        },
+        validations: vec![TriggerValidation::StartsUppercase],
+        include_trigger: false,
+      }],
+      address_stop_keywords: Vec::new(),
+      party_position_terms: Vec::new(),
+      legal_form_suffixes: Vec::new(),
+      post_nominals: Vec::new(),
+      sentence_terminal_currency_terms: Vec::new(),
+      phone_extension_labels: Vec::new(),
+      number_markers: Vec::new(),
+      number_labels: Vec::new(),
+    })
+    .unwrap();
+
+    let entities = process_trigger_matches(
+      &[SearchMatch::Literal {
+        pattern: 0,
+        start: u32::try_from(start).unwrap(),
+        end: u32::try_from(end).unwrap(),
+      }],
+      PatternSlice { start: 0, end: 1 },
+      text,
+      &data,
+      &BTreeSet::new(),
+      None,
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].text, "Janem Zorbax");
   }
 
   fn organization_role_trigger_data(
