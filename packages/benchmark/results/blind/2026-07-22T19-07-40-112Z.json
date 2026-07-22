@@ -1,7 +1,7 @@
 {
   "schemaVersion": 3,
-  "createdAt": "2026-07-22T18:12:54.514Z",
-  "sourceGitSha": "b7e658ebbc2d96db3e35888af02d390f39998f9e",
+  "createdAt": "2026-07-22T19:07:40.112Z",
+  "sourceGitSha": "447baad2c40019409b1a435db749c109c617e2c3",
   "runtime": "Bun 1.3.14",
   "policy": "evaluation-only",
   "corpus": {
@@ -23,12 +23,12 @@
       "version": "2.4.0",
       "status": "ok",
       "timing": {
-        "initSeconds": 0.20735045899999996,
-        "coldSeconds": 0.39452170900000005,
-        "warmSeconds": 0.272497167,
+        "initSeconds": 0.1879031249999998,
+        "coldSeconds": 0.3787657079999999,
+        "warmSeconds": 0.26515104199999995,
         "totalChars": 647638
       },
-      "adapterWallSeconds": 0.874623375,
+      "adapterWallSeconds": 0.832127083,
       "metrics": {
         "type": "tab-independent-annotator-span-redaction",
         "documents": 127,
@@ -48,12 +48,12 @@
       "version": "2.2.360",
       "status": "ok",
       "timing": {
-        "initSeconds": 2.7519357092678547,
-        "coldSeconds": 14.842481291852891,
-        "warmSeconds": 14.44988129241392,
+        "initSeconds": 2.6163419160000103,
+        "coldSeconds": 14.340165290999948,
+        "warmSeconds": 13.954804666999962,
         "totalChars": 647638
       },
-      "adapterWallSeconds": 33.250299792,
+      "adapterWallSeconds": 42.464715708,
       "metrics": {
         "type": "tab-independent-annotator-span-redaction",
         "documents": 127,
@@ -73,12 +73,12 @@
       "version": "2.0.1",
       "status": "ok",
       "timing": {
-        "initSeconds": 0.00018170801922678947,
-        "coldSeconds": 0.16278170887380838,
-        "warmSeconds": 0.156959124840796,
+        "initSeconds": 0.00016037499995036342,
+        "coldSeconds": 0.1677004579998993,
+        "warmSeconds": 0.15446812499999396,
         "totalChars": 647638
       },
-      "adapterWallSeconds": 2.0133042910000003,
+      "adapterWallSeconds": 20.177444084,
       "metrics": {
         "type": "tab-independent-annotator-span-redaction",
         "documents": 127,
@@ -99,11 +99,11 @@
       "status": "ok",
       "timing": {
         "initSeconds": 0,
-        "coldSeconds": 0.10115504171699286,
-        "warmSeconds": 0.0979545833542943,
+        "coldSeconds": 0.09844508299988775,
+        "warmSeconds": 0.09497304199999235,
         "totalChars": 647638
       },
-      "adapterWallSeconds": 0.31941570800000046,
+      "adapterWallSeconds": 0.5649102090000014,
       "metrics": {
         "type": "tab-independent-annotator-span-redaction",
         "documents": 127,
@@ -123,12 +123,12 @@
       "version": "3.4.0",
       "status": "ok",
       "timing": {
-        "initSeconds": 0.01102362500000163,
-        "coldSeconds": 15.590408084000002,
-        "warmSeconds": 15.093258958999998,
+        "initSeconds": 0.004795416999993904,
+        "coldSeconds": 12.336761958999995,
+        "warmSeconds": 11.904187124999996,
         "totalChars": 647638
       },
-      "adapterWallSeconds": 30.694844791999998,
+      "adapterWallSeconds": 24.24589908299999,
       "metrics": {
         "type": "tab-independent-annotator-span-redaction",
         "documents": 127,

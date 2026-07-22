@@ -1,7 +1,7 @@
 {
   "schemaVersion": 3,
-  "createdAt": "2026-07-22T18:19:03.322Z",
-  "sourceGitSha": "b7e658ebbc2d96db3e35888af02d390f39998f9e",
+  "createdAt": "2026-07-22T19:13:15.637Z",
+  "sourceGitSha": "447baad2c40019409b1a435db749c109c617e2c3",
   "runtime": "Bun 1.3.14",
   "policy": "evaluation-only",
   "corpus": {
@@ -23,12 +23,12 @@
       "version": "2.4.0",
       "status": "ok",
       "timing": {
-        "initSeconds": 0.24316391699999998,
-        "coldSeconds": 0.30435612500000003,
-        "warmSeconds": 0.22572012500000005,
+        "initSeconds": 0.17732229200000074,
+        "coldSeconds": 0.26809370799999943,
+        "warmSeconds": 0.20128208300000006,
         "totalChars": 710577
       },
-      "adapterWallSeconds": 0.773580334,
+      "adapterWallSeconds": 0.646981334,
       "metrics": {
         "type": "label-agnostic-span-redaction",
         "spanRecall": 0.42095036212683273,
@@ -42,12 +42,12 @@
       "version": "2.2.360",
       "status": "ok",
       "timing": {
-        "initSeconds": 3.5374496672302485,
-        "coldSeconds": 19.267756040673703,
-        "warmSeconds": 16.472069459035993,
+        "initSeconds": 2.329757917000279,
+        "coldSeconds": 14.692758749999939,
+        "warmSeconds": 14.257056415999614,
         "totalChars": 710577
       },
-      "adapterWallSeconds": 40.320882667,
+      "adapterWallSeconds": 31.819080000000003,
       "metrics": {
         "type": "label-agnostic-span-redaction",
         "spanRecall": 0.525172231054584,
@@ -61,12 +61,12 @@
       "version": "2.0.1",
       "status": "ok",
       "timing": {
-        "initSeconds": 0.0001688748598098755,
-        "coldSeconds": 0.1573770409449935,
-        "warmSeconds": 0.1532017500139773,
+        "initSeconds": 0.0001527499998701387,
+        "coldSeconds": 0.15614637499993478,
+        "warmSeconds": 0.15014100000007602,
         "totalChars": 710577
       },
-      "adapterWallSeconds": 1.4773304999999963,
+      "adapterWallSeconds": 1.3031869580000057,
       "metrics": {
         "type": "label-agnostic-span-redaction",
         "spanRecall": 0.04451510333863275,
@@ -81,11 +81,11 @@
       "status": "ok",
       "timing": {
         "initSeconds": 0,
-        "coldSeconds": 0.09872866701334715,
-        "warmSeconds": 0.09436554228886962,
+        "coldSeconds": 0.0974522500000603,
+        "warmSeconds": 0.09370787499983635,
         "totalChars": 710577
       },
-      "adapterWallSeconds": 0.29644045900000493,
+      "adapterWallSeconds": 0.2867660840000026,
       "metrics": {
         "type": "label-agnostic-span-redaction",
         "spanRecall": 0.14679385267620562,
@@ -99,12 +99,12 @@
       "version": "3.4.0",
       "status": "ok",
       "timing": {
-        "initSeconds": 0.015313540999995894,
-        "coldSeconds": 17.194303166000005,
-        "warmSeconds": 15.478181915999993,
+        "initSeconds": 0.003977750000005472,
+        "coldSeconds": 15.170141625000003,
+        "warmSeconds": 13.909312999999994,
         "totalChars": 710577
       },
-      "adapterWallSeconds": 32.687966624999994,
+      "adapterWallSeconds": 29.083589125,
       "metrics": {
         "type": "label-agnostic-span-redaction",
         "spanRecall": 0.25790496378731675,
