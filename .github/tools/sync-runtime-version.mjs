@@ -59,6 +59,7 @@ const SYNCED_DEPENDENCIES = ["@stll/anonymize", "@stll/anonymize-docx"];
 // the exact synchronized version before packing or publishing.
 const EXACT_CO_RELEASE_DEPENDENCIES = new Map([
   ["packages/mcp/package.json", new Set(["@stll/anonymize"])],
+  ["packages/document-pdf/package.json", new Set(["@stll/anonymize"])],
 ]);
 
 const escapeRegExp = (value) => value.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");

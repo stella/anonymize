@@ -156,7 +156,7 @@
       "name": "@stll/anonymize-pdf",
       "version": "2.3.0",
       "dependencies": {
-        "@stll/anonymize": "^2.3.0",
+        "@stll/anonymize": "workspace:*",
       },
       "devDependencies": {
         "@types/node": "^26.1.1",

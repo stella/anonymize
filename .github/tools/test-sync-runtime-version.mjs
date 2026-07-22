@@ -96,6 +96,16 @@ for (const scenarioLineEnding of ["\n", "\r\n"]) {
       throw new Error("DOCX package did not sync @stll/anonymize");
     }
 
+    const pdfPackage = JSON.parse(
+      readFileSync(
+        join(workspace, "packages/document-pdf/package.json"),
+        "utf8",
+      ),
+    );
+    if (pdfPackage.dependencies?.["@stll/anonymize"] !== "workspace:*") {
+      throw new Error("PDF source package did not preserve workspace:*");
+    }
+
     const mcpPackage = JSON.parse(
       readFileSync(join(workspace, "packages/mcp/package.json"), "utf8"),
     );
@@ -127,6 +137,27 @@ for (const scenarioLineEnding of ["\n", "\r\n"]) {
       `${JSON.stringify(mcpPackage, null, 2)}\n`,
     );
 
+    pdfPackage.dependencies["@stll/anonymize"] = `^${version}`;
+    writeText(
+      "packages/document-pdf/package.json",
+      `${JSON.stringify(pdfPackage, null, 2)}\n`,
+    );
+    const pdfLegacyCheck = spawnSync("node", [syncScript, "--check"], {
+      cwd: workspace,
+      encoding: "utf8",
+    });
+    if (
+      pdfLegacyCheck.status === 0 ||
+      !pdfLegacyCheck.stderr.includes(`workspace:* or ${version}`)
+    ) {
+      throw new Error("PDF legacy dependency range was not rejected");
+    }
+    pdfPackage.dependencies["@stll/anonymize"] = "workspace:*";
+    writeText(
+      "packages/document-pdf/package.json",
+      `${JSON.stringify(pdfPackage, null, 2)}\n`,
+    );
+
     execFileSync("node", [syncScript, "--release"], {
       cwd: workspace,
       stdio: "pipe",
@@ -142,14 +173,14 @@ for (const scenarioLineEnding of ["\n", "\r\n"]) {
       throw new Error("MCP release package did not resolve the exact version");
     }
 
-    const pdfPackage = JSON.parse(
+    const releasedPdfPackage = JSON.parse(
       readFileSync(
         join(workspace, "packages/document-pdf/package.json"),
         "utf8",
       ),
     );
-    if (pdfPackage.dependencies?.["@stll/anonymize"] !== `^${version}`) {
-      throw new Error("PDF package did not sync @stll/anonymize");
+    if (releasedPdfPackage.dependencies?.["@stll/anonymize"] !== version) {
+      throw new Error("PDF release package did not resolve the exact version");
     }
 
     const lockText = readFileSync(join(workspace, "bun.lock"), "utf8");
@@ -163,6 +194,13 @@ for (const scenarioLineEnding of ["\n", "\r\n"]) {
       ] !== version
     ) {
       throw new Error("MCP release lock did not resolve the exact version");
+    }
+    if (
+      releasedLock.workspaces?.["packages/document-pdf"]?.dependencies?.[
+        "@stll/anonymize"
+      ] !== version
+    ) {
+      throw new Error("PDF release lock did not resolve the exact version");
     }
 
     const sentinelRange = "SENTINEL_DO_NOT_MUTATE";
@@ -249,7 +287,7 @@ function writeFixture() {
       pkg.dependencies = { "@stll/anonymize": `^${staleVersion}` };
     }
     if (file === "packages/document-pdf/package.json") {
-      pkg.dependencies = { "@stll/anonymize": `^${staleVersion}` };
+      pkg.dependencies = { "@stll/anonymize": "workspace:*" };
     }
     if (file === "packages/mcp/package.json") {
       pkg.dependencies = {
@@ -341,7 +379,7 @@ function bunLockFixture() {
         "packages/document-pdf": {
           name: "@stll/anonymize-pdf",
           version,
-          dependencies: { "@stll/anonymize": `^${staleVersion}` },
+          dependencies: { "@stll/anonymize": "workspace:*" },
         },
         "packages/mcp": {
           name: "@stll/anonymize-mcp",
