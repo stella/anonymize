@@ -1706,7 +1706,7 @@ fn inline_field_label_start(
 fn unconfigured_label_is_acronym(text: &str, start: usize) -> bool {
   let Some(label) = text
     .get(start..)
-    .and_then(|tail| tail.split(|ch| matches!(ch, ':' | '：')).next())
+    .and_then(|tail| tail.split([':', '：']).next())
   else {
     return false;
   };
@@ -2483,10 +2483,10 @@ mod tests {
   #[test]
   fn unconfigured_acronym_label_after_nbsp_preserves_prefix_boundary() {
     let text = "Janem Zorbax\u{a0}IČO： 12345678";
-    let (start, may_preserve_prefix) =
-      inline_field_label_start(text, &[]).expect("field label boundary");
-    assert_eq!(text.get(..start).unwrap().trim_end(), "Janem Zorbax");
-    assert!(may_preserve_prefix);
+    assert_eq!(
+      inline_field_label_start(text, &[]),
+      Some(("Janem Zorbax".len(), true))
+    );
   }
 
   fn organization_role_trigger_data(
