@@ -173,7 +173,9 @@ const assetUrl = (fileName: string): URL =>
 const resolveBinding = (
   options?: WasmBindingOptions,
 ): Promise<NativeAnonymizeBinding> =>
-  options?.binding ? Promise.resolve(options.binding) : getBinding();
+  options?.binding
+    ? Promise.resolve(toNativeAnonymizeBinding(options.binding))
+    : getBinding();
 
 const toPackageBytes = async (
   source: PreparedPackageSource,
