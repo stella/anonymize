@@ -7,16 +7,65 @@
     "en": ["in witness whereof"]
   },
   "formFieldLabels": {
-    "en": ["name", "title", "position", "date", "signature", "address"],
-    "cs": ["jméno", "příjmení", "název", "funkce", "datum", "podpis", "adresa"],
-    "de": ["name", "funktion", "datum", "unterschrift", "adresse"],
+    "en": [
+      "name",
+      "title",
+      "position",
+      "date",
+      "signature",
+      "address",
+      "tax id",
+      "tax identification number",
+      "vat id",
+      "vat",
+      "social security number",
+      "ein",
+      "fein",
+      "ssn"
+    ],
+    "cs": [
+      "jméno",
+      "příjmení",
+      "název",
+      "funkce",
+      "datum",
+      "podpis",
+      "adresa",
+      "titul",
+      "ičo",
+      "dič"
+    ],
+    "de": [
+      "name",
+      "funktion",
+      "datum",
+      "unterschrift",
+      "adresse",
+      "hra",
+      "hrb",
+      "steuernummer",
+      "steuer-nr.",
+      "idnr.",
+      "idnr",
+      "ust-idnr.",
+      "ust-idnr"
+    ],
     "es": ["nombre", "cargo", "fecha", "firma"],
     "fr": ["nom", "fonction", "date", "signature"],
     "it": ["nome", "qualifica", "data", "firma"],
     "nl": ["naam", "functie", "datum", "handtekening"],
     "pl": ["imię", "nazwisko", "stanowisko", "data", "podpis"],
     "pt": ["nome", "cargo", "data", "assinatura"],
-    "sk": ["meno", "priezvisko", "funkcia", "dátum", "podpis"]
+    "sk": [
+      "meno",
+      "priezvisko",
+      "funkcia",
+      "dátum",
+      "podpis",
+      "titul",
+      "ičo",
+      "dič"
+    ]
   },
   "signatureStampPhrases": {
     "en": ["digitally signed by", "digitally signed"],

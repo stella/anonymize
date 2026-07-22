@@ -59,17 +59,32 @@ describe("person trigger extraction stops at the name run", () => {
   });
 
   test("multi-word acronym label stays out of the person prefix", async () => {
-    const persons = personTexts(
-      await detect("Pan Jane Roe VAT ID: 123, on site"),
-    );
-    expect(persons).toContain("Jane Roe");
-    expect(persons.some((person) => person.includes("VAT"))).toBe(false);
+    for (const label of ["VAT ID", "VAT"]) {
+      const persons = personTexts(
+        await detect(`Pan Jane Roe ${label}: 123, on site`),
+      );
+      expect(persons).toContain("Jane Roe");
+      expect(persons.some((person) => person.includes("VAT"))).toBe(false);
+    }
   });
 
   test("multi-word acronym label preserves an all-caps person", async () => {
     const persons = personTexts(await detect("Pan JOHN DOE VAT ID: 123"));
     expect(persons).toContain("JOHN DOE");
     expect(persons.some((person) => person.includes("VAT"))).toBe(false);
+  });
+
+  test("German registry and tax labels stay out of person spans", async () => {
+    for (const label of ["HRB: 1234", "USt-IdNr.: DE123456789"]) {
+      const persons = personTexts(
+        await detectNative(
+          { ...baseConfig, languages: ["de"] },
+          `Geschäftsführer Hans Müller ${label}, on site`,
+        ),
+      );
+      expect(persons).toContain("Hans Müller");
+      expect(persons.some((person) => person.includes(label))).toBe(false);
+    }
   });
 
   test("multi-word name: Pan Jan Novák je tady.", async () => {

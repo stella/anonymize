@@ -39,6 +39,23 @@ const personTexts = async (text: string): Promise<string[]> => {
   return entities.filter((e) => e.label === "person").map((e) => e.text);
 };
 
+const personTextsForLanguages = async (
+  text: string,
+  languages: string[],
+): Promise<string[]> => {
+  cachedDictionaries ??= await loadTestDictionaries();
+  const entities = await detectNative(
+    {
+      ...CONFIG,
+      dictionaries: cachedDictionaries,
+      languages,
+      nameCorpusLanguages: languages,
+    },
+    text,
+  );
+  return entities.filter((e) => e.label === "person").map((e) => e.text);
+};
+
 describe("person span stops before form-field labels", () => {
   test("Czech regression: name does not absorb following Jméno:", async () => {
     const persons = await personTexts(
@@ -59,18 +76,92 @@ describe("person span stops before form-field labels", () => {
     expect(persons).toContain("Jane Roe");
     expect(persons.some((person) => person.includes("VAT"))).toBe(false);
   });
+
+  test("resolved person span stops before an English tax acronym", async () => {
+    const persons = await personTextsForLanguages("Jane Roe EIN: 12-3456789", [
+      "en",
+    ]);
+    expect(persons).toContain("Jane Roe");
+    expect(persons.some((person) => person.includes("EIN"))).toBe(false);
+  });
+
+  test("all-caps surname before a colon stays redacted", async () => {
+    const persons = await personTexts("Pan JANE DOE: authorized signer");
+    expect(persons).toContain("JANE DOE");
+  });
 });
 
 describe("trailing role trigger does not emit field-label values as people", () => {
   test("Czech regression: IČO after ředitelem is not a person", async () => {
-    const persons = await personTexts(
+    const persons = await personTextsForLanguages(
       [
         "zastoupená prof. MUDr. Markem Svobodou, Ph.D., ředitelem",
         "IČO: 00209805, DIČ: CZ00209805",
       ].join("\n"),
+      ["cs"],
     );
     expect(persons.some((p) => /^IČO:?$/u.test(p.trim()))).toBe(false);
     expect(persons.some((p) => p.includes("Markem Svobodou"))).toBe(true);
+  });
+
+  test("Czech acronym label permits whitespace before its colon", async () => {
+    const persons = await personTextsForLanguages(
+      [
+        "zastoupená prof. MUDr. Markem Svobodou, Ph.D., ředitelem",
+        "IČO : 00209805, DIČ : CZ00209805",
+      ].join("\n"),
+      ["cs"],
+    );
+    expect(persons.some((p) => /^IČO:?$/u.test(p.trim()))).toBe(false);
+    expect(persons.some((p) => p.includes("Markem Svobodou"))).toBe(true);
+  });
+
+  test("Slovak IČO after a role is not a person", async () => {
+    const persons = await personTextsForLanguages(
+      "zastúpená Janou Novákovou, konateľkou\nIČO: 00209805, DIČ: SK00209805",
+      ["sk"],
+    );
+    expect(persons.some((p) => /^IČO:?$/u.test(p.trim()))).toBe(false);
+    expect(persons.some((p) => p.includes("Janou Novákovou"))).toBe(true);
+  });
+
+  test("Czech and Slovak surname fields after roles are not people", async () => {
+    const cases = [
+      {
+        language: "cs",
+        text: "zastoupená Janou Novákovou, ředitelkou\nPříjmení: Nováková",
+        label: "Příjmení",
+      },
+      {
+        language: "sk",
+        text: "zastúpená Janou Novákovou, konateľkou\nPriezvisko: Nováková",
+        label: "Priezvisko",
+      },
+    ] as const;
+    for (const { label, language, text } of cases) {
+      const persons = await personTextsForLanguages(text, [language]);
+      expect(persons.some((person) => person.includes(label))).toBe(false);
+      expect(persons.some((person) => person.includes("Janou Novákovou"))).toBe(
+        true,
+      );
+    }
+  });
+
+  test("Czech contact-party role is not emitted as a person", async () => {
+    const persons = await personTextsForLanguages(
+      "Kontaktní osoba Poskytovatele:\nxxx",
+      ["cs"],
+    );
+    expect(persons).not.toContain("Poskytovatele");
+  });
+
+  test("English identity field after a role is not a person", async () => {
+    const persons = await personTextsForLanguages(
+      "signed by Jane Roe, director\nSocial Security Number: 12-3456789, USA",
+      ["en"],
+    );
+    expect(persons).not.toContain("Social Security Number");
+    expect(persons.some((p) => p.includes("Jane Roe"))).toBe(true);
   });
 
   test("role prefix still extracts the following person", async () => {

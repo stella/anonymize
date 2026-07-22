@@ -35,6 +35,16 @@ struct SignatureDetection {
   image_stub_prefixes: OrderedMap<Value>,
 }
 
+pub(super) fn form_field_labels(
+  selected: Option<&[String]>,
+) -> Result<Vec<String>, AssembleError> {
+  let data: SignatureDetection =
+    stella_anonymize_core::assemble::parse_data_file(
+      "signature-detection.json",
+    )?;
+  Ok(language_keyed_terms(&data.form_field_labels, selected))
+}
+
 /// # Errors
 ///
 /// Returns [`AssembleError`] when `signature-detection.json` fails to parse.
@@ -70,7 +80,7 @@ pub(super) fn build_signature_data(
 mod tests {
   #![allow(clippy::unwrap_used)]
 
-  use super::build_signature_data;
+  use super::{build_signature_data, form_field_labels};
 
   #[test]
   fn scoped_packages_keep_cross_locale_signing_software_stamps() {
@@ -84,5 +94,16 @@ mod tests {
     );
     assert!(data.form_field_labels.iter().any(|label| label == "jméno"));
     assert!(!data.form_field_labels.iter().any(|label| label == "name"));
+  }
+
+  #[test]
+  fn german_registry_labels_share_the_scoped_field_source() {
+    let german = form_field_labels(Some(&[String::from("de")])).unwrap();
+    let english = form_field_labels(Some(&[String::from("en")])).unwrap();
+
+    assert!(german.iter().any(|label| label == "hrb"));
+    assert!(german.iter().any(|label| label == "ust-idnr."));
+    assert!(!english.iter().any(|label| label == "hrb"));
+    assert!(english.iter().any(|label| label == "vat"));
   }
 }
