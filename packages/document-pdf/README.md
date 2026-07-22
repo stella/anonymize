@@ -78,5 +78,6 @@ document-profile capability; PDF inspection remains available through the
 byte-oriented core runtimes.
 
 `rewritePdfRasterFromDetections` is the advanced rewrite-only seam for trusted
-adapters that already ran detection. Its name and certificate deliberately do
-not imply detection or PII cleanliness.
+adapters that already ran detection. Detection spans must be strictly ordered
+and non-overlapping. Its name and certificate deliberately do not imply
+detection or PII cleanliness.

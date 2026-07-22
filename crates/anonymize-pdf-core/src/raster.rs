@@ -347,6 +347,8 @@ fn detection_pixel_rects(
     ));
   }
   let mut mapped = BTreeSet::new();
+  let mut glyph_cursor = 0usize;
+  let mut previous_detection_end = 0u32;
   for detection in &page.detections {
     if !boundaries.contains(&detection.start)
       || !boundaries.contains(&detection.end)
@@ -374,6 +376,13 @@ fn detection_pixel_rects(
         "PDF raster detection span is empty",
       ));
     }
+    if detection.start < previous_detection_end {
+      return Err(error(
+        PdfRasterErrorCode::InvalidContract,
+        "PDF raster detections must be ordered and non-overlapping",
+      ));
+    }
+    previous_detection_end = detection.end;
     let selected_units = required_units.get(start..end).ok_or_else(|| {
       error(
         PdfRasterErrorCode::InvalidContract,
@@ -388,9 +397,17 @@ fn detection_pixel_rects(
     })?;
     let mut covered = vec![false; coverage_len];
     let mut regions = 0usize;
-    for glyph in &page.observation.glyphs {
-      if glyph.start >= detection.end || glyph.end <= detection.start {
-        continue;
+    while page
+      .observation
+      .glyphs
+      .get(glyph_cursor)
+      .is_some_and(|glyph| glyph.end <= detection.start)
+    {
+      glyph_cursor = glyph_cursor.saturating_add(1);
+    }
+    for glyph in page.observation.glyphs.iter().skip(glyph_cursor) {
+      if glyph.start >= detection.end {
+        break;
       }
       let glyph_start = usize::try_from(glyph.start)
         .map_err(|_| {
@@ -1217,6 +1234,63 @@ mod tests {
     assert_eq!(inspection.risks.metadata_stream_count, 0);
     assert_eq!(inspection.risks.embedded_file_count, 0);
     assert_eq!(inspection.risks.annotation_count, 0);
+  }
+
+  #[test]
+  fn maps_ordered_non_overlapping_detections_with_one_glyph_sweep() {
+    let pixels = vec![255; 17 * 22 * 3];
+    let mut contract = request(&pixels);
+    let Some(page) = contract.pages.first_mut() else {
+      return;
+    };
+    page.observation.text = "Alice Bob".to_owned();
+    page.observation.glyphs.push(PdfGlyphObservation {
+      start: 6,
+      end: 9,
+      bounds: PdfRect {
+        left: 216.0,
+        bottom: 396.0,
+        right: 288.0,
+        top: 540.0,
+      },
+      source: crate::PdfGlyphSource::Ocr,
+    });
+    page
+      .detections
+      .push(PdfRasterDetection { start: 6, end: 9 });
+
+    let rects = detection_pixel_rects(page);
+
+    assert!(rects.is_ok());
+    assert_eq!(rects.map(|value| value.len()), Ok(2));
+  }
+
+  #[test]
+  fn rejects_overlapping_or_out_of_order_detections() {
+    let pixels = vec![255; 17 * 22 * 3];
+    for detections in [
+      vec![
+        PdfRasterDetection { start: 0, end: 5 },
+        PdfRasterDetection { start: 4, end: 5 },
+      ],
+      vec![
+        PdfRasterDetection { start: 4, end: 5 },
+        PdfRasterDetection { start: 0, end: 1 },
+      ],
+    ] {
+      let mut contract = request(&pixels);
+      let Some(page) = contract.pages.first_mut() else {
+        return;
+      };
+      page.detections = detections;
+
+      assert_eq!(
+        detection_pixel_rects(page)
+          .err()
+          .map(|failure| failure.code()),
+        Some(PdfRasterErrorCode::InvalidContract),
+      );
+    }
   }
 
   #[test]

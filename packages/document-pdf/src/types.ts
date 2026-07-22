@@ -90,6 +90,7 @@ export type PdfRasterPage = {
   heightPixels: number;
   /** Lowercase SHA-256 of this page's exact opaque, row-packed RGB8 bytes. */
   pixelSha256: string;
+  /** Strictly ordered, non-overlapping UTF-16 spans. */
   detections: readonly PdfRasterDetection[];
 };
 
