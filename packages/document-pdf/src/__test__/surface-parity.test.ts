@@ -9,6 +9,7 @@ import {
 import {
   anonymizePdfRaster,
   inspectPdf,
+  renderPdfWithPopplerTesseract,
   rewritePdfRasterFromDetections,
 } from "../index";
 
@@ -16,6 +17,7 @@ const nodeSurface: Partial<Record<CapabilitySurfaceId, unknown>> = {
   "document.pdf.inspect": inspectPdf,
   "document.pdf.anonymize-raster": anonymizePdfRaster,
   "document.pdf.rewrite-raster": rewritePdfRasterFromDetections,
+  "document.pdf.observe-raster-local": renderPdfWithPopplerTesseract,
 };
 
 describe("PDF inspection runtime surface parity", () => {
@@ -56,5 +58,16 @@ describe("PDF inspection runtime surface parity", () => {
       "function",
     );
     expect(typeof nodeSurface["document.pdf.rewrite-raster"]).toBe("function");
+  });
+
+  test("the local raster observer is explicitly Node-only", () => {
+    const capability = CAPABILITY_SURFACES.find(
+      ({ id }) => id === "document.pdf.observe-raster-local",
+    );
+    expect(capability?.profile).toBe("nodeLocal");
+    expect(CAPABILITY_PARITY_PROFILES.nodeLocal).toEqual(["node"]);
+    expect(typeof nodeSurface["document.pdf.observe-raster-local"]).toBe(
+      "function",
+    );
   });
 });

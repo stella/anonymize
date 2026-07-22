@@ -47,6 +47,27 @@ anonymize -d key.json reply.txt
 Run `anonymize --help` for the full reference, including the
 `--json` schema and exit codes.
 
+## PDF workflows
+
+PDF anonymization uses locally installed Poppler and Tesseract, runs one
+explicit OCR language pack, and writes a verified fresh image-only document.
+It never overlays black boxes on retained source content and refuses to
+overwrite the input, a symlink input, or an existing output.
+
+```bash
+anonymize pdf anonymize contract.pdf \
+  --output contract.anonymized.pdf \
+  --ocr-language eng \
+  --languages en \
+  --countries GB \
+  --json
+```
+
+The raster output intentionally loses searchability, accessibility, links,
+forms, signatures, metadata, attachments, and other interactive PDF features.
+Its certificate verifies structure and rewritten pixels but cannot prove
+perfect OCR or detector recall; `piiCleanGuaranteed` is always false.
+
 ## DOCX workflows
 
 DOCX anonymization preserves supported document structure and stores reversible

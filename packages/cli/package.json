@@ -38,7 +38,8 @@
   "dependencies": {
     "@stll/anonymize": "^2.3.0",
     "@stll/anonymize-data": "^0.0.6",
-    "@stll/anonymize-docx": "^2.3.0"
+    "@stll/anonymize-docx": "^2.3.0",
+    "@stll/anonymize-pdf": "^2.3.0"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",

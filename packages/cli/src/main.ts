@@ -19,6 +19,7 @@ import type {
   NativePipelineBuildOptions,
   OperatorType,
   PipelineConfig,
+  PreparedNativePipeline,
 } from "@stll/anonymize";
 import { CAPABILITY_MANIFEST } from "@stll/anonymize/capabilities";
 import {
@@ -43,6 +44,11 @@ import {
   type DocxPipelineRequest,
   runDocxCommand,
 } from "./docx";
+import {
+  type PdfCliPipeline,
+  type PdfPipelineRequest,
+  runPdfCommand,
+} from "./pdf";
 
 /**
  * The pipeline functions the CLI needs, backed by the
@@ -279,6 +285,7 @@ type CliRedactionResult = {
 
 type NativeCliPipeline = DocxCliPipeline & {
   warmLazyRegex?: () => void;
+  redactTextWithCallerDetections: PreparedNativePipeline["redactTextWithCallerDetections"];
   redactText: (
     fullText: string,
     operators?: NativeOperatorConfig,
@@ -888,6 +895,19 @@ const dispatch = async (engine: CliEngine): Promise<void> => {
           await buildPipelineConfig(options, engine.loadDictionaries),
         );
       },
+    });
+    return;
+  }
+  if (argv.at(0) === "pdf") {
+    await runPdfCommand({
+      argv: argv.slice(1),
+      preparePipeline: async (
+        request: PdfPipelineRequest,
+      ): Promise<PdfCliPipeline> =>
+        prepareNativeCliPipeline(
+          engine.api,
+          await buildPipelineConfig(request.detection, engine.loadDictionaries),
+        ),
     });
     return;
   }

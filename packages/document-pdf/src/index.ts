@@ -293,6 +293,17 @@ export const anonymizePdfRaster = ({
 
 export { PDF_INSPECTION_ERROR_CODES } from "./types";
 export { PDF_RASTER_ERROR_CODES } from "./types";
+export {
+  PDF_LOCAL_PROVIDER_ERROR_CODES,
+  PdfLocalProviderError,
+  renderPdfWithPopplerTesseract,
+} from "./local-provider";
+export type {
+  LocalPdfRasterObservation,
+  LocalPdfRasterPage,
+  PdfLocalProviderErrorCode,
+  RenderPdfWithPopplerTesseractOptions,
+} from "./local-provider";
 export type {
   PdfGlyphObservation,
   PdfInspection,

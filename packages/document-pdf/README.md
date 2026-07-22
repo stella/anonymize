@@ -67,15 +67,42 @@ original pixels are absent rather than hidden underneath it. The tradeoff is
 intentional loss of searchability, accessibility, links, forms, signatures,
 and other interactive behavior.
 
-The package does not bundle or silently select a renderer or OCR engine. A
-provider's `complete` OCR assertion means every rendered page was submitted
+The package does not bundle renderer/OCR binaries or silently select a language.
+Its optional Node adapter invokes locally installed Poppler `pdftoppm` and
+Tesseract directly (without a shell), sequentially, in a private temporary
+directory with bounded output and timeouts. It renders and removes one page at a
+time so document-wide limits are enforced without first materializing every
+page raster. Callers select exactly one installed Tesseract language pack.
+
+```ts
+import {
+  anonymizePdfRaster,
+  renderPdfWithPopplerTesseract,
+} from "@stll/anonymize-pdf";
+
+const observed = await renderPdfWithPopplerTesseract({
+  document,
+  ocrLanguage: "eng",
+});
+const result = anonymizePdfRaster({
+  document,
+  pipeline,
+  provider: observed.provider,
+  pages: observed.pages,
+});
+```
+
+A provider's `complete` OCR assertion means every rendered page was submitted
 to that OCR engine; it is not a claim that OCR or PII detection has perfect
-recall. The returned certificate always says `piiCleanGuaranteed: false`:
+recall. OCR word boxes are conservatively redacted as whole regions when a
+selected span overlaps them. The returned certificate always says
+`piiCleanGuaranteed: false`:
 verification proves a fresh image-only structure and the requested destructive
 pixel rewrite, not perfect OCR or detector recall. Browser rendering is not
 part of this surface. Raster anonymization is a Node and Python
 document-profile capability; PDF inspection remains available through the
-byte-oriented core runtimes.
+byte-oriented core runtimes. The Poppler/Tesseract adapter is separately named
+as the Node-only `document.pdf.observe-raster-local` capability.
 
 `rewritePdfRasterFromDetections` is the advanced rewrite-only seam for trusted
 adapters that already ran detection. Detection spans must be strictly ordered

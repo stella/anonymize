@@ -1077,7 +1077,9 @@ describe("python binding parity", () => {
     () => {
       const python = runPythonParity([]);
       const expected = CAPABILITY_SURFACES.filter(({ profile }) =>
-        CAPABILITY_PARITY_PROFILES[profile].includes("python"),
+        CAPABILITY_PARITY_PROFILES[profile].some(
+          (runtime) => runtime === "python",
+        ),
       ).map(({ id }) => id);
 
       expect(python.surface_ids).toEqual(expected);

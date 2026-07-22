@@ -30,10 +30,11 @@ describe("capability manifest", () => {
     for (const surface of CAPABILITY_SURFACES) {
       expect(
         CAPABILITY_PARITY_PROFILES[surface.profile].length,
-      ).toBeGreaterThan(1);
+      ).toBeGreaterThan(0);
       expect(surfaceIds.has(surface.id)).toBe(false);
       surfaceIds.add(surface.id);
     }
+    expect(CAPABILITY_PARITY_PROFILES.nodeLocal).toEqual(["node"]);
   });
 
   test("round-trips as deterministic JSON", () => {

@@ -9,6 +9,7 @@ export type CapabilityRuntime = (typeof CAPABILITY_RUNTIMES)[number];
 export const CAPABILITY_PARITY_PROFILES = {
   core: CAPABILITY_RUNTIMES,
   local: ["node", "python"],
+  nodeLocal: ["node"],
   document: ["node", "python"],
 } as const satisfies Record<string, readonly CapabilityRuntime[]>;
 
@@ -38,6 +39,7 @@ export const CAPABILITY_SURFACES = [
   { id: "document.pdf.inspect", profile: "core" },
   { id: "document.pdf.anonymize-raster", profile: "document" },
   { id: "document.pdf.rewrite-raster", profile: "document" },
+  { id: "document.pdf.observe-raster-local", profile: "nodeLocal" },
 ] as const satisfies readonly {
   id: string;
   profile: CapabilityParityProfile;

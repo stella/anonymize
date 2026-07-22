@@ -55,6 +55,10 @@ export type PdfInspectionGap =
 
 export type PdfPageInspection = {
   pageIndex: number;
+  /** Effective visible width after page boxes, rotation, and UserUnit scaling. */
+  widthPoints: number;
+  /** Effective visible height after page boxes, rotation, and UserUnit scaling. */
+  heightPoints: number;
   annotationCount: number;
   observation: PdfPageObservation | null;
 };
