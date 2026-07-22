@@ -208,17 +208,19 @@ per-document detection passes. For the comparison to be fair, every library's
 own one-time cost must fall inside `init`, not be hidden at import time or folded
 into the per-document loop. What counts as init for each adapter:
 
-| Library    | Counted as init (one-time)                                                                      | Per document (cold/warm)       |
-| ---------- | ----------------------------------------------------------------------------------------------- | ------------------------------ |
-| stella     | load full bundled dictionaries (names, deny lists, cities), load native binding, build pipeline | `redactText` per doc           |
-| Presidio   | load the three spaCy models and build the analyzer/recognizer registry                          | `analyzer.analyze` per doc     |
-| scrubadub  | construct `Scrubber()` (instantiates its detectors)                                             | `iter_filth` per doc           |
-| redact-pii | load built-in pattern list + well-known-names, compile regexes (large name alternation)         | run compiled detectors per doc |
+| Library    | Counted as init (one-time)                                                                                | Per document (cold/warm)       |
+| ---------- | --------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| stella     | load language-scoped names and neutral dictionaries, load native binding, build one pipeline per language | `redactText` per doc           |
+| Presidio   | load the three spaCy models and build the analyzer/recognizer registry                                    | `analyzer.analyze` per doc     |
+| scrubadub  | construct `Scrubber()` (instantiates its detectors)                                                       | `iter_filth` per doc           |
+| redact-pii | load built-in pattern list + well-known-names, compile regexes (large name alternation)                   | run compiled detectors per doc |
 
-stella's dictionary load and binding load are the analogue of Presidio's model
-load, so they are timed inside `init` (`src/adapters/stella.ts`); earlier they
-happened in the adapter factory before the timer started, which understated
-stella's init. redact-pii's pattern/name-list load and regex compilation are
+stella's scoped dictionary load and binding load are the analogue of Presidio's
+model load, so they are timed inside `init` (`src/adapters/stella.ts`). Corpus
+documents declare language but not jurisdiction, so Stella loads only that
+language's name dictionaries and country-neutral non-name dictionaries; it
+does not guess national/city vocabularies from language. redact-pii's
+pattern/name-list load and regex compilation are
 likewise timed as init rather than left as a module-load side effect
 (`src/adapters/redact-pii.ts`). Python init is measured inside each Python
 process and excludes interpreter startup, which is reported separately in prose.
