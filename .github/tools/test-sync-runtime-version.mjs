@@ -24,6 +24,61 @@ let lineEnding = "\n";
 const version = "9.8.7";
 const staleVersion = "9.8.6";
 
+const releaseWorkflow = readFileSync(
+  join(repoRoot, ".github", "workflows", "release.yml"),
+  "utf8",
+);
+const releaseSyncCommands = [
+  ...releaseWorkflow.matchAll(/^\s+run: (bun run sync:version.*)$/gm),
+].map((match) => match[1]);
+if (
+  releaseSyncCommands.length === 0 ||
+  releaseSyncCommands.some(
+    (command) => command !== "bun run sync:version -- --release",
+  )
+) {
+  throw new Error(
+    "every release job must resolve workspace dependencies with sync:version -- --release",
+  );
+}
+
+const jobsStart = releaseWorkflow.indexOf("\njobs:\n");
+if (jobsStart === -1) {
+  throw new Error("release workflow has no jobs section");
+}
+const jobsText = releaseWorkflow.slice(jobsStart + "\njobs:\n".length);
+const jobHeaders = [...jobsText.matchAll(/^  ([A-Za-z0-9_-]+):\s*$/gm)];
+const releaseJobs = jobHeaders.map((header, index) => ({
+  name: header[1],
+  body: jobsText.slice(
+    header.index,
+    jobHeaders[index + 1]?.index ?? jobsText.length,
+  ),
+}));
+const npmPackingCommands = [
+  "npm pack ",
+  "node .github/tools/check-packlist.mjs",
+];
+const packingJobs = releaseJobs.filter(({ body }) =>
+  npmPackingCommands.some((command) => body.includes(command)),
+);
+if (packingJobs.length === 0) {
+  throw new Error("release workflow has no npm-packing jobs");
+}
+for (const { name, body } of packingJobs) {
+  const syncIndex = body.indexOf("run: bun run sync:version -- --release");
+  const packIndex = Math.min(
+    ...npmPackingCommands
+      .map((command) => body.indexOf(command))
+      .filter((index) => index !== -1),
+  );
+  if (syncIndex === -1 || syncIndex > packIndex) {
+    throw new Error(
+      `release job ${name} must resolve workspace dependencies before npm pack`,
+    );
+  }
+}
+
 const packageFiles = [
   "packages/anonymize/package.json",
   "packages/anonymize-darwin-arm64/package.json",
