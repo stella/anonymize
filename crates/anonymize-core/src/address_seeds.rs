@@ -285,9 +285,13 @@ impl PreparedAddressSeedData {
     seeds.sort_by(compare_seeds);
     let context_seed_count = seeds.len();
     let coverage = SeedCoverageIndex::new(seeds);
-    let mut added_state_seeds = Vec::new();
     // `find_iter` yields non-overlapping candidates in ascending order, so a
-    // postal seed added here cannot cover a later candidate.
+    // postal seed added here cannot cover a later candidate. State seeds are
+    // taken from immediately before their ZIP+4 candidate, so one added for
+    // an earlier candidate cannot cover or provide comma/whitespace-only
+    // context for a later candidate either. Keep the immutable context slice
+    // separate: the loop only appends State and PostalCode seeds, while the
+    // ZIP+4 fallback ignores both kinds.
     for found in self.postal_code_re.find_iter(full_text) {
       let start = found.start();
       let end = found.end();
@@ -305,7 +309,6 @@ impl PreparedAddressSeedData {
           start,
           end,
           seeds.get(..context_seed_count).unwrap_or_default(),
-          &added_state_seeds,
         )
       {
         continue;
@@ -316,15 +319,17 @@ impl PreparedAddressSeedData {
         continue;
       }
       if self.us_zip_plus_four_shape_re.is_match(text) {
-        let context = self.us_zip_plus_four_context(full_text, start, seeds);
+        let context = self.us_zip_plus_four_context(
+          full_text,
+          start,
+          seeds.get(..context_seed_count).unwrap_or_default(),
+        );
         if !context.has_context {
           continue;
         }
         if let Some(state_seed) = context.state_seed
           && !coverage.covers(state_seed.start, state_seed.end)
-          && !seed_covered(&added_state_seeds, state_seed.start, state_seed.end)
         {
-          added_state_seeds.push(state_seed.clone());
           seeds.push(state_seed);
         }
       }
@@ -343,18 +348,9 @@ impl PreparedAddressSeedData {
     start: usize,
     end: usize,
     sorted_seeds: &[Seed],
-    added_state_seeds: &[Seed],
   ) -> bool {
-    let max_byte_distance = PLAIN_POSTAL_CONTEXT_WINDOW.saturating_mul(4);
-    let range_start = start.saturating_sub(max_byte_distance);
-    let range_end = start.saturating_add(max_byte_distance);
-    let first = sorted_seeds.partition_point(|seed| seed.start < range_start);
-    let last = sorted_seeds.partition_point(|seed| seed.start <= range_end);
-    sorted_seeds
-      .get(first..last)
-      .unwrap_or_default()
+    seed_start_window(sorted_seeds, start, PLAIN_POSTAL_CONTEXT_WINDOW)
       .iter()
-      .chain(added_state_seeds)
       .any(|seed| {
         within_text_window(
           full_text,
@@ -445,20 +441,22 @@ impl PreparedAddressSeedData {
       };
     }
 
-    let has_context = seeds.iter().any(|seed| {
-      within_text_window(full_text, seed.start, start, US_ZIP_CONTEXT_WINDOW)
-        && match seed.kind {
-          SeedType::AddressTrigger => true,
-          SeedType::City => {
-            seed.end <= start
-              && full_text.get(seed.end..start).is_some_and(is_city_zip_gap)
+    let has_context = seed_start_window(seeds, start, US_ZIP_CONTEXT_WINDOW)
+      .iter()
+      .any(|seed| {
+        within_text_window(full_text, seed.start, start, US_ZIP_CONTEXT_WINDOW)
+          && match seed.kind {
+            SeedType::AddressTrigger => true,
+            SeedType::City => {
+              seed.end <= start
+                && full_text.get(seed.end..start).is_some_and(is_city_zip_gap)
+            }
+            SeedType::StreetWord => {
+              has_house_number_near_street_word(full_text, seed, self)
+            }
+            SeedType::PostalCode | SeedType::State => false,
           }
-          SeedType::StreetWord => {
-            has_house_number_near_street_word(full_text, seed, self)
-          }
-          SeedType::PostalCode | SeedType::State => false,
-        }
-    });
+      });
 
     UsZipPlusFourContext {
       state_seed: None,
@@ -627,6 +625,21 @@ fn compare_seeds(left: &Seed, right: &Seed) -> std::cmp::Ordering {
     .cmp(&right.start)
     .then_with(|| left.end.cmp(&right.end))
     .then_with(|| left.kind.cmp(&right.kind))
+}
+
+fn seed_start_window(
+  sorted_seeds: &[Seed],
+  start: usize,
+  max_units: usize,
+) -> &[Seed] {
+  // A Unicode scalar occupies at most four UTF-8 bytes per UTF-16 code unit,
+  // so a seed outside this byte window cannot pass `within_text_window`.
+  let max_byte_distance = max_units.saturating_mul(4);
+  let range_start = start.saturating_sub(max_byte_distance);
+  let range_end = start.saturating_add(max_byte_distance);
+  let first = sorted_seeds.partition_point(|seed| seed.start < range_start);
+  let last = sorted_seeds.partition_point(|seed| seed.start <= range_end);
+  sorted_seeds.get(first..last).unwrap_or_default()
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1786,6 +1799,74 @@ mod tests {
     }
 
     #[test]
+    fn bounded_seed_window_matches_linear_context_scan(
+      chars in proptest::collection::vec(any::<char>(), 0..256),
+      seed_indices in proptest::collection::vec(any::<usize>(), 0..256),
+      query_index in any::<usize>(),
+      max_units in 0_usize..512,
+    ) {
+      let full_text = chars.into_iter().collect::<String>();
+      let mut boundaries = full_text
+        .char_indices()
+        .map(|(index, _)| index)
+        .collect::<Vec<_>>();
+      boundaries.push(full_text.len());
+      let mut seeds = seed_indices
+        .into_iter()
+        .filter_map(|index| {
+          index
+            .checked_rem(boundaries.len())
+            .and_then(|bounded| boundaries.get(bounded))
+        })
+        .copied()
+        .map(|start| Seed {
+          kind: SeedType::City,
+          start,
+          end: start,
+          text: String::new(),
+        })
+        .collect::<Vec<_>>();
+      seeds.sort_by(compare_seeds);
+      let query = query_index
+        .checked_rem(boundaries.len())
+        .and_then(|bounded| boundaries.get(bounded))
+        .copied()
+        .unwrap_or_default();
+      let expected = seeds
+        .iter()
+        .filter(|seed| {
+          within_text_window(&full_text, seed.start, query, max_units)
+        })
+        .map(|seed| seed.start)
+        .collect::<Vec<_>>();
+      let actual = seed_start_window(&seeds, query, max_units)
+        .iter()
+        .filter(|seed| {
+          within_text_window(&full_text, seed.start, query, max_units)
+        })
+        .map(|seed| seed.start)
+        .collect::<Vec<_>>();
+
+      prop_assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn indexed_postal_collection_matches_legacy_scan(
+      fragments in proptest::collection::vec(any::<u8>(), 0..128),
+    ) {
+      let data = PreparedAddressSeedData::new(AddressSeedData::default())?;
+      let (full_text, initial_seeds) = postal_equivalence_fixture(&fragments);
+      let mut expected = initial_seeds.clone();
+      collect_postal_code_seeds_legacy(&data, &mut expected, &full_text);
+      expected.sort_by(compare_seeds);
+      let mut actual = initial_seeds;
+      data.collect_postal_code_seeds(&mut actual, &full_text);
+      actual.sort_by(compare_seeds);
+
+      prop_assert_eq!(actual, expected);
+    }
+
+    #[test]
     fn non_address_barrier_index_matches_linear_scan(
       ranges in proptest::collection::vec(
         (any::<u32>(), any::<u32>(), any::<bool>()),
@@ -1821,6 +1902,254 @@ mod tests {
           .has_barrier(gap_start, gap_end),
         expected,
       );
+    }
+  }
+
+  #[test]
+  #[ignore = "release-mode postal context scaling regression check"]
+  fn postal_context_collection_scales_for_dynamic_states_and_zip_plus_four()
+  -> Result<()> {
+    let data = PreparedAddressSeedData::new(AddressSeedData::default())?;
+    assert_postal_collection_scales(&data, PostalScalingCase::StateBacked);
+    assert_postal_collection_scales(
+      &data,
+      PostalScalingCase::StreetBackedWithoutState,
+    );
+    Ok(())
+  }
+
+  #[derive(Clone, Copy, Debug)]
+  enum PostalScalingCase {
+    StateBacked,
+    StreetBackedWithoutState,
+  }
+
+  impl PostalScalingCase {
+    fn fixture(self) -> &'static str {
+      match self {
+        Self::StateBacked => "MA 02101-1234.\n\n",
+        Self::StreetBackedWithoutState => "100 Main Street 02101-1234.\n\n",
+      }
+    }
+
+    fn initial_seeds(self, repeats: usize) -> Vec<Seed> {
+      match self {
+        Self::StateBacked => Vec::new(),
+        Self::StreetBackedWithoutState => {
+          let fixture_len = self.fixture().len();
+          (0..repeats)
+            .map(|repeat| {
+              let base = repeat.saturating_mul(fixture_len);
+              Seed {
+                kind: SeedType::StreetWord,
+                start: base.saturating_add(9),
+                end: base.saturating_add(15),
+                text: String::from("Street"),
+              }
+            })
+            .collect()
+        }
+      }
+    }
+  }
+
+  fn assert_postal_collection_scales(
+    data: &PreparedAddressSeedData,
+    case: PostalScalingCase,
+  ) {
+    let small = postal_collection_sample(data, case, 64 * 1024);
+    let large = postal_collection_sample(data, case, 1024 * 1024);
+    let samples = [&small, &large];
+    assert!(
+      large
+        .1
+        .as_nanos()
+        .saturating_mul(u128::try_from(small.0).unwrap_or(u128::MAX))
+        <= small
+          .1
+          .as_nanos()
+          .saturating_mul(u128::try_from(large.0).unwrap_or(u128::MAX))
+          .saturating_mul(3),
+      "{case:?} postal collection time per byte regressed: {samples:?}",
+    );
+    assert!(
+      large.1 <= std::time::Duration::from_millis(500),
+      "{case:?} postal collection exceeded 500 ms at 1 MiB: {samples:?}",
+    );
+  }
+
+  fn postal_collection_sample(
+    data: &PreparedAddressSeedData,
+    case: PostalScalingCase,
+    target_bytes: usize,
+  ) -> (usize, std::time::Duration) {
+    let fixture = case.fixture();
+    let repeats = target_bytes.div_ceil(fixture.len());
+    let full_text = fixture.repeat(repeats);
+    let initial_seeds = case.initial_seeds(repeats);
+    let expected_seed_count = repeats.saturating_mul(2);
+    let mut best = std::time::Duration::MAX;
+    for _ in 0..5 {
+      let mut seeds = initial_seeds.clone();
+      let start = Instant::now();
+      data.collect_postal_code_seeds(&mut seeds, &full_text);
+      best = best.min(start.elapsed());
+      assert_eq!(seeds.len(), expected_seed_count, "{case:?}");
+      std::hint::black_box(seeds);
+    }
+    (full_text.len(), best)
+  }
+
+  fn postal_equivalence_fixture(fragments: &[u8]) -> (String, Vec<Seed>) {
+    let mut full_text = String::new();
+    let mut seeds = Vec::new();
+    for fragment in fragments {
+      match fragment % 7 {
+        0 => full_text.push_str("MA 02101-1234 "),
+        1 => {
+          let base = full_text.len();
+          full_text.push_str("100 Main Street 02101-1234 ");
+          seeds.push(Seed {
+            kind: SeedType::StreetWord,
+            start: base.saturating_add(9),
+            end: base.saturating_add(15),
+            text: String::from("Street"),
+          });
+        }
+        2 => {
+          let base = full_text.len();
+          full_text.push_str("Boston, 02101 ");
+          seeds.push(Seed {
+            kind: SeedType::City,
+            start: base,
+            end: base.saturating_add(6),
+            text: String::from("Boston"),
+          });
+        }
+        3 => full_text.push_str("Notice 54321 "),
+        4 => full_text.push_str("CA, 94304-1050 "),
+        5 => {
+          let base = full_text.len();
+          full_text.push_str("100 Broad Road 94304-1050 ");
+          seeds.push(Seed {
+            kind: SeedType::StreetWord,
+            start: base.saturating_add(10),
+            end: base.saturating_add(14),
+            text: String::from("Road"),
+          });
+        }
+        _ => full_text.push_str("§§ 12345 — "),
+      }
+    }
+    (full_text, seeds)
+  }
+
+  fn collect_postal_code_seeds_legacy(
+    data: &PreparedAddressSeedData,
+    seeds: &mut Vec<Seed>,
+    full_text: &str,
+  ) {
+    for found in data.postal_code_re.find_iter(full_text) {
+      let start = found.start();
+      let end = found.end();
+      let text = found.as_str();
+      if !postal_boundaries(full_text, start, end) {
+        continue;
+      }
+      let is_plain_five_digit = is_plain_five_digit_postal_code(text);
+      if seed_covered(seeds, start, end) && !is_plain_five_digit {
+        continue;
+      }
+      if is_plain_five_digit
+        && !has_plain_postal_context_legacy(data, full_text, start, end, seeds)
+      {
+        continue;
+      }
+      if data.br_cep_shape_re.is_match(text)
+        && !data.has_br_cue_nearby(full_text, start, end)
+      {
+        continue;
+      }
+      if data.us_zip_plus_four_shape_re.is_match(text) {
+        let context =
+          us_zip_plus_four_context_legacy(data, full_text, start, seeds);
+        if !context.has_context {
+          continue;
+        }
+        if let Some(state_seed) = context.state_seed
+          && !seed_covered(seeds, state_seed.start, state_seed.end)
+        {
+          seeds.push(state_seed);
+        }
+      }
+      seeds.push(Seed {
+        kind: SeedType::PostalCode,
+        start,
+        end,
+        text: text.to_owned(),
+      });
+    }
+  }
+
+  fn has_plain_postal_context_legacy(
+    data: &PreparedAddressSeedData,
+    full_text: &str,
+    start: usize,
+    end: usize,
+    seeds: &[Seed],
+  ) -> bool {
+    seeds.iter().any(|seed| {
+      within_text_window(
+        full_text,
+        seed.start,
+        start,
+        PLAIN_POSTAL_CONTEXT_WINDOW,
+      ) && match seed.kind {
+        SeedType::AddressTrigger => true,
+        SeedType::City | SeedType::State => {
+          seed.end >= start && seed.start <= end.saturating_add(4)
+            || seed.end <= start
+              && full_text.get(seed.end..start).is_some_and(is_city_zip_gap)
+        }
+        SeedType::StreetWord => {
+          has_house_number_near_street_word(full_text, seed, data)
+        }
+        SeedType::PostalCode => false,
+      }
+    })
+  }
+
+  fn us_zip_plus_four_context_legacy(
+    data: &PreparedAddressSeedData,
+    full_text: &str,
+    start: usize,
+    seeds: &[Seed],
+  ) -> UsZipPlusFourContext {
+    if let Some(state_seed) = data.us_state_seed_before_zip(full_text, start) {
+      return UsZipPlusFourContext {
+        state_seed: Some(state_seed),
+        has_context: true,
+      };
+    }
+
+    let has_context = seeds.iter().any(|seed| {
+      within_text_window(full_text, seed.start, start, US_ZIP_CONTEXT_WINDOW)
+        && match seed.kind {
+          SeedType::AddressTrigger => true,
+          SeedType::City => {
+            seed.end <= start
+              && full_text.get(seed.end..start).is_some_and(is_city_zip_gap)
+          }
+          SeedType::StreetWord => {
+            has_house_number_near_street_word(full_text, seed, data)
+          }
+          SeedType::PostalCode | SeedType::State => false,
+        }
+    });
+
+    UsZipPlusFourContext {
+      state_seed: None,
+      has_context,
     }
   }
 
