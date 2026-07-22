@@ -145,7 +145,7 @@ export type PdfRasterObservedPageInput = {
   widthPixels: number;
   heightPixels: number;
   pixels: Uint8Array;
-  /** Optional digest-bound provider batch merged through Stella caller semantics. */
+  /** Optional digest-bound provider batch merged through stella caller semantics. */
   externalDetectionBatch?: ExternalDetectionBatch | string | undefined;
 };
 
@@ -163,7 +163,7 @@ export type AnonymizePdfRasterOptions = {
 const sha256 = (value: Uint8Array): string =>
   createHash("sha256").update(value).digest("hex");
 
-/** Run Stella detection, merge optional external detections, then rewrite pixels. */
+/** Run stella detection, merge optional external detections, then rewrite pixels. */
 export const anonymizePdfRaster = ({
   document,
   pipeline,

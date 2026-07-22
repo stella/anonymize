@@ -51,7 +51,7 @@ PDF. In particular, drawing an opaque rectangle over original page content is
 not redaction because the covered text or image can remain in the file.
 
 The provider-neutral raster surface accepts complete rendered/OCR page
-observations and opaque RGB8 pixels, runs Stella detection, merges optional
+observations and opaque RGB8 pixels, runs stella detection, merges optional
 digest-bound external detections, requires every selected span to map to glyph
 geometry, destructively fills those pixels, and writes a fresh image-only PDF
 without retaining source objects. It is currently an SDK contract: no

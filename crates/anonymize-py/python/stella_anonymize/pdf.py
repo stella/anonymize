@@ -153,7 +153,7 @@ def anonymize_pdf_raster(
     *,
     fill_rgb: Sequence[int] = (0, 0, 0),
 ) -> tuple[bytes, dict[str, Any]]:
-    """Run Stella detection, merge optional external detections, and rewrite pixels."""
+    """Run stella detection, merge optional external detections, and rewrite pixels."""
 
     if len(document) > PDF_DOCUMENT_MAX_BYTES:
         raise PdfRasterError(

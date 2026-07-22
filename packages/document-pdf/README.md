@@ -49,7 +49,7 @@ appropriate for untrusted files.
 ## Destructive raster anonymization
 
 `anonymizePdfRaster` accepts pages produced by an explicit renderer/OCR
-provider and creates a brand-new image-only PDF. It requires a prepared Stella
+provider and creates a brand-new image-only PDF. It requires a prepared stella
 pipeline, runs native detection over each page's observed text, merges an
 optional digest-bound `ExternalDetectionBatch`, and fails if any selected
 non-whitespace UTF-16 span is not completely mapped to observed glyph geometry.
