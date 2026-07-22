@@ -211,6 +211,8 @@ class PdfInspectionCoverage(TypedDict):
 
 class PdfPageInspection(TypedDict):
     pageIndex: int
+    widthPoints: float
+    heightPoints: float
     annotationCount: int
     observation: PdfPageObservation | None
 

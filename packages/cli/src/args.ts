@@ -55,6 +55,10 @@ DOCX workflows:
   Run "anonymize docx --help" for structure-preserving DOCX anonymization
   and restoration with encrypted session archives.
 
+PDF workflows:
+  Run "anonymize pdf --help" for destructive local Poppler/Tesseract PDF
+  anonymization into a verified fresh image-only output.
+
 Options:
   -o, --output <path>       Output file, or directory for batch
                             input (multiple files or a directory)

@@ -120,8 +120,8 @@ describe("full runtime surface parity", () => {
     test(`${runtime} exposes every surface in its parity profiles`, () => {
       const implemented: Partial<RuntimeSurface> = runtimeSurfaces[runtime];
       const expected = CAPABILITY_SURFACES.filter(
-        ({ profile }) =>
-          profile !== "document" &&
+        ({ id, profile }) =>
+          (profile === "core" || !id.startsWith("document.")) &&
           CAPABILITY_PARITY_PROFILES[profile].some(
             (candidate) => candidate === runtime,
           ),

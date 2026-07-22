@@ -33,6 +33,11 @@ describe("PDF inspection contract", () => {
     const inspection = inspectPdf(fixture("minimal-text.pdf"));
     expect(inspection.contractVersion).toBe(1);
     expect(inspection.pageCount).toBe(1);
+    expect(inspection.pages[0]).toMatchObject({
+      pageIndex: 0,
+      widthPoints: 612,
+      heightPoints: 792,
+    });
     expect(inspection.coverage).toEqual({
       status: "partial",
       gaps: ["page-content-not-observed"],

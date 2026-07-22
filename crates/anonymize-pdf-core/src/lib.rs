@@ -202,6 +202,10 @@ pub struct PdfInspectionCoverage {
 #[serde(rename_all = "camelCase")]
 pub struct PdfPageInspection {
   pub page_index: u32,
+  /// Effective visible width after page boxes, rotation, and `UserUnit` scaling.
+  pub width_points: f64,
+  /// Effective visible height after page boxes, rotation, and `UserUnit` scaling.
+  pub height_points: f64,
   pub annotation_count: u32,
   pub observation: Option<PdfPageObservation>,
 }
@@ -957,6 +961,8 @@ fn inspect_parsed(
       .and_then(|page| annotation_count(page, &document))?;
     page_inspections.push(PdfPageInspection {
       page_index,
+      width_points: page.width_points,
+      height_points: page.height_points,
       annotation_count,
       observation: observations
         .iter()
@@ -2719,6 +2725,9 @@ mod tests {
     let inspection = inspect_pdf(MINIMAL_PDF).unwrap();
     assert_eq!(inspection.contract_version, 1);
     assert_eq!(inspection.page_count, 1);
+    let page = inspection.pages.first().unwrap();
+    assert!((page.width_points - 612.0).abs() < f64::EPSILON);
+    assert!((page.height_points - 792.0).abs() < f64::EPSILON);
     assert_eq!(
       inspection.coverage.status,
       PdfInspectionCoverageStatus::Partial
