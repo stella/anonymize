@@ -1318,9 +1318,10 @@ fn risk_inventory(
   inventory.javascript_action_count = structure_risks.actions.javascript;
   inventory.unsupported_action_count = structure_risks.actions.unsupported;
   let mut scanned_nodes = 0usize;
-  for object in document.objects.values() {
+  for (object_id, object) in &document.objects {
     scan_risk_object(
       object,
+      Some(*object_id),
       document,
       &mut inventory,
       &mut structure_risks.attachments,
@@ -1343,6 +1344,7 @@ fn risk_inventory(
 
 fn scan_risk_object(
   object: &Object,
+  object_id: Option<lopdf::ObjectId>,
   document: &Document,
   inventory: &mut PdfRiskInventory,
   attachments: &mut AttachmentInventory,
@@ -1372,6 +1374,14 @@ fn scan_risk_object(
     ));
   }
   if let Some(dictionary) = object_dictionary(object) {
+    if name_deref_is(dictionary, b"Type", b"Filespec", document)
+      || dictionary.get(b"EF").is_ok()
+      || dictionary.get(b"RF").is_ok()
+    {
+      let file_spec =
+        object_id.map_or_else(|| object.clone(), Object::Reference);
+      validate_file_spec(&file_spec, document, attachments)?;
+    }
     validate_associated_files(dictionary, document, attachments, "object")?;
     if dictionary.get(b"FT").is_ok() {
       increment(&mut inventory.acro_form_field_count);
@@ -1393,6 +1403,7 @@ fn scan_risk_object(
     for (_, value) in dictionary {
       scan_risk_object(
         value,
+        None,
         document,
         inventory,
         attachments,
@@ -1405,6 +1416,7 @@ fn scan_risk_object(
     for value in values {
       scan_risk_object(
         value,
+        None,
         document,
         inventory,
         attachments,
@@ -3251,6 +3263,37 @@ mod tests {
     let mut document = Document::load_mem(MINIMAL_PDF).unwrap();
     let (file_spec_id, _) = add_untyped_attachment(&mut document);
     set_embedded_file_name_tree(&mut document, file_spec_id);
+
+    let inspection = inspect_document(&mut document);
+
+    assert_eq!(inspection.risks.embedded_file_count, 1);
+  }
+
+  #[test]
+  fn inventories_unreferenced_file_spec_without_stream_type() {
+    let mut document = Document::load_mem(MINIMAL_PDF).unwrap();
+    add_untyped_attachment(&mut document);
+
+    let inspection = inspect_document(&mut document);
+
+    assert_eq!(inspection.risks.embedded_file_count, 1);
+  }
+
+  #[test]
+  fn inventories_inline_file_spec_on_an_arbitrary_object() {
+    let mut document = Document::load_mem(MINIMAL_PDF).unwrap();
+    let payload_id = document.add_object(Object::Stream(lopdf::Stream::new(
+      Dictionary::new(),
+      b"inline attachment".to_vec(),
+    )));
+    let mut embedded_files = Dictionary::new();
+    embedded_files.set("F", Object::Reference(payload_id));
+    let mut file_spec = Dictionary::new();
+    file_spec.set("EF", Object::Dictionary(embedded_files));
+    document.add_object(lopdf::dictionary! {
+      "Type" => "CustomOwner",
+      "Payload" => Object::Dictionary(file_spec),
+    });
 
     let inspection = inspect_document(&mut document);
 
