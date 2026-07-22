@@ -21,9 +21,10 @@ const nodeDocumentSurface: Partial<Record<CapabilitySurfaceId, unknown>> = {
 };
 
 describe("DOCX runtime surface parity", () => {
-  test("Node exposes every document-profile surface", () => {
+  test("Node exposes every DOCX surface in its parity profiles", () => {
     const expected = CAPABILITY_SURFACES.filter(
-      ({ profile }) =>
+      ({ id, profile }) =>
+        id.startsWith("document.docx.") &&
         profile === "document" &&
         CAPABILITY_PARITY_PROFILES[profile].includes("node"),
     );

@@ -14,6 +14,18 @@ const nodeSurface: Partial<Record<CapabilitySurfaceId, unknown>> = {
 };
 
 describe("PDF inspection runtime surface parity", () => {
+  test("Node exposes every PDF surface in its parity profiles", () => {
+    const expected = CAPABILITY_SURFACES.filter(
+      ({ id, profile }) =>
+        id.startsWith("document.pdf.") &&
+        CAPABILITY_PARITY_PROFILES[profile].includes("node"),
+    );
+
+    for (const { id } of expected) {
+      expect(typeof nodeSurface[id]).toBe("function");
+    }
+  });
+
   test("PDF inspection is a core capability exposed by Node", () => {
     const capability = CAPABILITY_SURFACES.find(
       ({ id }) => id === "document.pdf.inspect",
