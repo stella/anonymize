@@ -145,6 +145,22 @@ afterEach(async () => {
 });
 
 void describe("durable MCP sessions", () => {
+  void test("rejects a bare durable store instead of silently using memory sessions", async () => {
+    const paths = await createStorePaths();
+    const store = await createStore(paths);
+    const scope = await PathScope.create([paths.root]);
+
+    expect(
+      () =>
+        new LocalAnonymizeService(
+          scope,
+          store as unknown as ConstructorParameters<
+            typeof LocalAnonymizeService
+          >[1],
+        ),
+    ).toThrow("requires { durableSessions }");
+  });
+
   void test("restores text across server restarts without plaintext archives", async () => {
     const paths = await createStorePaths();
     const input = join(paths.root, "input.txt");

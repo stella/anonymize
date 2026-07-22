@@ -583,14 +583,13 @@ export class LocalAnonymizeService {
   readonly #faults: LocalAnonymizeServiceFaults;
   readonly #pdfProvider: LocalPdfProviderConfiguration;
 
-  constructor(
-    scope: PathScope,
-    {
-      durableSessions,
-      faults = {},
-      pdfProvider = {},
-    }: LocalAnonymizeServiceOptions = {},
-  ) {
+  constructor(scope: PathScope, options: LocalAnonymizeServiceOptions = {}) {
+    if (options instanceof DurableSessionStore) {
+      throw new TypeError(
+        "LocalAnonymizeService requires { durableSessions } as its second argument",
+      );
+    }
+    const { durableSessions, faults = {}, pdfProvider = {} } = options;
     this.#scope = scope;
     this.#durableSessions = durableSessions;
     this.#faults = faults;
