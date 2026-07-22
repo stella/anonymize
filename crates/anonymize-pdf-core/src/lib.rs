@@ -2411,6 +2411,11 @@ fn validate_file_spec(
       })
     })
     .transpose()?;
+  if embedded_files.is_some_and(Dictionary::is_empty) {
+    return Err(invalid_document(
+      "PDF attachment EF must contain at least one payload",
+    ));
+  }
   if !has_file_name && embedded_files.is_none() {
     return Err(invalid_document(
       "PDF file specifications must declare a file name or EF payload",
@@ -3476,6 +3481,9 @@ mod tests {
       Object::Dictionary(lopdf::dictionary! { "S" => "Launch" }),
       Object::Dictionary(
         lopdf::dictionary! { "F" => Object::Array(Vec::new()) },
+      ),
+      Object::Dictionary(
+        lopdf::dictionary! { "EF" => Object::Dictionary(Dictionary::new()) },
       ),
     ] {
       let mut document = Document::load_mem(MINIMAL_PDF).unwrap();
