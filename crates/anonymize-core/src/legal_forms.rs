@@ -496,9 +496,16 @@ fn token_before(text: &str, pos: usize) -> Option<Token<'_>> {
       end = prev_start;
       continue;
     }
-    // Jurisdiction parentheticals such as "(UK)" / "(US)" sit between the
-    // firm name and the legal-form suffix; skip the parens like commas.
-    if is_inter_token_space(ch) || matches!(ch, ',' | ';' | '(' | ')') {
+    if ch == ')' {
+      // Skip only short jurisdiction markers such as "(UK)" / "(US)" that
+      // sit between the firm name and the legal-form suffix. Broader
+      // parentheticals ("Licensor (Wells Fargo Bank, N.A.)") still stop the
+      // walk so the role word outside the paren is not absorbed.
+      let open_start = jurisdiction_parenthetical_open(text, prev_start)?;
+      end = open_start;
+      continue;
+    }
+    if is_inter_token_space(ch) || matches!(ch, ',' | ';') {
       end = prev_start;
       continue;
     }
@@ -533,6 +540,34 @@ fn comma_before_soft_wrap(text: &str, newline_start: usize) -> bool {
     return ch == ',';
   }
   false
+}
+
+fn jurisdiction_parenthetical_open(
+  text: &str,
+  close_paren_start: usize,
+) -> Option<usize> {
+  let mut scan = close_paren_start;
+  let mut letter_count = 0_usize;
+  while let Some((prev_start, ch)) = previous_char(text, scan) {
+    if ch == '(' {
+      return (letter_count > 0).then_some(prev_start);
+    }
+    if is_inter_token_space(ch) {
+      scan = prev_start;
+      continue;
+    }
+    // Jurisdiction markers are short uppercase codes (UK, US, LLP offices).
+    if !ch.is_ascii_uppercase() {
+      return None;
+    }
+    letter_count = letter_count.saturating_add(1);
+    // Cap at a few letters so "(Wells Fargo...)" never qualifies.
+    if letter_count > 3 {
+      return None;
+    }
+    scan = prev_start;
+  }
+  None
 }
 
 const fn is_inter_token_space(ch: char) -> bool {
@@ -2957,6 +2992,47 @@ mod tests {
     assert!(
       texts.iter().any(|candidate| candidate == text),
       "expected full firm span, got {texts:?}"
+    );
+  }
+
+  #[test]
+  fn role_word_outside_bank_parenthetical_is_not_absorbed() {
+    // Skipping every "(" / ")" as a separator used to extend
+    // "Wells Fargo Bank, N.A." leftward into "Licensor (...)".
+    let data = PreparedLegalFormData::new(LegalFormData {
+      suffixes: vec![String::from("N.A.")],
+      ..LegalFormData::default()
+    });
+    let text = "account designated by Licensor (Wells Fargo Bank, N.A.)";
+    let suffix = "N.A.";
+    let suffix_start = text.find(suffix).expect("suffix present");
+    let suffix_end = suffix_start.saturating_add(suffix.len());
+    let found = SearchMatch::Literal {
+      pattern: 0,
+      start: u32::try_from(suffix_start).unwrap(),
+      end: u32::try_from(suffix_end).unwrap(),
+    };
+    let texts: Vec<String> = process_legal_form_matches(
+      &[found],
+      PatternSlice { start: 0, end: 1 },
+      text,
+      &data,
+    )
+    .unwrap()
+    .into_iter()
+    .map(|entity| entity.text)
+    .collect();
+    assert!(
+      texts
+        .iter()
+        .any(|candidate| candidate == "Wells Fargo Bank, N.A."),
+      "expected bank span only, got {texts:?}"
+    );
+    assert!(
+      texts
+        .iter()
+        .all(|candidate| !candidate.contains("Licensor")),
+      "role word must stay outside the org span: {texts:?}"
     );
   }
 
