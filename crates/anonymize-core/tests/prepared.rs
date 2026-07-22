@@ -935,6 +935,40 @@ fn address_context_large_document_output_digest_is_stable() {
     .redact_static_entities(&full_text, &OperatorConfig::default())
     .unwrap();
 
+  let address_text = "Praha 10, Vinohradská 2512/2a";
+  let expected_address_spans = full_text
+    .match_indices(address_text)
+    .map(|(start, text)| (start, start.saturating_add(text.len())))
+    .collect::<Vec<_>>();
+  let actual_address_spans = result
+    .resolved_entities
+    .iter()
+    .filter(|entity| entity.text == address_text)
+    .map(|entity| {
+      (
+        usize::try_from(entity.start).unwrap_or(usize::MAX),
+        usize::try_from(entity.end).unwrap_or(usize::MAX),
+      )
+    })
+    .collect::<Vec<_>>();
+
+  assert_eq!(result.resolved_entities.len(), 800);
+  assert_eq!(result.redaction.entity_count, 800);
+  assert_eq!(actual_address_spans, expected_address_spans);
+  assert_eq!(
+    result.redaction.redacted_text.matches("[ADDRESS_").count(),
+    800,
+  );
+  assert!(!result.redaction.redacted_text.contains(address_text));
+  assert_eq!(
+    result
+      .redaction
+      .redacted_text
+      .matches("The terms continue.")
+      .count(),
+    400,
+  );
+
   assert_eq!(
     static_redaction_digest(&result),
     "c43269315ab1014bc5754596ac55d68a65956c2a6b42582d8b7bd9b908d7fec2",

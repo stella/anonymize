@@ -58,30 +58,31 @@ struct ScanRange {
 }
 
 struct EntityProximityIndex<'a> {
-  entities: Vec<&'a PipelineEntity>,
-  prefix_max_ends: Vec<u32>,
+  by_start: Vec<&'a PipelineEntity>,
+  by_end: Vec<&'a PipelineEntity>,
 }
 
 struct NearbyEntities<'index, 'entity> {
   entities: &'index [&'entity PipelineEntity],
-  prefix_max_ends: &'index [u32],
   next: usize,
   minimum_end: u32,
+  maximum_start: u32,
+}
+
+#[cfg(test)]
+impl NearbyEntities<'_, '_> {
+  fn candidate_count(&self) -> usize {
+    self.entities.len()
+  }
 }
 
 impl<'entity> Iterator for NearbyEntities<'_, 'entity> {
   type Item = &'entity PipelineEntity;
 
   fn next(&mut self) -> Option<Self::Item> {
-    while self.next > 0 {
-      let current = self.next.saturating_sub(1);
-      self.next = current;
-      if self.prefix_max_ends.get(current).copied()? < self.minimum_end {
-        self.next = 0;
-        return None;
-      }
-      let entity = self.entities.get(current).copied()?;
-      if entity.end >= self.minimum_end {
+    while let Some(entity) = self.entities.get(self.next).copied() {
+      self.next = self.next.saturating_add(1);
+      if entity.end >= self.minimum_end && entity.start <= self.maximum_start {
         return Some(entity);
       }
     }
@@ -112,20 +113,16 @@ impl<'a> EntityProximityIndex<'a> {
 
   fn from_entities(mut entities: Vec<&'a PipelineEntity>) -> Self {
     entities.sort_by_key(|entity| (entity.start, entity.end));
-    let mut prefix_max_ends = Vec::with_capacity(entities.len());
-    let mut maximum_end = 0_u32;
-    for entity in &entities {
-      maximum_end = maximum_end.max(entity.end);
-      prefix_max_ends.push(maximum_end);
-    }
+    let mut by_end = entities.clone();
+    by_end.sort_by_key(|entity| (entity.end, entity.start));
     Self {
-      entities,
-      prefix_max_ends,
+      by_start: entities,
+      by_end,
     }
   }
 
   fn entities(&self) -> &[&'a PipelineEntity] {
-    &self.entities
+    &self.by_start
   }
 
   fn is_within_context_window(
@@ -149,14 +146,29 @@ impl<'a> EntityProximityIndex<'a> {
     let window_bytes = window.saturating_mul(MAX_UTF8_BYTES_PER_UTF16_UNIT);
     let minimum_end = start.saturating_sub(window_bytes);
     let maximum_start = end.saturating_add(window_bytes);
-    let next = self
-      .entities
+    let start_candidate_count = self
+      .by_start
       .partition_point(|entity| entity.start <= maximum_start);
+    let first_end_candidate = self
+      .by_end
+      .partition_point(|entity| entity.end < minimum_end);
+    let end_candidate_count =
+      self.by_end.len().saturating_sub(first_end_candidate);
+    // Every intersecting interval is present in both half-spaces. Iterating
+    // the smaller one bounds long-span and far-future adversaries alike.
+    let entities = if start_candidate_count <= end_candidate_count {
+      self
+        .by_start
+        .get(..start_candidate_count)
+        .unwrap_or_default()
+    } else {
+      self.by_end.get(first_end_candidate..).unwrap_or_default()
+    };
     NearbyEntities {
-      entities: &self.entities,
-      prefix_max_ends: &self.prefix_max_ends,
-      next,
+      entities,
+      next: 0,
       minimum_end,
+      maximum_start,
     }
   }
 }
@@ -188,14 +200,21 @@ impl PreparedAddressContextData {
     full_text: &str,
     existing_entities: &[PipelineEntity],
   ) -> Result<Vec<PipelineEntity>> {
-    let mut results = self
-      .detect_street_patterns_near_addresses(full_text, existing_entities)?;
+    let header_end = header_end(full_text);
+    let mut results = self.detect_street_patterns_near_addresses(
+      full_text,
+      existing_entities,
+      header_end,
+    )?;
     let mut orphan_context =
       Vec::with_capacity(existing_entities.len().saturating_add(results.len()));
     orphan_context.extend_from_slice(existing_entities);
     orphan_context.extend(results.iter().cloned());
-    results
-      .extend(self.detect_orphan_street_lines(full_text, &orphan_context)?);
+    results.extend(self.detect_orphan_street_lines(
+      full_text,
+      &orphan_context,
+      header_end,
+    )?);
     Ok(results)
   }
 
@@ -203,11 +222,11 @@ impl PreparedAddressContextData {
     &self,
     full_text: &str,
     existing_entities: &[PipelineEntity],
+    header_end: u32,
   ) -> Result<Vec<PipelineEntity>> {
     let mut results = Vec::new();
     let address_entities =
       EntityProximityIndex::addresses(existing_entities.iter());
-    let header_end = header_end(full_text);
     let offsets = ByteOffsets::new(full_text);
     let scan_ranges = address_context_scan_ranges(
       full_text,
@@ -439,8 +458,8 @@ impl PreparedAddressContextData {
     &self,
     full_text: &str,
     existing_entities: &[PipelineEntity],
+    header_end: u32,
   ) -> Result<Vec<PipelineEntity>> {
-    let header_end = header_end(full_text);
     let offsets = ByteOffsets::new(full_text);
     let header_scan_end = header_scan_end(full_text, &offsets, header_end)?;
     let header =
@@ -642,19 +661,60 @@ fn compile_regex(field: &'static str, pattern: &str) -> Result<Regex> {
 }
 
 fn header_end(full_text: &str) -> u32 {
-  let text_len = full_text.chars().map(char::len_utf16).sum::<usize>();
-  let percentage_cutoff =
-    text_len.saturating_mul(HEADER_ZONE_PERCENT).div_euclid(100);
   let absolute_cutoff =
     usize::try_from(HEADER_ZONE_MAX_UTF16_UNITS).unwrap_or(usize::MAX);
+  let mut text_units = 0usize;
+  let mut line_count = 0usize;
+  let mut line_cutoff = None;
+  let mut line_cutoff_units = None;
+  let mut domination_units = absolute_cutoff
+    .saturating_mul(100)
+    .div_ceil(HEADER_ZONE_PERCENT);
+
+  for (byte, ch) in full_text.char_indices() {
+    text_units = text_units.saturating_add(ch.len_utf16());
+    if ch == '\n' {
+      line_count = line_count.saturating_add(1);
+      if line_count == HEADER_ZONE_MAX_LINES {
+        line_cutoff = Some(byte.saturating_add(ch.len_utf8()));
+        line_cutoff_units = Some(text_units);
+        let structural_cutoff = absolute_cutoff.min(text_units);
+        domination_units = structural_cutoff
+          .saturating_mul(100)
+          .div_ceil(HEADER_ZONE_PERCENT);
+      }
+    }
+
+    // Once the observed prefix alone makes 15% reach the structural bound,
+    // unseen text cannot move the selected header end any farther.
+    if text_units >= domination_units {
+      let structural_cutoff = line_cutoff_units
+        .map_or(absolute_cutoff, |line_units| {
+          absolute_cutoff.min(line_units)
+        });
+      return byte_offset_at_utf16_cutoff(
+        full_text,
+        structural_cutoff,
+        line_cutoff,
+      );
+    }
+  }
+
+  let percentage_cutoff = text_units
+    .saturating_mul(HEADER_ZONE_PERCENT)
+    .div_euclid(100);
   let cutoff = percentage_cutoff.min(absolute_cutoff);
-  let line_cutoff = full_text
-    .match_indices('\n')
-    .nth(HEADER_ZONE_MAX_LINES.saturating_sub(1))
-    .map_or(full_text.len(), |(byte, _)| byte.saturating_add(1));
+  byte_offset_at_utf16_cutoff(full_text, cutoff, line_cutoff)
+}
+
+fn byte_offset_at_utf16_cutoff(
+  full_text: &str,
+  cutoff: usize,
+  line_cutoff: Option<usize>,
+) -> u32 {
   let mut units = 0usize;
   for (byte, ch) in full_text.char_indices() {
-    if units >= cutoff || byte >= line_cutoff {
+    if units >= cutoff || line_cutoff.is_some_and(|line| byte >= line) {
       return u32::try_from(byte).unwrap_or(u32::MAX);
     }
     units = units.saturating_add(ch.len_utf16());
@@ -889,6 +949,8 @@ fn usize_to_u32(field: &'static str, value: usize) -> Result<u32> {
 
 #[cfg(test)]
 mod tests {
+  use proptest::prelude::*;
+
   use super::{
     BARE_HOUSE_CONTEXT_WINDOW, EntityProximityIndex,
     HEADER_SCAN_MAX_LINE_EXTENSION_UTF16_UNITS, HEADER_ZONE_MAX_UTF16_UNITS,
@@ -902,6 +964,7 @@ mod tests {
     let text = "x".repeat(1024 * 1024);
 
     assert_eq!(header_end(&text), HEADER_ZONE_MAX_UTF16_UNITS);
+    assert_eq!(header_end(&text), reference_header_end(&text));
   }
 
   #[test]
@@ -910,6 +973,7 @@ mod tests {
     let text = format!("{lines}{}", "x".repeat(100_000));
 
     assert_eq!(header_end(&text), 400);
+    assert_eq!(header_end(&text), reference_header_end(&text));
   }
 
   #[test]
@@ -956,9 +1020,69 @@ mod tests {
     }
   }
 
+  proptest! {
+    #[test]
+    fn proximity_index_candidates_match_linear_interval_filter(
+      raw_entities in prop::collection::vec((0_u32..1024, 0_u32..128), 0..256),
+      start in 0_u32..1024,
+      width in 0_u32..128,
+      window in 0_u32..256,
+    ) {
+      let text = "x".repeat(1_152);
+      let end = start.saturating_add(width).min(1_152);
+      let entities = raw_entities
+        .into_iter()
+        .map(|(entity_start, entity_width)| {
+          let entity_end = entity_start
+            .saturating_add(entity_width)
+            .min(1_152);
+          PipelineEntity::detected(
+            entity_start,
+            entity_end,
+            "address",
+            "Synthetic address",
+            1.0,
+            DetectionSource::Regex,
+          )
+        })
+        .collect::<Vec<_>>();
+      let index = EntityProximityIndex::addresses(entities.iter());
+      let offsets = ByteOffsets::new(&text);
+      let mut expected = entities
+        .iter()
+        .filter(|entity| {
+          within_context_window(&offsets, entity, start, end, window)
+        })
+        .map(|entity| (entity.start, entity.end))
+        .collect::<Vec<_>>();
+      let mut actual = index
+        .nearby(start, end, window)
+        .filter(|entity| {
+          within_context_window(&offsets, entity, start, end, window)
+        })
+        .map(|entity| (entity.start, entity.end))
+        .collect::<Vec<_>>();
+      expected.sort_unstable();
+      actual.sort_unstable();
+
+      prop_assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn optimized_header_end_matches_full_scan_reference(
+      chars in prop::collection::vec(
+        prop_oneof![Just('x'), Just('\n'), Just('á'), Just('😀')],
+        0..4_000,
+      ),
+    ) {
+      let text = chars.into_iter().collect::<String>();
+      prop_assert_eq!(header_end(&text), reference_header_end(&text));
+    }
+  }
+
   #[test]
-  fn proximity_index_limits_candidate_visits() {
-    let entities = (0..10_000_u32)
+  fn proximity_index_bounds_long_span_adversary_candidates() {
+    let mut entities = (0..10_000_u32)
       .map(|index| {
         let start = index.saturating_mul(1_000);
         PipelineEntity::detected(
@@ -971,14 +1095,41 @@ mod tests {
         )
       })
       .collect::<Vec<_>>();
+    entities.push(PipelineEntity::detected(
+      0,
+      20_000_000,
+      "address",
+      "Long synthetic address",
+      1.0,
+      DetectionSource::Regex,
+    ));
     let index = EntityProximityIndex::addresses(entities.iter());
+    let nearby = index.nearby(15_000_000, 15_000_020, STREET_CONTEXT_WINDOW);
 
-    assert!(
-      index
-        .nearby(5_000_000, 5_000_020, STREET_CONTEXT_WINDOW)
-        .count()
-        <= 3,
-    );
+    assert_eq!(nearby.candidate_count(), 1);
+    assert_eq!(nearby.count(), 1);
+  }
+
+  fn reference_header_end(full_text: &str) -> u32 {
+    let text_len = full_text.chars().map(char::len_utf16).sum::<usize>();
+    let percentage_cutoff = text_len
+      .saturating_mul(super::HEADER_ZONE_PERCENT)
+      .div_euclid(100);
+    let absolute_cutoff =
+      usize::try_from(HEADER_ZONE_MAX_UTF16_UNITS).unwrap_or(usize::MAX);
+    let cutoff = percentage_cutoff.min(absolute_cutoff);
+    let line_cutoff = full_text
+      .match_indices('\n')
+      .nth(super::HEADER_ZONE_MAX_LINES.saturating_sub(1))
+      .map_or(full_text.len(), |(byte, _)| byte.saturating_add(1));
+    let mut units = 0usize;
+    for (byte, ch) in full_text.char_indices() {
+      if units >= cutoff || byte >= line_cutoff {
+        return u32::try_from(byte).unwrap_or(u32::MAX);
+      }
+      units = units.saturating_add(ch.len_utf16());
+    }
+    u32::try_from(full_text.len()).unwrap_or(u32::MAX)
   }
 
   fn entity_at(text: &str, needle: &str) -> PipelineEntity {
