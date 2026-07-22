@@ -2362,6 +2362,25 @@ fn validate_name_tree(
   }
 }
 
+const FILE_SPEC_NAME_KEYS: &[&[u8]] = &[b"F", b"UF", b"DOS", b"Mac", b"Unix"];
+
+fn validate_file_spec_names(
+  dictionary: &Dictionary,
+  document: &Document,
+) -> Result<bool, PdfInspectionError> {
+  let mut has_file_name = false;
+  for key in FILE_SPEC_NAME_KEYS {
+    let Some(file_name) = optional_deref(dictionary, key, document)? else {
+      continue;
+    };
+    file_name.as_str().map_err(|_| {
+      invalid_document("PDF attachment file names must be strings")
+    })?;
+    has_file_name = true;
+  }
+  Ok(has_file_name)
+}
+
 fn validate_file_spec(
   file_spec: &Object,
   document: &Document,
@@ -2384,6 +2403,7 @@ fn validate_file_spec(
       "PDF attachment Type must be Filespec when present",
     ));
   }
+  let has_file_name = validate_file_spec_names(dictionary, document)?;
   let embedded_files = optional_deref(dictionary, b"EF", document)?
     .map(|embedded_files| {
       embedded_files.as_dict().map_err(|_| {
@@ -2391,6 +2411,11 @@ fn validate_file_spec(
       })
     })
     .transpose()?;
+  if !has_file_name && embedded_files.is_none() {
+    return Err(invalid_document(
+      "PDF file specifications must declare a file name or EF payload",
+    ));
+  }
   let related_files = optional_deref(dictionary, b"RF", document)?;
   if related_files.is_some() && embedded_files.is_none() {
     return Err(invalid_document(
@@ -2399,7 +2424,12 @@ fn validate_file_spec(
   }
   let mut found_payload = false;
   if let Some(embedded_files) = embedded_files {
-    for (_, payload) in embedded_files {
+    for (key, payload) in embedded_files {
+      if !FILE_SPEC_NAME_KEYS.contains(&key.as_slice()) {
+        return Err(invalid_document(
+          "PDF attachment EF keys must be file-name keys",
+        ));
+      }
       inventory.charge_node()?;
       inventory
         .payload_ids
@@ -3443,6 +3473,10 @@ mod tests {
     for invalid_file in [
       Object::Array(Vec::new()),
       Object::Stream(lopdf::Stream::new(Dictionary::new(), Vec::new())),
+      Object::Dictionary(lopdf::dictionary! { "S" => "Launch" }),
+      Object::Dictionary(
+        lopdf::dictionary! { "F" => Object::Array(Vec::new()) },
+      ),
     ] {
       let mut document = Document::load_mem(MINIMAL_PDF).unwrap();
       let invalid_file_id = document.add_object(invalid_file);
