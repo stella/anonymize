@@ -10,7 +10,7 @@
   },
   "numberLabels": {
     "und": ["nº", "n°", "№"],
-    "en": ["no", "no.", "n.", "n"],
+    "en": ["no", "no.", "n.", "n", "tax id", "tax identification number"],
     "pl": ["nr", "nr.", "numer"]
   }
 }

@@ -364,7 +364,8 @@ pub(crate) fn process_trigger_matches(
     // label-shaped values are not people. Preserve a complete person-shaped
     // prefix when the field label follows it on the same line.
     if rule.label == crate::labels::PERSON_LABEL
-      && let Some(label_start) = inline_field_label_token_start(&value.text)
+      && let Some(label_start) =
+        inline_field_label_start(&value.text, &data.number_labels)
     {
       let prefix = value.text.get(..label_start).unwrap_or_default().trim_end();
       let complete_person_prefix = prefix.split_whitespace().count() >= 2
@@ -1686,11 +1687,50 @@ fn inline_field_label(text: &str) -> bool {
   inline_field_label_token_start(text).is_some()
 }
 
+fn inline_field_label_start(
+  text: &str,
+  configured_labels: &[String],
+) -> Option<usize> {
+  let configured_start = configured_labels
+    .iter()
+    .filter_map(|label| configured_field_label_start(text, label))
+    .min();
+  configured_start.or_else(|| inline_field_label_token_start(text))
+}
+
+fn configured_field_label_start(text: &str, label: &str) -> Option<usize> {
+  if label.is_empty() {
+    return None;
+  }
+  for (start, _) in text.char_indices().take(40) {
+    let left_boundary = start == 0
+      || text
+        .get(..start)
+        .and_then(|head| head.chars().next_back())
+        .is_some_and(char::is_whitespace);
+    if !left_boundary {
+      continue;
+    }
+    let end = start.saturating_add(label.len());
+    let Some(candidate) = text.get(start..end) else {
+      continue;
+    };
+    if !candidate.eq_ignore_ascii_case(label) {
+      continue;
+    }
+    let after = text.get(end..).unwrap_or_default().trim_start();
+    if after.starts_with(':') || after.starts_with('：') {
+      return Some(start);
+    }
+  }
+  None
+}
+
 fn inline_field_label_token_start(text: &str) -> Option<usize> {
   let mut token_start = None;
   let mut token_letters = 0_usize;
   for (index, ch) in text.char_indices().take(40) {
-    if ch == ':' && token_letters >= 2 {
+    if matches!(ch, ':' | '：') && token_letters >= 2 {
       return token_start;
     }
     if ch.is_alphabetic() {
@@ -2278,7 +2318,7 @@ mod tests {
   fn person_trigger_rejects_inline_field_label_values() {
     // Trailing role triggers sit before the next labelled field
     // (`…, director\nEIN: …`). The value is form-field shaped, not a person.
-    let text = "signed by Jane Roe, director\nEIN: 12-3456789, USA";
+    let text = "signed by Jane Roe, director\nTax Identification Number： 12-3456789, USA";
     let trigger = "director";
     let start = text.find(trigger).unwrap();
     let end = start.saturating_add(trigger.len());
@@ -2300,7 +2340,7 @@ mod tests {
       sentence_terminal_currency_terms: Vec::new(),
       phone_extension_labels: Vec::new(),
       number_markers: Vec::new(),
-      number_labels: Vec::new(),
+      number_labels: vec![String::from("Tax Identification Number")],
     })
     .unwrap();
 
@@ -2369,7 +2409,7 @@ mod tests {
 
   #[test]
   fn person_trigger_trims_a_same_line_field_label_after_a_real_name() {
-    let text = "approved by director Janem Zorbax IČO: 12345678, on site";
+    let text = "approved by director Janem Zorbax Tax ID： 12345678, on site";
     let trigger = "director";
     let start = text.find(trigger).unwrap();
     let end = start.saturating_add(trigger.len());
@@ -2391,7 +2431,7 @@ mod tests {
       sentence_terminal_currency_terms: Vec::new(),
       phone_extension_labels: Vec::new(),
       number_markers: Vec::new(),
-      number_labels: Vec::new(),
+      number_labels: vec![String::from("Tax ID")],
     })
     .unwrap();
 
