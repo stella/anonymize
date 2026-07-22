@@ -138,6 +138,15 @@ def redact_caller_detection(text: str) -> str:
 
 
 def convert_external_detection(document: bytes) -> list[anonymize.CallerDetection]:
+    limits: tuple[int, ...] = (
+        anonymize.EXTERNAL_DETECTION_BATCH_MAX_BYTES,
+        anonymize.EXTERNAL_DETECTION_DOCUMENT_MAX_BYTES,
+        anonymize.EXTERNAL_DETECTION_MAX_DETECTIONS,
+        anonymize.EXTERNAL_DETECTION_MAX_LABEL_MAPPINGS,
+        anonymize.EXTERNAL_DETECTION_MAX_METADATA_BYTES,
+        anonymize.EXTERNAL_DETECTION_PROVIDER_ID_MAX_BYTES,
+    )
+    assert all(limit > 0 for limit in limits)
     batch: anonymize.ExternalDetectionBatch = {
         "version": 1,
         "document": {"sha256": "0" * 64},

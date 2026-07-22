@@ -27,9 +27,9 @@ import {
   diagnostics_json as diagnosticsJsonWithBinding,
   diagnostics_stream_json as diagnosticsStreamJsonWithBinding,
   type NativeAnonymizeBinding,
-  type NativeDiagnosticsBatchCallback,
   type ExternalDetectionBatch,
   type NativeCallerDetection,
+  type NativeDiagnosticsBatchCallback,
   type NativeOperatorConfig,
   type NativeResultEventCallback,
   type NativeSearchPackageInput,
@@ -522,9 +522,6 @@ const isNativeAnonymizeBinding = (
     return false;
   }
   if (typeof value["normalizeForSearch"] !== "function") {
-    return false;
-  }
-  if (typeof value["convertExternalDetectionBatch"] !== "function") {
     return false;
   }
   if (typeof value["prepareStaticSearchPackageBytes"] !== "function") {

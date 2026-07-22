@@ -218,13 +218,35 @@ const providerOutput = {
 const detections = convert_external_detection_batch(document, providerOutput);
 ```
 
+The same converter is available from `@stll/anonymize-wasm`; its browser and
+Node-WASI entry returns a promise because the WASM binding loads lazily. Node,
+Python, Node-WASI, and browser WASM execute the same Rust validation and offset
+conversion contract.
+
 The example provider output is deliberately synthetic. Real providers may run
-in-process, as a local sidecar, or behind an application-owned service. The
-converter rejects unknown fields and versions, digest mismatch, invalid Unicode
-boundaries, unmapped labels, duplicate provenance, and bounded-size violations;
-it never guesses an offset unit or label mapping. Keep IDs free of personal
-data. Pass the returned detections to `redactTextWithCallerDetections()` using
-the UTF-8-decoded document text.
+in-process, as a local sidecar, or behind an application-owned service.
+`provider.id` is the immutable audit identity copied into every retained
+detection; version it when a materially different detector must remain
+distinguishable (for example, `example.local:1`). `provider.name` and
+`provider.version` are validated descriptive batch metadata, but are not copied
+into caller detections. Retain the original batch if those fields are needed in
+an audit record. The converter rejects unknown fields and versions, digest
+mismatch, invalid Unicode boundaries, unmapped labels, duplicate provenance,
+and bounded-size violations; it never guesses an offset unit or label mapping.
+Keep IDs free of personal data. Pass the returned detections to
+`redactTextWithCallerDetections()` using the UTF-8-decoded document text.
+
+TypeScript (including the WASM entry) and Python export the same exact v1 limit
+constants:
+
+| v1 limit                   | Public constant                            |               Exact value |
+| -------------------------- | ------------------------------------------ | ------------------------: |
+| Serialized batch           | `EXTERNAL_DETECTION_BATCH_MAX_BYTES`       | 16,777,216 bytes (16 MiB) |
+| UTF-8 document             | `EXTERNAL_DETECTION_DOCUMENT_MAX_BYTES`    | 67,108,864 bytes (64 MiB) |
+| Detections                 | `EXTERNAL_DETECTION_MAX_DETECTIONS`        |                   100,000 |
+| Label mappings             | `EXTERNAL_DETECTION_MAX_LABEL_MAPPINGS`    |                     4,096 |
+| Descriptive metadata field | `EXTERNAL_DETECTION_MAX_METADATA_BYTES`    |                 256 bytes |
+| Provider ID                | `EXTERNAL_DETECTION_PROVIDER_ID_MAX_BYTES` |                 128 bytes |
 
 The config module may export a `PipelineConfig` directly or `{ config, gazetteerEntries }`. Include `@stll/anonymize-data` dictionaries there if your runtime config uses the deny-list or name-corpus layers; keep the corresponding layers enabled for caller-owned `customDenyList`, `customRegexes`, and gazetteers. Those inputs are part of the prepared package and should be regenerated when they change.
 

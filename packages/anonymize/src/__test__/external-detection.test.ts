@@ -3,7 +3,13 @@ import { createHash } from "node:crypto";
 import { describe, expect, test } from "bun:test";
 
 import {
+  EXTERNAL_DETECTION_BATCH_MAX_BYTES,
   EXTERNAL_DETECTION_BATCH_VERSION,
+  EXTERNAL_DETECTION_DOCUMENT_MAX_BYTES,
+  EXTERNAL_DETECTION_MAX_DETECTIONS,
+  EXTERNAL_DETECTION_MAX_LABEL_MAPPINGS,
+  EXTERNAL_DETECTION_MAX_METADATA_BYTES,
+  EXTERNAL_DETECTION_PROVIDER_ID_MAX_BYTES,
   type ExternalDetectionBatch,
   convert_external_detection_batch,
 } from "../native";
@@ -48,29 +54,52 @@ const fakeProviderBatch = (
 });
 
 describe("ExternalDetectionBatch v1", () => {
-  test("converts every source unit to JavaScript caller offsets", () => {
+  test("public TypeScript limits exactly match the Rust contract", () => {
+    const limitsJson = binding.externalDetectionLimitsJson?.();
+    expect(limitsJson).toBeDefined();
+    expect(JSON.parse(limitsJson ?? "null")).toEqual({
+      batchMaxBytes: EXTERNAL_DETECTION_BATCH_MAX_BYTES,
+      documentMaxBytes: EXTERNAL_DETECTION_DOCUMENT_MAX_BYTES,
+      maxDetections: EXTERNAL_DETECTION_MAX_DETECTIONS,
+      maxLabelMappings: EXTERNAL_DETECTION_MAX_LABEL_MAPPINGS,
+      maxMetadataBytes: EXTERNAL_DETECTION_MAX_METADATA_BYTES,
+      providerIdMaxBytes: EXTERNAL_DETECTION_PROVIDER_ID_MAX_BYTES,
+    });
+    expect(JSON.parse(limitsJson ?? "null")).toEqual({
+      batchMaxBytes: 16_777_216,
+      documentMaxBytes: 67_108_864,
+      maxDetections: 100_000,
+      maxLabelMappings: 4_096,
+      maxMetadataBytes: 256,
+      providerIdMaxBytes: 128,
+    });
+  });
+
+  test("converts every source unit identically through Node and WASM", async () => {
+    const expected = [
+      {
+        start: 2,
+        end: 7,
+        label: "person",
+        score: 0.99,
+        providerId: "fake-provider",
+        detectionId: "fake-person-1",
+      },
+    ];
     const spans: readonly FakeProviderSpan[] = [
       { offsetUnit: "utf8-byte", start: 4, end: 9 },
       { offsetUnit: "utf16-code-unit", start: 2, end: 7 },
       { offsetUnit: "unicode-code-point", start: 1, end: 6 },
     ];
+
     for (const span of spans) {
+      const batch = fakeProviderBatch(span);
       expect(
-        convert_external_detection_batch({
-          binding,
-          document,
-          batch: fakeProviderBatch(span),
-        }),
-      ).toEqual([
-        {
-          start: 2,
-          end: 7,
-          label: "person",
-          score: 0.99,
-          providerId: "fake-provider",
-          detectionId: "fake-person-1",
-        },
-      ]);
+        convert_external_detection_batch({ binding, document, batch }),
+      ).toEqual(expected);
+      expect(
+        await convertWasmExternalDetectionBatch(document, batch, { binding }),
+      ).toEqual(expected);
     }
   });
 
@@ -90,7 +119,7 @@ describe("ExternalDetectionBatch v1", () => {
     ).toThrow("unknown field");
   });
 
-  test("WASM rejects a stale injected binding at the surface boundary", async () => {
+  test("keeps a missing converter feature-scoped in injected WASM bindings", async () => {
     const staleBinding = new Proxy(binding, {
       get: (target, property, receiver) =>
         property === "convertExternalDetectionBatch"
@@ -98,20 +127,41 @@ describe("ExternalDetectionBatch v1", () => {
           : Reflect.get(target, property, receiver),
     });
 
-    let caught: unknown;
-    try {
-      await convertWasmExternalDetectionBatch(document, fakeProviderBatch(), {
+    expect(staleBinding.normalizeForSearch("Alice")).toBe("Alice");
+    expect(
+      convertWasmExternalDetectionBatch(document, fakeProviderBatch(), {
         binding: staleBinding,
-      });
-    } catch (error) {
-      caught = error;
-    }
-    expect(caught).toBeInstanceOf(Error);
-    if (!(caught instanceof Error)) {
-      throw new TypeError("expected the stale WASM binding to be rejected");
-    }
-    expect(caught.message).toBe(
-      "wasm binding module does not expose the native anonymize surface",
+      }),
+    ).rejects.toThrow(
+      "Native anonymize binding does not support external detection batches",
     );
+  });
+
+  test("normalizes validation errors identically through Node and WASM", async () => {
+    const stale = fakeProviderBatch();
+    stale.document.sha256 = "0".repeat(64);
+    const unknown = JSON.stringify({
+      ...fakeProviderBatch(),
+      legacyOffsetGuessing: true,
+    });
+
+    for (const batch of [stale, unknown]) {
+      let nodeMessage: string | undefined;
+      try {
+        convert_external_detection_batch({ binding, document, batch });
+      } catch (error) {
+        nodeMessage = error instanceof Error ? error.message : undefined;
+      }
+
+      let wasmMessage: string | undefined;
+      try {
+        await convertWasmExternalDetectionBatch(document, batch, { binding });
+      } catch (error) {
+        wasmMessage = error instanceof Error ? error.message : undefined;
+      }
+
+      expect(nodeMessage).toBeDefined();
+      expect(wasmMessage).toBe(nodeMessage);
+    }
   });
 });

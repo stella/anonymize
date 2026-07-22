@@ -860,9 +860,6 @@ const isNativeAnonymizeBinding = (
   if (typeof candidate["normalizeForSearch"] !== "function") {
     return false;
   }
-  if (typeof candidate["convertExternalDetectionBatch"] !== "function") {
-    return false;
-  }
   if (typeof candidate["prepareStaticSearchPackageBytes"] !== "function") {
     return false;
   }

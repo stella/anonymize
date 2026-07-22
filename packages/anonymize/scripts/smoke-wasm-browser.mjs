@@ -170,6 +170,28 @@ const runInPage = async ({ sample, externalDetectionDocument, pdfBase64 }) => {
     throw new Error("SharedArrayBuffer is unavailable");
   }
   const module = await import("/wasm.mjs");
+  const expectedExternalLimits = {
+    batchMaxBytes: 16_777_216,
+    documentMaxBytes: 67_108_864,
+    maxDetections: 100_000,
+    maxLabelMappings: 4_096,
+    maxMetadataBytes: 256,
+    providerIdMaxBytes: 128,
+  };
+  const actualExternalLimits = {
+    batchMaxBytes: module.EXTERNAL_DETECTION_BATCH_MAX_BYTES,
+    documentMaxBytes: module.EXTERNAL_DETECTION_DOCUMENT_MAX_BYTES,
+    maxDetections: module.EXTERNAL_DETECTION_MAX_DETECTIONS,
+    maxLabelMappings: module.EXTERNAL_DETECTION_MAX_LABEL_MAPPINGS,
+    maxMetadataBytes: module.EXTERNAL_DETECTION_MAX_METADATA_BYTES,
+    providerIdMaxBytes: module.EXTERNAL_DETECTION_PROVIDER_ID_MAX_BYTES,
+  };
+  if (
+    JSON.stringify(actualExternalLimits) !==
+    JSON.stringify(expectedExternalLimits)
+  ) {
+    throw new Error("browser external detection limits diverged");
+  }
   const externalDocument = new TextEncoder().encode(externalDetectionDocument);
   const digest = Array.from(
     new Uint8Array(await crypto.subtle.digest("SHA-256", externalDocument)),
@@ -201,24 +223,32 @@ const runInPage = async ({ sample, externalDetectionDocument, pdfBase64 }) => {
     );
   }
   const rejectionCases = [
-    externalBatch("utf8-byte", 1, 9),
-    externalBatch("utf16-code-unit", 1, 7),
-    {
-      ...externalBatch("unicode-code-point", 1, 6),
-      document: { sha256: "0".repeat(64) },
-    },
-    JSON.stringify({
-      ...externalBatch("unicode-code-point", 1, 6),
-      legacyOffsetGuessing: true,
-    }),
+    [externalBatch("utf8-byte", 1, 9), "valid text boundary"],
+    [externalBatch("utf16-code-unit", 1, 7), "valid text boundary"],
+    [
+      {
+        ...externalBatch("unicode-code-point", 1, 6),
+        document: { sha256: "0".repeat(64) },
+      },
+      "document.sha256 does not match input bytes",
+    ],
+    [
+      JSON.stringify({
+        ...externalBatch("unicode-code-point", 1, 6),
+        legacyOffsetGuessing: true,
+      }),
+      "unknown field `legacyOffsetGuessing`",
+    ],
   ];
   const externalDetectionRejections = [];
-  for (const batch of rejectionCases) {
+  for (const [batch, expectedError] of rejectionCases) {
     try {
       await module.convert_external_detection_batch(externalDocument, batch);
       externalDetectionRejections.push(false);
-    } catch {
-      externalDetectionRejections.push(true);
+    } catch (error) {
+      externalDetectionRejections.push(
+        error instanceof Error && error.message.includes(expectedError),
+      );
     }
   }
   const pipeline = await module.loadDefaultPipeline("en");

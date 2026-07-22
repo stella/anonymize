@@ -36,6 +36,12 @@ import { join } from "node:path";
 import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 
 import {
+  EXTERNAL_DETECTION_BATCH_MAX_BYTES,
+  EXTERNAL_DETECTION_DOCUMENT_MAX_BYTES,
+  EXTERNAL_DETECTION_MAX_DETECTIONS,
+  EXTERNAL_DETECTION_MAX_LABEL_MAPPINGS,
+  EXTERNAL_DETECTION_MAX_METADATA_BYTES,
+  EXTERNAL_DETECTION_PROVIDER_ID_MAX_BYTES,
   convert_external_detection_batch,
   getDefaultNativePipeline,
   loadNativeAnonymizeBinding,
@@ -145,6 +151,15 @@ type PythonParityOutput = {
     provider_id: string;
     detection_id: string;
   }[][];
+  external_detection_error_messages: string[];
+  external_detection_limits: {
+    batch_max_bytes: number;
+    document_max_bytes: number;
+    max_detections: number;
+    max_label_mappings: number;
+    max_metadata_bytes: number;
+    provider_id_max_bytes: number;
+  };
   session_result: {
     session_id: string;
     mapping_count: number;
@@ -342,6 +357,27 @@ for offset_unit, start, end in [
             "😀Alice signed.".encode("utf-8"), batch
         )
     )
+
+stale_external_batch = json.loads(json.dumps(payload["external_detection_batch"]))
+stale_external_batch["document"]["sha256"] = "0" * 64
+unknown_external_batch = json.loads(json.dumps(payload["external_detection_batch"]))
+unknown_external_batch["legacyOffsetGuessing"] = True
+external_detection_error_messages = []
+for invalid_batch in [stale_external_batch, unknown_external_batch]:
+    try:
+        anonymize.convert_external_detection_batch(
+            "😀Alice signed.".encode("utf-8"), invalid_batch
+        )
+    except ValueError as error:
+        external_detection_error_messages.append(str(error))
+external_detection_limits = {
+    "batch_max_bytes": anonymize.EXTERNAL_DETECTION_BATCH_MAX_BYTES,
+    "document_max_bytes": anonymize.EXTERNAL_DETECTION_DOCUMENT_MAX_BYTES,
+    "max_detections": anonymize.EXTERNAL_DETECTION_MAX_DETECTIONS,
+    "max_label_mappings": anonymize.EXTERNAL_DETECTION_MAX_LABEL_MAPPINGS,
+    "max_metadata_bytes": anonymize.EXTERNAL_DETECTION_MAX_METADATA_BYTES,
+    "provider_id_max_bytes": anonymize.EXTERNAL_DETECTION_PROVIDER_ID_MAX_BYTES,
+}
 caller_diagnostics = json.loads(
     anonymize.get_default_native_pipeline(language="en").redact_text_with_caller_detections_diagnostics_json(
         "😀Alice signed.",
@@ -828,6 +864,8 @@ print(
                 "mask_operator": caller_mask_result["redaction"]["operator_map"][0]["operator"],
             },
             "external_detection_results": external_detection_results,
+            "external_detection_error_messages": external_detection_error_messages,
+            "external_detection_limits": external_detection_limits,
             "session_result": {
                 "session_id": restored_session.session_id(),
                 "mapping_count": session.mapping_count(),
@@ -1366,24 +1404,38 @@ describe("python binding parity", () => {
     "external detection batches share validation and host offset semantics",
     () => {
       const binding = loadNativeAnonymizeBinding();
-      const node = convert_external_detection_batch(
-        new TextEncoder().encode("😀Alice signed."),
-        EXTERNAL_DETECTION_FIXTURE,
-        { binding },
-      );
-      const python = runPythonParity([]).external_detection_results;
+      const document = new TextEncoder().encode("😀Alice signed.");
+      const sourceSpans = [
+        ["utf8-byte", 4, 9],
+        ["utf16-code-unit", 2, 7],
+        ["unicode-code-point", 1, 6],
+      ] as const;
+      const node = sourceSpans.map(([offsetUnit, start, end]) => {
+        const batch = {
+          ...structuredClone(EXTERNAL_DETECTION_FIXTURE),
+          offsetUnit,
+          detections: EXTERNAL_DETECTION_FIXTURE.detections.map(
+            (detection, index) =>
+              index === 0 ? { ...detection, start, end } : detection,
+          ),
+        };
+        return convert_external_detection_batch(document, batch, { binding });
+      });
+      const python = runPythonParity([]);
 
-      expect(node).toEqual([
-        {
-          start: 2,
-          end: 7,
-          label: "person",
-          score: 0.99,
-          providerId: "example.local",
-          detectionId: "person-1",
-        },
-      ]);
-      expect(python).toEqual(
+      expect(node).toEqual(
+        Array.from({ length: 3 }, () => [
+          {
+            start: 2,
+            end: 7,
+            label: "person",
+            score: 0.99,
+            providerId: "example.local",
+            detectionId: "person-1",
+          },
+        ]),
+      );
+      expect(python.external_detection_results).toEqual(
         Array.from({ length: 3 }, () => [
           {
             start: 1,
@@ -1395,6 +1447,35 @@ describe("python binding parity", () => {
           },
         ]),
       );
+      const stale = structuredClone(EXTERNAL_DETECTION_FIXTURE);
+      stale.document.sha256 = "0".repeat(64);
+      const unknown = JSON.stringify({
+        ...EXTERNAL_DETECTION_FIXTURE,
+        legacyOffsetGuessing: true,
+      });
+      const nodeErrorMessages = [stale, unknown].map((batch): string => {
+        try {
+          convert_external_detection_batch(document, batch, { binding });
+        } catch (error) {
+          if (error instanceof Error) {
+            return error.message;
+          }
+          throw new TypeError("expected an Error from the Node binding");
+        }
+        throw new Error("invalid external detection batch was accepted");
+      });
+      expect(python.external_detection_error_messages).toEqual(
+        nodeErrorMessages,
+      );
+
+      expect(python.external_detection_limits).toEqual({
+        batch_max_bytes: EXTERNAL_DETECTION_BATCH_MAX_BYTES,
+        document_max_bytes: EXTERNAL_DETECTION_DOCUMENT_MAX_BYTES,
+        max_detections: EXTERNAL_DETECTION_MAX_DETECTIONS,
+        max_label_mappings: EXTERNAL_DETECTION_MAX_LABEL_MAPPINGS,
+        max_metadata_bytes: EXTERNAL_DETECTION_MAX_METADATA_BYTES,
+        provider_id_max_bytes: EXTERNAL_DETECTION_PROVIDER_ID_MAX_BYTES,
+      });
     },
   );
 

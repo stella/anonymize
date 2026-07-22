@@ -15,6 +15,7 @@ use stella_anonymize_adapter_contract::{
   caller_detections_from_character_binding, diagnostic_events_to_utf16_binding,
   diagnostic_stage_event,
   external_detection_batch_to_character_caller_request_json,
+  external_detection_limits_json as contract_external_detection_limits_json,
   operator_config_from_binding, prepared_search_config_from_binding,
   prepared_search_core_package_to_bytes,
   prepared_search_core_package_to_compressed_bytes,
@@ -64,6 +65,12 @@ fn convert_external_detection_batch(
     document, batch_json,
   )
   .map_err(|error| PyValueError::new_err(error.to_string()))
+}
+
+#[pyfunction]
+fn external_detection_limits_json() -> PyResult<String> {
+  contract_external_detection_limits_json()
+    .map_err(|error| PyValueError::new_err(error.to_string()))
 }
 
 #[pyclass(name = "RedactionEntry", get_all, skip_from_py_object)]
@@ -1639,6 +1646,8 @@ fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
     convert_external_detection_batch,
     module
   )?)?;
+  module
+    .add_function(wrap_pyfunction!(external_detection_limits_json, module)?)?;
   module
     .add_function(wrap_pyfunction!(redact_static_entities_json, module)?)?;
   module.add_function(wrap_pyfunction!(

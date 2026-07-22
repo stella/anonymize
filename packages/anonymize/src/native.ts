@@ -244,10 +244,11 @@ export type NativePreparedSearchBinding = {
 };
 
 export type NativeAnonymizeBinding = {
-  convertExternalDetectionBatch: (
+  convertExternalDetectionBatch?: (
     document: Uint8Array,
     batchJson: string,
   ) => NativeCallerDetection[];
+  externalDetectionLimitsJson?: () => string;
   extractDocxTextJson?: (document: Uint8Array) => string;
   inspectPdfJson?: (document: Uint8Array, observationsJson?: string) => string;
   rewritePdfRasterFromDetectionsJson?: (
@@ -317,6 +318,12 @@ export type NativeOperatorConfig = {
 export const CALLER_DETECTION_CONTRACT_VERSION = 2;
 
 export const EXTERNAL_DETECTION_BATCH_VERSION = 1 as const;
+export const EXTERNAL_DETECTION_BATCH_MAX_BYTES = 16 * 1024 * 1024;
+export const EXTERNAL_DETECTION_DOCUMENT_MAX_BYTES = 64 * 1024 * 1024;
+export const EXTERNAL_DETECTION_MAX_DETECTIONS = 100_000;
+export const EXTERNAL_DETECTION_MAX_LABEL_MAPPINGS = 4_096;
+export const EXTERNAL_DETECTION_MAX_METADATA_BYTES = 256;
+export const EXTERNAL_DETECTION_PROVIDER_ID_MAX_BYTES = 128;
 
 export const EXTERNAL_DETECTION_OFFSET_UNITS = {
   unicodeCodePoint: "unicode-code-point",
@@ -365,7 +372,13 @@ export const convert_external_detection_batch = ({
   document,
   batch,
 }: ConvertExternalDetectionBatchOptions): NativeCallerDetection[] => {
-  return binding.convertExternalDetectionBatch(
+  const convert = binding.convertExternalDetectionBatch;
+  if (convert === undefined) {
+    throw new Error(
+      "Native anonymize binding does not support external detection batches",
+    );
+  }
+  return convert(
     document,
     typeof batch === "string" ? batch : JSON.stringify(batch),
   );
