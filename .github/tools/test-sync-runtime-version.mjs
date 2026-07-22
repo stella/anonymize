@@ -24,6 +24,24 @@ let lineEnding = "\n";
 const version = "9.8.7";
 const staleVersion = "9.8.6";
 
+const releaseWorkflow = readFileSync(
+  join(repoRoot, ".github", "workflows", "release.yml"),
+  "utf8",
+);
+const releaseSyncCommands = [
+  ...releaseWorkflow.matchAll(/^\s+run: (bun run sync:version.*)$/gm),
+].map((match) => match[1]);
+if (
+  releaseSyncCommands.length !== 4 ||
+  releaseSyncCommands.some(
+    (command) => command !== "bun run sync:version -- --release",
+  )
+) {
+  throw new Error(
+    "every release job must resolve workspace dependencies with sync:version -- --release",
+  );
+}
+
 const packageFiles = [
   "packages/anonymize/package.json",
   "packages/anonymize-darwin-arm64/package.json",
