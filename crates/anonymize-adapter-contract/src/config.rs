@@ -520,6 +520,7 @@ fn trigger_data_from_binding(
     phone_extension_labels: data.phone_extension_labels,
     number_markers: data.number_markers,
     number_labels: data.number_labels,
+    person_field_labels: data.person_field_labels,
   }
 }
 

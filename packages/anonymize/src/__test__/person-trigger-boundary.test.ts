@@ -52,6 +52,26 @@ describe("person trigger extraction stops at the name run", () => {
     expect(persons[0]?.source).toBe("trigger");
   });
 
+  test("single surname stays before a same-line field label", async () => {
+    const persons = personTexts(await detect("Pan Novák Titul: jednatel"));
+    expect(persons).toContain("Novák");
+    expect(persons.some((person) => person.includes("Titul"))).toBe(false);
+  });
+
+  test("multi-word acronym label stays out of the person prefix", async () => {
+    const persons = personTexts(
+      await detect("Pan Jane Roe VAT ID: 123, on site"),
+    );
+    expect(persons).toContain("Jane Roe");
+    expect(persons.some((person) => person.includes("VAT"))).toBe(false);
+  });
+
+  test("multi-word acronym label preserves an all-caps person", async () => {
+    const persons = personTexts(await detect("Pan JOHN DOE VAT ID: 123"));
+    expect(persons).toContain("JOHN DOE");
+    expect(persons.some((person) => person.includes("VAT"))).toBe(false);
+  });
+
   test("multi-word name: Pan Jan Novák je tady.", async () => {
     const persons = personTexts(await detect("Pan Jan Novák je tady."));
     expect(persons).toContain("Jan Novák");

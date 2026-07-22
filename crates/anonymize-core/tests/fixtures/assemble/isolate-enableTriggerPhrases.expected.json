@@ -33414,6 +33414,14 @@
       "nr",
       "nr.",
       "numer"
+    ],
+    "person_field_labels": [
+      "name",
+      "title",
+      "tax id",
+      "tax identification number",
+      "jméno",
+      "titul"
     ]
   },
   "false_positive_filters": {

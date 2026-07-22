@@ -98,6 +98,7 @@ fn keeps_trigger_address_with_extra_component_anchor() {
       phone_extension_labels: Vec::new(),
       number_markers: Vec::new(),
       number_labels: Vec::new(),
+      person_field_labels: Vec::new(),
     }),
     deny_list_data: Some(empty_deny_list_data(DenyListFilterData {
       address_component_terms: set(["sídliště"]),
@@ -219,6 +220,7 @@ fn rejects_only_ambiguous_street_type_trigger_addresses() {
       phone_extension_labels: Vec::new(),
       number_markers: Vec::new(),
       number_labels: Vec::new(),
+      person_field_labels: Vec::new(),
     }),
     deny_list_data: Some(empty_deny_list_data(DenyListFilterData {
       street_types: set(["cours"]),

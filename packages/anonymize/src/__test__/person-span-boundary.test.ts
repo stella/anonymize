@@ -53,6 +53,46 @@ describe("person span stops before form-field labels", () => {
     expect(persons.some((p) => /\bName\b/.test(p))).toBe(false);
     expect(persons.some((p) => p.includes("Jane Roe"))).toBe(true);
   });
+
+  test("resolved person span stops before a multi-word acronym label", async () => {
+    const persons = await personTexts("Jane Roe VAT ID: 123");
+    expect(persons).toContain("Jane Roe");
+    expect(persons.some((person) => person.includes("VAT"))).toBe(false);
+  });
+});
+
+describe("trailing role trigger does not emit field-label values as people", () => {
+  test("Czech regression: IČO after ředitelem is not a person", async () => {
+    const persons = await personTexts(
+      [
+        "zastoupená prof. MUDr. Markem Svobodou, Ph.D., ředitelem",
+        "IČO: 00209805, DIČ: CZ00209805",
+      ].join("\n"),
+    );
+    expect(persons.some((p) => /^IČO:?$/u.test(p.trim()))).toBe(false);
+    expect(persons.some((p) => p.includes("Markem Svobodou"))).toBe(true);
+  });
+
+  test("role prefix still extracts the following person", async () => {
+    // Uses jednatelem (vocabulary role), not a string hardcoded in detector code.
+    const persons = await personTexts(
+      "Smlouva podepsaná jednatelem Janem Novákem dne 1. 1. 2026",
+    );
+    expect(persons.some((p) => p.includes("Janem Novákem"))).toBe(true);
+  });
+
+  test("organization trigger control stays organization", async () => {
+    const entities = await detect(
+      "zhotovitel: Gymnázium Jana Keplera, IČO: 12345678",
+    );
+    const orgs = entities
+      .filter((e) => e.label === "organization")
+      .map((e) => e.text);
+    expect(orgs.some((o) => o.includes("Gymnázium"))).toBe(true);
+    expect(
+      entities.some((e) => e.label === "person" && /^IČO:?$/u.test(e.text)),
+    ).toBe(false);
+  });
 });
 
 describe("titled person does not absorb digital-signature modifiers", () => {

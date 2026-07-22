@@ -59,6 +59,7 @@ struct TriggerSupport {
   phone_extension_labels: Vec<String>,
   number_markers: Vec<String>,
   number_labels: Vec<String>,
+  person_field_labels: Vec<String>,
 }
 
 fn prepared_for_trigger_with_support(
@@ -97,6 +98,7 @@ fn prepared_for_trigger_with_support(
       phone_extension_labels: support.phone_extension_labels,
       number_markers: support.number_markers,
       number_labels: support.number_labels,
+      person_field_labels: support.person_field_labels,
     }),
     ..empty_config(PreparedEngineSlices::default())
   })

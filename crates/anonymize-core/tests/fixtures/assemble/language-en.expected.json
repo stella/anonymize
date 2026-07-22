@@ -24787,7 +24787,13 @@
     ],
     "phone_extension_labels": ["extension", "ext", "x"],
     "number_markers": ["nº", "n°", "№", "no", "n."],
-    "number_labels": ["nº", "n°", "№", "no", "no.", "n.", "n"]
+    "number_labels": ["nº", "n°", "№", "no", "no.", "n.", "n"],
+    "person_field_labels": [
+      "name",
+      "title",
+      "tax id",
+      "tax identification number"
+    ]
   },
   "coreference_data": {
     "definition_patterns": [

@@ -150,6 +150,8 @@ pub struct BindingTriggerData {
   pub number_markers: Vec<String>,
   #[serde(default)]
   pub number_labels: Vec<String>,
+  #[serde(default)]
+  pub person_field_labels: Vec<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
