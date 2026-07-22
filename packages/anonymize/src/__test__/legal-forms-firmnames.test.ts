@@ -116,6 +116,13 @@ describe("legal-form firm name capture", () => {
     expect(orgs.some((org) => org.includes("Wachtell"))).toBe(false);
   });
 
+  test("connector-complete firm can wrap immediately before LLP", async () => {
+    const orgs = await orgsIn("Wachtell, Lipton, Rosen & Katz,\nLLP");
+    expect(orgs.map((org) => org.replaceAll(/\s+/g, " "))).toContain(
+      "Wachtell, Lipton, Rosen & Katz, LLP",
+    );
+  });
+
   test("Simpson Thacher & Bartlett LLP across paragraphs", async () => {
     expect(
       await orgsIn("and\nSimpson Thacher & Bartlett LLP\n425 Lexington Avenue"),

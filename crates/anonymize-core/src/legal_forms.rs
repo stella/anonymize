@@ -504,7 +504,11 @@ fn token_before(
     if ch == '\n' {
       // Soft EDGAR wrap inside a comma-separated firm name:
       // "Slate,\nMeagher & Flom LLP". A bare paragraph break still stops.
-      if !comma_before_soft_wrap(text, prev_start) {
+      if !comma_before_soft_wrap(
+        text,
+        prev_start,
+        allow_suffix_adjacent_jurisdiction,
+      ) {
         return None;
       }
       end = prev_start;
@@ -547,7 +551,11 @@ fn token_before(
   })
 }
 
-fn comma_before_soft_wrap(text: &str, newline_start: usize) -> bool {
+fn comma_before_soft_wrap(
+  text: &str,
+  newline_start: usize,
+  suffix_is_the_continuation: bool,
+) -> bool {
   let mut scan = newline_start;
   while let Some((prev_start, ch)) = previous_char(text, scan) {
     if is_inter_token_space(ch) {
@@ -568,8 +576,10 @@ fn comma_before_soft_wrap(text: &str, newline_start: usize) -> bool {
       }
       // A connector-complete comma-rich line is more likely a separate firm
       // record ("Wachtell, Lipton, Rosen & Katz,") than the unfinished prefix
-      // of the suffix-bearing firm on the next line.
-      if earlier == '&' {
+      // of another named firm on the next line. The narrow suffix-only wrap
+      // is different: "Wachtell, Lipton, Rosen & Katz,\nLLP" must remain one
+      // organization.
+      if earlier == '&' && !suffix_is_the_continuation {
         return false;
       }
       if earlier == ',' {
@@ -3143,6 +3153,13 @@ mod tests {
     let text = "Wachtell, Lipton, Rosen & Katz,\nMeagher & Flom (UK) LLP";
     let texts = org_texts_for(text, "LLP");
     assert_eq!(texts, vec![String::from("Meagher & Flom (UK) LLP")]);
+  }
+
+  #[test]
+  fn connector_complete_firm_can_wrap_immediately_before_legal_suffix() {
+    let text = "Wachtell, Lipton, Rosen & Katz,\nLLP";
+    let texts = org_texts_for(text, "LLP");
+    assert_eq!(texts, vec![String::from(text)]);
   }
 
   fn connector_test_data() -> PreparedLegalFormData {
