@@ -147,6 +147,14 @@ describe("trailing role trigger does not emit field-label values as people", () 
     }
   });
 
+  test("Czech contact-party role is not emitted as a person", async () => {
+    const persons = await personTextsForLanguages(
+      "Kontaktní osoba Poskytovatele:\nxxx",
+      ["cs"],
+    );
+    expect(persons).not.toContain("Poskytovatele");
+  });
+
   test("English identity field after a role is not a person", async () => {
     const persons = await personTextsForLanguages(
       "signed by Jane Roe, director\nSocial Security Number: 12-3456789, USA",
