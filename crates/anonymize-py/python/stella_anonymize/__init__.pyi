@@ -182,6 +182,7 @@ class PdfRiskInventory(TypedDict):
     documentInfoEntryCount: int
     embeddedFileCount: int
     externalActionCount: int
+    formXObjectCount: int
     imageObjectCount: int
     incrementalRevisionCount: int
     javascriptActionCount: int

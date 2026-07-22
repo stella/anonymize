@@ -114,6 +114,7 @@ type PythonParityOutput = {
     stream_decompressed_max_bytes: number;
   };
   pdf_inspection: unknown;
+  pdf_risky_inspection: unknown;
   pdf_observed_inspection: unknown;
   pdf_invalid_error: { code: string; message: string };
   caller_result: {
@@ -215,6 +216,9 @@ sys.path.insert(0, str(module_root))
 import stella_anonymize as anonymize
 
 pdf_inspection = anonymize.inspect_pdf(base64.b64decode(payload["pdf_base64"]))
+pdf_risky_inspection = anonymize.inspect_pdf(
+    base64.b64decode(payload["pdf_risky_base64"])
+)
 pdf_observation = [{
     "pageIndex": 0,
     "widthPoints": 612.0,
@@ -633,6 +637,7 @@ print(
                 "stream_decompressed_max_bytes": anonymize.PDF_STREAM_DECOMPRESSED_MAX_BYTES,
             },
             "pdf_inspection": pdf_inspection,
+            "pdf_risky_inspection": pdf_risky_inspection,
             "pdf_observed_inspection": pdf_observed_inspection,
             "pdf_invalid_error": pdf_invalid_error,
             "caller_result": {
@@ -851,6 +856,18 @@ const runPythonParity = (cases: ParityCase[]): PythonParityOutput => {
           ),
         ),
       ).toString("base64"),
+      pdf_risky_base64: Buffer.from(
+        readFileSync(
+          join(
+            ROOT_DIR,
+            "crates",
+            "anonymize-pdf-core",
+            "tests",
+            "fixtures",
+            "risky-structures.pdf",
+          ),
+        ),
+      ).toString("base64"),
     }),
   );
   try {
@@ -910,6 +927,21 @@ describe("python binding parity", () => {
       loadNativeAnonymizeBinding().inspectPdfJson?.(fixture) ?? "null",
     ) as unknown;
     expect(python.pdf_inspection).toEqual(node);
+    const riskyFixture = readFileSync(
+      join(
+        ROOT_DIR,
+        "crates",
+        "anonymize-pdf-core",
+        "tests",
+        "fixtures",
+        "risky-structures.pdf",
+      ),
+    );
+    const riskyNode = JSON.parse(
+      loadNativeAnonymizeBinding().inspectPdfJson?.(riskyFixture) ?? "null",
+    ) as { risks?: { formXObjectCount?: unknown } };
+    expect(riskyNode.risks?.formXObjectCount).toBeGreaterThanOrEqual(1);
+    expect(python.pdf_risky_inspection).toEqual(riskyNode);
     const observations = [
       {
         pageIndex: 0,

@@ -33,6 +33,7 @@ export type PdfRiskInventory = {
   documentInfoEntryCount: number;
   embeddedFileCount: number;
   externalActionCount: number;
+  formXObjectCount: number;
   imageObjectCount: number;
   incrementalRevisionCount: number;
   javascriptActionCount: number;

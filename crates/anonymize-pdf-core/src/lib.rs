@@ -139,6 +139,8 @@ pub struct PdfRiskInventory {
   /// Embedded-file streams retained inside the PDF.
   pub embedded_file_count: u32,
   pub external_action_count: u32,
+  /// Reusable Form `XObject` streams can retain text, images, and nested content.
+  pub form_x_object_count: u32,
   pub image_object_count: u32,
   /// Additional completed `startxref`/`%%EOF` revision markers retained in the
   /// source bytes. Superseded revision contents are not claimed as inspected.
@@ -1302,6 +1304,7 @@ fn risk_inventory(
     document_info_entry_count: info_entry_count(document)?,
     embedded_file_count: 0,
     external_action_count: 0,
+    form_x_object_count: 0,
     image_object_count: 0,
     incremental_revision_count: retention.incremental_revision_count,
     javascript_action_count: 0,
@@ -1314,9 +1317,6 @@ fn risk_inventory(
     xfa_entry_count: catalog_xfa_count(document)?,
   };
   let mut structure_risks = validate_risk_structures(document, pages)?;
-  inventory.external_action_count = structure_risks.actions.external;
-  inventory.javascript_action_count = structure_risks.actions.javascript;
-  inventory.unsupported_action_count = structure_risks.actions.unsupported;
   let mut scanned_nodes = 0usize;
   for (object_id, object) in &document.objects {
     scan_risk_object(
@@ -1324,11 +1324,14 @@ fn risk_inventory(
       Some(*object_id),
       document,
       &mut inventory,
-      &mut structure_risks.attachments,
+      &mut structure_risks,
       0,
       &mut scanned_nodes,
     )?;
   }
+  inventory.external_action_count = structure_risks.actions.external;
+  inventory.javascript_action_count = structure_risks.actions.javascript;
+  inventory.unsupported_action_count = structure_risks.actions.unsupported;
   structure_risks.attachments.add_typed_streams(document);
   inventory.embedded_file_count = structure_risks.attachments.count();
   for page in pages {
@@ -1347,7 +1350,7 @@ fn scan_risk_object(
   object_id: Option<lopdf::ObjectId>,
   document: &Document,
   inventory: &mut PdfRiskInventory,
-  attachments: &mut AttachmentInventory,
+  structure_risks: &mut StructuralRiskInventory,
   depth: usize,
   scanned_nodes: &mut usize,
 ) -> Result<(), PdfInspectionError> {
@@ -1374,20 +1377,42 @@ fn scan_risk_object(
     ));
   }
   if let Some(dictionary) = object_dictionary(object) {
+    if name_deref_is(dictionary, b"Type", b"Action", document)
+      && let Some(object_id) = object_id
+      && !structure_risks.referenced_action_ids.contains(&object_id)
+    {
+      inventory_action_entry(
+        &Object::Reference(object_id),
+        document,
+        structure_risks,
+      )?;
+    }
     if name_deref_is(dictionary, b"Type", b"Filespec", document)
       || dictionary.get(b"EF").is_ok()
       || dictionary.get(b"RF").is_ok()
     {
       let file_spec =
         object_id.map_or_else(|| object.clone(), Object::Reference);
-      validate_file_spec(&file_spec, document, attachments)?;
+      validate_file_spec(
+        &file_spec,
+        document,
+        &mut structure_risks.attachments,
+      )?;
     }
-    validate_associated_files(dictionary, document, attachments, "object")?;
+    validate_associated_files(
+      dictionary,
+      document,
+      &mut structure_risks.attachments,
+      "object",
+    )?;
     if dictionary.get(b"FT").is_ok() {
       increment(&mut inventory.acro_form_field_count);
     }
     if name_deref_is(dictionary, b"Subtype", b"Image", document) {
       increment(&mut inventory.image_object_count);
+    }
+    if name_deref_is(dictionary, b"Subtype", b"Form", document) {
+      increment(&mut inventory.form_x_object_count);
     }
     if name_deref_is(dictionary, b"Type", b"Metadata", document) {
       increment(&mut inventory.metadata_stream_count);
@@ -1406,7 +1431,7 @@ fn scan_risk_object(
         None,
         document,
         inventory,
-        attachments,
+        structure_risks,
         depth.saturating_add(1),
         scanned_nodes,
       )?;
@@ -1419,7 +1444,7 @@ fn scan_risk_object(
         None,
         document,
         inventory,
-        attachments,
+        structure_risks,
         depth.saturating_add(1),
         scanned_nodes,
       )?;
@@ -1507,8 +1532,7 @@ fn validate_risk_structures(
   document: &Document,
   pages: &[ValidatedPage],
 ) -> Result<StructuralRiskInventory, PdfInspectionError> {
-  let mut action_risks = ActionRiskInventory::default();
-  let mut attachments = AttachmentInventory::default();
+  let mut risks = StructuralRiskInventory::default();
   let catalog = document
     .catalog()
     .map_err(|_| invalid_document("PDF catalog must resolve"))?;
@@ -1530,42 +1554,23 @@ fn validate_risk_structures(
       optional_deref(form, b"Fields", document)?.ok_or_else(|| {
         invalid_document("PDF catalog AcroForm must declare Fields")
       })?;
-    action_risks.add(validate_form_fields(fields, document, &mut attachments)?);
-    validate_additional_actions(
-      form,
-      document,
-      "PDF AcroForm AA",
-      &mut action_risks,
-      &mut attachments,
-    )?;
+    validate_form_fields(fields, document, &mut risks)?;
+    validate_additional_actions(form, document, "PDF AcroForm AA", &mut risks)?;
   }
-  validate_catalog_name_trees(
-    catalog,
-    document,
-    &mut action_risks,
-    &mut attachments,
-  )?;
+  validate_catalog_name_trees(catalog, document, &mut risks)?;
   validate_optional_content(catalog, document)?;
   if let Some(actions) = optional_deref(catalog, b"AA", document)? {
     let actions = actions.as_dict().map_err(|_| {
       invalid_document("PDF catalog AA must resolve to an action dictionary")
     })?;
     for (_, action) in actions {
-      action_risks.add(validate_action_entry(
-        action,
-        document,
-        &mut attachments,
-      )?);
+      inventory_action_entry(action, document, &mut risks)?;
     }
   }
   if let Some(open_action) = optional_entry(catalog, b"OpenAction") {
     let resolved_open_action = resolve_object(open_action, document)?;
     if resolved_open_action.as_dict().is_ok() {
-      action_risks.add(validate_action_entry(
-        open_action,
-        document,
-        &mut attachments,
-      )?);
+      inventory_action_entry(open_action, document, &mut risks)?;
     } else if resolved_open_action.as_array().is_err()
       && resolved_open_action.as_name().is_err()
       && resolved_open_action.as_str().is_err()
@@ -1575,36 +1580,21 @@ fn validate_risk_structures(
       ));
     }
   }
-  validate_outlines(catalog, document, &mut action_risks, &mut attachments)?;
+  validate_outlines(catalog, document, &mut risks)?;
   for page in pages {
     let page = document.get_dictionary(page.id).map_err(|_| {
       invalid_document("PDF page dictionary became unavailable")
     })?;
-    validate_additional_actions(
-      page,
-      document,
-      "PDF page AA",
-      &mut action_risks,
-      &mut attachments,
-    )?;
-    validate_page_annotations(
-      page,
-      document,
-      &mut action_risks,
-      &mut attachments,
-    )?;
+    validate_additional_actions(page, document, "PDF page AA", &mut risks)?;
+    validate_page_annotations(page, document, &mut risks)?;
   }
-  Ok(StructuralRiskInventory {
-    actions: action_risks,
-    attachments,
-  })
+  Ok(risks)
 }
 
 fn validate_catalog_name_trees(
   catalog: &Dictionary,
   document: &Document,
-  action_risks: &mut ActionRiskInventory,
-  attachments: &mut AttachmentInventory,
+  risks: &mut StructuralRiskInventory,
 ) -> Result<(), PdfInspectionError> {
   let Some(names) = optional_deref(catalog, b"Names", document)? else {
     return Ok(());
@@ -1628,8 +1618,7 @@ fn validate_catalog_name_trees(
       0,
       &mut BTreeSet::new(),
       value_kind,
-      action_risks,
-      attachments,
+      risks,
     )?;
   }
   Ok(())
@@ -1698,6 +1687,7 @@ struct ActionRiskInventory {
 struct StructuralRiskInventory {
   actions: ActionRiskInventory,
   attachments: AttachmentInventory,
+  referenced_action_ids: BTreeSet<lopdf::ObjectId>,
 }
 
 #[derive(Debug, Default)]
@@ -1777,6 +1767,7 @@ impl ActionRiskInventory {
 struct ActionValidator<'a, 'b> {
   document: &'a Document,
   attachments: &'b mut AttachmentInventory,
+  referenced_ids: &'b mut BTreeSet<lopdf::ObjectId>,
   visited: BTreeSet<lopdf::ObjectId>,
   node_count: usize,
   risks: ActionRiskInventory,
@@ -1786,16 +1777,33 @@ fn validate_action_entry(
   action: &Object,
   document: &Document,
   attachments: &mut AttachmentInventory,
+  referenced_ids: &mut BTreeSet<lopdf::ObjectId>,
 ) -> Result<ActionRiskInventory, PdfInspectionError> {
   let mut validator = ActionValidator {
     document,
     attachments,
+    referenced_ids,
     visited: BTreeSet::new(),
     node_count: 0,
     risks: ActionRiskInventory::default(),
   };
   validator.validate(action, 0)?;
   Ok(validator.risks)
+}
+
+fn inventory_action_entry(
+  action: &Object,
+  document: &Document,
+  risks: &mut StructuralRiskInventory,
+) -> Result<(), PdfInspectionError> {
+  let found = validate_action_entry(
+    action,
+    document,
+    &mut risks.attachments,
+    &mut risks.referenced_action_ids,
+  )?;
+  risks.actions.add(found);
+  Ok(())
 }
 
 impl ActionValidator<'_, '_> {
@@ -1822,12 +1830,13 @@ impl ActionValidator<'_, '_> {
         "PDF action chains exceed the object node limit",
       ));
     }
-    if let Object::Reference(id) = action
-      && !self.visited.insert(*id)
-    {
-      return Err(invalid_document(
-        "PDF action chains must not contain cycles or duplicate nodes",
-      ));
+    if let Object::Reference(id) = action {
+      if !self.visited.insert(*id) {
+        return Err(invalid_document(
+          "PDF action chains must not contain cycles or duplicate nodes",
+        ));
+      }
+      self.referenced_ids.insert(*id);
     }
     let action_dictionary = resolve_object(action, self.document)?
       .as_dict()
@@ -1889,8 +1898,7 @@ fn validate_additional_actions(
   owner: &Dictionary,
   document: &Document,
   context: &str,
-  risks: &mut ActionRiskInventory,
-  attachments: &mut AttachmentInventory,
+  risks: &mut StructuralRiskInventory,
 ) -> Result<(), PdfInspectionError> {
   let Some(actions) = optional_entry(owner, b"AA") else {
     return Ok(());
@@ -1899,7 +1907,7 @@ fn validate_additional_actions(
     invalid_document(format!("{context} must resolve to a dictionary"))
   })?;
   for (_, action) in actions {
-    risks.add(validate_action_entry(action, document, attachments)?);
+    inventory_action_entry(action, document, risks)?;
   }
   Ok(())
 }
@@ -1907,8 +1915,7 @@ fn validate_additional_actions(
 fn validate_page_annotations(
   page: &Dictionary,
   document: &Document,
-  risks: &mut ActionRiskInventory,
-  attachments: &mut AttachmentInventory,
+  risks: &mut StructuralRiskInventory,
 ) -> Result<(), PdfInspectionError> {
   let Some(annotations) = optional_entry(page, b"Annots") else {
     return Ok(());
@@ -1928,7 +1935,7 @@ fn validate_page_annotations(
         })?;
     for key in [b"A".as_slice(), b"PA"] {
       if let Some(action) = optional_entry(annotation, key) {
-        risks.add(validate_action_entry(action, document, attachments)?);
+        inventory_action_entry(action, document, risks)?;
       }
     }
     validate_additional_actions(
@@ -1936,12 +1943,11 @@ fn validate_page_annotations(
       document,
       "PDF annotation AA",
       risks,
-      attachments,
     )?;
     let is_file_attachment =
       name_deref_is(annotation, b"Subtype", b"FileAttachment", document);
     if let Some(file_spec) = optional_entry(annotation, b"FS") {
-      validate_file_spec(file_spec, document, attachments)?;
+      validate_file_spec(file_spec, document, &mut risks.attachments)?;
     } else if is_file_attachment {
       return Err(invalid_document(
         "PDF FileAttachment annotations must declare FS",
@@ -1953,31 +1959,29 @@ fn validate_page_annotations(
 
 struct FormFieldValidator<'a, 'b> {
   document: &'a Document,
-  attachments: &'b mut AttachmentInventory,
+  risks: &'b mut StructuralRiskInventory,
   visited: BTreeSet<lopdf::ObjectId>,
   node_count: usize,
-  action_risks: ActionRiskInventory,
 }
 
 fn validate_form_fields(
   fields: &Object,
   document: &Document,
-  attachments: &mut AttachmentInventory,
-) -> Result<ActionRiskInventory, PdfInspectionError> {
+  risks: &mut StructuralRiskInventory,
+) -> Result<(), PdfInspectionError> {
   let fields = resolve_object(fields, document)?.as_array().map_err(|_| {
     invalid_document("PDF AcroForm Fields must resolve to an array")
   })?;
   let mut validator = FormFieldValidator {
     document,
-    attachments,
+    risks,
     visited: BTreeSet::new(),
     node_count: 0,
-    action_risks: ActionRiskInventory::default(),
   };
   for field in fields {
     validator.validate_field(field, None, None, 0)?;
   }
-  Ok(validator.action_risks)
+  Ok(())
 }
 
 impl FormFieldValidator<'_, '_> {
@@ -2032,17 +2036,12 @@ impl FormFieldValidator<'_, '_> {
       field_dictionary,
       self.document,
       "PDF form-field AA",
-      &mut self.action_risks,
-      self.attachments,
+      self.risks,
     )?;
     if name_deref_is(field_dictionary, b"Subtype", b"Widget", self.document)
       && let Some(action) = optional_entry(field_dictionary, b"A")
     {
-      self.action_risks.add(validate_action_entry(
-        action,
-        self.document,
-        self.attachments,
-      )?);
+      inventory_action_entry(action, self.document, self.risks)?;
     }
     let Some(kids) = optional_entry(field_dictionary, b"Kids") else {
       if field_type.is_none() {
@@ -2106,8 +2105,7 @@ fn validate_field_parent(
 fn validate_outlines(
   catalog: &Dictionary,
   document: &Document,
-  action_risks: &mut ActionRiskInventory,
-  attachments: &mut AttachmentInventory,
+  risks: &mut StructuralRiskInventory,
 ) -> Result<(), PdfInspectionError> {
   let Some(outlines_entry) = optional_entry(catalog, b"Outlines") else {
     return Ok(());
@@ -2136,10 +2134,6 @@ fn validate_outlines(
   }
   let mut visited = BTreeSet::new();
   let mut node_count = 0usize;
-  let mut risks = OutlineRisks {
-    actions: action_risks,
-    attachments,
-  };
   let actual_last = validate_outline_chain(
     first,
     outlines_id,
@@ -2147,7 +2141,7 @@ fn validate_outlines(
     &mut visited,
     &mut node_count,
     0,
-    &mut risks,
+    risks,
   )?;
   let declared_last = last.as_reference().map_err(|_| {
     invalid_document("PDF outline Last must be an indirect reference")
@@ -2160,11 +2154,6 @@ fn validate_outlines(
   Ok(())
 }
 
-struct OutlineRisks<'a> {
-  actions: &'a mut ActionRiskInventory,
-  attachments: &'a mut AttachmentInventory,
-}
-
 fn validate_outline_chain(
   first: &Object,
   expected_parent: lopdf::ObjectId,
@@ -2172,7 +2161,7 @@ fn validate_outline_chain(
   visited: &mut BTreeSet<lopdf::ObjectId>,
   node_count: &mut usize,
   depth: usize,
-  risks: &mut OutlineRisks<'_>,
+  risks: &mut StructuralRiskInventory,
 ) -> Result<lopdf::ObjectId, PdfInspectionError> {
   if depth > PDF_MAX_OBJECT_DEPTH {
     return Err(error(
@@ -2233,11 +2222,7 @@ fn validate_outline_chain(
       .as_str()
       .map_err(|_| invalid_document("PDF outline Title must be a string"))?;
     if let Some(action) = optional_entry(item, b"A") {
-      risks.actions.add(validate_action_entry(
-        action,
-        document,
-        risks.attachments,
-      )?);
+      inventory_action_entry(action, document, risks)?;
     }
     let first_child = optional_entry(item, b"First");
     let last_child = optional_entry(item, b"Last");
@@ -2279,8 +2264,7 @@ fn validate_name_tree(
   depth: usize,
   visited: &mut BTreeSet<lopdf::ObjectId>,
   value_kind: NameTreeValueKind,
-  action_risks: &mut ActionRiskInventory,
-  attachments: &mut AttachmentInventory,
+  risks: &mut StructuralRiskInventory,
 ) -> Result<(), PdfInspectionError> {
   if depth > PDF_MAX_OBJECT_DEPTH {
     return Err(error(
@@ -2318,14 +2302,10 @@ fn validate_name_tree(
         })?;
         match value_kind {
           NameTreeValueKind::Action => {
-            action_risks.add(validate_action_entry(
-              value,
-              document,
-              attachments,
-            )?);
+            inventory_action_entry(value, document, risks)?;
           }
           NameTreeValueKind::EmbeddedFile => {
-            validate_file_spec(value, document, attachments)?;
+            validate_file_spec(value, document, &mut risks.attachments)?;
           }
         }
       }
@@ -2353,8 +2333,7 @@ fn validate_name_tree(
           depth.saturating_add(1),
           visited,
           value_kind,
-          action_risks,
-          attachments,
+          risks,
         )?;
       }
       Ok(())
@@ -3641,6 +3620,47 @@ mod tests {
   }
 
   #[test]
+  fn inventories_unreferenced_form_xobjects_and_action_dictionaries() {
+    let mut document = Document::load_mem(MINIMAL_PDF).unwrap();
+    document.add_object(Object::Stream(lopdf::Stream::new(
+      lopdf::dictionary! {
+        "Type" => "XObject",
+        "Subtype" => "Form",
+        "BBox" => vec![0.into(), 0.into(), 1.into(), 1.into()],
+      },
+      b"retained form content".to_vec(),
+    )));
+    document.add_object(lopdf::dictionary! {
+      "Type" => "Action",
+      "S" => "JavaScript",
+      "JS" => Object::string_literal("retained script content"),
+    });
+
+    let inspection = inspect_document(&mut document);
+
+    assert_eq!(inspection.risks.form_x_object_count, 1);
+    assert_eq!(inspection.risks.javascript_action_count, 1);
+  }
+
+  #[test]
+  fn deduplicates_referenced_actions_during_the_object_wide_scan() {
+    let mut document = Document::load_mem(MINIMAL_PDF).unwrap();
+    let action_id = document.add_object(lopdf::dictionary! {
+      "Type" => "Action",
+      "S" => "JavaScript",
+      "JS" => Object::string_literal("one retained script"),
+    });
+    document
+      .catalog_mut()
+      .unwrap()
+      .set("OpenAction", Object::Reference(action_id));
+
+    let inspection = inspect_document(&mut document);
+
+    assert_eq!(inspection.risks.javascript_action_count, 1);
+  }
+
+  #[test]
   fn rejects_malformed_attachment_ef_references_and_stream_types() {
     for malformed_payload in [
       Object::Dictionary(Dictionary::new()),
@@ -3720,6 +3740,7 @@ mod tests {
     assert!(inspection.risks.embedded_file_count >= 1);
     assert!(inspection.risks.document_info_entry_count >= 3);
     assert!(inspection.risks.external_action_count >= 1);
+    assert!(inspection.risks.form_x_object_count >= 1);
     assert!(inspection.risks.image_object_count >= 1);
     assert!(inspection.risks.javascript_action_count >= 1);
     assert!(inspection.risks.metadata_stream_count >= 1);

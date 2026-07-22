@@ -45,6 +45,7 @@ describe("PDF inspection contract", () => {
     expect(risks.annotationCount).toBeGreaterThanOrEqual(2);
     expect(risks.embeddedFileCount).toBeGreaterThanOrEqual(1);
     expect(risks.externalActionCount).toBeGreaterThanOrEqual(1);
+    expect(risks.formXObjectCount).toBeGreaterThanOrEqual(1);
     expect(risks.imageObjectCount).toBeGreaterThanOrEqual(1);
     expect(risks.javascriptActionCount).toBeGreaterThanOrEqual(1);
     expect(risks.metadataStreamCount).toBeGreaterThanOrEqual(1);

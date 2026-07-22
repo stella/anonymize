@@ -40,7 +40,8 @@ instructions, alternate content, and other package parts are reported as
 coverage gaps. Partial anonymization requires explicit opt-in.
 
 PDF inspection inventories forms, annotations, attachments, metadata,
-JavaScript, XFA, optional content, signatures, and image objects. Page text and
+JavaScript, XFA, optional content, signatures, image objects, and reusable Form
+XObject streams. Page text and
 glyph boxes use an explicit renderer/OCR observation contract; without those
 observations, coverage is reported as partial. Inspection does not anonymize a
 PDF. In particular, drawing an opaque rectangle over original page content is

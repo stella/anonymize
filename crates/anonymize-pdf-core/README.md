@@ -5,9 +5,11 @@ contract. It does not redact PDFs. In particular, it never treats a rectangle
 drawn over original page content as anonymization.
 
 The built-in inspector inventories document structures that can retain personal
-data. Page text, glyph geometry, rendered images, and OCR coverage come from an
-explicit observation provider. A later renderer can implement that provider and
-produce destructive raster output without changing the inspection contract.
+data, including otherwise-unreferenced action dictionaries and reusable Form
+XObject streams. Page text, glyph geometry, rendered images, and OCR coverage
+come from an explicit observation provider. A later renderer can implement that
+provider and produce destructive raster output without changing the inspection
+contract.
 
 Page-tree traversal is strict and bounded while supporting PDF 1.5
 cross-reference and object streams. Renderer dimensions are checked against
