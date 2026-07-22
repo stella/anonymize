@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { copyFileSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { copyFileSync, cpSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createRequire } from "node:module";
@@ -261,65 +261,14 @@ runCommand("cargo", [
 const tempDir = mkdtempSync(join(tmpdir(), "stella-anonymize-perf-"));
 const napiPath = join(tempDir, "stella_anonymize_napi.node");
 const pythonPackageDir = join(tempDir, "stella_anonymize");
-mkdirSync(pythonPackageDir);
+cpSync(
+  join(ROOT_DIR, "crates", "anonymize-py", "python", "stella_anonymize"),
+  pythonPackageDir,
+  { recursive: true },
+);
 const pythonModulePath = join(pythonPackageDir, "_native.so");
 copyFileSync(nativeLibraryPath("stella_anonymize_napi"), napiPath);
 copyFileSync(nativeLibraryPath("stella_anonymize_core_py"), pythonModulePath);
-copyFileSync(
-  join(
-    ROOT_DIR,
-    "crates",
-    "anonymize-py",
-    "python",
-    "stella_anonymize",
-    "__init__.py",
-  ),
-  join(pythonPackageDir, "__init__.py"),
-);
-copyFileSync(
-  join(
-    ROOT_DIR,
-    "crates",
-    "anonymize-py",
-    "python",
-    "stella_anonymize",
-    "docx.py",
-  ),
-  join(pythonPackageDir, "docx.py"),
-);
-copyFileSync(
-  join(
-    ROOT_DIR,
-    "crates",
-    "anonymize-py",
-    "python",
-    "stella_anonymize",
-    "__init__.pyi",
-  ),
-  join(pythonPackageDir, "__init__.pyi"),
-);
-copyFileSync(
-  join(
-    ROOT_DIR,
-    "crates",
-    "anonymize-py",
-    "python",
-    "stella_anonymize",
-    "_native.pyi",
-  ),
-  join(pythonPackageDir, "_native.pyi"),
-);
-copyFileSync(
-  join(
-    ROOT_DIR,
-    "crates",
-    "anonymize-py",
-    "python",
-    "stella_anonymize",
-    "py.typed",
-  ),
-  join(pythonPackageDir, "py.typed"),
-);
 
 const native = createRequire(import.meta.url)(napiPath);
 for (const userDataScenario of USER_DATA_SCENARIOS) {
