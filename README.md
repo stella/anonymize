@@ -55,15 +55,17 @@ console.log(redaction.redactedText);
 // Contact [PERSON_1] at [EMAIL_ADDRESS_1].
 
 const original = deanonymise(redaction.redactedText, redaction.redactionMap);
+console.log(original);
+// Contact Alice Smith at alice@example.com.
 ```
 
 Create the pipeline once and reuse it. Language-scoped packages are bundled for
-English, Czech, and German; the full package covers the other supported
-languages. Built-in data covers `cs`, `de`, `en`, `es`, `fr`, `hu`, `it`, `pl`,
-`pt-br`, `ro`, `sk`, and `sv`, with detectors for people, organizations,
-locations, contact details, dates, financial data, and legal identifiers. See
-the [Node package guide](packages/anonymize/README.md) for
-sessions, custom detections, operators, diagnostics, and prepared packages.
+English, Czech, and German; an all-language package is bundled as well. Built-in
+data covers `cs`, `de`, `en`, `es`, `fr`, `hu`, `it`, `pl`, `pt-br`, `ro`,
+`sk`, and `sv`. The [Node package guide](packages/anonymize/README.md) covers
+sessions, custom detections, operators, diagnostics, and prepared packages; the
+[capability manifest](packages/anonymize/src/capabilities.ts) is the exact list
+of public runtime surfaces and entity types.
 
 ### Browser
 
@@ -144,21 +146,23 @@ status rather than document contents or plaintext mappings.
 }
 ```
 
-The server requires Node.js 20+. It supports text, DOCX, PDF, optional encrypted
-durable sessions, and provider-neutral external-detection sidecars. PDF use also
-requires configured local Poppler and Tesseract executables. Read the
-[MCP guide](packages/mcp/README.md) before enabling durable sessions or document
-tools; it defines path, permission, key, archive, and failure boundaries.
+The server requires Node.js 20+. It supports text, DOCX, PDF, and
+provider-neutral external-detection sidecars for text. Encrypted durable
+sessions are optional and currently limited to macOS and Linux. PDF tools need
+local Poppler and Tesseract installations; their executable paths can be set at
+server startup. Read the [MCP guide](packages/mcp/README.md) before enabling
+durable sessions or document tools; it defines path, permission, key, archive,
+and failure boundaries.
 
 ## Document support
 
 ### DOCX
 
 DOCX extraction, anonymization, and restoration are available in Node.js and
-Python, and through the CLI and local MCP server. The adapter preserves
-supported Word structure and reports anything outside its rewrite surface.
-The default `require-full` policy fails closed on unsupported content; partial
-rewrites require explicit opt-in.
+Python, and through the CLI and local MCP server. The adapters preserve the
+supported Word structures and return a coverage inventory for known content
+outside the rewrite surface. The default `require-full` policy fails closed on
+coverage gaps; partial rewrites require explicit opt-in.
 
 The DOCX never stores the plaintext redaction mapping. Reversible workflows use
 an application-owned session and, when persisted, an encrypted session archive.
@@ -169,10 +173,12 @@ coverage contract.
 
 ### PDF
 
-PDF inspection is available in Node.js, Python, and WASM. Destructive PDF
-anonymization is available in Node.js and Python, and through the CLI and MCP
-server. The local adapter uses separately installed Poppler and Tesseract with
-one explicitly selected OCR language.
+PDF inspection is available in Node.js, Python, and WASM. Node.js and Python
+both expose the destructive raster contract, which requires complete rendered
+page pixels, OCR text, and glyph geometry. The Node.js package can produce
+those observations with separately installed Poppler and Tesseract; the CLI
+and MCP server use that adapter. Python callers must supply observations and
+pixels from their own renderer/OCR boundary.
 
 The output is a new image-only PDF. Source PDF objects are not copied and black
 rectangles are not layered over recoverable content. This removes
@@ -210,15 +216,15 @@ package graph and parity boundaries.
 
 | Package                                                     | Purpose                                             |
 | ----------------------------------------------------------- | --------------------------------------------------- |
-| `@stll/anonymize`                                           | Node.js SDK and native runtime                      |
-| `stella-anonymize-core`                                     | Python bindings                                     |
+| [`@stll/anonymize`](packages/anonymize/README.md)           | Node.js SDK and native runtime                      |
+| [`stella-anonymize-core`](crates/anonymize-py/README.md)    | Python bindings                                     |
 | [`@stll/anonymize-wasm`](packages/anonymize/wasm/README.md) | Browser/WASM runtime                                |
-| `@stll/anonymize-cli`                                       | Command-line text, DOCX, and PDF workflows          |
-| `@stll/anonymize-mcp`                                       | Path-only local MCP server                          |
-| `@stll/anonymize-docx`                                      | Structure-aware DOCX adapter                        |
-| `@stll/anonymize-pdf`                                       | PDF inspection and destructive raster anonymization |
-| `@stll/anonymize-data`                                      | Published dictionaries and detector configuration   |
-| `crates/anonymize-core`                                     | Shared Rust core                                    |
+| [`@stll/anonymize-cli`](packages/cli/README.md)             | Command-line text, DOCX, and PDF workflows          |
+| [`@stll/anonymize-mcp`](packages/mcp/README.md)             | Path-only local MCP server                          |
+| [`@stll/anonymize-docx`](packages/document-docx/README.md)  | Structure-aware DOCX adapter                        |
+| [`@stll/anonymize-pdf`](packages/document-pdf/README.md)    | PDF inspection and destructive raster anonymization |
+| [`@stll/anonymize-data`](packages/data/README.md)           | Published dictionaries and detector configuration   |
+| [`crates/anonymize-core`](crates/anonymize-core/README.md)  | Shared Rust core                                    |
 
 Platform-specific Node.js binary packages are installed automatically as
 optional dependencies of `@stll/anonymize`.
