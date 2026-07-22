@@ -199,6 +199,7 @@ def anonymize_pdf_raster(
         ]
     ] = []
     total_pixel_bytes = 0
+    total_observed_text_bytes = 0
     if len(pages) > PDF_MAX_PAGES:
         raise PdfRasterError(
             "limit-exceeded",
@@ -219,6 +220,18 @@ def anonymize_pdf_raster(
             raise PdfRasterError(
                 "invalid-contract",
                 "invalid-contract: PDF raster observed text is invalid",
+            )
+        observed_text_bytes = len(text.encode("utf-8"))
+        if observed_text_bytes > PDF_MAX_PAGE_TEXT_UTF8_BYTES:
+            raise PdfRasterError(
+                "limit-exceeded",
+                "limit-exceeded: PDF raster page text exceeds its byte limit",
+            )
+        total_observed_text_bytes += observed_text_bytes
+        if total_observed_text_bytes > PDF_MAX_OBSERVED_TEXT_UTF8_BYTES:
+            raise PdfRasterError(
+                "limit-exceeded",
+                "limit-exceeded: PDF raster observed text exceeds its aggregate byte limit",
             )
         width = page.get("widthPixels")
         height = page.get("heightPixels")

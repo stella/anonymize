@@ -3,7 +3,13 @@ import { join } from "node:path";
 
 import { describe, expect, test } from "bun:test";
 
-import { anonymizePdfRaster, inspectPdf, PdfRasterError } from "../index";
+import {
+  anonymizePdfRaster,
+  inspectPdf,
+  PDF_MAX_PAGE_TEXT_UTF8_BYTES,
+  PDF_MAX_OBSERVED_TEXT_UTF8_BYTES,
+  PdfRasterError,
+} from "../index";
 import type { PdfPageObservation } from "../types";
 
 const source = readFileSync(
@@ -172,6 +178,80 @@ describe("PDF destructive raster anonymization", () => {
         ],
       }),
     ).toThrow(PdfRasterError);
+    expect(calls).toBe(0);
+  });
+
+  test("rejects oversized observed text before invoking detection", () => {
+    let calls = 0;
+    const countingPipeline = {
+      redactText: () => {
+        calls += 1;
+        return detectorResult();
+      },
+      redactTextWithCallerDetections: () => detectorResult(),
+    };
+    const oversizedObservation = {
+      ...observation,
+      text: "a".repeat(PDF_MAX_PAGE_TEXT_UTF8_BYTES + 1),
+    };
+
+    try {
+      anonymizePdfRaster({
+        document: source,
+        pipeline: countingPipeline,
+        provider,
+        pages: [
+          {
+            observation: oversizedObservation,
+            widthPixels: 17,
+            heightPixels: 22,
+            pixels,
+          },
+        ],
+      });
+      throw new Error("expected observed-text limit failure");
+    } catch (error) {
+      expect(error).toBeInstanceOf(PdfRasterError);
+      expect((error as PdfRasterError).code).toBe("limit-exceeded");
+    }
+    expect(calls).toBe(0);
+  });
+
+  test("rejects aggregate observed text limits before invoking detection", () => {
+    let calls = 0;
+    const countingPipeline = {
+      redactText: () => {
+        calls += 1;
+        return detectorResult();
+      },
+      redactTextWithCallerDetections: () => detectorResult(),
+    };
+    const pageText = "a".repeat(PDF_MAX_PAGE_TEXT_UTF8_BYTES);
+    const pageCount =
+      PDF_MAX_OBSERVED_TEXT_UTF8_BYTES / PDF_MAX_PAGE_TEXT_UTF8_BYTES;
+    const pages = Array.from({ length: pageCount + 1 }, (_, pageIndex) => ({
+      observation: {
+        ...observation,
+        pageIndex,
+        text: pageIndex === pageCount ? "a" : pageText,
+      },
+      widthPixels: 17,
+      heightPixels: 22,
+      pixels,
+    }));
+
+    try {
+      anonymizePdfRaster({
+        document: source,
+        pipeline: countingPipeline,
+        provider,
+        pages,
+      });
+      throw new Error("expected aggregate observed-text limit failure");
+    } catch (error) {
+      expect(error).toBeInstanceOf(PdfRasterError);
+      expect((error as PdfRasterError).code).toBe("limit-exceeded");
+    }
     expect(calls).toBe(0);
   });
 });

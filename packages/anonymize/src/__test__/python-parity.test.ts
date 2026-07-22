@@ -121,6 +121,7 @@ type PythonParityOutput = {
   pdf_raster_detected: { document_base64: string; certificate: unknown };
   pdf_raster_astral: { document_base64: string; certificate: unknown };
   pdf_detection_error: { code: string; message: string };
+  pdf_observation_limit_errors: readonly { code: string; calls: number }[];
   pdf_invalid_error: { code: string; message: string };
   caller_result: {
     redacted_text: string;
@@ -452,6 +453,50 @@ try:
     raise AssertionError("failing PDF detector was accepted")
 except anonymize.PdfRasterError as error:
     pdf_detection_error = {"code": error.code, "message": str(error)}
+class CountingPdfDetector:
+    def __init__(self):
+        self.calls = 0
+
+    def redact_text(self, _text):
+        self.calls += 1
+        raise AssertionError("oversized observed text reached detection")
+
+pdf_observation_limit_errors = []
+oversized_page_text = "a" * (anonymize.PDF_MAX_PAGE_TEXT_UTF8_BYTES + 1)
+aggregate_page_text = "a" * anonymize.PDF_MAX_PAGE_TEXT_UTF8_BYTES
+aggregate_page_count = (
+    anonymize.PDF_MAX_OBSERVED_TEXT_UTF8_BYTES
+    // anonymize.PDF_MAX_PAGE_TEXT_UTF8_BYTES
+)
+for texts in [
+    [oversized_page_text],
+    [aggregate_page_text] * aggregate_page_count + ["a"],
+]:
+    counting_pdf_detector = CountingPdfDetector()
+    observed_pages = []
+    for page_index, text in enumerate(texts):
+        limited_observation = dict(pdf_observation[0])
+        limited_observation["pageIndex"] = page_index
+        limited_observation["text"] = text
+        observed_pages.append({
+            "observation": limited_observation,
+            "widthPixels": 17,
+            "heightPixels": 22,
+            "pixels": pdf_pixels,
+        })
+    try:
+        anonymize.anonymize_pdf_raster(
+            pdf_source,
+            counting_pdf_detector,
+            pdf_raster_request["provider"],
+            observed_pages,
+        )
+        raise AssertionError("oversized PDF observation was accepted")
+    except anonymize.PdfRasterError as error:
+        pdf_observation_limit_errors.append({
+            "code": error.code,
+            "calls": counting_pdf_detector.calls,
+        })
 session = prepared.create_redaction_session("parity_session_1")
 session_first = session.redact_text("Jan Novak signed.")
 session_second = session.redact_text("Jan Novak signed again.")
@@ -763,6 +808,7 @@ print(
             "pdf_raster_detected": pdf_raster_detected,
             "pdf_raster_astral": pdf_raster_astral,
             "pdf_detection_error": pdf_detection_error,
+            "pdf_observation_limit_errors": pdf_observation_limit_errors,
             "pdf_invalid_error": pdf_invalid_error,
             "caller_result": {
                 "redacted_text": caller_result["redaction"]["redacted_text"],
@@ -1227,6 +1273,10 @@ describe("python binding parity", () => {
         code: "detection-failed",
         message: "detection-failed: PDF raster detection failed",
       });
+      expect(python.pdf_observation_limit_errors).toEqual([
+        { code: "limit-exceeded", calls: 0 },
+        { code: "limit-exceeded", calls: 0 },
+      ]);
     },
   );
 

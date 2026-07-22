@@ -184,7 +184,31 @@ export const anonymizePdfRaster = ({
     );
   }
   let totalPixelBytes = 0;
+  let totalObservedTextBytes = 0;
+  const textEncoder = new TextEncoder();
   for (const page of pages) {
+    if (typeof page.observation?.text !== "string") {
+      throw new PdfRasterError(
+        PDF_RASTER_ERROR_CODES.invalidContract,
+        "invalid-contract: PDF raster observed text is invalid",
+      );
+    }
+    const observedTextBytes = textEncoder.encode(
+      page.observation.text,
+    ).byteLength;
+    if (observedTextBytes > PDF_MAX_PAGE_TEXT_UTF8_BYTES) {
+      throw new PdfRasterError(
+        PDF_RASTER_ERROR_CODES.limitExceeded,
+        "limit-exceeded: PDF raster page text exceeds its byte limit",
+      );
+    }
+    totalObservedTextBytes += observedTextBytes;
+    if (totalObservedTextBytes > PDF_MAX_OBSERVED_TEXT_UTF8_BYTES) {
+      throw new PdfRasterError(
+        PDF_RASTER_ERROR_CODES.limitExceeded,
+        "limit-exceeded: PDF raster observed text exceeds its aggregate byte limit",
+      );
+    }
     const { heightPixels, widthPixels } = page;
     if (
       !Number.isSafeInteger(widthPixels) ||
