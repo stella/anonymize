@@ -195,6 +195,8 @@
     "@emnapi/core": "1.11.1",
     "@emnapi/runtime": "1.11.1",
     "emnapi": "1.11.1",
+    "yuku-codegen": "0.6.5",
+    "yuku-parser": "0.6.5",
   },
   "packages": {
     "@babel/code-frame": ["@babel/code-frame@7.29.7", "", { "dependencies": { "@babel/helper-validator-identifier": "^7.29.7", "js-tokens": "^4.0.0", "picocolors": "^1.1.1" } }, "sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw=="],
