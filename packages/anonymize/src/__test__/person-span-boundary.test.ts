@@ -39,6 +39,22 @@ const personTexts = async (text: string): Promise<string[]> => {
   return entities.filter((e) => e.label === "person").map((e) => e.text);
 };
 
+const personTextsForLanguages = async (
+  text: string,
+  languages: string[],
+): Promise<string[]> => {
+  cachedDictionaries ??= await loadTestDictionaries();
+  const entities = await detectNative(
+    {
+      ...CONFIG,
+      dictionaries: cachedDictionaries,
+      nameCorpusLanguages: languages,
+    },
+    text,
+  );
+  return entities.filter((e) => e.label === "person").map((e) => e.text);
+};
+
 describe("person span stops before form-field labels", () => {
   test("Czech regression: name does not absorb following Jméno:", async () => {
     const persons = await personTexts(
@@ -87,6 +103,15 @@ describe("trailing role trigger does not emit field-label values as people", () 
     );
     expect(persons.some((p) => /^IČO:?$/u.test(p.trim()))).toBe(false);
     expect(persons.some((p) => p.includes("Markem Svobodou"))).toBe(true);
+  });
+
+  test("Slovak IČO after a role is not a person", async () => {
+    const persons = await personTextsForLanguages(
+      "zastúpená Janou Novákovou, konateľkou\nIČO: 00209805, DIČ: SK00209805",
+      ["sk"],
+    );
+    expect(persons.some((p) => /^IČO:?$/u.test(p.trim()))).toBe(false);
+    expect(persons.some((p) => p.includes("Janou Novákovou"))).toBe(true);
   });
 
   test("English identity field after a role is not a person", async () => {

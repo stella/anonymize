@@ -39105,7 +39105,8 @@
       "jméno",
       "titul",
       "ičo",
-      "dič"
+      "dič",
+      "meno"
     ]
   },
   "coreference_data": {

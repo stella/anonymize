@@ -22,6 +22,7 @@
       "vat id",
       "social security number"
     ],
-    "cs": ["jméno", "titul", "ičo", "dič"]
+    "cs": ["jméno", "titul", "ičo", "dič"],
+    "sk": ["meno", "titul", "ičo", "dič"]
   }
 }

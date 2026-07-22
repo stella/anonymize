@@ -33432,7 +33432,8 @@
       "jméno",
       "titul",
       "ičo",
-      "dič"
+      "dič",
+      "meno"
     ]
   },
   "false_positive_filters": {

@@ -50841,7 +50841,8 @@
       "jméno",
       "titul",
       "ičo",
-      "dič"
+      "dič",
+      "meno"
     ]
   },
   "deny_list_data": {
