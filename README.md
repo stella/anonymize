@@ -102,9 +102,9 @@ result = pipeline.redact_text(
 print(result.redaction.redacted_text)
 ```
 
-Prebuilt wheels support Python 3.11+ on Linux, macOS, and Windows. The
-[Python guide](crates/anonymize-py/README.md) covers sessions, encrypted
-archives, caller detections, DOCX, and PDF APIs.
+Prebuilt Python 3.11+ wheels target manylinux glibc x64/aarch64, macOS
+x64/arm64, and Windows x64. The [Python guide](crates/anonymize-py/README.md)
+covers sessions, encrypted archives, caller detections, DOCX, and PDF APIs.
 
 ### CLI
 
@@ -231,11 +231,18 @@ optional dependencies of `@stll/anonymize`.
 
 ## Benchmarks
 
-The benchmark package compares stella with other open-source PII tools and
-normalizes several public evaluation corpora without collapsing their different
-annotation semantics into one score. Evaluation-only data is kept separate
-from development fixtures, and committed holdout reports contain aggregate
-metrics only.
+The sealed reports compare stella with Presidio, base scrubadub, DataFog's
+model-free regex engine, and redact-pii across TAB-ECHR, RedactionBench, and
+MEDDOCAN. Each corpus keeps its native metrics, and committed holdout reports
+contain aggregate values only. PII-Shield is included only when its external
+CLI and model are installed.
+
+Quality-suite timings are one-shot corpus passes, so they are directional
+rather than speed rankings. The separate cross-provider harness runs stella's
+full pipeline, stella's built-in regex detectors, base scrubadub, and DataFog's
+regex engine in fresh processes with discarded warmups and repeated samples.
+It reports startup, initialization, calls, process CPU, and end-to-end wall
+time; read speed alongside output counts because detector scope differs.
 
 Read the [benchmark methodology](packages/benchmark/README.md), browse the
 [committed aggregate results](packages/benchmark/results/), or follow the
