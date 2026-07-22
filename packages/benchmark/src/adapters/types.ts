@@ -57,7 +57,7 @@ export type Adapter = {
  */
 export const runTwoPassInProcess = (
   docs: readonly GroundTruthDocument[],
-  processDoc: (text: string) => NativePrediction[],
+  processDoc: (doc: GroundTruthDocument) => NativePrediction[],
   initSeconds: number,
 ): AdapterOutcome => {
   const totalChars = docs.reduce((sum, doc) => sum + doc.text.length, 0);
@@ -65,13 +65,13 @@ export const runTwoPassInProcess = (
 
   const coldStart = performance.now();
   for (const doc of docs) {
-    predictions.set(doc.id, processDoc(doc.text));
+    predictions.set(doc.id, processDoc(doc));
   }
   const coldSeconds = (performance.now() - coldStart) / 1000;
 
   const warmStart = performance.now();
   for (const doc of docs) {
-    processDoc(doc.text);
+    processDoc(doc);
   }
   const warmSeconds = (performance.now() - warmStart) / 1000;
 
