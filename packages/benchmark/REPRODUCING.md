@@ -7,11 +7,13 @@ hardware.
 
 ## What is measured
 
-`@stll/anonymize` (stella) versus three other open-source PII libraries on a
-public, synthetic, legal-domain corpus (en/cs/de):
+The development comparison is configured to run `@stll/anonymize` (stella)
+and four other open-source PII libraries on a public, synthetic, legal-domain
+corpus (en/cs/de):
 
 - **Microsoft Presidio** (`presidio-analyzer`) with spaCy models.
 - **scrubadub** (base install).
+- **DataFog** 4.8.0 (core regex engine only; no spaCy or GLiNER extras).
 - **redact-pii** 3.4.0 detector assets, vendored from the npm package.
 
 Metrics: per-label and overall precision / recall / F1 with span-overlap
@@ -161,7 +163,17 @@ uv venv .venv-scrubadub --python 3.11
 uv pip install --python .venv-scrubadub -r python/requirements-scrubadub.txt
 ```
 
-### 4. Run
+### 4. DataFog virtualenv (Python, model-free)
+
+The requirements file pins DataFog and its complete core dependency closure.
+It does not install the `nlp` or `nlp-advanced` extras.
+
+```sh
+uv venv .venv-datafog --python 3.11
+uv pip install --python .venv-datafog -r python/requirements-datafog.txt
+```
+
+### 5. Run
 
 ```sh
 bun run bench:compare
@@ -220,6 +232,12 @@ addresses, Twitter handles, credentials) are dropped before scoring, so a
 library is never charged a false positive for correctly detecting a real
 category the ground truth does not track.
 
+DataFog's model-free mapping covers five common labels: `EMAIL` to `email`,
+`PHONE` to `phone`, `DATE` to `date`, ZIP/postal labels to `address`, and its
+credit-card, SSN, German VAT, IBAN, tax, social-security, passport, and
+residence-permit labels to `id-number`. `IP_ADDRESS` is out of scope and maps
+to `null`. Person, organization, and money are unsupported by this engine.
+
 ### Mapping fairness decisions
 
 - **Presidio NRP/GPE/LOCATION -> address.** NRP (nationalities, religious and
@@ -242,6 +260,9 @@ category the ground truth does not track.
   recognizers enabled for all three languages (`python/presidio_adapter.py`).
 - **scrubadub** runs its default `Scrubber()`; the active detector set is
   recorded in the JSON output and the report's adapter notes.
+- **DataFog** runs `scan(..., engine="regex")` from the core package. German
+  documents select its upstream `de` locale; other documents use only the base
+  structured detectors. No optional NER engine or model is installed.
 - **redact-pii** is a redaction library that returns masked text, not spans. The
   adapter recovers spans by running redact-pii's own detectors over the original
   text: the exported regexp built-ins via `matchAll`, and a faithful
@@ -263,6 +284,7 @@ into the per-document loop. What counts as init for each adapter:
 | stella     | load language-scoped names and neutral dictionaries, load native binding, build one pipeline per language | `redactText` per doc           |
 | Presidio   | load the three spaCy models and build the analyzer/recognizer registry                                    | `analyzer.analyze` per doc     |
 | scrubadub  | construct `Scrubber()` (instantiates its detectors)                                                       | `iter_filth` per doc           |
+| DataFog    | no explicit pipeline; first-use regex compilation remains in the cold pass                                | `scan(..., engine="regex")`    |
 | redact-pii | load built-in pattern list + well-known-names, compile regexes (large name alternation)                   | run compiled detectors per doc |
 
 stella's scoped dictionary load and binding load are the analogue of Presidio's
@@ -287,9 +309,18 @@ and compare medians.
 
 ## Provenance of committed results
 
-The `commit` field in committed results records the SHA of the source tree
-that produced them, which is a PR-branch commit. This repository squash-merges,
-so that SHA is not on `main`'s first-parent history; it remains permanently
-fetchable via the pull request head ref (`git fetch origin pull/<PR>/head`).
-Recording the post-squash SHA is impossible by construction: it does not exist
-until after the results are committed.
+The `sourceGitSha` field records the full 40-character SHA of the clean source
+tree that produced a sealed result. A sealed runner fails before loading a
+corpus when tracked source changes, staged changes, or unrelated untracked
+files are present. Canonical aggregate report pairs emitted by an earlier
+sealed phase for the same source SHA are the only untracked files ignored, so
+TAB, RedactionBench, and MEDDOCAN can run sequentially without weakening the
+provenance check.
+
+For reports produced on a PR branch, the recorded source SHA is a PR-branch
+commit. This repository squash-merges, so that commit will not be on `main`'s
+first-parent history; it remains fetchable via the pull request head ref
+(`git fetch origin pull/<PR>/head`). Recording the post-squash SHA is impossible
+by construction because it does not exist until after the results are committed.
+Runs from a trusted `main` push or manual dispatch instead record the clean
+`main` commit used by that run.

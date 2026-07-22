@@ -20,7 +20,7 @@ export type Timing = {
   readonly coldSeconds: number;
   /** Second full pass over the corpus (steady state). */
   readonly warmSeconds: number;
-  /** Total characters processed in one pass. */
+  /** Total UTF-16 code units processed in one pass (the scorer's offset unit). */
   readonly totalChars: number;
 };
 
@@ -50,6 +50,11 @@ export type Adapter = {
   ) => Promise<AdapterOutcome>;
 };
 
+/** Canonical corpus size used by every adapter and throughput calculation. */
+export const totalUtf16CodeUnits = (
+  docs: readonly GroundTruthDocument[],
+): number => docs.reduce((sum, doc) => sum + doc.text.length, 0);
+
 /**
  * Run a synchronous, in-process detector over the corpus twice and time it.
  * Pass one is "cold" (first touch, lazy init amortised), pass two is "warm".
@@ -60,7 +65,7 @@ export const runTwoPassInProcess = (
   processDoc: (doc: GroundTruthDocument) => NativePrediction[],
   initSeconds: number,
 ): AdapterOutcome => {
-  const totalChars = docs.reduce((sum, doc) => sum + doc.text.length, 0);
+  const totalChars = totalUtf16CodeUnits(docs);
   const predictions = new Map<string, readonly NativePrediction[]>();
 
   const coldStart = performance.now();

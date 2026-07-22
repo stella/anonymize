@@ -2,13 +2,14 @@ import { join } from "node:path";
 
 import { createBenchmarkAdapters } from "./adapters";
 import type { GroundTruthDocument } from "./ground-truth";
-import { benchmarkGitRevision } from "./git-revision";
+import { benchmarkSourceGitSha } from "./git-revision";
 import { runSealedBoundary } from "./sealed-boundary";
 import {
   type RedactionBenchAggregateMetrics,
   SEALED_AGGREGATE_REPORT_SCHEMA_VERSION,
   type SealedAggregateReport,
   type SealedLibraryResult,
+  normalizeSealedProviderVersion,
   writeSealedAggregateReport,
 } from "./sealed-report";
 import {
@@ -24,6 +25,7 @@ const RESULTS_DIR = join(
   "blind",
   "redactionbench",
 );
+const sourceGitSha = benchmarkSourceGitSha();
 const documents = await runSealedBoundary(
   "RedactionBench verification or parsing",
   loadVerifiedRedactionBench,
@@ -61,7 +63,9 @@ for (const adapter of createBenchmarkAdapters()) {
   };
   libraries.push({
     name: adapter.name,
-    version: outcome.reportedVersion ?? adapter.version,
+    version: normalizeSealedProviderVersion(
+      outcome.reportedVersion ?? adapter.version,
+    ),
     status: "ok",
     timing: outcome.timing,
     adapterWallSeconds,
@@ -72,7 +76,7 @@ for (const adapter of createBenchmarkAdapters()) {
 const report: SealedAggregateReport = {
   schemaVersion: SEALED_AGGREGATE_REPORT_SCHEMA_VERSION,
   createdAt: new Date().toISOString(),
-  gitSha: benchmarkGitRevision(),
+  sourceGitSha,
   runtime: `Bun ${Bun.version}`,
   policy: "evaluation-only",
   corpus: {

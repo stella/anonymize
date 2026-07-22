@@ -16,7 +16,7 @@ test data is never used for detector development or tuning.
 
 ```text
 fixtures/                 public-safe synthetic ground truth, per language (en/cs/de)
-python/                   Presidio + scrubadub adapter scripts and pinned requirements
+python/                   Python adapter scripts and pinned requirements
 results/                  committed, date-stamped JSON + Markdown reports (+ latest.md)
 vendor/                   pinned third-party benchmark detector assets and licenses
 src/
@@ -26,7 +26,7 @@ src/
   report.ts               Markdown report renderer
   adhoc.ts                unseen-document mode: side-by-side detections, no gold
   bench.ts                runner: bun run bench:compare [--input <file|dir>]
-  adapters/               stella, presidio, scrubadub, redact-pii adapters
+  adapters/               stella, Python, redact-pii, and PII-Shield adapters
 REPRODUCING.md            exact versions, models, hardware, mapping decisions
 ```
 
@@ -39,6 +39,7 @@ bun install && bun run build
 # from packages/benchmark, set up the Python competitors (see REPRODUCING.md):
 uv venv .venv-presidio  --python 3.11 && uv pip install --python .venv-presidio  -r python/requirements-presidio.txt   # + model wheels
 uv venv .venv-scrubadub --python 3.11 && uv pip install --python .venv-scrubadub -r python/requirements-scrubadub.txt
+uv venv .venv-datafog   --python 3.11 && uv pip install --python .venv-datafog   -r python/requirements-datafog.txt
 
 # run:
 bun run bench:compare
@@ -64,8 +65,9 @@ bun run bench:dev-gap --examples=ORG
 ```
 
 `bench:blind` verifies the upstream file against a pinned SHA-256 digest before
-loading it and writes only aggregate reports under `results/blind/`. Presidio
-and scrubadub use the same optional virtual environments as `bench:compare`.
+loading it and writes only aggregate reports under `results/blind/`. Presidio,
+scrubadub, and DataFog use the same optional virtual environments as
+`bench:compare`.
 PII-Shield is included when its CLI and GLiNER model are installed; set
 `PII_SHIELD_BIN` when the executable is not on `PATH`.
 

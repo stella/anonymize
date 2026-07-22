@@ -66,7 +66,6 @@ def main() -> None:
     scrub_all(scrubber, docs)
     warm_seconds = time.perf_counter() - warm_start
 
-    total_chars = sum(len(doc["text"]) for doc in docs)
     json.dump(
         {
             "version": getattr(scrubadub, "__version__", "unknown"),
@@ -74,7 +73,6 @@ def main() -> None:
             "initSeconds": init_seconds,
             "coldSeconds": cold_seconds,
             "warmSeconds": warm_seconds,
-            "totalChars": total_chars,
             "results": results,
         },
         sys.stdout,

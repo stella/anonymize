@@ -8,9 +8,9 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
-import { benchmarkGitRevision } from "../git-revision";
+import { benchmarkGitRevision, benchmarkSourceGitSha } from "../git-revision";
 import {
   renderSealedAggregateMarkdown,
   SEALED_AGGREGATE_REPORT_SCHEMA_VERSION,
@@ -21,12 +21,12 @@ import {
 const temporaryRepositories: string[] = [];
 
 const aggregateReport = (
-  gitSha: string,
-  corpus: "redactionbench" | "tab-echr",
+  sourceGitSha: string,
+  corpus: "meddocan" | "redactionbench" | "tab-echr",
 ): SealedAggregateReport => ({
   schemaVersion: SEALED_AGGREGATE_REPORT_SCHEMA_VERSION,
   createdAt: "2026-01-02T03:04:05.678Z",
-  gitSha,
+  sourceGitSha,
   runtime: "Bun test",
   policy: "evaluation-only",
   corpus: {
@@ -52,30 +52,41 @@ const aggregateReport = (
         totalChars: 100,
       },
       adapterWallSeconds: 0.9,
-      metrics:
-        corpus === "tab-echr"
-          ? {
-              type: "tab-independent-annotator-span-redaction",
-              documents: 1,
-              directMentions: 1,
-              quasiMentions: 1,
-              directMentionRecall: 1,
-              quasiMentionRecall: 1,
-              allMentionRecall: 1,
-              entityRecall: 1,
-              characterPrecision: 1,
-              characterRecall: 1,
-              predictedSpans: 1,
-            }
-          : {
-              type: "redactionbench-transparent-interim",
-              documents: 1,
-              mandatorySpans: 1,
-              mandatorySpanRecall: 1,
-              mandatoryCharacterRecall: 1,
-              acceptedCharacterPrecision: 1,
-              predictedSpans: 1,
-            },
+      metrics: (() => {
+        if (corpus === "tab-echr") {
+          return {
+            type: "tab-independent-annotator-span-redaction",
+            documents: 1,
+            directMentions: 1,
+            quasiMentions: 1,
+            directMentionRecall: 1,
+            quasiMentionRecall: 1,
+            allMentionRecall: 1,
+            entityRecall: 1,
+            characterPrecision: 1,
+            characterRecall: 1,
+            predictedSpans: 1,
+          };
+        }
+        if (corpus === "redactionbench") {
+          return {
+            type: "redactionbench-transparent-interim",
+            documents: 1,
+            mandatorySpans: 1,
+            mandatorySpanRecall: 1,
+            mandatoryCharacterRecall: 1,
+            acceptedCharacterPrecision: 1,
+            predictedSpans: 1,
+          };
+        }
+        return {
+          type: "label-agnostic-span-redaction",
+          spanRecall: 1,
+          characterRecall: 1,
+          characterPrecision: 1,
+          goldSpans: 1,
+        };
+      })(),
     },
   ],
 });
@@ -90,6 +101,7 @@ const writeAggregateReport = (
     root,
     `packages/benchmark/results/blind/${suite}${stamp}`,
   );
+  mkdirSync(dirname(prefix), { recursive: true });
   writeFileSync(`${prefix}.json`, serializeSealedAggregateReport(report));
   writeFileSync(`${prefix}.md`, renderSealedAggregateMarkdown(report));
 };
@@ -102,7 +114,11 @@ const git = (cwd: string, ...args: string[]): string => {
   return process.stdout.toString().trim();
 };
 
-const repository = (): { readonly root: string; readonly sha: string } => {
+const repository = (): {
+  readonly root: string;
+  readonly fullSha: string;
+  readonly shortSha: string;
+} => {
   const root = mkdtempSync(join(tmpdir(), "anonymize-benchmark-provenance-"));
   temporaryRepositories.push(root);
   mkdirSync(join(root, "packages/benchmark/results/blind/redactionbench"), {
@@ -133,7 +149,11 @@ const repository = (): { readonly root: string; readonly sha: string } => {
     "-m",
     "fixture",
   );
-  return { root, sha: git(root, "rev-parse", "--short", "HEAD") };
+  return {
+    root,
+    fullSha: git(root, "rev-parse", "HEAD"),
+    shortSha: git(root, "rev-parse", "--short", "HEAD"),
+  };
 };
 
 afterEach(() => {
@@ -144,12 +164,14 @@ afterEach(() => {
 
 describe("benchmark Git provenance", () => {
   test("ignores environments and untracked aggregate phase reports", () => {
-    const { root, sha } = repository();
+    const { root, fullSha, shortSha } = repository();
     symlinkSync(root, join(root, "packages/benchmark/.venv-presidio"));
-    writeAggregateReport(root, aggregateReport(sha, "tab-echr"));
-    writeAggregateReport(root, aggregateReport(sha, "redactionbench"));
+    writeAggregateReport(root, aggregateReport(fullSha, "tab-echr"));
+    writeAggregateReport(root, aggregateReport(fullSha, "redactionbench"));
+    writeAggregateReport(root, aggregateReport(fullSha, "meddocan"));
 
-    expect(benchmarkGitRevision(root)).toBe(sha);
+    expect(benchmarkGitRevision(root)).toBe(shortSha);
+    expect(benchmarkSourceGitSha(root)).toBe(fullSha);
   });
 
   test("does not ignore arbitrary or invalid report-looking files", () => {
@@ -158,9 +180,12 @@ describe("benchmark Git provenance", () => {
       "packages/benchmark/results/blind/per-document.json",
       "packages/benchmark/results/blind/2026-01-02T03-04-05-678Z.json",
     ]) {
-      const { root, sha } = repository();
+      const { root, shortSha } = repository();
       writeFileSync(join(root, relativePath), "{}\n");
-      expect(benchmarkGitRevision(root)).toBe(`${sha}-dirty`);
+      expect(benchmarkGitRevision(root)).toBe(`${shortSha}-dirty`);
+      expect(() => benchmarkSourceGitSha(root)).toThrow(
+        "clean Git source tree",
+      );
       temporaryRepositories.splice(temporaryRepositories.indexOf(root), 1);
       rmSync(root, { recursive: true, force: true });
     }
@@ -174,36 +199,48 @@ describe("benchmark Git provenance", () => {
     );
     writeFileSync(`${invalidPrefix}.json`, "{}\n");
     writeFileSync(`${invalidPrefix}.md`, "aggregate\n");
-    expect(benchmarkGitRevision(invalid.root)).toBe(`${invalid.sha}-dirty`);
+    expect(benchmarkGitRevision(invalid.root)).toBe(
+      `${invalid.shortSha}-dirty`,
+    );
+    expect(() => benchmarkSourceGitSha(invalid.root)).toThrow(
+      "clean Git source tree",
+    );
 
     const stale = repository();
-    writeAggregateReport(stale.root, aggregateReport("abcdef0", "tab-echr"));
-    expect(benchmarkGitRevision(stale.root)).toBe(`${stale.sha}-dirty`);
+    writeAggregateReport(
+      stale.root,
+      aggregateReport("a".repeat(40), "tab-echr"),
+    );
+    expect(benchmarkGitRevision(stale.root)).toBe(`${stale.shortSha}-dirty`);
 
     const tampered = repository();
-    const report = aggregateReport(tampered.sha, "tab-echr");
+    const report = aggregateReport(tampered.fullSha, "tab-echr");
     writeAggregateReport(tampered.root, report);
     const stamp = report.createdAt.replace(/[:.]/gu, "-");
     writeFileSync(
       join(tampered.root, `packages/benchmark/results/blind/${stamp}.md`),
       "non-aggregate analysis\n",
     );
-    expect(benchmarkGitRevision(tampered.root)).toBe(`${tampered.sha}-dirty`);
+    expect(benchmarkGitRevision(tampered.root)).toBe(
+      `${tampered.shortSha}-dirty`,
+    );
   });
 
   test("marks every other untracked file dirty", () => {
-    const { root, sha } = repository();
+    const { root, fullSha, shortSha } = repository();
     const source = join(root, "packages/benchmark/unreviewed.ts");
     writeFileSync(source, "export {};\n");
-    expect(benchmarkGitRevision(root)).toBe(`${sha}-dirty`);
+    expect(benchmarkGitRevision(root)).toBe(`${shortSha}-dirty`);
+    expect(() => benchmarkSourceGitSha(root)).toThrow("clean Git source tree");
     unlinkSync(source);
-    expect(benchmarkGitRevision(root)).toBe(sha);
+    expect(benchmarkGitRevision(root)).toBe(shortSha);
+    expect(benchmarkSourceGitSha(root)).toBe(fullSha);
   });
 
   test("marks tracked source and aggregate report modifications dirty", () => {
-    const { root, sha } = repository();
+    const { root, shortSha } = repository();
     writeFileSync(join(root, "source.ts"), "export const value = 2;\n");
-    expect(benchmarkGitRevision(root)).toBe(`${sha}-dirty`);
+    expect(benchmarkGitRevision(root)).toBe(`${shortSha}-dirty`);
     git(root, "restore", "source.ts");
     writeFileSync(
       join(
@@ -212,13 +249,14 @@ describe("benchmark Git provenance", () => {
       ),
       '{"changed":true}\n',
     );
-    expect(benchmarkGitRevision(root)).toBe(`${sha}-dirty`);
+    expect(benchmarkGitRevision(root)).toBe(`${shortSha}-dirty`);
   });
 
   test("marks staged changes dirty", () => {
-    const { root, sha } = repository();
+    const { root, shortSha } = repository();
     writeFileSync(join(root, "source.ts"), "export const value = 3;\n");
     git(root, "add", "source.ts");
-    expect(benchmarkGitRevision(root)).toBe(`${sha}-dirty`);
+    expect(benchmarkGitRevision(root)).toBe(`${shortSha}-dirty`);
+    expect(() => benchmarkSourceGitSha(root)).toThrow("clean Git source tree");
   });
 });

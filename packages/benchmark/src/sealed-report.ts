@@ -1,7 +1,18 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
-export const SEALED_AGGREGATE_REPORT_SCHEMA_VERSION = 2 as const;
+export const SEALED_AGGREGATE_REPORT_SCHEMA_VERSION = 3 as const;
+
+const SAFE_PROVIDER_NAME = /^[a-z0-9][a-z0-9._-]{0,63}$/u;
+const SAFE_PROVIDER_VERSION = /^[A-Za-z0-9][A-Za-z0-9 ._+/@():-]{0,127}$/u;
+
+/** Keep subprocess-controlled metadata out of the aggregate report channel. */
+export const normalizeSealedProviderVersion = (value: string): string => {
+  if (!SAFE_PROVIDER_VERSION.test(value)) {
+    throw new Error("sealed provider version is invalid");
+  }
+  return value;
+};
 
 export type SealedTiming = {
   readonly initSeconds: number;
@@ -67,7 +78,7 @@ export type SealedLibraryResult =
 export type SealedAggregateReport = {
   readonly schemaVersion: typeof SEALED_AGGREGATE_REPORT_SCHEMA_VERSION;
   readonly createdAt: string;
-  readonly gitSha: string;
+  readonly sourceGitSha: string;
   readonly runtime: string;
   readonly policy: "evaluation-only";
   readonly corpus: {
@@ -229,7 +240,7 @@ export const assertSealedAggregateReport: (
     [
       "schemaVersion",
       "createdAt",
-      "gitSha",
+      "sourceGitSha",
       "runtime",
       "policy",
       "corpus",
@@ -244,7 +255,12 @@ export const assertSealedAggregateReport: (
     throw new Error("sealed report contract or policy is invalid");
   }
   requireString(value["createdAt"], "sealed report createdAt");
-  requireString(value["gitSha"], "sealed report gitSha");
+  if (
+    typeof value["sourceGitSha"] !== "string" ||
+    !/^[a-f0-9]{40}$/u.test(value["sourceGitSha"])
+  ) {
+    throw new Error("sealed report sourceGitSha must be a full Git SHA");
+  }
   requireString(value["runtime"], "sealed report runtime");
 
   const corpus = value["corpus"];
@@ -302,11 +318,22 @@ export const assertSealedAggregateReport: (
   if (!Array.isArray(libraries) || libraries.length === 0)
     throw new Error("sealed report must contain aggregate library results");
   const libraryNames = new Set<string>();
+  let canonicalTotalChars: number | undefined;
   for (const [index, library] of libraries.entries()) {
     if (!isRecord(library))
       throw new Error(`sealed library ${index} must be an object`);
     requireString(library["name"], `sealed library ${index} name`);
     requireString(library["version"], `sealed library ${index} version`);
+    if (
+      typeof library["name"] !== "string" ||
+      !SAFE_PROVIDER_NAME.test(library["name"])
+    ) {
+      throw new Error(`sealed library ${index} name is invalid`);
+    }
+    if (typeof library["version"] !== "string") {
+      throw new Error(`sealed library ${index} version is invalid`);
+    }
+    normalizeSealedProviderVersion(library["version"]);
     if (typeof library["name"] === "string") {
       if (libraryNames.has(library["name"])) {
         throw new Error(`sealed library ${index} duplicates a library name`);
@@ -331,6 +358,21 @@ export const assertSealedAggregateReport: (
       `sealed library ${index}`,
     );
     validateTiming(library["timing"], `sealed library ${index} timing`);
+    const timing = library["timing"];
+    if (!isRecord(timing)) {
+      throw new Error(`sealed library ${index} timing must be an object`);
+    }
+    const totalChars = timing["totalChars"];
+    if (typeof totalChars !== "number") {
+      throw new Error(`sealed library ${index} totalChars must be a number`);
+    }
+    if (canonicalTotalChars === undefined) {
+      canonicalTotalChars = totalChars;
+    } else if (totalChars !== canonicalTotalChars) {
+      throw new Error(
+        `sealed library ${index} totalChars does not match other providers`,
+      );
+    }
     requireSeconds(
       library["adapterWallSeconds"],
       `sealed library ${index} adapterWallSeconds`,
@@ -448,10 +490,16 @@ export const renderSealedAggregateMarkdown = (
     `- Split: ${report.corpus.split}`,
     `- Selection: ${report.corpus.selection.type} (${report.corpus.documentCount} documents)`,
     `- Generated: ${cell(report.createdAt)}`,
-    `- Commit: ${cell(report.gitSha)}`,
+    `- Source commit: ${report.sourceGitSha}`,
     "",
-    `| Library | Version | ${definition.headers.join(" | ")} | Init (s) | Cold pass (s) | Warm pass (s) | Warm chars/s | Adapter wall (s, diagnostic) |`,
-    `| ------- | ------- | ${definition.headers.map(() => "---").join(" | ")} | -------- | ------------- | ------------- | ------------ | ---------------------------- |`,
+    `| Library | Version | ${definition.headers.join(
+      " | ",
+    )} | Init (s) | Cold pass (s) | Warm pass (s) | Warm chars/s | Adapter wall (s, diagnostic) |`,
+    `| ------- | ------- | ${definition.headers
+      .map(() => "---")
+      .join(
+        " | ",
+      )} | -------- | ------------- | ------------- | ------------ | ---------------------------- |`,
   ];
   for (const library of report.libraries) {
     if (library.status === "unavailable") {
@@ -460,13 +508,21 @@ export const renderSealedAggregateMarkdown = (
         ...definition.headers.slice(1).map(() => "—"),
       ].join(" | ");
       lines.push(
-        `| ${cell(library.name)} | ${cell(library.version)} | ${unavailableValues} | — | — | — | — | — |`,
+        `| ${cell(library.name)} | ${cell(
+          library.version,
+        )} | ${unavailableValues} | — | — | — | — | — |`,
       );
       continue;
     }
     const values = tableDefinition(library.metrics).values;
     lines.push(
-      `| ${cell(library.name)} | ${cell(library.version)} | ${values.join(" | ")} | ${seconds(library.timing.initSeconds)} | ${seconds(library.timing.coldSeconds)} | ${seconds(library.timing.warmSeconds)} | ${warmCharsPerSecond(library.timing)} | ${seconds(library.adapterWallSeconds)} |`,
+      `| ${cell(library.name)} | ${cell(library.version)} | ${values.join(
+        " | ",
+      )} | ${seconds(library.timing.initSeconds)} | ${seconds(
+        library.timing.coldSeconds,
+      )} | ${seconds(library.timing.warmSeconds)} | ${warmCharsPerSecond(
+        library.timing,
+      )} | ${seconds(library.adapterWallSeconds)} |`,
     );
   }
   lines.push(

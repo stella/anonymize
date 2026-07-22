@@ -188,7 +188,8 @@ export const renderMarkdown = (result: BenchResult): string => {
   lines.push("");
   lines.push(
     "scrubadub and redact-pii are English-only libraries; their cs/de scores are",
-    "expected to be low and are reported as-is.",
+    "expected to be low and are reported as-is. DataFog's base structured rules",
+    "run for every language, with its upstream German locale enabled only for de.",
     "",
   );
 
@@ -241,10 +242,10 @@ export const renderMarkdown = (result: BenchResult): string => {
   lines.push(
     "- **Domain skew.** The corpus is legal-domain and multilingual (en/cs/de).",
     "  stella is built for exactly this domain and language mix, which favours it.",
-    "  Competitors tuned for English chat/email (scrubadub, redact-pii) or general",
-    "  English text (Presidio's default models) are outside their strongest",
-    "  setting on cs/de. The per-language table exists so the English-only",
-    "  comparison is visible on its own.",
+    "  Competitors tuned for English chat/email (scrubadub, redact-pii), general",
+    "  English text (Presidio's default models), or structured identifiers",
+    "  (DataFog core) cover different parts of the task. The per-language table",
+    "  keeps those differences visible.",
     "- **Synthetic data.** Ground truth is authored, not sampled from real",
     "  filings, so absolute numbers may differ from production text. It is a",
     "  fairness/consistency trade: every library sees identical inputs with exact",

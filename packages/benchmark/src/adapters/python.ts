@@ -2,7 +2,12 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 import type { GroundTruthDocument } from "../ground-truth";
-import type { Adapter, AdapterOutcome, NativePrediction } from "./types";
+import {
+  totalUtf16CodeUnits,
+  type Adapter,
+  type AdapterOutcome,
+  type NativePrediction,
+} from "./types";
 
 const PYTHON_ADAPTER_TIMEOUT_MS = 10 * 60 * 1000;
 
@@ -14,11 +19,129 @@ type PythonResult = {
   initSeconds: number;
   coldSeconds: number;
   warmSeconds: number;
-  totalChars: number;
   results: { id: string; entities: NativePrediction[] }[];
 };
 
-type PythonAdapterOptions = {
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const protocolError = (message: string): never => {
+  throw new Error(`Python adapter protocol error: ${message}`);
+};
+
+const parseFiniteNonnegativeNumber = (
+  value: unknown,
+  field: string,
+): number => {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    return protocolError(`${field} must be a finite nonnegative number`);
+  }
+  return value;
+};
+
+const parsePrediction = (value: unknown): NativePrediction => {
+  if (!isRecord(value)) {
+    return protocolError("entity must be an object");
+  }
+  const { start, end, label, text } = value;
+  if (
+    typeof start !== "number" ||
+    !Number.isInteger(start) ||
+    start < 0 ||
+    typeof end !== "number" ||
+    !Number.isInteger(end) ||
+    end <= start
+  ) {
+    return protocolError(
+      "entity offsets must be increasing nonnegative integers",
+    );
+  }
+  if (typeof label !== "string" || label.length === 0) {
+    return protocolError("entity label must be a nonempty string");
+  }
+  if (typeof text !== "string") {
+    return protocolError("entity text must be a string");
+  }
+  return { start, end, label, text };
+};
+
+/** Validate the Python subprocess contract before any predictions are scored. */
+export const parsePythonResult = (value: unknown): PythonResult => {
+  if (!isRecord(value)) {
+    return protocolError("root must be an object");
+  }
+
+  const allowedRootKeys = new Set([
+    "version",
+    "activeDetectors",
+    "initSeconds",
+    "coldSeconds",
+    "warmSeconds",
+    "results",
+  ]);
+  for (const key of Object.keys(value)) {
+    if (!allowedRootKeys.has(key)) {
+      return protocolError(`root contains unexpected field ${key}`);
+    }
+  }
+
+  const { version, activeDetectors, results } = value;
+  if (typeof version !== "string" || version.length === 0) {
+    return protocolError("version must be a nonempty string");
+  }
+  if (!Array.isArray(results)) {
+    return protocolError("results must be an array");
+  }
+
+  let parsedActiveDetectors: string[] | undefined;
+  if (activeDetectors !== undefined) {
+    if (
+      !Array.isArray(activeDetectors) ||
+      activeDetectors.some(
+        (detector) => typeof detector !== "string" || detector.length === 0,
+      )
+    ) {
+      return protocolError("activeDetectors must contain nonempty strings");
+    }
+    parsedActiveDetectors = activeDetectors;
+  }
+
+  const parsedResults = results.map((result) => {
+    if (!isRecord(result)) {
+      return protocolError("result must be an object");
+    }
+    const { id, entities } = result;
+    if (typeof id !== "string" || id.length === 0) {
+      return protocolError("result id must be a nonempty string");
+    }
+    if (!Array.isArray(entities)) {
+      return protocolError("result entities must be an array");
+    }
+    return { id, entities: entities.map(parsePrediction) };
+  });
+
+  return {
+    version,
+    ...(parsedActiveDetectors === undefined
+      ? {}
+      : { activeDetectors: parsedActiveDetectors }),
+    initSeconds: parseFiniteNonnegativeNumber(
+      value["initSeconds"],
+      "initSeconds",
+    ),
+    coldSeconds: parseFiniteNonnegativeNumber(
+      value["coldSeconds"],
+      "coldSeconds",
+    ),
+    warmSeconds: parseFiniteNonnegativeNumber(
+      value["warmSeconds"],
+      "warmSeconds",
+    ),
+    results: parsedResults,
+  };
+};
+
+export type PythonAdapterOptions = {
   readonly name: string;
   /** Virtualenv directory under the package root (created via REPRODUCING.md). */
   readonly venvDir: string;
@@ -102,24 +225,46 @@ export const createPythonAdapter = ({
         throw new Error(`${name} adapter crashed (exit ${exitCode}): ${tail}`);
       }
 
+      let rawResult: unknown;
+      try {
+        rawResult = JSON.parse(stdout);
+      } catch {
+        throw new Error(`${name} adapter emitted malformed JSON`);
+      }
       let parsed: PythonResult;
       try {
-        parsed = JSON.parse(stdout) as PythonResult;
-      } catch {
-        return {
-          status: "unavailable",
-          reason: `could not parse adapter output: ${stdout.slice(0, 200)}`,
-        };
+        parsed = parsePythonResult(rawResult);
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : "unknown error";
+        throw new Error(`${name} adapter protocol failure: ${detail}`);
       }
 
       const textById = new Map(docs.map((doc) => [doc.id, doc.text]));
       const predictions = new Map<string, readonly NativePrediction[]>();
       for (const { id, entities } of parsed.results) {
         const text = textById.get(id);
-        predictions.set(
-          id,
-          text === undefined ? entities : convertCodePointSpans(text, entities),
-        );
+        if (text === undefined) {
+          throw new Error(`${name} adapter returned an unexpected document id`);
+        }
+        if (predictions.has(id)) {
+          throw new Error(`${name} adapter returned a duplicate document id`);
+        }
+        const codePoints: string[] = [];
+        for (const codePoint of text) {
+          codePoints.push(codePoint);
+        }
+        for (const entity of entities) {
+          if (
+            entity.end > codePoints.length ||
+            codePoints.slice(entity.start, entity.end).join("") !== entity.text
+          ) {
+            throw new Error(`${name} adapter returned an invalid entity span`);
+          }
+        }
+        predictions.set(id, convertCodePointSpans(text, entities));
+      }
+      if (predictions.size !== docs.length) {
+        throw new Error(`${name} adapter omitted one or more documents`);
       }
 
       return {
@@ -129,7 +274,11 @@ export const createPythonAdapter = ({
           initSeconds: parsed.initSeconds,
           coldSeconds: parsed.coldSeconds,
           warmSeconds: parsed.warmSeconds,
-          totalChars: parsed.totalChars,
+          // Python `len` counts Unicode code points, while scoring offsets and
+          // JavaScript strings use UTF-16 code units. Keep corpus size outside
+          // the subprocess contract so every provider has one authoritative
+          // denominator even when documents contain astral characters.
+          totalChars: totalUtf16CodeUnits(docs),
         },
         reportedVersion: parsed.version,
         notes: parsed.activeDetectors

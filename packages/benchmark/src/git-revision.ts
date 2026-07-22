@@ -1,3 +1,12 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+import {
+  assertSealedAggregateReport,
+  renderSealedAggregateMarkdown,
+  serializeSealedAggregateReport,
+} from "./sealed-report";
+
 const git = (
   cwd: string,
   args: readonly string[],
@@ -22,7 +31,7 @@ const GENERATED_AGGREGATE_REPORT =
 const generatedAggregateReport = (
   root: string,
   path: string,
-  expectedGitSha: string,
+  expectedSourceGitSha: string,
 ): boolean => {
   const match = GENERATED_AGGREGATE_REPORT.exec(path);
   if (match === null) return false;
@@ -40,7 +49,7 @@ const generatedAggregateReport = (
     if (suite === "meddocan") expectedCorpus = "meddocan";
     return (
       report.corpus.id === expectedCorpus &&
-      report.gitSha === expectedGitSha &&
+      report.sourceGitSha === expectedSourceGitSha &&
       report.createdAt.replace(/[:.]/gu, "-") === stamp &&
       serializeSealedAggregateReport(report) === json &&
       renderSealedAggregateMarkdown(report) === markdown
@@ -50,14 +59,31 @@ const generatedAggregateReport = (
   }
 };
 
-/** Ignore only new aggregate artifacts emitted by an earlier sealed phase. */
-export const benchmarkGitRevision = (cwd: string = import.meta.dir): string => {
+type RepositoryState = {
+  readonly fullSha: string;
+  readonly shortSha: string;
+  readonly dirty: boolean;
+};
+
+const repositoryState = (
+  cwd: string = import.meta.dir,
+): RepositoryState | undefined => {
   const rootResult = git(cwd, ["rev-parse", "--show-toplevel"]);
-  const shaResult = git(cwd, ["rev-parse", "--short", "HEAD"]);
-  if (!rootResult.ok || !shaResult.ok) return "no-git";
+  const fullShaResult = git(cwd, ["rev-parse", "HEAD"]);
+  const shortShaResult = git(cwd, ["rev-parse", "--short", "HEAD"]);
+  if (!rootResult.ok || !fullShaResult.ok || !shortShaResult.ok) {
+    return undefined;
+  }
   const root = text(rootResult.stdout);
-  const sha = text(shaResult.stdout);
-  if (root === "" || sha === "") return "no-git";
+  const fullSha = text(fullShaResult.stdout);
+  const shortSha = text(shortShaResult.stdout);
+  if (
+    root === "" ||
+    !/^[a-f0-9]{40}$/u.test(fullSha) ||
+    !/^[a-f0-9]+$/u.test(shortSha)
+  ) {
+    return undefined;
+  }
 
   const unstaged = git(root, ["diff", "--quiet", "--"]);
   const staged = git(root, ["diff", "--cached", "--quiet", "--"]);
@@ -67,19 +93,38 @@ export const benchmarkGitRevision = (cwd: string = import.meta.dir): string => {
     "--exclude-standard",
     "-z",
   ]);
-  if (!unstaged.ok || !staged.ok || !untracked.ok) return `${sha}-dirty`;
+  if (!untracked.ok) return undefined;
 
   const relevantUntracked = new TextDecoder()
     .decode(untracked.stdout)
     .split("\0")
-    .some((path) => path !== "" && !generatedAggregateReport(root, path, sha));
-  return relevantUntracked ? `${sha}-dirty` : sha;
+    .some(
+      (path) => path !== "" && !generatedAggregateReport(root, path, fullSha),
+    );
+  return {
+    fullSha,
+    shortSha,
+    dirty: !unstaged.ok || !staged.ok || relevantUntracked,
+  };
 };
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 
-import {
-  assertSealedAggregateReport,
-  renderSealedAggregateMarkdown,
-  serializeSealedAggregateReport,
-} from "./sealed-report";
+/** Ignore only canonical aggregate artifacts emitted by an earlier sealed phase. */
+export const benchmarkGitRevision = (cwd: string = import.meta.dir): string => {
+  const state = repositoryState(cwd);
+  if (state === undefined) return "no-git";
+  return state.dirty ? `${state.shortSha}-dirty` : state.shortSha;
+};
+
+/** Resolve the immutable source revision for a sealed run, failing closed. */
+export const benchmarkSourceGitSha = (
+  cwd: string = import.meta.dir,
+): string => {
+  const state = repositoryState(cwd);
+  if (state === undefined) {
+    throw new Error("sealed benchmarks require a valid Git source revision");
+  }
+  if (state.dirty) {
+    throw new Error("sealed benchmarks require a clean Git source tree");
+  }
+  return state.fullSha;
+};
