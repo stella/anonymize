@@ -611,13 +611,21 @@ fn comma_before_soft_wrap(
     if ch != ',' {
       return false;
     }
-    // A single `Party,\nOther LLP` is usually a field/list boundary, not a
-    // wrapped firm name. Require an earlier comma on the same line so this
-    // exception is limited to a continuing comma-separated name list such as
-    // `Skadden, Arps, Slate,\nMeagher & Flom LLP`.
+    // A short comma-ended line is usually a field/list boundary, not a
+    // wrapped firm name. Named continuations require two earlier commas, as in
+    // `Skadden, Arps, Slate,\nMeagher & Flom LLP`. A suffix-only continuation
+    // may instead use an ampersand-complete firm name such as
+    // `Smith, Gambrell & Russell,\nLLP`.
     scan = prev_start;
+    let mut earlier_commas = 0_usize;
+    let mut has_ampersand = false;
     while let Some((earlier_start, earlier)) = previous_char(text, scan) {
       if earlier == '\n' {
+        break;
+      }
+      // Colons mark structured fields such as
+      // `Address: New York, NY,\nAcme LLC`, never a firm-name continuation.
+      if earlier == ':' || earlier == '：' {
         return false;
       }
       // A connector-complete comma-rich line is more likely a separate firm
@@ -628,12 +636,16 @@ fn comma_before_soft_wrap(
       if earlier == '&' && !suffix_is_the_continuation {
         return false;
       }
+      if earlier == '&' {
+        has_ampersand = true;
+      }
       if earlier == ',' {
-        return true;
+        earlier_commas = earlier_commas.saturating_add(1);
       }
       scan = earlier_start;
     }
-    return false;
+    return earlier_commas >= 2
+      || (suffix_is_the_continuation && has_ampersand);
   }
   false
 }
@@ -3183,6 +3195,13 @@ mod tests {
   }
 
   #[test]
+  fn comma_rich_address_line_still_stops_firm_name_walk() {
+    let text = "Address: New York, NY,\nAcme LLC";
+    let texts = org_texts_for(text, "LLC");
+    assert_eq!(texts, vec![String::from("Acme LLC")]);
+  }
+
+  #[test]
   fn preceding_comma_rich_firm_line_still_stops_name_walk() {
     let text = "Wachtell, Lipton, Rosen & Katz,\nSkadden, Arps, Slate,\nMeagher & Flom (UK) LLP";
     let texts = org_texts_for(text, "LLP");
@@ -3291,6 +3310,13 @@ mod tests {
   #[test]
   fn connector_complete_firm_can_wrap_immediately_before_legal_suffix() {
     let text = "Wachtell, Lipton, Rosen & Katz,\nLLP";
+    let texts = org_texts_for(text, "LLP");
+    assert_eq!(texts, vec![String::from(text)]);
+  }
+
+  #[test]
+  fn short_connector_complete_firm_can_wrap_before_legal_suffix() {
+    let text = "Smith, Gambrell & Russell,\nLLP";
     let texts = org_texts_for(text, "LLP");
     assert_eq!(texts, vec![String::from(text)]);
   }

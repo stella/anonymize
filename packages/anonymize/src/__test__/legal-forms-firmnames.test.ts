@@ -123,6 +123,19 @@ describe("legal-form firm name capture", () => {
     );
   });
 
+  test("short connector-complete firm can wrap immediately before LLP", async () => {
+    const orgs = await orgsIn("Smith, Gambrell & Russell,\nLLP");
+    expect(orgs.map((org) => org.replaceAll(/\s+/g, " "))).toContain(
+      "Smith, Gambrell & Russell, LLP",
+    );
+  });
+
+  test("comma-rich address line does not wrap into an organization", async () => {
+    const orgs = await orgsIn("Address: New York, NY,\nAcme LLC");
+    expect(orgs).toContain("Acme LLC");
+    expect(orgs.some((org) => org.includes("New York"))).toBe(false);
+  });
+
   test("comma-separated party roles do not wrap into an organization", async () => {
     const orgs = await orgsIn("Buyer, Seller,\nAcme LLC");
     expect(orgs).toContain("Acme LLC");
