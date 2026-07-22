@@ -1,0 +1,80 @@
+name: Canonical performance
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Cargo.lock"
+      - "Cargo.toml"
+      - "bun.lock"
+      - "crates/**"
+      - "package.json"
+      - "packages/anonymize/**"
+      - "packages/data/**"
+      - "packages/benchmark/package.json"
+      - "packages/benchmark/src/**"
+      - "packages/benchmark/fixtures/**"
+      - ".github/tools/verify-performance-host.ts"
+      - ".github/workflows/performance.yml"
+      - "rust-toolchain.toml"
+  workflow_dispatch:
+
+concurrency:
+  group: canonical-performance
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    if: vars.ANONYMIZE_PERF_RUNNER_ENABLED == 'true' && github.repository == 'stella/anonymize' && github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || github.event_name == 'push')
+    runs-on: [self-hosted, anonymize-perf-v1]
+    timeout-minutes: 120
+    env:
+      RUSTUP_TOOLCHAIN: 1.96.0
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        run: bun ci
+        env:
+          NPM_TOKEN: ""
+
+      - name: Setup Rust
+        run: |
+          rustup toolchain install 1.96.0 --profile minimal \
+            --target wasm32-wasip1-threads
+
+      - name: Build native runtime
+        run: bun run build
+
+      - name: Wait for canonical host to become quiet
+        run: |
+          for attempt in {1..40}; do
+            if bun .github/tools/verify-performance-host.ts; then
+              exit 0
+            fi
+            if [[ "$attempt" == "40" ]]; then
+              exit 1
+            fi
+            sleep 15
+          done
+
+      - name: Measure isolated samples
+        run: >-
+          bun run --cwd packages/benchmark bench:performance --canonical
+          --output=${{ runner.temp }}/anonymize-performance.json
+
+      - name: Upload report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v5
+        with:
+          name: anonymize-performance-${{ github.sha }}
+          path: ${{ runner.temp }}/anonymize-performance.json
+          if-no-files-found: error
+          retention-days: 30
