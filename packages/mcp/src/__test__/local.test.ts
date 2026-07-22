@@ -1,12 +1,14 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { extractDocxText } from "@stll/anonymize-docx";
 import { strToU8, zipSync } from "fflate";
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import {
   mkdtemp,
+  link as createHardLink,
   mkdir,
   readFile,
   realpath,
@@ -72,6 +74,41 @@ const temporaryDirectory = async (): Promise<string> => {
   temporaryDirectories.push(directory);
   return directory;
 };
+
+type ExternalOffsetUnit =
+  | "unicode-code-point"
+  | "utf16-code-unit"
+  | "utf8-byte";
+
+const externalBatch = (
+  document: Uint8Array,
+  {
+    offsetUnit = "unicode-code-point",
+    start = 1,
+    end = 7,
+  }: { offsetUnit?: ExternalOffsetUnit; start?: number; end?: number } = {},
+) => ({
+  version: 1,
+  document: {
+    sha256: createHash("sha256").update(document).digest("hex"),
+  },
+  offsetUnit,
+  provider: {
+    id: "fake-provider",
+    name: "Deterministic fake provider",
+    version: "1.0.0",
+  },
+  labelMap: [{ providerLabel: "PER", entityLabel: "person" }],
+  detections: [
+    {
+      id: "fake-person-1",
+      start,
+      end,
+      label: "PER",
+      score: 0.99,
+    },
+  ],
+});
 
 afterEach(async () => {
   await Promise.all(
@@ -257,6 +294,146 @@ describe("local MCP surface", () => {
     expect(await readFile(restored, "utf8")).toBe("Alice Smith signed.");
   });
 
+  test("ingests provider-neutral Unicode sidecars and retains native detections", async () => {
+    const root = await temporaryDirectory();
+    const original = "😀XQZ-秘密 and alice@example.com signed.";
+    const document = new TextEncoder().encode(original);
+    const input = join(root, "external-input.txt");
+    await writeFile(input, document);
+    const service = new LocalAnonymizeService(await PathScope.create([root]));
+    const units: readonly [ExternalOffsetUnit, number, number][] = [
+      ["unicode-code-point", 1, 7],
+      ["utf16-code-unit", 2, 8],
+      ["utf8-byte", 4, 14],
+    ];
+
+    for (const [index, [offsetUnit, start, end]] of units.entries()) {
+      const batchPath = join(root, `external-${index}.json`);
+      const output = join(root, `external-${index}.txt`);
+      const restored = join(root, `external-restored-${index}.txt`);
+      await writeFile(
+        batchPath,
+        JSON.stringify(externalBatch(document, { offsetUnit, start, end })),
+      );
+      const result = await service.anonymizeTextWithExternalDetections({
+        inputPath: input,
+        detectionBatchPath: batchPath,
+        outputPath: output,
+        sessionId: `external_unicode_${index}`,
+        language: "en",
+      });
+      expect(result).toEqual({
+        operation: "anonymize",
+        format: "text",
+        outputCreated: true,
+        sessionId: `external_unicode_${index}`,
+        entityCount: 2,
+        externalDetectionBatchStatus: "accepted",
+        externalDetectionCount: 1,
+        retainedExternalDetectionCount: 1,
+      });
+      expect(JSON.stringify(result)).not.toContain("fake-provider");
+      const redacted = await readFile(output, "utf8");
+      expect(redacted).not.toContain("XQZ-秘密");
+      expect(redacted).not.toContain("alice@example.com");
+      await service.restoreText({
+        inputPath: output,
+        outputPath: restored,
+        sessionId: `external_unicode_${index}`,
+      });
+      expect(await readFile(restored, "utf8")).toBe(original);
+    }
+  });
+
+  test("rejects stale, open-schema, and invalid-boundary sidecars without output", async () => {
+    const root = await temporaryDirectory();
+    const document = new TextEncoder().encode("😀XQZ-秘密 signed.");
+    const input = join(root, "invalid-external-input.txt");
+    await writeFile(input, document);
+    const service = new LocalAnonymizeService(await PathScope.create([root]));
+    const invalidBatches = [
+      {
+        name: "stale",
+        batch: {
+          ...externalBatch(document),
+          document: { sha256: "0".repeat(64) },
+        },
+      },
+      {
+        name: "unknown",
+        batch: { ...externalBatch(document), unknownProviderPayload: true },
+      },
+      {
+        name: "boundary",
+        batch: externalBatch(document, {
+          offsetUnit: "utf8-byte",
+          start: 1,
+          end: 14,
+        }),
+      },
+    ] as const;
+    for (const invalid of invalidBatches) {
+      const batchPath = join(root, `${invalid.name}.json`);
+      const output = join(root, `${invalid.name}-output.txt`);
+      await writeFile(batchPath, JSON.stringify(invalid.batch));
+      await expect(
+        service.anonymizeTextWithExternalDetections({
+          inputPath: input,
+          detectionBatchPath: batchPath,
+          outputPath: output,
+          sessionId: `invalid_external_${invalid.name}`,
+        }),
+      ).rejects.toThrow("The external detection batch was rejected.");
+      await expect(readFile(output)).rejects.toThrow();
+    }
+  });
+
+  test("bounds and scopes external sidecars and rejects path collisions", async () => {
+    const root = await temporaryDirectory();
+    const outside = await temporaryDirectory();
+    const document = new TextEncoder().encode("😀XQZ-秘密 signed.");
+    const input = join(root, "scoped-external-input.txt");
+    const outsideBatch = join(outside, "outside.json");
+    const linkedBatch = join(root, "linked.json");
+    const oversizedBatch = join(root, "oversized.json");
+    const collisionBatch = join(root, "collision.json");
+    const collisionOutput = join(root, "collision.txt");
+    await writeFile(input, document);
+    await writeFile(outsideBatch, JSON.stringify(externalBatch(document)));
+    await symlink(outsideBatch, linkedBatch);
+    await writeFile(oversizedBatch, Buffer.alloc(16 * 1024 * 1024 + 1, 0x20));
+    await writeFile(collisionBatch, JSON.stringify(externalBatch(document)));
+    await createHardLink(collisionBatch, collisionOutput);
+    const service = new LocalAnonymizeService(await PathScope.create([root]));
+
+    for (const [index, batchPath] of [
+      outsideBatch,
+      linkedBatch,
+      oversizedBatch,
+    ].entries()) {
+      const output = join(root, `scoped-${index}.txt`);
+      await expect(
+        service.anonymizeTextWithExternalDetections({
+          inputPath: input,
+          detectionBatchPath: batchPath,
+          outputPath: output,
+          sessionId: `scoped_external_${index}`,
+        }),
+      ).rejects.toThrow("The external detection request paths were rejected.");
+      await expect(readFile(output)).rejects.toThrow();
+    }
+    await expect(
+      service.anonymizeTextWithExternalDetections({
+        inputPath: input,
+        detectionBatchPath: collisionBatch,
+        outputPath: collisionOutput,
+        sessionId: "external_path_collision_1",
+      }),
+    ).rejects.toThrow("The external detection request paths were rejected.");
+    expect(await readFile(collisionBatch, "utf8")).toContain("fake-provider");
+    expect(await readFile(collisionOutput, "utf8")).toContain("fake-provider");
+  });
+
   test("rejects invalid UTF-8 without creating an output", async () => {
     const root = await temporaryDirectory();
     const input = join(root, "invalid.txt");
@@ -317,6 +494,93 @@ describe("local MCP surface", () => {
       sessionId: "rollback_case_1",
     });
     expect(await readFile(recoveredOutput, "utf8")).toBe("Alice Smith signed.");
+  });
+
+  test("isolates concurrent external mutations and rolls back failed publication", async () => {
+    const root = await temporaryDirectory();
+    const documents = [
+      new TextEncoder().encode("😀XQZ-秘密 signed."),
+      new TextEncoder().encode("😀QRS-秘密 signed."),
+    ] as const;
+    const inputs = [join(root, "external-a.txt"), join(root, "external-b.txt")];
+    const batches = [
+      join(root, "external-a.json"),
+      join(root, "external-b.json"),
+    ];
+    const outputs = [
+      join(root, "external-a-output.txt"),
+      join(root, "external-b-output.txt"),
+    ];
+    for (const index of [0, 1] as const) {
+      await writeFile(inputs[index], documents[index]);
+      await writeFile(
+        batches[index],
+        JSON.stringify(externalBatch(documents[index])),
+      );
+    }
+    let failPublication = false;
+    const service = new LocalAnonymizeService(
+      await PathScope.create([root]),
+      undefined,
+      {
+        beforeOutputPublish: () => {
+          if (failPublication) {
+            throw new Error("injected external output failure");
+          }
+        },
+      },
+    );
+    const concurrent = await Promise.allSettled(
+      ([0, 1] as const).map((index) =>
+        service.anonymizeTextWithExternalDetections({
+          inputPath: inputs[index],
+          detectionBatchPath: batches[index],
+          outputPath: outputs[index],
+          sessionId: "external_concurrent_1",
+          language: "en",
+        }),
+      ),
+    );
+    expect(
+      concurrent.filter(({ status }) => status === "fulfilled"),
+    ).toHaveLength(1);
+    expect(
+      concurrent.filter(({ status }) => status === "rejected"),
+    ).toHaveLength(1);
+    const successfulIndex = concurrent.at(0)?.status === "fulfilled" ? 0 : 1;
+
+    failPublication = true;
+    const failedOutput = join(root, "external-failed-output.txt");
+    await expect(
+      service.anonymizeTextWithExternalDetections({
+        inputPath: inputs[1 - successfulIndex],
+        detectionBatchPath: batches[1 - successfulIndex],
+        outputPath: failedOutput,
+        sessionId: "external_concurrent_1",
+      }),
+    ).rejects.toThrow("The external detection operation failed safely.");
+    await expect(readFile(failedOutput)).rejects.toThrow();
+    failPublication = false;
+
+    const restored = join(root, "external-concurrent-restored.txt");
+    await service.restoreText({
+      inputPath: outputs[successfulIndex],
+      outputPath: restored,
+      sessionId: "external_concurrent_1",
+    });
+    expect(await readFile(restored)).toEqual(
+      Buffer.from(documents[successfulIndex]),
+    );
+    const predicted = join(root, "external-predicted.txt");
+    const predictedOutput = join(root, "external-predicted-output.txt");
+    await writeFile(predicted, "[PERSON_external%5Fconcurrent%5F1_2]");
+    await expect(
+      service.restoreText({
+        inputPath: predicted,
+        outputPath: predictedOutput,
+        sessionId: "external_concurrent_1",
+      }),
+    ).rejects.toThrow("unknown session placeholder");
   });
 
   test("anonymizes and restores DOCX through path-only operations", async () => {
@@ -422,6 +686,8 @@ describe("local MCP surface", () => {
     expect(tools.tools.map(({ name }) => name).toSorted()).toEqual([
       "anonymize_docx_file",
       "anonymize_text_file",
+      "anonymize_text_file_with_external_detections",
+      "capabilities",
       "inspect_docx_file",
       "restore_docx_file",
       "restore_text_file",
@@ -431,6 +697,166 @@ describe("local MCP surface", () => {
       expect(properties).not.toHaveProperty("text");
       expect(properties).not.toHaveProperty("document");
       expect(properties).not.toHaveProperty("mapping");
+    }
+    const capabilities = await client.callTool({
+      name: "capabilities",
+      arguments: {},
+    });
+    expect(capabilities.structuredContent).toMatchObject({
+      runtimeVersion: packageVersion(),
+      mcp: {
+        externalDetectionBatch: { ingestion: "path-only", version: 1 },
+        formats: ["docx", "text"],
+        sessionMode: "memory",
+        transport: "stdio",
+      },
+    });
+    expect(JSON.stringify(capabilities)).not.toContain("redactionMap");
+    expect(JSON.stringify(capabilities)).not.toContain("providerPayload");
+    expect(JSON.stringify(capabilities)).not.toContain("fake-provider");
+
+    const document = new TextEncoder().encode("😀XQZ-秘密 signed.");
+    const input = join(root, "tool-external-input.txt");
+    const batch = join(root, "tool-external.json");
+    const output = join(root, "tool-external-output.txt");
+    await writeFile(input, document);
+    await writeFile(batch, JSON.stringify(externalBatch(document)));
+    const externalResult = await client.callTool({
+      name: "anonymize_text_file_with_external_detections",
+      arguments: {
+        inputPath: input,
+        detectionBatchPath: batch,
+        outputPath: output,
+        sessionId: "external_tool_1",
+        language: "en",
+      },
+    });
+    expect(externalResult.structuredContent).toMatchObject({
+      externalDetectionBatchStatus: "accepted",
+      externalDetectionCount: 1,
+      retainedExternalDetectionCount: 1,
+      outputCreated: true,
+    });
+    expect(JSON.stringify(externalResult)).not.toContain("XQZ-秘密");
+    expect(JSON.stringify(externalResult)).not.toContain("fake-provider");
+
+    const secretField = "SYNTHETIC_SECRET_FIELD";
+    const secretLabel = "SYNTHETIC_SECRET_LABEL";
+    const secretProvider = "SYNTHETIC_SECRET_PROVIDER";
+    const secretDocument = "SYNTHETIC_SECRET_DOCUMENT";
+    const secretPath = "SYNTHETIC_SECRET_PATH";
+    const invalidInput = join(root, `${secretPath}.txt`);
+    await writeFile(invalidInput, secretDocument);
+    const invalidDocument = new TextEncoder().encode(secretDocument);
+    const invalidBatches = [
+      {
+        path: join(root, `${secretPath}-field.json`),
+        value: JSON.stringify({
+          ...externalBatch(invalidDocument),
+          [secretField]: true,
+        }),
+      },
+      {
+        path: join(root, `${secretPath}-label.json`),
+        value: JSON.stringify({
+          ...externalBatch(invalidDocument),
+          provider: {
+            id: secretProvider,
+            name: secretProvider,
+            version: "1.0.0",
+          },
+          detections: [
+            {
+              id: "synthetic-detection",
+              start: 0,
+              end: 1,
+              label: secretLabel,
+              score: 0.99,
+            },
+          ],
+        }),
+      },
+      {
+        path: join(root, `${secretPath}-json.json`),
+        value: `{"${secretField}":`,
+      },
+    ] as const;
+    const consoleError = spyOn(console, "error").mockImplementation(
+      () => undefined,
+    );
+    const stderrWrite = spyOn(process.stderr, "write").mockImplementation(
+      () => true,
+    );
+    try {
+      for (const [index, invalid] of invalidBatches.entries()) {
+        await writeFile(invalid.path, invalid.value);
+        const failure = await client.callTool({
+          name: "anonymize_text_file_with_external_detections",
+          arguments: {
+            inputPath: invalidInput,
+            detectionBatchPath: invalid.path,
+            outputPath: join(root, `${secretPath}-output-${index}.txt`),
+            sessionId: `external_tool_failure_${index}`,
+          },
+        });
+        expect(failure).toEqual({
+          isError: true,
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({
+                errorCode: "EXTERNAL_DETECTION_BATCH_REJECTED",
+                message: "The external detection batch was rejected.",
+              }),
+            },
+          ],
+          structuredContent: {
+            errorCode: "EXTERNAL_DETECTION_BATCH_REJECTED",
+            message: "The external detection batch was rejected.",
+          },
+        });
+        const serialized = JSON.stringify(failure);
+        for (const secret of [
+          secretField,
+          secretLabel,
+          secretProvider,
+          secretDocument,
+          secretPath,
+        ]) {
+          expect(serialized).not.toContain(secret);
+        }
+      }
+      const missingPathFailure = await client.callTool({
+        name: "anonymize_text_file_with_external_detections",
+        arguments: {
+          inputPath: invalidInput,
+          detectionBatchPath: join(root, `${secretPath}-missing.json`),
+          outputPath: join(root, `${secretPath}-missing-output.txt`),
+          sessionId: "external_tool_path_failure",
+        },
+      });
+      expect(missingPathFailure).toEqual({
+        isError: true,
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({
+              errorCode: "EXTERNAL_DETECTION_INPUT_REJECTED",
+              message: "The external detection request paths were rejected.",
+            }),
+          },
+        ],
+        structuredContent: {
+          errorCode: "EXTERNAL_DETECTION_INPUT_REJECTED",
+          message: "The external detection request paths were rejected.",
+        },
+      });
+      expect(JSON.stringify(missingPathFailure)).not.toContain(secretPath);
+      expect(consoleError).not.toHaveBeenCalled();
+      expect(stderrWrite).not.toHaveBeenCalled();
+    } finally {
+      consoleError.mockRestore();
+      stderrWrite.mockRestore();
     }
     await client.close();
   });

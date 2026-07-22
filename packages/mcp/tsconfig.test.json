@@ -5,6 +5,6 @@
     "types": ["bun-types"],
     "noUncheckedIndexedAccess": false
   },
-  "include": ["src/__test__/**/*.ts"],
+  "include": ["src/__test__/**/*.ts", "src/**/*.d.ts"],
   "exclude": ["node_modules"]
 }

@@ -7,6 +7,6 @@
     "target": "ES2023",
     "types": ["node"]
   },
-  "include": ["src/**/*.ts"],
+  "include": ["src/**/*.ts", "src/**/*.d.ts"],
   "exclude": ["node_modules", "src/**/__test__/**"]
 }

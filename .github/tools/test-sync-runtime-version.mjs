@@ -99,10 +99,47 @@ for (const scenarioLineEnding of ["\n", "\r\n"]) {
     const mcpPackage = JSON.parse(
       readFileSync(join(workspace, "packages/mcp/package.json"), "utf8"),
     );
-    for (const dependency of ["@stll/anonymize", "@stll/anonymize-docx"]) {
-      if (mcpPackage.dependencies?.[dependency] !== `^${version}`) {
-        throw new Error(`MCP package did not sync ${dependency}`);
-      }
+    if (mcpPackage.dependencies?.["@stll/anonymize"] !== "workspace:*") {
+      throw new Error("MCP source package did not preserve workspace:*");
+    }
+    if (mcpPackage.dependencies?.["@stll/anonymize-docx"] !== `^${version}`) {
+      throw new Error("MCP package did not sync @stll/anonymize-docx");
+    }
+
+    mcpPackage.dependencies["@stll/anonymize"] = `^${version}`;
+    writeText(
+      "packages/mcp/package.json",
+      `${JSON.stringify(mcpPackage, null, 2)}\n`,
+    );
+    const legacyCheck = spawnSync("node", [syncScript, "--check"], {
+      cwd: workspace,
+      encoding: "utf8",
+    });
+    if (
+      legacyCheck.status === 0 ||
+      !legacyCheck.stderr.includes(`workspace:* or ${version}`)
+    ) {
+      throw new Error("MCP legacy dependency range was not rejected");
+    }
+    mcpPackage.dependencies["@stll/anonymize"] = "workspace:*";
+    writeText(
+      "packages/mcp/package.json",
+      `${JSON.stringify(mcpPackage, null, 2)}\n`,
+    );
+
+    execFileSync("node", [syncScript, "--release"], {
+      cwd: workspace,
+      stdio: "pipe",
+    });
+    execFileSync("node", [syncScript, "--release", "--check"], {
+      cwd: workspace,
+      stdio: "pipe",
+    });
+    const releasedMcpPackage = JSON.parse(
+      readFileSync(join(workspace, "packages/mcp/package.json"), "utf8"),
+    );
+    if (releasedMcpPackage.dependencies?.["@stll/anonymize"] !== version) {
+      throw new Error("MCP release package did not resolve the exact version");
     }
 
     const pdfPackage = JSON.parse(
@@ -118,6 +155,57 @@ for (const scenarioLineEnding of ["\n", "\r\n"]) {
     const lockText = readFileSync(join(workspace, "bun.lock"), "utf8");
     if (lockText.includes(staleVersion)) {
       throw new Error("bun.lock still contains stale sidecar versions");
+    }
+    const releasedLock = JSON.parse(lockText);
+    if (
+      releasedLock.workspaces?.["packages/mcp"]?.dependencies?.[
+        "@stll/anonymize"
+      ] !== version
+    ) {
+      throw new Error("MCP release lock did not resolve the exact version");
+    }
+
+    const sentinelRange = "SENTINEL_DO_NOT_MUTATE";
+    releasedMcpPackage.dependencies["@stll/anonymize"] = "workspace:*";
+    writeText(
+      "packages/mcp/package.json",
+      `${JSON.stringify(releasedMcpPackage, null, 2)}\n`,
+    );
+    delete releasedLock.workspaces["packages/mcp"].dependencies[
+      "@stll/anonymize"
+    ];
+    releasedLock.workspaces["packages/z"] = {
+      name: "@stll/z-sentinel",
+      version,
+      dependencies: { "@stll/anonymize": sentinelRange },
+    };
+    writeText("bun.lock", `${JSON.stringify(releasedLock, null, 2)}\n`);
+
+    for (const arguments_ of [["--check"], ["--release"]]) {
+      const missingDependency = spawnSync("node", [syncScript, ...arguments_], {
+        cwd: workspace,
+        encoding: "utf8",
+      });
+      if (
+        missingDependency.status === 0 ||
+        !missingDependency.stderr.includes(
+          'expected exactly one direct "@stll/anonymize" property',
+        )
+      ) {
+        throw new Error(
+          `missing MCP lock dependency did not fail closed in ${arguments_.join(" ")} mode`,
+        );
+      }
+      const sentinelLock = JSON.parse(
+        readFileSync(join(workspace, "bun.lock"), "utf8"),
+      );
+      if (
+        sentinelLock.workspaces?.["packages/z"]?.dependencies?.[
+          "@stll/anonymize"
+        ] !== sentinelRange
+      ) {
+        throw new Error("later-workspace sentinel dependency was mutated");
+      }
     }
   } finally {
     rmSync(workspace, { force: true, recursive: true });
@@ -165,7 +253,7 @@ function writeFixture() {
     }
     if (file === "packages/mcp/package.json") {
       pkg.dependencies = {
-        "@stll/anonymize": `^${staleVersion}`,
+        "@stll/anonymize": "workspace:*",
         "@stll/anonymize-docx": `^${staleVersion}`,
       };
     }
@@ -259,7 +347,7 @@ function bunLockFixture() {
           name: "@stll/anonymize-mcp",
           version,
           dependencies: {
-            "@stll/anonymize": `^${staleVersion}`,
+            "@stll/anonymize": "workspace:*",
             "@stll/anonymize-docx": `^${staleVersion}`,
           },
         },
