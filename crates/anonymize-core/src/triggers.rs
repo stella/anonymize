@@ -1730,7 +1730,7 @@ fn configured_field_label_start(text: &str, label: &str) -> Option<usize> {
     let Some(candidate) = text.get(start..end) else {
       continue;
     };
-    if !candidate.eq_ignore_ascii_case(label) {
+    if candidate.to_lowercase() != label.to_lowercase() {
       continue;
     }
     let after = text.get(end..).unwrap_or_default().trim_start();
@@ -2450,6 +2450,14 @@ mod tests {
       assert_eq!(entities.len(), 1, "{text}");
       assert_eq!(entities[0].text, expected, "{text}");
     }
+  }
+
+  #[test]
+  fn configured_field_label_matching_is_unicode_case_insensitive() {
+    assert_eq!(
+      configured_field_label_start("IČO : 00209805", "ičo"),
+      Some(0)
+    );
   }
 
   fn organization_role_trigger_data(
