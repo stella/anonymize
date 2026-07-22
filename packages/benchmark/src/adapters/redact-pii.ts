@@ -198,6 +198,6 @@ export const createRedactPiiAdapter = (): Adapter => ({
     const initStart = performance.now();
     const detect = buildDetector();
     const initSeconds = (performance.now() - initStart) / 1000;
-    return runTwoPassInProcess(docs, detect, initSeconds);
+    return runTwoPassInProcess(docs, (doc) => detect(doc.text), initSeconds);
   },
 });
