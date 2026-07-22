@@ -622,13 +622,12 @@ fn header_scan_end(
     HEADER_SCAN_MAX_LINE_EXTENSION_UTF16_UNITS,
   )?;
   let bounded_end = offsets.validate_offset(bounded_end)?;
-  let tail =
-    full_text
-      .get(header_end..bounded_end)
-      .ok_or(Error::InvalidSpan {
-        start: u32::try_from(header_end).unwrap_or(u32::MAX),
-        end: u32::try_from(bounded_end).unwrap_or(u32::MAX),
-      })?;
+  let tail = full_text.get(header_end..bounded_end).ok_or_else(|| {
+    Error::InvalidSpan {
+      start: u32::try_from(header_end).unwrap_or(u32::MAX),
+      end: u32::try_from(bounded_end).unwrap_or(u32::MAX),
+    }
+  })?;
   let Some(relative_newline) = tail.find('\n') else {
     return Ok(bounded_end);
   };
@@ -914,18 +913,17 @@ mod tests {
   }
 
   #[test]
-  fn header_scan_stays_bounded_without_newlines() {
+  fn header_scan_stays_bounded_without_newlines() -> crate::types::Result<()> {
     let text = "x".repeat(1024 * 1024);
     let offsets = ByteOffsets::new(&text);
     let header_end = header_end(&text);
+    let expected = usize::try_from(
+      header_end.saturating_add(HEADER_SCAN_MAX_LINE_EXTENSION_UTF16_UNITS),
+    )
+    .unwrap_or(usize::MAX);
 
-    assert_eq!(
-      header_scan_end(&text, &offsets, header_end).unwrap(),
-      usize::try_from(
-        header_end.saturating_add(HEADER_SCAN_MAX_LINE_EXTENSION_UTF16_UNITS,),
-      )
-      .unwrap(),
-    );
+    assert_eq!(header_scan_end(&text, &offsets, header_end)?, expected);
+    Ok(())
   }
 
   #[test]
