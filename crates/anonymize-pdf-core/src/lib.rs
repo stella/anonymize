@@ -1377,16 +1377,13 @@ fn scan_risk_object(
     ));
   }
   if let Some(dictionary) = object_dictionary(object) {
-    if is_retained_action_dictionary(dictionary, document)?
-      && let Some(object_id) = object_id
-      && !structure_risks.referenced_action_ids.contains(&object_id)
-    {
-      inventory_action_entry(
-        &Object::Reference(object_id),
-        document,
-        structure_risks,
-      )?;
-    }
+    inventory_retained_action_object(
+      object,
+      object_id,
+      dictionary,
+      document,
+      structure_risks,
+    )?;
     if name_deref_is(dictionary, b"Type", b"Filespec", document)
       || dictionary.get(b"EF").is_ok()
       || dictionary.get(b"RF").is_ok()
@@ -1449,6 +1446,28 @@ fn scan_risk_object(
         scanned_nodes,
       )?;
     }
+  }
+  Ok(())
+}
+
+fn inventory_retained_action_object(
+  object: &Object,
+  object_id: Option<lopdf::ObjectId>,
+  dictionary: &Dictionary,
+  document: &Document,
+  risks: &mut StructuralRiskInventory,
+) -> Result<(), PdfInspectionError> {
+  if !matches!(object, Object::Dictionary(_))
+    || !is_retained_action_dictionary(dictionary, document)?
+  {
+    return Ok(());
+  }
+  if let Some(object_id) = object_id {
+    if !risks.inventoried_action_ids.contains(&object_id) {
+      inventory_action_entry(&Object::Reference(object_id), document, risks)?;
+    }
+  } else {
+    inventory_action_entry(object, document, risks)?;
   }
   Ok(())
 }
@@ -1706,7 +1725,8 @@ struct ActionRiskInventory {
 struct StructuralRiskInventory {
   actions: ActionRiskInventory,
   attachments: AttachmentInventory,
-  referenced_action_ids: BTreeSet<lopdf::ObjectId>,
+  inventoried_action_ids: BTreeSet<lopdf::ObjectId>,
+  inventoried_inline_action_pointers: BTreeSet<*const Dictionary>,
 }
 
 #[derive(Debug, Default)]
@@ -1786,7 +1806,8 @@ impl ActionRiskInventory {
 struct ActionValidator<'a, 'b> {
   document: &'a Document,
   attachments: &'b mut AttachmentInventory,
-  referenced_ids: &'b mut BTreeSet<lopdf::ObjectId>,
+  inventoried_ids: &'b mut BTreeSet<lopdf::ObjectId>,
+  inventoried_inline_pointers: &'b mut BTreeSet<*const Dictionary>,
   visited: BTreeSet<lopdf::ObjectId>,
   node_count: usize,
   risks: ActionRiskInventory,
@@ -1796,12 +1817,14 @@ fn validate_action_entry(
   action: &Object,
   document: &Document,
   attachments: &mut AttachmentInventory,
-  referenced_ids: &mut BTreeSet<lopdf::ObjectId>,
+  inventoried_ids: &mut BTreeSet<lopdf::ObjectId>,
+  inventoried_inline_pointers: &mut BTreeSet<*const Dictionary>,
 ) -> Result<ActionRiskInventory, PdfInspectionError> {
   let mut validator = ActionValidator {
     document,
     attachments,
-    referenced_ids,
+    inventoried_ids,
+    inventoried_inline_pointers,
     visited: BTreeSet::new(),
     node_count: 0,
     risks: ActionRiskInventory::default(),
@@ -1819,7 +1842,8 @@ fn inventory_action_entry(
     action,
     document,
     &mut risks.attachments,
-    &mut risks.referenced_action_ids,
+    &mut risks.inventoried_action_ids,
+    &mut risks.inventoried_inline_action_pointers,
   )?;
   risks.actions.add(found);
   Ok(())
@@ -1855,7 +1879,7 @@ impl ActionValidator<'_, '_> {
           "PDF action chains must not contain cycles or duplicate nodes",
         ));
       }
-      if !self.referenced_ids.insert(*id) {
+      if !self.inventoried_ids.insert(*id) {
         return Ok(());
       }
     }
@@ -1864,6 +1888,13 @@ impl ActionValidator<'_, '_> {
       .map_err(|_| {
         invalid_document("PDF actions must resolve to dictionaries")
       })?;
+    if !matches!(action, Object::Reference(_))
+      && !self
+        .inventoried_inline_pointers
+        .insert(std::ptr::from_ref(action_dictionary))
+    {
+      return Ok(());
+    }
     let action_kind = optional_deref(action_dictionary, b"S", self.document)?
       .ok_or_else(|| {
         invalid_document("PDF action dictionaries must declare S")
@@ -3684,6 +3715,29 @@ mod tests {
     let inspection = inspect_document(&mut document);
 
     assert_eq!(inspection.risks.javascript_action_count, 1);
+  }
+
+  #[test]
+  fn inventories_arbitrary_inline_actions_without_recounting_known_owners() {
+    let mut document = Document::load_mem(MINIMAL_PDF).unwrap();
+    document.catalog_mut().unwrap().set(
+      "OpenAction",
+      Object::Dictionary(lopdf::dictionary! {
+        "S" => "JavaScript",
+        "JS" => Object::string_literal("one inline script"),
+      }),
+    );
+    document.add_object(lopdf::dictionary! {
+      "Payload" => Object::Dictionary(lopdf::dictionary! {
+        "S" => "URI",
+        "URI" => Object::string_literal("https://example.invalid"),
+      }),
+    });
+
+    let inspection = inspect_document(&mut document);
+
+    assert_eq!(inspection.risks.javascript_action_count, 1);
+    assert_eq!(inspection.risks.external_action_count, 1);
   }
 
   #[test]
