@@ -217,7 +217,7 @@ into the per-document loop. What counts as init for each adapter:
 
 stella's scoped dictionary load and binding load are the analogue of Presidio's
 model load, so they are timed inside `init` (`src/adapters/stella.ts`). Corpus
-documents declare language but not jurisdiction, so Stella loads only that
+documents declare language but not jurisdiction, so stella loads only that
 language's name dictionaries and country-neutral non-name dictionaries; it
 does not guess national/city vocabularies from language. redact-pii's
 pattern/name-list load and regex compilation are
