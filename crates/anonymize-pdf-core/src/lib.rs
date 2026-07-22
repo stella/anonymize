@@ -1377,7 +1377,7 @@ fn scan_risk_object(
     ));
   }
   if let Some(dictionary) = object_dictionary(object) {
-    if name_deref_is(dictionary, b"Type", b"Action", document)
+    if is_retained_action_dictionary(dictionary, document)?
       && let Some(object_id) = object_id
       && !structure_risks.referenced_action_ids.contains(&object_id)
     {
@@ -1451,6 +1451,25 @@ fn scan_risk_object(
     }
   }
   Ok(())
+}
+
+fn is_retained_action_dictionary(
+  dictionary: &Dictionary,
+  document: &Document,
+) -> Result<bool, PdfInspectionError> {
+  if name_deref_is(dictionary, b"Type", b"Action", document) {
+    return Ok(true);
+  }
+  if dictionary.get(b"Type").is_ok() {
+    return Ok(false);
+  }
+  let Some(action_kind) = optional_deref(dictionary, b"S", document)? else {
+    return Ok(false);
+  };
+  let Ok(action_kind) = action_kind.as_name() else {
+    return Ok(false);
+  };
+  Ok(KNOWN_ACTION_KINDS.contains(&action_kind))
 }
 
 const KNOWN_ACTION_KINDS: &[&[u8]] = &[
@@ -1836,7 +1855,9 @@ impl ActionValidator<'_, '_> {
           "PDF action chains must not contain cycles or duplicate nodes",
         ));
       }
-      self.referenced_ids.insert(*id);
+      if !self.referenced_ids.insert(*id) {
+        return Ok(());
+      }
     }
     let action_dictionary = resolve_object(action, self.document)?
       .as_dict()
@@ -3066,7 +3087,7 @@ mod tests {
     let inspection = inspect_pdf(&bytes).unwrap();
     assert_eq!(inspection.risks.annotation_count, 1);
     assert_eq!(inspection.risks.javascript_action_count, 1);
-    assert_eq!(inspection.risks.external_action_count, 3);
+    assert_eq!(inspection.risks.external_action_count, 1);
     assert_eq!(inspection.risks.unsupported_action_count, 0);
   }
 
@@ -3620,7 +3641,7 @@ mod tests {
   }
 
   #[test]
-  fn inventories_unreferenced_form_xobjects_and_action_dictionaries() {
+  fn inventories_unreferenced_form_xobjects_and_untyped_actions() {
     let mut document = Document::load_mem(MINIMAL_PDF).unwrap();
     document.add_object(Object::Stream(lopdf::Stream::new(
       lopdf::dictionary! {
@@ -3631,7 +3652,6 @@ mod tests {
       b"retained form content".to_vec(),
     )));
     document.add_object(lopdf::dictionary! {
-      "Type" => "Action",
       "S" => "JavaScript",
       "JS" => Object::string_literal("retained script content"),
     });
@@ -3643,7 +3663,7 @@ mod tests {
   }
 
   #[test]
-  fn deduplicates_referenced_actions_during_the_object_wide_scan() {
+  fn deduplicates_shared_referenced_actions_and_the_object_wide_scan() {
     let mut document = Document::load_mem(MINIMAL_PDF).unwrap();
     let action_id = document.add_object(lopdf::dictionary! {
       "Type" => "Action",
@@ -3654,6 +3674,12 @@ mod tests {
       .catalog_mut()
       .unwrap()
       .set("OpenAction", Object::Reference(action_id));
+    document.catalog_mut().unwrap().set(
+      "AA",
+      Object::Dictionary(lopdf::dictionary! {
+        "WC" => Object::Reference(action_id),
+      }),
+    );
 
     let inspection = inspect_document(&mut document);
 
