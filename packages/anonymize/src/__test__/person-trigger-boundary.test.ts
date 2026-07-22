@@ -58,6 +58,14 @@ describe("person trigger extraction stops at the name run", () => {
     expect(persons.some((person) => person.includes("Titul"))).toBe(false);
   });
 
+  test("multi-word acronym label stays out of the person prefix", async () => {
+    const persons = personTexts(
+      await detect("Pan Jane Roe VAT ID: 123, on site"),
+    );
+    expect(persons).toContain("Jane Roe");
+    expect(persons.some((person) => person.includes("VAT"))).toBe(false);
+  });
+
   test("multi-word name: Pan Jan Novák je tady.", async () => {
     const persons = personTexts(await detect("Pan Jan Novák je tady."));
     expect(persons).toContain("Jan Novák");

@@ -53,6 +53,12 @@ describe("person span stops before form-field labels", () => {
     expect(persons.some((p) => /\bName\b/.test(p))).toBe(false);
     expect(persons.some((p) => p.includes("Jane Roe"))).toBe(true);
   });
+
+  test("resolved person span stops before a multi-word acronym label", async () => {
+    const persons = await personTexts("Jane Roe VAT ID: 123");
+    expect(persons).toContain("Jane Roe");
+    expect(persons.some((person) => person.includes("VAT"))).toBe(false);
+  });
 });
 
 describe("trailing role trigger does not emit field-label values as people", () => {

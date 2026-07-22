@@ -1715,7 +1715,26 @@ fn inline_field_label_start(
     return Some((start, true));
   }
   let start = inline_field_label_token_start(text)?;
-  Some((start, unconfigured_label_is_acronym(text, start)))
+  let is_acronym = unconfigured_label_is_acronym(text, start);
+  let start = if is_acronym {
+    unconfigured_acronym_run_start(text, start)
+  } else {
+    start
+  };
+  Some((start, is_acronym))
+}
+
+pub(crate) fn unconfigured_acronym_field_label_end(
+  text: &str,
+) -> Option<usize> {
+  let (start, is_acronym) = inline_field_label_start(text, &[])?;
+  if start != 0 || !is_acronym {
+    return None;
+  }
+  text
+    .char_indices()
+    .find(|(_, character)| matches!(character, ':' | '：'))
+    .map(|(index, character)| index.saturating_add(character.len_utf8()))
 }
 
 fn unconfigured_label_is_acronym(text: &str, start: usize) -> bool {
@@ -1725,8 +1744,12 @@ fn unconfigured_label_is_acronym(text: &str, start: usize) -> bool {
   else {
     return false;
   };
+  is_unconfigured_acronym_token(label)
+}
+
+fn is_unconfigured_acronym_token(token: &str) -> bool {
   let mut letters = 0_usize;
-  for ch in label.chars() {
+  for ch in token.chars() {
     if ch.is_alphabetic() {
       if !ch.is_uppercase() {
         return false;
@@ -1737,6 +1760,29 @@ fn unconfigured_label_is_acronym(text: &str, start: usize) -> bool {
     }
   }
   letters >= 2
+}
+
+fn unconfigured_acronym_run_start(text: &str, start: usize) -> usize {
+  let mut run_start = start;
+  loop {
+    let before = text.get(..run_start).unwrap_or_default();
+    let trimmed = before.trim_end();
+    if trimmed.len() == before.len() {
+      return run_start;
+    }
+    let token_start = trimmed
+      .char_indices()
+      .rev()
+      .find(|(_, character)| character.is_whitespace())
+      .map_or(0, |(index, character)| {
+        index.saturating_add(character.len_utf8())
+      });
+    let token = trimmed.get(token_start..).unwrap_or_default();
+    if !is_unconfigured_acronym_token(token) {
+      return run_start;
+    }
+    run_start = token_start;
+  }
 }
 
 fn configured_field_label_start(text: &str, label: &str) -> Option<usize> {
@@ -2505,6 +2551,10 @@ mod tests {
         "Janem Novákem",
       ),
       ("approved by director Novák Titul: jednatel", "Novák"),
+      (
+        "approved by director Jane Roe VAT ID: 123, on site",
+        "Jane Roe",
+      ),
     ] {
       let start = text.find(trigger).unwrap();
       let end = start.saturating_add(trigger.len());
@@ -2533,6 +2583,14 @@ mod tests {
     assert_eq!(
       inline_field_label_start(text, &[]),
       Some(("Janem Zorbax\u{a0}".len(), true))
+    );
+  }
+
+  #[test]
+  fn multi_word_unconfigured_acronym_preserves_its_full_start() {
+    assert_eq!(
+      inline_field_label_start("Jane Roe VAT ID: 123", &[]),
+      Some(("Jane Roe ".len(), true))
     );
   }
 
