@@ -48,7 +48,9 @@
   "overrides": {
     "@emnapi/core": "1.11.1",
     "@emnapi/runtime": "1.11.1",
-    "emnapi": "1.11.1"
+    "emnapi": "1.11.1",
+    "yuku-codegen": "0.6.5",
+    "yuku-parser": "0.6.5"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^0.7.0",
