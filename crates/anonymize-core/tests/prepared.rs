@@ -3,7 +3,10 @@
 mod support;
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt::Write;
+use std::time::Instant;
 
+use sha2::{Digest, Sha256};
 use stella_anonymize_core::{
   AddressContextData, AddressSeedData, AmountWordsData, CallerDetection,
   CallerDetectionParams, CallerRedactionOptions, CoreferenceData,
@@ -870,6 +873,193 @@ fn prepared_engine_finds_slash_address_context_after_long_multibyte_prefix() {
       .iter()
       .any(|entity| entity.text == "Vinohradská 2512/2a")
   );
+}
+
+#[test]
+fn prepared_engine_finds_known_address_context_beyond_header_limit() {
+  let prepared = PreparedEngine::new(prepared_config! {
+    regex_patterns: vec![SearchPattern::Regex(String::from(r"\bPraha 10\b"))],
+    regex_meta: vec![RegexMatchMeta::new("address", 1.0)],
+    slices: PreparedEngineSlices {
+      regex: PatternSlice { start: 0, end: 1 },
+      ..PreparedEngineSlices::default()
+    },
+    threshold: 0.5,
+    allowed_labels: vec![String::from("address")],
+    address_context_data: Some(address_context_data()),
+    ..empty_config(PreparedEngineSlices::default())
+  })
+  .unwrap();
+  let full_text = format!(
+    "{}\nPraha 10; Vinohradská 2512/2a.",
+    "contract body\n".repeat(3_000),
+  );
+
+  let result = prepared
+    .redact_static_entities(&full_text, &OperatorConfig::default())
+    .unwrap();
+
+  assert!(
+    result
+      .resolved_entities
+      .iter()
+      .any(|entity| entity.text.contains("Vinohradská 2512/2a"))
+  );
+}
+
+#[test]
+fn address_context_large_document_output_digest_is_stable() {
+  let prepared = PreparedEngine::new(prepared_config! {
+    regex_patterns: vec![SearchPattern::Regex(String::from(r"\bPraha 10\b"))],
+    regex_meta: vec![RegexMatchMeta::new("address", 1.0)],
+    slices: PreparedEngineSlices {
+      regex: PatternSlice { start: 0, end: 1 },
+      ..PreparedEngineSlices::default()
+    },
+    threshold: 0.5,
+    allowed_labels: vec![String::from("address")],
+    address_context_data: Some(address_context_data()),
+    ..empty_config(PreparedEngineSlices::default())
+  })
+  .unwrap();
+  let full_text = (0..400).fold(String::new(), |mut text, index| {
+    writeln!(
+      &mut text,
+      "Clause {index}: Praha 10, Vinohradská 2512/2a. The terms continue."
+    )
+    .unwrap();
+    text
+  });
+
+  let result = prepared
+    .redact_static_entities(&full_text, &OperatorConfig::default())
+    .unwrap();
+
+  let address_text = "Praha 10, Vinohradská 2512/2a";
+  let expected_address_spans = full_text
+    .match_indices(address_text)
+    .map(|(start, text)| (start, start.saturating_add(text.len())))
+    .collect::<Vec<_>>();
+  let actual_address_spans = result
+    .resolved_entities
+    .iter()
+    .filter(|entity| entity.text == address_text)
+    .map(|entity| {
+      (
+        usize::try_from(entity.start).unwrap_or(usize::MAX),
+        usize::try_from(entity.end).unwrap_or(usize::MAX),
+      )
+    })
+    .collect::<Vec<_>>();
+
+  assert_eq!(result.resolved_entities.len(), 800);
+  assert_eq!(result.redaction.entity_count, 800);
+  assert_eq!(actual_address_spans, expected_address_spans);
+  assert_eq!(
+    result.redaction.redacted_text.matches("[ADDRESS_").count(),
+    800,
+  );
+  assert!(!result.redaction.redacted_text.contains(address_text));
+  assert_eq!(
+    result
+      .redaction
+      .redacted_text
+      .matches("The terms continue.")
+      .count(),
+    400,
+  );
+
+  assert_eq!(
+    static_redaction_digest(&result),
+    "c43269315ab1014bc5754596ac55d68a65956c2a6b42582d8b7bd9b908d7fec2",
+  );
+}
+
+#[test]
+#[ignore = "release-mode scaling regression check"]
+fn address_context_cost_scales_with_input_size() {
+  let prepared = PreparedEngine::new(prepared_config! {
+    regex_patterns: vec![SearchPattern::Regex(String::from(r"\bPraha 10\b"))],
+    regex_meta: vec![RegexMatchMeta::new("address", 1.0)],
+    slices: PreparedEngineSlices {
+      regex: PatternSlice { start: 0, end: 1 },
+      ..PreparedEngineSlices::default()
+    },
+    threshold: 0.5,
+    allowed_labels: vec![String::from("address")],
+    address_context_data: Some(address_context_data()),
+    ..empty_config(PreparedEngineSlices::default())
+  })
+  .unwrap();
+  let fixture = format!(
+    "Clause: Praha 10, Vinohradská 2512/2a. {}\n",
+    "The terms continue under this Agreement. ".repeat(48),
+  );
+  let sizes: [usize; 5] =
+    [48 * 1024, 100 * 1024, 250 * 1024, 500 * 1024, 1024 * 1024];
+  let mut samples = Vec::new();
+
+  for target_bytes in sizes {
+    let repeats = target_bytes.div_ceil(fixture.len());
+    let text = fixture.repeat(repeats);
+    let expected_entities = repeats;
+    let warm = prepared
+      .redact_static_entities(&text, &OperatorConfig::default())
+      .unwrap();
+    assert_eq!(warm.redaction.entity_count, expected_entities);
+
+    let mut best: Option<std::time::Duration> = None;
+    for _ in 0..5 {
+      let start = Instant::now();
+      let result = prepared
+        .redact_static_entities(&text, &OperatorConfig::default())
+        .unwrap();
+      let elapsed = start.elapsed();
+      assert_eq!(result.redaction.entity_count, expected_entities);
+      std::hint::black_box(result);
+      best = Some(best.map_or(elapsed, |current| current.min(elapsed)));
+    }
+    samples.push((text.len(), best.unwrap().as_nanos()));
+  }
+
+  let (smallest_bytes, smallest_nanos) = samples.first().copied().unwrap();
+  let (largest_bytes, largest_nanos) = samples.last().copied().unwrap();
+  assert!(
+    largest_nanos.saturating_mul(u128::try_from(smallest_bytes).unwrap())
+      <= smallest_nanos
+        .saturating_mul(u128::try_from(largest_bytes).unwrap())
+        .saturating_mul(4),
+    "address-context time per byte regressed: {samples:?}",
+  );
+}
+
+fn static_redaction_digest(
+  result: &stella_anonymize_core::StaticRedactionResult,
+) -> String {
+  let mut hasher = Sha256::new();
+  update_digest_field(&mut hasher, result.redaction.redacted_text.as_bytes());
+  for entity in &result.resolved_entities {
+    hasher.update(entity.start.to_le_bytes());
+    hasher.update(entity.end.to_le_bytes());
+    update_digest_field(&mut hasher, entity.label.as_bytes());
+    update_digest_field(&mut hasher, entity.text.as_bytes());
+    hasher.update(entity.score.to_bits().to_le_bytes());
+    update_digest_field(
+      &mut hasher,
+      format!("{:?}:{:?}", entity.source, entity.source_detail).as_bytes(),
+    );
+  }
+  let digest = hasher.finalize();
+  let mut encoded = String::with_capacity(digest.len().saturating_mul(2));
+  for byte in digest {
+    write!(&mut encoded, "{byte:02x}").unwrap();
+  }
+  encoded
+}
+
+fn update_digest_field(hasher: &mut Sha256, value: &[u8]) {
+  hasher.update(u64::try_from(value.len()).unwrap().to_le_bytes());
+  hasher.update(value);
 }
 
 #[test]
