@@ -70,14 +70,18 @@ export const cpuNoiseDelta = (
   return {
     ...delta,
     status:
-      delta.irqTicks === 0 && delta.softIrqTicks === 0 && delta.stealTicks === 0
+      delta.niceTicks === 0 &&
+      delta.ioWaitTicks === 0 &&
+      delta.irqTicks === 0 &&
+      delta.softIrqTicks === 0 &&
+      delta.stealTicks === 0
         ? "clean"
         : "kernel-noise-observed",
   };
 };
 
-export const assertNoCpuSteal = (delta: CpuNoiseDelta): void => {
-  if (delta.stealTicks !== 0) {
-    throw new Error("canonical performance CPU accumulated steal time");
+export const assertCleanCpuNoise = (delta: CpuNoiseDelta): void => {
+  if (delta.status !== "clean") {
+    throw new Error("canonical performance CPU accumulated kernel noise");
   }
 };

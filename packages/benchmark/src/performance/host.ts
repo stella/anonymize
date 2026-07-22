@@ -298,9 +298,10 @@ export const assertCanonicalRuntimeControls = (
     ) ||
     snapshot.governors.length !== 1 ||
     snapshot.governors.at(0) !== profile.governor ||
-    !snapshot.turboDisabled
+    !snapshot.turboDisabled ||
+    snapshot.loadOneMinute / snapshot.logicalCores > profile.maximumLoadPerCore
   ) {
-    throw new Error("canonical CPU controls changed during measurement");
+    throw new Error("canonical host controls changed during measurement");
   }
 };
 

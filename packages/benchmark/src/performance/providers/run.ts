@@ -16,7 +16,7 @@ import {
 } from "../input";
 import { machineMetadata, type PerformanceMachine } from "../report";
 import {
-  assertNoCpuSteal,
+  assertCleanCpuNoise,
   cpuNoiseDelta,
   readCpuNoiseSnapshot,
   type CpuNoiseDelta,
@@ -140,6 +140,9 @@ export const parseCrossProviderArgs = (
     throw new Error(
       "canonical mode requires at least 3 warmups and 20 samples",
     );
+  }
+  if (mode === "canonical" && samples % 2 !== 0) {
+    throw new Error("canonical mode requires an even sample count");
   }
   if (
     mode === "canonical" &&
@@ -503,7 +506,8 @@ export const buildProviderSampleOrder = (
       diagonal.push({ definition, inputBytes: size });
     }
   }
-  return rotated(diagonal, round);
+  const paired = rotated(diagonal, Math.floor(round / 2));
+  return round % 2 === 0 ? paired : [...paired].reverse();
 };
 
 export const runCrossProviderPerformance = async (
@@ -548,10 +552,12 @@ export const runCrossProviderPerformance = async (
       round < options.warmups ? round + 1 : round - options.warmups + 1;
     const phaseTotal =
       round < options.warmups ? options.warmups : options.samples;
+    const phaseRoundIndex =
+      phase === "warmup" ? round : round - options.warmups;
     for (const { definition, inputBytes: size } of buildProviderSampleOrder(
       available,
       options.inputBytes,
-      round,
+      phaseRoundIndex,
     )) {
       process.stderr.write(
         `${phase} ${phaseRound}/${phaseTotal}: ${definition.id}, ${size} bytes\n`,
@@ -587,7 +593,7 @@ export const runCrossProviderPerformance = async (
       ? null
       : cpuNoiseDelta(noiseStart, readCpuNoiseSnapshot(benchmarkCpu));
   if (host !== undefined && hostNoise !== null) {
-    assertNoCpuSteal(hostNoise);
+    assertCleanCpuNoise(hostNoise);
     assertCanonicalRuntimeControls(
       host,
       currentHostSnapshot(host.benchmarkCpu),

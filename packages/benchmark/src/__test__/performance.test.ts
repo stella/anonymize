@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import { resolve } from "node:path";
 
 import {
   assertCanonicalHost,
+  assertCanonicalRuntimeControls,
   CANONICAL_HOST_LABEL,
   parseCpuList,
   type HostProfile,
@@ -9,7 +11,7 @@ import {
 } from "../performance/host";
 import { buildPerformanceInput } from "../performance/input";
 import {
-  assertNoCpuSteal,
+  assertCleanCpuNoise,
   cpuNoiseDelta,
   type CpuNoiseSnapshot,
 } from "../performance/noise";
@@ -30,6 +32,10 @@ import {
 } from "../performance/providers/run";
 import { regexDetectorConfig } from "../performance/providers/stella-config";
 import { assertProviderEntities } from "../performance/providers/identity";
+import {
+  assertProviderInputIdentity,
+  computeProviderInputIdentity,
+} from "../performance/providers/input-identity";
 
 describe("canonical performance statistics", () => {
   test("reports median, MAD, and nearest-rank p95 without sorting samples", () => {
@@ -81,6 +87,60 @@ describe("canonical performance statistics", () => {
 });
 
 describe("cross-provider performance contract", () => {
+  test("uses worker-verified UTF-16 input identity for astral text", () => {
+    const inputText = "A😀B";
+    const identity = computeProviderInputIdentity(inputText);
+    expect(identity.inputBytes).toBe(6);
+    expect(identity.inputCharacters).toBe(4);
+    expect(() =>
+      assertProviderInputIdentity(identity, inputText),
+    ).not.toThrow();
+    expect(() =>
+      assertProviderInputIdentity(
+        { ...identity, inputCharacters: identity.inputCharacters - 1 },
+        inputText,
+      ),
+    ).toThrow("mismatched input identity");
+    expect(() =>
+      assertProviderInputIdentity(
+        { ...identity, inputSha256: "0".repeat(64) },
+        inputText,
+      ),
+    ).toThrow("mismatched input identity");
+  });
+
+  test("Python independently rejects a code-point denominator", () => {
+    const python = Bun.which("python3") ?? Bun.which("python");
+    if (python === null)
+      throw new Error("Python is required by benchmark tests");
+    const inputText = "A😀B";
+    const identity = computeProviderInputIdentity(inputText);
+    const result = Bun.spawnSync({
+      cmd: [
+        python,
+        resolve(
+          import.meta.dir,
+          "..",
+          "..",
+          "python",
+          "provider_performance_worker.py",
+        ),
+        "datafog-regex-only",
+      ],
+      stdin: new TextEncoder().encode(
+        JSON.stringify({
+          ...identity,
+          inputCharacters: 3,
+          inputText,
+        }),
+      ),
+    });
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr.toString()).toContain(
+      "Python worker received mismatched input identity",
+    );
+  });
+
   test("pins the provider interpreter and preserves its arguments", () => {
     const definition: ProviderDefinition = {
       id: "datafog-regex-only",
@@ -104,6 +164,9 @@ describe("cross-provider performance contract", () => {
     expect(() =>
       parseCrossProviderArgs(["--canonical", "--samples=19"]),
     ).toThrow("at least 3 warmups and 20 samples");
+    expect(() =>
+      parseCrossProviderArgs(["--canonical", "--samples=21"]),
+    ).toThrow("even sample count");
     expect(
       parseCrossProviderArgs(["--samples=1", "--warmups=1"]).inputBytes,
     ).toEqual([48 * 1024, 256 * 1024]);
@@ -139,6 +202,30 @@ describe("cross-provider performance contract", () => {
     expect(buildProviderSampleOrder(definitions, sizes, 1).at(-1)).toEqual(
       order.at(0),
     );
+
+    const positions = new Map<string, number[]>();
+    for (let round = 0; round < 20; round += 1) {
+      for (const [position, coordinate] of buildProviderSampleOrder(
+        definitions,
+        sizes,
+        round,
+      ).entries()) {
+        const key = `${coordinate.definition.id}:${coordinate.inputBytes}`;
+        const seen = positions.get(key) ?? [];
+        seen.push(position);
+        positions.set(key, seen);
+      }
+    }
+    const center = (order.length - 1) / 2;
+    expect(
+      [...positions.values()].every(
+        (seen) =>
+          seen.length === 20 &&
+          seen.reduce((total, position) => total + position, 0) /
+            seen.length ===
+            center,
+      ),
+    ).toBe(true);
   });
 
   test("rejects invalid provider spans and labels", () => {
@@ -261,9 +348,15 @@ describe("canonical performance host", () => {
         onlineCpus: [...snapshot.onlineCpus, 7],
       }),
     ).toThrow("SMT siblings must be offline");
+    expect(() =>
+      assertCanonicalRuntimeControls(profile, {
+        ...snapshot,
+        loadOneMinute: 8,
+      }),
+    ).toThrow("changed during measurement");
   });
 
-  test("records CPU counter noise and rejects steal time", () => {
+  test("records CPU counter noise and rejects any canonical contamination", () => {
     const before: CpuNoiseSnapshot = {
       userTicks: 1,
       niceTicks: 0,
@@ -276,14 +369,27 @@ describe("canonical performance host", () => {
     };
     const clean = cpuNoiseDelta(before, { ...before, userTicks: 4 });
     expect(clean.status).toBe("clean");
-    expect(() => assertNoCpuSteal(clean)).not.toThrow();
+    expect(() => assertCleanCpuNoise(clean)).not.toThrow();
     const noisy = cpuNoiseDelta(before, {
       ...before,
       softIrqTicks: 1,
       stealTicks: 1,
     });
     expect(noisy.status).toBe("kernel-noise-observed");
-    expect(() => assertNoCpuSteal(noisy)).toThrow("steal time");
+    expect(() => assertCleanCpuNoise(noisy)).toThrow("kernel noise");
+    expect(() =>
+      assertCleanCpuNoise({
+        ...clean,
+        irqTicks: 1,
+        status: "kernel-noise-observed",
+      }),
+    ).toThrow("kernel noise");
+    expect(cpuNoiseDelta(before, { ...before, niceTicks: 1 }).status).toBe(
+      "kernel-noise-observed",
+    );
+    expect(cpuNoiseDelta(before, { ...before, ioWaitTicks: 1 }).status).toBe(
+      "kernel-noise-observed",
+    );
   });
 
   test("parses Linux CPU lists without accepting ambiguous syntax", () => {

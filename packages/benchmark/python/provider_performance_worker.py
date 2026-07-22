@@ -15,6 +15,15 @@ if PROVIDER not in {"scrubadub-base", "datafog-regex-only"}:
 print(json.dumps({"type": "ready"}), flush=True)
 request = json.load(sys.stdin)
 text = request["inputText"]
+input_bytes = len(text.encode("utf-8"))
+input_characters = len(text.encode("utf-16-le")) // 2
+input_sha256 = hashlib.sha256(text.encode("utf-8")).hexdigest()
+if (
+    request["inputBytes"] != input_bytes
+    or request["inputCharacters"] != input_characters
+    or request["inputSha256"] != input_sha256
+):
+    raise ValueError("Python worker received mismatched input identity")
 
 
 def identity(entities: list[dict]) -> tuple[int, str, dict[str, int]]:
@@ -99,9 +108,9 @@ sample = {
     "providerVersion": provider_version,
     "runtimeVersion": f"Python {sys.version.split()[0]}",
     "scope": scope,
-    "inputBytes": request["inputBytes"],
-    "inputCharacters": request["inputCharacters"],
-    "inputSha256": request["inputSha256"],
+    "inputBytes": input_bytes,
+    "inputCharacters": input_characters,
+    "inputSha256": input_sha256,
     "outputCount": second_call_identity[0],
     "outputDigest": second_call_identity[1],
     "outputLabelCounts": second_call_identity[2],

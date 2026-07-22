@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 
 import type { NativePrediction } from "../../adapters/types";
+import { assertProviderInputIdentity } from "./input-identity";
 import { assertProviderEntities, outputIdentity } from "./identity";
 import { regexDetectorConfig } from "./stella-config";
 import type { CrossProviderId, ProviderSample } from "./types";
@@ -18,6 +19,8 @@ const request = (await new Response(Bun.stdin.stream()).json()) as {
   readonly inputText: string;
   readonly inputSha256: string;
 };
+const { inputBytes, inputCharacters, inputSha256 } =
+  assertProviderInputIdentity(request, request.inputText);
 const initStarted = performance.now();
 const anonymize = await import("@stll/anonymize");
 const binding = anonymize.loadNativeAnonymizeBinding();
@@ -125,9 +128,9 @@ const sample: ProviderSample = {
   providerVersion: version,
   runtimeVersion: `Bun ${Bun.version}`,
   scope: provider === "stella-full" ? "full-pipeline" : "regex-detectors-only",
-  inputBytes: request.inputBytes,
-  inputCharacters: request.inputCharacters,
-  inputSha256: request.inputSha256,
+  inputBytes,
+  inputCharacters,
+  inputSha256,
   outputCount: secondCallIdentity.count,
   outputDigest: secondCallIdentity.digest,
   outputLabelCounts: secondCallIdentity.labelCounts,
