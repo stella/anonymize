@@ -419,11 +419,21 @@ fn walk_backward(
   let mut steps = 0;
   let mut leftmost_cap = None::<usize>;
   let mut lower_bridge_run = 0_usize;
+  let mut crossed_comma_wrap = false;
 
   while steps < HEAD_TOKEN_CAP {
     let Some(token) = token_before(text, pos) else {
       break;
     };
+    let crossed_newline = text
+      .get(token.end..pos)
+      .is_some_and(|between| between.contains('\n'));
+    if crossed_newline {
+      if crossed_comma_wrap {
+        break;
+      }
+      crossed_comma_wrap = true;
+    }
     if !is_acceptable_token(token.text, data) {
       break;
     }
@@ -3081,6 +3091,18 @@ mod tests {
     let text = "Unrelated Party,\nMeagher & Flom LLP";
     let texts = org_texts_for(text, "LLP");
     assert_eq!(texts, vec![String::from("Meagher & Flom LLP")]);
+  }
+
+  #[test]
+  fn preceding_comma_rich_firm_line_still_stops_name_walk() {
+    let text = "Wachtell, Lipton, Rosen & Katz,\nSkadden, Arps, Slate,\nMeagher & Flom (UK) LLP";
+    let texts = org_texts_for(text, "LLP");
+    assert_eq!(
+      texts,
+      vec![String::from(
+        "Skadden, Arps, Slate,\nMeagher & Flom (UK) LLP"
+      )]
+    );
   }
 
   fn connector_test_data() -> PreparedLegalFormData {
