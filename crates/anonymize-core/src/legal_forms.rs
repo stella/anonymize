@@ -422,7 +422,7 @@ fn walk_backward(
   let mut crossed_comma_wrap = false;
 
   while steps < HEAD_TOKEN_CAP {
-    let Some(token) = token_before(text, pos) else {
+    let Some(token) = token_before(text, pos, steps == 0) else {
       break;
     };
     let crossed_newline = text
@@ -448,7 +448,7 @@ fn walk_backward(
     }
 
     if contains_lowercase(&data.connector_words, token.text) {
-      let previous = token_before(text, token.start);
+      let previous = token_before(text, token.start, false);
       if previous
         .as_ref()
         .is_some_and(|found| is_legal_form_suffix_word(found.text, data))
@@ -494,7 +494,11 @@ struct Token<'a> {
   text: &'a str,
 }
 
-fn token_before(text: &str, pos: usize) -> Option<Token<'_>> {
+fn token_before(
+  text: &str,
+  pos: usize,
+  allow_suffix_adjacent_jurisdiction: bool,
+) -> Option<Token<'_>> {
   let mut end = pos;
   while let Some((prev_start, ch)) = previous_char(text, end) {
     if ch == '\n' {
@@ -511,6 +515,9 @@ fn token_before(text: &str, pos: usize) -> Option<Token<'_>> {
       // sit between the firm name and the legal-form suffix. Broader
       // parentheticals ("Licensor (Wells Fargo Bank, N.A.)") still stop the
       // walk so the role word outside the paren is not absorbed.
+      if !allow_suffix_adjacent_jurisdiction {
+        return None;
+      }
       let open_start = jurisdiction_parenthetical_open(text, prev_start)?;
       end = open_start;
       continue;
@@ -681,7 +688,7 @@ fn is_in_name_legal_form_word(
 fn count_upper_before(text: &str, pos: usize) -> usize {
   let mut scan = pos;
   let mut count = 0_usize;
-  while let Some(token) = token_before(text, scan) {
+  while let Some(token) = token_before(text, scan, false) {
     if !starts_upper(token.text) {
       break;
     }
@@ -1498,7 +1505,7 @@ fn is_bare_single_cap_structural_inner_match(
   if !is_bare_single_cap_legal_form(text) {
     return false;
   }
-  token_before(full_text, match_start).is_some_and(|token| {
+  token_before(full_text, match_start, false).is_some_and(|token| {
     data
       .structural_single_cap_prefixes
       .contains(lowercase_lookup(token.text).as_ref())
@@ -3061,6 +3068,13 @@ mod tests {
         .all(|candidate| !candidate.contains("Licensor")),
       "role word must stay outside the org span: {texts:?}"
     );
+  }
+
+  #[test]
+  fn jurisdiction_parenthetical_away_from_suffix_stops_name_walk() {
+    let text = "Licensor (US) Acme LLP";
+    let texts = org_texts_for(text, "LLP");
+    assert_eq!(texts, vec![String::from("Acme LLP")]);
   }
 
   #[test]
