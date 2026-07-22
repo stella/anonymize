@@ -12,6 +12,9 @@ const HEADER_ZONE_PERCENT: usize = 15;
 // with concatenated or unusually long documents.
 const HEADER_ZONE_MAX_UTF16_UNITS: u32 = 32 * 1024;
 const HEADER_ZONE_MAX_LINES: usize = 200;
+// Finish a header's last physical line when it is short, without allowing a
+// newline-free OCR/minified document to turn the header scan into a body scan.
+const HEADER_SCAN_MAX_LINE_EXTENSION_UTF16_UNITS: u32 = 512;
 const STREET_CONTEXT_WINDOW: u32 = 200;
 const BARE_HOUSE_CONTEXT_WINDOW: u32 = 50;
 const MAX_UTF8_BYTES_PER_UTF16_UNIT: u32 = 3;
@@ -614,12 +617,20 @@ fn header_scan_end(
   header_end: u32,
 ) -> Result<usize> {
   let header_end = offsets.validate_offset(header_end)?;
-  let tail = full_text.get(header_end..).ok_or(Error::InvalidSpan {
-    start: u32::try_from(header_end).unwrap_or(u32::MAX),
-    end: offsets.len()?,
-  })?;
+  let bounded_end = offsets.offset_after_utf16_units(
+    u32::try_from(header_end).unwrap_or(u32::MAX),
+    HEADER_SCAN_MAX_LINE_EXTENSION_UTF16_UNITS,
+  )?;
+  let bounded_end = offsets.validate_offset(bounded_end)?;
+  let tail =
+    full_text
+      .get(header_end..bounded_end)
+      .ok_or(Error::InvalidSpan {
+        start: u32::try_from(header_end).unwrap_or(u32::MAX),
+        end: u32::try_from(bounded_end).unwrap_or(u32::MAX),
+      })?;
   let Some(relative_newline) = tail.find('\n') else {
-    return Ok(full_text.len());
+    return Ok(bounded_end);
   };
   Ok(header_end.saturating_add(relative_newline))
 }
@@ -881,8 +892,8 @@ fn usize_to_u32(field: &'static str, value: usize) -> Result<u32> {
 mod tests {
   use super::{
     BARE_HOUSE_CONTEXT_WINDOW, EntityProximityIndex,
-    HEADER_ZONE_MAX_UTF16_UNITS, STREET_CONTEXT_WINDOW, header_end,
-    within_context_window,
+    HEADER_SCAN_MAX_LINE_EXTENSION_UTF16_UNITS, HEADER_ZONE_MAX_UTF16_UNITS,
+    STREET_CONTEXT_WINDOW, header_end, header_scan_end, within_context_window,
   };
   use crate::byte_offsets::ByteOffsets;
   use crate::resolution::{DetectionSource, PipelineEntity};
@@ -900,6 +911,21 @@ mod tests {
     let text = format!("{lines}{}", "x".repeat(100_000));
 
     assert_eq!(header_end(&text), 400);
+  }
+
+  #[test]
+  fn header_scan_stays_bounded_without_newlines() {
+    let text = "x".repeat(1024 * 1024);
+    let offsets = ByteOffsets::new(&text);
+    let header_end = header_end(&text);
+
+    assert_eq!(
+      header_scan_end(&text, &offsets, header_end).unwrap(),
+      usize::try_from(
+        header_end.saturating_add(HEADER_SCAN_MAX_LINE_EXTENSION_UTF16_UNITS,),
+      )
+      .unwrap(),
+    );
   }
 
   #[test]
