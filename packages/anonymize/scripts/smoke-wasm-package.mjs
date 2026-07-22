@@ -24,6 +24,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const packageRoot = dirname(here);
 const entryPath = join(packageRoot, "wasm", "dist", "wasm.mjs");
+const nativeNodeEntryPath = join(packageRoot, "dist", "native-node.mjs");
 const defaultPackagePath = join(
   packageRoot,
   "wasm",
@@ -31,9 +32,20 @@ const defaultPackagePath = join(
   "native",
   "native-pipeline.stlanonpkg",
 );
+const pdfFixturePath = join(
+  packageRoot,
+  "..",
+  "..",
+  "crates",
+  "anonymize-pdf-core",
+  "tests",
+  "fixtures",
+  "minimal-text.pdf",
+);
 
 for (const [label, path] of [
   ["package entry", entryPath],
+  ["native Node entry", nativeNodeEntryPath],
   ["default package", defaultPackagePath],
 ]) {
   if (!existsSync(path)) {
@@ -45,6 +57,8 @@ for (const [label, path] of [
 
 // eslint-disable-next-line stll/no-dynamic-import-specifier
 const entry = await import(pathToFileURL(entryPath).href);
+// eslint-disable-next-line stll/no-dynamic-import-specifier
+const nativeNodeEntry = await import(pathToFileURL(nativeNodeEntryPath).href);
 
 const {
   getBinding,
@@ -54,6 +68,7 @@ const {
   deanonymise,
   defaultPackageUrl,
   CAPABILITY_MANIFEST,
+  inspect_pdf_json: inspectPdfJson,
 } = entry;
 
 if (
@@ -66,6 +81,43 @@ if (
 const binding = await getBinding();
 if (typeof binding.nativePackageVersion !== "function") {
   throw new TypeError("getBinding() did not return a native binding");
+}
+if (typeof binding.inspectPdfJson !== "function") {
+  throw new TypeError("getBinding() did not expose PDF inspection");
+}
+
+const pdfBytes = new Uint8Array(readFileSync(pdfFixturePath));
+const nodeBinding = nativeNodeEntry.loadNativeAnonymizeBinding();
+const nodePdfJson = nodeBinding.inspectPdfJson(pdfBytes);
+const directPdfJson = binding.inspectPdfJson(pdfBytes);
+const packagePdfJson = await inspectPdfJson(pdfBytes);
+if (packagePdfJson !== directPdfJson || packagePdfJson !== nodePdfJson) {
+  throw new Error("Node and WASI PDF inspection results are not exact");
+}
+let directPdfError;
+let packagePdfError;
+try {
+  binding.inspectPdfJson(new Uint8Array([0]));
+} catch (error) {
+  directPdfError = String(error?.message ?? error);
+}
+let nodePdfError;
+try {
+  nodeBinding.inspectPdfJson(new Uint8Array([0]));
+} catch (error) {
+  nodePdfError = String(error?.message ?? error);
+}
+try {
+  await inspectPdfJson(new Uint8Array([0]));
+} catch (error) {
+  packagePdfError = String(error?.message ?? error);
+}
+if (
+  !directPdfError ||
+  packagePdfError !== directPdfError ||
+  nodePdfError !== directPdfError
+) {
+  throw new Error("Node and WASI PDF inspection error behavior is not exact");
 }
 
 const version = await nativePackageVersion();
@@ -151,5 +203,6 @@ console.log(
     deanonymiseRoundTrip: true,
     loadDefaultPipeline: true,
     regionalLanguageFallback: true,
+    pdfInspectionParity: true,
   }),
 );

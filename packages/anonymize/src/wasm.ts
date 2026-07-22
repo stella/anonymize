@@ -479,6 +479,20 @@ export const summary_diagnostics_json = async (
     ...(operators !== undefined ? { operators } : {}),
   });
 
+/** Inspect PDF bytes and optional renderer observations through the same
+ * fail-closed core used by Node and Python. This does not redact the PDF. */
+export const inspect_pdf_json = async (
+  document: Uint8Array,
+  observationsJson?: string,
+  options?: WasmBindingOptions,
+): Promise<string> => {
+  const inspect = (await resolveBinding(options)).inspectPdfJson;
+  if (inspect === undefined) {
+    throw new Error("wasm binding is stale: inspectPdfJson is missing");
+  }
+  return inspect(document, observationsJson);
+};
+
 // --- Binding extraction ------------------------------------------------------
 
 const toNativeAnonymizeBinding = (loaded: unknown): NativeAnonymizeBinding => {
@@ -514,6 +528,9 @@ const isNativeAnonymizeBinding = (
     return false;
   }
   if (typeof value["prepareStaticSearchPackageBytes"] !== "function") {
+    return false;
+  }
+  if (typeof value["inspectPdfJson"] !== "function") {
     return false;
   }
   if (

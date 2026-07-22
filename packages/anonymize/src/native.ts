@@ -249,6 +249,7 @@ export type NativeAnonymizeBinding = {
     batchJson: string,
   ) => NativeCallerDetection[];
   extractDocxTextJson?: (document: Uint8Array) => string;
+  inspectPdfJson?: (document: Uint8Array, observationsJson?: string) => string;
   rewriteDocxTextNative?: (
     document: Uint8Array,
     rewritesJson: string,

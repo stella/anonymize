@@ -278,9 +278,10 @@ Rust adapter parity examples).
 
 Parity covers public surface availability as well as fixture output. The
 versioned `CAPABILITY_MANIFEST` assigns each capability to a runtime profile:
-`core` for Node.js, Python, and WASM; `local` for Node.js and Python filesystem
-operations; and `document` for Node.js and Python structure-aware adapters. CI
-fails when one runtime in a profile is missing the corresponding surface.
+`core` for Node.js, Python, and WASM (including byte-based PDF inspection);
+`local` for Node.js and Python filesystem operations; and `document` for
+Node.js and Python structure-aware DOCX adapters. CI fails when one
+runtime in a profile is missing the corresponding surface.
 
 Dictionaries and language data are baked into `.stlanonpkg` prepared packages at
 build time, not loaded from the network at runtime. Native Node binaries ship as
@@ -336,6 +337,9 @@ format, workflow, and local MCP coverage matrix.
 | `@stll/anonymize-wasm`  | Browser/WASM build of the runtime                              |
 | `@stll/anonymize-cli`   | Command-line anonymization (`anonymize` binary)                |
 | `@stll/anonymize-data`  | Published deny-list dictionaries and trigger/config data       |
+| `@stll/anonymize-docx`  | Structure-aware DOCX inspection and anonymization              |
+| `@stll/anonymize-pdf`   | Fail-closed PDF structure and coverage inspection              |
+| `@stll/anonymize-mcp`   | Path-only local MCP tools for text and DOCX                    |
 | `stella-anonymize-core` | Python bindings for the Rust anonymization core                |
 | `crates/anonymize-core` | Rust anonymization core                                        |
 

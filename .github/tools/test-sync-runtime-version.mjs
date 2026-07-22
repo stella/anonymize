@@ -34,6 +34,7 @@ const packageFiles = [
   "packages/anonymize/wasm/package.json",
   "packages/cli/package.json",
   "packages/document-docx/package.json",
+  "packages/document-pdf/package.json",
   "packages/mcp/package.json",
 ];
 
@@ -104,6 +105,16 @@ for (const scenarioLineEnding of ["\n", "\r\n"]) {
       }
     }
 
+    const pdfPackage = JSON.parse(
+      readFileSync(
+        join(workspace, "packages/document-pdf/package.json"),
+        "utf8",
+      ),
+    );
+    if (pdfPackage.dependencies?.["@stll/anonymize"] !== `^${version}`) {
+      throw new Error("PDF package did not sync @stll/anonymize");
+    }
+
     const lockText = readFileSync(join(workspace, "bun.lock"), "utf8");
     if (lockText.includes(staleVersion)) {
       throw new Error("bun.lock still contains stale sidecar versions");
@@ -126,6 +137,7 @@ function writeFixture() {
       cargoPackage("stella-anonymize-adapter-contract"),
       cargoPackage("stella-anonymize-core"),
       cargoPackage("stella-anonymize-docx-core"),
+      cargoPackage("stella-anonymize-pdf-core"),
       cargoPackage("stella-anonymize-napi"),
       cargoPackage("stella-anonymize-py"),
     ].join("\n"),
@@ -146,6 +158,9 @@ function writeFixture() {
       };
     }
     if (file === "packages/document-docx/package.json") {
+      pkg.dependencies = { "@stll/anonymize": `^${staleVersion}` };
+    }
+    if (file === "packages/document-pdf/package.json") {
       pkg.dependencies = { "@stll/anonymize": `^${staleVersion}` };
     }
     if (file === "packages/mcp/package.json") {
@@ -176,6 +191,9 @@ function packageNameFor(file) {
   }
   if (file === "packages/document-docx/package.json") {
     return "@stll/anonymize-docx";
+  }
+  if (file === "packages/document-pdf/package.json") {
+    return "@stll/anonymize-pdf";
   }
   if (file === "packages/mcp/package.json") {
     return "@stll/anonymize-mcp";
@@ -229,6 +247,11 @@ function bunLockFixture() {
         },
         "packages/document-docx": {
           name: "@stll/anonymize-docx",
+          version,
+          dependencies: { "@stll/anonymize": `^${staleVersion}` },
+        },
+        "packages/document-pdf": {
+          name: "@stll/anonymize-pdf",
           version,
           dependencies: { "@stll/anonymize": `^${staleVersion}` },
         },

@@ -45,6 +45,8 @@ const coreSurface = {
   ),
   "text.operators": prototypeMethod(preparedPrototype, "redact_text"),
   "package.default": nativeNode.getDefaultNativePipeline,
+  "document.pdf.inspect":
+    nativeNode.loadNativeAnonymizeBinding().inspectPdfJson,
 } as const;
 
 const nodeSurface = {
@@ -103,6 +105,7 @@ const wasmSurface = {
     wasm.PreparedNativeRedactionSession?.prototype,
     "toEncryptedArchive",
   ),
+  "document.pdf.inspect": wasm.inspect_pdf_json,
 } satisfies Partial<RuntimeSurface>;
 
 const runtimeSurfaces = {
@@ -129,4 +132,16 @@ describe("full runtime surface parity", () => {
       }
     });
   }
+
+  test("WASM rejects injected bindings missing core PDF inspection", () =>
+    expect(
+      wasm.inspect_pdf_json(new Uint8Array([0]), undefined, {
+        binding: {
+          ...nativeNode.loadNativeAnonymizeBinding(),
+          inspectPdfJson: undefined,
+        } as unknown as native.NativeAnonymizeBinding,
+      }),
+    ).rejects.toThrow(
+      "wasm binding module does not expose the native anonymize surface",
+    ));
 });

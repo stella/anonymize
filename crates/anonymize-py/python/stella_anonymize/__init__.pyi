@@ -130,6 +130,107 @@ class DocxRestorationError(ValueError):
     code: str
 
 def extract_docx_text(document: BytesLike) -> dict[str, Any]: ...
+PdfInspectionErrorCode: TypeAlias = Literal[
+    "document-limit-exceeded",
+    "invalid-document",
+    "invalid-observation",
+    "observation-limit-exceeded",
+    "provider-failed",
+]
+
+class PdfInspectionError(ValueError):
+    code: PdfInspectionErrorCode
+
+PdfGlyphSource: TypeAlias = Literal["embedded-text", "ocr"]
+PdfTextLayerCoverage: TypeAlias = Literal["absent", "partial", "complete"]
+PdfOcrCoverage: TypeAlias = Literal["not-run", "partial", "complete"]
+PdfInspectionGap: TypeAlias = Literal[
+    "encrypted-document",
+    "page-content-not-observed",
+    "page-not-rendered",
+    "partial-text-layer",
+    "retained-document-bytes",
+    "unobserved-visual-content",
+]
+
+class PdfRect(TypedDict):
+    left: float
+    bottom: float
+    right: float
+    top: float
+
+class PdfGlyphObservation(TypedDict):
+    start: int
+    end: int
+    bounds: PdfRect
+    source: PdfGlyphSource
+
+class PdfPageObservation(TypedDict):
+    pageIndex: int
+    widthPoints: float
+    heightPoints: float
+    text: str
+    glyphs: Sequence[PdfGlyphObservation]
+    rendered: bool
+    textLayer: PdfTextLayerCoverage
+    ocr: PdfOcrCoverage
+    imageCount: int
+
+class PdfRiskInventory(TypedDict):
+    acroFormFieldCount: int
+    annotationCount: int
+    documentInfoEntryCount: int
+    embeddedFileCount: int
+    externalActionCount: int
+    formXObjectCount: int
+    imageObjectCount: int
+    incrementalRevisionCount: int
+    javascriptActionCount: int
+    metadataStreamCount: int
+    optionalContentGroupCount: int
+    signatureCount: int
+    trailingNonWhitespaceByteCount: int
+    unsupportedActionCount: int
+    xfaEntryCount: int
+
+class PdfInspectionCoverage(TypedDict):
+    status: Literal["full", "partial"]
+    gaps: list[PdfInspectionGap]
+
+class PdfPageInspection(TypedDict):
+    pageIndex: int
+    annotationCount: int
+    observation: PdfPageObservation | None
+
+class PdfInspection(TypedDict):
+    contractVersion: Literal[1]
+    pdfVersion: str
+    byteLength: int
+    objectCount: int
+    pageCount: int
+    encrypted: bool
+    pages: list[PdfPageInspection]
+    risks: PdfRiskInventory
+    coverage: PdfInspectionCoverage
+
+PDF_INSPECTION_CONTRACT_VERSION: int
+PDF_DOCUMENT_MAX_BYTES: int
+PDF_MAX_OBJECTS: int
+PDF_LOADED_PAYLOAD_MAX_BYTES: int
+PDF_STREAM_DECOMPRESSED_MAX_BYTES: int
+PDF_MAX_OBJECT_NODES: int
+PDF_MAX_OBJECT_DEPTH: int
+PDF_MAX_PAGES: int
+PDF_MAX_GLYPHS: int
+PDF_MAX_PAGE_TEXT_UTF8_BYTES: int
+PDF_MAX_OBSERVED_TEXT_UTF8_BYTES: int
+PDF_OBSERVATIONS_JSON_MAX_BYTES: int
+PDF_PAGE_DIMENSION_TOLERANCE_POINTS: float
+
+def inspect_pdf(
+    document: BytesLike,
+    page_observations: Sequence[PdfPageObservation] | None = None,
+) -> PdfInspection: ...
 def rewrite_docx_text(
     document: BytesLike,
     rewrites: Sequence[Mapping[str, Any]],
