@@ -15,7 +15,9 @@ on:
       - "packages/benchmark/src/**"
       - "packages/benchmark/python/provider_performance_worker.py"
       - "packages/benchmark/python/requirements-datafog.txt"
+      - "packages/benchmark/python/requirements-datafog.lock"
       - "packages/benchmark/python/requirements-scrubadub.txt"
+      - "packages/benchmark/python/requirements-scrubadub.lock"
       - "packages/benchmark/fixtures/**"
       - ".github/tools/verify-performance-host.ts"
       - ".github/workflows/performance.yml"
@@ -36,6 +38,8 @@ jobs:
     timeout-minutes: 120
     env:
       RUSTUP_TOOLCHAIN: 1.96.0
+      UV_VERSION: 0.10.1
+      PYTHON_VERSION: 3.11.12
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
@@ -59,13 +63,20 @@ jobs:
 
       - name: Prepare model-free Python providers
         run: |
-          command -v uv
-          uv venv packages/benchmark/.venv-scrubadub --python 3.11
-          uv pip install --python packages/benchmark/.venv-scrubadub/bin/python \
-            -r packages/benchmark/python/requirements-scrubadub.txt
-          uv venv packages/benchmark/.venv-datafog --python 3.11
-          uv pip install --python packages/benchmark/.venv-datafog/bin/python \
-            -r packages/benchmark/python/requirements-datafog.txt
+          test "$(uvx --from "uv==${UV_VERSION}" uv --version)" = "uv ${UV_VERSION}"
+          uvx --from "uv==${UV_VERSION}" uv python install "${PYTHON_VERSION}"
+          uvx --from "uv==${UV_VERSION}" uv venv packages/benchmark/.venv-scrubadub \
+            --python "${PYTHON_VERSION}"
+          uvx --from "uv==${UV_VERSION}" uv pip install \
+            --python packages/benchmark/.venv-scrubadub/bin/python \
+            --require-hashes \
+            -r packages/benchmark/python/requirements-scrubadub.lock
+          uvx --from "uv==${UV_VERSION}" uv venv packages/benchmark/.venv-datafog \
+            --python "${PYTHON_VERSION}"
+          uvx --from "uv==${UV_VERSION}" uv pip install \
+            --python packages/benchmark/.venv-datafog/bin/python \
+            --require-hashes \
+            -r packages/benchmark/python/requirements-datafog.lock
 
       - name: Wait for canonical host to become quiet
         run: |

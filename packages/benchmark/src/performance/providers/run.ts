@@ -4,13 +4,23 @@ import { dirname, resolve } from "node:path";
 import { createInterface } from "node:readline";
 
 import { benchmarkGitRevision } from "../../git-revision";
-import { verifyCanonicalHost } from "../host";
+import {
+  assertCanonicalRuntimeControls,
+  currentHostSnapshot,
+  verifyCanonicalHost,
+} from "../host";
 import {
   buildPerformanceInput,
   PERFORMANCE_INPUT_SOURCE,
   performanceInputSourceDigest,
 } from "../input";
 import { machineMetadata, type PerformanceMachine } from "../report";
+import {
+  assertNoCpuSteal,
+  cpuNoiseDelta,
+  readCpuNoiseSnapshot,
+  type CpuNoiseDelta,
+} from "../noise";
 import { summarize } from "../statistics";
 import {
   CROSS_PROVIDER_IDS,
@@ -59,7 +69,10 @@ export type CrossProviderReport = {
     readonly processIsolation: "fresh-process-per-provider-size-sample";
     readonly startupBoundary: "spawn-to-worker-ready";
     readonly initBoundary: "provider-import-and-pipeline-construction";
-    readonly passesPerProcess: "one-cold-one-warm";
+    readonly wallBoundary: "spawn-to-clean-worker-exit";
+    readonly processCpuBoundary: "worker-start-through-output-validation";
+    readonly passesPerProcess: "one-first-call-one-second-call";
+    readonly sampleOrder: "balanced-diagonal-rotation";
     readonly interpretation: string;
   };
   readonly configuration: {
@@ -73,6 +86,7 @@ export type CrossProviderReport = {
     readonly sha256: string;
   };
   readonly machine: PerformanceMachine;
+  readonly hostNoise: CpuNoiseDelta | null;
   readonly providers: readonly ProviderAvailability[];
   readonly results: readonly ProviderResult[];
 };
@@ -231,14 +245,15 @@ const assertProviderSample: (
     "outputDigest",
     "outputLabelCounts",
     "initSeconds",
-    "coldSeconds",
-    "warmSeconds",
+    "firstCallSeconds",
+    "secondCallSeconds",
+    "processCpuSeconds",
   ];
   if (
     Object.keys(value).length !== keys.length ||
     keys.some((key) => !(key in value))
   ) {
-    throw new Error("provider sample fields do not match schema version 1");
+    throw new Error("provider sample fields do not match schema version 2");
   }
   if (
     value["provider"] !== expectedProvider ||
@@ -260,7 +275,12 @@ const assertProviderSample: (
     typeof value["outputDigest"] !== "string" ||
     !/^[a-f0-9]{64}$/u.test(value["outputDigest"]) ||
     !isRecord(value["outputLabelCounts"]) ||
-    ["initSeconds", "coldSeconds", "warmSeconds"].some((key) => {
+    [
+      "initSeconds",
+      "firstCallSeconds",
+      "secondCallSeconds",
+      "processCpuSeconds",
+    ].some((key) => {
       const timing = value[key];
       return (
         typeof timing !== "number" || !Number.isFinite(timing) || timing < 0
@@ -269,6 +289,7 @@ const assertProviderSample: (
   ) {
     throw new Error("provider sample values are invalid");
   }
+  let labelTotal = 0;
   for (const count of Object.values(value["outputLabelCounts"])) {
     if (
       !Number.isSafeInteger(count) ||
@@ -276,6 +297,26 @@ const assertProviderSample: (
     ) {
       throw new Error("provider output label counts are invalid");
     }
+    if (typeof count !== "number") {
+      throw new Error("provider output label count must be numeric");
+    }
+    labelTotal += count;
+  }
+  if (labelTotal !== value["outputCount"]) {
+    throw new Error("provider output label counts do not sum to outputCount");
+  }
+};
+
+const assertSampleMatchesRequest = (
+  sample: ProviderSample,
+  request: SampleRequest,
+): void => {
+  if (
+    sample.inputBytes !== request.inputBytes ||
+    sample.inputCharacters !== request.inputText.length ||
+    sample.inputSha256 !== request.inputSha256
+  ) {
+    throw new Error(`${sample.provider} returned mismatched input identity`);
   }
 };
 
@@ -339,6 +380,7 @@ const runProviderSample = (
       const candidate = message["sample"];
       try {
         assertProviderSample(candidate, definition.id);
+        assertSampleMatchesRequest(candidate, request);
       } catch (error) {
         reject(
           new Error(`${definition.id} emitted an invalid sample`, {
@@ -364,7 +406,11 @@ const runProviderSample = (
         reject(new Error(`${definition.id} worker protocol was incomplete`));
         return;
       }
-      resolveSample({ ...sample, startupSeconds });
+      resolveSample({
+        ...sample,
+        startupSeconds,
+        wallSeconds: (performance.now() - spawnedAt) / 1000,
+      });
     });
   });
 
@@ -426,6 +472,39 @@ const rotated = <T>(values: readonly T[], round: number): readonly T[] => {
   return [...values.slice(offset), ...values.slice(0, offset)];
 };
 
+export type ProviderSampleCoordinate = {
+  readonly definition: ProviderDefinition;
+  readonly inputBytes: number;
+};
+
+export const buildProviderSampleOrder = (
+  definitions: readonly ProviderDefinition[],
+  inputBytes: readonly number[],
+  round: number,
+): readonly ProviderSampleCoordinate[] => {
+  if (definitions.length === 0 || inputBytes.length === 0) {
+    throw new Error("provider sample order inputs must not be empty");
+  }
+  const diagonal: ProviderSampleCoordinate[] = [];
+  for (let sizeOffset = 0; sizeOffset < inputBytes.length; sizeOffset += 1) {
+    for (
+      let providerIndex = 0;
+      providerIndex < definitions.length;
+      providerIndex += 1
+    ) {
+      const definition = definitions.at(providerIndex);
+      const size = inputBytes.at(
+        (providerIndex + sizeOffset) % inputBytes.length,
+      );
+      if (definition === undefined || size === undefined) {
+        throw new Error("provider sample order inputs must not be empty");
+      }
+      diagonal.push({ definition, inputBytes: size });
+    }
+  }
+  return rotated(diagonal, round);
+};
+
 export const runCrossProviderPerformance = async (
   options: CrossProviderOptions,
 ): Promise<CrossProviderReport> => {
@@ -460,41 +539,57 @@ export const runCrossProviderPerformance = async (
 
   const expected = new Map<string, IsolatedProviderSample>();
   const measured = new Map<string, IsolatedProviderSample[]>();
+  const noiseStart =
+    benchmarkCpu === null ? null : readCpuNoiseSnapshot(benchmarkCpu);
   for (let round = 0; round < options.warmups + options.samples; round += 1) {
     const phase = round < options.warmups ? "warmup" : "sample";
     const phaseRound =
       round < options.warmups ? round + 1 : round - options.warmups + 1;
     const phaseTotal =
       round < options.warmups ? options.warmups : options.samples;
-    for (const definition of rotated(available, round)) {
-      for (const size of rotated(options.inputBytes, round)) {
-        process.stderr.write(
-          `${phase} ${phaseRound}/${phaseTotal}: ${definition.id}, ${size} bytes\n`,
-        );
-        const input = inputs.get(size);
-        if (input === undefined) {
-          throw new Error(`missing input for ${size} bytes`);
-        }
-        const sample = await runProviderSample(
-          definition,
-          {
-            inputBytes: size,
-            inputText: input.text,
-            inputSha256: input.sha256,
-          },
-          benchmarkCpu,
-        );
-        const key = `${definition.id}:${size}`;
-        const identity = expected.get(key);
-        if (identity === undefined) expected.set(key, sample);
-        else assertSameOutput(identity, sample);
-        if (phase === "sample") {
-          const samples = measured.get(key) ?? [];
-          samples.push(sample);
-          measured.set(key, samples);
-        }
+    for (const { definition, inputBytes: size } of buildProviderSampleOrder(
+      available,
+      options.inputBytes,
+      round,
+    )) {
+      process.stderr.write(
+        `${phase} ${phaseRound}/${phaseTotal}: ${definition.id}, ${size} bytes\n`,
+      );
+      const input = inputs.get(size);
+      if (input === undefined) {
+        throw new Error(`missing input for ${size} bytes`);
+      }
+      const sample = await runProviderSample(
+        definition,
+        {
+          inputBytes: size,
+          inputText: input.text,
+          inputSha256: input.sha256,
+        },
+        benchmarkCpu,
+      );
+      const key = `${definition.id}:${size}`;
+      const identity = expected.get(key);
+      if (identity === undefined) expected.set(key, sample);
+      else assertSameOutput(identity, sample);
+      if (phase === "sample") {
+        const samples = measured.get(key) ?? [];
+        samples.push(sample);
+        measured.set(key, samples);
       }
     }
+  }
+
+  const hostNoise =
+    benchmarkCpu === null || noiseStart === null
+      ? null
+      : cpuNoiseDelta(noiseStart, readCpuNoiseSnapshot(benchmarkCpu));
+  if (host !== undefined && hostNoise !== null) {
+    assertNoCpuSteal(hostNoise);
+    assertCanonicalRuntimeControls(
+      host,
+      currentHostSnapshot(host.benchmarkCpu),
+    );
   }
 
   const results: ProviderResult[] = [];
@@ -520,12 +615,21 @@ export const runCrossProviderPerformance = async (
         startupSeconds: summarize(
           samples.map(({ startupSeconds }) => startupSeconds),
         ),
+        wallSeconds: summarize(samples.map(({ wallSeconds }) => wallSeconds)),
         initSeconds: summarize(samples.map(({ initSeconds }) => initSeconds)),
-        coldSeconds: summarize(samples.map(({ coldSeconds }) => coldSeconds)),
-        warmSeconds: summarize(samples.map(({ warmSeconds }) => warmSeconds)),
-        warmCharactersPerSecond: summarize(
+        firstCallSeconds: summarize(
+          samples.map(({ firstCallSeconds }) => firstCallSeconds),
+        ),
+        secondCallSeconds: summarize(
+          samples.map(({ secondCallSeconds }) => secondCallSeconds),
+        ),
+        processCpuSeconds: summarize(
+          samples.map(({ processCpuSeconds }) => processCpuSeconds),
+        ),
+        secondCallCharactersPerSecond: summarize(
           samples.map(
-            ({ inputCharacters, warmSeconds }) => inputCharacters / warmSeconds,
+            ({ inputCharacters, secondCallSeconds }) =>
+              inputCharacters / secondCallSeconds,
           ),
         ),
       });
@@ -542,7 +646,10 @@ export const runCrossProviderPerformance = async (
       processIsolation: "fresh-process-per-provider-size-sample",
       startupBoundary: "spawn-to-worker-ready",
       initBoundary: "provider-import-and-pipeline-construction",
-      passesPerProcess: "one-cold-one-warm",
+      wallBoundary: "spawn-to-clean-worker-exit",
+      processCpuBoundary: "worker-start-through-output-validation",
+      passesPerProcess: "one-first-call-one-second-call",
+      sampleOrder: "balanced-diagonal-rotation",
       interpretation:
         "The closest like-for-like lanes are stella's built-in regex detectors and DataFog's regex engine; their pattern sets and result resolution still differ. stella full and scrubadub base cover broader, different detector sets. Speed must be read beside output counts and digests.",
     },
@@ -557,6 +664,7 @@ export const runCrossProviderPerformance = async (
       sha256: performanceInputSourceDigest(),
     },
     machine: await machineMetadata(benchmarkCpu),
+    hostNoise,
     providers: CROSS_PROVIDER_IDS.map(
       (provider) =>
         availability.find((entry) => entry.provider === provider) ?? {

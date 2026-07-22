@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 
 import type { NativePrediction } from "../../adapters/types";
-import { outputIdentity } from "./identity";
+import { assertProviderEntities, outputIdentity } from "./identity";
 import { regexDetectorConfig } from "./stella-config";
 import type { CrossProviderId, ProviderSample } from "./types";
 
@@ -97,25 +97,28 @@ const detect = (): NativePrediction[] =>
     }),
   );
 
-const coldStarted = performance.now();
-const cold = detect();
-const coldSeconds = (performance.now() - coldStarted) / 1000;
-const warmStarted = performance.now();
-const warm = detect();
-const warmSeconds = (performance.now() - warmStarted) / 1000;
-const coldIdentity = outputIdentity(cold);
-const warmIdentity = outputIdentity(warm);
+const firstCallStarted = performance.now();
+const firstCall = detect();
+const firstCallSeconds = (performance.now() - firstCallStarted) / 1000;
+const secondCallStarted = performance.now();
+const secondCall = detect();
+const secondCallSeconds = (performance.now() - secondCallStarted) / 1000;
+assertProviderEntities(firstCall, request.inputText.length);
+assertProviderEntities(secondCall, request.inputText.length);
+const firstCallIdentity = outputIdentity(firstCall);
+const secondCallIdentity = outputIdentity(secondCall);
 if (
-  coldIdentity.count !== warmIdentity.count ||
-  coldIdentity.digest !== warmIdentity.digest
+  firstCallIdentity.count !== secondCallIdentity.count ||
+  firstCallIdentity.digest !== secondCallIdentity.digest
 ) {
-  throw new Error("stella cold and warm outputs differ");
+  throw new Error("stella first-call and second-call outputs differ");
 }
 
 const require = createRequire(import.meta.url);
 const version = (
   require("@stll/anonymize/package.json") as { readonly version: string }
 ).version;
+const processCpuUsage = process.cpuUsage();
 const sample: ProviderSample = {
   provider,
   providerVersion: version,
@@ -124,11 +127,13 @@ const sample: ProviderSample = {
   inputBytes: request.inputBytes,
   inputCharacters: request.inputText.length,
   inputSha256: request.inputSha256,
-  outputCount: warmIdentity.count,
-  outputDigest: warmIdentity.digest,
-  outputLabelCounts: warmIdentity.labelCounts,
+  outputCount: secondCallIdentity.count,
+  outputDigest: secondCallIdentity.digest,
+  outputLabelCounts: secondCallIdentity.labelCounts,
   initSeconds,
-  coldSeconds,
-  warmSeconds,
+  firstCallSeconds,
+  secondCallSeconds,
+  processCpuSeconds:
+    (processCpuUsage.user + processCpuUsage.system) / 1_000_000,
 };
 process.stdout.write(`${JSON.stringify({ type: "result", sample })}\n`);

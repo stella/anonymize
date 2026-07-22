@@ -6,6 +6,26 @@ export type ProviderEntity = {
   readonly label: string;
 };
 
+export const assertProviderEntities = (
+  entities: readonly ProviderEntity[],
+  inputCharacters: number,
+): void => {
+  for (const [index, { start, end, label }] of entities.entries()) {
+    if (
+      !Number.isSafeInteger(start) ||
+      !Number.isSafeInteger(end) ||
+      start < 0 ||
+      end <= start ||
+      end > inputCharacters
+    ) {
+      throw new Error(`provider entity ${index} has an invalid span`);
+    }
+    if (typeof label !== "string" || label === "") {
+      throw new Error(`provider entity ${index} has an invalid label`);
+    }
+  }
+};
+
 export const outputIdentity = (
   entities: readonly ProviderEntity[],
 ): {

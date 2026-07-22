@@ -29,6 +29,23 @@ def identity(entities: list[dict]) -> tuple[int, str, dict[str, int]]:
     return len(entities), digest.hexdigest(), dict(sorted(label_counts.items()))
 
 
+def validate_entities(entities: list[dict]) -> None:
+    for index, entity in enumerate(entities):
+        start = entity["start"]
+        end = entity["end"]
+        label = entity["label"]
+        if (
+            not isinstance(start, int)
+            or not isinstance(end, int)
+            or start < 0
+            or end <= start
+            or end > len(text)
+        ):
+            raise ValueError(f"provider entity {index} has an invalid span")
+        if not isinstance(label, str) or not label:
+            raise ValueError(f"provider entity {index} has an invalid label")
+
+
 init_started = time.perf_counter()
 if PROVIDER == "scrubadub-base":
     scrubadub = importlib.import_module("scrubadub")
@@ -64,16 +81,18 @@ else:
     scope = "regex-only"
 init_seconds = time.perf_counter() - init_started
 
-cold_started = time.perf_counter()
-cold = detect()
-cold_seconds = time.perf_counter() - cold_started
-warm_started = time.perf_counter()
-warm = detect()
-warm_seconds = time.perf_counter() - warm_started
-cold_identity = identity(cold)
-warm_identity = identity(warm)
-if cold_identity != warm_identity:
-    raise RuntimeError("Python provider cold and warm outputs differ")
+first_call_started = time.perf_counter()
+first_call = detect()
+first_call_seconds = time.perf_counter() - first_call_started
+second_call_started = time.perf_counter()
+second_call = detect()
+second_call_seconds = time.perf_counter() - second_call_started
+validate_entities(first_call)
+validate_entities(second_call)
+first_call_identity = identity(first_call)
+second_call_identity = identity(second_call)
+if first_call_identity != second_call_identity:
+    raise RuntimeError("Python provider first-call and second-call outputs differ")
 
 sample = {
     "provider": PROVIDER,
@@ -83,11 +102,12 @@ sample = {
     "inputBytes": request["inputBytes"],
     "inputCharacters": len(text),
     "inputSha256": request["inputSha256"],
-    "outputCount": warm_identity[0],
-    "outputDigest": warm_identity[1],
-    "outputLabelCounts": warm_identity[2],
+    "outputCount": second_call_identity[0],
+    "outputDigest": second_call_identity[1],
+    "outputLabelCounts": second_call_identity[2],
     "initSeconds": init_seconds,
-    "coldSeconds": cold_seconds,
-    "warmSeconds": warm_seconds,
+    "firstCallSeconds": first_call_seconds,
+    "secondCallSeconds": second_call_seconds,
+    "processCpuSeconds": time.process_time(),
 }
 print(json.dumps({"type": "result", "sample": sample}), flush=True)

@@ -110,8 +110,9 @@ Canonical reports run only on trusted `main` pushes or manual dispatches on the
 `ANONYMIZE_PERF_RUNNER_ENABLED` is set to `true`. Canonical mode fails closed
 unless the machine matches its provisioned hardware profile, uses the
 performance CPU governor with boost disabled, has an isolated physical CPU,
-and is below its declared load ceiling. Every canonical worker is pinned to
-that CPU with `taskset`; local runs remain unpinned. See `REPRODUCING.md` for
+uses `nohz_full` adaptive ticks, and is below its declared load ceiling. Every
+canonical worker is pinned to that CPU with `taskset`; local runs remain
+unpinned. See `REPRODUCING.md` for
 the host profile contract.
 
 Each loader verifies the pinned artifact digest before invoking JSON, Parquet,

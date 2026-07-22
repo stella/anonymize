@@ -1,6 +1,6 @@
 import type { Distribution } from "../statistics";
 
-export const CROSS_PROVIDER_REPORT_SCHEMA_VERSION = 1 as const;
+export const CROSS_PROVIDER_REPORT_SCHEMA_VERSION = 2 as const;
 
 export const CROSS_PROVIDER_IDS = [
   "stella-full",
@@ -29,12 +29,16 @@ export type ProviderSample = {
   readonly outputDigest: string;
   readonly outputLabelCounts: Readonly<Record<string, number>>;
   readonly initSeconds: number;
-  readonly coldSeconds: number;
-  readonly warmSeconds: number;
+  readonly firstCallSeconds: number;
+  readonly secondCallSeconds: number;
+  /** Total worker CPU time since process start, including runtime startup. */
+  readonly processCpuSeconds: number;
 };
 
 export type IsolatedProviderSample = ProviderSample & {
   readonly startupSeconds: number;
+  /** Parent-observed spawn-to-clean-worker-exit duration. */
+  readonly wallSeconds: number;
 };
 
 export type ProviderResult = {
@@ -49,8 +53,10 @@ export type ProviderResult = {
   readonly outputDigest: string;
   readonly outputLabelCounts: Readonly<Record<string, number>>;
   readonly startupSeconds: Distribution;
+  readonly wallSeconds: Distribution;
   readonly initSeconds: Distribution;
-  readonly coldSeconds: Distribution;
-  readonly warmSeconds: Distribution;
-  readonly warmCharactersPerSecond: Distribution;
+  readonly firstCallSeconds: Distribution;
+  readonly secondCallSeconds: Distribution;
+  readonly processCpuSeconds: Distribution;
+  readonly secondCallCharactersPerSecond: Distribution;
 };

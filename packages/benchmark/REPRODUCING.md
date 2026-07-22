@@ -97,8 +97,11 @@ of `main` or a `main` push in `stella/anonymize`; it also verifies the CPU,
 memory (within 1%), load ceiling, Linux scaling governor, and disabled
 turbo/boost state before measuring. The declared `benchmarkCpu` must be online,
 listed by Linux in `/sys/devices/system/cpu/isolated`, and have no online SMT
-sibling. Every canonical worker runs through
+sibling. It must also appear in `/sys/devices/system/cpu/nohz_full`, which
+keeps regular scheduler ticks off the measurement CPU. Every canonical worker runs through
 `taskset --cpu-list <benchmarkCpu>`; the selected logical CPU is recorded in
+the report. Provider runs record per-CPU IRQ, soft-IRQ, and steal-time deltas;
+any steal time fails the canonical run, while other kernel noise is marked in
 the report. Missing profile, `taskset`, isolation, or sysfs controls fail the
 run instead of silently producing non-comparable numbers. Local mode does not
 pin processes and records a null benchmark CPU.
@@ -113,17 +116,21 @@ non-regex support data removed, base scrubadub, and DataFog's regex-only engine:
 bun run bench:performance:providers
 ```
 
-Each observation uses a fresh process, followed by one cold and one warm pass.
+Each observation uses a fresh process, followed by a first and second call.
 Startup ends when the worker interpreter is ready; provider imports and pipeline
-construction are recorded as initialization. Canonical mode uses the same host
+construction are recorded as initialization. The parent also records the paired
+spawn-to-clean-exit wall duration, and each worker records total process CPU
+time. These paired values are the end-to-end comparison; phase medians must not
+be added together. Canonical mode uses the same host
 verification and `taskset` CPU pinning contract as `bench:performance`.
-The canonical runner must provide `uv` and Python 3.11; the workflow creates
-fresh virtualenvs from the fully pinned requirement files before it waits for
-the host to become quiet.
+The workflow pins uv 0.10.1 and CPython 3.11.12, then creates fresh virtualenvs
+from hash-locked requirement closures before it waits for the host to become
+quiet. Provider-size pairs use a deterministic diagonal rotation so each
+provider and size moves through the execution order without provider blocks.
 
-The scopes are deliberately explicit. Stella's regex-detector lane and
+The scopes are deliberately explicit. stella's regex-detector lane and
 DataFog's regex engine are the closest like-for-like rows, but their pattern
-sets and result resolution differ. Stella full and scrubadub base run different,
+sets and result resolution differ. stella full and scrubadub base run different,
 broader detector sets. Every row
 records its detection count, per-label counts, and output digest, so a fast
 provider cannot appear to win by doing no work. Python virtualenvs default to

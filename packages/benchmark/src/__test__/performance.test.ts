@@ -9,6 +9,11 @@ import {
 } from "../performance/host";
 import { buildPerformanceInput } from "../performance/input";
 import {
+  assertNoCpuSteal,
+  cpuNoiseDelta,
+  type CpuNoiseSnapshot,
+} from "../performance/noise";
+import {
   assertPerformanceReport,
   PERFORMANCE_REPORT_SCHEMA_VERSION,
 } from "../performance/report";
@@ -19,10 +24,12 @@ import {
 import { summarize } from "../performance/statistics";
 import {
   buildProviderInvocation,
+  buildProviderSampleOrder,
   parseCrossProviderArgs,
   type ProviderDefinition,
 } from "../performance/providers/run";
 import { regexDetectorConfig } from "../performance/providers/stella-config";
+import { assertProviderEntities } from "../performance/providers/identity";
 
 describe("canonical performance statistics", () => {
   test("reports median, MAD, and nearest-rank p95 without sorting samples", () => {
@@ -102,6 +109,50 @@ describe("cross-provider performance contract", () => {
     ).toEqual([48 * 1024, 256 * 1024]);
   });
 
+  test("balances every provider and size without provider blocks", () => {
+    const definitions: ProviderDefinition[] = [
+      { id: "stella-full", command: "stella", args: [] },
+      {
+        id: "stella-regex-detectors-only",
+        command: "stella-regex",
+        args: [],
+      },
+      { id: "scrubadub-base", command: "scrubadub", args: [] },
+      { id: "datafog-regex-only", command: "datafog", args: [] },
+    ];
+    const sizes = [48, 256, 512, 1024];
+    const order = buildProviderSampleOrder(definitions, sizes, 0);
+    expect(order).toHaveLength(definitions.length * sizes.length);
+    expect(
+      new Set(
+        order.map(
+          ({ definition, inputBytes }) => `${definition.id}:${inputBytes}`,
+        ),
+      ).size,
+    ).toBe(order.length);
+    expect(
+      order.every(
+        ({ definition }, index) =>
+          index === 0 || definition.id !== order.at(index - 1)?.definition.id,
+      ),
+    ).toBe(true);
+    expect(buildProviderSampleOrder(definitions, sizes, 1).at(-1)).toEqual(
+      order.at(0),
+    );
+  });
+
+  test("rejects invalid provider spans and labels", () => {
+    expect(() =>
+      assertProviderEntities([{ start: 0, end: 1, label: "email" }], 1),
+    ).not.toThrow();
+    expect(() =>
+      assertProviderEntities([{ start: 0, end: 2, label: "email" }], 1),
+    ).toThrow("invalid span");
+    expect(() =>
+      assertProviderEntities([{ start: 0, end: 1, label: "" }], 1),
+    ).toThrow("invalid label");
+  });
+
   test("removes every non-regex detector lane from stella", async () => {
     const anonymize = await import("@stll/anonymize");
     const binding = anonymize.loadNativeAnonymizeBinding();
@@ -172,6 +223,7 @@ describe("canonical performance host", () => {
     totalMemoryBytes: 16_000_000_000,
     loadOneMinute: 0.4,
     isolatedCpus: [6],
+    noHzFullCpus: [6],
     onlineCpus: [0, 1, 2, 3, 4, 5, 6],
     benchmarkCpuSiblings: [6],
     tasksetAvailable: true,
@@ -200,12 +252,38 @@ describe("canonical performance host", () => {
       assertCanonicalHost(profile, { ...snapshot, isolatedCpus: [] }),
     ).toThrow("online and isolated");
     expect(() =>
+      assertCanonicalHost(profile, { ...snapshot, noHzFullCpus: [] }),
+    ).toThrow("nohz_full");
+    expect(() =>
       assertCanonicalHost(profile, {
         ...snapshot,
         benchmarkCpuSiblings: [6, 7],
         onlineCpus: [...snapshot.onlineCpus, 7],
       }),
     ).toThrow("SMT siblings must be offline");
+  });
+
+  test("records CPU counter noise and rejects steal time", () => {
+    const before: CpuNoiseSnapshot = {
+      userTicks: 1,
+      niceTicks: 0,
+      systemTicks: 1,
+      idleTicks: 10,
+      ioWaitTicks: 0,
+      irqTicks: 0,
+      softIrqTicks: 0,
+      stealTicks: 0,
+    };
+    const clean = cpuNoiseDelta(before, { ...before, userTicks: 4 });
+    expect(clean.status).toBe("clean");
+    expect(() => assertNoCpuSteal(clean)).not.toThrow();
+    const noisy = cpuNoiseDelta(before, {
+      ...before,
+      softIrqTicks: 1,
+      stealTicks: 1,
+    });
+    expect(noisy.status).toBe("kernel-noise-observed");
+    expect(() => assertNoCpuSteal(noisy)).toThrow("steal time");
   });
 
   test("parses Linux CPU lists without accepting ambiguous syntax", () => {
