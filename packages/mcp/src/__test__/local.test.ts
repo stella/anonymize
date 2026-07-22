@@ -521,33 +521,52 @@ describe("local MCP surface", () => {
       );
     }
     let failPublication = false;
+    let holdFirstPublication = true;
+    let releaseFirstPublication = (): void => undefined;
+    const firstPublicationReleased = new Promise<void>((resolvePromise) => {
+      releaseFirstPublication = resolvePromise;
+    });
+    let markFirstPublicationReached = (): void => undefined;
+    const firstPublicationReached = new Promise<void>((resolvePromise) => {
+      markFirstPublicationReached = resolvePromise;
+    });
     const service = new LocalAnonymizeService(await PathScope.create([root]), {
       faults: {
-        beforeOutputPublish: () => {
+        beforeOutputPublish: async () => {
           if (failPublication) {
             throw new Error("injected external output failure");
+          }
+          if (holdFirstPublication) {
+            holdFirstPublication = false;
+            markFirstPublicationReached();
+            await firstPublicationReleased;
           }
         },
       },
     });
-    const concurrent = await Promise.allSettled(
-      ([0, 1] as const).map((index) =>
+    const first = service.anonymizeTextWithExternalDetections({
+      inputPath: inputs[0],
+      detectionBatchPath: batches[0],
+      outputPath: outputs[0],
+      sessionId: "external_concurrent_1",
+      language: "en",
+    });
+    await firstPublicationReached;
+    try {
+      await expect(
         service.anonymizeTextWithExternalDetections({
-          inputPath: inputs[index],
-          detectionBatchPath: batches[index],
-          outputPath: outputs[index],
+          inputPath: inputs[1],
+          detectionBatchPath: batches[1],
+          outputPath: outputs[1],
           sessionId: "external_concurrent_1",
           language: "en",
         }),
-      ),
-    );
-    expect(
-      concurrent.filter(({ status }) => status === "fulfilled"),
-    ).toHaveLength(1);
-    expect(
-      concurrent.filter(({ status }) => status === "rejected"),
-    ).toHaveLength(1);
-    const successfulIndex = concurrent.at(0)?.status === "fulfilled" ? 0 : 1;
+      ).rejects.toThrow("The external detection session was rejected.");
+    } finally {
+      releaseFirstPublication();
+    }
+    await expect(first).resolves.toMatchObject({ outputCreated: true });
+    const successfulIndex = 0;
 
     failPublication = true;
     const failedOutput = join(root, "external-failed-output.txt");

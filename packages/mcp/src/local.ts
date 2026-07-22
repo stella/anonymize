@@ -141,7 +141,7 @@ const externalDetectionStep = async <Result>(
 };
 
 export type LocalAnonymizeServiceFaults = {
-  beforeOutputPublish?: () => void;
+  beforeOutputPublish?: () => void | Promise<void>;
 };
 
 const inside = (root: string, target: string): boolean => {
@@ -877,7 +877,7 @@ export class LocalAnonymizeService {
     ) {
       throw new Error("PDF raster verification did not satisfy MCP policy");
     }
-    this.#faults.beforeOutputPublish?.();
+    await this.#faults.beforeOutputPublish?.();
     await destination.write(anonymized.document);
     return {
       operation: "anonymize",
@@ -907,7 +907,7 @@ export class LocalAnonymizeService {
     try {
       const result = lease.entry.session.redact_text(text);
       await this.#persistSession(input.sessionId, lease.entry.session);
-      this.#faults.beforeOutputPublish?.();
+      await this.#faults.beforeOutputPublish?.();
       await destination.write(result.redaction.redactedText);
       this.#commitSession(lease);
       return {
@@ -1005,7 +1005,7 @@ export class LocalAnonymizeService {
       const redactedText = applyTextReplacements(text, block.replacements);
       plan.commit();
       await this.#persistSession(input.sessionId, lease.entry.session);
-      this.#faults.beforeOutputPublish?.();
+      await this.#faults.beforeOutputPublish?.();
       await destination.write(redactedText);
       this.#commitSession(lease);
       return {
@@ -1088,7 +1088,7 @@ export class LocalAnonymizeService {
         },
       });
       await this.#persistSession(input.sessionId, lease.entry.session);
-      this.#faults.beforeOutputPublish?.();
+      await this.#faults.beforeOutputPublish?.();
       await destination.write(result.document);
       this.#commitSession(lease);
       return {
