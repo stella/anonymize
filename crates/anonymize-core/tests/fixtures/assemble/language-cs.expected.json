@@ -29032,7 +29032,8 @@
     ],
     "phone_extension_labels": [],
     "number_markers": ["nº", "n°", "№"],
-    "number_labels": ["nº", "n°", "№"]
+    "number_labels": ["nº", "n°", "№"],
+    "person_field_labels": ["jméno", "titul"]
   },
   "coreference_data": {
     "definition_patterns": [

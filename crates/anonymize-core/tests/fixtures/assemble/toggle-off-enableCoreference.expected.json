@@ -50828,7 +50828,9 @@
       "name",
       "title",
       "tax id",
-      "tax identification number"
+      "tax identification number",
+      "jméno",
+      "titul"
     ]
   },
   "deny_list_data": {

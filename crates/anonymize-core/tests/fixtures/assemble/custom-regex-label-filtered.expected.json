@@ -38523,7 +38523,9 @@
       "name",
       "title",
       "tax id",
-      "tax identification number"
+      "tax identification number",
+      "jméno",
+      "titul"
     ]
   },
   "coreference_data": {

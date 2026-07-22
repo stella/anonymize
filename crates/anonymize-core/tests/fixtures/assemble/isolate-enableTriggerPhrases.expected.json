@@ -33419,7 +33419,9 @@
       "name",
       "title",
       "tax id",
-      "tax identification number"
+      "tax identification number",
+      "jméno",
+      "titul"
     ]
   },
   "false_positive_filters": {

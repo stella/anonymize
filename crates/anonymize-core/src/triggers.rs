@@ -2482,6 +2482,7 @@ mod tests {
         String::from("Name"),
         String::from("Title"),
         String::from("Tax ID"),
+        String::from("Jméno"),
       ],
     })
     .unwrap();
@@ -2497,6 +2498,10 @@ mod tests {
       ),
       (
         "approved by director Janem Novákem - IČO: 12345678, on site",
+        "Janem Novákem",
+      ),
+      (
+        "approved by director Janem Novákem Jméno: držitele účtu",
         "Janem Novákem",
       ),
     ] {

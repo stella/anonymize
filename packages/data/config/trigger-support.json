@@ -14,6 +14,7 @@
     "pl": ["nr", "nr.", "numer"]
   },
   "personFieldLabels": {
-    "en": ["name", "title", "tax id", "tax identification number"]
+    "en": ["name", "title", "tax id", "tax identification number"],
+    "cs": ["jméno", "titul"]
   }
 }
