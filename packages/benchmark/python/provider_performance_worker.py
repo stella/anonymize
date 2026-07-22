@@ -100,7 +100,7 @@ sample = {
     "runtimeVersion": f"Python {sys.version.split()[0]}",
     "scope": scope,
     "inputBytes": request["inputBytes"],
-    "inputCharacters": len(text),
+    "inputCharacters": request["inputCharacters"],
     "inputSha256": request["inputSha256"],
     "outputCount": second_call_identity[0],
     "outputDigest": second_call_identity[1],

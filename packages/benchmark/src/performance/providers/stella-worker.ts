@@ -14,6 +14,7 @@ process.stdout.write(`${JSON.stringify({ type: "ready" })}\n`);
 
 const request = (await new Response(Bun.stdin.stream()).json()) as {
   readonly inputBytes: number;
+  readonly inputCharacters: number;
   readonly inputText: string;
   readonly inputSha256: string;
 };
@@ -125,7 +126,7 @@ const sample: ProviderSample = {
   runtimeVersion: `Bun ${Bun.version}`,
   scope: provider === "stella-full" ? "full-pipeline" : "regex-detectors-only",
   inputBytes: request.inputBytes,
-  inputCharacters: request.inputText.length,
+  inputCharacters: request.inputCharacters,
   inputSha256: request.inputSha256,
   outputCount: secondCallIdentity.count,
   outputDigest: secondCallIdentity.digest,

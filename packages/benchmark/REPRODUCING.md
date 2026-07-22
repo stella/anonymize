@@ -133,7 +133,8 @@ DataFog's regex engine are the closest like-for-like rows, but their pattern
 sets and result resolution differ. stella full and scrubadub base run different,
 broader detector sets. Every row
 records its detection count, per-label counts, and output digest, so a fast
-provider cannot appear to win by doing no work. Python virtualenvs default to
+provider cannot appear to win by doing no work. Throughput uses parent-owned
+JavaScript UTF-16 code units across every provider. Python virtualenvs default to
 `.venv-scrubadub` and `.venv-datafog`; override their interpreters with
 `ANONYMIZE_SCRUBADUB_PYTHON` and `ANONYMIZE_DATAFOG_PYTHON` when needed.
 

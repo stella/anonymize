@@ -221,6 +221,7 @@ export const buildProviderInvocation = (
 
 type SampleRequest = {
   readonly inputBytes: number;
+  readonly inputCharacters: number;
   readonly inputText: string;
   readonly inputSha256: string;
 };
@@ -313,7 +314,7 @@ const assertSampleMatchesRequest = (
 ): void => {
   if (
     sample.inputBytes !== request.inputBytes ||
-    sample.inputCharacters !== request.inputText.length ||
+    sample.inputCharacters !== request.inputCharacters ||
     sample.inputSha256 !== request.inputSha256
   ) {
     throw new Error(`${sample.provider} returned mismatched input identity`);
@@ -563,6 +564,7 @@ export const runCrossProviderPerformance = async (
         definition,
         {
           inputBytes: size,
+          inputCharacters: input.text.length,
           inputText: input.text,
           inputSha256: input.sha256,
         },
