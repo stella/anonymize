@@ -136,6 +136,12 @@ describe("legal-form firm name capture", () => {
     expect(orgs.some((org) => org.includes("New York"))).toBe(false);
   });
 
+  test("unlabelled address line does not wrap into an organization", async () => {
+    const orgs = await orgsIn("650 Page Mill Road, Palo Alto, CA,\nAcme LLC");
+    expect(orgs).toContain("Acme LLC");
+    expect(orgs.some((org) => org.includes("Palo Alto"))).toBe(false);
+  });
+
   test("comma-separated party roles do not wrap into an organization", async () => {
     const orgs = await orgsIn("Buyer, Seller,\nAcme LLC");
     expect(orgs).toContain("Acme LLC");

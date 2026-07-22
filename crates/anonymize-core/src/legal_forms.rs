@@ -602,52 +602,45 @@ fn comma_before_soft_wrap(
   newline_start: usize,
   suffix_is_the_continuation: bool,
 ) -> bool {
-  let mut scan = newline_start;
-  while let Some((prev_start, ch)) = previous_char(text, scan) {
-    if is_inter_token_space(ch) {
-      scan = prev_start;
-      continue;
-    }
-    if ch != ',' {
-      return false;
-    }
-    // A short comma-ended line is usually a field/list boundary, not a
-    // wrapped firm name. Named continuations require two earlier commas, as in
-    // `Skadden, Arps, Slate,\nMeagher & Flom LLP`. A suffix-only continuation
-    // may instead use an ampersand-complete firm name such as
-    // `Smith, Gambrell & Russell,\nLLP`.
-    scan = prev_start;
-    let mut earlier_commas = 0_usize;
-    let mut has_ampersand = false;
-    while let Some((earlier_start, earlier)) = previous_char(text, scan) {
-      if earlier == '\n' {
-        break;
-      }
-      // Colons mark structured fields such as
-      // `Address: New York, NY,\nAcme LLC`, never a firm-name continuation.
-      if earlier == ':' || earlier == '：' {
-        return false;
-      }
-      // A connector-complete comma-rich line is more likely a separate firm
-      // record ("Wachtell, Lipton, Rosen & Katz,") than the unfinished prefix
-      // of another named firm on the next line. The narrow suffix-only wrap
-      // is different: "Wachtell, Lipton, Rosen & Katz,\nLLP" must remain one
-      // organization.
-      if earlier == '&' && !suffix_is_the_continuation {
-        return false;
-      }
-      if earlier == '&' {
-        has_ampersand = true;
-      }
-      if earlier == ',' {
-        earlier_commas = earlier_commas.saturating_add(1);
-      }
-      scan = earlier_start;
-    }
-    return earlier_commas >= 2
-      || (suffix_is_the_continuation && has_ampersand);
+  let before_newline = text.get(..newline_start).unwrap_or_default();
+  let line_start = before_newline
+    .rfind('\n')
+    .map_or(0, |index| index.saturating_add(1));
+  let line = before_newline.get(line_start..).unwrap_or_default().trim();
+  let Some(content) = line.strip_suffix(',').map(str::trim_end) else {
+    return false;
+  };
+  if content
+    .chars()
+    .any(|character| character.is_numeric() || matches!(character, ':' | '：'))
+  {
+    return false;
   }
-  false
+
+  let has_ampersand = content.contains('&');
+  if has_ampersand {
+    // A connector-complete line is a prior firm record unless the continuation
+    // is the legal suffix itself: `Smith, Gambrell & Russell,\nLLP`.
+    return suffix_is_the_continuation;
+  }
+
+  // Named continuations use a comma-separated surname-list shape such as
+  // `Skadden, Arps, Slate,\nMeagher & Flom LLP`. Requiring three single-token,
+  // mixed-case segments excludes labelled and unlabelled address lines without
+  // embedding address vocabulary.
+  let (segment_count, all_name_shaped) = content
+    .split(',')
+    .map(str::trim)
+    .filter(|segment| !segment.is_empty())
+    .fold((0_usize, true), |(count, valid), segment| {
+      let single_token = segment.split_whitespace().count() == 1;
+      let has_lowercase = segment.chars().any(char::is_lowercase);
+      (
+        count.saturating_add(1),
+        valid && single_token && has_lowercase,
+      )
+    });
+  segment_count >= 3 && all_name_shaped
 }
 
 fn jurisdiction_parenthetical_open(
@@ -3197,6 +3190,13 @@ mod tests {
   #[test]
   fn comma_rich_address_line_still_stops_firm_name_walk() {
     let text = "Address: New York, NY,\nAcme LLC";
+    let texts = org_texts_for(text, "LLC");
+    assert_eq!(texts, vec![String::from("Acme LLC")]);
+  }
+
+  #[test]
+  fn unlabelled_address_line_still_stops_firm_name_walk() {
+    let text = "650 Page Mill Road, Palo Alto, CA,\nAcme LLC";
     let texts = org_texts_for(text, "LLC");
     assert_eq!(texts, vec![String::from("Acme LLC")]);
   }
