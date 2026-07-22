@@ -3089,7 +3089,9 @@ mod tests {
   fn one_letter_parenthetical_before_suffix_is_not_a_jurisdiction() {
     let texts = org_texts_for("Schedule (A) LLC Agreement", "LLC");
     assert!(
-      texts.iter().all(|candidate| !candidate.contains("Schedule")),
+      texts
+        .iter()
+        .all(|candidate| !candidate.contains("Schedule")),
       "schedule marker must not be absorbed into an organization: {texts:?}"
     );
   }
@@ -3140,10 +3142,7 @@ mod tests {
   fn directly_preceding_connector_complete_firm_record_stops_name_walk() {
     let text = "Wachtell, Lipton, Rosen & Katz,\nMeagher & Flom (UK) LLP";
     let texts = org_texts_for(text, "LLP");
-    assert_eq!(
-      texts,
-      vec![String::from("Meagher & Flom (UK) LLP")]
-    );
+    assert_eq!(texts, vec![String::from("Meagher & Flom (UK) LLP")]);
   }
 
   fn connector_test_data() -> PreparedLegalFormData {
