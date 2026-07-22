@@ -2969,9 +2969,8 @@ mod tests {
       .map(|candidate| candidate.replace('\n', " "))
       .collect();
     assert!(
-      normalized
-        .iter()
-        .any(|candidate| candidate == "Skadden, Arps, Slate, Meagher & Flom (UK) LLP"),
+      normalized.iter().any(|candidate| candidate
+        == "Skadden, Arps, Slate, Meagher & Flom (UK) LLP"),
       "expected soft-wrapped firm span, got {texts:?}"
     );
   }
