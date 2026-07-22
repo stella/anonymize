@@ -652,7 +652,31 @@ void describe("durable MCP sessions", () => {
 
   void test("serializes same-session mutations and rolls durable state back on publication failure", async () => {
     const paths = await createStorePaths();
-    const service = await createService(paths);
+    let holdFirstPublication = true;
+    let releaseFirstPublication = (): void => undefined;
+    const firstPublicationReleased = new Promise<void>((resolvePromise) => {
+      releaseFirstPublication = resolvePromise;
+    });
+    let markFirstPublicationReached = (): void => undefined;
+    const firstPublicationReached = new Promise<void>((resolvePromise) => {
+      markFirstPublicationReached = resolvePromise;
+    });
+    const service = new LocalAnonymizeService(
+      await PathScope.create([paths.root]),
+      {
+        durableSessions: await createStore(paths),
+        faults: {
+          beforeOutputPublish: async () => {
+            if (holdFirstPublication) {
+              holdFirstPublication = false;
+              markFirstPublicationReached();
+              await firstPublicationReleased;
+            }
+          },
+        },
+      },
+    );
+    openServices.add(service);
     const firstInput = join(paths.root, "first.txt");
     const secondInput = join(paths.root, "second.txt");
     const firstOutput = join(paths.root, "first-output.txt");
@@ -660,31 +684,27 @@ void describe("durable MCP sessions", () => {
     await writeFile(firstInput, "Alice Smith signed.");
     await writeFile(secondInput, "Bob Jones signed.");
 
-    const concurrent = await Promise.allSettled([
-      service.anonymizeText({
-        inputPath: firstInput,
-        outputPath: firstOutput,
-        sessionId: "serialized_session_1",
-      }),
-      service.anonymizeText({
-        inputPath: secondInput,
-        outputPath: secondOutput,
-        sessionId: "serialized_session_1",
-      }),
-    ]);
-    expect(
-      concurrent.filter(({ status }) => status === "fulfilled"),
-    ).toHaveLength(1);
-    expect(
-      concurrent.filter(({ status }) => status === "rejected"),
-    ).toHaveLength(1);
+    const first = service.anonymizeText({
+      inputPath: firstInput,
+      outputPath: firstOutput,
+      sessionId: "serialized_session_1",
+    });
+    await firstPublicationReached;
+    try {
+      await expect(
+        service.anonymizeText({
+          inputPath: secondInput,
+          outputPath: secondOutput,
+          sessionId: "serialized_session_1",
+        }),
+      ).rejects.toThrow("still initializing");
+    } finally {
+      releaseFirstPublication();
+    }
+    await expect(first).resolves.toMatchObject({ outputCreated: true });
 
-    const successfulOutput =
-      concurrent.at(0)?.status === "fulfilled" ? firstOutput : secondOutput;
-    const original =
-      concurrent.at(0)?.status === "fulfilled"
-        ? "Alice Smith signed."
-        : "Bob Jones signed.";
+    const successfulOutput = firstOutput;
+    const original = "Alice Smith signed.";
     const failedOutput = join(paths.root, `${"x".repeat(240)}.txt`);
     await expect(
       service.anonymizeText({
