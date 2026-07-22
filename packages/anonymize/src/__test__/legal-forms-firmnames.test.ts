@@ -123,6 +123,12 @@ describe("legal-form firm name capture", () => {
     );
   });
 
+  test("comma-separated party roles do not wrap into an organization", async () => {
+    const orgs = await orgsIn("Buyer, Seller,\nAcme LLC");
+    expect(orgs).toContain("Acme LLC");
+    expect(orgs.some((org) => org.includes("Buyer"))).toBe(false);
+  });
+
   test("Simpson Thacher & Bartlett LLP across paragraphs", async () => {
     expect(
       await orgsIn("and\nSimpson Thacher & Bartlett LLP\n425 Lexington Avenue"),

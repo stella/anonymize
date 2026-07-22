@@ -429,6 +429,9 @@ fn walk_backward(
       .get(token.end..pos)
       .is_some_and(|between| between.contains('\n'));
     if crossed_newline {
+      if preceding_line_is_role_list(text, pos, data) {
+        break;
+      }
       if crossed_comma_wrap {
         break;
       }
@@ -485,6 +488,35 @@ fn walk_backward(
   }
 
   leftmost_cap
+}
+
+fn preceding_line_is_role_list(
+  text: &str,
+  next_line_start: usize,
+  data: &PreparedLegalFormData,
+) -> bool {
+  let Some(before_next_line) = text.get(..next_line_start) else {
+    return false;
+  };
+  let Some(newline_start) = before_next_line.rfind('\n') else {
+    return false;
+  };
+  let previous_lines =
+    before_next_line.get(..newline_start).unwrap_or_default();
+  let line_start = previous_lines
+    .rfind('\n')
+    .map_or(0, |index| index.saturating_add(1));
+  let line = previous_lines.get(line_start..).unwrap_or_default().trim();
+  line
+    .split(',')
+    .map(str::trim)
+    .filter(|segment| !segment.is_empty())
+    .filter(|segment| {
+      data.role_heads.contains(lowercase_lookup(segment).as_ref())
+    })
+    .take(2)
+    .count()
+    >= 2
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -3153,6 +3185,34 @@ mod tests {
     let text = "Wachtell, Lipton, Rosen & Katz,\nMeagher & Flom (UK) LLP";
     let texts = org_texts_for(text, "LLP");
     assert_eq!(texts, vec![String::from("Meagher & Flom (UK) LLP")]);
+  }
+
+  #[test]
+  fn comma_separated_party_roles_do_not_soft_wrap_into_organization() {
+    let text = "Buyer, Seller,\nAcme LLC";
+    let data = PreparedLegalFormData::new(LegalFormData {
+      suffixes: vec![String::from("LLC")],
+      role_heads: vec![String::from("buyer"), String::from("seller")],
+      ..LegalFormData::default()
+    });
+    let suffix = "LLC";
+    let suffix_start = text.find(suffix).unwrap();
+    let found = SearchMatch::Literal {
+      pattern: 0,
+      start: u32::try_from(suffix_start).unwrap(),
+      end: u32::try_from(suffix_start + suffix.len()).unwrap(),
+    };
+    let texts: Vec<String> = process_legal_form_matches(
+      &[found],
+      PatternSlice { start: 0, end: 1 },
+      text,
+      &data,
+    )
+    .unwrap()
+    .into_iter()
+    .map(|entity| entity.text)
+    .collect();
+    assert_eq!(texts, vec![String::from("Acme LLC")]);
   }
 
   #[test]
