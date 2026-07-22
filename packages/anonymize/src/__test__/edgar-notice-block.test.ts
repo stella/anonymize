@@ -10,6 +10,8 @@
  *   honorific/notice names and dual `/s/` signatures on one line.
  * - Lightwave Logic employment agreement (2026-07-20): Attn given
  *   name corpus gap and middle-initial counsel vs US city tokens.
+ * - Twenty One Capital employment agreement (2026-07-21): soft-wrapped
+ *   Skadden (UK) LLP counsel block.
  */
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
@@ -243,5 +245,37 @@ Email: Clayton.Parker@example.com`;
           (entity.text === "Clayton" || entity.text === "Parker"),
       ),
     ).toBe(false);
+  });
+
+  test("soft-wrapped Skadden UK LLP counsel block is an organization", async () => {
+    // Twenty One Capital EX-10.2 (2026-07-21): jurisdiction parenthetical
+    // before LLP plus an EDGAR comma soft-wrap dropped the firm entirely.
+    const text = `with a copy (which will not constitute
+notice) to:
+
+Skadden, Arps, Slate,
+Meagher & Flom (UK) LLP
+
+22 Bishopsgate,
+
+EC2N 4BQ London
+
+Attn: Lorenzo Corte`;
+    const entities = await detect(text);
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "organization" &&
+          entity.text
+            .replaceAll(/\s+/g, " ")
+            .includes("Skadden, Arps, Slate, Meagher & Flom (UK) LLP"),
+      ),
+    ).toBe(true);
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "person" && entity.text === "Lorenzo Corte",
+      ),
+    ).toBe(true);
   });
 });

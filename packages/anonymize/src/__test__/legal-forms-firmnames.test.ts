@@ -80,6 +80,28 @@ describe("legal-form firm name capture", () => {
     ).toContain("Skadden, Arps, Slate, Meagher & Flom LLP");
   });
 
+  test("jurisdiction parenthetical before LLP (Skadden UK)", async () => {
+    expect(
+      await orgsIn("Skadden, Arps, Slate, Meagher & Flom (UK) LLP"),
+    ).toContain("Skadden, Arps, Slate, Meagher & Flom (UK) LLP");
+  });
+
+  test("comma soft-wrap before jurisdiction LLP", async () => {
+    const orgs = await orgsIn(
+      "with a copy (which will not constitute notice) to:\n\n" +
+        "Skadden, Arps, Slate,\n" +
+        "Meagher & Flom (UK) LLP\n\n" +
+        "22 Bishopsgate",
+    );
+    expect(
+      orgs.some((org) =>
+        org
+          .replaceAll(/\s+/g, " ")
+          .includes("Skadden, Arps, Slate, Meagher & Flom (UK) LLP"),
+      ),
+    ).toBe(true);
+  });
+
   test("Simpson Thacher & Bartlett LLP across paragraphs", async () => {
     expect(
       await orgsIn("and\nSimpson Thacher & Bartlett LLP\n425 Lexington Avenue"),

@@ -488,9 +488,17 @@ fn token_before(text: &str, pos: usize) -> Option<Token<'_>> {
   let mut end = pos;
   while let Some((prev_start, ch)) = previous_char(text, end) {
     if ch == '\n' {
-      return None;
+      // Soft EDGAR wrap inside a comma-separated firm name:
+      // "Slate,\nMeagher & Flom LLP". A bare paragraph break still stops.
+      if !comma_before_soft_wrap(text, prev_start) {
+        return None;
+      }
+      end = prev_start;
+      continue;
     }
-    if is_inter_token_space(ch) || matches!(ch, ',' | ';') {
+    // Jurisdiction parentheticals such as "(UK)" / "(US)" sit between the
+    // firm name and the legal-form suffix; skip the parens like commas.
+    if is_inter_token_space(ch) || matches!(ch, ',' | ';' | '(' | ')') {
       end = prev_start;
       continue;
     }
@@ -513,6 +521,18 @@ fn token_before(text: &str, pos: usize) -> Option<Token<'_>> {
     end,
     text: text.get(start..end).unwrap_or_default(),
   })
+}
+
+fn comma_before_soft_wrap(text: &str, newline_start: usize) -> bool {
+  let mut scan = newline_start;
+  while let Some((prev_start, ch)) = previous_char(text, scan) {
+    if is_inter_token_space(ch) {
+      scan = prev_start;
+      continue;
+    }
+    return ch == ',';
+  }
+  false
 }
 
 const fn is_inter_token_space(ch: char) -> bool {
@@ -1453,8 +1473,11 @@ fn has_disallowed_line_break(text: &str) -> bool {
     let index = search_start.saturating_add(relative);
     let before = text.get(..index).unwrap_or_default();
     let after = text.get(index.saturating_add(1)..).unwrap_or_default();
-    let dotted_designator_before =
-      before.trim_end_matches(is_inter_token_space).ends_with('.');
+    let before_trimmed = before.trim_end_matches(is_inter_token_space);
+    let dotted_designator_before = before_trimmed.ends_with('.');
+    // EDGAR often soft-wraps comma-separated firm names:
+    // "Skadden, Arps, Slate,\nMeagher & Flom LLP".
+    let comma_continuation_before = before_trimmed.ends_with(',');
     let after_trimmed = after.trim_matches(is_inter_token_space);
     let legal_suffix_after = is_dotted_upper_suffix(after_trimmed);
     let all_caps_suffix_after = after_trimmed
@@ -1462,9 +1485,12 @@ fn has_disallowed_line_break(text: &str) -> bool {
       .chars()
       .all(char::is_uppercase)
       && after_trimmed.chars().any(char::is_uppercase);
-    if !dotted_designator_before
-      || (!legal_suffix_after && !all_caps_suffix_after)
-    {
+    let upper_name_after =
+      after_trimmed.chars().next().is_some_and(is_name_initial);
+    let allowed = (comma_continuation_before && upper_name_after)
+      || (dotted_designator_before
+        && (legal_suffix_after || all_caps_suffix_after));
+    if !allowed {
       return true;
     }
     search_start = index.saturating_add(1);
@@ -2890,6 +2916,71 @@ mod tests {
       !texts.iter().any(|candidate| candidate.contains("supplier")),
       "leading prose must be trimmed from the clipped candidate: {texts:?}"
     );
+  }
+
+  fn firm_name_llp_data() -> PreparedLegalFormData {
+    PreparedLegalFormData::new(LegalFormData {
+      suffixes: vec![String::from("LLP")],
+      connector_words: vec![String::from("&"), String::from("and")],
+      and_connector_words: vec![String::from("and")],
+      ..LegalFormData::default()
+    })
+  }
+
+  fn org_texts_for(text: &str, suffix: &str) -> Vec<String> {
+    let suffix_start = text.find(suffix).expect("suffix present");
+    let found = SearchMatch::Literal {
+      pattern: 0,
+      start: u32::try_from(suffix_start).unwrap(),
+      end: u32::try_from(suffix_start + suffix.len()).unwrap(),
+    };
+    process_legal_form_matches(
+      &[found],
+      PatternSlice { start: 0, end: 1 },
+      text,
+      &firm_name_llp_data(),
+    )
+    .unwrap()
+    .into_iter()
+    .map(|entity| entity.text)
+    .collect()
+  }
+
+  #[test]
+  fn jurisdiction_parenthetical_before_llp_keeps_firm_name() {
+    // Law-firm notices often insert a jurisdiction marker before the
+    // legal-form suffix: "Meagher & Flom (UK) LLP". Parentheses used to
+    // stop the backward walk, so the org was dropped entirely.
+    let text = "Skadden, Arps, Slate, Meagher & Flom (UK) LLP";
+    let texts = org_texts_for(text, "LLP");
+    assert!(
+      texts.iter().any(|candidate| candidate == text),
+      "expected full firm span, got {texts:?}"
+    );
+  }
+
+  #[test]
+  fn comma_soft_wrap_before_llp_keeps_firm_name() {
+    // EDGAR HTML reflow splits comma-separated firm names across a line.
+    let text = "Skadden, Arps, Slate,\nMeagher & Flom (UK) LLP";
+    let texts = org_texts_for(text, "LLP");
+    let normalized: Vec<String> = texts
+      .iter()
+      .map(|candidate| candidate.replace('\n', " "))
+      .collect();
+    assert!(
+      normalized
+        .iter()
+        .any(|candidate| candidate == "Skadden, Arps, Slate, Meagher & Flom (UK) LLP"),
+      "expected soft-wrapped firm span, got {texts:?}"
+    );
+  }
+
+  #[test]
+  fn paragraph_break_still_stops_firm_name_walk() {
+    let text = "Unrelated Party.\n\nMeagher & Flom LLP";
+    let texts = org_texts_for(text, "LLP");
+    assert_eq!(texts, vec![String::from("Meagher & Flom LLP")]);
   }
 
   fn connector_test_data() -> PreparedLegalFormData {
