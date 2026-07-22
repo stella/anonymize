@@ -129,7 +129,10 @@
       "tax id",
       "tax identification number",
       "vat id",
-      "social security number"
+      "social security number",
+      "ein",
+      "fein",
+      "ssn"
     ],
     "signature_stamp_phrases": [
       "digitally signed by",
@@ -24798,7 +24801,10 @@
       "tax id",
       "tax identification number",
       "vat id",
-      "social security number"
+      "social security number",
+      "ein",
+      "fein",
+      "ssn"
     ]
   },
   "coreference_data": {

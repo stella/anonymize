@@ -20,7 +20,10 @@
       "tax id",
       "tax identification number",
       "vat id",
-      "social security number"
+      "social security number",
+      "ein",
+      "fein",
+      "ssn"
     ],
     "cs": ["jméno", "titul", "ičo", "dič"],
     "sk": ["meno", "titul", "ičo", "dič"]

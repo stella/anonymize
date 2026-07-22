@@ -77,6 +77,14 @@ describe("person span stops before form-field labels", () => {
     expect(persons.some((person) => person.includes("VAT"))).toBe(false);
   });
 
+  test("resolved person span stops before an English tax acronym", async () => {
+    const persons = await personTextsForLanguages("Jane Roe EIN: 12-3456789", [
+      "en",
+    ]);
+    expect(persons).toContain("Jane Roe");
+    expect(persons.some((person) => person.includes("EIN"))).toBe(false);
+  });
+
   test("all-caps surname before a colon stays redacted", async () => {
     const persons = await personTexts("Pan JANE DOE: authorized signer");
     expect(persons).toContain("JANE DOE");

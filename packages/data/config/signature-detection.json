@@ -17,7 +17,10 @@
       "tax id",
       "tax identification number",
       "vat id",
-      "social security number"
+      "social security number",
+      "ein",
+      "fein",
+      "ssn"
     ],
     "cs": [
       "jméno",
