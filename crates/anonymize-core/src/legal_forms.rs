@@ -586,7 +586,7 @@ fn jurisdiction_parenthetical_open(
     if ch == '(' {
       return (letter_count > 0).then_some(prev_start);
     }
-    if is_inter_token_space(ch) {
+    if is_inter_token_space(ch) || ch == '.' {
       scan = prev_start;
       continue;
     }
@@ -605,7 +605,7 @@ fn jurisdiction_parenthetical_open(
 }
 
 const fn is_inter_token_space(ch: char) -> bool {
-  matches!(ch, ' ' | '\t' | '\u{00a0}' | '\u{202f}')
+  matches!(ch, ' ' | '\t' | '\r' | '\u{00a0}' | '\u{202f}')
 }
 
 fn is_token_char(ch: char) -> bool {
@@ -3021,7 +3021,7 @@ mod tests {
     // Law-firm notices often insert a jurisdiction marker before the
     // legal-form suffix: "Meagher & Flom (UK) LLP". Parentheses used to
     // stop the backward walk, so the org was dropped entirely.
-    let text = "Skadden, Arps, Slate, Meagher & Flom (UK) LLP";
+    let text = "Skadden, Arps, Slate, Meagher & Flom (U.K.) LLP";
     let texts = org_texts_for(text, "LLP");
     assert!(
       texts.iter().any(|candidate| candidate == text),
@@ -3080,11 +3080,11 @@ mod tests {
   #[test]
   fn comma_soft_wrap_before_llp_keeps_firm_name() {
     // EDGAR HTML reflow splits comma-separated firm names across a line.
-    let text = "Skadden, Arps, Slate,\nMeagher & Flom (UK) LLP";
+    let text = "Skadden, Arps, Slate,\r\nMeagher & Flom (UK) LLP";
     let texts = org_texts_for(text, "LLP");
     let normalized: Vec<String> = texts
       .iter()
-      .map(|candidate| candidate.replace('\n', " "))
+      .map(|candidate| candidate.replace("\r\n", " "))
       .collect();
     assert!(
       normalized.iter().any(|candidate| candidate
