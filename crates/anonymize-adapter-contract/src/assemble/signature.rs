@@ -104,5 +104,6 @@ mod tests {
     assert!(german.iter().any(|label| label == "hrb"));
     assert!(german.iter().any(|label| label == "ust-idnr."));
     assert!(!english.iter().any(|label| label == "hrb"));
+    assert!(english.iter().any(|label| label == "vat"));
   }
 }

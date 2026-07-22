@@ -59,11 +59,13 @@ describe("person trigger extraction stops at the name run", () => {
   });
 
   test("multi-word acronym label stays out of the person prefix", async () => {
-    const persons = personTexts(
-      await detect("Pan Jane Roe VAT ID: 123, on site"),
-    );
-    expect(persons).toContain("Jane Roe");
-    expect(persons.some((person) => person.includes("VAT"))).toBe(false);
+    for (const label of ["VAT ID", "VAT"]) {
+      const persons = personTexts(
+        await detect(`Pan Jane Roe ${label}: 123, on site`),
+      );
+      expect(persons).toContain("Jane Roe");
+      expect(persons.some((person) => person.includes("VAT"))).toBe(false);
+    }
   });
 
   test("multi-word acronym label preserves an all-caps person", async () => {
