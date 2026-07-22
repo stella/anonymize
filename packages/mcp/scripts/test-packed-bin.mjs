@@ -1,6 +1,7 @@
 import { execFile, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
+  access,
   chmod,
   cp,
   mkdir,
@@ -44,7 +45,7 @@ const packPackage = async (directory, destination) => {
   return join(destination, filename);
 };
 
-const platformPackage = () => {
+const platformPackageDirectory = () => {
   const key = `${process.platform}-${process.arch}`;
   const packages = {
     "darwin-arm64": "anonymize-darwin-arm64",
@@ -60,12 +61,35 @@ const platformPackage = () => {
   return join(repositoryRoot, "packages", directory);
 };
 
+const preparePlatformPackage = async (destination) => {
+  const nativeBinding = "stella_anonymize_napi.node";
+  const cachedNativeBinding = join(
+    repositoryRoot,
+    "packages",
+    "anonymize",
+    nativeBinding,
+  );
+  await access(cachedNativeBinding).catch(() => {
+    throw new Error(
+      `Canonical native binding is missing: ${cachedNativeBinding}. Build @stll/anonymize before running the packed MCP smoke test.`,
+    );
+  });
+  await cp(platformPackageDirectory(), destination, {
+    filter: (source) =>
+      basename(source) !== "node_modules" && basename(source) !== nativeBinding,
+    recursive: true,
+  });
+  await cp(cachedNativeBinding, join(destination, nativeBinding));
+};
+
 try {
   const coreArchive = await packPackage(
     join(repositoryRoot, "packages", "anonymize"),
     temporary,
   );
-  const platformArchive = await packPackage(platformPackage(), temporary);
+  const packedPlatformPackage = join(temporary, "platform-package");
+  await preparePlatformPackage(packedPlatformPackage);
+  const platformArchive = await packPackage(packedPlatformPackage, temporary);
   const releaseWorkspace = join(temporary, "release-workspace");
   const releasePacks = join(temporary, "release-packs");
   await mkdir(releaseWorkspace);
