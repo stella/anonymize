@@ -57,6 +57,13 @@ describe("English U.S. Social Security number triggers", () => {
     },
   );
 
+  test.each(["SSN 219-09-9999-1234", "SSN 219099999-1234"])(
+    "rejects an SSN-shaped prefix of a longer identifier %s",
+    async (text) => {
+      expect(await socialSecurityNumbers(text)).toEqual([]);
+    },
+  );
+
   test("does not activate English vocabulary in another language scope", async () => {
     expect(
       await socialSecurityNumbers("Social Security Number 219-09-9999", "cs"),
