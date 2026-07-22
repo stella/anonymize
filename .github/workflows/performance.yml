@@ -31,6 +31,8 @@ jobs:
     if: vars.ANONYMIZE_PERF_RUNNER_ENABLED == 'true' && github.repository == 'stella/anonymize' && github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || github.event_name == 'push')
     runs-on: [self-hosted, anonymize-perf-v1]
     timeout-minutes: 120
+    env:
+      RUSTUP_TOOLCHAIN: 1.96.0
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
@@ -51,7 +53,6 @@ jobs:
         run: |
           rustup toolchain install 1.96.0 --profile minimal \
             --target wasm32-wasip1-threads
-          rustup default 1.96.0
 
       - name: Build native runtime
         run: bun run build
