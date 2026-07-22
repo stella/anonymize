@@ -1764,7 +1764,11 @@ fn is_unconfigured_acronym_token(token: &str) -> bool {
 
 fn unconfigured_acronym_run_start(text: &str, start: usize) -> usize {
   let mut run_start = start;
+  let mut token_count = 1_usize;
   loop {
+    if token_count >= 2 {
+      return run_start;
+    }
     let before = text.get(..run_start).unwrap_or_default();
     let trimmed = before.trim_end();
     if trimmed.len() == before.len() {
@@ -1782,6 +1786,7 @@ fn unconfigured_acronym_run_start(text: &str, start: usize) -> usize {
       return run_start;
     }
     run_start = token_start;
+    token_count = token_count.saturating_add(1);
   }
 }
 
@@ -2591,6 +2596,14 @@ mod tests {
     assert_eq!(
       inline_field_label_start("Jane Roe VAT ID: 123", &[]),
       Some(("Jane Roe ".len(), true))
+    );
+  }
+
+  #[test]
+  fn multi_word_acronym_does_not_absorb_an_uppercase_person_prefix() {
+    assert_eq!(
+      inline_field_label_start("JOHN DOE VAT ID: 123", &[]),
+      Some(("JOHN DOE ".len(), true))
     );
   }
 
