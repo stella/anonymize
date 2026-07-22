@@ -17,6 +17,12 @@ import {
   parsePerformanceArgs,
 } from "../performance/run";
 import { summarize } from "../performance/statistics";
+import {
+  buildProviderInvocation,
+  parseCrossProviderArgs,
+  type ProviderDefinition,
+} from "../performance/providers/run";
+import { regexDetectorConfig } from "../performance/providers/stella-config";
 
 describe("canonical performance statistics", () => {
   test("reports median, MAD, and nearest-rank p95 without sorting samples", () => {
@@ -64,6 +70,80 @@ describe("canonical performance statistics", () => {
     const local = buildPerformanceWorkerInvocation(49_152, { type: "local" });
     expect(local.command).toBe(process.execPath);
     expect(local.args).not.toContain("--cpu-list");
+  });
+});
+
+describe("cross-provider performance contract", () => {
+  test("pins the provider interpreter and preserves its arguments", () => {
+    const definition: ProviderDefinition = {
+      id: "datafog-regex-only",
+      command: "/venv/bin/python",
+      args: ["worker.py", "datafog-regex-only"],
+    };
+    expect(buildProviderInvocation(definition, 6)).toEqual({
+      command: "taskset",
+      args: [
+        "--cpu-list",
+        "6",
+        "/venv/bin/python",
+        "worker.py",
+        "datafog-regex-only",
+      ],
+    });
+    expect(buildProviderInvocation(definition, null)).toEqual(definition);
+  });
+
+  test("keeps canonical sample and scale floors", () => {
+    expect(() =>
+      parseCrossProviderArgs(["--canonical", "--samples=19"]),
+    ).toThrow("at least 3 warmups and 20 samples");
+    expect(
+      parseCrossProviderArgs(["--samples=1", "--warmups=1"]).inputBytes,
+    ).toEqual([48 * 1024, 256 * 1024]);
+  });
+
+  test("removes every non-regex detector lane from stella", async () => {
+    const anonymize = await import("@stll/anonymize");
+    const binding = anonymize.loadNativeAnonymizeBinding();
+    const assembled = await anonymize.prepareNativePipelineConfig({
+      binding,
+      config: {
+        threshold: 0.3,
+        language: "en",
+        nameCorpusLanguages: ["en"],
+        enableTriggerPhrases: false,
+        enableRegex: true,
+        enableLegalForms: false,
+        enableNameCorpus: false,
+        enableDenyList: false,
+        enableGazetteer: false,
+        enableCountries: false,
+        enableConfidenceBoost: false,
+        enableCoreference: false,
+        enableHotwordRules: false,
+        enableZoneClassification: false,
+        labels: [...anonymize.DEFAULT_ENTITY_LABELS],
+        workspaceId: "cross-provider-performance-test",
+      },
+    });
+    expect(assembled.address_seed_data).toBeDefined();
+    expect(assembled.address_context_data).toBeDefined();
+
+    const regexOnly = regexDetectorConfig(assembled);
+    expect(regexOnly.literal_patterns).toEqual([]);
+    expect(regexOnly.address_seed_data).toBeUndefined();
+    expect(regexOnly.address_context_data).toBeUndefined();
+    expect(regexOnly.date_data).toBeUndefined();
+    expect(regexOnly.monetary_data).toBeUndefined();
+    expect(regexOnly.signature_data).toBeUndefined();
+    const prepared = anonymize.createNativeAnonymizerFromConfig({
+      binding,
+      config: regexOnly,
+    });
+    expect(
+      prepared.redactStaticEntities("Email legal@example.test")
+        .resolvedEntities,
+    ).toHaveLength(1);
   });
 });
 

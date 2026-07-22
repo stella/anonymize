@@ -13,6 +13,9 @@ on:
       - "packages/data/**"
       - "packages/benchmark/package.json"
       - "packages/benchmark/src/**"
+      - "packages/benchmark/python/provider_performance_worker.py"
+      - "packages/benchmark/python/requirements-datafog.txt"
+      - "packages/benchmark/python/requirements-scrubadub.txt"
       - "packages/benchmark/fixtures/**"
       - ".github/tools/verify-performance-host.ts"
       - ".github/workflows/performance.yml"
@@ -54,6 +57,16 @@ jobs:
       - name: Build native runtime
         run: bun run build
 
+      - name: Prepare model-free Python providers
+        run: |
+          command -v uv
+          uv venv packages/benchmark/.venv-scrubadub --python 3.11
+          uv pip install --python packages/benchmark/.venv-scrubadub/bin/python \
+            -r packages/benchmark/python/requirements-scrubadub.txt
+          uv venv packages/benchmark/.venv-datafog --python 3.11
+          uv pip install --python packages/benchmark/.venv-datafog/bin/python \
+            -r packages/benchmark/python/requirements-datafog.txt
+
       - name: Wait for canonical host to become quiet
         run: |
           for attempt in {1..40}; do
@@ -71,10 +84,18 @@ jobs:
           bun run --cwd packages/benchmark bench:performance --canonical
           --output=${{ runner.temp }}/anonymize-performance.json
 
+      - name: Measure cross-provider samples
+        run: >-
+          bun run --cwd packages/benchmark bench:performance:providers
+          --canonical
+          --output=${{ runner.temp }}/anonymize-provider-performance.json
+
       - name: Upload report
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v5
         with:
           name: anonymize-performance-${{ github.sha }}
-          path: ${{ runner.temp }}/anonymize-performance.json
+          path: |
+            ${{ runner.temp }}/anonymize-performance.json
+            ${{ runner.temp }}/anonymize-provider-performance.json
           if-no-files-found: error
           retention-days: 30

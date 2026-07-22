@@ -103,6 +103,33 @@ the report. Missing profile, `taskset`, isolation, or sysfs controls fail the
 run instead of silently producing non-comparable numbers. Local mode does not
 pin processes and records a null benchmark CPU.
 
+### Cross-provider throughput
+
+The separate provider harness runs the same public-safe synthetic English text
+through stella's full pipeline, stella's built-in regex detectors with all
+non-regex support data removed, base scrubadub, and DataFog's regex-only engine:
+
+```sh
+bun run bench:performance:providers
+```
+
+Each observation uses a fresh process, followed by one cold and one warm pass.
+Startup ends when the worker interpreter is ready; provider imports and pipeline
+construction are recorded as initialization. Canonical mode uses the same host
+verification and `taskset` CPU pinning contract as `bench:performance`.
+The canonical runner must provide `uv` and Python 3.11; the workflow creates
+fresh virtualenvs from the fully pinned requirement files before it waits for
+the host to become quiet.
+
+The scopes are deliberately explicit. Stella's regex-detector lane and
+DataFog's regex engine are the closest like-for-like rows, but their pattern
+sets and result resolution differ. Stella full and scrubadub base run different,
+broader detector sets. Every row
+records its detection count, per-label counts, and output digest, so a fast
+provider cannot appear to win by doing no work. Python virtualenvs default to
+`.venv-scrubadub` and `.venv-datafog`; override their interpreters with
+`ANONYMIZE_SCRUBADUB_PYTHON` and `ANONYMIZE_DATAFOG_PYTHON` when needed.
+
 ## Toolchain versions (committed run)
 
 | Component                       | Version       |
