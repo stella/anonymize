@@ -159,6 +159,14 @@ jobs:
           --test prepared address_context_cost_scales_with_input_size
           -- --ignored --exact
 
+      - name: Address-seed scaling regression
+        # Gates candidate-heavy postal collection and clustering from 48 KiB
+        # to 1 MiB, plus a fixed end-to-end output digest, in release mode.
+        run: >-
+          cargo test --release --locked -p stella-anonymize-core
+          --test prepared address_seed_collection_and_clustering_scale_with_input_size
+          -- --ignored --exact
+
       - name: Package exports (publint + attw)
         # Validates the published @stll/anonymize package.json exports and that
         # its types resolve for real consumers. Runs after the build so dist/

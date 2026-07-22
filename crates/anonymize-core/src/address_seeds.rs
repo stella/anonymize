@@ -254,13 +254,7 @@ impl PreparedAddressSeedData {
     profile.italian_cap_seed_count =
       seeds.len().saturating_sub(before_italian_cap);
 
-    seeds.sort_by(|left, right| {
-      left
-        .start
-        .cmp(&right.start)
-        .then_with(|| left.end.cmp(&right.end))
-        .then_with(|| left.kind.cmp(&right.kind))
-    });
+    seeds.sort_by(compare_seeds);
     Ok(seeds)
   }
 
@@ -288,6 +282,12 @@ impl PreparedAddressSeedData {
   }
 
   fn collect_postal_code_seeds(&self, seeds: &mut Vec<Seed>, full_text: &str) {
+    seeds.sort_by(compare_seeds);
+    let context_seed_count = seeds.len();
+    let coverage = SeedCoverageIndex::new(seeds);
+    let mut added_state_seeds = Vec::new();
+    // `find_iter` yields non-overlapping candidates in ascending order, so a
+    // postal seed added here cannot cover a later candidate.
     for found in self.postal_code_re.find_iter(full_text) {
       let start = found.start();
       let end = found.end();
@@ -296,11 +296,17 @@ impl PreparedAddressSeedData {
         continue;
       }
       let is_plain_five_digit = is_plain_five_digit_postal_code(text);
-      if seed_covered(seeds, start, end) && !is_plain_five_digit {
+      if coverage.covers(start, end) && !is_plain_five_digit {
         continue;
       }
       if is_plain_five_digit
-        && !self.has_plain_postal_context(full_text, start, end, seeds)
+        && !self.has_plain_postal_context(
+          full_text,
+          start,
+          end,
+          seeds.get(..context_seed_count).unwrap_or_default(),
+          &added_state_seeds,
+        )
       {
         continue;
       }
@@ -315,8 +321,10 @@ impl PreparedAddressSeedData {
           continue;
         }
         if let Some(state_seed) = context.state_seed
-          && !seed_covered(seeds, state_seed.start, state_seed.end)
+          && !coverage.covers(state_seed.start, state_seed.end)
+          && !seed_covered(&added_state_seeds, state_seed.start, state_seed.end)
         {
+          added_state_seeds.push(state_seed.clone());
           seeds.push(state_seed);
         }
       }
@@ -334,27 +342,38 @@ impl PreparedAddressSeedData {
     full_text: &str,
     start: usize,
     end: usize,
-    seeds: &[Seed],
+    sorted_seeds: &[Seed],
+    added_state_seeds: &[Seed],
   ) -> bool {
-    seeds.iter().any(|seed| {
-      within_text_window(
-        full_text,
-        seed.start,
-        start,
-        PLAIN_POSTAL_CONTEXT_WINDOW,
-      ) && match seed.kind {
-        SeedType::AddressTrigger => true,
-        SeedType::City | SeedType::State => {
-          seed.end >= start && seed.start <= end.saturating_add(4)
-            || seed.end <= start
-              && full_text.get(seed.end..start).is_some_and(is_city_zip_gap)
+    let max_byte_distance = PLAIN_POSTAL_CONTEXT_WINDOW.saturating_mul(4);
+    let range_start = start.saturating_sub(max_byte_distance);
+    let range_end = start.saturating_add(max_byte_distance);
+    let first = sorted_seeds.partition_point(|seed| seed.start < range_start);
+    let last = sorted_seeds.partition_point(|seed| seed.start <= range_end);
+    sorted_seeds
+      .get(first..last)
+      .unwrap_or_default()
+      .iter()
+      .chain(added_state_seeds)
+      .any(|seed| {
+        within_text_window(
+          full_text,
+          seed.start,
+          start,
+          PLAIN_POSTAL_CONTEXT_WINDOW,
+        ) && match seed.kind {
+          SeedType::AddressTrigger => true,
+          SeedType::City | SeedType::State => {
+            seed.end >= start && seed.start <= end.saturating_add(4)
+              || seed.end <= start
+                && full_text.get(seed.end..start).is_some_and(is_city_zip_gap)
+          }
+          SeedType::StreetWord => {
+            has_house_number_near_street_word(full_text, seed, self)
+          }
+          SeedType::PostalCode => false,
         }
-        SeedType::StreetWord => {
-          has_house_number_near_street_word(full_text, seed, self)
-        }
-        SeedType::PostalCode => false,
-      }
-    })
+      })
   }
 
   fn collect_italian_cap_seeds(seeds: &mut Vec<Seed>, full_text: &str) {
@@ -567,6 +586,47 @@ struct Seed {
   start: usize,
   end: usize,
   text: String,
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct SeedCoverageIndex {
+  starts: Vec<usize>,
+  prefix_max_ends: Vec<usize>,
+}
+
+impl SeedCoverageIndex {
+  fn new(sorted_seeds: &[Seed]) -> Self {
+    let mut starts = Vec::with_capacity(sorted_seeds.len());
+    let mut prefix_max_ends = Vec::with_capacity(sorted_seeds.len());
+    let mut max_end = 0usize;
+    for seed in sorted_seeds {
+      starts.push(seed.start);
+      max_end = max_end.max(seed.end);
+      prefix_max_ends.push(max_end);
+    }
+    Self {
+      starts,
+      prefix_max_ends,
+    }
+  }
+
+  fn covers(&self, start: usize, end: usize) -> bool {
+    let count = self
+      .starts
+      .partition_point(|seed_start| *seed_start <= start);
+    count
+      .checked_sub(1)
+      .and_then(|index| self.prefix_max_ends.get(index))
+      .is_some_and(|max_end| *max_end >= end)
+  }
+}
+
+fn compare_seeds(left: &Seed, right: &Seed) -> std::cmp::Ordering {
+  left
+    .start
+    .cmp(&right.start)
+    .then_with(|| left.end.cmp(&right.end))
+    .then_with(|| left.kind.cmp(&right.kind))
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1048,6 +1108,7 @@ fn cluster_seeds(
     start: first.start,
     end: first.end,
   };
+  let barrier_index = NonAddressBarrierIndex::new(existing_entities);
 
   for seed in seeds.iter().skip(1) {
     let gap_ok = within_text_window(
@@ -1059,7 +1120,7 @@ fn cluster_seeds(
       full_text,
       current.end,
       seed.start,
-      existing_entities,
+      &barrier_index,
     );
     if gap_ok {
       current.seeds.push(seed.clone());
@@ -1077,6 +1138,89 @@ fn cluster_seeds(
   clusters
 }
 
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+struct NonAddressBarrierIndex {
+  starts: Vec<usize>,
+  max_end_tree: Vec<usize>,
+  leaf_count: usize,
+}
+
+impl NonAddressBarrierIndex {
+  fn new(existing_entities: &[PipelineEntity]) -> Self {
+    let mut intervals = existing_entities
+      .iter()
+      .filter(|entity| non_address_label(&entity.label))
+      .filter_map(|entity| {
+        Some((
+          usize::try_from(entity.start).ok()?,
+          usize::try_from(entity.end).ok()?,
+        ))
+      })
+      .collect::<Vec<_>>();
+    intervals.sort_unstable_by_key(|interval| interval.0);
+
+    let leaf_count = intervals.len().max(1);
+    let mut max_end_tree = vec![0; leaf_count.saturating_mul(2)];
+    let mut starts = Vec::with_capacity(intervals.len());
+    for (index, (start, end)) in intervals.into_iter().enumerate() {
+      starts.push(start);
+      if let Some(leaf) = max_end_tree.get_mut(leaf_count.saturating_add(index))
+      {
+        *leaf = end;
+      }
+    }
+    for index in (1..leaf_count).rev() {
+      let left = max_end_tree
+        .get(index.saturating_mul(2))
+        .copied()
+        .unwrap_or(0);
+      let right = max_end_tree
+        .get(index.saturating_mul(2).saturating_add(1))
+        .copied()
+        .unwrap_or(0);
+      if let Some(node) = max_end_tree.get_mut(index) {
+        *node = left.max(right);
+      }
+    }
+
+    Self {
+      starts,
+      max_end_tree,
+      leaf_count,
+    }
+  }
+
+  fn has_barrier(&self, gap_start: usize, gap_end: usize) -> bool {
+    if gap_start >= gap_end {
+      return false;
+    }
+    let first = self.starts.partition_point(|start| *start < gap_start);
+    let last = self.starts.partition_point(|start| *start < gap_end);
+    self.range_max_end(first, last) > gap_start
+  }
+
+  fn range_max_end(&self, start: usize, end: usize) -> usize {
+    let mut left = self.leaf_count.saturating_add(start);
+    let mut right = self.leaf_count.saturating_add(end);
+    let mut max_end = 0usize;
+    while left < right {
+      if left % 2 == 1 {
+        max_end =
+          max_end.max(self.max_end_tree.get(left).copied().unwrap_or(0));
+        left = left.saturating_add(1);
+      }
+      if right % 2 == 1 {
+        right = right.saturating_sub(1);
+        max_end =
+          max_end.max(self.max_end_tree.get(right).copied().unwrap_or(0));
+      }
+      left /= 2;
+      right /= 2;
+    }
+    max_end
+  }
+}
+
 fn within_text_window(
   full_text: &str,
   left: usize,
@@ -1085,9 +1229,17 @@ fn within_text_window(
 ) -> bool {
   let start = left.min(right);
   let end = left.max(right);
-  full_text
-    .get(start..end)
-    .is_some_and(|gap| text_units(gap) <= max_units)
+  let Some(gap) = full_text.get(start..end) else {
+    return false;
+  };
+  let byte_len = end.saturating_sub(start);
+  if byte_len <= max_units {
+    return true;
+  }
+  if byte_len > max_units.saturating_mul(4) {
+    return false;
+  }
+  text_units(gap) <= max_units
 }
 
 fn text_units(text: &str) -> usize {
@@ -1136,17 +1288,12 @@ fn has_cluster_barrier(
   full_text: &str,
   gap_start: usize,
   gap_end: usize,
-  existing_entities: &[PipelineEntity],
+  barrier_index: &NonAddressBarrierIndex,
 ) -> bool {
   full_text
     .get(gap_start..gap_end)
     .is_some_and(has_paragraph_break)
-    || existing_entities.iter().any(|entity| {
-      non_address_label(&entity.label)
-        && usize::try_from(entity.start)
-          .is_ok_and(|start| start >= gap_start && start < gap_end)
-        && usize::try_from(entity.end).is_ok_and(|end| end > gap_start)
-    })
+    || barrier_index.has_barrier(gap_start, gap_end)
 }
 
 fn overlaps_non_address(
@@ -1574,7 +1721,108 @@ fn next_char(text: &str, byte: usize) -> Option<(usize, char)> {
 
 #[cfg(test)]
 mod tests {
+  use proptest::prelude::*;
+
   use super::*;
+
+  proptest! {
+    #[test]
+    fn bounded_text_window_matches_full_utf16_count(
+      chars in proptest::collection::vec(any::<char>(), 0..256),
+      left_index in any::<usize>(),
+      right_index in any::<usize>(),
+      max_units in 0_usize..512,
+    ) {
+      let full_text = chars.into_iter().collect::<String>();
+      let mut boundaries = full_text
+        .char_indices()
+        .map(|(index, _)| index)
+        .collect::<Vec<_>>();
+      boundaries.push(full_text.len());
+      let left = left_index
+        .checked_rem(boundaries.len())
+        .and_then(|index| boundaries.get(index))
+        .copied()
+        .unwrap_or_default();
+      let right = right_index
+        .checked_rem(boundaries.len())
+        .and_then(|index| boundaries.get(index))
+        .copied()
+        .unwrap_or_default();
+      let start = left.min(right);
+      let end = left.max(right);
+      let expected = full_text
+        .get(start..end)
+        .is_some_and(|gap| text_units(gap) <= max_units);
+
+      prop_assert_eq!(
+        within_text_window(&full_text, left, right, max_units),
+        expected,
+      );
+    }
+
+    #[test]
+    fn seed_coverage_index_matches_linear_scan(
+      ranges in proptest::collection::vec((0_usize..4096, 0_usize..256), 0..256),
+      query_start in 0_usize..4096,
+      query_len in 0_usize..256,
+    ) {
+      let mut seeds = ranges
+        .into_iter()
+        .map(|(start, len)| Seed {
+          kind: SeedType::City,
+          start,
+          end: start.saturating_add(len),
+          text: String::new(),
+        })
+        .collect::<Vec<_>>();
+      seeds.sort_by(compare_seeds);
+      let query_end = query_start.saturating_add(query_len);
+
+      prop_assert_eq!(
+        SeedCoverageIndex::new(&seeds).covers(query_start, query_end),
+        seed_covered(&seeds, query_start, query_end),
+      );
+    }
+
+    #[test]
+    fn non_address_barrier_index_matches_linear_scan(
+      ranges in proptest::collection::vec(
+        (any::<u32>(), any::<u32>(), any::<bool>()),
+        0..512,
+      ),
+      gap_start in any::<u32>(),
+      gap_end in any::<u32>(),
+    ) {
+      let entities = ranges
+        .into_iter()
+        .map(|(start, end, is_address)| {
+          PipelineEntity::detected(
+            start,
+            end,
+            if is_address { "address" } else { "person" },
+            "fixture",
+            0.9,
+            DetectionSource::Regex,
+          )
+        })
+        .collect::<Vec<_>>();
+      let gap_start = usize::try_from(gap_start).unwrap_or(usize::MAX);
+      let gap_end = usize::try_from(gap_end).unwrap_or(usize::MAX);
+      let expected = entities.iter().any(|entity| {
+        non_address_label(&entity.label)
+          && usize::try_from(entity.start)
+            .is_ok_and(|start| start >= gap_start && start < gap_end)
+          && usize::try_from(entity.end).is_ok_and(|end| end > gap_start)
+      });
+
+      prop_assert_eq!(
+        NonAddressBarrierIndex::new(&entities)
+          .has_barrier(gap_start, gap_end),
+        expected,
+      );
+    }
+  }
 
   fn entity(
     full_text: &str,

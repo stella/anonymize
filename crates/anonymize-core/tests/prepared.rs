@@ -3243,6 +3243,136 @@ fn prepared_engine_expands_address_seeds_from_street_type_slice() {
 }
 
 #[test]
+#[ignore = "release-mode scaling regression check"]
+fn address_seed_collection_and_clustering_scale_with_input_size() {
+  let prepared = address_seed_scaling_engine();
+  let fixture = concat!(
+    "Notice 12345: send process to 100 Main Street, Boston, MA 02101-1234. ",
+    "Docket 67890 remains governed by Section 54321.\n\n",
+  );
+  let sizes: [usize; 5] =
+    [48 * 1024, 100 * 1024, 250 * 1024, 500 * 1024, 1024 * 1024];
+  let mut samples = Vec::new();
+
+  for target_bytes in sizes {
+    let repeats = target_bytes.div_ceil(fixture.len());
+    let text = fixture.repeat(repeats);
+    let mut best_postal_us = u64::MAX;
+    let mut best_cluster_us = u64::MAX;
+    let mut best_total = std::time::Duration::MAX;
+    for _ in 0..3 {
+      let start = Instant::now();
+      let result = prepared
+        .redact_static_entities_with_summary_diagnostics(
+          &text,
+          &OperatorConfig::default(),
+        )
+        .unwrap();
+      best_total = best_total.min(start.elapsed());
+      assert_eq!(result.result.redaction.entity_count, repeats);
+      let postal_us = result
+        .diagnostics
+        .events
+        .iter()
+        .find(|event| {
+          event.stage == DiagnosticStage::EntityAddressSeedCollectPostalCodes
+        })
+        .and_then(|event| event.elapsed_us)
+        .unwrap();
+      best_postal_us = best_postal_us.min(postal_us);
+      let cluster_us = result
+        .diagnostics
+        .events
+        .iter()
+        .find(|event| event.stage == DiagnosticStage::EntityAddressSeedCluster)
+        .and_then(|event| event.elapsed_us)
+        .unwrap();
+      best_cluster_us = best_cluster_us.min(cluster_us);
+      if target_bytes == 100 * 1024 {
+        assert_eq!(
+          static_redaction_digest(&result.result),
+          "d7f492eb350006be0f06501a38e091017a9f6d6a3f372f586f2bcb1a03adfd76",
+        );
+      }
+      std::hint::black_box(result);
+    }
+    samples.push((text.len(), best_postal_us, best_cluster_us, best_total));
+  }
+
+  let (smallest_bytes, smallest_postal_us, smallest_cluster_us, _) = samples[0];
+  let (largest_bytes, largest_postal_us, largest_cluster_us, largest_total) =
+    samples[4];
+  assert!(
+    u128::from(largest_postal_us)
+      .saturating_mul(u128::try_from(smallest_bytes).unwrap())
+      <= u128::from(smallest_postal_us)
+        .saturating_mul(u128::try_from(largest_bytes).unwrap())
+        .saturating_mul(3),
+    "postal-code collection time per byte regressed: {samples:?}",
+  );
+  assert!(
+    largest_postal_us <= 500_000,
+    "postal-code collection exceeded 500 ms at 1 MiB: {samples:?}",
+  );
+  assert!(
+    u128::from(largest_cluster_us)
+      .saturating_mul(u128::try_from(smallest_bytes).unwrap())
+      <= u128::from(smallest_cluster_us)
+        .saturating_mul(u128::try_from(largest_bytes).unwrap())
+        .saturating_mul(3),
+    "address-seed clustering time per byte regressed: {samples:?}",
+  );
+  assert!(
+    largest_cluster_us <= 100_000,
+    "address-seed clustering exceeded 100 ms at 1 MiB: {samples:?}",
+  );
+  assert!(
+    largest_total <= std::time::Duration::from_secs(10),
+    "candidate-heavy legal workload exceeded 10 s at 1 MiB: {samples:?}",
+  );
+}
+
+fn address_seed_scaling_engine() -> PreparedEngine {
+  PreparedEngine::new(prepared_config! {
+    literal_patterns: vec![
+      SearchPattern::LiteralWithOptions {
+        pattern: String::from("Boston"),
+        case_insensitive: Some(true),
+        whole_words: Some(true),
+      },
+      SearchPattern::LiteralWithOptions {
+        pattern: String::from("Street"),
+        case_insensitive: Some(true),
+        whole_words: Some(true),
+      },
+    ],
+    literal_options: SearchOptions {
+      literal: LiteralSearchOptions {
+        case_insensitive: true,
+        whole_words: false,
+      },
+      ..SearchOptions::default()
+    },
+    slices: PreparedEngineSlices {
+      deny_list: PatternSlice { start: 0, end: 1 },
+      street_types: PatternSlice { start: 1, end: 2 },
+      ..PreparedEngineSlices::default()
+    },
+    deny_list_data: Some(DenyListMatchData {
+      labels: vec![vec![String::from("address")]].into(),
+      custom_labels: vec![vec![]].into(),
+      originals: vec![String::from("Boston")],
+      pattern_meta: stella_anonymize_core::DenyListPatternMetaSet::default(),
+      sources: vec![vec![String::from("city")]].into(),
+      filters: Some(DenyListFilterData::default()),
+    }),
+    address_seed_data: Some(AddressSeedData::default()),
+    ..empty_config(PreparedEngineSlices::default())
+  })
+  .unwrap()
+}
+
+#[test]
 fn prepared_engine_expands_address_seeds_from_city_and_postal_code() {
   let prepared = PreparedEngine::new(prepared_config! {
     literal_patterns: vec![SearchPattern::LiteralWithOptions {
