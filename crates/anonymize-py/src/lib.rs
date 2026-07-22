@@ -1509,7 +1509,7 @@ fn rewrite_pdf_raster_from_detections_json<'py>(
     })?;
   let page_pixels = page_pixels
     .iter()
-    .map(|page| page.as_bytes())
+    .map(pyo3::types::PyBytesMethods::as_bytes)
     .collect::<Vec<_>>();
   let (output, certificate) =
     rewrite_pdf_raster_from_detections_core(document, &request, &page_pixels)
