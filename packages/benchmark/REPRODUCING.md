@@ -317,8 +317,10 @@ sealed phase for the same source SHA are the only untracked files ignored, so
 TAB, RedactionBench, and MEDDOCAN can run sequentially without weakening the
 provenance check.
 
-The recorded source SHA is a PR-branch commit. This repository squash-merges,
-so it is not on `main`'s first-parent history; it remains fetchable via the pull
-request head ref (`git fetch origin pull/<PR>/head`). Recording the post-squash
-SHA is impossible by construction because it does not exist until after the
-results are committed.
+For reports produced on a PR branch, the recorded source SHA is a PR-branch
+commit. This repository squash-merges, so that commit will not be on `main`'s
+first-parent history; it remains fetchable via the pull request head ref
+(`git fetch origin pull/<PR>/head`). Recording the post-squash SHA is impossible
+by construction because it does not exist until after the results are committed.
+Runs from a trusted `main` push or manual dispatch instead record the clean
+`main` commit used by that run.
