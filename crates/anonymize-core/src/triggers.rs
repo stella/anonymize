@@ -379,7 +379,6 @@ pub(crate) fn process_trigger_matches(
         value.text.get(..label_start).unwrap_or_default().trim_end(),
       );
       let complete_person_prefix = may_preserve_prefix
-        && prefix.split_whitespace().count() >= 2
         && person_name_run_end(prefix) == Some(prefix.len());
       if !complete_person_prefix {
         record_trigger_rejection(
@@ -2483,6 +2482,7 @@ mod tests {
         String::from("Title"),
         String::from("Tax ID"),
         String::from("Jméno"),
+        String::from("Titul"),
       ],
     })
     .unwrap();
@@ -2504,6 +2504,7 @@ mod tests {
         "approved by director Janem Novákem Jméno: držitele účtu",
         "Janem Novákem",
       ),
+      ("approved by director Novák Titul: jednatel", "Novák"),
     ] {
       let start = text.find(trigger).unwrap();
       let end = start.saturating_add(trigger.len());
