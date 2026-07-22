@@ -135,6 +135,12 @@ describe("legal-form firm name capture", () => {
     expect(orgs.some((org) => org.includes("Seller"))).toBe(false);
   });
 
+  test("multi-word party roles do not wrap into an organization", async () => {
+    const orgs = await orgsIn("Donneur d'ordre, Emprunteur,\nAcme SARL");
+    expect(orgs).toContain("Acme SARL");
+    expect(orgs.some((org) => org.includes("Emprunteur"))).toBe(false);
+  });
+
   test("Simpson Thacher & Bartlett LLP across paragraphs", async () => {
     expect(
       await orgsIn("and\nSimpson Thacher & Bartlett LLP\n425 Lexington Avenue"),

@@ -511,15 +511,26 @@ fn preceding_line_is_role_list(
     .split(',')
     .map(str::trim)
     .filter(|segment| !segment.is_empty())
-    .filter(|segment| {
-      let leading_word = segment.split_whitespace().next().unwrap_or_default();
-      data
-        .role_heads
-        .contains(lowercase_lookup(leading_word).as_ref())
-    })
+    .filter(|segment| segment_starts_with_role_head(segment, data))
     .take(2)
     .count()
     >= 2
+}
+
+fn segment_starts_with_role_head(
+  segment: &str,
+  data: &PreparedLegalFormData,
+) -> bool {
+  let lower = lowercase_lookup(segment);
+  data.role_heads.iter().any(|role_head| {
+    lower.strip_prefix(role_head).is_some_and(|rest| {
+      rest.is_empty()
+        || rest
+          .chars()
+          .next()
+          .is_some_and(|character| !character.is_alphanumeric())
+    })
+  })
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -3244,6 +3255,37 @@ mod tests {
     .map(|entity| entity.text)
     .collect();
     assert_eq!(texts, vec![String::from("Acme LLC")]);
+  }
+
+  #[test]
+  fn multi_word_party_roles_do_not_soft_wrap_into_organization() {
+    let text = "Donneur d'ordre, Emprunteur,\nAcme SARL";
+    let data = PreparedLegalFormData::new(LegalFormData {
+      suffixes: vec![String::from("SARL")],
+      role_heads: vec![
+        String::from("donneur d'ordre"),
+        String::from("emprunteur"),
+      ],
+      ..LegalFormData::default()
+    });
+    let suffix = "SARL";
+    let suffix_start = text.find(suffix).unwrap();
+    let found = SearchMatch::Literal {
+      pattern: 0,
+      start: u32::try_from(suffix_start).unwrap(),
+      end: u32::try_from(suffix_start + suffix.len()).unwrap(),
+    };
+    let texts: Vec<String> = process_legal_form_matches(
+      &[found],
+      PatternSlice { start: 0, end: 1 },
+      text,
+      &data,
+    )
+    .unwrap()
+    .into_iter()
+    .map(|entity| entity.text)
+    .collect();
+    assert_eq!(texts, vec![String::from("Acme SARL")]);
   }
 
   #[test]
