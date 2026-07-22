@@ -363,6 +363,20 @@ pub(crate) fn process_trigger_matches(
       record_trigger_rejection(&mut diagnostics, found, rule, "validation");
       continue;
     }
+    // Trailing role triggers (`…, director` / `…, ředitelem`) often sit
+    // immediately before the next form field (`IČO: …`, `EIN: …`). Those
+    // label-shaped values are not people.
+    if rule.label == crate::labels::PERSON_LABEL
+      && inline_field_label(&value.text)
+    {
+      record_trigger_rejection(
+        &mut diagnostics,
+        found,
+        rule,
+        "field-label-value",
+      );
+      continue;
+    }
     if rule.label == crate::labels::PHONE_NUMBER_LABEL
       && !is_plausible_phone_trigger_value(&value.text)
     {
@@ -2236,6 +2250,99 @@ mod tests {
     // leaking "ten Brink".
     assert_eq!(entities.len(), 1);
     assert_eq!(entities[0].text, "Maarten ten Brink");
+  }
+
+  #[test]
+  fn person_trigger_rejects_inline_field_label_values() {
+    // Trailing role triggers sit before the next labelled field
+    // (`…, director\nEIN: …`). The value is form-field shaped, not a person.
+    let text = "signed by Jane Roe, director\nEIN: 12-3456789, USA";
+    let trigger = "director";
+    let start = text.find(trigger).unwrap();
+    let end = start.saturating_add(trigger.len());
+    let data = PreparedTriggerData::new(TriggerData {
+      rules: vec![TriggerRule {
+        trigger: String::from(trigger),
+        label: String::from("person"),
+        strategy: TriggerStrategy::ToNextComma {
+          stop_words: Vec::new(),
+          max_length: None,
+        },
+        validations: vec![TriggerValidation::StartsUppercase],
+        include_trigger: false,
+      }],
+      address_stop_keywords: Vec::new(),
+      party_position_terms: Vec::new(),
+      legal_form_suffixes: Vec::new(),
+      post_nominals: Vec::new(),
+      sentence_terminal_currency_terms: Vec::new(),
+      phone_extension_labels: Vec::new(),
+      number_markers: Vec::new(),
+      number_labels: Vec::new(),
+    })
+    .unwrap();
+
+    let entities = process_trigger_matches(
+      &[SearchMatch::Literal {
+        pattern: 0,
+        start: u32::try_from(start).unwrap(),
+        end: u32::try_from(end).unwrap(),
+      }],
+      PatternSlice { start: 0, end: 1 },
+      text,
+      &data,
+      &BTreeSet::new(),
+      None,
+    )
+    .unwrap();
+
+    assert!(entities.is_empty());
+  }
+
+  #[test]
+  fn person_trigger_keeps_real_name_after_role_trigger() {
+    let text = "approved by director Jane Roe, on site";
+    let trigger = "director";
+    let start = text.find(trigger).unwrap();
+    let end = start.saturating_add(trigger.len());
+    let data = PreparedTriggerData::new(TriggerData {
+      rules: vec![TriggerRule {
+        trigger: String::from(trigger),
+        label: String::from("person"),
+        strategy: TriggerStrategy::ToNextComma {
+          stop_words: Vec::new(),
+          max_length: None,
+        },
+        validations: vec![TriggerValidation::StartsUppercase],
+        include_trigger: false,
+      }],
+      address_stop_keywords: Vec::new(),
+      party_position_terms: Vec::new(),
+      legal_form_suffixes: Vec::new(),
+      post_nominals: Vec::new(),
+      sentence_terminal_currency_terms: Vec::new(),
+      phone_extension_labels: Vec::new(),
+      number_markers: Vec::new(),
+      number_labels: Vec::new(),
+    })
+    .unwrap();
+
+    let entities = process_trigger_matches(
+      &[SearchMatch::Literal {
+        pattern: 0,
+        start: u32::try_from(start).unwrap(),
+        end: u32::try_from(end).unwrap(),
+      }],
+      PatternSlice { start: 0, end: 1 },
+      text,
+      &data,
+      &BTreeSet::new(),
+      None,
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].text, "Jane Roe");
   }
 
   fn organization_role_trigger_data(

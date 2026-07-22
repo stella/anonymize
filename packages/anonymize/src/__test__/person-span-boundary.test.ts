@@ -55,6 +55,67 @@ describe("person span stops before form-field labels", () => {
   });
 });
 
+describe("trailing role trigger does not emit field-label values as people", () => {
+  test("Czech regression: IČO after ředitelem is not a person", async () => {
+    const persons = await personTexts(
+      [
+        "zastoupená prof. MUDr. Markem Svobodou, Ph.D., ředitelem",
+        "IČO: 00209805, DIČ: CZ00209805",
+      ].join("\n"),
+    );
+    expect(persons.some((p) => /^IČO:?$/u.test(p.trim()))).toBe(false);
+    expect(persons.some((p) => p.includes("Markem Svobodou"))).toBe(true);
+  });
+
+  test("role prefix still extracts the following person", async () => {
+    // Uses jednatelem (vocabulary role), not a string hardcoded in detector code.
+    const persons = await personTexts(
+      "Smlouva podepsaná jednatelem Janem Novákem dne 1. 1. 2026",
+    );
+    expect(persons.some((p) => p.includes("Janem Novákem"))).toBe(true);
+  });
+
+  test("organization trigger control stays organization", async () => {
+    const entities = await detect(
+      "zhotovitel: Gymnázium Jana Keplera, IČO: 12345678",
+    );
+    const orgs = entities
+      .filter((e) => e.label === "organization")
+      .map((e) => e.text);
+    expect(orgs.some((o) => o.includes("Gymnázium"))).toBe(true);
+    expect(
+      entities.some((e) => e.label === "person" && /^IČO:?$/u.test(e.text)),
+    ).toBe(false);
+  });
+});
+
+describe("person extension stops before a following titled person", () => {
+  test("Czech regression: Ph.D. does not absorb following Ing.", async () => {
+    const persons = await personTexts(
+      "prof. MUDr. Marek Svoboda, Ph.D. Ing. Ondřej Machač",
+    );
+    expect(persons.some((p) => p.includes("Ing. Ondřej Machač"))).toBe(true);
+    expect(
+      persons.some((p) => p.includes("Svoboda") && p.includes("Machač")),
+    ).toBe(false);
+    expect(persons.some((p) => p.includes("Marek Svoboda"))).toBe(true);
+  });
+
+  test("English control: adjacent Dr. titles stay separate people", async () => {
+    const persons = await personTexts("Dr. Jane Roe Dr. John Smith");
+    expect(persons.some((p) => p.includes("Jane Roe"))).toBe(true);
+    expect(persons.some((p) => p.includes("John Smith"))).toBe(true);
+    expect(
+      persons.some((p) => p.includes("Jane Roe") && p.includes("John Smith")),
+    ).toBe(false);
+  });
+
+  test("title-shaped surname without a following name still extends", async () => {
+    const persons = await personTexts("John Judge signed the form.");
+    expect(persons.some((p) => p.includes("John Judge"))).toBe(true);
+  });
+});
+
 describe("titled person does not absorb digital-signature modifiers", () => {
   test("Czech regression: Digitálně after a titled given name", async () => {
     const persons = await personTexts("Mgr. Karel Digitálně podepsal");
