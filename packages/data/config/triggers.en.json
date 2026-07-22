@@ -72,6 +72,16 @@
     "triggers": ["VAT number", "VAT ID", "tax identification number", "tax id"]
   },
   {
+    "id": "en-us-social-security-number",
+    "label": "social security number",
+    "strategy": {
+      "type": "match-pattern",
+      "pattern": "^(?:(?!000|666|9[0-9]{2})[0-9]{3}-(?!00)[0-9]{2}-(?!0000)[0-9]{4}|(?!000|666|9[0-9]{2})[0-9]{3} (?!00)[0-9]{2} (?!0000)[0-9]{4}|(?!000|666|9[0-9]{2})[0-9]{3}(?!00)[0-9]{2}(?!0000)[0-9]{4})\\b"
+    },
+    "triggers": ["Social Security Number", "Social Security No.", "SSN"],
+    "extensions": ["add-colon", "add-colon-space"]
+  },
+  {
     "id": "en-uk-companies-house",
     "label": "registration number",
     "strategy": { "type": "company-id-value" },

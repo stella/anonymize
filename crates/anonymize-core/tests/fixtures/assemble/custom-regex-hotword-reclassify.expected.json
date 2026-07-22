@@ -13191,6 +13191,51 @@
     },
     {
       "kind": "literal-with-options",
+      "pattern": "social security number",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "social security no.",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "ssn",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "social security number:",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "social security number: ",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "social security no.:",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "social security no.: ",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "ssn:",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "ssn: ",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
       "pattern": "companies house",
       "case_insensitive": true
     },
@@ -23510,6 +23555,96 @@
         "label": "tax identification number",
         "strategy": {
           "type": "company-id-value"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "Social Security Number",
+        "label": "social security number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:(?!000|666|9[0-9]{2})[0-9]{3}-(?!00)[0-9]{2}-(?!0000)[0-9]{4}|(?!000|666|9[0-9]{2})[0-9]{3} (?!00)[0-9]{2} (?!0000)[0-9]{4}|(?!000|666|9[0-9]{2})[0-9]{3}(?!00)[0-9]{2}(?!0000)[0-9]{4})\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "Social Security No.",
+        "label": "social security number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:(?!000|666|9[0-9]{2})[0-9]{3}-(?!00)[0-9]{2}-(?!0000)[0-9]{4}|(?!000|666|9[0-9]{2})[0-9]{3} (?!00)[0-9]{2} (?!0000)[0-9]{4}|(?!000|666|9[0-9]{2})[0-9]{3}(?!00)[0-9]{2}(?!0000)[0-9]{4})\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "SSN",
+        "label": "social security number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:(?!000|666|9[0-9]{2})[0-9]{3}-(?!00)[0-9]{2}-(?!0000)[0-9]{4}|(?!000|666|9[0-9]{2})[0-9]{3} (?!00)[0-9]{2} (?!0000)[0-9]{4}|(?!000|666|9[0-9]{2})[0-9]{3}(?!00)[0-9]{2}(?!0000)[0-9]{4})\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "Social Security Number:",
+        "label": "social security number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:(?!000|666|9[0-9]{2})[0-9]{3}-(?!00)[0-9]{2}-(?!0000)[0-9]{4}|(?!000|666|9[0-9]{2})[0-9]{3} (?!00)[0-9]{2} (?!0000)[0-9]{4}|(?!000|666|9[0-9]{2})[0-9]{3}(?!00)[0-9]{2}(?!0000)[0-9]{4})\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "Social Security Number: ",
+        "label": "social security number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:(?!000|666|9[0-9]{2})[0-9]{3}-(?!00)[0-9]{2}-(?!0000)[0-9]{4}|(?!000|666|9[0-9]{2})[0-9]{3} (?!00)[0-9]{2} (?!0000)[0-9]{4}|(?!000|666|9[0-9]{2})[0-9]{3}(?!00)[0-9]{2}(?!0000)[0-9]{4})\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "Social Security No.:",
+        "label": "social security number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:(?!000|666|9[0-9]{2})[0-9]{3}-(?!00)[0-9]{2}-(?!0000)[0-9]{4}|(?!000|666|9[0-9]{2})[0-9]{3} (?!00)[0-9]{2} (?!0000)[0-9]{4}|(?!000|666|9[0-9]{2})[0-9]{3}(?!00)[0-9]{2}(?!0000)[0-9]{4})\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "Social Security No.: ",
+        "label": "social security number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:(?!000|666|9[0-9]{2})[0-9]{3}-(?!00)[0-9]{2}-(?!0000)[0-9]{4}|(?!000|666|9[0-9]{2})[0-9]{3} (?!00)[0-9]{2} (?!0000)[0-9]{4}|(?!000|666|9[0-9]{2})[0-9]{3}(?!00)[0-9]{2}(?!0000)[0-9]{4})\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "SSN:",
+        "label": "social security number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:(?!000|666|9[0-9]{2})[0-9]{3}-(?!00)[0-9]{2}-(?!0000)[0-9]{4}|(?!000|666|9[0-9]{2})[0-9]{3} (?!00)[0-9]{2} (?!0000)[0-9]{4}|(?!000|666|9[0-9]{2})[0-9]{3}(?!00)[0-9]{2}(?!0000)[0-9]{4})\\b"
+        },
+        "validations": [],
+        "include_trigger": false
+      },
+      {
+        "trigger": "SSN: ",
+        "label": "social security number",
+        "strategy": {
+          "type": "match-pattern",
+          "pattern": "^(?:(?!000|666|9[0-9]{2})[0-9]{3}-(?!00)[0-9]{2}-(?!0000)[0-9]{4}|(?!000|666|9[0-9]{2})[0-9]{3} (?!00)[0-9]{2} (?!0000)[0-9]{4}|(?!000|666|9[0-9]{2})[0-9]{3}(?!00)[0-9]{2}(?!0000)[0-9]{4})\\b"
         },
         "validations": [],
         "include_trigger": false
@@ -88289,7 +88424,7 @@
     },
     "triggers": {
       "start": 1292,
-      "end": 2749
+      "end": 2758
     },
     "deny_list": {
       "start": 0,
