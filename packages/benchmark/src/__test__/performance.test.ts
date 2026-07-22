@@ -1,13 +1,20 @@
 import { describe, expect, test } from "bun:test";
+import { resolve } from "node:path";
 
 import {
   assertCanonicalHost,
+  assertCanonicalRuntimeControls,
   CANONICAL_HOST_LABEL,
   parseCpuList,
   type HostProfile,
   type HostSnapshot,
 } from "../performance/host";
 import { buildPerformanceInput } from "../performance/input";
+import {
+  assertCleanCpuNoise,
+  cpuNoiseDelta,
+  type CpuNoiseSnapshot,
+} from "../performance/noise";
 import {
   assertPerformanceReport,
   PERFORMANCE_REPORT_SCHEMA_VERSION,
@@ -17,6 +24,18 @@ import {
   parsePerformanceArgs,
 } from "../performance/run";
 import { summarize } from "../performance/statistics";
+import {
+  buildProviderInvocation,
+  buildProviderSampleOrder,
+  parseCrossProviderArgs,
+  type ProviderDefinition,
+} from "../performance/providers/run";
+import { regexDetectorConfig } from "../performance/providers/stella-config";
+import { assertProviderEntities } from "../performance/providers/identity";
+import {
+  assertProviderInputIdentity,
+  computeProviderInputIdentity,
+} from "../performance/providers/input-identity";
 
 describe("canonical performance statistics", () => {
   test("reports median, MAD, and nearest-rank p95 without sorting samples", () => {
@@ -67,6 +86,205 @@ describe("canonical performance statistics", () => {
   });
 });
 
+describe("cross-provider performance contract", () => {
+  test("uses worker-verified UTF-16 input identity for astral text", () => {
+    const inputText = "A😀B";
+    const identity = computeProviderInputIdentity(inputText);
+    expect(identity.inputBytes).toBe(6);
+    expect(identity.inputCharacters).toBe(4);
+    expect(() =>
+      assertProviderInputIdentity(identity, inputText),
+    ).not.toThrow();
+    expect(() =>
+      assertProviderInputIdentity(
+        { ...identity, inputCharacters: identity.inputCharacters - 1 },
+        inputText,
+      ),
+    ).toThrow("mismatched input identity");
+    expect(() =>
+      assertProviderInputIdentity(
+        { ...identity, inputSha256: "0".repeat(64) },
+        inputText,
+      ),
+    ).toThrow("mismatched input identity");
+  });
+
+  test("Python independently rejects a code-point denominator", () => {
+    const python = Bun.which("python3") ?? Bun.which("python");
+    if (python === null)
+      throw new Error("Python is required by benchmark tests");
+    const inputText = "A😀B";
+    const identity = computeProviderInputIdentity(inputText);
+    const result = Bun.spawnSync({
+      cmd: [
+        python,
+        resolve(
+          import.meta.dir,
+          "..",
+          "..",
+          "python",
+          "provider_performance_worker.py",
+        ),
+        "datafog-regex-only",
+      ],
+      stdin: new TextEncoder().encode(
+        JSON.stringify({
+          ...identity,
+          inputCharacters: 3,
+          inputText,
+        }),
+      ),
+    });
+    expect(result.exitCode).not.toBe(0);
+    expect(result.stderr.toString()).toContain(
+      "Python worker received mismatched input identity",
+    );
+  });
+
+  test("pins the provider interpreter and preserves its arguments", () => {
+    const definition: ProviderDefinition = {
+      id: "datafog-regex-only",
+      command: "/venv/bin/python",
+      args: ["worker.py", "datafog-regex-only"],
+    };
+    expect(buildProviderInvocation(definition, 6)).toEqual({
+      command: "taskset",
+      args: [
+        "--cpu-list",
+        "6",
+        "/venv/bin/python",
+        "worker.py",
+        "datafog-regex-only",
+      ],
+    });
+    expect(buildProviderInvocation(definition, null)).toEqual(definition);
+  });
+
+  test("keeps canonical sample and scale floors", () => {
+    expect(() =>
+      parseCrossProviderArgs(["--canonical", "--samples=19"]),
+    ).toThrow("at least 3 warmups and 20 samples");
+    expect(() =>
+      parseCrossProviderArgs(["--canonical", "--samples=21"]),
+    ).toThrow("even sample count");
+    expect(
+      parseCrossProviderArgs(["--samples=1", "--warmups=1"]).inputBytes,
+    ).toEqual([48 * 1024, 256 * 1024]);
+  });
+
+  test("balances every provider and size without provider blocks", () => {
+    const definitions: ProviderDefinition[] = [
+      { id: "stella-full", command: "stella", args: [] },
+      {
+        id: "stella-regex-detectors-only",
+        command: "stella-regex",
+        args: [],
+      },
+      { id: "scrubadub-base", command: "scrubadub", args: [] },
+      { id: "datafog-regex-only", command: "datafog", args: [] },
+    ];
+    const sizes = [48, 256, 512, 1024];
+    const order = buildProviderSampleOrder(definitions, sizes, 0);
+    expect(order).toHaveLength(definitions.length * sizes.length);
+    expect(
+      new Set(
+        order.map(
+          ({ definition, inputBytes }) => `${definition.id}:${inputBytes}`,
+        ),
+      ).size,
+    ).toBe(order.length);
+    expect(
+      order.every(
+        ({ definition }, index) =>
+          index === 0 || definition.id !== order.at(index - 1)?.definition.id,
+      ),
+    ).toBe(true);
+    expect(buildProviderSampleOrder(definitions, sizes, 1).at(-1)).toEqual(
+      order.at(0),
+    );
+
+    const positions = new Map<string, number[]>();
+    for (let round = 0; round < 20; round += 1) {
+      for (const [position, coordinate] of buildProviderSampleOrder(
+        definitions,
+        sizes,
+        round,
+      ).entries()) {
+        const key = `${coordinate.definition.id}:${coordinate.inputBytes}`;
+        const seen = positions.get(key) ?? [];
+        seen.push(position);
+        positions.set(key, seen);
+      }
+    }
+    const center = (order.length - 1) / 2;
+    expect(
+      [...positions.values()].every(
+        (seen) =>
+          seen.length === 20 &&
+          seen.reduce((total, position) => total + position, 0) /
+            seen.length ===
+            center,
+      ),
+    ).toBe(true);
+  });
+
+  test("rejects invalid provider spans and labels", () => {
+    expect(() =>
+      assertProviderEntities([{ start: 0, end: 1, label: "email" }], 1),
+    ).not.toThrow();
+    expect(() =>
+      assertProviderEntities([{ start: 0, end: 2, label: "email" }], 1),
+    ).toThrow("invalid span");
+    expect(() =>
+      assertProviderEntities([{ start: 0, end: 1, label: "" }], 1),
+    ).toThrow("invalid label");
+  });
+
+  test("removes every non-regex detector lane from stella", async () => {
+    const anonymize = await import("@stll/anonymize");
+    const binding = anonymize.loadNativeAnonymizeBinding();
+    const assembled = await anonymize.prepareNativePipelineConfig({
+      binding,
+      config: {
+        threshold: 0.3,
+        language: "en",
+        nameCorpusLanguages: ["en"],
+        enableTriggerPhrases: false,
+        enableRegex: true,
+        enableLegalForms: false,
+        enableNameCorpus: false,
+        enableDenyList: false,
+        enableGazetteer: false,
+        enableCountries: false,
+        enableConfidenceBoost: false,
+        enableCoreference: false,
+        enableHotwordRules: false,
+        enableZoneClassification: false,
+        labels: [...anonymize.DEFAULT_ENTITY_LABELS],
+        workspaceId: "cross-provider-performance-test",
+      },
+    });
+    expect(assembled.address_seed_data).toBeDefined();
+    expect(assembled.address_context_data).toBeDefined();
+
+    const regexOnly = regexDetectorConfig(assembled);
+    expect(regexOnly.literal_patterns).toEqual([]);
+    expect(regexOnly.address_seed_data).toBeUndefined();
+    expect(regexOnly.address_context_data).toBeUndefined();
+    expect(regexOnly.date_data).toBeUndefined();
+    expect(regexOnly.monetary_data).toBeUndefined();
+    expect(regexOnly.signature_data).toBeUndefined();
+    const prepared = anonymize.createNativeAnonymizerFromConfig({
+      binding,
+      config: regexOnly,
+    });
+    expect(
+      prepared.redactStaticEntities("Email legal@example.test")
+        .resolvedEntities,
+    ).toHaveLength(1);
+  });
+});
+
 describe("canonical performance host", () => {
   const profile: HostProfile = {
     schemaVersion: 1,
@@ -92,6 +310,7 @@ describe("canonical performance host", () => {
     totalMemoryBytes: 16_000_000_000,
     loadOneMinute: 0.4,
     isolatedCpus: [6],
+    noHzFullCpus: [6],
     onlineCpus: [0, 1, 2, 3, 4, 5, 6],
     benchmarkCpuSiblings: [6],
     tasksetAvailable: true,
@@ -120,12 +339,57 @@ describe("canonical performance host", () => {
       assertCanonicalHost(profile, { ...snapshot, isolatedCpus: [] }),
     ).toThrow("online and isolated");
     expect(() =>
+      assertCanonicalHost(profile, { ...snapshot, noHzFullCpus: [] }),
+    ).toThrow("nohz_full");
+    expect(() =>
       assertCanonicalHost(profile, {
         ...snapshot,
         benchmarkCpuSiblings: [6, 7],
         onlineCpus: [...snapshot.onlineCpus, 7],
       }),
     ).toThrow("SMT siblings must be offline");
+    expect(() =>
+      assertCanonicalRuntimeControls(profile, {
+        ...snapshot,
+        loadOneMinute: 8,
+      }),
+    ).toThrow("changed during measurement");
+  });
+
+  test("records CPU counter noise and rejects any canonical contamination", () => {
+    const before: CpuNoiseSnapshot = {
+      userTicks: 1,
+      niceTicks: 0,
+      systemTicks: 1,
+      idleTicks: 10,
+      ioWaitTicks: 0,
+      irqTicks: 0,
+      softIrqTicks: 0,
+      stealTicks: 0,
+    };
+    const clean = cpuNoiseDelta(before, { ...before, userTicks: 4 });
+    expect(clean.status).toBe("clean");
+    expect(() => assertCleanCpuNoise(clean)).not.toThrow();
+    const noisy = cpuNoiseDelta(before, {
+      ...before,
+      softIrqTicks: 1,
+      stealTicks: 1,
+    });
+    expect(noisy.status).toBe("kernel-noise-observed");
+    expect(() => assertCleanCpuNoise(noisy)).toThrow("kernel noise");
+    expect(() =>
+      assertCleanCpuNoise({
+        ...clean,
+        irqTicks: 1,
+        status: "kernel-noise-observed",
+      }),
+    ).toThrow("kernel noise");
+    expect(cpuNoiseDelta(before, { ...before, niceTicks: 1 }).status).toBe(
+      "kernel-noise-observed",
+    );
+    expect(cpuNoiseDelta(before, { ...before, ioWaitTicks: 1 }).status).toBe(
+      "kernel-noise-observed",
+    );
   });
 
   test("parses Linux CPU lists without accepting ambiguous syntax", () => {

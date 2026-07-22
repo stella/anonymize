@@ -19,7 +19,8 @@
     "bench:redactionbench": "bun src/redactionbench.ts",
     "bench:meddocan": "bun src/meddocan.ts",
     "bench:suite": "bun src/suite.ts",
-    "bench:performance": "bun src/performance/run.ts"
+    "bench:performance": "bun src/performance/run.ts",
+    "bench:performance:providers": "bun src/performance/providers/run.ts"
   },
   "dependencies": {
     "@stll/anonymize": "workspace:^",

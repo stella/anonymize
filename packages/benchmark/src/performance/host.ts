@@ -30,6 +30,7 @@ export type HostSnapshot = {
   readonly totalMemoryBytes: number;
   readonly loadOneMinute: number;
   readonly isolatedCpus: readonly number[];
+  readonly noHzFullCpus: readonly number[];
   readonly onlineCpus: readonly number[];
   readonly benchmarkCpuSiblings: readonly number[];
   readonly tasksetAvailable: boolean;
@@ -201,6 +202,10 @@ export const currentHostSnapshot = (benchmarkCpu: number): HostSnapshot => {
       path: "/sys/devices/system/cpu/isolated",
       context: "Linux isolated CPU list",
     }),
+    noHzFullCpus: readCpuList({
+      path: "/sys/devices/system/cpu/nohz_full",
+      context: "Linux adaptive-tick CPU list",
+    }),
     onlineCpus,
     benchmarkCpuSiblings: readCpuList({
       path: `/sys/devices/system/cpu/cpu${benchmarkCpu}/topology/thread_siblings_list`,
@@ -250,6 +255,9 @@ export const assertCanonicalHost = (
       "benchmark CPU must be online and isolated from the scheduler",
     );
   }
+  if (!snapshot.noHzFullCpus.includes(profile.benchmarkCpu)) {
+    throw new Error("benchmark CPU must use Linux nohz_full adaptive ticks");
+  }
   const onlineSiblings = snapshot.benchmarkCpuSiblings.filter(
     (cpu) => cpu !== profile.benchmarkCpu && snapshot.onlineCpus.includes(cpu),
   );
@@ -273,6 +281,27 @@ export const assertCanonicalHost = (
   }
   if (!snapshot.turboDisabled || profile.turbo !== "disabled") {
     throw new Error("canonical CPU turbo/boost must be disabled");
+  }
+};
+
+export const assertCanonicalRuntimeControls = (
+  profile: HostProfile,
+  snapshot: HostSnapshot,
+): void => {
+  if (
+    !snapshot.onlineCpus.includes(profile.benchmarkCpu) ||
+    !snapshot.isolatedCpus.includes(profile.benchmarkCpu) ||
+    !snapshot.noHzFullCpus.includes(profile.benchmarkCpu) ||
+    snapshot.benchmarkCpuSiblings.some(
+      (cpu) =>
+        cpu !== profile.benchmarkCpu && snapshot.onlineCpus.includes(cpu),
+    ) ||
+    snapshot.governors.length !== 1 ||
+    snapshot.governors.at(0) !== profile.governor ||
+    !snapshot.turboDisabled ||
+    snapshot.loadOneMinute / snapshot.logicalCores > profile.maximumLoadPerCore
+  ) {
+    throw new Error("canonical host controls changed during measurement");
   }
 };
 

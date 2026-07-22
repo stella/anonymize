@@ -97,11 +97,49 @@ of `main` or a `main` push in `stella/anonymize`; it also verifies the CPU,
 memory (within 1%), load ceiling, Linux scaling governor, and disabled
 turbo/boost state before measuring. The declared `benchmarkCpu` must be online,
 listed by Linux in `/sys/devices/system/cpu/isolated`, and have no online SMT
-sibling. Every canonical worker runs through
+sibling. It must also appear in `/sys/devices/system/cpu/nohz_full`, which
+keeps regular scheduler ticks off the measurement CPU. Every canonical worker runs through
 `taskset --cpu-list <benchmarkCpu>`; the selected logical CPU is recorded in
-the report. Missing profile, `taskset`, isolation, or sysfs controls fail the
+the report. Provider runs record per-CPU nice, I/O-wait, IRQ, soft-IRQ, and
+steal-time deltas; any such non-benchmark CPU noise fails the canonical run. The
+host load ceiling is checked again after measurement. Missing profile,
+`taskset`, isolation, or sysfs controls fail the
 run instead of silently producing non-comparable numbers. Local mode does not
 pin processes and records a null benchmark CPU.
+
+### Cross-provider throughput
+
+The separate provider harness runs the same public-safe synthetic English text
+through stella's full pipeline, stella's built-in regex detectors with all
+non-regex support data removed, base scrubadub, and DataFog's regex-only engine:
+
+```sh
+bun run bench:performance:providers
+```
+
+Each observation uses a fresh process, followed by a first and second call.
+Startup ends when the worker interpreter is ready; provider imports and pipeline
+construction are recorded as initialization. The parent also records the paired
+spawn-to-clean-exit wall duration, and each worker records total process CPU
+time. These paired values are the end-to-end comparison; phase medians must not
+be added together. Canonical mode uses the same host
+verification and `taskset` CPU pinning contract as `bench:performance`.
+The workflow pins uv 0.10.1 and CPython 3.11.12, then creates fresh virtualenvs
+from hash-locked requirement closures before it waits for the host to become
+quiet. Provider-size pairs use paired forward/reverse rotations so every
+coordinate's mean execution position is exactly balanced across measured
+rounds; canonical runs therefore require an even sample count.
+
+The scopes are deliberately explicit. stella's regex-detector lane and
+DataFog's regex engine are the closest like-for-like rows, but their pattern
+sets and result resolution differ. stella full and scrubadub base run different,
+broader detector sets. Every row
+records its detection count, per-label counts, and output digest, so a fast
+provider cannot appear to win by doing no work. Throughput uses JavaScript
+UTF-16 code units across every provider; each worker recomputes and verifies the
+input bytes, denominator, and SHA-256 independently. Python virtualenvs default to
+`.venv-scrubadub` and `.venv-datafog`; override their interpreters with
+`ANONYMIZE_SCRUBADUB_PYTHON` and `ANONYMIZE_DATAFOG_PYTHON` when needed.
 
 ## Toolchain versions (committed run)
 
