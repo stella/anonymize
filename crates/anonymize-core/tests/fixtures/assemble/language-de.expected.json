@@ -124,7 +124,15 @@
       "funktion",
       "datum",
       "unterschrift",
-      "adresse"
+      "adresse",
+      "hra",
+      "hrb",
+      "steuernummer",
+      "steuer-nr.",
+      "idnr.",
+      "idnr",
+      "ust-idnr.",
+      "ust-idnr"
     ],
     "signature_stamp_phrases": [
       "digitally signed by",
@@ -23834,6 +23842,11 @@
     "number_markers": ["nº", "n°", "№"],
     "number_labels": ["nº", "n°", "№"],
     "person_field_labels": [
+      "name",
+      "funktion",
+      "datum",
+      "unterschrift",
+      "adresse",
       "hra",
       "hrb",
       "steuernummer",

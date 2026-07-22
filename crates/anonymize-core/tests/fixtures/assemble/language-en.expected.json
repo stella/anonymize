@@ -24050,6 +24050,10 @@
     "person_field_labels": [
       "name",
       "title",
+      "position",
+      "date",
+      "signature",
+      "address",
       "tax id",
       "tax identification number",
       "vat id",

@@ -23,9 +23,10 @@
 //! - `post_nominals`: the static `POST_NOMINALS` table.
 //! - `sentence_terminal_currency_terms`:
 //!   [`super::monetary::sentence_terminal_currency_terms`].
-//! - `phone_extension_labels` / `number_markers` / `number_labels` /
-//!   `person_field_labels`:
+//! - `phone_extension_labels` / `number_markers` / `number_labels`:
 //!   `languageKeyedTerms(TRIGGER_SUPPORT.<field>, contentLanguages)`.
+//! - `person_field_labels`: the same language-scoped canonical form-field
+//!   vocabulary used by signature and resolved-span boundaries.
 //!
 //! The binding-to-core conversion excludes the legal-form data's explicit
 //! detection-only suffix delta before populating core trigger data, so an
@@ -42,7 +43,7 @@ use stella_anonymize_core::assemble::{
 
 use super::js::{canonical_regexp_flags, escape_regexp_source, utf16_len};
 use super::language::{language_config_matches, language_keyed_terms};
-use super::{AssembleContext, legal_forms, monetary};
+use super::{AssembleContext, legal_forms, monetary, signature};
 use crate::{
   BindingTriggerData, BindingTriggerRule, BindingTriggerStrategy,
   BindingTriggerValidation,
@@ -393,7 +394,6 @@ enum TriggerSupportField {
   PhoneExtensionLabels,
   NumberMarkers,
   NumberLabels,
-  PersonFieldLabels,
 }
 
 fn trigger_support_field(
@@ -408,8 +408,6 @@ fn trigger_support_field(
     number_markers: OrderedMap<Value>,
     #[serde(rename = "numberLabels", default)]
     number_labels: OrderedMap<Value>,
-    #[serde(rename = "personFieldLabels", default)]
-    person_field_labels: OrderedMap<Value>,
   }
   let support: TriggerSupport = parse_data_file("trigger-support.json")?;
   let map = match field {
@@ -418,7 +416,6 @@ fn trigger_support_field(
     }
     TriggerSupportField::NumberMarkers => &support.number_markers,
     TriggerSupportField::NumberLabels => &support.number_labels,
-    TriggerSupportField::PersonFieldLabels => &support.person_field_labels,
   };
   Ok(language_keyed_terms(map, selected))
 }
@@ -459,32 +456,6 @@ pub(super) fn build_trigger_data(
       TriggerSupportField::NumberLabels,
       selected,
     )?,
-    person_field_labels: trigger_support_field(
-      TriggerSupportField::PersonFieldLabels,
-      selected,
-    )?,
+    person_field_labels: signature::form_field_labels(selected)?,
   }))
-}
-
-#[cfg(test)]
-mod tests {
-  use super::{AssembleError, TriggerSupportField, trigger_support_field};
-
-  #[test]
-  fn person_field_labels_follow_content_language_scope()
-  -> Result<(), AssembleError> {
-    let german = trigger_support_field(
-      TriggerSupportField::PersonFieldLabels,
-      Some(&[String::from("de")]),
-    )?;
-    let english = trigger_support_field(
-      TriggerSupportField::PersonFieldLabels,
-      Some(&[String::from("en")]),
-    )?;
-
-    assert!(german.iter().any(|label| label == "hrb"));
-    assert!(german.iter().any(|label| label == "ust-idnr."));
-    assert!(!english.iter().any(|label| label == "hrb"));
-    Ok(())
-  }
 }

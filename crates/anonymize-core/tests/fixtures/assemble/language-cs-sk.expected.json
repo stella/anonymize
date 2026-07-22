@@ -34513,11 +34513,18 @@
     "person_field_labels": [
       "jméno",
       "příjmení",
+      "název",
+      "funkce",
+      "datum",
+      "podpis",
+      "adresa",
       "titul",
       "ičo",
       "dič",
       "meno",
-      "priezvisko"
+      "priezvisko",
+      "funkcia",
+      "dátum"
     ]
   },
   "coreference_data": {

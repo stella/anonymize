@@ -28314,7 +28314,18 @@
     "phone_extension_labels": [],
     "number_markers": ["nº", "n°", "№"],
     "number_labels": ["nº", "n°", "№"],
-    "person_field_labels": ["jméno", "příjmení", "titul", "ičo", "dič"]
+    "person_field_labels": [
+      "jméno",
+      "příjmení",
+      "název",
+      "funkce",
+      "datum",
+      "podpis",
+      "adresa",
+      "titul",
+      "ičo",
+      "dič"
+    ]
   },
   "coreference_data": {
     "definition_patterns": [

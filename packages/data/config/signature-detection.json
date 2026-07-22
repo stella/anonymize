@@ -34,7 +34,21 @@
       "ičo",
       "dič"
     ],
-    "de": ["name", "funktion", "datum", "unterschrift", "adresse"],
+    "de": [
+      "name",
+      "funktion",
+      "datum",
+      "unterschrift",
+      "adresse",
+      "hra",
+      "hrb",
+      "steuernummer",
+      "steuer-nr.",
+      "idnr.",
+      "idnr",
+      "ust-idnr.",
+      "ust-idnr"
+    ],
     "es": ["nombre", "cargo", "fecha", "firma"],
     "fr": ["nom", "fonction", "date", "signature"],
     "it": ["nome", "qualifica", "data", "firma"],
