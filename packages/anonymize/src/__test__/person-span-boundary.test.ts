@@ -48,6 +48,7 @@ const personTextsForLanguages = async (
     {
       ...CONFIG,
       dictionaries: cachedDictionaries,
+      languages,
       nameCorpusLanguages: languages,
     },
     text,
