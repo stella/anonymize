@@ -44,6 +44,6 @@ pre-push:
     format:
       run: bun run format:check
     ai-skills:
-      run: bun run sync-ai:check
+      run: bun run sync-ai:check:optional
     test:
       run: bun run --filter @stll/anonymize test:fast

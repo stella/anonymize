@@ -380,7 +380,8 @@ bun run build
 ### Git hooks (opt-in)
 
 Lefthook config lives at [`lefthook.yml`](lefthook.yml) and is not
-auto-installed. To enable local hooks (format on pre-commit, typecheck + format
+auto-installed. To enable local hooks (format on pre-commit, focused tests,
+typechecks, AI-instruction sync when its submodule is initialized, and format
 check on pre-push):
 
 ```bash
