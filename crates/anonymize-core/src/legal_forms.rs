@@ -537,7 +537,24 @@ fn comma_before_soft_wrap(text: &str, newline_start: usize) -> bool {
       scan = prev_start;
       continue;
     }
-    return ch == ',';
+    if ch != ',' {
+      return false;
+    }
+    // A single `Party,\nOther LLP` is usually a field/list boundary, not a
+    // wrapped firm name. Require an earlier comma on the same line so this
+    // exception is limited to a continuing comma-separated name list such as
+    // `Skadden, Arps, Slate,\nMeagher & Flom LLP`.
+    scan = prev_start;
+    while let Some((earlier_start, earlier)) = previous_char(text, scan) {
+      if earlier == '\n' {
+        return false;
+      }
+      if earlier == ',' {
+        return true;
+      }
+      scan = earlier_start;
+    }
+    return false;
   }
   false
 }
@@ -3055,6 +3072,13 @@ mod tests {
   #[test]
   fn paragraph_break_still_stops_firm_name_walk() {
     let text = "Unrelated Party.\n\nMeagher & Flom LLP";
+    let texts = org_texts_for(text, "LLP");
+    assert_eq!(texts, vec![String::from("Meagher & Flom LLP")]);
+  }
+
+  #[test]
+  fn single_comma_line_boundary_still_stops_firm_name_walk() {
+    let text = "Unrelated Party,\nMeagher & Flom LLP";
     let texts = org_texts_for(text, "LLP");
     assert_eq!(texts, vec![String::from("Meagher & Flom LLP")]);
   }
