@@ -72,6 +72,19 @@ describe("person trigger extraction stops at the name run", () => {
     expect(persons.some((person) => person.includes("VAT"))).toBe(false);
   });
 
+  test("German registry and tax labels stay out of person spans", async () => {
+    for (const label of ["HRB: 1234", "USt-IdNr.: DE123456789"]) {
+      const persons = personTexts(
+        await detectNative(
+          { ...baseConfig, languages: ["de"] },
+          `Geschäftsführer Hans Müller ${label}, on site`,
+        ),
+      );
+      expect(persons).toContain("Hans Müller");
+      expect(persons.some((person) => person.includes(label))).toBe(false);
+    }
+  });
+
   test("multi-word name: Pan Jan Novák je tady.", async () => {
     const persons = personTexts(await detect("Pan Jan Novák je tady."));
     expect(persons).toContain("Jan Novák");

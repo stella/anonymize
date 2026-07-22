@@ -25,6 +25,16 @@
       "fein",
       "ssn"
     ],
+    "de": [
+      "hra",
+      "hrb",
+      "steuernummer",
+      "steuer-nr.",
+      "idnr.",
+      "idnr",
+      "ust-idnr.",
+      "ust-idnr"
+    ],
     "cs": ["jméno", "příjmení", "titul", "ičo", "dič"],
     "sk": ["meno", "priezvisko", "titul", "ičo", "dič"]
   }

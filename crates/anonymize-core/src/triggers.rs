@@ -2408,6 +2408,8 @@ mod tests {
         String::from("Tax ID"),
         String::from("Jméno"),
         String::from("Titul"),
+        String::from("HRB"),
+        String::from("USt-IdNr."),
       ],
     })
     .unwrap();
@@ -2430,6 +2432,14 @@ mod tests {
         "Janem Novákem",
       ),
       ("approved by director Novák Titul: jednatel", "Novák"),
+      (
+        "approved by director Hans Müller HRB: 1234, on site",
+        "Hans Müller",
+      ),
+      (
+        "approved by director Hans Müller USt-IdNr.: DE123456789",
+        "Hans Müller",
+      ),
     ] {
       let start = text.find(trigger).unwrap();
       let end = start.saturating_add(trigger.len());

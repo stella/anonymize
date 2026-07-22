@@ -23832,7 +23832,17 @@
     ],
     "phone_extension_labels": [],
     "number_markers": ["nº", "n°", "№"],
-    "number_labels": ["nº", "n°", "№"]
+    "number_labels": ["nº", "n°", "№"],
+    "person_field_labels": [
+      "hra",
+      "hrb",
+      "steuernummer",
+      "steuer-nr.",
+      "idnr.",
+      "idnr",
+      "ust-idnr.",
+      "ust-idnr"
+    ]
   },
   "coreference_data": {
     "definition_patterns": [

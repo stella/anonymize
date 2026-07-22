@@ -465,3 +465,26 @@ pub(super) fn build_trigger_data(
     )?,
   }))
 }
+
+#[cfg(test)]
+mod tests {
+  use super::{AssembleError, TriggerSupportField, trigger_support_field};
+
+  #[test]
+  fn person_field_labels_follow_content_language_scope()
+  -> Result<(), AssembleError> {
+    let german = trigger_support_field(
+      TriggerSupportField::PersonFieldLabels,
+      Some(&[String::from("de")]),
+    )?;
+    let english = trigger_support_field(
+      TriggerSupportField::PersonFieldLabels,
+      Some(&[String::from("en")]),
+    )?;
+
+    assert!(german.iter().any(|label| label == "hrb"));
+    assert!(german.iter().any(|label| label == "ust-idnr."));
+    assert!(!english.iter().any(|label| label == "hrb"));
+    Ok(())
+  }
+}

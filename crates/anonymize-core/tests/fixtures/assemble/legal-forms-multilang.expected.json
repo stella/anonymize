@@ -32630,7 +32630,17 @@
     ],
     "phone_extension_labels": [],
     "number_markers": ["nº", "n°", "№", "nr", "nr.", "numer"],
-    "number_labels": ["nº", "n°", "№", "nr", "nr.", "numer"]
+    "number_labels": ["nº", "n°", "№", "nr", "nr.", "numer"],
+    "person_field_labels": [
+      "hra",
+      "hrb",
+      "steuernummer",
+      "steuer-nr.",
+      "idnr.",
+      "idnr",
+      "ust-idnr.",
+      "ust-idnr"
+    ]
   },
   "coreference_data": {
     "definition_patterns": [
