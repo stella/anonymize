@@ -512,7 +512,7 @@ fn extract_value(
     .get(trigger_end_byte..lookahead_end)
     .unwrap_or_default();
   let stripped = remaining.trim_start_matches(|ch: char| {
-    ch.is_whitespace() || matches!(ch, ':' | ';')
+    ch.is_whitespace() || matches!(ch, ':' | ';' | '#' | '=')
   });
   let trimmed_offset = remaining.len().saturating_sub(stripped.len());
   let value_start_byte = trigger_end_byte.saturating_add(trimmed_offset);

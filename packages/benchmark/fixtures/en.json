@@ -47,7 +47,7 @@
       ". Our registered office is located at ",
       { "t": "500 Market Street, San Francisco, CA 94105", "label": "address" },
       ". For payroll setup we will need your Social Security Number ",
-      { "t": "078-05-1120", "label": "id-number" },
+      { "t": "219-09-9999", "label": "id-number" },
       "."
     ]
   },
