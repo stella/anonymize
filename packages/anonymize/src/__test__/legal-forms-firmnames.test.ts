@@ -80,6 +80,86 @@ describe("legal-form firm name capture", () => {
     ).toContain("Skadden, Arps, Slate, Meagher & Flom LLP");
   });
 
+  test("jurisdiction parenthetical before LLP (Skadden UK)", async () => {
+    expect(
+      await orgsIn("Skadden, Arps, Slate, Meagher & Flom (UK) LLP"),
+    ).toContain("Skadden, Arps, Slate, Meagher & Flom (UK) LLP");
+  });
+
+  test("one-letter schedule marker is not a jurisdiction", async () => {
+    expect(await orgsIn("Schedule (A) LLC Agreement")).not.toContain(
+      "Schedule (A) LLC",
+    );
+  });
+
+  test("comma soft-wrap before jurisdiction LLP", async () => {
+    const orgs = await orgsIn(
+      "with a copy (which will not constitute notice) to:\n\n" +
+        "Skadden, Arps, Slate,\n" +
+        "Meagher & Flom (UK) LLP\n\n" +
+        "22 Bishopsgate",
+    );
+    expect(
+      orgs.some((org) =>
+        org
+          .replaceAll(/\s+/g, " ")
+          .includes("Skadden, Arps, Slate, Meagher & Flom (UK) LLP"),
+      ),
+    ).toBe(true);
+  });
+
+  test("connector-complete prior firm record is not merged", async () => {
+    const orgs = await orgsIn(
+      "Wachtell, Lipton, Rosen & Katz,\nMeagher & Flom (UK) LLP",
+    );
+    expect(orgs).toContain("Meagher & Flom (UK) LLP");
+    expect(orgs.some((org) => org.includes("Wachtell"))).toBe(false);
+  });
+
+  test("connector-complete firm can wrap immediately before LLP", async () => {
+    const orgs = await orgsIn("Wachtell, Lipton, Rosen & Katz,\nLLP");
+    expect(orgs.map((org) => org.replaceAll(/\s+/g, " "))).toContain(
+      "Wachtell, Lipton, Rosen & Katz, LLP",
+    );
+  });
+
+  test("short connector-complete firm can wrap immediately before LLP", async () => {
+    const orgs = await orgsIn("Smith, Gambrell & Russell,\nLLP");
+    expect(orgs.map((org) => org.replaceAll(/\s+/g, " "))).toContain(
+      "Smith, Gambrell & Russell, LLP",
+    );
+  });
+
+  test("comma-rich address line does not wrap into an organization", async () => {
+    const orgs = await orgsIn("Address: New York, NY,\nAcme LLC");
+    expect(orgs).toContain("Acme LLC");
+    expect(orgs.some((org) => org.includes("New York"))).toBe(false);
+  });
+
+  test("unlabelled address line does not wrap into an organization", async () => {
+    const orgs = await orgsIn("650 Page Mill Road, Palo Alto, CA,\nAcme LLC");
+    expect(orgs).toContain("Acme LLC");
+    expect(orgs.some((org) => org.includes("Palo Alto"))).toBe(false);
+  });
+
+  test("comma-separated party roles do not wrap into an organization", async () => {
+    const orgs = await orgsIn("Buyer, Seller,\nAcme LLC");
+    expect(orgs).toContain("Acme LLC");
+    expect(orgs.some((org) => org.includes("Buyer"))).toBe(false);
+  });
+
+  test("decorated party roles do not wrap into an organization", async () => {
+    const orgs = await orgsIn("Buyer (the “Buyer”), Seller,\nAcme LLC");
+    expect(orgs).toContain("Acme LLC");
+    expect(orgs.some((org) => org.includes("Seller"))).toBe(false);
+  });
+
+  test("multi-word party roles do not wrap into an organization", async () => {
+    const orgs = await orgsIn("Donneur d'ordre, Emprunteur,\nAcme SARL");
+    expect(orgs).toContain("Acme SARL");
+    expect(orgs.some((org) => org.includes("Emprunteur"))).toBe(false);
+  });
+
   test("Simpson Thacher & Bartlett LLP across paragraphs", async () => {
     expect(
       await orgsIn("and\nSimpson Thacher & Bartlett LLP\n425 Lexington Avenue"),
