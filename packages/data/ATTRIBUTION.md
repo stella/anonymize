@@ -76,6 +76,18 @@ implementations are original.
 - License: Creative Commons CC0 1.0 Universal
   Public Domain Dedication
 
+### Ireland CSO and England/Wales ONS Baby-Name Registrations
+
+- `Kai` and `Sam` in the English first-name corpus are supported by the Central
+  Statistics Office's official top-100 names registered in Ireland in 2016.
+- The Office for National Statistics historical top-100 data for England and
+  Wales independently corroborates `Kai` in an English-language jurisdiction.
+- Used in: `dictionaries/names/first/en.json`
+- https://www.cso.ie/en/releasesandpublications/ep/p-ibn/irishbabiesnames2016/tbls/
+- https://www.ons.gov.uk/peoplepopulationandcommunity/birthsdeathsandmarriages/livebirths/bulletins/babynamesenglandandwales/2019
+- CSO license: Creative Commons Attribution 4.0
+- ONS license: Open Government Licence v3.0
+
 ### GeoNames (CC BY 4.0)
 
 - City and place names from the GeoNames gazetteer
