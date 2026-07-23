@@ -2164,32 +2164,12 @@ fn classify_identifier_continuation(
     .iter()
     .any(|value| matches!(value, b'.' | b'-' | b'/'));
   if has_separator {
-    if token
-      .last()
-      .is_some_and(|value| matches!(value, b'-' | b'/'))
-    {
-      return IdentifierContinuation::Reject;
-    }
-    if !first.is_ascii_alphabetic() {
-      let digits = token.iter().filter(|value| value.is_ascii_digit()).count();
-      return if digits >= 2
-        && !is_ascii_date_shape(token, bytes.get(end).copied())
-      {
-        IdentifierContinuation::Consume
-      } else {
-        IdentifierContinuation::Stop
-      };
-    }
-    let digits = token.iter().filter(|value| value.is_ascii_digit()).count();
-    let leading_alpha = token
-      .iter()
-      .take_while(|value| value.is_ascii_alphabetic())
-      .count();
-    return if digits >= 2 && leading_alpha <= 3 {
-      IdentifierContinuation::Consume
-    } else {
-      IdentifierContinuation::Stop
-    };
+    return classify_separated_identifier_continuation(
+      token,
+      *first,
+      prior_digits,
+      bytes.get(end).copied(),
+    );
   }
 
   let digits = token.iter().filter(|value| value.is_ascii_digit()).count();
@@ -2204,25 +2184,75 @@ fn classify_identifier_continuation(
       has_structured_digit_prefix,
     );
   }
-  if !first.is_ascii_alphabetic() {
-    return IdentifierContinuation::Stop;
-  }
-  let leading_alpha = token
-    .iter()
-    .take_while(|value| value.is_ascii_alphabetic())
-    .count();
   if prior_digits > 0 {
-    return if leading_alpha <= 3 && digits >= 2 {
+    if digits < 2 {
+      return IdentifierContinuation::Stop;
+    }
+    return if max_ascii_alpha_run(token) <= MAX_IDENTIFIER_ALPHA_RUN {
       IdentifierContinuation::Consume
     } else {
-      IdentifierContinuation::Stop
+      IdentifierContinuation::Reject
     };
+  }
+  if !first.is_ascii_alphabetic() {
+    return IdentifierContinuation::Stop;
   }
   if token.len() <= 3 && digits > 0 {
     IdentifierContinuation::Consume
   } else {
     IdentifierContinuation::Stop
   }
+}
+
+fn classify_separated_identifier_continuation(
+  token: &[u8],
+  first: u8,
+  prior_digits: usize,
+  following: Option<u8>,
+) -> IdentifierContinuation {
+  if token
+    .last()
+    .is_some_and(|value| matches!(value, b'-' | b'/'))
+  {
+    return IdentifierContinuation::Reject;
+  }
+  let digits = token.iter().filter(|value| value.is_ascii_digit()).count();
+  if !first.is_ascii_alphabetic() {
+    return if digits >= 2 && !is_ascii_date_shape(token, following) {
+      IdentifierContinuation::Consume
+    } else {
+      IdentifierContinuation::Stop
+    };
+  }
+  if digits < 2 {
+    return IdentifierContinuation::Stop;
+  }
+  let alpha_limit = if prior_digits > 0 {
+    MAX_IDENTIFIER_ALPHA_RUN
+  } else {
+    3
+  };
+  if max_ascii_alpha_run(token) <= alpha_limit {
+    IdentifierContinuation::Consume
+  } else if prior_digits > 0 {
+    IdentifierContinuation::Reject
+  } else {
+    IdentifierContinuation::Stop
+  }
+}
+
+fn max_ascii_alpha_run(token: &[u8]) -> usize {
+  token
+    .iter()
+    .fold((0_usize, 0_usize), |(current, maximum), value| {
+      let current = if value.is_ascii_alphabetic() {
+        current.saturating_add(1)
+      } else {
+        0
+      };
+      (current, maximum.max(current))
+    })
+    .1
 }
 
 fn classify_numeric_identifier_continuation(
