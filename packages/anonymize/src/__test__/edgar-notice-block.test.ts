@@ -12,6 +12,8 @@
  *   name corpus gap and middle-initial counsel vs US city tokens.
  * - Twenty One Capital employment agreement (2026-07-21): soft-wrapped
  *   Skadden (UK) LLP counsel block.
+ * - Utz Brands voting agreement (2026-07-22): notice-block counsel
+ *   given names missing from the scoped English first-name corpus.
  */
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
@@ -277,5 +279,78 @@ Attn: Lorenzo Corte`;
           entity.label === "person" && entity.text === "Lorenzo Corte",
       ),
     ).toBe(true);
+  });
+
+  test("counsel names on lines after Attention are people", async () => {
+    // Utz Brands EX-10.1 voting agreement (2026-07-22): co-counsel lines
+    // under Attention were left intact when given names were absent from
+    // names/first/en.json.
+    const text = `Attention: Neil Stronski
+
+June Dipchand
+Marissa Spalding
+
+Email: neil.stronski@example.com`;
+    const entities = await detect(text);
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "person" && entity.text === "June Dipchand",
+      ),
+    ).toBe(true);
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "person" && entity.text === "Marissa Spalding",
+      ),
+    ).toBe(true);
+  });
+
+  test("Attention middle-initial counsel name is a person", async () => {
+    const text = `Attention: Larry P. Laubach
+
+Email: llaubach@example.com`;
+    const entities = await detect(text);
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "person" && entity.text === "Larry P. Laubach",
+      ),
+    ).toBe(true);
+  });
+
+  test("Attention co-addressee before title is a person", async () => {
+    const text = `Attention: Howard Friedman, Chief Executive Officer;
+
+Theresa Shea, Executive Vice President, Chief Legal
+
+Officer and Corporate Secretary`;
+    const entities = await detect(text);
+    expect(
+      entities.some(
+        (entity) => entity.label === "person" && entity.text === "Theresa Shea",
+      ),
+    ).toBe(true);
+  });
+
+  test("three-token counsel name after Attention stays whole", async () => {
+    const text = `Attention: Scott R. Williams
+
+Anika Hermann Bargfrede
+Email: abargfrede@example.com`;
+    const entities = await detect(text);
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "person" &&
+          entity.text === "Anika Hermann Bargfrede",
+      ),
+    ).toBe(true);
+    expect(
+      entities.some(
+        (entity) =>
+          entity.label === "person" && entity.text === "Hermann Bargfrede",
+      ),
+    ).toBe(false);
   });
 });
