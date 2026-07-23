@@ -437,6 +437,38 @@ Denise Haeggberg before the close of business.`;
     );
   });
 
+  test("address stops before an alternative-address recipient clause", async () => {
+    const text =
+      "Notices must be mailed to 123 Main Street, Boston, Massachusetts 02110, or to such other address as the Company designates.";
+    const entities = await detect(text);
+    const addresses = entities.filter((entity) => entity.label === "address");
+    expect(
+      addresses.some(
+        (entity) =>
+          entity.text === "123 Main Street, Boston, Massachusetts 02110",
+      ),
+    ).toBe(true);
+    expect(
+      addresses.some((entity) => entity.text.includes("other address")),
+    ).toBe(false);
+  });
+
+  test("address stops before an alternative email channel clause", async () => {
+    const text =
+      "Notices must be mailed to 123 Main Street, Boston, Massachusetts 02110, or via email to legal@example.com.";
+    const entities = await detect(text);
+    const addresses = entities.filter((entity) => entity.label === "address");
+    expect(
+      addresses.some(
+        (entity) =>
+          entity.text === "123 Main Street, Boston, Massachusetts 02110",
+      ),
+    ).toBe(true);
+    expect(addresses.some((entity) => entity.text.includes("via email"))).toBe(
+      false,
+    );
+  });
+
   test("address stops before an additional fax delivery clause", async () => {
     const text =
       "Notices must be mailed to 123 Main Street, Boston, Massachusetts 02110, and by fax to +1 617 555 0199.";

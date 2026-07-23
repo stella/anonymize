@@ -633,6 +633,8 @@
       "and sent to",
       "and submit",
       "and submitted to",
+      "and to",
+      "and via",
       "but at",
       "but by",
       "but contact",
@@ -653,6 +655,8 @@
       "but sent to",
       "but submit",
       "but submitted to",
+      "but to",
+      "but via",
       "nor at",
       "nor by",
       "nor contact",
@@ -673,6 +677,8 @@
       "nor sent to",
       "nor submit",
       "nor submitted to",
+      "nor to",
+      "nor via",
       "or at",
       "or by",
       "or contact",
@@ -692,7 +698,9 @@
       "or send",
       "or sent to",
       "or submit",
-      "or submitted to"
+      "or submitted to",
+      "or to",
+      "or via"
     ],
     "br_cep_cue_words": [
       "alameda",
