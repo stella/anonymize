@@ -39,9 +39,6 @@ const ALLOWLIST = new Set([
   "NONWESTERN_LOCALE_KEYS",
   "forms",
   // migration debt (move into packages/data, then delete from here)
-  "SUPPLEMENTARY_NAME_EXCLUSIONS",
-  "SENTENCE_VERB_INDICATORS_SEED",
-  "ADDRESS_STOP_KEYWORDS_SEED",
   "IN_NAME_CONNECTORS",
   "UNIT_DESIGNATORS",
 ]);

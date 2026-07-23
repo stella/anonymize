@@ -57,31 +57,6 @@ const POST_NOMINALS: &[&str] = &[
   "CIPT", "CIPP/E", "CIPP", "KC", "QC",
 ];
 
-/// `ADDRESS_STOP_KEYWORDS_SEED` from `detectors/triggers.ts`.
-const ADDRESS_STOP_KEYWORDS_SEED: &[&str] = &[
-  "číslo účtu",
-  "registrační",
-  "zastoupen",
-  "bankovní",
-  "e-mail",
-  "telefon",
-  "jednatel",
-  "ředitel",
-  "datová",
-  "vložka",
-  "sp.zn.",
-  "oddíl",
-  "swift",
-  "email",
-  "iban",
-  "dič",
-  "ičo",
-  "tel",
-  "č.ú.",
-  "bic",
-  "ič",
-];
-
 /// A trigger group config row from `triggers.<lang>.json` / global.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -350,7 +325,7 @@ pub(super) fn build_trigger_rules(
 
 /// Mirrors `getAddressStopKeywordsSync()` after `loadAddressStopKeywords`:
 /// union every non-`_` array from `address-stop-keywords.json` (lowercased,
-/// first-occurrence dedup), append the seed, then stable longest-first sort.
+/// first-occurrence dedup), then stable longest-first sort.
 fn address_stop_keywords() -> Result<Vec<String>, AssembleError> {
   let data: OrderedMap<Value> =
     parse_ordered_data_file("address-stop-keywords.json")?;
@@ -378,9 +353,6 @@ fn address_stop_keywords() -> Result<Vec<String>, AssembleError> {
         add(value, &mut seen, &mut out);
       }
     }
-  }
-  for value in ADDRESS_STOP_KEYWORDS_SEED {
-    add(value, &mut seen, &mut out);
   }
   // `out.sort((a, b) => b.length - a.length)`: stable longest-first by UTF-16
   // length.

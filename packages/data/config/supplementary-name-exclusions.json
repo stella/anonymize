@@ -1,0 +1,21 @@
+{
+  "_comment": "Short given names that are absent from the first-name corpus but must still be protected from stopword removal (they look like common short words). Lowercased; unioned with the first-name corpus by the deny-list assembler.",
+  "words": [
+    "ana",
+    "ben",
+    "dan",
+    "eden",
+    "ella",
+    "ina",
+    "jo",
+    "kai",
+    "lena",
+    "may",
+    "mia",
+    "sam",
+    "sara",
+    "sue",
+    "tim",
+    "tom"
+  ]
+}
