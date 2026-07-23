@@ -396,6 +396,8 @@ mod tests {
 
     assert!(boundaries.iter().any(|word| word == "or emailed to"));
     assert!(boundaries.iter().any(|word| word == "and provide"));
+    assert!(boundaries.iter().any(|word| word == "or at"));
+    assert!(boundaries.iter().any(|word| word == "and by"));
     assert_no_bare_conjunctions(&boundaries)?;
     Ok(())
   }
@@ -407,6 +409,8 @@ mod tests {
 
     assert!(!boundaries.iter().any(|word| word == "or emailed to"));
     assert!(!boundaries.iter().any(|word| word == "and provide"));
+    assert!(!boundaries.iter().any(|word| word == "or at"));
+    assert!(!boundaries.iter().any(|word| word == "and by"));
     assert_no_bare_conjunctions(&boundaries)?;
     Ok(())
   }

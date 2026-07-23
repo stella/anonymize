@@ -404,4 +404,66 @@ Denise Haeggberg before the close of business.`;
       ),
     ).toBe(true);
   });
+
+  test("address stops before an alternative-address notice clause", async () => {
+    const text =
+      "Notices must be mailed to 123 Main Street, Boston, Massachusetts 02110, or at such other address as the Company designates.";
+    const entities = await detect(text);
+    const addresses = entities.filter((entity) => entity.label === "address");
+    expect(
+      addresses.some(
+        (entity) =>
+          entity.text === "123 Main Street, Boston, Massachusetts 02110",
+      ),
+    ).toBe(true);
+    expect(
+      addresses.some((entity) => entity.text.includes("other address")),
+    ).toBe(false);
+  });
+
+  test("address stops before an alternative email delivery clause", async () => {
+    const text =
+      "Notices must be mailed to 123 Main Street, Boston, Massachusetts 02110, or by email to legal@example.com.";
+    const entities = await detect(text);
+    const addresses = entities.filter((entity) => entity.label === "address");
+    expect(
+      addresses.some(
+        (entity) =>
+          entity.text === "123 Main Street, Boston, Massachusetts 02110",
+      ),
+    ).toBe(true);
+    expect(addresses.some((entity) => entity.text.includes("by email"))).toBe(
+      false,
+    );
+  });
+
+  test("address stops before an additional fax delivery clause", async () => {
+    const text =
+      "Notices must be mailed to 123 Main Street, Boston, Massachusetts 02110, and by fax to +1 617 555 0199.";
+    const entities = await detect(text);
+    const addresses = entities.filter((entity) => entity.label === "address");
+    expect(
+      addresses.some(
+        (entity) =>
+          entity.text === "123 Main Street, Boston, Massachusetts 02110",
+      ),
+    ).toBe(true);
+    expect(addresses.some((entity) => entity.text.includes("by fax"))).toBe(
+      false,
+    );
+  });
+
+  test("address keeps an alternative unit component", async () => {
+    const text =
+      "Notices must be mailed to 123 Main Street, Boston, Massachusetts 02110, Suite A or B.";
+    const entities = await detect(text);
+    const addresses = entities.filter((entity) => entity.label === "address");
+    expect(
+      addresses.some(
+        (entity) =>
+          entity.text ===
+          "123 Main Street, Boston, Massachusetts 02110, Suite A or B",
+      ),
+    ).toBe(true);
+  });
 });
