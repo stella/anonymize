@@ -108,6 +108,30 @@ describe("legal-form ORG span discipline — suffix word boundary", () => {
     expect(samsungSe).toBeDefined();
   });
 
+  test("short suffixes support Unicode organization names", async () => {
+    const text =
+      "Küstenwerke AG, Société générale SA, and Řeka SE filed jointly.";
+    const entities = orgs(await detect(text)).map(({ text: entityText }) =>
+      entityText.replace(/,$/, ""),
+    );
+
+    expect(entities).toContain("Küstenwerke AG");
+    expect(entities).toContain("Société générale SA");
+    expect(entities).toContain("Řeka SE");
+  });
+
+  test("short suffixes reject Unicode prose ending in abbreviations", async () => {
+    const text = [
+      "Zapsaná v obchodním rejstříku vedeném u KS Brno.",
+      "Výkon motoru je 191 KW, benzín BA 95.",
+    ].join("\n");
+    const entities = orgs(await detect(text));
+
+    expect(
+      entities.some(({ text: entityText }) => /\b(KS|BA)$/.test(entityText)),
+    ).toBeFalse();
+  });
+
   test("short suffix followed by an accented Latin letter is rejected", async () => {
     // `AG` would match the leading two chars of `AGÊNCIA` under the
     // ASCII-only regex boundary; the post-match accented-letter
