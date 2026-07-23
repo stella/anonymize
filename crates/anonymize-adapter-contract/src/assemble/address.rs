@@ -394,7 +394,9 @@ mod tests {
   fn contextual_boundaries_follow_english_scope() -> Result<(), AssembleError> {
     let boundaries = boundary_words(&["en"])?;
 
-    assert!(boundaries.iter().any(|word| word == "or emailed to"));
+    assert!(boundaries.iter().any(|word| word == "or emailed"));
+    assert!(boundaries.iter().any(|word| word == "or sent"));
+    assert!(boundaries.iter().any(|word| word == "and delivered"));
     assert!(boundaries.iter().any(|word| word == "and provide"));
     assert!(boundaries.iter().any(|word| word == "or at"));
     assert!(boundaries.iter().any(|word| word == "and by"));
@@ -409,7 +411,9 @@ mod tests {
   -> Result<(), AssembleError> {
     let boundaries = boundary_words(&["de"])?;
 
-    assert!(!boundaries.iter().any(|word| word == "or emailed to"));
+    assert!(!boundaries.iter().any(|word| word == "or emailed"));
+    assert!(!boundaries.iter().any(|word| word == "or sent"));
+    assert!(!boundaries.iter().any(|word| word == "and delivered"));
     assert!(!boundaries.iter().any(|word| word == "and provide"));
     assert!(!boundaries.iter().any(|word| word == "or at"));
     assert!(!boundaries.iter().any(|word| word == "and by"));
@@ -425,7 +429,8 @@ mod tests {
     let boundaries = boundary_words(&["de", "en"])?;
     let english_only = boundary_words(&["en"])?;
 
-    assert!(boundaries.iter().any(|word| word == "or emailed to"));
+    assert!(boundaries.iter().any(|word| word == "or emailed"));
+    assert!(boundaries.iter().any(|word| word == "or sent"));
     assert!(boundaries.iter().any(|word| word == "and provide"));
     assert_eq!(boundaries, english_only);
     assert_no_bare_conjunctions(&boundaries)?;

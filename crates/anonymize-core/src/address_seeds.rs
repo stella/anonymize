@@ -2019,6 +2019,7 @@ mod tests {
     let data = PreparedAddressSeedData::new(AddressSeedData {
       boundary_words: vec![
         String::from("or emailed to"),
+        String::from("or sent"),
         String::from("con C.I.F."),
         String::from("con N.I.F."),
         String::from("con D.N.I."),
@@ -2055,7 +2056,7 @@ mod tests {
     assert!(
       data
         .boundary_starts(
-          "nonstop xor emailed to recipient or emailed toxin xcon C.I.F.",
+          "nonstop xor emailed to recipient or emailed toxin or sentry xcon C.I.F.",
         )
         .is_empty()
     );

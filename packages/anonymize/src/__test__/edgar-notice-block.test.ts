@@ -397,6 +397,27 @@ Denise Haeggberg before the close of business.`;
     }
   });
 
+  test("address stops before participle-led delivery methods", async () => {
+    for (const delivery of [
+      "or sent by email to legal@example.com",
+      "or sent by facsimile to the recipient",
+      "and delivered via courier to the recipient",
+    ]) {
+      const text =
+        "Notices must be mailed to 123 Main Street, Boston, Massachusetts 02110, " +
+        delivery +
+        ".";
+      const entities = await detect(text);
+      const addresses = entities.filter((entity) => entity.label === "address");
+      expect(addresses.map((entity) => entity.text)).toContain(
+        "123 Main Street, Boston, Massachusetts 02110",
+      );
+      expect(addresses.some((entity) => entity.text.includes(delivery))).toBe(
+        false,
+      );
+    }
+  });
+
   test("address stops before contextual provide prose", async () => {
     const text =
       "Notices must be mailed to 123 Main Street, Boston, Massachusetts 02110, and provide a copy to the Company.";
