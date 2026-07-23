@@ -20,21 +20,21 @@ correct by construction; the `.snapshot.json` fixtures elsewhere in the repo
 are stella's own output and are deliberately NOT used as ground truth here.
 
 | Language | Documents |
-| --- | --- |
-| cs | 10 |
-| de | 8 |
-| en | 10 |
+| -------- | --------- |
+| cs       | 10        |
+| de       | 8         |
+| en       | 10        |
 
-| Label | Gold entities |
-| --- | --- |
-| person | 40 |
-| organization | 31 |
-| address | 24 |
-| email | 19 |
-| phone | 13 |
-| id-number | 19 |
-| date | 29 |
-| money | 21 |
+| Label        | Gold entities |
+| ------------ | ------------- |
+| person       | 40            |
+| organization | 31            |
+| address      | 24            |
+| email        | 19            |
+| phone        | 13            |
+| id-number    | 19            |
+| date         | 29            |
+| money        | 21            |
 
 ## Matching
 
@@ -51,53 +51,54 @@ after taxonomy mapping, so a library is not judged on categories it never
 attempts (e.g. an email-only scrubber is not charged recall on dates). Both
 are reported; neither is cherry-picked.
 
-| Library | Version | Supported labels | P | R | F1 (overlap, all) | F1 (overlap, supported) | F1 (exact, all) |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| stella | 2.4.1 | 8/8 | 94.0 | 80.6 | 86.8 | 86.8 | 75.8 |
-| presidio | 2.2.360 | 7/8 | 53.6 | 49.5 | 51.5 | 54.5 | 48.8 |
-| scrubadub | 2.0.1 | 3/8 | 90.9 | 15.3 | 26.2 | 71.4 | 26.2 |
-| datafog | 4.8.0 | 5/8 | 67.7 | 22.4 | 33.7 | 52.1 | 33.0 |
-| redact-pii | 3.4.0 | 5/8 | 38.1 | 27.0 | 31.6 | 41.7 | 22.1 |
+| Library    | Version | Supported labels | P    | R    | F1 (overlap, all) | F1 (overlap, supported) | F1 (exact, all) |
+| ---------- | ------- | ---------------- | ---- | ---- | ----------------- | ----------------------- | --------------- |
+| stella     | 2.4.1   | 8/8              | 94.0 | 80.6 | 86.8              | 86.8                    | 75.8            |
+| presidio   | 2.2.360 | 7/8              | 53.6 | 49.5 | 51.5              | 54.5                    | 48.8            |
+| scrubadub  | 2.0.1   | 3/8              | 90.9 | 15.3 | 26.2              | 71.4                    | 26.2            |
+| datafog    | 4.8.0   | 5/8              | 67.7 | 22.4 | 33.7              | 52.1                    | 33.0            |
+| redact-pii | 3.4.0   | 5/8              | 38.1 | 27.0 | 31.6              | 41.7                    | 22.1            |
 
-Cells are percentages. P/R/F1 use the primary overlap rule.
+Cells are percentages. P, R, and overlap F1 use the primary overlap rule; exact
+F1 requires exact span matches.
 
 ## Per-label F1 (overlap, all-labels)
 
-| Label | stella | presidio | scrubadub | datafog | redact-pii |
-| --- | --- | --- | --- | --- | --- |
-| person | 91.9 | 86.0 | n/a | n/a | 41.6 |
-| organization | 55.6 | 56.3 | n/a | n/a | n/a |
-| address | 88.9 | 0.0 | n/a | 0.0 | 4.1 |
-| email | 97.3 | 69.0 | 97.4 | 100.0 | 94.7 |
-| phone | 96.3 | 73.3 | 84.6 | 78.6 | 58.3 |
-| id-number | 77.4 | 51.6 | 0.0 | 34.8 | 33.3 |
-| date | 98.2 | 42.6 | n/a | 51.3 | n/a |
-| money | 92.3 | n/a | n/a | n/a | n/a |
+| Label        | stella | presidio | scrubadub | datafog | redact-pii |
+| ------------ | ------ | -------- | --------- | ------- | ---------- |
+| person       | 91.9   | 86.0     | n/a       | n/a     | 41.6       |
+| organization | 55.6   | 56.3     | n/a       | n/a     | n/a        |
+| address      | 88.9   | 0.0      | n/a       | 0.0     | 4.1        |
+| email        | 97.3   | 69.0     | 97.4      | 100.0   | 94.7       |
+| phone        | 96.3   | 73.3     | 84.6      | 78.6    | 58.3       |
+| id-number    | 77.4   | 51.6     | 0.0       | 34.8    | 33.3       |
+| date         | 98.2   | 42.6     | n/a       | 51.3    | n/a        |
+| money        | 92.3   | n/a      | n/a       | n/a     | n/a        |
 
 `n/a` marks a label the library does not target (no recognizer maps to it).
 A `0.0` means the library targets the label but scored no correct match.
 
 ## Per-label recall (overlap, all-labels)
 
-| Label | stella | presidio | scrubadub | datafog | redact-pii |
-| --- | --- | --- | --- | --- | --- |
-| person | 85.0 | 100.0 | n/a | n/a | 40.0 |
-| organization | 48.4 | 58.1 | n/a | n/a | n/a |
-| address | 83.3 | 0.0 | n/a | 0.0 | 4.2 |
-| email | 94.7 | 52.6 | 100.0 | 100.0 | 94.7 |
-| phone | 100.0 | 84.6 | 84.6 | 84.6 | 53.8 |
-| id-number | 63.2 | 42.1 | 0.0 | 21.1 | 57.9 |
-| date | 96.6 | 34.5 | n/a | 34.5 | n/a |
-| money | 85.7 | n/a | n/a | n/a | n/a |
+| Label        | stella | presidio | scrubadub | datafog | redact-pii |
+| ------------ | ------ | -------- | --------- | ------- | ---------- |
+| person       | 85.0   | 100.0    | n/a       | n/a     | 40.0       |
+| organization | 48.4   | 58.1     | n/a       | n/a     | n/a        |
+| address      | 83.3   | 0.0      | n/a       | 0.0     | 4.2        |
+| email        | 94.7   | 52.6     | 100.0     | 100.0   | 94.7       |
+| phone        | 100.0  | 84.6     | 84.6      | 84.6    | 53.8       |
+| id-number    | 63.2   | 42.1     | 0.0       | 21.1    | 57.9       |
+| date         | 96.6   | 34.5     | n/a       | 34.5    | n/a        |
+| money        | 85.7   | n/a      | n/a       | n/a     | n/a        |
 
 ## Per-language F1 (overlap, all-labels)
 
-| Library | cs | de | en |
-| --- | --- | --- | --- |
-| stella | 78.4 | 89.1 | 92.8 |
-| presidio | 35.0 | 54.7 | 61.7 |
-| scrubadub | 20.3 | 31.7 | 27.6 |
-| datafog | 22.2 | 30.6 | 44.4 |
+| Library    | cs   | de   | en   |
+| ---------- | ---- | ---- | ---- |
+| stella     | 78.4 | 89.1 | 92.8 |
+| presidio   | 35.0 | 54.7 | 61.7 |
+| scrubadub  | 20.3 | 31.7 | 27.6 |
+| datafog    | 22.2 | 30.6 | 44.4 |
 | redact-pii | 24.8 | 34.8 | 34.8 |
 
 scrubadub and redact-pii are English-only libraries; their cs/de scores are
@@ -113,13 +114,13 @@ separately. Python throughput is measured inside the Python process and
 excludes interpreter startup. Single run on one machine: treat as
 order-of-magnitude, not a precise micro-benchmark.
 
-| Library | init (s) | cold (chars/s) | warm (chars/s) |
-| --- | --- | --- | --- |
-| stella | 0.55 | 38,546 | 1,453,384 |
-| presidio | 2.57 | 10,179 | 44,207 |
-| scrubadub | 0.00 | 754,369 | 1,839,092 |
-| datafog | 0.00 | 1,701,984 | 4,209,086 |
-| redact-pii | 0.02 | 4,377 | 63,165 |
+| Library    | init (s) | cold (chars/s) | warm (chars/s) |
+| ---------- | -------- | -------------- | -------------- |
+| stella     | 0.55     | 38,546         | 1,453,384      |
+| presidio   | 2.57     | 10,179         | 44,207         |
+| scrubadub  | 0.00     | 754,369        | 1,839,092      |
+| datafog    | 0.00     | 1,701,984      | 4,209,086      |
+| redact-pii | 0.02     | 4,377          | 63,165         |
 
 ## Adapter notes
 
@@ -145,4 +146,3 @@ order-of-magnitude, not a precise micro-benchmark.
   `src/taxonomy.ts` for every decision.
 - **No cherry-picking.** Every label is reported, including those where stella
   underperforms. Overlap and exact modes are both shown.
-
