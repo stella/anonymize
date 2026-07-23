@@ -1267,11 +1267,7 @@
       "representado",
       "telefone",
       "c.f. e p.iva",
-      "pec",
-      "and",
-      "but",
-      "nor",
-      "or"
+      "pec"
     ],
     "br_cep_cue_words": [
       "alameda",

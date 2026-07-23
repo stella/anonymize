@@ -357,7 +357,7 @@ Email: abargfrede@example.com`;
       ),
     ).toBe(false);
   });
-  test("address stops at a trailing coordinating conjunction", async () => {
+  test("address stops at a contextual notice-prose boundary", async () => {
     // MVW Services separation agreement (2026-07-21): right-expansion walked
     // the return address into the notice sentence ("..., or emailed to").
     const text = `one executed original of this Agreement must be
@@ -373,5 +373,35 @@ Denise Haeggberg before the close of business.`;
     expect(addresses.some((entity) => entity.text.includes("emailed"))).toBe(
       false,
     );
+  });
+
+  test("address stops before contextual provide prose", async () => {
+    const text =
+      "Notices must be mailed to 123 Main Street, Boston, Massachusetts 02110, and provide a copy to the Company.";
+    const entities = await detect(text);
+    const addresses = entities.filter((entity) => entity.label === "address");
+    expect(
+      addresses.some(
+        (entity) =>
+          entity.text === "123 Main Street, Boston, Massachusetts 02110",
+      ),
+    ).toBe(true);
+    expect(addresses.some((entity) => entity.text.includes("provide"))).toBe(
+      false,
+    );
+  });
+
+  test("address keeps a conjunction that joins unit components", async () => {
+    const text =
+      "Notices must be mailed to 123 Main Street, Boston, Massachusetts 02110, Suite A and B.";
+    const entities = await detect(text);
+    const addresses = entities.filter((entity) => entity.label === "address");
+    expect(
+      addresses.some(
+        (entity) =>
+          entity.text ===
+          "123 Main Street, Boston, Massachusetts 02110, Suite A and B",
+      ),
+    ).toBe(true);
   });
 });

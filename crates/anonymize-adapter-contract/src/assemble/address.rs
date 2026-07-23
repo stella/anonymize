@@ -19,6 +19,7 @@ use stella_anonymize_core::assemble::{
 };
 
 use super::AssembleContext;
+use super::language::language_config_matches;
 use crate::{BindingAddressContextData, BindingAddressSeedData};
 
 #[derive(Deserialize)]
@@ -33,6 +34,13 @@ struct AddressPrepositions {
 struct Conjunctions {
   #[serde(default)]
   coordinating: OrderedMap<Value>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AddressExitFollowers {
+  #[serde(default)]
+  after_coordinating_conjunction: OrderedMap<Value>,
 }
 
 #[derive(Deserialize)]
@@ -189,20 +197,72 @@ pub(super) fn build_address_seed_data(
     parse_ordered_data_file("address-unit-abbreviations.json")?;
   let street_types: OrderedMap<Value> =
     parse_ordered_data_file("address-street-types.json")?;
-  // Grammar composed into address meaning: a coordinating conjunction cannot
-  // join two address components, so it ends the span when expansion walks into
-  // trailing prose ("..., or emailed to", "..., and provide the Company").
   let conjunctions: Conjunctions = parse_data_file("conjunctions.json")?;
+  let exit_followers: AddressExitFollowers =
+    parse_data_file("address-exit-followers.json")?;
+
+  let mut boundary_words = flatten_dictionaries(&[&boundaries, &stop_keywords]);
+  extend_deduplicated(
+    &mut boundary_words,
+    contextual_conjunction_boundaries(&ContextualBoundaryData {
+      conjunctions: &conjunctions.coordinating,
+      followers: &exit_followers.after_coordinating_conjunction,
+      selected_languages: ctx.content_languages.as_deref(),
+    }),
+  );
 
   Ok(Some(BindingAddressSeedData {
-    boundary_words: flatten_dictionaries(&[
-      &boundaries,
-      &stop_keywords,
-      &conjunctions.coordinating,
-    ]),
+    boundary_words,
     br_cep_cue_words: build_br_cue_words(&street_types, &boundaries),
     unit_abbreviations: flatten_dictionaries(&[&unit_abbreviations]),
   }))
+}
+
+struct ContextualBoundaryData<'a> {
+  conjunctions: &'a OrderedMap<Value>,
+  followers: &'a OrderedMap<Value>,
+  selected_languages: Option<&'a [String]>,
+}
+
+/// A conjunction can join address components, so it becomes an address exit
+/// only when followed by a same-language notice or delivery phrase.
+fn contextual_conjunction_boundaries(
+  data: &ContextualBoundaryData<'_>,
+) -> Vec<String> {
+  let mut boundaries = Vec::new();
+  for (language, conjunction_values) in data.conjunctions {
+    if !language_config_matches(language, data.selected_languages) {
+      continue;
+    }
+    let Some(conjunction_values) = conjunction_values.as_array() else {
+      continue;
+    };
+    let Some(follower_values) =
+      data.followers.get(language).and_then(Value::as_array)
+    else {
+      continue;
+    };
+    for conjunction in conjunction_values.iter().filter_map(Value::as_str) {
+      for follower in follower_values.iter().filter_map(Value::as_str) {
+        if !conjunction.is_empty() && !follower.is_empty() {
+          boundaries.push(format!("{conjunction} {follower}"));
+        }
+      }
+    }
+  }
+  boundaries
+}
+
+fn extend_deduplicated(words: &mut Vec<String>, additions: Vec<String>) {
+  let mut seen = words
+    .iter()
+    .map(|word| word.to_lowercase())
+    .collect::<HashSet<_>>();
+  for word in additions {
+    if !word.is_empty() && seen.insert(word.to_lowercase()) {
+      words.push(word);
+    }
+  }
 }
 
 /// Mirrors `flattenDictionaries`/`flattenDictionary`: concatenate the array
@@ -260,4 +320,107 @@ fn build_br_cue_words(
     }
   }
   out
+}
+
+#[cfg(test)]
+mod tests {
+  use stella_anonymize_core::assemble::{
+    AssembleError, PipelineConfig, parse_data_file,
+  };
+
+  use super::{
+    AssembleContext, Conjunctions, build_address_seed_data,
+    flatten_dictionaries,
+  };
+
+  fn config(languages: Vec<String>) -> PipelineConfig {
+    PipelineConfig {
+      threshold: 0.5,
+      enable_trigger_phrases: false,
+      enable_regex: false,
+      languages: Some(languages),
+      language: None,
+      enable_legal_forms: Some(false),
+      enable_name_corpus: false,
+      name_corpus_languages: None,
+      enable_deny_list: false,
+      deny_list_countries: None,
+      deny_list_regions: None,
+      deny_list_exclude_categories: None,
+      custom_deny_list: None,
+      custom_regexes: None,
+      enable_gazetteer: false,
+      enable_countries: Some(false),
+      enable_confidence_boost: false,
+      enable_coreference: false,
+      enable_zone_classification: Some(false),
+      enable_hotword_rules: Some(false),
+      labels: vec![String::from("address")],
+      workspace_id: String::from("address-language-test"),
+      dictionaries: None,
+    }
+  }
+
+  fn boundary_words(languages: &[&str]) -> Result<Vec<String>, AssembleError> {
+    let config = config(
+      languages
+        .iter()
+        .map(|language| (*language).to_owned())
+        .collect(),
+    );
+    let context = AssembleContext {
+      config: &config,
+      dictionaries: None,
+      content_languages: config.languages.clone(),
+      allowed_labels: None,
+    };
+    Ok(
+      build_address_seed_data(&context)?
+        .map_or_else(Vec::new, |data| data.boundary_words),
+    )
+  }
+
+  fn assert_no_bare_conjunctions(
+    boundaries: &[String],
+  ) -> Result<(), AssembleError> {
+    let conjunctions: Conjunctions = parse_data_file("conjunctions.json")?;
+    for conjunction in flatten_dictionaries(&[&conjunctions.coordinating]) {
+      assert!(!boundaries.iter().any(|word| word == &conjunction));
+    }
+    Ok(())
+  }
+
+  #[test]
+  fn contextual_boundaries_follow_english_scope() -> Result<(), AssembleError> {
+    let boundaries = boundary_words(&["en"])?;
+
+    assert!(boundaries.iter().any(|word| word == "or emailed to"));
+    assert!(boundaries.iter().any(|word| word == "and provide"));
+    assert_no_bare_conjunctions(&boundaries)?;
+    Ok(())
+  }
+
+  #[test]
+  fn unreviewed_german_scope_has_no_contextual_boundaries()
+  -> Result<(), AssembleError> {
+    let boundaries = boundary_words(&["de"])?;
+
+    assert!(!boundaries.iter().any(|word| word == "or emailed to"));
+    assert!(!boundaries.iter().any(|word| word == "and provide"));
+    assert_no_bare_conjunctions(&boundaries)?;
+    Ok(())
+  }
+
+  #[test]
+  fn multilingual_scope_includes_selected_reviewed_english_grammar()
+  -> Result<(), AssembleError> {
+    let boundaries = boundary_words(&["de", "en"])?;
+    let english_only = boundary_words(&["en"])?;
+
+    assert!(boundaries.iter().any(|word| word == "or emailed to"));
+    assert!(boundaries.iter().any(|word| word == "and provide"));
+    assert_eq!(boundaries, english_only);
+    assert_no_bare_conjunctions(&boundaries)?;
+    Ok(())
+  }
 }
