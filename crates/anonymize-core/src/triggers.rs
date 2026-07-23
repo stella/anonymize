@@ -2103,7 +2103,9 @@ fn classify_identifier_continuation(
     }
     if !first.is_ascii_alphabetic() {
       let digits = token.iter().filter(|value| value.is_ascii_digit()).count();
-      return if digits >= 2 && !is_ascii_date_shape(token) {
+      return if digits >= 2
+        && !is_ascii_date_shape(token, bytes.get(end).copied())
+      {
         IdentifierContinuation::Consume
       } else {
         IdentifierContinuation::Stop
@@ -2169,12 +2171,23 @@ fn classify_numeric_identifier_continuation(
     current_leading_alpha,
     completed_numeric_groups,
   );
-  if matches!(grouped_numeric, IdentifierContinuation::Reject) {
+  let mixed_prefix_numeric = classify_mixed_prefix_numeric_continuation(
+    bytes,
+    end,
+    digits,
+    prior_digits,
+    current_leading_alpha,
+    completed_numeric_groups,
+  );
+  if matches!(grouped_numeric, IdentifierContinuation::Reject)
+    || matches!(mixed_prefix_numeric, IdentifierContinuation::Reject)
+  {
     return IdentifierContinuation::Reject;
   }
   if digits >= 2
-    && ((prior_digits <= 1 && (1..=3).contains(&current_leading_alpha))
-      || matches!(grouped_numeric, IdentifierContinuation::Consume))
+    && ((prior_digits == 0 && (1..=3).contains(&current_leading_alpha))
+      || matches!(grouped_numeric, IdentifierContinuation::Consume)
+      || matches!(mixed_prefix_numeric, IdentifierContinuation::Consume))
   {
     IdentifierContinuation::Consume
   } else {
@@ -2198,12 +2211,39 @@ fn classify_grouped_numeric_continuation(
   }
   match following_numeric_group(bytes, end) {
     FollowingNumericGroup::Absent
-      if current_leading_alpha == 0 && (2..=3).contains(&prior_digits) =>
+      if (current_leading_alpha == 0 && (2..=3).contains(&prior_digits))
+        || (1..=3).contains(&current_leading_alpha) =>
     {
       IdentifierContinuation::Consume
     }
     FollowingNumericGroup::Absent => IdentifierContinuation::Stop,
     FollowingNumericGroup::Valid => IdentifierContinuation::Consume,
+    FollowingNumericGroup::Invalid => IdentifierContinuation::Reject,
+  }
+}
+
+fn classify_mixed_prefix_numeric_continuation(
+  bytes: &[u8],
+  end: usize,
+  digits: usize,
+  prior_digits: usize,
+  current_leading_alpha: usize,
+  completed_numeric_groups: usize,
+) -> IdentifierContinuation {
+  if completed_numeric_groups > 0
+    || prior_digits == 0
+    || !(1..=3).contains(&current_leading_alpha)
+    || digits < 2
+  {
+    return IdentifierContinuation::Stop;
+  }
+  if !(2..=3).contains(&digits) {
+    return IdentifierContinuation::Consume;
+  }
+  match following_numeric_group(bytes, end) {
+    FollowingNumericGroup::Absent | FollowingNumericGroup::Valid => {
+      IdentifierContinuation::Consume
+    }
     FollowingNumericGroup::Invalid => IdentifierContinuation::Reject,
   }
 }
@@ -2267,7 +2307,7 @@ fn following_numeric_group(
   }
 }
 
-fn is_ascii_date_shape(token: &[u8]) -> bool {
+fn is_ascii_date_shape(token: &[u8], following: Option<u8>) -> bool {
   let Some(separator) =
     token.iter().position(|value| matches!(value, b'T' | b't'))
   else {
@@ -2279,15 +2319,24 @@ fn is_ascii_date_shape(token: &[u8]) -> bool {
   else {
     return false;
   };
-  is_ascii_time_prefix(time_prefix) && is_conventional_ascii_date(date)
+  is_ascii_time_prefix(time_prefix, following)
+    && is_conventional_ascii_date(date)
 }
 
-fn is_ascii_time_prefix(token: &[u8]) -> bool {
+fn is_ascii_time_prefix(token: &[u8], following: Option<u8>) -> bool {
   let mut end = token
     .iter()
     .take_while(|value| value.is_ascii_digit())
     .count();
   if end == 0 {
+    return false;
+  }
+  let valid_time_width = if following == Some(b':') && token.len() == end {
+    (1..=2).contains(&end)
+  } else {
+    matches!(end, 2 | 4 | 6)
+  };
+  if !valid_time_width {
     return false;
   }
   if token.get(end) == Some(&b'.') {
