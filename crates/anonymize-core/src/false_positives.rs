@@ -9,8 +9,8 @@ use crate::resolution::{DetectionSource, PipelineEntity, SourceDetail};
 use crate::types::{Error, Result};
 
 use crate::labels::{
-  ADDRESS_LABEL, CASE_NUMBER_LABEL, IP_ADDRESS_LABEL, ORGANIZATION_LABEL,
-  PERSON_LABEL, REGISTRATION_NUMBER_LABEL,
+  ADDRESS_LABEL, BIRTH_NUMBER_LABEL, CASE_NUMBER_LABEL, IP_ADDRESS_LABEL,
+  ORGANIZATION_LABEL, PERSON_LABEL, REGISTRATION_NUMBER_LABEL,
 };
 const MAX_ORGANIZATION_LENGTH: usize = 80;
 const MAX_PERSON_LENGTH: usize = 60;
@@ -158,6 +158,14 @@ fn should_reject_entity(
     return Ok(true);
   }
   if entity.label == REGISTRATION_NUMBER_LABEL && is_short_letter_run(text) {
+    return Ok(true);
+  }
+  // Birth-number identifiers are numeric (e.g. YYMMDD/NNNN). Trigger n-word
+  // extraction can otherwise keep the next prose token after a cue such as
+  // "rodné číslo," / "birth number".
+  if entity.label == BIRTH_NUMBER_LABEL
+    && !text.chars().any(|ch| ch.is_ascii_digit())
+  {
     return Ok(true);
   }
   if entity.label == PERSON_LABEL && text.chars().any(|ch| ch.is_ascii_digit())
@@ -572,7 +580,8 @@ fn trim_trailing_separators(text: &str, start: usize, end: &mut usize) {
     let Some((index, ch)) = slice.char_indices().next_back() else {
       break;
     };
-    if ch.is_whitespace() || ch == ',' {
+    // Letterhead separators (comma, bullet) are not part of the value.
+    if ch.is_whitespace() || ch == ',' || ch == '•' {
       *end = start.saturating_add(index);
       continue;
     }
@@ -1432,6 +1441,56 @@ mod tests {
       ),
       Some("123 Main St.".len())
     );
+  }
+
+  #[test]
+  fn rejects_birth_number_values_without_digits() {
+    let entities = filter_entity_false_positives(
+      vec![entity(
+        "údaje",
+        "údaje",
+        BIRTH_NUMBER_LABEL,
+        DetectionSource::Trigger,
+      )],
+      "údaje",
+      Some(&DenyListFilterData::default()),
+    )
+    .unwrap();
+
+    assert!(entities.is_empty());
+  }
+
+  #[test]
+  fn keeps_birth_number_values_with_digits() {
+    let text = "900101/1234";
+    let entities = filter_entity_false_positives(
+      vec![entity(
+        text,
+        text,
+        BIRTH_NUMBER_LABEL,
+        DetectionSource::Trigger,
+      )],
+      text,
+      Some(&DenyListFilterData::default()),
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].text, text);
+  }
+
+  #[test]
+  fn trims_trailing_bullet_separator() {
+    let text = "Sulická 1597/48, 142 00 Praha 4 •";
+    let entities = filter_entity_false_positives(
+      vec![entity(text, text, ADDRESS_LABEL, DetectionSource::Regex)],
+      text,
+      Some(&DenyListFilterData::default()),
+    )
+    .unwrap();
+
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].text, "Sulická 1597/48, 142 00 Praha 4");
   }
 
   #[test]
