@@ -2206,12 +2206,10 @@ fn classify_grouped_numeric_continuation(
   if !(2..=3).contains(&digits) || completed_numeric_groups == 0 {
     return IdentifierContinuation::Stop;
   }
-  if completed_numeric_groups >= 2 {
-    return IdentifierContinuation::Consume;
-  }
   match following_numeric_group(bytes, end) {
     FollowingNumericGroup::Absent
-      if (current_leading_alpha == 0 && (2..=3).contains(&prior_digits))
+      if completed_numeric_groups >= 2
+        || (current_leading_alpha == 0 && (2..=3).contains(&prior_digits))
         || (1..=3).contains(&current_leading_alpha) =>
     {
       IdentifierContinuation::Consume
@@ -2296,11 +2294,17 @@ fn following_numeric_group(
     end = end.saturating_add(1);
   }
   let digits = end.saturating_sub(start);
-  if !(2..=3).contains(&digits)
-    || bytes.get(end).is_some_and(|value| {
-      value.is_ascii_alphanumeric() || matches!(value, b'_' | b'-' | b'/')
-    })
-  {
+  let dirty_boundary = bytes.get(end).is_some_and(|value| {
+    value.is_ascii_alphanumeric() || matches!(value, b'_' | b'-' | b'/')
+  });
+  let prose_year = digits == 4
+    && bytes
+      .get(start)
+      .is_some_and(|value| matches!(value, b'1' | b'2'))
+    && !dirty_boundary;
+  if prose_year {
+    FollowingNumericGroup::Absent
+  } else if !(2..=3).contains(&digits) || dirty_boundary {
     FollowingNumericGroup::Invalid
   } else {
     FollowingNumericGroup::Valid

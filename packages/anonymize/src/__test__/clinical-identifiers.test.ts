@@ -208,6 +208,8 @@ const PARTIAL_REDACTION_FIXTURES = [
   ["en", "Patient number: AB12 345 8901."],
   ["en", "Patient number: FR A1 123 456 8."],
   ["en", "Patient number: FR A1 123 456 8901."],
+  ["en", "Patient number: 197 38 269 8."],
+  ["en", "Patient number: 197 38 269 8901."],
   ["en", "Patient number: ABCD123\u2013456."],
   ["en", "Patient number: ABCD123\u2013É456."],
   ["en", "Patient number: ABCD123\u2011٦."],

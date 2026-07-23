@@ -583,6 +583,8 @@ fn company_id_trigger_rejects_partial_or_overlong_identifier() {
     "AB12 345 8901",
     "FR A1 123 456 8",
     "FR A1 123 456 8901",
+    "197 38 269 8",
+    "197 38 269 8901",
     "ABCD123\u{2013}456",
     "ABCD123\u{2013}É456",
     "ABCD123\u{2011}٦",
