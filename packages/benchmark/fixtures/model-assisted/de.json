@@ -1,0 +1,50 @@
+[
+  {
+    "id": "nym-de-invented-1",
+    "language": "de",
+    "title": "Erfundener zivilrechtlicher Schriftsatz",
+    "segments": [
+      "Die Klägerin ",
+      { "t": "Mara Winterfeld", "label": "person" },
+      ", wohnhaft in ",
+      { "t": "Falkenweg 17, 12347 Berlin", "label": "address" },
+      ", wird durch Rechtsanwalt ",
+      { "t": "Tobias Morgenstern", "label": "person" },
+      " vertreten. Kontakt: ",
+      { "t": "mara.winterfeld@example.invalid", "label": "email" },
+      " und ",
+      { "t": "+49 30 55501842", "label": "phone" },
+      ". Das Aktenzeichen 8 O 314/26 und § 823 Abs. 1 BGB sind keine Personenkennungen."
+    ]
+  },
+  {
+    "id": "nym-de-invented-2",
+    "language": "de",
+    "title": "Erfundener arbeitsrechtlicher Beschluss",
+    "segments": [
+      "Der Arbeitnehmer ",
+      { "t": "Lennart Eichen", "label": "person" },
+      ", geboren am ",
+      { "t": "14. September 1988", "label": "date" },
+      ", war bei der ",
+      { "t": "Nordlicht Werkstätten GmbH", "label": "organization" },
+      " beschäftigt. Seine IBAN lautet ",
+      { "t": "DE12500105170648489890", "label": "id-number" },
+      ". Das Bundesarbeitsgericht und Art. 3 GG bleiben als Rechtskontext erhalten."
+    ]
+  },
+  {
+    "id": "nym-de-invented-3",
+    "language": "de",
+    "title": "Erfundene Zustellungsverfügung",
+    "segments": [
+      "Die Zustellung an ",
+      { "t": "Nele Rosenhain", "label": "person" },
+      " erfolgt an ",
+      { "t": "Am Birkenhof 4, 04109 Leipzig", "label": "address" },
+      ". Als weitere Rufnummer ist ",
+      { "t": "0341 555 77 21", "label": "phone" },
+      " vermerkt. BVerfG, NJW 2024, 110 und die Verfahrensnummer 2 BvR 42/24 sind keine privaten Namen."
+    ]
+  }
+]
