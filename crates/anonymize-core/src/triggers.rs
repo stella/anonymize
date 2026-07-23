@@ -1898,31 +1898,17 @@ fn id_value_prefix(text: &str) -> Option<&str> {
       {
         next = next.saturating_add(1);
       }
-      let mut segment_end = next;
-      let mut segment_has_digit = false;
-      while bytes
-        .get(segment_end)
-        .is_some_and(u8::is_ascii_alphanumeric)
-      {
-        segment_has_digit |=
-          bytes.get(segment_end).is_some_and(u8::is_ascii_digit);
-        segment_end = segment_end.saturating_add(1);
-      }
-      let segment_len = segment_end.saturating_sub(next);
-      let short_mixed_segment = digits == 0
-        && leading_alpha <= 3
-        && segment_has_digit
-        && (1..=3).contains(&segment_len);
-      let next_is_digit = bytes.get(next).is_some_and(u8::is_ascii_digit);
-      if end == 0
-        || !(short_mixed_segment
-          || (next_is_digit
-            && (bytes
-              .get(end.saturating_sub(1))
-              .is_some_and(u8::is_ascii_digit)
-              || (digits == 0 && leading_alpha <= 3))))
-      {
-        break;
+      match classify_identifier_continuation(
+        bytes,
+        next,
+        digits > 0,
+        leading_alpha,
+      ) {
+        IdentifierContinuation::Consume if end > 0 => {}
+        IdentifierContinuation::Reject => return None,
+        IdentifierContinuation::Consume | IdentifierContinuation::Stop => {
+          break;
+        }
       }
       chars = chars.saturating_add(next.saturating_sub(end));
       alpha_run = 0;
@@ -1940,7 +1926,32 @@ fn id_value_prefix(text: &str) -> Option<&str> {
   let boundary = text.get(end..)?.chars().next();
   let clean_boundary = boundary.is_none_or(|ch| {
     ch.is_whitespace()
-      || matches!(ch, '.' | ',' | ';' | ':' | '!' | '?' | ')' | ']' | '}')
+      || matches!(
+        ch,
+        '.'
+          | ','
+          | ';'
+          | ':'
+          | '!'
+          | '?'
+          | ')'
+          | ']'
+          | '}'
+          | '\''
+          | '"'
+          | '‘'
+          | '’'
+          | '‚'
+          | '‛'
+          | '“'
+          | '”'
+          | '„'
+          | '‟'
+          | '«'
+          | '»'
+          | '‹'
+          | '›'
+      )
   });
   (digits >= 2
     && end >= 5
@@ -1949,6 +1960,94 @@ fn id_value_prefix(text: &str) -> Option<&str> {
     && clean_boundary
     && !single_digit_dotted_prefix(candidate))
   .then_some(candidate)
+}
+
+#[derive(Clone, Copy)]
+enum IdentifierContinuation {
+  Consume,
+  Stop,
+  Reject,
+}
+
+fn classify_identifier_continuation(
+  bytes: &[u8],
+  start: usize,
+  has_prior_digits: bool,
+  current_leading_alpha: usize,
+) -> IdentifierContinuation {
+  let Some(first) = bytes.get(start) else {
+    return IdentifierContinuation::Stop;
+  };
+  if *first == b'_' {
+    return IdentifierContinuation::Reject;
+  }
+  if !first.is_ascii_alphanumeric() {
+    return IdentifierContinuation::Stop;
+  }
+
+  let mut end = start;
+  while bytes.get(end).is_some_and(|value| {
+    value.is_ascii_alphanumeric() || matches!(value, b'.' | b'-' | b'/' | b'_')
+  }) {
+    end = end.saturating_add(1);
+    if end.saturating_sub(start) > MAX_IDENTIFIER_VALUE_CHARS {
+      return IdentifierContinuation::Reject;
+    }
+  }
+  let Some(mut token) = bytes.get(start..end) else {
+    return IdentifierContinuation::Reject;
+  };
+  if token.contains(&b'_') {
+    return IdentifierContinuation::Reject;
+  }
+  if token.last() == Some(&b'.') {
+    let Some(trimmed) = token.get(..token.len().saturating_sub(1)) else {
+      return IdentifierContinuation::Reject;
+    };
+    token = trimmed;
+  }
+  if token.is_empty() {
+    return IdentifierContinuation::Stop;
+  }
+
+  let has_separator = token
+    .iter()
+    .any(|value| matches!(value, b'.' | b'-' | b'/'));
+  if has_separator {
+    return if first.is_ascii_alphabetic() {
+      IdentifierContinuation::Reject
+    } else {
+      IdentifierContinuation::Stop
+    };
+  }
+
+  let digits = token.iter().filter(|value| value.is_ascii_digit()).count();
+  if digits == token.len() {
+    return if digits >= 2 && (has_prior_digits || current_leading_alpha <= 3) {
+      IdentifierContinuation::Consume
+    } else {
+      IdentifierContinuation::Stop
+    };
+  }
+  if !first.is_ascii_alphabetic() {
+    return IdentifierContinuation::Stop;
+  }
+  let leading_alpha = token
+    .iter()
+    .take_while(|value| value.is_ascii_alphabetic())
+    .count();
+  if has_prior_digits {
+    return if leading_alpha <= 3 && digits >= 2 {
+      IdentifierContinuation::Consume
+    } else {
+      IdentifierContinuation::Stop
+    };
+  }
+  if token.len() <= 3 && digits > 0 {
+    IdentifierContinuation::Consume
+  } else {
+    IdentifierContinuation::Stop
+  }
 }
 
 fn single_digit_dotted_prefix(text: &str) -> bool {

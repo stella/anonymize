@@ -7,8 +7,8 @@
 //! order. This test compares every field (large arrays via a targeted
 //! first-difference report); the companion `assemble_digest` test then proves
 //! the assembled config is byte-identical end to end. Deliberate behavior
-//! changes are refreshed through the gated Rust updater documented alongside
-//! the fixtures.
+//! changes require an independent source and explicit manual review, as
+//! documented alongside the fixtures.
 
 use std::collections::HashSet;
 use std::fs;

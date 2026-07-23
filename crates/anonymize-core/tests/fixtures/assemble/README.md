@@ -15,16 +15,7 @@ config-assembly layer. They remain **frozen oracles** during ordinary
 development and CI; never regenerate them to hide an unexplained parity
 failure.
 
-For an intentional assembler or bundled-data behavior change, use the ignored
-Rust updater with both safety gates and an explicit comma-separated allowlist:
-
-```sh
-STELLA_UPDATE_ASSEMBLE_FIXTURES=1 \
-STELLA_ASSEMBLE_FIXTURES=baseline-all-on,language-all \
-cargo test -p stella-anonymize-core --test assemble_regenerate -- --ignored
-```
-
-The updater changes only the selected expected outputs and their manifest
-digests, then applies the repository's standard JSON formatter. Review the
-generated diff and commit it with the behavior change. Do not restore a
-parallel TypeScript assembly implementation.
+An intentional oracle change requires an independent source and explicit
+manual review. Never generate expected output or package digests from the Rust
+assembler under test: doing so would let an implementation regression bless
+itself. Do not restore a parallel TypeScript assembly implementation.

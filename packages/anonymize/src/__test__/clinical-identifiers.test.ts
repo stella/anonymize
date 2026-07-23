@@ -145,12 +145,26 @@ const ALPHANUMERIC_FIXTURES = [
   ["en", "Medical record number: ABCD-12345.", "ABCD-12345"],
   ["de", "Patientennummer: 12345-ABCD.", "12345-ABCD"],
   ["cs", "Číslo průkazu pojištěnce: AB12/345.XY.", "AB12/345.XY"],
+  ["en", "Patient number: ABCD123 CD456“", "ABCD123 CD456"],
 ] as const;
 
 const PARTIAL_REDACTION_FIXTURES = [
   ["en", "Patient number: ABCD-12345_tail."],
   ["de", "Krankenaktennummer: 12345-."],
   ["sv", `Journalnummer: AB-${"1".repeat(129)}.`],
+  ["en", "Patient number: ABCD123 CD456_tail."],
+  ["en", "Patient number: ABCD123 CD-."],
+  ["en", "Patient number: 12345 next-field."],
+  ["en", "Patient number: AB123 CD/EF."],
+  ["en", "Patient number: ABCD123 CD_456."],
+  ["en", "Patient number: ABCD123 _CD456."],
+] as const;
+
+const STOP_BEFORE_PROSE_FIXTURES = [
+  ["Patient number: 12345 2.", "12345"],
+  ["Patient number: ABCD123 page2.", "ABCD123"],
+  ["Patient number: 12345 2025-07-23.", "12345"],
+  ["Patient number: ABCD123 2nd.", "ABCD123"],
 ] as const;
 
 describe("multilingual clinical identifiers", () => {
@@ -215,6 +229,17 @@ describe("multilingual clinical identifiers", () => {
     "%s rejects a partial clinical identifier",
     async (language, text) => {
       expect(await detect(language, text)).toEqual([]);
+    },
+  );
+
+  test.each(STOP_BEFORE_PROSE_FIXTURES)(
+    "stops %s at the complete identifier %s",
+    async (text, expected) => {
+      const values = (await detect("en", text))
+        .filter((entity) => entity.label === "registration number")
+        .map((entity) => entity.text);
+
+      expect(values).toEqual([expected]);
     },
   );
 });
