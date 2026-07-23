@@ -11,5 +11,9 @@
       "linting"
     ],
     "local": ".ai/local/agents.md"
-  }
+  },
+  "sharedRootFiles": [
+    "rustfmt.toml",
+    "deny.toml"
+  ]
 }

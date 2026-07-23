@@ -33,8 +33,10 @@ details unless they are already public in the repository.
 
 ## GitHub Interactions
 
-- When commenting on GitHub (PRs, issues), include "CC on behalf of @username" where
-  username is the GitHub handle of the person who requested the comment.
+- When commenting on GitHub (PRs, issues), append `CC on behalf of username`, where
+  `username` is the GitHub handle of the person who requested the comment. Keep the
+  handle as plain text: never prefix it with `@` or link the account, because the
+  attribution must not trigger a GitHub mention notification.
 - This repository (including PRs, commits, comments) is public. Never include
   marketing language, internal business context, pricing, competitive analysis, user
   identities, conversation specifics, or security architecture beyond what the diff
@@ -45,6 +47,10 @@ details unless they are already public in the repository.
 - Never manually reformat code you did not semantically change (auto-formatter output
   from `bun run format` is fine to include)
 - Vary punctuation: prefer colons, semicolons, commas, and parentheses over em dashes
+- Omit needless words. Vigorous writing is concise: a sentence should contain no
+  unnecessary words, a paragraph no unnecessary sentences, for the same reason that a
+  drawing should have no unnecessary lines and a machine no unnecessary parts. Applies
+  to comments, commits, PRs, and docs.
 - Prefer explicit over implicit; when a backend endpoint accepts a discriminator
   (e.g., `?type=document|file`), thread it through the full stack (URL params,
   component props) instead of hardcoding a default on the frontend
@@ -57,6 +63,9 @@ details unless they are already public in the repository.
   now is usually cheaper than migrating an `isX` flag later.
 - Conventional Commits: `feat:`, `chore:`, `fix:`, `docs:`
 - Rebase feature branches onto main (linear history)
+- Enable `git rerere` (`git config --global rerere.enabled true`, plus
+  `rerere.autoupdate true` to auto-stage what it resolves) so conflict
+  resolutions are recorded and auto-replayed across repeated or long rebases
 - Fail fast: validate at boundaries, return/throw early
 - Minimize brace nesting: invert conditions, early returns
 - Use named constants, not string literals for domain values
@@ -64,6 +73,12 @@ details unless they are already public in the repository.
 - Avoid spread in loop accumulators (use `.push()`)
 - If you encounter a pre-existing bug or lint error while working on something else,
   fix it (separate commit)
+- Orchestrate across model tiers when your harness supports subagents and model
+  selection: delegate well-scoped, mechanical, or independently verifiable subtasks
+  (edits, searches, refactors, test runs) to a subagent on the cheapest model that
+  does them correctly; keep planning, cross-cutting design, security-sensitive work,
+  and final review on the primary model. If your tooling has no subagents or model
+  selection, ignore this.
 
 ## Design Principles
 
@@ -91,6 +106,13 @@ details unless they are already public in the repository.
 - When a type mismatch appears, trace it to the source (e.g., the handler or query
   that produces the wrong type) rather than casting at the consumer. Check git to
   verify you did not introduce the mismatch yourself before blaming the framework.
+- Never annotate or cast a value the compiler already infers, and never pass explicit
+  type arguments to inference-driven hooks (`useLoaderData<T>()`, `useQuery<T>()`, Eden
+  calls). Every annotation or explicit generic masks real errors and breaks the
+  inference chain; let inference flow and narrow at the boundary instead.
+- Validate object literals against a large union type (route, link, query options) with
+  `as const satisfies T`, not a `: T` annotation. `satisfies` checks the value without
+  widening it or paying the annotation's instantiation cost.
 - Use `.at(0)` when the element may not exist (signals possible absence). Use `[0]`
   only when existence is already established (length check, or a `// SAFETY:` comment).
 - Prefer arrow functions over function expressions
@@ -115,6 +137,9 @@ details unless they are already public in the repository.
 - If a return type is noisy enough to hurt readability, hoist it into a nearby alias
   such as `SomethingResult` and use it in the signature (e.g., `SomethingResult` or
   `Promise<SomethingResult>`). If the return type is simple, keep it inline.
+- Watch type-instantiation cost in hot generic paths (route trees, query options, Eden
+  surfaces): prefer narrowing (`satisfies`, route `from`, query `select`) over
+  annotation, and keep large unused types out of inferred return positions.
 
 ### Module Side Effects
 
@@ -182,6 +207,19 @@ details unless they are already public in the repository.
   organized by language/concept where relevant.
 - Public docs, logs, diagnostics, and comments should write `stella` lowercase.
 
+### Rust Extensible Rule Systems
+
+- For analyzers, detectors, linters, validators, and similar extensible rule
+  systems, prefer module-owned declarative rule specs. Co-locate the rule id,
+  diagnostic id, required inputs, dependencies, support resources, activation
+  predicate, execution hook, and tests with the rule implementation.
+- Keep central registries thin. They should preserve cross-module ordering and
+  expose iteration, not contain rule-specific branching, diagnostic mapping, or
+  activation logic.
+- Reach for macros or derives only when they remove repeated plumbing across
+  many rules. Humans should write domain behavior; generated code should handle
+  mechanical metadata wiring.
+
 ### Rust Module Side Effects
 
 - Avoid expensive module-level initialization. Prefer explicit prepare/build
@@ -206,6 +244,13 @@ details unless they are already public in the repository.
 - Use fixture parity tests when replacing an implementation in another language.
   The Rust core, TypeScript binding, and Python binding should produce the same
   structured result from the same fixtures.
+- Use `insta` snapshots for structured diagnostics, rule output, CLI output,
+  registry metadata, and other reviewable behavior diffs. Prefer YAML or JSON
+  snapshots over hand-written assertion lists when the important contract is the
+  full shape of the output.
+- Review snapshot changes deliberately with `cargo insta review` or
+  `cargo insta accept`; do not accept broad snapshot churn without explaining
+  the behavior change.
 - Benchmark behavior that is part of the product. Track cold start, warm run,
   artifact load, preparation, and execution separately.
 - Do not snapshot sensitive raw text unless the fixture is intentionally public

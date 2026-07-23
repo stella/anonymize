@@ -59,10 +59,22 @@ If the request is vague, default to:
    - run `bun outdated --filter="*"` for Bun workspace packages
    - run `cargo outdated --root-deps-only` for Cargo crates. If
      `cargo-outdated` is missing, prefer `cargo binstall
-     cargo-outdated` when available (prebuilt binary, seconds)
+cargo-outdated` when available (prebuilt binary, seconds)
      over `cargo install cargo-outdated` (compiles from source,
      several minutes). As a fallback, use `cargo update --dry-run`
      plus targeted `cargo search` / `cargo info` checks
+   - flag prerelease-pinned deps separately. `bun outdated` reports
+     the latest version allowed by the declared requirement as
+     `Update` and the registry's `latest` release as `Latest`.
+     Exact prerelease pins, and ranges that exclude newer releases
+     from the intended prerelease channel (`alpha`, `beta`, `rc`,
+     `next`, `canary`, `dev`), can therefore show no applicable
+     update even when that channel has advanced. Grep manifests and
+     catalogs for prerelease versions and non-`latest` tags, then
+     compare each one with `npm view <pkg> dist-tags` and the
+     intended channel's version. A `bunfig.toml`
+     `minimumReleaseAgeExcludes` entry is a strong hint that a
+     package is deliberately tracked ahead of stable.
    - inspect open dependency PRs if the request is about triage
      rather than local edits
    - include GitHub Actions only when the request covers them
@@ -82,6 +94,9 @@ If the request is vague, default to:
    - minor: check new features and silent behavior changes
    - major: assume migration work
    - `0.x` minor: treat as potentially breaking
+   - prerelease (`beta`, `rc`, etc.): unstable channel; assume
+     breaking changes can land between any two prerelease builds,
+     so read the diff and validate even for a "small" bump
 
 5. **Read official upgrade sources**:
    - changelog or release notes
@@ -135,6 +150,14 @@ If the request is vague, default to:
    - for Cargo, prefer `cargo update -p <crate>` when the
      existing semver range already covers the new version; edit
      `Cargo.toml` only when bumping past the range
+   - ordinary `bun update` respects the declared requirement, but
+     `bun update --latest` ignores it and can replace an exact
+     prerelease pin or non-`latest` tag with the registry's
+     `latest` release while rewriting the manifest. Use `--latest`
+     only when that channel change is intentional. To remain on a
+     prerelease channel, resolve the target explicitly (for example,
+     `npm view <pkg>@<tag> version`), edit the real source of truth
+     to that exact prerelease or deliberate tag. Then run `bun install`
    - after each batch passes validation, commit that batch before
      moving to the next one
 
@@ -152,7 +175,7 @@ If the request is vague, default to:
       first
     - then run repo checks relevant to the touched surfaces
     - for Bun package updates, default to `bun run lint`, `bun run
-      typecheck`, and the relevant tests
+typecheck`, and the relevant tests
     - for Cargo updates, run `cargo check` and `cargo test` when
       crates touch logic, not just deps
     - verify generated artifacts explicitly when the upgraded
