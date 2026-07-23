@@ -430,6 +430,39 @@ fn company_id_trigger_accepts_closing_quote_boundaries() {
 }
 
 #[test]
+fn company_id_trigger_accepts_immediate_prose_boundaries() {
+  let prepared = prepared_for_trigger(
+    "Patient number",
+    "registration number",
+    TriggerStrategy::CompanyIdValue,
+  );
+
+  for boundary in [
+    '(', '[', '{', '\u{2010}', '\u{2011}', '\u{2012}', '\u{2013}', '\u{2014}',
+    '\u{2015}', '\u{2026}',
+  ] {
+    let text = format!("Patient number: ABCD123{boundary}prose");
+    let result = prepared
+      .detect_static_entities(&text)
+      .expect("static detection should succeed");
+
+    assert_eq!(trigger_texts(&result), ["ABCD123"]);
+  }
+
+  for boundary in ["_", "-", "/", "é", "Ж"] {
+    let text = format!("Patient number: ABCD123{boundary}");
+    let result = prepared
+      .detect_static_entities(&text)
+      .expect("static detection should succeed");
+
+    assert!(
+      result.entities.trigger().is_empty(),
+      "boundary {boundary:?} must remain identifier-shaped"
+    );
+  }
+}
+
+#[test]
 fn company_id_trigger_does_not_consume_punctuation_led_prose() {
   let prepared = prepared_for_trigger(
     "Patient number",
@@ -510,6 +543,9 @@ fn company_id_trigger_rejects_partial_or_overlong_identifier() {
     "197 38 269_",
     "1 2025 12",
     "1 1234 12",
+    "12345 67 8",
+    "12345 67 8901",
+    "12345 67 89_tail",
     overlong.as_str(),
   ] {
     let text = format!("Patient number: {value}");

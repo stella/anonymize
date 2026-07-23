@@ -172,6 +172,30 @@ const PARTIAL_REDACTION_FIXTURES = [
   ["en", "Patient number: 197 38 269_."],
   ["en", "Patient number: 1 2025 12."],
   ["en", "Patient number: 1 1234 12."],
+  ["en", "Patient number: 12345 67 8."],
+  ["en", "Patient number: 12345 67 8901."],
+  ["en", "Patient number: 12345 67 89_tail."],
+] as const;
+
+const IMMEDIATE_BOUNDARY_FIXTURES = [
+  ["("],
+  ["["],
+  ["{"],
+  ["\u2010"],
+  ["\u2011"],
+  ["\u2012"],
+  ["\u2013"],
+  ["\u2014"],
+  ["\u2015"],
+  ["\u2026"],
+] as const;
+
+const INVALID_IMMEDIATE_BOUNDARY_FIXTURES = [
+  ["_"],
+  ["-"],
+  ["/"],
+  ["é"],
+  ["Ж"],
 ] as const;
 
 const STOP_BEFORE_PROSE_FIXTURES = [
@@ -260,6 +284,28 @@ describe("multilingual clinical identifiers", () => {
     "%s rejects a partial clinical identifier",
     async (language, text) => {
       expect(await detect(language, text)).toEqual([]);
+    },
+  );
+
+  test.each(IMMEDIATE_BOUNDARY_FIXTURES)(
+    "accepts an identifier before the immediate %s prose boundary",
+    async (boundary) => {
+      const values = (
+        await detect("en", `Patient number: ABCD123${boundary}prose`)
+      )
+        .filter((entity) => entity.label === "registration number")
+        .map((entity) => entity.text);
+
+      expect(values).toEqual(["ABCD123"]);
+    },
+  );
+
+  test.each(INVALID_IMMEDIATE_BOUNDARY_FIXTURES)(
+    "rejects an identifier before the immediate %s identifier boundary",
+    async (boundary) => {
+      expect(await detect("en", `Patient number: ABCD123${boundary}`)).toEqual(
+        [],
+      );
     },
   );
 

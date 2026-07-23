@@ -1923,35 +1923,7 @@ fn id_value_prefix(text: &str) -> Option<&str> {
 
   let candidate = text.get(..end)?;
   let boundary = text.get(end..)?.chars().next();
-  let clean_boundary = boundary.is_none_or(|ch| {
-    ch.is_whitespace()
-      || matches!(
-        ch,
-        '.'
-          | ','
-          | ';'
-          | ':'
-          | '!'
-          | '?'
-          | ')'
-          | ']'
-          | '}'
-          | '\''
-          | '"'
-          | '‘'
-          | '’'
-          | '‚'
-          | '‛'
-          | '“'
-          | '”'
-          | '„'
-          | '‟'
-          | '«'
-          | '»'
-          | '‹'
-          | '›'
-      )
-  });
+  let clean_boundary = boundary.is_none_or(is_clean_identifier_boundary);
   (digits >= 2
     && end >= 5
     && leading_alpha <= MAX_IDENTIFIER_ALPHA_RUN
@@ -1959,6 +1931,46 @@ fn id_value_prefix(text: &str) -> Option<&str> {
     && clean_boundary
     && !single_digit_dotted_prefix(candidate))
   .then_some(candidate)
+}
+
+const fn is_clean_identifier_boundary(ch: char) -> bool {
+  ch.is_whitespace()
+    || matches!(
+      ch,
+      '.'
+        | ','
+        | ';'
+        | ':'
+        | '!'
+        | '?'
+        | '('
+        | ')'
+        | '['
+        | ']'
+        | '{'
+        | '}'
+        | '\''
+        | '"'
+        | '‘'
+        | '’'
+        | '‚'
+        | '‛'
+        | '“'
+        | '”'
+        | '„'
+        | '‟'
+        | '«'
+        | '»'
+        | '‹'
+        | '›'
+        | '‐'
+        | '‑'
+        | '‒'
+        | '–'
+        | '—'
+        | '―'
+        | '…'
+    )
 }
 
 struct IdentifierGroupState {
@@ -2103,18 +2115,14 @@ fn classify_identifier_continuation(
 
   let digits = token.iter().filter(|value| value.is_ascii_digit()).count();
   if digits == token.len() {
-    let grouped_numeric_id = (2..=3).contains(&digits)
-      && (completed_numeric_groups >= 2
-        || (completed_numeric_groups == 1
-          && has_following_numeric_group(bytes, end)));
-    return if digits >= 2
-      && ((prior_digits <= 1 && (1..=3).contains(&current_leading_alpha))
-        || grouped_numeric_id)
-    {
-      IdentifierContinuation::Consume
-    } else {
-      IdentifierContinuation::Stop
-    };
+    return classify_numeric_identifier_continuation(
+      bytes,
+      end,
+      digits,
+      prior_digits,
+      current_leading_alpha,
+      completed_numeric_groups,
+    );
   }
   if !first.is_ascii_alphabetic() {
     return IdentifierContinuation::Stop;
@@ -2137,6 +2145,52 @@ fn classify_identifier_continuation(
   }
 }
 
+fn classify_numeric_identifier_continuation(
+  bytes: &[u8],
+  end: usize,
+  digits: usize,
+  prior_digits: usize,
+  current_leading_alpha: usize,
+  completed_numeric_groups: usize,
+) -> IdentifierContinuation {
+  let grouped_numeric = classify_grouped_numeric_continuation(
+    bytes,
+    end,
+    digits,
+    completed_numeric_groups,
+  );
+  if matches!(grouped_numeric, IdentifierContinuation::Reject) {
+    return IdentifierContinuation::Reject;
+  }
+  if digits >= 2
+    && ((prior_digits <= 1 && (1..=3).contains(&current_leading_alpha))
+      || matches!(grouped_numeric, IdentifierContinuation::Consume))
+  {
+    IdentifierContinuation::Consume
+  } else {
+    IdentifierContinuation::Stop
+  }
+}
+
+fn classify_grouped_numeric_continuation(
+  bytes: &[u8],
+  end: usize,
+  digits: usize,
+  completed_numeric_groups: usize,
+) -> IdentifierContinuation {
+  if !(2..=3).contains(&digits) || completed_numeric_groups == 0 {
+    return IdentifierContinuation::Stop;
+  }
+  if completed_numeric_groups >= 2 {
+    return IdentifierContinuation::Consume;
+  }
+  match following_numeric_group(bytes, end) {
+    FollowingNumericGroup::Absent => IdentifierContinuation::Stop,
+    FollowingNumericGroup::Valid => IdentifierContinuation::Consume,
+    FollowingNumericGroup::Invalid => IdentifierContinuation::Reject,
+  }
+}
+
 const fn is_id_evidence(value: u8) -> bool {
   value.is_ascii_digit() || matches!(value, b'.' | b'-' | b'/' | b'_')
 }
@@ -2151,7 +2205,17 @@ const fn overlong_continuation(
   }
 }
 
-fn has_following_numeric_group(bytes: &[u8], mut start: usize) -> bool {
+#[derive(Clone, Copy)]
+enum FollowingNumericGroup {
+  Absent,
+  Valid,
+  Invalid,
+}
+
+fn following_numeric_group(
+  bytes: &[u8],
+  mut start: usize,
+) -> FollowingNumericGroup {
   let limit = bytes.len().min(MAX_IDENTIFIER_VALUE_CHARS);
   while start < limit
     && bytes
@@ -2160,15 +2224,30 @@ fn has_following_numeric_group(bytes: &[u8], mut start: usize) -> bool {
   {
     start = start.saturating_add(1);
   }
+  if start >= limit {
+    return if bytes.get(start).is_none() {
+      FollowingNumericGroup::Absent
+    } else {
+      FollowingNumericGroup::Invalid
+    };
+  }
+  if !bytes.get(start).is_some_and(u8::is_ascii_digit) {
+    return FollowingNumericGroup::Absent;
+  }
   let mut end = start;
   while end < limit && bytes.get(end).is_some_and(u8::is_ascii_digit) {
     end = end.saturating_add(1);
   }
-  (2..=3).contains(&end.saturating_sub(start))
-    && !bytes.get(end).is_some_and(u8::is_ascii_digit)
-    && bytes.get(end).is_none_or(|value| {
-      !value.is_ascii_alphanumeric() && !matches!(value, b'_' | b'-' | b'/')
+  let digits = end.saturating_sub(start);
+  if !(2..=3).contains(&digits)
+    || bytes.get(end).is_some_and(|value| {
+      value.is_ascii_alphanumeric() || matches!(value, b'_' | b'-' | b'/')
     })
+  {
+    FollowingNumericGroup::Invalid
+  } else {
+    FollowingNumericGroup::Valid
+  }
 }
 
 fn is_ascii_date_shape(token: &[u8]) -> bool {
