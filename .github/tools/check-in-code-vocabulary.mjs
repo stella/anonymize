@@ -29,15 +29,13 @@ const IGNORED_SUBSTRINGS = ["/__test__/", "/wasm/", "/dist/"];
 const IGNORED_SUFFIXES = [".test.ts", ".test.mts", ".d.ts"];
 
 // Exceptions, keyed by the identifier the array is bound to. Two kinds:
-//   - genuinely not language vocabulary (locale codes; morphology forms that
-//     are coupled to Rust gate predicates, not a lookup list);
+//   - genuinely not language vocabulary (locale codes);
 //   - existing debt tracked for migration into packages/data. Do NOT extend the
 //     debt set — new vocabulary must go straight to a data file. A source site
 //     can also opt out with a `vocab-allow: <reason>` comment on its line.
 const ALLOWLIST = new Set([
   // not vocabulary
   "NONWESTERN_LOCALE_KEYS",
-  "forms",
   // migration debt (move into packages/data, then delete from here)
   "SUPPLEMENTARY_NAME_EXCLUSIONS",
   "SENTENCE_VERB_INDICATORS_SEED",
