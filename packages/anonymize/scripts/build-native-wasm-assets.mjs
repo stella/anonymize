@@ -100,6 +100,7 @@ for (const fileName of BROWSER_GLUE_ENTRIES) {
   const destination = join(distNativeDir, fileName);
   bundleBrowserGlue(source, destination);
   assertSelfContainedGlue(destination);
+  assertBrowserSafeGlue(destination);
   glue.push({
     file: fileName,
     mode: "bundle",
@@ -178,6 +179,43 @@ function assertSelfContainedGlue(filePath) {
     throw new Error(
       `Bundled browser glue ${basename(filePath)} still imports bare specifiers: ` +
         `${[...new Set(remaining)].join(", ")}. Bundling did not inline them.`,
+    );
+  }
+}
+
+/** Fail the build if a bundled browser glue file uses Node-only APIs that
+ * cannot exist in a browser: `node:*` imports (static or dynamic), CJS
+ * `require()`, or `__dirname`/`__filename`. A regression that leaks the Node
+ * WASI loader (or any `node:` built-in) into the browser bundle would crash at
+ * instantiation in a real browser; this catches it at build time.
+ *
+ * `Buffer` and `process.env` are deliberately NOT banned: browser hosts provide
+ * them (the consumer installs a `Buffer` polyfill; bundlers statically define
+ * `process.env`), which is why the shipped browser glue runs fine, so banning
+ * them would be a false positive. This complements assertSelfContainedGlue,
+ * which catches un-inlined bare ESM specifiers. */
+function assertBrowserSafeGlue(filePath) {
+  const code = readFileSync(filePath, "utf8");
+  const banned = [
+    { pattern: /(?:from|import)\s*["']node:/g, name: 'import "node:*"' },
+    { pattern: /import\s*\(\s*["']node:/g, name: 'import("node:*")' },
+    { pattern: /\brequire\s*\(\s*["']/g, name: "require()" },
+    { pattern: /\b__dirname\b/g, name: "__dirname" },
+    { pattern: /\b__filename\b/g, name: "__filename" },
+  ];
+  const issues = [];
+  for (const { pattern, name } of banned) {
+    for (const match of code.matchAll(pattern)) {
+      const line = code.slice(0, match.index).split("\n").length;
+      issues.push(`  ${name} (line ${line})`);
+    }
+  }
+  if (issues.length > 0) {
+    throw new Error(
+      `Bundled browser glue ${basename(filePath)} uses Node-only APIs that ` +
+        `crash in the browser:\n${issues.join("\n")}\nFix the source or route ` +
+        `the Node path through a runtime check so browser bundles never pull ` +
+        `it in.`,
     );
   }
 }
