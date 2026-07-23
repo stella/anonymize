@@ -20,6 +20,9 @@ This is a Bun-first TypeScript monorepo for text anonymization. The library hand
   data. Never solve a collision in one language by hard-coding or unioning
   words from other languages; tests must prove that enabling one language does
   not change another language's behavior.
+- Cross-language domain concepts must ship with a supported-language coverage
+  matrix or an explicit scope rationale; never add vocabulary only for the
+  language exposed by a benchmark.
 - Favor invariant tests around redaction stability, offsets, and replacement safety over snapshot-only examples.
 - Start architecture reviews from `packages/anonymize/ARCHITECTURE.md`; it
   explains the native package graph, prepared-package flow, and TypeScript
