@@ -1212,10 +1212,9 @@ fn emit_candidate_segments(
     if has_roman_numeral_suffix(emit_text) {
       continue;
     }
-    if short_ascii_suffix_collides_with_non_ascii_prefix(emit_text) {
+    if short_ascii_suffix_has_ambiguous_non_ascii_prefix(emit_text) {
       continue;
     }
-
     let end = emit_start.saturating_add(emit_text.len());
     let Some(validated_start) = named_institutional_span_start(
       full_text, emit_start, end, candidate, data,
@@ -2320,7 +2319,7 @@ fn has_roman_numeral_suffix(text: &str) -> bool {
   !suffix.is_empty() && is_roman_numeral(&suffix)
 }
 
-fn short_ascii_suffix_collides_with_non_ascii_prefix(text: &str) -> bool {
+fn short_ascii_suffix_has_ambiguous_non_ascii_prefix(text: &str) -> bool {
   let separator = last_suffix_separator(text);
   let raw_suffix = separator
     .and_then(|index| text.get(index.saturating_add(1)..))
@@ -2332,10 +2331,40 @@ fn short_ascii_suffix_collides_with_non_ascii_prefix(text: &str) -> bool {
   let prefix = separator
     .and_then(|index| text.get(..index))
     .unwrap_or(text)
-    .chars()
-    .filter(|ch| !matches!(ch, '\u{00a0}' | '\u{202f}'))
-    .collect::<String>();
-  !prefix.is_ascii()
+    .trim_matches(|ch: char| {
+      ch.is_whitespace() || matches!(ch, '\u{00a0}' | '\u{202f}')
+    });
+  if prefix.is_ascii() {
+    return false;
+  }
+
+  // A short bare suffix is easily confused with an ordinary uppercase
+  // abbreviation. Inspect the active phrase after the last clause separator;
+  // a trailing separator belongs to the legal-name punctuation itself.
+  let last_clause_separator = prefix
+    .char_indices()
+    .rev()
+    .find(|(_, ch)| matches!(ch, ',' | ';' | ':'))
+    .map(|(index, ch)| (index, ch.len_utf8()));
+  let active = last_clause_separator
+    .and_then(|(index, width)| prefix.get(index.saturating_add(width)..))
+    .map(str::trim)
+    .filter(|tail| !tail.is_empty())
+    .or_else(|| {
+      last_clause_separator
+        .and_then(|(index, _)| prefix.get(..index))
+        .map(str::trim)
+    })
+    .unwrap_or(prefix);
+  let tokens = word_tokens(active, 0, active.len()).collect::<Vec<_>>();
+  let starts_like_name =
+    tokens.first().is_some_and(|token| starts_upper(token.text));
+  let capitalized = tokens
+    .iter()
+    .filter(|token| starts_upper(token.text))
+    .count();
+
+  !starts_like_name || (tokens.len() > 3 && capitalized < 2)
 }
 
 fn last_suffix_separator(text: &str) -> Option<usize> {
@@ -2753,6 +2782,36 @@ mod tests {
       ("東京 Court", "Court"),
     ] {
       assert_eq!(institutional_head_entities(text, head), [text]);
+    }
+  }
+
+  #[test]
+  fn short_legal_forms_support_non_ascii_organization_names() {
+    for (text, suffix) in [
+      ("Küstenwerke AG", "AG"),
+      ("Étoile SA", "SA"),
+      ("Řeka SE", "SE"),
+      ("Société générale SA", "SA"),
+      ("Société Générale, SA", "SA"),
+      ("Bank für Internationalen Zahlungsausgleich AG", "AG"),
+    ] {
+      assert_eq!(legal_form_entities(text, &[suffix], &[]), [text]);
+    }
+  }
+
+  #[test]
+  fn short_legal_forms_still_require_a_trailing_boundary() {
+    assert!(legal_form_entities("Minha AGÊNCIA", &["AG"], &[]).is_empty());
+    assert!(legal_form_entities("PLANO DE SAÚDE", &["SA"], &[]).is_empty());
+  }
+
+  #[test]
+  fn short_legal_forms_reject_non_ascii_prose_abbreviations() {
+    for (text, suffix) in [
+      ("Zapsaná v obchodním rejstříku vedeném u KS", "KS"),
+      ("191 KW, benzín BA", "BA"),
+    ] {
+      assert!(legal_form_entities(text, &[suffix], &[]).is_empty());
     }
   }
 
