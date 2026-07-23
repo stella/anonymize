@@ -6,18 +6,18 @@ lifetime, restoration, and what metadata can still carry PII.
 
 ## Current coverage
 
-| Surface                            | Node | Python | WASM | CLI | Local MCP            |
-| ---------------------------------- | ---- | ------ | ---- | --- | -------------------- |
-| In-memory text detection/redaction | Yes  | Yes    | Yes  | Yes | Via file paths       |
-| Caller detections and operators    | Yes  | Yes    | Yes  | Yes | v1 sidecar paths     |
-| Streaming text results             | Yes  | Yes    | Yes  | No  | No                   |
-| Cross-document sessions            | Yes  | Yes    | Yes  | Yes | In-memory            |
-| Encrypted session transfer         | Yes  | Yes    | Yes  | Yes | No; durable local    |
-| DOCX extraction/coverage           | Yes  | Yes    | No   | Yes | Aggregate inspection |
-| DOCX rewrite/anonymize/restore     | Yes  | Yes    | No   | Yes | Yes                  |
-| PDF structure/coverage inspection  | Yes  | Yes    | Yes  | No  | No                   |
-| PDF destructive raster output      | Yes  | Yes    | No   | Yes | Yes, path-only       |
-| Runtime capability discovery       | Yes  | Yes    | Yes  | Yes | Manifest + tools     |
+| Surface                                   | Node | Python | WASM | CLI       | Local MCP            |
+| ----------------------------------------- | ---- | ------ | ---- | --------- | -------------------- |
+| In-memory text detection/redaction        | Yes  | Yes    | Yes  | Yes       | Via file paths       |
+| Caller detections and per-label operators | Yes  | Yes    | Yes  | No        | v1 sidecar paths     |
+| Streaming text results                    | Yes  | Yes    | Yes  | No        | No                   |
+| In-memory cross-document sessions         | Yes  | Yes    | Yes  | No        | Process-local        |
+| Encrypted session archive import/export   | Yes  | Yes    | Yes  | DOCX only | No; managed store    |
+| DOCX extraction/coverage API              | Yes  | Yes    | No   | No        | Aggregate inspection |
+| DOCX rewrite/anonymize/restore            | Yes  | Yes    | No   | Yes       | Yes                  |
+| PDF structure/coverage inspection         | Yes  | Yes    | Yes  | No        | No                   |
+| PDF destructive raster output             | Yes  | Yes    | No   | Yes       | Yes, path-only       |
+| Runtime capability discovery              | Yes  | No     | Yes  | Yes       | Manifest + tools     |
 
 Node and Python DOCX adapters share bounded extraction, rewrite, and restoration
 planning in Rust. Availability gates require every surface in a parity profile,
@@ -28,7 +28,13 @@ stdio only, requires explicit absolute input and output paths under configured
 roots, rejects symlink escapes and overwrites, and returns aggregate summaries
 without document text or plaintext mappings. It supports opt-in encrypted
 durable sessions on macOS and Linux and provider-neutral external detections
-through bounded, digest-bound v1 JSON sidecar paths.
+through bounded, digest-bound v1 JSON sidecar paths. Durable archives are owned
+by the server's configured store; MCP clients cannot import or export them.
+
+The CLI does not accept caller detections or the SDK's general per-label
+operator map. Its cross-document session workflow is limited to DOCX commands,
+which open or create an encrypted archive for each operation. It does not expose
+standalone DOCX extraction or archive-transfer APIs.
 
 PDF inspection parity includes the browser/WASM byte-oriented API. It does not
 include a browser renderer or OCR provider; without provider observations the
@@ -50,25 +56,21 @@ observations, coverage is reported as partial. Inspection does not anonymize a
 PDF. In particular, drawing an opaque rectangle over original page content is
 not redaction because the covered text or image can remain in the file.
 
-The provider-neutral raster surface accepts complete rendered/OCR page
-observations and opaque RGB8 pixels, runs stella detection, merges optional
-digest-bound external detections, requires every selected span to map to glyph
-geometry, destructively fills those pixels, and writes a fresh image-only PDF
-without retaining source objects. The Node package and CLI can invoke locally
-installed Poppler and Tesseract directly, sequentially, with private temporary
-files, per-page rendering, document-wide bounds, timeouts, and one explicit OCR
-language pack. The local MCP tool exposes only scoped input/output paths and
-bounded options; executable paths are server configuration, and results contain
-aggregate verification only. No binary is bundled. The certificate explicitly sets
-`piiCleanGuaranteed` to false because complete OCR
-coverage asserts that every page was processed, not that OCR or PII detection
-has perfect recall. Raster output deliberately removes searchability,
-accessibility, forms, links, attachments, metadata, and digital signatures.
-Both `document.pdf.anonymize-raster` and the advanced
-`document.pdf.rewrite-raster` seam are named document-profile capabilities, so
-the exhaustive Node/Python parity gate covers each public API independently.
-The Poppler/Tesseract observation adapter is the explicit Node-only
-`document.pdf.observe-raster-local` capability.
+The provider-neutral raster surface accepts complete rendered/OCR observations
+and RGB8 page pixels, runs detection, merges optional digest-bound external
+detections, and requires every selected span to map to glyph geometry. It then
+destructively fills those pixels and writes a fresh image-only PDF without
+retaining source objects. Python callers provide observations and pixels from
+their own renderer/OCR boundary. The Node adapter can instead invoke locally
+installed Poppler and Tesseract; the CLI and MCP tools use that adapter. No
+renderer, OCR model, or executable is bundled.
+
+The certificate sets `piiCleanGuaranteed` to false: complete page processing
+does not prove perfect OCR or detector recall. Raster output deliberately
+removes searchability, accessibility, forms, links, attachments, metadata, and
+digital signatures. The provider-neutral anonymize and lower-level rewrite
+APIs are separate Node/Python parity capabilities. Local Poppler/Tesseract
+observation is an explicit Node-only capability.
 
 The repository does not yet provide PDF structure-preserving anonymization or
 pipelines for XLSX, PPTX, HTML, Markdown, CSV, email containers, images/OCR,

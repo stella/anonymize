@@ -4,9 +4,8 @@ Python bindings for the stella anonymization Rust core.
 
 ## Install
 
-Prebuilt wheels are published to PyPI (this activates with the next release).
-Wheels ship the bundled native pipeline packages, so no monorepo checkout is
-needed:
+Prebuilt wheels on PyPI ship the bundled native pipeline packages, so no
+monorepo checkout is needed:
 
 ```bash
 uv add stella-anonymize-core
@@ -204,6 +203,19 @@ print(inspection["coverage"])
 Regional codes use the exact package when present and otherwise fall back to
 the base language package, so `en-US` can use the shipped `en` artifact.
 
+`anonymize_pdf_raster()` is the destructive output API. The caller supplies a
+complete observation and RGB8 pixel buffer for every page; the function runs
+the prepared anonymizer, maps selected spans to glyph geometry, fills those
+pixels, and returns a new image-only PDF plus its verification certificate.
+Python does not bundle a renderer or OCR engine.
+
+`rewrite_pdf_raster_from_detections()` is the lower-level seam for callers that
+already own validated UTF-16 detection ranges. Both APIs reject incomplete page
+coverage, unmapped detections, mismatched pixels, source-object reuse, and
+limit violations. A successful certificate proves the destructive rewrite and
+fresh output structure, not perfect OCR or PII recall; `piiCleanGuaranteed` is
+always false.
+
 For caller-owned configs, prepare package bytes before serving documents and
 load them at runtime:
 
@@ -240,6 +252,9 @@ for repeated document processing.
 - `PreparedAnonymizer.restore_redaction_session(plaintext_json) -> PreparedRedactionSession`
 - `PreparedRedactionSession.restore_text(full_text, observed_at_epoch_seconds=None) -> str`
 - `deanonymise(redacted_text, redaction_map) -> str`
+- `inspect_pdf(document, page_observations=None) -> dict`
+- `anonymize_pdf_raster(document, anonymizer, provider, pages, fill_rgb=(0, 0, 0)) -> (bytes, dict)`
+- `rewrite_pdf_raster_from_detections(document, request, page_pixels) -> (bytes, dict)`
 - `PreparedAnonymizer.redact_text(text, operators=None, redact_string=None)`
 - `PreparedAnonymizer.redact_text_json(text, operators=None, redact_string=None)`
 - `PreparedAnonymizer.diagnostics_json(text, operators=None, redact_string=None)`

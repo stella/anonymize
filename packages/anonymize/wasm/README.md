@@ -12,9 +12,11 @@ bun add @stll/anonymize-wasm
 
 ## Usage
 
-Same native-SDK surface as `@stll/anonymize/native`, backed by the WebAssembly
-binding. Browsers load prebuilt prepared packages (there is no in-browser config
-building). The wasm binding is instantiated lazily on first use.
+The package exposes the core text, session, caller-detection, and PDF-inspection
+profile backed by WebAssembly. Node-only configuration assembly, local document
+tools, and native filesystem loaders are outside this browser surface. Browsers
+load prebuilt prepared packages; the binding is instantiated lazily on first
+use.
 
 ```ts
 import { loadDefaultPipeline } from "@stll/anonymize-wasm";

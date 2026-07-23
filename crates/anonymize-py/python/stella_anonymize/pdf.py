@@ -1,4 +1,4 @@
-"""Fail-closed PDF coverage inspection; this module does not redact PDFs."""
+"""Fail-closed PDF inspection and destructive raster anonymization."""
 
 from __future__ import annotations
 
