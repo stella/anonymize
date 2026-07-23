@@ -1864,6 +1864,9 @@ fn id_value_prefix(text: &str) -> Option<&str> {
   let mut leading_alpha = 0_usize;
   let mut alpha_run = 0_usize;
   let mut max_alpha_run = 0_usize;
+  let mut completed_numeric_groups = 0_usize;
+  let mut group_chars = 0_usize;
+  let mut group_is_numeric = true;
 
   while let Some(&byte) = bytes.get(end) {
     if byte.is_ascii_digit() {
@@ -1871,6 +1874,7 @@ fn id_value_prefix(text: &str) -> Option<&str> {
       alpha_run = 0;
       end = end.saturating_add(1);
       chars = chars.saturating_add(1);
+      group_chars = group_chars.saturating_add(1);
     } else if byte.is_ascii_alphabetic() {
       if digits == 0 {
         leading_alpha = leading_alpha.saturating_add(1);
@@ -1879,6 +1883,8 @@ fn id_value_prefix(text: &str) -> Option<&str> {
       max_alpha_run = max_alpha_run.max(alpha_run);
       end = end.saturating_add(1);
       chars = chars.saturating_add(1);
+      group_chars = group_chars.saturating_add(1);
+      group_is_numeric = false;
     } else if matches!(byte, b'.' | b'-' | b'/') {
       if end == 0
         || !bytes
@@ -1890,6 +1896,8 @@ fn id_value_prefix(text: &str) -> Option<&str> {
       alpha_run = 0;
       end = end.saturating_add(1);
       chars = chars.saturating_add(1);
+      group_chars = group_chars.saturating_add(1);
+      group_is_numeric = false;
     } else if matches!(byte, b' ' | b'\t') {
       let mut next = end;
       while bytes
@@ -1898,8 +1906,15 @@ fn id_value_prefix(text: &str) -> Option<&str> {
       {
         next = next.saturating_add(1);
       }
-      match classify_identifier_continuation(bytes, next, digits, leading_alpha)
-      {
+      let numeric_groups = completed_numeric_groups
+        .saturating_add(usize::from(group_chars > 0 && group_is_numeric));
+      match classify_identifier_continuation(
+        bytes,
+        next,
+        digits,
+        leading_alpha,
+        numeric_groups,
+      ) {
         IdentifierContinuation::Consume if end > 0 => {}
         IdentifierContinuation::Reject => return None,
         IdentifierContinuation::Consume | IdentifierContinuation::Stop => {
@@ -1907,6 +1922,9 @@ fn id_value_prefix(text: &str) -> Option<&str> {
         }
       }
       chars = chars.saturating_add(next.saturating_sub(end));
+      completed_numeric_groups = numeric_groups;
+      group_chars = 0;
+      group_is_numeric = true;
       alpha_run = 0;
       end = next;
     } else {
@@ -1970,6 +1988,7 @@ fn classify_identifier_continuation(
   start: usize,
   prior_digits: usize,
   current_leading_alpha: usize,
+  completed_numeric_groups: usize,
 ) -> IdentifierContinuation {
   let Some(first) = bytes.get(start) else {
     return IdentifierContinuation::Stop;
@@ -2038,7 +2057,14 @@ fn classify_identifier_continuation(
 
   let digits = token.iter().filter(|value| value.is_ascii_digit()).count();
   if digits == token.len() {
-    return if digits >= 2 && prior_digits <= 1 && current_leading_alpha <= 3 {
+    let grouped_numeric_id = (2..=3).contains(&digits)
+      && (completed_numeric_groups >= 2
+        || (completed_numeric_groups == 1
+          && has_following_numeric_group(bytes, end)));
+    return if digits >= 2
+      && ((prior_digits <= 1 && (1..=3).contains(&current_leading_alpha))
+        || grouped_numeric_id)
+    {
       IdentifierContinuation::Consume
     } else {
       IdentifierContinuation::Stop
@@ -2063,6 +2089,26 @@ fn classify_identifier_continuation(
   } else {
     IdentifierContinuation::Stop
   }
+}
+
+fn has_following_numeric_group(bytes: &[u8], mut start: usize) -> bool {
+  let limit = bytes.len().min(MAX_IDENTIFIER_VALUE_CHARS);
+  while start < limit
+    && bytes
+      .get(start)
+      .is_some_and(|value| matches!(value, b' ' | b'\t'))
+  {
+    start = start.saturating_add(1);
+  }
+  let mut end = start;
+  while end < limit && bytes.get(end).is_some_and(u8::is_ascii_digit) {
+    end = end.saturating_add(1);
+  }
+  (2..=3).contains(&end.saturating_sub(start))
+    && !bytes.get(end).is_some_and(u8::is_ascii_digit)
+    && bytes.get(end).is_none_or(|value| {
+      !value.is_ascii_alphanumeric() && !matches!(value, b'_' | b'-' | b'/')
+    })
 }
 
 fn is_ascii_date_shape(token: &[u8]) -> bool {

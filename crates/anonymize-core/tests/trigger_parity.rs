@@ -396,6 +396,9 @@ fn company_id_trigger_consumes_complete_alphanumeric_identifier() {
     "ABCD123 23.07/2025",
     "ABCD123 2025-0007-00023",
     "ABCD123 0001-0002-0003",
+    "197 38 269",
+    "78 123 456 789",
+    "197\t38\t269",
   ] {
     let text = format!("Patient number: {value}, next field");
     let result = prepared
@@ -452,6 +455,7 @@ fn company_id_trigger_stops_before_non_identifier_groups() {
     ("12345 2", "12345"),
     ("12345 456", "12345"),
     ("12345 2025", "12345"),
+    ("197 38 269 2025", "197 38 269"),
     ("ABCD123 page2", "ABCD123"),
     ("12345 2025-07-23", "12345"),
     ("12345 23/07/2025", "12345"),
@@ -493,6 +497,11 @@ fn company_id_trigger_rejects_partial_or_overlong_identifier() {
     "ABCD123 CD-",
     "ABCD123 CD_456",
     "ABCD123 _CD456",
+    "197 38 269_tail",
+    "197 38 269-",
+    "197 38 269_",
+    "1 2025 12",
+    "1 1234 12",
     overlong.as_str(),
   ] {
     let text = format!("Patient number: {value}");
@@ -503,6 +512,23 @@ fn company_id_trigger_rejects_partial_or_overlong_identifier() {
     assert!(
       result.entities.trigger().is_empty(),
       "must not redact a partial prefix of {value:?}"
+    );
+  }
+
+  let exact_limit = vec!["12"; 43].join(" ");
+  assert_eq!(exact_limit.len(), 128);
+  let accepted = prepared
+    .detect_static_entities(&format!("Patient number: {exact_limit}"))
+    .expect("static detection should succeed");
+  assert_eq!(trigger_texts(&accepted), [exact_limit.as_str()]);
+
+  for value in [vec!["12"; 44].join(" "), vec!["12"; 10_000].join(" ")] {
+    let result = prepared
+      .detect_static_entities(&format!("Patient number: {value}"))
+      .expect("static detection should succeed");
+    assert!(
+      result.entities.trigger().is_empty(),
+      "must reject overlong grouped identifiers without a partial prefix"
     );
   }
 }

@@ -154,6 +154,9 @@ const ALPHANUMERIC_FIXTURES = [
   ["en", "Patient number: ABCD123 23.07/2025.", "ABCD123 23.07/2025"],
   ["en", "Patient number: ABCD123 2025-0007-00023.", "ABCD123 2025-0007-00023"],
   ["en", "Patient number: ABCD123 0001-0002-0003.", "ABCD123 0001-0002-0003"],
+  ["en", "Patient number: 197 38 269.", "197 38 269"],
+  ["en", "Patient number: 78 123 456 789.", "78 123 456 789"],
+  ["en", "Patient number: 197\t38\t269.", "197\t38\t269"],
 ] as const;
 
 const PARTIAL_REDACTION_FIXTURES = [
@@ -164,12 +167,18 @@ const PARTIAL_REDACTION_FIXTURES = [
   ["en", "Patient number: ABCD123 CD-."],
   ["en", "Patient number: ABCD123 CD_456."],
   ["en", "Patient number: ABCD123 _CD456."],
+  ["en", "Patient number: 197 38 269_tail."],
+  ["en", "Patient number: 197 38 269-."],
+  ["en", "Patient number: 197 38 269_."],
+  ["en", "Patient number: 1 2025 12."],
+  ["en", "Patient number: 1 1234 12."],
 ] as const;
 
 const STOP_BEFORE_PROSE_FIXTURES = [
   ["Patient number: 12345 2.", "12345"],
   ["Patient number: 12345 456.", "12345"],
   ["Patient number: 12345 2025.", "12345"],
+  ["Patient number: 197 38 269 2025.", "197 38 269"],
   ["Patient number: ABCD123 page2.", "ABCD123"],
   ["Patient number: 12345 2025-07-23.", "12345"],
   ["Patient number: 12345 23/07/2025.", "12345"],
@@ -262,4 +271,20 @@ describe("multilingual clinical identifiers", () => {
       expect(values).toEqual([expected]);
     },
   );
+
+  test("bounds grouped numeric identifier scanning", async () => {
+    const exactLimit = Array.from({ length: 43 }, () => "12").join(" ");
+    expect(exactLimit).toHaveLength(128);
+    const accepted = (await detect("en", `Patient number: ${exactLimit}`))
+      .filter((entity) => entity.label === "registration number")
+      .map((entity) => entity.text);
+    expect(accepted).toEqual([exactLimit]);
+
+    for (const value of [
+      Array.from({ length: 44 }, () => "12").join(" "),
+      Array.from({ length: 10_000 }, () => "12").join(" "),
+    ]) {
+      expect(await detect("en", `Patient number: ${value}`)).toEqual([]);
+    }
+  });
 });
