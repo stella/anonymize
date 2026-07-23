@@ -25,4 +25,8 @@ if [[ ! -f "$REPO_ROOT/.ai/shared/scripts/sync-ai-skills.sh" ]]; then
   exit 1
 fi
 
-bash "$REPO_ROOT/.ai/shared/scripts/sync-ai-skills.sh" "${args[@]}" "$REPO_ROOT"
+if [[ "${#args[@]}" -eq 0 ]]; then
+  bash "$REPO_ROOT/.ai/shared/scripts/sync-ai-skills.sh" "$REPO_ROOT"
+else
+  bash "$REPO_ROOT/.ai/shared/scripts/sync-ai-skills.sh" "${args[@]}" "$REPO_ROOT"
+fi
