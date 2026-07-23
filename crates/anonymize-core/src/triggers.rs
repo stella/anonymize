@@ -2267,7 +2267,7 @@ fn classify_grouped_numeric_continuation(
     FollowingNumericGroup::Absent
       if completed_numeric_groups >= 2
         || (current_leading_alpha == 0 && (2..=3).contains(&prior_digits))
-        || (1..=3).contains(&current_leading_alpha) =>
+        || (1..=MAX_IDENTIFIER_ALPHA_RUN).contains(&current_leading_alpha) =>
     {
       IdentifierContinuation::Consume
     }
@@ -2287,7 +2287,7 @@ fn classify_mixed_prefix_numeric_continuation(
 ) -> IdentifierContinuation {
   if completed_numeric_groups > 0
     || prior_digits == 0
-    || !(1..=3).contains(&current_leading_alpha)
+    || !(1..=MAX_IDENTIFIER_ALPHA_RUN).contains(&current_leading_alpha)
     || digits < 2
   {
     return IdentifierContinuation::Stop;
@@ -2324,6 +2324,9 @@ enum FollowingNumericGroup {
   Invalid,
 }
 
+const PROSE_YEAR_MIN: u16 = 1900;
+const PROSE_YEAR_MAX: u16 = 2099;
+
 fn following_numeric_group(
   bytes: &[u8],
   mut start: usize,
@@ -2354,11 +2357,11 @@ fn following_numeric_group(
   let dirty_boundary = bytes.get(end).is_some_and(|value| {
     value.is_ascii_alphanumeric() || matches!(value, b'_' | b'-' | b'/')
   });
-  let prose_year = digits == 4
+  let prose_year = !dirty_boundary
     && bytes
-      .get(start)
-      .is_some_and(|value| matches!(value, b'1' | b'2'))
-    && !dirty_boundary;
+      .get(start..end)
+      .and_then(parse_ascii_year)
+      .is_some_and(|year| (PROSE_YEAR_MIN..=PROSE_YEAR_MAX).contains(&year));
   if prose_year {
     FollowingNumericGroup::Absent
   } else if !(2..=3).contains(&digits) || dirty_boundary {
@@ -2366,6 +2369,19 @@ fn following_numeric_group(
   } else {
     FollowingNumericGroup::Valid
   }
+}
+
+fn parse_ascii_year(value: &[u8]) -> Option<u16> {
+  let [thousands, hundreds, tens, ones] = value else {
+    return None;
+  };
+  [thousands, hundreds, tens, ones].into_iter().try_fold(
+    0_u16,
+    |year, digit| {
+      let digit = digit.checked_sub(b'0').filter(|digit| *digit <= 9)?;
+      Some(year.saturating_mul(10).saturating_add(u16::from(digit)))
+    },
+  )
 }
 
 fn is_ascii_date_shape(token: &[u8], following: Option<u8>) -> bool {
