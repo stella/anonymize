@@ -1,14 +1,13 @@
 //! End-to-end digest gate: the Rust assembler, fed through the same
 //! prepare/package path the native binding uses, must reproduce the SHA-256
-//! package digest the TypeScript source captured in `manifest.json`.
+//! package digest committed in `manifest.json`.
 //!
 //! For each fixture the test assembles a [`BindingPreparedSearchConfig`] from
 //! the committed inputs, converts it to a core `PreparedEngineConfig`, prepares
 //! the artifacts, serializes the uncompressed core package, and hashes the
-//! bytes. The `manifest.json` digests were produced by
-//! `capture-assemble-fixtures.mjs` via `prepareStaticSearchPackageBytes`
-//! (`node:crypto` SHA-256, since blake3 is not exposed to JS), so a digest match
-//! proves the assembled config is byte-identical end to end, not just field-wise.
+//! bytes. A digest match proves the assembled config is byte-identical end to
+//! end, not just field-wise. Deliberate behavior changes are refreshed through
+//! the gated Rust updater documented alongside the fixtures.
 
 use std::fmt::Write as _;
 use std::fs;

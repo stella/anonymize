@@ -10,14 +10,21 @@ triple:
 - `manifest.json` — a per-fixture `packageDigest` (sha256 of the prepared
   package bytes), checked by `tests/assemble_digest.rs`.
 
-They were captured once from the retired TypeScript config-assembly layer
-(`packages/anonymize/src/build-unified-search.ts` and its detector modules)
-before that layer was deleted in the Rust-assembler cutover. That capture script
-(`packages/anonymize/scripts/capture-assemble-fixtures.mjs`) is gone along with
-the TypeScript source it depended on, so these files are **frozen** — they are
-the oracle, not a regenerated artifact.
+The expected files were originally captured from the retired TypeScript
+config-assembly layer. They remain **frozen oracles** during ordinary
+development and CI; never regenerate them to hide an unexplained parity
+failure.
 
-Do not "recapture" them. If a fixture's expected output must change, the change
-is a deliberate behavior change to the assembler: update the expected/manifest
-values by hand (or from the Rust assembler output) in the same commit that
-changes the assembler, and explain why in the commit message.
+For an intentional assembler or bundled-data behavior change, use the ignored
+Rust updater with both safety gates and an explicit comma-separated allowlist:
+
+```sh
+STELLA_UPDATE_ASSEMBLE_FIXTURES=1 \
+STELLA_ASSEMBLE_FIXTURES=baseline-all-on,language-all \
+cargo test -p stella-anonymize-core --test assemble_regenerate -- --ignored
+```
+
+The updater changes only the selected expected outputs and their manifest
+digests, then applies the repository's standard JSON formatter. Review the
+generated diff and commit it with the behavior change. Do not restore a
+parallel TypeScript assembly implementation.
