@@ -44,7 +44,7 @@ pub struct LegalFormData {
 pub(crate) struct PreparedLegalFormData {
   suffixes: Vec<String>,
   non_ascii_name_short_suffixes: HashSet<String>,
-  list_suffix_indices: Vec<usize>,
+  list_suffix_indices_by_last_char: HashMap<char, Vec<usize>>,
   suffix_indices_by_last_char: HashMap<char, Vec<usize>>,
   normalized_boundary_suffixes: HashSet<String>,
   normalized_in_name_words: HashSet<String>,
@@ -96,13 +96,16 @@ impl PreparedLegalFormData {
       institutional_generic_words,
       institutional_prefix_generic_words,
     } = data;
-    let list_suffix_indices = list_suffix_indices(&suffixes);
+    let list_suffix_indices_by_last_char =
+      suffix_indices_by_last_char_matching(&suffixes, |suffix| {
+        !is_roman_legal_suffix(suffix)
+      });
     let suffix_indices_by_last_char = suffix_indices_by_last_char(&suffixes);
 
     Self {
       suffixes,
       non_ascii_name_short_suffixes: lower_set(non_ascii_name_short_suffixes),
-      list_suffix_indices,
+      list_suffix_indices_by_last_char,
       suffix_indices_by_last_char,
       normalized_boundary_suffixes: lower_set(normalized_boundary_suffixes),
       normalized_in_name_words: lower_set(normalized_in_name_words),
@@ -135,21 +138,21 @@ impl PreparedLegalFormData {
   }
 }
 
-fn list_suffix_indices(suffixes: &[String]) -> Vec<usize> {
-  suffixes
-    .iter()
-    .enumerate()
-    .filter_map(|(index, suffix)| {
-      (!is_roman_legal_suffix(suffix)).then_some(index)
-    })
-    .collect()
-}
-
 fn suffix_indices_by_last_char(
   suffixes: &[String],
 ) -> HashMap<char, Vec<usize>> {
+  suffix_indices_by_last_char_matching(suffixes, |_| true)
+}
+
+fn suffix_indices_by_last_char_matching(
+  suffixes: &[String],
+  include: impl Fn(&str) -> bool,
+) -> HashMap<char, Vec<usize>> {
   let mut by_char = HashMap::<char, Vec<usize>>::new();
   for (index, suffix) in suffixes.iter().enumerate() {
+    if !include(suffix) {
+      continue;
+    }
     let Some(last) = suffix.chars().next_back() else {
       continue;
     };
@@ -1895,27 +1898,21 @@ fn split_embedded_legal_form_list<'a>(
   }
 
   let mut cuts = vec![0_usize];
-  for suffix in list_suffixes(data) {
-    let mut search_from = 0_usize;
-    while let Some(relative) = entity_text
-      .get(search_from..)
-      .and_then(|tail| tail.find(suffix))
+  for (suffix_end, _) in entity_text.match_indices([',', ';']) {
+    let Some(before) = entity_text.get(..suffix_end) else {
+      continue;
+    };
+    if !ends_with_list_suffix(before, data) {
+      continue;
+    }
+    let Some(after) = entity_text.get(suffix_end..) else {
+      continue;
+    };
+    let boundary_len = legal_list_boundary_len(after);
+    if boundary_len > 0
+      && following_list_segment_has_name(after, boundary_len, data)
     {
-      let suffix_start = search_from.saturating_add(relative);
-      let suffix_end = suffix_start.saturating_add(suffix.len());
-      search_from = suffix_end;
-      if suffix_end >= entity_text.len().saturating_sub(1) {
-        continue;
-      }
-      let Some(after) = entity_text.get(suffix_end..) else {
-        continue;
-      };
-      let boundary_len = legal_list_boundary_len(after);
-      if boundary_len > 0
-        && following_list_segment_has_name(after, boundary_len, data)
-      {
-        cuts.push(suffix_end.saturating_add(boundary_len));
-      }
+      cuts.push(suffix_end.saturating_add(boundary_len));
     }
   }
 
@@ -2034,13 +2031,13 @@ fn has_name_before_trailing_list_suffix(
   segment: &str,
   data: &PreparedLegalFormData,
 ) -> bool {
-  list_suffixes(data)
-    .filter(|suffix| segment.ends_with(*suffix))
-    .max_by_key(|suffix| suffix.len())
-    .and_then(|suffix| {
-      segment.get(..segment.len().saturating_sub(suffix.len()))
-    })
-    .is_some_and(|prefix| prefix.chars().any(char::is_alphanumeric))
+  longest_trailing_suffix(
+    segment,
+    &data.list_suffix_indices_by_last_char,
+    &data.suffixes,
+  )
+  .and_then(|suffix| segment.get(..segment.len().saturating_sub(suffix.len())))
+  .is_some_and(|prefix| prefix.chars().any(char::is_alphanumeric))
 }
 
 fn legal_list_boundary_len(text: &str) -> usize {
@@ -2094,34 +2091,28 @@ fn trim_embedded_legal_form_list_prefix<'a>(
   }
 
   let mut cut = 0_usize;
-  for suffix in list_suffixes(data) {
-    let mut search_from = 0_usize;
-    while let Some(relative) = entity_text
-      .get(search_from..)
-      .and_then(|tail| tail.find(suffix))
+  for (suffix_end, _) in entity_text.match_indices(',') {
+    let Some(before) = entity_text.get(..suffix_end) else {
+      continue;
+    };
+    if !ends_with_list_suffix(before, data) {
+      continue;
+    }
+    let Some(after) = entity_text.get(suffix_end..) else {
+      continue;
+    };
+    let boundary_len = comma_upper_boundary_len(after);
+    if boundary_len == 0
+      || !following_list_segment_has_name(after, boundary_len, data)
     {
-      let suffix_start = search_from.saturating_add(relative);
-      let suffix_end = suffix_start.saturating_add(suffix.len());
-      search_from = suffix_end;
-      if suffix_end >= entity_text.len().saturating_sub(1) {
-        continue;
-      }
-      let Some(after) = entity_text.get(suffix_end..) else {
-        continue;
-      };
-      let boundary_len = comma_upper_boundary_len(after);
-      if boundary_len == 0
-        || !following_list_segment_has_name(after, boundary_len, data)
-      {
-        continue;
-      }
-      let next_start = suffix_end.saturating_add(boundary_len);
-      if entity_text.get(next_start..).is_some_and(|remainder| {
-        ends_with_legal_suffix(remainder, data)
-          || starts_with_named_institutional_complement(remainder, data)
-      }) {
-        cut = cut.max(next_start);
-      }
+      continue;
+    }
+    let next_start = suffix_end.saturating_add(boundary_len);
+    if entity_text.get(next_start..).is_some_and(|remainder| {
+      ends_with_legal_suffix(remainder, data)
+        || starts_with_named_institutional_complement(remainder, data)
+    }) {
+      cut = cut.max(next_start);
     }
   }
 
@@ -2398,12 +2389,28 @@ fn is_roman_legal_suffix(text: &str) -> bool {
   !suffix.is_empty() && is_roman_numeral(&suffix)
 }
 
-fn list_suffixes(
-  data: &PreparedLegalFormData,
-) -> impl Iterator<Item = &str> + '_ {
-  data.list_suffix_indices.iter().filter_map(|index| {
-    data.suffixes.get(*index).map(std::string::String::as_str)
-  })
+fn ends_with_list_suffix(text: &str, data: &PreparedLegalFormData) -> bool {
+  longest_trailing_suffix(
+    text,
+    &data.list_suffix_indices_by_last_char,
+    &data.suffixes,
+  )
+  .is_some()
+}
+
+fn longest_trailing_suffix<'a>(
+  text: &str,
+  indices_by_last_char: &HashMap<char, Vec<usize>>,
+  suffixes: &'a [String],
+) -> Option<&'a str> {
+  let last = text.chars().next_back()?;
+  indices_by_last_char
+    .get(&last)?
+    .iter()
+    .filter_map(|index| suffixes.get(*index))
+    .filter(|suffix| text.ends_with(suffix.as_str()))
+    .max_by_key(|suffix| suffix.len())
+    .map(String::as_str)
 }
 
 fn is_roman_numeral(text: &str) -> bool {
@@ -2551,11 +2558,391 @@ mod tests {
 
   use super::{
     LegalFormData, PreparedLegalFormData, crosses_sentence_end,
-    extend_backward, process_legal_form_matches, trim_leading_clause,
-    trim_role_head,
+    ends_with_list_suffix, extend_backward, is_roman_legal_suffix,
+    process_legal_form_matches, split_embedded_legal_form_list,
+    trim_embedded_legal_form_list_prefix, trim_leading_clause, trim_role_head,
   };
   use crate::processors::PatternSlice;
   use crate::types::SearchMatch;
+  use proptest::prelude::*;
+
+  proptest! {
+    #[test]
+    fn trailing_suffix_index_matches_exhaustive_lookup(
+      suffixes in proptest::collection::vec("[A-Z][A-Za-z.]{0,7}", 0..80),
+      prefix in "[A-Za-z ,;]{0,120}",
+    ) {
+      let expected = suffixes.iter().any(|suffix| {
+        !is_roman_legal_suffix(suffix) && prefix.ends_with(suffix)
+      });
+      let data = PreparedLegalFormData::new(LegalFormData {
+        suffixes,
+        ..LegalFormData::default()
+      });
+      prop_assert_eq!(ends_with_list_suffix(&prefix, &data), expected);
+    }
+
+    #[test]
+    fn indexed_list_split_and_trim_match_legacy_reference(
+      name_offset in 0_usize..7,
+      suffix_offset in 0_usize..10,
+      boundary_offset in 0_usize..10,
+      entity_start in 0_usize..256,
+    ) {
+      let names = [
+        "Acme",
+        "Élan",
+        "İstanbul",
+        "Cafe\u{301}",
+        "Žlutý",
+        "München",
+        "東京",
+      ];
+      // The pairs exercise nested ASCII, multibyte-final, and combining-mark
+      // suffixes. Exact matching is intentional: normalization is unchanged
+      // from the exhaustive implementation.
+      let suffixes = [
+        "LLC",
+        "C",
+        "Inc.",
+        "GmbH",
+        "AŞ",
+        "Ş",
+        "株式会社",
+        "社",
+        "e\u{301}",
+        "\u{301}",
+      ];
+      let boundaries = [
+        (',', " "),
+        (';', " "),
+        (',', "\u{a0}"),
+        (';', "\u{a0}"),
+        (',', "\u{202f}"),
+        (';', "\u{202f}"),
+        (',', "\r\n  "),
+        (';', "\r\n  "),
+        (',', "\t"),
+        (';', "\t"),
+      ];
+      let data = PreparedLegalFormData::new(LegalFormData {
+        suffixes: suffixes.iter().map(|suffix| (*suffix).to_string()).collect(),
+        ..LegalFormData::default()
+      });
+      let mut text = String::new();
+      for member in 0..=boundaries.len() {
+        let name = names
+          .iter()
+          .cycle()
+          .nth(member.wrapping_add(name_offset))
+          .copied()
+          .expect("wrapped name index");
+        let suffix = suffixes
+          .iter()
+          .cycle()
+          .nth(member.wrapping_add(suffix_offset))
+          .copied()
+          .expect("wrapped suffix index");
+        text.push_str(name);
+        text.push(' ');
+        text.push_str(suffix);
+        if member < boundaries.len() {
+          let (delimiter, whitespace) = boundaries
+            .iter()
+            .cycle()
+            .nth(member.wrapping_add(boundary_offset))
+            .copied()
+            .expect("wrapped boundary index");
+          text.push(delimiter);
+          text.push_str(whitespace);
+        }
+      }
+
+      let indexed = split_embedded_legal_form_list(entity_start, &text, &data);
+      let exhaustive = legacy_split_embedded_legal_form_list(
+        entity_start,
+        &text,
+        &data,
+      );
+      prop_assert_eq!(
+        segment_identity(&indexed),
+        segment_identity(&exhaustive),
+      );
+      prop_assert_eq!(
+        trim_embedded_legal_form_list_prefix(entity_start, &text, &data),
+        legacy_trim_embedded_legal_form_list_prefix(
+          entity_start,
+          &text,
+          &data,
+        ),
+      );
+    }
+  }
+
+  fn legacy_list_suffixes(
+    data: &PreparedLegalFormData,
+  ) -> impl Iterator<Item = &str> + '_ {
+    data
+      .suffixes
+      .iter()
+      .map(String::as_str)
+      .filter(|suffix| !is_roman_legal_suffix(suffix))
+  }
+
+  fn legacy_has_name_before_trailing_list_suffix(
+    segment: &str,
+    data: &PreparedLegalFormData,
+  ) -> bool {
+    legacy_list_suffixes(data)
+      .filter(|suffix| segment.ends_with(*suffix))
+      .max_by_key(|suffix| suffix.len())
+      .and_then(|suffix| {
+        segment.get(..segment.len().saturating_sub(suffix.len()))
+      })
+      .is_some_and(|prefix| prefix.chars().any(char::is_alphanumeric))
+  }
+
+  fn legacy_following_list_segment_has_name(
+    after_suffix: &str,
+    boundary_len: usize,
+    data: &PreparedLegalFormData,
+  ) -> bool {
+    let Some(after_boundary) = after_suffix.get(boundary_len..) else {
+      return false;
+    };
+    let segment_end = after_boundary
+      .find([',', ';'])
+      .unwrap_or(after_boundary.len());
+    let segment = after_boundary.get(..segment_end).unwrap_or_default().trim();
+    if legacy_has_name_before_trailing_list_suffix(segment, data)
+      || super::starts_with_named_institutional_complement(segment, data)
+    {
+      return true;
+    }
+
+    let Some(after_comma) = after_boundary.get(segment_end..) else {
+      return false;
+    };
+    let Some(after_comma) = after_comma.strip_prefix(',') else {
+      return false;
+    };
+    let legal_form_end =
+      after_comma.find([',', ';']).unwrap_or(after_comma.len());
+    let legal_form =
+      after_comma.get(..legal_form_end).unwrap_or_default().trim();
+    if legal_form.is_empty() {
+      return false;
+    }
+    let combined_len = segment_end
+      .saturating_add(','.len_utf8())
+      .saturating_add(legal_form_end);
+    after_boundary
+      .get(..combined_len)
+      .map(str::trim)
+      .is_some_and(|combined| {
+        legacy_has_name_before_trailing_list_suffix(combined, data)
+      })
+  }
+
+  fn legacy_split_embedded_legal_form_list<'a>(
+    entity_start: usize,
+    entity_text: &'a str,
+    data: &PreparedLegalFormData,
+  ) -> Vec<super::Segment<'a>> {
+    if !entity_text.contains([',', ';']) {
+      return vec![super::Segment {
+        start: entity_start,
+        text: entity_text,
+      }];
+    }
+
+    let mut cuts = vec![0_usize];
+    for suffix in legacy_list_suffixes(data) {
+      let mut search_from = 0_usize;
+      while let Some(relative) = entity_text
+        .get(search_from..)
+        .and_then(|tail| tail.find(suffix))
+      {
+        let suffix_start = search_from.saturating_add(relative);
+        let suffix_end = suffix_start.saturating_add(suffix.len());
+        search_from = suffix_end;
+        if suffix_end >= entity_text.len().saturating_sub(1) {
+          continue;
+        }
+        let Some(after) = entity_text.get(suffix_end..) else {
+          continue;
+        };
+        let boundary_len = super::legal_list_boundary_len(after);
+        if boundary_len > 0
+          && legacy_following_list_segment_has_name(after, boundary_len, data)
+        {
+          cuts.push(suffix_end.saturating_add(boundary_len));
+        }
+      }
+    }
+
+    cuts.sort_unstable();
+    cuts.dedup();
+    if cuts.len() == 1 {
+      return vec![super::Segment {
+        start: entity_start,
+        text: entity_text,
+      }];
+    }
+
+    let mut segments = Vec::new();
+    for (index, start) in cuts.iter().enumerate() {
+      let end = cuts
+        .get(index.saturating_add(1))
+        .copied()
+        .unwrap_or(entity_text.len());
+      if *start >= end {
+        continue;
+      }
+      let Some(segment) = entity_text.get(*start..end) else {
+        continue;
+      };
+      let trimmed = segment.trim_end_matches(|ch: char| {
+        ch.is_whitespace() || matches!(ch, ',' | ';')
+      });
+      if trimmed.is_empty()
+        || (!legacy_has_name_before_trailing_list_suffix(trimmed, data)
+          && !super::starts_with_named_institutional_complement(trimmed, data))
+      {
+        continue;
+      }
+      segments.push(super::Segment {
+        start: entity_start.saturating_add(*start),
+        text: trimmed,
+      });
+    }
+    segments
+  }
+
+  fn legacy_trim_embedded_legal_form_list_prefix<'a>(
+    entity_start: usize,
+    entity_text: &'a str,
+    data: &PreparedLegalFormData,
+  ) -> (usize, &'a str) {
+    if !entity_text.contains(',') {
+      return (entity_start, entity_text);
+    }
+
+    let mut cut = 0_usize;
+    for suffix in legacy_list_suffixes(data) {
+      let mut search_from = 0_usize;
+      while let Some(relative) = entity_text
+        .get(search_from..)
+        .and_then(|tail| tail.find(suffix))
+      {
+        let suffix_start = search_from.saturating_add(relative);
+        let suffix_end = suffix_start.saturating_add(suffix.len());
+        search_from = suffix_end;
+        if suffix_end >= entity_text.len().saturating_sub(1) {
+          continue;
+        }
+        let Some(after) = entity_text.get(suffix_end..) else {
+          continue;
+        };
+        let boundary_len = super::comma_upper_boundary_len(after);
+        if boundary_len == 0
+          || !legacy_following_list_segment_has_name(after, boundary_len, data)
+        {
+          continue;
+        }
+        let next_start = suffix_end.saturating_add(boundary_len);
+        if entity_text.get(next_start..).is_some_and(|remainder| {
+          super::ends_with_legal_suffix(remainder, data)
+            || super::starts_with_named_institutional_complement(
+              remainder, data,
+            )
+        }) {
+          cut = cut.max(next_start);
+        }
+      }
+    }
+
+    if cut == 0 {
+      return (entity_start, entity_text);
+    }
+    (
+      entity_start.saturating_add(cut),
+      entity_text.get(cut..).unwrap_or_default(),
+    )
+  }
+
+  fn segment_identity<'a>(
+    segments: &'a [super::Segment<'a>],
+  ) -> Vec<(usize, &'a str)> {
+    segments
+      .iter()
+      .map(|segment| (segment.start, segment.text))
+      .collect()
+  }
+
+  #[test]
+  fn empty_list_suffixes_are_ignored() {
+    // The assembler drops empty legal forms. Keep the core preparation path
+    // fail-safe too: an empty suffix has no trailing character to index and
+    // must never create a cut or make an exhaustive search fail to advance.
+    let data = PreparedLegalFormData::new(LegalFormData {
+      suffixes: vec![String::new()],
+      ..LegalFormData::default()
+    });
+    let text = "Acme LLC, Beta Inc.";
+    assert!(!ends_with_list_suffix("Acme LLC", &data));
+    assert_eq!(
+      segment_identity(&split_embedded_legal_form_list(7, text, &data)),
+      [(7, text)],
+    );
+    assert_eq!(
+      trim_embedded_legal_form_list_prefix(7, text, &data),
+      (7, text),
+    );
+  }
+
+  #[test]
+  #[ignore = "release-mode scaling regression check"]
+  fn delimiter_dense_legal_form_lists_scale_with_input_size() {
+    let mut suffixes = vec![String::from("LLC"), String::from("Inc.")];
+    suffixes.extend((0..256).map(|index| format!("DenseBucket{index:03}C")));
+    let data = PreparedLegalFormData::new(LegalFormData {
+      suffixes,
+      ..LegalFormData::default()
+    });
+    let fixture = "Ácme LLC, Béťa Inc.; ";
+    let sizes: [usize; 3] = [16 * 1024, 64 * 1024, 256 * 1024];
+    let mut samples = Vec::new();
+
+    for target_bytes in sizes {
+      let repeats = target_bytes.div_ceil(fixture.len());
+      let text = fixture.repeat(repeats);
+      let expected_segments = repeats.saturating_mul(2);
+      let warm = split_embedded_legal_form_list(0, &text, &data);
+      assert_eq!(warm.len(), expected_segments);
+
+      let mut best = std::time::Duration::MAX;
+      for _ in 0..5 {
+        let started = std::time::Instant::now();
+        let segments = split_embedded_legal_form_list(0, &text, &data);
+        let trimmed = trim_embedded_legal_form_list_prefix(0, &text, &data);
+        best = best.min(started.elapsed());
+        assert_eq!(segments.len(), expected_segments);
+        std::hint::black_box((segments, trimmed));
+      }
+      samples.push((text.len(), best.as_nanos()));
+    }
+
+    let (smallest_bytes, smallest_nanos) = samples.first().copied().unwrap();
+    let (largest_bytes, largest_nanos) = samples.last().copied().unwrap();
+    assert!(
+      largest_nanos.saturating_mul(u128::try_from(smallest_bytes).unwrap())
+        <= smallest_nanos
+          .saturating_mul(u128::try_from(largest_bytes).unwrap())
+          .saturating_mul(4),
+      "delimiter-dense legal-form time per byte regressed: {samples:?}",
+    );
+  }
 
   fn leading_clause_data() -> PreparedLegalFormData {
     PreparedLegalFormData::new(LegalFormData {
