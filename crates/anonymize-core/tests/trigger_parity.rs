@@ -371,6 +371,46 @@ fn company_id_trigger_caps_leading_alpha_prefixes() {
 }
 
 #[test]
+fn company_id_trigger_consumes_complete_alphanumeric_identifier() {
+  let prepared = prepared_for_trigger(
+    "Patient number",
+    "registration number",
+    TriggerStrategy::CompanyIdValue,
+  );
+
+  for value in ["ABCD-12345", "12345-ABCD", "ABCD/12345.XY"] {
+    let text = format!("Patient number: {value}, next field");
+    let result = prepared
+      .detect_static_entities(&text)
+      .expect("static detection should succeed");
+
+    assert_eq!(trigger_texts(&result), [value]);
+  }
+}
+
+#[test]
+fn company_id_trigger_rejects_partial_or_overlong_identifier() {
+  let prepared = prepared_for_trigger(
+    "Patient number",
+    "registration number",
+    TriggerStrategy::CompanyIdValue,
+  );
+  let overlong = format!("AB-{}", "1".repeat(129));
+
+  for value in ["12345-", "ABCD-12345_tail", overlong.as_str()] {
+    let text = format!("Patient number: {value}");
+    let result = prepared
+      .detect_static_entities(&text)
+      .expect("static detection should succeed");
+
+    assert!(
+      result.entities.trigger().is_empty(),
+      "must not redact a partial prefix of {value:?}"
+    );
+  }
+}
+
+#[test]
 fn address_trigger_stops_after_short_proper_noun_before_real_sentence() {
   let prepared = prepared_for_trigger(
     "office",

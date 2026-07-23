@@ -131,6 +131,28 @@ const NEGATIVE_FIXTURES = [
   ["sv", "Patientnummer: okänt."],
 ] as const;
 
+const LANGUAGE_ISOLATION_FIXTURES = POSITIVE_FIXTURES.map(
+  ([language], index) => {
+    const foreign = POSITIVE_FIXTURES[(index + 1) % POSITIVE_FIXTURES.length];
+    if (!foreign) {
+      throw new TypeError("clinical language-isolation fixture is missing");
+    }
+    return [language, foreign[1]] as const;
+  },
+);
+
+const ALPHANUMERIC_FIXTURES = [
+  ["en", "Medical record number: ABCD-12345.", "ABCD-12345"],
+  ["de", "Patientennummer: 12345-ABCD.", "12345-ABCD"],
+  ["cs", "Číslo průkazu pojištěnce: AB12/345.XY.", "AB12/345.XY"],
+] as const;
+
+const PARTIAL_REDACTION_FIXTURES = [
+  ["en", "Patient number: ABCD-12345_tail."],
+  ["de", "Krankenaktennummer: 12345-."],
+  ["sv", `Journalnummer: AB-${"1".repeat(129)}.`],
+] as const;
+
 describe("multilingual clinical identifiers", () => {
   test("covers every clinical identifier family in every supported language", async () => {
     for (const language of SUPPORTED_LANGUAGES) {
@@ -166,6 +188,31 @@ describe("multilingual clinical identifiers", () => {
 
   test.each(NEGATIVE_FIXTURES)(
     "%s rejects a clinical identifier without digits",
+    async (language, text) => {
+      expect(await detect(language, text)).toEqual([]);
+    },
+  );
+
+  test.each(LANGUAGE_ISOLATION_FIXTURES)(
+    "%s excludes another language's clinical triggers",
+    async (language, foreignText) => {
+      expect(await detect(language, foreignText)).toEqual([]);
+    },
+  );
+
+  test.each(ALPHANUMERIC_FIXTURES)(
+    "%s consumes a complete alphanumeric clinical identifier",
+    async (language, text, expected) => {
+      const values = (await detect(language, text))
+        .filter((entity) => entity.label === "registration number")
+        .map((entity) => entity.text);
+
+      expect(values).toContain(expected);
+    },
+  );
+
+  test.each(PARTIAL_REDACTION_FIXTURES)(
+    "%s rejects a partial clinical identifier",
     async (language, text) => {
       expect(await detect(language, text)).toEqual([]);
     },
