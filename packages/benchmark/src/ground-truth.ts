@@ -39,7 +39,9 @@ export type GroundTruthDocument = {
 
 const FIXTURES_DIR = join(import.meta.dir, "..", "fixtures");
 
-const buildDocument = (raw: RawDocument): GroundTruthDocument => {
+export const buildGroundTruthDocument = (
+  raw: RawDocument,
+): GroundTruthDocument => {
   let offset = 0;
   let text = "";
   const entities: GoldEntity[] = [];
@@ -92,7 +94,7 @@ export const loadGroundTruth = async (): Promise<GroundTruthDocument[]> => {
         throw new Error(`duplicate document id "${doc.id}" in ${file}`);
       }
       seenIds.add(doc.id);
-      documents.push(buildDocument(doc));
+      documents.push(buildGroundTruthDocument(doc));
     }
   }
 

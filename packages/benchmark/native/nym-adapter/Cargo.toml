@@ -1,0 +1,39 @@
+[package]
+name = "stella-nym-benchmark-adapter"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.88"
+license = "Apache-2.0"
+publish = false
+
+[[bin]]
+name = "stella-nym-adapter"
+path = "src/main.rs"
+
+# Keep this optional benchmark tool outside stella's release workspace and
+# default dependency graph.
+[workspace]
+
+[dependencies]
+anyhow = "1.0.100"
+ort = { version = "=2.0.0-rc.12", default-features = false, features = [
+  "std",
+  "ndarray",
+  "download-binaries",
+  "tls-native",
+  "copy-dylibs",
+  "api-24",
+] }
+# Keep the safe wrapper and generated ONNX Runtime ABI on one exact RC.
+ort-sys = "=2.0.0-rc.12"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+sha2 = "0.10.9"
+tokenizers = { version = "0.21.4", default-features = false, features = [
+  "onig",
+] }
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+strip = "symbols"

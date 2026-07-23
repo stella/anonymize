@@ -1,0 +1,39 @@
+# Supply-chain policy for the detached benchmark-only Nym adapter.
+# Run from the repository root with the exact command in CI.
+
+[advisories]
+version = 2
+yanked = "deny"
+ignore = [
+  # Hugging Face tokenizers 0.21.4 depends on paste directly and through
+  # macro_rules_attribute. The latest maintained release (0.23.1) still has
+  # the same direct dependency, so there is no safe upstream upgrade yet.
+  { id = "RUSTSEC-2024-0436", reason = "no maintained tokenizers release avoids paste; recheck when upstream removes it" },
+]
+
+[licenses]
+version = 2
+# Keep this list local and limited to licenses present in the optional native
+# inference graph. CDLA-Permissive-2.0 covers the certificate roots downloaded
+# by ort-sys's build-only HTTP client; it is not needed by stella's root graph.
+allow = [
+  "MIT",
+  "Apache-2.0",
+  "Apache-2.0 WITH LLVM-exception",
+  "BSD-2-Clause",
+  "ISC",
+  "CDLA-Permissive-2.0",
+  "Unicode-3.0",
+  "Unlicense",
+  "Zlib",
+]
+confidence-threshold = 0.9
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

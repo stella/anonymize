@@ -213,7 +213,60 @@ uv venv .venv-datafog --python 3.11
 uv pip install --python .venv-datafog -r python/requirements-datafog.txt
 ```
 
-### 5. Run
+### 5. Optional German PII-assisted lane (local ONNX)
+
+The default stella adapter remains deterministic and model-free. An explicit
+German-only lane combines it with the MIT-licensed
+[`Wismut/nym-pii-multilingual-small`](https://huggingface.co/Wismut/nym-pii-multilingual-small)
+token-classification model. The adapter pins revision
+`4348999cd3c2e20c49615e9af7c6bbb45b64cd85` and its `int8/` ONNX export; it does
+not follow a moving model branch. The approximately 133 MiB model is downloaded
+into the benchmark's ignored `.cache/` directory on first use and all inference
+remains local. The exact artifacts total 151,126,561 bytes (138,730,982-byte
+model plus tokenizer and config); each has a committed expected size and
+SHA-256. The current upstream card's historical 70 MB row describes the older
+v2 int8 model, not the pinned v3 artifact. CPU ONNX inference is expected to
+dominate runtime and to be substantially slower than model-free stella on short
+documents; the runner reports model load, cold-pass, and warm-pass timings
+separately instead of hiding that cost.
+
+The model was trained on multilingual synthetic PII plus LLM-labelled
+Wikipedia, not the German LER corpus. Its upstream model card reports a
+recall-leaning operating point and warns that ambiguous spans may be
+over-flagged; this lane is therefore an optional provider, not a compliance
+claim or a replacement for stella's deterministic detectors. No text is sent
+to an API or written to benchmark output.
+
+```sh
+# Build the isolated benchmark-only Rust binary. It is deliberately not a
+# member of stella's release workspace and does not affect default binaries.
+cargo build --release --locked \
+  --manifest-path native/nym-adapter/Cargo.toml
+
+# Independently authored, public-safe German legal development fixtures only:
+bun run bench:dev:nym-assisted
+
+# Sealed aggregate-only German LER run (requires a clean committed tree):
+bun run bench:sealed:german-ler:assisted
+```
+
+Provider output uses Unicode code-point offsets and is imported through the
+public `ExternalDetectionBatch` v1 contract, including a document SHA-256 and
+the exact provider revision. stella then performs its normal overlap
+resolution. The mapping is intentionally PII-only: unsupported Nym concepts
+are dropped, and legal citations, statutes, cases, and other non-PII legal NER
+classes are not flattened into a generic PII label. Accordingly, German LER's
+label-agnostic score is only a coverage diagnostic for this assisted lane, not
+label-aware legal NER accuracy.
+
+The optional adapter uses native Rust `ort` and Hugging Face `tokenizers`; there
+is no Python, NumPy, transformers, or provider-specific TypeScript decoder. Its
+standalone Cargo lock pins the complete native toolchain, including the matching
+`ort`/`ort-sys` release-candidate pair. The release binary and ONNX Runtime
+dynamic library live under `native/nym-adapter/target/`, which is ignored and
+never shipped with stella packages.
+
+### 6. Run
 
 ```sh
 bun run bench:compare
@@ -233,8 +286,9 @@ All text is **public-safe synthetic** legal prose: invented people, companies,
 and identifiers. The repo's `.snapshot.json` contract fixtures are stella's own
 pipeline output and are deliberately NOT used as ground truth (that would be
 circular). Offsets are UTF-16 code units; fixtures avoid astral-plane
-characters, so UTF-16 offsets equal Python code-point offsets and spans align
-across the Node and Python adapters.
+characters, so UTF-16 offsets equal provider offsets for the development corpus.
+The native Nym adapter separately tests astral Unicode conversion through the
+public external-detection contract.
 
 ## Common taxonomy and per-library mapping
 
