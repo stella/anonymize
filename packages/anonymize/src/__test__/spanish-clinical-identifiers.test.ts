@@ -39,6 +39,7 @@ describe("Spanish clinical identifier triggers", () => {
   test.each([
     "El campo número de paciente quedó vacío.",
     "El manual solo describe la tarjeta sanitaria.",
+    "Número de historia clínica: no consta.",
   ] as const)(
     "does not capture prose without an identifier: %s",
     async (text) => {
