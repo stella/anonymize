@@ -217,10 +217,20 @@ const PARTIAL_REDACTION_FIXTURES = [
   ["en", "Patient number: ABCD123(6)."],
   ["en", "Patient number: ABCD123(٦)."],
   ["en", "Patient number: ABCD123(É456)."],
+  ["en", "Patient number: ABCD123(v2)."],
+  ["en", "Patient number: ABCD123(a2)."],
+  ["en", "Patient number: ABCD123[v2]."],
+  ["en", "Patient number: ABCD123{a2}."],
   ["en", "Patient number: ABCD123[6]."],
   ["en", "Patient number: ABCD123{6}."],
   ["en", "Patient number: ABCD123\u2014É456."],
   ["en", "Patient number: ABCD123\u2014456."],
+  ["en", "Patient number: ABCD123\u2014v2."],
+  ["en", "Patient number: ABCD123\u2013confirmed."],
+  ["en", 'Patient number: ABCD123"456.'],
+  ["en", "Patient number: ABCD123“456."],
+  ["en", "Patient number: ABCD123“É٤56."],
+  ["en", "Patient number: ABCD123'v2."],
 ] as const;
 
 const IMMEDIATE_BOUNDARY_FIXTURES = [
@@ -234,6 +244,8 @@ const IMMEDIATE_BOUNDARY_FIXTURES = [
   ["\u2014confirmed"],
   ["\u2015confirmed"],
   ["\u2026prose"],
+  ["“confirmed"],
+  ["“, next"],
 ] as const;
 
 const INVALID_IMMEDIATE_BOUNDARY_FIXTURES = [

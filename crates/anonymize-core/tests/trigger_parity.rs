@@ -432,12 +432,14 @@ fn company_id_trigger_accepts_closing_quote_boundaries() {
   for quote in [
     '\'', '"', '‘', '’', '‚', '‛', '“', '”', '„', '‟', '«', '»', '‹', '›',
   ] {
-    let text = format!("Patient number: ABCD123 CD456{quote}");
-    let result = prepared
-      .detect_static_entities(&text)
-      .expect("static detection should succeed");
+    for suffix in ["", ", next", " confirmed"] {
+      let text = format!("Patient number: ABCD123 CD456{quote}{suffix}");
+      let result = prepared
+        .detect_static_entities(&text)
+        .expect("static detection should succeed");
 
-    assert_eq!(trigger_texts(&result), ["ABCD123 CD456"]);
+      assert_eq!(trigger_texts(&result), ["ABCD123 CD456"]);
+    }
   }
 }
 
@@ -592,10 +594,20 @@ fn company_id_trigger_rejects_partial_or_overlong_identifier() {
     "ABCD123(6)",
     "ABCD123(٦)",
     "ABCD123(É456)",
+    "ABCD123(v2)",
+    "ABCD123(a2)",
+    "ABCD123[v2]",
+    "ABCD123{a2}",
     "ABCD123[6]",
     "ABCD123{6}",
     "ABCD123\u{2014}É456",
     "ABCD123\u{2014}456",
+    "ABCD123\u{2014}v2",
+    "ABCD123\u{2013}confirmed",
+    "ABCD123\"456",
+    "ABCD123“456",
+    "ABCD123“É٤56",
+    "ABCD123'v2",
     overlong.as_str(),
   ] {
     let text = format!("Patient number: {value}");

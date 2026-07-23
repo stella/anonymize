@@ -1940,45 +1940,102 @@ fn is_clean_identifier_boundary(tail: &str) -> bool {
   if boundary.is_whitespace() {
     return true;
   }
-  let following = chars.next();
+  let token = immediate_boundary_token(chars.as_str());
   match boundary {
-    '(' | '[' | '{' => {
-      following.is_none_or(|ch| !ch.is_numeric() && !ch.is_uppercase())
+    '(' | '[' | '{' | '—' | '―' => {
+      !token.is_overlong() && !token.has_numeric() && !token.begins_uppercase()
     }
     '‐' | '‑' | '‒' | '–' => {
-      following.is_none_or(|ch| !ch.is_alphanumeric())
+      !token.is_overlong() && !token.has_alphanumeric()
     }
-    '—' | '―' => {
-      following.is_none_or(|ch| !ch.is_numeric() && !ch.is_uppercase())
+    ch if is_identifier_quote(ch) => {
+      !token.is_overlong() && !token.has_numeric()
     }
     ch => matches!(
       ch,
-      '.'
-        | ','
-        | ';'
-        | ':'
-        | '!'
-        | '?'
-        | ')'
-        | ']'
-        | '}'
-        | '\''
-        | '"'
-        | '‘'
-        | '’'
-        | '‚'
-        | '‛'
-        | '“'
-        | '”'
-        | '„'
-        | '‟'
-        | '«'
-        | '»'
-        | '‹'
-        | '›'
-        | '…'
+      '.' | ',' | ';' | ':' | '!' | '?' | ')' | ']' | '}' | '…'
     ),
   }
+}
+
+#[derive(Clone, Copy)]
+struct ImmediateBoundaryToken {
+  evidence: u8,
+}
+
+impl ImmediateBoundaryToken {
+  const NUMERIC: u8 = 1;
+  const ALPHANUMERIC: u8 = 1 << 1;
+  const UPPERCASE: u8 = 1 << 2;
+  const OVERLONG: u8 = 1 << 3;
+
+  const fn has_numeric(self) -> bool {
+    self.evidence & Self::NUMERIC != 0
+  }
+
+  const fn has_alphanumeric(self) -> bool {
+    self.evidence & Self::ALPHANUMERIC != 0
+  }
+
+  const fn begins_uppercase(self) -> bool {
+    self.evidence & Self::UPPERCASE != 0
+  }
+
+  const fn is_overlong(self) -> bool {
+    self.evidence & Self::OVERLONG != 0
+  }
+}
+
+fn immediate_boundary_token(tail: &str) -> ImmediateBoundaryToken {
+  let mut token = ImmediateBoundaryToken { evidence: 0 };
+  let mut chars = 0_usize;
+  for ch in tail.chars() {
+    if ch.is_whitespace() || is_boundary_token_terminator(ch) {
+      break;
+    }
+    if chars >= MAX_IDENTIFIER_VALUE_CHARS {
+      token.evidence |= ImmediateBoundaryToken::OVERLONG;
+      break;
+    }
+    if chars == 0 && ch.is_uppercase() {
+      token.evidence |= ImmediateBoundaryToken::UPPERCASE;
+    }
+    if ch.is_numeric() {
+      token.evidence |= ImmediateBoundaryToken::NUMERIC;
+    }
+    if ch.is_alphanumeric() {
+      token.evidence |= ImmediateBoundaryToken::ALPHANUMERIC;
+    }
+    chars = chars.saturating_add(1);
+  }
+  token
+}
+
+const fn is_boundary_token_terminator(ch: char) -> bool {
+  matches!(
+    ch,
+    '.' | ',' | ';' | ':' | '!' | '?' | ')' | ']' | '}' | '…'
+  ) || is_identifier_quote(ch)
+}
+
+const fn is_identifier_quote(ch: char) -> bool {
+  matches!(
+    ch,
+    '\''
+      | '"'
+      | '‘'
+      | '’'
+      | '‚'
+      | '‛'
+      | '“'
+      | '”'
+      | '„'
+      | '‟'
+      | '«'
+      | '»'
+      | '‹'
+      | '›'
+  )
 }
 
 struct IdentifierGroupState {
