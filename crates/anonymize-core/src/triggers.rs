@@ -1898,12 +1898,8 @@ fn id_value_prefix(text: &str) -> Option<&str> {
       {
         next = next.saturating_add(1);
       }
-      match classify_identifier_continuation(
-        bytes,
-        next,
-        digits > 0,
-        leading_alpha,
-      ) {
+      match classify_identifier_continuation(bytes, next, digits, leading_alpha)
+      {
         IdentifierContinuation::Consume if end > 0 => {}
         IdentifierContinuation::Reject => return None,
         IdentifierContinuation::Consume | IdentifierContinuation::Stop => {
@@ -1972,7 +1968,7 @@ enum IdentifierContinuation {
 fn classify_identifier_continuation(
   bytes: &[u8],
   start: usize,
-  has_prior_digits: bool,
+  prior_digits: usize,
   current_leading_alpha: usize,
 ) -> IdentifierContinuation {
   let Some(first) = bytes.get(start) else {
@@ -2021,7 +2017,12 @@ fn classify_identifier_continuation(
       return IdentifierContinuation::Reject;
     }
     if !first.is_ascii_alphabetic() {
-      return IdentifierContinuation::Stop;
+      let digits = token.iter().filter(|value| value.is_ascii_digit()).count();
+      return if digits >= 2 && !is_ascii_date_shape(token) {
+        IdentifierContinuation::Consume
+      } else {
+        IdentifierContinuation::Stop
+      };
     }
     let digits = token.iter().filter(|value| value.is_ascii_digit()).count();
     let leading_alpha = token
@@ -2037,7 +2038,7 @@ fn classify_identifier_continuation(
 
   let digits = token.iter().filter(|value| value.is_ascii_digit()).count();
   if digits == token.len() {
-    return if digits >= 2 && (has_prior_digits || current_leading_alpha <= 3) {
+    return if digits >= 2 && prior_digits <= 1 && current_leading_alpha <= 3 {
       IdentifierContinuation::Consume
     } else {
       IdentifierContinuation::Stop
@@ -2050,7 +2051,7 @@ fn classify_identifier_continuation(
     .iter()
     .take_while(|value| value.is_ascii_alphabetic())
     .count();
-  if has_prior_digits {
+  if prior_digits > 0 {
     return if leading_alpha <= 3 && digits >= 2 {
       IdentifierContinuation::Consume
     } else {
@@ -2062,6 +2063,36 @@ fn classify_identifier_continuation(
   } else {
     IdentifierContinuation::Stop
   }
+}
+
+fn is_ascii_date_shape(token: &[u8]) -> bool {
+  let mut separators = token
+    .iter()
+    .filter(|value| matches!(value, b'.' | b'-' | b'/'));
+  let (Some(first_separator), Some(second_separator), None) =
+    (separators.next(), separators.next(), separators.next())
+  else {
+    return false;
+  };
+  if first_separator != second_separator {
+    return false;
+  }
+
+  let mut parts = token.split(|value| matches!(value, b'.' | b'-' | b'/'));
+  let (Some(first), Some(second), Some(third), None) =
+    (parts.next(), parts.next(), parts.next(), parts.next())
+  else {
+    return false;
+  };
+  [first, second, third]
+    .iter()
+    .all(|part| !part.is_empty() && part.iter().all(u8::is_ascii_digit))
+    && ((first.len() == 4
+      && (1..=2).contains(&second.len())
+      && (1..=2).contains(&third.len()))
+      || ((1..=2).contains(&first.len())
+        && (1..=2).contains(&second.len())
+        && matches!(third.len(), 2 | 4)))
 }
 
 fn single_digit_dotted_prefix(text: &str) -> bool {

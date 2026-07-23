@@ -147,6 +147,13 @@ const ALPHANUMERIC_FIXTURES = [
   ["cs", "Číslo průkazu pojištěnce: AB12/345.XY.", "AB12/345.XY"],
   ["en", "Patient number: ABCD123 CD456“", "ABCD123 CD456"],
   ["en", "Patient number: ABCD123 CD-456.", "ABCD123 CD-456"],
+  ["en", "Patient number: ABCD123 456-789.", "ABCD123 456-789"],
+  ["en", "Patient number: 12345 67/89.", "12345 67/89"],
+  ["en", "Patient number: ABCD123 123-45-6789.", "ABCD123 123-45-6789"],
+  ["en", "Patient number: ABCD123 2025-07/23.", "ABCD123 2025-07/23"],
+  ["en", "Patient number: ABCD123 23.07/2025.", "ABCD123 23.07/2025"],
+  ["en", "Patient number: ABCD123 2025-0007-00023.", "ABCD123 2025-0007-00023"],
+  ["en", "Patient number: ABCD123 0001-0002-0003.", "ABCD123 0001-0002-0003"],
 ] as const;
 
 const PARTIAL_REDACTION_FIXTURES = [
@@ -161,8 +168,18 @@ const PARTIAL_REDACTION_FIXTURES = [
 
 const STOP_BEFORE_PROSE_FIXTURES = [
   ["Patient number: 12345 2.", "12345"],
+  ["Patient number: 12345 456.", "12345"],
+  ["Patient number: 12345 2025.", "12345"],
   ["Patient number: ABCD123 page2.", "ABCD123"],
   ["Patient number: 12345 2025-07-23.", "12345"],
+  ["Patient number: 12345 23/07/2025.", "12345"],
+  ["Patient number: 12345 07/23/2025.", "12345"],
+  ["Patient number: 12345 23/07/25.", "12345"],
+  ["Patient number: 12345 07/23/25.", "12345"],
+  ["Patient number: 12345 2023-02-29.", "12345"],
+  ["Patient number: 12345 2025-04-31.", "12345"],
+  ["Patient number: 12345 2025-13-01.", "12345"],
+  ["Patient number: 12345 1900-02-29.", "12345"],
   ["Patient number: ABCD123 2nd.", "ABCD123"],
   ["Patient number: 12345 e.g. above.", "12345"],
   ["Patient number: 12345 ref-code.", "12345"],
