@@ -391,7 +391,20 @@ fn company_id_trigger_consumes_complete_alphanumeric_identifier() {
     "ABCD123 CD-456",
     "ABCD123 456",
     "ABCD123 456 789",
+    "ABCD123 67",
+    "ABCD123 678",
+    "ABCD123 6789",
+    "ABCD123 2025",
+    "ABCD123 67890",
     "ABCDEFGHIJKL123 456",
+    "123-45 67",
+    "123-45 678",
+    "123-45 6789",
+    "123-45 2025",
+    "123-45 67890",
+    "197-38 269",
+    "123/45 6789",
+    "123.45 6789",
     "ABCD123 456-789",
     "12345 67/89",
     "ABCD123 123-45-6789",
@@ -511,8 +524,11 @@ fn company_id_trigger_stops_before_non_identifier_groups() {
 
   for (value, expected) in [
     ("12345 2", "12345"),
+    ("12345 67", "12345"),
     ("12345 456", "12345"),
+    ("12345 6789", "12345"),
     ("12345 2025", "12345"),
+    ("12345 67890", "12345"),
     ("197 38 269 2025", "197 38 269"),
     ("197 38 269 1900", "197 38 269"),
     ("197 38 269 2099", "197 38 269"),
@@ -591,6 +607,12 @@ fn company_id_trigger_rejects_partial_or_overlong_identifier() {
     "ABCD123 456 8",
     "ABCD123 456 8901",
     "ABCD123 456 789_tail",
+    "ABCD123 4567 8",
+    "ABCD123 8",
+    "123-45 8",
+    "123-45 6789 8",
+    "123-45 67_tail",
+    "123-45 _678",
     "FR A1 123 456 8",
     "FR A1 123 456 8901",
     "197 38 269 8",
@@ -646,6 +668,14 @@ fn company_id_trigger_rejects_partial_or_overlong_identifier() {
       "overlong identifier-shaped continuation must reject without a partial prefix"
     );
   }
+
+  let structured_overlong = "1".repeat(129);
+  let result = prepared
+    .detect_static_entities(&format!(
+      "Patient number: 123-45 {structured_overlong}"
+    ))
+    .expect("static detection should succeed");
+  assert!(result.entities.trigger().is_empty());
 }
 
 #[test]

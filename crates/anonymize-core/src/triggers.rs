@@ -2041,34 +2041,42 @@ const fn is_identifier_quote(ch: char) -> bool {
 struct IdentifierGroupState {
   completed_numeric: usize,
   chars: usize,
-  is_numeric: bool,
+  current_evidence: u8,
+  has_structured_digit_prefix: bool,
 }
 
 impl IdentifierGroupState {
+  const DIGIT: u8 = 1;
+  const STRUCTURE: u8 = 1 << 1;
+
   const fn new() -> Self {
     Self {
       completed_numeric: 0,
       chars: 0,
-      is_numeric: true,
+      current_evidence: 0,
+      has_structured_digit_prefix: false,
     }
   }
 
   const fn observe_digit(&mut self) {
     self.chars = self.chars.saturating_add(1);
+    self.current_evidence |= Self::DIGIT;
   }
 
   const fn observe_non_digit(&mut self) {
     self.chars = self.chars.saturating_add(1);
-    self.is_numeric = false;
+    self.current_evidence |= Self::STRUCTURE;
   }
 
-  fn complete(&mut self) -> usize {
-    self.completed_numeric = self
-      .completed_numeric
-      .saturating_add(usize::from(self.chars > 0 && self.is_numeric));
+  fn complete(&mut self) -> (usize, bool) {
+    self.completed_numeric = self.completed_numeric.saturating_add(
+      usize::from(self.chars > 0 && self.current_evidence == Self::DIGIT),
+    );
+    self.has_structured_digit_prefix |=
+      self.current_evidence == (Self::DIGIT | Self::STRUCTURE);
     self.chars = 0;
-    self.is_numeric = true;
-    self.completed_numeric
+    self.current_evidence = 0;
+    (self.completed_numeric, self.has_structured_digit_prefix)
   }
 }
 
@@ -2085,12 +2093,15 @@ fn continuation_after_whitespace(
   {
     next = next.saturating_add(1);
   }
+  let (completed_numeric_groups, has_structured_digit_prefix) =
+    groups.complete();
   let continuation = classify_identifier_continuation(
     bytes,
     next,
     prior_digits,
     current_leading_alpha,
-    groups.complete(),
+    completed_numeric_groups,
+    has_structured_digit_prefix,
   );
   (next, continuation)
 }
@@ -2108,6 +2119,7 @@ fn classify_identifier_continuation(
   prior_digits: usize,
   current_leading_alpha: usize,
   completed_numeric_groups: usize,
+  has_structured_digit_prefix: bool,
 ) -> IdentifierContinuation {
   let Some(first) = bytes.get(start) else {
     return IdentifierContinuation::Stop;
@@ -2189,6 +2201,7 @@ fn classify_identifier_continuation(
       prior_digits,
       current_leading_alpha,
       completed_numeric_groups,
+      has_structured_digit_prefix,
     );
   }
   if !first.is_ascii_alphabetic() {
@@ -2219,6 +2232,7 @@ fn classify_numeric_identifier_continuation(
   prior_digits: usize,
   current_leading_alpha: usize,
   completed_numeric_groups: usize,
+  has_structured_digit_prefix: bool,
 ) -> IdentifierContinuation {
   let grouped_numeric = classify_grouped_numeric_continuation(
     bytes,
@@ -2233,8 +2247,8 @@ fn classify_numeric_identifier_continuation(
     end,
     digits,
     prior_digits,
-    current_leading_alpha,
     completed_numeric_groups,
+    has_structured_digit_prefix,
   );
   if matches!(grouped_numeric, IdentifierContinuation::Reject)
     || matches!(mixed_prefix_numeric, IdentifierContinuation::Reject)
@@ -2282,18 +2296,17 @@ fn classify_mixed_prefix_numeric_continuation(
   end: usize,
   digits: usize,
   prior_digits: usize,
-  current_leading_alpha: usize,
   completed_numeric_groups: usize,
+  has_structured_digit_prefix: bool,
 ) -> IdentifierContinuation {
   if completed_numeric_groups > 0
     || prior_digits == 0
-    || !(1..=MAX_IDENTIFIER_ALPHA_RUN).contains(&current_leading_alpha)
-    || digits < 2
+    || !has_structured_digit_prefix
   {
     return IdentifierContinuation::Stop;
   }
-  if !(2..=3).contains(&digits) {
-    return IdentifierContinuation::Consume;
+  if digits < 2 {
+    return IdentifierContinuation::Reject;
   }
   match following_numeric_group(bytes, end) {
     FollowingNumericGroup::Absent | FollowingNumericGroup::Valid => {
