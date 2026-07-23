@@ -246,7 +246,7 @@ const runNativeNym = async (
   }
 };
 
-export const createNymAssistedStellaAdapter = (): Adapter => ({
+export const createNymAssistedAdapter = (): Adapter => ({
   name: "stella+nym-pii",
   version: `${stellaVersion} + ${NYM_PROVIDER_VERSION}`,
   run: async (
@@ -322,7 +322,7 @@ export const createNymAssistedStellaAdapter = (): Adapter => ({
       },
       reportedVersion: `${stellaVersion} + ${nym.version}`,
       notes:
-        "opt-in native ONNX PII assistance; non-PII legal entity classes intentionally remain Stella-only",
+        "opt-in native ONNX PII assistance; non-PII legal entity classes intentionally remain stella-only",
     };
   },
 });

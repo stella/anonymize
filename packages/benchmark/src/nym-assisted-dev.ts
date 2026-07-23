@@ -1,6 +1,6 @@
 import { join } from "node:path";
 
-import { createNymAssistedStellaAdapter } from "./adapters/nym-assisted";
+import { createNymAssistedAdapter } from "./adapters/nym-assisted";
 import { createStllAdapter } from "./adapters/stella";
 import { buildGroundTruthDocument, type RawDocument } from "./ground-truth";
 import { aggregate, scoreCorpus } from "./metrics";
@@ -16,7 +16,7 @@ const fixturePath = join(
 const raw = (await Bun.file(fixturePath).json()) as RawDocument[];
 const documents = raw.map(buildGroundTruthDocument);
 
-for (const adapter of [createStllAdapter(), createNymAssistedStellaAdapter()]) {
+for (const adapter of [createStllAdapter(), createNymAssistedAdapter()]) {
   const outcome = await adapter.run(documents);
   if (outcome.status === "unavailable") {
     throw new Error(`${adapter.name} unavailable: ${outcome.reason}`);

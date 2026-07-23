@@ -252,7 +252,7 @@ bun run bench:sealed:german-ler:assisted
 
 Provider output uses Unicode code-point offsets and is imported through the
 public `ExternalDetectionBatch` v1 contract, including a document SHA-256 and
-the exact provider revision. Stella then performs its normal overlap
+the exact provider revision. stella then performs its normal overlap
 resolution. The mapping is intentionally PII-only: unsupported Nym concepts
 are dropped, and legal citations, statutes, cases, and other non-PII legal NER
 classes are not flattened into a generic PII label. Accordingly, German LER's
@@ -264,7 +264,7 @@ is no Python, NumPy, transformers, or provider-specific TypeScript decoder. Its
 standalone Cargo lock pins the complete native toolchain, including the matching
 `ort`/`ort-sys` release-candidate pair. The release binary and ONNX Runtime
 dynamic library live under `native/nym-adapter/target/`, which is ignored and
-never shipped with Stella packages.
+never shipped with stella packages.
 
 ### 6. Run
 

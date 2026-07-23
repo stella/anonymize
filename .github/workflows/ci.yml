@@ -129,6 +129,15 @@ jobs:
         # PR-scoped dependency-review action. See deny.toml.
         run: bun run rust:deny
 
+      - name: Native Nym cargo deny (supply chain)
+        # The benchmark adapter is a detached workspace and therefore needs
+        # its own narrow policy and explicit continuous check.
+        run: >-
+          cargo deny --locked
+          --manifest-path packages/benchmark/native/nym-adapter/Cargo.toml
+          --config packages/benchmark/native/nym-adapter/deny.toml
+          check
+
       - name: Snapshot hygiene (insta)
         # Rejects snapshot mismatches and orphaned .snap files no test
         # references anymore. Reuses the cached `ci` profile build.
@@ -144,7 +153,7 @@ jobs:
 
       - name: Native Nym benchmark adapter
         # This optional ONNX tool is deliberately a detached workspace so its
-        # heavy inference dependencies never enter Stella's release graph.
+        # heavy inference dependencies never enter stella's release graph.
         # Compile and test it explicitly so that isolation cannot hide bitrot.
         run: |
           cargo fmt --check --manifest-path packages/benchmark/native/nym-adapter/Cargo.toml

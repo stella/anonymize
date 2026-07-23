@@ -1,7 +1,7 @@
 import { join } from "node:path";
 
 import { createBenchmarkAdapters } from "./adapters";
-import { createNymAssistedStellaAdapter } from "./adapters/nym-assisted";
+import { createNymAssistedAdapter } from "./adapters/nym-assisted";
 import type { GroundTruthDocument } from "./ground-truth";
 import { benchmarkSourceGitSha } from "./git-revision";
 import { runSealedBoundary } from "./sealed-boundary";
@@ -47,7 +47,7 @@ const inputs: GroundTruthDocument[] = documents.map(({ id, text }) => ({
 }));
 const libraries: SealedLibraryResult[] = [];
 const adapters = createBenchmarkAdapters();
-if (assisted) adapters.push(createNymAssistedStellaAdapter());
+if (assisted) adapters.push(createNymAssistedAdapter());
 for (const adapter of adapters) {
   process.stderr.write(
     `running sealed German LER adapter ${adapter.name}...\n`,
