@@ -439,11 +439,19 @@ fn company_id_trigger_accepts_immediate_prose_boundaries() {
     TriggerStrategy::CompanyIdValue,
   );
 
-  for boundary in [
-    '(', '[', '{', '\u{2010}', '\u{2011}', '\u{2012}', '\u{2013}', '\u{2014}',
-    '\u{2015}', '\u{2026}',
+  for suffix in [
+    "(active)",
+    "[active]",
+    "{active}",
+    "\u{2010} ",
+    "\u{2011},",
+    "\u{2012}.",
+    "\u{2013} ",
+    "\u{2014}confirmed",
+    "\u{2015}confirmed",
+    "\u{2026}prose",
   ] {
-    let text = format!("Patient number: ABCD123{boundary}prose");
+    let text = format!("Patient number: ABCD123{suffix}");
     let result = prepared
       .detect_static_entities(&text)
       .expect("static detection should succeed");
@@ -558,6 +566,11 @@ fn company_id_trigger_rejects_partial_or_overlong_identifier() {
     "12345 67 8",
     "12345 67 8901",
     "12345 67 89_tail",
+    "ABCD123\u{2013}456",
+    "197\u{2011}38\u{2011}269",
+    "ABCD123(6)",
+    "ABCD123[6]",
+    "ABCD123{6}",
     overlong.as_str(),
   ] {
     let text = format!("Patient number: {value}");

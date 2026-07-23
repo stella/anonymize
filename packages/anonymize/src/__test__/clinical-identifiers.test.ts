@@ -181,19 +181,24 @@ const PARTIAL_REDACTION_FIXTURES = [
   ["en", "Patient number: 12345 67 8."],
   ["en", "Patient number: 12345 67 8901."],
   ["en", "Patient number: 12345 67 89_tail."],
+  ["en", "Patient number: ABCD123\u2013456."],
+  ["en", "Patient number: 197\u201138\u2011269."],
+  ["en", "Patient number: ABCD123(6)."],
+  ["en", "Patient number: ABCD123[6]."],
+  ["en", "Patient number: ABCD123{6}."],
 ] as const;
 
 const IMMEDIATE_BOUNDARY_FIXTURES = [
-  ["("],
-  ["["],
-  ["{"],
-  ["\u2010"],
-  ["\u2011"],
-  ["\u2012"],
-  ["\u2013"],
-  ["\u2014"],
-  ["\u2015"],
-  ["\u2026"],
+  ["(active)"],
+  ["[active]"],
+  ["{active}"],
+  ["\u2010 "],
+  ["\u2011,"],
+  ["\u2012."],
+  ["\u2013 "],
+  ["\u2014confirmed"],
+  ["\u2015confirmed"],
+  ["\u2026prose"],
 ] as const;
 
 const INVALID_IMMEDIATE_BOUNDARY_FIXTURES = [
@@ -305,10 +310,8 @@ describe("multilingual clinical identifiers", () => {
 
   test.each(IMMEDIATE_BOUNDARY_FIXTURES)(
     "accepts an identifier before the immediate %s prose boundary",
-    async (boundary) => {
-      const values = (
-        await detect("en", `Patient number: ABCD123${boundary}prose`)
-      )
+    async (suffix) => {
+      const values = (await detect("en", `Patient number: ABCD123${suffix}`))
         .filter((entity) => entity.label === "registration number")
         .map((entity) => entity.text);
 

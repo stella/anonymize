@@ -1922,8 +1922,7 @@ fn id_value_prefix(text: &str) -> Option<&str> {
   }
 
   let candidate = text.get(..end)?;
-  let boundary = text.get(end..)?.chars().next();
-  let clean_boundary = boundary.is_none_or(is_clean_identifier_boundary);
+  let clean_boundary = is_clean_identifier_boundary(text.get(end..)?);
   (digits >= 2
     && end >= 5
     && leading_alpha <= MAX_IDENTIFIER_ALPHA_RUN
@@ -1933,9 +1932,22 @@ fn id_value_prefix(text: &str) -> Option<&str> {
   .then_some(candidate)
 }
 
-const fn is_clean_identifier_boundary(ch: char) -> bool {
-  ch.is_whitespace()
-    || matches!(
+fn is_clean_identifier_boundary(tail: &str) -> bool {
+  let mut chars = tail.chars();
+  let Some(boundary) = chars.next() else {
+    return true;
+  };
+  if boundary.is_whitespace() {
+    return true;
+  }
+  let following = chars.next();
+  match boundary {
+    '(' | '[' | '{' => following.is_none_or(|ch| !ch.is_ascii_digit()),
+    '‐' | '‑' | '‒' | '–' => {
+      following.is_none_or(|ch| !ch.is_ascii_alphanumeric())
+    }
+    '—' | '―' => following.is_none_or(|ch| !ch.is_ascii_digit()),
+    ch => matches!(
       ch,
       '.'
         | ','
@@ -1943,11 +1955,8 @@ const fn is_clean_identifier_boundary(ch: char) -> bool {
         | ':'
         | '!'
         | '?'
-        | '('
         | ')'
-        | '['
         | ']'
-        | '{'
         | '}'
         | '\''
         | '"'
@@ -1963,14 +1972,9 @@ const fn is_clean_identifier_boundary(ch: char) -> bool {
         | '»'
         | '‹'
         | '›'
-        | '‐'
-        | '‑'
-        | '‒'
-        | '–'
-        | '—'
-        | '―'
         | '…'
-    )
+    ),
+  }
 }
 
 struct IdentifierGroupState {
