@@ -723,6 +723,12 @@ pub struct DenyListFilterData {
   /// person name. Used to strip a leading title before checking whether a
   /// defined-term quote starts with a known first name.
   pub title_tokens: BTreeSet<String>,
+  /// Lowercase building unit designators ("suite", "apt", "unit", ...) that
+  /// introduce a unit line rather than a new prose sentence.
+  pub unit_designators: BTreeSet<String>,
+  /// Lowercase connective words allowed inside a name ("of", "de", "von",
+  /// "and", "&", ...); a run of them between capitals stays part of the name.
+  pub in_name_connectors: BTreeSet<String>,
 }
 
 #[derive(

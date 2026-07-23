@@ -1,0 +1,17 @@
+{
+  "_comment": "Building unit designators ('Suite 100', 'Apt 4B', 'Unit 5') used by the false-positive filter to tell a unit line from a new prose sentence. Matched case-insensitively with an optional trailing dot. Distinct from address-unit-abbreviations.json (dotted forms feeding address-seed expansion); this set also carries the common un-dotted spellings.",
+  "en": [
+    "suite",
+    "ste",
+    "apt",
+    "apartment",
+    "unit",
+    "floor",
+    "fl",
+    "bldg",
+    "building",
+    "room",
+    "rm",
+    "no"
+  ]
+}

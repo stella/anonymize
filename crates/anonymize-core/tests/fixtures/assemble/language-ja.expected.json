@@ -45531,6 +45531,34 @@
         "shall mean",
         "shall means"
       ],
+      "unit_designators": [
+        "apartment",
+        "apt",
+        "bldg",
+        "building",
+        "fl",
+        "floor",
+        "no",
+        "rm",
+        "room",
+        "ste",
+        "suite",
+        "unit"
+      ],
+      "in_name_connectors": [
+        "&",
+        "and",
+        "da",
+        "de",
+        "des",
+        "du",
+        "la",
+        "le",
+        "of",
+        "und",
+        "van",
+        "von"
+      ],
       "signing_place_guards": [
         {
           "prefix_phrases": ["v", "ve"],
@@ -57102,6 +57130,34 @@
       "shall have the meanings",
       "shall mean",
       "shall means"
+    ],
+    "unit_designators": [
+      "apartment",
+      "apt",
+      "bldg",
+      "building",
+      "fl",
+      "floor",
+      "no",
+      "rm",
+      "room",
+      "ste",
+      "suite",
+      "unit"
+    ],
+    "in_name_connectors": [
+      "&",
+      "and",
+      "da",
+      "de",
+      "des",
+      "du",
+      "la",
+      "le",
+      "of",
+      "und",
+      "van",
+      "von"
     ],
     "signing_place_guards": [
       {

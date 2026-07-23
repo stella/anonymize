@@ -99,6 +99,7 @@ fn normalize_entity(
       && let Some(cut) = trim_open_ended_org_prose(
         org_text,
         filters.map(|filters| &filters.sentence_starters),
+        filters.map(|filters| &filters.in_name_connectors),
       )
     {
       end_byte = start_byte.saturating_add(cut);
@@ -679,30 +680,8 @@ fn is_unit_or_address_continuation(
 ) -> bool {
   after.len() < 5
     || has_address_component(after, filters)
-    || starts_with_unit_number(after)
+    || starts_with_unit_number(after, filters)
 }
-
-/// Recognized unit designators, matched case-insensitively with an optional
-/// trailing dot ("Ste." -> "ste"). The prepared address data carries dotted
-/// unit abbreviations (`packages/data/config/address-unit-abbreviations.json`),
-/// but that set feeds the address-seed expansion, is not threaded into this
-/// false-positive filter, and only covers a few dotted English spellings. This
-/// filter also needs the common un-dotted forms, so keep a small named set here
-/// per the repo's named-constants rule.
-const UNIT_DESIGNATORS: &[&str] = &[
-  "suite",
-  "ste",
-  "apt",
-  "apartment",
-  "unit",
-  "floor",
-  "fl",
-  "bldg",
-  "building",
-  "room",
-  "rm",
-  "no",
-];
 
 /// True when `text` opens with a recognized unit designator ("Suite", "Apt",
 /// "Unit", ...) immediately followed by a short unit identifier: digit-leading
@@ -711,16 +690,13 @@ const UNIT_DESIGNATORS: &[&str] = &[
 /// capitalized headings that merely precede a number ("Section 2 applies")
 /// fail because their first token is not a designator; prose after a real
 /// designator ("Suite The") fails the short-identifier shape.
-fn starts_with_unit_number(text: &str) -> bool {
+fn starts_with_unit_number(text: &str, filters: &DenyListFilterData) -> bool {
   let mut words = text.split_whitespace();
   let Some(first) = words.next() else {
     return false;
   };
-  let designator = first.trim_end_matches('.');
-  if !UNIT_DESIGNATORS
-    .iter()
-    .any(|known| designator.eq_ignore_ascii_case(known))
-  {
+  let designator = first.trim_end_matches('.').to_lowercase();
+  if !filters.unit_designators.contains(&designator) {
     return false;
   }
   words.next().is_some_and(is_unit_identifier)
@@ -915,18 +891,6 @@ fn first_word(text: &str) -> Option<(usize, &str)> {
   text.get(..end).map(|word| (end, word))
 }
 
-/// Lowercase tokens that link proper-noun parts inside an organization or
-/// institution name ("Bank of the West", "Tribunal de commerce des ...").
-/// They never mark the transition from the name to trailing clause prose, so
-/// they must not arm the sentence-starter stop in `trim_open_ended_org_prose`.
-/// Kept as a small fixed const here (with `sentence_starters` staying in the
-/// per-language `DenyListFilterData`) because this is stable cross-language
-/// name grammar rather than tunable deny-list data, mirroring the
-/// unit-designator decision for address trimming.
-const IN_NAME_CONNECTORS: &[&str] = &[
-  "of", "de", "des", "du", "da", "la", "le", "von", "van", "and", "und", "&",
-];
-
 /// Byte offset just past the last capitalized token that belongs to the leading
 /// organization name. Scanning records capitalized tokens as the retained span
 /// and stops at a lowercase sentence-starter (`the`, `for`, `by`, ...) that
@@ -936,7 +900,7 @@ const IN_NAME_CONNECTORS: &[&str] = &[
 ///
 /// The starter-stop is *armed* only after the scan has passed at least one
 /// lowercase token that is neither a sentence-starter nor an in-name connector
-/// (see `IN_NAME_CONNECTORS`). An in-name article that appears before any prose
+/// (`filters.in_name_connectors`). An in-name article that appears before any prose
 /// ("Bank of **the** West National Association") therefore does not cut the
 /// name: it arrives unarmed. A run of lowercase connector words inside the name
 /// ("Tribunal de commerce des Sables-d'Olonne") is likewise preserved. Returns
@@ -945,6 +909,7 @@ const IN_NAME_CONNECTORS: &[&str] = &[
 fn trim_open_ended_org_prose(
   text: &str,
   sentence_starters: Option<&BTreeSet<String>>,
+  in_name_connectors: Option<&BTreeSet<String>>,
 ) -> Option<usize> {
   let mut last_capital_end = None::<usize>;
   let mut word_start = None::<usize>;
@@ -971,7 +936,14 @@ fn trim_open_ended_org_prose(
     // décision ...") must stop the scan, not extend the name. It qualifies
     // only when the previous token ended in a sentence-final period and this
     // token is a starter/connector that has no business inside the name.
-    if is_capital && starts_new_sentence(prev_word, word, sentence_starters) {
+    if is_capital
+      && starts_new_sentence(
+        prev_word,
+        word,
+        sentence_starters,
+        in_name_connectors,
+      )
+    {
       break;
     }
     if is_capital {
@@ -982,7 +954,7 @@ fn trim_open_ended_org_prose(
     if armed && is_sentence_starter(word, sentence_starters) {
       break;
     }
-    if !is_in_name_connector(word)
+    if !is_in_name_connector(word, in_name_connectors)
       && !is_sentence_starter(word, sentence_starters)
     {
       armed = true;
@@ -992,7 +964,12 @@ fn trim_open_ended_org_prose(
   if let Some(start) = word_start {
     let tail = text.get(start..trimmed_end);
     if (word_is_capital || is_elided_capital(tail))
-      && !starts_new_sentence(prev_word, tail, sentence_starters)
+      && !starts_new_sentence(
+        prev_word,
+        tail,
+        sentence_starters,
+        in_name_connectors,
+      )
     {
       last_capital_end = Some(trimmed_end);
     }
@@ -1029,10 +1006,14 @@ fn is_elided_capital(word: Option<&str>) -> bool {
     .is_some_and(char::is_uppercase)
 }
 
-fn is_in_name_connector(word: Option<&str>) -> bool {
-  word.is_some_and(|word| {
-    IN_NAME_CONNECTORS.contains(&word.to_lowercase().as_str())
-  })
+fn is_in_name_connector(
+  word: Option<&str>,
+  in_name_connectors: Option<&BTreeSet<String>>,
+) -> bool {
+  let (Some(word), Some(connectors)) = (word, in_name_connectors) else {
+    return false;
+  };
+  connectors.contains(&word.to_lowercase())
 }
 
 fn is_sentence_starter(
@@ -1054,10 +1035,11 @@ fn starts_new_sentence(
   prev_word: Option<&str>,
   word: Option<&str>,
   sentence_starters: Option<&BTreeSet<String>>,
+  in_name_connectors: Option<&BTreeSet<String>>,
 ) -> bool {
   ends_with_sentence_final_period(prev_word)
     && (is_sentence_starter(word, sentence_starters)
-      || is_in_name_connector(word))
+      || is_in_name_connector(word, in_name_connectors))
 }
 
 /// The token closes a sentence: it ends in a period whose stem is a
@@ -1188,14 +1170,16 @@ mod tests {
     assert_eq!(
       trim_open_ended_org_prose(
         "Conseil de prud'hommes des Sables-d'Olonne a rendu son jugement",
-        None
+        None,
+        Some(&in_name_connectors()),
       ),
       Some("Conseil de prud'hommes des Sables-d'Olonne".len())
     );
     assert_eq!(
       trim_open_ended_org_prose(
         "Tribunal judiciaire du Mans statue sur l'affaire",
-        None
+        None,
+        Some(&in_name_connectors()),
       ),
       Some("Tribunal judiciaire du Mans".len())
     );
@@ -1211,7 +1195,8 @@ mod tests {
     assert_eq!(
       trim_open_ended_org_prose(
         "ACME Corporation shall provide the Services under this agreement",
-        Some(&starters)
+        Some(&starters),
+        Some(&in_name_connectors()),
       ),
       Some("ACME Corporation".len())
     );
@@ -1227,7 +1212,8 @@ mod tests {
     assert_eq!(
       trim_open_ended_org_prose(
         "Bank of the West National Association shall provide services",
-        Some(&starters)
+        Some(&starters),
+        Some(&in_name_connectors()),
       ),
       Some("Bank of the West National Association".len())
     );
@@ -1242,7 +1228,8 @@ mod tests {
     assert_eq!(
       trim_open_ended_org_prose(
         "ACME Corporation shall provide the Services under this agreement",
-        Some(&starters)
+        Some(&starters),
+        Some(&in_name_connectors()),
       ),
       Some("ACME Corporation".len())
     );
@@ -1254,7 +1241,11 @@ mod tests {
     let text = "Conseil de prud'hommes d'Aix-en-Provence a rendu son jugement";
     let keep = "Conseil de prud'hommes d'Aix-en-Provence";
     assert_eq!(
-      trim_open_ended_org_prose(text, Some(&starters)),
+      trim_open_ended_org_prose(
+        text,
+        Some(&starters),
+        Some(&in_name_connectors())
+      ),
       Some(keep.len()),
       "the elided d'Aix-en-Provence token must count as capitalized"
     );
@@ -1269,7 +1260,8 @@ mod tests {
     assert_eq!(
       trim_open_ended_org_prose(
         "Tribunal de commerce des Sables-d'Olonne a rendu son jugement",
-        Some(&starters)
+        Some(&starters),
+        Some(&in_name_connectors()),
       ),
       Some("Tribunal de commerce des Sables-d'Olonne".len())
     );
@@ -1286,7 +1278,8 @@ mod tests {
     assert_eq!(
       trim_open_ended_org_prose(
         "Tribunal de commerce de Paris. La décision a été rendue aujourd'hui",
-        None
+        None,
+        Some(&in_name_connectors()),
       ),
       Some("Tribunal de commerce de Paris.".len())
     );
@@ -1301,7 +1294,8 @@ mod tests {
     assert_eq!(
       trim_open_ended_org_prose(
         "J.P. Morgan Chase Bank agreed to the terms",
-        Some(&starters)
+        Some(&starters),
+        Some(&in_name_connectors()),
       ),
       Some("J.P. Morgan Chase Bank".len())
     );
@@ -1316,6 +1310,10 @@ mod tests {
     // stop without any per-language starter data.
     let text =
       "Tribunal de commerce de Paris. La décision a été rendue aujourd'hui.";
+    let filters = DenyListFilterData {
+      in_name_connectors: in_name_connectors(),
+      ..DenyListFilterData::default()
+    };
     let entities = filter_entity_false_positives(
       vec![entity(
         text,
@@ -1324,7 +1322,7 @@ mod tests {
         DetectionSource::Trigger,
       )],
       text,
-      Some(&DenyListFilterData::default()),
+      Some(&filters),
     )
     .unwrap();
     assert_eq!(entities.len(), 1);
@@ -1337,11 +1335,19 @@ mod tests {
     assert_eq!(
       trim_open_ended_org_prose(
         "Conseil de prud'hommes des Sables-d'Olonne",
-        None
+        None,
+        Some(&in_name_connectors()),
       ),
       None
     );
-    assert_eq!(trim_open_ended_org_prose("Bank of America", None), None);
+    assert_eq!(
+      trim_open_ended_org_prose(
+        "Bank of America",
+        None,
+        Some(&in_name_connectors())
+      ),
+      None
+    );
   }
 
   #[test]
@@ -1374,6 +1380,7 @@ mod tests {
     // dot, not a sentence end, so the unit continuation must not be trimmed.
     let filters = DenyListFilterData {
       street_types: set(["st.", "street"]),
+      unit_designators: unit_designators(),
       ..DenyListFilterData::default()
     };
     assert_eq!(
@@ -1391,6 +1398,7 @@ mod tests {
   fn keeps_lettered_suite_continuation_after_abbreviation() {
     let filters = DenyListFilterData {
       street_types: set(["st.", "street"]),
+      unit_designators: unit_designators(),
       ..DenyListFilterData::default()
     };
     assert_eq!(
@@ -1412,6 +1420,7 @@ mod tests {
     // ("Section 2 applies") is trailing prose and must be trimmed off.
     let filters = DenyListFilterData {
       street_types: set(["st.", "street"]),
+      unit_designators: unit_designators(),
       ..DenyListFilterData::default()
     };
     assert_eq!(
@@ -1432,6 +1441,7 @@ mod tests {
     // abbreviation dot on "St.".
     let filters = DenyListFilterData {
       street_types: set(["st.", "street"]),
+      unit_designators: unit_designators(),
       ..DenyListFilterData::default()
     };
     assert_eq!(
@@ -1735,5 +1745,29 @@ mod tests {
 
   fn set<const N: usize>(values: [&str; N]) -> BTreeSet<String> {
     values.into_iter().map(String::from).collect()
+  }
+
+  fn in_name_connectors() -> BTreeSet<String> {
+    set([
+      "of", "and", "de", "des", "du", "da", "la", "le", "von", "van", "und",
+      "&",
+    ])
+  }
+
+  fn unit_designators() -> BTreeSet<String> {
+    set([
+      "suite",
+      "ste",
+      "apt",
+      "apartment",
+      "unit",
+      "floor",
+      "fl",
+      "bldg",
+      "building",
+      "room",
+      "rm",
+      "no",
+    ])
   }
 }
