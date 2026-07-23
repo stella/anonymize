@@ -106,22 +106,13 @@ struct GenericRoles {
   roles: Vec<String>,
 }
 
-/// First-name corpus lowercased, plus supplementary short given names that are
-/// absent from the corpus (`supplementary-name-exclusions.json`).
-fn first_name_exclusions(
-  corpus: &NameCorpus,
-) -> Result<HashSet<String>, AssembleError> {
-  let mut set: HashSet<String> = corpus
+/// First-name corpus lowercased for stopword exclusion.
+fn first_name_exclusions(corpus: &NameCorpus) -> HashSet<String> {
+  corpus
     .first_names_list
     .iter()
     .map(|name| js_lowercase(name))
-    .collect();
-  let supplementary: WordsFile =
-    parse_data_file("supplementary-name-exclusions.json")?;
-  for word in supplementary.words {
-    set.insert(js_lowercase(&word));
-  }
-  Ok(set)
+    .collect()
 }
 
 /// `new Set(...)` insertion-order dedup for a `words`-style file.
@@ -154,7 +145,7 @@ pub(super) fn build_deny_list_filter_data(
   content_languages: Option<&[String]>,
 ) -> Result<BindingDenyListFilterData, AssembleError> {
   // stopwords: stopwords.json filtered by first-name exclusions, Set order.
-  let exclusions = first_name_exclusions(corpus)?;
+  let exclusions = first_name_exclusions(corpus);
   let stopwords_file: Vec<String> = parse_data_file("stopwords.json")?;
   let stopwords = set_ordered(
     stopwords_file
@@ -1006,7 +997,13 @@ mod tests {
 
   use stella_anonymize_core::assemble::DictionaryMeta;
 
+  use super::super::names::build_name_corpus;
   use super::*;
+
+  const ENGLISH_FIRST_NAMES_JSON: &str =
+    include_str!("../../../../packages/data/dictionaries/names/first/en.json");
+  const FRENCH_FIRST_NAMES_JSON: &str =
+    include_str!("../../../../packages/data/dictionaries/names/first/fr.json");
 
   fn test_pipeline_config() -> PipelineConfig {
     PipelineConfig {
@@ -1047,6 +1044,88 @@ mod tests {
       non_western_names_list: Vec::new(),
       excluded_all_caps_list: Vec::new(),
       common_words_set: HashSet::new(),
+    }
+  }
+
+  #[test]
+  fn stopword_exclusions_follow_name_corpus_scope_not_content_language() {
+    let dictionaries = Dictionaries {
+      first_names: Some(OrderedMap(vec![
+        (
+          String::from("en"),
+          serde_json::from_str(ENGLISH_FIRST_NAMES_JSON)
+            .expect("English first-name corpus should parse"),
+        ),
+        (
+          String::from("fr"),
+          serde_json::from_str(FRENCH_FIRST_NAMES_JSON)
+            .expect("French first-name corpus should parse"),
+        ),
+      ])),
+      ..Dictionaries::default()
+    };
+    let english_scope = [String::from("en")];
+    let french_scope = [String::from("fr")];
+    let english_corpus =
+      build_name_corpus(Some(&dictionaries), Some(english_scope.as_slice()))
+        .expect("English name corpus should build");
+    let french_corpus =
+      build_name_corpus(Some(&dictionaries), Some(french_scope.as_slice()))
+        .expect("French name corpus should build");
+    let french_names: HashSet<String> = french_corpus
+      .first_names_list
+      .iter()
+      .map(|name| js_lowercase(name))
+      .collect();
+    let stopword_source: HashSet<String> =
+      parse_data_file::<Vec<String>>("stopwords.json")
+        .expect("stopwords should parse")
+        .into_iter()
+        .collect();
+    let english_only_stopwords: Vec<String> = english_corpus
+      .first_names_list
+      .iter()
+      .map(|name| js_lowercase(name))
+      .filter(|name| {
+        stopword_source.contains(name) && !french_names.contains(name)
+      })
+      .collect();
+    assert!(
+      !english_only_stopwords.is_empty(),
+      "the fixture corpora should include an English-only stopword collision"
+    );
+
+    // Deliberately pass the opposite content-language scopes. Only the name
+    // corpus selected above may decide which first names leave the stopwords.
+    let english_filters = build_deny_list_filter_data(
+      &english_corpus,
+      Some(french_scope.as_slice()),
+    )
+    .expect("English filters should build");
+    let french_filters = build_deny_list_filter_data(
+      &french_corpus,
+      Some(english_scope.as_slice()),
+    )
+    .expect("French filters should build");
+    let english_stopwords: HashSet<&str> = english_filters
+      .stopwords
+      .iter()
+      .map(String::as_str)
+      .collect();
+    let french_stopwords: HashSet<&str> = french_filters
+      .stopwords
+      .iter()
+      .map(String::as_str)
+      .collect();
+    for name in &english_only_stopwords {
+      assert!(
+        !english_stopwords.contains(name.as_str()),
+        "English corpus name should be excluded from stopwords: {name}"
+      );
+      assert!(
+        french_stopwords.contains(name.as_str()),
+        "English-only corpus name leaked into French exclusions: {name}"
+      );
     }
   }
 
