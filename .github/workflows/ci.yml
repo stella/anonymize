@@ -260,11 +260,13 @@ jobs:
       - name: Smoke test built artifact
         run: bun run --cwd packages/anonymize smoke:dist
 
-      - name: Smoke test wasm binding
-        run: bun run --cwd packages/anonymize smoke:wasm
-
-      - name: Smoke test wasm package entry
-        run: bun run --cwd packages/anonymize smoke:wasm-package
+      - name: Smoke test wasm binding + package entry across runtimes
+        # Runs the raw-binding and package-entry smokes under BOTH Node and Bun.
+        # The napi-rs WASI glue is patched to the portable @napi-rs/wasm-runtime
+        # WASI (node:wasi's WASI lacks .initialize() under Bun); this matrix is
+        # the guard that keeps the binding loadable on every supported non-browser
+        # runtime, so a loader regression fails here instead of downstream.
+        run: bun run --cwd packages/anonymize smoke:wasm-runtimes
 
       - name: Smoke test wasm browser path
         # Exercises the browser glue, its Worker, and the SharedArrayBuffer

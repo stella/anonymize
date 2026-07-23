@@ -76,6 +76,7 @@
     "build:wasm-assets": "node scripts/build-native-wasm-assets.mjs",
     "smoke:wasm": "node scripts/smoke-wasm.mjs",
     "smoke:wasm-package": "node scripts/smoke-wasm-package.mjs",
+    "smoke:wasm-runtimes": "node scripts/smoke-wasm-runtimes.mjs",
     "smoke:wasm-browser": "node scripts/smoke-wasm-browser.mjs",
     "format": "oxfmt ."
   },
