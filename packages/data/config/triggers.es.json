@@ -62,6 +62,19 @@
     ]
   },
   {
+    "id": "es-clinical-record-id",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "número de historia clínica",
+      "numero de historia clinica",
+      "número de paciente",
+      "numero de paciente",
+      "tarjeta sanitaria"
+    ],
+    "validations": [{ "type": "has-digits" }]
+  },
+  {
     "id": "es-bank-account",
     "label": "bank account number",
     "strategy": { "type": "to-end-of-line" },

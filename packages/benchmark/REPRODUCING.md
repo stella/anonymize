@@ -8,8 +8,8 @@ hardware.
 ## What is measured
 
 The development comparison is configured to run `@stll/anonymize` (stella)
-and four other open-source PII libraries on a public, synthetic, legal-domain
-corpus (en/cs/de):
+and four other open-source PII libraries on a public, synthetic legal/clinical
+corpus (en/cs/de/es):
 
 - **Microsoft Presidio** (`presidio-analyzer`) with spaCy models.
 - **scrubadub** (base install).

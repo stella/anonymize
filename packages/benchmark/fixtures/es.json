@@ -1,0 +1,144 @@
+[
+  {
+    "id": "es-contrato-arrendamiento",
+    "language": "es",
+    "title": "Contrato de arrendamiento (synthetic)",
+    "segments": [
+      "El contrato se firma el ",
+      { "t": "14 de marzo de 2025", "label": "date" },
+      " entre la arrendadora ",
+      { "t": "Alba Montes Rivas", "label": "person" },
+      ", con DNI ",
+      { "t": "48273165M", "label": "id-number" },
+      " y domicilio en ",
+      { "t": "Calle del Mirador 17, 28000 Puerto Claro", "label": "address" },
+      ". Puede recibir avisos en ",
+      { "t": "alba.montes@example.com", "label": "email" },
+      " o en el teléfono ",
+      { "t": "+34 600 000 271", "label": "phone" },
+      "."
+    ]
+  },
+  {
+    "id": "es-poder-notarial",
+    "language": "es",
+    "title": "Poder notarial (synthetic)",
+    "segments": [
+      "Yo, ",
+      { "t": "Nicolás Prado Soler", "label": "person" },
+      ", con NIE ",
+      { "t": "X1036724R", "label": "id-number" },
+      ", otorgo poder a ",
+      { "t": "Irene Valle Cid", "label": "person" },
+      " desde el ",
+      { "t": "2 de abril de 2025", "label": "date" },
+      ". La apoderada señala como domicilio ",
+      { "t": "Avenida de la Aurora 8, 41000 Villa Serena", "label": "address" },
+      "."
+    ]
+  },
+  {
+    "id": "es-demanda-laboral",
+    "language": "es",
+    "title": "Demanda laboral (synthetic)",
+    "segments": [
+      "La demandante ",
+      { "t": "Marta Luján Vela", "label": "person" },
+      ", identificada con NIF ",
+      { "t": "73194628Q", "label": "id-number" },
+      ", designa para notificaciones la dirección ",
+      { "t": "Plaza del Olmo 3, 50000 Monteverde", "label": "address" },
+      " y el correo ",
+      { "t": "marta.lujan@example.org", "label": "email" },
+      ". La vista está señalada para el ",
+      { "t": "09/06/2025", "label": "date" },
+      "."
+    ]
+  },
+  {
+    "id": "es-ingreso-clinico",
+    "language": "es",
+    "title": "Hoja de ingreso clínico (synthetic)",
+    "segments": [
+      "Paciente: ",
+      { "t": "Lucía Ferrer Navas", "label": "person" },
+      ". Fecha de nacimiento: ",
+      { "t": "7 de enero de 1984", "label": "date" },
+      ". Número de historia clínica: ",
+      { "t": "HC-704193", "label": "id-number" },
+      ". Domicilio: ",
+      { "t": "Calle Brisa 42, 03000 Prado Azul", "label": "address" },
+      ". Teléfono: ",
+      { "t": "+34 611 000 482", "label": "phone" },
+      ". Correo electrónico: ",
+      { "t": "lucia.ferrer@example.net", "label": "email" },
+      "."
+    ]
+  },
+  {
+    "id": "es-informe-alta",
+    "language": "es",
+    "title": "Informe de alta (synthetic)",
+    "segments": [
+      "Se emite el informe para ",
+      { "t": "Tomás Requena Gil", "label": "person" },
+      ", tarjeta sanitaria ",
+      { "t": "TS-9284017", "label": "id-number" },
+      ". Fecha de alta: ",
+      { "t": "18/05/2025", "label": "date" },
+      ". Para seguimiento, llamar al ",
+      { "t": "952 000 316", "label": "phone" },
+      " o escribir a ",
+      { "t": "tomas.requena@example.com", "label": "email" },
+      "."
+    ]
+  },
+  {
+    "id": "es-consentimiento-clinico",
+    "language": "es",
+    "title": "Consentimiento informado (synthetic)",
+    "segments": [
+      "La paciente ",
+      { "t": "Eva Cordero Mena", "label": "person" },
+      ", con número de paciente ",
+      { "t": "PAC-310862", "label": "id-number" },
+      ", firma el consentimiento el ",
+      { "t": "21 de mayo de 2025", "label": "date" },
+      ". Su contacto alternativo es ",
+      { "t": "+34 622 000 593", "label": "phone" },
+      "."
+    ]
+  },
+  {
+    "id": "es-negativo-citas-legales",
+    "language": "es",
+    "title": "Referencias legales sin PII (synthetic negative)",
+    "segments": [
+      "El escrito cita el artículo 24.2 de la Constitución, la Ley 14/1986 y el expediente modelo A-17. Ninguna referencia identifica a una persona."
+    ]
+  },
+  {
+    "id": "es-negativo-mediciones-clinicas",
+    "language": "es",
+    "title": "Mediciones clínicas sin PII (synthetic negative)",
+    "segments": [
+      "La presión arterial fue 120/80 mmHg, la temperatura 36,7 °C y la dosis indicada fue 5 mg cada 8 horas."
+    ]
+  },
+  {
+    "id": "es-negativo-codigos-muestra",
+    "language": "es",
+    "title": "Códigos técnicos sin PII (synthetic negative)",
+    "segments": [
+      "La muestra de control usa el código LOTE-204, el equipo funciona a 230 V y la sala de pruebas es la número 12."
+    ]
+  },
+  {
+    "id": "es-negativo-roles-genericos",
+    "language": "es",
+    "title": "Roles clínicos genéricos sin PII (synthetic negative)",
+    "segments": [
+      "La paciente fue atendida por el servicio de cardiología y revisada por el personal de guardia. El campo número de paciente quedó vacío y el manual solo describe la tarjeta sanitaria. El informe no contiene nombres propios."
+    ]
+  }
+]

@@ -11,7 +11,7 @@ import { type CommonLabel, isCommonLabel } from "./taxonomy";
  * makes offsets correct by construction and keeps the fixtures diffable.
  *
  * All fixture text is PUBLIC-SAFE SYNTHETIC: invented people, companies, and
- * identifiers in legal-ish en/cs/de prose. No real personal data.
+ * identifiers in legal and clinical en/cs/de/es prose. No real personal data.
  */
 export type Segment = string | { readonly t: string; readonly label: string };
 

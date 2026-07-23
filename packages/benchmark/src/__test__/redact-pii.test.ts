@@ -6,7 +6,7 @@ import { createRedactPiiAdapter } from "../adapters/redact-pii";
 import { loadGroundTruth } from "../ground-truth";
 
 const EXPECTED_PREDICTION_DIGEST =
-  "73276b381d24bd28856cbf7782b77ee2d57cfd7d0457d12ac8ec71aec92f0b6a";
+  "2c092e1735818eab9682cf7686bad6f5fbc615e85e2ed2637119c2de6d0d1f39";
 
 type StablePrediction = readonly [
   string,
@@ -48,8 +48,8 @@ describe("redact-pii benchmark adapter", () => {
       .update(JSON.stringify(predictions))
       .digest("hex");
 
-    expect(predictions).toHaveLength(28);
-    expect(spanCount).toBe(139);
+    expect(predictions).toHaveLength(38);
+    expect(spanCount).toBe(172);
     expect(digest).toBe(EXPECTED_PREDICTION_DIGEST);
   });
 });

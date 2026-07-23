@@ -34,9 +34,9 @@ export type BenchmarkCorpus = {
 export const BENCHMARK_CORPORA: readonly BenchmarkCorpus[] = [
   {
     id: "stella-synthetic-legal",
-    name: "stella synthetic legal fixtures",
-    domains: ["contracts"],
-    languages: ["cs", "de", "en"],
+    name: "stella synthetic legal and clinical fixtures",
+    domains: ["contracts", "medical"],
+    languages: ["cs", "de", "en", "es"],
     task: "span-redaction",
     access: "bundled-development",
     policy: "development",

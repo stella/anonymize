@@ -2,7 +2,7 @@
 
 Reproducible comparison of `@stll/anonymize` (stella) against other open-source
 PII redaction libraries on recall, precision, and throughput. The development
-track includes a public synthetic legal-domain corpus (en/cs/de) and a declared
+track includes a public synthetic legal/clinical corpus (en/cs/de/es) and a declared
 TAB development split. The evaluation-only suite unifies independently
 published corpora without flattening their different task semantics into one
 misleading score.
@@ -15,7 +15,7 @@ test data is never used for detector development or tuning.
 ## Layout
 
 ```text
-fixtures/                 public-safe synthetic ground truth, per language (en/cs/de)
+fixtures/                 public-safe synthetic ground truth, per language (en/cs/de/es)
 python/                   Python adapter scripts and pinned requirements
 results/                  committed, date-stamped JSON + Markdown reports (+ latest.md)
 vendor/                   pinned third-party benchmark detector assets and licenses
