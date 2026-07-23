@@ -9,15 +9,15 @@ reviews:
   path_filters:
     - "!**/*.gen.ts"
     - "!**/*.generated.ts"
-    - "!**/drizzle/**/snapshot.json"
     # sync-ai: injected path filters
   auto_review:
     enabled: true
-    drafts: true
+    drafts: false
     auto_incremental_review: true
     auto_pause_after_reviewed_commits: 2
     ignore_title_keywords:
       - "wip"
+      - "draft"
     ignore_usernames:
       - "dependabot[bot]"
       - "github-actions[bot]"
@@ -58,5 +58,4 @@ knowledge_base:
       - "GEMINI.md"
       - "CONTRIBUTING.md"
       - "SECURITY.md"
-      - "**/.cursorrules"
       # sync-ai: injected code guideline file patterns
