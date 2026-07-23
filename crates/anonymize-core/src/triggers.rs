@@ -1864,9 +1864,7 @@ fn id_value_prefix(text: &str) -> Option<&str> {
   let mut leading_alpha = 0_usize;
   let mut alpha_run = 0_usize;
   let mut max_alpha_run = 0_usize;
-  let mut completed_numeric_groups = 0_usize;
-  let mut group_chars = 0_usize;
-  let mut group_is_numeric = true;
+  let mut groups = IdentifierGroupState::new();
 
   while let Some(&byte) = bytes.get(end) {
     if byte.is_ascii_digit() {
@@ -1874,7 +1872,7 @@ fn id_value_prefix(text: &str) -> Option<&str> {
       alpha_run = 0;
       end = end.saturating_add(1);
       chars = chars.saturating_add(1);
-      group_chars = group_chars.saturating_add(1);
+      groups.observe_digit();
     } else if byte.is_ascii_alphabetic() {
       if digits == 0 {
         leading_alpha = leading_alpha.saturating_add(1);
@@ -1883,8 +1881,7 @@ fn id_value_prefix(text: &str) -> Option<&str> {
       max_alpha_run = max_alpha_run.max(alpha_run);
       end = end.saturating_add(1);
       chars = chars.saturating_add(1);
-      group_chars = group_chars.saturating_add(1);
-      group_is_numeric = false;
+      groups.observe_non_digit();
     } else if matches!(byte, b'.' | b'-' | b'/') {
       if end == 0
         || !bytes
@@ -1896,25 +1893,16 @@ fn id_value_prefix(text: &str) -> Option<&str> {
       alpha_run = 0;
       end = end.saturating_add(1);
       chars = chars.saturating_add(1);
-      group_chars = group_chars.saturating_add(1);
-      group_is_numeric = false;
+      groups.observe_non_digit();
     } else if matches!(byte, b' ' | b'\t') {
-      let mut next = end;
-      while bytes
-        .get(next)
-        .is_some_and(|value| matches!(value, b' ' | b'\t'))
-      {
-        next = next.saturating_add(1);
-      }
-      let numeric_groups = completed_numeric_groups
-        .saturating_add(usize::from(group_chars > 0 && group_is_numeric));
-      match classify_identifier_continuation(
+      let (next, continuation) = continuation_after_whitespace(
         bytes,
-        next,
+        end,
         digits,
         leading_alpha,
-        numeric_groups,
-      ) {
+        &mut groups,
+      );
+      match continuation {
         IdentifierContinuation::Consume if end > 0 => {}
         IdentifierContinuation::Reject => return None,
         IdentifierContinuation::Consume | IdentifierContinuation::Stop => {
@@ -1922,9 +1910,6 @@ fn id_value_prefix(text: &str) -> Option<&str> {
         }
       }
       chars = chars.saturating_add(next.saturating_sub(end));
-      completed_numeric_groups = numeric_groups;
-      group_chars = 0;
-      group_is_numeric = true;
       alpha_run = 0;
       end = next;
     } else {
@@ -1974,6 +1959,63 @@ fn id_value_prefix(text: &str) -> Option<&str> {
     && clean_boundary
     && !single_digit_dotted_prefix(candidate))
   .then_some(candidate)
+}
+
+struct IdentifierGroupState {
+  completed_numeric: usize,
+  chars: usize,
+  is_numeric: bool,
+}
+
+impl IdentifierGroupState {
+  const fn new() -> Self {
+    Self {
+      completed_numeric: 0,
+      chars: 0,
+      is_numeric: true,
+    }
+  }
+
+  const fn observe_digit(&mut self) {
+    self.chars = self.chars.saturating_add(1);
+  }
+
+  const fn observe_non_digit(&mut self) {
+    self.chars = self.chars.saturating_add(1);
+    self.is_numeric = false;
+  }
+
+  fn complete(&mut self) -> usize {
+    self.completed_numeric = self
+      .completed_numeric
+      .saturating_add(usize::from(self.chars > 0 && self.is_numeric));
+    self.chars = 0;
+    self.is_numeric = true;
+    self.completed_numeric
+  }
+}
+
+fn continuation_after_whitespace(
+  bytes: &[u8],
+  mut next: usize,
+  prior_digits: usize,
+  current_leading_alpha: usize,
+  groups: &mut IdentifierGroupState,
+) -> (usize, IdentifierContinuation) {
+  while bytes
+    .get(next)
+    .is_some_and(|value| matches!(value, b' ' | b'\t'))
+  {
+    next = next.saturating_add(1);
+  }
+  let continuation = classify_identifier_continuation(
+    bytes,
+    next,
+    prior_digits,
+    current_leading_alpha,
+    groups.complete(),
+  );
+  (next, continuation)
 }
 
 #[derive(Clone, Copy)]

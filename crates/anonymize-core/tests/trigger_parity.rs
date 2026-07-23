@@ -515,14 +515,14 @@ fn company_id_trigger_rejects_partial_or_overlong_identifier() {
     );
   }
 
-  let exact_limit = vec!["12"; 43].join(" ");
+  let exact_limit = ["12"; 43].join(" ");
   assert_eq!(exact_limit.len(), 128);
   let accepted = prepared
     .detect_static_entities(&format!("Patient number: {exact_limit}"))
     .expect("static detection should succeed");
   assert_eq!(trigger_texts(&accepted), [exact_limit.as_str()]);
 
-  for value in [vec!["12"; 44].join(" "), vec!["12"; 10_000].join(" ")] {
+  for value in [["12"; 44].join(" "), vec!["12"; 10_000].join(" ")] {
     let result = prepared
       .detect_static_entities(&format!("Patient number: {value}"))
       .expect("static detection should succeed");
