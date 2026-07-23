@@ -1,0 +1,9 @@
+{
+  "_comment": "Lowercase connective words that may appear inside an organization or person name ('Bank of America', 'Tribunal de commerce des Sables-d'Olonne', 'Marks & Spencer'). The false-positive filter treats a run of these between capitalized tokens as part of the name rather than trailing prose. Grammar (prepositions, coordinating conjunctions, ampersand); every language's list is unioned at assemble time.",
+  "en": ["of", "and"],
+  "fr": ["de", "des", "du", "le", "la"],
+  "it": ["da"],
+  "de": ["von", "und"],
+  "nl": ["van"],
+  "symbol": ["&"]
+}

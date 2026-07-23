@@ -40,9 +40,6 @@ const ALLOWLIST = new Set([
   // not vocabulary
   "NONWESTERN_LOCALE_KEYS",
   "forms",
-  // migration debt (move into packages/data, then delete from here)
-  "IN_NAME_CONNECTORS",
-  "UNIT_DESIGNATORS",
 ]);
 
 const CASED_WORD = /^\p{Ll}[\p{Ll}\p{M}'’-]*$/u;
@@ -64,7 +61,11 @@ export const isNaturalLanguageWord = (value) =>
 
 export const findInCodeVocabularies = (file, raw) => {
   const findings = [];
-  const text = stripComments(raw);
+  // Rust inline `#[cfg(test)]` modules hold test fixtures, not production
+  // vocabulary; scan only the code above the (conventionally last) test module.
+  const cfgTest = file.endsWith(".rs") ? raw.indexOf("#[cfg(test)]") : -1;
+  const scanned = cfgTest === -1 ? raw : raw.slice(0, cfgTest);
+  const text = stripComments(scanned);
   const stringLiteral = /\.m?ts$/.test(file)
     ? TYPESCRIPT_STRING
     : DOUBLE_QUOTED_STRING;

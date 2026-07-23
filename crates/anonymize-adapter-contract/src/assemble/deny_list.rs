@@ -199,6 +199,9 @@ pub(super) fn build_deny_list_filter_data(
   let document_heading_words =
     language_word_file("document-structure-headings.json")?;
 
+  let unit_designators = language_word_file("unit-designators.json")?;
+  let in_name_connectors = language_word_file("in-name-connectors.json")?;
+
   let signing_place_guards = build_signing_place_guards()?;
 
   Ok(BindingDenyListFilterData {
@@ -219,6 +222,8 @@ pub(super) fn build_deny_list_filter_data(
     document_heading_words,
     document_heading_ordinal_markers: shape("documentHeadingOrdinalMarkers"),
     defined_term_cues: deny_list_filter_static("definedTermCues")?,
+    unit_designators,
+    in_name_connectors,
     signing_place_guards,
     // Both title sources: dotted honorifics ("M.", "Sig.", "Sr.") live in
     // `title_abbreviations` (already trailing-dot-stripped and lowercased),

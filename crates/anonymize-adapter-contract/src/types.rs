@@ -502,6 +502,10 @@ pub struct BindingDenyListFilterData {
   pub document_heading_ordinal_markers: Vec<String>,
   pub defined_term_cues: Vec<String>,
   #[serde(default)]
+  pub unit_designators: Vec<String>,
+  #[serde(default)]
+  pub in_name_connectors: Vec<String>,
+  #[serde(default)]
   pub signing_place_guards: Vec<BindingSigningPlaceGuardData>,
   #[serde(default)]
   pub title_tokens: Vec<String>,
