@@ -7,7 +7,8 @@
 //! the artifacts, serializes the uncompressed core package, and hashes the
 //! bytes. A digest match proves the assembled config is byte-identical end to
 //! end, not just field-wise. Deliberate behavior changes are refreshed through
-//! the gated Rust updater documented alongside the fixtures.
+//! the independently reviewed frozen manifest documented alongside the
+//! fixtures.
 
 use std::fmt::Write as _;
 use std::fs;

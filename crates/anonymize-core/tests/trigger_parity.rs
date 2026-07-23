@@ -365,8 +365,12 @@ fn company_id_trigger_caps_leading_alpha_prefixes() {
   let accepted = prepared
     .detect_static_entities("Company No. AB12345")
     .expect("static detection should succeed");
+  let place_after_short_trigger = prepared
+    .detect_static_entities("Company No. Paris 123456789")
+    .expect("static detection should succeed");
 
   assert!(rejected.entities.trigger().is_empty());
+  assert!(place_after_short_trigger.entities.trigger().is_empty());
   assert_eq!(trigger_texts(&accepted), ["AB12345"]);
 }
 
@@ -383,6 +387,59 @@ fn company_id_trigger_consumes_complete_alphanumeric_identifier() {
     "12345-ABCD",
     "ABCD/12345.XY",
     "FR A1 123456789",
+    "ABCD123 CD456",
+    "ABCD123 CD-456",
+    "ABCD123 456",
+    "ABCD123 456 789",
+    "ABCD123 67",
+    "ABCD123 678",
+    "ABCD123 6789",
+    "ABCD123 2025",
+    "ABCD123 67890",
+    "ABCD123 456A",
+    "ABCD123 456ABCD",
+    "ABCD123 ABCD456",
+    "ABCD123 456ABCDEFGHIJKL",
+    "ABCD123 ABCDEFGHIJKL456",
+    "ABCD123 ABCD-456",
+    "ABCDEFGHIJKL123 456",
+    "123-45 67",
+    "123-45 678",
+    "123-45 6789",
+    "123-45 2025",
+    "123-45 67890",
+    "123-45 456A",
+    "123-45 456ABCD",
+    "123-45 ABCD456",
+    "123-45 ABCD-456",
+    "123-45 456-A",
+    "197-38 269",
+    "123/45 6789",
+    "123.45 6789",
+    "ABCD123 456-789",
+    "12345 67/89",
+    "ABCD123 123-45-6789",
+    "ABCD123 2025-07/23",
+    "ABCD123 23.07/2025",
+    "ABCD123 2025-0007-00023",
+    "ABCD123 0001-0002-0003",
+    "ABCD123 2025-07-23Tfoo",
+    "ABCD123 2025-07-23T12T34",
+    "ABCD123 2025-07-23T1",
+    "ABCD123 2025-07-23T123",
+    "ABCD123 2025-07-23T12345",
+    "ABCD123 2025-07-23T1234567",
+    "ABCD123 2025-07-23T123456789",
+    "AB12 345",
+    "AB12 345 8901",
+    "AB-12 345",
+    "FR A1 123 456",
+    "FR A1 123 456 8901",
+    "197 38 269",
+    "78 123 456 789",
+    "197\t38\t269",
+    "482 731",
+    "78 123",
   ] {
     let text = format!("Patient number: {value}, next field");
     let result = prepared
@@ -394,6 +451,198 @@ fn company_id_trigger_consumes_complete_alphanumeric_identifier() {
 }
 
 #[test]
+fn company_id_trigger_preserves_structured_prefix_state_across_groups() {
+  let prepared = prepared_for_trigger(
+    "Patient number",
+    "registration number",
+    TriggerStrategy::CompanyIdValue,
+  );
+
+  for prefix in ["123-45", "123/45", "123.45", "ABCD123"] {
+    for final_group in ["67", "678", "6789", "67890"] {
+      let value = format!("{prefix} 111 222 {final_group}");
+      let result = prepared
+        .detect_static_entities(&format!("Patient number: {value}, next"))
+        .expect("static detection should succeed");
+
+      assert_eq!(trigger_texts(&result), [value.as_str()]);
+    }
+
+    let year_value = format!("{prefix} 111 222 2025");
+    let year_result = prepared
+      .detect_static_entities(&format!("Patient number: {year_value}, next"))
+      .expect("static detection should succeed");
+    assert_eq!(trigger_texts(&year_result), [year_value.as_str()]);
+
+    for malformed_tail in [
+      "111 222 67 8".to_owned(),
+      "111 222 67 _89".to_owned(),
+      "111 222 67_tail".to_owned(),
+      format!("111 222 67 {}", "1".repeat(129)),
+    ] {
+      let result = prepared
+        .detect_static_entities(&format!(
+          "Patient number: {prefix} {malformed_tail}"
+        ))
+        .expect("static detection should succeed");
+
+      assert!(
+        result.entities.trigger().is_empty(),
+        "must reject malformed continuation after {prefix:?}: {malformed_tail:?}"
+      );
+    }
+  }
+
+  for value in ["123-45 678 901", "197-38 269 123"] {
+    let result = prepared
+      .detect_static_entities(&format!("Patient number: {value}."))
+      .expect("static detection should succeed");
+    assert_eq!(trigger_texts(&result), [value]);
+  }
+}
+
+#[test]
+fn company_id_trigger_accepts_closing_quote_boundaries() {
+  let prepared = prepared_for_trigger(
+    "Patient number",
+    "registration number",
+    TriggerStrategy::CompanyIdValue,
+  );
+
+  for quote in [
+    '\'', '"', '‘', '’', '‚', '‛', '“', '”', '„', '‟', '«', '»', '‹', '›',
+  ] {
+    for suffix in ["", ", next", " confirmed"] {
+      let text = format!("Patient number: ABCD123 CD456{quote}{suffix}");
+      let result = prepared
+        .detect_static_entities(&text)
+        .expect("static detection should succeed");
+
+      assert_eq!(trigger_texts(&result), ["ABCD123 CD456"]);
+    }
+  }
+}
+
+#[test]
+fn company_id_trigger_accepts_immediate_prose_boundaries() {
+  let prepared = prepared_for_trigger(
+    "Patient number",
+    "registration number",
+    TriggerStrategy::CompanyIdValue,
+  );
+
+  for suffix in [
+    "(active)",
+    "[active]",
+    "{active}",
+    "\u{2010} ",
+    "\u{2011},",
+    "\u{2012}.",
+    "\u{2013} ",
+    "\u{2014}confirmed",
+    "\u{2015}confirmed",
+    "\u{2026}prose",
+  ] {
+    let text = format!("Patient number: ABCD123{suffix}");
+    let result = prepared
+      .detect_static_entities(&text)
+      .expect("static detection should succeed");
+
+    assert_eq!(trigger_texts(&result), ["ABCD123"]);
+  }
+
+  for boundary in ["_", "-", "/", "é", "Ж"] {
+    let text = format!("Patient number: ABCD123{boundary}");
+    let result = prepared
+      .detect_static_entities(&text)
+      .expect("static detection should succeed");
+
+    assert!(
+      result.entities.trigger().is_empty(),
+      "boundary {boundary:?} must remain identifier-shaped"
+    );
+  }
+}
+
+#[test]
+fn company_id_trigger_does_not_consume_punctuation_led_prose() {
+  let prepared = prepared_for_trigger(
+    "Patient number",
+    "registration number",
+    TriggerStrategy::CompanyIdValue,
+  );
+  let result = prepared
+    .detect_static_entities("Patient number: ABCD123 .note follows")
+    .expect("static detection should succeed");
+
+  assert_eq!(trigger_texts(&result), ["ABCD123"]);
+}
+
+#[test]
+fn company_id_trigger_stops_before_non_identifier_groups() {
+  let prepared = prepared_for_trigger(
+    "Patient number",
+    "registration number",
+    TriggerStrategy::CompanyIdValue,
+  );
+
+  for (value, expected) in [
+    ("12345 2", "12345"),
+    ("12345 67", "12345"),
+    ("12345 456", "12345"),
+    ("12345 6789", "12345"),
+    ("12345 2025", "12345"),
+    ("12345 67890", "12345"),
+    ("197 38 269 2025", "197 38 269"),
+    ("197 38 269 1900", "197 38 269"),
+    ("197 38 269 2099", "197 38 269"),
+    ("ABCD123 page2", "ABCD123"),
+    ("123-45 page2", "123-45"),
+    ("12345 2025-07-23", "12345"),
+    ("12345 2025-07-23T12:00", "12345"),
+    ("12345 23/07/2025T9:30", "12345"),
+    ("12345 2025-07-23t123456", "12345"),
+    ("12345 2025-07-23T12", "12345"),
+    ("12345 2025-07-23T1234", "12345"),
+    ("12345 2025-07-23T123456Z", "12345"),
+    ("12345 2025-07-23T123456z", "12345"),
+    ("12345 2025-07-23T123456.789Z", "12345"),
+    ("12345 2025-07-23T123456-05:00", "12345"),
+    ("12345 2025-07-23T123456-0500", "12345"),
+    ("12345 2025-07-23T123456.789-05:00", "12345"),
+    ("12345 2025-07-23T123456.789-0500", "12345"),
+    ("12345 23/07/2025", "12345"),
+    ("12345 07/23/2025", "12345"),
+    ("12345 23/07/25", "12345"),
+    ("12345 07/23/25", "12345"),
+    ("12345 2023-02-29", "12345"),
+    ("12345 2025-04-31", "12345"),
+    ("12345 2025-13-01", "12345"),
+    ("12345 1900-02-29", "12345"),
+    ("ABCD123 2nd", "ABCD123"),
+    ("12345 e.g. above", "12345"),
+    ("12345 ref-code", "12345"),
+    ("12345 next-field", "12345"),
+    ("12345 field_name", "12345"),
+    ("ABCD123 _section", "ABCD123"),
+    ("AB123 CD/EF", "AB123"),
+  ] {
+    let text = format!("Patient number: {value}");
+    let result = prepared
+      .detect_static_entities(&text)
+      .expect("static detection should succeed");
+
+    assert_eq!(trigger_texts(&result), [expected]);
+  }
+
+  let overlong_prose = "a".repeat(129);
+  let result = prepared
+    .detect_static_entities(&format!("Patient number: 12345 {overlong_prose}"))
+    .expect("static detection should succeed");
+  assert_eq!(trigger_texts(&result), ["12345"]);
+}
+
+#[test]
 fn company_id_trigger_rejects_partial_or_overlong_identifier() {
   let prepared = prepared_for_trigger(
     "Patient number",
@@ -402,7 +651,67 @@ fn company_id_trigger_rejects_partial_or_overlong_identifier() {
   );
   let overlong = format!("AB-{}", "1".repeat(129));
 
-  for value in ["12345-", "ABCD-12345_tail", overlong.as_str()] {
+  for value in [
+    "12345-",
+    "ABCD-12345_tail",
+    "ABCD123 CD456_tail",
+    "ABCD123 CD-",
+    "ABCD123 CD_456",
+    "ABCD123 _CD456",
+    "197 38 269_tail",
+    "197 38 269-",
+    "197 38 269_",
+    "1 2025 12",
+    "1 1234 12",
+    "12345 67 8",
+    "12345 67 8901",
+    "12345 67 89_tail",
+    "482 731 8",
+    "AB12 345 8",
+    "ABCD123 456 8",
+    "ABCD123 456 789_tail",
+    "ABCD123 4567 8",
+    "ABCD123 8",
+    "123-45 8",
+    "123-45 6789 8",
+    "ABCD123 456A 8",
+    "123-45 ABCD456 _678",
+    "ABCD123 456_A",
+    "ABCD123 456ABCDEFGHIJKLM",
+    "123-45 ABCDEFGHIJKLM456",
+    "ABCD123 ABCDEFGHIJKLM-456",
+    "123-45 67_tail",
+    "123-45 _678",
+    "FR A1 123 456 8",
+    "197 38 269 8",
+    "197 38 269 8901",
+    "197 38 269 1000",
+    "197 38 269 1899",
+    "197 38 269 2100",
+    "197 38 269 2999",
+    "ABCD123\u{2013}456",
+    "ABCD123\u{2013}É456",
+    "ABCD123\u{2011}٦",
+    "197\u{2011}38\u{2011}269",
+    "ABCD123(6)",
+    "ABCD123(٦)",
+    "ABCD123(É456)",
+    "ABCD123(v2)",
+    "ABCD123(a2)",
+    "ABCD123[v2]",
+    "ABCD123{a2}",
+    "ABCD123[6]",
+    "ABCD123{6}",
+    "ABCD123\u{2014}É456",
+    "ABCD123\u{2014}456",
+    "ABCD123\u{2014}v2",
+    "ABCD123\u{2013}confirmed",
+    "ABCD123\"456",
+    "ABCD123“456",
+    "ABCD123“É٤56",
+    "ABCD123'v2",
+    overlong.as_str(),
+  ] {
     let text = format!("Patient number: {value}");
     let result = prepared
       .detect_static_entities(&text)
@@ -411,6 +720,79 @@ fn company_id_trigger_rejects_partial_or_overlong_identifier() {
     assert!(
       result.entities.trigger().is_empty(),
       "must not redact a partial prefix of {value:?}"
+    );
+  }
+
+  for continuation in [
+    "1".repeat(129),
+    format!("{}1{}", "a".repeat(64), "a".repeat(64)),
+    format!("{}-{}", "a".repeat(64), "a".repeat(64)),
+  ] {
+    let result = prepared
+      .detect_static_entities(&format!("Patient number: 12345 {continuation}"))
+      .expect("static detection should succeed");
+    assert!(
+      result.entities.trigger().is_empty(),
+      "overlong identifier-shaped continuation must reject without a partial prefix"
+    );
+  }
+
+  let structured_overlong = "1".repeat(129);
+  let result = prepared
+    .detect_static_entities(&format!(
+      "Patient number: 123-45 {structured_overlong}"
+    ))
+    .expect("static detection should succeed");
+  assert!(result.entities.trigger().is_empty());
+}
+
+#[test]
+fn company_id_trigger_classifies_the_exact_length_boundary() {
+  let prepared = prepared_for_trigger(
+    "Patient number",
+    "registration number",
+    TriggerStrategy::CompanyIdValue,
+  );
+
+  let exact_limit = ["12"; 43].join(" ");
+  assert_eq!(exact_limit.len(), 128);
+  for suffix in ["", ", next", " confirmed", " follow-up", " , next"] {
+    let accepted = prepared
+      .detect_static_entities(&format!("Patient number: {exact_limit}{suffix}"))
+      .expect("static detection should succeed");
+    assert_eq!(trigger_texts(&accepted), [exact_limit.as_str()]);
+  }
+
+  for suffix in ["3", "A2", " 34", " page2", "_tail", " -tail", " (v2)"] {
+    let rejected = prepared
+      .detect_static_entities(&format!("Patient number: {exact_limit}{suffix}"))
+      .expect("static detection should succeed");
+    assert!(
+      rejected.entities.trigger().is_empty(),
+      "exact-limit identifier must reject overflow suffix {suffix:?}"
+    );
+  }
+
+  let near_limit = ["12"; 42].join(" ");
+  assert_eq!(near_limit.len(), 125);
+  let accepted = prepared
+    .detect_static_entities(&format!(
+      "Patient number: {near_limit}   confirmed"
+    ))
+    .expect("static detection should succeed");
+  assert_eq!(trigger_texts(&accepted), [near_limit.as_str()]);
+  let rejected = prepared
+    .detect_static_entities(&format!("Patient number: {near_limit}   34"))
+    .expect("static detection should succeed");
+  assert!(rejected.entities.trigger().is_empty());
+
+  for value in [["12"; 44].join(" "), vec!["12"; 10_000].join(" ")] {
+    let result = prepared
+      .detect_static_entities(&format!("Patient number: {value}"))
+      .expect("static detection should succeed");
+    assert!(
+      result.entities.trigger().is_empty(),
+      "must reject overlong grouped identifiers without a partial prefix"
     );
   }
 }
