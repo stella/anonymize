@@ -496,6 +496,7 @@ const DECLENSION_RULES: &[DeclensionRule] = &[
   DeclensionRule {
     ending_len: 0,
     gate: |lc| last_in(lc, &['c', 'č', 'ď', 'ť', 'ň', 'ř', 'š', 'ž', 'j', 'ľ']),
+    // vocab-allow: Czech declension endings coupled to this morphology rule
     forms: &["e", "i", "a", "ovi", "em", "om"],
   },
   DeclensionRule {
@@ -506,6 +507,7 @@ const DECLENSION_RULES: &[DeclensionRule] = &[
   DeclensionRule {
     ending_len: 2,
     gate: |lc| tail_after_not_in(lc, &['e', 'l'], V_WITH_I),
+    // vocab-allow: Czech declension endings coupled to this morphology rule
     forms: &["la", "lu", "le", "lovi", "lem", "lom"],
   },
   DeclensionRule {
