@@ -106,24 +106,22 @@ struct GenericRoles {
   roles: Vec<String>,
 }
 
-/// Mirrors `SUPPLEMENTARY_NAME_EXCLUSIONS`.
-const SUPPLEMENTARY_NAME_EXCLUSIONS: &[&str] = &[
-  "ana", "ben", "dan", "eden", "ella", "ina", "jo", "kai", "lena", "may",
-  "mia", "sam", "sara", "sue", "tim", "tom",
-];
-
-/// Mirrors `getFirstNameExclusions`: first-name corpus lowercased plus the
-/// supplementary set.
-fn first_name_exclusions(corpus: &NameCorpus) -> HashSet<String> {
+/// First-name corpus lowercased, plus supplementary short given names that are
+/// absent from the corpus (`supplementary-name-exclusions.json`).
+fn first_name_exclusions(
+  corpus: &NameCorpus,
+) -> Result<HashSet<String>, AssembleError> {
   let mut set: HashSet<String> = corpus
     .first_names_list
     .iter()
     .map(|name| js_lowercase(name))
     .collect();
-  for word in SUPPLEMENTARY_NAME_EXCLUSIONS {
-    set.insert((*word).to_string());
+  let supplementary: WordsFile =
+    parse_data_file("supplementary-name-exclusions.json")?;
+  for word in supplementary.words {
+    set.insert(js_lowercase(&word));
   }
-  set
+  Ok(set)
 }
 
 /// `new Set(...)` insertion-order dedup for a `words`-style file.
@@ -156,7 +154,7 @@ pub(super) fn build_deny_list_filter_data(
   content_languages: Option<&[String]>,
 ) -> Result<BindingDenyListFilterData, AssembleError> {
   // stopwords: stopwords.json filtered by first-name exclusions, Set order.
-  let exclusions = first_name_exclusions(corpus);
+  let exclusions = first_name_exclusions(corpus)?;
   let stopwords_file: Vec<String> = parse_data_file("stopwords.json")?;
   let stopwords = set_ordered(
     stopwords_file
