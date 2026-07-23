@@ -104,10 +104,6 @@ const RAW_LEGAL_SUFFIXES: &[&str] = &[
   "MEI",
 ];
 
-/// Sentence-verb seed set (`SENTENCE_VERB_INDICATORS_SEED`).
-const SENTENCE_VERB_INDICATORS_SEED: &[&str] =
-  &["je", "jsou", "is", "are", "ist", "sind"];
-
 /// Clause-noun seed set (`CLAUSE_NOUN_HEADS_SEED`).
 const CLAUSE_NOUN_HEADS_SEED: &[&str] = &["agreement", "contract"];
 
@@ -672,7 +668,7 @@ pub(super) fn build_legal_form_data(
     role_heads: role_heads(ctx.content_languages.as_deref())?,
     sentence_verb_indicators: load_lowercase_union(
       "sentence-verb-indicators.json",
-      SENTENCE_VERB_INDICATORS_SEED,
+      &[],
     )?,
     clause_noun_heads: load_lowercase_union(
       "clause-noun-heads.json",

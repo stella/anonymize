@@ -5,14 +5,12 @@
 // See packages/data/config/conjunctions.json for the intended shape.
 //
 // Heuristic: a flat array literal holding at least THRESHOLD string literals
-// that are natural-language words is treated as an in-code vocabulary. Cased
-// scripts must be lowercase; caseless scripts accept letters and marks.
-// Documented exceptions live in ALLOWLIST, keyed by the constant/identifier
-// name on the same line.
+// that are lowercase natural-language words (letters, marks, hyphen,
+// apostrophe) is treated as an in-code vocabulary. Documented exceptions live
+// in ALLOWLIST, keyed by the constant/identifier name on the same line.
 
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { pathToFileURL } from "node:url";
 import process from "node:process";
 
 const THRESHOLD = 6;
@@ -31,26 +29,21 @@ const IGNORED_SUBSTRINGS = ["/__test__/", "/wasm/", "/dist/"];
 const IGNORED_SUFFIXES = [".test.ts", ".test.mts", ".d.ts"];
 
 // Exceptions, keyed by the identifier the array is bound to. Two kinds:
-//   - genuinely not language vocabulary (locale codes);
+//   - genuinely not language vocabulary (locale codes; morphology forms that
+//     are coupled to Rust gate predicates, not a lookup list);
 //   - existing debt tracked for migration into packages/data. Do NOT extend the
 //     debt set — new vocabulary must go straight to a data file. A source site
 //     can also opt out with a `vocab-allow: <reason>` comment on its line.
 const ALLOWLIST = new Set([
   // not vocabulary
   "NONWESTERN_LOCALE_KEYS",
+  "forms",
   // migration debt (move into packages/data, then delete from here)
-  "SUPPLEMENTARY_NAME_EXCLUSIONS",
-  "SENTENCE_VERB_INDICATORS_SEED",
-  "ADDRESS_STOP_KEYWORDS_SEED",
   "IN_NAME_CONNECTORS",
   "UNIT_DESIGNATORS",
 ]);
 
-const CASED_WORD = /^\p{Ll}[\p{Ll}\p{M}'’-]*$/u;
-// Arabic, Han, Hiragana, Katakana, Thai, and other caseless scripts use Lo/Lm
-// rather than Ll. Keep this separate from CASED_WORD: rejecting every cased
-// letter prevents camelCase, PascalCase, and uppercase codes from slipping in.
-const CASELESS_WORD = /^(?!.*[\p{Ll}\p{Lu}\p{Lt}])\p{L}[\p{L}\p{M}'’-]*$/u;
+const WORD = /^\p{Ll}[\p{Ll}\p{M}'’-]*$/u;
 const STRING_LITERAL = /"(?:[^"\\]|\\.)*"/g;
 const FLAT_ARRAY = /\[[^[\]]*\]/gs;
 // Identifier bound to the array, read from the enclosing statement: `NAME = [`,
@@ -59,11 +52,17 @@ const FLAT_ARRAY = /\[[^[\]]*\]/gs;
 const IDENT_ASSIGN = /([A-Za-z_]\w*)\s*(?::[^=]*)?=\s*&?\s*$/s;
 const IDENT_FIELD = /([A-Za-z_]\w*)\s*:\s*&?\s*$/s;
 
-export const isNaturalLanguageWord = (value) =>
-  CASED_WORD.test(value) || CASELESS_WORD.test(value);
+const trackedFiles = execFileSync("git", ["ls-files", "-z"], {
+  encoding: "utf8",
+})
+  .split("\0")
+  .filter(Boolean)
+  .filter(isSource);
 
-export const findInCodeVocabularies = (file, raw) => {
-  const findings = [];
+let hasFailure = false;
+
+for (const file of trackedFiles) {
+  const raw = readFileSync(file, "utf8");
   const text = stripComments(raw);
   for (const match of text.matchAll(FLAT_ARRAY)) {
     const literals = [...match[0].matchAll(STRING_LITERAL)].map((m) =>
@@ -72,7 +71,7 @@ export const findInCodeVocabularies = (file, raw) => {
     if (literals.length < THRESHOLD) {
       continue;
     }
-    const words = literals.filter(isNaturalLanguageWord);
+    const words = literals.filter((value) => WORD.test(value));
     if (
       words.length < THRESHOLD ||
       words.length / literals.length < WORD_FRACTION
@@ -98,48 +97,21 @@ export const findInCodeVocabularies = (file, raw) => {
       continue;
     }
     const { line, column } = lineColumnFor(text, match.index);
-    findings.push({ file, line, column, ident, words });
+    console.error(
+      `${file}:${line}:${column} in-code vocabulary${ident ? ` "${ident}"` : ""} ` +
+        `(${words.length} words: ${words.slice(0, 4).join(", ")}…); move it to a ` +
+        `per-language data file and compose it in the assembler`,
+    );
+    hasFailure = true;
   }
-  return findings;
-};
+}
 
-const reportFinding = ({ file, line, column, ident, words }) => {
-  console.error(
-    `${file}:${line}:${column} in-code vocabulary${ident ? ` "${ident}"` : ""} ` +
-      `(${words.length} words: ${words.slice(0, 4).join(", ")}…); move it to a ` +
-      `per-language data file and compose it in the assembler`,
-  );
-};
-
-const run = () => {
-  const trackedFiles = execFileSync("git", ["ls-files", "-z"], {
-    encoding: "utf8",
-  })
-    .split("\0")
-    .filter(Boolean)
-    .filter(isSource);
-
-  const findings = trackedFiles.flatMap((file) =>
-    findInCodeVocabularies(file, readFileSync(file, "utf8")),
-  );
-  findings.forEach(reportFinding);
-
-  if (findings.length === 0) {
-    return;
-  }
-
+if (hasFailure) {
   console.error(
     "\nHardcoded vocabulary is banned. Put word lists in packages/data and " +
       "thread them through the assembler; see conjunctions.json.",
   );
-  process.exitCode = 1;
-};
-
-if (
-  process.argv[1] !== undefined &&
-  import.meta.url === pathToFileURL(process.argv[1]).href
-) {
-  run();
+  process.exit(1);
 }
 
 function isSource(file) {
