@@ -1,0 +1,6 @@
+{
+  "_comment": "Conjunctions by language and grammatical class. This is pure grammar vocabulary; consumers apply domain meaning by composition (e.g. address-seed expansion treats a trailing coordinating conjunction as the end of the address span, since a real address separates its parts with commas followed by a capitalized component, not a conjunction).",
+  "coordinating": {
+    "en": ["and", "but", "nor", "or"]
+  }
+}

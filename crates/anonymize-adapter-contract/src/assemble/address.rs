@@ -30,6 +30,12 @@ struct AddressPrepositions {
 }
 
 #[derive(Deserialize)]
+struct Conjunctions {
+  #[serde(default)]
+  coordinating: OrderedMap<Value>,
+}
+
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct AddressContextJson {
   #[serde(default)]
@@ -183,9 +189,17 @@ pub(super) fn build_address_seed_data(
     parse_ordered_data_file("address-unit-abbreviations.json")?;
   let street_types: OrderedMap<Value> =
     parse_ordered_data_file("address-street-types.json")?;
+  // Grammar composed into address meaning: a coordinating conjunction cannot
+  // join two address components, so it ends the span when expansion walks into
+  // trailing prose ("..., or emailed to", "..., and provide the Company").
+  let conjunctions: Conjunctions = parse_data_file("conjunctions.json")?;
 
   Ok(Some(BindingAddressSeedData {
-    boundary_words: flatten_dictionaries(&[&boundaries, &stop_keywords]),
+    boundary_words: flatten_dictionaries(&[
+      &boundaries,
+      &stop_keywords,
+      &conjunctions.coordinating,
+    ]),
     br_cep_cue_words: build_br_cue_words(&street_types, &boundaries),
     unit_abbreviations: flatten_dictionaries(&[&unit_abbreviations]),
   }))

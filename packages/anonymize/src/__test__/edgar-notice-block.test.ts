@@ -357,4 +357,21 @@ Email: abargfrede@example.com`;
       ),
     ).toBe(false);
   });
+  test("address stops at a trailing coordinating conjunction", async () => {
+    // MVW Services separation agreement (2026-07-21): right-expansion walked
+    // the return address into the notice sentence ("..., or emailed to").
+    const text = `one executed original of this Agreement must be
+mailed to 7812 Palm Parkway, Orlando, Florida 32836, or emailed to
+Denise Haeggberg before the close of business.`;
+    const entities = await detect(text);
+    const addresses = entities.filter((entity) => entity.label === "address");
+    expect(
+      addresses.some(
+        (entity) => entity.text === "7812 Palm Parkway, Orlando, Florida 32836",
+      ),
+    ).toBe(true);
+    expect(addresses.some((entity) => entity.text.includes("emailed"))).toBe(
+      false,
+    );
+  });
 });
