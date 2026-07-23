@@ -59,7 +59,8 @@ are reported; neither is cherry-picked.
 | datafog | 4.8.0 | 5/8 | 67.7 | 22.4 | 33.7 | 52.1 | 33.0 |
 | redact-pii | 3.4.0 | 5/8 | 38.1 | 27.0 | 31.6 | 41.7 | 22.1 |
 
-Cells are percentages. P/R/F1 use the primary overlap rule.
+Cells are percentages. P, R, and overlap F1 use the primary overlap rule; exact
+F1 requires exact span matches.
 
 ## Per-label F1 (overlap, all-labels)
 
@@ -145,4 +146,3 @@ order-of-magnitude, not a precise micro-benchmark.
   `src/taxonomy.ts` for every decision.
 - **No cherry-picking.** Every label is reported, including those where stella
   underperforms. Overlap and exact modes are both shown.
-

@@ -131,7 +131,9 @@ export const renderMarkdown = (result: BenchResult): string => {
     );
   }
   lines.push("");
-  lines.push("Cells are percentages. P/R/F1 use the primary overlap rule.");
+  lines.push(
+    "Cells are percentages. P, R, and overlap F1 use the primary overlap rule; exact F1 requires exact span matches.",
+  );
   lines.push("");
 
   lines.push("## Per-label F1 (overlap, all-labels)");
