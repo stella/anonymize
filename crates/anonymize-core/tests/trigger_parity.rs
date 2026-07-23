@@ -470,6 +470,8 @@ fn company_id_trigger_stops_before_non_identifier_groups() {
     ("12345 e.g. above", "12345"),
     ("12345 ref-code", "12345"),
     ("12345 next-field", "12345"),
+    ("12345 field_name", "12345"),
+    ("ABCD123 _section", "ABCD123"),
     ("AB123 CD/EF", "AB123"),
   ] {
     let text = format!("Patient number: {value}");

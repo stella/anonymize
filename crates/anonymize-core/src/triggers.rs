@@ -2035,10 +2035,7 @@ fn classify_identifier_continuation(
   let Some(first) = bytes.get(start) else {
     return IdentifierContinuation::Stop;
   };
-  if *first == b'_' {
-    return IdentifierContinuation::Reject;
-  }
-  if !first.is_ascii_alphanumeric() {
+  if !first.is_ascii_alphanumeric() && *first != b'_' {
     return IdentifierContinuation::Stop;
   }
 
@@ -2055,7 +2052,11 @@ fn classify_identifier_continuation(
     return IdentifierContinuation::Reject;
   };
   if token.contains(&b'_') {
-    return IdentifierContinuation::Reject;
+    return if token.iter().any(u8::is_ascii_digit) {
+      IdentifierContinuation::Reject
+    } else {
+      IdentifierContinuation::Stop
+    };
   }
   if token.last() == Some(&b'.') {
     let Some(trimmed) = token.get(..token.len().saturating_sub(1)) else {

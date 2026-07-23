@@ -193,6 +193,8 @@ const STOP_BEFORE_PROSE_FIXTURES = [
   ["Patient number: 12345 e.g. above.", "12345"],
   ["Patient number: 12345 ref-code.", "12345"],
   ["Patient number: 12345 next-field.", "12345"],
+  ["Patient number: 12345 field_name.", "12345"],
+  ["Patient number: ABCD123 _section.", "ABCD123"],
   ["Patient number: AB123 CD/EF.", "AB123"],
 ] as const;
 
