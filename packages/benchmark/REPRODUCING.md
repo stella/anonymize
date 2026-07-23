@@ -28,6 +28,7 @@ The sealed suite uses public tools and credential-free public artifacts:
 | TAB            | GitHub raw content        | built-in JSON            | repository commit plus SHA-256 |
 | RedactionBench | Hugging Face dataset file | `hyparquet`              | dataset commit plus SHA-256    |
 | MEDDOCAN       | Zenodo record API         | `fflate` and BRAT parser | archive SHA-256                |
+| German LER     | Hugging Face dataset file | `hyparquet`              | dataset commit plus SHA-256    |
 
 From `packages/benchmark`, run all complete test splits or one corpus:
 
@@ -36,6 +37,7 @@ bun run bench:sealed
 bun run bench:sealed:tab
 bun run bench:sealed:redactionbench
 bun run bench:sealed:meddocan
+bun run bench:sealed:german-ler
 ```
 
 The runners download into `.cache/`, enforce byte limits, verify the pinned
@@ -352,8 +354,8 @@ tree that produced a sealed result. A sealed runner fails before loading a
 corpus when tracked source changes, staged changes, or unrelated untracked
 files are present. Canonical aggregate report pairs emitted by an earlier
 sealed phase for the same source SHA are the only untracked files ignored, so
-TAB, RedactionBench, and MEDDOCAN can run sequentially without weakening the
-provenance check.
+TAB, RedactionBench, MEDDOCAN, and German LER can run sequentially without
+weakening the provenance check.
 
 For reports produced on a PR branch, the recorded source SHA is a PR-branch
 commit. This repository squash-merges, so that commit will not be on `main`'s

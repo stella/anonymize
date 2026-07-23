@@ -31,6 +31,18 @@ redistributed by this repository.
 - SHA-256: `d0e4708b58689bc1440ede6f89e017e58d667827d927827622d73810cd68eac3`
 - License: Creative Commons Attribution 4.0 International (CC BY 4.0)
 
+## German Legal Entity Recognition
+
+- Project: German Named Entity Recognition in Legal Documents
+- Source: https://huggingface.co/datasets/elenanereiss/german-ler
+- Commit: `405b6923dfd2299da3d76a68220ee15a95bc1eab`
+- Test artifact: `data/test-00000-of-00001.parquet`
+- SHA-256: `78e36e4c297e95d755e2a80c8a98f988efee23c2f27e3dfb8c6c28872a57a7e6`
+- License: Creative Commons Attribution 4.0 International (CC BY 4.0)
+- Paper: https://arxiv.org/abs/2003.13016
+- Citation: Elena Leitner, Georg Rehm, and Julian Moreno-Schneider,
+  “Fine-grained Named Entity Recognition in Legal Documents” (2019)
+
 Use of each corpus remains subject to its upstream license and citation
 requirements. See the linked upstream project or record for the canonical
 license text and citation metadata.
