@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 4,
+  "createdAt": "2026-07-23T03:16:13.738Z",
+  "sourceGitSha": "8d441ede98c57bced1f811f2d00f1cd5f8a732c2",
+  "runtime": "Bun 1.3.14",
+  "policy": "evaluation-only",
+  "corpus": {
+    "id": "german-ler",
+    "source": "https://huggingface.co/datasets/elenanereiss/german-ler",
+    "version": "405b6923dfd2299da3d76a68220ee15a95bc1eab",
+    "file": "data/test-00000-of-00001.parquet",
+    "sha256": "78e36e4c297e95d755e2a80c8a98f988efee23c2f27e3dfb8c6c28872a57a7e6",
+    "license": "CC-BY-4.0",
+    "split": "test",
+    "documentCount": 6673,
+    "selection": {
+      "type": "full-test-split"
+    }
+  },
+  "libraries": [
+    {
+      "name": "stella",
+      "version": "2.4.1",
+      "status": "ok",
+      "timing": {
+        "initSeconds": 0.17840625,
+        "coldSeconds": 0.414385125,
+        "warmSeconds": 0.3854497919999999,
+        "totalChars": 1383026
+      },
+      "adapterWallSeconds": 0.978884833,
+      "metrics": {
+        "type": "german-legal-entity-coverage",
+        "documents": 6673,
+        "entityRecall": 0.024426907177752723,
+        "characterRecall": 0.09652170860973641,
+        "characterPrecision": 0.4066363044892648,
+        "goldEntities": 5322,
+        "predictedSpans": 2741
+      }
+    },
+    {
+      "name": "presidio",
+      "version": "2.2.360",
+      "status": "ok",
+      "timing": {
+        "initSeconds": 2.3986379590023716,
+        "coldSeconds": 46.94629512500251,
+        "warmSeconds": 36.73993870900085,
+        "totalChars": 1383026
+      },
+      "adapterWallSeconds": 86.748851834,
+      "metrics": {
+        "type": "german-legal-entity-coverage",
+        "documents": 6673,
+        "entityRecall": 0.19767004885381437,
+        "characterRecall": 0.22057491839528273,
+        "characterPrecision": 0.5384536294468435,
+        "goldEntities": 5322,
+        "predictedSpans": 5739
+      }
+    },
+    {
+      "name": "scrubadub",
+      "version": "2.0.1",
+      "status": "ok",
+      "timing": {
+        "initSeconds": 0.00018008400002145208,
+        "coldSeconds": 0.39775562500290107,
+        "warmSeconds": 0.40143512500071665,
+        "totalChars": 1383026
+      },
+      "adapterWallSeconds": 1.8838847499999973,
+      "metrics": {
+        "type": "german-legal-entity-coverage",
+        "documents": 6673,
+        "entityRecall": 0,
+        "characterRecall": 0.0005826401319714997,
+        "characterPrecision": 0.16338582677165353,
+        "goldEntities": 5322,
+        "predictedSpans": 20
+      }
+    },
+    {
+      "name": "datafog",
+      "version": "unknown",
+      "status": "unavailable",
+      "reasonCode": "adapter-unavailable"
+    },
+    {
+      "name": "redact-pii",
+      "version": "3.4.0",
+      "status": "ok",
+      "timing": {
+        "initSeconds": 0.004595750000007683,
+        "coldSeconds": 25.130295792000005,
+        "warmSeconds": 23.685230209,
+        "totalChars": 1383026
+      },
+      "adapterWallSeconds": 48.820427041999984,
+      "metrics": {
+        "type": "german-legal-entity-coverage",
+        "documents": 6673,
+        "entityRecall": 0.008455467869222097,
+        "characterRecall": 0.07671896388333158,
+        "characterPrecision": 0.505855126128211,
+        "goldEntities": 5322,
+        "predictedSpans": 4998
+      }
+    },
+    {
+      "name": "pii-shield",
+      "version": "unknown",
+      "status": "unavailable",
+      "reasonCode": "adapter-unavailable"
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
-export const SEALED_AGGREGATE_REPORT_SCHEMA_VERSION = 3 as const;
+export const SEALED_AGGREGATE_REPORT_SCHEMA_VERSION = 4 as const;
 
 const SAFE_PROVIDER_NAME = /^[a-z0-9][a-z0-9._-]{0,63}$/u;
 const SAFE_PROVIDER_VERSION = /^[A-Za-z0-9][A-Za-z0-9 ._+/@():-]{0,127}$/u;
@@ -53,10 +53,21 @@ export type MeddocanAggregateMetrics = {
   readonly goldSpans: number;
 };
 
+export type GermanLerAggregateMetrics = {
+  readonly type: "german-legal-entity-coverage";
+  readonly documents: number;
+  readonly entityRecall: number;
+  readonly characterRecall: number;
+  readonly characterPrecision: number;
+  readonly goldEntities: number;
+  readonly predictedSpans: number;
+};
+
 export type SealedAggregateMetrics =
   | TabAggregateMetrics
   | RedactionBenchAggregateMetrics
-  | MeddocanAggregateMetrics;
+  | MeddocanAggregateMetrics
+  | GermanLerAggregateMetrics;
 
 export type SealedLibraryResult =
   | {
@@ -82,7 +93,7 @@ export type SealedAggregateReport = {
   readonly runtime: string;
   readonly policy: "evaluation-only";
   readonly corpus: {
-    readonly id: "tab-echr" | "redactionbench" | "meddocan";
+    readonly id: "tab-echr" | "redactionbench" | "meddocan" | "german-ler";
     readonly source: string;
     readonly version: string;
     readonly file: string;
@@ -216,6 +227,18 @@ const validateMetrics = (value: unknown): void => {
     for (const key of ratios) requireRatio(value[key], `MEDDOCAN ${key}`);
     return;
   }
+  if (type === "german-legal-entity-coverage") {
+    const counts = ["documents", "goldEntities", "predictedSpans"];
+    const ratios = ["entityRecall", "characterRecall", "characterPrecision"];
+    exactKeys(
+      value,
+      ["type", ...counts, ...ratios],
+      "German LER aggregate metrics",
+    );
+    for (const key of counts) requireCount(value[key], `German LER ${key}`);
+    for (const key of ratios) requireRatio(value[key], `German LER ${key}`);
+    return;
+  }
   throw new Error("sealed metrics use an unknown task type");
 };
 
@@ -227,6 +250,9 @@ const metricTypeForCorpus = (
   }
   if (corpusId === "redactionbench") {
     return "redactionbench-transparent-interim";
+  }
+  if (corpusId === "german-ler") {
+    return "german-legal-entity-coverage";
   }
   return "label-agnostic-span-redaction";
 };
@@ -285,7 +311,8 @@ export const assertSealedAggregateReport: (
   if (
     (corpusId !== "tab-echr" &&
       corpusId !== "redactionbench" &&
-      corpusId !== "meddocan") ||
+      corpusId !== "meddocan" &&
+      corpusId !== "german-ler") ||
     corpus["split"] !== "test"
   ) {
     throw new Error("sealed report corpus id or split is invalid");
@@ -455,6 +482,16 @@ const tableDefinition = (
       ],
     };
   }
+  if (metrics.type === "german-legal-entity-coverage") {
+    return {
+      headers: ["Entity coverage", "Character coverage", "Character precision"],
+      values: [
+        percent(metrics.entityRecall),
+        percent(metrics.characterRecall),
+        percent(metrics.characterPrecision),
+      ],
+    };
+  }
   return {
     headers: ["Span recall", "Character recall", "Character precision"],
     values: [
@@ -475,7 +512,7 @@ export const renderSealedAggregateMarkdown = (
       ? { headers: ["Aggregate metrics"], values: ["unavailable"] }
       : tableDefinition(available.metrics);
   const lines = [
-    "# Sealed aggregate anonymization evaluation",
+    "# Sealed aggregate benchmark evaluation",
     "",
     "Evaluation-only results on a checksum-pinned public test split.",
     "This report is generated exclusively from the aggregate report contract.",
@@ -528,6 +565,12 @@ export const renderSealedAggregateMarkdown = (
   lines.push(
     "",
     "Metrics retain each corpus's native task semantics; no cross-corpus score is computed.",
+    ...(report.corpus.id === "german-ler"
+      ? [
+          "German LER coverage is label-agnostic: it measures overlap with all seven coarse legal NER classes, not PII recall or label-aware NER accuracy.",
+          "The source decisions were already anonymized before annotation, so this corpus cannot measure de-identification recall.",
+        ]
+      : []),
     "Warm chars/s is the steady-state throughput headline and covers one complete second pass over the corpus.",
     "These are one-shot wall-clock measurements and are sensitive to machine load; compare controlled repeated runs before drawing performance conclusions.",
     "Adapter wall time is diagnostic only. It includes init plus two corpus passes and may include subprocess startup, imports, and protocol overhead; adapter init/import boundaries differ.",

@@ -1,4 +1,7 @@
-export type BenchmarkTask = "span-redaction" | "contextual-redaction";
+export type BenchmarkTask =
+  | "span-redaction"
+  | "contextual-redaction"
+  | "named-entity-recognition";
 
 export type BenchmarkAccess = "bundled-development" | "verified-download";
 
@@ -136,6 +139,27 @@ export const BENCHMARK_CORPORA: readonly BenchmarkCorpus[] = [
     notes:
       "Complete 250-document test split; checksum-pinned Zenodo BRAT archive.",
   },
+  {
+    id: "german-ler",
+    name: "German Legal Entity Recognition",
+    domains: ["court decisions", "legal"],
+    languages: ["de"],
+    task: "named-entity-recognition",
+    access: "verified-download",
+    policy: "evaluation-only",
+    license: GERMAN_LER_PROVENANCE.license,
+    source: GERMAN_LER_PROVENANCE.repository,
+    version: GERMAN_LER_PROVENANCE.commit,
+    artifact: {
+      file: GERMAN_LER_PROVENANCE.file,
+      sha256: GERMAN_LER_PROVENANCE.sha256,
+      split: "test",
+    },
+    runnable: true,
+    execution: { script: "german-ler.ts", args: [] },
+    notes:
+      "All 6,673 public test sentences. Label-agnostic entity coverage is a legal NER diagnostic, not PII recall or label-aware NER accuracy.",
+  },
 ] as const;
 
 export const validateBenchmarkRegistry = (): void => {
@@ -171,5 +195,6 @@ export const validateBenchmarkRegistry = (): void => {
   }
 };
 import { TAB_DEV_PROVENANCE, TAB_PROVENANCE } from "../blind/tab";
+import { GERMAN_LER_PROVENANCE } from "./german-ler";
 import { MEDDOCAN_PROVENANCE } from "./meddocan";
 import { REDACTIONBENCH_PROVENANCE } from "./redactionbench";
