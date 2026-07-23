@@ -34,6 +34,24 @@ await describe("in-code vocabulary script detection", async () => {
     assert.equal(isNaturalLanguageWord("camelCase"), false);
     assert.equal(isNaturalLanguageWord("HTTPServer"), false);
   });
+
+  await it("detects single-quoted TypeScript vocabulary", () => {
+    const source =
+      "const WORDS = ['vendor', 'supplier', 'customer', 'partner', 'manager', 'director'];";
+    const findings = findInCodeVocabularies(
+      "packages/anonymize/src/example.ts",
+      source,
+    );
+    assert.equal(findings.length, 1);
+    assert.deepEqual(findings[0].words, [
+      "vendor",
+      "supplier",
+      "customer",
+      "partner",
+      "manager",
+      "director",
+    ]);
+  });
 });
 
 await describe("in-code vocabulary false-positive controls", async () => {

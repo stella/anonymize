@@ -5,12 +5,14 @@
 // See packages/data/config/conjunctions.json for the intended shape.
 //
 // Heuristic: a flat array literal holding at least THRESHOLD string literals
-// that are lowercase natural-language words (letters, marks, hyphen,
-// apostrophe) is treated as an in-code vocabulary. Documented exceptions live
-// in ALLOWLIST, keyed by the constant/identifier name on the same line.
+// that are natural-language words is treated as an in-code vocabulary. Cased
+// scripts must be lowercase; caseless scripts accept letters and marks.
+// Documented exceptions live in ALLOWLIST, keyed by the constant/identifier
+// name on the same line.
 
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 import process from "node:process";
 
 const THRESHOLD = 6;
@@ -43,8 +45,13 @@ const ALLOWLIST = new Set([
   "UNIT_DESIGNATORS",
 ]);
 
-const WORD = /^\p{Ll}[\p{Ll}\p{M}'’-]*$/u;
-const STRING_LITERAL = /"(?:[^"\\]|\\.)*"/g;
+const CASED_WORD = /^\p{Ll}[\p{Ll}\p{M}'’-]*$/u;
+// Arabic, Han, Hiragana, Katakana, Thai, and other caseless scripts use Lo/Lm
+// rather than Ll. Keep this separate from CASED_WORD: rejecting every cased
+// letter prevents camelCase, PascalCase, and uppercase codes from slipping in.
+const CASELESS_WORD = /^(?!.*[\p{Ll}\p{Lu}\p{Lt}])\p{L}[\p{L}\p{M}'’-]*$/u;
+const DOUBLE_QUOTED_STRING = /"(?:[^"\\]|\\.)*"/g;
+const TYPESCRIPT_STRING = /"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g;
 const FLAT_ARRAY = /\[[^[\]]*\]/gs;
 // Identifier bound to the array, read from the enclosing statement: `NAME = [`,
 // `NAME: T = &[` (const with type, `=` and array may be on separate lines), or
@@ -52,26 +59,23 @@ const FLAT_ARRAY = /\[[^[\]]*\]/gs;
 const IDENT_ASSIGN = /([A-Za-z_]\w*)\s*(?::[^=]*)?=\s*&?\s*$/s;
 const IDENT_FIELD = /([A-Za-z_]\w*)\s*:\s*&?\s*$/s;
 
-const trackedFiles = execFileSync("git", ["ls-files", "-z"], {
-  encoding: "utf8",
-})
-  .split("\0")
-  .filter(Boolean)
-  .filter(isSource);
+export const isNaturalLanguageWord = (value) =>
+  CASED_WORD.test(value) || CASELESS_WORD.test(value);
 
-let hasFailure = false;
-
-for (const file of trackedFiles) {
-  const raw = readFileSync(file, "utf8");
+export const findInCodeVocabularies = (file, raw) => {
+  const findings = [];
   const text = stripComments(raw);
+  const stringLiteral = /\.m?ts$/.test(file)
+    ? TYPESCRIPT_STRING
+    : DOUBLE_QUOTED_STRING;
   for (const match of text.matchAll(FLAT_ARRAY)) {
-    const literals = [...match[0].matchAll(STRING_LITERAL)].map((m) =>
+    const literals = [...match[0].matchAll(stringLiteral)].map((m) =>
       decode(m[0]),
     );
     if (literals.length < THRESHOLD) {
       continue;
     }
-    const words = literals.filter((value) => WORD.test(value));
+    const words = literals.filter(isNaturalLanguageWord);
     if (
       words.length < THRESHOLD ||
       words.length / literals.length < WORD_FRACTION
@@ -97,21 +101,48 @@ for (const file of trackedFiles) {
       continue;
     }
     const { line, column } = lineColumnFor(text, match.index);
-    console.error(
-      `${file}:${line}:${column} in-code vocabulary${ident ? ` "${ident}"` : ""} ` +
-        `(${words.length} words: ${words.slice(0, 4).join(", ")}…); move it to a ` +
-        `per-language data file and compose it in the assembler`,
-    );
-    hasFailure = true;
+    findings.push({ file, line, column, ident, words });
   }
-}
+  return findings;
+};
 
-if (hasFailure) {
+const reportFinding = ({ file, line, column, ident, words }) => {
+  console.error(
+    `${file}:${line}:${column} in-code vocabulary${ident ? ` "${ident}"` : ""} ` +
+      `(${words.length} words: ${words.slice(0, 4).join(", ")}…); move it to a ` +
+      `per-language data file and compose it in the assembler`,
+  );
+};
+
+const run = () => {
+  const trackedFiles = execFileSync("git", ["ls-files", "-z"], {
+    encoding: "utf8",
+  })
+    .split("\0")
+    .filter(Boolean)
+    .filter(isSource);
+
+  const findings = trackedFiles.flatMap((file) =>
+    findInCodeVocabularies(file, readFileSync(file, "utf8")),
+  );
+  findings.forEach(reportFinding);
+
+  if (findings.length === 0) {
+    return;
+  }
+
   console.error(
     "\nHardcoded vocabulary is banned. Put word lists in packages/data and " +
       "thread them through the assembler; see conjunctions.json.",
   );
-  process.exit(1);
+  process.exitCode = 1;
+};
+
+if (
+  process.argv[1] !== undefined &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
+  run();
 }
 
 function isSource(file) {
