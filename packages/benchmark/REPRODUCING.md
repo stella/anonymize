@@ -213,7 +213,47 @@ uv venv .venv-datafog --python 3.11
 uv pip install --python .venv-datafog -r python/requirements-datafog.txt
 ```
 
-### 5. Run
+### 5. Optional German PII-assisted lane (local ONNX)
+
+The default stella adapter remains deterministic and model-free. An explicit
+German-only lane combines it with the MIT-licensed
+[`Wismut/nym-pii-multilingual-small`](https://huggingface.co/Wismut/nym-pii-multilingual-small)
+token-classification model. The adapter pins revision
+`4348999cd3c2e20c49615e9af7c6bbb45b64cd85` and its `int8/` ONNX export; it does
+not follow a moving model branch. The approximately 133 MiB model is downloaded
+into the Hugging Face cache on first use and all inference remains local.
+CPU ONNX inference is expected to dominate runtime and to be substantially
+slower than model-free stella on short documents; the runner reports model
+load, cold-pass, and warm-pass timings separately instead of hiding that cost.
+
+The model was trained on multilingual synthetic PII plus LLM-labelled
+Wikipedia, not the German LER corpus. Its upstream model card reports a
+recall-leaning operating point and warns that ambiguous spans may be
+over-flagged; this lane is therefore an optional provider, not a compliance
+claim or a replacement for stella's deterministic detectors. No text is sent
+to an API or written to benchmark output.
+
+```sh
+uv venv .venv-nym --python 3.11
+uv pip install --python .venv-nym -r python/requirements-nym.lock
+
+# Independently authored, public-safe German legal development fixtures only:
+bun run bench:dev:nym-assisted
+
+# Sealed aggregate-only German LER run (requires a clean committed tree):
+bun run bench:sealed:german-ler:assisted
+```
+
+Provider output uses Unicode code-point offsets and is imported through the
+public `ExternalDetectionBatch` v1 contract, including a document SHA-256 and
+the exact provider revision. Stella then performs its normal overlap
+resolution. The mapping is intentionally PII-only: unsupported Nym concepts
+are dropped, and legal citations, statutes, cases, and other non-PII legal NER
+classes are not flattened into a generic PII label. Accordingly, German LER's
+label-agnostic score is only a coverage diagnostic for this assisted lane, not
+label-aware legal NER accuracy.
+
+### 6. Run
 
 ```sh
 bun run bench:compare

@@ -49,6 +49,22 @@ license text and citation metadata.
 
 ## Benchmark provider dependencies
 
+### Nym PII multilingual small
+
+The opt-in German assisted lane downloads the reviewed `int8/` ONNX export;
+the model and its training data are not redistributed by this repository. The
+adapter's token-classification and BIO-decoding structure is derived from the
+upstream implementation named below.
+
+- Model: https://huggingface.co/Wismut/nym-pii-multilingual-small
+- Model revision: `4348999cd3c2e20c49615e9af7c6bbb45b64cd85`
+- Model subfolder: `int8/`
+- Source: https://github.com/byteowlz/nym
+- Source commit reviewed: `56f6dac6454edb6349e60a8366047577ab10b4f5`
+- License: MIT
+
+### DataFog
+
 DataFog is invoked as an external, pinned benchmark dependency; its source is
 not redistributed here.
 

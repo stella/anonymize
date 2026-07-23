@@ -2,6 +2,7 @@
 .venv-presidio
 .venv-scrubadub
 .venv-datafog
+.venv-nym
 # Turbo cache
 .turbo/
 # Ad-hoc (unseen-input) comparison reports: may quote sensitive input entities.
