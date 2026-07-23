@@ -59,6 +59,11 @@ PDF workflows:
   Run "anonymize pdf --help" for destructive local Poppler/Tesseract PDF
   anonymization into a verified fresh image-only output.
 
+Feedback:
+  Run "anonymize feedback --help" to report a bug or gap. It sanitizes your
+  text locally and prints a prefilled GitHub issue URL you submit yourself;
+  it makes no network calls.
+
 Options:
   -o, --output <path>       Output file, or directory for batch
                             input (multiple files or a directory)

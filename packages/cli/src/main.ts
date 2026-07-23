@@ -30,6 +30,11 @@ import {
 
 import pkg from "../package.json" with { type: "json" };
 
+import {
+  exitCodeForError,
+  isAnonymizeSurfaceError,
+} from "@stll/anonymize/agent-surface";
+
 import type { CliOptions } from "./args";
 import {
   DEFAULT_THRESHOLD,
@@ -38,6 +43,7 @@ import {
   parseCountries,
   UsageError,
 } from "./args";
+import { runFeedbackCommand } from "./feedback";
 import type { DictionaryScope } from "./dictionary-scope";
 import {
   type DocxCliPipeline,
@@ -898,6 +904,16 @@ const dispatch = async (engine: CliEngine): Promise<void> => {
     });
     return;
   }
+  if (argv.at(0) === "feedback") {
+    await runFeedbackCommand({
+      argv: argv.slice(1),
+      readStdin,
+      write: (text) => {
+        process.stdout.write(text);
+      },
+    });
+    return;
+  }
   if (argv.at(0) === "pdf") {
     await runPdfCommand({
       argv: argv.slice(1),
@@ -950,6 +966,10 @@ export const runCli = async (engine: CliEngine): Promise<void> => {
       process.stderr.write(`anonymize: ${err.message}\n`);
       process.stderr.write(`Try "anonymize --help" for usage.\n`);
       process.exitCode = 2;
+    } else if (isAnonymizeSurfaceError(err)) {
+      process.stderr.write(`anonymize: ${err.message}\n`);
+      process.stderr.write(`hint: ${err.hint}\n`);
+      process.exitCode = exitCodeForError(err);
     } else {
       const message = err instanceof Error ? err.message : String(err);
       process.stderr.write(`anonymize: ${message}\n`);
