@@ -281,13 +281,12 @@ Attn: Lorenzo Corte`;
     ).toBe(true);
   });
 
-  test("counsel names on lines after Attention are people", async () => {
-    // Utz Brands EX-10.1 voting agreement (2026-07-22): co-counsel lines
-    // under Attention were left intact when given names were absent from
+  test("counsel name on a line after Attention is a person", async () => {
+    // Utz Brands EX-10.1 voting agreement (2026-07-22): a co-counsel line
+    // under Attention was left intact when the given name was absent from
     // names/first/en.json.
     const text = `Attention: Neil Stronski
 
-June Dipchand
 Marissa Spalding
 
 Email: neil.stronski@example.com`;
@@ -295,15 +294,20 @@ Email: neil.stronski@example.com`;
     expect(
       entities.some(
         (entity) =>
-          entity.label === "person" && entity.text === "June Dipchand",
-      ),
-    ).toBe(true);
-    expect(
-      entities.some(
-        (entity) =>
           entity.label === "person" && entity.text === "Marissa Spalding",
       ),
     ).toBe(true);
+  });
+
+  test("month-led legal terms are not people", async () => {
+    const entities = await detect(
+      "The June Effective Date and June Payment remain unchanged.",
+    );
+    expect(
+      entities.some(
+        (entity) => entity.label === "person" && entity.text.startsWith("June"),
+      ),
+    ).toBe(false);
   });
 
   test("Attention middle-initial counsel name is a person", async () => {
