@@ -401,6 +401,8 @@ fn company_id_trigger_consumes_complete_alphanumeric_identifier() {
     "197 38 269",
     "78 123 456 789",
     "197\t38\t269",
+    "482 731",
+    "78 123",
   ] {
     let text = format!("Patient number: {value}, next field");
     let result = prepared
@@ -566,11 +568,18 @@ fn company_id_trigger_rejects_partial_or_overlong_identifier() {
     "12345 67 8",
     "12345 67 8901",
     "12345 67 89_tail",
+    "482 731 8",
     "ABCD123\u{2013}456",
+    "ABCD123\u{2013}É456",
+    "ABCD123\u{2011}٦",
     "197\u{2011}38\u{2011}269",
     "ABCD123(6)",
+    "ABCD123(٦)",
+    "ABCD123(É456)",
     "ABCD123[6]",
     "ABCD123{6}",
+    "ABCD123\u{2014}É456",
+    "ABCD123\u{2014}456",
     overlong.as_str(),
   ] {
     let text = format!("Patient number: {value}");

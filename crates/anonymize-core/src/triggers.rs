@@ -1942,11 +1942,15 @@ fn is_clean_identifier_boundary(tail: &str) -> bool {
   }
   let following = chars.next();
   match boundary {
-    '(' | '[' | '{' => following.is_none_or(|ch| !ch.is_ascii_digit()),
-    '‐' | '‑' | '‒' | '–' => {
-      following.is_none_or(|ch| !ch.is_ascii_alphanumeric())
+    '(' | '[' | '{' => {
+      following.is_none_or(|ch| !ch.is_numeric() && !ch.is_uppercase())
     }
-    '—' | '―' => following.is_none_or(|ch| !ch.is_ascii_digit()),
+    '‐' | '‑' | '‒' | '–' => {
+      following.is_none_or(|ch| !ch.is_alphanumeric())
+    }
+    '—' | '―' => {
+      following.is_none_or(|ch| !ch.is_numeric() && !ch.is_uppercase())
+    }
     ch => matches!(
       ch,
       '.'
@@ -2161,6 +2165,8 @@ fn classify_numeric_identifier_continuation(
     bytes,
     end,
     digits,
+    prior_digits,
+    current_leading_alpha,
     completed_numeric_groups,
   );
   if matches!(grouped_numeric, IdentifierContinuation::Reject) {
@@ -2180,6 +2186,8 @@ fn classify_grouped_numeric_continuation(
   bytes: &[u8],
   end: usize,
   digits: usize,
+  prior_digits: usize,
+  current_leading_alpha: usize,
   completed_numeric_groups: usize,
 ) -> IdentifierContinuation {
   if !(2..=3).contains(&digits) || completed_numeric_groups == 0 {
@@ -2189,6 +2197,11 @@ fn classify_grouped_numeric_continuation(
     return IdentifierContinuation::Consume;
   }
   match following_numeric_group(bytes, end) {
+    FollowingNumericGroup::Absent
+      if current_leading_alpha == 0 && (2..=3).contains(&prior_digits) =>
+    {
+      IdentifierContinuation::Consume
+    }
     FollowingNumericGroup::Absent => IdentifierContinuation::Stop,
     FollowingNumericGroup::Valid => IdentifierContinuation::Consume,
     FollowingNumericGroup::Invalid => IdentifierContinuation::Reject,
