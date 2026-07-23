@@ -105,6 +105,40 @@ describe("sealed aggregate report contract", () => {
     ]);
   });
 
+  test("keeps German LER coverage distinct from anonymization recall", () => {
+    const base = report();
+    const first = base.libraries.at(0);
+    if (first?.status !== "ok") {
+      throw new Error("test report must be available");
+    }
+    const germanLer: SealedAggregateReport = {
+      ...base,
+      corpus: {
+        ...base.corpus,
+        id: "german-ler",
+        documentCount: 6_673,
+      },
+      libraries: [
+        {
+          ...first,
+          metrics: {
+            type: "german-legal-entity-coverage",
+            documents: 6_673,
+            entityRecall: 0.4,
+            characterRecall: 0.5,
+            characterPrecision: 0.6,
+            goldEntities: 5_322,
+            predictedSpans: 2_000,
+          },
+        },
+      ],
+    };
+    const markdown = renderSealedAggregateMarkdown(germanLer);
+    expect(markdown).toContain("Entity coverage");
+    expect(markdown).toContain("not PII recall or label-aware NER accuracy");
+    expect(markdown).toContain("already anonymized before annotation");
+  });
+
   test("rejects missing or invalid phase timing", () => {
     const base = report();
     const first = base.libraries.at(0);
