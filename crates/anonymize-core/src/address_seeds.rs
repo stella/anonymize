@@ -39,6 +39,7 @@ pub struct AddressSeedData {
 
 pub(crate) struct PreparedAddressSeedData {
   boundary_search: Option<SearchIndex>,
+  boundary_phrase_re: Option<Regex>,
   br_cep_cue_search: Option<SearchIndex>,
   unit_abbreviations: BTreeSet<String>,
   postal_code_re: Regex,
@@ -79,8 +80,11 @@ pub(crate) struct AddressSeedDetection {
 
 impl PreparedAddressSeedData {
   pub(crate) fn new(data: AddressSeedData) -> Result<Self> {
+    let (boundary_search, boundary_phrase_re) =
+      boundary_searches(data.boundary_words)?;
     Ok(Self {
-      boundary_search: literal_search(data.boundary_words)?,
+      boundary_search,
+      boundary_phrase_re,
       br_cep_cue_search: literal_search(data.br_cep_cue_words)?,
       unit_abbreviations: lowercased_set(data.unit_abbreviations),
       postal_code_re: compile_regex(
@@ -546,16 +550,22 @@ impl PreparedAddressSeedData {
   }
 
   fn boundary_starts(&self, full_text: &str) -> Vec<usize> {
-    let Some(search) = self.boundary_search.as_ref() else {
-      return Vec::new();
-    };
-    let Ok(matches) = search.find_iter(full_text) else {
-      return Vec::new();
-    };
-    matches
+    let literal_starts = self
+      .boundary_search
+      .as_ref()
+      .and_then(|search| search.find_iter(full_text).ok())
       .into_iter()
+      .flatten()
       .filter_map(|found| usize::try_from(found.start()).ok())
-      .collect()
+      .collect::<Vec<_>>();
+    let phrase_starts = self
+      .boundary_phrase_re
+      .as_ref()
+      .into_iter()
+      .flat_map(|phrase_re| phrase_re.find_iter(full_text))
+      .map(|found| found.start())
+      .collect::<Vec<_>>();
+    merge_sorted_starts(literal_starts, phrase_starts)
   }
 
   fn nearest_boundary_word(
@@ -708,6 +718,104 @@ fn literal_search(patterns: Vec<String>) -> Result<Option<SearchIndex>> {
     return Ok(None);
   }
   Ok(Some(SearchIndex::new(patterns, SearchOptions::default())?))
+}
+
+/// Keep single-token boundary words on the literal index, while compiling
+/// multi-token phrases into one automaton whose separators accept one or more
+/// Unicode whitespace characters. Regex matches retain byte offsets into the
+/// original text, so wrapped legal prose needs no normalized text copy.
+fn boundary_searches(
+  patterns: Vec<String>,
+) -> Result<(Option<SearchIndex>, Option<Regex>)> {
+  let mut literals = Vec::new();
+  let mut phrases = Vec::new();
+  for pattern in patterns.into_iter().filter(|pattern| !pattern.is_empty()) {
+    if pattern.split_whitespace().nth(1).is_some() {
+      phrases.push(pattern);
+    } else {
+      literals.push(pattern);
+    }
+  }
+  Ok((literal_search(literals)?, flexible_phrase_regex(&phrases)?))
+}
+
+fn flexible_phrase_regex(patterns: &[String]) -> Result<Option<Regex>> {
+  let mut groups: [Vec<String>; 4] = std::array::from_fn(|_| Vec::new());
+  for pattern in patterns {
+    let tokens = pattern.split_whitespace().collect::<Vec<_>>();
+    let Some((first, last)) = tokens
+      .first()
+      .and_then(|token| token.chars().next())
+      .zip(tokens.last().and_then(|token| token.chars().next_back()))
+    else {
+      continue;
+    };
+    let group = match (
+      is_regex_word_character(first),
+      is_regex_word_character(last),
+    ) {
+      (false, false) => 0,
+      (false, true) => 1,
+      (true, false) => 2,
+      (true, true) => 3,
+    };
+    if let Some(group) = groups.get_mut(group) {
+      group.push(
+        tokens
+          .into_iter()
+          .map(regex::escape)
+          .collect::<Vec<_>>()
+          .join(r"\s+"),
+      );
+    }
+  }
+  let alternatives = groups
+    .into_iter()
+    .enumerate()
+    .filter(|(_, group)| !group.is_empty())
+    .map(|(edge_shape, group)| {
+      let leading_boundary = if edge_shape & 2 == 2 { r"\b" } else { "" };
+      let trailing_boundary = if edge_shape & 1 == 1 {
+        r"\b"
+      } else {
+        r"(?:$|[^\w])"
+      };
+      format!(
+        "{leading_boundary}(?:{}){trailing_boundary}",
+        group.join("|")
+      )
+    })
+    .collect::<Vec<_>>();
+  if alternatives.is_empty() {
+    return Ok(None);
+  }
+  compile_regex(&format!(r"(?iu)(?:{})", alternatives.join("|"))).map(Some)
+}
+
+fn is_regex_word_character(character: char) -> bool {
+  character.is_alphanumeric() || character == '_'
+}
+
+fn merge_sorted_starts(left: Vec<usize>, right: Vec<usize>) -> Vec<usize> {
+  let mut starts = Vec::with_capacity(left.len().saturating_add(right.len()));
+  let mut left = left.into_iter().peekable();
+  let mut right = right.into_iter().peekable();
+  while left.peek().is_some() || right.peek().is_some() {
+    let next = match (left.peek(), right.peek()) {
+      (Some(left_start), Some(right_start)) if left_start <= right_start => {
+        left.next()
+      }
+      (Some(_) | None, Some(_)) => right.next(),
+      (Some(_), None) => left.next(),
+      (None, None) => None,
+    };
+    if let Some(start) = next
+      && starts.last() != Some(&start)
+    {
+      starts.push(start);
+    }
+  }
+  starts
 }
 
 fn lowercased_set(values: Vec<String>) -> BTreeSet<String> {
@@ -1903,6 +2011,105 @@ mod tests {
         expected,
       );
     }
+  }
+
+  #[test]
+  fn boundary_phrases_match_original_offsets_across_unicode_whitespace()
+  -> Result<()> {
+    let data = PreparedAddressSeedData::new(AddressSeedData {
+      boundary_words: vec![
+        String::from("or emailed to"),
+        String::from("con C.I.F."),
+        String::from("con N.I.F."),
+        String::from("con D.N.I."),
+        String::from("con N.I.E."),
+        String::from("sp. zn."),
+        String::from("stop"),
+      ],
+      ..AddressSeedData::default()
+    })?;
+    for phrase in [
+      "or emailed to",
+      "or\nemailed to",
+      "or\r\nemailed\tto",
+      "or  \t emailed\u{2003}to",
+    ] {
+      let full_text = format!("§ {phrase} recipient");
+      assert_eq!(data.boundary_starts(&full_text), vec!["§ ".len()]);
+    }
+    assert_eq!(data.boundary_starts("stop here"), vec![0]);
+    for phrase in [
+      "con C.I.F.",
+      "con N.I.F.",
+      "con D.N.I.",
+      "con N.I.E.",
+      "sp. zn.",
+    ] {
+      assert_eq!(
+        data.boundary_starts(&format!("{phrase} recipient")),
+        vec![0]
+      );
+      assert_eq!(data.boundary_starts(&phrase.replace(' ', "\n")), vec![0]);
+      assert!(data.boundary_starts(&format!("{phrase}foo")).is_empty());
+    }
+    assert!(
+      data
+        .boundary_starts(
+          "nonstop xor emailed to recipient or emailed toxin xcon C.I.F.",
+        )
+        .is_empty()
+    );
+    Ok(())
+  }
+
+  #[test]
+  #[ignore = "release-mode boundary phrase scaling regression check"]
+  fn boundary_phrase_search_scales_with_input_size() -> Result<()> {
+    let data = PreparedAddressSeedData::new(AddressSeedData {
+      boundary_words: (0..128)
+        .map(|index| format!("marker {index} terminus"))
+        .collect(),
+      ..AddressSeedData::default()
+    })?;
+    let small = boundary_phrase_sample(&data, 64 * 1024);
+    let large = boundary_phrase_sample(&data, 1024 * 1024);
+    let samples = [&small, &large];
+    assert!(
+      large
+        .1
+        .as_nanos()
+        .saturating_mul(u128::try_from(small.0).unwrap_or(u128::MAX))
+        <= small
+          .1
+          .as_nanos()
+          .saturating_mul(u128::try_from(large.0).unwrap_or(u128::MAX))
+          .saturating_mul(3),
+      "boundary phrase search time per byte regressed: {samples:?}",
+    );
+    assert!(
+      large.1 <= std::time::Duration::from_millis(500),
+      "boundary phrase search exceeded 500 ms at 1 MiB: {samples:?}",
+    );
+    Ok(())
+  }
+
+  fn boundary_phrase_sample(
+    data: &PreparedAddressSeedData,
+    target_bytes: usize,
+  ) -> (usize, std::time::Duration) {
+    let fixture = "ordinary legal prose marker\r\n127\tterminus follows.\n";
+    let repeats = target_bytes.div_ceil(fixture.len());
+    let full_text = fixture.repeat(repeats);
+    let expected = repeats;
+    assert_eq!(data.boundary_starts(&full_text).len(), expected);
+    let mut best = std::time::Duration::MAX;
+    for _ in 0..5 {
+      let start = Instant::now();
+      let starts = data.boundary_starts(&full_text);
+      best = best.min(start.elapsed());
+      assert_eq!(starts.len(), expected);
+    }
+    (full_text.len(), best)
   }
 
   #[test]

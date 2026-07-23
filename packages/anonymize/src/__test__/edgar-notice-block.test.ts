@@ -375,6 +375,28 @@ Denise Haeggberg before the close of business.`;
     );
   });
 
+  test("address exits tolerate wrapped and repeated whitespace", async () => {
+    for (const whitespace of ["\n", "\r\n", "\t", "  \t "]) {
+      const text =
+        "one executed original must be mailed to 7812 Palm Parkway, Orlando, Florida 32836, or" +
+        whitespace +
+        "emailed" +
+        whitespace +
+        "to Denise Haeggberg.";
+      const entities = await detect(text);
+      const addresses = entities.filter((entity) => entity.label === "address");
+      expect(
+        addresses.some(
+          (entity) =>
+            entity.text === "7812 Palm Parkway, Orlando, Florida 32836",
+        ),
+      ).toBe(true);
+      expect(addresses.some((entity) => entity.text.includes("emailed"))).toBe(
+        false,
+      );
+    }
+  });
+
   test("address stops before contextual provide prose", async () => {
     const text =
       "Notices must be mailed to 123 Main Street, Boston, Massachusetts 02110, and provide a copy to the Company.";
