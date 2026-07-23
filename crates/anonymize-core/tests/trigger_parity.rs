@@ -388,6 +388,7 @@ fn company_id_trigger_consumes_complete_alphanumeric_identifier() {
     "ABCD/12345.XY",
     "FR A1 123456789",
     "ABCD123 CD456",
+    "ABCD123 CD-456",
   ] {
     let text = format!("Patient number: {value}, next field");
     let result = prepared
@@ -445,6 +446,10 @@ fn company_id_trigger_stops_before_non_identifier_groups() {
     ("ABCD123 page2", "ABCD123"),
     ("12345 2025-07-23", "12345"),
     ("ABCD123 2nd", "ABCD123"),
+    ("12345 e.g. above", "12345"),
+    ("12345 ref-code", "12345"),
+    ("12345 next-field", "12345"),
+    ("AB123 CD/EF", "AB123"),
   ] {
     let text = format!("Patient number: {value}");
     let result = prepared
@@ -469,8 +474,6 @@ fn company_id_trigger_rejects_partial_or_overlong_identifier() {
     "ABCD-12345_tail",
     "ABCD123 CD456_tail",
     "ABCD123 CD-",
-    "12345 next-field",
-    "AB123 CD/EF",
     "ABCD123 CD_456",
     "ABCD123 _CD456",
     overlong.as_str(),

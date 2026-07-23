@@ -2014,8 +2014,22 @@ fn classify_identifier_continuation(
     .iter()
     .any(|value| matches!(value, b'.' | b'-' | b'/'));
   if has_separator {
-    return if first.is_ascii_alphabetic() {
-      IdentifierContinuation::Reject
+    if token
+      .last()
+      .is_some_and(|value| matches!(value, b'-' | b'/'))
+    {
+      return IdentifierContinuation::Reject;
+    }
+    if !first.is_ascii_alphabetic() {
+      return IdentifierContinuation::Stop;
+    }
+    let digits = token.iter().filter(|value| value.is_ascii_digit()).count();
+    let leading_alpha = token
+      .iter()
+      .take_while(|value| value.is_ascii_alphabetic())
+      .count();
+    return if digits >= 2 && leading_alpha <= 3 {
+      IdentifierContinuation::Consume
     } else {
       IdentifierContinuation::Stop
     };

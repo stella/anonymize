@@ -146,6 +146,7 @@ const ALPHANUMERIC_FIXTURES = [
   ["de", "Patientennummer: 12345-ABCD.", "12345-ABCD"],
   ["cs", "Číslo průkazu pojištěnce: AB12/345.XY.", "AB12/345.XY"],
   ["en", "Patient number: ABCD123 CD456“", "ABCD123 CD456"],
+  ["en", "Patient number: ABCD123 CD-456.", "ABCD123 CD-456"],
 ] as const;
 
 const PARTIAL_REDACTION_FIXTURES = [
@@ -154,8 +155,6 @@ const PARTIAL_REDACTION_FIXTURES = [
   ["sv", `Journalnummer: AB-${"1".repeat(129)}.`],
   ["en", "Patient number: ABCD123 CD456_tail."],
   ["en", "Patient number: ABCD123 CD-."],
-  ["en", "Patient number: 12345 next-field."],
-  ["en", "Patient number: AB123 CD/EF."],
   ["en", "Patient number: ABCD123 CD_456."],
   ["en", "Patient number: ABCD123 _CD456."],
 ] as const;
@@ -165,6 +164,10 @@ const STOP_BEFORE_PROSE_FIXTURES = [
   ["Patient number: ABCD123 page2.", "ABCD123"],
   ["Patient number: 12345 2025-07-23.", "12345"],
   ["Patient number: ABCD123 2nd.", "ABCD123"],
+  ["Patient number: 12345 e.g. above.", "12345"],
+  ["Patient number: 12345 ref-code.", "12345"],
+  ["Patient number: 12345 next-field.", "12345"],
+  ["Patient number: AB123 CD/EF.", "AB123"],
 ] as const;
 
 describe("multilingual clinical identifiers", () => {
