@@ -256,5 +256,36 @@
       { "type": "starts-uppercase" },
       { "type": "min-length", "min": 3 }
     ]
+  },
+  {
+    "id": "pl-clinical-medical-record-number",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "numer dokumentacji medycznej",
+      "numer historii choroby",
+      "numer kartoteki medycznej"
+    ],
+    "extensions": ["add-colon", "add-colon-space"],
+    "validations": [{ "type": "has-digits" }]
+  },
+  {
+    "id": "pl-clinical-patient-number",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": ["numer pacjenta", "identyfikator pacjenta", "ID pacjenta"],
+    "extensions": ["add-colon", "add-colon-space"],
+    "validations": [{ "type": "has-digits" }]
+  },
+  {
+    "id": "pl-clinical-health-card-number",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "numer karty ubezpieczenia zdrowotnego",
+      "numer karty ubezpieczeniowej"
+    ],
+    "extensions": ["add-colon", "add-colon-space"],
+    "validations": [{ "type": "has-digits" }]
   }
 ]

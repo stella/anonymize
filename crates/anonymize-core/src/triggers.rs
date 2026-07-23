@@ -17,6 +17,8 @@ const MIN_TRIGGER_PHONE_DIGITS: usize = 5;
 const TRIGGER_LOOKAHEAD_MARGIN: usize = 128;
 const LINE_TRIGGER_LOOKAHEAD: usize = 2_048;
 const MATCH_PATTERN_LOOKAHEAD: usize = 512;
+const MAX_IDENTIFIER_VALUE_CHARS: usize = 128;
+const MAX_IDENTIFIER_ALPHA_RUN: usize = 12;
 pub const PERSON_OR_ORGANIZATION_TRIGGER_LABEL: &str = "person-or-organization";
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
@@ -1855,37 +1857,96 @@ fn number_label_len(text: &str, number_labels: &[String]) -> Option<usize> {
 }
 
 fn id_value_prefix(text: &str) -> Option<&str> {
-  let mut end = 0;
+  let bytes = text.as_bytes();
+  let mut end = 0_usize;
+  let mut chars = 0_usize;
   let mut digits = 0_usize;
   let mut leading_alpha = 0_usize;
-  let mut previous_was_digit = false;
-  for (index, ch) in text.char_indices() {
-    let allowed = if ch.is_ascii_digit() {
+  let mut alpha_run = 0_usize;
+  let mut max_alpha_run = 0_usize;
+
+  while let Some(&byte) = bytes.get(end) {
+    if byte.is_ascii_digit() {
       digits = digits.saturating_add(1);
-      previous_was_digit = true;
-      true
-    } else if ch.is_ascii_alphabetic() {
-      let allow = digits == 0 || previous_was_digit;
+      alpha_run = 0;
+      end = end.saturating_add(1);
+      chars = chars.saturating_add(1);
+    } else if byte.is_ascii_alphabetic() {
       if digits == 0 {
         leading_alpha = leading_alpha.saturating_add(1);
       }
-      previous_was_digit = false;
-      allow
-    } else if matches!(ch, ' ' | '.' | '-' | '/' | '\t') {
-      previous_was_digit = false;
-      true
+      alpha_run = alpha_run.saturating_add(1);
+      max_alpha_run = max_alpha_run.max(alpha_run);
+      end = end.saturating_add(1);
+      chars = chars.saturating_add(1);
+    } else if matches!(byte, b'.' | b'-' | b'/') {
+      if end == 0
+        || !bytes
+          .get(end.saturating_add(1))
+          .is_some_and(u8::is_ascii_alphanumeric)
+      {
+        break;
+      }
+      alpha_run = 0;
+      end = end.saturating_add(1);
+      chars = chars.saturating_add(1);
+    } else if matches!(byte, b' ' | b'\t') {
+      let mut next = end;
+      while bytes
+        .get(next)
+        .is_some_and(|value| matches!(value, b' ' | b'\t'))
+      {
+        next = next.saturating_add(1);
+      }
+      let mut segment_end = next;
+      let mut segment_has_digit = false;
+      while bytes
+        .get(segment_end)
+        .is_some_and(u8::is_ascii_alphanumeric)
+      {
+        segment_has_digit |=
+          bytes.get(segment_end).is_some_and(u8::is_ascii_digit);
+        segment_end = segment_end.saturating_add(1);
+      }
+      let segment_len = segment_end.saturating_sub(next);
+      let short_mixed_segment = digits == 0
+        && leading_alpha <= 3
+        && segment_has_digit
+        && (1..=3).contains(&segment_len);
+      let next_is_digit = bytes.get(next).is_some_and(u8::is_ascii_digit);
+      if end == 0
+        || !(short_mixed_segment
+          || (next_is_digit
+            && (bytes
+              .get(end.saturating_sub(1))
+              .is_some_and(u8::is_ascii_digit)
+              || (digits == 0 && leading_alpha <= 3))))
+      {
+        break;
+      }
+      chars = chars.saturating_add(next.saturating_sub(end));
+      alpha_run = 0;
+      end = next;
     } else {
-      false
-    };
-    if !allowed {
       break;
     }
-    end = index.saturating_add(ch.len_utf8());
+
+    if chars > MAX_IDENTIFIER_VALUE_CHARS {
+      return None;
+    }
   }
+
   let candidate = text.get(..end)?;
+  let boundary = text.get(end..)?.chars().next();
+  let clean_boundary = boundary.is_none_or(|ch| {
+    ch.is_whitespace()
+      || matches!(ch, '.' | ',' | ';' | ':' | '!' | '?' | ')' | ']' | '}')
+  });
   (digits >= 2
     && end >= 5
-    && leading_alpha <= 3
+    && leading_alpha <= MAX_IDENTIFIER_ALPHA_RUN
+    && max_alpha_run <= MAX_IDENTIFIER_ALPHA_RUN
+    && clean_boundary
     && !single_digit_dotted_prefix(candidate))
   .then_some(candidate)
 }

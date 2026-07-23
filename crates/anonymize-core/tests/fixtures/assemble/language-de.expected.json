@@ -21908,6 +21908,141 @@
     },
     {
       "kind": "literal-with-options",
+      "pattern": "krankenaktennummer",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "patientenaktennummer",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "medizinische aktennummer",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "krankenaktennummer:",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "krankenaktennummer: ",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "patientenaktennummer:",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "patientenaktennummer: ",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "medizinische aktennummer:",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "medizinische aktennummer: ",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "patientennummer",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "patienten-id",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "patientenkennung",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "patientennummer:",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "patientennummer: ",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "patienten-id:",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "patienten-id: ",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "patientenkennung:",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "patientenkennung: ",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "krankenversichertennummer",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "gesundheitskartennummer",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "nummer der gesundheitskarte",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "krankenversichertennummer:",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "krankenversichertennummer: ",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "gesundheitskartennummer:",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "gesundheitskartennummer: ",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "nummer der gesundheitskarte:",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
+      "pattern": "nummer der gesundheitskarte: ",
+      "case_insensitive": true
+    },
+    {
+      "kind": "literal-with-options",
       "pattern": "swift code",
       "case_insensitive": true
     },
@@ -22790,6 +22925,357 @@
           {
             "type": "min-length",
             "min": 3
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "Krankenaktennummer",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "Patientenaktennummer",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "medizinische Aktennummer",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "Krankenaktennummer:",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "Krankenaktennummer: ",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "Patientenaktennummer:",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "Patientenaktennummer: ",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "medizinische Aktennummer:",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "medizinische Aktennummer: ",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "Patientennummer",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "Patienten-ID",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "Patientenkennung",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "Patientennummer:",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "Patientennummer: ",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "Patienten-ID:",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "Patienten-ID: ",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "Patientenkennung:",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "Patientenkennung: ",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "Krankenversichertennummer",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "Gesundheitskartennummer",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "Nummer der Gesundheitskarte",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "Krankenversichertennummer:",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "Krankenversichertennummer: ",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "Gesundheitskartennummer:",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "Gesundheitskartennummer: ",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "Nummer der Gesundheitskarte:",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
+          }
+        ],
+        "include_trigger": false
+      },
+      {
+        "trigger": "Nummer der Gesundheitskarte: ",
+        "label": "registration number",
+        "strategy": {
+          "type": "company-id-value"
+        },
+        "validations": [
+          {
+            "type": "has-digits"
           }
         ],
         "include_trigger": false
@@ -82697,7 +83183,7 @@
     },
     "triggers": {
       "start": 1381,
-      "end": 1485
+      "end": 1512
     },
     "deny_list": {
       "start": 0,

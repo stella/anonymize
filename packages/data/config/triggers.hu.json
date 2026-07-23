@@ -41,5 +41,29 @@
     "strategy": { "type": "to-end-of-line" },
     "triggers": ["PHONE"],
     "extensions": ["add-colon"]
+  },
+  {
+    "id": "hu-clinical-medical-record-number",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": ["kórlapszám", "egészségügyi nyilvántartási szám"],
+    "extensions": ["add-colon", "add-colon-space"],
+    "validations": [{ "type": "has-digits" }]
+  },
+  {
+    "id": "hu-clinical-patient-number",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": ["betegazonosító", "betegazonosító szám", "betegszám"],
+    "extensions": ["add-colon", "add-colon-space"],
+    "validations": [{ "type": "has-digits" }]
+  },
+  {
+    "id": "hu-clinical-health-card-number",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": ["TAJ-szám", "TAJ szám", "társadalombiztosítási azonosító jel"],
+    "extensions": ["add-colon", "add-colon-space"],
+    "validations": [{ "type": "has-digits" }]
   }
 ]

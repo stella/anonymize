@@ -2,13 +2,13 @@
 //! `buildNativeStaticSearchBundle` output for every field of the native static
 //! config.
 //!
-//! Fixtures are captured by
-//! `packages/anonymize/scripts/capture-assemble-fixtures.mjs`. Each
-//! `<name>.input.json` holds the `{ config, gazetteer }` inputs; each
+//! Each `<name>.input.json` holds the `{ config, gazetteer }` inputs; each
 //! `<name>.expected.json` holds the full native static config in stable key
 //! order. This test compares every field (large arrays via a targeted
 //! first-difference report); the companion `assemble_digest` test then proves
-//! the assembled config is byte-identical end to end.
+//! the assembled config is byte-identical end to end. Deliberate behavior
+//! changes are refreshed through the gated Rust updater documented alongside
+//! the fixtures.
 
 use std::collections::HashSet;
 use std::fs;

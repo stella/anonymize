@@ -39,10 +39,12 @@ proptest = "1"
 # Cargo permits this cycle because the contract -> core edge is a normal
 # dependency and this reverse edge is dev-only.
 stella-anonymize-adapter-contract = { path = "../anonymize-adapter-contract" }
-# Dev-only: the digest gate hashes the end-to-end package bytes with SHA-256 to
-# match the manifest captured by the TypeScript source (node:crypto SHA-256;
-# blake3 is not exposed to JS, so the manifest cannot use it).
+# Dev-only: the digest gate and gated fixture updater hash the end-to-end
+# package bytes with the manifest's established SHA-256 contract.
 sha2 = "0.11"
+# Preserve object insertion order while the gated updater merges deliberate
+# changes into the established frozen-oracle shape.
+serde_json = { version = "1", features = ["preserve_order"] }
 
 [lints]
 workspace = true

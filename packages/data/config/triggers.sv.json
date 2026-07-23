@@ -44,5 +44,33 @@
     "label": "tax identification number",
     "strategy": { "type": "company-id-value" },
     "triggers": ["momsregistreringsnummer"]
+  },
+  {
+    "id": "sv-clinical-medical-record-number",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": ["journalnummer", "medicinskt journalnummer"],
+    "extensions": ["add-colon", "add-colon-space"],
+    "validations": [{ "type": "has-digits" }]
+  },
+  {
+    "id": "sv-clinical-patient-number",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": ["patientnummer", "patient-ID", "patientidentifikator"],
+    "extensions": ["add-colon", "add-colon-space"],
+    "validations": [{ "type": "has-digits" }]
+  },
+  {
+    "id": "sv-clinical-health-card-number",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "sjukförsäkringskortets nummer",
+      "försäkringskortsnummer",
+      "EU-kortets nummer"
+    ],
+    "extensions": ["add-colon", "add-colon-space"],
+    "validations": [{ "type": "has-digits" }]
   }
 ]

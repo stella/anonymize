@@ -55,5 +55,33 @@
     "triggers": ["C.A.P."],
     "includeTrigger": false,
     "validations": [{ "type": "matches-pattern", "pattern": "^\\d{5}$" }]
+  },
+  {
+    "id": "it-clinical-medical-record-number",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": ["numero di cartella clinica", "numero della cartella clinica"],
+    "extensions": ["add-colon", "add-colon-space"],
+    "validations": [{ "type": "has-digits" }]
+  },
+  {
+    "id": "it-clinical-patient-number",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": ["numero paziente", "ID paziente", "identificativo paziente"],
+    "extensions": ["add-colon", "add-colon-space"],
+    "validations": [{ "type": "has-digits" }]
+  },
+  {
+    "id": "it-clinical-health-card-number",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "numero tessera sanitaria",
+      "numero della tessera sanitaria",
+      "codice tessera sanitaria"
+    ],
+    "extensions": ["add-colon", "add-colon-space"],
+    "validations": [{ "type": "has-digits" }]
   }
 ]

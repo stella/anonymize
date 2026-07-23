@@ -301,5 +301,37 @@
         "pattern": "(?:\\d[^\\d]*){6,}"
       }
     ]
+  },
+  {
+    "id": "fr-clinical-medical-record-number",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "numéro de dossier médical",
+      "numéro de dossier patient",
+      "numéro de dossier clinique"
+    ],
+    "extensions": ["add-colon", "add-colon-space"],
+    "validations": [{ "type": "has-digits" }]
+  },
+  {
+    "id": "fr-clinical-patient-number",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": ["numéro de patient", "identifiant patient", "ID patient"],
+    "extensions": ["add-colon", "add-colon-space"],
+    "validations": [{ "type": "has-digits" }]
+  },
+  {
+    "id": "fr-clinical-health-card-number",
+    "label": "registration number",
+    "strategy": { "type": "company-id-value" },
+    "triggers": [
+      "numéro de carte Vitale",
+      "numéro de carte d’assurance maladie",
+      "numéro de carte d'assurance maladie"
+    ],
+    "extensions": ["add-colon", "add-colon-space"],
+    "validations": [{ "type": "has-digits" }]
   }
 ]
