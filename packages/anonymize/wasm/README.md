@@ -12,11 +12,10 @@ bun add @stll/anonymize-wasm
 
 ## Usage
 
-The package exposes the core text, session, caller-detection, and PDF-inspection
-profile backed by WebAssembly. Node-only configuration assembly, local document
-tools, and native filesystem loaders are outside this browser surface. Browsers
-load prebuilt prepared packages; the binding is instantiated lazily on first
-use.
+The package exposes text, sessions, caller detections, PDF inspection, and
+prepared-package/config assembly through WebAssembly. Native filesystem loaders
+and local document-provider tools remain Node-only. The binding is instantiated
+lazily on first use.
 
 ```ts
 import { loadDefaultPipeline } from "@stll/anonymize-wasm";
