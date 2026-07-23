@@ -4,6 +4,12 @@ use crate::labels::PERSON_LABEL;
 const MAX_NAME_LEN: usize = 60;
 const MAX_WITNESS_SCAN_UNITS: usize = 600;
 
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum CandidateContext {
+  SignatureBlock,
+  LabelledField,
+}
+
 #[derive(
   Clone, Debug, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize,
 )]
@@ -119,6 +125,7 @@ fn detect_slash_s(
         line_end.saturating_add(1),
         4,
         0.9,
+        CandidateContext::SignatureBlock,
       );
     } else {
       let first_cell_end = after_mark.saturating_add(
@@ -127,13 +134,29 @@ fn detect_slash_s(
           slash_s_cell_end,
         ),
       );
-      try_emit(results, full_text, data, after_mark, first_cell_end, 0.95);
+      try_emit(
+        results,
+        full_text,
+        data,
+        after_mark,
+        first_cell_end,
+        0.95,
+        CandidateContext::SignatureBlock,
+      );
     }
 
     if let Some((prev_start, prev_end)) =
       find_prev_line(full_text, data, mark_start)
     {
-      try_emit(results, full_text, data, prev_start, prev_end, 0.85);
+      try_emit(
+        results,
+        full_text,
+        data,
+        prev_start,
+        prev_end,
+        0.85,
+        CandidateContext::SignatureBlock,
+      );
     }
     cursor = mark_start.saturating_add("/s/".len());
   }
@@ -191,9 +214,18 @@ fn detect_labelled_names_in_line(
         global_end.saturating_add(1),
         3,
         0.9,
+        CandidateContext::LabelledField,
       );
     } else {
-      try_emit(results, full_text, data, global_start, global_end, 0.95);
+      try_emit(
+        results,
+        full_text,
+        data,
+        global_start,
+        global_end,
+        0.95,
+        CandidateContext::LabelledField,
+      );
     }
     cursor = value_end.max(label.next_cursor);
   }
@@ -220,7 +252,15 @@ fn detect_witness_blocks(
       advance_utf16_boundary(full_text, anchor, MAX_WITNESS_SCAN_UNITS);
     if let Some(scan_from) = find_witness_sentence_end(full_text, anchor, limit)
     {
-      try_emit_forward_lines(results, full_text, data, scan_from, 6, 0.85);
+      try_emit_forward_lines(
+        results,
+        full_text,
+        data,
+        scan_from,
+        6,
+        0.85,
+        CandidateContext::SignatureBlock,
+      );
     }
     cursor = anchor.saturating_add(phrase_len);
   }
@@ -233,6 +273,7 @@ fn try_emit_forward_lines(
   from_pos: usize,
   max_lines: usize,
   score: f64,
+  context: CandidateContext,
 ) -> bool {
   let mut pos = from_pos;
   for _ in 0..max_lines {
@@ -243,7 +284,7 @@ fn try_emit_forward_lines(
     let line = full_text.get(pos..line_end).unwrap_or_default().trim();
     if !line.is_empty()
       && !is_image_stub(line, data)
-      && try_emit(results, full_text, data, pos, line_end, score)
+      && try_emit(results, full_text, data, pos, line_end, score, context)
     {
       return true;
     }
@@ -259,12 +300,18 @@ fn try_emit(
   start: usize,
   end: usize,
   score: f64,
+  context: CandidateContext,
 ) -> bool {
   let raw = full_text.get(start..end).unwrap_or_default();
   if contains_org_suffix(raw, data) {
     return false;
   }
   let candidate = normalise_candidate(raw, data);
+  if context == CandidateContext::LabelledField
+    && ends_with_configured_label(&candidate, data)
+  {
+    return false;
+  }
   if !is_name_shape(&candidate, data) {
     return false;
   }
@@ -288,6 +335,19 @@ fn try_emit(
     DetectionSource::Trigger,
   ));
   true
+}
+
+fn ends_with_configured_label(
+  candidate: &str,
+  data: &PreparedSignatureData,
+) -> bool {
+  let Some(last) = candidate.split_whitespace().next_back() else {
+    return false;
+  };
+  data
+    .labels
+    .iter()
+    .any(|label| last.eq_ignore_ascii_case(label))
 }
 
 fn normalise_candidate(text: &str, data: &PreparedSignatureData) -> String {
@@ -815,6 +875,17 @@ mod tests {
         .map(|entity| entity.text.as_str())
         .collect::<Vec<_>>(),
       vec!["Priya Ramanathan", "Jonathan H. Whitaker"]
+    );
+  }
+
+  #[test]
+  fn labelled_fields_reject_values_ending_in_another_field_label() {
+    assert!(detect("Name: General Name").is_empty());
+    assert_eq!(
+      detect("/s/ General Name")
+        .first()
+        .map(|entity| entity.text.as_str()),
+      Some("General Name")
     );
   }
 

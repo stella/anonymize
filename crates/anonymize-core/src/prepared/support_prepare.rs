@@ -48,19 +48,31 @@ pub(super) struct PreparedSupportData {
   pub(super) count: usize,
 }
 
-pub(super) const fn take_support_input(
+pub(super) fn take_support_input(
   config: &mut PreparedEngineDetectorConfig,
 ) -> SupportDataInput {
+  let legal_forms = config.legal_form_data.take();
+  let mut signature = config.signature_data.take();
+  if let (Some(legal_forms), Some(signature)) =
+    (legal_forms.as_ref(), signature.as_mut())
+  {
+    for role_head in &legal_forms.role_heads {
+      if !signature.labels.iter().any(|label| label == role_head) {
+        signature.labels.push(role_head.clone());
+      }
+    }
+  }
+
   SupportDataInput {
     hotwords: config.hotword_data.take(),
     triggers: config.trigger_data.take(),
-    legal_forms: config.legal_form_data.take(),
+    legal_forms,
     address_seed: config.address_seed_data.take(),
     zones: config.zone_data.take(),
     address_context: config.address_context_data.take(),
     coreference: config.coreference_data.take(),
     name_corpus: config.name_corpus_data.take(),
-    signature: config.signature_data.take(),
+    signature,
   }
 }
 
@@ -220,6 +232,35 @@ impl ParallelPreparedSupportData {
       .metrics()
       .map(|metric| metric.count)
       .fold(0usize, usize::saturating_add)
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use crate::legal_forms::LegalFormData;
+  use crate::signatures::SignatureData;
+
+  use super::{PreparedEngineDetectorConfig, take_support_input};
+
+  #[test]
+  fn contract_role_heads_extend_structured_name_labels() {
+    let mut config = PreparedEngineDetectorConfig {
+      legal_form_data: Some(LegalFormData {
+        role_heads: vec![String::from("buyer"), String::from("seller")],
+        ..LegalFormData::default()
+      }),
+      signature_data: Some(SignatureData {
+        labels: vec![String::from("name"), String::from("buyer")],
+        ..SignatureData::default()
+      }),
+      ..PreparedEngineDetectorConfig::default()
+    };
+
+    let input = take_support_input(&mut config);
+
+    assert!(input.signature.as_ref().is_some_and(|signature| {
+      signature.labels == ["name", "buyer", "seller"]
+    }));
   }
 }
 
