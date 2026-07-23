@@ -1,0 +1,29 @@
+{
+  "_comment": "Per-language phrases that mark a transition from an address into delivery or notice prose when they follow a coordinating conjunction. Consumers must compose these only with conjunctions from the same language. The initial reviewed scope is English legal-notice prose; other languages remain absent until their address-exit grammar is reviewed independently.",
+  "afterCoordinatingConjunction": {
+    "en": [
+      "at",
+      "by",
+      "contact",
+      "deliver",
+      "delivered",
+      "email",
+      "emailed",
+      "fax",
+      "faxed",
+      "forward",
+      "forwarded",
+      "notify",
+      "provide",
+      "provided",
+      "return",
+      "returned",
+      "send",
+      "sent",
+      "submit",
+      "submitted",
+      "to",
+      "via"
+    ]
+  }
+}

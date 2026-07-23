@@ -357,7 +357,7 @@ Email: abargfrede@example.com`;
       ),
     ).toBe(false);
   });
-  test("address stops at a trailing coordinating conjunction", async () => {
+  test("address stops at a contextual notice-prose boundary", async () => {
     // MVW Services separation agreement (2026-07-21): right-expansion walked
     // the return address into the notice sentence ("..., or emailed to").
     const text = `one executed original of this Agreement must be
@@ -373,5 +373,172 @@ Denise Haeggberg before the close of business.`;
     expect(addresses.some((entity) => entity.text.includes("emailed"))).toBe(
       false,
     );
+  });
+
+  test("address exits tolerate wrapped and repeated whitespace", async () => {
+    for (const whitespace of ["\n", "\r\n", "\t", "  \t "]) {
+      const text =
+        "one executed original must be mailed to 7812 Palm Parkway, Orlando, Florida 32836, or" +
+        whitespace +
+        "emailed" +
+        whitespace +
+        "to Denise Haeggberg.";
+      const entities = await detect(text);
+      const addresses = entities.filter((entity) => entity.label === "address");
+      expect(
+        addresses.some(
+          (entity) =>
+            entity.text === "7812 Palm Parkway, Orlando, Florida 32836",
+        ),
+      ).toBe(true);
+      expect(addresses.some((entity) => entity.text.includes("emailed"))).toBe(
+        false,
+      );
+    }
+  });
+
+  test("address stops before participle-led delivery methods", async () => {
+    for (const delivery of [
+      "or sent by email to legal@example.com",
+      "or sent by facsimile to the recipient",
+      "and delivered via courier to the recipient",
+    ]) {
+      const text =
+        "Notices must be mailed to 123 Main Street, Boston, Massachusetts 02110, " +
+        delivery +
+        ".";
+      const entities = await detect(text);
+      const addresses = entities.filter((entity) => entity.label === "address");
+      expect(addresses.map((entity) => entity.text)).toContain(
+        "123 Main Street, Boston, Massachusetts 02110",
+      );
+      expect(addresses.some((entity) => entity.text.includes(delivery))).toBe(
+        false,
+      );
+    }
+  });
+
+  test("address stops before contextual provide prose", async () => {
+    const text =
+      "Notices must be mailed to 123 Main Street, Boston, Massachusetts 02110, and provide a copy to the Company.";
+    const entities = await detect(text);
+    const addresses = entities.filter((entity) => entity.label === "address");
+    expect(
+      addresses.some(
+        (entity) =>
+          entity.text === "123 Main Street, Boston, Massachusetts 02110",
+      ),
+    ).toBe(true);
+    expect(addresses.some((entity) => entity.text.includes("provide"))).toBe(
+      false,
+    );
+  });
+
+  test("address keeps a conjunction that joins unit components", async () => {
+    const text =
+      "Notices must be mailed to 123 Main Street, Boston, Massachusetts 02110, Suite A and B.";
+    const entities = await detect(text);
+    const addresses = entities.filter((entity) => entity.label === "address");
+    expect(
+      addresses.some(
+        (entity) =>
+          entity.text ===
+          "123 Main Street, Boston, Massachusetts 02110, Suite A and B",
+      ),
+    ).toBe(true);
+  });
+
+  test("address stops before an alternative-address notice clause", async () => {
+    const text =
+      "Notices must be mailed to 123 Main Street, Boston, Massachusetts 02110, or at such other address as the Company designates.";
+    const entities = await detect(text);
+    const addresses = entities.filter((entity) => entity.label === "address");
+    expect(
+      addresses.some(
+        (entity) =>
+          entity.text === "123 Main Street, Boston, Massachusetts 02110",
+      ),
+    ).toBe(true);
+    expect(
+      addresses.some((entity) => entity.text.includes("other address")),
+    ).toBe(false);
+  });
+
+  test("address stops before an alternative email delivery clause", async () => {
+    const text =
+      "Notices must be mailed to 123 Main Street, Boston, Massachusetts 02110, or by email to legal@example.com.";
+    const entities = await detect(text);
+    const addresses = entities.filter((entity) => entity.label === "address");
+    expect(
+      addresses.some(
+        (entity) =>
+          entity.text === "123 Main Street, Boston, Massachusetts 02110",
+      ),
+    ).toBe(true);
+    expect(addresses.some((entity) => entity.text.includes("by email"))).toBe(
+      false,
+    );
+  });
+
+  test("address stops before an alternative-address recipient clause", async () => {
+    const text =
+      "Notices must be mailed to 123 Main Street, Boston, Massachusetts 02110, or to such other address as the Company designates.";
+    const entities = await detect(text);
+    const addresses = entities.filter((entity) => entity.label === "address");
+    expect(
+      addresses.some(
+        (entity) =>
+          entity.text === "123 Main Street, Boston, Massachusetts 02110",
+      ),
+    ).toBe(true);
+    expect(
+      addresses.some((entity) => entity.text.includes("other address")),
+    ).toBe(false);
+  });
+
+  test("address stops before an alternative email channel clause", async () => {
+    const text =
+      "Notices must be mailed to 123 Main Street, Boston, Massachusetts 02110, or via email to legal@example.com.";
+    const entities = await detect(text);
+    const addresses = entities.filter((entity) => entity.label === "address");
+    expect(
+      addresses.some(
+        (entity) =>
+          entity.text === "123 Main Street, Boston, Massachusetts 02110",
+      ),
+    ).toBe(true);
+    expect(addresses.some((entity) => entity.text.includes("via email"))).toBe(
+      false,
+    );
+  });
+
+  test("address stops before an additional fax delivery clause", async () => {
+    const text =
+      "Notices must be mailed to 123 Main Street, Boston, Massachusetts 02110, and by fax to +1 617 555 0199.";
+    const entities = await detect(text);
+    const addresses = entities.filter((entity) => entity.label === "address");
+    expect(
+      addresses.some(
+        (entity) =>
+          entity.text === "123 Main Street, Boston, Massachusetts 02110",
+      ),
+    ).toBe(true);
+    expect(addresses.some((entity) => entity.text.includes("by fax"))).toBe(
+      false,
+    );
+  });
+
+  test("address keeps an alternative unit component", async () => {
+    const text =
+      "Notices must be mailed to 123 Main Street, Boston, Massachusetts 02110, Suite A or B.";
+    const entities = await detect(text);
+    const addresses = entities.filter((entity) => entity.label === "address");
+    expect(
+      addresses.some(
+        (entity) =>
+          entity.text ===
+          "123 Main Street, Boston, Massachusetts 02110, Suite A or B",
+      ),
+    ).toBe(true);
   });
 });

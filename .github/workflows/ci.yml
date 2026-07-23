@@ -188,6 +188,9 @@ jobs:
             --test prepared address_seed_collection_and_clustering_scale_with_input_size \
             -- --ignored --exact
           cargo test --release --locked -p stella-anonymize-core \
+            --lib address_seeds::tests::boundary_phrase_search_scales_with_input_size \
+            -- --ignored --exact
+          cargo test --release --locked -p stella-anonymize-core \
             --lib address_seeds::tests::postal_context_collection_scales_for_dynamic_states_and_zip_plus_four \
             -- --ignored --exact
 
