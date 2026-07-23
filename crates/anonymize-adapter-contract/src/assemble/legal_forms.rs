@@ -527,6 +527,68 @@ struct LegalFormRuleWords {
   comma_gated_direct_prefixes: Vec<String>,
 }
 
+#[derive(Deserialize)]
+struct LegalFormLanguageScope {
+  #[serde(default, rename = "denyListCountries")]
+  countries: Vec<String>,
+}
+
+#[derive(Deserialize)]
+struct LegalFormLanguageScopes {
+  #[serde(default)]
+  languages: std::collections::BTreeMap<String, LegalFormLanguageScope>,
+}
+
+fn is_short_bare_ascii_suffix(value: &str) -> bool {
+  !value.contains('.')
+    && !value.is_empty()
+    && value.len() <= 2
+    && value.chars().all(|ch| ch.is_ascii_uppercase())
+}
+
+fn non_ascii_name_short_suffixes(
+  languages: Option<&[String]>,
+) -> Result<Vec<String>, AssembleError> {
+  let scopes: LegalFormLanguageScopes =
+    parse_data_file("language-scopes.json")?;
+  let selected_countries =
+    language::selected_language_keys(languages).map(|_| {
+      let selected = languages.unwrap_or_default();
+      scopes
+        .languages
+        .iter()
+        .filter(|(language_key, _)| {
+          language::language_config_matches(language_key, Some(selected))
+        })
+        .flat_map(|(_, scope)| scope.countries.iter().cloned())
+        .collect::<HashSet<_>>()
+    });
+  let legal_forms: OrderedMap<Value> =
+    parse_ordered_data_file("legal-forms.json")?;
+  let mut seen = HashSet::new();
+  let mut result = Vec::new();
+  for (country, values) in &legal_forms {
+    if selected_countries
+      .as_ref()
+      .is_some_and(|countries| !countries.contains(country))
+    {
+      continue;
+    }
+    let Some(values) = values.as_array() else {
+      continue;
+    };
+    for value in values {
+      let Some(value) = value.as_str() else {
+        continue;
+      };
+      if is_short_bare_ascii_suffix(value) {
+        push_unique(value.to_string(), &mut seen, &mut result);
+      }
+    }
+  }
+  Ok(result)
+}
+
 fn is_emitted(ctx: &AssembleContext<'_>) -> bool {
   let config = ctx.config;
   // `isLegalFormsEnabled`: `enableLegalForms !== false` (omitted = enabled).
@@ -599,6 +661,9 @@ pub(super) fn build_legal_form_data(
 
   Ok(Some(BindingLegalFormData {
     suffixes,
+    non_ascii_name_short_suffixes: non_ascii_name_short_suffixes(
+      ctx.content_languages.as_deref(),
+    )?,
     detection_only_suffixes,
     institutional_heads: institutional.heads,
     normalized_boundary_suffixes,
@@ -651,8 +716,8 @@ mod tests {
 
   use super::{
     InstitutionalOrganizationData, all_legal_suffixes,
-    institutional_language_words, organization_detection_suffixes, role_heads,
-    validate_institutional_terms,
+    institutional_language_words, non_ascii_name_short_suffixes,
+    organization_detection_suffixes, role_heads, validate_institutional_terms,
   };
 
   #[test]
@@ -679,6 +744,24 @@ mod tests {
 
     assert!(czech.iter().any(|word| word == "poskytovatele"));
     assert!(!english.iter().any(|word| word == "poskytovatele"));
+  }
+
+  #[test]
+  fn unicode_name_short_suffixes_follow_content_language_scope() {
+    let czech =
+      non_ascii_name_short_suffixes(Some(&[String::from("cs")])).unwrap();
+    let german =
+      non_ascii_name_short_suffixes(Some(&[String::from("de")])).unwrap();
+    let latvian =
+      non_ascii_name_short_suffixes(Some(&[String::from("lv")])).unwrap();
+
+    assert!(czech.iter().any(|suffix| suffix == "SE"));
+    assert!(!czech.iter().any(|suffix| suffix == "PS"));
+    assert!(!czech.iter().any(|suffix| suffix == "AG"));
+    assert!(german.iter().any(|suffix| suffix == "AG"));
+    assert!(!german.iter().any(|suffix| suffix == "PS"));
+    assert!(latvian.iter().any(|suffix| suffix == "PS"));
+    assert!(!latvian.iter().any(|suffix| suffix == "AG"));
   }
 
   #[test]

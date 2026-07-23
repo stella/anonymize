@@ -234,6 +234,8 @@ pub enum BindingTriggerValidation {
 pub struct BindingLegalFormData {
   #[serde(default)]
   pub suffixes: Vec<String>,
+  #[serde(default)]
+  pub non_ascii_name_short_suffixes: Vec<String>,
   pub detection_only_suffixes: Vec<String>,
   pub institutional_heads: Vec<String>,
   #[serde(default)]

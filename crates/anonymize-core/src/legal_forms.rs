@@ -16,6 +16,7 @@ const MAX_NAME_LOOKBACK: usize = 32;
 )]
 pub struct LegalFormData {
   pub suffixes: Vec<String>,
+  pub non_ascii_name_short_suffixes: Vec<String>,
   pub normalized_boundary_suffixes: Vec<String>,
   pub normalized_in_name_words: Vec<String>,
   pub normalized_suffix_words: Vec<String>,
@@ -42,6 +43,7 @@ pub struct LegalFormData {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct PreparedLegalFormData {
   suffixes: Vec<String>,
+  non_ascii_name_short_suffixes: HashSet<String>,
   list_suffix_indices: Vec<usize>,
   suffix_indices_by_last_char: HashMap<char, Vec<usize>>,
   normalized_boundary_suffixes: HashSet<String>,
@@ -71,6 +73,7 @@ impl PreparedLegalFormData {
   pub(crate) fn new(data: LegalFormData) -> Self {
     let LegalFormData {
       suffixes,
+      non_ascii_name_short_suffixes,
       normalized_boundary_suffixes,
       normalized_in_name_words,
       normalized_suffix_words,
@@ -98,6 +101,7 @@ impl PreparedLegalFormData {
 
     Self {
       suffixes,
+      non_ascii_name_short_suffixes: lower_set(non_ascii_name_short_suffixes),
       list_suffix_indices,
       suffix_indices_by_last_char,
       normalized_boundary_suffixes: lower_set(normalized_boundary_suffixes),
@@ -1212,7 +1216,7 @@ fn emit_candidate_segments(
     if has_roman_numeral_suffix(emit_text) {
       continue;
     }
-    if short_ascii_suffix_has_ambiguous_non_ascii_prefix(emit_text) {
+    if short_ascii_suffix_has_ambiguous_non_ascii_prefix(emit_text, data) {
       continue;
     }
     let end = emit_start.saturating_add(emit_text.len());
@@ -2319,7 +2323,10 @@ fn has_roman_numeral_suffix(text: &str) -> bool {
   !suffix.is_empty() && is_roman_numeral(&suffix)
 }
 
-fn short_ascii_suffix_has_ambiguous_non_ascii_prefix(text: &str) -> bool {
+fn short_ascii_suffix_has_ambiguous_non_ascii_prefix(
+  text: &str,
+  data: &PreparedLegalFormData,
+) -> bool {
   let separator = last_suffix_separator(text);
   let raw_suffix = separator
     .and_then(|index| text.get(index.saturating_add(1)..))
@@ -2336,6 +2343,12 @@ fn short_ascii_suffix_has_ambiguous_non_ascii_prefix(text: &str) -> bool {
     });
   if prefix.is_ascii() {
     return false;
+  }
+  if !data
+    .non_ascii_name_short_suffixes
+    .contains(&suffix.to_lowercase())
+  {
+    return true;
   }
 
   // A short bare suffix is easily confused with an ordinary uppercase
@@ -2681,6 +2694,20 @@ mod tests {
     suffixes: &[&str],
     institutional_heads: &[&str],
   ) -> Vec<String> {
+    legal_form_entities_with_short_suffix_scope(
+      text,
+      suffixes,
+      institutional_heads,
+      suffixes,
+    )
+  }
+
+  fn legal_form_entities_with_short_suffix_scope(
+    text: &str,
+    suffixes: &[&str],
+    institutional_heads: &[&str],
+    non_ascii_name_short_suffixes: &[&str],
+  ) -> Vec<String> {
     let complement_starters = english_vocabulary(include_str!(
       "../../../packages/data/config/institutional-organization-complement-starters.json"
     ));
@@ -2697,6 +2724,10 @@ mod tests {
       include_str!("../../../packages/data/config/legal-form-rule-words.json");
     let data = PreparedLegalFormData::new(LegalFormData {
       suffixes: suffixes.iter().map(ToString::to_string).collect(),
+      non_ascii_name_short_suffixes: non_ascii_name_short_suffixes
+        .iter()
+        .map(ToString::to_string)
+        .collect(),
       connector_words: object_vocabulary(
         legal_form_rule_words,
         "connectorWords",
@@ -2813,6 +2844,37 @@ mod tests {
     ] {
       assert!(legal_form_entities(text, &[suffix], &[]).is_empty());
     }
+  }
+
+  #[test]
+  fn short_legal_form_unicode_names_follow_language_scope() {
+    assert_eq!(
+      legal_form_entities_with_short_suffix_scope(
+        "Řeka SE",
+        &["SE", "PS"],
+        &[],
+        &["SE"],
+      ),
+      ["Řeka SE"]
+    );
+    assert!(
+      legal_form_entities_with_short_suffix_scope(
+        "Škoda Octavia 110 PS",
+        &["SE", "PS"],
+        &[],
+        &["SE"],
+      )
+      .is_empty()
+    );
+    assert_eq!(
+      legal_form_entities_with_short_suffix_scope(
+        "Latvijas Šķiedra PS",
+        &["SE", "PS"],
+        &[],
+        &["PS"],
+      ),
+      ["Latvijas Šķiedra PS"]
+    );
   }
 
   #[test]
