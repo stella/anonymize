@@ -2040,12 +2040,15 @@ fn classify_identifier_continuation(
   }
 
   let mut end = start;
+  let mut has_identifier_evidence = false;
   while bytes.get(end).is_some_and(|value| {
     value.is_ascii_alphanumeric() || matches!(value, b'.' | b'-' | b'/' | b'_')
   }) {
+    has_identifier_evidence |=
+      bytes.get(end).is_some_and(|byte| is_id_evidence(*byte));
     end = end.saturating_add(1);
     if end.saturating_sub(start) > MAX_IDENTIFIER_VALUE_CHARS {
-      return IdentifierContinuation::Reject;
+      return overlong_continuation(has_identifier_evidence);
     }
   }
   let Some(mut token) = bytes.get(start..end) else {
@@ -2129,6 +2132,20 @@ fn classify_identifier_continuation(
   }
   if token.len() <= 3 && digits > 0 {
     IdentifierContinuation::Consume
+  } else {
+    IdentifierContinuation::Stop
+  }
+}
+
+const fn is_id_evidence(value: u8) -> bool {
+  value.is_ascii_digit() || matches!(value, b'.' | b'-' | b'/' | b'_')
+}
+
+const fn overlong_continuation(
+  has_identifier_evidence: bool,
+) -> IdentifierContinuation {
+  if has_identifier_evidence {
+    IdentifierContinuation::Reject
   } else {
     IdentifierContinuation::Stop
   }

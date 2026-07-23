@@ -275,6 +275,24 @@ describe("multilingual clinical identifiers", () => {
   );
 
   test("bounds grouped numeric identifier scanning", async () => {
+    const overlongProse = "a".repeat(129);
+    const stopped = (
+      await detect("en", `Patient number: 12345 ${overlongProse}`)
+    )
+      .filter((entity) => entity.label === "registration number")
+      .map((entity) => entity.text);
+    expect(stopped).toEqual(["12345"]);
+
+    for (const continuation of [
+      "1".repeat(129),
+      `${"a".repeat(64)}1${"a".repeat(64)}`,
+      `${"a".repeat(64)}-${"a".repeat(64)}`,
+    ]) {
+      expect(
+        await detect("en", `Patient number: 12345 ${continuation}`),
+      ).toEqual([]);
+    }
+
     const exactLimit = Array.from({ length: 43 }, () => "12").join(" ");
     expect(exactLimit).toHaveLength(128);
     const accepted = (await detect("en", `Patient number: ${exactLimit}`))

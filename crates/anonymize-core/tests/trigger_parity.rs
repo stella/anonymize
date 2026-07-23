@@ -481,6 +481,12 @@ fn company_id_trigger_stops_before_non_identifier_groups() {
 
     assert_eq!(trigger_texts(&result), [expected]);
   }
+
+  let overlong_prose = "a".repeat(129);
+  let result = prepared
+    .detect_static_entities(&format!("Patient number: 12345 {overlong_prose}"))
+    .expect("static detection should succeed");
+  assert_eq!(trigger_texts(&result), ["12345"]);
 }
 
 #[test]
@@ -514,6 +520,20 @@ fn company_id_trigger_rejects_partial_or_overlong_identifier() {
     assert!(
       result.entities.trigger().is_empty(),
       "must not redact a partial prefix of {value:?}"
+    );
+  }
+
+  for continuation in [
+    "1".repeat(129),
+    format!("{}1{}", "a".repeat(64), "a".repeat(64)),
+    format!("{}-{}", "a".repeat(64), "a".repeat(64)),
+  ] {
+    let result = prepared
+      .detect_static_entities(&format!("Patient number: 12345 {continuation}"))
+      .expect("static detection should succeed");
+    assert!(
+      result.entities.trigger().is_empty(),
+      "overlong identifier-shaped continuation must reject without a partial prefix"
     );
   }
 
