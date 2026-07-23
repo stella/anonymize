@@ -142,6 +142,18 @@ jobs:
         # locally or on demand (see fuzz/README.md).
         run: cargo check --manifest-path fuzz/Cargo.toml --bins
 
+      - name: Native Nym benchmark adapter
+        # This optional ONNX tool is deliberately a detached workspace so its
+        # heavy inference dependencies never enter Stella's release graph.
+        # Compile and test it explicitly so that isolation cannot hide bitrot.
+        run: |
+          cargo fmt --check --manifest-path packages/benchmark/native/nym-adapter/Cargo.toml
+          cargo clippy --locked --all-targets \
+            --manifest-path packages/benchmark/native/nym-adapter/Cargo.toml \
+            -- -D warnings
+          cargo test --release --locked \
+            --manifest-path packages/benchmark/native/nym-adapter/Cargo.toml
+
       - name: Check runtime package versions
         # Verify, do not mutate: a PR that bumps VERSION without bumping
         # the package versions (or vice versa) must fail CI, not be

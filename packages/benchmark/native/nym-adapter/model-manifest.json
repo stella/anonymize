@@ -1,0 +1,25 @@
+{
+  "repo": "Wismut/nym-pii-multilingual-small",
+  "revision": "4348999cd3c2e20c49615e9af7c6bbb45b64cd85",
+  "subfolder": "int8",
+  "providerId": "wismut-nym-pii-multilingual-small-int8",
+  "providerName": "Nym PII multilingual small (int8)",
+  "license": "MIT",
+  "artifacts": [
+    {
+      "name": "config.json",
+      "bytes": 5688,
+      "sha256": "3f07065571e22bb73eba28ddb1fae4509c0cf703762e3bfa7a6ab2111cf7cb88"
+    },
+    {
+      "name": "tokenizer.json",
+      "bytes": 12389891,
+      "sha256": "c299144e68dfec1dc536204a7ae3712710c5c6cade9269a83f5042250d47d8de"
+    },
+    {
+      "name": "model_int8.onnx",
+      "bytes": 138730982,
+      "sha256": "139006aea2cbd8e709d322f056232570de54661f624143be4893aaa387190286"
+    }
+  ]
+}

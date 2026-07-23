@@ -1,6 +1,7 @@
 import { join } from "node:path";
 
 import { createBenchmarkAdapters } from "./adapters";
+import { createNymAssistedStellaAdapter } from "./adapters/nym-assisted";
 import type { GroundTruthDocument } from "./ground-truth";
 import { benchmarkSourceGitSha } from "./git-revision";
 import { runSealedBoundary } from "./sealed-boundary";
@@ -26,6 +27,13 @@ const RESULTS_DIR = join(
   "german-ler",
 );
 const sourceGitSha = benchmarkSourceGitSha();
+const assisted = process.argv.slice(2).includes("--assisted");
+const unexpectedArguments = process.argv
+  .slice(2)
+  .filter((argument) => argument !== "--assisted");
+if (unexpectedArguments.length > 0) {
+  throw new Error(`unknown argument: ${unexpectedArguments.join(", ")}`);
+}
 const documents = await runSealedBoundary(
   "German LER verification or parsing",
   loadVerifiedGermanLer,
@@ -38,7 +46,9 @@ const inputs: GroundTruthDocument[] = documents.map(({ id, text }) => ({
   entities: [],
 }));
 const libraries: SealedLibraryResult[] = [];
-for (const adapter of createBenchmarkAdapters()) {
+const adapters = createBenchmarkAdapters();
+if (assisted) adapters.push(createNymAssistedStellaAdapter());
+for (const adapter of adapters) {
   process.stderr.write(
     `running sealed German LER adapter ${adapter.name}...\n`,
   );
