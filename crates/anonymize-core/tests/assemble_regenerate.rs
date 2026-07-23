@@ -94,7 +94,6 @@ fn normalized_value(value: &Value) -> Value {
     Value::Object(object) => Value::Object(
       object
         .iter()
-        .filter(|(_, item)| !item.is_null())
         .map(|(key, item)| (key.clone(), normalized_value(item)))
         .collect::<Map<_, _>>(),
     ),
@@ -136,16 +135,11 @@ fn compatible_shape(expected: &Value, actual: &Value) -> bool {
 
 fn shaped_value(actual: &Value, template: &Value) -> Value {
   match (actual, template) {
-    (Value::Object(actual), Value::Object(template)) => Value::Object(
-      template
-        .iter()
-        .filter_map(|(key, template_value)| {
-          actual.get(key).map(|actual_value| {
-            (key.clone(), shaped_value(actual_value, template_value))
-          })
-        })
-        .collect::<Map<_, _>>(),
-    ),
+    (Value::Object(_), Value::Object(_)) => {
+      let mut shaped = template.clone();
+      merge_current(&mut shaped, actual);
+      shaped
+    }
     (Value::Array(actual), Value::Array(template)) => {
       let values = actual
         .iter()
@@ -195,6 +189,10 @@ fn merge_current(expected: &mut Value, actual: &Value) {
       for (key, actual_value) in actual {
         if let Some(expected_value) = expected.get_mut(key) {
           merge_current(expected_value, actual_value);
+        } else {
+          // Existing keys keep their frozen relative order. New keys are
+          // appended in the assembler's deterministic serialization order.
+          expected.insert(key.clone(), normalized_value(actual_value));
         }
       }
     }
@@ -347,4 +345,87 @@ fn regenerate_selected_assemble_fixtures() -> Result<(), String> {
   }
 
   Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+  use serde_json::{Value, json};
+
+  use super::merge_current;
+
+  fn object_keys(value: &Value) -> Vec<&str> {
+    value
+      .as_object()
+      .map(|object| object.keys().map(String::as_str).collect())
+      .unwrap_or_default()
+  }
+
+  #[test]
+  fn merge_inserts_top_level_and_nested_keys_and_removes_stale_keys() {
+    let mut expected = json!({
+      "existing": { "old": 1, "staleNested": true },
+      "staleTop": true
+    });
+    let actual = json!({
+      "newTop": null,
+      "existing": { "newNested": [], "old": 2 }
+    });
+
+    merge_current(&mut expected, &actual);
+
+    assert_eq!(expected, actual);
+    assert_eq!(object_keys(&expected), ["existing", "newTop"]);
+    assert_eq!(
+      object_keys(expected.get("existing").unwrap_or(&Value::Null)),
+      ["old", "newNested"]
+    );
+  }
+
+  #[test]
+  fn merge_preserves_frozen_key_order_and_appends_new_keys_in_actual_order() {
+    let mut expected = json!({ "b": 0, "d": 0 });
+    let actual = json!({ "a": 1, "b": 2, "c": 3, "d": 4, "e": 5 });
+
+    merge_current(&mut expected, &actual);
+
+    assert_eq!(expected, actual);
+    assert_eq!(object_keys(&expected), ["b", "d", "a", "c", "e"]);
+  }
+
+  #[test]
+  fn merge_aligns_array_insertions_and_preserves_all_new_object_members() {
+    let mut expected = json!([
+      { "kind": "row", "id": "a", "value": 1 },
+      { "kind": "row", "id": "c", "value": 3 }
+    ]);
+    let actual = json!([
+      { "kind": "row", "id": "a", "value": 1, "added": false },
+      { "kind": "row", "id": "b", "value": 2, "novel": { "flag": true } },
+      { "kind": "row", "id": "c", "value": 3 }
+    ]);
+
+    merge_current(&mut expected, &actual);
+
+    assert_eq!(expected, actual);
+  }
+
+  #[test]
+  fn merge_handles_array_removal_and_is_idempotent() {
+    let mut expected = json!([
+      { "kind": "row", "id": "a" },
+      { "kind": "row", "id": "removed" },
+      { "kind": "row", "id": "c" }
+    ]);
+    let actual = json!([
+      { "kind": "row", "id": "a", "metadata": null },
+      { "kind": "row", "id": "c" }
+    ]);
+
+    merge_current(&mut expected, &actual);
+    let once = serde_json::to_string(&expected).unwrap_or_default();
+    merge_current(&mut expected, &actual);
+
+    assert_eq!(expected, actual);
+    assert_eq!(serde_json::to_string(&expected).unwrap_or_default(), once);
+  }
 }
